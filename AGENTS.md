@@ -25,3 +25,11 @@ Maintain:
 Do not expose, copy, or commit credentials or unrelated data from the host environment.
 
 Do not weaken the autonomy, validation, implementation, or scientific requirements without an explicit, version-controlled experiment change.
+
+## Human intervention
+
+When human intervention is permitted by `EXPERIMENT.md`, use the `request_human_intervention` tool rather than asking informally in the conversation.
+
+The tool creates the authoritative intervention record and notifies the designated experiment operator.
+
+Do not use the tool merely because a scientific or technical decision is difficult or uncertain.
