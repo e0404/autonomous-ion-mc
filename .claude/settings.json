@@ -33,7 +33,9 @@
       "Bash(python *)",
       "Bash(python3 *)",
       "Bash(pytest *)",
-      "Bash(pre-commit *)"
+      "Bash(pre-commit *)",
+
+      "mcp__codex-worker"
     ],
 
     "ask": [

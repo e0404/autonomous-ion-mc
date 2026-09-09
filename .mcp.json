@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "codex-worker": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "--project",
+        "/home/wahln/aiprojects/ion-mc/infrastructure/mcp/env",
+        "run",
+        "python",
+        "/home/wahln/aiprojects/ion-mc/infrastructure/mcp/codex_mcp.py"
+      ],
+      "env": {}
+    }
+  }
+}
