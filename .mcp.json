@@ -11,6 +11,18 @@
         "/home/wahln/aiprojects/ion-mc/infrastructure/mcp/codex_mcp.py"
       ],
       "env": {}
+    },
+    "task-manager": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "--project",
+        "/home/wahln/aiprojects/ion-mc/infrastructure/mcp/env",
+        "run",
+        "python",
+        "/home/wahln/aiprojects/ion-mc/infrastructure/mcp/task_mcp.py"
+      ],
+      "env": {}
     }
   }
 }
