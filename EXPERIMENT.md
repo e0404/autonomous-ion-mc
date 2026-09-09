@@ -479,6 +479,25 @@ Remote synchronization should occur sufficiently often that meaningful completed
 
 At minimum, task branches should be pushed at meaningful checkpoints and before integration, and integrated `develop` states should be pushed immediately.
 
+### CI versus local validation
+
+GitHub-hosted CI is intended for lightweight, fast, reproducible checks only.
+
+CI may include:
+
+- formatting and linting;
+- static analysis;
+- unit tests;
+- small deterministic physics tests;
+- small cross-backend consistency tests;
+- packaging and installation checks.
+
+Full scientific validation, large Monte Carlo comparisons, long-running benchmarks, GPU-intensive validation, and reference-data comparison gates must run locally on the designated experiment workstation.
+
+A task must not be considered scientifically validated merely because GitHub CI passes.
+
+When a local validation gate is required for integration or release, its execution and result must be recorded in the repository or telemetry in a machine-readable form.
+
 ---
 
 ## Repository Protection
