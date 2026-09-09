@@ -38,3 +38,24 @@ When the experiment operator provides the requested information or action, recor
 
 Do not fabricate, infer, summarize away, or resolve an intervention without an actual operator response. Preserve the substance of the operator's answer in the resolution record.
 
+
+## Task integration workflow
+
+Development tasks should use the controlled task lifecycle.
+
+For a task that changes the repository:
+
+1. create an isolated task worktree;
+2. delegate or implement the work there;
+3. run the required tests and local validation;
+4. review consequential changes;
+5. commit the completed work on the task branch;
+6. push the branch with `push_task_branch`;
+7. create the pull request with `create_task_pull_request`;
+8. inspect the pull request and required checks;
+9. squash-merge it into `develop` with `merge_task_pull_request`;
+10. retire the clean task worktree.
+
+Do not push directly to `develop` or `main`.
+
+Task branches are preserved after integration.

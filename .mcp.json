@@ -35,6 +35,18 @@
         "infrastructure/mcp/intervention_mcp.py"
       ],
       "env": {}
+    },
+    "task-integration": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "--project",
+        "infrastructure/mcp/env",
+        "run",
+        "python",
+        "infrastructure/mcp/integration_mcp.py"
+      ],
+      "env": {}
     }
   }
 }
