@@ -259,28 +259,6 @@
       }
     ],
 
-    "WorktreeCreate": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 .claude/hooks/log_event.py"
-          }
-        ]
-      }
-    ],
-
-    "WorktreeRemove": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 .claude/hooks/log_event.py"
-          }
-        ]
-      }
-    ],
-
     "ConfigChange": [
       {
         "matcher": "*",
