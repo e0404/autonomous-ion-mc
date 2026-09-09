@@ -126,3 +126,11 @@ The runner executes the requested argv directly, without a shell, inside a secon
 Host validation requires a clean task worktree and is associated with the exact current commit SHA.
 
 A successful command is execution evidence only. It does not constitute scientific validation by itself. The orchestrator must separately record an appropriate exact-SHA local validation result using the validation manager.
+
+## Public development-network access
+
+Sandboxed development tools may use the pre-authorized public development domains configured in `.claude/settings.json` for operations such as public Git access, dependency retrieval, and pre-commit hook installation.
+
+Public web research is permitted by `EXPERIMENT.md` and is separate from sandboxed subprocess networking.
+
+If a legitimate software or scientific resource requires a public host outside the configured sandbox allowlist, use the structured human-intervention mechanism to request an experiment-configuration extension rather than bypassing the sandbox.
