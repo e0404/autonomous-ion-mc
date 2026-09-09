@@ -35,7 +35,8 @@
       "Bash(pytest *)",
       "Bash(pre-commit *)",
 
-      "mcp__codex-worker"
+      "mcp__codex-worker",
+      "mcp__task-manager"
     ],
 
     "ask": [
