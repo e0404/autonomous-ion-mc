@@ -166,3 +166,11 @@ Documentation must describe implemented behavior. Planned behavior must not bepr
 Canonical experiment records remain in their repository locations. In particular, `EXPERIMENT.md`, `REQUIREMENTS.md`, and files under `decisions/` must not be manually duplicated for documentation purposes. The documentation build mirrors them automatically into the rendered site.
 
 The documentation site must build successfully before task integration.
+
+### Experiment prompts
+
+Prompts that define major experimental phase boundaries or initial conditions must be preserved canonically under `experiment/prompts/`.
+
+These prompt records are part of the experimental provenance and must not be silently rewritten after they have been used.
+
+The documentation build may mirror canonical prompts into the rendered site.

@@ -18,6 +18,11 @@ CANONICAL_EXPERIMENT_FILES = {
     "REQUIREMENTS.md": DOCS_ROOT / "experiment" / "requirements.md",
 }
 
+CANONICAL_PROMPT_FILES = {
+    "experiment/prompts/kickoff-v1.md":
+        DOCS_ROOT / "experiment" / "prompts" / "kickoff-v1.md",
+}
+
 
 def reset_generated_decisions() -> None:
     if DECISIONS_DEST.exists():
@@ -51,6 +56,24 @@ def copy_experiment_files() -> list[Path]:
         if not source.is_file():
             raise RuntimeError(
                 f"required canonical documentation source missing: {source}"
+            )
+
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, destination)
+        copied.append(destination)
+
+    return copied
+
+
+def copy_prompt_files() -> list[Path]:
+    copied: list[Path] = []
+
+    for source_name, destination in CANONICAL_PROMPT_FILES.items():
+        source = REPO_ROOT / source_name
+
+        if not source.is_file():
+            raise RuntimeError(
+                f"required canonical prompt missing: {source}"
             )
 
         destination.parent.mkdir(parents=True, exist_ok=True)
@@ -96,10 +119,12 @@ def write_decision_index(decisions: list[Path]) -> Path:
 def main() -> int:
     decisions = copy_decisions()
     copied = copy_experiment_files()
+    prompts = copy_prompt_files()
     index = write_decision_index(decisions)
 
     print(f"generated {len(decisions)} decision page(s)")
     print(f"copied {len(copied)} canonical experiment document(s)")
+    print(f"copied {len(prompts)} canonical prompt document(s)")
     print(f"generated {index.relative_to(REPO_ROOT)}")
 
     return 0
