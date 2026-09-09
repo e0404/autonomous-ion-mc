@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import sys
 import argparse
 import json
 import re
@@ -10,6 +11,12 @@ from pathlib import Path
 REPO = Path.home() / "aiprojects" / "ion-mc"
 WORKTREE_ROOT = Path.home() / "aiprojects" / "ion-mc-worktrees"
 
+VALIDATION_TOOL = (
+    Path(__file__).resolve().parents[2]
+    / "infrastructure"
+    / "validation"
+    / "local_validation.py"
+)
 
 def run(
     command: list[str],
@@ -253,10 +260,32 @@ def sync_develop():
     git("fetch", "origin", "develop", cwd=REPO)
     git("merge", "--ff-only", "origin/develop", cwd=REPO)
 
+def require_local_validation(task_id: str):
+    proc = subprocess.run(
+        [
+            sys.executable,
+            str(VALIDATION_TOOL),
+            "check",
+            "--task-id",
+            normalize_task_id(task_id),
+        ],
+        cwd=REPO,
+        text=True,
+        capture_output=True,
+    )
+
+    if proc.returncode != 0:
+        detail = proc.stdout.strip() or proc.stderr.strip()
+        raise RuntimeError(
+            "Local validation gate has not passed for the exact "
+            "task-branch SHA:\n" + detail
+        )
 
 def merge_pr(task_id: str):
     path, branch = ensure_worktree(task_id)
     ensure_clean(path)
+
+    require_local_validation(task_id)
 
     pr = find_open_pr(branch)
 

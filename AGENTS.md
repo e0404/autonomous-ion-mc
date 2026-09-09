@@ -59,3 +59,22 @@ For a task that changes the repository:
 Do not push directly to `develop` or `main`.
 
 Task branches are preserved after integration.
+
+## Local validation gate
+
+A task may only be merged into `develop` after appropriate local validation has been performed for the exact committed task-branch SHA.
+
+After committing the state that was validated, record the validation result with `record_local_validation`.
+
+A new commit invalidates prior validation for merge-gate purposes because validation records are keyed to the exact Git SHA.
+
+Do not record a passing validation result unless the stated validation was actually performed successfully.
+
+The required depth of validation depends on the change:
+
+- documentation or infrastructure changes may require focused functional validation;
+- software changes require appropriate automated tests;
+- scientific or numerical changes require the relevant local scientific
+  validation defined by `EXPERIMENT.md` and `REQUIREMENTS.md`.
+
+GitHub CI is not a substitute for the local validation gate.
