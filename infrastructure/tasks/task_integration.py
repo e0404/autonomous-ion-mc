@@ -12,7 +12,7 @@ REPO = Path.home() / "aiprojects" / "ion-mc"
 WORKTREE_ROOT = Path.home() / "aiprojects" / "ion-mc-worktrees"
 
 VALIDATION_TOOL = (
-    REPO
+    Path(__file__).resolve().parents[2]
     / "infrastructure"
     / "validation"
     / "local_validation.py"
