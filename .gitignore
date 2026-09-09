@@ -53,3 +53,11 @@ benchmarks/generated/
 .claude/settings.local.json
 .claude/skills
 .claude/workflows
+
+# Documentation
+# Generated documentation artifacts
+docs/generated/
+docs/experiment/protocol.md
+docs/experiment/requirements.md
+docs/experiment/decisions.md
+site/

@@ -154,3 +154,15 @@ These configured domains are not a strict egress allowlist. Other public network
 Public web research is separately permitted by `EXPERIMENT.md`.
 
 Agents must not bypass the sandbox or use network access to perform activities prohibited by `EXPERIMENT.md`, including initiating human communication.
+
+## Documentation
+
+Documentation is part of the implementation.
+
+When a task introduces or materially changes public APIs, architecture, scientific models, configuration, validation procedures, or user-visible behavior, update the corresponding documentation in the same task.
+
+Documentation must describe implemented behavior. Planned behavior must not bepresented as implemented functionality.
+
+Canonical experiment records remain in their repository locations. In particular, `EXPERIMENT.md`, `REQUIREMENTS.md`, and files under `decisions/` must not be manually duplicated for documentation purposes. The documentation build mirrors them automatically into the rendered site.
+
+The documentation site must build successfully before task integration.
