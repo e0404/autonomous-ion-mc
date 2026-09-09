@@ -139,6 +139,10 @@ Host validation requires a clean task worktree and is associated with the exact 
 
 A successful command is execution evidence only. It does not constitute scientific validation by itself. The orchestrator must separately record an appropriate exact-SHA local validation result using the validation manager.
 
+Host-runner results include bounded stdout and stderr directly in the structured MCP response so agents can interpret scientific and diagnostic output without reading the protected raw-run archive.
+
+Complete stdout and stderr remain archived outside the task worktree. If an inline stream exceeds the configured limit, the MCP result returns the tail of the stream together with truncation and total-length metadata.
+
 ## Public development-network access
 
 Sandboxed development tools may autonomously access public network resources needed for software and scientific development.

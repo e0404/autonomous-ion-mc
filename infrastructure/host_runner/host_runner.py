@@ -19,6 +19,7 @@ HOST_VENV = CACHE_ROOT / "venv"
 SANDBOX_VENV = str(HOST_VENV)
 
 MAX_TIMEOUT_SECONDS = 7200
+MAX_INLINE_OUTPUT_CHARS = 65536
 
 SAFE_ENV = {
     "HOME": "/tmp/home",
@@ -183,6 +184,15 @@ def write_json(path: Path, value: dict) -> None:
     )
 
 
+def bounded_tail(text: str, max_chars: int) -> tuple[str, bool, int]:
+    total_chars = len(text)
+
+    if total_chars <= max_chars:
+        return text, False, total_chars
+
+    return text[-max_chars:], True, total_chars
+
+
 def run_validation(
     task_id: str,
     argv: list[str],
@@ -247,6 +257,16 @@ def run_validation(
     (run_dir / "stdout.txt").write_text(stdout, encoding="utf-8")
     (run_dir / "stderr.txt").write_text(stderr, encoding="utf-8")
 
+    stdout_inline, stdout_truncated, stdout_total_chars = bounded_tail(
+        stdout,
+        MAX_INLINE_OUTPUT_CHARS,
+    )
+
+    stderr_inline, stderr_truncated, stderr_total_chars = bounded_tail(
+        stderr,
+        MAX_INLINE_OUTPUT_CHARS,
+    )
+
     result = {
         "schema_version": 1,
         "run_id": run_id,
@@ -263,6 +283,12 @@ def run_validation(
         "timed_out": timed_out,
         "stdout_file": str(run_dir / "stdout.txt"),
         "stderr_file": str(run_dir / "stderr.txt"),
+        "stdout": stdout_inline,
+        "stderr": stderr_inline,
+        "stdout_truncated": stdout_truncated,
+        "stderr_truncated": stderr_truncated,
+        "stdout_total_chars": stdout_total_chars,
+        "stderr_total_chars": stderr_total_chars,
         "run_directory": str(run_dir),
         "succeeded": (not timed_out and exit_code == 0),
     }
