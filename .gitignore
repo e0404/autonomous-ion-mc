@@ -35,3 +35,21 @@ benchmarks/generated/
 .env
 .env.*
 !.env.example
+
+# Claude Code local runtime state
+# `.claude/settings.json`, `.claude/agents/` and `.claude/hooks/` are the
+# version-controlled agent configuration and stay tracked. Everything below
+# is per-machine or per-session state created by the harness in every
+# checkout and task worktree; leaving it untracked-but-not-ignored makes
+# `git status --porcelain` permanently non-empty, which blocks the
+# controlled task-integration and local-validation gates.
+.claude/.cc-writes/
+.claude/commands
+.claude/launch.json
+.claude/loop.md
+.claude/output-styles
+.claude/routines
+.claude/scheduled_tasks.json
+.claude/settings.local.json
+.claude/skills
+.claude/workflows
