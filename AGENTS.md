@@ -129,8 +129,12 @@ A successful command is execution evidence only. It does not constitute scientif
 
 ## Public development-network access
 
-Sandboxed development tools may use the pre-authorized public development domains configured in `.claude/settings.json` for operations such as public Git access, dependency retrieval, and pre-commit hook installation.
+Sandboxed development tools may autonomously access public network resources needed for software and scientific development.
 
-Public web research is permitted by `EXPERIMENT.md` and is separate from sandboxed subprocess networking.
+Common development domains configured in `.claude/settings.json` are pre-authorized so routine operations such as public Git access, dependency retrieval, and pre-commit hook installation do not require additional network approval.
 
-If a legitimate software or scientific resource requires a public host outside the configured sandbox allowlist, use the structured human-intervention mechanism to request an experiment-configuration extension rather than bypassing the sandbox.
+These configured domains are not a strict egress allowlist. Other public network destinations may be permitted by Claude Code's normal sandbox and Auto-mode permission mechanisms.
+
+Public web research is separately permitted by `EXPERIMENT.md`.
+
+Agents must not bypass the sandbox or use network access to perform activities prohibited by `EXPERIMENT.md`, including initiating human communication.
