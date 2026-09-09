@@ -39,7 +39,8 @@
       "mcp__task-manager",
       "mcp__human-intervention",
       "mcp__task-integration",
-      "mcp__validation-manager"
+      "mcp__validation-manager",
+      "mcp__task-commit"
     ],
 
     "ask": [
