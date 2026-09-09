@@ -83,15 +83,31 @@ def test_python_section_always_available():
     assert section["executable"] == sys.executable
 
 
-def test_on_this_host_optional_tools_report_unavailable_not_error():
-    # This host has no claude or codex CLI, and no warp install.
-    report = er.build_report()
-    for key in ("claude_code", "codex_cli", "warp"):
-        assert report[key]["status"] == er.STATUS_UNAVAILABLE, report[key]
-    # nvidia-smi may be present on PATH (e.g. under WSL) even with no GPU
-    # accessible, in which case it exits non-zero rather than being
-    # missing outright - either degrades gracefully (never "available").
-    assert report["nvidia_gpu"]["status"] in (er.STATUS_UNAVAILABLE, er.STATUS_ERROR), report["nvidia_gpu"]
+@pytest.mark.parametrize("builder_name", ["build_claude_code_section", "build_codex_cli_section", "build_nvidia_gpu_section"])
+def test_optional_tool_section_unavailable_when_executable_missing(monkeypatch, builder_name):
+    # No test may depend on whether claude/codex/nvidia-smi are actually
+    # installed on the host running the tests - simulate "missing
+    # executable" explicitly instead of relying on host truth.
+    def fake_run(*args, **kwargs):
+        raise FileNotFoundError("no such file")
+
+    monkeypatch.setattr(er.subprocess, "run", fake_run)
+    section = getattr(er, builder_name)()
+    assert section["status"] == er.STATUS_UNAVAILABLE
+    assert "detail" in section
+
+
+@pytest.mark.parametrize("builder_name", ["build_claude_code_section", "build_codex_cli_section", "build_nvidia_gpu_section"])
+def test_optional_tool_section_error_when_command_fails(monkeypatch, builder_name):
+    # Likewise, simulate "present but failing" explicitly rather than
+    # depending on whether that happens to be true on this host.
+    def fake_run(*args, **kwargs):
+        return subprocess.CompletedProcess(args=args, returncode=1, stdout="", stderr="broken")
+
+    monkeypatch.setattr(er.subprocess, "run", fake_run)
+    section = getattr(er, builder_name)()
+    assert section["status"] == er.STATUS_ERROR
+    assert "detail" in section
 
 
 # ---------------------------------------------------------------------------
@@ -111,13 +127,16 @@ def test_run_subprocess_missing_executable(monkeypatch):
 
 
 def test_run_subprocess_permission_error(monkeypatch):
+    # Permission-denied means the executable exists but running it was
+    # attempted and failed - that's "error", not "unavailable" (which is
+    # reserved for the tool simply being absent).
     def fake_run(*args, **kwargs):
         raise PermissionError("denied")
 
     monkeypatch.setattr(er.subprocess, "run", fake_run)
     result = er.run_subprocess(["some-command"])
     assert result["ok"] is False
-    assert result["status"] == er.STATUS_UNAVAILABLE
+    assert result["status"] == er.STATUS_ERROR
 
 
 def test_run_subprocess_timeout(monkeypatch):
@@ -267,12 +286,6 @@ def test_warp_section_reports_unavailable_on_import_error(monkeypatch):
     assert "warp" in section["detail"].lower()
 
 
-def test_warp_section_on_this_host_is_unavailable():
-    # warp is genuinely not installed on this host; exercises the real path.
-    section = er.build_warp_section()
-    assert section["status"] == er.STATUS_UNAVAILABLE
-
-
 # ---------------------------------------------------------------------------
 # Parsing helpers, tested against fixture strings (not host state)
 # ---------------------------------------------------------------------------
@@ -395,10 +408,71 @@ def test_parse_nvidia_smi_csv_empty():
     assert er.parse_nvidia_smi_csv("") == []
 
 
+def test_parse_nvidia_smi_csv_quoted_field_with_comma():
+    # csv.reader must handle a quoted field containing a comma correctly,
+    # rather than splitting it into extra columns.
+    text = '"Some, Weird GPU Name", 535.104.05, 24576 MiB\n'
+    gpus = er.parse_nvidia_smi_csv(text)
+    assert gpus == [
+        {"name": "Some, Weird GPU Name", "driver_version": "535.104.05", "memory_total": "24576 MiB"}
+    ]
+
+
+@pytest.mark.parametrize(
+    "malformed_text",
+    [
+        "NVIDIA GeForce RTX 3090, 535.104.05\n",  # missing a field
+        "NVIDIA GeForce RTX 3090, 535.104.05, 24576 MiB, extra\n",  # extra field
+        "NVIDIA GeForce RTX 3090, , 24576 MiB\n",  # empty field
+    ],
+)
+def test_parse_nvidia_smi_csv_malformed_row_raises(malformed_text):
+    with pytest.raises(ValueError):
+        er.parse_nvidia_smi_csv(malformed_text)
+
+
+def test_build_nvidia_gpu_section_error_on_malformed_row(monkeypatch):
+    def fake_run(*args, **kwargs):
+        return subprocess.CompletedProcess(args=args, returncode=0, stdout="only, two\n", stderr="")
+
+    monkeypatch.setattr(er.subprocess, "run", fake_run)
+    section = er.build_nvidia_gpu_section()
+    assert section["status"] == er.STATUS_ERROR
+    assert "detail" in section
+
+
+def test_build_nvidia_gpu_section_unavailable_on_empty_output(monkeypatch):
+    # nvidia-smi can exit 0 with no rows (e.g. driver present, no GPUs
+    # enumerated); that means "no GPUs", not "available".
+    def fake_run(*args, **kwargs):
+        return subprocess.CompletedProcess(args=args, returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(er.subprocess, "run", fake_run)
+    section = er.build_nvidia_gpu_section()
+    assert section["status"] == er.STATUS_UNAVAILABLE
+    assert "detail" in section
+    assert section["gpus"] == []
+
+
 def test_extract_version_token():
     assert er.extract_version_token("uv 0.12.11 (abcdef 2024-01-01)") == "0.12.11"
     assert er.extract_version_token("git version 2.43.0") == "2.43.0"
     assert er.extract_version_token("no version here") is None
+
+
+def test_parse_labeled_version_raises_on_unparseable_output():
+    with pytest.raises(ValueError):
+        er._parse_labeled_version("no version number in here")
+
+
+def test_version_section_reports_error_on_unparseable_version_output(monkeypatch):
+    def fake_run(*args, **kwargs):
+        return subprocess.CompletedProcess(args=args, returncode=0, stdout="nonsense output", stderr="")
+
+    monkeypatch.setattr(er.subprocess, "run", fake_run)
+    section = er.version_section(["some-tool", "--version"], parse=er._parse_labeled_version)
+    assert section["status"] == er.STATUS_ERROR
+    assert "detail" in section
 
 
 # ---------------------------------------------------------------------------
@@ -429,6 +503,37 @@ def test_cli_main_writes_output_file(tmp_path):
     assert output_path.exists()
     parsed = json.loads(output_path.read_text(encoding="utf-8"))
     assert parsed["schema_version"] == er.SCHEMA_VERSION
+
+
+def test_cli_main_exits_one_with_structured_error_when_output_unwritable(tmp_path, capsys):
+    # A path whose parent directory doesn't exist is unwritable; this
+    # must not raise a traceback out of main().
+    unwritable_path = tmp_path / "no-such-directory" / "report.json"
+    exit_code = er.main(["--output", str(unwritable_path)])
+    assert exit_code == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    error_payload = json.loads(captured.err)
+    assert error_payload["status"] == er.STATUS_ERROR
+    assert "detail" in error_payload
+    assert not unwritable_path.exists()
+
+
+def test_cli_subprocess_exits_one_no_traceback_when_output_unwritable(tmp_path):
+    unwritable_path = tmp_path / "no-such-directory" / "report.json"
+    module_path = er.Path(__file__).resolve().parents[2] / "infrastructure" / "diagnostics" / "environment_report.py"
+    proc = subprocess.run(
+        [sys.executable, str(module_path), "--output", str(unwritable_path)],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=30,
+        text=True,
+    )
+    assert proc.returncode == 1
+    assert "Traceback" not in proc.stderr
+    error_payload = json.loads(proc.stderr)
+    assert error_payload["status"] == er.STATUS_ERROR
 
 
 def test_cli_as_subprocess_exits_zero_with_valid_json():

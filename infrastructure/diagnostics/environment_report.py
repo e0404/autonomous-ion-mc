@@ -13,28 +13,34 @@ Design goals (see also docs/environment_diagnostics.md):
   never a hard dependency of this module.
 * Every probe is independently guarded: a missing or broken optional
   tool degrades to a section with a non-"available" status rather than
-  raising. The top-level report is always produced and the CLI always
-  exits 0 on a successful report, even when every optional probe is
-  unavailable.
+  raising. The top-level report is always produced; the CLI exits 0
+  whenever a report was produced and delivered, even when every
+  optional probe is unavailable (see the CLI exit-code policy on
+  `main()` and in the docs for the other exit codes).
 * No secrets or host-identifying personal data: no environment-variable
-  dumps, user names, home paths of the invoking user, tokens, or remote
-  URLs are ever included.
+  dumps, user names, tokens, or remote URLs are ever included. The only
+  exception is `python.executable`/`python.prefix`, which are required
+  diagnostic fields that may incidentally contain a path under the
+  invoking user's home directory.
 
 Status vocabulary used by every section's "status" field:
 
 * "available"   - the probe succeeded; the section's data fields are populated.
-* "unavailable" - the underlying tool/file/module is absent (e.g. the
-                  executable is not installed, or the platform-specific
-                  file does not exist). This is an expected condition,
-                  not a failure.
+* "unavailable" - the underlying tool/file/module is simply absent (e.g.
+                  the executable is not on PATH, or an optional Python
+                  module is not importable) or produced no data (e.g.
+                  nvidia-smi ran but enumerated zero GPUs). This is an
+                  expected condition, not a failure.
 * "error"       - the probe was attempted but failed unexpectedly (e.g.
-                  the command timed out, exited non-zero, or its output
-                  could not be parsed). A "detail" field explains why.
+                  permission denied, the command timed out, exited
+                  non-zero, or its output could not be parsed or was
+                  malformed). A "detail" field explains why.
 """
 
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import os
 import platform
@@ -96,9 +102,12 @@ def run_subprocess(
             "detail": f"executable not found: {args[0]}",
         }
     except PermissionError as exc:
+        # The executable exists but could not be run: this was attempted
+        # and failed, not simply absent, so it is an "error" rather than
+        # "unavailable".
         return {
             "ok": False,
-            "status": STATUS_UNAVAILABLE,
+            "status": STATUS_ERROR,
             "detail": f"permission denied running {args[0]}: {exc}",
         }
     except subprocess.TimeoutExpired:
@@ -151,7 +160,13 @@ def version_section(
 
 
 def _parse_labeled_version(stdout: str) -> dict[str, Any]:
-    return {"version": extract_version_token(stdout), "raw": stdout}
+    version = extract_version_token(stdout)
+    if version is None:
+        # Unparseable output must surface as an "error" section, not as
+        # "available" with a null version - version_section() converts
+        # this exception into a STATUS_ERROR result.
+        raise ValueError(f"could not find a version number in output: {stdout!r}")
+    return {"version": version, "raw": stdout}
 
 
 # ---------------------------------------------------------------------------
@@ -160,7 +175,12 @@ def _parse_labeled_version(stdout: str) -> dict[str, Any]:
 
 
 def parse_os_release(text: str) -> dict[str, str]:
-    """Parse the contents of an /etc/os-release-style file."""
+    """Parse the contents of an /etc/os-release-style file.
+
+    Best-effort: this strips matching surrounding single/double quotes
+    from each value (the common case for this file format), but it does
+    NOT interpret shell-style backslash escapes within quoted values.
+    """
     data: dict[str, str] = {}
     for line in text.splitlines():
         line = line.strip()
@@ -238,17 +258,24 @@ def parse_meminfo(text: str) -> dict[str, Any]:
     }
 
 
-def parse_nvidia_smi_csv(text: str) -> list[dict[str, str | None]]:
-    """Parse `nvidia-smi --query-gpu=... --format=csv,noheader` output."""
-    gpus: list[dict[str, str | None]] = []
-    for line in text.splitlines():
-        line = line.strip()
-        if not line:
+def parse_nvidia_smi_csv(text: str) -> list[dict[str, str]]:
+    """Parse `nvidia-smi --query-gpu=... --format=csv,noheader` output.
+
+    Uses `csv.reader` so quoted fields (e.g. a GPU name containing a
+    comma) are handled correctly. Each non-blank row must contain
+    exactly 3 non-empty fields (name, driver_version, memory_total);
+    a row that doesn't is malformed and raises ValueError so the
+    caller can surface it as an "error" section rather than silently
+    padding it with nulls.
+    """
+    gpus: list[dict[str, str]] = []
+    for row in csv.reader(text.splitlines()):
+        fields = [field.strip() for field in row]
+        if not fields or all(field == "" for field in fields):
             continue
-        parts = [p.strip() for p in line.split(",")]
-        while len(parts) < 3:
-            parts.append(None)
-        name, driver_version, memory_total = parts[0], parts[1], parts[2]
+        if len(fields) != 3 or any(field == "" for field in fields):
+            raise ValueError(f"expected 3 non-empty CSV fields (name, driver_version, memory.total), got: {row!r}")
+        name, driver_version, memory_total = fields
         gpus.append(
             {
                 "name": name,
@@ -401,6 +428,13 @@ def build_nvidia_gpu_section() -> dict[str, Any]:
     except Exception as exc:  # noqa: BLE001
         return {"status": STATUS_ERROR, "detail": f"failed to parse nvidia-smi output: {exc}"}
 
+    if not gpus:
+        return {
+            "status": STATUS_UNAVAILABLE,
+            "detail": "nvidia-smi ran successfully but reported no GPUs",
+            "gpus": [],
+        }
+
     return {"status": STATUS_AVAILABLE, "gpus": gpus}
 
 
@@ -524,13 +558,35 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """CLI entry point.
+
+    Exit code policy:
+
+    * 0 - the report was produced (even if every optional probe is
+      "unavailable"/"error") and successfully delivered to stdout or
+      --output.
+    * 1 - the report was produced but could not be written to the
+      --output path (e.g. an unwritable/nonexistent parent directory).
+      A structured JSON error object is printed to stderr; no traceback
+      is allowed to escape.
+    * 2 - argparse usage error (e.g. an unrecognized argument), raised
+      by argparse itself before report generation.
+    """
     args = build_arg_parser().parse_args(argv)
 
     report = build_report()
     text = json.dumps(report, indent=args.indent, sort_keys=True) + "\n"
 
     if args.output is not None:
-        args.output.write_text(text, encoding="utf-8")
+        try:
+            args.output.write_text(text, encoding="utf-8")
+        except OSError as exc:
+            error_payload = {
+                "status": STATUS_ERROR,
+                "detail": f"failed to write report to {args.output}: {exc}",
+            }
+            sys.stderr.write(json.dumps(error_payload) + "\n")
+            return 1
     else:
         sys.stdout.write(text)
 
