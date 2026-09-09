@@ -33,3 +33,8 @@ When human intervention is permitted by `EXPERIMENT.md`, use the `request_human_
 The tool creates the authoritative intervention record and notifies the designated experiment operator.
 
 Do not use the tool merely because a scientific or technical decision is difficult or uncertain.
+
+When the experiment operator provides the requested information or action, record that response with `resolve_human_intervention`.
+
+Do not fabricate, infer, summarize away, or resolve an intervention without an actual operator response. Preserve the substance of the operator's answer in the resolution record.
+
