@@ -189,6 +189,53 @@ def test_resolve_repo_root_none_outside_a_repo(tmp_path):
     assert rcr.resolve_repo_root(module_path=tmp_path) is None
 
 
+def test_resolve_repo_root_is_pure_filesystem_no_subprocess(tmp_path, monkeypatch):
+    # Determinism requirement: repo-root resolution must not depend on a
+    # `git` executable at all, unlike the `repository` section.
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("resolve_repo_root must not shell out to git")
+
+    monkeypatch.setattr(rcr.subprocess, "run", fail_if_called)
+    root = tmp_path / "repo"
+    root.mkdir()
+    (root / ".git").mkdir()
+    (root / ".git" / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
+    nested = root / "a" / "b"
+    nested.mkdir(parents=True)
+    assert rcr.resolve_repo_root(module_path=nested) == root
+
+
+def test_resolve_repo_root_ignores_bare_git_named_directory(tmp_path):
+    # A `.git` entry that is merely an empty/unrelated directory (e.g. a
+    # stray filesystem artifact) must not be mistaken for a repository
+    # root - only a genuine Git marker (a `.git` dir with `HEAD`, or a
+    # `.git` file starting with `gitdir:`) counts.
+    root = tmp_path / "not_a_repo"
+    (root / ".git").mkdir(parents=True)
+    nested = root / "a" / "b"
+    nested.mkdir(parents=True)
+    assert rcr.resolve_repo_root(module_path=nested) is None
+
+
+def test_resolve_repo_root_ignores_bare_git_named_file(tmp_path):
+    root = tmp_path / "not_a_repo_either"
+    root.mkdir()
+    (root / ".git").write_text("not a gitdir pointer\n", encoding="utf-8")
+    assert rcr.resolve_repo_root(module_path=root) is None
+
+
+def test_resolve_repo_root_handles_git_file_worktree_marker(tmp_path):
+    # A linked Git worktree has a `.git` *file* (not directory) at its
+    # root, pointing at the main checkout's gitdir - this must still be
+    # recognized as the worktree's own root.
+    root = tmp_path / "worktree_repo"
+    root.mkdir()
+    (root / ".git").write_text("gitdir: /somewhere/else/.git/worktrees/x\n", encoding="utf-8")
+    nested = root / "sub" / "dir"
+    nested.mkdir(parents=True)
+    assert rcr.resolve_repo_root(module_path=nested) == root
+
+
 def test_repository_section_resolved_from_module_file_not_cwd(tmp_path, monkeypatch):
     repo_dir = rcr.Path(__file__).resolve().parents[2]
     monkeypatch.chdir(tmp_path)
@@ -223,6 +270,7 @@ def test_build_report_degrades_gracefully_when_repo_root_unresolvable(tmp_path):
 def test_load_mcp_config_missing_file(tmp_path):
     result = rcr.load_mcp_config(tmp_path)
     assert result["ok"] is False
+    assert result["hard_error"] is False
     assert "detail" in result
 
 
@@ -230,6 +278,7 @@ def test_load_mcp_config_malformed_json(tmp_path):
     (tmp_path / ".mcp.json").write_text("{not valid json", encoding="utf-8")
     result = rcr.load_mcp_config(tmp_path)
     assert result["ok"] is False
+    assert result["hard_error"] is True
     assert "not valid JSON" in result["detail"]
 
 
@@ -237,6 +286,7 @@ def test_load_mcp_config_wrong_shape(tmp_path):
     (tmp_path / ".mcp.json").write_text(json.dumps({"nope": {}}), encoding="utf-8")
     result = rcr.load_mcp_config(tmp_path)
     assert result["ok"] is False
+    assert result["hard_error"] is True
     assert "mcpServers" in result["detail"]
 
 
@@ -351,19 +401,37 @@ def test_mcp_backed_capability_partial_missing_mcp_registration(tmp_path, capabi
 
 
 @pytest.mark.parametrize("capability_key", list(ALL_CAPABILITY_FILES.keys() - {"github_ci_workflow", "pre_commit_config"}))
-def test_mcp_backed_capability_partial_when_mcp_json_malformed(tmp_path, capability_key):
+def test_mcp_backed_capability_error_when_mcp_json_malformed(tmp_path, capability_key):
     required_files = ALL_CAPABILITY_FILES[capability_key]
     root = _make_fake_repo(tmp_path, files={p: "content\n" for p in required_files})
     (root / ".mcp.json").write_text("{not valid json", encoding="utf-8")
     mcp_config = rcr.load_mcp_config(root)
     assert mcp_config["ok"] is False
+    assert mcp_config["hard_error"] is True
 
     builder = getattr(rcr, f"build_{capability_key}_section")
     section = builder(root, mcp_config)
-    # Files are present but MCP confirmation is impossible -> not "present".
-    assert section["status"] != rcr.STATUS_PRESENT
+    # Files are present but a malformed .mcp.json is a genuine, unexpected
+    # failure to determine MCP registration -> "error", not "partial".
+    assert section["status"] == rcr.STATUS_ERROR
     assert section["mcp_registered"] is None
     assert "detail" in section
+
+
+@pytest.mark.parametrize("capability_key", list(ALL_CAPABILITY_FILES.keys() - {"github_ci_workflow", "pre_commit_config"}))
+def test_mcp_backed_capability_error_when_mcp_json_malformed_even_if_files_missing(tmp_path, capability_key):
+    # A hard .mcp.json parse error dominates over missing files: the
+    # diagnostic cannot determine MCP registration either way, which is
+    # a different, stronger condition than "files simply absent".
+    root = _make_fake_repo(tmp_path)
+    (root / ".mcp.json").write_text("{not valid json", encoding="utf-8")
+    mcp_config = rcr.load_mcp_config(root)
+    assert mcp_config["hard_error"] is True
+
+    builder = getattr(rcr, f"build_{capability_key}_section")
+    section = builder(root, mcp_config)
+    assert section["status"] == rcr.STATUS_ERROR
+    assert section["mcp_registered"] is None
 
 
 @pytest.mark.parametrize("capability_key", list(ALL_CAPABILITY_FILES.keys() - {"github_ci_workflow", "pre_commit_config"}))

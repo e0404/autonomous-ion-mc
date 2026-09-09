@@ -22,11 +22,21 @@ utility is **deterministic apart from the repository's current
 branch/SHA**. Every capability check is a pure filesystem/repo-content
 check: does a file exist, is it non-empty, and — where relevant — does a
 specific marker (a JSON key in `.mcp.json`, a `name:` key in an agent's
-YAML frontmatter) appear. Nothing shells out to a tool whose behavior
-could vary by host (no `--version` probes), and no network access is
-used or required. The only environment-derived, host-varying fields
-anywhere in the report are `repository.branch` / `repository.sha` /
-`repository.dirty`, plus `generated_at_utc` (which varies by
+YAML frontmatter) appear. Repository-root resolution (`resolve_repo_root`)
+walks the filesystem for a genuine Git repository marker (a `.git`
+directory containing `HEAD`, or a `.git` file starting with `gitdir:`,
+covering both a normal checkout and a linked worktree) rather than
+shelling out to `git`, so capability checks have no dependency on a
+`git` executable being installed or behaving consistently across hosts.
+A bare/empty path merely named `.git` is deliberately not treated as a
+marker, to avoid a false-positive repository root. Nothing shells
+out to a tool whose behavior could vary by host (no `--version` probes),
+and no network access is used or required — *except* the `repository`
+section itself, which reports `branch`/`sha`/`dirty` via `git` the same
+way `environment_report.py` does; this is an inherent, documented
+exception, not an oversight. The only environment-derived, host-varying
+fields anywhere in the report are `repository.branch` / `repository.sha`
+/ `repository.dirty`, plus `generated_at_utc` (which varies by
 generation time, not by host).
 
 ## What it reports
@@ -53,11 +63,20 @@ For the six capabilities backed by `.mcp.json` (`local_exact_sha_validation`
 through `github_ci_observability`), each section independently reports
 `files` (which of the required files were found) and `mcp_registered`
 (whether the named server is declared). `.mcp.json` is read once per
-report and shared across all six checks; a missing, unreadable, or
-malformed `.mcp.json` is treated as a hard fact affecting every one of
-these capabilities — each affected section reports `mcp_registered: null`
-plus a `detail` explaining why the MCP-registration part could not be
-confirmed, rather than the report failing to be produced.
+report and shared across all six checks. Two distinct failure modes are
+handled and reported differently:
+
+- **`.mcp.json` simply does not exist** — not itself an error; each
+  affected section reports `mcp_registered: null` plus a `detail`, and
+  falls back to `partial`/`absent` purely on file presence.
+- **`.mcp.json` exists but is unreadable, not valid JSON, or missing its
+  `mcpServers` object** — a genuine failure to determine registration,
+  distinct from "registration confirmed absent". Every affected section
+  reports `status: "error"` and `mcp_registered: null`, regardless of
+  whether its own required files are present.
+
+Either way the report itself is always produced — a bad `.mcp.json` never
+prevents report generation.
 
 ## Status vocabulary
 
@@ -76,12 +95,22 @@ vocabulary (`available`/`unavailable`/`error`): this module reports
   `detail` field explains what is missing.
 - **`absent`** — none of the required files/markers for this capability
   were found.
-- **`error`** — checking the capability failed unexpectedly (e.g.
-  `.mcp.json` exists but is not valid JSON, or a filesystem read raised
-  for a reason other than "does not exist"). A `detail` field explains
-  why.
+- **`error`** — checking the capability failed unexpectedly: `.mcp.json`
+  exists but could not be understood (unreadable, invalid JSON, or
+  missing its `mcpServers` object), an internal builder exception, or a
+  malformed builder return value. A `detail` field explains why.
 
 Every section whose status is not `present` carries a `detail` string.
+
+**Caveat on required-file checks:** a required file that exists but
+cannot be read (e.g. a permission error) is currently reported the same
+as a file that does not exist at all — i.e. `absent`/`partial`, not
+`error`. This is a deliberate simplification for a self-audited,
+repository-committed file set that this process itself normally has
+ordinary read access to. It differs from the `.mcp.json` handling above,
+where "exists but unreadable/malformed" is specifically distinguished as
+`error` because `.mcp.json` parsing is a single well-defined check whose
+failure mode is worth surfacing precisely.
 
 ## Summary field
 

@@ -18,12 +18,18 @@ Design goals:
 * **Deterministic apart from the repository's current branch/SHA.** Every
   capability check is a pure filesystem/repo-content check (a file
   exists, is non-empty, and — where relevant — a specific marker
-  string/JSON key is present in a config file). Nothing shells out to a
-  tool whose behavior could vary by host (no `--version` probes, no
-  network access). The only environment-derived, host-varying fields
-  anywhere in the report are `repository.branch`/`repository.sha`/
-  `repository.dirty`, plus `generated_at_utc` (timestamp-varying by
-  nature, not host-varying).
+  string/JSON key is present in a config file). Repository-root
+  resolution (`resolve_repo_root`) walks the filesystem for a `.git`
+  entry rather than shelling out to `git`, so capability checks have no
+  dependency on a `git` executable being installed or behaving
+  consistently across hosts. Nothing shells out to a tool whose behavior
+  could vary by host (no `--version` probes, no network access) *except*
+  the `repository` section itself, which reports `branch`/`sha`/`dirty`
+  via `git` the same way `environment_report.py` does — an inherent,
+  documented exception, not an oversight. The only environment-derived,
+  host-varying fields anywhere in the report are `repository.branch`/
+  `repository.sha`/`repository.dirty`, plus `generated_at_utc`
+  (timestamp-varying by nature, not host-varying).
 * Every probe/check function is independently guarded so it can never
   raise; the top-level report is always produced (mirrors
   `_safe_section` in `environment_report.py`).
@@ -43,14 +49,24 @@ probe outcomes*):
                missing.
 * "absent"   - none of the required files/markers for this capability
                were found.
-* "error"    - checking the capability failed unexpectedly (e.g.
-               `.mcp.json` exists but fails to parse as JSON, or a
-               filesystem read raised unexpectedly for a reason other
-               than "file does not exist"). A "detail" field explains
-               why.
+* "error"    - checking the capability failed unexpectedly: `.mcp.json`
+               exists but could not be understood (unreadable, invalid
+               JSON, or missing the expected `mcpServers` object), an
+               internal builder exception, or a malformed builder return
+               value (see `_safe_call`). A "detail" field explains why.
 
 Every section carries a "status" field from this vocabulary; every
 section whose status is not "present" also carries a "detail" string.
+
+Note on required-file checks specifically: `_is_nonempty_file` treats
+*any* `OSError` (not only "file does not exist") as "not present", so an
+unreadable-but-existing file (e.g. a permission error) is reported as
+"absent"/"partial" rather than "error". This is a deliberate
+simplification for a self-audited, repository-committed file set that
+this process itself normally has ordinary read access to; it is not
+expected to matter in practice, but it means "absent" for a *required
+file* does not always mean "does not exist" the way it does for
+`.mcp.json`'s "malformed vs. missing" distinction above.
 
 No secrets: this utility never reads environment variables, credentials,
 or remote URLs, and never dumps `os.environ`. It only reads a small,
@@ -153,26 +169,53 @@ def run_subprocess(
 # ---------------------------------------------------------------------------
 
 
-def resolve_repo_root(
-    module_path: Path | str | None = None,
-    timeout: float = SUBPROCESS_TIMEOUT_SECONDS,
-) -> Path | None:
+def _has_git_marker(candidate: Path) -> bool:
+    """True if `candidate / ".git"` is an actual Git repository marker.
+
+    Deliberately stricter than "a `.git` path exists": a bare, empty
+    directory or file happening to be named `.git` (e.g. a stray
+    filesystem artifact) must not be mistaken for a repository root.
+    Recognizes the two shapes Git itself produces:
+
+    * a directory containing a `HEAD` file (a normal checkout or a bare
+      repository's gitdir);
+    * a regular file whose content starts with `gitdir:` (the marker Git
+      writes at the root of a linked worktree, pointing at the main
+      checkout's gitdir).
+    """
+    git_entry = candidate / ".git"
+    try:
+        if git_entry.is_dir():
+            return (git_entry / "HEAD").is_file()
+        if git_entry.is_file():
+            return git_entry.read_text(encoding="utf-8", errors="ignore").lstrip().startswith("gitdir:")
+    except OSError:
+        return False
+    return False
+
+
+def resolve_repo_root(module_path: Path | str | None = None) -> Path | None:
     """Resolve the repository root containing this module.
 
     Resolved from the file location of this module (``module_path``
     defaults to ``__file__``), never from the process's current working
-    directory, via ``git rev-parse --show-toplevel`` run with ``cwd`` set
-    to that location. Returns ``None`` if the location is not inside a
-    Git working tree or the probe otherwise fails.
+    directory, by walking upward looking for a directory with a genuine
+    Git repository marker (see `_has_git_marker`: a normal checkout's
+    `.git` directory, or a linked worktree's `.git` file). This is a pure
+    filesystem check: no subprocess, no dependency on a ``git``
+    executable being installed or behaving consistently across hosts,
+    which keeps every capability check anchored by this function free of
+    any host-tool dependency beyond the repository's own committed
+    content. Returns ``None`` if no ancestor directory has such a marker.
     """
-    module_dir = Path(module_path if module_path is not None else __file__).resolve()
-    if module_dir.is_file():
-        module_dir = module_dir.parent
+    current = Path(module_path if module_path is not None else __file__).resolve()
+    if current.is_file():
+        current = current.parent
 
-    result = run_subprocess(["git", "rev-parse", "--show-toplevel"], cwd=module_dir, timeout=timeout)
-    if not result["ok"]:
-        return None
-    return Path(result["stdout"]).resolve()
+    for candidate in (current, *current.parents):
+        if _has_git_marker(candidate):
+            return candidate
+    return None
 
 
 def build_repository_section(
@@ -226,26 +269,37 @@ def load_mcp_config(repo_root: Path) -> dict[str, Any]:
 
     Returns a dict with ``ok`` (bool). On success it also carries
     ``servers`` (the set of declared `mcpServers` names). On failure it
-    carries ``detail`` explaining why (missing file, unreadable, not
-    valid JSON, or malformed shape).
+    always carries ``detail`` and a ``hard_error`` bool distinguishing two
+    materially different cases:
+
+    * ``hard_error=False`` - `.mcp.json` simply does not exist. This is
+      not a failure of the diagnostic: there is nothing to confirm
+      registration against, so dependent capabilities fall back to
+      reporting on file presence alone (`partial`/`absent`).
+    * ``hard_error=True`` - `.mcp.json` exists but could not be
+      understood (unreadable, not valid JSON, or missing the expected
+      `mcpServers` object). This is the genuinely unexpected condition
+      the module's `STATUS_ERROR` vocabulary entry describes, and every
+      capability that depends on MCP registration must surface it as
+      `error` rather than silently degrading to `partial`/`absent`.
     """
     mcp_path = repo_root / ".mcp.json"
     if not mcp_path.is_file():
-        return {"ok": False, "detail": f"{mcp_path} does not exist"}
+        return {"ok": False, "hard_error": False, "detail": ".mcp.json does not exist"}
 
     try:
         text = mcp_path.read_text(encoding="utf-8")
     except OSError as exc:
-        return {"ok": False, "detail": f"failed to read {mcp_path}: {exc}"}
+        return {"ok": False, "hard_error": True, "detail": f"failed to read .mcp.json: {exc}"}
 
     try:
         data = json.loads(text)
     except json.JSONDecodeError as exc:
-        return {"ok": False, "detail": f"{mcp_path} is not valid JSON: {exc}"}
+        return {"ok": False, "hard_error": True, "detail": f".mcp.json is not valid JSON: {exc}"}
 
     servers = data.get("mcpServers") if isinstance(data, dict) else None
     if not isinstance(servers, dict):
-        return {"ok": False, "detail": f"{mcp_path} has no 'mcpServers' object"}
+        return {"ok": False, "hard_error": True, "detail": ".mcp.json has no 'mcpServers' object"}
 
     return {"ok": True, "servers": set(servers.keys())}
 
@@ -265,9 +319,14 @@ def _check_files_and_mcp_marker(
     non-empty, AND .mcp.json declares this server name".
 
     `mcp_config` is the pre-loaded result of `load_mcp_config()` (shared
-    across capabilities so a single missing/malformed `.mcp.json` is read
-    only once), or `None` if this capability has no MCP-registration
-    requirement.
+    across capabilities so `.mcp.json` is read only once), or `None` if
+    this capability has no MCP-registration requirement.
+
+    A `hard_error` on `mcp_config` (an unreadable/malformed `.mcp.json`,
+    as opposed to one that simply doesn't exist) always yields
+    `STATUS_ERROR` for this capability, regardless of file presence: the
+    diagnostic genuinely cannot determine MCP registration, which is a
+    different condition from "registration confirmed absent".
     """
     files: dict[str, bool] = {}
     for relpath in required_relpaths:
@@ -275,45 +334,56 @@ def _check_files_and_mcp_marker(
 
     missing_files = [relpath for relpath, present in files.items() if not present]
 
-    mcp_detail: str | None = None
-    mcp_registered: bool | None = None
-    if mcp_server_name is not None:
-        if mcp_config is None or not mcp_config.get("ok"):
-            mcp_registered = None
-            mcp_detail = (
-                mcp_config.get("detail", ".mcp.json could not be read") if mcp_config else ".mcp.json could not be read"
-            )
-        else:
-            mcp_registered = mcp_server_name in mcp_config["servers"]
-            if not mcp_registered:
-                mcp_detail = f"'{mcp_server_name}' not declared in .mcp.json mcpServers"
+    result: dict[str, Any] = {"files": files}
 
-    detail_parts: list[str] = []
+    if mcp_server_name is None:
+        detail_parts = [f"missing/empty files: {sorted(missing_files)}"] if missing_files else []
+        if not missing_files:
+            result["status"] = STATUS_PRESENT
+        elif not any(files.values()):
+            result["status"] = STATUS_ABSENT
+            result["detail"] = "; ".join(detail_parts)
+        else:
+            result["status"] = STATUS_PARTIAL
+            result["detail"] = "; ".join(detail_parts)
+        return result
+
+    result["mcp_server_name"] = mcp_server_name
+
+    if mcp_config is not None and mcp_config.get("hard_error"):
+        result["mcp_registered"] = None
+        detail_parts = [mcp_config["detail"]]
+        if missing_files:
+            detail_parts.append(f"missing/empty files: {sorted(missing_files)}")
+        result["status"] = STATUS_ERROR
+        result["detail"] = "; ".join(detail_parts)
+        return result
+
+    mcp_detail: str | None = None
+    if mcp_config is None or not mcp_config.get("ok"):
+        mcp_registered = None
+        mcp_detail = mcp_config["detail"] if mcp_config else ".mcp.json could not be read"
+    else:
+        mcp_registered = mcp_server_name in mcp_config["servers"]
+        if not mcp_registered:
+            mcp_detail = f"'{mcp_server_name}' not declared in .mcp.json mcpServers"
+
+    result["mcp_registered"] = mcp_registered
+
+    detail_parts = []
     if missing_files:
         detail_parts.append(f"missing/empty files: {sorted(missing_files)}")
     if mcp_detail is not None:
         detail_parts.append(mcp_detail)
 
-    result: dict[str, Any] = {
-        "files": files,
-    }
-    if mcp_server_name is not None:
-        result["mcp_server_name"] = mcp_server_name
-        result["mcp_registered"] = mcp_registered
-
     all_files_present = not missing_files
-    mcp_ok = mcp_server_name is None or mcp_registered is True
+    mcp_ok = mcp_registered is True
 
     if all_files_present and mcp_ok:
         result["status"] = STATUS_PRESENT
-    elif not files or all(not present for present in files.values()):
-        if mcp_server_name is not None and mcp_registered:
-            # Files entirely missing but MCP registration present: still partial.
-            result["status"] = STATUS_PARTIAL
-            result["detail"] = "; ".join(detail_parts) or "capability not fully present"
-        else:
-            result["status"] = STATUS_ABSENT
-            result["detail"] = "; ".join(detail_parts) or "no required files present"
+    elif not any(files.values()) and not mcp_ok:
+        result["status"] = STATUS_ABSENT
+        result["detail"] = "; ".join(detail_parts) or "no required files present"
     else:
         result["status"] = STATUS_PARTIAL
         result["detail"] = "; ".join(detail_parts) or "capability not fully present"
@@ -327,26 +397,26 @@ def _check_files_and_mcp_marker(
 
 
 def build_github_ci_workflow_section(repo_root: Path) -> dict[str, Any]:
-    path = repo_root / ".github" / "workflows" / "ci.yml"
-    present = _is_nonempty_file(path)
+    relpath = ".github/workflows/ci.yml"
+    present = _is_nonempty_file(repo_root / relpath)
     if present:
-        return {"status": STATUS_PRESENT, "files": {".github/workflows/ci.yml": True}}
+        return {"status": STATUS_PRESENT, "files": {relpath: True}}
     return {
         "status": STATUS_ABSENT,
-        "detail": f"{path} does not exist or is empty",
-        "files": {".github/workflows/ci.yml": False},
+        "detail": f"{relpath} does not exist or is empty",
+        "files": {relpath: False},
     }
 
 
 def build_pre_commit_config_section(repo_root: Path) -> dict[str, Any]:
-    path = repo_root / ".pre-commit-config.yaml"
-    present = _is_nonempty_file(path)
+    relpath = ".pre-commit-config.yaml"
+    present = _is_nonempty_file(repo_root / relpath)
     if present:
-        return {"status": STATUS_PRESENT, "files": {".pre-commit-config.yaml": True}}
+        return {"status": STATUS_PRESENT, "files": {relpath: True}}
     return {
         "status": STATUS_ABSENT,
-        "detail": f"{path} does not exist or is empty",
-        "files": {".pre-commit-config.yaml": False},
+        "detail": f"{relpath} does not exist or is empty",
+        "files": {relpath: False},
     }
 
 
@@ -441,7 +511,7 @@ def build_claude_native_subagents_section(repo_root: Path) -> dict[str, Any]:
     if not agents_dir.is_dir():
         return {
             "status": STATUS_ABSENT,
-            "detail": f"{agents_dir} does not exist",
+            "detail": ".claude/agents does not exist",
             "agent_names": [],
             "skipped_files": [],
         }
@@ -449,7 +519,7 @@ def build_claude_native_subagents_section(repo_root: Path) -> dict[str, Any]:
     try:
         candidate_paths = sorted(agents_dir.glob("*.md"))
     except OSError as exc:
-        return {"status": STATUS_ERROR, "detail": f"failed to list {agents_dir}: {exc}"}
+        return {"status": STATUS_ERROR, "detail": f"failed to list .claude/agents: {exc}"}
 
     agent_names: list[str] = []
     skipped_files: list[str] = []
@@ -501,10 +571,10 @@ def build_governing_docs_section(repo_root: Path) -> dict[str, Any]:
         result["status"] = STATUS_PRESENT
     elif len(missing) == len(_GOVERNING_DOCS):
         result["status"] = STATUS_ABSENT
-        result["detail"] = f"missing/empty: {missing}"
+        result["detail"] = f"missing/empty: {sorted(missing)}"
     else:
         result["status"] = STATUS_PARTIAL
-        result["detail"] = f"missing/empty: {missing}"
+        result["detail"] = f"missing/empty: {sorted(missing)}"
     return result
 
 
