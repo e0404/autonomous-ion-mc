@@ -16,6 +16,7 @@ WORKTREE_ROOT = Path.home() / "aiprojects" / "ion-mc-worktrees"
 RUN_ROOT = Path.home() / ".local" / "share" / "ionmc-experiment" / "host-runs"
 CACHE_ROOT = Path.home() / ".cache" / "ionmc-experiment" / "host-runner"
 HOST_VENV = CACHE_ROOT / "venv"
+SANDBOX_VENV = str(HOST_VENV)
 
 MAX_TIMEOUT_SECONDS = 7200
 
@@ -27,9 +28,9 @@ SAFE_ENV = {
     "NUMBA_CACHE_DIR": "/cache/numba",
     "CUDA_CACHE_PATH": "/cache/cuda",
     "PYTHONUNBUFFERED": "1",
-    "VIRTUAL_ENV": "/runtime",
+    "VIRTUAL_ENV": str(HOST_VENV),
     "PATH": (
-        "/runtime/bin"
+        f"{HOST_VENV}/bin:"
         "/usr/lib/wsl/lib:"
         "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
     ),
@@ -143,7 +144,12 @@ def build_bwrap_command(worktree: Path, argv: list[str]) -> list[str]:
         raise RuntimeError(f"host runner virtual environment not found: {HOST_VENV}")
 
     args.extend([
-        "--ro-bind", str(HOST_VENV), "/runtime",
+        "--dir", "/home",
+        "--dir", str(Path.home()),
+        "--dir", str(Path.home() / ".cache"),
+        "--dir", str(Path.home() / ".cache" / "ionmc-experiment"),
+        "--dir", str(Path.home() / ".cache" / "ionmc-experiment" / "host-runner"),
+        "--ro-bind", str(HOST_VENV), str(HOST_VENV),
     ])
 
     args.extend([
