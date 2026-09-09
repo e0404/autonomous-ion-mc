@@ -36,5 +36,3 @@ The autonomous system is responsible for scientific, numerical, architectural, a
 Infrastructure supporting orchestration and experiment recording is located under `infrastructure/` and `.claude/`.
 
 Human intervention is intentionally restricted and must use the structured intervention mechanism defined by the experiment protocol.
-
-
