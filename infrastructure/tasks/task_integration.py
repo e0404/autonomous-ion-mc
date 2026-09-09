@@ -274,80 +274,137 @@ def inspect_ci(task_id: str):
             "CI state would not describe the exact local task SHA"
         )
 
-    checks_proc = gh(
-        "pr",
-        "checks",
-        str(pr["number"]),
-        "--repo",
-        repo,
-        "--json",
-        "name,state,bucket,link,workflow",
-        cwd=path,
-        check=False,
-    )
+    # ------------------------------------------------------------------
+    # Check runs for the exact pushed SHA
+    # ------------------------------------------------------------------
 
-    if checks_proc.returncode not in (0, 1, 8):
-        raise RuntimeError(
-            "Failed to inspect PR checks:\n"
-            + (checks_proc.stderr.strip() or checks_proc.stdout.strip())
-        )
+    checks_proc = gh(
+        "api",
+        "-H",
+        "Accept: application/vnd.github+json",
+        f"repos/{repo}/commits/{head_sha}/check-runs",
+        cwd=path,
+    )
 
     try:
-        checks = json.loads(checks_proc.stdout)
+        checks_payload = json.loads(checks_proc.stdout)
     except json.JSONDecodeError as exc:
         raise RuntimeError(
-            f"Could not parse gh pr checks output: {exc}"
+            "Could not parse GitHub check-runs response:\n"
+            f"stdout: {checks_proc.stdout!r}\n"
+            f"stderr: {checks_proc.stderr!r}"
         ) from exc
 
+    checks = [
+        {
+            "id": check.get("id"),
+            "name": check.get("name"),
+            "status": check.get("status"),
+            "conclusion": check.get("conclusion"),
+            "started_at": check.get("started_at"),
+            "completed_at": check.get("completed_at"),
+            "details_url": check.get("details_url"),
+            "app": (
+                check.get("app", {}).get("name")
+                if check.get("app")
+                else None
+            ),
+        }
+        for check in checks_payload.get("check_runs", [])
+    ]
+
+    # ------------------------------------------------------------------
+    # Workflow runs for the exact pushed SHA
+    # ------------------------------------------------------------------
+
     runs_proc = gh(
-        "run",
-        "list",
-        "--repo",
-        repo,
-        "--branch",
-        branch,
-        "--event",
-        "pull_request",
-        "--limit",
-        "20",
-        "--json",
-        (
-            "databaseId,name,workflowName,event,status,"
-            "conclusion,headSha,url,createdAt,updatedAt"
-        ),
+        "api",
+        "-H",
+        "Accept: application/vnd.github+json",
+        f"repos/{repo}/actions/runs",
+        "-f",
+        f"head_sha={head_sha}",
+        "-f",
+        "event=pull_request",
+        "-f",
+        "per_page=100",
         cwd=path,
     )
 
-    runs = json.loads(runs_proc.stdout)
+    try:
+        runs_payload = json.loads(runs_proc.stdout)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(
+            "Could not parse GitHub workflow-runs response:\n"
+            f"stdout: {runs_proc.stdout!r}\n"
+            f"stderr: {runs_proc.stderr!r}"
+        ) from exc
 
-    matching_runs = [
-        run
-        for run in runs
-        if run.get("headSha") == head_sha
-    ]
+    matching_runs = runs_payload.get("workflow_runs", [])
 
     detailed_runs = []
 
     for run_info in matching_runs:
-        run_id = run_info["databaseId"]
+        run_id = run_info["id"]
 
-        view_proc = gh(
-            "run",
-            "view",
-            str(run_id),
-            "--repo",
-            repo,
-            "--json",
-            "jobs",
+        jobs_proc = gh(
+            "api",
+            "-H",
+            "Accept: application/vnd.github+json",
+            f"repos/{repo}/actions/runs/{run_id}/jobs",
+            "-f",
+            "per_page=100",
             cwd=path,
         )
 
-        view = json.loads(view_proc.stdout)
+        try:
+            jobs_payload = json.loads(jobs_proc.stdout)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(
+                f"Could not parse jobs for workflow run {run_id}:\n"
+                f"stdout: {jobs_proc.stdout!r}\n"
+                f"stderr: {jobs_proc.stderr!r}"
+            ) from exc
+
+        normalized_jobs = []
+
+        for job in jobs_payload.get("jobs", []):
+            normalized_jobs.append(
+                {
+                    "id": job.get("id"),
+                    "name": job.get("name"),
+                    "status": job.get("status"),
+                    "conclusion": job.get("conclusion"),
+                    "started_at": job.get("started_at"),
+                    "completed_at": job.get("completed_at"),
+                    "html_url": job.get("html_url"),
+                    "steps": [
+                        {
+                            "name": step.get("name"),
+                            "status": step.get("status"),
+                            "conclusion": step.get("conclusion"),
+                            "number": step.get("number"),
+                            "started_at": step.get("started_at"),
+                            "completed_at": step.get("completed_at"),
+                        }
+                        for step in job.get("steps", [])
+                    ],
+                }
+            )
 
         detailed_runs.append(
             {
-                **run_info,
-                "jobs": view.get("jobs", []),
+                "id": run_info.get("id"),
+                "name": run_info.get("name"),
+                "workflow_name": run_info.get("name"),
+                "event": run_info.get("event"),
+                "status": run_info.get("status"),
+                "conclusion": run_info.get("conclusion"),
+                "head_sha": run_info.get("head_sha"),
+                "html_url": run_info.get("html_url"),
+                "created_at": run_info.get("created_at"),
+                "updated_at": run_info.get("updated_at"),
+                "jobs": normalized_jobs,
             }
         )
 
@@ -386,10 +443,17 @@ def ci_failure_logs(
     repo = repository_name()
     head_sha = git_text("rev-parse", "HEAD", cwd=path)
 
-    remote_sha = git_text(
+    remote_sha_proc = git(
         "rev-parse",
         f"origin/{branch}",
         cwd=path,
+        check=False,
+    )
+
+    remote_sha = (
+        remote_sha_proc.stdout.strip()
+        if remote_sha_proc.returncode == 0
+        else None
     )
 
     if remote_sha != head_sha:
@@ -397,49 +461,59 @@ def ci_failure_logs(
             "Task branch HEAD does not match pushed origin branch"
         )
 
+    # ------------------------------------------------------------------
+    # Workflow runs for exact pushed SHA
+    # ------------------------------------------------------------------
+
     runs_proc = gh(
-        "run",
-        "list",
-        "--repo",
-        repo,
-        "--branch",
-        branch,
-        "--event",
-        "pull_request",
-        "--limit",
-        "20",
-        "--json",
-        "databaseId,workflowName,status,conclusion,headSha,url",
+        "api",
+        "-H",
+        "Accept: application/vnd.github+json",
+        f"repos/{repo}/actions/runs",
+        "-f",
+        f"head_sha={head_sha}",
+        "-f",
+        "event=pull_request",
+        "-f",
+        "per_page=100",
         cwd=path,
     )
 
-    runs = json.loads(runs_proc.stdout)
+    try:
+        runs_payload = json.loads(runs_proc.stdout)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(
+            "Could not parse GitHub workflow-runs response:\n"
+            f"stdout: {runs_proc.stdout!r}\n"
+            f"stderr: {runs_proc.stderr!r}"
+        ) from exc
 
-    matching_runs = [
-        run
-        for run in runs
-        if run.get("headSha") == head_sha
-    ]
-
+    matching_runs = runs_payload.get("workflow_runs", [])
     failures = []
 
     for run_info in matching_runs:
-        run_id = run_info["databaseId"]
+        run_id = run_info["id"]
 
-        view_proc = gh(
-            "run",
-            "view",
-            str(run_id),
-            "--repo",
-            repo,
-            "--json",
-            "jobs",
+        jobs_proc = gh(
+            "api",
+            "-H",
+            "Accept: application/vnd.github+json",
+            f"repos/{repo}/actions/runs/{run_id}/jobs",
+            "-f",
+            "per_page=100",
             cwd=path,
         )
 
-        jobs = json.loads(view_proc.stdout).get("jobs", [])
+        try:
+            jobs_payload = json.loads(jobs_proc.stdout)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(
+                f"Could not parse jobs for workflow run {run_id}:\n"
+                f"stdout: {jobs_proc.stdout!r}\n"
+                f"stderr: {jobs_proc.stderr!r}"
+            ) from exc
 
-        for job in jobs:
+        for job in jobs_payload.get("jobs", []):
             if job.get("conclusion") not in {
                 "failure",
                 "cancelled",
@@ -448,19 +522,14 @@ def ci_failure_logs(
             }:
                 continue
 
-            job_id = job.get("databaseId")
+            job_id = job.get("id")
 
             if job_id is None:
                 continue
 
             log_proc = gh(
-                "run",
-                "view",
-                "--repo",
-                repo,
-                "--job",
-                str(job_id),
-                "--log-failed",
+                "api",
+                f"repos/{repo}/actions/jobs/{job_id}/logs",
                 cwd=path,
                 check=False,
             )
@@ -469,22 +538,32 @@ def ci_failure_logs(
             truncated = len(raw_log) > max_chars
 
             if truncated:
-                # Failure is normally near the end of the job log.
                 log = raw_log[-max_chars:]
             else:
                 log = raw_log
 
             failures.append(
                 {
-                    "workflow": run_info.get("workflowName"),
+                    "workflow": run_info.get("name"),
                     "run_id": run_id,
-                    "run_url": run_info.get("url"),
+                    "run_url": run_info.get("html_url"),
                     "job_id": job_id,
                     "job_name": job.get("name"),
                     "job_conclusion": job.get("conclusion"),
-                    "steps": job.get("steps", []),
+                    "steps": [
+                        {
+                            "name": step.get("name"),
+                            "status": step.get("status"),
+                            "conclusion": step.get("conclusion"),
+                            "number": step.get("number"),
+                            "started_at": step.get("started_at"),
+                            "completed_at": step.get("completed_at"),
+                        }
+                        for step in job.get("steps", [])
+                    ],
                     "log": log,
                     "log_truncated": truncated,
+                    "log_command_exit_code": log_proc.returncode,
                 }
             )
 
@@ -494,6 +573,7 @@ def ci_failure_logs(
         "branch": branch,
         "head_sha": head_sha,
         "pr_number": pr["number"],
+        "pr_url": pr["url"],
         "failures": failures,
     }
 
