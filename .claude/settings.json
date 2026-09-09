@@ -4,7 +4,7 @@
   "disableClaudeAiConnectors": true,
 
   "permissions": {
-    "defaultMode": "default",
+    "defaultMode": "auto",
     "disableBypassPermissionsMode": "disable",
 
     "allow": [
@@ -33,7 +33,15 @@
       "Bash(python *)",
       "Bash(python3 *)",
       "Bash(pytest *)",
-      "Bash(pre-commit *)"
+      "Bash(pre-commit *)",
+
+      "mcp__codex-worker",
+      "mcp__task-manager",
+      "mcp__human-intervention",
+      "mcp__task-integration",
+      "mcp__validation-manager",
+      "mcp__task-commit",
+      "mcp__host-runner"
     ],
 
     "ask": [
@@ -57,6 +65,10 @@
       "Read(~/.pypirc)",
       "Read(~/.docker/config.json)",
       "Read(/mnt/c/Users/**)"
+    ],
+
+    "additionalDirectories": [
+      "~/aiprojects/ion-mc-worktrees"
     ]
   },
 
@@ -75,13 +87,26 @@
         ".",
         "~/.local/bin",
         "~/.cache/ionmc-experiment",
-        "~/.local/share/ionmc-experiment"
+        "~/.local/share/ionmc-experiment",
+        "~/aiprojects/ion-mc-worktrees"
       ],
 
       "allowWrite": [
         ".",
         "~/.cache/ionmc-experiment",
-        "~/.local/share/ionmc-experiment"
+        "~/.local/share/ionmc-experiment",
+        "~/aiprojects/ion-mc-worktrees"
+      ]
+    },
+
+    "network": {
+      "allowedDomains": [
+        "github.com",
+        "*.github.com",
+        "*.githubusercontent.com",
+        "pypi.org",
+        "*.pypi.org",
+        "files.pythonhosted.org"
       ]
     },
 
@@ -140,5 +165,147 @@
         }
       ]
     }
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/log_event.py"
+          }
+        ]
+      }
+    ],
+
+    "SessionEnd": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/log_event.py"
+          }
+        ]
+      }
+    ],
+
+    "TaskCreated": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/log_event.py"
+          }
+        ]
+      }
+    ],
+
+    "TaskCompleted": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/log_event.py"
+          }
+        ]
+      }
+    ],
+
+    "SubagentStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/log_event.py"
+          }
+        ]
+      }
+    ],
+
+    "SubagentStop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/log_event.py"
+          }
+        ]
+      }
+    ],
+
+    "Notification": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/log_event.py"
+          }
+        ]
+      }
+    ],
+
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/log_event.py"
+          }
+        ]
+      }
+    ],
+
+    "StopFailure": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/log_event.py"
+          }
+        ]
+      }
+    ],
+
+    "ConfigChange": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/log_event.py"
+          }
+        ]
+      }
+    ],
+
+    "PreModelSwitch": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/log_event.py"
+          }
+        ]
+      }
+    ],
+
+    "PostModelSwitch": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/log_event.py"
+          }
+        ]
+      }
+    ]
   }
 }

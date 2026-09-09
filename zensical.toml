@@ -1,0 +1,48 @@
+[project]
+site_name = "Autonomous Ion Therapy Monte Carlo"
+site_url = "https://e0404.github.io/autonomous-ion-mc/"
+site_description = "Documentation for an autonomously developed ion-therapy Monte Carlo system."
+repo_url = "https://github.com/e0404/autonomous-ion-mc"
+
+nav = [
+  { "Home" = "index.md" },
+
+  { "Getting started" = [
+    "getting-started/index.md",
+  ] },
+
+  { "Architecture" = [
+    "architecture/index.md",
+  ] },
+
+  { "Physics" = [
+    "physics/index.md",
+  ] },
+
+  { "Validation" = [
+    "validation/index.md",
+    "environment_diagnostics.md",
+    "warp_backend_diagnostics.md",
+    "repo_capability_diagnostics.md",
+  ] },
+
+  { "Development" = [
+    "development/index.md",
+  ] },
+
+  { "Experiment" = [
+    "experiment/index.md",
+    { "Protocol" = "experiment/protocol.md" },
+    { "Requirements" = "experiment/requirements.md" },
+    { "Design decisions" = "experiment/decisions.md" },
+  ] },
+]
+
+[project.theme]
+features = [
+  "navigation.tabs",
+  "navigation.sections",
+  "navigation.path",
+  "navigation.top",
+  "toc.follow",
+]

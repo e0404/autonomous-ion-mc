@@ -1,0 +1,88 @@
+{
+  "mcpServers": {
+    "codex-worker": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "--project",
+        "/home/wahln/aiprojects/ion-mc/infrastructure/mcp/env",
+        "run",
+        "python",
+        "/home/wahln/aiprojects/ion-mc/infrastructure/mcp/codex_mcp.py"
+      ],
+      "env": {}
+    },
+    "task-manager": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "--project",
+        "/home/wahln/aiprojects/ion-mc/infrastructure/mcp/env",
+        "run",
+        "python",
+        "/home/wahln/aiprojects/ion-mc/infrastructure/mcp/task_mcp.py"
+      ],
+      "env": {}
+    },
+    "human-intervention": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "--project",
+        "infrastructure/mcp/env",
+        "run",
+        "python",
+        "infrastructure/mcp/intervention_mcp.py"
+      ],
+      "env": {}
+    },
+    "task-integration": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "--project",
+        "infrastructure/mcp/env",
+        "run",
+        "python",
+        "infrastructure/mcp/integration_mcp.py"
+      ],
+      "env": {}
+    },
+    "validation-manager": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "--project",
+        "infrastructure/mcp/env",
+        "run",
+        "python",
+        "infrastructure/mcp/validation_mcp.py"
+      ],
+      "env": {}
+    },
+    "task-commit": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "--project",
+        "infrastructure/mcp/env",
+        "run",
+        "python",
+        "infrastructure/mcp/commit_mcp.py"
+      ],
+      "env": {}
+    },
+    "host-runner": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "--project",
+        "infrastructure/mcp/env",
+        "run",
+        "python",
+        "infrastructure/mcp/host_runner_mcp.py"
+      ],
+      "env": {}
+    }
+  }
+}
