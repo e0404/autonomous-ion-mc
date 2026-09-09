@@ -59,5 +59,6 @@ benchmarks/generated/
 docs/generated/
 docs/experiment/protocol.md
 docs/experiment/requirements.md
+docs/experiment/prompts/
 docs/experiment/decisions.md
 site/
