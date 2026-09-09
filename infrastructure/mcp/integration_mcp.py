@@ -83,6 +83,40 @@ def inspect_task_pull_request(task_id: str) -> dict:
         task_id,
     )
 
+@mcp.tool()
+def inspect_task_ci(task_id: str) -> dict:
+    """
+    Inspect GitHub CI for the exact pushed task-branch SHA.
+
+    Returns PR checks and matching GitHub Actions workflow runs,
+    including jobs and steps. This is read-only.
+    """
+    return run_integration(
+        "inspect-ci",
+        "--task-id",
+        task_id,
+    )
+
+
+@mcp.tool()
+def get_task_ci_failure_logs(
+    task_id: str,
+    max_chars: int = 20000,
+) -> dict:
+    """
+    Retrieve bounded failed-job logs for GitHub Actions runs associated
+    with the exact pushed task-branch SHA.
+
+    This is read-only and does not expose GitHub credentials.
+    """
+    return run_integration(
+        "ci-failure-logs",
+        "--task-id",
+        task_id,
+        "--max-chars",
+        str(max_chars),
+    )
+
 
 @mcp.tool()
 def merge_task_pull_request(task_id: str) -> dict:

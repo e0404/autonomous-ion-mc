@@ -242,6 +242,264 @@ def inspect_pr(task_id: str):
     print(json.dumps(result, indent=2))
 
 
+def inspect_ci(task_id: str):
+    path, branch = ensure_worktree(task_id)
+
+    pr = find_open_pr(branch)
+
+    if pr is None:
+        raise RuntimeError(
+            f"No open develop PR found for branch {branch}"
+        )
+
+    repo = repository_name()
+    head_sha = git_text("rev-parse", "HEAD", cwd=path)
+
+    remote_sha_proc = git(
+        "rev-parse",
+        f"origin/{branch}",
+        cwd=path,
+        check=False,
+    )
+
+    remote_sha = (
+        remote_sha_proc.stdout.strip()
+        if remote_sha_proc.returncode == 0
+        else None
+    )
+
+    if remote_sha != head_sha:
+        raise RuntimeError(
+            "Task branch HEAD does not match pushed origin branch; "
+            "CI state would not describe the exact local task SHA"
+        )
+
+    checks_proc = gh(
+        "pr",
+        "checks",
+        str(pr["number"]),
+        "--repo",
+        repo,
+        "--json",
+        "name,state,bucket,link,workflow",
+        cwd=path,
+        check=False,
+    )
+
+    if checks_proc.returncode not in (0, 1, 8):
+        raise RuntimeError(
+            "Failed to inspect PR checks:\n"
+            + (checks_proc.stderr.strip() or checks_proc.stdout.strip())
+        )
+
+    try:
+        checks = json.loads(checks_proc.stdout)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(
+            f"Could not parse gh pr checks output: {exc}"
+        ) from exc
+
+    runs_proc = gh(
+        "run",
+        "list",
+        "--repo",
+        repo,
+        "--branch",
+        branch,
+        "--event",
+        "pull_request",
+        "--limit",
+        "20",
+        "--json",
+        (
+            "databaseId,name,workflowName,event,status,"
+            "conclusion,headSha,url,createdAt,updatedAt"
+        ),
+        cwd=path,
+    )
+
+    runs = json.loads(runs_proc.stdout)
+
+    matching_runs = [
+        run
+        for run in runs
+        if run.get("headSha") == head_sha
+    ]
+
+    detailed_runs = []
+
+    for run_info in matching_runs:
+        run_id = run_info["databaseId"]
+
+        view_proc = gh(
+            "run",
+            "view",
+            str(run_id),
+            "--repo",
+            repo,
+            "--json",
+            "jobs",
+            cwd=path,
+        )
+
+        view = json.loads(view_proc.stdout)
+
+        detailed_runs.append(
+            {
+                **run_info,
+                "jobs": view.get("jobs", []),
+            }
+        )
+
+    result = {
+        "status": "observed",
+        "task_id": normalize_task_id(task_id),
+        "branch": branch,
+        "head_sha": head_sha,
+        "pr_number": pr["number"],
+        "pr_url": pr["url"],
+        "checks": checks,
+        "workflow_runs": detailed_runs,
+    }
+
+    print(json.dumps(result, indent=2))
+
+
+def ci_failure_logs(
+    task_id: str,
+    max_chars: int = 20000,
+):
+    if max_chars < 1000 or max_chars > 100000:
+        raise ValueError(
+            "max_chars must be between 1000 and 100000"
+        )
+
+    path, branch = ensure_worktree(task_id)
+
+    pr = find_open_pr(branch)
+
+    if pr is None:
+        raise RuntimeError(
+            f"No open develop PR found for branch {branch}"
+        )
+
+    repo = repository_name()
+    head_sha = git_text("rev-parse", "HEAD", cwd=path)
+
+    remote_sha = git_text(
+        "rev-parse",
+        f"origin/{branch}",
+        cwd=path,
+    )
+
+    if remote_sha != head_sha:
+        raise RuntimeError(
+            "Task branch HEAD does not match pushed origin branch"
+        )
+
+    runs_proc = gh(
+        "run",
+        "list",
+        "--repo",
+        repo,
+        "--branch",
+        branch,
+        "--event",
+        "pull_request",
+        "--limit",
+        "20",
+        "--json",
+        "databaseId,workflowName,status,conclusion,headSha,url",
+        cwd=path,
+    )
+
+    runs = json.loads(runs_proc.stdout)
+
+    matching_runs = [
+        run
+        for run in runs
+        if run.get("headSha") == head_sha
+    ]
+
+    failures = []
+
+    for run_info in matching_runs:
+        run_id = run_info["databaseId"]
+
+        view_proc = gh(
+            "run",
+            "view",
+            str(run_id),
+            "--repo",
+            repo,
+            "--json",
+            "jobs",
+            cwd=path,
+        )
+
+        jobs = json.loads(view_proc.stdout).get("jobs", [])
+
+        for job in jobs:
+            if job.get("conclusion") not in {
+                "failure",
+                "cancelled",
+                "timed_out",
+                "action_required",
+            }:
+                continue
+
+            job_id = job.get("databaseId")
+
+            if job_id is None:
+                continue
+
+            log_proc = gh(
+                "run",
+                "view",
+                "--repo",
+                repo,
+                "--job",
+                str(job_id),
+                "--log-failed",
+                cwd=path,
+                check=False,
+            )
+
+            raw_log = log_proc.stdout or log_proc.stderr
+            truncated = len(raw_log) > max_chars
+
+            if truncated:
+                # Failure is normally near the end of the job log.
+                log = raw_log[-max_chars:]
+            else:
+                log = raw_log
+
+            failures.append(
+                {
+                    "workflow": run_info.get("workflowName"),
+                    "run_id": run_id,
+                    "run_url": run_info.get("url"),
+                    "job_id": job_id,
+                    "job_name": job.get("name"),
+                    "job_conclusion": job.get("conclusion"),
+                    "steps": job.get("steps", []),
+                    "log": log,
+                    "log_truncated": truncated,
+                }
+            )
+
+    result = {
+        "status": "observed",
+        "task_id": normalize_task_id(task_id),
+        "branch": branch,
+        "head_sha": head_sha,
+        "pr_number": pr["number"],
+        "failures": failures,
+    }
+
+    print(json.dumps(result, indent=2))
+
+
 def sync_develop():
     branch = git_text("branch", "--show-current", cwd=REPO)
 
@@ -342,6 +600,17 @@ def main() -> int:
     p_inspect = sub.add_parser("inspect-pr")
     p_inspect.add_argument("--task-id", required=True)
 
+    p_ci = sub.add_parser("inspect-ci")
+    p_ci.add_argument("--task-id", required=True)
+
+    p_ci_logs = sub.add_parser("ci-failure-logs")
+    p_ci_logs.add_argument("--task-id", required=True)
+    p_ci_logs.add_argument(
+        "--max-chars",
+        type=int,
+        default=20000,
+    )
+
     p_merge = sub.add_parser("merge-pr")
     p_merge.add_argument("--task-id", required=True)
 
@@ -360,6 +629,15 @@ def main() -> int:
 
         elif args.command == "inspect-pr":
             inspect_pr(args.task_id)
+
+        elif args.command == "inspect-ci":
+            inspect_ci(args.task_id)
+
+        elif args.command == "ci-failure-logs":
+            ci_failure_logs(
+                args.task_id,
+                max_chars=args.max_chars,
+            )
 
         elif args.command == "merge-pr":
             merge_pr(args.task_id)
