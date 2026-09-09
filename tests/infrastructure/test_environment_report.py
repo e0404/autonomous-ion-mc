@@ -255,7 +255,9 @@ def test_repository_section_resolved_from_module_file_not_cwd(tmp_path, monkeypa
     section = er.build_repository_section(module_path=repo_dir / "infrastructure" / "diagnostics")
 
     assert section["status"] == er.STATUS_AVAILABLE
-    assert isinstance(section["branch"], str) and section["branch"]
+    # CI checkouts may be detached, in which case
+    # `git branch --show-current` legitimately returns "".
+    assert isinstance(section["branch"], str)
     assert isinstance(section["sha"], str) and len(section["sha"]) == 40
     assert isinstance(section["dirty"], bool)
 
