@@ -59,6 +59,18 @@
         "infrastructure/mcp/validation_mcp.py"
       ],
       "env": {}
+    },
+    "task-commit": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "--project",
+        "infrastructure/mcp/env",
+        "run",
+        "python",
+        "infrastructure/mcp/commit_mcp.py"
+      ],
+      "env": {}
     }
   }
 }

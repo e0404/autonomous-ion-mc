@@ -60,6 +60,25 @@ Do not push directly to `develop` or `main`.
 
 Task branches are preserved after integration.
 
+## Autonomous Git commits
+
+Autonomous agents must not depend on the operator's personal Git identity or attempt to read or modify user-level Git configuration.
+
+Use `commit_task_changes` to commit completed task-worktree changes.
+
+Autonomous commits use the fixed experiment identity:
+
+    Autonomous IonMC Agent <autonomous-ionmc-agent@users.noreply.github.com>
+
+Before committing:
+
+- inspect the worktree changes;
+- ensure no unintended files are present;
+- run the appropriate tests for the task.
+
+Local scientific validation records are created only after the exact state being validated has been committed.
+
+
 ## Local validation gate
 
 A task may only be merged into `develop` after appropriate local validation has been performed for the exact committed task-branch SHA.
