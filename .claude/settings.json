@@ -99,6 +99,17 @@
       ]
     },
 
+    "network": {
+      "allowedDomains": [
+        "github.com",
+        "*.github.com",
+        "*.githubusercontent.com",
+        "pypi.org",
+        "*.pypi.org",
+        "files.pythonhosted.org"
+      ]
+    },
+
     "credentials": {
       "files": [
         {

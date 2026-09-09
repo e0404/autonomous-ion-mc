@@ -126,3 +126,15 @@ The runner executes the requested argv directly, without a shell, inside a secon
 Host validation requires a clean task worktree and is associated with the exact current commit SHA.
 
 A successful command is execution evidence only. It does not constitute scientific validation by itself. The orchestrator must separately record an appropriate exact-SHA local validation result using the validation manager.
+
+## Public development-network access
+
+Sandboxed development tools may autonomously access public network resources needed for software and scientific development.
+
+Common development domains configured in `.claude/settings.json` are pre-authorized so routine operations such as public Git access, dependency retrieval, and pre-commit hook installation do not require additional network approval.
+
+These configured domains are not a strict egress allowlist. Other public network destinations may be permitted by Claude Code's normal sandbox and Auto-mode permission mechanisms.
+
+Public web research is separately permitted by `EXPERIMENT.md`.
+
+Agents must not bypass the sandbox or use network access to perform activities prohibited by `EXPERIMENT.md`, including initiating human communication.
