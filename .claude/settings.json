@@ -36,7 +36,8 @@
       "Bash(pre-commit *)",
 
       "mcp__codex-worker",
-      "mcp__task-manager"
+      "mcp__task-manager",
+      "mcp__human_intervention"
     ],
 
     "ask": [
