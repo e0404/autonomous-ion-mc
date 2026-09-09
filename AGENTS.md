@@ -78,3 +78,11 @@ The required depth of validation depends on the change:
   validation defined by `EXPERIMENT.md` and `REQUIREMENTS.md`.
 
 GitHub CI is not a substitute for the local validation gate.
+
+## Lightweight GitHub CI
+
+GitHub CI is a software-quality gate, not a scientific-validation environment.
+
+Before integration, the lightweight CI checks must pass. These checks may cover repository hygiene, syntax, unit tests, packaging, and other small deterministic tests.
+
+Do not move full scientific validation, large Monte Carlo runs, GPU-intensive validation, reference comparisons, or performance validation into GitHub-hosted CI. Those remain local validation tasks under the exact-SHA local validation gate.
