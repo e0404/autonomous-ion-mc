@@ -40,7 +40,8 @@
       "mcp__human-intervention",
       "mcp__task-integration",
       "mcp__validation-manager",
-      "mcp__task-commit"
+      "mcp__task-commit",
+      "mcp__host-runner"
     ],
 
     "ask": [
