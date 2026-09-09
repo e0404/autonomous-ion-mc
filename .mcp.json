@@ -71,6 +71,18 @@
         "infrastructure/mcp/commit_mcp.py"
       ],
       "env": {}
+    },
+    "host-runner": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "--project",
+        "infrastructure/mcp/env",
+        "run",
+        "python",
+        "infrastructure/mcp/host_runner_mcp.py"
+      ],
+      "env": {}
     }
   }
 }

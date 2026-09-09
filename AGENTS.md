@@ -105,3 +105,24 @@ GitHub CI is a software-quality gate, not a scientific-validation environment.
 Before integration, the lightweight CI checks must pass. These checks may cover repository hygiene, syntax, unit tests, packaging, and other small deterministic tests.
 
 Do not move full scientific validation, large Monte Carlo runs, GPU-intensive validation, reference comparisons, or performance validation into GitHub-hosted CI. Those remain local validation tasks under the exact-SHA local validation gate.
+
+## Controlled local host/GPU execution
+
+Agents must not bypass the Claude sandbox to obtain GPU or unrestricted host execution.
+
+For committed task states requiring local CPU/GPU execution, use `run_host_validation`.
+
+The runner executes the requested argv directly, without a shell, inside a second bubblewrap sandbox with:
+
+- the task worktree mounted at `/workspace`;
+- dedicated experiment caches mounted at `/cache`;
+- WSL GPU access through `/dev/dxg`;
+- no network access;
+- no Docker socket;
+- no user home directory;
+- no credentials;
+- no arbitrary Windows filesystem access.
+
+Host validation requires a clean task worktree and is associated with the exact current commit SHA.
+
+A successful command is execution evidence only. It does not constitute scientific validation by itself. The orchestrator must separately record an appropriate exact-SHA local validation result using the validation manager.
