@@ -15,6 +15,7 @@ from pathlib import Path
 WORKTREE_ROOT = Path.home() / "aiprojects" / "ion-mc-worktrees"
 RUN_ROOT = Path.home() / ".local" / "share" / "ionmc-experiment" / "host-runs"
 CACHE_ROOT = Path.home() / ".cache" / "ionmc-experiment" / "host-runner"
+HOST_VENV = CACHE_ROOT / "venv"
 
 MAX_TIMEOUT_SECONDS = 7200
 
@@ -26,7 +27,9 @@ SAFE_ENV = {
     "NUMBA_CACHE_DIR": "/cache/numba",
     "CUDA_CACHE_PATH": "/cache/cuda",
     "PYTHONUNBUFFERED": "1",
+    "VIRTUAL_ENV": "/runtime",
     "PATH": (
+        "/runtime/bin"
         "/usr/lib/wsl/lib:"
         "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
     ),
@@ -135,6 +138,13 @@ def build_bwrap_command(worktree: Path, argv: list[str]) -> list[str]:
     add_optional_ro_bind(args, "/etc/ld.so.cache")
     add_optional_ro_bind(args, "/etc/ssl")
     add_optional_ro_bind(args, "/etc/ca-certificates")
+
+    if not HOST_VENV.is_dir():
+        raise RuntimeError(f"host runner virtual environment not found: {HOST_VENV}")
+
+    args.extend([
+        "--ro-bind", str(HOST_VENV), "/runtime",
+    ])
 
     args.extend([
         "--ro-bind", "/sys", "/sys",
