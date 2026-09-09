@@ -319,6 +319,8 @@ def inspect_ci(task_id: str):
 
     runs_proc = gh(
         "api",
+        "--method",
+        "GET",
         "-H",
         "Accept: application/vnd.github+json",
         f"repos/{repo}/actions/runs",
@@ -349,6 +351,8 @@ def inspect_ci(task_id: str):
 
         jobs_proc = gh(
             "api",
+            "--method",
+            "GET",
             "-H",
             "Accept: application/vnd.github+json",
             f"repos/{repo}/actions/runs/{run_id}/jobs",
@@ -467,6 +471,8 @@ def ci_failure_logs(
 
     runs_proc = gh(
         "api",
+        "--method",
+        "GET",
         "-H",
         "Accept: application/vnd.github+json",
         f"repos/{repo}/actions/runs",
@@ -496,6 +502,8 @@ def ci_failure_logs(
 
         jobs_proc = gh(
             "api",
+            "--method",
+            "GET",
             "-H",
             "Accept: application/vnd.github+json",
             f"repos/{repo}/actions/runs/{run_id}/jobs",
