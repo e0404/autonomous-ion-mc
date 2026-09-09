@@ -223,14 +223,36 @@ Two findings, both of which changed this decision:
    numerical case, not one to dodge), and `max_normalized_diff` was added
    so the headline number is the one the verdict actually uses.
 
-Measured margins of the selected tolerances against the data above:
-`fma_exposed`/`float32` has a budget of ~1.35e-05 against a measured
-9.54e-07 (≈14x); `fma_exposed`/`float64` ~1.26e-11 against 1.78e-15
-(≈7000x); `transcendental`/`float32` ~2.2e-06 against 1.19e-07 (≈18x);
-`transcendental`/`float64` ~1.2e-12 against 2.22e-16 (≈5000x). The
-`float64` margins are deliberately generous: the measured differences are
-at the 1 ULP floor, where a tight tolerance would track toolchain
-versions rather than divergence.
+The revised criterion was then re-executed on the same hardware at SHA
+`79ebf2a4e54cffedfdaab960b676f77753d72fd4` with the full
+`--require-cpu --require-cuda --require-parity` gate, which passed. The
+contraction-free control behaved as predicted:
+
+| workload | dtype | max_abs_diff | max_normalized_diff | verdict |
+|---|---|---|---|---|
+| `product` | `float32` | 0.0 | n/a (bitwise) | identical |
+| `product` | `float64` | 0.0 | n/a (bitwise) | identical |
+| `fma_exposed` | `float32` | 9.5367431640625e-07 | 0.105 | within_tolerance |
+| `fma_exposed` | `float64` | 1.7763568394002505e-15 | 2.212e-04 | within_tolerance |
+| `transcendental` | `float32` | 1.1920928955078125e-07 | 0.076 | within_tolerance |
+| `transcendental` | `float64` | 2.220446049250313e-16 | 1.333e-03 | within_tolerance |
+
+`product` being **bitwise identical between Warp CPU and Warp CUDA in
+both precisions** confirms the diagnosis: the earlier failure was FMA
+contraction of an expression that invited it, not an inherent inability
+of the two backends to agree exactly. A bitwise class is therefore
+achievable and worth keeping.
+
+Measured margins of the selected tolerances (margin = 1 /
+max_normalized_diff, so a margin of 1 would be a bare pass):
+`fma_exposed`/`float32` 9.5x, `fma_exposed`/`float64` 4520x,
+`transcendental`/`float32` 13.2x, `transcendental`/`float64` 750x. The
+`float64` margins are deliberately generous: those differences are at the
+1 ULP floor, where a tight tolerance would track toolchain versions
+rather than divergence. The `float32` margins near 10x are the intended
+working range - loose enough to survive a driver or Warp update, tight
+enough that a genuine algorithmic divergence, which would be orders of
+magnitude larger, cannot hide.
 
 Both findings were independently confirmed as blocking by the external
 Codex reviewer, which additionally identified that NaN-vs-NaN could
