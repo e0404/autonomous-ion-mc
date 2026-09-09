@@ -60,6 +60,18 @@ Do not push directly to `develop` or `main`.
 
 Task branches are preserved after integration.
 
+### GitHub CI observability
+
+Agents must inspect GitHub CI through the controlled task-integration tools rather than attempting to access operator GitHub credentials.
+
+Use `inspect_task_ci` to inspect check, workflow, job, and step status for the exact pushed task-branch SHA.
+
+If CI fails, use `get_task_ci_failure_logs` to retrieve bounded failed-job logs and diagnose the failure.
+
+CI observations must correspond to the exact current pushed task SHA. A local commit that has not yet been pushed invalidates the relevance of earlier CI results.
+
+Do not treat `mergeStateStatus` alone as evidence that the required CI checks passed when check-level information is available.
+
 ## Autonomous Git commits
 
 Autonomous agents must not depend on the operator's personal Git identity or attempt to read or modify user-level Git configuration.
