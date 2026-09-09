@@ -512,7 +512,9 @@ The remote repository should enforce the intended workflow where technically pos
 
 Integration should require pull requests and passing required status checks.
 
-A linear history should be maintained on protected integration branches.
+`develop` maintains linear history through squash integration of task branches.
+
+`main` preserves release ancestry by merging release-ready states of `develop` with merge commits. Rebase integration is not used for either protected branch.
 
 Repository configuration that affects the experiment should itself be documented or exported where practical.
 

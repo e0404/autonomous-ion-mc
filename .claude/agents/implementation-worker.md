@@ -5,7 +5,6 @@ model: sonnet
 effort: medium
 permissionMode: default
 maxTurns: 40
-isolation: worktree
 ---
 
 You are an implementation specialist for an autonomous scientific software project.

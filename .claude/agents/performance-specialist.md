@@ -5,7 +5,6 @@ model: opus
 effort: high
 permissionMode: default
 maxTurns: 40
-isolation: worktree
 ---
 
 You are the performance engineering specialist for a high-performance ion-therapy Monte Carlo project.
