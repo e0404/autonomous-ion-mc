@@ -1,4 +1,144 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
-  "disableClaudeAiConnectors": true
+
+  "disableClaudeAiConnectors": true,
+
+  "permissions": {
+    "defaultMode": "default",
+    "disableBypassPermissionsMode": "disable",
+
+    "allow": [
+      "Edit(src/**)",
+      "Edit(tests/**)",
+      "Edit(decisions/**)",
+      "Edit(validation/**)",
+      "Edit(benchmarks/**)",
+      "Edit(reference_requests/**)",
+      "Edit(docs/**)",
+      "Edit(infrastructure/**)",
+      "Edit(.github/**)",
+
+      "Edit(README.md)",
+      "Edit(AGENTS.md)",
+      "Edit(CLAUDE.md)",
+      "Edit(EXPERIMENT.md)",
+      "Edit(REQUIREMENTS.md)",
+      "Edit(pyproject.toml)",
+      "Edit(uv.lock)",
+      "Edit(.pre-commit-config.yaml)",
+
+      "Bash(git *)",
+      "Bash(gh *)",
+      "Bash(uv *)",
+      "Bash(python *)",
+      "Bash(python3 *)",
+      "Bash(pytest *)",
+      "Bash(pre-commit *)"
+    ],
+
+    "ask": [
+      "Bash(git push *)",
+      "Bash(gh pr merge *)",
+      "Bash(gh release create *)"
+    ],
+
+    "deny": [
+      "Bash(sudo *)",
+      "Bash(su *)",
+
+      "Read(~/.ssh/**)",
+      "Read(~/.aws/**)",
+      "Read(~/.config/gh/hosts.yml)",
+      "Read(~/.claude/**)",
+      "Read(~/.claude-ionmc/**)",
+      "Read(~/.git-credentials)",
+      "Read(~/.netrc)",
+      "Read(~/.npmrc)",
+      "Read(~/.pypirc)",
+      "Read(~/.docker/config.json)",
+      "Read(/mnt/c/Users/**)"
+    ]
+  },
+
+  "sandbox": {
+    "enabled": true,
+    "failIfUnavailable": true,
+
+    "allowUnsandboxedCommands": false,
+
+    "filesystem": {
+      "denyRead": [
+        "~/"
+      ],
+
+      "allowRead": [
+        ".",
+        "~/.local/bin",
+        "~/.cache/ionmc-experiment",
+        "~/.local/share/ionmc-experiment"
+      ],
+
+      "allowWrite": [
+        ".",
+        "~/.cache/ionmc-experiment",
+        "~/.local/share/ionmc-experiment"
+      ]
+    },
+
+    "credentials": {
+      "files": [
+        {
+          "path": "~/.ssh",
+          "mode": "deny"
+        },
+        {
+          "path": "~/.aws",
+          "mode": "deny"
+        },
+        {
+          "path": "~/.netrc",
+          "mode": "deny"
+        },
+        {
+          "path": "~/.docker/config.json",
+          "mode": "deny"
+        },
+        {
+          "path": "~/.config/gh/hosts.yml",
+          "mode": "deny"
+        }
+      ],
+
+      "envVars": [
+        {
+          "name": "OPENAI_API_KEY",
+          "mode": "deny"
+        },
+        {
+          "name": "ANTHROPIC_API_KEY",
+          "mode": "deny"
+        },
+        {
+          "name": "GITHUB_TOKEN",
+          "mode": "deny"
+        },
+        {
+          "name": "GH_TOKEN",
+          "mode": "deny"
+        },
+        {
+          "name": "AWS_ACCESS_KEY_ID",
+          "mode": "deny"
+        },
+        {
+          "name": "AWS_SECRET_ACCESS_KEY",
+          "mode": "deny"
+        },
+        {
+          "name": "AWS_SESSION_TOKEN",
+          "mode": "deny"
+        }
+      ]
+    }
+  }
 }
