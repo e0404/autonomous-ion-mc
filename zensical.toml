@@ -34,6 +34,7 @@ nav = [
     "experiment/index.md",
     { "Protocol" = "experiment/protocol.md" },
     { "Requirements" = "experiment/requirements.md" },
+    { "Kickoff prompt" = "experiment/prompts/kickoff-v1.md" },
     { "Design decisions" = "experiment/decisions.md" },
   ] },
 ]
