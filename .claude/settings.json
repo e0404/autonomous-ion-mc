@@ -37,7 +37,8 @@
 
       "mcp__codex-worker",
       "mcp__task-manager",
-      "mcp__human-intervention"
+      "mcp__human-intervention",
+      "mcp__task-integration"
     ],
 
     "ask": [
