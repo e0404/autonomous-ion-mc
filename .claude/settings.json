@@ -4,7 +4,7 @@
   "disableClaudeAiConnectors": true,
 
   "permissions": {
-    "defaultMode": "default",
+    "defaultMode": "auto",
     "disableBypassPermissionsMode": "disable",
 
     "allow": [
@@ -63,6 +63,10 @@
       "Read(~/.pypirc)",
       "Read(~/.docker/config.json)",
       "Read(/mnt/c/Users/**)"
+    ],
+
+    "additionalDirectories": [
+      "~/aiprojects/ion-mc-worktrees"
     ]
   },
 
@@ -81,13 +85,15 @@
         ".",
         "~/.local/bin",
         "~/.cache/ionmc-experiment",
-        "~/.local/share/ionmc-experiment"
+        "~/.local/share/ionmc-experiment",
+        "~/aiprojects/ion-mc-worktrees"
       ],
 
       "allowWrite": [
         ".",
         "~/.cache/ionmc-experiment",
-        "~/.local/share/ionmc-experiment"
+        "~/.local/share/ionmc-experiment",
+        "~/aiprojects/ion-mc-worktrees"
       ]
     },
 
