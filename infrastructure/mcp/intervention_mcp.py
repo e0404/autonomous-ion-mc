@@ -16,6 +16,12 @@ REQUEST_TOOL = (
     / "interventions"
     / "request_intervention.py"
 )
+RESOLVE_TOOL = (
+    REPO_ROOT
+    / "infrastructure"
+    / "interventions"
+    / "resolve_intervention.py"
+)
 
 mcp = MCPServer("ionmc-human-intervention")
 
@@ -93,6 +99,55 @@ def request_human_intervention(
 
     return result
 
+@mcp.tool()
+def resolve_human_intervention(
+    request_id: str,
+    response: str,
+    operator_note: str = "",
+) -> dict:
+    """
+    Record the designated experiment operator's response to an existing
+    human-intervention request and mark that request resolved.
+
+    The response must originate from the experiment operator. Do not
+    fabricate or infer a human response.
+    """
+
+    cmd = [
+        sys.executable,
+        str(RESOLVE_TOOL),
+        "--request-id",
+        request_id,
+        "--response",
+        response,
+    ]
+
+    if operator_note:
+        cmd += ["--operator-note", operator_note]
+
+    proc = subprocess.run(
+        cmd,
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+    )
+
+    stream = proc.stdout if proc.stdout.strip() else proc.stderr
+
+    try:
+        result = json.loads(stream)
+    except json.JSONDecodeError:
+        result = {
+            "status": "failed",
+            "exit_code": proc.returncode,
+            "stdout": proc.stdout,
+            "stderr": proc.stderr,
+        }
+
+    if proc.returncode != 0:
+        result["exit_code"] = proc.returncode
+
+    return result
 
 if __name__ == "__main__":
     mcp.run()
