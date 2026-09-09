@@ -47,6 +47,18 @@
         "infrastructure/mcp/integration_mcp.py"
       ],
       "env": {}
+    },
+    "validation-manager": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "--project",
+        "infrastructure/mcp/env",
+        "run",
+        "python",
+        "infrastructure/mcp/validation_mcp.py"
+      ],
+      "env": {}
     }
   }
 }
