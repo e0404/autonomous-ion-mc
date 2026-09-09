@@ -23,6 +23,18 @@
         "/home/wahln/aiprojects/ion-mc/infrastructure/mcp/task_mcp.py"
       ],
       "env": {}
+    },
+    "human-intervention": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "--project",
+        "infrastructure/mcp/env",
+        "run",
+        "python",
+        "infrastructure/mcp/intervention_mcp.py"
+      ],
+      "env": {}
     }
   }
 }
