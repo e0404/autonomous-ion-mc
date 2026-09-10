@@ -85,6 +85,24 @@ tasks.
 Warp results are from host run `RUN-20260910T135739Z-8166c2f4` (RTX A6000, CUDA 12.9, Warp 1.17.0) at
 SHA `b726507`, recorded in the DEV-004 local validation record.
 
+## V1 (straggling) - Bragg peak and range straggling (task DEV-005)
+
+Script: ``validation/v1_bragg_straggling.py``. References: the analytic Bohr
+range-straggling integral and Bortfeld's ``sigma = 0.012 R^0.935`` (decision
+0010). The metric is the range straggling ``sigma_R`` (std of stopping depths),
+which isolates straggling from the peak shape.
+
+| check | criterion | result (reference paths) |
+|---|---|---|
+| mean range vs CSDA range, 100/150/200 MeV | within 0.1 % | <0.01 % |
+| sigma_R vs analytic Bohr integral | within 3 % | <1 % |
+| sigma_R vs Bortfeld 0.012 R^0.935 | within 10 % | +5-7 % (Bohr electron-binding gap) |
+| sigma_R / R band | 0.9-1.2 % | 1.04-1.11 % |
+| energy conservation (reference float64 / Warp float32) | 1e-9 / 5e-5 | ~1e-16 / ~1e-5 |
+| Bragg peak present (peak > 3x entrance, deep) | yes | yes |
+| two independent seeds statistically consistent | RMS(t) in [0.5, 1.6] | ~1.1 |
+| reference vs Warp / Warp CPU vs CUDA cumulative | 1e-4 / 1e-5 | see the DEV-005 validation record |
+
 The ICRU 90 mean excitation energy (78 eV) is reported as a separate model
 difference (−1.14 % at 1 MeV to −0.43 % at 400 MeV), not absorbed into any
 tolerance.

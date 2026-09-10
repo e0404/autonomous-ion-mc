@@ -464,6 +464,8 @@ deterministically and reviewed in one pull request.
   (decision `0008`).
 - 2026-09-10: `DEV-004` began **Stage 1**: the proton transport architecture
   and continuous-slowing-down longitudinal depth dose (decision `0009`),
-  deterministic (no straggling/scattering yet). Next: energy-loss straggling
-  and the Bragg-peak shape, then multiple Coulomb scattering and lateral
-  spread, which close milestone V1.
+  deterministic (no straggling/scattering yet).
+- 2026-09-10: `DEV-005` added Bohr energy-loss straggling and the Bragg peak
+  with batch-based uncertainty (decision `0010`), and decoupled the physics
+  step from the scoring grid. Next: multiple Coulomb scattering and lateral
+  spread, which turn the depth dose into a volumetric dose and close V1.
