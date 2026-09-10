@@ -197,4 +197,25 @@ host runner for the exact SHA (Warp CPU and CUDA), recorded below.
 
 ## Later validation outcome
 
-To be filled in from the DEV-004 host run.
+DEV-004 host run `RUN-20260910T135330Z-081a424c` (RTX A6000, CUDA 12.9, Warp 1.17.0, SHA `c0bf1c2`):
+all seven gates passed. Energy conservation on the reference path ~1e-16;
+R80 versus the tabulated CSDA range +0.15 % (100 MeV), +0.09 % (150 MeV),
+−0.05 % (200 MeV); step-size drift ≤ 1.7e-6 on the fixed grid; the on-axis
+stopping depth within 0.11 % of the CSDA range. Reference (float64) versus
+float32 Warp cumulative depth dose ≤ 2.7e-5 of the total on both CPU and CUDA;
+float32 Warp energy balance ≤ 7e-7. **Warp CPU versus CUDA agreed to ≤ 2.3e-8**
+of the total cumulative depth dose — near bitwise, because the transport step
+(tabulated PCHIP stopping power, arithmetic, no transcendentals) leaves the two
+toolchains almost nothing to round differently, the strongest outcome the
+decision 0001 criterion admits.
+
+**Decision 0005 re-examined under real transport (as promised).** The
+shared-source execution model held: one source ran as the float64 reference
+driver and as the Warp CPU/CUDA kernel for a per-thread ``while`` loop with
+register-resident state, a data-dependent trip count and atomic scoring. The
+one shared-source rule reconfirmed is that integer loop counters mutated inside
+a dynamic loop must be declared dynamic (``step = int(0)``), the integer
+analogue of the ``float(0.0)`` rule; and that the reference path of a module
+that calls another shared-source module needs the dependency rebound to the
+same binding (the ``rebind_dependencies`` loader change). Decision 0005 remains
+appropriate; no revision is needed.

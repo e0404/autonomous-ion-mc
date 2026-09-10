@@ -79,8 +79,11 @@ tasks.
 | R80 vs tabulated CSDA range, 100/150/200 MeV | ≤ 0.3 % | ≤ 0.15 % |
 | step-size convergence (fixed grid, 0.02 vs 0.002) | drift ≤ 0.05 % | ≤ 3e-4 % |
 | range cross-check (stopping depth vs CSDA range) | ≤ 0.2 % | ≤ 0.15 % |
-| reference vs Warp CPU/CUDA, cumulative depth dose | ≤ 1e-4 of total | see the DEV-004 validation record |
-| Warp CPU vs CUDA, cumulative depth dose | ≤ 1e-5 of total | see the DEV-004 validation record |
+| reference vs Warp CPU/CUDA, cumulative depth dose | ≤ 1e-4 of total | ≤ 2.7e-5 (both devices) |
+| Warp CPU vs CUDA, cumulative depth dose | ≤ 1e-5 of total | ≤ 2.3e-8 (near bitwise) |
+
+Warp results are from host run `RUN-20260910T135330Z-081a424c` (RTX A6000, CUDA 12.9, Warp 1.17.0) at
+SHA `c0bf1c2`, recorded in the DEV-004 local validation record.
 
 The ICRU 90 mean excitation energy (78 eV) is reported as a separate model
 difference (−1.14 % at 1 MeV to −0.43 % at 400 MeV), not absorbed into any
