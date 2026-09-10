@@ -467,5 +467,8 @@ deterministically and reviewed in one pull request.
   deterministic (no straggling/scattering yet).
 - 2026-09-10: `DEV-005` added Bohr energy-loss straggling and the Bragg peak
   with batch-based uncertainty (decision `0010`), and decoupled the physics
-  step from the scoring grid. Next: multiple Coulomb scattering and lateral
-  spread, which turn the depth dose into a volumetric dose and close V1.
+  step from the scoring grid.
+- 2026-09-10: `DEV-006` added multiple Coulomb scattering with 3-D transport,
+  the random-hinge lateral spread and 2-D depth-lateral scoring (decision
+  `0011`), **closing milestone V1** (proton transport in homogeneous water).
+  Next: **Stage 2**, nuclear interactions for protons.

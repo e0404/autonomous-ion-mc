@@ -13,7 +13,8 @@ Implemented so far (Stage 0 complete; Stage 1 in progress):
 * :mod:`ionmc.rng` - pure-Python mirror of Warp's random-number generator;
 * :mod:`ionmc.backend` - the shared-source execution mechanism;
 * :mod:`ionmc.transport` - Stage-1 proton transport: continuous-slowing-down
-  depth-dose of a pencil beam in homogeneous water (task DEV-004).
+  depth dose (DEV-004), energy-loss straggling and the Bragg peak (DEV-005),
+  and multiple Coulomb scattering with 2-D lateral spread (DEV-006).
 """
 
 from __future__ import annotations
