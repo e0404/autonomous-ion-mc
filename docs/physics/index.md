@@ -6,8 +6,9 @@ electronic stopping power and CSDA range (task `DEV-002`), a tabulated
 stopping-power layer from external data (task `DEV-003`), continuous-slowing-down
 proton transport in homogeneous water with energy-loss straggling and multiple
 Coulomb scattering (milestone V1, tasks `DEV-004`/`DEV-005`/`DEV-006`),
-nonelastic nuclear attenuation of primaries (task `DEV-007`), and secondary
-charged-particle transport (task `DEV-008`, closing milestone V2).
+nonelastic nuclear attenuation of primaries (task `DEV-007`), secondary
+charged-particle transport (task `DEV-008`, closing milestone V2), and 1-D
+voxelized density heterogeneity (task `DEV-009`, opening milestone V3).
 
 ## Electronic stopping power (analytical layer)
 
@@ -256,7 +257,37 @@ This **closes milestone V2**.
 Deferred with quantitative justification (Paganetti 2002): explicit deuteron/
 triton/alpha and recoil transport (deposited locally, < 0.1 % of dose), neutron
 and prompt-gamma transport (dropped as escaping, < 0.05 %), tertiary reactions,
-and the ICRU-63/TENDL tabulated double-differential path. Not yet: nuclear
-removal and the lateral halo on the 3-D scattering path, heterogeneous voxel
-geometry (Stage 3), and treatment-planning scoring and influence matrices
-(Stage 4).
+and the ICRU-63/TENDL tabulated double-differential path.
+
+## Voxelized density heterogeneity (Stage 3, task DEV-009, decision 0014)
+
+Module: ``ionmc.transport.geometry`` (``VoxelSlab``), wired into the depth-dose
+engine and Warp kernel as a per-step density lookup.
+
+Real treatment planning runs on a voxelized patient geometry where the dose
+depends on the **water-equivalent thickness (WET)** the beam traverses, not the
+geometric depth. A ``VoxelSlab`` gives the beam axis a 1-D stack of voxels, each
+with its own mass density (built from ``(thickness, density)`` layers with exact
+interfaces, or a uniform grid). The tabulated stopping power is a *mass*
+stopping power, so the linear energy loss is ``S/rho * rho * dl``: the transport
+looks up the local voxel density each step and limits the step to the voxel
+boundary so the density is unambiguous, tracking a **non-decreasing** voxel index
+(forward transport never backscatters). The nonelastic nuclear rate uses a
+per-voxel oxygen number density that scales with the voxel mass density.
+
+Consecutive equal-density voxels are merged, so a uniform slab (any voxel count)
+and a homogeneous ``WaterSlab`` both collapse to a single voxel and reproduce the
+homogeneous transport **bit-for-bit** (a validation gate). Validated: the CSDA
+range scales as ``1/rho`` (R80 at ``R_water/rho`` to ~1e-4 on a 0.1 mm grid); a
+dense layer shifts the Bragg peak proximally by exactly its extra water-
+equivalent thickness (a 20 mm, 1.85 g/cm^3 layer shifts the peak 17 mm); the
+energy budget stays exact with nuclear and secondary transport across a density
+interface; and the reference and Warp paths agree across the interface. This
+**opens milestone V3**.
+
+Deferred to later Stage-3 tasks: full 3-D voxel geometry with arbitrary beam
+incidence and ray/voxel traversal, per-voxel *material* composition (stopping-
+power ratios and per-voxel ``<Z/A>``/radiation length, not just density), nuclear
+removal and the lateral halo on the 3-D scattering path in heterogeneous media,
+and scoring grids decoupled from the transport grid. Not yet, beyond Stage 3:
+treatment-planning scoring and influence matrices (Stage 4).

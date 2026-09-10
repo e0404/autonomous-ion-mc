@@ -452,8 +452,9 @@ deterministically and reviewed in one pull request.
 | Stage 1, `DEV-005` (energy-loss straggling, Bragg peak, batch uncertainty) | **completed** 2026-09-10 | decision `0010`; `validation/v1_bragg_straggling.py` on the host runner (CPU + CUDA); DEV-005 local validation record |
 | Stage 1, `DEV-006` (multiple Coulomb scattering, 3-D transport; closes V1) | **completed** 2026-09-10 | decision `0011`; `validation/v1_lateral_scattering.py` on the host runner (CPU + CUDA); DEV-006 local validation record; **milestone V1 closed** |
 | Stage 2, `DEV-007` (proton nonelastic nuclear attenuation, local deposition; opens V2) | **completed** 2026-09-10 | decision `0012`; `validation/v2_nuclear_attenuation.py` on the host runner (CPU + CUDA); `tests/ionmc/test_nuclear.py`; DEV-007 local validation record |
-| Stage 2, `DEV-008` (secondary charged-particle transport; closes V2) | **in progress** 2026-09-10 | decision `0013`; `validation/v2_secondary_transport.py`; `tests/ionmc/test_secondaries.py` |
-| Stages 3–6 | not started | — |
+| Stage 2, `DEV-008` (secondary charged-particle transport; closes V2) | **completed** 2026-09-10 | decision `0013`; `validation/v2_secondary_transport.py` on the host runner (CPU + CUDA); `tests/ionmc/test_secondaries.py`; DEV-008 local validation record; **milestone V2 closed** |
+| Stage 3, `DEV-009` (1-D voxelized density heterogeneity, WET transport; opens V3) | **in progress** 2026-09-10 | decision `0014`; `validation/v3_density_heterogeneity.py`; `tests/ionmc/test_voxel_geometry.py` |
+| Stages 4–6 | not started | — |
 
 ## Change log
 
@@ -500,3 +501,16 @@ deterministically and reviewed in one pull request.
   alpha and neutron/gamma transport, tertiary reactions, and the ICRU-63/TENDL
   tabulated double-differential path. Next: **Stage 3**, voxelized heterogeneous
   geometry and materials.
+- 2026-09-10: `DEV-009` began **Stage 3**: 1-D voxelized density heterogeneity
+  along the beam axis (decision `0014`). A `VoxelSlab` gives each voxel its own
+  mass density; the depth-dose transport (reference and Warp) looks up the local
+  density per step and limits the step to the voxel boundary, tracking a
+  non-decreasing voxel index (forward transport). Consecutive equal-density
+  voxels are merged, so a uniform slab reproduces the homogeneous `WaterSlab`
+  bit-for-bit. **Opens milestone V3**: validated water-equivalent-thickness
+  scaling (R80 at R_water/rho to ~1e-4), layered-interface peak shift (exactly
+  the extra WET), energy conservation with nuclear+secondaries across an
+  interface, and cross-backend agreement. Deferred to later Stage-3 tasks: 3-D
+  voxel geometry and arbitrary beam incidence, per-voxel *material* composition
+  (stopping-power ratios, per-voxel <Z/A>), and scoring grids decoupled from the
+  transport grid.

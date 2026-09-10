@@ -27,7 +27,10 @@ def csda_depth_dose_kernel(
     z0: wp.array(dtype=float),
     weight: wp.array(dtype=float),
     rng_state0: wp.array(dtype=wp.uint32),
-    density: float,
+    voxel_z: wp.array(dtype=float),
+    voxel_density: wp.array(dtype=float),
+    voxel_oxygen: wp.array(dtype=float),
+    n_vox: int,
     max_fraction: float,
     max_step_mm: float,
     bin_width_mm: float,
@@ -40,7 +43,6 @@ def csda_depth_dose_kernel(
     straggling: int,
     straggling_floor_mev: float,
     nuclear: int,
-    oxygen_density_per_cm3: float,
     nuclear_local_fraction: float,
     table_e: wp.array(dtype=float),
     table_s: wp.array(dtype=float),
@@ -67,14 +69,22 @@ def csda_depth_dose_kernel(
     step = int(0)  # noqa: UP018, RUF046
     alive = int(1)  # noqa: UP018, RUF046
     reacted = int(0)  # noqa: UP018, RUF046
+    # current voxel index for the per-voxel density profile (decision 0014):
+    # advance to the voxel containing z0 (non-decreasing thereafter)
+    voxel = int(0)  # noqa: UP018, RUF046
+    while voxel + 1 < n_vox and z >= voxel_z[voxel + 1]:
+        voxel = voxel + 1
     while alive == 1 and step < max_steps:
+        density = voxel_density[voxel]
+        ox = voxel_oxygen[voxel]
         # physics step: fractional energy loss, not bin-limited (decision 0010),
-        # so the straggling and clamp are unbiased; deposition is split across
-        # the bins the step spans (mirrors the reference driver).
+        # so the straggling and clamp are unbiased; additionally limited to the
+        # current voxel boundary so the density is unambiguous (decision 0014);
+        # deposition is split across the bins the step spans.
         dl_e = transport.energy_loss_step_length(
             e, max_fraction, max_step_mm, density, table_e, table_s, table_d, n, n_steps
         )
-        dl = wp.min(dl_e, geom_depth_mm - z)
+        dl = wp.min(wp.min(dl_e, geom_depth_mm - z), voxel_z[voxel + 1] - z)
         de = transport.midpoint_energy_loss(
             e, dl, density, table_e, table_s, table_d, n, n_steps
         )
@@ -87,9 +97,7 @@ def csda_depth_dose_kernel(
         if nuclear == 1:
             # one uniform per alive step keeps the Warp and reference streams
             # aligned; the probability is zero below threshold (decision 0012).
-            p_nuc = nuclear_phys.nonelastic_step_probability(
-                e, dl, oxygen_density_per_cm3
-            )
+            p_nuc = nuclear_phys.nonelastic_step_probability(e, dl, ox)
             if wp.randf(rng) < p_nuc:
                 rbin = int(wp.floor(z / bin_width_mm))
                 if rbin >= 0 and rbin < n_bins:
@@ -120,6 +128,9 @@ def csda_depth_dose_kernel(
         z = z + dl
         e = e - de
         step = step + 1
+        # advance across any voxel boundaries the step reached (z non-decreasing)
+        while voxel + 1 < n_vox and z >= voxel_z[voxel + 1] - 1.0e-9:
+            voxel = voxel + 1
         if e <= energy_cut_mev:
             dep_bin = int(wp.floor(z / bin_width_mm))
             if dep_bin >= 0 and dep_bin < n_bins:
@@ -169,7 +180,9 @@ class DepthDoseKernel:
         z0: np.ndarray,
         weight: np.ndarray,
         rng_state: np.ndarray,
-        density: float,
+        voxel_z_mm: np.ndarray,
+        voxel_density: np.ndarray,
+        voxel_oxygen_density: np.ndarray,
         max_fraction: float,
         max_step_mm: float,
         bin_width_mm: float,
@@ -183,7 +196,6 @@ class DepthDoseKernel:
         straggling: bool,
         straggling_floor_mev: float,
         nuclear: bool = False,
-        oxygen_density_per_cm3: float = 0.0,
         nuclear_local_fraction: float = 0.0,
     ) -> tuple[
         np.ndarray, int, np.ndarray, np.ndarray, float, int, np.ndarray, np.ndarray
@@ -207,6 +219,18 @@ class DepthDoseKernel:
             dtype=wp.uint32,
             device=d,
         )
+        vz: Any = wp.array(
+            np.ascontiguousarray(voxel_z_mm, dtype=np.float32), dtype=float, device=d
+        )
+        vrho: Any = wp.array(
+            np.ascontiguousarray(voxel_density, dtype=np.float32), dtype=float, device=d
+        )
+        vox: Any = wp.array(
+            np.ascontiguousarray(voxel_oxygen_density, dtype=np.float32),
+            dtype=float,
+            device=d,
+        )
+        n_vox = int(voxel_density.shape[0])
         edep = wp.zeros(n_bins, dtype=wp.float64, device=d)
         truncated = wp.zeros(1, dtype=int, device=d)
         final_z = wp.zeros(n_hist, dtype=float, device=d)
@@ -224,7 +248,10 @@ class DepthDoseKernel:
                 zz,
                 ww,
                 rng,
-                float(density),
+                vz,
+                vrho,
+                vox,
+                n_vox,
                 float(max_fraction),
                 float(max_step_mm),
                 float(bin_width_mm),
@@ -237,7 +264,6 @@ class DepthDoseKernel:
                 (1 if straggling else 0),
                 float(straggling_floor_mev),
                 (1 if nuclear else 0),
-                float(oxygen_density_per_cm3),
                 float(nuclear_local_fraction),
                 t["e"],
                 t["s"],
