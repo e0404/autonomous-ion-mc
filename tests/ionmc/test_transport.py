@@ -127,6 +127,49 @@ def test_escaped_history_when_slab_too_thin(table) -> None:
     assert res.energy_balance < 0.0
 
 
+def test_scoring_grid_shorter_than_slab_does_not_stop_transport(table) -> None:
+    # Scoring grid (100 mm) is shorter than the slab (400 mm); a 150 MeV proton
+    # (~158 mm range) must transport its full range in the medium and not be
+    # terminated at the grid edge - only the first 100 mm is scored.
+    slab = WaterSlab(400.0, materials.WATER)
+    short_grid = DepthDoseGrid(100.0, 200)
+    eng = TransportEngine(table, slab, short_grid)
+    res = eng.run(PencilBeamSource(150.0), n_histories=1, path="python")
+    # energy scored is only the part deposited within the first 100 mm
+    assert 0.0 < res.energy_deposited_mev < 150.0
+    # the proton stops in the slab (does not escape a 400 mm medium)
+    full_grid = DepthDoseGrid(400.0, 800)
+    full = TransportEngine(table, slab, full_grid).run(
+        PencilBeamSource(150.0), 1, path="python"
+    )
+    assert abs(full.energy_balance) <= 1e-9  # full grid: all energy scored
+
+
+def test_scoring_grid_longer_than_slab_marks_escape(table) -> None:
+    # Slab (100 mm) shorter than the grid (400 mm): the proton leaves the medium
+    # at 100 mm with residual energy, so less than its full energy is deposited.
+    eng = TransportEngine(
+        table, WaterSlab(100.0, materials.WATER), DepthDoseGrid(400.0, 800)
+    )
+    res = eng.run(PencilBeamSource(150.0), n_histories=1, path="python")
+    assert res.energy_deposited_mev < 150.0
+    # nothing scored beyond the 100 mm slab
+    beyond = res.grid.centers_mm > 100.0
+    assert np.all(res.edep_mev[beyond] == 0.0)
+
+
+def test_truncation_counter_increments_on_step_cap(table) -> None:
+    # A tiny step cap forces the history to hit max_steps before stopping; it
+    # must be counted, not silently dropped.
+    eng = TransportEngine(
+        table, WaterSlab(400.0, materials.WATER), DepthDoseGrid(400.0, 800), max_steps=5
+    )
+    res = eng.run(PencilBeamSource(150.0), n_histories=2, path="python")
+    assert res.truncated == 2
+    # only a few steps' worth of energy was deposited before truncation
+    assert res.energy_deposited_mev < 150.0 * 2
+
+
 # -- Warp paths (sandbox: CPU; CUDA on the host runner) -----------------------
 
 

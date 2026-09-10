@@ -128,8 +128,8 @@ class TransportEngine:
         )
         density = self.slab.density_g_per_cm3
         dz = self.grid.bin_width_mm
-        depth = self.grid.depth_mm
-        n_bins = self.grid.n_bins
+        geom_depth = self.slab.depth_mm  # transport is bounded by the medium...
+        n_bins = self.grid.n_bins  # ...scoring only within the grid extent
         edep = self.grid.empty()
         truncated = 0
         for h in range(state.size):
@@ -144,7 +144,7 @@ class TransportEngine:
                 dl_e = tp.energy_loss_step_length(
                     e, self.max_fraction, self.max_step_mm, density, *args
                 )
-                dl = min(dl_e, boundary - z + 1.0e-6, depth - z)
+                dl = min(dl_e, boundary - z + 1.0e-6, geom_depth - z)
                 de = tp.midpoint_energy_loss(e, dl, density, *args)
                 if 0 <= cur_bin < n_bins:
                     edep[cur_bin] += w * de
@@ -157,7 +157,7 @@ class TransportEngine:
                         edep[dep_bin] += w * e
                     e = 0.0
                     status = Status.STOPPED
-                if z >= depth:
+                if z >= geom_depth:
                     status = Status.ESCAPED
             if step >= self.max_steps and status == Status.ALIVE:
                 truncated += 1
@@ -181,7 +181,7 @@ class TransportEngine:
             max_fraction=self.max_fraction,
             max_step_mm=self.max_step_mm,
             bin_width_mm=self.grid.bin_width_mm,
-            depth_mm=self.grid.depth_mm,
+            geom_depth_mm=self.slab.depth_mm,
             energy_cut_mev=self.energy_cut_mev,
             max_steps=self.max_steps,
             n_bins=self.grid.n_bins,

@@ -29,7 +29,7 @@ def csda_depth_dose_kernel(
     max_fraction: float,
     max_step_mm: float,
     bin_width_mm: float,
-    depth_mm: float,
+    geom_depth_mm: float,
     energy_cut_mev: float,
     max_steps: int,
     table_e: wp.array(dtype=float),
@@ -56,7 +56,7 @@ def csda_depth_dose_kernel(
             e, max_fraction, max_step_mm, density, table_e, table_s, table_d, n, n_steps
         )
         dl = wp.min(dl_e, boundary - z + 1.0e-6)
-        dl = wp.min(dl, depth_mm - z)
+        dl = wp.min(dl, geom_depth_mm - z)
         de = transport.midpoint_energy_loss(
             e, dl, density, table_e, table_s, table_d, n, n_steps
         )
@@ -71,7 +71,7 @@ def csda_depth_dose_kernel(
                 wp.atomic_add(edep, dep_bin, w * e)
             e = 0.0
             alive = 0
-        if z >= depth_mm:
+        if z >= geom_depth_mm:
             alive = 0
     if step >= max_steps and alive == 1:
         wp.atomic_add(truncated, 0, 1)
@@ -108,7 +108,7 @@ class DepthDoseKernel:
         max_fraction: float,
         max_step_mm: float,
         bin_width_mm: float,
-        depth_mm: float,
+        geom_depth_mm: float,
         energy_cut_mev: float,
         max_steps: int,
         n_bins: int,
@@ -139,7 +139,7 @@ class DepthDoseKernel:
                 float(max_fraction),
                 float(max_step_mm),
                 float(bin_width_mm),
-                float(depth_mm),
+                float(geom_depth_mm),
                 float(energy_cut_mev),
                 int(max_steps),
                 t["e"],
