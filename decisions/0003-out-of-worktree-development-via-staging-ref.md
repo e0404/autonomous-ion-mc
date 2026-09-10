@@ -1,8 +1,11 @@
 # 0003 — Out-of-worktree development via a staging ref (kickoff workaround)
 
-- Status: accepted (temporary; see *Stopping condition*)
-- Date: 2026-09-10
-- Task: DEV-001
+- Status: **superseded** on 2026-09-10 (during task DEV-002) by direct
+  sandbox access to the task worktrees; the normal task lifecycle of
+  `AGENTS.md` applies again. Kept as the historical record of why DEV-001
+  and the first DEV-002 commits were produced this way.
+- Date: 2026-09-10 (accepted, as a temporary workaround); superseded the same day
+- Task: DEV-001 (used also for the first three commits of DEV-002)
 - Affects: reproducibility, provenance of task history, maintainability of the
   task lifecycle
 
@@ -109,5 +112,51 @@ checks are recorded in the task's local validation record.
 
 ## Later validation outcome
 
-To be filled in when the workaround is retired or when direct worktree access
-is confirmed.
+**Workaround retired (2026-09-10, session resumed for DEV-002).** The first
+action of the new session was the check required by the stopping condition:
+
+- A directory created with `mktemp -d` under the experiment scratch area and
+  the existing task worktree `~/aiprojects/ion-mc-worktrees/dev-002` were
+  both read and written from the orchestrator sandbox through
+  variable-derived paths (`ls`, `cat`, `sed`, `grep`, `git status`), with no
+  computed-path or read-boundary approval prompt and without any unsandboxed
+  execution. The operator's telemetry event
+  `infrastructure_capability_observed` (`direct_dynamic_workspace_access`,
+  status `passed`, 2026-09-10T07:44Z) records the same check and states the
+  resolution: "removed conflicting user-level
+  `blockReadsOutsideWorkingDirectories=true` setting". The root cause was
+  therefore a Claude Code permission setting, not the session-start snapshot
+  of the filesystem assumed in *Problem* above.
+- Sandbox network egress also worked: `uv sync --extra dev` installed the
+  package with `pytest`, `ruff`, `mypy`, `pre-commit` and `warp-lang 1.17.0`
+  into the worktree, and `pre-commit`, `pytest`, `mypy` and the `zensical`
+  documentation build all ran inside the sandbox. The host-side test
+  execution through the Codex worker (step 7) is therefore no longer needed
+  either.
+
+Consequences:
+
+- From the DEV-002 commit that records this outcome onward, development,
+  tests and quality checks run directly in the task worktree; commits are
+  made by `commit_task_changes` as before. Steps 1–7 of the *Selected
+  approach* are not used.
+- The staging refs `refs/staging/dev-001` and `refs/staging/dev-002` remain
+  in the local object store of the main checkout as provenance of the
+  DEV-001 and early DEV-002 snapshots (they were never pushed and are not
+  branches). They are not deleted, in keeping with the history-preservation
+  rules of `EXPERIMENT.md`; no new staging refs are created.
+- Integrity, re-verified from the sandbox at retirement:
+  `refs/staging/dev-001^{tree}` equals the tree of the DEV-001 task-branch
+  head `515029b`. `refs/staging/dev-002` (`54474f3`, "staging: silence warp
+  output in diagnostics") is the *last* DEV-002 snapshot; it had been
+  materialised into the worktree by step 4 but the session ended before
+  step 5, so the worktree was found dirty with exactly that snapshot's
+  changes relative to `5ef05c7` (`git diff --stat 5ef05c7 refs/staging/dev-002`
+  and `git status` list the same ten files). That work was continued in
+  place and committed through `commit_task_changes` by the resumed session.
+  The per-commit tree checks of the earlier DEV-002 commits were performed
+  when they were made (step 6) and are not reproducible afterwards because
+  the staging ref was overwritten by each later snapshot.
+- Should the sandbox lose sight of a worktree again, this record documents a
+  verified fallback; it would be re-adopted by a new decision rather than by
+  reviving this one silently.

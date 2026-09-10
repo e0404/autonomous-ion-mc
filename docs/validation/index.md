@@ -33,8 +33,8 @@ repository, commit ``211eefe6``; two independent fetches agreed).
 | CSDA range 100–250 MeV vs recalled PSTAR values | 0.5 % guard (informational) | within 0.04 % |
 | R(200) − R(100) vs recalled 18.242 g/cm² | 0.2 % | +0.02 % |
 | numpy binding vs Python binding | bitwise equal | equal |
-| Warp CPU / CUDA (float32) vs Python reference | S: rtol 1e-5; range: rtol 2e-5 | see the DEV-002 validation record |
-| Warp CPU vs CUDA | S: rtol 4e-6, atol 1e-6 (transcendental class); range: rtol 1e-5, atol 1e-6 (iterative) | see the DEV-002 validation record |
+| Warp CPU / CUDA (float32) vs Python reference, 400 energies 2–400 MeV | S: rtol 1e-5; range: rtol 2e-5 | pending host run for the committed SHA (sandbox Warp CPU after the cancellation fix: S 4.2e-7, range 2.4e-7) |
+| Warp CPU vs CUDA | S: rtol 4e-6, atol 1e-6 (transcendental class); range: rtol 1e-5, atol 1e-6 (iterative) | pending host run for the committed SHA |
 
 The ICRU 90 mean excitation energy (78 eV) is reported as a separate model
 difference (−1.14 % at 1 MeV to −0.43 % at 400 MeV), not absorbed into any

@@ -55,7 +55,12 @@ def test_regression_guard_below_10_mev(water_proton_python) -> None:
 def test_numpy_path_is_bitwise_identical_to_python_path(
     water_proton_python, water_proton_numpy
 ) -> None:
-    energies = np.array(sorted(PSTAR_WATER_STOPPING_POWER))
+    # The grid extends to 1500 MeV so that the density-effect ``mid`` branch
+    # (x >= x0, i.e. protons above about 705 MeV in water), the only place
+    # where ``m.pow`` is evaluated, is exercised as well.
+    energies = np.concatenate(
+        [np.array(sorted(PSTAR_WATER_STOPPING_POWER)), np.linspace(500.0, 1500.0, 21)]
+    )
     a = water_proton_python.mass_stopping_power(energies)
     b = water_proton_numpy.mass_stopping_power(energies)
     np.testing.assert_allclose(b, a, rtol=1e-14, atol=0.0)
@@ -121,7 +126,7 @@ def test_correction_magnitudes_are_physical() -> None:
         Corrections(density_effect=False),
         path="numpy",
     ).mass_stopping_power(1000.0)
-    assert -0.003 < float(s_1gev / s_1gev_no_delta - 1.0) < 0.0
+    assert -0.003 < float((s_1gev / s_1gev_no_delta - 1.0)[0]) < 0.0
 
 
 def test_icru90_i_value_lowers_stopping_power_by_about_half_a_percent() -> None:
@@ -201,3 +206,65 @@ def test_provenance_records_i_value_and_corrections(water_proton_python) -> None
 def test_unknown_path_rejected() -> None:
     with pytest.raises(ValueError):
         AnalyticStoppingPower(materials.WATER, particles.PROTON, path="fortran")
+
+
+def test_kinematics_are_cancellation_free_in_float32() -> None:
+    """Regression guard for the float32 error found in decision 0006.
+
+    ``(beta gamma)^2`` written as ``gamma^2 - 1`` loses bits for low-energy
+    protons in float32; the shared source uses ``tau (tau + 2)``. The numpy
+    binding evaluates the shared source in whatever dtype it is given, so it
+    serves as a float32 probe without Warp.
+    """
+    npy = reference.numpy_reference("ionmc.physics.stopping")
+    py = reference.python_reference("ionmc.physics.stopping")
+    mass = particles.PROTON.rest_energy_mev
+    energies = np.linspace(2.0, 10.0, 201)
+    t32, m32 = energies.astype(np.float32), np.float32(mass)
+    exact = np.array([py.beta_gamma_squared(float(t), mass) for t in energies])
+    shared = npy.beta_gamma_squared(t32, m32).astype(np.float64)
+    naive = ((np.float32(1.0) + t32 / m32) ** 2 - np.float32(1.0)).astype(np.float64)
+    assert shared.dtype == np.float64 and t32.dtype == np.float32
+    assert np.max(np.abs(shared / exact - 1.0)) < 2.0e-7
+    assert np.max(np.abs(naive / exact - 1.0)) > 1.0e-6, "naive form lost no bits?"
+    beta2_exact = np.array([py.beta_squared(float(t), mass) for t in energies])
+    beta2_shared = npy.beta_squared(t32, m32).astype(np.float64)
+    assert np.max(np.abs(beta2_shared / beta2_exact - 1.0)) < 3.0e-7
+
+
+def test_projectile_charge_scaling_of_corrections() -> None:
+    """The ion generalisation: Barkas is odd in z, Bloch depends on z^2/beta^2."""
+    py = reference.python_reference("ionmc.physics.stopping")
+    p1 = build_parameters(materials.WATER, particles.PROTON)
+    args = list(p1.as_call_args())
+    del args[2]  # za_ratio is not an argument of stopping_number
+    charge_index = 1
+    t = 100.0
+    contributions = {}
+    for z in (1.0, 2.0, 6.0):
+        a = list(args)
+        a[charge_index] = z
+        on = py.stopping_number(t, *a)
+        a[-2] = 0.0  # use_barkas off
+        off = py.stopping_number(t, *a)
+        contributions[z] = on - off
+    assert contributions[2.0] == pytest.approx(2.0 * contributions[1.0], rel=1e-12)
+    assert contributions[6.0] == pytest.approx(6.0 * contributions[1.0], rel=1e-12)
+    beta2 = py.beta_squared(t, particles.PROTON.rest_energy_mev)
+    assert py.bloch_correction(2.0, beta2) == pytest.approx(
+        py.bloch_correction(1.0, beta2 / 4.0), rel=1e-12
+    )
+    # Alpha at the same velocity as a 100 MeV proton: S scales as z^2 up to
+    # the projectile-mass terms of T_max (about 4e-5 here).
+    same_velocity = (
+        t * particles.ALPHA.rest_energy_mev / particles.PROTON.rest_energy_mev
+    )
+    s_alpha = AnalyticStoppingPower(
+        materials.WATER, particles.ALPHA, Corrections(barkas=False, bloch=False)
+    ).mass_stopping_power(same_velocity)[0]
+    s_p = AnalyticStoppingPower(
+        materials.WATER, particles.PROTON, Corrections(barkas=False, bloch=False)
+    ).mass_stopping_power(t)[0]
+    # T_max grows with projectile mass (smaller m_e/M terms), so the ratio is
+    # slightly above one.
+    assert 1.0 < s_alpha / (4.0 * s_p) < 1.001

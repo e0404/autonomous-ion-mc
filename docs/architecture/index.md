@@ -55,11 +55,20 @@ Rules that shared source must follow (so that the three bindings agree):
   ``if`` on values;
 - loops with data-independent trip counts where the numpy binding must
   vectorise (the CSDA integration uses a fixed step count);
-- no reliance on Python ``**`` or ``%`` semantics on values.
+- no reliance on Python ``**`` or ``%`` semantics on values;
+- loop accumulators declared as dynamic variables (``total = float(0.0)``):
+  Warp refuses to mutate a literal-initialised constant inside a dynamic
+  loop;
+- cancellation-free forms for quantities evaluated in float32: e.g.
+  ``(beta gamma)^2 = tau (tau + 2)`` with ``tau = T/M`` rather than
+  ``gamma^2 - 1``, which loses about nine bits for a 2 MeV proton and was
+  the dominant float32 error of the stopping power (decision 0006).
 
 Warp's Python-scope fallback (``Function.__call__`` executes the original
-Python function) also makes the Warp-bound functions callable from Python,
-but with float32 builtins; the ``python`` binding is the float64 oracle.
+Python function) makes *some* Warp-bound functions callable from Python, but
+with float32 builtins and only when every builtin they use has a Python-scope
+implementation (``wp.where`` has none); the ``python`` binding is the
+reference path.
 
 ## Random numbers
 

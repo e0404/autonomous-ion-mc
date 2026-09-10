@@ -40,13 +40,22 @@ comparison is run (review finding B2 on decision 0002).
   element with ICRU 37 elemental I and combined as `Σ n_k C_k / N_e`
   (Geant4 `ShellCorrectionSTD`, `G4IonisParamMat.cc`); valid for
   η ≥ 0.13, frozen below the velocity of an 8 MeV proton and tapered
-  logarithmically to zero at the velocity of a 2 MeV proton (Geant4).
+  logarithmically to zero at the velocity of a 2 MeV proton (a
+  velocity-based variant of Geant4's thresholds `8 MeV/M` and `2 MeV/m_p`
+  in τ; identical for protons, taper factor 0.6606 vs 0.6610 at 5 MeV).
 - Barkas correction: Ashley–Ritchie–Brandt with the 47-point `F(W)` table,
   `b` per element and the 1.29 normalisation of Geant4
   `G4EmCorrections::BarkasCorrection` (cites Ashley & Ritchie, Phys. Rev. B
   5 (1972) 2393, and ICRU 49); `X = β²/(α² Z)`, `W = b/√X`,
   `L1 = 1.29 F(W)/(√(Z X) X)`, combined over elements with electron weights
-  (Geant4 uses atom weights; the difference is < 0.01 % of S for water).
+  (Bragg additivity per electron, consistent with the shell term). Geant4
+  weights by atoms instead; for water the electron-weighted `L1` is larger
+  by a factor 1.8 at 10 MeV (1.6 at 2 MeV), which is 0.07 % of S at
+  10 MeV, 0.44 % at 2 MeV and 0.003 % at 100 MeV (measured from the
+  implementation; an earlier version of this record understated it as
+  "< 0.01 %"). The electron weighting is kept as the physically consistent
+  additivity rule; the comparison against PSTAR below is the arbiter, and
+  at 10 MeV the two weightings bracket the table value.
 - Bloch correction: exact series `L2 = −y² Σ_j 1/(j(j² + y²))`, `y = zα/β`
   (Geant4 `BlochCorrection`), 16 terms plus integral tail.
 - Mean excitation energy of water: 75.0 eV (ICRU 37/49, PSTAR) versus
@@ -137,9 +146,46 @@ E ≥ 10 MeV is **0.075 %** (all 17 points low by 0.01–0.07 %); 5 MeV +0.90 %,
 7.7169 / 15.7760 / 25.9623 / 37.9443 g/cm² versus recalled 7.718 / 15.77 /
 25.96 / 37.94 (−0.015 %, +0.038 %, +0.009 %, +0.011 %); R(200) − R(100) =
 18.2455 g/cm² versus 18.242 (+0.02 %). numpy and Python bindings bitwise
-equal. Correction magnitudes at 10 MeV: shell −0.78 %, Barkas +0.30 %,
-Bloch −0.05 %, density 0; ICRU 90 offset −1.14 % (1 MeV) to −0.43 %
+equal. Correction magnitudes at 10 MeV: shell −0.78 %, Barkas +0.16 %,
+Bloch −0.05 %, density 0 (Barkas was misreported as +0.30 % in the first
+version of this record; the value here is measured from the implementation); ICRU 90 offset −1.14 % (1 MeV) to −0.43 %
 (400 MeV).
 
-*Warp paths (host runner):* see the DEV-002 validation record; to be
-appended here.
+*Warp paths (host runner, RTX A6000, CUDA 12.9, Warp 1.17.0, run
+`RUN-20260910T072536Z-f9f8c5ff` at task SHA `5ef05c7`):* all gates passed.
+float32 Warp versus the float64 Python reference on a 400-point grid from 2
+to 400 MeV: maximum relative difference of S **8.7 × 10⁻⁶** on both CPU and
+CUDA (normalized 0.87 against rtol 1e-5 — the criterion holds, but with a
+margin of only 1.15×, see below); ranges 2.4 × 10⁻⁷ (CPU) and 3.1 × 10⁻⁷
+(CUDA) relative. Warp CPU versus CUDA: S max absolute difference
+9.5 × 10⁻⁷ MeV cm²/g (normalized 0.028); range 7.6 × 10⁻⁶ g/cm² (normalized
+0.020). Both cross-device margins exceed 35×.
+
+*Finding on the reference-vs-float32 margin, and its resolution.* The
+float32 error of S measured at `5ef05c7` (≈70 ULP, identical on CPU and
+CUDA) was larger than the ~10 ULP anticipated when the 1e-5 tolerance was
+set. Because it was device-independent it had to be a property of the
+float32 evaluation order of the shared source. The dominant term was
+identified as the kinematic factor ``(beta gamma)^2 = gamma^2 - 1`` with
+``gamma = 1 + T/M``: for a 2 MeV proton ``gamma - 1 = 2.1e-3``, so the
+subtraction discards about nine bits and the relative error of ``beta^2``
+(and hence of ``1/beta^2`` in S) can reach ``2^-24 / 2.1e-3 ≈ 3e-5``; the
+measured maximum on the grid was 8.7 × 10⁻⁶, and a float32 probe of the
+naive form over 2–10 MeV shows errors above 10⁻⁶ (regression test
+`test_kinematics_are_cancellation_free_in_float32`). The algebraically
+identical form ``tau (tau + 2)`` with
+``tau = T/M`` has no cancellation and is now used everywhere the shared
+source needs ``(beta gamma)^2`` or ``beta^2`` (`beta_gamma_squared`,
+`beta_squared`, `max_energy_transfer`, `stopping_number`). With this change
+the maximum float32-vs-float64 difference of S on the 400-point 2–400 MeV
+grid dropped from 8.7 × 10⁻⁶ to **4.2 × 10⁻⁷** (≈3 ULP) on Warp CPU in the
+sandbox (Warp 1.17.0, no CUDA); the host confirmation on CPU and CUDA for
+the committed SHA is recorded in the paragraph below. The criterion itself
+(rtol 1e-5) is unchanged: it was fixed before the comparison and is now met
+with a margin of about 24×, so a regression of the kind found here would
+fail the gate clearly. The lesson is recorded as a shared-source rule in
+`docs/architecture/index.md`: kinematic quantities are written in
+cancellation-free form because the Warp instantiation is single precision.
+
+*Warp paths after the cancellation fix (host runner):* pending — to be
+appended when the host run for the committed SHA has been executed.

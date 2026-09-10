@@ -19,21 +19,29 @@ Model choices and their sources (decision ``0006``):
 
 * **Density effect**: Sternheimer-Berger-Seltzer parameterisation with the
   per-material constants of ``ionmc.materials``.
-* **Shell correction**: the Barkas-Berger empirical formula (as reproduced by
-  Leo, *Techniques for Nuclear and Particle Physics Experiments*, eq. 2.33,
-  and implemented in Geant4 ``G4IonisParamElm``), ``C(I, eta) = A(eta) I^2 +
-  B(eta) I^3`` with ``eta = beta gamma`` and ``I`` in eV, applied per target
-  element with the ICRU 37 elemental ``I`` and combined by electron-weighted
-  Bragg additivity ``sum_k n_k C_k / N_e`` (which is what Geant4's
-  ``ShellCorrectionSTD`` evaluates). The formula is valid for
-  ``eta >= 0.13``; below the velocity of an 8 MeV proton it is frozen and
-  tapered logarithmically to zero at the velocity of a 2 MeV proton, as in
-  Geant4. The analytic layer is therefore only claimed accurate for proton
-  energies >= 10 MeV (decision ``0006`` fixes the acceptance tolerances).
+* **Shell correction**: the Barkas-Berger empirical formula
+  ``C(I, eta) = A(eta) I^2 + B(eta) I^3`` with ``eta = beta gamma`` and ``I``
+  in eV (the formula also appears in Leo, *Techniques for Nuclear and
+  Particle Physics Experiments*, eq. 2.33; the coefficients used here are
+  transcribed from Geant4 ``G4IonisParamElm.cc``, which is the authoritative
+  source for their exact values), applied per target element with the
+  ICRU 37 elemental ``I`` and combined by electron-weighted Bragg additivity
+  ``sum_k n_k C_k / N_e`` (which is what Geant4's ``ShellCorrectionSTD``
+  evaluates). The formula is valid for ``eta >= 0.13``; below the velocity
+  of an 8 MeV proton it is frozen and tapered logarithmically to zero at the
+  velocity of a 2 MeV proton. This is a velocity-based variant of the Geant4
+  convention, whose thresholds are ``8 MeV / M`` and ``2 MeV / m_p`` in
+  ``tau`` (identical for protons, and within 0.1 percent of the taper factor
+  at 5 MeV; for heavier ions Geant4's thresholds move to lower velocity).
+  The analytic layer is therefore only claimed accurate for proton energies
+  >= 10 MeV (decision ``0006`` fixes the acceptance tolerances).
 * **Barkas correction**: Ashley-Ritchie-Brandt ``L1 = 1.29 F(b / sqrt(X)) /
   (sqrt(Z X) X)``, ``X = beta^2 / (alpha^2 Z)``, with the tabulated ``F`` and
   the element parameter ``b`` of :mod:`ionmc.physics.barkas_table`, combined
-  over target elements with electron weights.
+  over target elements with electron weights (Bragg additivity per electron;
+  Geant4 weights by atoms instead, which for water gives an ``L1`` smaller
+  by a factor 1.6-1.8, i.e. 0.07 percent of ``S`` at 10 MeV, see decision
+  ``0006``).
 * **Bloch correction**: exact series ``L2 = -y^2 sum_j 1 / (j (j^2 + y^2))``,
   ``y = z alpha / beta`` (Geant4 ``BlochCorrection``), summed to 16 terms
   with an integral tail estimate.
@@ -74,8 +82,8 @@ ALPHA_SQUARED: float = FINE_STRUCTURE_CONSTANT * FINE_STRUCTURE_CONSTANT
 
 
 def _beta2_gamma2_of_proton(kinetic_energy_mev: float) -> float:
-    gamma = 1.0 + kinetic_energy_mev / PROTON_MASS_MEV
-    return gamma * gamma - 1.0
+    tau = kinetic_energy_mev / PROTON_MASS_MEV
+    return tau * (tau + 2.0)
 
 
 #: (beta gamma)^2 of an 8 MeV proton: below this velocity the shell correction
@@ -97,10 +105,21 @@ def lorentz_gamma(kinetic_energy: float, rest_energy: float) -> float:
 
 
 @func
+def beta_gamma_squared(kinetic_energy: float, rest_energy: float) -> float:
+    """``(beta gamma)^2 = tau (tau + 2)`` with ``tau = T / (M c^2)``.
+
+    This form has no cancellation, unlike ``gamma^2 - 1``, which loses about
+    five digits in float32 for a 5 MeV proton (``gamma - 1 ~ 5e-3``).
+    """
+    tau = kinetic_energy / rest_energy
+    return tau * (tau + 2.0)
+
+
+@func
 def beta_squared(kinetic_energy: float, rest_energy: float) -> float:
     """``beta^2`` from kinetic energy and rest energy (same units)."""
-    gamma = 1.0 + kinetic_energy / rest_energy
-    return 1.0 - 1.0 / (gamma * gamma)
+    gamma = lorentz_gamma(kinetic_energy, rest_energy)
+    return beta_gamma_squared(kinetic_energy, rest_energy) / (gamma * gamma)
 
 
 @func
@@ -109,8 +128,8 @@ def max_energy_transfer(kinetic_energy: float, rest_energy: float) -> float:
 
     ``T_max = 2 m_e c^2 beta^2 gamma^2 / (1 + 2 gamma m_e/M + (m_e/M)^2)``.
     """
-    gamma = 1.0 + kinetic_energy / rest_energy
-    bg2 = gamma * gamma - 1.0
+    gamma = lorentz_gamma(kinetic_energy, rest_energy)
+    bg2 = beta_gamma_squared(kinetic_energy, rest_energy)
     ratio = ELECTRON_MASS_MEV / rest_energy
     return 2.0 * ELECTRON_MASS_MEV * bg2 / (1.0 + 2.0 * gamma * ratio + ratio * ratio)
 
@@ -235,8 +254,8 @@ def stopping_number(
     The ``use_*`` switches are 0.0 or 1.0 so that the same source serves the
     configurable-fidelity requirement without branching.
     """
-    gamma = 1.0 + kinetic_energy / rest_energy
-    bg2 = gamma * gamma - 1.0
+    gamma = lorentz_gamma(kinetic_energy, rest_energy)
+    bg2 = beta_gamma_squared(kinetic_energy, rest_energy)
     beta2 = bg2 / (gamma * gamma)
     tmax = max_energy_transfer(kinetic_energy, rest_energy)
     l0 = 0.5 * m.log(2.0 * ELECTRON_MASS_MEV * bg2 * tmax / (i_mev * i_mev)) - beta2

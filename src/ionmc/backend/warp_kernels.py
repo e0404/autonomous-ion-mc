@@ -13,6 +13,8 @@ Kernels run in float32 (decision ``0005``).
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 import warp as wp
 
@@ -157,7 +159,7 @@ class StoppingPowerKernels:
         p.use_barkas = parameters.use_barkas
         p.use_bloch = parameters.use_bloch
         self.struct = p
-        self.tables = {
+        self.tables: dict[str, Any] = {
             name: wp.array(
                 np.asarray(getattr(parameters, name), dtype=np.float32),
                 dtype=float,
@@ -170,7 +172,7 @@ class StoppingPowerKernels:
         self, kernel: wp.Kernel, energies: np.ndarray, extra: list
     ) -> np.ndarray:
         e32 = np.ascontiguousarray(np.asarray(energies, dtype=np.float32))
-        e_arr = wp.array(e32, dtype=float, device=self.device)
+        e_arr: Any = wp.array(e32, dtype=float, device=self.device)
         out = wp.zeros(e32.shape[0], dtype=float, device=self.device)
         t = self.tables
         inputs = [

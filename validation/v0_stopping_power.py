@@ -124,6 +124,10 @@ def main() -> int:
             gates["warp_cpu_vs_cuda"] = False
     else:
         wp = mathlib.warp_module()
+        # Keep Warp's banner and module-load notices off stdout: this script's
+        # stdout is one JSON document (Warp >= 1.17 API; ``config.quiet`` is
+        # deprecated there).
+        wp.config.log_level = wp.LOG_WARNING
         wp.init()
         devices = [d.alias for d in wp.get_devices()]
         report["warp"] = {

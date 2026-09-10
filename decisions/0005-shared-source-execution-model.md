@@ -113,7 +113,11 @@ Approach 3, implemented in `src/ionmc/backend/mathlib.py` and
 
 The binding mechanism gives literally one source for all paths while keeping
 the oracle in float64 and Warp-independent, which is stronger than approach 2
-on both counts and avoids approach 1's divergence risk. The probe showed all
+on both counts and avoids approach 1's divergence risk. Approach 2 was in
+fact found to be incomplete during the DEV-002 host test run: a Warp-bound
+function that uses `wp.where` raises "function is undefined" when called
+from Python scope, because that builtin has no Python-scope implementation,
+so the Python-scope fallback cannot serve as a general reference path. The probe showed all
 Warp features the design relies on (Python-scope fallback, generic functions,
 dynamic loops with per-thread state, atomics) work on both devices.
 
@@ -143,4 +147,22 @@ dynamic loops with per-thread state, atomics) work on both devices.
 
 ## Later validation outcome
 
-To be filled in from the DEV-002 host run and revisited at Stage 1.
+DEV-002 host run `RUN-20260910T072536Z-f9f8c5ff` (SHA `5ef05c7`): the
+shared stopping-power source compiled and ran on Warp CPU and CUDA once loop
+accumulators were declared as dynamic variables (`float(0.0)`; Warp refuses
+to mutate a literal-initialised constant inside a dynamic loop — recorded
+as a shared-source rule). float32 Warp versus the float64 Python reference
+agreed to 8.7 × 10⁻⁶ relative for the stopping power (rtol 1e-5 criterion
+met with only 1.15× margin) and to 3 × 10⁻⁷ for the 200-step range
+integral; CPU and CUDA agreed to 9.5 × 10⁻⁷ absolute (transcendental class,
+normalized 0.028). The numpy and Python bindings were bitwise identical.
+
+The small margin was traced (decision 0006, *Finding on the
+reference-vs-float32 margin*) to float32 cancellation in ``gamma^2 - 1``,
+not to the execution model; rewriting the kinematics as ``tau (tau + 2)``
+reduced the float32 error of S to 4.2 × 10⁻⁷ (sandbox Warp CPU; host
+CPU/CUDA confirmation pending, see decision 0006). A second shared-source rule follows from it: quantities
+that lose precision by cancellation in float32 must be written in
+cancellation-free form, because the Warp instantiation is single precision
+while the reference is float64. To be revisited at Stage 1 under real
+transport.

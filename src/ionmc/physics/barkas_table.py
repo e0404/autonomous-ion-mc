@@ -9,9 +9,13 @@ and ``W = b / sqrt(X)``; for ``W`` above the last tabulated point the value
 is scaled by ``W_max / W`` as in Geant4. The element-dependent parameter
 ``b`` follows the same source (:func:`barkas_b_parameter`).
 
-Provenance: Geant4 (Geant4 Software License) is the tabulation source; the
-underlying function is published in the paper above. The numbers are data,
-not code, and are reproduced here with attribution.
+Provenance and notice: the tabulation is transcribed from Geant4
+(``G4EmCorrections.cc``), Copyright (c) the Geant4 Collaboration, distributed
+under the Geant4 Software License (https://geant4.web.cern.ch/download/license),
+which requires that this copyright notice, and the statement that the Geant4
+software is provided without warranty of any kind, be retained where the
+material is redistributed. The underlying function is published in the paper
+above; the numbers are data, not code, and are reproduced here unchanged.
 """
 
 from __future__ import annotations

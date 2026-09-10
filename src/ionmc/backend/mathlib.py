@@ -8,11 +8,12 @@ physics module is **loaded**:
 ``warp`` binding (default when ``warp`` is importable)
     ``m.<name>`` is the Warp builtin (``wp.sqrt`` ...) and ``@func`` is
     ``wp.func``. The functions can be called from Warp kernels on the CPU and
-    CUDA devices. Because Warp's own ``Function.__call__`` falls back to the
+    CUDA devices. Warp's own ``Function.__call__`` falls back to the
     undecorated Python function when a ``@wp.func`` is called from Python
     scope (verified on Warp 1.17.0, host run ``RUN-20260910T004325Z-472e71df``),
-    the very same objects are also callable from Python - but Warp's builtins
-    evaluate in float32 in Python scope, so this is not the reference path.
+    so *some* of these objects are also callable from Python - but Warp's
+    builtins then evaluate in float32 and builtins without a Python-scope
+    implementation (``wp.where``) raise, so this is not the reference path.
 
 ``python`` binding
     ``m.<name>`` is the standard-library ``math`` function (float64) and
@@ -37,18 +38,25 @@ exposed. In particular the physics code must not rely on Python's ``**`` or
 from __future__ import annotations
 
 import contextlib
+import importlib
 import math
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from typing import Any
 
-try:  # pragma: no cover - exercised only where warp is installed
-    import warp as wp
 
-    HAVE_WARP = True
-except ImportError:  # pragma: no cover
-    wp = None
-    HAVE_WARP = False
+def _import_warp() -> Any:
+    """Import ``warp`` if installed, else return ``None`` (typed ``Any`` so that
+    the module type-checks identically with and without Warp present)."""
+    try:
+        return importlib.import_module("warp")
+    except ImportError:  # pragma: no cover - depends on the environment
+        return None
+
+
+#: The ``warp`` module, or ``None`` when warp-lang is not installed.
+wp: Any = _import_warp()
+HAVE_WARP: bool = wp is not None
 
 
 def warp_module() -> Any:
@@ -204,9 +212,10 @@ def _identity_decorator(f: Callable[..., Any]) -> Callable[..., Any]:
 def func(f: Callable[..., Any]) -> Any:
     """``wp.func`` under the warp binding, identity otherwise.
 
-    Under the ``warp`` binding the returned object is a Warp ``Function`` that
-    is usable from kernels and, thanks to Warp's Python-scope fallback, also
-    directly callable; under the other bindings it is the plain function.
+    Under the ``warp`` binding the returned object is a Warp ``Function`` for
+    use from kernels (Warp's Python-scope fallback makes it directly callable
+    only when every builtin it uses has a Python-scope implementation); under
+    the other bindings it is the plain function.
     """
     if _active_binding[-1] == "warp":
         return warp_module().func(f)

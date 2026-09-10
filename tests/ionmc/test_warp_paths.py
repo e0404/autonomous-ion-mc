@@ -49,21 +49,6 @@ def test_warp_cpu_matches_reference(warp_module, reference_python) -> None:
     )
 
 
-def test_python_scope_call_of_warp_function_matches_reference(
-    warp_module, reference_python
-):
-    """Warp's Python-scope fallback executes the same source (float32 builtins)."""
-    from ionmc.physics import stopping as warp_bound
-
-    if warp_bound.m.name != "warp":
-        pytest.skip("stopping module not bound to warp in this environment")
-    args = reference_python.parameters.as_call_args()
-    for e in (10.0, 100.0):
-        value = warp_bound.mass_stopping_power(float(e), *args)
-        ref = float(reference_python.mass_stopping_power(e)[0])
-        assert abs(value / ref - 1.0) < 1e-5
-
-
 @pytest.mark.cuda
 def test_warp_cuda_matches_cpu_and_reference(
     warp_module, cuda_available, reference_python
@@ -80,3 +65,17 @@ def test_warp_cuda_matches_cpu_and_reference(
     np.testing.assert_allclose(
         cuda.csda_range(e), cpu.csda_range(e), **CPU_VS_CUDA_RANGE
     )
+
+
+def test_float32_error_of_stopping_power_stays_small(warp_module, reference_python):
+    """Engineering guard behind the decision 0005 criterion (rtol 1e-5).
+
+    The float32 cancellation in ``gamma^2 - 1`` (decision 0006) produced a
+    relative error of 8.7e-6; the cancellation-free source gives about 4e-7.
+    This bound fails for the former and passes for the latter, so the fix
+    cannot be undone unnoticed. It is not an acceptance criterion.
+    """
+    grid = np.linspace(2.0, 400.0, 400)
+    s_cpu = _warp("cpu").mass_stopping_power(grid)
+    s_ref = reference_python.mass_stopping_power(grid)
+    assert float(np.max(np.abs(s_cpu / s_ref - 1.0))) < 1.0e-6

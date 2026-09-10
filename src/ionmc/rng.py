@@ -74,7 +74,12 @@ class RandomState:
         return self.state % (high - low) + low
 
     def randf(self, low: float = 0.0, high: float = 1.0) -> float:
-        """Uniform float in ``[low, high)`` (``wp.randf``); 24 random bits."""
+        """Uniform float in ``[low, high)`` (``wp.randf``); 24 random bits.
+
+        The unit-interval value is bit-exact with the kernel; the scaled form
+        is computed in float64 here and in float32 by Warp, so it agrees to
+        float32 rounding only.
+        """
         self.state = rand_pcg(self.state)
         u = (self.state >> 8) * _INV_2_24
         if low == 0.0 and high == 1.0:
@@ -85,6 +90,14 @@ class RandomState:
         """Standard normal via Box-Muller (``wp.randn``); consumes two uniforms.
 
         Warp evaluates this in float32; agreement is to float32 precision.
+
+        Warp's ``randn`` (``rand.h``) draws its two uniforms as the two
+        operands of one C++ multiplication, ``sqrt(-2 log(randf(state) + eps))
+        * cos(2 pi randf(state))``, whose evaluation order the language does
+        not fix. The order mirrored here (``u1`` for the radius, ``u2`` for
+        the angle) is the one observed on the experiment workstation for both
+        the CPU and CUDA back ends; ``tests/ionmc/test_rng.py`` pins it and
+        must be re-checked after a Warp or compiler upgrade.
         """
         u1 = self.randf()
         u2 = self.randf()
