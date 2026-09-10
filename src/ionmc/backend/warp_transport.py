@@ -17,6 +17,7 @@ import numpy as np
 import warp as wp
 
 from ionmc.data.stopping_tables import StoppingTable
+from ionmc.physics import nuclear as nuclear_phys
 from ionmc.physics import transport
 
 
@@ -38,6 +39,9 @@ def csda_depth_dose_kernel(
     za_ratio: float,
     straggling: int,
     straggling_floor_mev: float,
+    nuclear: int,
+    oxygen_density_per_cm3: float,
+    nuclear_local_fraction: float,
     table_e: wp.array(dtype=float),
     table_s: wp.array(dtype=float),
     table_d: wp.array(dtype=float),
@@ -48,6 +52,8 @@ def csda_depth_dose_kernel(
     truncated: wp.array(dtype=int),
     final_z: wp.array(dtype=float),
     final_status: wp.array(dtype=int),
+    escaped: wp.array(dtype=wp.float64),
+    reactions: wp.array(dtype=int),
 ):
     i = wp.tid()
     e = energy0[i]
@@ -58,6 +64,7 @@ def csda_depth_dose_kernel(
     # as constants inside the while loop (noqa keeps ruff from stripping int()).
     step = int(0)  # noqa: UP018, RUF046
     alive = int(1)  # noqa: UP018, RUF046
+    reacted = int(0)  # noqa: UP018, RUF046
     while alive == 1 and step < max_steps:
         # physics step: fractional energy loss, not bin-limited (decision 0010),
         # so the straggling and clamp are unbiased; deposition is split across
@@ -75,6 +82,25 @@ def csda_depth_dose_kernel(
             )
             variate = wp.randn(rng)
             de = transport.straggled_energy_loss(de, sigma, variate, e)
+        if nuclear == 1:
+            # one uniform per alive step keeps the Warp and reference streams
+            # aligned; the probability is zero below threshold (decision 0012).
+            p_nuc = nuclear_phys.nonelastic_step_probability(
+                e, dl, oxygen_density_per_cm3
+            )
+            if wp.randf(rng) < p_nuc:
+                rbin = int(wp.floor(z / bin_width_mm))
+                if rbin >= 0 and rbin < n_bins:
+                    wp.atomic_add(
+                        edep, rbin, wp.float64(w * nuclear_local_fraction * e)
+                    )
+                wp.atomic_add(
+                    escaped, 0, wp.float64(w * (1.0 - nuclear_local_fraction) * e)
+                )
+                wp.atomic_add(reactions, 0, 1)
+                reacted = 1
+                alive = 0
+                break
         deposit = w * de
         z1 = z + dl
         pos = z
@@ -98,9 +124,11 @@ def csda_depth_dose_kernel(
             alive = 0
         if z >= geom_depth_mm:
             alive = 0
-    # per-history outcome: status 1 stopped, 2 escaped, 3 truncated
+    # per-history outcome: status 1 stopped, 2 escaped, 3 truncated, 4 reacted
     final_z[i] = z
-    if step >= max_steps and alive == 1:
+    if reacted == 1:
+        final_status[i] = 4
+    elif step >= max_steps and alive == 1:
         wp.atomic_add(truncated, 0, 1)
         final_status[i] = 3
     elif z >= geom_depth_mm:
@@ -150,8 +178,12 @@ class DepthDoseKernel:
         za_ratio: float,
         straggling: bool,
         straggling_floor_mev: float,
-    ) -> tuple[np.ndarray, int, np.ndarray, np.ndarray]:
-        """Return (energy deposited per bin [MeV], number of truncated histories)."""
+        nuclear: bool = False,
+        oxygen_density_per_cm3: float = 0.0,
+        nuclear_local_fraction: float = 0.0,
+    ) -> tuple[np.ndarray, int, np.ndarray, np.ndarray, float, int]:
+        """Return (edep per bin [MeV], truncated, final z, final status, escaped
+        energy [MeV], number of nonelastic reactions)."""
         d = self.device
         n_hist = int(energy0.shape[0])
         e0: Any = wp.array(
@@ -172,6 +204,8 @@ class DepthDoseKernel:
         truncated = wp.zeros(1, dtype=int, device=d)
         final_z = wp.zeros(n_hist, dtype=float, device=d)
         final_status = wp.zeros(n_hist, dtype=int, device=d)
+        escaped = wp.zeros(1, dtype=wp.float64, device=d)
+        reactions = wp.zeros(1, dtype=int, device=d)
         t = self.tables
         wp.launch(
             csda_depth_dose_kernel,
@@ -193,6 +227,9 @@ class DepthDoseKernel:
                 float(za_ratio),
                 (1 if straggling else 0),
                 float(straggling_floor_mev),
+                (1 if nuclear else 0),
+                float(oxygen_density_per_cm3),
+                float(nuclear_local_fraction),
                 t["e"],
                 t["s"],
                 t["d"],
@@ -203,6 +240,8 @@ class DepthDoseKernel:
                 truncated,
                 final_z,
                 final_status,
+                escaped,
+                reactions,
             ],
             device=d,
         )
@@ -212,6 +251,8 @@ class DepthDoseKernel:
             int(truncated.numpy()[0]),
             final_z.numpy().astype(np.float64),
             final_status.numpy().astype(np.int32),
+            float(escaped.numpy()[0]),
+            int(reactions.numpy()[0]),
         )
 
 

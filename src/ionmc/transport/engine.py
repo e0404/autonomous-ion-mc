@@ -18,6 +18,7 @@ from typing import Any
 import numpy as np
 
 from ionmc.backend import mathlib, reference
+from ionmc.constants import AVOGADRO
 from ionmc.data.stopping_tables import StoppingTable
 from ionmc.particles import PROTON, Particle
 from ionmc.rng import RandomState
@@ -37,6 +38,11 @@ DEFAULT_MAX_STEPS: int = 100_000
 #: deterministic, so the terminal-step Gaussian clamp cannot bias the range; the
 #: residual range below it (<~0.1 mm in water) is negligible (decision 0010).
 DEFAULT_STRAGGLING_FLOOR_MEV: float = 2.0
+#: Fraction of a reacting primary's kinetic energy deposited locally at the
+#: nonelastic reaction vertex (short-range recoils and heavy fragments); the
+#: remainder is booked to the escaping/deferred channel for secondary transport
+#: in Stage 2 (decision 0012).
+DEFAULT_NUCLEAR_LOCAL_FRACTION: float = 0.30
 
 
 @dataclass(frozen=True)
@@ -53,6 +59,12 @@ class DepthDoseResult:
     range_mean_mm: float = float("nan")  # mean stopping depth of stopped histories
     range_sigma_mm: float = float("nan")  # range straggling (std of stopping depth)
     n_stopped: int = 0
+    #: Kinetic energy [MeV] carried off by nonelastic reaction products (secondary
+    #: protons, neutrons, gammas) and booked for later secondary transport
+    #: (decision 0012). Zero unless the run had ``nuclear=True``.
+    escaped_mev: float = 0.0
+    #: Number of primaries removed by a nonelastic nuclear reaction.
+    n_reactions: int = 0
 
     @property
     def energy_deposited_mev(self) -> float:
@@ -60,8 +72,14 @@ class DepthDoseResult:
 
     @property
     def energy_balance(self) -> float:
-        """Relative energy imbalance ``(deposited - in) / in``."""
-        return (self.energy_deposited_mev - self.energy_in_mev) / self.energy_in_mev
+        """Relative energy imbalance ``(deposited + escaped - in) / in``.
+
+        With ``nuclear=True`` a reacting primary's energy is split between the
+        locally deposited fraction and the escaping channel; both must be
+        counted for the balance to close (decision 0012).
+        """
+        accounted = self.energy_deposited_mev + self.escaped_mev
+        return (accounted - self.energy_in_mev) / self.energy_in_mev
 
     def r80_mm(self) -> float:
         """Distal 80 %-of-maximum depth of the integral depth dose [mm]."""
@@ -214,9 +232,13 @@ class TransportEngine:
         particle: Particle = PROTON,
         straggling: bool = True,
         straggling_floor_mev: float = DEFAULT_STRAGGLING_FLOOR_MEV,
+        nuclear: bool = False,
+        nuclear_local_fraction: float = DEFAULT_NUCLEAR_LOCAL_FRACTION,
     ) -> None:
         if not (0.0 < max_fraction < 1.0):
             raise ValueError("max_fraction must be in (0, 1)")
+        if not (0.0 <= nuclear_local_fraction <= 1.0):
+            raise ValueError("nuclear_local_fraction must be in [0, 1]")
         self.table = table
         self.slab = slab
         self.grid = grid
@@ -227,10 +249,22 @@ class TransportEngine:
         self.particle = particle
         self.straggling = straggling
         self.straggling_floor_mev = straggling_floor_mev
+        self.nuclear = nuclear
+        self.nuclear_local_fraction = nuclear_local_fraction
         #: Electrons per gram <Z/A> of the medium (Bohr straggling; decision 0010).
         self.za_ratio = slab.material.electrons_per_gram_ratio
         #: Radiation length [g/cm^2] of the medium (MCS; decision 0011).
         self.radiation_length_g_per_cm2 = slab.material.radiation_length_g_per_cm2
+        #: Oxygen number density [1/cm^3] of the medium: only oxygen contributes
+        #: catastrophic nonelastic removal of primaries (decision 0012). Zero if
+        #: the medium has no oxygen, which disables nuclear removal there.
+        material = slab.material
+        if "O" in material.mass_fractions:
+            self.oxygen_density_per_cm3 = (
+                AVOGADRO * material.atoms_per_gram("O") * material.density_g_per_cm3
+            )
+        else:
+            self.oxygen_density_per_cm3 = 0.0
 
     def run(
         self,
@@ -243,9 +277,13 @@ class TransportEngine:
         state = source.sample(n_histories, seed)
         energy_in = float(np.sum(state.energy_mev * state.weight))
         if path == "warp":
-            edep, truncated, final_z, final_status = self._run_warp(state, device)
+            edep, truncated, final_z, final_status, escaped, n_reactions = (
+                self._run_warp(state, device)
+            )
         elif path == "python":
-            edep, truncated, final_z, final_status = self._run_reference(state)
+            edep, truncated, final_z, final_status, escaped, n_reactions = (
+                self._run_reference(state)
+            )
         else:
             raise ValueError(
                 f"unknown transport path {path!r} (use 'python' or 'warp')"
@@ -265,6 +303,8 @@ class TransportEngine:
             range_mean_mm=range_mean,
             range_sigma_mm=range_sigma,
             n_stopped=n_stopped,
+            escaped_mev=escaped,
+            n_reactions=n_reactions,
         )
 
     def run_batched(
@@ -482,12 +522,13 @@ class TransportEngine:
 
     def _run_reference(
         self, state: ParticleState
-    ) -> tuple[np.ndarray, int, np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, int, np.ndarray, np.ndarray, float, int]:
         tp = reference.load_bound_module(
             "ionmc.physics.transport",
             "python",
             rebind_dependencies=["ionmc.physics.tabulated"],
         )
+        nuc = reference.load_bound_module("ionmc.physics.nuclear", "python")
         t = self.table
         args: tuple[Any, ...] = (
             t.energy_mev,
@@ -505,8 +546,13 @@ class TransportEngine:
         za = self.za_ratio
         straggling = self.straggling
         floor = self.straggling_floor_mev
+        nuclear = self.nuclear
+        oxygen_density = self.oxygen_density_per_cm3
+        local_fraction = self.nuclear_local_fraction
         edep = self.grid.empty()
         truncated = 0
+        escaped = 0.0
+        n_reactions = 0
         final_z = np.zeros(state.size, dtype=np.float64)
         final_status = np.zeros(state.size, dtype=np.int32)
         for h in range(state.size):
@@ -530,6 +576,19 @@ class TransportEngine:
                         e, rest_energy, dl, density, za, charge
                     )
                     de = tp.straggled_energy_loss(de, sigma, rng.randn(), e)
+                if nuclear:
+                    # one uniform per alive step keeps the reference and Warp
+                    # streams aligned; the probability is zero below threshold
+                    # so the draw never triggers there (decision 0012).
+                    p_nuc = nuc.nonelastic_step_probability(e, dl, oxygen_density)
+                    if rng.randf() < p_nuc:
+                        dep_bin = math.floor(z / dz)
+                        if 0 <= dep_bin < n_bins:
+                            edep[dep_bin] += w * local_fraction * e
+                        escaped += w * (1.0 - local_fraction) * e
+                        n_reactions += 1
+                        status = Status.REACTED
+                        break
                 _deposit_along_step(edep, z, dl, w * de, dz, n_bins)
                 z += dl
                 e -= de
@@ -548,13 +607,13 @@ class TransportEngine:
                 final_status[h] = 3
             else:
                 final_status[h] = int(status)
-        return edep, truncated, final_z, final_status
+        return edep, truncated, final_z, final_status, escaped, n_reactions
 
     # -- Warp path ------------------------------------------------------------
 
     def _run_warp(
         self, state: ParticleState, device: str
-    ) -> tuple[np.ndarray, int, np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, int, np.ndarray, np.ndarray, float, int]:
         if not mathlib.HAVE_WARP:
             raise ImportError(
                 "warp-lang is not installed; the warp path is unavailable"
@@ -580,6 +639,9 @@ class TransportEngine:
             za_ratio=self.za_ratio,
             straggling=self.straggling,
             straggling_floor_mev=self.straggling_floor_mev,
+            nuclear=self.nuclear,
+            oxygen_density_per_cm3=self.oxygen_density_per_cm3,
+            nuclear_local_fraction=self.nuclear_local_fraction,
         )
 
 

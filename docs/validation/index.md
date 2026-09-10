@@ -132,6 +132,30 @@ The ICRU 90 mean excitation energy (78 eV) is reported as a separate model
 difference (−1.14 % at 1 MeV to −0.43 % at 400 MeV), not absorbed into any
 tolerance.
 
+## V2 (attenuation) - proton nonelastic nuclear removal (task DEV-007)
+
+Script: ``validation/v2_nuclear_attenuation.py``. References: the published
+primary survival to the Bragg peak (Paganetti 2002; Gottschalk), the analytic
+``1 - exp(-integral Sigma/S dE)`` reaction fraction, and cross-backend parity
+(decision 0012). Primaries are removed catastrophically at the macroscopic
+nonelastic rate on oxygen; a local fraction (``f_local = 0.30``) is deposited
+at the vertex and the remainder is booked to an audited escaping channel.
+
+| check | criterion | result (reference / Warp CPU) |
+|---|---|---|
+| primary survival to peak, 150 MeV | 0.80 ± 0.03 | 0.813 |
+| primary survival to peak, 200 MeV | 0.73 ± 0.04 | 0.716 |
+| MC reaction fraction vs analytic | within 5σ + 0.01 | 0.187 vs 0.189; 0.284 vs 0.285 |
+| energy budget deposited + escaped = in (reference / Warp) | 1e-9 / 1e-5 | ~1e-16 / ~4e-7 |
+| ``nuclear=False`` regression | zero reactions, exact EM budget | identical |
+| reference vs Warp CPU (matched N, seed) | same reactions, cumulative ≤ 1e-4 | identical set, ~8e-7 |
+
+The absolute Bragg peak-to-entrance ratio still reads high until DEV-008
+transports the escaping secondary protons; the V2 attenuation gate therefore
+checks primary removal and the energy budget, not the peak-to-entrance ratio.
+Milestone **V2** opens here and closes with DEV-008. Warp CPU/CUDA results are
+recorded in the DEV-007 local validation record (host run below).
+
 The V0 milestone of the roadmap is closed by task ``DEV-003`` (tabulated
 layer), which will replace the recalled range values by table-integrated
 ones from the acquired dataset.

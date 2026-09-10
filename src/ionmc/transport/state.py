@@ -27,6 +27,7 @@ class Status(IntEnum):
     ALIVE = 0
     STOPPED = 1  # reached the energy cutoff
     ESCAPED = 2  # left the geometry
+    REACTED = 4  # removed by a nonelastic nuclear reaction (3 marks truncation)
 
 
 @dataclass
