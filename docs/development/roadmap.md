@@ -447,7 +447,7 @@ deterministically and reviewed in one pull request.
 | Stage / task | Status | Evidence |
 |---|---|---|
 | Stage 0, `DEV-002` (package, conventions, execution model, quality tooling, analytic stopping power) | **completed** 2026-09-10 | decisions `0004`–`0006`; `validation/v0_stopping_power.py` on the host runner, CPU + CUDA, run `RUN-20260910T080455Z-e666b469` at `d23c78a`; DEV-002 local validation records; squash-merged into `develop` |
-| Stage 0, `DEV-003` (data layer, tabulated stopping power; closes V0) | not started | — |
+| Stage 0, `DEV-003` (data layer, tabulated stopping power; closes V0) | **completed** 2026-09-10 | decisions `0007`, `0008`; `validation/v0_tabulated_stopping_power.py` on the host runner (CPU + CUDA); DEV-003 local validation record; **milestone V0 closed** |
 | Stages 1–6 | not started | — |
 
 ## Change log
@@ -459,3 +459,7 @@ deterministically and reviewed in one pull request.
 - 2026-09-10: `DEV-002` completed; status table added. Decision `0003`
   (kickoff workaround) superseded by direct worktree access. The
   "provisional until Stage 1" status of decision `0005` is unchanged.
+- 2026-09-10: `DEV-003` completed, closing **Stage 0** and milestone **V0**:
+  external data layer (decision `0007`) and tabulated PCHIP stopping power
+  (decision `0008`). Next milestone is Stage 1 (proton condensed-history
+  transport in homogeneous water).

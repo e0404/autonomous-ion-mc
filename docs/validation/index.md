@@ -40,6 +40,28 @@ sandbox as well.
 | Warp CPU / CUDA (float32) vs Python reference, 400 energies 2–400 MeV | S: rtol 1e-5; range: rtol 2e-5 | S 4.2e-7 on both devices (normalized 0.042); range 2.4e-7 (normalized 0.012) |
 | Warp CPU vs CUDA | S: rtol 4e-6, atol 1e-6 (transcendental class); range: rtol 1e-5, atol 1e-6 (iterative) | S max abs 1.5e-5 MeV cm²/g = 1 float32 ULP at 2 MeV (normalized 0.043); range 9.5e-7 g/cm² (normalized 0.006) |
 
+## V0 — tabulated stopping power and range (task DEV-003)
+
+Script: ``validation/v0_tabulated_stopping_power.py``. Data: the MCsquare
+PSTAR and Geant4 water tables through the data layer (decision `0007`),
+acquired into the host-runner cache. Reference: the analytic model
+(decision `0006`) and NIST PSTAR CSDA ranges for liquid water (retrieved
+2026-09-10). Criteria fixed in decision `0008` before the comparison.
+
+| comparison | criterion | result (reference paths) |
+|---|---|---|
+| tabulated (PCHIP) reproduces the committed 20-point PSTAR subset | rtol 1e-12 | exact |
+| tabulated vs analytic, 10-400 MeV | ≤ 1.0 % | max +0.25 % (at 11 MeV) |
+| tabulated CSDA range + 0.5 MeV residual vs NIST PSTAR (100/150/200/250 MeV) | ≤ 0.1 % | ≤ 0.018 % |
+| analytic CSDA range + 1 MeV residual vs NIST PSTAR | ≤ 0.5 % | ≤ 0.053 % |
+| numpy binding vs Python binding | bitwise equal | equal |
+| Warp CPU / CUDA (float32) vs Python reference | S rtol 1e-5; range rtol 2e-5 | see the DEV-003 validation record |
+| Warp CPU vs CUDA | transcendental class (rtol 4e-6, atol 1e-6) | see the DEV-003 validation record |
+
+This closes milestone V0: proton stopping power in water is now available from
+both an analytical model and an I-value-consistent external table, on all three
+execution paths, validated against reference data with pre-fixed tolerances.
+
 The ICRU 90 mean excitation energy (78 eV) is reported as a separate model
 difference (−1.14 % at 1 MeV to −0.43 % at 400 MeV), not absorbed into any
 tolerance.

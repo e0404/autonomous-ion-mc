@@ -1,9 +1,9 @@
 # Physics
 
 This section documents implemented transport and interaction physics, model
-assumptions, and applicable validity ranges. Implemented so far (task
-`DEV-002`): the analytical electronic stopping power and CSDA range. No
-transport exists yet.
+assumptions, and applicable validity ranges. Implemented so far: the analytical electronic stopping power and CSDA range
+(task `DEV-002`) and a tabulated stopping-power layer from external data
+(task `DEV-003`). No transport exists yet.
 
 ## Electronic stopping power (analytical layer)
 
@@ -70,8 +70,46 @@ by composite Simpson quadrature (200 intervals; quadrature error below
 about 0.0025 g/cm² for protons in water. Protons in water: 7.717 g/cm² at
 100 MeV, 15.776 at 150 MeV, 25.962 at 200 MeV, 37.944 at 250 MeV.
 
+## Tabulated stopping power (data layer)
+
+Module: ``ionmc.physics.tabulated``; API:
+``ionmc.tabulated_stopping_power.TabulatedStoppingPower``; data layer:
+``ionmc.data``; decisions `0007`, `0008`.
+
+The same interface as the analytical layer (`mass_stopping_power`,
+`csda_range`, same units) is served from an external table. The reference
+table is the proton stopping power of liquid water from the MCsquare
+repository (``Materials/Water/PSTAR_Stop_Pow.dat``, Apache-2.0, UCLouvain;
+commit ``211eefe6``): NIST PSTAR (SRD 124) *total* mass stopping power on a
+0.5 MeV grid, 0-400 MeV. Nuclear stopping is at most 0.1 % of the total above
+0.5 MeV, so the table is used as the electronic stopping power at therapeutic
+energies.
+
+| aspect | choice | reason |
+|---|---|---|
+| interpolation | monotone cubic Hermite (PCHIP), slopes precomputed at load | reproduces the data generator; shape-preserving; no transcendentals; error against the model ≲ 1e-5 above 1 MeV |
+| segment lookup | fixed-count bisection (``ceil(log2 n)`` steps) | grid-agnostic; runs identically on the Python, numpy and Warp paths |
+| CSDA range | cumulative range precomputed per segment by 4-point Gauss-Legendre of ``1/S``; a query integrates the partial top segment with the same rule | continuity across grid nodes; range from the 0.5 MeV floor, residual below it added by the caller |
+| out of range | raises unless ``allow_extrapolation=True`` | avoids MCsquare's out-of-bounds read |
+
+The layer separates an **acquire** phase (needs network; verifies a SHA-256
+and writes a manifest) from an offline **use** phase (cache-only, fails with
+an actionable message when data are missing), because the host runner has no
+network (decision `0007`). The cache location is configurable
+(``IONMC_CACHE_DIR`` or ``$XDG_CACHE_HOME/ionmc``). A second table
+(``mcsquare-g4-water``, Geant4-derived) is registered as a selectable
+alternative source; it lies 0.4-0.5 % below the PSTAR table, matching the
+ICRU 90 versus ICRU 49 analytic offset.
+
+### Validity and accuracy
+
+The tabulated layer agrees with the analytic model (decision `0006`) to within
+0.25 % over 10-400 MeV and reproduces NIST PSTAR CSDA ranges at
+100/150/200/250 MeV to within 1.8e-4 (with the 8.9 µm residual range below
+0.5 MeV added). It is defined over the tabulated energy range 0.5-400 MeV.
+
 ## Not yet implemented
 
 Energy-loss straggling, multiple Coulomb scattering, nuclear interactions,
-tabulated stopping powers and material libraries, and all transport are
-future stages of the [roadmap](../development/roadmap.md).
+material libraries beyond water, and all transport are future stages of the
+[roadmap](../development/roadmap.md).

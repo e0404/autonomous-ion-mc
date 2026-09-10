@@ -7,6 +7,9 @@ Implemented so far (Stage 0, task DEV-002):
 * :mod:`ionmc.physics.stopping` - shared-source analytical stopping power;
 * :mod:`ionmc.stopping_power` - Python API evaluating it on the reference
   Python, numpy and Warp execution paths;
+* :mod:`ionmc.tabulated_stopping_power` - tabulated stopping power and CSDA
+  range by PCHIP interpolation of an external table (task DEV-003);
+* :mod:`ionmc.data` - versioned, checksummed, cached external datasets;
 * :mod:`ionmc.rng` - pure-Python mirror of Warp's random-number generator;
 * :mod:`ionmc.backend` - the shared-source execution mechanism.
 """
@@ -16,6 +19,7 @@ from __future__ import annotations
 from ionmc.materials import WATER, WATER_ICRU49, WATER_ICRU90, Material
 from ionmc.particles import PROTON, Particle
 from ionmc.stopping_power import AnalyticStoppingPower, Corrections, available_paths
+from ionmc.tabulated_stopping_power import TabulatedStoppingPower
 
 __version__ = "0.1.0.dev0"
 
@@ -28,6 +32,7 @@ __all__ = [
     "Corrections",
     "Material",
     "Particle",
+    "TabulatedStoppingPower",
     "__version__",
     "available_paths",
 ]

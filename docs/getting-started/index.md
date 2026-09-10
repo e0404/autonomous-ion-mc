@@ -47,7 +47,28 @@ model.csda_range(energies)                                   # g/cm^2
 model.provenance()                                           # I value, corrections, path
 ```
 
-- a pure-Python mirror of Warp's random-number generator (`ionmc.rng`).
+- a pure-Python mirror of Warp's random-number generator (`ionmc.rng`);
+- a tabulated stopping-power layer fed by an external, versioned, cached
+  dataset (`ionmc.TabulatedStoppingPower`, `ionmc.data`):
+
+```python
+from ionmc import WATER, PROTON, TabulatedStoppingPower
+from ionmc.data import MCSQUARE_PSTAR_WATER, acquire
+
+acquire(MCSQUARE_PSTAR_WATER)                    # once, with network access
+model = TabulatedStoppingPower.from_dataset(     # offline afterwards
+    MCSQUARE_PSTAR_WATER, WATER, PROTON, path="numpy"
+)
+model.mass_stopping_power([10.0, 100.0, 200.0])  # MeV cm^2/g
+model.csda_range([100.0, 200.0])                 # g/cm^2 from the 0.5 MeV floor
+```
+
+The dataset can also be fetched from the command line:
+
+```bash
+python -m ionmc.data acquire --all      # download and cache the registered tables
+python -m ionmc.data status             # show what is cached
+```
 
 Transport, geometry, scoring and tabulated physics data are planned
 (`docs/development/roadmap.md`) but not yet implemented.
