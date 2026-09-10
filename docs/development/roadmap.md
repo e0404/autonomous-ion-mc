@@ -453,7 +453,8 @@ deterministically and reviewed in one pull request.
 | Stage 1, `DEV-006` (multiple Coulomb scattering, 3-D transport; closes V1) | **completed** 2026-09-10 | decision `0011`; `validation/v1_lateral_scattering.py` on the host runner (CPU + CUDA); DEV-006 local validation record; **milestone V1 closed** |
 | Stage 2, `DEV-007` (proton nonelastic nuclear attenuation, local deposition; opens V2) | **completed** 2026-09-10 | decision `0012`; `validation/v2_nuclear_attenuation.py` on the host runner (CPU + CUDA); `tests/ionmc/test_nuclear.py`; DEV-007 local validation record |
 | Stage 2, `DEV-008` (secondary charged-particle transport; closes V2) | **completed** 2026-09-10 | decision `0013`; `validation/v2_secondary_transport.py` on the host runner (CPU + CUDA); `tests/ionmc/test_secondaries.py`; DEV-008 local validation record; **milestone V2 closed** |
-| Stage 3, `DEV-009` (1-D voxelized density heterogeneity, WET transport; opens V3) | **in progress** 2026-09-10 | decision `0014`; `validation/v3_density_heterogeneity.py`; `tests/ionmc/test_voxel_geometry.py` |
+| Stage 3, `DEV-009` (1-D voxelized density heterogeneity, WET transport; opens V3) | **completed** 2026-09-10 | decision `0014`; `validation/v3_density_heterogeneity.py` on the host runner (CPU + CUDA); `tests/ionmc/test_voxel_geometry.py`; DEV-009 local validation record |
+| Stage 3, `DEV-010` (per-voxel tissue materials via stopping-power ratios) | **in progress** 2026-09-10 | decision `0015`; `validation/v3_material_composition.py`; `tests/ionmc/test_material_composition.py` |
 | Stages 4–6 | not started | — |
 
 ## Change log
@@ -514,3 +515,18 @@ deterministically and reviewed in one pull request.
   voxel geometry and arbitrary beam incidence, per-voxel *material* composition
   (stopping-power ratios, per-voxel <Z/A>), and scoring grids decoupled from the
   transport grid.
+- 2026-09-10: `DEV-010` added per-voxel **tissue materials** (decision `0015`).
+  A tissue library (ICRU-44: cortical bone, adipose, soft tissue, muscle, lung,
+  air) plus a stopping-power ratio: each voxel transports as water at its
+  water-equivalent density `SPR(material) x rho`, computed from the analytic
+  Bethe mass-stopping-power ratio, and with a composition-scaled oxygen-
+  equivalent nuclear density. The depth-dose transport is unchanged from DEV-009;
+  the material physics enters through the per-voxel density and nuclear arrays.
+  Validated water-equivalent ratios in the published bands (bone 1.70, adipose
+  0.97, muscle 1.04), R80 at R_water/WER, ~2x/3.4x nuclear scaling for bone/
+  adipose, energy conservation across material interfaces, and cross-backend
+  agreement. Deferred: energy-dependent SPR / per-material stopping tables
+  (bone's 2.5% energy dependence; soft tissue < 0.25% with the scalar), element-
+  specific nuclear cross sections, and heterogeneous-material scattering. Next:
+  the remaining Stage-3 work (3-D voxel geometry with arbitrary incidence,
+  decoupled scoring grids) toward milestone V3 closure.

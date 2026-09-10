@@ -310,3 +310,28 @@ def available_paths() -> Sequence[str]:
     if mathlib.HAVE_WARP:
         paths.append("warp")
     return tuple(paths)
+
+
+def mass_stopping_power_ratio(
+    material: Material,
+    reference_energy_mev: float = 150.0,
+    particle: Particle | None = None,
+) -> float:
+    """Mass stopping-power ratio material:water at ``reference_energy_mev``.
+
+    The proton stopping-power ratio (SPR) used to transport non-water tissues as
+    water at their water-equivalent density (decision 0015). Both stopping powers
+    are the full analytic Bethe model, so shell/Barkas/Bloch corrections cancel
+    consistently and the ratio is robust; water is the ICRU-49 (75 eV) default to
+    match the PSTAR water table (decision 0006). Energy-independent to < 0.25 %
+    for soft tissue and ~1-1.5 % for bone over the therapeutic range.
+    """
+    from ionmc.materials import WATER
+    from ionmc.particles import PROTON
+
+    p = particle if particle is not None else PROTON
+    numerator = AnalyticStoppingPower(material, p, path="numpy")
+    denominator = AnalyticStoppingPower(WATER, p, path="numpy")
+    s_mat = float(numerator.mass_stopping_power(reference_energy_mev)[0])
+    s_wat = float(denominator.mass_stopping_power(reference_energy_mev)[0])
+    return s_mat / s_wat

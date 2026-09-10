@@ -185,6 +185,27 @@ class Material:
 
         return AVOGADRO * self.electrons_per_gram_ratio * self.density_g_per_cm3
 
+    @property
+    def oxygen_equivalent_per_gram(self) -> float:
+        """Oxygen-equivalent target-nucleus content per gram [mol/g] for the
+        nonelastic nuclear rate (decision 0015).
+
+        ``sum_{Z>1} (w_i/A_i) (A_i/A_O)^(2/3)``: each non-hydrogen element's
+        number density scaled to the oxygen cross-section shape by geometric
+        ``A^(2/3)`` radius scaling. Hydrogen is excluded (elastic; decision 0012).
+        For water this reduces to ``atoms_per_gram('O')``, so the oxygen-only
+        model (decision 0012) is reproduced exactly. Multiply by Avogadro and the
+        mass density to get the oxygen-equivalent number density in 1/cm^3.
+        """
+        a_o = ELEMENTS["O"].atomic_weight
+        total = 0.0
+        for s in self.mass_fractions:
+            e = ELEMENTS[s]
+            if e.atomic_number <= 1:
+                continue  # hydrogen: elastic, not a nonelastic removal target
+            total += self.atoms_per_gram(s) * (e.atomic_weight / a_o) ** (2.0 / 3.0)
+        return total
+
     def with_mean_excitation_energy(
         self, value_ev: float, source: str, name: str | None = None
     ) -> Material:
@@ -246,3 +267,142 @@ WATER_ICRU90: Material = WATER_ICRU49.with_mean_excitation_energy(
 #: reference tables used for validation (PSTAR-derived) are built on it;
 #: decision 0006 records the policy.
 WATER: Material = WATER_ICRU49
+
+
+_ICRU44 = (
+    "ICRU Report 44 (1989) tissue composition, density and compound mean "
+    "excitation energy as tabulated by NIST (Composition of materials); "
+    "radiation length from Tsai's formula (PDG)"
+)
+
+
+def _tissue(
+    name: str,
+    density: float,
+    i_ev: float,
+    fractions: dict[str, float],
+    radiation_length: float,
+) -> Material:
+    """Build a tissue Material (no density-effect parameters: < 0.1 % for
+    therapeutic protons; decision 0015)."""
+    return Material(
+        name=name,
+        density_g_per_cm3=density,
+        mass_fractions=fractions,
+        mean_excitation_energy=MeanExcitationEnergy(i_ev, _ICRU44),
+        source=_ICRU44,
+        radiation_length_g_per_cm2=radiation_length,
+    )
+
+
+#: ICRU-44 tissue material library (decision 0015). Compositions/densities/I from
+#: ICRU 44 / NIST; radiation lengths from Tsai's formula (reproduce water 36.08).
+CORTICAL_BONE: Material = _tissue(
+    "cortical_bone",
+    1.92,
+    110.0,
+    {
+        "H": 0.034,
+        "C": 0.155,
+        "N": 0.042,
+        "O": 0.435,
+        "Na": 0.001,
+        "Mg": 0.002,
+        "P": 0.103,
+        "S": 0.003,
+        "Ca": 0.225,
+    },
+    26.99,
+)
+
+ADIPOSE: Material = _tissue(
+    "adipose",
+    0.95,
+    64.8,
+    {
+        "H": 0.114,
+        "C": 0.598,
+        "N": 0.007,
+        "O": 0.278,
+        "Na": 0.001,
+        "S": 0.001,
+        "Cl": 0.001,
+    },
+    41.23,
+)
+
+SOFT_TISSUE: Material = _tissue(
+    "soft_tissue",
+    1.03,
+    72.3,
+    {
+        "H": 0.102,
+        "C": 0.143,
+        "N": 0.034,
+        "O": 0.708,
+        "Na": 0.002,
+        "P": 0.003,
+        "S": 0.003,
+        "Cl": 0.002,
+        "K": 0.003,
+    },
+    36.78,
+)
+
+SKELETAL_MUSCLE: Material = _tissue(
+    "skeletal_muscle",
+    1.05,
+    75.3,
+    {
+        "H": 0.102,
+        "C": 0.143,
+        "N": 0.034,
+        "O": 0.710,
+        "Na": 0.001,
+        "P": 0.002,
+        "S": 0.003,
+        "Cl": 0.001,
+        "K": 0.004,
+    },
+    36.81,
+)
+
+LUNG_TISSUE: Material = _tissue(
+    "lung_tissue",
+    1.05,
+    75.3,
+    {
+        "H": 0.103,
+        "C": 0.105,
+        "N": 0.031,
+        "O": 0.749,
+        "Na": 0.002,
+        "P": 0.002,
+        "S": 0.003,
+        "Cl": 0.003,
+        "K": 0.002,
+    },
+    36.53,
+)
+
+AIR: Material = _tissue(
+    "air",
+    1.205e-3,
+    85.7,
+    {"C": 0.000124, "N": 0.755268, "O": 0.231781, "Ar": 0.012827},
+    36.62,
+)
+
+#: Tissue library by name (water plus the ICRU-44 tissues).
+TISSUES: dict[str, Material] = {
+    m.name: m
+    for m in (
+        WATER,
+        CORTICAL_BONE,
+        ADIPOSE,
+        SOFT_TISSUE,
+        SKELETAL_MUSCLE,
+        LUNG_TISSUE,
+        AIR,
+    )
+}

@@ -8,7 +8,8 @@ proton transport in homogeneous water with energy-loss straggling and multiple
 Coulomb scattering (milestone V1, tasks `DEV-004`/`DEV-005`/`DEV-006`),
 nonelastic nuclear attenuation of primaries (task `DEV-007`), secondary
 charged-particle transport (task `DEV-008`, closing milestone V2), and 1-D
-voxelized density heterogeneity (task `DEV-009`, opening milestone V3).
+voxelized density heterogeneity (task `DEV-009`, opening milestone V3), and
+per-voxel tissue materials via stopping-power ratios (task `DEV-010`).
 
 ## Electronic stopping power (analytical layer)
 
@@ -285,9 +286,48 @@ energy budget stays exact with nuclear and secondary transport across a density
 interface; and the reference and Warp paths agree across the interface. This
 **opens milestone V3**.
 
+## Per-voxel tissue materials (Stage 3, task DEV-010, decision 0015)
+
+Module: ``ionmc.materials`` (tissue library) and
+``ionmc.stopping_power.mass_stopping_power_ratio``, wired into the engine's
+per-voxel arrays.
+
+Different tissues stop protons differently *per gram* than water (through their
+electron density ``<Z/A>`` and mean excitation energy ``I``), so density alone
+(DEV-009) is not enough. An ICRU-44 tissue library is added (cortical bone,
+adipose, soft tissue, skeletal muscle, lung, air), and each voxel is transported
+as **water at its water-equivalent density** ``rho_we = SPR(material) x
+rho_phys``. The stopping-power ratio ``SPR`` is the ratio of the analytic Bethe
+mass stopping powers (material / water) at a 150 MeV reference energy, so the
+water table and the DEV-009 per-voxel-density transport are reused **unchanged**;
+the material physics enters entirely through the per-voxel density and nuclear
+arrays the engine assembles at construction. Because ``SPR ~ <Z/A>_mat/
+<Z/A>_wat`` up to a small ``I``-value term, transporting in this water-equivalent
+frame (water table, water ``<Z/A>``) reproduces the material's linear straggling
+to a sub-percent term. The nonelastic nuclear rate uses a **composition-scaled**
+oxygen-equivalent number density ``sum_{Z>1} (w_i/A_i)(A_i/A_O)^(2/3)`` (geometric
+``A^(2/3)`` scaling of the oxygen cross-section shape), which reduces to ``n_O``
+for water and is ~2x larger in bone / ~3.4x in adipose, removing the large error
+of oxygen-only removal in bony and fatty tissue.
+
+Validated: the water-equivalent ratios ``SPR x rho`` fall in the published
+Schneider/ICRU bands (cortical bone 1.70, adipose 0.97, muscle 1.04, lung 1.04);
+a tissue slab puts R80 at ``R80_water / WER``; a water ``VoxelSlab`` reproduces
+the homogeneous baseline bit-for-bit; energy is conserved across material
+interfaces with nuclear and secondary transport; and the reference and Warp paths
+agree. Radiation lengths (Tsai's formula) are populated per material for the
+future heterogeneous scattering path.
+
+Deferred: energy-dependent SPR / per-material stopping tables (cortical bone's
+2.5 % energy dependence; soft tissues are already < 0.25 % with the 150 MeV
+scalar), element-specific measured nonelastic cross sections (C, Ca), per-tissue
+density-effect parameters, and non-water/heterogeneous-material multiple
+scattering on the 3-D path (the water-only scattering path rejects both a
+heterogeneous slab and a homogeneous non-water material with a
+``NotImplementedError`` rather than silently giving a wrong Bragg depth).
+
 Deferred to later Stage-3 tasks: full 3-D voxel geometry with arbitrary beam
-incidence and ray/voxel traversal, per-voxel *material* composition (stopping-
-power ratios and per-voxel ``<Z/A>``/radiation length, not just density), nuclear
-removal and the lateral halo on the 3-D scattering path in heterogeneous media,
-and scoring grids decoupled from the transport grid. Not yet, beyond Stage 3:
-treatment-planning scoring and influence matrices (Stage 4).
+incidence and ray/voxel traversal, nuclear removal and the lateral halo on the
+3-D scattering path in heterogeneous media, and scoring grids decoupled from the
+transport grid. Not yet, beyond Stage 3: treatment-planning scoring and influence
+matrices (Stage 4).
