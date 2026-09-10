@@ -333,11 +333,16 @@ def csda_scattering_kernel(
     energy0: wp.array(dtype=float),
     weight: wp.array(dtype=float),
     rng_state0: wp.array(dtype=wp.uint32),
+    pos0: wp.array(dtype=wp.vec3),
+    dir0: wp.array(dtype=wp.vec3),
     voxel_z: wp.array(dtype=float),
     voxel_density: wp.array(dtype=float),
     voxel_phys: wp.array(dtype=float),
     voxel_radlen: wp.array(dtype=float),
     n_vox: int,
+    slab_nx: float,
+    slab_ny: float,
+    slab_nz: float,
     max_fraction: float,
     max_step_mm: float,
     geom_depth_mm: float,
@@ -347,6 +352,7 @@ def csda_scattering_kernel(
     charge: float,
     za_ratio: float,
     straggling: int,
+    scattering: int,
     straggling_floor_mev: float,
     depth_bin_mm: float,
     half_width_mm: float,
@@ -367,6 +373,42 @@ def csda_scattering_kernel(
     e = energy0[i]
     w = weight[i]
     rng = rng_state0[i]
+    p0 = pos0[i]
+    d0v = dir0[i]
+    dn = wp.sqrt(d0v[0] * d0v[0] + d0v[1] * d0v[1] + d0v[2] * d0v[2])
+    d0x = d0v[0] / dn
+    d0y = d0v[1] / dn
+    d0z = d0v[2] / dn
+    # beam frame (e1, e2, d0); transverse axes built as in _scatter_dir so the
+    # geometry m_hat = R^T normal uses the identical construction (decision 0018)
+    ax0 = wp.abs(d0x)
+    ay0 = wp.abs(d0y)
+    az0 = wp.abs(d0z)
+    rx = float(0.0)  # noqa: UP018
+    ry = float(0.0)  # noqa: UP018
+    rz = float(0.0)  # noqa: UP018
+    if ax0 <= ay0 and ax0 <= az0:
+        rx = 1.0
+    elif ay0 <= az0:
+        ry = 1.0
+    else:
+        rz = 1.0
+    c1x = d0y * rz - d0z * ry
+    c1y = d0z * rx - d0x * rz
+    c1z = d0x * ry - d0y * rx
+    finv1 = 1.0 / wp.sqrt(c1x * c1x + c1y * c1y + c1z * c1z)
+    fe1x = c1x * finv1
+    fe1y = c1y * finv1
+    fe1z = c1z * finv1
+    fe2x = d0y * fe1z - d0z * fe1y
+    fe2y = d0z * fe1x - d0x * fe1z
+    fe2z = d0x * fe1y - d0y * fe1x
+    # m_hat = R^T normal; u0 = normal . p0 (material coordinate of the entry)
+    m0 = fe1x * slab_nx + fe1y * slab_ny + fe1z * slab_nz
+    m1 = fe2x * slab_nx + fe2y * slab_ny + fe2z * slab_nz
+    m2 = d0x * slab_nx + d0y * slab_ny + d0z * slab_nz
+    u0 = slab_nx * p0[0] + slab_ny * p0[1] + slab_nz * p0[2]
+    # beam-frame position (relative to the entry point) and direction
     px = float(0.0)  # noqa: UP018
     py = float(0.0)  # noqa: UP018
     pz = float(0.0)  # noqa: UP018
@@ -375,18 +417,19 @@ def csda_scattering_kernel(
     dz = float(1.0)  # noqa: UP018
     step = int(0)  # noqa: UP018, RUF046
     alive = int(1)  # noqa: UP018, RUF046
-    # current voxel index by depth (decision 0016); pz starts at 0 -> voxel 0
+    # current voxel index by material coordinate u (decision 0018)
+    u = u0
     voxel = int(0)  # noqa: UP018, RUF046
-    while voxel + 1 < n_vox and pz >= voxel_z[voxel + 1]:
+    while voxel + 1 < n_vox and u >= voxel_z[voxel + 1]:
         voxel = voxel + 1
     while alive == 1 and step < max_steps:
         density = voxel_density[voxel]
-        dz_pos = wp.max(dz, 1.0e-6)
+        mproj = wp.max(m0 * dx + m1 * dy + m2 * dz, 1.0e-6)
         s = transport.energy_loss_step_length(
             e, max_fraction, max_step_mm, density, table_e, table_s, table_d, n, n_steps
         )
-        s = wp.min(s, (geom_depth_mm - pz) / dz_pos)
-        s = wp.min(s, (voxel_z[voxel + 1] - pz) / dz_pos)
+        s = wp.min(s, (geom_depth_mm - u) / mproj)
+        s = wp.min(s, (voxel_z[voxel + 1] - u) / mproj)
         de = transport.midpoint_energy_loss(
             e, s, density, table_e, table_s, table_d, n, n_steps
         )
@@ -401,7 +444,7 @@ def csda_scattering_kernel(
         px = px + a * dx
         py = py + a * dy
         pz = pz + a * dz
-        if e > straggling_floor_mev:
+        if scattering == 1 and e > straggling_floor_mev:
             theta0 = transport.highland_theta0(
                 e, rest_energy_mev, charge, s, voxel_phys[voxel], voxel_radlen[voxel]
             )
@@ -440,8 +483,9 @@ def csda_scattering_kernel(
                     b = b + 1
         e = e - de
         step = step + 1
-        # advance the voxel index across depth boundaries the step reached
-        while voxel + 1 < n_vox and pz >= voxel_z[voxel + 1] - 1.0e-9:
+        # material coordinate after the step, then advance the voxel index
+        u = u0 + m0 * px + m1 * py + m2 * pz
+        while voxel + 1 < n_vox and u >= voxel_z[voxel + 1] - 1.0e-9:
             voxel = voxel + 1
         if e <= energy_cut_mev:
             xb2 = int(wp.floor((px + half_width_mm) / lateral_bin_mm))
@@ -450,13 +494,13 @@ def csda_scattering_kernel(
                 wp.atomic_add(edep, b2 * n_lateral + xb2, wp.float64(w * e))
             e = 0.0
             alive = 0
-        if pz >= geom_depth_mm:
+        if u >= geom_depth_mm:
             alive = 0
     final_z[i] = pz
     if step >= max_steps and alive == 1:
         wp.atomic_add(truncated, 0, 1)
         final_status[i] = 3
-    elif pz >= geom_depth_mm:
+    elif u >= geom_depth_mm:
         final_status[i] = 2
     else:
         final_status[i] = 1
@@ -492,6 +536,7 @@ class ScatteringKernel:
         voxel_density: np.ndarray,
         voxel_physical_density: np.ndarray,
         voxel_radiation_length: np.ndarray,
+        slab_normal: np.ndarray,
         max_fraction: float,
         max_step_mm: float,
         geom_depth_mm: float,
@@ -501,6 +546,7 @@ class ScatteringKernel:
         charge: float,
         za_ratio: float,
         straggling: bool,
+        scattering: bool,
         straggling_floor_mev: float,
     ) -> tuple[np.ndarray, int, np.ndarray, np.ndarray]:
         d = self.device
@@ -519,6 +565,17 @@ class ScatteringKernel:
             dtype=wp.uint32,
             device=d,
         )
+        pos0: Any = wp.array(
+            np.ascontiguousarray(state.position_mm, dtype=np.float32),
+            dtype=wp.vec3,
+            device=d,
+        )
+        dir0: Any = wp.array(
+            np.ascontiguousarray(state.direction, dtype=np.float32),
+            dtype=wp.vec3,
+            device=d,
+        )
+        snx, sny, snz = (float(v) for v in np.asarray(slab_normal, dtype=np.float64))
         vz: Any = wp.array(
             np.ascontiguousarray(voxel_z_mm, dtype=np.float32), dtype=float, device=d
         )
@@ -548,11 +605,16 @@ class ScatteringKernel:
                 e0,
                 ww,
                 rng,
+                pos0,
+                dir0,
                 vz,
                 vrho,
                 vphys,
                 vradlen,
                 n_vox,
+                float(snx),
+                float(sny),
+                float(snz),
                 float(max_fraction),
                 float(max_step_mm),
                 float(geom_depth_mm),
@@ -562,6 +624,7 @@ class ScatteringKernel:
                 float(charge),
                 float(za_ratio),
                 (1 if straggling else 0),
+                (1 if scattering else 0),
                 float(straggling_floor_mev),
                 float(grid.depth_bin_mm),
                 float(grid.half_width_mm),

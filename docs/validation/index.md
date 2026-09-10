@@ -274,6 +274,34 @@ capability. Deferred: 3-D voxel geometry with arbitrary incidence and decoupled
 scoring grids (V3 closure). Warp CPU/CUDA results are recorded in the DEV-012
 local validation record (host run below).
 
+## V3 (arbitrary incidence) - beam-frame transport, rotated-vs-axis-aligned (task DEV-013)
+
+Script: ``validation/v3_arbitrary_incidence.py``. References: the axis-aligned
+run itself (rigid-rotation invariance), the homogeneous Fermi-Eyges oracle, an
+analytic oblique water-equivalent-path relation, and cross-backend parity
+(decision 0018). Tolerances are pre-registered before running.
+
+| check | criterion | result |
+|---|---|---|
+| axis-aligned energy conservation | 1e-9 (reference) | ~0 |
+| deterministic rotation equivalence (scattering off): energy / depth-dose cumulative / R80 | 1e-12 / 1e-9 / 1e-4 mm | round-off |
+| statistical rotation covariance (scattering on): rotated sigma_x' vs Fermi-Eyges, axis-vs-rot R80 | within 3 % / <= 1 mm | < 1 % / within stats |
+| oblique WET traversal (heterogeneous, interior boundaries): tilted vs cos-stretched-normal deposited energy + profile | within 1e-6 / 1e-9 | round-off |
+| reference vs Warp CPU (rotated): sigma_x', depth dose cumulative | <= 0.05 mm / <= 5e-4 | within budget |
+| CUDA sigma_x' vs Fermi-Eyges / CUDA vs CPU depth dose | < 3 % / <= 5e-4 | within budget |
+
+The deterministic gate isolates the frame/geometry transform (a straight ray has
+no azimuthal gauge, so a rotated scene is the same history in different
+coordinates, agreeing to round-off); the statistical gate confirms the physics
+is genuinely rotation-covariant with scattering on; the oblique gate exercises
+the interior oblique voxel-boundary traversal through a heterogeneous slab that a
+stopping beam in a thick homogeneous slab hides. A unit test additionally asserts
+the beam-frame material-coordinate identity ``u = normal . (p0 + R . p_beam)``
+directly, so a wrong transverse cross-term is falsifiable.
+Deferred: arbitrary 3-D per-voxel maps with Siddon traversal and decoupled
+scoring grids (V3 closure, DEV-014). Warp CPU/CUDA results are recorded in the
+DEV-013 local validation record (host run below).
+
 ## Unit and regression tests
 
 ``tests/ionmc/`` covers units and constants, materials, the RNG mirror

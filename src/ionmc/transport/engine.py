@@ -208,16 +208,19 @@ class ScatteringResult:
         return float(np.interp(depth_mm, centers[good], sigma[good]))
 
 
-def _scatter_direction(
-    dx: float, dy: float, dz: float, theta_x: float, theta_y: float
-) -> tuple[float, float, float]:
-    """Tilt a unit direction by small projected angles in its transverse frame.
-
-    Builds an orthonormal frame perpendicular to ``d`` (reference axis = the
-    least-aligned world axis, avoiding degeneracy), applies
-    ``d' = normalize(d + theta_x e1 + theta_y e2)`` (the two-plane sampler, space
-    angle variance ``2 theta0^2``). Mirrors the Warp kernel exactly; plain float
-    arithmetic keeps the two paths numerically identical (decision 0011).
+def _transverse_frame(
+    dx: float, dy: float, dz: float
+) -> tuple[float, float, float, float, float, float]:
+    """Return two orthonormal axes ``(e1, e2)`` spanning the plane perpendicular
+    to the unit direction ``d`` (reference axis = the least-aligned world axis,
+    avoiding degeneracy). ``(e1, e2, d)`` is a right-handed frame. Shared by the
+    scattering sampler (:func:`_scatter_direction`) and the beam-frame builder
+    (:func:`_beam_frame`) so both use the identical construction (decisions 0011,
+    0018). The Warp path inlines the *same* arithmetic in ``_scatter_dir`` and in
+    ``csda_scattering_kernel`` (which cannot call this Python function); those
+    three sites must stay in sync, and the cross-backend validation gates
+    (``warp_cpu_vs_reference``/``warp_cpu_vs_cuda``) catch a desync. Plain float
+    arithmetic keeps the reference and Warp paths numerically consistent.
     """
     ax, ay, az = abs(dx), abs(dy), abs(dz)
     if ax <= ay and ax <= az:
@@ -234,11 +237,49 @@ def _scatter_direction(
         dz * e1x - dx * e1z,
         dx * e1y - dy * e1x,
     )
+    return e1x, e1y, e1z, e2x, e2y, e2z
+
+
+def _scatter_direction(
+    dx: float, dy: float, dz: float, theta_x: float, theta_y: float
+) -> tuple[float, float, float]:
+    """Tilt a unit direction by small projected angles in its transverse frame.
+
+    Applies ``d' = normalize(d + theta_x e1 + theta_y e2)`` (the two-plane
+    sampler, space angle variance ``2 theta0^2``) with ``(e1, e2)`` from
+    :func:`_transverse_frame`. Mirrors the Warp kernel exactly; plain float
+    arithmetic keeps the two paths numerically identical (decision 0011).
+    """
+    e1x, e1y, e1z, e2x, e2y, e2z = _transverse_frame(dx, dy, dz)
     nx = dx + theta_x * e1x + theta_y * e2x
     ny = dy + theta_x * e1y + theta_y * e2y
     nz = dz + theta_x * e1z + theta_y * e2z
     inv = 1.0 / math.sqrt(nx * nx + ny * ny + nz * nz)
     return nx * inv, ny * inv, nz * inv
+
+
+def _beam_frame(
+    direction: np.ndarray, normal: np.ndarray, position: np.ndarray
+) -> tuple[float, float, float, float]:
+    """Beam-frame material-coordinate coefficients for one history (decision 0018).
+
+    The beam frame has orthonormal basis ``R = (e1, e2, d_hat)`` (columns) built
+    from the unit beam ``direction``; a lab point ``x = R @ x_beam + position``.
+    The material coordinate (signed distance along the slab ``normal``) is then
+    ``u(x_beam) = normal . x = u0 + m0 x' + m1 y' + m2 z'`` with ``m = R^T normal``
+    and ``u0 = normal . position``. Returns ``(m0, m1, m2, u0)``; ``normal`` must
+    be a unit vector. The Warp kernel inlines the identical computation.
+    """
+    dx, dy, dz = (float(v) for v in direction)
+    dnorm = math.sqrt(dx * dx + dy * dy + dz * dz)
+    dx, dy, dz = dx / dnorm, dy / dnorm, dz / dnorm
+    e1x, e1y, e1z, e2x, e2y, e2z = _transverse_frame(dx, dy, dz)
+    nrx, nry, nrz = (float(v) for v in normal)
+    m0 = e1x * nrx + e1y * nry + e1z * nrz
+    m1 = e2x * nrx + e2y * nry + e2z * nrz
+    m2 = dx * nrx + dy * nry + dz * nrz
+    u0 = nrx * float(position[0]) + nry * float(position[1]) + nrz * float(position[2])
+    return m0, m1, m2, u0
 
 
 def _deposit_zx(
@@ -293,6 +334,7 @@ class TransportEngine:
         max_steps: int = DEFAULT_MAX_STEPS,
         particle: Particle = PROTON,
         straggling: bool = True,
+        scattering: bool = True,
         straggling_floor_mev: float = DEFAULT_STRAGGLING_FLOOR_MEV,
         nuclear: bool = False,
         nuclear_local_fraction: float = DEFAULT_NUCLEAR_LOCAL_FRACTION,
@@ -318,6 +360,12 @@ class TransportEngine:
         self.max_steps = max_steps
         self.particle = particle
         self.straggling = straggling
+        #: Whether multiple Coulomb scattering is applied on the scattering path.
+        #: Off gives a deterministic straight-ray transport (scattering-only vs
+        #: no-scattering studies, and the deterministic rotation-equivalence
+        #: check of arbitrary incidence; decision 0018). Ignored by the pure
+        #: depth-dose path, which never scatters.
+        self.scattering = scattering
         self.straggling_floor_mev = straggling_floor_mev
         self.nuclear = nuclear
         self.nuclear_local_fraction = nuclear_local_fraction
@@ -368,6 +416,12 @@ class TransportEngine:
         self.depth_mm = float(self.voxel_z_mm[-1])
         #: Physical front-voxel density for scalar consumers.
         self.density_g_per_cm3 = float(raw_rho[0])
+        #: Lab-frame unit normal of the layer stack; voxel boundaries are measured
+        #: along it. +z reproduces the axis-aligned geometry exactly (decision
+        #: 0018). Arbitrary beam incidence is handled by the scattering path,
+        #: which transports in a canonical beam frame and looks up the voxel by
+        #: the material coordinate ``u = normal . position``.
+        self.slab_normal = np.ascontiguousarray(slab.normal_hat, dtype=np.float64)
         #: Lazily-built engine that transports secondary protons (nuclear off, no
         #: further secondaries), reusing this engine's geometry (decision 0013).
         self._sec_engine: TransportEngine | None = None
@@ -380,6 +434,11 @@ class TransportEngine:
         path: str = "python",
         device: str = "cpu",
     ) -> DepthDoseResult:
+        if not np.allclose(source.direction_hat, (0.0, 0.0, 1.0)):
+            raise ValueError(
+                "the depth-dose path is longitudinal (+z only); use "
+                "run_scattering for arbitrary beam incidence (decision 0018)"
+            )
         state = source.sample(n_histories, seed)
         energy_in = float(np.sum(state.energy_mev * state.weight))
         (
@@ -562,16 +621,21 @@ class TransportEngine:
         """Run 3-D transport with multiple Coulomb scattering into a 2-D
         (depth, lateral-x) grid (decision 0011).
 
-        Scattering is always applied (above the 2 MeV floor); energy-loss
-        straggling independently follows the engine's ``straggling`` flag, so a
-        scattering-only study (``straggling=False``) is possible. The medium's
-        radiation length must be known (> 0).
+        Multiple scattering (above the 2 MeV floor) follows the engine's
+        ``scattering`` flag and energy-loss straggling its independent
+        ``straggling`` flag, so scattering-only (``straggling=False``) and
+        no-scattering (``scattering=False``) studies are both possible. The
+        medium's radiation length must be known (> 0).
 
         The 3-D scattering path supports **1-D voxelized heterogeneous materials**
         (decisions 0016, 0017): the energy loss uses the per-voxel water-
         equivalent density and the multiple scattering uses the per-voxel physical
-        density and material radiation length, looked up by depth. Every voxel
-        material must have a known radiation length (> 0).
+        density and material radiation length. It also supports **arbitrary beam
+        incidence** (decision 0018): the ``source`` direction and the slab
+        ``normal`` may be arbitrary; transport runs in a canonical beam frame
+        (origin at the beam entry point, +z' along the beam), so the ``grid``
+        scores beam-frame depth/lateral (a pencil beam is centred on its own
+        axis). Every voxel material must have a known radiation length (> 0).
         """
         if np.any(self.voxel_radiation_length <= 0.0):
             raise ValueError(
@@ -624,6 +688,7 @@ class TransportEngine:
             voxel_density=self.voxel_density,
             voxel_physical_density=self.voxel_physical_density,
             voxel_radiation_length=self.voxel_radiation_length,
+            slab_normal=self.slab_normal,
             za_ratio=self.depth_dose_za_ratio,
             max_fraction=self.max_fraction,
             max_step_mm=self.max_step_mm,
@@ -633,6 +698,7 @@ class TransportEngine:
             rest_energy_mev=self.particle.rest_energy_mev,
             charge=self.particle.charge,
             straggling=self.straggling,
+            scattering=self.scattering,
             straggling_floor_mev=self.straggling_floor_mev,
         )
 
@@ -664,8 +730,15 @@ class TransportEngine:
         charge = self.particle.charge
         za = self.depth_dose_za_ratio  # water-equivalent frame (decision 0015)
         straggling = self.straggling
+        scattering = self.scattering
         floor = self.straggling_floor_mev
         geom_depth = self.depth_mm
+        # lab-frame slab normal; boundaries voxel_z are measured along it. The
+        # transport runs in a canonical beam frame (origin at the entry point,
+        # +z' along the beam), so scoring uses the beam-frame position while the
+        # geometry is looked up by the material coordinate u = normal . position
+        # = u0 + m_hat . beam_position, m_hat = R^T normal (decision 0018).
+        normal = self.slab_normal
         dz = grid.depth_bin_mm
         half_w = grid.half_width_mm
         dxb = grid.lateral_bin_mm
@@ -676,25 +749,34 @@ class TransportEngine:
         final_status = np.zeros(state.size, dtype=np.int32)
         for h in range(state.size):
             e = float(state.energy_mev[h])
-            px, py, pz = (float(v) for v in state.position_mm[h])
+            # beam frame (origin at the entry point, +z' along the beam); the
+            # material coordinate is u = u0 + m . beam_position (decision 0018)
+            m0, m1, m2, u0 = _beam_frame(
+                state.direction[h], normal, state.position_mm[h]
+            )
+            # beam-frame position (relative to the entry point) and direction
+            px, py, pz = 0.0, 0.0, 0.0
             dx, dy, dzr = 0.0, 0.0, 1.0
             w = float(state.weight[h])
             rng = RandomState.from_state(int(state.rng_state[h]))
-            voxel = min(int(np.searchsorted(voxel_z, pz, side="right")) - 1, n_vox - 1)
+            u = u0
+            voxel = min(int(np.searchsorted(voxel_z, u, side="right")) - 1, n_vox - 1)
             voxel = max(voxel, 0)
             step = 0
             status = Status.ALIVE
             while status == Status.ALIVE and step < self.max_steps:
                 density = float(voxel_density[voxel])
-                dzr_pos = max(dzr, 1.0e-6)
+                # advance in the material coordinate per unit path (>0 forward)
+                mproj = max(m0 * dx + m1 * dy + m2 * dzr, 1.0e-6)
                 s = tp.energy_loss_step_length(
                     e, self.max_fraction, self.max_step_mm, density, *args
                 )
-                # limit the step so its depth advance stays within the voxel
+                # limit the step so its material-coordinate advance stays within
+                # the voxel and the geometry (u, not the beam depth pz)
                 s = min(
                     s,
-                    (geom_depth - pz) / dzr_pos,
-                    (float(voxel_z[voxel + 1]) - pz) / dzr_pos,
+                    (geom_depth - u) / mproj,
+                    (float(voxel_z[voxel + 1]) - u) / mproj,
                 )
                 de = tp.midpoint_energy_loss(e, s, density, *args)
                 if straggling and e > floor:
@@ -707,9 +789,9 @@ class TransportEngine:
                 z_start = pz
                 x_start = px
                 px, py, pz = px + a * dx, py + a * dy, pz + a * dzr
-                # scattering is independent of energy-loss straggling: it is
-                # always applied above the floor in a scattering run (decision 0011).
-                if e > floor:
+                # scattering is independent of energy-loss straggling; it is
+                # applied above the floor when enabled (decisions 0011, 0018).
+                if scattering and e > floor:
                     # MCS uses the physical density and material radiation length
                     theta0 = tp.highland_theta0(
                         e,
@@ -737,14 +819,15 @@ class TransportEngine:
                 )
                 e -= de
                 step += 1
-                # advance the voxel index across depth boundaries the step reached
-                while voxel + 1 < n_vox and pz >= float(voxel_z[voxel + 1]) - 1.0e-9:
+                # material coordinate after the step, then advance the voxel index
+                u = u0 + m0 * px + m1 * py + m2 * pz
+                while voxel + 1 < n_vox and u >= float(voxel_z[voxel + 1]) - 1.0e-9:
                     voxel += 1
                 if e <= self.energy_cut_mev:
                     _deposit_zx(edep, pz, pz, px, w * e, dz, half_w, dxb, nz, nx)
                     e = 0.0
                     status = Status.STOPPED
-                if pz >= geom_depth:
+                if u >= geom_depth:
                     status = Status.ESCAPED
             final_pz[h] = pz
             if step >= self.max_steps and status == Status.ALIVE:
