@@ -9,10 +9,16 @@ must be cached). Emits one JSON document with these gates:
                                the fine per-bin dose summed 4:1 equals the coarse;
 * ``integral_dose_alignment`` - total deposited energy invariant under a depth-
                                origin and lateral-centre shift of the grid;
+* ``lateral_origin``         - scattering off: a lateral window centred on the
+                               beam captures the dose, one shifted off it captures
+                               none, and the energy-weighted mean lateral position
+                               is the beam axis -- a *discriminating* check of the
+                               lateral origin (sigma_x is translation-invariant);
 * ``lateral_shift_sigma_x``  - scattering on: sigma_x(z) invariant under a
-                               lateral-centre shift;
+                               lateral-centre shift (an invariance, not a
+                               discriminating check);
 * ``partial_coverage``       - a grid starting past the entrance captures strictly
-                               less energy (the origin shifts the scored window);
+                               less energy (the depth origin shifts the window);
 * ``warp_cpu_vs_reference`` - CPU agrees with the reference on a shifted grid;
 * ``warp_cuda_vs_oracle`` / ``warp_cpu_vs_cuda`` - CUDA reproduces the Fermi-Eyges
                                sigma_x on a shifted grid and CUDA vs CPU agree.
@@ -125,6 +131,27 @@ def main() -> int:
     }
     gates["partial_coverage"] = (
         0.0 < downstream.energy_deposited_mev < base.energy_deposited_mev
+    )
+
+    # -- lateral origin discriminated: window selection + first moment --------
+    # scattering off: the beam stays on the x=0 axis. A window centred on the beam
+    # captures the dose; one shifted off it captures none; and on a wide shifted
+    # grid the energy-weighted mean lateral position is the beam axis (x=0), not
+    # the grid centre. sigma_x alone cannot show this (it is translation-invariant).
+    centred_lat = _det(DepthLateralGrid(DEPTH_MM, 300, 3.0, 60))
+    off_lat = _det(DepthLateralGrid(DEPTH_MM, 300, 3.0, 60, lateral_center_mm=10.0))
+    wide_shift = _det(DepthLateralGrid(DEPTH_MM, 300, 30.0, 600, lateral_center_mm=8.0))
+    w = wide_shift.edep_zx_mev.sum(axis=0)
+    mean_x = float((w * wide_shift.grid.lateral_centers_mm).sum() / w.sum())
+    report["lateral_origin"] = {
+        "centred_window_mev": centred_lat.energy_deposited_mev,
+        "off_window_mev": off_lat.energy_deposited_mev,
+        "mean_x_on_shifted_grid_mm": mean_x,
+    }
+    gates["lateral_origin"] = (
+        centred_lat.energy_deposited_mev > 100.0
+        and off_lat.energy_deposited_mev == 0.0
+        and abs(mean_x) < 0.2
     )
 
     # -- lateral-shift sigma_x invariance (reference, scattering on) ----------

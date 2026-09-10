@@ -312,6 +312,7 @@ Script: ``validation/v3_scoring_grid.py``. References: the transport run itself
 |---|---|---|
 | integral dose vs resolution (total; fine summed 4:1 vs coarse) | 1e-12 / 1e-12 | round-off |
 | integral dose vs alignment (depth-origin + lateral-centre shift) | 1e-12 | round-off |
+| lateral origin discriminated (off-beam window captures none; mean_x = beam axis) | 0 MeV / < 0.2 mm | holds |
 | lateral sigma_x invariant under a lateral shift | <= 1e-6 mm | round-off |
 | partial coverage (grid past the entrance captures strictly less) | 0 < E_down < E_full | holds |
 | reference vs Warp CPU (shifted grid): depth dose cumulative | <= 5e-4 | within budget |

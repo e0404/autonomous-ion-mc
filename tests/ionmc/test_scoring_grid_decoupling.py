@@ -114,11 +114,39 @@ def test_lateral_shift_preserves_sigma_x(table) -> None:
         assert abs(centred.sigma_x_at_depth(z) - shifted.sigma_x_at_depth(z)) < 1e-9
 
 
+def test_lateral_window_shift_selects_region(table) -> None:
+    """The lateral centre truly shifts the scored window (discriminates the
+    lateral origin, which the translation-invariant sigma_x cannot): with
+    scattering off the beam stays on the x=0 axis, so a window centred on the beam
+    captures the dose while one shifted off the beam captures none."""
+    kw = dict(straggling=False, scattering=False)
+    centred = _run(table, DepthLateralGrid(300.0, 300, 3.0, 60), **kw)  # x in [-3, 3]
+    off = _run(
+        table, DepthLateralGrid(300.0, 300, 3.0, 60, lateral_center_mm=10.0), **kw
+    )  # x in [7, 13], excludes the beam
+    assert centred.energy_deposited_mev > 100.0
+    assert off.energy_deposited_mev == 0.0
+
+
+def test_lateral_shift_reports_beam_centre(table) -> None:
+    """On a laterally shifted grid the energy-weighted mean lateral position is the
+    beam's true axis (x=0), not the grid centre -- so the deposition honours the
+    lateral origin rather than ignoring it (deterministic straight ray)."""
+    kw = dict(straggling=False, scattering=False)
+    shifted = _run(
+        table, DepthLateralGrid(300.0, 300, 30.0, 600, lateral_center_mm=8.0), **kw
+    )
+    w = shifted.edep_zx_mev.sum(axis=0)
+    centers = shifted.grid.lateral_centers_mm
+    mean_x = float((w * centers).sum() / w.sum())
+    assert abs(mean_x) < 0.2  # beam is at x=0, far from the grid centre (8 mm)
+
+
 @pytest.mark.warp
-def test_warp_cpu_honours_origin(warp_module, table) -> None:
-    """The Warp CPU scattering kernel honours the scoring-grid origin: a shifted
-    grid conserves the total deposited energy vs an unshifted one that covers the
-    same dose (float32 round-off)."""
+def test_warp_cpu_origin_partial_coverage(warp_module, table) -> None:
+    """The Warp CPU scattering kernel honours the depth origin: a grid starting
+    past the entrance captures strictly less than one covering the full dose
+    (discriminating -- if the origin were ignored both would capture the same)."""
     eng = TransportEngine(
         table,
         WaterSlab(300.0),
@@ -127,7 +155,7 @@ def test_warp_cpu_honours_origin(warp_module, table) -> None:
         scattering=False,
     )
     src = PencilBeamSource(150.0)
-    base = eng.run_scattering(
+    full = eng.run_scattering(
         src,
         DepthLateralGrid(300.0, 300, 25.0, 200),
         1,
@@ -135,18 +163,15 @@ def test_warp_cpu_honours_origin(warp_module, table) -> None:
         path="warp",
         device="cpu",
     )
-    shifted = eng.run_scattering(
+    downstream = eng.run_scattering(
         src,
-        DepthLateralGrid(
-            320.0, 320, 30.0, 240, depth_origin_mm=-20.0, lateral_center_mm=4.0
-        ),
+        DepthLateralGrid(200.0, 200, 25.0, 200, depth_origin_mm=100.0),
         1,
         seed=4,
         path="warp",
         device="cpu",
     )
-    e0 = base.energy_deposited_mev
-    assert abs(shifted.energy_deposited_mev - e0) / e0 < 1e-6
+    assert 0.0 < downstream.energy_deposited_mev < full.energy_deposited_mev
 
 
 @pytest.mark.cuda

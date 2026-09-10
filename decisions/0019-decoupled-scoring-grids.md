@@ -54,10 +54,17 @@ Pre-registered before running (decision `0001` methodology), in
 - **integral_dose_alignment** — the same run scored on a grid shifted in depth
   origin and lateral centre (still containing the dose): total deposited energy
   invariant to round-off (`≤ 1e-12` reference, `≤ 1e-6` Warp float32).
+- **lateral_origin** — a *discriminating* check of the lateral origin (which the
+  translation-invariant `σ_x` cannot show): with scattering off the beam stays on
+  the `x = 0` axis, so a lateral window centred on the beam captures the dose, one
+  shifted off it captures **none**, and on a wide shifted grid the energy-weighted
+  mean lateral position is the beam axis (`|mean_x| < 0.2 mm`), not the grid
+  centre.
 - **lateral_shift_sigma_x** — with scattering on, `σ_x(z)` is invariant under a
-  lateral-centre shift (the bin centres move with the grid), `≤ 1e-6 mm`.
+  lateral-centre shift, `≤ 1e-6 mm` (an invariance property, complementing the
+  discriminating `lateral_origin` check).
 - **partial_coverage** — a grid starting past the entrance captures strictly less
-  energy (the origin truly shifts the scored window).
+  energy (the depth origin truly shifts the scored window).
 - **cross-backend** — reference vs Warp CPU vs CUDA on a shifted grid:
   depth-dose cumulative `≤ 5e-4`, `σ_x` `≤ 0.05 mm` (decisions `0001`/`0011`).
 

@@ -420,10 +420,13 @@ reproduce the prior grids bit-for-bit.
 Validated (decision 0019): the total deposited energy and the energy per depth
 interval are invariant under resolution changes (a 4x-finer grid summed 4:1
 equals the coarse, to round-off) and under depth-origin/lateral-centre shifts; a
-grid starting past the entrance captures strictly less energy; lateral ``sigma_x``
-is invariant under a lateral shift; and the reference, Warp CPU and CUDA paths
-agree on a shifted grid. This closes **V3** (voxelized heterogeneous geometry and
-materials).
+grid starting past the entrance captures strictly less energy; the lateral origin
+is checked discriminatingly (a lateral window shifted off the on-axis beam
+captures no dose, and the energy-weighted mean lateral position is the beam axis,
+not the grid centre -- which the translation-invariant ``sigma_x`` alone cannot
+show, though ``sigma_x`` invariance under a lateral shift is also confirmed); and
+the reference, Warp CPU and CUDA paths agree on a shifted grid. This closes **V3**
+(voxelized heterogeneous geometry and materials).
 
 Deferred (Stage-3 capability beyond the V3 gates): a full 3-D voxel grid with
 arbitrary per-voxel material maps and robust ray/voxel (Siddon/DDA) traversal for
