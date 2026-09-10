@@ -421,19 +421,22 @@ class TransportEngine:
             b = math.floor(z / dz)
             if 0 <= b < n_bins:
                 secondary_edep[b] += weighted_energy
-        # the secondary pool leaves the escaping channel (it is now transported
-        # or locally deposited); grid-escaping secondary energy, if any, returns
-        # to the escaping channel via the secondary pass below
-        escaped -= batch.escaped_reduction_mev
         sec_truncated = 0
         if batch.state is not None:
             sec_engine = self._secondary_engine()
-            s_edep, s_trunc, _, _, s_escaped, _, _, _ = sec_engine._transport(
+            s_edep, s_trunc, _, _, _, _, _, _ = sec_engine._transport(
                 batch.state, path, device
             )
             secondary_edep = secondary_edep + s_edep
             sec_truncated += s_trunc
-            escaped += s_escaped
+        # Every MeV a secondary deposits was pulled from the primary's escaping
+        # channel; whatever the secondaries do not deposit (sub-cut energy or
+        # transported energy that leaves the grid/geometry) simply stays in the
+        # escaping channel. So subtracting the deposited secondary dose closes
+        # deposited + escaped = energy_in exactly for any geometry (decision 0013;
+        # the remaining escaping energy is the neutron/gamma/binding fraction plus
+        # any secondary that left the scored region).
+        escaped -= float(np.sum(secondary_edep))
         return (
             primary_edep + secondary_edep,
             secondary_edep,

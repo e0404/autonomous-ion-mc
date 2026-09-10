@@ -7,8 +7,9 @@ with the decision-0013 gates:
 * ``secondary_dose_fraction`` - transported secondary protons contribute ~1-2 %
                                 of the local dose at entrance and a few percent of
                                 the total dose (Paganetti 2002);
-* ``secondary_plateau_shape`` - the secondary dose forms a broad plateau: its
-                                fraction at the Bragg peak is well below entrance;
+* ``secondary_plateau_shape`` - the secondary-dose fraction rises from ~1-2 % at
+                                entrance to ~5-10 % across the plateau, then drops
+                                at the sharp Bragg peak (Paganetti 2002);
 * ``energy_conservation``     - deposited + escaped = energy_in with the second
                                 pass (reference exact, Warp float32 < 1e-5);
 * ``secondaries_off_regression`` - secondaries=False reproduces the DEV-007
@@ -164,14 +165,25 @@ def main() -> int:
                         and 0.005 <= entrance <= 0.04
                         and 0.02 <= total_fraction <= 0.12
                     )
-                    # secondaries form a broad plateau, not a peak: their dose
-                    # fraction at the Bragg peak is well below the entrance value
-                    # (the primary peak dominates there). This distinguishes the
-                    # secondary plateau from the peaked primary dose.
+                    # secondary-fraction depth shape (Paganetti 2002): the
+                    # fraction rises from ~1-2 % at entrance to ~5-10 % across the
+                    # plateau proximal to the peak, then collapses at the sharp
+                    # Bragg peak where the primary dose dominates. Gate the mean
+                    # plateau fraction (entrance..just before the peak) into the
+                    # published band, require it above entrance (it rises), and
+                    # require it to drop at the peak (secondaries don't peak).
                     peak_bin = int(np.argmax(on.edep_mev))
                     frac_at_peak = float(frac[peak_bin])
+                    plateau = frac[25 : max(26, peak_bin - 10)]
+                    plateau_mean = float(np.mean(plateau))
                     entry["secondary_fraction_at_peak"] = frac_at_peak
-                    shape_ok = shape_ok and frac_at_peak < entrance
+                    entry["plateau_mean_fraction"] = plateau_mean
+                    shape_ok = (
+                        shape_ok
+                        and 0.03 <= plateau_mean <= 0.12
+                        and plateau_mean > entrance
+                        and frac_at_peak < entrance
+                    )
                     # parity vs reference at matched N
                     ref_small = eng_on.run(
                         PencilBeamSource(e0), N_REFERENCE, seed=2024, path="python"
@@ -187,10 +199,15 @@ def main() -> int:
                     entry["parity_secondaries_ref"] = ref_small.n_secondaries
                     entry["parity_secondaries_cpu"] = cpu_small.n_secondaries
                     entry["parity_cumulative_diff"] = parity_cum
+                    # the secondary count derives from the float32-vs-float64
+                    # reaction energy, so it is compared within a small tolerance;
+                    # the cumulative depth dose is the real cross-backend gate
+                    secondary_tol = max(1, round(0.005 * ref_small.n_secondaries))
                     cpu_ref_ok = (
                         cpu_ref_ok
                         and abs(on.energy_balance) <= 1e-5
-                        and cpu_small.n_secondaries == ref_small.n_secondaries
+                        and abs(cpu_small.n_secondaries - ref_small.n_secondaries)
+                        <= secondary_tol
                         and parity_cum <= REF_WARP_CUM_TOL
                     )
                 else:

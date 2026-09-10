@@ -227,22 +227,31 @@ secondary-proton multiplicity is ``nu_p(E) = 0.5 + 0.004 E`` (Poisson); their
 energies are sampled from a two-component spectrum (an evaporation Maxwellian
 ``E exp(-E/T)`` with ``T = 2`` MeV mixed with a forward cascade component uniform
 on ``[10 MeV, E]``) and **renormalised so their per-reaction sum equals
-``f_p E`` exactly**, which keeps the energy budget closed. Secondaries are
-emitted forward from the vertex and transported by the same CSDA + straggling
-proton engine (their own nuclear removal off, a documented sub-percent
-simplification).
+``f_p E`` exactly**, which keeps the energy budget closed. Because the
+multiplicity is low and the energies are renormalised, this budget-closing
+renormalisation dominates the effective spectrum (a single-secondary reaction
+emits one proton of ``f_p E`` regardless of the sampled shape); the evaporation/
+cascade parameters are a second-order influence. This is an intentional depth-
+dose surrogate; a faithful differential spectrum is deferred with the tabulated-
+data follow-up (decision 0013). Secondaries are emitted forward from the vertex
+and transported by the same CSDA + straggling proton engine (their own nuclear
+removal off, a documented sub-percent simplification).
 
 Because each primary reacts at most once, the transport drivers emit one
 reaction record per history (vertex depth, residual energy); the secondaries are
 generated **host-side** from those records and transported in a second pass.
-Since DEV-007 already makes the reference and Warp paths remove the identical
-primary set, and host-side generation is deterministic (counter RNG keyed by the
-history index), the two backends produce the identical secondary set and dose
-(decision 0001). Validated: secondary protons contribute ~1-2 % of the local
-dose at entrance and ~4-7 % of the total dose at 150/200 MeV, forming a broad
-plateau (their fraction at the Bragg peak is ~0.1 %, far below entrance); the
-energy budget ``deposited + escaped = energy_in`` stays exact. This **closes
-milestone V2**.
+Since DEV-007 already makes the reference and Warp paths remove the same primary
+set, and host-side generation is deterministic (counter RNG keyed by the history
+index), the two backends produce the same secondary set and dose in practice,
+within the decision-0001 tolerances (not strictly bit-identical: the reaction
+energy fed to the sampler is float32 on the Warp path and float64 on the
+reference path, so a rare boundary case could shift a count; the cumulative
+depth-dose agreement is the real gate). Validated: secondary protons contribute
+~1-2 % of the local dose at entrance and ~4-7 % of the total dose at 150/200 MeV;
+their dose *fraction* rises to a ~5-10 % plateau proximal to the peak, then
+collapses at the sharp Bragg peak (~0.1 %) where the primary dose dominates. The
+energy budget ``deposited + escaped = energy_in`` stays exact for any geometry.
+This **closes milestone V2**.
 
 Deferred with quantitative justification (Paganetti 2002): explicit deuteron/
 triton/alpha and recoil transport (deposited locally, < 0.1 % of dose), neutron

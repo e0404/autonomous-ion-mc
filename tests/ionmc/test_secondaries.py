@@ -150,18 +150,33 @@ def test_secondary_dose_fraction_matches_published(warp_module, table, e0) -> No
     total_fraction = res.secondary_edep_mev.sum() / res.energy_deposited_mev
     assert 0.005 <= entrance <= 0.04, entrance
     assert 0.02 <= total_fraction <= 0.12, total_fraction
+    # the fraction rises across the plateau to ~5-10 % and collapses at the peak
+    peak_bin = int(np.argmax(res.edep_mev))
+    plateau_mean = float(np.mean(frac[25 : peak_bin - 10]))
+    assert 0.03 <= plateau_mean <= 0.12, plateau_mean
+    assert plateau_mean > entrance
+    assert frac[peak_bin] < entrance
 
 
 @pytest.mark.warp
 def test_reference_and_warp_secondaries_match(warp_module, table) -> None:
     """Host-side secondary generation from the shared reaction records makes the
-    reference and Warp paths produce the identical secondary set and dose."""
+    reference and Warp paths produce the same secondary set and dose in practice.
+
+    The secondary count is derived from the reaction residual energy, which is
+    float32 on the Warp path and float64 on the reference path, so a boundary
+    case could shift a Poisson draw or a sub-cut classification; the counts are
+    therefore compared within a small tolerance rather than for bit equality,
+    and the cumulative depth-dose agreement (decision 0001) is the real gate.
+    """
     eng = _engine(table, nuclear=True, secondaries=True)
     src = PencilBeamSource(150.0)
     ref = eng.run(src, n_histories=4000, seed=7, path="python")
     war = eng.run(src, n_histories=4000, seed=7, path="warp", device="cpu")
     assert war.n_reactions == ref.n_reactions
-    assert war.n_secondaries == ref.n_secondaries
+    assert abs(war.n_secondaries - ref.n_secondaries) <= max(
+        1, round(0.005 * ref.n_secondaries)
+    )
     total = float(np.sum(ref.edep_mev))
     cum = np.max(np.abs(np.cumsum(war.edep_mev) - np.cumsum(ref.edep_mev))) / total
     assert cum <= 1e-4

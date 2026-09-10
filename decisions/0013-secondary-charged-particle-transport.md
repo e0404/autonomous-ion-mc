@@ -86,6 +86,22 @@ existing DEV-007 machinery established:
      locally at the vertex rather than transported (folds the short-range
      evaporation tail into the local channel).
 
+   **Caveat on the spectrum's operative role.** Because the multiplicity is low
+   (`nu_p ~ 1.1` at 150 MeV) and the per-reaction energies are renormalized to
+   sum to `f_p E`, the budget-closing renormalization *dominates* the effective
+   secondary spectrum: a single-secondary reaction (the majority) emits one
+   proton of exactly `f_p E` regardless of the sampled evaporation/cascade value,
+   and multi-secondary events are rescaled by a large factor. The evaporation and
+   cascade shapes therefore only modulate how a reaction's fixed `f_p E` pool is
+   *split* among its (usually one or two) protons; they are a second-order
+   influence, not the operative spectrum. This is an intentional depth-dose
+   surrogate: the secondary dose spans a continuum of depths and energies because
+   reactions occur across the whole track, which is what the plateau-magnitude
+   and shape gates confirm. A faithful differential spectrum (with a mutually
+   consistent multiplicity so renormalization is a small correction, or a
+   tabulated ICRU-63/TENDL double-differential sampler) is deferred with the
+   tabulated-data follow-up.
+
 3. **Forward emission for the 1-D depth dose.** Secondaries are emitted along
    `+z` from the vertex and transported by the existing CSDA depth-dose engine.
    The dose-dominant cascade protons are genuinely forward; the low-energy
@@ -102,15 +118,29 @@ existing DEV-007 machinery established:
    the records; the host generates the secondary `ParticleState` deterministically
    from the records using counter-based streams keyed by a stable reaction
    ordinal (primary history index); pass 2 transports the secondaries through the
-   same driver and its dose is added to the grid. Because DEV-007 already
-   guarantees the reference and Warp paths remove the **identical** primary set
-   (decision `0001`), and secondary generation is host-side and deterministic,
-   the secondary dose is bit-reproducible across backends.
+   same driver and its dose is added to the grid. Because DEV-007 already makes
+   the reference and Warp paths remove the same primary set, and secondary
+   generation is host-side and deterministic, the two backends produce the same
+   secondary set and dose **in practice, within the decision-`0001` tolerances**.
+   It is not strictly bit-identical: the reaction residual energy fed to the
+   host sampler is float32 on the Warp path and float64 on the reference path, so
+   a rare boundary case could shift a Poisson draw or a sub-cut classification.
+   The secondary count is therefore validated within a small tolerance and the
+   cumulative depth-dose agreement is the real cross-backend gate.
 
 5. **Secondaries are transported without their own nuclear removal** (pure EM:
    CSDA + energy-loss straggling; scattering off on the 1-D path). Secondary-
    secondary (tertiary) reactions are a sub-percent effect and are deferred; this
    also keeps the secondary energy fully deposited, so the budget closes cleanly.
+
+6. **Energy accounting closes for any geometry.** Every MeV a secondary deposits
+   is subtracted from the primary's escaping channel; whatever the secondaries do
+   not deposit (a sub-cut deposit or transported energy that leaves the grid or
+   the geometry) simply stays in the escaping channel. So `deposited + escaped =
+   energy_in` holds exactly regardless of whether a secondary leaves the scored
+   region. (As in DEV-004..007, energy a *primary* deposits beyond the scoring
+   grid is dropped, so the exact whole-run budget still assumes the scoring grid
+   spans the transported geometry, which the validation configuration ensures.)
 
 ## Deferred (with quantitative justification)
 
@@ -142,18 +172,25 @@ existing DEV-007 machinery established:
 
 - **Secondary-dose fraction**: ~1-2 % of the local dose at entrance and a few
   percent (~2-10 %) of the total dose at 150 and 200 MeV (Paganetti 2002).
-- **Secondary plateau shape**: the secondary dose is a broad plateau, not a
-  peak; its fraction at the Bragg peak is well below the entrance value (the
-  primary peak dominates there). This is the clean, baseline-independent check
-  (a comparison against the DEV-007 curve is confounded because that curve uses
-  the lumped local fraction `f_local = 0.30` rather than `f_heavy = 0.12`).
+- **Secondary plateau shape**: the secondary-dose *fraction* rises with depth,
+  from ~1-2 % at entrance to a plateau mean of ~5-10 % proximal to the peak
+  (matching Paganetti's "up to ~10 % proximal to the Bragg peak"), then collapses
+  at the sharp peak where the primary dose dominates. The gate checks the mean
+  plateau fraction (entrance to just before the peak) is in the ~3-12 % band,
+  above the entrance value, and above the (near-zero) fraction at the peak. This
+  is baseline-independent (a comparison against the DEV-007 curve is confounded
+  because that curve uses the lumped `f_local = 0.30` rather than `f_heavy =
+  0.12`). Note the *absolute* secondary profile is not flat: secondaries born
+  upstream range downstream, so their absolute dose also rises toward the peak;
+  it is the fraction that traces the entrance-to-plateau lift.
 - **Energy bookkeeping**: `deposited + escaped = energy_in` to < 1e-6 (Warp
   float32) and < 1e-9 (reference), now with the secondary pass included.
 - **Secondaries-off regression**: identical to the DEV-007 baseline (no second
   pass, no extra draws, unchanged depth dose and escaped energy).
 - **Cross-backend**: reference vs Warp CPU and (host) CUDA reproduce the same
-  secondary set and a cumulative total-depth-dose difference within the
-  decision-`0001` tolerances.
+  secondary set (count within a small tolerance, see point 4 on the float32
+  reaction-energy caveat) and a cumulative total-depth-dose difference within the
+  decision-`0001` tolerances (the cumulative difference is the real gate).
 
 ## Sources
 

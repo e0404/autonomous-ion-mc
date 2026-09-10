@@ -169,7 +169,7 @@ and transported in a second pass through the same proton engine.
 |---|---|---|
 | secondary dose fraction at entrance (150/200 MeV) | 0.5-4 % | 2.1 % / 2.5 % |
 | secondary dose fraction of total dose | 2-12 % | 4.0 % / 6.9 % |
-| secondary plateau shape (fraction at peak << entrance) | peak < entrance | 0.11 % << 2.1 % |
+| secondary fraction plateau mean (rises entrance→plateau, drops at peak) | 3-12 %, > entrance, > peak | 5.4 % / 8.6 % |
 | energy budget deposited + escaped = in (reference / Warp) | 1e-9 / 1e-5 | ~0 / ~4e-7 |
 | secondaries-off regression | zero secondaries, no second pass | identical |
 | reference vs Warp CPU (matched N, seed) | same secondaries, cumulative ≤ 1e-4 | identical set, ~1e-6 |
