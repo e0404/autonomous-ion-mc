@@ -184,6 +184,26 @@ The V0 milestone of the roadmap is closed by task ``DEV-003`` (tabulated
 layer), which will replace the recalled range values by table-integrated
 ones from the acquired dataset.
 
+## V3 (opening) - voxelized density heterogeneity (task DEV-009)
+
+Script: ``validation/v3_density_heterogeneity.py``. References: the analytic
+water-equivalent-thickness relation (CSDA range scales as ``1/rho``) and cross-
+backend parity (decision 0014). A ``VoxelSlab`` gives each voxel its own mass
+density; the transport looks up the local density per step.
+
+| check | criterion | result |
+|---|---|---|
+| homogeneous equivalence (uniform voxels vs WaterSlab) | bit-exact (reference) | max diff 0 |
+| WET scaling: R80 at R_water/rho (rho 0.5, 1.2; 150/200 MeV) | within 0.3 % | ~1e-4 |
+| layered interface: peak shift = extra WET (20 mm x 0.85) | within 0.5 mm | 17.0 mm |
+| energy conservation with nuclear+secondaries across interface | 1e-9 (reference) | ~0 |
+| reference vs Warp CPU across the interface | same reactions, cumulative <= 1e-4 | ~6e-7 |
+
+This **opens milestone V3** (voxelized heterogeneous geometry). Deferred to later
+Stage-3 tasks: 3-D voxel geometry and arbitrary incidence, per-voxel material
+composition, and decoupled scoring grids. Warp CPU/CUDA results are recorded in
+the DEV-009 local validation record (host run below).
+
 ## Unit and regression tests
 
 ``tests/ionmc/`` covers units and constants, materials, the RNG mirror

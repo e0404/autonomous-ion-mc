@@ -32,7 +32,7 @@ from ionmc.physics.secondaries import (
 )
 from ionmc.rng import RandomState
 from ionmc.transport.depth_dose import DepthDoseGrid, DepthLateralGrid
-from ionmc.transport.geometry import WaterSlab
+from ionmc.transport.geometry import VoxelSlab, WaterSlab
 from ionmc.transport.source import PencilBeamSource
 from ionmc.transport.state import ParticleState, Status
 
@@ -52,6 +52,32 @@ DEFAULT_STRAGGLING_FLOOR_MEV: float = 2.0
 #: remainder is booked to the escaping/deferred channel for secondary transport
 #: in Stage 2 (decision 0012).
 DEFAULT_NUCLEAR_LOCAL_FRACTION: float = 0.30
+
+
+def _merge_voxels(
+    z_boundaries: np.ndarray, densities: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """Collapse consecutive voxels of equal density (decision 0014).
+
+    Returns merged ``(z_boundaries, densities)``. A uniform slab (or a
+    homogeneous ``WaterSlab``) collapses to a single voxel, so the voxelized
+    transport reproduces the homogeneous transport exactly; step limiting then
+    only happens at genuine density interfaces.
+    """
+    rho = np.ascontiguousarray(densities, dtype=np.float64)
+    z = np.ascontiguousarray(z_boundaries, dtype=np.float64)
+    merged_rho = [float(rho[0])]
+    merged_z = [float(z[0]), float(z[1])]
+    for v in range(1, rho.shape[0]):
+        if rho[v] == merged_rho[-1]:
+            merged_z[-1] = float(z[v + 1])  # extend the current merged voxel
+        else:
+            merged_rho.append(float(rho[v]))
+            merged_z.append(float(z[v + 1]))
+    return (
+        np.asarray(merged_z, dtype=np.float64),
+        np.asarray(merged_rho, dtype=np.float64),
+    )
 
 
 @dataclass(frozen=True)
@@ -251,7 +277,7 @@ class TransportEngine:
     def __init__(
         self,
         table: StoppingTable,
-        slab: WaterSlab,
+        slab: WaterSlab | VoxelSlab,
         grid: DepthDoseGrid,
         max_fraction: float = DEFAULT_MAX_FRACTION,
         max_step_mm: float = DEFAULT_MAX_STEP_MM,
@@ -293,16 +319,26 @@ class TransportEngine:
         self.za_ratio = slab.material.electrons_per_gram_ratio
         #: Radiation length [g/cm^2] of the medium (MCS; decision 0011).
         self.radiation_length_g_per_cm2 = slab.material.radiation_length_g_per_cm2
-        #: Oxygen number density [1/cm^3] of the medium: only oxygen contributes
-        #: catastrophic nonelastic removal of primaries (decision 0012). Zero if
-        #: the medium has no oxygen, which disables nuclear removal there.
+        #: Voxel geometry along the beam axis (decision 0014): ascending voxel
+        #: boundaries [mm] and per-voxel mass density [g/cm^3]. Consecutive voxels
+        #: of equal density are merged, so a uniform slab (any voxel count) and a
+        #: homogeneous WaterSlab both collapse to a single voxel and reproduce the
+        #: homogeneous transport exactly.
+        raw_z, raw_rho = slab.voxel_profile()
+        self.voxel_z_mm, self.voxel_density = _merge_voxels(raw_z, raw_rho)
+        self.n_voxels = int(self.voxel_density.shape[0])
+        self.depth_mm = float(self.voxel_z_mm[-1])
+        #: Representative (front-voxel) density for the homogeneous scattering path.
+        self.density_g_per_cm3 = float(self.voxel_density[0])
+        #: Per-voxel oxygen number density [1/cm^3]; only oxygen drives nonelastic
+        #: removal (decision 0012). Scales with the voxel mass density; zero when
+        #: the shared material has no oxygen (disables nuclear removal).
         material = slab.material
         if "O" in material.mass_fractions:
-            self.oxygen_density_per_cm3 = (
-                AVOGADRO * material.atoms_per_gram("O") * material.density_g_per_cm3
-            )
+            o_per_gram = AVOGADRO * material.atoms_per_gram("O")
+            self.voxel_oxygen_density = o_per_gram * self.voxel_density
         else:
-            self.oxygen_density_per_cm3 = 0.0
+            self.voxel_oxygen_density = np.zeros(self.n_voxels, dtype=np.float64)
         #: Lazily-built engine that transports secondary protons (nuclear off, no
         #: further secondaries), reusing this engine's geometry (decision 0013).
         self._sec_engine: TransportEngine | None = None
@@ -501,10 +537,21 @@ class TransportEngine:
         straggling independently follows the engine's ``straggling`` flag, so a
         scattering-only study (``straggling=False``) is possible. The medium's
         radiation length must be known (> 0).
+
+        The 3-D scattering path is homogeneous only: it uses the front-voxel
+        density. Nuclear/scattering in a heterogeneous ``VoxelSlab`` is deferred
+        to a later Stage-3 task (decision 0014), so a heterogeneous slab is
+        rejected here rather than silently giving a wrong result.
         """
         if self.radiation_length_g_per_cm2 <= 0.0:
             raise ValueError(
                 "the medium has no radiation length; multiple scattering is unavailable"
+            )
+        if self.n_voxels > 1:
+            raise NotImplementedError(
+                "run_scattering supports only a homogeneous medium; the 3-D "
+                "scattering path does not yet handle density heterogeneity "
+                "(decision 0014). Use a WaterSlab or a single-density VoxelSlab."
             )
         state = source.sample(n_histories, seed)
         energy_in = float(np.sum(state.energy_mev * state.weight))
@@ -548,11 +595,11 @@ class TransportEngine:
         return kernel.run(
             state=state,
             grid=grid,
-            density=self.slab.density_g_per_cm3,
+            density=self.density_g_per_cm3,
             radiation_length_g_per_cm2=self.radiation_length_g_per_cm2,
             max_fraction=self.max_fraction,
             max_step_mm=self.max_step_mm,
-            geom_depth_mm=self.slab.depth_mm,
+            geom_depth_mm=self.depth_mm,
             energy_cut_mev=self.energy_cut_mev,
             max_steps=self.max_steps,
             rest_energy_mev=self.particle.rest_energy_mev,
@@ -578,14 +625,14 @@ class TransportEngine:
             t.size,
             t.bisection_steps,
         )
-        density = self.slab.density_g_per_cm3
+        density = self.density_g_per_cm3
         radlen = self.radiation_length_g_per_cm2
         rest_energy = self.particle.rest_energy_mev
         charge = self.particle.charge
         za = self.za_ratio
         straggling = self.straggling
         floor = self.straggling_floor_mev
-        geom_depth = self.slab.depth_mm
+        geom_depth = self.depth_mm
         dz = grid.depth_bin_mm
         half_w = grid.half_width_mm
         dxb = grid.lateral_bin_mm
@@ -686,17 +733,20 @@ class TransportEngine:
             t.size,
             t.bisection_steps,
         )
-        density = self.slab.density_g_per_cm3
         dz = self.grid.bin_width_mm
-        geom_depth = self.slab.depth_mm  # transport is bounded by the medium...
+        geom_depth = self.depth_mm  # transport is bounded by the medium...
         n_bins = self.grid.n_bins  # ...scoring only within the grid extent
+        # per-voxel density profile along the beam axis (decision 0014)
+        voxel_z = self.voxel_z_mm
+        voxel_density = self.voxel_density
+        voxel_oxygen = self.voxel_oxygen_density
+        n_vox = self.n_voxels
         rest_energy = self.particle.rest_energy_mev
         charge = self.particle.charge
         za = self.za_ratio
         straggling = self.straggling
         floor = self.straggling_floor_mev
         nuclear = self.nuclear
-        oxygen_density = self.oxygen_density_per_cm3
         local_fraction = self._reaction_local_fraction()
         edep = self.grid.empty()
         truncated = 0
@@ -713,16 +763,23 @@ class TransportEngine:
             z = float(state.position_mm[h, 2])
             w = float(state.weight[h])
             rng = RandomState.from_state(int(state.rng_state[h]))
+            # current voxel index (non-decreasing; forward transport, decision 0014)
+            voxel = min(int(np.searchsorted(voxel_z, z, side="right")) - 1, n_vox - 1)
+            voxel = max(voxel, 0)
             step = 0
             status = Status.ALIVE
             while status == Status.ALIVE and step < self.max_steps:
+                density = float(voxel_density[voxel])
+                oxygen_density = float(voxel_oxygen[voxel])
                 # physics step: fractional energy loss, not bin-limited, so the
-                # straggling and clamp are unbiased (decision 0010). Deposition
-                # is split across the bins the step spans (below).
+                # straggling and clamp are unbiased (decision 0010). The step is
+                # additionally limited to the current voxel boundary so its
+                # density is unambiguous (decision 0014). Deposition is split
+                # across the bins the step spans (below).
                 dl = tp.energy_loss_step_length(
                     e, self.max_fraction, self.max_step_mm, density, *args
                 )
-                dl = min(dl, geom_depth - z)
+                dl = min(dl, geom_depth - z, float(voxel_z[voxel + 1]) - z)
                 de = tp.midpoint_energy_loss(e, dl, density, *args)
                 if straggling and e > floor:
                     sigma = tp.bohr_straggling_sigma(
@@ -748,6 +805,10 @@ class TransportEngine:
                 z += dl
                 e -= de
                 step += 1
+                # advance the voxel index across any boundaries the step reached
+                # (z is non-decreasing, so the index only moves forward)
+                while voxel + 1 < n_vox and z >= voxel_z[voxel + 1] - 1.0e-9:
+                    voxel += 1
                 if e <= self.energy_cut_mev:
                     dep_bin = math.floor(z / dz)
                     if 0 <= dep_bin < n_bins:
@@ -792,11 +853,13 @@ class TransportEngine:
             z0=state.position_mm[:, 2],
             weight=state.weight,
             rng_state=state.rng_state,
-            density=self.slab.density_g_per_cm3,
+            voxel_z_mm=self.voxel_z_mm,
+            voxel_density=self.voxel_density,
+            voxel_oxygen_density=self.voxel_oxygen_density,
             max_fraction=self.max_fraction,
             max_step_mm=self.max_step_mm,
             bin_width_mm=self.grid.bin_width_mm,
-            geom_depth_mm=self.slab.depth_mm,
+            geom_depth_mm=self.depth_mm,
             energy_cut_mev=self.energy_cut_mev,
             max_steps=self.max_steps,
             n_bins=self.grid.n_bins,
@@ -806,7 +869,6 @@ class TransportEngine:
             straggling=self.straggling,
             straggling_floor_mev=self.straggling_floor_mev,
             nuclear=self.nuclear,
-            oxygen_density_per_cm3=self.oxygen_density_per_cm3,
             nuclear_local_fraction=self._reaction_local_fraction(),
         )
 
