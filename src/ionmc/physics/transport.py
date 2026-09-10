@@ -150,3 +150,40 @@ def straggled_energy_loss(
     """
     loss = mean_loss + variate * sigma
     return m.min(m.max(loss, 0.0), energy)
+
+
+#: Highland/Lynch-Dahl leading constant [MeV] and log coefficient (decision 0011).
+HIGHLAND_CONSTANT_MEV: float = 13.6
+HIGHLAND_LOG_COEFF: float = 0.038
+
+
+@func
+def momentum_times_velocity(energy: float, rest_energy: float) -> float:
+    """``beta c p = p v = T (T + 2 M) / (T + M)`` [MeV] (cancellation-free)."""
+    return energy * (energy + 2.0 * rest_energy) / (energy + rest_energy)
+
+
+@func
+def highland_theta0(
+    energy: float,
+    rest_energy: float,
+    charge: float,
+    step_mm: float,
+    density: float,
+    radiation_length_g_per_cm2: float,
+) -> float:
+    """Projected RMS multiple-scattering angle [rad] over a step (decision 0011).
+
+    ``theta0 = (13.6 MeV / (beta c p)) z sqrt(x / X0)`` with the mass thickness
+    ``x = step_mm/10 * density`` [g/cm^2] and ``X0`` the radiation length
+    [g/cm^2]. This is the **projected** (one-plane) RMS angle; the space-angle
+    variance is ``2 theta0^2``. The Lynch-Dahl logarithmic bracket is omitted
+    (the scattering-power form): it is not additive across the ~1 mm steps used
+    here and its per-step value is pathological (negative log); the bracket-1
+    form matches published lateral spreads within a few percent and makes the
+    per-step model and the Fermi-Eyges oracle use the identical scattering power
+    (decision 0011).
+    """
+    pv = momentum_times_velocity(energy, rest_energy)
+    x_over_x0 = (step_mm / MM_PER_CM) * density / radiation_length_g_per_cm2
+    return HIGHLAND_CONSTANT_MEV / pv * charge * m.sqrt(m.max(x_over_x0, 0.0))

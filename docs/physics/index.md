@@ -152,6 +152,27 @@ range over 100-200 MeV. Statistical uncertainty is estimated by batches
 (``TransportEngine.run_batched``); two independent seeds are consistent within
 their combined standard error (decision 0010).
 
-Not yet: multiple Coulomb scattering and lateral spread (which turn the
-integral depth dose into a volumetric dose and close milestone V1), nuclear
-interactions, and heterogeneous geometry.
+### Multiple Coulomb scattering and lateral spread (task DEV-006, decision 0011)
+
+Each step deflects the proton by a small angle sampled from the Highland /
+Lynch-Dahl projected RMS ``theta0 = (13.6 MeV / (beta c p)) z sqrt(x/X0)`` (the
+scattering-power form, no log term; water radiation length ``X0 = 36.08
+g/cm^2``), applied with a **random hinge** (the full-step deflection at a
+uniform random point along the step, which gives the correct lateral
+displacement) as a two-plane tilt of the direction. Transport is now 3-D and
+energy is scored into a 2-D (depth, lateral-``x``) grid; the depth dose is the
+lateral marginal and ``sigma_x(z)`` is the lateral second moment per depth
+slice.
+
+Validated against the **Fermi-Eyges** analytic lateral spread built from the
+same scattering power (``ionmc.physics.fermi_eyges``): the Monte Carlo
+``sigma_x(z)`` agrees to within 1 % at 0.5R and 0.8R for 150 and 200 MeV, and
+the lateral ``sigma_x`` at 0.8R (2.45 mm at 150 MeV, 3.9 mm at 200 MeV) matches
+published values within ~2 %. Multiple scattering shortens the projected range
+by the detour factor (< 0.1 %). A single Gaussian central-scattering model is
+used (no single-scattering tail), which is standard for fast therapy Monte
+Carlo and adequate for the lateral-``sigma`` core.
+
+This closes the physics of milestone **V1** (proton transport in homogeneous
+water). Not yet: nuclear interactions (Stage 2), heterogeneous voxel geometry
+(Stage 3), and treatment-planning scoring and influence matrices (Stage 4).

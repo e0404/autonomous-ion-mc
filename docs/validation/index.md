@@ -106,6 +106,28 @@ which isolates straggling from the peak shape.
 Warp results are from host run `RUN-20260910T144031Z-8dd34007` (RTX A6000, CUDA 12.9, Warp 1.17.0) at
 SHA `100653d`, recorded in the DEV-005 local validation record.
 
+## V1 (scattering) - lateral spread from multiple Coulomb scattering (task DEV-006)
+
+Script: ``validation/v1_lateral_scattering.py``. Reference: the Fermi-Eyges
+lateral-spread oracle (``ionmc.physics.fermi_eyges``) built from the same
+scattering power, and published values (decision 0011). Metric: lateral
+``sigma_x(z)`` from the 2-D depth-lateral dose.
+
+| check | criterion | result (reference paths) |
+|---|---|---|
+| theta0 / pv vs Highland hand values | within 0.5 % | matches |
+| MC sigma_x(z) vs Fermi-Eyges at 0.5R, 0.8R (150/200 MeV) | within 3 % | within 1 % |
+| MC sigma_x(0.8R) vs published (2.4 / 3.9 mm) | within 8 % | within ~2 % |
+| energy conservation (reference / Warp) | 1e-9 / 5e-5 | ~1e-16 / ~1e-6 |
+| depth-dose Bragg peak (marginal) | present | peak/entrance ~6.8 |
+| detour factor (mean projected range vs CSDA) | shortened ~0.1 % | -0.10 % |
+| Warp CPU vs CUDA sigma_x(0.8R) | within 0.02 mm | agree to 5 digits |
+
+Warp results are from host run `RUN-20260910T151223Z-286dcc42` (RTX A6000, CUDA 12.9, Warp 1.17.0) at
+SHA `69d5401`, recorded in the DEV-006 local validation record.
+
+This closes the physics of milestone **V1** (proton transport in homogeneous water).
+
 The ICRU 90 mean excitation energy (78 eV) is reported as a separate model
 difference (−1.14 % at 1 MeV to −0.43 % at 400 MeV), not absorbed into any
 tolerance.

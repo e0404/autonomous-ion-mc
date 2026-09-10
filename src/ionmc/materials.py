@@ -120,6 +120,9 @@ class Material:
     mean_excitation_energy: MeanExcitationEnergy
     density_effect: DensityEffectParameters | None = None
     source: str = ""
+    #: Radiation length [g/cm^2], for multiple Coulomb scattering (decision 0011);
+    #: 0.0 means "unknown" (scattering unavailable for the material).
+    radiation_length_g_per_cm2: float = 0.0
     _elements: tuple[Element, ...] = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
@@ -197,6 +200,7 @@ class Material:
             mean_excitation_energy=MeanExcitationEnergy(value_ev, source),
             density_effect=None,
             source=self.source,
+            radiation_length_g_per_cm2=self.radiation_length_g_per_cm2,
         )
 
 
@@ -227,6 +231,8 @@ WATER_ICRU49: Material = Material(
         source=_SBS_1984,
     ),
     source="NIST PSTAR material 276 composition and density",
+    #: PDG liquid-water radiation length (36.08 g/cm^2), for multiple scattering.
+    radiation_length_g_per_cm2=36.08,
 )
 
 #: Liquid water with the ICRU Report 90 (2016) mean excitation energy. No

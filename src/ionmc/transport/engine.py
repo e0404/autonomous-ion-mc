@@ -21,7 +21,7 @@ from ionmc.backend import mathlib, reference
 from ionmc.data.stopping_tables import StoppingTable
 from ionmc.particles import PROTON, Particle
 from ionmc.rng import RandomState
-from ionmc.transport.depth_dose import DepthDoseGrid
+from ionmc.transport.depth_dose import DepthDoseGrid, DepthLateralGrid
 from ionmc.transport.geometry import WaterSlab
 from ionmc.transport.source import PencilBeamSource
 from ionmc.transport.state import ParticleState, Status
@@ -90,6 +90,115 @@ class BatchedDepthDoseResult:
         return out
 
 
+@dataclass(frozen=True)
+class ScatteringResult:
+    """Outcome of a 3-D transport run with multiple Coulomb scattering."""
+
+    edep_zx_mev: np.ndarray  # (n_depth, n_lateral) energy [MeV]
+    grid: DepthLateralGrid
+    n_histories: int
+    energy_in_mev: float
+    truncated: int
+    path: str
+    device: str | None
+    range_mean_mm: float = float("nan")  # mean projected stopping depth
+    n_stopped: int = 0
+
+    @property
+    def depth_dose_mev(self) -> np.ndarray:
+        return self.grid.depth_dose(self.edep_zx_mev)
+
+    @property
+    def sigma_x_mm(self) -> np.ndarray:
+        return self.grid.sigma_x_mm(self.edep_zx_mev)
+
+    @property
+    def energy_deposited_mev(self) -> float:
+        return float(np.sum(self.edep_zx_mev))
+
+    @property
+    def energy_balance(self) -> float:
+        return (self.energy_deposited_mev - self.energy_in_mev) / self.energy_in_mev
+
+    def sigma_x_at_depth(self, depth_mm: float) -> float:
+        """Lateral RMS ``sigma_x`` [mm] interpolated at ``depth_mm``."""
+        centers = self.grid.depth_centers_mm
+        sigma = self.sigma_x_mm
+        good = np.isfinite(sigma)
+        return float(np.interp(depth_mm, centers[good], sigma[good]))
+
+
+def _scatter_direction(
+    dx: float, dy: float, dz: float, theta_x: float, theta_y: float
+) -> tuple[float, float, float]:
+    """Tilt a unit direction by small projected angles in its transverse frame.
+
+    Builds an orthonormal frame perpendicular to ``d`` (reference axis = the
+    least-aligned world axis, avoiding degeneracy), applies
+    ``d' = normalize(d + theta_x e1 + theta_y e2)`` (the two-plane sampler, space
+    angle variance ``2 theta0^2``). Mirrors the Warp kernel exactly; plain float
+    arithmetic keeps the two paths numerically identical (decision 0011).
+    """
+    ax, ay, az = abs(dx), abs(dy), abs(dz)
+    if ax <= ay and ax <= az:
+        rx, ry, rz = 1.0, 0.0, 0.0
+    elif ay <= az:
+        rx, ry, rz = 0.0, 1.0, 0.0
+    else:
+        rx, ry, rz = 0.0, 0.0, 1.0
+    c1x, c1y, c1z = dy * rz - dz * ry, dz * rx - dx * rz, dx * ry - dy * rx
+    inv1 = 1.0 / math.sqrt(c1x * c1x + c1y * c1y + c1z * c1z)
+    e1x, e1y, e1z = c1x * inv1, c1y * inv1, c1z * inv1
+    e2x, e2y, e2z = (
+        dy * e1z - dz * e1y,
+        dz * e1x - dx * e1z,
+        dx * e1y - dy * e1x,
+    )
+    nx = dx + theta_x * e1x + theta_y * e2x
+    ny = dy + theta_x * e1y + theta_y * e2y
+    nz = dz + theta_x * e1z + theta_y * e2z
+    inv = 1.0 / math.sqrt(nx * nx + ny * ny + nz * nz)
+    return nx * inv, ny * inv, nz * inv
+
+
+def _deposit_zx(
+    edep: np.ndarray,
+    z0: float,
+    z1: float,
+    x_mid: float,
+    energy: float,
+    dz: float,
+    half_width: float,
+    dx_bin: float,
+    n_depth: int,
+    n_lateral: int,
+) -> None:
+    """Deposit ``energy`` across the depth bins spanned by ``[z0, z1]`` (by depth
+    overlap) at the lateral bin containing ``x_mid`` (decision 0011).
+
+    Mirrors the Warp kernel deposition. Energy outside the grid is dropped.
+    """
+    xb = math.floor((x_mid + half_width) / dx_bin)
+    if not (0 <= xb < n_lateral):
+        return
+    span = z1 - z0
+    if span <= 0.0:
+        b = math.floor(z0 / dz)
+        if 0 <= b < n_depth:
+            edep[b, xb] += energy
+        return
+    inv = 1.0 / span
+    pos = z0
+    b = math.floor(z0 / dz)
+    while pos < z1 - 1.0e-12:
+        bin_end = (b + 1) * dz
+        seg_end = min(bin_end, z1)
+        if 0 <= b < n_depth:
+            edep[b, xb] += energy * (seg_end - pos) * inv
+        pos = seg_end
+        b += 1
+
+
 class TransportEngine:
     """Runs CSDA depth-dose transport for one stopping-power table and geometry."""
 
@@ -120,6 +229,8 @@ class TransportEngine:
         self.straggling_floor_mev = straggling_floor_mev
         #: Electrons per gram <Z/A> of the medium (Bohr straggling; decision 0010).
         self.za_ratio = slab.material.electrons_per_gram_ratio
+        #: Radiation length [g/cm^2] of the medium (MCS; decision 0011).
+        self.radiation_length_g_per_cm2 = slab.material.radiation_length_g_per_cm2
 
     def run(
         self,
@@ -195,6 +306,177 @@ class TransportEngine:
             path=path,
             device=device if path == "warp" else None,
         )
+
+    def run_scattering(
+        self,
+        source: PencilBeamSource,
+        grid: DepthLateralGrid,
+        n_histories: int = 1,
+        seed: int = 12345,
+        path: str = "warp",
+        device: str = "cpu",
+    ) -> ScatteringResult:
+        """Run 3-D transport with multiple Coulomb scattering into a 2-D
+        (depth, lateral-x) grid (decision 0011).
+
+        Scattering is always applied (above the 2 MeV floor); energy-loss
+        straggling independently follows the engine's ``straggling`` flag, so a
+        scattering-only study (``straggling=False``) is possible. The medium's
+        radiation length must be known (> 0).
+        """
+        if self.radiation_length_g_per_cm2 <= 0.0:
+            raise ValueError(
+                "the medium has no radiation length; multiple scattering is unavailable"
+            )
+        state = source.sample(n_histories, seed)
+        energy_in = float(np.sum(state.energy_mev * state.weight))
+        if path == "warp":
+            edep, truncated, final_z, final_status = self._run_scattering_warp(
+                state, grid, device
+            )
+        elif path == "python":
+            edep, truncated, final_z, final_status = self._run_scattering_reference(
+                state, grid
+            )
+        else:
+            raise ValueError(
+                f"unknown transport path {path!r} (use 'python' or 'warp')"
+            )
+        stopped = final_z[final_status == int(Status.STOPPED)]
+        n_stopped = int(stopped.shape[0])
+        range_mean = float(np.mean(stopped)) if n_stopped else float("nan")
+        return ScatteringResult(
+            edep_zx_mev=edep,
+            grid=grid,
+            n_histories=n_histories,
+            energy_in_mev=energy_in,
+            truncated=truncated,
+            path=path,
+            device=device if path == "warp" else None,
+            range_mean_mm=range_mean,
+            n_stopped=n_stopped,
+        )
+
+    def _run_scattering_warp(
+        self, state: ParticleState, grid: DepthLateralGrid, device: str
+    ) -> tuple[np.ndarray, int, np.ndarray, np.ndarray]:
+        if not mathlib.HAVE_WARP:
+            raise ImportError(
+                "warp-lang is not installed; the warp path is unavailable"
+            )
+        from ionmc.backend.warp_transport import ScatteringKernel
+
+        kernel = ScatteringKernel(self.table, device)
+        return kernel.run(
+            state=state,
+            grid=grid,
+            density=self.slab.density_g_per_cm3,
+            radiation_length_g_per_cm2=self.radiation_length_g_per_cm2,
+            max_fraction=self.max_fraction,
+            max_step_mm=self.max_step_mm,
+            geom_depth_mm=self.slab.depth_mm,
+            energy_cut_mev=self.energy_cut_mev,
+            max_steps=self.max_steps,
+            rest_energy_mev=self.particle.rest_energy_mev,
+            charge=self.particle.charge,
+            za_ratio=self.za_ratio,
+            straggling=self.straggling,
+            straggling_floor_mev=self.straggling_floor_mev,
+        )
+
+    def _run_scattering_reference(
+        self, state: ParticleState, grid: DepthLateralGrid
+    ) -> tuple[np.ndarray, int, np.ndarray, np.ndarray]:
+        tp = reference.load_bound_module(
+            "ionmc.physics.transport",
+            "python",
+            rebind_dependencies=["ionmc.physics.tabulated"],
+        )
+        t = self.table
+        args: tuple[Any, ...] = (
+            t.energy_mev,
+            t.stopping_mev_cm2_per_g,
+            t.slope,
+            t.size,
+            t.bisection_steps,
+        )
+        density = self.slab.density_g_per_cm3
+        radlen = self.radiation_length_g_per_cm2
+        rest_energy = self.particle.rest_energy_mev
+        charge = self.particle.charge
+        za = self.za_ratio
+        straggling = self.straggling
+        floor = self.straggling_floor_mev
+        geom_depth = self.slab.depth_mm
+        dz = grid.depth_bin_mm
+        half_w = grid.half_width_mm
+        dxb = grid.lateral_bin_mm
+        nz, nx = grid.n_depth, grid.n_lateral
+        edep = grid.empty()
+        truncated = 0
+        final_pz = np.zeros(state.size, dtype=np.float64)
+        final_status = np.zeros(state.size, dtype=np.int32)
+        for h in range(state.size):
+            e = float(state.energy_mev[h])
+            px, py, pz = (float(v) for v in state.position_mm[h])
+            dx, dy, dzr = 0.0, 0.0, 1.0
+            w = float(state.weight[h])
+            rng = RandomState.from_state(int(state.rng_state[h]))
+            step = 0
+            status = Status.ALIVE
+            while status == Status.ALIVE and step < self.max_steps:
+                s = tp.energy_loss_step_length(
+                    e, self.max_fraction, self.max_step_mm, density, *args
+                )
+                s = min(s, (geom_depth - pz) / max(dzr, 1.0e-6))
+                de = tp.midpoint_energy_loss(e, s, density, *args)
+                if straggling and e > floor:
+                    sigma = tp.bohr_straggling_sigma(
+                        e, rest_energy, s, density, za, charge
+                    )
+                    de = tp.straggled_energy_loss(de, sigma, rng.randn(), e)
+                # random hinge: straight a, scatter, straight (s - a)
+                a = rng.randf() * s
+                z_start = pz
+                x_start = px
+                px, py, pz = px + a * dx, py + a * dy, pz + a * dzr
+                # scattering is independent of energy-loss straggling: it is
+                # always applied above the floor in a scattering run (decision 0011).
+                if e > floor:
+                    theta0 = tp.highland_theta0(
+                        e, rest_energy, charge, s, density, radlen
+                    )
+                    dx, dy, dzr = _scatter_direction(
+                        dx, dy, dzr, rng.randn() * theta0, rng.randn() * theta0
+                    )
+                px, py, pz = px + (s - a) * dx, py + (s - a) * dy, pz + (s - a) * dzr
+                _deposit_zx(
+                    edep,
+                    z_start,
+                    pz,
+                    0.5 * (x_start + px),
+                    w * de,
+                    dz,
+                    half_w,
+                    dxb,
+                    nz,
+                    nx,
+                )
+                e -= de
+                step += 1
+                if e <= self.energy_cut_mev:
+                    _deposit_zx(edep, pz, pz, px, w * e, dz, half_w, dxb, nz, nx)
+                    e = 0.0
+                    status = Status.STOPPED
+                if pz >= geom_depth:
+                    status = Status.ESCAPED
+            final_pz[h] = pz
+            if step >= self.max_steps and status == Status.ALIVE:
+                truncated += 1
+                final_status[h] = 3
+            else:
+                final_status[h] = int(status)
+        return edep, truncated, final_pz, final_status
 
     # -- reference Python path ------------------------------------------------
 
