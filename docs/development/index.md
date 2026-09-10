@@ -31,6 +31,17 @@ uv run mypy
 python3 infrastructure/docs/generate_docs.py && uvx zensical build --clean --strict
 ```
 
+Tests and validation that need external datasets acquire them first (needs
+network), then use them offline:
+
+```bash
+uv run python -m ionmc.data acquire --all   # into $XDG_CACHE_HOME/ionmc or IONMC_CACHE_DIR
+```
+
+Data-dependent tests are marked ``network`` and skip when the dataset is
+neither cached nor fetchable; host validation reads a cache the runner can see
+(``/cache/ionmc``).
+
 Ruff (lint and format) and mypy apply to `src/` and `tests/ionmc/`; the
 legacy scripts under `infrastructure/` and their tests under
 `tests/infrastructure/` (about 120 pre-existing style violations, mostly

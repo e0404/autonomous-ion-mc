@@ -18,7 +18,8 @@ from typing import Any
 import numpy as np
 import warp as wp
 
-from ionmc.physics import stopping
+from ionmc.data.stopping_tables import StoppingTable
+from ionmc.physics import stopping, tabulated
 from ionmc.stopping_power import StoppingPowerParameters
 
 
@@ -200,4 +201,86 @@ class StoppingPowerKernels:
         """CSDA range increment [g/cm^2] evaluated in float32 on the device."""
         return self._launch(
             csda_range_kernel, energies, [float(energy_floor), int(n_steps)]
+        )
+
+
+@wp.kernel
+def tabulated_stopping_power_kernel(
+    energies: wp.array(dtype=float),
+    table_e: wp.array(dtype=float),
+    table_s: wp.array(dtype=float),
+    table_d: wp.array(dtype=float),
+    n: int,
+    n_steps: int,
+    out: wp.array(dtype=float),
+):
+    i = wp.tid()
+    out[i] = tabulated.tabulated_mass_stopping_power(
+        energies[i], table_e, table_s, table_d, n, n_steps
+    )
+
+
+@wp.kernel
+def tabulated_csda_range_kernel(
+    energies: wp.array(dtype=float),
+    table_e: wp.array(dtype=float),
+    table_s: wp.array(dtype=float),
+    table_d: wp.array(dtype=float),
+    table_range: wp.array(dtype=float),
+    n: int,
+    n_steps: int,
+    out: wp.array(dtype=float),
+):
+    i = wp.tid()
+    out[i] = tabulated.tabulated_csda_range(
+        energies[i], table_e, table_s, table_d, table_range, n, n_steps
+    )
+
+
+class TabulatedKernels:
+    """Launches the table-lookup kernels for one prepared table on one device."""
+
+    def __init__(self, table: StoppingTable, device: str = "cpu") -> None:
+        wp.init()
+        self.device = device
+        self.table = table
+        self.n = int(table.size)
+        self.n_steps = int(table.bisection_steps)
+        self.arrays: dict[str, Any] = {
+            name: wp.array(
+                np.asarray(getattr(table, attr), dtype=np.float32),
+                dtype=float,
+                device=device,
+            )
+            for name, attr in (
+                ("e", "energy_mev"),
+                ("s", "stopping_mev_cm2_per_g"),
+                ("d", "slope"),
+                ("range", "csda_range_g_per_cm2"),
+            )
+        }
+
+    def _launch(
+        self, kernel: wp.Kernel, energies: np.ndarray, tables: list
+    ) -> np.ndarray:
+        e32 = np.ascontiguousarray(np.asarray(energies, dtype=np.float32))
+        e_arr: Any = wp.array(e32, dtype=float, device=self.device)
+        out = wp.zeros(e32.shape[0], dtype=float, device=self.device)
+        inputs = [e_arr, *tables, self.n, self.n_steps, out]
+        wp.launch(kernel, dim=e32.shape[0], inputs=inputs, device=self.device)
+        wp.synchronize_device(self.device)
+        return out.numpy().astype(np.float64)
+
+    def mass_stopping_power(self, energies: np.ndarray) -> np.ndarray:
+        """Mass stopping power [MeV cm^2/g] from the table, float32 on the device."""
+        a = self.arrays
+        return self._launch(
+            tabulated_stopping_power_kernel, energies, [a["e"], a["s"], a["d"]]
+        )
+
+    def csda_range(self, energies: np.ndarray) -> np.ndarray:
+        """CSDA range [g/cm^2] from the table's floor energy, float32 on the device."""
+        a = self.arrays
+        return self._launch(
+            tabulated_csda_range_kernel, energies, [a["e"], a["s"], a["d"], a["range"]]
         )
