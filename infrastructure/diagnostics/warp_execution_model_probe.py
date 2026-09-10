@@ -17,8 +17,8 @@ import numpy as np
 import warp as wp
 
 
-def report(name, **kw):
-    print(json.dumps({"probe": name, **kw}, default=str))
+def report(probe_name, **kw):
+    print(json.dumps({"probe": probe_name, **kw}, default=str))
 
 
 wp.init()
