@@ -12,10 +12,12 @@ must be cached). Emits one JSON document with the decision-0018 gates:
 * ``statistical_rotation_covariance`` - scattering on, a rotated homogeneous slab
                                reproduces the Fermi-Eyges lateral sigma_x' and
                                the axis-aligned R80 within statistics;
-* ``oblique_wet_traversal``  - a beam tilted by theta through a lab-fixed slab of
-                               thickness D deposits the same energy as a normal
-                               beam through D/cos(theta) (same water-equivalent
-                               path), exercising the m_hat != z' plane traversal;
+* ``oblique_wet_traversal``  - a beam tilted by theta through a lab-fixed
+                               *heterogeneous* slab crosses the same
+                               water-equivalent path -- layer by layer, including
+                               interior boundaries -- as a normal beam through the
+                               same layers stretched by 1/cos(theta), exercising
+                               the interior oblique voxel-boundary traversal;
 * ``warp_cpu_vs_reference`` - CPU agrees with the reference Python transport on a
                                rotated config (sigma_x' and the 3-D depth dose);
 * ``warp_cuda_vs_oracle`` / ``warp_cpu_vs_cuda`` - CUDA reproduces the Fermi-Eyges
@@ -42,6 +44,7 @@ from ionmc.physics import fermi_eyges as fe
 from ionmc.tabulated_stopping_power import TabulatedStoppingPower
 from ionmc.transport import DepthDoseGrid, PencilBeamSource, TransportEngine, WaterSlab
 from ionmc.transport.depth_dose import DepthLateralGrid
+from ionmc.transport.geometry import VoxelSlab
 
 X0 = materials.WATER.radiation_length_g_per_cm2
 SIGMA_TOL = 0.03  # 3 % vs Fermi-Eyges
@@ -168,30 +171,46 @@ def main() -> int:
         d_energy <= 1e-12 and dd_cum <= 1e-9 and d_r80 <= 1e-4
     )
 
-    # -- oblique WET traversal (analytic, reference, scattering off) ----------
+    # -- oblique WET traversal through a heterogeneous slab (reference, off) ---
+    # A beam tilted by theta through a lab-fixed +z heterogeneous slab crosses the
+    # same water-equivalent path -- layer by layer, including interior boundaries
+    # -- as a normal beam through the same layers each stretched by 1/cos(theta).
     theta = 30.0
     cos_t = float(np.cos(np.radians(theta)))
-    slab_d = 80.0  # thin: the 150 MeV proton escapes the back face
+    obl_layers = [(20.0, 1.0), (15.0, 1.7), (25.0, 1.0)]  # interior boundaries
+    stretched = [(t / cos_t, rho) for t, rho in obl_layers]
     d_obl = tuple(float(v) for v in (_rot_y(theta) @ np.array([0.0, 0.0, 1.0])))
     lat_obl = _lat(300.0)
     normal_eff = TransportEngine(
-        table, WaterSlab(slab_d / cos_t), DepthDoseGrid(300.0, 10), **kw_det
+        table, VoxelSlab.from_layers(stretched), DepthDoseGrid(300.0, 10), **kw_det
     ).run_scattering(PencilBeamSource(150.0), lat_obl, 1, seed=3, path="python")
     oblique = TransportEngine(
-        table, WaterSlab(slab_d), DepthDoseGrid(300.0, 10), **kw_det
+        table, VoxelSlab.from_layers(obl_layers), DepthDoseGrid(300.0, 10), **kw_det
     ).run_scattering(
         PencilBeamSource(150.0, direction=d_obl), lat_obl, 1, seed=3, path="python"
     )
     e_ref = normal_eff.energy_deposited_mev
     obl_diff = abs(oblique.energy_deposited_mev - e_ref) / e_ref
+    obl_cum = float(
+        np.max(
+            np.abs(
+                np.cumsum(oblique.depth_dose_mev) - np.cumsum(normal_eff.depth_dose_mev)
+            )
+        )
+        / np.sum(normal_eff.depth_dose_mev)
+    )
     report["oblique_wet"] = {
         "theta_deg": theta,
+        "layers": obl_layers,
         "deposited_oblique_mev": oblique.energy_deposited_mev,
         "deposited_normal_effective_mev": e_ref,
         "rel_diff": obl_diff,
+        "depth_dose_cumulative": obl_cum,
     }
     gates["oblique_wet_traversal"] = (
-        0.0 < oblique.energy_deposited_mev < 150.0 and obl_diff <= 1e-3
+        0.0 < oblique.energy_deposited_mev < 150.0
+        and obl_diff <= 1e-6
+        and obl_cum <= 1e-9
     )
 
     # -- Warp: statistical covariance + cross-backend -------------------------

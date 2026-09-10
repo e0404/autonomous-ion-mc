@@ -30,6 +30,7 @@ from ionmc.transport import (
     WaterSlab,
 )
 from ionmc.transport.depth_dose import DepthLateralGrid
+from ionmc.transport.engine import _beam_frame, _transverse_frame
 from ionmc.transport.geometry import VoxelSlab
 
 
@@ -70,6 +71,61 @@ def _r80_mm(res) -> float:
             f = (dd[i] - level) / (dd[i] - dd[i + 1])
             return float(centers[i] + f * (centers[i + 1] - centers[i]))
     return float(centers[i_peak])
+
+
+def test_beam_frame_material_coordinate_identity() -> None:
+    """The beam-frame coefficients satisfy the defining identity
+    ``u0 + m.p_beam == normal.(p0 + R.p_beam)`` for arbitrary direction, normal,
+    entry point and beam-frame position (falsifies a wrong m0/m1/m2/u0, which the
+    physics gates -- all with normal==direction or on-axis rays -- cannot)."""
+    rng = np.random.default_rng(20260913)
+    for _ in range(200):
+        d = rng.normal(size=3)
+        d /= np.linalg.norm(d)
+        n = rng.normal(size=3)
+        n /= np.linalg.norm(n)
+        p0 = rng.normal(size=3) * 40.0
+        e1x, e1y, e1z, e2x, e2y, e2z = _transverse_frame(*d)
+        rot = np.array([[e1x, e2x, d[0]], [e1y, e2y, d[1]], [e1z, e2z, d[2]]])
+        m0, m1, m2, u0 = _beam_frame(d, n, p0)
+        for _ in range(5):
+            pb = rng.normal(size=3) * 30.0
+            lhs = u0 + m0 * pb[0] + m1 * pb[1] + m2 * pb[2]
+            rhs = float(n @ (p0 + rot @ pb))
+            assert abs(lhs - rhs) < 1e-9
+
+
+def test_oblique_heterogeneous_interior_crossing(table) -> None:
+    """A beam tilted by theta through a lab-fixed +z *heterogeneous* slab crosses
+    the same water-equivalent path -- layer by layer -- as a normal beam through
+    the same layers each stretched by 1/cos(theta). Deposited energy and the
+    beam-depth profile agree to round-off (deterministic, scattering off). This
+    exercises interior oblique voxel-boundary crossings, not just the final escape
+    (decision 0018)."""
+    theta = 25.0
+    cos_t = float(np.cos(np.radians(theta)))
+    layers = [(20.0, 1.0), (15.0, 1.7), (25.0, 1.0)]  # interior density boundaries
+    stretched = [(t / cos_t, rho) for t, rho in layers]
+    grid = DepthDoseGrid(300.0, 10)
+    lat = _lat(300.0)
+    kw = dict(straggling=False, scattering=False)
+    normal_eff = TransportEngine(
+        table, VoxelSlab.from_layers(stretched), grid, **kw
+    ).run_scattering(PencilBeamSource(150.0), lat, 1, seed=3, path="python")
+    d = _rot_y(theta) @ np.array([0.0, 0.0, 1.0])
+    oblique = TransportEngine(
+        table, VoxelSlab.from_layers(layers), grid, **kw
+    ).run_scattering(
+        PencilBeamSource(150.0, direction=tuple(d)), lat, 1, seed=3, path="python"
+    )
+    assert 0.0 < oblique.energy_deposited_mev < 150.0  # escapes the back face
+    e_ref = normal_eff.energy_deposited_mev
+    assert abs(oblique.energy_deposited_mev - e_ref) / e_ref < 1e-6
+    denom = np.sum(normal_eff.depth_dose_mev)
+    cum = np.max(
+        np.abs(np.cumsum(oblique.depth_dose_mev) - np.cumsum(normal_eff.depth_dose_mev))
+    )
+    assert cum / denom < 1e-9
 
 
 def test_source_direction_is_normalised() -> None:
