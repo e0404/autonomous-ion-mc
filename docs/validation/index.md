@@ -123,8 +123,8 @@ scattering power, and published values (decision 0011). Metric: lateral
 | detour factor (mean projected range vs CSDA) | shortened ~0.1 % | -0.10 % |
 | Warp CPU vs CUDA sigma_x(0.8R) | within 0.02 mm | agree to 5 digits |
 
-Warp results are from host run `RUN-20260910T150236Z-a4da3ec3` (RTX A6000, CUDA 12.9, Warp 1.17.0) at
-SHA `3f2a9f5`, recorded in the DEV-006 local validation record.
+Warp results are from host run `RUN-20260910T151223Z-286dcc42` (RTX A6000, CUDA 12.9, Warp 1.17.0) at
+SHA `69d5401`, recorded in the DEV-006 local validation record.
 
 This closes the physics of milestone **V1** (proton transport in homogeneous water).
 

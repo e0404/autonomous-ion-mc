@@ -136,12 +136,12 @@ runner for the exact SHA (Warp CPU and CUDA), recorded below.
 
 ## Later validation outcome
 
-DEV-006 host run `RUN-20260910T150236Z-a4da3ec3` (RTX A6000, CUDA 12.9, Warp 1.17.0, SHA `3f2a9f5`,
+DEV-006 host run `RUN-20260910T151223Z-286dcc42` (RTX A6000, CUDA 12.9, Warp 1.17.0, SHA `69d5401`,
 40000 histories): all seven gates passed. MC sigma_x versus the Fermi-Eyges
 oracle: at 150 MeV 1.003 / 1.007 (0.5R / 0.8R), at 200 MeV 1.004 / 1.008 - all
 within 1 %. sigma_x(0.8R) = 2.449 mm (150 MeV) and 3.963 mm (200 MeV), versus
 published 2.4 / 3.9 mm (+2.0 % / +1.6 %). Energy conservation 3.8e-9 (150) /
-5.2e-6 (200, Warp float32). The mean projected stopping depth is 157.54 / 259.29 mm versus the CSDA range
+5.2e-6 (200, Warp float32). The mean projected stopping depth is 157.53 / 259.28 mm versus the CSDA range
 157.70 / 259.55 mm, i.e. a detour shortening of -0.10 % / -0.10 % - the
 expected proton detour factor (~0.999), now measured directly from the
 recorded projected ranges. The depth-dose marginal Bragg peak is at
