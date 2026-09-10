@@ -333,7 +333,9 @@ def csda_scattering_kernel(
     energy0: wp.array(dtype=float),
     weight: wp.array(dtype=float),
     rng_state0: wp.array(dtype=wp.uint32),
-    density: float,
+    voxel_z: wp.array(dtype=float),
+    voxel_density: wp.array(dtype=float),
+    n_vox: int,
     radlen: float,
     max_fraction: float,
     max_step_mm: float,
@@ -372,11 +374,18 @@ def csda_scattering_kernel(
     dz = float(1.0)  # noqa: UP018
     step = int(0)  # noqa: UP018, RUF046
     alive = int(1)  # noqa: UP018, RUF046
+    # current voxel index by depth (decision 0016); pz starts at 0 -> voxel 0
+    voxel = int(0)  # noqa: UP018, RUF046
+    while voxel + 1 < n_vox and pz >= voxel_z[voxel + 1]:
+        voxel = voxel + 1
     while alive == 1 and step < max_steps:
+        density = voxel_density[voxel]
+        dz_pos = wp.max(dz, 1.0e-6)
         s = transport.energy_loss_step_length(
             e, max_fraction, max_step_mm, density, table_e, table_s, table_d, n, n_steps
         )
-        s = wp.min(s, (geom_depth_mm - pz) / wp.max(dz, 1.0e-6))
+        s = wp.min(s, (geom_depth_mm - pz) / dz_pos)
+        s = wp.min(s, (voxel_z[voxel + 1] - pz) / dz_pos)
         de = transport.midpoint_energy_loss(
             e, s, density, table_e, table_s, table_d, n, n_steps
         )
@@ -430,6 +439,9 @@ def csda_scattering_kernel(
                     b = b + 1
         e = e - de
         step = step + 1
+        # advance the voxel index across depth boundaries the step reached
+        while voxel + 1 < n_vox and pz >= voxel_z[voxel + 1] - 1.0e-9:
+            voxel = voxel + 1
         if e <= energy_cut_mev:
             xb2 = int(wp.floor((px + half_width_mm) / lateral_bin_mm))
             b2 = int(wp.floor(pz / depth_bin_mm))
@@ -475,7 +487,8 @@ class ScatteringKernel:
         self,
         state: Any,
         grid: Any,
-        density: float,
+        voxel_z_mm: np.ndarray,
+        voxel_density: np.ndarray,
         radiation_length_g_per_cm2: float,
         max_fraction: float,
         max_step_mm: float,
@@ -504,6 +517,13 @@ class ScatteringKernel:
             dtype=wp.uint32,
             device=d,
         )
+        vz: Any = wp.array(
+            np.ascontiguousarray(voxel_z_mm, dtype=np.float32), dtype=float, device=d
+        )
+        vrho: Any = wp.array(
+            np.ascontiguousarray(voxel_density, dtype=np.float32), dtype=float, device=d
+        )
+        n_vox = int(voxel_density.shape[0])
         edep = wp.zeros(nz * nx, dtype=wp.float64, device=d)
         truncated = wp.zeros(1, dtype=int, device=d)
         final_z = wp.zeros(n_hist, dtype=float, device=d)
@@ -516,7 +536,9 @@ class ScatteringKernel:
                 e0,
                 ww,
                 rng,
-                float(density),
+                vz,
+                vrho,
+                n_vox,
                 float(radiation_length_g_per_cm2),
                 float(max_fraction),
                 float(max_step_mm),

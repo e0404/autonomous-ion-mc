@@ -71,3 +71,54 @@ def lateral_sigma_x_mm(
         integrand = (z_mm / MM_PER_CM - u_cm) ** 2 * scattering_power  # cm^2/cm
         out[i] = np.sqrt(np.trapezoid(integrand, u_cm)) * MM_PER_CM
     return out
+
+
+def _density_at_depth(
+    depth_cm: np.ndarray, z_boundaries_mm: np.ndarray, densities: np.ndarray
+) -> np.ndarray:
+    """Piecewise-constant density [g/cm^3] at each depth [cm] for a VoxelSlab
+    profile (decision 0016)."""
+    z_cm = np.asarray(z_boundaries_mm, dtype=np.float64) / MM_PER_CM
+    idx = np.clip(
+        np.searchsorted(z_cm, depth_cm, side="right") - 1, 0, densities.size - 1
+    )
+    return np.asarray(densities, dtype=np.float64)[idx]
+
+
+def lateral_sigma_x_heterogeneous_mm(
+    model: TabulatedStoppingPower,
+    energy0_mev: float,
+    depths_mm: np.ndarray,
+    radiation_length_g_per_cm2: float,
+    z_boundaries_mm: np.ndarray,
+    densities: np.ndarray,
+    n_integration: int = 6000,
+) -> np.ndarray:
+    """Projected Fermi-Eyges lateral sigma_x [mm] for a piecewise-density profile.
+
+    The energy vs depth follows the integrated water-equivalent thickness
+    ``integral rho dl`` and the scattering power uses the *local* density
+    (decision 0016), so a density interface produces the correct sigma_x kink.
+    """
+    z_max = float(np.max(depths_mm))
+    u_cm = np.linspace(0.0, z_max / MM_PER_CM, n_integration)
+    rho_u = _density_at_depth(u_cm, z_boundaries_mm, densities)
+    # integrated water-equivalent thickness [g/cm^2] from 0 to each u
+    step_wet = 0.5 * (rho_u[1:] + rho_u[:-1]) * np.diff(u_cm)
+    wet = np.concatenate([[0.0], np.cumsum(step_wet)])
+    e_grid = np.linspace(1.0, energy0_mev, 6000)
+    r_grid = model.csda_range(e_grid)  # g/cm^2
+    r0 = float(model.csda_range(energy0_mev)[0])
+    residual = np.clip(r0 - wet, r_grid[0], r_grid[-1])
+    e_u = np.interp(residual, r_grid, e_grid)
+    pv = e_u * (e_u + 2.0 * PROTON_MASS_MEV) / (e_u + PROTON_MASS_MEV)
+    scattering_power = (
+        (HIGHLAND_CONSTANT_MEV / pv) ** 2 * rho_u / radiation_length_g_per_cm2
+    )
+    out = np.empty_like(np.asarray(depths_mm, dtype=np.float64))
+    for i, z_mm in enumerate(np.atleast_1d(depths_mm)):
+        z_c = z_mm / MM_PER_CM
+        mask = u_cm <= z_c
+        integrand = (z_c - u_cm[mask]) ** 2 * scattering_power[mask]
+        out[i] = np.sqrt(np.trapezoid(integrand, u_cm[mask])) * MM_PER_CM
+    return out

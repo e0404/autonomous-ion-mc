@@ -362,8 +362,15 @@ class TransportEngine:
         )
         self.n_voxels = int(self.voxel_density.shape[0])
         self.depth_mm = float(self.voxel_z_mm[-1])
-        #: Physical front-voxel density for the homogeneous scattering path.
+        #: Physical front-voxel density for the scattering path.
         self.density_g_per_cm3 = float(raw_rho[0])
+        #: True when every voxel is water (SPR = 1, so the water-equivalent
+        #: density equals the physical density). The 3-D scattering path
+        #: (decision 0016) supports density-heterogeneous water but not non-water
+        #: materials (whose MCS needs the physical density and material X0).
+        self.is_water_only = bool(
+            np.allclose(we_density, raw_rho, rtol=1e-12, atol=0.0)
+        )
         #: Lazily-built engine that transports secondary protons (nuclear off, no
         #: further secondaries), reusing this engine's geometry (decision 0013).
         self._sec_engine: TransportEngine | None = None
@@ -563,31 +570,24 @@ class TransportEngine:
         scattering-only study (``straggling=False``) is possible. The medium's
         radiation length must be known (> 0).
 
-        The 3-D scattering path is water only: it feeds the physical density into
-        the water stopping table with no stopping-power ratio, so it is correct
-        only for water. Density heterogeneity (decision 0014) and non-water
-        materials (decision 0015) are deferred to a later Stage-3 task; both are
-        rejected here rather than silently giving a wrong result.
+        The 3-D scattering path supports **density-heterogeneous water** (a
+        `VoxelSlab` of water at varying density, decision 0016): it looks up the
+        local voxel density by depth. It does not yet support non-water materials
+        (whose multiple scattering needs the physical density and the material
+        radiation length, distinct from the water-equivalent density used for
+        stopping); a slab containing a non-water material is rejected with a clear
+        error rather than silently giving a wrong result (decision 0015).
         """
         if self.radiation_length_g_per_cm2 <= 0.0:
             raise ValueError(
                 "the medium has no radiation length; multiple scattering is unavailable"
             )
-        if self.n_voxels > 1:
+        if not self.is_water_only:
             raise NotImplementedError(
-                "run_scattering supports only a homogeneous medium; the 3-D "
-                "scattering path does not yet handle density heterogeneity "
-                "(decision 0014). Use a WaterSlab or a single-density VoxelSlab."
-            )
-        # a homogeneous non-water material collapses to one voxel but its water-
-        # equivalent density (SPR x rho) differs from the physical density the
-        # scattering path uses; reject it rather than transport it as water
-        # (decision 0015; the depth-dose path handles it via the SPR).
-        if abs(self.voxel_density[0] - self.density_g_per_cm3) > 1.0e-9:
-            raise NotImplementedError(
-                "run_scattering supports only water; the 3-D scattering path does "
-                "not yet apply the material stopping-power ratio (decision 0015). "
-                "Use water for scattering studies."
+                "run_scattering supports only water (density-heterogeneous water "
+                "is allowed); the 3-D scattering path does not yet apply the "
+                "material stopping-power ratio and radiation length (decision "
+                "0016). Use water for scattering studies."
             )
         state = source.sample(n_histories, seed)
         energy_in = float(np.sum(state.energy_mev * state.weight))
@@ -631,7 +631,8 @@ class TransportEngine:
         return kernel.run(
             state=state,
             grid=grid,
-            density=self.density_g_per_cm3,
+            voxel_z_mm=self.voxel_z_mm,
+            voxel_density=self.voxel_density,
             radiation_length_g_per_cm2=self.radiation_length_g_per_cm2,
             max_fraction=self.max_fraction,
             max_step_mm=self.max_step_mm,
@@ -661,7 +662,11 @@ class TransportEngine:
             t.size,
             t.bisection_steps,
         )
-        density = self.density_g_per_cm3
+        # per-voxel density along the beam axis (decision 0016); water only, so
+        # the water-equivalent density equals the physical density.
+        voxel_z = self.voxel_z_mm
+        voxel_density = self.voxel_density
+        n_vox = self.n_voxels
         radlen = self.radiation_length_g_per_cm2
         rest_energy = self.particle.rest_energy_mev
         charge = self.particle.charge
@@ -683,13 +688,22 @@ class TransportEngine:
             dx, dy, dzr = 0.0, 0.0, 1.0
             w = float(state.weight[h])
             rng = RandomState.from_state(int(state.rng_state[h]))
+            voxel = min(int(np.searchsorted(voxel_z, pz, side="right")) - 1, n_vox - 1)
+            voxel = max(voxel, 0)
             step = 0
             status = Status.ALIVE
             while status == Status.ALIVE and step < self.max_steps:
+                density = float(voxel_density[voxel])
+                dzr_pos = max(dzr, 1.0e-6)
                 s = tp.energy_loss_step_length(
                     e, self.max_fraction, self.max_step_mm, density, *args
                 )
-                s = min(s, (geom_depth - pz) / max(dzr, 1.0e-6))
+                # limit the step so its depth advance stays within the voxel
+                s = min(
+                    s,
+                    (geom_depth - pz) / dzr_pos,
+                    (float(voxel_z[voxel + 1]) - pz) / dzr_pos,
+                )
                 de = tp.midpoint_energy_loss(e, s, density, *args)
                 if straggling and e > floor:
                     sigma = tp.bohr_straggling_sigma(
@@ -725,6 +739,9 @@ class TransportEngine:
                 )
                 e -= de
                 step += 1
+                # advance the voxel index across depth boundaries the step reached
+                while voxel + 1 < n_vox and pz >= float(voxel_z[voxel + 1]) - 1.0e-9:
+                    voxel += 1
                 if e <= self.energy_cut_mev:
                     _deposit_zx(edep, pz, pz, px, w * e, dz, half_w, dxb, nz, nx)
                     e = 0.0
