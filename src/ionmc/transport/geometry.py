@@ -47,23 +47,30 @@ class WaterSlab:
             np.array([self.density_g_per_cm3], dtype=np.float64),
         )
 
+    def materials_profile(self) -> tuple[Material, ...]:
+        """Per-voxel materials (a single voxel of ``material``)."""
+        return (self.material,)
+
 
 @dataclass(frozen=True)
 class VoxelSlab:
     """A 1-D stack of voxels along +z, each with its own mass density.
 
     Construct from explicit boundary/density arrays, or with :meth:`from_layers`
-    from a list of ``(thickness_mm, density_g_per_cm3)`` layers (exact interface
-    positions), or with :meth:`uniform` for a single-density slab discretised
-    into ``n`` voxels. All voxels share ``material`` (its composition is used for
-    the density-scaled physics; per-voxel *composition* is a later task).
+    from a list of ``(thickness_mm, density_g_per_cm3)`` single-material layers,
+    or with :meth:`from_material_layers` from ``(thickness_mm, Material)`` layers
+    (per-voxel composition, decision 0015), or with :meth:`uniform` for a
+    single-density slab. ``material`` is the default composition when no per-voxel
+    materials are given; ``voxel_materials`` overrides it voxel by voxel.
     """
 
     z_boundaries_mm: np.ndarray
     density_g_per_cm3: np.ndarray
     material: Material = WATER
+    voxel_materials: tuple[Material, ...] | None = None
     _z: np.ndarray = field(init=False, repr=False, compare=False)
     _rho: np.ndarray = field(init=False, repr=False, compare=False)
+    _mats: tuple[Material, ...] = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         z = np.ascontiguousarray(self.z_boundaries_mm, dtype=np.float64)
@@ -80,8 +87,16 @@ class VoxelSlab:
             raise ValueError("the first boundary must be z = 0")
         if not np.all(rho > 0.0):
             raise ValueError("all voxel densities must be positive")
+        n_vox = int(rho.shape[0])
+        if self.voxel_materials is None:
+            mats = (self.material,) * n_vox
+        else:
+            mats = tuple(self.voxel_materials)
+            if len(mats) != n_vox:
+                raise ValueError("voxel_materials must have one entry per voxel")
         object.__setattr__(self, "_z", z)
         object.__setattr__(self, "_rho", rho)
+        object.__setattr__(self, "_mats", mats)
 
     @classmethod
     def from_layers(
@@ -99,6 +114,28 @@ class VoxelSlab:
             z_boundaries_mm=boundaries,
             density_g_per_cm3=np.asarray(densities, dtype=np.float64),
             material=material,
+        )
+
+    @classmethod
+    def from_material_layers(cls, layers: list[tuple[float, Material]]) -> VoxelSlab:
+        """Build from ``(thickness_mm, Material)`` layers (front to back).
+
+        Each layer's mass density is the material's own density (decision 0015);
+        the per-voxel composition drives the material-dependent physics.
+        """
+        if not layers:
+            raise ValueError("need at least one layer")
+        thicknesses = [t for t, _ in layers]
+        mats = tuple(m for _, m in layers)
+        if any(t <= 0.0 for t in thicknesses):
+            raise ValueError("layer thicknesses must be positive")
+        boundaries = np.concatenate([[0.0], np.cumsum(thicknesses)])
+        densities = np.asarray([m.density_g_per_cm3 for m in mats], dtype=np.float64)
+        return cls(
+            z_boundaries_mm=boundaries,
+            density_g_per_cm3=densities,
+            material=mats[0],
+            voxel_materials=mats,
         )
 
     @classmethod
@@ -146,3 +183,7 @@ class VoxelSlab:
     def voxel_profile(self) -> tuple[np.ndarray, np.ndarray]:
         """Return ``(z_boundaries_mm, density_g_per_cm3)``."""
         return self._z, self._rho
+
+    def materials_profile(self) -> tuple[Material, ...]:
+        """Per-voxel materials (length ``n_voxels``)."""
+        return self._mats

@@ -204,6 +204,27 @@ Stage-3 tasks: 3-D voxel geometry and arbitrary incidence, per-voxel material
 composition, and decoupled scoring grids. Warp CPU/CUDA results are recorded in
 the DEV-009 local validation record (host run below).
 
+## V3 (materials) - per-voxel tissue materials (task DEV-010)
+
+Script: ``validation/v3_material_composition.py``. References: the published
+Schneider/ICRU water-equivalent ratios and the analytic stopping-power ratio
+(decision 0015). Each voxel transports as water at its water-equivalent density
+``SPR(material) x rho`` with a composition-scaled nuclear rate.
+
+| check | criterion | result |
+|---|---|---|
+| water VoxelSlab vs homogeneous WaterSlab | bit-exact (reference) | max diff 0 |
+| water-equivalent ratio in published band | bone 1.60-1.72, adipose 0.95-0.98, ... | 1.70 / 0.97 / 1.04 |
+| R80 at R_water/WER (bone, adipose, muscle; 150/200 MeV) | within 0.3 % | ~1e-4 |
+| nuclear composition scaling (bone / adipose vs oxygen-only) | ~2x / ~3.4x, n_O for water | 2.08 / 3.40 |
+| energy conservation across material interfaces | 1e-9 (reference) | ~0 |
+| reference vs Warp CPU across material interfaces | same reactions, cumulative <= 1e-4 | ~4e-7 |
+
+Deferred: energy-dependent SPR / per-material stopping tables (bone's 2.5 % energy
+dependence), element-specific nuclear cross sections, and heterogeneous-material
+scattering. Warp CPU/CUDA results are recorded in the DEV-010 local validation
+record (host run below).
+
 ## Unit and regression tests
 
 ``tests/ionmc/`` covers units and constants, materials, the RNG mirror

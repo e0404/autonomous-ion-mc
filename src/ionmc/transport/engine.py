@@ -20,6 +20,7 @@ import numpy as np
 from ionmc.backend import mathlib, reference
 from ionmc.constants import AVOGADRO
 from ionmc.data.stopping_tables import StoppingTable
+from ionmc.materials import WATER
 from ionmc.particles import PROTON, Particle
 from ionmc.physics.secondaries import (
     F_HEAVY as SECONDARY_F_HEAVY,
@@ -31,6 +32,7 @@ from ionmc.physics.secondaries import (
     generate_secondaries,
 )
 from ionmc.rng import RandomState
+from ionmc.stopping_power import mass_stopping_power_ratio
 from ionmc.transport.depth_dose import DepthDoseGrid, DepthLateralGrid
 from ionmc.transport.geometry import VoxelSlab, WaterSlab
 from ionmc.transport.source import PencilBeamSource
@@ -55,28 +57,34 @@ DEFAULT_NUCLEAR_LOCAL_FRACTION: float = 0.30
 
 
 def _merge_voxels(
-    z_boundaries: np.ndarray, densities: np.ndarray
-) -> tuple[np.ndarray, np.ndarray]:
-    """Collapse consecutive voxels of equal density (decision 0014).
+    z_boundaries: np.ndarray, densities: np.ndarray, oxygen: np.ndarray
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Collapse consecutive voxels sharing both transported quantities: the
+    water-equivalent density and the oxygen-equivalent nuclear density
+    (decisions 0014, 0015).
 
-    Returns merged ``(z_boundaries, densities)``. A uniform slab (or a
-    homogeneous ``WaterSlab``) collapses to a single voxel, so the voxelized
-    transport reproduces the homogeneous transport exactly; step limiting then
-    only happens at genuine density interfaces.
+    Returns merged ``(z_boundaries, densities, oxygen)``. A uniform single-
+    material slab (or a homogeneous ``WaterSlab``) collapses to a single voxel,
+    so the voxelized transport reproduces the homogeneous transport exactly; step
+    limiting then only happens at genuine material/density interfaces.
     """
     rho = np.ascontiguousarray(densities, dtype=np.float64)
+    ox = np.ascontiguousarray(oxygen, dtype=np.float64)
     z = np.ascontiguousarray(z_boundaries, dtype=np.float64)
     merged_rho = [float(rho[0])]
+    merged_ox = [float(ox[0])]
     merged_z = [float(z[0]), float(z[1])]
     for v in range(1, rho.shape[0]):
-        if rho[v] == merged_rho[-1]:
+        if rho[v] == merged_rho[-1] and ox[v] == merged_ox[-1]:
             merged_z[-1] = float(z[v + 1])  # extend the current merged voxel
         else:
             merged_rho.append(float(rho[v]))
+            merged_ox.append(float(ox[v]))
             merged_z.append(float(z[v + 1]))
     return (
         np.asarray(merged_z, dtype=np.float64),
         np.asarray(merged_rho, dtype=np.float64),
+        np.asarray(merged_ox, dtype=np.float64),
     )
 
 
@@ -291,6 +299,7 @@ class TransportEngine:
         secondaries: bool = False,
         secondary_heavy_fraction: float = SECONDARY_F_HEAVY,
         secondary_proton_fraction: float = SECONDARY_F_PROTON,
+        material_reference_energy_mev: float = 150.0,
     ) -> None:
         if not (0.0 < max_fraction < 1.0):
             raise ValueError("max_fraction must be in (0, 1)")
@@ -315,30 +324,45 @@ class TransportEngine:
         self.secondaries = secondaries
         self.secondary_heavy_fraction = secondary_heavy_fraction
         self.secondary_proton_fraction = secondary_proton_fraction
-        #: Electrons per gram <Z/A> of the medium (Bohr straggling; decision 0010).
+        self.material_reference_energy_mev = material_reference_energy_mev
+        #: Electrons per gram <Z/A> of the medium's front material, for the
+        #: homogeneous scattering path (Bohr straggling; decision 0010).
         self.za_ratio = slab.material.electrons_per_gram_ratio
-        #: Radiation length [g/cm^2] of the medium (MCS; decision 0011).
+        #: The depth-dose transport operates in a *water-equivalent* frame (water
+        #: table x water-equivalent density; decision 0015), so its straggling
+        #: prefactor <Z/A> is water's; the material's <Z/A> enters through the SPR.
+        self.depth_dose_za_ratio = WATER.electrons_per_gram_ratio
+        #: Radiation length [g/cm^2] of the front material (MCS; decision 0011).
         self.radiation_length_g_per_cm2 = slab.material.radiation_length_g_per_cm2
-        #: Voxel geometry along the beam axis (decision 0014): ascending voxel
-        #: boundaries [mm] and per-voxel mass density [g/cm^3]. Consecutive voxels
-        #: of equal density are merged, so a uniform slab (any voxel count) and a
-        #: homogeneous WaterSlab both collapse to a single voxel and reproduce the
-        #: homogeneous transport exactly.
+        #: Voxel geometry along the beam axis (decisions 0014, 0015). Each voxel
+        #: is transported as water at its **water-equivalent density** rho_we =
+        #: SPR(material) x rho_phys, with a composition-scaled oxygen-equivalent
+        #: nuclear density. Consecutive voxels sharing both transported quantities
+        #: are merged, so a uniform single-material slab (and a homogeneous
+        #: WaterSlab) collapse to a single voxel and reproduce the homogeneous
+        #: transport exactly.
         raw_z, raw_rho = slab.voxel_profile()
-        self.voxel_z_mm, self.voxel_density = _merge_voxels(raw_z, raw_rho)
+        raw_mats = slab.materials_profile()
+        n_phys = int(raw_rho.shape[0])
+        we_density = np.empty(n_phys, dtype=np.float64)
+        ox_density = np.empty(n_phys, dtype=np.float64)
+        spr_cache: dict[int, float] = {}
+        for v in range(n_phys):
+            mat_v = raw_mats[v]
+            key = id(mat_v)
+            if key not in spr_cache:
+                spr_cache[key] = mass_stopping_power_ratio(
+                    mat_v, self.material_reference_energy_mev, particle
+                )
+            we_density[v] = spr_cache[key] * raw_rho[v]
+            ox_density[v] = AVOGADRO * mat_v.oxygen_equivalent_per_gram * raw_rho[v]
+        self.voxel_z_mm, self.voxel_density, self.voxel_oxygen_density = _merge_voxels(
+            raw_z, we_density, ox_density
+        )
         self.n_voxels = int(self.voxel_density.shape[0])
         self.depth_mm = float(self.voxel_z_mm[-1])
-        #: Representative (front-voxel) density for the homogeneous scattering path.
-        self.density_g_per_cm3 = float(self.voxel_density[0])
-        #: Per-voxel oxygen number density [1/cm^3]; only oxygen drives nonelastic
-        #: removal (decision 0012). Scales with the voxel mass density; zero when
-        #: the shared material has no oxygen (disables nuclear removal).
-        material = slab.material
-        if "O" in material.mass_fractions:
-            o_per_gram = AVOGADRO * material.atoms_per_gram("O")
-            self.voxel_oxygen_density = o_per_gram * self.voxel_density
-        else:
-            self.voxel_oxygen_density = np.zeros(self.n_voxels, dtype=np.float64)
+        #: Physical front-voxel density for the homogeneous scattering path.
+        self.density_g_per_cm3 = float(raw_rho[0])
         #: Lazily-built engine that transports secondary protons (nuclear off, no
         #: further secondaries), reusing this engine's geometry (decision 0013).
         self._sec_engine: TransportEngine | None = None
@@ -743,7 +767,7 @@ class TransportEngine:
         n_vox = self.n_voxels
         rest_energy = self.particle.rest_energy_mev
         charge = self.particle.charge
-        za = self.za_ratio
+        za = self.depth_dose_za_ratio
         straggling = self.straggling
         floor = self.straggling_floor_mev
         nuclear = self.nuclear
@@ -865,7 +889,7 @@ class TransportEngine:
             n_bins=self.grid.n_bins,
             rest_energy_mev=self.particle.rest_energy_mev,
             charge=self.particle.charge,
-            za_ratio=self.za_ratio,
+            za_ratio=self.depth_dose_za_ratio,
             straggling=self.straggling,
             straggling_floor_mev=self.straggling_floor_mev,
             nuclear=self.nuclear,
