@@ -1,9 +1,12 @@
 # Physics
 
 This section documents implemented transport and interaction physics, model
-assumptions, and applicable validity ranges. Implemented so far: the analytical electronic stopping power and CSDA range
-(task `DEV-002`) and a tabulated stopping-power layer from external data
-(task `DEV-003`). No transport exists yet.
+assumptions, and applicable validity ranges. Implemented so far: the analytical
+electronic stopping power and CSDA range (task `DEV-002`), a tabulated
+stopping-power layer from external data (task `DEV-003`), continuous-slowing-down
+proton transport in homogeneous water with energy-loss straggling and multiple
+Coulomb scattering (milestone V1, tasks `DEV-004`/`DEV-005`/`DEV-006`), and
+nonelastic nuclear attenuation of primaries (task `DEV-007`, opening Stage 2).
 
 ## Electronic stopping power (analytical layer)
 
@@ -174,5 +177,39 @@ used (no single-scattering tail), which is standard for fast therapy Monte
 Carlo and adequate for the lateral-``sigma`` core.
 
 This closes the physics of milestone **V1** (proton transport in homogeneous
-water). Not yet: nuclear interactions (Stage 2), heterogeneous voxel geometry
-(Stage 3), and treatment-planning scoring and influence matrices (Stage 4).
+water).
+
+## Nonelastic nuclear attenuation (Stage 2, task DEV-007, decision 0012)
+
+Module: ``ionmc.physics.nuclear``; wired into ``TransportEngine`` and the Warp
+depth-dose kernel behind a ``nuclear`` flag.
+
+Real protons are removed along the track by **nonelastic nuclear reactions**,
+so about 20 % (150 MeV) to 27 % (200 MeV) never reach the Bragg peak. Each
+alive step draws one uniform and, with probability ``Sigma(E) x s`` (the
+thin-step macroscopic nonelastic rate over the step length ``s``), removes the
+primary: a local fraction ``f_local = 0.30`` of its energy is deposited at the
+vertex (short-range recoils and fragments) and the remainder is booked to an
+**escaping/deferred channel** for the secondary transport of Stage 2 (DEV-008).
+The macroscopic cross section is oxygen-only, ``Sigma = n_O sigma_nonel(E)``;
+the hydrogen channel is proton-proton *elastic* scattering, which deflects
+rather than removes the primary and is excluded here. ``sigma_nonel(E)`` on
+oxygen is an analytic parameterization of the ICRU-63 shape (7 MeV threshold,
+~550 mb near 20 MeV, ~340-400 mb plateau over 100-250 MeV), written in the
+shared-source math namespace so the Warp kernel and the float64 reference
+evaluate it identically.
+
+The nuclear uniform is drawn after the straggling normal and unconditionally
+per alive step, so the reference and Warp counter streams stay bit-aligned and
+the two backends remove the identical primary set (decision 0001). With
+``nuclear=False`` no extra draw is made and the DEV-004/005/006 results are
+reproduced exactly. Energy is fully accounted: ``deposited + escaped =
+energy_in``. Validated on the primary survival to the Bragg peak (0.813 /
+0.716 at 150 / 200 MeV, within the published tolerances) and on the analytic
+reaction fraction (see the validation index).
+
+The **absolute** peak-to-entrance ratio still reads high until DEV-008
+transports the escaping secondary protons (a broad low-level plateau). Not yet:
+secondary charged-particle transport (DEV-008, closes V2), nuclear removal on
+the 3-D scattering path, heterogeneous voxel geometry (Stage 3), and treatment-
+planning scoring and influence matrices (Stage 4).

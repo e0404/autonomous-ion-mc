@@ -448,7 +448,11 @@ deterministically and reviewed in one pull request.
 |---|---|---|
 | Stage 0, `DEV-002` (package, conventions, execution model, quality tooling, analytic stopping power) | **completed** 2026-09-10 | decisions `0004`–`0006`; `validation/v0_stopping_power.py` on the host runner, CPU + CUDA, run `RUN-20260910T080455Z-e666b469` at `d23c78a`; DEV-002 local validation records; squash-merged into `develop` |
 | Stage 0, `DEV-003` (data layer, tabulated stopping power; closes V0) | **completed** 2026-09-10 | decisions `0007`, `0008`; `validation/v0_tabulated_stopping_power.py` on the host runner (CPU + CUDA); DEV-003 local validation record; **milestone V0 closed** |
-| Stages 1–6 | not started | — |
+| Stage 1, `DEV-004` (transport architecture, deterministic CSDA depth dose) | **completed** 2026-09-10 | decision `0009`; `validation/v1_depth_dose_csda.py` on the host runner (CPU + CUDA); DEV-004 local validation record |
+| Stage 1, `DEV-005` (energy-loss straggling, Bragg peak, batch uncertainty) | **completed** 2026-09-10 | decision `0010`; `validation/v1_bragg_straggling.py` on the host runner (CPU + CUDA); DEV-005 local validation record |
+| Stage 1, `DEV-006` (multiple Coulomb scattering, 3-D transport; closes V1) | **completed** 2026-09-10 | decision `0011`; `validation/v1_lateral_scattering.py` on the host runner (CPU + CUDA); DEV-006 local validation record; **milestone V1 closed** |
+| Stage 2, `DEV-007` (proton nonelastic nuclear attenuation, local deposition; opens V2) | **in progress** 2026-09-10 | decision `0012`; `validation/v2_nuclear_attenuation.py`; `tests/ionmc/test_nuclear.py` |
+| Stages 3–6 | not started | — |
 
 ## Change log
 
@@ -472,3 +476,12 @@ deterministically and reviewed in one pull request.
   the random-hinge lateral spread and 2-D depth-lateral scoring (decision
   `0011`), **closing milestone V1** (proton transport in homogeneous water).
   Next: **Stage 2**, nuclear interactions for protons.
+- 2026-09-10: `DEV-007` began **Stage 2**: proton nonelastic nuclear
+  attenuation with catastrophic primary removal (analytic ICRU-63-shape oxygen
+  cross section), local-vs-escaping energy split, and an audited escaping
+  channel for later secondary transport (decision `0012`). Reproduces the
+  published primary survival to the Bragg peak (0.81 at 150 MeV, 0.72 at
+  200 MeV). **Opens milestone V2**; V2 closes once secondary charged-particle
+  transport (DEV-008) consumes the escaping channel. Data-layer note: the
+  ICRU-63-derived tabulated cross section is *not* vendored (licensing); an
+  openly-licensed TENDL-2021 tabulated path is deferred.
