@@ -289,30 +289,33 @@ def _deposit_zx(
     x_mid: float,
     energy: float,
     dz: float,
-    half_width: float,
+    z_origin: float,
+    x_lo: float,
     dx_bin: float,
     n_depth: int,
     n_lateral: int,
 ) -> None:
     """Deposit ``energy`` across the depth bins spanned by ``[z0, z1]`` (by depth
-    overlap) at the lateral bin containing ``x_mid`` (decision 0011).
+    overlap) at the lateral bin containing ``x_mid`` (decisions 0011, 0019).
 
-    Mirrors the Warp kernel deposition. Energy outside the grid is dropped.
+    The scoring grid starts at depth ``z_origin`` and its lowest lateral bin at
+    ``x_lo``, decoupling its alignment from the transport grid. Mirrors the Warp
+    kernel deposition. Energy outside the grid is dropped.
     """
-    xb = math.floor((x_mid + half_width) / dx_bin)
+    xb = math.floor((x_mid - x_lo) / dx_bin)
     if not (0 <= xb < n_lateral):
         return
     span = z1 - z0
     if span <= 0.0:
-        b = math.floor(z0 / dz)
+        b = math.floor((z0 - z_origin) / dz)
         if 0 <= b < n_depth:
             edep[b, xb] += energy
         return
     inv = 1.0 / span
     pos = z0
-    b = math.floor(z0 / dz)
+    b = math.floor((z0 - z_origin) / dz)
     while pos < z1 - 1.0e-12:
-        bin_end = (b + 1) * dz
+        bin_end = z_origin + (b + 1) * dz
         seg_end = min(bin_end, z1)
         if 0 <= b < n_depth:
             edep[b, xb] += energy * (seg_end - pos) * inv
@@ -538,11 +541,12 @@ class TransportEngine:
             f_secondary=self.secondary_proton_fraction,
         )
         dz = self.grid.bin_width_mm
+        z_org = self.grid.origin_mm
         n_bins = self.grid.n_bins
         secondary_edep = self.grid.empty()
         # short-range (sub-cut) secondaries deposit locally at their vertex
         for z, weighted_energy in batch.local_deposit:
-            b = math.floor(z / dz)
+            b = math.floor((z - z_org) / dz)
             if 0 <= b < n_bins:
                 secondary_edep[b] += weighted_energy
         sec_truncated = 0
@@ -740,7 +744,8 @@ class TransportEngine:
         # = u0 + m_hat . beam_position, m_hat = R^T normal (decision 0018).
         normal = self.slab_normal
         dz = grid.depth_bin_mm
-        half_w = grid.half_width_mm
+        z_org = grid.depth_origin_mm
+        x_lo = grid.lateral_lo_mm
         dxb = grid.lateral_bin_mm
         nz, nx = grid.n_depth, grid.n_lateral
         edep = grid.empty()
@@ -812,7 +817,8 @@ class TransportEngine:
                     0.5 * (x_start + px),
                     w * de,
                     dz,
-                    half_w,
+                    z_org,
+                    x_lo,
                     dxb,
                     nz,
                     nx,
@@ -824,7 +830,7 @@ class TransportEngine:
                 while voxel + 1 < n_vox and u >= float(voxel_z[voxel + 1]) - 1.0e-9:
                     voxel += 1
                 if e <= self.energy_cut_mev:
-                    _deposit_zx(edep, pz, pz, px, w * e, dz, half_w, dxb, nz, nx)
+                    _deposit_zx(edep, pz, pz, px, w * e, dz, z_org, x_lo, dxb, nz, nx)
                     e = 0.0
                     status = Status.STOPPED
                 if u >= geom_depth:
@@ -868,6 +874,7 @@ class TransportEngine:
             t.bisection_steps,
         )
         dz = self.grid.bin_width_mm
+        z_org = self.grid.origin_mm  # scoring-grid alignment (decision 0019)
         geom_depth = self.depth_mm  # transport is bounded by the medium...
         n_bins = self.grid.n_bins  # ...scoring only within the grid extent
         # per-voxel density profile along the beam axis (decision 0014)
@@ -926,7 +933,7 @@ class TransportEngine:
                     # so the draw never triggers there (decision 0012).
                     p_nuc = nuc.nonelastic_step_probability(e, dl, oxygen_density)
                     if rng.randf() < p_nuc:
-                        dep_bin = math.floor(z / dz)
+                        dep_bin = math.floor((z - z_org) / dz)
                         if 0 <= dep_bin < n_bins:
                             edep[dep_bin] += w * local_fraction * e
                         escaped += w * (1.0 - local_fraction) * e
@@ -935,7 +942,7 @@ class TransportEngine:
                         n_reactions += 1
                         status = Status.REACTED
                         break
-                _deposit_along_step(edep, z, dl, w * de, dz, n_bins)
+                _deposit_along_step(edep, z, dl, w * de, dz, z_org, n_bins)
                 z += dl
                 e -= de
                 step += 1
@@ -944,7 +951,7 @@ class TransportEngine:
                 while voxel + 1 < n_vox and z >= voxel_z[voxel + 1] - 1.0e-9:
                     voxel += 1
                 if e <= self.energy_cut_mev:
-                    dep_bin = math.floor(z / dz)
+                    dep_bin = math.floor((z - z_org) / dz)
                     if 0 <= dep_bin < n_bins:
                         edep[dep_bin] += w * e
                     e = 0.0
@@ -993,6 +1000,7 @@ class TransportEngine:
             max_fraction=self.max_fraction,
             max_step_mm=self.max_step_mm,
             bin_width_mm=self.grid.bin_width_mm,
+            depth_origin_mm=self.grid.origin_mm,
             geom_depth_mm=self.depth_mm,
             energy_cut_mev=self.energy_cut_mev,
             max_steps=self.max_steps,
@@ -1008,25 +1016,33 @@ class TransportEngine:
 
 
 def _deposit_along_step(
-    edep: np.ndarray, z0: float, dl: float, energy: float, dz: float, n_bins: int
+    edep: np.ndarray,
+    z0: float,
+    dl: float,
+    energy: float,
+    dz: float,
+    z_origin: float,
+    n_bins: int,
 ) -> None:
     """Distribute ``energy`` uniformly over the depth bins the step ``[z0, z0+dl]``
-    spans, proportional to the path length in each bin (decision 0010).
+    spans, proportional to the path length in each bin (decisions 0010, 0019).
 
-    Mirrors the Warp kernel's deposition loop. Energy that falls outside the
-    scoring grid is dropped (the ``0 <= b < n_bins`` guard).
+    The scoring grid starts at depth ``z_origin`` (default 0), decoupling its
+    alignment from the transport grid. Mirrors the Warp kernel's deposition loop.
+    Energy that falls outside the scoring grid is dropped (the ``0 <= b < n_bins``
+    guard).
     """
     if dl <= 0.0:
-        b = math.floor(z0 / dz)
+        b = math.floor((z0 - z_origin) / dz)
         if 0 <= b < n_bins:
             edep[b] += energy
         return
     z1 = z0 + dl
     pos = z0
-    b = math.floor(z0 / dz)
+    b = math.floor((z0 - z_origin) / dz)
     inv_dl = 1.0 / dl
     while pos < z1 - 1.0e-12:
-        bin_end = (b + 1) * dz
+        bin_end = z_origin + (b + 1) * dz
         seg_end = min(bin_end, z1)
         if 0 <= b < n_bins:
             edep[b] += energy * (seg_end - pos) * inv_dl

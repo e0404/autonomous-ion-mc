@@ -457,7 +457,8 @@ deterministically and reviewed in one pull request.
 | Stage 3, `DEV-010` (per-voxel tissue materials via stopping-power ratios) | **completed** 2026-09-10 | decision `0015`; `validation/v3_material_composition.py` on the host runner (CPU + CUDA); `tests/ionmc/test_material_composition.py`; DEV-010 local validation record |
 | Stage 3, `DEV-011` (density-heterogeneous 3-D multiple-scattering transport) | **completed** 2026-09-10 | decision `0016`; `validation/v3_scattering_heterogeneity.py` on the host runner (CPU + CUDA); `tests/ionmc/test_scattering_heterogeneity.py`; DEV-011 local validation record |
 | Stage 3, `DEV-012` (non-water materials on the 3-D scattering path) | **completed** 2026-09-10 | decision `0017`; `validation/v3_material_scattering.py` on the host runner (CPU + CUDA); `tests/ionmc/test_material_scattering.py`; DEV-012 local validation record; squash-merged into `develop` at `58309bf` |
-| Stage 3, `DEV-013` (arbitrary beam incidence via a beam frame; rotated-vs-axis-aligned equivalence) | **in progress** 2026-09-11 | decision `0018`; `validation/v3_arbitrary_incidence.py`; `tests/ionmc/test_arbitrary_incidence.py` |
+| Stage 3, `DEV-013` (arbitrary beam incidence via a beam frame; rotated-vs-axis-aligned equivalence) | **completed** 2026-09-11 | decision `0018`; `validation/v3_arbitrary_incidence.py` on the host runner (CPU + CUDA); `tests/ionmc/test_arbitrary_incidence.py`; DEV-013 local validation record; squash-merged into `develop` at `ebd719f` |
+| Stage 3, `DEV-014` (scoring grids decoupled from the transport grid; grid-independence; **closes V3**) | **in progress** 2026-09-11 | decision `0019`; `validation/v3_scoring_grid.py`; `tests/ionmc/test_scoring_grid_decoupling.py` |
 | Stages 4–6 | not started | — |
 
 ## Change log
@@ -570,6 +571,20 @@ deterministically and reviewed in one pull request.
   axis-aligned beam-frame depth dose (bit-exact with scattering off, within
   statistics with it on), an oblique beam traverses the same water-equivalent
   path as a normal beam through `D/cos(theta)`, and reference/Warp CPU/CUDA agree.
-  Remaining for **V3 closure** (DEV-014): arbitrary 3-D per-voxel maps with
-  robust ray/voxel (Siddon) traversal, and scoring grids decoupled from the
+  Remaining for **V3 closure** (DEV-014): scoring grids decoupled from the
   transport grid in resolution and alignment (the grid-independence gate).
+- 2026-09-11: `DEV-014` decoupled the **scoring grid** from the transport grid in
+  resolution *and* alignment (decision `0019`), **closing milestone V3**. The
+  scoring grids gain an `origin_mm` (`DepthDoseGrid`) and a `depth_origin_mm` /
+  `lateral_center_mm` (`DepthLateralGrid`); the reference and Warp deposition
+  index bins by `floor((z - z_origin)/dz)`, defaults reproducing the prior grids
+  bit-for-bit. Validated: the total deposited energy and the energy per depth
+  interval are grid-independent under resolution changes (a 4x-finer grid summed
+  4:1 equals the coarse, to round-off) and depth-origin/lateral-centre shifts; a
+  grid past the entrance captures strictly less; lateral `sigma_x` is invariant
+  under a lateral shift; and reference/Warp CPU/CUDA agree on a shifted grid.
+  **Milestone V3 (voxelized heterogeneous geometry and materials) is closed.**
+  Deferred (Stage-3 capability beyond the V3 gates): a full 3-D voxel grid with
+  arbitrary per-voxel material maps and robust ray/voxel (Siddon/DDA) traversal
+  for true patient geometries, a follow-on task and a Stage-4 prerequisite. Next:
+  **Stage 4**, treatment-planning scoring and influence matrices.

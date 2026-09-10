@@ -34,6 +34,7 @@ def csda_depth_dose_kernel(
     max_fraction: float,
     max_step_mm: float,
     bin_width_mm: float,
+    depth_origin_mm: float,
     geom_depth_mm: float,
     energy_cut_mev: float,
     max_steps: int,
@@ -99,7 +100,7 @@ def csda_depth_dose_kernel(
             # aligned; the probability is zero below threshold (decision 0012).
             p_nuc = nuclear_phys.nonelastic_step_probability(e, dl, ox)
             if wp.randf(rng) < p_nuc:
-                rbin = int(wp.floor(z / bin_width_mm))
+                rbin = int(wp.floor((z - depth_origin_mm) / bin_width_mm))
                 if rbin >= 0 and rbin < n_bins:
                     wp.atomic_add(
                         edep, rbin, wp.float64(w * nuclear_local_fraction * e)
@@ -116,10 +117,10 @@ def csda_depth_dose_kernel(
         deposit = w * de
         z1 = z + dl
         pos = z
-        b = int(wp.floor(z / bin_width_mm))
+        b = int(wp.floor((z - depth_origin_mm) / bin_width_mm))
         inv_dl = 1.0 / wp.max(dl, 1.0e-12)
         while pos < z1 - 1.0e-12:
-            bin_end = float(b + 1) * bin_width_mm
+            bin_end = depth_origin_mm + float(b + 1) * bin_width_mm
             seg_end = wp.min(bin_end, z1)
             if b >= 0 and b < n_bins:
                 wp.atomic_add(edep, b, wp.float64(deposit * (seg_end - pos) * inv_dl))
@@ -132,7 +133,7 @@ def csda_depth_dose_kernel(
         while voxel + 1 < n_vox and z >= voxel_z[voxel + 1] - 1.0e-9:
             voxel = voxel + 1
         if e <= energy_cut_mev:
-            dep_bin = int(wp.floor(z / bin_width_mm))
+            dep_bin = int(wp.floor((z - depth_origin_mm) / bin_width_mm))
             if dep_bin >= 0 and dep_bin < n_bins:
                 wp.atomic_add(edep, dep_bin, wp.float64(w * e))
             e = 0.0
@@ -186,6 +187,7 @@ class DepthDoseKernel:
         max_fraction: float,
         max_step_mm: float,
         bin_width_mm: float,
+        depth_origin_mm: float,
         geom_depth_mm: float,
         energy_cut_mev: float,
         max_steps: int,
@@ -255,6 +257,7 @@ class DepthDoseKernel:
                 float(max_fraction),
                 float(max_step_mm),
                 float(bin_width_mm),
+                float(depth_origin_mm),
                 float(geom_depth_mm),
                 float(energy_cut_mev),
                 int(max_steps),
@@ -355,7 +358,8 @@ def csda_scattering_kernel(
     scattering: int,
     straggling_floor_mev: float,
     depth_bin_mm: float,
-    half_width_mm: float,
+    depth_origin_mm: float,
+    lateral_lo_mm: float,
     lateral_bin_mm: float,
     n_depth: int,
     n_lateral: int,
@@ -459,19 +463,19 @@ def csda_scattering_kernel(
         pz = pz + (s - a) * dz
         # deposit w*de across depth bins [z_start, pz] at lateral bin of x mid
         x_mid = 0.5 * (x_start + px)
-        xb = int(wp.floor((x_mid + half_width_mm) / lateral_bin_mm))
+        xb = int(wp.floor((x_mid - lateral_lo_mm) / lateral_bin_mm))
         if xb >= 0 and xb < n_lateral:
             span = pz - z_start
             if span <= 0.0:
-                b0 = int(wp.floor(z_start / depth_bin_mm))
+                b0 = int(wp.floor((z_start - depth_origin_mm) / depth_bin_mm))
                 if b0 >= 0 and b0 < n_depth:
                     wp.atomic_add(edep, b0 * n_lateral + xb, wp.float64(w * de))
             else:
                 invs = 1.0 / span
                 pos = z_start
-                b = int(wp.floor(z_start / depth_bin_mm))
+                b = int(wp.floor((z_start - depth_origin_mm) / depth_bin_mm))
                 while pos < pz - 1.0e-12:
-                    bin_end = float(b + 1) * depth_bin_mm
+                    bin_end = depth_origin_mm + float(b + 1) * depth_bin_mm
                     seg_end = wp.min(bin_end, pz)
                     if b >= 0 and b < n_depth:
                         wp.atomic_add(
@@ -488,8 +492,8 @@ def csda_scattering_kernel(
         while voxel + 1 < n_vox and u >= voxel_z[voxel + 1] - 1.0e-9:
             voxel = voxel + 1
         if e <= energy_cut_mev:
-            xb2 = int(wp.floor((px + half_width_mm) / lateral_bin_mm))
-            b2 = int(wp.floor(pz / depth_bin_mm))
+            xb2 = int(wp.floor((px - lateral_lo_mm) / lateral_bin_mm))
+            b2 = int(wp.floor((pz - depth_origin_mm) / depth_bin_mm))
             if xb2 >= 0 and xb2 < n_lateral and b2 >= 0 and b2 < n_depth:
                 wp.atomic_add(edep, b2 * n_lateral + xb2, wp.float64(w * e))
             e = 0.0
@@ -627,7 +631,8 @@ class ScatteringKernel:
                 (1 if scattering else 0),
                 float(straggling_floor_mev),
                 float(grid.depth_bin_mm),
-                float(grid.half_width_mm),
+                float(grid.depth_origin_mm),
+                float(grid.lateral_lo_mm),
                 float(grid.lateral_bin_mm),
                 nz,
                 nx,
