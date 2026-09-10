@@ -230,6 +230,29 @@ dependence), element-specific nuclear cross sections, and non-water/heterogeneou
 material scattering (the 3-D path rejects both). Warp CPU/CUDA results are
 recorded in the DEV-010 local validation record (host run below).
 
+## V3 (scattering) - density-heterogeneous 3-D scattering (task DEV-011)
+
+Script: ``validation/v3_scattering_heterogeneity.py``. References: the Fermi-Eyges
+lateral-spread oracle (uniform density) and a new piecewise-density Fermi-Eyges
+variant (layered), plus cross-backend parity (decision 0016). The 3-D scattering
+path now looks up the local water density by depth.
+
+| check | criterion | result |
+|---|---|---|
+| uniform water VoxelSlab vs WaterSlab scattering | bit-exact (reference) | max diff 0 |
+| uniform-density lateral sigma_x vs Fermi-Eyges (0.5R, 0.8R) | within 3 % | < 1 % |
+| layered sigma_x vs piecewise-density Fermi-Eyges (60/90/120 mm) | within 3 % | < 1 % |
+| energy conservation (layered scattering) | 1e-9 (reference) | ~0 |
+| reference vs Warp CPU (layered) | sigma_x <= 0.05 mm, depth dose cumulative <= 5e-4 | ~1e-4 |
+| CUDA sigma_x vs Fermi-Eyges (its own physics gate) | within 3 % | < 1 % |
+| CUDA vs CPU (layered depth dose) | cumulative <= 5e-4 | ~4e-6 |
+
+The depth-dose cross-backend tolerance (5e-4) is looser than the 1-D path's 1e-4
+because the 3-D scattering kernel accumulates more float32 rounding at voxel
+boundaries; the lateral ``sigma_x`` is the tight cross-backend metric. Deferred:
+non-water materials on the scattering path (DEV-012). Warp CPU/CUDA results are
+recorded in the DEV-011 local validation record (host run below).
+
 ## Unit and regression tests
 
 ``tests/ionmc/`` covers units and constants, materials, the RNG mirror

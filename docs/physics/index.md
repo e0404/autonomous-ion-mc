@@ -9,7 +9,8 @@ Coulomb scattering (milestone V1, tasks `DEV-004`/`DEV-005`/`DEV-006`),
 nonelastic nuclear attenuation of primaries (task `DEV-007`), secondary
 charged-particle transport (task `DEV-008`, closing milestone V2), and 1-D
 voxelized density heterogeneity (task `DEV-009`, opening milestone V3), and
-per-voxel tissue materials via stopping-power ratios (task `DEV-010`).
+per-voxel tissue materials via stopping-power ratios (task `DEV-010`), and
+density-heterogeneous 3-D multiple scattering (task `DEV-011`).
 
 ## Electronic stopping power (analytical layer)
 
@@ -326,8 +327,29 @@ scattering on the 3-D path (the water-only scattering path rejects both a
 heterogeneous slab and a homogeneous non-water material with a
 ``NotImplementedError`` rather than silently giving a wrong Bragg depth).
 
+## Density-heterogeneous 3-D scattering (Stage 3, task DEV-011, decision 0016)
+
+The 3-D multiple-scattering path (DEV-006) is brought to **1-D voxelized density
+heterogeneity** for water, reusing the DEV-009 per-voxel-density-by-depth
+pattern: the scattering reference driver and Warp kernel look up the local water
+density by depth ``pz``, limit the step so its depth advance ``s d_z`` stays
+within the voxel, and advance a non-decreasing voxel index. Since the Highland
+scattering power uses the areal thickness ``rho s / X0``, the same per-voxel
+density that drives the energy loss also drives the lateral spread; for water
+``X0`` and ``<Z/A>`` are constant, so no new physics is needed. ``run_scattering``
+now accepts a density-heterogeneous water ``VoxelSlab`` and still rejects
+non-water materials (whose MCS needs the physical density and material radiation
+length, distinct from the water-equivalent density used for stopping — a later
+task).
+
+Validated: a uniform water ``VoxelSlab`` reproduces the homogeneous ``WaterSlab``
+scattering bit-for-bit; the lateral ``sigma_x`` matches the Fermi-Eyges oracle at
+a uniform density and a **piecewise-density** Fermi-Eyges variant across a water/
+dense/water interface to < 1 %; energy is conserved; and the reference and Warp
+paths agree (``sigma_x`` tightly, the depth dose within the 3-D float32 budget).
+
 Deferred to later Stage-3 tasks: full 3-D voxel geometry with arbitrary beam
-incidence and ray/voxel traversal, nuclear removal and the lateral halo on the
-3-D scattering path in heterogeneous media, and scoring grids decoupled from the
+incidence and ray/voxel traversal, non-water *materials* and nuclear removal /
+lateral halo on the 3-D scattering path, and scoring grids decoupled from the
 transport grid. Not yet, beyond Stage 3: treatment-planning scoring and influence
 matrices (Stage 4).

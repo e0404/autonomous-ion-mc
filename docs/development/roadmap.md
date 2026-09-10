@@ -454,7 +454,8 @@ deterministically and reviewed in one pull request.
 | Stage 2, `DEV-007` (proton nonelastic nuclear attenuation, local deposition; opens V2) | **completed** 2026-09-10 | decision `0012`; `validation/v2_nuclear_attenuation.py` on the host runner (CPU + CUDA); `tests/ionmc/test_nuclear.py`; DEV-007 local validation record |
 | Stage 2, `DEV-008` (secondary charged-particle transport; closes V2) | **completed** 2026-09-10 | decision `0013`; `validation/v2_secondary_transport.py` on the host runner (CPU + CUDA); `tests/ionmc/test_secondaries.py`; DEV-008 local validation record; **milestone V2 closed** |
 | Stage 3, `DEV-009` (1-D voxelized density heterogeneity, WET transport; opens V3) | **completed** 2026-09-10 | decision `0014`; `validation/v3_density_heterogeneity.py` on the host runner (CPU + CUDA); `tests/ionmc/test_voxel_geometry.py`; DEV-009 local validation record |
-| Stage 3, `DEV-010` (per-voxel tissue materials via stopping-power ratios) | **in progress** 2026-09-10 | decision `0015`; `validation/v3_material_composition.py`; `tests/ionmc/test_material_composition.py` |
+| Stage 3, `DEV-010` (per-voxel tissue materials via stopping-power ratios) | **completed** 2026-09-10 | decision `0015`; `validation/v3_material_composition.py` on the host runner (CPU + CUDA); `tests/ionmc/test_material_composition.py`; DEV-010 local validation record |
+| Stage 3, `DEV-011` (density-heterogeneous 3-D multiple-scattering transport) | **in progress** 2026-09-10 | decision `0016`; `validation/v3_scattering_heterogeneity.py`; `tests/ionmc/test_scattering_heterogeneity.py` |
 | Stages 4–6 | not started | — |
 
 ## Change log
@@ -530,3 +531,16 @@ deterministically and reviewed in one pull request.
   specific nuclear cross sections, and heterogeneous-material scattering. Next:
   the remaining Stage-3 work (3-D voxel geometry with arbitrary incidence,
   decoupled scoring grids) toward milestone V3 closure.
+- 2026-09-10: `DEV-011` brought the **3-D multiple-scattering path to 1-D
+  voxelized density heterogeneity** (decision `0016`), reusing the DEV-009
+  per-voxel-density-by-depth pattern: the scattering reference driver and Warp
+  kernel look up the local water density, limit the step's depth advance to the
+  voxel boundary, and advance a non-decreasing voxel index. `run_scattering` now
+  accepts a density-heterogeneous water `VoxelSlab` (still rejecting non-water
+  materials, whose MCS needs the physical density and material X0 — a later
+  task). Validated: homogeneous equivalence bit-exact, lateral `sigma_x` vs the
+  Fermi-Eyges oracle (uniform density) and a new piecewise-density Fermi-Eyges
+  variant (layered interface) to < 1 %, energy conservation, and cross-backend
+  agreement. This closes the density-heterogeneity half of the scattering path;
+  materials on the scattering path and 3-D geometry/arbitrary incidence remain
+  for V3 closure.
