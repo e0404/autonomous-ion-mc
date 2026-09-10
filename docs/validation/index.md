@@ -103,8 +103,8 @@ which isolates straggling from the peak shape.
 | two independent seeds statistically consistent | RMS(t) in [0.5, 1.6] | ~1.1 |
 | reference vs Warp / Warp CPU vs CUDA cumulative | 1e-4 / 1e-5 | 5.8e-7 / 8.1e-8 |
 
-Warp results are from host run `RUN-20260910T143136Z-71fe1ef7` (RTX A6000, CUDA 12.9, Warp 1.17.0) at
-SHA `9b75365`, recorded in the DEV-005 local validation record.
+Warp results are from host run `RUN-20260910T144031Z-8dd34007` (RTX A6000, CUDA 12.9, Warp 1.17.0) at
+SHA `100653d`, recorded in the DEV-005 local validation record.
 
 The ICRU 90 mean excitation energy (78 eV) is reported as a separate model
 difference (−1.14 % at 1 MeV to −0.43 % at 400 MeV), not absorbed into any

@@ -150,7 +150,7 @@ SHA (Warp CPU and CUDA), recorded below.
 
 ## Later validation outcome
 
-DEV-005 host run `RUN-20260910T143136Z-71fe1ef7` (RTX A6000, CUDA 12.9, Warp 1.17.0, SHA `9b75365`,
+DEV-005 host run `RUN-20260910T144031Z-8dd34007` (RTX A6000, CUDA 12.9, Warp 1.17.0, SHA `100653d`,
 40000 histories): all eight gates passed. Mean range = CSDA range to 5e-5 at
 100/150/200 MeV (straggling unbiased). Range straggling sigma_R = 0.853 / 1.687
 / 2.705 mm vs the analytic Bohr integral 0.860 / 1.694 / 2.712 mm (ratio
