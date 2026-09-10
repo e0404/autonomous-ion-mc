@@ -140,6 +140,23 @@ rejected.
   scattering path (`run_scattering`) keeps EM-only transport for now; nuclear
   removal there is a small follow-up once secondary lateral transport exists.
 
+## Open validation gaps (recorded, deferred)
+
+- **The cross section is calibrated only to the integral survival at 150 and
+  200 MeV.** The survival and analytic-self-consistency gates constrain the
+  *total* reaction count integrated over the track, not the energy-differential
+  shape of `sigma_nonel(E)`. The depth distribution of reaction vertices (which
+  drives the pre-peak dose reduction and the placement of the local deposits)
+  and beam energies below 150 MeV are not yet tested. The flat ~0.40 b plateau
+  is a coarse approximation with no ~50 MeV structure. This is acceptable for
+  *opening* V2 but is a real coverage gap: it is closed by the deferred
+  TENDL-2021 tabulated cross-check and by the DEV-008 secondary transport that
+  makes the absolute depth dose comparable to measured Bragg curves.
+- **The reaction vertex is placed at step entry, not sampled uniformly within
+  the step.** For ~1 mm steps this is a sub-millimetre bias in the local-deposit
+  location, negligible for the depth dose; it should be revisited when secondary
+  products are transported from the vertex (DEV-008) and on the 3-D path.
+
 ## Acceptance targets (validation `v2_nuclear_attenuation.py`)
 
 - **Primary survival to the Bragg peak**: `0.80 +- 0.03` at 150 MeV,

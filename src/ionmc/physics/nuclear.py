@@ -68,8 +68,11 @@ def nonelastic_step_probability(
     The leading-order (thin-step) form; for the ~1 mm steps used here it is
     accurate to better than 0.1 % versus ``1 - exp(-Sigma dl)`` (decision 0012).
     ``energy`` is the step-entry energy. Zero below the nonelastic threshold.
+    Clamped to at most 1: with ``Sigma ~ 0.012/cm`` and 1 mm steps ``P ~ 1e-3``,
+    but the clamp keeps the returned value a valid probability if a caller ever
+    raises the step cap far enough that the thin-step form would exceed 1.
     """
     sigma = macroscopic_nonelastic(energy, oxygen_density_per_cm3)
     dl_cm = step_mm / MM_PER_CM
-    p = sigma * dl_cm
+    p = m.min(sigma * dl_cm, 1.0)
     return m.where(energy > NONELASTIC_THRESHOLD_MEV, p, 0.0)

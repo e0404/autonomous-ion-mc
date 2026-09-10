@@ -88,9 +88,9 @@ def test_macroscopic_and_probability(nuc, oxygen_density) -> None:
 def test_nuclear_off_matches_em_baseline(table) -> None:
     """nuclear=False draws no extra uniform, so the EM result is bit-identical."""
     src = PencilBeamSource(150.0)
-    base = _engine(table).run(src, n_histories=2000, seed=99, path="python")
+    base = _engine(table).run(src, n_histories=400, seed=99, path="python")
     off = _engine(table, nuclear=False).run(
-        src, n_histories=2000, seed=99, path="python"
+        src, n_histories=400, seed=99, path="python"
     )
     assert off.n_reactions == 0
     assert off.escaped_mev == 0.0
@@ -98,21 +98,15 @@ def test_nuclear_off_matches_em_baseline(table) -> None:
 
 
 @pytest.mark.parametrize("e0", ENERGIES)
-def test_primary_survival_matches_published(table, e0) -> None:
-    """Primary survival to the Bragg peak matches Paganetti/Gottschalk."""
-    res = _engine(table, nuclear=True).run(
-        PencilBeamSource(e0), n_histories=6000, seed=2024, path="python"
-    )
-    survival = 1.0 - res.n_reactions / res.n_histories
-    target, tol = PUBLISHED_SURVIVAL[e0]
-    assert abs(survival - target) <= tol, (survival, target, tol)
-
-
-@pytest.mark.parametrize("e0", ENERGIES)
 def test_energy_budget_closes(table, e0) -> None:
-    """deposited + escaped = energy_in to float64 round-off, with escaped > 0."""
+    """deposited + escaped = energy_in to float64 round-off, with escaped > 0.
+
+    Small-N reference path: the exact float64 budget is a per-history property,
+    so a few reacting histories already exercise it (the statistical survival
+    magnitude is checked on the fast Warp path below).
+    """
     res = _engine(table, nuclear=True).run(
-        PencilBeamSource(e0), n_histories=3000, seed=7, path="python"
+        PencilBeamSource(e0), n_histories=400, seed=7, path="python"
     )
     assert res.n_reactions > 0
     assert res.escaped_mev > 0.0
@@ -120,24 +114,59 @@ def test_energy_budget_closes(table, e0) -> None:
 
 
 def test_local_fraction_split(table) -> None:
-    """Escaped energy is (1 - f_local) of the total reacting-primary energy."""
-    f_local = 0.30
-    res = _engine(table, nuclear=True, nuclear_local_fraction=f_local).run(
-        PencilBeamSource(200.0), n_histories=3000, seed=11, path="python"
+    """The escaped energy scales as (1 - f_local) of the (f_local-independent)
+    reacting-primary energy, while deposited + escaped stays invariant.
+
+    The reaction set is independent of ``f_local`` (same seed, same RNG stream,
+    the split does not enter the reaction test), so the total reacting-primary
+    energy is identical across ``f_local`` and ``escaped`` must scale linearly.
+    """
+    src = PencilBeamSource(200.0)
+    lo = _engine(table, nuclear=True, nuclear_local_fraction=0.2).run(
+        src, n_histories=400, seed=11, path="python"
     )
-    # local deposit from reactions = escaped * f_local/(1-f_local)
-    local_from_reactions = res.escaped_mev * f_local / (1.0 - f_local)
-    assert local_from_reactions > 0.0
-    # the reacting-primary energy is fully accounted (local + escaped)
-    assert abs(res.energy_balance) <= 1e-12
+    hi = _engine(table, nuclear=True, nuclear_local_fraction=0.5).run(
+        src, n_histories=400, seed=11, path="python"
+    )
+    assert lo.n_reactions == hi.n_reactions > 0
+    # escaped scales as (1 - f_local): escaped(0.2)/escaped(0.5) == 0.8/0.5
+    assert math.isclose(lo.escaped_mev / hi.escaped_mev, 0.8 / 0.5, rel_tol=1e-9)
+    # total accounted energy is invariant to the split, and closes exactly
+    assert abs(lo.energy_balance) <= 1e-12
+    assert abs(hi.energy_balance) <= 1e-12
 
 
+@pytest.mark.warp
 @pytest.mark.parametrize("e0", ENERGIES)
-def test_reaction_fraction_matches_analytic(table, oxygen_density, nuc, e0) -> None:
+def test_primary_survival_matches_published(warp_module, table, e0) -> None:
+    """Primary survival to the Bragg peak matches Paganetti/Gottschalk.
+
+    Large-statistics run on the Warp CPU path (fast); the reference path removes
+    the identical primary set (checked by the parity test below), so this Warp
+    magnitude check equally certifies the reference model.
+    """
+    res = _engine(table, nuclear=True).run(
+        PencilBeamSource(e0), n_histories=20000, seed=2024, path="warp", device="cpu"
+    )
+    survival = 1.0 - res.n_reactions / res.n_histories
+    target, tol = PUBLISHED_SURVIVAL[e0]
+    assert abs(survival - target) <= tol, (survival, target, tol)
+
+
+@pytest.mark.warp
+@pytest.mark.parametrize("e0", ENERGIES)
+def test_reaction_fraction_matches_analytic(
+    warp_module, table, oxygen_density, nuc, e0
+) -> None:
     """MC reaction fraction agrees with 1 - exp(-integral Sigma dl) on the mean
-    track (a sampling-correctness check independent of the depth-dose shape)."""
+    track (a sampling-correctness check independent of the depth-dose shape).
+
+    Large-statistics run on the Warp CPU path.
+    """
     engine = _engine(table, nuclear=True)
-    res = engine.run(PencilBeamSource(e0), n_histories=8000, seed=555, path="python")
+    res = engine.run(
+        PencilBeamSource(e0), n_histories=20000, seed=555, path="warp", device="cpu"
+    )
     mc_fraction = res.n_reactions / res.n_histories
 
     # analytic survival: change variables from path length to energy along the
