@@ -197,7 +197,7 @@ host runner for the exact SHA (Warp CPU and CUDA), recorded below.
 
 ## Later validation outcome
 
-DEV-004 host run `RUN-20260910T135330Z-081a424c` (RTX A6000, CUDA 12.9, Warp 1.17.0, SHA `c0bf1c2`):
+DEV-004 host run `RUN-20260910T135739Z-8166c2f4` (RTX A6000, CUDA 12.9, Warp 1.17.0, SHA `b726507`):
 all seven gates passed. Energy conservation on the reference path ~1e-16;
 R80 versus the tabulated CSDA range +0.15 % (100 MeV), +0.09 % (150 MeV),
 −0.05 % (200 MeV); step-size drift ≤ 1.7e-6 on the fixed grid; the on-axis
