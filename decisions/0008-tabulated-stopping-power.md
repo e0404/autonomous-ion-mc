@@ -149,7 +149,13 @@ float32 stopping power and range agreed with the float64 reference to
 5.8e-8 and 4.5e-8 relative, within the decision 0005 criterion; the CUDA path
 and the full gate are recorded from the host run below.
 
-*Warp paths (host runner, CPU + CUDA):* recorded below and in the DEV-003
-validation record.
-
-HOST_RESULT_0008
+*Warp paths (host runner, RTX A6000, CUDA 12.9, Warp 1.17.0, run `RUN-20260910T100641Z-80a76b4a`
+at task SHA `dfd9995`):* all seven V0 gates passed. float32 Warp versus the
+float64 reference on the 0.5-400 MeV grid: S max relative difference
+5.8e-8 (normalized 0.006 against rtol 1e-5), range 4.5e-8 (normalized 0.002).
+Warp CPU versus CUDA: **bitwise identical** (S and range max absolute
+difference exactly 0.0) - the PCHIP interpolation and Gauss-Legendre range use
+no transcendental functions, so the two toolchains produce the same float32
+result, the strongest outcome the decision 0001 criterion admits. The
+reference-path numbers (tabulated vs analytic max 0.244 %, ranges vs NIST
+within 1.8e-4, numpy = Python bitwise) matched the sandbox.

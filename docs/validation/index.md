@@ -55,8 +55,11 @@ acquired into the host-runner cache. Reference: the analytic model
 | tabulated CSDA range + 0.5 MeV residual vs NIST PSTAR (100/150/200/250 MeV) | ≤ 0.1 % | ≤ 0.018 % |
 | analytic CSDA range + 1 MeV residual vs NIST PSTAR | ≤ 0.5 % | ≤ 0.053 % |
 | numpy binding vs Python binding | bitwise equal | equal |
-| Warp CPU / CUDA (float32) vs Python reference | S rtol 1e-5; range rtol 2e-5 | see the DEV-003 validation record |
-| Warp CPU vs CUDA | transcendental class (rtol 4e-6, atol 1e-6) | see the DEV-003 validation record |
+| Warp CPU / CUDA (float32) vs Python reference | S rtol 1e-5; range rtol 2e-5 | S 5.8e-8, range 4.5e-8 (both devices) |
+| Warp CPU vs CUDA | transcendental class (rtol 4e-6, atol 1e-6) | bitwise identical (no transcendentals) |
+
+Warp results are from host run `RUN-20260910T100641Z-80a76b4a` (RTX A6000, CUDA 12.9, Warp 1.17.0) at
+task SHA `dfd9995`, recorded in the DEV-003 local validation record.
 
 This closes milestone V0: proton stopping power in water is now available from
 both an analytical model and an I-value-consistent external table, on all three
