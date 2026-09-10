@@ -25,18 +25,30 @@ nothing else.
 GitHub CI runs the following; run the same locally before integration:
 
 ```bash
-uvx --from pre-commit==4.6.2 pre-commit run --all-files
-uv run --with pytest --no-project python -m pytest tests -q
+uvx --from pre-commit==4.6.2 pre-commit run --all-files   # hygiene, ruff, ruff-format, mypy
+uv sync --extra dev && uv run python -m pytest tests -q
+uv run mypy
 python3 infrastructure/docs/generate_docs.py && uvx zensical build --clean --strict
 ```
 
-## Known environment caveats
+Ruff (lint and format) and mypy apply to `src/` and `tests/ionmc/`; the
+legacy scripts under `infrastructure/` and their tests under
+`tests/infrastructure/` (about 120 pre-existing style violations, mostly
+line length) are excluded until a separate cleanup task.
+Warp tests are skipped automatically where `warp` or a CUDA device is
+unavailable (markers `warp`, `cuda`).
 
-- **Sandbox filesystem view is fixed at session start.** Directories created
-  on the host during a session (for example the first task worktree root)
-  are not visible to the orchestrator sandbox until the next session. The
-  temporary workaround used in the kickoff session, its integrity argument
-  and its stopping condition are recorded in decision `0003`.
-- **Sandbox network egress can be unavailable.** When it is, tests and
-  quality tools are executed on the host through the Codex worker and by
-  GitHub CI; the validation record for the affected task states this.
+## Environment history
+
+- **Kickoff session (DEV-001, first DEV-002 commits).** The orchestrator
+  sandbox could not see the task worktree directory (a user-level
+  Claude Code setting blocked reads outside the primary working directory)
+  and had no network egress. Development happened in a scratch clone whose
+  tree was transferred into the worktree through a staging ref, and tests
+  ran on the host through the Codex worker; decision `0003` records the
+  workaround, its integrity argument and its verification.
+- **From the DEV-002 resumption on 2026-09-10.** Direct worktree access and
+  sandbox network egress were verified and decision `0003` was marked
+  superseded. Tests, pre-commit, mypy and the documentation build run
+  inside the sandbox in the task worktree; only GPU execution still goes
+  through `run_host_validation`.

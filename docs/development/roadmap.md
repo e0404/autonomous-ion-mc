@@ -442,9 +442,20 @@ tested, on kernels with control flow and per-thread state, before transport is
 built on them; and (c) bounded — its correctness can be checked
 deterministically and reviewed in one pull request.
 
+## Status of stages and tasks
+
+| Stage / task | Status | Evidence |
+|---|---|---|
+| Stage 0, `DEV-002` (package, conventions, execution model, quality tooling, analytic stopping power) | **completed** 2026-09-10 | decisions `0004`–`0006`; `validation/v0_stopping_power.py` on the host runner, CPU + CUDA, run `RUN-20260910T080455Z-e666b469` at `d23c78a`; DEV-002 local validation records; squash-merged into `develop` |
+| Stage 0, `DEV-003` (data layer, tabulated stopping power; closes V0) | not started | — |
+| Stages 1–6 | not started | — |
+
 ## Change log
 
 - 2026-09-10: roadmap established (`DEV-001`), revised after independent
   review (V0 criterion scope, I-value consistency, requirement coverage,
   Stage 0 split into `DEV-002`/`DEV-003`, network contingency, RNG and
   determinism validation items, dependency diagram).
+- 2026-09-10: `DEV-002` completed; status table added. Decision `0003`
+  (kickoff workaround) superseded by direct worktree access. The
+  "provisional until Stage 1" status of decision `0005` is unchanged.
