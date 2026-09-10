@@ -5,8 +5,9 @@ assumptions, and applicable validity ranges. Implemented so far: the analytical
 electronic stopping power and CSDA range (task `DEV-002`), a tabulated
 stopping-power layer from external data (task `DEV-003`), continuous-slowing-down
 proton transport in homogeneous water with energy-loss straggling and multiple
-Coulomb scattering (milestone V1, tasks `DEV-004`/`DEV-005`/`DEV-006`), and
-nonelastic nuclear attenuation of primaries (task `DEV-007`, opening Stage 2).
+Coulomb scattering (milestone V1, tasks `DEV-004`/`DEV-005`/`DEV-006`),
+nonelastic nuclear attenuation of primaries (task `DEV-007`), and secondary
+charged-particle transport (task `DEV-008`, closing milestone V2).
 
 ## Electronic stopping power (analytical layer)
 
@@ -208,8 +209,54 @@ energy_in``. Validated on the primary survival to the Bragg peak (0.813 /
 0.716 at 150 / 200 MeV, within the published tolerances) and on the analytic
 reaction fraction (see the validation index).
 
-The **absolute** peak-to-entrance ratio still reads high until DEV-008
-transports the escaping secondary protons (a broad low-level plateau). Not yet:
-secondary charged-particle transport (DEV-008, closes V2), nuclear removal on
-the 3-D scattering path, heterogeneous voxel geometry (Stage 3), and treatment-
-planning scoring and influence matrices (Stage 4).
+The **absolute** peak-to-entrance ratio still reads high until the escaping
+secondary protons are transported (below).
+
+## Secondary charged-particle transport (Stage 2, task DEV-008, decision 0013)
+
+Module: ``ionmc.physics.secondaries`` (host-side sampling), wired into
+``TransportEngine`` as a second transport pass.
+
+The escaping energy booked by DEV-007 is not all lost: about half is carried by
+**secondary protons** that travel on and deposit a broad low-level dose (the
+nuclear plateau/halo). Each nonelastic reaction of residual energy ``E`` is now
+partitioned into local heavy fragments (``f_heavy = 0.12``, deposited at the
+vertex), transported secondary protons (``f_p = 0.50``), and truly escaping
+neutrons, gammas and binding energy (``f_esc = 0.38``, booked as escaping). The
+secondary-proton multiplicity is ``nu_p(E) = 0.5 + 0.004 E`` (Poisson); their
+energies are sampled from a two-component spectrum (an evaporation Maxwellian
+``E exp(-E/T)`` with ``T = 2`` MeV mixed with a forward cascade component uniform
+on ``[10 MeV, E]``) and **renormalised so their per-reaction sum equals
+``f_p E`` exactly**, which keeps the energy budget closed. Because the
+multiplicity is low and the energies are renormalised, this budget-closing
+renormalisation dominates the effective spectrum (a single-secondary reaction
+emits one proton of ``f_p E`` regardless of the sampled shape); the evaporation/
+cascade parameters are a second-order influence. This is an intentional depth-
+dose surrogate; a faithful differential spectrum is deferred with the tabulated-
+data follow-up (decision 0013). Secondaries are emitted forward from the vertex
+and transported by the same CSDA + straggling proton engine (their own nuclear
+removal off, a documented sub-percent simplification).
+
+Because each primary reacts at most once, the transport drivers emit one
+reaction record per history (vertex depth, residual energy); the secondaries are
+generated **host-side** from those records and transported in a second pass.
+Since DEV-007 already makes the reference and Warp paths remove the same primary
+set, and host-side generation is deterministic (counter RNG keyed by the history
+index), the two backends produce the same secondary set and dose in practice,
+within the decision-0001 tolerances (not strictly bit-identical: the reaction
+energy fed to the sampler is float32 on the Warp path and float64 on the
+reference path, so a rare boundary case could shift a count; the cumulative
+depth-dose agreement is the real gate). Validated: secondary protons contribute
+~1-2 % of the local dose at entrance and ~4-7 % of the total dose at 150/200 MeV;
+their dose *fraction* rises to a ~5-10 % plateau proximal to the peak, then
+collapses at the sharp Bragg peak (~0.1 %) where the primary dose dominates. The
+energy budget ``deposited + escaped = energy_in`` stays exact for any geometry.
+This **closes milestone V2**.
+
+Deferred with quantitative justification (Paganetti 2002): explicit deuteron/
+triton/alpha and recoil transport (deposited locally, < 0.1 % of dose), neutron
+and prompt-gamma transport (dropped as escaping, < 0.05 %), tertiary reactions,
+and the ICRU-63/TENDL tabulated double-differential path. Not yet: nuclear
+removal and the lateral halo on the 3-D scattering path, heterogeneous voxel
+geometry (Stage 3), and treatment-planning scoring and influence matrices
+(Stage 4).

@@ -451,7 +451,8 @@ deterministically and reviewed in one pull request.
 | Stage 1, `DEV-004` (transport architecture, deterministic CSDA depth dose) | **completed** 2026-09-10 | decision `0009`; `validation/v1_depth_dose_csda.py` on the host runner (CPU + CUDA); DEV-004 local validation record |
 | Stage 1, `DEV-005` (energy-loss straggling, Bragg peak, batch uncertainty) | **completed** 2026-09-10 | decision `0010`; `validation/v1_bragg_straggling.py` on the host runner (CPU + CUDA); DEV-005 local validation record |
 | Stage 1, `DEV-006` (multiple Coulomb scattering, 3-D transport; closes V1) | **completed** 2026-09-10 | decision `0011`; `validation/v1_lateral_scattering.py` on the host runner (CPU + CUDA); DEV-006 local validation record; **milestone V1 closed** |
-| Stage 2, `DEV-007` (proton nonelastic nuclear attenuation, local deposition; opens V2) | **in progress** 2026-09-10 | decision `0012`; `validation/v2_nuclear_attenuation.py`; `tests/ionmc/test_nuclear.py` |
+| Stage 2, `DEV-007` (proton nonelastic nuclear attenuation, local deposition; opens V2) | **completed** 2026-09-10 | decision `0012`; `validation/v2_nuclear_attenuation.py` on the host runner (CPU + CUDA); `tests/ionmc/test_nuclear.py`; DEV-007 local validation record |
+| Stage 2, `DEV-008` (secondary charged-particle transport; closes V2) | **in progress** 2026-09-10 | decision `0013`; `validation/v2_secondary_transport.py`; `tests/ionmc/test_secondaries.py` |
 | Stages 3–6 | not started | — |
 
 ## Change log
@@ -485,3 +486,17 @@ deterministically and reviewed in one pull request.
   transport (DEV-008) consumes the escaping channel. Data-layer note: the
   ICRU-63-derived tabulated cross section is *not* vendored (licensing); an
   openly-licensed TENDL-2021 tabulated path is deferred.
+- 2026-09-10: `DEV-008` added secondary charged-particle transport (decision
+  `0013`), **closing milestone V2** (nuclear interactions for protons in water).
+  Each nonelastic reaction is partitioned into local heavy fragments
+  (`f_heavy = 0.12`), transported secondary protons (`f_p = 0.50`, sampled with
+  an evaporation+cascade energy spectrum and forward emission), and truly
+  escaping neutrons/gammas/binding (`f_esc = 0.38`). A two-pass architecture
+  (primaries emit one reaction record each; secondaries are generated host-side
+  and transported through the same proton engine) keeps the reference and Warp
+  paths bit-parity. Secondary protons contribute ~1-2 % of the local dose at
+  entrance and a few percent of the total, forming the nuclear plateau; the
+  energy budget stays exact. Deferred (with quantitative justification): d/t/
+  alpha and neutron/gamma transport, tertiary reactions, and the ICRU-63/TENDL
+  tabulated double-differential path. Next: **Stage 3**, voxelized heterogeneous
+  geometry and materials.

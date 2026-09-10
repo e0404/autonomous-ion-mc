@@ -21,6 +21,15 @@ from ionmc.backend import mathlib, reference
 from ionmc.constants import AVOGADRO
 from ionmc.data.stopping_tables import StoppingTable
 from ionmc.particles import PROTON, Particle
+from ionmc.physics.secondaries import (
+    F_HEAVY as SECONDARY_F_HEAVY,
+)
+from ionmc.physics.secondaries import (
+    F_SECONDARY as SECONDARY_F_PROTON,
+)
+from ionmc.physics.secondaries import (
+    generate_secondaries,
+)
 from ionmc.rng import RandomState
 from ionmc.transport.depth_dose import DepthDoseGrid, DepthLateralGrid
 from ionmc.transport.geometry import WaterSlab
@@ -65,10 +74,29 @@ class DepthDoseResult:
     escaped_mev: float = 0.0
     #: Number of primaries removed by a nonelastic nuclear reaction.
     n_reactions: int = 0
+    #: Per-depth-bin dose from transported secondary protons and their sub-cut
+    #: local deposits [MeV]; included in ``edep_mev``. Zero unless the run had
+    #: ``secondaries=True`` (decision 0013).
+    secondary_edep_mev: np.ndarray | None = None
+    #: Number of secondary protons transported.
+    n_secondaries: int = 0
 
     @property
     def energy_deposited_mev(self) -> float:
         return float(np.sum(self.edep_mev))
+
+    @property
+    def secondary_dose_fraction(self) -> np.ndarray:
+        """Per-bin fraction of the deposited dose that is of secondary origin.
+
+        Zero where no secondary array was recorded or the total dose is zero.
+        """
+        out = np.zeros_like(self.edep_mev)
+        if self.secondary_edep_mev is None:
+            return out
+        nz = self.edep_mev > 0.0
+        out[nz] = self.secondary_edep_mev[nz] / self.edep_mev[nz]
+        return out
 
     @property
     def energy_balance(self) -> float:
@@ -234,11 +262,18 @@ class TransportEngine:
         straggling_floor_mev: float = DEFAULT_STRAGGLING_FLOOR_MEV,
         nuclear: bool = False,
         nuclear_local_fraction: float = DEFAULT_NUCLEAR_LOCAL_FRACTION,
+        secondaries: bool = False,
+        secondary_heavy_fraction: float = SECONDARY_F_HEAVY,
+        secondary_proton_fraction: float = SECONDARY_F_PROTON,
     ) -> None:
         if not (0.0 < max_fraction < 1.0):
             raise ValueError("max_fraction must be in (0, 1)")
         if not (0.0 <= nuclear_local_fraction <= 1.0):
             raise ValueError("nuclear_local_fraction must be in [0, 1]")
+        if secondaries and not nuclear:
+            raise ValueError("secondaries=True requires nuclear=True (decision 0013)")
+        if secondary_heavy_fraction + secondary_proton_fraction > 1.0:
+            raise ValueError("heavy + proton secondary fractions must be <= 1")
         self.table = table
         self.slab = slab
         self.grid = grid
@@ -251,6 +286,9 @@ class TransportEngine:
         self.straggling_floor_mev = straggling_floor_mev
         self.nuclear = nuclear
         self.nuclear_local_fraction = nuclear_local_fraction
+        self.secondaries = secondaries
+        self.secondary_heavy_fraction = secondary_heavy_fraction
+        self.secondary_proton_fraction = secondary_proton_fraction
         #: Electrons per gram <Z/A> of the medium (Bohr straggling; decision 0010).
         self.za_ratio = slab.material.electrons_per_gram_ratio
         #: Radiation length [g/cm^2] of the medium (MCS; decision 0011).
@@ -265,6 +303,9 @@ class TransportEngine:
             )
         else:
             self.oxygen_density_per_cm3 = 0.0
+        #: Lazily-built engine that transports secondary protons (nuclear off, no
+        #: further secondaries), reusing this engine's geometry (decision 0013).
+        self._sec_engine: TransportEngine | None = None
 
     def run(
         self,
@@ -276,18 +317,27 @@ class TransportEngine:
     ) -> DepthDoseResult:
         state = source.sample(n_histories, seed)
         energy_in = float(np.sum(state.energy_mev * state.weight))
-        if path == "warp":
-            edep, truncated, final_z, final_status, escaped, n_reactions = (
-                self._run_warp(state, device)
+        (
+            edep,
+            truncated,
+            final_z,
+            final_status,
+            escaped,
+            n_reactions,
+            react_z,
+            react_e,
+        ) = self._transport(state, path, device)
+        # second pass: transport the secondary protons produced at the reaction
+        # vertices and fold their dose into the grid (decision 0013).
+        secondary_edep: np.ndarray | None = None
+        n_secondaries = 0
+        if self.secondaries and n_reactions > 0:
+            edep, secondary_edep, escaped, n_secondaries, sec_truncated = (
+                self._transport_secondaries(
+                    react_z, react_e, state.weight, edep, escaped, seed, path, device
+                )
             )
-        elif path == "python":
-            edep, truncated, final_z, final_status, escaped, n_reactions = (
-                self._run_reference(state)
-            )
-        else:
-            raise ValueError(
-                f"unknown transport path {path!r} (use 'python' or 'warp')"
-            )
+            truncated += sec_truncated
         stopped = final_z[final_status == int(Status.STOPPED)]
         n_stopped = int(stopped.shape[0])
         range_mean = float(np.mean(stopped)) if n_stopped else float("nan")
@@ -305,6 +355,94 @@ class TransportEngine:
             n_stopped=n_stopped,
             escaped_mev=escaped,
             n_reactions=n_reactions,
+            secondary_edep_mev=secondary_edep,
+            n_secondaries=n_secondaries,
+        )
+
+    def _transport(
+        self, state: ParticleState, path: str, device: str
+    ) -> tuple[
+        np.ndarray, int, np.ndarray, np.ndarray, float, int, np.ndarray, np.ndarray
+    ]:
+        """Dispatch one transport pass to the reference or Warp driver."""
+        if path == "warp":
+            return self._run_warp(state, device)
+        if path == "python":
+            return self._run_reference(state)
+        raise ValueError(f"unknown transport path {path!r} (use 'python' or 'warp')")
+
+    def _secondary_engine(self) -> TransportEngine:
+        """Engine that transports secondary protons: same geometry, nuclear off,
+        no further secondaries (decision 0013)."""
+        if self._sec_engine is None:
+            self._sec_engine = TransportEngine(
+                self.table,
+                self.slab,
+                self.grid,
+                max_fraction=self.max_fraction,
+                max_step_mm=self.max_step_mm,
+                energy_cut_mev=self.energy_cut_mev,
+                max_steps=self.max_steps,
+                particle=self.particle,
+                straggling=self.straggling,
+                straggling_floor_mev=self.straggling_floor_mev,
+                nuclear=False,
+                secondaries=False,
+            )
+        return self._sec_engine
+
+    def _transport_secondaries(
+        self,
+        react_z: np.ndarray,
+        react_e: np.ndarray,
+        weight: np.ndarray,
+        primary_edep: np.ndarray,
+        escaped: float,
+        seed: int,
+        path: str,
+        device: str,
+    ) -> tuple[np.ndarray, np.ndarray, float, int, int]:
+        """Generate and transport secondary protons; return the combined dose,
+        the secondary-only dose, the updated escaping energy, the secondary
+        count, and any secondary truncations (decision 0013)."""
+        batch = generate_secondaries(
+            react_z,
+            react_e,
+            weight,
+            seed=seed,
+            f_heavy=self.secondary_heavy_fraction,
+            f_secondary=self.secondary_proton_fraction,
+        )
+        dz = self.grid.bin_width_mm
+        n_bins = self.grid.n_bins
+        secondary_edep = self.grid.empty()
+        # short-range (sub-cut) secondaries deposit locally at their vertex
+        for z, weighted_energy in batch.local_deposit:
+            b = math.floor(z / dz)
+            if 0 <= b < n_bins:
+                secondary_edep[b] += weighted_energy
+        sec_truncated = 0
+        if batch.state is not None:
+            sec_engine = self._secondary_engine()
+            s_edep, s_trunc, _, _, _, _, _, _ = sec_engine._transport(
+                batch.state, path, device
+            )
+            secondary_edep = secondary_edep + s_edep
+            sec_truncated += s_trunc
+        # Every MeV a secondary deposits was pulled from the primary's escaping
+        # channel; whatever the secondaries do not deposit (sub-cut energy or
+        # transported energy that leaves the grid/geometry) simply stays in the
+        # escaping channel. So subtracting the deposited secondary dose closes
+        # deposited + escaped = energy_in exactly for any geometry (decision 0013;
+        # the remaining escaping energy is the neutron/gamma/binding fraction plus
+        # any secondary that left the scored region).
+        escaped -= float(np.sum(secondary_edep))
+        return (
+            primary_edep + secondary_edep,
+            secondary_edep,
+            escaped,
+            batch.n_secondaries,
+            sec_truncated,
         )
 
     def run_batched(
@@ -520,9 +658,20 @@ class TransportEngine:
 
     # -- reference Python path ------------------------------------------------
 
+    def _reaction_local_fraction(self) -> float:
+        """Fraction of a reacting primary's energy deposited locally at the
+        vertex. With secondary transport on this is the heavy-fragment fraction
+        (the secondary protons carry the rest); otherwise the DEV-007 lumped
+        local fraction (decision 0013)."""
+        if self.secondaries:
+            return self.secondary_heavy_fraction
+        return self.nuclear_local_fraction
+
     def _run_reference(
         self, state: ParticleState
-    ) -> tuple[np.ndarray, int, np.ndarray, np.ndarray, float, int]:
+    ) -> tuple[
+        np.ndarray, int, np.ndarray, np.ndarray, float, int, np.ndarray, np.ndarray
+    ]:
         tp = reference.load_bound_module(
             "ionmc.physics.transport",
             "python",
@@ -548,13 +697,17 @@ class TransportEngine:
         floor = self.straggling_floor_mev
         nuclear = self.nuclear
         oxygen_density = self.oxygen_density_per_cm3
-        local_fraction = self.nuclear_local_fraction
+        local_fraction = self._reaction_local_fraction()
         edep = self.grid.empty()
         truncated = 0
         escaped = 0.0
         n_reactions = 0
         final_z = np.zeros(state.size, dtype=np.float64)
         final_status = np.zeros(state.size, dtype=np.int32)
+        # per-reacting-history record for secondary generation (decision 0013):
+        # vertex depth and residual energy, zero for histories that do not react.
+        react_z = np.zeros(state.size, dtype=np.float64)
+        react_e = np.zeros(state.size, dtype=np.float64)
         for h in range(state.size):
             e = float(state.energy_mev[h])
             z = float(state.position_mm[h, 2])
@@ -586,6 +739,8 @@ class TransportEngine:
                         if 0 <= dep_bin < n_bins:
                             edep[dep_bin] += w * local_fraction * e
                         escaped += w * (1.0 - local_fraction) * e
+                        react_z[h] = z
+                        react_e[h] = e
                         n_reactions += 1
                         status = Status.REACTED
                         break
@@ -607,13 +762,24 @@ class TransportEngine:
                 final_status[h] = 3
             else:
                 final_status[h] = int(status)
-        return edep, truncated, final_z, final_status, escaped, n_reactions
+        return (
+            edep,
+            truncated,
+            final_z,
+            final_status,
+            escaped,
+            n_reactions,
+            react_z,
+            react_e,
+        )
 
     # -- Warp path ------------------------------------------------------------
 
     def _run_warp(
         self, state: ParticleState, device: str
-    ) -> tuple[np.ndarray, int, np.ndarray, np.ndarray, float, int]:
+    ) -> tuple[
+        np.ndarray, int, np.ndarray, np.ndarray, float, int, np.ndarray, np.ndarray
+    ]:
         if not mathlib.HAVE_WARP:
             raise ImportError(
                 "warp-lang is not installed; the warp path is unavailable"
@@ -641,7 +807,7 @@ class TransportEngine:
             straggling_floor_mev=self.straggling_floor_mev,
             nuclear=self.nuclear,
             oxygen_density_per_cm3=self.oxygen_density_per_cm3,
-            nuclear_local_fraction=self.nuclear_local_fraction,
+            nuclear_local_fraction=self._reaction_local_fraction(),
         )
 
 
