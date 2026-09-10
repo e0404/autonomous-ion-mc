@@ -12,8 +12,10 @@ The documentation tracks the implementation as it evolves.
 - **Architecture** — transport architecture, execution backends, data flow, and design.
 - **Physics** — implemented physical models and their assumptions.
 - **Validation** — numerical, physical, and cross-backend validation methodology.
-- **Development** — developer tooling and autonomous-development infrastructure.
+- **Development** — developer tooling, autonomous-development infrastructure,
+  and the development roadmap (intended stages and validation milestones).
 - **Experiment** — experiment protocol, requirements, and recorded design decisions.
 
 Documentation describes implemented behavior. Planned behavior belongs in
-requirements or decision records rather than being presented as implemented functionality.
+requirements, decision records or the explicitly labelled roadmap rather than
+being presented as implemented functionality.

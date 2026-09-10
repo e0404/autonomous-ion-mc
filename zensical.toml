@@ -28,6 +28,7 @@ nav = [
 
   { "Development" = [
     "development/index.md",
+    "development/roadmap.md",
   ] },
 
   { "Experiment" = [
