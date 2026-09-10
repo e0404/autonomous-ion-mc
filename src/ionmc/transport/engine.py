@@ -32,7 +32,7 @@ from ionmc.physics.secondaries import (
 )
 from ionmc.rng import RandomState
 from ionmc.transport.depth_dose import DepthDoseGrid, DepthLateralGrid
-from ionmc.transport.geometry import WaterSlab
+from ionmc.transport.geometry import VoxelSlab, WaterSlab
 from ionmc.transport.source import PencilBeamSource
 from ionmc.transport.state import ParticleState, Status
 
@@ -277,7 +277,7 @@ class TransportEngine:
     def __init__(
         self,
         table: StoppingTable,
-        slab: WaterSlab,
+        slab: WaterSlab | VoxelSlab,
         grid: DepthDoseGrid,
         max_fraction: float = DEFAULT_MAX_FRACTION,
         max_step_mm: float = DEFAULT_MAX_STEP_MM,
@@ -537,10 +537,21 @@ class TransportEngine:
         straggling independently follows the engine's ``straggling`` flag, so a
         scattering-only study (``straggling=False``) is possible. The medium's
         radiation length must be known (> 0).
+
+        The 3-D scattering path is homogeneous only: it uses the front-voxel
+        density. Nuclear/scattering in a heterogeneous ``VoxelSlab`` is deferred
+        to a later Stage-3 task (decision 0014), so a heterogeneous slab is
+        rejected here rather than silently giving a wrong result.
         """
         if self.radiation_length_g_per_cm2 <= 0.0:
             raise ValueError(
                 "the medium has no radiation length; multiple scattering is unavailable"
+            )
+        if self.n_voxels > 1:
+            raise NotImplementedError(
+                "run_scattering supports only a homogeneous medium; the 3-D "
+                "scattering path does not yet handle density heterogeneity "
+                "(decision 0014). Use a WaterSlab or a single-density VoxelSlab."
             )
         state = source.sample(n_histories, seed)
         energy_in = float(np.sum(state.energy_mev * state.weight))

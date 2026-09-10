@@ -97,6 +97,10 @@ the geometry and the density-dependence, not a transport rewrite.
   density 1.0 must reproduce the homogeneous `WaterSlab` depth dose bit-for-bit.
 - The peak position now scales with `1/rho`; the absolute range in mm is no
   longer the CSDA range but `R_csda / rho` (the WET range).
+- The 3-D scattering path (`run_scattering`) is homogeneous only (it uses the
+  front-voxel density). To avoid a silently wrong result, it **rejects** a
+  heterogeneous `VoxelSlab` (`n_voxels > 1`) with a `NotImplementedError`;
+  density heterogeneity on the scattering path is a later Stage-3 task.
 
 ## Acceptance targets (validation `v3_density_heterogeneity.py`)
 

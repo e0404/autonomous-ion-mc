@@ -123,6 +123,20 @@ def test_energy_conserved_in_heterogeneous_phantom(table) -> None:
     assert abs(res.energy_balance) <= 1e-9
 
 
+def test_scattering_rejects_heterogeneous_slab(table) -> None:
+    """The homogeneous-only 3-D scattering path rejects a heterogeneous VoxelSlab
+    rather than silently using the front-voxel density (decision 0014)."""
+    from ionmc.transport.depth_dose import DepthLateralGrid
+
+    layered = VoxelSlab.from_layers([(40.0, 1.0), (20.0, 1.85), (340.0, 1.0)])
+    eng = TransportEngine(table, layered, DepthDoseGrid(400.0, 800))
+    lat = DepthLateralGrid(
+        depth_mm=400.0, n_depth=800, half_width_mm=25.0, n_lateral=100
+    )
+    with pytest.raises(NotImplementedError, match="homogeneous"):
+        eng.run_scattering(PencilBeamSource(150.0), lat, 1, path="python")
+
+
 @pytest.mark.warp
 def test_heterogeneous_cross_backend(warp_module, table) -> None:
     """Reference and Warp CPU agree across a density interface (with nuclear and
