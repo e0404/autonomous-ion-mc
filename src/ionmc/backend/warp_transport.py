@@ -54,6 +54,8 @@ def csda_depth_dose_kernel(
     final_status: wp.array(dtype=int),
     escaped: wp.array(dtype=wp.float64),
     reactions: wp.array(dtype=int),
+    react_z: wp.array(dtype=float),
+    react_e: wp.array(dtype=float),
 ):
     i = wp.tid()
     e = energy0[i]
@@ -98,6 +100,8 @@ def csda_depth_dose_kernel(
                     escaped, 0, wp.float64(w * (1.0 - nuclear_local_fraction) * e)
                 )
                 wp.atomic_add(reactions, 0, 1)
+                react_z[i] = z
+                react_e[i] = e
                 reacted = 1
                 alive = 0
                 break
@@ -181,9 +185,12 @@ class DepthDoseKernel:
         nuclear: bool = False,
         oxygen_density_per_cm3: float = 0.0,
         nuclear_local_fraction: float = 0.0,
-    ) -> tuple[np.ndarray, int, np.ndarray, np.ndarray, float, int]:
+    ) -> tuple[
+        np.ndarray, int, np.ndarray, np.ndarray, float, int, np.ndarray, np.ndarray
+    ]:
         """Return (edep per bin [MeV], truncated, final z, final status, escaped
-        energy [MeV], number of nonelastic reactions)."""
+        energy [MeV], number of nonelastic reactions, per-history reaction vertex
+        depth [mm], per-history reaction residual energy [MeV])."""
         d = self.device
         n_hist = int(energy0.shape[0])
         e0: Any = wp.array(
@@ -206,6 +213,8 @@ class DepthDoseKernel:
         final_status = wp.zeros(n_hist, dtype=int, device=d)
         escaped = wp.zeros(1, dtype=wp.float64, device=d)
         reactions = wp.zeros(1, dtype=int, device=d)
+        react_z = wp.zeros(n_hist, dtype=float, device=d)
+        react_e = wp.zeros(n_hist, dtype=float, device=d)
         t = self.tables
         wp.launch(
             csda_depth_dose_kernel,
@@ -242,6 +251,8 @@ class DepthDoseKernel:
                 final_status,
                 escaped,
                 reactions,
+                react_z,
+                react_e,
             ],
             device=d,
         )
@@ -253,6 +264,8 @@ class DepthDoseKernel:
             final_status.numpy().astype(np.int32),
             float(escaped.numpy()[0]),
             int(reactions.numpy()[0]),
+            react_z.numpy().astype(np.float64),
+            react_e.numpy().astype(np.float64),
         )
 
 

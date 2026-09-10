@@ -156,6 +156,30 @@ checks primary removal and the energy budget, not the peak-to-entrance ratio.
 Milestone **V2** opens here and closes with DEV-008. Warp CPU/CUDA results are
 recorded in the DEV-007 local validation record (host run below).
 
+## V2 (secondaries) - secondary charged-particle transport (task DEV-008)
+
+Script: ``validation/v2_secondary_transport.py``. References: the published
+secondary-proton dose contribution (Paganetti 2002) and cross-backend parity
+(decision 0013). Each nonelastic reaction is partitioned into local heavy
+fragments, transported secondary protons, and truly escaping neutrals; the
+secondary protons are generated host-side from the per-history reaction records
+and transported in a second pass through the same proton engine.
+
+| check | criterion | result (reference / Warp CPU) |
+|---|---|---|
+| secondary dose fraction at entrance (150/200 MeV) | 0.5-4 % | 2.1 % / 2.5 % |
+| secondary dose fraction of total dose | 2-12 % | 4.0 % / 6.9 % |
+| secondary plateau shape (fraction at peak << entrance) | peak < entrance | 0.11 % << 2.1 % |
+| energy budget deposited + escaped = in (reference / Warp) | 1e-9 / 1e-5 | ~0 / ~4e-7 |
+| secondaries-off regression | zero secondaries, no second pass | identical |
+| reference vs Warp CPU (matched N, seed) | same secondaries, cumulative ≤ 1e-4 | identical set, ~1e-6 |
+
+This **closes milestone V2** (nuclear interactions for protons in water). The
+absolute peak-to-entrance ratio is not gated (it is geometry- and convention-
+dependent); the acceptance is the secondary-dose fraction and plateau shape plus
+the unchanged DEV-007 survival gate. Warp CPU/CUDA results are recorded in the
+DEV-008 local validation record (host run below).
+
 The V0 milestone of the roadmap is closed by task ``DEV-003`` (tabulated
 layer), which will replace the recalled range values by table-integrated
 ones from the acquired dataset.
