@@ -58,34 +58,33 @@ DEFAULT_NUCLEAR_LOCAL_FRACTION: float = 0.30
 
 
 def _merge_voxels(
-    z_boundaries: np.ndarray, densities: np.ndarray, oxygen: np.ndarray
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Collapse consecutive voxels sharing both transported quantities: the
-    water-equivalent density and the oxygen-equivalent nuclear density
-    (decisions 0014, 0015).
+    z_boundaries: np.ndarray, *per_voxel: np.ndarray
+) -> tuple[np.ndarray, ...]:
+    """Collapse consecutive voxels sharing **all** their per-voxel physics
+    quantities (decisions 0014, 0015, 0017): the water-equivalent density, the
+    oxygen-equivalent nuclear density, the physical density and the radiation
+    length. Merging on the full set keeps every returned array aligned and safe.
 
-    Returns merged ``(z_boundaries, densities, oxygen)``. A uniform single-
-    material slab (or a homogeneous ``WaterSlab``) collapses to a single voxel,
-    so the voxelized transport reproduces the homogeneous transport exactly; step
-    limiting then only happens at genuine material/density interfaces.
+    Returns ``(z_boundaries, *merged_arrays)`` in the same order as the inputs. A
+    uniform single-material slab (or a homogeneous ``WaterSlab``) collapses to a
+    single voxel, so the voxelized transport reproduces the homogeneous transport
+    exactly; step limiting then only happens at genuine material/density
+    interfaces.
     """
-    rho = np.ascontiguousarray(densities, dtype=np.float64)
-    ox = np.ascontiguousarray(oxygen, dtype=np.float64)
+    arrays = [np.ascontiguousarray(a, dtype=np.float64) for a in per_voxel]
     z = np.ascontiguousarray(z_boundaries, dtype=np.float64)
-    merged_rho = [float(rho[0])]
-    merged_ox = [float(ox[0])]
+    merged = [[float(a[0])] for a in arrays]
     merged_z = [float(z[0]), float(z[1])]
-    for v in range(1, rho.shape[0]):
-        if rho[v] == merged_rho[-1] and ox[v] == merged_ox[-1]:
+    for v in range(1, arrays[0].shape[0]):
+        if all(a[v] == m[-1] for a, m in zip(arrays, merged, strict=True)):
             merged_z[-1] = float(z[v + 1])  # extend the current merged voxel
         else:
-            merged_rho.append(float(rho[v]))
-            merged_ox.append(float(ox[v]))
+            for a, m in zip(arrays, merged, strict=True):
+                m.append(float(a[v]))
             merged_z.append(float(z[v + 1]))
     return (
         np.asarray(merged_z, dtype=np.float64),
-        np.asarray(merged_rho, dtype=np.float64),
-        np.asarray(merged_ox, dtype=np.float64),
+        *(np.asarray(m, dtype=np.float64) for m in merged),
     )
 
 
@@ -326,12 +325,10 @@ class TransportEngine:
         self.secondary_heavy_fraction = secondary_heavy_fraction
         self.secondary_proton_fraction = secondary_proton_fraction
         self.material_reference_energy_mev = material_reference_energy_mev
-        #: Electrons per gram <Z/A> of the medium's front material, for the
-        #: homogeneous scattering path (Bohr straggling; decision 0010).
-        self.za_ratio = slab.material.electrons_per_gram_ratio
-        #: The depth-dose transport operates in a *water-equivalent* frame (water
-        #: table x water-equivalent density; decision 0015), so its straggling
-        #: prefactor <Z/A> is water's; the material's <Z/A> enters through the SPR.
+        #: Both transport paths operate in a *water-equivalent* frame (water table
+        #: x water-equivalent density; decisions 0015, 0017), so the Bohr
+        #: straggling prefactor <Z/A> is water's on every path; the material's
+        #: <Z/A> enters through the stopping-power ratio.
         self.depth_dose_za_ratio = WATER.electrons_per_gram_ratio
         #: Radiation length [g/cm^2] of the front material (MCS; decision 0011).
         self.radiation_length_g_per_cm2 = slab.material.radiation_length_g_per_cm2
@@ -347,6 +344,8 @@ class TransportEngine:
         n_phys = int(raw_rho.shape[0])
         we_density = np.empty(n_phys, dtype=np.float64)
         ox_density = np.empty(n_phys, dtype=np.float64)
+        phys_density = np.ascontiguousarray(raw_rho, dtype=np.float64)
+        radlen = np.empty(n_phys, dtype=np.float64)
         spr_cache: dict[int, float] = {}
         for v in range(n_phys):
             mat_v = raw_mats[v]
@@ -357,20 +356,18 @@ class TransportEngine:
                 )
             we_density[v] = spr_cache[key] * raw_rho[v]
             ox_density[v] = AVOGADRO * mat_v.oxygen_equivalent_per_gram * raw_rho[v]
-        self.voxel_z_mm, self.voxel_density, self.voxel_oxygen_density = _merge_voxels(
-            raw_z, we_density, ox_density
-        )
+            radlen[v] = mat_v.radiation_length_g_per_cm2
+        (
+            self.voxel_z_mm,
+            self.voxel_density,
+            self.voxel_oxygen_density,
+            self.voxel_physical_density,
+            self.voxel_radiation_length,
+        ) = _merge_voxels(raw_z, we_density, ox_density, phys_density, radlen)
         self.n_voxels = int(self.voxel_density.shape[0])
         self.depth_mm = float(self.voxel_z_mm[-1])
-        #: Physical front-voxel density for the scattering path.
+        #: Physical front-voxel density for scalar consumers.
         self.density_g_per_cm3 = float(raw_rho[0])
-        #: True when every voxel is water (SPR = 1, so the water-equivalent
-        #: density equals the physical density). The 3-D scattering path
-        #: (decision 0016) supports density-heterogeneous water but not non-water
-        #: materials (whose MCS needs the physical density and material X0).
-        self.is_water_only = bool(
-            np.allclose(we_density, raw_rho, rtol=1e-12, atol=0.0)
-        )
         #: Lazily-built engine that transports secondary protons (nuclear off, no
         #: further secondaries), reusing this engine's geometry (decision 0013).
         self._sec_engine: TransportEngine | None = None
@@ -570,24 +567,16 @@ class TransportEngine:
         scattering-only study (``straggling=False``) is possible. The medium's
         radiation length must be known (> 0).
 
-        The 3-D scattering path supports **density-heterogeneous water** (a
-        `VoxelSlab` of water at varying density, decision 0016): it looks up the
-        local voxel density by depth. It does not yet support non-water materials
-        (whose multiple scattering needs the physical density and the material
-        radiation length, distinct from the water-equivalent density used for
-        stopping); a slab containing a non-water material is rejected with a clear
-        error rather than silently giving a wrong result (decision 0015).
+        The 3-D scattering path supports **1-D voxelized heterogeneous materials**
+        (decisions 0016, 0017): the energy loss uses the per-voxel water-
+        equivalent density and the multiple scattering uses the per-voxel physical
+        density and material radiation length, looked up by depth. Every voxel
+        material must have a known radiation length (> 0).
         """
-        if self.radiation_length_g_per_cm2 <= 0.0:
+        if np.any(self.voxel_radiation_length <= 0.0):
             raise ValueError(
-                "the medium has no radiation length; multiple scattering is unavailable"
-            )
-        if not self.is_water_only:
-            raise NotImplementedError(
-                "run_scattering supports only water (density-heterogeneous water "
-                "is allowed); the 3-D scattering path does not yet apply the "
-                "material stopping-power ratio and radiation length (decision "
-                "0016). Use water for scattering studies."
+                "a voxel material has no radiation length; multiple scattering is "
+                "unavailable (populate radiation_length_g_per_cm2)"
             )
         state = source.sample(n_histories, seed)
         energy_in = float(np.sum(state.energy_mev * state.weight))
@@ -633,7 +622,9 @@ class TransportEngine:
             grid=grid,
             voxel_z_mm=self.voxel_z_mm,
             voxel_density=self.voxel_density,
-            radiation_length_g_per_cm2=self.radiation_length_g_per_cm2,
+            voxel_physical_density=self.voxel_physical_density,
+            voxel_radiation_length=self.voxel_radiation_length,
+            za_ratio=self.depth_dose_za_ratio,
             max_fraction=self.max_fraction,
             max_step_mm=self.max_step_mm,
             geom_depth_mm=self.depth_mm,
@@ -641,7 +632,6 @@ class TransportEngine:
             max_steps=self.max_steps,
             rest_energy_mev=self.particle.rest_energy_mev,
             charge=self.particle.charge,
-            za_ratio=self.za_ratio,
             straggling=self.straggling,
             straggling_floor_mev=self.straggling_floor_mev,
         )
@@ -662,15 +652,17 @@ class TransportEngine:
             t.size,
             t.bisection_steps,
         )
-        # per-voxel density along the beam axis (decision 0016); water only, so
-        # the water-equivalent density equals the physical density.
+        # per-voxel physics along the beam axis (decisions 0016, 0017): the
+        # energy loss uses the water-equivalent density, the multiple scattering
+        # the physical density and material radiation length.
         voxel_z = self.voxel_z_mm
-        voxel_density = self.voxel_density
+        voxel_density = self.voxel_density  # water-equivalent (stopping)
+        voxel_phys = self.voxel_physical_density  # physical (MCS)
+        voxel_radlen = self.voxel_radiation_length  # material X0 (MCS)
         n_vox = self.n_voxels
-        radlen = self.radiation_length_g_per_cm2
         rest_energy = self.particle.rest_energy_mev
         charge = self.particle.charge
-        za = self.za_ratio
+        za = self.depth_dose_za_ratio  # water-equivalent frame (decision 0015)
         straggling = self.straggling
         floor = self.straggling_floor_mev
         geom_depth = self.depth_mm
@@ -718,8 +710,14 @@ class TransportEngine:
                 # scattering is independent of energy-loss straggling: it is
                 # always applied above the floor in a scattering run (decision 0011).
                 if e > floor:
+                    # MCS uses the physical density and material radiation length
                     theta0 = tp.highland_theta0(
-                        e, rest_energy, charge, s, density, radlen
+                        e,
+                        rest_energy,
+                        charge,
+                        s,
+                        float(voxel_phys[voxel]),
+                        float(voxel_radlen[voxel]),
                     )
                     dx, dy, dzr = _scatter_direction(
                         dx, dy, dzr, rng.randn() * theta0, rng.randn() * theta0

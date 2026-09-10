@@ -122,3 +122,45 @@ def lateral_sigma_x_heterogeneous_mm(
         integrand = (z_c - u_cm[mask]) ** 2 * scattering_power[mask]
         out[i] = np.sqrt(np.trapezoid(integrand, u_cm[mask])) * MM_PER_CM
     return out
+
+
+def lateral_sigma_x_material_mm(
+    model: TabulatedStoppingPower,
+    energy0_mev: float,
+    depths_mm: np.ndarray,
+    z_boundaries_mm: np.ndarray,
+    we_densities: np.ndarray,
+    phys_densities: np.ndarray,
+    radiation_lengths: np.ndarray,
+    n_integration: int = 6000,
+) -> np.ndarray:
+    """Projected Fermi-Eyges lateral sigma_x [mm] for a per-voxel MATERIAL profile
+    (decision 0017).
+
+    The energy vs depth follows the integrated **water-equivalent** thickness
+    ``integral rho_we dl`` (stopping-power ratio applied), while the scattering
+    power uses the **physical** density and the **material** radiation length,
+    ``T(u) = (13.6/pv)^2 rho_phys(u) / X0(u)``. This separates the two densities,
+    which coincide only for water.
+    """
+    z_max = float(np.max(depths_mm))
+    u_cm = np.linspace(0.0, z_max / MM_PER_CM, n_integration)
+    we_u = _density_at_depth(u_cm, z_boundaries_mm, we_densities)
+    phys_u = _density_at_depth(u_cm, z_boundaries_mm, phys_densities)
+    x0_u = _density_at_depth(u_cm, z_boundaries_mm, radiation_lengths)
+    step_wet = 0.5 * (we_u[1:] + we_u[:-1]) * np.diff(u_cm)
+    wet = np.concatenate([[0.0], np.cumsum(step_wet)])
+    e_grid = np.linspace(1.0, energy0_mev, 6000)
+    r_grid = model.csda_range(e_grid)
+    r0 = float(model.csda_range(energy0_mev)[0])
+    residual = np.clip(r0 - wet, r_grid[0], r_grid[-1])
+    e_u = np.interp(residual, r_grid, e_grid)
+    pv = e_u * (e_u + 2.0 * PROTON_MASS_MEV) / (e_u + PROTON_MASS_MEV)
+    scattering_power = (HIGHLAND_CONSTANT_MEV / pv) ** 2 * phys_u / x0_u
+    out = np.empty_like(np.asarray(depths_mm, dtype=np.float64))
+    for i, z_mm in enumerate(np.atleast_1d(depths_mm)):
+        z_c = z_mm / MM_PER_CM
+        mask = u_cm <= z_c
+        integrand = (z_c - u_cm[mask]) ** 2 * scattering_power[mask]
+        out[i] = np.sqrt(np.trapezoid(integrand, u_cm[mask])) * MM_PER_CM
+    return out

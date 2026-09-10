@@ -56,14 +56,18 @@ def test_uniform_voxels_match_homogeneous_scattering(table) -> None:
     np.testing.assert_array_equal(a.edep_zx_mev, b.edep_zx_mev)
 
 
-def test_scattering_rejects_non_water(table) -> None:
+def test_scattering_supports_non_water_material(table) -> None:
+    """The 3-D scattering path now supports non-water materials (decision 0017):
+    a bone slab runs and conserves energy rather than raising."""
     eng = TransportEngine(
         table,
         VoxelSlab.from_material_layers([(100.0, materials.CORTICAL_BONE)]),
         DepthDoseGrid(250.0, 10),
     )
-    with pytest.raises(NotImplementedError, match="water"):
-        eng.run_scattering(PencilBeamSource(150.0), _lat(250.0), 1, path="python")
+    res = eng.run_scattering(
+        PencilBeamSource(150.0), _lat(250.0), 100, seed=1, path="python"
+    )
+    assert abs(res.energy_balance) <= 1e-9
 
 
 @pytest.mark.warp

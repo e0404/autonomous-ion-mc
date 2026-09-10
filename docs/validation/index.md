@@ -249,9 +249,30 @@ path now looks up the local water density by depth.
 
 The depth-dose cross-backend tolerance (5e-4) is looser than the 1-D path's 1e-4
 because the 3-D scattering kernel accumulates more float32 rounding at voxel
-boundaries; the lateral ``sigma_x`` is the tight cross-backend metric. Deferred:
-non-water materials on the scattering path (DEV-012). Warp CPU/CUDA results are
-recorded in the DEV-011 local validation record (host run below).
+boundaries; the lateral ``sigma_x`` is the tight cross-backend metric. Warp
+CPU/CUDA results are recorded in the DEV-011 local validation record (host run
+below).
+
+## V3 (material scattering) - non-water materials on the scattering path (task DEV-012)
+
+Script: ``validation/v3_material_scattering.py``. References: a **material-aware**
+Fermi-Eyges oracle (``lateral_sigma_x_material_mm``: energy vs depth from the
+water-equivalent thickness, scattering power from the physical density and
+material radiation length) and cross-backend parity (decision 0017).
+
+| check | criterion | result |
+|---|---|---|
+| water VoxelSlab vs WaterSlab scattering | bit-exact (reference) | max diff 0 |
+| homogeneous bone sigma_x vs material Fermi-Eyges | within 3 % | < 1 % |
+| water/bone/water interface sigma_x vs material Fermi-Eyges | within 3 % | < 1 % |
+| energy conservation (material scattering) | 1e-9 (reference) | ~0 |
+| reference vs Warp CPU (material interface) | sigma_x <= 0.05 mm, depth dose <= 5e-4 | within budget |
+| CUDA sigma_x vs material oracle / CUDA vs CPU depth dose | < 3 % / <= 5e-4 | < 1 % / tight |
+
+The depth-dose and scattering paths now share the same per-voxel material
+capability. Deferred: 3-D voxel geometry with arbitrary incidence and decoupled
+scoring grids (V3 closure). Warp CPU/CUDA results are recorded in the DEV-012
+local validation record (host run below).
 
 ## Unit and regression tests
 
