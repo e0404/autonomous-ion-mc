@@ -18,6 +18,7 @@ from __future__ import annotations
 from typing import Any
 
 from ionmc.backend import mathlib
+from ionmc.constants import BETHE_K_MEV_CM2_PER_MOL, ELECTRON_MASS_MEV
 from ionmc.physics.tabulated import tabulated_mass_stopping_power
 
 m = mathlib.current()
@@ -25,6 +26,11 @@ func = mathlib.func
 
 #: mm per cm; linear stopping power [MeV/mm] = mass SP [MeV cm^2/g] * rho / 10.
 MM_PER_CM: float = 10.0
+
+#: Bohr energy-straggling constant ``K m_e c^2 = 4 pi r_e^2 (m_e c^2)^2 N_A``
+#: [MeV^2 cm^2/mol]; the Bohr variance per unit mass thickness is this times
+#: ``(Z/A) z^2 f(beta)`` (decision 0010).
+BOHR_K_MEV2_CM2_PER_MOL: float = BETHE_K_MEV_CM2_PER_MOL * ELECTRON_MASS_MEV
 
 
 @func
@@ -90,3 +96,57 @@ def midpoint_energy_loss(
     e_mid = m.max(energy - 0.5 * s0 * step_mm, 0.0)
     s_mid = linear_stopping_power(e_mid, density, table_e, table_s, table_d, n, n_steps)
     return m.min(s_mid * step_mm, energy)
+
+
+@func
+def _beta_squared(energy: float, rest_energy: float) -> float:
+    """``beta^2`` from kinetic and rest energy, cancellation-free (decision 0006)."""
+    tau = energy / rest_energy
+    gamma = 1.0 + tau
+    return tau * (tau + 2.0) / (gamma * gamma)
+
+
+@func
+def bohr_straggling_sigma(
+    energy: float,
+    rest_energy: float,
+    step_mm: float,
+    density: float,
+    za_ratio: float,
+    charge: float,
+) -> float:
+    """Standard deviation [MeV] of the Bohr energy-loss straggling over a step.
+
+    Bohr variance per unit path length ``dOmega^2/dx =
+    K m_e c^2 (Z/A) rho z^2 f(beta)`` with ``K m_e c^2`` = ``BOHR_K``
+    [MeV^2 cm^2/mol] and the relativistic factor
+    ``f(beta) = (1 - beta^2/2)/(1 - beta^2)`` (decision 0010). ``step_mm`` is
+    converted to cm; the result is ``sqrt(dOmega^2/dx * step)``.
+    """
+    beta2 = _beta_squared(energy, rest_energy)
+    f_rel = (1.0 - 0.5 * beta2) / (1.0 - beta2)
+    variance = (
+        BOHR_K_MEV2_CM2_PER_MOL
+        * za_ratio
+        * density
+        * (step_mm / MM_PER_CM)
+        * charge
+        * charge
+        * f_rel
+    )
+    return m.sqrt(m.max(variance, 0.0))
+
+
+@func
+def straggled_energy_loss(
+    mean_loss: float, sigma: float, variate: float, energy: float
+) -> float:
+    """Energy lost [MeV] over a step with Gaussian energy-loss straggling.
+
+    ``mean_loss + variate * sigma``, clamped to ``[0, energy]`` (a step never
+    removes more than the particle has, nor adds energy). ``variate`` is a
+    standard-normal sample drawn in the execution layer (decision 0005: the RNG
+    is not called from shared source; the variate is passed in).
+    """
+    loss = mean_loss + variate * sigma
+    return m.min(m.max(loss, 0.0), energy)

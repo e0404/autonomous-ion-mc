@@ -36,8 +36,12 @@ def table(pstar_cache_root):
 
 @pytest.fixture(scope="module")
 def engine(table):
+    # deterministic (no straggling): the DEV-004 CSDA foundation tests
     return TransportEngine(
-        table, WaterSlab(400.0, materials.WATER), DepthDoseGrid(400.0, 800)
+        table,
+        WaterSlab(400.0, materials.WATER),
+        DepthDoseGrid(400.0, 800),
+        straggling=False,
     )
 
 
@@ -91,16 +95,28 @@ def test_depth_dose_scales_linearly_with_histories(engine) -> None:
 
 
 def test_step_size_convergence_on_fixed_grid(table) -> None:
+    # Step convergence is measured on the mean stopping depth (the transport
+    # physics), which is grid-independent; R80 additionally depends on how a
+    # step's energy is smeared across bins once deposition is distributed along
+    # the step, so it is not the right step-convergence metric here.
     grid = DepthDoseGrid(400.0, 8000)
     coarse = TransportEngine(
-        table, WaterSlab(400.0, materials.WATER), grid, max_fraction=0.02
+        table,
+        WaterSlab(400.0, materials.WATER),
+        grid,
+        max_fraction=0.04,
+        straggling=False,
     )
     fine = TransportEngine(
-        table, WaterSlab(400.0, materials.WATER), grid, max_fraction=0.002
+        table,
+        WaterSlab(400.0, materials.WATER),
+        grid,
+        max_fraction=0.002,
+        straggling=False,
     )
     for e0 in ENERGIES:
-        r_c = coarse.run(PencilBeamSource(e0), 1, path="python").r80_mm()
-        r_f = fine.run(PencilBeamSource(e0), 1, path="python").r80_mm()
+        r_c = coarse.run(PencilBeamSource(e0), 1, path="python").range_mean_mm
+        r_f = fine.run(PencilBeamSource(e0), 1, path="python").range_mean_mm
         assert abs(r_c / r_f - 1.0) <= 5e-4, (e0, r_c, r_f)
 
 
@@ -133,13 +149,13 @@ def test_scoring_grid_shorter_than_slab_does_not_stop_transport(table) -> None:
     # terminated at the grid edge - only the first 100 mm is scored.
     slab = WaterSlab(400.0, materials.WATER)
     short_grid = DepthDoseGrid(100.0, 200)
-    eng = TransportEngine(table, slab, short_grid)
+    eng = TransportEngine(table, slab, short_grid, straggling=False)
     res = eng.run(PencilBeamSource(150.0), n_histories=1, path="python")
     # energy scored is only the part deposited within the first 100 mm
     assert 0.0 < res.energy_deposited_mev < 150.0
     # the proton stops in the slab (does not escape a 400 mm medium)
     full_grid = DepthDoseGrid(400.0, 800)
-    full = TransportEngine(table, slab, full_grid).run(
+    full = TransportEngine(table, slab, full_grid, straggling=False).run(
         PencilBeamSource(150.0), 1, path="python"
     )
     assert abs(full.energy_balance) <= 1e-9  # full grid: all energy scored
@@ -149,7 +165,10 @@ def test_scoring_grid_longer_than_slab_marks_escape(table) -> None:
     # Slab (100 mm) shorter than the grid (400 mm): the proton leaves the medium
     # at 100 mm with residual energy, so less than its full energy is deposited.
     eng = TransportEngine(
-        table, WaterSlab(100.0, materials.WATER), DepthDoseGrid(400.0, 800)
+        table,
+        WaterSlab(100.0, materials.WATER),
+        DepthDoseGrid(400.0, 800),
+        straggling=False,
     )
     res = eng.run(PencilBeamSource(150.0), n_histories=1, path="python")
     assert res.energy_deposited_mev < 150.0
@@ -162,7 +181,11 @@ def test_truncation_counter_increments_on_step_cap(table) -> None:
     # A tiny step cap forces the history to hit max_steps before stopping; it
     # must be counted, not silently dropped.
     eng = TransportEngine(
-        table, WaterSlab(400.0, materials.WATER), DepthDoseGrid(400.0, 800), max_steps=5
+        table,
+        WaterSlab(400.0, materials.WATER),
+        DepthDoseGrid(400.0, 800),
+        max_steps=5,
+        straggling=False,
     )
     res = eng.run(PencilBeamSource(150.0), n_histories=2, path="python")
     assert res.truncated == 2
@@ -183,7 +206,9 @@ def test_warp_cpu_matches_reference_cumulative(warp_module, engine, e0) -> None:
         np.max(np.abs(np.cumsum(warp.edep_mev) - np.cumsum(ref.edep_mev))) / total
     )
     assert cum_diff <= 1e-4, (e0, cum_diff)
-    assert abs(warp.energy_balance) <= 1e-5
+    # float32 transport conserves energy to ~1e-5 (the de values and the
+    # along-step deposition fractions are float32); the accumulator is float64.
+    assert abs(warp.energy_balance) <= 5e-5
     # R80 within one bin
     assert abs(warp.r80_mm() - ref.r80_mm()) <= ref.grid.bin_width_mm
     # edge-aware per-bin normalized difference

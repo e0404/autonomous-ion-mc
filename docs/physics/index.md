@@ -131,6 +131,27 @@ near-discontinuity without straggling, cross-backend agreement is measured on
 the *cumulative* depth dose (reference vs Warp ≤ 1e-4 of the total), not
 bin-by-bin.
 
-Not yet: energy-loss straggling and the Bragg-peak shape (next task),
-multiple Coulomb scattering and lateral spread, nuclear interactions,
-heterogeneous geometry, and volumetric dose.
+### Energy-loss straggling and the Bragg peak (task DEV-005, decision 0010)
+
+Each transport step adds a Gaussian fluctuation to the mean energy loss,
+``dE = clamp(dE_mean + xi sigma, 0, E)`` with the Bohr variance
+``sigma^2 = K m_e c^2 (Z/A) rho z^2 f(beta) dx`` (relativistic factor
+``f(beta) = (1 - beta^2/2)/(1 - beta^2)``) and ``xi`` a standard normal from
+the per-history counter-based stream (drawn in the execution layer, not the
+shared source). This gives a realistic Bragg peak. Transport now steps by a
+physics-sized step (fractional energy loss) and distributes the deposited
+energy across the depth bins the step spans, so the mean range is
+grid-independent and unbiased.
+
+Validated on the **range straggling** (std of stopping depths), which isolates
+straggling from the peak shape: the mean range reproduces the CSDA range to
+<0.1 %, and sigma_R matches the model's own analytic Bohr integral to <1 % and
+Bortfeld's ``0.012 R^0.935`` to +5-7 % (the pure-Bohr value is slightly high
+because it omits the electron-binding reduction), staying at 1.0-1.1 % of the
+range over 100-200 MeV. Statistical uncertainty is estimated by batches
+(``TransportEngine.run_batched``); two independent seeds are consistent within
+their combined standard error (decision 0010).
+
+Not yet: multiple Coulomb scattering and lateral spread (which turn the
+integral depth dose into a volumetric dose and close milestone V1), nuclear
+interactions, and heterogeneous geometry.
