@@ -10,9 +10,12 @@ must be cached). Emits one JSON document with the decision-0016 gates:
 * ``layered_sigma_x``        - a water/dense/water phantom reproduces the
                                piecewise-density Fermi-Eyges sigma_x;
 * ``energy_conservation``    - deposited = energy_in in the layered scattering run;
-* ``warp_cpu_vs_reference`` / ``warp_cuda_vs_reference`` / ``warp_cpu_vs_cuda``
-                               - the backends agree on sigma_x (tight) and the
-                               depth dose (3-D float32 budget) across the interface.
+* ``warp_cpu_vs_reference`` - CPU agrees with the reference Python transport on
+                               sigma_x (tight) and the depth dose (3-D float32
+                               budget) across the interface;
+* ``warp_cuda_vs_oracle`` / ``warp_cpu_vs_cuda`` - CUDA reproduces the Fermi-Eyges
+                               sigma_x (its own physics gate) and CUDA vs CPU
+                               agree on the depth dose.
 
 Exit 0 if every gate passes, 3 otherwise, 4 if the dataset is missing.
 """
@@ -121,7 +124,7 @@ def main() -> int:
         ):
             gates[g] = False
         if args.require_cuda:
-            gates["warp_cuda_vs_reference"] = False
+            gates["warp_cuda_vs_oracle"] = False
             gates["warp_cpu_vs_cuda"] = False
     else:
         wp = mathlib.warp_module()
@@ -152,82 +155,90 @@ def main() -> int:
         report["density_scaling"] = density_detail
         gates["density_scaling_sigma_x"] = density_ok
 
-        # layered sigma_x vs heterogeneous Fermi-Eyges + cross-backend
+        # each device's layered sigma_x is checked against the heterogeneous
+        # Fermi-Eyges oracle (a genuine per-device physics gate), then the
+        # backends are compared to each other and (CPU) to the reference.
         profiles: dict[str, Any] = {}
-        cpu_ref_ok = True
-        cuda_ref_ok = True
-        layered_ok = True
         layered_detail: dict[str, Any] = {}
+
+        def _sigma_x_vs_oracle_ok(res: Any, tag: str) -> bool:
+            ok = True
+            for z in (60.0, 90.0, 120.0):
+                mc = res.sigma_x_at_depth(z)
+                oracle = float(
+                    fe.lateral_sigma_x_heterogeneous_mm(
+                        model, 150.0, np.array([z]), X0, zb, dens
+                    )[0]
+                )
+                layered_detail.setdefault(tag, {})[str(z)] = {
+                    "mc": mc,
+                    "oracle": oracle,
+                }
+                ok = ok and abs(mc / oracle - 1.0) <= SIGMA_TOL
+            return ok and abs(res.energy_balance) <= 1e-5
+
+        layered_ok = True
         for device in devices:
             res = TransportEngine(table, layered, grid).run_scattering(
                 src, lat, N_LARGE, seed=11, path="warp", device=device
             )
             profiles[device] = res
-            if device == "cpu":
-                for z in (60.0, 90.0, 120.0):
-                    mc = res.sigma_x_at_depth(z)
-                    oracle = float(
-                        fe.lateral_sigma_x_heterogeneous_mm(
-                            model, 150.0, np.array([z]), X0, zb, dens
-                        )[0]
-                    )
-                    layered_detail[str(z)] = {"mc": mc, "oracle": oracle}
-                    layered_ok = layered_ok and abs(mc / oracle - 1.0) <= SIGMA_TOL
-                # cross-backend vs reference at a matched, tractable N (the slow
-                # reference Python loop is small; the Fermi-Eyges sigma_x check
-                # above uses the fast large-N Warp run)
-                n_match = 4000
-                eng_match = TransportEngine(table, layered, grid)
-                ref_match = eng_match.run_scattering(
-                    src, lat, n_match, seed=13, path="python"
-                )
-                cpu_match = eng_match.run_scattering(
-                    src, lat, n_match, seed=13, path="warp", device="cpu"
-                )
-                dd_ref = ref_match.depth_dose_mev
-                dd_cpu = cpu_match.depth_dose_mev
-                cum = float(
-                    np.max(np.abs(np.cumsum(dd_cpu) - np.cumsum(dd_ref)))
-                    / np.sum(dd_ref)
-                )
-                sig_ok = all(
-                    abs(cpu_match.sigma_x_at_depth(z) - ref_match.sigma_x_at_depth(z))
-                    <= SIGMA_BACKEND_TOL_MM
-                    for z in (60.0, 90.0, 120.0)
-                )
-                report.setdefault("cross_backend", {})["cpu_vs_reference"] = {
-                    "depth_dose_cumulative": cum,
-                    "sigma_x_ok": sig_ok,
-                    "energy_balance": res.energy_balance,
-                }
-                cpu_ref_ok = (
-                    cpu_ref_ok
-                    and cum <= REF_WARP_DD_TOL
-                    and sig_ok
-                    and abs(res.energy_balance) <= 1e-5
-                )
+            layered_ok = layered_ok and _sigma_x_vs_oracle_ok(res, device)
         report["layered_sigma_x"] = layered_detail
-        gates["density_scaling_sigma_x"] = density_ok
         gates["layered_sigma_x"] = layered_ok
-        gates["warp_cpu_vs_reference"] = cpu_ref_ok
+
+        # CPU vs the reference Python transport at a matched, tractable N (the
+        # slow reference loop is small; the sigma_x-vs-oracle check above uses the
+        # fast large-N Warp runs).
+        n_match = 4000
+        eng_match = TransportEngine(table, layered, grid)
+        ref_match = eng_match.run_scattering(src, lat, n_match, seed=13, path="python")
+        cpu_match = eng_match.run_scattering(
+            src, lat, n_match, seed=13, path="warp", device="cpu"
+        )
+        dd_ref = ref_match.depth_dose_mev
+        cum_cpu_ref = float(
+            np.max(np.abs(np.cumsum(cpu_match.depth_dose_mev) - np.cumsum(dd_ref)))
+            / np.sum(dd_ref)
+        )
+        sig_cpu_ref = all(
+            abs(cpu_match.sigma_x_at_depth(z) - ref_match.sigma_x_at_depth(z))
+            <= SIGMA_BACKEND_TOL_MM
+            for z in (60.0, 90.0, 120.0)
+        )
+        report.setdefault("cross_backend", {})["cpu_vs_reference"] = {
+            "depth_dose_cumulative": cum_cpu_ref,
+            "sigma_x_ok": sig_cpu_ref,
+        }
+        gates["warp_cpu_vs_reference"] = (
+            cum_cpu_ref <= REF_WARP_DD_TOL and sig_cpu_ref
+        )
 
         cuda_devices = [d for d in devices if d != "cpu"]
         if args.require_cuda and not cuda_devices:
-            gates["warp_cuda_vs_reference"] = False
+            gates["warp_cuda_vs_oracle"] = False
             gates["warp_cpu_vs_cuda"] = False
         elif cuda_devices:
+            # CUDA gets its own physics gate (sigma_x vs oracle, folded into
+            # layered_sigma_x above); here CUDA is compared to CPU cumulatively.
+            cpu_cuda_ok = True
+            cuda_oracle_ok = True
             for device in cuda_devices:
                 res = profiles[device]
-                dd_cuda = res.depth_dose_mev
-                dd_cpu = profiles["cpu"].depth_dose_mev
+                cuda_oracle_ok = cuda_oracle_ok and _sigma_x_vs_oracle_ok(res, device)
                 cum = float(
-                    np.max(np.abs(np.cumsum(dd_cuda) - np.cumsum(dd_cpu)))
-                    / np.sum(dd_cpu)
+                    np.max(
+                        np.abs(
+                            np.cumsum(res.depth_dose_mev)
+                            - np.cumsum(profiles["cpu"].depth_dose_mev)
+                        )
+                    )
+                    / np.sum(profiles["cpu"].depth_dose_mev)
                 )
                 report.setdefault("cross_backend", {})[f"{device}_vs_cpu"] = cum
-                cuda_ref_ok = cuda_ref_ok and cum <= REF_WARP_DD_TOL
-            gates["warp_cuda_vs_reference"] = cuda_ref_ok
-            gates["warp_cpu_vs_cuda"] = cuda_ref_ok
+                cpu_cuda_ok = cpu_cuda_ok and cum <= REF_WARP_DD_TOL
+            gates["warp_cuda_vs_oracle"] = cuda_oracle_ok
+            gates["warp_cpu_vs_cuda"] = cpu_cuda_ok
 
     report["all_gates_passed"] = all(gates.values())
     json.dump(report, sys.stdout, indent=2, default=_jsonable)

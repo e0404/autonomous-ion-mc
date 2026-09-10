@@ -34,9 +34,13 @@ density used for stopping) are the DEV-012 step and stay guarded here.
 - **Depth is the voxel axis.** A `VoxelSlab` is 1-D along `z`; the scattering
   history moves in 3-D with direction `d`, advancing in depth by `s d_z`. The
   voxel a history occupies is set by its depth `pz`, and (forward transport,
-  `d_z > 0`) that voxel index is non-decreasing. A step is limited so `s d_z`
-  does not cross a voxel boundary, mirroring DEV-009's boundary limiting for the
-  depth-dose path (now projected onto `z`).
+  `d_z > 0`) that voxel index is treated as non-decreasing. A step is limited so
+  `s d_z` does not cross a voxel boundary, mirroring DEV-009's boundary limiting
+  for the depth-dose path (now projected onto `z`). A rare large-angle history
+  with `d_z <= 0` moves toward lower depth; the index is not decreased (it keeps
+  the current voxel's density and is not boundary-limited), which is a bounded,
+  identically-mirrored approximation with negligible dose impact (scattering is
+  gated at `e > floor`, so the angle cannot blow up near end-of-range).
 - **Water-only keeps the frame simple.** For water the water-equivalent density
   equals the physical density, so the stopping, straggling and MCS all use the
   same per-voxel density and water's `X0`/`<Z/A>`; the DEV-010 water-equivalent

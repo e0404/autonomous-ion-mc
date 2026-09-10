@@ -243,8 +243,9 @@ path now looks up the local water density by depth.
 | uniform-density lateral sigma_x vs Fermi-Eyges (0.5R, 0.8R) | within 3 % | < 1 % |
 | layered sigma_x vs piecewise-density Fermi-Eyges (60/90/120 mm) | within 3 % | < 1 % |
 | energy conservation (layered scattering) | 1e-9 (reference) | ~0 |
-| reference vs Warp CPU (layered) | sigma_x <= 0.05 mm, depth dose cumulative <= 5e-4 | ~1.4e-4 |
-| CUDA vs CPU (layered depth dose) | cumulative <= 5e-4 | within budget |
+| reference vs Warp CPU (layered) | sigma_x <= 0.05 mm, depth dose cumulative <= 5e-4 | ~1e-4 |
+| CUDA sigma_x vs Fermi-Eyges (its own physics gate) | within 3 % | < 1 % |
+| CUDA vs CPU (layered depth dose) | cumulative <= 5e-4 | ~4e-6 |
 
 The depth-dose cross-backend tolerance (5e-4) is looser than the 1-D path's 1e-4
 because the 3-D scattering kernel accumulates more float32 rounding at voxel
