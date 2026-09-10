@@ -120,7 +120,7 @@ scattering power, and published values (decision 0011). Metric: lateral
 | MC sigma_x(0.8R) vs published (2.4 / 3.9 mm) | within 8 % | within ~2 % |
 | energy conservation (reference / Warp) | 1e-9 / 5e-5 | ~1e-16 / ~1e-6 |
 | depth-dose Bragg peak (marginal) | present | peak/entrance ~6.8 |
-| detour factor (projected range shortening) | < 0.1 % | yes |
+| detour factor (mean projected range vs CSDA) | shortened ~0.1 % | -0.10 % |
 | Warp CPU vs CUDA sigma_x(0.8R) | within 0.02 mm | agree to 5 digits |
 
 Warp results are from host run `RUN-20260910T150236Z-a4da3ec3` (RTX A6000, CUDA 12.9, Warp 1.17.0) at

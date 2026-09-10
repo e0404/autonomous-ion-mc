@@ -277,6 +277,8 @@ def csda_scattering_kernel(
     n_steps: int,
     edep: wp.array(dtype=wp.float64),
     truncated: wp.array(dtype=int),
+    final_z: wp.array(dtype=float),
+    final_status: wp.array(dtype=int),
 ):
     i = wp.tid()
     e = energy0[i]
@@ -309,7 +311,7 @@ def csda_scattering_kernel(
         px = px + a * dx
         py = py + a * dy
         pz = pz + a * dz
-        if straggling == 1 and e > straggling_floor_mev:
+        if e > straggling_floor_mev:
             theta0 = transport.highland_theta0(
                 e, rest_energy_mev, charge, s, density, radlen
             )
@@ -357,8 +359,14 @@ def csda_scattering_kernel(
             alive = 0
         if pz >= geom_depth_mm:
             alive = 0
+    final_z[i] = pz
     if step >= max_steps and alive == 1:
         wp.atomic_add(truncated, 0, 1)
+        final_status[i] = 3
+    elif pz >= geom_depth_mm:
+        final_status[i] = 2
+    else:
+        final_status[i] = 1
 
 
 class ScatteringKernel:
@@ -399,7 +407,7 @@ class ScatteringKernel:
         za_ratio: float,
         straggling: bool,
         straggling_floor_mev: float,
-    ) -> tuple[np.ndarray, int]:
+    ) -> tuple[np.ndarray, int, np.ndarray, np.ndarray]:
         d = self.device
         n_hist = int(state.energy_mev.shape[0])
         nz, nx = int(grid.n_depth), int(grid.n_lateral)
@@ -418,6 +426,8 @@ class ScatteringKernel:
         )
         edep = wp.zeros(nz * nx, dtype=wp.float64, device=d)
         truncated = wp.zeros(1, dtype=int, device=d)
+        final_z = wp.zeros(n_hist, dtype=float, device=d)
+        final_status = wp.zeros(n_hist, dtype=int, device=d)
         t = self.tables
         wp.launch(
             csda_scattering_kernel,
@@ -450,10 +460,15 @@ class ScatteringKernel:
                 self.n_steps,
                 edep,
                 truncated,
+                final_z,
+                final_status,
             ],
             device=d,
         )
         wp.synchronize_device(d)
-        return edep.numpy().astype(np.float64).reshape(nz, nx), int(
-            truncated.numpy()[0]
+        return (
+            edep.numpy().astype(np.float64).reshape(nz, nx),
+            int(truncated.numpy()[0]),
+            final_z.numpy().astype(np.float64),
+            final_status.numpy().astype(np.int32),
         )

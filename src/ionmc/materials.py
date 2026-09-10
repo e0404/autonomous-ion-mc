@@ -200,6 +200,7 @@ class Material:
             mean_excitation_energy=MeanExcitationEnergy(value_ev, source),
             density_effect=None,
             source=self.source,
+            radiation_length_g_per_cm2=self.radiation_length_g_per_cm2,
         )
 
 

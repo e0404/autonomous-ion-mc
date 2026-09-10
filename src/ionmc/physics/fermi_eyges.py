@@ -62,9 +62,12 @@ def lateral_sigma_x_mm(
         u_cm = np.linspace(1.0e-4, z_mm / MM_PER_CM, n_integration)
         e_u = energy_at_depth(model, energy0_mev, u_cm * MM_PER_CM, density_g_per_cm3)
         pv = e_u * (e_u + 2.0 * PROTON_MASS_MEV) / (e_u + PROTON_MASS_MEV)
+        # projected scattering power T = (13.6/pv)^2 * rho / X0 [rad^2/cm]
         scattering_power = (
-            HIGHLAND_CONSTANT_MEV / pv
-        ) ** 2 / radiation_length_g_per_cm2
+            (HIGHLAND_CONSTANT_MEV / pv) ** 2
+            * density_g_per_cm3
+            / radiation_length_g_per_cm2
+        )
         integrand = (z_mm / MM_PER_CM - u_cm) ** 2 * scattering_power  # cm^2/cm
         out[i] = np.sqrt(np.trapezoid(integrand, u_cm)) * MM_PER_CM
     return out

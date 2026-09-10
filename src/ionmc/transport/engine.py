@@ -101,6 +101,8 @@ class ScatteringResult:
     truncated: int
     path: str
     device: str | None
+    range_mean_mm: float = float("nan")  # mean projected stopping depth
+    n_stopped: int = 0
 
     @property
     def depth_dose_mev(self) -> np.ndarray:
@@ -317,9 +319,10 @@ class TransportEngine:
         """Run 3-D transport with multiple Coulomb scattering into a 2-D
         (depth, lateral-x) grid (decision 0011).
 
-        Straggling follows the engine's ``straggling`` flag; scattering is
-        always on here (that is the point of this method). The radiation length
-        of the medium must be known (> 0).
+        Scattering is always applied (above the 2 MeV floor); energy-loss
+        straggling independently follows the engine's ``straggling`` flag, so a
+        scattering-only study (``straggling=False``) is possible. The medium's
+        radiation length must be known (> 0).
         """
         if self.radiation_length_g_per_cm2 <= 0.0:
             raise ValueError(
@@ -328,13 +331,20 @@ class TransportEngine:
         state = source.sample(n_histories, seed)
         energy_in = float(np.sum(state.energy_mev * state.weight))
         if path == "warp":
-            edep, truncated = self._run_scattering_warp(state, grid, device)
+            edep, truncated, final_z, final_status = self._run_scattering_warp(
+                state, grid, device
+            )
         elif path == "python":
-            edep, truncated = self._run_scattering_reference(state, grid)
+            edep, truncated, final_z, final_status = self._run_scattering_reference(
+                state, grid
+            )
         else:
             raise ValueError(
                 f"unknown transport path {path!r} (use 'python' or 'warp')"
             )
+        stopped = final_z[final_status == int(Status.STOPPED)]
+        n_stopped = int(stopped.shape[0])
+        range_mean = float(np.mean(stopped)) if n_stopped else float("nan")
         return ScatteringResult(
             edep_zx_mev=edep,
             grid=grid,
@@ -343,11 +353,13 @@ class TransportEngine:
             truncated=truncated,
             path=path,
             device=device if path == "warp" else None,
+            range_mean_mm=range_mean,
+            n_stopped=n_stopped,
         )
 
     def _run_scattering_warp(
         self, state: ParticleState, grid: DepthLateralGrid, device: str
-    ) -> tuple[np.ndarray, int]:
+    ) -> tuple[np.ndarray, int, np.ndarray, np.ndarray]:
         if not mathlib.HAVE_WARP:
             raise ImportError(
                 "warp-lang is not installed; the warp path is unavailable"
@@ -374,7 +386,7 @@ class TransportEngine:
 
     def _run_scattering_reference(
         self, state: ParticleState, grid: DepthLateralGrid
-    ) -> tuple[np.ndarray, int]:
+    ) -> tuple[np.ndarray, int, np.ndarray, np.ndarray]:
         tp = reference.load_bound_module(
             "ionmc.physics.transport",
             "python",
@@ -402,6 +414,8 @@ class TransportEngine:
         nz, nx = grid.n_depth, grid.n_lateral
         edep = grid.empty()
         truncated = 0
+        final_pz = np.zeros(state.size, dtype=np.float64)
+        final_status = np.zeros(state.size, dtype=np.int32)
         for h in range(state.size):
             e = float(state.energy_mev[h])
             px, py, pz = (float(v) for v in state.position_mm[h])
@@ -426,7 +440,9 @@ class TransportEngine:
                 z_start = pz
                 x_start = px
                 px, py, pz = px + a * dx, py + a * dy, pz + a * dzr
-                if straggling and e > floor:
+                # scattering is independent of energy-loss straggling: it is
+                # always applied above the floor in a scattering run (decision 0011).
+                if e > floor:
                     theta0 = tp.highland_theta0(
                         e, rest_energy, charge, s, density, radlen
                     )
@@ -454,9 +470,13 @@ class TransportEngine:
                     status = Status.STOPPED
                 if pz >= geom_depth:
                     status = Status.ESCAPED
+            final_pz[h] = pz
             if step >= self.max_steps and status == Status.ALIVE:
                 truncated += 1
-        return edep, truncated
+                final_status[h] = 3
+            else:
+                final_status[h] = int(status)
+        return edep, truncated, final_pz, final_status
 
     # -- reference Python path ------------------------------------------------
 

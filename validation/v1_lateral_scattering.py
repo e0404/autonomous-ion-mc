@@ -36,7 +36,7 @@ from ionmc.transport import (
 
 ENERGIES = [150.0, 200.0]
 PUBLISHED_SIGMA_08R = {150.0: 2.4, 200.0: 3.9}
-X0 = 36.08
+X0 = materials.WATER.radiation_length_g_per_cm2
 
 
 def main() -> int:
@@ -117,7 +117,10 @@ def main() -> int:
         pub_ok = pub_ok and bool(abs(mc[1] / PUBLISHED_SIGMA_08R[e0] - 1.0) <= 0.08)
         balance_ok = balance_ok and bool(abs(res.energy_balance) <= 5e-5)
         peak_ok = peak_ok and bool(centers[peak_bin] > 0.9 * r and dd[peak_bin] > 3.0 * entrance)
-        detour_ok = detour_ok and bool(centers[peak_bin] <= r * 1.001)
+        detour = res.range_mean_mm / r - 1.0
+        per_energy[str(e0)]["projected_range_mm"] = res.range_mean_mm
+        per_energy[str(e0)]["detour"] = detour
+        detour_ok = detour_ok and bool(-0.003 < detour <= 1e-4)
     report["per_energy"] = per_energy
     gates["sigma_vs_fermi_eyges"] = fe_ok
     gates["sigma_vs_published"] = pub_ok
