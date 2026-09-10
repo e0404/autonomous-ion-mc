@@ -24,7 +24,11 @@ so far and the rules it follows.
 Script: ``validation/v0_stopping_power.py``. Reference: the 20 native PSTAR
 grid values for protons in liquid water kept in
 ``ionmc.reference_data.pstar_water`` (NIST PSTAR via the Apache-2.0 MCsquare
-repository, commit ``211eefe6``; two independent fetches agreed).
+repository, commit ``211eefe6``; two independent fetches agreed). Warp
+results below are from host run ``RUN-20260910T080455Z-e666b469`` (RTX A6000,
+CUDA 12.9, Warp 1.17.0) at task SHA ``d23c78a``, recorded in the DEV-002
+local validation record; the reference-path results were reproduced in the
+sandbox as well.
 
 | comparison | criterion (decision 0006) | result |
 |---|---|---|
@@ -33,8 +37,8 @@ repository, commit ``211eefe6``; two independent fetches agreed).
 | CSDA range 100–250 MeV vs recalled PSTAR values | 0.5 % guard (informational) | within 0.04 % |
 | R(200) − R(100) vs recalled 18.242 g/cm² | 0.2 % | +0.02 % |
 | numpy binding vs Python binding | bitwise equal | equal |
-| Warp CPU / CUDA (float32) vs Python reference, 400 energies 2–400 MeV | S: rtol 1e-5; range: rtol 2e-5 | pending host run for the committed SHA (sandbox Warp CPU after the cancellation fix: S 4.2e-7, range 2.4e-7) |
-| Warp CPU vs CUDA | S: rtol 4e-6, atol 1e-6 (transcendental class); range: rtol 1e-5, atol 1e-6 (iterative) | pending host run for the committed SHA |
+| Warp CPU / CUDA (float32) vs Python reference, 400 energies 2–400 MeV | S: rtol 1e-5; range: rtol 2e-5 | S 4.2e-7 on both devices (normalized 0.042); range 2.4e-7 (normalized 0.012) |
+| Warp CPU vs CUDA | S: rtol 4e-6, atol 1e-6 (transcendental class); range: rtol 1e-5, atol 1e-6 (iterative) | S max abs 1.5e-5 MeV cm²/g = 1 float32 ULP at 2 MeV (normalized 0.043); range 9.5e-7 g/cm² (normalized 0.006) |
 
 The ICRU 90 mean excitation energy (78 eV) is reported as a separate model
 difference (−1.14 % at 1 MeV to −0.43 % at 400 MeV), not absorbed into any

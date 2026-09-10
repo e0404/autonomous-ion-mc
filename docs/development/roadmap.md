@@ -446,7 +446,7 @@ deterministically and reviewed in one pull request.
 
 | Stage / task | Status | Evidence |
 |---|---|---|
-| Stage 0, `DEV-002` (package, conventions, execution model, quality tooling, analytic stopping power) | implemented; final host validation pending | decisions `0004`–`0006`; `validation/v0_stopping_power.py` (host runner CPU + CUDA run for the final SHA to be recorded in decision 0006 and the DEV-002 local validation record) |
+| Stage 0, `DEV-002` (package, conventions, execution model, quality tooling, analytic stopping power) | **completed** 2026-09-10 | decisions `0004`–`0006`; `validation/v0_stopping_power.py` on the host runner, CPU + CUDA, run `RUN-20260910T080455Z-e666b469` at `d23c78a`; DEV-002 local validation records; squash-merged into `develop` |
 | Stage 0, `DEV-003` (data layer, tabulated stopping power; closes V0) | not started | — |
 | Stages 1–6 | not started | — |
 

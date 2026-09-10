@@ -187,5 +187,16 @@ fail the gate clearly. The lesson is recorded as a shared-source rule in
 `docs/architecture/index.md`: kinematic quantities are written in
 cancellation-free form because the Warp instantiation is single precision.
 
-*Warp paths after the cancellation fix (host runner):* pending — to be
-appended when the host run for the committed SHA has been executed.
+*Warp paths after the cancellation fix (host runner, RTX A6000, CUDA 12.9,
+Warp 1.17.0, run `RUN-20260910T080455Z-e666b469` at task SHA `d23c78a`):* all
+six gates passed. float32 Warp versus the float64 Python reference on the
+400-point 2–400 MeV grid: maximum relative difference of S **4.2 × 10⁻⁷**
+on both CPU and CUDA (normalized 0.042 against rtol 1e-5, margin 24×);
+ranges 2.4 × 10⁻⁷ relative on both devices (normalized 0.012). Warp CPU
+versus CUDA: S max absolute difference 1.5 × 10⁻⁵ MeV cm²/g, which is one
+float32 ULP at S ≈ 164 MeV cm²/g (2 MeV; normalized 0.043 under the
+transcendental class); range 9.5 × 10⁻⁷ g/cm² (normalized 0.006). The
+reference-path results (PSTAR deviation, CSDA ranges, numpy = Python
+bitwise) are unchanged from the paragraph above. The code validated by
+this run is the code integrated into `develop`; the commit that records
+these numbers changes decision records and documentation only.

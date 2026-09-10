@@ -160,8 +160,9 @@ normalized 0.028). The numpy and Python bindings were bitwise identical.
 The small margin was traced (decision 0006, *Finding on the
 reference-vs-float32 margin*) to float32 cancellation in ``gamma^2 - 1``,
 not to the execution model; rewriting the kinematics as ``tau (tau + 2)``
-reduced the float32 error of S to 4.2 × 10⁻⁷ (sandbox Warp CPU; host
-CPU/CUDA confirmation pending, see decision 0006). A second shared-source rule follows from it: quantities
+reduced the float32 error of S to 4.2 × 10⁻⁷ on Warp CPU and CUDA alike
+(host run `RUN-20260910T080455Z-e666b469`, SHA `d23c78a`; CPU and CUDA
+differ by at most one float32 ULP, see decision 0006). A second shared-source rule follows from it: quantities
 that lose precision by cancellation in float32 must be written in
 cancellation-free form, because the Warp instantiation is single precision
 while the reference is float64. To be revisited at Stage 1 under real
