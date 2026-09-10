@@ -42,16 +42,15 @@ def engine(table):
     )
 
 
-def _analytic_sigma_r_mm(table, e0: float) -> float:
-    """Bohr range straggling sqrt(integral (dOmega^2/dx)/S^3 dE), in mm (rho=1)."""
-    tab = (
-        TabulatedStoppingPower(materials.WATER, particles.PROTON, path="numpy")
-        if False
-        else TabulatedStoppingPower(
-            table, materials.WATER, particles.PROTON, path="numpy"
-        )
-    )
-    e = np.linspace(0.6, e0, 4000)
+def _analytic_sigma_r_mm(table, e0: float, floor_mev: float = 2.0) -> float:
+    """Bohr range straggling sqrt(integral (dOmega^2/dx)/S^3 dE), in mm (rho=1).
+
+    The integral starts at ``floor_mev`` (the MC's straggling floor), so the
+    analytic reference and the Monte Carlo accumulate straggling over the same
+    energy range.
+    """
+    tab = TabulatedStoppingPower(table, materials.WATER, particles.PROTON, path="numpy")
+    e = np.linspace(floor_mev, e0, 4000)
     tau = e / PROTON_MASS_MEV
     gamma = 1.0 + tau
     beta2 = tau * (tau + 2.0) / (gamma * gamma)

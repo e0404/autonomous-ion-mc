@@ -31,8 +31,11 @@ from ionmc.transport import DepthDoseGrid, PencilBeamSource, TransportEngine, Wa
 ENERGIES = [100.0, 150.0, 200.0]
 
 
-def analytic_sigma_r_mm(tab: TabulatedStoppingPower, e0: float) -> float:
-    e = np.linspace(0.6, e0, 4000)
+def analytic_sigma_r_mm(
+    tab: TabulatedStoppingPower, e0: float, floor_mev: float = 2.0
+) -> float:
+    # integrate from the MC straggling floor so the reference matches the MC
+    e = np.linspace(floor_mev, e0, 4000)
     tau = e / PROTON_MASS_MEV
     gamma = 1.0 + tau
     beta2 = tau * (tau + 2.0) / (gamma * gamma)
