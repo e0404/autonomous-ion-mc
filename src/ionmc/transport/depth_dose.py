@@ -17,10 +17,17 @@ import numpy as np
 
 @dataclass(frozen=True)
 class DepthDoseGrid:
-    """Uniform depth bins over ``[0, depth_mm]``."""
+    """Uniform depth bins over ``[origin_mm, origin_mm + depth_mm]``.
+
+    ``origin_mm`` (default 0) shifts the grid along the beam axis independently
+    of the transport geometry, so the scoring grid's resolution *and* alignment
+    are decoupled from the transport grid (decision ``0019``); the default
+    reproduces the historical grid anchored at ``z = 0``.
+    """
 
     depth_mm: float
     n_bins: int
+    origin_mm: float = 0.0
 
     def __post_init__(self) -> None:
         if self.depth_mm <= 0.0 or self.n_bins <= 0:
@@ -32,7 +39,9 @@ class DepthDoseGrid:
 
     @property
     def edges_mm(self) -> np.ndarray:
-        return np.linspace(0.0, self.depth_mm, self.n_bins + 1)
+        return np.linspace(
+            self.origin_mm, self.origin_mm + self.depth_mm, self.n_bins + 1
+        )
 
     @property
     def centers_mm(self) -> np.ndarray:
@@ -46,19 +55,26 @@ class DepthDoseGrid:
 
 @dataclass(frozen=True)
 class DepthLateralGrid:
-    """2-D scoring grid: depth ``z`` in ``[0, depth_mm]`` x lateral ``x`` in
-    ``[-half_width_mm, half_width_mm]`` (decision 0011).
+    """2-D scoring grid: depth ``z`` in ``[depth_origin_mm, depth_origin_mm +
+    depth_mm]`` x lateral ``x`` in ``[lateral_center_mm +/- half_width_mm]``
+    (decisions 0011, 0019).
 
     Energy is accumulated per (depth, lateral-x) bin, summed over the second
     transverse axis ``y`` (a marginal projection). The depth marginal (sum over
     ``x``) is the integral depth dose; the second moment in ``x`` per depth
-    slice gives the lateral spread ``sigma_x(z)``.
+    slice gives the lateral spread ``sigma_x(z)``. ``depth_origin_mm`` and
+    ``lateral_center_mm`` (both default 0) shift the grid independently of the
+    transport geometry, decoupling scoring-grid alignment from the transport
+    grid; the defaults reproduce the historical grid anchored at ``z = 0`` and
+    centred at ``x = 0``.
     """
 
     depth_mm: float
     n_depth: int
     half_width_mm: float
     n_lateral: int
+    depth_origin_mm: float = 0.0
+    lateral_center_mm: float = 0.0
 
     def __post_init__(self) -> None:
         if self.depth_mm <= 0.0 or self.n_depth <= 0:
@@ -75,13 +91,24 @@ class DepthLateralGrid:
         return 2.0 * self.half_width_mm / self.n_lateral
 
     @property
+    def lateral_lo_mm(self) -> float:
+        """Lower lateral edge ``lateral_center_mm - half_width_mm``."""
+        return self.lateral_center_mm - self.half_width_mm
+
+    @property
     def depth_centers_mm(self) -> np.ndarray:
-        edges = np.linspace(0.0, self.depth_mm, self.n_depth + 1)
+        edges = np.linspace(
+            self.depth_origin_mm, self.depth_origin_mm + self.depth_mm, self.n_depth + 1
+        )
         return 0.5 * (edges[:-1] + edges[1:])
 
     @property
     def lateral_centers_mm(self) -> np.ndarray:
-        edges = np.linspace(-self.half_width_mm, self.half_width_mm, self.n_lateral + 1)
+        edges = np.linspace(
+            self.lateral_center_mm - self.half_width_mm,
+            self.lateral_center_mm + self.half_width_mm,
+            self.n_lateral + 1,
+        )
         return 0.5 * (edges[:-1] + edges[1:])
 
     def empty(self) -> np.ndarray:

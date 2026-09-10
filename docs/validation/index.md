@@ -302,6 +302,26 @@ Deferred: arbitrary 3-D per-voxel maps with Siddon traversal and decoupled
 scoring grids (V3 closure, DEV-014). Warp CPU/CUDA results are recorded in the
 DEV-013 local validation record (host run below).
 
+## V3 (scoring grid) - grid-independence of integral dose (task DEV-014, closes V3)
+
+Script: ``validation/v3_scoring_grid.py``. References: the transport run itself
+(grid-independence under scoring-grid changes) and cross-backend parity (decision
+0019). Tolerances are pre-registered before running.
+
+| check | criterion | result |
+|---|---|---|
+| integral dose vs resolution (total; fine summed 4:1 vs coarse) | 1e-12 / 1e-12 | round-off |
+| integral dose vs alignment (depth-origin + lateral-centre shift) | 1e-12 | round-off |
+| lateral sigma_x invariant under a lateral shift | <= 1e-6 mm | round-off |
+| partial coverage (grid past the entrance captures strictly less) | 0 < E_down < E_full | holds |
+| reference vs Warp CPU (shifted grid): depth dose cumulative | <= 5e-4 | within budget |
+| CUDA sigma_x vs Fermi-Eyges / CUDA vs CPU (shifted grid) | < 3 % / <= 5e-4 | within budget |
+
+The scoring grid is now decoupled from the transport grid in resolution *and*
+alignment, satisfying the last **V3** gate: **milestone V3 is closed**. Warp
+CPU/CUDA results are recorded in the DEV-014 local validation record (host run
+below).
+
 ## Unit and regression tests
 
 ``tests/ionmc/`` covers units and constants, materials, the RNG mirror

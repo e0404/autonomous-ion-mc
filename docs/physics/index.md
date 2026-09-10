@@ -403,7 +403,29 @@ oblique beam through a slab of thickness ``D`` traverses the same
 water-equivalent path as a normal beam through ``D/cos(theta)``; and the
 reference, Warp CPU and CUDA paths agree.
 
-Deferred to DEV-014 (V3 closure): arbitrary 3-D per-voxel material maps with
-robust ray/voxel (Siddon/DDA) traversal, and scoring grids decoupled from the
-transport grid in resolution *and* alignment (the grid-independence gate). Not
-yet, beyond Stage 3: treatment-planning scoring and influence matrices (Stage 4).
+## Scoring grids decoupled from the transport grid (Stage 3, task DEV-014, decision 0019)
+
+DEV-014 makes the scoring grid's **alignment** free, completing the decoupling of
+scoring from transport and **closing milestone V3**. The scoring grids were
+already resolution-independent of the transport voxel grid (deposition splits
+each step by depth overlap); DEV-014 adds an `origin_mm` to `DepthDoseGrid` and a
+`depth_origin_mm`/`lateral_center_mm` to `DepthLateralGrid`, so the scored window
+can be placed anywhere along and across the beam. The deposition (reference and
+Warp) indexes bins as ``floor((z - z_origin)/dz)`` with edges ``z_origin +
+b*dz``; because ``floor((z - z_origin)/dz) = b`` guarantees ``z_origin + (b+1)*dz
+> z`` for any sign of ``b``, the depth-overlap loop stays well-formed for a grid
+that starts before, at, or after the entrance. The defaults (origin 0, centre 0)
+reproduce the prior grids bit-for-bit.
+
+Validated (decision 0019): the total deposited energy and the energy per depth
+interval are invariant under resolution changes (a 4x-finer grid summed 4:1
+equals the coarse, to round-off) and under depth-origin/lateral-centre shifts; a
+grid starting past the entrance captures strictly less energy; lateral ``sigma_x``
+is invariant under a lateral shift; and the reference, Warp CPU and CUDA paths
+agree on a shifted grid. This closes **V3** (voxelized heterogeneous geometry and
+materials).
+
+Deferred (Stage-3 capability beyond the V3 gates): a full 3-D voxel grid with
+arbitrary per-voxel material maps and robust ray/voxel (Siddon/DDA) traversal for
+true patient geometries. Not yet, beyond Stage 3: treatment-planning scoring and
+influence matrices (Stage 4).
