@@ -51,8 +51,13 @@ def locate_segment(e: float, table_e: Any, n: int, n_steps: int) -> int:
     Bisection with ``n_steps`` iterations (``2^n_steps >= n``); energies below
     the table give 0 and energies above give ``n - 2``.
     """
-    lo = 0
-    hi = n - 1
+    # ``lo`` and ``hi`` are mutated inside the loop, so they must be dynamic
+    # variables for Warp: initialising with ``int(...)`` marks them mutable
+    # (Warp refuses to mutate a constant-initialised variable inside a dynamic
+    # loop; the same shared-source rule as decision 0006). ``noqa: UP018`` keeps
+    # ruff from rewriting ``int(0)`` back to the constant ``0``.
+    lo = int(0)  # noqa: UP018, RUF046 - int() marks the variable mutable for Warp
+    hi = int(n - 1)
     for _ in range(n_steps):
         mid = (lo + hi) // 2
         go_right = table_e[mid] <= e

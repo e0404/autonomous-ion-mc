@@ -235,3 +235,68 @@ def test_provenance_records_dataset_and_path(pstar_table) -> None:
     assert p["table"]["dataset"] == MCSQUARE_PSTAR_WATER.name
     assert p["table"]["sha256"] == MCSQUARE_PSTAR_WATER.sha256
     assert p["range_floor_energy_mev"] == 0.5
+
+
+@pytest.mark.warp
+def test_warp_paths_match_reference(warp_module, pstar_cache_root):
+    """Warp CPU (float32) vs the float64 reference for the tabulated layer.
+
+    Tolerances are those of decision 0005 (reference vs float32 Warp), the same
+    criteria the analytic layer uses. CUDA is exercised by the host validation.
+    """
+    ref = TabulatedStoppingPower.from_dataset(
+        MCSQUARE_PSTAR_WATER,
+        materials.WATER,
+        particles.PROTON,
+        pstar_cache_root,
+        path="python",
+    )
+    warp_model = TabulatedStoppingPower.from_dataset(
+        MCSQUARE_PSTAR_WATER,
+        materials.WATER,
+        particles.PROTON,
+        pstar_cache_root,
+        path="warp",
+        device="cpu",
+    )
+    grid = np.linspace(0.5, 400.0, 800)
+    np.testing.assert_allclose(
+        warp_model.mass_stopping_power(grid),
+        ref.mass_stopping_power(grid),
+        rtol=1e-5,
+        atol=0.0,
+    )
+    e = np.array([50.0, 100.0, 150.0, 200.0, 250.0])
+    np.testing.assert_allclose(
+        warp_model.csda_range(e),
+        ref.csda_range(e),
+        rtol=2e-5,
+        atol=0.0,
+    )
+
+
+@pytest.mark.cuda
+def test_warp_cuda_matches_cpu(warp_module, cuda_available, pstar_cache_root):
+    cpu = TabulatedStoppingPower.from_dataset(
+        MCSQUARE_PSTAR_WATER,
+        materials.WATER,
+        particles.PROTON,
+        pstar_cache_root,
+        path="warp",
+        device="cpu",
+    )
+    cuda = TabulatedStoppingPower.from_dataset(
+        MCSQUARE_PSTAR_WATER,
+        materials.WATER,
+        particles.PROTON,
+        pstar_cache_root,
+        path="warp",
+        device="cuda:0",
+    )
+    grid = np.linspace(0.5, 400.0, 800)
+    np.testing.assert_allclose(
+        cuda.mass_stopping_power(grid),
+        cpu.mass_stopping_power(grid),
+        rtol=4e-6,
+        atol=1e-6,
+    )

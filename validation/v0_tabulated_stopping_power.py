@@ -4,7 +4,7 @@ Runs on the controlled host runner (numpy + Warp only, no network; the
 datasets must already be in the cache, see ``python -m ionmc.data acquire``)
 and prints one JSON document with the gates fixed in decision 0008:
 
-* tabulated (log-log interpolation of the MCsquare PSTAR water table) vs the
+* tabulated (PCHIP interpolation of the MCsquare PSTAR water table) vs the
   analytic model of decision 0006 for 10-400 MeV: <= 1.0 percent;
 * tabulated CSDA range (from the 0.5 MeV table floor, plus the PSTAR residual
   range below 0.5 MeV) vs NIST PSTAR at 100/150/200/250 MeV: <= 0.1 percent;

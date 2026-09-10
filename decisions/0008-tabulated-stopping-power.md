@@ -78,13 +78,12 @@ names and units as `AnalyticStoppingPower`.
    would hard-code the 0.5 MeV spacing; the bisection keeps the layer
    grid-agnostic. Revisit if profiling at Stage 1+ shows it matters.
 3. **CSDA range.** The cumulative range at each grid point is precomputed by
-   8-point Gauss-Legendre quadrature of 1/S over the Hermite interpolant of
-   each full segment; a query integrates the partial last segment with a
-   4-point rule and adds the cumulative value at the lower node. The range
-   below the first grid energy is **not** included; callers add the tabulated
-   residual (8.869e-4 g/cm² at the 0.5 MeV floor) when comparing with a range
-   defined from rest. The two quadrature rules agree to ~1e-7 over a full
-   segment.
+   the *same* 4-point Gauss-Legendre quadrature of 1/S over the Hermite
+   interpolant that a query uses on the partial last segment, so the stored
+   column and a query at a grid node agree exactly and the range is continuous
+   across nodes. The range below the first grid energy is **not** included;
+   callers add the tabulated residual (8.869e-4 g/cm² at the 0.5 MeV floor)
+   when comparing with a range defined from rest.
 4. **Out-of-range energies** raise by default; `allow_extrapolation=True`
    continues the boundary segment's cubic.
 5. **Second data source.** `mcsquare-g4-water` (Geant4-derived) is registered
@@ -145,8 +144,10 @@ row); tabulated CSDA range + residual vs NIST PSTAR is within 1.8e-4
 analytic range + residual within 5.3e-4; numpy and Python bindings bitwise
 equal; PCHIP exact for cubic data and slope-monotone. The Geant4 table is
 0.4-0.5 % below the PSTAR table, matching the ICRU 90 vs ICRU 49 analytic
-offset. Warp CPU float32 vs the float64 reference passed the decision 0005
-criterion in the sandbox.
+offset. On the Warp CPU path in the sandbox (Warp 1.17.0, no CUDA), the
+float32 stopping power and range agreed with the float64 reference to
+5.8e-8 and 4.5e-8 relative, within the decision 0005 criterion; the CUDA path
+and the full gate are recorded from the host run below.
 
 *Warp paths (host runner, CPU + CUDA):* recorded below and in the DEV-003
 validation record.

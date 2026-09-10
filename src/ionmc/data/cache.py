@@ -66,6 +66,8 @@ class DatasetSpec:
             value = getattr(self, field_name)
             if not value or not all(c.isalnum() or c in "-_." for c in value):
                 raise ValueError(f"{field_name}={value!r} is not cache-safe")
+            if value in (".", "..") or value.startswith("."):
+                raise ValueError(f"{field_name}={value!r} must not be a dotted path")
         if len(self.sha256) != 64 or any(
             c not in "0123456789abcdef" for c in self.sha256.lower()
         ):
