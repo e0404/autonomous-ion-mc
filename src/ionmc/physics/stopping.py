@@ -155,7 +155,9 @@ def shell_correction(bg2: float, shell_m2: float, shell_m3: float) -> float:
 def bloch_correction(charge: float, beta2: float) -> float:
     """Bloch correction ``L2 = -y^2 sum_j 1/(j (j^2 + y^2))``, ``y = z alpha/beta``."""
     y2 = charge * charge * ALPHA_SQUARED / beta2
-    total = 0.0
+    # ``float(0.0)`` declares a mutable (dynamic) variable for Warp's code
+    # generator; a bare literal would be a constant that loops cannot update.
+    total = float(0.0)  # noqa: UP018 - dynamic variable for Warp
     for j in range(1, BLOCH_TERMS + 1):
         fj = float(j)
         total += 1.0 / (fj * (fj * fj + y2))
@@ -241,7 +243,7 @@ def stopping_number(
     x = 0.5 * m.log10(bg2)
     delta = density_effect_delta(x, cbar, x0, x1, a, mexp, delta0)
     shell = shell_correction(bg2, shell_m2, shell_m3)
-    barkas = 0.0
+    barkas = float(0.0)  # noqa: UP018 - dynamic variable for Warp
     for k in range(n_elem):
         barkas += elem_f[k] * barkas_l1(
             beta2, elem_z[k], elem_b[k], table_w, table_f, n_table
@@ -351,7 +353,7 @@ def csda_range_increment(
     u0 = m.log(energy_low)
     u1 = m.log(energy_high)
     h = (u1 - u0) / float(n_steps)
-    total = 0.0
+    total = float(0.0)  # noqa: UP018 - dynamic variable for Warp
     for i in range(n_steps + 1):
         u = u0 + h * float(i)
         e = m.exp(u)
