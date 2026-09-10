@@ -1,6 +1,6 @@
 """ionmc: research-grade ion-therapy Monte Carlo (Python-first, Warp accelerated).
 
-Implemented so far (Stage 0, task DEV-002):
+Implemented so far (Stage 0 complete; Stage 1 in progress):
 
 * :mod:`ionmc.units`, :mod:`ionmc.constants` - unit conventions and constants;
 * :mod:`ionmc.materials`, :mod:`ionmc.particles` - materials and projectiles;
@@ -11,7 +11,9 @@ Implemented so far (Stage 0, task DEV-002):
   range by PCHIP interpolation of an external table (task DEV-003);
 * :mod:`ionmc.data` - versioned, checksummed, cached external datasets;
 * :mod:`ionmc.rng` - pure-Python mirror of Warp's random-number generator;
-* :mod:`ionmc.backend` - the shared-source execution mechanism.
+* :mod:`ionmc.backend` - the shared-source execution mechanism;
+* :mod:`ionmc.transport` - Stage-1 proton transport: continuous-slowing-down
+  depth-dose of a pencil beam in homogeneous water (task DEV-004).
 """
 
 from __future__ import annotations

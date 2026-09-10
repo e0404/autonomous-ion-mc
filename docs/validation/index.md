@@ -65,6 +65,23 @@ This closes milestone V0: proton stopping power in water is now available from
 both an analytical model and an I-value-consistent external table, on all three
 execution paths, validated against reference data with pre-fixed tolerances.
 
+## V1 (partial) - CSDA proton depth dose (task DEV-004)
+
+Script: ``validation/v1_depth_dose_csda.py``. Reference: the tabulated CSDA
+range (task DEV-003). Criteria fixed in decision `0009` before the comparison.
+This is the deterministic, no-straggling foundation of milestone V1; the
+straggling/Bragg-shape and scattering/lateral parts follow in later Stage-1
+tasks.
+
+| check | criterion | result (reference paths) |
+|---|---|---|
+| energy conservation (reference, float64) | \|balance\| ≤ 1e-9 | ~1e-16 |
+| R80 vs tabulated CSDA range, 100/150/200 MeV | ≤ 0.3 % | ≤ 0.15 % |
+| step-size convergence (fixed grid, 0.02 vs 0.002) | drift ≤ 0.05 % | ≤ 3e-4 % |
+| range cross-check (stopping depth vs CSDA range) | ≤ 0.2 % | ≤ 0.15 % |
+| reference vs Warp CPU/CUDA, cumulative depth dose | ≤ 1e-4 of total | see the DEV-004 validation record |
+| Warp CPU vs CUDA, cumulative depth dose | ≤ 1e-5 of total | see the DEV-004 validation record |
+
 The ICRU 90 mean excitation energy (78 eV) is reported as a separate model
 difference (−1.14 % at 1 MeV to −0.43 % at 400 MeV), not absorbed into any
 tolerance.
