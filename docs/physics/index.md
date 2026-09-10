@@ -372,7 +372,38 @@ material radiation length): a homogeneous bone slab (R80 at ``R_water/WER``,
 oracle to < 1 %, energy is conserved, and the backends agree. The depth-dose and
 scattering paths now share the same per-voxel material capability.
 
-Deferred to later Stage-3 tasks: full 3-D voxel geometry with arbitrary beam
-incidence and ray/voxel traversal, nuclear removal / lateral halo on the 3-D
-scattering path, and scoring grids decoupled from the transport grid. Not yet,
-beyond Stage 3: treatment-planning scoring and influence matrices (Stage 4).
+## Arbitrary beam incidence via a beam frame (Stage 3, task DEV-013, decision 0018)
+
+DEV-013 lets the pencil beam enter at an arbitrary position and unit
+``direction`` and the whole scene (beam + phantom) be rigidly rotated, on the
+scattering path. Transport runs in a **canonical beam frame** (origin at the
+entry point, ``+z'`` along the beam), built per history from the beam direction
+with the same transverse-frame construction the scattering sampler uses. Because
+the beam is always ``+z'`` in this frame, the (non-rotation-equivariant)
+scattering sampler is unchanged and cross-backend parity is preserved; multiple
+Coulomb scattering is isotropic, so it is automatically rotation-covariant.
+
+The plane-layered phantom carries a lab unit ``normal`` (default ``+z``); the
+voxel is looked up by the **material coordinate** ``u = normal . position = u0 +
+m_hat . (beam position)`` with ``m_hat = R^T normal``, and the step is limited so
+its advance in ``u`` (rate ``m_hat . direction``) stays within the layer. When
+``normal = direction = +z`` this reduces bit-for-bit to the DEV-012 path. Scoring
+is in the beam frame, so an axis-aligned and a rotated run share the identical
+grid and discretisation is not confused with physics. A ``scattering`` toggle
+adds a deterministic straight-ray mode (used by the deterministic
+rotation-equivalence check and for scattering-only vs no-scattering studies).
+
+The frame-invariant observables (integral depth dose in beam depth, lateral
+``sigma_x'``, R80, total deposited energy, energy balance) are guaranteed
+invariant under a rigid rotation because energy loss depends only on the
+water-equivalent path length and MCS only on ``rho s / X0`` and ``pv``. Validated
+(decision 0018): a rigidly rotated scene reproduces the axis-aligned beam-frame
+depth dose to round-off with scattering off and within statistics with it on; an
+oblique beam through a slab of thickness ``D`` traverses the same
+water-equivalent path as a normal beam through ``D/cos(theta)``; and the
+reference, Warp CPU and CUDA paths agree.
+
+Deferred to DEV-014 (V3 closure): arbitrary 3-D per-voxel material maps with
+robust ray/voxel (Siddon/DDA) traversal, and scoring grids decoupled from the
+transport grid in resolution *and* alignment (the grid-independence gate). Not
+yet, beyond Stage 3: treatment-planning scoring and influence matrices (Stage 4).

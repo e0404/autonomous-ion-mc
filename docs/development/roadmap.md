@@ -456,7 +456,8 @@ deterministically and reviewed in one pull request.
 | Stage 3, `DEV-009` (1-D voxelized density heterogeneity, WET transport; opens V3) | **completed** 2026-09-10 | decision `0014`; `validation/v3_density_heterogeneity.py` on the host runner (CPU + CUDA); `tests/ionmc/test_voxel_geometry.py`; DEV-009 local validation record |
 | Stage 3, `DEV-010` (per-voxel tissue materials via stopping-power ratios) | **completed** 2026-09-10 | decision `0015`; `validation/v3_material_composition.py` on the host runner (CPU + CUDA); `tests/ionmc/test_material_composition.py`; DEV-010 local validation record |
 | Stage 3, `DEV-011` (density-heterogeneous 3-D multiple-scattering transport) | **completed** 2026-09-10 | decision `0016`; `validation/v3_scattering_heterogeneity.py` on the host runner (CPU + CUDA); `tests/ionmc/test_scattering_heterogeneity.py`; DEV-011 local validation record |
-| Stage 3, `DEV-012` (non-water materials on the 3-D scattering path) | **in progress** 2026-09-10 | decision `0017`; `validation/v3_material_scattering.py`; `tests/ionmc/test_material_scattering.py` |
+| Stage 3, `DEV-012` (non-water materials on the 3-D scattering path) | **completed** 2026-09-10 | decision `0017`; `validation/v3_material_scattering.py` on the host runner (CPU + CUDA); `tests/ionmc/test_material_scattering.py`; DEV-012 local validation record; squash-merged into `develop` at `58309bf` |
+| Stage 3, `DEV-013` (arbitrary beam incidence via a beam frame; rotated-vs-axis-aligned equivalence) | **in progress** 2026-09-11 | decision `0018`; `validation/v3_arbitrary_incidence.py`; `tests/ionmc/test_arbitrary_incidence.py` |
 | Stages 4–6 | not started | — |
 
 ## Change log
@@ -557,3 +558,18 @@ deterministically and reviewed in one pull request.
   agreement. The depth-dose and scattering paths now have the **same** per-voxel
   material capability; the remaining Stage-3 work for V3 closure is 3-D voxel
   geometry with arbitrary beam incidence and decoupled scoring grids.
+- 2026-09-11: `DEV-013` added **arbitrary beam incidence via a canonical beam
+  frame** (decision `0018`). The pencil beam enters at an arbitrary position and
+  unit direction and the whole scene (beam + slab normal) can be rigidly rotated;
+  the scattering path transports in a beam frame (origin at the entry point, +z'
+  along the beam) and looks up the voxel by the material coordinate `u = normal .
+  position`, so the (non-equivariant) scattering sampler is unchanged and MCS is
+  automatically rotation-covariant. When `normal = direction = +z` it reduces to
+  the DEV-012 path bit-for-bit. A `scattering` toggle adds a deterministic
+  straight-ray mode. Validated: a rigidly rotated scene reproduces the
+  axis-aligned beam-frame depth dose (bit-exact with scattering off, within
+  statistics with it on), an oblique beam traverses the same water-equivalent
+  path as a normal beam through `D/cos(theta)`, and reference/Warp CPU/CUDA agree.
+  Remaining for **V3 closure** (DEV-014): arbitrary 3-D per-voxel maps with
+  robust ray/voxel (Siddon) traversal, and scoring grids decoupled from the
+  transport grid in resolution and alignment (the grid-independence gate).

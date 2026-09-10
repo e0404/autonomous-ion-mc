@@ -21,16 +21,38 @@ import numpy as np
 from ionmc.materials import WATER, Material
 
 
+def _unit_normal(normal: tuple[float, float, float]) -> np.ndarray:
+    """Return the normalised slab normal, validating it is non-zero."""
+    n = np.asarray(normal, dtype=np.float64)
+    norm = float(np.linalg.norm(n))
+    if norm <= 0.0:
+        raise ValueError("slab normal must be a non-zero vector")
+    return n / norm
+
+
 @dataclass(frozen=True)
 class WaterSlab:
-    """A homogeneous slab of ``material`` from ``z = 0`` to ``z = depth_mm``."""
+    """A homogeneous slab of ``material`` from ``z = 0`` to ``z = depth_mm``.
+
+    ``normal`` is the lab-frame unit vector along which the layer stack (here a
+    single layer) is measured; it defaults to +z (the historical axis-aligned
+    slab). A rotated ``normal`` places the slab at an arbitrary orientation for
+    the arbitrary-incidence scattering path (decision ``0018``).
+    """
 
     depth_mm: float = 400.0
     material: Material = WATER
+    normal: tuple[float, float, float] = (0.0, 0.0, 1.0)
 
     def __post_init__(self) -> None:
         if self.depth_mm <= 0.0:
             raise ValueError("slab depth must be positive")
+        _unit_normal(self.normal)
+
+    @property
+    def normal_hat(self) -> np.ndarray:
+        """The unit slab normal (lab frame)."""
+        return _unit_normal(self.normal)
 
     @property
     def density_g_per_cm3(self) -> float:
@@ -68,6 +90,7 @@ class VoxelSlab:
     density_g_per_cm3: np.ndarray
     material: Material = WATER
     voxel_materials: tuple[Material, ...] | None = None
+    normal: tuple[float, float, float] = (0.0, 0.0, 1.0)
     _z: np.ndarray = field(init=False, repr=False, compare=False)
     _rho: np.ndarray = field(init=False, repr=False, compare=False)
     _mats: tuple[Material, ...] = field(init=False, repr=False, compare=False)
@@ -94,13 +117,23 @@ class VoxelSlab:
             mats = tuple(self.voxel_materials)
             if len(mats) != n_vox:
                 raise ValueError("voxel_materials must have one entry per voxel")
+        _unit_normal(self.normal)
         object.__setattr__(self, "_z", z)
         object.__setattr__(self, "_rho", rho)
         object.__setattr__(self, "_mats", mats)
 
+    @property
+    def normal_hat(self) -> np.ndarray:
+        """The unit slab normal (lab frame); layer boundaries are measured
+        along it (decision ``0018``). Defaults to +z."""
+        return _unit_normal(self.normal)
+
     @classmethod
     def from_layers(
-        cls, layers: list[tuple[float, float]], material: Material = WATER
+        cls,
+        layers: list[tuple[float, float]],
+        material: Material = WATER,
+        normal: tuple[float, float, float] = (0.0, 0.0, 1.0),
     ) -> VoxelSlab:
         """Build from ``(thickness_mm, density_g_per_cm3)`` layers (front to back)."""
         if not layers:
@@ -114,10 +147,15 @@ class VoxelSlab:
             z_boundaries_mm=boundaries,
             density_g_per_cm3=np.asarray(densities, dtype=np.float64),
             material=material,
+            normal=normal,
         )
 
     @classmethod
-    def from_material_layers(cls, layers: list[tuple[float, Material]]) -> VoxelSlab:
+    def from_material_layers(
+        cls,
+        layers: list[tuple[float, Material]],
+        normal: tuple[float, float, float] = (0.0, 0.0, 1.0),
+    ) -> VoxelSlab:
         """Build from ``(thickness_mm, Material)`` layers (front to back).
 
         Each layer's mass density is the material's own density (decision 0015);
@@ -136,6 +174,7 @@ class VoxelSlab:
             density_g_per_cm3=densities,
             material=mats[0],
             voxel_materials=mats,
+            normal=normal,
         )
 
     @classmethod
@@ -145,6 +184,7 @@ class VoxelSlab:
         density: float,
         n_voxels: int,
         material: Material = WATER,
+        normal: tuple[float, float, float] = (0.0, 0.0, 1.0),
     ) -> VoxelSlab:
         """A single-density slab discretised into ``n_voxels`` equal voxels."""
         if depth_mm <= 0.0 or n_voxels < 1:
@@ -155,6 +195,7 @@ class VoxelSlab:
             z_boundaries_mm=boundaries,
             density_g_per_cm3=densities,
             material=material,
+            normal=normal,
         )
 
     @property
