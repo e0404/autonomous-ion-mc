@@ -25,10 +25,18 @@ nothing else.
 GitHub CI runs the following; run the same locally before integration:
 
 ```bash
-uvx --from pre-commit==4.6.2 pre-commit run --all-files
-uv run --with pytest --no-project python -m pytest tests -q
+uvx --from pre-commit==4.6.2 pre-commit run --all-files   # hygiene, ruff, ruff-format, mypy
+uv sync --extra dev && uv run python -m pytest tests -q
+uv run mypy
 python3 infrastructure/docs/generate_docs.py && uvx zensical build --clean --strict
 ```
+
+Ruff (lint and format) and mypy apply to `src/` and `tests/ionmc/`; the
+legacy scripts under `infrastructure/` and their tests under
+`tests/infrastructure/` (about 120 pre-existing style violations, mostly
+line length) are excluded until a separate cleanup task.
+Warp tests are skipped automatically where `warp` or a CUDA device is
+unavailable (markers `warp`, `cuda`).
 
 ## Known environment caveats
 

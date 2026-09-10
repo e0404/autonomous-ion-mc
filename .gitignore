@@ -6,6 +6,11 @@ __pycache__/
 .ruff_cache/
 .mypy_cache/
 
+# uv / ionmc local caches (uv.lock is intentionally NOT ignored: it is
+# committed once it can be generated with network access)
+.uv-cache/
+.ionmc-cache/
+
 # Build / generated output
 build/
 dist/
