@@ -220,10 +220,15 @@ Schneider/ICRU water-equivalent ratios and the analytic stopping-power ratio
 | energy conservation across material interfaces | 1e-9 (reference) | ~0 |
 | reference vs Warp CPU across material interfaces | same reactions, cumulative <= 1e-4 | ~4e-7 |
 
+The **independent physics check** is the water-equivalent-ratio band membership;
+the R80-at-``R_water/WER`` check is a *self-consistency* check (it uses the same
+analytic SPR to build both the transported density and the expectation), so it
+confirms the engine applies the SPR correctly, not the SPR value itself.
+
 Deferred: energy-dependent SPR / per-material stopping tables (bone's 2.5 % energy
-dependence), element-specific nuclear cross sections, and heterogeneous-material
-scattering. Warp CPU/CUDA results are recorded in the DEV-010 local validation
-record (host run below).
+dependence), element-specific nuclear cross sections, and non-water/heterogeneous-
+material scattering (the 3-D path rejects both). Warp CPU/CUDA results are
+recorded in the DEV-010 local validation record (host run below).
 
 ## Unit and regression tests
 

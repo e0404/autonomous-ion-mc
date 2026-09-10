@@ -13,6 +13,7 @@ import numpy as np
 import pytest
 
 from ionmc import materials as M
+from ionmc.constants import AVOGADRO
 from ionmc.data import MCSQUARE_PSTAR_WATER
 from ionmc.data.stopping_tables import load_stopping_table
 from ionmc.particles import PROTON
@@ -123,6 +124,21 @@ def test_tissue_r80_at_water_range_over_wer(table, name, e0) -> None:
     assert tissue.r80_mm() == pytest.approx(water.r80_mm() / wer, rel=3e-3)
 
 
+def test_scattering_rejects_non_water_material(table) -> None:
+    """The water-only 3-D scattering path rejects a homogeneous non-water slab
+    (its water-equivalent density differs from the physical density it would feed
+    the water table) rather than silently giving a wrong Bragg depth (0015)."""
+    from ionmc.transport.depth_dose import DepthLateralGrid
+
+    bone = VoxelSlab.from_material_layers([(200.0, M.CORTICAL_BONE)])
+    eng = TransportEngine(table, bone, DepthDoseGrid(400.0, 800))
+    lat = DepthLateralGrid(
+        depth_mm=200.0, n_depth=400, half_width_mm=25.0, n_lateral=100
+    )
+    with pytest.raises(NotImplementedError, match="water"):
+        eng.run_scattering(PencilBeamSource(150.0), lat, 1, path="python")
+
+
 def test_multi_material_interface_conserves_energy(table) -> None:
     grid = DepthDoseGrid(400.0, 800)
     slab = VoxelSlab.from_material_layers(
@@ -153,19 +169,35 @@ def test_material_cross_backend(warp_module, table) -> None:
     assert abs(war.energy_balance) <= 1e-5
 
 
-def test_nuclear_scales_with_composition(table) -> None:
-    """The nonelastic reaction count in adipose exceeds the oxygen-only estimate:
-    running the same phantom composition scaled vs oxygen-only content."""
-    # a thick adipose slab: more reactions than if only its oxygen counted
+def test_engine_builds_composition_scaled_nuclear_density(table) -> None:
+    """The engine's per-voxel nuclear density is the composition-scaled oxygen-
+    equivalent number density (decision 0015): 1:1 with n_O for water and ~3.4x
+    the oxygen-only value for adipose. This is what the nuclear step uses, so it
+    verifies the transport wiring, not just the material property."""
     grid = DepthDoseGrid(400.0, 800)
-    adipose_slab = VoxelSlab.from_material_layers([(200.0, M.ADIPOSE)])
-    n = 4000
-    res = TransportEngine(table, adipose_slab, grid, nuclear=True).run(
+    for mat, factor in ((M.WATER, 1.0), (M.ADIPOSE, 3.40), (M.CORTICAL_BONE, 2.08)):
+        eng = TransportEngine(
+            table, VoxelSlab.from_material_layers([(200.0, mat)]), grid, nuclear=True
+        )
+        expected = AVOGADRO * mat.oxygen_equivalent_per_gram * mat.density_g_per_cm3
+        assert eng.voxel_oxygen_density[0] == pytest.approx(expected, rel=1e-12)
+        oxygen_only = AVOGADRO * mat.atoms_per_gram("O") * mat.density_g_per_cm3
+        assert eng.voxel_oxygen_density[0] / oxygen_only == pytest.approx(
+            factor, rel=0.03
+        )
+
+
+def test_composition_raises_adipose_reactions_over_matched_water(table) -> None:
+    """At matched water-equivalent thickness a fatty tissue reacts more than water
+    because its composition-scaled nuclear content raises the macroscopic rate."""
+    grid = DepthDoseGrid(400.0, 800)
+    n = 6000
+    spr = mass_stopping_power_ratio(M.ADIPOSE, 150.0, PROTON)
+    wer = spr * M.ADIPOSE.density_g_per_cm3
+    adipose = TransportEngine(
+        table, VoxelSlab.from_material_layers([(150.0, M.ADIPOSE)]), grid, nuclear=True
+    ).run(PencilBeamSource(150.0), n, seed=5, path="python")
+    water = TransportEngine(table, WaterSlab(150.0 * wer), grid, nuclear=True).run(
         PencilBeamSource(150.0), n, seed=5, path="python"
     )
-    # oxygen-equivalent density is ~3.4x the oxygen-only density for adipose, so
-    # the reaction fraction is well above the water/oxygen-only expectation
-    frac = res.n_reactions / n
-    assert frac > 0.0
-    ratio = M.ADIPOSE.oxygen_equivalent_per_gram / M.ADIPOSE.atoms_per_gram("O")
-    assert ratio > 3.0
+    assert adipose.n_reactions > water.n_reactions

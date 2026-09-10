@@ -270,8 +270,9 @@ WATER: Material = WATER_ICRU49
 
 
 _ICRU44 = (
-    "ICRU Report 44 (1989) tissue composition as tabulated by NIST; "
-    "I-value ICRU 37/49; radiation length from Tsai's formula (PDG)"
+    "ICRU Report 44 (1989) tissue composition, density and compound mean "
+    "excitation energy as tabulated by NIST (Composition of materials); "
+    "radiation length from Tsai's formula (PDG)"
 )
 
 

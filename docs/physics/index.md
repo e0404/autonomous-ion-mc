@@ -321,8 +321,10 @@ future heterogeneous scattering path.
 Deferred: energy-dependent SPR / per-material stopping tables (cortical bone's
 2.5 % energy dependence; soft tissues are already < 0.25 % with the 150 MeV
 scalar), element-specific measured nonelastic cross sections (C, Ca), per-tissue
-density-effect parameters, and heterogeneous-material multiple scattering on the
-3-D path (still guarded by the decision-0014 ``NotImplementedError``).
+density-effect parameters, and non-water/heterogeneous-material multiple
+scattering on the 3-D path (the water-only scattering path rejects both a
+heterogeneous slab and a homogeneous non-water material with a
+``NotImplementedError`` rather than silently giving a wrong Bragg depth).
 
 Deferred to later Stage-3 tasks: full 3-D voxel geometry with arbitrary beam
 incidence and ray/voxel traversal, nuclear removal and the lateral halo on the

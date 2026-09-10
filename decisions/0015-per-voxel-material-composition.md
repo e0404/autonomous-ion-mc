@@ -107,10 +107,14 @@ Schneider 2000, PDG) and an in-repo SPR computation established:
   rate, far better than the 2-3.4x error of oxygen-only).
 - Per-tissue Sternheimer density-effect parameters (< 0.1 % for protons under
   900 MeV; `density_effect=None`).
-- Heterogeneous-material multiple scattering on the 3-D path (it stays guarded by
-  the decision-`0014` `NotImplementedError`; couple it with the deferred
-  heterogeneous 3-D geometry work). Radiation lengths are populated now for that
-  future work and validated against PDG.
+- Multiple scattering on the 3-D path for **non-water** materials (and
+  heterogeneous slabs). The scattering path feeds the *physical* density into the
+  water stopping table with no SPR, so it is correct only for water; it now
+  rejects both a heterogeneous `VoxelSlab` and a homogeneous non-water material
+  (its water-equivalent density differs from the physical density) with a
+  `NotImplementedError`, rather than silently returning a wrong Bragg depth.
+  Radiation lengths are populated now for that future work and validated against
+  PDG.
 
 ## Consequences
 

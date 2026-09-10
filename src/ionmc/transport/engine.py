@@ -1,7 +1,8 @@
 """Transport engine: reference Python and Warp execution of CSDA depth dose.
 
-The engine runs a monoenergetic proton pencil beam through a homogeneous water
-slab and returns the integral depth dose (energy deposited per depth bin). The
+The engine runs a monoenergetic proton pencil beam through a water slab or a 1-D
+voxelized, materially-heterogeneous phantom (decisions 0014, 0015) and returns
+the integral depth dose (energy deposited per depth bin). The
 **reference Python** path is a scalar per-history loop calling the float64
 shared-source step functions (:mod:`ionmc.physics.transport`); the **warp** path
 launches the equivalent kernel on the CPU or CUDA device (decision ``0009``).
@@ -562,9 +563,10 @@ class TransportEngine:
         scattering-only study (``straggling=False``) is possible. The medium's
         radiation length must be known (> 0).
 
-        The 3-D scattering path is homogeneous only: it uses the front-voxel
-        density. Nuclear/scattering in a heterogeneous ``VoxelSlab`` is deferred
-        to a later Stage-3 task (decision 0014), so a heterogeneous slab is
+        The 3-D scattering path is water only: it feeds the physical density into
+        the water stopping table with no stopping-power ratio, so it is correct
+        only for water. Density heterogeneity (decision 0014) and non-water
+        materials (decision 0015) are deferred to a later Stage-3 task; both are
         rejected here rather than silently giving a wrong result.
         """
         if self.radiation_length_g_per_cm2 <= 0.0:
@@ -576,6 +578,16 @@ class TransportEngine:
                 "run_scattering supports only a homogeneous medium; the 3-D "
                 "scattering path does not yet handle density heterogeneity "
                 "(decision 0014). Use a WaterSlab or a single-density VoxelSlab."
+            )
+        # a homogeneous non-water material collapses to one voxel but its water-
+        # equivalent density (SPR x rho) differs from the physical density the
+        # scattering path uses; reject it rather than transport it as water
+        # (decision 0015; the depth-dose path handles it via the SPR).
+        if abs(self.voxel_density[0] - self.density_g_per_cm3) > 1.0e-9:
+            raise NotImplementedError(
+                "run_scattering supports only water; the 3-D scattering path does "
+                "not yet apply the material stopping-power ratio (decision 0015). "
+                "Use water for scattering studies."
             )
         state = source.sample(n_histories, seed)
         energy_in = float(np.sum(state.energy_mev * state.weight))
