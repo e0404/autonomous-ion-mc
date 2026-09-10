@@ -325,12 +325,10 @@ class TransportEngine:
         self.secondary_heavy_fraction = secondary_heavy_fraction
         self.secondary_proton_fraction = secondary_proton_fraction
         self.material_reference_energy_mev = material_reference_energy_mev
-        #: Electrons per gram <Z/A> of the medium's front material, for the
-        #: homogeneous scattering path (Bohr straggling; decision 0010).
-        self.za_ratio = slab.material.electrons_per_gram_ratio
-        #: The depth-dose transport operates in a *water-equivalent* frame (water
-        #: table x water-equivalent density; decision 0015), so its straggling
-        #: prefactor <Z/A> is water's; the material's <Z/A> enters through the SPR.
+        #: Both transport paths operate in a *water-equivalent* frame (water table
+        #: x water-equivalent density; decisions 0015, 0017), so the Bohr
+        #: straggling prefactor <Z/A> is water's on every path; the material's
+        #: <Z/A> enters through the stopping-power ratio.
         self.depth_dose_za_ratio = WATER.electrons_per_gram_ratio
         #: Radiation length [g/cm^2] of the front material (MCS; decision 0011).
         self.radiation_length_g_per_cm2 = slab.material.radiation_length_g_per_cm2
