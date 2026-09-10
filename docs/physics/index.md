@@ -108,8 +108,29 @@ The tabulated layer agrees with the analytic model (decision `0006`) to within
 100/150/200/250 MeV to within 1.8e-4 (with the 8.9 µm residual range below
 0.5 MeV added). It is defined over the tabulated energy range 0.5-400 MeV.
 
-## Not yet implemented
+## Continuous-slowing-down transport (Stage 1, longitudinal)
 
-Energy-loss straggling, multiple Coulomb scattering, nuclear interactions,
-material libraries beyond water, and all transport are future stages of the
-[roadmap](../development/roadmap.md).
+Modules: ``ionmc.transport`` (``TransportEngine``, ``PencilBeamSource``,
+``WaterSlab``, ``DepthDoseGrid``); shared-source step physics
+``ionmc.physics.transport``; decision `0009`.
+
+A monoenergetic proton pencil beam is transported through homogeneous water by
+the continuous-slowing-down approximation with **no straggling and no
+scattering yet**: one history per thread, an in-kernel step loop with a
+midpoint (RK2) energy-loss integration, and energy deposited along the axis
+into a 1-D integral-depth-dose grid by atomics. The step is limited by a
+fractional energy loss and by the depth-bin boundary; below a 0.5 MeV cutoff
+the residual energy is deposited locally. The stopping power comes from the
+tabulated layer (task DEV-003).
+
+The reference Python path is a scalar per-history loop over the *same*
+shared-source step functions the Warp CPU/CUDA kernel runs. Energy is conserved
+exactly (float64) and the distal 80 % depth (R80) reproduces the tabulated CSDA
+range to within 0.15 % at 100-200 MeV. Because the distal edge is a
+near-discontinuity without straggling, cross-backend agreement is measured on
+the *cumulative* depth dose (reference vs Warp ≤ 1e-4 of the total), not
+bin-by-bin.
+
+Not yet: energy-loss straggling and the Bragg-peak shape (next task),
+multiple Coulomb scattering and lateral spread, nuclear interactions,
+heterogeneous geometry, and volumetric dose.

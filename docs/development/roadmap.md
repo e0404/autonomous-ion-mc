@@ -461,5 +461,9 @@ deterministically and reviewed in one pull request.
   "provisional until Stage 1" status of decision `0005` is unchanged.
 - 2026-09-10: `DEV-003` completed, closing **Stage 0** and milestone **V0**:
   external data layer (decision `0007`) and tabulated PCHIP stopping power
-  (decision `0008`). Next milestone is Stage 1 (proton condensed-history
-  transport in homogeneous water).
+  (decision `0008`).
+- 2026-09-10: `DEV-004` began **Stage 1**: the proton transport architecture
+  and continuous-slowing-down longitudinal depth dose (decision `0009`),
+  deterministic (no straggling/scattering yet). Next: energy-loss straggling
+  and the Bragg-peak shape, then multiple Coulomb scattering and lateral
+  spread, which close milestone V1.
