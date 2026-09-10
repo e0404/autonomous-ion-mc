@@ -150,4 +150,16 @@ SHA (Warp CPU and CUDA), recorded below.
 
 ## Later validation outcome
 
-To be filled in from the DEV-005 host run.
+DEV-005 host run `RUN-20260910T143136Z-71fe1ef7` (RTX A6000, CUDA 12.9, Warp 1.17.0, SHA `9b75365`,
+40000 histories): all eight gates passed. Mean range = CSDA range to 5e-5 at
+100/150/200 MeV (straggling unbiased). Range straggling sigma_R = 0.853 / 1.687
+/ 2.705 mm vs the analytic Bohr integral 0.860 / 1.694 / 2.712 mm (ratio
+0.992 / 0.996 / 0.997) and Bortfeld 0.811 / 1.582 / 2.520 mm (ratio 1.052 /
+1.067 / 1.073 — the expected +5-7 % electron-binding gap); sigma_R/R =
+1.11 / 1.07 / 1.04 %. Energy conservation ~8e-9 (reference float64 residual in
+the deposit) to ~5e-7 (Warp float32). A Bragg peak with peak/entrance ~6.8.
+Two independent seeds statistically consistent: RMS(t) = 1.10, max|t| = 4.1.
+Reference vs Warp CPU cumulative depth dose 5.8e-7; **Warp CPU vs CUDA 8.1e-8**,
+with sigma_R agreeing to seven digits (1.68423368 vs 1.68423374 mm) — the
+shared counter-based streams make the two devices sample the same histories up
+to float32 rounding.
