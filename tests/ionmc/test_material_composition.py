@@ -124,10 +124,10 @@ def test_tissue_r80_at_water_range_over_wer(table, name, e0) -> None:
     assert tissue.r80_mm() == pytest.approx(water.r80_mm() / wer, rel=3e-3)
 
 
-def test_scattering_rejects_non_water_material(table) -> None:
-    """The water-only 3-D scattering path rejects a homogeneous non-water slab
-    (its water-equivalent density differs from the physical density it would feed
-    the water table) rather than silently giving a wrong Bragg depth (0015)."""
+def test_scattering_supports_non_water_material(table) -> None:
+    """The 3-D scattering path now supports a non-water material (decision 0017):
+    a bone slab runs and conserves energy rather than raising as it did under
+    decision 0015/0016."""
     from ionmc.transport.depth_dose import DepthLateralGrid
 
     bone = VoxelSlab.from_material_layers([(200.0, M.CORTICAL_BONE)])
@@ -135,8 +135,8 @@ def test_scattering_rejects_non_water_material(table) -> None:
     lat = DepthLateralGrid(
         depth_mm=200.0, n_depth=400, half_width_mm=25.0, n_lateral=100
     )
-    with pytest.raises(NotImplementedError, match="water"):
-        eng.run_scattering(PencilBeamSource(150.0), lat, 1, path="python")
+    res = eng.run_scattering(PencilBeamSource(150.0), lat, 100, seed=1, path="python")
+    assert abs(res.energy_balance) <= 1e-9
 
 
 def test_multi_material_interface_conserves_energy(table) -> None:

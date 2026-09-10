@@ -335,8 +335,9 @@ def csda_scattering_kernel(
     rng_state0: wp.array(dtype=wp.uint32),
     voxel_z: wp.array(dtype=float),
     voxel_density: wp.array(dtype=float),
+    voxel_phys: wp.array(dtype=float),
+    voxel_radlen: wp.array(dtype=float),
     n_vox: int,
-    radlen: float,
     max_fraction: float,
     max_step_mm: float,
     geom_depth_mm: float,
@@ -402,7 +403,7 @@ def csda_scattering_kernel(
         pz = pz + a * dz
         if e > straggling_floor_mev:
             theta0 = transport.highland_theta0(
-                e, rest_energy_mev, charge, s, density, radlen
+                e, rest_energy_mev, charge, s, voxel_phys[voxel], voxel_radlen[voxel]
             )
             nd = _scatter_dir(
                 dx, dy, dz, wp.randn(rng) * theta0, wp.randn(rng) * theta0
@@ -489,7 +490,8 @@ class ScatteringKernel:
         grid: Any,
         voxel_z_mm: np.ndarray,
         voxel_density: np.ndarray,
-        radiation_length_g_per_cm2: float,
+        voxel_physical_density: np.ndarray,
+        voxel_radiation_length: np.ndarray,
         max_fraction: float,
         max_step_mm: float,
         geom_depth_mm: float,
@@ -523,6 +525,16 @@ class ScatteringKernel:
         vrho: Any = wp.array(
             np.ascontiguousarray(voxel_density, dtype=np.float32), dtype=float, device=d
         )
+        vphys: Any = wp.array(
+            np.ascontiguousarray(voxel_physical_density, dtype=np.float32),
+            dtype=float,
+            device=d,
+        )
+        vradlen: Any = wp.array(
+            np.ascontiguousarray(voxel_radiation_length, dtype=np.float32),
+            dtype=float,
+            device=d,
+        )
         n_vox = int(voxel_density.shape[0])
         edep = wp.zeros(nz * nx, dtype=wp.float64, device=d)
         truncated = wp.zeros(1, dtype=int, device=d)
@@ -538,8 +550,9 @@ class ScatteringKernel:
                 rng,
                 vz,
                 vrho,
+                vphys,
+                vradlen,
                 n_vox,
-                float(radiation_length_g_per_cm2),
                 float(max_fraction),
                 float(max_step_mm),
                 float(geom_depth_mm),

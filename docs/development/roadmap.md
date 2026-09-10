@@ -455,7 +455,8 @@ deterministically and reviewed in one pull request.
 | Stage 2, `DEV-008` (secondary charged-particle transport; closes V2) | **completed** 2026-09-10 | decision `0013`; `validation/v2_secondary_transport.py` on the host runner (CPU + CUDA); `tests/ionmc/test_secondaries.py`; DEV-008 local validation record; **milestone V2 closed** |
 | Stage 3, `DEV-009` (1-D voxelized density heterogeneity, WET transport; opens V3) | **completed** 2026-09-10 | decision `0014`; `validation/v3_density_heterogeneity.py` on the host runner (CPU + CUDA); `tests/ionmc/test_voxel_geometry.py`; DEV-009 local validation record |
 | Stage 3, `DEV-010` (per-voxel tissue materials via stopping-power ratios) | **completed** 2026-09-10 | decision `0015`; `validation/v3_material_composition.py` on the host runner (CPU + CUDA); `tests/ionmc/test_material_composition.py`; DEV-010 local validation record |
-| Stage 3, `DEV-011` (density-heterogeneous 3-D multiple-scattering transport) | **in progress** 2026-09-10 | decision `0016`; `validation/v3_scattering_heterogeneity.py`; `tests/ionmc/test_scattering_heterogeneity.py` |
+| Stage 3, `DEV-011` (density-heterogeneous 3-D multiple-scattering transport) | **completed** 2026-09-10 | decision `0016`; `validation/v3_scattering_heterogeneity.py` on the host runner (CPU + CUDA); `tests/ionmc/test_scattering_heterogeneity.py`; DEV-011 local validation record |
+| Stage 3, `DEV-012` (non-water materials on the 3-D scattering path) | **in progress** 2026-09-10 | decision `0017`; `validation/v3_material_scattering.py`; `tests/ionmc/test_material_scattering.py` |
 | Stages 4–6 | not started | — |
 
 ## Change log
@@ -544,3 +545,15 @@ deterministically and reviewed in one pull request.
   agreement. This closes the density-heterogeneity half of the scattering path;
   materials on the scattering path and 3-D geometry/arbitrary incidence remain
   for V3 closure.
+- 2026-09-10: `DEV-012` added **non-water materials on the 3-D scattering path**
+  (decision `0017`), mirroring DEV-010 for the scattering kernel: the energy loss
+  uses the per-voxel water-equivalent density and the multiple scattering the
+  per-voxel physical density and material radiation length (looked up by depth).
+  The `is_water_only` guard is lifted; the voxel merge now collapses on the full
+  per-voxel physics tuple. Validated a homogeneous bone slab and a water/bone/
+  water interface against a new material-aware Fermi-Eyges oracle (energy vs
+  depth from the water-equivalent thickness, scattering power from the physical
+  density and material X0) to < 1 %, energy conservation, and cross-backend
+  agreement. The depth-dose and scattering paths now have the **same** per-voxel
+  material capability; the remaining Stage-3 work for V3 closure is 3-D voxel
+  geometry with arbitrary beam incidence and decoupled scoring grids.

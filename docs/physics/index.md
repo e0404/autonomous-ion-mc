@@ -10,7 +10,8 @@ nonelastic nuclear attenuation of primaries (task `DEV-007`), secondary
 charged-particle transport (task `DEV-008`, closing milestone V2), and 1-D
 voxelized density heterogeneity (task `DEV-009`, opening milestone V3), and
 per-voxel tissue materials via stopping-power ratios (task `DEV-010`), and
-density-heterogeneous 3-D multiple scattering (task `DEV-011`).
+density-heterogeneous 3-D multiple scattering (task `DEV-011`), and non-water
+materials on the 3-D scattering path (task `DEV-012`).
 
 ## Electronic stopping power (analytical layer)
 
@@ -348,8 +349,30 @@ a uniform density and a **piecewise-density** Fermi-Eyges variant across a water
 dense/water interface to < 1 %; energy is conserved; and the reference and Warp
 paths agree (``sigma_x`` tightly, the depth dose within the 3-D float32 budget).
 
+## Non-water materials on the 3-D scattering path (Stage 3, task DEV-012, decision 0017)
+
+DEV-012 extends the scattering path to per-voxel non-water **materials**,
+mirroring DEV-010 for the scattering kernel. The subtlety is that stopping and
+scattering use *different* densities: the energy loss uses the per-voxel
+water-equivalent density ``rho_we = SPR(material) rho_phys`` (with water's
+``<Z/A>``), while the Highland scattering power uses the per-voxel **physical**
+density and **material** radiation length, ``theta0^2 = (13.6/pv)^2 (rho_phys s /
+X0_mat)``. The engine builds and merges a per-voxel physical density and radiation
+length alongside the water-equivalent and oxygen-equivalent densities; the
+scattering reference driver and Warp kernel look both up by depth. The
+``is_water_only`` guard is lifted; only a known radiation length per voxel is
+required. A uniform single-material slab still collapses to one voxel, so water
+reproduces the prior result bit-for-bit.
+
+Validated against a **material-aware** Fermi-Eyges oracle
+(``lateral_sigma_x_material_mm``: energy vs depth from the integrated
+water-equivalent thickness, scattering power from the physical density and
+material radiation length): a homogeneous bone slab (R80 at ``R_water/WER``,
+``sigma_x`` with bone's smaller X0) and a water/bone/water interface reproduce the
+oracle to < 1 %, energy is conserved, and the backends agree. The depth-dose and
+scattering paths now share the same per-voxel material capability.
+
 Deferred to later Stage-3 tasks: full 3-D voxel geometry with arbitrary beam
-incidence and ray/voxel traversal, non-water *materials* and nuclear removal /
-lateral halo on the 3-D scattering path, and scoring grids decoupled from the
-transport grid. Not yet, beyond Stage 3: treatment-planning scoring and influence
-matrices (Stage 4).
+incidence and ray/voxel traversal, nuclear removal / lateral halo on the 3-D
+scattering path, and scoring grids decoupled from the transport grid. Not yet,
+beyond Stage 3: treatment-planning scoring and influence matrices (Stage 4).
