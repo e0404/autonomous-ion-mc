@@ -73,9 +73,38 @@ env PYTHONPATH=/workspace/src python benchmarks/bench_dose3d.py \
     --require-cuda --cache-dir /cache/ionmc
 ```
 
+## Regression tracking
+
+Each benchmark's **physics identity is anchored on its reference (float64) result**,
+which is deterministic and hardware-independent — the stable pin across machines and
+revisions. `benchmarks/baselines/<benchmark>.json` (decision `0032`) commits that
+fingerprint (benchmark, config, reference digest) plus a machine-tagged throughput
+snapshot. `benchmarks/check_regression.py` compares a fresh report against a baseline:
+it **gates on the reference digest** (the V6 "unchanged scientific outcome") and
+**reports per-backend throughput ratios** without gating on them (wall-clock is
+machine-dependent).
+
+```bash
+# check a fresh run against the committed baseline (exit 3 on a physics regression)
+env PYTHONPATH=/workspace/src python benchmarks/bench_dose3d.py \
+    --require-cuda --cache-dir /cache/ionmc > r.json
+env PYTHONPATH=/workspace/src python benchmarks/check_regression.py \
+    --report r.json --baseline benchmarks/baselines/dose3d.json
+
+# (re)generate a baseline from a report on the reference GPU machine
+env PYTHONPATH=/workspace/src python benchmarks/check_regression.py \
+    --report r.json --emit-baseline > benchmarks/baselines/dose3d.json
+```
+
+This is the before/after guard for every future optimisation: a change is admissible
+under V6 only if the reference physics is unchanged, with the throughput delta
+documented.
+
 ## Deferred
 
-GPU occupancy/scaling sweeps, benchmarks of the 3-D scattering / dose / LET / fluence /
-multi-ion / fragmentation paths, stochastic-throughput benchmarks, memory-footprint
-measurement, a persisted results series for regression tracking, `float32`-vs-`float64`
-accumulation precision studies, and any actual kernel or memory-layout optimisation.
+Benchmarks of the 3-D scattering (stochastic) / LET / fluence / multi-ion /
+fragmentation paths, grid/beamlet-count scaling dimensions, memory-footprint
+measurement, a persisted results *time series* (trend history beyond a single
+baseline), per-backend throughput regression *thresholds*, wiring the regression check
+into CI (needs a GPU), `float32`-vs-`float64` accumulation precision studies, and any
+actual kernel or memory-layout optimisation.

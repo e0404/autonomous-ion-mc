@@ -178,3 +178,93 @@ def test_end_to_end_reference_benchmark(pstar_cache_root) -> None:
         backend="reference",
     )
     assert t.throughput_per_s is not None and t.throughput_per_s > 0.0
+
+
+# -- performance-regression tracking (decision 0032) --------------------------
+
+
+def _report(name="dose3d", digest="abc123", integral=150.0, peak=None, timings=None):
+    r = {
+        "benchmark": name,
+        "config": {"energy_mev": 150.0},
+        "digest": {
+            "reference": {
+                "integral_per_history_mev": integral,
+                "shape_digest": digest,
+            }
+        },
+    }
+    if peak is not None:
+        r["peak_throughput_per_s"] = peak
+    if timings is not None:
+        r["timings"] = timings
+    return r
+
+
+def test_throughput_by_backend_both_shapes() -> None:
+    peak = _report(peak={"warp:cpu": 100.0, "warp:cuda:0": 900.0})
+    assert bm.throughput_by_backend(peak) == {"warp:cpu": 100.0, "warp:cuda:0": 900.0}
+    timings = _report(
+        timings=[
+            {"backend": "reference", "throughput_per_s": 10.0},
+            {"backend": "warp:cpu", "throughput_per_s": 50.0},
+            {"backend": "warp:cpu", "throughput_per_s": 80.0},  # max wins
+            {"backend": "warp:cpu", "throughput_per_s": None},
+        ]
+    )
+    assert bm.throughput_by_backend(timings) == {"reference": 10.0, "warp:cpu": 80.0}
+
+
+def test_physics_fingerprint_and_make_baseline() -> None:
+    r = _report(peak={"warp:cuda:0": 900.0})
+    r["provenance"] = {"machine": "x86_64", "warp_version": "1.17.0"}
+    fp = bm.physics_fingerprint(r)
+    assert fp["benchmark"] == "dose3d"
+    assert fp["reference_digest"]["shape_digest"] == "abc123"
+    base = bm.make_baseline(r)
+    assert base["physics"] == fp
+    assert base["throughput_by_backend"] == {"warp:cuda:0": 900.0}
+    assert base["recorded_on"]["machine"] == "x86_64"
+
+
+def test_compare_to_baseline_passes_on_matching_physics() -> None:
+    base = bm.make_baseline(_report(peak={"warp:cuda:0": 900.0}))
+    # a later run on a faster machine: same physics, 1.5x throughput
+    cur = _report(peak={"warp:cuda:0": 1350.0})
+    res = bm.compare_to_baseline(cur, base)
+    assert res["physics_ok"] is True
+    assert res["reference_digest_match"] is True
+    assert res["throughput"]["warp:cuda:0"]["ratio"] == pytest.approx(1.5)
+
+
+def test_compare_to_baseline_fails_on_changed_digest() -> None:
+    """A changed reference digest is a physics regression, even if the integral and
+    throughput are unchanged — this is the guard the mechanism exists for."""
+    base = bm.make_baseline(_report(digest="abc123"))
+    res = bm.compare_to_baseline(_report(digest="def456"), base)
+    assert res["physics_ok"] is False
+    assert res["reference_digest_match"] is False
+
+
+def test_compare_to_baseline_fails_on_changed_integral() -> None:
+    base = bm.make_baseline(_report(integral=150.0))
+    res = bm.compare_to_baseline(_report(integral=150.5), base)
+    assert res["physics_ok"] is False
+    assert res["integral_rel_diff"] > bm.BASELINE_INTEGRAL_TOL
+
+
+def test_compare_to_baseline_fails_on_benchmark_mismatch() -> None:
+    base = bm.make_baseline(_report(name="dose3d"))
+    res = bm.compare_to_baseline(_report(name="depth_dose_csda"), base)
+    assert res["physics_ok"] is False
+    assert res["benchmark_match"] is False
+
+
+def test_compare_to_baseline_handles_missing_backend() -> None:
+    base = bm.make_baseline(_report(peak={"warp:cpu": 100.0, "warp:cuda:0": 900.0}))
+    cur = _report(peak={"warp:cpu": 120.0})  # cuda absent this run
+    res = bm.compare_to_baseline(cur, base)
+    assert res["physics_ok"] is True
+    assert res["throughput"]["warp:cuda:0"]["current"] is None
+    assert res["throughput"]["warp:cuda:0"]["ratio"] is None
+    assert res["throughput"]["warp:cpu"]["ratio"] == pytest.approx(1.2)
