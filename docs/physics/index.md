@@ -551,3 +551,29 @@ the dose scorer's cross-backend story (decision 0022), so under scattering only 
 deterministic per-voxel and the stochastic totals are tight. Deferred:
 track-averaged LET_t, restricted LET with a delta cutoff, species-/energy-resolved
 LET, and a water-normalised LET-to-water variant for heterogeneous media.
+
+## Batch-based statistical uncertainty for 3-D dose (Stage 4, task DEV-019, decision 0024)
+
+DEV-019 adds the MUST statistical-uncertainty estimate for the volumetric scorer.
+`TransportEngine.run_scattering_batched` runs `n_batches` independent history
+batches (batch `b` seeded `seed+1+b`, so the batches are independent Monte Carlo
+samples) into a `DoseGrid3D` and reports, per voxel, the mean dose and the
+**standard error of the mean** `std(batches, ddof=1) / √n_batches` — the same
+independent-batch convention already used for the 1-D depth dose (decision 0010).
+With `score_let` it also reduces the per-batch LET_d to a mean and SEM. The result
+exposes the per-voxel relative standard error and a high-dose-region
+relative-uncertainty summary (the standard MC quality metric — uncertainty is
+reported only where there is appreciable dose, since the low-dose tail is
+statistically noisy). Because each batch reuses the shared `_scatter_state`
+dispatch, the estimator is backend-agnostic and needs no kernel change.
+
+Validated (decision 0024): the SEM obeys the `1/√N` law (quadrupling the histories
+halves the high-dose mean relative SEM, checked over a shared high-dose mask so
+both runs average over the identical voxel set); the batch mean conserves energy
+for a contained beam; the SEM is positive where there is dose and zero elsewhere;
+and the batched-mean total dose agrees across the reference and Warp CPU/CUDA
+backends (the per-voxel mean under scattering decorrelates like dose, decision
+0022, so the cross-backend gate is on the tight total). Deferred:
+beamlet-/influence-resolved (planning-aware) uncertainty, a single-pass online
+variance estimator, and the statistical gamma/uncertainty-based cross-backend
+spatial dose comparison this machinery now enables.

@@ -405,6 +405,27 @@ construction. The LET_d ratio inherits the dose scorer's cross-backend story
 spatial gate, while under scattering only the totals stay tight and the per-voxel
 ratio is a recorded diagnostic.
 
+## V4 (uncertainty) - batch-based statistical uncertainty for 3-D dose (task DEV-019)
+
+Script: ``validation/v4_uncertainty.py``. `run_scattering_batched` runs independent
+history batches into a `DoseGrid3D` and reports the per-voxel mean and standard
+error of the mean (decision 0024).
+
+| check | criterion | result |
+|---|---|---|
+| se_scaling (4x histories -> ~0.5x rel SEM, shared mask) | ratio in [0.35, 0.71] | ~0.53 |
+| mean energy conservation (batch-mean total == input) | rel <= 1e-9 | ~0 |
+| uncertainty sanity (SEM>0 in dose, ==0 outside) | exact | pass |
+| reference vs Warp CPU batched-mean total dose | rel <= 1e-4 | ~1.4e-9 |
+| CUDA vs CPU batched-mean total dose | rel <= 1e-4 | recorded (host) |
+
+The standard error of the mean is `std(batches, ddof=1)/√n_batches`; the `1/√N`
+scaling is checked over a **shared** high-dose voxel mask so both runs average over
+the identical voxel set (per-voxel SEM estimates are individually noisy at a
+practical batch count). Under scattering the per-voxel batched *mean* decorrelates
+across backends like dose (decision 0022), so the cross-backend gate is on the tight
+total.
+
 ## Unit and regression tests
 
 ``tests/ionmc/`` covers units and constants, materials, the RNG mirror

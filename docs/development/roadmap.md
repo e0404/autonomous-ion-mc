@@ -462,7 +462,8 @@ deterministically and reviewed in one pull request.
 | Stage 3, `DEV-015` (3-D voxel grid with ray/voxel DDA traversal; arbitrary incidence through true voxel geometries) | **completed** 2026-09-11 | decision `0020`; `validation/v3_voxel_grid_3d.py` on the host runner (CPU + CUDA); `tests/ionmc/test_voxel_grid_3d.py`; DEV-015 local validation record; squash-merged into `develop` at `d0df873` |
 | Stage 4, `DEV-016` (lab-frame 3-D dose scoring on the voxel-grid path; prerequisite for beamlet influence matrices) | **completed** 2026-09-11 | decision `0021`; `validation/v4_dose3d.py` on the host runner (CPU + CUDA); `tests/ionmc/test_dose3d.py`; DEV-016 local validation record; squash-merged into `develop` at `e8f89df` |
 | Stage 4, `DEV-017` (beamlet-resolved scoring and sparse dose-influence matrices; V4 beamlet-sum gate) | **completed** 2026-09-11 | decision `0022`; `validation/v4_influence.py` on the host runner (CPU + CUDA, all 5 gates); `tests/ionmc/test_influence.py`; DEV-017 local validation record; squash-merged into `develop` at `63883c4` |
-| Stage 4, `DEV-018` (dose-averaged LET (LET_d) scoring; V4 LET gate) | **in progress** 2026-09-11 | decision `0023` (planned); `validation/v4_let.py` (planned); `tests/ionmc/test_let.py` (planned) |
+| Stage 4, `DEV-018` (dose-averaged LET (LET_d) scoring; V4 LET gate) | **completed** 2026-09-11 | decision `0023`; `validation/v4_let.py` on the host runner (CPU + CUDA, all 6 gates); `tests/ionmc/test_let.py`; DEV-018 local validation record; squash-merged into `develop` at `3b5ddbf` |
+| Stage 4, `DEV-019` (batch-based statistical uncertainty for 3-D dose; V4 "within statistics") | **in progress** 2026-09-11 | decision `0024`; `validation/v4_uncertainty.py`; `tests/ionmc/test_uncertainty.py` |
 | Stages 4–6 | not started | — |
 
 ## Change log
@@ -645,3 +646,18 @@ deterministically and reviewed in one pull request.
   analytical limits). LET_d is scored on the lab-frame 3-D grid alongside dose as
   `Σ ε·L / Σ ε`; the denominator is the existing per-voxel dose energy and the
   numerator an added `Σ ε·L` accumulator on the reference and Warp CPU/CUDA paths.
+  Validated (decision 0023): thin-voxel LET_d reproduces NIST PSTAR water within
+  ~0.3 %, entrance ≈0.545 keV/µm rising to >10 keV/µm distally, dose-weight
+  consistent, voxel-size convergent (~0.3 % over 0.5/1/2 mm), and deterministic
+  per-voxel LET_d agrees across backends. Squash-merged into `develop` at
+  `3b5ddbf`.
+- 2026-09-11: `DEV-019` adds **batch-based statistical uncertainty for 3-D dose**
+  (decision `0024`), the MUST statistical-uncertainty requirement for the
+  volumetric scorer and the V4 "within statistics" anchor.
+  `run_scattering_batched` runs independent history batches (seed `seed+1+b`) into
+  a `DoseGrid3D` and reports the per-voxel mean and standard error of the mean
+  (`std(batches, ddof=1)/√n_batches`), plus a high-dose-region relative-uncertainty
+  summary and, with `score_let`, the LET_d mean and SEM. Validated: the SEM obeys
+  the `1/√N` law (4× histories → ~half the SEM over a shared high-dose mask), the
+  batch mean conserves energy, and the batched-mean total agrees across backends.
+  Deferred: beamlet-/influence-resolved (planning-aware) uncertainty.
