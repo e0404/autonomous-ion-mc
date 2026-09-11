@@ -598,6 +598,9 @@ def csda_scattering_grid3d_kernel(
     dose_hy: float,
     dose_hz: float,
     dose: wp.array(dtype=wp.float64),
+    have_let: int,
+    e_floor_mev: float,
+    let_num: wp.array(dtype=wp.float64),
 ):
     i = wp.tid()
     e = energy0[i]
@@ -666,6 +669,15 @@ def csda_scattering_grid3d_kernel(
         de = transport.midpoint_energy_loss(
             e, s, density, table_e, table_s, table_d, n, n_steps
         )
+        # LET_d 'Method C' (decision 0023): unrestricted electronic linear stopping
+        # power at the unstraggled step-mean energy (MeV/mm == keV/um), clamped to
+        # the table floor. Computed before straggling; weighted by the actual de.
+        let_lin = float(0.0)  # noqa: UP018
+        if have_let == 1:
+            e_mid = wp.max(e - 0.5 * de, e_floor_mev)
+            let_lin = transport.linear_stopping_power(
+                e_mid, density, table_e, table_s, table_d, n, n_steps
+            )
         if straggling == 1 and e > straggling_floor_mev:
             sigma = transport.bohr_straggling_sigma(
                 e, rest_energy_mev, s, density, za_ratio, charge
@@ -710,9 +722,10 @@ def csda_scattering_grid3d_kernel(
                 and dk >= 0
                 and dk < dose_nz
             ):
-                wp.atomic_add(
-                    dose, (di * dose_ny + dj) * dose_nz + dk, wp.float64(w * de)
-                )
+                dflat = (di * dose_ny + dj) * dose_nz + dk
+                wp.atomic_add(dose, dflat, wp.float64(w * de))
+                if have_let == 1:
+                    wp.atomic_add(let_num, dflat, wp.float64(w * de * let_lin))
         # deposit w*de across depth bins [z_start, pz] at lateral bin of x mid
         x_mid = 0.5 * (x_start + px)
         xb = int(wp.floor((x_mid - lateral_lo_mm) / lateral_bin_mm))
@@ -759,9 +772,19 @@ def csda_scattering_grid3d_kernel(
                     and dkt >= 0
                     and dkt < dose_nz
                 ):
-                    wp.atomic_add(
-                        dose, (dit * dose_ny + djt) * dose_nz + dkt, wp.float64(w * e)
-                    )
+                    tflat = (dit * dose_ny + djt) * dose_nz + dkt
+                    wp.atomic_add(dose, tflat, wp.float64(w * e))
+                    if have_let == 1:
+                        let_term = transport.linear_stopping_power(
+                            wp.max(e, e_floor_mev),
+                            density,
+                            table_e,
+                            table_s,
+                            table_d,
+                            n,
+                            n_steps,
+                        )
+                        wp.atomic_add(let_num, tflat, wp.float64(w * e * let_term))
             e = 0.0
             alive = 0
         else:
@@ -985,7 +1008,10 @@ class ScatteringGrid3DKernel:
         scattering: bool,
         straggling_floor_mev: float,
         dose_grid: Any = None,
-    ) -> tuple[np.ndarray, int, np.ndarray, np.ndarray, np.ndarray | None]:
+        score_let: bool = False,
+    ) -> tuple[
+        np.ndarray, int, np.ndarray, np.ndarray, np.ndarray | None, np.ndarray | None
+    ]:
         d = self.device
         n_hist = int(state.energy_mev.shape[0])
         nz, nx = int(grid.n_depth), int(grid.n_lateral)
@@ -1046,6 +1072,15 @@ class ScatteringGrid3DKernel:
             dhx = dhy = dhz = 1.0
             dose = wp.zeros(1, dtype=wp.float64, device=d)
             have_dose = 0
+        # optional co-registered LET_d numerator (decision 0023); shares the dose
+        # grid geometry. A length-1 dummy when absent.
+        if score_let and dose_grid is not None:
+            let_num = wp.zeros(dnx * dny * dnz, dtype=wp.float64, device=d)
+            have_let = 1
+        else:
+            let_num = wp.zeros(1, dtype=wp.float64, device=d)
+            have_let = 0
+        e_floor_mev = float(self.tables["e"].numpy()[0])
         t = self.tables
         wp.launch(
             csda_scattering_grid3d_kernel,
@@ -1104,6 +1139,9 @@ class ScatteringGrid3DKernel:
                 dhy,
                 dhz,
                 dose,
+                have_let,
+                e_floor_mev,
+                let_num,
             ],
             device=d,
         )
@@ -1113,10 +1151,16 @@ class ScatteringGrid3DKernel:
             if dose_grid is not None
             else None
         )
+        let3d = (
+            let_num.numpy().astype(np.float64).reshape(dnx, dny, dnz)
+            if have_let == 1
+            else None
+        )
         return (
             edep.numpy().astype(np.float64).reshape(nz, nx),
             int(truncated.numpy()[0]),
             final_z.numpy().astype(np.float64),
             final_status.numpy().astype(np.int32),
             dose3d,
+            let3d,
         )

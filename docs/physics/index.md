@@ -520,3 +520,34 @@ two MC estimates is a deferred cross-cutting validation item.
 Deferred: a GPU (voxel, beamlet) hash-table assembly, per-beamlet scoring inside
 the kernel (currently one launch per beamlet), LET/fluence/species-resolved
 scorers, and beamlet-resolved uncertainty (remaining Stage-4 items).
+
+## Dose-averaged LET scoring (Stage 4, task DEV-018, decision 0023)
+
+DEV-018 adds **dose-averaged LET (LET_d)**, a MUST requirement and the next named
+**V4** validation item (LET estimators vs published proton LET-in-water data and
+analytical limits). LET_d is scored on a grid co-registered with `DoseGrid3D` as
+`LET_d = (Σ_i ε_i·L_i) / (Σ_i ε_i)`,
+following Cortés-Giraldo & Carabe (2015) "Method C": `L_i` is the tabulated
+**unrestricted electronic linear stopping power** at the step-mean energy
+`E_mid = E − ½·Δe` (`linear_stopping_power`, MeV/mm, numerically keV/µm since
+1 MeV/mm ≡ 1 keV/µm), clamped to the table floor; `ε_i = w·de` is the *same*
+energy already deposited at the step's lab midpoint into the dose grid (decision
+0021), so the LET_d denominator equals the scored dose energy exactly. The engine
+transports no delta rays, so unrestricted LET is the self-consistent choice (there
+is no escaping energy to exclude), and using tabulated `S(E)` rather than the
+deposited-energy-over-length estimator immunises LET_d against the step
+face-clipping (decision 0020) and straggling that would otherwise inflate a
+truncated-step `ε/Δl`. Two additive, strictly positive grids (`Σ ε·L` and `Σ ε`)
+are accumulated on the reference and Warp CPU/CUDA paths and combined lazily via
+`DoseGrid3D.let_d_kev_um` with a low-dose reporting mask.
+
+Validated (decision 0023): the thin-voxel LET_d reproduces the NIST PSTAR water
+electronic stopping power (250/150/100 MeV within ~0.3 %); the entrance LET_d for a
+150 MeV beam is ≈0.545 keV/µm (PSTAR) and rises to > 10 keV/µm toward the distal
+edge, with the LET_d peak at or beyond the Bragg dose peak; the LET_d denominator
+equals the scored dose energy; and the deterministic per-voxel LET_d agrees
+reference-vs-Warp-CPU (and CPU-vs-CUDA) to the float32 budget — the ratio inherits
+the dose scorer's cross-backend story (decision 0022), so under scattering only the
+deterministic per-voxel and the stochastic totals are tight. Deferred:
+track-averaged LET_t, restricted LET with a delta cutoff, species-/energy-resolved
+LET, and a water-normalised LET-to-water variant for heterogeneous media.
