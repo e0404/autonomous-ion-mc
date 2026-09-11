@@ -60,3 +60,34 @@ def test_digest_structure(driver, built) -> None:
     assert dig["peak_voxel_mev"] > 0.0
     assert dig["n_nonzero_voxels"] > 0
     assert isinstance(dig["shape_digest"], str)
+
+
+def test_main_reference_only_passes_and_is_well_formed(
+    driver, pstar_cache_root, monkeypatch, capsys
+) -> None:
+    """End-to-end ``main()`` on the reference path (Warp forced absent, no
+    --require-cuda): the physics gate passes, the return code is 0, and the emitted
+    report is well-formed JSON with provenance, config and the reference digest. This
+    covers the pass/fail decision logic that the unit helpers do not."""
+    import json
+
+    monkeypatch.setattr(driver.mathlib, "HAVE_WARP", False)
+    argv = ["bench_dose3d"]
+    if pstar_cache_root is not None:
+        argv += ["--cache-dir", str(pstar_cache_root)]
+    monkeypatch.setattr("sys.argv", argv)
+
+    rc = driver.main()
+    assert rc == 0
+
+    report = json.loads(capsys.readouterr().out)
+    assert report["physics_gate_passed"] is True
+    assert report["benchmark"] == "dose3d"
+    assert report["warp"] == {"available": False}
+    assert report["config"]["reference_precision"] == "float64"
+    assert report["digest"]["reference"]["integral_per_history_mev"] == pytest.approx(
+        150.0, rel=1e-9
+    )
+    # no Warp backend -> no cross-backend comparisons and an empty scaling sweep
+    assert report["cross_backend"] == {}
+    assert report["scaling"] == []

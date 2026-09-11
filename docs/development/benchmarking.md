@@ -57,7 +57,8 @@ env PYTHONPATH=/workspace/src python benchmarks/bench_depth_dose.py \
 `benchmarks/bench_dose3d.py` (decision `0031`) times the **representative
 treatment-planning workload**: a 150 MeV proton pencil beam through a 120×120×300
 (1 mm) voxel box scored into a 60×60×150 (2 mm) 3-D dose grid via ray/voxel DDA
-traversal and per-step atomic dose scoring — the memory-bound hot kernel, deterministic
+traversal and per-step atomic dose scoring — the hot kernel (expected memory-bound),
+deterministic
 (scattering/straggling off). The per-history 3-D dose is gated cross-backend on the
 established V4 budget (integral ≤ 1e-5, worst voxel ≤ 5e-3; decision `0021`).
 

@@ -6,8 +6,9 @@ independent lab-frame 3-D dose grid by per-step atomic scatter (decisions 0020,
 0021). Scattering and straggling are off, so the workload is deterministic and its
 per-history 3-D dose is a fixed digest that is gated cross-backend to the established
 float32 budget (decision 0021 / validation/v4_dose3d.py). This kernel is
-memory-bound (atomic voxel accumulation), unlike the compute-bound 1-D depth dose of
-`bench_depth_dose.py`.
+expected to be memory-bound (atomic voxel accumulation), in contrast to the more
+compute-bound 1-D depth dose of `bench_depth_dose.py` (a characterisation to be
+confirmed by the deferred occupancy/roofline profiling, not asserted here).
 
 Beyond the fixed-size timing, this driver runs a **history-count scaling sweep** on
 the Warp backends, reporting throughput (histories/s) at each size — characterising
@@ -190,7 +191,9 @@ def main() -> int:
             "devices": devices,
         }
         cpu_perhist: np.ndarray | None = None
-        for device in devices:
+        # process "cpu" before any CUDA device so the CUDA-vs-CPU gate always has its
+        # baseline, regardless of the order wp.get_devices() returns
+        for device in sorted(devices, key=lambda d: 0 if d == "cpu" else 1):
             perhist = _run(eng, src, lat, args.corr_histories, "warp", device)
             label = backend_label("warp", device)
             report["digest"][label] = _digest(perhist)

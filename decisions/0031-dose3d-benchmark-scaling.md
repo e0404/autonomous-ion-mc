@@ -26,7 +26,7 @@ meaningful rate.
    **scattering and straggling off** so the per-history 3-D dose is deterministic and
    a fixed digest.
 
-2. **Physics gate on the per-history 3-D dose** to the established V1/V4 float32
+2. **Physics gate on the per-history 3-D dose** to the established V4 float32
    budget (decision `0021` / `validation/v4_dose3d.py`): reference-vs-Warp and
    CUDA-vs-CPU each tight on the integral (`total_rel_diff ≤ 1e-5`) and the worst
    voxel (`max_bin_rel_diff ≤ 5e-3`). The cumulative (depth-ordered) metric used for
@@ -40,7 +40,8 @@ meaningful rate.
    size and the per-backend peak. This characterises GPU utilisation and saturation
    and quantifies the under-utilisation caveat of the small-workload 1-D benchmark;
    the fresh dose grid allocated per run keeps the physics gate and the sweep from
-   leaking accumulation between runs.
+   leaking accumulation between runs (its ~2 MB allocation is inside the timed region,
+   a constant across backends and a legitimate part of a per-run dose calculation).
 
 ## Validation (`benchmarks/bench_dose3d.py`, `tests/ionmc/test_bench_dose3d.py`)
 
