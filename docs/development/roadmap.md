@@ -790,3 +790,15 @@ deterministically and reviewed in one pull request.
   milestone validations are included automatically. Deferred: CI wiring (needs a GPU),
   a packaging gate, and the actual tag-and-merge to `main` once the suite passes at a
   release SHA and the version is finalised.
+- 2026-09-11: `DEV-029` fixes a latent regression in `validation/v1_depth_dose_csda.py`
+  that the release validation suite (DEV-028) surfaced (decision `0034`). The CSDA
+  (deterministic) validation, unchanged since DEV-004, constructed its `TransportEngine`
+  without `straggling=False`, and DEV-005 later made `straggling=True` the engine
+  default — so from DEV-005 on the "CSDA" R80 / step-convergence / range gates silently
+  ran *with* straggling (R80 +1.5 % vs the CSDA range, step drift 0.47 %). The unit
+  tests in `test_transport.py` were already explicit (`straggling=False`) and stayed
+  green, so only the host validation script carried the implicit dependency. Fix: make
+  the three engine constructions `straggling=False` (reproducing DEV-004's R80 exactly),
+  and set the Warp float32 energy-balance sub-tolerance to the project's standard 5e-5
+  budget (the deterministic 150 MeV residual is ~1.3e-5, benign float32). No physics
+  change. With this, the release validation suite reaches `release_ready = true`.
