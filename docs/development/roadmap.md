@@ -475,7 +475,8 @@ deterministically and reviewed in one pull request.
 | Stage 6, `DEV-025` (reproducible benchmark harness + first depth-dose benchmark; foundation for milestone V6) | **in progress** 2026-09-11 | decision `0030` (planned); `src/ionmc/benchmarking.py` (planned); `benchmarks/bench_depth_dose.py` (planned); `tests/ionmc/test_benchmarking.py` (planned) |
 | Stage 6, `DEV-026` (3-D voxel-grid dose benchmark + Warp CUDA history-count scaling sweep) | **in progress** 2026-09-11 | decision `0031` (planned); `benchmarks/bench_dose3d.py` (planned); `tests/ionmc/test_bench_dose3d.py` (planned) |
 | Stage 6, `DEV-027` (performance-regression tracking: committed baselines + physics-gated comparison; milestone V6 mechanism) | **in progress** 2026-09-11 | decision `0032` (planned); `src/ionmc/benchmarking.py` (compare_to_baseline etc.); `benchmarks/check_regression.py` + `benchmarks/baselines/` (planned); `tests/ionmc/test_benchmarking.py` (planned) |
-| Stage 6 optimisation + release readiness | not started | — |
+| Stage 6, `DEV-028` (release validation suite: aggregate V0-V6 milestone gates; first-release criteria) | **in progress** 2026-09-11 | decision `0033` (planned); `validation/release_validation.py` (planned); `docs/development/release.md` (planned); `tests/ionmc/test_release_validation.py` (planned) |
+| Stage 6 optimisation + first release cut | not started | — |
 
 ## Change log
 
@@ -777,3 +778,15 @@ deterministically and reviewed in one pull request.
   future optimisation admissible under V6. Deferred: a persisted results time series,
   throughput regression thresholds, CI wiring (needs a GPU), and the optimisation work
   itself.
+- 2026-09-11: `DEV-028` defines and implements the **release validation suite**
+  (decision `0033`), the missing gate for a `develop` → `main` release. With the
+  physics milestones V0–V5 complete and the Stage-6 benchmark + regression
+  infrastructure (V6) in place, `validation/release_validation.py` runs every
+  milestone validation plus the benchmark physics gates and regression checks against
+  the committed baselines, aggregating a single machine-readable release-readiness
+  report that passes iff every suite passes. `docs/development/release.md` documents
+  the release process and the first-release criteria. Composition is discovered by
+  globbing `validation/v*.py` (the `warp_cuda_smoke` diagnostic excluded), so future
+  milestone validations are included automatically. Deferred: CI wiring (needs a GPU),
+  a packaging gate, and the actual tag-and-merge to `main` once the suite passes at a
+  release SHA and the version is finalised.
