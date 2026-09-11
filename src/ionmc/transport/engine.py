@@ -34,7 +34,12 @@ from ionmc.physics.secondaries import (
 )
 from ionmc.rng import RandomState
 from ionmc.stopping_power import mass_stopping_power_ratio
-from ionmc.transport.depth_dose import DepthDoseGrid, DepthLateralGrid, DoseGrid3D
+from ionmc.transport.depth_dose import (
+    DepthDoseGrid,
+    DepthLateralGrid,
+    DoseGrid3D,
+    FluenceSpectrum,
+)
 from ionmc.transport.geometry import VoxelGrid3D, VoxelSlab, WaterSlab
 from ionmc.transport.source import PencilBeamSource
 from ionmc.transport.state import ParticleState, Status
@@ -244,6 +249,15 @@ class ScatteringResult:
     #: voxel] when ``score_let`` was set (decision 0023), else None. Combine with
     #: ``dose3d_mev`` via ``DoseGrid3D.let_d_kev_um`` to get LET_d [keV/um].
     let3d_num_mev_per_mm: np.ndarray | None = None
+    #: Raw track-length fluence histogram ``Sum w_i*l_i`` [mm per energy bin] when a
+    #: ``FluenceSpectrum`` was supplied (decision 0026), else None.
+    fluence_counts_mm: np.ndarray | None = None
+    #: On-the-fly lookup accumulator ``A_gate = Sum (w_i*l_i)*w_tab[bin]`` [MeV] and
+    #: the per-bin lookup table ``w_tab`` used (S_lin at bin centres) -- offline
+    #: ``spectrum.postprocess_lookup(counts, table)`` reproduces the accumulator to
+    #: round-off (decision 0026). Both None unless a ``FluenceSpectrum`` was scored.
+    fluence_lookup_sum: float | None = None
+    fluence_lookup_table: np.ndarray | None = None
 
     @property
     def depth_dose_mev(self) -> np.ndarray:
@@ -725,6 +739,7 @@ class TransportEngine:
         device: str = "cpu",
         dose_grid: DoseGrid3D | None = None,
         score_let: bool = False,
+        fluence: FluenceSpectrum | None = None,
     ) -> ScatteringResult:
         """Run 3-D transport with multiple Coulomb scattering into a 2-D
         (depth, lateral-x) grid (decision 0011).
@@ -745,12 +760,17 @@ class TransportEngine:
         scores beam-frame depth/lateral (a pencil beam is centred on its own
         axis). Every voxel material must have a known radiation length (> 0).
         """
-        self._check_scatter(dose_grid, score_let)
+        self._check_scatter(dose_grid, score_let, fluence)
         state = source.sample(n_histories, seed)
-        return self._scatter_state(state, grid, path, device, dose_grid, score_let)
+        return self._scatter_state(
+            state, grid, path, device, dose_grid, score_let, fluence
+        )
 
     def _check_scatter(
-        self, dose_grid: DoseGrid3D | None, score_let: bool = False
+        self,
+        dose_grid: DoseGrid3D | None,
+        score_let: bool = False,
+        fluence: FluenceSpectrum | None = None,
     ) -> None:
         if np.any(self.voxel_radiation_length <= 0.0):
             raise ValueError(
@@ -767,6 +787,38 @@ class TransportEngine:
                 "LET_d scoring needs a DoseGrid3D (its dose energy is the LET_d "
                 "denominator); pass dose_grid together with score_let (decision 0023)"
             )
+        if fluence is not None and not self.geometry_is_grid3d:
+            raise ValueError(
+                "a FluenceSpectrum scorer is supported only on the VoxelGrid3D "
+                "transport path (decision 0026)"
+            )
+
+    def _fluence_lookup_table(self, fluence: FluenceSpectrum) -> np.ndarray:
+        """Per-bin lookup table ``w_tab[k] = S_lin(center[k])`` [MeV/mm] at unit
+        density, clamped to the table floor (decision 0026). The on-the-fly
+        accumulator and the offline post-processing both read this array, making
+        their agreement an exact round-off identity."""
+        tp = reference.load_bound_module(
+            "ionmc.physics.transport",
+            "python",
+            rebind_dependencies=["ionmc.physics.tabulated"],
+        )
+        t = self.table
+        args: tuple[Any, ...] = (
+            t.energy_mev,
+            t.stopping_mev_cm2_per_g,
+            t.slope,
+            t.size,
+            t.bisection_steps,
+        )
+        e_floor = float(t.energy_mev[0])
+        return np.array(
+            [
+                tp.linear_stopping_power(max(float(c), e_floor), 1.0, *args)
+                for c in fluence.centers_mev
+            ],
+            dtype=np.float64,
+        )
 
     def run_scattering_multi(
         self,
@@ -870,16 +922,27 @@ class TransportEngine:
         device: str,
         dose_grid: DoseGrid3D | None,
         score_let: bool = False,
+        fluence: FluenceSpectrum | None = None,
     ) -> ScatteringResult:
         energy_in = float(np.sum(state.energy_mev * state.weight))
         dose3d: np.ndarray | None = None
         let_num: np.ndarray | None = None
+        fl_counts: np.ndarray | None = None
+        fl_sum: float | None = None
+        w_tab = self._fluence_lookup_table(fluence) if fluence is not None else None
         if path == "warp":
             if self.geometry_is_grid3d:
-                edep, truncated, final_z, final_status, dose3d, let_num = (
-                    self._run_scattering_grid3d_warp(
-                        state, grid, device, dose_grid, score_let
-                    )
+                (
+                    edep,
+                    truncated,
+                    final_z,
+                    final_status,
+                    dose3d,
+                    let_num,
+                    fl_counts,
+                    fl_sum,
+                ) = self._run_scattering_grid3d_warp(
+                    state, grid, device, dose_grid, score_let, fluence, w_tab
                 )
             else:
                 edep, truncated, final_z, final_status = self._run_scattering_warp(
@@ -887,10 +950,17 @@ class TransportEngine:
                 )
         elif path == "python":
             if self.geometry_is_grid3d:
-                edep, truncated, final_z, final_status, dose3d, let_num = (
-                    self._run_scattering_reference_grid3d(
-                        state, grid, dose_grid, score_let
-                    )
+                (
+                    edep,
+                    truncated,
+                    final_z,
+                    final_status,
+                    dose3d,
+                    let_num,
+                    fl_counts,
+                    fl_sum,
+                ) = self._run_scattering_reference_grid3d(
+                    state, grid, dose_grid, score_let, fluence, w_tab
                 )
             else:
                 edep, truncated, final_z, final_status = self._run_scattering_reference(
@@ -915,6 +985,9 @@ class TransportEngine:
             n_stopped=n_stopped,
             dose3d_mev=dose3d,
             let3d_num_mev_per_mm=let_num,
+            fluence_counts_mm=fl_counts,
+            fluence_lookup_sum=fl_sum,
+            fluence_lookup_table=w_tab,
         )
 
     def _run_scattering_warp(
@@ -955,8 +1028,17 @@ class TransportEngine:
         device: str,
         dose_grid: DoseGrid3D | None,
         score_let: bool = False,
+        fluence: FluenceSpectrum | None = None,
+        fluence_table: np.ndarray | None = None,
     ) -> tuple[
-        np.ndarray, int, np.ndarray, np.ndarray, np.ndarray | None, np.ndarray | None
+        np.ndarray,
+        int,
+        np.ndarray,
+        np.ndarray,
+        np.ndarray | None,
+        np.ndarray | None,
+        np.ndarray | None,
+        float | None,
     ]:
         if not mathlib.HAVE_WARP:
             raise ImportError(
@@ -986,6 +1068,8 @@ class TransportEngine:
             straggling_floor_mev=self.straggling_floor_mev,
             dose_grid=dose_grid,
             score_let=score_let,
+            fluence=fluence,
+            fluence_table=fluence_table,
         )
 
     def _run_scattering_reference(
@@ -1131,8 +1215,17 @@ class TransportEngine:
         grid: DepthLateralGrid,
         dose_grid: DoseGrid3D | None,
         score_let: bool = False,
+        fluence: FluenceSpectrum | None = None,
+        fluence_table: np.ndarray | None = None,
     ) -> tuple[
-        np.ndarray, int, np.ndarray, np.ndarray, np.ndarray | None, np.ndarray | None
+        np.ndarray,
+        int,
+        np.ndarray,
+        np.ndarray,
+        np.ndarray | None,
+        np.ndarray | None,
+        np.ndarray | None,
+        float | None,
     ]:
         """3-D voxel-grid scattering transport with Amanatides-Woo DDA traversal
         (decision 0020). Identical to :meth:`_run_scattering_reference` except the
@@ -1200,6 +1293,16 @@ class TransportEngine:
         have_dose = dose_grid is not None
         have_let = score_let and have_dose
         e_floor = float(t.energy_mev[0])  # table floor for the LET S(E) lookup
+        # optional energy-resolved fluence spectrum + lookup accumulator (0026)
+        have_fluence = fluence is not None and fluence_table is not None
+        fl_counts: np.ndarray | None = None
+        fl_sum = 0.0
+        if have_fluence:
+            assert fluence is not None and fluence_table is not None
+            fl_counts = fluence.empty()
+            fl_nbins = fluence.n_bins
+            fl_lo = float(fluence.e_lo_mev)
+            fl_dw = float(fluence.bin_width_mev)
         dose_flat: np.ndarray | None = None
         let_num_flat: np.ndarray | None = None
         if dose_grid is not None:
@@ -1269,6 +1372,16 @@ class TransportEngine:
                     let_lin = tp.linear_stopping_power(
                         max(e - 0.5 * de, e_floor), density, *args
                     )
+                if have_fluence and fl_counts is not None and fluence_table is not None:
+                    # track-length fluence: bin w*s by the step-mean energy, and
+                    # accumulate the bin-centre lookup A_gate = Sum w*s*w_tab[bin]
+                    # (decision 0026). Uses the same E_mid as LET (E - de/2), and
+                    # math.floor (matching the kernel's wp.floor) so below-range
+                    # E_mid drops consistently on both backends.
+                    fk = math.floor((e - 0.5 * de - fl_lo) / fl_dw)
+                    if 0 <= fk < fl_nbins:
+                        fl_counts[fk] += w * s
+                        fl_sum += w * s * float(fluence_table[fk])
                 if straggling and e > floor:
                     sigma = tp.bohr_straggling_sigma(
                         e, rest_energy, s, density, za, charge
@@ -1363,7 +1476,18 @@ class TransportEngine:
         let3d = (
             let_num_flat.reshape(dnx, dny, dnz) if let_num_flat is not None else None
         )
-        return edep, truncated, final_pz, final_status, dose3d, let3d
+        fl_out = fl_counts if have_fluence else None
+        fl_sum_out = fl_sum if have_fluence else None
+        return (
+            edep,
+            truncated,
+            final_pz,
+            final_status,
+            dose3d,
+            let3d,
+            fl_out,
+            fl_sum_out,
+        )
 
     # -- reference Python path ------------------------------------------------
 

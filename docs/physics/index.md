@@ -602,3 +602,33 @@ form, complementing DEV-017's exact same-partition round-off additivity; and the
 deterministic per-beamlet mean dose agrees reference-vs-Warp-CPU (and CUDA-vs-CPU)
 per voxel to the float32 budget. Deferred: beamlet-resolved LET_d/fluence
 uncertainty and correlated-uncertainty propagation into an optimiser.
+
+## Energy-resolved fluence-spectrum scoring and lookup accumulation (Stage 4, task DEV-021, decision 0026)
+
+DEV-021 closes the last V4 milestone gate. A `FluenceSpectrum` scores a proton
+fluence-vs-energy histogram with the standard Monte-Carlo **track-length
+estimator** (Kellerer/Chilton; ICRU 85; Geant4 `G4PSCellFlux`, TOPAS `Fluence`):
+each step's weighted track length `w_i·s` (`s` the step length in mm) is
+histogrammed into the bin of its step-mean energy `E_mid = E − ½·de` — the same
+energy the LET Method C scorer uses (decision 0023). The scored array is the raw
+track-length histogram `counts[k] = Σ w_i·s` [mm]; the differential fluence is
+`Φ(E) = counts·100/(V·ΔE)` [cm⁻²·MeV⁻¹] (optionally per primary history). Default
+bins are linear, 160 over 0–160 MeV (ΔE = 1 MeV ≥ the per-step Δe, so a step never
+straddles a bin and the midpoint binning is second-order and convergent).
+
+Alongside, an on-the-fly **lookup-table accumulator** `A_gate = Σ (w_i·s)·w_tab[k_i]`
+reads a precomputed per-bin table `w_tab` (at bin centres) and the same bin rule as
+the offline post-processing `Σ_k counts·w_tab`, so the two are **identical to
+round-off** (`~4e-15` on the float64 reference; float64 accumulators even in the
+float32 kernel) — the milestone gate "lookup-table accumulation reproduces offline
+post-processing on scored spectra". With the physical lookup `w = S_lin`, the
+accumulator equals `Σ s·S_lin(E_mid) ≈ Σ de` = the total electronic **step** energy
+deposited: the fluence spectrum folded with a stopping-power lookup recovers the
+total dose. This is checked in deterministic mode (so `de` is not stochastic); it
+is the total dose minus the terminal energy-cut residual (a point deposit with no
+track step) and a small midpoint/binning error (`~0.2 %`, shrinking with step/bin
+size). Scored on the reference and Warp CPU/CUDA paths, deterministic per-bin
+cross-backend to the float32 budget. Deferred: per-voxel/spatially-resolved
+spectra, angular/direction-resolved fluence, secondary-/heavier-species spectra,
+restricted (delta-cutoff) lookups, exact 1/S intra-bin sub-splitting, log-spaced
+bins, and multiple simultaneous scoring regions.

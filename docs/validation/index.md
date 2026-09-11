@@ -451,6 +451,29 @@ normal); the loose 4σ / 95 %-coverage band accommodates that. The cross-backend
 gate validates the per-beamlet *mean*; the per-beamlet *SEM* inherits its
 cross-backend soundness from the single-source batched estimator (decision 0024).
 
+## V4 (fluence) - fluence-spectrum scoring + lookup accumulation (task DEV-021)
+
+Script: ``validation/v4_fluence.py``. A `FluenceSpectrum` histograms the track
+length `Σ w·s` by step-mean energy; an on-the-fly lookup accumulator reproduces the
+offline post-processing of the scored spectrum, and with `w = S_lin` recovers the
+deposited energy (decision 0026). This closes the last V4 milestone gate.
+
+| check | criterion | result |
+|---|---|---|
+| lookup reproduces offline post-processing (the V4 gate) | rel diff <= 1e-12 | ~4e-15 |
+| stopping lookup reproduces deposited energy (deterministic) | A/dose in [0.99, 1.0] | ~0.998 |
+| fluence sanity (counts >= 0, physical support) | exact | pass |
+| reference vs Warp CPU spectrum + accumulator (deterministic) | per-bin / acc <= 5e-3 | ~4e-5 / 2e-5 |
+| CUDA vs CPU spectrum + accumulator (deterministic) | per-bin / acc <= 5e-3 | recorded (host) |
+
+The **lookup_reproduces_offline** gate is the V4 milestone gate ("lookup-table
+accumulation reproduces offline post-processing on scored spectra"): the on-the-fly
+accumulator `A_gate = Σ (w·s)·w_tab[bin]` and the offline `Σ_k counts·w_tab` read the
+same precomputed bin-centre lookup and bin rule, so they are identical to round-off
+(float64 accumulators). With `w = S_lin` the accumulator equals the total *step*
+energy — the total dose minus the terminal energy-cut residual and a small
+midpoint/binning error (`~0.2 %`), converging with step/bin size.
+
 ## Unit and regression tests
 
 ``tests/ionmc/`` covers units and constants, materials, the RNG mirror

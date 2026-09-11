@@ -464,7 +464,8 @@ deterministically and reviewed in one pull request.
 | Stage 4, `DEV-017` (beamlet-resolved scoring and sparse dose-influence matrices; V4 beamlet-sum gate) | **completed** 2026-09-11 | decision `0022`; `validation/v4_influence.py` on the host runner (CPU + CUDA, all 5 gates); `tests/ionmc/test_influence.py`; DEV-017 local validation record; squash-merged into `develop` at `63883c4` |
 | Stage 4, `DEV-018` (dose-averaged LET (LET_d) scoring; V4 LET gate) | **completed** 2026-09-11 | decision `0023`; `validation/v4_let.py` on the host runner (CPU + CUDA, all 6 gates); `tests/ionmc/test_let.py`; DEV-018 local validation record; squash-merged into `develop` at `3b5ddbf` |
 | Stage 4, `DEV-019` (batch-based statistical uncertainty for 3-D dose; V4 "within statistics") | **completed** 2026-09-11 | decision `0024`; `validation/v4_uncertainty.py` on the host runner (CPU + CUDA, all 5 gates); `tests/ionmc/test_uncertainty.py`; DEV-019 local validation record; squash-merged into `develop` at `6eb245b` |
-| Stage 4, `DEV-020` (beamlet-resolved planning-aware uncertainty; V4 beamlet-sum within statistics) | **in progress** 2026-09-11 | decision `0025`; `validation/v4_beamlet_uncertainty.py`; `tests/ionmc/test_beamlet_uncertainty.py` |
+| Stage 4, `DEV-020` (beamlet-resolved planning-aware uncertainty; V4 beamlet-sum within statistics) | **completed** 2026-09-11 | decision `0025`; `validation/v4_beamlet_uncertainty.py` on the host runner (CPU + CUDA, all 5 gates); `tests/ionmc/test_beamlet_uncertainty.py`; DEV-020 local validation record; squash-merged into `develop` at `83ec95b` |
+| Stage 4, `DEV-021` (energy-resolved fluence-spectrum scoring + lookup-table accumulation; closes V4 lookup gate) | **in progress** 2026-09-11 | decision `0026`; `validation/v4_fluence.py`; `tests/ionmc/test_fluence.py` |
 | Stages 4–6 | not started | — |
 
 ## Change log
@@ -674,4 +675,18 @@ deterministically and reviewed in one pull request.
   voxels within 4σ) — the V4 beamlet-sum gate in its full statistical form,
   complementing DEV-017's exact same-partition round-off check. Deferred:
   beamlet-resolved LET_d/fluence uncertainty and correlated-uncertainty
-  propagation into an optimiser.
+  propagation into an optimiser. Squash-merged into `develop` at `83ec95b`.
+- 2026-09-11: `DEV-021` closes the last **V4** milestone gate with
+  **energy-resolved fluence-spectrum scoring + lookup-table accumulation**
+  (decision `0026`). A `FluenceSpectrum` histograms the track length `Σ w·s` by the
+  step-mean energy `E_mid` (the track-length fluence estimator), and an on-the-fly
+  accumulator `A_gate = Σ (w·s)·w_tab[bin]` reads the same precomputed bin-centre
+  lookup `w_tab` and bin rule as the offline post-processing `Σ_k counts·w_tab`, so
+  the two are identical to round-off (`~4e-15` reference) — the milestone's
+  "lookup-table accumulation reproduces offline post-processing on scored spectra".
+  With the physical lookup `w = S_lin` the accumulator recovers the total step
+  energy deposited (`A/dose ≈ 0.998`; the deficit is the terminal energy-cut
+  residual + binning). Scored on the reference and Warp CPU/CUDA paths (float64
+  accumulators), deterministic per-bin cross-backend to the float32 budget.
+  Deferred: per-voxel/angular/secondary-species spectra, restricted lookups,
+  exact 1/S sub-binning, log bins, and multiple scoring regions.
