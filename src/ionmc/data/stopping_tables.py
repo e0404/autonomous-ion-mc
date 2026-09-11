@@ -29,9 +29,12 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from ionmc.particles import Particle
 
 #: Gauss-Legendre points used for the cumulative range (matches the kernel).
 RANGE_QUADRATURE_POINTS = 4
@@ -208,3 +211,40 @@ def load_stopping_table(
     """Parse and prepare a two-column stopping-power file."""
     e, s = parse_two_column_table(path)
     return prepare_stopping_table(e, s, provenance)
+
+
+def scale_ion_stopping_table(
+    proton_table: StoppingTable, particle: Particle
+) -> StoppingTable:
+    """Build an ion mass-stopping table from a proton table by equal-velocity
+    z-squared scaling (decision 0027).
+
+    At the same velocity beta (same energy per nucleon) a bare ion's mass stopping
+    power is ``S_ion(E_ion) = z^2 * S_p(E_p)`` with ``E_p = E_ion * (m_p/m_ion)``
+    (the first-Born Bethe scaling; only the projectile charge differs). Mapping the
+    proton grid point ``(E_p, S_p)`` to the ion grid gives
+    ``E_ion = E_p * (m_ion/m_p)`` and ``S_ion = z^2 * S_p``; the PCHIP slopes and the
+    cumulative CSDA range are recomputed on the ion grid. The transport kernels are
+    unchanged -- they run with this table and ``particle`` (whose ``charge`` and
+    ``rest_energy_mev`` already drive straggling, scattering, and kinematics).
+
+    ``particle`` must expose ``charge`` (z), ``rest_energy_mev`` (m_ion c^2), and
+    ``name``. The proton rest energy is taken from :data:`ionmc.constants.
+    PROTON_MASS_MEV`.
+    """
+    from ionmc.constants import PROTON_MASS_MEV
+
+    mass_ratio = float(particle.rest_energy_mev) / PROTON_MASS_MEV  # m_ion / m_p
+    z2 = float(particle.charge) ** 2
+    e_ion = proton_table.energy_mev * mass_ratio
+    s_ion = z2 * proton_table.stopping_mev_cm2_per_g
+    prov = dict(proton_table.provenance)
+    prov.update(
+        scaled_from="proton",
+        ion=str(particle.name),
+        ion_charge=float(particle.charge),
+        ion_rest_energy_mev=float(particle.rest_energy_mev),
+        mass_ratio_ion_over_proton=mass_ratio,
+        scaling="equal-velocity z^2 (decision 0027)",
+    )
+    return prepare_stopping_table(e_ion, s_ion, prov)

@@ -474,6 +474,31 @@ same precomputed bin-centre lookup and bin rule, so they are identical to round-
 energy — the total dose minus the terminal energy-cut residual and a small
 midpoint/binning error (`~0.2 %`), converging with step/bin size.
 
+## V5 (helium) - helium-4 transport via z-squared scaling (task DEV-022)
+
+Script: ``validation/v5_helium.py``. Helium-4 is transported by reusing the proton
+stopping table under equal-velocity `z²` scaling (decision 0027); this is the first
+Stage-5 (multi-ion) task, opening milestone **V5**.
+
+| check | criterion | result |
+|---|---|---|
+| stopping vs independent Bethe model (E/A 10-250 MeV/u) | rel <= 1.5 % | ~0.1 % |
+| range identity R_He = (m_He/z²m_p)·R_p(E·m_p/m_He) | rel <= 1e-6 | round-off |
+| R_He(600 MeV) Bragg-range target | ~15.86 g/cm² | 15.85 |
+| helium Bragg peak depth (600 MeV, deterministic) | 155-161 mm | ~158 mm |
+| reference vs Warp CPU helium depth dose | total <= 1e-5 / per-bin <= 5e-3 | 6e-6 / 2e-4 |
+| CUDA vs CPU helium depth dose | total <= 1e-5 / per-bin <= 5e-3 | recorded (host) |
+
+The **stopping_vs_bethe** gate cross-checks the scaled-PSTAR helium table against
+the repository's analytic Bethe model (`AnalyticStoppingPower(WATER, ALPHA)`, an independent
+computation that reproduces PSTAR to < 0.1 % for protons), so the `z²` scaling is
+validated against physics, not just self-consistency. The **range identity** is
+exact by construction (the helium table is the proton table mapped in energy by
+`m_He/m_p` and in value by `z²`), and a 600 MeV (150 MeV/u) helium ion ranges to the
+same depth in water as a 150 MeV proton (~15.8 cm) — the Bragg-curve target. The
+transport kernels are unchanged; helium differs only by the scaled table and the
+ALPHA particle's charge/rest energy (driving straggling ∝ z² and MCS ∝ z).
+
 ## Unit and regression tests
 
 ``tests/ionmc/`` covers units and constants, materials, the RNG mirror
