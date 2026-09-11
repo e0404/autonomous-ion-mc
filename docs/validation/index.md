@@ -525,6 +525,38 @@ rounding. **Only the primary Bragg curve is validated** — carbon/oxygen fragme
 strongly and the distal fragment tail is not modelled (deferred to nuclear
 fragmentation, the remaining V5 gate).
 
+## V5 (fragmentation) - carbon-12 distal dose tail from fragmentation (task DEV-024)
+
+Script: ``validation/v5_fragmentation.py``. DEV-023 transports carbon primaries
+only; DEV-024 adds the **distal dose tail** from nuclear fragmentation (decision
+0029), the defining feature of an ion depth dose and the last V5 gate. A bounded,
+deterministic model attenuates the primary carbon by a constant reaction
+cross-section (``σ_R ≈ 1.4 barn``, ``Σ ≈ 0.047 /cm``, survival ``S(z)=exp(-Σz)``)
+and emits forward, same-velocity fragments (proton, alpha, boron-11) that are
+transported by their z²-scaled tables through the existing CSDA drivers and summed
+onto the attenuated primary. No transport-kernel change; the model runs on both
+backends and inherits their parity.
+
+| check | criterion | result |
+|---|---|---|
+| fragment tail present (+5/+10/+20 mm past peak) | 8-20 % of peak | ~12 % |
+| primary-only run has no tail (control) | dose at +10 mm < 0.1 % of peak | ~0 |
+| tail reach (> 1 % of peak) | >= 1.5x carbon range | 2.9x (467 mm) |
+| primary survival at peak | matches exp(-ΣR) ~ 0.47, in [0.40, 0.55] | 0.466 |
+| energy conservation | deposited + escaped == E0, escaped >= 0 | exact (esc 354 MeV) |
+| reference vs Warp CPU total depth dose | total <= 5e-5 / per-bin <= 5e-3 | 7.3e-6 / 2.1e-4 |
+| CUDA vs CPU total depth dose | total <= 1e-5 / per-bin <= 5e-3 | recorded (host) |
+
+The tail-to-peak ratio is reported on realistic 2 mm bins (the peak height depends
+on binning; sub-mm bins inflate a razor-sharp deterministic peak and understate the
+ratio). The transported fragments carry ~0.72 of each reaction's energy; the balance
+(target fragments, neutrons, binding, transverse momentum, grid escape) is booked as
+``escaped``. **Bounded model:** representative-species multiplicities are a
+calibration handle, not measured spectra; energy/angular-resolved fragment spectra,
+secondary fragmentation, neutrons/gammas, the full isotopic cocktail, target
+fragmentation, tail LET, the lateral halo, and a discriminating fragment-resolved
+TOPAS/Geant4 reference are deferred.
+
 ## Unit and regression tests
 
 ``tests/ionmc/`` covers units and constants, materials, the RNG mirror

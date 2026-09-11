@@ -35,7 +35,11 @@ ALPHA: Particle = Particle("alpha", 2.0, 3727.3794066, 4)
 CARBON_12: Particle = Particle("carbon-12", 6.0, 11174.8628, 12)
 #: Oxygen-16 nucleus, rest energy 14895.08 MeV.
 OXYGEN_16: Particle = Particle("oxygen-16", 8.0, 14895.0796, 16)
+#: Boron-11 nucleus, rest energy ~10252.5 MeV (atomic mass 11.009305 u minus 5
+#: electrons). Used as the representative "heavy" carbon fragment (Z=3-5 lumped)
+#: in the bounded fragmentation model (decision 0029).
+BORON_11: Particle = Particle("boron-11", 5.0, 10252.5476, 11)
 
 PARTICLES: dict[str, Particle] = {
-    p.name: p for p in (PROTON, ALPHA, CARBON_12, OXYGEN_16)
+    p.name: p for p in (PROTON, ALPHA, CARBON_12, OXYGEN_16, BORON_11)
 }
