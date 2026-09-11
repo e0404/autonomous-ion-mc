@@ -428,7 +428,38 @@ show, though ``sigma_x`` invariance under a lateral shift is also confirmed); an
 the reference, Warp CPU and CUDA paths agree on a shifted grid. This closes **V3**
 (voxelized heterogeneous geometry and materials).
 
-Deferred (Stage-3 capability beyond the V3 gates): a full 3-D voxel grid with
-arbitrary per-voxel material maps and robust ray/voxel (Siddon/DDA) traversal for
-true patient geometries. Not yet, beyond Stage 3: treatment-planning scoring and
+## 3-D voxel grid with ray/voxel DDA traversal (Stage 3, task DEV-015, decision 0020)
+
+DEV-015 adds a true 3-D voxel geometry (`VoxelGrid3D`: lab-axis-aligned,
+`Nx*Ny*Nz`, per-voxel mass density, a single material — the density-only cut) so
+the scattering path transports through a patient-like grid at arbitrary
+incidence. Traversal uses an **Amanatides-Woo voxel DDA** (not Siddon: the
+random-hinge step changes direction every step and is already physics-bounded, so
+a whole-ray integral is the wrong amortisation). It is phrased as a strict
+generalisation of the beam-frame 1-D limiter: the single material coordinate
+``u = n̂·p`` and its step limit ``(voxel_z[v+1]−u)/mproj`` become **three lab-axis
+coordinates** ``u_k = p0[k] + mᵏ·q`` with ``mᵏ`` the rows of the beam-frame
+rotation ``R = (e1|e2|d̂)`` (the 1-D path already computes the ``z`` row),
+``rateₖ = mᵏ·D``, and a per-axis distance to the next voxel face; the step is
+clipped to the nearest face over the three axes. Geometry state is **recomputed
+from the position and direction each step** (rather than carried), so no float
+state drifts between the float64 reference and the float32 kernel. Axis-parallel
+rays take an infinite face distance; on-face ties are resolved by a direction-aware
+``s_tie = 1e-4 mm`` nudge with a fixed axis priority. The grid is not rotated — an
+oblique beam through an axis-aligned grid already exercises full 3-D traversal.
+
+Parallel drivers keep the 1-D `VoxelSlab` path untouched, so a single-column grid
+(`Nx=Ny=1`) reproduces it bit-for-bit (the x/y face distances are infinite and the
+z-arithmetic mirrors the 1-D path). Validated (decision 0020): the reduction is
+bit-exact; a homogeneous box reproduces `WaterSlab` at the step-partition
+discretization level; an oblique beam through an off-axis dense insert stops where
+an independent Siddon `∫ρ dl` oracle reaches the water CSDA range (a genuine
+interior-crossing physics check); energy is conserved for a contained beam; and
+the reference, Warp CPU and CUDA paths agree (statistically, since rare near-corner
+face flips decorrelate float32/float64 histories per decision 0001). Scoring stays
+beam-frame marginal.
+
+Deferred: a per-voxel material map (a pure data extension of the flat arrays),
+grid rotation, a 3-D lab-frame scoring volume, non-uniform spacing, and
+CT/Hounsfield ingestion. Not yet, beyond Stage 3: treatment-planning scoring and
 influence matrices (Stage 4).
