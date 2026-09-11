@@ -204,3 +204,37 @@ def test_warp_cuda_dose_matches_cpu(warp_module, cuda_available, table) -> None:
     )
     denom = float(cpu.dose3d_mev.sum())
     assert abs(float(cuda.dose3d_mev.sum()) - denom) / denom < 1e-4
+
+
+def test_dose_not_contained_drops_energy(table) -> None:
+    """A dose grid that does not contain the full range captures strictly less
+    than the deposited energy (out-of-grid deposits are dropped), locking the
+    documented containment caveat (decision 0021)."""
+    eng = TransportEngine(
+        table, _box(), DepthDoseGrid(300.0, 10), straggling=False, scattering=False
+    )
+    # a shallow dose grid covering only z in [0, 80] mm; the 150 MeV beam ranges
+    # to ~158 mm, so the distal dose is outside the grid and dropped
+    shallow = DoseGrid3D(
+        shape=(40, 40, 80), origin_mm=(-40.0, -40.0, 0.0), spacing_mm=(2.0, 2.0, 1.0)
+    )
+    res = eng.run_scattering(
+        PencilBeamSource(150.0),
+        _lat(300.0),
+        1,
+        seed=4,
+        path="python",
+        dose_grid=shallow,
+    )
+    captured = float(res.dose3d_mev.sum())
+    assert 0.0 < captured < res.energy_deposited_mev
+
+
+def test_dose_gy_conversion_value() -> None:
+    """The MeV -> Gy conversion has the correct absolute value for a known voxel
+    mass (2x2x2 mm water voxel)."""
+    g = DoseGrid3D(shape=(1, 1, 1), spacing_mm=(2.0, 2.0, 2.0))
+    # mass = 1 g/cm^3 * 8e-3 cm^3 = 8e-6 kg; 1 MeV = 1.602176634e-13 J
+    expected = 1.602176634e-13 / 8.0e-6  # Gy per MeV
+    got = float(g.dose_gy(np.array([[[1.0]]]), density_g_per_cm3=1.0)[0, 0, 0])
+    assert abs(got - expected) / expected < 1e-12
