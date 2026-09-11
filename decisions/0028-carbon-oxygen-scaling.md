@@ -31,11 +31,18 @@ analytic Bethe model (which includes those corrections).
    scaling agrees to (worst case, at the 10 MeV/u end-of-range end where the
    higher-order z terms are largest): **helium ~0.3 %, carbon ~1.1 %, oxygen
    ~2.0 %**; across the therapeutic plateau (50–400 MeV/u) it is < 0.5 % for all
-   three. The error grows with z (the omitted Barkas ∝ z³ and Bloch ∝ z⁴ terms),
-   so the pre-registered Bethe cross-check tolerances are ion-specific: helium
-   ≤ 1.5 %, carbon ≤ 2 %, oxygen ≤ 3 %. This documents the model's fidelity limit;
-   a per-ion table (ASTAR/ICRU 73) or an explicit Barkas/Bloch term would tighten
-   it and is a later refinement.
+   three. The error has a small z-independent baseline (the PSTAR-proton vs
+   analytic-Bethe-proton model difference, ~0.3 %, which is what the helium z=2 case
+   essentially reflects) plus a part that **grows with z** (the omitted Barkas ∝ z³
+   and Bloch ∝ z⁴ terms), so the pre-registered Bethe cross-check tolerances are
+   ion-specific: helium ≤ 1.5 %, carbon ≤ 2 %, oxygen ≤ 3 %. This documents the
+   model's fidelity limit; a per-ion table (ASTAR/ICRU 73) or an explicit
+   Barkas/Bloch term would tighten it and is a later refinement. **Upper energy
+   coverage:** the proton table ceils at 400 MeV, so a scaled ion table reaches only
+   `400·(m_p/m_ion)⁻¹` per nucleon — ~397 MeV/u for carbon, below the ~430 MeV/u
+   clinical maximum; extending the top energy needs a higher-energy proton table (a
+   later data-layer item), and the validation samples stay ≤ 380 MeV/u to remain
+   in-domain (no `np.interp` clamping).
 
 3. **Fragmentation is a critical, explicit caveat for carbon/oxygen.** Unlike
    helium (fragmentation ~2–3 % of dose), carbon and oxygen fragment strongly; the

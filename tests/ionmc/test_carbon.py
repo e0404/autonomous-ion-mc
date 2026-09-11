@@ -36,7 +36,10 @@ def test_carbon_oxygen_stopping_vs_bethe(proton_table, particle, tol: float) -> 
     tolerance (the z^2 scaling omits Barkas/Bloch terms that grow with z)."""
     tab = scale_ion_stopping_table(proton_table, particle)
     bethe = AnalyticStoppingPower(WATER, particle, path="numpy")
-    for e_per_u in (10.0, 50.0, 100.0, 150.0, 250.0, 400.0):
+    # top energy stays inside the scaled table's domain: the proton table ceils at
+    # 400 MeV, so the ion table reaches only 400*(m_p/m_ion)^-1 ~ 397 MeV/u for
+    # carbon; 380 MeV/u avoids np.interp silently clamping (decision 0028).
+    for e_per_u in (10.0, 50.0, 100.0, 150.0, 250.0, 380.0):
         e = e_per_u * particle.mass_number
         s_tab = float(np.interp(e, tab.energy_mev, tab.stopping_mev_cm2_per_g))
         s_bethe = float(bethe.mass_stopping_power(e)[0])

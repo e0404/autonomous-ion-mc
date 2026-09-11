@@ -81,7 +81,10 @@ def main() -> int:
         tab = scale_ion_stopping_table(proton, particle)
         bethe = AnalyticStoppingPower(WATER, particle, path="numpy")
         worst = 0.0
-        for e_per_u in (10.0, 50.0, 100.0, 150.0, 250.0, 400.0):
+        # top energy stays inside the scaled table's domain (the proton table ceils
+        # at 400 MeV -> the ion table reaches only ~397 MeV/u for carbon), avoiding
+        # a silent np.interp clamp (decision 0028).
+        for e_per_u in (10.0, 50.0, 100.0, 150.0, 250.0, 380.0):
             e = e_per_u * particle.mass_number
             s_tab = float(np.interp(e, tab.energy_mev, tab.stopping_mev_cm2_per_g))
             s_bethe = float(bethe.mass_stopping_power(e)[0])
@@ -177,7 +180,10 @@ def main() -> int:
                 mx = float(np.max(np.abs(cu.edep_mev - cd)) / cd.max())
                 cb = report.setdefault("cross_backend", {})
                 cb[f"{device}_vs_cpu"] = {"total_rel_diff": tot, "max_bin_rel_diff": mx}
-                ok = ok and tot <= 5e-5 and mx <= 5e-3
+                # CUDA vs CPU is same-precision (float32-vs-float32), so it stays
+                # tight (1e-5); only the cross-precision cpu_vs_reference needs the
+                # looser 5e-5 heavier-ion float32 budget.
+                ok = ok and tot <= 1e-5 and mx <= 5e-3
             gates["warp_cpu_vs_cuda"] = ok
 
     report["all_gates_passed"] = all(gates.values())
