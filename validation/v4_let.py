@@ -10,6 +10,8 @@ be cached). Emits one JSON document with the decision-0023 gates:
                             (num > 0 exactly where dose > 0);
 * ``distal_let_peak``     - LET_d rises with depth, its peak lies at/distal to the
                             Bragg dose peak, entrance ~0.5 keV/um at 150 MeV;
+* ``voxel_size_convergence`` - the plateau LET_d is stable across dose-voxel
+                            z-sizes (the property that motivates "Method C");
 * ``warp_cpu_vs_reference`` - the deterministic CPU LET_d matches the reference
                             per voxel (float32 budget);
 * ``warp_cpu_vs_cuda``    - the deterministic CUDA LET_d agrees with CPU per voxel
@@ -195,6 +197,40 @@ def main() -> int:
         zc[k_let] >= zc[k_dose]
         and abs(entrance - 0.5445) / 0.5445 <= 0.05
         and letz[k_let] > 3.0
+    )
+
+    # -- voxel-size convergence (the property that motivates Method C) --------
+    z0 = 40.0  # plateau depth, well before the ~157 mm Bragg peak
+    conv_vals = []
+    for sp in (0.5, 1.0, 2.0):
+        dg = DoseGrid3D(
+            shape=(21, 21, int(200.0 / sp)),
+            origin_mm=(-10.5, -10.5, 0.0),
+            spacing_mm=(1.0, 1.0, sp),
+        )
+        rc = eng.run_scattering(
+            PencilBeamSource(150.0),
+            _lat(200.0),
+            1,
+            seed=5,
+            path="python",
+            dose_grid=dg,
+            score_let=True,
+        )
+        zcc, dd = dg.axis_marginals(rc.dose3d_mev)
+        _, nn = dg.axis_marginals(rc.let3d_num_mev_per_mm)
+        lz = np.divide(nn, dd, out=np.zeros_like(dd), where=dd > 0)
+        conv_vals.append(float(lz[int(np.argmin(np.abs(zcc - z0)))]))
+    conv_spread = (max(conv_vals) - min(conv_vals)) / min(conv_vals)
+    report["voxel_size_convergence"] = {
+        "z0_mm": z0,
+        "let_d_kev_um_by_spacing": dict(
+            zip(["0.5", "1.0", "2.0"], conv_vals, strict=True)
+        ),
+        "rel_spread": conv_spread,
+    }
+    gates["voxel_size_convergence"] = bool(
+        all(v > 0.0 for v in conv_vals) and conv_spread < 0.03
     )
 
     # -- Warp cross-backend --------------------------------------------------

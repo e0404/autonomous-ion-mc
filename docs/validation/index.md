@@ -392,6 +392,7 @@ consistency), and cross-backend parity (decisions 0023, 0022).
 | thin-voxel LET_d == PSTAR S(E) (250/150/100 MeV) | rel <= 2 % and LET_d >= S(E) | ~0.3 % |
 | dose-weight consistency (den == dose, num>0 where dose>0) | exact | pass |
 | distal LET peak (entrance ~0.5445 keV/um, peak distal to dose) | entrance rel <= 5 %, peak > 3 keV/um | 0.545 / ~14 |
+| voxel-size convergence (plateau LET_d vs dose-voxel z-size) | rel spread < 3 % over 0.5/1/2 mm | ~0.3 % |
 | reference vs Warp CPU LET_d (deterministic, per voxel) | per-voxel <= 5e-3 | ~4.8e-5 |
 | CUDA vs CPU LET_d (deterministic, per voxel) | per-voxel <= 5e-3 | tight (float32) |
 | CUDA vs CPU LET numerator total (scattering on) | total <= 1e-4 | recorded (host) |

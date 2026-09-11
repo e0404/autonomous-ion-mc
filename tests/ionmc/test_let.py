@@ -180,6 +180,50 @@ def test_distal_let_trend(table) -> None:
     assert letz[k_let] > 5.0 * letz[first]
 
 
+def _letd_at_depth(eng, dose: DoseGrid3D, z0_mm: float) -> float:
+    """Reference plateau LET_d [keV/um] in the dose voxel containing depth z0."""
+    r = eng.run_scattering(
+        PencilBeamSource(150.0),
+        _lat(200.0),
+        1,
+        seed=5,
+        path="python",
+        dose_grid=dose,
+        score_let=True,
+    )
+    zc, ddz = dose.axis_marginals(r.dose3d_mev)
+    _, dnz = dose.axis_marginals(r.let3d_num_mev_per_mm)
+    letz = np.divide(dnz, ddz, out=np.zeros_like(ddz), where=ddz > 0)
+    k = int(np.argmin(np.abs(zc - z0_mm)))
+    return float(letz[k])
+
+
+def test_let_voxel_size_convergence(table) -> None:
+    """Method C (tabulated S(E_mid)) is voxel-size-convergent: at a plateau depth
+    where the energy varies slowly, the per-voxel LET_d is stable across dose-voxel
+    z-sizes (decision 0023). This is the property that motivates S(E) over the
+    face-clip-sensitive deposited-energy-over-length estimator."""
+    eng = TransportEngine(
+        table, _box(), DepthDoseGrid(200.0, 10), straggling=False, scattering=False
+    )
+    z0 = 40.0  # mm; plateau, well before the ~157 mm Bragg peak
+    vals = [
+        _letd_at_depth(
+            eng,
+            DoseGrid3D(
+                shape=(21, 21, int(200.0 / sp)),
+                origin_mm=(-10.5, -10.5, 0.0),
+                spacing_mm=(1.0, 1.0, sp),
+            ),
+            z0,
+        )
+        for sp in (0.5, 1.0, 2.0)
+    ]
+    # all positive and mutually consistent to a few percent (convergent)
+    assert all(v > 0.0 for v in vals)
+    assert (max(vals) - min(vals)) / min(vals) < 0.03
+
+
 @pytest.mark.warp
 def test_warp_cpu_let_matches_reference_deterministic(warp_module, table) -> None:
     """Deterministic +z: the Warp CPU LET_d grid matches the reference per voxel

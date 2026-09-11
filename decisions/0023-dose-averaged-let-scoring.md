@@ -92,6 +92,10 @@ versus analytical limits." This builds on the lab-frame 3-D dose scorer
 - **distal_let_peak** — for a therapeutic pencil beam the LET_d rises with depth
   and its maximum lies **distal to** the Bragg dose maximum; entrance LET_d for
   ~150 MeV ≈ 0.4–0.5 keV/µm, distal region a few keV/µm.
+- **voxel_size_convergence** — at a plateau depth (slowly varying energy) the
+  per-voxel LET_d is stable across dose-voxel z-sizes (0.5/1/2 mm agree to a few
+  percent), demonstrating the voxel-size convergence that motivates Method C over
+  the face-clip-sensitive `ε/Δl` estimator.
 - **dose_weight_consistency** — the LET_d denominator grid equals the scored
   dose energy to round-off (same ε_i).
 - **cross-backend** — deterministic reference-vs-Warp-CPU LET_d per voxel to the
