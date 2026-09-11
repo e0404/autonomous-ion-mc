@@ -344,6 +344,23 @@ and the Siddon oracle is an implementation-independent interior-crossing physics
 check. Warp CPU/CUDA results are recorded in the DEV-015 local validation record
 (host run below).
 
+## V4 (dose scoring) - lab-frame 3-D dose on the voxel-grid path (task DEV-016)
+
+Script: ``validation/v4_dose3d.py``. References: energy conservation, the
+beam-frame depth dose (R80 consistency), and cross-backend parity (decision 0021).
+
+| check | criterion | result |
+|---|---|---|
+| energy conservation (dose sum == deposited; deterministic + scattering) | 1e-9 | ~0 |
+| depth-dose consistency (3-D z-marginal R80 vs beam-frame R80) | <= 1 mm (a dose voxel) | within budget |
+| grid-independence (total dose vs dose-grid resolution/alignment) | 1e-12 | round-off |
+| reference vs Warp CPU dose (deterministic): total / per-voxel | <= 1e-5 / <= 5e-3 | float32 point deposition |
+| CUDA vs CPU total dose (same precision) | <= 1e-4 | within budget |
+
+This is the volumetric-dose prerequisite for beamlet-resolved influence matrices.
+Warp CPU/CUDA results are recorded in the DEV-016 local validation record (host
+run below).
+
 ## Unit and regression tests
 
 ``tests/ionmc/`` covers units and constants, materials, the RNG mirror

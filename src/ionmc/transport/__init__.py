@@ -10,7 +10,7 @@ Multiple Coulomb scattering and lateral spread are a later Stage-1 task.
 
 from __future__ import annotations
 
-from ionmc.transport.depth_dose import DepthDoseGrid, DepthLateralGrid
+from ionmc.transport.depth_dose import DepthDoseGrid, DepthLateralGrid, DoseGrid3D
 from ionmc.transport.engine import (
     BatchedDepthDoseResult,
     DepthDoseResult,
@@ -26,6 +26,7 @@ __all__ = [
     "DepthDoseGrid",
     "DepthDoseResult",
     "DepthLateralGrid",
+    "DoseGrid3D",
     "ParticleState",
     "PencilBeamSource",
     "ScatteringResult",
