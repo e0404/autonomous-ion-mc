@@ -601,6 +601,13 @@ def csda_scattering_grid3d_kernel(
     have_let: int,
     e_floor_mev: float,
     let_num: wp.array(dtype=wp.float64),
+    have_fluence: int,
+    fl_nbins: int,
+    fl_lo: float,
+    fl_dw: float,
+    fl_counts: wp.array(dtype=wp.float64),
+    fl_table: wp.array(dtype=wp.float64),
+    fl_sum: wp.array(dtype=wp.float64),
 ):
     i = wp.tid()
     e = energy0[i]
@@ -678,6 +685,13 @@ def csda_scattering_grid3d_kernel(
             let_lin = transport.linear_stopping_power(
                 e_mid, density, table_e, table_s, table_d, n, n_steps
             )
+        if have_fluence == 1:
+            # track-length fluence: bin w*s by the step-mean energy (same E_mid as
+            # LET), and accumulate the bin-centre lookup A_gate (decision 0026).
+            fk = int(wp.floor((e - 0.5 * de - fl_lo) / fl_dw))
+            if fk >= 0 and fk < fl_nbins:
+                wp.atomic_add(fl_counts, fk, wp.float64(w * s))
+                wp.atomic_add(fl_sum, 0, wp.float64(w * s) * fl_table[fk])
         if straggling == 1 and e > straggling_floor_mev:
             sigma = transport.bohr_straggling_sigma(
                 e, rest_energy_mev, s, density, za_ratio, charge
@@ -1009,8 +1023,17 @@ class ScatteringGrid3DKernel:
         straggling_floor_mev: float,
         dose_grid: Any = None,
         score_let: bool = False,
+        fluence: Any = None,
+        fluence_table: np.ndarray | None = None,
     ) -> tuple[
-        np.ndarray, int, np.ndarray, np.ndarray, np.ndarray | None, np.ndarray | None
+        np.ndarray,
+        int,
+        np.ndarray,
+        np.ndarray,
+        np.ndarray | None,
+        np.ndarray | None,
+        np.ndarray | None,
+        float | None,
     ]:
         d = self.device
         n_hist = int(state.energy_mev.shape[0])
@@ -1081,6 +1104,28 @@ class ScatteringGrid3DKernel:
             let_num = wp.zeros(1, dtype=wp.float64, device=d)
             have_let = 0
         e_floor_mev = float(self.tables["e"].numpy()[0])
+        # optional energy-resolved fluence spectrum + lookup accumulator (0026);
+        # length-1 dummies when absent so the kernel signature is satisfied.
+        if fluence is not None and fluence_table is not None:
+            fl_nbins = int(fluence.n_bins)
+            fl_lo = float(fluence.e_lo_mev)
+            fl_dw = float(fluence.bin_width_mev)
+            fl_counts = wp.zeros(fl_nbins, dtype=wp.float64, device=d)
+            fl_table: Any = wp.array(
+                np.ascontiguousarray(fluence_table, dtype=np.float64),
+                dtype=wp.float64,
+                device=d,
+            )
+            fl_sum = wp.zeros(1, dtype=wp.float64, device=d)
+            have_fluence = 1
+        else:
+            fl_nbins = 1
+            fl_lo = 0.0
+            fl_dw = 1.0
+            fl_counts = wp.zeros(1, dtype=wp.float64, device=d)
+            fl_table = wp.zeros(1, dtype=wp.float64, device=d)
+            fl_sum = wp.zeros(1, dtype=wp.float64, device=d)
+            have_fluence = 0
         t = self.tables
         wp.launch(
             csda_scattering_grid3d_kernel,
@@ -1142,6 +1187,13 @@ class ScatteringGrid3DKernel:
                 have_let,
                 e_floor_mev,
                 let_num,
+                have_fluence,
+                fl_nbins,
+                fl_lo,
+                fl_dw,
+                fl_counts,
+                fl_table,
+                fl_sum,
             ],
             device=d,
         )
@@ -1156,6 +1208,10 @@ class ScatteringGrid3DKernel:
             if have_let == 1
             else None
         )
+        fl_counts_out = (
+            fl_counts.numpy().astype(np.float64) if have_fluence == 1 else None
+        )
+        fl_sum_out = float(fl_sum.numpy()[0]) if have_fluence == 1 else None
         return (
             edep.numpy().astype(np.float64).reshape(nz, nx),
             int(truncated.numpy()[0]),
@@ -1163,4 +1219,6 @@ class ScatteringGrid3DKernel:
             final_status.numpy().astype(np.int32),
             dose3d,
             let3d,
+            fl_counts_out,
+            fl_sum_out,
         )

@@ -225,3 +225,63 @@ class DoseGrid3D:
             mask = den > 0.0
         out[mask] = num[mask] / den[mask]
         return out
+
+
+@dataclass(frozen=True)
+class FluenceSpectrum:
+    """A 1-D proton fluence-vs-energy histogram over a single scoring region
+    (decision ``0026``). Linear energy bins over ``[e_lo_mev, e_hi_mev]``; the
+    scored array is the raw track-length histogram ``counts[k] = Sum w_i*l_i`` [mm]
+    (weighted step length ``l = s``) binned by the step-mean energy ``E_mid``. The
+    default 160 bins over 0-160 MeV suit a therapeutic proton beam in water."""
+
+    n_bins: int = 160
+    e_lo_mev: float = 0.0
+    e_hi_mev: float = 160.0
+
+    def __post_init__(self) -> None:
+        if self.n_bins <= 0:
+            raise ValueError("need at least one energy bin")
+        if self.e_hi_mev <= self.e_lo_mev:
+            raise ValueError("e_hi_mev must exceed e_lo_mev")
+
+    @property
+    def bin_width_mev(self) -> float:
+        return (self.e_hi_mev - self.e_lo_mev) / self.n_bins
+
+    @property
+    def edges_mev(self) -> np.ndarray:
+        return np.linspace(self.e_lo_mev, self.e_hi_mev, self.n_bins + 1)
+
+    @property
+    def centers_mev(self) -> np.ndarray:
+        e = self.edges_mev
+        return 0.5 * (e[:-1] + e[1:])
+
+    def empty(self) -> np.ndarray:
+        """A zeroed raw track-length histogram [mm per bin]."""
+        return np.zeros(self.n_bins, dtype=np.float64)
+
+    def differential_fluence(
+        self, counts_mm: np.ndarray, volume_mm3: float, n_histories: int = 1
+    ) -> np.ndarray:
+        """Differential fluence ``Phi(E)`` [protons cm^-2 MeV^-1] from the raw
+        track-length histogram: ``counts * 100 / (V_mm3 * dE)`` (100 converts mm
+        track length over mm^3 volume to cm^-2), divided by ``n_histories`` for the
+        per-primary fluence."""
+        scale = 100.0 / (volume_mm3 * self.bin_width_mev * max(1, n_histories))
+        return np.asarray(counts_mm, dtype=np.float64) * scale
+
+    def postprocess_lookup(
+        self, counts_mm: np.ndarray, lookup_table: np.ndarray
+    ) -> float:
+        """Offline post-processing of the scored spectrum through a per-bin lookup
+        table: ``Sum_k counts[k] * lookup_table[k]`` (decision 0026). With the same
+        table and bin rule the on-the-fly accumulator reproduces this to round-off.
+        """
+        return float(
+            np.dot(
+                np.asarray(counts_mm, dtype=np.float64),
+                np.asarray(lookup_table, dtype=np.float64),
+            )
+        )
