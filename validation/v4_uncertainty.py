@@ -8,8 +8,11 @@ be cached). Emits one JSON document with the decision-0024 gates:
 * ``mean_energy_conservation`` - the batch-mean total dose equals the per-batch
                             input energy for a contained beam;
 * ``uncertainty_sanity``  - SEM > 0 in high-dose voxels, == 0 where no dose;
-* ``warp_cpu_vs_reference`` - the batched-mean total dose agrees reference-vs-CPU;
-* ``warp_cpu_vs_cuda``    - the batched-mean total dose agrees CUDA-vs-CPU.
+* ``warp_cpu_vs_reference`` - the DETERMINISTIC batched-mean dose agrees
+                            reference-vs-CPU per voxel (float32 budget), and the
+                            stochastic total agrees;
+* ``warp_cpu_vs_cuda``    - the deterministic batched-mean dose agrees CUDA-vs-CPU
+                            per voxel and the stochastic total agrees.
 
 Exit 0 if every gate passes, 3 otherwise, 4 if the dataset is missing.
 """
@@ -163,27 +166,58 @@ def main() -> int:
         }
         gates["se_scaling"] = bool(0.35 <= ratio <= 0.71)
 
-        # cross-backend: the batched-mean TOTAL dose agrees (per-voxel mean under
-        # scattering decorrelates like dose, decision 0022; the total is tight)
-        ref_b = eng.run_scattering_batched(
-            src, lat, _dose(), 4000, n_batches=8, seed=9, path="python"
+        # cross-backend: the discriminating check is the DETERMINISTIC
+        # (scattering/straggling off) batched-mean dose PER VOXEL to the float32
+        # budget -- the estimator is a numpy reduction over per-batch grids, so
+        # this exercises the mean cross-backend spatially (not just the total).
+        # Under scattering the per-voxel mean decorrelates like dose (decision
+        # 0022); the stochastic total stays tight and is reported alongside.
+        ref_d = eng_det.run_scattering_batched(
+            src, lat, _dose(), 8, n_batches=4, seed=5, path="python"
         )
+        cpu_d = eng_det.run_scattering_batched(
+            src, lat, _dose(), 8, n_batches=4, seed=5, path="warp", device="cpu"
+        )
+        rd, cd = ref_d.mean_dose3d_mev, cpu_d.mean_dose3d_mev
+        det_tot = abs(float(cd.sum()) - float(rd.sum())) / float(rd.sum())
+        det_max = float(np.max(np.abs(cd - rd)) / rd.max())
         cpu_b = eng.run_scattering_batched(
             src, lat, _dose(), 4000, n_batches=8, seed=9, path="warp", device="cpu"
         )
-        rt, ct = float(ref_b.mean_dose3d_mev.sum()), float(cpu_b.mean_dose3d_mev.sum())
-        cpu_tot = abs(ct - rt) / rt
-        report.setdefault("cross_backend", {})["cpu_vs_reference_total"] = cpu_tot
-        gates["warp_cpu_vs_reference"] = cpu_tot <= 1e-4
+        ref_b = eng.run_scattering_batched(
+            src, lat, _dose(), 4000, n_batches=8, seed=9, path="python"
+        )
+        stoch_tot = abs(
+            float(cpu_b.mean_dose3d_mev.sum()) - float(ref_b.mean_dose3d_mev.sum())
+        ) / float(ref_b.mean_dose3d_mev.sum())
+        report.setdefault("cross_backend", {})["cpu_vs_reference_deterministic"] = {
+            "total_rel_diff": det_tot,
+            "max_voxel_rel_diff": det_max,
+        }
+        report["cross_backend"]["cpu_vs_reference_total_stochastic"] = stoch_tot
+        gates["warp_cpu_vs_reference"] = (
+            det_tot <= 1e-5 and det_max <= 5e-3 and stoch_tot <= 1e-4
+        )
 
         cuda_devices = [dv for dv in devices if dv != "cpu"]
         if args.require_cuda and not cuda_devices:
             gates["warp_cpu_vs_cuda"] = False
         elif cuda_devices:
             ok = True
-            d0 = float(cpu_b.mean_dose3d_mev.sum())
             for device in cuda_devices:
-                cuda_b = eng.run_scattering_batched(
+                gpu_d = eng_det.run_scattering_batched(
+                    src,
+                    lat,
+                    _dose(),
+                    8,
+                    n_batches=4,
+                    seed=5,
+                    path="warp",
+                    device=device,
+                )
+                gd = gpu_d.mean_dose3d_mev
+                dmax = float(np.max(np.abs(gd - cd)) / cd.max())
+                gpu_b = eng.run_scattering_batched(
                     src,
                     lat,
                     _dose(),
@@ -193,9 +227,14 @@ def main() -> int:
                     path="warp",
                     device=device,
                 )
-                tot = abs(float(cuda_b.mean_dose3d_mev.sum()) - d0) / d0
-                report.setdefault("cross_backend", {})[f"{device}_vs_cpu_total"] = tot
-                ok = ok and tot <= 1e-4
+                stot = abs(
+                    float(gpu_b.mean_dose3d_mev.sum())
+                    - float(cpu_b.mean_dose3d_mev.sum())
+                ) / float(cpu_b.mean_dose3d_mev.sum())
+                cb = report.setdefault("cross_backend", {})
+                cb[f"{device}_vs_cpu_deterministic_max_voxel"] = dmax
+                cb[f"{device}_vs_cpu_total_stochastic"] = stot
+                ok = ok and dmax <= 5e-3 and stot <= 1e-4
             gates["warp_cpu_vs_cuda"] = ok
 
     report["all_gates_passed"] = all(gates.values())

@@ -30,12 +30,19 @@ adds per-voxel batch uncertainty for the 3-D scored quantities.
 
 2. **`BatchedDoseResult`.** Carries `mean_dose3d_mev` and `standard_error_mev`
    (both `(nx,ny,nz)`), `n_batches`, `histories_per_batch`, `path`, `device`, and
-   — when `score_let` is set — `mean_let_d_kev_um` and `standard_error_let_kev_um`
-   (the per-voxel mean and SEM of the batch LET_d ratios). It exposes
-   `relative_standard_error` (per-voxel SEM/mean where mean>0) and
-   `mean_relative_uncertainty(min_dose_frac)` — the dose-threshold-restricted mean
-   relative SEM, the standard Monte-Carlo quality metric (uncertainty is reported
-   only where there is appreciable dose; the low-dose tail is statistically noisy).
+   — when `score_let` is set — `mean_let_d_kev_um` and `standard_error_let_kev_um`.
+   The LET_d **point estimate is the pooled ratio-of-sums** `Σ_b num_b / Σ_b dose_b`
+   (equivalently the canonical dose-averaged LET over *all* batched histories), not
+   the mean of per-batch ratios: averaging per-batch `num_b/dose_b` would dilute
+   penumbra/distal voxels (a batch with no dose there contributes a 0 ratio) toward
+   zero and carries the ordinary `E[num/dose] ≠ E[num]/E[dose]` bias. Its SEM is
+   taken from the per-batch LET_d **only where every batch deposits dose** (so each
+   ratio is defined); where coverage is partial the LET_d uncertainty is not
+   well-defined and is reported as 0. It exposes `relative_standard_error`
+   (per-voxel dose SEM/mean where mean>0) and `mean_relative_uncertainty(
+   min_dose_frac)` — the dose-threshold-restricted mean relative SEM, the standard
+   Monte-Carlo quality metric (uncertainty is reported only where there is
+   appreciable dose; the low-dose tail is statistically noisy).
 
 3. **1/sqrt(N) scaling is the correctness anchor.** For a fixed batch count, the
    high-dose-region mean relative SEM scales as `1/sqrt(N_histories)`: quadrupling

@@ -190,7 +190,10 @@ class BatchedDepthDoseResult:
 class BatchedDoseResult:
     """Per-voxel mean 3-D dose and its statistical uncertainty over independent
     history batches (decision 0024). ``standard_error_mev`` is the standard error
-    of the mean; the optional LET_d fields are present when ``score_let`` was set."""
+    of the mean. When ``score_let`` was set, ``mean_let_d_kev_um`` is the pooled
+    dose-averaged LET (ratio of summed numerator to summed dose over all batches,
+    the canonical LET_d) and ``standard_error_let_kev_um`` its SEM over the batches
+    where every batch deposited dose (0 where LET_d uncertainty is undefined)."""
 
     mean_dose3d_mev: np.ndarray  # (nx, ny, nz) mean deposited energy [MeV]
     standard_error_mev: np.ndarray  # (nx, ny, nz) standard error of the mean [MeV]
@@ -816,25 +819,38 @@ class TransportEngine:
         per_batch = max(1, n_histories // n_batches)
         shape = (n_batches, dose_grid.nx, dose_grid.ny, dose_grid.nz)
         doses = np.empty(shape, dtype=np.float64)
-        lets = np.empty(shape, dtype=np.float64) if score_let else None
+        letnums = np.empty(shape, dtype=np.float64) if score_let else None
         for b in range(n_batches):
             state = source.sample(per_batch, seed + 1 + b)
             res = self._scatter_state(state, grid, path, device, dose_grid, score_let)
             dose3d = res.dose3d_mev
             assert dose3d is not None  # _check_scatter guarantees a dose grid
             doses[b] = dose3d
-            if lets is not None:
+            if letnums is not None:
                 let_num = res.let3d_num_mev_per_mm
                 assert let_num is not None  # score_let guarantees the numerator
-                lets[b] = dose_grid.let_d_kev_um(let_num, dose3d)
+                letnums[b] = let_num
         mean = doses.mean(axis=0)
         sem = doses.std(axis=0, ddof=1) / math.sqrt(n_batches)
-        let_mean = lets.mean(axis=0) if lets is not None else None
-        let_sem = (
-            lets.std(axis=0, ddof=1) / math.sqrt(n_batches)
-            if lets is not None
-            else None
-        )
+        let_mean, let_sem = None, None
+        if letnums is not None:
+            # LET_d point estimate is the pooled ratio-of-sums (= the canonical
+            # dose-averaged LET over all batched histories), which avoids the
+            # zero-dilution and mean-of-ratios bias of averaging per-batch ratios
+            # (decision 0024). Its SEM is taken from the per-batch LET_d only where
+            # *every* batch deposits dose (so each ratio is defined); elsewhere the
+            # LET_d uncertainty is not well-defined and is reported as 0.
+            dose_sum = doses.sum(axis=0)
+            pos = dose_sum > 0.0
+            let_mean = np.zeros_like(dose_sum)
+            let_mean[pos] = letnums.sum(axis=0)[pos] / dose_sum[pos]
+            let_sem = np.zeros_like(dose_sum)
+            covered = np.all(doses > 0.0, axis=0)
+            if np.any(covered):
+                per_batch_let = letnums[:, covered] / doses[:, covered]
+                let_sem[covered] = per_batch_let.std(axis=0, ddof=1) / math.sqrt(
+                    n_batches
+                )
         return BatchedDoseResult(
             mean_dose3d_mev=mean,
             standard_error_mev=sem,

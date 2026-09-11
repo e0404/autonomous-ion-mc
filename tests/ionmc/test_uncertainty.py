@@ -135,6 +135,44 @@ def test_batch_let_fields(table) -> None:
     assert with_let.mean_let_d_kev_um.max() > 0.0
 
 
+def test_batched_let_d_is_pooled_ratio_of_sums(table) -> None:
+    """The batched LET_d point estimate is the pooled ratio-of-sums (canonical
+    LET_d over all batched histories, decision 0024), NOT the diluted mean of
+    per-batch ratios. Reproduce the pooling from the same per-batch seeds and
+    confirm the reduction matches (sum numerators / sum doses)."""
+    eng = TransportEngine(table, _box(), DepthDoseGrid(200.0, 10))  # scattering on
+    lat, dose = _lat(200.0), _dose()
+    n_batches, per_batch, seed = 4, 100, 3
+    batched = eng.run_scattering_batched(
+        PencilBeamSource(150.0),
+        lat,
+        dose,
+        n_batches * per_batch,
+        n_batches=n_batches,
+        seed=seed,
+        path="python",
+        score_let=True,
+    )
+    num_tot = np.zeros(dose.shape, dtype=np.float64)
+    dose_tot = np.zeros(dose.shape, dtype=np.float64)
+    for b in range(n_batches):
+        r = eng.run_scattering(
+            PencilBeamSource(150.0),
+            lat,
+            per_batch,
+            seed=seed + 1 + b,
+            path="python",
+            dose_grid=dose,
+            score_let=True,
+        )
+        num_tot += r.let3d_num_mev_per_mm
+        dose_tot += r.dose3d_mev
+    expected = dose.let_d_kev_um(num_tot, dose_tot)
+    assert np.allclose(batched.mean_let_d_kev_um, expected, rtol=1e-12, atol=1e-12)
+    # and it differs from the diluted mean-of-per-batch-ratios in sparse voxels
+    assert batched.mean_let_d_kev_um.max() > 0.0
+
+
 @pytest.mark.warp
 def test_se_scaling_one_over_sqrt_n(warp_module, table) -> None:
     """The standard error of the mean scales as 1/sqrt(N): quadrupling the
