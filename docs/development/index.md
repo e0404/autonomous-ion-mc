@@ -2,7 +2,8 @@
 
 This section documents development tooling and contributor-facing workflows,
 and hosts the [development roadmap](roadmap.md) (capability stages,
-dependencies, validation milestones and the currently selected milestone).
+dependencies, validation milestones and the currently selected milestone) and
+the [performance benchmarking](benchmarking.md) suite (Stage 6, milestone V6).
 
 ## Controlled task lifecycle
 
