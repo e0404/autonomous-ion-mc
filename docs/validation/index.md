@@ -445,7 +445,11 @@ doses equals the broad-field dose within statistics") in its full statistical fo
 the summed independent-batch beamlet means agree per voxel with a high-statistics
 broad field within the combined SEM. It complements DEV-017's exact same-partition
 round-off check. Per-beamlet variances add for the broad-field SEM (`√Σσ²`) because
-the beamlets are transported as independent batched estimates.
+the beamlets are transported as independent batched estimates. The per-voxel
+`z = |Δ|/σ` uses a ~16-batch SEM, so it is t-distributed (heavier tails than
+normal); the loose 4σ / 95 %-coverage band accommodates that. The cross-backend
+gate validates the per-beamlet *mean*; the per-beamlet *SEM* inherits its
+cross-backend soundness from the single-source batched estimator (decision 0024).
 
 ## Unit and regression tests
 

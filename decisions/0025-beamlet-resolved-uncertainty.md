@@ -49,12 +49,20 @@ combines them: a **per-beamlet standard error** on the influence-matrix rows.
 - **sigma_alignment** — `data_sigma` has the same length as `data`; every kept
   voxel has a defined (finite, ≥ 0) SEM; `beamlet_sigma_flat` is 0 off-row.
 - **beamlet_sum_within_statistics** — the sum of the independent-batch beamlet
-  mean doses agrees with an independent broad-field batched mean **within the
-  combined statistical uncertainty** (per-voxel `|Δ| ≲ k·σ` in the high-dose
+  mean doses agrees with an independent high-statistics broad-field dose **within
+  the combined statistical uncertainty** (per-voxel `|Δ| ≤ k·σ` in the high-dose
   region), the V4 "within statistics" gate (complementing DEV-017's exact
-  same-partition round-off check).
+  same-partition round-off check). The per-voxel `z = |Δ|/σ` uses the batched SEM
+  (`n_batches ≈ 16`, so `z` is t-distributed with heavier-than-normal tails); the
+  loose `k = 4` / 95 %-coverage band accommodates that, and the high-statistics
+  broad field is treated as effectively noise-free (conservative — it slightly
+  inflates `z`).
 - **cross-backend** — the **deterministic** (scattering off) per-beamlet mean dose
   agrees reference-vs-Warp-CPU (and CUDA-vs-CPU) per voxel to the float32 budget.
+  Note this validates the per-beamlet *mean*; the stochastic per-beamlet **SEM**
+  (`data_sigma`) is not itself independently cross-backend-validated here — its
+  cross-backend soundness is inherited from decision `0024`'s single-source
+  batched-SEM behaviour (the estimator is the identical reduction per beamlet).
 
 ## Consequences
 
