@@ -303,6 +303,7 @@ def make_baseline(report: dict[str, Any]) -> dict[str, Any]:
             "warp_version": prov.get("warp_version"),
             "warp_devices": prov.get("warp_devices"),
             "ionmc_version": prov.get("ionmc_version"),
+            "git_sha": prov.get("git_sha"),
         },
     }
 

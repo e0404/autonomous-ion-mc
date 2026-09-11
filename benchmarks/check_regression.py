@@ -41,6 +41,18 @@ def _load(path: str) -> dict[str, Any] | None:
     return obj if isinstance(obj, dict) else None
 
 
+def _is_benchmark_report(obj: dict[str, Any]) -> bool:
+    """A report carries the fields the regression check needs. A driver's *error*
+    report (dataset uncached: ``{"error": ...}`` with no ``digest``) is valid JSON
+    but not a benchmark report, and must be rejected cleanly rather than crash."""
+    return (
+        "benchmark" in obj
+        and isinstance(obj.get("digest"), dict)
+        and isinstance(obj["digest"].get("reference"), dict)
+        and "integral_per_history_mev" in obj["digest"]["reference"]
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--report", required=True, help="benchmark report JSON")
@@ -56,6 +68,11 @@ def main() -> int:
     if report is None:
         sys.stderr.write(f"cannot read report: {args.report}\n")
         return 4
+    if not _is_benchmark_report(report):
+        sys.stderr.write(
+            f"not a benchmark report (missing benchmark/digest fields): {args.report}\n"
+        )
+        return 4
 
     if args.emit_baseline:
         dump_report(make_baseline(report), sys.stdout)
@@ -67,6 +84,9 @@ def main() -> int:
     baseline = _load(args.baseline)
     if baseline is None:
         sys.stderr.write(f"cannot read baseline: {args.baseline}\n")
+        return 4
+    if "physics" not in baseline:
+        sys.stderr.write(f"not a baseline (missing 'physics' field): {args.baseline}\n")
         return 4
 
     result = compare_to_baseline(report, baseline)

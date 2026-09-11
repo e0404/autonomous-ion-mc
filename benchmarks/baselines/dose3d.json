@@ -44,6 +44,7 @@
       "cpu",
       "cuda:0"
     ],
-    "ionmc_version": "0.1.0.dev0"
+    "ionmc_version": "0.1.0.dev0",
+    "git_sha": null
   }
 }
