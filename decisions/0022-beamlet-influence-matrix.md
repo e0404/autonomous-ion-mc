@@ -55,13 +55,22 @@ beamlet identity already carried in the particle state.
   doses exactly.
 - **energy_conservation** — the summed influence dose equals the total deposited
   energy for a contained set of beamlets.
-- **cross-backend** — a **deterministic** (scattering-off) broad-field dose agrees
-  reference-vs-Warp-CPU per voxel to the float32 budget (total `≤ 1e-5`, per-voxel
-  `≤ 5e-3` of peak); with scattering on, float32-vs-float64 DDA face-flip
-  decorrelation makes the per-voxel dose two independent MC estimates, so the
-  spatial parity is checked deterministically (the stochastic DoseGrid3D
-  cross-backend was validated in DEV-016); CUDA-vs-CPU total dose agrees
-  same-precision (`≤ 1e-4`).
+- **cross-backend** — the tight, discriminating spatial parity is **deterministic**
+  (scattering/straggling off): the broad-field dose agrees **per voxel** to the
+  float32 budget (total `≤ 1e-5`, per-voxel `≤ 5e-3` of peak) both
+  reference-vs-Warp-CPU *and* Warp-CPU-vs-CUDA — the straight-line trajectory is
+  not chaotic, so this isolates the float32 arithmetic and certifies the kernel is
+  spatially identical across backends. Under **scattering on**, per-voxel dose is
+  *not* a tight cross-backend metric for *any* pair: float32 CPU and float32 CUDA
+  arithmetic is not bit-identical (FMA contraction, transcendental
+  implementations) and, like the reference(float64)-vs-float32 case, DDA face-flip
+  decorrelation amplifies it into two independent MC estimates (measured
+  CPU-vs-CUDA per-voxel `~3e-2` of peak at `N=2e4`/beamlet, recorded as a
+  diagnostic). Only the **total** energy stays tight (CPU-vs-CUDA `~1e-10`,
+  reference-vs-float32 `~5e-9`), because dose is a linear sum of per-history
+  deposits over the same seed partition — that total is the gated stochastic
+  quantity. A genuine statistical (gamma/uncertainty-based) spatial comparison of
+  two MC estimates is a deferred cross-cutting validation item.
 
 ## Consequences
 

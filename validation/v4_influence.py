@@ -9,7 +9,9 @@ be cached). Emits one JSON document with the decision-0022 gates:
 * ``sparse_vs_dense``     - a 1 % thresholded matrix keeps >= 99 % of the energy;
 * ``energy_conservation`` - the summed influence dose equals the deposited energy;
 * ``warp_cpu_vs_reference`` - the CPU broad-field dose matches the reference;
-* ``warp_cpu_vs_cuda``    - the CUDA broad-field dose agrees with CPU.
+* ``warp_cpu_vs_cuda``    - the CUDA broad-field dose agrees with CPU per voxel
+                            deterministically and in total under scattering (the
+                            stochastic per-voxel diff is a recorded diagnostic).
 
 Exit 0 if every gate passes, 3 otherwise, 4 if the dataset is missing.
 """
@@ -169,8 +171,7 @@ def main() -> int:
         # face-flip decorrelation makes the per-voxel dose two independent MC
         # estimates (large per-voxel diff at finite N), so the deterministic run
         # isolates the float32 arithmetic -- the tight, discriminating spatial
-        # metric (the stochastic DoseGrid3D cross-backend was validated in
-        # DEV-016). The total energy stays tight either way.
+        # metric. The total energy stays tight either way.
         eng_det = TransportEngine(
             table, _box(), DepthDoseGrid(250.0, 10), straggling=False, scattering=False
         )
@@ -199,6 +200,37 @@ def main() -> int:
         if args.require_cuda and not cuda_devices:
             gates["warp_cpu_vs_cuda"] = False
         elif cuda_devices:
+            # The discriminating *spatial* cross-backend gate is DETERMINISTIC
+            # (scattering/straggling off): the straight-line trajectory is not
+            # chaotic, so the float32 CPU and float32 CUDA kernels deposit the same
+            # per-voxel dose to a tight budget -- this certifies the kernel is
+            # spatially identical across backends. Under scattering ON, float32
+            # CPU and float32 CUDA arithmetic is NOT bit-identical (FMA
+            # contraction and transcendental implementations differ); combined
+            # with DDA face flips this decorrelates individual trajectories, so
+            # the per-voxel dose becomes two independent MC estimates (large
+            # per-voxel diff at finite N) while only the *total* energy stays
+            # tight. That per-voxel stochastic decorrelation is recorded as a
+            # diagnostic; a genuine statistical (gamma/uncertainty-based) spatial
+            # comparison is a deferred cross-cutting validation item.
+            cuda_det = eng_det.run_scattering_multi(
+                srcs,
+                lat,
+                n_histories=1,
+                seed=5,
+                path="warp",
+                device=cuda_devices[0],
+                dose_grid=_dose(),
+            )
+            dcd = cuda_det.dose3d_mev
+            det_max_v = float(np.max(np.abs(dcd - cd)) / cd.max())
+            det_tot = abs(float(dcd.sum()) - float(cd.sum())) / float(cd.sum())
+            cbk = report.setdefault("cross_backend", {})
+            cbk[f"{cuda_devices[0]}_vs_cpu_deterministic"] = {
+                "total_rel_diff": det_tot,
+                "max_voxel_rel_diff": det_max_v,
+            }
+
             cpu_l = eng.run_scattering_multi(
                 srcs,
                 lat,
@@ -208,7 +240,9 @@ def main() -> int:
                 device="cpu",
                 dose_grid=_dose(),
             )
-            ok = True
+            ok = det_tot <= 1e-5 and det_max_v <= 5e-3
+            cl = cpu_l.dose3d_mev
+            d0 = float(cl.sum())
             for device in cuda_devices:
                 cuda_l = eng.run_scattering_multi(
                     srcs,
@@ -219,9 +253,16 @@ def main() -> int:
                     device=device,
                     dose_grid=_dose(),
                 )
-                d0 = float(cpu_l.dose3d_mev.sum())
-                tot_d = abs(float(cuda_l.dose3d_mev.sum()) - d0) / d0
-                report.setdefault("cross_backend", {})[f"{device}_vs_cpu_total"] = tot_d
+                dd = cuda_l.dose3d_mev
+                tot_d = abs(float(dd.sum()) - d0) / d0
+                # Stochastic per-voxel diff: diagnostic only (decorrelates, see
+                # comment above). The gated quantity is the total energy, tight
+                # under scattering because dose is a linear sum of per-history
+                # deposits over the same seed partition.
+                max_v = float(np.max(np.abs(dd - cl)) / cl.max())
+                cb = report.setdefault("cross_backend", {})
+                cb[f"{device}_vs_cpu_total"] = tot_d
+                cb[f"{device}_vs_cpu_max_voxel_stochastic"] = max_v
                 ok = ok and tot_d <= 1e-4
             gates["warp_cpu_vs_cuda"] = ok
 

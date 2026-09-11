@@ -627,7 +627,7 @@ deterministically and reviewed in one pull request.
   exported to `.npz`). Because the per-beamlet and batched runs share the identical
   seed-partitioned histories, the sum of the beamlet rows equals the batched
   broad-field dose to round-off -- the first **V4** gate (sum of beamlet doses ==
-  broad-field dose), validated at ~1e-13 (reference). A 1 % peak threshold keeps
+  broad-field dose), validated at ~1e-18 (reference). A 1 % peak threshold keeps
   > 99 % of the energy while making the matrix sparse. Deferred: a GPU
   (voxel, beamlet) hash-table assembly, per-beamlet scoring inside the kernel
   (currently one launch per beamlet), LET/fluence/species-resolved scorers, and

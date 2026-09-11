@@ -504,9 +504,18 @@ its contribution to the batched broad-field run use the identical
 seed-`(seed+i)` histories and dose is a linear sum of per-history deposits, the sum
 of the beamlet rows equals the batched broad-field dose to round-off — no
 statistical tolerance needed. Validated (decision 0022): the summed influence dose
-matches `run_scattering_multi` to ~1e-13 (reference; the first V4 gate), a 1 % peak
-threshold keeps > 99 % of the energy while making the matrix sparse, energy is
-conserved, and the backends agree. Deferred: a GPU (voxel, beamlet) hash-table
-assembly, per-beamlet scoring inside the kernel (currently one launch per beamlet),
-LET/fluence/species-resolved scorers, and beamlet-resolved uncertainty (remaining
-Stage-4 items).
+matches `run_scattering_multi` to ~1e-18 (reference; the first V4 gate), a 1 % peak
+threshold keeps > 99 % of the energy while making the matrix sparse, and energy is
+conserved. Cross-backend: the tight spatial parity is **deterministic**
+(scattering off) — the broad-field dose agrees per voxel to the float32 budget both
+reference-vs-Warp-CPU and Warp-CPU-vs-CUDA, certifying the kernel is spatially
+identical across backends. Under scattering on, per-voxel dose is *not* a tight
+cross-backend metric for any pair (float32 CPU and CUDA arithmetic differ by
+FMA/transcendentals, and DDA face flips decorrelate the trajectories into
+independent MC estimates — measured CPU-vs-CUDA ~3 % of peak, a diagnostic); only
+the *total* energy stays tight (CPU-vs-CUDA ~1e-10, reference-vs-float32 ~5e-9). A
+genuine *statistical* (gamma/uncertainty-based) spatial comparison of two MC
+estimates is a deferred cross-cutting validation item.
+Deferred: a GPU (voxel, beamlet) hash-table assembly, per-beamlet scoring inside
+the kernel (currently one launch per beamlet), LET/fluence/species-resolved
+scorers, and beamlet-resolved uncertainty (remaining Stage-4 items).
