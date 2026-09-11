@@ -472,7 +472,8 @@ deterministically and reviewed in one pull request.
 | Stage 5, `DEV-022` (first non-proton ion: helium-4 via effective-charge scaling of the proton stopping power) | **completed** 2026-09-11 | decision `0027`; `validation/v5_helium.py` on the host runner (CPU + CUDA, all 5 gates); `tests/ionmc/test_helium.py`; DEV-022 local validation record; squash-merged into `develop` at `755df41` |
 | Stage 5, `DEV-023` (carbon-12 and oxygen-16 primary transport; z² scaling accuracy vs Bethe) | **completed** 2026-09-11 | decision `0028`; `validation/v5_carbon.py` on the host runner (CPU + CUDA, all 5 gates); `tests/ionmc/test_carbon.py`; DEV-023 local validation record; squash-merged into `develop` at `235a95f` |
 | Stage 5, `DEV-024` (bounded carbon nuclear fragmentation: distal fragment dose tail; V5 fragment-tail gate) | **completed** 2026-09-11 | decision `0029`; `src/ionmc/fragmentation.py`; `validation/v5_fragmentation.py` on the host runner (CPU + CUDA); `tests/ionmc/test_fragmentation.py`; DEV-024 local validation record; **closes milestone V5** |
-| Stages 4–6 | not started | — |
+| Stage 6, `DEV-025` (reproducible benchmark harness + first depth-dose benchmark; foundation for milestone V6) | **in progress** 2026-09-11 | decision `0030` (planned); `src/ionmc/benchmarking.py` (planned); `benchmarks/bench_depth_dose.py` (planned); `tests/ionmc/test_benchmarking.py` (planned) |
+| Stage 6 optimisation + release readiness | not started | — |
 
 ## Change log
 
@@ -738,3 +739,17 @@ deterministically and reviewed in one pull request.
   Deferred: energy/angular-resolved fragment spectra, secondary fragmentation,
   neutrons/gammas, the full isotopic cocktail, target fragmentation, tail LET, the
   lateral halo, and a discriminating fragment-resolved TOPAS/Geant4 reference.
+- 2026-09-11: `DEV-025` opens **Stage 6 (performance engineering)** with a
+  reproducible benchmark suite (decision `0030`). The harness `ionmc.benchmarking`
+  captures full run provenance (hardware, versions, Warp devices, git SHA), times a
+  callable with warm-up and repeats (device-synchronised for honest GPU timing), and
+  pins a reproducible **scientific digest** so an optimisation can be shown to leave
+  the physics unchanged (milestone V6). Benchmarks are deliberately separate from the
+  `validation/` gates: wall-clock time is recorded but **never asserted** against an
+  absolute threshold; only the cross-backend physics is gated (to the decision-`0001`
+  float32 budget). The first driver `benchmarks/bench_depth_dose.py` times the
+  deterministic 150 MeV proton CSDA depth-dose kernel on reference/Warp CPU/CUDA;
+  baseline result: Warp CPU ~10²× the scalar reference per-history rate, cross-backend
+  agreement within budget. Deferred: GPU occupancy/scaling sweeps, benchmarks of the
+  other transport paths, memory-footprint and precision studies, a persisted
+  regression series, and any actual kernel/memory-layout optimisation.
