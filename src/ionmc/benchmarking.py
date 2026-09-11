@@ -247,3 +247,106 @@ def dump_report(report: dict[str, Any], stream: Any) -> None:
     """Write ``report`` as indented JSON (numpy-aware) with a trailing newline."""
     json.dump(report, stream, indent=2, default=_jsonable)
     stream.write("\n")
+
+
+# -- performance-regression tracking (milestone V6, decision 0032) -------------
+#
+# A benchmark's *physics identity* is anchored on its reference (float64) result,
+# which is deterministic and hardware-independent, so it is the stable pin across
+# machines and revisions. Wall-clock throughput is machine-dependent and is compared
+# only informationally. A regression check therefore GATES on the reference digest
+# (the "unchanged scientific outcome" V6 requirement) and REPORTS throughput deltas.
+
+#: reference (float64) integral must match the baseline to this relative tolerance;
+#: the reference path is deterministic, so this only absorbs last-bit summation order.
+BASELINE_INTEGRAL_TOL = 1.0e-9
+
+
+def throughput_by_backend(report: dict[str, Any]) -> dict[str, float]:
+    """Per-backend peak throughput [work/s] from a benchmark report, tolerating both
+    report shapes: an explicit ``peak_throughput_per_s`` (the scaling-sweep drivers)
+    or the per-backend ``timings``/``scaling`` rows (max over sizes)."""
+    if isinstance(report.get("peak_throughput_per_s"), dict):
+        return {k: float(v) for k, v in report["peak_throughput_per_s"].items()}
+    out: dict[str, float] = {}
+    for row in (*report.get("timings", []), *report.get("scaling", [])):
+        tp = row.get("throughput_per_s")
+        if tp is not None:
+            out[row["backend"]] = max(out.get(row["backend"], 0.0), float(tp))
+    return out
+
+
+def physics_fingerprint(report: dict[str, Any]) -> dict[str, Any]:
+    """The hardware-independent physics identity of a benchmark run: its name, the
+    config that defines the workload, and the reference (float64) digest. This is
+    what a regression baseline pins; two runs of the same physics share it on any
+    machine."""
+    return {
+        "benchmark": report["benchmark"],
+        "config": report.get("config", {}),
+        "reference_digest": report["digest"]["reference"],
+    }
+
+
+def make_baseline(report: dict[str, Any]) -> dict[str, Any]:
+    """Build a committable regression baseline from a benchmark report: the
+    hardware-independent physics fingerprint (the gate) plus a machine-tagged
+    throughput snapshot (informational)."""
+    prov = report.get("provenance", {})
+    return {
+        "schema_version": 1,
+        "physics": physics_fingerprint(report),
+        "throughput_by_backend": throughput_by_backend(report),
+        "recorded_on": {
+            "platform": prov.get("platform"),
+            "machine": prov.get("machine"),
+            "warp_version": prov.get("warp_version"),
+            "warp_devices": prov.get("warp_devices"),
+            "ionmc_version": prov.get("ionmc_version"),
+            "git_sha": prov.get("git_sha"),
+        },
+    }
+
+
+def compare_to_baseline(
+    report: dict[str, Any], baseline: dict[str, Any]
+) -> dict[str, Any]:
+    """Compare a fresh benchmark report against a committed baseline. GATES on the
+    reference physics digest (unchanged scientific outcome) and REPORTS per-backend
+    throughput ratios (current / baseline) without gating on them.
+
+    Returns ``{"physics_ok", "benchmark_match", "reference_digest_match",
+    "integral_rel_diff", "throughput"}``; ``physics_ok`` is the pass/fail signal.
+    """
+    cur = physics_fingerprint(report)
+    base = baseline["physics"]
+    benchmark_match = cur["benchmark"] == base["benchmark"]
+    cur_dig = cur["reference_digest"]
+    base_dig = base["reference_digest"]
+    digest_match = cur_dig.get("shape_digest") == base_dig.get("shape_digest")
+    base_integral = float(base_dig["integral_per_history_mev"])
+    integral_rel = (
+        abs(float(cur_dig["integral_per_history_mev"]) - base_integral) / base_integral
+        if base_integral != 0.0
+        else float("nan")
+    )
+    physics_ok = bool(
+        benchmark_match and digest_match and integral_rel <= BASELINE_INTEGRAL_TOL
+    )
+
+    cur_tp = throughput_by_backend(report)
+    base_tp = baseline.get("throughput_by_backend", {})
+    throughput: dict[str, dict[str, float | None]] = {}
+    for backend in sorted(set(cur_tp) | set(base_tp)):
+        b = base_tp.get(backend)
+        c = cur_tp.get(backend)
+        ratio = (c / b) if (b and c) else None
+        throughput[backend] = {"baseline": b, "current": c, "ratio": ratio}
+
+    return {
+        "physics_ok": physics_ok,
+        "benchmark_match": benchmark_match,
+        "reference_digest_match": digest_match,
+        "integral_rel_diff": integral_rel,
+        "throughput": throughput,
+    }

@@ -474,6 +474,7 @@ deterministically and reviewed in one pull request.
 | Stage 5, `DEV-024` (bounded carbon nuclear fragmentation: distal fragment dose tail; V5 fragment-tail gate) | **completed** 2026-09-11 | decision `0029`; `src/ionmc/fragmentation.py`; `validation/v5_fragmentation.py` on the host runner (CPU + CUDA); `tests/ionmc/test_fragmentation.py`; DEV-024 local validation record; **closes milestone V5** |
 | Stage 6, `DEV-025` (reproducible benchmark harness + first depth-dose benchmark; foundation for milestone V6) | **in progress** 2026-09-11 | decision `0030` (planned); `src/ionmc/benchmarking.py` (planned); `benchmarks/bench_depth_dose.py` (planned); `tests/ionmc/test_benchmarking.py` (planned) |
 | Stage 6, `DEV-026` (3-D voxel-grid dose benchmark + Warp CUDA history-count scaling sweep) | **in progress** 2026-09-11 | decision `0031` (planned); `benchmarks/bench_dose3d.py` (planned); `tests/ionmc/test_bench_dose3d.py` (planned) |
+| Stage 6, `DEV-027` (performance-regression tracking: committed baselines + physics-gated comparison; milestone V6 mechanism) | **in progress** 2026-09-11 | decision `0032` (planned); `src/ionmc/benchmarking.py` (compare_to_baseline etc.); `benchmarks/check_regression.py` + `benchmarks/baselines/` (planned); `tests/ionmc/test_benchmarking.py` (planned) |
 | Stage 6 optimisation + release readiness | not started | — |
 
 ## Change log
@@ -765,3 +766,14 @@ deterministically and reviewed in one pull request.
   meaningful single-GPU protons/s figure the 1-D benchmark deliberately under-utilises.
   Deferred: scattering-on throughput, grid/beamlet-count scaling, occupancy profiling, a
   persisted regression series, and any actual kernel optimisation.
+- 2026-09-11: `DEV-027` adds **performance-regression tracking**, the milestone V6
+  mechanism (decision `0032`). A benchmark's physics identity is anchored on its
+  deterministic float64 **reference digest** (hardware-independent), committed as
+  `benchmarks/baselines/<benchmark>.json` alongside a machine-tagged throughput
+  snapshot. `benchmarks/check_regression.py` / `compare_to_baseline` compares a fresh
+  run to its baseline: it **gates on the reference digest** (the "unchanged scientific
+  outcome" V6 requirement) and **reports per-backend throughput ratios** without gating
+  (wall-clock is machine-dependent). This is the before/after guard that makes any
+  future optimisation admissible under V6. Deferred: a persisted results time series,
+  throughput regression thresholds, CI wiring (needs a GPU), and the optimisation work
+  itself.

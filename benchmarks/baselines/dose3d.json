@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "physics": {
+    "benchmark": "dose3d",
+    "config": {
+      "energy_mev": 150.0,
+      "voxel_box": "VoxelGrid3D.uniform((120,120,300),1mm)",
+      "dose_grid": "DoseGrid3D((60,60,150),2mm)",
+      "straggling": false,
+      "scattering": false,
+      "corr_histories": 1000,
+      "cuda_sweep": [
+        1000,
+        10000,
+        100000,
+        1000000
+      ],
+      "cpu_sweep": [
+        1000,
+        5000,
+        20000
+      ],
+      "repeats": 3,
+      "warmup": 1,
+      "reference_precision": "float64",
+      "warp_precision": "float32"
+    },
+    "reference_digest": {
+      "integral_per_history_mev": 150.00000000000006,
+      "peak_voxel_mev": 12.047281786377903,
+      "n_nonzero_voxels": 79,
+      "shape_digest": "bcacb00f9e598f90"
+    }
+  },
+  "throughput_by_backend": {
+    "warp:cpu": 28172.536802394457,
+    "warp:cuda:0": 1132617.3795066949
+  },
+  "recorded_on": {
+    "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+    "machine": "x86_64",
+    "warp_version": "1.17.0",
+    "warp_devices": [
+      "cpu",
+      "cuda:0"
+    ],
+    "ionmc_version": "0.1.0.dev0",
+    "git_sha": null
+  }
+}
