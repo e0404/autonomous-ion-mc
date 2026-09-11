@@ -1375,8 +1375,10 @@ class TransportEngine:
                 if have_fluence and fl_counts is not None and fluence_table is not None:
                     # track-length fluence: bin w*s by the step-mean energy, and
                     # accumulate the bin-centre lookup A_gate = Sum w*s*w_tab[bin]
-                    # (decision 0026). Uses the same E_mid as LET (E - de/2).
-                    fk = int((e - 0.5 * de - fl_lo) / fl_dw)
+                    # (decision 0026). Uses the same E_mid as LET (E - de/2), and
+                    # math.floor (matching the kernel's wp.floor) so below-range
+                    # E_mid drops consistently on both backends.
+                    fk = math.floor((e - 0.5 * de - fl_lo) / fl_dw)
                     if 0 <= fk < fl_nbins:
                         fl_counts[fk] += w * s
                         fl_sum += w * s * float(fluence_table[fk])

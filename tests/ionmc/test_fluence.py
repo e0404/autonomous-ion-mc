@@ -147,6 +147,39 @@ def test_fluence_sanity(table) -> None:
 
 
 @pytest.mark.warp
+def test_fluence_e_lo_offset_bin_rule_backends_agree(warp_module, table) -> None:
+    """With a non-zero e_lo_mev, steps whose E_mid falls below the range must be
+    DROPPED identically on both backends (math.floor on the reference matches the
+    kernel's wp.floor). A truncating int() would mis-bin below-range steps into
+    bin 0 on the reference only, so this exercises the shared bin rule."""
+    eng = TransportEngine(
+        table, _box(), DepthDoseGrid(200.0, 10), straggling=False, scattering=False
+    )
+    fl = FluenceSpectrum(n_bins=100, e_lo_mev=50.0, e_hi_mev=150.0)
+    ref = eng.run_scattering(
+        PencilBeamSource(150.0),
+        _lat(),
+        20,
+        seed=4,
+        path="python",
+        dose_grid=_dose(),
+        fluence=fl,
+    )
+    cpu = eng.run_scattering(
+        PencilBeamSource(150.0),
+        _lat(),
+        20,
+        seed=4,
+        path="warp",
+        device="cpu",
+        dose_grid=_dose(),
+        fluence=fl,
+    )
+    peak = float(ref.fluence_counts_mm.max())
+    assert np.max(np.abs(cpu.fluence_counts_mm - ref.fluence_counts_mm)) / peak < 5e-3
+
+
+@pytest.mark.warp
 def test_warp_cpu_fluence_matches_reference_deterministic(warp_module, table) -> None:
     """Deterministic +z: the Warp CPU fluence spectrum and lookup accumulator match
     the reference per bin (float32 budget)."""
