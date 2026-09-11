@@ -23,7 +23,7 @@ straggling ∝ z² and Highland MCS ∝ z).
    first-Born (Bethe) z² scaling; only the projectile charge differs. It acts on
    mass stopping power (MeV·cm²/g), so the **same water table applies directly**.
    For helium-4, `E_p = E_He · MP_OVER_MHE` with
-   `MP_OVER_MHE = m_p / m_He = 938.27208816 / 3727.3794066 = 0.2517237`
+   `MP_OVER_MHE = m_p / m_He = 938.27208816 / 3727.3794066 = 0.2517243`
    (this exact mass ratio, not `E/4`, keeps the z² scaling exact to 4 significant
    figures across the therapeutic range; `E/4` leaves a systematic ~0.5 % error).
 
@@ -42,12 +42,16 @@ straggling ∝ z² and Highland MCS ∝ z).
    `midpoint_energy_loss` / `energy_loss_step_length` with the ion table and
    `particle = ALPHA`; no hot-path change. Straggling (via `charge` → variance ∝ z²)
    and Highland MCS (via `charge` and `m_He` in `pv` → θ₀ ∝ z/A at equal velocity)
-   are already generic. The table floor maps to `E_He ≈ 4 MeV`; below it the
-   residual is deposited locally exactly as the proton path handles its own floor.
+   are already generic. The proton table floor of 0.5 MeV maps to `E_He ≈ 1.99 MeV`
+   (0.5 MeV/u), so the constant `z = 2` scaling is actually applied down to
+   0.5 MeV/u — into the Barkas-pickup band — but that spans only the last
+   ~0.03–0.07 mm of a 15.8 cm range, so the residual error is negligible; below the
+   floor the residual is deposited locally exactly as the proton path handles its
+   own floor.
 
 4. **The range identity.** Integrating `R = ∫dE/S` under the scaling gives
    `R_ion(E_ion) = (m_ion/(z²·m_p)) · R_p(E_ion·m_p/m_ion)` exactly. For helium
-   `m_He/(z²·m_p) = 0.99310`, so a helium-4 ion has essentially the **same range in
+   `m_He/(z²·m_p) = 0.99315`, so a helium-4 ion has essentially the **same range in
    g/cm² as a proton of the same energy per nucleon**: a 600 MeV (150 MeV/u) helium
    beam ranges to **≈ 15.86 g/cm² ≈ 15.8 cm** in water — the depth of a 150 MeV
    proton. This is the primary Bragg-curve validation target.
@@ -55,7 +59,7 @@ straggling ∝ z² and Highland MCS ∝ z).
 ## Validation (`validation/v5_helium.py`, pre-registered per decision 0001)
 
 - **stopping_vs_bethe** — the scaled-PSTAR helium table agrees with the *independent*
-  analytic Bethe model (`StoppingPower(WATER, ALPHA)`, which reproduces PSTAR to
+  analytic Bethe model (`AnalyticStoppingPower(WATER, ALPHA)`, which reproduces PSTAR to
   < 0.1 % for protons) at several energies spanning `E/A = 10–250 MeV/u` to ≲ 1.5 %
   (the two share ICRU-49 physics; the z² scaling breaks only in the low-energy
   pickup tail).

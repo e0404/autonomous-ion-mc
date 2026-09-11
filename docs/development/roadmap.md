@@ -469,7 +469,7 @@ deterministically and reviewed in one pull request.
 | Stage 4, `DEV-019` (batch-based statistical uncertainty for 3-D dose; V4 "within statistics") | **completed** 2026-09-11 | decision `0024`; `validation/v4_uncertainty.py` on the host runner (CPU + CUDA, all 5 gates); `tests/ionmc/test_uncertainty.py`; DEV-019 local validation record; squash-merged into `develop` at `6eb245b` |
 | Stage 4, `DEV-020` (beamlet-resolved planning-aware uncertainty; V4 beamlet-sum within statistics) | **completed** 2026-09-11 | decision `0025`; `validation/v4_beamlet_uncertainty.py` on the host runner (CPU + CUDA, all 5 gates); `tests/ionmc/test_beamlet_uncertainty.py`; DEV-020 local validation record; squash-merged into `develop` at `83ec95b` |
 | Stage 4, `DEV-021` (energy-resolved fluence-spectrum scoring + lookup-table accumulation; closes V4 lookup gate) | **completed** 2026-09-11 | decision `0026`; `validation/v4_fluence.py` on the host runner (CPU + CUDA, all 5 gates); `tests/ionmc/test_fluence.py`; DEV-021 local validation record; squash-merged into `develop` at `98251c2` — **milestone V4 achieved** |
-| Stage 5, `DEV-022` (first non-proton ion: helium-4 via effective-charge scaling of the proton stopping power) | **in progress** 2026-09-11 | decision `0027` (planned); `validation/v5_helium.py` (planned); `tests/ionmc/test_helium.py` (planned) |
+| Stage 5, `DEV-022` (first non-proton ion: helium-4 via effective-charge scaling of the proton stopping power) | **in progress** 2026-09-11 | decision `0027`; `validation/v5_helium.py`; `tests/ionmc/test_helium.py` |
 | Stages 4–6 | not started | — |
 
 ## Change log
@@ -699,8 +699,11 @@ deterministically and reviewed in one pull request.
   runner).
 - 2026-09-11: **Stage 5 begins.** `DEV-022` adds the first non-proton ion,
   **helium-4**, transported by reusing the proton stopping-power table via
-  velocity matching (`E → E/A`) and effective-charge `z²` scaling (decision
-  `0027`), validated against NIST ASTAR helium stopping/range data and the
-  `R_He(E) = R_p(E/A)` Bragg-range identity. Deferred to later Stage-5 tasks:
-  nuclear fragmentation and the fragment tail, carbon/oxygen, and
-  species-resolved scoring.
+  equal-velocity matching (`E_p = E·m_p/m_He`, the exact mass ratio, not `E/4`)
+  and effective-charge `z²` scaling (decision `0027`), validated against the
+  repository's *independent* analytic Bethe model (`AnalyticStoppingPower(WATER,
+  ALPHA)`, ~0.1 % agreement) and the `R_He(E) = (m_He/z²m_p)·R_p(E·m_p/m_He)`
+  Bragg-range identity (600 MeV He → ~15.85 g/cm² ≈ a 150 MeV proton). NIST ASTAR
+  is not reachable from the sandbox; adding an ASTAR dataset as a further reference
+  is a follow-up. Deferred to later Stage-5 tasks: nuclear fragmentation and the
+  fragment tail, carbon/oxygen, and species-resolved scoring.

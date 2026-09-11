@@ -490,7 +490,7 @@ Stage-5 (multi-ion) task, opening milestone **V5**.
 | CUDA vs CPU helium depth dose | total <= 1e-5 / per-bin <= 5e-3 | recorded (host) |
 
 The **stopping_vs_bethe** gate cross-checks the scaled-PSTAR helium table against
-the repository's analytic Bethe model (`StoppingPower(WATER, ALPHA)`, an independent
+the repository's analytic Bethe model (`AnalyticStoppingPower(WATER, ALPHA)`, an independent
 computation that reproduces PSTAR to < 0.1 % for protons), so the `z²` scaling is
 validated against physics, not just self-consistency. The **range identity** is
 exact by construction (the helium table is the proton table mapped in energy by

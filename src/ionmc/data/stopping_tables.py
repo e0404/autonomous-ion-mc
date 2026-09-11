@@ -29,9 +29,12 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from ionmc.particles import Particle
 
 #: Gauss-Legendre points used for the cumulative range (matches the kernel).
 RANGE_QUADRATURE_POINTS = 4
@@ -211,7 +214,7 @@ def load_stopping_table(
 
 
 def scale_ion_stopping_table(
-    proton_table: StoppingTable, particle: Any
+    proton_table: StoppingTable, particle: Particle
 ) -> StoppingTable:
     """Build an ion mass-stopping table from a proton table by equal-velocity
     z-squared scaling (decision 0027).
