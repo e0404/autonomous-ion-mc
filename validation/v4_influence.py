@@ -213,6 +213,9 @@ def main() -> int:
             # tight. That per-voxel stochastic decorrelation is recorded as a
             # diagnostic; a genuine statistical (gamma/uncertainty-based) spatial
             # comparison is a deferred cross-cutting validation item.
+            # The deterministic per-voxel spatial gate is checked on the first
+            # CUDA device (sufficient on the single-GPU host runner); the
+            # stochastic-total loop below covers every CUDA device.
             cuda_det = eng_det.run_scattering_multi(
                 srcs,
                 lat,

@@ -66,11 +66,13 @@ beamlet identity already carried in the particle state.
   implementations) and, like the reference(float64)-vs-float32 case, DDA face-flip
   decorrelation amplifies it into two independent MC estimates (measured
   CPU-vs-CUDA per-voxel `~3e-2` of peak at `N=2e4`/beamlet, recorded as a
-  diagnostic). Only the **total** energy stays tight (CPU-vs-CUDA `~1e-10`,
-  reference-vs-float32 `~5e-9`), because dose is a linear sum of per-history
-  deposits over the same seed partition — that total is the gated stochastic
-  quantity. A genuine statistical (gamma/uncertainty-based) spatial comparison of
-  two MC estimates is a deferred cross-cutting validation item.
+  diagnostic). The **total** energy, by contrast, stays tight (measured
+  CPU-vs-CUDA `~1.9e-10`) — the gated stochastic quantity: for the CPU-vs-CUDA
+  pair the same seed partition gives the same per-history deposits, and for *any*
+  pair the total is anyway pinned by energy conservation (each history contained
+  in the dose grid deposits its full energy regardless of the exact path). A
+  genuine statistical (gamma/uncertainty-based) per-voxel comparison of two MC
+  estimates is a deferred cross-cutting validation item.
 
 ## Consequences
 

@@ -373,7 +373,7 @@ and cross-backend parity (decision 0022).
 | sparse vs dense (1 % threshold keeps energy) | >= 99 % kept, nnz shrinks | ~99.4 % |
 | energy conservation (summed influence == deposited) | 1e-9 | ~0 |
 | reference vs Warp CPU broad-field dose (deterministic) | total <= 1e-5 / per-voxel <= 5e-3 | 1.7e-7 / 2.7e-5 |
-| CUDA vs CPU broad-field dose (deterministic, per voxel) | total <= 1e-5 / per-voxel <= 5e-3 | tight (float32) |
+| CUDA vs CPU broad-field dose (deterministic, per voxel) | total <= 1e-5 / per-voxel <= 5e-3 | 2.0e-9 / 1.4e-7 |
 | CUDA vs CPU broad-field total (scattering on) | total <= 1e-4 | ~1.9e-10 |
 | CUDA vs CPU per voxel (scattering on) | diagnostic only (decorrelates) | ~3 % of peak |
 

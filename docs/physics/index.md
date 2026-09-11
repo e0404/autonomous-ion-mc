@@ -512,10 +512,11 @@ reference-vs-Warp-CPU and Warp-CPU-vs-CUDA, certifying the kernel is spatially
 identical across backends. Under scattering on, per-voxel dose is *not* a tight
 cross-backend metric for any pair (float32 CPU and CUDA arithmetic differ by
 FMA/transcendentals, and DDA face flips decorrelate the trajectories into
-independent MC estimates — measured CPU-vs-CUDA ~3 % of peak, a diagnostic); only
-the *total* energy stays tight (CPU-vs-CUDA ~1e-10, reference-vs-float32 ~5e-9). A
-genuine *statistical* (gamma/uncertainty-based) spatial comparison of two MC
-estimates is a deferred cross-cutting validation item.
+independent MC estimates — measured CPU-vs-CUDA ~3 % of peak, a diagnostic); the
+*total* energy stays tight (measured CPU-vs-CUDA ~1.9e-10), pinned for any pair by
+energy conservation (a contained history deposits its full energy regardless of
+path). A genuine *statistical* (gamma/uncertainty-based) per-voxel comparison of
+two MC estimates is a deferred cross-cutting validation item.
 Deferred: a GPU (voxel, beamlet) hash-table assembly, per-beamlet scoring inside
 the kernel (currently one launch per beamlet), LET/fluence/species-resolved
 scorers, and beamlet-resolved uncertainty (remaining Stage-4 items).
