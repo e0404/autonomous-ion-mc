@@ -932,7 +932,9 @@ class TransportEngine:
         (decision 0020). Identical to :meth:`_run_scattering_reference` except the
         geometry lookup and step limit use three lab-axis coordinates and the
         distance to the nearest voxel face, rather than a single material
-        coordinate. Scoring stays beam-frame marginal."""
+        coordinate. Scoring stays beam-frame marginal. The source entry point is
+        expected to lie within the grid bounding box; a point outside it is
+        clamped to the edge voxel (decision 0020)."""
         tp = reference.load_bound_module(
             "ionmc.physics.transport",
             "python",

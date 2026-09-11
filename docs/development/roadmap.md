@@ -598,7 +598,8 @@ deterministically and reviewed in one pull request.
   distance-to-next-face; geometry state is recomputed each step, so no float state
   drifts between backends and the 1-D `VoxelSlab` is an exact sub-case (Nx=Ny=1).
   Parallel drivers keep the 1-D path untouched (bit-exact). Validated: a
-  single-column grid reproduces the VoxelSlab bit-for-bit; a homogeneous box
+  single-column grid reproduces the VoxelSlab bit-for-bit (uniform-spacing case);
+  a homogeneous box
   reproduces WaterSlab at the step-partition level; an oblique beam through an
   off-axis dense insert stops where an independent Siddon WET integral reaches the
   water CSDA range; energy is conserved for a contained beam; and reference/Warp

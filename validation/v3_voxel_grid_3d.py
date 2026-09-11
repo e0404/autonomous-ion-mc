@@ -261,6 +261,14 @@ def main() -> int:
             np.max(np.abs(np.cumsum(cpu_match.depth_dose_mev) - np.cumsum(dd_ref)))
             / np.sum(dd_ref)
         )
+        # no-drift check: the *signed* cumulative at the last bin is the total
+        # deposited-energy relative difference; for two energy-conserving contained
+        # runs it must be ~0, proving the ~1e-3 max excursion is a zero-mean profile
+        # wiggle (float32 face-flip decorrelation), not a systematic range/energy
+        # bias -- the discriminator against a subtle DDA bug (decision 0020).
+        signed_drift = float(
+            (np.sum(cpu_match.depth_dose_mev) - np.sum(dd_ref)) / np.sum(dd_ref)
+        )
         sig_cpu_ref = all(
             abs(cpu_match.sigma_x_at_depth(f * r0) - ref_match.sigma_x_at_depth(f * r0))
             <= SIGMA_BACKEND_TOL_MM
@@ -268,10 +276,13 @@ def main() -> int:
         )
         report.setdefault("cross_backend", {})["cpu_vs_reference"] = {
             "depth_dose_cumulative": cum_cpu_ref,
+            "signed_total_drift": signed_drift,
             "sigma_x_ok": sig_cpu_ref,
         }
         gates["warp_cpu_vs_reference"] = (
-            cum_cpu_ref <= GRID_REF_WARP_DD_TOL and sig_cpu_ref
+            cum_cpu_ref <= GRID_REF_WARP_DD_TOL
+            and abs(signed_drift) <= 1e-4
+            and sig_cpu_ref
         )
 
         cuda_devices = [dv for dv in devices if dv != "cpu"]

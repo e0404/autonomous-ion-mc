@@ -449,8 +449,9 @@ rays take an infinite face distance; on-face ties are resolved by a direction-aw
 oblique beam through an axis-aligned grid already exercises full 3-D traversal.
 
 Parallel drivers keep the 1-D `VoxelSlab` path untouched, so a single-column grid
-(`Nx=Ny=1`) reproduces it bit-for-bit (the x/y face distances are infinite and the
-z-arithmetic mirrors the 1-D path). Validated (decision 0020): the reduction is
+(`Nx=Ny=1`) reproduces it bit-for-bit when the uniform spacing reconstructs the
+slab's z-faces exactly (the x/y face distances are infinite and the z-arithmetic
+mirrors the 1-D path; the source must enter within the grid bounding box). Validated (decision 0020): the reduction is
 bit-exact; a homogeneous box reproduces `WaterSlab` at the step-partition
 discretization level; an oblique beam through an off-axis dense insert stops where
 an independent Siddon `∫ρ dl` oracle reaches the water CSDA range (a genuine

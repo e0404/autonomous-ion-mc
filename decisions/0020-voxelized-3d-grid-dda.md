@@ -50,9 +50,12 @@ geometry as the remaining Stage-3 capability and a Stage-4 prerequisite.
    clip occurs — the signed 3-D case replaces the 1-D `max(mproj, 1e-6)` floor,
    which is only valid for forward motion. On-face degeneracy is resolved by a
    direction-aware nudge of `s_tie = 1e-4 mm` (far above float32 coordinate
-   resolution, far below a voxel) with a fixed axis tie-priority `x<y<z`,
-   identical in the reference and kernel. Escape (status 2) when a step reaches
-   the grid bounding box or a re-seeded index leaves `[0, N_k)`.
+   resolution, far below a voxel), applied **per axis independently** (the three
+   lab-axis coordinates are independent, so no cross-axis tie ordering is needed);
+   the nudge is identical in the reference and kernel. Escape (status 2) when a
+   step reaches the grid bounding box or a re-seeded index leaves `[0, N_k)`. The
+   source entry point is **required to lie within the grid bounding box**; a
+   position outside it is clamped to the edge voxel (not validated).
 
 5. **Parallel drivers; the 1-D path is untouched.** `run_scattering` dispatches on
    geometry type to a sibling reference driver and Warp kernel; the
@@ -75,8 +78,11 @@ geometry as the remaining Stage-3 capability and a Stage-4 prerequisite.
   cumulative `≤ 3e-3`, σ_x within SEM).
 - **oblique_wet** — an oblique beam through an off-axis dense insert matches an
   independent Siddon central-ray `∫ρ dl` oracle (`≤ 1e-3` relative WET).
-- **energy_conservation** — deposited + escaped − in `≤ 1e-9` (reference) /
-  `≤ 1e-5` (Warp), with an escaped-energy accumulator on the grid path.
+- **energy_conservation** — deposited − in `≤ 1e-9` (reference) for a beam
+  **contained** in a wide box (so escaped ≡ 0). The grid path has **no
+  escaped-energy accumulator** (`ScatteringResult.energy_balance` is
+  deposited-vs-in), so this gate is containment-only; a general escaped-energy
+  accounting for beams that leave the box sides is deferred (see below).
 - **cross-backend** — reference vs Warp CPU vs CUDA on a scattering grid config
   (statistical parity per decision 0001). The tight metrics are σ_x `≤ 0.05 mm`
   (physics) and the **same-precision** CPU-vs-CUDA depth-dose cumulative
@@ -86,7 +92,10 @@ geometry as the remaining Stage-3 capability and a Stage-4 prerequisite.
   lateral crossings per history), so float32-vs-float64 near-corner face-decision
   flips decorrelate proportionally more histories and accumulate ~1e-3 into the
   depth dose. A deterministic (scattering-off) grid run stays tight
-  (`~3e-6`, no face flips), confirming this is float32 DDA divergence, not a bug.
+  (`~3e-6`, no face flips), and the **signed** cumulative at the last bin (the
+  total deposited-energy difference) stays `≤ 1e-4` — proving the ~1e-3 excursion
+  is a zero-mean profile wiggle, not a systematic range/energy bias — confirming
+  this is float32 DDA decorrelation, not a bug.
 
 ## Provenance
 
@@ -99,4 +108,6 @@ data.
 ## Deferred
 
 Per-voxel material map, grid rotation, a 3-D lab-frame scoring volume,
-non-uniform per-axis spacing, and CT/Hounsfield ingestion.
+non-uniform per-axis spacing, CT/Hounsfield ingestion, and an escaped-energy
+accumulator on the grid scattering path (so energy conservation can be checked
+for beams that leave the box sides, not only contained beams).
