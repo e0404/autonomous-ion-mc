@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "physics": {
+    "benchmark": "depth_dose_csda",
+    "config": {
+      "energy_mev": 150.0,
+      "grid": "DepthDoseGrid(250.0, 500)",
+      "straggling": false,
+      "histories_warp": 20000,
+      "histories_reference": 200,
+      "repeats": 5,
+      "warmup": 1,
+      "reference_precision": "float64",
+      "warp_precision": "float32"
+    },
+    "reference_digest": {
+      "peak_depth_mm": 157.75,
+      "integral_per_history_mev": 149.99999999999955,
+      "shape_digest": "ae4eb76ed2d2fe6b"
+    }
+  },
+  "throughput_by_backend": {
+    "reference": 350.98593889226566,
+    "warp:cpu": 36680.38125962283,
+    "warp:cuda:0": 904311.3768749953
+  },
+  "recorded_on": {
+    "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+    "machine": "x86_64",
+    "warp_version": "1.17.0",
+    "warp_devices": [
+      "cpu",
+      "cuda:0"
+    ],
+    "ionmc_version": "0.1.0.dev0"
+  }
+}
