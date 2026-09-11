@@ -17,7 +17,7 @@ from ionmc.transport.engine import (
     ScatteringResult,
     TransportEngine,
 )
-from ionmc.transport.geometry import WaterSlab
+from ionmc.transport.geometry import VoxelGrid3D, WaterSlab
 from ionmc.transport.source import PencilBeamSource
 from ionmc.transport.state import ParticleState, Species
 
@@ -31,5 +31,6 @@ __all__ = [
     "ScatteringResult",
     "Species",
     "TransportEngine",
+    "VoxelGrid3D",
     "WaterSlab",
 ]

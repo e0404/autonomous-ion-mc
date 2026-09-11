@@ -35,7 +35,7 @@ from ionmc.physics.secondaries import (
 from ionmc.rng import RandomState
 from ionmc.stopping_power import mass_stopping_power_ratio
 from ionmc.transport.depth_dose import DepthDoseGrid, DepthLateralGrid
-from ionmc.transport.geometry import VoxelSlab, WaterSlab
+from ionmc.transport.geometry import VoxelGrid3D, VoxelSlab, WaterSlab
 from ionmc.transport.source import PencilBeamSource
 from ionmc.transport.state import ParticleState, Status
 
@@ -329,7 +329,7 @@ class TransportEngine:
     def __init__(
         self,
         table: StoppingTable,
-        slab: WaterSlab | VoxelSlab,
+        slab: WaterSlab | VoxelSlab | VoxelGrid3D,
         grid: DepthDoseGrid,
         max_fraction: float = DEFAULT_MAX_FRACTION,
         max_step_mm: float = DEFAULT_MAX_STEP_MM,
@@ -383,6 +383,18 @@ class TransportEngine:
         self.depth_dose_za_ratio = WATER.electrons_per_gram_ratio
         #: Radiation length [g/cm^2] of the front material (MCS; decision 0011).
         self.radiation_length_g_per_cm2 = slab.material.radiation_length_g_per_cm2
+        #: Whether the geometry is a 3-D voxel grid (DDA traversal, decision 0020)
+        #: rather than a 1-D voxel stack.
+        self.geometry_is_grid3d = isinstance(slab, VoxelGrid3D)
+        if isinstance(slab, VoxelGrid3D):
+            self._init_grid3d(slab, particle)
+        else:
+            self._init_slab(slab, particle)
+        #: Lazily-built engine that transports secondary protons (nuclear off, no
+        #: further secondaries), reusing this engine's geometry (decision 0013).
+        self._sec_engine: TransportEngine | None = None
+
+    def _init_slab(self, slab: WaterSlab | VoxelSlab, particle: Particle) -> None:
         #: Voxel geometry along the beam axis (decisions 0014, 0015). Each voxel
         #: is transported as water at its **water-equivalent density** rho_we =
         #: SPR(material) x rho_phys, with a composition-scaled oxygen-equivalent
@@ -425,9 +437,33 @@ class TransportEngine:
         #: which transports in a canonical beam frame and looks up the voxel by
         #: the material coordinate ``u = normal . position``.
         self.slab_normal = np.ascontiguousarray(slab.normal_hat, dtype=np.float64)
-        #: Lazily-built engine that transports secondary protons (nuclear off, no
-        #: further secondaries), reusing this engine's geometry (decision 0013).
-        self._sec_engine: TransportEngine | None = None
+
+    def _init_grid3d(self, grid: VoxelGrid3D, particle: Particle) -> None:
+        #: 3-D voxel grid (decision 0020). Per-voxel physics arrays are flattened
+        #: C-order ``flat = (i*Ny + j)*Nz + k``; a single material composition
+        #: applies to the whole grid (density-only cut), so the stopping-power
+        #: ratio and radiation length are scalars and only the mass density varies
+        #: per voxel. No 1-D voxel merge; the DDA localises the voxel directly.
+        rho_flat = grid.density_flat()
+        spr = mass_stopping_power_ratio(
+            grid.material, self.material_reference_energy_mev, particle
+        )
+        self.voxel_density = spr * rho_flat  # water-equivalent (stopping)
+        self.voxel_physical_density = rho_flat  # physical (MCS)
+        self.voxel_radiation_length = np.full(
+            rho_flat.shape[0],
+            grid.material.radiation_length_g_per_cm2,
+            dtype=np.float64,
+        )
+        self.voxel_oxygen_density = (
+            AVOGADRO * grid.material.oxygen_equivalent_per_gram * rho_flat
+        )
+        self.n_voxels = int(rho_flat.shape[0])
+        self.grid_shape = (grid.nx, grid.ny, grid.nz)
+        self.grid_origin_mm = np.asarray(grid.origin_mm, dtype=np.float64)
+        self.grid_spacing_mm = np.asarray(grid.spacing_mm, dtype=np.float64)
+        #: Physical front-voxel density for scalar consumers.
+        self.density_g_per_cm3 = float(rho_flat[0])
 
     def run(
         self,
@@ -437,6 +473,11 @@ class TransportEngine:
         path: str = "python",
         device: str = "cpu",
     ) -> DepthDoseResult:
+        if self.geometry_is_grid3d:
+            raise ValueError(
+                "the depth-dose path does not support a 3-D VoxelGrid3D; use "
+                "run_scattering (decision 0020)"
+            )
         if not np.allclose(source.direction_hat, (0.0, 0.0, 1.0)):
             raise ValueError(
                 "the depth-dose path is longitudinal (+z only); use "
@@ -649,13 +690,23 @@ class TransportEngine:
         state = source.sample(n_histories, seed)
         energy_in = float(np.sum(state.energy_mev * state.weight))
         if path == "warp":
-            edep, truncated, final_z, final_status = self._run_scattering_warp(
-                state, grid, device
-            )
+            if self.geometry_is_grid3d:
+                edep, truncated, final_z, final_status = (
+                    self._run_scattering_grid3d_warp(state, grid, device)
+                )
+            else:
+                edep, truncated, final_z, final_status = self._run_scattering_warp(
+                    state, grid, device
+                )
         elif path == "python":
-            edep, truncated, final_z, final_status = self._run_scattering_reference(
-                state, grid
-            )
+            if self.geometry_is_grid3d:
+                edep, truncated, final_z, final_status = (
+                    self._run_scattering_reference_grid3d(state, grid)
+                )
+            else:
+                edep, truncated, final_z, final_status = self._run_scattering_reference(
+                    state, grid
+                )
         else:
             raise ValueError(
                 f"unknown transport path {path!r} (use 'python' or 'warp')"
@@ -701,6 +752,37 @@ class TransportEngine:
             max_steps=self.max_steps,
             rest_energy_mev=self.particle.rest_energy_mev,
             charge=self.particle.charge,
+            straggling=self.straggling,
+            scattering=self.scattering,
+            straggling_floor_mev=self.straggling_floor_mev,
+        )
+
+    def _run_scattering_grid3d_warp(
+        self, state: ParticleState, grid: DepthLateralGrid, device: str
+    ) -> tuple[np.ndarray, int, np.ndarray, np.ndarray]:
+        if not mathlib.HAVE_WARP:
+            raise ImportError(
+                "warp-lang is not installed; the warp path is unavailable"
+            )
+        from ionmc.backend.warp_transport import ScatteringGrid3DKernel
+
+        kernel = ScatteringGrid3DKernel(self.table, device)
+        return kernel.run(
+            state=state,
+            grid=grid,
+            voxel_density=self.voxel_density,
+            voxel_physical_density=self.voxel_physical_density,
+            voxel_radiation_length=self.voxel_radiation_length,
+            grid_shape=self.grid_shape,
+            grid_origin_mm=self.grid_origin_mm,
+            grid_spacing_mm=self.grid_spacing_mm,
+            max_fraction=self.max_fraction,
+            max_step_mm=self.max_step_mm,
+            energy_cut_mev=self.energy_cut_mev,
+            max_steps=self.max_steps,
+            rest_energy_mev=self.particle.rest_energy_mev,
+            charge=self.particle.charge,
+            za_ratio=self.depth_dose_za_ratio,
             straggling=self.straggling,
             scattering=self.scattering,
             straggling_floor_mev=self.straggling_floor_mev,
@@ -834,6 +916,171 @@ class TransportEngine:
                     e = 0.0
                     status = Status.STOPPED
                 if u >= geom_depth:
+                    status = Status.ESCAPED
+            final_pz[h] = pz
+            if step >= self.max_steps and status == Status.ALIVE:
+                truncated += 1
+                final_status[h] = 3
+            else:
+                final_status[h] = int(status)
+        return edep, truncated, final_pz, final_status
+
+    def _run_scattering_reference_grid3d(
+        self, state: ParticleState, grid: DepthLateralGrid
+    ) -> tuple[np.ndarray, int, np.ndarray, np.ndarray]:
+        """3-D voxel-grid scattering transport with Amanatides-Woo DDA traversal
+        (decision 0020). Identical to :meth:`_run_scattering_reference` except the
+        geometry lookup and step limit use three lab-axis coordinates and the
+        distance to the nearest voxel face, rather than a single material
+        coordinate. Scoring stays beam-frame marginal. The source entry point is
+        expected to lie within the grid bounding box; a point outside it is
+        clamped to the edge voxel (decision 0020)."""
+        tp = reference.load_bound_module(
+            "ionmc.physics.transport",
+            "python",
+            rebind_dependencies=["ionmc.physics.tabulated"],
+        )
+        t = self.table
+        args: tuple[Any, ...] = (
+            t.energy_mev,
+            t.stopping_mev_cm2_per_g,
+            t.slope,
+            t.size,
+            t.bisection_steps,
+        )
+        voxel_density = self.voxel_density  # water-equivalent (stopping)
+        voxel_phys = self.voxel_physical_density  # physical (MCS)
+        voxel_radlen = self.voxel_radiation_length  # material X0 (MCS)
+        ox, oy, oz = (float(v) for v in self.grid_origin_mm)
+        hx, hy, hz = (float(v) for v in self.grid_spacing_mm)
+        gnx, gny, gnz = self.grid_shape
+        rest_energy = self.particle.rest_energy_mev
+        charge = self.particle.charge
+        za = self.depth_dose_za_ratio
+        straggling = self.straggling
+        scattering = self.scattering
+        floor = self.straggling_floor_mev
+        dz = grid.depth_bin_mm
+        z_org = grid.depth_origin_mm
+        x_lo = grid.lateral_lo_mm
+        dxb = grid.lateral_bin_mm
+        nz, nx = grid.n_depth, grid.n_lateral
+        edep = grid.empty()
+        truncated = 0
+        final_pz = np.zeros(state.size, dtype=np.float64)
+        final_status = np.zeros(state.size, dtype=np.int32)
+        s_tie = 1.0e-4  # mm; on-face nudge and tie epsilon (decision 0020)
+        rate_eps = 1.0e-12
+        big = 1.0e30
+
+        def _index(uu: float, o: float, hh: float, rate: float, n: int) -> int:
+            # entering voxel: nudge forward along the ray to resolve on-face ties
+            g = (uu + rate * s_tie - o) / hh
+            return min(max(math.floor(g), 0), n - 1)
+
+        def _face_dist(uu: float, i: int, o: float, hh: float, rate: float) -> float:
+            if rate > rate_eps:
+                d = (o + float(i + 1) * hh - uu) / rate
+            elif rate < -rate_eps:
+                d = (o + float(i) * hh - uu) / rate
+            else:
+                return big
+            return d if d > 0.0 else big
+
+        for h in range(state.size):
+            e = float(state.energy_mev[h])
+            p0x, p0y, p0z = (float(v) for v in state.position_mm[h])
+            d0 = state.direction[h]
+            d0x, d0y, d0z = (float(v) for v in d0)
+            dn = math.sqrt(d0x * d0x + d0y * d0y + d0z * d0z)
+            d0x, d0y, d0z = d0x / dn, d0y / dn, d0z / dn
+            e1x, e1y, e1z, e2x, e2y, e2z = _transverse_frame(d0x, d0y, d0z)
+            # rows of R = (e1|e2|d0): m^x=(e1x,e2x,d0x), etc. (decision 0020)
+            px, py, pz = 0.0, 0.0, 0.0
+            dx, dy, dzr = 0.0, 0.0, 1.0
+            w = float(state.weight[h])
+            rng = RandomState.from_state(int(state.rng_state[h]))
+            step = 0
+            status = Status.ALIVE
+            while status == Status.ALIVE and step < self.max_steps:
+                # lab position u_k = p0[k] + m^k . (px,py,pz)
+                ux = p0x + e1x * px + e2x * py + d0x * pz
+                uy = p0y + e1y * px + e2y * py + d0y * pz
+                uz = p0z + e1z * px + e2z * py + d0z * pz
+                # signed advance rate rate_k = m^k . direction
+                rx = e1x * dx + e2x * dy + d0x * dzr
+                ry = e1y * dx + e2y * dy + d0y * dzr
+                rz = e1z * dx + e2z * dy + d0z * dzr
+                ix = _index(ux, ox, hx, rx, gnx)
+                iy = _index(uy, oy, hy, ry, gny)
+                iz = _index(uz, oz, hz, rz, gnz)
+                flat = (ix * gny + iy) * gnz + iz
+                density = float(voxel_density[flat])
+                s = tp.energy_loss_step_length(
+                    e, self.max_fraction, self.max_step_mm, density, *args
+                )
+                # clip the step to the nearest voxel face along the ray
+                s = min(
+                    s,
+                    _face_dist(ux, ix, ox, hx, rx),
+                    _face_dist(uy, iy, oy, hy, ry),
+                    _face_dist(uz, iz, oz, hz, rz),
+                )
+                de = tp.midpoint_energy_loss(e, s, density, *args)
+                if straggling and e > floor:
+                    sigma = tp.bohr_straggling_sigma(
+                        e, rest_energy, s, density, za, charge
+                    )
+                    de = tp.straggled_energy_loss(de, sigma, rng.randn(), e)
+                a = rng.randf() * s
+                z_start = pz
+                x_start = px
+                px, py, pz = px + a * dx, py + a * dy, pz + a * dzr
+                if scattering and e > floor:
+                    theta0 = tp.highland_theta0(
+                        e,
+                        rest_energy,
+                        charge,
+                        s,
+                        float(voxel_phys[flat]),
+                        float(voxel_radlen[flat]),
+                    )
+                    dx, dy, dzr = _scatter_direction(
+                        dx, dy, dzr, rng.randn() * theta0, rng.randn() * theta0
+                    )
+                px, py, pz = px + (s - a) * dx, py + (s - a) * dy, pz + (s - a) * dzr
+                _deposit_zx(
+                    edep,
+                    z_start,
+                    pz,
+                    0.5 * (x_start + px),
+                    w * de,
+                    dz,
+                    z_org,
+                    x_lo,
+                    dxb,
+                    nz,
+                    nx,
+                )
+                e -= de
+                step += 1
+                if e <= self.energy_cut_mev:
+                    _deposit_zx(edep, pz, pz, px, w * e, dz, z_org, x_lo, dxb, nz, nx)
+                    e = 0.0
+                    status = Status.STOPPED
+                    final_pz[h] = pz
+                    break
+                # escape test: has the (post-step) position left the grid box?
+                ux = p0x + e1x * px + e2x * py + d0x * pz
+                uy = p0y + e1y * px + e2y * py + d0y * pz
+                uz = p0z + e1z * px + e2z * py + d0z * pz
+                rx = e1x * dx + e2x * dy + d0x * dzr
+                ry = e1y * dx + e2y * dy + d0y * dzr
+                rz = e1z * dx + e2z * dy + d0z * dzr
+                gx = (ux + rx * s_tie - ox) / hx
+                gy = (uy + ry * s_tie - oy) / hy
+                gz = (uz + rz * s_tie - oz) / hz
+                if not (0.0 <= gx < gnx and 0.0 <= gy < gny and 0.0 <= gz < gnz):
                     status = Status.ESCAPED
             final_pz[h] = pz
             if step >= self.max_steps and status == Status.ALIVE:

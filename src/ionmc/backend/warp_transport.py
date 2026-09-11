@@ -510,6 +510,239 @@ def csda_scattering_kernel(
         final_status[i] = 1
 
 
+@wp.func
+def _grid_index(
+    uu: float, o: float, hh: float, rate: float, n: int, s_tie: float
+) -> int:
+    """Entering-voxel index along one axis, nudged forward by ``rate*s_tie`` to
+    resolve on-face ties (decision 0020); clamped to ``[0, n-1]``."""
+    g = (uu + rate * s_tie - o) / hh
+    idx = int(wp.floor(g))
+    if idx < 0:
+        idx = 0
+    if idx > n - 1:
+        idx = n - 1
+    return idx
+
+
+@wp.func
+def _face_dist(
+    uu: float, i: int, o: float, hh: float, rate: float, rate_eps: float, big: float
+) -> float:
+    """Path length from ``uu`` to the exit face of voxel ``i`` along one axis
+    (``+big`` for an axis-parallel ray); decision 0020."""
+    d = big
+    if rate > rate_eps:
+        d = (o + float(i + 1) * hh - uu) / rate
+    elif rate < -rate_eps:
+        d = (o + float(i) * hh - uu) / rate
+    else:
+        return big
+    if d > 0.0:
+        return d
+    return big
+
+
+@wp.kernel
+def csda_scattering_grid3d_kernel(
+    energy0: wp.array(dtype=float),
+    weight: wp.array(dtype=float),
+    rng_state0: wp.array(dtype=wp.uint32),
+    pos0: wp.array(dtype=wp.vec3),
+    dir0: wp.array(dtype=wp.vec3),
+    voxel_density: wp.array(dtype=float),
+    voxel_phys: wp.array(dtype=float),
+    voxel_radlen: wp.array(dtype=float),
+    grid_nx: int,
+    grid_ny: int,
+    grid_nz: int,
+    origin_x: float,
+    origin_y: float,
+    origin_z: float,
+    spacing_x: float,
+    spacing_y: float,
+    spacing_z: float,
+    max_fraction: float,
+    max_step_mm: float,
+    energy_cut_mev: float,
+    max_steps: int,
+    rest_energy_mev: float,
+    charge: float,
+    za_ratio: float,
+    straggling: int,
+    scattering: int,
+    straggling_floor_mev: float,
+    depth_bin_mm: float,
+    depth_origin_mm: float,
+    lateral_lo_mm: float,
+    lateral_bin_mm: float,
+    n_depth: int,
+    n_lateral: int,
+    table_e: wp.array(dtype=float),
+    table_s: wp.array(dtype=float),
+    table_d: wp.array(dtype=float),
+    n: int,
+    n_steps: int,
+    edep: wp.array(dtype=wp.float64),
+    truncated: wp.array(dtype=int),
+    final_z: wp.array(dtype=float),
+    final_status: wp.array(dtype=int),
+):
+    i = wp.tid()
+    e = energy0[i]
+    w = weight[i]
+    rng = rng_state0[i]
+    p0 = pos0[i]
+    d0v = dir0[i]
+    dn = wp.sqrt(d0v[0] * d0v[0] + d0v[1] * d0v[1] + d0v[2] * d0v[2])
+    d0x = d0v[0] / dn
+    d0y = d0v[1] / dn
+    d0z = d0v[2] / dn
+    # beam frame (e1, e2, d0), built exactly as in csda_scattering_kernel
+    ax0 = wp.abs(d0x)
+    ay0 = wp.abs(d0y)
+    az0 = wp.abs(d0z)
+    rx = float(0.0)  # noqa: UP018
+    ry = float(0.0)  # noqa: UP018
+    rz = float(0.0)  # noqa: UP018
+    if ax0 <= ay0 and ax0 <= az0:
+        rx = 1.0
+    elif ay0 <= az0:
+        ry = 1.0
+    else:
+        rz = 1.0
+    c1x = d0y * rz - d0z * ry
+    c1y = d0z * rx - d0x * rz
+    c1z = d0x * ry - d0y * rx
+    finv1 = 1.0 / wp.sqrt(c1x * c1x + c1y * c1y + c1z * c1z)
+    fe1x = c1x * finv1
+    fe1y = c1y * finv1
+    fe1z = c1z * finv1
+    fe2x = d0y * fe1z - d0z * fe1y
+    fe2y = d0z * fe1x - d0x * fe1z
+    fe2z = d0x * fe1y - d0y * fe1x
+    px = float(0.0)  # noqa: UP018
+    py = float(0.0)  # noqa: UP018
+    pz = float(0.0)  # noqa: UP018
+    dx = float(0.0)  # noqa: UP018
+    dy = float(0.0)  # noqa: UP018
+    dz = float(1.0)  # noqa: UP018
+    step = int(0)  # noqa: UP018, RUF046
+    alive = int(1)  # noqa: UP018, RUF046
+    escaped = int(0)  # noqa: UP018, RUF046
+    s_tie = 1.0e-4
+    rate_eps = 1.0e-12
+    big = 1.0e30
+    while alive == 1 and step < max_steps:
+        # lab position u_k = p0[k] + m^k . (px,py,pz); rate_k = m^k . direction
+        ux = p0[0] + fe1x * px + fe2x * py + d0x * pz
+        uy = p0[1] + fe1y * px + fe2y * py + d0y * pz
+        uz = p0[2] + fe1z * px + fe2z * py + d0z * pz
+        rax = fe1x * dx + fe2x * dy + d0x * dz
+        ray = fe1y * dx + fe2y * dy + d0y * dz
+        raz = fe1z * dx + fe2z * dy + d0z * dz
+        ix = _grid_index(ux, origin_x, spacing_x, rax, grid_nx, s_tie)
+        iy = _grid_index(uy, origin_y, spacing_y, ray, grid_ny, s_tie)
+        iz = _grid_index(uz, origin_z, spacing_z, raz, grid_nz, s_tie)
+        flat = (ix * grid_ny + iy) * grid_nz + iz
+        density = voxel_density[flat]
+        s = transport.energy_loss_step_length(
+            e, max_fraction, max_step_mm, density, table_e, table_s, table_d, n, n_steps
+        )
+        s = wp.min(s, _face_dist(ux, ix, origin_x, spacing_x, rax, rate_eps, big))
+        s = wp.min(s, _face_dist(uy, iy, origin_y, spacing_y, ray, rate_eps, big))
+        s = wp.min(s, _face_dist(uz, iz, origin_z, spacing_z, raz, rate_eps, big))
+        de = transport.midpoint_energy_loss(
+            e, s, density, table_e, table_s, table_d, n, n_steps
+        )
+        if straggling == 1 and e > straggling_floor_mev:
+            sigma = transport.bohr_straggling_sigma(
+                e, rest_energy_mev, s, density, za_ratio, charge
+            )
+            de = transport.straggled_energy_loss(de, sigma, wp.randn(rng), e)
+        a = wp.randf(rng) * s
+        z_start = pz
+        x_start = px
+        px = px + a * dx
+        py = py + a * dy
+        pz = pz + a * dz
+        if scattering == 1 and e > straggling_floor_mev:
+            theta0 = transport.highland_theta0(
+                e, rest_energy_mev, charge, s, voxel_phys[flat], voxel_radlen[flat]
+            )
+            nd = _scatter_dir(
+                dx, dy, dz, wp.randn(rng) * theta0, wp.randn(rng) * theta0
+            )
+            dx = nd[0]
+            dy = nd[1]
+            dz = nd[2]
+        px = px + (s - a) * dx
+        py = py + (s - a) * dy
+        pz = pz + (s - a) * dz
+        # deposit w*de across depth bins [z_start, pz] at lateral bin of x mid
+        x_mid = 0.5 * (x_start + px)
+        xb = int(wp.floor((x_mid - lateral_lo_mm) / lateral_bin_mm))
+        if xb >= 0 and xb < n_lateral:
+            span = pz - z_start
+            if span <= 0.0:
+                b0 = int(wp.floor((z_start - depth_origin_mm) / depth_bin_mm))
+                if b0 >= 0 and b0 < n_depth:
+                    wp.atomic_add(edep, b0 * n_lateral + xb, wp.float64(w * de))
+            else:
+                invs = 1.0 / span
+                pos = z_start
+                b = int(wp.floor((z_start - depth_origin_mm) / depth_bin_mm))
+                while pos < pz - 1.0e-12:
+                    bin_end = depth_origin_mm + float(b + 1) * depth_bin_mm
+                    seg_end = wp.min(bin_end, pz)
+                    if b >= 0 and b < n_depth:
+                        wp.atomic_add(
+                            edep,
+                            b * n_lateral + xb,
+                            wp.float64(w * de * (seg_end - pos) * invs),
+                        )
+                    pos = seg_end
+                    b = b + 1
+        e = e - de
+        step = step + 1
+        if e <= energy_cut_mev:
+            xb2 = int(wp.floor((px - lateral_lo_mm) / lateral_bin_mm))
+            b2 = int(wp.floor((pz - depth_origin_mm) / depth_bin_mm))
+            if xb2 >= 0 and xb2 < n_lateral and b2 >= 0 and b2 < n_depth:
+                wp.atomic_add(edep, b2 * n_lateral + xb2, wp.float64(w * e))
+            e = 0.0
+            alive = 0
+        else:
+            # escape test: has the post-step position left the grid box?
+            ux2 = p0[0] + fe1x * px + fe2x * py + d0x * pz
+            uy2 = p0[1] + fe1y * px + fe2y * py + d0y * pz
+            uz2 = p0[2] + fe1z * px + fe2z * py + d0z * pz
+            rax2 = fe1x * dx + fe2x * dy + d0x * dz
+            ray2 = fe1y * dx + fe2y * dy + d0y * dz
+            raz2 = fe1z * dx + fe2z * dy + d0z * dz
+            gx = (ux2 + rax2 * s_tie - origin_x) / spacing_x
+            gy = (uy2 + ray2 * s_tie - origin_y) / spacing_y
+            gz = (uz2 + raz2 * s_tie - origin_z) / spacing_z
+            if (
+                gx < 0.0
+                or gx >= float(grid_nx)
+                or gy < 0.0
+                or gy >= float(grid_ny)
+                or gz < 0.0
+                or gz >= float(grid_nz)
+            ):
+                escaped = 1
+                alive = 0
+    final_z[i] = pz
+    if step >= max_steps and alive == 1:
+        wp.atomic_add(truncated, 0, 1)
+        final_status[i] = 3
+    elif escaped == 1:
+        final_status[i] = 2
+    else:
+        final_status[i] = 1
+
+
 class ScatteringKernel:
     """Launches the 3-D scattering depth-lateral kernel for one table/device."""
 
@@ -622,6 +855,154 @@ class ScatteringKernel:
                 float(max_fraction),
                 float(max_step_mm),
                 float(geom_depth_mm),
+                float(energy_cut_mev),
+                int(max_steps),
+                float(rest_energy_mev),
+                float(charge),
+                float(za_ratio),
+                (1 if straggling else 0),
+                (1 if scattering else 0),
+                float(straggling_floor_mev),
+                float(grid.depth_bin_mm),
+                float(grid.depth_origin_mm),
+                float(grid.lateral_lo_mm),
+                float(grid.lateral_bin_mm),
+                nz,
+                nx,
+                t["e"],
+                t["s"],
+                t["d"],
+                self.n,
+                self.n_steps,
+                edep,
+                truncated,
+                final_z,
+                final_status,
+            ],
+            device=d,
+        )
+        wp.synchronize_device(d)
+        return (
+            edep.numpy().astype(np.float64).reshape(nz, nx),
+            int(truncated.numpy()[0]),
+            final_z.numpy().astype(np.float64),
+            final_status.numpy().astype(np.int32),
+        )
+
+
+class ScatteringGrid3DKernel:
+    """Launches the 3-D voxel-grid scattering kernel (DDA, decision 0020)."""
+
+    def __init__(self, table: StoppingTable, device: str = "cpu") -> None:
+        wp.init()
+        self.device = device
+        self.table = table
+        self.n = int(table.size)
+        self.n_steps = int(table.bisection_steps)
+        self.tables: dict[str, Any] = {
+            name: wp.array(
+                np.asarray(getattr(table, attr), dtype=np.float32),
+                dtype=float,
+                device=device,
+            )
+            for name, attr in (
+                ("e", "energy_mev"),
+                ("s", "stopping_mev_cm2_per_g"),
+                ("d", "slope"),
+            )
+        }
+
+    def run(
+        self,
+        state: Any,
+        grid: Any,
+        voxel_density: np.ndarray,
+        voxel_physical_density: np.ndarray,
+        voxel_radiation_length: np.ndarray,
+        grid_shape: tuple[int, int, int],
+        grid_origin_mm: np.ndarray,
+        grid_spacing_mm: np.ndarray,
+        max_fraction: float,
+        max_step_mm: float,
+        energy_cut_mev: float,
+        max_steps: int,
+        rest_energy_mev: float,
+        charge: float,
+        za_ratio: float,
+        straggling: bool,
+        scattering: bool,
+        straggling_floor_mev: float,
+    ) -> tuple[np.ndarray, int, np.ndarray, np.ndarray]:
+        d = self.device
+        n_hist = int(state.energy_mev.shape[0])
+        nz, nx = int(grid.n_depth), int(grid.n_lateral)
+        e0: Any = wp.array(
+            np.ascontiguousarray(state.energy_mev, dtype=np.float32),
+            dtype=float,
+            device=d,
+        )
+        ww: Any = wp.array(
+            np.ascontiguousarray(state.weight, dtype=np.float32), dtype=float, device=d
+        )
+        rng: Any = wp.array(
+            np.ascontiguousarray(state.rng_state, dtype=np.uint32),
+            dtype=wp.uint32,
+            device=d,
+        )
+        pos0: Any = wp.array(
+            np.ascontiguousarray(state.position_mm, dtype=np.float32),
+            dtype=wp.vec3,
+            device=d,
+        )
+        dir0: Any = wp.array(
+            np.ascontiguousarray(state.direction, dtype=np.float32),
+            dtype=wp.vec3,
+            device=d,
+        )
+        vrho: Any = wp.array(
+            np.ascontiguousarray(voxel_density, dtype=np.float32), dtype=float, device=d
+        )
+        vphys: Any = wp.array(
+            np.ascontiguousarray(voxel_physical_density, dtype=np.float32),
+            dtype=float,
+            device=d,
+        )
+        vradlen: Any = wp.array(
+            np.ascontiguousarray(voxel_radiation_length, dtype=np.float32),
+            dtype=float,
+            device=d,
+        )
+        gnx, gny, gnz = (int(v) for v in grid_shape)
+        ox, oy, oz = (float(v) for v in np.asarray(grid_origin_mm, dtype=np.float64))
+        hx, hy, hz = (float(v) for v in np.asarray(grid_spacing_mm, dtype=np.float64))
+        edep = wp.zeros(nz * nx, dtype=wp.float64, device=d)
+        truncated = wp.zeros(1, dtype=int, device=d)
+        final_z = wp.zeros(n_hist, dtype=float, device=d)
+        final_status = wp.zeros(n_hist, dtype=int, device=d)
+        t = self.tables
+        wp.launch(
+            csda_scattering_grid3d_kernel,
+            dim=n_hist,
+            inputs=[
+                e0,
+                ww,
+                rng,
+                pos0,
+                dir0,
+                vrho,
+                vphys,
+                vradlen,
+                gnx,
+                gny,
+                gnz,
+                ox,
+                oy,
+                oz,
+                hx,
+                hy,
+                hz,
+                float(max_fraction),
+                float(max_step_mm),
                 float(energy_cut_mev),
                 int(max_steps),
                 float(rest_energy_mev),

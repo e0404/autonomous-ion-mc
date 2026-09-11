@@ -228,3 +228,117 @@ class VoxelSlab:
     def materials_profile(self) -> tuple[Material, ...]:
         """Per-voxel materials (length ``n_voxels``)."""
         return self._mats
+
+
+@dataclass(frozen=True)
+class VoxelGrid3D:
+    """A 3-D axis-aligned voxel grid in the lab frame (decision ``0020``).
+
+    ``density_g_per_cm3`` is an ``(nx, ny, nz)`` array of per-voxel mass density;
+    the grid's lab bounding box has its minimum corner at ``origin_mm`` and voxel
+    edge lengths ``spacing_mm``. A single ``material`` composition applies to the
+    whole grid (only the mass density varies per voxel in this first cut), so the
+    stopping-power ratio and radiation length are scalars. The 3-D
+    multiple-scattering path traverses the grid with a ray/voxel DDA, so a beam of
+    arbitrary incidence sees the correct per-voxel density along its path.
+
+    The flat index convention (shared by the reference driver and the Warp kernel)
+    is C-order: ``flat = (i * ny + j) * nz + k``.
+    """
+
+    density_g_per_cm3: np.ndarray
+    origin_mm: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    spacing_mm: tuple[float, float, float] = (1.0, 1.0, 1.0)
+    material: Material = WATER
+
+    def __post_init__(self) -> None:
+        rho = np.ascontiguousarray(self.density_g_per_cm3, dtype=np.float64)
+        if rho.ndim != 3:
+            raise ValueError("density must be a 3-D (nx, ny, nz) array")
+        if not np.all(rho > 0.0):
+            raise ValueError("all voxel densities must be positive")
+        if any(s <= 0.0 for s in self.spacing_mm):
+            raise ValueError("voxel spacing must be positive on every axis")
+        object.__setattr__(self, "density_g_per_cm3", rho)
+
+    @property
+    def nx(self) -> int:
+        return int(self.density_g_per_cm3.shape[0])
+
+    @property
+    def ny(self) -> int:
+        return int(self.density_g_per_cm3.shape[1])
+
+    @property
+    def nz(self) -> int:
+        return int(self.density_g_per_cm3.shape[2])
+
+    @property
+    def n_voxels(self) -> int:
+        return int(self.density_g_per_cm3.size)
+
+    @property
+    def bbox_lo_mm(self) -> tuple[float, float, float]:
+        return tuple(float(v) for v in self.origin_mm)  # type: ignore[return-value]
+
+    @property
+    def bbox_hi_mm(self) -> tuple[float, float, float]:
+        o = self.origin_mm
+        s = self.spacing_mm
+        n = (self.nx, self.ny, self.nz)
+        return (o[0] + n[0] * s[0], o[1] + n[1] * s[1], o[2] + n[2] * s[2])
+
+    def density_flat(self) -> np.ndarray:
+        """C-order flattened density, ``flat = (i * ny + j) * nz + k``."""
+        return np.ascontiguousarray(self.density_g_per_cm3, dtype=np.float64).ravel(
+            order="C"
+        )
+
+    def materials_profile(self) -> tuple[Material, ...]:
+        """The single grid material (density-only cut, decision ``0020``)."""
+        return (self.material,)
+
+    @classmethod
+    def uniform(
+        cls,
+        shape: tuple[int, int, int],
+        spacing_mm: tuple[float, float, float],
+        density: float,
+        origin_mm: tuple[float, float, float] = (0.0, 0.0, 0.0),
+        material: Material = WATER,
+    ) -> VoxelGrid3D:
+        """A grid of ``shape`` voxels all at ``density``."""
+        nx, ny, nz = shape
+        if nx < 1 or ny < 1 or nz < 1:
+            raise ValueError("each grid dimension must have at least one voxel")
+        rho = np.full((nx, ny, nz), float(density), dtype=np.float64)
+        return cls(rho, origin_mm, spacing_mm, material)
+
+    @classmethod
+    def from_voxel_slab(
+        cls,
+        slab: VoxelSlab,
+        transverse_extent_mm: float,
+        center_xy: tuple[float, float] = (0.0, 0.0),
+    ) -> VoxelGrid3D:
+        """Build a single-column ``(1, 1, nz)`` grid equivalent to a ``VoxelSlab``
+        z-stack (the reduction-test constructor). Requires uniform z-spacing and a
+        single-material (water-normal) slab; the transverse cell is centred on
+        ``center_xy`` with edge ``transverse_extent_mm``."""
+        if transverse_extent_mm <= 0.0:
+            raise ValueError("transverse_extent_mm must be positive")
+        z, rho = slab.voxel_profile()
+        dz_arr = np.diff(z)
+        dz = float(dz_arr[0])
+        if not np.allclose(dz_arr, dz):
+            raise ValueError("from_voxel_slab requires uniform z-spacing")
+        dens = np.empty((1, 1, rho.shape[0]), dtype=np.float64)
+        dens[0, 0, :] = rho
+        cx, cy = center_xy
+        origin = (
+            cx - 0.5 * transverse_extent_mm,
+            cy - 0.5 * transverse_extent_mm,
+            float(z[0]),
+        )
+        spacing = (transverse_extent_mm, transverse_extent_mm, dz)
+        return cls(dens, origin, spacing, slab.material)

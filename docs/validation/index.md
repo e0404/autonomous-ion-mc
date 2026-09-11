@@ -323,6 +323,27 @@ alignment, satisfying the last **V3** gate: **milestone V3 is closed**. Warp
 CPU/CUDA results are recorded in the DEV-014 local validation record (host run
 below).
 
+## V3 (voxel grid) - 3-D voxel geometry with ray/voxel DDA (task DEV-015)
+
+Script: ``validation/v3_voxel_grid_3d.py``. References: the 1-D VoxelSlab / homogeneous
+WaterSlab (reduction), an independent Siddon water-equivalent-path oracle, and
+cross-backend parity (decision 0020). Tolerances are pre-registered before running.
+
+| check | criterion | result |
+|---|---|---|
+| single-column grid reduces to VoxelSlab (deterministic) | depth-dose cumulative <= 1e-9 | bit-exact |
+| homogeneous box vs WaterSlab (step-partition discretization) | energy <= 1e-4 / R80 <= 1e-2 mm | within budget |
+| oblique beam through a dense insert vs Siddon WET range | within 1e-2 | within budget |
+| energy conservation (contained beam, scattering on) | 1e-9 (reference) | ~0 |
+| reference vs Warp CPU (grid, scattering): depth dose / sigma_x | <= 3e-3 (DDA face-flip) / <= 0.05 mm | within budget |
+| CUDA sigma_x vs Fermi-Eyges / CUDA vs CPU depth dose (same precision) | < 3 % / <= 5e-4 | within budget |
+
+This adds the general 3-D voxel geometry (beyond the slab/layered phantoms the V3
+gates used); the single-column reduction is the strict-generalization safety anchor
+and the Siddon oracle is an implementation-independent interior-crossing physics
+check. Warp CPU/CUDA results are recorded in the DEV-015 local validation record
+(host run below).
+
 ## Unit and regression tests
 
 ``tests/ionmc/`` covers units and constants, materials, the RNG mirror

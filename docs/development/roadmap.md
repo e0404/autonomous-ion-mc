@@ -458,7 +458,8 @@ deterministically and reviewed in one pull request.
 | Stage 3, `DEV-011` (density-heterogeneous 3-D multiple-scattering transport) | **completed** 2026-09-10 | decision `0016`; `validation/v3_scattering_heterogeneity.py` on the host runner (CPU + CUDA); `tests/ionmc/test_scattering_heterogeneity.py`; DEV-011 local validation record |
 | Stage 3, `DEV-012` (non-water materials on the 3-D scattering path) | **completed** 2026-09-10 | decision `0017`; `validation/v3_material_scattering.py` on the host runner (CPU + CUDA); `tests/ionmc/test_material_scattering.py`; DEV-012 local validation record; squash-merged into `develop` at `58309bf` |
 | Stage 3, `DEV-013` (arbitrary beam incidence via a beam frame; rotated-vs-axis-aligned equivalence) | **completed** 2026-09-11 | decision `0018`; `validation/v3_arbitrary_incidence.py` on the host runner (CPU + CUDA); `tests/ionmc/test_arbitrary_incidence.py`; DEV-013 local validation record; squash-merged into `develop` at `ebd719f` |
-| Stage 3, `DEV-014` (scoring grids decoupled from the transport grid; grid-independence; **closes V3**) | **in progress** 2026-09-11 | decision `0019`; `validation/v3_scoring_grid.py`; `tests/ionmc/test_scoring_grid_decoupling.py` |
+| Stage 3, `DEV-014` (scoring grids decoupled from the transport grid; grid-independence; **closed V3**) | **completed** 2026-09-11 | decision `0019`; `validation/v3_scoring_grid.py` on the host runner (CPU + CUDA); `tests/ionmc/test_scoring_grid_decoupling.py`; DEV-014 local validation record; squash-merged into `develop` at `f9e3c90`; **milestone V3 closed** |
+| Stage 3, `DEV-015` (3-D voxel grid with ray/voxel DDA traversal; arbitrary incidence through true voxel geometries) | **in progress** 2026-09-11 | decision `0020`; `validation/v3_voxel_grid_3d.py`; `tests/ionmc/test_voxel_grid_3d.py` |
 | Stages 4–6 | not started | — |
 
 ## Change log
@@ -586,5 +587,22 @@ deterministically and reviewed in one pull request.
   **Milestone V3 (voxelized heterogeneous geometry and materials) is closed.**
   Deferred (Stage-3 capability beyond the V3 gates): a full 3-D voxel grid with
   arbitrary per-voxel material maps and robust ray/voxel (Siddon/DDA) traversal
-  for true patient geometries, a follow-on task and a Stage-4 prerequisite. Next:
-  **Stage 4**, treatment-planning scoring and influence matrices.
+  for true patient geometries, a follow-on task and a Stage-4 prerequisite.
+- 2026-09-11: `DEV-015` added a **3-D voxel grid with ray/voxel DDA traversal**
+  (decision `0020`), the remaining Stage-3 *Voxelized geometries* capability
+  (beyond the V3 gates, which used slab/layered phantoms). A `VoxelGrid3D`
+  (lab-axis-aligned, per-voxel mass density, single material — density-only cut)
+  is traversed by an Amanatides-Woo DDA phrased in the beam-frame idiom: the 1-D
+  material coordinate `u = n̂·p` and its limit generalise to three lab-axis
+  coordinates `u_k = p0[k] + mᵏ·q` (mᵏ = rows of the beam-frame R) with a per-axis
+  distance-to-next-face; geometry state is recomputed each step, so no float state
+  drifts between backends and the 1-D `VoxelSlab` is an exact sub-case (Nx=Ny=1).
+  Parallel drivers keep the 1-D path untouched (bit-exact). Validated: a
+  single-column grid reproduces the VoxelSlab bit-for-bit (uniform-spacing case);
+  a homogeneous box
+  reproduces WaterSlab at the step-partition level; an oblique beam through an
+  off-axis dense insert stops where an independent Siddon WET integral reaches the
+  water CSDA range; energy is conserved for a contained beam; and reference/Warp
+  CPU/CUDA agree. Deferred: per-voxel material map, grid rotation, a 3-D lab-frame
+  scoring volume, non-uniform spacing, CT ingestion. Next: **Stage 4**,
+  treatment-planning scoring and influence matrices.
