@@ -661,3 +661,32 @@ Warp CPU/CUDA helium depth dose agree to the float32 budget. Deferred: nuclear
 fragmentation and the fragment dose tail, ion-specific nonelastic cross-sections,
 carbon/oxygen, species-resolved scoring, and the low-energy shell/Barkas/Bloch
 corrections beyond the constant z = 2.
+
+## Carbon-12 and oxygen-16 primary transport (Stage 5, task DEV-023, decision 0028)
+
+DEV-023 generalises the equal-velocity z² scaling (decision 0027) to **carbon-12**
+(z=6, A=12) and **oxygen-16** (z=8, A=16). No new transport code is needed:
+`scale_ion_stopping_table` is species-generic, so carbon and oxygen are transported
+exactly as helium — build the scaled table (`E_ion = E_p·m_ion/m_p`, `S_ion = z²·S_p`,
+z²=36 and 64 respectively) and run with the corresponding particle. All three
+clinical ions (He, C, O) are now transportable, closing the *Multi-ion
+architecture* breadth.
+
+The new content is **quantifying the z² scaling accuracy**: the pure z² scaling
+omits the higher-order Barkas (∝ z³) and Bloch (∝ z⁴) stopping terms, which grow
+with the projectile charge. Compared with the independent analytic Bethe model
+(which includes them), the scaled table's worst-case error (at the 10 MeV/u
+end-of-range, where those terms are largest) is helium ~0.3 %, carbon ~1.1 %,
+oxygen ~2.0 %; across the 50–400 MeV/u therapeutic plateau it is < 0.5 % for all
+three. The range identity `R_ion(E) = (m_ion/(z²·m_p))·R_p(E·m_p/m_ion)` holds to
+round-off, and a 290 MeV/u carbon beam ranges to ~16.3 g/cm² (its clinical range),
+peak at ~163 mm, conserving energy; reference vs Warp CPU/CUDA carbon depth dose
+agree to the float32 budget (looser for carbon's ~500-step, 3480 MeV transport).
+
+**Critical caveat:** carbon and oxygen fragment strongly, and the distal **fragment
+dose tail is not modelled here** — this is the primary-particle CSDA Bragg curve
+only, valid for the range and peak position but not the distal tail. Nuclear
+fragmentation (with transported charged fragments and species-resolved scoring) is
+the next Stage-5 task and the remaining V5 gate. Also deferred: ion-specific
+nonelastic cross-sections, per-ion ASTAR/ICRU 73 tables, and explicit Barkas/Bloch
+corrections.

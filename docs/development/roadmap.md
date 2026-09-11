@@ -469,7 +469,8 @@ deterministically and reviewed in one pull request.
 | Stage 4, `DEV-019` (batch-based statistical uncertainty for 3-D dose; V4 "within statistics") | **completed** 2026-09-11 | decision `0024`; `validation/v4_uncertainty.py` on the host runner (CPU + CUDA, all 5 gates); `tests/ionmc/test_uncertainty.py`; DEV-019 local validation record; squash-merged into `develop` at `6eb245b` |
 | Stage 4, `DEV-020` (beamlet-resolved planning-aware uncertainty; V4 beamlet-sum within statistics) | **completed** 2026-09-11 | decision `0025`; `validation/v4_beamlet_uncertainty.py` on the host runner (CPU + CUDA, all 5 gates); `tests/ionmc/test_beamlet_uncertainty.py`; DEV-020 local validation record; squash-merged into `develop` at `83ec95b` |
 | Stage 4, `DEV-021` (energy-resolved fluence-spectrum scoring + lookup-table accumulation; closes V4 lookup gate) | **completed** 2026-09-11 | decision `0026`; `validation/v4_fluence.py` on the host runner (CPU + CUDA, all 5 gates); `tests/ionmc/test_fluence.py`; DEV-021 local validation record; squash-merged into `develop` at `98251c2` — **milestone V4 achieved** |
-| Stage 5, `DEV-022` (first non-proton ion: helium-4 via effective-charge scaling of the proton stopping power) | **in progress** 2026-09-11 | decision `0027`; `validation/v5_helium.py`; `tests/ionmc/test_helium.py` |
+| Stage 5, `DEV-022` (first non-proton ion: helium-4 via effective-charge scaling of the proton stopping power) | **completed** 2026-09-11 | decision `0027`; `validation/v5_helium.py` on the host runner (CPU + CUDA, all 5 gates); `tests/ionmc/test_helium.py`; DEV-022 local validation record; squash-merged into `develop` at `755df41` |
+| Stage 5, `DEV-023` (carbon-12 and oxygen-16 primary transport; z² scaling accuracy vs Bethe) | **in progress** 2026-09-11 | decision `0028`; `validation/v5_carbon.py`; `tests/ionmc/test_carbon.py` |
 | Stages 4–6 | not started | — |
 
 ## Change log
@@ -706,4 +707,17 @@ deterministically and reviewed in one pull request.
   Bragg-range identity (600 MeV He → ~15.85 g/cm² ≈ a 150 MeV proton). NIST ASTAR
   is not reachable from the sandbox; adding an ASTAR dataset as a further reference
   is a follow-up. Deferred to later Stage-5 tasks: nuclear fragmentation and the
-  fragment tail, carbon/oxygen, and species-resolved scoring.
+  fragment tail, carbon/oxygen, and species-resolved scoring. Squash-merged into
+  `develop` at `755df41`.
+- 2026-09-11: `DEV-023` generalises primary-ion transport to **carbon-12** (z=6)
+  and **oxygen-16** (z=8) — no new transport code, since `scale_ion_stopping_table`
+  is species-generic — and **quantifies the z² scaling accuracy** against the
+  independent Bethe model (decision `0028`): worst-case (at the 10 MeV/u
+  end-of-range) helium ~0.3 %, carbon ~1.1 %, oxygen ~2.0 %, with < 0.5 % across
+  the 50–400 MeV/u plateau (the error grows with the omitted Barkas ∝ z³ and Bloch
+  ∝ z⁴ terms). A 290 MeV/u carbon beam ranges to ~16.3 cm (its clinical range). All
+  three clinical ions (He, C, O) are now transportable, closing the *Multi-ion
+  architecture* breadth. **Critical caveat:** carbon/oxygen fragment strongly, and
+  the distal **fragment tail is not modelled** — this is the primary-particle Bragg
+  curve only; nuclear fragmentation is the next Stage-5 task and the remaining V5
+  gate.

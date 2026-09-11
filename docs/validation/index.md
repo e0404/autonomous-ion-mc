@@ -499,6 +499,32 @@ same depth in water as a 150 MeV proton (~15.8 cm) — the Bragg-curve target. T
 transport kernels are unchanged; helium differs only by the scaled table and the
 ALPHA particle's charge/rest energy (driving straggling ∝ z² and MCS ∝ z).
 
+## V5 (carbon/oxygen) - carbon-12 and oxygen-16 primary transport (task DEV-023)
+
+Script: ``validation/v5_carbon.py``. Carbon-12 (z=6) and oxygen-16 (z=8) are
+transported with the same species-generic z² scaling as helium (decision 0028); no
+new transport code. The task quantifies the scaling accuracy against the
+independent Bethe model, whose Z-dependence is the new content.
+
+| check | criterion | result |
+|---|---|---|
+| carbon stopping vs Bethe (E/A 10-400 MeV/u) | worst rel <= 2 % | ~1.1 % |
+| oxygen stopping vs Bethe | worst rel <= 3 % | ~2.0 % |
+| range identity R_ion = (m_ion/z²m_p)·R_p (C and O) | rel <= 1e-6 | round-off |
+| carbon Bragg peak (290 MeV/u, deterministic) | 159-167 mm | ~163 mm |
+| reference vs Warp CPU carbon depth dose | total <= 5e-5 / per-bin <= 5e-3 | 1.4e-5 / 2.4e-4 |
+| CUDA vs CPU carbon depth dose | total <= 5e-5 / per-bin <= 5e-3 | recorded (host) |
+
+The z² scaling error grows with the projectile charge (helium ~0.3 %, carbon
+~1.1 %, oxygen ~2.0 % worst-case at 10 MeV/u), because the omitted Barkas (∝ z³) and
+Bloch (∝ z⁴) terms scale with z; the Bethe cross-check quantifies this fidelity
+limit, so the tolerances are ion-specific. The deterministic float32 cross-backend
+total is looser for carbon (5e-5) than protons/helium (1e-5) because carbon's
+z²=36 and 3480 MeV entail ~500 steps, accumulating more benign float32 summation
+rounding. **Only the primary Bragg curve is validated** — carbon/oxygen fragment
+strongly and the distal fragment tail is not modelled (deferred to nuclear
+fragmentation, the remaining V5 gate).
+
 ## Unit and regression tests
 
 ``tests/ionmc/`` covers units and constants, materials, the RNG mirror
