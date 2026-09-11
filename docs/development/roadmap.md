@@ -343,12 +343,15 @@ Content:
 Depends on: Stage 3 (heterogeneous transport) for clinically meaningful use;
 API and estimator design can begin after Stage 1.
 
-Validation milestone **V4**: sum of beamlet doses equals the corresponding
-broad-field dose within statistics; LET estimators versus published proton
-LET-in-water data computed with the *same* estimator convention (or versus a
-reference calculation whose convention is documented) and versus analytical
-limits; lookup-table accumulation reproduces offline post-processing on
-scored spectra; sparse-vs-dense matrix agreement.
+Validation milestone **V4** (**achieved 2026-09-11**, develop `98251c2`): sum of
+beamlet doses equals the corresponding broad-field dose within statistics (`DEV-017`
+exact same-partition + `DEV-020` within-statistics); LET estimators versus published
+proton LET-in-water data computed with the *same* estimator convention (or versus a
+reference calculation whose convention is documented) and versus analytical limits
+(`DEV-018`); statistical uncertainty for the volumetric and beamlet-resolved
+scorers (`DEV-019`, `DEV-020`); lookup-table accumulation reproduces offline
+post-processing on scored spectra (`DEV-021`); sparse-vs-dense matrix agreement
+(`DEV-017`).
 
 ### Stage 5 — Multi-ion transport (helium, carbon, oxygen)
 
@@ -465,7 +468,8 @@ deterministically and reviewed in one pull request.
 | Stage 4, `DEV-018` (dose-averaged LET (LET_d) scoring; V4 LET gate) | **completed** 2026-09-11 | decision `0023`; `validation/v4_let.py` on the host runner (CPU + CUDA, all 6 gates); `tests/ionmc/test_let.py`; DEV-018 local validation record; squash-merged into `develop` at `3b5ddbf` |
 | Stage 4, `DEV-019` (batch-based statistical uncertainty for 3-D dose; V4 "within statistics") | **completed** 2026-09-11 | decision `0024`; `validation/v4_uncertainty.py` on the host runner (CPU + CUDA, all 5 gates); `tests/ionmc/test_uncertainty.py`; DEV-019 local validation record; squash-merged into `develop` at `6eb245b` |
 | Stage 4, `DEV-020` (beamlet-resolved planning-aware uncertainty; V4 beamlet-sum within statistics) | **completed** 2026-09-11 | decision `0025`; `validation/v4_beamlet_uncertainty.py` on the host runner (CPU + CUDA, all 5 gates); `tests/ionmc/test_beamlet_uncertainty.py`; DEV-020 local validation record; squash-merged into `develop` at `83ec95b` |
-| Stage 4, `DEV-021` (energy-resolved fluence-spectrum scoring + lookup-table accumulation; closes V4 lookup gate) | **in progress** 2026-09-11 | decision `0026`; `validation/v4_fluence.py`; `tests/ionmc/test_fluence.py` |
+| Stage 4, `DEV-021` (energy-resolved fluence-spectrum scoring + lookup-table accumulation; closes V4 lookup gate) | **completed** 2026-09-11 | decision `0026`; `validation/v4_fluence.py` on the host runner (CPU + CUDA, all 5 gates); `tests/ionmc/test_fluence.py`; DEV-021 local validation record; squash-merged into `develop` at `98251c2` — **milestone V4 achieved** |
+| Stage 5, `DEV-022` (first non-proton ion: helium-4 via effective-charge scaling of the proton stopping power) | **in progress** 2026-09-11 | decision `0027` (planned); `validation/v5_helium.py` (planned); `tests/ionmc/test_helium.py` (planned) |
 | Stages 4–6 | not started | — |
 
 ## Change log
@@ -689,4 +693,14 @@ deterministically and reviewed in one pull request.
   residual + binning). Scored on the reference and Warp CPU/CUDA paths (float64
   accumulators), deterministic per-bin cross-backend to the float32 budget.
   Deferred: per-voxel/angular/secondary-species spectra, restricted lookups,
-  exact 1/S sub-binning, log bins, and multiple scoring regions.
+  exact 1/S sub-binning, log bins, and multiple scoring regions. Squash-merged
+  into `develop` at `98251c2`, **completing milestone V4** (all four V4 gates —
+  beamlet-sum, LET, uncertainty, and lookup/sparse — are validated on the host
+  runner).
+- 2026-09-11: **Stage 5 begins.** `DEV-022` adds the first non-proton ion,
+  **helium-4**, transported by reusing the proton stopping-power table via
+  velocity matching (`E → E/A`) and effective-charge `z²` scaling (decision
+  `0027`), validated against NIST ASTAR helium stopping/range data and the
+  `R_He(E) = R_p(E/A)` Bragg-range identity. Deferred to later Stage-5 tasks:
+  nuclear fragmentation and the fragment tail, carbon/oxygen, and
+  species-resolved scoring.

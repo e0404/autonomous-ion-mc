@@ -632,3 +632,32 @@ cross-backend to the float32 budget. Deferred: per-voxel/spatially-resolved
 spectra, angular/direction-resolved fluence, secondary-/heavier-species spectra,
 restricted (delta-cutoff) lookups, exact 1/S intra-bin sub-splitting, log-spaced
 bins, and multiple simultaneous scoring regions.
+
+## Helium-4 transport via effective-charge scaling (Stage 5, task DEV-022, decision 0027)
+
+DEV-022 opens Stage 5 (multi-ion transport) with the first non-proton ion,
+**helium-4** (alpha, z = 2, A = 4). At the same velocity β (same energy per
+nucleon) a bare ion's **mass** stopping power obeys the first-Born z² scaling
+`S_ion(E_ion) = z²·S_p(E_p)` with `E_p = E_ion·(m_p/m_ion)`, acting on the mass
+stopping power so the same water table applies. `scale_ion_stopping_table` builds
+a helium `StoppingTable` once from the proton table — `E_He,i = E_p,i·(m_He/m_p)`,
+`S_He,i = z²·S_p,i` (z = 2, so ×4), with the PCHIP slopes and cumulative CSDA range
+recomputed on the helium grid — and transport runs the *identical*
+`linear_stopping_power`/`midpoint_energy_loss` kernels with that table and the
+`ALPHA` particle. Straggling (∝ z², via the particle charge) and Highland MCS
+(∝ z, via charge and `m_He` in `pv`) need no new code. The bare effective charge
+`z = 2` is exact above ~2 MeV/u; Barkas electron pickup matters only in the last
+~0.03 mm of a 15.8 cm range (a later table-build refinement).
+
+Integrating `R = ∫dE/S` under the scaling gives the exact range identity
+`R_He(E) = (m_He/(z²·m_p))·R_p(E·m_p/m_He)`, whose prefactor `m_He/(z²·m_p) = 0.993`
+means a helium-4 ion has essentially the same range in g/cm² as a proton of the
+same energy per nucleon: a 600 MeV (150 MeV/u) helium beam ranges to ≈15.85 g/cm² ≈
+15.8 cm in water, the depth of a 150 MeV proton. Validated (decision 0027): the
+scaled-PSTAR helium table matches the independent analytic Bethe model to ~0.1 %
+(E/A 10–250 MeV/u); the range identity holds to round-off; a 600 MeV helium beam
+transported deterministically stops at ~158 mm conserving energy; and reference vs
+Warp CPU/CUDA helium depth dose agree to the float32 budget. Deferred: nuclear
+fragmentation and the fragment dose tail, ion-specific nonelastic cross-sections,
+carbon/oxygen, species-resolved scoring, and the low-energy shell/Barkas/Bloch
+corrections beyond the constant z = 2.
