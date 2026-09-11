@@ -460,7 +460,8 @@ deterministically and reviewed in one pull request.
 | Stage 3, `DEV-013` (arbitrary beam incidence via a beam frame; rotated-vs-axis-aligned equivalence) | **completed** 2026-09-11 | decision `0018`; `validation/v3_arbitrary_incidence.py` on the host runner (CPU + CUDA); `tests/ionmc/test_arbitrary_incidence.py`; DEV-013 local validation record; squash-merged into `develop` at `ebd719f` |
 | Stage 3, `DEV-014` (scoring grids decoupled from the transport grid; grid-independence; **closed V3**) | **completed** 2026-09-11 | decision `0019`; `validation/v3_scoring_grid.py` on the host runner (CPU + CUDA); `tests/ionmc/test_scoring_grid_decoupling.py`; DEV-014 local validation record; squash-merged into `develop` at `f9e3c90`; **milestone V3 closed** |
 | Stage 3, `DEV-015` (3-D voxel grid with ray/voxel DDA traversal; arbitrary incidence through true voxel geometries) | **completed** 2026-09-11 | decision `0020`; `validation/v3_voxel_grid_3d.py` on the host runner (CPU + CUDA); `tests/ionmc/test_voxel_grid_3d.py`; DEV-015 local validation record; squash-merged into `develop` at `d0df873` |
-| Stage 4, `DEV-016` (lab-frame 3-D dose scoring on the voxel-grid path; prerequisite for beamlet influence matrices) | **in progress** 2026-09-11 | decision `0021`; `validation/v4_dose3d.py`; `tests/ionmc/test_dose3d.py` |
+| Stage 4, `DEV-016` (lab-frame 3-D dose scoring on the voxel-grid path; prerequisite for beamlet influence matrices) | **completed** 2026-09-11 | decision `0021`; `validation/v4_dose3d.py` on the host runner (CPU + CUDA); `tests/ionmc/test_dose3d.py`; DEV-016 local validation record; squash-merged into `develop` at `e8f89df` |
+| Stage 4, `DEV-017` (beamlet-resolved scoring and sparse dose-influence matrices; V4 beamlet-sum gate) | **in progress** 2026-09-11 | decision `0022`; `validation/v4_influence.py`; `tests/ionmc/test_influence.py` |
 | Stages 4–6 | not started | — |
 
 ## Change log
@@ -616,5 +617,18 @@ deterministically and reviewed in one pull request.
   reproduces the beam-frame depth-dose R80 within a dose voxel; the total dose is
   grid-independent; and the backends agree. Deferred: a 3-D scorer on the
   1-D-geometry path, path-length-splitting deposition, and density-driven dose
-  units. Next: **beamlet-resolved scoring and sparse dose-influence matrices**
-  (V4: sum of beamlet doses equals the broad-field dose).
+  units.
+- 2026-09-11: `DEV-017` added **beamlet-resolved scoring and sparse dose-influence
+  matrices** (decision `0022`). `TransportEngine.run_scattering_multi` transports a
+  list of beamlets together in one batched launch (each seeded `seed + i`, keeping
+  its `beamlet` id and per-history streams, without reinitialising physics data);
+  `assemble_influence_matrix` transports each beamlet with a `DoseGrid3D` scorer
+  and thresholds its dose into a CSR `SparseInfluenceMatrix` (one row per beamlet,
+  exported to `.npz`). Because the per-beamlet and batched runs share the identical
+  seed-partitioned histories, the sum of the beamlet rows equals the batched
+  broad-field dose to round-off -- the first **V4** gate (sum of beamlet doses ==
+  broad-field dose), validated at ~1e-18 (reference). A 1 % peak threshold keeps
+  > 99 % of the energy while making the matrix sparse. Deferred: a GPU
+  (voxel, beamlet) hash-table assembly, per-beamlet scoring inside the kernel
+  (currently one launch per beamlet), LET/fluence/species-resolved scorers, and
+  beamlet-resolved uncertainty. Next: the remaining V4 items toward milestone V4.

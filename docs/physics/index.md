@@ -483,5 +483,40 @@ the deposited energy; the 3-D dose projected onto the beam axis reproduces the
 beam-frame depth-dose R80 within a dose voxel; the total dose is invariant to the
 dose grid's resolution and alignment; and the backends agree. Deferred: a 3-D
 scorer on the 1-D-geometry path, path-length-splitting deposition, and
-density-driven dose (energy/mass) units. Not yet: beamlet-resolved scoring and
-sparse dose-influence matrices (the next Stage-4 task).
+density-driven dose (energy/mass) units.
+
+## Beamlet-resolved scoring and sparse influence matrices (Stage 4, task DEV-017, decision 0022)
+
+DEV-017 adds the treatment-planning core: a **dose-influence matrix** with one row
+per beamlet (pencil-beam spot) and one column per dose voxel.
+`TransportEngine.run_scattering_multi` transports a list of beamlets **together**
+in one batched launch (each beamlet `i` seeded `seed + i`, keeping its `beamlet`
+id and per-history RNG streams, without reinitialising the immutable
+physics/material data); single- and multi-beamlet runs share the same
+`_scatter_state` dispatch. `assemble_influence_matrix` transports each beamlet with
+a `DoseGrid3D` scorer (decision 0021), thresholds its dose (dropping voxels below a
+fraction of that beamlet's peak), and stores the rows as a CSR
+`SparseInfluenceMatrix` (flat voxel index `(i·ny+j)·nz+k`, dose in MeV), exported
+to a documented `.npz`.
+
+The key property is **exact additivity**: because each beamlet's separate run and
+its contribution to the batched broad-field run use the identical
+seed-`(seed+i)` histories and dose is a linear sum of per-history deposits, the sum
+of the beamlet rows equals the batched broad-field dose to round-off — no
+statistical tolerance needed. Validated (decision 0022): the summed influence dose
+matches `run_scattering_multi` to ~1e-18 (reference; the first V4 gate), a 1 % peak
+threshold keeps > 99 % of the energy while making the matrix sparse, and energy is
+conserved. Cross-backend: the tight spatial parity is **deterministic**
+(scattering off) — the broad-field dose agrees per voxel to the float32 budget both
+reference-vs-Warp-CPU and Warp-CPU-vs-CUDA, certifying the kernel is spatially
+identical across backends. Under scattering on, per-voxel dose is *not* a tight
+cross-backend metric for any pair (float32 CPU and CUDA arithmetic differ by
+FMA/transcendentals, and DDA face flips decorrelate the trajectories into
+independent MC estimates — measured CPU-vs-CUDA ~3 % of peak, a diagnostic); the
+*total* energy stays tight (measured CPU-vs-CUDA ~1.9e-10), pinned for any pair by
+energy conservation (a contained history deposits its full energy regardless of
+path). A genuine *statistical* (gamma/uncertainty-based) per-voxel comparison of
+two MC estimates is a deferred cross-cutting validation item.
+Deferred: a GPU (voxel, beamlet) hash-table assembly, per-beamlet scoring inside
+the kernel (currently one launch per beamlet), LET/fluence/species-resolved
+scorers, and beamlet-resolved uncertainty (remaining Stage-4 items).

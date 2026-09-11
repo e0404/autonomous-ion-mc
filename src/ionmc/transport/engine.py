@@ -57,6 +57,22 @@ DEFAULT_STRAGGLING_FLOOR_MEV: float = 2.0
 DEFAULT_NUCLEAR_LOCAL_FRACTION: float = 0.30
 
 
+def _concatenate_states(states: list[ParticleState]) -> ParticleState:
+    """Concatenate several :class:`ParticleState` batches into one (batched
+    multi-beamlet launch, decision 0022). Each field is stacked along the history
+    axis; beamlet ids and per-history RNG streams are preserved."""
+    return ParticleState(
+        position_mm=np.concatenate([s.position_mm for s in states], axis=0),
+        direction=np.concatenate([s.direction for s in states], axis=0),
+        energy_mev=np.concatenate([s.energy_mev for s in states]),
+        weight=np.concatenate([s.weight for s in states]),
+        species=np.concatenate([s.species for s in states]),
+        beamlet=np.concatenate([s.beamlet for s in states]),
+        rng_state=np.concatenate([s.rng_state for s in states]),
+        status=np.concatenate([s.status for s in states]),
+    )
+
+
 def _merge_voxels(
     z_boundaries: np.ndarray, *per_voxel: np.ndarray
 ) -> tuple[np.ndarray, ...]:
@@ -686,6 +702,11 @@ class TransportEngine:
         scores beam-frame depth/lateral (a pencil beam is centred on its own
         axis). Every voxel material must have a known radiation length (> 0).
         """
+        self._check_scatter(dose_grid)
+        state = source.sample(n_histories, seed)
+        return self._scatter_state(state, grid, path, device, dose_grid)
+
+    def _check_scatter(self, dose_grid: DoseGrid3D | None) -> None:
         if np.any(self.voxel_radiation_length <= 0.0):
             raise ValueError(
                 "a voxel material has no radiation length; multiple scattering is "
@@ -696,7 +717,37 @@ class TransportEngine:
                 "a 3-D DoseGrid3D scorer is supported only on the VoxelGrid3D "
                 "transport path (decision 0021)"
             )
-        state = source.sample(n_histories, seed)
+
+    def run_scattering_multi(
+        self,
+        sources: list[PencilBeamSource],
+        grid: DepthLateralGrid,
+        n_histories: int = 1,
+        seed: int = 12345,
+        path: str = "warp",
+        device: str = "cpu",
+        dose_grid: DoseGrid3D | None = None,
+    ) -> ScatteringResult:
+        """Transport several beamlets **together** in one batched launch (each
+        keeps its ``beamlet`` id and its own per-history RNG streams; beamlet ``i``
+        is seeded ``seed + i``). Immutable physics/material data is not
+        reinitialised. Scoring accumulates into the shared grids, so a broad field
+        equals the sum of its per-beamlet runs (decision 0022)."""
+        if not sources:
+            raise ValueError("need at least one beamlet source")
+        self._check_scatter(dose_grid)
+        states = [src.sample(n_histories, seed + i) for i, src in enumerate(sources)]
+        combined = _concatenate_states(states)
+        return self._scatter_state(combined, grid, path, device, dose_grid)
+
+    def _scatter_state(
+        self,
+        state: ParticleState,
+        grid: DepthLateralGrid,
+        path: str,
+        device: str,
+        dose_grid: DoseGrid3D | None,
+    ) -> ScatteringResult:
         energy_in = float(np.sum(state.energy_mev * state.weight))
         dose3d: np.ndarray | None = None
         if path == "warp":
@@ -727,7 +778,7 @@ class TransportEngine:
         return ScatteringResult(
             edep_zx_mev=edep,
             grid=grid,
-            n_histories=n_histories,
+            n_histories=int(state.size),
             energy_in_mev=energy_in,
             truncated=truncated,
             path=path,
