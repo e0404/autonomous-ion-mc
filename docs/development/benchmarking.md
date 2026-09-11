@@ -28,18 +28,21 @@ just as `validation/` scripts use source modules.
 
 A benchmark records **wall-clock time, which is hardware-dependent and is never
 asserted against an absolute threshold**. What each driver *does* gate is the physics:
-it pins a scientific digest of its output and checks cross-backend agreement to the
-established float32 budget (decision `0001`). A change that silently breaks the physics
-fails the benchmark; a change that only affects speed does not. This is the concrete
-mechanism behind the V6 "unchanged scientific outcome" requirement.
+it pins a scientific digest of its output and checks cross-backend agreement on
+**per-history** results (which retain absolute magnitude — never unit-normalised
+shapes, which would hide a uniform-scale error) against the established depth-dose
+budget (decision `0009` / `validation/v1_depth_dose_csda.py`). A change that silently
+breaks the physics fails the benchmark; a change that only affects speed does not. This
+is the concrete mechanism behind the V6 "unchanged scientific outcome" requirement.
 
 ## First benchmark
 
 `benchmarks/bench_depth_dose.py` times the core longitudinal transport kernel — a
 150 MeV proton pencil beam in water, 0.5 mm bins, energy straggling off so the workload
 is deterministic — on the reference, Warp CPU and Warp CUDA backends. It records
-per-backend throughput and speedups and gates the reference-vs-Warp depth dose to the
-float32 budget. The reference is a scalar Python oracle (~10² histories/s) timed at a
+per-backend throughput and speedups and gates the per-history depth dose with the
+established edge-aware cumulative metric (1e-4 reference-vs-Warp, 1e-5 CUDA-vs-CPU).
+The reference is a scalar Python oracle (~10² histories/s) timed at a
 small history count; the Warp backends are timed at a larger count (throughput is a
 per-history rate, so the numbers stay comparable, with the GPU under-utilised at these
 sizes). Run it on the host runner:

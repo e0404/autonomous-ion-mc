@@ -31,7 +31,8 @@ from ionmc.backend import mathlib
 
 
 def _git_sha() -> str | None:
-    """Best-effort short git SHA of the working tree (``None`` if unavailable)."""
+    """Best-effort git SHA (full ``rev-parse HEAD``) of the working tree, or
+    ``None`` if git is unavailable."""
     try:
         out = subprocess.run(
             ["git", "rev-parse", "HEAD"],
@@ -174,23 +175,44 @@ def measure(
 def array_digest(a: np.ndarray, decimals: int = 6) -> str:
     """A short, order-sensitive fingerprint of a numeric array, rounded to
     ``decimals`` places in float64 so it is stable across backends to that
-    precision. Two runs with the same physics share a digest; a changed result
-    changes it — the basis for the V6 'unchanged scientific outcome' check."""
+    precision. Two runs of the same backend with the same physics share a digest;
+    a changed result changes it — the basis for the V6 'unchanged scientific outcome'
+    check. For a float32 (Warp) backend the 6-decimal boundary means the digest is a
+    reliable regression pin only within the same backend/hardware; cross-backend
+    correctness is checked with :func:`relative_agreement`, not digest equality."""
     rounded = np.round(np.asarray(a, dtype=np.float64), decimals)
     return hashlib.sha256(np.ascontiguousarray(rounded).tobytes()).hexdigest()[:16]
 
 
 def relative_agreement(a: np.ndarray, b: np.ndarray) -> dict[str, float]:
-    """Total and per-element relative difference between two result arrays,
-    normalised by the reference peak — the cross-backend correctness check that
-    ties a benchmark's speed to the validated physics."""
+    """Cross-backend agreement between two result arrays that carry their **absolute
+    magnitude** (e.g. per-history depth dose), so a uniform-scale divergence is
+    caught — the correctness check that ties a benchmark's speed to the validated
+    physics. Do not pass unit-normalised curves: that would hide any constant-factor
+    error. Returns three relative differences, all normalised by ``sum(a)``:
+
+    * ``total_rel_diff`` — integral difference ``|sum(b)-sum(a)|/sum(a)``;
+    * ``cumulative_rel_diff`` — ``max|cumsum(a)-cumsum(b)|/sum(a)``, the edge-aware
+      metric used by the established depth-dose gate (decision 0009), robust to
+      sub-bin range shifts at the steep distal Bragg falloff;
+    * ``max_bin_rel_diff`` — worst per-bin difference normalised by the peak bin.
+    """
     a = np.asarray(a, dtype=np.float64)
     b = np.asarray(b, dtype=np.float64)
     denom = float(a.sum())
     peak = float(np.max(np.abs(a)))
     total_rel = abs(float(b.sum()) - denom) / denom if denom != 0.0 else float("nan")
+    cum_rel = (
+        float(np.max(np.abs(np.cumsum(a) - np.cumsum(b))) / denom)
+        if denom != 0.0
+        else float("nan")
+    )
     max_rel = float(np.max(np.abs(b - a)) / peak) if peak > 0.0 else float("nan")
-    return {"total_rel_diff": total_rel, "max_bin_rel_diff": max_rel}
+    return {
+        "total_rel_diff": total_rel,
+        "cumulative_rel_diff": cum_rel,
+        "max_bin_rel_diff": max_rel,
+    }
 
 
 def _jsonable(o: Any) -> Any:
@@ -206,8 +228,8 @@ def _jsonable(o: Any) -> Any:
 
 
 def timing_to_dict(t: Timing) -> dict[str, Any]:
-    """A JSON-ready dict for a :class:`Timing` (drops the raw per-repeat list to a
-    compact summary while keeping it available)."""
+    """A JSON-ready dict for a :class:`Timing` (including the full per-repeat
+    ``seconds`` list alongside the summary statistics)."""
     return asdict(t)
 
 

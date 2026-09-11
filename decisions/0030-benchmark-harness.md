@@ -28,9 +28,10 @@ and the first benchmark; it does **not** optimise anything.
    time, which is **hardware-dependent and is never asserted against an absolute
    threshold**. What a benchmark *does* gate is the physics: every driver pins a
    reproducible **scientific digest** of its output and checks cross-backend agreement
-   to the established float32 budget (decision `0001`), so a change that silently
-   breaks the physics fails the benchmark. This is the concrete mechanism for the V6
-   "unchanged scientific outcome" requirement.
+   on results that carry their **absolute magnitude** (per-history dose, never
+   unit-normalised — which would hide a uniform-scale error), so a change that
+   silently breaks the physics fails the benchmark. This is the concrete mechanism for
+   the V6 "unchanged scientific outcome" requirement.
 
 3. **Full provenance on every run.** `capture_provenance()` records `ionmc` version,
    Python/NumPy versions, platform/machine/processor, CPU count, git SHA, and the Warp
@@ -49,10 +50,14 @@ and the first benchmark; it does **not** optimise anything.
    (`benchmarks/bench_depth_dose.py`). A 150 MeV proton pencil beam in water, 0.5 mm
    bins, **straggling off** so the workload is deterministic and its output is a fixed
    digest. It times the core longitudinal transport kernel on reference, Warp CPU and
-   Warp CUDA, records per-backend throughput and speedups, and gates the reference-vs-
-   Warp depth dose to the float32 budget (`total ≤ 1e-4`, `per-bin ≤ 5e-3`; CUDA-vs-CPU
-   `total ≤ 1e-5`). The reference is a scalar Python oracle (~10² histories/s) timed at
-   a small history count; the Warp backends are timed at a larger count. Throughput is a
+   Warp CUDA, records per-backend throughput and speedups, and gates the **per-history**
+   depth dose with the established V1 metric — the edge-aware cumulative difference
+   `max|cumsum(a)−cumsum(b)|/Σa` (decision `0009` /
+   `validation/v1_depth_dose_csda.py`), tight to `1e-4` reference-vs-Warp and `1e-5`
+   CUDA-vs-CPU (plus a `5e-3` per-bin term on CUDA-vs-CPU). The comparison is on
+   per-history dose, not unit-normalised shapes, so a uniform-scale divergence is
+   caught. The reference is a scalar Python oracle (~10² histories/s) timed at a small
+   history count; the Warp backends are timed at a larger count. Throughput is a
    per-history rate, so the numbers stay comparable — with the caveat that the GPU is
    under-utilised at these sizes.
 

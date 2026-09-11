@@ -46,10 +46,14 @@ from ionmc.data.stopping_tables import load_stopping_table
 from ionmc.transport import DepthDoseGrid, PencilBeamSource, TransportEngine
 from ionmc.transport.geometry import WaterSlab
 
-# float32 budget for the deterministic cross-backend depth dose (decision 0001)
-REF_VS_WARP_TOTAL = 1.0e-4
-REF_VS_WARP_MAXBIN = 5.0e-3
-CUDA_VS_CPU_TOTAL = 1.0e-5
+# float32 budget for the deterministic cross-backend depth dose, from the
+# established V1 depth-dose gate (decision 0009 / validation/v1_depth_dose_csda.py):
+# the edge-aware cumulative_rel_diff, tight to 1e-4 reference-vs-Warp and 1e-5
+# CUDA-vs-CPU. Comparisons are on per-history-normalised curves so a uniform-scale
+# divergence is caught (not hidden by unit normalisation).
+REF_VS_WARP_CUM = 1.0e-4
+CUDA_VS_CPU_CUM = 1.0e-5
+CUDA_VS_CPU_MAXBIN = 5.0e-3
 
 
 def _build(cache_dir: str | None) -> tuple[TransportEngine, PencilBeamSource]:
@@ -61,12 +65,19 @@ def _build(cache_dir: str | None) -> tuple[TransportEngine, PencilBeamSource]:
     return eng, PencilBeamSource(150.0)
 
 
-def _digest(edep: np.ndarray, grid: DepthDoseGrid) -> dict[str, Any]:
-    """A reproducible scientific fingerprint of the depth-dose curve (per-history
-    normalised so it is independent of the timing history count)."""
-    total = float(edep.sum())
-    shape = edep / total if total > 0.0 else edep
-    kpk = int(edep.argmax())
+def _per_history(edep: np.ndarray, n_histories: int) -> np.ndarray:
+    """Per-history depth dose. For the deterministic (straggling-off) CSDA workload
+    every history is identical, so this is directly comparable across backends timed
+    at different history counts, while retaining absolute magnitude."""
+    return edep / float(n_histories)
+
+
+def _digest(per_hist: np.ndarray, grid: DepthDoseGrid) -> dict[str, Any]:
+    """A reproducible scientific fingerprint of the per-history depth-dose curve
+    (independent of the timing history count and carrying absolute magnitude)."""
+    total = float(per_hist.sum())
+    shape = per_hist / total if total > 0.0 else per_hist
+    kpk = int(per_hist.argmax())
     return {
         "peak_depth_mm": float(grid.centers_mm[kpk]),
         "integral_per_history_mev": total,
@@ -93,6 +104,10 @@ def main() -> int:
         "histories_reference": args.ref_histories,
         "repeats": args.repeats,
         "warmup": args.warmup,
+        # the cross-backend gate is a float32-vs-float64 check: Warp accumulates in
+        # float32, the reference oracle in float64 (decision 0009 budget)
+        "reference_precision": "float64",
+        "warp_precision": "float32",
     }
     try:
         eng, src = _build(args.cache_dir)
@@ -103,10 +118,12 @@ def main() -> int:
 
     grid = eng.grid
     # -- reference: small history count (scalar oracle), correctness digest -----
+    # per-history dose retains absolute magnitude, so the cross-backend gate catches
+    # a uniform-scale divergence (a units / normalisation / accumulation-constant bug)
+    # that a unit-normalised comparison would hide.
     ref_res = eng.run(src, args.ref_histories, seed=1, path="python")
-    ref_shape = ref_res.edep_mev / float(ref_res.edep_mev.sum())
-    ref_digest = _digest(ref_res.edep_mev, grid)
-    report["digest"] = {"reference": ref_digest}
+    ref_perhist = _per_history(ref_res.edep_mev, args.ref_histories)
+    report["digest"] = {"reference": _digest(ref_perhist, grid)}
     report["cross_backend"] = {}
 
     ref_timing = measure(
@@ -135,24 +152,26 @@ def main() -> int:
             "version": str(wp.config.version),
             "devices": devices,
         }
-        cpu_shape: np.ndarray | None = None
+        cpu_perhist: np.ndarray | None = None
         for device in devices:
             n = args.histories
             res = eng.run(src, n, seed=1, path="warp", device=device)
-            shape = res.edep_mev / float(res.edep_mev.sum())
+            perhist = _per_history(res.edep_mev, n)
             label = backend_label("warp", device)
-            report["digest"][label] = _digest(res.edep_mev, grid)
-            agree = relative_agreement(ref_shape, shape)
+            report["digest"][label] = _digest(perhist, grid)
+            agree = relative_agreement(ref_perhist, perhist)
             report["cross_backend"][f"{label}_vs_reference"] = agree
-            ok = agree["total_rel_diff"] <= REF_VS_WARP_TOTAL and (
-                agree["max_bin_rel_diff"] <= REF_VS_WARP_MAXBIN
-            )
+            ok = agree["cumulative_rel_diff"] <= REF_VS_WARP_CUM
             if device == "cpu":
-                cpu_shape = shape
-            elif cpu_shape is not None:
-                cagree = relative_agreement(cpu_shape, shape)
+                cpu_perhist = perhist
+            elif cpu_perhist is not None:
+                cagree = relative_agreement(cpu_perhist, perhist)
                 report["cross_backend"][f"{label}_vs_cpu"] = cagree
-                ok = ok and cagree["total_rel_diff"] <= CUDA_VS_CPU_TOTAL
+                ok = (
+                    ok
+                    and cagree["cumulative_rel_diff"] <= CUDA_VS_CPU_CUM
+                    and (cagree["max_bin_rel_diff"] <= CUDA_VS_CPU_MAXBIN)
+                )
             gate_ok = gate_ok and ok
             timing = measure(
                 lambda d=device, m=n: eng.run(src, m, seed=1, path="warp", device=d),

@@ -79,13 +79,49 @@ def test_relative_agreement() -> None:
     a = np.array([0.0, 1.0, 2.0, 1.0])
     assert bm.relative_agreement(a, a) == {
         "total_rel_diff": 0.0,
+        "cumulative_rel_diff": 0.0,
         "max_bin_rel_diff": 0.0,
     }
     b = a.copy()
-    b[2] += 0.2  # peak is 2.0
+    b[2] += 0.2  # peak is 2.0, total is 4.0
     agree = bm.relative_agreement(a, b)
     assert agree["max_bin_rel_diff"] == pytest.approx(0.1)
     assert agree["total_rel_diff"] == pytest.approx(0.2 / 4.0)
+    # cumulative: cumsum diff is 0.2 from bin 2 onward -> max 0.2, /total 4.0
+    assert agree["cumulative_rel_diff"] == pytest.approx(0.2 / 4.0)
+
+
+def test_agreement_catches_uniform_scale_divergence() -> None:
+    """A uniform-scale divergence (a units / normalisation / accumulation-constant
+    bug) must fail the gate on arrays that carry absolute magnitude. This is the
+    guarantee the benchmark physics gate relies on: comparing per-history curves,
+    not unit-normalised shapes (which would hide any constant factor)."""
+    a = np.array([1.0, 3.0, 5.0, 2.0])
+    scaled = a * 1.10  # 10 % more total energy, identical shape
+    agree = bm.relative_agreement(a, scaled)
+    assert agree["total_rel_diff"] == pytest.approx(0.10)
+    assert agree["cumulative_rel_diff"] > 0.05  # would be ~0 on unit-normalised curves
+    # sanity: normalising away the scale hides it -> shows why we must not do that
+    norm = bm.relative_agreement(a / a.sum(), scaled / scaled.sum())
+    assert norm["total_rel_diff"] < 1e-12
+
+
+def test_make_sync_cuda_branch(monkeypatch) -> None:
+    """For a non-CPU Warp device, make_sync returns a callable that synchronises
+    that device (the honest-GPU-timing path), even without a real GPU present."""
+    if not bm.mathlib.HAVE_WARP:
+        pytest.skip("Warp not installed")
+    calls: list[str] = []
+
+    class _FakeWarp:
+        def synchronize_device(self, device: str) -> None:
+            calls.append(device)
+
+    monkeypatch.setattr(bm.mathlib, "warp_module", lambda: _FakeWarp())
+    sync = bm.make_sync("warp", "cuda:0")
+    assert sync is not None
+    sync()
+    assert calls == ["cuda:0"]
 
 
 def test_backend_label_and_sync_selection() -> None:
