@@ -690,3 +690,59 @@ fragmentation (with transported charged fragments and species-resolved scoring) 
 the next Stage-5 task and the remaining V5 gate. Also deferred: ion-specific
 nonelastic cross-sections, per-ion ASTAR/ICRU 73 tables, and explicit Barkas/Bloch
 corrections.
+
+## Carbon-12 nuclear fragmentation and the distal dose tail (Stage 5, task DEV-024, decision 0029)
+
+DEV-023 transports carbon *primaries* only; DEV-024 adds the **distal dose tail**
+from nuclear fragmentation — the feature that distinguishes an ion depth dose from
+a proton's. A 290 MeV/u carbon beam loses ~50 % of its primaries to nonelastic
+nuclear reactions before the Bragg peak, and the lighter charged fragments (H, He,
+Li–B), which at the same velocity **outrange** the primary carbon, deposit dose
+*beyond* the peak. The model (`ionmc.fragmentation.carbon_fragmentation_depth_dose`)
+is a deterministic orchestration that **reuses the existing multi-ion CSDA transport
+with no transport-kernel change**:
+
+- **Primary attenuation.** The ¹²C total reaction cross-section in water is
+  ~energy-independent, `σ_R ≈ 1.4 barn` per water molecule; with the water molecular
+  density this gives a macroscopic rate `Σ = n_mol·σ_R ≈ 0.047 /cm` (mean free path
+  ~21 cm), so the surviving primary fraction is `S(z) = exp(−Σz)`. At the 290 MeV/u
+  range (16.3 cm) `S(R) ≈ 0.47` — i.e. ~53 % have fragmented, matching the published
+  fragmenting fraction. The attenuated primary dose is `D₀(z)·S(z)`.
+- **Fragment emission.** The reactions in each depth bin (`N·[S(edge_lo)−S(edge_hi)]`)
+  emit three representative charged species — **proton** (lumps H), **alpha** (lumps
+  He), **boron-11** (new `BORON_11`, lumps Z=3–5) — with per-reaction multiplicities
+  `N_H=2.0, N_He=0.7, N_B=0.35`. In the peripheral (abrasion) picture a projectile
+  fragment continues at the **beam velocity**, so a fragment of mass `A_f` from a
+  vertex with residual carbon energy `E_C` takes `E_f = A_f·(E_C/12)` forward (+z),
+  with `E_C(z)` obtained by inverting the carbon CSDA range.
+- **Transport and summation.** Each species is transported by its own z²-scaled table
+  (decisions 0027/0028) through the *validated* reference and Warp CPU/CUDA CSDA
+  drivers into the depth-dose grid; the total is `D = D₀·S + Σ_species D_fragment`.
+  Because both the primary and every fragment species use the existing kernels and the
+  fragmentation itself is deterministic numpy, the model runs on both backends and
+  inherits their parity. Energy is booked as `escaped = E₀ − D.sum() ≥ 0` (the
+  transported fragments carry `Σ N_s·A_s/12 ≈ 0.72` of each reaction's energy; the
+  remainder — target fragments, neutrons, binding, transverse momentum, and fragments
+  leaving the grid — escapes).
+
+For a 290 MeV/u beam the model reproduces the characteristic tail with the right
+magnitude and reach. The magnitude is gated on a **resolution-robust integrated
+metric**, the *distal-dose fraction* — the fraction of the total deposited dose that
+lands beyond a fixed margin distal to the peak — which is **~16 %** at +10 mm and, by
+integrating over bins, is essentially invariant to the depth-bin width (≈0.164 across
+0.5–4 mm bins). The commonly quoted single-bin *tail-to-peak* ratio (~12 % at a 2 mm
+resolution) is reported only as a diagnostic: being a point ratio against the peak-bin
+height it depends strongly on binning (0.05 at 0.5 mm), and since the model omits the
+beam energy spread that dominates real peak broadening, its peak sharpness is set by
+resolution rather than physics — so the gate deliberately avoids peak *height*.
+Fragment dose stays > 1 % of the peak out to **2.9× the carbon range**, the primary
+survival at the peak is 0.47, the fragment energy budget reconciles independently
+(injected KE = 914 MeV, matching an independent reconstruction and deposited in full),
+and reference vs Warp CPU total depth dose agree to 7×10⁻⁶ (within the float32
+budget). This closes the V5 fragment-tail gate.
+
+**Deferred (bounded model boundaries):** energy/angular-resolved fragment spectra,
+secondary fragmentation, neutron/gamma production, the full isotopic cocktail
+(d,t,³He, individual Li/Be/B), target fragmentation, species-resolved LET of the
+tail, the lateral fragment halo, and a discriminating TOPAS/Geant4 fragment-resolved
+reference to lock the multiplicities and normalization.

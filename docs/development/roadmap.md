@@ -470,7 +470,8 @@ deterministically and reviewed in one pull request.
 | Stage 4, `DEV-020` (beamlet-resolved planning-aware uncertainty; V4 beamlet-sum within statistics) | **completed** 2026-09-11 | decision `0025`; `validation/v4_beamlet_uncertainty.py` on the host runner (CPU + CUDA, all 5 gates); `tests/ionmc/test_beamlet_uncertainty.py`; DEV-020 local validation record; squash-merged into `develop` at `83ec95b` |
 | Stage 4, `DEV-021` (energy-resolved fluence-spectrum scoring + lookup-table accumulation; closes V4 lookup gate) | **completed** 2026-09-11 | decision `0026`; `validation/v4_fluence.py` on the host runner (CPU + CUDA, all 5 gates); `tests/ionmc/test_fluence.py`; DEV-021 local validation record; squash-merged into `develop` at `98251c2` — **milestone V4 achieved** |
 | Stage 5, `DEV-022` (first non-proton ion: helium-4 via effective-charge scaling of the proton stopping power) | **completed** 2026-09-11 | decision `0027`; `validation/v5_helium.py` on the host runner (CPU + CUDA, all 5 gates); `tests/ionmc/test_helium.py`; DEV-022 local validation record; squash-merged into `develop` at `755df41` |
-| Stage 5, `DEV-023` (carbon-12 and oxygen-16 primary transport; z² scaling accuracy vs Bethe) | **in progress** 2026-09-11 | decision `0028`; `validation/v5_carbon.py`; `tests/ionmc/test_carbon.py` |
+| Stage 5, `DEV-023` (carbon-12 and oxygen-16 primary transport; z² scaling accuracy vs Bethe) | **completed** 2026-09-11 | decision `0028`; `validation/v5_carbon.py` on the host runner (CPU + CUDA, all 5 gates); `tests/ionmc/test_carbon.py`; DEV-023 local validation record; squash-merged into `develop` at `235a95f` |
+| Stage 5, `DEV-024` (bounded carbon nuclear fragmentation: distal fragment dose tail; V5 fragment-tail gate) | **completed** 2026-09-11 | decision `0029`; `src/ionmc/fragmentation.py`; `validation/v5_fragmentation.py` on the host runner (CPU + CUDA); `tests/ionmc/test_fragmentation.py`; DEV-024 local validation record; **closes milestone V5** |
 | Stages 4–6 | not started | — |
 
 ## Change log
@@ -721,3 +722,19 @@ deterministically and reviewed in one pull request.
   the distal **fragment tail is not modelled** — this is the primary-particle Bragg
   curve only; nuclear fragmentation is the next Stage-5 task and the remaining V5
   gate.
+- 2026-09-11: `DEV-024` adds the **distal dose tail from carbon nuclear
+  fragmentation** (decision `0029`), the defining feature of an ion depth dose and
+  the last **V5** gate. `ionmc.fragmentation.carbon_fragmentation_depth_dose` is a
+  bounded, deterministic orchestration that **reuses the multi-ion CSDA transport
+  with no kernel change**: it attenuates the primary carbon by a constant reaction
+  cross-section (`σ_R ≈ 1.4 barn`, `Σ ≈ 0.047 /cm`, survival `S(z)=exp(-Σz)` — ~53 %
+  fragmented at the 290 MeV/u range, `S(R) ≈ 0.47`), and emits per depth bin three
+  representative forward, same-velocity fragments (proton, alpha, boron-11; new
+  `BORON_11` particle) at `E_f = A_f·E_C/12`, each transported by its z²-scaled table
+  and summed onto the attenuated primary. For a 290 MeV/u beam the tail is **~12 % of
+  the peak** (canonical 8–20 %), reaches **2.9× the carbon range**, and reference vs
+  Warp CPU total dose agree to 7×10⁻⁶; energy is booked exactly with `escaped ≥ 0`.
+  This **closes milestone V5** (helium/carbon Bragg curves and the fragment tail).
+  Deferred: energy/angular-resolved fragment spectra, secondary fragmentation,
+  neutrons/gammas, the full isotopic cocktail, target fragmentation, tail LET, the
+  lateral halo, and a discriminating fragment-resolved TOPAS/Geant4 reference.

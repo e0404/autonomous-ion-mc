@@ -525,6 +525,50 @@ rounding. **Only the primary Bragg curve is validated** — carbon/oxygen fragme
 strongly and the distal fragment tail is not modelled (deferred to nuclear
 fragmentation, the remaining V5 gate).
 
+## V5 (fragmentation) - carbon-12 distal dose tail from fragmentation (task DEV-024)
+
+Script: ``validation/v5_fragmentation.py``. DEV-023 transports carbon primaries
+only; DEV-024 adds the **distal dose tail** from nuclear fragmentation (decision
+0029), the defining feature of an ion depth dose and the last V5 gate. A bounded,
+deterministic model attenuates the primary carbon by a constant reaction
+cross-section (``σ_R ≈ 1.4 barn``, ``Σ ≈ 0.047 /cm``, survival ``S(z)=exp(-Σz)``)
+and emits forward, same-velocity fragments (proton, alpha, boron-11) that are
+transported by their z²-scaled tables through the existing CSDA drivers and summed
+onto the attenuated primary. No transport-kernel change; the model runs on both
+backends and inherits their parity.
+
+| check | criterion | result |
+|---|---|---|
+| fragment tail present (integrated distal-dose fraction, +10 mm) | 10-25 % of total dose, decreasing with margin | ~16 % |
+| tail metric resolution-robust (0.5-4 mm bins) | spread < 0.01 | ~0.005 |
+| primary-only run has no tail (control) | integrated distal fraction +10 mm < 0.1 % | ~0 |
+| tail reach (> 1 % of peak) | >= 1.5x carbon range | 2.9x (467 mm) |
+| primary survival at peak | matches exp(-ΣR) ~ 0.47, in [0.40, 0.55] | 0.466 |
+| energy: injected KE vs independent reconstruction | rel < 1e-6 | exact (914.2 MeV) |
+| energy: injected KE deposited in full (grid contains fragments) | rel < 1e-4 | exact |
+| energy: deposited + escaped == E0, escaped >= 0 | rel < 1e-9 | exact (esc 354 MeV) |
+| reference vs Warp CPU total depth dose | total <= 5e-5 / per-bin <= 5e-3 | 7.3e-6 / 2.1e-4 |
+| CUDA vs CPU total depth dose | total <= 1e-5 / per-bin <= 5e-3 | recorded (host) |
+
+The **discriminating tail metric is the integrated distal-dose fraction** — the
+fraction of the total deposited dose landing more than a fixed margin distal to the
+Bragg peak. Because it integrates over bins it is essentially invariant to the
+depth-bin width (~0.164 at +10 mm across 0.5-4 mm bins), unlike the single-bin
+`tail_to_peak` point ratio (0.05 at 0.5 mm → 0.12 at 2 mm), which is reported only
+as a diagnostic at a pinned 2 mm resolution. Note the model omits the beam energy
+spread that dominates real-world peak broadening, so it deliberately does not gate
+on peak *height*. The energy budget is reconciled independently: the injected
+fragment KE reconstructed from the reaction weights, multiplicities and residual
+carbon energy (914.2 MeV) matches the transported value and is deposited in full
+(the grid contains the fragments), so the balance is a genuine check rather than a
+tautology. The transported fragments carry ~0.72 of each reaction's energy; the
+balance (target fragments, neutrons, binding, transverse momentum, grid escape) is
+booked as ``escaped``. **Bounded model:** representative-species multiplicities are a
+calibration handle, not measured spectra; energy/angular-resolved fragment spectra,
+secondary fragmentation, neutrons/gammas, the full isotopic cocktail, target
+fragmentation, tail LET, the lateral halo, and a discriminating fragment-resolved
+TOPAS/Geant4 reference are deferred.
+
 ## Unit and regression tests
 
 ``tests/ionmc/`` covers units and constants, materials, the RNG mirror
