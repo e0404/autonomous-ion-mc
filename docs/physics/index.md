@@ -461,6 +461,27 @@ face flips decorrelate float32/float64 histories per decision 0001). Scoring sta
 beam-frame marginal.
 
 Deferred: a per-voxel material map (a pure data extension of the flat arrays),
-grid rotation, a 3-D lab-frame scoring volume, non-uniform spacing, and
-CT/Hounsfield ingestion. Not yet, beyond Stage 3: treatment-planning scoring and
-influence matrices (Stage 4).
+grid rotation, non-uniform spacing, and CT/Hounsfield ingestion.
+
+## Lab-frame 3-D dose scoring (Stage 4, task DEV-016, decision 0021)
+
+DEV-016 begins Stage 4 with a **lab-frame 3-D dose grid** (`DoseGrid3D`), the
+volumetric-dose prerequisite for beamlet-resolved influence matrices. Scoring so
+far was a beam-frame 2-D marginal (depth × one transverse axis); treatment
+planning needs dose per voxel in a fixed patient frame, so beamlets entering at
+different positions/directions accumulate into a common grid. The 3-D voxel-grid
+transport path already computes the lab position `x = p0 + R·q` every step, so the
+scorer needs only a deposition mapping: when a `DoseGrid3D` is supplied, each step
+additionally deposits its energy at the step's **lab midpoint** into the
+containing dose voxel (one accumulation per step, so energy is conserved exactly
+for a beam contained in the dose grid). Point-at-midpoint deposition (the physics
+step ~1 mm ≤ a dose voxel) is accurate to O(step/voxel) while conserving energy; a
+path-length-splitting scoring DDA is a later refinement.
+
+Validated (decision 0021, reference + Warp CPU/CUDA): the summed 3-D dose equals
+the deposited energy; the 3-D dose projected onto the beam axis reproduces the
+beam-frame depth-dose R80 within a dose voxel; the total dose is invariant to the
+dose grid's resolution and alignment; and the backends agree. Deferred: a 3-D
+scorer on the 1-D-geometry path, path-length-splitting deposition, and
+density-driven dose (energy/mass) units. Not yet: beamlet-resolved scoring and
+sparse dose-influence matrices (the next Stage-4 task).

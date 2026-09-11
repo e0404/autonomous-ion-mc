@@ -459,7 +459,8 @@ deterministically and reviewed in one pull request.
 | Stage 3, `DEV-012` (non-water materials on the 3-D scattering path) | **completed** 2026-09-10 | decision `0017`; `validation/v3_material_scattering.py` on the host runner (CPU + CUDA); `tests/ionmc/test_material_scattering.py`; DEV-012 local validation record; squash-merged into `develop` at `58309bf` |
 | Stage 3, `DEV-013` (arbitrary beam incidence via a beam frame; rotated-vs-axis-aligned equivalence) | **completed** 2026-09-11 | decision `0018`; `validation/v3_arbitrary_incidence.py` on the host runner (CPU + CUDA); `tests/ionmc/test_arbitrary_incidence.py`; DEV-013 local validation record; squash-merged into `develop` at `ebd719f` |
 | Stage 3, `DEV-014` (scoring grids decoupled from the transport grid; grid-independence; **closed V3**) | **completed** 2026-09-11 | decision `0019`; `validation/v3_scoring_grid.py` on the host runner (CPU + CUDA); `tests/ionmc/test_scoring_grid_decoupling.py`; DEV-014 local validation record; squash-merged into `develop` at `f9e3c90`; **milestone V3 closed** |
-| Stage 3, `DEV-015` (3-D voxel grid with ray/voxel DDA traversal; arbitrary incidence through true voxel geometries) | **in progress** 2026-09-11 | decision `0020`; `validation/v3_voxel_grid_3d.py`; `tests/ionmc/test_voxel_grid_3d.py` |
+| Stage 3, `DEV-015` (3-D voxel grid with ray/voxel DDA traversal; arbitrary incidence through true voxel geometries) | **completed** 2026-09-11 | decision `0020`; `validation/v3_voxel_grid_3d.py` on the host runner (CPU + CUDA); `tests/ionmc/test_voxel_grid_3d.py`; DEV-015 local validation record; squash-merged into `develop` at `d0df873` |
+| Stage 4, `DEV-016` (lab-frame 3-D dose scoring on the voxel-grid path; prerequisite for beamlet influence matrices) | **in progress** 2026-09-11 | decision `0021`; `validation/v4_dose3d.py`; `tests/ionmc/test_dose3d.py` |
 | Stages 4–6 | not started | — |
 
 ## Change log
@@ -604,5 +605,16 @@ deterministically and reviewed in one pull request.
   off-axis dense insert stops where an independent Siddon WET integral reaches the
   water CSDA range; energy is conserved for a contained beam; and reference/Warp
   CPU/CUDA agree. Deferred: per-voxel material map, grid rotation, a 3-D lab-frame
-  scoring volume, non-uniform spacing, CT ingestion. Next: **Stage 4**,
-  treatment-planning scoring and influence matrices.
+  scoring volume, non-uniform spacing, CT ingestion.
+- 2026-09-11: `DEV-016` began **Stage 4** with a **lab-frame 3-D dose scoring
+  grid** (decision `0021`), the volumetric-dose prerequisite for beamlet-resolved
+  influence matrices. A `DoseGrid3D` (lab-axis-aligned, own resolution/alignment)
+  is scored on the 3-D voxel-grid transport path: each step deposits its energy at
+  its lab midpoint (`x = p0 + R·q`) into the containing dose voxel, conserving
+  energy exactly for a beam contained in the dose grid. Validated (reference +
+  Warp CPU/CUDA): dose sum equals the deposited energy; the 3-D dose z-marginal
+  reproduces the beam-frame depth-dose R80 within a dose voxel; the total dose is
+  grid-independent; and the backends agree. Deferred: a 3-D scorer on the
+  1-D-geometry path, path-length-splitting deposition, and density-driven dose
+  units. Next: **beamlet-resolved scoring and sparse dose-influence matrices**
+  (V4: sum of beamlet doses equals the broad-field dose).

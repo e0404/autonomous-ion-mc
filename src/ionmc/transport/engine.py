@@ -34,7 +34,7 @@ from ionmc.physics.secondaries import (
 )
 from ionmc.rng import RandomState
 from ionmc.stopping_power import mass_stopping_power_ratio
-from ionmc.transport.depth_dose import DepthDoseGrid, DepthLateralGrid
+from ionmc.transport.depth_dose import DepthDoseGrid, DepthLateralGrid, DoseGrid3D
 from ionmc.transport.geometry import VoxelGrid3D, VoxelSlab, WaterSlab
 from ionmc.transport.source import PencilBeamSource
 from ionmc.transport.state import ParticleState, Status
@@ -183,6 +183,9 @@ class ScatteringResult:
     device: str | None
     range_mean_mm: float = float("nan")  # mean projected stopping depth
     n_stopped: int = 0
+    #: Lab-frame 3-D dose ``(nx, ny, nz)`` [MeV per voxel] when a ``DoseGrid3D``
+    #: was supplied to a voxel-grid ``run_scattering`` (decision 0021), else None.
+    dose3d_mev: np.ndarray | None = None
 
     @property
     def depth_dose_mev(self) -> np.ndarray:
@@ -662,6 +665,7 @@ class TransportEngine:
         seed: int = 12345,
         path: str = "warp",
         device: str = "cpu",
+        dose_grid: DoseGrid3D | None = None,
     ) -> ScatteringResult:
         """Run 3-D transport with multiple Coulomb scattering into a 2-D
         (depth, lateral-x) grid (decision 0011).
@@ -687,12 +691,18 @@ class TransportEngine:
                 "a voxel material has no radiation length; multiple scattering is "
                 "unavailable (populate radiation_length_g_per_cm2)"
             )
+        if dose_grid is not None and not self.geometry_is_grid3d:
+            raise ValueError(
+                "a 3-D DoseGrid3D scorer is supported only on the VoxelGrid3D "
+                "transport path (decision 0021)"
+            )
         state = source.sample(n_histories, seed)
         energy_in = float(np.sum(state.energy_mev * state.weight))
+        dose3d: np.ndarray | None = None
         if path == "warp":
             if self.geometry_is_grid3d:
-                edep, truncated, final_z, final_status = (
-                    self._run_scattering_grid3d_warp(state, grid, device)
+                edep, truncated, final_z, final_status, dose3d = (
+                    self._run_scattering_grid3d_warp(state, grid, device, dose_grid)
                 )
             else:
                 edep, truncated, final_z, final_status = self._run_scattering_warp(
@@ -700,8 +710,8 @@ class TransportEngine:
                 )
         elif path == "python":
             if self.geometry_is_grid3d:
-                edep, truncated, final_z, final_status = (
-                    self._run_scattering_reference_grid3d(state, grid)
+                edep, truncated, final_z, final_status, dose3d = (
+                    self._run_scattering_reference_grid3d(state, grid, dose_grid)
                 )
             else:
                 edep, truncated, final_z, final_status = self._run_scattering_reference(
@@ -724,6 +734,7 @@ class TransportEngine:
             device=device if path == "warp" else None,
             range_mean_mm=range_mean,
             n_stopped=n_stopped,
+            dose3d_mev=dose3d,
         )
 
     def _run_scattering_warp(
@@ -758,8 +769,12 @@ class TransportEngine:
         )
 
     def _run_scattering_grid3d_warp(
-        self, state: ParticleState, grid: DepthLateralGrid, device: str
-    ) -> tuple[np.ndarray, int, np.ndarray, np.ndarray]:
+        self,
+        state: ParticleState,
+        grid: DepthLateralGrid,
+        device: str,
+        dose_grid: DoseGrid3D | None,
+    ) -> tuple[np.ndarray, int, np.ndarray, np.ndarray, np.ndarray | None]:
         if not mathlib.HAVE_WARP:
             raise ImportError(
                 "warp-lang is not installed; the warp path is unavailable"
@@ -786,6 +801,7 @@ class TransportEngine:
             straggling=self.straggling,
             scattering=self.scattering,
             straggling_floor_mev=self.straggling_floor_mev,
+            dose_grid=dose_grid,
         )
 
     def _run_scattering_reference(
@@ -926,13 +942,15 @@ class TransportEngine:
         return edep, truncated, final_pz, final_status
 
     def _run_scattering_reference_grid3d(
-        self, state: ParticleState, grid: DepthLateralGrid
-    ) -> tuple[np.ndarray, int, np.ndarray, np.ndarray]:
+        self, state: ParticleState, grid: DepthLateralGrid, dose_grid: DoseGrid3D | None
+    ) -> tuple[np.ndarray, int, np.ndarray, np.ndarray, np.ndarray | None]:
         """3-D voxel-grid scattering transport with Amanatides-Woo DDA traversal
         (decision 0020). Identical to :meth:`_run_scattering_reference` except the
         geometry lookup and step limit use three lab-axis coordinates and the
         distance to the nearest voxel face, rather than a single material
-        coordinate. Scoring stays beam-frame marginal. The source entry point is
+        coordinate. Scoring stays beam-frame marginal; when ``dose_grid`` is given
+        it additionally accumulates each step's energy at its lab midpoint into a
+        lab-frame 3-D dose grid (decision 0021). The source entry point is
         expected to lie within the grid bounding box; a point outside it is
         clamped to the edge voxel (decision 0020)."""
         tp = reference.load_bound_module(
@@ -987,6 +1005,22 @@ class TransportEngine:
                 return big
             return d if d > 0.0 else big
 
+        # optional lab-frame 3-D dose scoring (decision 0021)
+        have_dose = dose_grid is not None
+        dose_flat: np.ndarray | None = None
+        if dose_grid is not None:
+            dox, doy, doz = (float(v) for v in dose_grid.origin_mm)
+            dhx, dhy, dhz = (float(v) for v in dose_grid.spacing_mm)
+            dnx, dny, dnz = dose_grid.nx, dose_grid.ny, dose_grid.nz
+            dose_flat = np.zeros(dose_grid.n_voxels, dtype=np.float64)
+
+            def _dose_deposit(xl: float, yl: float, zl: float, energy: float) -> None:
+                di = math.floor((xl - dox) / dhx)
+                dj = math.floor((yl - doy) / dhy)
+                dk = math.floor((zl - doz) / dhz)
+                if 0 <= di < dnx and 0 <= dj < dny and 0 <= dk < dnz:
+                    dose_flat[(di * dny + dj) * dnz + dk] += energy
+
         for h in range(state.size):
             e = float(state.energy_mev[h])
             p0x, p0y, p0z = (float(v) for v in state.position_mm[h])
@@ -1035,6 +1069,7 @@ class TransportEngine:
                 a = rng.randf() * s
                 z_start = pz
                 x_start = px
+                y_start = py
                 px, py, pz = px + a * dx, py + a * dy, pz + a * dzr
                 if scattering and e > floor:
                     theta0 = tp.highland_theta0(
@@ -1062,10 +1097,28 @@ class TransportEngine:
                     nz,
                     nx,
                 )
+                if have_dose:
+                    # deposit the step energy at its lab midpoint (decision 0021)
+                    mxb = 0.5 * (x_start + px)
+                    myb = 0.5 * (y_start + py)
+                    mzb = 0.5 * (z_start + pz)
+                    _dose_deposit(
+                        p0x + e1x * mxb + e2x * myb + d0x * mzb,
+                        p0y + e1y * mxb + e2y * myb + d0y * mzb,
+                        p0z + e1z * mxb + e2z * myb + d0z * mzb,
+                        w * de,
+                    )
                 e -= de
                 step += 1
                 if e <= self.energy_cut_mev:
                     _deposit_zx(edep, pz, pz, px, w * e, dz, z_org, x_lo, dxb, nz, nx)
+                    if have_dose:
+                        _dose_deposit(
+                            p0x + e1x * px + e2x * py + d0x * pz,
+                            p0y + e1y * px + e2y * py + d0y * pz,
+                            p0z + e1z * px + e2z * py + d0z * pz,
+                            w * e,
+                        )
                     e = 0.0
                     status = Status.STOPPED
                     final_pz[h] = pz
@@ -1088,7 +1141,8 @@ class TransportEngine:
                 final_status[h] = 3
             else:
                 final_status[h] = int(status)
-        return edep, truncated, final_pz, final_status
+        dose3d = dose_flat.reshape(dnx, dny, dnz) if dose_flat is not None else None
+        return edep, truncated, final_pz, final_status, dose3d
 
     # -- reference Python path ------------------------------------------------
 

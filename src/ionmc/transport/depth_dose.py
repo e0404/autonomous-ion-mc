@@ -135,3 +135,66 @@ class DepthLateralGrid:
         sigma = np.sqrt(np.clip(var, 0.0, None))
         sigma[total <= 0.0] = np.nan
         return sigma
+
+
+@dataclass(frozen=True)
+class DoseGrid3D:
+    """A lab-frame 3-D scoring grid accumulating deposited energy per voxel [MeV]
+    (decision ``0021``).
+
+    An ``Nx*Ny*Nz`` uniform grid with its minimum corner at ``origin_mm`` and
+    voxel edge lengths ``spacing_mm``; it is independent of the transport grid
+    (its own resolution and alignment). The 3-D voxel-grid transport path deposits
+    each step's energy at the step's lab midpoint into the containing voxel. Flat
+    index (shared with the deposition code): ``flat = (i*ny + j)*nz + k``.
+    """
+
+    shape: tuple[int, int, int]
+    origin_mm: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    spacing_mm: tuple[float, float, float] = (2.0, 2.0, 2.0)
+
+    def __post_init__(self) -> None:
+        if any(int(n) < 1 for n in self.shape):
+            raise ValueError("each grid dimension must have at least one voxel")
+        if any(s <= 0.0 for s in self.spacing_mm):
+            raise ValueError("voxel spacing must be positive on every axis")
+
+    @property
+    def nx(self) -> int:
+        return int(self.shape[0])
+
+    @property
+    def ny(self) -> int:
+        return int(self.shape[1])
+
+    @property
+    def nz(self) -> int:
+        return int(self.shape[2])
+
+    @property
+    def n_voxels(self) -> int:
+        return self.nx * self.ny * self.nz
+
+    @property
+    def voxel_volume_cm3(self) -> float:
+        sx, sy, sz = self.spacing_mm
+        return (sx * sy * sz) * 1.0e-3  # mm^3 -> cm^3
+
+    def empty(self) -> np.ndarray:
+        """A zeroed ``(nx, ny, nz)`` energy array [MeV]."""
+        return np.zeros((self.nx, self.ny, self.nz), dtype=np.float64)
+
+    def dose_gy(self, edep_mev: np.ndarray, density_g_per_cm3: float) -> np.ndarray:
+        """Convert deposited energy [MeV] to absorbed dose [Gy] for a uniform
+        voxel mass ``density * voxel_volume`` (1 MeV = 1.602176634e-13 J,
+        1 g = 1e-3 kg)."""
+        mass_kg = density_g_per_cm3 * self.voxel_volume_cm3 * 1.0e-3
+        return edep_mev * (1.602176634e-13 / mass_kg)
+
+    def axis_marginals(self, edep: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """Return ``(z_centers_mm, depth_profile)`` -- energy summed over x and y
+        per z-plane, with z-voxel centres in the lab frame."""
+        oz = self.origin_mm[2]
+        sz = self.spacing_mm[2]
+        centers = oz + (np.arange(self.nz) + 0.5) * sz
+        return centers, edep.sum(axis=(0, 1))

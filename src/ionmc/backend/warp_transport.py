@@ -587,6 +587,17 @@ def csda_scattering_grid3d_kernel(
     truncated: wp.array(dtype=int),
     final_z: wp.array(dtype=float),
     final_status: wp.array(dtype=int),
+    have_dose: int,
+    dose_nx: int,
+    dose_ny: int,
+    dose_nz: int,
+    dose_ox: float,
+    dose_oy: float,
+    dose_oz: float,
+    dose_hx: float,
+    dose_hy: float,
+    dose_hz: float,
+    dose: wp.array(dtype=wp.float64),
 ):
     i = wp.tid()
     e = energy0[i]
@@ -663,6 +674,7 @@ def csda_scattering_grid3d_kernel(
         a = wp.randf(rng) * s
         z_start = pz
         x_start = px
+        y_start = py
         px = px + a * dx
         py = py + a * dy
         pz = pz + a * dz
@@ -679,6 +691,28 @@ def csda_scattering_grid3d_kernel(
         px = px + (s - a) * dx
         py = py + (s - a) * dy
         pz = pz + (s - a) * dz
+        # optional lab-frame 3-D dose at the step's lab midpoint (decision 0021)
+        if have_dose == 1:
+            mxb = 0.5 * (x_start + px)
+            myb = 0.5 * (y_start + py)
+            mzb = 0.5 * (z_start + pz)
+            lxd = p0[0] + fe1x * mxb + fe2x * myb + d0x * mzb
+            lyd = p0[1] + fe1y * mxb + fe2y * myb + d0y * mzb
+            lzd = p0[2] + fe1z * mxb + fe2z * myb + d0z * mzb
+            di = int(wp.floor((lxd - dose_ox) / dose_hx))
+            dj = int(wp.floor((lyd - dose_oy) / dose_hy))
+            dk = int(wp.floor((lzd - dose_oz) / dose_hz))
+            if (
+                di >= 0
+                and di < dose_nx
+                and dj >= 0
+                and dj < dose_ny
+                and dk >= 0
+                and dk < dose_nz
+            ):
+                wp.atomic_add(
+                    dose, (di * dose_ny + dj) * dose_nz + dk, wp.float64(w * de)
+                )
         # deposit w*de across depth bins [z_start, pz] at lateral bin of x mid
         x_mid = 0.5 * (x_start + px)
         xb = int(wp.floor((x_mid - lateral_lo_mm) / lateral_bin_mm))
@@ -710,6 +744,24 @@ def csda_scattering_grid3d_kernel(
             b2 = int(wp.floor((pz - depth_origin_mm) / depth_bin_mm))
             if xb2 >= 0 and xb2 < n_lateral and b2 >= 0 and b2 < n_depth:
                 wp.atomic_add(edep, b2 * n_lateral + xb2, wp.float64(w * e))
+            if have_dose == 1:
+                lxt = p0[0] + fe1x * px + fe2x * py + d0x * pz
+                lyt = p0[1] + fe1y * px + fe2y * py + d0y * pz
+                lzt = p0[2] + fe1z * px + fe2z * py + d0z * pz
+                dit = int(wp.floor((lxt - dose_ox) / dose_hx))
+                djt = int(wp.floor((lyt - dose_oy) / dose_hy))
+                dkt = int(wp.floor((lzt - dose_oz) / dose_hz))
+                if (
+                    dit >= 0
+                    and dit < dose_nx
+                    and djt >= 0
+                    and djt < dose_ny
+                    and dkt >= 0
+                    and dkt < dose_nz
+                ):
+                    wp.atomic_add(
+                        dose, (dit * dose_ny + djt) * dose_nz + dkt, wp.float64(w * e)
+                    )
             e = 0.0
             alive = 0
         else:
@@ -932,7 +984,8 @@ class ScatteringGrid3DKernel:
         straggling: bool,
         scattering: bool,
         straggling_floor_mev: float,
-    ) -> tuple[np.ndarray, int, np.ndarray, np.ndarray]:
+        dose_grid: Any = None,
+    ) -> tuple[np.ndarray, int, np.ndarray, np.ndarray, np.ndarray | None]:
         d = self.device
         n_hist = int(state.energy_mev.shape[0])
         nz, nx = int(grid.n_depth), int(grid.n_lateral)
@@ -979,6 +1032,20 @@ class ScatteringGrid3DKernel:
         truncated = wp.zeros(1, dtype=int, device=d)
         final_z = wp.zeros(n_hist, dtype=float, device=d)
         final_status = wp.zeros(n_hist, dtype=int, device=d)
+        # optional lab-frame 3-D dose grid (decision 0021); a length-1 dummy when
+        # absent so the kernel signature is always satisfied
+        if dose_grid is not None:
+            dnx, dny, dnz = dose_grid.nx, dose_grid.ny, dose_grid.nz
+            dox, doy, doz = (float(v) for v in dose_grid.origin_mm)
+            dhx, dhy, dhz = (float(v) for v in dose_grid.spacing_mm)
+            dose = wp.zeros(dnx * dny * dnz, dtype=wp.float64, device=d)
+            have_dose = 1
+        else:
+            dnx = dny = dnz = 1
+            dox = doy = doz = 0.0
+            dhx = dhy = dhz = 1.0
+            dose = wp.zeros(1, dtype=wp.float64, device=d)
+            have_dose = 0
         t = self.tables
         wp.launch(
             csda_scattering_grid3d_kernel,
@@ -1026,13 +1093,30 @@ class ScatteringGrid3DKernel:
                 truncated,
                 final_z,
                 final_status,
+                have_dose,
+                dnx,
+                dny,
+                dnz,
+                dox,
+                doy,
+                doz,
+                dhx,
+                dhy,
+                dhz,
+                dose,
             ],
             device=d,
         )
         wp.synchronize_device(d)
+        dose3d = (
+            dose.numpy().astype(np.float64).reshape(dnx, dny, dnz)
+            if dose_grid is not None
+            else None
+        )
         return (
             edep.numpy().astype(np.float64).reshape(nz, nx),
             int(truncated.numpy()[0]),
             final_z.numpy().astype(np.float64),
             final_status.numpy().astype(np.int32),
+            dose3d,
         )
