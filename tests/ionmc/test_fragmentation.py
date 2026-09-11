@@ -3,10 +3,9 @@
 ``carbon_fragmentation_depth_dose`` attenuates the primary carbon by a constant
 reaction cross-section and emits forward, same-velocity fragments (proton, alpha,
 boron-11) that produce the distal dose tail beyond the Bragg peak. The tests cover
-the cross-section, the tail magnitude and reach, primary survival, energy
-bookkeeping, and reference/Warp CPU agreement. Realistic 2 mm bins are used (the
-tail-to-peak ratio depends on the peak's binning; measured carbon curves have a
-straggling-broadened peak at a few-mm resolution).
+the cross-section, the tail magnitude (via the resolution-robust integrated
+distal-dose fraction) and reach, primary survival, the fragment energy budget
+(reconciled independently, not tautologically), and reference/Warp CPU agreement.
 """
 
 from __future__ import annotations
@@ -19,6 +18,7 @@ from ionmc.data import MCSQUARE_PSTAR_WATER
 from ionmc.data.stopping_tables import load_stopping_table, scale_ion_stopping_table
 from ionmc.fragmentation import (
     CARBON_SIGMA_R_BARN,
+    FRAGMENT_SPECIES,
     carbon_fragmentation_depth_dose,
     macroscopic_carbon_reaction_per_cm,
 )
@@ -60,14 +60,42 @@ def test_macroscopic_cross_section() -> None:
 
 
 def test_fragment_tail_present(frag) -> None:
-    """The distal fragment tail is 8-20 % of the Bragg peak (canonical ~15 %)."""
-    for distal in (5.0, 10.0, 20.0):
-        assert 0.08 <= frag.tail_to_peak(distal) <= 0.20
+    """The integrated distal-dose fraction (the resolution-robust tail metric) is a
+    substantial fraction of the deposited dose: > 10 % lands more than 10 mm distal
+    to the Bragg peak, tapering with margin. Canonical ~16 %."""
+    assert 0.10 <= frag.distal_dose_fraction(10.0) <= 0.25
+    # monotone decrease with distance from the peak (a real tail, not a plateau)
+    assert (
+        frag.distal_dose_fraction(5.0)
+        > frag.distal_dose_fraction(10.0)
+        > frag.distal_dose_fraction(20.0)
+        > 0.10
+    )
+
+
+def test_tail_metric_is_resolution_robust(proton_table) -> None:
+    """The gate metric (integrated distal-dose fraction) is invariant to the bin
+    width, unlike the single-bin ``tail_to_peak`` point ratio (which is why the
+    latter is a diagnostic, not the gate)."""
+    fracs = []
+    for n_bins in (138, 275, 550, 1100):  # 4, 2, 1, 0.5 mm bins
+        r = carbon_fragmentation_depth_dose(
+            proton_table,
+            WaterSlab(550.0),
+            DepthDoseGrid(550.0, n_bins),
+            PencilBeamSource(3480.0),
+            n_histories=1,
+            seed=1,
+            path="python",
+            straggling=False,
+        )
+        fracs.append(r.distal_dose_fraction(10.0))
+    assert max(fracs) - min(fracs) < 0.01  # ~0.164 across an 8x resolution range
 
 
 def test_primary_only_has_no_tail(proton_table) -> None:
-    """A primary-only carbon run (no fragmentation) has ~0 dose beyond the peak,
-    isolating the tail as a fragmentation effect."""
+    """A primary-only carbon run (no fragmentation) has ~0 dose beyond the peak, so
+    the distal-dose-fraction metric isolates the tail as a fragmentation effect."""
     grid = DepthDoseGrid(550.0, 275)
     carbon = scale_ion_stopping_table(proton_table, CARBON_12)
     eng = TransportEngine(
@@ -80,27 +108,10 @@ def test_primary_only_has_no_tail(proton_table) -> None:
     )
     r = eng.run(PencilBeamSource(3480.0), n_histories=1, seed=1, path="python")
     dd = r.edep_mev
+    centers = grid.centers_mm
     kpk = int(dd.argmax())
-    # a bin ~10 mm beyond the primary peak has negligible primary dose...
-    k_beyond = kpk + 5
-    assert dd[k_beyond] / dd[kpk] < 1e-3
-    # ...while the fragmentation run has a real tail there
-    assert frag_tail_ratio(proton_table) > 0.05
-
-
-def frag_tail_ratio(proton_table) -> float:
-    grid = DepthDoseGrid(550.0, 275)
-    r = carbon_fragmentation_depth_dose(
-        proton_table,
-        WaterSlab(550.0),
-        grid,
-        PencilBeamSource(3480.0),
-        n_histories=1,
-        seed=1,
-        path="python",
-        straggling=False,
-    )
-    return r.tail_to_peak(10.0)
+    primary_distal = float(dd[centers > centers[kpk] + 10.0].sum() / dd.sum())
+    assert primary_distal < 1e-3
 
 
 def test_primary_survival(frag) -> None:
@@ -121,11 +132,41 @@ def test_tail_reach(frag) -> None:
     assert reach_mm >= 1.5 * CARBON_RANGE_MM
 
 
-def test_energy_conservation(frag) -> None:
-    """total deposited + escaped == energy in, with escaped >= 0 (the fragments
-    carry ~0.72 of each reaction's energy; the rest escapes)."""
-    total = float(frag.total_edep_mev.sum())
-    assert total + frag.escaped_mev == pytest.approx(frag.energy_in_mev, rel=1e-9)
+def test_fragment_energy_budget_reconciles(frag, proton_table) -> None:
+    """The fragment energy budget is checked three ways, not by construction:
+
+    1. the injected fragment KE, reconstructed *independently* from the reaction
+       weights, multiplicities and residual carbon energy, matches the value the
+       transport recorded;
+    2. that injected KE is deposited in full (the grid contains the fragments), so
+       ``fragment_edep.sum() == fragment_energy_injected``;
+    3. only then does ``deposited + escaped == E0`` (with escaped >= 0) close.
+    """
+    # (1) independent reconstruction of Sum_species Sum_bins w_frag * E_frag
+    grid = frag.grid
+    carbon = scale_ion_stopping_table(proton_table, CARBON_12)
+    sigma = macroscopic_carbon_reaction_per_cm(1.0)
+    s_edge = np.exp(-sigma * grid.edges_mm / 10.0)
+    react = s_edge[:-1] - s_edge[1:]  # total weight ~ 1 for a unit-weight history
+    r_tot = float(np.interp(3480.0, carbon.energy_mev, carbon.csda_range_g_per_cm2))
+    resid = r_tot - grid.centers_mm / 10.0
+    e_carbon = np.where(
+        resid > carbon.csda_range_g_per_cm2[0],
+        np.interp(resid, carbon.csda_range_g_per_cm2, carbon.energy_mev),
+        0.0,
+    )
+    n_a_over_12 = sum(m * sp.mass_number for sp, m in FRAGMENT_SPECIES) / 12.0
+    injected_independent = float(np.sum(react * e_carbon * n_a_over_12))
+    assert frag.fragment_energy_injected_mev == pytest.approx(
+        injected_independent, rel=1e-6
+    )
+    # (2) the injected KE is deposited in full (fragments stay inside the grid)
+    assert frag.fragment_edep_mev.sum() == pytest.approx(
+        frag.fragment_energy_injected_mev, rel=1e-4
+    )
+    # (3) overall balance, escaped non-negative (target fragments / neutrons escape)
+    deposited = float(frag.total_edep_mev.sum())
+    assert deposited + frag.escaped_mev == pytest.approx(frag.energy_in_mev, rel=1e-9)
     assert frag.escaped_mev >= 0.0
     assert 0.0 < frag.fragment_edep_mev.sum() < frag.energy_in_mev
 

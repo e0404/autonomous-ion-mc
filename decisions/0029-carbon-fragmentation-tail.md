@@ -65,15 +65,24 @@ approximate magnitude and reach.
 
 ## Validation (`validation/v5_fragmentation.py`, pre-registered per decision 0001)
 
-- **fragment_tail_present** — for a 290 MeV/u carbon beam the dose just distal to
-  the Bragg peak is **8–20 % of the peak dose** (canonical ~15 %), and is ~0 for a
-  primary-only (no-fragmentation) run.
+- **fragment_tail_present** — for a 290 MeV/u carbon beam the **integrated
+  distal-dose fraction** (the fraction of the total deposited dose landing more than
+  a fixed margin distal to the peak) is **10–25 %** at +10 mm (canonical ~16 %),
+  decreasing with margin, and is ~0 for a primary-only (no-fragmentation) run. This
+  integrated metric is the gate because it is **resolution-robust** (invariant to the
+  depth-bin width to < 0.01 across 0.5–4 mm bins); the single-bin *tail-to-peak*
+  point ratio (~15 % only near 2–4 mm bins) is a diagnostic, since the model omits
+  the beam energy spread that sets real peak sharpness.
 - **tail_reach** — fragment dose stays `> 1 %` of the peak out to `≥ 1.5×` the
   carbon range, with non-zero dose extending toward `~2.5–3×` (H/He fragments).
 - **primary_survival** — the surviving primary fraction at the peak matches
   `S(R) ≈ 0.50` at 290 MeV/u (and ~0.28 fragmented-away consistent with the
   cross-section).
-- **energy_conservation** — `D.sum() + escaped = E₀` exactly, `escaped ≥ 0`.
+- **energy_conservation** — reconciled independently rather than tautologically:
+  the injected fragment KE reconstructed from the reaction weights, multiplicities
+  and residual carbon energy matches the transported value (rel < 1e-6) and is
+  deposited in full (rel < 1e-4, the grid contains the fragments); only then does
+  `D.sum() + escaped = E₀` close, with `escaped ≥ 0`.
 - **cross-backend** — reference vs Warp CPU (and CUDA) total depth dose (primary +
   fragments) agree to the float32 budget.
 

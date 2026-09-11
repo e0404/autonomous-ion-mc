@@ -539,19 +539,31 @@ backends and inherits their parity.
 
 | check | criterion | result |
 |---|---|---|
-| fragment tail present (+5/+10/+20 mm past peak) | 8-20 % of peak | ~12 % |
-| primary-only run has no tail (control) | dose at +10 mm < 0.1 % of peak | ~0 |
+| fragment tail present (integrated distal-dose fraction, +10 mm) | 10-25 % of total dose, decreasing with margin | ~16 % |
+| tail metric resolution-robust (0.5-4 mm bins) | spread < 0.01 | ~0.005 |
+| primary-only run has no tail (control) | integrated distal fraction +10 mm < 0.1 % | ~0 |
 | tail reach (> 1 % of peak) | >= 1.5x carbon range | 2.9x (467 mm) |
 | primary survival at peak | matches exp(-ΣR) ~ 0.47, in [0.40, 0.55] | 0.466 |
-| energy conservation | deposited + escaped == E0, escaped >= 0 | exact (esc 354 MeV) |
+| energy: injected KE vs independent reconstruction | rel < 1e-6 | exact (914.2 MeV) |
+| energy: injected KE deposited in full (grid contains fragments) | rel < 1e-4 | exact |
+| energy: deposited + escaped == E0, escaped >= 0 | rel < 1e-9 | exact (esc 354 MeV) |
 | reference vs Warp CPU total depth dose | total <= 5e-5 / per-bin <= 5e-3 | 7.3e-6 / 2.1e-4 |
 | CUDA vs CPU total depth dose | total <= 1e-5 / per-bin <= 5e-3 | recorded (host) |
 
-The tail-to-peak ratio is reported on realistic 2 mm bins (the peak height depends
-on binning; sub-mm bins inflate a razor-sharp deterministic peak and understate the
-ratio). The transported fragments carry ~0.72 of each reaction's energy; the balance
-(target fragments, neutrons, binding, transverse momentum, grid escape) is booked as
-``escaped``. **Bounded model:** representative-species multiplicities are a
+The **discriminating tail metric is the integrated distal-dose fraction** — the
+fraction of the total deposited dose landing more than a fixed margin distal to the
+Bragg peak. Because it integrates over bins it is essentially invariant to the
+depth-bin width (~0.164 at +10 mm across 0.5-4 mm bins), unlike the single-bin
+`tail_to_peak` point ratio (0.05 at 0.5 mm → 0.12 at 2 mm), which is reported only
+as a diagnostic at a pinned 2 mm resolution. Note the model omits the beam energy
+spread that dominates real-world peak broadening, so it deliberately does not gate
+on peak *height*. The energy budget is reconciled independently: the injected
+fragment KE reconstructed from the reaction weights, multiplicities and residual
+carbon energy (914.2 MeV) matches the transported value and is deposited in full
+(the grid contains the fragments), so the balance is a genuine check rather than a
+tautology. The transported fragments carry ~0.72 of each reaction's energy; the
+balance (target fragments, neutrons, binding, transverse momentum, grid escape) is
+booked as ``escaped``. **Bounded model:** representative-species multiplicities are a
 calibration handle, not measured spectra; energy/angular-resolved fragment spectra,
 secondary fragmentation, neutrons/gammas, the full isotopic cocktail, target
 fragmentation, tail LET, the lateral halo, and a discriminating fragment-resolved

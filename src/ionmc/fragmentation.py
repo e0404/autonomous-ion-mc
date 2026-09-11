@@ -65,14 +65,42 @@ class FragmentationResult:
     energy_in_mev: float = 0.0
     escaped_mev: float = 0.0
     primary_survival_at_peak: float = float("nan")
+    #: total kinetic energy *handed to* the transported fragments (Σ w·E over every
+    #: fragment history). Independent of where that energy is deposited, so
+    #: comparing it to ``fragment_edep_mev.sum()`` is a non-trivial conservation
+    #: check on the fragment transport (they coincide when the grid contains the
+    #: fragments); reconstructing it from the reaction weights and multiplicities
+    #: is a non-tautological check on the bookkeeping (decision 0029).
+    fragment_energy_injected_mev: float = 0.0
 
     @property
     def total_edep_mev(self) -> np.ndarray:
         return self.primary_edep_mev + self.fragment_edep_mev
 
+    def distal_dose_fraction(self, margin_mm: float = 10.0) -> float:
+        """Fraction of the *total* deposited dose that lands more than ``margin_mm``
+        distal to the Bragg peak — the resolution-robust fragment-tail magnitude
+        metric. Unlike :meth:`tail_to_peak` it integrates over bins, so it is
+        essentially invariant to the depth-bin width (the peak-bin height, and hence
+        the point ratio, is not), which makes it the discriminating gate. It is ~0
+        for a no-fragmentation run."""
+        total = self.total_edep_mev
+        centers = self.grid.centers_mm
+        denom = float(total.sum())
+        if denom <= 0.0:
+            return float("nan")
+        kpk = int(total.argmax())
+        distal = float(total[centers > centers[kpk] + margin_mm].sum())
+        return distal / denom
+
     def tail_to_peak(self, distal_mm: float = 10.0) -> float:
-        """Ratio of the fragment-tail dose a distance ``distal_mm`` beyond the total
-        Bragg peak to the peak dose (the fragment-tail magnitude metric)."""
+        """Ratio of the fragment-tail dose in the single bin a distance ``distal_mm``
+        beyond the Bragg peak to the peak-bin dose. A **diagnostic only**: being a
+        single-bin point ratio it depends strongly on the depth-bin width (a sharp
+        deterministic peak inflates the denominator at fine resolution), so the
+        discriminating gate is :meth:`distal_dose_fraction`. Reported at a pinned
+        2 mm resolution (comparable to measured-curve resolution; the model omits
+        the beam energy spread that dominates real peak broadening)."""
         total = self.total_edep_mev
         centers = self.grid.centers_mm
         kpk = int(total.argmax())
@@ -149,6 +177,7 @@ def carbon_fragmentation_depth_dose(
     # -- per-species fragment transport --------------------------------------
     fragment_total = grid.empty()
     per_species: dict[str, np.ndarray] = {}
+    fragment_injected = 0.0  # total KE handed to the transported fragments
     a_c = float(CARBON_12.mass_number)
     for species, mult in FRAGMENT_SPECIES:
         # production bins with a defined residual energy and a reaction weight
@@ -160,6 +189,7 @@ def carbon_fragmentation_depth_dose(
         z_prod = grid.centers_mm[active]
         e_frag = a_f * e_carbon[active] / a_c  # same velocity: E_f = A_f*(E_C/12)
         w_frag = mult * react_per_bin[active]
+        fragment_injected += float(np.sum(w_frag * e_frag))
         # a fragment "history" per production bin (deterministic weighted state)
         n_frag = int(z_prod.shape[0])
         state = ParticleState.allocate(n_frag)
@@ -194,4 +224,5 @@ def carbon_fragmentation_depth_dose(
         energy_in_mev=energy_in,
         escaped_mev=escaped,
         primary_survival_at_peak=survival_at_peak,
+        fragment_energy_injected_mev=fragment_injected,
     )
