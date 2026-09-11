@@ -13,6 +13,7 @@ from __future__ import annotations
 from ionmc.transport.depth_dose import DepthDoseGrid, DepthLateralGrid, DoseGrid3D
 from ionmc.transport.engine import (
     BatchedDepthDoseResult,
+    BatchedDoseResult,
     DepthDoseResult,
     ScatteringResult,
     TransportEngine,
@@ -23,6 +24,7 @@ from ionmc.transport.state import ParticleState, Species
 
 __all__ = [
     "BatchedDepthDoseResult",
+    "BatchedDoseResult",
     "DepthDoseGrid",
     "DepthDoseResult",
     "DepthLateralGrid",

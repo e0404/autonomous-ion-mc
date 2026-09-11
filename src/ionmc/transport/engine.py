@@ -187,6 +187,41 @@ class BatchedDepthDoseResult:
 
 
 @dataclass(frozen=True)
+class BatchedDoseResult:
+    """Per-voxel mean 3-D dose and its statistical uncertainty over independent
+    history batches (decision 0024). ``standard_error_mev`` is the standard error
+    of the mean; the optional LET_d fields are present when ``score_let`` was set."""
+
+    mean_dose3d_mev: np.ndarray  # (nx, ny, nz) mean deposited energy [MeV]
+    standard_error_mev: np.ndarray  # (nx, ny, nz) standard error of the mean [MeV]
+    n_batches: int
+    histories_per_batch: int
+    path: str
+    device: str | None
+    mean_let_d_kev_um: np.ndarray | None = None
+    standard_error_let_kev_um: np.ndarray | None = None
+
+    @property
+    def relative_standard_error(self) -> np.ndarray:
+        """Per-voxel relative standard error of the mean dose where it is positive."""
+        out = np.zeros_like(self.mean_dose3d_mev)
+        nz = self.mean_dose3d_mev > 0.0
+        out[nz] = self.standard_error_mev[nz] / self.mean_dose3d_mev[nz]
+        return out
+
+    def mean_relative_uncertainty(self, min_dose_frac: float = 0.5) -> float:
+        """Mean relative standard error over voxels whose mean dose exceeds
+        ``min_dose_frac`` of the peak mean dose -- the standard MC quality metric
+        (uncertainty is meaningful only where there is appreciable dose). Returns
+        nan if no voxel clears the threshold."""
+        peak = float(self.mean_dose3d_mev.max()) if self.mean_dose3d_mev.size else 0.0
+        mask = self.mean_dose3d_mev > max(0.0, min_dose_frac) * peak
+        if not np.any(mask):
+            return float("nan")
+        return float(np.mean(self.relative_standard_error[mask]))
+
+
+@dataclass(frozen=True)
 class ScatteringResult:
     """Outcome of a 3-D transport run with multiple Coulomb scattering."""
 
@@ -752,6 +787,64 @@ class TransportEngine:
         states = [src.sample(n_histories, seed + i) for i, src in enumerate(sources)]
         combined = _concatenate_states(states)
         return self._scatter_state(combined, grid, path, device, dose_grid, score_let)
+
+    def run_scattering_batched(
+        self,
+        source: PencilBeamSource,
+        grid: DepthLateralGrid,
+        dose_grid: DoseGrid3D,
+        n_histories: int,
+        n_batches: int = 10,
+        seed: int = 12345,
+        path: str = "warp",
+        device: str = "cpu",
+        score_let: bool = False,
+    ) -> BatchedDoseResult:
+        """Run ``n_batches`` independent scattering batches and estimate the
+        per-voxel statistical uncertainty of the mean 3-D dose (decision 0024).
+
+        Each batch transports ``n_histories // n_batches`` histories seeded
+        ``seed+1+b`` (independent Monte Carlo samples) into a ``DoseGrid3D``; the
+        per-voxel standard error of the mean is the batch standard deviation
+        (``ddof=1``) divided by ``sqrt(n_batches)``. When ``score_let`` is set the
+        per-batch LET_d (num/dose) is also reduced to a mean and standard error.
+        Reuses the shared ``_scatter_state`` dispatch, so it is backend-agnostic.
+        """
+        if n_batches < 2:
+            raise ValueError("need at least two batches for an uncertainty estimate")
+        self._check_scatter(dose_grid, score_let)
+        per_batch = max(1, n_histories // n_batches)
+        shape = (n_batches, dose_grid.nx, dose_grid.ny, dose_grid.nz)
+        doses = np.empty(shape, dtype=np.float64)
+        lets = np.empty(shape, dtype=np.float64) if score_let else None
+        for b in range(n_batches):
+            state = source.sample(per_batch, seed + 1 + b)
+            res = self._scatter_state(state, grid, path, device, dose_grid, score_let)
+            dose3d = res.dose3d_mev
+            assert dose3d is not None  # _check_scatter guarantees a dose grid
+            doses[b] = dose3d
+            if lets is not None:
+                let_num = res.let3d_num_mev_per_mm
+                assert let_num is not None  # score_let guarantees the numerator
+                lets[b] = dose_grid.let_d_kev_um(let_num, dose3d)
+        mean = doses.mean(axis=0)
+        sem = doses.std(axis=0, ddof=1) / math.sqrt(n_batches)
+        let_mean = lets.mean(axis=0) if lets is not None else None
+        let_sem = (
+            lets.std(axis=0, ddof=1) / math.sqrt(n_batches)
+            if lets is not None
+            else None
+        )
+        return BatchedDoseResult(
+            mean_dose3d_mev=mean,
+            standard_error_mev=sem,
+            n_batches=n_batches,
+            histories_per_batch=per_batch,
+            path=path,
+            device=device if path == "warp" else None,
+            mean_let_d_kev_um=let_mean,
+            standard_error_let_kev_um=let_sem,
+        )
 
     def _scatter_state(
         self,
