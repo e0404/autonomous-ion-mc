@@ -473,6 +473,7 @@ deterministically and reviewed in one pull request.
 | Stage 5, `DEV-023` (carbon-12 and oxygen-16 primary transport; z² scaling accuracy vs Bethe) | **completed** 2026-09-11 | decision `0028`; `validation/v5_carbon.py` on the host runner (CPU + CUDA, all 5 gates); `tests/ionmc/test_carbon.py`; DEV-023 local validation record; squash-merged into `develop` at `235a95f` |
 | Stage 5, `DEV-024` (bounded carbon nuclear fragmentation: distal fragment dose tail; V5 fragment-tail gate) | **completed** 2026-09-11 | decision `0029`; `src/ionmc/fragmentation.py`; `validation/v5_fragmentation.py` on the host runner (CPU + CUDA); `tests/ionmc/test_fragmentation.py`; DEV-024 local validation record; **closes milestone V5** |
 | Stage 6, `DEV-025` (reproducible benchmark harness + first depth-dose benchmark; foundation for milestone V6) | **in progress** 2026-09-11 | decision `0030` (planned); `src/ionmc/benchmarking.py` (planned); `benchmarks/bench_depth_dose.py` (planned); `tests/ionmc/test_benchmarking.py` (planned) |
+| Stage 6, `DEV-026` (3-D voxel-grid dose benchmark + Warp CUDA history-count scaling sweep) | **in progress** 2026-09-11 | decision `0031` (planned); `benchmarks/bench_dose3d.py` (planned); `tests/ionmc/test_bench_dose3d.py` (planned) |
 | Stage 6 optimisation + release readiness | not started | — |
 
 ## Change log
@@ -753,3 +754,14 @@ deterministically and reviewed in one pull request.
   agreement within budget. Deferred: GPU occupancy/scaling sweeps, benchmarks of the
   other transport paths, memory-footprint and precision studies, a persisted
   regression series, and any actual kernel/memory-layout optimisation.
+- 2026-09-11: `DEV-026` extends the Stage 6 benchmark suite to the **representative
+  treatment-planning workload** — the 3-D voxel-grid dose (ray/voxel DDA traversal +
+  per-step atomic dose scoring), the memory-bound hot kernel (decision `0031`). Reusing
+  the `ionmc.benchmarking` harness, `benchmarks/bench_dose3d.py` times a deterministic
+  150 MeV proton pencil beam scored into a 60×60×150 dose grid, gates the per-history
+  3-D dose cross-backend to the established V4 float32 budget (integral ≤ 1e-5, worst
+  voxel ≤ 5e-3; decision `0021`), and runs a **history-count scaling sweep** on the Warp
+  backends (CUDA 10³–10⁶, CPU 10³–2·10⁴) reporting the throughput-vs-size curve — the
+  meaningful single-GPU protons/s figure the 1-D benchmark deliberately under-utilises.
+  Deferred: scattering-on throughput, grid/beamlet-count scaling, occupancy profiling, a
+  persisted regression series, and any actual kernel optimisation.
