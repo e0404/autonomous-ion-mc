@@ -381,6 +381,29 @@ The beamlet-sum gate is exact (round-off) because the per-beamlet and batched ru
 share the identical seed-partitioned histories. Warp CPU/CUDA results are recorded
 in the DEV-017 local validation record (host run below).
 
+## V4 (LET) - dose-averaged LET scoring (task DEV-018)
+
+Script: ``validation/v4_let.py``. References: NIST PSTAR water electronic stopping
+power (thin-voxel analytic limit), the scored dose energy (dose-weight
+consistency), and cross-backend parity (decisions 0023, 0022).
+
+| check | criterion | result |
+|---|---|---|
+| thin-voxel LET_d == PSTAR S(E) (250/150/100 MeV) | rel <= 2 % and LET_d >= S(E) | ~0.3 % |
+| dose-weight consistency (den == dose, num>0 where dose>0) | exact | pass |
+| distal LET peak (entrance ~0.5445 keV/um, peak distal to dose) | entrance rel <= 5 %, peak > 3 keV/um | 0.545 / ~14 |
+| reference vs Warp CPU LET_d (deterministic, per voxel) | per-voxel <= 5e-3 | ~4.8e-5 |
+| CUDA vs CPU LET_d (deterministic, per voxel) | per-voxel <= 5e-3 | tight (float32) |
+| CUDA vs CPU LET numerator total (scattering on) | total <= 1e-4 | recorded (host) |
+| CUDA vs CPU LET_d per voxel (scattering on) | diagnostic only (decorrelates) | recorded (host) |
+
+LET_d "Method C" uses the tabulated `S(E_mid)`, so it is immune to step
+face-clipping and straggling; the denominator equals the scored dose energy by
+construction. The LET_d ratio inherits the dose scorer's cross-backend story
+(decision 0022): the deterministic per-voxel comparison is the tight, discriminating
+spatial gate, while under scattering only the totals stay tight and the per-voxel
+ratio is a recorded diagnostic.
+
 ## Unit and regression tests
 
 ``tests/ionmc/`` covers units and constants, materials, the RNG mirror

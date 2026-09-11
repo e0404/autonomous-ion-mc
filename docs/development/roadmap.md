@@ -461,7 +461,8 @@ deterministically and reviewed in one pull request.
 | Stage 3, `DEV-014` (scoring grids decoupled from the transport grid; grid-independence; **closed V3**) | **completed** 2026-09-11 | decision `0019`; `validation/v3_scoring_grid.py` on the host runner (CPU + CUDA); `tests/ionmc/test_scoring_grid_decoupling.py`; DEV-014 local validation record; squash-merged into `develop` at `f9e3c90`; **milestone V3 closed** |
 | Stage 3, `DEV-015` (3-D voxel grid with ray/voxel DDA traversal; arbitrary incidence through true voxel geometries) | **completed** 2026-09-11 | decision `0020`; `validation/v3_voxel_grid_3d.py` on the host runner (CPU + CUDA); `tests/ionmc/test_voxel_grid_3d.py`; DEV-015 local validation record; squash-merged into `develop` at `d0df873` |
 | Stage 4, `DEV-016` (lab-frame 3-D dose scoring on the voxel-grid path; prerequisite for beamlet influence matrices) | **completed** 2026-09-11 | decision `0021`; `validation/v4_dose3d.py` on the host runner (CPU + CUDA); `tests/ionmc/test_dose3d.py`; DEV-016 local validation record; squash-merged into `develop` at `e8f89df` |
-| Stage 4, `DEV-017` (beamlet-resolved scoring and sparse dose-influence matrices; V4 beamlet-sum gate) | **in progress** 2026-09-11 | decision `0022`; `validation/v4_influence.py`; `tests/ionmc/test_influence.py` |
+| Stage 4, `DEV-017` (beamlet-resolved scoring and sparse dose-influence matrices; V4 beamlet-sum gate) | **completed** 2026-09-11 | decision `0022`; `validation/v4_influence.py` on the host runner (CPU + CUDA, all 5 gates); `tests/ionmc/test_influence.py`; DEV-017 local validation record; squash-merged into `develop` at `63883c4` |
+| Stage 4, `DEV-018` (dose-averaged LET (LET_d) scoring; V4 LET gate) | **in progress** 2026-09-11 | decision `0023` (planned); `validation/v4_let.py` (planned); `tests/ionmc/test_let.py` (planned) |
 | Stages 4–6 | not started | — |
 
 ## Change log
@@ -631,4 +632,16 @@ deterministically and reviewed in one pull request.
   > 99 % of the energy while making the matrix sparse. Deferred: a GPU
   (voxel, beamlet) hash-table assembly, per-beamlet scoring inside the kernel
   (currently one launch per beamlet), LET/fluence/species-resolved scorers, and
-  beamlet-resolved uncertainty. Next: the remaining V4 items toward milestone V4.
+  beamlet-resolved uncertainty. A review follow-up corrected the cross-backend
+  validation story: the tight, discriminating per-voxel spatial parity is
+  *deterministic* (scattering off, reference-vs-CPU and CPU-vs-CUDA to the float32
+  budget), while under scattering on the per-voxel dose decorrelates for *any*
+  backend pair (float32 CPU vs CUDA is not bit-identical) and only the total stays
+  tight -- a genuine statistical spatial comparison is a deferred cross-cutting
+  item. Squash-merged into `develop` at `63883c4`.
+- 2026-09-11: `DEV-018` begins the **V4 LET gate** with **dose-averaged LET
+  (LET_d) scoring** (decision `0023`), a MUST requirement and the next named V4
+  validation item (LET estimators vs published proton LET-in-water data and
+  analytical limits). LET_d is scored on the lab-frame 3-D grid alongside dose as
+  `Σ ε·L / Σ ε`; the denominator is the existing per-voxel dose energy and the
+  numerator an added `Σ ε·L` accumulator on the reference and Warp CPU/CUDA paths.

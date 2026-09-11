@@ -198,3 +198,30 @@ class DoseGrid3D:
         sz = self.spacing_mm[2]
         centers = oz + (np.arange(self.nz) + 0.5) * sz
         return centers, edep.sum(axis=(0, 1))
+
+    def let_d_kev_um(
+        self,
+        let_num_mev_per_mm: np.ndarray,
+        edep_mev: np.ndarray,
+        min_dose_frac: float = 0.0,
+    ) -> np.ndarray:
+        """Dose-averaged LET ``LET_d = num / den`` [keV/um] (decision ``0023``).
+
+        ``let_num_mev_per_mm`` is the per-voxel ``Sum eps_i * L_i`` numerator
+        (MeV/mm, numerically keV/um since ``1 MeV/mm == 1 keV/um``) and
+        ``edep_mev`` the co-registered dose energy ``Sum eps_i`` (the
+        denominator). LET_d is returned only where the voxel dose exceeds
+        ``min_dose_frac`` of the peak dose (a low-dose reporting mask, because the
+        distal falloff where LET_d is highest is exactly where the dose -- and so
+        the ratio's statistics -- is weakest); masked and zero-dose voxels are 0.
+        """
+        num = np.asarray(let_num_mev_per_mm, dtype=np.float64)
+        den = np.asarray(edep_mev, dtype=np.float64)
+        peak = float(den.max()) if den.size else 0.0
+        threshold = max(0.0, min_dose_frac) * peak
+        out = np.zeros_like(den)
+        mask = den > threshold
+        if threshold <= 0.0:
+            mask = den > 0.0
+        out[mask] = num[mask] / den[mask]
+        return out
