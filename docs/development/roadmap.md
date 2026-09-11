@@ -463,7 +463,8 @@ deterministically and reviewed in one pull request.
 | Stage 4, `DEV-016` (lab-frame 3-D dose scoring on the voxel-grid path; prerequisite for beamlet influence matrices) | **completed** 2026-09-11 | decision `0021`; `validation/v4_dose3d.py` on the host runner (CPU + CUDA); `tests/ionmc/test_dose3d.py`; DEV-016 local validation record; squash-merged into `develop` at `e8f89df` |
 | Stage 4, `DEV-017` (beamlet-resolved scoring and sparse dose-influence matrices; V4 beamlet-sum gate) | **completed** 2026-09-11 | decision `0022`; `validation/v4_influence.py` on the host runner (CPU + CUDA, all 5 gates); `tests/ionmc/test_influence.py`; DEV-017 local validation record; squash-merged into `develop` at `63883c4` |
 | Stage 4, `DEV-018` (dose-averaged LET (LET_d) scoring; V4 LET gate) | **completed** 2026-09-11 | decision `0023`; `validation/v4_let.py` on the host runner (CPU + CUDA, all 6 gates); `tests/ionmc/test_let.py`; DEV-018 local validation record; squash-merged into `develop` at `3b5ddbf` |
-| Stage 4, `DEV-019` (batch-based statistical uncertainty for 3-D dose; V4 "within statistics") | **in progress** 2026-09-11 | decision `0024`; `validation/v4_uncertainty.py`; `tests/ionmc/test_uncertainty.py` |
+| Stage 4, `DEV-019` (batch-based statistical uncertainty for 3-D dose; V4 "within statistics") | **completed** 2026-09-11 | decision `0024`; `validation/v4_uncertainty.py` on the host runner (CPU + CUDA, all 5 gates); `tests/ionmc/test_uncertainty.py`; DEV-019 local validation record; squash-merged into `develop` at `6eb245b` |
+| Stage 4, `DEV-020` (beamlet-resolved planning-aware uncertainty; V4 beamlet-sum within statistics) | **in progress** 2026-09-11 | decision `0025`; `validation/v4_beamlet_uncertainty.py`; `tests/ionmc/test_beamlet_uncertainty.py` |
 | Stages 4–6 | not started | — |
 
 ## Change log
@@ -660,4 +661,17 @@ deterministically and reviewed in one pull request.
   summary and, with `score_let`, the LET_d mean and SEM. Validated: the SEM obeys
   the `1/√N` law (4× histories → ~half the SEM over a shared high-dose mask), the
   batch mean conserves energy, and the batched-mean total agrees across backends.
-  Deferred: beamlet-/influence-resolved (planning-aware) uncertainty.
+  Squash-merged into `develop` at `6eb245b`.
+- 2026-09-11: `DEV-020` adds **beamlet-resolved (planning-aware) uncertainty**
+  (decision `0025`), the SHOULD planning-aware-uncertainty requirement.
+  `assemble_influence_matrix_batched` transports each beamlet over independent
+  batches (seeded `seed + i·n_batches`) and stores the per-voxel mean dose plus its
+  standard error (`data_sigma`) in the sparse matrix; `SparseInfluenceMatrix` gains
+  `beamlet_sigma_flat`, `total_sigma` (√Σσ² over independent beamlets),
+  `beamlet_relative_uncertainty`, and `data_sigma` npz round-tripping. Validated:
+  per-beamlet SEM obeys `1/√N`, and the summed per-beamlet means agree with a
+  high-statistics broad-field dose **within statistics** (≈99.9 % of high-dose
+  voxels within 4σ) — the V4 beamlet-sum gate in its full statistical form,
+  complementing DEV-017's exact same-partition round-off check. Deferred:
+  beamlet-resolved LET_d/fluence uncertainty and correlated-uncertainty
+  propagation into an optimiser.

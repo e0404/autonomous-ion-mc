@@ -426,6 +426,31 @@ practical batch count). Under scattering the per-voxel batched *mean* decorrelat
 across backends like dose (decision 0022), so the cross-backend gate is on the tight
 total.
 
+## V4 (beamlet uncertainty) - beamlet-resolved uncertainty (task DEV-020)
+
+Script: ``validation/v4_beamlet_uncertainty.py``. `assemble_influence_matrix_batched`
+stores each beamlet's per-voxel mean dose and its standard error (`data_sigma`) in
+the sparse influence matrix (decision 0025).
+
+| check | criterion | result |
+|---|---|---|
+| sigma alignment (data_sigma vs data, finite, >= 0) | exact | pass |
+| per-beamlet SE scaling (4x histories -> ~0.5x rel SEM) | ratio in [0.35, 0.71] | ~0.53 |
+| beamlet sum within statistics (vs high-stat broad field) | >= 95 % of hi voxels within 4 sigma | ~99.9 % |
+| reference vs Warp CPU per-beamlet dose (deterministic, per voxel) | per-voxel <= 5e-3 | ~1.8e-5 |
+| CUDA vs CPU per-beamlet dose (deterministic, per voxel) | per-voxel <= 5e-3 | recorded (host) |
+
+The **beamlet_sum_within_statistics** gate is the V4 milestone gate ("sum of beamlet
+doses equals the broad-field dose within statistics") in its full statistical form:
+the summed independent-batch beamlet means agree per voxel with a high-statistics
+broad field within the combined SEM. It complements DEV-017's exact same-partition
+round-off check. Per-beamlet variances add for the broad-field SEM (`√Σσ²`) because
+the beamlets are transported as independent batched estimates. The per-voxel
+`z = |Δ|/σ` uses a ~16-batch SEM, so it is t-distributed (heavier tails than
+normal); the loose 4σ / 95 %-coverage band accommodates that. The cross-backend
+gate validates the per-beamlet *mean*; the per-beamlet *SEM* inherits its
+cross-backend soundness from the single-source batched estimator (decision 0024).
+
 ## Unit and regression tests
 
 ``tests/ionmc/`` covers units and constants, materials, the RNG mirror

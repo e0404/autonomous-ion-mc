@@ -577,3 +577,28 @@ backends (the per-voxel mean under scattering decorrelates like dose, decision
 beamlet-/influence-resolved (planning-aware) uncertainty, a single-pass online
 variance estimator, and the statistical gamma/uncertainty-based cross-backend
 spatial dose comparison this machinery now enables.
+
+## Beamlet-resolved statistical uncertainty (Stage 4, task DEV-020, decision 0025)
+
+DEV-020 makes the dose uncertainty **planning-aware**: it attaches a per-beamlet,
+per-voxel standard error to the sparse dose-influence matrix.
+`assemble_influence_matrix_batched` transports each beamlet `i` over `n_batches`
+independent history batches with `run_scattering_batched` (decision 0024), seeded
+from `seed + i·n_batches` so the per-batch streams never collide across beamlets,
+and stores the per-voxel **mean dose** as the row value with a parallel
+`data_sigma` holding the matching **standard error of the mean**. Thresholding is
+on the mean dose, and `data_sigma` is carried for exactly the kept voxels.
+`SparseInfluenceMatrix` gains `beamlet_sigma_flat`, `total_sigma` (the broad-field
+SEM `√Σ_b σ_b²`, since the beamlets are independent batched estimates),
+`beamlet_relative_uncertainty` (the per-beamlet high-dose quality metric), and
+`.npz` round-tripping of `data_sigma`. The exact single-run matrix (decision 0022,
+`data_sigma=None`) is unchanged.
+
+Validated (decision 0025): the per-beamlet SEM obeys the `1/√N` law; `data_sigma`
+stays aligned with `data`; the summed per-beamlet mean doses agree with a
+high-statistics broad-field dose **within statistics** (≈99.9 % of high-dose voxels
+within 4σ of the combined SEM) — the V4 beamlet-sum gate in its full statistical
+form, complementing DEV-017's exact same-partition round-off additivity; and the
+deterministic per-beamlet mean dose agrees reference-vs-Warp-CPU (and CUDA-vs-CPU)
+per voxel to the float32 budget. Deferred: beamlet-resolved LET_d/fluence
+uncertainty and correlated-uncertainty propagation into an optimiser.
