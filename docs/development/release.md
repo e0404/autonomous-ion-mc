@@ -28,12 +28,15 @@ validations are included automatically; each is run with only the flags it suppo
 
 A `develop` state is release-ready when all of the following hold:
 
-1. the release validation suite passes on the host runner (CPU + CUDA);
-2. the result is recorded for the exact SHA (`record_local_validation`);
-3. the documented validation status and the reproducible benchmark baselines
+1. the release SHA has **passing required CI** (unit tests, lint/pre-commit,
+   type-check, docs build) — the release validation suite is deliberately physics-only
+   and does not re-run the unit/packaging checks, so CI health is a separate criterion;
+2. the release validation suite passes on the host runner (CPU + CUDA);
+3. the result is recorded for the exact SHA (`record_local_validation`);
+4. the documented validation status and the reproducible benchmark baselines
    (`benchmarks/baselines/`) are committed;
-4. the version (`ionmc.__version__`) is set for the release;
-5. the experiment configuration is identified (stamped in the report).
+5. the version (`ionmc.__version__`) is set for the release;
+6. the experiment configuration is identified (stamped in the report).
 
 ## Cutting the release
 

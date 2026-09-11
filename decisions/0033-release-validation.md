@@ -28,16 +28,19 @@ and implements it.
    digests are therefore all re-exercised at the exact release SHA.
 
 2. **Composition is discovered, not hand-maintained.** The orchestrator globs
-   `validation/v*.py`, excluding the `warp_cuda_smoke` diagnostic (not a milestone
-   gate, non-standard interface) and itself, and runs each as a subprocess with only
-   the flags it supports (`--require-cuda`, `--cache-dir`), so new milestone
-   validations are included automatically. Each milestone CLI follows the shared exit
+   `validation/v*.py` — a pattern that by construction matches every milestone gate
+   while excluding both the `warp_cuda_smoke` diagnostic (not a milestone gate,
+   non-standard interface) and this orchestrator itself — and runs each as a
+   subprocess with only the flags it supports (`--require-cuda`, `--cache-dir`), so new
+   milestone validations are included automatically. Each milestone CLI follows the shared exit
    convention (0 pass, 3 gate failure, 4 dataset missing); a 3 **or** a 4 both count
    as not-release-ready (a release requires the datasets present and every gate
    green).
 
-3. **Release criteria.** A `develop` state is release-ready when: the release
-   validation suite passes on the host runner (CPU + CUDA); the result is recorded for
+3. **Release criteria.** A `develop` state is release-ready when: the release SHA has
+   passing required CI (unit tests, lint, type-check, docs — the suite is physics-only
+   and does not re-run these); the release validation suite passes on the host runner
+   (CPU + CUDA); the result is recorded for
    the exact SHA (`record_local_validation`); the documented validation status and the
    reproducible benchmark baselines are committed; the version is set; and the
    experiment configuration is identified (the report stamps `ionmc` / Python / NumPy

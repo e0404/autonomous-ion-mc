@@ -11,8 +11,9 @@ passes.
 Each milestone validation is an independent CLI following the shared exit convention
 (0 pass, 3 gate failure, 4 dataset missing); this orchestrator runs each as a
 subprocess with only the flags it supports, so a dataset-missing (4) or a gate
-failure (3) both count as NOT release-ready. The ``warp_cuda_smoke`` diagnostic is
-excluded (it is not a milestone gate and has a non-standard interface).
+failure (3) both count as NOT release-ready. Composition is discovered by globbing
+``validation/v*.py`` -- a pattern that by construction excludes both the
+``warp_cuda_smoke`` diagnostic (not a milestone gate) and this orchestrator itself.
 
 Exit 0 iff release-ready (all suites pass), 3 otherwise.
 """
@@ -25,6 +26,7 @@ import platform
 import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -38,19 +40,19 @@ VALIDATION_DIR = REPO_ROOT / "validation"
 BENCH_DIR = REPO_ROOT / "benchmarks"
 BASELINE_DIR = BENCH_DIR / "baselines"
 
-#: milestone validation scripts excluded from the release suite (not a gate)
-EXCLUDE = {"release_validation.py", "warp_cuda_smoke.py"}
 #: benchmarks whose physics gate + regression check are part of the release suite
 BENCHMARKS = ("depth_dose_csda", "dose3d")
 BENCH_SCRIPT = {"depth_dose_csda": "bench_depth_dose.py", "dose3d": "bench_dose3d.py"}
+#: how much of a failing suite's output to keep in the report, for diagnosis
+DIAG_CHARS = 800
 
 
 def _supports(path: Path, flag: str) -> bool:
     return flag in path.read_text(encoding="utf-8")
 
 
-def _run(argv: list[str], timeout: int) -> tuple[int, str]:
-    """Run a suite subprocess, returning (returncode, stdout). A timeout or a
+def _run(argv: list[str], timeout: int) -> tuple[int, str, str]:
+    """Run a suite subprocess, returning (returncode, stdout, stderr). A timeout or a
     launch failure is reported as a non-zero code so it counts as not-ready."""
     try:
         proc = subprocess.run(
@@ -62,11 +64,10 @@ def _run(argv: list[str], timeout: int) -> tuple[int, str]:
             check=False,
         )
     except subprocess.TimeoutExpired:
-        return 124, ""
+        return 124, "", f"timeout after {timeout}s"
     except OSError as exc:
-        sys.stderr.write(f"failed to launch {argv}: {exc}\n")
-        return 125, ""
-    return proc.returncode, proc.stdout
+        return 125, "", f"failed to launch: {exc}"
+    return proc.returncode, proc.stdout, proc.stderr
 
 
 def _validation_suites(
@@ -74,8 +75,6 @@ def _validation_suites(
 ) -> list[dict[str, Any]]:
     suites: list[dict[str, Any]] = []
     for script in sorted(VALIDATION_DIR.glob("v*.py")):
-        if script.name in EXCLUDE:
-            continue
         argv = [sys.executable, str(script)]
         if require_cuda and _supports(script, "--require-cuda"):
             argv.append("--require-cuda")
@@ -83,6 +82,35 @@ def _validation_suites(
             argv += ["--cache-dir", cache_dir]
         suites.append({"name": script.stem, "kind": "validation", "argv": argv})
     return suites
+
+
+def _regression_check(bname: str, stdout: str, timeout: int) -> tuple[int, str]:
+    """Run the performance-regression check on a benchmark's stdout report against
+    its committed baseline. Missing/empty stdout is a failure (fail closed): the V6
+    baseline comparison is a required part of the release gate."""
+    if not stdout.strip():
+        return 126, "benchmark produced no report to regression-check"
+    baseline = BASELINE_DIR / f"{bname}.json"
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".json", delete=False, encoding="utf-8"
+    ) as fh:
+        fh.write(stdout)
+        report_path = Path(fh.name)
+    try:
+        rc, _, err = _run(
+            [
+                sys.executable,
+                str(BENCH_DIR / "check_regression.py"),
+                "--report",
+                str(report_path),
+                "--baseline",
+                str(baseline),
+            ],
+            timeout,
+        )
+    finally:
+        report_path.unlink(missing_ok=True)
+    return rc, err
 
 
 def main() -> int:
@@ -109,7 +137,6 @@ def main() -> int:
     }
 
     suites = _validation_suites(args.cache_dir, args.require_cuda)
-    # benchmark physics gate + regression check per benchmark
     for name in BENCHMARKS:
         script = BENCH_DIR / BENCH_SCRIPT[name]
         argv = [sys.executable, str(script)]
@@ -125,45 +152,36 @@ def main() -> int:
 
     all_passed = True
     for suite in suites:
-        rc, stdout = _run(suite["argv"], args.timeout)
+        rc, stdout, stderr = _run(suite["argv"], args.timeout)
         passed = rc == 0
-        entry = {
+        entry: dict[str, Any] = {
             "name": suite["name"],
             "kind": suite["kind"],
             "returncode": rc,
             "passed": passed,
         }
-        # for a benchmark, also run the regression check against the committed baseline
-        if suite["kind"] == "benchmark" and stdout:
+        if suite["kind"] == "benchmark":
+            # the regression check is a REQUIRED part of the release gate (fail closed)
             bname = suite["name"].split(":", 1)[1]
-            baseline = BASELINE_DIR / f"{bname}.json"
-            report_path = REPO_ROOT / f".release_report_{bname}.json"
-            try:
-                report_path.write_text(stdout, encoding="utf-8")
-                rrc, _ = _run(
-                    [
-                        sys.executable,
-                        str(BENCH_DIR / "check_regression.py"),
-                        "--report",
-                        str(report_path),
-                        "--baseline",
-                        str(baseline),
-                    ],
-                    args.timeout,
-                )
-            finally:
-                report_path.unlink(missing_ok=True)
-            reg_passed = rrc == 0
+            rrc, rerr = _regression_check(bname, stdout, args.timeout)
             entry["regression_returncode"] = rrc
-            entry["regression_passed"] = reg_passed
-            passed = passed and reg_passed
+            entry["regression_passed"] = rrc == 0
+            passed = passed and rrc == 0
             entry["passed"] = passed
+            if rrc != 0 and rerr:
+                entry["regression_diagnostic"] = rerr[:DIAG_CHARS]
+        if not passed:
+            # keep a bounded tail of the failing suite's output for diagnosis
+            tail = (stderr or stdout or "").strip()
+            if tail:
+                entry["diagnostic"] = tail[-DIAG_CHARS:]
         all_passed = all_passed and passed
         report["results"].append(entry)
 
     report["all_passed"] = all_passed
     report["n_suites"] = len(report["results"])
     report["n_passed"] = sum(1 for r in report["results"] if r["passed"])
+    report["failed"] = [r["name"] for r in report["results"] if not r["passed"]]
     report["release_ready"] = all_passed
     json.dump(report, sys.stdout, indent=2)
     sys.stdout.write("\n")
