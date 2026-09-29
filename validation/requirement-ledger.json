@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "revision": 1,
+  "revision": 2,
   "updated": "2026-09-30",
   "status_vocabulary": [
     "planned",
@@ -427,13 +427,15 @@
       "id": "V1-MUST-036",
       "title": "Reproducible benchmarking",
       "source": "REQUIREMENTS.md",
-      "status": "planned",
+      "status": "in-progress",
       "suites": [
         "PROV-OUTPUT",
         "PERF-WORKLOADS"
       ],
-      "tasks": [],
-      "notes": ""
+      "tasks": [
+        "V2-002"
+      ],
+      "notes": "Calibration measured and numeric targets frozen in V2-002 (decision 0039); measurements against targets follow implementation."
     },
     {
       "id": "V1-MUST-037",
@@ -632,23 +634,27 @@
       "id": "V2-PERF",
       "title": "frozen application-level performance/resource gates",
       "source": "experiment/v2/REQUIREMENTS.md",
-      "status": "planned",
+      "status": "in-progress",
       "suites": [
         "PERF-WORKLOADS"
       ],
-      "tasks": [],
-      "notes": ""
+      "tasks": [
+        "V2-002"
+      ],
+      "notes": "Calibration measured and numeric targets frozen in V2-002 (decision 0039); measurements against targets follow implementation."
     },
     {
       "id": "V2-RELEASE",
       "title": "complete qualification and promotion",
       "source": "experiment/v2/REQUIREMENTS.md",
-      "status": "planned",
+      "status": "in-progress",
       "suites": [
         "WF-QUALITY-RELEASE"
       ],
-      "tasks": [],
-      "notes": ""
+      "tasks": [
+        "V2-002"
+      ],
+      "notes": "Release plan with 18 suites and acceptance criteria frozen in V2-002."
     }
   ]
 }

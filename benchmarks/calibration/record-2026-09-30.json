@@ -1,0 +1,399 @@
+{
+  "schema_version": 1,
+  "task_id": "V2-002",
+  "date": "2026-09-30",
+  "purpose": "Pre-optimization calibration of the workstation, NVIDIA Warp and the registered reference engines for freezing the v2 performance targets (decision 0039). Not release evidence.",
+  "hardware": {
+    "cpu_model": "13th Gen Intel(R) Core(TM) i9-13900K",
+    "host_memory_kib": 32733056,
+    "logical_cpus": 32,
+    "platform": "Linux-6.18.40.1-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+    "python": "3.12.0",
+    "gpu": {
+      "arch": 86,
+      "name": "NVIDIA RTX A6000",
+      "total_memory_bytes": 51526500352
+    },
+    "cuda_toolkit": "12.9",
+    "cuda_driver_reported_by_warp": "13.4",
+    "warp": "1.17.0"
+  },
+  "primitives": {
+    "source_host_run": "RUN-20260929T224600Z-098609df",
+    "code_sha": "9d6412cd76ed6e2fc1f4080a10fffb3484d2d97b",
+    "method": "benchmarks/calibration/primitives.py --clear-cache --devices cpu cuda:0 --particles 10000 100000 1000000 --steps 200 --repeats 3 inside the controlled host runner (bubblewrap, no network). Synthetic kernel: per particle-step three RNG draws, log-table lookup with linear interpolation, energy decrement, Box-Muller angle, direction rotation, voxel index and float atomic deposit into 60x60x150; particles stop after ~150 steps, so effective rates are 0.75 x the reported upper bound. Best of 3 launches, wall time around launch+synchronize.",
+    "init_seconds_fresh_process_after_cache_clear": 3.790000846493058e-06,
+    "cold_compile_seconds": {
+      "cpu": 1.3009918480001943,
+      "cuda:0": 0.8415061100004095
+    },
+    "host_peak_rss_kib": 444204,
+    "step_kernel": [
+      {
+        "device": "cpu",
+        "dtype": "float32",
+        "particles": 10000,
+        "deposit": true,
+        "best_seconds": 0.04242527399946994,
+        "seconds": [
+          0.04242527399946994,
+          0.04282355000032112,
+          0.04264709699964442
+        ],
+        "particle_steps_max": 2000000,
+        "mean_final_energy": 0.20438800752162933,
+        "attributable_device_bytes": null
+      },
+      {
+        "device": "cpu",
+        "dtype": "float32",
+        "particles": 10000,
+        "deposit": false,
+        "best_seconds": 0.03972216500005743,
+        "seconds": [
+          0.04019690300083312,
+          0.03972216500005743,
+          0.04025515300054394
+        ],
+        "particle_steps_max": 2000000,
+        "mean_final_energy": 0.20438800752162933,
+        "attributable_device_bytes": null
+      },
+      {
+        "device": "cpu",
+        "dtype": "float64",
+        "particles": 10000,
+        "deposit": true,
+        "best_seconds": 0.06120537999959197,
+        "seconds": [
+          0.06186024199996609,
+          0.06157700800031307,
+          0.06120537999959197
+        ],
+        "particle_steps_max": 2000000,
+        "mean_final_energy": 0.204388872071994,
+        "attributable_device_bytes": null
+      },
+      {
+        "device": "cpu",
+        "dtype": "float64",
+        "particles": 10000,
+        "deposit": false,
+        "best_seconds": 0.056911273999503464,
+        "seconds": [
+          0.05697762599993439,
+          0.056911273999503464,
+          0.057427448000453296
+        ],
+        "particle_steps_max": 2000000,
+        "mean_final_energy": 0.204388872071994,
+        "attributable_device_bytes": null
+      },
+      {
+        "device": "cpu",
+        "dtype": "float32",
+        "particles": 100000,
+        "deposit": true,
+        "best_seconds": 0.41675359699911496,
+        "seconds": [
+          0.4232966800009308,
+          0.41675359699911496,
+          0.4182903509990865
+        ],
+        "particle_steps_max": 20000000,
+        "mean_final_energy": 0.1963042914867401,
+        "attributable_device_bytes": null
+      },
+      {
+        "device": "cpu",
+        "dtype": "float32",
+        "particles": 100000,
+        "deposit": false,
+        "best_seconds": 0.3934714669994719,
+        "seconds": [
+          0.39958011799899396,
+          0.3934714669994719,
+          0.3953474499994627
+        ],
+        "particle_steps_max": 20000000,
+        "mean_final_energy": 0.1963042914867401,
+        "attributable_device_bytes": null
+      },
+      {
+        "device": "cpu",
+        "dtype": "float64",
+        "particles": 100000,
+        "deposit": true,
+        "best_seconds": 0.6017737269994541,
+        "seconds": [
+          0.6017737269994541,
+          0.6094819230002031,
+          0.61403641600009
+        ],
+        "particle_steps_max": 20000000,
+        "mean_final_energy": 0.19757302397187973,
+        "attributable_device_bytes": null
+      },
+      {
+        "device": "cpu",
+        "dtype": "float64",
+        "particles": 100000,
+        "deposit": false,
+        "best_seconds": 0.5641511799985892,
+        "seconds": [
+          0.5641511799985892,
+          0.5658416849983041,
+          0.575714249000157
+        ],
+        "particle_steps_max": 20000000,
+        "mean_final_energy": 0.19757302397187973,
+        "attributable_device_bytes": null
+      },
+      {
+        "device": "cuda:0",
+        "dtype": "float32",
+        "particles": 10000,
+        "deposit": true,
+        "best_seconds": 0.0010705719996622065,
+        "seconds": [
+          0.0011248209993937053,
+          0.0010705719996622065,
+          0.001089332999981707
+        ],
+        "particle_steps_max": 2000000,
+        "mean_final_energy": 0.2043880671262741,
+        "attributable_device_bytes": 0
+      },
+      {
+        "device": "cuda:0",
+        "dtype": "float32",
+        "particles": 10000,
+        "deposit": false,
+        "best_seconds": 0.0010232619988528313,
+        "seconds": [
+          0.001035298999340739,
+          0.0010232619988528313,
+          0.001028437000059057
+        ],
+        "particle_steps_max": 2000000,
+        "mean_final_energy": 0.2043880671262741,
+        "attributable_device_bytes": 0
+      },
+      {
+        "device": "cuda:0",
+        "dtype": "float64",
+        "particles": 10000,
+        "deposit": true,
+        "best_seconds": 0.01791404300092836,
+        "seconds": [
+          0.019851924998874892,
+          0.01796982399901026,
+          0.01791404300092836
+        ],
+        "particle_steps_max": 2000000,
+        "mean_final_energy": 0.20438887207199397,
+        "attributable_device_bytes": 0
+      },
+      {
+        "device": "cuda:0",
+        "dtype": "float64",
+        "particles": 10000,
+        "deposit": false,
+        "best_seconds": 0.017979655000090133,
+        "seconds": [
+          0.017979655000090133,
+          0.01798356099970988,
+          0.019911481000235653
+        ],
+        "particle_steps_max": 2000000,
+        "mean_final_energy": 0.20438887207199397,
+        "attributable_device_bytes": 0
+      },
+      {
+        "device": "cuda:0",
+        "dtype": "float32",
+        "particles": 100000,
+        "deposit": true,
+        "best_seconds": 0.003530373000103282,
+        "seconds": [
+          0.00360021899905405,
+          0.003530373000103282,
+          0.003680087998873205
+        ],
+        "particle_steps_max": 20000000,
+        "mean_final_energy": 0.19630444049835205,
+        "attributable_device_bytes": 0
+      },
+      {
+        "device": "cuda:0",
+        "dtype": "float32",
+        "particles": 100000,
+        "deposit": false,
+        "best_seconds": 0.0026064230005431455,
+        "seconds": [
+          0.0026350110001658322,
+          0.0026064230005431455,
+          0.002607694001198979
+        ],
+        "particle_steps_max": 20000000,
+        "mean_final_energy": 0.19630444049835205,
+        "attributable_device_bytes": 0
+      },
+      {
+        "device": "cuda:0",
+        "dtype": "float64",
+        "particles": 100000,
+        "deposit": true,
+        "best_seconds": 0.018050343000140856,
+        "seconds": [
+          0.10284594499898958,
+          0.026272209999660845,
+          0.018050343000140856
+        ],
+        "particle_steps_max": 20000000,
+        "mean_final_energy": 0.19757302397187979,
+        "attributable_device_bytes": 0
+      },
+      {
+        "device": "cuda:0",
+        "dtype": "float64",
+        "particles": 100000,
+        "deposit": false,
+        "best_seconds": 0.017980158001591917,
+        "seconds": [
+          0.01801408299979812,
+          0.01807839100001729,
+          0.017980158001591917
+        ],
+        "particle_steps_max": 20000000,
+        "mean_final_energy": 0.19757302397187979,
+        "attributable_device_bytes": 0
+      },
+      {
+        "device": "cuda:0",
+        "dtype": "float32",
+        "particles": 1000000,
+        "deposit": true,
+        "best_seconds": 0.006556477999765775,
+        "seconds": [
+          0.0065643779998936225,
+          0.006556477999765775,
+          0.00658333299907099
+        ],
+        "particle_steps_max": 200000000,
+        "mean_final_energy": 0.20539385080337524,
+        "attributable_device_bytes": 0
+      },
+      {
+        "device": "cuda:0",
+        "dtype": "float32",
+        "particles": 1000000,
+        "deposit": false,
+        "best_seconds": 0.004283939000742976,
+        "seconds": [
+          0.004307909999624826,
+          0.004292678999263444,
+          0.004283939000742976
+        ],
+        "particle_steps_max": 200000000,
+        "mean_final_energy": 0.20539385080337524,
+        "attributable_device_bytes": 0
+      },
+      {
+        "device": "cuda:0",
+        "dtype": "float64",
+        "particles": 1000000,
+        "deposit": true,
+        "best_seconds": 0.1612336990001495,
+        "seconds": [
+          0.16293747799863922,
+          0.16199762399992323,
+          0.1612336990001495
+        ],
+        "particle_steps_max": 200000000,
+        "mean_final_energy": 0.20593059003825823,
+        "attributable_device_bytes": 33554432
+      },
+      {
+        "device": "cuda:0",
+        "dtype": "float64",
+        "particles": 1000000,
+        "deposit": false,
+        "best_seconds": 0.15950093700121215,
+        "seconds": [
+          0.16056782299892802,
+          0.15950093700121215,
+          0.16177493800023512
+        ],
+        "particle_steps_max": 200000000,
+        "mean_final_energy": 0.20593059003825823,
+        "attributable_device_bytes": 0
+      }
+    ],
+    "derived": {
+      "cuda_float32_effective_steps_per_second_1e6_particles_with_atomics": 22879804758.99939,
+      "cuda_float64_effective_steps_per_second_1e6_particles_with_atomics": 930347950.1333498,
+      "cuda_float32_effective_steps_per_second_1e5_particles_with_atomics": 4249291784.7025495,
+      "cpu_float32_effective_steps_per_second_single_thread": 35992801.439712055,
+      "note": "Warp CPU kernels execute on a single host thread; float64 on the A6000 is ~25x slower than float32 (1/32 FP64 rate)."
+    }
+  },
+  "reference_engines": {
+    "workload": "proton-3d envelope: 150 MeV protons, 120 x 120 x 300 mm water, 2 mm scoring, single thread, full default physics of each engine",
+    "topas": {
+      "run_id": "REF-9b1409ed46826c2c82b9-ebf89c46",
+      "histories": 10000,
+      "execution_seconds": 9.389,
+      "initialization_seconds": 0.053,
+      "histories_per_second": 1065.0761529449355,
+      "physics": "Geant4 11.4.2 QGSP_BIC + EM opt4, 0.1 mm cuts, electrons transported",
+      "case": "validation/references/calibration/topas-proton-3d"
+    },
+    "mcsquare": {
+      "run_id": "REF-79a06b4029c303bdaae2-cf425f13",
+      "histories": 100000,
+      "mc_seconds": 1.591,
+      "initialization_seconds": 0.09,
+      "histories_per_second": 62853.55122564425,
+      "physics": "MCsquare defaults, nuclear + secondary p/d/alpha, E_Cut_Pro 0.5 MeV, D_Max 2 mm",
+      "notes": "26 primaries generated outside the geometry (nominal BDL spot)",
+      "case": "validation/references/calibration/mcsquare-proton-3d"
+    },
+    "fred": {
+      "run_id": "REF-0ffa92d1284ad4b51b89-354a38ab",
+      "histories": 100000,
+      "tracking_seconds": 3.38,
+      "initialization_seconds": 0.94,
+      "histories_per_second": 29581.0,
+      "secondary_fraction": 0.333,
+      "physics": "FRED 3.76 defaults (I=75 eV, DTmax 7 %, 50 um residual-range cut, MCS mode 6, nuclear on)",
+      "case": "validation/references/calibration/fred-proton-3d"
+    }
+  },
+  "workload_step_estimates": {
+    "proton-3d": {
+      "csda_range_mm_150MeV_water": 157.6,
+      "max_step_mm": 1.0,
+      "energy_step_fraction": 0.1,
+      "estimated_primary_steps": 200,
+      "secondary_overhead": 0.15,
+      "estimated_steps_per_history": 230,
+      "histories": 1000000,
+      "estimated_total_steps": 230000000.0
+    },
+    "influence": {
+      "histories": 1000000,
+      "beamlets": 100,
+      "estimated_steps_per_history": 230,
+      "estimated_total_steps": 230000000.0,
+      "extra": "per-beamlet dense scratch grids 100 x 540k float32 = 216 MB; sparse assembly on host"
+    },
+    "carbon-fragments": {
+      "range_mm_290MeVu_water_approx": 165,
+      "estimated_steps_per_history": 500,
+      "note": "fragments (H, He, Li, Be, B, C isotopes) roughly double the charged-particle path length per history",
+      "histories": 1000000,
+      "estimated_total_steps": 500000000.0
+    }
+  }
+}

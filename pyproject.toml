@@ -35,7 +35,7 @@ include = ["src/ionmc", "hatch_build.py", "README.md", "pyproject.toml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
+pythonpath = ["src", "."]
 markers = [
     "local: local scientific validation; excluded from lightweight GitHub CI",
     "cuda: requires a CUDA device through the controlled host runner",
