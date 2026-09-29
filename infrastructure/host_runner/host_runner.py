@@ -12,9 +12,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-WORKTREE_ROOT = Path.home() / "aiprojects" / "ion-mc-worktrees"
-RUN_ROOT = Path.home() / ".local" / "share" / "ionmc-experiment" / "host-runs"
-CACHE_ROOT = Path.home() / ".cache" / "ionmc-experiment" / "host-runner"
+WORKTREE_ROOT = Path(__file__).resolve().parents[2].parent / (Path(__file__).resolve().parents[2].name + "-worktrees")
+IS_V2 = (Path(__file__).resolve().parents[2] / ".ionmc-condition.json").exists()
+RUN_ROOT = Path.home() / ".local" / "share" / "ionmc-experiment" / ("host-runs-v2" if IS_V2 else "host-runs")
+CACHE_ROOT = Path.home() / ".cache" / "ionmc-experiment" / ("host-runner-v2" if IS_V2 else "host-runner")
 HOST_VENV = CACHE_ROOT / "venv"
 SANDBOX_VENV = str(HOST_VENV)
 
@@ -149,7 +150,7 @@ def build_bwrap_command(worktree: Path, argv: list[str]) -> list[str]:
         "--dir", str(Path.home()),
         "--dir", str(Path.home() / ".cache"),
         "--dir", str(Path.home() / ".cache" / "ionmc-experiment"),
-        "--dir", str(Path.home() / ".cache" / "ionmc-experiment" / "host-runner"),
+        "--dir", str(CACHE_ROOT),
         "--ro-bind", str(HOST_VENV), str(HOST_VENV),
     ])
 
@@ -197,6 +198,8 @@ def run_validation(
     task_id: str,
     argv: list[str],
     timeout_seconds: int,
+    *,
+    release_root: Path | None = None,
 ) -> dict:
     if timeout_seconds < 1 or timeout_seconds > MAX_TIMEOUT_SECONDS:
         raise ValueError(
@@ -204,7 +207,17 @@ def run_validation(
         )
 
     ensure_runtime_dirs()
-    worktree = inspect_worktree(task_id)
+    if release_root is None:
+        worktree = inspect_worktree(task_id)
+    else:
+        condition = json.loads((release_root / ".ionmc-condition.json").read_text())
+        if (condition.get("experiment_id") != "experiment-v2"
+                or git_text(release_root, "branch", "--show-current") != condition["integration_branch"]
+                or git_text(release_root, "status", "--porcelain")):
+            raise RuntimeError("Release validation requires a clean v2 integration checkout")
+        worktree = {"path": release_root, "branch": condition["integration_branch"],
+                    "sha": git_text(release_root, "rev-parse", "HEAD")}
+
 
     run_id, run_dir = create_run_dir(task_id)
 

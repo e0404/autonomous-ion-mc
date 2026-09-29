@@ -33,6 +33,12 @@ nav = [
 
   { "Experiment" = [
     "experiment/index.md",
+    { "V2 setup" = "experiment/v2/SETUP.md" },
+    { "V2 protocol" = "experiment/v2/PROTOCOL.md" },
+    { "V2 requirements" = "experiment/v2/REQUIREMENTS.md" },
+    { "V2 operations" = "experiment/v2/AGENTS.md" },
+    { "V2 telemetry" = "experiment/v2/TELEMETRY.md" },
+    { "V2 kickoff" = "experiment/prompts/kickoff-v2.md" },
     { "Protocol" = "experiment/protocol.md" },
     { "Requirements" = "experiment/requirements.md" },
     { "Kickoff prompt" = "experiment/prompts/kickoff-v1.md" },

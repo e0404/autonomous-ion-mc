@@ -1,0 +1,28 @@
+{
+  "schema_version": 2,
+  "phase": "setup verification in progress; no scientific v2 implementation",
+  "v1_final_sha": "3a2e8953be0034d75a29ccf2b04640353759982b",
+  "tests": "308 passed in 4.22s",
+  "docs": "zensical strict build passed",
+  "mcp": "research/release stdio initialization and tool discovery passed",
+  "reference_pilots": {
+    "topas": "native 100-history score output produced",
+    "mcsquare": "native 1024-history dose produced; 52 particles outside fixture geometry",
+    "fred": "native 100-history CPU dose produced; safe internal output aliases supported"
+  },
+  "qualification": "execution smoke only, not scientific validation",
+  "notification": {
+    "local_receiver": "covered by infrastructure tests",
+    "operator_delivery": "not tested: IONMC_NTFY_URL absent in this session"
+  },
+  "remote_ci": "pending publication",
+  "fresh_start": "pending bootstrap verification",
+  "performance_targets": "unratified; mandatory early calibration before substantial optimization",
+  "precommit": "all checks passed",
+  "public_data_smoke": {
+    "source": "NIST ASTAR landing page; exploratory infrastructure test",
+    "sha256": "5a42c0eb6d8f0705a9a764e850a641fd2fb88ad3ebb15e810cd516d52ce1a9c7",
+    "bytes": 12307,
+    "note": "Authentication-free egress proxy required in this session. This page is not physical validation data."
+  }
+}

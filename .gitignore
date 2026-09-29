@@ -67,3 +67,6 @@ docs/experiment/requirements.md
 docs/experiment/prompts/
 docs/experiment/decisions.md
 site/
+
+# Generated v2 condition documentation
+docs/experiment/v2/

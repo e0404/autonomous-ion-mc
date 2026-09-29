@@ -8,8 +8,12 @@ import sys
 from pathlib import Path
 
 
-REPO = Path.home() / "aiprojects" / "ion-mc"
-WORKTREE_ROOT = Path.home() / "aiprojects" / "ion-mc-worktrees"
+REPO = Path(__file__).resolve().parents[2]
+WORKTREE_ROOT = Path(__file__).resolve().parents[2].parent / (Path(__file__).resolve().parents[2].name + "-worktrees")
+
+
+CONDITION = REPO / ".ionmc-condition.json"
+BASE_BRANCH = json.loads(CONDITION.read_text())["integration_branch"] if CONDITION.exists() else "develop"
 
 
 def git(*args: str, cwd: Path = REPO, check: bool = True) -> subprocess.CompletedProcess:
@@ -57,7 +61,7 @@ def path_for(task_id: str) -> Path:
 
 def ensure_repo_ready():
     branch = git_text("branch", "--show-current")
-    if branch != "develop":
+    if branch != BASE_BRANCH:
         raise RuntimeError(
             f"Main checkout must be on develop, currently on {branch!r}"
         )
@@ -66,10 +70,10 @@ def ensure_repo_ready():
     if status:
         raise RuntimeError("Main develop checkout is not clean")
 
-    git("fetch", "origin", "develop")
+    git("fetch", "origin", BASE_BRANCH)
 
-    local = git_text("rev-parse", "develop")
-    remote = git_text("rev-parse", "origin/develop")
+    local = git_text("rev-parse", BASE_BRANCH)
+    remote = git_text("rev-parse", f"origin/{BASE_BRANCH}")
 
     if local != remote:
         raise RuntimeError(
@@ -122,15 +126,15 @@ def create(task_id: str, description: str | None):
 
     WORKTREE_ROOT.mkdir(parents=True, exist_ok=True)
 
-    git("worktree", "add", "-b", branch, str(path), "develop")
+    git("worktree", "add", "-b", branch, str(path), BASE_BRANCH)
 
     result = {
         "status": "created",
         "task_id": task_id,
         "branch": branch,
         "worktree": str(path),
-        "base_branch": "develop",
-        "base_sha": git_text("rev-parse", "develop"),
+        "base_branch": BASE_BRANCH,
+        "base_sha": git_text("rev-parse", BASE_BRANCH),
         "head_sha": git_text("rev-parse", "HEAD", cwd=path),
     }
 

@@ -8,8 +8,8 @@ import subprocess
 from pathlib import Path
 
 
-REPO = Path.home() / "aiprojects" / "ion-mc"
-WORKTREE_ROOT = Path.home() / "aiprojects" / "ion-mc-worktrees"
+REPO = Path(__file__).resolve().parents[2]
+WORKTREE_ROOT = Path(__file__).resolve().parents[2].parent / (Path(__file__).resolve().parents[2].name + "-worktrees")
 
 VALIDATION_TOOL = (
     Path(__file__).resolve().parents[2]
@@ -17,6 +17,10 @@ VALIDATION_TOOL = (
     / "validation"
     / "local_validation.py"
 )
+
+CONDITION = REPO / ".ionmc-condition.json"
+BASE_BRANCH = json.loads(CONDITION.read_text())["integration_branch"] if CONDITION.exists() else "develop"
+
 
 def run(
     command: list[str],
@@ -103,7 +107,7 @@ def commits_ahead(path: Path) -> int:
     output = git_text(
         "rev-list",
         "--count",
-        "origin/develop..HEAD",
+        f"origin/{BASE_BRANCH}..HEAD",
         cwd=path,
     )
     return int(output)
@@ -120,7 +124,7 @@ def find_open_pr(branch: str) -> dict | None:
         "--head",
         branch,
         "--base",
-        "develop",
+        BASE_BRANCH,
         "--state",
         "open",
         "--json",
@@ -144,7 +148,7 @@ def push_task(task_id: str):
     path, branch = ensure_worktree(task_id)
     ensure_clean(path)
 
-    git("fetch", "origin", "develop", cwd=path)
+    git("fetch", "origin", BASE_BRANCH, cwd=path)
 
     ahead = commits_ahead(path)
 
@@ -194,7 +198,7 @@ def create_pr(task_id: str, title: str, body: str):
         "--repo",
         repo,
         "--base",
-        "develop",
+        BASE_BRANCH,
         "--head",
         branch,
         "--title",
@@ -591,7 +595,7 @@ def ci_failure_logs(
 def sync_develop():
     branch = git_text("branch", "--show-current", cwd=REPO)
 
-    if branch != "develop":
+    if branch != BASE_BRANCH:
         raise RuntimeError(
             f"Primary checkout must be on develop, currently {branch}"
         )
@@ -603,8 +607,8 @@ def sync_develop():
             "Primary develop checkout is dirty; refusing synchronization"
         )
 
-    git("fetch", "origin", "develop", cwd=REPO)
-    git("merge", "--ff-only", "origin/develop", cwd=REPO)
+    git("fetch", "origin", BASE_BRANCH, cwd=REPO)
+    git("merge", "--ff-only", f"origin/{BASE_BRANCH}", cwd=REPO)
 
 def require_local_validation(task_id: str):
     proc = subprocess.run(
@@ -661,7 +665,7 @@ def merge_pr(task_id: str):
         "branch": branch,
         "pr_number": pr["number"],
         "pr_url": pr["url"],
-        "develop_sha": git_text("rev-parse", "develop", cwd=REPO),
+        "develop_sha": git_text("rev-parse", BASE_BRANCH, cwd=REPO),
         "branch_preserved": True,
         "gh_output": proc.stdout.strip(),
     }

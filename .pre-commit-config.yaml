@@ -3,6 +3,7 @@ repos:
     rev: v6.0.0
     hooks:
       - id: trailing-whitespace
+        exclude: ^experiment/prompts/prepare-v2\.md$
       - id: end-of-file-fixer
         exclude: ^(?:\.claude/(?:agents|hooks)/|\.claude/settings\.json$|\.mcp\.json$)
       - id: check-yaml
@@ -21,6 +22,15 @@ repos:
         files: ^(src|tests/ionmc)/.*\.py$
       - id: ruff-format
         files: ^(src|tests/ionmc)/.*\.py$
+
+      - id: ruff
+        name: ruff-v2-infrastructure
+        args: ["--fix", "--config", "experiment/v2/ruff.toml"]
+        files: ^(?:infrastructure/experiment_v2/|tests/infrastructure/v2/).*\.py$|^infrastructure/mcp/(?:research|release)_mcp\.py$
+      - id: ruff-format
+        name: ruff-format-v2-infrastructure
+        args: ["--config", "experiment/v2/ruff.toml"]
+        files: ^(?:infrastructure/experiment_v2/|tests/infrastructure/v2/).*\.py$|^infrastructure/mcp/(?:research|release)_mcp\.py$
 
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.17.1

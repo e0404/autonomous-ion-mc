@@ -5,10 +5,10 @@
       "command": "uv",
       "args": [
         "--project",
-        "/home/wahln/aiprojects/ion-mc/infrastructure/mcp/env",
+        "infrastructure/mcp/env",
         "run",
         "python",
-        "/home/wahln/aiprojects/ion-mc/infrastructure/mcp/codex_mcp.py"
+        "infrastructure/mcp/codex_mcp.py"
       ],
       "env": {}
     },
@@ -17,10 +17,10 @@
       "command": "uv",
       "args": [
         "--project",
-        "/home/wahln/aiprojects/ion-mc/infrastructure/mcp/env",
+        "infrastructure/mcp/env",
         "run",
         "python",
-        "/home/wahln/aiprojects/ion-mc/infrastructure/mcp/task_mcp.py"
+        "infrastructure/mcp/task_mcp.py"
       ],
       "env": {}
     },
@@ -81,6 +81,30 @@
         "run",
         "python",
         "infrastructure/mcp/host_runner_mcp.py"
+      ],
+      "env": {}
+    },
+    "v2-research": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "--project",
+        "infrastructure/mcp/env",
+        "run",
+        "python",
+        "infrastructure/mcp/research_mcp.py"
+      ],
+      "env": {}
+    },
+    "v2-release": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "--project",
+        "infrastructure/mcp/env",
+        "run",
+        "python",
+        "infrastructure/mcp/release_mcp.py"
       ],
       "env": {}
     }

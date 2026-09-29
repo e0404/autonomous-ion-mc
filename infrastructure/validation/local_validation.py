@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-WORKTREE_ROOT = Path.home() / "aiprojects" / "ion-mc-worktrees"
+WORKTREE_ROOT = Path(__file__).resolve().parents[2].parent / (Path(__file__).resolve().parents[2].name + "-worktrees")
 
 VALIDATION_ROOT = Path(
     os.environ.get(

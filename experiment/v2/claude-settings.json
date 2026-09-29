@@ -1,0 +1,323 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "disableClaudeAiConnectors": true,
+  "permissions": {
+    "defaultMode": "auto",
+    "disableBypassPermissionsMode": "disable",
+    "blockReadsOutsideWorkingDirectories": false,
+    "allow": [
+      "Edit(src/**)",
+      "Edit(tests/**)",
+      "Edit(decisions/**)",
+      "Edit(validation/**)",
+      "Edit(benchmarks/**)",
+      "Edit(reference_requests/**)",
+      "Edit(docs/**)",
+      "Edit(infrastructure/**)",
+      "Edit(.github/**)",
+      "Edit(README.md)",
+      "Edit(AGENTS.md)",
+      "Edit(CLAUDE.md)",
+      "Edit(EXPERIMENT.md)",
+      "Edit(REQUIREMENTS.md)",
+      "Edit(pyproject.toml)",
+      "Edit(uv.lock)",
+      "Edit(.pre-commit-config.yaml)",
+      "Bash(git *)",
+      "Bash(uv *)",
+      "Bash(python *)",
+      "Bash(python3 *)",
+      "Bash(pytest *)",
+      "Bash(pre-commit *)",
+      "mcp__codex-worker",
+      "mcp__task-manager",
+      "mcp__human-intervention",
+      "mcp__task-integration",
+      "mcp__validation-manager",
+      "mcp__task-commit",
+      "mcp__host-runner",
+      "mcp__v2-research",
+      "mcp__v2-release",
+      "Edit(experiment/v2/**)"
+    ],
+    "ask": [
+      "Bash(git push *)",
+      "Bash(gh pr merge *)",
+      "Bash(gh release create *)"
+    ],
+    "deny": [
+      "Bash(sudo *)",
+      "Bash(su *)",
+      "Read(~/.ssh/**)",
+      "Read(~/.aws/**)",
+      "Read(~/.config/gh/hosts.yml)",
+      "Read(~/.claude/**)",
+      "Read(~/.claude-ionmc/**)",
+      "Read(~/.git-credentials)",
+      "Read(~/.netrc)",
+      "Read(~/.npmrc)",
+      "Read(~/.pypirc)",
+      "Read(~/.docker/config.json)",
+      "Read(/mnt/c/Users/**)",
+      "Bash(gh *)"
+    ],
+    "additionalDirectories": [
+      "~/aiprojects/ion-mc-worktrees"
+    ]
+  },
+  "sandbox": {
+    "enabled": true,
+    "failIfUnavailable": true,
+    "allowUnsandboxedCommands": false,
+    "filesystem": {
+      "denyRead": [
+        "~/"
+      ],
+      "allowRead": [
+        ".",
+        "~/.local/bin",
+        "~/.cache/ionmc-experiment",
+        "~/aiprojects/ion-mc-worktrees",
+        "~/.local/share/ionmc-experiment/telemetry"
+      ],
+      "allowWrite": [
+        ".",
+        "~/.cache/ionmc-experiment",
+        "~/aiprojects/ion-mc-worktrees",
+        "~/.local/share/ionmc-experiment/telemetry"
+      ]
+    },
+    "network": {
+      "allowedDomains": [
+        "github.com",
+        "*.github.com",
+        "*.githubusercontent.com",
+        "pypi.org",
+        "*.pypi.org",
+        "files.pythonhosted.org"
+      ]
+    },
+    "credentials": {
+      "files": [
+        {
+          "path": "~/.ssh",
+          "mode": "deny"
+        },
+        {
+          "path": "~/.aws",
+          "mode": "deny"
+        },
+        {
+          "path": "~/.netrc",
+          "mode": "deny"
+        },
+        {
+          "path": "~/.docker/config.json",
+          "mode": "deny"
+        },
+        {
+          "path": "~/.config/gh/hosts.yml",
+          "mode": "deny"
+        }
+      ],
+      "envVars": [
+        {
+          "name": "OPENAI_API_KEY",
+          "mode": "deny"
+        },
+        {
+          "name": "ANTHROPIC_API_KEY",
+          "mode": "deny"
+        },
+        {
+          "name": "GITHUB_TOKEN",
+          "mode": "deny"
+        },
+        {
+          "name": "GH_TOKEN",
+          "mode": "deny"
+        },
+        {
+          "name": "AWS_ACCESS_KEY_ID",
+          "mode": "deny"
+        },
+        {
+          "name": "AWS_SECRET_ACCESS_KEY",
+          "mode": "deny"
+        },
+        {
+          "name": "AWS_SESSION_TOKEN",
+          "mode": "deny"
+        }
+      ]
+    }
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/log_event.py"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/log_event.py"
+          }
+        ]
+      }
+    ],
+    "TaskCreated": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/log_event.py"
+          }
+        ]
+      }
+    ],
+    "TaskCompleted": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/log_event.py"
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/log_event.py"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/log_event.py"
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/log_event.py"
+          }
+        ]
+      },
+      {
+        "matcher": "permission_prompt",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -m infrastructure.experiment_v2.notify",
+            "timeout": 20
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/log_event.py"
+          }
+        ]
+      }
+    ],
+    "StopFailure": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/log_event.py"
+          }
+        ]
+      }
+    ],
+    "ConfigChange": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/log_event.py"
+          }
+        ]
+      }
+    ],
+    "PreModelSwitch": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/log_event.py"
+          }
+        ]
+      }
+    ],
+    "PostModelSwitch": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/log_event.py"
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -m infrastructure.experiment_v2.notify",
+            "timeout": 20
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -m infrastructure.experiment_v2.policy"
+          }
+        ]
+      }
+    ]
+  },
+  "env": {
+    "IONMC_EXPERIMENT_ID": "experiment-v2",
+    "IONMC_V2_EVENT_DIR": "~/.local/share/ionmc-experiment/telemetry/v2"
+  }
+}

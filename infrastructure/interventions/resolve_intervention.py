@@ -3,6 +3,7 @@
 import argparse
 import json
 import subprocess
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -87,6 +88,9 @@ def main() -> int:
         capture_output=True,
         text=True,
     )
+
+    if (ROOT / ".ionmc-condition.json").exists():
+        subprocess.run([sys.executable, "-m", "infrastructure.experiment_v2.intervention_event", "intervention_resolved", args.request_id, request.get("task_id") or "unknown"], cwd=ROOT, check=True)
 
     print(
         json.dumps(
