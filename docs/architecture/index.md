@@ -15,8 +15,12 @@ and planning-oriented batched execution.
 | `ionmc.species`, `ionmc.materials` | Species (nuclear masses, MeV/u conventions) and materials (composition, density, I values). |
 | `ionmc.physics.stopping`, `ionmc.physics.tables` | Corrected Bethe layer and blended stopping/range tables with provenance (decision 0040). |
 | `ionmc.data.icru90` | Shipped ICRU 90 water tables (p, He, C). |
+| `ionmc.geometry`, `ionmc.sources`, `ionmc.scoring` | Voxel/box/slab geometries, pencil beams with spot/energy/angular spread, scoring grids with exact overlap masses and batch tallies. |
+| `ionmc.transport.step_physics`, `ionmc.transport.shared` | Single-source step physics bound to Python math (reference) or Warp builtins (kernels). |
+| `ionmc.transport.reference` | Float64 reference backend (per-particle loop). |
+| `ionmc.config`, `ionmc.simulation`, `ionmc.results`, `ionmc.runconfig` | Capability contract, `run()`, self-describing result persistence, JSON run configuration. |
 | `ionmc.data` | Content-addressed download cache with SHA-256 verification, provenance records and offline reuse. |
 | `ionmc.data.nist_star` | NIST PSTAR/ASTAR (SRD 124, ICRU 49) acquisition and parsing. |
 
-Transport, geometry, sources, scoring, data and results modules are added by
+Warp CPU/CUDA backends, nuclear interactions, LET and influence matrices are added by
 subsequent tasks; this page lists only implemented behavior.

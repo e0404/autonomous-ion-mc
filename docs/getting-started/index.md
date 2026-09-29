@@ -62,3 +62,30 @@ CSDA range (g/cm²) at the given kinetic energies per nucleon together with
 the table's provenance (sources, dataset hashes, mean excitation energy,
 blend window). Water needs no network: its low-energy data are the shipped
 ICRU 90 tables.
+
+## Running a simulation
+
+Write a JSON configuration (lengths mm, energies MeV/u):
+
+```json
+{
+  "source": {"species": "proton", "energy_mev_per_u": 100, "position_mm": [0, 0, -1]},
+  "geometry": {"type": "box", "size_mm": [40, 40, 100], "spacing_mm": 1, "material": "water"},
+  "scoring": {"spacing_mm": [40, 40, 1]},
+  "histories": 500, "batches": 5, "seed": 1, "backend": "python"
+}
+```
+
+```bash
+ionmc run config.json --output results/p100 --offline
+```
+
+This writes `results/p100.npz` (dose and energy per primary with standard
+errors and voxel masses), `results/p100.json` (requested and effective
+configuration, code identity, geometry and scoring coordinates, units, table
+provenance, energy accounting, RNG identity) and `results/p100.txt` (a
+human-readable summary with the integral depth-dose profile). The `python`
+backend is a slow float64 reference (about 4×10⁴ steps/s); heterogeneous
+phantoms use `"slabs": [[z0, z1, "bone_cortical", null]]` in the geometry.
+`ionmc capabilities` prints which physics, scorers and backends are
+implemented; unsupported requests fail before any transport.

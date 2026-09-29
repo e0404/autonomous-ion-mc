@@ -50,10 +50,15 @@ target-version = "py312"
 select = ["E", "F", "W", "I", "UP", "B", "RUF"]
 # Scientific docstrings and comments use Greek letters, minus signs and
 # superscripts deliberately; the ambiguous-unicode checks would forbid them.
-ignore = ["RUF001", "RUF002", "RUF003"]
+# E501 is left to the formatter (88 columns for code); long docstrings, f-strings
+# and comment lines with formulas/URLs are allowed.
+ignore = ["RUF001", "RUF002", "RUF003", "E501"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["B011"]
+# MATH is injected by ionmc.transport.shared before the module body runs, and
+# Warp's floor() returns a float (unlike math.floor), so int() casts are needed.
+"src/ionmc/transport/step_physics.py" = ["F821", "RUF046"]
 
 [tool.mypy]
 python_version = "3.12"

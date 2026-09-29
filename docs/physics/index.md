@@ -54,5 +54,22 @@ default tables use ICRU 90 values (78 eV for water), so ranges are ≈ 0.5 %
 longer than PSTAR/ASTAR (75 eV). Every table carries its I value, sources,
 dataset identifiers/hashes and domains in `StoppingTable.provenance`.
 
-Not yet implemented: energy-loss straggling, multiple scattering, nuclear
-interactions, transport, scoring.
+## Condensed-history transport (electromagnetic)
+
+Implemented on the reference Python backend (decision 0041) with the shared
+step physics of `ionmc.transport.step_physics`:
+
+| Element | Model | Domain / limitation |
+|---|---|---|
+| Step limits | voxel face, `max_step_mm` (1 mm), 10 % CSDA energy loss | configurable; step-size independence tested |
+| Mean energy loss | exact inversion of the log-log CSDA range table | any step length |
+| Straggling | Gamma with CSDA mean and Bohr variance (relativistic factor, z_eff) | integrated quantities; not Landau-shaped per step |
+| Multiple scattering | Gaussian core, Gottschalk differential Molière scattering power T_dM, z² scaling, random hinge | no single-scattering tail |
+| Cutoff | 0.5 MeV/u, residual energy deposited locally and counted | — |
+| Nuclear interactions | not implemented; requesting them raises `UnsupportedConfigurationError` | — |
+
+Verified on the reference backend: energy conservation to 1e-9 with escaped
+and cutoff energies accounted separately; 100 MeV protons in water R80 =
+77.57 mm versus the ICRU 90 CSDA range 77.59 mm, unchanged between 1 mm/10 %
+and 0.2 mm/2 % steps; scoring grids of different resolution or alignment
+conserve the deposited energy.

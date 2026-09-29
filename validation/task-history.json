@@ -30,6 +30,21 @@
       ],
       "integrated_at": "2026-09-29T22:57Z",
       "notes": "Release plan frozen; integrated freeze SHA for qualification is the squash commit df26927 (targets_frozen events reference both a05e701 and df26927)."
+    },
+    {
+      "task_id": "V2-003",
+      "title": "data provenance cache, materials and stopping-power physics",
+      "branch": "task/v2-003-data-provenance-cache-materials-and-stopping-power-physics",
+      "head_sha": "00c53e3f46402c4c397358361285aadc5fde50ec",
+      "pull_request": 66,
+      "squash_sha": "f1e0b6d79f497736a2a2f6b7b61bc39c0fb7d805",
+      "validation_record": "VAL-20260929-231546-B46F44",
+      "agents": [
+        "claude-fable-5-1 (lead orchestrator)",
+        "implementation-worker (sonnet; ionmc.data cache and NIST module)"
+      ],
+      "integrated_at": "2026-09-29T23:17Z",
+      "notes": "Release-plan amendment 1; re-freeze event at f1e0b6d."
     }
   ]
 }

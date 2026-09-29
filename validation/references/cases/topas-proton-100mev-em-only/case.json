@@ -1,0 +1,15 @@
+{
+  "input": "input.txt",
+  "physics": ["g4em-standard_opt4"],
+  "source": "100 MeV proton point source at z = -0.5 mm, direction +z, no spread",
+  "geometry": "G4_WATER box 60 x 60 x 100 mm (z from 0 to 100 mm) with a 1 mm daughter slab at z = 30-31 mm",
+  "materials": "G4_WATER (I = 78 eV in Geant4 11)",
+  "cuts": "0.1 mm production cuts; Geant4 EM opt4 default step limits; NO hadronic physics",
+  "histories": 20000,
+  "seeds": [314159],
+  "scorers": ["EnergyDeposit along z, 200 bins of 0.5 mm (whole box)", "EnergyDeposit across x in the slab at 30-31 mm depth, 120 bins of 0.5 mm"],
+  "units": "MeV summed over histories (native csv headers)",
+  "rationale": "Independent Monte Carlo evidence for electromagnetic proton transport (range, straggling width, lateral spread) without nuclear interactions; used to evaluate the reference backend of V2-004 (PHY-PROTON-WATER partial evidence)",
+  "expected_outputs": ["pdd.csv", "lateral.csv"],
+  "arguments": []
+}

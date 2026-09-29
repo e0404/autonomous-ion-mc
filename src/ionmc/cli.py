@@ -11,8 +11,11 @@ Implemented commands:
 * ``ionmc stopping --species S --material M --energy T [T ...]`` — electronic
   mass stopping power (MeV cm²/g) and CSDA range (g/cm²) from the default
   tables at kinetic energies per nucleon T (MeV/u), with table provenance.
-
-Scientific transport commands are added by later tasks.
+* ``ionmc run CONFIG.json --output PREFIX [--offline]`` — run a simulation
+  described by a JSON configuration (see ``ionmc.runconfig``) and persist
+  ``PREFIX.npz`` + ``PREFIX.json`` plus a human-readable ``PREFIX.txt``
+  depth-dose summary.
+* ``ionmc capabilities`` — the fail-closed capability contract as JSON.
 """
 
 from __future__ import annotations
@@ -48,7 +51,37 @@ def build_parser() -> argparse.ArgumentParser:
     stop.add_argument("--material", required=True)
     stop.add_argument("--energy", type=float, nargs="+", required=True, help="MeV/u")
     stop.add_argument("--offline", action="store_true")
+
+    runp = sub.add_parser("run", help="run a simulation from a JSON configuration")
+    runp.add_argument("config")
+    runp.add_argument("--output", required=True, help="output path prefix")
+    runp.add_argument("--offline", action="store_true")
+    sub.add_parser("capabilities", help="print the capability contract")
     return parser
+
+
+def _cmd_run(args: argparse.Namespace) -> int:
+    from ionmc.data import DataCache
+    from ionmc.results import write_text_summary
+    from ionmc.runconfig import load_config
+    from ionmc.simulation import run
+
+    config = load_config(args.config)
+    result = run(config, cache=DataCache(), offline=args.offline)
+    npz, js = result.save(args.output)
+    txt = write_text_summary(result, args.output)
+    print(
+        json.dumps(
+            {
+                "arrays": str(npz),
+                "metadata": str(js),
+                "summary": str(txt),
+                "wall_seconds": result.metadata["timing"]["wall_seconds"],
+            },
+            indent=2,
+        )
+    )
+    return 0
 
 
 def _cmd_data(args: argparse.Namespace) -> int:
@@ -116,6 +149,14 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_data(args)
     if args.command == "stopping":
         return _cmd_stopping(args)
+    if args.command == "run":
+        return _cmd_run(args)
+    if args.command == "capabilities":
+        from ionmc.config import capabilities
+
+        json.dump(capabilities(), sys.stdout, indent=2, sort_keys=True)
+        sys.stdout.write("\n")
+        return 0
     return 2  # pragma: no cover
 
 
