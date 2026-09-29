@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "experiment": "v1",
+  "baseline_sha": "c100544c0667b749172006590de3373aa7af4827",
+  "infrastructure_sha": "59fb8803561ef66e7ab2340989696c241b2dc458",
+  "start_sha": "8d7d831d62015bfb51b99d795d84c2421d2b6941",
+  "final_sha": "3a2e8953be0034d75a29ccf2b04640353759982b",
+  "audited_sha": "3a2e8953be0034d75a29ccf2b04640353759982b",
+  "canonical_files": [
+    "EXPERIMENT.md",
+    "REQUIREMENTS.md",
+    "experiment/prompts/kickoff-v1.md"
+  ],
+  "audit": {
+    "artifact": "ion-mc-independent-audit-3a2e895",
+    "report_sha256": "c39416b250cc3666a45b8175cfbb5cbdeba2c66051157709b313ca49e5134fab",
+    "archive_sha256": "f8e3b790a202fe0fd37f6465a23042831de74346f9335ca38fc07d9e929dd391",
+    "availability": "operator workspace; not bundled as a v2 validation corpus"
+  },
+  "reconstruction": "git worktree add --detach <destination> <start_sha or final_sha>"
+}

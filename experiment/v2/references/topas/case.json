@@ -1,0 +1,29 @@
+{
+  "input": "input.txt",
+  "physics": [
+    "g4em-standard_opt4",
+    "g4h-phy_QGSP_BIC",
+    "g4h-elastic",
+    "g4stopping",
+    "g4ion-binarycascade",
+    "g4decay",
+    "g4radioactivedecay"
+  ],
+  "source": "100 MeV proton point at z=-0.001 mm, direction +z",
+  "geometry": "water x/y +/-20 mm, z 0..100 mm",
+  "materials": "G4_WATER",
+  "cuts": "0.1 mm production range cuts",
+  "histories": 100,
+  "seeds": [
+    271828
+  ],
+  "scorers": [
+    "EnergyDeposit, 1x1x20 bins, sum MeV"
+  ],
+  "units": "native output headers",
+  "rationale": "Infrastructure execution smoke only; no scientific acceptance claim",
+  "expected_outputs": [
+    "edep.csv"
+  ],
+  "arguments": []
+}

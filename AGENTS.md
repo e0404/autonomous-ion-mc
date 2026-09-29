@@ -1,5 +1,10 @@
 # Agent Instructions
 
+If `.ionmc-condition.json` identifies experiment v2, also read
+`experiment/v2/PROTOCOL.md`, `experiment/v2/REQUIREMENTS.md` and
+`experiment/v2/AGENTS.md`; their explicit v2 overrides apply.
+The setup maintainer is distinct from the autonomous runtime governed below.
+
 This repository is part of an autonomous scientific software-development experiment.
 
 Before planning or modifying the project, read:

@@ -123,8 +123,10 @@ Exit code policy (see also `main()`):
 """
 
 import argparse
+import contextlib
 import json
 import math
+import os
 import random
 import struct
 import sys
@@ -403,6 +405,51 @@ def generate_inputs(n: int, seed: int) -> list:
 # ---------------------------------------------------------------------------
 
 
+@contextlib.contextmanager
+def _silence_native_output():
+    """Redirect file descriptors 1 and 2 to /dev/null for the duration.
+
+    `warp.init()` prints an initialisation banner to stdout and, on hosts
+    without a CUDA driver, error text to stderr from native code. Both
+    would corrupt the JSON this tool emits on those streams, so the first
+    Warp call is made with the descriptors redirected. Python-level
+    `sys.stdout`/`sys.stderr` are flushed first so buffered report text is
+    not lost.
+    """
+    sys.stdout.flush()
+    sys.stderr.flush()
+    saved = [os.dup(1), os.dup(2)]
+    devnull = os.open(os.devnull, os.O_WRONLY)
+    try:
+        os.dup2(devnull, 1)
+        os.dup2(devnull, 2)
+        yield
+    finally:
+        os.dup2(saved[0], 1)
+        os.dup2(saved[1], 2)
+        for fd in (devnull, *saved):
+            os.close(fd)
+
+
+def _quiet_warp_init(warp_module) -> None:
+    """Initialise Warp without letting it write to stdout/stderr.
+
+    Warp >= 1.17 suppresses its banner and module-load notices when
+    `config.log_level` is raised to `LOG_WARNING`; the older `config.quiet`
+    flag is deprecated there and itself prints a warning to stderr, so it is
+    only used as a fallback when `log_level` does not exist.
+    """
+    try:
+        if hasattr(warp_module.config, "log_level"):
+            warp_module.config.log_level = warp_module.LOG_WARNING
+        else:
+            warp_module.config.quiet = True
+    except Exception:  # noqa: BLE001
+        pass
+    with _silence_native_output():
+        warp_module.init()
+
+
 def _import_warp():
     """Best-effort `import warp`. Returns (module_or_None, error_section_or_None)."""
     try:
@@ -411,6 +458,10 @@ def _import_warp():
         return None, {"status": STATUS_UNAVAILABLE, "detail": f"warp is not importable: {exc}"}
     except Exception as exc:  # noqa: BLE001 - probes must never raise
         return None, {"status": STATUS_ERROR, "detail": f"unexpected error importing warp: {exc}"}
+    try:
+        _quiet_warp_init(warp)
+    except Exception as exc:  # noqa: BLE001 - probes must never raise
+        return None, {"status": STATUS_ERROR, "detail": f"warp.init() failed: {exc}"}
     return warp, None
 
 

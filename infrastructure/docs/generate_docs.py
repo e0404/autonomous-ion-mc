@@ -120,6 +120,14 @@ def main() -> int:
     decisions = copy_decisions()
     copied = copy_experiment_files()
     prompts = copy_prompt_files()
+    v2 = REPO_ROOT / "experiment" / "v2"
+    if v2.exists():
+        destination = DOCS_ROOT / "experiment" / "v2"
+        destination.mkdir(parents=True, exist_ok=True)
+        for source in v2.glob("*.md"):
+            shutil.copyfile(source, destination / source.name)
+        for name in ("kickoff-v2.md", "prepare-v2.md"):
+            shutil.copyfile(REPO_ROOT / "experiment/prompts" / name, DOCS_ROOT / "experiment/prompts" / name)
     index = write_decision_index(decisions)
 
     print(f"generated {len(decisions)} decision page(s)")

@@ -1,12 +1,178 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
-
   "disableClaudeAiConnectors": true,
-
+  "env": {
+    "IONMC_EXPERIMENT_ID": "experiment-v2",
+    "IONMC_V2_EVENT_DIR": "~/.local/share/ionmc-experiment/telemetry/v2"
+  },
+  "hooks": {
+    "ConfigChange": [
+      {
+        "hooks": [
+          {
+            "command": "python3 .claude/hooks/log_event.py",
+            "type": "command"
+          }
+        ],
+        "matcher": "*"
+      }
+    ],
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "command": "python3 .claude/hooks/log_event.py",
+            "type": "command"
+          }
+        ],
+        "matcher": "*"
+      },
+      {
+        "hooks": [
+          {
+            "command": "python3 -m infrastructure.experiment_v2.notify",
+            "timeout": 20,
+            "type": "command"
+          }
+        ],
+        "matcher": "permission_prompt"
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "command": "python3 -m infrastructure.experiment_v2.notify",
+            "timeout": 20,
+            "type": "command"
+          }
+        ],
+        "matcher": "*"
+      }
+    ],
+    "PostModelSwitch": [
+      {
+        "hooks": [
+          {
+            "command": "python3 .claude/hooks/log_event.py",
+            "type": "command"
+          }
+        ],
+        "matcher": "*"
+      }
+    ],
+    "PreModelSwitch": [
+      {
+        "hooks": [
+          {
+            "command": "python3 .claude/hooks/log_event.py",
+            "type": "command"
+          }
+        ],
+        "matcher": "*"
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "python3 -m infrastructure.experiment_v2.policy",
+            "type": "command"
+          }
+        ],
+        "matcher": "Bash"
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "command": "python3 .claude/hooks/log_event.py",
+            "type": "command"
+          }
+        ],
+        "matcher": "*"
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "command": "python3 .claude/hooks/log_event.py",
+            "type": "command"
+          }
+        ],
+        "matcher": "*"
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "command": "python3 .claude/hooks/log_event.py",
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "StopFailure": [
+      {
+        "hooks": [
+          {
+            "command": "python3 .claude/hooks/log_event.py",
+            "type": "command"
+          }
+        ],
+        "matcher": "*"
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "command": "python3 .claude/hooks/log_event.py",
+            "type": "command"
+          }
+        ],
+        "matcher": "*"
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "command": "python3 .claude/hooks/log_event.py",
+            "type": "command"
+          }
+        ],
+        "matcher": "*"
+      }
+    ],
+    "TaskCompleted": [
+      {
+        "hooks": [
+          {
+            "command": "python3 .claude/hooks/log_event.py",
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "TaskCreated": [
+      {
+        "hooks": [
+          {
+            "command": "python3 .claude/hooks/log_event.py",
+            "type": "command"
+          }
+        ]
+      }
+    ]
+  },
   "permissions": {
-    "defaultMode": "auto",
-    "disableBypassPermissionsMode": "disable",
-
+    "additionalDirectories": [
+      "/home/wahln/aiprojects/ion-mc-v2-worktrees"
+    ],
     "allow": [
       "Edit(src/**)",
       "Edit(tests/**)",
@@ -17,7 +183,6 @@
       "Edit(docs/**)",
       "Edit(infrastructure/**)",
       "Edit(.github/**)",
-
       "Edit(README.md)",
       "Edit(AGENTS.md)",
       "Edit(CLAUDE.md)",
@@ -26,34 +191,33 @@
       "Edit(pyproject.toml)",
       "Edit(uv.lock)",
       "Edit(.pre-commit-config.yaml)",
-
       "Bash(git *)",
-      "Bash(gh *)",
       "Bash(uv *)",
       "Bash(python *)",
       "Bash(python3 *)",
       "Bash(pytest *)",
       "Bash(pre-commit *)",
-
       "mcp__codex-worker",
       "mcp__task-manager",
       "mcp__human-intervention",
       "mcp__task-integration",
       "mcp__validation-manager",
       "mcp__task-commit",
-      "mcp__host-runner"
+      "mcp__host-runner",
+      "mcp__v2-research",
+      "mcp__v2-release",
+      "Edit(experiment/v2/**)"
     ],
-
     "ask": [
       "Bash(git push *)",
       "Bash(gh pr merge *)",
       "Bash(gh release create *)"
     ],
-
+    "blockReadsOutsideWorkingDirectories": false,
+    "defaultMode": "auto",
     "deny": [
       "Bash(sudo *)",
       "Bash(su *)",
-
       "Read(~/.ssh/**)",
       "Read(~/.aws/**)",
       "Read(~/.config/gh/hosts.yml)",
@@ -64,41 +228,87 @@
       "Read(~/.npmrc)",
       "Read(~/.pypirc)",
       "Read(~/.docker/config.json)",
-      "Read(/mnt/c/Users/**)"
+      "Read(/mnt/c/Users/**)",
+      "Bash(gh *)"
     ],
-
-    "additionalDirectories": [
-      "~/aiprojects/ion-mc-worktrees"
-    ]
+    "disableBypassPermissionsMode": "disable"
   },
-
   "sandbox": {
+    "allowUnsandboxedCommands": false,
+    "credentials": {
+      "envVars": [
+        {
+          "mode": "deny",
+          "name": "OPENAI_API_KEY"
+        },
+        {
+          "mode": "deny",
+          "name": "ANTHROPIC_API_KEY"
+        },
+        {
+          "mode": "deny",
+          "name": "GITHUB_TOKEN"
+        },
+        {
+          "mode": "deny",
+          "name": "GH_TOKEN"
+        },
+        {
+          "mode": "deny",
+          "name": "AWS_ACCESS_KEY_ID"
+        },
+        {
+          "mode": "deny",
+          "name": "AWS_SECRET_ACCESS_KEY"
+        },
+        {
+          "mode": "deny",
+          "name": "AWS_SESSION_TOKEN"
+        }
+      ],
+      "files": [
+        {
+          "mode": "deny",
+          "path": "~/.ssh"
+        },
+        {
+          "mode": "deny",
+          "path": "~/.aws"
+        },
+        {
+          "mode": "deny",
+          "path": "~/.netrc"
+        },
+        {
+          "mode": "deny",
+          "path": "~/.docker/config.json"
+        },
+        {
+          "mode": "deny",
+          "path": "~/.config/gh/hosts.yml"
+        }
+      ]
+    },
     "enabled": true,
     "failIfUnavailable": true,
-
-    "allowUnsandboxedCommands": false,
-
     "filesystem": {
-      "denyRead": [
-        "~/"
-      ],
-
       "allowRead": [
         ".",
         "~/.local/bin",
         "~/.cache/ionmc-experiment",
-        "~/.local/share/ionmc-experiment",
-        "~/aiprojects/ion-mc-worktrees"
+        "/home/wahln/aiprojects/ion-mc-v2-worktrees",
+        "~/.local/share/ionmc-experiment/telemetry"
       ],
-
       "allowWrite": [
         ".",
         "~/.cache/ionmc-experiment",
-        "~/.local/share/ionmc-experiment",
-        "~/aiprojects/ion-mc-worktrees"
+        "/home/wahln/aiprojects/ion-mc-v2-worktrees",
+        "~/.local/share/ionmc-experiment/telemetry"
+      ],
+      "denyRead": [
+        "~/"
       ]
     },
-
     "network": {
       "allowedDomains": [
         "github.com",
@@ -108,204 +318,6 @@
         "*.pypi.org",
         "files.pythonhosted.org"
       ]
-    },
-
-    "credentials": {
-      "files": [
-        {
-          "path": "~/.ssh",
-          "mode": "deny"
-        },
-        {
-          "path": "~/.aws",
-          "mode": "deny"
-        },
-        {
-          "path": "~/.netrc",
-          "mode": "deny"
-        },
-        {
-          "path": "~/.docker/config.json",
-          "mode": "deny"
-        },
-        {
-          "path": "~/.config/gh/hosts.yml",
-          "mode": "deny"
-        }
-      ],
-
-      "envVars": [
-        {
-          "name": "OPENAI_API_KEY",
-          "mode": "deny"
-        },
-        {
-          "name": "ANTHROPIC_API_KEY",
-          "mode": "deny"
-        },
-        {
-          "name": "GITHUB_TOKEN",
-          "mode": "deny"
-        },
-        {
-          "name": "GH_TOKEN",
-          "mode": "deny"
-        },
-        {
-          "name": "AWS_ACCESS_KEY_ID",
-          "mode": "deny"
-        },
-        {
-          "name": "AWS_SECRET_ACCESS_KEY",
-          "mode": "deny"
-        },
-        {
-          "name": "AWS_SESSION_TOKEN",
-          "mode": "deny"
-        }
-      ]
     }
-  },
-  "hooks": {
-    "SessionStart": [
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 .claude/hooks/log_event.py"
-          }
-        ]
-      }
-    ],
-
-    "SessionEnd": [
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 .claude/hooks/log_event.py"
-          }
-        ]
-      }
-    ],
-
-    "TaskCreated": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 .claude/hooks/log_event.py"
-          }
-        ]
-      }
-    ],
-
-    "TaskCompleted": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 .claude/hooks/log_event.py"
-          }
-        ]
-      }
-    ],
-
-    "SubagentStart": [
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 .claude/hooks/log_event.py"
-          }
-        ]
-      }
-    ],
-
-    "SubagentStop": [
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 .claude/hooks/log_event.py"
-          }
-        ]
-      }
-    ],
-
-    "Notification": [
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 .claude/hooks/log_event.py"
-          }
-        ]
-      }
-    ],
-
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 .claude/hooks/log_event.py"
-          }
-        ]
-      }
-    ],
-
-    "StopFailure": [
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 .claude/hooks/log_event.py"
-          }
-        ]
-      }
-    ],
-
-    "ConfigChange": [
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 .claude/hooks/log_event.py"
-          }
-        ]
-      }
-    ],
-
-    "PreModelSwitch": [
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 .claude/hooks/log_event.py"
-          }
-        ]
-      }
-    ],
-
-    "PostModelSwitch": [
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 .claude/hooks/log_event.py"
-          }
-        ]
-      }
-    ]
   }
 }

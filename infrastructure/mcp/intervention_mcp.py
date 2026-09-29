@@ -34,6 +34,7 @@ def request_human_intervention(
     reason: str,
     requested_input: str,
     depends_on: str = "",
+    investigation: dict | None = None,
 ) -> dict:
     """
     Request intervention from the designated experiment operator.
@@ -71,6 +72,9 @@ def request_human_intervention(
         "--requested-input",
         requested_input,
     ]
+
+    if investigation is not None:
+        cmd += ["--investigation-json", json.dumps(investigation)]
 
     if depends_on:
         cmd += ["--depends-on", depends_on]

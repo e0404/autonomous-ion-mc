@@ -1,0 +1,29 @@
+{
+  "input": "fred.inp",
+  "physics": "native settings in input; smoke only",
+  "source": "100 MeV proton pencil",
+  "geometry": "FRED 3.76 default 4x4x10 cm water; actual native dose grid 41x41x400",
+  "materials": "water",
+  "cuts": "FRED 3.76 native defaults; fred.inp and log retained",
+  "histories": 100,
+  "seeds": [
+    271828
+  ],
+  "scorers": [
+    "dose"
+  ],
+  "units": "native output headers",
+  "rationale": "Infrastructure execution smoke only; no scientific acceptance claim",
+  "expected_outputs": [
+    "out/score/Phantom.Dose.mhd"
+  ],
+  "arguments": [
+    "-nogpu",
+    "-numThreads",
+    "1",
+    "-nprim",
+    "100",
+    "-rseed",
+    "271828"
+  ]
+}

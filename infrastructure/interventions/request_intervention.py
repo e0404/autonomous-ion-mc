@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import subprocess
+import sys
 import urllib.error
 import urllib.request
 import uuid
@@ -58,7 +59,7 @@ def send_notification(
     except (urllib.error.URLError, TimeoutError) as exc:
         return {
             "status": "failed",
-            "error": str(exc),
+            "error": type(exc).__name__,
         }
 
 
@@ -84,7 +85,13 @@ def main() -> None:
     parser.add_argument("--requested-input", required=True)
     parser.add_argument("--depends-on", default="")
 
+    parser.add_argument("--investigation-json")
     args = parser.parse_args()
+    investigation = None
+    if (ROOT / ".ionmc-condition.json").exists():
+        sys.path.insert(0, str(ROOT))
+        from infrastructure.experiment_v2.intervention import validate_context
+        investigation = validate_context(json.loads(args.investigation_json or "null"))
 
     now = datetime.now(timezone.utc)
 
@@ -105,11 +112,13 @@ def main() -> None:
 
     payload = {
         "schema_version": 1,
+        "git_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
         "request_id": request_id,
         "created_at_utc": now.isoformat(),
         "task_id": args.task_id,
         "category": args.category,
         "summary": args.summary,
+        "investigation": investigation,
         "reason_autonomous_resolution_not_possible": args.reason,
         "requested_input": args.requested_input,
         "decisions_or_tasks_blocked": args.depends_on or None,
@@ -172,6 +181,9 @@ def main() -> None:
         capture_output=True,
         text=True,
     )
+
+    if (ROOT / ".ionmc-condition.json").exists():
+        subprocess.run([sys.executable, "-m", "infrastructure.experiment_v2.intervention_event", "intervention_requested", request_id, args.task_id], cwd=ROOT, check=True)
 
     print(
         json.dumps(

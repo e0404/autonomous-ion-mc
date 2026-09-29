@@ -62,3 +62,8 @@ docs/experiment/requirements.md
 docs/experiment/prompts/
 docs/experiment/decisions.md
 site/
+
+# V2 generated docs and task data caches
+docs/experiment/v2/
+.ionmc-cache/
+.uv-cache/
