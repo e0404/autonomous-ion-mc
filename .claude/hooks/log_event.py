@@ -16,7 +16,7 @@ TELEMETRY_DIR = Path(
         "IONMC_TELEMETRY_DIR",
         str(Path.home() / ".local/share/ionmc-experiment/telemetry"),
     )
-)
+).expanduser()
 
 OUTPUT = TELEMETRY_DIR / "experiment-events.jsonl"
 

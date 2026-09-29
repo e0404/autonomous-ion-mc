@@ -17,7 +17,7 @@ VALIDATION_ROOT = Path(
         "IONMC_VALIDATION_DIR",
         str(Path.home() / ".local/share/ionmc-experiment/validation"),
     )
-)
+).expanduser()
 
 
 def git_text(*args: str, cwd: Path) -> str:

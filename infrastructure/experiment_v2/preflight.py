@@ -13,6 +13,7 @@ from infrastructure.experiment_v2.common import (
     exact_state,
     write_json,
 )
+from infrastructure.experiment_v2.history import inspect as inspect_history
 from infrastructure.experiment_v2.reference import load_engine, run_reference
 from infrastructure.interventions.request_intervention import send_notification
 
@@ -29,6 +30,7 @@ def check(root=ROOT, *, smoke=False, notify=False, state=STATE):
         )
     except (ValueError, OSError, KeyError, subprocess.CalledProcessError):
         results["fresh_condition"] = False
+    results["history_isolation"] = inspect_history(root)
     results["tools"] = {
         name: shutil.which(name) is not None
         for name in ("bwrap", "git", "gh", "uv", "claude")
@@ -86,6 +88,7 @@ def check(root=ROOT, *, smoke=False, notify=False, state=STATE):
     # This preflight deliberately never labels an untested notification/engine as ready.
     results["ready_for_unattended_launch"] = bool(
         results.get("fresh_condition")
+        and results["history_isolation"]["ready"]
         and all(results["tools"].values())
         and results["gpu_device"]
         and results["host_runtime"]

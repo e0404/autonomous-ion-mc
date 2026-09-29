@@ -3,7 +3,10 @@
 This is infrastructure setup, not IonMC v2 scientific implementation. Historical
 root protocol/requirements and kickoff-v1 remain unchanged; v1 is reconstructable
 from `experiment/v1/provenance.json`. The setup branch keeps the completed v1
-package. Use the fresh-start generator before starting the new scientific run.
+package. The active v2 checkout is now an independent clone with restricted
+v2-only history access; see [the condition 2.1 amendment](HISTORY-ISOLATION.md).
+The old fresh-start generator below records how the initial snapshot was made;
+it does not produce the final isolated runtime checkout.
 
 ## What changes from v1
 
@@ -156,7 +159,7 @@ No special rule is added for the historical `/home/wahlm` typo. The user-level
 blockReadsOutsideWorkingDirectories observation is retained as an incident;
 v2 uses portable declared worktree paths and does not modify user configuration.
 
-## Fresh start and exact kickoff
+## Original fresh-start preparation (operator provenance)
 
 From a clean, committed setup checkout:
 
@@ -176,17 +179,21 @@ configuration (the setup environment has a pre-existing repository config lock).
 The current setup test record distinguishes
 local checks from remote CI and delivery checks.
 
-Then, with the operator notification variable supplied by the existing launcher:
+For an independent replacement checkout, follow HISTORY-ISOLATION.md rather than
+using the shared-worktree bootstrap. With the operator notification variable
+supplied by the existing launcher, start a new session from the v2 clone:
 
 ```bash
 cd /home/wahln/aiprojects/ion-mc-v2
 python3 -m infrastructure.experiment_v2.preflight --smoke --notify
-claude "Read experiment/prompts/kickoff-v2.md and carry out that autonomous run."
+claude "Read experiment/prompts/kickoff-v2-isolated.md and carry out that autonomous run."
 ```
 
 The bootstrap and ready conditions are preserved separately as
 `experiment-v2-start` and `experiment-v2-ready`; use current `v2/develop` and the
-ready tag for the final setup state. No historical tag is moved.
+ready tag for the original setup state. Condition 2.1 is a subsequent versioned
+amendment on v2/develop; its clone intentionally has no inherited tags.
+No historical tag is moved.
 
 Run the Claude command only after preflight succeeds. Calibration remains the
 first scientific-run phase. This preparation task never launches it.

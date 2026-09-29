@@ -24,6 +24,7 @@ OVERLAY = (
     "experiment/v2/",
     "experiment/prompts/prepare-v2.md",
     "experiment/prompts/kickoff-v2.md",
+    "experiment/prompts/kickoff-v2-isolated.md",
     ".mcp.json",
     ".pre-commit-config.yaml",
     "AGENTS.md",

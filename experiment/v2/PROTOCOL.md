@@ -1,4 +1,4 @@
-# Autonomous IonMC experiment v2 — protocol condition 2.0
+# Autonomous IonMC experiment v2 — protocol condition 2.1
 
 Status: infrastructure preparation; scientific development has not begun. The
 canonical setup instruction is `experiment/prompts/prepare-v2.md`. Its maintainer
@@ -8,12 +8,15 @@ maintainer session.
 
 ## Provenance and starting condition
 
-V1 is an experimental result, not a codebase to silently repair. Immutable commit
-identifiers and audit hashes are in `experiment/v1/provenance.json`. Reconstruct
-historical protocol, requirements, prompts, decisions and software with `git show
-<SHA>:<path>` or a detached worktree. The original root EXPERIMENT.md,
-REQUIREMENTS.md and kickoff-v1.md remain unmodified. Tags are convenient labels;
-the full object IDs in the manifest are authoritative. Never move historical tags.
+V1 is preserved as an experimental result in the operator's separate checkout.
+Immutable identifiers and audit hashes in `experiment/v1/provenance.json` are
+provenance only, not instructions to retrieve excluded history. Under condition
+2.1, read `HISTORY-ISOLATION.md`: the autonomous runtime must not reconstruct or
+inspect v1 scientific commits, branches, tags, PRs, source, results or archives.
+This explicitly overrides the inherited permission to read previous project
+history. The operator may still reconstruct v1 outside the autonomous workspace.
+The original root EXPERIMENT.md, REQUIREMENTS.md and kickoff-v1.md remain
+unmodified. Never move historical tags.
 
 V2 inherits the complete v1 protocol and product requirements at the recorded
 start SHA, with explicit additions/overrides in this file and REQUIREMENTS.md in
@@ -29,6 +32,10 @@ names are the sole override of v1's permanent branch names. Task branches and PR
 remain preserved, squash integration and exact-SHA local validation remain
 mandatory, and release promotion uses a merge PR. The bootstrap records its
 baseline and setup commit and content manifest. It never resets v1 branches.
+The runtime now uses an independent full clone with only v2 branch fetches and
+no automatic tag fetching, rather than a worktree sharing v1's Git objects.
+Use `experiment/prompts/kickoff-v2-isolated.md` for the new run; the original
+kickoff/preparation prompt records remain unchanged.
 
 ## Autonomy and independent evidence
 
