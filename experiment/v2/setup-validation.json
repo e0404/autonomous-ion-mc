@@ -2,7 +2,7 @@
   "schema_version": 2,
   "phase": "Infrastructure implemented; operator notification configuration required before unattended launch",
   "v1_final_sha": "3a2e8953be0034d75a29ccf2b04640353759982b",
-  "tests": "1 failed, 310 passed in 3.69s",
+  "tests": "311 passed in 3.76s",
   "docs": "zensical strict build passed",
   "mcp": "research/release stdio initialization and tool discovery passed",
   "reference_pilots": {
