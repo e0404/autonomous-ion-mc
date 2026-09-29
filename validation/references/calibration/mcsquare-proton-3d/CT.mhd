@@ -1,0 +1,8 @@
+ObjectType = Image
+NDims = 3
+DimSize = 60 150 60
+ElementSpacing = 2 2 2
+Offset = 0 0 0
+ElementType = MET_SHORT
+ElementByteOrderMSB = False
+ElementDataFile = CT.raw

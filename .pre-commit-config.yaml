@@ -11,6 +11,7 @@ repos:
       - id: check-toml
       - id: check-merge-conflict
       - id: check-added-large-files
+        args: ["--maxkb=1200"]
       - id: debug-statements
       - id: check-ast
 

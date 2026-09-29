@@ -1,0 +1,23 @@
+{
+  "input": "input.txt",
+  "physics": [
+    "g4em-standard_opt4",
+    "g4h-phy_QGSP_BIC",
+    "g4h-elastic",
+    "g4stopping",
+    "g4ion-binarycascade",
+    "g4decay",
+    "g4radioactivedecay"
+  ],
+  "source": "150 MeV proton point source, no energy spread, at z = -0.001 mm, direction +z (confirmed from the setup smoke output)",
+  "geometry": "G4_WATER box x,y in [-60,60] mm, z in [0,300] mm; scoring bins 60 x 60 x 150 of 2 mm",
+  "materials": "G4_WATER (Geant4 NIST material, I = 78 eV in Geant4 11)",
+  "cuts": "0.1 mm production range cuts for all particles; Geant4 default step limits",
+  "histories": 10000,
+  "seeds": [271828],
+  "scorers": ["DoseToMedium (Gy) summed over histories, binary output"],
+  "units": "TOPAS binary scorer: Gy; header in dose.binheader",
+  "rationale": "Performance calibration reference (single thread) for the proton-3d workload envelope and a first independent-MC proton depth-dose/lateral reference in water; execution success is not physics validation",
+  "expected_outputs": ["dose.bin", "dose.binheader"],
+  "arguments": []
+}

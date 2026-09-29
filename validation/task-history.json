@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "note": "Integrated task record required by EXPERIMENT.md (task id, branch, task-branch head SHA, PR, squash SHA on v2/develop, agents). Each task appends the previous task's entry, because its own squash SHA is only known after integration.",
+  "tasks": [
+    {
+      "task_id": "V2-001",
+      "title": "preflight record, ionmc package scaffold, requirement ledger and draft release plan",
+      "branch": "task/v2-001-preflight-record-package-scaffold-requirement-ledger",
+      "head_sha": "74089c8e14fea31045939106cf8cb594c712d278",
+      "pull_request": 64,
+      "squash_sha": "bea37d44cbdd3ca7132d2f8de1aaa173a7e1f63e",
+      "validation_record": "VAL-20260929-223817-F4085E",
+      "agents": [
+        "claude-fable-5-1 (lead orchestrator)",
+        "physics-researcher x3 (opus; literature research, no file changes)"
+      ],
+      "integrated_at": "2026-09-29T22:38Z"
+    }
+  ]
+}

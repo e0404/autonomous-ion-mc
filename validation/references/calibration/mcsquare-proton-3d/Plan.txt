@@ -1,0 +1,39 @@
+#TREATMENT-PLAN-DESCRIPTION
+#PlanName
+CalibrationProton3D
+#NumberOfFractions
+1
+##FractionID
+1
+##NumberOfFields
+1
+###FieldsID
+1
+#TotalMetersetWeightOfAllFields
+1
+#FIELD-DESCRIPTION
+###FieldID
+1
+###FinalCumulativeMeterSetWeight
+1
+###GantryAngle
+0
+###PatientSupportAngle
+0
+###IsocenterPosition
+60 150 60
+###NumberOfControlPoints
+1
+#SPOTS-DESCRIPTION
+####ControlPointIndex
+1
+####SpotTunnedID
+1
+####CumulativeMetersetWeight
+1
+####Energy (MeV)
+150
+####NbOfScannedSpots
+1
+####X Y Weight
+0 0 1
