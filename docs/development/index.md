@@ -7,7 +7,8 @@
 | `src/ionmc/` | The `ionmc` package (Python-first physics, Warp backends, scoring, results, CLI). |
 | `tests/ionmc/` | Package tests. Tests marked `local` or `cuda` are excluded from GitHub CI and run under the local exact-SHA validation gate. |
 | `tests/infrastructure/` | Tests of the experiment infrastructure. |
-| `validation/` | Requirement ledger, release plan and validation methods/results. |
+| `validation/` | Requirement ledger, frozen release plan, reference-engine case bundles, research notes, task history. |
+| `benchmarks/` | Reproducible performance calibration and (later) workload benchmarks; `benchmarks/generated/` is ignored output. |
 | `decisions/` | Consequential scientific and technical decision records. |
 | `infrastructure/` | Autonomous-development tooling (MCP services, host runner, reference-engine execution, release qualification). |
 

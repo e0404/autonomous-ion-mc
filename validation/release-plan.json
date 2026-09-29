@@ -1,9 +1,13 @@
 {
   "schema_version": 2,
-  "status": "draft",
-  "draft_note": "Suite membership drafted in V2-001. Numeric tolerances and performance targets are set and the plan is frozen (status 'frozen') in the calibration task before optimization/qualification. Until then this plan is not acceptance evidence.",
-  "hardware": null,
-  "calibration_artifacts": [],
+  "status": "frozen",
+  "hardware": "NVIDIA RTX A6000 48 GiB sm_86 (CUDA 12.9, driver 13.4/616.92, WSL2); Intel Core i9-13900K 32 logical CPUs; 32 GiB host; Warp 1.17.0; Python 3.12",
+  "calibration_artifacts": [
+    "benchmarks/calibration/record-2026-09-30.json",
+    "host-run RUN-20260929T224600Z-098609df (primitives, SHA 9d6412cd)",
+    "reference runs REF-9b1409ed46826c2c82b9-ebf89c46 (TOPAS), REF-79a06b4029c303bdaae2-cf425f13 (MCsquare), REF-0ffa92d1284ad4b51b89-354a38ab (FRED)",
+    "decisions/0039-v2-performance-targets-and-acceptance-criteria.md"
+  ],
   "suites": [
     {
       "id": "PHY-STOPPING-RANGE",
@@ -23,7 +27,7 @@
         "warp-cpu",
         "warp-cuda"
       ],
-      "acceptance": "DRAFT: for each species and material, transport stopping power agrees with the held-out ion-specific evaluation table within tolerance T_S over the documented energy domain; Monte Carlo R80 in water agrees with the CSDA-derived range from that table within T_R. Numeric T_S and T_R are set at freeze from the calibration/research record.",
+      "acceptance": "For each species (p, He, C, O) and each qualified material: tabulated electronic stopping power within 1.5 % (p, He) / 3 % (C, O) of a held-out evaluation table (role 'evaluation', distinct from construction data) over the documented energy domain; Monte Carlo R80 in water within max(0.5 mm, 0.5 %) (p, He) / max(0.7 mm, 0.7 %) (C, O) of the CSDA range of that table, at >= 1e5 histories per energy for >= 3 energies per species.",
       "rationale": "Ion-specific stopping/range evidence is required per species; proton data cannot validate heavier ions (V2-ION, V2-EVID).",
       "species": [
         "proton",
@@ -32,7 +36,8 @@
         "oxygen"
       ],
       "independent_required": true,
-      "independent_evidence": "ion-specific-tabulated evaluation tables (PSTAR/ASTAR/ICRU 90 lineage) with construction/evaluation roles recorded"
+      "independent_evidence": "ion-specific-tabulated evaluation tables (PSTAR/ASTAR/ICRU 90 lineage) with construction/evaluation roles recorded",
+      "frozen_by": "decisions/0039-v2-performance-targets-and-acceptance-criteria.md"
     },
     {
       "id": "PHY-PROTON-WATER",
@@ -49,13 +54,14 @@
         "warp-cpu",
         "warp-cuda"
       ],
-      "acceptance": "DRAFT: proton pristine Bragg curves (70-230 MeV) and lateral profiles in water versus independent Monte Carlo (TOPAS/Geant4) and measured/analytic references: R80 within T_R80, distal 80-20 within T_fall, normalized depth dose within T_dose (local) proximal to the peak, lateral sigma within T_sig.",
+      "acceptance": "Pristine 70, 150, 230 MeV protons in water vs TOPAS (independent MC) at matched configuration: |dR80| <= 1.0 mm; distal 80-20 % width within 0.5 mm; central-axis depth-dose gamma (3 % local of maximum, 1 mm) pass rate >= 95 % over 0..R80+5 mm; lateral sigma at 3 depths within max(5 %, 0.2 mm). Additionally R80 within 1.5 mm of a non-Geant4 range reference (PSTAR/ASTAR CSDA or measured range data).",
       "rationale": "Depth dose and lateral spread are the primary planning observables; evidence must be independent of the implementation.",
       "species": [
         "proton"
       ],
       "independent_required": true,
-      "independent_evidence": "independent Monte Carlo (TOPAS), measured/analytic Bragg-curve references"
+      "independent_evidence": "independent Monte Carlo (TOPAS), measured/analytic Bragg-curve references",
+      "frozen_by": "decisions/0039-v2-performance-targets-and-acceptance-criteria.md"
     },
     {
       "id": "PHY-PROTON-NUCLEAR",
@@ -72,13 +78,14 @@
         "warp-cpu",
         "warp-cuda"
       ],
-      "acceptance": "DRAFT: primary proton fluence attenuation versus depth and secondary-particle dose fraction versus TOPAS within tolerances; disabling nuclear physics changes the distal/plateau dose by the expected magnitude (discriminating test).",
+      "acceptance": "150 and 230 MeV protons in water vs TOPAS: primary-proton fraction at R80-10 mm within 0.03 absolute; secondary-particle dose fraction within 30 % relative; plateau dose (20-50 mm) within 3 %; a discriminating run with nuclear physics disabled must change the plateau dose by >= 5 % and be reported as such.",
       "rationale": "Nuclear attenuation and secondaries change the plateau by roughly 10-15% for 200 MeV protons; the model must be evidenced, not just enabled.",
       "species": [
         "proton"
       ],
       "independent_required": true,
-      "independent_evidence": "independent Monte Carlo (TOPAS), published cross-section evaluations"
+      "independent_evidence": "independent Monte Carlo (TOPAS), published cross-section evaluations",
+      "frozen_by": "decisions/0039-v2-performance-targets-and-acceptance-criteria.md"
     },
     {
       "id": "PHY-HETEROGENEITY",
@@ -96,14 +103,15 @@
         "warp-cpu",
         "warp-cuda"
       ],
-      "acceptance": "DRAFT: slab phantoms (bone, lung, adipose inserts) and the explicit heterogeneous planning variant versus TOPAS and a second engine (MCsquare/FRED) with range shift and dose agreement within tolerances.",
+      "acceptance": "Slab phantoms (compact bone, lung, adipose inserts) and the explicit heterogeneous planning variant, 150 MeV protons and 290 MeV/u carbon, vs TOPAS: |dR80| <= 1.5 mm on axis; 3-D gamma (3 %, 2 mm) pass rate >= 95 % in voxels above 10 % of maximum; MCsquare and/or FRED results recorded as supporting evidence with their differences explained.",
       "rationale": "Material/density handling is central to patient-like planning geometries.",
       "species": [
         "proton",
         "carbon"
       ],
       "independent_required": true,
-      "independent_evidence": "independent Monte Carlo (TOPAS, MCsquare, FRED)"
+      "independent_evidence": "independent Monte Carlo (TOPAS, MCsquare, FRED)",
+      "frozen_by": "decisions/0039-v2-performance-targets-and-acceptance-criteria.md"
     },
     {
       "id": "PHY-HELIUM",
@@ -120,13 +128,14 @@
         "warp-cpu",
         "warp-cuda"
       ],
-      "acceptance": "DRAFT: helium-4 Bragg curves and lateral profiles in water versus TOPAS and ion-specific tabulated range data within tolerances; nuclear attenuation evidenced.",
+      "acceptance": "Helium-4 at 100, 150, 220 MeV/u in water vs TOPAS: |dR80| <= 1.0 mm; depth-dose gamma (3 %, 1 mm) >= 95 %; lateral sigma within max(7 %, 0.3 mm); R80 within 0.5 % of the ASTAR-lineage CSDA range (ion-specific tabulated).",
       "rationale": "Helium requires its own evidence (V2-ION).",
       "species": [
         "helium"
       ],
       "independent_required": true,
-      "independent_evidence": "independent Monte Carlo (TOPAS), ion-specific tabulated (ASTAR/ICRU 90)"
+      "independent_evidence": "independent Monte Carlo (TOPAS), ion-specific tabulated (ASTAR/ICRU 90)",
+      "frozen_by": "decisions/0039-v2-performance-targets-and-acceptance-criteria.md"
     },
     {
       "id": "PHY-CARBON-FRAGMENTS",
@@ -143,13 +152,14 @@
         "warp-cpu",
         "warp-cuda"
       ],
-      "acceptance": "DRAFT: carbon-12 (150-400 MeV/u) Bragg curves, primary attenuation, fragment fluence build-up by charge and distal fragment dose tail versus TOPAS and measured fragmentation data within tolerances; species contributions scored.",
+      "acceptance": "Carbon-12 at 150, 290, 400 MeV/u in water vs TOPAS (BIC or QMD, recorded): |dR80| <= 1.0 mm; peak-to-plateau ratio within 10 %; fragment-tail dose integrated over R80+10..R80+40 mm within 25 % relative; primary carbon fraction at R80-10 mm within 0.05 absolute; H+He share of tail dose within 30 %; if measured fragment-yield data are acquired (role evaluation), charge-resolved yields within 30 %.",
       "rationale": "Carbon nuclear physics and fragment dose are central release requirements.",
       "species": [
         "carbon"
       ],
       "independent_required": true,
-      "independent_evidence": "independent Monte Carlo (TOPAS/Geant4 QMD or BIC), measured fragment yields where accessible"
+      "independent_evidence": "independent Monte Carlo (TOPAS/Geant4 QMD or BIC), measured fragment yields where accessible",
+      "frozen_by": "decisions/0039-v2-performance-targets-and-acceptance-criteria.md"
     },
     {
       "id": "PHY-OXYGEN",
@@ -166,13 +176,14 @@
         "warp-cpu",
         "warp-cuda"
       ],
-      "acceptance": "DRAFT: oxygen-16 Bragg curve and attenuation versus TOPAS and ion-specific range data within tolerances over a documented supported domain; unsupported channels raise errors.",
+      "acceptance": "Oxygen-16 at 200 and 400 MeV/u in water vs TOPAS: |dR80| <= 1.5 mm; peak-to-plateau within 12 %; tail dose (R80+10..R80+40 mm) within 30 %; supported domain 100-430 MeV/u documented; requests outside it raise errors.",
       "rationale": "Oxygen needs a documented supported domain with ion-specific validation.",
       "species": [
         "oxygen"
       ],
       "independent_required": true,
-      "independent_evidence": "independent Monte Carlo (TOPAS), ion-specific tabulated stopping data"
+      "independent_evidence": "independent Monte Carlo (TOPAS), ion-specific tabulated stopping data",
+      "frozen_by": "decisions/0039-v2-performance-targets-and-acceptance-criteria.md"
     },
     {
       "id": "PHY-LET",
@@ -189,7 +200,7 @@
         "warp-cpu",
         "warp-cuda"
       ],
-      "acceptance": "DRAFT: dose- and track-averaged LET in water for protons and mixed carbon fields versus TOPAS LET scorers and analytic single-species limits within tolerances.",
+      "acceptance": "Dose-averaged LET on the central axis (unrestricted electronic stopping power in water, transported charged hadrons/ions) vs TOPAS scorer of the same definition: within 10 % proximal to R80-5 mm and 15 % in the peak/distal region, for 150 MeV protons and 290 MeV/u carbon (mixed field, species-resolved); entrance LET within 2 % of the analytic single-track value; undefined LET voxels reported as NaN.",
       "rationale": "LET is a required planning observable and depends on estimator definitions.",
       "species": [
         "proton",
@@ -198,7 +209,8 @@
         "oxygen"
       ],
       "independent_required": true,
-      "independent_evidence": "independent Monte Carlo (TOPAS LET scorers), analytic limits"
+      "independent_evidence": "independent Monte Carlo (TOPAS LET scorers), analytic limits",
+      "frozen_by": "decisions/0039-v2-performance-targets-and-acceptance-criteria.md"
     },
     {
       "id": "NUM-FALSIFICATION",
@@ -216,8 +228,9 @@
         "warp-cpu",
         "warp-cuda"
       ],
-      "acceptance": "DRAFT: step-size, scoring-grid refinement/shift, boundary alignment, translated/outside sources, finite-phantom escape accounting, float32/float64, beam orientation probes yield changes within predeclared stability bounds or the domain is rejected.",
-      "rationale": "Adversarial numerical falsification is a v2 MUST."
+      "acceptance": "Predeclared bounds for 150 MeV protons and 290 MeV/u carbon in water at >= 1e5 histories: halving max step (1 -> 0.5 mm) and energy-step fraction (0.10 -> 0.05) changes R80 by <= 0.2 mm and peak dose by <= 1 %; shifting the scoring grid by half a voxel conserves integral dose to 0.1 % and R80 to 0.3 mm; translated/rotated sources and beam orientations reproduce profiles within statistics (|z| < 3, mean |z| < 0.2); float32 vs float64 total energy deposited within 0.01 % and voxel doses within statistics; finite-phantom escape and truncation energies are reported separately and the energy balance closes to 0.1 %; inapplicable probes are explained. Domains violating a bound are rejected and documented.",
+      "rationale": "Adversarial numerical falsification is a v2 MUST.",
+      "frozen_by": "decisions/0039-v2-performance-targets-and-acceptance-criteria.md"
     },
     {
       "id": "NUM-STATISTICS",
@@ -234,8 +247,9 @@
         "warp-cpu",
         "warp-cuda"
       ],
-      "acceptance": "DRAFT: batch uncertainty coverage within predeclared bounds; uncertainty of dose and secondary/fragment estimators scales as 1/sqrt(N); seeds and batch counts reproduce statistically.",
-      "rationale": "Undefined uncertainty must not masquerade as zero."
+      "acceptance": "Batch-based uncertainty: 1-sigma interval coverage across >= 1000 high-dose voxels within 0.60-0.76 (nominal 0.683); relative uncertainty vs histories fits an exponent within -0.5 +/- 0.1 for dose, LET numerators and each fragment-species dose; identical seed and backend reproduce bitwise; different seeds give |mean z| < 0.1 and std z within 0.9-1.1; batch counts 2/10/40 recorded; undefined uncertainty is represented explicitly, never as zero.",
+      "rationale": "Undefined uncertainty must not masquerade as zero.",
+      "frozen_by": "decisions/0039-v2-performance-targets-and-acceptance-criteria.md"
     },
     {
       "id": "NUM-BACKEND-PARITY",
@@ -253,8 +267,9 @@
         "warp-cpu",
         "warp-cuda"
       ],
-      "acceptance": "DRAFT: reference Python, Warp CPU and Warp CUDA agree statistically on identical configurations (z-score criteria on voxel dose, integral quantities exact within float tolerance); deterministic per-backend reproducibility.",
-      "rationale": "Backends share the physics model; parity is equivalence, not accuracy evidence."
+      "acceptance": "Reference Python (>= 2e4 histories), Warp CPU and Warp CUDA (>= 1e6) on identical configurations: total energy per primary within 0.1 % (and |z| < 3); voxelwise z-score distribution with |mean| < 0.1 and std within 0.9-1.15; CPU vs CUDA gamma (1 %, 1 mm) >= 99 %; deterministic repeat per backend and seed.",
+      "rationale": "Backends share the physics model; parity is equivalence, not accuracy evidence.",
+      "frozen_by": "decisions/0039-v2-performance-targets-and-acceptance-criteria.md"
     },
     {
       "id": "CAP-CONTRACT",
@@ -275,8 +290,9 @@
         "warp-cpu",
         "warp-cuda"
       ],
-      "acceptance": "DRAFT: every public path honors or rejects requested physics/scoring/influence flags with discriminating tests; requested and effective configuration persisted.",
-      "rationale": "Fail-closed capability contract is a v2 MUST."
+      "acceptance": "Every public path (simulate, dose, LET, influence, CLI) with all combinations of nuclear/secondaries/fragmentation/LET/species/biological/influence flags either honours the request with a discriminating observable change or raises an unsupported-combination error before any result; requested and effective configuration persisted and compared; supported species/materials/geometries/energies/sources/scorers/backends discoverable via API and documented. All tests pass.",
+      "rationale": "Fail-closed capability contract is a v2 MUST.",
+      "frozen_by": "decisions/0039-v2-performance-targets-and-acceptance-criteria.md"
     },
     {
       "id": "CAP-BIO-LOOKUP",
@@ -291,8 +307,9 @@
         "warp-cpu",
         "warp-cuda"
       ],
-      "acceptance": "DRAFT: user-provided species/energy(/material) lookup tables produce tallies matching fluence-weighted expectations in controlled cases, with provenance recorded.",
-      "rationale": "External biological lookup functionality must be demonstrated nontrivially."
+      "acceptance": "User-provided species/energy(/material) lookup tables (JSON/NumPy) accumulate tallies equal within statistics to the fluence-weighted expectation in controlled monoenergetic and mixed-field cases; the provenance (hash, source) is persisted; a table derived from the implementation's own stopping data is rejected as demonstration evidence. All tests pass.",
+      "rationale": "External biological lookup functionality must be demonstrated nontrivially.",
+      "frozen_by": "decisions/0039-v2-performance-targets-and-acceptance-criteria.md"
     },
     {
       "id": "PROV-OUTPUT",
@@ -310,8 +327,9 @@
         "warp-cpu",
         "warp-cuda"
       ],
-      "acceptance": "DRAFT: persisted results reopened in a separate clean process recover all V2-OUTPUT fields; influence matrices retain geometry/beamlet/unit/history metadata.",
-      "rationale": "Self-describing results are a release requirement."
+      "acceptance": "A persisted result reopened in a separate clean process (no access to the producing objects) recovers every V2-OUTPUT field; influence matrices retain geometry, beamlet mapping, units, histories and normalization; human-readable summaries/profiles/plots are produced. All tests pass.",
+      "rationale": "Self-describing results are a release requirement.",
+      "frozen_by": "decisions/0039-v2-performance-targets-and-acceptance-criteria.md"
     },
     {
       "id": "PROV-DATA",
@@ -328,8 +346,9 @@
       "backends": [
         "python"
       ],
-      "acceptance": "DRAFT: external datasets are acquired automatically, cached, versioned, hash-verified, offline-reusable and identified in outputs.",
-      "rationale": "External data management MUSTs."
+      "acceptance": "External datasets are acquired through the provenance cache with URL, retrieval time, license/access basis, hash and role; cached reuse works offline; a hash mismatch fails; results identify the dataset hashes used. All tests pass.",
+      "rationale": "External data management MUSTs.",
+      "frozen_by": "decisions/0039-v2-performance-targets-and-acceptance-criteria.md"
     },
     {
       "id": "PERF-WORKLOADS",
@@ -344,8 +363,9 @@
         "warp-cpu",
         "warp-cuda"
       ],
-      "acceptance": "DRAFT: each performance.json workload measured with full enabled physics meets every ratified numeric target; scaling series recorded.",
-      "rationale": "Frozen application-level performance gates."
+      "acceptance": "Each performance.json workload measured on warp-cuda with all workload physics enabled and >= 10 batches satisfies every frozen target of decision 0039 (see performance_targets); warp-cpu and reference-path measurements and the scaling series are recorded; measurement method, concurrency and noise (>= 3 repeats) documented; failed runs retained.",
+      "rationale": "Frozen application-level performance gates.",
+      "frozen_by": "decisions/0039-v2-performance-targets-and-acceptance-criteria.md"
     },
     {
       "id": "WF-CLEAN-INSTALL",
@@ -362,8 +382,9 @@
         "warp-cpu",
         "warp-cuda"
       ],
-      "acceptance": "DRAFT: the documented workflow (install, data acquisition, source/geometry/scoring definition, run, dose/LET/uncertainty/influence outputs, offline reuse) succeeds from a clean installation; failures are acceptance failures.",
-      "rationale": "A product, not internal tests, is the deliverable."
+      "acceptance": "From a fresh virtual environment, following only the documentation: install, acquire/cache data, define water, heterogeneous, multi-beamlet and carbon cases, run on the reference, warp-cpu and warp-cuda backends, obtain dose, LET, uncertainty and influence outputs, inspect human-readable results, and rerun offline from the cache. Any deviation is an acceptance failure.",
+      "rationale": "A product, not internal tests, is the deliverable.",
+      "frozen_by": "decisions/0039-v2-performance-targets-and-acceptance-criteria.md"
     },
     {
       "id": "WF-QUALITY-RELEASE",
@@ -378,9 +399,118 @@
       "backends": [
         "python"
       ],
-      "acceptance": "DRAFT: automated tests, CI, pre-commit and documentation build pass; the qualification report covers every MUST.",
-      "rationale": "Software-quality and release-completeness MUSTs."
+      "acceptance": "pre-commit, CI (pre-commit, tests, docs) and the local exact-SHA validation gate pass; the qualification report covers all 53 MUST IDs with supporting suites; release promotion completes.",
+      "rationale": "Software-quality and release-completeness MUSTs.",
+      "frozen_by": "decisions/0039-v2-performance-targets-and-acceptance-criteria.md"
     }
   ],
-  "performance_targets": null
+  "performance_targets": {
+    "proton-3d": {
+      "wall_seconds": {
+        "direction": "max",
+        "value": 60
+      },
+      "histories_per_second": {
+        "direction": "min",
+        "value": 100000
+      },
+      "cold_start_seconds": {
+        "direction": "max",
+        "value": 30
+      },
+      "compilation_seconds": {
+        "direction": "max",
+        "value": 300
+      },
+      "host_seconds": {
+        "direction": "max",
+        "value": 30
+      },
+      "gpu_kernel_seconds": {
+        "direction": "max",
+        "value": 20
+      },
+      "gpu_peak_mib": {
+        "direction": "max",
+        "value": 4096
+      },
+      "host_peak_mib": {
+        "direction": "max",
+        "value": 4096
+      }
+    },
+    "influence": {
+      "wall_seconds": {
+        "direction": "max",
+        "value": 120
+      },
+      "histories_per_second": {
+        "direction": "min",
+        "value": 50000
+      },
+      "cold_start_seconds": {
+        "direction": "max",
+        "value": 30
+      },
+      "compilation_seconds": {
+        "direction": "max",
+        "value": 300
+      },
+      "host_seconds": {
+        "direction": "max",
+        "value": 60
+      },
+      "gpu_kernel_seconds": {
+        "direction": "max",
+        "value": 40
+      },
+      "gpu_peak_mib": {
+        "direction": "max",
+        "value": 8192
+      },
+      "host_peak_mib": {
+        "direction": "max",
+        "value": 6144
+      }
+    },
+    "carbon-fragments": {
+      "wall_seconds": {
+        "direction": "max",
+        "value": 180
+      },
+      "histories_per_second": {
+        "direction": "min",
+        "value": 25000
+      },
+      "cold_start_seconds": {
+        "direction": "max",
+        "value": 30
+      },
+      "compilation_seconds": {
+        "direction": "max",
+        "value": 300
+      },
+      "host_seconds": {
+        "direction": "max",
+        "value": 60
+      },
+      "gpu_kernel_seconds": {
+        "direction": "max",
+        "value": 80
+      },
+      "gpu_peak_mib": {
+        "direction": "max",
+        "value": 6144
+      },
+      "host_peak_mib": {
+        "direction": "max",
+        "value": 4096
+      }
+    }
+  },
+  "performance_target_backend": "warp-cuda",
+  "performance_metric_definitions": "See decisions/0039: wall_seconds end-to-end warm-cache; histories_per_second = primaries / transport wall time (host+kernel, all batches); cold_start_seconds process start to first launch with warm kernel cache; compilation_seconds extra time of a run after warp.clear_kernel_cache(); host_seconds non-kernel transport time; gpu_kernel_seconds summed kernel time; peaks attributable device memory / host RSS.",
+  "frozen_on": "2026-09-30",
+  "freeze_task": "V2-002",
+  "amendment_policy": "Any change requires a new decision record citing 0039, preserves this file's history and original results, records a tolerance_changed/validation_strategy_changed event, and re-freezes at a new SHA."
 }
