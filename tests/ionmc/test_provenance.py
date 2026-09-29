@@ -3,6 +3,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 import ionmc
 from ionmc import cli, provenance
 
@@ -67,3 +69,41 @@ def test_module_entry_point_runs():
     )
     assert proc.returncode == 0, proc.stderr
     assert "git_sha" in proc.stdout
+
+
+def test_cli_stopping_offline_water_uses_shipped_icru90(capsys, tmp_path, monkeypatch):
+    monkeypatch.setenv("IONMC_DATA_DIR", str(tmp_path))
+    assert (
+        cli.main(
+            [
+                "stopping",
+                "--species",
+                "c12",
+                "--material",
+                "water",
+                "--energy",
+                "290",
+                "--offline",
+            ]
+        )
+        == 0
+    )
+    out = json.loads(capsys.readouterr().out)
+    assert out["provenance"]["low_energy_source"].startswith("ICRU 90")
+    assert 16.0 < out["values"][0]["csda_range_g_cm2"] < 16.6
+
+
+def test_cli_data_cache_dir_and_list(capsys, tmp_path, monkeypatch):
+    monkeypatch.setenv("IONMC_DATA_DIR", str(tmp_path))
+    assert cli.main(["data", "cache-dir"]) == 0
+    assert str(tmp_path) in capsys.readouterr().out
+    assert cli.main(["data", "list"]) == 0
+    assert json.loads(capsys.readouterr().out) == []
+
+
+def test_cli_data_fetch_offline_reports_missing_dataset(tmp_path, monkeypatch):
+    from ionmc.data import DatasetUnavailableError
+
+    monkeypatch.setenv("IONMC_DATA_DIR", str(tmp_path))
+    with pytest.raises(DatasetUnavailableError):
+        cli.main(["data", "fetch", "--material", "pmma", "--offline"])

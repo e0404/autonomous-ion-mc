@@ -48,6 +48,9 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "RUF"]
+# Scientific docstrings and comments use Greek letters, minus signs and
+# superscripts deliberately; the ambiguous-unicode checks would forbid them.
+ignore = ["RUF001", "RUF002", "RUF003"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["B011"]
