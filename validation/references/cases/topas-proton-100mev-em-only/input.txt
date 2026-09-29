@@ -1,0 +1,66 @@
+# IonMC v2 reference case: 100 MeV protons in water, electromagnetic physics only
+# (no hadronic modules), for validating condensed-history energy loss, straggling
+# and multiple scattering independently of nuclear interactions.
+i:Ts/NumberOfThreads = 1
+i:Ts/Seed = 314159
+b:Ts/PauseBeforeQuit = "False"
+i:Ts/ShowHistoryCountAtInterval = 5000
+
+s:Ge/World/Material = "Vacuum"
+d:Ge/World/HLX = 10 cm
+d:Ge/World/HLY = 10 cm
+d:Ge/World/HLZ = 10 cm
+
+s:Ge/Water/Parent = "World"
+s:Ge/Water/Type = "TsBox"
+s:Ge/Water/Material = "G4_WATER"
+d:Ge/Water/HLX = 30 mm
+d:Ge/Water/HLY = 30 mm
+d:Ge/Water/HLZ = 50 mm
+d:Ge/Water/TransZ = 50 mm
+
+# thin daughter slab at 30-31 mm depth for a lateral profile
+s:Ge/Slab/Parent = "Water"
+s:Ge/Slab/Type = "TsBox"
+s:Ge/Slab/Material = "G4_WATER"
+d:Ge/Slab/HLX = 30 mm
+d:Ge/Slab/HLY = 30 mm
+d:Ge/Slab/HLZ = 0.5 mm
+d:Ge/Slab/TransZ = -19.5 mm
+
+s:Ge/Source/Parent = "World"
+s:Ge/Source/Type = "Group"
+d:Ge/Source/TransZ = -0.5 mm
+
+s:So/Beam/Type = "Beam"
+s:So/Beam/Component = "Source"
+s:So/Beam/BeamParticle = "proton"
+d:So/Beam/BeamEnergy = 100 MeV
+u:So/Beam/BeamEnergySpread = 0
+s:So/Beam/BeamPositionDistribution = "None"
+s:So/Beam/BeamAngularDistribution = "None"
+i:So/Beam/NumberOfHistoriesInRun = 20000
+
+s:Ph/Default/Type = "Geant4_Modular"
+sv:Ph/Default/Modules = 1 "g4em-standard_opt4"
+d:Ph/Default/CutForAllParticles = 0.1 mm
+
+s:Sc/pdd/Quantity = "EnergyDeposit"
+s:Sc/pdd/Component = "Water"
+i:Sc/pdd/XBins = 1
+i:Sc/pdd/YBins = 1
+i:Sc/pdd/ZBins = 200
+s:Sc/pdd/OutputType = "csv"
+s:Sc/pdd/OutputFile = "pdd"
+s:Sc/pdd/IfOutputFileAlreadyExists = "Overwrite"
+sv:Sc/pdd/Report = 2 "Sum" "Histories"
+
+s:Sc/lat/Quantity = "EnergyDeposit"
+s:Sc/lat/Component = "Slab"
+i:Sc/lat/XBins = 120
+i:Sc/lat/YBins = 1
+i:Sc/lat/ZBins = 1
+s:Sc/lat/OutputType = "csv"
+s:Sc/lat/OutputFile = "lateral"
+s:Sc/lat/IfOutputFileAlreadyExists = "Overwrite"
+sv:Sc/lat/Report = 2 "Sum" "Histories"

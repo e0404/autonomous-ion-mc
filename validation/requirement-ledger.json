@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "revision": 3,
+  "revision": 4,
   "updated": "2026-09-30",
   "status_vocabulary": [
     "planned",
@@ -42,12 +42,14 @@
       "id": "V1-MUST-003",
       "title": "Reference Python execution",
       "source": "REQUIREMENTS.md",
-      "status": "planned",
+      "status": "implemented",
       "suites": [
         "NUM-BACKEND-PARITY"
       ],
-      "tasks": [],
-      "notes": ""
+      "tasks": [
+        "V2-004"
+      ],
+      "notes": "Reference Python backend (float64, shared step physics) in V2-004."
     },
     {
       "id": "V1-MUST-004",
@@ -74,44 +76,50 @@
         "PHY-OXYGEN"
       ],
       "tasks": [
-        "V2-003"
+        "V2-003",
+        "V2-004"
       ],
-      "notes": "Species set and per-nucleon energy conventions defined (V2-003); transport follows."
+      "notes": "Electromagnetic transport of any ionmc species on the reference backend (V2-004); nuclear physics pending."
     },
     {
       "id": "V1-MUST-006",
       "title": "Homogeneous reference geometries",
       "source": "REQUIREMENTS.md",
-      "status": "planned",
+      "status": "implemented",
       "suites": [
         "PHY-PROTON-WATER"
       ],
-      "tasks": [],
-      "notes": ""
+      "tasks": [
+        "V2-004"
+      ],
+      "notes": "Homogeneous boxes via homogeneous_box (V2-004)."
     },
     {
       "id": "V1-MUST-007",
       "title": "Voxelized geometries",
       "source": "REQUIREMENTS.md",
-      "status": "planned",
+      "status": "implemented",
       "suites": [
         "PHY-HETEROGENEITY"
       ],
-      "tasks": [],
-      "notes": ""
+      "tasks": [
+        "V2-004"
+      ],
+      "notes": "Voxel geometry with per-voxel material index and density (V2-004)."
     },
     {
       "id": "V1-MUST-008",
       "title": "Material assignment",
       "source": "REQUIREMENTS.md",
-      "status": "in-progress",
+      "status": "implemented",
       "suites": [
         "PHY-HETEROGENEITY"
       ],
       "tasks": [
-        "V2-003"
+        "V2-003",
+        "V2-004"
       ],
-      "notes": "Material library with composition/density/I values (V2-003)."
+      "notes": "Material/density assignment per voxel, slab phantoms (V2-004)."
     },
     {
       "id": "V1-MUST-009",
@@ -140,13 +148,15 @@
       "id": "V1-MUST-011",
       "title": "Changeable scoring grids",
       "source": "REQUIREMENTS.md",
-      "status": "planned",
+      "status": "implemented",
       "suites": [
         "NUM-FALSIFICATION",
         "CAP-CONTRACT"
       ],
-      "tasks": [],
-      "notes": ""
+      "tasks": [
+        "V2-004"
+      ],
+      "notes": "Scoring grids of different resolution/alignment with path-length-weighted deposit and overlap masses (V2-004)."
     },
     {
       "id": "V1-MUST-012",
@@ -165,23 +175,27 @@
       "id": "V1-MUST-013",
       "title": "Absorbed dose",
       "source": "REQUIREMENTS.md",
-      "status": "planned",
+      "status": "implemented",
       "suites": [
         "CAP-CONTRACT"
       ],
-      "tasks": [],
-      "notes": ""
+      "tasks": [
+        "V2-004"
+      ],
+      "notes": "Dose per primary (Gy) on the scoring grid (V2-004)."
     },
     {
       "id": "V1-MUST-014",
       "title": "Energy deposition",
       "source": "REQUIREMENTS.md",
-      "status": "planned",
+      "status": "implemented",
       "suites": [
         "CAP-CONTRACT"
       ],
-      "tasks": [],
-      "notes": ""
+      "tasks": [
+        "V2-004"
+      ],
+      "notes": "Energy deposition per primary with escape/cutoff accounting (V2-004)."
     },
     {
       "id": "V1-MUST-015",
@@ -236,14 +250,15 @@
       "id": "V1-MUST-019",
       "title": "Separation of transport from data source",
       "source": "REQUIREMENTS.md",
-      "status": "in-progress",
+      "status": "implemented",
       "suites": [
         "PHY-STOPPING-RANGE"
       ],
       "tasks": [
-        "V2-003"
+        "V2-003",
+        "V2-004"
       ],
-      "notes": "Blended StoppingTable abstraction built; transport consumption follows."
+      "notes": "Transport consumes packed tables only (TableSet); sources are recorded in provenance (V2-004)."
     },
     {
       "id": "V1-MUST-020",
@@ -343,12 +358,14 @@
       "id": "V1-MUST-027",
       "title": "Explicit random control",
       "source": "REQUIREMENTS.md",
-      "status": "planned",
+      "status": "implemented",
       "suites": [
         "NUM-STATISTICS"
       ],
-      "tasks": [],
-      "notes": ""
+      "tasks": [
+        "V2-004"
+      ],
+      "notes": "Explicit seed; batch streams via SeedSequence (reference backend) (V2-004)."
     },
     {
       "id": "V1-MUST-028",
@@ -376,12 +393,14 @@
       "id": "V1-MUST-030",
       "title": "Statistical uncertainty estimation",
       "source": "REQUIREMENTS.md",
-      "status": "planned",
+      "status": "implemented",
       "suites": [
         "NUM-STATISTICS"
       ],
-      "tasks": [],
-      "notes": ""
+      "tasks": [
+        "V2-004"
+      ],
+      "notes": "Batch-based standard error, NaN when undefined (V2-004)."
     },
     {
       "id": "V1-MUST-031",
@@ -465,25 +484,29 @@
       "id": "V1-MUST-037",
       "title": "Explicit physical units",
       "source": "REQUIREMENTS.md",
-      "status": "planned",
+      "status": "in-progress",
       "suites": [
         "NUM-FALSIFICATION",
         "PROV-OUTPUT"
       ],
-      "tasks": [],
-      "notes": ""
+      "tasks": [
+        "V2-004"
+      ],
+      "notes": "Units documented in APIs, results and summaries (mm, MeV/u, Gy per primary) (V2-004)."
     },
     {
       "id": "V1-MUST-038",
       "title": "Coordinate-system documentation",
       "source": "REQUIREMENTS.md",
-      "status": "planned",
+      "status": "implemented",
       "suites": [
         "NUM-FALSIFICATION",
         "PROV-OUTPUT"
       ],
-      "tasks": [],
-      "notes": ""
+      "tasks": [
+        "V2-004"
+      ],
+      "notes": "Coordinate convention documented in geometry and persisted with results (V2-004)."
     },
     {
       "id": "V1-MUST-039",
@@ -583,25 +606,29 @@
       "id": "V2-CAP",
       "title": "fail-closed capability contract",
       "source": "experiment/v2/REQUIREMENTS.md",
-      "status": "planned",
+      "status": "in-progress",
       "suites": [
         "PHY-PROTON-NUCLEAR",
         "CAP-CONTRACT"
       ],
-      "tasks": [],
-      "notes": ""
+      "tasks": [
+        "V2-004"
+      ],
+      "notes": "Fail-closed capability contract with discoverable capabilities() and discriminating tests (V2-004); more flags with later physics."
     },
     {
       "id": "V2-NUM",
       "title": "adversarial numerical falsification",
       "source": "experiment/v2/REQUIREMENTS.md",
-      "status": "planned",
+      "status": "in-progress",
       "suites": [
         "NUM-FALSIFICATION",
         "NUM-STATISTICS"
       ],
-      "tasks": [],
-      "notes": ""
+      "tasks": [
+        "V2-004"
+      ],
+      "notes": "Step-size, grid shift/coarsening and energy-balance probes in tests (V2-004)."
     },
     {
       "id": "V2-EVID",
@@ -637,24 +664,28 @@
       "id": "V2-OUTPUT",
       "title": "self-describing persisted scientific results",
       "source": "experiment/v2/REQUIREMENTS.md",
-      "status": "planned",
+      "status": "in-progress",
       "suites": [
         "PROV-OUTPUT"
       ],
-      "tasks": [],
-      "notes": ""
+      "tasks": [
+        "V2-004"
+      ],
+      "notes": "Self-describing npz+json results reopened in a clean process; text summary (V2-004); influence and remaining fields later."
     },
     {
       "id": "V2-USER",
       "title": "complete clean-install scientific workflow",
       "source": "experiment/v2/REQUIREMENTS.md",
-      "status": "planned",
+      "status": "in-progress",
       "suites": [
         "PHY-HETEROGENEITY",
         "WF-CLEAN-INSTALL"
       ],
-      "tasks": [],
-      "notes": ""
+      "tasks": [
+        "V2-004"
+      ],
+      "notes": "ionmc run with JSON configuration, offline reuse (V2-004)."
     },
     {
       "id": "V2-PERF",
