@@ -1,11 +1,11 @@
 # Operational instructions for the v2 autonomous orchestrator
 
 Read the inherited root AGENTS.md/EXPERIMENT.md/REQUIREMENTS.md, then v2 PROTOCOL.md,
-REQUIREMENTS.md, performance.json, requirements-index.json and the kickoff-v2 prompt.
+REQUIREMENTS.md, performance.json, requirements-index.json, HISTORY-ISOLATION.md and the kickoff-v2-isolated prompt.
 V2 overrides take precedence only where stated. The setup maintainer is distinct
 from the autonomous runtime governed here.
 
-Work in the generated fresh checkout with .ionmc-condition.json, never the setup
+Work in the independent v2-only clone with .ionmc-condition.json, never the setup
 branch's completed v1 package. Permanent branches are v2/develop and v2/main.
 Use the existing task manager, commit, local validation, host runner and controlled
 CI/integration MCPs. Use inspect_task_ci and bounded failure logs for the exact
@@ -32,5 +32,13 @@ Task completion and milestones are checkpoints. Continue autonomously across the
 including research, independent review, integration and release promotion. Stop
 only for successful promoted release or a genuine external blocker with a recorded
 intervention; continue unrelated work if possible. Do not start with or copy v1
-scientific implementation/validation; historical findings inform research questions,
-not a prescribed set of answers. No clinical-use claims.
+scientific implementation/validation. Do not fetch, browse or reconstruct v1
+branches, tags, commits, PRs, logs or audit archives, including through web tools,
+MCP tools or other local checkouts. Only the supplied v2 requirements and audit
+lessons are experimental inputs. Do not change the restricted Git fetch settings
+or attach another object database. No clinical-use claims.
+
+Choose unique task IDs prefixed with V2-, such as V2-001 and V2-002. The task MCP
+accepts caller-supplied IDs; it does not allocate consecutive numbers. Never reuse
+v1 task IDs. Existing local or remote v2 IDs are rejected; select a new V2- ID
+without inspecting historical branch contents. GitHub PR numbers remain repository-wide.

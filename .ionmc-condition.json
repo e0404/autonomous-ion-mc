@@ -2,6 +2,15 @@
   "baseline_sha": "8d7d831d62015bfb51b99d795d84c2421d2b6941",
   "experiment_id": "experiment-v2",
   "final_setup_source_sha": "15b6a8664ebc1789d1869a3f7291925e5148f211",
+  "history_access": {
+    "excluded_commit_ids": [
+      "3a2e8953be0034d75a29ccf2b04640353759982b",
+      "15b6a8664ebc1789d1869a3f7291925e5148f211"
+    ],
+    "kickoff_prompt": "experiment/prompts/kickoff-v2-isolated.md",
+    "mode": "v2-only",
+    "policy": "experiment/v2/HISTORY-ISOLATION.md"
+  },
   "integration_branch": "v2/develop",
   "overlay": {
     ".mcp.json": "5aeabac845a7e20d12865da630166d7e5a33da6a73b80367fe2ba8f61bea9123",

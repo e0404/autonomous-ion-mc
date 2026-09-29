@@ -113,6 +113,10 @@ def find_worktree(path: Path):
 
 def create(task_id: str, description: str | None):
     task_id = normalize_task_id(task_id)
+    if BASE_BRANCH.startswith("v2/") and not re.fullmatch(
+        r"V2-[A-Z0-9][A-Z0-9._-]*", task_id
+    ):
+        raise ValueError("V2 task IDs must start with V2-, for example V2-001")
     ensure_repo_ready()
 
     branch = branch_for(task_id, description)
@@ -123,6 +127,22 @@ def create(task_id: str, description: str | None):
 
     if git("show-ref", "--verify", "--quiet", f"refs/heads/{branch}", check=False).returncode == 0:
         raise RuntimeError(f"Local branch already exists: {branch}")
+
+    if BASE_BRANCH.startswith("v2/"):
+        # Query only this v2 ID, without fetching task branches or v1 history.
+        # Different descriptions must not silently reuse an already used ID.
+        ref = f"refs/heads/task/{task_id.lower()}"
+        local = git_text("for-each-ref", "--format=%(refname)", ref, ref + "-*")
+        if local:
+            raise RuntimeError(f"Local task ID already exists: {task_id}")
+        remote = git(
+            "ls-remote", "--exit-code", "--heads", "origin", ref, ref + "-*",
+            check=False,
+        )
+        if remote.returncode == 0:
+            raise RuntimeError(f"Remote task ID already exists: {task_id}; choose a new V2- ID")
+        if remote.returncode != 2:
+            raise RuntimeError("Could not verify remote task ID availability")
 
     WORKTREE_ROOT.mkdir(parents=True, exist_ok=True)
 

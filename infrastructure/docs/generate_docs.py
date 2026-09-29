@@ -126,7 +126,7 @@ def main() -> int:
         destination.mkdir(parents=True, exist_ok=True)
         for source in v2.glob("*.md"):
             shutil.copyfile(source, destination / source.name)
-        for name in ("kickoff-v2.md", "prepare-v2.md"):
+        for name in ("kickoff-v2.md", "kickoff-v2-isolated.md", "prepare-v2.md"):
             shutil.copyfile(REPO_ROOT / "experiment/prompts" / name, DOCS_ROOT / "experiment/prompts" / name)
     index = write_decision_index(decisions)
 

@@ -17,7 +17,7 @@ RAW_ROOT = Path(
         "IONMC_CODEX_RAW_DIR",
         str(Path.home() / ".local/share/ionmc-experiment/raw/codex"),
     )
-)
+).expanduser()
 
 EXPERIMENT_ID = os.environ.get("IONMC_EXPERIMENT_ID", "experiment-v1")
 
