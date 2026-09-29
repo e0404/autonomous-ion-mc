@@ -245,6 +245,17 @@ def inspect_pr(task_id: str):
     print(json.dumps(result, indent=2))
 
 
+def pushed_task_sha(path: Path, branch: str) -> str | None:
+    # Narrow v2 clones do not maintain origin/task/* tracking refs. Query only
+    # this task ref on the remote; do not fetch objects or trust a stale ref.
+    ref = f"refs/heads/{branch}"
+    proc = git("ls-remote", "--exit-code", "origin", ref, cwd=path, check=False)
+    rows = [line.split() for line in proc.stdout.splitlines()]
+    if proc.returncode or len(rows) != 1 or rows[0][1:] != [ref]:
+        return None
+    return rows[0][0]
+
+
 def inspect_ci(task_id: str):
     path, branch = ensure_worktree(task_id)
 
@@ -258,18 +269,7 @@ def inspect_ci(task_id: str):
     repo = repository_name()
     head_sha = git_text("rev-parse", "HEAD", cwd=path)
 
-    remote_sha_proc = git(
-        "rev-parse",
-        f"origin/{branch}",
-        cwd=path,
-        check=False,
-    )
-
-    remote_sha = (
-        remote_sha_proc.stdout.strip()
-        if remote_sha_proc.returncode == 0
-        else None
-    )
+    remote_sha = pushed_task_sha(path, branch)
 
     if remote_sha != head_sha:
         raise RuntimeError(
@@ -450,18 +450,7 @@ def ci_failure_logs(
     repo = repository_name()
     head_sha = git_text("rev-parse", "HEAD", cwd=path)
 
-    remote_sha_proc = git(
-        "rev-parse",
-        f"origin/{branch}",
-        cwd=path,
-        check=False,
-    )
-
-    remote_sha = (
-        remote_sha_proc.stdout.strip()
-        if remote_sha_proc.returncode == 0
-        else None
-    )
+    remote_sha = pushed_task_sha(path, branch)
 
     if remote_sha != head_sha:
         raise RuntimeError(

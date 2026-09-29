@@ -46,8 +46,19 @@ the readers now expand `~`. The general telemetry directory is no longer an
 allowed sandbox read/write root. IONMC_NTFY_URL and the registered native engines
 are unchanged. Old logs remain in the operator's archive.
 
+The orchestrator chooses unique `V2-` task IDs (for example `V2-001`); the task
+MCP has no automatic numbering counter. V2 creation rejects IDs without that
+prefix and checks local refs plus an exact-ID remote namespace query before
+creating a worktree. An existing remote ID is rejected even if its description
+differs. This reads only ref metadata, not branch contents. Retain all old remote
+task branches; GitHub PR numbering remains repository-wide and creates no Git
+branch collision. The availability check is not an atomic distributed allocator;
+concurrent orchestrators must still coordinate ID allocation.
+
 The controlled Git services already fetch the configured v2 branches explicitly.
-New task branches may be pushed and preserved normally. The clone fetch config
+New task branches may be pushed and preserved normally. CI inspection and failure
+logs verify the task SHA with an exact-ref `git ls-remote` query; they do not
+require a local origin/task tracking ref or fetch excluded history. The clone fetch config
 contains exactly:
 
 ```text

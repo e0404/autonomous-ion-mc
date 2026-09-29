@@ -37,3 +37,8 @@ branches, tags, commits, PRs, logs or audit archives, including through web tool
 MCP tools or other local checkouts. Only the supplied v2 requirements and audit
 lessons are experimental inputs. Do not change the restricted Git fetch settings
 or attach another object database. No clinical-use claims.
+
+Choose unique task IDs prefixed with V2-, such as V2-001 and V2-002. The task MCP
+accepts caller-supplied IDs; it does not allocate consecutive numbers. Never reuse
+v1 task IDs. Existing local or remote v2 IDs are rejected; select a new V2- ID
+without inspecting historical branch contents. GitHub PR numbers remain repository-wide.

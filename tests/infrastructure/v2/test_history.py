@@ -238,3 +238,113 @@ def test_preflight_requires_history_boundary(isolated, tmp_path, monkeypatch):
     result = preflight.check(clone, smoke=True, notify=True, state=tmp_path)
     assert not result["history_isolation"]["ready"]
     assert not result["ready_for_unattended_launch"]
+
+
+@pytest.mark.parametrize("operation", ["inspect_ci", "ci_failure_logs"])
+def test_ci_checks_remote_sha_without_task_tracking_ref(
+    isolated, tmp_path, monkeypatch, capsys, operation
+):
+    from infrastructure.tasks import task_integration
+
+    clone, _, _ = isolated
+    branch = "task/v2-ci"
+    task = tmp_path / "ci-task"
+    git(clone, "worktree", "add", "-b", branch, str(task))
+    (task / "task-change").write_text("first change")
+    head = commit(task, "first task commit")
+    git(task, "push", "origin", branch)
+    assert (
+        subprocess.run(
+            [
+                "git",
+                "-C",
+                str(clone),
+                "show-ref",
+                "--verify",
+                "--quiet",
+                "refs/remotes/origin/" + branch,
+            ]
+        ).returncode
+        != 0
+    )
+    monkeypatch.setattr(task_integration, "ensure_worktree", lambda _: (task, branch))
+    monkeypatch.setattr(
+        task_integration, "find_open_pr", lambda _: {"number": 1, "url": "test"}
+    )
+    monkeypatch.setattr(task_integration, "repository_name", lambda: "test/repo")
+    calls = []
+
+    def gh(*args, **kwargs):
+        calls.append(args)
+        return subprocess.CompletedProcess(
+            args, 0, stdout='{"check_runs": [], "workflow_runs": []}', stderr=""
+        )
+
+    monkeypatch.setattr(task_integration, "gh", gh)
+    getattr(task_integration, operation)("V2-CI")
+    assert json.loads(capsys.readouterr().out)["head_sha"] == head
+    assert any("head_sha=" + head in args for args in calls)
+    assert history.inspect(clone)["ready"]
+    (task / "task-change").write_text("not pushed")
+    commit(task, "unpublished task commit")
+    calls.clear()
+    with pytest.raises(RuntimeError, match="does not match pushed"):
+        getattr(task_integration, operation)("V2-CI")
+    assert not calls
+
+
+@pytest.fixture
+def task_manager(isolated, tmp_path, monkeypatch):
+    from infrastructure.tasks import task_worktree
+
+    clone, _, _ = isolated
+    runner = task_worktree.git
+    monkeypatch.setattr(task_worktree, "REPO", clone)
+    monkeypatch.setattr(task_worktree, "BASE_BRANCH", "v2/develop")
+    monkeypatch.setattr(task_worktree, "WORKTREE_ROOT", tmp_path / "worktrees")
+    monkeypatch.setattr(
+        task_worktree, "git", lambda *a, **k: runner(*a, cwd=k.pop("cwd", clone), **k)
+    )
+    monkeypatch.setattr(
+        task_worktree, "git_text", lambda *a, **k: git(k.get("cwd", clone), *a)
+    )
+    return task_worktree, clone
+
+
+def test_v2_task_ids_do_not_collide_with_preserved_remote_tasks(task_manager, capsys):
+    manager, clone = task_manager
+    with pytest.raises(ValueError, match="must start with V2-"):
+        manager.create("T001", "legacy numbering")
+    manager.create("V2-001", "first")
+    result = json.loads(capsys.readouterr().out)
+    assert result["branch"] == "task/v2-001-first"
+    git(Path(result["worktree"]), "push", "origin", result["branch"])
+    manager.retire("V2-001")
+    capsys.readouterr()
+    with pytest.raises(RuntimeError, match="Local task ID already exists"):
+        manager.create("V2-001", "different description")
+    # Simulate a fresh clone with no local copy of the preserved remote task.
+    git(clone, "branch", "-D", result["branch"])
+    with pytest.raises(RuntimeError, match="Remote task ID already exists"):
+        manager.create("V2-001", "different description")
+    assert not manager.path_for("V2-001").exists()
+    manager.create("V2-002", "next")
+    assert json.loads(capsys.readouterr().out)["branch"] == "task/v2-002-next"
+    assert history.inspect(clone)["ready"]
+
+
+def test_task_creation_fails_if_remote_uniqueness_cannot_be_checked(
+    task_manager, monkeypatch
+):
+    manager, _ = task_manager
+    runner = manager.git
+
+    def unavailable(*args, **kwargs):
+        if args[0] == "ls-remote":
+            return subprocess.CompletedProcess(args, 128, stdout="", stderr="offline")
+        return runner(*args, **kwargs)
+
+    monkeypatch.setattr(manager, "git", unavailable)
+    with pytest.raises(RuntimeError, match="Could not verify"):
+        manager.create("V2-003", "offline")
+    assert not manager.path_for("V2-003").exists()

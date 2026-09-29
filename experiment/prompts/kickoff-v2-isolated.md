@@ -48,3 +48,8 @@ gate pass, complete promotion to v2/main, the version tag and GitHub release.
 Report the final scientific limitations and evidence honestly. Do not stop at
 'release-ready'. If externally blocked, record the intervention and continue any
 independent work. Never fabricate operator responses or validation outcomes.
+
+Choose unique task IDs prefixed with V2-, such as V2-001 and V2-002. The task MCP
+accepts caller-supplied IDs; it does not allocate consecutive numbers. Never reuse
+v1 task IDs. Existing local or remote v2 IDs are rejected; select a new V2- ID
+without inspecting historical branch contents. GitHub PR numbers remain repository-wide.

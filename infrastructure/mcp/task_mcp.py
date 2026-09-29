@@ -42,7 +42,11 @@ def run_taskctl(*args: str) -> dict:
 
 @mcp.tool()
 def create_task_worktree(task_id: str, description: str = "") -> dict:
-    """Create a new isolated task branch/worktree from synchronized develop."""
+    """Create a task from the synchronized integration branch.
+
+    The caller supplies task_id; there is no automatic counter. V2 IDs must
+    start with V2- (for example V2-001). Existing remote IDs are rejected.
+    """
     args = ["create", "--task-id", task_id]
     if description:
         args += ["--description", description]
