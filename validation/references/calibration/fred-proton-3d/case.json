@@ -1,7 +1,7 @@
 {
   "input": "fred.inp",
   "physics": "FRED 3.76 defaults: ionisation with straggling, MCS mode 6 (Rossi-Greisen + Fippel correction), nuclear elastic and inelastic interactions enabled; I(water) = 75 eV; DTmax 7 % energy step limiter; tracking cut at 50 um residual range (values as printed in the FRED smoke log)",
-  "source": "150 MeV proton pin beam at (0,0,-1 mm) along +z, monoenergetic; N = 1 so dose is per primary",
+  "source": "150 MeV proton pin beam at (0,0,-10 mm) along +z (1 cm vacuum gap), monoenergetic; N = 1 so dose is per primary",
   "geometry": "region Phantom 120 x 120 x 300 mm water, 60 x 60 x 150 voxels of 2 mm, entrance face at z = 0",
   "materials": "FRED built-in water",
   "cuts": "FRED 3.76 native defaults (see physics)",
