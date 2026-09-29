@@ -51,8 +51,11 @@ jobs:
           version: "0.12.11"
           enable-cache: true
 
+      - name: Install locked project environment
+        run: uv sync --locked --extra dev
+
       - name: Run lightweight tests
-        run: uv run --with pytest --no-project python -m pytest tests -q
+        run: uv run --frozen python -m pytest tests -q -m "not local and not cuda"
 
   docs:
     name: docs

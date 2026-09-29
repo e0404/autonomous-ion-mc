@@ -67,3 +67,8 @@ site/
 docs/experiment/v2/
 .ionmc-cache/
 .uv-cache/
+
+# Build-time source identity stamped into wheels by hatch_build.py
+src/ionmc/_build_info.json
+# Rendered requirement ledger (generated from validation/requirement-ledger.json)
+docs/validation/requirement-ledger.md

@@ -1,0 +1,654 @@
+{
+  "schema_version": 1,
+  "revision": 1,
+  "updated": "2026-09-30",
+  "status_vocabulary": [
+    "planned",
+    "in-progress",
+    "implemented",
+    "evidence-collected",
+    "qualified",
+    "blocked"
+  ],
+  "notes": "Status 'qualified' is set only by the exact-SHA release qualification. Suites refer to validation/release-plan.json.",
+  "requirements": [
+    {
+      "id": "V1-MUST-001",
+      "title": "Ion-therapy treatment planning orientation",
+      "source": "REQUIREMENTS.md",
+      "status": "planned",
+      "suites": [
+        "CAP-CONTRACT",
+        "WF-CLEAN-INSTALL"
+      ],
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "V1-MUST-002",
+      "title": "Python-first implementation",
+      "source": "REQUIREMENTS.md",
+      "status": "in-progress",
+      "suites": [
+        "NUM-BACKEND-PARITY",
+        "WF-CLEAN-INSTALL"
+      ],
+      "tasks": [
+        "V2-001"
+      ],
+      "notes": "Python package skeleton (ionmc) with provenance/CLI in V2-001; transport physics follows."
+    },
+    {
+      "id": "V1-MUST-003",
+      "title": "Reference Python execution",
+      "source": "REQUIREMENTS.md",
+      "status": "planned",
+      "suites": [
+        "NUM-BACKEND-PARITY"
+      ],
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "V1-MUST-004",
+      "title": "NVIDIA Warp acceleration",
+      "source": "REQUIREMENTS.md",
+      "status": "planned",
+      "suites": [
+        "NUM-BACKEND-PARITY"
+      ],
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "V1-MUST-005",
+      "title": "Ion transport",
+      "source": "REQUIREMENTS.md",
+      "status": "planned",
+      "suites": [
+        "PHY-STOPPING-RANGE",
+        "PHY-PROTON-WATER",
+        "PHY-PROTON-NUCLEAR",
+        "PHY-HELIUM",
+        "PHY-CARBON-FRAGMENTS",
+        "PHY-OXYGEN"
+      ],
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "V1-MUST-006",
+      "title": "Homogeneous reference geometries",
+      "source": "REQUIREMENTS.md",
+      "status": "planned",
+      "suites": [
+        "PHY-PROTON-WATER"
+      ],
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "V1-MUST-007",
+      "title": "Voxelized geometries",
+      "source": "REQUIREMENTS.md",
+      "status": "planned",
+      "suites": [
+        "PHY-HETEROGENEITY"
+      ],
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "V1-MUST-008",
+      "title": "Material assignment",
+      "source": "REQUIREMENTS.md",
+      "status": "planned",
+      "suites": [
+        "PHY-HETEROGENEITY"
+      ],
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "V1-MUST-009",
+      "title": "Beamlet-resolved scoring",
+      "source": "REQUIREMENTS.md",
+      "status": "planned",
+      "suites": [
+        "CAP-CONTRACT"
+      ],
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "V1-MUST-010",
+      "title": "Dose influence matrices",
+      "source": "REQUIREMENTS.md",
+      "status": "planned",
+      "suites": [
+        "CAP-CONTRACT",
+        "PROV-OUTPUT"
+      ],
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "V1-MUST-011",
+      "title": "Changeable scoring grids",
+      "source": "REQUIREMENTS.md",
+      "status": "planned",
+      "suites": [
+        "NUM-FALSIFICATION",
+        "CAP-CONTRACT"
+      ],
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "V1-MUST-012",
+      "title": "Extensible scoring",
+      "source": "REQUIREMENTS.md",
+      "status": "planned",
+      "suites": [
+        "PHY-LET",
+        "CAP-CONTRACT",
+        "CAP-BIO-LOOKUP"
+      ],
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "V1-MUST-013",
+      "title": "Absorbed dose",
+      "source": "REQUIREMENTS.md",
+      "status": "planned",
+      "suites": [
+        "CAP-CONTRACT"
+      ],
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "V1-MUST-014",
+      "title": "Energy deposition",
+      "source": "REQUIREMENTS.md",
+      "status": "planned",
+      "suites": [
+        "CAP-CONTRACT"
+      ],
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "V1-MUST-015",
+      "title": "LET scoring",
+      "source": "REQUIREMENTS.md",
+      "status": "planned",
+      "suites": [
+        "PHY-LET",
+        "CAP-CONTRACT"
+      ],
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "V1-MUST-016",
+      "title": "External biological lookup data",
+      "source": "REQUIREMENTS.md",
+      "status": "planned",
+      "suites": [
+        "CAP-BIO-LOOKUP"
+      ],
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "V1-MUST-017",
+      "title": "Analytical physics layer",
+      "source": "REQUIREMENTS.md",
+      "status": "planned",
+      "suites": [
+        "PHY-STOPPING-RANGE"
+      ],
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "V1-MUST-018",
+      "title": "External/tabulated data layer",
+      "source": "REQUIREMENTS.md",
+      "status": "planned",
+      "suites": [
+        "PHY-STOPPING-RANGE"
+      ],
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "V1-MUST-019",
+      "title": "Separation of transport from data source",
+      "source": "REQUIREMENTS.md",
+      "status": "planned",
+      "suites": [
+        "PHY-STOPPING-RANGE"
+      ],
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "V1-MUST-020",
+      "title": "No large physics datasets in Git",
+      "source": "REQUIREMENTS.md",
+      "status": "planned",
+      "suites": [
+        "PROV-DATA"
+      ],
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "V1-MUST-021",
+      "title": "Automatic acquisition",
+      "source": "REQUIREMENTS.md",
+      "status": "planned",
+      "suites": [
+        "PROV-DATA",
+        "WF-CLEAN-INSTALL"
+      ],
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "V1-MUST-022",
+      "title": "Local caching",
+      "source": "REQUIREMENTS.md",
+      "status": "planned",
+      "suites": [
+        "PROV-DATA"
+      ],
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "V1-MUST-023",
+      "title": "Dataset versioning",
+      "source": "REQUIREMENTS.md",
+      "status": "planned",
+      "suites": [
+        "PROV-DATA"
+      ],
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "V1-MUST-024",
+      "title": "Integrity verification",
+      "source": "REQUIREMENTS.md",
+      "status": "planned",
+      "suites": [
+        "PROV-DATA"
+      ],
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "V1-MUST-025",
+      "title": "Provenance",
+      "source": "REQUIREMENTS.md",
+      "status": "planned",
+      "suites": [
+        "PROV-OUTPUT",
+        "PROV-DATA"
+      ],
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "V1-MUST-026",
+      "title": "Offline reuse",
+      "source": "REQUIREMENTS.md",
+      "status": "planned",
+      "suites": [
+        "PROV-DATA",
+        "WF-CLEAN-INSTALL"
+      ],
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "V1-MUST-027",
+      "title": "Explicit random control",
+      "source": "REQUIREMENTS.md",
+      "status": "planned",
+      "suites": [
+        "NUM-STATISTICS"
+      ],
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "V1-MUST-028",
+      "title": "Parallel-safe random streams",
+      "source": "REQUIREMENTS.md",
+      "status": "planned",
+      "suites": [
+        "NUM-STATISTICS"
+      ],
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "V1-MUST-029",
+      "title": "Cross-backend statistical consistency",
+      "source": "REQUIREMENTS.md",
+      "status": "planned",
+      "suites": [
+        "NUM-BACKEND-PARITY"
+      ],
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "V1-MUST-030",
+      "title": "Statistical uncertainty estimation",
+      "source": "REQUIREMENTS.md",
+      "status": "planned",
+      "suites": [
+        "NUM-STATISTICS"
+      ],
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "V1-MUST-031",
+      "title": "Validated physical behavior",
+      "source": "REQUIREMENTS.md",
+      "status": "planned",
+      "suites": [
+        "PHY-STOPPING-RANGE",
+        "PHY-PROTON-WATER",
+        "PHY-PROTON-NUCLEAR",
+        "PHY-HETEROGENEITY",
+        "PHY-HELIUM",
+        "PHY-CARBON-FRAGMENTS",
+        "PHY-OXYGEN",
+        "PHY-LET"
+      ],
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "V1-MUST-032",
+      "title": "Conservation checks",
+      "source": "REQUIREMENTS.md",
+      "status": "planned",
+      "suites": [
+        "NUM-FALSIFICATION",
+        "NUM-STATISTICS"
+      ],
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "V1-MUST-033",
+      "title": "Numerical convergence",
+      "source": "REQUIREMENTS.md",
+      "status": "planned",
+      "suites": [
+        "NUM-FALSIFICATION"
+      ],
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "V1-MUST-034",
+      "title": "High-throughput execution",
+      "source": "REQUIREMENTS.md",
+      "status": "planned",
+      "suites": [
+        "PERF-WORKLOADS"
+      ],
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "V1-MUST-035",
+      "title": "GPU-oriented architecture",
+      "source": "REQUIREMENTS.md",
+      "status": "planned",
+      "suites": [
+        "NUM-BACKEND-PARITY",
+        "PERF-WORKLOADS"
+      ],
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "V1-MUST-036",
+      "title": "Reproducible benchmarking",
+      "source": "REQUIREMENTS.md",
+      "status": "planned",
+      "suites": [
+        "PROV-OUTPUT",
+        "PERF-WORKLOADS"
+      ],
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "V1-MUST-037",
+      "title": "Explicit physical units",
+      "source": "REQUIREMENTS.md",
+      "status": "planned",
+      "suites": [
+        "NUM-FALSIFICATION",
+        "PROV-OUTPUT"
+      ],
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "V1-MUST-038",
+      "title": "Coordinate-system documentation",
+      "source": "REQUIREMENTS.md",
+      "status": "planned",
+      "suites": [
+        "NUM-FALSIFICATION",
+        "PROV-OUTPUT"
+      ],
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "V1-MUST-039",
+      "title": "Independent validation",
+      "source": "REQUIREMENTS.md",
+      "status": "planned",
+      "suites": [
+        "PHY-STOPPING-RANGE",
+        "PHY-PROTON-WATER",
+        "PHY-PROTON-NUCLEAR",
+        "PHY-HETEROGENEITY",
+        "PHY-HELIUM",
+        "PHY-CARBON-FRAGMENTS",
+        "PHY-OXYGEN",
+        "PHY-LET"
+      ],
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "V1-MUST-040",
+      "title": "Backend consistency",
+      "source": "REQUIREMENTS.md",
+      "status": "planned",
+      "suites": [
+        "NUM-BACKEND-PARITY"
+      ],
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "V1-MUST-041",
+      "title": "Automated testing",
+      "source": "REQUIREMENTS.md",
+      "status": "in-progress",
+      "suites": [
+        "WF-QUALITY-RELEASE"
+      ],
+      "tasks": [
+        "V2-001"
+      ],
+      "notes": "Package test layout, locked CI environment and pre-commit coverage established in V2-001; scientific tests follow."
+    },
+    {
+      "id": "V1-MUST-042",
+      "title": "CI integration",
+      "source": "REQUIREMENTS.md",
+      "status": "in-progress",
+      "suites": [
+        "WF-QUALITY-RELEASE"
+      ],
+      "tasks": [
+        "V2-001"
+      ],
+      "notes": "Package test layout, locked CI environment and pre-commit coverage established in V2-001; scientific tests follow."
+    },
+    {
+      "id": "V1-MUST-043",
+      "title": "Pre-commit framework",
+      "source": "REQUIREMENTS.md",
+      "status": "in-progress",
+      "suites": [
+        "WF-QUALITY-RELEASE"
+      ],
+      "tasks": [
+        "V2-001"
+      ],
+      "notes": "Package test layout, locked CI environment and pre-commit coverage established in V2-001; scientific tests follow."
+    },
+    {
+      "id": "V1-SCOPE",
+      "title": "Complete MUST scope-control priorities",
+      "source": "REQUIREMENTS.md#scope-control",
+      "status": "planned",
+      "suites": [
+        "WF-QUALITY-RELEASE"
+      ],
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "V2-ION",
+      "title": "independently qualified therapeutic ions",
+      "source": "experiment/v2/REQUIREMENTS.md",
+      "status": "planned",
+      "suites": [
+        "PHY-STOPPING-RANGE",
+        "PHY-HELIUM",
+        "PHY-CARBON-FRAGMENTS",
+        "PHY-OXYGEN",
+        "PHY-LET"
+      ],
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "V2-CAP",
+      "title": "fail-closed capability contract",
+      "source": "experiment/v2/REQUIREMENTS.md",
+      "status": "planned",
+      "suites": [
+        "PHY-PROTON-NUCLEAR",
+        "CAP-CONTRACT"
+      ],
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "V2-NUM",
+      "title": "adversarial numerical falsification",
+      "source": "experiment/v2/REQUIREMENTS.md",
+      "status": "planned",
+      "suites": [
+        "NUM-FALSIFICATION",
+        "NUM-STATISTICS"
+      ],
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "V2-EVID",
+      "title": "physical evidence lineage and sufficiency",
+      "source": "experiment/v2/REQUIREMENTS.md",
+      "status": "planned",
+      "suites": [
+        "PHY-STOPPING-RANGE",
+        "PHY-PROTON-WATER",
+        "PHY-PROTON-NUCLEAR",
+        "PHY-HETEROGENEITY",
+        "PHY-HELIUM",
+        "PHY-CARBON-FRAGMENTS",
+        "PHY-OXYGEN"
+      ],
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "V2-BIO",
+      "title": "external biological lookup functionality",
+      "source": "experiment/v2/REQUIREMENTS.md",
+      "status": "planned",
+      "suites": [
+        "CAP-BIO-LOOKUP"
+      ],
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "V2-OUTPUT",
+      "title": "self-describing persisted scientific results",
+      "source": "experiment/v2/REQUIREMENTS.md",
+      "status": "planned",
+      "suites": [
+        "PROV-OUTPUT"
+      ],
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "V2-USER",
+      "title": "complete clean-install scientific workflow",
+      "source": "experiment/v2/REQUIREMENTS.md",
+      "status": "planned",
+      "suites": [
+        "PHY-HETEROGENEITY",
+        "WF-CLEAN-INSTALL"
+      ],
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "V2-PERF",
+      "title": "frozen application-level performance/resource gates",
+      "source": "experiment/v2/REQUIREMENTS.md",
+      "status": "planned",
+      "suites": [
+        "PERF-WORKLOADS"
+      ],
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "V2-RELEASE",
+      "title": "complete qualification and promotion",
+      "source": "experiment/v2/REQUIREMENTS.md",
+      "status": "planned",
+      "suites": [
+        "WF-QUALITY-RELEASE"
+      ],
+      "tasks": [],
+      "notes": ""
+    }
+  ]
+}

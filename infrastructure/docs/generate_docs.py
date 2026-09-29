@@ -116,6 +116,44 @@ def write_decision_index(decisions: list[Path]) -> Path:
     return index
 
 
+def write_requirement_ledger() -> Path | None:
+    """Render validation/requirement-ledger.json as a documentation page."""
+    import json
+
+    source = REPO_ROOT / "validation" / "requirement-ledger.json"
+    if not source.is_file():
+        return None
+    ledger = json.loads(source.read_text(encoding="utf-8"))
+    lines = [
+        "# Requirement ledger",
+        "",
+        "Generated from `validation/requirement-ledger.json`, the canonical "
+        "machine-readable record mapping every MUST requirement to its "
+        "implementation status, planned evidence suites and tasks. Status "
+        "vocabulary: " + ", ".join(f"`{s}`" for s in ledger["status_vocabulary"]) + ".",
+        "",
+        f"Ledger revision: {ledger['revision']} ({ledger['updated']}).",
+        "",
+        "| ID | Title | Status | Suites | Tasks | Notes |",
+        "|---|---|---|---|---|---|",
+    ]
+    for item in ledger["requirements"]:
+        lines.append(
+            "| {id} | {title} | `{status}` | {suites} | {tasks} | {notes} |".format(
+                id=item["id"],
+                title=item["title"],
+                status=item["status"],
+                suites=", ".join(item["suites"]) or "-",
+                tasks=", ".join(item["tasks"]) or "-",
+                notes=item.get("notes", "").replace("|", "/"),
+            )
+        )
+    lines.append("")
+    destination = DOCS_ROOT / "validation" / "requirement-ledger.md"
+    destination.write_text("\n".join(lines), encoding="utf-8")
+    return destination
+
+
 def main() -> int:
     decisions = copy_decisions()
     copied = copy_experiment_files()
@@ -129,6 +167,7 @@ def main() -> int:
         for name in ("kickoff-v2.md", "kickoff-v2-isolated.md", "prepare-v2.md"):
             shutil.copyfile(REPO_ROOT / "experiment/prompts" / name, DOCS_ROOT / "experiment/prompts" / name)
     index = write_decision_index(decisions)
+    write_requirement_ledger()
 
     print(f"generated {len(decisions)} decision page(s)")
     print(f"copied {len(copied)} canonical experiment document(s)")
