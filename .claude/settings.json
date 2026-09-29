@@ -174,7 +174,7 @@
   },
   "permissions": {
     "additionalDirectories": [
-      "/home/wahln/aiprojects/ion-mc-v2-worktrees"
+      "/home/wahln/aiprojects/ion-mc-worktrees"
     ],
     "allow": [
       "Edit(src/**)",
@@ -233,10 +233,10 @@
       "Read(~/.docker/config.json)",
       "Read(/mnt/c/Users/**)",
       "Bash(gh *)",
-      "Read(//home/wahln/aiprojects/ion-mc)",
-      "Read(//home/wahln/aiprojects/ion-mc/**)",
-      "Read(//home/wahln/aiprojects/ion-mc-worktrees)",
-      "Read(//home/wahln/aiprojects/ion-mc-worktrees/**)",
+      "Read(//home/wahln/aiprojects/ion-mc-v1)",
+      "Read(//home/wahln/aiprojects/ion-mc-v1/**)",
+      "Read(//home/wahln/aiprojects/ion-mc-v1-worktrees)",
+      "Read(//home/wahln/aiprojects/ion-mc-v1-worktrees/**)",
       "Read(//home/wahln/aiprojects/ion-mc-v2-before-isolation)",
       "Read(//home/wahln/aiprojects/ion-mc-v2-before-isolation/**)",
       "Read(//home/wahln/aiprojects/ion-mc-independent-audit-3a2e895)",
@@ -309,22 +309,24 @@
         ".",
         "~/.local/bin",
         "~/.cache/ionmc-experiment/experiment-v2",
-        "/home/wahln/aiprojects/ion-mc-v2-worktrees",
+        "/home/wahln/aiprojects/ion-mc-worktrees",
         "~/.local/share/ionmc-experiment/experiment-v2/telemetry",
-        "/home/wahln/aiprojects/ion-mc-v2/.git",
-        "~/.local/share/ionmc-experiment/experiment-v2/tmp"
+        "/home/wahln/aiprojects/ion-mc/.git",
+        "~/.local/share/ionmc-experiment/experiment-v2/tmp",
+        "~/.local/share/ionmc-experiment/experiment-v2/claude-memory"
       ],
       "allowWrite": [
         ".",
         "~/.cache/ionmc-experiment/experiment-v2",
-        "/home/wahln/aiprojects/ion-mc-v2-worktrees",
+        "/home/wahln/aiprojects/ion-mc-worktrees",
         "~/.local/share/ionmc-experiment/experiment-v2/telemetry",
-        "~/.local/share/ionmc-experiment/experiment-v2/tmp"
+        "~/.local/share/ionmc-experiment/experiment-v2/tmp",
+        "~/.local/share/ionmc-experiment/experiment-v2/claude-memory"
       ],
       "denyRead": [
         "~/",
-        "/home/wahln/aiprojects/ion-mc",
-        "/home/wahln/aiprojects/ion-mc-worktrees",
+        "/home/wahln/aiprojects/ion-mc-v1",
+        "/home/wahln/aiprojects/ion-mc-v1-worktrees",
         "/home/wahln/aiprojects/ion-mc-v2-before-isolation",
         "/home/wahln/aiprojects/ion-mc-independent-audit-3a2e895",
         "/home/wahln/aiprojects/ion-mc-independent-audit-3a2e895.tar.gz"
@@ -340,5 +342,6 @@
         "files.pythonhosted.org"
       ]
     }
-  }
+  },
+  "autoMemoryDirectory": "~/.local/share/ionmc-experiment/experiment-v2/claude-memory"
 }

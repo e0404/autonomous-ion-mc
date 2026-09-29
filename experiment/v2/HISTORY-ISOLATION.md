@@ -26,18 +26,29 @@ exposure and its likely effect without copying the material into task context.
 
 ## Clone and runtime arrangement
 
-The integration checkout is `/home/wahln/aiprojects/ion-mc-v2`, with its own `.git`
+The integration checkout is `/home/wahln/aiprojects/ion-mc`, with its own `.git`
 directory and object database. Its complete ancestry starts from the pre-scientific
 baseline plus v2 infrastructure commits; it does not contain the completed v1
 scientific ancestry. Keep full v2 ancestry for merge-base and release checks.
 Task worktrees share only this independent v2 database.
 
-The original checkout remains `/home/wahln/aiprojects/ion-mc`. The previous shared
+The original checkout is archived at `/home/wahln/aiprojects/ion-mc-v1`; its
+leftover task files are at `ion-mc-v1-worktrees`. The previous shared
 v2 worktree is preserved at `/home/wahln/aiprojects/ion-mc-v2-before-isolation`.
 Those paths, the v1 task-worktree directory and the independent audit directory
 and archive are excluded in v2 Claude read permissions and sandbox settings.
 Start a new Claude session in the v2 clone; do not resume a v1 or setup session.
 Do not attach the excluded directories to its workspace.
+
+At the operator's request, the independent v2 clone was moved from `ion-mc-v2`
+back to `ion-mc`. It retains complete v2-only ancestry, not a shallow history.
+Active tasks now use `ion-mc-worktrees`; the archived Git worktree links were
+repaired without deleting or rewriting history. The launcher sets
+`CLAUDE_CODE_PROJECT_DIR_NAME=experiment-v2`, and project settings explicitly use
+`~/.local/share/ionmc-experiment/experiment-v2/claude-memory` for auto memory.
+This avoids loading v1 memory when reusing the old checkout pathname; the shared
+Claude authentication/configuration profile is preserved. Do not resume v1
+conversations. See the [Claude memory documentation](https://code.claude.com/docs/en/memory).
 
 Claude project settings select separate v2 telemetry, Codex raw-output and local
 validation directories using the existing IONMC_TELEMETRY_DIR,

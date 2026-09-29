@@ -184,7 +184,7 @@ using the shared-worktree bootstrap. With the operator notification variable
 supplied by the existing launcher, start a new session from the v2 clone:
 
 ```bash
-cd /home/wahln/aiprojects/ion-mc-v2
+cd /home/wahln/aiprojects/ion-mc
 ~/bin/claude-ionmc --preflight
 ~/bin/claude-ionmc "Read experiment/prompts/kickoff-v2-isolated.md and carry out that autonomous run."
 ```
@@ -225,9 +225,25 @@ package versions because moving a venv can leave invalid absolute shebangs.
 The old host cache remains archived. Legacy state paths have compatibility
 symlinks for earlier run records. New execution writes to the experiment-ID roots.
 
-The launcher must enter `ion-mc-v2`, invoke the Python module
+The launcher must enter `ion-mc` (the independent v2 clone), invoke the Python module
 `infrastructure.experiment_v2.preflight` (the module name is not the experiment
 ID), and end with exactly one `exec claude "$@"`. Its `--preflight` mode runs
 smokes and notification delivery using the same exported environment as Claude.
 Keep the operator's notification URL private. The launcher itself is maintained
 outside Git; the repository contains no copy of its secret-bearing contents.
+
+## Active checkout and archived v1
+
+The active v2 clone is `/home/wahln/aiprojects/ion-mc`; new task worktrees are in
+`/home/wahln/aiprojects/ion-mc-worktrees`. The previous checkout and its leftover
+task files are preserved as `ion-mc-v1` and `ion-mc-v1-worktrees`. The old shared
+bootstrap worktree remains `ion-mc-v2-before-isolation`, with repaired Git links.
+The earlier bootstrap command above is historical preparation, not a command to
+repeat before starting the existing v2 clone.
+
+The clone still fetches only v2/develop and v2/main without automatic tags. It
+retains v2 ancestry for integration and release checks. The launcher selects a
+separate Claude session namespace using CLAUDE_CODE_PROJECT_DIR_NAME, and v2
+project settings select a dedicated claude-memory directory inside v2 state.
+Start a new session; do not resume v1 history. Cache and state locations remain
+keyed to experiment-v2 and require no further migration after the checkout move.
