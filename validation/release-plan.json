@@ -1,0 +1,386 @@
+{
+  "schema_version": 2,
+  "status": "draft",
+  "draft_note": "Suite membership drafted in V2-001. Numeric tolerances and performance targets are set and the plan is frozen (status 'frozen') in the calibration task before optimization/qualification. Until then this plan is not acceptance evidence.",
+  "hardware": null,
+  "calibration_artifacts": [],
+  "suites": [
+    {
+      "id": "PHY-STOPPING-RANGE",
+      "category": "physics",
+      "requirements": [
+        "V1-MUST-005",
+        "V1-MUST-017",
+        "V1-MUST-018",
+        "V1-MUST-019",
+        "V1-MUST-031",
+        "V1-MUST-039",
+        "V2-EVID",
+        "V2-ION"
+      ],
+      "backends": [
+        "python",
+        "warp-cpu",
+        "warp-cuda"
+      ],
+      "acceptance": "DRAFT: for each species and material, transport stopping power agrees with the held-out ion-specific evaluation table within tolerance T_S over the documented energy domain; Monte Carlo R80 in water agrees with the CSDA-derived range from that table within T_R. Numeric T_S and T_R are set at freeze from the calibration/research record.",
+      "rationale": "Ion-specific stopping/range evidence is required per species; proton data cannot validate heavier ions (V2-ION, V2-EVID).",
+      "species": [
+        "proton",
+        "helium",
+        "carbon",
+        "oxygen"
+      ],
+      "independent_required": true,
+      "independent_evidence": "ion-specific-tabulated evaluation tables (PSTAR/ASTAR/ICRU 90 lineage) with construction/evaluation roles recorded"
+    },
+    {
+      "id": "PHY-PROTON-WATER",
+      "category": "physics",
+      "requirements": [
+        "V1-MUST-005",
+        "V1-MUST-006",
+        "V1-MUST-031",
+        "V1-MUST-039",
+        "V2-EVID"
+      ],
+      "backends": [
+        "python",
+        "warp-cpu",
+        "warp-cuda"
+      ],
+      "acceptance": "DRAFT: proton pristine Bragg curves (70-230 MeV) and lateral profiles in water versus independent Monte Carlo (TOPAS/Geant4) and measured/analytic references: R80 within T_R80, distal 80-20 within T_fall, normalized depth dose within T_dose (local) proximal to the peak, lateral sigma within T_sig.",
+      "rationale": "Depth dose and lateral spread are the primary planning observables; evidence must be independent of the implementation.",
+      "species": [
+        "proton"
+      ],
+      "independent_required": true,
+      "independent_evidence": "independent Monte Carlo (TOPAS), measured/analytic Bragg-curve references"
+    },
+    {
+      "id": "PHY-PROTON-NUCLEAR",
+      "category": "physics",
+      "requirements": [
+        "V1-MUST-005",
+        "V1-MUST-031",
+        "V1-MUST-039",
+        "V2-CAP",
+        "V2-EVID"
+      ],
+      "backends": [
+        "python",
+        "warp-cpu",
+        "warp-cuda"
+      ],
+      "acceptance": "DRAFT: primary proton fluence attenuation versus depth and secondary-particle dose fraction versus TOPAS within tolerances; disabling nuclear physics changes the distal/plateau dose by the expected magnitude (discriminating test).",
+      "rationale": "Nuclear attenuation and secondaries change the plateau by roughly 10-15% for 200 MeV protons; the model must be evidenced, not just enabled.",
+      "species": [
+        "proton"
+      ],
+      "independent_required": true,
+      "independent_evidence": "independent Monte Carlo (TOPAS), published cross-section evaluations"
+    },
+    {
+      "id": "PHY-HETEROGENEITY",
+      "category": "physics",
+      "requirements": [
+        "V1-MUST-007",
+        "V1-MUST-008",
+        "V1-MUST-031",
+        "V1-MUST-039",
+        "V2-EVID",
+        "V2-USER"
+      ],
+      "backends": [
+        "python",
+        "warp-cpu",
+        "warp-cuda"
+      ],
+      "acceptance": "DRAFT: slab phantoms (bone, lung, adipose inserts) and the explicit heterogeneous planning variant versus TOPAS and a second engine (MCsquare/FRED) with range shift and dose agreement within tolerances.",
+      "rationale": "Material/density handling is central to patient-like planning geometries.",
+      "species": [
+        "proton",
+        "carbon"
+      ],
+      "independent_required": true,
+      "independent_evidence": "independent Monte Carlo (TOPAS, MCsquare, FRED)"
+    },
+    {
+      "id": "PHY-HELIUM",
+      "category": "physics",
+      "requirements": [
+        "V1-MUST-005",
+        "V1-MUST-031",
+        "V1-MUST-039",
+        "V2-EVID",
+        "V2-ION"
+      ],
+      "backends": [
+        "python",
+        "warp-cpu",
+        "warp-cuda"
+      ],
+      "acceptance": "DRAFT: helium-4 Bragg curves and lateral profiles in water versus TOPAS and ion-specific tabulated range data within tolerances; nuclear attenuation evidenced.",
+      "rationale": "Helium requires its own evidence (V2-ION).",
+      "species": [
+        "helium"
+      ],
+      "independent_required": true,
+      "independent_evidence": "independent Monte Carlo (TOPAS), ion-specific tabulated (ASTAR/ICRU 90)"
+    },
+    {
+      "id": "PHY-CARBON-FRAGMENTS",
+      "category": "physics",
+      "requirements": [
+        "V1-MUST-005",
+        "V1-MUST-031",
+        "V1-MUST-039",
+        "V2-EVID",
+        "V2-ION"
+      ],
+      "backends": [
+        "python",
+        "warp-cpu",
+        "warp-cuda"
+      ],
+      "acceptance": "DRAFT: carbon-12 (150-400 MeV/u) Bragg curves, primary attenuation, fragment fluence build-up by charge and distal fragment dose tail versus TOPAS and measured fragmentation data within tolerances; species contributions scored.",
+      "rationale": "Carbon nuclear physics and fragment dose are central release requirements.",
+      "species": [
+        "carbon"
+      ],
+      "independent_required": true,
+      "independent_evidence": "independent Monte Carlo (TOPAS/Geant4 QMD or BIC), measured fragment yields where accessible"
+    },
+    {
+      "id": "PHY-OXYGEN",
+      "category": "physics",
+      "requirements": [
+        "V1-MUST-005",
+        "V1-MUST-031",
+        "V1-MUST-039",
+        "V2-EVID",
+        "V2-ION"
+      ],
+      "backends": [
+        "python",
+        "warp-cpu",
+        "warp-cuda"
+      ],
+      "acceptance": "DRAFT: oxygen-16 Bragg curve and attenuation versus TOPAS and ion-specific range data within tolerances over a documented supported domain; unsupported channels raise errors.",
+      "rationale": "Oxygen needs a documented supported domain with ion-specific validation.",
+      "species": [
+        "oxygen"
+      ],
+      "independent_required": true,
+      "independent_evidence": "independent Monte Carlo (TOPAS), ion-specific tabulated stopping data"
+    },
+    {
+      "id": "PHY-LET",
+      "category": "physics",
+      "requirements": [
+        "V1-MUST-012",
+        "V1-MUST-015",
+        "V1-MUST-031",
+        "V1-MUST-039",
+        "V2-ION"
+      ],
+      "backends": [
+        "python",
+        "warp-cpu",
+        "warp-cuda"
+      ],
+      "acceptance": "DRAFT: dose- and track-averaged LET in water for protons and mixed carbon fields versus TOPAS LET scorers and analytic single-species limits within tolerances.",
+      "rationale": "LET is a required planning observable and depends on estimator definitions.",
+      "species": [
+        "proton",
+        "helium",
+        "carbon",
+        "oxygen"
+      ],
+      "independent_required": true,
+      "independent_evidence": "independent Monte Carlo (TOPAS LET scorers), analytic limits"
+    },
+    {
+      "id": "NUM-FALSIFICATION",
+      "category": "numerical",
+      "requirements": [
+        "V1-MUST-011",
+        "V1-MUST-032",
+        "V1-MUST-033",
+        "V1-MUST-037",
+        "V1-MUST-038",
+        "V2-NUM"
+      ],
+      "backends": [
+        "python",
+        "warp-cpu",
+        "warp-cuda"
+      ],
+      "acceptance": "DRAFT: step-size, scoring-grid refinement/shift, boundary alignment, translated/outside sources, finite-phantom escape accounting, float32/float64, beam orientation probes yield changes within predeclared stability bounds or the domain is rejected.",
+      "rationale": "Adversarial numerical falsification is a v2 MUST."
+    },
+    {
+      "id": "NUM-STATISTICS",
+      "category": "numerical",
+      "requirements": [
+        "V1-MUST-027",
+        "V1-MUST-028",
+        "V1-MUST-030",
+        "V1-MUST-032",
+        "V2-NUM"
+      ],
+      "backends": [
+        "python",
+        "warp-cpu",
+        "warp-cuda"
+      ],
+      "acceptance": "DRAFT: batch uncertainty coverage within predeclared bounds; uncertainty of dose and secondary/fragment estimators scales as 1/sqrt(N); seeds and batch counts reproduce statistically.",
+      "rationale": "Undefined uncertainty must not masquerade as zero."
+    },
+    {
+      "id": "NUM-BACKEND-PARITY",
+      "category": "numerical",
+      "requirements": [
+        "V1-MUST-002",
+        "V1-MUST-003",
+        "V1-MUST-004",
+        "V1-MUST-029",
+        "V1-MUST-035",
+        "V1-MUST-040"
+      ],
+      "backends": [
+        "python",
+        "warp-cpu",
+        "warp-cuda"
+      ],
+      "acceptance": "DRAFT: reference Python, Warp CPU and Warp CUDA agree statistically on identical configurations (z-score criteria on voxel dose, integral quantities exact within float tolerance); deterministic per-backend reproducibility.",
+      "rationale": "Backends share the physics model; parity is equivalence, not accuracy evidence."
+    },
+    {
+      "id": "CAP-CONTRACT",
+      "category": "capability",
+      "requirements": [
+        "V1-MUST-001",
+        "V1-MUST-009",
+        "V1-MUST-010",
+        "V1-MUST-011",
+        "V1-MUST-012",
+        "V1-MUST-013",
+        "V1-MUST-014",
+        "V1-MUST-015",
+        "V2-CAP"
+      ],
+      "backends": [
+        "python",
+        "warp-cpu",
+        "warp-cuda"
+      ],
+      "acceptance": "DRAFT: every public path honors or rejects requested physics/scoring/influence flags with discriminating tests; requested and effective configuration persisted.",
+      "rationale": "Fail-closed capability contract is a v2 MUST."
+    },
+    {
+      "id": "CAP-BIO-LOOKUP",
+      "category": "capability",
+      "requirements": [
+        "V1-MUST-012",
+        "V1-MUST-016",
+        "V2-BIO"
+      ],
+      "backends": [
+        "python",
+        "warp-cpu",
+        "warp-cuda"
+      ],
+      "acceptance": "DRAFT: user-provided species/energy(/material) lookup tables produce tallies matching fluence-weighted expectations in controlled cases, with provenance recorded.",
+      "rationale": "External biological lookup functionality must be demonstrated nontrivially."
+    },
+    {
+      "id": "PROV-OUTPUT",
+      "category": "provenance",
+      "requirements": [
+        "V1-MUST-010",
+        "V1-MUST-025",
+        "V1-MUST-036",
+        "V1-MUST-037",
+        "V1-MUST-038",
+        "V2-OUTPUT"
+      ],
+      "backends": [
+        "python",
+        "warp-cpu",
+        "warp-cuda"
+      ],
+      "acceptance": "DRAFT: persisted results reopened in a separate clean process recover all V2-OUTPUT fields; influence matrices retain geometry/beamlet/unit/history metadata.",
+      "rationale": "Self-describing results are a release requirement."
+    },
+    {
+      "id": "PROV-DATA",
+      "category": "provenance",
+      "requirements": [
+        "V1-MUST-020",
+        "V1-MUST-021",
+        "V1-MUST-022",
+        "V1-MUST-023",
+        "V1-MUST-024",
+        "V1-MUST-025",
+        "V1-MUST-026"
+      ],
+      "backends": [
+        "python"
+      ],
+      "acceptance": "DRAFT: external datasets are acquired automatically, cached, versioned, hash-verified, offline-reusable and identified in outputs.",
+      "rationale": "External data management MUSTs."
+    },
+    {
+      "id": "PERF-WORKLOADS",
+      "category": "performance",
+      "requirements": [
+        "V1-MUST-034",
+        "V1-MUST-035",
+        "V1-MUST-036",
+        "V2-PERF"
+      ],
+      "backends": [
+        "warp-cpu",
+        "warp-cuda"
+      ],
+      "acceptance": "DRAFT: each performance.json workload measured with full enabled physics meets every ratified numeric target; scaling series recorded.",
+      "rationale": "Frozen application-level performance gates."
+    },
+    {
+      "id": "WF-CLEAN-INSTALL",
+      "category": "workflow",
+      "requirements": [
+        "V1-MUST-001",
+        "V1-MUST-002",
+        "V1-MUST-021",
+        "V1-MUST-026",
+        "V2-USER"
+      ],
+      "backends": [
+        "python",
+        "warp-cpu",
+        "warp-cuda"
+      ],
+      "acceptance": "DRAFT: the documented workflow (install, data acquisition, source/geometry/scoring definition, run, dose/LET/uncertainty/influence outputs, offline reuse) succeeds from a clean installation; failures are acceptance failures.",
+      "rationale": "A product, not internal tests, is the deliverable."
+    },
+    {
+      "id": "WF-QUALITY-RELEASE",
+      "category": "workflow",
+      "requirements": [
+        "V1-MUST-041",
+        "V1-MUST-042",
+        "V1-MUST-043",
+        "V1-SCOPE",
+        "V2-RELEASE"
+      ],
+      "backends": [
+        "python"
+      ],
+      "acceptance": "DRAFT: automated tests, CI, pre-commit and documentation build pass; the qualification report covers every MUST.",
+      "rationale": "Software-quality and release-completeness MUSTs."
+    }
+  ],
+  "performance_targets": null
+}

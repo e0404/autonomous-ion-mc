@@ -21,6 +21,7 @@ nav = [
 
   { "Validation" = [
     "validation/index.md",
+    "validation/requirement-ledger.md",
     "environment_diagnostics.md",
     "warp_backend_diagnostics.md",
     "repo_capability_diagnostics.md",

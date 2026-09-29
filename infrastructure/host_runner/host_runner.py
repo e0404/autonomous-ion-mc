@@ -96,7 +96,32 @@ def inspect_worktree(task_id: str) -> dict:
         "path": path,
         "branch": branch,
         "sha": sha,
+        "git_common_dir": git_common_dir(path),
     }
+
+
+def git_common_dir(worktree: Path) -> Path:
+    """Absolute Git common directory backing a (possibly linked) worktree."""
+    return Path(
+        git_text(worktree, "rev-parse", "--path-format=absolute", "--git-common-dir")
+    ).resolve()
+
+
+def git_dir_binds(worktree: Path, common_dir: Path | None) -> list[str]:
+    """Read-only bind of a linked worktree's Git metadata, at its host path.
+
+    A linked worktree's ``.git`` file points at ``<main>/.git/worktrees/<id>``
+    outside the workspace mount. Without that directory, code inside the
+    sandbox cannot resolve its own commit SHA or dirty state, so persisted
+    scientific results would lose their provenance. The primary checkout keeps
+    ``.git`` inside the workspace and needs no extra mount.
+    """
+    if common_dir is None:
+        return []
+    common_dir = Path(common_dir).resolve()
+    if common_dir.is_relative_to(Path(worktree).resolve()):
+        return []
+    return ["--ro-bind", str(common_dir), str(common_dir)]
 
 
 def ensure_runtime_dirs() -> None:
@@ -124,7 +149,9 @@ def add_optional_ro_bind(args: list[str], path: str) -> None:
         args.extend(["--ro-bind", path, path])
 
 
-def build_bwrap_command(worktree: Path, argv: list[str]) -> list[str]:
+def build_bwrap_command(
+    worktree: Path, argv: list[str], git_common: Path | None = None
+) -> list[str]:
     if not argv:
         raise ValueError("argv must contain at least one argument")
 
@@ -150,6 +177,8 @@ def build_bwrap_command(worktree: Path, argv: list[str]) -> list[str]:
     add_optional_ro_bind(args, "/etc/ld.so.cache")
     add_optional_ro_bind(args, "/etc/ssl")
     add_optional_ro_bind(args, "/etc/ca-certificates")
+    # Host identification for reproducibility records (no secrets inside).
+    add_optional_ro_bind(args, "/etc/os-release")
 
     if not HOST_VENV.is_dir():
         raise RuntimeError(f"host runner virtual environment not found: {HOST_VENV}")
@@ -171,6 +200,7 @@ def build_bwrap_command(worktree: Path, argv: list[str]) -> list[str]:
         "--dev-bind", "/dev/dxg", "/dev/dxg",
 
         "--bind", str(worktree), "/workspace",
+        *git_dir_binds(worktree, git_common),
         "--bind", str(CACHE_ROOT), "/cache",
 
         "--tmpfs", "/tmp",
@@ -226,7 +256,8 @@ def run_validation(
                 or git_text(release_root, "status", "--porcelain")):
             raise RuntimeError("Release validation requires a clean v2 integration checkout")
         worktree = {"path": release_root, "branch": condition["integration_branch"],
-                    "sha": git_text(release_root, "rev-parse", "HEAD")}
+                    "sha": git_text(release_root, "rev-parse", "HEAD"),
+                    "git_common_dir": git_common_dir(release_root)}
 
 
     run_id, run_dir = create_run_dir(task_id)
@@ -245,7 +276,9 @@ def run_validation(
 
     write_json(run_dir / "request.json", request)
 
-    bwrap_command = build_bwrap_command(worktree["path"], argv)
+    bwrap_command = build_bwrap_command(
+        worktree["path"], argv, worktree.get("git_common_dir")
+    )
 
     started_wall = utc_now()
     started_mono = time.monotonic()

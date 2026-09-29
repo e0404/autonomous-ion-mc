@@ -1,0 +1,59 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ionmc"
+version = "0.1.0.dev0"
+description = "Ion-therapy Monte Carlo transport with a Python reference path and NVIDIA Warp CPU/CUDA acceleration"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+dependencies = [
+    "numpy>=2.0",
+    "warp-lang>=1.17,<2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "ruff>=0.12",
+    "mypy>=1.17",
+]
+
+[project.scripts]
+ionmc = "ionmc.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ionmc"]
+
+[tool.hatch.build.hooks.custom]
+path = "hatch_build.py"
+
+[tool.hatch.build.targets.sdist]
+include = ["src/ionmc", "hatch_build.py", "README.md", "pyproject.toml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+markers = [
+    "local: local scientific validation; excluded from lightweight GitHub CI",
+    "cuda: requires a CUDA device through the controlled host runner",
+]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["B011"]
+
+[tool.mypy]
+python_version = "3.12"
+warn_unused_ignores = true
+ignore_missing_imports = true
+check_untyped_defs = true
