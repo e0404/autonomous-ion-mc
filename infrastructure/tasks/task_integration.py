@@ -159,7 +159,6 @@ def push_task(task_id: str):
 
     proc = git(
         "push",
-        "-u",
         "origin",
         branch,
         cwd=path,

@@ -171,7 +171,9 @@ The committed condition manifest identifies the setup SHA and baseline. Maintain
 publication must push these new refs and set the same protective requirements as
 v1 (PRs, no force/deletion, required pre-commit/tests/docs, linear v2/develop).
 Do not start unattended until protection, exact-head lightweight CI, reference
-smokes and notification delivery pass. The current setup test record distinguishes
+smokes and notification delivery pass. Task pushes name origin and branch explicitly; they do not write Git tracking
+configuration (the setup environment has a pre-existing repository config lock).
+The current setup test record distinguishes
 local checks from remote CI and delivery checks.
 
 Then, with the operator notification variable supplied by the existing launcher:
@@ -181,6 +183,10 @@ cd /home/wahln/aiprojects/ion-mc-v2
 python3 -m infrastructure.experiment_v2.preflight --smoke --notify
 claude "Read experiment/prompts/kickoff-v2.md and carry out that autonomous run."
 ```
+
+The bootstrap and ready conditions are preserved separately as
+`experiment-v2-start` and `experiment-v2-ready`; use current `v2/develop` and the
+ready tag for the final setup state. No historical tag is moved.
 
 Run the Claude command only after preflight succeeds. Calibration remains the
 first scientific-run phase. This preparation task never launches it.

@@ -271,3 +271,29 @@ def test_ignored_reference_inputs_cannot_claim_committed_provenance(monkeypatch)
         reference.require_committed_inputs(
             Path("/repo"), "case", {"input.txt": {}, "ignored.txt": {}}
         )
+
+
+def test_task_push_does_not_write_locked_git_tracking_config(
+    monkeypatch, tmp_path, capsys
+):
+    import subprocess
+
+    from infrastructure.tasks import task_integration
+
+    calls = []
+    monkeypatch.setattr(
+        task_integration, "ensure_worktree", lambda _: (tmp_path, "task/test")
+    )
+    monkeypatch.setattr(task_integration, "ensure_clean", lambda _: None)
+    monkeypatch.setattr(task_integration, "commits_ahead", lambda _: 1)
+    monkeypatch.setattr(task_integration, "git_text", lambda *args, **kw: "a" * 40)
+
+    def git(*args, **kwargs):
+        calls.append(args)
+        return subprocess.CompletedProcess(args, 0, stdout="pushed", stderr="")
+
+    monkeypatch.setattr(task_integration, "git", git)
+    task_integration.push_task("TEST")
+    assert json.loads(capsys.readouterr().out)["status"] == "pushed"
+    assert ("push", "origin", "task/test") in calls
+    assert all("-u" not in args and "--set-upstream" not in args for args in calls)

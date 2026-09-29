@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
-  "phase": "setup prepared; final fresh-start and remote verification pending",
+  "phase": "Infrastructure implemented; operator notification configuration required before unattended launch",
   "v1_final_sha": "3a2e8953be0034d75a29ccf2b04640353759982b",
-  "tests": "308 passed in 4.22s",
+  "tests": "311 passed in 3.76s",
   "docs": "zensical strict build passed",
   "mcp": "research/release stdio initialization and tool discovery passed",
   "reference_pilots": {
@@ -12,11 +12,21 @@
   },
   "qualification": "execution smoke only, not scientific validation",
   "notification": {
-    "local_receiver": "covered by infrastructure tests",
+    "local_receiver": "real HTTP notification transport test passed; permission-hook payload redaction/no-approval tests passed",
     "operator_delivery": "not tested: IONMC_NTFY_URL absent in this session"
   },
-  "remote_ci": "pending publication",
-  "fresh_start": "Local-clone bootstrap passed: no v1 science; 306 tests passed, 2 optional Warp diagnostics skipped; pre-commit and strict docs passed. Missing cache ignore found and corrected before real bootstrap.",
+  "remote_ci": {
+    "sha": "153e2f65471b7cd65240b22d50d2bc3773006525",
+    "github_run_id": 36548702808,
+    "conclusion": "success",
+    "required_checks": [
+      "pre-commit",
+      "tests",
+      "docs"
+    ],
+    "protections": "v2/develop and v2/main applied and verified; PRs/checks/no force/no deletion"
+  },
+  "fresh_start": "153e2f65471b7cd65240b22d50d2bc3773006525: 308 passed, 2 optional Warp diagnostics skipped; strict docs build passed; no inherited scientific implementation",
   "performance_targets": "unratified; mandatory early calibration before substantial optimization",
   "precommit": "all checks passed",
   "public_data_smoke": {
@@ -25,21 +35,21 @@
     "bytes": 12307,
     "note": "Authentication-free egress proxy required in this session. This page is not physical validation data."
   },
-  "reference_exact_setup_sha": "cfe705f1d14286d69769a668701663fdf1b56c23",
+  "reference_exact_setup_sha": "153e2f65471b7cd65240b22d50d2bc3773006525",
   "reference_exact_smokes": {
     "all_execution_smokes_passed": true,
     "engines": {
       "fred": {
-        "code_sha": "cfe705f1d14286d69769a668701663fdf1b56c23",
-        "configuration_id": "4f4655b989853115fb3a74cd7c5b1796e742df019b43e4f8106d8d864cd00fd6",
+        "code_sha": "153e2f65471b7cd65240b22d50d2bc3773006525",
+        "configuration_id": "5d43c614506c7366c1744131aa0ef1f38ad237318a38306e5d5c833ba307cb34",
         "engine": "fred",
         "error": null,
         "exit_code": 0,
-        "finished_at": "2026-09-29T09:19:04.998995+00:00",
+        "finished_at": "2026-09-29T09:22:34.284506+00:00",
         "metadata_status": "declared; inspect native logs/outputs",
         "missing_outputs": [],
         "output_count": 18,
-        "run_id": "REF-4f4655b989853115fb3a-dd9e4688",
+        "run_id": "REF-5d43c614506c7366c174-c9b52302",
         "schema_version": 2,
         "scientifically_validated": false,
         "score_smoke": {
@@ -48,21 +58,21 @@
           "physical_accuracy_validated": false,
           "sum_native_units": 6.412591267714664e-05
         },
-        "seconds": 1.1243363009998575,
+        "seconds": 1.0221485229994869,
         "succeeded": true,
         "timed_out": false
       },
       "mcsquare": {
-        "code_sha": "cfe705f1d14286d69769a668701663fdf1b56c23",
-        "configuration_id": "cddf8f52d8af15aa75f4b770d92da927c07d20db500dbce869dae80758834fea",
+        "code_sha": "153e2f65471b7cd65240b22d50d2bc3773006525",
+        "configuration_id": "313130e87babe0be661e08c98f6add97a814ccfd08fba465061f7e3215ab1be1",
         "engine": "mcsquare",
         "error": null,
         "exit_code": 0,
-        "finished_at": "2026-09-29T09:19:03.809790+00:00",
+        "finished_at": "2026-09-29T09:22:33.223957+00:00",
         "metadata_status": "declared; inspect native logs/outputs",
         "missing_outputs": [],
         "output_count": 7,
-        "run_id": "REF-cddf8f52d8af15aa75f4-3cb4e8f0",
+        "run_id": "REF-313130e87babe0be661e-5716c19c",
         "schema_version": 2,
         "scientifically_validated": false,
         "score_smoke": {
@@ -71,21 +81,21 @@
           "physical_accuracy_validated": false,
           "sum_native_units": 11531151991.919235
         },
-        "seconds": 0.11654892999649746,
+        "seconds": 0.1161745229983353,
         "succeeded": true,
         "timed_out": false
       },
       "topas": {
-        "code_sha": "cfe705f1d14286d69769a668701663fdf1b56c23",
-        "configuration_id": "cfd7bd9c0ce978a54de6157301d0fb5c4e90bd89abb8b78f0aad90a467077315",
+        "code_sha": "153e2f65471b7cd65240b22d50d2bc3773006525",
+        "configuration_id": "4e43eb6272b77dc809b7eb24cb1e99a2b4653b41869322dcb8d14041783f4c8f",
         "engine": "topas",
         "error": null,
         "exit_code": 0,
-        "finished_at": "2026-09-29T09:19:03.599068+00:00",
+        "finished_at": "2026-09-29T09:22:33.076337+00:00",
         "metadata_status": "declared; inspect native logs/outputs",
         "missing_outputs": [],
         "output_count": 3,
-        "run_id": "REF-cfd7bd9c0ce978a54de6-74b2c097",
+        "run_id": "REF-4e43eb6272b77dc809b7-fa245834",
         "schema_version": 2,
         "scientifically_validated": false,
         "score_smoke": {
@@ -94,10 +104,23 @@
           "physical_accuracy_validated": false,
           "sum_native_units": 9832.080532073975
         },
-        "seconds": 0.5674875279946718,
+        "seconds": 0.5169285279989708,
         "succeeded": true,
         "timed_out": false
       }
     }
-  }
+  },
+  "controlled_cuda_smoke": {
+    "sha": "153e2f65471b7cd65240b22d50d2bc3773006525",
+    "run_id": "RUN-20260929T092230Z-729dfd79",
+    "succeeded": true,
+    "exit_code": 0
+  },
+  "limitations": [
+    "No operator endpoint supplied in this Codex environment; actual out-of-band delivery is not claimed. Preflight blocks unattended launch until it is supplied and tested.",
+    "FRED CPU reference smoke passed; OpenCL/GPU FRED execution is not qualified.",
+    "Engine smokes do not qualify physics.",
+    "Numeric performance targets intentionally remain unratified until the bounded calibration phase.",
+    "Runner has per-file/runtime limits but no aggregate disk quota; host system libraries are not a portable container."
+  ]
 }
