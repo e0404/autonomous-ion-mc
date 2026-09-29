@@ -89,3 +89,14 @@ Fermi–Eyges (local), carbon range (local). Independent Monte Carlo evidence:
 TOPAS electromagnetic-only case
 `validation/references/cases/topas-proton-100mev-em-only` (run ID in the
 validation record of this task).
+
+## Validation outcome (V2-004)
+
+Independent Monte Carlo comparison with TOPAS (electromagnetic physics only,
+run `REF-0088173fbe7787954e15-cac6f372`, 20 000 histories) for 100 MeV
+protons in water, IonMC reference backend with 4 000 histories: R80 77.47 vs
+77.69 mm, distal 80–20 % width 1.23 vs 1.17 mm, peak/plateau 6.42 vs 6.36,
+depth-energy ratio 1.004 (0.993–1.021) over 5–70 mm, lateral σ at 30 mm
+0.371 vs 0.411 mm (−10 %, attributed to the missing single-scattering tail;
+within the frozen absolute tolerance). Details and hashes in
+`validation/evidence/V2-004-proton-100mev-em-vs-topas.md`.
