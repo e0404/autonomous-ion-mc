@@ -42,3 +42,22 @@ def test_bounded_tail_long_text_returns_tail():
 def test_inline_output_limit_is_bounded():
     assert host_runner.MAX_INLINE_OUTPUT_CHARS > 0
     assert host_runner.MAX_INLINE_OUTPUT_CHARS <= 100000
+
+
+def test_linked_worktree_git_metadata_is_bound_read_only(tmp_path):
+    worktree = tmp_path / "worktrees" / "v2-001"
+    worktree.mkdir(parents=True)
+    common = tmp_path / "main" / ".git"
+    common.mkdir(parents=True)
+    assert host_runner.git_dir_binds(worktree, common) == [
+        "--ro-bind",
+        str(common.resolve()),
+        str(common.resolve()),
+    ]
+
+
+def test_primary_checkout_git_metadata_needs_no_extra_bind(tmp_path):
+    inside = tmp_path / ".git"
+    inside.mkdir()
+    assert host_runner.git_dir_binds(tmp_path, inside) == []
+    assert host_runner.git_dir_binds(tmp_path, None) == []
