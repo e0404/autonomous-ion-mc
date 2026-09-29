@@ -165,7 +165,9 @@ def test_project_uses_separate_v2_telemetry():
     root = Path(__file__).resolve().parents[3]
     for name in (".claude/settings.json", "experiment/v2/claude-settings.json"):
         settings = json.loads((root / name).read_text())
-        assert settings["env"]["IONMC_TELEMETRY_DIR"].endswith("/telemetry/v2")
+        assert settings["env"]["IONMC_TELEMETRY_DIR"].endswith(
+            "/experiment-v2/telemetry"
+        )
         assert (
             "~/.local/share/ionmc-experiment/telemetry"
             not in (settings["sandbox"]["filesystem"]["allowRead"])

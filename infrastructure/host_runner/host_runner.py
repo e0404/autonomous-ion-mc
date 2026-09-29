@@ -14,8 +14,17 @@ from pathlib import Path
 
 WORKTREE_ROOT = Path(__file__).resolve().parents[2].parent / (Path(__file__).resolve().parents[2].name + "-worktrees")
 IS_V2 = (Path(__file__).resolve().parents[2] / ".ionmc-condition.json").exists()
-RUN_ROOT = Path.home() / ".local" / "share" / "ionmc-experiment" / ("host-runs-v2" if IS_V2 else "host-runs")
-CACHE_ROOT = Path.home() / ".cache" / "ionmc-experiment" / ("host-runner-v2" if IS_V2 else "host-runner")
+if IS_V2:
+    # The runner is also invoked as a script by the trusted MCP server.
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+    from infrastructure.experiment_v2.paths import CACHE_ROOT as EXPERIMENT_CACHE
+    from infrastructure.experiment_v2.paths import SHARE_ROOT
+
+    RUN_ROOT = SHARE_ROOT / "host-runs"
+    CACHE_ROOT = EXPERIMENT_CACHE / "host-runner"
+else:
+    RUN_ROOT = Path.home() / ".local/share/ionmc-experiment/host-runs"
+    CACHE_ROOT = Path.home() / ".cache/ionmc-experiment/host-runner"
 HOST_VENV = CACHE_ROOT / "venv"
 SANDBOX_VENV = str(HOST_VENV)
 
@@ -150,6 +159,7 @@ def build_bwrap_command(worktree: Path, argv: list[str]) -> list[str]:
         "--dir", str(Path.home()),
         "--dir", str(Path.home() / ".cache"),
         "--dir", str(Path.home() / ".cache" / "ionmc-experiment"),
+        "--dir", str(CACHE_ROOT.parent),
         "--dir", str(CACHE_ROOT),
         "--ro-bind", str(HOST_VENV), str(HOST_VENV),
     ])

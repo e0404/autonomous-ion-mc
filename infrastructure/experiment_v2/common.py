@@ -10,12 +10,10 @@ import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-STATE = Path(
-    os.environ.get(
-        "IONMC_V2_STATE", str(Path.home() / ".local/share/ionmc-experiment/v2")
-    )
-)
+from infrastructure.experiment_v2.paths import ROOT as ROOT
+from infrastructure.experiment_v2.paths import SHARE_ROOT
+
+STATE = Path(os.environ.get("IONMC_V2_STATE", str(SHARE_ROOT))).expanduser()
 
 
 def now():
@@ -125,7 +123,9 @@ def event(name, *, sha=None, task_id=None, details=None, state=None):
     event_root = (
         Path(state)
         if state is not None
-        else Path(os.environ.get("IONMC_V2_EVENT_DIR", str(STATE))).expanduser()
+        else Path(
+            os.environ.get("IONMC_V2_EVENT_DIR", str(STATE / "telemetry"))
+        ).expanduser()
     )
     path = event_root / "events.jsonl"
     path.parent.mkdir(parents=True, exist_ok=True)
