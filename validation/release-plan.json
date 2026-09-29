@@ -27,7 +27,7 @@
         "warp-cpu",
         "warp-cuda"
       ],
-      "acceptance": "For each species (p, He, C, O) and each qualified material: tabulated electronic stopping power within 1.5 % (p, He) / 3 % (C, O) of a held-out evaluation table (role 'evaluation', distinct from construction data) over the documented energy domain; Monte Carlo R80 in water within max(0.5 mm, 0.5 %) (p, He) / max(0.7 mm, 0.7 %) (C, O) of the CSDA range of that table, at >= 1e5 histories per energy for >= 3 energies per species.",
+      "acceptance": "For each species (p, He, C, O) and each qualified material: tabulated electronic stopping power within 1.5 % (p, He) / 3 % (C, O) of a held-out evaluation table (role 'evaluation', distinct from construction data) over the documented energy domain; Monte Carlo R80 in water within max(0.5 mm, 0.5 %) (p, He) / max(0.7 mm, 0.7 %) (C, O) of the CSDA range of the evaluation table with the same mean-excitation-energy lineage (ICRU 90, I = 78 eV, whose values above the blend window are held out from construction; for oxygen the effective-charge-scaled ICRU 90 lineage), at >= 1e5 histories per energy for >= 3 energies per species. PSTAR/ASTAR (ICRU 49, I = 75 eV) are reported as a second evaluation with their documented +0.5 % range offset; they are the same-lineage reference for non-water materials.",
       "rationale": "Ion-specific stopping/range evidence is required per species; proton data cannot validate heavier ions (V2-ION, V2-EVID).",
       "species": [
         "proton",
@@ -37,7 +37,8 @@
       ],
       "independent_required": true,
       "independent_evidence": "ion-specific-tabulated evaluation tables (PSTAR/ASTAR/ICRU 90 lineage) with construction/evaluation roles recorded",
-      "frozen_by": "decisions/0039-v2-performance-targets-and-acceptance-criteria.md"
+      "frozen_by": "decisions/0039-v2-performance-targets-and-acceptance-criteria.md",
+      "amended": "V2-003 (decision 0040): evaluation-lineage clarification, tolerances unchanged"
     },
     {
       "id": "PHY-PROTON-WATER",
@@ -511,6 +512,16 @@
   "performance_target_backend": "warp-cuda",
   "performance_metric_definitions": "See decisions/0039: wall_seconds end-to-end warm-cache; histories_per_second = primaries / transport wall time (host+kernel, all batches); cold_start_seconds process start to first launch with warm kernel cache; compilation_seconds extra time of a run after warp.clear_kernel_cache(); host_seconds non-kernel transport time; gpu_kernel_seconds summed kernel time; peaks attributable device memory / host RSS.",
   "frozen_on": "2026-09-30",
-  "freeze_task": "V2-002",
-  "amendment_policy": "Any change requires a new decision record citing 0039, preserves this file's history and original results, records a tolerance_changed/validation_strategy_changed event, and re-freezes at a new SHA."
+  "freeze_task": "V2-003 (amendment 1 of the V2-002 freeze)",
+  "amendment_policy": "Any change requires a new decision record citing 0039, preserves this file's history and original results, records a tolerance_changed/validation_strategy_changed event, and re-freezes at a new SHA.",
+  "amendments": [
+    {
+      "task": "V2-003",
+      "date": "2026-09-30",
+      "decision": "decisions/0040-v2-stopping-power-model-and-data-lineage.md",
+      "change": "PHY-STOPPING-RANGE acceptance text clarifies which table is the same-lineage range reference (ICRU 90 for water); numeric tolerances and all other suites unchanged.",
+      "previous_freeze_sha": "df26927ab201fc97ad561a1b98492c1690c90a83",
+      "previous_plan_sha256": "c882c8e84a994c19e62abc3b68410ed3c2136b383f66bf7b7d7be2840d7934f7"
+    }
+  ]
 }

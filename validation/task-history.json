@@ -15,6 +15,21 @@
         "physics-researcher x3 (opus; literature research, no file changes)"
       ],
       "integrated_at": "2026-09-29T22:38Z"
+    },
+    {
+      "task_id": "V2-002",
+      "title": "performance calibration and release plan freeze",
+      "branch": "task/v2-002-performance-calibration-and-release-plan-freeze",
+      "head_sha": "a05e701311e2dbf1ae752fc0658181e6cf821662",
+      "pull_request": 65,
+      "squash_sha": "df26927ab201fc97ad561a1b98492c1690c90a83",
+      "validation_record": "VAL-20260929-225555-454348",
+      "agents": [
+        "claude-fable-5-1 (lead orchestrator)",
+        "general-purpose subagent (FRED manual research, no file changes)"
+      ],
+      "integrated_at": "2026-09-29T22:57Z",
+      "notes": "Release plan frozen; integrated freeze SHA for qualification is the squash commit df26927 (targets_frozen events reference both a05e701 and df26927)."
     }
   ]
 }

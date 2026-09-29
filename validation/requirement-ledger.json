@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "revision": 2,
+  "revision": 3,
   "updated": "2026-09-30",
   "status_vocabulary": [
     "planned",
@@ -64,7 +64,7 @@
       "id": "V1-MUST-005",
       "title": "Ion transport",
       "source": "REQUIREMENTS.md",
-      "status": "planned",
+      "status": "in-progress",
       "suites": [
         "PHY-STOPPING-RANGE",
         "PHY-PROTON-WATER",
@@ -73,8 +73,10 @@
         "PHY-CARBON-FRAGMENTS",
         "PHY-OXYGEN"
       ],
-      "tasks": [],
-      "notes": ""
+      "tasks": [
+        "V2-003"
+      ],
+      "notes": "Species set and per-nucleon energy conventions defined (V2-003); transport follows."
     },
     {
       "id": "V1-MUST-006",
@@ -102,12 +104,14 @@
       "id": "V1-MUST-008",
       "title": "Material assignment",
       "source": "REQUIREMENTS.md",
-      "status": "planned",
+      "status": "in-progress",
       "suites": [
         "PHY-HETEROGENEITY"
       ],
-      "tasks": [],
-      "notes": ""
+      "tasks": [
+        "V2-003"
+      ],
+      "notes": "Material library with composition/density/I values (V2-003)."
     },
     {
       "id": "V1-MUST-009",
@@ -206,114 +210,134 @@
       "id": "V1-MUST-017",
       "title": "Analytical physics layer",
       "source": "REQUIREMENTS.md",
-      "status": "planned",
+      "status": "implemented",
       "suites": [
         "PHY-STOPPING-RANGE"
       ],
-      "tasks": [],
-      "notes": ""
+      "tasks": [
+        "V2-003"
+      ],
+      "notes": "Analytic Bethe layer with corrections (ionmc.physics.stopping), validated vs ICRU 90/PSTAR/ASTAR (V2-003)."
     },
     {
       "id": "V1-MUST-018",
       "title": "External/tabulated data layer",
       "source": "REQUIREMENTS.md",
-      "status": "planned",
+      "status": "implemented",
       "suites": [
         "PHY-STOPPING-RANGE"
       ],
-      "tasks": [],
-      "notes": ""
+      "tasks": [
+        "V2-003"
+      ],
+      "notes": "Tabulated layer: shipped ICRU 90 water tables and NIST PSTAR/ASTAR acquisition (V2-003)."
     },
     {
       "id": "V1-MUST-019",
       "title": "Separation of transport from data source",
       "source": "REQUIREMENTS.md",
-      "status": "planned",
+      "status": "in-progress",
       "suites": [
         "PHY-STOPPING-RANGE"
       ],
-      "tasks": [],
-      "notes": ""
+      "tasks": [
+        "V2-003"
+      ],
+      "notes": "Blended StoppingTable abstraction built; transport consumption follows."
     },
     {
       "id": "V1-MUST-020",
       "title": "No large physics datasets in Git",
       "source": "REQUIREMENTS.md",
-      "status": "planned",
+      "status": "implemented",
       "suites": [
         "PROV-DATA"
       ],
-      "tasks": [],
-      "notes": ""
+      "tasks": [
+        "V2-003"
+      ],
+      "notes": "Only an 8 kB ICRU 90 key-data table is shipped; NIST tables are cached outside Git (V2-003)."
     },
     {
       "id": "V1-MUST-021",
       "title": "Automatic acquisition",
       "source": "REQUIREMENTS.md",
-      "status": "planned",
+      "status": "implemented",
       "suites": [
         "PROV-DATA",
         "WF-CLEAN-INSTALL"
       ],
-      "tasks": [],
-      "notes": ""
+      "tasks": [
+        "V2-003"
+      ],
+      "notes": "Automatic NIST STAR acquisition through the provenance cache and `ionmc data fetch` (V2-003)."
     },
     {
       "id": "V1-MUST-022",
       "title": "Local caching",
       "source": "REQUIREMENTS.md",
-      "status": "planned",
+      "status": "implemented",
       "suites": [
         "PROV-DATA"
       ],
-      "tasks": [],
-      "notes": ""
+      "tasks": [
+        "V2-003"
+      ],
+      "notes": "Content-addressed local cache with configurable location (V2-003)."
     },
     {
       "id": "V1-MUST-023",
       "title": "Dataset versioning",
       "source": "REQUIREMENTS.md",
-      "status": "planned",
+      "status": "implemented",
       "suites": [
         "PROV-DATA"
       ],
-      "tasks": [],
-      "notes": ""
+      "tasks": [
+        "V2-003"
+      ],
+      "notes": "Dataset records carry dataset_id/version identifiers (V2-003)."
     },
     {
       "id": "V1-MUST-024",
       "title": "Integrity verification",
       "source": "REQUIREMENTS.md",
-      "status": "planned",
+      "status": "implemented",
       "suites": [
         "PROV-DATA"
       ],
-      "tasks": [],
-      "notes": ""
+      "tasks": [
+        "V2-003"
+      ],
+      "notes": "SHA-256 verification on fetch and reuse; pinned hashes supported (V2-003)."
     },
     {
       "id": "V1-MUST-025",
       "title": "Provenance",
       "source": "REQUIREMENTS.md",
-      "status": "planned",
+      "status": "in-progress",
       "suites": [
         "PROV-OUTPUT",
         "PROV-DATA"
       ],
-      "tasks": [],
-      "notes": ""
+      "tasks": [
+        "V2-003"
+      ],
+      "notes": "Provenance records exist for datasets and tables; result persistence follows."
     },
     {
       "id": "V1-MUST-026",
       "title": "Offline reuse",
       "source": "REQUIREMENTS.md",
-      "status": "planned",
+      "status": "implemented",
       "suites": [
         "PROV-DATA",
         "WF-CLEAN-INSTALL"
       ],
-      "tasks": [],
-      "notes": ""
+      "tasks": [
+        "V2-003"
+      ],
+      "notes": "Offline reuse via IONMC_OFFLINE/--offline; missing data raises actionable errors (V2-003)."
     },
     {
       "id": "V1-MUST-027",
@@ -583,7 +607,7 @@
       "id": "V2-EVID",
       "title": "physical evidence lineage and sufficiency",
       "source": "experiment/v2/REQUIREMENTS.md",
-      "status": "planned",
+      "status": "in-progress",
       "suites": [
         "PHY-STOPPING-RANGE",
         "PHY-PROTON-WATER",
@@ -593,8 +617,10 @@
         "PHY-CARBON-FRAGMENTS",
         "PHY-OXYGEN"
       ],
-      "tasks": [],
-      "notes": ""
+      "tasks": [
+        "V2-003"
+      ],
+      "notes": "First evidence lineage records: PSTAR/ASTAR (evaluation), ICRU 90 addendum (construction/evaluation split by energy window) (V2-003)."
     },
     {
       "id": "V2-BIO",
