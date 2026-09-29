@@ -85,7 +85,7 @@ physics. Empty/missing outputs fail even if the native process returns zero.
 Inspect native banners, actual histories, settings, units and output content
 before scientific comparison. Smoke success is not physics qualification.
 
-Default state is `~/.local/share/ionmc-experiment/v2`, with `engines.json`, raw
+Default state is `~/.local/share/ionmc-experiment/experiment-v2`, with `engines.json`, raw
 reference attempts and content-addressed data; it is inaccessible for agent-shell
 writes in the v2 settings. MCP exposes bounded raw artifact reads and copies
 verified datasets into ignored task caches. A configuration ID hashes exact code,
@@ -185,8 +185,8 @@ supplied by the existing launcher, start a new session from the v2 clone:
 
 ```bash
 cd /home/wahln/aiprojects/ion-mc-v2
-python3 -m infrastructure.experiment_v2.preflight --smoke --notify
-claude "Read experiment/prompts/kickoff-v2-isolated.md and carry out that autonomous run."
+~/bin/claude-ionmc --preflight
+~/bin/claude-ionmc "Read experiment/prompts/kickoff-v2-isolated.md and carry out that autonomous run."
 ```
 
 The bootstrap and ready conditions are preserved separately as
@@ -197,3 +197,37 @@ No historical tag is moved.
 
 Run the Claude command only after preflight succeeds. Calibration remains the
 first scientific-run phase. This preparation task never launches it.
+
+## Launcher and experiment storage
+
+The operator launcher `~/bin/claude-ionmc` sets IONMC_EXPERIMENT_ID first.
+Active caches are under `~/.cache/ionmc-experiment/<experiment-id>` and state under
+`~/.local/share/ionmc-experiment/<experiment-id>`. For this condition the ID is
+`experiment-v2`. The repository's Claude settings use the same literal ID;
+changing an experimental condition requires updating those settings too.
+
+| Purpose | Location relative to the experiment root |
+| --- | --- |
+| General development caches | cache root (XDG_CACHE_HOME) |
+| Host environment and CUDA/Warp caches | cache root / host-runner |
+| Engine registry, reference runs/events, datasets and runtimes | state root |
+| Hook and orchestration telemetry | state root / telemetry |
+| Codex raw output | state root / raw/codex |
+| Exact-SHA validation records | state root / validation |
+| Host execution records | state root / host-runs |
+| Launcher temporary files | state root / tmp |
+
+IONMC_V2_STATE remains an optional state override. Existing logging variable names
+remain supported. Registered runtime data and historical execution evidence are
+preserved during migration; do not clear state directories to start a run.
+The host virtual environment is recreated at its new path with the same installed
+package versions because moving a venv can leave invalid absolute shebangs.
+The old host cache remains archived. Legacy state paths have compatibility
+symlinks for earlier run records. New execution writes to the experiment-ID roots.
+
+The launcher must enter `ion-mc-v2`, invoke the Python module
+`infrastructure.experiment_v2.preflight` (the module name is not the experiment
+ID), and end with exactly one `exec claude "$@"`. Its `--preflight` mode runs
+smokes and notification delivery using the same exported environment as Claude.
+Keep the operator's notification URL private. The launcher itself is maintained
+outside Git; the repository contains no copy of its secret-bearing contents.

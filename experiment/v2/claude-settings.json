@@ -91,16 +91,18 @@
       "allowRead": [
         ".",
         "~/.local/bin",
-        "~/.cache/ionmc-experiment",
+        "~/.cache/ionmc-experiment/experiment-v2",
         "~/aiprojects/ion-mc-worktrees",
-        "~/.local/share/ionmc-experiment/telemetry/v2",
-        "/home/wahln/aiprojects/ion-mc-v2/.git"
+        "~/.local/share/ionmc-experiment/experiment-v2/telemetry",
+        "/home/wahln/aiprojects/ion-mc-v2/.git",
+        "~/.local/share/ionmc-experiment/experiment-v2/tmp"
       ],
       "allowWrite": [
         ".",
-        "~/.cache/ionmc-experiment",
+        "~/.cache/ionmc-experiment/experiment-v2",
         "~/aiprojects/ion-mc-worktrees",
-        "~/.local/share/ionmc-experiment/telemetry/v2"
+        "~/.local/share/ionmc-experiment/experiment-v2/telemetry",
+        "~/.local/share/ionmc-experiment/experiment-v2/tmp"
       ]
     },
     "network": {
@@ -334,9 +336,9 @@
   },
   "env": {
     "IONMC_EXPERIMENT_ID": "experiment-v2",
-    "IONMC_V2_EVENT_DIR": "~/.local/share/ionmc-experiment/telemetry/v2",
-    "IONMC_TELEMETRY_DIR": "~/.local/share/ionmc-experiment/telemetry/v2",
-    "IONMC_CODEX_RAW_DIR": "~/.local/share/ionmc-experiment/raw/codex-v2",
-    "IONMC_VALIDATION_DIR": "~/.local/share/ionmc-experiment/validation-v2"
+    "IONMC_V2_EVENT_DIR": "~/.local/share/ionmc-experiment/experiment-v2/telemetry",
+    "IONMC_TELEMETRY_DIR": "~/.local/share/ionmc-experiment/experiment-v2/telemetry",
+    "IONMC_CODEX_RAW_DIR": "~/.local/share/ionmc-experiment/experiment-v2/raw/codex",
+    "IONMC_VALIDATION_DIR": "~/.local/share/ionmc-experiment/experiment-v2/validation"
   }
 }
