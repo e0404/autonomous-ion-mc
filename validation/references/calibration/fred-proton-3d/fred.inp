@@ -1,0 +1,6 @@
+# IonMC v2 calibration/reference case: 150 MeV protons in a 12 x 12 x 30 cm water box
+# FRED units: lengths cm, energies MeV. Histories and seed are given on the command line
+# (-nprim, -rseed override input-file definitions per the FRED 3.76 manual).
+region: Phantom ; O=[0,0,0] ; pivot=[0.5,0.5,0] ; f=[0,0,1] ; u=[0,1,0] ; L=[12,12,30] ; voxels=[60,60,150] ; material=water ; score=[dose,LETd]
+field: 1 ; O=[0,0,-0.1] ; f=[0,0,1] ; u=[0,1,0]
+pb: 1 1 ; particle=proton ; T=150 ; Xsec=pin ; P=[0,0,0] ; v=[0,0,1] ; N=1

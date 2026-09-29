@@ -10,6 +10,6 @@
   "scorers": ["dose (Gy per primary? see native header)", "energy deposit", "LET"],
   "units": "native MHD headers; MCsquare dose output normalisation to be read from the log",
   "rationale": "Performance calibration reference for the proton-3d workload envelope (single thread) and a first independent-MC proton depth-dose in water; execution success is not physics validation",
-  "expected_outputs": ["Outputs/Dose.mhd", "Outputs/Dose.raw"],
+  "expected_outputs": ["Outputs/Dose.mhd", "Outputs/Dose.raw", "Outputs/LET.mhd"],
   "arguments": []
 }
