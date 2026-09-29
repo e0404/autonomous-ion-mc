@@ -64,6 +64,12 @@ def check(root=ROOT, *, smoke=False, notify=False, state=STATE):
                 "available": False,
                 "error_type": type(exc).__name__,
             }
+    try:
+        from infrastructure.experiment_v2.remote import inspect
+
+        results["remote"] = inspect(root)
+    except (ValueError, OSError, KeyError, IndexError, subprocess.CalledProcessError):
+        results["remote"] = {"ready": False}
     results["notification"] = {
         "configured": bool(os.environ.get("IONMC_NTFY_URL")),
         "delivery_tested": False,
@@ -83,6 +89,7 @@ def check(root=ROOT, *, smoke=False, notify=False, state=STATE):
         and all(results["tools"].values())
         and results["gpu_device"]
         and results["host_runtime"]
+        and results["remote"]["ready"]
         and all(
             e.get("available") and e.get("smoke") for e in results["engines"].values()
         )

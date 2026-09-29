@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import pytest
 
@@ -177,6 +178,7 @@ def test_process_failure_missing_outputs_and_timeout_are_retained(
     )
     (case / "case.json").write_text(json.dumps(envelope))
     monkeypatch.setattr(reference, "exact_state", lambda root: "a" * 40)
+    monkeypatch.setattr(reference, "require_committed_inputs", lambda *args: None)
     monkeypatch.setattr(reference, "load_engine", lambda *args: {"engine": "topas"})
     monkeypatch.setattr(reference, "command", lambda *args: ["/usr/bin/false"])
     result = reference.run_reference(root, "case", "topas", state=tmp_path / "state")
@@ -260,3 +262,12 @@ def test_v2_intervention_requires_real_investigation_record():
         ],
     }
     assert validate_context(value) == value
+
+
+def test_ignored_reference_inputs_cannot_claim_committed_provenance(monkeypatch):
+    monkeypatch.setattr(reference, "git", lambda *args: "case/input.txt")
+    reference.require_committed_inputs(Path("/repo"), "case", {"input.txt": {}})
+    with pytest.raises(ValueError):
+        reference.require_committed_inputs(
+            Path("/repo"), "case", {"input.txt": {}, "ignored.txt": {}}
+        )

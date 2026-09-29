@@ -110,7 +110,10 @@ def create(destination, *, root=ROOT):
         )
     )
     with (destination / ".gitignore").open("a") as out:
-        out.write("\n# Generated v2 condition documentation\ndocs/experiment/v2/\n")
+        out.write(
+            "\n# V2 generated docs and task data caches\n"
+            "docs/experiment/v2/\n.ionmc-cache/\n.uv-cache/\n"
+        )
     condition = {
         "schema_version": 2,
         "experiment_id": "experiment-v2",

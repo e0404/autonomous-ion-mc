@@ -19,6 +19,7 @@ from infrastructure.experiment_v2.common import (
     event,
     exact_state,
     file_hash,
+    git,
     identifier,
     inventory,
     now,
@@ -174,6 +175,13 @@ def tail(path):
         }
 
 
+def require_committed_inputs(root, case_path, files):
+    tracked = set(git(root, "ls-files", "--", str(case_path)).splitlines())
+    expected = {(Path(case_path) / name).as_posix() for name in files}
+    if not expected or not expected <= tracked:
+        raise ValueError("Every reference input must be tracked in the clean commit")
+
+
 def run_reference(
     root,
     case_path,
@@ -191,6 +199,7 @@ def run_reference(
     sha = exact_state(root)
     case_dir = safe_path(root, case_path)
     files = inventory(case_dir)
+    require_committed_inputs(root, case_path, files)
     case = json.loads((case_dir / "case.json").read_text())
     validate_case(case)
     if not safe_path(case_dir, case["input"]).is_file():

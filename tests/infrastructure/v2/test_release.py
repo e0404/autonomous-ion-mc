@@ -226,3 +226,23 @@ def test_promotion_requires_exact_check_level_evidence():
     pr["statusCheckRollup"][0]["conclusion"] = "SKIPPED"
     with pytest.raises(ValueError):
         check_ci(pr, "sha")
+
+
+def test_remote_protection_requires_prs_and_checks():
+    from infrastructure.experiment_v2.remote import protection_ok
+
+    good = {
+        "required_pull_request_reviews": {},
+        "enforce_admins": {"enabled": True},
+        "allow_force_pushes": {"enabled": False},
+        "allow_deletions": {"enabled": False},
+        "required_linear_history": {"enabled": True},
+        "required_status_checks": {
+            "strict": True,
+            "contexts": ["pre-commit", "tests", "docs"],
+        },
+    }
+    assert protection_ok(good, linear=True)
+    assert not protection_ok({}, linear=True)
+    good["required_status_checks"]["contexts"] = []
+    assert not protection_ok(good, linear=True)
