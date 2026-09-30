@@ -212,12 +212,19 @@ def test_warp_cuda_matches_warp_cpu_statistically(case):
     _, pc, ec = depth_profile(cpu)
     _, pg, eg = depth_profile(gpu)
     z = zscores(pc, ec, pg, eg)
-    assert abs(z.mean()) < 0.25 and z.std() < 1.3 and np.abs(z).max() < 4.5, (
+    assert abs(z.mean()) < 0.6 and z.std() < 1.3 and np.abs(z).max() < 4.5, (
         z.mean(),
         z.std(),
         np.abs(z).max(),
     )
     assert pc.sum() == pytest.approx(pg.sum(), rel=1e-4)
+    # Depth bins are correlated within a run, so the mean z has a standard
+    # deviation well above 1/sqrt(n_bins); decision 0042 bounds it at 0.6 and
+    # relies on integral quantities for tight checks.
+    zc_axis, _, _ = depth_profile(cpu)
+    assert abs(r80(zc_axis, pc) - r80(zc_axis, pg)) < 0.15
+    plateau = (zc_axis > 10) & (zc_axis < 50)
+    assert pc[plateau].mean() == pytest.approx(pg[plateau].mean(), rel=0.005)
     assert gpu.metadata["timing"]["device"].startswith("cuda")
 
 
@@ -229,7 +236,7 @@ def test_warp_cuda_float64_matches_float32_and_is_deterministic(case):
     _, pa, ea = depth_profile(a)
     _, pb, eb = depth_profile(b)
     z = zscores(pa, ea, pb, eb)
-    assert abs(z.mean()) < 0.25 and z.std() < 1.3
+    assert abs(z.mean()) < 0.6 and z.std() < 1.3
     again = run_case(case, "warp-cuda", "float32", 50000, 51, batches=10)
     # atomics make float32 device sums order-dependent at the ulp level; compare to 1e-5
     assert np.allclose(a.energy_mean, again.energy_mean, rtol=1e-5, atol=1e-9)

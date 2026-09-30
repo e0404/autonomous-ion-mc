@@ -137,7 +137,7 @@ def test_capability_contract_fails_closed():
         )
     with pytest.raises(UnsupportedConfigurationError, match="backend"):
         run(
-            SimulationConfig(beam, geo, histories=2, batches=1, backend="warp-cuda"),
+            SimulationConfig(beam, geo, histories=2, batches=1, backend="opencl"),
             offline=True,
         )
     with pytest.raises(UnsupportedConfigurationError, match="precision"):
