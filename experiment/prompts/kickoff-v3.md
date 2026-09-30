@@ -31,7 +31,7 @@ Persist plans/checkpoints to tracked files and compact between milestones.
 Use the external Codex worker proactively when independent implementation helps.
 For EVERY repository-changing task, commit the tested state, then call
 start_codex_review through the codex-worker MCP. This launches an independent
-read-only Codex reviewer (default gpt-6-sol). Poll inspect_codex_review at sensible
+read-only Codex reviewer (default gpt-5.6-sol). Poll inspect_codex_review at sensible
 intervals while doing independent work. Review covers the exact task commit and
 current integration base. Fix all blocking/important findings, recommit and
 request a fresh review. A new commit or changed integration base invalidates the

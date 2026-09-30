@@ -39,7 +39,7 @@ The codex-worker MCP provides start_codex_review(task_id) and
 inspect_codex_review(review_id). Start returns immediately; poll at reasonable
 intervals, doing independent work while the reviewer runs. Codex uses read-only,
 ephemeral execution and structured output, ignoring personal config and using
-IONMC_CODEX_REVIEW_MODEL (default gpt-6-sol). Authentication uses the existing Codex
+IONMC_CODEX_REVIEW_MODEL (default gpt-5.6-sol). Authentication uses the existing Codex
 login. Generic codex_worker calls do not satisfy the review gate. The trusted
 service writes reports outside the task sandbox and binds them to task SHA,
 integration-base SHA and report hash. No tool accepts a caller-authored approval.

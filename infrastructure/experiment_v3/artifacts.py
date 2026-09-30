@@ -21,6 +21,18 @@ def manifest(run_id, *, state=STATE):
     return archive, record, record["artifact_files"]
 
 
+def archived_file(archive, name):
+    relative = Path(name)
+    if relative.is_absolute() or ".." in relative.parts or not relative.parts:
+        raise ValueError("Invalid archive path")
+    # Some engines emit internal aliases (FRED Dose.mhd). Resolve only within
+    # this immutable archive, then copy bytes rather than exporting symlinks.
+    source = (archive / relative).resolve(strict=True)
+    if not source.is_relative_to(archive.resolve()) or not source.is_file():
+        raise ValueError("Artifact escapes archive or is not a regular file")
+    return source
+
+
 def list_artifacts(run_id, *, offset=0, limit=50, state=STATE):
     if (
         type(offset) is not int
@@ -59,12 +71,8 @@ def materialize(run_id, worktree, paths=None, *, state=STATE):
     for name in selected:
         if name not in files:
             raise ValueError("Unknown artifact path; use list_reference_artifacts")
-        source = safe_path(archive, name)
-        if (
-            not source.is_file()
-            or source.is_symlink()
-            or file_hash(source) != files[name]["sha256"]
-        ):
+        source = archived_file(archive, name)
+        if not source.is_file() or file_hash(source) != files[name]["sha256"]:
             raise ValueError("Archived artifact hash mismatch")
         source_files[name] = source
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -124,7 +132,7 @@ def read_text(run_id, path, *, offset=0, limit=2000, state=STATE):
     archive, _, files = manifest(run_id, state=state)
     if path not in files:
         raise ValueError("Unknown artifact path; use list_reference_artifacts")
-    source = safe_path(archive, path)
+    source = archived_file(archive, path)
     if file_hash(source) != files[path]["sha256"]:
         raise ValueError("Archived artifact hash mismatch")
     with source.open("rb") as stream:

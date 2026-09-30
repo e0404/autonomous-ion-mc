@@ -24,8 +24,8 @@ retrieval, parsing, tests, docs and routine operations. General-purpose workers
 default to Sonnet, never inherit Fable. The Agent hook pins missing/inherit models
 according to role; top-tier Fable requires a substantive
 TOP_TIER_JUSTIFICATION: line explaining why lower tiers cannot resolve the task.
-Codex planned implementation defaults to gpt-6-luna; independent review uses
-operator-configured gpt-6-sol. Use small parallel groups when tasks are independent.
+Codex planned implementation defaults to gpt-5.6-luna; independent review uses
+operator-configured gpt-5.6-sol. Use small parallel groups when tasks are independent.
 Avoid delegation overhead for trivial commands. Preserve small checkpoints and
 compact context between milestones; do not reread every document on every call.
 

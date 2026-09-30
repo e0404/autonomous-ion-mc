@@ -99,7 +99,7 @@ def main() -> int:
 
     parser.add_argument(
         "--model",
-        default=os.environ.get("IONMC_CODEX_WORKER_MODEL", "gpt-6-luna"),
+        default=os.environ.get("IONMC_CODEX_WORKER_MODEL", "gpt-5.6-luna"),
         help="Explicit worker model; defaults to economical planned-work tier.",
     )
 
@@ -131,7 +131,7 @@ def main() -> int:
         else args.prompt_file.read_text(encoding="utf-8")
     )
 
-    if args.model not in ("gpt-6-luna", "gpt-6-sol") and not re.search(r"(?m)^TOP_TIER_JUSTIFICATION:\s*.{40,}$", prompt):
+    if args.model not in ("gpt-5.6-luna", "gpt-5.6-sol") and not re.search(r"(?m)^TOP_TIER_JUSTIFICATION:\s*.{40,}$", prompt):
         parser.error("Non-default worker model requires TOP_TIER_JUSTIFICATION in its prompt")
 
     RAW_ROOT.mkdir(parents=True, exist_ok=True)

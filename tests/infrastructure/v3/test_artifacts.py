@@ -61,3 +61,23 @@ def test_corruption_unknown_paths_and_symlinks_rejected(bundle, tmp_path):
     with pytest.raises(ValueError):
         artifacts.materialize("REF-test", wt, ["stdout.txt"], state=state)
     assert not list(outside.iterdir())
+
+
+def test_engine_internal_alias_is_copied_as_bytes(bundle, tmp_path):
+    state, archive, wt = bundle
+    alias = archive / "work/alias.bin"
+    alias.symlink_to("dose.bin")
+    record = json.loads((archive / "result.json").read_text())
+    record["artifact_files"]["work/alias.bin"] = record["artifact_files"][
+        "work/dose.bin"
+    ]
+    write_json(archive / "result.json", record)
+    artifacts.materialize("REF-test", wt, ["work/alias.bin"], state=state)
+    target = wt / ".ionmc-cache/reference-runs/REF-test/work/alias.bin"
+    assert target.is_file() and not target.is_symlink()
+    alias.unlink()
+    outside = tmp_path / "private"
+    outside.write_bytes(b"secret")
+    alias.symlink_to(outside)
+    with pytest.raises(ValueError, match="escapes"):
+        artifacts.read_text("REF-test", "work/alias.bin", state=state)
