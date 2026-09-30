@@ -142,6 +142,11 @@ def execute(rid, *, state=STATE):
         wt = Path(job["worktree"])
         if exact_state(wt) != job["head_sha"]:
             raise ValueError("Worktree changed before review")
+        from infrastructure.experiment_v3.host_snapshot import create
+
+        snapshot = create(
+            ROOT, wt, job["head_sha"], "review", dest / "snapshot", include_inputs=False
+        )
         write_json(dest / "schema.json", SCHEMA)
         prompt = f"""You are the independent Codex reviewer for IonMC experiment v3.
 Review the complete diff {job["base_sha"]}..{job["head_sha"]} in this worktree.
@@ -211,7 +216,7 @@ unresolved findings. If you cannot inspect the diff, return changes_required.
                 cmd,
                 input=prompt,
                 text=True,
-                cwd=wt,
+                cwd=snapshot,
                 stdout=out,
                 stderr=err,
                 timeout=1800,
@@ -222,6 +227,8 @@ unresolved findings. If you cannot inspect the diff, return changes_required.
             )
         if exact_state(wt) != job["head_sha"]:
             raise ValueError("Worktree changed during review")
+        if exact_state(snapshot) != job["head_sha"]:
+            raise ValueError("Review snapshot changed during execution")
         report = json.loads((dest / "report.json").read_text())
         passed = validate_report(report, job["head_sha"])
         job.update(

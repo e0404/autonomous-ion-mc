@@ -278,7 +278,7 @@ def test_sandbox_version_gate_rejects_old_runtime(monkeypatch):
     monkeypatch.setattr(
         sandbox_runtime, "inspect", lambda: {"ready": False, "version": "0.9.0"}
     )
-    with pytest.raises(RuntimeError, match="0.12.0"):
+    with pytest.raises(RuntimeError, match=r"0\.12\.0"):
         sandbox_runtime.require()
 
 
@@ -325,3 +325,67 @@ def test_real_sandbox_snapshot_provenance_and_restore_race(
     assert result["committed_state_unchanged"]
     assert source.read_bytes() == original
     assert (Path(result["output_paths"][0]) / "result").read_text() == "passed"
+
+
+def test_review_uses_snapshot_when_live_source_is_restored(
+    registered, tmp_path, monkeypatch
+):
+    import json
+
+    from infrastructure.experiment_v3 import review
+    from infrastructure.experiment_v3.common import write_json
+
+    root, wt = registered
+    sha = git(wt, "rev-parse", "HEAD")
+    monkeypatch.setattr(review, "ROOT", root)
+    state = tmp_path / "protected"
+    rid = "REVIEW-race"
+    dest = state / "reviews" / rid
+    write_json(
+        dest / "job.json",
+        {
+            "review_id": rid,
+            "task_id": "V3-TEST",
+            "head_sha": sha,
+            "base_sha": sha,
+            "worktree": str(wt),
+            "status": "running",
+            "started_at": "2026-09-30T00:00:00Z",
+            "model": "gpt-5.6-sol",
+        },
+    )
+    original_run = subprocess.run
+    source = wt / "README.md"
+    original = source.read_bytes()
+    seen = []
+
+    def reviewer(cmd, **kwargs):
+        if cmd[:2] == ["codex", "exec"]:
+            source.write_text("live source changed during review")
+            try:
+                snapshot = Path(kwargs["cwd"])
+                seen.append(snapshot)
+                assert snapshot == dest / "snapshot"
+                assert (snapshot / "README.md").read_bytes() == original
+                assert git(snapshot, "rev-parse", "HEAD") == sha
+                assert not (snapshot / ".ionmc-cache").exists()
+                write_json(
+                    dest / "report.json",
+                    {
+                        "head_sha": sha,
+                        "verdict": "pass",
+                        "summary": "reviewed",
+                        "findings": [],
+                    },
+                )
+            finally:
+                source.write_bytes(original)
+            return subprocess.CompletedProcess(cmd, 0)
+        return original_run(cmd, **kwargs)
+
+    monkeypatch.setattr(review.subprocess, "run", reviewer)
+    result = review.execute(rid, state=state)
+    assert result["status"] == "passed", result
+    assert len(seen) == 1 and source.read_bytes() == original
+    assert review.require_review("V3-TEST", wt, sha, state=state) == rid
+    assert json.loads((dest / "report.json").read_text())["head_sha"] == sha

@@ -33,7 +33,7 @@ def copy_regular_tree(source_fd, destination):
             raise ValueError("Snapshot inputs must not contain links or special files")
 
 
-def create(root, worktree, sha, branch, destination):
+def create(root, worktree, sha, branch, destination, *, include_inputs=True):
     """Fetch exactly sha into a private object database; copy only ignored inputs.
 
     Source edits/restoration during execution cannot affect this checkout. Git
@@ -59,6 +59,8 @@ def create(root, worktree, sha, branch, destination):
     # Git symlinks are unnecessary for this runtime and complicate nested mounts.
     if any(p.is_symlink() for p in destination.rglob("*")):
         raise ValueError("Validation snapshots must not contain committed symlinks")
+    if not include_inputs:
+        return destination
     fd = os.open(worktree, DIRECTORY_FLAGS)
     try:
         try:
