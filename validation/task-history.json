@@ -45,6 +45,20 @@
       ],
       "integrated_at": "2026-09-29T23:17Z",
       "notes": "Release-plan amendment 1; re-freeze event at f1e0b6d."
+    },
+    {
+      "task_id": "V2-004",
+      "title": "geometry, sources, scoring and the reference Python electromagnetic transport",
+      "branch": "task/v2-004-geometry-sources-scoring-and-reference-python-electromagneti",
+      "head_sha": "a1ff69dbab58b7c9bebed44ff6387d92d7a1da46",
+      "pull_request": 67,
+      "squash_sha": "53ef4fd5e5c989ab856e2360da96d9b9ad6aa1f0",
+      "validation_record": "VAL-20260929-235723-D51CE0",
+      "agents": [
+        "claude-fable-5-1 (lead orchestrator)"
+      ],
+      "integrated_at": "2026-09-29T23:59Z",
+      "notes": "Merged remotely by the integration tool; local sync completed manually because the sandbox had left placeholder files and mounted repo files in the integration checkout (recorded in the task report)."
     }
   ]
 }

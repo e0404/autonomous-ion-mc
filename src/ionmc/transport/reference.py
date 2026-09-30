@@ -76,55 +76,15 @@ def deposit_along_segment(
     y1: float,
     z1: float,
     energy: float,
-) -> None:
-    """Distribute ``energy`` over the scoring voxels crossed by the segment (path-length weighted)."""
-    length = math.sqrt((x1 - x0) ** 2 + (y1 - y0) ** 2 + (z1 - z0) ** 2)
-    if energy <= 0.0:
-        return
+) -> float:
+    """Path-length-weighted deposit through the shared ``deposit_segment`` physics."""
+    py = physics("python")
     ox, oy, oz = grid.origin_mm
     dx, dy, dz = grid.spacing_mm
     nx, ny, nz = grid.shape
-    if length == 0.0:
-        i, j, k = (
-            math.floor((x0 - ox) / dx),
-            math.floor((y0 - oy) / dy),
-            math.floor((z0 - oz) / dz),
-        )
-        if 0 <= i < nx and 0 <= j < ny and 0 <= k < nz:
-            edep[i, j, k] += energy
-        return
-    ux, uy, uz = (x1 - x0) / length, (y1 - y0) / length, (z1 - z0) / length
-    s = 0.0
-    x, y, z = x0, y0, z0
-    guard = 0
-    while s < length - 1e-9 and guard < 10000:
-        guard += 1
-        i, j, k = (
-            math.floor((x - ox) / dx),
-            math.floor((y - oy) / dy),
-            math.floor((z - oz) / dz),
-        )
-        # distance to the next scoring face along the direction
-        best = length - s
-        if ux > 0:
-            best = min(best, (ox + (i + 1) * dx - x) / ux)
-        elif ux < 0:
-            best = min(best, (ox + i * dx - x) / ux)
-        if uy > 0:
-            best = min(best, (oy + (j + 1) * dy - y) / uy)
-        elif uy < 0:
-            best = min(best, (oy + j * dy - y) / uy)
-        if uz > 0:
-            best = min(best, (oz + (k + 1) * dz - z) / uz)
-        elif uz < 0:
-            best = min(best, (oz + k * dz - z) / uz)
-        best = max(best, 0.0)
-        seg = best + 1e-9  # nudge across the face
-        seg = min(seg, length - s)
-        if 0 <= i < nx and 0 <= j < ny and 0 <= k < nz:
-            edep[i, j, k] += energy * seg / length
-        s += seg
-        x, y, z = x0 + ux * s, y0 + uy * s, z0 + uz * s
+    return py.deposit_segment(
+        edep, ox, oy, oz, dx, dy, dz, nx, ny, nz, x0, y0, z0, x1, y1, z1, energy
+    )
 
 
 def transport_history(
@@ -201,7 +161,9 @@ def transport_history(
             nt,
         )
         d_energy = (r_now - r_frac) / rho * 10.0  # g/cm² -> mm at density rho
-        step = min(d_face + 1e-6, ph.max_step_mm, max(d_energy, 1e-3))
+        step = min(
+            d_face + py.boundary_overshoot(x), ph.max_step_mm, max(d_energy, 1e-3)
+        )
         rho_path = rho * step * 0.1  # g/cm²
         # mean energy loss via range inversion
         t_new = py.energy_after_path(
@@ -214,7 +176,7 @@ def transport_history(
             var = py.straggling_variance_mev2(
                 z_eff, float(tables.z_over_a[m]), beta2, rho_path
             )
-            de = py.sample_energy_loss(rng, de, var)
+            de, rng = py.sample_energy_loss(rng, de, var)
             de = min(de, t * a)
         # multiple scattering with random hinge
         hinge = rng.random() if ph.multiple_scattering else 1.0

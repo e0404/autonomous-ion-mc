@@ -89,3 +89,9 @@ backend is a slow float64 reference (about 4×10⁴ steps/s); heterogeneous
 phantoms use `"slabs": [[z0, z1, "bone_cortical", null]]` in the geometry.
 `ionmc capabilities` prints which physics, scorers and backends are
 implemented; unsupported requests fail before any transport.
+
+Backends: `"backend": "python"` (float64 reference, slow), `"warp-cpu"`
+(single host thread, ≈ 1000× faster than the reference for protons) and
+`"warp-cuda"` (NVIDIA GPU). Warp backends accept `"precision": "float32"`
+(default) or `"float64"`. The first run of a session compiles the kernels
+(seconds); later runs reuse the kernel cache.

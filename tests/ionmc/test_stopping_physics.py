@@ -21,6 +21,7 @@ from ionmc.physics.tables import (
     water_shape_source,
 )
 from ionmc.species import get_species
+from ionmc.transport.shared import physics
 
 WATER = get_material("water")
 
@@ -144,3 +145,16 @@ def test_stopping_power_scales_with_electron_density_and_i_value():
     )
     # bone: lower Z/A (0.515 vs 0.555) and higher I -> ~7-9 % lower mass stopping power
     assert 0.88 < float(ratio[0]) < 0.94
+
+
+def test_shared_samplers_return_advanced_state_python_scope():
+    """Regression: samplers must hand back the RNG state (Warp passes it by value)."""
+    py = physics("python")
+    rng = np.random.default_rng(0)
+    a, state = py.sample_energy_loss(rng, 0.7, 0.01)
+    b, state = py.sample_energy_loss(state, 0.7, 0.01)
+    assert a != b and state is rng
+    xs = np.array([py.sample_energy_loss(rng, 0.7, 0.01)[0] for _ in range(20000)])
+    assert xs.mean() == pytest.approx(0.7, rel=0.01) and xs.var() == pytest.approx(
+        0.01, rel=0.05
+    )

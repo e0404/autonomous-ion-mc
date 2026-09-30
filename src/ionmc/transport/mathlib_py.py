@@ -38,3 +38,10 @@ def randf(state: np.random.Generator) -> float:
 
 def randn(state: np.random.Generator) -> float:
     return float(state.standard_normal())
+
+
+def add3(array, i: int, j: int, k: int, value: float) -> float:
+    """In-place accumulate into a 3-D NumPy array (mirrors ``wp.atomic_add``)."""
+    old = array[i, j, k]
+    array[i, j, k] = old + value
+    return old

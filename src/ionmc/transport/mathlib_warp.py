@@ -14,9 +14,11 @@ from warp import (
     sin,
     sqrt,
 )
+from warp import atomic_add as add3
 
 __all__ = [
     "abs",
+    "add3",
     "atan2",
     "cos",
     "exp",
