@@ -49,14 +49,15 @@ def test_worker_binds_to_registered_task(registered, tmp_path):
 
 
 def test_host_mounts_source_read_only_and_only_ignored_outputs_rw(
-    registered, monkeypatch
+    registered, monkeypatch, tmp_path
 ):
     _, wt = registered
     monkeypatch.setattr(host_runner.shutil, "which", lambda _: "/usr/bin/bwrap")
     exists = Path.exists
     monkeypatch.setattr(Path, "exists", lambda p: str(p) == "/dev/dxg" or exists(p))
     monkeypatch.setattr(host_runner, "HOST_VENV", wt)
-    cmd = host_runner.build_bwrap_command(wt, ["/bin/true"])
+    output_root = tmp_path / "protected-run/outputs"
+    cmd = host_runner.build_bwrap_command(wt, ["/bin/true"], output_root)
     mounts = [
         (cmd[i], cmd[i + 1], cmd[i + 2])
         for i in range(len(cmd) - 2)
@@ -66,14 +67,14 @@ def test_host_mounts_source_read_only_and_only_ignored_outputs_rw(
     assert ("--bind", str(wt), "/workspace") not in mounts
     assert (
         "--bind",
-        str(wt / "validation/generated"),
+        str(output_root / "validation/generated"),
         "/workspace/validation/generated",
     ) in mounts
     assert not git(wt, "status", "--porcelain")
     (wt / "validation/generated/forbidden.txt").write_text("tracked")
     git(wt, "add", "-f", "validation/generated/forbidden.txt")
     with pytest.raises(ValueError, match="committed"):
-        host_runner.build_bwrap_command(wt, ["/bin/true"])
+        host_runner.build_bwrap_command(wt, ["/bin/true"], tmp_path / "other-output")
 
 
 def test_host_run_rejects_source_mutation_even_on_exit_zero(
@@ -179,3 +180,58 @@ def test_partial_release_retry_requires_successful_asset_upload(tmp_path, monkey
     fail_upload = False
     assert promote.promote(*args)["promoted"]
     assert len(uploaded) == 2 and len(promoted) == 1
+
+
+def test_host_rejects_archived_symlink_and_unregistered_clone(registered, monkeypatch):
+    root, wt = registered
+    monkeypatch.setattr(host_runner, "REPO", root)
+    monkeypatch.setattr(host_runner, "WORKTREE_ROOT", wt.parent)
+    assert host_runner.inspect_worktree("V3-TEST")["path"] == wt
+    for name in ["v2-001", "v3-archive"]:
+        (wt.parent / name).symlink_to(wt, target_is_directory=True)
+        with pytest.raises(ValueError):
+            host_runner.inspect_worktree(name)
+    other = wt.parent / "v3-unregistered"
+    subprocess.run(
+        ["git", "clone", str(root), str(other)], check=True, capture_output=True
+    )
+    with pytest.raises(ValueError, match="registered"):
+        host_runner.inspect_worktree("V3-UNREGISTERED")
+
+
+def test_output_publication_preserves_hardlinked_source_and_rejects_links(
+    registered, tmp_path
+):
+    import os
+
+    _, wt = registered
+    generated = wt / "validation/generated"
+    generated.mkdir(parents=True)
+    (wt / "benchmarks/generated").mkdir(parents=True)
+    os.link(wt / "README.md", generated / "prior-source-alias")
+    run = tmp_path / "RUN-test"
+    fresh = run / "outputs/validation/generated"
+    fresh.mkdir(parents=True)
+    (fresh / "README.md").write_text("new output")
+    paths = host_runner.publish_outputs(wt, run)
+    assert paths == [str(generated / "RUN-test")]
+    assert (generated / "RUN-test/README.md").read_text() == "new output"
+    assert (wt / "README.md").read_text() == "tracked source"
+    run2 = tmp_path / "RUN-link"
+    unsafe = run2 / "outputs/validation/generated"
+    unsafe.mkdir(parents=True)
+    (unsafe / "escape").symlink_to(wt / "README.md")
+    with pytest.raises(ValueError, match="without links"):
+        host_runner.publish_outputs(wt, run2)
+    assert (wt / "README.md").read_text() == "tracked source"
+
+
+def test_output_publication_rejects_destination_symlink(registered, tmp_path):
+    _, wt = registered
+    (wt / "validation").mkdir()
+    (wt / "validation/generated").symlink_to(tmp_path, target_is_directory=True)
+    run = tmp_path / "RUN-destination"
+    (run / "outputs/validation/generated").mkdir(parents=True)
+    with pytest.raises(OSError):
+        host_runner.publish_outputs(wt, run)
+    assert not (tmp_path / "RUN-destination/RUN-destination").exists()

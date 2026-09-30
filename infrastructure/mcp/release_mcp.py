@@ -18,7 +18,8 @@ mcp = MCPServer("ionmc-v3-release")
 def run_release_validation(argv: list[str], timeout_seconds: int = 600) -> dict:
     """Execute exact integration-SHA qualification in the existing host sandbox.
 
-    Store reports under ignored validation/generated. A successful process is
+    Write reports to validation/generated; returned output_paths identify the
+    published validation/generated/<run-id> directory. A successful process is
     execution evidence only; qualification independently checks its artifacts.
     """
     from infrastructure.host_runner.host_runner import run_validation

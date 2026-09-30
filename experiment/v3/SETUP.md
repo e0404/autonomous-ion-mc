@@ -82,9 +82,12 @@ requirements and exact-SHA qualification/promotion gates remain in force.
 ## Validation write boundary
 
 Host execution mounts committed /workspace and Git metadata read-only. Write
-persistent generated evidence only to /workspace/validation/generated or
-/workspace/benchmarks/generated (both ignored); temporary files and compilation
-caches use /tmp and /cache. Materialized reference inputs remain read-only during
+generated evidence to /workspace/validation/generated or
+/workspace/benchmarks/generated. These are fresh protected directories for each
+run, published afterwards under the corresponding ignored directory / <run-id>.
+Use the returned output_paths to locate reports or stage release evidence; previous
+outputs are not inputs to the next run. Temporary files use /tmp; compilation
+caches use protected shared state/host-cache mounted at /cache. Materialized reference inputs remain read-only during
 validation. The runner verifies the task SHA and clean state again after execution.
 Generic Codex workers must use the registered V3 task ID and matching worktree;
 archived and primary checkouts are rejected. Release retries always upload the
