@@ -38,6 +38,9 @@ def check(root=ROOT, *, smoke=False, notify=False, state=STATE):
     from infrastructure.experiment_v3.review import readiness
 
     results["codex_review"] = readiness()
+    from infrastructure.experiment_v3.sandbox_runtime import inspect as sandbox_status
+
+    results["sandbox_runtime"] = sandbox_status()
     results["gpu_device"] = Path("/dev/dxg").exists()
     try:
         from infrastructure.host_runner.host_runner import HOST_VENV
@@ -93,6 +96,7 @@ def check(root=ROOT, *, smoke=False, notify=False, state=STATE):
         results.get("fresh_condition")
         and results["history_isolation"]["ready"]
         and all(results["tools"].values())
+        and results["sandbox_runtime"]["ready"]
         and results["gpu_device"]
         and results["host_runtime"]
         and results["codex_review"]["ready"]

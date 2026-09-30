@@ -52,7 +52,9 @@ def test_host_mounts_source_read_only_and_only_ignored_outputs_rw(
     registered, monkeypatch, tmp_path
 ):
     _, wt = registered
-    monkeypatch.setattr(host_runner.shutil, "which", lambda _: "/usr/bin/bwrap")
+    from infrastructure.experiment_v3 import sandbox_runtime
+
+    monkeypatch.setattr(sandbox_runtime, "require", lambda: "/usr/bin/bwrap")
     exists = Path.exists
     monkeypatch.setattr(Path, "exists", lambda p: str(p) == "/dev/dxg" or exists(p))
     monkeypatch.setattr(host_runner, "HOST_VENV", wt)
@@ -80,7 +82,8 @@ def test_host_mounts_source_read_only_and_only_ignored_outputs_rw(
 def test_host_run_rejects_source_mutation_even_on_exit_zero(
     registered, monkeypatch, tmp_path
 ):
-    _, wt = registered
+    root, wt = registered
+    monkeypatch.setattr(host_runner, "REPO", root)
     sha = git(wt, "rev-parse", "HEAD")
     monkeypatch.setattr(
         host_runner,
@@ -235,3 +238,90 @@ def test_output_publication_rejects_destination_symlink(registered, tmp_path):
     with pytest.raises(OSError):
         host_runner.publish_outputs(wt, run)
     assert not (tmp_path / "RUN-destination/RUN-destination").exists()
+
+
+def test_snapshot_source_ignores_mutation_restored_before_exit(registered, tmp_path):
+    from infrastructure.experiment_v3.host_snapshot import create
+
+    root, wt = registered
+    sha = git(wt, "rev-parse", "HEAD")
+    original = (wt / "README.md").read_text()
+    snapshot = create(root, wt, sha, "task/v3-test-worker", tmp_path / "snapshot")
+    (wt / "README.md").write_text("different source during execution")
+    observed = (snapshot / "README.md").read_text()
+    (wt / "README.md").write_text(original)
+    assert not git(wt, "status", "--porcelain")
+    assert observed == original
+    assert git(snapshot, "rev-parse", "HEAD") == sha
+    assert (snapshot / ".git").is_dir()
+    assert (snapshot / "README.md").stat().st_ino != (wt / "README.md").stat().st_ino
+
+
+def test_snapshot_rejects_symlink_input_directory(registered, tmp_path):
+    from infrastructure.experiment_v3.host_snapshot import create
+
+    root, wt = registered
+    (wt / ".ionmc-cache").symlink_to(tmp_path)
+    with pytest.raises(OSError):
+        create(
+            root,
+            wt,
+            git(wt, "rev-parse", "HEAD"),
+            "task/v3-test-worker",
+            tmp_path / "snapshot",
+        )
+
+
+def test_sandbox_version_gate_rejects_old_runtime(monkeypatch):
+    from infrastructure.experiment_v3 import sandbox_runtime
+
+    monkeypatch.setattr(
+        sandbox_runtime, "inspect", lambda: {"ready": False, "version": "0.9.0"}
+    )
+    with pytest.raises(RuntimeError, match="0.12.0"):
+        sandbox_runtime.require()
+
+
+def test_real_sandbox_snapshot_provenance_and_restore_race(
+    registered, tmp_path, monkeypatch
+):
+    import os
+
+    if os.environ.get("IONMC_TEST_HOST_SANDBOX") != "1":
+        pytest.skip("operator host sandbox test; set IONMC_TEST_HOST_SANDBOX=1")
+    root, wt = registered
+    monkeypatch.setattr(host_runner, "REPO", root)
+    monkeypatch.setattr(host_runner, "WORKTREE_ROOT", wt.parent)
+    monkeypatch.setattr(host_runner, "RUN_ROOT", tmp_path / "protected/runs")
+    expected = git(wt, "rev-parse", "HEAD")
+    original_run = subprocess.run
+    source = wt / "README.md"
+    original = source.read_bytes()
+
+    def restore_race(cmd, **kwargs):
+        if cmd and Path(cmd[0]).name == "bwrap":
+            source.write_text("concurrently changed live source")
+            try:
+                return original_run(cmd, **kwargs)
+            finally:
+                source.write_bytes(original)
+        return original_run(cmd, **kwargs)
+
+    monkeypatch.setattr(host_runner.subprocess, "run", restore_race)
+    code = "\n".join(
+        [
+            "import subprocess; from pathlib import Path",
+            "def git(*a): return subprocess.check_output(['git',*a],text=True).strip()",
+            f"assert git('rev-parse','HEAD') == {expected!r}",
+            "assert git('branch','--show-current') == 'task/v3-test-worker'",
+            "assert not git('status','--porcelain')",
+            "assert Path('README.md').read_text() == 'tracked source'",
+            "Path('validation/generated/result').write_text('passed')",
+            "print('snapshot provenance and restored live mutation passed')",
+        ]
+    )
+    result = host_runner.run_validation("V3-TEST", ["python", "-c", code], 30)
+    assert result["succeeded"], result
+    assert result["committed_state_unchanged"]
+    assert source.read_bytes() == original
+    assert (Path(result["output_paths"][0]) / "result").read_text() == "passed"

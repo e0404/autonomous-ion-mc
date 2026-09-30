@@ -199,7 +199,9 @@ def test_runtime_expands_project_log_paths(monkeypatch, source, variable, consta
 
 
 def test_preflight_requires_history_boundary(isolated, tmp_path, monkeypatch):
-    from infrastructure.experiment_v3 import preflight, remote, review
+    from infrastructure.experiment_v3 import preflight, remote, review, sandbox_runtime
+
+    monkeypatch.setattr(sandbox_runtime, "inspect", lambda: {"ready": True})
 
     monkeypatch.setattr(review, "readiness", lambda: {"ready": True})
     from infrastructure.host_runner import host_runner

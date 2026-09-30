@@ -26,6 +26,7 @@ from infrastructure.experiment_v3.common import (
     safe_path,
     write_json,
 )
+from infrastructure.experiment_v3.sandbox_runtime import require as require_bwrap
 
 ENGINES = {"topas", "mcsquare", "fred"}
 INLINE_BYTES = 16000
@@ -107,9 +108,7 @@ def validate_case(case):
 
 
 def command(config, case, work, gpu=False):
-    bwrap = shutil.which("bwrap")
-    if not bwrap:
-        raise RuntimeError("bubblewrap unavailable; no unsandboxed fallback")
+    bwrap = require_bwrap()
     args = [bwrap, "--die-with-parent", "--new-session", "--unshare-all"]
     for path in (
         "/usr",
@@ -218,9 +217,7 @@ def run_reference(
         "timeout_seconds": timeout,
         "runner_source_sha256": file_hash(Path(__file__)),
         "os_release_sha256": file_hash("/etc/os-release"),
-        "sandbox_binary_sha256": (
-            file_hash(shutil.which("bwrap")) if shutil.which("bwrap") else None
-        ),
+        "sandbox_binary_sha256": (file_hash(require_bwrap())),
     }
     config_id = digest(request)
     run_id = "REF-" + config_id[:20] + "-" + uuid.uuid4().hex[:8]

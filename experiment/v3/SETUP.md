@@ -81,7 +81,10 @@ requirements and exact-SHA qualification/promotion gates remain in force.
 
 ## Validation write boundary
 
-Host execution mounts committed /workspace and Git metadata read-only. Write
+Host execution creates a protected snapshot from the recorded Git commit with an
+independent Git database, then mounts it at /workspace read-only. Live worktree
+edits cannot change the running source or its Git provenance. Ignored .ionmc-cache
+inputs are copied as regular files; committed symlinks are rejected. Write
 generated evidence to /workspace/validation/generated or
 /workspace/benchmarks/generated. These are fresh protected directories for each
 run, published afterwards under the corresponding ignored directory / <run-id>.
@@ -92,3 +95,8 @@ validation. The runner verifies the task SHA and clean state again after executi
 Generic Codex workers must use the registered V3 task ID and matching worktree;
 archived and primary checkouts are rejected. Release retries always upload the
 qualification report before claiming promotion complete.
+
+The host/reference runners and preflight require bubblewrap >= 0.12.0, including
+its [CVE-2026-87766 fix](https://github.com/containers/bubblewrap/security/advisories/GHSA-pxhw-h44j-8pfx).
+The dedicated binary is state/runtime/bin/bwrap; the launcher prepends that directory
+to PATH for Claude as well. The system binary is unchanged.

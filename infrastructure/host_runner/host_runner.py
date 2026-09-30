@@ -134,9 +134,8 @@ def build_bwrap_command(worktree: Path, argv: list[str], output_root: Path) -> l
     if not argv:
         raise ValueError("argv must contain at least one argument")
 
-    bwrap = shutil.which("bwrap")
-    if not bwrap:
-        raise RuntimeError("bubblewrap executable not found")
+    from infrastructure.experiment_v3.sandbox_runtime import require
+    bwrap = require()
 
     if not Path("/dev/dxg").exists():
         raise RuntimeError("/dev/dxg is not available")
@@ -246,6 +245,10 @@ def publish_outputs(worktree: Path, run_dir: Path) -> list[str]:
         fd = os.open(worktree, directory_flags)
         try:
             for part in Path(relative).parts:
+                try:
+                    os.mkdir(part, dir_fd=fd)
+                except FileExistsError:
+                    pass
                 child = os.open(part, directory_flags, dir_fd=fd)
                 os.close(fd)
                 fd = child
@@ -318,7 +321,10 @@ def run_validation(
 
     write_json(run_dir / "request.json", request)
 
-    bwrap_command = build_bwrap_command(worktree["path"], argv, run_dir / "outputs")
+    from infrastructure.experiment_v3.host_snapshot import create
+    snapshot = create(REPO, worktree["path"], worktree["sha"],
+                      worktree["branch"], run_dir / "snapshot")
+    bwrap_command = build_bwrap_command(snapshot, argv, run_dir / "outputs")
 
     started_wall = utc_now()
     started_mono = time.monotonic()
@@ -381,6 +387,7 @@ def run_validation(
         "branch": worktree["branch"],
         "sha": worktree["sha"],
         "dirty_before": False,
+        "execution_snapshot": str(snapshot),
         "dirty_after": dirty_after,
         "sha_after": after_sha,
         "committed_state_unchanged": unchanged,

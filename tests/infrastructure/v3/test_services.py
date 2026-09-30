@@ -34,7 +34,7 @@ def test_input_symlink_rejected(tmp_path):
 def test_controlled_argv_has_no_shell_network_home_or_inherited_env(
     tmp_path, monkeypatch
 ):
-    monkeypatch.setattr(reference.shutil, "which", lambda _: "/usr/bin/bwrap")
+    monkeypatch.setattr(reference, "require_bwrap", lambda: "/usr/bin/bwrap")
     config = {
         "engine": "topas",
         "executable": "/opt/reference/topas/bin/topas",
@@ -155,6 +155,7 @@ def test_bounded_artifact_and_traversal(tmp_path):
 def test_process_failure_missing_outputs_and_timeout_are_retained(
     tmp_path, monkeypatch
 ):
+    monkeypatch.setattr(reference, "require_bwrap", lambda: "/usr/bin/true")
     root = tmp_path / "repo"
     root.mkdir()
     case = root / "case"
