@@ -40,6 +40,10 @@ def run(
         from ionmc.transport.reference import run_reference
 
         out = run_reference(cfg, tables)
+    elif cfg.backend in ("warp-cpu", "warp-cuda"):
+        from ionmc.transport.warp_backend import run_warp
+
+        out = run_warp(cfg, tables)
     else:  # pragma: no cover - guarded by check_supported
         raise UnsupportedConfigurationError(cfg.backend)
     assert cfg.scoring is not None
@@ -55,5 +59,15 @@ def run(
         out["energy"],
         mass,
         out["accounting"].per_primary(),
-        {"timing": {"wall_seconds": out["wall_seconds"], "backend": cfg.backend}},
+        {
+            "timing": {
+                "wall_seconds": out["wall_seconds"],
+                "backend": cfg.backend,
+                "kernel_seconds": out.get("kernel_seconds"),
+                "host_seconds": out.get("host_seconds"),
+                "upload_seconds": out.get("upload_seconds"),
+                "first_launch_seconds": out.get("first_launch_seconds"),
+                "device": out.get("device"),
+            }
+        },
     )

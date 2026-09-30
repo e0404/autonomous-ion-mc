@@ -56,8 +56,9 @@ dataset identifiers/hashes and domains in `StoppingTable.provenance`.
 
 ## Condensed-history transport (electromagnetic)
 
-Implemented on the reference Python backend (decision 0041) with the shared
-step physics of `ionmc.transport.step_physics`:
+Implemented on the reference Python backend and the Warp CPU/CUDA backends
+(decisions 0041, 0042) with the shared step physics of
+`ionmc.transport.step_physics`:
 
 | Element | Model | Domain / limitation |
 |---|---|---|

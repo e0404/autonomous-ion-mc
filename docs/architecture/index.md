@@ -18,9 +18,10 @@ and planning-oriented batched execution.
 | `ionmc.geometry`, `ionmc.sources`, `ionmc.scoring` | Voxel/box/slab geometries, pencil beams with spot/energy/angular spread, scoring grids with exact overlap masses and batch tallies. |
 | `ionmc.transport.step_physics`, `ionmc.transport.shared` | Single-source step physics bound to Python math (reference) or Warp builtins (kernels). |
 | `ionmc.transport.reference` | Float64 reference backend (per-particle loop). |
+| `ionmc.transport.warp_backend` | Warp CPU/CUDA backend: one generic kernel (float32/float64) transporting one history per thread with per-history streams and atomic scoring (decision 0042). |
 | `ionmc.config`, `ionmc.simulation`, `ionmc.results`, `ionmc.runconfig` | Capability contract, `run()`, self-describing result persistence, JSON run configuration. |
 | `ionmc.data` | Content-addressed download cache with SHA-256 verification, provenance records and offline reuse. |
 | `ionmc.data.nist_star` | NIST PSTAR/ASTAR (SRD 124, ICRU 49) acquisition and parsing. |
 
-Warp CPU/CUDA backends, nuclear interactions, LET and influence matrices are added by
+Nuclear interactions, secondaries, LET and influence matrices are added by
 subsequent tasks; this page lists only implemented behavior.

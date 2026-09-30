@@ -97,7 +97,25 @@ class SimulationConfig:
         }
 
 
+_WARP_CAPS = {
+    "precision": ["float32", "float64"],
+    "physics": {
+        "energy_loss": [True],
+        "straggling": [True, False],
+        "multiple_scattering": [True, False],
+        "nuclear": [False],
+        "transport_secondaries": [False],
+    },
+    "scorers": ["energy", "dose"],
+    "sources": ["pencil-beam"],
+    "geometries": ["voxel"],
+    "species": "any species in ionmc.species (electromagnetic transport only)",
+    "energy_range_mev_per_u": [1.0, 1000.0],
+}
+
 BACKEND_CAPABILITIES: dict[str, dict] = {
+    "warp-cpu": dict(_WARP_CAPS),
+    "warp-cuda": dict(_WARP_CAPS),
     "python": {
         "precision": ["float64"],
         "physics": {
@@ -112,7 +130,7 @@ BACKEND_CAPABILITIES: dict[str, dict] = {
         "geometries": ["voxel"],
         "species": "any species in ionmc.species (electromagnetic transport only)",
         "energy_range_mev_per_u": [1.0, 1000.0],
-    }
+    },
 }
 
 

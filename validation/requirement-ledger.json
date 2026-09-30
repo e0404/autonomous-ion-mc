@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "revision": 4,
+  "revision": 5,
   "updated": "2026-09-30",
   "status_vocabulary": [
     "planned",
@@ -55,12 +55,14 @@
       "id": "V1-MUST-004",
       "title": "NVIDIA Warp acceleration",
       "source": "REQUIREMENTS.md",
-      "status": "planned",
+      "status": "implemented",
       "suites": [
         "NUM-BACKEND-PARITY"
       ],
-      "tasks": [],
-      "notes": ""
+      "tasks": [
+        "V2-005"
+      ],
+      "notes": "Warp CPU and CUDA backends executing the shared step physics (V2-005); optimization pending."
     },
     {
       "id": "V1-MUST-005",
@@ -371,23 +373,27 @@
       "id": "V1-MUST-028",
       "title": "Parallel-safe random streams",
       "source": "REQUIREMENTS.md",
-      "status": "planned",
+      "status": "implemented",
       "suites": [
         "NUM-STATISTICS"
       ],
-      "tasks": [],
-      "notes": ""
+      "tasks": [
+        "V2-005"
+      ],
+      "notes": "Counter-based per-history Warp streams; numpy SeedSequence batches (V2-005)."
     },
     {
       "id": "V1-MUST-029",
       "title": "Cross-backend statistical consistency",
       "source": "REQUIREMENTS.md",
-      "status": "planned",
+      "status": "in-progress",
       "suites": [
         "NUM-BACKEND-PARITY"
       ],
-      "tasks": [],
-      "notes": ""
+      "tasks": [
+        "V2-005"
+      ],
+      "notes": "Statistical parity criterion (decision 0042) with CPU evidence; CUDA evidence through host-runner tests (V2-005)."
     },
     {
       "id": "V1-MUST-030",
@@ -447,24 +453,28 @@
       "id": "V1-MUST-034",
       "title": "High-throughput execution",
       "source": "REQUIREMENTS.md",
-      "status": "planned",
+      "status": "in-progress",
       "suites": [
         "PERF-WORKLOADS"
       ],
-      "tasks": [],
-      "notes": ""
+      "tasks": [
+        "V2-005"
+      ],
+      "notes": "First EM-only timings recorded; targets evaluated after full physics (V2-005)."
     },
     {
       "id": "V1-MUST-035",
       "title": "GPU-oriented architecture",
       "source": "REQUIREMENTS.md",
-      "status": "planned",
+      "status": "implemented",
       "suites": [
         "NUM-BACKEND-PARITY",
         "PERF-WORKLOADS"
       ],
-      "tasks": [],
-      "notes": ""
+      "tasks": [
+        "V2-005"
+      ],
+      "notes": "Whole-history device loop, no per-step host control (V2-005)."
     },
     {
       "id": "V1-MUST-036",
@@ -530,12 +540,14 @@
       "id": "V1-MUST-040",
       "title": "Backend consistency",
       "source": "REQUIREMENTS.md",
-      "status": "planned",
+      "status": "in-progress",
       "suites": [
         "NUM-BACKEND-PARITY"
       ],
-      "tasks": [],
-      "notes": ""
+      "tasks": [
+        "V2-005"
+      ],
+      "notes": "Python vs Warp CPU vs Warp CUDA parity tests (V2-005); repeated at each physics addition."
     },
     {
       "id": "V1-MUST-041",

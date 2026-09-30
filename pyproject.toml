@@ -58,10 +58,18 @@ ignore = ["RUF001", "RUF002", "RUF003", "E501"]
 "tests/**" = ["B011"]
 # MATH is injected by ionmc.transport.shared before the module body runs, and
 # Warp's floor() returns a float (unlike math.floor), so int() casts are needed.
-"src/ionmc/transport/step_physics.py" = ["F821", "RUF046"]
+# UP018/RUF046: Warp needs int(0)/float(0.0) calls to declare dynamic loop variables.
+"src/ionmc/transport/step_physics.py" = ["F821", "RUF046", "UP018"]
+"src/ionmc/transport/warp_backend.py" = ["RUF046", "UP018"]
 
 [tool.mypy]
 python_version = "3.12"
 warn_unused_ignores = true
 ignore_missing_imports = true
 check_untyped_defs = true
+
+[[tool.mypy.overrides]]
+# Warp kernels use wp.array(dtype=...) call expressions as annotations, which
+# mypy cannot interpret; the kernel signature is checked by Warp at build time.
+module = ["ionmc.transport.warp_backend", "ionmc.transport.step_physics"]
+disable_error_code = ["valid-type"]

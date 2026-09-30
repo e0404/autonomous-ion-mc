@@ -99,7 +99,9 @@ def build_kernel(wp, dtype):
     two_pi = dtype(6.283185307179586)
 
     @wp.func
-    def table_lookup(table: wp.array(dtype=dtype), energy: dtype, e_min: dtype, inv_dlog: dtype):
+    def table_lookup(
+        table: wp.array(dtype=dtype), energy: dtype, e_min: dtype, inv_dlog: dtype
+    ):
         # log-spaced lookup with linear interpolation, clamped to the table
         x = wp.log(energy / e_min) * inv_dlog
         x = wp.max(x, dtype(0.0))
@@ -205,7 +207,9 @@ def make_table(dtype_np) -> np.ndarray:
     return (30.0 * e**-0.8).astype(dtype_np)
 
 
-def run_step_measurement(wp, kernels, device, n_particles, n_steps, dtype, deposit, repeats):
+def run_step_measurement(
+    wp, kernels, device, n_particles, n_steps, dtype, deposit, repeats
+):
     dtype_np = np.float32 if dtype == "float32" else np.float64
     wp_dtype = wp.float32 if dtype == "float32" else wp.float64
     kernel = kernels[dtype]
@@ -241,7 +245,19 @@ def run_step_measurement(wp, kernels, device, n_particles, n_steps, dtype, depos
         wp.launch(
             kernel,
             dim=n_particles,
-            inputs=[pos, dirs, energy, table, grid, 7, n_steps, deposit, voxel, e_min, inv_dlog],
+            inputs=[
+                pos,
+                dirs,
+                energy,
+                table,
+                grid,
+                7,
+                n_steps,
+                deposit,
+                voxel,
+                e_min,
+                inv_dlog,
+            ],
             device=device,
         )
         wp.synchronize_device(device)
@@ -291,7 +307,10 @@ def measure(args) -> dict[str, Any]:
             "arch": getattr(d, "arch", None),
             "total_memory_bytes": getattr(d, "total_memory", None),
         }
-    kernel = {"float32": build_kernel(wp, wp.float32), "float64": build_kernel(wp, wp.float64)}
+    kernel = {
+        "float32": build_kernel(wp, wp.float32),
+        "float64": build_kernel(wp, wp.float64),
+    }
     report["measurements"]["compile_seconds"] = {}
     for alias in devices:
         # First launch triggers module load/compile for that device.
@@ -308,7 +327,14 @@ def measure(args) -> dict[str, Any]:
                 for deposit in (1, 0):
                     results.append(
                         run_step_measurement(
-                            wp, kernel, alias, n, args.steps, dtype, deposit, args.repeats
+                            wp,
+                            kernel,
+                            alias,
+                            n,
+                            args.steps,
+                            dtype,
+                            deposit,
+                            args.repeats,
                         )
                     )
     report["measurements"]["step_kernel"] = results
@@ -321,7 +347,9 @@ def measure(args) -> dict[str, Any]:
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--devices", nargs="+", default=["cpu", "cuda:0"])
-    p.add_argument("--particles", nargs="+", type=int, default=[10_000, 100_000, 1_000_000])
+    p.add_argument(
+        "--particles", nargs="+", type=int, default=[10_000, 100_000, 1_000_000]
+    )
     p.add_argument("--cpu-max-particles", type=int, default=100_000)
     p.add_argument("--steps", type=int, default=200)
     p.add_argument("--dtypes", nargs="+", default=["float32", "float64"])

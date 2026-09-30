@@ -24,6 +24,18 @@ import warp as wp
 
 MATH: Any  # injected by ionmc.transport.shared before the module body executes
 
+# Overshoot applied after reaching a voxel face so the next lookup lands in the
+# neighbouring voxel in every precision: float32 positions up to ~500 mm have a
+# resolution of ~6e-5 mm, so 2.5e-4 mm is at least four ulps. The overshoot is
+# part of the step length (energy loss is computed for it), so it only
+# reassigns a 0.25 µm slice per crossing to the neighbouring voxel.
+BOUNDARY_OVERSHOOT_MM = 2.5e-4
+
+
+@wp.func
+def boundary_overshoot(x: Any) -> Any:
+    return type(x)(2.5e-4)
+
 
 @wp.func
 def log_lookup(
@@ -135,8 +147,13 @@ def straggling_variance_mev2(
 
 
 @wp.func
-def sample_gamma(state: Any, k: Any) -> Any:
-    """Marsaglia–Tsang sampler for Gamma(shape k, scale 1); k > 0 (boost for k < 1)."""
+def sample_gamma(state: Any, k: Any):
+    """Marsaglia–Tsang sampler for Gamma(shape k, scale 1); k > 0 (boost for k < 1).
+
+    Returns ``(sample, state)``: Warp passes the RNG state by value, so the
+    advanced state must be handed back to the caller (a state passed into a
+    ``wp.func`` and not returned would replay the same draws at every call).
+    """
     boost = type(k)(1.0)
     kk = k
     if kk < type(k)(1.0):
@@ -158,17 +175,21 @@ def sample_gamma(state: Any, k: Any) -> Any:
             ) * z * z + d - d * v + d * MATH.log(v):
                 x = d * v
                 break
-    return x * boost
+    return x * boost, state
 
 
 @wp.func
-def sample_energy_loss(state: Any, mean_mev: Any, variance_mev2: Any) -> Any:
-    """Gamma-distributed loss with the given mean and variance (positive, mean-preserving)."""
+def sample_energy_loss(state: Any, mean_mev: Any, variance_mev2: Any):
+    """Gamma-distributed loss with the given mean and variance (positive, mean-preserving).
+
+    Returns ``(loss, state)`` with the advanced RNG state (see sample_gamma).
+    """
     if variance_mev2 <= type(mean_mev)(0.0) or mean_mev <= type(mean_mev)(0.0):
-        return mean_mev
+        return mean_mev, state
     k = mean_mev * mean_mev / variance_mev2
     theta = variance_mev2 / mean_mev
-    return sample_gamma(state, k) * theta
+    x, state = sample_gamma(state, k)
+    return x * theta, state
 
 
 @wp.func
@@ -339,3 +360,67 @@ def distance_to_box_entry(
     if tmax < tmin or tmax >= big:
         return type(x)(-1.0)
     return tmin + type(x)(1.0e-6)
+
+
+@wp.func
+def deposit_segment(
+    edep: Any,
+    ox: Any,
+    oy: Any,
+    oz: Any,
+    dx: Any,
+    dy: Any,
+    dz: Any,
+    nx: int,
+    ny: int,
+    nz: int,
+    x0: Any,
+    y0: Any,
+    z0: Any,
+    x1: Any,
+    y1: Any,
+    z1: Any,
+    energy: Any,
+) -> Any:
+    """Distribute ``energy`` over the scoring voxels crossed by the segment, proportionally
+    to the path length in each (uniform loss rate along the step). Returns the energy
+    actually scored (parts outside the grid are not scored)."""
+    scored = type(x0)(0.0)
+    if energy <= type(x0)(0.0):
+        return scored
+    length = MATH.sqrt(
+        (x1 - x0) * (x1 - x0) + (y1 - y0) * (y1 - y0) + (z1 - z0) * (z1 - z0)
+    )
+    if length <= type(x0)(0.0):
+        i = voxel_axis_index(x0, ox, dx, nx)
+        j = voxel_axis_index(y0, oy, dy, ny)
+        k = voxel_axis_index(z0, oz, dz, nz)
+        if i >= 0 and j >= 0 and k >= 0:
+            MATH.add3(edep, i, j, k, energy)
+            scored = energy
+        return scored
+    ux = (x1 - x0) / length
+    uy = (y1 - y0) / length
+    uz = (z1 - z0) / length
+    s = type(x0)(0.0)
+    eps = boundary_overshoot(x0)
+    for _ in range(4096):
+        if s >= length:
+            break
+        x = x0 + ux * s
+        y = y0 + uy * s
+        z = z0 + uz * s
+        seg = (
+            distance_to_voxel_boundary(x, y, z, ux, uy, uz, ox, oy, oz, dx, dy, dz)
+            + eps
+        )
+        seg = MATH.min(seg, length - s)
+        i = voxel_axis_index(x, ox, dx, nx)
+        j = voxel_axis_index(y, oy, dy, ny)
+        k = voxel_axis_index(z, oz, dz, nz)
+        if i >= 0 and j >= 0 and k >= 0:
+            part = energy * seg / length
+            MATH.add3(edep, i, j, k, part)
+            scored = scored + part
+        s = s + seg
+    return scored
