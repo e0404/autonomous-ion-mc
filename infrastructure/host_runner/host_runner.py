@@ -170,8 +170,9 @@ def build_bwrap_command(worktree: Path, argv: list[str]) -> list[str]:
         "--dev", "/dev",
         "--dev-bind", "/dev/dxg", "/dev/dxg",
 
-        "--bind", str(worktree), "/workspace",
+        "--ro-bind", str(worktree), "/workspace",
         "--bind", str(CACHE_ROOT), "/cache",
+        "--ro-bind", str(HOST_VENV), "/cache/venv",
 
         "--tmpfs", "/tmp",
         "--dir", "/tmp/home",
@@ -180,6 +181,19 @@ def build_bwrap_command(worktree: Path, argv: list[str]) -> list[str]:
 
         "--clearenv",
     ])
+
+    # Committed source and .git stay read-only; generated evidence goes only
+    # into explicit ignored output directories, never arbitrary source paths.
+    for relative in ("validation/generated", "benchmarks/generated"):
+        from infrastructure.experiment_v3.common import safe_path
+        output = safe_path(worktree, relative)
+        if any(p.is_symlink() for p in [output, *output.parents] if p != worktree):
+            raise ValueError("Validation output paths must not contain symlinks")
+        tracked = git_text(worktree, "ls-files", "--", relative)
+        if tracked:
+            raise ValueError("Validation output directory contains committed files")
+        output.mkdir(parents=True, exist_ok=True)
+        args.extend(["--bind", str(output), "/workspace/" + relative])
 
     for key, value in SAFE_ENV.items():
         args.extend(["--setenv", key, value])
@@ -274,6 +288,9 @@ def run_validation(
         if isinstance(stderr, bytes):
             stderr = stderr.decode(errors="replace")
 
+    after_sha = git_text(worktree["path"], "rev-parse", "HEAD")
+    dirty_after = bool(git_text(worktree["path"], "status", "--porcelain"))
+    unchanged = after_sha == worktree["sha"] and not dirty_after
     duration = time.monotonic() - started_mono
     finished_wall = utc_now()
 
@@ -298,6 +315,9 @@ def run_validation(
         "branch": worktree["branch"],
         "sha": worktree["sha"],
         "dirty_before": False,
+        "dirty_after": dirty_after,
+        "sha_after": after_sha,
+        "committed_state_unchanged": unchanged,
         "argv": argv,
         "started_at": started_wall,
         "finished_at": finished_wall,
@@ -313,7 +333,7 @@ def run_validation(
         "stdout_total_chars": stdout_total_chars,
         "stderr_total_chars": stderr_total_chars,
         "run_directory": str(run_dir),
-        "succeeded": (not timed_out and exit_code == 0),
+        "succeeded": (not timed_out and exit_code == 0 and unchanged),
     }
 
     write_json(run_dir / "result.json", result)

@@ -30,6 +30,11 @@ def check_ci(pr, sha, required=("pre-commit", "tests", "docs")):
         raise ValueError("Required lightweight CI is missing")
 
 
+def ensure_report_asset(root, tag, report, *, run=None):
+    """Repair partial release creation; a failed upload must remain unfinished."""
+    (run or gh)(root, "release", "upload", tag, str(report), "--clobber")
+
+
 def promote(root, plan, freeze_sha, report, artifacts, tag):
     if not re.fullmatch(r"ionmc-v3-[0-9]+\.[0-9]+\.[0-9]+", tag):
         raise ValueError("Tag must be ionmc-v3-X.Y.Z")
@@ -172,6 +177,9 @@ def promote(root, plan, freeze_sha, report, artifacts, tag):
                 str(notes),
                 str(report),
             )
+        # A previous create may have succeeded before an asset upload failed.
+        # Always restore the exact qualification report before claiming completion.
+        ensure_report_asset(root, tag, report)
     result = qualification | {
         "promoted": True,
         "release_sha": release_sha,

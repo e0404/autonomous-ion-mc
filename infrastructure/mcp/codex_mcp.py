@@ -8,6 +8,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from mcp.server.mcpserver import MCPServer
 from infrastructure.experiment_v3.review import start, inspect
+from infrastructure.experiment_v3.worker_boundary import validate_task
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -33,19 +34,7 @@ def codex_worker(
         model: Optional explicit Codex model.
     """
 
-    wt = Path(worktree).resolve()
-
-    allowed_root = Path.home() / "aiprojects"
-
-    try:
-        wt.relative_to(allowed_root)
-    except ValueError as exc:
-        raise ValueError(
-            f"Worktree must be below {allowed_root}"
-        ) from exc
-
-    if not (wt / ".git").exists():
-        raise ValueError(f"Not a Git worktree: {wt}")
+    task_id, wt = validate_task(task_id, worktree)
 
     cmd = [
         sys.executable,

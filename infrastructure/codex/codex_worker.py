@@ -13,6 +13,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from infrastructure.experiment_v3.worker_boundary import validate_task
+
 RAW_ROOT = Path(
     os.environ.get(
         "IONMC_CODEX_RAW_DIR",
@@ -119,11 +122,7 @@ def main() -> int:
     if bool(args.prompt) == bool(args.prompt_file):
         parser.error("Specify exactly one of --prompt or --prompt-file.")
 
-    worktree = args.worktree.resolve()
-
-    if not (worktree / ".git").exists():
-        print(f"Not a Git worktree: {worktree}", file=sys.stderr)
-        return 2
+    args.task_id, worktree = validate_task(args.task_id, args.worktree)
 
     prompt = (
         args.prompt
@@ -143,6 +142,8 @@ def main() -> int:
     )
 
     run_dir = RAW_ROOT / args.task_id / run_id
+    if not run_dir.resolve().is_relative_to(RAW_ROOT.resolve()):
+        raise ValueError("Codex run directory escapes its protected state root")
     run_dir.mkdir(parents=True, exist_ok=False)
 
     prompt_path = run_dir / "prompt.txt"

@@ -76,10 +76,10 @@ def validate_report(report, sha):
 
 
 def start(task_id, *, root=ROOT, state=STATE, model=None):
+    from infrastructure.experiment_v3.worker_boundary import validate_task
     from infrastructure.host_runner.host_runner import inspect_worktree
 
-    identifier(task_id)
-    wt = inspect_worktree(task_id)["path"]
+    task_id, wt = validate_task(task_id, inspect_worktree(task_id)["path"], root=root)
     sha = exact_state(wt)
     condition = json.loads((Path(root) / ".ionmc-condition.json").read_text())
     branch = condition["integration_branch"]
@@ -157,6 +157,31 @@ Return the structured report for head_sha {job["head_sha"]}.
 Use severities blocking, important, minor. A pass requires no blocking or important
 unresolved findings. If you cannot inspect the diff, return changes_required.
 """
+        previous = []
+        for candidate in review_root(state).glob("REVIEW-*/job.json"):
+            earlier = json.loads(candidate.read_text())
+            if (
+                earlier.get("task_id") == job["task_id"]
+                and earlier.get("status") == "changes_required"
+                and earlier.get("started_at", "") < job["started_at"]
+            ):
+                previous.append(earlier)
+        if previous:
+            earlier = max(previous, key=lambda value: value["started_at"])
+            prior = inspect(earlier["review_id"], state=state)
+            prompt += (
+                "\nPrior independent review findings (recheck fixes and regressions):\n"
+                + json.dumps(prior["report"])
+                + f"\nBegin with delta {earlier['head_sha']}..{job['head_sha']}. "
+                + "Reuse the prior full-review findings; re-open unchanged code "
+                + "only when needed to verify a fix or regression. Still assess "
+                + "the current complete change before returning a verdict.\n"
+            )
+        prompt += (
+            "\nThe reviewer sandbox is read-only, including temporary directories. "
+            "Do not spend turns retrying pytest or creating files. Inspect test "
+            "coverage in source; execution is enforced by separate local/CI gates.\n"
+        )
         (dest / "prompt.txt").write_text(prompt)
         cmd = [
             "codex",
