@@ -17,15 +17,21 @@ import argparse
 import json
 import platform
 import resource
+import sys
 import time
+
+import numpy as np
 from pathlib import Path
 
-from ionmc.config import SimulationConfig
-from ionmc.geometry import homogeneous_box
-from ionmc.provenance import code_identity
-from ionmc.scoring import ScoringGrid
-from ionmc.simulation import build_tables, run
-from ionmc.sources import PencilBeam
+# The controlled host runner executes scripts without an installed package.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
+
+from ionmc.config import SimulationConfig  # noqa: E402
+from ionmc.geometry import homogeneous_box  # noqa: E402
+from ionmc.provenance import code_identity  # noqa: E402
+from ionmc.scoring import ScoringGrid  # noqa: E402
+from ionmc.simulation import build_tables, run  # noqa: E402
+from ionmc.sources import PencilBeam  # noqa: E402
 
 
 def main(argv=None) -> int:
