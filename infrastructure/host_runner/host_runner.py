@@ -17,8 +17,8 @@ IS_V2 = (Path(__file__).resolve().parents[2] / ".ionmc-condition.json").exists()
 if IS_V2:
     # The runner is also invoked as a script by the trusted MCP server.
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-    from infrastructure.experiment_v2.paths import CACHE_ROOT as EXPERIMENT_CACHE
-    from infrastructure.experiment_v2.paths import SHARE_ROOT
+    from infrastructure.experiment_v3.paths import CACHE_ROOT as EXPERIMENT_CACHE
+    from infrastructure.experiment_v3.paths import SHARE_ROOT
 
     RUN_ROOT = SHARE_ROOT / "host-runs"
     CACHE_ROOT = EXPERIMENT_CACHE / "host-runner"
@@ -221,7 +221,7 @@ def run_validation(
         worktree = inspect_worktree(task_id)
     else:
         condition = json.loads((release_root / ".ionmc-condition.json").read_text())
-        if (condition.get("experiment_id") != "experiment-v2"
+        if (condition.get("experiment_id") != "experiment-v3"
                 or git_text(release_root, "branch", "--show-current") != condition["integration_branch"]
                 or git_text(release_root, "status", "--porcelain")):
             raise RuntimeError("Release validation requires a clean v2 integration checkout")

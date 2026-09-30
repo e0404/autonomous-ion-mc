@@ -67,3 +67,6 @@ site/
 docs/experiment/v2/
 .ionmc-cache/
 .uv-cache/
+
+# V3 generated documentation
+docs/experiment/v3/

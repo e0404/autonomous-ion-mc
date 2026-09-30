@@ -9,6 +9,7 @@ from pathlib import Path
 
 
 REPO = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO))
 WORKTREE_ROOT = Path(__file__).resolve().parents[2].parent / (Path(__file__).resolve().parents[2].name + "-worktrees")
 
 VALIDATION_TOOL = (
@@ -625,6 +626,14 @@ def merge_pr(task_id: str):
 
     require_local_validation(task_id)
 
+    from infrastructure.experiment_v3.review import require_review
+    git("fetch", "--no-tags", "origin", BASE_BRANCH, cwd=REPO)
+    base_sha = git_text("rev-parse", "origin/" + BASE_BRANCH, cwd=REPO)
+    review_id = require_review(normalize_task_id(task_id), path, base_sha)
+    reviewed_sha = git_text("rev-parse", "HEAD", cwd=path)
+    if pushed_task_sha(path, branch) != reviewed_sha:
+        raise RuntimeError("Reviewed task SHA is not the pushed SHA")
+
     pr = find_open_pr(branch)
 
     if pr is None:
@@ -640,6 +649,8 @@ def merge_pr(task_id: str):
         str(pr["number"]),
         "--repo",
         repo,
+        "--match-head-commit",
+        reviewed_sha,
         "--squash",
         "--delete-branch=false",
         cwd=path,
@@ -649,6 +660,7 @@ def merge_pr(task_id: str):
 
     result = {
         "status": "merged",
+        "review_id": review_id,
         "task_id": normalize_task_id(task_id),
         "branch": branch,
         "pr_number": pr["number"],

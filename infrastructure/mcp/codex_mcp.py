@@ -5,7 +5,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from mcp.server.mcpserver import MCPServer
+from infrastructure.experiment_v3.review import start, inspect
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -87,6 +89,18 @@ def codex_worker(
         result["stderr"] = proc.stderr
 
     return result
+
+
+@mcp.tool()
+def start_codex_review(task_id: str) -> dict:
+    """Start mandatory independent review of a clean exact-SHA task. Poll inspect_codex_review; fix findings before merge. Generic codex_worker calls do not satisfy this gate."""
+    return start(task_id)
+
+
+@mcp.tool()
+def inspect_codex_review(review_id: str) -> dict:
+    """Read protected review status and structured findings, without raw token logs."""
+    return inspect(review_id)
 
 
 if __name__ == "__main__":

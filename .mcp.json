@@ -84,7 +84,7 @@
       ],
       "env": {}
     },
-    "v2-research": {
+    "v3-research": {
       "type": "stdio",
       "command": "uv",
       "args": [
@@ -96,7 +96,7 @@
       ],
       "env": {}
     },
-    "v2-release": {
+    "v3-release": {
       "type": "stdio",
       "command": "uv",
       "args": [

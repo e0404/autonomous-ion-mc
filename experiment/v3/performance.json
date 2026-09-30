@@ -1,0 +1,71 @@
+{
+  "schema_version": 2,
+  "status": "unratified",
+  "workstation": {
+    "gpu": "NVIDIA RTX A6000",
+    "gpu_memory_mib": 49140,
+    "driver_reported": "616.92",
+    "cpu": "Intel Core i9-13900K",
+    "logical_cpus": 32,
+    "host_memory_kib": 32730816,
+    "platform": "Linux x86_64 / WSL2",
+    "observed_on": "2026-09-29"
+  },
+  "calibration": {
+    "maximum_initial_hours": 8,
+    "freeze_before": "substantial optimization",
+    "required_record": "reference/primitive measurements, accuracy constraints, rationale, commit and reviewed targets"
+  },
+  "metrics": [
+    "wall_seconds",
+    "histories_per_second",
+    "cold_start_seconds",
+    "compilation_seconds",
+    "host_seconds",
+    "gpu_kernel_seconds",
+    "gpu_peak_mib",
+    "host_peak_mib"
+  ],
+  "workloads": [
+    {
+      "id": "proton-3d",
+      "source": "150 MeV protons; 1,000,000 primaries",
+      "geometry": "120 x 120 x 300 mm; water and explicit heterogeneous composition/density variant",
+      "transport_grid_mm": 1,
+      "scoring_grid_mm": 2,
+      "physics": "straggling, scattering, nuclear interactions and transported secondaries",
+      "scorers": [
+        "dose",
+        "dose-averaged LET",
+        "uncertainty"
+      ]
+    },
+    {
+      "id": "influence",
+      "source": "100 beamlets x 10,000 primaries with multiple energies/positions",
+      "geometry": "same planning volume as proton-3d",
+      "physics": "same complete proton physics",
+      "includes": "source generation, transport, beamlet uncertainty, assembly and persisted influence output"
+    },
+    {
+      "id": "carbon-fragments",
+      "source": "carbon-12, 290 MeV/u, 1,000,000 primaries",
+      "geometry": "same planning volume; extend scorer for distal fragments as scientifically necessary",
+      "physics": "stopping, straggling, scattering, nuclear attenuation, projectile fragmentation and transported secondary ions",
+      "scorers": [
+        "dose",
+        "mixed-field LET",
+        "species contributions",
+        "uncertainty"
+      ]
+    }
+  ],
+  "scaling": [
+    "histories 1e3/1e4/1e5/1e6",
+    "beamlets 1/10/100",
+    "scoring grid 1/2/4 mm",
+    "batch counts 2/10/40"
+  ],
+  "targets": null,
+  "note": "Workload envelopes, not a fixed physical validation corpus. Final case details and numeric budgets must be committed and frozen during calibration. No v1 timing is accepted as full-physics target evidence."
+}

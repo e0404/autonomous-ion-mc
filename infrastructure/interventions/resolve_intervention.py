@@ -90,7 +90,7 @@ def main() -> int:
     )
 
     if (ROOT / ".ionmc-condition.json").exists():
-        subprocess.run([sys.executable, "-m", "infrastructure.experiment_v2.intervention_event", "intervention_resolved", args.request_id, request.get("task_id") or "unknown"], cwd=ROOT, check=True)
+        subprocess.run([sys.executable, "-m", "infrastructure.experiment_v3.intervention_event", "intervention_resolved", args.request_id, request.get("task_id") or "unknown"], cwd=ROOT, check=True)
 
     print(
         json.dumps(

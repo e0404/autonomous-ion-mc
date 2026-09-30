@@ -120,13 +120,13 @@ def main() -> int:
     decisions = copy_decisions()
     copied = copy_experiment_files()
     prompts = copy_prompt_files()
-    v2 = REPO_ROOT / "experiment" / "v2"
+    v2 = REPO_ROOT / "experiment" / "v3"
     if v2.exists():
-        destination = DOCS_ROOT / "experiment" / "v2"
+        destination = DOCS_ROOT / "experiment" / "v3"
         destination.mkdir(parents=True, exist_ok=True)
         for source in v2.glob("*.md"):
             shutil.copyfile(source, destination / source.name)
-        for name in ("kickoff-v2.md", "kickoff-v2-isolated.md", "prepare-v2.md"):
+        for name in ("kickoff-v3.md", "prepare-v3.md"):
             shutil.copyfile(REPO_ROOT / "experiment/prompts" / name, DOCS_ROOT / "experiment/prompts" / name)
     index = write_decision_index(decisions)
 

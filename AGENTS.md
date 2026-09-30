@@ -1,9 +1,9 @@
 # Agent Instructions
 
-If `.ionmc-condition.json` identifies experiment v2, also read
-`experiment/v2/PROTOCOL.md`, `experiment/v2/REQUIREMENTS.md` and
-`experiment/v2/AGENTS.md` and `experiment/v2/HISTORY-ISOLATION.md`; their
-explicit v2 overrides apply. Do not retrieve excluded v1 history or artifacts.
+If `.ionmc-condition.json` identifies experiment v3, also read
+`experiment/v3/PROTOCOL.md`, `experiment/v3/REQUIREMENTS.md` and
+`experiment/v3/AGENTS.md` and `experiment/v3/HISTORY-ISOLATION.md`; their
+explicit v3 overrides apply. Do not retrieve excluded v1/v2 scientific history or artifacts.
 The setup maintainer is distinct from the autonomous runtime governed below.
 
 This repository is part of an autonomous scientific software-development experiment.

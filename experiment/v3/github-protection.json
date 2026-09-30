@@ -1,0 +1,60 @@
+{
+  "v3/develop": {
+    "required_status_checks": {
+      "strict": true,
+      "checks": [
+        {
+          "context": "pre-commit",
+          "app_id": 15368
+        },
+        {
+          "context": "tests",
+          "app_id": 15368
+        },
+        {
+          "context": "docs",
+          "app_id": 15368
+        }
+      ]
+    },
+    "enforce_admins": true,
+    "required_pull_request_reviews": {
+      "required_approving_review_count": 0,
+      "dismiss_stale_reviews": false,
+      "require_code_owner_reviews": false
+    },
+    "restrictions": null,
+    "allow_force_pushes": false,
+    "allow_deletions": false,
+    "required_linear_history": true
+  },
+  "v3/main": {
+    "required_status_checks": {
+      "strict": true,
+      "checks": [
+        {
+          "context": "pre-commit",
+          "app_id": 15368
+        },
+        {
+          "context": "tests",
+          "app_id": 15368
+        },
+        {
+          "context": "docs",
+          "app_id": 15368
+        }
+      ]
+    },
+    "enforce_admins": true,
+    "required_pull_request_reviews": {
+      "required_approving_review_count": 0,
+      "dismiss_stale_reviews": false,
+      "require_code_owner_reviews": false
+    },
+    "restrictions": null,
+    "allow_force_pushes": false,
+    "allow_deletions": false,
+    "required_linear_history": false
+  }
+}

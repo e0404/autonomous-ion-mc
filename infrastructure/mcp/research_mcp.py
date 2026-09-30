@@ -8,12 +8,17 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from mcp.server.mcpserver import MCPServer
 
-from infrastructure.experiment_v2.common import ROOT, STATE, event, exact_state
-from infrastructure.experiment_v2.data import acquire, assign_role
-from infrastructure.experiment_v2.reference import read_artifact, run_reference
+from infrastructure.experiment_v3.artifacts import (
+    list_artifacts,
+    materialize,
+    read_text,
+)
+from infrastructure.experiment_v3.common import ROOT, STATE, event, exact_state
+from infrastructure.experiment_v3.data import acquire, assign_role
+from infrastructure.experiment_v3.reference import run_reference
 from infrastructure.host_runner.host_runner import inspect_worktree
 
-mcp = MCPServer("ionmc-v2-research")
+mcp = MCPServer("ionmc-v3-research")
 
 
 @mcp.tool()
@@ -47,7 +52,7 @@ def run_reference_calculation(
     """
     worktree = (
         {"path": ROOT, "sha": exact_state(ROOT)}
-        if task_id == "V2-RELEASE"
+        if task_id == "V3-RELEASE"
         else inspect_worktree(task_id)
     )
     return run_reference(
@@ -62,10 +67,31 @@ def run_reference_calculation(
 
 @mcp.tool()
 def read_reference_artifact(
-    run_id: str, path: str, offset: int = 0, limit: int = 16000
+    run_id: str, path: str, offset: int = 0, limit: int = 2000
 ) -> dict:
-    """Read bounded raw reference bytes (base64) or JSON/logs with checksum."""
-    return read_artifact(run_id, path, offset=offset, limit=limit)
+    """Preview UTF-8 text (max 4000 bytes).
+
+    Use listing and direct materialization for full/binary files.
+    Never reconstruct base64 in conversation.
+    """
+    return read_text(run_id, path, offset=offset, limit=limit)
+
+
+@mcp.tool()
+def list_reference_artifacts(run_id: str, offset: int = 0, limit: int = 50) -> dict:
+    """List exact paths, sizes and hashes; paginate instead of guessing names."""
+    return list_artifacts(run_id, offset=offset, limit=limit)
+
+
+@mcp.tool()
+def materialize_reference_artifacts(
+    run_id: str, task_id: str, paths: list[str] | None = None
+) -> dict:
+    """Copy verified outputs directly into the ignored task cache.
+
+    Return only paths/counts. Analyze locally and return compact summaries.
+    """
+    return materialize(run_id, inspect_worktree(task_id)["path"], paths)
 
 
 @mcp.tool()
@@ -106,7 +132,7 @@ def materialize_reference_data(content_sha256: str, task_id: str) -> dict:
     """Copy verified reference data to the ignored task cache."""
     import shutil
 
-    from infrastructure.experiment_v2.common import file_hash
+    from infrastructure.experiment_v3.common import file_hash
 
     if len(content_sha256) != 64 or any(
         c not in "0123456789abcdef" for c in content_sha256
@@ -117,7 +143,7 @@ def materialize_reference_data(content_sha256: str, task_id: str) -> dict:
     if file_hash(source) != content_sha256:
         raise ValueError("Cached content changed")
     destination = worktree["path"] / ".ionmc-cache/reference" / content_sha256
-    from infrastructure.experiment_v2.common import safe_path
+    from infrastructure.experiment_v3.common import safe_path
 
     safe_path(worktree["path"], ".ionmc-cache/reference/" + content_sha256)
     destination.parent.mkdir(parents=True, exist_ok=True)
