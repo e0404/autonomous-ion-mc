@@ -24,13 +24,13 @@ repos:
         files: ^(src|tests/ionmc)/.*\.py$
 
       - id: ruff
-        name: ruff-v2-infrastructure
-        args: ["--fix", "--config", "experiment/v2/ruff.toml"]
-        files: ^(?:infrastructure/experiment_v2/|tests/infrastructure/v2/).*\.py$|^infrastructure/mcp/(?:research|release)_mcp\.py$
+        name: ruff-v3-infrastructure
+        args: ["--fix", "--config", "experiment/v3/ruff.toml"]
+        files: ^(?:infrastructure/experiment_v3/|tests/infrastructure/v3/).*\.py$|^infrastructure/mcp/(?:research|release)_mcp\.py$
       - id: ruff-format
-        name: ruff-format-v2-infrastructure
-        args: ["--config", "experiment/v2/ruff.toml"]
-        files: ^(?:infrastructure/experiment_v2/|tests/infrastructure/v2/).*\.py$|^infrastructure/mcp/(?:research|release)_mcp\.py$
+        name: ruff-format-v3-infrastructure
+        args: ["--config", "experiment/v3/ruff.toml"]
+        files: ^(?:infrastructure/experiment_v3/|tests/infrastructure/v3/).*\.py$|^infrastructure/mcp/(?:research|release)_mcp\.py$
 
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.17.1

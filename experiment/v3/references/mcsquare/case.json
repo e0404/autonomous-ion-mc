@@ -1,0 +1,22 @@
+{
+  "input": "config.txt",
+  "physics": "nuclear and secondary protons/deuterons/alphas enabled",
+  "source": "single 100 MeV nominal BDL spot; gantry 0; isocenter (20,100,20) mm",
+  "geometry": "20x100x20 voxels, 2 mm spacing, all HU 0",
+  "materials": "Water_Phantom conversion from registered MCsquare",
+  "cuts": "E_Cut_Pro 0.5 MeV, D_Max 0.2 cm, Te_Min 0.05 MeV",
+  "histories": 1024,
+  "seeds": [
+    271828
+  ],
+  "scorers": [
+    "dose"
+  ],
+  "units": "native output headers",
+  "rationale": "Infrastructure execution smoke only; no scientific acceptance claim",
+  "expected_outputs": [
+    "Outputs/Dose.mhd",
+    "Outputs/Dose.raw"
+  ],
+  "arguments": []
+}

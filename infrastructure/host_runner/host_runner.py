@@ -5,6 +5,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import time
@@ -12,13 +13,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
+REPO = Path(__file__).resolve().parents[2]
 WORKTREE_ROOT = Path(__file__).resolve().parents[2].parent / (Path(__file__).resolve().parents[2].name + "-worktrees")
 IS_V2 = (Path(__file__).resolve().parents[2] / ".ionmc-condition.json").exists()
 if IS_V2:
     # The runner is also invoked as a script by the trusted MCP server.
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-    from infrastructure.experiment_v2.paths import CACHE_ROOT as EXPERIMENT_CACHE
-    from infrastructure.experiment_v2.paths import SHARE_ROOT
+    from infrastructure.experiment_v3.paths import CACHE_ROOT as EXPERIMENT_CACHE
+    from infrastructure.experiment_v3.paths import SHARE_ROOT
 
     RUN_ROOT = SHARE_ROOT / "host-runs"
     CACHE_ROOT = EXPERIMENT_CACHE / "host-runner"
@@ -80,6 +82,9 @@ def inspect_worktree(task_id: str) -> dict:
     if not path.is_dir():
         raise RuntimeError(f"task worktree does not exist: {path}")
 
+    from infrastructure.experiment_v3.worker_boundary import validate_task
+    _, path = validate_task(task_id, path, root=REPO)
+
     branch = git_text(path, "branch", "--show-current")
     sha = git_text(path, "rev-parse", "HEAD")
     status = git_text(path, "status", "--porcelain")
@@ -105,6 +110,7 @@ def ensure_runtime_dirs() -> None:
 
     os.chmod(RUN_ROOT, 0o700)
     os.chmod(CACHE_ROOT, 0o700)
+    (RUN_ROOT.parent / "host-cache").mkdir(mode=0o700, exist_ok=True)
 
 
 def create_run_dir(task_id: str) -> tuple[str, Path]:
@@ -124,13 +130,12 @@ def add_optional_ro_bind(args: list[str], path: str) -> None:
         args.extend(["--ro-bind", path, path])
 
 
-def build_bwrap_command(worktree: Path, argv: list[str]) -> list[str]:
+def build_bwrap_command(worktree: Path, argv: list[str], output_root: Path) -> list[str]:
     if not argv:
         raise ValueError("argv must contain at least one argument")
 
-    bwrap = shutil.which("bwrap")
-    if not bwrap:
-        raise RuntimeError("bubblewrap executable not found")
+    from infrastructure.experiment_v3.sandbox_runtime import require
+    bwrap = require()
 
     if not Path("/dev/dxg").exists():
         raise RuntimeError("/dev/dxg is not available")
@@ -170,8 +175,9 @@ def build_bwrap_command(worktree: Path, argv: list[str]) -> list[str]:
         "--dev", "/dev",
         "--dev-bind", "/dev/dxg", "/dev/dxg",
 
-        "--bind", str(worktree), "/workspace",
-        "--bind", str(CACHE_ROOT), "/cache",
+        "--ro-bind", str(worktree), "/workspace",
+        "--bind", str(RUN_ROOT.parent / "host-cache"), "/cache",
+        "--ro-bind", str(HOST_VENV), "/cache/venv",
 
         "--tmpfs", "/tmp",
         "--dir", "/tmp/home",
@@ -181,11 +187,81 @@ def build_bwrap_command(worktree: Path, argv: list[str]) -> list[str]:
         "--clearenv",
     ])
 
+    # Only fresh directories in protected run storage are writable. Never bind
+    # agent-writable output/cache trees: pre-existing hard links bypass ro mounts.
+    common = Path(git_text(worktree, "rev-parse", "--path-format=absolute", "--git-common-dir"))
+    args.extend(["--ro-bind", str(common), str(common)])
+    args.extend(["--setenv", "GIT_WORK_TREE", "/workspace"])
+    for relative in ("validation/generated", "benchmarks/generated"):
+        from infrastructure.experiment_v3.common import safe_path
+        output = safe_path(worktree, relative)
+        if any(p.is_symlink() for p in [output, *output.parents] if p != worktree):
+            raise ValueError("Validation output paths must not contain symlinks")
+        if git_text(worktree, "ls-files", "--", relative):
+            raise ValueError("Validation output directory contains committed files")
+        output.mkdir(parents=True, exist_ok=True)
+        fresh = output_root / relative
+        fresh.mkdir(parents=True, exist_ok=False)
+        args.extend(["--bind", str(fresh), "/workspace/" + relative])
+
     for key, value in SAFE_ENV.items():
         args.extend(["--setenv", key, value])
 
     args.extend(["--", *argv])
     return args
+
+
+def publish_outputs(worktree: Path, run_dir: Path) -> list[str]:
+    """Publish each run under a new ID, without following destination links.
+
+    Directory fds and O_NOFOLLOW keep concurrent path replacement from redirecting
+    writes. Fresh files break inode aliases; no existing files are overwritten.
+    """
+    published = []
+    directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+
+    def copy_contents(source, target_fd):
+        for entry in source.iterdir():
+            mode = entry.lstat().st_mode
+            if stat.S_ISDIR(mode):
+                os.mkdir(entry.name, dir_fd=target_fd)
+                child = os.open(entry.name, directory_flags, dir_fd=target_fd)
+                try:
+                    copy_contents(entry, child)
+                finally:
+                    os.close(child)
+            elif stat.S_ISREG(mode) and entry.stat().st_nlink == 1:
+                out = os.open(entry.name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                              0o600, dir_fd=target_fd)
+                with os.fdopen(out, "wb") as stream, entry.open("rb") as incoming:
+                    shutil.copyfileobj(incoming, stream)
+            else:
+                raise ValueError("Generated outputs must be regular files/directories without links")
+
+    for relative in ("validation/generated", "benchmarks/generated"):
+        source = run_dir / "outputs" / relative
+        if not source.exists():
+            continue
+        fd = os.open(worktree, directory_flags)
+        try:
+            for part in Path(relative).parts:
+                try:
+                    os.mkdir(part, dir_fd=fd)
+                except FileExistsError:
+                    pass
+                child = os.open(part, directory_flags, dir_fd=fd)
+                os.close(fd)
+                fd = child
+            os.mkdir(run_dir.name, dir_fd=fd)
+            target = os.open(run_dir.name, directory_flags, dir_fd=fd)
+            try:
+                copy_contents(source, target)
+            finally:
+                os.close(target)
+        finally:
+            os.close(fd)
+        published.append(str(worktree / relative / run_dir.name))
+    return published
 
 
 def write_json(path: Path, value: dict) -> None:
@@ -221,7 +297,7 @@ def run_validation(
         worktree = inspect_worktree(task_id)
     else:
         condition = json.loads((release_root / ".ionmc-condition.json").read_text())
-        if (condition.get("experiment_id") != "experiment-v2"
+        if (condition.get("experiment_id") != "experiment-v3"
                 or git_text(release_root, "branch", "--show-current") != condition["integration_branch"]
                 or git_text(release_root, "status", "--porcelain")):
             raise RuntimeError("Release validation requires a clean v2 integration checkout")
@@ -245,7 +321,10 @@ def run_validation(
 
     write_json(run_dir / "request.json", request)
 
-    bwrap_command = build_bwrap_command(worktree["path"], argv)
+    from infrastructure.experiment_v3.host_snapshot import create
+    snapshot = create(REPO, worktree["path"], worktree["sha"],
+                      worktree["branch"], run_dir / "snapshot")
+    bwrap_command = build_bwrap_command(snapshot, argv, run_dir / "outputs")
 
     started_wall = utc_now()
     started_mono = time.monotonic()
@@ -274,6 +353,9 @@ def run_validation(
         if isinstance(stderr, bytes):
             stderr = stderr.decode(errors="replace")
 
+    after_sha = git_text(worktree["path"], "rev-parse", "HEAD")
+    dirty_after = bool(git_text(worktree["path"], "status", "--porcelain"))
+    unchanged = after_sha == worktree["sha"] and not dirty_after
     duration = time.monotonic() - started_mono
     finished_wall = utc_now()
 
@@ -290,6 +372,13 @@ def run_validation(
         MAX_INLINE_OUTPUT_CHARS,
     )
 
+    publication_error = None
+    try:
+        output_paths = publish_outputs(worktree["path"], run_dir)
+    except (OSError, ValueError) as exc:
+        output_paths = []
+        publication_error = str(exc)
+
     result = {
         "schema_version": 1,
         "run_id": run_id,
@@ -298,6 +387,10 @@ def run_validation(
         "branch": worktree["branch"],
         "sha": worktree["sha"],
         "dirty_before": False,
+        "execution_snapshot": str(snapshot),
+        "dirty_after": dirty_after,
+        "sha_after": after_sha,
+        "committed_state_unchanged": unchanged,
         "argv": argv,
         "started_at": started_wall,
         "finished_at": finished_wall,
@@ -313,7 +406,9 @@ def run_validation(
         "stdout_total_chars": stdout_total_chars,
         "stderr_total_chars": stderr_total_chars,
         "run_directory": str(run_dir),
-        "succeeded": (not timed_out and exit_code == 0),
+        "output_paths": output_paths,
+        "output_publication_error": publication_error,
+        "succeeded": (not timed_out and exit_code == 0 and unchanged and publication_error is None),
     }
 
     write_json(run_dir / "result.json", result)

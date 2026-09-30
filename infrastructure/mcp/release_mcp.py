@@ -7,23 +7,24 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from mcp.server.mcpserver import MCPServer
 
-from infrastructure.experiment_v2.common import ROOT, STATE, safe_path
-from infrastructure.experiment_v2.promote import promote
-from infrastructure.experiment_v2.release import evaluate
+from infrastructure.experiment_v3.common import ROOT, STATE, safe_path
+from infrastructure.experiment_v3.promote import promote
+from infrastructure.experiment_v3.release import evaluate
 
-mcp = MCPServer("ionmc-v2-release")
+mcp = MCPServer("ionmc-v3-release")
 
 
 @mcp.tool()
 def run_release_validation(argv: list[str], timeout_seconds: int = 600) -> dict:
     """Execute exact integration-SHA qualification in the existing host sandbox.
 
-    Store reports under ignored validation/generated. A successful process is
+    Write reports to validation/generated; returned output_paths identify the
+    published validation/generated/<run-id> directory. A successful process is
     execution evidence only; qualification independently checks its artifacts.
     """
     from infrastructure.host_runner.host_runner import run_validation
 
-    return run_validation("V2-RELEASE", argv, timeout_seconds, release_root=ROOT)
+    return run_validation("V3-RELEASE", argv, timeout_seconds, release_root=ROOT)
 
 
 @mcp.tool()
@@ -32,7 +33,7 @@ def stage_release_evidence(report_path: str, artifact_path: str) -> dict:
     import json
     import shutil
 
-    from infrastructure.experiment_v2.common import exact_state, file_hash, write_json
+    from infrastructure.experiment_v3.common import exact_state, file_hash, write_json
 
     if not (
         report_path.startswith("validation/generated/")

@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -11,6 +12,9 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from infrastructure.experiment_v3.worker_boundary import validate_task
 
 RAW_ROOT = Path(
     os.environ.get(
@@ -98,8 +102,8 @@ def main() -> int:
 
     parser.add_argument(
         "--model",
-        default=None,
-        help="Optional explicit Codex model.",
+        default=os.environ.get("IONMC_CODEX_WORKER_MODEL", "gpt-5.6-luna"),
+        help="Explicit worker model; defaults to economical planned-work tier.",
     )
 
     parser.add_argument(
@@ -118,17 +122,16 @@ def main() -> int:
     if bool(args.prompt) == bool(args.prompt_file):
         parser.error("Specify exactly one of --prompt or --prompt-file.")
 
-    worktree = args.worktree.resolve()
-
-    if not (worktree / ".git").exists():
-        print(f"Not a Git worktree: {worktree}", file=sys.stderr)
-        return 2
+    args.task_id, worktree = validate_task(args.task_id, args.worktree)
 
     prompt = (
         args.prompt
         if args.prompt is not None
         else args.prompt_file.read_text(encoding="utf-8")
     )
+
+    if args.model not in ("gpt-5.6-luna", "gpt-5.6-sol") and not re.search(r"(?m)^TOP_TIER_JUSTIFICATION:\s*.{40,}$", prompt):
+        parser.error("Non-default worker model requires TOP_TIER_JUSTIFICATION in its prompt")
 
     RAW_ROOT.mkdir(parents=True, exist_ok=True)
 
@@ -139,6 +142,8 @@ def main() -> int:
     )
 
     run_dir = RAW_ROOT / args.task_id / run_id
+    if not run_dir.resolve().is_relative_to(RAW_ROOT.resolve()):
+        raise ValueError("Codex run directory escapes its protected state root")
     run_dir.mkdir(parents=True, exist_ok=False)
 
     prompt_path = run_dir / "prompt.txt"

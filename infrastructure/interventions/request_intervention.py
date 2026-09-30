@@ -90,7 +90,7 @@ def main() -> None:
     investigation = None
     if (ROOT / ".ionmc-condition.json").exists():
         sys.path.insert(0, str(ROOT))
-        from infrastructure.experiment_v2.intervention import validate_context
+        from infrastructure.experiment_v3.intervention import validate_context
         investigation = validate_context(json.loads(args.investigation_json or "null"))
 
     now = datetime.now(timezone.utc)
@@ -183,7 +183,7 @@ def main() -> None:
     )
 
     if (ROOT / ".ionmc-condition.json").exists():
-        subprocess.run([sys.executable, "-m", "infrastructure.experiment_v2.intervention_event", "intervention_requested", request_id, args.task_id], cwd=ROOT, check=True)
+        subprocess.run([sys.executable, "-m", "infrastructure.experiment_v3.intervention_event", "intervention_requested", request_id, args.task_id], cwd=ROOT, check=True)
 
     print(
         json.dumps(

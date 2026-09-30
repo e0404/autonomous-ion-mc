@@ -1,0 +1,270 @@
+{
+  "schema_version": 2,
+  "requirements": [
+    {
+      "id": "V1-MUST-001",
+      "title": "Ion-therapy treatment planning orientation",
+      "source": "REQUIREMENTS.md"
+    },
+    {
+      "id": "V1-MUST-002",
+      "title": "Python-first implementation",
+      "source": "REQUIREMENTS.md"
+    },
+    {
+      "id": "V1-MUST-003",
+      "title": "Reference Python execution",
+      "source": "REQUIREMENTS.md"
+    },
+    {
+      "id": "V1-MUST-004",
+      "title": "NVIDIA Warp acceleration",
+      "source": "REQUIREMENTS.md"
+    },
+    {
+      "id": "V1-MUST-005",
+      "title": "Ion transport",
+      "source": "REQUIREMENTS.md"
+    },
+    {
+      "id": "V1-MUST-006",
+      "title": "Homogeneous reference geometries",
+      "source": "REQUIREMENTS.md"
+    },
+    {
+      "id": "V1-MUST-007",
+      "title": "Voxelized geometries",
+      "source": "REQUIREMENTS.md"
+    },
+    {
+      "id": "V1-MUST-008",
+      "title": "Material assignment",
+      "source": "REQUIREMENTS.md"
+    },
+    {
+      "id": "V1-MUST-009",
+      "title": "Beamlet-resolved scoring",
+      "source": "REQUIREMENTS.md"
+    },
+    {
+      "id": "V1-MUST-010",
+      "title": "Dose influence matrices",
+      "source": "REQUIREMENTS.md"
+    },
+    {
+      "id": "V1-MUST-011",
+      "title": "Changeable scoring grids",
+      "source": "REQUIREMENTS.md"
+    },
+    {
+      "id": "V1-MUST-012",
+      "title": "Extensible scoring",
+      "source": "REQUIREMENTS.md"
+    },
+    {
+      "id": "V1-MUST-013",
+      "title": "Absorbed dose",
+      "source": "REQUIREMENTS.md"
+    },
+    {
+      "id": "V1-MUST-014",
+      "title": "Energy deposition",
+      "source": "REQUIREMENTS.md"
+    },
+    {
+      "id": "V1-MUST-015",
+      "title": "LET scoring",
+      "source": "REQUIREMENTS.md"
+    },
+    {
+      "id": "V1-MUST-016",
+      "title": "External biological lookup data",
+      "source": "REQUIREMENTS.md"
+    },
+    {
+      "id": "V1-MUST-017",
+      "title": "Analytical physics layer",
+      "source": "REQUIREMENTS.md"
+    },
+    {
+      "id": "V1-MUST-018",
+      "title": "External/tabulated data layer",
+      "source": "REQUIREMENTS.md"
+    },
+    {
+      "id": "V1-MUST-019",
+      "title": "Separation of transport from data source",
+      "source": "REQUIREMENTS.md"
+    },
+    {
+      "id": "V1-MUST-020",
+      "title": "No large physics datasets in Git",
+      "source": "REQUIREMENTS.md"
+    },
+    {
+      "id": "V1-MUST-021",
+      "title": "Automatic acquisition",
+      "source": "REQUIREMENTS.md"
+    },
+    {
+      "id": "V1-MUST-022",
+      "title": "Local caching",
+      "source": "REQUIREMENTS.md"
+    },
+    {
+      "id": "V1-MUST-023",
+      "title": "Dataset versioning",
+      "source": "REQUIREMENTS.md"
+    },
+    {
+      "id": "V1-MUST-024",
+      "title": "Integrity verification",
+      "source": "REQUIREMENTS.md"
+    },
+    {
+      "id": "V1-MUST-025",
+      "title": "Provenance",
+      "source": "REQUIREMENTS.md"
+    },
+    {
+      "id": "V1-MUST-026",
+      "title": "Offline reuse",
+      "source": "REQUIREMENTS.md"
+    },
+    {
+      "id": "V1-MUST-027",
+      "title": "Explicit random control",
+      "source": "REQUIREMENTS.md"
+    },
+    {
+      "id": "V1-MUST-028",
+      "title": "Parallel-safe random streams",
+      "source": "REQUIREMENTS.md"
+    },
+    {
+      "id": "V1-MUST-029",
+      "title": "Cross-backend statistical consistency",
+      "source": "REQUIREMENTS.md"
+    },
+    {
+      "id": "V1-MUST-030",
+      "title": "Statistical uncertainty estimation",
+      "source": "REQUIREMENTS.md"
+    },
+    {
+      "id": "V1-MUST-031",
+      "title": "Validated physical behavior",
+      "source": "REQUIREMENTS.md"
+    },
+    {
+      "id": "V1-MUST-032",
+      "title": "Conservation checks",
+      "source": "REQUIREMENTS.md"
+    },
+    {
+      "id": "V1-MUST-033",
+      "title": "Numerical convergence",
+      "source": "REQUIREMENTS.md"
+    },
+    {
+      "id": "V1-MUST-034",
+      "title": "High-throughput execution",
+      "source": "REQUIREMENTS.md"
+    },
+    {
+      "id": "V1-MUST-035",
+      "title": "GPU-oriented architecture",
+      "source": "REQUIREMENTS.md"
+    },
+    {
+      "id": "V1-MUST-036",
+      "title": "Reproducible benchmarking",
+      "source": "REQUIREMENTS.md"
+    },
+    {
+      "id": "V1-MUST-037",
+      "title": "Explicit physical units",
+      "source": "REQUIREMENTS.md"
+    },
+    {
+      "id": "V1-MUST-038",
+      "title": "Coordinate-system documentation",
+      "source": "REQUIREMENTS.md"
+    },
+    {
+      "id": "V1-MUST-039",
+      "title": "Independent validation",
+      "source": "REQUIREMENTS.md"
+    },
+    {
+      "id": "V1-MUST-040",
+      "title": "Backend consistency",
+      "source": "REQUIREMENTS.md"
+    },
+    {
+      "id": "V1-MUST-041",
+      "title": "Automated testing",
+      "source": "REQUIREMENTS.md"
+    },
+    {
+      "id": "V1-MUST-042",
+      "title": "CI integration",
+      "source": "REQUIREMENTS.md"
+    },
+    {
+      "id": "V1-MUST-043",
+      "title": "Pre-commit framework",
+      "source": "REQUIREMENTS.md"
+    },
+    {
+      "id": "V1-SCOPE",
+      "title": "Complete MUST scope-control priorities",
+      "source": "REQUIREMENTS.md#scope-control"
+    },
+    {
+      "id": "V2-ION",
+      "title": "independently qualified therapeutic ions",
+      "source": "experiment/v3/REQUIREMENTS.md"
+    },
+    {
+      "id": "V2-CAP",
+      "title": "fail-closed capability contract",
+      "source": "experiment/v3/REQUIREMENTS.md"
+    },
+    {
+      "id": "V2-NUM",
+      "title": "adversarial numerical falsification",
+      "source": "experiment/v3/REQUIREMENTS.md"
+    },
+    {
+      "id": "V2-EVID",
+      "title": "physical evidence lineage and sufficiency",
+      "source": "experiment/v3/REQUIREMENTS.md"
+    },
+    {
+      "id": "V2-BIO",
+      "title": "external biological lookup functionality",
+      "source": "experiment/v3/REQUIREMENTS.md"
+    },
+    {
+      "id": "V2-OUTPUT",
+      "title": "self-describing persisted scientific results",
+      "source": "experiment/v3/REQUIREMENTS.md"
+    },
+    {
+      "id": "V2-USER",
+      "title": "complete clean-install scientific workflow",
+      "source": "experiment/v3/REQUIREMENTS.md"
+    },
+    {
+      "id": "V2-PERF",
+      "title": "frozen application-level performance/resource gates",
+      "source": "experiment/v3/REQUIREMENTS.md"
+    },
+    {
+      "id": "V2-RELEASE",
+      "title": "complete qualification and promotion",
+      "source": "experiment/v3/REQUIREMENTS.md"
+    }
+  ]
+}
