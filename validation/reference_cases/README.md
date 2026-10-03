@@ -27,6 +27,14 @@ zero-divergence pencil on the axis, seed 20261003, one thread.
   The carbon smoke cases additionally test whether TOPAS (QMD) and FRED transport 12C and the
   energy convention; they provide no ion evidence.
 
+## Engine roles established by the smoke runs
+
+* TOPAS (Geant4): protons and ions (12C runs with QMD; surviving-carbon surface counts work).
+* MCsquare: protons only.
+* FRED 3.76 CPU: protons only. 12C is recognised but aborts with "fragmentation of C12 ...
+  not implemented"; `fred/carbon-water-290mevu-smoke` is kept as a documented negative result.
+  `lTracking_nuc = t` enables FRED's nuclear elastic and inelastic modules for protons only.
+
 ## Materializing outputs
 
 After a run, use the controlled tools, not shell copies:

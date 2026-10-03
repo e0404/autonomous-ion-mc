@@ -89,3 +89,47 @@ def test_metaimage_errors(tmp_path: Path) -> None:
     mhd.write_text("NDims = 3\nDimSize = 1 1 1\n")
     with pytest.raises(ParseError):
         read_metaimage(mhd)
+
+
+def test_metaimage_local(tmp_path: Path) -> None:
+    arr = np.arange(2 * 3 * 4, dtype="<f4").reshape(2, 3, 4)
+    head = (
+        "ObjectType = Image\nNDims = 3\nDimSize = 4 3 2\nBinaryData = True\n"
+        "BinaryDataByteOrderMSB = False\nCompressedData = False\nOffset = -1 -2 0.5\n"
+        "ElementSpacing = 1 1 1\nElementType = MET_FLOAT\nElementDataFile = LOCAL\n"
+    )
+    p = tmp_path / "local.mhd"
+    p.write_bytes(head.encode() + arr.tobytes() + b"")
+    img = read_metaimage(p)
+    np.testing.assert_array_equal(img.data, arr)
+    assert img.offset == (-1.0, -2.0, 0.5)
+    p.write_bytes(head.encode() + arr.tobytes()[:-4])
+    with pytest.raises(ParseError):
+        read_metaimage(p)
+
+
+def test_topas_csv_count_scorer_without_unit(tmp_path: Path) -> None:
+    p = tmp_path / "count.csv"
+    p.write_text(
+        "# TOPAS Version: 4.3\n# Results for scorer: PrimaryCount\n"
+        '# Filtered by: OnlyIncludeParticlesGoing = "In"\n'
+        "# Scored on surface: Water/ZMinusSurface\n"
+        "# X in 1 bin  of 12 cm\n# Y in 1 bin  of 12 cm\n# Z in 2 bins of 0.1 cm\n"
+        "# SurfaceTrackCount : Sum   \n0, 0, 0, 200\n0, 0, 1, 197\n"
+    )
+    s = read_topas_csv(p)
+    assert s.quantity == "SurfaceTrackCount" and s.unit == ""
+    assert s.statistics == ["Sum"]
+    assert s.meta["scorer"] == "PrimaryCount"
+    np.testing.assert_array_equal(s.values["Sum"][0, 0], [200, 197])
+
+
+def test_topas_csv_nested_parentheses_in_unit(tmp_path: Path) -> None:
+    p = tmp_path / "let.csv"
+    p.write_text(
+        "# Results for scorer: LETd\n# Warning: bins set to 0: 119\n"
+        "# X in 1 bin  of 12 cm\n# Y in 1 bin  of 12 cm\n# Z in 1 bin of 0.1 cm\n"
+        "# ProtonLET ( MeV/mm/(g/cm3) ) : Sum   \n0, 0, 0, 0.52\n"
+    )
+    s = read_topas_csv(p)
+    assert (s.quantity, s.unit) == ("ProtonLET", "MeV/mm/(g/cm3)")

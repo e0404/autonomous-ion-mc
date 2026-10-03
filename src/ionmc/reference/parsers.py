@@ -30,9 +30,9 @@ _AXIS = re.compile(
     r"^#\s*([XYZ]|R|Phi|Theta)\s+in\s+(\d+)\s+bins?\s+of\s+([-+0-9.eE]+)\s*(\S*)\s*$"
 )
 _QUANTITY = re.compile(
-    r"^#\s*(?P<name>[^\s(][^(]*?)\s*\(\s*(?P<unit>[^)]*?)\s*\)\s*:\s*(?P<stats>.*)$"
+    r"^#\s*(?P<name>[^\s(:][^(:]*?)\s*(?:\(\s*(?P<unit>.*?)\s*\))?\s*:\s*(?P<stats>.*)$"
 )
-_SCORER = re.compile(r"^#\s*Results for scorer\s+(\S+)", re.IGNORECASE)
+_SCORER = re.compile(r"^#\s*Results for scorer:?\s+(\S+)", re.IGNORECASE)
 _COMPONENT = re.compile(r"^#\s*Scored in component:\s*(\S+)", re.IGNORECASE)
 
 
@@ -84,8 +84,8 @@ def read_topas_csv(path: str | Path) -> TopasScorer:
             meta["component"] = m.group(1)
             continue
         m = _QUANTITY.match(line)
-        if m and not statistics:
-            quantity, unit = m.group("name").strip(), m.group("unit").strip()
+        if m and not statistics and all(a in axes for a in "XYZ"):
+            quantity, unit = m.group("name").strip(), (m.group("unit") or "").strip()
             statistics = m.group("stats").replace(",", " ").split()
     if not all(a in axes for a in "XYZ"):
         raise ParseError(f"{path}: header lacks X/Y/Z bin structure")
@@ -157,13 +157,23 @@ def _floats(text: str, n: int, default: float) -> tuple[float, ...]:
 
 
 def read_metaimage(path: str | Path) -> MetaImage:
-    """Read a 3D MetaImage ``.mhd`` and its raw data file (same directory unless absolute)."""
+    """Read a 3D MetaImage ``.mhd`` with a separate raw file or ``ElementDataFile = LOCAL``."""
     path = Path(path)
+    blob = path.read_bytes()
     header: dict[str, str] = {}
-    for line in path.read_text().splitlines():
+    local_offset: int | None = None
+    pos = 0
+    while pos < len(blob):
+        nl = blob.find(b"\n", pos)
+        end = len(blob) if nl < 0 else nl
+        line = blob[pos:end].decode("ascii", errors="replace").rstrip("\r")
+        pos = end + 1
         if "=" in line:
             key, _, value = line.partition("=")
             header[key.strip()] = value.strip()
+            if key.strip() == "ElementDataFile" and value.strip() == "LOCAL":
+                local_offset = min(pos, len(blob))
+                break
     for key in ("NDims", "DimSize", "ElementType", "ElementDataFile"):
         if key not in header:
             raise ParseError(f"{path}: missing {key}")
@@ -181,15 +191,24 @@ def read_metaimage(path: str | Path) -> MetaImage:
     msb = header.get("ElementByteOrderMSB", header.get("BinaryDataByteOrderMSB", "False"))
     dtype = np.dtype(("<" if msb.lower() != "true" else ">") + _MET_TYPES[header["ElementType"]])
     raw_name = header["ElementDataFile"]
-    if raw_name == "LOCAL":
-        raise ParseError(f"{path}: ElementDataFile = LOCAL is not supported")
-    raw_path = Path(raw_name)
-    if not raw_path.is_absolute():
-        raw_path = path.parent / raw_path
     count = dims[0] * dims[1] * dims[2]
-    data = np.fromfile(raw_path, dtype=dtype)
-    if data.size != count:
-        raise ParseError(f"{raw_path}: expected {count} elements, found {data.size}")
+    if raw_name == "LOCAL":
+        if local_offset is None:
+            raise ParseError(f"{path}: LOCAL data marker not found")
+        payload = blob[local_offset:]
+        if len(payload) != count * dtype.itemsize:
+            raise ParseError(
+                f"{path}: expected {count * dtype.itemsize} data bytes, found {len(payload)}"
+            )
+        data = np.frombuffer(payload, dtype=dtype)
+        where: Path = path
+    else:
+        where = Path(raw_name)
+        if not where.is_absolute():
+            where = path.parent / where
+        data = np.fromfile(where, dtype=dtype)
+        if data.size != count:
+            raise ParseError(f"{where}: expected {count} elements, found {data.size}")
     spacing = _floats(header.get("ElementSpacing", header.get("ElementSize", "")), 3, 1.0)
     offset = _floats(header.get("Offset", header.get("Position", "")), 3, 0.0)
     return MetaImage(
