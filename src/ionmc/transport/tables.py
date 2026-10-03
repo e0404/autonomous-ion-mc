@@ -29,6 +29,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
+from ionmc._frozen import freeze_array
 from ionmc.materials import Material
 from ionmc.physics.projectiles import Projectile
 from ionmc.physics.scattering import inverse_scattering_length_cm2_per_g
@@ -72,17 +73,7 @@ class TransportTables:
             a = getattr(self, name)
             if not isinstance(a, np.ndarray):
                 raise ValueError(f"{name} must be a numpy array")
-            # back the array by an immutable bytes object: NumPy then refuses setflags(write=True)
-            raw = np.ascontiguousarray(a, dtype=np.float64).tobytes()
-            frozen = np.frombuffer(raw, dtype=np.float64).reshape(a.shape)
-            object.__setattr__(self, name, frozen)
-            root: Any = frozen
-            while isinstance(root, np.ndarray):
-                if root.flags.writeable:
-                    raise ValueError(f"{name} could not be made read-only")
-                root = root.base
-            if not isinstance(root, bytes):
-                raise ValueError(f"{name} could not be backed by an immutable buffer")
+            object.__setattr__(self, name, freeze_array(a, np.float64, name))
         object.__setattr__(self, "identity", _freeze(self.identity))
         nm = len(self.materials)
         if nm < 1:

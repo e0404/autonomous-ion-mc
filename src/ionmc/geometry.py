@@ -14,6 +14,7 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
 
+from ionmc._frozen import freeze_array
 from ionmc._validate import fail, int_triple, real, triple
 from ionmc.materials import Material
 
@@ -53,9 +54,7 @@ class VoxelGeometry:
                 f"material_index values must lie in [0, {len(self.materials)}), "
                 f"found [{raw.min()}, {raw.max()}]"
             )
-        mi = np.array(raw, dtype=np.int32)
-        mi.setflags(write=False)
-        object.__setattr__(self, "material_index", mi)
+        object.__setattr__(self, "material_index", freeze_array(raw, np.int32, "material_index"))
         if self.density_g_cm3 is not None:
             d = np.array(self.density_g_cm3, dtype=np.float64)
             if d.shape != self.shape:
@@ -64,8 +63,7 @@ class VoxelGeometry:
                 raise fail("density_g_cm3 must be finite")
             if np.any(d <= 0.0):
                 raise fail("density_g_cm3 must be > 0 everywhere (vacuum voxels are unsupported)")
-            d.setflags(write=False)
-            object.__setattr__(self, "density_g_cm3", d)
+            object.__setattr__(self, "density_g_cm3", freeze_array(d, np.float64, "density_g_cm3"))
 
     @property
     def lower_mm(self) -> tuple[float, float, float]:

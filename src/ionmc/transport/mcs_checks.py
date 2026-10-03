@@ -129,8 +129,9 @@ class ProtonPath:
         )
 
     def theta2_steps(self, x_mm: float, step_mm: float) -> float:
-        """Sum over uniform steps (last one shortened) as in the transport: the exact
-        log-average variance on the first step, ``s T(E_mid)`` on the others."""
+        """Sum over uniform steps (last one shortened) as in the transport: the linearized
+        analytic log-average variance (residual ~1e-3) on the first step,
+        ``s T(E_mid)`` on the others."""
         n = int(math.floor(x_mm / step_mm))
         lens = np.full(n, step_mm)
         starts = np.arange(n) * step_mm

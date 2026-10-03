@@ -270,7 +270,8 @@ class _Reference:
         iz = min(max(int(math.floor((pz - o[2]) / sp[2])), 0), nz - 1)
 
         steps = 0
-        birth = True  # first step of the particle's life (exact log average of f_dM)
+        # first step of the particle's life: linearized analytic log-average of f_dM (~1e-3)
+        birth = True
         blocks = 0
         zero_run = 0
         max_steps = self.eff.max_steps

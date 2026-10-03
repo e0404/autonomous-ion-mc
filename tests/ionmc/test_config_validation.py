@@ -546,3 +546,24 @@ def test_transport_tables_are_deeply_immutable(make_config: MakeConfig) -> None:
     s["rng"]["generator"] = "x"
     assert eff.summary() == before
     assert t.identity[0]["I_eV_effective"] == 78.0 and eff.rng["generator"] == "philox4x32-10"
+
+
+def test_voxel_geometry_arrays_are_deeply_immutable() -> None:
+    mi = np.zeros((2, 1, 1), dtype=np.int64)
+    dens = np.array([[[1.0]], [[1.1]]])
+    g = VoxelGeometry((0, 0, 0), (1, 1, 1), (2, 1, 1), (WATER,), mi, dens)
+    assert mi.flags.writeable and dens.flags.writeable  # caller's arrays untouched
+    for arr, dtype in ((g.material_index, np.int32), (g.density_g_cm3, np.float64)):
+        assert arr is not None and arr.dtype == dtype and arr.shape == (2, 1, 1)
+        before = arr.tobytes()
+        with pytest.raises(ValueError):
+            arr[...] = 0
+        root: object = arr
+        while isinstance(root, np.ndarray):
+            assert not root.flags.writeable
+            with pytest.raises(ValueError):
+                root.setflags(write=True)
+            root = root.base
+        assert isinstance(root, bytes)
+        assert arr.tobytes() == before
+    assert g.densities_g_cm3().tolist() == [[[1.0]], [[1.1]]]
