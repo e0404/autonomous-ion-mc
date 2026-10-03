@@ -15,7 +15,7 @@ from typing import Any
 
 import numpy as np
 
-from .parsers import ParseError, parse_metaimage, parse_topas_csv
+from .parsers import ParseError, parse_metaimage, parse_topas_binary, parse_topas_csv
 
 _TO_MM = {"mm": 1.0, "cm": 10.0, "m": 1000.0}
 
@@ -47,6 +47,17 @@ class DepthDose:
     unit: str
     histories: int
     files: list[str]  # run-relative paths of the files used
+
+
+@dataclass
+class Dose3D:
+    """3-D dose ``dose[ix, iy, iz]`` (run total, scorer units) with bin widths in mm."""
+
+    dose: np.ndarray
+    bin_mm: tuple[float, float, float]
+    unit: str
+    histories: int
+    files: list[str]
 
 
 def _json_bytes(blob: bytes, label: str) -> dict[str, Any]:
@@ -207,3 +218,69 @@ def depth_dose(run: ReferenceRun) -> DepthDose:
     if dd.depth_mm.shape != dd.dose.shape or dd.dose.size < 3:
         raise RunError(f"{run.run_id}: inconsistent depth-dose arrays")
     return dd
+
+
+IDD_CONSISTENCY_RTOL = 1e-4  # relative; covers float32 3-D storage, catches a wrong axis order
+
+
+def dose_3d(run: ReferenceRun, scorer: str = "dose3d") -> Dose3D:
+    """3-D TOPAS binary dose (``work/<scorer>.bin`` + ``.binheader``), verified against the IDD.
+
+    ``scorer`` is ``"dose3d"`` (all particles) or ``"dose3d_primary"`` (generation-0 particles).
+    Fail closed: ``RunError`` for other engines, unmanifested or malformed files, or if the
+    laterally summed all-particle dose does not reproduce the IDD scorer of the same run (the IDD
+    may have finer depth bins that are an integer divisor of the 3-D ones) to
+    ``IDD_CONSISTENCY_RTOL`` of the peak bin. This pins the binary memory order and the unit.
+    The primary scorer is loaded together with the verified all-particle one: the grids must be
+    identical and its dose may not exceed the all-particle depth profile (same tolerance).
+    """
+    if scorer not in ("dose3d", "dose3d_primary"):
+        raise RunError(f"unknown 3-D scorer {scorer!r}")
+    if run.engine != "topas":
+        raise RunError(f"{run.run_id}: no 3-D dose extractor for engine {run.engine!r}")
+    rel_h, rel_b = f"work/{scorer}.binheader", f"work/{scorer}.bin"
+    try:
+        s = parse_topas_binary(_read(run, rel_h).decode("utf-8"), _read(run, rel_b), rel_b)
+    except ParseError as exc:
+        raise RunError(str(exc)) from exc
+    if "Sum" not in s.values:
+        raise RunError(f"{rel_b}: no Sum statistic")
+    if any(u not in _TO_MM for u in s.bin_unit):
+        raise RunError(f"{rel_b}: unknown length unit in {s.bin_unit}")
+    bin_mm = tuple(w * _TO_MM[u] for w, u in zip(s.bin_width, s.bin_unit, strict=True))
+    dose = s.values["Sum"]
+    idd = depth_dose(run)
+    ratio = bin_mm[2] / float(idd.depth_mm[1] - idd.depth_mm[0])
+    n_sub = int(round(ratio))
+    if n_sub < 1 or abs(ratio - n_sub) > 1e-6 or idd.dose.size != n_sub * dose.shape[2]:
+        raise RunError(f"{run.run_id}: IDD and 3-D depth grids are incompatible")
+    lateral = dose.sum(axis=(0, 1))
+    idd_rebinned = idd.dose.reshape(dose.shape[2], n_sub).sum(axis=1)
+    scale = float(np.max(np.abs(idd_rebinned)))
+    tol = IDD_CONSISTENCY_RTOL * scale
+    files = [rel_h, rel_b, *idd.files]
+    if scorer == "dose3d":
+        if not scale > 0 or float(np.max(np.abs(lateral - idd_rebinned))) > tol:
+            raise RunError(
+                f"{run.run_id}: laterally summed 3-D dose does not reproduce the IDD "
+                f"(binary layout or content wrong)"
+            )
+    else:
+        full = dose_3d(run, "dose3d")  # layout verified against the IDD
+        if full.dose.shape != dose.shape or full.bin_mm != (bin_mm[0], bin_mm[1], bin_mm[2]):
+            raise RunError(f"{run.run_id}: primary and all-particle 3-D grids differ")
+        if not float(lateral.sum()) > 0 or float(np.max(lateral - idd_rebinned)) > tol:
+            raise RunError(f"{run.run_id}: primary 3-D dose is empty or exceeds the IDD")
+        files += full.files
+    return Dose3D(
+        dose=dose,
+        bin_mm=(bin_mm[0], bin_mm[1], bin_mm[2]),
+        unit=f"{s.unit} (run total)",
+        histories=run.histories,
+        files=files,
+    )
+
+
+def read_verified(run: ReferenceRun, rel: str) -> bytes:
+    """Bytes of a manifested run file, verified against size and sha256 (fail closed)."""
+    return _read(run, rel)

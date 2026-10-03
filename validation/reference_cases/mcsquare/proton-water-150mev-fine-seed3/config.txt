@@ -1,7 +1,7 @@
 # Native MCsquare e0404 configuration. Independent Monte Carlo evidence; no validation claim.
 Num_Threads 1
 # RNG_Seed is the PER-BATCH seed: fixed per committed seed-variant directory (batch statistics need >= 2 distinct seeds).
-RNG_Seed 20261003
+RNG_Seed 20261005
 Num_Primaries 100000
 E_Cut_Pro 0.5
 D_Max 0.2

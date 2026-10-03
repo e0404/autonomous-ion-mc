@@ -1,0 +1,31 @@
+{
+  "input": "fred.inp",
+  "physics": "FRED 3.76 CPU: native defaults for stopping (lTracking_dEdx, fluctuations), multiple scattering (mcsMode default 6), nuclear elastic+inelastic via lTracking_nuc = t explicitly set; IonizPotential default (75 eV water), stoppowDTmax default",
+  "source": "proton, Emean 150 MeV, monoenergetic (Espread 0 default), Xsec = pin (zero size), paraxial propagation (no divergence), from z = -1 cm field origin through vacuum Room to the phantom, direction +z on the axis, N=1 (dose per primary)",
+  "geometry": "water region 'Phantom' 12 x 12 x 30 cm (z 0..30 cm), 120 x 120 x 600 voxels of 1 x 1 x 0.5 mm (0.5 mm depth bins); Room vacuum",
+  "materials": "FRED built-in water (IonizPotential 75 eV default)",
+  "cuts": "FRED 3.76 native defaults (stoppowPathlengthCutoff 10 um, stoppowDTmax 2 %); fred.inp and out/log retained",
+  "histories": 100000,
+  "seeds": [
+    20261004
+  ],
+  "scorers": [
+    "dose (dose-to-medium, Gy per primary), voxel 1 x 1 x 0.5 mm",
+    "LETd (dose-averaged LET, Polster 2015 Eq. 14, MeV cm2/g)"
+  ],
+  "units": "MetaImage; dose in Gy per primary (N=1); LETd in MeV cm2/g; voxel 1 x 1 x 0.5 mm; lengths in cm in the input, mhd header spacing as written by FRED (check ElementSpacing units: mm vs cm)",
+  "rationale": "independent Monte Carlo evidence for suite S-PHYS-PROTON-EM/-NUCLEAR/-LET: evidence-grade candidate (0.5 mm depth bins, 1e5 primaries per batch; seed fixed per committed variant, at least 2 seeds required for batch statistics)",
+  "expected_outputs": [
+    "out/score/Phantom.Dose.mhd",
+    "out/score/Phantom.LETd.mhd"
+  ],
+  "arguments": [
+    "-nogpu",
+    "-numThreads",
+    "1",
+    "-nprim",
+    "100000",
+    "-rseed",
+    "20261004"
+  ]
+}

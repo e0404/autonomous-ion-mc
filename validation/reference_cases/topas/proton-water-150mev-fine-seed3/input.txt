@@ -1,7 +1,7 @@
 # Native OpenTOPAS 4.3 input. Independent Monte Carlo evidence input; no validation claim.
 i:Ts/NumberOfThreads = 1
 # Ts/Seed is the PER-BATCH seed: fixed per committed seed-variant directory (batch statistics need >= 2 distinct seeds).
-i:Ts/Seed = 20261003
+i:Ts/Seed = 20261005
 b:Ts/PauseBeforeQuit = "False"
 
 # Geometry: 120 x 120 x 300 mm G4_WATER box, entrance face at z = 0, beam axis = +z through the face centre.

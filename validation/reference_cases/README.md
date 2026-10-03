@@ -11,8 +11,10 @@ physics validation by itself; evidence requires the frozen criteria of the requi
 ```
 topas/proton-water-150mev[-smoke]/       150 MeV p, QGSP_BIC_HP + opt4, dose 1 mm column + 2 mm 3D + LETd
 topas/carbon-water-290mevu-smoke/        12C 3480 MeV total, QMD, Edep + primary-carbon Fluence (1/mm2) vs depth
-topas/proton-water-150mev-fine/          0.5 mm depth bins, 1e5 histories (evidence-grade candidate)
-mcsquare/proton-water-150mev-fine/       0.5 mm depth bins, 1e5 primaries (evidence-grade candidate)
+topas/proton-water-150mev-fine[-seed2|-seed3]/   0.5 mm depth bins, 1e5 histories (evidence-grade candidates)
+topas/proton-water-150mev-lateral[-seed2|-seed3|-smoke]/  T15 lateral case: IDD 0.5 mm + binary 3-D dose 240x240x300 (0.5 x 0.5 x 1 mm)
+fred/proton-water-150mev-fine[-seed2|-seed3]/    1 x 1 x 0.5 mm voxels, 1e5 primaries (evidence-grade candidates)
+mcsquare/proton-water-150mev-fine[-seed2|-seed3]/ 0.5 mm depth bins, 1e5 primaries (evidence-grade candidates)
 mcsquare/proton-water-150mev[-smoke]/    150 MeV p, hand-written BDL (sigma 1.0 mm), 2 mm water CT, dose + LET
 fred/proton-water-150mev[-smoke]/        150 MeV p, 1 mm water phantom, dose + LETd
 fred/carbon-water-290mevu-smoke/         12C 290 MeV/u, 100 primaries: tests ion + nuclear support of the build
@@ -130,3 +132,47 @@ option to relabel results from detached metadata.
 Library code: `ionmc.reference.runs` (`load_run`, `depth_dose`, per-engine extraction, fail closed)
 and `ionmc.reference.metrics`. Metrics use bin-centre depths, argmax for the peak (resolution is
 the bin width: 1 mm TOPAS/FRED, 2 mm MCsquare) and linear interpolation on the distal side.
+
+## Evidence-grade batch protocol (V3-010B)
+
+`run_reference_calculation` accepts no seed or history override (arguments: `task_id`,
+`case_path`, `engine`, `gpu`, `timeout_seconds`), so the seed is varied by committed variant
+directories. Each directory differs from its siblings only in the native seed line and
+`case.json` `seeds`: base `-fine` / `-lateral` = 20261003, `-seed2` = 20261004, `-seed3` =
+20261005 (TOPAS `i:Ts/Seed`, MCsquare `RNG_Seed`, FRED `-rseed` in `case.json` `arguments`). Every
+run is reproducible from its committed bundle; the manifested `inputs/case.json` records the seed.
+
+* Depth-dose batches (1e5 primaries, depth bins 0.5 mm): TOPAS `-fine`, MCsquare `-fine`
+  (anisotropic 2 x 0.5 x 2 mm CT: if e0404 rejects it, a 1 mm isotropic fall-back is not
+  evidence-grade and must be reported), FRED `-fine` (new; 120 x 120 x 600 voxels of
+  1 x 1 x 0.5 mm; the 1 mm case was too coarse), each with `-seed2`, `-seed3`.
+* Lateral case (T15): `topas/proton-water-150mev-lateral`. The 3-D DoseToMedium scorer covers the
+  whole 120 x 120 mm field (240 x 240 bins of 0.5 mm) and 300 depth bins of 1 mm, output
+  `Binary` (`dose3d.bin` + `dose3d.binheader`, Sum only, 17.28e6 bins, 138 MB if float64). The full
+  field is scored, not +-30 mm: the scorer shares the `Water` component with the 0.5 mm IDD (a
+  child scoring box would remove its volume from the IDD), and the halo and the outer-10 %
+  background zone then lie inside the grid. The frozen T15 text names 0.2 mm lateral bins;
+  240 x 240 bins of 0.2 mm over the field would be 6.7x larger (about 0.9 GB per run), so 0.5 mm is used
+  (Sheppard-corrected, tested at sigma = 2-6 mm; accepted by the orchestrator).
+  A second identical 3-D scorer `Dose3DPrimary` (`dose3d_primary.bin`) adds the TOPAS filter
+  `OnlyIncludeParticlesOfGeneration = "Primary"` (generation-0 particles, no nuclear-secondary
+  dose) for comparison with EM-only backends; the all-particle scorer is for the comparison after
+  nuclear physics exists. The parameter name is unverified: the smoke run decides, with fallback
+  `OnlyIncludeParticlesNamed = "proton"` plus a generation filter, reporting what worked. Outputs
+  and `compare_batches.py` report sigma_lat for both (`lateral`, `lateral_primary`). Dose3D binary layout and precision are not documented in the
+  repository: `ionmc.reference.parsers.parse_topas_binary` infers float32/float64 from the file
+  size and `runs.dose_3d` requires the laterally summed 3-D dose to reproduce the IDD (1e-4 of the
+  peak bin), which fails closed on a wrong memory order. Run the `-lateral-smoke` case first.
+* Batch statistics: `validation/scripts/reference/compare_batches.py` (>= 2 runs per engine,
+  distinct seeds read from the manifested `inputs/case.json` and cross-checked against the
+  manifested native input, equal histories >= 1e5 and bins <= 0.5 mm; otherwise it exits
+  non-zero). Output status `batched` means only that the protocol holds. Results are evidence only
+  after the frozen criteria of the acceptance plan have been evaluated against them; the physics list
+  (QGSP_BIC_HP + opt4) and I-values (TOPAS G4_WATER 78 eV, FRED 75 eV, MCsquare not printed) label
+  every result.
+* Lateral estimator (`ionmc.reference.metrics.lateral_variance_1d`): per 1 mm slab at z = f R80
+  (f = 0.5, 0.9; R80 from the IDD of the same run), x and y projections, outer-10 % background
+  subtracted, second central moment minus Sheppard h^2/12, mean of the two projections; reported
+  for the full field and a +-20 mm window. The standard error is the spread across seeds.
+  Bias: Sheppard exact for bin-integrated Gaussians, truncation 1.5e-5 relative at 5 sigma; the
+  nuclear halo is not removed (the full-field value is the dose-profile second moment).

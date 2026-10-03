@@ -26,7 +26,7 @@ Tiers:
 | U3 | X_S from the formula for water, Be, Al, Cu, Pb | within 0.3% of 46.88 / 92.60 / 28.75 / 14.62 / 6.62 g/cm². This also settles ln vs log10 in eq. XS. | source-model reproduction⁴ (Gottschalk's own X_S table) | CI |
 | U4 | θ_dM(x) by numpy quadrature of T_dM along CSDA E(x), 158.6 MeV, x/R1 ∈ {0.01, 0.1, 0.5, 0.9}, for the materials V3-002 provides | within 1.5% of Gottschalk's θ_Hanson·(1+dM%) (theta0Single table). Residual is from the range-table I-value. | source-model reproduction³ (shared T_dM model and coefficients; not independent) | LV¹ |
 | U4b³ | Same θ_dM(x) as U4 compared directly with Gottschalk's tabulated θ_Hanson (Molière/Fano/Hanson theory, the quantity T_dM was fitted to; independent of the dM fit) | \|θ_dM/θ_Hanson − 1\| ≤ 4.5 % at every frozen point, derived before measurement from the table's own max \|dM%\| = 2.74 % (x/R1 ≥ 0.01) compounded with the U4 bound 1.5 % | source-model reproduction⁴ (θ_Hanson is the calibration target of T_dM and the bound is implied by U4; not independent) | LV¹ |
-| T15³ | **Independent-MC lateral check:** 150 MeV protons in water, all physics on, lateral σ of the dose profile at z/R ∈ {0.5, 0.9} (0.2 mm lateral bins, 1 mm slabs) versus a TOPAS/Geant4 11 run of the same geometry (3-D dose grid, ≥ 10⁵ primaries, ≥ 2 seeds) from the V3-010 reference service | \|σ_ionmc/σ_TOPAS − 1\| ≤ 3 % and \|z\| < 3 using both standard errors; result labelled by TOPAS physics list and I-value (78 eV) | independent Monte Carlo | LV (after V3-003B and the V3-010 3-D dose case) |
+| T15³ | **Independent-MC lateral check:** 150 MeV protons in water, all physics on, lateral σ of the dose profile at z/R ∈ {0.5, 0.9} (0.2 mm lateral bins, 1 mm slabs) versus a TOPAS/Geant4 11 run of the same geometry (3-D dose grid, ≥ 10⁵ primaries, ≥ 2 seeds) from the V3-010 reference service⁶ | \|σ_ionmc/σ_TOPAS − 1\| ≤ 3 % and \|z\| < 3 using both standard errors; result labelled by TOPAS physics list and I-value (78 eV) | independent Monte Carlo | LV (after V3-003B and the V3-010 3-D dose case) |
 | U5 | **Step independence of the MCS integrator (deterministic):** Σ_steps T(E_mid)·s along CSDA in water, 150 MeV, s ∈ {0.01, 0.1, 0.5, 1, 2, 5} mm, compared with adaptive quadrature at x/R1 ∈ {0.05, 0.25, 0.5, 0.9} | \|Δθ²/θ²\| ≤ 2e-3 for every s at x/R1 ≥ 0.05. Negative control computed analytically: per-step Highland varies ≥ 5% over the same s range, so the test has power. | self-consistency | CI |
 | U6 | RNG tests (a)–(e) of §3 | exact | self-consistency | CI |
 | T1 | **Trajectory parity**, python vs warp-cpu f64 trace: K = 16 (CI) and K = 256 (LV) histories, 100 MeV (CI) and 150 MeV (LV) in a water box, all physics on | Discrete sequences (idx, step reason, c2 count, attempt counts) identical for 100% of steps. Continuous state per step within rtol = atol = 1e-10. Any branch flip fails. | backend parity | CI/LV |
@@ -83,3 +83,14 @@ physics. They are retained as source-model reproduction and self-consistency che
 frozen numbers unchanged. The only independent scattering qualification in this plan is T15
 (independent Monte Carlo), still pending; the requirement ledger must not mark scattering
 requirements as independently evidenced before T15 passes.
+
+⁶ Clarification (2026-10-04, task V3-010B, before any T15 reference run was launched): the 0.2 mm
+lateral bins of T15 refer to ionmc's own scoring grid; the TOPAS reference scores the 3-D dose on
+0.5 mm lateral × 1 mm depth bins over the full ±60 mm field, and both σ estimators apply the
+Sheppard bin-width correction on the same lateral window (full field and a ±20 mm window are both
+reported). The TOPAS case carries two 3-D scorers: all particles, and primary-generation only
+(TOPAS generation filter). EM-only backends (V3-003B, no nuclear interactions) are compared with the
+primary-generation scorer — the residual difference is Geant4's hadron-elastic deflection of
+primaries, which ionmc lacks until V3-005 and which is therefore part of the measured deviation,
+not an allowance; the all-particle scorer is the T15 reference once nuclear interactions exist
+(V3-005). Tolerances are unchanged.

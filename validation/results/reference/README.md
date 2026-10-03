@@ -22,8 +22,13 @@ Raw engine outputs remain archived by the controlled reference service.
   prints 75 eV; MCsquare's value is not printed), an expected contribution to the sub-2 mm range
   spread.
 
-Evidence-grade runs will use multiple seeds (batch variance), at least 1e5 primaries per batch
-and depth bins of at most 0.5 mm (MCsquare CT at 1 mm or finer; TOPAS IDD at 0.5 mm). The
-comparison script always labels its result exploratory (single-seed inputs); batch statistics from
-several seeded runs per engine are a later task and cannot be asserted through detached metadata.
-It records git HEAD of the analysis code and a dirty flag; `--code-sha` must equal HEAD.
+Evidence-grade runs use several seeded runs per engine (committed `-fine`, `-fine-seed2`,
+`-fine-seed3`, `-lateral...` variants, at least 1e5 primaries and depth bins of at most 0.5 mm).
+`validation/scripts/reference/compare_batches.py` groups runs by engine, reads each seed from the
+manifested `inputs/case.json`, requires at least 2 runs per engine with distinct seeds (otherwise
+exit non-zero, no exploratory fallback) and writes per-engine mean, sample SD, standard error and
+95 % t-interval of R80, peak depth, R90, the distal 80-20 width and (TOPAS lateral case)
+the Sheppard-corrected lateral sigma at z/R80 = 0.5 and 0.9. Its status `batched` is not a grade:
+results are evidence only after the frozen criteria of the acceptance plan (e.g. T15) have been
+evaluated against them. `compare_depth_dose.py` still labels its single-run results exploratory.
+Both scripts record git HEAD of the analysis code and a dirty flag; `--code-sha` must equal HEAD.
