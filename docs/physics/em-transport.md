@@ -50,7 +50,7 @@ sampled as follows (ratio `r = mean / sigma`; model identifier `bohr_gauss_clamp
 A Gamma sample is accepted by the Marsaglia-Tsang test; a rejection draws another Philox block, at most 64
 attempts (then the `straggling_rejection` counter invalidates the run). Step energies of 1 mm or more
 at therapeutic energies have `r` well above 3, so the Gamma branch is used near the end of the range.
-`test_straggling_moments_are_preserved` checks mean and variance on a grid of `(mean, sigma)` that covers both
+`test_straggling_gamma_moments_exact_and_gaussian_variance_loss_bounded` checks the Gamma branch for both moments and the Gaussian branch for the mean and the bounded variance deficit on a grid of `(mean, sigma)` that covers both
 branches and the boundary (4e5 draws per point, three standard errors; the Gaussian branch near the boundary
 is given the 1 % clamp allowance). The transport-level validation of straggling is the range
 straggling `sigma_R` of the end depths (criterion T6, local validation), which is not part of the CI tests.

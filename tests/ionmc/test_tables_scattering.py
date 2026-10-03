@@ -283,13 +283,16 @@ def _straggle_kernel(
     "ratio", [30.0, 8.0, 4.0, 3.0, 2.99, 2.0, 1.0, 0.5, 0.3], ids=lambda r: f"ratio{r}"
 )
 @pytest.mark.parametrize("mean", [0.05, 2.0])
-def test_straggling_moments_are_preserved(ratio: float, mean: float) -> None:
-    """Both moments of the step energy loss equal the Bohr mean and variance (sigma = mean /
-    ratio), within three standard errors, over 4e5 draws, for the Gaussian branch (ratio >= 3)
-    and the Gamma branch (ratio < 3); losses are positive and the branch boundary is 3. The
-    Gaussian branch is clamped at 0 and 2 mean, which costs less than 1 % of the variance (at
-    most 0.5 % at ratio 3): that residual is allowed there. Warp's Philox is bit-identical to
-    the Python-integer Philox (test_rng)."""
+def test_straggling_gamma_moments_exact_and_gaussian_variance_loss_bounded(
+    ratio: float, mean: float
+) -> None:
+    """Gamma branch (ratio < 3): mean and variance of the step energy loss equal the Bohr mean
+    and variance (sigma = mean / ratio) within three standard errors over 4e5 draws. Gaussian
+    branch (ratio >= 3): the mean is preserved, but the clamp to [0, 2 mean] deliberately
+    lowers the variance (about 0.5 % at ratio 3, less at larger ratios); the assertion allows a
+    1 % variance deficit there, so this branch is NOT a two-moment check. Losses are positive and
+    the branch boundary is 3. Warp's Philox is bit-identical to the Python-integer Philox
+    (test_rng)."""
     n = 400_000
     sigma = mean / ratio
     loss = wp.zeros(n, dtype=wp.float64, device="cpu")

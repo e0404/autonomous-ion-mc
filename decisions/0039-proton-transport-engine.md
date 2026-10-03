@@ -88,9 +88,12 @@ block index, purpose) with purpose 1 for source sampling and 0 for transport.
   this U5 holds for all frozen step lengths (worst 1.5e-3 at x/R₁ = 0.9,
   5 mm steps).
 - The hinge's second leg may be truncated by a voxel plane while the angle
-  was sampled for the full step: a small overestimate of scattering on
-  boundary steps, measured by the step-independence probe rather than
-  corrected ad hoc.
+  was sampled for the full step: an overestimate of scattering on boundary
+  steps whose size is not yet measured. U5 and T8 do not probe it (they use
+  uncut homogeneous steps or vary only the maximum step); the frozen T14
+  (grid-size and half-voxel alignment refinement with angular and lateral
+  observables, V3-003B) bounds it, and its negative control decides whether
+  the default must switch to sampling for the truncated length.
 - The step loop exists twice (reference loop and kernel). It is kept thin;
   trajectory-level parity between the reference and the float64 kernel is
   the guard.
