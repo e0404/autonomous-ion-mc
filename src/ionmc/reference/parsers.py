@@ -148,14 +148,15 @@ def parse_topas_csv(text: str, path: str = "<memory>") -> TopasScorer:
 
 
 def parse_topas_binary(
-    header_text: str, blob: bytes, path: str = "<memory>", order: Literal["C", "F"] = "C"
+    header_text: str, blob: bytes, path: str = "<memory>", order: Literal["C", "F"] = "F"
 ) -> TopasScorer:
     """Parse a TOPAS binary scorer file (``.bin`` bytes plus ``.binheader`` text).
 
     Fail closed: the header must give the X/Y/Z bin structure and exactly one statistic
     (``Sum``); the file size must equal ``nx*ny*nz`` little-endian values of 8 bytes (float64)
     or 4 bytes (float32), otherwise ``ParseError``. ``order`` is the memory order of the bins:
-    ``"C"`` (z fastest, same as the CSV row order) or ``"F"`` (x fastest). The layout is
+    ``"F"`` (x fastest; verified for OpenTOPAS 4.3 on a real run, REF-95ef7515c835ec8c348f-e1a37fc0,
+    default) or ``"C"`` (z fastest, the CSV row order). The layout is
     verified against the IDD scorer of the same run by ``ionmc.reference.runs.dose_3d``.
     Header lines without a leading '#' are accepted (a '# ' is prepended).
     """

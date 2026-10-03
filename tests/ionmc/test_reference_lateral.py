@@ -91,11 +91,11 @@ HEADER = (
 
 def test_topas_binary_layouts_and_precision() -> None:
     arr = np.arange(24, dtype="<f8")
-    s = parse_topas_binary(HEADER, arr.tobytes())
+    s = parse_topas_binary(HEADER, arr.tobytes())  # default: x fastest (OpenTOPAS 4.3)
     assert s.bins == (2, 3, 4) and s.statistics == ["Sum"] and s.meta["dtype"] == "<f8"
-    assert s.values["Sum"][1, 2, 3] == 23 and s.values["Sum"][0, 0, 1] == 1  # z fastest
-    f = parse_topas_binary(HEADER, arr.astype("<f4").tobytes(), order="F")
-    assert f.meta["dtype"] == "<f4" and f.values["Sum"][1, 0, 0] == 1  # x fastest
+    assert s.values["Sum"][1, 2, 3] == 23 and s.values["Sum"][1, 0, 0] == 1
+    f = parse_topas_binary(HEADER, arr.astype("<f4").tobytes(), order="C")
+    assert f.meta["dtype"] == "<f4" and f.values["Sum"][0, 0, 1] == 1  # z fastest
     assert s.bin_width == (0.5, 0.5, 1.0) and s.bin_unit == ("mm", "mm", "mm")
     nohash = "\n".join(ln[2:] for ln in HEADER.splitlines())
     assert parse_topas_binary(nohash, arr.tobytes()).bins == (2, 3, 4)

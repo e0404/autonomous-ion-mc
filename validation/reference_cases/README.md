@@ -161,7 +161,7 @@ run is reproducible from its committed bundle; the manifested `inputs/case.json`
   `OnlyIncludeParticlesNamed = "proton"` plus a generation filter, reporting what worked. Outputs
   and `compare_batches.py` report sigma_lat for both (`lateral`, `lateral_primary`). Dose3D binary layout and precision are not documented in the
   repository: `ionmc.reference.parsers.parse_topas_binary` infers float32/float64 from the file
-  size and `runs.dose_3d` requires the laterally summed 3-D dose to reproduce the IDD (1e-4 of the
+  size and `runs.dose_3d` requires the lateral mean of the 3-D dose to reproduce the IDD (1e-4 of the
   peak bin), which fails closed on a wrong memory order. Run the `-lateral-smoke` case first.
 * Batch statistics: `validation/scripts/reference/compare_batches.py` (>= 2 runs per engine,
   distinct seeds read from the manifested `inputs/case.json` and cross-checked against the
@@ -176,3 +176,8 @@ run is reproducible from its committed bundle; the manifested `inputs/case.json`
   for the full field and a +-20 mm window. The standard error is the spread across seeds.
   Bias: Sheppard exact for bin-integrated Gaussians, truncation 1.5e-5 relative at 5 sigma; the
   nuclear halo is not removed (the full-field value is the dose-profile second moment).
+
+Smoke finding (REF-95ef7515c835ec8c348f-e1a37fc0, 200 histories, 2.6 s): the filter
+`OnlyIncludeParticlesOfGeneration = "Primary"` is accepted (recorded in the binheader as
+"Filtered by"); binary files are float64, x fastest ("F" order), dose = energy / voxel mass, so
+the lateral mean of the 3-D dose equals the IDD dose of the same slab (agreement 2e-8).

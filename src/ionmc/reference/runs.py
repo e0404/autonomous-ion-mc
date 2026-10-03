@@ -228,7 +228,7 @@ def dose_3d(run: ReferenceRun, scorer: str = "dose3d") -> Dose3D:
 
     ``scorer`` is ``"dose3d"`` (all particles) or ``"dose3d_primary"`` (generation-0 particles).
     Fail closed: ``RunError`` for other engines, unmanifested or malformed files, or if the
-    laterally summed all-particle dose does not reproduce the IDD scorer of the same run (the IDD
+    laterally averaged all-particle dose does not reproduce the IDD scorer of the same run (the IDD
     may have finer depth bins that are an integer divisor of the 3-D ones) to
     ``IDD_CONSISTENCY_RTOL`` of the peak bin. This pins the binary memory order and the unit.
     The primary scorer is loaded together with the verified all-particle one: the grids must be
@@ -254,15 +254,15 @@ def dose_3d(run: ReferenceRun, scorer: str = "dose3d") -> Dose3D:
     n_sub = int(round(ratio))
     if n_sub < 1 or abs(ratio - n_sub) > 1e-6 or idd.dose.size != n_sub * dose.shape[2]:
         raise RunError(f"{run.run_id}: IDD and 3-D depth grids are incompatible")
-    lateral = dose.sum(axis=(0, 1))
-    idd_rebinned = idd.dose.reshape(dose.shape[2], n_sub).sum(axis=1)
+    lateral = dose.mean(axis=(0, 1))
+    idd_rebinned = idd.dose.reshape(dose.shape[2], n_sub).mean(axis=1)
     scale = float(np.max(np.abs(idd_rebinned)))
     tol = IDD_CONSISTENCY_RTOL * scale
     files = [rel_h, rel_b, *idd.files]
     if scorer == "dose3d":
         if not scale > 0 or float(np.max(np.abs(lateral - idd_rebinned))) > tol:
             raise RunError(
-                f"{run.run_id}: laterally summed 3-D dose does not reproduce the IDD "
+                f"{run.run_id}: laterally averaged 3-D dose does not reproduce the IDD "
                 f"(binary layout or content wrong)"
             )
     else:

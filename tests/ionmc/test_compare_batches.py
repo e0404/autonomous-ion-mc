@@ -67,10 +67,10 @@ def topas_run(
         for z, a in zip(z1, amp, strict=True)
     ]
     d3 = np.stack(slabs, axis=2)
-    lat = d3.sum(axis=(0, 1))
+    lat = d3.mean(axis=(0, 1))  # IDD voxel spans the field: dose = lateral mean
     if idd_wrong:
         lat = lat[::-1]
-    idd = np.repeat(lat / 2.0, 2)
+    idd = np.repeat(lat, 2)
     rows = "".join(f"0,0,{i},{float(v)!r},0.0\n" for i, v in enumerate(idd))
     csv = (
         f"# X in 1 bin of 120 mm\n# Y in 1 bin of 120 mm\n# Z in {idd.size} bins of 0.5 mm\n"
@@ -85,12 +85,12 @@ def topas_run(
         "inputs/input.txt": f"i:Ts/Seed = {native_seed or seed}\n".encode(),
     }
     if lateral:
-        files["work/dose3d.bin"] = d3.astype("<f8").tobytes()
+        files["work/dose3d.bin"] = d3.astype("<f8").ravel(order="F").tobytes()
         files["work/dose3d.binheader"] = hdr.encode()
     if lateral and primary:
         amp_p = 0.9 if primary is True else 1.5  # "exceeds" -> more dose than all particles
         d3p = d3 * amp_p * 0.8
-        files["work/dose3d_primary.bin"] = d3p.astype("<f8").tobytes()
+        files["work/dose3d_primary.bin"] = d3p.astype("<f8").ravel(order="F").tobytes()
         files["work/dose3d_primary.binheader"] = hdr.encode()
     case = {"histories": histories, "input": "input.txt", "seeds": [seed]}
     return _write(tmp, "topas", files, case, f"REF-topas-{seed}")
