@@ -154,6 +154,17 @@ transport is indifferent to the source (`stopping_source = "bethe" |
   requested from the operator in the follow-up intervention
   `IR-20261003-220532-42BA5F` and will be reported as completed, with
   the verification date, only after the remote branch is observed absent.
+- **Cleanup completed (2026-10-04).** The operator reported executing the
+  remote deletion (response recorded verbatim in
+  `reference_requests/interventions/IR-20261003-220532-42BA5F/response.json`).
+  Verified by the orchestrator at 2026-10-03T22:12:54Z (UTC) with the exact-ref
+  query `git ls-remote --exit-code origin
+  refs/heads/task/v3-002-external-data-layer-materials-and-stopping-power-tables`
+  → exit code 2 (no matching ref); the control query for
+  `refs/heads/v3/develop` returned `a17ec674` (exit 0). The local task branch
+  is retained in the primary clone as the experimental record. The exposure
+  inventory above is thereby closed: no transcribed NIST STAR values remain on
+  the public remote; `v3/develop` history is intact by operator decision.
 - ICRU 90 water arrays: the numbers are obtained from a Geant4 source file
   distributed under the Geant4 Software License, which permits use and
   modification with attribution. The ICRU report itself is copyrighted; the

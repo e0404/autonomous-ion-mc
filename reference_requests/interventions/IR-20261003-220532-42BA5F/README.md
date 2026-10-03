@@ -2,7 +2,7 @@
 
 **Task:** V3-002R
 **Category:** authorization
-**Status:** open
+**Status:** resolved (2026-10-04; operator executed the remote deletion; verified absent by exact-ref query at 2026-10-03T22:12:54Z UTC; see `response.json` and decision 0038)
 
 ## Summary
 
@@ -14,7 +14,7 @@ The operator resolved IR-20261003-192301-6CF85A with option B: the remote task b
 
 ## Exact requested input or action
 
-Please either (1) run, from a clone with push rights: `git push origin --delete task/v3-002-external-data-layer-materials-and-stopping-power-tables` (the local branch in /home/wahln/aiprojects/ion-mc is untouched and the squash-merged develop content 8a9ad488 is NIST-free), then reply "deleted"; or (2) reply "autonomous system may run the deletion" to delegate exactly that single command to the autonomous system. After either, the orchestrator verifies `git ls-remote --heads origin` no longer lists the branch and records the completion date in decision 0038.
+Please either (1) run, from a clone with push rights: `git push origin --delete task/v3-002-external-data-layer-materials-and-stopping-power-tables` (the local branch in /home/wahln/aiprojects/ion-mc is untouched and the squash-merged develop content 8a9ad488 is NIST-free), then reply "deleted"; or (2) reply "autonomous system may run the deletion" to delegate exactly that single command to the autonomous system. After either, the orchestrator verifies with the exact-ref query `git ls-remote --exit-code origin refs/heads/task/v3-002-external-data-layer-materials-and-stopping-power-tables` (exit code 2 = absent; never an unrestricted `--heads` enumeration, per experiment/v3/HISTORY-ISOLATION.md) and records the completion date in decision 0038.
 
 ## Decision or task depending on this request
 
