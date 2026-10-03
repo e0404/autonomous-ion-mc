@@ -327,3 +327,127 @@ def test_batch_reducer() -> None:
         reduce_batches(sums, 0)
     with pytest.raises(ValueError):
         reduce_batches(np.full((2, 2), np.nan), 1)
+
+
+# ---------------------------------------------------------------------------------------------
+# review fixes: projectile identity, table identity, effective table provenance
+# ---------------------------------------------------------------------------------------------
+def test_forged_proton_like_projectiles_are_rejected(make_config: MakeConfig) -> None:
+    from ionmc.physics.projectiles import Projectile
+
+    cfg = make_config()
+    # wrong mass or name: constructible (consistent fields) but not the canonical proton
+    for forged in (
+        Projectile("proton", "p", 1, 1, 940.0),
+        Projectile("antiproton", "p", 1, 1, PROTON.mass_mev),
+        Projectile("proton", "H", 1, 1, PROTON.mass_mev),
+    ):
+        _rejects(replace(cfg, source=replace(cfg.source, projectile=forged)))
+    # invalid fields are rejected when the projectile is built
+    for args in (
+        ("proton", "p", 1, 1, float("nan")),
+        ("proton", "p", 1, 1, float("inf")),
+        ("proton", "p", 1, 1, -938.0),
+        ("proton", "p", 1, 1, 0.0),
+        ("proton", "p", 1, 1, 5000.0),  # mass inconsistent with the mass number
+        ("", "p", 1, 1, PROTON.mass_mev),
+        ("proton", " ", 1, 1, PROTON.mass_mev),
+        ("proton", "p", 0, 1, PROTON.mass_mev),
+        ("proton", "p", 2, 1, PROTON.mass_mev),
+        ("proton", "p", 1.0, 1, PROTON.mass_mev),
+        ("proton", "p", True, 1, PROTON.mass_mev),
+    ):
+        with pytest.raises(ValueError):
+            Projectile(*args)  # type: ignore[arg-type]
+    _rejects(lambda: Simulation(replace(cfg, source=replace(cfg.source, projectile=DEUTERON))))
+
+
+class _WrongTableSource:
+    """Returns a valid table, but not for the requested material or projectile."""
+
+    def __init__(self, material: Any = AIR, projectile: Any = PROTON) -> None:
+        self.name = "wrong-table"
+        self._material, self._projectile = material, projectile
+
+    def table(self, material: Any, projectile: Any) -> StoppingTable:
+        return BetheStoppingSource().table(self._material, self._projectile)
+
+
+def test_stopping_source_results_are_checked_against_the_request(make_config: MakeConfig) -> None:
+    from ionmc.physics.projectiles import ALPHA
+
+    cfg = make_config()
+    for source in (_WrongTableSource(AIR), _WrongTableSource(WATER, ALPHA)):
+        _rejects(replace(cfg, physics=replace(cfg.physics, stopping=source)))
+    # same name but a different I value or density is also a different material
+    for forged in (WATER.with_I(75.0, "water"), replace_density(WATER, 1.1)):
+        _rejects(replace(cfg, physics=replace(cfg.physics, stopping=_WrongTableSource(forged))))
+    validate(replace(cfg, physics=replace(cfg.physics, stopping=_WrongTableSource(WATER))))
+    _rejects(
+        lambda: validate(replace(cfg, physics=replace(cfg.physics, stopping=_NotATableSource())))
+    )
+
+
+class _NotATableSource:
+    name = "not-a-table"
+
+    def table(self, material: Any, projectile: Any) -> Any:
+        return {"energy": [1.0]}
+
+
+def replace_density(material: Any, density: float) -> Any:
+    from ionmc.materials import Material
+
+    return Material(
+        material.name,
+        density,
+        dict(material.mass_fractions),
+        material.I_eV,
+        material.sternheimer,
+        material.source,
+    )
+
+
+def _synthetic_pstar() -> Any:
+    """Smooth STAR-like proton table from the analytic model at I = 75 eV (plumbing only)."""
+    import numpy as np
+
+    from ionmc.data.nist_star import parse_star_text
+    from ionmc.physics.stopping import bethe_mass_stopping
+
+    e = np.geomspace(1.0, 600.0, 120)
+    s = bethe_mass_stopping(e, PROTON, WATER.with_I(75.0))
+    r = np.cumsum(np.concatenate(([0.0], np.diff(e) / s[1:]))) + 1e-3
+    lines = ["PSTAR: x", "WATER, LIQUID", "", "h", "h", "h", ""]
+    for ei, si, ri in zip(e, s, r, strict=True):
+        lines.append(f"{ei:.6E} {si:.6E} 1.0E-3 {si:.6E} {ri:.6E} {ri * 0.9:.6E} 1.0")
+    return parse_star_text("\n".join(lines))
+
+
+def test_effective_table_provenance_reaches_the_summary(make_config: MakeConfig) -> None:
+    """A NIST STAR table is at I = 75 eV and carries a dataset identity: the effective I, the
+    dataset id and the hashes are in the table identity, the table hash and the summary, and
+    they differ from the requested material's 78 eV and from the analytic tables."""
+    from ionmc.physics.stopping import NistStarStoppingSource
+
+    star = replace(
+        _synthetic_pstar(), dataset_id="nist-pstar-water-2005", sha256="ab" * 32, version="v-test"
+    )
+    cfg = make_config()
+    star_cfg = replace(cfg, physics=replace(cfg.physics, stopping=NistStarStoppingSource(star)))
+    eff, ref = validate(star_cfg), validate(cfg)
+    ident = eff.summary()["tables"]["materials"][0]
+    assert ident["I_eV_requested"] == 78.0 and ident["I_eV_effective"] == 75.0
+    assert ident["dataset_id"] == "nist-pstar-water-2005" and ident["source_sha256"] == "ab" * 32
+    assert ident["content_sha256"] == star.content_sha256 and ident["source"] == "nist-star"
+    assert ident["metadata"]["effective_material"]["I_eV"] == 75.0
+    assert ident["metadata"]["requested_material"]["I_eV"] == 78.0
+    ref_ident = ref.summary()["tables"]["materials"][0]
+    assert ref_ident["I_eV_effective"] == 78.0 and ref_ident["dataset_id"] is None
+    assert eff.tables.sha256 != ref.tables.sha256
+    other = replace(star, sha256="cd" * 32)
+    other_cfg = replace(cfg, physics=replace(cfg.physics, stopping=NistStarStoppingSource(other)))
+    assert validate(other_cfg).tables.sha256 != eff.tables.sha256  # the dataset hash is hashed
+    import json
+
+    json.dumps(eff.summary())  # JSON-serialisable

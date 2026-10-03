@@ -41,7 +41,7 @@ class TransportCounters:
     """Transport-limit counters; any nonzero value invalidates the result.
 
     ``step_truncation``: histories stopped by ``max_steps``; ``stall``: histories stopped after
-    more than three consecutive zero-length steps; ``rejection_limit``: straggling samples
+    more than three consecutive zero-length steps; ``straggling_rejection``: straggling samples
     that exceeded 64 attempts; ``genealogy_overflow`` and ``queue_overflow``: secondary
     bookkeeping limits (always 0 until secondaries exist); ``source_energy_out_of_range``:
     sampled source energies outside ``[E_cut, table maximum]``; ``energy_inversion``: steps in
@@ -50,7 +50,7 @@ class TransportCounters:
 
     step_truncation: int = 0
     stall: int = 0
-    rejection_limit: int = 0
+    straggling_rejection: int = 0
     genealogy_overflow: int = 0
     queue_overflow: int = 0
     source_energy_out_of_range: int = 0
@@ -66,7 +66,7 @@ class TransportCounters:
         return {
             "step_truncation": self.step_truncation,
             "stall": self.stall,
-            "rejection_limit": self.rejection_limit,
+            "straggling_rejection": self.straggling_rejection,
             "genealogy_overflow": self.genealogy_overflow,
             "queue_overflow": self.queue_overflow,
             "source_energy_out_of_range": self.source_energy_out_of_range,

@@ -266,18 +266,45 @@ def _resolve_geometry(geometry: VoxelGeometry | BoxPhantom) -> VoxelGeometry:
     return geometry.to_geometry() if isinstance(geometry, BoxPhantom) else geometry
 
 
+def _check_table_identity(table: StoppingTable, material: Material, source_name: str) -> None:
+    """Fail closed unless ``table`` describes exactly the requested proton and material."""
+    if not isinstance(table, StoppingTable):
+        raise fail(f"source {source_name!r} returned {type(table).__name__}, not a StoppingTable")
+    if table.projectile != PROTON:
+        raise fail(
+            f"source {source_name!r} returned a table for projectile {table.projectile.name!r}, "
+            f"not the requested proton"
+        )
+    got = table.material
+    same = (
+        got.name == material.name
+        and math.isclose(got.density_g_cm3, material.density_g_cm3, rel_tol=1e-12)
+        and math.isclose(got.z_over_a, material.z_over_a, rel_tol=1e-12)
+        and math.isclose(got.mean_excitation_eV, material.mean_excitation_eV, rel_tol=1e-12)
+    )
+    if not same:
+        raise fail(
+            f"source {source_name!r} returned a table for material {got.name!r} "
+            f"(density {got.density_g_cm3}, Z/A {got.z_over_a}, I {got.mean_excitation_eV} eV), "
+            f"not the requested {material.name!r} (density {material.density_g_cm3}, "
+            f"Z/A {material.z_over_a}, I {material.mean_excitation_eV} eV)"
+        )
+
+
 def _stopping_tables(
     source: StoppingSource, materials: tuple[Material, ...]
 ) -> list[StoppingTable]:
     tables: list[StoppingTable] = []
     for material in materials:
         try:
-            tables.append(source.table(material, PROTON))
+            table = source.table(material, PROTON)
         except (ValueError, KeyError) as exc:
             raise fail(
                 f"no stopping table for material {material.name!r} from source "
                 f"{source.name!r}: {exc}"
             ) from exc
+        _check_table_identity(table, material, source.name)
+        tables.append(table)
     return tables
 
 
@@ -320,10 +347,10 @@ def validate(config: SimulationConfig) -> EffectiveConfig:
     src, ph, run = config.source, config.physics, config.run
     geometry = _resolve_geometry(config.geometry)
 
-    if src.projectile.z != 1 or src.projectile.a != 1:
+    if src.projectile != PROTON:
         raise fail(
-            f"projectile {src.projectile.name!r} is not supported: the transport engine "
-            "implements protons only (ions arrive with V3-008)"
+            f"projectile {src.projectile!r} is not supported: the transport engine implements "
+            f"exactly the canonical proton {PROTON!r} (ions arrive with V3-008)"
         )
     if ph.nuclear:
         raise fail(

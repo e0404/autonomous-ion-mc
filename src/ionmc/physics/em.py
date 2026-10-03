@@ -6,9 +6,9 @@ Models and sources (decision 0039; derivations in ``docs/physics/em-transport.md
 
 * mean energy loss over a path of mass thickness ``t`` [g/cm2]: the CSDA range inversion
   ``E1 = Rinv(R(E0) - t)``, with the linear branch ``S(E0) t`` when ``t < f_short R(E0)``;
-* straggling: Bohr variance ``(K/2)(Z/A) rho x z^2 Tmax (1/beta^2 - 1/2)`` and the sampling
-  regime switch of Geant4 ``G4IonFluctuations`` (Gaussian for mean/sigma >= 2, Gamma for
-  0.1 < mean/sigma < 2, uniform otherwise);
+* straggling: Bohr variance ``(K/2)(Z/A) rho x z^2 Tmax (1/beta^2 - 1/2)``, sampled so that the
+  mean and the variance are preserved (Gaussian clamped to ``[0, 2 mean]`` for mean/sigma >= 3,
+  otherwise Gamma with the same mean and variance);
 * multiple Coulomb scattering: the differential Moliere scattering power ``T_dM`` of
   B. Gottschalk, Med. Phys. 37 (2010) 352 (arXiv:0908.1413), ``E_s = 15.0 MeV``, applied
   as a two-dimensional Gaussian polar angle, with the rotation of ``G4ThreeVector::rotateUz``.
@@ -100,10 +100,12 @@ def make_em(real: type) -> SimpleNamespace:
     ) -> tuple[real, int]:
         """One sampling attempt of the energy loss [MeV] and an accepted flag (1 or 0).
 
-        Regimes of ``G4IonFluctuations`` with ratio = mean / sigma: ratio >= 2 Gaussian
-        accepted iff 0 < loss < 2 mean; 0.1 < ratio < 2 Gamma(n = ratio^2, scale mean / n)
-        by Marsaglia-Tsang (shape n + 1 and a ``u3^(1/n)`` factor for n < 1); otherwise
-        uniform on (0, 2 mean). All four uniforms are arguments (one Philox block).
+        Both moments are preserved: with ratio = mean / sigma, ``ratio >= 3`` is Gaussian
+        clamped to ``[0, 2 mean]`` (always accepted; P(x < 0) = 0.13 %, variance loss below
+        1 %); otherwise Gamma with shape ``k = ratio^2`` and scale ``sigma^2 / mean`` by
+        Marsaglia-Tsang (shape ``k + 1`` and a ``u3^(1/k)`` factor for ``k < 1``), accepted with
+        the Marsaglia-Tsang test. All four uniforms are arguments (one Philox block); the caller
+        draws a new block after a rejection (at most 64 attempts).
         """
         loss = real(0.0)
         ok = int(0)
@@ -115,19 +117,17 @@ def make_em(real: type) -> SimpleNamespace:
         else:
             sigma = wp.sqrt(var_mev2)
             ratio = mean_mev / sigma
-            if ratio >= real(2.0):
-                zn = wp.sqrt(real(-2.0) * wp.log(u0)) * wp.cos(two_pi * u1)
-                loss = mean_mev + sigma * zn
-                if loss > real(0.0) and loss < real(2.0) * mean_mev:
-                    ok = 1
-            elif ratio > real(0.1):
-                n = ratio * ratio
-                a = n
-                if n < real(1.0):
-                    a = n + real(1.0)
+            x = wp.sqrt(real(-2.0) * wp.log(u0)) * wp.cos(two_pi * u1)
+            if ratio >= real(3.0):
+                loss = wp.min(wp.max(mean_mev + sigma * x, real(0.0)), real(2.0) * mean_mev)
+                ok = 1
+            else:
+                k = ratio * ratio
+                a = k
+                if k < real(1.0):
+                    a = k + real(1.0)
                 d = a - real(1.0) / real(3.0)
                 c = real(1.0) / wp.sqrt(real(9.0) * d)
-                x = wp.sqrt(real(-2.0) * wp.log(u0)) * wp.cos(two_pi * u1)
                 v1 = real(1.0) + c * x
                 if v1 > real(0.0):
                     v = v1 * v1 * v1
@@ -135,13 +135,10 @@ def make_em(real: type) -> SimpleNamespace:
                     rhs = real(0.5) * x * x + d - d * v + d * wp.log(v)
                     if lhs < rhs:
                         g = d * v
-                        if n < real(1.0):
-                            g = g * wp.pow(u3, real(1.0) / n)
-                        loss = mean_mev / n * g
+                        if k < real(1.0):
+                            g = g * wp.pow(u3, real(1.0) / k)
+                        loss = mean_mev / k * g
                         ok = 1
-            else:
-                loss = real(2.0) * mean_mev * u0
-                ok = 1
         return loss, ok
 
     @named_func(name)

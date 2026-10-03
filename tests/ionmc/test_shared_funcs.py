@@ -92,7 +92,7 @@ def _args(precision: str) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     # straggle_attempt: mean, var, u0..u3
     x[:, 14] = logu(1e-3, 50.0)
     ratio = logu(0.02, 40.0)
-    ratio[:6] = [2.0, 0.1, 1.999999, 0.100001, 1e3, 1e-3]
+    ratio[:8] = [3.0, 2.999999, 3.000001, 1.0, 0.1, 1e3, 1e-3, 2.0]
     x[:, 15] = (x[:, 14] / ratio) ** 2
     x[0, 14] = 0.0
     x[1, 15] = 0.0

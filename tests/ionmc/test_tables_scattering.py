@@ -263,18 +263,18 @@ def _straggle_kernel(
 
 
 @pytest.mark.parametrize(
-    ("ratio", "kind"),
-    [
-        (12.0, "sigma"),  # Gaussian, truncation negligible: variance sigma^2
-        (3.0, "truncated"),  # Gaussian cut at 2 sigma: variance slightly reduced
-        (1.5, "sigma"),  # Gamma, n = 2.25
-        (0.8, "sigma"),  # Gamma, n = 0.64 < 1 (u3^(1/n) branch)
-        (0.05, "uniform"),  # uniform on (0, 2 mean): variance mean^2 / 3
-    ],
+    "ratio", [30.0, 8.0, 4.0, 3.0, 2.99, 2.0, 1.0, 0.5, 0.3], ids=lambda r: f"ratio{r}"
 )
-def test_straggling_regimes_preserve_mean_and_variance(ratio: float, kind: str) -> None:
+@pytest.mark.parametrize("mean", [0.05, 2.0])
+def test_straggling_moments_are_preserved(ratio: float, mean: float) -> None:
+    """Both moments of the step energy loss equal the Bohr mean and variance (sigma = mean /
+    ratio), within three standard errors, over 4e5 draws, for the Gaussian branch (ratio >= 3)
+    and the Gamma branch (ratio < 3); losses are positive and the branch boundary is 3. The
+    Gaussian branch is clamped at 0 and 2 mean, which costs less than 1 % of the variance (at
+    most 0.5 % at ratio 3): that residual is allowed there. Warp's Philox is bit-identical to
+    the Python-integer Philox (test_rng)."""
     n = 400_000
-    mean, sigma = 2.0, 2.0 / ratio
+    sigma = mean / ratio
     loss = wp.zeros(n, dtype=wp.float64, device="cpu")
     attempts = wp.zeros(n, dtype=wp.int32, device="cpu")
     wp.launch(
@@ -285,15 +285,36 @@ def test_straggling_regimes_preserve_mean_and_variance(ratio: float, kind: str) 
     )
     x = loss.numpy()
     assert np.all(np.isfinite(x)) and np.all(x >= 0.0) and attempts.numpy().max() < 64
-    assert abs(x.mean() - mean) < 5 * x.std() / math.sqrt(n)  # statistical error of the mean
-    if kind == "sigma":
-        assert x.var() == pytest.approx(sigma**2, rel=0.03)
-    elif kind == "uniform":
-        assert x.var() == pytest.approx(mean**2 / 3.0, rel=0.01)
-        assert x.max() < 2.0 * mean
+    se_mean = x.std() / math.sqrt(n)
+    assert abs(x.mean() - mean) <= 3.0 * se_mean + 1e-3 * sigma * (ratio >= 3.0)
+    centred = (x - x.mean()) ** 2
+    se_var = centred.std() / math.sqrt(n)
+    allowance = 0.01 * sigma**2 if ratio >= 3.0 else 0.0
+    assert abs(x.var() - sigma**2) <= 3.0 * se_var + allowance, (x.var(), sigma**2)
+    if ratio >= 3.0:
+        assert x.max() <= 2.0 * mean and attempts.numpy().max() == 1  # always accepted
     else:
-        assert 0.8 * sigma**2 < x.var() < sigma**2
-        assert x.max() < 2.0 * mean
+        assert attempts.numpy().max() >= 1
+
+
+def test_straggling_branch_boundary() -> None:
+    """Exactly at ratio 3 the Gaussian branch is used (always accepted, clamped), just below
+    it the Gamma branch (a rejection is possible)."""
+    f = EM.straggle_attempt
+    sigma = 1.0
+    hi = f(F64(3.0), F64(sigma**2), F64(0.5), F64(0.0), F64(0.5), F64(0.5))
+    assert hi[1] == 1 and float(hi[0]) == pytest.approx(
+        3.0 + sigma * math.sqrt(2.0 * math.log(2.0))
+    )
+    clamped = f(F64(3.0), F64(sigma**2), F64(1e-300), F64(0.5), F64(0.5), F64(0.5))
+    assert float(clamped[0]) == 0.0 and clamped[1] == 1  # z = -37: clamped at 0
+    upper = f(F64(3.0), F64(sigma**2), F64(1e-300), F64(0.0), F64(0.5), F64(0.5))
+    assert float(upper[0]) == 6.0  # clamped at 2 mean
+    # below the boundary a Gamma sample with a failing acceptance test is rejected
+    rejected = f(F64(2.9), F64(sigma**2), F64(1e-300), F64(0.5), F64(0.5), F64(0.5))
+    assert rejected[1] == 0  # 1 + c x <= 0: Marsaglia-Tsang rejects
+    assert f(F64(0.0), F64(1.0), F64(0.5), F64(0.5), F64(0.5), F64(0.5)) == (0.0, 1)
+    assert f(F64(2.0), F64(0.0), F64(0.5), F64(0.5), F64(0.5), F64(0.5)) == (2.0, 1)
 
 
 def test_polar_deflection_and_rotation_statistics() -> None:

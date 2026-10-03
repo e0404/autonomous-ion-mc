@@ -77,7 +77,7 @@ blocks drawn by the history so far, ``reason`` the step-limit reason of the shar
 COUNTER_NAMES = (
     "step_truncation",
     "stall",
-    "rejection_limit",
+    "straggling_rejection",
     "genealogy_overflow",
     "queue_overflow",
     "source_energy_out_of_range",
@@ -395,7 +395,7 @@ class _Reference:
                         accepted = True
                         break
                 if not accepted:
-                    self.counters["rejection_limit"] += 1
+                    self.counters["straggling_rejection"] += 1
                     loss = mean_f
             else:
                 draw_block(key, h, 0, blocks, PURPOSE_TRANSPORT)

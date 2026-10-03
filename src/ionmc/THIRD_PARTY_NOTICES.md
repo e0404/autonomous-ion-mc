@@ -12,8 +12,8 @@ Parts of this repository derive from Geant4 source code, release 11.4.2:
   small excerpts appear as test fixtures);
 - material compositions, densities and mean excitation energies in `src/ionmc/materials.py`
   (including beryllium, aluminium, copper and lead) are taken from `G4NistMaterialBuilder.cc`;
-- the transport engine re-implements, without copying code, the regime switch of
-  `G4IonFluctuations` (energy-loss straggling), the range-limited step function of Geant4's
+- the transport engine re-implements, without copying code, the Gaussian/Gamma
+  regime idea of `G4IonFluctuations` (energy-loss straggling), the range-limited step function of Geant4's
   energy-loss processes and the `G4ThreeVector::rotateUz` rotation in
   `src/ionmc/physics/em.py` and `src/ionmc/transport/funcs.py`.
 

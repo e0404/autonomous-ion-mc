@@ -41,13 +41,20 @@ Tiers:
 | T12 | **Statistical parity:** python (4·10³, spawn pool), warp-cpu (10⁶), warp-cuda (10⁶) at 150 MeV with all physics on; also the warp f32 vs f64 bias probe | per-voxel z = Δ/√(σa²+σb²) on the IDD and on lateral profiles at 3 depths with dose > 1% of max: χ² p > 0.001 and max\|z\| < Bonferroni Φ⁻¹(1−0.001/2n); scalars (R80, total deposit, σ_lat at 0.5R) \|z\| < 3.5. CI runs a reduced version: python 200 vs warp-cpu 2·10⁴ at 70 MeV. | backend parity | CI (reduced) / LV / HR (CUDA) |
 | T13 | Partition invariance: 1 vs 3 workers, and CUDA chunk sizes 2¹⁰ vs 2¹⁸ | counters and tallies identical; edep within rel 1e-5 (f32) or 1e-12 (f64) | self-consistency | CI (CPU) / HR |
 | C1 | Fail-closed dispatch: each rule in §1 raises before transport; requested and effective configs are present | | capability | CI |
+| T14² | **Voxel-boundary scattering bias (grid size and alignment):** 150 MeV in water, MCS on, straggling off, 10⁶ histories warp-cpu; transport voxel size {0.5, 1, 2, 5} mm, each also with the phantom grid shifted by half a voxel along the beam and laterally; observables: exit θ_rms of a 0.5·R1 slab and the T7 lateral σ at z/R ∈ {0.5, 0.9} (scoring grid fixed at 0.2 mm lateral bins, independent of the transport voxels) | pairwise θ_rms ≤ 0.5 %, σ_lat ≤ 1 % across all voxel sizes and shifts; θ_rms within 0.5 % of the U5 quadrature; σ_lat within 2 % of Fermi-Eyges A2(z) (as T7). Negative control: forcing the hinge angle to be sampled for the truncated length only (diagnostic switch) must change θ_rms by < 0.5 % at 1 mm voxels — if it changes more, the approximation is material and the default must switch | falsification (boundary approximation) | LV (V3-003B) |
 
 CI ≤ ~3 min. This file is that frozen table.
 
 
 ## Amendments
 
-None.
+² Added 2026-10-03 after the first Codex review of V3-003A (head de212db) and before any T14
+measurement exists: decision 0039 acknowledges that the hinge angle is sampled for the planned
+step while the second leg may be truncated at a voxel plane, which overestimates scattering on
+boundary steps; U5, T8 and T11 do not measure this. T14 bounds it with a grid-size and
+half-voxel-alignment refinement using angular and lateral observables (requirement V2-NUM
+boundary alignment). The numbers are frozen now; the test runs on the Warp CPU backend
+(V3-003B), where 10⁶ histories are feasible.
 
 ¹ Venue amendment (2026-10-03, after the table was materialized, before the test was first run against it):
 the theta0Single table is parsed at run time from the materialized arXiv:0908.1413 source

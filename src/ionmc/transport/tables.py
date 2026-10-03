@@ -19,6 +19,7 @@ Units: energies MeV, mass stopping power MeV cm2/g, ranges g/cm2, ``inv_rho_xs``
 from __future__ import annotations
 
 import hashlib
+import json
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -181,16 +182,23 @@ class TransportTables:
                 "material": mat.name,
                 "projectile": projectile.name,
                 "source": t.metadata.get("source"),
-                "I_eV": mat.mean_excitation_eV,
+                "I_eV_requested": mat.mean_excitation_eV,
+                # the I value of the data actually used (a NIST table is at 75 eV whatever
+                # the requested material says); falls back to the material's value
+                "I_eV_effective": float(t.metadata.get("I_eV", mat.mean_excitation_eV)),
+                "dataset_id": t.metadata.get("dataset_id"),
+                "source_sha256": t.metadata.get("sha256"),
+                "content_sha256": t.metadata.get("content_sha256"),
                 "e_min_mev": float(e_min[i]),
                 "e_max_mev": float(e_max[i]),
+                "metadata": _jsonable(t.metadata),
             }
             for i, (mat, t) in enumerate(zip(materials, tables, strict=True))
         )
         h = hashlib.sha256()
         for arr in (e_min, e_max, ln_s, ln_r, ln_e_of_r, z_over_a, inv_xs, density):
             h.update(np.ascontiguousarray(arr).tobytes())
-        h.update(repr(identity).encode())
+        h.update(json.dumps(identity, sort_keys=True).encode())
         return cls(
             projectile=projectile,
             materials=materials,
@@ -268,6 +276,11 @@ class TransportTables:
             n_e=self.n_e,
             n_r=self.n_r,
         )
+
+
+def _jsonable(value: Any) -> Any:
+    """Canonical JSON-compatible copy of table metadata (recorded in identity, hash, summary)."""
+    return json.loads(json.dumps(value, sort_keys=True, default=str))
 
 
 def _count(ratio: float, points_per_decade: int) -> int:

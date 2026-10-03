@@ -38,18 +38,22 @@ is
 
 with `K = 0.307075 MeV cm2/mol`, `T_max = 2 m_e c^2 beta^2 gamma^2 / (1 + 2 gamma m_e/M + (m_e/M)^2)`.
 This equals the Geant4 dispersion `2 pi r_e^2 m_e c^2 n_el z^2 x T_max (1/beta^2 - 1/2)`. The loss is
-sampled with the regime switch of `G4IonFluctuations` (ratio `r = mean / sigma`):
+sampled so that both the mean and the variance of the step are preserved (ratio `r = mean / sigma`):
 
-* `r >= 2`: Gaussian, accepted if `0 < loss < 2 mean`;
-* `0.1 < r < 2`: Gamma distribution with shape `r^2` and scale `mean / r^2` (Marsaglia-Tsang; for
-  shape < 1 the shape-plus-one sample times `u^(1/shape)`), which has exactly the requested mean
-  and variance;
-* otherwise: uniform on `(0, 2 mean)`.
+* `r >= 3`: Gaussian, clamped (no resampling) to `[0, 2 mean]`; the clamp affects 0.13 % of the
+  samples on each side at `r = 3` and removes less than 1 % of the variance (about 0.5 % at `r = 3`,
+  less above);
+* `r < 3`: Gamma distribution with shape `k = r^2` and scale `sigma^2 / mean` (Marsaglia-Tsang; for
+  `k < 1` the shape-plus-one sample times `u^(1/k)`), which has exactly the requested mean and
+  variance.
 
-A rejected sample draws another Philox block, at most 64 attempts (then the `rejection_limit`
-counter invalidates the run). `test_straggling_regimes_preserve_mean_and_variance` checks mean and
-variance of each regime with 4e5 samples (3 % on the variance, uniform 1 %; the truncated Gaussian
-variance lies between 0.8 and 1 of `sigma^2`).
+A Gamma sample is accepted by the Marsaglia-Tsang test; a rejection draws another Philox block, at most 64
+attempts (then the `straggling_rejection` counter invalidates the run). Step energies of 1 mm or more
+at therapeutic energies have `r` well above 3, so the Gamma branch is used near the end of the range.
+`test_straggling_moments_are_preserved` checks mean and variance on a grid of `(mean, sigma)` that covers both
+branches and the boundary (4e5 draws per point, three standard errors; the Gaussian branch near the boundary
+is given the 1 % clamp allowance). The transport-level validation of straggling is the range
+straggling `sigma_R` of the end depths (criterion T6, local validation), which is not part of the CI tests.
 
 ## Multiple Coulomb scattering
 

@@ -101,7 +101,7 @@ counter starting at 0.
 6. Energy loss for `s_act`: mean loss from the inverse-range expression
    (`E - Rinv(R - rho s_act / 10)`, or `S t` for `t < 1e-3 R`, or `E` when the whole residual range is
    travelled); with straggling, block B draws (one block per attempt, at most 64; exceeding the limit
-   increments `rejection_limit` and uses the mean); without straggling one block is drawn and ignored.
+   increments `straggling_rejection` and uses the mean); without straggling one block is drawn and ignored.
    The loss is limited to `E`. If the inverse-range energy ever exceeds `E` (round trip of the
    tables) it is clamped to `E` and `energy_inversion` is incremented (invalidates the result).
 
@@ -126,12 +126,25 @@ counter starting at 0.
 * `RunOptions.memory_budget_bytes` bounds the accumulators; `PhysicsOptions.stopping` has no default.
 * The energy loss uses the state energy (step 6 above); the cutoff energy is scored (see Results).
 
+## Grids of different size and alignment
+
+Transport voxels (the `VoxelGeometry`, which sets the voxel planes that end steps) and scoring voxels
+are independent: a scoring grid may have any origin (for example a half-voxel offset from the phantom
+corner), spacing and shape, and its voxel is found from the step midpoint with `floor`. The geometry
+may be a single box or a refined or shifted voxel grid, so the sensitivity of lateral and angular
+observables to the transport grid can be probed with the reference backend: `escape_records` gives
+position, direction and energy of every escaping particle (exit angles, `theta_rms`), the scoring grids
+give deposits for lateral second moments. One restriction applies to such studies: `max_step_mm` must not
+exceed the smallest scoring spacing (any axis), so a fine lateral scoring grid forces short steps.
+
 ## Fail-closed rules
 
 Each rule raises before any transport and nothing is clamped or substituted (test C1,
 `tests/ionmc/test_config_validation.py`):
 
-* the projectile is not a proton; `nuclear=True`; unknown model names;
+* the projectile is not exactly the canonical proton (all fields; projectile fields are validated
+  when a `Projectile` is built); a stopping source that returns a table for another projectile or
+  material (name, density, Z/A, I) than requested; `nuclear=True`; unknown model names;
 * `backend="python"` with `float32`; `warp-cpu` / `warp-cuda` (not implemented yet, `BackendUnavailableError`);
   `cpu_workers > 1` (on `warp-cuda` always an error, on `python` `BackendUnavailableError`);
 * `n_histories` outside `[1, 2**32]`, not a multiple of `n_batches`, `n_batches < 2`, `seed` outside `[0, 2**64)`;
@@ -154,7 +167,7 @@ and the uniform mapping.
 After the run a nonzero transport-limit counter makes the result invalid: `run()` raises
 `TransportLimitError` (its `.result` is the invalid result) unless
 `RunOptions.allow_invalid_result` is set, in which case `result.valid` is `False` and every grid
-result is flagged `valid = False`. Counters: `step_truncation`, `stall`, `rejection_limit`,
+result is flagged `valid = False`. Counters: `step_truncation`, `stall`, `straggling_rejection`,
 `genealogy_overflow` and `queue_overflow` (both always 0 until secondaries exist),
 `source_energy_out_of_range` and `energy_inversion`.
 
