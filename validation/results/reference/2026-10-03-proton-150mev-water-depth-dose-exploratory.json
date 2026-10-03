@@ -1,5 +1,6 @@
 {
   "evidence_status": "exploratory diagnostic; single seed, no statistical uncertainty, bins 1-2 mm versus a 2.4-2.7 mm distal falloff",
+  "analysis_code_sha": "bd0e69c508df3669d3ada251da718fef40dd79c9",
   "runs": [
     {
       "run_id": "REF-247e0913d2a55767d65f-432cc9ae",
