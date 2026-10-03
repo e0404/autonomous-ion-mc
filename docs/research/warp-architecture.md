@@ -4,9 +4,9 @@ Author: performance specialist subagent. Status: advisory input to the lead; non
 
 ## Measurement context
 
-All numbers come from this sandbox. Hardware: Intel i9-13900K (32 logical CPUs, WSL2). Software: Python 3.12.0, numpy 2.5.3, warp-lang 1.17.0, CPU device only (no CUDA driver visible here). Scripts are in `.../scratchpad/perf/`.
+All numbers come from this sandbox. Hardware: Intel i9-13900K (32 logical CPUs, WSL2). Software: Python 3.12.0, numpy 2.5.3, warp-lang 1.17.0, CPU device only (no CUDA driver visible here). Scripts are preserved in the repository under `validation/scripts/warp-architecture/` (see its README for the result table); the RNG scripts are under `validation/scripts/rng/`.
 
-The toy kernel is `toy_transport.py`. It is cost-representative but **not validated physics**. Per step it does:
+The toy kernel is `validation/scripts/warp-architecture/toy_transport.py`. It is cost-representative but **not validated physics**. Per step it does:
 - a 3D DDA in a 120×120×300 1 mm grid with four materials;
 - three log-spaced table lookups;
 - 8 Philox uniforms;

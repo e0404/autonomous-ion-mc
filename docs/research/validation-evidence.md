@@ -107,7 +107,7 @@ How to read the tolerances: they are proposals to freeze before qualification. T
 
 - **Primary test: pointwise standardized residuals.** z_i = (x_i − r_i) / sqrt(σ_x,i² + σ_r,i² + σ_sys,i²). Use batch standard errors with ≥10 batches; for an MC reference, the reference's own batch standard error.
   - Acceptance needs both:
-    - an **equivalence (bias) test**: |x − r| ≤ tolerance + 2σ_comb in a frozen ROI. This is TOST-style and avoids "passing" because of noise.
+    - an **equivalence (bias) test**: |x − r| + k·σ_comb ≤ tolerance in a frozen ROI (k fixed in advance, e.g. k = 1.645 for a one-sided 95 % confidence bound per point, with the multiplicity rule for the ROI frozen as well). This is the TOST-style requirement that the confidence interval of the difference lies *inside* the tolerance, so an under-sampled comparison cannot pass. *[Lead correction, 2026-10-03: the agent's original text wrote `|x − r| ≤ tolerance + 2σ_comb`, which rewards statistical noise and is wrong; it was replaced before this report was committed.]*
     - a **consistency test**: the χ²/ndf of z over the ROI is consistent with 1 (p > 0.01), and coverage of the 1σ intervals is about 68%.
   - Because the dose fall-off is steep, evaluate high-gradient regions in *position* (distance-to-agreement) rather than dose.
 - **Range metrics.**

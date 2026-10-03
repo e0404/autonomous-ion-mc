@@ -137,12 +137,15 @@ encoding guarantees by construction:
 |---|---|---|
 | `k0`, `k1` | low and high 32 bits of the user seed (64-bit integer) | — |
 | `c0` | global history index within the run, `0 … N−1`, never reset between batches or beamlets | N ≤ 2³² histories per run |
-| `c1` | particle identifier within the history: `0` for the primary; a secondary born as the `b`-th child (`b` from 1) of a particle at generation `g` (primary has `g = 0`) gets `id = parent_id + b · 32^g` | at most 31 children per particle and 6 generations (`id < 2³⁰`); a 32nd child or a 7th generation increments a fail-closed overflow counter, the particle's energy is deposited locally, and the run is rejected in validation mode |
+| `c1` | particle identifier within the history: `0` for the primary; a secondary born as the `b`-th child (`b` from 1) of a particle at generation `g` (primary has `g = 0`) gets `id = parent_id + b · 32^g` | at most 31 children per particle and 6 generations (`id < 2³⁰`); a 32nd child or a 7th generation is **never transported and never deposited as dose**: its kinetic energy is added to a separate `unaccounted_energy` tally and an `overflow` counter, and a nonzero counter makes the result invalid in every mode (the API raises `TransportLimitError` after the batch; a caller may opt in to receive the invalid result object, whose `valid` flag is `False` and whose dose arrays are marked not physically meaningful) |
 | `c2` | draw-block index within the particle, incremented at every Philox call (four uniforms per block) | 2³² blocks per particle (unreachable; step limits bind first) |
 | `c3` | purpose: `0` transport, `1` source sampling of the primary, `2` reserved | — |
 
 Consequences:
 
+- The same fail-closed rule applies to step-count truncation and queue
+  overflow: truncated energy is tallied separately, counted, and invalidates
+  the result; it is never folded into dose.
 - Batch membership is `history_index mod n_batches` and beamlet membership
   is a range of history indices, so batches and beamlets never share
   counters and the batch estimator sees independent streams.
