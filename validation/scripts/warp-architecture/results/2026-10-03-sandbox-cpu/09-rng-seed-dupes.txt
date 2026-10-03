@@ -1,0 +1,9 @@
+# command: /home/wahln/aiprojects/ion-mc-worktrees/v3-001/.venv/bin/python ../rng/rng_seed_dupes.py
+# git_sha: 11fc62891e7bc65fe30810e8603224e8677a2b20
+# started_utc: 2026-10-03T18:18:08Z
+# step_timeout_s: 300
+seeds 1,2: identical start states between batches (N=1000000): 260
+seeds 1000,1001: identical start states between batches (N=1000000): 260
+seeds 42,43: identical start states between batches (N=1000000): 260
+distinct pcg(i) for i<1e6: 1000000
+# exit=0

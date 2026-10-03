@@ -39,7 +39,7 @@ jobs:
   tests:
     name: tests
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
 
     steps:
       - name: Check out repository
@@ -51,8 +51,11 @@ jobs:
           version: "0.12.11"
           enable-cache: true
 
+      - name: Install locked environment
+        run: uv sync --extra dev --locked
+
       - name: Run lightweight tests
-        run: uv run --with pytest --no-project python -m pytest tests -q
+        run: uv run pytest tests -q -m "not cuda and not host"
 
   docs:
     name: docs

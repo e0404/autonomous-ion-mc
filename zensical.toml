@@ -28,6 +28,15 @@ nav = [
 
   { "Development" = [
     "development/index.md",
+    { "Program plan" = "development/program-plan.md" },
+  ] },
+
+  { "Research" = [
+    "research/index.md",
+    { "EM physics" = "research/em-physics.md" },
+    { "Nuclear physics" = "research/nuclear-physics.md" },
+    { "Validation evidence" = "research/validation-evidence.md" },
+    { "Warp architecture" = "research/warp-architecture.md" },
   ] },
 
   { "Experiment" = [
