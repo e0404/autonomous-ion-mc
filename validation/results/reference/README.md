@@ -13,6 +13,9 @@ Raw engine outputs remain archived by the controlled reference service.
   FRED REF-ef9079a711bbbc7346a4-625cee73, MCsquare REF-e62d4ae032ee7d48700d-608a98c2; source
   commit c6bc047). Peak depth, R80, R90 and distal 80-20 width of the laterally integrated depth
   dose and their pairwise differences.
+  The runs were produced at c6bc047 under the original case rationale (no exploratory qualifier)
+  and were reclassified as exploratory afterwards (conservative reclassification); their manifested
+  `inputs/case.json` are the c6bc047 files.
   **Exploratory diagnostic only**: single seed, no statistical uncertainty, depth bins of
   1-2 mm against a 2.4-2.7 mm distal falloff. It is not acceptance evidence and does not
   validate ionmc. The engines also use different water I-values (Geant4 11 G4_WATER 78 eV; FRED

@@ -17,6 +17,7 @@ import itertools
 import json
 import subprocess
 from pathlib import Path
+from typing import Any
 
 from ionmc.reference.metrics import (
     distal_falloff_80_20,
@@ -27,10 +28,22 @@ from ionmc.reference.metrics import (
 )
 from ionmc.reference.runs import depth_dose, file_hashes, load_run
 
-EXPLORATORY = (
-    "exploratory diagnostic; single seed, no statistical uncertainty, bins 1-2 mm versus a "
-    "2.4-2.7 mm distal falloff"
-)
+EXPLORATORY_PREFIX = "exploratory: single-seed runs, no statistical uncertainty"
+
+
+def exploratory_status(runs: list[dict[str, Any]]) -> str:
+    """Status text with the bin widths and distal widths derived from the loaded runs."""
+
+    def fmt(key: str) -> str:
+        vals = sorted({f"{r[key]:.1f}" for r in runs}, key=float)
+        return "{" + ", ".join(vals) + "}"
+
+    return (
+        f"{EXPLORATORY_PREFIX}; depth bin widths {fmt('bin_width_mm')} mm; "
+        f"distal 80-20 widths {fmt('falloff_80_20_mm')} mm"
+    )
+
+
 METRICS = ("peak_depth_mm", "r80_mm", "r90_mm", "falloff_80_20_mm")
 
 
@@ -63,8 +76,6 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
 
     code_sha, dirty = code_state(args.code_sha)
-    status = EXPLORATORY
-
     runs = []
     for run_dir in args.runs:
         run = load_run(run_dir)
@@ -97,7 +108,7 @@ def main(argv: list[str] | None = None) -> int:
         )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     doc = {
-        "evidence_status": status,
+        "evidence_status": exploratory_status(runs),
         "analysis_code_sha": code_sha,
         "analysis_code_dirty": dirty,
         "runs": runs,

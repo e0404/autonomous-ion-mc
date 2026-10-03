@@ -13,13 +13,15 @@ topas/proton-water-150mev[-smoke]/       150 MeV p, QGSP_BIC_HP + opt4, dose 1 m
 topas/carbon-water-290mevu-smoke/        12C 3480 MeV total, QMD, Edep + primary-carbon Fluence (1/mm2) vs depth
 topas/proton-water-150mev-fine/          0.5 mm depth bins, 1e5 histories (evidence-grade candidate)
 mcsquare/proton-water-150mev-fine/       0.5 mm depth bins, 1e5 primaries (evidence-grade candidate)
-mcsquare/proton-water-150mev[-smoke]/    150 MeV p, hand-written zero-width BDL, 2 mm water CT, dose + LET
+mcsquare/proton-water-150mev[-smoke]/    150 MeV p, hand-written BDL (sigma 1.0 mm), 2 mm water CT, dose + LET
 fred/proton-water-150mev[-smoke]/        150 MeV p, 1 mm water phantom, dose + LETd
 fred/carbon-water-290mevu-smoke/         12C 290 MeV/u, 100 primaries: tests ion + nuclear support of the build
 ```
 
-Common setup: water 120 x 120 x 300 mm, entrance face at depth 0, monoenergetic zero-size
-zero-divergence pencil on the axis, seed 20261003, one thread.
+Common setup: water 120 x 120 x 300 mm, entrance face at depth 0, monoenergetic pencil on the
+axis, seed 20261003, one thread. TOPAS and FRED use a zero-size, zero-divergence source. The
+committed MCsquare BDL uses sigma 1.0 mm and divergence 1e-6 rad (correlation 0, energy spread 0 %)
+because smaller or zero-width configurations placed all primaries outside the geometry.
 
 ## Roles
 
@@ -51,7 +53,7 @@ After a run, use the controlled tools, not shell copies:
 ## Items to verify on first (smoke) run
 
 See `case.json` text and the task report: TOPAS ion BeamEnergy convention and filter parameter
-names; MCsquare beam axis/isocentre placement, zero-width BDL acceptance, output file names for
+names; MCsquare beam axis/isocentre placement, output file names for
 LET and dose normalisation; FRED particle name for 12C, mhd spacing units, LETd output name.
 
 ## MCsquare beam model and output conventions
@@ -105,8 +107,13 @@ uv run python validation/scripts/reference/compare_depth_dose.py \
 
 ### Evidence status and fine cases
 
-The three 20000-history runs above are exploratory (single seed, 1-2 mm bins, no uncertainty),
-and their `rationale` says "exploratory reference; evidence-grade configuration pending".
+The three 20000-history runs above were produced at commit c6bc047, where the `rationale` in the
+case definitions read only "independent Monte Carlo evidence for suite
+S-PHYS-PROTON-EM/-NUCLEAR/-LET" (no exploratory qualifier). The orchestrator reclassified them as
+exploratory afterwards, as a conservative reclassification (single seed, 1-2 mm bins, no
+uncertainty), and added the qualifier "exploratory reference; evidence-grade configuration
+pending" to the current case definitions. The `inputs/case.json` hashes in the run manifests
+refer to the c6bc047 files, not the current ones.
 Evidence-grade runs use multiple seeds (the seed in `input.txt` / `config.txt` is the per-batch
 seed, varied by the orchestrator), at least 1e5 primaries per batch and depth bins of at most
 0.5 mm. Candidate cases: `topas/proton-water-150mev-fine` (IDD and LETd, ZBins 600) and
