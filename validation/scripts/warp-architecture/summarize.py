@@ -1,9 +1,13 @@
 """Write a Markdown summary of an archived run_all.sh results directory.
 
 Every value is copied or computed from the raw step files; nothing is typed by
-hand. Steps with a non-zero exit code are reported as failed/timed out and
-excluded from statistics. For repeated steps (``NN-rK-name``) the median and
-range of the metrics found in the output are computed.
+hand. The expected set of step files is derived here from the fixed suite
+definition and the validated ``repeats`` value recorded in ``environment.txt``,
+never from the archive's own manifest; the manifest and the files must both
+match that set exactly. Steps with a non-zero exit code are reported as
+failed/timed out and excluded from statistics. For repeated steps
+(``NN-rK-name``) the median and range of the metrics found in the output are
+computed.
 """
 
 import re
@@ -12,6 +16,24 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
+# Fixed suite definition (must match run_all.sh; a regression test checks that).
+REPEATED_STEPS = [
+    "01-compile-cold-backward-on",
+    "02-compile-cold-backward-off",
+    "03-toy-f32-1thread",
+    "04-toy-f64-1thread",
+    "05-toy-f32-4threads",
+    "06-toy-f32-8threads",
+    "07-toy-f32-16threads",
+    "13-philox-kat-and-cost",
+]
+SINGLE_STEPS = [
+    "08-precision",
+    "09-rng-seed-dupes",
+    "10-rng-overlap-1e5x1000",
+    "11-rng-overlap-1e6x1000",
+    "12-rng-overlap-1e6x2000",
+]
 NOISE = re.compile(r"^(Warp CUDA (error|warning)|Warp DeprecationWarning|#|$)")
 METRICS = {
     "hist/s": re.compile(r"hist/s=([0-9.]+)"),
@@ -19,6 +41,49 @@ METRICS = {
     "philox ns/uniform": re.compile(r"philox: ([0-9.]+) ns/uniform"),
     "warp-pcg ns/uniform": re.compile(r"warp-pcg: ([0-9.]+) ns/uniform"),
 }
+
+
+def expected_names(repeats: int) -> set[str]:
+    names = set(SINGLE_STEPS)
+    for step in REPEATED_STEPS:
+        number, rest = step.split("-", 1)
+        names.update(f"{number}-r{k}-{rest}" for k in range(1, repeats + 1))
+    return names
+
+
+def read_environment(root: Path) -> tuple[str, int]:
+    values = dict(line.split("=", 1) for line in (root / "environment.txt").read_text().splitlines() if "=" in line)
+    sha = values.get("git_sha", "")
+    if not re.fullmatch(r"[0-9a-f]{40}", sha):
+        raise SystemExit("environment.txt: missing or malformed git_sha")
+    repeats = values.get("repeats", "")
+    if not re.fullmatch(r"[1-9][0-9]*", repeats):
+        raise SystemExit("environment.txt: missing or non-positive repeats")
+    return sha, int(repeats)
+
+
+def verify_archive(root: Path) -> str:
+    sha, repeats = read_environment(root)
+    expected = expected_names(repeats)
+    manifest_lines = [l for l in (root / "manifest.txt").read_text().splitlines() if l.strip()]
+    if not manifest_lines or len(set(manifest_lines)) != len(manifest_lines):
+        raise SystemExit("manifest.txt is empty or contains duplicates")
+    if set(manifest_lines) != expected:
+        raise SystemExit(
+            f"manifest.txt does not match the suite for repeats={repeats}: "
+            f"missing={sorted(expected - set(manifest_lines))} extra={sorted(set(manifest_lines) - expected)}"
+        )
+    present = {p.stem for p in root.glob("[0-9][0-9]-*.txt")}
+    if present != expected:
+        raise SystemExit(
+            f"archive files do not match the suite for repeats={repeats}: "
+            f"missing={sorted(expected - present)} extra={sorted(present - expected)}"
+        )
+    for path in root.glob("[0-9][0-9]-*.txt"):
+        header = path.read_text().splitlines()[:4]
+        if f"# git_sha: {sha}" not in header:
+            raise SystemExit(f"{path.name}: step provenance does not match environment.txt (SHA {sha})")
+    return sha
 
 
 def parse(path: Path) -> tuple[str, str, list[str]]:
@@ -31,17 +96,7 @@ def parse(path: Path) -> tuple[str, str, list[str]]:
 
 def main(directory: str) -> None:
     root = Path(directory)
-    env = (root / "environment.txt").read_text()
-    sha = next(l.split("=", 1)[1] for l in env.splitlines() if l.startswith("git_sha="))
-    expected = set((root / "manifest.txt").read_text().split())
-    present = {p.stem for p in root.glob("[0-9][0-9]-*.txt")}
-    if present != expected:
-        missing, extra = sorted(expected - present), sorted(present - expected)
-        raise SystemExit(f"archive does not match manifest.txt: missing={missing} extra={extra}")
-    for path in root.glob("[0-9][0-9]-*.txt"):
-        header = path.read_text().splitlines()[:4]
-        if f"# git_sha: {sha}" not in header:
-            raise SystemExit(f"{path.name}: step provenance does not match environment.txt (SHA {sha})")
+    verify_archive(root)
     print(f"# Archived measurement run `{root.name}`\n")
     print("## Environment\n\n```")
     print((root / "environment.txt").read_text().rstrip())
