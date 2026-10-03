@@ -23,16 +23,19 @@ if any step failed or timed out. `STEPS="06 07"` reruns selected steps.
 
 ## What each step measures
 
+Steps 01–07 and 13 are executed `REPEATS` times (default 3) and archived as
+`NN-rK-<name>.txt`; `SUMMARY.md` reports median, minimum and maximum of the
+throughput, compile-time and RNG-cost metrics over the successful repeats.
+
 | Step | Script | Measures |
 |---|---|---|
 | 01, 02 | `compile_probe.py {1,0}` | CPU cold compile time of the toy module with/without `enable_backward`, using a fresh empty `WARP_CACHE_PATH` per process |
 | 03, 04 | `run_toy.py {f32,f64} 20000 1` | single-thread throughput of the toy kernel (20 000 histories of 150 MeV protons), float32 vs float64 (the default kernel cache is warm here; cold compile is steps 01–02) |
 | 05–07 | `run_toy.py f32 {80000,160000,320000} {4,8,16}` | throughput with concurrent CPU launches (20 000 histories per thread, private accumulators) |
-| 08 | `run_toy.py f32 20000 1` | repeat of step 03 (repeatability) |
-| 09 | `precision.py` | float32 accumulation error vs deposits per voxel, 40-batch split, float32 position drift over 300 steps, short-step energy-loss cancellation |
-| 10 | `../rng/rng_seed_dupes.py` | histories with identical `wp.rand_init` start states between seeds s and s+1 |
-| 11–13 | `../rng/rng_overlap.py N L` | fraction of `wp.randf` draws revisiting a 32-bit state already used by another history |
-| 14 | `../rng/philox.py` | Philox4x32-10 Random123 known-answer vectors (kernel and Python adapter), kernel-vs-Python agreement on 20 000 random blocks, cost per uniform |
+| 08 | `precision.py` | float32 accumulation error vs deposits per voxel, 40-batch split, float32 position drift over 300 steps, short-step energy-loss cancellation |
+| 09 | `../rng/rng_seed_dupes.py` | histories with identical `wp.rand_init` start states between seeds s and s+1 |
+| 10–12 | `../rng/rng_overlap.py N L` | fraction of `wp.randf` draws revisiting a 32-bit state already used by another history |
+| 13 | `../rng/philox.py` | Philox4x32-10 Random123 known-answer vectors (kernel and Python adapter), kernel-vs-Python agreement on 20 000 random blocks, cost per uniform; exits non-zero on any mismatch |
 
 ## Archived runs
 
