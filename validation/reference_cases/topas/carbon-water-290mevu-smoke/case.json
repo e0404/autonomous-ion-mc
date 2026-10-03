@@ -1,0 +1,28 @@
+{
+  "input": "input.txt",
+  "physics": [
+    "Geant4_Modular (OpenTOPAS 4.3 / Geant4 11.4.2): g4em-standard_opt4, g4h-phy_QGSP_BIC_HP, g4ion-QMD, g4h-elastic_HP, g4stopping, g4decay",
+    "ion module name g4ion-QMD (G4IonQMDPhysics; OpenTOPAS 4.3 module lookup is case-insensitive)"
+  ],
+  "source": "12C (BeamParticle GenericIon(6,12)), BeamEnergy 3480 MeV total kinetic energy (= 290 MeV/u x 12), monoenergetic, zero-size, zero-divergence pencil beam from z=-0.001 mm along +z at the face centre",
+  "geometry": "G4_WATER box 120 x 120 x 300 mm, entrance face z=0; vacuum world 400x400x800 mm",
+  "materials": "G4_WATER",
+  "cuts": "CutForAllParticles = 0.05 mm",
+  "histories": 200,
+  "seeds": [
+    20261003
+  ],
+  "scorers": [
+    "Edep: EnergyDeposit, 1x1x300 bins (1 mm), Report Sum",
+    "C12Count: SurfaceTrackCount on Water/ZMinusSurface of each of 300 z bins, OnlyIncludeParticlesGoingIn, filter atomic number 6 and atomic mass 12 (surviving 12C, incl. any secondary 12C)",
+    "ChargedCount: SurfaceTrackCount, same surface, OnlyIncludeParticlesCharged (all charged particles; includes delta electrons and fragments)"
+  ],
+  "units": "TOPAS CSV headers: EnergyDeposit in MeV (run total over 200 histories); counts are track counts (dimensionless, run total; divide by histories for N/N0); 0-based bin indices, 1 mm z bins",
+  "rationale": "independent Monte Carlo evidence for suite S-PHYS-PROTON-EM/-NUCLEAR/-LET (smoke: execution only)",
+  "expected_outputs": [
+    "edep.csv",
+    "c12count.csv",
+    "chargedcount.csv"
+  ],
+  "arguments": []
+}

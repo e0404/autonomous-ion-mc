@@ -1,0 +1,20 @@
+--Monoenergetic zero-width beam model for independent MC evidence (hand-written, not a clinical model)--
+# Format as BDL_default_DN.txt of the MCsquare repository. EnergySpread = 0 %, spot sizes 1e-3 mm,
+# divergence 1e-6 rad, correlation 0, single Gaussian (Weight1 = 1). Second Gaussian has Weight2 = 0.
+
+Nozzle exit to Isocenter distance
+410.0
+
+SMX to Isocenter distance
+2234.8
+
+SMY to Isocenter distance
+1859.1
+
+Beam parameters
+3 energies
+
+NominalEnergy 	 MeanEnergy 	 EnergySpread 	 ProtonsMU 	 Weight1 	 SpotSize1x 	 Divergence1x 	 Correlation1x 	 SpotSize1y 	 Divergence1y 	 Correlation1y 	 Weight2 	 SpotSize2x 	 Divergence2x 	 Correlation2x 	 SpotSize2y 	 Divergence2y 	 Correlation2y
+140.000 	 140.000 	 0.000000 	 1.0e9 	 1.000000 	 0.001 	 0.000001 	 0.0 	 0.001 	 0.000001 	 0.0 	 0.000000 	 0.001 	 0.000001 	 0.0 	 0.001 	 0.000001 	 0.0
+150.000 	 150.000 	 0.000000 	 1.0e9 	 1.000000 	 0.001 	 0.000001 	 0.0 	 0.001 	 0.000001 	 0.0 	 0.000000 	 0.001 	 0.000001 	 0.0 	 0.001 	 0.000001 	 0.0
+160.000 	 160.000 	 0.000000 	 1.0e9 	 1.000000 	 0.001 	 0.000001 	 0.0 	 0.001 	 0.000001 	 0.0 	 0.000000 	 0.001 	 0.000001 	 0.0 	 0.001 	 0.000001 	 0.0

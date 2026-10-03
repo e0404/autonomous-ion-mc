@@ -1,0 +1,25 @@
+{
+  "input": "config.txt",
+  "physics": "MCsquare e0404: Class II condensed history, ICRU-63-type nuclear cross sections; nuclear interactions and secondary protons/deuterons/alphas enabled; E_Cut_Pro 0.5 MeV, D_Max 0.2 cm, Epsilon_Max 0.25",
+  "source": "Single spot, nominal 150 MeV (BDL_mono.txt: MeanEnergy 150, EnergySpread 0 %, spot size 0.001 mm, divergence 1e-6 rad, correlation 0, Weight1 1): exactly zero size/divergence was not verified to be accepted so the evidence-doc smallest values are used; gantry 0, couch 0, spot (0,0), meterset 1 x ProtonsMU 1e9; isocentre (60,0,60) mm = centre of the entrance face assuming beam travels along +y (to be confirmed by the smoke Dose.mhd)",
+  "geometry": "CT 60 x 150 x 60 voxels, 2 mm spacing (120 x 300 x 120 mm; MCsquare axes x,y,z with depth along y), all voxels HU 0; dose grid = CT grid (Independent_scoring_grid False)",
+  "materials": "HU 0 -> Water_Phantom scanner conversion of the registered MCsquare (HU_Density/HU_Material files)",
+  "cuts": "E_Cut_Pro 0.5 MeV, D_Max 0.2 cm, Epsilon_Max 0.25, Te_Min 0.05 MeV",
+  "histories": 200,
+  "seeds": [
+    20261003
+  ],
+  "scorers": [
+    "dose (dose-to-medium) per voxel, Compute_stat_uncertainty True",
+    "LET_MHD_Output True, LET method left at the MCsquare default (StopPow)"
+  ],
+  "units": "MetaImage float32 little-endian, dimension order x,y,z (x fastest), 2 mm spacing: Dose in Gy for meterset weight 1 x ProtonsMU (1e9 protons; divide by 1e9 for Gy per primary - confirm with output); LET in MeV/cm per MCsquare documentation of StopPow method (confirm in log)",
+  "rationale": "independent Monte Carlo evidence for suite S-PHYS-PROTON-EM/-NUCLEAR/-LET (smoke: execution only)",
+  "expected_outputs": [
+    "Outputs/Dose.mhd",
+    "Outputs/Dose.raw",
+    "Outputs/LET.mhd",
+    "Outputs/LET.raw"
+  ],
+  "arguments": []
+}

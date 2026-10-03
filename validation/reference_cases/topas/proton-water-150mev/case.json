@@ -1,0 +1,28 @@
+{
+  "input": "input.txt",
+  "physics": [
+    "Geant4_Modular (OpenTOPAS 4.3 / Geant4 11.4.2): g4em-standard_opt4, g4h-phy_QGSP_BIC_HP, g4h-elastic_HP, g4stopping, g4ion-binarycascade, g4decay",
+    "EM: g4em-standard_opt4; hadronic: QGSP_BIC_HP + HP elastic + binary-cascade ions"
+  ],
+  "source": "150 MeV proton kinetic energy, monoenergetic (BeamEnergySpread 0), pencil beam (BeamPositionDistribution None, BeamAngularDistribution None), starting at z=-0.001 mm on the beam axis x=y=0, direction +z, entering the centre of the water entrance face (z=0)",
+  "geometry": "G4_WATER box 120 x 120 x 300 mm (x,y centred on the beam axis; z from 0 to 300 mm) in a vacuum world 400 x 400 x 800 mm",
+  "materials": "G4_WATER (Geant4 NIST material, I=78 eV, density 1.0 g/cm3)",
+  "cuts": "CutForAllParticles = 0.05 mm (production range cut for gamma, e-, e+, proton)",
+  "histories": 20000,
+  "seeds": [
+    20261003
+  ],
+  "scorers": [
+    "IDD: DoseToMedium (equal to DoseToWater scale in homogeneous G4_WATER: no conversion applied), 1x1x300 bins (full lateral extent 120x120 mm, 1 mm depth bins); Report Sum, Standard_Deviation",
+    "Dose3D: DoseToMedium, 60x60x150 bins (2 mm); Report Sum, Standard_Deviation",
+    "LETd: ProtonLET, 1x1x300 bins, WeightBy Dose (dose-averaged), MaxScoredLET 100 MeV/mm/(g/cm3), UsePreStepLookup False; Report Sum"
+  ],
+  "units": "TOPAS CSV with '#' header: dose in Gy (total for the run, i.e. Gy per NumberOfHistoriesInRun histories, Ts OutputWeightingFactor 1; divide by histories for Gy per primary); Standard_Deviation column as defined by TOPAS 4.3 (docs: 'standard deviation of the mean and sum': definition to be checked against header); LET in MeV/mm/(g/cm3) as printed in the header; bin indices 0-based; bins 1 mm along z and 2 mm in Dose3D",
+  "rationale": "independent Monte Carlo evidence for suite S-PHYS-PROTON-EM/-NUCLEAR/-LET",
+  "expected_outputs": [
+    "idd_dose.csv",
+    "dose3d.csv",
+    "let_d.csv"
+  ],
+  "arguments": []
+}

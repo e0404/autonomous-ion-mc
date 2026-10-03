@@ -1,0 +1,73 @@
+# Native OpenTOPAS 4.3 input. Independent Monte Carlo evidence input; no validation claim.
+i:Ts/NumberOfThreads = 1
+i:Ts/Seed = 20261003
+b:Ts/PauseBeforeQuit = "False"
+
+# Geometry: 120 x 120 x 300 mm G4_WATER box, entrance face at z = 0, beam axis = +z through the face centre.
+s:Ge/World/Material = "Vacuum"
+d:Ge/World/HLX = 20 cm
+d:Ge/World/HLY = 20 cm
+d:Ge/World/HLZ = 40 cm
+s:Ge/Water/Parent = "World"
+s:Ge/Water/Type = "TsBox"
+s:Ge/Water/Material = "G4_WATER"
+d:Ge/Water/HLX = 60 mm
+d:Ge/Water/HLY = 60 mm
+d:Ge/Water/HLZ = 150 mm
+d:Ge/Water/TransZ = 150 mm
+s:Ge/Source/Parent = "World"
+s:Ge/Source/Type = "Group"
+d:Ge/Source/TransZ = -0.001 mm
+
+# Source: monoenergetic, zero-size, zero-divergence pencil beam along +z. BeamEnergy = TOTAL kinetic energy of the ion: 12 u x 290 MeV/u = 3480 MeV (per-nucleon convention not documented in OpenTOPAS beam page; verify via Bragg peak ~17 cm).
+s:So/Beam/Type = "Beam"
+s:So/Beam/Component = "Source"
+s:So/Beam/BeamParticle = "GenericIon(6,12)"
+d:So/Beam/BeamEnergy = 3480 MeV
+u:So/Beam/BeamEnergySpread = 0
+s:So/Beam/BeamPositionDistribution = "None"
+s:So/Beam/BeamAngularDistribution = "None"
+i:So/Beam/NumberOfHistoriesInRun = 200
+
+# Physics (Geant4 modular) and production cuts
+s:Ph/Default/Type = "Geant4_Modular"
+sv:Ph/Default/Modules = 6 "g4em-standard_opt4" "g4h-phy_QGSP_BIC_HP" "g4ion-QMD" "g4h-elastic_HP" "g4stopping" "g4decay"
+d:Ph/Default/CutForAllParticles = 0.05 mm
+
+s:Sc/Edep/Quantity = "EnergyDeposit"
+s:Sc/Edep/Component = "Water"
+i:Sc/Edep/XBins = 1
+i:Sc/Edep/YBins = 1
+i:Sc/Edep/ZBins = 300
+s:Sc/Edep/OutputType = "csv"
+s:Sc/Edep/OutputFile = "edep"
+s:Sc/Edep/IfOutputFileAlreadyExists = "Overwrite"
+sv:Sc/Edep/Report = 1 "Sum"
+
+# Surviving 12C versus depth: count particles of atomic number 6 and mass 12 crossing the entrance
+# (z-minus) face of each of 300 depth bins going in; compare to charge-only filter.
+
+s:Sc/C12Count/Quantity = "SurfaceTrackCount"
+s:Sc/C12Count/Surface = "Water/ZMinusSurface"
+i:Sc/C12Count/XBins = 1
+i:Sc/C12Count/YBins = 1
+i:Sc/C12Count/ZBins = 300
+b:Sc/C12Count/OnlyIncludeParticlesGoingIn = "True"
+iv:Sc/C12Count/OnlyIncludeParticlesOfAtomicNumber = 1 6
+iv:Sc/C12Count/OnlyIncludeParticlesOfAtomicMass = 1 12
+s:Sc/C12Count/OutputType = "csv"
+s:Sc/C12Count/OutputFile = "c12count"
+s:Sc/C12Count/IfOutputFileAlreadyExists = "Overwrite"
+sv:Sc/C12Count/Report = 1 "Sum"
+
+s:Sc/ChargedCount/Quantity = "SurfaceTrackCount"
+s:Sc/ChargedCount/Surface = "Water/ZMinusSurface"
+i:Sc/ChargedCount/XBins = 1
+i:Sc/ChargedCount/YBins = 1
+i:Sc/ChargedCount/ZBins = 300
+b:Sc/ChargedCount/OnlyIncludeParticlesGoingIn = "True"
+b:Sc/ChargedCount/OnlyIncludeParticlesCharged = "True"
+s:Sc/ChargedCount/OutputType = "csv"
+s:Sc/ChargedCount/OutputFile = "chargedcount"
+s:Sc/ChargedCount/IfOutputFileAlreadyExists = "Overwrite"
+sv:Sc/ChargedCount/Report = 1 "Sum"
