@@ -12,8 +12,8 @@ method, post_body, sha256, bytes, license, citation, parser, description)`. Regi
 
 | id | Content | Licence |
 |---|---|---|
-| `nist-pstar-water-2005` | NIST PSTAR liquid water (POST to `physics.nist.gov/cgi-bin/Star/apdata.pl`) | NIST SRD 124, attribution required |
-| `nist-astar-water-2005` | NIST ASTAR liquid water (same endpoint, `prog=ASTAR`) | NIST SRD 124, attribution required |
+| `nist-pstar-water-2005` | NIST PSTAR liquid water (POST to `physics.nist.gov/cgi-bin/Star/apdata.pl`) | NIST SRD 124, copyright all rights reserved: use-only, downloaded by each user, never redistributed |
+| `nist-astar-water-2005` | NIST ASTAR liquid water (same endpoint, `prog=ASTAR`) | NIST SRD 124, copyright all rights reserved: use-only, downloaded by each user, never redistributed |
 | `geant4-icru90-stopping-11.4.2` | `G4ICRU90StoppingData.cc` of Geant4 v11.4.2 (ICRU 90 proton/alpha arrays) | Geant4 Software License |
 
 A downloaded payload whose SHA-256 or size differs from the registry is an integrity

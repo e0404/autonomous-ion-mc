@@ -50,6 +50,11 @@ def _nist_range(star: StarTable, e_total_mev: float) -> float:
     )
 
 
+def window_mask(e_u: np.ndarray) -> np.ndarray:
+    """Boolean mask of energies per nucleon inside the comparison window [2, E_MAX] MeV/u."""
+    return (e_u >= E_COMPARE_MIN) & (e_u <= E_MAX)
+
+
 def _aggregate(e_u: np.ndarray, dev: np.ndarray) -> dict[str, Any]:
     """Non-reversible summary of relative deviations ``dev`` at energies per nucleon ``e_u``."""
     out: dict[str, Any] = {
@@ -69,7 +74,7 @@ def _stopping_deviation(
 ) -> dict[str, Any]:
     """Aggregate relative deviation of the Bethe model from reference stopping powers."""
     e_u = e_total / proj.a
-    sel = (e_u >= E_COMPARE_MIN) & (e_u <= E_MAX)
+    sel = window_mask(e_u)
     s = BetheStoppingSource().table(water(i_ev), proj)
     dev = s.stopping_at(e_u[sel]) / s_ref[sel] - 1.0
     return {"I_eV": i_ev, **_aggregate(e_u[sel], dev)}
@@ -99,7 +104,7 @@ def run(cache_dir: str | None, offline: bool) -> dict[str, Any]:
         }
         # ICRU 90 against NIST on the shared energies (checks the energy-grid reading).
         common = np.intersect1d(star.energy_mev, e_icru)
-        common = common[common / proj.a >= E_COMPARE_MIN]
+        common = common[window_mask(common / proj.a)]
         ratio = np.array(
             [
                 s_icru[np.searchsorted(e_icru, e)]

@@ -113,7 +113,11 @@ transport is indifferent to the source (`stopping_source = "bethe" |
   fixtures and a comparison file with per-energy model/reference ratios
   from which table values are recoverable. They were removed from the tree
   at `d3945d1`, before integration, so neither `v3/develop` (squash merge)
-  nor any release contains them. The experiment's history-integrity rule
+  nor any release contains them. In addition, the research note
+  `docs/research/em-physics.md` as merged with V3-001 (develop commit
+  `c4e63dd4`) quoted a few individual PSTAR/ASTAR values as examples; they
+  were redacted from the note in this task and the exposure is listed in an
+  addendum to the intervention record. The experiment's history-integrity rule
   forbids rewriting pushed task branches except for recovery from a
   documented repository error; this entry is that documentation. The lead
   has requested operator authorization to rewrite or delete the affected
@@ -158,8 +162,9 @@ runs cannot be evaluated against the same table.
 
 ## Validation strategy
 
-- Unit tests against transcribed anchor values (a handful of PSTAR/ASTAR
-  points) at I = 75 eV.
+- Unit tests against a short excerpt of the ICRU 90 water arrays
+  (Geant4-licensed) at I = 78 eV with pre-chosen bounds (0.3 % protons,
+  0.5 % alphas); no NIST values are used in tests.
 - Validation script comparing full PSTAR/ASTAR tables (cached) with the
   analytical layer at 75 eV, and ICRU 90 arrays at 78 eV, over 2–500 MeV/u,
   reporting relative deviations and CSDA range differences.
