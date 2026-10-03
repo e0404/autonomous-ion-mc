@@ -138,6 +138,22 @@ transport is indifferent to the source (`stopping_source = "bethe" |
   integration-branch quotation history should also be rewritten; the
   autonomous system does not rewrite pushed or protected history itself,
   and integration proceeds with the clean tree.
+- **Operator decision on the exposure (2026-10-04, intervention
+  `IR-20261003-192301-6CF85A` resolved; response recorded verbatim in
+  `reference_requests/interventions/IR-20261003-192301-6CF85A/response.json`).**
+  (a) Task-branch history: option B — the remote task branch
+  `task/v3-002-external-data-layer-materials-and-stopping-power-tables`
+  (pushed commits `7a2d817..6eb6369` with transcribed NIST STAR rows) is to
+  be deleted from the GitHub remote; the local branch is retained as the
+  experimental record. (b) `v3/develop` history (addendum 1): the individual
+  quoted values in the research note are acceptable; the develop history
+  stays intact and is not rewritten. **Status of the cleanup:** authorization
+  only. At the time of this entry the remote branch has not been deleted and
+  no history has been rewritten; remote branch deletion is not among the
+  pre-authorized remote operations of the protocol, so its execution is
+  requested from the operator in the follow-up intervention
+  `IR-20261003-220532-42BA5F` and will be reported as completed, with
+  the verification date, only after the remote branch is observed absent.
 - ICRU 90 water arrays: the numbers are obtained from a Geant4 source file
   distributed under the Geant4 Software License, which permits use and
   modification with attribution. The ICRU report itself is copyrighted; the
