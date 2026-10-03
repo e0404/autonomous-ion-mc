@@ -101,3 +101,15 @@ The host/reference runners and preflight require bubblewrap >= 0.12.0, including
 its [CVE-2026-87766 fix](https://github.com/containers/bubblewrap/security/advisories/GHSA-pxhw-h44j-8pfx).
 The dedicated binary is state/runtime/bin/bwrap; the launcher prepends that directory
 to PATH for Claude as well. The system binary is unchanged.
+
+## Usage-limit alerts
+
+The StopFailure hook routes rate_limit errors to the existing IONMC_NTFY_URL
+channel. No additional environment variables are needed. Alerts contain the
+experiment and hashed session identifier, with best-effort quota category;
+inspect Claude for reset details. Duplicate successful alerts are suppressed for
+15 minutes per session, and failed deliveries have a 60-second retry cooldown.
+These operational interruptions are logged separately from scientific interventions.
+Start a fresh Claude session to load the updated hook configuration. Preflight tests
+notification delivery and runtime readiness; it does not check remaining Claude
+subscription quota or start the scientific experiment.

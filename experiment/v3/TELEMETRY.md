@@ -32,3 +32,18 @@ V3 records agent_routed events with selected role/model and any top-tier rationa
 Protected state/reviews holds independent Codex job status, exact task/base SHAs,
 structured findings and raw JSONL usage. General Claude SubagentStart/Stop hooks
 do not represent Codex execution; inspect the review records separately.
+
+StopFailure(rate_limit) sends an operational alert through the existing operator
+notification channel without a model call. The runtime_limit event and its
+notification_result record a random alert ID, a hashed session identifier and a
+best-effort fixed category (weekly/session/Fable/Opus/Sonnet/unspecified). Raw error text,
+reset strings and transcripts are not forwarded by this handler. Claude's display
+text is the only source for the category; reset times remain in Claude's UI.
+
+Cooldown records live under telemetry/notification-cooldowns. Per experiment and
+session, successful delivery suppresses retries for 15 minutes; failed or missing
+configuration retries after 60 seconds on the next matching hook. Concurrent hooks
+are deduplicated with a file lock. Each suppressed event is still recorded. This
+alerts the operator but does not create/resolve a scientific intervention, restart
+Claude, change models or spend additional model tokens. Abrupt process/WSL failures
+that do not emit StopFailure cannot be detected by this hook.

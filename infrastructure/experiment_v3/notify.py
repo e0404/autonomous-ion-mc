@@ -1,4 +1,4 @@
-"""Permission notifications never grant approval or resolve interventions."""
+"""Operational alerts never grant approval or resolve interventions."""
 
 from __future__ import annotations
 
@@ -12,6 +12,10 @@ from infrastructure.interventions.request_intervention import send_notification
 
 def handle(payload, *, sender=send_notification, state=None):
     hook = payload.get("hook_event_name")
+    if hook == "StopFailure" and payload.get("error") == "rate_limit":
+        from infrastructure.experiment_v3.usage_notifications import handle as usage
+
+        return usage(payload, sender=sender, state=state)
     if hook != "PermissionRequest" and not (
         hook == "Notification"
         and payload.get("notification_type") == "permission_prompt"
@@ -41,15 +45,16 @@ def handle(payload, *, sender=send_notification, state=None):
 def main():
     try:
         status = handle(json.load(sys.stdin))
-        if status not in (None, "sent"):
+        if status not in (None, "sent", "suppressed"):
             print(
-                "IonMC permission notification was not delivered; "
+                "IonMC operational notification was not delivered; "
                 "inspect local notification configuration.",
                 file=sys.stderr,
             )
     except Exception:
         print(
-            "IonMC permission notification failed; explicit approval still required.",
+            "IonMC operational notification failed; "
+            "inspect notification configuration.",
             file=sys.stderr,
         )
     # No approval output: Claude retains normal permission handling.

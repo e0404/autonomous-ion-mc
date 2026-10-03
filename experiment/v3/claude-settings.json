@@ -137,6 +137,16 @@
           }
         ],
         "matcher": "*"
+      },
+      {
+        "matcher": "rate_limit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -m infrastructure.experiment_v3.notify",
+            "timeout": 20
+          }
+        ]
       }
     ],
     "SubagentStart": [
