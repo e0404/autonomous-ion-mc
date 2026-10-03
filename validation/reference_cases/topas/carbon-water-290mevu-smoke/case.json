@@ -1,0 +1,26 @@
+{
+  "input": "input.txt",
+  "physics": [
+    "Geant4_Modular (OpenTOPAS 4.3 / Geant4 11.4.2): g4em-standard_opt4, g4h-phy_QGSP_BIC_HP, g4ion-QMD, g4h-elastic_HP, g4stopping, g4decay",
+    "ion module name g4ion-QMD (G4IonQMDPhysics; OpenTOPAS 4.3 module lookup is case-insensitive)"
+  ],
+  "source": "12C (BeamParticle GenericIon(6,12)), BeamEnergy 3480 MeV total kinetic energy (= 290 MeV/u x 12), monoenergetic, zero-size, zero-divergence pencil beam from z=-0.001 mm along +z at the face centre",
+  "geometry": "G4_WATER box 120 x 120 x 300 mm, entrance face z=0; vacuum world 400x400x800 mm",
+  "materials": "G4_WATER",
+  "cuts": "CutForAllParticles = 0.05 mm",
+  "histories": 200,
+  "seeds": [
+    20261003
+  ],
+  "scorers": [
+    "Edep: EnergyDeposit, 1x1x300 bins (1 mm), Report Sum",
+    "PrimaryFluence: Fluence (1/mm2) on the binned Water component, 1x1x300 bins, filters OnlyIncludeParticlesOfGeneration=\"Primary\" and OnlyIncludeParticlesOfAtomicNumber=6 (all carbon isotopes of the primary generation; the primary track survives nuclear elastic scattering and ends at the first inelastic interaction)"
+  ],
+  "units": "TOPAS CSV headers: EnergyDeposit in MeV (run total over 200 histories); Fluence in 1/mm2 as printed in the header (run total over 200 histories; divide by histories); 0-based bin indices, 1 mm z bins",
+  "rationale": "independent Monte Carlo evidence for suite S-PHYS-PROTON-EM/-NUCLEAR/-LET (smoke: execution only)",
+  "expected_outputs": [
+    "edep.csv",
+    "primaryfluence.csv"
+  ],
+  "arguments": []
+}
