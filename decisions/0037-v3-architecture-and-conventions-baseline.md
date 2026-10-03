@@ -113,23 +113,48 @@ whose arguments are not in these units state the unit in the parameter name
   mode on the Warp backends is provided for numerical falsification probes.
 - Random numbers: all backends use the same counter-based generator,
   Philox4x32-10 (Salmon et al., SC'11; the Random123 construction). Warp's
-  built-in `wp.rand_init`/`wp.randf` is **not** used: it is a stateful
-  32-bit PCG hash whose streams share one 2³² state space, and a measurement
-  on the installed Warp 1.17.0 (research report `warp-architecture.md`)
-  found 20 % of draws revisiting states already used by other histories at
-  1e6 histories × 2000 draws, and 260 of 1e6 histories bit-identical between
-  seeds `s` and `s+1`. Philox is implemented once as a `@wp.func` over
-  `uint32` words for the Warp kernels and once over Python integers for the
-  reference backend; the two were verified bit-identical on the published
-  known-answer vectors and 20 000 random blocks. The counter is
-  `(history_id, genealogy_id, step, sub-draw)` and the key is `(seed,
-  stream)`, so every history, every secondary particle (identified by its
-  parent and birth index, never by a queue slot) and every batch has a
-  disjoint, reproducible stream independent of thread count or launch
-  partitioning. Because the streams are identical across backends, the
-  reference backend and the float64 build of the Warp kernels can be
-  compared trajectory by trajectory; production float32 Warp results are
-  compared statistically.
+  built-in `wp.rand_init`/`wp.randf` is **not** used anywhere: it is a
+  stateful 32-bit PCG hash whose streams share one 2³² state space. The
+  measurement scripts committed under `validation/scripts/rng/` (results
+  tabulated in its README and in `docs/research/warp-architecture.md`) found,
+  on Warp 1.17.0, 20 % of draws revisiting states already used by other
+  histories at 1e6 histories × 2000 draws, and 260 of 1e6 histories
+  bit-identical between seeds `s` and `s+1`. The same scripts check the
+  Philox `@wp.func` against the Random123 known-answer vectors and against a
+  pure-Python integer implementation (20 000 random blocks, bit-identical).
+  The package implementation and its unit tests are delivered by the
+  transport task (V3-003); until then this section specifies the design.
+
+### Random stream allocation
+
+Philox4x32-10 maps a 128-bit counter `(c0, c1, c2, c3)` and a 64-bit key
+`(k0, k1)` to four 32-bit words; each word yields one uniform in (0, 1) as
+`(w >> 8 + 0.5) · 2⁻²⁴` (never exactly 0 or 1). Streams are disjoint if and
+only if no (counter, key) pair is used twice, which the following fixed
+encoding guarantees by construction:
+
+| Field | Content | Bound (exceeding it fails closed) |
+|---|---|---|
+| `k0`, `k1` | low and high 32 bits of the user seed (64-bit integer) | — |
+| `c0` | global history index within the run, `0 … N−1`, never reset between batches or beamlets | N ≤ 2³² histories per run |
+| `c1` | particle identifier within the history: `0` for the primary; a secondary born as the `b`-th child (`b` from 1) of a particle at generation `g` (primary has `g = 0`) gets `id = parent_id + b · 32^g` | at most 31 children per particle and 6 generations (`id < 2³⁰`); a 32nd child or a 7th generation increments a fail-closed overflow counter, the particle's energy is deposited locally, and the run is rejected in validation mode |
+| `c2` | draw-block index within the particle, incremented at every Philox call (four uniforms per block) | 2³² blocks per particle (unreachable; step limits bind first) |
+| `c3` | purpose: `0` transport, `1` source sampling of the primary, `2` reserved | — |
+
+Consequences:
+
+- Batch membership is `history_index mod n_batches` and beamlet membership
+  is a range of history indices, so batches and beamlets never share
+  counters and the batch estimator sees independent streams.
+- A secondary's stream depends only on its genealogy (parent identifier and
+  birth order), never on the slot it receives in a global queue, so results
+  are independent of thread scheduling and launch partitioning apart from
+  floating-point summation order in accumulators.
+- The reference backend uses the identical encoding with Python integers, so
+  reference and float64 Warp trajectories can be compared history by
+  history; production float32 Warp results are compared statistically.
+- Different seeds give different keys; there is no relation between the
+  streams of seed `s` and `s+1`.
 
 ## Expected tradeoffs
 
