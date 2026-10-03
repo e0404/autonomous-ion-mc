@@ -25,8 +25,10 @@ because smaller or zero-width configurations placed all primaries outside the ge
 
 ## Roles
 
-* Evidence cases (20000 histories, no suffix): independent MC evidence for suites
-  S-PHYS-PROTON-EM, S-PHYS-PROTON-NUCLEAR and S-PHYS-PROTON-LET.
+* Full cases (20000 histories, no suffix): currently classified as exploratory (see "Evidence
+  status and fine cases" below); they are candidates for independent MC evidence towards suites
+  S-PHYS-PROTON-EM, S-PHYS-PROTON-NUCLEAR and S-PHYS-LET once evidence-grade configurations
+  (multiple seeds, >= 1e5 primaries per batch, <= 0.5 mm bins) are run.
 * `-smoke` cases (100 to 200 histories): execution, timing and output-format checks only.
   The carbon smoke cases additionally test whether TOPAS (QMD) and FRED transport 12C and the
   energy convention; they provide no ion evidence.
