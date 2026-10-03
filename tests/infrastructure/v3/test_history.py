@@ -354,3 +354,40 @@ def test_task_creation_fails_if_remote_uniqueness_cannot_be_checked(
     with pytest.raises(RuntimeError, match="Could not verify"):
         manager.create("V3-003", "offline")
     assert not manager.path_for("V3-003").exists()
+
+
+@pytest.mark.parametrize("suffix", ["captures/test/base", "checkpoints/test"])
+def test_codex_checkpoint_accepts_only_committed_integration_trees(isolated, suffix):
+    clone, _, _ = isolated
+    ref = "refs/codex/turn-diffs/" + suffix
+    original_tree = git(clone, "rev-parse", "HEAD^{tree}")
+    git(clone, "update-ref", ref, original_tree)
+    assert history.inspect(clone)["ready"]
+    # Checkpoints remain valid after advancing integration to a later v3 commit.
+    (clone / "next").write_text("v3 infrastructure update")
+    commit(clone, "advance integration")
+    assert history.inspect(clone)["ready"]
+    # A commit disguised under the bookkeeping namespace is not a tree snapshot.
+    git(clone, "update-ref", ref, git(clone, "rev-parse", "HEAD"))
+    assert not history.inspect(clone)["checks"]["only_v3_refs"]
+    # Nor can the namespace admit uncommitted or otherwise unrelated tree content.
+    (clone / "uncommitted").write_text("not reviewed or integrated")
+    git(clone, "add", "uncommitted")
+    git(clone, "update-ref", ref, git(clone, "write-tree"))
+    assert not history.inspect(clone)["checks"]["only_v3_refs"]
+    git(clone, "update-ref", ref, git(clone, "rev-parse", "HEAD:baseline"))
+    assert not history.inspect(clone)["checks"]["only_v3_refs"]
+
+
+def test_codex_checkpoint_does_not_hide_excluded_objects(isolated):
+    clone, _, excluded = isolated
+    git(
+        clone,
+        "update-ref",
+        "refs/codex/turn-diffs/checkpoints/test",
+        git(clone, "rev-parse", "HEAD^{tree}"),
+    )
+    git(clone, "fetch", "origin", excluded)
+    result = history.inspect(clone)
+    assert result["checks"]["only_v3_refs"]
+    assert not result["checks"]["excluded_objects_absent"] and not result["ready"]
