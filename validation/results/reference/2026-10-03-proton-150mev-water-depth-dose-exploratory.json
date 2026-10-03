@@ -1,6 +1,6 @@
 {
-  "evidence_status": "exploratory diagnostic; single seed, no statistical uncertainty, bins 1-2 mm versus a 2.4-2.7 mm distal falloff",
-  "analysis_code_sha": "17c4f44dcbd1b5d3995fef5b3f87f9f52cf58044",
+  "evidence_status": "exploratory: single-seed runs, no statistical uncertainty; depth bin widths {1.0, 2.0} mm; distal 80-20 widths {2.4, 2.7} mm",
+  "analysis_code_sha": "71e785c0c58c233da713d74e0e3b19965c20079a",
   "analysis_code_dirty": false,
   "runs": [
     {
