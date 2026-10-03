@@ -97,7 +97,7 @@ PHYS32, PHYS64 = make_physics(wp.float32), make_physics(wp.float64)
   - Both rules need V2-NUM step-refinement tests.
 - **Accumulation.** See §4.
 
-**Policy.** Use float32 transport state and tables, float32 atomics into per-batch grids, and float64 batch reduction and outputs. Build a float64 variant of the *same* kernels from the factory. The float64 build costs about 1.35× on CPU (archive-derived medians 77.8k vs 57.4k histories/s over three repeats, see `SUMMARY.md`); on an A6000 the FP64 ALU rate is 1/64 of FP32, so expect a much larger factor. It serves as the V2-NUM float32/float64 probe and as the trajectory-parity partner of the reference. It is not a production mode on CUDA.
+**Policy.** Use float32 transport state and tables, float32 atomics into per-batch grids, and float64 batch reduction and outputs. Build a float64 variant of the *same* kernels from the factory. The float64 build costs about 1.35× on CPU (ratio of the archived single-thread float32 and float64 median throughputs over three repeats, see `SUMMARY.md`); on an A6000 the FP64 ALU rate is 1/64 of FP32, so expect a much larger factor. It serves as the V2-NUM float32/float64 probe and as the trajectory-parity partner of the reference. It is not a production mode on CUDA.
 
 ## 3. Kernel organisation
 
