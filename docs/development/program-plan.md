@@ -47,7 +47,7 @@ every MUST requirement to planned evidence is `validation/requirement-ledger.md`
 | V3-006 | Self-describing persisted results, human-readable reports and SVG plots, configuration files, `ionmc run` CLI, fail-closed capability contract with requested/effective configuration | V3-004, V3-005 |
 | V3-007 | Beamlet-resolved transport and sparse dose influence matrices with per-beamlet uncertainty and persisted output | V3-006 |
 | V3-008 | Helium, carbon and oxygen electromagnetic transport: effective-charge stopping, ion straggling and scattering, ion-specific tabulated range evidence | V3-003 |
-| V3-009 | Nuclear reaction cross-sections and projectile fragmentation for He/C/O with transported secondary ions, distal fragment dose, mixed-field LET, oxygen supported domain | V3-005, V3-008 |
+| V3-009 | Nuclear reaction cross-sections and projectile fragmentation for He/C/O with transported secondary ions, distal fragment dose and mixed-field LET; the oxygen supported domain is declared explicitly and every claimed oxygen capability (range, attenuation, fragment build-up, distal dose, mixed-field LET) receives its own ion-specific evidence in suite `S-PHYS-OXYGEN`; unsupported oxygen combinations fail closed | V3-005, V3-008 |
 | V3-010 | Reference evidence: native TOPAS/MCsquare/FRED case bundles and runs, measured data acquisition, parsers, comparison metrics (range metrics, gamma, z-tests), evidence records | V3-006, V3-009 |
 | V3-011 | Adversarial numerical falsification suite and uncertainty coverage tests | V3-007, V3-009 |
 | V3-012 | Performance measurement harness, calibration measurements of the three workload families, frozen release plan and targets (reviewed before merge) | V3-010, V3-011 |

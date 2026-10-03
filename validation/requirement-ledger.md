@@ -15,9 +15,9 @@ related-model, backend-parity, self-consistency.
 | `S-PHYS-PROTON-EM` | physics: proton stopping, range, straggling, lateral scattering |
 | `S-PHYS-PROTON-NUCLEAR` | physics: proton nuclear attenuation and secondaries |
 | `S-PHYS-LET` | physics: track- and dose-averaged LET including mixed fields |
-| `S-PHYS-HELIUM` | physics: helium range and fragmentation |
+| `S-PHYS-HELIUM` | physics: helium range, primary attenuation, fragment (Z=1,2) yields and distal dose |
 | `S-PHYS-CARBON` | physics: carbon range, attenuation, fragment build-up, distal dose |
-| `S-PHYS-OXYGEN` | physics: oxygen range and attenuation in its supported domain |
+| `S-PHYS-OXYGEN` | physics: oxygen range, primary attenuation, charge-resolved fragment build-up, distal fragment dose and mixed-field LET within the documented supported domain (16O in water/tissue, 100-430 MeV/u entrance energy); any oxygen capability outside this domain must fail closed and is not claimed |
 | `S-NUM-FALSIFICATION` | numerical: step/grid/precision/orientation/seed probes |
 | `S-NUM-PARITY` | numerical: python vs warp-cpu vs warp-cuda statistical consistency |
 | `S-NUM-UNCERTAINTY` | numerical: batch uncertainty validity and coverage |

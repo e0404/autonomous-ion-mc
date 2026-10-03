@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling==1.32.4"]
 build-backend = "hatchling.build"
 
 [project]
@@ -25,6 +25,17 @@ dev = [
 
 [project.scripts]
 ionmc = "ionmc.cli:main"
+
+[tool.uv]
+# Pin the build backend's own dependencies so that `uv sync --locked` builds
+# the project with a reproducible build environment (review finding, V3-001).
+build-constraint-dependencies = [
+  "hatchling==1.32.4",
+  "packaging==26.3",
+  "pathspec==1.1.1",
+  "pluggy==1.6.0",
+  "trove-classifiers==2026.9.21.13",
+]
 
 [tool.hatch.version]
 path = "src/ionmc/_version.py"

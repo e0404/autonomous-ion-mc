@@ -111,11 +111,25 @@ whose arguments are not in these units state the unit in the parameter name
 - Warp transport state defaults to float32 with float64 accumulators for
   scoring; the reference backend is float64 throughout. A float64 transport
   mode on the Warp backends is provided for numerical falsification probes.
-- Random numbers: Warp backends use the counter-based `wp.rand_init(seed,
-  history_index)` stream per history (secondaries derive sub-streams from the
-  history stream); the reference backend uses `numpy.random.Generator`
-  streams spawned from `SeedSequence(seed)` per history. Results across
-  backends are compared statistically, never bitwise.
+- Random numbers: all backends use the same counter-based generator,
+  Philox4x32-10 (Salmon et al., SC'11; the Random123 construction). Warp's
+  built-in `wp.rand_init`/`wp.randf` is **not** used: it is a stateful
+  32-bit PCG hash whose streams share one 2³² state space, and a measurement
+  on the installed Warp 1.17.0 (research report `warp-architecture.md`)
+  found 20 % of draws revisiting states already used by other histories at
+  1e6 histories × 2000 draws, and 260 of 1e6 histories bit-identical between
+  seeds `s` and `s+1`. Philox is implemented once as a `@wp.func` over
+  `uint32` words for the Warp kernels and once over Python integers for the
+  reference backend; the two were verified bit-identical on the published
+  known-answer vectors and 20 000 random blocks. The counter is
+  `(history_id, genealogy_id, step, sub-draw)` and the key is `(seed,
+  stream)`, so every history, every secondary particle (identified by its
+  parent and birth index, never by a queue slot) and every batch has a
+  disjoint, reproducible stream independent of thread count or launch
+  partitioning. Because the streams are identical across backends, the
+  reference backend and the float64 build of the Warp kernels can be
+  compared trajectory by trajectory; production float32 Warp results are
+  compared statistically.
 
 ## Expected tradeoffs
 
@@ -131,6 +145,12 @@ whose arguments are not in these units state the unit in the parameter name
 - Unit tests call each shared function from Python and inside a Warp CPU
   kernel with identical arguments and compare results within float32
   tolerance (decision 0001 classes).
+- The Philox implementation is tested against the Random123 known-answer
+  vectors in both the kernel and the Python form, and stream disjointness
+  (no repeated counter/key pairs across histories, secondaries and batches)
+  is asserted by construction tests.
+- Trajectory-level parity: reference backend versus the float64 Warp CPU
+  build for the first K histories with identical random streams.
 - Transport-level comparisons between backends use statistical criteria
   defined in the numerical parity suite.
 
