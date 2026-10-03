@@ -51,9 +51,7 @@ S_el/rho = K z^2 (Z/A) beta^-2 [ L0 + z L1 + z^2 L2 ] (MeV cm2/g)
 ### 1c. I-value of water [EST]
 ICRU 90 (2016) gives I_water = 78 +/- 2 eV; ICRU 49 and PSTAR use 75 eV. This session integrated the electronic stopping from 1 MeV upward (log-log interpolation) using the ICRU 90 arrays from Geant4 against PSTAR:
 
-| E_p (MeV) | 70 | 100 | 150 | 200 | 250 |
-|---|---|---|---|---|---|
-| Delta R (ICRU 90 - PSTAR) | +0.22 mm | +0.39 mm | +0.68 mm | **+1.07 mm (0.41%)** | +1.26 mm |
+*(Per-energy ICRU 90 − PSTAR range differences computed by the agent were redacted from this note on 2026-10-03; the committed aggregate comparison in `validation/results/stopping/` and decision 0038 carry the project's own evaluation. The agent's finding was that the 75 → 78 eV change shifts the 200 MeV proton range by about +1 mm, of order 0.4 %.)*
 
 A ±2 eV uncertainty in I corresponds to about ±0.3% of range. Recommendation: default to 78 eV for water and make I a configurable, provenance-recorded parameter. Validate twice: 75 eV against PSTAR/ASTAR (this should reproduce them to about 0.1-0.2%), and 78 eV against the ICRU 90 arrays. This is the discriminating test of whether the implementation is correct or only calibrated.
 

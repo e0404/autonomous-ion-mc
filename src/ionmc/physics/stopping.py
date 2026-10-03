@@ -390,10 +390,14 @@ class BetheStoppingSource:
     """Analytic Bethe-Bloch source (construction data: none; see module docstring).
 
     ``e_min_per_u`` and ``e_max_per_u`` in MeV/u (e_min >= 1), ``points_per_decade`` grid
-    density. The range at ``e_min_per_u`` is approximated by ``a E_min / S(E_min)``, which
-    equals the integral of dE/S below E_min for constant S and is an upper bound there
-    because the true stopping power is larger at lower energy (it rises towards the Bragg
-    peak); the resulting range offset is therefore at most ``a E_min / S(E_min)``.
+    density. The range at ``e_min_per_u`` is approximated by ``a E_min / S(E_min)``, the
+    integral of dE/S below E_min for a constant stopping power equal to S(E_min). This is
+    an approximation, not a bound: the electronic stopping power rises below E_min only
+    down to its maximum (around 0.1 MeV/u for protons in water) and falls again at lower
+    velocity, so the true residual range below 1 MeV/u can be smaller or larger. The offset
+    is of the order of 0.02 mm of water for protons and is recorded in the table metadata;
+    transport deposits the residual energy locally below E_cut, so it never enters a
+    transported range.
     """
 
     options: BetheOptions = field(default_factory=BetheOptions)

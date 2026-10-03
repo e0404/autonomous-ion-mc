@@ -93,37 +93,51 @@ transport is indifferent to the source (`stopping_source = "bethe" |
 
 ### Legal assessment of the data sources
 
-- NIST PSTAR/ASTAR (SRD 124): NIST's statement
+- NIST PSTAR/ASTAR (SRD 124). *Terms.* NIST's statement
   (https://www.nist.gov/open/license, read 2026-10-03) says copyright on
   the compilation is secured under the Standard Reference Data Act,
   15 U.S.C. § 290e, "All rights reserved", and that SRD products should
-  carry the NIST copyright statement. No general redistribution licence is
-  granted. The project therefore treats the tables as **use-only**: each
-  user downloads them from NIST's public web service into a local cache
-  (the registry stores only the URL, request body, version and hash);
-  nothing committed to Git contains table values or values from which
-  they can be recovered. Committed comparison results are non-reversible
-  aggregates (maximum and RMS deviations), and the test suite contains no
-  NIST values (a synthetic STAR-layout fixture and ICRU 90 anchors are used
-  instead). The NIST copyright statement and citation are reproduced in the
-  packaged third-party notices.
-- **Recorded repository error (2026-10-03).** Earlier commits of the
-  preserved task branch of V3-002 (first commit `7a2d817` through
-  `6eb6369`) contained about a dozen transcribed PSTAR/ASTAR rows as test
-  fixtures and a comparison file with per-energy model/reference ratios
-  from which table values are recoverable. They were removed from the tree
-  at `d3945d1`, before integration, so neither `v3/develop` (squash merge)
-  nor any release contains them. In addition, the research note
+  carry the NIST copyright statement; no general redistribution licence is
+  granted. *Legal basis of the project's use (lead's assessment, not legal
+  advice).* The copyright secured under § 290e is a compilation copyright.
+  Under 17 U.S.C. § 102(b) and *Feist Publications v. Rural Telephone*
+  (499 U.S. 340, 1991) individual facts, including measured or computed
+  physical quantities, are not themselves protected; what is protected is
+  the compilation's selection and arrangement. The project (i) downloads
+  the tables through NIST's public web service for its own computation,
+  which is the use the service is provided for; (ii) does not reproduce,
+  store in Git, or ship the tables or any substantial part of them;
+  (iii) publishes only non-reversible aggregate statistics of its own model's
+  agreement with them; and (iv) treats any quotation of individual values
+  with citation as ordinary scientific quotation under 17 U.S.C. § 107. The
+  project's own policy is stricter than this basis requires: **the current
+  source tree contains no NIST table values and no values from which they
+  can be recovered** (tests use a synthetic STAR-layout fixture and ICRU 90
+  anchors; research notes were redacted), and the packaged notices
+  reproduce the NIST copyright statement and citation.
+- **Recorded repository error and exposure inventory (2026-10-03).**
+  (a) Commits `7a2d817`, `a678285`, `76c3639` and `6eb6369` of the pushed,
+  preserved task branch of V3-002 contained about a dozen transcribed
+  PSTAR/ASTAR rows as test fixtures and a comparison file with per-energy
+  model/reference ratios from which table values are recoverable; this
+  exceeds individual quotation and is the error. They were removed at
+  `d3945d1`, before integration, so the squash merge into `v3/develop` and
+  any release excludes them. (b) The research note
   `docs/research/em-physics.md` as merged with V3-001 (develop commit
-  `c4e63dd4`) quoted a few individual PSTAR/ASTAR values as examples; they
-  were redacted from the note in this task and the exposure is listed in an
-  addendum to the intervention record. The experiment's history-integrity rule
-  forbids rewriting pushed task branches except for recovery from a
-  documented repository error; this entry is that documentation. The lead
-  has requested operator authorization to rewrite or delete the affected
-  task-branch commits on the remote (an irreversible, externally
-  consequential action reserved to the operator); until then the branch
-  remains preserved in the private experiment repository.
+  `c4e63dd4`, the integration base of this task) quoted a few individual
+  PSTAR/ASTAR values (one stopping power at 200 MeV, one alpha stopping
+  power and range at 800 MeV, CSDA ranges at four proton and three alpha
+  energies) and a row of five derived range differences; these are
+  individual quotations with citation (basis (iv) above) and were redacted
+  from the note in this task as a matter of policy. The experiment's
+  history-integrity rule forbids rewriting pushed task branches and
+  protected branches except for recovery from a documented repository
+  error; this entry is that documentation. Intervention
+  `IR-20261003-192301-6CF85A` (with addendum 1) asks the operator whether
+  to rewrite or delete the affected task-branch history and whether the
+  integration-branch quotation history should also be rewritten; the
+  autonomous system does not rewrite pushed or protected history itself,
+  and integration proceeds with the clean tree.
 - ICRU 90 water arrays: the numbers are obtained from a Geant4 source file
   distributed under the Geant4 Software License, which permits use and
   modification with attribution. The ICRU report itself is copyrighted; the

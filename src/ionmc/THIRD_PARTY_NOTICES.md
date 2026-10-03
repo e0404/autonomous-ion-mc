@@ -107,9 +107,12 @@ Programs for Calculating Stopping-Power and Range Tables for Electrons, Protons,
 Ions (version 2.0.1), National Institute of Standards and Technology, Gaithersburg, MD,
 https://doi.org/10.18434/T4NC7P. Terms: https://www.nist.gov/open/license.
 
-No NIST table values are included in this repository; tests use synthetic fixtures and
-result files contain aggregate statistics only. The full tables are not redistributed;
-users download them from NIST with `ionmc data fetch`.
+The NIST tables are downloaded by each user through NIST's public web service into a
+local cache and are not shipped with this package. The current source tree contains no
+NIST table values or values from which they can be recovered; see decision 0038 in the
+repository for the project's legal assessment and for an inventory of earlier repository
+history that quoted individual values.
+
 
 ## ICRU Report 90
 
