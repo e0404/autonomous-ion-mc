@@ -1,0 +1,80 @@
+{
+  "runs": [
+    {
+      "run_id": "REF-247e0913d2a55767d65f-432cc9ae",
+      "engine": "topas",
+      "source_sha": "c6bc0477afab253235eb312aafca1c936bdcd9e6",
+      "case_input": "input.txt",
+      "histories": 20000,
+      "dose_unit": "Gy (run total)",
+      "bin_width_mm": 1.0,
+      "output_sha256": {
+        "work/idd_dose.csv": "634236f5939fcdab55418d4ec575346855eecd1fdb92070869a6f6ed65aba7f4"
+      },
+      "peak_depth_mm": 157.5,
+      "r80_mm": 158.67240480099548,
+      "r90_mm": 158.1475335786953,
+      "falloff_80_20_mm": 2.400300289890282
+    },
+    {
+      "run_id": "REF-ef9079a711bbbc7346a4-625cee73",
+      "engine": "fred",
+      "source_sha": "c6bc0477afab253235eb312aafca1c936bdcd9e6",
+      "case_input": "fred.inp",
+      "histories": 20000,
+      "dose_unit": "Gy per primary (lateral sum)",
+      "bin_width_mm": 1.0,
+      "output_sha256": {
+        "work/out/score/Phantom.Dose.mhd": "cad346eb95a9912b346659d2a2d8da65d9a6cf04d3a1923d5bcb6d219add4e6d"
+      },
+      "peak_depth_mm": 155.5,
+      "r80_mm": 157.49793824643746,
+      "r90_mm": 156.9402399876229,
+      "falloff_80_20_mm": 2.3626470071793335
+    },
+    {
+      "run_id": "REF-e62d4ae032ee7d48700d-608a98c2",
+      "engine": "mcsquare",
+      "source_sha": "c6bc0477afab253235eb312aafca1c936bdcd9e6",
+      "case_input": "config.txt",
+      "histories": 20000,
+      "dose_unit": "MCsquare native per proton (lateral sum)",
+      "bin_width_mm": 2.0,
+      "output_sha256": {
+        "work/Outputs/Dose.mhd": "837e832ec9f284a69044d711f6999211f59e3801e50c978466c7ee15e6dcd9fc",
+        "work/Outputs/Dose.raw": "1ca3067e457a27cd7fc6eeaf513b536a8da40ff846d60d7343d1a7a2ff52b657"
+      },
+      "peak_depth_mm": 157.0,
+      "r80_mm": 157.8616807395289,
+      "r90_mm": 157.43084036976444,
+      "falloff_80_20_mm": 2.7063016643602964
+    }
+  ],
+  "pairwise": [
+    {
+      "a": "topas",
+      "b": "fred",
+      "peak_depth_mm_diff_b_minus_a": -2.0,
+      "r80_mm_diff_b_minus_a": -1.1744665545580233,
+      "r90_mm_diff_b_minus_a": -1.2072935910723857,
+      "falloff_80_20_mm_diff_b_minus_a": -0.03765328271094859
+    },
+    {
+      "a": "topas",
+      "b": "mcsquare",
+      "peak_depth_mm_diff_b_minus_a": -0.5,
+      "r80_mm_diff_b_minus_a": -0.8107240614665727,
+      "r90_mm_diff_b_minus_a": -0.7166932089308489,
+      "falloff_80_20_mm_diff_b_minus_a": 0.3060013744700143
+    },
+    {
+      "a": "fred",
+      "b": "mcsquare",
+      "peak_depth_mm_diff_b_minus_a": 1.5,
+      "r80_mm_diff_b_minus_a": 0.36374249309145057,
+      "r90_mm_diff_b_minus_a": 0.4906003821415368,
+      "falloff_80_20_mm_diff_b_minus_a": 0.3436546571809629
+    }
+  ],
+  "analysis_code_sha": "67d59f8ba74a53493b0cb453d25c917ea0bdcf3b"
+}
