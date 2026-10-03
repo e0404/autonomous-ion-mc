@@ -13,13 +13,17 @@ PYTHON="$PWD/.venv/bin/python" bash validation/scripts/warp-architecture/run_all
     validation/scripts/warp-architecture/results/<date>-<host>
 ```
 
-`run_all.sh` records the exact command line of every step, bounds each step
-with `timeout` (`STEP_TIMEOUT`, default 600 s; a timed-out step is archived with
-exit code 124), archives stdout and stderr verbatim as `NN-<name>.txt`, writes
-`environment.txt` (Python, Warp, numpy, CPU, kernel, exact git SHA, dirty state
-of the script directory and SHA-256 of every script) and finally generates
-`SUMMARY.md` from the raw files with `summarize.py`. The script exits non-zero
-if any step failed or timed out. `STEPS="06 07"` reruns selected steps.
+`run_all.sh` refuses to reuse an existing results directory (each archive is
+one complete execution; evidence from different executions or SHAs cannot be
+mixed), records the exact command line, git SHA and start time of every step,
+bounds each step with `timeout` (`STEP_TIMEOUT`, default 600 s; a timed-out
+step is archived with exit code 124), archives stdout and stderr verbatim as
+`NN[-rK]-<name>.txt`, writes `environment.txt` (Python, Warp, numpy, CPU,
+kernel, exact git SHA, dirty state of the script directory and SHA-256 of
+every script; every probe must succeed and be non-empty) and finally generates
+`SUMMARY.md` with `summarize.py`, which also verifies that every step file
+carries the archive's SHA. Any failure, including an unwritable archive file,
+exits non-zero.
 
 ## What each step measures
 

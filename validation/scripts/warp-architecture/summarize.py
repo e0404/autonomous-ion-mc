@@ -31,6 +31,12 @@ def parse(path: Path) -> tuple[str, str, list[str]]:
 
 def main(directory: str) -> None:
     root = Path(directory)
+    env = (root / "environment.txt").read_text()
+    sha = next(l.split("=", 1)[1] for l in env.splitlines() if l.startswith("git_sha="))
+    for path in root.glob("[0-9][0-9]-*.txt"):
+        header = path.read_text().splitlines()[:4]
+        if f"# git_sha: {sha}" not in header:
+            raise SystemExit(f"{path.name}: step provenance does not match environment.txt (SHA {sha})")
     print(f"# Archived measurement run `{root.name}`\n")
     print("## Environment\n\n```")
     print((root / "environment.txt").read_text().rstrip())
