@@ -111,8 +111,12 @@ Evidence-grade runs use multiple seeds (the seed in `input.txt` / `config.txt` i
 seed, varied by the orchestrator), at least 1e5 primaries per batch and depth bins of at most
 0.5 mm. Candidate cases: `topas/proton-water-150mev-fine` (IDD and LETd, ZBins 600) and
 `mcsquare/proton-water-150mev-fine` (CT 60 x 600 x 60 at 2 x 0.5 x 2 mm, anisotropic spacing
-unverified in e0404; fall back to 1 mm isotropic if rejected). The comparison script labels results
-exploratory unless `--batches <json>` (n_batches >= 2, seeds) is given.
+unverified in e0404; fall back to 1 mm isotropic if rejected). The comparison script always labels
+its results exploratory: it analyses single-seed runs and computes no uncertainty. Evidence-grade
+batch analysis is future work; it must read the per-run seeds from each run's manifested
+`inputs/case.json`, group runs by engine and calculate the batch mean, variance and standard error
+before any result can be graded against the frozen acceptance criteria. There is deliberately no
+option to relabel results from detached metadata.
 
 Library code: `ionmc.reference.runs` (`load_run`, `depth_dose`, per-engine extraction, fail closed)
 and `ionmc.reference.metrics`. Metrics use bin-centre depths, argmax for the peak (resolution is
