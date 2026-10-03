@@ -217,13 +217,13 @@ def test_counterfeit_water_rejected_and_renamed_water_accepted() -> None:
 def test_table_metadata_carries_provenance() -> None:
     star = replace(
         _synthetic_star("PSTAR", 1.0),
-        dataset_id="ds",
+        dataset_id="nist-pstar-water-2005",
         version="v",
         sha256="a" * 64,
         retrieved_at="2026-01-01T00:00:00+00:00",
     )
     meta = NistStarStoppingSource(star).table(WATER, PROTON).metadata
-    assert meta["dataset_id"] == "ds" and meta["sha256"] == "a" * 64
+    assert meta["dataset_id"] == "nist-pstar-water-2005" and meta["sha256"] == "a" * 64
     assert meta["content_sha256"] == star.content_sha256 and len(meta["content_sha256"]) == 64
     assert meta["retrieved_at"] == "2026-01-01T00:00:00+00:00" and meta["version"] == "v"
     bmeta = BetheStoppingSource().table(WATER, PROTON).metadata
@@ -314,3 +314,22 @@ def test_build_table_rejects_nonpositive_start_range() -> None:
     for start in (0.0, -1e-3, float("inf")):
         with pytest.raises(ValueError):
             build_table(PROTON, WATER, e, s, start, {})
+
+
+def test_star_table_must_be_liquid_water() -> None:
+    graphite = replace(_synthetic_star("PSTAR", 1.0), material="GRAPHITE")
+    with pytest.raises(ValueError, match="GRAPHITE"):
+        NistStarStoppingSource(graphite).table(WATER, PROTON)  # requested material is water
+    wrong_dataset = replace(_synthetic_star("PSTAR", 1.0), dataset_id="nist-astar-water-2005")
+    with pytest.raises(ValueError, match="nist-astar-water-2005"):
+        NistStarStoppingSource(wrong_dataset).table(WATER, PROTON)
+    ok = replace(_synthetic_star("PSTAR", 1.0), dataset_id="nist-pstar-water-2005")
+    assert NistStarStoppingSource(ok).table(WATER, PROTON).metadata["source"] == "nist-star"
+
+
+def test_star_program_must_match_projectile() -> None:
+    star = _synthetic_star("ASTAR", 1.0)
+    with pytest.raises(ValueError, match="cannot describe"):
+        NistStarStoppingSource(star).table(WATER, PROTON)
+    with pytest.raises(ValueError, match="cannot describe"):
+        NistStarStoppingSource(_synthetic_star("PSTAR", 1.0)).table(WATER, ALPHA)

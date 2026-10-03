@@ -465,6 +465,31 @@ def _require_nist_water(material: Material) -> None:
         )
 
 
+_WATER_DATASETS = {"proton": "nist-pstar-water-2005", "alpha": "nist-astar-water-2005"}
+
+
+def _require_water_table(star: StarTable, projectile: Projectile) -> None:
+    """Raise ``ValueError`` unless ``star`` is the NIST liquid-water table for ``projectile``.
+
+    A table loaded from the verified cache must carry the pinned dataset id of the water
+    table of that projectile; an unverified table (``dataset_id`` None) must name liquid
+    water in its parsed header material label (case-insensitive).
+    """
+    if star.dataset_id is not None:
+        if star.dataset_id != _WATER_DATASETS.get(projectile.name):
+            raise ValueError(
+                f"dataset {star.dataset_id!r} is not the NIST liquid-water table for "
+                f"{projectile.name}"
+            )
+        return
+    label = star.material.upper()
+    if "WATER" not in label or "LIQUID" not in label:
+        raise ValueError(
+            f"STAR table material {star.material!r} is not liquid water; "
+            "refusing to use it as water"
+        )
+
+
 @dataclass(frozen=True)
 class NistStarStoppingSource:
     """Tabulated source from a NIST PSTAR (protons) or ASTAR (alpha) liquid-water table.
@@ -487,6 +512,7 @@ class NistStarStoppingSource:
         expected = {"PSTAR": "proton", "ASTAR": "alpha"}.get(st.program)
         if expected != projectile.name:
             raise ValueError(f"{st.program} table cannot describe projectile {projectile.name}")
+        _require_water_table(st, projectile)
         _require_nist_water(material)
         e_u = st.energy_mev / projectile.a
         e_max = min(self.e_max_per_u, float(e_u[-1]))

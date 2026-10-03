@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -71,8 +72,7 @@ def write_manifest(manifest: dict[str, Any], cache_dir: Path) -> Path:
     if missing:
         raise ValueError(f"manifest lacks fields: {missing}")
     path = manifest_path(str(manifest["dataset_id"]), cache_dir)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    _atomic_write(path, (json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode("utf-8"))
     return path
 
 
@@ -87,14 +87,41 @@ def read_manifest(dataset_id: str, cache_dir: Path) -> dict[str, Any] | None:
     return data
 
 
+def _atomic_write(final: Path, data: bytes) -> None:
+    """Write ``data`` to ``final`` via a private temporary file and ``os.replace``.
+
+    The temporary file is created in the target directory (mode 0600, unpredictable name).
+    An existing symlink at ``final`` is refused.
+    """
+    final.parent.mkdir(parents=True, exist_ok=True)
+    if os.path.islink(final):
+        raise IntegrityError(f"refusing to write through a symlink at {final}")
+    handle = tempfile.NamedTemporaryFile(dir=final.parent, delete=False, prefix=".tmp-")
+    try:
+        with handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(handle.name, final)
+    except BaseException:
+        Path(handle.name).unlink(missing_ok=True)
+        raise
+
+
 def store_object(data: bytes, cache_dir: Path) -> Path:
-    """Store ``data`` under its SHA-256 name (atomic rename) and return the path."""
+    """Store ``data`` under its SHA-256 name and return the path.
+
+    An existing identical object is left untouched; an existing symlink at the final path
+    is refused with :class:`IntegrityError`.
+    """
     digest = sha256_bytes(data)
     path = object_path(digest, cache_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(path.name + ".tmp")
-    tmp.write_bytes(data)
-    tmp.replace(path)
+    if os.path.islink(path):
+        raise IntegrityError(f"refusing to use a symlink at {path}")
+    if path.is_file() and sha256_bytes(path.read_bytes()) == digest:
+        return path
+    _atomic_write(path, data)
     return path
 
 

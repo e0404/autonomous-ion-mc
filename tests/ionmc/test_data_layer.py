@@ -314,3 +314,34 @@ def test_loaders_verify_and_record_provenance(
     assert parse_icru90_source(ICRU90_EXCERPT).content_sha256 == cache.sha256_bytes(
         ICRU90_EXCERPT.encode()
     )
+
+
+def test_store_object_refuses_symlink(tmp_path: Path) -> None:
+    target = tmp_path / "elsewhere"
+    target.write_bytes(b"x")
+    obj = cache.object_path(PAYLOAD_SHA, tmp_path)
+    obj.parent.mkdir(parents=True)
+    obj.symlink_to(target)
+    with pytest.raises(cache.IntegrityError, match="symlink"):
+        cache.store_object(PAYLOAD, tmp_path)
+    assert target.read_bytes() == b"x"
+
+
+def test_store_leaves_no_temporary_files_and_is_idempotent(tmp_path: Path) -> None:
+    first = cache.store_object(PAYLOAD, tmp_path)
+    inode = first.stat().st_ino
+    second = cache.store_object(PAYLOAD, tmp_path)  # concurrent-style double store
+    assert first == second and second.read_bytes() == PAYLOAD
+    assert second.stat().st_ino == inode  # identical object left untouched
+    assert [p.name for p in (tmp_path / "objects").iterdir()] == [PAYLOAD_SHA]
+    assert (second.stat().st_mode & 0o777) == 0o600
+    record = {k: "x" for k in cache.MANIFEST_FIELDS} | {"dataset_id": "fake"}
+    mpath = cache.write_manifest(record, tmp_path)
+    assert [p.name for p in mpath.parent.iterdir()] == ["fake.json"]
+
+
+def test_store_replaces_corrupt_object(tmp_path: Path) -> None:
+    obj = cache.object_path(PAYLOAD_SHA, tmp_path)
+    obj.parent.mkdir(parents=True)
+    obj.write_bytes(b"corrupt")
+    assert cache.store_object(PAYLOAD, tmp_path).read_bytes() == PAYLOAD

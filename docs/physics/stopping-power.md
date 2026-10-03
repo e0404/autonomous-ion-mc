@@ -45,8 +45,12 @@ projectile)` returns a `StoppingTable` on a log-spaced grid (defaults 1 to 500 M
 200 points per decade) with `s_el_mass` [MeV cm^2/g], `s_el_linear` [MeV/mm] =
 S rho / 10, `csda_range_g_cm2` and `range_mm`. The CSDA range is the trapezoid integral
 of `a E_u / S` over ln E_u starting from `a E_min / S(E_min)`, which is the integral of
-dE/S below E_min for a constant stopping power. Since the true stopping power is larger
-at lower energy, this start value is an upper bound of the range below E_min. Stopping
+dE/S below E_min for a constant stopping power equal to S(E_min). This is an approximation,
+not a bound: the stopping power rises below E_min only down to its low-energy maximum
+(around 0.1 MeV/u for protons in water) and falls again at lower velocity, so the true
+residual range can be smaller or larger. The offset is of the order of 0.02 mm of water
+for protons and is recorded in the table metadata; transport deposits the energy below
+E_cut locally, so the offset does not enter a transported range. Stopping
 power, range and the inverse `energy_from_range` use one log-log piecewise-linear
 interpolant, so `energy_from_range(range_at(E))` returns E to rounding error.
 `NistStarStoppingSource` produces the same structure from a cached PSTAR (protons) or
