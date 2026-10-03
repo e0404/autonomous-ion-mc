@@ -14,6 +14,12 @@ The software is intended to provide:
 
 This repository is also the experimental record for studying autonomous scientific software development.
 
+## Installation
+
+The `ionmc` package requires Python 3.12 or newer. See the documentation under
+`docs/getting-started/index.md` for installation steps (`uv sync`) and
+`docs/development/index.md` for the development setup.
+
 ## Autonomous development infrastructure
 
 This repository is developed as an experiment in highly autonomous scientific software engineering.

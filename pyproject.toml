@@ -1,0 +1,61 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ionmc"
+dynamic = ["version"]
+description = "Autonomously developed Monte Carlo framework for ion therapy (Python and NVIDIA Warp)."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "Autonomous experiment; see repository" }
+dependencies = [
+  "numpy>=2",
+  "warp-lang>=1.17,<2",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+  "pytest-cov",
+  "ruff==0.12.11",
+  "mypy==1.17.1",
+  "pre-commit",
+]
+
+[project.scripts]
+ionmc = "ionmc.cli:main"
+
+[tool.hatch.version]
+path = "src/ionmc/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ionmc"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "--import-mode=importlib"
+markers = [
+  "cuda: requires a CUDA device",
+  "slow: long-running test",
+  "host: requires the controlled host runner",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "W"]
+
+[tool.mypy]
+python_version = "3.12"
+disallow_untyped_defs = true
+warn_unused_ignores = true
+warn_return_any = true
+check_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = ["warp", "warp.*"]
+ignore_missing_imports = true
