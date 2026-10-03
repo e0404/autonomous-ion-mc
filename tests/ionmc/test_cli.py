@@ -30,3 +30,14 @@ def test_no_command_is_usage_error() -> None:
 
 def test_unknown_command_is_usage_error() -> None:
     assert main(["bogus"]) == 2
+
+
+def test_notices_packaged_and_printed(capsys: pytest.CaptureFixture[str]) -> None:
+    from importlib.resources import files
+
+    text = (files("ionmc") / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
+    assert "This product includes software developed by Members of the Geant4 Collaboration" in text
+    assert "Copyright protection on this compilation of data has been secured" in text
+    assert "Geant4 Software License" in text
+    assert main(["notices"]) == 0
+    assert "Geant4 Software License" in capsys.readouterr().out

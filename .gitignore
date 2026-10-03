@@ -70,3 +70,6 @@ docs/experiment/v2/
 
 # V3 generated documentation
 docs/experiment/v3/
+
+# Generated from src/ionmc/THIRD_PARTY_NOTICES.md by infrastructure/docs/generate_docs.py
+docs/third-party-notices.md

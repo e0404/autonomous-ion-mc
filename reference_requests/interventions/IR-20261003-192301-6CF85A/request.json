@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "git_sha": "c4e63dd426346f0e664255ea3fcd739fed5459f4",
+  "request_id": "IR-20261003-192301-6CF85A",
+  "created_at_utc": "2026-10-03T19:23:01.375522+00:00",
+  "task_id": "V3-002",
+  "category": "authorization",
+  "summary": "Authorization to rewrite or delete pushed task-branch commits of V3-002 that contain NIST SRD 124 excerpts (documented repository error)",
+  "investigation": {
+    "blocked_claim": "Compliance claim: no NIST SRD 124 content is reachable in the repository's distributable Git history. The current tree (d3945d1 and later) satisfies this; the pushed task-branch commits 7a2d817..6eb6369 do not, and only the operator can rewrite or delete pushed history.",
+    "budget": "Investigation bounded to reading the NIST licence statement, locating all affected commits and files, and removing the material from the tree; no further autonomous remedy exists because force pushes are prohibited and no controlled tool performs them.",
+    "alternatives": [
+      "Squash-merge only: v3/develop and releases never contain the material; retain the task branch as a private experimental record (requires operator acceptance of option C).",
+      "Operator-performed rewrite of the task branch replacing 7a2d817..6eb6369 (option A).",
+      "Remote deletion of the task branch after merge, local copy preserved (option B)."
+    ],
+    "attempts": [
+      {
+        "approach": "Remove all NIST rows from tests and replace the comparison artifact with non-reversible aggregates in the current tree",
+        "outcome": "Done at d3945d1/52b276b; reviewer confirms the current tree is aggregate-only but flags reachable history",
+        "artifact": "task branch commits d3945d1, 52b276b; REVIEW-2d51221472ed4f01a1dc06126b750dd3"
+      },
+      {
+        "approach": "Read NIST's licence statement to establish a permission basis for excerpts",
+        "outcome": "No redistribution permission exists: SRD copyright secured under 15 U.S.C. 290e, all rights reserved",
+        "artifact": "https://www.nist.gov/open/license (read 2026-10-03); decision 0038 legal assessment"
+      },
+      {
+        "approach": "Check whether the controlled integration tools can rewrite pushed history",
+        "outcome": "push_task_branch performs ordinary pushes only; EXPERIMENT.md prohibits force pushes except for documented repository errors, and the action is externally consequential",
+        "artifact": "infrastructure/tasks/task_integration.py; EXPERIMENT.md History integrity"
+      }
+    ]
+  },
+  "reason_autonomous_resolution_not_possible": "Commits 7a2d817 through 6eb6369 on the pushed, preserved task branch task/v3-002-external-data-layer-materials-and-stopping-power-tables contain about a dozen transcribed NIST PSTAR/ASTAR rows as test fixtures and a comparison JSON with per-energy model/reference ratios from which NIST table values can be recovered. NIST's statement (https://www.nist.gov/open/license) secures copyright on SRD compilations with all rights reserved and grants no redistribution licence. The material was removed from the tree at d3945d1 before integration, so the squash merge into v3/develop and any release will not contain it; the independent Codex reviewer nevertheless flags the reachable task-branch history. EXPERIMENT.md forbids force pushes to shared task branches except for recovery from an explicitly documented repository error; decision 0038 now documents this error. Rewriting or deleting pushed history on the designated GitHub repository is an irreversible, externally consequential action that the autonomous system may not perform without explicit authorization (EXPERIMENT.md, permitted intervention 4), and the controlled integration tools provide no force-push capability.",
+  "requested_input": "Please choose one: (A) authorize the operator-performed rewrite of the task branch so that commits 7a2d817..6eb6369 are replaced by NIST-free equivalents (or the branch is reset to start at d3945d1), reporting the new branch head; (B) authorize deletion of the remote task branch after the squash merge, keeping only the local copy; or (C) decide that the private repository may retain these historical commits as an experimental record. The autonomous system proceeds with integration of the NIST-free head (the squash merge excludes the material) unless instructed otherwise; the chosen remedy will be recorded in decision 0038.",
+  "decisions_or_tasks_blocked": "Final remedy recorded in decision 0038; whether the preserved task-branch history of V3-002 is rewritten, deleted or retained.",
+  "status": "open",
+  "notification": {
+    "status": "sent",
+    "http_status": 200
+  }
+}

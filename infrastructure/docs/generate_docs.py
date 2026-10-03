@@ -83,6 +83,16 @@ def copy_prompt_files() -> list[Path]:
     return copied
 
 
+def copy_third_party_notices() -> Path:
+    """Copy the packaged full notices to docs/third-party-notices.md (generated, git-ignored)."""
+    source = REPO_ROOT / "src" / "ionmc" / "THIRD_PARTY_NOTICES.md"
+    if not source.is_file():
+        raise RuntimeError(f"required third-party notices missing: {source}")
+    destination = DOCS_ROOT / "third-party-notices.md"
+    shutil.copyfile(source, destination)
+    return destination
+
+
 def write_decision_index(decisions: list[Path]) -> Path:
     index = DOCS_ROOT / "experiment" / "decisions.md"
 
@@ -120,6 +130,7 @@ def main() -> int:
     decisions = copy_decisions()
     copied = copy_experiment_files()
     prompts = copy_prompt_files()
+    notices = copy_third_party_notices()
     v2 = REPO_ROOT / "experiment" / "v3"
     if v2.exists():
         destination = DOCS_ROOT / "experiment" / "v3"
@@ -134,6 +145,7 @@ def main() -> int:
     print(f"copied {len(copied)} canonical experiment document(s)")
     print(f"copied {len(prompts)} canonical prompt document(s)")
     print(f"generated {index.relative_to(REPO_ROOT)}")
+    print(f"copied {notices.relative_to(REPO_ROOT)}")
 
     return 0
 

@@ -4,6 +4,8 @@ Scope: p, He, C, O ions from 1 to about 500 MeV/u in water and tissue. Runtime d
 Labels: **[EST]** established physics; **[APPROX]** approximation; **[ENG]** engineering choice; **[NV]** not verified in this session (it comes from memory or secondary sources, so check it before you rely on it).
 Notation: T = kinetic energy; T/A or MeV/u = energy per nucleon; z = projectile charge; S = mass electronic stopping power in MeV cm2/g.
 
+*[Lead redaction note, 2026-10-03: exact PSTAR/ASTAR values that the agent quoted as examples were removed from this note; NIST SRD 124 data are copyrighted, all rights reserved, and the project commits no NIST values (decision 0038). Earlier revisions of this file in the repository history contain the quoted values; see the intervention record IR-20261003-192301-6CF85A.]*
+
 ## 0. Recommendations at a glance
 | Topic | Recommendation | Label |
 |---|---|---|
@@ -22,8 +24,8 @@ Notation: T = kinetic energy; T/A or MeV/u = energy per nucleon; z = projectile 
 | Source | Coverage | Access (tested 2026-10-03 unless marked) | Terms |
 |---|---|---|---|
 | **NIST PSTAR** (SRD 124, doi:10.18434/T4NC7P) | Protons, 74 materials, 1 keV-10 GeV, 133 default energies. Equivalent to ICRU 49, which uses I_water = 75 eV. | **Verified working:** `POST https://physics.nist.gov/cgi-bin/Star/apdata.pl` (urlencoded or multipart) with fields `prog=PSTAR`, `matno=276` (liquid water; 104 = dry air, 119 = compact bone ICRU, 223 = PMMA, etc. from the `<select name="matno">` list on PSTAR.html), `ShowDefault=on`, `NumofEnergies=0`, `character=space`, `electronic=on`, `nuclear=on`, `total=on`, `csda=on`, `project=on`, `detour=on`. The response is plain text: 8 header lines, then columns T [MeV], S_el, S_nuc, S_tot [MeV cm2/g], CSDA and projected range [g/cm2], and the detour factor. GET is rejected ("Request Invalid"). The HTML form endpoint is `/cgi-bin/Star/ap_table.pl`, which requires `GraphType=None` and accepts custom energies in the `Energies` textarea. Python stdlib `urllib` is enough to download. | NIST SRD: **copyright claimed** under the Standard Reference Data Act (15 USC 290e). Attribution and the notice "Copyright protection on this compilation of data has been secured by the Secretary of the U.S. Department of Commerce on behalf of the United States" are required (https://www.nist.gov/open/license). **Auto-download to a cache is fine; do not commit the tables to Git.** |
-| **NIST ASTAR** | 4He, same materials, 1 keV-1 GeV **total** kinetic energy (that is, up to 250 MeV/u), 122 energies | Same POST with `prog=ASTAR`. Verified, for example: 800 MeV alpha has S_el = 17.88 MeV cm2/g and CSDA = 26.09 g/cm2. | Same as PSTAR |
-| **ICRU 90 water/air/graphite (p, alpha)** | Proton arrays 1 keV-10 GeV, alpha arrays 1 keV-1 GeV, I_water = 78 eV | Hard-coded in Geant4 `source/materials/src/G4ICRU90StoppingData.cc` (arrays `T0_proton`/`e1_proton`, where index 1 is G4_WATER). For example, at 200 MeV S = 4.470 MeV cm2/g, compared with 4.491 in PSTAR. | Geant4 Software License (permissive, attribution required). The ICRU 90 report itself is copyrighted, so the provenance of the numbers needs a recorded legal judgement [NV]. |
+| **NIST ASTAR** | 4He, same materials, 1 keV-1 GeV **total** kinetic energy (that is, up to 250 MeV/u), 122 energies | Same POST with `prog=ASTAR`. Verified (example values redacted: NIST SRD 124 data are use-only and are not reproduced in this repository). | Same as PSTAR |
+| **ICRU 90 water/air/graphite (p, alpha)** | Proton arrays 1 keV-10 GeV, alpha arrays 1 keV-1 GeV, I_water = 78 eV | Hard-coded in Geant4 `source/materials/src/G4ICRU90StoppingData.cc` (arrays `T0_proton`/`e1_proton`, where index 1 is G4_WATER). For example, at 200 MeV the ICRU 90 value is S = 4.470 MeV cm2/g (the corresponding PSTAR value is redacted: NIST SRD 124 data are use-only). | Geant4 Software License (permissive, attribution required). The ICRU 90 report itself is copyrighted, so the provenance of the numbers needs a recorded legal judgement [NV]. |
 | **Geant4 G4EMLOW 8.8** `ion_stopping_data/` | ICRU 73 (+ errata) tables: projectile Z = 3-80 for 31 named NIST materials (including G4_WATER, G4_MUSCLE_STRIATED_ICRU, G4_BONE_COMPACT_ICRU, G4_ADIPOSE_TISSUE_ICRP, G4_LUCITE, G4_AIR) and element targets. There is also an `icru90/` variant for Z <= 18 in G4_WATER, G4_AIR and G4_GRAPHITE. | URL https://cern.ch/geant4-data/datasets/G4EMLOW.8.8.tar.gz (Geant4 11.4). Paths, verified from the reader source `G4IonICRU73Data.cc`/`G4IonStoppingData.cc`: `G4EMLOW8.8/ion_stopping_data/icru73/z{Zion}_{G4_MATNAME}.dat`, `.../icru90/z{Zion}_G4_WATER.dat`, and element files `z{Zion}_{Ztarget}.dat`. The format is G4PhysicsFreeVector ASCII (edge min/max/n, then energy-value pairs). Energy is per nucleon in MeV, and dE/dx is in MeV cm2/mg (the reader multiplies by 1000 x density). **The tarball listing was not completed in this session** (the download of about 300 MB was still running), so confirm the file names and the energy span of each file [NV]. Note that current Geant4 uses these tables only between 0.025 and 2.5 MeV/u (G4IonICRU73Data fEmin/fEmax) and uses Bethe + Lindhard-Sorensen above that. | Geant4 Software License for the dataset [NV: confirm a LICENSE file in the tarball]. This is a data table from a reference engine, **not** an engine run (PROTOCOL.md). |
 | ICRU 73 report / ICRU 90 report | C and O in water, 0.025-1000 MeV/u | Purchase only | Copyrighted; do not redistribute. |
 | SRIM | All ions | Closed-source Windows executable; cannot be auto-downloaded or run under numpy+warp | Output is usable for comparison; the redistribution terms are unclear [NV]. **Not recommended.** |
@@ -49,9 +51,7 @@ S_el/rho = K z^2 (Z/A) beta^-2 [ L0 + z L1 + z^2 L2 ] (MeV cm2/g)
 ### 1c. I-value of water [EST]
 ICRU 90 (2016) gives I_water = 78 +/- 2 eV; ICRU 49 and PSTAR use 75 eV. This session integrated the electronic stopping from 1 MeV upward (log-log interpolation) using the ICRU 90 arrays from Geant4 against PSTAR:
 
-| E_p (MeV) | 70 | 100 | 150 | 200 | 250 |
-|---|---|---|---|---|---|
-| Delta R (ICRU 90 - PSTAR) | +0.22 mm | +0.39 mm | +0.68 mm | **+1.07 mm (0.41%)** | +1.26 mm |
+*(Per-energy ICRU 90 − PSTAR range differences computed by the agent were redacted from this note on 2026-10-03; the committed aggregate comparison in `validation/results/stopping/` and decision 0038 carry the project's own evaluation. The agent's finding was that the 75 → 78 eV change shifts the 200 MeV proton range by about +1 mm, of order 0.4 %.)*
 
 A ±2 eV uncertainty in I corresponds to about ±0.3% of range. Recommendation: default to 78 eV for water and make I a configurable, provenance-recorded parameter. Validate twice: 75 eV against PSTAR/ASTAR (this should reproduce them to about 0.1-0.2%), and 78 eV against the ICRU 90 arrays. This is the discriminating test of whether the implementation is correct or only calibrated.
 
@@ -104,8 +104,8 @@ Literature: Cortés-Giraldo & Carabe, PMB 60, 2645 (2015), doi:10.1088/0031-9155
 ## 7. Validation targets
 | Quantity | Reference | Evidence class |
 |---|---|---|
-| CSDA range p | PSTAR: 100/150/200/250 MeV → 7.718/15.77/25.96/37.94 g/cm2 (detour factor 0.9987-0.9989) | ion-specific tabulated |
-| CSDA range He | ASTAR: 400/600/800 MeV (100/150/200 MeV/u) → 7.760/15.86/26.09 g/cm2 | ion-specific tabulated |
+| CSDA range p | PSTAR at 100/150/200/250 MeV (values redacted: NIST SRD 124 data are use-only; the table is downloaded by the user) | ion-specific tabulated |
+| CSDA range He | ASTAR at 400/600/800 MeV (100/150/200 MeV/u) (values redacted, as above) | ion-specific tabulated |
 | C, O range and S | ICRU 73 (errata) via G4EMLOW; ATIMA/catima; TOPAS runs | tabulated / independent MC |
 | I-value sensitivity | 75 vs 78 eV gives +0.4% range (section 1c) | self-consistency + tabulated |
 | Bragg-Kleeman | R = alpha E^p, alpha = 0.0022 cm MeV^-p, p = 1.77 (water, protons; Bortfeld, Med Phys 24, 2024 (1997), doi:10.1118/1.598116) | related model (about 1-2%) |
