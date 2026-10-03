@@ -26,12 +26,9 @@ outside grid ``g``).
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
-from typing import Any
 
 import numpy as np
 import warp as wp
-from numpy.typing import NDArray
 
 from ionmc.config import MAX_REJECTION_ATTEMPTS, EffectiveConfig
 from ionmc.physics.em import make_em
@@ -44,61 +41,54 @@ from ionmc.rng.philox import (
     u01_py,
 )
 from ionmc.transport.funcs import make_transport_funcs
-
-END_CUTOFF = 0
-END_ESCAPED = 1
-END_TRUNCATED = 2
-END_SOURCE_REJECTED = 3
-END_MISSED_WORLD = 4
-
-TRACE_COLUMNS = (
-    "history",
-    "step",
-    "ix",
-    "iy",
-    "iz",
-    "reason",
-    "blocks",
-    "attempts",
-    "x_mm",
-    "y_mm",
-    "z_mm",
-    "ux",
-    "uy",
-    "uz",
-    "energy_mev",
-    "deposit_mev",
-    "step_mm",
-)
-"""Columns of the per-step trace (state after the step; ``blocks`` is the number of Philox
-blocks drawn by the history so far, ``reason`` the step-limit reason of the shared
-``select_step`` (0 geometry, 1 energy loss, 2 range, 3 maximum step))."""
-
-COUNTER_NAMES = (
-    "step_truncation",
-    "stall",
-    "straggling_rejection",
-    "genealogy_overflow",
-    "queue_overflow",
-    "source_energy_out_of_range",
-    "energy_inversion",
+from ionmc.transport.tally import (
+    COUNTER_NAMES,
+    END_CUTOFF,
+    END_ESCAPED,
+    END_MISSED_WORLD,
+    END_SOURCE_REJECTED,
+    END_TRUNCATED,
+    N_FIXED_TALLIES,
+    TALLY_NAMES,
+    TRACE_COLUMNS,
+    HistoryDiagnostics,
+    PartialTransport,
+    RawTransport,
+    build_diagnostics,
+    merge_partials,
+    rows_to_partial,
 )
 
-
-@dataclass
-class RawTransport:
-    """Raw output of the reference transport (float64)."""
-
-    edep_mev: list[NDArray[np.float64]]
-    tallies: dict[str, float]
-    outside_mev: list[float]
-    counters: dict[str, int]
-    diagnostics: dict[str, Any] = field(default_factory=dict)
+__all__ = [
+    "COUNTER_NAMES",
+    "END_CUTOFF",
+    "END_ESCAPED",
+    "END_MISSED_WORLD",
+    "END_SOURCE_REJECTED",
+    "END_TRUNCATED",
+    "TRACE_COLUMNS",
+    "RawTransport",
+    "run_reference",
+    "run_reference_range",
+]
 
 
 def run_reference(eff: EffectiveConfig) -> RawTransport:
     """Transport ``n_histories`` primaries with the Python reference loop (float64)."""
-    return _Reference(eff).run()
+    n = eff.requested.run.n_histories
+    part = run_reference_range(eff, 0, n)
+    diag = eff.requested.diagnostics
+    raw = merge_partials([part], n, len(eff.requested.scoring))
+    raw.diagnostics = build_diagnostics(
+        [part], diag.track_end_positions, diag.escape_records, diag.trace_histories
+    )
+    raw.meta = {"workers": 1}
+    return raw
+
+
+def run_reference_range(eff: EffectiveConfig, h0: int, h1: int) -> PartialTransport:
+    """Transport the histories ``[h0, h1)``; the result depends on no other history."""
+    return _Reference(eff).run_range(h0, h1)
 
 
 def f_short_t(tt: float, r0: float, f_short: object) -> bool:
@@ -142,10 +132,7 @@ class _Reference:
         self.g_inv = [self.V(*(r(1.0 / x) for x in g.spacing_mm)) for g in self.grids]
         self.edep = [np.zeros((self.n_batches, g.n_voxels), dtype=np.float64) for g in self.grids]
         self.outside = [0.0] * len(self.grids)
-        self.tallies = {
-            k: 0.0
-            for k in ("initial", "cutoff", "step_deposit", "escaped", "truncated", "unaccounted")
-        }
+        self.tallies = dict.fromkeys(TALLY_NAMES, 0.0)
         self.counters = dict.fromkeys(COUNTER_NAMES, 0)
         self.e_table_max = float(self.tab.e_max_mev.min())
 
@@ -177,46 +164,55 @@ class _Reference:
                 self.outside[g] += deposit
 
     # -- driver -------------------------------------------------------------------------------
-    def run(self) -> RawTransport:
-        cfg = self.cfg
-        n = cfg.run.n_histories
-        diag = cfg.diagnostics
-        self.end_pos = np.full((n, 3), np.nan) if diag.track_end_positions else None
-        self.end_code = np.full(n, -1, dtype=np.int8) if diag.track_end_positions else None
-        self.end_energy = np.full(n, np.nan) if diag.track_end_positions else None
-        self.escapes: list[tuple[int, float, float, float, float, float, float, float]] = []
+    def run_range(self, h0: int, h1: int) -> PartialTransport:
+        n = h1 - h0
+        diag = self.cfg.diagnostics
+        n_g = len(self.grids)
+        self.want_diag = diag.track_end_positions or diag.escape_records or diag.trace_histories > 0
+        self.end_pos = np.full((n, 3), np.nan)
+        self.end_dir = np.full((n, 3), np.nan)
+        self.end_code = np.full(n, -1, dtype=np.int8)
+        self.end_energy = np.full(n, np.nan)
         self.trace: list[list[float]] = []
-        self.trace_end: list[tuple[int, int, float]] = []
-        for h in range(n):
+        self.h_base = h0
+        tally_rows = np.zeros((n, N_FIXED_TALLIES + n_g))
+        counter_rows = np.zeros((n, len(COUNTER_NAMES)), dtype=np.int32)
+        for h in range(h0, h1):
+            # per-history accumulators: a row depends on this history alone
+            self.tallies = dict.fromkeys(TALLY_NAMES, 0.0)
+            self.outside = [0.0] * n_g
+            self.counters = dict.fromkeys(COUNTER_NAMES, 0)
             self._history(h)
-        diagnostics: dict[str, Any] = {}
-        if diag.track_end_positions:
-            diagnostics["end_position_mm"] = self.end_pos
-            diagnostics["end_code"] = self.end_code
-            diagnostics["end_energy_mev"] = self.end_energy
-        if diag.escape_records:
-            arr = np.array(self.escapes, dtype=np.float64).reshape(-1, 8)
-            diagnostics["escape_history"] = arr[:, 0].astype(np.int64)
-            diagnostics["escape_position_mm"] = arr[:, 1:4]
-            diagnostics["escape_direction"] = arr[:, 4:7]
-            diagnostics["escape_energy_mev"] = arr[:, 7]
-        if diag.trace_histories > 0:
+            row = h - h0
+            tally_rows[row, :N_FIXED_TALLIES] = [self.tallies[k] for k in TALLY_NAMES]
+            tally_rows[row, N_FIXED_TALLIES:] = self.outside
+            counter_rows[row] = [self.counters[k] for k in COUNTER_NAMES]
+        diagnostics = None
+        if self.want_diag:
             tr = np.array(self.trace, dtype=np.float64).reshape(-1, len(TRACE_COLUMNS))
-            diagnostics["trace"] = {name: tr[:, i] for i, name in enumerate(TRACE_COLUMNS)}
-            diagnostics["trace_columns"] = TRACE_COLUMNS
-            te = np.array(self.trace_end, dtype=np.float64).reshape(-1, 3)
-            diagnostics["trace_end_history"] = te[:, 0].astype(np.int64)
-            diagnostics["trace_end_code"] = te[:, 1].astype(np.int64)
-            diagnostics["trace_end_energy_mev"] = te[:, 2]
-        return RawTransport(self.edep, self.tallies, self.outside, self.counters, diagnostics)
+            diagnostics = HistoryDiagnostics(
+                end_position_mm=self.end_pos,
+                end_direction=self.end_dir,
+                end_energy_mev=self.end_energy,
+                end_code=self.end_code,
+                trace_int=tr[:, :8].astype(np.int32),
+                trace_float=tr[:, 8:],
+            )
+        return rows_to_partial(h0, h1, tally_rows, counter_rows, self.edep, diagnostics)
 
-    def _end(self, h: int, code: int, pos: tuple[float, float, float], energy: float) -> None:
-        if self.end_pos is not None and self.end_code is not None and self.end_energy is not None:
-            self.end_pos[h] = pos
-            self.end_code[h] = code
-            self.end_energy[h] = energy
-        if h < self.cfg.diagnostics.trace_histories:
-            self.trace_end.append((h, code, energy))
+    def _end(
+        self,
+        h: int,
+        code: int,
+        pos: tuple[float, float, float],
+        direction: tuple[float, float, float],
+        energy: float,
+    ) -> None:
+        i = h - self.h_base
+        self.end_pos[i] = pos
+        self.end_dir[i] = direction
+        self.end_code[i] = code
+        self.end_energy[i] = energy
 
     # -- one history --------------------------------------------------------------------------
     def _history(self, h: int) -> None:
@@ -246,7 +242,7 @@ class _Reference:
             pz = pz + sg * (zz1 * float(e1v[2]) + zz2 * float(e2v[2]))
         if not (self.e_cut <= energy <= self.e_table_max):
             self.counters["source_energy_out_of_range"] += 1
-            self._end(h, END_SOURCE_REJECTED, (px, py, pz), energy)
+            self._end(h, END_SOURCE_REJECTED, (px, py, pz), d, energy)
             return
         self.tallies["initial"] += energy
         p1v1 = float(K.pv_mev(r(energy), self.mass))
@@ -257,7 +253,7 @@ class _Reference:
         t_in, t_out = float(t_in), float(t_out)
         if t_in > t_out or t_out < 0.0:
             self.tallies["escaped"] += energy
-            self._end(h, END_MISSED_WORLD, (px, py, pz), energy)
+            self._end(h, END_MISSED_WORLD, (px, py, pz), (ux, uy, uz), energy)
             return
         t0 = max(t_in, 0.0)
         lo, hi = self.geo.lower_mm, self.geo.upper_mm
@@ -279,12 +275,12 @@ class _Reference:
             if energy <= self.e_cut:
                 self.tallies["cutoff"] += energy
                 self._score(batch, (px, py, pz), energy)
-                self._end(h, END_CUTOFF, (px, py, pz), energy)
+                self._end(h, END_CUTOFF, (px, py, pz), (ux, uy, uz), energy)
                 return
             if steps >= max_steps:
                 self.tallies["truncated"] += energy
                 self.counters["step_truncation"] += 1
-                self._end(h, END_TRUNCATED, (px, py, pz), energy)
+                self._end(h, END_TRUNCATED, (px, py, pz), (ux, uy, uz), energy)
                 return
 
             m = int(self.mat[ix, iy, iz])
@@ -444,13 +440,11 @@ class _Reference:
                 )
             if exited:
                 self.tallies["escaped"] += energy
-                if self.cfg.diagnostics.escape_records:
-                    self.escapes.append((h, px, py, pz, ux, uy, uz, energy))
-                self._end(h, END_ESCAPED, (px, py, pz), energy)
+                self._end(h, END_ESCAPED, (px, py, pz), (ux, uy, uz), energy)
                 return
             zero_run = zero_run + 1 if s_act <= 0.0 else 0
             if zero_run > 3:
                 self.tallies["truncated"] += energy
                 self.counters["stall"] += 1
-                self._end(h, END_TRUNCATED, (px, py, pz), energy)
+                self._end(h, END_TRUNCATED, (px, py, pz), (ux, uy, uz), energy)
                 return

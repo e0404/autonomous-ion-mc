@@ -26,6 +26,7 @@ from ionmc.physics.stopping import StoppingSource, StoppingTable
 from ionmc.scoring import MAX_SCORING_GRIDS, ScoringGrid
 from ionmc.sources import PencilBeamSource
 from ionmc.transport.tables import TransportTables, thaw
+from ionmc.transport.tally import TRACE_N_CONTINUOUS, TRACE_N_DISCRETE
 
 STRAGGLING_MODELS = ("bohr_gauss_clamped_gamma_v1",)
 MCS_MODELS = ("differential_moliere",)
@@ -33,6 +34,10 @@ DELTA_ELECTRON_MODELS = ("local",)
 BACKENDS = ("python", "warp-cpu", "warp-cuda")
 PRECISIONS = ("float32", "float64")
 MAX_REJECTION_ATTEMPTS = 64
+DEFAULT_CHUNK_HISTORIES = 2**18
+MIN_CHUNK_HISTORIES = 2**10
+MAX_CPU_WORKERS = 256
+MAX_TRACE_BUFFER_BYTES = 2**30
 MAX_ENERGY_SIGMA_FRACTION = 0.05
 MAX_ENERGY_LOSS_FRACTION = 0.2
 U01_MAPPING = {
@@ -98,9 +103,13 @@ class RunOptions:
     split into ``n_batches`` interleaved batches (history ``h`` belongs to batch ``h mod B``).
     ``max_steps`` (per history) defaults to a computed bound that is recorded. A nonzero
     transport-limit counter raises ``TransportLimitError`` unless ``allow_invalid_result``.
-    ``memory_budget_bytes`` bounds the per-batch accumulators. ``cpu_workers`` (> 1) and
-    ``worker_timeout_s`` belong to the multi-process Warp CPU driver (V3-003B); the python
-    backend runs in-process and rejects ``cpu_workers > 1``."""
+    ``memory_budget_bytes`` bounds the energy-deposit accumulators (of all worker processes
+    together). ``cpu_workers`` > 1 splits the histories over that many spawned worker processes
+    on the ``python`` and ``warp-cpu`` backends (``warp-cuda`` rejects it); a worker that fails
+    or exceeds ``worker_timeout_s`` terminates the run without a partial result.
+    ``chunk_histories`` (a power of two, at least 2**10, recorded in the effective
+    configuration) bounds the histories per Warp launch; it affects memory and, through the
+    order of float atomic adds, only the rounding of the deposit grids."""
 
     backend: Literal["python", "warp-cpu", "warp-cuda"]
     precision: Literal["float32", "float64"]
@@ -112,6 +121,7 @@ class RunOptions:
     allow_invalid_result: bool = False
     worker_timeout_s: float | None = None
     memory_budget_bytes: int = 2**31
+    chunk_histories: int = DEFAULT_CHUNK_HISTORIES
 
     def __post_init__(self) -> None:
         choice("backend", self.backend, BACKENDS)
@@ -127,6 +137,9 @@ class RunOptions:
         if self.worker_timeout_s is not None:
             real("worker_timeout_s", self.worker_timeout_s, positive=True)
         integer("memory_budget_bytes", self.memory_budget_bytes, minimum=1)
+        chunk = integer("chunk_histories", self.chunk_histories, minimum=MIN_CHUNK_HISTORIES)
+        if chunk & (chunk - 1) != 0:
+            raise fail(f"chunk_histories must be a power of two, got {chunk}")
 
 
 @dataclass(frozen=True)
@@ -209,6 +222,7 @@ class EffectiveConfig:
             "n_histories": r.n_histories,
             "n_batches": r.n_batches,
             "cpu_workers": r.cpu_workers,
+            "chunk_histories": r.chunk_histories,
             "max_steps": self.max_steps,
             "max_steps_origin": self.max_steps_origin,
             "unit_direction": list(self.unit_direction),
@@ -332,6 +346,21 @@ def _computed_max_steps(
     return int(4 * (n_len + n_cross + n_eloss + n_range) + 100)
 
 
+def trace_buffer_bytes(trace_histories: int, max_steps: int) -> int:
+    """Bytes of the trace buffers (int32 discrete and float64 continuous columns per step)."""
+    return trace_histories * max_steps * (4 * TRACE_N_DISCRETE + 8 * TRACE_N_CONTINUOUS)
+
+
+def cuda_available() -> bool:
+    """True if Warp sees a usable CUDA device (``cuda:0``)."""
+    import warp as wp
+
+    try:
+        return bool(wp.is_cuda_available())
+    except Exception:  # pragma: no cover - driver probing differs between hosts
+        return False
+
+
 def validate(config: SimulationConfig) -> EffectiveConfig:
     """Check every fail-closed rule and return the effective configuration.
 
@@ -371,9 +400,11 @@ def validate(config: SimulationConfig) -> EffectiveConfig:
         raise fail(
             f"n_histories ({run.n_histories}) must be a multiple of n_batches ({run.n_batches})"
         )
-    if run.cpu_workers > 1 and run.backend == "python":
-        raise BackendUnavailableError(
-            "multi-process execution (cpu_workers > 1) is implemented in V3-003B"
+    if run.cpu_workers > MAX_CPU_WORKERS:
+        raise fail(f"cpu_workers must be <= {MAX_CPU_WORKERS}, got {run.cpu_workers}")
+    if run.cpu_workers > run.n_histories:
+        raise fail(
+            f"cpu_workers ({run.cpu_workers}) must not exceed n_histories ({run.n_histories})"
         )
 
     if not 1 <= len(config.scoring) <= MAX_SCORING_GRIDS:
@@ -382,11 +413,14 @@ def validate(config: SimulationConfig) -> EffectiveConfig:
     if len(set(names)) != len(names):
         raise fail(f"scoring grid names must be unique, got {names}")
     bytes_per = 4 if run.precision == "float32" else 8
-    accumulator_bytes = run.n_batches * sum(g.n_voxels for g in config.scoring) * bytes_per
+    accumulator_bytes = (
+        run.n_batches * sum(g.n_voxels for g in config.scoring) * bytes_per * run.cpu_workers
+    )
     if accumulator_bytes > run.memory_budget_bytes:
         raise fail(
-            f"per-batch accumulators need {accumulator_bytes} bytes, above the memory budget "
-            f"of {run.memory_budget_bytes} bytes (reduce n_batches or the grids)"
+            f"per-batch accumulators need {accumulator_bytes} bytes (including one private copy "
+            f"per worker process), above the memory budget of {run.memory_budget_bytes} bytes "
+            "(reduce n_batches, the grids or cpu_workers)"
         )
     min_spacing = min(min(g.spacing_mm) for g in config.scoring)
     if ph.max_step_mm > min_spacing:
@@ -429,10 +463,28 @@ def validate(config: SimulationConfig) -> EffectiveConfig:
             "reaches the 2**32 block-counter bound"
         )
 
-    if run.backend in ("warp-cpu", "warp-cuda"):
+    diag = config.diagnostics
+    if diag.trace_histories > 0:
+        if run.precision != "float64":
+            raise fail(
+                "the per-step trace is only available in float64 (trace_histories > 0 with "
+                f"precision {run.precision!r}); the trace is the trajectory-parity reference"
+            )
+        if diag.trace_histories > run.n_histories:
+            raise fail(
+                f"trace_histories ({diag.trace_histories}) exceeds n_histories ({run.n_histories})"
+            )
+        trace_bytes = trace_buffer_bytes(diag.trace_histories, max_steps)
+        if trace_bytes > MAX_TRACE_BUFFER_BYTES:
+            raise fail(
+                f"the trace buffers ({diag.trace_histories} histories x {max_steps} steps) need "
+                f"{trace_bytes} bytes, above the limit of {MAX_TRACE_BUFFER_BYTES} bytes"
+            )
+
+    if run.backend == "warp-cuda" and not cuda_available():
         raise BackendUnavailableError(
-            f"backend {run.backend!r} is implemented in V3-003B; only backend 'python' is "
-            "available (no fallback is performed)"
+            "backend 'warp-cuda' requires a CUDA device (cuda:0) that Warp can use; none is "
+            "available and nothing falls back to another backend"
         )
 
     return EffectiveConfig(

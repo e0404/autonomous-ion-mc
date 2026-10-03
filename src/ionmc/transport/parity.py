@@ -1,0 +1,399 @@
+"""Backend-parity measurements (T1, T12, T13 of ``validation/plans/v3-003-acceptance.md``).
+
+Pure NumPy/``statistics`` functions (no SciPy: the host runner has none) that compare two
+:class:`~ionmc.simulation.Result` objects and return JSON-serialisable verdicts. They are used
+by the tests and by ``validation/scripts/transport/run_suite.py``, so the numbers a test
+asserts and the numbers a validation archive records come from the same code.
+
+* T1 (:func:`compare_traces`): discrete trace columns exactly equal, continuous columns within
+  ``rtol = atol = 1e-10``.
+* T13 (:func:`compare_partition`): counters and tallies bit-identical, deposit grids within
+  relative 1e-5 (float32) or 1e-12 (float64); see :func:`deposit_agreement` for the exact
+  meaning of "relative" on voxels far below the peak.
+* T12 (:func:`t12_compare`): per-bin ``z = (a - b) / sqrt(se_a^2 + se_b^2)`` of two independent
+  samples (distinct seeds) on the IDD and the lateral profiles for bins above 1 % of the maximum,
+  a Wilson-Hilferty chi-square p-value (> 0.001), the Bonferroni bound on ``max |z|`` and
+  ``|z| < 3.5`` for the scalars (R80, total deposit, lateral sigma at 0.5 R). Standard errors
+  come from the batch method of each run, so ``z`` is Student-t rather than normal for few
+  batches; the number of batches of every run is recorded with the verdict.
+"""
+
+from __future__ import annotations
+
+import math
+from dataclasses import dataclass
+from statistics import NormalDist
+from typing import Any
+
+import numpy as np
+from numpy.typing import NDArray
+
+from ionmc.scoring import ScoringGrid
+from ionmc.simulation import Result
+from ionmc.transport.tally import COUNTER_NAMES, TRACE_COLUMNS, TRACE_N_DISCRETE
+
+TRACE_RTOL = 1e-10
+TRACE_ATOL = 1e-10
+DEPOSIT_RTOL = {"float32": 1e-5, "float64": 1e-12}
+DEPOSIT_FLOOR_FRACTION = 0.01
+P_VALUE_MIN = 0.001
+SCALAR_Z_MAX = 3.5
+DOSE_FRACTION = 0.01
+T12_DEPTHS = (0.25, 0.5, 0.9)
+
+
+# -- T1: trajectory parity ---------------------------------------------------------------------
+def compare_traces(
+    reference: dict[str, Any], other: dict[str, Any], *, rtol: float = TRACE_RTOL,
+    atol: float = TRACE_ATOL,
+) -> dict[str, Any]:  # fmt: skip
+    """T1 verdict for two ``diagnostics`` dictionaries that contain a trace.
+
+    Discrete columns (``history, step, ix, iy, iz, reason, blocks, attempts``) must be equal on
+    every step of every traced history, the end codes equal, and every continuous column within
+    ``|a - b| <= atol + rtol |b|``. A different number of steps fails.
+    """
+    tr_a, tr_b = reference["trace"], other["trace"]
+    n_a, n_b = len(tr_a["step"]), len(tr_b["step"])
+    out: dict[str, Any] = {
+        "steps_reference": n_a,
+        "steps_other": n_b,
+        "rtol": rtol,
+        "atol": atol,
+        "discrete_mismatches": {},
+        "continuous_max_abs_diff": {},
+        "continuous_violations": {},
+    }
+    if n_a != n_b:
+        out["pass"] = False
+        out["reason"] = "different number of trace steps"
+        return out
+    ok = True
+    for i, name in enumerate(TRACE_COLUMNS):
+        a, b = np.asarray(tr_a[name]), np.asarray(tr_b[name])
+        if i < TRACE_N_DISCRETE:
+            bad = int(np.count_nonzero(a != b))
+            out["discrete_mismatches"][name] = bad
+            ok &= bad == 0
+        else:
+            diff = np.abs(a - b)
+            out["continuous_max_abs_diff"][name] = float(diff.max()) if n_a else 0.0
+            viol = int(np.count_nonzero(~(diff <= atol + rtol * np.abs(b))))
+            out["continuous_violations"][name] = viol
+            ok &= viol == 0
+    codes_equal = bool(
+        np.array_equal(reference["trace_end_code"], other["trace_end_code"])
+        and np.array_equal(reference["trace_end_history"], other["trace_end_history"])
+    )
+    out["end_codes_equal"] = codes_equal
+    out["pass"] = bool(ok and codes_equal and n_a > 0)
+    return out
+
+
+# -- T13: partition invariance -----------------------------------------------------------------
+def deposit_agreement(
+    a: NDArray[np.float64], b: NDArray[np.float64], rtol: float
+) -> dict[str, Any]:
+    """Elementwise agreement of two deposit arrays: ``|a - b| <= rtol * max(|a|, f max|a|)``
+    with ``f = 1 %`` (voxels below 1 % of the peak are compared with an absolute tolerance of
+    ``rtol`` times 1 % of the peak, because float32 accumulation noise is relative to the
+    accumulated magnitude, not to a near-empty voxel)."""
+    peak = float(np.max(np.abs(a))) if a.size else 0.0
+    floor = DEPOSIT_FLOOR_FRACTION * peak
+    scale = np.maximum(np.abs(a), floor)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        rel = np.where(scale > 0.0, np.abs(a - b) / scale, 0.0)
+    return {
+        "max_relative_difference": float(rel.max()) if a.size else 0.0,
+        "max_difference_over_peak": float(np.abs(a - b).max() / peak) if peak > 0 else 0.0,
+        "total_relative_difference": float(abs(a.sum() - b.sum()) / abs(a.sum()))
+        if a.sum() != 0.0
+        else 0.0,
+        "rtol": rtol,
+        "pass": bool(np.all(rel <= rtol)),
+    }
+
+
+def compare_partition(a: Result, b: Result) -> dict[str, Any]:
+    """T13 verdict for two runs of the same configuration that differ only in how the histories
+    were split (workers, chunk size): counters and tallies identical, deposit grids within
+    ``DEPOSIT_RTOL[precision]``."""
+    precision = a.precision
+    ea, eb = a.energy_balance, b.energy_balance
+    tallies_a = {
+        "initial": ea.initial_mev,
+        "step_deposit": ea.step_deposit_mev,
+        "cutoff": ea.cutoff_mev,
+        "escaped": ea.escaped_mev,
+        "truncated": ea.truncated_mev,
+        "unaccounted": ea.unaccounted_mev,
+        **{f"outside_{i}": v for i, v in enumerate(ea.outside_mev)},
+    }
+    tallies_b = {
+        "initial": eb.initial_mev,
+        "step_deposit": eb.step_deposit_mev,
+        "cutoff": eb.cutoff_mev,
+        "escaped": eb.escaped_mev,
+        "truncated": eb.truncated_mev,
+        "unaccounted": eb.unaccounted_mev,
+        **{f"outside_{i}": v for i, v in enumerate(eb.outside_mev)},
+    }
+    tallies_identical = tallies_a == tallies_b
+    counters_identical = a.counters.as_dict() == b.counters.as_dict()
+    grids = {
+        ga.name: deposit_agreement(
+            np.asarray(ga.batch_energy_mev), np.asarray(gb.batch_energy_mev),
+            DEPOSIT_RTOL[precision],
+        )
+        for ga, gb in zip(a.grids, b.grids, strict=True)
+    }  # fmt: skip
+    return {
+        "precision": precision,
+        "tallies_identical": tallies_identical,
+        "tallies_a": tallies_a,
+        "tallies_b": tallies_b,
+        "counters_identical": counters_identical,
+        "counters": a.counters.as_dict(),
+        "counter_names": list(COUNTER_NAMES),
+        "deposit": grids,
+        "pass": bool(
+            tallies_identical and counters_identical and all(g["pass"] for g in grids.values())
+        ),
+    }
+
+
+# -- T12: statistical parity -------------------------------------------------------------------
+def wilson_hilferty_p(chi2: float, dof: int) -> float:
+    """Upper-tail probability ``P(X >= chi2)`` of a chi-square variable (Wilson-Hilferty)."""
+    if dof < 1:
+        raise ValueError("dof must be >= 1")
+    c = 2.0 / (9.0 * dof)
+    z = ((chi2 / dof) ** (1.0 / 3.0) - (1.0 - c)) / math.sqrt(c)
+    return 1.0 - NormalDist().cdf(z)
+
+
+def bonferroni_z(n: int, alpha: float = P_VALUE_MIN) -> float:
+    """Two-sided Bonferroni bound ``Phi^-1(1 - alpha / (2 n))`` on ``max |z|`` of ``n`` bins."""
+    return NormalDist().inv_cdf(1.0 - alpha / (2.0 * n))
+
+
+@dataclass(frozen=True)
+class T12Layout:
+    """Scoring layout of the statistical-parity runs: the grid names and slab depths."""
+
+    idd: str
+    slabs: tuple[tuple[str, float], ...]  # (grid name, z/R)
+    range_mm: float
+    bin_mm: float
+    lateral_bin_mm: float
+
+
+def t12_scoring_grids(
+    range_mm: float,
+    *,
+    half_width_mm: float,
+    lateral_bin_mm: float = 0.2,
+    slab_mm: float = 1.0,
+    depth_mm: float | None = None,
+) -> tuple[tuple[ScoringGrid, ...], T12Layout]:
+    """Scoring grids of T12: an IDD ``(1, 1, nz)`` of ``slab_mm`` bins and lateral slabs of
+    ``slab_mm`` thickness at ``z/R`` in (0.25, 0.5, 0.9) with ``lateral_bin_mm`` bins (at most
+    four grids, the engine's limit). ``max_step_mm`` of the run must not exceed the smallest
+    spacing (``lateral_bin_mm``)."""
+    depth = depth_mm if depth_mm is not None else 1.3 * range_mm
+    nz = int(math.ceil(depth / slab_mm))
+    n_lat = int(round(2.0 * half_width_mm / lateral_bin_mm))
+    grids = [
+        ScoringGrid(
+            (-half_width_mm, -half_width_mm, 0.0),
+            (2.0 * half_width_mm, 2.0 * half_width_mm, slab_mm),
+            (1, 1, nz),
+            name="idd",
+        )
+    ]
+    slabs = []
+    for frac in T12_DEPTHS:
+        z0 = math.floor(frac * range_mm / slab_mm) * slab_mm  # slab aligned with the IDD bins
+        name = f"lat{int(round(100 * frac)):02d}"
+        grids.append(
+            ScoringGrid(
+                (-half_width_mm, -half_width_mm, z0),
+                (lateral_bin_mm, lateral_bin_mm, slab_mm),
+                (n_lat, n_lat, 1),
+                name=name,
+            )
+        )
+        slabs.append((name, frac))
+    return tuple(grids), T12Layout("idd", tuple(slabs), range_mm, slab_mm, lateral_bin_mm)
+
+
+@dataclass(frozen=True)
+class T12Observables:
+    """Per-batch observables of one run: arrays ``(B, m)`` and scalars ``(B,)``."""
+
+    arrays: dict[str, NDArray[np.float64]]
+    scalars: dict[str, NDArray[np.float64]]
+    n_batches: int
+
+
+def _r80(profile: NDArray[np.float64], dz: float) -> float:
+    """Depth [mm] of the distal 80 % point of an IDD (linear interpolation between bin centres)."""
+    i_max = int(np.argmax(profile))
+    level = 0.8 * profile[i_max]
+    for i in range(i_max, len(profile) - 1):
+        if profile[i + 1] < level <= profile[i]:
+            f = (profile[i] - level) / (profile[i] - profile[i + 1])
+            return float((i + 0.5 + f) * dz)
+    return float("nan")
+
+
+def t12_observables(result: Result, layout: T12Layout) -> T12Observables:
+    """Batch-wise IDD, lateral profiles and scalars (R80, total deposit, lateral sigma at 0.5 R)."""
+    idd_b = np.asarray(result.grid(layout.idd).batch_energy_mev)  # (B, 1, 1, nz)
+    b = idd_b.shape[0]
+    idd = idd_b.reshape(b, -1)
+    arrays = {"idd": idd}
+    scalars = {
+        "total_deposit_mev": idd.sum(axis=1),
+        "r80_mm": np.array([_r80(idd[k], layout.bin_mm) for k in range(b)]),
+    }
+    for name, frac in layout.slabs:
+        slab = np.asarray(result.grid(name).batch_energy_mev)  # (B, nx, ny, 1)
+        prof = slab.sum(axis=(2, 3))  # (B, nx): lateral x profile summed over y
+        arrays[name] = prof
+        if abs(frac - 0.5) < 1e-9:
+            nx = prof.shape[1]
+            g = result.requested_config.scoring
+            grid = next(x for x in g if x.name == name)
+            xc = grid.origin_mm[0] + (np.arange(nx) + 0.5) * grid.spacing_mm[0]
+            tot = prof.sum(axis=1)
+            mean = (prof * xc).sum(axis=1) / tot
+            var = (prof * (xc[None, :] - mean[:, None]) ** 2).sum(axis=1) / tot
+            scalars["sigma_lat_05R_mm"] = np.sqrt(var)
+    return T12Observables(arrays, scalars, b)
+
+
+def _mean_se(x: NDArray[np.float64]) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    b = x.shape[0]
+    return x.mean(axis=0), x.std(axis=0, ddof=1) / math.sqrt(b)
+
+
+def t12_compare(a: T12Observables, b: T12Observables) -> dict[str, Any]:
+    """T12 verdict for two independent samples (see the module docstring)."""
+    out: dict[str, Any] = {"n_batches": [a.n_batches, b.n_batches], "arrays": {}, "scalars": {}}
+    ok = True
+    for name in a.arrays:
+        ma, sa = _mean_se(a.arrays[name])
+        mb, sb = _mean_se(b.arrays[name])
+        ref = 0.5 * (ma + mb)
+        sel = ref > DOSE_FRACTION * ref.max()
+        n = int(sel.sum())
+        diff = (ma - mb)[sel]
+        se = np.sqrt(sa[sel] ** 2 + sb[sel] ** 2)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            z: NDArray[np.float64] = np.where(
+                se > 0.0, diff / se, np.where(diff == 0.0, 0.0, np.inf)
+            )
+        chi2 = float((z**2).sum())
+        p = wilson_hilferty_p(chi2, n) if n >= 1 else 1.0
+        zmax = float(np.abs(z).max()) if n else 0.0
+        bound = bonferroni_z(n) if n else float("inf")
+        passed = bool(p > P_VALUE_MIN and zmax < bound)
+        out["arrays"][name] = {
+            "n_bins": n,
+            "chi2": chi2,
+            "p_value": p,
+            "max_abs_z": zmax,
+            "bonferroni_bound": bound,
+            "pass": passed,
+        }
+        ok &= passed
+    for name in a.scalars:
+        ma, sa = _mean_se(a.scalars[name])
+        mb, sb = _mean_se(b.scalars[name])
+        se_ab = math.sqrt(float(sa) ** 2 + float(sb) ** 2)
+        zs = (float(ma) - float(mb)) / se_ab if se_ab > 0.0 else math.inf
+        passed = bool(abs(zs) < SCALAR_Z_MAX)
+        out["scalars"][name] = {
+            "a": float(ma),
+            "b": float(mb),
+            "se_a": float(sa),
+            "se_b": float(sb),
+            "z": zs,
+            "bound": SCALAR_Z_MAX,
+            "pass": passed,
+        }
+        ok &= passed
+    out["pass"] = bool(ok)
+    return out
+
+
+def t12_config(
+    *,
+    energy_mev: float,
+    backend: str,
+    precision: str,
+    seed: int,
+    n_histories: int,
+    n_batches: int,
+    workers: int = 1,
+    lateral_bin_mm: float = 0.2,
+    half_width_mm: float = 20.0,
+    max_step_mm: float | None = None,
+    timeout_s: float | None = None,
+    chunk_histories: int | None = None,
+) -> tuple[Any, T12Layout]:
+    """Configuration of one T12 sample: a pencil beam of protons in a water box, all physics on,
+    offline analytic (Bethe, I = 78 eV) stopping, the T12 scoring grids. Each sample must use
+    its own ``seed``. ``max_step_mm`` defaults to ``lateral_bin_mm`` (the engine requires steps
+    no longer than the smallest scoring spacing)."""
+    from ionmc.config import (
+        DEFAULT_CHUNK_HISTORIES,
+        PhysicsOptions,
+        RunOptions,
+        SimulationConfig,
+    )
+    from ionmc.geometry import BoxPhantom
+    from ionmc.materials import WATER
+    from ionmc.physics.projectiles import PROTON
+    from ionmc.physics.stopping import BetheStoppingSource
+    from ionmc.sources import PencilBeamSource
+    from ionmc.transport.tables import TransportTables
+
+    stopping = BetheStoppingSource()
+    tab = TransportTables.from_stopping_tables([stopping.table(WATER, PROTON)])
+    range_mm = tab.range_g_cm2(0, energy_mev) * 10.0 / WATER.density_g_cm3
+    grids, layout = t12_scoring_grids(
+        range_mm, half_width_mm=half_width_mm, lateral_bin_mm=lateral_bin_mm
+    )
+    depth = 1.3 * range_mm
+    margin = half_width_mm + 10.0
+    cfg = SimulationConfig(
+        source=PencilBeamSource(PROTON, (0.0, 0.0, 0.0), (0.0, 0.0, 1.0), energy_mev),
+        geometry=BoxPhantom((-margin, -margin, 0.0), (2 * margin, 2 * margin, depth), WATER),
+        scoring=grids,
+        physics=PhysicsOptions(
+            nuclear=False,
+            stopping=stopping,
+            max_step_mm=max_step_mm if max_step_mm is not None else lateral_bin_mm,
+        ),
+        run=RunOptions(
+            backend=backend,  # type: ignore[arg-type]
+            precision=precision,  # type: ignore[arg-type]
+            seed=seed,
+            n_histories=n_histories,
+            n_batches=n_batches,
+            cpu_workers=workers,
+            worker_timeout_s=timeout_s,
+            chunk_histories=chunk_histories or DEFAULT_CHUNK_HISTORIES,
+        ),
+    )
+    return cfg, layout
+
+
+def t12_sample(**kwargs: Any) -> tuple[Result, T12Layout]:
+    """Run one T12 sample (see :func:`t12_config`)."""
+    from ionmc.simulation import Simulation
+
+    cfg, layout = t12_config(**kwargs)
+    return Simulation(cfg).run(), layout

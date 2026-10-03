@@ -323,6 +323,8 @@ def test_capabilities_report() -> None:
     cap = capabilities()
     assert cap["species"] == ["proton"] and cap["physics"]["nuclear"] is False
     assert cap["backends"]["python"].startswith("available")
+    assert cap["backends"]["warp-cpu"].startswith("available")
+    assert cap["chunk_histories"]["default"] == 2**18
     assert "warp-cuda" in cap["backend_names"]
     import ionmc
 

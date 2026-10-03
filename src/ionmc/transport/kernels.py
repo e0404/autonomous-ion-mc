@@ -1,0 +1,511 @@
+# mypy: ignore-errors
+# (Warp kernel sources use runtime precision types in annotations; see _wpfunc.py.)
+"""The Warp transport kernel: one thread transports one history (Warp CPU and CUDA).
+
+``make_transport_kernel(real, diag)`` returns a cached kernel (``module="unique"``, backward
+off) for precision ``real`` and diagnostics flag ``diag`` (end states and, in float64, the
+per-step trace). Variants: float32, float32 with diagnostics, float64 with diagnostics (and
+float64 without, for float64 production runs); only float64 is validated for traces.
+
+The step loop below is a statement-by-statement copy of ``ionmc.transport.reference._history``:
+the same branches in the same order and the same expression order, so that the float64 kernel
+and the Python reference follow the same trajectory (test T1). All physical decisions are the
+shared ``@wp.func`` functions of ``ionmc.physics`` and ``ionmc.transport.funcs``; the kernel
+only holds the glue (table reads, state bookkeeping, random-number draws, scoring, tallies).
+State lives in registers.
+
+Outputs (no atomics except the energy-deposit grid): ``edep[B, sum(n_voxels)]`` of the backend
+precision, accumulated with ``atomic_add`` into batch ``h % B``; per-history float64
+``tally_rows[chunk, 6 + G]`` (``ionmc.transport.tally.TALLY_NAMES`` then the outside deposit of
+every grid) and int32 ``counter_rows[chunk, 7]`` (``COUNTER_NAMES``), each row written only by
+its own thread; with ``diag``: ``end_state[chunk, 7]`` (position, direction, energy),
+``end_code[chunk]``, and for the first ``trace_k`` histories the trace
+``trace_i[K, max_steps, 8]`` (int32), ``trace_f[K, max_steps, 9]`` (float64) and ``trace_n[K]``
+(rows written). A history stops at ``max_steps`` so the trace buffer cannot overflow.
+"""
+
+import functools
+import math
+from types import SimpleNamespace
+
+import warp as wp
+
+from ionmc._wpfunc import check_real, named_func
+from ionmc.config import MAX_REJECTION_ATTEMPTS
+from ionmc.physics.em import make_em
+from ionmc.physics.kinematics import make_kinematics
+from ionmc.rng.philox import PURPOSE_SOURCE, PURPOSE_TRANSPORT, make_philox
+from ionmc.transport.funcs import make_transport_funcs
+from ionmc.transport.tally import (
+    END_CUTOFF,
+    END_ESCAPED,
+    END_MISSED_WORLD,
+    END_SOURCE_REJECTED,
+    END_TRUNCATED,
+    N_FIXED_TALLIES,
+)
+
+wp.set_module_options({"enable_backward": False})
+
+_TWO_PI = 2.0 * math.pi
+_MAX_ATTEMPTS = MAX_REJECTION_ATTEMPTS
+
+
+@functools.cache
+def make_kernel_support(real: type) -> SimpleNamespace:
+    """Control struct and helper functions of precision ``real`` (shared by the variants)."""
+    name = check_real(real)
+    R = real
+    F = make_transport_funcs(real)
+    v3 = F.vec3
+    n_fixed = wp.constant(N_FIXED_TALLIES)
+
+    class Control:
+        pass
+
+    Control.__annotations__ = {
+        "seed0": wp.uint32,
+        "seed1": wp.uint32,
+        "h0": wp.uint32,
+        "trace_k": wp.uint32,
+        "trace_h0": wp.uint32,
+        "n_batches": int,
+        "max_steps": int,
+        "mcs": int,
+        "straggling": int,
+        "nx": int,
+        "ny": int,
+        "nz": int,
+        "n_grids": int,
+        "n_e": int,
+        "n_r": int,
+        "e_cut": R,
+        "e_table_max": R,
+        "e0": R,
+        "sigma_e": R,
+        "sigma_lat": R,
+        "c_alpha": R,
+        "c_rho_f": R,
+        "c_frac": R,
+        "c_smax": R,
+        "c_fshort": R,
+        "mass": R,
+        "pos0": v3,
+        "dir": v3,
+        "origin": v3,
+        "spacing": v3,
+        "lo": v3,
+        "hi": v3,
+    }
+    Control.__name__ = f"TransportControl_{name}"
+    Control.__qualname__ = Control.__name__
+    control = wp.struct(Control)
+
+    @named_func(name)
+    def score(
+        edep: wp.array2d(dtype=R),
+        tally_rows: wp.array2d(dtype=wp.float64),
+        tid: int,
+        batch: int,
+        px: R,
+        py: R,
+        pz: R,
+        deposit: R,
+        g_origin: wp.array2d(dtype=R),
+        g_inv: wp.array2d(dtype=R),
+        g_shape: wp.array2d(dtype=int),
+        g_off: wp.array(dtype=int),
+        n_grids: int,
+    ):
+        """Deposit ``deposit`` at ``p`` in every grid containing it; else tally it as outside."""
+        p = v3(px, py, pz)
+        for g in range(n_grids):
+            go = v3(g_origin[g, 0], g_origin[g, 1], g_origin[g, 2])
+            gi = v3(g_inv[g, 0], g_inv[g, 1], g_inv[g, 2])
+            nxg = g_shape[g, 0]
+            nyg = g_shape[g, 1]
+            nzg = g_shape[g, 2]
+            ix, iy, iz, inside = F.grid_index(p, go, gi, nxg, nyg, nzg)
+            if inside == 1:
+                wp.atomic_add(edep, batch, g_off[g] + (ix * nyg + iy) * nzg + iz, deposit)
+            else:
+                tally_rows[tid, n_fixed + g] = tally_rows[tid, n_fixed + g] + wp.float64(deposit)
+
+    @named_func(name)
+    def energy_from_range(
+        ln_er: wp.array2d(dtype=R),
+        ln_r0: wp.array(dtype=R),
+        inv_dln_r: wp.array(dtype=R),
+        n_r: int,
+        m: int,
+        r_g_cm2: R,
+    ) -> R:
+        """Energy [MeV] with CSDA range ``r_g_cm2`` (shared bin location, array reads)."""
+        i, f = F.log_bin_index(r_g_cm2, ln_r0[m], inv_dln_r[m], n_r)
+        return F.interp_exp(ln_er[m, i], ln_er[m, i + 1], f)
+
+    return SimpleNamespace(
+        control=control, score=score, energy_from_range=energy_from_range, real=name
+    )
+
+
+@functools.cache
+def make_transport_kernel(real: type, diag: bool):
+    """Return the cached transport kernel for precision ``real`` and diagnostics flag ``diag``.
+
+    ``enable_backward`` is off and ``module="unique"`` gives every variant its own Warp module
+    (its own compile unit and cache entry).
+    """
+    name = check_real(real)
+    R = real
+    S = make_kernel_support(real)
+    F = make_transport_funcs(real)
+    EM = make_em(real)
+    K = make_kinematics(real)
+    PH = make_philox(real)
+    v3 = F.vec3
+    control = S.control
+    score = S.score
+    energy_from_range = S.energy_from_range
+
+    u_zero = wp.constant(wp.uint32(0))
+    p_transport = wp.constant(wp.uint32(PURPOSE_TRANSPORT))
+    p_source = wp.constant(wp.uint32(PURPOSE_SOURCE))
+    two_pi = wp.constant(R(_TWO_PI))
+    max_attempts = wp.constant(_MAX_ATTEMPTS)
+    code_cutoff = wp.constant(END_CUTOFF)
+    code_escaped = wp.constant(END_ESCAPED)
+    code_truncated = wp.constant(END_TRUNCATED)
+    code_rejected = wp.constant(END_SOURCE_REJECTED)
+    code_missed = wp.constant(END_MISSED_WORLD)
+    with_diag = wp.constant(diag)
+
+    def transport(
+        ctl: control,
+        mat: wp.array3d(dtype=wp.int32),
+        dens: wp.array3d(dtype=R),
+        ln_s: wp.array2d(dtype=R),
+        ln_r: wp.array2d(dtype=R),
+        ln_er: wp.array2d(dtype=R),
+        ln_e0: wp.array(dtype=R),
+        inv_dln_e: wp.array(dtype=R),
+        ln_r0: wp.array(dtype=R),
+        inv_dln_r: wp.array(dtype=R),
+        z_over_a: wp.array(dtype=R),
+        inv_xs: wp.array(dtype=R),
+        g_origin: wp.array2d(dtype=R),
+        g_inv: wp.array2d(dtype=R),
+        g_shape: wp.array2d(dtype=int),
+        g_off: wp.array(dtype=int),
+        edep: wp.array2d(dtype=R),
+        tally_rows: wp.array2d(dtype=wp.float64),
+        counter_rows: wp.array2d(dtype=wp.int32),
+        end_state: wp.array2d(dtype=R),
+        end_code: wp.array(dtype=wp.int32),
+        trace_i: wp.array3d(dtype=wp.int32),
+        trace_f: wp.array3d(dtype=wp.float64),
+        trace_n: wp.array(dtype=wp.int32),
+    ):
+        tid = wp.tid()
+        h = ctl.h0 + wp.uint32(tid)
+        batch = int(h % wp.uint32(ctl.n_batches))
+        key = wp.vec2ui(ctl.seed0, ctl.seed1)
+        nx = ctl.nx
+        ny = ctl.ny
+        nz = ctl.nz
+        zero = R(0.0)
+        one = R(1.0)
+
+        # per-history accumulators (a row depends on this history alone)
+        t_initial = wp.float64(0.0)
+        t_cutoff = wp.float64(0.0)
+        t_step = wp.float64(0.0)
+        t_escaped = wp.float64(0.0)
+        t_truncated = wp.float64(0.0)
+        c_trunc = int(0)
+        c_stall = int(0)
+        c_strag = int(0)
+        c_src = int(0)
+        c_inv = int(0)
+        code = int(-1)
+        alive = int(1)
+
+        # source sampling (purpose 1)
+        w = PH.philox_block(h, u_zero, u_zero, p_source, key)
+        z1, z2 = F.gauss_pair(PH.u01(w[0]), PH.u01(w[1]))
+        z3 = F.gauss_one(PH.u01(w[2]), PH.u01(w[3]))
+        d = ctl.dir
+        e1v, e2v = F.orthonormal_basis(d)
+        energy = R(ctl.e0)
+        if ctl.sigma_e > zero:
+            energy = energy + ctl.sigma_e * z3
+        px = R(ctl.pos0[0])
+        py = R(ctl.pos0[1])
+        pz = R(ctl.pos0[2])
+        if ctl.sigma_lat > zero:
+            sg = ctl.sigma_lat
+            px = px + sg * (z1 * e1v[0] + z2 * e2v[0])
+            py = py + sg * (z1 * e1v[1] + z2 * e2v[1])
+            pz = pz + sg * (z1 * e1v[2] + z2 * e2v[2])
+        ux = R(d[0])
+        uy = R(d[1])
+        uz = R(d[2])
+        ix = int(0)
+        iy = int(0)
+        iz = int(0)
+        p1v1 = R(0.0)
+        t0 = R(0.0)
+        src_ok = int(0)
+        if energy >= ctl.e_cut and energy <= ctl.e_table_max:
+            src_ok = 1
+        if src_ok == 0:
+            c_src = 1
+            code = code_rejected
+            alive = 0
+        if alive == 1:
+            t_initial = wp.float64(energy)
+            p1v1 = K.pv_mev(energy, ctl.mass)
+            # entry into the world (vacuum outside)
+            t_in, t_out = F.ray_box(v3(px, py, pz), v3(ux, uy, uz), ctl.lo, ctl.hi)
+            if t_in > t_out or t_out < zero:
+                t_escaped = wp.float64(energy)
+                code = code_missed
+                alive = 0
+            else:
+                t0 = wp.max(t_in, zero)
+                px = wp.min(wp.max(px + ux * t0, ctl.lo[0]), ctl.hi[0])
+                py = wp.min(wp.max(py + uy * t0, ctl.lo[1]), ctl.hi[1])
+                pz = wp.min(wp.max(pz + uz * t0, ctl.lo[2]), ctl.hi[2])
+                ix = wp.min(wp.max(int(wp.floor((px - ctl.origin[0]) / ctl.spacing[0])), 0), nx - 1)
+                iy = wp.min(wp.max(int(wp.floor((py - ctl.origin[1]) / ctl.spacing[1])), 0), ny - 1)
+                iz = wp.min(wp.max(int(wp.floor((pz - ctl.origin[2]) / ctl.spacing[2])), 0), nz - 1)
+
+        steps = int(0)
+        birth = int(1)  # first step of the life: linearized analytic log-average of f_dM
+        blocks = int(0)
+        zero_run = int(0)
+        while alive == 1:
+            if energy <= ctl.e_cut:
+                t_cutoff = t_cutoff + wp.float64(energy)
+                score(
+                    edep, tally_rows, tid, batch, px, py, pz, energy, g_origin, g_inv, g_shape,
+                    g_off, ctl.n_grids,
+                )  # fmt: skip
+                code = code_cutoff
+                alive = 0
+            if alive == 1 and steps >= ctl.max_steps:
+                t_truncated = t_truncated + wp.float64(energy)
+                c_trunc = c_trunc + 1
+                code = code_truncated
+                alive = 0
+            if alive == 1:
+                m = int(mat[ix, iy, iz])
+                rho = dens[ix, iy, iz]
+                ib, fb = F.log_bin_index(energy, ln_e0[m], inv_dln_e[m], ctl.n_e)
+                s0 = F.interp_exp(ln_s[m, ib], ln_s[m, ib + 1], fb)
+                r0 = F.interp_exp(ln_r[m, ib], ln_r[m, ib + 1], fb)
+                s_lin = s0 * rho / R(10.0)
+                r_mm = r0 * R(10.0) / rho
+                pvec = v3(px, py, pz)
+                dvec = v3(ux, uy, uz)
+                d_geo, _axis = F.dda_next(pvec, dvec, ix, iy, iz, ctl.origin, ctl.spacing)
+                s_el = F.eloss_step_limit(energy, s_lin, ctl.c_frac)
+                s_rg = F.range_step_limit(r_mm, ctl.c_alpha, ctl.c_rho_f)
+                s, reason = F.select_step(d_geo, s_el, s_rg, ctl.c_smax)
+
+                # block A
+                wa = PH.philox_block(h, u_zero, wp.uint32(blocks), p_transport, key)
+                blocks = blocks + 1
+                ua0 = PH.u01(wa[0])
+                ua1 = PH.u01(wa[1])
+                ua2 = PH.u01(wa[2])
+                leg1 = ua0 * s
+
+                # multiple scattering
+                d1x = R(ux)
+                d1y = R(uy)
+                d1z = R(uz)
+                if ctl.mcs == 1:
+                    e_mid = energy_from_range(
+                        ln_er, ln_r0, inv_dln_r, ctl.n_r, m, r0 - rho * s / R(20.0)
+                    )
+                    inv_x = inv_xs[m]
+                    pv_mid = K.pv_mev(e_mid, ctl.mass)
+                    var = R(0.0)
+                    if birth == 1:
+                        e_end = wp.min(
+                            energy_from_range(
+                                ln_er, ln_r0, inv_dln_r, ctl.n_r, m, r0 - rho * s / R(10.0)
+                            ),
+                            energy,
+                        )
+                        var = EM.scattering_variance_birth(
+                            pv_mid, K.pv_mev(e_end, ctl.mass), p1v1, one, inv_x, rho, s
+                        )
+                    else:
+                        t_pow = EM.scattering_power_dm(pv_mid, p1v1, one, inv_x, rho)
+                        var = t_pow * s
+                    theta = EM.polar_deflection(var, ua1)
+                    nd = EM.rotate_dir(dvec, theta, two_pi * ua2)
+                    d1x = nd[0]
+                    d1y = nd[1]
+                    d1z = nd[2]
+
+                # hinge and second leg
+                hx = px + ux * leg1
+                hy = py + uy * leg1
+                hz = pz + uz * leg1
+                leg2, axis2 = F.leg2_limit(
+                    v3(hx, hy, hz), v3(d1x, d1y, d1z), ix, iy, iz, ctl.origin, ctl.spacing, s - leg1
+                )
+                nxp = hx + d1x * leg2
+                nyp = hy + d1y * leg2
+                nzp = hz + d1z * leg2
+                exited = int(0)
+                if axis2 >= 0:
+                    d1a = R(d1x)
+                    if axis2 == 1:
+                        d1a = d1y
+                    if axis2 == 2:
+                        d1a = d1z
+                    upward = int(0)
+                    if d1a > zero:
+                        upward = 1
+                    step_i = int(-1)
+                    if upward == 1:
+                        step_i = 1
+                    if axis2 == 0:
+                        nxp = F.plane_position(ix, upward, ctl.origin[0], ctl.spacing[0])
+                        ix = ix + step_i
+                    if axis2 == 1:
+                        nyp = F.plane_position(iy, upward, ctl.origin[1], ctl.spacing[1])
+                        iy = iy + step_i
+                    if axis2 == 2:
+                        nzp = F.plane_position(iz, upward, ctl.origin[2], ctl.spacing[2])
+                        iz = iz + step_i
+                    inside = int(0)
+                    if ix >= 0 and ix < nx and iy >= 0 and iy < ny and iz >= 0 and iz < nz:
+                        inside = 1
+                    if inside == 0:
+                        exited = 1
+                s_act = leg1 + leg2
+
+                # energy loss
+                tt = rho * s_act / R(10.0)
+                e_r1 = energy_from_range(ln_er, ln_r0, inv_dln_r, ctl.n_r, m, r0 - tt)
+                if ctl.c_fshort * r0 <= tt and tt < r0 and e_r1 > energy:
+                    c_inv = c_inv + 1  # E1 > E0 from the inverse round trip
+                    e_r1 = R(energy)
+                mean = EM.csda_mean_loss(energy, e_r1, s0, tt, r0, ctl.c_fshort)
+                attempts = int(1)
+                loss = R(mean)
+                if ctl.straggling == 1:
+                    var_e = EM.bohr_variance(
+                        energy - R(0.5) * mean, ctl.mass, one, z_over_a[m], rho, s_act
+                    )
+                    accepted = int(0)
+                    k = int(0)
+                    while k < max_attempts and accepted == 0:
+                        wb = PH.philox_block(h, u_zero, wp.uint32(blocks), p_transport, key)
+                        blocks = blocks + 1
+                        lw, ok = EM.straggle_attempt(
+                            mean,
+                            var_e,
+                            PH.u01(wb[0]),
+                            PH.u01(wb[1]),
+                            PH.u01(wb[2]),
+                            PH.u01(wb[3]),
+                        )
+                        attempts = k + 1
+                        if ok == 1:
+                            loss = lw
+                            accepted = 1
+                        k = k + 1
+                    if accepted == 0:
+                        c_strag = c_strag + 1
+                        loss = R(mean)
+                else:
+                    blocks = blocks + 1  # one block is drawn and ignored
+                loss = wp.min(loss, energy)
+                e_new = energy - loss
+                deposit = energy - e_new
+
+                # scoring at the hinge-path midpoint
+                if deposit > zero:
+                    mid = F.point_on_hinge(pvec, dvec, leg1, v3(d1x, d1y, d1z), R(0.5) * s_act)
+                    score(
+                        edep, tally_rows, tid, batch, mid[0], mid[1], mid[2], deposit, g_origin,
+                        g_inv, g_shape, g_off, ctl.n_grids,
+                    )  # fmt: skip
+                    t_step = t_step + wp.float64(deposit)
+
+                px = R(nxp)
+                py = R(nyp)
+                pz = R(nzp)
+                ux = R(d1x)
+                uy = R(d1y)
+                uz = R(d1z)
+                energy = R(e_new)
+                steps = steps + 1
+                if s_act > zero:
+                    birth = 0
+                if with_diag:
+                    if h < ctl.trace_k:
+                        ti = int(h - ctl.trace_h0)
+                        row = steps - 1
+                        trace_i[ti, row, 0] = int(h)
+                        trace_i[ti, row, 1] = steps
+                        trace_i[ti, row, 2] = ix
+                        trace_i[ti, row, 3] = iy
+                        trace_i[ti, row, 4] = iz
+                        trace_i[ti, row, 5] = reason
+                        trace_i[ti, row, 6] = blocks
+                        trace_i[ti, row, 7] = attempts
+                        trace_f[ti, row, 0] = wp.float64(px)
+                        trace_f[ti, row, 1] = wp.float64(py)
+                        trace_f[ti, row, 2] = wp.float64(pz)
+                        trace_f[ti, row, 3] = wp.float64(ux)
+                        trace_f[ti, row, 4] = wp.float64(uy)
+                        trace_f[ti, row, 5] = wp.float64(uz)
+                        trace_f[ti, row, 6] = wp.float64(energy)
+                        trace_f[ti, row, 7] = wp.float64(deposit)
+                        trace_f[ti, row, 8] = wp.float64(s_act)
+                        trace_n[ti] = steps
+                if exited == 1:
+                    t_escaped = t_escaped + wp.float64(energy)
+                    code = code_escaped
+                    alive = 0
+                if alive == 1:
+                    if s_act <= zero:
+                        zero_run = zero_run + 1
+                    else:
+                        zero_run = 0
+                    if zero_run > 3:
+                        t_truncated = t_truncated + wp.float64(energy)
+                        c_stall = c_stall + 1
+                        code = code_truncated
+                        alive = 0
+
+        tally_rows[tid, 0] = t_initial
+        tally_rows[tid, 1] = t_cutoff
+        tally_rows[tid, 2] = t_step
+        tally_rows[tid, 3] = t_escaped
+        tally_rows[tid, 4] = t_truncated
+        counter_rows[tid, 0] = c_trunc
+        counter_rows[tid, 1] = c_stall
+        counter_rows[tid, 2] = c_strag
+        counter_rows[tid, 5] = c_src
+        counter_rows[tid, 6] = c_inv
+        if with_diag:
+            end_state[tid, 0] = px
+            end_state[tid, 1] = py
+            end_state[tid, 2] = pz
+            end_state[tid, 3] = ux
+            end_state[tid, 4] = uy
+            end_state[tid, 5] = uz
+            end_state[tid, 6] = energy
+            end_code[tid] = code
+
+    transport.__name__ = f"transport_{name}_{'diag' if diag else 'plain'}"
+    transport.__qualname__ = transport.__name__
+    return wp.kernel(enable_backward=False, module="unique")(transport)

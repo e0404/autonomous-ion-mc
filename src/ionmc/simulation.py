@@ -22,18 +22,23 @@ from numpy.typing import NDArray
 
 from ionmc.config import (
     BACKENDS,
+    DEFAULT_CHUNK_HISTORIES,
     DELTA_ELECTRON_MODELS,
+    MAX_CPU_WORKERS,
     MCS_MODELS,
+    MIN_CHUNK_HISTORIES,
     PRECISIONS,
     STRAGGLING_MODELS,
     EffectiveConfig,
     SimulationConfig,
+    cuda_available,
     validate,
 )
 from ionmc.environment import describe_environment
 from ionmc.errors import TransportLimitError
 from ionmc.scoring import MEV_PER_G_TO_GY, ScoringGrid, reduce_batches, voxel_mass_g
-from ionmc.transport.reference import RawTransport, run_reference
+from ionmc.transport.run import run_transport
+from ionmc.transport.tally import RawTransport
 
 
 @dataclass(frozen=True)
@@ -157,7 +162,9 @@ class Result:
 
     ``valid`` is False if any transport-limit counter is nonzero. ``timings`` in seconds:
     ``setup``, ``compile`` (0 for the Python backend), ``transport``, ``reduce``, ``total``.
-    ``diagnostics`` holds the optional diagnostics requested in the configuration.
+    ``diagnostics`` holds the optional diagnostics requested in the configuration;
+    ``transport_report`` holds backend facts (workers, per-worker device, compile seconds,
+    chunking, register count) that are not part of the physics result.
     """
 
     valid: bool
@@ -176,6 +183,7 @@ class Result:
     timings: dict[str, float]
     environment: dict[str, Any]
     diagnostics: dict[str, Any] = field(default_factory=dict)
+    transport_report: dict[str, Any] = field(default_factory=dict)
 
     def grid(self, name: str) -> GridResult:
         """The grid result named ``name``."""
@@ -190,10 +198,17 @@ def capabilities() -> dict[str, Any]:
     return {
         "species": ["proton"],
         "backends": {
-            "python": "available (float64 reference)",
-            "warp-cpu": "not available (V3-003B)",
-            "warp-cuda": "not available (V3-003B)",
+            "python": "available (float64 reference; cpu_workers > 1 splits over processes)",
+            "warp-cpu": "available (float32 production, float64 validation; cpu_workers > 1)",
+            "warp-cuda": (
+                "available (cuda:0, float32 and float64; chunked launches)"
+                if cuda_available()
+                else "not available (no usable CUDA device; no fallback)"
+            ),
         },
+        "trace": "float64 only (float32 with trace_histories > 0 is rejected)",
+        "chunk_histories": {"default": DEFAULT_CHUNK_HISTORIES, "minimum": MIN_CHUNK_HISTORIES},
+        "max_cpu_workers": MAX_CPU_WORKERS,
         "backend_names": list(BACKENDS),
         "precisions": list(PRECISIONS),
         "physics": {
@@ -224,13 +239,13 @@ class Simulation:
         """Run the transport and return the result (raises on invalid results unless allowed)."""
         t_start = time.perf_counter()
         eff = self.effective
-        raw = run_reference(eff)
+        raw = run_transport(eff)
         t_transport = time.perf_counter()
         result = _assemble(eff, raw)
         t_end = time.perf_counter()
         timings = {
             "setup": self._setup_s,
-            "compile": 0.0,
+            "compile": _compile_seconds(raw),
             "transport": t_transport - t_start,
             "reduce": t_end - t_transport,
             "total": self._setup_s + (t_end - t_start),
@@ -244,6 +259,22 @@ class Simulation:
                 result,
             )
         return result
+
+
+def _compile_seconds(raw: RawTransport) -> float:
+    """Kernel compile/load seconds (the slowest worker; 0 for the Python backend)."""
+    parts = raw.meta.get("partials", [])
+    return max((float(p.get("compile_s", 0.0)) for p in parts), default=0.0)
+
+
+def _device_description(eff: EffectiveConfig, raw: RawTransport) -> str:
+    parts = raw.meta.get("partials", [])
+    if eff.backend == "python":
+        base = "python (float64)"
+    else:
+        base = str(parts[0].get("device", eff.backend)) if parts else eff.backend
+    workers = eff.requested.run.cpu_workers
+    return f"{base} x {workers} processes" if workers > 1 else base
 
 
 def _with_timings(result: Result, timings: dict[str, float]) -> Result:
@@ -264,6 +295,7 @@ def _with_timings(result: Result, timings: dict[str, float]) -> Result:
         timings=timings,
         environment=result.environment,
         diagnostics=result.diagnostics,
+        transport_report=result.transport_report,
     )
 
 
@@ -325,7 +357,7 @@ def _assemble(eff: EffectiveConfig, raw: RawTransport) -> Result:
         requested_config=cfg,
         effective_config=eff,
         backend=eff.backend,
-        device="python (float64)",
+        device=_device_description(eff, raw),
         precision=eff.precision,
         seed=cfg.run.seed,
         rng=dict(eff.rng),
@@ -337,4 +369,5 @@ def _assemble(eff: EffectiveConfig, raw: RawTransport) -> Result:
         timings={},
         environment=describe_environment(),
         diagnostics=raw.diagnostics,
+        transport_report=raw.meta,
     )
