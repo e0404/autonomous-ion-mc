@@ -22,8 +22,10 @@ step is archived with exit code 124), archives stdout and stderr verbatim as
 kernel, exact git SHA, dirty state of the script directory and SHA-256 of
 every script; every probe must succeed and be non-empty) and finally generates
 `SUMMARY.md` with `summarize.py`, which also verifies that every step file
-carries the archive's SHA. Any failure, including an unwritable archive file,
-exits non-zero.
+carries the archive's SHA and that the file set equals the expected manifest
+(`manifest.txt`). `REPEATS` and `STEP_TIMEOUT` must be positive integers. Any
+failure, including an unwritable archive file, exits non-zero. Regression tests
+for these fail-closed behaviours are in `tests/infrastructure/test_measurement_runner.py`.
 
 ## What each step measures
 

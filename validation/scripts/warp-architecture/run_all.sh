@@ -22,6 +22,11 @@ cd "$here"
 PY="${PYTHON:-python}"
 REPEATS="${REPEATS:-3}"
 STEP_TIMEOUT="${STEP_TIMEOUT:-600}"
+# Controls must be positive integers: REPEATS=0 or a non-numeric value would silently skip
+# the repeated steps, and STEP_TIMEOUT=0 disables GNU timeout instead of bounding execution.
+positive_int() { [[ "$2" =~ ^[1-9][0-9]*$ ]] || { echo "$1 must be a positive integer, got '$2'" >&2; exit 1; }; }
+positive_int REPEATS "$REPEATS"
+positive_int STEP_TIMEOUT "$STEP_TIMEOUT"
 repo="$(git -C "$here" rev-parse --show-toplevel)"
 sha="$(git -C "$here" rev-parse HEAD)"
 
@@ -97,6 +102,16 @@ run 10 rng-overlap-1e5x1000 "$PY" ../rng/rng_overlap.py 100000 1000
 run 11 rng-overlap-1e6x1000 "$PY" ../rng/rng_overlap.py 1000000 1000
 run 12 rng-overlap-1e6x2000 "$PY" ../rng/rng_overlap.py 1000000 2000
 run_repeated 13 philox-kat-and-cost "$PY" ../rng/philox.py
+# summarize.py verifies that exactly this manifest of step files exists before summarising.
+manifest="$out/manifest.txt"
+: > "$manifest"
+for step in 01-compile-cold-backward-on 02-compile-cold-backward-off 03-toy-f32-1thread 04-toy-f64-1thread \
+            05-toy-f32-4threads 06-toy-f32-8threads 07-toy-f32-16threads 13-philox-kat-and-cost; do
+  for k in $(seq 1 "$REPEATS"); do echo "${step%%-*}-r$k-${step#*-}" >> "$manifest"; done
+done
+for step in 08-precision 09-rng-seed-dupes 10-rng-overlap-1e5x1000 11-rng-overlap-1e6x1000 12-rng-overlap-1e6x2000; do
+  echo "$step" >> "$manifest"
+done
 "$PY" "$here/summarize.py" "$out" > "$out/SUMMARY.md"
 echo "done: $out (failed_or_timed_out_steps=$failures)"
 [ "$failures" -eq 0 ]

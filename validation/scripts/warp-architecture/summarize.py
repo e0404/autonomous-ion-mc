@@ -33,6 +33,11 @@ def main(directory: str) -> None:
     root = Path(directory)
     env = (root / "environment.txt").read_text()
     sha = next(l.split("=", 1)[1] for l in env.splitlines() if l.startswith("git_sha="))
+    expected = set((root / "manifest.txt").read_text().split())
+    present = {p.stem for p in root.glob("[0-9][0-9]-*.txt")}
+    if present != expected:
+        missing, extra = sorted(expected - present), sorted(present - expected)
+        raise SystemExit(f"archive does not match manifest.txt: missing={missing} extra={extra}")
     for path in root.glob("[0-9][0-9]-*.txt"):
         header = path.read_text().splitlines()[:4]
         if f"# git_sha: {sha}" not in header:
