@@ -1,4 +1,5 @@
 {
+  "evidence_status": "exploratory diagnostic; single seed, no statistical uncertainty, bins 1-2 mm versus a 2.4-2.7 mm distal falloff",
   "runs": [
     {
       "run_id": "REF-247e0913d2a55767d65f-432cc9ae",
@@ -9,7 +10,8 @@
       "dose_unit": "Gy (run total)",
       "bin_width_mm": 1.0,
       "output_sha256": {
-        "work/idd_dose.csv": "634236f5939fcdab55418d4ec575346855eecd1fdb92070869a6f6ed65aba7f4"
+        "work/idd_dose.csv": "634236f5939fcdab55418d4ec575346855eecd1fdb92070869a6f6ed65aba7f4",
+        "inputs/case.json": "b01679344ef00585220eb7a218fbefc1bf034facf9650ed8a6e5b16afe170b37"
       },
       "peak_depth_mm": 157.5,
       "r80_mm": 158.67240480099548,
@@ -25,7 +27,8 @@
       "dose_unit": "Gy per primary (lateral sum)",
       "bin_width_mm": 1.0,
       "output_sha256": {
-        "work/out/score/Phantom.Dose.mhd": "cad346eb95a9912b346659d2a2d8da65d9a6cf04d3a1923d5bcb6d219add4e6d"
+        "work/out/score/Phantom.Dose.mhd": "cad346eb95a9912b346659d2a2d8da65d9a6cf04d3a1923d5bcb6d219add4e6d",
+        "inputs/case.json": "8388166fe7f545001e71bc06a49bd92650ed1c9ef099aed6f659b99567067a6b"
       },
       "peak_depth_mm": 155.5,
       "r80_mm": 157.49793824643746,
@@ -42,7 +45,8 @@
       "bin_width_mm": 2.0,
       "output_sha256": {
         "work/Outputs/Dose.mhd": "837e832ec9f284a69044d711f6999211f59e3801e50c978466c7ee15e6dcd9fc",
-        "work/Outputs/Dose.raw": "1ca3067e457a27cd7fc6eeaf513b536a8da40ff846d60d7343d1a7a2ff52b657"
+        "work/Outputs/Dose.raw": "1ca3067e457a27cd7fc6eeaf513b536a8da40ff846d60d7343d1a7a2ff52b657",
+        "inputs/case.json": "94a4c0550a7b0f72dc841622c094e9ac0c51d23ccd428407f23eedd3032559cf"
       },
       "peak_depth_mm": 157.0,
       "r80_mm": 157.8616807395289,
@@ -75,6 +79,5 @@
       "r90_mm_diff_b_minus_a": 0.4906003821415368,
       "falloff_80_20_mm_diff_b_minus_a": 0.3436546571809629
     }
-  ],
-  "analysis_code_sha": "67d59f8ba74a53493b0cb453d25c917ea0bdcf3b"
+  ]
 }

@@ -44,19 +44,18 @@ s:Sc/Edep/OutputFile = "edep"
 s:Sc/Edep/IfOutputFileAlreadyExists = "Overwrite"
 sv:Sc/Edep/Report = 1 "Sum"
 
-# Surviving 12C versus depth: count particles of atomic number 6 and mass 12 crossing the entrance
-# (z-minus) face of each of 300 depth bins going in; compare to charge-only filter.
-
-
-s:Sc/PrimaryCount/Quantity = "SurfaceTrackCount"
-s:Sc/PrimaryCount/Surface = "Water/ZMinusSurface"
-i:Sc/PrimaryCount/XBins = 1
-i:Sc/PrimaryCount/YBins = 1
-i:Sc/PrimaryCount/ZBins = 300
-s:Sc/PrimaryCount/OnlyIncludeParticlesGoing = "In"
-s:Sc/PrimaryCount/OnlyIncludeParticlesOfGeneration = "Primary"
-i:Sc/PrimaryCount/OnlyIncludeParticlesOfAtomicNumber = 6
-s:Sc/PrimaryCount/OutputType = "csv"
-s:Sc/PrimaryCount/OutputFile = "primarycount"
-s:Sc/PrimaryCount/IfOutputFileAlreadyExists = "Overwrite"
-sv:Sc/PrimaryCount/Report = 1 "Sum"
+# Primary-carbon fluence versus depth: Fluence (track length per volume, 1/mm2) of generation-1
+# particles with atomic number 6 in 300 depth bins. All carbon isotopes of the primary generation
+# are included; the primary track survives nuclear elastic scattering and ends at the first
+# inelastic interaction, so the fluence falls with depth through nuclear attenuation and range end.
+s:Sc/PrimaryFluence/Quantity = "Fluence"
+s:Sc/PrimaryFluence/Component = "Water"
+i:Sc/PrimaryFluence/XBins = 1
+i:Sc/PrimaryFluence/YBins = 1
+i:Sc/PrimaryFluence/ZBins = 300
+s:Sc/PrimaryFluence/OnlyIncludeParticlesOfGeneration = "Primary"
+i:Sc/PrimaryFluence/OnlyIncludeParticlesOfAtomicNumber = 6
+s:Sc/PrimaryFluence/OutputType = "csv"
+s:Sc/PrimaryFluence/OutputFile = "primaryfluence"
+s:Sc/PrimaryFluence/IfOutputFileAlreadyExists = "Overwrite"
+sv:Sc/PrimaryFluence/Report = 1 "Sum"

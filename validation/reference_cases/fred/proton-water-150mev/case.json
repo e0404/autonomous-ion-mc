@@ -14,7 +14,7 @@
     "LETd (dose-averaged LET, Polster 2015 Eq. 14, MeV cm2/g)"
   ],
   "units": "MetaImage; dose in Gy per primary (N=1); LETd in MeV cm2/g; lengths in cm in the input, mhd header spacing as written by FRED (check ElementSpacing units: mm vs cm)",
-  "rationale": "independent Monte Carlo evidence for suite S-PHYS-PROTON-EM/-NUCLEAR/-LET",
+  "rationale": "independent Monte Carlo evidence for suite S-PHYS-PROTON-EM/-NUCLEAR/-LET: exploratory reference; evidence-grade configuration pending",
   "expected_outputs": [
     "out/score/Phantom.Dose.mhd",
     "out/score/Phantom.LETd.mhd"

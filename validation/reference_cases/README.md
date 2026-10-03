@@ -10,7 +10,9 @@ physics validation by itself; evidence requires the frozen criteria of the requi
 
 ```
 topas/proton-water-150mev[-smoke]/       150 MeV p, QGSP_BIC_HP + opt4, dose 1 mm column + 2 mm 3D + LETd
-topas/carbon-water-290mevu-smoke/        12C 3480 MeV total, QMD, Edep + surviving-12C surface counts
+topas/carbon-water-290mevu-smoke/        12C 3480 MeV total, QMD, Edep + primary-carbon Fluence (1/mm2) vs depth
+topas/proton-water-150mev-fine/          0.5 mm depth bins, 1e5 histories (evidence-grade candidate)
+mcsquare/proton-water-150mev-fine/       0.5 mm depth bins, 1e5 primaries (evidence-grade candidate)
 mcsquare/proton-water-150mev[-smoke]/    150 MeV p, hand-written zero-width BDL, 2 mm water CT, dose + LET
 fred/proton-water-150mev[-smoke]/        150 MeV p, 1 mm water phantom, dose + LETd
 fred/carbon-water-290mevu-smoke/         12C 290 MeV/u, 100 primaries: tests ion + nuclear support of the build
@@ -29,7 +31,7 @@ zero-divergence pencil on the axis, seed 20261003, one thread.
 
 ## Engine roles established by the smoke runs
 
-* TOPAS (Geant4): protons and ions (12C runs with QMD; surviving-carbon surface counts work).
+* TOPAS (Geant4): protons and ions (12C runs with QMD; primary-carbon Fluence scoring).
 * MCsquare: protons only.
 * FRED 3.76 CPU: protons only. 12C is recognised but aborts with "fragmentation of C12 ...
   not implemented"; `fred/carbon-water-290mevu-smoke` is kept as a documented negative result.
@@ -100,6 +102,17 @@ differences, output file hashes; no raw curves) after materializing the runs:
 uv run python validation/scripts/reference/compare_depth_dose.py \
   --runs .ionmc-cache/reference-runs/<run-id>... --output <out>.json
 ```
+
+### Evidence status and fine cases
+
+The three 20000-history runs above are exploratory (single seed, 1-2 mm bins, no uncertainty),
+and their `rationale` says "exploratory reference; evidence-grade configuration pending".
+Evidence-grade runs use multiple seeds (the seed in `input.txt` / `config.txt` is the per-batch
+seed, varied by the orchestrator), at least 1e5 primaries per batch and depth bins of at most
+0.5 mm. Candidate cases: `topas/proton-water-150mev-fine` (IDD and LETd, ZBins 600) and
+`mcsquare/proton-water-150mev-fine` (CT 60 x 600 x 60 at 2 x 0.5 x 2 mm, anisotropic spacing
+unverified in e0404; fall back to 1 mm isotropic if rejected). The comparison script labels results
+exploratory unless `--batches <json>` (n_batches >= 2, seeds) is given.
 
 Library code: `ionmc.reference.runs` (`load_run`, `depth_dose`, per-engine extraction, fail closed)
 and `ionmc.reference.metrics`. Metrics use bin-centre depths, argmax for the peak (resolution is

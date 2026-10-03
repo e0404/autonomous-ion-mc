@@ -133,3 +133,38 @@ def test_topas_csv_nested_parentheses_in_unit(tmp_path: Path) -> None:
     )
     s = read_topas_csv(p)
     assert (s.quantity, s.unit) == ("ProtonLET", "MeV/mm/(g/cm3)")
+
+
+def test_metaimage_rejects_unsafe_data_paths(tmp_path: Path) -> None:
+    sub = tmp_path / "sub"
+    sub.mkdir()
+    (tmp_path / "outside.raw").write_bytes(np.zeros(1, dtype="<f4").tobytes())
+    (sub / "ok.raw").write_bytes(np.zeros(1, dtype="<f4").tobytes())
+    mhd = sub / "e.mhd"
+    template = (
+        "NDims = 3\nDimSize = 1 1 1\nElementType = MET_FLOAT\n"
+        "ElementByteOrderMSB = False\nElementDataFile = {}\n"
+    )
+    mhd.write_text(template.format("ok.raw"))
+    assert read_metaimage(mhd).data.shape == (1, 1, 1)
+    for bad in (str(tmp_path / "outside.raw"), "../outside.raw", "./ok.raw", "sub/../ok.raw"):
+        mhd.write_text(template.format(bad))
+        with pytest.raises(ParseError):
+            read_metaimage(mhd)
+    (sub / "link.raw").symlink_to(tmp_path / "outside.raw")
+    mhd.write_text(template.format("link.raw"))
+    with pytest.raises(ParseError, match="symlink"):
+        read_metaimage(mhd)
+
+
+def test_topas_csv_index_validation(tmp_path: Path) -> None:
+    p = tmp_path / "i.csv"
+    p.write_text(TOPAS_CSV.replace("0, 0, 1, 2.5", "0, 0, 0.9, 2.5"))
+    with pytest.raises(ParseError, match="integer"):
+        read_topas_csv(p)
+    p.write_text(TOPAS_CSV.replace("0, 0, 1, 2.5", "0, 0, 0, 2.5"))
+    with pytest.raises(ParseError, match="duplicate"):
+        read_topas_csv(p)
+    p.write_text(TOPAS_CSV.replace("0, 0, 1, 2.5", "0, 0, nan, 2.5"))
+    with pytest.raises(ParseError):
+        read_topas_csv(p)

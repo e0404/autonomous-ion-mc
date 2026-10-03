@@ -14,13 +14,13 @@
   ],
   "scorers": [
     "Edep: EnergyDeposit, 1x1x300 bins (1 mm), Report Sum",
-    "PrimaryCount: SurfaceTrackCount, same surface, OnlyIncludeParticlesGoing=\"In\", s:OnlyIncludeParticlesOfGeneration=\"Primary\" and atomic number 6 (surviving primary carbon, any isotope)"
+    "PrimaryFluence: Fluence (1/mm2) on the binned Water component, 1x1x300 bins, filters OnlyIncludeParticlesOfGeneration=\"Primary\" and OnlyIncludeParticlesOfAtomicNumber=6 (all carbon isotopes of the primary generation; the primary track survives nuclear elastic scattering and ends at the first inelastic interaction)"
   ],
-  "units": "TOPAS CSV headers: EnergyDeposit in MeV (run total over 200 histories); counts are track counts (dimensionless, run total; divide by histories for N/N0); 0-based bin indices, 1 mm z bins",
+  "units": "TOPAS CSV headers: EnergyDeposit in MeV (run total over 200 histories); Fluence in 1/mm2 as printed in the header (run total over 200 histories; divide by histories); 0-based bin indices, 1 mm z bins",
   "rationale": "independent Monte Carlo evidence for suite S-PHYS-PROTON-EM/-NUCLEAR/-LET (smoke: execution only)",
   "expected_outputs": [
     "edep.csv",
-    "primarycount.csv"
+    "primaryfluence.csv"
   ],
   "arguments": []
 }

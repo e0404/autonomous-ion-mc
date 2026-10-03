@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -17,6 +18,7 @@ from ionmc.reference.metrics import (
     r80,
     r90,
 )
+from ionmc.reference.runs import file_hashes
 
 
 def _curve() -> tuple[np.ndarray, np.ndarray]:
@@ -52,7 +54,10 @@ def test_integral_depth_dose() -> None:
     np.testing.assert_allclose(integral_depth_dose(a, 0, 2.0), 2 * a.sum(axis=(1, 2)))
 
 
-def _run(tmp: Path, engine: str, files: dict[str, bytes]) -> Path:
+def _run(tmp: Path, engine: str, files: dict[str, bytes], skip: tuple[str, ...] = ()) -> Path:
+    """Write fixture files plus a manifest with their real size and sha256."""
+    case = json.dumps({"histories": 10, "input": "x"}).encode()
+    files = {**files, "inputs/case.json": case}
     for rel, blob in files.items():
         p = tmp / rel
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -61,11 +66,13 @@ def _run(tmp: Path, engine: str, files: dict[str, bytes]) -> Path:
         "engine": engine,
         "run_id": "REF-test",
         "source_sha": "abc",
-        "files": {rel: {"bytes": len(b), "sha256": "0" * 64} for rel, b in files.items()},
+        "files": {
+            rel: {"bytes": len(b), "sha256": hashlib.sha256(b).hexdigest()}
+            for rel, b in files.items()
+            if rel not in skip
+        },
     }
     (tmp / "transfer-manifest.json").write_text(json.dumps(manifest))
-    (tmp / "inputs").mkdir(exist_ok=True)
-    (tmp / "inputs" / "case.json").write_text(json.dumps({"histories": 10, "input": "x"}))
     return tmp
 
 
@@ -118,7 +125,72 @@ def test_fred_and_mcsquare_runs(tmp_path: Path) -> None:
 
 def test_run_fail_closed(tmp_path: Path) -> None:
     with pytest.raises(RunError):
-        load_run(tmp_path)
+        load_run(tmp_path)  # no manifest
     run = load_run(_run(tmp_path, "topas", {"work/other.csv": b"x"}))
     with pytest.raises(RunError):
         depth_dose(run)
+
+
+_CSV = (
+    "# X in 1 bin of 12 cm\n# Y in 1 bin of 12 cm\n# Z in 3 bins of 0.1 cm\n"
+    "# DoseToMedium ( Gy ) : Sum Standard_Deviation\n0,0,0,1,0.1\n0,0,1,3,0.1\n0,0,2,2,0.1\n"
+)
+
+
+def test_hashes_reported_for_bytes_read(tmp_path: Path) -> None:
+    run = load_run(_run(tmp_path, "topas", {"work/idd_dose.csv": _CSV.encode()}))
+    dd = depth_dose(run)
+    hashes = file_hashes(run, [*dd.files, "inputs/case.json"])
+    assert hashes["work/idd_dose.csv"] == hashlib.sha256(_CSV.encode()).hexdigest()
+    with pytest.raises(RunError):
+        file_hashes(run, ["work/never-read.csv"])
+
+
+def test_corrupted_file_rejected(tmp_path: Path) -> None:
+    d = _run(tmp_path, "topas", {"work/idd_dose.csv": _CSV.encode()})
+    run = load_run(d)
+    blob = bytearray((d / "work/idd_dose.csv").read_bytes())
+    blob[-3] = ord("9")  # same size, modified byte
+    (d / "work/idd_dose.csv").write_bytes(bytes(blob))
+    with pytest.raises(RunError, match="sha256"):
+        depth_dose(run)
+    (d / "work/idd_dose.csv").write_bytes(_CSV.encode() + b"\n")
+    with pytest.raises(RunError, match="size"):
+        depth_dose(run)
+
+
+def test_corrupted_case_json_rejected(tmp_path: Path) -> None:
+    d = _run(tmp_path, "topas", {"work/idd_dose.csv": _CSV.encode()})
+    (d / "inputs/case.json").write_text('{"histories": 11, "input": "x"}')
+    with pytest.raises(RunError):
+        load_run(d)
+
+
+def test_missing_manifest_entry_rejected(tmp_path: Path) -> None:
+    d = _run(tmp_path, "topas", {"work/idd_dose.csv": _CSV.encode()}, skip=("work/idd_dose.csv",))
+    with pytest.raises(RunError, match="manifest"):
+        depth_dose(load_run(d))
+    d2 = _run(tmp_path / "x", "topas", {}, skip=("inputs/case.json",))
+    with pytest.raises(RunError, match="manifest"):
+        load_run(d2)
+
+
+def test_mcsquare_raw_must_be_manifested(tmp_path: Path) -> None:
+    arr = np.ones((2, 4, 2))
+    h, b = _mhd((2, 4, 2), 2.0, "0 0 0", False, arr)
+    d = _run(
+        tmp_path,
+        "mcsquare",
+        {"work/Outputs/Dose.mhd": h, "work/Outputs/Dose.raw": b},
+        skip=("work/Outputs/Dose.raw",),
+    )
+    with pytest.raises(RunError, match="manifest"):
+        depth_dose(load_run(d))
+    h2 = h.replace(b"Dose.raw", b"Other.raw")
+    d2 = _run(
+        tmp_path / "o",
+        "mcsquare",
+        {"work/Outputs/Dose.mhd": h2, "work/Outputs/Other.raw": b},
+    )
+    with pytest.raises(RunError, match="Dose.raw"):
+        depth_dose(load_run(d2))

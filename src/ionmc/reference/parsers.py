@@ -15,6 +15,7 @@ MetaImage (.mhd with raw data file)
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -52,9 +53,14 @@ class TopasScorer:
 
 def read_topas_csv(path: str | Path) -> TopasScorer:
     """Read a TOPAS CSV scorer file; missing bins (not written by TOPAS) are NaN."""
+    return parse_topas_csv(Path(path).read_text(), str(path))
+
+
+def parse_topas_csv(text: str, path: str = "<memory>") -> TopasScorer:
+    """Parse the text of a TOPAS CSV scorer file (``path`` is only used in messages)."""
     header: list[str] = []
     rows: list[list[float]] = []
-    for line_no, raw in enumerate(Path(path).read_text().splitlines(), start=1):
+    for line_no, raw in enumerate(text.splitlines(), start=1):
         line = raw.strip()
         if not line:
             continue
@@ -99,7 +105,12 @@ def read_topas_csv(path: str | Path) -> TopasScorer:
     if any(len(r) != ncol for r in rows):
         raise ParseError(f"{path}: every row must have {ncol} columns (ix,iy,iz + {statistics})")
     data = np.asarray(rows, dtype=np.float64)
-    idx = data[:, :3].astype(np.int64)
+    raw_idx = data[:, :3]
+    if not np.all(np.isfinite(raw_idx)) or np.any(raw_idx != np.rint(raw_idx)):
+        raise ParseError(f"{path}: bin indices must be finite integers")
+    idx = raw_idx.astype(np.int64)
+    if np.unique(idx, axis=0).shape[0] != idx.shape[0]:
+        raise ParseError(f"{path}: duplicate bin indices")
     if (
         np.any(idx < 0)
         or np.any(idx[:, 0] >= nx)
@@ -156,10 +167,38 @@ def _floats(text: str, n: int, default: float) -> tuple[float, ...]:
     return vals
 
 
+RawLoader = Callable[[str], bytes]
+
+
+def _strict_raw_loader(mhd: Path) -> RawLoader:
+    """Loader reading ``ElementDataFile`` strictly beneath the .mhd directory (no symlinks)."""
+    base = mhd.parent.resolve()
+
+    def load(name: str) -> bytes:
+        rel = Path(name)
+        if rel.is_absolute() or not rel.parts or ".." in rel.parts or name != str(rel):
+            raise ParseError(f"{mhd}: unsafe ElementDataFile {name!r}")
+        cur = mhd.parent
+        for part in rel.parts:
+            cur = cur / part
+            if cur.is_symlink():
+                raise ParseError(f"{mhd}: ElementDataFile {name!r} involves a symlink")
+        target = (base / rel).resolve()
+        if base not in target.parents:
+            raise ParseError(f"{mhd}: ElementDataFile {name!r} resolves outside its directory")
+        return target.read_bytes()
+
+    return load
+
+
 def read_metaimage(path: str | Path) -> MetaImage:
     """Read a 3D MetaImage ``.mhd`` with a separate raw file or ``ElementDataFile = LOCAL``."""
     path = Path(path)
-    blob = path.read_bytes()
+    return parse_metaimage(path.read_bytes(), str(path), _strict_raw_loader(path))
+
+
+def parse_metaimage(blob: bytes, path: str, raw_loader: RawLoader | None) -> MetaImage:
+    """Parse MetaImage bytes; ``raw_loader(name)`` supplies a separate raw data file."""
     header: dict[str, str] = {}
     local_offset: int | None = None
     pos = 0
@@ -201,14 +240,15 @@ def read_metaimage(path: str | Path) -> MetaImage:
                 f"{path}: expected {count * dtype.itemsize} data bytes, found {len(payload)}"
             )
         data = np.frombuffer(payload, dtype=dtype)
-        where: Path = path
     else:
-        where = Path(raw_name)
-        if not where.is_absolute():
-            where = path.parent / where
-        data = np.fromfile(where, dtype=dtype)
-        if data.size != count:
-            raise ParseError(f"{where}: expected {count} elements, found {data.size}")
+        if raw_loader is None:
+            raise ParseError(f"{path}: external data file {raw_name!r} cannot be loaded")
+        payload = raw_loader(raw_name)
+        if len(payload) != count * dtype.itemsize:
+            raise ParseError(
+                f"{raw_name}: expected {count * dtype.itemsize} bytes, found {len(payload)}"
+            )
+        data = np.frombuffer(payload, dtype=dtype)
     spacing = _floats(header.get("ElementSpacing", header.get("ElementSize", "")), 3, 1.0)
     offset = _floats(header.get("Offset", header.get("Position", "")), 3, 0.0)
     return MetaImage(

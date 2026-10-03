@@ -20,6 +20,10 @@ from ionmc.reference.metrics import (
 )
 from ionmc.reference.runs import depth_dose, file_hashes, load_run
 
+EXPLORATORY = (
+    "exploratory diagnostic; single seed, no statistical uncertainty, bins 1-2 mm versus a "
+    "2.4-2.7 mm distal falloff"
+)
 METRICS = ("peak_depth_mm", "r80_mm", "r90_mm", "falloff_80_20_mm")
 
 
@@ -27,7 +31,33 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--runs", nargs="+", required=True, type=Path)
     ap.add_argument("--output", required=True, type=Path)
+    ap.add_argument(
+        "--code-sha",
+        default=None,
+        help="git SHA of the clean checkout running this analysis (recorded verbatim)",
+    )
+    ap.add_argument(
+        "--batches",
+        type=Path,
+        help="JSON with batch metadata {'n_batches': >=2, 'seeds': [...]}; without it the result "
+        "is always labelled exploratory",
+    )
     args = ap.parse_args()
+
+    status = EXPLORATORY
+    batches = None
+    if args.batches is not None:
+        batches = json.loads(args.batches.read_text())
+        if (
+            not isinstance(batches, dict)
+            or int(batches.get("n_batches", 0)) < 2
+            or len(batches.get("seeds", [])) < 2
+        ):
+            raise SystemExit("--batches needs n_batches >= 2 and at least two seeds")
+        status = (
+            "batch metadata supplied (multiple seeds); acceptance grade is decided against the "
+            "frozen criteria, not by this script"
+        )
 
     runs = []
     for run_dir in args.runs:
@@ -43,7 +73,7 @@ def main() -> int:
                 "histories": dd.histories,
                 "dose_unit": dd.unit,
                 "bin_width_mm": float(dd.depth_mm[1] - dd.depth_mm[0]),
-                "output_sha256": file_hashes(run, dd.files),
+                "output_sha256": file_hashes(run, [*dd.files, "inputs/case.json"]),
                 "peak_depth_mm": peak_depth(dd.depth_mm, curve),
                 "r80_mm": r80(dd.depth_mm, curve),
                 "r90_mm": r90(dd.depth_mm, curve),
@@ -60,7 +90,15 @@ def main() -> int:
             }
         )
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps({"runs": runs, "pairwise": pairs}, indent=2) + "\n")
+    doc = {
+        "evidence_status": status,
+        "analysis_code_sha": args.code_sha,
+        "runs": runs,
+        "pairwise": pairs,
+    }
+    if batches is not None:
+        doc["batches"] = batches
+    args.output.write_text(json.dumps(doc, indent=2) + "\n")
     for r in runs:
         print(
             f"{r['engine']:9s} peak {r['peak_depth_mm']:7.2f}  R90 {r['r90_mm']:7.2f}  "

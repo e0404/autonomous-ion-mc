@@ -7,14 +7,15 @@ missing metadata or inconsistent dimensions.
 
 from __future__ import annotations
 
+import hashlib
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 
-from .parsers import ParseError, read_metaimage, read_topas_csv
+from .parsers import ParseError, parse_metaimage, parse_topas_csv
 
 _TO_MM = {"mm": 1.0, "cm": 10.0, "m": 1000.0}
 
@@ -32,6 +33,7 @@ class ReferenceRun:
     files: dict[str, dict[str, Any]]  # manifest path -> {bytes, sha256}
     case: dict[str, Any]
     request: dict[str, Any]
+    read_digests: dict[str, str] = field(default_factory=dict)  # sha256 of the bytes read
 
     @property
     def histories(self) -> int:
@@ -47,57 +49,98 @@ class DepthDose:
     files: list[str]  # run-relative paths of the files used
 
 
-def _json(path: Path) -> dict[str, Any]:
+def _json_bytes(blob: bytes, label: str) -> dict[str, Any]:
     try:
-        data = json.loads(path.read_text())
-    except (OSError, ValueError) as exc:
-        raise RunError(f"cannot read {path}: {exc}") from exc
+        data = json.loads(blob.decode("utf-8"))
+    except ValueError as exc:
+        raise RunError(f"cannot parse {label}: {exc}") from exc
     if not isinstance(data, dict):
-        raise RunError(f"{path}: expected a JSON object")
+        raise RunError(f"{label}: expected a JSON object")
     return data
+
+
+def _verified_bytes(
+    run_dir: Path, files: dict[str, dict[str, Any]], rel: str, digests: dict[str, str]
+) -> bytes:
+    """Read ``rel`` and check size and sha256 against the transfer manifest (fail closed)."""
+    entry = files.get(rel)
+    if not isinstance(entry, dict) or "sha256" not in entry or "bytes" not in entry:
+        raise RunError(f"{run_dir.name}: {rel} not in transfer manifest")
+    path = run_dir / rel
+    if path.is_symlink() or not path.is_file():
+        raise RunError(f"{run_dir.name}: {rel} not materialized as a regular file")
+    blob = path.read_bytes()
+    if len(blob) != entry["bytes"]:
+        raise RunError(f"{run_dir.name}: {rel} size {len(blob)} != manifest {entry['bytes']}")
+    digest = hashlib.sha256(blob).hexdigest()
+    if digest != entry["sha256"]:
+        raise RunError(f"{run_dir.name}: {rel} sha256 mismatch against transfer manifest")
+    digests[rel] = digest
+    return blob
 
 
 def load_run(run_dir: str | Path) -> ReferenceRun:
     run_dir = Path(run_dir)
-    manifest = _json(run_dir / "transfer-manifest.json")
+    try:
+        manifest = _json_bytes((run_dir / "transfer-manifest.json").read_bytes(), "manifest")
+    except OSError as exc:
+        raise RunError(f"{run_dir}: transfer-manifest.json unreadable: {exc}") from exc
     for key in ("run_id", "engine", "source_sha", "files"):
         if key not in manifest:
             raise RunError(f"{run_dir}: manifest lacks {key}")
-    case_path = run_dir / "inputs" / "case.json"
-    if not case_path.is_file():
-        raise RunError(f"{run_dir}: inputs/case.json missing")
-    request_path = run_dir / "request.json"
-    request = _json(request_path) if request_path.is_file() else {}
-    case = _json(case_path)
+    if not isinstance(manifest["files"], dict):
+        raise RunError(f"{run_dir}: manifest files must be an object")
+    files = dict(manifest["files"])
+    digests: dict[str, str] = {}
+    case = _json_bytes(
+        _verified_bytes(run_dir, files, "inputs/case.json", digests), "inputs/case.json"
+    )
     if "histories" not in case:
-        raise RunError(f"{case_path}: no histories")
+        raise RunError(f"{run_dir}: case.json has no histories")
+    request: dict[str, Any] = {}
+    if "request.json" in files:
+        request = _json_bytes(
+            _verified_bytes(run_dir, files, "request.json", digests), "request.json"
+        )
     return ReferenceRun(
         run_id=str(manifest["run_id"]),
         engine=str(manifest["engine"]),
         source_sha=str(manifest["source_sha"]),
         run_dir=run_dir,
-        files=dict(manifest["files"]),
+        files=files,
         case=case,
         request=request,
+        read_digests=digests,
     )
 
 
-def _require(run: ReferenceRun, rel: str) -> Path:
-    if rel not in run.files:
-        raise RunError(f"{run.run_id}: {rel} not in transfer manifest")
-    path = run.run_dir / rel
-    if not path.is_file():
-        raise RunError(f"{run.run_id}: {rel} not materialized")
-    return path
+def _read(run: ReferenceRun, rel: str) -> bytes:
+    return _verified_bytes(run.run_dir, run.files, rel, run.read_digests)
 
 
 def file_hashes(run: ReferenceRun, rels: list[str]) -> dict[str, str]:
-    return {rel: str(run.files[rel]["sha256"]) for rel in rels}
+    """sha256 digests of the bytes actually read (verified against the manifest)."""
+    missing = [r for r in rels if r not in run.read_digests]
+    if missing:
+        raise RunError(f"{run.run_id}: files not read/verified: {missing}")
+    return {rel: run.read_digests[rel] for rel in rels}
+
+
+def _mhd(run: ReferenceRun, rel: str) -> Any:
+    """Parse a manifested .mhd; a separate raw file must be a plain name in the same directory."""
+    directory = rel.rpartition("/")[0]
+
+    def loader(name: str) -> bytes:
+        if "/" in name or "\\" in name or name in ("", ".", ".."):
+            raise RunError(f"{rel}: unsafe ElementDataFile {name!r}")
+        return _read(run, f"{directory}/{name}" if directory else name)
+
+    return parse_metaimage(_read(run, rel), rel, loader)
 
 
 def _topas(run: ReferenceRun) -> DepthDose:
     rel = "work/idd_dose.csv"
-    s = read_topas_csv(_require(run, rel))
+    s = parse_topas_csv(_read(run, rel).decode("utf-8"), rel)
     if s.bins[0] != 1 or s.bins[1] != 1:
         raise RunError(f"{rel}: expected a 1x1xN column, got bins {s.bins}")
     if "Sum" not in s.values:
@@ -115,7 +158,7 @@ def _topas(run: ReferenceRun) -> DepthDose:
 
 def _fred(run: ReferenceRun) -> DepthDose:
     rel = "work/out/score/Phantom.Dose.mhd"
-    img = read_metaimage(_require(run, rel))
+    img = _mhd(run, rel)
     nx, ny, nz = img.dims
     if img.data.shape != (nz, ny, nx):
         raise RunError(f"{rel}: inconsistent dims")
@@ -129,8 +172,9 @@ def _fred(run: ReferenceRun) -> DepthDose:
 
 def _mcsquare(run: ReferenceRun) -> DepthDose:
     rel = "work/Outputs/Dose.mhd"
-    _require(run, "work/Outputs/Dose.raw")
-    img = read_metaimage(_require(run, rel))
+    img = _mhd(run, rel)
+    if img.header.get("ElementDataFile") != "Dose.raw":
+        raise RunError(f"{rel}: ElementDataFile must be Dose.raw")
     nx, ny, nz = img.dims
     if img.data.shape != (nz, ny, nx):
         raise RunError(f"{rel}: inconsistent dims")

@@ -4,6 +4,8 @@ from .parsers import (
     MetaImage,
     ParseError,
     TopasScorer,
+    parse_metaimage,
+    parse_topas_csv,
     read_metaimage,
     read_topas_csv,
 )
@@ -18,6 +20,8 @@ __all__ = [
     "MetaImage",
     "ParseError",
     "TopasScorer",
+    "parse_metaimage",
+    "parse_topas_csv",
     "read_metaimage",
     "read_topas_csv",
 ]
