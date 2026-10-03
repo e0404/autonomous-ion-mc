@@ -1,0 +1,19 @@
+--UPenn beam model (double gaussian)--
+# Beam data library (IBA dedicated nozzle - P2)
+
+Nozzle exit to Isocenter distance
+410.0
+
+SMX to Isocenter distance
+2234.8
+
+SMY to Isocenter distance
+1859.1
+
+Beam parameters
+3 energies
+
+NominalEnergy 	 MeanEnergy 	 EnergySpread 	 ProtonsMU 	 Weight1 	 SpotSize1x 	 Divergence1x 	 Correlation1x 	 SpotSize1y 	 Divergence1y 	 Correlation1y 	 Weight2 	 SpotSize2x 	 Divergence2x 	 Correlation2x 	 SpotSize2y 	 Divergence2y 	 Correlation2y
+140.000 	 140.496 	 0.636823 	 109872000.0 	 0.957500 	 3.284013 	 0.004857 	 -0.047616 	 3.949676 	 0.004974 	 -0.251242 	 0.042500 	 26.059423 	 0.045877 	 -0.313754 15.083101 	 0.026580 	 -0.235456 
+150.000 	 150.559 	 0.626557 	 115140000.0 	 0.959000 	 3.077055 	 0.004502 	 -0.039148 	 3.871036 	 0.004567 	 -0.270952 	 0.041000 	 22.496600 	 0.039382 	 -0.278384 13.965773 	 0.023799 	 -0.194537 
+160.000 	 160.429 	 0.600311 	 120487500.0 	 0.961000 	 2.879674 	 0.004542 	 -0.079435 	 3.638438 	 0.004455 	 -0.295247 	 0.039000 	 19.162852 	 0.036358 	 -0.355983 12.690601 	 0.023506 	 -0.245978 
