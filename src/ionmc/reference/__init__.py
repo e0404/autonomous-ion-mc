@@ -7,8 +7,14 @@ from .parsers import (
     read_metaimage,
     read_topas_csv,
 )
+from .runs import DepthDose, ReferenceRun, RunError, depth_dose, load_run
 
 __all__ = [
+    "DepthDose",
+    "ReferenceRun",
+    "RunError",
+    "depth_dose",
+    "load_run",
     "MetaImage",
     "ParseError",
     "TopasScorer",

@@ -84,3 +84,23 @@ Sources: MCsquare master, gitlab.com/openmcsquare/MCsquare (`src/compute_beam_mo
 | 1.0 mm, 1e-6 rad, corr 0 | REF-62136da2 | OK (used in the cases) |
 
 The diagnostic case directories were removed from the tree after these runs.
+
+## Evidence runs (commit c6bc047, 20000 histories)
+
+| Engine | Run id |
+| --- | --- |
+| TOPAS | REF-247e0913d2a55767d65f-432cc9ae |
+| FRED | REF-ef9079a711bbbc7346a4-625cee73 |
+| MCsquare | REF-e62d4ae032ee7d48700d-608a98c2 |
+
+Reproduce the depth-dose comparison (peak depth, R90, R80, distal 80-20 width, pairwise
+differences, output file hashes; no raw curves) after materializing the runs:
+
+```
+uv run python validation/scripts/reference/compare_depth_dose.py \
+  --runs .ionmc-cache/reference-runs/<run-id>... --output <out>.json
+```
+
+Library code: `ionmc.reference.runs` (`load_run`, `depth_dose`, per-engine extraction, fail closed)
+and `ionmc.reference.metrics`. Metrics use bin-centre depths, argmax for the peak (resolution is
+the bin width: 1 mm TOPAS/FRED, 2 mm MCsquare) and linear interpolation on the distal side.
