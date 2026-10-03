@@ -141,7 +141,10 @@ whose arguments are not in these units state the unit in the parameter name
 
 Philox4x32-10 maps a 128-bit counter `(c0, c1, c2, c3)` and a 64-bit key
 `(k0, k1)` to four 32-bit words; each word yields one uniform in (0, 1) as
-`(w >> 8 + 0.5) · 2⁻²⁴` (never exactly 0 or 1). Streams are disjoint if and
+`(w >> 8 + 0.5) · 2⁻²⁴` in float64 and `(w >> 9 + 0.5) · 2⁻²³` in float32
+(never exactly 0 or 1; the 24-bit form rounds to exactly 1.0 in float32 for
+the largest word, an error found during V3-003 planning and amended here on
+2026-10-03, decision 0039). Streams are disjoint if and
 only if no (counter, key) pair is used twice, which the following fixed
 encoding guarantees by construction:
 

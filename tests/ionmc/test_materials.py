@@ -31,7 +31,7 @@ def test_electron_density_of_water() -> None:
 @pytest.mark.parametrize("material", list(MATERIALS.values()), ids=list(MATERIALS))
 def test_predefined_materials_are_consistent(material: Material) -> None:
     assert sum(material.mass_fractions.values()) == pytest.approx(1.0, abs=1e-5)
-    assert 0.4 < material.z_over_a < 0.6
+    assert 0.39 < material.z_over_a < 0.6  # lead: 0.396
     # Bragg additivity is within 20 % of the tabulated I of the same material.
     assert material.mean_excitation_eV / math.exp(material.ln_I_bragg) < 1.25
     assert material.ln_I == pytest.approx(math.log(material.mean_excitation_eV))

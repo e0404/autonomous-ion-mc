@@ -14,11 +14,13 @@ nav = [
   { "Architecture" = [
     "architecture/index.md",
     { "Data layer" = "architecture/data-layer.md" },
+    { "Transport engine" = "architecture/transport.md" },
   ] },
 
   { "Physics" = [
     "physics/index.md",
     { "Stopping power" = "physics/stopping-power.md" },
+    { "EM transport" = "physics/em-transport.md" },
   ] },
 
   { "Validation" = [

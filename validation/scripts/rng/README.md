@@ -13,5 +13,10 @@ construction. Run them with a Python environment containing `warp-lang` and
 | `philox.py` | Checks the kernel implementation against the Random123 known-answer vectors and against a pure-Python integer implementation on 20 000 random counter/key blocks | all known-answer vectors match; 20 000/20 000 blocks bit-identical |
 
 These scripts are measurement provenance for the decision, not part of the
-`ionmc` package. The package implementation of Philox and its tests are
-delivered by the transport task (V3-003).
+`ionmc` package; they are archived unchanged. The package implementation is
+`ionmc.rng.philox` with its tests in `tests/ionmc/test_rng.py` (task V3-003A).
+
+Note (decision 0039): `philox_lib.py` maps a word to a uniform with the 24-bit form
+`((w >> 8) + 0.5) * 2**-24` in both precisions. In float32 this form rounds to exactly 1.0
+for `w >> 8 = 2**24 - 1`; the package uses `((w >> 9) + 0.5) * 2**-23` for float32 and keeps
+the 24-bit form for float64 (regression test `test_u6c_u01_strictly_inside_unit_interval_in_both_precisions`).

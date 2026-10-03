@@ -10,6 +10,7 @@ electron binding energy.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 ELECTRON_MASS_MEV = 0.51099895000
@@ -25,6 +26,29 @@ class Projectile:
     z: int
     a: int
     mass_mev: float
+
+    def __post_init__(self) -> None:
+        for field_name in ("name", "symbol"):
+            value = getattr(self, field_name)
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(f"projectile {field_name} must be a non-empty string")
+        for field_name in ("z", "a"):
+            value = getattr(self, field_name)
+            if isinstance(value, bool) or not isinstance(value, int):
+                raise ValueError(f"projectile {field_name} must be an integer, got {value!r}")
+        if not 1 <= self.z <= self.a:
+            raise ValueError(f"projectile needs 1 <= z <= a, got z={self.z}, a={self.a}")
+        if (
+            isinstance(self.mass_mev, bool)
+            or not isinstance(self.mass_mev, int | float)
+            or not math.isfinite(self.mass_mev)
+            or self.mass_mev <= 0.0
+        ):
+            raise ValueError(f"projectile mass must be finite and > 0, got {self.mass_mev!r}")
+        if abs(self.mass_mev / (self.a * AMU_MEV) - 1.0) > 0.02:
+            raise ValueError(
+                f"projectile mass {self.mass_mev} MeV/c2 is inconsistent with mass number {self.a}"
+            )
 
 
 def _nucleus(name: str, symbol: str, z: int, a: int, atomic_mass_u: float) -> Projectile:
