@@ -23,7 +23,7 @@ import json
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass
-from types import SimpleNamespace
+from types import MappingProxyType, SimpleNamespace
 from typing import Any
 
 import numpy as np
@@ -68,6 +68,19 @@ class TransportTables:
     sha256: str
 
     def __post_init__(self) -> None:
+        for name in _ARRAY_FIELDS:
+            a = getattr(self, name)
+            if not isinstance(a, np.ndarray):
+                raise ValueError(f"{name} must be a numpy array")
+            if a.flags.owndata or a.base is None:
+                a.setflags(write=False)
+            else:  # a view: freeze a private copy so the caller's array stays untouched
+                a = np.array(a)
+                a.setflags(write=False)
+                object.__setattr__(self, name, a)
+            if a.flags.writeable:
+                raise ValueError(f"{name} could not be made read-only")
+        object.__setattr__(self, "identity", _freeze(self.identity))
         nm = len(self.materials)
         if nm < 1:
             raise ValueError("tables need at least one material")
@@ -189,6 +202,7 @@ class TransportTables:
                 "dataset_id": t.metadata.get("dataset_id"),
                 "source_sha256": t.metadata.get("sha256"),
                 "content_sha256": t.metadata.get("content_sha256"),
+                "material_sha256": material_fingerprint(mat),
                 "e_min_mev": float(e_min[i]),
                 "e_max_mev": float(e_max[i]),
                 "metadata": _jsonable(t.metadata),
@@ -276,6 +290,58 @@ class TransportTables:
             n_e=self.n_e,
             n_r=self.n_r,
         )
+
+
+_ARRAY_FIELDS = (
+    "e_min_mev",
+    "e_max_mev",
+    "ln_e0",
+    "inv_dln_e",
+    "ln_s_mass",
+    "ln_r_mass",
+    "r_min_g_cm2",
+    "r_max_g_cm2",
+    "ln_r0",
+    "inv_dln_r",
+    "ln_e_of_r",
+    "z_over_a",
+    "inv_rho_xs_cm2_g",
+    "nominal_density_g_cm3",
+)
+
+
+def _freeze(value: Any) -> Any:
+    """Recursively immutable copy: dict -> MappingProxyType, list/tuple -> tuple."""
+    if isinstance(value, dict | MappingProxyType):
+        return MappingProxyType({k: _freeze(v) for k, v in value.items()})
+    if isinstance(value, list | tuple):
+        return tuple(_freeze(v) for v in value)
+    return value
+
+
+def thaw(value: Any) -> Any:
+    """Deep mutable copy (dict/list) of a frozen structure, for summaries."""
+    if isinstance(value, MappingProxyType | dict):
+        return {k: thaw(v) for k, v in value.items()}
+    if isinstance(value, list | tuple):
+        return [thaw(v) for v in value]
+    return value
+
+
+def material_fingerprint(material: Material) -> str:
+    """SHA-256 of the complete physics definition of a material (composition, density, I,
+    density-effect parameters)."""
+    sp = material.sternheimer
+    payload = {
+        "name": material.name,
+        "density_g_cm3": material.density_g_cm3,
+        "mass_fractions": {k: material.mass_fractions[k] for k in sorted(material.mass_fractions)},
+        "I_eV": material.I_eV,
+        "sternheimer": None
+        if sp is None
+        else {"x0": sp.x0, "x1": sp.x1, "cbar": sp.cbar, "a": sp.a, "m": sp.m},
+    }
+    return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
 
 
 def _jsonable(value: Any) -> Any:

@@ -25,9 +25,9 @@ from ionmc.physics.scattering import scattering_length_g_cm2
 from ionmc.physics.stopping import StoppingSource, StoppingTable
 from ionmc.scoring import MAX_SCORING_GRIDS, ScoringGrid
 from ionmc.sources import PencilBeamSource
-from ionmc.transport.tables import TransportTables
+from ionmc.transport.tables import TransportTables, thaw
 
-STRAGGLING_MODELS = ("bohr_g4ion",)
+STRAGGLING_MODELS = ("bohr_two_moment_gauss_gamma_v1",)
 MCS_MODELS = ("differential_moliere",)
 DELTA_ELECTRON_MODELS = ("local",)
 BACKENDS = ("python", "warp-cpu", "warp-cuda")
@@ -58,7 +58,7 @@ class PhysicsOptions:
     nuclear: bool
     stopping: StoppingSource
     straggling: bool = True
-    straggling_model: str = "bohr_g4ion"
+    straggling_model: str = "bohr_two_moment_gauss_gamma_v1"
     multiple_scattering: bool = True
     mcs_model: str = "differential_moliere"
     delta_electrons: str = "local"
@@ -253,7 +253,7 @@ class EffectiveConfig:
             "tables": {
                 "sha256": self.tables.sha256,
                 "stopping_source": p.stopping.name,
-                "materials": list(self.tables.identity),
+                "materials": thaw(self.tables.identity),
                 "n_e": self.tables.n_e,
                 "n_r": self.tables.n_r,
             },
@@ -276,18 +276,14 @@ def _check_table_identity(table: StoppingTable, material: Material, source_name:
             f"not the requested proton"
         )
     got = table.material
-    same = (
-        got.name == material.name
-        and math.isclose(got.density_g_cm3, material.density_g_cm3, rel_tol=1e-12)
-        and math.isclose(got.z_over_a, material.z_over_a, rel_tol=1e-12)
-        and math.isclose(got.mean_excitation_eV, material.mean_excitation_eV, rel_tol=1e-12)
-    )
-    if not same:
+    if got != material:
         raise fail(
             f"source {source_name!r} returned a table for material {got.name!r} "
-            f"(density {got.density_g_cm3}, Z/A {got.z_over_a}, I {got.mean_excitation_eV} eV), "
-            f"not the requested {material.name!r} (density {material.density_g_cm3}, "
-            f"Z/A {material.z_over_a}, I {material.mean_excitation_eV} eV)"
+            f"(density {got.density_g_cm3}, Z/A {got.z_over_a}, I {got.mean_excitation_eV} eV, "
+            f"composition {dict(got.mass_fractions)}) that differs from the requested "
+            f"{material.name!r} (density {material.density_g_cm3}, Z/A {material.z_over_a}, "
+            f"I {material.mean_excitation_eV} eV, composition {dict(material.mass_fractions)}); "
+            "the full material definition must be identical"
         )
 
 

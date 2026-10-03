@@ -43,6 +43,10 @@ GOTTSCHALK_SHA256 = "67fb1478e51534064f0e5363b1ee4160da2a37a600f51897b56dd74ea22
 GOTTSCHALK_CACHE = Path(__file__).resolve().parents[3] / ".ionmc-cache" / "reference"
 U4_FRACTIONS = (0.01, 0.1, 0.5, 0.9)
 U4_TOLERANCE = 0.015
+U4B_TOLERANCE = 0.045
+"""Frozen U4b tolerance: the paper's own T_dM is within 2.74 % of theta_Hanson over the frozen
+points (largest |dM %| of theta0Single for x/R1 >= 0.01) and U4 bounds our reproduction of T_dM
+at 1.5 %, so (1 + 0.0274)(1 + 0.015) - 1 = 4.3 % -> 4.5 %."""
 STEPS_MM = (0.01, 0.1, 0.5, 1.0, 2.0, 5.0)
 DEPTH_FRACTIONS = (0.05, 0.25, 0.5, 0.9)
 _ROW = re.compile(r"^\s*(" + r"\s*&\s*".join([r"(-?\d+\.\d+)"] * 11) + r")\s*(?:\\\\)?\s*$")
@@ -242,6 +246,21 @@ def u4_deviations(
         reference = theta_hanson * (1.0 + dm_percent / 100.0)
         out[frac] = 1e3 * math.sqrt(path.theta2_quadrature(frac * path.r1_mm)) / reference - 1.0
     return out, path.r1_g
+
+
+def u4b_deviations(
+    tables: TransportTables,
+    material: Material,
+    rows: dict[float, tuple[float, float]],
+) -> tuple[dict[float, float], float]:
+    """theta_dM(quadrature) / theta_Hanson - 1 per x/R1 (the measured/Moliere-theory column,
+    independent of the paper's dM fit) and the paper's max |dM %| over the same points."""
+    path = ProtonPath(tables, material, 158.6)
+    out = {}
+    for frac in U4_FRACTIONS:
+        theta_hanson, _ = rows[frac]
+        out[frac] = 1e3 * math.sqrt(path.theta2_quadrature(frac * path.r1_mm)) / theta_hanson - 1.0
+    return out, max(abs(rows[f][1]) for f in U4_FRACTIONS)
 
 
 def xs_deviations(x_s_table: dict[str, float], materials: dict[str, Material]) -> dict[str, float]:

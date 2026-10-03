@@ -24,7 +24,9 @@ Tiers:
 | U1 | Every shared func, Python scope vs Warp CPU kernel (f32, f64), 10⁴ args incl. edges | Decision 0001 classes: f64 rtol 1e-12 / atol 1e-14, f32 1e-6 / 1e-6; `dda_next` reasons and indices identical; NaN fails | backend parity | CI |
 | U2 | Table round trip \|Rinv(R(E))−E\|/E and monotonicity of R and Rinv | ≤ 1e-5 (f64 build), strictly monotone | self-consistency | CI |
 | U3 | X_S from the formula for water, Be, Al, Cu, Pb | within 0.3% of 46.88 / 92.60 / 28.75 / 14.62 / 6.62 g/cm². This also settles ln vs log10 in eq. XS. | independent theory | CI |
-| U4 | θ_dM(x) by numpy quadrature of T_dM along CSDA E(x), 158.6 MeV, x/R1 ∈ {0.01, 0.1, 0.5, 0.9}, for the materials V3-002 provides | within 1.5% of Gottschalk's θ_Hanson·(1+dM%) (theta0Single table). Residual is from the range-table I-value. | independent theory | LV¹ |
+| U4 | θ_dM(x) by numpy quadrature of T_dM along CSDA E(x), 158.6 MeV, x/R1 ∈ {0.01, 0.1, 0.5, 0.9}, for the materials V3-002 provides | within 1.5% of Gottschalk's θ_Hanson·(1+dM%) (theta0Single table). Residual is from the range-table I-value. | source-model reproduction³ (shared T_dM model and coefficients; not independent) | LV¹ |
+| U4b³ | Same θ_dM(x) as U4 compared directly with Gottschalk's tabulated θ_Hanson (Molière/Fano/Hanson theory, the quantity T_dM was fitted to; independent of the dM fit) | \|θ_dM/θ_Hanson − 1\| ≤ 4.5 % at every frozen point, derived before measurement from the table's own max \|dM%\| = 2.74 % (x/R1 ≥ 0.01) compounded with the U4 bound 1.5 % | independent theory | LV¹ |
+| T15³ | **Independent-MC lateral check:** 150 MeV protons in water, all physics on, lateral σ of the dose profile at z/R ∈ {0.5, 0.9} (0.2 mm lateral bins, 1 mm slabs) versus a TOPAS/Geant4 11 run of the same geometry (3-D dose grid, ≥ 10⁵ primaries, ≥ 2 seeds) from the V3-010 reference service | \|σ_ionmc/σ_TOPAS − 1\| ≤ 3 % and \|z\| < 3 using both standard errors; result labelled by TOPAS physics list and I-value (78 eV) | independent Monte Carlo | LV (after V3-003B and the V3-010 3-D dose case) |
 | U5 | **Step independence of the MCS integrator (deterministic):** Σ_steps T(E_mid)·s along CSDA in water, 150 MeV, s ∈ {0.01, 0.1, 0.5, 1, 2, 5} mm, compared with adaptive quadrature at x/R1 ∈ {0.05, 0.25, 0.5, 0.9} | \|Δθ²/θ²\| ≤ 2e-3 for every s at x/R1 ≥ 0.05. Negative control computed analytically: per-step Highland varies ≥ 5% over the same s range, so the test has power. | self-consistency | CI |
 | U6 | RNG tests (a)–(e) of §3 | exact | self-consistency | CI |
 | T1 | **Trajectory parity**, python vs warp-cpu f64 trace: K = 16 (CI) and K = 256 (LV) histories, 100 MeV (CI) and 150 MeV (LV) in a water box, all physics on | Discrete sequences (idx, step reason, c2 count, attempt counts) identical for 100% of steps. Continuous state per step within rtol = atol = 1e-10. Any branch flip fails. | backend parity | CI/LV |
@@ -63,3 +65,12 @@ executed locally (LV) and on the host runner. The acceptance number (1.5 %) is u
 contains Be, Al, Cu and Pb blocks only (no water), so U4 covers those four V3-002 materials; water
 is covered by the cache-independent generalised-Highland cross-check (bounded at 6 %, not an
 acceptance criterion) and by the X_S comparison with Gottschalk's Table tbl:LS (within 0.5 %).
+
+³ Classification amendment (2026-10-03, after the second Codex review of V3-003A, head f4aad1f):
+U4 compares against θ_Hanson·(1+dM%), which reconstructs Gottschalk's own differential-Molière
+result — the model, coefficients and calibration paper that the engine implements — so U4 is a
+source-model reproduction check, not independent theory. U4b (direct comparison with the
+Molière/Fano/Hanson column, which T_dM was fitted to) and T15 (independent Monte Carlo lateral
+spreading) are added as the independent scattering evidence. The U4b tolerance is derived from
+the paper's table (max |dM%| 2.74 % for x/R1 ≥ 0.01, Pb at 0.9 R1 = −2.51 %) and the frozen U4
+bound, not from any ionmc result; the U4b numbers had not been computed when this was frozen.

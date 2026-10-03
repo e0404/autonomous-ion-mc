@@ -29,12 +29,14 @@ from ionmc.transport.mcs_checks import (
     GOTTSCHALK_SHA256,
     U4_FRACTIONS,
     U4_TOLERANCE,
+    U4B_TOLERANCE,
     ProtonPath,
     gottschalk_tex,
     highland_cross_check,
     parse_tables,
     radiation_length_g_cm2,
     u4_deviations,
+    u4b_deviations,
     u5_deviations,
     u5_negative_control,
     xs_deviations,
@@ -161,6 +163,21 @@ def test_u4_theta_dm_against_gottschalk_table(bethe: BetheStoppingSource, name: 
     assert set(rows[name]) >= set(U4_FRACTIONS)
     deviations, _ = u4_deviations(tables, material, rows[name])
     assert max(abs(d) for d in deviations.values()) <= U4_TOLERANCE, deviations
+
+
+@pytest.mark.parametrize("name", list(_U4_MATERIALS))
+def test_u4b_theta_dm_against_theta_hanson(bethe: BetheStoppingSource, name: str) -> None:
+    """U4b: our theta_dM against the paper's theta_Hanson column itself, within 4.5 %.
+
+    theta_Hanson (Moliere/Fano/Hanson theory) is independent of the dM fit. The paper's own
+    T_dM is within 2.74 % of it over the frozen points (largest |dM %|) and U4 bounds our
+    reproduction of T_dM at 1.5 %, so (1.0274)(1.015) - 1 = 4.3 % -> frozen tolerance 4.5 %."""
+    rows, _, _ = parse_tables(_gottschalk_tex())
+    material = _U4_MATERIALS[name]
+    tables = TransportTables.from_stopping_tables([bethe.table(material, PROTON)])
+    deviations, paper_dm = u4b_deviations(tables, material, rows[name])
+    assert paper_dm <= 2.74 + 1e-9, paper_dm
+    assert max(abs(d) for d in deviations.values()) <= U4B_TOLERANCE, deviations
 
 
 def test_scattering_length_against_gottschalk_table() -> None:

@@ -14,9 +14,10 @@ the quadrature theta_dM from theta_Hanson (1 + dM %/100) per material (and per f
 deviations only, no table values), our rho R1 against the paper's; X_S deviations from the
 table ``tbl:LS``; the full U5 table (relative deviation of the stepped variance sum from the
 quadrature per step length and x/R1) and the negative control (relative spread of the per-step
-Highland formula over the step lengths); the generalised-Highland cross-check for water. No
-table rows of the paper are written. All physics comes from ``ionmc.transport.mcs_checks``
-(the same functions as the tests).
+Highland formula over the step lengths); the generalised-Highland cross-check for water; the
+U4b comparison with theta_Hanson itself and the paper's maximum |dM %| per material. No table rows
+of the paper are written. All physics comes from ``ionmc.transport.mcs_checks`` (the same
+functions as the tests).
 """
 
 from __future__ import annotations
@@ -52,6 +53,7 @@ def run() -> dict[str, Any]:
         return TransportTables.from_stopping_tables([bethe.table(material, PROTON)])
 
     u4: dict[str, Any] = {}
+    u4b: dict[str, Any] = {}
     for key, material in {
         "Be": BERYLLIUM,
         "Al": ALUMINIUM,
@@ -59,6 +61,12 @@ def run() -> dict[str, Any]:
         "Pb": LEAD,
     }.items():
         dev, our_r1 = mc.u4_deviations(tables(material), material, rows[key])
+        dev_b, paper_dm = mc.u4b_deviations(tables(material), material, rows[key])
+        u4b[key] = {
+            "deviation_by_x_over_R1": {str(f): d for f, d in dev_b.items()},
+            "max_abs_deviation": max(abs(d) for d in dev_b.values()),
+            "paper_max_abs_dM_percent": paper_dm,
+        }
         u4[key] = {
             "deviation_by_x_over_R1": {str(f): d for f, d in dev.items()},
             "max_abs_deviation": max(abs(d) for d in dev.values()),
@@ -84,6 +92,12 @@ def run() -> dict[str, Any]:
             "reference": "theta_Hanson * (1 + dM %/100)",
             "materials": u4,
             "max_abs_deviation_all": max(m["max_abs_deviation"] for m in u4.values()),
+        },
+        "u4b": {
+            "reference": "theta_Hanson column (independent of the dM fit)",
+            "tolerance": mc.U4B_TOLERANCE,
+            "materials": u4b,
+            "max_abs_deviation_all": max(m["max_abs_deviation"] for m in u4b.values()),
         },
         "x_s_relative_deviation_vs_tbl_LS": xs,
         "u5": {

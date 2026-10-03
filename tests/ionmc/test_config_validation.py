@@ -451,3 +451,82 @@ def test_effective_table_provenance_reaches_the_summary(make_config: MakeConfig)
     import json
 
     json.dumps(eff.summary())  # JSON-serialisable
+
+
+def test_material_identity_is_the_full_definition(make_config: MakeConfig) -> None:
+    """Same name, density, Z/A and I but different density-effect parameters or composition
+    must not be accepted as the requested material."""
+    from ionmc.materials import Material, SternheimerParameters
+
+    cfg = make_config()
+    sp = WATER.sternheimer
+    assert sp is not None
+    other_sp = SternheimerParameters(sp.x0, sp.x1, sp.cbar + 0.01, sp.a, sp.m)
+    same_aggregates = Material(
+        "water", 1.0, dict(WATER.mass_fractions), WATER.I_eV, other_sp, WATER.source
+    )
+    assert (same_aggregates.density_g_cm3, same_aggregates.z_over_a, same_aggregates.I_eV) == (
+        WATER.density_g_cm3,
+        WATER.z_over_a,
+        WATER.I_eV,
+    )
+    recomposed = Material(
+        "water",
+        1.0,
+        {"H": 0.1119, "O": 0.8881},  # a different composition
+        WATER.I_eV,
+        WATER.sternheimer,
+        WATER.source,
+    )
+    for forged in (same_aggregates, recomposed):
+        _rejects(replace(cfg, physics=replace(cfg.physics, stopping=_WrongTableSource(forged))))
+    validate(replace(cfg, physics=replace(cfg.physics, stopping=_WrongTableSource(WATER))))
+    from ionmc.transport.tables import material_fingerprint
+
+    assert material_fingerprint(WATER) != material_fingerprint(same_aggregates)
+    assert material_fingerprint(WATER) != material_fingerprint(recomposed)
+    assert validate(cfg).tables.identity[0]["material_sha256"] == material_fingerprint(WATER)
+
+
+def test_transport_tables_are_deeply_immutable(make_config: MakeConfig) -> None:
+    import copy
+
+    eff = validate(make_config())
+    t = eff.tables
+    for name in (
+        "ln_s_mass",
+        "ln_r_mass",
+        "ln_e_of_r",
+        "e_min_mev",
+        "z_over_a",
+        "inv_rho_xs_cm2_g",
+        "nominal_density_g_cm3",
+        "ln_e0",
+    ):
+        arr = getattr(t, name)
+        assert not arr.flags.writeable
+        with pytest.raises(ValueError):
+            arr[...] = 0.0
+    with pytest.raises(TypeError):
+        t.identity[0]["I_eV_effective"] = 1.0  # type: ignore[index]
+    with pytest.raises(TypeError):
+        t.identity[0]["metadata"]["source"] = "x"  # type: ignore[index]
+    with pytest.raises(AttributeError):
+        t.sha256 = "x"  # type: ignore[misc]
+    # a view is copied, the caller's array stays writable
+    base = t.ln_s_mass.copy()
+    view = base[:, :]
+    from dataclasses import fields
+
+    kwargs = {f.name: getattr(t, f.name) for f in fields(t)}
+    kwargs["ln_s_mass"] = view
+    t2 = type(t)(**kwargs)
+    assert not t2.ln_s_mass.flags.writeable and base.flags.writeable
+    # the summary is a deep copy: mutating it changes neither identity nor hash
+    s = eff.summary()
+    before = copy.deepcopy(s)
+    s["tables"]["materials"][0]["I_eV_effective"] = -1.0
+    s["tables"]["materials"][0]["metadata"]["source"] = "tampered"
+    s["rng"]["generator"] = "x"
+    assert eff.summary() == before
+    assert t.identity[0]["I_eV_effective"] == 78.0 and eff.rng["generator"] == "philox4x32-10"

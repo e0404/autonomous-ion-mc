@@ -22,15 +22,14 @@ from ionmc.transport.funcs import make_transport_funcs
 
 wp.config.log_level = wp.LOG_WARNING
 
-# Frozen criterion U1 asks for 1e4 arguments per function. Python-scope Warp calls cost about
-# 3 ms per argument set, so the default is 2000 (about 12 s for both precisions); set the
-# environment variable IONMC_U1_N=10000 for the full count (about 60 s).
-N_ARGS = int(os.environ.get("IONMC_U1_N", "2000"))
+# Frozen criterion U1: 1e4 arguments per function (the environment variable only allows a
+# smaller count for quick local runs; CI uses the default).
+N_ARGS = int(os.environ.get("IONMC_U1_N", "10000"))
 TOL = {"float64": (1e-12, 1e-14), "float32": (1e-6, 1e-6)}
 M_P = 938.27208816
 
 # column layout of the argument pools -------------------------------------------------------
-NX = 56  # real columns
+NX = 61  # real columns
 NV = 16  # vec3 columns
 NI = 9  # int columns
 NO = 40  # real outputs
@@ -142,6 +141,25 @@ def _args(precision: str) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     x[0:3, 51] = [x[0, 50], 0.0, x[2, 50] * 2.0]
     x[:, 52] = uni()
     x[:, 53] = uni()
+    # scattering_variance_birth: pv_mid, pv_end, p1v1, z, inv_rho_xs, rho, s
+    x[:, 56] = logu(50.0, 900.0)  # p1v1
+    r_end = rng.uniform(0.02, 0.97, n)
+    x[:, 55] = x[:, 56] * r_end  # pv_end
+    x[:, 54] = x[:, 55] + (x[:, 56] - x[:, 55]) * rng.uniform(0.0, 0.5, n)  # pv_mid
+    x[:, 57] = 1.0
+    x[:, 58] = rng.uniform(0.01, 0.2, n)
+    x[:, 59] = rng.uniform(0.001, 12.0, n)
+    x[:, 60] = logu(1e-3, 5.0)
+    # edges: E1 == E0 (no loss), clamp active (pv_end within 1e-9 of p1v1, beyond it), tiny step,
+    # near the end of the range (low pv, large p1v1)
+    x[0, 54:57] = [400.0, 400.0, 400.0]
+    x[1, 54:57] = [399.9999, 400.0 * (1 - 1e-9), 400.0]
+    x[2, 54:57] = [400.0, 400.0 * 1.01, 400.0]
+    x[3, 54:57] = [12.0, 10.0, 600.0]
+    x[4, 54:57] = [399.99, 399.98, 400.0]
+    x[4, 60] = 1e-6
+    x[5, 54:57] = [30.0, 25.0, 30.0]
+    x[6, 54:57] = [500.0, 480.0, 550.0]  # ordinary step with the clamp inactive
     # ints: ix, iy, iz in the DDA grid and indices
     ii[:, 0:3] = rng.integers(-2, 9, (n, 3))
     ii[:, 3] = rng.integers(-3, 50, n)
@@ -253,6 +271,9 @@ def _make_kernel(real: Any) -> Any:
         o[i, 21] = g0
         o[i, 22] = g1
         o[i, 23] = tf.gauss_one(x[i, 52], x[i, 53])
+        o[i, 24] = em.scattering_variance_birth(
+            x[i, 54], x[i, 55], x[i, 56], x[i, 57], x[i, 58], x[i, 59], x[i, 60]
+        )
         b1, b2 = tf.orthonormal_basis(v[i, 15])
         ov[i, 2] = b1
         ov[i, 3] = b2
@@ -316,6 +337,9 @@ def _python_scope(real: Any, x: np.ndarray, v: np.ndarray, ii: np.ndarray) -> tu
         o[i, 21] = float(g0)
         o[i, 22] = float(g1)
         o[i, 23] = float(tf.gauss_one(r[52], r[53]))
+        o[i, 24] = float(
+            em.scattering_variance_birth(r[54], r[55], r[56], r[57], r[58], r[59], r[60])
+        )
         b1, b2 = tf.orthonormal_basis(vv[15])
         ov[i, 2] = [float(c) for c in b1]
         ov[i, 3] = [float(c) for c in b2]
@@ -328,7 +352,7 @@ REAL_OUTPUTS = {
     9: "polar_deflection", 10: "log_bin_frac", 11: "lerp", 12: "interp_exp",
     13: "plane_position", 14: "dda_distance", 15: "leg2_length", 16: "range_step_limit",
     17: "eloss_step_limit", 18: "select_step", 19: "ray_box_in", 20: "ray_box_out",
-    21: "gauss_pair_0", 22: "gauss_pair_1", 23: "gauss_one",
+    21: "gauss_pair_0", 22: "gauss_pair_1", 23: "gauss_one", 24: "scattering_variance_birth",
 }  # fmt: skip
 INT_OUTPUTS = {
     0: "straggle_ok", 1: "log_bin_index", 2: "dda_axis", 3: "leg2_axis", 4: "select_reason",

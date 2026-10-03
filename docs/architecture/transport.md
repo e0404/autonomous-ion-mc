@@ -65,7 +65,7 @@ densities in g/cm3, doses in Gy per primary). All grids use `origin_mm` = corner
   e_cut_mev=2.0, max_step_mm=1.0, max_energy_loss_fraction=0.02, range_alpha=0.2,
   range_rho_f_mm=0.1, short_step_fraction=1e-3, ...)`: `nuclear` and `stopping` have no default
   (`nuclear=True` is rejected until nuclear interactions exist). Model names are
-  `straggling_model="bohr_g4ion"`, `mcs_model="differential_moliere"`, `delta_electrons="local"`;
+  `straggling_model="bohr_two_moment_gauss_gamma_v1"`, `mcs_model="differential_moliere"`, `delta_electrons="local"`;
   any other string is rejected.
 * `RunOptions(backend, precision, seed, n_histories, n_batches=20, cpu_workers=1,
   max_steps=None, allow_invalid_result=False, worker_timeout_s=None, memory_budget_bytes=2**31)`.
@@ -126,6 +126,10 @@ counter starting at 0.
 * `RunOptions.memory_budget_bytes` bounds the accumulators; `PhysicsOptions.stopping` has no default.
 * The energy loss uses the state energy (step 6 above); the cutoff energy is scored (see Results).
 
+`TransportTables` is immutable: every array is read-only, the identity (source, effective I, dataset id
+and hashes, material fingerprint, metadata) is stored as read-only mappings and tuples, and
+`EffectiveConfig.summary()` returns deep copies.
+
 ## Grids of different size and alignment
 
 Transport voxels (the `VoxelGeometry`, which sets the voxel planes that end steps) and scoring voxels
@@ -144,7 +148,8 @@ Each rule raises before any transport and nothing is clamped or substituted (tes
 
 * the projectile is not exactly the canonical proton (all fields; projectile fields are validated
   when a `Projectile` is built); a stopping source that returns a table for another projectile or
-  material (name, density, Z/A, I) than requested; `nuclear=True`; unknown model names;
+  material than requested (the complete `Material` definition must be identical: composition,
+  density, I and density-effect parameters); `nuclear=True`; unknown model names;
 * `backend="python"` with `float32`; `warp-cpu` / `warp-cuda` (not implemented yet, `BackendUnavailableError`);
   `cpu_workers > 1` (on `warp-cuda` always an error, on `python` `BackendUnavailableError`);
 * `n_histories` outside `[1, 2**32]`, not a multiple of `n_batches`, `n_batches < 2`, `seed` outside `[0, 2**64)`;

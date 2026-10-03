@@ -101,6 +101,11 @@ overestimate of scattering on boundary steps.
   Frozen criterion 1.5 %; maximum deviations (test `test_u4_theta_dm_against_gottschalk_table`):
   Be 0.31 %, Al 0.29 %, Cu 0.21 %, Pb 1.12 %. The table has no water block. Residuals come from the
   range tables (our Bethe `rho R1` differs from the paper's by 0.85 % for Pb and by less than 0.2 % for Be, Al and Cu).
+* U4b (`test_u4b_theta_dm_against_theta_hanson`): our `theta_dM` against the paper's `theta_Hanson`
+  column itself, which does not depend on the paper's dM fit; frozen tolerance 4.5 % (the paper's own
+  `T_dM` is within 2.74 % of it over the frozen points and U4 bounds our reproduction at 1.5 %).
+  Maximum deviations: Be 2.31 %, Al 2.26 %, Cu 1.52 %, Pb 1.41 % (the paper's own maximum `|dM %|`
+  over the frozen points: Be 2.21, Al 2.06, Cu 1.41, Pb 2.51 %).
 * `X_S` against the table of the same paper (`test_scattering_length_against_gottschalk_table`):
   within 0.5 % for water, Be, Al, Cu and Pb (largest deviation 0.08 %, Pb).
 * Cache-independent cross-check: the quadrature against the generalised Highland formula of Gottschalk
