@@ -20,5 +20,7 @@ Raw engine outputs remain archived by the controlled reference service.
   spread.
 
 Evidence-grade runs will use multiple seeds (batch variance), at least 1e5 primaries per batch
-and depth bins of at most 0.5 mm (MCsquare CT at 1 mm or finer; TOPAS IDD at 0.5 mm). Without
-`--batches` metadata the comparison script always labels its result exploratory.
+and depth bins of at most 0.5 mm (MCsquare CT at 1 mm or finer; TOPAS IDD at 0.5 mm). The
+comparison script always labels its result exploratory (single-seed inputs); batch statistics from
+several seeded runs per engine are a later task and cannot be asserted through detached metadata.
+It records git HEAD of the analysis code and a dirty flag; `--code-sha` must equal HEAD.

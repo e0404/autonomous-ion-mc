@@ -2,6 +2,12 @@
 
 Usage: compare_depth_dose.py --runs RUN_DIR... --output OUT.json
 Writes metrics (mm) per run and pairwise differences; no raw curves.
+
+The evidence status is always "exploratory": each input is a single-seed run with no statistical
+uncertainty. Batch statistics (several runs per engine with distinct seeds read from the manifested
+case.json) are a later task; there is deliberately no option to relabel the status from detached
+metadata. The analysis code SHA is derived from git HEAD of this repository and a dirty flag is
+recorded; --code-sha, if given, must equal HEAD.
 """
 
 from __future__ import annotations
@@ -9,6 +15,7 @@ from __future__ import annotations
 import argparse
 import itertools
 import json
+import subprocess
 from pathlib import Path
 
 from ionmc.reference.metrics import (
@@ -27,37 +34,36 @@ EXPLORATORY = (
 METRICS = ("peak_depth_mm", "r80_mm", "r90_mm", "falloff_80_20_mm")
 
 
-def main() -> int:
+def _git(*args: str) -> str:
+    repo = Path(__file__).resolve().parent
+    out = subprocess.run(
+        ["git", "-C", str(repo), *args], check=True, capture_output=True, text=True
+    )
+    return out.stdout.strip()
+
+
+def code_state(claimed: str | None) -> tuple[str, bool]:
+    """Return (HEAD sha, dirty); exit non-zero if a claimed SHA differs from HEAD."""
+    head = _git("rev-parse", "HEAD")
+    dirty = bool(_git("status", "--porcelain"))
+    if claimed is not None and claimed != head:
+        raise SystemExit(f"--code-sha {claimed} does not equal repository HEAD {head}")
+    return head, dirty
+
+
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--runs", nargs="+", required=True, type=Path)
     ap.add_argument("--output", required=True, type=Path)
     ap.add_argument(
         "--code-sha",
         default=None,
-        help="git SHA of the clean checkout running this analysis (recorded verbatim)",
+        help="optional assertion: must equal git HEAD of this repository (HEAD is recorded)",
     )
-    ap.add_argument(
-        "--batches",
-        type=Path,
-        help="JSON with batch metadata {'n_batches': >=2, 'seeds': [...]}; without it the result "
-        "is always labelled exploratory",
-    )
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
 
+    code_sha, dirty = code_state(args.code_sha)
     status = EXPLORATORY
-    batches = None
-    if args.batches is not None:
-        batches = json.loads(args.batches.read_text())
-        if (
-            not isinstance(batches, dict)
-            or int(batches.get("n_batches", 0)) < 2
-            or len(batches.get("seeds", [])) < 2
-        ):
-            raise SystemExit("--batches needs n_batches >= 2 and at least two seeds")
-        status = (
-            "batch metadata supplied (multiple seeds); acceptance grade is decided against the "
-            "frozen criteria, not by this script"
-        )
 
     runs = []
     for run_dir in args.runs:
@@ -92,12 +98,11 @@ def main() -> int:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     doc = {
         "evidence_status": status,
-        "analysis_code_sha": args.code_sha,
+        "analysis_code_sha": code_sha,
+        "analysis_code_dirty": dirty,
         "runs": runs,
         "pairwise": pairs,
     }
-    if batches is not None:
-        doc["batches"] = batches
     args.output.write_text(json.dumps(doc, indent=2) + "\n")
     for r in runs:
         print(
