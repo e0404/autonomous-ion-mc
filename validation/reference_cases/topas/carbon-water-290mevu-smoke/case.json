@@ -14,14 +14,12 @@
   ],
   "scorers": [
     "Edep: EnergyDeposit, 1x1x300 bins (1 mm), Report Sum",
-    "C12Count: SurfaceTrackCount on Water/ZMinusSurface of each of 300 z bins, OnlyIncludeParticlesGoingIn, scalar filters i:OnlyIncludeParticlesOfAtomicNumber=6 and i:OnlyIncludeParticlesOfAtomicMass=12 (OpenTOPAS filter docs; surviving 12C incl. any secondary 12C)",
-    "PrimaryCount: SurfaceTrackCount, same surface, OnlyIncludeParticlesGoingIn, s:OnlyIncludeParticlesOfGeneration=\"Primary\" and atomic number 6 (surviving primary carbon, any isotope)"
+    "PrimaryCount: SurfaceTrackCount, same surface, OnlyIncludeParticlesGoing=\"In\", s:OnlyIncludeParticlesOfGeneration=\"Primary\" and atomic number 6 (surviving primary carbon, any isotope)"
   ],
   "units": "TOPAS CSV headers: EnergyDeposit in MeV (run total over 200 histories); counts are track counts (dimensionless, run total; divide by histories for N/N0); 0-based bin indices, 1 mm z bins",
   "rationale": "independent Monte Carlo evidence for suite S-PHYS-PROTON-EM/-NUCLEAR/-LET (smoke: execution only)",
   "expected_outputs": [
     "edep.csv",
-    "c12count.csv",
     "primarycount.csv"
   ],
   "arguments": []

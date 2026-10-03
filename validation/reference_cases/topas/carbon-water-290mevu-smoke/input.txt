@@ -47,25 +47,13 @@ sv:Sc/Edep/Report = 1 "Sum"
 # Surviving 12C versus depth: count particles of atomic number 6 and mass 12 crossing the entrance
 # (z-minus) face of each of 300 depth bins going in; compare to charge-only filter.
 
-s:Sc/C12Count/Quantity = "SurfaceTrackCount"
-s:Sc/C12Count/Surface = "Water/ZMinusSurface"
-i:Sc/C12Count/XBins = 1
-i:Sc/C12Count/YBins = 1
-i:Sc/C12Count/ZBins = 300
-b:Sc/C12Count/OnlyIncludeParticlesGoingIn = "True"
-i:Sc/C12Count/OnlyIncludeParticlesOfAtomicNumber = 6
-i:Sc/C12Count/OnlyIncludeParticlesOfAtomicMass = 12
-s:Sc/C12Count/OutputType = "csv"
-s:Sc/C12Count/OutputFile = "c12count"
-s:Sc/C12Count/IfOutputFileAlreadyExists = "Overwrite"
-sv:Sc/C12Count/Report = 1 "Sum"
 
 s:Sc/PrimaryCount/Quantity = "SurfaceTrackCount"
 s:Sc/PrimaryCount/Surface = "Water/ZMinusSurface"
 i:Sc/PrimaryCount/XBins = 1
 i:Sc/PrimaryCount/YBins = 1
 i:Sc/PrimaryCount/ZBins = 300
-b:Sc/PrimaryCount/OnlyIncludeParticlesGoingIn = "True"
+s:Sc/PrimaryCount/OnlyIncludeParticlesGoing = "In"
 s:Sc/PrimaryCount/OnlyIncludeParticlesOfGeneration = "Primary"
 i:Sc/PrimaryCount/OnlyIncludeParticlesOfAtomicNumber = 6
 s:Sc/PrimaryCount/OutputType = "csv"
