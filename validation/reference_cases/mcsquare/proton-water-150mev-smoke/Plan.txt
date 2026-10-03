@@ -21,7 +21,7 @@ Mono150
 ###PatientSupportAngle
 0
 ###IsocenterPosition
-60 0 60
+60 150 60
 ###NumberOfControlPoints
 1
 #SPOTS-DESCRIPTION

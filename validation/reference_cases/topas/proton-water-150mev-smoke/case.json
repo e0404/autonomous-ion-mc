@@ -17,7 +17,7 @@
     "Dose3D: DoseToMedium, 60x60x150 bins (2 mm); Report Sum, Standard_Deviation",
     "LETd: ProtonLET, 1x1x300 bins, WeightBy Dose (dose-averaged), MaxScoredLET 100 MeV/mm/(g/cm3), UsePreStepLookup False; Report Sum"
   ],
-  "units": "TOPAS CSV with '#' header: dose in Gy (total for the run, i.e. Gy per NumberOfHistoriesInRun histories, Ts OutputWeightingFactor 1; divide by histories for Gy per primary); Standard_Deviation column as defined by TOPAS 4.3 (docs: 'standard deviation of the mean and sum': definition to be checked against header); LET in MeV/mm/(g/cm3) as printed in the header; bin indices 0-based; bins 1 mm along z and 2 mm in Dose3D",
+  "units": "TOPAS CSV with '#' header: dose in Gy (total for the run, i.e. Gy per NumberOfHistoriesInRun histories, Ts OutputWeightingFactor 1; divide by histories for Gy per primary); Standard_Deviation column as defined by TOPAS 4.3 (docs: 'standard deviation of the mean and sum': definition to be checked against header); LET in MeV/mm/(g/cm3) as printed in the header; bin indices 0-based; bins 1 mm along z and 2 mm in Dose3D; LETd is undefined (set to 0 by TOPAS, warning 'bins set to 0') in bins where no dose was scored: mask with dose > 0 before use",
   "rationale": "independent Monte Carlo evidence for suite S-PHYS-PROTON-EM/-NUCLEAR/-LET (smoke: execution only)",
   "expected_outputs": [
     "idd_dose.csv",
