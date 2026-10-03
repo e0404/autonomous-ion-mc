@@ -1,4 +1,11 @@
 {
+  "evidence_class": {
+    "highland_cross_check": "related model",
+    "u4": "source-model reproduction (Gottschalk 2010 formulae and tables; not independent)",
+    "u4b": "source-model reproduction (Gottschalk 2010 formulae and tables; not independent)",
+    "u5": "deterministic self-consistency",
+    "x_s": "source-model reproduction (Gottschalk 2010 formulae and tables; not independent)"
+  },
   "generalised_highland_cross_check_water": {
     "0.01": 0.036456465036285746,
     "0.1": 0.009346128191417113,
@@ -7,7 +14,7 @@
   },
   "provenance": {
     "analysis_code_dirty": false,
-    "analysis_code_sha": "6e7efb65cd211a57d0ea3d0c8abc4782f9fc63b4"
+    "analysis_code_sha": "4dea8bdaee531a2124e84aaa5ac619fc66683bf3"
   },
   "source": {
     "arxiv": "0908.1413",
