@@ -22,46 +22,44 @@ from ionmc.physics.stopping import (
     pierce_blann_charge,
 )
 
-# Anchor values transcribed from the NIST PSTAR table of liquid water (SRD 124; Berger,
-# Coursey, Zucker, Chang 2005, https://doi.org/10.18434/T4NC7P), I = 75 eV:
-# (kinetic energy MeV, electronic stopping power MeV cm2/g, CSDA range g/cm2).
-PSTAR_ANCHORS = [
-    (10.0, 45.64, 0.1230),
-    (50.0, 12.44, 2.227),
-    (100.0, 7.286, 7.718),
-    (200.0, 4.491, 25.96),
-    (500.0, 2.743, 117.0),
-]
-# ASTAR liquid water (same source): (total kinetic energy MeV, S_el MeV cm2/g, CSDA g/cm2).
-ASTAR_ANCHORS = [
-    (40.0, 181.5, 0.1240),
-    (200.0, 49.50, 2.240),
-    (400.0, 29.00, 7.760),
-    (800.0, 17.88, 26.09),
-]
+# Anchor values: ICRU Report 90 (2016) electronic stopping power of liquid water
+# (I = 78 eV), as embedded in the Geant4 source file G4ICRU90StoppingData.cc, v11.4.2
+# (Geant4 Software License; see src/ionmc/THIRD_PARTY_NOTICES.md). Arrays e1_proton and
+# e1_alpha (index 1 = G4_WATER). Tuples: (kinetic energy MeV, S_el MeV cm2/g); the alpha
+# energies are total kinetic energies of the alpha particle. All are >= 10 MeV/u.
+# Tolerances are pre-chosen (0.3 % protons, 0.5 % alphas) and were not tuned to the model.
+ICRU90_PROTON_ANCHORS = [
+    (10.0, 45.32), (20.0, 25.89), (50.0, 12.38), (100.0, 7.250),
+    (150.0, 5.417), (200.0, 4.470), (300.0, 3.504), (500.0, 2.731),
+]  # fmt: skip
+ICRU90_ALPHA_ANCHORS = [
+    (40.0, 180.2), (80.0, 103.0), (200.0, 49.23), (400.0, 28.85), (800.0, 17.80), (1000.0, 15.50),
+]  # fmt: skip
+PROTON_TOLERANCE = 0.003
+ALPHA_TOLERANCE = 0.005
 
+W78 = water(78.0)
 W75 = water(75.0)
 
 
-@pytest.mark.parametrize(("e", "s", "r"), PSTAR_ANCHORS)
-def test_proton_stopping_matches_pstar_anchors(e: float, s: float, r: float) -> None:
-    s_bethe = bethe_mass_stopping(e, PROTON, W75)[0]
-    assert abs(s_bethe / s - 1.0) < 0.015
+@pytest.mark.parametrize(("e", "s"), ICRU90_PROTON_ANCHORS)
+def test_proton_stopping_matches_icru90_anchors(e: float, s: float) -> None:
+    assert abs(bethe_mass_stopping(e, PROTON, W78)[0] / s - 1.0) < PROTON_TOLERANCE
 
 
-@pytest.mark.parametrize(("e", "s", "r"), ASTAR_ANCHORS)
-def test_alpha_stopping_matches_astar_anchors(e: float, s: float, r: float) -> None:
-    s_bethe = bethe_mass_stopping(e / ALPHA.a, ALPHA, W75)[0]
-    assert abs(s_bethe / s - 1.0) < 0.015
+@pytest.mark.parametrize(("e", "s"), ICRU90_ALPHA_ANCHORS)
+def test_alpha_stopping_matches_icru90_anchors(e: float, s: float) -> None:
+    assert abs(bethe_mass_stopping(e / ALPHA.a, ALPHA, W78)[0] / s - 1.0) < ALPHA_TOLERANCE
 
 
-def test_csda_ranges_match_anchors() -> None:
-    table = BetheStoppingSource().table(W75, PROTON)
-    for e, _, r in PSTAR_ANCHORS:
-        assert abs(table.range_at(e) / r - 1.0) < 0.01
-    atable = BetheStoppingSource().table(W75, ALPHA)
-    for e, _, r in ASTAR_ANCHORS:
-        assert abs(atable.range_at(e / ALPHA.a) / r - 1.0) < 0.015
+def test_csda_range_equals_independent_integral() -> None:
+    """R(200 MeV) - R(100 MeV) from the table equals an independent Simpson integral of 1/S."""
+    table = BetheStoppingSource().table(W78, PROTON)
+    e = np.linspace(100.0, 200.0, 2001)
+    f = 1.0 / bethe_mass_stopping(e, PROTON, W78)
+    h = e[1] - e[0]
+    simpson = h / 3.0 * (f[0] + f[-1] + 4.0 * f[1:-1:2].sum() + 2.0 * f[2:-1:2].sum())
+    assert abs((table.range_at(200.0) - table.range_at(100.0)) / simpson - 1.0) < 1e-4
 
 
 def test_larger_I_lowers_stopping_and_lengthens_range() -> None:
@@ -255,3 +253,51 @@ def test_nonfinite_inputs_rejected() -> None:
         t.energy_from_range(float("nan"))
     with pytest.raises(ValueError):
         StoppingTable(PROTON, WATER, e, bad, bad * 0.1, t.csda_range_g_cm2, t.range_mm)
+
+
+def _valid_arrays() -> dict[str, np.ndarray]:
+    e = np.geomspace(1.0, 100.0, 10)
+    s = bethe_mass_stopping(e, PROTON, WATER)
+    t = build_table(PROTON, WATER, e, s, 1e-3, {})
+    return {
+        "energy_per_u": t.energy_per_u,
+        "s_el_mass": t.s_el_mass,
+        "s_el_linear": t.s_el_linear,
+        "csda_range_g_cm2": t.csda_range_g_cm2,
+        "range_mm": t.range_mm,
+    }
+
+
+@pytest.mark.parametrize(
+    ("field", "mutate", "message"),
+    [
+        ("energy_per_u", lambda a: -a[::-1] * 1.0, "energy_per_u"),
+        ("energy_per_u", lambda a: a[:-1], "length"),
+        ("energy_per_u", lambda a: a * np.array([1.0] * 9 + [0.5]), "strictly increasing"),
+        ("s_el_mass", lambda a: np.where(np.arange(a.size) == 2, -1.0, a), "s_el_mass"),
+        ("s_el_linear", lambda a: a * 1.001, "s_el_linear"),
+        ("range_mm", lambda a: a * 1.001, "range_mm"),
+        ("csda_range_g_cm2", lambda a: a[::-1].copy(), "csda_range_g_cm2"),
+        ("csda_range_g_cm2", lambda a: np.where(np.arange(a.size) == 0, -1e-3, a), "non-negative"),
+        ("energy_per_u", lambda a: a.reshape(2, 5), "one-dimensional"),
+        ("range_mm", lambda a: np.where(np.arange(a.size) == 4, np.nan, a), "NaN"),
+    ],
+)
+def test_stopping_table_fail_closed(field: str, mutate, message: str) -> None:  # type: ignore[no-untyped-def]
+    arrays = _valid_arrays()
+    arrays[field] = mutate(arrays[field])
+    with pytest.raises(ValueError, match=message):
+        StoppingTable(PROTON, WATER, **arrays)
+
+
+def test_stopping_table_minimum_length() -> None:
+    arrays = {k: v[:1] for k, v in _valid_arrays().items()}
+    with pytest.raises(ValueError, match="at least two"):
+        StoppingTable(PROTON, WATER, **arrays)
+    StoppingTable(PROTON, WATER, **_valid_arrays())
+
+
+def test_negative_increasing_energies_rejected() -> None:
+    e = np.array([-3.0, -2.0, -1.0])
+    with pytest.raises(ValueError):
+        build_table(PROTON, WATER, e, np.array([5.0, 4.0, 3.0]), 0.0, {})

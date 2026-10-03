@@ -65,6 +65,9 @@ def parse_icru90_source(source: str, material: str = "G4_WATER") -> Icru90Water:
     s_a = _array(source, f"e{index}_alpha")
     if s_p.shape != t_p.shape or s_a.shape != t_a.shape:
         raise ValueError("stopping arrays and energy grids differ in length")
+    for arr in (t_p, t_a, s_p, s_a):
+        if not np.all(np.isfinite(arr)) or np.any(arr <= 0.0):
+            raise ValueError("energies and stopping powers must be finite and positive")
     if np.any(np.diff(t_p) <= 0.0) or np.any(np.diff(t_a) <= 0.0):
         raise ValueError("energy grids are not strictly increasing")
     return Icru90Water(t_p, s_p, t_a, s_a, content_sha256=sha256_bytes(source.encode("utf-8")))

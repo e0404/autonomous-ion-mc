@@ -147,52 +147,8 @@ runs cannot be evaluated against the same table.
 
 ## Later validation outcome
 
-Comparison script `validation/scripts/stopping/compare_nist.py` executed at the
-clean task SHA `76c3639d62fb41931231f9194bd3cb8c4d051537` against the cached NIST PSTAR/ASTAR water tables and the
-ICRU 90 water arrays (dataset hashes recorded in the result file
-`validation/results/stopping/2026-10-03-compare-nist.json`, from which every
-number below is copied):
-
-| Comparison | Max relative deviation of S_el, E ≥ 10 MeV/u | Max, E ≥ 2 MeV/u |
-|---|---|---|
-| proton, Bethe (I = 75 eV) vs NIST | +0.08 % | +1.84 % |
-| proton, Bethe (I = 78 eV) vs ICRU 90 | +0.08 % | +1.87 % |
-| alpha, Bethe (I = 75 eV) vs NIST | +0.20 % | +0.71 % |
-| alpha, Bethe (I = 78 eV) vs ICRU 90 | +0.20 % | +0.71 % |
-
-CSDA ranges (water):
-
-| Projectile | E (MeV/u) | Bethe 75 eV / NIST − 1 | Bethe 78 eV / ICRU 90 (integrated) − 1 | Bethe 78 − 75 eV (mm) | ICRU 90 − NIST (mm) |
-|---|---|---|---|---|---|
-| proton | 100 | +0.05 % | +0.05 % | +0.42 | +0.42 |
-| proton | 150 | +0.07 % | +0.11 % | +0.81 | +0.76 |
-| proton | 200 | +0.03 % | +0.11 % | +1.30 | +1.09 |
-| proton | 250 | +0.03 % | +0.17 % | +1.85 | +1.29 |
-| alpha | 100 | -0.04 % | -0.03 % | +0.42 | +0.41 |
-| alpha | 150 | -0.09 % | -0.07 % | +0.82 | +0.77 |
-| alpha | 200 | -0.10 % | -0.06 % | +1.30 | +1.20 |
-
-Interpretation:
-
-- Above 10 MeV/u the analytic layer reproduces the ICRU 49 (PSTAR/ASTAR) and
-  ICRU 90 electronic stopping powers within 0.08 % for protons and
-  0.21 % for alpha particles at the respective I-values (maximum
-  absolute deviations from the result file), and CSDA ranges within 0.2 %. Between 2 and 10 MeV/u the deviation grows to about 2 %
-  (protons) because the shell correction is held at its validity boundary;
-  the residual-range consequence is below 0.1 mm, as expected in the
-  selected approach.
-- The ICRU 90 arrays shorten/lengthen ranges relative to PSTAR by less than
-  the pure I-value change computed with the analytic model (for 200 MeV
-  protons +1.09 mm versus +1.30 mm). ICRU 90 therefore differs from ICRU 49
-  by more than the I-value alone; the analytic model at 78 eV follows ICRU 90
-  stopping powers to 0.1 % but its ranges exceed the integrated ICRU 90 ranges
-  by up to 0.2 % at 250 MeV. This is preserved as a known model-table
-  difference, not tuned away.
-- The ICRU 90 alpha arrays in the Geant4 source are indexed by total alpha
-  kinetic energy; this was established by the ratio of ICRU 90 to ASTAR
-  stopping powers on common energies (0.990–0.996), which matches the
-  expected I-value effect only under that reading.
-- These are ion-specific tabulated comparisons sharing Bethe-theory lineage
-  with the model; they establish implementation correctness, not measured
-  physical accuracy. Measured and independent Monte Carlo range evidence is
-  collected in later suites.
+Filled from the committed aggregate result file
+`validation/results/stopping/2026-10-03-compare-nist.json` once it has been
+regenerated at a clean task SHA with the aggregate-only comparison script
+(no NIST values or per-energy ratios are committed; see the legal
+assessment above).

@@ -31,6 +31,7 @@ nav = [
   { "Development" = [
     "development/index.md",
     { "Program plan" = "development/program-plan.md" },
+    { "Third-party notices" = "third-party-notices.md" },
   ] },
 
   { "Research" = [

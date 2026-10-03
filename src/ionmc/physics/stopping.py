@@ -54,7 +54,8 @@ E_MIN_PER_U_MEV = 1.0
 ETA_SHELL_MIN = 0.13
 
 # Ashley-Ritchie-Brandt function F(W) as tabulated in G4EmCorrections.cc (Geant4 v11.4.2).
-# This table derives from Geant4 source; see THIRD_PARTY_NOTICES.md (Geant4 Software License).
+# This table derives from Geant4 source; see src/ionmc/THIRD_PARTY_NOTICES.md
+# (Geant4 Software License).
 _BARKAS_F = np.array(
     [
         (0.02, 21.5), (0.03, 20.0), (0.04, 18.0), (0.05, 15.6), (0.06, 15.0), (0.07, 14.0),
@@ -263,22 +264,28 @@ class StoppingTable:
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        arrays = (
-            self.energy_per_u,
-            self.s_el_mass,
-            self.s_el_linear,
-            self.csda_range_g_cm2,
-            self.range_mm,
-        )
-        for arr in arrays:
+        rho = self.material.density_g_cm3
+        names = ("energy_per_u", "s_el_mass", "s_el_linear", "csda_range_g_cm2", "range_mm")
+        arrays = [getattr(self, n) for n in names]
+        for name, arr in zip(names, arrays, strict=True):
+            if arr.ndim != 1:
+                raise ValueError(f"{name} must be one-dimensional")
+            if arr.size != arrays[0].size:
+                raise ValueError(f"{name} has length {arr.size}, expected {arrays[0].size}")
             if not np.all(np.isfinite(arr)):
-                raise ValueError("stopping table contains NaN or infinity")
-        if np.any(self.s_el_mass <= 0.0) or np.any(self.csda_range_g_cm2 <= 0.0):
-            raise ValueError("stopping powers and ranges must be positive")
-        if np.any(np.diff(self.energy_per_u) <= 0.0) or np.any(
-            np.diff(self.csda_range_g_cm2) <= 0.0
-        ):
-            raise ValueError("energies and ranges must be strictly increasing")
+                raise ValueError(f"{name} contains NaN or infinity")
+        if self.energy_per_u.size < 2:
+            raise ValueError("table needs at least two grid points")
+        if np.any(self.energy_per_u <= 0.0) or np.any(np.diff(self.energy_per_u) <= 0.0):
+            raise ValueError("energy_per_u must be positive and strictly increasing")
+        if np.any(self.s_el_mass <= 0.0):
+            raise ValueError("s_el_mass must be positive")
+        if np.any(self.csda_range_g_cm2 < 0.0) or np.any(np.diff(self.csda_range_g_cm2) < 0.0):
+            raise ValueError("csda_range_g_cm2 must be non-negative and non-decreasing")
+        if not np.allclose(self.s_el_linear, self.s_el_mass * rho / 10.0, rtol=1e-12, atol=0.0):
+            raise ValueError("s_el_linear is inconsistent with s_el_mass * density / 10")
+        if not np.allclose(self.range_mm, self.csda_range_g_cm2 / rho * 10.0, rtol=1e-12, atol=0.0):
+            raise ValueError("range_mm is inconsistent with csda_range_g_cm2 / density * 10")
 
     def _check(self, e: NDArray[np.float64]) -> None:
         if not np.all(np.isfinite(e)):

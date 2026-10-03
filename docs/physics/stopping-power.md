@@ -99,7 +99,7 @@ Results are produced by running the script; this page does not quote them.
 
 ## Sources
 
-Third-party licence texts and data attributions: `THIRD_PARTY_NOTICES.md` in the repository root.
+Third-party licence texts and data attributions: `THIRD_PARTY_NOTICES.md` in the repository root (full text in `src/ionmc/THIRD_PARTY_NOTICES.md`, shipped with the package; see [third-party notices](../third-party-notices.md)).
 
 - ICRU Report 49 (1993), Stopping Powers and Ranges for Protons and Alpha Particles.
 - ICRU Report 90 (2016), Key Data for Ionizing-Radiation Dosimetry (J. ICRU 14(1)).

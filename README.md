@@ -43,4 +43,4 @@ Infrastructure supporting orchestration and experiment recording is located unde
 
 Human intervention is intentionally restricted and must use the structured intervention mechanism defined by the experiment protocol.
 
-Third-party licences and data attributions (Geant4, NIST SRD 124, ICRU 90) are in `THIRD_PARTY_NOTICES.md`.
+Third-party licences and data attributions (Geant4, NIST SRD 124, ICRU 90) are in `THIRD_PARTY_NOTICES.md` (full text: `src/ionmc/THIRD_PARTY_NOTICES.md`, also `ionmc notices`).

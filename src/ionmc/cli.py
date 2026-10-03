@@ -17,6 +17,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", metavar="command")
     sub.add_parser("version", help="print the ionmc version")
     sub.add_parser("info", help="print the runtime environment as JSON")
+    sub.add_parser("notices", help="print the packaged third-party notices")
     data = sub.add_parser("data", help="manage cached external datasets")
     data_sub = data.add_subparsers(dest="data_command", metavar="action")
     for action, help_text in (
@@ -75,6 +76,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         from ionmc.environment import describe_environment
 
         print(json.dumps(describe_environment(), indent=2, sort_keys=True))
+        return 0
+    if args.command == "notices":
+        from importlib.resources import files
+
+        print((files("ionmc") / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8"))
         return 0
     if args.command == "data":
         code = _run_data(args)

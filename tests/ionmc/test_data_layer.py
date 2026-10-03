@@ -16,29 +16,19 @@ from ionmc.data.icru90 import parse_icru90_source
 from ionmc.data.nist_star import parse_star_text
 from ionmc.data.registry import DATASETS, Dataset
 
-# Excerpt (header and first 12 data rows) of the NIST PSTAR liquid-water table as returned
-# for the request in DATASETS["nist-pstar-water-2005"]; NIST SRD 124, attribution:
-# Berger, Coursey, Zucker, Chang (2005), https://doi.org/10.18434/T4NC7P.
-PSTAR_EXCERPT = """PSTAR: Stopping Powers and Range Tables for Protons
-
+# Synthetic layout fixture, not NIST data: made-up numbers in the text layout of a STAR
+# response (title, material, three header lines, seven numeric columns).
+PSTAR_EXCERPT = """PSTAR: Synthetic fixture
 WATER, LIQUID
 
 Kinetic   Electron. Nuclear   Total     CSDA      Projected Detour
 Energy    Stp. Pow. Stp. Pow. Stp. Pow. Range     Range     Factor
 MeV       MeV cm2/g MeV cm2/g MeV cm2/g g/cm2     g/cm2
 
-1.000E-03 1.337E+02 4.315E+01 1.769E+02 6.319E-06 2.878E-06 0.4555
-1.500E-03 1.638E+02 3.460E+01 1.984E+02 8.969E-06 4.400E-06 0.4906
-2.000E-03 1.891E+02 2.927E+01 2.184E+02 1.137E-05 5.909E-06 0.5197
-2.500E-03 2.114E+02 2.557E+01 2.370E+02 1.357E-05 7.380E-06 0.5440
-3.000E-03 2.316E+02 2.281E+01 2.544E+02 1.560E-05 8.811E-06 0.5647
-4.000E-03 2.675E+02 1.894E+01 2.864E+02 1.930E-05 1.155E-05 0.5986
-5.000E-03 2.990E+02 1.631E+01 3.153E+02 2.262E-05 1.415E-05 0.6254
-6.000E-03 3.276E+02 1.439E+01 3.420E+02 2.567E-05 1.661E-05 0.6473
-7.000E-03 3.538E+02 1.292E+01 3.667E+02 2.849E-05 1.896E-05 0.6656
-8.000E-03 3.782E+02 1.175E+01 3.900E+02 3.113E-05 2.121E-05 0.6813
-9.000E-03 4.012E+02 1.080E+01 4.120E+02 3.363E-05 2.337E-05 0.6950
-1.000E-02 4.229E+02 1.000E+01 4.329E+02 3.599E-05 2.545E-05 0.7070
+1.000E-01 1.000E+02 1.000E+00 1.010E+02 1.000E-03 9.000E-04 0.5000
+2.000E-01 2.000E+02 2.000E+00 2.020E+02 2.000E-03 1.900E-03 0.6000
+4.000E-01 3.000E+02 3.000E+00 3.030E+02 3.000E-03 2.900E-03 0.7000
+8.000E-01 4.000E+02 4.000E+00 4.040E+02 4.000E-03 3.900E-03 0.8000
 """
 
 # Excerpt: first five entries of each water-relevant array of G4ICRU90StoppingData.cc
@@ -185,27 +175,35 @@ def test_cli_data_commands(
     assert main(["data"]) == 2
 
 
-def test_star_parser_excerpt() -> None:
+def test_star_parser_synthetic_fixture() -> None:
     table = parse_star_text(PSTAR_EXCERPT)
     assert table.program == "PSTAR"
     assert table.material.startswith("WATER, LIQUID")
-    assert table.energy_mev.shape == (12,)
-    assert table.energy_mev[0] == 1.0e-3 and table.energy_mev[-1] == 1.0e-2
-    assert table.s_electronic[0] == 133.7 and table.csda_range[-1] == 3.599e-5
-    assert table.detour[2] == 0.5197
+    assert table.energy_mev.tolist() == [0.1, 0.2, 0.4, 0.8]
+    assert table.s_electronic.tolist() == [100.0, 200.0, 300.0, 400.0]
+    assert table.csda_range[-1] == 4.0e-3 and table.detour[1] == 0.6
     assert table.energy_mev.dtype == np.float64
 
 
 def test_star_parser_rejects_bad_input() -> None:
     lines = PSTAR_EXCERPT.splitlines()
-    swapped = "\n".join(lines[:8] + [lines[9], lines[8]] + lines[10:])
+    swapped = "\n".join(lines[:7] + [lines[8], lines[7]] + lines[9:])
     with pytest.raises(ValueError, match="increasing"):
         parse_star_text(swapped)
-    short = "\n".join(lines[:8] + ["1.0E-03 1.0 2.0"])
+    short = "\n".join(lines[:7] + ["1.0E-03 1.0 2.0"])
     with pytest.raises(ValueError, match="columns"):
         parse_star_text(short)
     with pytest.raises(ValueError):
-        parse_star_text("\n".join(lines[:7]))
+        parse_star_text("\n".join(lines[:6]))
+    nan_row = lines[:7] + ["1.0E-01 nan 1.0 1.0 1.0E-03 9.0E-04 0.5"]
+    with pytest.raises(ValueError, match="NaN"):
+        parse_star_text("\n".join(nan_row))
+    negative = lines[:7] + ["1.0E-01 -5.0 1.0 1.0 1.0E-03 9.0E-04 0.5"]
+    with pytest.raises(ValueError, match="positive"):
+        parse_star_text("\n".join(negative))
+    inf_energy = lines[:7] + ["inf 5.0 1.0 1.0 1.0E-03 9.0E-04 0.5"]
+    with pytest.raises(ValueError):
+        parse_star_text("\n".join(inf_energy))
 
 
 def test_icru90_parser_excerpt() -> None:
@@ -217,6 +215,10 @@ def test_icru90_parser_excerpt() -> None:
     assert graphite.proton_stopping[0] == 118.5
     with pytest.raises(ValueError):
         parse_icru90_source(ICRU90_EXCERPT.replace("T0_alpha", "X"))
+    with pytest.raises(ValueError):
+        parse_icru90_source(ICRU90_EXCERPT.replace("133.70f", "nan"))
+    with pytest.raises(ValueError):
+        parse_icru90_source(ICRU90_EXCERPT.replace("133.70f", "-1.0f"))
 
 
 class _FakeResponse:

@@ -80,7 +80,7 @@ class Material:
     """A homogeneous material.
 
     ``mass_fractions`` maps element symbol to mass fraction (normalised to sum 1 within
-    1e-5). ``I_eV`` is the mean excitation energy [eV]; if None it follows from Bragg
+    1e-6). ``I_eV`` is the mean excitation energy [eV]; if None it follows from Bragg
     additivity (:attr:`ln_I_bragg`). ``sternheimer`` may be None (density effect = 0).
     """
 
