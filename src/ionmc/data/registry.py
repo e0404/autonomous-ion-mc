@@ -91,3 +91,11 @@ DATASETS: dict[str, Dataset] = {
         ),
     )
 }
+
+
+def identify(content_sha256: str) -> Dataset | None:
+    """Return the registered dataset whose pinned SHA-256 equals ``content_sha256``, or None."""
+    for ds in DATASETS.values():
+        if ds.sha256 == content_sha256:
+            return ds
+    return None

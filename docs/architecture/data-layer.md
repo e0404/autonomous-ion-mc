@@ -40,7 +40,17 @@ Otherwise the dataset is downloaded with `urllib` (https only, redirects only to
 `IONMC_OFFLINE=1` a missing dataset raises `OfflineError`. The controlled host runner has
 no network, so datasets must be fetched before such runs.
 
+Downloads are streamed in chunks and aborted with `IntegrityError` as soon as more than
+the registered `bytes` arrive; a shorter payload fails the hash check.
+
 ## Parsers
+
+`load_star_table` and `load_icru90_water` re-hash the file they parse and require the hash
+to equal the pinned SHA-256 of a registered dataset (`IntegrityError` otherwise). The result
+carries `dataset_id`, `version`, `sha256` (pinned), `content_sha256` (of the parsed bytes)
+and `retrieved_at` (from the manifest); these are copied into the metadata of tables
+built from them. `allow_unverified=True` parses any file and records only `content_sha256`
+(`dataset_id` is None). `parse_*_text` functions parse text without any identity check.
 
 - `ionmc.data.nist_star.parse_star_text` returns a `StarTable` (energy [MeV], electronic,
   nuclear, total stopping power [MeV cm^2/g], CSDA and projected range [g/cm^2],

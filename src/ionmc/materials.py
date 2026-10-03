@@ -20,7 +20,9 @@ Units: densities in g/cm3, mean excitation energies in eV, A in g/mol.
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 from dataclasses import dataclass, field
+from types import MappingProxyType
 
 import numpy as np
 
@@ -67,6 +69,11 @@ class SternheimerParameters:
     a: float
     m: float
 
+    def __post_init__(self) -> None:
+        for name in ("x0", "x1", "cbar", "a", "m"):
+            if not math.isfinite(getattr(self, name)):
+                raise ValueError(f"Sternheimer parameter {name} is not finite")
+
 
 @dataclass(frozen=True)
 class Material:
@@ -79,19 +86,30 @@ class Material:
 
     name: str
     density_g_cm3: float
-    mass_fractions: dict[str, float]
+    mass_fractions: Mapping[str, float]
     I_eV: float | None = None
     sternheimer: SternheimerParameters | None = None
     source: str = ""
     _fractions: tuple[tuple[Element, float], ...] = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
-        total = sum(self.mass_fractions.values())
-        if abs(total - 1.0) > 1e-5:
-            raise ValueError(f"{self.name}: mass fractions sum to {total}, not 1")
-        if self.density_g_cm3 <= 0.0:
-            raise ValueError("density must be positive")
-        fr = tuple((ELEMENTS[s], w / total) for s, w in self.mass_fractions.items())
+        fractions = dict(self.mass_fractions)
+        if not fractions:
+            raise ValueError(f"{self.name}: mass fractions are empty")
+        for symbol, w in fractions.items():
+            if symbol not in ELEMENTS:
+                raise ValueError(f"{self.name}: unknown element symbol {symbol!r}")
+            if not (math.isfinite(w) and w > 0.0):
+                raise ValueError(f"{self.name}: mass fraction of {symbol} must be finite and > 0")
+        total = math.fsum(fractions.values())
+        if abs(total - 1.0) > 1e-6:
+            raise ValueError(f"{self.name}: mass fractions sum to {total}, not 1 (tolerance 1e-6)")
+        if not (math.isfinite(self.density_g_cm3) and self.density_g_cm3 > 0.0):
+            raise ValueError(f"{self.name}: density must be finite and positive")
+        if self.I_eV is not None and not (math.isfinite(self.I_eV) and self.I_eV > 0.0):
+            raise ValueError(f"{self.name}: I_eV must be finite and positive")
+        fr = tuple((ELEMENTS[s], w / total) for s, w in fractions.items())
+        object.__setattr__(self, "mass_fractions", MappingProxyType(fractions))
         object.__setattr__(self, "_fractions", fr)
 
     @property
@@ -163,7 +181,11 @@ WATER = water()
 AIR = Material(
     "air",
     0.00120479,
-    {"C": 0.000124, "N": 0.755267, "O": 0.231781, "Ar": 0.012827},
+    # Geant4 weights sum to 0.999999; normalised here to sum to 1.
+    {
+        k: v / 0.999999
+        for k, v in {"C": 0.000124, "N": 0.755267, "O": 0.231781, "Ar": 0.012827}.items()
+    },
     85.7,
     None,
     _G4 + "G4_AIR (dry air, near sea level)",

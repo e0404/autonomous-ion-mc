@@ -13,11 +13,13 @@ energy, which ``compare_nist.py`` checks against ASTAR on the shared energies.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import numpy as np
 from numpy.typing import NDArray
+
+from ionmc.data.cache import provenance_of, sha256_bytes
 
 WATER_INDEX = 1
 _MATERIAL_ORDER = ("G4_AIR", "G4_WATER", "G4_GRAPHITE")
@@ -35,6 +37,11 @@ class Icru90Water:
     proton_stopping: NDArray[np.float64]
     alpha_energy_mev: NDArray[np.float64]
     alpha_stopping: NDArray[np.float64]
+    content_sha256: str = ""
+    dataset_id: str | None = None
+    version: str | None = None
+    sha256: str | None = None
+    retrieved_at: str | None = None
 
 
 def _array(source: str, name: str) -> NDArray[np.float64]:
@@ -60,9 +67,26 @@ def parse_icru90_source(source: str, material: str = "G4_WATER") -> Icru90Water:
         raise ValueError("stopping arrays and energy grids differ in length")
     if np.any(np.diff(t_p) <= 0.0) or np.any(np.diff(t_a) <= 0.0):
         raise ValueError("energy grids are not strictly increasing")
-    return Icru90Water(t_p, s_p, t_a, s_a)
+    return Icru90Water(t_p, s_p, t_a, s_a, content_sha256=sha256_bytes(source.encode("utf-8")))
 
 
-def load_icru90_water(path: str | Path) -> Icru90Water:
-    """Read the cached Geant4 source file and return the liquid-water arrays."""
-    return parse_icru90_source(Path(path).read_text(encoding="utf-8"))
+def load_icru90_water(path: str | Path, *, allow_unverified: bool = False) -> Icru90Water:
+    """Read, verify and parse the cached Geant4 source file; return the liquid-water arrays.
+
+    The bytes must hash to the pinned SHA-256 of a registered dataset (``IntegrityError``
+    otherwise) and the result carries ``dataset_id``, ``version``, ``sha256``,
+    ``content_sha256`` and ``retrieved_at``; ``allow_unverified=True`` parses any file
+    and records only ``content_sha256``.
+    """
+    path = Path(path)
+    raw = path.read_bytes()
+    prov = provenance_of(path, raw, allow_unverified)
+    data = parse_icru90_source(raw.decode("utf-8"))
+    return replace(
+        data,
+        content_sha256=str(prov["content_sha256"]),
+        dataset_id=prov["dataset_id"],
+        version=prov["version"],
+        sha256=prov["sha256"],
+        retrieved_at=prov["retrieved_at"],
+    )

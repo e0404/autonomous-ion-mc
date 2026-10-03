@@ -2,18 +2,22 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import numpy as np
 import pytest
 
 from ionmc.data.nist_star import StarTable, parse_star_text
-from ionmc.materials import AIR, WATER, water
+from ionmc.materials import AIR, WATER, Material, fractions_from_atom_counts, water
 from ionmc.physics.projectiles import ALPHA, CARBON12, OXYGEN16, PROTON
 from ionmc.physics.stopping import (
     BetheOptions,
     BetheStoppingSource,
     NistStarStoppingSource,
+    StoppingTable,
     bethe_mass_stopping,
     bloch_term,
+    build_table,
     kinematics,
     pierce_blann_charge,
 )
@@ -190,3 +194,64 @@ def test_nist_star_source_builds_consistent_table() -> None:
     astar = _synthetic_star("ASTAR", 1.0)
     ta = NistStarStoppingSource(astar, e_max_per_u=200.0).table(WATER, ALPHA)
     assert ta.energy_per_u[-1] == pytest.approx(200.0)
+
+
+def test_counterfeit_water_rejected_and_renamed_water_accepted() -> None:
+    star = _synthetic_star("PSTAR", 1.0)
+    src = NistStarStoppingSource(star)
+    fake = Material("water_fake", 1.0, {"C": 1.0}, 75.0)
+    with pytest.raises(ValueError, match="liquid water only"):
+        src.table(fake, PROTON)
+    wrong_density = Material("water", 1.05, dict(WATER.mass_fractions), 75.0)
+    with pytest.raises(ValueError):
+        src.table(wrong_density, PROTON)
+    renamed = Material(
+        "my_h2o", 1.0, fractions_from_atom_counts({"H": 2, "O": 1}), 78.0, WATER.sternheimer
+    )
+    t = src.table(renamed, PROTON)
+    assert t.metadata["requested_material"]["name"] == "my_h2o"
+    assert t.metadata["requested_material"]["I_eV"] == 78.0
+    assert t.metadata["effective_material"]["I_eV"] == 75.0
+
+
+def test_table_metadata_carries_provenance() -> None:
+    star = replace(
+        _synthetic_star("PSTAR", 1.0),
+        dataset_id="ds",
+        version="v",
+        sha256="a" * 64,
+        retrieved_at="2026-01-01T00:00:00+00:00",
+    )
+    meta = NistStarStoppingSource(star).table(WATER, PROTON).metadata
+    assert meta["dataset_id"] == "ds" and meta["sha256"] == "a" * 64
+    assert meta["content_sha256"] == star.content_sha256 and len(meta["content_sha256"]) == 64
+    assert meta["retrieved_at"] == "2026-01-01T00:00:00+00:00" and meta["version"] == "v"
+    bmeta = BetheStoppingSource().table(WATER, PROTON).metadata
+    assert bmeta["I_eV"] == 78.0 and bmeta["options"]["bloch"] is True
+    assert "G4_WATER" in bmeta["material_source"]
+
+
+def test_nonfinite_inputs_rejected() -> None:
+    with pytest.raises(ValueError):
+        bethe_mass_stopping(float("nan"), PROTON, WATER)
+    with pytest.raises(ValueError):
+        bethe_mass_stopping(np.array([10.0, np.inf]), PROTON, WATER)
+    e = np.geomspace(1.0, 100.0, 10)
+    s = bethe_mass_stopping(e, PROTON, WATER)
+    bad = s.copy()
+    bad[3] = np.nan
+    with pytest.raises(ValueError):
+        build_table(PROTON, WATER, e, bad, 1e-3, {})
+    with pytest.raises(ValueError):
+        build_table(PROTON, WATER, e, s, float("nan"), {})
+    bad_e = e.copy()
+    bad_e[2] = np.nan
+    with pytest.raises(ValueError):
+        build_table(PROTON, WATER, bad_e, s, 1e-3, {})
+    t = build_table(PROTON, WATER, e, s, 1e-3, {})
+    with pytest.raises(ValueError):
+        t.stopping_at(float("nan"))
+    with pytest.raises(ValueError):
+        t.energy_from_range(float("nan"))
+    with pytest.raises(ValueError):
+        StoppingTable(PROTON, WATER, e, bad, bad * 0.1, t.csda_range_g_cm2, t.range_mm)

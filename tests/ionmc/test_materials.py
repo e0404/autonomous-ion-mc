@@ -62,3 +62,49 @@ def test_projectiles() -> None:
     # carbon-12 nucleus: 12 u minus six electron masses
     assert CARBON12.mass_mev == pytest.approx(12 * 931.49410242 - 6 * 0.51099895, abs=1e-6)
     assert CARBON12.z == 6 and CARBON12.a == 12
+
+
+@pytest.mark.parametrize(
+    "fractions",
+    [
+        {},
+        {"H": -0.1, "O": 1.1},
+        {"H": 0.0, "O": 1.0},
+        {"H": float("nan"), "O": 1.0},
+        {"H": 0.2, "O": 0.7},
+        {"Xx": 1.0},
+    ],
+)
+def test_invalid_fractions_rejected(fractions: dict[str, float]) -> None:
+    with pytest.raises(ValueError):
+        Material("bad", 1.0, fractions)
+
+
+@pytest.mark.parametrize("density", [float("nan"), float("inf"), 0.0, -1.0])
+def test_invalid_density_rejected(density: float) -> None:
+    with pytest.raises(ValueError):
+        Material("bad", density, {"H": 0.111894, "O": 0.888106})
+
+
+@pytest.mark.parametrize("i_ev", [float("nan"), float("inf"), 0.0, -75.0])
+def test_invalid_I_rejected(i_ev: float) -> None:
+    with pytest.raises(ValueError):
+        Material("bad", 1.0, {"H": 0.111894, "O": 0.888106}, I_eV=i_ev)
+
+
+def test_nonfinite_sternheimer_rejected() -> None:
+    from ionmc.materials import SternheimerParameters
+
+    with pytest.raises(ValueError):
+        SternheimerParameters(0.24, float("nan"), 3.5, 0.09, 3.4)
+
+
+def test_mass_fractions_are_immutable() -> None:
+    with pytest.raises(TypeError):
+        WATER.mass_fractions["H"] = 0.5  # type: ignore[index]
+    with pytest.raises(AttributeError):
+        WATER.mass_fractions = {"C": 1.0}  # type: ignore[misc]
+    source = {"H": 0.111894, "O": 0.888106}
+    m = Material("copy", 1.0, source)
+    source["H"] = 0.5
+    assert m.mass_fractions["H"] == 0.111894

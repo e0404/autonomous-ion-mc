@@ -54,6 +54,7 @@ E_MIN_PER_U_MEV = 1.0
 ETA_SHELL_MIN = 0.13
 
 # Ashley-Ritchie-Brandt function F(W) as tabulated in G4EmCorrections.cc (Geant4 v11.4.2).
+# This table derives from Geant4 source; see THIRD_PARTY_NOTICES.md (Geant4 Software License).
 _BARKAS_F = np.array(
     [
         (0.02, 21.5), (0.03, 20.0), (0.04, 18.0), (0.05, 15.6), (0.06, 15.0), (0.07, 14.0),
@@ -212,6 +213,8 @@ def bethe_mass_stopping(
     Pierce-Blann effective charge (the latter only acts for z >= 2).
     """
     e = np.atleast_1d(np.asarray(energy_per_u_mev, dtype=np.float64))
+    if not np.all(np.isfinite(e)):
+        raise ValueError("energies must be finite")
     if np.any(e < E_MIN_PER_U_MEV):
         raise ValueError(f"energy below the {E_MIN_PER_U_MEV} MeV/u domain limit of the model")
     beta2, bg2, tmax = kinematics(e, projectile)
@@ -259,7 +262,27 @@ class StoppingTable:
     range_mm: NDArray[np.float64]
     metadata: dict[str, Any] = field(default_factory=dict)
 
+    def __post_init__(self) -> None:
+        arrays = (
+            self.energy_per_u,
+            self.s_el_mass,
+            self.s_el_linear,
+            self.csda_range_g_cm2,
+            self.range_mm,
+        )
+        for arr in arrays:
+            if not np.all(np.isfinite(arr)):
+                raise ValueError("stopping table contains NaN or infinity")
+        if np.any(self.s_el_mass <= 0.0) or np.any(self.csda_range_g_cm2 <= 0.0):
+            raise ValueError("stopping powers and ranges must be positive")
+        if np.any(np.diff(self.energy_per_u) <= 0.0) or np.any(
+            np.diff(self.csda_range_g_cm2) <= 0.0
+        ):
+            raise ValueError("energies and ranges must be strictly increasing")
+
     def _check(self, e: NDArray[np.float64]) -> None:
+        if not np.all(np.isfinite(e)):
+            raise ValueError("energies must be finite")
         if np.any(e < self.energy_per_u[0] * (1 - 1e-12)) or np.any(
             e > self.energy_per_u[-1] * (1 + 1e-12)
         ):
@@ -284,6 +307,8 @@ class StoppingTable:
     def energy_from_range(self, range_g_cm2: ArrayLike) -> NDArray[np.float64]:
         """Energy per nucleon [MeV/u] for a CSDA range [g/cm2]; exact inverse of ``range_at``."""
         r = np.asarray(range_g_cm2, dtype=np.float64)
+        if not np.all(np.isfinite(r)):
+            raise ValueError("ranges must be finite")
         lo, hi = self.csda_range_g_cm2[0], self.csda_range_g_cm2[-1]
         if np.any(r < lo * (1 - 1e-12)) or np.any(r > hi * (1 + 1e-12)):
             raise ValueError(f"range outside table [{lo}, {hi}] g/cm2")
@@ -314,12 +339,16 @@ def build_table(
     """
     e = np.asarray(energy_per_u, dtype=np.float64)
     s = np.asarray(s_el_mass, dtype=np.float64)
-    if np.any(np.diff(e) <= 0.0) or np.any(s <= 0.0):
-        raise ValueError("energies must increase and stopping powers must be positive")
+    if not (np.all(np.isfinite(e)) and np.all(np.isfinite(s)) and math.isfinite(start_range_g_cm2)):
+        raise ValueError("energies, stopping powers and start range must be finite")
+    if np.any(np.diff(e) <= 0.0) or np.any(s <= 0.0) or e[0] <= 0.0 or start_range_g_cm2 < 0.0:
+        raise ValueError("energies must be positive and increase; stopping powers positive")
     f = projectile.a * e / s  # dR/dlnE [g/cm2]
     dln = np.diff(np.log(e))
     r = start_range_g_cm2 + np.concatenate(([0.0], np.cumsum(0.5 * (f[1:] + f[:-1]) * dln)))
     rho = material.density_g_cm3
+    if not np.all(np.isfinite(r)):
+        raise ValueError("computed ranges are not finite")
     return StoppingTable(
         projectile=projectile,
         material=material,
@@ -381,6 +410,9 @@ class BetheStoppingSource:
             "source": "bethe",
             "I_eV": material.mean_excitation_eV,
             "material": material.name,
+            "material_source": material.source,
+            "material_density_g_cm3": material.density_g_cm3,
+            "material_mass_fractions": dict(material.mass_fractions),
             "projectile": projectile.name,
             "options": {
                 "shell": o.shell,
@@ -392,6 +424,30 @@ class BetheStoppingSource:
             "start_range": "constant-S approximation a*E_min/S(E_min)",
         }
         return build_table(projectile, material, e, s, r0, meta)
+
+
+_WATER_FRACTIONS = {"H": 0.111894, "O": 0.888106}
+
+
+def _require_nist_water(material: Material) -> None:
+    """Raise ``ValueError`` unless ``material`` is structurally liquid water (H2O, 1 g/cm3).
+
+    The check uses composition (only H and O, mass fractions within 1e-4 of water's) and
+    density (within 1e-6 g/cm3 of 1), never the material name. The NIST table is for
+    I = 75 eV; the requested I is recorded in the table metadata but not used.
+    """
+    fr = material.mass_fractions
+    ok = (
+        set(fr) == set(_WATER_FRACTIONS)
+        and all(abs(fr[k] - v) <= 1e-4 for k, v in _WATER_FRACTIONS.items())
+        and abs(material.density_g_cm3 - 1.0) <= 1e-6
+    )
+    if not ok:
+        raise ValueError(
+            f"the NIST STAR source describes liquid water only (H and O with mass fractions "
+            f"{_WATER_FRACTIONS} within 1e-4, density 1.0 g/cm3 within 1e-6); material "
+            f"{material.name!r} does not match. Use BetheStoppingSource for other materials."
+        )
 
 
 @dataclass(frozen=True)
@@ -416,8 +472,7 @@ class NistStarStoppingSource:
         expected = {"PSTAR": "proton", "ASTAR": "alpha"}.get(st.program)
         if expected != projectile.name:
             raise ValueError(f"{st.program} table cannot describe projectile {projectile.name}")
-        if "WATER" not in st.material.upper() or not material.name.startswith("water"):
-            raise ValueError("NIST STAR source is only available for liquid water")
+        _require_nist_water(material)
         e_u = st.energy_mev / projectile.a
         e_max = min(self.e_max_per_u, float(e_u[-1]))
         if self.e_min_per_u < e_u[0]:
@@ -428,9 +483,21 @@ class NistStarStoppingSource:
         meta = {
             "source": "nist-star",
             "I_eV": 75.0,
-            "material": material.name,
             "projectile": projectile.name,
             "program": st.program,
+            **st.provenance(),
+            "requested_material": {
+                "name": material.name,
+                "density_g_cm3": material.density_g_cm3,
+                "mass_fractions": dict(material.mass_fractions),
+                "I_eV": material.mean_excitation_eV,
+            },
+            "effective_material": {
+                "name": "NIST liquid water (matno 276)",
+                "density_g_cm3": 1.0,
+                "mass_fractions": dict(_WATER_FRACTIONS),
+                "I_eV": 75.0,
+            },
             "start_range": "NIST CSDA range at e_min (log-log interpolation)",
         }
         return build_table(projectile, material, e, s, r0, meta)

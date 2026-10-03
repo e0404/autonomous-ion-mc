@@ -51,6 +51,12 @@ power, range and the inverse `energy_from_range` use one log-log piecewise-linea
 interpolant, so `energy_from_range(range_at(E))` returns E to rounding error.
 `NistStarStoppingSource` produces the same structure from a cached PSTAR (protons) or
 ASTAR (alpha) liquid-water table, starting the range from the NIST CSDA range at E_min.
+`NistStarStoppingSource` accepts a material only if it is structurally liquid water
+(elements H and O, mass fractions within 1e-4 of water's, density within 1e-6 g/cm^3 of 1);
+names are not used. The table metadata records `requested_material` and
+`effective_material` (NIST liquid water, I = 75 eV). `Material` validates its inputs
+(finite positive density and I, positive finite fractions summing to 1 within 1e-6) and
+exposes its mass fractions as a read-only mapping; tables reject non-finite values.
 Both implement the `StoppingSource` protocol; the table metadata records the source and
 the I value.
 
@@ -92,6 +98,8 @@ the ICRU 90 arrays), CSDA range differences at 100/150/200/250 MeV protons and
 Results are produced by running the script; this page does not quote them.
 
 ## Sources
+
+Third-party licence texts and data attributions: `THIRD_PARTY_NOTICES.md` in the repository root.
 
 - ICRU Report 49 (1993), Stopping Powers and Ranges for Protons and Alpha Particles.
 - ICRU Report 90 (2016), Key Data for Ionizing-Radiation Dosimetry (J. ICRU 14(1)).

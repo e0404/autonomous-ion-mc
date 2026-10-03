@@ -217,3 +217,90 @@ def test_icru90_parser_excerpt() -> None:
     assert graphite.proton_stopping[0] == 118.5
     with pytest.raises(ValueError):
         parse_icru90_source(ICRU90_EXCERPT.replace("T0_alpha", "X"))
+
+
+class _FakeResponse:
+    def __init__(self, payload: bytes) -> None:
+        self._buf = payload
+        self.reads = 0
+
+    def __enter__(self) -> _FakeResponse:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        return None
+
+    def read(self, n: int = -1) -> bytes:
+        self.reads += 1
+        chunk, self._buf = self._buf[:n], self._buf[n:]
+        return chunk
+
+
+def _patch_opener(monkeypatch: pytest.MonkeyPatch, response: _FakeResponse) -> None:
+    class Opener:
+        def open(self, request: object, timeout: float) -> _FakeResponse:
+            return response
+
+    monkeypatch.setattr(urllib.request, "build_opener", lambda *a, **k: Opener())
+
+
+def test_download_is_bounded(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setitem(DATASETS, "fake", _fake_dataset())
+    huge = _FakeResponse(PAYLOAD + b"x" * 10_000_000)
+    _patch_opener(monkeypatch, huge)
+    with pytest.raises(cache.IntegrityError, match="exceeds"):
+        acquire.fetch("fake", tmp_path)
+    assert huge.reads < 10  # aborted early, did not read everything
+    assert not (tmp_path / "objects").exists()
+
+
+def test_download_exact_size_streams_in_chunks(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    payload = b"abc" * 10_000
+    ds = _fake_dataset(cache.sha256_bytes(payload), len(payload))
+    monkeypatch.setitem(DATASETS, "fake", ds)
+    resp = _FakeResponse(payload)
+    _patch_opener(monkeypatch, resp)
+    assert acquire.fetch("fake", tmp_path).read_bytes() == payload
+    assert resp.reads > 2
+
+
+def test_short_download_rejected(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setitem(DATASETS, "fake", _fake_dataset())
+    _patch_opener(monkeypatch, _FakeResponse(PAYLOAD[:-3]))
+    with pytest.raises(cache.IntegrityError):
+        acquire.fetch("fake", tmp_path)
+
+
+def test_loaders_verify_and_record_provenance(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from ionmc.data.icru90 import load_icru90_water
+    from ionmc.data.nist_star import load_star_table
+
+    data = PSTAR_EXCERPT.encode("ascii")
+    ds = _fake_dataset(cache.sha256_bytes(data), len(data))
+    monkeypatch.setitem(DATASETS, "fake", ds)
+    monkeypatch.setattr(acquire, "_download", lambda d: data)
+    path = acquire.fetch("fake", tmp_path)
+    table = load_star_table(path)
+    assert table.dataset_id == "fake" and table.sha256 == ds.sha256
+    assert table.content_sha256 == ds.sha256 and table.version == "1"
+    assert table.retrieved_at is not None
+    # an unregistered file is refused unless explicitly allowed
+    other = tmp_path / "other.txt"
+    other.write_bytes(data + b"\n")
+    with pytest.raises(cache.IntegrityError):
+        load_star_table(other)
+    loose = load_star_table(other, allow_unverified=True)
+    assert loose.dataset_id is None and loose.sha256 is None
+    assert loose.content_sha256 == cache.sha256_bytes(data + b"\n")
+    src = tmp_path / "g4.cc"
+    src.write_text(ICRU90_EXCERPT)
+    with pytest.raises(cache.IntegrityError):
+        load_icru90_water(src)
+    assert load_icru90_water(src, allow_unverified=True).dataset_id is None
+    assert parse_icru90_source(ICRU90_EXCERPT).content_sha256 == cache.sha256_bytes(
+        ICRU90_EXCERPT.encode()
+    )

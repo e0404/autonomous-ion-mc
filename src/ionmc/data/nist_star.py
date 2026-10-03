@@ -8,11 +8,13 @@ detour factor (dimensionless). For ASTAR the energy is the *total* alpha kinetic
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import numpy as np
 from numpy.typing import NDArray
+
+from ionmc.data.cache import provenance_of, sha256_bytes
 
 N_COLUMNS = 7
 
@@ -35,11 +37,28 @@ class StarTable:
     csda_range: NDArray[np.float64]
     projected_range: NDArray[np.float64]
     detour: NDArray[np.float64]
+    content_sha256: str = ""
+    dataset_id: str | None = None
+    version: str | None = None
+    sha256: str | None = None
+    retrieved_at: str | None = None
+
+    def provenance(self) -> dict[str, str | None]:
+        """Dataset provenance: dataset_id, version, pinned sha256, content_sha256, retrieved_at."""
+        return {
+            "dataset_id": self.dataset_id,
+            "version": self.version,
+            "sha256": self.sha256,
+            "content_sha256": self.content_sha256,
+            "retrieved_at": self.retrieved_at,
+        }
 
 
 def parse_star_text(text: str) -> StarTable:
     """Parse the text of a PSTAR/ASTAR response into a :class:`StarTable`.
 
+    The result records ``content_sha256`` of the UTF-8 text but no dataset identity (use
+    :func:`load_star_table` for verified provenance).
     Raises ``ValueError`` if no rows are found, a row does not have seven numeric columns,
     or the energies are not strictly increasing.
     """
@@ -78,9 +97,27 @@ def parse_star_text(text: str) -> StarTable:
         csda_range=arr[:, 4].copy(),
         projected_range=arr[:, 5].copy(),
         detour=arr[:, 6].copy(),
+        content_sha256=sha256_bytes(text.encode("utf-8")),
     )
 
 
-def load_star_table(path: str | Path) -> StarTable:
-    """Read and parse a cached PSTAR/ASTAR file."""
-    return parse_star_text(Path(path).read_text(encoding="ascii"))
+def load_star_table(path: str | Path, *, allow_unverified: bool = False) -> StarTable:
+    """Read, verify and parse a cached PSTAR/ASTAR file.
+
+    The bytes must hash to the pinned SHA-256 of a registered dataset (``IntegrityError``
+    otherwise); the table then carries ``dataset_id``, ``version``, ``sha256``,
+    ``content_sha256`` and ``retrieved_at``. With ``allow_unverified=True`` any file is
+    parsed, ``dataset_id`` is None and only ``content_sha256`` is recorded.
+    """
+    path = Path(path)
+    raw = path.read_bytes()
+    prov = provenance_of(path, raw, allow_unverified)
+    table = parse_star_text(raw.decode("ascii"))
+    return replace(
+        table,
+        content_sha256=str(prov["content_sha256"]),
+        dataset_id=prov["dataset_id"],
+        version=prov["version"],
+        sha256=prov["sha256"],
+        retrieved_at=prov["retrieved_at"],
+    )

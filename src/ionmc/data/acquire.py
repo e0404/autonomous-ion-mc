@@ -21,6 +21,7 @@ from ionmc.data.cache import (
 from ionmc.data.registry import DATASETS, Dataset
 
 TIMEOUT_S = 30.0
+CHUNK_BYTES = 8192
 OFFLINE_ENV = "IONMC_OFFLINE"
 
 
@@ -40,7 +41,7 @@ class _HttpsOnlyRedirect(urllib.request.HTTPRedirectHandler):
 
 
 def _download(dataset: Dataset) -> bytes:
-    """Download the dataset bytes (https only, 30 s timeout)."""
+    """Download the dataset bytes (https only, 30 s timeout, at most ``dataset.bytes``)."""
     if not dataset.url.lower().startswith("https://"):
         raise ValueError(f"only https URLs are allowed: {dataset.url}")
     body = dataset.post_body.encode("ascii") if dataset.post_body is not None else None
@@ -49,9 +50,21 @@ def _download(dataset: Dataset) -> bytes:
         headers["Content-Type"] = "application/x-www-form-urlencoded"
     request = urllib.request.Request(dataset.url, data=body, headers=headers, method=dataset.method)
     opener = urllib.request.build_opener(_HttpsOnlyRedirect)
+    limit = dataset.bytes
+    chunks: list[bytes] = []
+    total = 0
     with opener.open(request, timeout=TIMEOUT_S) as response:  # noqa: S310
-        data: bytes = response.read()
-    return data
+        while True:
+            chunk: bytes = response.read(CHUNK_BYTES)
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > limit:
+                raise IntegrityError(
+                    f"{dataset.id}: response exceeds the registered size of {limit} bytes; aborted"
+                )
+            chunks.append(chunk)
+    return b"".join(chunks)
 
 
 def is_offline(offline: bool = False) -> bool:

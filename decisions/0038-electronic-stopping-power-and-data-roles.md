@@ -94,14 +94,23 @@ transport is indifferent to the source (`stopping_source = "bethe" |
 ### Legal assessment of the data sources
 
 - NIST PSTAR/ASTAR: Standard Reference Data; use with attribution is
-  permitted, the tables are cached locally and never redistributed in Git.
+  permitted. The full tables are cached locally and not redistributed in
+  Git; the test suite contains short excerpts (about a dozen rows) with the
+  NIST copyright notice and citation, which the lead judges to be within
+  the attribution-based use permitted by NIST's licence statement
+  (https://www.nist.gov/open/license). The notices are collected in
+  `THIRD_PARTY_NOTICES.md`.
 - ICRU 90 water arrays: the numbers are obtained from a Geant4 source file
   distributed under the Geant4 Software License, which permits use and
   modification with attribution. The ICRU report itself is copyrighted; the
   project uses the values only as a cached evaluation reference, cites ICRU
-  Report 90 and Geant4, and does not redistribute either. This is the lead's
-  assessment; it is recorded here because the research report flagged it as
-  unverified.
+  Report 90 and Geant4, and does not redistribute the ICRU report. The
+  Barkas-correction table implemented in the analytic layer is transcribed
+  from Geant4's `G4EmCorrections` and the test suite contains short
+  excerpts of the ICRU 90 arrays; both are covered by the Geant4 Software
+  License, whose text and required acknowledgment are included in
+  `THIRD_PARTY_NOTICES.md`. This is the lead's assessment; it is recorded
+  here because the research report flagged it as unverified.
 
 ### Evidence roles
 
@@ -166,9 +175,9 @@ CSDA ranges (water):
 Interpretation:
 
 - Above 10 MeV/u the analytic layer reproduces the ICRU 49 (PSTAR/ASTAR) and
-  ICRU 90 electronic stopping powers to better than 0.1 % for protons and
-  0.2 % for alpha particles at the respective I-values, and CSDA ranges to
-  within 0.2 %. Between 2 and 10 MeV/u the deviation grows to about 2 %
+  ICRU 90 electronic stopping powers within 0.08 % for protons and
+  0.21 % for alpha particles at the respective I-values (maximum
+  absolute deviations from the result file), and CSDA ranges within 0.2 %. Between 2 and 10 MeV/u the deviation grows to about 2 %
   (protons) because the shell correction is held at its validity boundary;
   the residual-range consequence is below 0.1 mm, as expected in the
   selected approach.

@@ -122,3 +122,43 @@ def verify(dataset_id: str, cache_dir: Path | None = None) -> Path:
     if pinned is not None and pinned.sha256 != digest:
         raise IntegrityError(f"{dataset_id}: manifest hash {digest} != registry {pinned.sha256}")
     return path
+
+
+def provenance_of(path: Path, data: bytes, allow_unverified: bool) -> dict[str, Any]:
+    """Verify ``data`` (the bytes read from ``path``) against the registry and return provenance.
+
+    The SHA-256 of ``data`` must equal the pinned hash of a registered dataset; otherwise
+    :class:`IntegrityError` is raised unless ``allow_unverified`` is true, in which case
+    ``dataset_id`` is None. Returned keys: ``dataset_id``, ``version``, ``sha256`` (pinned),
+    ``content_sha256`` (of the parsed bytes) and ``retrieved_at`` (from the cache manifest
+    when the file lies in a cache ``objects`` directory, else None).
+    """
+    from ionmc.data.registry import identify
+
+    digest = sha256_bytes(data)
+    ds = identify(digest)
+    if ds is None:
+        if not allow_unverified:
+            raise IntegrityError(
+                f"{path}: sha256 {digest} matches no registered dataset; "
+                "pass allow_unverified=True to parse it anyway"
+            )
+        return {
+            "dataset_id": None,
+            "version": None,
+            "sha256": None,
+            "content_sha256": digest,
+            "retrieved_at": None,
+        }
+    retrieved_at = None
+    if path.parent.name == "objects":
+        manifest = read_manifest(ds.id, path.parent.parent)
+        if manifest is not None:
+            retrieved_at = str(manifest.get("retrieved_at"))
+    return {
+        "dataset_id": ds.id,
+        "version": ds.version,
+        "sha256": ds.sha256,
+        "content_sha256": digest,
+        "retrieved_at": retrieved_at,
+    }
