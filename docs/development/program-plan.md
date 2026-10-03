@@ -59,4 +59,11 @@ are preserved under `docs/research/` once used for a decision.
 ## Checkpoints
 
 Checkpoints are appended here as milestones complete (date, task, develop SHA,
-summary). None yet.
+summary).
+
+- 2026-10-03, M0, V3-001 merged as `c4e63dd4` (PR #72): package scaffold,
+  tooling, CI, program plan, requirement ledger, decision 0037, research
+  reports under `docs/research/`, reproducible RNG and Warp architecture
+  measurement archive. Ten independent review rounds were needed; the
+  recurring theme was that every quoted number must be reproducible from
+  committed scripts and archived raw outputs at a clean SHA.
