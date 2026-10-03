@@ -3,6 +3,8 @@ t_import0 = time.perf_counter()
 import warp as wp
 from toy_transport import build, tables
 prec = sys.argv[1]; N = int(sys.argv[2]); nthreads = int(sys.argv[3]) if len(sys.argv) > 3 else 1
+if N % nthreads != 0:
+    raise SystemExit(f"N={N} must be divisible by threads={nthreads} so that exactly N histories are simulated")
 real = wp.float32 if prec == "f32" else wp.float64; rnp = np.float32 if prec == "f32" else np.float64
 wp.init(); t_init = time.perf_counter() - t_import0
 kern = build(real)
@@ -36,6 +38,6 @@ else:
         list(ex.map(lambda k: launch(chunk, k * chunk, *bufs[k]), range(nthreads)))
     wp.synchronize(); dt = time.perf_counter() - t0
     edep = sum(float(b[0].numpy().astype(np.float64).sum()) for b in bufs); cnt = sum(b[2].numpy() for b in bufs)
-print(f"prec={prec} N={N} threads={nthreads} wall={dt:.2f}s hist/s={N/dt:.0f} edep/primary={edep/N:.2f}MeV "
+print(f"prec={prec} N={N} simulated={N} threads={nthreads} wall={dt:.2f}s hist/s={N/dt:.0f} edep/primary={edep/N:.2f}MeV "
       f"particles={cnt[0]} truncated={cnt[1]} escaped={cnt[2]} stack_overflow={cnt[3]} steps/primary={cnt[4]/N:.0f} init={t_init:.2f}s load_module={t_comp:.2f}s "
       f"host_peak_MiB={resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024:.0f}")

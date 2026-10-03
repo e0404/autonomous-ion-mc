@@ -1,0 +1,8 @@
+date_utc=2026-10-03T17:18:47Z
+python=3.12.0
+warp=1.17.0
+numpy=2.5.3
+cpu=13th Gen Intel(R) Core(TM) i9-13900K
+logical_cpus=32
+kernel=6.18.40.1-microsoft-standard-WSL2
+git_sha=196ee2ba19bf326599c0c061e602645f27532bc2

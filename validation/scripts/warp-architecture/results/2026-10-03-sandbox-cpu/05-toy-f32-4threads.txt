@@ -1,0 +1,1 @@
+# command: /home/wahln/aiprojects/ion-mc-worktrees/v3-001/.venv/bin/python run_toy.py f32 80000 4

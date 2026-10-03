@@ -22,7 +22,7 @@ The workload is 150 MeV protons at about 160 steps per primary.
 | Warp CPU, 1 thread, float32 | 75,000 histories/s (≈12 M steps/s, ≈83 ns/step) |
 | Warp CPU, 1 thread, float64 | 55,000 histories/s (float32 is 1.36× faster) |
 | Warp CPU, 4 / 8 / 16 concurrent launches (private accumulators) | 301k / 514k / 841k histories/s (11.2× at 16) |
-| Results across 1/4/8/16 threads | particle count and energy deposit **identical** (counter-based RNG) |
+| Results across 1/4/8/16 threads | particle count and energy deposit **identical** (counter-based RNG) *[Lead note: the archived rerun in `validation/scripts/warp-architecture/results/` simulates different history sets per configuration and shows totals agreeing only within statistics; partition invariance is to be tested in the package, see its README]* |
 | Cold CPU compile of the transport module | 1.45 s (1.22 s with `enable_backward=False`); warm cache ≈0 s |
 | Python-scope `@wp.func`, one partial step (lookup + 3 plane distances + Highland + rotate) | ≈300 µs |
 | Python-scope float64-typed function call | ≈56 µs per call |
@@ -139,7 +139,7 @@ Why not step-wise kernels in v1?
 - Cap steps at `max_steps = ceil(k · (path_bound/min_step))`, for example 4·(nx+ny+nz) plus the range-limited count, padded generously.
 - Also enforce a *progress* guard: any step of length 0 must advance a voxel index.
 - Tally truncated particle count **and residual energy** into dedicated counters.
-- Fail-closed rule: truncation > 0 in validation mode is an error, and in production it is a persisted, reported quantity (V2-NUM/V2-OUTPUT).
+- Fail-closed rule: any step truncation, queue overflow or genealogy overflow invalidates the result in every mode; the truncated energy is tallied separately and never enters dose (V2-NUM/V2-OUTPUT). *[Lead correction, 2026-10-03: the agent's original text allowed production runs to merely report truncation; decision 0037 requires invalidation in all modes.]*
 
 **Language limits verified in Warp 1.17.**
 - `while`, `break`, `continue` and local fixed-size vectors with dynamic indexing work.
