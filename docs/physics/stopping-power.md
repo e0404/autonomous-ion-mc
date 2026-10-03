@@ -91,11 +91,14 @@ uv run python validation/scripts/stopping/compare_nist.py --output-dir OUT_DIR
 ```
 
 It reads only the cache (no network unless `--online`) and writes
-`stopping_comparison.json` containing relative deviations on the reference energy grids
-for E >= 2 MeV/u (Bethe at I = 75 eV against PSTAR/ASTAR; Bethe at I = 78 eV against
-the ICRU 90 arrays), CSDA range differences at 100/150/200/250 MeV protons and
-100/150/200 MeV/u alpha particles, and the range shift between I = 78 and 75 eV.
-Results are produced by running the script; this page does not quote them.
+`stopping_comparison.json`, which contains aggregates only and no per-energy values: for
+each comparison (Bethe at I = 75 eV against PSTAR/ASTAR, Bethe at I = 78 eV against the
+ICRU 90 arrays, ICRU 90 against NIST on shared energies) the number of points, the energy
+range and the maximum and RMS relative deviation of the stopping power for E >= 2 and
+E >= 10 MeV/u; for CSDA ranges at 100/150/200/250 MeV protons and 100/150/200 MeV/u alpha
+particles the maximum absolute relative deviation (Bethe 75 eV against NIST, Bethe 78 eV
+against the integrated ICRU 90 values); and the model-only Bethe 78 - 75 eV range shift per
+energy. Results are produced by running the script; this page does not quote them.
 
 ## Sources
 

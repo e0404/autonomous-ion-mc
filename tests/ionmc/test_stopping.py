@@ -171,7 +171,9 @@ def _synthetic_star(program: str, energy_scale: float) -> StarTable:
     text = [f"{program}: x", "WATER, LIQUID", "", "h", "h", "h", ""]
     r = np.cumsum(np.concatenate(([0.0], proj.a * np.diff(e_u) / s[1:])))
     for eu, si, ri in zip(e_u, s, r + 1e-3, strict=True):
-        text.append(f"{eu * proj.a * energy_scale:.6E} {si:.6E} 0.0 {si:.6E} {ri:.6E} 0.0 1.0")
+        text.append(
+            f"{eu * proj.a * energy_scale:.6E} {si:.6E} 1.0E-3 {si:.6E} {ri:.6E} {ri * 0.9:.6E} 1.0"
+        )
     return parse_star_text("\n".join(text))
 
 
@@ -278,7 +280,10 @@ def _valid_arrays() -> dict[str, np.ndarray]:
         ("s_el_linear", lambda a: a * 1.001, "s_el_linear"),
         ("range_mm", lambda a: a * 1.001, "range_mm"),
         ("csda_range_g_cm2", lambda a: a[::-1].copy(), "csda_range_g_cm2"),
-        ("csda_range_g_cm2", lambda a: np.where(np.arange(a.size) == 0, -1e-3, a), "non-negative"),
+        ("csda_range_g_cm2", lambda a: np.where(np.arange(a.size) == 0, -1e-3, a), "strictly pos"),
+        ("csda_range_g_cm2", lambda a: np.where(np.arange(a.size) == 0, 0.0, a), "strictly pos"),
+        ("csda_range_g_cm2", lambda a: np.where(np.arange(a.size) == 3, a[2], a), "strictly incr"),
+        ("range_mm", lambda a: np.where(np.arange(a.size) == 0, 0.0, a), "range_mm"),
         ("energy_per_u", lambda a: a.reshape(2, 5), "one-dimensional"),
         ("range_mm", lambda a: np.where(np.arange(a.size) == 4, np.nan, a), "NaN"),
     ],
@@ -301,3 +306,11 @@ def test_negative_increasing_energies_rejected() -> None:
     e = np.array([-3.0, -2.0, -1.0])
     with pytest.raises(ValueError):
         build_table(PROTON, WATER, e, np.array([5.0, 4.0, 3.0]), 0.0, {})
+
+
+def test_build_table_rejects_nonpositive_start_range() -> None:
+    e = np.geomspace(1.0, 100.0, 10)
+    s = bethe_mass_stopping(e, PROTON, WATER)
+    for start in (0.0, -1e-3, float("inf")):
+        with pytest.raises(ValueError):
+            build_table(PROTON, WATER, e, s, start, {})

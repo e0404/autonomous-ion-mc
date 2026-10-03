@@ -280,8 +280,10 @@ class StoppingTable:
             raise ValueError("energy_per_u must be positive and strictly increasing")
         if np.any(self.s_el_mass <= 0.0):
             raise ValueError("s_el_mass must be positive")
-        if np.any(self.csda_range_g_cm2 < 0.0) or np.any(np.diff(self.csda_range_g_cm2) < 0.0):
-            raise ValueError("csda_range_g_cm2 must be non-negative and non-decreasing")
+        if np.any(self.csda_range_g_cm2 <= 0.0) or np.any(np.diff(self.csda_range_g_cm2) <= 0.0):
+            raise ValueError("csda_range_g_cm2 must be strictly positive and strictly increasing")
+        if np.any(self.range_mm <= 0.0) or np.any(np.diff(self.range_mm) <= 0.0):
+            raise ValueError("range_mm must be strictly positive and strictly increasing")
         if not np.allclose(self.s_el_linear, self.s_el_mass * rho / 10.0, rtol=1e-12, atol=0.0):
             raise ValueError("s_el_linear is inconsistent with s_el_mass * density / 10")
         if not np.allclose(self.range_mm, self.csda_range_g_cm2 / rho * 10.0, rtol=1e-12, atol=0.0):
@@ -348,8 +350,10 @@ def build_table(
     s = np.asarray(s_el_mass, dtype=np.float64)
     if not (np.all(np.isfinite(e)) and np.all(np.isfinite(s)) and math.isfinite(start_range_g_cm2)):
         raise ValueError("energies, stopping powers and start range must be finite")
-    if np.any(np.diff(e) <= 0.0) or np.any(s <= 0.0) or e[0] <= 0.0 or start_range_g_cm2 < 0.0:
-        raise ValueError("energies must be positive and increase; stopping powers positive")
+    if np.any(np.diff(e) <= 0.0) or np.any(s <= 0.0) or e[0] <= 0.0 or start_range_g_cm2 <= 0.0:
+        raise ValueError(
+            "energies must be positive and increase; stopping powers and start range positive"
+        )
     f = projectile.a * e / s  # dR/dlnE [g/cm2]
     dln = np.diff(np.log(e))
     r = start_range_g_cm2 + np.concatenate(([0.0], np.cumsum(0.5 * (f[1:] + f[:-1]) * dln)))

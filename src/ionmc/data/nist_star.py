@@ -87,12 +87,12 @@ def parse_star_text(text: str) -> StarTable:
     arr = np.asarray(rows, dtype=np.float64)
     if not np.all(np.isfinite(arr)):
         raise ValueError("table contains NaN or infinity")
-    positive = arr[:, [0, 1, 3, 4]]
-    if np.any(positive <= 0.0) or np.any(arr[:, [2, 5, 6]] < 0.0):
+    if np.any(arr[:, :6] <= 0.0):
         raise ValueError(
-            "energy, electronic/total stopping power and CSDA range must be positive; "
-            "other columns non-negative"
+            "kinetic energy, stopping powers, CSDA range and projected range must be positive"
         )
+    if np.any(arr[:, 6] <= 0.0) or np.any(arr[:, 6] > 1.0):
+        raise ValueError("detour factor must lie in (0, 1]")
     if np.any(np.diff(arr[:, 0]) <= 0.0):
         raise ValueError("energies are not strictly increasing")
     return StarTable(

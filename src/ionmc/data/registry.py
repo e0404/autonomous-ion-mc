@@ -32,7 +32,8 @@ _STAR_BODY = (
     "&electronic=on&nuclear=on&total=on&csda=on&project=on&detour=on"
 )
 _STAR_LICENSE = (
-    "NIST SRD 124; copyright claimed, attribution required (https://www.nist.gov/open/license)"
+    "NIST SRD 124: copyright secured under 15 U.S.C. 290e, all rights reserved "
+    "(https://www.nist.gov/open/license); use-only, downloaded by each user, never redistributed"
 )
 _STAR_CITATION = (
     "M.J. Berger, J.S. Coursey, M.A. Zucker, J. Chang (2005), ESTAR, PSTAR, and ASTAR: "

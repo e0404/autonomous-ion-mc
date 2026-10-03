@@ -201,6 +201,14 @@ def test_star_parser_rejects_bad_input() -> None:
     negative = lines[:7] + ["1.0E-01 -5.0 1.0 1.0 1.0E-03 9.0E-04 0.5"]
     with pytest.raises(ValueError, match="positive"):
         parse_star_text("\n".join(negative))
+    for bad_row, message in (
+        ("1.0E-01 5.0 0.0 1.0 1.0E-03 9.0E-04 0.5", "positive"),  # zero nuclear stopping
+        ("1.0E-01 5.0 1.0 1.0 1.0E-03 0.0 0.5", "positive"),  # zero projected range
+        ("1.0E-01 5.0 1.0 1.0 1.0E-03 9.0E-04 1.5", "detour"),  # detour factor > 1
+        ("1.0E-01 5.0 1.0 1.0 1.0E-03 9.0E-04 0.0", "detour"),
+    ):
+        with pytest.raises(ValueError, match=message):
+            parse_star_text("\n".join(lines[:7] + [bad_row]))
     inf_energy = lines[:7] + ["inf 5.0 1.0 1.0 1.0E-03 9.0E-04 0.5"]
     with pytest.raises(ValueError):
         parse_star_text("\n".join(inf_energy))

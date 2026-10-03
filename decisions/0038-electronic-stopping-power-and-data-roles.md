@@ -93,13 +93,33 @@ transport is indifferent to the source (`stopping_source = "bethe" |
 
 ### Legal assessment of the data sources
 
-- NIST PSTAR/ASTAR: Standard Reference Data; use with attribution is
-  permitted. The full tables are cached locally and not redistributed in
-  Git; the test suite contains short excerpts (about a dozen rows) with the
-  NIST copyright notice and citation, which the lead judges to be within
-  the attribution-based use permitted by NIST's licence statement
-  (https://www.nist.gov/open/license). The notices are collected in
-  `THIRD_PARTY_NOTICES.md`.
+- NIST PSTAR/ASTAR (SRD 124): NIST's statement
+  (https://www.nist.gov/open/license, read 2026-10-03) says copyright on
+  the compilation is secured under the Standard Reference Data Act,
+  15 U.S.C. § 290e, "All rights reserved", and that SRD products should
+  carry the NIST copyright statement. No general redistribution licence is
+  granted. The project therefore treats the tables as **use-only**: each
+  user downloads them from NIST's public web service into a local cache
+  (the registry stores only the URL, request body, version and hash);
+  nothing committed to Git contains table values or values from which
+  they can be recovered. Committed comparison results are non-reversible
+  aggregates (maximum and RMS deviations), and the test suite contains no
+  NIST values (a synthetic STAR-layout fixture and ICRU 90 anchors are used
+  instead). The NIST copyright statement and citation are reproduced in the
+  packaged third-party notices.
+- **Recorded repository error (2026-10-03).** Earlier commits of the
+  preserved task branch of V3-002 (first commit `7a2d817` through
+  `6eb6369`) contained about a dozen transcribed PSTAR/ASTAR rows as test
+  fixtures and a comparison file with per-energy model/reference ratios
+  from which table values are recoverable. They were removed from the tree
+  at `d3945d1`, before integration, so neither `v3/develop` (squash merge)
+  nor any release contains them. The experiment's history-integrity rule
+  forbids rewriting pushed task branches except for recovery from a
+  documented repository error; this entry is that documentation. The lead
+  has requested operator authorization to rewrite or delete the affected
+  task-branch commits on the remote (an irreversible, externally
+  consequential action reserved to the operator); until then the branch
+  remains preserved in the private experiment repository.
 - ICRU 90 water arrays: the numbers are obtained from a Geant4 source file
   distributed under the Geant4 Software License, which permits use and
   modification with attribution. The ICRU report itself is copyrighted; the
