@@ -12,3 +12,5 @@ data must not be reproducible from Git. Dataset identities and hashes are record
 
 Reproduce: `ionmc data fetch` the three datasets, then
 `uv run python validation/scripts/stopping/compare_nist.py --output-dir OUT --cache-dir CACHE --code-sha $(git rev-parse HEAD)`.
+
+Archived run: produced at clean task SHA `d3945d1f54e26c24b82e8737109f2a5c2e2034b2`.
