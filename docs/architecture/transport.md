@@ -91,7 +91,7 @@ counter starting at 0.
    drawn every step whatever the options.
 5. Multiple scattering (if enabled): the variance is `s T_dM(E_mid)` with
    `E_mid = Rinv(R - rho s / 20)`, except on the first step of the particle's life (the `birth` state flag
-   is true until a step of nonzero length completes), which uses `scattering_variance_birth` (exact
+   is true until a step of nonzero length completes), which uses `scattering_variance_birth` (analytic linearized
    average of the logarithmic term of `f_dM`, with `E1 = Rinv(R - rho s / 10)` limited to `E0`); it gives
    the polar angle; the direction is rotated at the hinge (leg 1 has length
    `a s` along the old direction). Leg 2 has length `(1 - a) s` along the new direction and is cut at

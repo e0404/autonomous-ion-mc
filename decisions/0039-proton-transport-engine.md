@@ -81,7 +81,7 @@ block index, purpose) with purpose 1 for source sampling and 0 for transport.
   `f_dM` has an integrable logarithmic singularity that no fixed-order
   quadrature over the step removes (measured during V3-003A: midpoint and
   Simpson rules both missed the frozen U5 bound of 2e-3 by up to 1.2e-2 at
-  x/R₁ = 0.05 with 1 mm steps). The birth step therefore uses the exact step
+  x/R₁ = 0.05 with 1 mm steps). The birth step therefore uses the analytic (linearized) step
   average of the logarithmic term, `lg(1 − (pv(E₁)/p₁v₁)²) − 1/ln 10`, with
   `E₁` the energy at the end of the planned step, the smooth terms at `E_mid`
   and the clamp applied after averaging (`scattering_variance_birth`). With

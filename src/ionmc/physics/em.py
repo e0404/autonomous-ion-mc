@@ -178,7 +178,10 @@ def make_em(real: type) -> SimpleNamespace:
         """Projected variance [rad^2] of the first step of a particle's life (birth step).
 
         On this step ``1 - (pv/p1v1)^2`` grows linearly from 0, so the logarithmic term of
-        f_dM has the exact step average ``L1 = lg(1 - (pv_end/p1v1)^2) - 1/ln(10)``. The
+        f_dM is replaced by the analytic average ``L1 = lg(1 - (pv_end/p1v1)^2) - 1/ln(10)``,
+        which is exact only if ``1 - (pv/p1v1)^2`` grew linearly along the step (linearized
+        birth-step approximation; under CSDA slowing the growth is slightly nonlinear, so a
+        residual of order 1e-3 remains for steps up to 1 mm, bounded by the quadrature test). The
         smooth terms (``lg pv``) and the prefactor are taken at the midpoint energy; f_dM
         is clamped at 0 after averaging. ``pv_end_mev`` belongs to the end of the step.
         """

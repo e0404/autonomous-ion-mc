@@ -76,7 +76,7 @@ water, Be, Al, Cu and Pb against the tabulated 46.88, 92.60, 28.75, 14.62 and 6.
 Per step the variance is the midpoint rule `s T_dM(E_mid)` with `E_mid = Rinv(R - rho s / 20)`;
 `p1v1` is the particle's own birth value. On the first step of a particle's life (birth step)
 `1 - (pv/p1v1)^2` grows linearly from 0 and `f_dM` is logarithmically singular, so the logarithmic
-term has its exact step average `L1 = lg(1 - (pv(E1)/p1v1)^2) - 1/ln(10)`, with `E1 = Rinv(R - rho s / 10)`
+term is replaced by its analytic (linearized) step average `L1 = lg(1 - (pv(E1)/p1v1)^2) - 1/ln(10)`, exact for a linear growth of `1 - (pv/p1v1)^2` along the step and accurate to about 1e-3 under CSDA slowing for steps up to 1 mm,, with `E1 = Rinv(R - rho s / 10)`
 for the planned step (the shared function `scattering_variance_birth`); the smooth terms and the
 prefactor are taken at `E_mid` and `f_dM` is clamped at 0 after averaging. The variance defines a two-dimensional
 Gaussian polar angle `theta = sqrt(-2 var ln u)` (limited to pi) and an azimuth `2 pi u`. The
@@ -129,7 +129,7 @@ scattering model is T15 (independent Monte Carlo comparison), which is pending.
   | 0.9 | +7.2e-8 | -2.6e-8 | -1.6e-5 | -6.9e-5 | -2.8e-4 | -1.5e-3 |
 
   The midpoint rule alone is biased by the logarithmic singularity of the first step (several per
-  cent for large steps); the exact birth-step average removes it. `test_birth_variance_matches_fine_quadrature`
+  cent for large steps); the analytic birth-step average removes it (residual of order 1e-3 from the linearization). `test_birth_variance_matches_fine_quadrature`
   checks the birth variance against quadrature (1e-3 for 0.1 to 1 mm; not tested at 0.01 mm, where
   the step changes pv by less than the 1e-5 round-trip accuracy of the tables and the quadrature's
   `1 - (pv/p1v1)^2` no longer starts from 0). `E1` is evaluated for the planned step because the
