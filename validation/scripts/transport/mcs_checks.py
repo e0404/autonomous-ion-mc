@@ -35,6 +35,7 @@ from ionmc.physics.stopping import BetheStoppingSource
 from ionmc.transport import mcs_checks as mc
 from ionmc.transport.tables import TransportTables
 
+SOURCE_MODEL = "source-model reproduction (Gottschalk 2010 formulae and tables; not independent)"
 REPO = Path(__file__).resolve().parents[3]
 
 
@@ -84,6 +85,13 @@ def run() -> dict[str, Any]:
             "arxiv": "0908.1413",
             "sha256": mc.GOTTSCHALK_SHA256,
             "note": "aggregates only; no table rows of the paper are reproduced",
+        },
+        "evidence_class": {
+            "u4": SOURCE_MODEL,
+            "u4b": SOURCE_MODEL,
+            "x_s": SOURCE_MODEL,
+            "u5": "deterministic self-consistency",
+            "highland_cross_check": "related model",
         },
         "u4": {
             "energy_mev": 158.6,

@@ -18,7 +18,9 @@ paper's table `tbl:LS`; the full U5 table (water, 150 MeV: relative deviation of
 variance sum from the quadrature for steps 0.01 to 5 mm at x/R1 0.05 to 0.9) with the per-step
 Highland negative control; a generalised-Highland cross-check for water.
 
-Evidence status: independent theory comparison for U4 and X_S (the reference is the published
-table); deterministic self-consistency for U5; the Highland cross-check is a related model. Not a
-clinical claim. The U4 venue is local validation (LV): the source is not in Git, so the
-corresponding test skips in CI.
+Evidence status: U4, U4b and the `X_S` comparison are **source-model reproduction (Gottschalk 2010
+formulae and tables; not independent)**: the reference is the paper's own table and formulae, and U4b is
+implied by U4 with the paper's dM % column. U5 is deterministic self-consistency; the Highland
+cross-check is a related model. The only independent scattering qualification is T15 (independent Monte
+Carlo comparison, pending). Not a clinical claim. The U4 venue is local validation (LV): the source is not
+in Git, so the corresponding tests skip in CI.

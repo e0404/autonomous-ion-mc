@@ -6,9 +6,9 @@ Models and sources (decision 0039; derivations in ``docs/physics/em-transport.md
 
 * mean energy loss over a path of mass thickness ``t`` [g/cm2]: the CSDA range inversion
   ``E1 = Rinv(R(E0) - t)``, with the linear branch ``S(E0) t`` when ``t < f_short R(E0)``;
-* straggling: Bohr variance ``(K/2)(Z/A) rho x z^2 Tmax (1/beta^2 - 1/2)``, sampled so that the
-  mean and the variance are preserved (Gaussian clamped to ``[0, 2 mean]`` for mean/sigma >= 3,
-  otherwise Gamma with the same mean and variance);
+* straggling: Bohr variance ``(K/2)(Z/A) rho x z^2 Tmax (1/beta^2 - 1/2)``; Gamma with exactly the
+  Bohr mean and variance for mean/sigma < 3, Gaussian clamped to ``[0, 2 mean]`` for
+  mean/sigma >= 3 (mean preserved, variance reduced by at most about 0.5 %);
 * multiple Coulomb scattering: the differential Moliere scattering power ``T_dM`` of
   B. Gottschalk, Med. Phys. 37 (2010) 352 (arXiv:0908.1413), ``E_s = 15.0 MeV``, applied
   as a two-dimensional Gaussian polar angle, with the rotation of ``G4ThreeVector::rotateUz``.
@@ -100,12 +100,12 @@ def make_em(real: type) -> SimpleNamespace:
     ) -> tuple[real, int]:
         """One sampling attempt of the energy loss [MeV] and an accepted flag (1 or 0).
 
-        Both moments are preserved: with ratio = mean / sigma, ``ratio >= 3`` is Gaussian
-        clamped to ``[0, 2 mean]`` (always accepted; P(x < 0) = 0.13 %, variance loss below
-        1 %); otherwise Gamma with shape ``k = ratio^2`` and scale ``sigma^2 / mean`` by
-        Marsaglia-Tsang (shape ``k + 1`` and a ``u3^(1/k)`` factor for ``k < 1``), accepted with
-        the Marsaglia-Tsang test. All four uniforms are arguments (one Philox block); the caller
-        draws a new block after a rejection (at most 64 attempts).
+        With ratio = mean / sigma, ``ratio >= 3`` is Gaussian clamped to ``[0, 2 mean]`` (always
+        accepted; mean preserved, P(x < 0) = 0.13 %, variance reduced by at most about 0.5 %);
+        otherwise Gamma (exact mean and Bohr variance) with shape ``k = ratio^2`` and scale
+        ``sigma^2 / mean`` by Marsaglia-Tsang (shape ``k + 1`` and a ``u3^(1/k)`` factor for
+        ``k < 1``), accepted with the Marsaglia-Tsang test. All four uniforms are arguments (one
+        Philox block); the caller draws a new block after a rejection (at most 64 attempts).
         """
         loss = real(0.0)
         ok = int(0)

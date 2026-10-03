@@ -23,9 +23,9 @@ Tiers:
 |---|---|---|---|---|
 | U1 | Every shared func, Python scope vs Warp CPU kernel (f32, f64), 10⁴ args incl. edges | Decision 0001 classes: f64 rtol 1e-12 / atol 1e-14, f32 1e-6 / 1e-6; `dda_next` reasons and indices identical; NaN fails | backend parity | CI |
 | U2 | Table round trip \|Rinv(R(E))−E\|/E and monotonicity of R and Rinv | ≤ 1e-5 (f64 build), strictly monotone | self-consistency | CI |
-| U3 | X_S from the formula for water, Be, Al, Cu, Pb | within 0.3% of 46.88 / 92.60 / 28.75 / 14.62 / 6.62 g/cm². This also settles ln vs log10 in eq. XS. | independent theory | CI |
+| U3 | X_S from the formula for water, Be, Al, Cu, Pb | within 0.3% of 46.88 / 92.60 / 28.75 / 14.62 / 6.62 g/cm². This also settles ln vs log10 in eq. XS. | source-model reproduction⁴ (Gottschalk's own X_S table) | CI |
 | U4 | θ_dM(x) by numpy quadrature of T_dM along CSDA E(x), 158.6 MeV, x/R1 ∈ {0.01, 0.1, 0.5, 0.9}, for the materials V3-002 provides | within 1.5% of Gottschalk's θ_Hanson·(1+dM%) (theta0Single table). Residual is from the range-table I-value. | source-model reproduction³ (shared T_dM model and coefficients; not independent) | LV¹ |
-| U4b³ | Same θ_dM(x) as U4 compared directly with Gottschalk's tabulated θ_Hanson (Molière/Fano/Hanson theory, the quantity T_dM was fitted to; independent of the dM fit) | \|θ_dM/θ_Hanson − 1\| ≤ 4.5 % at every frozen point, derived before measurement from the table's own max \|dM%\| = 2.74 % (x/R1 ≥ 0.01) compounded with the U4 bound 1.5 % | independent theory | LV¹ |
+| U4b³ | Same θ_dM(x) as U4 compared directly with Gottschalk's tabulated θ_Hanson (Molière/Fano/Hanson theory, the quantity T_dM was fitted to; independent of the dM fit) | \|θ_dM/θ_Hanson − 1\| ≤ 4.5 % at every frozen point, derived before measurement from the table's own max \|dM%\| = 2.74 % (x/R1 ≥ 0.01) compounded with the U4 bound 1.5 % | source-model reproduction⁴ (θ_Hanson is the calibration target of T_dM and the bound is implied by U4; not independent) | LV¹ |
 | T15³ | **Independent-MC lateral check:** 150 MeV protons in water, all physics on, lateral σ of the dose profile at z/R ∈ {0.5, 0.9} (0.2 mm lateral bins, 1 mm slabs) versus a TOPAS/Geant4 11 run of the same geometry (3-D dose grid, ≥ 10⁵ primaries, ≥ 2 seeds) from the V3-010 reference service | \|σ_ionmc/σ_TOPAS − 1\| ≤ 3 % and \|z\| < 3 using both standard errors; result labelled by TOPAS physics list and I-value (78 eV) | independent Monte Carlo | LV (after V3-003B and the V3-010 3-D dose case) |
 | U5 | **Step independence of the MCS integrator (deterministic):** Σ_steps T(E_mid)·s along CSDA in water, 150 MeV, s ∈ {0.01, 0.1, 0.5, 1, 2, 5} mm, compared with adaptive quadrature at x/R1 ∈ {0.05, 0.25, 0.5, 0.9} | \|Δθ²/θ²\| ≤ 2e-3 for every s at x/R1 ≥ 0.05. Negative control computed analytically: per-step Highland varies ≥ 5% over the same s range, so the test has power. | self-consistency | CI |
 | U6 | RNG tests (a)–(e) of §3 | exact | self-consistency | CI |
@@ -35,7 +35,7 @@ Tiers:
 | T4 | Energy balance: initial = Σgrid + Σoutside + cutoff + escaped + truncated + unaccounted, all accumulated independently | rel ≤ 1e-5 (f32), 1e-12 (f64 and python); counters 0 | conservation | CI |
 | T5 | R80 of the IDD (0.1 mm depth bins, straggling on, MCS off), 10⁵ histories | \|R80/R_csda − 1\| ≤ 0.2% at 100/150/200 MeV | related model (Bortfeld R80 ≈ R0) | LV |
 | T6 | σ_R from end-depth diagnostics (straggling on, MCS off) | within 5% of σ_R² = ∫(dσ²/dx)/S³ dE (numpy, same Bohr variance); within 10% of 0.012·R^0.935 cm | self-consistency + related model | LV |
-| T7 | Lateral variance of deposits in 1 mm slabs (0.2 mm lateral bins, Sheppard-corrected) at z/R ∈ {0.25, 0.5, 0.75, 0.9}, MCS on, straggling off, 150 MeV | within 2% of Fermi-Eyges A2(z) = ∫(z−z')²T_dM dz'; within 3% of the generalised-Highland y_rms (related model) | independent theory | LV |
+| T7 | Lateral variance of deposits in 1 mm slabs (0.2 mm lateral bins, Sheppard-corrected) at z/R ∈ {0.25, 0.5, 0.75, 0.9}, MCS on, straggling off, 150 MeV | within 2% of Fermi-Eyges A2(z) = ∫(z−z')²T_dM dz'; within 3% of the generalised-Highland y_rms (related model) | self-consistency⁴ (Fermi-Eyges with the implemented T_dM) + related model | LV |
 | T8 | **MCS step independence in transport:** exit θ_rms of a 0.5·R1 water slab and T7 σ at 0.9R, s_max ∈ {0.1, 0.5, 1, 5} mm, 10⁶ histories warp-cpu | pairwise θ_rms ≤ 0.5%, σ ≤ 1%, and θ_rms within 0.5% of the U5 quadrature | self-consistency (falsification) | LV |
 | T9 | IDD step independence, s_max ∈ {0.1, 0.5, 1} mm, f_E ∈ {0.005, 0.02} | \|ΔR80\| ≤ 0.1 mm; IDD χ² (dose > 1% of max) p > 0.001 | falsification | LV |
 | T10 | Rotation invariance: beam along +x, +y, +z, −z, and (1,1,0)/√2 and (1,1,1)/√3 in a 200 mm cube; IDD versus projected depth | permutations: χ² p > 0.001; obliques: \|ΔR80\| ≤ 0.3 mm and total energy equal within 3σ; zero counters | falsification | LV |
@@ -74,3 +74,12 @@ Molière/Fano/Hanson column, which T_dM was fitted to) and T15 (independent Mont
 spreading) are added as the independent scattering evidence. The U4b tolerance is derived from
 the paper's table (max |dM%| 2.74 % for x/R1 ≥ 0.01, Pb at 0.9 R1 = −2.51 %) and the frozen U4
 bound, not from any ionmc result; the U4b numbers had not been computed when this was frozen.
+
+⁴ Classification amendment (2026-10-03, after the third Codex review of V3-003A, head dc88004):
+U3, U4, U4b and the X_S comparison all reproduce Gottschalk (2010) — the paper whose formulae and
+coefficients the engine implements — from that paper's own tables, and T7 integrates the
+implemented T_dM in Fermi-Eyges theory; none of them is independent evidence for the scattering
+physics. They are retained as source-model reproduction and self-consistency checks with their
+frozen numbers unchanged. The only independent scattering qualification in this plan is T15
+(independent Monte Carlo), still pending; the requirement ledger must not mark scattering
+requirements as independently evidenced before T15 passes.

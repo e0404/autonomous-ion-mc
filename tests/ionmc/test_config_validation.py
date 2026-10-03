@@ -507,13 +507,29 @@ def test_transport_tables_are_deeply_immutable(make_config: MakeConfig) -> None:
         assert not arr.flags.writeable
         with pytest.raises(ValueError):
             arr[...] = 0.0
+        with pytest.raises(ValueError):
+            arr.setflags(write=True)  # cannot be made writable again
+        before = arr.tobytes()
+        with pytest.raises(ValueError):
+            arr[...] = 1.0
+        with pytest.raises(ValueError):
+            arr.setflags(write=True)
+        assert arr.dtype == np.float64 and arr.tobytes() == before
+        root = arr
+        while isinstance(root, np.ndarray):
+            assert not root.flags.writeable
+            with pytest.raises(ValueError):
+                root.setflags(write=True)
+            root = root.base
+        assert isinstance(root, bytes)  # immutable backing buffer
+    assert t.sha256 == eff.tables.sha256 == validate(make_config()).tables.sha256
     with pytest.raises(TypeError):
         t.identity[0]["I_eV_effective"] = 1.0  # type: ignore[index]
     with pytest.raises(TypeError):
         t.identity[0]["metadata"]["source"] = "x"  # type: ignore[index]
     with pytest.raises(AttributeError):
         t.sha256 = "x"  # type: ignore[misc]
-    # a view is copied, the caller's array stays writable
+    # any constructor path re-freezes: the caller's array stays writable, ours does not
     base = t.ln_s_mass.copy()
     view = base[:, :]
     from dataclasses import fields

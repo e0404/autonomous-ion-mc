@@ -72,14 +72,17 @@ class TransportTables:
             a = getattr(self, name)
             if not isinstance(a, np.ndarray):
                 raise ValueError(f"{name} must be a numpy array")
-            if a.flags.owndata or a.base is None:
-                a.setflags(write=False)
-            else:  # a view: freeze a private copy so the caller's array stays untouched
-                a = np.array(a)
-                a.setflags(write=False)
-                object.__setattr__(self, name, a)
-            if a.flags.writeable:
-                raise ValueError(f"{name} could not be made read-only")
+            # back the array by an immutable bytes object: NumPy then refuses setflags(write=True)
+            raw = np.ascontiguousarray(a, dtype=np.float64).tobytes()
+            frozen = np.frombuffer(raw, dtype=np.float64).reshape(a.shape)
+            object.__setattr__(self, name, frozen)
+            root: Any = frozen
+            while isinstance(root, np.ndarray):
+                if root.flags.writeable:
+                    raise ValueError(f"{name} could not be made read-only")
+                root = root.base
+            if not isinstance(root, bytes):
+                raise ValueError(f"{name} could not be backed by an immutable buffer")
         object.__setattr__(self, "identity", _freeze(self.identity))
         nm = len(self.materials)
         if nm < 1:

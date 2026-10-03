@@ -65,7 +65,7 @@ densities in g/cm3, doses in Gy per primary). All grids use `origin_mm` = corner
   e_cut_mev=2.0, max_step_mm=1.0, max_energy_loss_fraction=0.02, range_alpha=0.2,
   range_rho_f_mm=0.1, short_step_fraction=1e-3, ...)`: `nuclear` and `stopping` have no default
   (`nuclear=True` is rejected until nuclear interactions exist). Model names are
-  `straggling_model="bohr_two_moment_gauss_gamma_v1"`, `mcs_model="differential_moliere"`, `delta_electrons="local"`;
+  `straggling_model="bohr_gauss_clamped_gamma_v1"`, `mcs_model="differential_moliere"`, `delta_electrons="local"`;
   any other string is rejected.
 * `RunOptions(backend, precision, seed, n_histories, n_batches=20, cpu_workers=1,
   max_steps=None, allow_invalid_result=False, worker_timeout_s=None, memory_budget_bytes=2**31)`.

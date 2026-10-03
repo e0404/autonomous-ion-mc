@@ -27,7 +27,7 @@ from ionmc.scoring import MAX_SCORING_GRIDS, ScoringGrid
 from ionmc.sources import PencilBeamSource
 from ionmc.transport.tables import TransportTables, thaw
 
-STRAGGLING_MODELS = ("bohr_two_moment_gauss_gamma_v1",)
+STRAGGLING_MODELS = ("bohr_gauss_clamped_gamma_v1",)
 MCS_MODELS = ("differential_moliere",)
 DELTA_ELECTRON_MODELS = ("local",)
 BACKENDS = ("python", "warp-cpu", "warp-cuda")
@@ -58,7 +58,7 @@ class PhysicsOptions:
     nuclear: bool
     stopping: StoppingSource
     straggling: bool = True
-    straggling_model: str = "bohr_two_moment_gauss_gamma_v1"
+    straggling_model: str = "bohr_gauss_clamped_gamma_v1"
     multiple_scattering: bool = True
     mcs_model: str = "differential_moliere"
     delta_electrons: str = "local"

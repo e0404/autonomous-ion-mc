@@ -38,14 +38,14 @@ is
 
 with `K = 0.307075 MeV cm2/mol`, `T_max = 2 m_e c^2 beta^2 gamma^2 / (1 + 2 gamma m_e/M + (m_e/M)^2)`.
 This equals the Geant4 dispersion `2 pi r_e^2 m_e c^2 n_el z^2 x T_max (1/beta^2 - 1/2)`. The loss is
-sampled so that both the mean and the variance of the step are preserved (ratio `r = mean / sigma`):
+sampled as follows (ratio `r = mean / sigma`; model identifier `bohr_gauss_clamped_gamma_v1`):
 
-* `r >= 3`: Gaussian, clamped (no resampling) to `[0, 2 mean]`; the clamp affects 0.13 % of the
-  samples on each side at `r = 3` and removes less than 1 % of the variance (about 0.5 % at `r = 3`,
-  less above);
 * `r < 3`: Gamma distribution with shape `k = r^2` and scale `sigma^2 / mean` (Marsaglia-Tsang; for
-  `k < 1` the shape-plus-one sample times `u^(1/k)`), which has exactly the requested mean and
-  variance.
+  `k < 1` the shape-plus-one sample times `u^(1/k)`), which reproduces the mean and the Bohr variance
+  exactly;
+* `r >= 3`: Gaussian, clamped (no resampling) to `[0, 2 mean]`. This preserves the mean and reduces
+  the variance by at most about 0.5 % (0.49 % at `r = 3` from the Gaussian tails; the moment test
+  allows 1 %); 0.13 % of the samples are clamped at 0 at `r = 3`.
 
 A Gamma sample is accepted by the Marsaglia-Tsang test; a rejection draws another Philox block, at most 64
 attempts (then the `straggling_rejection` counter invalidates the run). Step energies of 1 mm or more
@@ -93,7 +93,14 @@ overestimate of scattering on boundary steps.
 
 ### Validation status of this model (tests in `tests/ionmc/test_tables_scattering.py`)
 
-* `X_S` against Gottschalk's table: within 0.3 % (above).
+Evidence class of the checks below (U3, U4, U4b and the `X_S` comparison): **source-model reproduction
+(Gottschalk 2010 formulae and tables; not independent)**. U3 reproduces the paper's `X_S` table from its
+own formula, U4 reproduces its `T_dM` column, and U4b is implied by U4 together with the paper's dM %
+column (both read from the same table). The generalised-Highland comparison is a related model and the
+step-independence check U5 is deterministic self-consistency. The only independent qualification of the
+scattering model is T15 (independent Monte Carlo comparison), which is pending.
+
+* `X_S` against Gottschalk's table: within 0.3 % (above; source-model reproduction).
 * `theta_dM(x)` by quadrature of `T_dM` along the CSDA path at 158.6 MeV, `x/R1` = 0.01, 0.1, 0.5, 0.9,
   against `theta_Hanson (1 + dM %/100)` of the table of Gottschalk (2010), parsed at run time from the
   cached LaTeX source of arXiv:0908.1413 (not committed; the test is skipped when the cache is absent,
