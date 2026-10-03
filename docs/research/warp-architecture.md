@@ -72,7 +72,7 @@ The Python reference calls the **float64 variant** of every shared function with
 
 Lookups must be composed as `log_bin` (shared) → adapter `fetch` of `y0` and `y1` → `interp` (shared). That way only the memory read differs between backends.
 
-The driver step loop is the one piece written twice. Keep it short, with the step-level physics decisions inside shared functions. Guard it with a **trajectory-level parity test**: because Philox is bit-identical across backends and the draw order is fixed, reference(float64) and Warp CPU(float64) must agree step by step for the first K histories to about 1e-12 until a branch flips. This is far more discriminating than distribution-level parity. Cost is about 1 ms per full step in Python, so the reference handles about 1e2–1e4 histories per process. Use multiprocessing for statistical parity runs.
+The driver step loop is the one piece written twice. Keep it short, with the step-level physics decisions inside shared functions. Guard it with a **trajectory-level parity test**: because Philox is bit-identical across backends and the draw order is fixed, reference(float64) and Warp CPU(float64) must agree step by step for the first K histories to about 1e-12 until a branch flips. This is far more discriminating than distribution-level parity. Cost is of order 1 ms per full step in Python (agent's scratch estimate from `pyscope_cost.py`, not archived), so the reference handles about 1e2–1e4 histories per process. Use multiprocessing for statistical parity runs.
 
 ```python
 def make_physics(R):
@@ -97,7 +97,7 @@ PHYS32, PHYS64 = make_physics(wp.float32), make_physics(wp.float64)
   - Both rules need V2-NUM step-refinement tests.
 - **Accumulation.** See §4.
 
-**Policy.** Use float32 transport state and tables, float32 atomics into per-batch grids, and float64 batch reduction and outputs. Build a float64 variant of the *same* kernels from the factory. It costs 1.36× on CPU; on an A6000 the FP64 ALU rate is 1/64 of FP32, so expect a much larger factor. It serves as the V2-NUM float32/float64 probe and as the trajectory-parity partner of the reference. It is not a production mode on CUDA.
+**Policy.** Use float32 transport state and tables, float32 atomics into per-batch grids, and float64 batch reduction and outputs. Build a float64 variant of the *same* kernels from the factory. The float64 build costs about 1.4× on CPU (archive-derived, see `SUMMARY.md` statistics); on an A6000 the FP64 ALU rate is 1/64 of FP32, so expect a much larger factor. It serves as the V2-NUM float32/float64 probe and as the trajectory-parity partner of the reference. It is not a production mode on CUDA.
 
 ## 3. Kernel organisation
 
@@ -221,7 +221,7 @@ LETd needs two accumulators: Σ edep·L and Σ edep. For a batch estimate of the
 
 ## 8. Compilation and caching
 
-- Measured: CPU cold compile of the toy module is 1.45 s, and 1.22 s with `wp.set_module_options({"enable_backward": False})`. Disable backward for all transport modules because the kernels are not differentiated.
+- Cold CPU compile of the toy module is about 1.2–1.4 s, with `enable_backward=False` about 0.2 s faster (archive-derived medians, see `SUMMARY.md`; the agent's scratch values 1.45/1.22 s are non-evidentiary). Disable backward for all transport modules because the kernels are not differentiated.
 - **CUDA NVRTC times are unmeasured here and are a risk.** Measure them on the host runner.
 - Treat physics *model selection* as runtime flags (ints in a `Control` struct) when the branches are cheap.
 - Use `wp.static`/factory closures only for precision (f32/f64) and genuinely structural variants (species families). Keep the variant count ≤ about 4, and put each in its own module (`module="unique"` or separate Python modules) so a change recompiles one variant.
@@ -254,7 +254,7 @@ LETd needs two accumulators: Σ edep·L and Σ edep. For a batch estimate of the
 - MCsquare: 1e7 protons in under a minute on many-core CPUs ([Souris et al., Med Phys 2016](https://dial.uclouvain.be/pr/boreal/en/object/boreal%3A150338)).
 
 **Ballpark for this design (hypotheses to calibrate, not targets).**
-- Full proton physics is perhaps 2–4× the toy's per-step cost: Warp CPU about 20–40k histories/s per thread, about 0.2–0.5 M/s on 16 threads.
+- Full proton physics is perhaps 2–4× the toy's per-step cost, i.e. Warp CPU of order 20–40k histories/s per thread and 0.2–0.5 M/s on 16 threads (extrapolation from the archive-derived toy throughput, not a measurement).
 - RTX A6000: about 1–5 M primaries/s for 150 MeV protons in water, so the 1e6 kernel time is about 0.2–1 s.
 - Wall time is then dominated by Python/Warp start-up (≈1–2 s), cold NVRTC compile (expected multi-second to tens of seconds, unmeasured), data upload and output writing.
 - Carbon at 290 MeV/u: 3–10× slower per primary because of fragment transport.
@@ -297,7 +297,7 @@ This violates "parallel-safe streams" (REQUIREMENTS) and would contaminate batch
 Verified:
 - Random123 known-answer vectors pass in Warp.
 - The pure-Python adapter is bit-identical on 20,000 random blocks.
-- Cost per uniform on one CPU thread: see the archived step 14 output (Philox is slightly cheaper than `wp.randf`; the agent's scratch run gave 2.09 vs 2.42 ns).
+- Cost per uniform on one CPU thread: Philox is slightly cheaper than `wp.randf` (archive-derived medians in `SUMMARY.md`, step 13; the agent's scratch values 2.09 vs 2.42 ns are non-evidentiary).
 - Results are expected to be invariant to thread count and partitioning because the generator is counter-based; this is to be tested in the package (see lead note above).
 
 Each Philox call returns 4 uniforms. A step that needs more draws makes a second call with a different sub-draw index.

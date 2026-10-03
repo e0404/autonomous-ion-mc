@@ -29,7 +29,8 @@ ks = np.array([[0,0],[0xffffffff]*2,[0xa4093822,0x299f31d0]], dtype=np.uint32)
 exp = [[0x6627e8d5,0xe169c58d,0xbc57ac4c,0x9b00dbd8],[0x408f276d,0x41c83b0e,0xa20bc7c6,0x6d5451fd],[0xd16cfe09,0x94fdcceb,0x5001e420,0x24126ea1]]
 o = wp.zeros(3, dtype=wp.vec4ui)
 wp.launch(kat, dim=3, inputs=[wp.array(cs, dtype=wp.vec4ui), wp.array(ks, dtype=wp.vec2ui), o], device="cpu")
-print("Random123 KAT pass:", (o.numpy() == np.array(exp, dtype=np.uint32)).all())
+kat_ok = bool((o.numpy() == np.array(exp, dtype=np.uint32)).all())
+print("Random123 KAT pass:", kat_ok)
 
 def philox_py(c, k):   # pure-Python reference adapter (ints)
     c0,c1,c2,c3 = c; k0,k1 = k
@@ -38,7 +39,8 @@ def philox_py(c, k):   # pure-Python reference adapter (ints)
         c0, c1, c2, c3 = ((p1>>32) ^ c1 ^ k0) & 0xFFFFFFFF, p1 & 0xFFFFFFFF, ((p0>>32) ^ c3 ^ k1) & 0xFFFFFFFF, p0 & 0xFFFFFFFF
         k0 = (k0 + 0x9E3779B9) & 0xFFFFFFFF; k1 = (k1 + 0xBB67AE85) & 0xFFFFFFFF
     return (c0,c1,c2,c3)
-print("python adapter KAT pass:", all(philox_py(tuple(map(int,c)), tuple(map(int,k))) == tuple(e) for c,k,e in zip(cs,ks,exp)))
+py_ok = all(philox_py(tuple(map(int,c)), tuple(map(int,k))) == tuple(e) for c,k,e in zip(cs,ks,exp))
+print("python adapter KAT pass:", py_ok)
 # bit-equality on random inputs
 rng = np.random.default_rng(0); n = 20000
 C = rng.integers(0, 2**32, (n,4), dtype=np.uint64).astype(np.uint32); K = rng.integers(0, 2**32, (n,2), dtype=np.uint64).astype(np.uint32)
@@ -70,3 +72,9 @@ for name, kk, args in [("philox", cost_philox, [D, wp.uint32(7), out]), ("warp-p
     t = time.perf_counter(); wp.launch(kk, dim=N, inputs=args, device="cpu"); wp.synchronize()
     dt = time.perf_counter()-t
     print(f"{name}: {dt/(N*D)*1e9:.2f} ns/uniform (Warp CPU, 1 thread), mean={out.numpy().mean()/D:.5f}")
+
+# Fail closed: a mismatch must be a non-zero exit so that run_all.sh records a failed step.
+failures = [name for name, flag in (("random123-kat", kat_ok), ("python-kat", py_ok), ("kernel-python-parity", ok)) if not flag]
+if failures:
+    raise SystemExit("PHILOX CHECK FAILED: " + ", ".join(failures))
+print("all philox checks passed")

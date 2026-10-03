@@ -41,10 +41,14 @@ coordinate and precision conventions API boundaries use.
    Physics is written once as `@wp.func` functions over scalars, vectors and
    structs. A reference driver loops over histories in Python and calls the
    same functions with Python floats; Warp CPU and CUDA kernels call them
-   compiled. Randomness and table interpolation are *inputs* to these
-   functions, supplied by backend-specific adapters (numpy `Generator` and
-   `numpy.interp` in the reference driver; `wp.rand_init`/`wp.randf` and
-   array lookups in kernels).
+   compiled. Random numbers and table values are *inputs* to these
+   functions. Randomness comes from one shared counter-based generator
+   (Philox4x32-10, see *Precision and randomness* below) implemented twice
+   with bit-identical output: as a `@wp.func` for kernels and over Python
+   integers for the reference driver. Table interpolation is split into a
+   shared bin-location function, a backend-specific memory read (numpy
+   array in the reference driver, `wp.array` in kernels) and a shared
+   interpolation function, so only the read differs between backends.
 
 ## Selected approach
 
@@ -108,9 +112,17 @@ whose arguments are not in these units state the unit in the parameter name
 
 ### Precision and randomness
 
-- Warp transport state defaults to float32 with float64 accumulators for
-  scoring; the reference backend is float64 throughout. A float64 transport
-  mode on the Warp backends is provided for numerical falsification probes.
+- Warp transport state and tables default to float32; the reference
+  backend is float64 throughout. Scoring on the Warp backends accumulates
+  into per-batch float32 arrays (one accumulator set per statistical batch,
+  which also provides the batch variance) and reduces across batches in
+  float64. A single float32 accumulator is not used because the archived
+  measurement (`precision.py`, step 08) shows a relative accumulation error
+  of about 1e-3 at 3e6 deposits per voxel, above the statistical error,
+  whereas spreading the same deposits over 40 batch accumulators reduces it
+  to below 1e-6. A float64 build of the same kernels (float64 state, tables
+  and accumulators) is provided for numerical falsification probes and
+  trajectory-level parity with the reference; it is not a production mode.
 - Random numbers: all backends use the same counter-based generator,
   Philox4x32-10 (Salmon et al., SC'11; the Random123 construction). Warp's
   built-in `wp.rand_init`/`wp.randf` is **not** used anywhere: it is a
