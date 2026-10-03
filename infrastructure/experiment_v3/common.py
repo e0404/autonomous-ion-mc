@@ -98,6 +98,7 @@ EVENTS = {
     "performance_failure",
     "workflow_failure",
     "permission_prompt",
+    "runtime_limit",
     "notification_result",
     "release_evaluated",
     "release_promoted",
