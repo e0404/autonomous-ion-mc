@@ -148,7 +148,7 @@ runs cannot be evaluated against the same table.
 ## Later validation outcome
 
 Comparison script `validation/scripts/stopping/compare_nist.py` executed at the
-clean task SHA `7a2d817085a1094bbb8cc7574391dd8d77c8fb49` against the cached NIST PSTAR/ASTAR water tables and the
+clean task SHA `76c3639d62fb41931231f9194bd3cb8c4d051537` against the cached NIST PSTAR/ASTAR water tables and the
 ICRU 90 water arrays (dataset hashes recorded in the result file
 `validation/results/stopping/2026-10-03-compare-nist.json`, from which every
 number below is copied):

@@ -513,7 +513,7 @@
   "provenance": {
     "ionmc_version": "0.1.0.dev0",
     "numpy_version": "2.5.3",
-    "code_sha": "7a2d817085a1094bbb8cc7574391dd8d77c8fb49",
+    "code_sha": "76c3639d62fb41931231f9194bd3cb8c4d051537",
     "datasets": {
       "nist-pstar-water-2005": {
         "version": "PSTAR 2.0.1 (2005), liquid water (matno 276)",
