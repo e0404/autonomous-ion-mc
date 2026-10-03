@@ -173,20 +173,22 @@ runs cannot be evaluated against the same table.
 ## Later validation outcome
 
 Comparison script `validation/scripts/stopping/compare_nist.py` executed at
-the clean task SHA `d3945d1f54e26c24b82e8737109f2a5c2e2034b2` against the cached NIST PSTAR/ASTAR water tables
-and the ICRU 90 water arrays. Every number below is copied from the committed
-aggregate result file `validation/results/stopping/2026-10-03-compare-nist.json`
-(dataset hashes inside; the file contains aggregates only, no reference
-values or per-energy ratios).
+the clean task SHA `b634e2841a9379339b3b60cd100294904ea01829` against the cached NIST PSTAR/ASTAR water tables
+and the ICRU 90 water arrays, all comparisons restricted to the common window
+2–500 MeV/u (the alpha reference grids end at 250 MeV/u). Every number below
+is copied from the committed aggregate result file
+`validation/results/stopping/2026-10-03-compare-nist.json` (dataset hashes
+inside; the file contains aggregates only, no reference values or per-energy
+ratios).
 
-| Comparison of electronic stopping power | Points (E ≥ 10 MeV/u) | Max abs. rel. deviation | RMS rel. deviation | Max abs. rel. deviation, E ≥ 2 MeV/u |
-|---|---|---|---|---|
-| proton, Bethe (I = 75 eV) vs NIST | 34 | 0.079 % | 0.028 % | 1.835 % |
-| proton, Bethe (I = 78 eV) vs ICRU 90 | 14 | 0.077 % | 0.032 % | 1.871 % |
-| proton, ICRU 90 vs NIST (reference tables themselves) | 25 | 0.701 % | 0.430 % | 1.009 % |
-| alpha, Bethe (I = 75 eV) vs NIST | 35 | 0.203 % | 0.114 % | 0.711 % |
-| alpha, Bethe (I = 78 eV) vs ICRU 90 | 13 | 0.200 % | 0.114 % | 0.712 % |
-| alpha, ICRU 90 vs NIST (reference tables themselves) | 13 | 0.716 % | 0.558 % | 0.984 % |
+| Comparison of electronic stopping power | Window (MeV/u) | Points (E ≥ 10 MeV/u) | Max abs. rel. deviation | RMS rel. deviation | Max abs. rel. deviation, E ≥ 2 MeV/u |
+|---|---|---|---|---|---|
+| proton, Bethe (I = 75 eV) vs NIST | 2–500 | 34 | 0.079 % | 0.028 % | 1.835 % |
+| proton, Bethe (I = 78 eV) vs ICRU 90 | 2–500 | 14 | 0.077 % | 0.032 % | 1.871 % |
+| proton, ICRU 90 vs NIST (reference tables themselves) | 2–500 | 14 | 0.701 % | 0.532 % | 1.009 % |
+| alpha, Bethe (I = 75 eV) vs NIST | 2–250 | 35 | 0.203 % | 0.114 % | 0.711 % |
+| alpha, Bethe (I = 78 eV) vs ICRU 90 | 2–250 | 13 | 0.200 % | 0.114 % | 0.712 % |
+| alpha, ICRU 90 vs NIST (reference tables themselves) | 2–250 | 13 | 0.716 % | 0.558 % | 0.984 % |
 
 CSDA range (water):
 
@@ -204,13 +206,13 @@ Interpretation:
   deviation grows to about 2 % (protons) because the shell correction is
   held at its validity boundary; the residual-range consequence is below
   0.1 mm, as anticipated in the selected approach.
-- The reference tables themselves differ: ICRU 90 stopping powers lie up to
-  about 1 % below PSTAR/ASTAR over the therapeutic range (table row "ICRU 90
-  vs NIST"), more than the pure I-value change the analytic model produces,
-  so the analytic model at 78 eV reproduces ICRU 90 stopping to 0.1 % while
-  its ranges exceed the integrated ICRU 90 ranges by up to 0.18 % at the
-  highest proton energy. This is preserved as a known model-table
-  difference, not tuned away.
+- The reference tables themselves differ within the therapeutic window: ICRU
+  90 stopping powers lie up to about 1 % below PSTAR/ASTAR (table rows
+  "ICRU 90 vs NIST"), more than the pure I-value change the analytic model
+  produces, so the analytic model at 78 eV reproduces ICRU 90 stopping to
+  0.1 % while its ranges exceed the integrated ICRU 90 ranges by up to
+  0.18 % at the highest proton energy. This is preserved as a known
+  model-table difference, not tuned away.
 - The ICRU 90 alpha arrays in the Geant4 source are indexed by total alpha
   kinetic energy; this reading makes the ICRU 90/ASTAR ratio consistent with
   the proton ratio and with the expected I-value effect.

@@ -31,17 +31,17 @@
         "n_points_ge_10_MeV_u": 14
       },
       "icru90_vs_nist_shared_energies": {
-        "n_points": 31,
+        "n_points": 20,
         "energy_per_u_range_mev": [
           2.0,
-          10000.0
+          500.0
         ],
         "max_abs_relative_deviation_ge_2_MeV_u": 0.010094637223974745,
-        "rms_relative_deviation_ge_2_MeV_u": 0.005386120755660457,
-        "n_points_ge_2_MeV_u": 31,
+        "rms_relative_deviation_ge_2_MeV_u": 0.006454836470400514,
+        "n_points_ge_2_MeV_u": 20,
         "max_abs_relative_deviation_ge_10_MeV_u": 0.007011393514461006,
-        "rms_relative_deviation_ge_10_MeV_u": 0.004299272960235944,
-        "n_points_ge_10_MeV_u": 25
+        "rms_relative_deviation_ge_10_MeV_u": 0.005318920246403414,
+        "n_points_ge_10_MeV_u": 14
       }
     },
     "alpha": {
@@ -123,7 +123,7 @@
   "provenance": {
     "ionmc_version": "0.1.0.dev0",
     "numpy_version": "2.5.3",
-    "code_sha": "d3945d1f54e26c24b82e8737109f2a5c2e2034b2",
+    "code_sha": "b634e2841a9379339b3b60cd100294904ea01829",
     "datasets": {
       "nist-pstar-water-2005": {
         "version": "PSTAR 2.0.1 (2005), liquid water (matno 276)",
