@@ -1,8 +1,8 @@
 {
   "input": "config.txt",
   "physics": "MCsquare e0404: Class II condensed history, ICRU-63-type nuclear cross sections; nuclear interactions and secondary protons/deuterons/alphas enabled; E_Cut_Pro 0.5 MeV, D_Max 0.2 cm, Epsilon_Max 0.25",
-  "source": "Single spot, nominal 150 MeV (BDL_mono.txt: MeanEnergy 150, EnergySpread 0 %, spot size 0.001 mm, divergence 1e-6 rad, correlation 0, Weight1 1), gantry 0, couch 0, spot (0,0), meterset 1 x ProtonsMU 1e9. Isocentre (60,150,60) mm = CT centre, as in the working registered smoke bundle. In the MCsquare source (src/compute_beam_model.c, BEV_to_CT_frame) IsocenterPosition is in mm in the CT frame measured from the CT origin; beam-frame z maps to CT y so depth is along y; the sense (+y or -y) is not certain from the source, so the beam enters at y=0 or y=300 mm and the depth axis may be reversed in Dose.mhd: determine from the dose peak. Previous isocentre (60,0,60) put all primaries outside the geometry.",
-  "geometry": "CT 60 x 150 x 60 voxels, 2 mm spacing (120 x 300 x 120 mm; MCsquare axes x,y,z with depth along y), all voxels HU 0; dose grid = CT grid (Independent_scoring_grid False)",
+  "source": "Single spot, nominal 150 MeV; BDL_mono.txt uses the verbatim default-BDL layout (BDL_default_DN.txt header) with rows for 140/150/160 MeV: EnergySpread 0 %, SpotSize 1.0 mm, Divergence 1e-6 rad, Correlation 0 for both axes and Gaussians, Weight1 1, Weight2 0, ProtonsMU 1e9. SpotSize is the standard deviation (sigma) in mm and Divergence the sigma in rad: src/compute_beam_model.c builds the covariance matrix [[s^2, c*s*d],[c*s*d, d^2]] and samples with sqrt(eigenvalues) as sigmas (positions mm, converted to cm). Smaller sizes (0.001 mm, or 0.5 mm with 1e-3 rad) combined with correlation 0 made all primaries 'generated outside' in diagnostics (see README), so 1.0 mm is the smallest verified working size; the beam is therefore NOT point-like (sigma 1 mm). Gantry 0, couch 0, spot (0,0), meterset 1; isocentre (60,150,60) mm = CT centre.",
+  "geometry": "CT 60 x 150 x 60 voxels, 2 mm spacing (120 x 300 x 120 mm; MCsquare axes x,y,z, depth axis y), all voxels HU 0; dose grid = CT grid. Verified by the smoke run: for gantry 0 the beam enters at the y_max face (y index 149) and travels in -y, so depth = (y_max - y); Bragg peak at y index 72 (~154 mm depth).",
   "materials": "HU 0 -> Water_Phantom scanner conversion of the registered MCsquare (HU_Density/HU_Material files)",
   "cuts": "E_Cut_Pro 0.5 MeV, D_Max 0.2 cm, Epsilon_Max 0.25, Te_Min 0.05 MeV",
   "histories": 20000,
@@ -13,7 +13,7 @@
     "dose (dose-to-medium) per voxel, Compute_stat_uncertainty True",
     "LET_MHD_Output True, LET method left at the MCsquare default (StopPow)"
   ],
-  "units": "MetaImage float32 little-endian, dimension order x,y,z (x fastest), 2 mm spacing: Dose in Gy for meterset weight 1 x ProtonsMU (1e9 protons; divide by 1e9 for Gy per primary - confirm with output); LET in MeV/cm per MCsquare documentation of StopPow method (confirm in log)",
+  "units": "MetaImage float32 little-endian, x fastest, 2 mm spacing, y reversed with respect to depth. Dose.mhd is dose per delivered proton (src/compute_scoring.c PostProcess_Scoring: dose * plan normalization(1.0) / simulated primaries / voxel volume), NOT scaled by the meterset or ProtonsMU; MCsquare converts to Gy only for DVH via DoseScaling = 1.602176e-19 * 1000 * Num_delivered_protons (src/compute_simulation.c), implying the file unit is eV/g per proton (inferred; check magnitude against a known peak dose). LET in MeV/cm as per the MCsquare StopPow method (to verify from header/doc)",
   "rationale": "independent Monte Carlo evidence for suite S-PHYS-PROTON-EM/-NUCLEAR/-LET",
   "expected_outputs": [
     "Outputs/Dose.mhd",

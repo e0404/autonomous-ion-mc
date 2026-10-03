@@ -51,3 +51,36 @@ After a run, use the controlled tools, not shell copies:
 See `case.json` text and the task report: TOPAS ion BeamEnergy convention and filter parameter
 names; MCsquare beam axis/isocentre placement, zero-width BDL acceptance, output file names for
 LET and dose normalisation; FRED particle name for 12C, mhd spacing units, LETd output name.
+
+## MCsquare beam model and output conventions
+
+Sources: MCsquare master, gitlab.com/openmcsquare/MCsquare (`src/compute_beam_model.c`,
+`src/compute_scoring.c`, `src/compute_simulation.c`, `BDL/BDL_default_DN.txt`).
+
+* SpotSize is a standard deviation (sigma, mm) and Divergence a sigma (rad); the code builds the
+  covariance matrix [[s^2, c s d], [c s d, d^2]] and samples with the square roots of its eigenvalues.
+  Our BDL uses SpotSize 1.0 mm, Divergence 1e-6 rad, Correlation 0, EnergySpread 0 %: the beam is
+  not point-like (sigma 1 mm), the smallest verified working size.
+* Dose.mhd is dose per delivered proton (sum of deposited energy / simulated primaries / voxel
+  volume, normalisation 1.0), not scaled by meterset or ProtonsMU. The source converts to Gy only
+  for DVH with 1.602176e-19 * 1000 * N_delivered, so the file unit is inferred to be eV/g per
+  proton: confirm the magnitude before use.
+* Gantry 0: the beam enters at the y_max face and travels in -y, so depth = (y_max - y); the
+  isocentre is the CT centre (60, 150, 60) mm.
+
+### Beam-model diagnostics (150 MeV, 320 primaries; "outside" = all primaries generated outside)
+
+| Variant | Run | Result |
+| --- | --- | --- |
+| default BDL verbatim | REF-73894625 | OK |
+| spread 0 | REF-29377f19 | OK |
+| 3 energies only | REF-88b26422 | OK |
+| ProtonsMU in scientific notation | REF-fd4476b5 | OK |
+| SpotSize 0.001 alone | REF-c1359df6 | OK |
+| Divergence 1e-6 alone | REF-6447ed2d | OK |
+| Correlation 0 alone | REF-75d2ccdf | FAIL (all outside) |
+| point spot (0.001, 1e-6, 0) | REF-281e8414 | FAIL |
+| 0.5 mm, 1e-3 rad, corr 0 | REF-bb2e900a | FAIL |
+| 1.0 mm, 1e-6 rad, corr 0 | REF-62136da2 | OK (used in the cases) |
+
+The diagnostic case directories were removed from the tree after these runs.
