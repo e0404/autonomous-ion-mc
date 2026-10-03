@@ -1,0 +1,329 @@
+"""C1 (fail-closed configuration rules) and checks of geometry, source and scoring types."""
+
+from collections.abc import Callable
+from dataclasses import replace
+from typing import Any
+
+import numpy as np
+import pytest
+
+from ionmc.config import (
+    DiagnosticsOptions,
+    PhysicsOptions,
+    RunOptions,
+    SimulationConfig,
+    validate,
+)
+from ionmc.errors import (
+    BackendUnavailableError,
+    TransportLimitError,
+    UnsupportedCombinationError,
+)
+from ionmc.geometry import BoxPhantom, VoxelGeometry
+from ionmc.materials import AIR, PMMA, WATER
+from ionmc.physics.projectiles import DEUTERON, PROTON
+from ionmc.physics.stopping import BetheStoppingSource, StoppingSource, StoppingTable
+from ionmc.scoring import (
+    MEV_PER_G_TO_GY,
+    ScoringGrid,
+    overlap_matrix,
+    reduce_batches,
+    voxel_mass_g,
+)
+from ionmc.simulation import Simulation
+from ionmc.sources import PencilBeamSource
+
+MakeConfig = Callable[..., SimulationConfig]
+
+
+def _rejects(cfg_or_callable: Any, exc: type[Exception] = UnsupportedCombinationError) -> None:
+    with pytest.raises(exc):
+        if callable(cfg_or_callable):
+            cfg_or_callable()
+        else:
+            validate(cfg_or_callable)
+
+
+class _NoTableSource:
+    """A stopping source that has no table for any material."""
+
+    name = "no-tables"
+
+    def table(self, material: Any, projectile: Any) -> StoppingTable:
+        raise ValueError("this source has no table for the material")
+
+
+def test_c1_valid_configuration_records_requested_and_effective(
+    make_config: MakeConfig,
+) -> None:
+    cfg = make_config(direction=(0.0, 3.0, 4.0))
+    eff = validate(cfg)
+    assert eff.requested is cfg
+    assert eff.unit_direction == pytest.approx((0.0, 0.6, 0.8))
+    assert eff.backend == "python" and eff.precision == "float64" and not eff.production
+    assert eff.max_steps > 100 and eff.max_steps_origin == "computed"
+    assert eff.rng["u01"] == "((w >> 8) + 0.5) * 2**-24"
+    s = eff.summary()
+    assert s["tables"]["sha256"] == eff.tables.sha256
+    assert s["scattering_length_g_cm2"][0] == pytest.approx(46.88, rel=3e-3)
+    assert s["physics"]["scattering_E_s_mev"] == 15.0
+    pinned = validate(make_config(max_steps=5000))
+    assert pinned.max_steps == 5000 and pinned.max_steps_origin == "user"
+
+
+def test_c1_nuclear_has_no_default_and_true_is_rejected(
+    make_config: MakeConfig, bethe: BetheStoppingSource
+) -> None:
+    with pytest.raises(TypeError):
+        PhysicsOptions(stopping=bethe)  # type: ignore[call-arg]
+    with pytest.raises(UnsupportedCombinationError):
+        PhysicsOptions(nuclear=1, stopping=bethe)  # type: ignore[arg-type]
+    cfg = make_config()
+    _rejects(replace(cfg, physics=replace(cfg.physics, nuclear=True)))
+    # the same rule through Simulation, before any transport
+    _rejects(lambda: Simulation(replace(cfg, physics=replace(cfg.physics, nuclear=True))))
+
+
+def test_c1_projectile_must_be_a_proton(make_config: MakeConfig) -> None:
+    cfg = make_config()
+    _rejects(replace(cfg, source=replace(cfg.source, projectile=DEUTERON)))
+
+
+@pytest.mark.parametrize("field", ["straggling_model", "mcs_model", "delta_electrons"])
+def test_c1_unknown_models_are_rejected(make_config: MakeConfig, field: str) -> None:
+    cfg = make_config()
+    _rejects(replace(cfg, physics=replace(cfg.physics, **{field: "highland"})))
+
+
+def test_c1_backend_and_precision_rules(make_config: MakeConfig) -> None:
+    cfg = make_config()
+    run = cfg.run
+    _rejects(replace(cfg, run=replace(run, precision="float32")))  # python is float64 only
+    with pytest.raises(UnsupportedCombinationError):
+        RunOptions(backend="gpu", precision="float64", seed=1, n_histories=2)  # type: ignore[arg-type]
+    with pytest.raises(UnsupportedCombinationError):
+        RunOptions(backend="python", precision="float16", seed=1, n_histories=2)  # type: ignore[arg-type]
+    for backend in ("warp-cpu", "warp-cuda"):
+        for precision in ("float32", "float64"):
+            _rejects(
+                replace(cfg, run=replace(run, backend=backend, precision=precision)),
+                BackendUnavailableError,
+            )
+    # a warp-cuda request never falls back; cpu_workers on CUDA is rejected first
+    _rejects(
+        replace(cfg, run=replace(run, backend="warp-cuda", precision="float32", cpu_workers=2))
+    )
+    _rejects(replace(cfg, run=replace(run, cpu_workers=2)), BackendUnavailableError)
+    with pytest.raises(UnsupportedCombinationError):
+        RunOptions(backend="python", precision="float64", seed=1, n_histories=2, cpu_workers=0)
+
+
+@pytest.mark.parametrize(
+    "run_kwargs",
+    [
+        {"n_histories": 0},
+        {"n_histories": 2**32 + 20},
+        {"n_histories": 7, "n_batches": 2},
+        {"n_histories": 4, "n_batches": 1},
+        {"seed": -1},
+        {"seed": 2**64},
+    ],
+)
+def test_c1_run_size_and_seed_bounds(make_config: MakeConfig, run_kwargs: dict[str, int]) -> None:
+    cfg = make_config()
+    _rejects(replace(cfg, run=replace(cfg.run, **run_kwargs)))
+    for bad in (1.5, True, "3"):
+        with pytest.raises(UnsupportedCombinationError):
+            RunOptions(backend="python", precision="float64", seed=bad, n_histories=2)  # type: ignore[arg-type]
+
+
+def test_c1_source_energy_rules(make_config: MakeConfig) -> None:
+    cfg = make_config()
+    for energy in (3.9, 600.0):  # below 2 e_cut, above the table maximum (500 MeV)
+        _rejects(replace(cfg, source=replace(cfg.source, kinetic_energy_mev=energy)))
+    _rejects(replace(cfg, source=replace(cfg.source, energy_sigma_mev=1.01)))  # > 5 % of 20 MeV
+    validate(replace(cfg, source=replace(cfg.source, energy_sigma_mev=1.0)))
+    with pytest.raises(UnsupportedCombinationError):
+        PencilBeamSource(PROTON, (0, 0, 0), (0, 0, 0), 20.0)  # zero direction
+    for bad in (float("nan"), float("inf"), -1.0, 0.0):
+        with pytest.raises(UnsupportedCombinationError):
+            PencilBeamSource(PROTON, (0, 0, 0), (0, 0, 1), bad)
+    with pytest.raises(UnsupportedCombinationError):
+        PencilBeamSource(PROTON, (0, 0), (0, 0, 1), 20.0)  # type: ignore[arg-type]
+    with pytest.raises(UnsupportedCombinationError):
+        PencilBeamSource(PROTON, (0, 0, 0), (0, 0, 1), 20.0, energy_sigma_mev=-1.0)
+    with pytest.raises(UnsupportedCombinationError):
+        PencilBeamSource("proton", (0, 0, 0), (0, 0, 1), 20.0)  # type: ignore[arg-type]
+
+
+def test_c1_table_rules(make_config: MakeConfig, bethe: BetheStoppingSource) -> None:
+    cfg = make_config()
+    # table floor 1.5 MeV is above half of e_cut = 2 MeV
+    floor = BetheStoppingSource(e_min_per_u=1.5)
+    _rejects(replace(cfg, physics=replace(cfg.physics, stopping=floor)))
+    # a material without a table
+    _rejects(replace(cfg, physics=replace(cfg.physics, stopping=_NoTableSource())))
+    with pytest.raises(UnsupportedCombinationError):
+        PhysicsOptions(nuclear=False, stopping=object())  # type: ignore[arg-type]
+    src: StoppingSource = bethe
+    assert src.name == "bethe"
+
+
+def _geo(**kw: Any) -> VoxelGeometry:
+    args: dict[str, Any] = dict(
+        origin_mm=(0.0, 0.0, 0.0),
+        spacing_mm=(1.0, 1.0, 1.0),
+        shape=(2, 2, 2),
+        materials=(WATER,),
+        material_index=np.zeros((2, 2, 2), dtype=np.int32),
+    )
+    args.update(kw)
+    return VoxelGeometry(**args)
+
+
+def test_c1_geometry_rules() -> None:
+    _geo()
+    _rejects(lambda: _geo(material_index=np.full((2, 2, 2), 1, dtype=np.int32)))  # out of range
+    _rejects(lambda: _geo(material_index=np.full((2, 2, 2), -1, dtype=np.int32)))
+    _rejects(lambda: _geo(material_index=np.zeros((2, 2, 3), dtype=np.int32)))  # shape
+    _rejects(lambda: _geo(material_index=np.zeros((2, 2, 2), dtype=np.float64)))
+    for bad in (0.0, -1.0, float("nan")):
+        _rejects(lambda bad=bad: _geo(spacing_mm=(1.0, bad, 1.0)))
+    _rejects(lambda: _geo(shape=(2, 0, 2)))
+    _rejects(lambda: _geo(origin_mm=(0.0, float("inf"), 0.0)))
+    _rejects(lambda: _geo(materials=()))
+    _rejects(lambda: _geo(materials=("water",)))
+    dens = np.ones((2, 2, 2))
+    _geo(density_g_cm3=dens)
+    for bad_density in (0.0, -1.0, float("nan")):
+        d = dens.copy()
+        d[1, 1, 1] = bad_density
+        _rejects(lambda d=d: _geo(density_g_cm3=d))  # vacuum voxels are unsupported
+    _rejects(lambda: _geo(density_g_cm3=np.ones((2, 2, 3))))
+    # a BoxPhantom is the one-voxel geometry
+    box = BoxPhantom((1.0, 2.0, 3.0), (4.0, 5.0, 6.0), WATER)
+    g = box.to_geometry()
+    assert g.shape == (1, 1, 1) and g.upper_mm == (5.0, 7.0, 9.0) and g.n_voxels == 1
+    assert g.densities_g_cm3()[0, 0, 0] == 1.0
+    _rejects(lambda: BoxPhantom((0, 0, 0), (1.0, 0.0, 1.0), WATER))
+    _rejects(lambda: BoxPhantom((0, 0, 0), (1.0, 1.0, 1.0), "water"))  # type: ignore[arg-type]
+    assert not g.material_index.flags.writeable
+
+
+def test_c1_scoring_rules(make_config: MakeConfig) -> None:
+    cfg = make_config()
+    grid = cfg.scoring[0]
+    five = tuple(replace(grid, name=f"g{i}") for i in range(5))
+    _rejects(replace(cfg, scoring=five))  # more than four grids
+    _rejects(replace(cfg, scoring=()))
+    _rejects(replace(cfg, scoring=(grid, grid)))  # duplicate names
+    # memory budget: n_batches * voxels * 8 B for the float64 python backend
+    tight = replace(cfg.run, memory_budget_bytes=2 * grid.n_voxels * 8 - 1)
+    _rejects(replace(cfg, run=tight))
+    validate(replace(cfg, run=replace(cfg.run, memory_budget_bytes=2 * grid.n_voxels * 8)))
+    # max_step above the smallest scoring spacing: rejected, not clamped
+    _rejects(replace(cfg, physics=replace(cfg.physics, max_step_mm=2.5)))
+    fine = ScoringGrid((0.0, 0.0, 0.0), (2.0, 2.0, 0.5), (4, 4, 4))
+    _rejects(replace(cfg, scoring=(grid, fine)))
+    for bad in (0.0, -1.0, float("nan")):
+        with pytest.raises(UnsupportedCombinationError):
+            ScoringGrid((0, 0, 0), (1.0, bad, 1.0), (2, 2, 2))
+    with pytest.raises(UnsupportedCombinationError):
+        ScoringGrid((0, 0, 0), (1, 1, 1), (2, 2))  # type: ignore[arg-type]
+    with pytest.raises(UnsupportedCombinationError):
+        ScoringGrid((0, 0, 0), (1, 1, 1), (2, 2, 2.5))  # type: ignore[arg-type]
+    with pytest.raises(UnsupportedCombinationError):
+        ScoringGrid((0, 0, 0), (1, 1, 1), (2, 2, 2), name="")
+
+
+def test_c1_step_counter_bound(make_config: MakeConfig) -> None:
+    cfg = make_config()
+    ok = 2**32 // 65  # largest step bound with 65 * max_steps < 2**32
+    validate(replace(cfg, run=replace(cfg.run, max_steps=ok)))
+    _rejects(replace(cfg, run=replace(cfg.run, max_steps=ok + 1)))  # (1 + 64) * max_steps >= 2^32
+
+
+def test_c1_numeric_option_bounds(bethe: BetheStoppingSource) -> None:
+    ok = dict(nuclear=False, stopping=bethe)
+    PhysicsOptions(**ok)
+    for kwargs in (
+        {"e_cut_mev": 0.0},
+        {"e_cut_mev": float("nan")},
+        {"max_step_mm": -1.0},
+        {"max_energy_loss_fraction": 0.0},
+        {"max_energy_loss_fraction": 0.3},
+        {"range_alpha": 1.5},
+        {"range_rho_f_mm": 0.0},
+        {"short_step_fraction": 0.5},
+        {"straggling": "yes"},
+        {"straggling_model": 3},
+    ):
+        with pytest.raises(UnsupportedCombinationError):
+            PhysicsOptions(**ok, **kwargs)  # type: ignore[arg-type]
+    for dkw in ({"trace_histories": -1}, {"track_end_positions": 1}, {"escape_records": "x"}):
+        with pytest.raises(UnsupportedCombinationError):
+            DiagnosticsOptions(**dkw)  # type: ignore[arg-type]
+    with pytest.raises(UnsupportedCombinationError):
+        RunOptions("python", "float64", 1, 2, max_steps=0)
+    with pytest.raises(UnsupportedCombinationError):
+        RunOptions("python", "float64", 1, 2, worker_timeout_s=-1.0)
+    with pytest.raises(UnsupportedCombinationError):
+        RunOptions("python", "float64", 1, 2, allow_invalid_result=1)  # type: ignore[arg-type]
+    with pytest.raises(UnsupportedCombinationError):
+        SimulationConfig(  # type: ignore[arg-type]
+            source=None,
+            geometry=BoxPhantom((0, 0, 0), (1, 1, 1), WATER),
+            scoring=(),
+            physics=PhysicsOptions(**ok),
+            run=RunOptions("python", "float64", 1, 2),
+        )
+
+
+def test_transport_limit_error_carries_result(make_config: MakeConfig) -> None:
+    err = TransportLimitError("x")
+    assert err.result is None and isinstance(err, RuntimeError)
+
+
+# ---------------------------------------------------------------------------------------------
+# scoring: voxel masses and the batch estimator
+# ---------------------------------------------------------------------------------------------
+def test_voxel_mass_is_the_exact_overlap_integral() -> None:
+    idx = np.array([[[0, 1]]], dtype=np.int32)  # two voxels along z: water, PMMA
+    geo = VoxelGeometry((0, 0, 0), (2.0, 2.0, 3.0), (1, 1, 2), (WATER, PMMA), idx)
+    # a grid shifted by half a voxel in z, finer in x/y and larger than the geometry in x
+    grid = ScoringGrid((-1.0, 0.0, 1.5), (1.0, 1.0, 3.0), (4, 2, 2))
+    mass = voxel_mass_g(grid, geo)
+    assert mass.shape == (4, 2, 2)
+    # voxel (1, 0, 0): x 0..1 (inside), y 0..1, z 1.5..4.5 -> 1.5 mm water + 1.5 mm PMMA
+    expected = (1.0 * 1.0 * (1.5 * 1.0 + 1.5 * 1.19)) * 1e-3
+    assert mass[1, 0, 0] == pytest.approx(expected, rel=1e-14)
+    assert mass[0, :, :].sum() == 0.0  # x -1..0 lies outside the geometry
+    # the total mass inside the grid equals the mass of the covered part of the geometry
+    covered = 2.0 * 2.0 * (1.5 * 1.0 + 3.0 * 1.19) * 1e-3  # z 1.5..6 of the geometry
+    assert mass.sum() == pytest.approx(covered, rel=1e-14)
+    full = ScoringGrid((0.0, 0.0, 0.0), (2.0, 2.0, 3.0), (1, 1, 2))
+    assert voxel_mass_g(full, geo).sum() == pytest.approx(
+        2.0 * 2.0 * (3.0 * 1.0 + 3.0 * 1.19) * 1e-3, rel=1e-14
+    )
+    # density override
+    dens = np.array([[[1.0, 0.5]]])
+    geo2 = VoxelGeometry((0, 0, 0), (2.0, 2.0, 3.0), (1, 1, 2), (WATER, AIR), idx, dens)
+    assert voxel_mass_g(full, geo2)[0, 0, 1] == pytest.approx(2.0 * 2.0 * 3.0 * 0.5e-3)
+    ov = overlap_matrix(np.array([0.0, 1.0, 2.0]), np.array([0.5, 1.5]))
+    assert np.allclose(ov, [[0.5], [0.5]])
+    assert MEV_PER_G_TO_GY == 1.602176634e-10
+
+
+def test_batch_reducer() -> None:
+    sums = np.array([[2.0, 0.0, 4.0], [4.0, 0.0, 0.0], [6.0, 0.0, 2.0], [0.0, 0.0, 2.0]])
+    st = reduce_batches(sums, 2)
+    x = sums / 2.0
+    assert np.allclose(st.mean, x.mean(axis=0))
+    assert np.allclose(st.variance_of_mean, x.var(axis=0, ddof=1) / 4.0)
+    assert list(st.n_nonzero) == [3, 0, 3]
+    with pytest.raises(ValueError):
+        reduce_batches(sums[:1], 2)
+    with pytest.raises(ValueError):
+        reduce_batches(sums, 0)
+    with pytest.raises(ValueError):
+        reduce_batches(np.full((2, 2), np.nan), 1)

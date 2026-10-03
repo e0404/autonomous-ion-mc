@@ -6,8 +6,9 @@ Python 3.12 or newer. The runtime dependencies are `numpy>=2` and
 available, on CUDA devices.
 
 At the current stage the package provides the project scaffold (version and
-environment report), the external data layer, materials and the electronic
-stopping-power model and tables. Transport is not implemented yet.
+environment report), the external data layer, materials, the electronic
+stopping-power model and tables, and the proton electromagnetic transport engine with
+its Python reference backend (the Warp CPU and CUDA backends are not available yet).
 
 ## Installation
 
@@ -56,3 +57,40 @@ ionmc data fetch nist-pstar-water-2005 --offline   # cache only, never the netwo
 
 See [data layer](../architecture/data-layer.md) and
 [stopping power](../physics/stopping-power.md).
+
+## A minimal transport run
+
+The reference backend (`backend="python"`, float64) runs a few histories of a 30 MeV proton
+beam in a water box with the analytic Bethe stopping power (no downloaded data). It is slow by
+design: use small numbers of histories.
+
+```python
+from ionmc.config import PhysicsOptions, RunOptions, SimulationConfig
+from ionmc.geometry import BoxPhantom
+from ionmc.materials import WATER
+from ionmc.physics.projectiles import PROTON
+from ionmc.physics.stopping import BetheStoppingSource
+from ionmc.scoring import ScoringGrid
+from ionmc.simulation import Simulation
+from ionmc.sources import PencilBeamSource
+
+config = SimulationConfig(
+    source=PencilBeamSource(
+        PROTON, position_mm=(0.0, 0.0, 0.0), direction=(0.0, 0.0, 1.0), kinetic_energy_mev=30.0
+    ),
+    geometry=BoxPhantom(lower_mm=(-10.0, -10.0, 0.0), size_mm=(20.0, 20.0, 20.0), material=WATER),
+    scoring=(ScoringGrid(origin_mm=(-10.0, -10.0, 0.0), spacing_mm=(2.0, 2.0, 1.0), shape=(10, 10, 20)),),
+    physics=PhysicsOptions(nuclear=False, stopping=BetheStoppingSource(), max_step_mm=1.0),
+    run=RunOptions(backend="python", precision="float64", seed=1, n_histories=4, n_batches=2),
+)
+result = Simulation(config).run()
+dose = result.grid("dose")
+print(result.valid, dose.dose_gy.shape, result.energy_balance.relative_residual)
+```
+
+`result.grid("dose")` holds the mean energy and dose per primary (`energy_mev`, `dose_gy`), their
+standard errors and the defined-value mask; `result.energy_balance` and `result.counters` report
+where the energy went and whether any transport limit was hit (a nonzero counter raises
+`TransportLimitError`). `nuclear` has no default and `nuclear=True` is rejected until nuclear
+interactions are implemented. See [transport engine](../architecture/transport.md) and
+[EM transport](../physics/em-transport.md).

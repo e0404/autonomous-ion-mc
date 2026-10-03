@@ -11,7 +11,11 @@ Parts of this repository derive from Geant4 source code, release 11.4.2:
   `G4ICRU90StoppingData.cc` (the file itself is downloaded by users, not redistributed here;
   small excerpts appear as test fixtures);
 - material compositions, densities and mean excitation energies in `src/ionmc/materials.py`
-  are taken from `G4NistMaterialBuilder.cc`.
+  (including beryllium, aluminium, copper and lead) are taken from `G4NistMaterialBuilder.cc`;
+- the transport engine re-implements, without copying code, the regime switch of
+  `G4IonFluctuations` (energy-loss straggling), the range-limited step function of Geant4's
+  energy-loss processes and the `G4ThreeVector::rotateUz` rotation in
+  `src/ionmc/physics/em.py` and `src/ionmc/transport/funcs.py`.
 
 This product includes software developed by Members of the Geant4 Collaboration
 ( http://cern.ch/geant4 ).
@@ -96,6 +100,14 @@ license is subject to the following conditions:
    institute litigation against any Member or Copyright Holder of the Geant4
    Collaboration with regard to this software.
 ```
+
+## Random123 (Philox4x32-10)
+
+`src/ionmc/rng/philox.py` implements the Philox4x32-10 counter-based generator of J. K. Salmon,
+M. A. Moraes, R. O. Dror and D. E. Shaw, "Parallel random numbers: as easy as 1, 2, 3"
+(SC'11) from the published algorithm. The multiplier and Weyl constants and the known-answer
+vectors used in `tests/ionmc/test_rng.py` are those of the Random123 library (D. E. Shaw
+Research, BSD 3-Clause License); no Random123 source code is included.
 
 ## NIST Standard Reference Database 124 (ESTAR, PSTAR, ASTAR)
 

@@ -3,7 +3,9 @@
 Mean excitation energies of the elements are the values tabulated by NIST for the
 ESTAR/PSTAR/ASTAR programs (ICRU Report 37 (1984) and ICRU Report 49 (1993)): H 19.2,
 C 81.0 (graphite-like carbon as used in the NIST element table), N 82.0, O 95.0,
-Na 149, Mg 156, P 173, S 180, Cl 174, Ar 188, K 190, Ca 191 eV. Atomic weights are
+Na 149, Mg 156, Al 166, P 173, S 180, Cl 174, Ar 188, K 190, Ca 191, Cu 322, Pb 823 eV and
+Be 63.7 eV (the same values as ``G4_Be``, ``G4_Al``, ``G4_Cu`` and ``G4_Pb`` of the Geant4
+NIST material builder, which also provides their densities). Atomic weights are
 standard (IUPAC) values as used in the Geant4 element builder, ``G4NistElementBuilder``.
 
 Compositions, densities and mean excitation energies of the predefined materials are
@@ -47,13 +49,17 @@ ELEMENTS: dict[str, Element] = {
         Element("N", 7, 14.0067, 82.0),
         Element("O", 8, 15.9994, 95.0),
         Element("Na", 11, 22.98977, 149.0),
+        Element("Be", 4, 9.012182, 63.7),
         Element("Mg", 12, 24.305, 156.0),
+        Element("Al", 13, 26.981538, 166.0),
         Element("P", 15, 30.97376, 173.0),
         Element("S", 16, 32.065, 180.0),
         Element("Cl", 17, 35.453, 174.0),
         Element("Ar", 18, 39.948, 188.0),
         Element("K", 19, 39.0983, 190.0),
         Element("Ca", 20, 40.078, 191.0),
+        Element("Cu", 29, 63.546, 322.0),
+        Element("Pb", 82, 207.2, 823.0),
     )
 }
 _BY_Z = {e.Z: e for e in ELEMENTS.values()}
@@ -260,6 +266,11 @@ LUNG_ICRP = Material(
     _G4 + "G4_LUNG_ICRP (ICRU 46 / ICRP 23)",
 )
 
+BERYLLIUM = Material("beryllium", 1.848, {"Be": 1.0}, 63.7, None, _G4 + "G4_Be")
+ALUMINIUM = Material("aluminium", 2.699, {"Al": 1.0}, 166.0, None, _G4 + "G4_Al")
+COPPER = Material("copper", 8.96, {"Cu": 1.0}, 322.0, None, _G4 + "G4_Cu")
+LEAD = Material("lead", 11.35, {"Pb": 1.0}, 823.0, None, _G4 + "G4_Pb")
+
 MATERIALS: dict[str, Material] = {
     m.name: m
     for m in (
@@ -270,5 +281,9 @@ MATERIALS: dict[str, Material] = {
         MUSCLE_SKELETAL_ICRP,
         BONE_COMPACT_ICRU,
         LUNG_ICRP,
+        BERYLLIUM,
+        ALUMINIUM,
+        COPPER,
+        LEAD,
     )
 }

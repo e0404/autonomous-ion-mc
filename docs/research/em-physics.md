@@ -63,6 +63,8 @@ A ±2 eV uncertainty in I corresponds to about ±0.3% of range. Recommendation: 
 - Validation: range straggling sigma_R ≈ 0.012 R^0.935 cm for protons (Bortfeld 1997), which is about 1.0-1.1% of R. For ions, sigma_R/R scales roughly as 1/sqrt(A) at equal range [APPROX]. Test that the dose is independent of step size when the step is refined.
 
 ## 3. Multiple Coulomb scattering
+
+*[Lead correction, 2026-10-03: the coefficients attributed below to a "differential Highland" f_dH (0.5244, 0.1975, 0.2320, −0.0098) are Gottschalk's differential **Molière** fit f_dM (Med. Phys. 37 (2010) 352, arXiv:0908.1413, read in source form by the V3-003 planning agent); Kanematsu's differential Highland is a different form. The water scattering length ρX_S = 46.88 g/cm² is verified from the paper. Decision 0039 adopts T_dM.]*
 | Model | Formula / notes | Use |
 |---|---|---|
 | Highland/PDG (Lynch & Dahl, NIM B 58, 6 (1991), doi:10.1016/0168-583X(91)95671-Y) | theta0 = (13.6 MeV/(beta c p)) z sqrt(x/X0) [1 + 0.038 ln(x z^2/(X0 beta^2))]; 11% accuracy for 1e-3 < x/X0 < 100. Water X0 = 36.08 g/cm2. Gottschalk et al. 1993 use 14.1 MeV and (1 + (1/9) log10(x/X0)) (NIM B 74, 467, doi:10.1016/0168-583X(93)95944-Z), checked against measured 158.6 MeV proton data. | Validation only; see the pitfall below |
