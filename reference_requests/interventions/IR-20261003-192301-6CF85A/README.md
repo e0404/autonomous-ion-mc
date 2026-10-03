@@ -2,7 +2,7 @@
 
 **Task:** V3-002
 **Category:** authorization
-**Status:** open
+**Status:** resolved (2026-10-04; operator response in `response.json`; option B chosen for the task branch, develop history retained; cleanup not yet performed — see decision 0038 and the follow-up request)
 
 ## Summary
 

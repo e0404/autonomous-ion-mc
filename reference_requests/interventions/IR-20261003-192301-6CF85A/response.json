@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "request_id": "IR-20261003-192301-6CF85A",
+  "resolved_at_utc": "2026-10-03T22:03:08.611048+00:00",
+  "task_id": "V3-002",
+  "response": "For the V3-002 task-branch history: Use option B - remote branches with transcribed NIST SDR values should not be public, but you can retain the task branches locally\n\nFor the v3/develop history mentioned in addendum-1.md:\nIndividual values in the documentation are okay, so the v3/develop history can stay intact.\n\nRecord my response verbatim using resolve_human_intervention.\nDistinguish authorization from completed cleanup; do not report a rewrite or deletion as completed until it has actually been performed.",
+  "operator_note": "Operator response received 2026-10-04 (relayed verbatim). Status at the time of this record: AUTHORIZATION ONLY. No remote branch has been deleted and no pushed history has been rewritten yet. Option B requires deleting the remote V3-002 task branch (its pushed commits 7a2d817..6eb6369 contain transcribed NIST STAR excerpts) while keeping the local branch; the orchestrator is not permitted to push deletions or rewrite pushed history itself, so execution is requested from the operator (or a controlled tool) in a follow-up intervention and will be reported as completed only after the remote branch is verified absent. The v3/develop history stays intact per the operator's decision; the remedy will be recorded in decision 0038."
+}
