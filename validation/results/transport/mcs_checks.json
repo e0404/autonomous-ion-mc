@@ -7,7 +7,7 @@
   },
   "provenance": {
     "analysis_code_dirty": false,
-    "analysis_code_sha": "f50f425d98206f738b37fb3cbc2dfc3289deafe7"
+    "analysis_code_sha": "6e7efb65cd211a57d0ea3d0c8abc4782f9fc63b4"
   },
   "source": {
     "arxiv": "0908.1413",
@@ -71,6 +71,53 @@
       0.5,
       0.9
     ]
+  },
+  "u4b": {
+    "materials": {
+      "Al": {
+        "deviation_by_x_over_R1": {
+          "0.01": 0.017267440662856126,
+          "0.1": 0.022638498914632876,
+          "0.5": 0.02011113773661677,
+          "0.9": 0.0059173339427252
+        },
+        "max_abs_deviation": 0.022638498914632876,
+        "paper_max_abs_dM_percent": 2.06
+      },
+      "Be": {
+        "deviation_by_x_over_R1": {
+          "0.01": 0.0009399805882037704,
+          "0.1": 0.018650651288335318,
+          "0.5": 0.0231387839283681,
+          "0.9": 0.012302310031612862
+        },
+        "max_abs_deviation": 0.0231387839283681,
+        "paper_max_abs_dM_percent": 2.21
+      },
+      "Cu": {
+        "deviation_by_x_over_R1": {
+          "0.01": -0.002307236801289192,
+          "0.1": -0.0005520254171043071,
+          "0.5": -0.0038330875839847067,
+          "0.9": -0.015221806890111211
+        },
+        "max_abs_deviation": 0.015221806890111211,
+        "paper_max_abs_dM_percent": 1.41
+      },
+      "Pb": {
+        "deviation_by_x_over_R1": {
+          "0.01": 0.0024646487372745884,
+          "0.1": -0.006742429602998645,
+          "0.5": -0.011952617391386533,
+          "0.9": -0.014148032257972676
+        },
+        "max_abs_deviation": 0.014148032257972676,
+        "paper_max_abs_dM_percent": 2.51
+      }
+    },
+    "max_abs_deviation_all": 0.0231387839283681,
+    "reference": "theta_Hanson column (independent of the dM fit)",
+    "tolerance": 0.045
   },
   "u5": {
     "criterion": 0.002,
