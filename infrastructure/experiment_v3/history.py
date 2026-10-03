@@ -71,6 +71,23 @@ def inspect(root=ROOT):
             f"refs/remotes/origin/{b}" for b in branches
         }
         allowed.add("refs/remotes/origin/HEAD")
+        # Codex stores UI checkpoints as tree refs, not development branches.
+        # Accept only exact trees already committed in v3 integration ancestry;
+        # arbitrary snapshots, blobs, tags and commits remain disallowed here.
+        committed_trees = set(
+            git(
+                root,
+                "log",
+                "--format=%T",
+                "refs/heads/" + condition["integration_branch"],
+            ).splitlines()
+        )
+        allowed.update(
+            ref
+            for ref in refs
+            if ref.startswith("refs/codex/turn-diffs/")
+            and git(root, "rev-parse", ref) in committed_trees
+        )
         checks["only_v3_refs"] = all(
             ref in allowed
             or ref.startswith(

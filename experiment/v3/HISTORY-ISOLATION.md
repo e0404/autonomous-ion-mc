@@ -28,3 +28,9 @@ network firewall. Canonical historical prompts remain unmodified.
 Launch a fresh experiment-v3 session through ~/bin/claude-ionmc. Do not resume a
 v1/v2 conversation or attach archived folders. Cache/state/memory/telemetry use
 experiment-v3 directories; no scientific caches or outputs are copied from v2.
+
+Codex may create local UI checkpoint refs under refs/codex/turn-diffs/. Preflight
+accepts these bookkeeping refs only when their object is an exact tree already
+committed in the local v3/develop ancestry. Commit, blob, unrelated tree and other
+ref namespaces remain subject to the existing restrictions. This exception neither
+fetches history nor changes excluded-object, remote or refspec checks.
