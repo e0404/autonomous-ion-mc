@@ -45,8 +45,9 @@ from ionmc.rng.philox import (
     key_from_seed,
     u01_py,
 )
-from ionmc.transport.funcs import make_transport_funcs
+from ionmc.transport.funcs import BIG_LENGTH_MM, make_transport_funcs
 from ionmc.transport.tally import (
+    CONTROL_TOLERANCE,
     COUNTER_NAMES,
     END_CUTOFF,
     END_ESCAPED,
@@ -127,6 +128,7 @@ class _Reference:
         self.c_fshort = r(ph.short_step_fraction)
         self.mass = r(cfg.source.projectile.mass_mev)
         self.trunc_diag = ph.truncated_hinge_diagnostic
+        self.ctrl_res = 0.0
         self.max_pieces = eff.scoring_pieces
         self.one = r(1.0)
         self.mat = self.geo.material_index
@@ -135,7 +137,9 @@ class _Reference:
         self.origin = self.V(*(r(x) for x in self.geo.origin_mm))
         self.spacing = self.V(*(r(x) for x in self.geo.spacing_mm))
         self.lo = self.V(*(r(x) for x in self.geo.lower_mm))
-        self.hi = self.V(*(r(x) for x in self.geo.upper_mm))
+        self.hi = self.V(*(r(x) for x in self.geo.world_upper_mm))
+        zc = self.geo.z_exit_mm
+        self.z_clip = r(BIG_LENGTH_MM if zc is None else float(zc))
         self.grids = cfg.scoring
         self.g_origin = [self.V(*(r(x) for x in g.origin_mm)) for g in self.grids]
         self.g_inv = [self.V(*(r(1.0 / x) for x in g.spacing_mm)) for g in self.grids]
@@ -274,6 +278,7 @@ class _Reference:
         self.end_dir = np.full((n, 3), np.nan)
         self.end_code = np.full(n, -1, dtype=np.int8)
         self.end_energy = np.full(n, np.nan)
+        self.end_ctrl = np.zeros(n)
         self.trace: list[list[float]] = []
         self.h_base = h0
         tally_rows = np.zeros((n, N_FIXED_TALLIES + 2 * n_g))
@@ -284,6 +289,7 @@ class _Reference:
             self.outside = [0.0] * n_g
             self.quant = [0.0] * n_g
             self.counters = dict.fromkeys(COUNTER_NAMES, 0)
+            self.ctrl_res = 0.0
             self._history(h)
             row = h - h0
             tally_rows[row, :N_FIXED_TALLIES] = [self.tallies[k] for k in TALLY_NAMES]
@@ -298,6 +304,7 @@ class _Reference:
                 end_direction=self.end_dir,
                 end_energy_mev=self.end_energy,
                 end_code=self.end_code,
+                control_residual=self.end_ctrl,
                 trace_int=tr[:, :8].astype(np.int32),
                 trace_float=tr[:, 8:],
             )
@@ -316,6 +323,7 @@ class _Reference:
         self.end_dir[i] = direction
         self.end_code[i] = code
         self.end_energy[i] = energy
+        self.end_ctrl[i] = self.ctrl_res
 
     # -- one history --------------------------------------------------------------------------
     def _history(self, h: int) -> None:
@@ -359,7 +367,7 @@ class _Reference:
             self._end(h, END_MISSED_WORLD, (px, py, pz), (ux, uy, uz), energy)
             return
         t0 = max(t_in, 0.0)
-        lo, hi = self.geo.lower_mm, self.geo.upper_mm
+        lo, hi = self.geo.lower_mm, self.geo.world_upper_mm
         px = min(max(px + ux * t0, lo[0]), hi[0])
         py = min(max(py + uy * t0, lo[1]), hi[1])
         pz = min(max(pz + uz * t0, lo[2]), hi[2])
@@ -393,7 +401,9 @@ class _Reference:
             r_mm = r0 * 10.0 / rho
             pvec = V(r(px), r(py), r(pz))
             dvec = V(r(ux), r(uy), r(uz))
-            d_geo, _axis = F.dda_next(pvec, dvec, ix, iy, iz, self.origin, self.spacing)
+            d_geo, _axis = F.dda_next_clip(
+                pvec, dvec, ix, iy, iz, self.origin, self.spacing, self.z_clip
+            )
             s_el = F.eloss_step_limit(r(energy), r(s_lin), self.c_frac)
             s_rg = F.range_step_limit(r(r_mm), self.c_alpha, self.c_rho_f)
             s_w, reason = F.select_step(d_geo, s_el, s_rg, self.c_smax)
@@ -433,7 +443,7 @@ class _Reference:
 
             # hinge and second leg
             hx, hy, hz = px + ux * leg1, py + uy * leg1, pz + uz * leg1
-            leg2_w, axis2 = F.leg2_limit(
+            leg2_w, axis2 = F.leg2_limit_clip(
                 V(r(hx), r(hy), r(hz)),
                 V(r(d1x), r(d1y), r(d1z)),
                 ix,
@@ -442,14 +452,17 @@ class _Reference:
                 self.origin,
                 self.spacing,
                 r(s - leg1),
+                self.z_clip,
             )
             leg2 = float(leg2_w)
             if self.trunc_diag and ph.multiple_scattering and axis2 >= 0:
-                # DIAGNOSTIC (T14 negative control, default off): the hinge angle is sampled again,
-                # from the same uniforms, for the truncated length s_cut = leg1 + leg2 of the first
-                # pass; the second-leg boundary is then found again with the new direction (new
-                # length, axis and sign). One-pass residual: the new truncated length may differ
-                # from s_cut (second order).
+                # DIAGNOSTIC (T14 negative control, default off): the hinge angle is sampled from
+                # the same uniforms with the variance of the truncated length s_cut = leg1 + leg2
+                # of the straight line (pre-hinge direction); the hinge is applied and the
+                # second-leg boundary is found again with the new direction (cut at the plane it
+                # now reaches, or uncut). No iteration: the relative mismatch between s_cut and the
+                # length actually travelled is second order in the angle except where a hinge lies
+                # on a plane; it is recorded per history (informative, not a pass condition).
                 s_cut = leg1 + leg2
                 e_mid2 = self._energy_from_range(m, r0 - rho * s_cut / 20.0)
                 pv_mid2 = K.pv_mev(r(e_mid2), self.mass)
@@ -472,7 +485,7 @@ class _Reference:
                 theta2 = EM.polar_deflection(r(var2), r(ua[1]))
                 nd2 = EM.rotate_dir(dvec, theta2, r(2.0 * math.pi * ua[2]))
                 d1x, d1y, d1z = float(nd2[0]), float(nd2[1]), float(nd2[2])
-                leg2_w, axis2 = F.leg2_limit(
+                leg2_w, axis2 = F.leg2_limit_clip(
                     V(r(hx), r(hy), r(hz)),
                     V(r(d1x), r(d1y), r(d1z)),
                     ix,
@@ -481,11 +494,18 @@ class _Reference:
                     self.origin,
                     self.spacing,
                     r(s - leg1),
+                    self.z_clip,
                 )
                 leg2 = float(leg2_w)
+                den = max(s_cut, CONTROL_TOLERANCE * s)  # floor: negligible-variance steps
+                resid = abs(leg1 + leg2 - s_cut) / den if den > 0.0 else 0.0
+                self.ctrl_res = max(self.ctrl_res, resid)
             nxp, nyp, nzp = hx + d1x * leg2, hy + d1y * leg2, hz + d1z * leg2
             exited = False
-            if axis2 >= 0:
+            if axis2 == 3:  # the clip plane z = z_exit: the particle leaves the world there
+                nzp = float(self.z_clip)
+                exited = True
+            elif axis2 >= 0:
                 d1a = (d1x, d1y, d1z)[axis2]
                 upward = 1 if d1a > 0.0 else 0
                 idx = [ix, iy, iz]

@@ -132,6 +132,42 @@ def make_transport_funcs(real: type) -> SimpleNamespace:
         return leg, axis
 
     @named_func(name)
+    def dda_next_clip(
+        p: v3, u: v3, ix: int, iy: int, iz: int, origin: v3, spacing: v3, z_clip: real
+    ) -> tuple[real, int]:
+        """:func:`dda_next` with an extra world face at ``z = z_clip`` (axis 3): the transport
+        distance to the next voxel plane or to the clip plane, whichever is nearer (the clip plane
+        wins ties). With ``z_clip`` at ``BIG_LENGTH_MM`` it is :func:`dda_next`."""
+        d, ax = dda_next(p, u, ix, iy, iz, origin, spacing)
+        if u[2] > eps:
+            dclip = wp.max((z_clip - p[2]) / u[2], real(0.0))
+            if dclip <= d:
+                d = dclip
+                ax = 3
+        return d, ax
+
+    @named_func(name)
+    def leg2_limit_clip(
+        ph: v3,
+        d1: v3,
+        ix: int,
+        iy: int,
+        iz: int,
+        origin: v3,
+        spacing: v3,
+        target_mm: real,
+        z_clip: real,
+    ) -> tuple[real, int]:
+        """:func:`leg2_limit` with the clip plane of :func:`dda_next_clip` (axis 3)."""
+        dd, ax = dda_next_clip(ph, d1, ix, iy, iz, origin, spacing, z_clip)
+        leg = target_mm
+        axis = int(-1)
+        if dd <= target_mm * (real(1.0) + leg_tol):
+            leg = dd
+            axis = ax
+        return leg, axis
+
+    @named_func(name)
     def seg_piece(
         p: v3, u: v3, ix: int, iy: int, iz: int, origin: v3, spacing: v3, remaining_mm: real
     ) -> tuple[real, int]:
@@ -250,6 +286,8 @@ def make_transport_funcs(real: type) -> SimpleNamespace:
         log_bin_index=log_bin_index,
         plane_position=plane_position,
         dda_next=dda_next,
+        dda_next_clip=dda_next_clip,
+        leg2_limit_clip=leg2_limit_clip,
         leg2_limit=leg2_limit,
         seg_piece=seg_piece,
         range_step_limit=range_step_limit,

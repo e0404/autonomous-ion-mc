@@ -583,6 +583,7 @@ def t12_config(
     max_step_mm: float | None = None,
     timeout_s: float | None = None,
     chunk_histories: int | None = None,
+    memory_budget_bytes: int | None = None,
 ) -> tuple[Any, T12Layout]:
     """Configuration of one T12 sample: a pencil beam of protons in a water box, all physics on,
     offline analytic (Bethe, I = 78 eV) stopping, the T12 scoring grids. Each sample must use
@@ -626,6 +627,7 @@ def t12_config(
             cpu_workers=workers,
             worker_timeout_s=timeout_s,
             chunk_histories=chunk_histories or DEFAULT_CHUNK_HISTORIES,
+            **({"memory_budget_bytes": memory_budget_bytes} if memory_budget_bytes else {}),  # type: ignore[arg-type]
         ),
     )
     return cfg, layout

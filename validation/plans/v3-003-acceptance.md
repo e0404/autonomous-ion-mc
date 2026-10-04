@@ -150,3 +150,17 @@ tails, and ionmc's Gaussian multiple-scattering model has no single-scattering t
 full-field σ is expected to fall below the reference — that expected deficit is a documented
 model limitation (to be probed in V3-011), not a T15 pass/fail quantity. The frozen tolerance
 (3 % and |z| < 3) applies to the ±20 mm window at both depths; both depths must pass.
+
+¹¹ Definition of the T14 negative control (2026-10-04, task V3-003B, after Codex review REVIEW-e9f5410b7d9c4cd0ad4540756901ae4d
+and before any T14 result is graded): the diagnostic switch samples the hinge angle with the
+variance of the straight-line truncated length (leg 1 plus the second leg cut at the voxel plane
+reached with the pre-hinge direction), then applies the hinge and recomputes the second leg with
+the new direction (cut where it now reaches a plane, or uncut). The difference between that
+straight-line truncated length and the length actually travelled is second order in the
+scattering angle except for hinge points lying on a plane, where the cut/uncut outcome is
+discontinuous; it is recorded per history and reported (quantiles, fraction above 1e-3) as an
+informative diagnostic, not as a pass condition. The frozen control quantity is unchanged:
+|Δθ_rms(default − control)| < 0.5 % at 1 mm voxels. T14's angular observable is the raw pairwise
+exit θ_rms of the same 0.5·R₁ slab for every voxel size and shift, obtained with a world exit
+plane at the slab thickness that is independent of the voxel grid (grid shifts overhang the world
+instead of lengthening it); the quadrature ratio is informative only.

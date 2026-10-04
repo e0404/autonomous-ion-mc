@@ -83,6 +83,12 @@ QUANTUM_MEV = 2.0**-30
 multiple (``floor(x / q + 1/2)``, a deterministic function of the piece) and accumulated in int64,
 so the grids are bit-identical for any partition of the histories."""
 QUANTUM_SCALE = 2.0**30
+CONTROL_TOLERANCE = 1e-3
+"""Reporting threshold of the T14 truncated-hinge diagnostic (see the reference): the relative
+mismatch between the straight-line truncated length used for the angle variance and the length
+actually travelled is recorded per history, relative to ``max(s_cut, CONTROL_TOLERANCE * s)``
+(``s`` the planned step; a truncated length below ``1e-3 s`` has negligible scattering variance).
+It is informative, never a pass condition."""
 MAX_QUANTA = 2**62
 """Capacity bound of one voxel accumulator in quanta (validated before, checked after a run)."""
 
@@ -116,6 +122,7 @@ class HistoryDiagnostics:
     end_direction: NDArray[np.float64]
     end_energy_mev: NDArray[np.float64]
     end_code: NDArray[np.int8]
+    control_residual: NDArray[np.float64]
     trace_int: NDArray[np.int32]
     trace_float: NDArray[np.float64]
 
@@ -292,6 +299,7 @@ def build_diagnostics(
         out["end_position_mm"] = pos
         out["end_code"] = code
         out["end_direction"] = direc
+        out["control_residual"] = np.concatenate([d.control_residual for d in diags])
         out["end_energy_mev"] = energy
     if escape_records:
         sel = np.nonzero(code == END_ESCAPED)[0]

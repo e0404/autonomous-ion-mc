@@ -234,6 +234,11 @@ def environment_text(
     return "\n".join(lines) + "\n"
 
 
+def resolve_workers(value: str) -> int:
+    """``auto`` is every logical CPU of this host; otherwise an integer."""
+    return (os.cpu_count() or 1) if value == "auto" else int(value)
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--suite", choices=("lv", "hr"), required=True)
@@ -262,7 +267,7 @@ def main(argv: list[str] | None = None) -> int:
         help="factor on all history counts (< 1 gives a non-conformant, labelled run)",
     )
     args = ap.parse_args(argv)
-    workers = (os.cpu_count() or 1) if args.workers == "auto" else int(args.workers)
+    workers = resolve_workers(args.workers)
     if workers < 2 or args.step_timeout < 1 or not 0.0 < args.scale <= 1.0:
         raise SystemExit("need --workers >= 2, --step-timeout >= 1 and 0 < --scale <= 1")
     if not 1 <= args.python_parts <= 64:

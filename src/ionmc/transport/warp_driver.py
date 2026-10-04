@@ -20,6 +20,7 @@ import numpy as np
 import warp as wp
 
 from ionmc.config import EffectiveConfig
+from ionmc.transport.funcs import BIG_LENGTH_MM
 from ionmc.transport.kernels import make_kernel_support, make_transport_kernel
 from ionmc.transport.tally import (
     COUNTER_NAMES,
@@ -125,7 +126,8 @@ def run_warp_range(eff: EffectiveConfig, h0: int, h1: int, device: str) -> Parti
     ctl.origin = vec(geo.origin_mm)
     ctl.spacing = vec(geo.spacing_mm)
     ctl.lo = vec(geo.lower_mm)
-    ctl.hi = vec(geo.upper_mm)
+    ctl.hi = vec(geo.world_upper_mm)
+    ctl.z_clip = real(BIG_LENGTH_MM if geo.z_exit_mm is None else float(geo.z_exit_mm))
 
     n_g = len(cfg.scoring)
     sizes = [g.n_voxels for g in cfg.scoring]
@@ -153,7 +155,7 @@ def run_warp_range(eff: EffectiveConfig, h0: int, h1: int, device: str) -> Parti
     tally_rows = wp.zeros((chunk, N_FIXED_TALLIES + 2 * n_g), dtype=wp.float64, device=device)
     counter_rows = wp.zeros((chunk, len(COUNTER_NAMES)), dtype=wp.int32, device=device)
     if use_diag:
-        end_state = wp.zeros((chunk, 7), dtype=real, device=device)
+        end_state = wp.zeros((chunk, 8), dtype=real, device=device)
         end_code = wp.zeros(chunk, dtype=wp.int32, device=device)
         k_loc = max(0, min(h1, diag.trace_histories) - h0)
         t_shape = (max(k_loc, 1), eff.max_steps if k_loc else 1)
@@ -165,9 +167,10 @@ def run_warp_range(eff: EffectiveConfig, h0: int, h1: int, device: str) -> Parti
         host_pos = np.zeros((n_local, 3))
         host_dir = np.zeros((n_local, 3))
         host_energy = np.zeros(n_local)
+        host_ctrl = np.zeros(n_local)
         host_code = np.zeros(n_local, dtype=np.int8)
     else:
-        end_state = wp.zeros((1, 7), dtype=real, device=device)
+        end_state = wp.zeros((1, 8), dtype=real, device=device)
         end_code = wp.zeros(1, dtype=wp.int32, device=device)
         trace_i = wp.zeros((1, 1, TRACE_N_DISCRETE), dtype=wp.int32, device=device)
         trace_f = wp.zeros((1, 1, TRACE_N_CONTINUOUS), dtype=wp.float64, device=device)
@@ -209,6 +212,7 @@ def run_warp_range(eff: EffectiveConfig, h0: int, h1: int, device: str) -> Parti
             host_pos[sl] = es[:, 0:3]
             host_dir[sl] = es[:, 3:6]
             host_energy[sl] = es[:, 6]
+            host_ctrl[sl] = es[:, 7]
             host_code[sl] = end_code.numpy()[:n].astype(np.int8)
     loop_s = time.perf_counter() - t_loop
 
@@ -229,6 +233,7 @@ def run_warp_range(eff: EffectiveConfig, h0: int, h1: int, device: str) -> Parti
             end_direction=host_dir,
             end_energy_mev=host_energy,
             end_code=host_code,
+            control_residual=host_ctrl,
             trace_int=trace_int,
             trace_float=trace_float,
         )

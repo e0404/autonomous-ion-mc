@@ -79,9 +79,12 @@ def voxel_mass_g(grid: ScoringGrid, geometry: VoxelGeometry) -> NDArray[np.float
 
 
 def _geometry_edges(geometry: VoxelGeometry, axis: int) -> NDArray[np.float64]:
-    return geometry.origin_mm[axis] + geometry.spacing_mm[axis] * np.arange(
+    edges: NDArray[np.float64] = geometry.origin_mm[axis] + geometry.spacing_mm[axis] * np.arange(
         geometry.shape[axis] + 1, dtype=np.float64
     )
+    if axis == 2 and geometry.z_exit_mm is not None:  # voxels beyond the exit plane have no mass
+        edges = np.minimum(edges, geometry.z_exit_mm)
+    return edges
 
 
 @dataclass(frozen=True, eq=False)

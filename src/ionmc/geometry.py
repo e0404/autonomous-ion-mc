@@ -25,7 +25,10 @@ class VoxelGeometry:
 
     ``material_index`` is an integer array of shape ``shape`` indexing ``materials``.
     ``density_g_cm3`` (optional, same shape) overrides the nominal density of each voxel's
-    material [g/cm3]; it must be finite and positive everywhere.
+    material [g/cm3]; it must be finite and positive everywhere. ``z_exit_mm`` (optional)
+    makes the plane ``z = z_exit_mm`` the far face of the world, independent of the voxel
+    grid: a grid that overhangs it (for example a half-voxel-shifted grid) does not lengthen the
+    world, and particles reaching the plane leave. It must lie in ``(lower z, upper z]``.
     """
 
     origin_mm: tuple[float, float, float]
@@ -34,6 +37,7 @@ class VoxelGeometry:
     materials: tuple[Material, ...]
     material_index: NDArray[np.int32]
     density_g_cm3: NDArray[np.float64] | None = None
+    z_exit_mm: float | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "origin_mm", triple("origin_mm", self.origin_mm))
@@ -44,6 +48,11 @@ class VoxelGeometry:
         for m in self.materials:
             if not isinstance(m, Material):
                 raise fail(f"materials must contain Material objects, got {m!r}")
+        if self.z_exit_mm is not None:
+            z = real("z_exit_mm", self.z_exit_mm)
+            lo_z, hi_z = self.origin_mm[2], self.upper_mm[2]
+            if not lo_z < z <= hi_z:
+                raise fail(f"z_exit_mm must lie in ({lo_z}, {hi_z}], got {z}")
         raw = np.asarray(self.material_index)
         if raw.shape != self.shape:
             raise fail(f"material_index shape {raw.shape} does not match shape {self.shape}")
@@ -75,6 +84,12 @@ class VoxelGeometry:
         """Upper corner of the world box [mm]."""
         o, s, n = self.origin_mm, self.spacing_mm, self.shape
         return (o[0] + s[0] * n[0], o[1] + s[1] * n[1], o[2] + s[2] * n[2])
+
+    @property
+    def world_upper_mm(self) -> tuple[float, float, float]:
+        """Upper corner of the world [mm]: ``upper_mm`` with ``z_exit_mm`` applied."""
+        u = self.upper_mm
+        return (u[0], u[1], u[2] if self.z_exit_mm is None else float(self.z_exit_mm))
 
     @property
     def n_voxels(self) -> int:

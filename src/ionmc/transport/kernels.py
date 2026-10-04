@@ -37,6 +37,7 @@ from ionmc.physics.kinematics import make_kinematics
 from ionmc.rng.philox import PURPOSE_SOURCE, PURPOSE_TRANSPORT, make_philox
 from ionmc.transport.funcs import make_transport_funcs
 from ionmc.transport.tally import (
+    CONTROL_TOLERANCE,
     END_CUTOFF,
     END_ESCAPED,
     END_MISSED_WORLD,
@@ -77,6 +78,7 @@ def make_kernel_support(real: type) -> SimpleNamespace:
         "straggling": int,
         "trunc_diag": int,
         "max_pieces": int,
+        "z_clip": R,
         "nx": int,
         "ny": int,
         "nz": int,
@@ -348,6 +350,7 @@ def make_transport_kernel(real: type, diag: bool):
     code_rejected = wp.constant(END_SOURCE_REJECTED)
     code_missed = wp.constant(END_MISSED_WORLD)
     with_diag = wp.constant(diag)
+    ctrl_tol = wp.constant(R(CONTROL_TOLERANCE))
 
     def transport(
         ctl: control,
@@ -398,6 +401,7 @@ def make_transport_kernel(real: type, diag: bool):
         c_src = int(0)
         c_inv = int(0)
         c_pieces = int(0)
+        c_res = R(0.0)
         code = int(-1)
         alive = int(1)
 
@@ -479,7 +483,9 @@ def make_transport_kernel(real: type, diag: bool):
                 r_mm = r0 * R(10.0) / rho
                 pvec = v3(px, py, pz)
                 dvec = v3(ux, uy, uz)
-                d_geo, _axis = F.dda_next(pvec, dvec, ix, iy, iz, ctl.origin, ctl.spacing)
+                d_geo, _axis = F.dda_next_clip(
+                    pvec, dvec, ix, iy, iz, ctl.origin, ctl.spacing, ctl.z_clip
+                )
                 s_el = F.eloss_step_limit(energy, s_lin, ctl.c_frac)
                 s_rg = F.range_step_limit(r_mm, ctl.c_alpha, ctl.c_rho_f)
                 s, reason = F.select_step(d_geo, s_el, s_rg, ctl.c_smax)
@@ -526,12 +532,13 @@ def make_transport_kernel(real: type, diag: bool):
                 hx = px + ux * leg1
                 hy = py + uy * leg1
                 hz = pz + uz * leg1
-                leg2, axis2 = F.leg2_limit(
-                    v3(hx, hy, hz), v3(d1x, d1y, d1z), ix, iy, iz, ctl.origin, ctl.spacing, s - leg1
-                )
+                leg2, axis2 = F.leg2_limit_clip(
+                    v3(hx, hy, hz), v3(d1x, d1y, d1z), ix, iy, iz, ctl.origin, ctl.spacing,
+                    s - leg1, ctl.z_clip,
+                )  # fmt: skip
                 if ctl.trunc_diag == 1 and ctl.mcs == 1 and axis2 >= 0:
-                    # DIAGNOSTIC (T14 negative control, default off): see reference._history;
-                    # the second-leg boundary is found again with the new direction
+                    # DIAGNOSTIC (T14 negative control, default off): see reference._history; one
+                    # pass, the mismatch of the truncated length is recorded, not iterated
                     s_cut = leg1 + leg2
                     e_mid2 = energy_from_range(
                         ln_er, ln_r0, inv_dln_r, ctl.n_r, m, r0 - rho * s_cut / R(20.0)
@@ -546,8 +553,9 @@ def make_transport_kernel(real: type, diag: bool):
                             energy,
                         )
                         var2 = EM.scattering_variance_birth(
-                            pv_mid2, K.pv_mev(e_end2, ctl.mass), p1v1, one, inv_xs[m], rho, s_cut
-                        )
+                            pv_mid2, K.pv_mev(e_end2, ctl.mass), p1v1, one, inv_xs[m], rho,
+                            s_cut,
+                        )  # fmt: skip
                     else:
                         t_pow2 = EM.scattering_power_dm(pv_mid2, p1v1, one, inv_xs[m], rho)
                         var2 = t_pow2 * s_cut
@@ -556,15 +564,24 @@ def make_transport_kernel(real: type, diag: bool):
                     d1x = nd2[0]
                     d1y = nd2[1]
                     d1z = nd2[2]
-                    leg2, axis2 = F.leg2_limit(
-                        v3(hx, hy, hz), v3(d1x, d1y, d1z), ix, iy, iz, ctl.origin, ctl.spacing,
-                        s - leg1,
+                    leg2, axis2 = F.leg2_limit_clip(
+                        v3(hx, hy, hz), v3(d1x, d1y, d1z), ix, iy, iz, ctl.origin,
+                        ctl.spacing, s - leg1, ctl.z_clip,
                     )  # fmt: skip
+                    den = wp.max(s_cut, ctrl_tol * s)  # floor: negligible-variance steps
+                    resid = R(0.0)
+                    if den > zero:
+                        resid = wp.abs(leg1 + leg2 - s_cut) / den
+                    if resid > c_res:
+                        c_res = resid
                 nxp = hx + d1x * leg2
                 nyp = hy + d1y * leg2
                 nzp = hz + d1z * leg2
                 exited = int(0)
-                if axis2 >= 0:
+                if axis2 == 3:  # the clip plane z = z_exit: the particle leaves the world there
+                    nzp = ctl.z_clip
+                    exited = 1
+                if axis2 >= 0 and axis2 < 3:
                     d1a = R(d1x)
                     if axis2 == 1:
                         d1a = d1y
@@ -706,6 +723,7 @@ def make_transport_kernel(real: type, diag: bool):
             end_state[tid, 4] = uy
             end_state[tid, 5] = uz
             end_state[tid, 6] = energy
+            end_state[tid, 7] = c_res
             end_code[tid] = code
 
     transport.__name__ = f"transport_{name}_{'diag' if diag else 'plain'}"

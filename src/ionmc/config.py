@@ -64,9 +64,10 @@ class PhysicsOptions:
     kinetic energy; ``range_alpha`` and ``range_rho_f_mm`` parametrise the Geant4 range step
     function; steps shorter than ``short_step_fraction`` of the residual range use the
     linear loss ``S t``. ``truncated_hinge_diagnostic`` (default off, a diagnostic for the T14
-    negative control, not a physics model) samples the hinge angle again, from the same
-    uniforms, for the truncated length (of the first pass) when the second leg is cut at a
-    transport voxel plane, then finds the second-leg boundary again with the new direction.
+    negative control, not a physics model) samples the hinge angle from the same uniforms with the
+    variance of the straight-line truncated length when the second leg is cut at a transport voxel
+    plane, applies the hinge and finds the second-leg boundary again with the new direction (no
+    iteration).
     """
 
     nuclear: bool
@@ -268,6 +269,7 @@ class EffectiveConfig:
                 "spacing_mm": list(self.geometry.spacing_mm),
                 "shape": list(self.geometry.shape),
                 "materials": [m.name for m in self.geometry.materials],
+                "z_exit_mm": self.geometry.z_exit_mm,
             },
             "scoring": [
                 {

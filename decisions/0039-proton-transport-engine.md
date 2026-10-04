@@ -140,7 +140,7 @@ fail-closed configuration rules.
   per-leg walk of the path-length scoring (at most 8 pieces). It made the
   frozen T8 probe (s_max up to 5 mm with 0.2 mm lateral dose bins) impossible
   to run as frozen. It is replaced by a per-run computed bound
-  `pieces = 3·⌈max_step/min_spacing⌉ + 2` (maximum over scoring grids, cap
+  `pieces = 3·⌈max_step/min_spacing⌉ + 4` (maximum over scoring grids; a leg meets up to ⌈·⌉+1 planes per axis including zero-length hops at a start exactly on a plane; cap
   4096 beyond which the configuration is rejected) carried in the kernel
   control structure; exceeding it at run time increments the fail-closed
   counter `scoring_pieces_overflow` and invalidates the result — the deposit

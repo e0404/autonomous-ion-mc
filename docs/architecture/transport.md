@@ -64,8 +64,10 @@ densities in g/cm3, doses in Gy per primary). All grids use `origin_mm` = corner
   lateral offsets (perpendicular to the beam, deterministic orthonormal basis, no axis privileged)
   are Gaussian. The beam travels in vacuum until it enters the geometry; a beam that misses the
   geometry is tallied as escaped.
-* `VoxelGeometry(origin_mm, spacing_mm, shape, materials, material_index, density_g_cm3=None)`:
-  world = union of voxels, vacuum outside. Vacuum voxels (density <= 0) are rejected.
+* `VoxelGeometry(origin_mm, spacing_mm, shape, materials, material_index, density_g_cm3=None, z_exit_mm=None)`:
+  world = union of voxels, vacuum outside; `z_exit_mm` (optional, in `(lower z, upper z]`) makes the plane `z = z_exit_mm`
+  the far face of the world independent of the grid (the grid may overhang it; particles reaching it leave; the DDA
+  and the second-leg limit know it as axis 3, scoring voxel masses ignore the part beyond it). Vacuum voxels (density <= 0) are rejected.
 * `ScoringGrid(origin_mm, spacing_mm, shape, name="dose")`: independent of the geometry grid.
 * `PhysicsOptions(nuclear, stopping, straggling=True, multiple_scattering=True,
   e_cut_mev=2.0, max_step_mm=1.0, max_energy_loss_fraction=0.02, range_alpha=0.2,
@@ -316,7 +318,11 @@ period) and `TransportWorkerError` is raised; no partial result is returned. Scr
   `conformant`. `summarize.py --combine DIR ... --expected-sha SHA --out FILE` verifies that the directories share the
   suite, SHA, scale and source hashes, that no step is duplicated or missing, and only then writes a combined summary
   that may be `conformant`.
-* **Workers.** `--workers auto` (the default) uses all cores for the python pool and the accelerated samples.
+* **Workers and memory.** `--workers auto` (the default) means every logical CPU. Every step plans its worker count:
+  CUDA runs always use one CPU worker, and CPU runs use at most `budget / (n_batches x scoring voxels x 8 B)` workers
+  (never fewer than one) under the declared accumulator budget `STEP_MEMORY_BUDGET` (16 GiB of host RAM headroom, recorded
+  in the step documents together with the requested and used worker counts and in the sample metadata), so a host with
+  more cores never fails validation.
   `--scale` below 1 reduces all history counts; such a run is labelled reduced and is not conformant.
 * **T12 as separate steps.** `t12-python-sample` (`--python-parts N`, default 2: each part is a step covering a history
   range of the 4e3-history python sample), `t12-accelerated-samples` (warp-cpu float32 and float64 1e6 histories and, in
@@ -335,29 +341,36 @@ period) and `TransportWorkerError` is raised; no partial result is returned. Scr
   the same per-primary variance of a bin in both samples under the null and does not assume independent bins. The
   Wilson-Hilferty value is reported for information; the Bonferroni bound on `max |z|` is the frozen one.
 * **T14 negative control.** `PhysicsOptions.truncated_hinge_diagnostic` (default off, recorded in the effective
-  configuration, a diagnostic and not a physics model) samples the hinge angle again, from the same uniforms, for the
-  truncated length `leg1 + leg2` of the first pass when the second leg is cut at a transport voxel plane, then finds the
-  second-leg boundary again with the new direction (new length, axis and sign; the particle snaps onto that plane, or is
-  not cut at all if the new direction does not reach one). One-pass residual: the new truncated length may differ from
-  the one used for the variance (second order). It is implemented identically in the reference and
-  the kernel; with the flag off the engine is unchanged (a stored baseline trace guards this). The T14 step runs it at
-  1 mm voxels and requires the relative change of the exit `theta_rms` to be below 0.5 %.
+  configuration, a diagnostic and not a physics model) samples the hinge angle from the same uniforms with the variance of
+  the straight-line truncated length `s_cut = leg1 + leg2` (leg 2 cut at the plane the pre-hinge direction reaches), then
+  applies the hinge and finds the second-leg boundary again with the new direction (cut at the plane it now reaches, or
+  uncut), and travels that. There is no iteration. The relative mismatch between `s_cut` and the length actually travelled
+  (relative to `max(s_cut, 1e-3 s)`) is second order in the angle except where a hinge lies on a plane, where the boundary
+  can flip between cut and uncut; it is recorded per history (`control_residual` in the end-state diagnostics) and
+  reported with quantiles and the fraction above 1e-3 as information, never as a pass condition. It is implemented
+  identically in the reference and the kernel; with the flag off the engine is unchanged (a stored baseline trace guards
+  this). The T14 step runs it at 1 mm voxels and requires the relative change of the exit `theta_rms` to be below 0.5 %.
 * **T10 energy.** The total deposited energy of every orientation is compared with that of the `+z` beam with the batch
   standard errors of both and must agree within 3 sigma.
 
 * **T8, T14 observables.** The lateral sigma is the frozen one: the standard deviation of the deposited energy in fixed
   0.2 mm lateral bins and 1 mm slabs at z/R = 0.5 and 0.9 (scoring grids independent of the transport voxels, Sheppard
   corrected, compared with Fermi-Eyges A2 at the slab centre); the exit `theta_rms` of a 0.5 R1 slab from the escape
-  records is the second observable. T8 runs `s_max` in {0.1, 0.5, 1, 5} mm, T14 steps of `min(1 mm, voxel)`.
+  records is the second observable. T8 runs `s_max` in {0.1, 0.5, 1, 5} mm, T14 steps of `min(1 mm, voxel)`. T14 keeps
+  the physical slab fixed: the world ends at `z = thickness` (`z_exit_mm`) for every voxel size and shift, so a
+  half-voxel-shifted grid overhangs the world instead of lengthening the slab, and the raw exit `theta_rms` is compared
+  pairwise (the ratio to the U5 quadrature is informative).
 * **T10.** Every orientation scores a 1 mm grid around its path; the integrated depth-dose is formed by projecting the
   voxels on the beam axis (`ionmc.transport.parity.projected_idd`: each voxel is spread over the convolution of
   `|u_i| d_i` boxes it covers, 0.1 mm bins), R80 is read from it (the estimator of T9/T12) and obliques must agree with
   the `+z` beam within 0.3 mm; permutations use the permutation-calibrated chi-square of the 1 mm-binned depth-dose;
   the mean track-end depth is reported for information.
-* **Imported samples.** The comparison builds the expected configuration of each sample itself (effective-configuration
-  fingerprint, seed, energy, geometry parameters, backend, precision, frozen count) and refuses any mismatch; archives
-  that supply samples need the expected SHA and the same `source_hashes` as the comparison's own archive, or a valid
-  attestation. Every non-pytest step prints a result document naming its step, the suite and the SHA, which
+* **Imported samples.** The comparison trusts nothing it is given. It builds the expected configuration of each sample
+  itself (effective-configuration fingerprint, seed, energy, geometry parameters, backend, precision, frozen count) and
+  refuses any mismatch. It recomputes the `source_hashes` of the tree that is executing and requires its own archive to
+  match; every producer archive must verify completely (`summarize.verify`: manifest, step headers, trailers, result
+  documents) and carry the expected SHA and byte-equal `source_hashes`, or hashes that match the blobs of the expected
+  commit when git can read the repository (recomputed there; a stored `attestation` is ignored). Every non-pytest step prints a result document naming its step, the suite and the SHA, which
   `summarize.py` checks against the manifest (a missing or unparsable document fails the step).
 
 Other choices (listed so the criteria are not read as met more strongly than measured): T9 uses 1 mm IDD bins (the

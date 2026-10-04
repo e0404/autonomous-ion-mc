@@ -336,21 +336,29 @@ def test_snapshot_without_git_is_attested_later(tmp_path: Path) -> None:
 
 def test_t12_split_steps_roundtrip_and_tamper_detection(tmp_path: Path) -> None:
     """The python sample in two history ranges, the accelerated samples and the comparison, each
-    a separate step with its own output. The comparison rebuilds the expected configuration itself
-    and refuses tampered files, tampered metadata, a wrong seed, a wrong SHA, archives with other
-    source hashes (unless attested) and missing parts. (Tiny histories: the verdict itself is not
-    asserted, only the plumbing and the per-sample reduced flags.)"""
+    a separate step with its own output. The comparison trusts nothing it is given: it rebuilds the
+    expected configuration itself, verifies every producer archive completely, recomputes the
+    source hashes of the executing tree, and refuses tampered files or step archives, tampered
+    metadata, a wrong seed or SHA, other source hashes (a stored attestation is ignored) and
+    missing parts. (Tiny histories: the verdict itself is not asserted, only the plumbing.)"""
+    import hashlib
+
     import numpy as np
 
     sha = "c" * 40
+    run_suite = _load("run_suite")
+    current = {
+        str(f.relative_to(run_suite.REPO)): run_suite.sha256(f) for f in run_suite.source_files()
+    }
     env = dict(os.environ, IONMC_RUN_SHA=sha, IONMC_RUN_SUITE="lv", PYTHONPATH=str(REPO / "src"))
     base = ["--energy", "70", "--lateral-bin", "0.5", "--half-width", "8", "--scale", "0.01"]
     steps = str(SCRIPTS / "steps.py")
     own, prod = tmp_path / "own", tmp_path / "prod"
-    hashes = {"src/ionmc/a.py": "0" * 64}
+    names = ["01-t12-python-sample-1of2", "02-t12-python-sample-2of2", "03-t12-accelerated-samples"]
     for d in (own, prod):
         d.mkdir()
-        (d / "environment.txt").write_text(_env(hashes=hashes).replace(SHA, sha))
+        (d / "environment.txt").write_text(_env(hashes=current).replace(SHA, sha))
+    (prod / "manifest.txt").write_text("".join(f"{n}\n" for n in names))
 
     def step(
         name: str, *args: str, environ: dict | None = None
@@ -360,16 +368,16 @@ def test_t12_split_steps_roundtrip_and_tamper_detection(tmp_path: Path) -> None:
 
     def archive(fname: str, proc: subprocess.CompletedProcess[str]) -> None:
         body = f"# command: x\n# git_sha: {sha}\n# started_utc: n\n# step_timeout_s: 1\n"
-        (prod / fname).write_text(body + proc.stdout + f"\n# exit={proc.returncode}\n")
+        (prod / f"{fname}.txt").write_text(body + proc.stdout + f"\n# exit={proc.returncode}\n")
 
     samples = str(prod / "samples")
     for i in (1, 2):
         p = step("t12-python-sample", "--part", f"{i}/2", "--out-dir", samples, "--workers", "2")
         assert p.returncode == 0, p.stdout[-2000:] + p.stderr[-2000:]
-        archive(f"0{i}-t12-python-sample.txt", p)
+        archive(names[i - 1], p)
     p = step("t12-accelerated-samples", "--samples", "cpu32", "--out-dir", samples)
     assert p.returncode == 0, p.stderr[-2000:]
-    archive("03-t12-acc.txt", p)
+    archive(names[2], p)
     args = ("t12-compare", "--pairs", "python:cpu32", "--dirs", str(own), str(prod))
     c = step(*args)
     doc = json.loads(c.stdout.split("#JSON-BEGIN")[1].split("#JSON-END")[0])
@@ -381,24 +389,32 @@ def test_t12_split_steps_roundtrip_and_tamper_detection(tmp_path: Path) -> None:
     assert doc["t12"]["python_vs_cpu32"]["permutation"]["n_perm"] == 2000
 
     def refused(proc: subprocess.CompletedProcess[str], text: str) -> None:
-        assert proc.returncode != 0 and text in (proc.stderr + proc.stdout), proc.stderr[-600:]
+        assert proc.returncode != 0 and text in (proc.stderr + proc.stdout), proc.stderr[-800:]
 
     refused(step(*args, environ=dict(env, IONMC_RUN_SHA="d" * 40)), "SHA")  # wrong SHA
     refused(step(*args, "--seed", "99"), "differs from expected")  # wrong seed
     refused(step(*args, "--energy", "71"), "differs from expected")  # other configuration
-    # an archive with other source hashes is refused ... unless a valid attestation says it is
-    # the expected commit
-    (prod / "environment.txt").write_text(
-        _env(hashes={"src/ionmc/a.py": "1" * 64}).replace(SHA, sha)
-    )
+    # a tampered producer step archive (its trailer says the step failed): the archive is refused
+    good = (prod / f"{names[0]}.txt").read_text()
+    (prod / f"{names[0]}.txt").write_text(good.replace("# exit=0", "# exit=1"))
+    refused(step(*args), "does not verify")
+    (prod / f"{names[0]}.txt").write_text(good)
+    assert "#JSON-BEGIN" in step(*args).stdout
+    # other source hashes in the producer's archive are refused - also when a stored attestation
+    # claims validity (it is ignored; the comparison recomputes it against the commit)
+    other = dict(current, **{next(iter(current)): "1" * 64})
+    (prod / "environment.txt").write_text(_env(hashes=other).replace(SHA, sha))
     refused(step(*args), "source hashes differ")
     (prod / "summary.json").write_text(
         json.dumps({"attestation": {"valid": True, "attested_sha": sha}})
     )
-    accepted = step(*args)  # accepted: it ran the statistics (the tiny-sample verdict may fail)
-    assert "#JSON-BEGIN" in accepted.stdout, accepted.stderr[-600:]
+    refused(step(*args), "source hashes differ")
     (prod / "summary.json").unlink()
-    (prod / "environment.txt").write_text(_env(hashes=hashes).replace(SHA, sha))
+    (prod / "environment.txt").write_text(_env(hashes=current).replace(SHA, sha))
+    # this run's own archive must match the tree that is executing
+    (own / "environment.txt").write_text(_env(hashes=other).replace(SHA, sha))
+    refused(step(*args), "differ from the executing tree")
+    (own / "environment.txt").write_text(_env(hashes=current).replace(SHA, sha))
     # tampered metadata with a consistently updated sha256 in the producer's archive
     f = prod / "samples" / "t12-python-part-1-of-2.npz"
     data = dict(np.load(f))
@@ -407,10 +423,8 @@ def test_t12_split_steps_roundtrip_and_tamper_detection(tmp_path: Path) -> None:
     data["meta"] = np.array(json.dumps(meta, sort_keys=True))
     old = f.read_bytes()
     np.savez(f, **data)
-    import hashlib
-
-    arch = prod / "01-t12-python-sample.txt"
     new_digest = hashlib.sha256(f.read_bytes()).hexdigest()
+    arch = prod / f"{names[0]}.txt"
     arch.write_text(arch.read_text().replace(hashlib.sha256(old).hexdigest(), new_digest))
     refused(step(*args), "differs from expected")
     # tampered sample file: sha256 mismatch
@@ -418,5 +432,4 @@ def test_t12_split_steps_roundtrip_and_tamper_detection(tmp_path: Path) -> None:
     refused(step(*args), "sha256 mismatch")
     # a missing part: the sample no longer tiles the history range
     f.unlink()
-    arch.unlink()
     assert step(*args).returncode != 0

@@ -52,7 +52,7 @@ def _config(backend: str = "python", *, diagnostic: bool = False) -> SimulationC
             n_histories=4,
             n_batches=2,
         ),
-        DiagnosticsOptions(trace_histories=4),
+        DiagnosticsOptions(trace_histories=4, track_end_positions=True),
     )
 
 
@@ -114,3 +114,18 @@ def test_steps_that_change_voxel_end_exactly_on_the_crossed_plane(diagnostic: bo
         assert pos[k, a] == pytest.approx(plane, abs=1e-12)
         n_checked += 1
     assert n_checked > 10
+
+
+def test_control_records_the_truncated_length_mismatch_without_iterating() -> None:
+    """One pass: the angle uses the variance of the straight-line truncated length; the relative
+    mismatch with the length travelled is recorded per history (python and kernel identical),
+    informative only (it is not bounded); the default engine records zero."""
+    py = Simulation(_config("python", diagnostic=True)).run()
+    wp = Simulation(_config("warp-cpu", diagnostic=True)).run()
+    assert np.array_equal(py.diagnostics["control_residual"], wp.diagnostics["control_residual"])
+    big = replace(_config("warp-cpu", diagnostic=True))
+    big = replace(big, run=replace(big.run, n_histories=200, n_batches=2))
+    res = Simulation(big).run().diagnostics["control_residual"]
+    assert res.max() > 0.0  # the mismatch exists and is recorded
+    off = Simulation(_config("warp-cpu")).run().diagnostics["control_residual"]
+    assert not off.any()

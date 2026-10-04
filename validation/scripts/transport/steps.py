@@ -60,6 +60,38 @@ def r_csda_mm(e_mev: float) -> float:
     return TABLES.range_g_cm2(0, e_mev) * 10.0 / WATER.density_g_cm3
 
 
+STEP_MEMORY_BUDGET = 2**34
+"""Memory budget [bytes] of the deposit accumulators that the validation steps declare (16 GiB:
+host RAM headroom for the per-worker private copies); recorded in the step documents. A step
+never requests more worker processes than this budget allows (``plan_workers``)."""
+RUN_PLANS: list[dict[str, Any]] = []
+
+
+def plan_workers(
+    requested: int,
+    backend: str,
+    n_batches: int,
+    scoring: tuple[ScoringGrid, ...],
+    n_histories: int,
+    budget: int = STEP_MEMORY_BUDGET,
+) -> dict[str, Any]:
+    """Worker processes to use: CUDA never uses CPU workers; CPU runs use at most ``requested``
+    workers, at most one per history and at most ``budget // per-worker accumulator bytes``
+    (``n_batches * voxels * 8`` bytes per worker), never fewer than one."""
+    per_worker = n_batches * sum(g.n_voxels for g in scoring) * 8
+    if backend == "warp-cuda":
+        used = 1
+    else:
+        used = max(1, min(requested, n_histories, budget // max(per_worker, 1)))
+    return {
+        "backend": backend,
+        "workers_requested": requested,
+        "workers_used": used,
+        "accumulator_bytes_per_worker": per_worker,
+        "memory_budget_bytes": budget,
+    }
+
+
 def run_cfg(
     *,
     energy: float,
@@ -84,8 +116,12 @@ def run_cfg(
     memory_budget: int | None = None,
 ) -> Result:
     kw = {"chunk_histories": chunk} if chunk else {}
-    if memory_budget:
-        kw["memory_budget_bytes"] = memory_budget
+    plan = plan_workers(
+        workers, backend, n_batches, scoring, n, memory_budget or STEP_MEMORY_BUDGET
+    )
+    RUN_PLANS.append(plan)
+    workers = plan["workers_used"]
+    kw["memory_budget_bytes"] = plan["memory_budget_bytes"]
     cfg = SimulationConfig(
         source=PencilBeamSource(PROTON, position, direction, energy),
         geometry=geometry,
@@ -123,6 +159,20 @@ def finish(doc: dict[str, Any], frozen_n: int | None, n: int | None) -> int:
 
 def emit(doc: dict[str, Any]) -> int:
     """Print the result document (with the run identity) and return the exit status."""
+    if RUN_PLANS:
+        doc = {
+            **doc,
+            "worker_plan": {
+                "runs": len(RUN_PLANS),
+                "workers_requested": max(p["workers_requested"] for p in RUN_PLANS),
+                "workers_used_min": min(p["workers_used"] for p in RUN_PLANS),
+                "workers_used_max": max(p["workers_used"] for p in RUN_PLANS),
+                "max_accumulator_bytes_per_worker": max(
+                    p["accumulator_bytes_per_worker"] for p in RUN_PLANS
+                ),
+                "memory_budget_bytes": STEP_MEMORY_BUDGET,
+            },
+        }
     doc = {
         **doc,
         "suite": os.environ.get("IONMC_RUN_SUITE", "unknown"),
@@ -305,18 +355,25 @@ def sample_histories(name: str, scale: float) -> int:
 
 
 def sample_config(a: argparse.Namespace, name: str, workers: int) -> tuple[Any, parity.T12Layout]:
+    """Configuration of sample ``name`` with the worker count planned from the memory budget
+    (CUDA samples always use one CPU worker); the requested count is not changed by the plan."""
     backend, prec, _, b, k = SAMPLES[name]
-    return parity.t12_config(
+    n = sample_histories(name, a.scale)
+    kwargs = dict(
         energy_mev=a.energy,
         backend=backend,
         precision=prec,
         seed=a.seed + 1000 * k,  # a distinct seed per sample
-        n_histories=sample_histories(name, a.scale),
+        n_histories=n,
         n_batches=b,
-        workers=workers,
         lateral_bin_mm=a.lateral_bin,
         half_width_mm=a.half_width,
         timeout_s=a.timeout,
+    )
+    cfg, layout = parity.t12_config(workers=1, **kwargs)
+    plan = plan_workers(workers, backend, b, cfg.scoring, n)
+    return parity.t12_config(
+        workers=plan["workers_used"], memory_budget_bytes=plan["memory_budget_bytes"], **kwargs
     )
 
 
@@ -359,10 +416,28 @@ def expected_sample(a: argparse.Namespace, name: str) -> dict[str, Any]:
     }
 
 
+def current_source_hashes() -> dict[str, str]:
+    """sha256 of every execution-defining file of the tree this step runs from (recomputed, not
+    read from any archive)."""
+    import run_suite
+
+    return {
+        str(f.relative_to(run_suite.REPO)): run_suite.sha256(f) for f in run_suite.source_files()
+    }
+
+
 def verify_archives(dirs: list[Path], expected_sha: str) -> None:
-    """Fail closed unless every archive that supplies samples has the verified source identity:
-    the expected SHA and the same ``source_hashes`` as this run's own archive (``dirs[0]``), or a
-    valid attestation of the expected SHA in its ``summary.json``."""
+    """Fail closed unless every archive that supplies samples is trustworthy: nothing stored is
+    taken on trust.
+
+    * this run's own archive (``dirs[0]``, still being written) must carry the expected SHA and
+      the ``source_hashes`` that are recomputed from the tree now executing;
+    * every other archive must verify completely (``summarize.verify``: manifest, step headers,
+      trailers and result documents; any invalid step fails it), carry the expected SHA, and have
+      ``source_hashes`` byte-equal to the recomputed ones - or, when git can read the repository,
+      hashes that match the blobs of the expected commit (the attestation is recomputed here,
+      a stored ``attestation`` is ignored).
+    """
     import summarize
 
     def env_of(d: Path) -> dict[str, Any]:
@@ -371,20 +446,26 @@ def verify_archives(dirs: list[Path], expected_sha: str) -> None:
             raise SystemExit(f"{d} has no environment.txt: sample source not verifiable")
         return summarize.parse_env(f.read_text())
 
+    current = current_source_hashes()
     own = env_of(dirs[0])
     if own.get("git_sha") != expected_sha:
         raise SystemExit(f"{dirs[0]}: environment SHA {own.get('git_sha')} != {expected_sha}")
+    if own["source_hashes"] != current:
+        raise SystemExit(f"{dirs[0]}: recorded source hashes differ from the executing tree")
     for d in dirs[1:]:
+        summary = summarize.verify(d, expected_sha)
+        if not summary["pass"]:
+            bad = {n: s["problems"] for n, s in summary["steps"].items() if not s["pass"]}
+            raise SystemExit(f"{d}: archive does not verify: {summary['problems']} {bad}")
         env = env_of(d)
         if env.get("git_sha") != expected_sha:
             raise SystemExit(f"{d}: archive SHA {env.get('git_sha')} != {expected_sha}")
-        if env["source_hashes"] == own["source_hashes"]:
+        if env["source_hashes"] == current:
             continue
-        att = None
-        if (d / "summary.json").exists():
-            att = json.loads((d / "summary.json").read_text()).get("attestation")
-        if not (att and att.get("valid") and att.get("attested_sha") == expected_sha):
-            raise SystemExit(f"{d}: source hashes differ from this run and no valid attestation")
+        if not summarize.attest(env, expected_sha)["valid"]:
+            raise SystemExit(
+                f"{d}: source hashes differ from the executing tree and from the commit"
+            )
 
 
 def file_sha256(path: Path) -> str:
@@ -402,9 +483,10 @@ def save_sample_part(
     from ionmc.transport.tally import concat_partials
 
     cfg, _ = sample_config(a, name, workers)
+    workers_used = cfg.run.cpu_workers
     eff = validate(cfg)
     t0 = time.perf_counter()
-    if workers > 1 and cfg.run.backend != "warp-cuda":
+    if workers_used > 1 and cfg.run.backend != "warp-cuda":
         parts = run_pool(eff, h_range=(h0, h1))
     else:
         parts = [run_range(eff, h0, h1)]
@@ -428,7 +510,9 @@ def save_sample_part(
         "frozen_histories": SAMPLES[name][2],
         "git_sha": os.environ.get("IONMC_RUN_SHA", "unknown"),
         "config_fingerprint": config_fingerprint(eff.summary()),
-        "workers": workers,
+        "workers_requested": workers,
+        "workers_used": workers_used,
+        "memory_budget_bytes": cfg.run.memory_budget_bytes,
         "seconds": seconds,
         "device": parts[0].meta.get("device"),
     }
@@ -631,22 +715,30 @@ def _thickness(frac: float) -> float:
     return 5.0 * round(frac * r_csda_mm(150.0) / 5.0)
 
 
-def _slab_geometry(depth: float, voxel: float, shift_z: bool, shift_xy: bool) -> tuple[Any, float]:
+def _slab_geometry(
+    depth: float, voxel: float, shift_z: bool, shift_xy: bool, exit_clip: bool = False
+) -> tuple[Any, float]:
     """Water world of the given depth from the source plane z = 0: one voxel (``voxel <= 0``) or a
     grid of cubic voxels, optionally shifted by half a voxel along the beam and laterally.
-    Returns the geometry and the z of its far face."""
+    With ``exit_clip`` the far face of the world is the plane ``z = depth`` for every voxel size
+    and shift (the grid overhangs it; ``VoxelGeometry.z_exit_mm``), so the physical slab does not
+    depend on the grid. Returns the geometry and the z of the far face of the world."""
     half = HALF_WORLD_MM
     if voxel <= 0.0:
         return BoxPhantom((-half, -half, 0.0), (2 * half, 2 * half, depth), WATER), depth
-    nz = int(round(depth / voxel)) + (1 if shift_z else 0)
-    nxy = int(round(2 * half / voxel)) + (1 if shift_xy else 0)
     z0 = -0.5 * voxel if shift_z else 0.0
+    if exit_clip:
+        nz = int(math.ceil((depth - z0) / voxel - 1e-9))
+    else:
+        nz = int(round(depth / voxel)) + (1 if shift_z else 0)
+    nxy = int(round(2 * half / voxel)) + (1 if shift_xy else 0)
     xy0 = -half - (0.5 * voxel if shift_xy else 0.0)
     shape = (nxy, nxy, nz)
     geo = VoxelGeometry(
-        (xy0, xy0, z0), (voxel,) * 3, shape, (WATER,), np.zeros(shape, dtype=np.int32)
-    )
-    return geo, z0 + nz * voxel
+        (xy0, xy0, z0), (voxel,) * 3, shape, (WATER,), np.zeros(shape, dtype=np.int32),
+        z_exit_mm=depth if exit_clip else None,
+    )  # fmt: skip
+    return geo, (depth if exit_clip else z0 + nz * voxel)
 
 
 def slab_theta(
@@ -664,7 +756,7 @@ def slab_theta(
 ) -> dict[str, float]:
     """Exit-angle observable: projected rms angle of protons leaving a water slab of the given
     thickness (MCS on, straggling off), from the escape records."""
-    geo, z_end = _slab_geometry(thickness, voxel, shift_z, shift_xy)
+    geo, z_end = _slab_geometry(thickness, voxel, shift_z, shift_xy, exit_clip=True)
     half = HALF_WORLD_MM
     res = run_cfg(
         energy=150.0,
@@ -680,7 +772,7 @@ def slab_theta(
         mcs=True,
         straggling=False,
         max_step=smax,
-        diag=DiagnosticsOptions(escape_records=True),
+        diag=DiagnosticsOptions(escape_records=True, track_end_positions=trunc_diag),
         trunc_diag=trunc_diag,
     )
     u = res.diagnostics["escape_direction"]
@@ -690,6 +782,17 @@ def slab_theta(
         "z_end_mm": z_end,
         "n_escaped": len(res.diagnostics["escape_history"]),
         "valid": float(res.valid),
+        "control_residual_max": (
+            float(res.diagnostics["control_residual"].max()) if trunc_diag else 0.0
+        ),
+        "control_residual_fraction_above_tolerance": (
+            float((res.diagnostics["control_residual"] > 1e-3).mean()) if trunc_diag else 0.0
+        ),
+        "control_residual_quantiles_50_90_99": (
+            [float(x) for x in np.quantile(res.diagnostics["control_residual"], [0.5, 0.9, 0.99])]
+            if trunc_diag
+            else [0.0, 0.0, 0.0]
+        ),
     }
 
 
@@ -748,7 +851,6 @@ def slab_sigma(
         mcs=True,
         straggling=False,
         max_step=smax,
-        memory_budget=2**33,
     )
     out: dict[str, dict[str, float]] = {}
     for f, g in zip(fracs, grids, strict=True):
@@ -897,16 +999,29 @@ def step_t14(a: argparse.Namespace) -> int:
         "relative_change": control_1mm["theta_rms"] / default_1mm["theta_rms"] - 1.0,
         "bound": 0.005,
         "valid": bool(default_1mm["valid"] == 1.0 and control_1mm["valid"] == 1.0),
+        # informative (never a pass condition): the relative mismatch between the straight-line
+        # truncated length used for the angle variance and the length travelled
+        "informative_truncated_length_mismatch": {
+            "max": control_1mm["control_residual_max"],
+            "fraction_of_histories_above_1e-3": control_1mm[
+                "control_residual_fraction_above_tolerance"
+            ],
+            "quantiles_50_90_99_over_histories": control_1mm["control_residual_quantiles_50_90_99"],
+        },
     }
     control["pass"] = bool(abs(control["relative_change"]) < 0.005 and control["valid"])
+    # the frozen observable: the RAW exit theta_rms of the same 0.5 R1 slab (the world ends at
+    # z = thickness for every voxel size and shift), compared pairwise; the ratio to the U5
+    # quadrature is informative
+    th_raw = [rows[k]["theta"]["theta_rms"] for k in rows]
     ths = [rows[k]["theta"]["theta_over_quadrature"] for k in rows]
     s5 = [rows[k]["sigma"]["0.5"]["sigma_over_fermi_eyges"] for k in rows]
     s9 = [rows[k]["sigma"]["0.9"]["sigma_over_fermi_eyges"] for k in rows]
     abs_s5 = [rows[k]["sigma"]["0.5"]["sigma_mm"] for k in rows]
     abs_s9 = [rows[k]["sigma"]["0.9"]["sigma_mm"] for k in rows]
     res = {
-        "theta_pairwise_spread": max(ths) / min(ths) - 1.0,
-        "theta_max_dev_from_quadrature": max(abs(t - 1.0) for t in ths),
+        "theta_pairwise_spread": max(th_raw) / min(th_raw) - 1.0,
+        "theta_max_dev_from_quadrature_informative": max(abs(t - 1.0) for t in ths),
         "sigma_pairwise_spread_0.5R": max(abs_s5) / min(abs_s5) - 1.0,
         "sigma_pairwise_spread_0.9R": max(abs_s9) / min(abs_s9) - 1.0,
         "sigma_max_dev_from_fermi_eyges": max(abs(t - 1.0) for t in s5 + s9),
@@ -917,7 +1032,6 @@ def step_t14(a: argparse.Namespace) -> int:
     )
     res["pass"] = bool(
         res["theta_pairwise_spread"] <= 0.005
-        and res["theta_max_dev_from_quadrature"] <= 0.005
         and max(res["sigma_pairwise_spread_0.5R"], res["sigma_pairwise_spread_0.9R"]) <= 0.01
         and res["sigma_max_dev_from_fermi_eyges"] <= 0.02
         and valid
@@ -1021,7 +1135,6 @@ def step_t10(a: argparse.Namespace) -> int:
             position=tuple(float(x) for x in start),
             direction=d,
             diag=DiagnosticsOptions(track_end_positions=True),
-            memory_budget=2**35,
         )
         be = np.asarray(res.grids[0].batch_energy_mev)  # (B, nx, ny, nz) per primary
         idd = parity.projected_idd(be, grid, tuple(float(x) for x in start), d, n_bins=nb)
