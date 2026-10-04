@@ -118,16 +118,17 @@ exploratory afterwards, as a conservative reclassification (single seed, 1-2 mm 
 uncertainty), and added the qualifier "exploratory reference; evidence-grade configuration
 pending" to the current case definitions. The `inputs/case.json` hashes in the run manifests
 refer to the c6bc047 files, not the current ones.
-Evidence-grade runs use multiple seeds (the seed in `input.txt` / `config.txt` is the per-batch
-seed, varied by the orchestrator), at least 1e5 primaries per batch and depth bins of at most
-0.5 mm. Candidate cases: `topas/proton-water-150mev-fine` (IDD and LETd, ZBins 600) and
+Evidence-grade runs use several committed seed variants per case (`-fine`, `-fine-seed2`,
+`-fine-seed3`, and the `-lateral...` variants; seeds 20261003 / 20261004 / 20261005), 1e5 primaries
+per run and depth bins of at most 0.5 mm: `topas/proton-water-150mev-fine` (ZBins 600),
 `mcsquare/proton-water-150mev-fine` (CT 60 x 600 x 60 at 2 x 0.5 x 2 mm; the anisotropic spacing
-was accepted by MCsquare e0404 in the archived fine runs, output grid 60 x 600 x 60). The comparison script always labels
-its results exploratory: it analyses single-seed runs and computes no uncertainty. Evidence-grade
-batch analysis is future work; it must read the per-run seeds from each run's manifested
-`inputs/case.json`, group runs by engine and calculate the batch mean, variance and standard error
-before any result can be graded against the frozen acceptance criteria. There is deliberately no
-option to relabel results from detached metadata.
+was accepted by MCsquare e0404 in the archived runs) and `fred/proton-water-150mev-fine`
+(120 x 120 x 600 voxels at 1 x 1 x 0.5 mm). Their batch analysis is implemented in
+`validation/scripts/reference/compare_batches.py` (replicate gate on the full executed
+configuration except the seed, per-engine mean / SD / SE / 95 % t-interval) and the archived results
+are listed in `validation/results/reference/README.md`. `compare_depth_dose.py` (single runs) always
+labels its results exploratory and computes no uncertainty; neither script accepts detached
+metadata to change a status.
 
 Library code: `ionmc.reference.runs` (`load_run`, `depth_dose`, per-engine extraction, fail closed)
 and `ionmc.reference.metrics`. Metrics use bin-centre depths, argmax for the peak (resolution is
