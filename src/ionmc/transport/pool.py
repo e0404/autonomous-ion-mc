@@ -21,6 +21,7 @@ Spawned workers re-import the ``__main__`` module: scripts that start a pool nee
 from __future__ import annotations
 
 import copyreg
+import faulthandler
 import multiprocessing as mp
 import os
 import pickle
@@ -56,6 +57,7 @@ def _worker_main(
     worker: int, h0: int, h1: int, payload: bytes, conn: Connection, fault: str | None
 ) -> None:
     """Worker entry point: unpickle the configuration, transport ``[h0, h1)``, send the result."""
+    faulthandler.enable()  # a fatal signal (SIGSEGV, ...) leaves a Python stack in stderr
     try:
         t0 = time.perf_counter()
         eff: EffectiveConfig = pickle.loads(payload)

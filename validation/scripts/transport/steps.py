@@ -1170,7 +1170,7 @@ def step_t9(a: argparse.Namespace) -> int:
         v = parity.t12_compare(ref, o)
         dr = abs(v["scalars"]["r80_mm"]["a"] - v["scalars"]["r80_mm"]["b"])
         idd = v["arrays"]["idd"]
-        passed = bool(dr <= 0.1 and idd["p_value"] > parity.P_VALUE_MIN)
+        passed = bool(dr <= 0.1 and idd["pass"])  # profile verdict: bins + tail + inconclusive rule
         # where the profiles differ: bins (1 mm = depth in mm) with |z| > 3 and the sign of
         # z = (reference - test) / se for bins above 1 % of the maximum
         ma, mt = ref.arrays["idd"].mean(axis=0), o.arrays["idd"].mean(axis=0)
@@ -1272,7 +1272,9 @@ def step_t10(a: argparse.Namespace) -> int:
         d_r80 = abs(o["r80_mm"] - ref["r80_mm"])
         e_z = parity.scalar_z(ref["total_b"], o["total_b"])
         oblique = name.startswith("(")
-        chi_ok = v["arrays"]["idd_1mm"]["p_value"] > parity.P_VALUE_MIN
+        chi_ok = bool(
+            v["arrays"]["idd_1mm"]["pass"]
+        )  # supported bins + tail test, inconclusive fails
         r80_ok = d_r80 <= 0.3
         energy_ok = abs(e_z["z"]) < 3.0
         # frozen: axis permutations -> chi-square p > 0.001 (obliques: the chi-square is only

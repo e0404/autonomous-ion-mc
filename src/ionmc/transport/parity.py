@@ -550,6 +550,60 @@ def bootstrap_p_value(
     return (1.0 + count) / (1.0 + n_boot)
 
 
+def _tail_test(
+    ta: NDArray[np.float64],
+    tb: NDArray[np.float64],
+    n_bins: int,
+    need: tuple[int, int],
+    a: T12Observables,
+    b: T12Observables,
+    *,
+    equal: bool,
+    n_perm: int,
+    n_boot: int,
+    seed: int,
+) -> dict[str, Any]:
+    """Aggregate "tail mass" test of the unsupported selected bins of one profile.
+
+    ``ta`` and ``tb`` are the per-batch sums of the per-primary deposits of the ``n_bins``
+    unsupported bins. The same calibrated scalar statistic as for the profile (``z`` from the batch
+    standard errors; the permutation p-value for equal and the bootstrap-t p-value for unequal
+    batch structures) is applied; it passes when ``|z| < SCALAR_Z_MAX`` or ``p > P_VALUE_MIN``.
+    The aggregate is supported when both samples have at least ``need`` nonzero batches; an
+    unsupported aggregate has ``status = "unsupported"`` and does not pass (the profile is then
+    inconclusive). With no unsupported bins the test is ``status = "empty"`` and passes."""
+    if n_bins == 0:
+        return {"status": "empty", "n_bins": 0, "pass": True}
+    nz = (int((ta > 0.0).sum()), int((tb > 0.0).sum()))
+    sc = scalar_z(ta, tb)
+    out: dict[str, Any] = {
+        "n_bins": n_bins,
+        "mean_a": sc["a"],
+        "mean_b": sc["b"],
+        "se_a": sc["se_a"],
+        "se_b": sc["se_b"],
+        "z": sc["z"],
+        "batches_with_deposit": list(nz),
+        "required": list(need),
+    }
+    if nz[0] < need[0] or nz[1] < need[1]:
+        return {**out, "status": "unsupported", "p_value": None, "pass": False}
+    xa, xb = ta[:, None], tb[:, None]
+    if equal:
+        p = permutation_p_value(
+            xa, a.histories_per_batch, xb, b.histories_per_batch, n_perm=n_perm, seed=seed
+        )
+    else:
+        p = bootstrap_p_value(xa, xb, n_boot=n_boot, seed=seed)
+    return {
+        **out,
+        "status": "supported",
+        "p_value": p,
+        "z_bound": SCALAR_Z_MAX,
+        "pass": bool(abs(sc["z"]) < SCALAR_Z_MAX or p > P_VALUE_MIN),
+    }
+
+
 def t12_compare(
     a: T12Observables,
     b: T12Observables,
@@ -569,7 +623,13 @@ def t12_compare(
     studentized bootstrap-t :func:`bootstrap_p_value` (``n_boot`` resamples, same seed) when they
     differ; the method is recorded as ``calibration`` per profile and for the pair. The
     Wilson-Hilferty value is reported as ``p_value_wilson_hilferty`` only. The bound on
-    ``max |z|`` is the frozen Bonferroni bound."""
+    ``max |z|`` is the frozen Bonferroni bound.
+
+    The unsupported selected bins of a profile are pooled into one aggregate tail mass per batch
+    and compared with the same calibrated scalar statistic (:func:`_tail_test`, recorded as
+    ``tail``); the profile passes only when the supported bins AND the tail test pass. A profile
+    is ``inconclusive`` (and fails) when fewer than half of its selected bins are supported or
+    when the aggregate tail is itself unsupported (see ``verdict`` and ``inconclusive_reason``)."""
     equal = (a.n_batches, a.histories_per_batch) == (b.n_batches, b.histories_per_batch)
     method = "studentized_permutation" if equal else "studentized_bootstrap_t"
     out: dict[str, Any] = {
@@ -605,7 +665,7 @@ def t12_compare(
         worst_all = int(np.argmax(np.abs(z_sel))) if z_sel.size else 0
         p_wh = wilson_hilferty_p(chi2, n_supported) if n_supported >= 1 else 1.0
         if n_supported < 1:
-            p = 1.0
+            p = 0.0  # no calibrated statistic: never a pass (the profile is inconclusive)
         elif equal:
             p = permutation_p_value(
                 xa_sup,
@@ -618,7 +678,39 @@ def t12_compare(
         else:
             p = bootstrap_p_value(xa_sup, xb_sup, n_boot=n_boot, seed=seed + i)
         bound = bonferroni_z(n_supported) if n_supported else float("inf")
-        passed = bool(p > P_VALUE_MIN and zmax < bound)
+        core_pass = bool(n_supported >= 1 and p > P_VALUE_MIN and zmax < bound)
+        # aggregate tail test: the selected bins that are not supported are pooled into one
+        # per-batch quantity (the sum of their per-primary deposits) so that a backend that
+        # drops or invents rare deposits in a relevant region cannot hide behind the support rule
+        tail = _tail_test(
+            a.arrays[name][:, sel][:, ~supported].sum(axis=1),
+            b.arrays[name][:, sel][:, ~supported].sum(axis=1),
+            int((~supported).sum()),
+            (need_a, need_b),
+            a,
+            b,
+            equal=equal,
+            n_perm=n_perm,
+            n_boot=n_boot,
+            seed=seed + 1000 + i,
+        )
+        inconclusive_reason: str | None = None
+        if n == 0:
+            inconclusive_reason = "no bin above the dose threshold"
+        elif n_supported < 0.5 * n:
+            inconclusive_reason = f"only {n_supported} of {n} selected bins are supported (< 50 %)"
+        elif tail["status"] == "unsupported":
+            inconclusive_reason = (
+                "the aggregate of the unsupported bins is itself unsupported (fewer than "
+                f"{need_a} / {need_b} nonzero batches in sample a / b: "
+                f"{tail['batches_with_deposit']})"
+            )
+        verdict = (
+            "inconclusive"
+            if inconclusive_reason
+            else ("pass" if core_pass and tail["pass"] else "fail")
+        )
+        passed = verdict == "pass"
         out["arrays"][name] = {
             "n_bins": n,
             "n_supported_bins": n_supported,
@@ -639,6 +731,10 @@ def t12_compare(
                 "supported": bool(supported[worst_all]) if z_sel.size else None,
             },
             "bonferroni_bound": bound,
+            "supported_bins_pass": core_pass,
+            "tail": tail,
+            "verdict": verdict,
+            "inconclusive_reason": inconclusive_reason,
             "pass": passed,
         }
         ok &= passed

@@ -220,3 +220,8 @@ Consequences:
 - 2026-10-04 (V3-003B): the float32 per-batch accumulator rule was falsified
   on CUDA by the frozen T13 chunk-invariance check (see the amendment under
   "Precision and randomness"); replaced by int64 fixed-point accumulators.
+- 2026-10-04 (V3-003B): Warp 1.17 Python-scope evaluation of `@wp.func`
+  bodies (the reference backend's execution path) was found to crash
+  intermittently (SIGSEGV/SIGABRT in `context.call_builtin`) under
+  multi-process use; the reference executor's independence from this path is
+  the subject of task V3-003C (see decision 0039, outcome 2026-10-04).

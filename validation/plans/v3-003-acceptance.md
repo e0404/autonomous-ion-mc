@@ -229,3 +229,14 @@ trials) guards the method. The python-vs-float64-CPU pair joins the T12 comparis
 same-algorithm control. Because the 20281004 samples were observed, the qualification seed base is re-frozen to
 20291004; 20261004, 20271004 and 20281004 are preserved as non-qualification evidence. Tolerances
 and history counts are unchanged.
+
+¹⁶ Sparse-bin aggregate test and inconclusive rule for T12 profiles (2026-10-04, task V3-003B, after Codex review
+REVIEW-f41e11bc05a446c5aa074b804be9b616, before any T12 qualification result at base 20291004 was observed):
+excluding unsupported bins from χ² and max|z| (¹⁵) must not exempt a backend that deposits nothing,
+or almost nothing, in a scientifically relevant region. The unsupported bins of a profile are
+therefore pooled per batch into one aggregate tail quantity whose two-sample comparison (batch z
+with |z| < 3.5 for equal batch structures; the bootstrap-t calibration with p > 0.001 otherwise)
+is a second, mandatory part of the profile verdict. A profile with fewer than half of its selected
+bins supported, or whose aggregate is itself unsupported, is inconclusive and fails the pair; a
+profile is never passed by default. Tolerances, history counts and the seed base 20291004 are
+unchanged (no T12 comparison at that base has been observed).

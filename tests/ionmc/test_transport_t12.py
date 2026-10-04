@@ -45,6 +45,8 @@ def test_t12_statistics_have_power(make_config) -> None:  # type: ignore[no-unty
 
 
 def test_t12_ci_python_vs_warp_cpu() -> None:
+    """Reduced CI version of T12 (the plan designates it as such): the LV/HR samples are far
+    larger. Asserts no profile is a statistical `fail`, the IDD verdict and the scalars."""
     py, layout = t12_sample(
         backend="python", precision="float64", seed=2026100401, n_histories=200, n_batches=10,
         workers=4, timeout_s=900.0, **KW,
@@ -54,7 +56,12 @@ def test_t12_ci_python_vs_warp_cpu() -> None:
         n_batches=20, **KW,
     )  # fmt: skip
     verdict = t12_compare(t12_observables(py, layout), t12_observables(wp, layout))
-    assert verdict["pass"], verdict
+    # the reduced python sample (200 histories) cannot support the sparse lateral tails: such a
+    # profile is `inconclusive` by rule (and so fails); no profile may be a statistical `fail`
+    # and the dense IDD and the scalars must pass
+    assert all(v["verdict"] != "fail" for v in verdict["arrays"].values()), verdict
+    assert verdict["arrays"]["idd"]["pass"] and all(s["pass"] for s in verdict["scalars"].values())
+    assert verdict["pass"] == all(v["pass"] for v in verdict["arrays"].values())
     for v in verdict["arrays"].values():
         assert v["n_bins"] >= 2 and math.isfinite(v["chi2"])
     assert np.isfinite(verdict["scalars"]["r80_mm"]["z"])
@@ -218,3 +225,64 @@ def test_sparse_shifted_alternative_is_detected() -> None:
     b = _sparse_observables(rng, 100, 10_000, scale=1.2)
     v = t12_compare(a, b, n_boot=1500, seed=5)["arrays"]["lat"]
     assert v["p_value"] < 0.001 and not v["pass"]
+
+
+def test_tail_aggregate_catches_a_backend_that_drops_the_tail() -> None:
+    """Sample B deposits nothing beyond some radius while its core matches: the dropped bins are
+    unsupported (never enter chi2 / max|z|) but the aggregate tail test rejects the pair."""
+    rng = np.random.default_rng(30)
+    a = _sparse_observables(rng, 100, 10_000)
+    b = _sparse_observables(rng, 100, 10_000)
+    b.arrays["lat"][:, 20:] = 0.0  # tail beyond bin 20 never deposited
+    v = t12_compare(a, b, n_perm=100, seed=2)["arrays"]["lat"]
+    assert {20, 21} <= set(v["unsupported_bins"])  # only bins above 1 % of max are selected
+    assert v["tail"]["z"] > 3.5 or v["tail"]["status"] == "unsupported"
+    assert not v["pass"] and v["verdict"] in ("fail", "inconclusive")
+    # a supported but depleted tail (a quarter of the deposits left) fails by the statistic
+    c = _sparse_observables(rng, 100, 10_000)
+    d = _sparse_observables(rng, 100, 10_000)
+    d.arrays["lat"][:, 20:] *= 0.25
+    w = t12_compare(c, d, n_perm=100, seed=2)["arrays"]["lat"]
+    if w["tail"]["status"] == "supported":
+        assert not w["tail"]["pass"] and w["verdict"] == "fail"
+
+
+def test_profile_without_supported_bins_is_inconclusive_and_fails() -> None:
+    from ionmc.transport.parity import T12Observables
+
+    prof = np.zeros((20, 6))
+    prof[0] = 1.0  # a single nonzero batch: no bin is supported
+    ob = T12Observables({"p": prof}, {}, 20, 1000, "float64")
+    v = t12_compare(ob, ob, n_perm=50)
+    pv = v["arrays"]["p"]
+    assert pv["n_supported_bins"] == 0 and pv["verdict"] == "inconclusive"
+    assert pv["inconclusive_reason"] and not pv["pass"] and not v["pass"]
+
+
+def test_mostly_unsupported_profile_is_inconclusive() -> None:
+    rng = np.random.default_rng(31)
+    a = _sparse_observables(rng, 40, 100)
+    v = t12_compare(a, a, n_perm=50)["arrays"]["lat"]
+    if v["n_supported_bins"] < 0.5 * v["n_bins"]:
+        assert v["verdict"] == "inconclusive" and not v["pass"]
+    full = _synthetic(1, "float64", 150.0)
+    w = t12_compare(full, full, n_perm=50)["arrays"]["idd"]
+    assert w["verdict"] == "pass" and w["tail"]["status"] == "empty"
+
+
+def test_sparse_null_combined_decision_false_alarm_rate() -> None:
+    """The whole verdict (supported bins and tail aggregate; inconclusive counts as a failure)
+    of null pairs with different batch structures: at most 8 % of 200 trials are rejected at the
+    frozen 0.001 level of the profile or with the Bonferroni-combined p-value (2 min p) < 0.05.
+    """
+    rng = np.random.default_rng(20)
+    trials, below05, failed = 200, 0, 0
+    for k in range(trials):
+        a = _sparse_observables(rng, 40, 100)
+        b = _sparse_observables(rng, 100, 10_000)
+        v = t12_compare(a, b, n_boot=500, seed=100 + k)["arrays"]["lat"]
+        assert v["verdict"] != "inconclusive", v["inconclusive_reason"]
+        tail_p = v["tail"].get("p_value")
+        below05 += 2.0 * min(v["p_value"], 1.0 if tail_p is None else tail_p) < 0.05  # Bonferroni
+        failed += not v["pass"]
+    assert below05 <= 0.08 * trials and failed <= 0.02 * trials, (below05, failed)

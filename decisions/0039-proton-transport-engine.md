@@ -38,7 +38,7 @@ are deliberately out of scope here.
 | Multiple scattering | per-step Highland; Molière; differential Highland (Kanematsu); differential Molière (Gottschalk) | **differential Molière** scattering power `T_dM = f_dM(pv, p₁v₁)(E_s/pv)²/X_S`, `E_s = 15.0 MeV`, `f_dM = 0.5244 + 0.1975 lg(1−(pv/p₁v₁)²) + 0.2320 lg(pv) − 0.0098 lg(pv) lg(1−(pv/p₁v₁)²)` (clamped ≥ 0), scattering length `1/(ρX_S) = α N_A r_e² (Z²/A){2 ln(33219 (AZ)^{-1/3}) − 1}` Bragg-additive, applied as a Gaussian polar angle with a random hinge | step-size independent by construction (per-step Highland is not; a negative-control test proves the instrument has power); ranked best against Hanson theory and measurement in the source paper; the research report's label "differential Highland" for these coefficients was wrong and is corrected |
 | Lateral displacement | explicit correlated sampling; random hinge | random hinge (move `a·s`, deflect, move `(1−a)·s`, `a` uniform) | reproduces the Fermi–Eyges second moments exactly without extra draws |
 | Geometry traversal | `floor(p)` with nudge; incremental DDA | incremental DDA with the voxel index as state and plane snapping on crossing | the nudge variant stalled in the archived toy kernel |
-| Scoring | split steps at scoring planes; midpoint deposit; path-length-proportional deposit | **path-length-proportional deposit along both hinge legs** (amendment 2026-10-04, see below); the former `max_step ≤ min scoring spacing` rule is replaced by a computed, fail-closed bound on the number of scoring pieces per leg (second amendment 2026-10-04, see below) | simplest unbiased choice at the enforced step size; grid refinement/misalignment is a falsification probe in V3-011 |
+| Scoring | split steps at scoring planes; midpoint deposit; path-length-proportional deposit | **deposit apportioned along both hinge legs with a linear stopping-power ramp S(E₀) → S(E₁)** (amendments 2026-10-04, see below; initially path-length-proportional); the former `max_step ≤ min scoring spacing` rule is replaced by a computed, fail-closed bound on the number of scoring pieces per leg (second amendment 2026-10-04, see below) | simplest unbiased choice at the enforced step size; grid refinement/misalignment is a falsification probe in V3-011 |
 | End of range | transport to zero; local deposition below `E_cut` | local deposition below `E_cut = 2 MeV` (protons) | residual range ≈ 0.07 mm in water; the V3-002 table floor (1 MeV/u) must stay ≤ `E_cut/2` |
 | Uniform mapping | `((w>>8)+0.5)·2⁻²⁴` in both precisions | float64: 24-bit form; float32: `((w>>9)+0.5)·2⁻²³` | the 24-bit form rounds to exactly 1.0 in float32 for the top word (amends decision 0037) |
 | CPU parallelism | Python threads; processes | spawned processes with private accumulators, float64 summation by the parent | archived stall of thread-concurrent CPU launches; Warp CPU atomics are plain read-modify-write |
@@ -162,6 +162,26 @@ fail-closed configuration rules.
   float64 Warp-CPU kernel — bit-identical to the reference in T1 — is the
   fallback reference executor if the observation recurs. The anomaly is
   preserved here as unexplained; it is not attributed to the physics.
+- **2026-10-04 (V3-003B) — the Python-scope Warp evaluator is unreliable
+  (reproduced).** A pool worker of the python reference backend died with
+  SIGSEGV inside `inspect._bind` called from Warp `context.call_builtin`
+  (chain: `types.__truediv__` ← `kinematics.tmax_mev` ← `em.bohr_variance`
+  ← `reference._history`), reproduced in 1 of 10 test runs with several
+  spawned workers and in a standalone two-worker repro, never in 23
+  single-worker runs. Together with the three host SIGABRTs in the same path
+  and the unexplained escaped history, this establishes that Warp 1.17's
+  Python-scope execution of `@wp.func` builtins is subject to native
+  memory corruption under multi-process use. Consequences: (a) the pool is
+  fail-closed (a dead worker aborts the run, `TransportWorkerError`, no
+  partial result), so no evidence in this task can come from a crashed run;
+  (b) silent corruption is bounded by the frozen cross-checks that every
+  qualification run must pass — T1 (trajectories bit-identical to the
+  float64 kernel), R1 (bit-identical repeats) and the T12 python-vs-float64
+  control; (c) the structural remedy — a reference executor that does not
+  depend on Warp's Python-scope dispatch (pure-Python twins of the shared
+  functions generated from the same source and verified bit-identical in
+  T1) — is deferred to the next task, V3-003C, before any further physics
+  lands on the reference backend.
 - **2026-10-04 (V3-003B) — T9 at full scale: straggling default and deposit
   apportioning changed.** The frozen T9 probe (1e6 histories, held-out seed
   base 20271004) failed at s_max = 0.1 mm for the clamped-Gaussian/Gamma

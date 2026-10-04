@@ -359,7 +359,17 @@ period) and `TransportWorkerError` is raised; no partial result is returned. Scr
   supported bins) and its permutation calibration: the batch means of an undersupported bin are discrete and its
   standard error is unreliable, which breaks the exchangeability of the studentized residuals. The unsupported bins
   are listed (`unsupported_bins`), the all-bin chi-square is reported for information, and the worst bin of all bins
-  is reported with its support. Calibration method per pair (recorded as `calibration` in the document): the studentized permutation when both
+  is reported with its support.
+  **Aggregate tail test and inconclusive rule.** Excluding unsupported bins must not hide a defect that produces zero
+  or rare deposits in a relevant bin, so all unsupported selected bins of a profile are pooled into one aggregate
+  tail mass per batch (the sum of their per-batch per-primary deposits) and compared between the samples with the same
+  calibrated scalar statistic (`z` from the batch standard errors; permutation p for equal, bootstrap-t p for unequal
+  batch structures); it passes for `|z| < 3.5` or calibrated `p > 0.001`. The aggregate's means, standard errors,
+  support counts, `z`, `p` and verdict are recorded as `tail`. A profile passes only when the supported-bin
+  chi-square and `max|z|` AND the tail test pass. A profile is `inconclusive` (`verdict`, with `inconclusive_reason`)
+  and the pair fails, never p = 1 by default, when fewer than 50 % of its selected bins are supported or when the
+  aggregate is itself unsupported (fewer than `max(2, ceil(B/2))` nonzero batches in either sample, which also covers
+  a sample that deposits nothing in the tail). Calibration method per pair (recorded as `calibration` in the document): the studentized permutation when both
   samples have the same batch structure (T9, T10, cpu32/cpu64/cuda32 pairs), the within-sample studentized
   bootstrap-t (`parity.bootstrap_p_value`; batches resampled with replacement within each sample, both means and
   standard errors recomputed, 2000 resamples, recorded seed, chi-square of the difference recentred at the observed
