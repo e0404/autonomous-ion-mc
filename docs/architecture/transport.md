@@ -341,15 +341,19 @@ period) and `TransportWorkerError` is raised; no partial result is returned. Scr
   the same per-primary variance of a bin in both samples under the null and does not assume independent bins. The
   Wilson-Hilferty value is reported for information; the Bonferroni bound on `max |z|` is the frozen one.
 * **T14 negative control.** `PhysicsOptions.truncated_hinge_diagnostic` (default off, recorded in the effective
-  configuration, a diagnostic and not a physics model) samples the hinge angle from the same uniforms with the variance of
-  the straight-line truncated length `s_cut = leg1 + leg2` (leg 2 cut at the plane the pre-hinge direction reaches), then
-  applies the hinge and finds the second-leg boundary again with the new direction (cut at the plane it now reaches, or
-  uncut), and travels that. There is no iteration. The relative mismatch between `s_cut` and the length actually travelled
-  (relative to `max(s_cut, 1e-3 s)`) is second order in the angle except where a hinge lies on a plane, where the boundary
-  can flip between cut and uncut; it is recorded per history (`control_residual` in the end-state diagnostics) and
-  reported with quantiles and the fraction above 1e-3 as information, never as a pass condition. It is implemented
-  identically in the reference and the kernel; with the flag off the engine is unchanged (a stored baseline trace guards
-  this). The T14 step runs it at 1 mm voxels and requires the relative change of the exit `theta_rms` to be below 0.5 %.
+  configuration, a diagnostic and not a physics model) is "truncate-first": the planned step already ends at the first
+  voxel plane the straight line (pre-hinge direction) reaches, the angle is sampled with the variance of that length (same
+  uniforms), the two legs are travelled without cutting leg 2 again (their lengths sum to the step exactly), and the end
+  point is snapped onto the plane, keeping the lateral displacement of the hinge path; energy loss and scoring use that
+  step. The snap moves only the end position, never the direction (the direction after the hinge is the sampled one,
+  tested bit for bit). Its displacement is second order in the angle for planes normal to the beam and first order for
+  lateral planes, so it is judged by what it does to the observable: the vector sum of a history's snap displacements is
+  recorded (`control_displacement`, together with the maximum per-step displacement over the step, `control_residual`),
+  and the T14 step requires the RMS over histories of the magnitude of that sum to be below 1 % of the lateral sigma of
+  the control sample at the exit plane (so the positional bias contributes below 1e-4 to the squared lateral spread), besides
+  |relative change of exit `theta_rms`| < 0.5 % at 1 mm voxels; the quantiles of the sum and of the per-step displacement
+  are reported as information. It is implemented identically in the reference and the kernel; with the flag off the engine
+  is unchanged (a stored baseline trace guards this).
 * **T10 energy.** The total deposited energy of every orientation is compared with that of the `+z` beam with the batch
   standard errors of both and must agree within 3 sigma.
 
@@ -358,8 +362,8 @@ period) and `TransportWorkerError` is raised; no partial result is returned. Scr
   corrected, compared with Fermi-Eyges A2 at the slab centre); the exit `theta_rms` of a 0.5 R1 slab from the escape
   records is the second observable. T8 runs `s_max` in {0.1, 0.5, 1, 5} mm, T14 steps of `min(1 mm, voxel)`. T14 keeps
   the physical slab fixed: the world ends at `z = thickness` (`z_exit_mm`) for every voxel size and shift, so a
-  half-voxel-shifted grid overhangs the world instead of lengthening the slab, and the raw exit `theta_rms` is compared
-  pairwise (the ratio to the U5 quadrature is informative).
+  half-voxel-shifted grid overhangs the world instead of lengthening the slab; the slab has the exact depth `0.5 R1`, the raw
+  exit `theta_rms` is compared pairwise (<= 0.5 %) and with the U5 quadrature (within 0.5 %).
 * **T10.** Every orientation scores a 1 mm grid around its path; the integrated depth-dose is formed by projecting the
   voxels on the beam axis (`ionmc.transport.parity.projected_idd`: each voxel is spread over the convolution of
   `|u_i| d_i` boxes it covers, 0.1 mm bins), R80 is read from it (the estimator of T9/T12) and obliques must agree with
@@ -374,8 +378,7 @@ period) and `TransportWorkerError` is raised; no partial result is returned. Scr
   `summarize.py` checks against the manifest (a missing or unparsable document fails the step).
 
 Other choices (listed so the criteria are not read as met more strongly than measured): T9 uses 1 mm IDD bins (the
-deterministic T9-CI check in `test_transport_scoring.py` guards the scoring); the T14 along-beam shift changes the slab
-thickness by half a voxel, so T14 compares the ratios to the quadrature at the actual thickness; T12 compares
+deterministic T9-CI check in `test_transport_scoring.py` guards the scoring);  T12 compares
 independent samples with distinct seeds using the batch-method standard errors (Student-t for few batches; the batch
 counts are recorded). The deposit grids of T13 must be bit-identical.
 

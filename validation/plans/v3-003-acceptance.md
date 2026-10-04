@@ -151,16 +151,25 @@ full-field σ is expected to fall below the reference — that expected deficit 
 model limitation (to be probed in V3-011), not a T15 pass/fail quantity. The frozen tolerance
 (3 % and |z| < 3) applies to the ±20 mm window at both depths; both depths must pass.
 
-¹¹ Definition of the T14 negative control (2026-10-04, task V3-003B, after Codex review REVIEW-e9f5410b7d9c4cd0ad4540756901ae4d
-and before any T14 result is graded): the diagnostic switch samples the hinge angle with the
-variance of the straight-line truncated length (leg 1 plus the second leg cut at the voxel plane
-reached with the pre-hinge direction), then applies the hinge and recomputes the second leg with
-the new direction (cut where it now reaches a plane, or uncut). The difference between that
-straight-line truncated length and the length actually travelled is second order in the
-scattering angle except for hinge points lying on a plane, where the cut/uncut outcome is
-discontinuous; it is recorded per history and reported (quantiles, fraction above 1e-3) as an
-informative diagnostic, not as a pass condition. The frozen control quantity is unchanged:
+¹¹ Definition of the T14 negative control (2026-10-04, task V3-003B, after Codex reviews
+REVIEW-e9f5410b7d9c4cd0ad4540756901ae4d and REVIEW-94ca934293af49ceb0633ff55ec0d959, before any
+T14 result is graded): the diagnostic switch applies "truncate first": before the angle is sampled,
+the straight-line path with the pre-hinge direction over the planned step is tested against the
+voxel planes; if it crosses one, the step is shortened to end exactly on that plane
+(s_trunc = straight-line distance to the plane), otherwise s_trunc is the planned step. The hinge
+angle is then sampled with the variance for s_trunc, the hinge is placed within s_trunc, both legs
+are travelled without re-cutting, and the end point is snapped onto the plane along the cut axis
+(lateral displacement kept); energy loss and scoring use s_trunc. By construction the travelled
+hinge-path length equals the length used for the variance and the direction is untouched (tested);
+the only approximation is the snap displacement δ of the end point along the cut axis, which is
+second order in θ for planes normal to the beam but first order for grazing lateral planes. It is
+recorded per step, summed vectorially per history, and the control verdict requires the RMS over
+histories of |Σδ| at the slab exit to be below 1 % of the control sample's lateral σ at that exit
+plane (positional bias of the control < 1 % of the lateral observable; quantiles of |Σδ| and of
+per-step δ/s are reported as information). The frozen control quantity is unchanged:
 |Δθ_rms(default − control)| < 0.5 % at 1 mm voxels. T14's angular observable is the raw pairwise
-exit θ_rms of the same 0.5·R₁ slab for every voxel size and shift, obtained with a world exit
-plane at the slab thickness that is independent of the voxel grid (grid shifts overhang the world
-instead of lengthening it); the quadrature ratio is informative only.
+exit θ_rms of the same 0.5·R₁ slab (exact depth, no rounding) for every voxel size and shift,
+obtained with a world exit plane at the slab thickness that is independent of the voxel grid
+(grid shifts overhang the world instead of lengthening it); the frozen bound "θ_rms within 0.5 %
+of the U5 quadrature" remains part of the T14 verdict; the quadrature ratio across shifts is
+informative only.

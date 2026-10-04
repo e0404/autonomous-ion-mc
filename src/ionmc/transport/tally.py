@@ -83,12 +83,6 @@ QUANTUM_MEV = 2.0**-30
 multiple (``floor(x / q + 1/2)``, a deterministic function of the piece) and accumulated in int64,
 so the grids are bit-identical for any partition of the histories."""
 QUANTUM_SCALE = 2.0**30
-CONTROL_TOLERANCE = 1e-3
-"""Reporting threshold of the T14 truncated-hinge diagnostic (see the reference): the relative
-mismatch between the straight-line truncated length used for the angle variance and the length
-actually travelled is recorded per history, relative to ``max(s_cut, CONTROL_TOLERANCE * s)``
-(``s`` the planned step; a truncated length below ``1e-3 s`` has negligible scattering variance).
-It is informative, never a pass condition."""
 MAX_QUANTA = 2**62
 """Capacity bound of one voxel accumulator in quanta (validated before, checked after a run)."""
 
@@ -115,7 +109,9 @@ class HistoryDiagnostics:
     """End state of every history of a range and the per-step trace rows of the traced ones.
 
     ``trace_int`` (rows, 8) and ``trace_float`` (rows, 9) hold the trace rows of this range in
-    history/step order (columns of ``TRACE_COLUMNS``).
+    history/step order (columns of ``TRACE_COLUMNS``). ``control_residual`` is the maximum over a
+    history's steps of the snap displacement relative to the step and ``control_displacement`` the
+    vector sum of its snap displacements [mm] (both zero unless ``truncated_hinge_diagnostic``).
     """
 
     end_position_mm: NDArray[np.float64]
@@ -123,6 +119,7 @@ class HistoryDiagnostics:
     end_energy_mev: NDArray[np.float64]
     end_code: NDArray[np.int8]
     control_residual: NDArray[np.float64]
+    control_displacement: NDArray[np.float64]
     trace_int: NDArray[np.int32]
     trace_float: NDArray[np.float64]
 
@@ -300,6 +297,7 @@ def build_diagnostics(
         out["end_code"] = code
         out["end_direction"] = direc
         out["control_residual"] = np.concatenate([d.control_residual for d in diags])
+        out["control_displacement"] = np.concatenate([d.control_displacement for d in diags])
         out["end_energy_mev"] = energy
     if escape_records:
         sel = np.nonzero(code == END_ESCAPED)[0]

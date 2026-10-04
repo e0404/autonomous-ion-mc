@@ -47,7 +47,6 @@ from ionmc.rng.philox import (
 )
 from ionmc.transport.funcs import BIG_LENGTH_MM, make_transport_funcs
 from ionmc.transport.tally import (
-    CONTROL_TOLERANCE,
     COUNTER_NAMES,
     END_CUTOFF,
     END_ESCAPED,
@@ -129,6 +128,7 @@ class _Reference:
         self.mass = r(cfg.source.projectile.mass_mev)
         self.trunc_diag = ph.truncated_hinge_diagnostic
         self.ctrl_res = 0.0
+        self.ctrl_sum = [0.0, 0.0, 0.0]
         self.max_pieces = eff.scoring_pieces
         self.one = r(1.0)
         self.mat = self.geo.material_index
@@ -279,6 +279,7 @@ class _Reference:
         self.end_code = np.full(n, -1, dtype=np.int8)
         self.end_energy = np.full(n, np.nan)
         self.end_ctrl = np.zeros(n)
+        self.end_ctrl_sum = np.zeros((n, 3))
         self.trace: list[list[float]] = []
         self.h_base = h0
         tally_rows = np.zeros((n, N_FIXED_TALLIES + 2 * n_g))
@@ -290,6 +291,7 @@ class _Reference:
             self.quant = [0.0] * n_g
             self.counters = dict.fromkeys(COUNTER_NAMES, 0)
             self.ctrl_res = 0.0
+            self.ctrl_sum = [0.0, 0.0, 0.0]
             self._history(h)
             row = h - h0
             tally_rows[row, :N_FIXED_TALLIES] = [self.tallies[k] for k in TALLY_NAMES]
@@ -305,6 +307,7 @@ class _Reference:
                 end_energy_mev=self.end_energy,
                 end_code=self.end_code,
                 control_residual=self.end_ctrl,
+                control_displacement=self.end_ctrl_sum,
                 trace_int=tr[:, :8].astype(np.int32),
                 trace_float=tr[:, 8:],
             )
@@ -324,6 +327,7 @@ class _Reference:
         self.end_code[i] = code
         self.end_energy[i] = energy
         self.end_ctrl[i] = self.ctrl_res
+        self.end_ctrl_sum[i] = self.ctrl_sum
 
     # -- one history --------------------------------------------------------------------------
     def _history(self, h: int) -> None:
@@ -401,7 +405,7 @@ class _Reference:
             r_mm = r0 * 10.0 / rho
             pvec = V(r(px), r(py), r(pz))
             dvec = V(r(ux), r(uy), r(uz))
-            d_geo, _axis = F.dda_next_clip(
+            d_geo, axis_pre = F.dda_next_clip(
                 pvec, dvec, ix, iy, iz, self.origin, self.spacing, self.z_clip
             )
             s_el = F.eloss_step_limit(r(energy), r(s_lin), self.c_frac)
@@ -443,48 +447,15 @@ class _Reference:
 
             # hinge and second leg
             hx, hy, hz = px + ux * leg1, py + uy * leg1, pz + uz * leg1
-            leg2_w, axis2 = F.leg2_limit_clip(
-                V(r(hx), r(hy), r(hz)),
-                V(r(d1x), r(d1y), r(d1z)),
-                ix,
-                iy,
-                iz,
-                self.origin,
-                self.spacing,
-                r(s - leg1),
-                self.z_clip,
-            )
-            leg2 = float(leg2_w)
-            if self.trunc_diag and ph.multiple_scattering and axis2 >= 0:
-                # DIAGNOSTIC (T14 negative control, default off): the hinge angle is sampled from
-                # the same uniforms with the variance of the truncated length s_cut = leg1 + leg2
-                # of the straight line (pre-hinge direction); the hinge is applied and the
-                # second-leg boundary is found again with the new direction (cut at the plane it
-                # now reaches, or uncut). No iteration: the relative mismatch between s_cut and the
-                # length actually travelled is second order in the angle except where a hinge lies
-                # on a plane; it is recorded per history (informative, not a pass condition).
-                s_cut = leg1 + leg2
-                e_mid2 = self._energy_from_range(m, r0 - rho * s_cut / 20.0)
-                pv_mid2 = K.pv_mev(r(e_mid2), self.mass)
-                if birth:
-                    e_end2 = min(self._energy_from_range(m, r0 - rho * s_cut / 10.0), energy)
-                    var2 = float(
-                        EM.scattering_variance_birth(
-                            pv_mid2,
-                            K.pv_mev(r(e_end2), self.mass),
-                            r(p1v1),
-                            self.one,
-                            inv_xs,
-                            r(rho),
-                            r(s_cut),
-                        )
-                    )
-                else:
-                    t_pow2 = EM.scattering_power_dm(pv_mid2, r(p1v1), self.one, inv_xs, r(rho))
-                    var2 = float(t_pow2) * s_cut
-                theta2 = EM.polar_deflection(r(var2), r(ua[1]))
-                nd2 = EM.rotate_dir(dvec, theta2, r(2.0 * math.pi * ua[2]))
-                d1x, d1y, d1z = float(nd2[0]), float(nd2[1]), float(nd2[2])
+            if self.trunc_diag:
+                # DIAGNOSTIC (T14 negative control, default off), "truncate-first": the planned
+                # step already ends at the first plane the straight line (pre-hinge direction)
+                # reaches (reason 0, axis_pre); the angle was sampled for that length, and the two
+                # legs are travelled without cutting leg 2 again; the end point is then snapped
+                # onto that plane (below) keeping the lateral displacement of the hinge path.
+                leg2 = s - leg1
+                axis2 = int(axis_pre) if int(reason) == 0 else -1
+            else:
                 leg2_w, axis2 = F.leg2_limit_clip(
                     V(r(hx), r(hy), r(hz)),
                     V(r(d1x), r(d1y), r(d1z)),
@@ -497,19 +468,25 @@ class _Reference:
                     self.z_clip,
                 )
                 leg2 = float(leg2_w)
-                den = max(s_cut, CONTROL_TOLERANCE * s)  # floor: negligible-variance steps
-                resid = abs(leg1 + leg2 - s_cut) / den if den > 0.0 else 0.0
-                self.ctrl_res = max(self.ctrl_res, resid)
             nxp, nyp, nzp = hx + d1x * leg2, hy + d1y * leg2, hz + d1z * leg2
             exited = False
             if axis2 == 3:  # the clip plane z = z_exit: the particle leaves the world there
+                if self.trunc_diag and s > 0.0:
+                    self.ctrl_res = max(self.ctrl_res, abs(nzp - float(self.z_clip)) / s)
+                    self.ctrl_sum[2] += float(self.z_clip) - nzp
                 nzp = float(self.z_clip)
                 exited = True
             elif axis2 >= 0:
-                d1a = (d1x, d1y, d1z)[axis2]
+                # the plane crossed: by the bent leg 2 normally, by the pre-hinge direction in the
+                # truncate-first control
+                d1a = (ux, uy, uz)[axis2] if self.trunc_diag else (d1x, d1y, d1z)[axis2]
                 upward = 1 if d1a > 0.0 else 0
                 idx = [ix, iy, iz]
                 plane = float(F.plane_position(idx[axis2], upward, r(o[axis2]), r(sp[axis2])))
+                if self.trunc_diag and s > 0.0:  # snap displacement relative to the step
+                    got = (nxp, nyp, nzp)[axis2]
+                    self.ctrl_res = max(self.ctrl_res, abs(got - plane) / s)
+                    self.ctrl_sum[axis2] += plane - got
                 idx[axis2] += 1 if upward else -1
                 if axis2 == 0:
                     nxp = plane

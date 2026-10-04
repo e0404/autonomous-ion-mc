@@ -116,16 +116,56 @@ def test_steps_that_change_voxel_end_exactly_on_the_crossed_plane(diagnostic: bo
     assert n_checked > 10
 
 
-def test_control_records_the_truncated_length_mismatch_without_iterating() -> None:
-    """One pass: the angle uses the variance of the straight-line truncated length; the relative
-    mismatch with the length travelled is recorded per history (python and kernel identical),
-    informative only (it is not bounded); the default engine records zero."""
+def test_truncate_first_control_ends_cut_steps_on_the_plane_with_bounded_snap() -> None:
+    """Truncate-first control: the planned step already ends at the first plane the straight line
+    reaches; leg 2 is not cut again and the end point is snapped onto that plane. The snap
+    displacement relative to the step, recorded per history (python and kernel identical), is
+    recorded and small; every geometry-limited step changes the voxel (it ends on its
+    plane); the travelled hinge path equals the step exactly; the default records nothing."""
     py = Simulation(_config("python", diagnostic=True)).run()
     wp = Simulation(_config("warp-cpu", diagnostic=True)).run()
     assert np.array_equal(py.diagnostics["control_residual"], wp.diagnostics["control_residual"])
-    big = replace(_config("warp-cpu", diagnostic=True))
-    big = replace(big, run=replace(big.run, n_histories=200, n_batches=2))
-    res = Simulation(big).run().diagnostics["control_residual"]
-    assert res.max() > 0.0  # the mismatch exists and is recorded
+    tr = py.diagnostics["trace"]
+    idx = np.stack([tr["ix"], tr["iy"], tr["iz"]], axis=1)
+    hist = tr["history"]
+    n_cut = 0
+    for k in range(1, len(hist)):
+        if hist[k] == hist[k - 1] and int(tr["reason"][k]) == 0:
+            assert (idx[k] != idx[k - 1]).any()  # ended on its plane: a new voxel
+            n_cut += 1
+    assert n_cut > 10
+    assert np.array_equal(
+        py.diagnostics["control_displacement"], wp.diagnostics["control_displacement"]
+    )
+    assert py.diagnostics["control_residual"].max() > 0.0
+    assert np.abs(py.diagnostics["control_displacement"]).max() > 0.0
     off = Simulation(_config("warp-cpu")).run().diagnostics["control_residual"]
     assert not off.any()
+    assert not Simulation(_config("warp-cpu")).run().diagnostics["control_displacement"].any()
+
+
+def test_control_direction_after_the_hinge_is_the_sampled_direction_exactly() -> None:
+    """The snap moves only the end position, never the direction: in control mode the direction
+    after every step equals, bit for bit, the direction returned by the scattering rotation."""
+    from ionmc.config import validate
+    from ionmc.transport.reference import _Reference
+
+    eff = validate(_config("python", diagnostic=True))
+    ref = _Reference(eff)
+    sampled: list[tuple[float, float, float]] = []
+    original = ref.EM.rotate_dir
+
+    def spy(u, theta, phi):  # type: ignore[no-untyped-def]
+        out = original(u, theta, phi)
+        sampled.append((float(out[0]), float(out[1]), float(out[2])))
+        return out
+
+    ref.EM.rotate_dir = spy
+    try:
+        part = ref.run_range(0, 4)
+    finally:
+        ref.EM.rotate_dir = original  # the namespace is shared by every reference run
+    tr = part.diagnostics.trace_float  # columns x y z ux uy uz E deposit step
+    assert len(sampled) == len(tr) > 100
+    for k, d in enumerate(sampled):
+        assert (tr[k, 3], tr[k, 4], tr[k, 5]) == d

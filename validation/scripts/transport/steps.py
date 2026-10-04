@@ -712,7 +712,8 @@ def fermi_eyges_a2(path: mc.ProtonPath, z_mm: float) -> float:
 
 
 def _thickness(frac: float) -> float:
-    return 5.0 * round(frac * r_csda_mm(150.0) / 5.0)
+    """The actual depth ``frac * R1`` of the slab [mm] (no rounding: the exit plane is exact)."""
+    return frac * r_csda_mm(150.0)
 
 
 def _slab_geometry(
@@ -792,6 +793,34 @@ def slab_theta(
             [float(x) for x in np.quantile(res.diagnostics["control_residual"], [0.5, 0.9, 0.99])]
             if trunc_diag
             else [0.0, 0.0, 0.0]
+        ),
+        # truncate-first control: vector sum of the snap displacements of each history [mm]
+        "control_displacement_rms_mm": (
+            float(np.sqrt(np.mean(np.sum(res.diagnostics["control_displacement"] ** 2, axis=1))))
+            if trunc_diag
+            else 0.0
+        ),
+        "control_displacement_quantiles_50_90_99_mm": (
+            [
+                float(x)
+                for x in np.quantile(
+                    np.linalg.norm(res.diagnostics["control_displacement"], axis=1),
+                    [0.5, 0.9, 0.99],
+                )
+            ]
+            if trunc_diag
+            else [0.0, 0.0, 0.0]
+        ),
+        "sigma_exit_mm": float(
+            math.sqrt(
+                float(
+                    np.mean(
+                        res.diagnostics["escape_position_mm"][:, 0] ** 2
+                        + res.diagnostics["escape_position_mm"][:, 1] ** 2
+                    )
+                )
+                / 2.0
+            )
         ),
     }
 
@@ -999,20 +1028,37 @@ def step_t14(a: argparse.Namespace) -> int:
         "relative_change": control_1mm["theta_rms"] / default_1mm["theta_rms"] - 1.0,
         "bound": 0.005,
         "valid": bool(default_1mm["valid"] == 1.0 and control_1mm["valid"] == 1.0),
-        # informative (never a pass condition): the relative mismatch between the straight-line
-        # truncated length used for the angle variance and the length travelled
-        "informative_truncated_length_mismatch": {
-            "max": control_1mm["control_residual_max"],
-            "fraction_of_histories_above_1e-3": control_1mm[
-                "control_residual_fraction_above_tolerance"
+        # truncate-first control: the snap moves only the position (never the direction); the
+        # positional bias is the vector sum of a history's snap displacements, whose RMS over the
+        # histories must be below 1 % of the lateral sigma at the exit plane (ENFORCED); the
+        # quantiles of |sum| and of the per-step displacement/step are informative
+        "snap_displacement": {
+            "rms_of_vector_sum_mm": control_1mm["control_displacement_rms_mm"],
+            "sigma_exit_mm": control_1mm["sigma_exit_mm"],
+            "relative_to_sigma": control_1mm["control_displacement_rms_mm"]
+            / control_1mm["sigma_exit_mm"],
+            "bound": 0.01,
+            "quantiles_50_90_99_of_abs_sum_mm": control_1mm[
+                "control_displacement_quantiles_50_90_99_mm"
             ],
-            "quantiles_50_90_99_over_histories": control_1mm["control_residual_quantiles_50_90_99"],
+            "per_step_over_step_informative": {
+                "max_over_histories": control_1mm["control_residual_max"],
+                "fraction_of_histories_above_1e-3": control_1mm[
+                    "control_residual_fraction_above_tolerance"
+                ],
+                "quantiles_50_90_99": control_1mm["control_residual_quantiles_50_90_99"],
+            },
         },
     }
-    control["pass"] = bool(abs(control["relative_change"]) < 0.005 and control["valid"])
+    control["pass"] = bool(
+        abs(control["relative_change"]) < 0.005
+        and control["valid"]
+        and control["snap_displacement"]["relative_to_sigma"]
+        < control["snap_displacement"]["bound"]
+    )
     # the frozen observable: the RAW exit theta_rms of the same 0.5 R1 slab (the world ends at
     # z = thickness for every voxel size and shift), compared pairwise; the ratio to the U5
-    # quadrature is informative
+    # quadrature is the second frozen bound (within 0.5 %)
     th_raw = [rows[k]["theta"]["theta_rms"] for k in rows]
     ths = [rows[k]["theta"]["theta_over_quadrature"] for k in rows]
     s5 = [rows[k]["sigma"]["0.5"]["sigma_over_fermi_eyges"] for k in rows]
@@ -1021,7 +1067,7 @@ def step_t14(a: argparse.Namespace) -> int:
     abs_s9 = [rows[k]["sigma"]["0.9"]["sigma_mm"] for k in rows]
     res = {
         "theta_pairwise_spread": max(th_raw) / min(th_raw) - 1.0,
-        "theta_max_dev_from_quadrature_informative": max(abs(t - 1.0) for t in ths),
+        "theta_max_dev_from_quadrature": max(abs(t - 1.0) for t in ths),
         "sigma_pairwise_spread_0.5R": max(abs_s5) / min(abs_s5) - 1.0,
         "sigma_pairwise_spread_0.9R": max(abs_s9) / min(abs_s9) - 1.0,
         "sigma_max_dev_from_fermi_eyges": max(abs(t - 1.0) for t in s5 + s9),
@@ -1032,6 +1078,7 @@ def step_t14(a: argparse.Namespace) -> int:
     )
     res["pass"] = bool(
         res["theta_pairwise_spread"] <= 0.005
+        and res["theta_max_dev_from_quadrature"] <= 0.005
         and max(res["sigma_pairwise_spread_0.5R"], res["sigma_pairwise_spread_0.9R"]) <= 0.01
         and res["sigma_max_dev_from_fermi_eyges"] <= 0.02
         and valid

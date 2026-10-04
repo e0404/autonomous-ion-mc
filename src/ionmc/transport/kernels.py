@@ -37,7 +37,6 @@ from ionmc.physics.kinematics import make_kinematics
 from ionmc.rng.philox import PURPOSE_SOURCE, PURPOSE_TRANSPORT, make_philox
 from ionmc.transport.funcs import make_transport_funcs
 from ionmc.transport.tally import (
-    CONTROL_TOLERANCE,
     END_CUTOFF,
     END_ESCAPED,
     END_MISSED_WORLD,
@@ -350,7 +349,6 @@ def make_transport_kernel(real: type, diag: bool):
     code_rejected = wp.constant(END_SOURCE_REJECTED)
     code_missed = wp.constant(END_MISSED_WORLD)
     with_diag = wp.constant(diag)
-    ctrl_tol = wp.constant(R(CONTROL_TOLERANCE))
 
     def transport(
         ctl: control,
@@ -402,6 +400,9 @@ def make_transport_kernel(real: type, diag: bool):
         c_inv = int(0)
         c_pieces = int(0)
         c_res = R(0.0)
+        c_sx = R(0.0)
+        c_sy = R(0.0)
+        c_sz = R(0.0)
         code = int(-1)
         alive = int(1)
 
@@ -483,7 +484,7 @@ def make_transport_kernel(real: type, diag: bool):
                 r_mm = r0 * R(10.0) / rho
                 pvec = v3(px, py, pz)
                 dvec = v3(ux, uy, uz)
-                d_geo, _axis = F.dda_next_clip(
+                d_geo, axis_pre = F.dda_next_clip(
                     pvec, dvec, ix, iy, iz, ctl.origin, ctl.spacing, ctl.z_clip
                 )
                 s_el = F.eloss_step_limit(energy, s_lin, ctl.c_frac)
@@ -532,53 +533,27 @@ def make_transport_kernel(real: type, diag: bool):
                 hx = px + ux * leg1
                 hy = py + uy * leg1
                 hz = pz + uz * leg1
-                leg2, axis2 = F.leg2_limit_clip(
-                    v3(hx, hy, hz), v3(d1x, d1y, d1z), ix, iy, iz, ctl.origin, ctl.spacing,
-                    s - leg1, ctl.z_clip,
-                )  # fmt: skip
-                if ctl.trunc_diag == 1 and ctl.mcs == 1 and axis2 >= 0:
-                    # DIAGNOSTIC (T14 negative control, default off): see reference._history; one
-                    # pass, the mismatch of the truncated length is recorded, not iterated
-                    s_cut = leg1 + leg2
-                    e_mid2 = energy_from_range(
-                        ln_er, ln_r0, inv_dln_r, ctl.n_r, m, r0 - rho * s_cut / R(20.0)
-                    )
-                    pv_mid2 = K.pv_mev(e_mid2, ctl.mass)
-                    var2 = R(0.0)
-                    if birth == 1:
-                        e_end2 = wp.min(
-                            energy_from_range(
-                                ln_er, ln_r0, inv_dln_r, ctl.n_r, m, r0 - rho * s_cut / R(10.0)
-                            ),
-                            energy,
-                        )
-                        var2 = EM.scattering_variance_birth(
-                            pv_mid2, K.pv_mev(e_end2, ctl.mass), p1v1, one, inv_xs[m], rho,
-                            s_cut,
-                        )  # fmt: skip
-                    else:
-                        t_pow2 = EM.scattering_power_dm(pv_mid2, p1v1, one, inv_xs[m], rho)
-                        var2 = t_pow2 * s_cut
-                    theta2 = EM.polar_deflection(var2, ua1)
-                    nd2 = EM.rotate_dir(dvec, theta2, two_pi * ua2)
-                    d1x = nd2[0]
-                    d1y = nd2[1]
-                    d1z = nd2[2]
+                leg2 = R(0.0)
+                axis2 = int(-1)
+                if ctl.trunc_diag == 1:
+                    # DIAGNOSTIC (T14 negative control, default off), "truncate-first": see
+                    # reference._history; the planned step already ends at the straight-line plane
+                    leg2 = s - leg1
+                    if reason == 0:
+                        axis2 = axis_pre
+                else:
                     leg2, axis2 = F.leg2_limit_clip(
-                        v3(hx, hy, hz), v3(d1x, d1y, d1z), ix, iy, iz, ctl.origin,
-                        ctl.spacing, s - leg1, ctl.z_clip,
+                        v3(hx, hy, hz), v3(d1x, d1y, d1z), ix, iy, iz, ctl.origin, ctl.spacing,
+                        s - leg1, ctl.z_clip,
                     )  # fmt: skip
-                    den = wp.max(s_cut, ctrl_tol * s)  # floor: negligible-variance steps
-                    resid = R(0.0)
-                    if den > zero:
-                        resid = wp.abs(leg1 + leg2 - s_cut) / den
-                    if resid > c_res:
-                        c_res = resid
                 nxp = hx + d1x * leg2
                 nyp = hy + d1y * leg2
                 nzp = hz + d1z * leg2
                 exited = int(0)
                 if axis2 == 3:  # the clip plane z = z_exit: the particle leaves the world there
+                    if ctl.trunc_diag == 1 and s > zero:
+                        c_res = wp.max(c_res, wp.abs(nzp - ctl.z_clip) / s)
+                        c_sz = c_sz + (ctl.z_clip - nzp)
                     nzp = ctl.z_clip
                     exited = 1
                 if axis2 >= 0 and axis2 < 3:
@@ -587,6 +562,12 @@ def make_transport_kernel(real: type, diag: bool):
                         d1a = d1y
                     if axis2 == 2:
                         d1a = d1z
+                    if ctl.trunc_diag == 1:  # the plane crossed by the pre-hinge direction
+                        d1a = R(ux)
+                        if axis2 == 1:
+                            d1a = uy
+                        if axis2 == 2:
+                            d1a = uz
                     upward = int(0)
                     if d1a > zero:
                         upward = 1
@@ -594,13 +575,25 @@ def make_transport_kernel(real: type, diag: bool):
                     if upward == 1:
                         step_i = 1
                     if axis2 == 0:
-                        nxp = F.plane_position(ix, upward, ctl.origin[0], ctl.spacing[0])
+                        plane_x = F.plane_position(ix, upward, ctl.origin[0], ctl.spacing[0])
+                        if ctl.trunc_diag == 1 and s > zero:
+                            c_res = wp.max(c_res, wp.abs(nxp - plane_x) / s)
+                            c_sx = c_sx + (plane_x - nxp)
+                        nxp = plane_x
                         ix = ix + step_i
                     if axis2 == 1:
-                        nyp = F.plane_position(iy, upward, ctl.origin[1], ctl.spacing[1])
+                        plane_y = F.plane_position(iy, upward, ctl.origin[1], ctl.spacing[1])
+                        if ctl.trunc_diag == 1 and s > zero:
+                            c_res = wp.max(c_res, wp.abs(nyp - plane_y) / s)
+                            c_sy = c_sy + (plane_y - nyp)
+                        nyp = plane_y
                         iy = iy + step_i
                     if axis2 == 2:
-                        nzp = F.plane_position(iz, upward, ctl.origin[2], ctl.spacing[2])
+                        plane_z = F.plane_position(iz, upward, ctl.origin[2], ctl.spacing[2])
+                        if ctl.trunc_diag == 1 and s > zero:
+                            c_res = wp.max(c_res, wp.abs(nzp - plane_z) / s)
+                            c_sz = c_sz + (plane_z - nzp)
+                        nzp = plane_z
                         iz = iz + step_i
                     inside = int(0)
                     if ix >= 0 and ix < nx and iy >= 0 and iy < ny and iz >= 0 and iz < nz:
@@ -724,6 +717,9 @@ def make_transport_kernel(real: type, diag: bool):
             end_state[tid, 5] = uz
             end_state[tid, 6] = energy
             end_state[tid, 7] = c_res
+            end_state[tid, 8] = c_sx
+            end_state[tid, 9] = c_sy
+            end_state[tid, 10] = c_sz
             end_code[tid] = code
 
     transport.__name__ = f"transport_{name}_{'diag' if diag else 'plain'}"
