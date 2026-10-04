@@ -150,14 +150,14 @@ run is reproducible from its committed bundle; the manifested `inputs/case.json`
   whole 120 x 120 mm field (240 x 240 bins of 0.5 mm) and 300 depth bins of 1 mm, output
   `Binary` (`dose3d.bin` + `dose3d.binheader`, Sum only, 17.28e6 bins, 138 MB if float64). The full
   field is scored, not +-30 mm: the scorer shares the `Water` component with the 0.5 mm IDD (a
-  child scoring box would remove its volume from the IDD), and the halo and the outer-10 %
-  background zone then lie inside the grid. The frozen T15 text names 0.2 mm lateral bins;
+  child scoring box would remove its volume from the IDD), and the halo then lies inside the grid. The frozen T15 text names 0.2 mm lateral bins;
   240 x 240 bins of 0.2 mm over the field would be 6.7x larger (about 0.9 GB per run), so 0.5 mm is used
   (Sheppard-corrected, tested at sigma = 2-6 mm; accepted by the orchestrator).
   A second identical 3-D scorer `Dose3DPrimary` (`dose3d_primary.bin`) adds the TOPAS filter
   `OnlyIncludeParticlesOfGeneration = "Primary"` (generation-0 particles, no nuclear-secondary
-  dose) for comparison with EM-only backends; the all-particle scorer is for the comparison after
-  nuclear physics exists. The parameter name is unverified: the smoke run decides, with fallback
+  dose); it is INFORMATIVE only and not the EM-only reference (the EM-only all-particle run is, see
+  below), because it also excludes delta-electron dose; the full-physics all-particle scorer serves
+  the comparison after nuclear physics exists. The parameter name is unverified: the smoke run decides, with fallback
   `OnlyIncludeParticlesNamed = "proton"` plus a generation filter, reporting what worked. Outputs
   and `compare_batches.py` report sigma_lat for both (`lateral`, `lateral_primary`). Dose3D binary layout and precision are not documented in the
   repository: `ionmc.reference.parsers.parse_topas_binary` infers float32/float64 from the file
@@ -191,9 +191,12 @@ run is reproducible from its committed bundle; the manifested `inputs/case.json`
   energy fraction in such deltas is a few percent with mean displacement well below 0.5 mm,
   bounding the extra variance by about 0.01 mm^2 against sigma^2 >= 2.9 mm^2, i.e. <= 0.4 % on
   sigma^2 and <= 0.2 % on sigma (range argument, not computed).
+* The comment text about a 'background zone' inside the already executed TOPAS `input.txt` files of
+  the lateral cases is obsolete (no pedestal is subtracted); the files stay byte-identical to what
+  the run manifests hash and the comment will be dropped at the next case revision.
 * Replicate gate (`compare_batches.py`): within a group all runs must have identical engine
   identity (request.json engine block, runner/OS/sandbox hashes, clean commit), identical case.json
-  (minus `seeds` and `rationale`, `-rseed` removed), identical native input after deleting only the
+  (minus `seeds` and `rationale`, the single `-rseed <int>` pair of FRED removed; zero, several or malformed `-rseed` options are rejected), identical native input after deleting only the
   seed line(s) and identical hashes of all other manifested inputs (CT, BDL, Plan), and declared
   histories equal to the native input, FRED `-nprim` and the engine's own run summary. TOPAS
   EM-only runs form their own group `topas-emonly`.

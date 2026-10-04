@@ -134,7 +134,7 @@ def topas_run(
     return _write(tmp, "topas", files, case, f"REF-topas-{seed}", stdout=out, identity=identity)
 
 
-def fred_run(tmp: Path, seed: int) -> Path:
+def fred_run(tmp: Path, seed: int, *, extra_args: list[str] | None = None) -> Path:
     z = (np.arange(100) + 0.5) * 0.5
     arr = _amp(z, 25.0).reshape(100, 1, 1).astype("<f4")
     head = (
@@ -145,7 +145,7 @@ def fred_run(tmp: Path, seed: int) -> Path:
         "histories": 100_000,
         "input": "fred.inp",
         "seeds": [seed],
-        "arguments": ["-nprim", "100000", "-rseed", str(seed)],
+        "arguments": ["-nprim", "100000", "-rseed", str(seed), *(extra_args or [])],
     }
     return _write(
         tmp,
@@ -297,3 +297,42 @@ def test_dose3d_must_reproduce_idd(tmp_path: Path) -> None:
         dose_3d(load_run(topas_run(tmp_path / "b", 2, idd_wrong=True)))
     with pytest.raises(RunError, match="engine"):
         dose_3d(load_run(fred_run(tmp_path / "f", 3)))
+
+
+def test_fred_seed_gate(tmp_path: Path) -> None:
+    mod = _load()
+    a, b = fred_run(tmp_path / "a", 1), fred_run(tmp_path / "b", 2)
+    assert mod.batch_analysis([a, b])["engines"]["fred"]["r80_mm"]["n"] == 2
+    dup = fred_run(tmp_path / "dup", 3, extra_args=["-rseed", "99"])
+    with pytest.raises(mod.BatchError, match="exactly one"):
+        mod.batch_analysis([a, dup])
+    with pytest.raises(SystemExit):
+        mod.main(["--runs", str(a), str(dup), "--output", str(tmp_path / "o.json")])
+    for bad in ("12x", "-5", "0"):
+        run = fred_run(tmp_path / f"m{bad}", 4)
+        case = json.loads((run / "inputs/case.json").read_text())
+        case["arguments"] = ["-nprim", "100000", "-rseed", bad]
+        mal = _rewrite_case(run, case)
+        with pytest.raises(mod.BatchError, match="positive integer"):
+            mod.batch_analysis([a, mal])
+    with pytest.raises(mod.BatchError, match="exactly one"):
+        mod.fred_rseed(["-nprim", "1"])
+    with pytest.raises(mod.BatchError, match="positive integer"):
+        mod.fred_rseed(["-rseed"])
+    assert mod.fred_rseed(["-a", "-rseed", "7", "-b"]) == (7, ["-a", "-b"])
+
+
+def _rewrite_case(run: Path, case: dict) -> Path:
+    """Rewrite inputs/case.json, the request copy and the manifest hashes consistently."""
+    (run / "inputs/case.json").write_text(json.dumps(case))
+    req = json.loads((run / "request.json").read_text())
+    req["case"] = case
+    blob = (run / "inputs/case.json").read_bytes()
+    req["input_files"]["case.json"]["sha256"] = hashlib.sha256(blob).hexdigest()
+    (run / "request.json").write_text(json.dumps(req))
+    man = json.loads((run / "transfer-manifest.json").read_text())
+    for rel in ("inputs/case.json", "request.json"):
+        data = (run / rel).read_bytes()
+        man["files"][rel] = {"bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
+    (run / "transfer-manifest.json").write_text(json.dumps(man))
+    return run

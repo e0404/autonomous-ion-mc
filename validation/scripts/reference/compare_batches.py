@@ -168,13 +168,14 @@ def run_seed(run: ReferenceRun) -> int:
         if found != [seed]:
             raise BatchError(f"{run.run_id}: native input seed {found} != case.json seed {seed}")
     elif run.engine == "fred":
-        args = run.case.get("arguments", [])
-        if (
-            "-rseed" not in args
-            or args.index("-rseed") + 1 >= len(args)
-            or args[args.index("-rseed") + 1] != str(seed)
-        ):
-            raise BatchError(f"{run.run_id}: case.json arguments lack '-rseed {seed}'")
+        if "rseed" in text:
+            raise BatchError(f"{run.run_id}: fred input must not set the seed ({rel})")
+        try:
+            found_seed, _ = fred_rseed(list(run.case.get("arguments", [])))
+        except BatchError as exc:
+            raise BatchError(f"{run.run_id}: {exc}") from exc
+        if found_seed != seed:
+            raise BatchError(f"{run.run_id}: -rseed {found_seed} != case.json seed {seed}")
     else:
         raise BatchError(f"{run.run_id}: unsupported engine {run.engine!r}")
     return seed
@@ -210,17 +211,19 @@ def _sha(blob: bytes) -> str:
     return hashlib.sha256(blob).hexdigest()
 
 
-def _strip_rseed(args: list[Any]) -> list[Any]:
-    out: list[Any] = []
-    skip = False
-    for a in args:
-        if skip:
-            skip = False
-        elif a == "-rseed":
-            skip = True
-        else:
-            out.append(a)
-    return out
+def fred_rseed(args: list[Any]) -> tuple[int, list[Any]]:
+    """The single well-formed ``-rseed <int>`` pair of a FRED argv and the argv without it.
+
+    Zero or several ``-rseed`` options, a missing value or a non-positive-integer value raise
+    ``BatchError``.
+    """
+    idx = [i for i, a in enumerate(args) if a == "-rseed"]
+    if len(idx) != 1:
+        raise BatchError(f"expected exactly one '-rseed' argument, found {len(idx)}")
+    i = idx[0]
+    if i + 1 >= len(args) or not re.fullmatch(r"[1-9][0-9]*", str(args[i + 1])):
+        raise BatchError("'-rseed' must be followed by a positive integer")
+    return int(args[i + 1]), args[:i] + args[i + 2 :]
 
 
 def run_fingerprint(run: ReferenceRun) -> dict[str, Any]:
@@ -274,7 +277,8 @@ def run_fingerprint(run: ReferenceRun) -> dict[str, Any]:
     if run.engine in _SEED_LINE:
         native = _SEED_LINE[run.engine].sub("", native)
     case = {k: v for k, v in run.case.items() if k not in _CASE_SEED_FIELDS}
-    case["arguments"] = _strip_rseed(list(case.get("arguments", [])))
+    if run.engine == "fred":
+        case["arguments"] = fred_rseed(list(case.get("arguments", [])))[1]
     identity = {k: run.request.get(k) for k in _IDENTITY_KEYS}
     if identity["engine"] is None:
         raise BatchError(f"{run.run_id}: request.json lacks the engine identity")

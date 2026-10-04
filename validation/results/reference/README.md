@@ -73,4 +73,6 @@ and was superseded; its values are not comparable and are not kept.
   precision. The large difference between full physics and EM-only is the nuclear halo (secondary
   particles) plus hadron-elastic deflection of primaries. R80: EM-only 158.81 +- 0.00 mm versus
   full physics 158.61 +- 0.01 mm. The EM-only all-particle values are the T15 reference for the
-  EM-only ionmc backends.
+  EM-only ionmc backends; the acceptance window is +-20 mm (plan clarification 10), and the
+  full-field second moment is informative only (ionmc's Gaussian MCS lacks the single-scattering
+  tail, so its full-field sigma is expected to fall below the reference).

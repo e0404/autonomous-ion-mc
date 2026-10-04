@@ -105,3 +105,13 @@ of the all-physics lateral case is informative only. The remaining known differe
 reference and ionmc is Geant4's transport of delta electrons above its production cut versus local
 deposition; it is part of the measured deviation, not an allowance. The all-physics, all-particle
 scorer is the T15 reference once nuclear interactions exist (V3-005). Tolerances are unchanged.
+
+¹⁰ Window designation for T15 (2026-10-04, task V3-010B, after Codex review REVIEW-0aa3fa48f2f54b4f81e5c3a2cab13da3
+and before any T15 grading): the T15 acceptance observable is the Sheppard-corrected lateral σ of
+the dose profile within the ±20 mm window around the beam axis (1 mm slabs at z/R80 = 0.5 and
+0.9), computed identically for ionmc and the reference; the full-field (±60 mm) second moment is
+reported alongside as informative only. Reason: the full-field moment is dominated by the far
+tails, and ionmc's Gaussian multiple-scattering model has no single-scattering tail, so its
+full-field σ is expected to fall below the reference — that expected deficit is a documented
+model limitation (to be probed in V3-011), not a T15 pass/fail quantity. The frozen tolerance
+(3 % and |z| < 3) applies to the ±20 mm window at both depths; both depths must pass.
