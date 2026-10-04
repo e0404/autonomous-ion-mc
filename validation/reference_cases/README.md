@@ -132,7 +132,8 @@ metadata to change a status.
 
 Library code: `ionmc.reference.runs` (`load_run`, `depth_dose`, per-engine extraction, fail closed)
 and `ionmc.reference.metrics`. Metrics use bin-centre depths, argmax for the peak (resolution is
-the bin width: 1 mm TOPAS/FRED, 2 mm MCsquare) and linear interpolation on the distal side.
+the depth bin width of the run: 1 mm TOPAS/FRED and 2 mm MCsquare for the older exploratory runs,
+0.5 mm for all fine batch runs) and linear interpolation on the distal side.
 
 ## Evidence-grade batch protocol (V3-010B)
 
