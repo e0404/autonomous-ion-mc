@@ -10,8 +10,14 @@ column), expansions of different chunks and workers are concatenated, and the re
 correctly rounded exact sum (``math.fsum``). The reduced tallies are therefore bit-identical
 for any partition of the histories (test T13); counters are integer sums.
 
-Only the per-voxel energy-deposit grids (``edep``) are not exact: they are accumulated in the
-backend precision with atomic adds, converted to float64 and summed in worker order.
+The per-voxel energy-deposit grids are int64 fixed-point accumulators (quantum ``QUANTUM_MEV`` =
+2**-30 MeV): each deposit piece (see the track-length scoring in ``ionmc.transport.reference``)
+is rounded to the nearest quantum by a deterministic function of the piece and added with an
+integer (associative) addition, so the grids are bit-identical for any partition of the
+histories and across chunk sizes, workers, and CPU/CUDA within a precision. The rounding
+error is at most q/2 per piece (random walk q/2 sqrt(N) over N pieces in a voxel) and is
+tallied per history and grid (``quantization`` columns) so that the energy balance closes.
+Conversion to float64 and the sum over workers happen at the reduction.
 
 Diagnostic arrays are per history (end state) and per step (trace); they are concatenated in
 history order.
@@ -66,9 +72,21 @@ COUNTER_NAMES = (
     "queue_overflow",
     "source_energy_out_of_range",
     "energy_inversion",
+    "accumulator_overflow",
 )
 TALLY_NAMES = ("initial", "cutoff", "step_deposit", "escaped", "truncated", "unaccounted")
 N_FIXED_TALLIES = len(TALLY_NAMES)
+
+QUANTUM_MEV = 2.0**-30
+"""Fixed-point quantum of the deposit grids [MeV]: every deposit piece is rounded to the nearest
+multiple (``floor(x / q + 1/2)``, a deterministic function of the piece) and accumulated in int64,
+so the grids are bit-identical for any partition of the histories."""
+QUANTUM_SCALE = 2.0**30
+MAX_LEG_PIECES = 8
+"""Pieces walked per leg of the track-length scoring (a leg of at most one scoring spacing crosses
+at most one plane per axis)."""
+MAX_QUANTA = 2**62
+"""Capacity bound of one voxel accumulator in quanta (validated before, checked after a run)."""
 
 
 @dataclass
@@ -83,6 +101,7 @@ class RawTransport:
     tallies: dict[str, float]
     outside_mev: list[float]
     counters: dict[str, int]
+    quantization_mev: list[float] = field(default_factory=list)
     diagnostics: dict[str, Any] = field(default_factory=dict)
     meta: dict[str, Any] = field(default_factory=dict)
 
@@ -108,15 +127,17 @@ class PartialTransport:
     """Result of the histories ``[h0, h1)`` (one chunk sequence of one worker).
 
     ``tally_components[c]`` is the exact-sum expansion of tally column ``c`` (``N_FIXED_TALLIES``
-    fixed columns, then one per scoring grid for the outside deposit); ``counter_sums`` the
-    int64 sums of the counters; ``edep`` one ``(B, n_voxels)`` float64 array per grid.
+    fixed columns, then one per scoring grid for the outside deposit, then one per grid for the
+    quantization residual ``sum(piece - quanta * q)`` of the deposits inside the grid);
+    ``counter_sums`` the int64 sums of the counters; ``edep`` one ``(B, n_voxels)`` int64 array
+    (quanta of ``QUANTUM_MEV``) per grid.
     """
 
     h0: int
     h1: int
     tally_components: list[list[float]]
     counter_sums: list[int]
-    edep: list[NDArray[np.float64]]
+    edep: list[NDArray[np.int64]]
     diagnostics: HistoryDiagnostics | None
     meta: dict[str, Any] = field(default_factory=dict)
 
@@ -146,7 +167,7 @@ def rows_to_partial(
     h1: int,
     tally_rows: NDArray[np.float64],
     counter_rows: NDArray[np.int32],
-    edep: list[NDArray[np.float64]],
+    edep: list[NDArray[np.int64]],
     diagnostics: HistoryDiagnostics | None,
     meta: dict[str, Any] | None = None,
 ) -> PartialTransport:
@@ -167,11 +188,16 @@ def rows_to_partial_many(
     h1: int,
     tally_components: list[list[float]],
     counter_sums: list[int],
-    edep: list[NDArray[np.float64]],
+    edep: list[NDArray[np.int64]],
     diagnostics: HistoryDiagnostics | None,
     meta: dict[str, Any] | None = None,
 ) -> PartialTransport:
-    """Assemble a :class:`PartialTransport` from already reduced pieces (chunked backends)."""
+    """Assemble a :class:`PartialTransport` from already reduced pieces (chunked backends). The
+    ``accumulator_overflow`` counter is set here: a voxel at or above ``MAX_QUANTA`` (or
+    negative, i.e. wrapped) invalidates the result."""
+    counter_sums = list(counter_sums)
+    bad = any(int(a.max()) >= MAX_QUANTA or int(a.min()) < 0 for a in edep if a.size)
+    counter_sums[COUNTER_NAMES.index("accumulator_overflow")] += int(bad)
     return PartialTransport(
         h0, h1, tally_components, counter_sums, edep, diagnostics, dict(meta or {})
     )
@@ -194,7 +220,7 @@ def merge_partials(
         pos = p.h1
     if pos != n_histories:
         raise ValueError(f"partial results cover [0, {pos}), expected [0, {n_histories})")
-    n_cols = N_FIXED_TALLIES + n_grids
+    n_cols = N_FIXED_TALLIES + 2 * n_grids
     for p in parts:
         if (
             len(p.tally_components) != n_cols
@@ -208,15 +234,16 @@ def merge_partials(
     }
     edep = []
     for g in range(n_grids):
-        acc = np.zeros_like(parts[0].edep[g], dtype=np.float64)
-        for p in parts:  # worker order, float64
+        acc = np.zeros_like(parts[0].edep[g], dtype=np.int64)
+        for p in parts:  # integer sums are associative: any order gives the same grid
             acc += p.edep[g]
-        edep.append(acc)
+        edep.append(acc.astype(np.float64) * QUANTUM_MEV)
     tallies = dict(zip(TALLY_NAMES, totals[:N_FIXED_TALLIES], strict=True))
     return RawTransport(
         edep_mev=edep,
         tallies=tallies,
-        outside_mev=totals[N_FIXED_TALLIES:],
+        outside_mev=totals[N_FIXED_TALLIES : N_FIXED_TALLIES + n_grids],
+        quantization_mev=totals[N_FIXED_TALLIES + n_grids :],
         counters=counters,
     )
 

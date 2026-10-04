@@ -50,7 +50,8 @@ class TransportCounters:
     that exceeded 64 attempts; ``genealogy_overflow`` and ``queue_overflow``: secondary
     bookkeeping limits (always 0 until secondaries exist); ``source_energy_out_of_range``:
     sampled source energies outside ``[E_cut, table maximum]``; ``energy_inversion``: steps in
-    which the inverse-range energy exceeded the initial energy (clamped to it).
+    which the inverse-range energy exceeded the initial energy (clamped to it);
+    ``accumulator_overflow``: a fixed-point voxel accumulator reached its capacity.
     """
 
     step_truncation: int = 0
@@ -60,6 +61,7 @@ class TransportCounters:
     queue_overflow: int = 0
     source_energy_out_of_range: int = 0
     energy_inversion: int = 0
+    accumulator_overflow: int = 0
 
     @property
     def any_nonzero(self) -> bool:
@@ -76,6 +78,7 @@ class TransportCounters:
             "queue_overflow": self.queue_overflow,
             "source_energy_out_of_range": self.source_energy_out_of_range,
             "energy_inversion": self.energy_inversion,
+            "accumulator_overflow": self.accumulator_overflow,
         }
 
 
@@ -86,7 +89,8 @@ class EnergyBalance:
     Every tally is accumulated independently. ``cutoff_mev`` (energy deposited locally below
     ``E_cut``) is part of the grid and outside deposits; the closure identity is
     ``initial = step_deposit + cutoff + escaped + truncated + unaccounted`` and, for every
-    grid, ``in_grid + outside = step_deposit + cutoff``.
+    grid, ``in_grid + quantization + outside = step_deposit + cutoff`` (``quantization`` is the
+    summed rounding residual of the fixed-point grids, at most q/2 per deposited piece).
     """
 
     initial_mev: float
@@ -97,6 +101,7 @@ class EnergyBalance:
     unaccounted_mev: float
     in_grid_mev: tuple[float, ...]
     outside_mev: tuple[float, ...]
+    quantization_mev: tuple[float, ...] = ()
 
     @property
     def closure_residual_mev(self) -> float:
@@ -117,11 +122,14 @@ class EnergyBalance:
         return abs(self.closure_residual_mev) / self.initial_mev
 
     def grid_relative_residual(self, grid: int) -> float:
-        """``|in_grid + outside - (step_deposit + cutoff)| / initial`` for grid ``grid``."""
+        """``|in_grid + quantization + outside - (step_deposit + cutoff)| / initial``."""
         if self.initial_mev == 0.0:
             return 0.0
         total = self.step_deposit_mev + self.cutoff_mev
-        return abs(self.in_grid_mev[grid] + self.outside_mev[grid] - total) / self.initial_mev
+        quant = self.quantization_mev[grid] if self.quantization_mev else 0.0
+        return abs(self.in_grid_mev[grid] + quant + self.outside_mev[grid] - total) / (
+            self.initial_mev
+        )
 
 
 @dataclass(frozen=True, eq=False)
@@ -351,6 +359,7 @@ def _assemble(eff: EffectiveConfig, raw: RawTransport) -> Result:
         unaccounted_mev=t["unaccounted"],
         in_grid_mev=tuple(float(a.sum()) for a in raw.edep_mev),
         outside_mev=tuple(float(x) for x in raw.outside_mev),
+        quantization_mev=tuple(float(x) for x in raw.quantization_mev),
     )
     return Result(
         valid=valid,

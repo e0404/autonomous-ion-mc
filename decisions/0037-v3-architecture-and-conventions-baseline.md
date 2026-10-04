@@ -123,6 +123,22 @@ whose arguments are not in these units state the unit in the parameter name
   to below 1e-6. A float64 build of the same kernels (float64 state, tables
   and accumulators) is provided for numerical falsification probes and
   trajectory-level parity with the reference; it is not a production mode.
+  **Amendment (2026-10-04, task V3-003B):** the per-batch deposit
+  accumulators are int64 fixed-point (quantum q = 2⁻³⁰ MeV) on every
+  backend instead of float32. Reason (contrary evidence preserved): on the
+  GPU host the frozen partition-invariance check T13 failed for float32
+  deposit grids — tallies and counters were identical across CUDA chunk sizes
+  2¹⁰ vs 2¹⁸ but the deposit grid missed the 1e-5 relative bound, because the
+  order of float32 `atomic_add` depends on the chunking and per-add rounding
+  (≈6e-8 of the running sum) random-walks as √N_add (≈1e-5 at 1e⁴ adds,
+  3e-5 at 1e⁵). Integer addition is associative, so int64 fixed-point sums
+  are bit-identical across chunk sizes, worker counts and CPU/CUDA within a
+  precision; the quantization error is ≤ q/2 per deposit (random walk
+  ≤ q/2·√N_add ≈ 1.5e-7 MeV at 1e⁵ adds) and the per-batch rounding
+  residual is tallied so the energy balance still closes. Capacity is
+  guarded fail-closed at validation (n_histories_per_batch·E_max/q < 2⁶²) and
+  by a runtime overflow check. The per-batch split is kept for the standard
+  error; batch grids are converted to float64 and summed in a fixed order.
 - Random numbers: all backends use the same counter-based generator,
   Philox4x32-10 (Salmon et al., SC'11; the Random123 construction). Warp's
   built-in `wp.rand_init`/`wp.randf` is **not** used anywhere: it is a
@@ -199,4 +215,6 @@ Consequences:
 
 ## Later validation outcome
 
-To be appended as tasks merge.
+- 2026-10-04 (V3-003B): the float32 per-batch accumulator rule was falsified
+  on CUDA by the frozen T13 chunk-invariance check (see the amendment under
+  "Precision and randomness"); replaced by int64 fixed-point accumulators.

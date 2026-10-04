@@ -131,6 +131,7 @@ def run_warp_range(eff: EffectiveConfig, h0: int, h1: int, device: str) -> Parti
     total_vox = int(sum(sizes))
     g_origin = np.array([list(g.origin_mm) for g in cfg.scoring])
     g_inv = np.array([[1.0 / x for x in g.spacing_mm] for g in cfg.scoring])
+    g_spacing = np.array([list(g.spacing_mm) for g in cfg.scoring])
     g_shape = np.array([list(g.shape) for g in cfg.scoring], dtype=np.int32)
 
     t = tab.to_warp(device, real)
@@ -140,13 +141,14 @@ def run_warp_range(eff: EffectiveConfig, h0: int, h1: int, device: str) -> Parti
     )
     arr_gorigin: Any = wp.array(g_origin.astype(np_real), dtype=real, device=device)
     arr_ginv: Any = wp.array(g_inv.astype(np_real), dtype=real, device=device)
+    arr_gspacing: Any = wp.array(g_spacing.astype(np_real), dtype=real, device=device)
     arr_gshape: Any = wp.array(g_shape, dtype=int, device=device)
     arr_goff: Any = wp.array(offsets, dtype=int, device=device)
-    edep = wp.zeros((run.n_batches, total_vox), dtype=real, device=device)
+    edep = wp.zeros((run.n_batches, total_vox), dtype=wp.int64, device=device)
 
     n_local = h1 - h0
     chunk = min(run.chunk_histories, max(n_local, 1))
-    tally_rows = wp.zeros((chunk, N_FIXED_TALLIES + n_g), dtype=wp.float64, device=device)
+    tally_rows = wp.zeros((chunk, N_FIXED_TALLIES + 2 * n_g), dtype=wp.float64, device=device)
     counter_rows = wp.zeros((chunk, len(COUNTER_NAMES)), dtype=wp.int32, device=device)
     if use_diag:
         end_state = wp.zeros((chunk, 7), dtype=real, device=device)
@@ -171,7 +173,7 @@ def run_warp_range(eff: EffectiveConfig, h0: int, h1: int, device: str) -> Parti
         ctl.trace_k = wp.uint32(0)
         ctl.trace_h0 = wp.uint32(0)
 
-    comps: list[list[float]] = [[] for _ in range(N_FIXED_TALLIES + n_g)]
+    comps: list[list[float]] = [[] for _ in range(N_FIXED_TALLIES + 2 * n_g)]
     counter_sums = [0] * len(COUNTER_NAMES)
     chunk_seconds: list[float] = []
     t_loop = time.perf_counter()
@@ -186,16 +188,16 @@ def run_warp_range(eff: EffectiveConfig, h0: int, h1: int, device: str) -> Parti
             dim=n,
             inputs=[
                 ctl, arr_mat, arr_dens, t.ln_s_mass, t.ln_r_mass, t.ln_e_of_r, t.ln_e0,
-                t.inv_dln_e, t.ln_r0, t.inv_dln_r, t.z_over_a, t.inv_rho_xs, arr_gorigin, arr_ginv,
-                arr_gshape, arr_goff, edep, tally_rows, counter_rows, end_state, end_code,
-                trace_i, trace_f, trace_n,
+                t.inv_dln_e, t.ln_r0, t.inv_dln_r, t.z_over_a, t.inv_rho_xs,
+                arr_gorigin, arr_gspacing, arr_ginv, arr_gshape, arr_goff,
+                edep, tally_rows, counter_rows, end_state, end_code, trace_i, trace_f, trace_n,
             ],
             device=device,
         )  # fmt: skip
         trows = tally_rows.numpy()[:n]  # synchronises
         crows = counter_rows.numpy()[:n]
         chunk_seconds.append(time.perf_counter() - t_c)
-        for c in range(N_FIXED_TALLIES + n_g):
+        for c in range(N_FIXED_TALLIES + 2 * n_g):
             comps[c].extend(exact_components(trows[:, c]))
         for i, x in enumerate(crows.astype(np.int64).sum(axis=0)):
             counter_sums[i] += int(x)
@@ -208,7 +210,7 @@ def run_warp_range(eff: EffectiveConfig, h0: int, h1: int, device: str) -> Parti
             host_code[sl] = end_code.numpy()[:n].astype(np.int8)
     loop_s = time.perf_counter() - t_loop
 
-    edep_all = edep.numpy().astype(np.float64)
+    edep_all = edep.numpy().astype(np.int64)
     edep_grids = [edep_all[:, o : o + s].copy() for o, s in zip(offsets, sizes, strict=True)]
     diagnostics = None
     if use_diag:

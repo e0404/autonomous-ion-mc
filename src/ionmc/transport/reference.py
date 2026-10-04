@@ -16,6 +16,11 @@ Draw order (counter ``(history, genealogy 0, block, purpose)``, key from the see
   block B (straggling attempts, at most 64; exactly one ignored block when straggling is
   off). A step that finds ``E <= E_cut`` draws nothing.
 
+Scoring (decision amended in V3-003B): the deposit of a step (after straggling) is distributed
+along both hinge legs proportionally to the path length inside each scoring voxel, for every
+scoring grid, by an incremental DDA over the leg (``seg_piece``); the energy left at the cutoff
+is a point deposit at the end point. Pieces are quantized to int64 quanta (``tally``).
+
 Tallies (MeV, accumulated independently of the grids): ``initial``, ``cutoff`` (local
 deposition below ``E_cut``; scored into the grids like any deposit), ``step_deposit``,
 ``escaped``, ``truncated`` (energy of histories stopped by the step limit or a stall, never
@@ -48,7 +53,10 @@ from ionmc.transport.tally import (
     END_MISSED_WORLD,
     END_SOURCE_REJECTED,
     END_TRUNCATED,
+    MAX_LEG_PIECES,
     N_FIXED_TALLIES,
+    QUANTUM_MEV,
+    QUANTUM_SCALE,
     TALLY_NAMES,
     TRACE_COLUMNS,
     HistoryDiagnostics,
@@ -130,8 +138,10 @@ class _Reference:
         self.grids = cfg.scoring
         self.g_origin = [self.V(*(r(x) for x in g.origin_mm)) for g in self.grids]
         self.g_inv = [self.V(*(r(1.0 / x) for x in g.spacing_mm)) for g in self.grids]
-        self.edep = [np.zeros((self.n_batches, g.n_voxels), dtype=np.float64) for g in self.grids]
+        self.g_spacing = [self.V(*(r(x) for x in g.spacing_mm)) for g in self.grids]
+        self.edep = [np.zeros((self.n_batches, g.n_voxels), dtype=np.int64) for g in self.grids]
         self.outside = [0.0] * len(self.grids)
+        self.quant = [0.0] * len(self.grids)
         self.tallies = dict.fromkeys(TALLY_NAMES, 0.0)
         self.counters = dict.fromkeys(COUNTER_NAMES, 0)
         self.e_table_max = float(self.tab.e_max_mev.min())
@@ -152,16 +162,105 @@ class _Reference:
         return float(self.F.interp_exp(r(row[i]), r(row[i + 1]), f))
 
     # -- scoring ------------------------------------------------------------------------------
-    def _score(self, batch: int, pos: tuple[float, float, float], deposit: float) -> None:
+    # Deposits are quantized (nearest multiple of QUANTUM_MEV, floor(x / q + 1/2)) and added to
+    # int64 grids; the rounding residual of every in-grid piece is tallied per grid, deposits
+    # outside a grid are tallied in float64 (see ionmc.transport.tally).
+    def _deposit_voxel(self, batch: int, g: int, ix: int, iy: int, iz: int, de: float) -> None:
+        nx, ny, nz = self.grids[g].shape
+        if 0 <= ix < nx and 0 <= iy < ny and 0 <= iz < nz:
+            n = math.floor(de * QUANTUM_SCALE + 0.5)
+            self.edep[g][batch, (ix * ny + iy) * nz + iz] += n
+            self.quant[g] += de - n * QUANTUM_MEV
+        else:
+            self.outside[g] += de
+
+    def _deposit_point(self, batch: int, pos: tuple[float, float, float], de: float) -> None:
+        """Point deposit (the energy left at the cutoff) in every grid."""
         r = self.R
         p = self.V(r(pos[0]), r(pos[1]), r(pos[2]))
         for g, grid in enumerate(self.grids):
             nx, ny, nz = grid.shape
-            ix, iy, iz, inside = self.F.grid_index(p, self.g_origin[g], self.g_inv[g], nx, ny, nz)
-            if inside:
-                self.edep[g][batch, (ix * ny + iy) * nz + iz] += deposit
+            ix, iy, iz, _inside = self.F.grid_index(p, self.g_origin[g], self.g_inv[g], nx, ny, nz)
+            self._deposit_voxel(batch, g, ix, iy, iz, de)
+
+    def _deposit_leg(
+        self,
+        batch: int,
+        g: int,
+        p: tuple[float, float, float],
+        u: tuple[float, float, float],
+        length: float,
+        deposit: float,
+        s_act: float,
+    ) -> None:
+        """Deposit ``deposit * piece / s_act`` in every voxel of grid ``g`` crossed by the straight
+        segment from ``p`` along ``u`` of the given length (per-grid incremental DDA)."""
+        r, F, V = self.R, self.F, self.V
+        nx, ny, nz = self.grids[g].shape
+        go, gs = self.g_origin[g], self.g_spacing[g]
+        og, sg = self.grids[g].origin_mm, self.grids[g].spacing_mm
+        px, py, pz = p
+        ux, uy, uz = u
+        uvec = V(r(ux), r(uy), r(uz))
+        ix, iy, iz, _inside = F.grid_index(V(r(px), r(py), r(pz)), go, self.g_inv[g], nx, ny, nz)
+        remaining = length
+        for _ in range(MAX_LEG_PIECES):
+            if remaining > 0.0:
+                piece_w, axis = F.seg_piece(V(r(px), r(py), r(pz)), uvec, ix, iy, iz, go, gs,
+                                            r(remaining))  # fmt: skip
+                piece = float(piece_w)
+                self._deposit_voxel(batch, g, ix, iy, iz, deposit * piece / s_act)
+                remaining = remaining - piece
+                if axis >= 0:
+                    px = px + ux * piece
+                    py = py + uy * piece
+                    pz = pz + uz * piece
+                    ua = (ux, uy, uz)[axis]
+                    upward = 1 if ua > 0.0 else 0
+                    idx = (ix, iy, iz)[axis]
+                    plane = float(F.plane_position(idx, upward, r(og[axis]), r(sg[axis])))
+                    step = 1 if upward else -1
+                    if axis == 0:
+                        px = plane
+                        ix = ix + step
+                    elif axis == 1:
+                        py = plane
+                        iy = iy + step
+                    else:
+                        pz = plane
+                        iz = iz + step
+        if remaining > 0.0:  # cannot happen for max_step <= scoring spacing; conserves energy
+            self._deposit_voxel(batch, g, ix, iy, iz, deposit * remaining / s_act)
+
+    def _deposit_step(
+        self,
+        batch: int,
+        p0: tuple[float, float, float],
+        d0: tuple[float, float, float],
+        leg1: float,
+        hinge: tuple[float, float, float],
+        d1: tuple[float, float, float],
+        leg2: float,
+        deposit: float,
+        s_act: float,
+    ) -> None:
+        """Track-length apportioning of a step deposit along both hinge legs in every grid."""
+        for g in range(len(self.grids)):
+            if s_act > 0.0:
+                self._deposit_leg(batch, g, p0, d0, leg1, deposit, s_act)
+                self._deposit_leg(batch, g, hinge, d1, leg2, deposit, s_act)
             else:
-                self.outside[g] += deposit
+                self._deposit_point_grid(batch, g, p0, deposit)
+
+    def _deposit_point_grid(
+        self, batch: int, g: int, pos: tuple[float, float, float], de: float
+    ) -> None:
+        r = self.R
+        nx, ny, nz = self.grids[g].shape
+        ix, iy, iz, _inside = self.F.grid_index(
+            self.V(r(pos[0]), r(pos[1]), r(pos[2])), self.g_origin[g], self.g_inv[g], nx, ny, nz
+        )
+        self._deposit_voxel(batch, g, ix, iy, iz, de)
 
     # -- driver -------------------------------------------------------------------------------
     def run_range(self, h0: int, h1: int) -> PartialTransport:
@@ -175,17 +274,19 @@ class _Reference:
         self.end_energy = np.full(n, np.nan)
         self.trace: list[list[float]] = []
         self.h_base = h0
-        tally_rows = np.zeros((n, N_FIXED_TALLIES + n_g))
+        tally_rows = np.zeros((n, N_FIXED_TALLIES + 2 * n_g))
         counter_rows = np.zeros((n, len(COUNTER_NAMES)), dtype=np.int32)
         for h in range(h0, h1):
             # per-history accumulators: a row depends on this history alone
             self.tallies = dict.fromkeys(TALLY_NAMES, 0.0)
             self.outside = [0.0] * n_g
+            self.quant = [0.0] * n_g
             self.counters = dict.fromkeys(COUNTER_NAMES, 0)
             self._history(h)
             row = h - h0
             tally_rows[row, :N_FIXED_TALLIES] = [self.tallies[k] for k in TALLY_NAMES]
-            tally_rows[row, N_FIXED_TALLIES:] = self.outside
+            tally_rows[row, N_FIXED_TALLIES : N_FIXED_TALLIES + n_g] = self.outside
+            tally_rows[row, N_FIXED_TALLIES + n_g :] = self.quant
             counter_rows[row] = [self.counters[k] for k in COUNTER_NAMES]
         diagnostics = None
         if self.want_diag:
@@ -274,7 +375,7 @@ class _Reference:
         while True:
             if energy <= self.e_cut:
                 self.tallies["cutoff"] += energy
-                self._score(batch, (px, py, pz), energy)
+                self._deposit_point(batch, (px, py, pz), energy)
                 self._end(h, END_CUTOFF, (px, py, pz), (ux, uy, uz), energy)
                 return
             if steps >= max_steps:
@@ -402,12 +503,12 @@ class _Reference:
             e_new = energy - loss
             deposit = energy - e_new
 
-            # scoring at the hinge-path midpoint
+            # scoring: the deposit is apportioned along both legs by path length in each voxel
             if deposit > 0.0:
-                mid = F.point_on_hinge(
-                    pvec, dvec, r(leg1), V(r(d1x), r(d1y), r(d1z)), r(0.5 * s_act)
-                )
-                self._score(batch, (float(mid[0]), float(mid[1]), float(mid[2])), deposit)
+                self._deposit_step(
+                    batch, (px, py, pz), (ux, uy, uz), leg1, (hx, hy, hz), (d1x, d1y, d1z), leg2,
+                    deposit, s_act,
+                )  # fmt: skip
                 self.tallies["step_deposit"] += deposit
 
             px, py, pz = nxp, nyp, nzp

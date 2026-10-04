@@ -10,7 +10,7 @@ import pytest
 from ionmc.config import SimulationConfig
 from ionmc.errors import UnsupportedCombinationError
 from ionmc.simulation import Simulation
-from ionmc.transport.parity import compare_partition
+from ionmc.transport.parity import compare_partition, format_partition_verdict
 
 pytestmark = pytest.mark.cuda
 MakeConfig = Callable[..., SimulationConfig]
@@ -40,7 +40,9 @@ def test_cuda_chunk_sizes_partition_invariance(make_config: MakeConfig) -> None:
         return Simulation(cfg).run()
 
     v = compare_partition(run(2**10), run(2**18))
-    assert v["tallies_identical"] and v["counters_identical"] and v["pass"], v
+    assert v["tallies_identical"] and v["counters_identical"] and v["pass"], (
+        format_partition_verdict(v)
+    )
 
 
 def test_cuda_cpu_workers_rejected(make_config: MakeConfig) -> None:

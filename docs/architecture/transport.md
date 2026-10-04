@@ -117,8 +117,12 @@ counter starting at 0.
    state energy `E` replaces `Rinv(R(E))`, because the round-trip offset of the tables would
    otherwise accumulate step after step along a track; the path independence of the CSDA relation
    is kept since the new energy is a function of the old one only.
-7. Deposit `E_old - E_new` at the midpoint of the two-leg path into every scoring grid (a deposit
-   outside a grid is tallied in that grid's `outside`).
+7. Deposit `E_old - E_new` into every scoring grid by track-length apportioning: the deposit is
+   distributed along both hinge legs proportionally to the path length inside each scoring voxel
+   (`piece / s_act` of it per piece), using a per-grid incremental DDA over the leg (`seg_piece`, the
+   transport DDA pattern; no floor-and-nudge); a piece outside a grid is tallied in that grid's `outside`.
+   The energy left at the cutoff is a point deposit at the end point. Each piece is quantized (below).
+   (V3-003A scored the midpoint; with steps comparable to the bin width that aliased with the bin edges.)
 8. Leaving the geometry tallies the remaining energy as `escaped`. More than three consecutive
    zero-length steps tally the energy as `truncated` and increment `stall`.
 
@@ -143,7 +147,7 @@ and hashes, material fingerprint, metadata) is stored as read-only mappings and 
 
 Transport voxels (the `VoxelGeometry`, which sets the voxel planes that end steps) and scoring voxels
 are independent: a scoring grid may have any origin (for example a half-voxel offset from the phantom
-corner), spacing and shape, and its voxel is found from the step midpoint with `floor`. The geometry
+corner), spacing and shape, and the deposit of a step is shared among the voxels its legs cross. The geometry
 may be a single box or a refined or shifted voxel grid, so the sensitivity of lateral and angular
 observables to the transport grid can be probed with the reference backend: `escape_records` gives
 position, direction and energy of every escaping particle (exit angles, `theta_rms`), the scoring grids
@@ -171,8 +175,10 @@ Each rule raises before any transport and nothing is clamped or substituted (tes
 * material index out of range, density <= 0, spacing <= 0, wrong shapes, non-finite values;
 * zero or more than four scoring grids, duplicate grid names, accumulators
   (`n_batches * voxels * bytes`) above `memory_budget_bytes`;
-* `max_step_mm` larger than the smallest scoring spacing (the midpoint deposit needs steps no
-  longer than one scoring voxel);
+* `max_step_mm` larger than the smallest scoring spacing (a leg then crosses at most one plane
+  per axis of a scoring grid, which bounds the DDA walk of the track-length scoring);
+* `n_histories / n_batches` times the largest source energy above the capacity `2**62` quanta of a fixed-point
+  voxel accumulator (quantum 2**-30 MeV);
 * `max_steps * 65 >= 2**32` (the block counter bound).
 
 `max_steps` defaults to a conservative bound computed from the CSDA path length, the step limits
@@ -236,16 +242,28 @@ the same trajectory (test T1). `make_transport_kernel(real, diag)` is cached per
 (`module="unique"`, backward off); the variants are float32, float32 with diagnostics, float64 and float64 with
 diagnostics, and the trace is validated for float64 only (float32 with a trace is rejected). Inputs are
 structure-of-arrays Warp arrays plus a per-precision `wp.struct` of scalars. Outputs: the deposit grid
-`edep[B, sum(n_voxels)]` in the backend precision (atomic adds into batch `h mod B`), per-history float64
-`tally_rows[chunk, 6 + G]` and int32 `counter_rows[chunk, 7]` (each written by its own thread), and with
-diagnostics the end state (position, direction, energy, code) per history.
+`edep[B, sum(n_voxels)]` of int64 fixed-point quanta (integer atomic adds into batch `h mod B`), per-history
+float64 `tally_rows[chunk, 6 + 2 G]` (tallies, outside deposits, quantization residuals) and int32
+`counter_rows[chunk, 8]` (each written by its own thread), and with diagnostics the end state (position,
+direction, energy, code) per history.
 
 **Exact tallies.** The host reduces the per-history rows with exact summation (`exact_components`: repeated
 `math.fsum` of the residual gives an expansion whose exact sum is the exact column sum, and expansions of chunks
 and workers are concatenated before the final `fsum`). Tallies are therefore bit-identical for any partition
-of the histories (chunks, workers); counters are int64 sums. Only the deposit grids depend on the order of float
-additions: they are accumulated in the backend precision (atomic adds), converted to float64 and summed in worker
-order. The reference backend uses the same row reduction.
+of the histories (chunks, workers); counters are int64 sums. The reference backend uses the same row reduction.
+
+**Fixed-point deposit grids.** Every apportioned deposit piece is rounded to the nearest multiple of
+q = 2**-30 MeV (`floor(x / q + 1/2)`, a deterministic function of the piece) and added to an int64 voxel
+accumulator. Integer addition is associative, so the grids are bit-identical for any chunk size and any
+number of workers within a precision (test T13 requires `edep_identical`; the old relative bounds are reported
+as secondary numbers). The rounding error is at most q/2 per piece (a random walk of at most q/2 sqrt(N)
+over N pieces in one voxel) and its sum is tallied per history and grid, so the balance
+`in_grid + quantization + outside = step_deposit + cutoff` closes in float64. The conversion to float64
+and the sum over workers happen at the reduction. Capacity: a voxel holds at most `2**62` quanta (about
+`4.3e9` MeV); validation rejects runs whose per-batch energy could reach it, and a voxel at or above it after
+a run raises the counter `accumulator_overflow`, which invalidates the result. Pieces are computed in the
+backend precision, so a float32 run apportions to float32 rounding (about 1e-7 of a step deposit) before
+quantizing.
 
 **Chunking.** A range of histories is launched in chunks of at most `chunk_histories`; after each chunk the rows
 are reduced and the deposit grid stays on the device. On CUDA, `.numpy()` of the rows synchronises, and the
@@ -287,16 +305,15 @@ summary. Steps (`steps.py`): T1, T2, T8, T9, T10, T12, T13 (workers, chunks) and
 Implementation choices forced by engine rules (listed so the criteria are not read as met more strongly than
 measured): `max_step_mm` must not exceed the smallest scoring spacing, so T8/T14 take the lateral sigma from the
 exit positions of particles leaving a water slab of the stated thickness (the Fermi-Eyges A2 quantity) instead of
-0.2 mm deposit bins; T9 uses 1 mm IDD bins; T10 uses the distribution of the projected track-end depth
+0.2 mm deposit bins; T9 uses 1 mm IDD bins (the deterministic T9-CI check in `test_transport_scoring.py` guards the scoring); T10 uses the distribution of the projected track-end depth
 (oblique deposit grids alias when projected); the T14 along-beam shift changes the slab thickness by half a voxel,
 so T14 compares the ratios to the quadrature at the actual thickness; the T14 negative control (a diagnostic
 switch for the hinge angle) is not implemented. T12 compares independent samples with distinct seeds using the
-batch-method standard errors (Student-t for few batches; the batch counts are recorded). The deposit-grid
-comparison of T13 is voxelwise with an absolute floor of 1 % of the peak.
+batch-method standard errors (Student-t for few batches; the batch counts are recorded). The deposit grids of T13 must be bit-identical.
 
-Note on T9: with `s_max` equal to the IDD bin width the midpoint scoring aliases with the bin edges (deposits of
-steps of one bin width fall into one bin each, and the pattern changes where steps become energy-loss limited);
-the artefact moves with the bin offset and is absent for steps much shorter than the bin.
+Note on T9: with the midpoint scoring of V3-003A and `s_max` comparable to the IDD bin width, point deposits
+aliased with the bin edges (deviations of tens of percent relative to a 0.1 mm-step run in the deterministic
+case); track-length apportioning removes this, and the T9-CI test records the bounds.
 
 ## Benchmarks
 

@@ -378,4 +378,4 @@ def test_history_belongs_to_batch_history_mod_b(make_config: MakeConfig) -> None
     assert len(set(np.round(energy, 9))) == n  # distinct per-history energies
     per_batch = res.grids[0].batch_energy_mev[:, 0, 0, 0] * (n // b)
     for k in range(b):
-        assert per_batch[k] == pytest.approx(energy[k::b].sum(), rel=1e-12)
+        assert per_batch[k] == pytest.approx(energy[k::b].sum(), rel=1e-12, abs=1e-6)  # + quantum

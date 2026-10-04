@@ -42,7 +42,10 @@ from ionmc.transport.tally import (
     END_MISSED_WORLD,
     END_SOURCE_REJECTED,
     END_TRUNCATED,
+    MAX_LEG_PIECES,
     N_FIXED_TALLIES,
+    QUANTUM_MEV,
+    QUANTUM_SCALE,
 )
 
 wp.set_module_options({"enable_backward": False})
@@ -101,23 +104,55 @@ def make_kernel_support(real: type) -> SimpleNamespace:
     Control.__qualname__ = Control.__name__
     control = wp.struct(Control)
 
+    q_scale = wp.constant(wp.float64(QUANTUM_SCALE))
+    q_mev = wp.constant(wp.float64(QUANTUM_MEV))
+    max_pieces = wp.constant(MAX_LEG_PIECES)
+
     @named_func(name)
-    def score(
-        edep: wp.array2d(dtype=R),
+    def deposit_voxel(
+        edep: wp.array2d(dtype=wp.int64),
+        tally_rows: wp.array2d(dtype=wp.float64),
+        tid: int,
+        batch: int,
+        g: int,
+        ix: int,
+        iy: int,
+        iz: int,
+        nxg: int,
+        nyg: int,
+        nzg: int,
+        off: int,
+        n_grids: int,
+        de: R,
+    ):
+        """Quantize and add ``de`` to voxel ``(ix, iy, iz)`` of grid ``g`` (int64 atomic add), or
+        tally it as outside; the rounding residual is tallied per grid."""
+        d64 = wp.float64(de)
+        if ix >= 0 and ix < nxg and iy >= 0 and iy < nyg and iz >= 0 and iz < nzg:
+            n = wp.int64(wp.floor(d64 * q_scale + wp.float64(0.5)))
+            wp.atomic_add(edep, batch, off + (ix * nyg + iy) * nzg + iz, n)
+            c = n_fixed + n_grids + g
+            tally_rows[tid, c] = tally_rows[tid, c] + (d64 - wp.float64(n) * q_mev)
+        else:
+            tally_rows[tid, n_fixed + g] = tally_rows[tid, n_fixed + g] + d64
+
+    @named_func(name)
+    def deposit_point(
+        edep: wp.array2d(dtype=wp.int64),
         tally_rows: wp.array2d(dtype=wp.float64),
         tid: int,
         batch: int,
         px: R,
         py: R,
         pz: R,
-        deposit: R,
+        de: R,
         g_origin: wp.array2d(dtype=R),
         g_inv: wp.array2d(dtype=R),
         g_shape: wp.array2d(dtype=int),
         g_off: wp.array(dtype=int),
         n_grids: int,
     ):
-        """Deposit ``deposit`` at ``p`` in every grid containing it; else tally it as outside."""
+        """Point deposit (the energy left at the cutoff) in every grid."""
         p = v3(px, py, pz)
         for g in range(n_grids):
             go = v3(g_origin[g, 0], g_origin[g, 1], g_origin[g, 2])
@@ -126,10 +161,129 @@ def make_kernel_support(real: type) -> SimpleNamespace:
             nyg = g_shape[g, 1]
             nzg = g_shape[g, 2]
             ix, iy, iz, inside = F.grid_index(p, go, gi, nxg, nyg, nzg)
-            if inside == 1:
-                wp.atomic_add(edep, batch, g_off[g] + (ix * nyg + iy) * nzg + iz, deposit)
+            deposit_voxel(
+                edep, tally_rows, tid, batch, g, ix, iy, iz, nxg, nyg, nzg, g_off[g], n_grids, de
+            )
+
+    @named_func(name)
+    def deposit_leg(
+        edep: wp.array2d(dtype=wp.int64),
+        tally_rows: wp.array2d(dtype=wp.float64),
+        tid: int,
+        batch: int,
+        g: int,
+        px0: R,
+        py0: R,
+        pz0: R,
+        ux: R,
+        uy: R,
+        uz: R,
+        length: R,
+        deposit: R,
+        s_act: R,
+        g_origin: wp.array2d(dtype=R),
+        g_spacing: wp.array2d(dtype=R),
+        g_inv: wp.array2d(dtype=R),
+        g_shape: wp.array2d(dtype=int),
+        g_off: wp.array(dtype=int),
+        n_grids: int,
+    ):
+        """Deposit ``deposit * piece / s_act`` in every voxel of grid ``g`` crossed by the straight
+        segment from ``p0`` along ``u`` (per-grid incremental DDA, ``seg_piece``)."""
+        go = v3(g_origin[g, 0], g_origin[g, 1], g_origin[g, 2])
+        gs = v3(g_spacing[g, 0], g_spacing[g, 1], g_spacing[g, 2])
+        gi = v3(g_inv[g, 0], g_inv[g, 1], g_inv[g, 2])
+        nxg = g_shape[g, 0]
+        nyg = g_shape[g, 1]
+        nzg = g_shape[g, 2]
+        off = g_off[g]
+        px = R(px0)
+        py = R(py0)
+        pz = R(pz0)
+        uvec = v3(ux, uy, uz)
+        ix, iy, iz, inside0 = F.grid_index(v3(px, py, pz), go, gi, nxg, nyg, nzg)
+        remaining = R(length)
+        for _it in range(max_pieces):
+            if remaining > R(0.0):
+                piece, axis = F.seg_piece(v3(px, py, pz), uvec, ix, iy, iz, go, gs, remaining)
+                deposit_voxel(
+                    edep, tally_rows, tid, batch, g, ix, iy, iz, nxg, nyg, nzg, off, n_grids,
+                    deposit * piece / s_act,
+                )  # fmt: skip
+                remaining = remaining - piece
+                if axis >= 0:
+                    px = px + ux * piece
+                    py = py + uy * piece
+                    pz = pz + uz * piece
+                    ua = R(ux)
+                    if axis == 1:
+                        ua = uy
+                    if axis == 2:
+                        ua = uz
+                    upward = int(0)
+                    step_i = int(-1)
+                    if ua > R(0.0):
+                        upward = 1
+                        step_i = 1
+                    if axis == 0:
+                        px = F.plane_position(ix, upward, go[0], gs[0])
+                        ix = ix + step_i
+                    if axis == 1:
+                        py = F.plane_position(iy, upward, go[1], gs[1])
+                        iy = iy + step_i
+                    if axis == 2:
+                        pz = F.plane_position(iz, upward, go[2], gs[2])
+                        iz = iz + step_i
+        if remaining > R(0.0):
+            deposit_voxel(
+                edep, tally_rows, tid, batch, g, ix, iy, iz, nxg, nyg, nzg, off, n_grids,
+                deposit * remaining / s_act,
+            )  # fmt: skip
+
+    @named_func(name)
+    def deposit_step(
+        edep: wp.array2d(dtype=wp.int64),
+        tally_rows: wp.array2d(dtype=wp.float64),
+        tid: int,
+        batch: int,
+        p0: v3,
+        d0: v3,
+        leg1: R,
+        hinge: v3,
+        d1: v3,
+        leg2: R,
+        deposit: R,
+        s_act: R,
+        g_origin: wp.array2d(dtype=R),
+        g_spacing: wp.array2d(dtype=R),
+        g_inv: wp.array2d(dtype=R),
+        g_shape: wp.array2d(dtype=int),
+        g_off: wp.array(dtype=int),
+        n_grids: int,
+    ):
+        """Track-length apportioning of a step deposit along both hinge legs in every grid."""
+        for g in range(n_grids):
+            if s_act > R(0.0):
+                deposit_leg(
+                    edep, tally_rows, tid, batch, g, p0[0], p0[1], p0[2], d0[0], d0[1], d0[2],
+                    leg1, deposit, s_act, g_origin, g_spacing, g_inv, g_shape, g_off, n_grids,
+                )  # fmt: skip
+                deposit_leg(
+                    edep, tally_rows, tid, batch, g, hinge[0], hinge[1], hinge[2], d1[0], d1[1],
+                    d1[2], leg2, deposit, s_act, g_origin, g_spacing, g_inv, g_shape, g_off,
+                    n_grids,
+                )  # fmt: skip
             else:
-                tally_rows[tid, n_fixed + g] = tally_rows[tid, n_fixed + g] + wp.float64(deposit)
+                go = v3(g_origin[g, 0], g_origin[g, 1], g_origin[g, 2])
+                gi = v3(g_inv[g, 0], g_inv[g, 1], g_inv[g, 2])
+                nxg = g_shape[g, 0]
+                nyg = g_shape[g, 1]
+                nzg = g_shape[g, 2]
+                ix, iy, iz, inside = F.grid_index(p0, go, gi, nxg, nyg, nzg)
+                deposit_voxel(
+                    edep, tally_rows, tid, batch, g, ix, iy, iz, nxg, nyg, nzg, g_off[g], n_grids,
+                    deposit,
+                )  # fmt: skip
 
     @named_func(name)
     def energy_from_range(
@@ -145,7 +299,11 @@ def make_kernel_support(real: type) -> SimpleNamespace:
         return F.interp_exp(ln_er[m, i], ln_er[m, i + 1], f)
 
     return SimpleNamespace(
-        control=control, score=score, energy_from_range=energy_from_range, real=name
+        control=control,
+        deposit_point=deposit_point,
+        deposit_step=deposit_step,
+        energy_from_range=energy_from_range,
+        real=name,
     )
 
 
@@ -165,7 +323,8 @@ def make_transport_kernel(real: type, diag: bool):
     PH = make_philox(real)
     v3 = F.vec3
     control = S.control
-    score = S.score
+    deposit_point = S.deposit_point
+    deposit_step = S.deposit_step
     energy_from_range = S.energy_from_range
 
     u_zero = wp.constant(wp.uint32(0))
@@ -194,10 +353,11 @@ def make_transport_kernel(real: type, diag: bool):
         z_over_a: wp.array(dtype=R),
         inv_xs: wp.array(dtype=R),
         g_origin: wp.array2d(dtype=R),
+        g_spacing: wp.array2d(dtype=R),
         g_inv: wp.array2d(dtype=R),
         g_shape: wp.array2d(dtype=int),
         g_off: wp.array(dtype=int),
-        edep: wp.array2d(dtype=R),
+        edep: wp.array2d(dtype=wp.int64),
         tally_rows: wp.array2d(dtype=wp.float64),
         counter_rows: wp.array2d(dtype=wp.int32),
         end_state: wp.array2d(dtype=R),
@@ -287,7 +447,7 @@ def make_transport_kernel(real: type, diag: bool):
         while alive == 1:
             if energy <= ctl.e_cut:
                 t_cutoff = t_cutoff + wp.float64(energy)
-                score(
+                deposit_point(
                     edep, tally_rows, tid, batch, px, py, pz, energy, g_origin, g_inv, g_shape,
                     g_off, ctl.n_grids,
                 )  # fmt: skip
@@ -430,12 +590,11 @@ def make_transport_kernel(real: type, diag: bool):
                 e_new = energy - loss
                 deposit = energy - e_new
 
-                # scoring at the hinge-path midpoint
                 if deposit > zero:
-                    mid = F.point_on_hinge(pvec, dvec, leg1, v3(d1x, d1y, d1z), R(0.5) * s_act)
-                    score(
-                        edep, tally_rows, tid, batch, mid[0], mid[1], mid[2], deposit, g_origin,
-                        g_inv, g_shape, g_off, ctl.n_grids,
+                    deposit_step(
+                        edep, tally_rows, tid, batch, v3(px, py, pz), v3(ux, uy, uz), leg1,
+                        v3(hx, hy, hz), v3(d1x, d1y, d1z), leg2, deposit, s_act, g_origin,
+                        g_spacing, g_inv, g_shape, g_off, ctl.n_grids,
                     )  # fmt: skip
                     t_step = t_step + wp.float64(deposit)
 

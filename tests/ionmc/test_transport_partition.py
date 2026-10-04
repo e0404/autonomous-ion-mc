@@ -17,7 +17,7 @@ import pytest
 from ionmc.config import DiagnosticsOptions, SimulationConfig, validate
 from ionmc.errors import TransportWorkerError, UnsupportedCombinationError
 from ionmc.simulation import Simulation
-from ionmc.transport.parity import compare_partition
+from ionmc.transport.parity import compare_partition, format_partition_verdict
 from ionmc.transport.pool import history_ranges, run_pool
 from ionmc.transport.reference import run_reference_range
 from ionmc.transport.tally import (
@@ -60,9 +60,9 @@ def _partial(h0: int, h1: int, n_grids: int = 1) -> PartialTransport:
     return rows_to_partial(
         h0,
         h1,
-        np.ones((n, 6 + n_grids)),
-        np.zeros((n, 7), dtype=np.int32),
-        [np.zeros((2, 3)) for _ in range(n_grids)],
+        np.ones((n, 6 + 2 * n_grids)),
+        np.zeros((n, 8), dtype=np.int32),
+        [np.zeros((2, 3), dtype=np.int64) for _ in range(n_grids)],
         None,
     )
 
@@ -122,7 +122,7 @@ def test_t13_warp_cpu_one_versus_three_workers(make_config: MakeConfig, precisio
     one, three = run(1), run(3)
     verdict = _compare(one, three)
     assert verdict["tallies_identical"] and verdict["counters_identical"]
-    assert verdict["pass"], verdict["deposit"]
+    assert verdict["pass"], format_partition_verdict(verdict)
     parts = three.transport_report["partials"]
     assert [p["worker"] for p in parts] == [0, 1, 2]
     assert len({p["pid"] for p in parts}) == 3

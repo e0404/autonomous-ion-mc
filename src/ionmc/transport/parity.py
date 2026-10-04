@@ -7,9 +7,9 @@ asserts and the numbers a validation archive records come from the same code.
 
 * T1 (:func:`compare_traces`): discrete trace columns exactly equal, continuous columns within
   ``rtol = atol = 1e-10``.
-* T13 (:func:`compare_partition`): counters and tallies bit-identical, deposit grids within
-  relative 1e-5 (float32) or 1e-12 (float64); see :func:`deposit_agreement` for the exact
-  meaning of "relative" on voxels far below the peak.
+* T13 (:func:`compare_partition`): counters, tallies and deposit grids bit-identical (the grids
+  are int64 fixed-point accumulators); the old relative bounds (1e-5 float32, 1e-12 float64, see
+  :func:`deposit_agreement`) are reported as secondary numbers.
 * T12 (:func:`t12_compare`): per-bin ``z = (a - b) / sqrt(se_a^2 + se_b^2)`` of two independent
   samples (distinct seeds) on the IDD and the lateral profiles for bins above 1 % of the maximum,
   a Wilson-Hilferty chi-square p-value (> 0.001), the Bonferroni bound on ``max |z|`` and
@@ -38,6 +38,7 @@ DEPOSIT_RTOL = {"float32": 1e-5, "float64": 1e-12}
 DEPOSIT_FLOOR_FRACTION = 0.01
 P_VALUE_MIN = 0.001
 SCALAR_Z_MAX = 3.5
+DEGENERATE_RTOL = 1e-9
 DOSE_FRACTION = 0.01
 T12_DEPTHS = (0.25, 0.5, 0.9)
 
@@ -97,21 +98,55 @@ def deposit_agreement(
     """Elementwise agreement of two deposit arrays: ``|a - b| <= rtol * max(|a|, f max|a|)``
     with ``f = 1 %`` (voxels below 1 % of the peak are compared with an absolute tolerance of
     ``rtol`` times 1 % of the peak, because float32 accumulation noise is relative to the
-    accumulated magnitude, not to a near-empty voxel)."""
+    accumulated magnitude, not to a near-empty voxel).
+
+    The verdict carries the diagnostics of the worst voxel: its index (into the array, e.g.
+    ``(batch, ix, iy, iz)``), both values, the number of violating voxels and the largest
+    difference relative to the peak.
+    """
     peak = float(np.max(np.abs(a))) if a.size else 0.0
     floor = DEPOSIT_FLOOR_FRACTION * peak
     scale = np.maximum(np.abs(a), floor)
     with np.errstate(divide="ignore", invalid="ignore"):
         rel = np.where(scale > 0.0, np.abs(a - b) / scale, 0.0)
+    worst = np.unravel_index(int(np.argmax(rel)), rel.shape) if a.size else ()
+    dmax = np.unravel_index(int(np.argmax(np.abs(a - b))), a.shape) if a.size else ()
     return {
         "max_relative_difference": float(rel.max()) if a.size else 0.0,
+        "worst_voxel_index": [int(i) for i in worst],
+        "worst_voxel_value_a": float(a[worst]) if a.size else 0.0,
+        "worst_voxel_value_b": float(b[worst]) if a.size else 0.0,
+        "n_violating_voxels": int(np.count_nonzero(rel > rtol)),
+        "n_compared_voxels": int(a.size),
         "max_difference_over_peak": float(np.abs(a - b).max() / peak) if peak > 0 else 0.0,
+        "max_difference_voxel_index": [int(i) for i in dmax],
+        "peak": peak,
         "total_relative_difference": float(abs(a.sum() - b.sum()) / abs(a.sum()))
         if a.sum() != 0.0
         else 0.0,
         "rtol": rtol,
         "pass": bool(np.all(rel <= rtol)),
     }
+
+
+def format_partition_verdict(v: dict[str, Any]) -> str:
+    """One readable block of the numbers of a :func:`compare_partition` verdict (for assertion
+    messages)."""
+    lines = [
+        f"precision={v['precision']} tallies_identical={v['tallies_identical']} "
+        f"counters_identical={v['counters_identical']} edep_identical={v['edep_identical']} "
+        f"pass={v['pass']}"
+    ]
+    for name, g in v["deposit"].items():
+        lines.append(
+            f"  grid {name}: identical={g['edep_identical']} "
+            f"max_rel={g['max_relative_difference']:.3e} (rtol {g['rtol']:.0e}) at "
+            f"{g['worst_voxel_index']} a={g['worst_voxel_value_a']:.9g} "
+            f"b={g['worst_voxel_value_b']:.9g}; violating {g['n_violating_voxels']}/"
+            f"{g['n_compared_voxels']}; max|d|/peak={g['max_difference_over_peak']:.3e} at "
+            f"{g['max_difference_voxel_index']}; total_rel={g['total_relative_difference']:.3e}"
+        )
+    return "\n".join(lines)
 
 
 def compare_partition(a: Result, b: Result) -> dict[str, Any]:
@@ -140,13 +175,12 @@ def compare_partition(a: Result, b: Result) -> dict[str, Any]:
     }
     tallies_identical = tallies_a == tallies_b
     counters_identical = a.counters.as_dict() == b.counters.as_dict()
-    grids = {
-        ga.name: deposit_agreement(
-            np.asarray(ga.batch_energy_mev), np.asarray(gb.batch_energy_mev),
-            DEPOSIT_RTOL[precision],
-        )
-        for ga, gb in zip(a.grids, b.grids, strict=True)
-    }  # fmt: skip
+    grids = {}
+    for ga, gb in zip(a.grids, b.grids, strict=True):
+        arr_a, arr_b = np.asarray(ga.batch_energy_mev), np.asarray(gb.batch_energy_mev)
+        g = deposit_agreement(arr_a, arr_b, DEPOSIT_RTOL[precision])
+        g["edep_identical"] = bool(np.array_equal(arr_a, arr_b))
+        grids[ga.name] = g
     return {
         "precision": precision,
         "tallies_identical": tallies_identical,
@@ -156,8 +190,11 @@ def compare_partition(a: Result, b: Result) -> dict[str, Any]:
         "counters": a.counters.as_dict(),
         "counter_names": list(COUNTER_NAMES),
         "deposit": grids,
+        "edep_identical": all(g["edep_identical"] for g in grids.values()),
         "pass": bool(
-            tallies_identical and counters_identical and all(g["pass"] for g in grids.values())
+            tallies_identical
+            and counters_identical
+            and all(g["edep_identical"] for g in grids.values())
         ),
     }
 
@@ -312,7 +349,11 @@ def t12_compare(a: T12Observables, b: T12Observables) -> dict[str, Any]:
         ma, sa = _mean_se(a.scalars[name])
         mb, sb = _mean_se(b.scalars[name])
         se_ab = math.sqrt(float(sa) ** 2 + float(sb) ** 2)
-        zs = (float(ma) - float(mb)) / se_ab if se_ab > 0.0 else math.inf
+        diff_s = float(ma) - float(mb)
+        if abs(diff_s) <= DEGENERATE_RTOL * max(abs(float(ma)), abs(float(mb))):
+            zs = 0.0  # fixed by conservation (no variance): equal to the accumulator quantum
+        else:
+            zs = diff_s / se_ab if se_ab > 0.0 else math.inf
         passed = bool(abs(zs) < SCALAR_Z_MAX)
         out["scalars"][name] = {
             "a": float(ma),

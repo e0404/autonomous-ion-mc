@@ -132,6 +132,23 @@ def make_transport_funcs(real: type) -> SimpleNamespace:
         return leg, axis
 
     @named_func(name)
+    def seg_piece(
+        p: v3, u: v3, ix: int, iy: int, iz: int, origin: v3, spacing: v3, remaining_mm: real
+    ) -> tuple[real, int]:
+        """Length [mm] of the next piece of a straight segment inside voxel ``(ix, iy, iz)`` of a
+        grid and the axis of the plane that ends it (-1 if the segment ends inside the voxel):
+        the shared per-grid DDA step of the track-length scoring. ``remaining_mm`` is the length
+        of the segment still to be walked; a plane at exactly that distance does not end the
+        piece (the segment ends there)."""
+        d, ax = dda_next(p, u, ix, iy, iz, origin, spacing)
+        piece = remaining_mm
+        axis = int(-1)
+        if d < remaining_mm:
+            piece = d
+            axis = ax
+        return piece, axis
+
+    @named_func(name)
     def range_step_limit(r_mm: real, alpha: real, rho_f_mm: real) -> real:
         """Geant4 range step function: ``alpha R + rho_f (1 - alpha)(2 - rho_f/R)`` for
         ``R > rho_f``, else ``R`` (final range step); ``r_mm`` is the residual CSDA range."""
@@ -234,6 +251,7 @@ def make_transport_funcs(real: type) -> SimpleNamespace:
         plane_position=plane_position,
         dda_next=dda_next,
         leg2_limit=leg2_limit,
+        seg_piece=seg_piece,
         range_step_limit=range_step_limit,
         eloss_step_limit=eloss_step_limit,
         select_step=select_step,

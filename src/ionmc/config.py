@@ -26,7 +26,12 @@ from ionmc.physics.stopping import StoppingSource, StoppingTable
 from ionmc.scoring import MAX_SCORING_GRIDS, ScoringGrid
 from ionmc.sources import PencilBeamSource
 from ionmc.transport.tables import TransportTables, thaw
-from ionmc.transport.tally import TRACE_N_CONTINUOUS, TRACE_N_DISCRETE
+from ionmc.transport.tally import (
+    MAX_QUANTA,
+    QUANTUM_MEV,
+    TRACE_N_CONTINUOUS,
+    TRACE_N_DISCRETE,
+)
 
 STRAGGLING_MODELS = ("bohr_gauss_clamped_gamma_v1",)
 MCS_MODELS = ("differential_moliere",)
@@ -412,7 +417,7 @@ def validate(config: SimulationConfig) -> EffectiveConfig:
     names = [g.name for g in config.scoring]
     if len(set(names)) != len(names):
         raise fail(f"scoring grid names must be unique, got {names}")
-    bytes_per = 4 if run.precision == "float32" else 8
+    bytes_per = 8  # int64 fixed-point accumulators on every backend
     accumulator_bytes = (
         run.n_batches * sum(g.n_voxels for g in config.scoring) * bytes_per * run.cpu_workers
     )
@@ -449,6 +454,15 @@ def validate(config: SimulationConfig) -> EffectiveConfig:
         raise fail(
             f"energy_sigma_mev ({src.energy_sigma_mev}) exceeds "
             f"{MAX_ENERGY_SIGMA_FRACTION} of the source energy"
+        )
+
+    e_hi = min(e0 + 6.0 * src.energy_sigma_mev, e_hi_table)
+    per_batch = run.n_histories // run.n_batches
+    if per_batch * e_hi / QUANTUM_MEV >= MAX_QUANTA:
+        raise fail(
+            f"{per_batch} histories per batch of up to {e_hi:g} MeV exceed the capacity "
+            f"{MAX_QUANTA * QUANTUM_MEV:g} MeV of a fixed-point voxel accumulator (quantum "
+            f"{QUANTUM_MEV:g} MeV); increase n_batches or reduce n_histories"
         )
 
     max_steps_origin = "user" if run.max_steps is not None else "computed"

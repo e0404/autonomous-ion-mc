@@ -38,7 +38,7 @@ are deliberately out of scope here.
 | Multiple scattering | per-step Highland; Molière; differential Highland (Kanematsu); differential Molière (Gottschalk) | **differential Molière** scattering power `T_dM = f_dM(pv, p₁v₁)(E_s/pv)²/X_S`, `E_s = 15.0 MeV`, `f_dM = 0.5244 + 0.1975 lg(1−(pv/p₁v₁)²) + 0.2320 lg(pv) − 0.0098 lg(pv) lg(1−(pv/p₁v₁)²)` (clamped ≥ 0), scattering length `1/(ρX_S) = α N_A r_e² (Z²/A){2 ln(33219 (AZ)^{-1/3}) − 1}` Bragg-additive, applied as a Gaussian polar angle with a random hinge | step-size independent by construction (per-step Highland is not; a negative-control test proves the instrument has power); ranked best against Hanson theory and measurement in the source paper; the research report's label "differential Highland" for these coefficients was wrong and is corrected |
 | Lateral displacement | explicit correlated sampling; random hinge | random hinge (move `a·s`, deflect, move `(1−a)·s`, `a` uniform) | reproduces the Fermi–Eyges second moments exactly without extra draws |
 | Geometry traversal | `floor(p)` with nudge; incremental DDA | incremental DDA with the voxel index as state and plane snapping on crossing | the nudge variant stalled in the archived toy kernel |
-| Scoring | split steps at scoring planes; midpoint deposit | midpoint deposit with `max_step ≤ min scoring spacing` enforced (otherwise the configuration is rejected) | simplest unbiased choice at the enforced step size; grid refinement/misalignment is a falsification probe in V3-011 |
+| Scoring | split steps at scoring planes; midpoint deposit; path-length-proportional deposit | **path-length-proportional deposit along both hinge legs** (amendment 2026-10-04, see below); `max_step ≤ min scoring spacing` still enforced | simplest unbiased choice at the enforced step size; grid refinement/misalignment is a falsification probe in V3-011 |
 | End of range | transport to zero; local deposition below `E_cut` | local deposition below `E_cut = 2 MeV` (protons) | residual range ≈ 0.07 mm in water; the V3-002 table floor (1 MeV/u) must stay ≤ `E_cut/2` |
 | Uniform mapping | `((w>>8)+0.5)·2⁻²⁴` in both precisions | float64: 24-bit form; float32: `((w>>9)+0.5)·2⁻²³` | the 24-bit form rounds to exactly 1.0 in float32 for the top word (amends decision 0037) |
 | CPU parallelism | Python threads; processes | spawned processes with private accumulators, float64 summation by the parent | archived stall of thread-concurrent CPU launches; Warp CPU atomics are plain read-modify-write |
@@ -62,8 +62,10 @@ step 1 mm, Geant4 range step function α = 0.2, ρ_f = 0.1 mm, 20 batches.
 5. Energy loss for the travelled length: mean by telescoping, fluctuation
    from block B (further blocks on rejection, at most 64; exceeding the
    limit is a fail-closed counter); `E₁ = E₀ − loss ≥ 0`.
-6. Deposit `E₀ − E₁` at the hinge-path midpoint into every scoring grid
-   (outside-grid deposits are tallied separately).
+6. Deposit `E₀ − E₁` into every scoring grid proportionally to the path
+   length of each hinge leg inside each scoring voxel (per-grid incremental
+   DDA; outside-grid deposits are tallied separately). Until 2026-10-04 this
+   was a point deposit at the hinge-path midpoint — see the amendment below.
 7. Leaving the world tallies `E₁` as escaped. Step-count truncation or a
    stall tallies `E₁` as truncated, increments a counter and invalidates the
    result (decision 0037).
@@ -116,5 +118,22 @@ statistical parity across the three backends, partition invariance, and the
 fail-closed configuration rules.
 
 ## Later validation outcome
+
+- **2026-10-04 (V3-003B) — midpoint scoring falsified and replaced.** The
+  frozen T9 step-independence probe exposed point-sampling aliasing of the
+  midpoint deposit with the scoring-bin edges: with straggling and MCS off,
+  150 MeV in water, 1 mm IDD bins, 2e5 histories on warp-cpu, the maximum
+  IDD deviation from a 0.1 mm-step run was 62 % (125–140 mm) for s_max =
+  1.0 mm, 32 % (plateau) for 0.33 mm, 80 % for 0.9 mm and 66 % for 2.0 mm
+  steps with 2 mm bins; straggling smears but does not remove it (4.2 % at
+  s_max = 1 mm), and the python reference shows the same (62.6 %). The bump at
+  130–135 mm sits where the energy-loss step limit (f_E·R) first drops below
+  s_max = 1 mm. The remedy is path-length-proportional apportioning of the
+  step deposit along both hinge legs (exact for a uniform dE/dx within the
+  step; the residual is second order in the step's energy change) with the
+  new frozen T9-CI aliasing probe; the point-midpoint result is preserved
+  here as contrary evidence. Also from V3-003B: the float32 per-batch
+  accumulators of decision 0037 were replaced by int64 fixed-point
+  accumulators (see decision 0037, amendment 2026-10-04).
 
 To be appended from committed result files.

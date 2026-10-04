@@ -87,8 +87,8 @@ direction is rotated with the `rotateUz` construction of Geant4 and renormalised
 The step of length `s` is split at a uniformly distributed fraction: the particle moves `a s` along
 the old direction, is deflected, and moves `(1 - a) s` along the new direction (cut at a voxel plane
 if necessary, in which case the particle snaps onto the plane). This reproduces the Fermi-Eyges
-second moments of a thin layer without an extra draw; energy is deposited at the midpoint of the
-path. The angle is sampled for the planned `s`, so a second leg cut by a plane carries a small
+second moments of a thin layer without an extra draw; energy is deposited along both legs in
+proportion to the path length in each scoring voxel (track-length apportioning). The angle is sampled for the planned `s`, so a second leg cut by a plane carries a small
 overestimate of scattering on boundary steps.
 
 ### Validation status of this model (tests in `tests/ionmc/test_tables_scattering.py`)

@@ -38,6 +38,8 @@ Tiers:
 | T7 | Lateral variance of deposits in 1 mm slabs (0.2 mm lateral bins, Sheppard-corrected) at z/R ∈ {0.25, 0.5, 0.75, 0.9}, MCS on, straggling off, 150 MeV | within 2% of Fermi-Eyges A2(z) = ∫(z−z')²T_dM dz'; within 3% of the generalised-Highland y_rms (related model) | self-consistency⁴ (Fermi-Eyges with the implemented T_dM) + related model | LV |
 | T8 | **MCS step independence in transport:** exit θ_rms of a 0.5·R1 water slab and T7 σ at 0.9R, s_max ∈ {0.1, 0.5, 1, 5} mm, 10⁶ histories warp-cpu | pairwise θ_rms ≤ 0.5%, σ ≤ 1%, and θ_rms within 0.5% of the U5 quadrature | self-consistency (falsification) | LV |
 | T9 | IDD step independence, s_max ∈ {0.1, 0.5, 1} mm, f_E ∈ {0.005, 0.02} | \|ΔR80\| ≤ 0.1 mm; IDD χ² (dose > 1% of max) p > 0.001 | falsification | LV |
+| T9-CI⁷ | **Scoring aliasing probe (deterministic):** single-voxel water box, 150 MeV, straggling and MCS off, 2·10⁴ histories, IDD with 1 mm bins for s_max ∈ {0.33, 0.5, 0.9, 1.0} mm and 2 mm bins for s_max = 2.0 mm, each compared with the 0.1 mm-step run | max \|IDD deviation\| ≤ 2e-3 in 20–120 mm and ≤ 1e-2 in 125–140 mm for every s_max; pre-fix midpoint scoring gave 32–80 % (plateau) and 62 % (125–140 mm) — those numbers stay in the test as the negative control | falsification (numerical) | CI |
+| T13⁷ (edep) | Partition and chunk invariance of the deposit grid with int64 fixed-point accumulators | edep bit-identical across 1 vs 3 workers (CPU) and chunk sizes 2¹⁰ vs 2¹⁸ (CUDA) within each precision; the former relative bounds (1e-5 f32 / 1e-12 f64) are reported but no longer the criterion | self-consistency | CI (CPU) / HR |
 | T10 | Rotation invariance: beam along +x, +y, +z, −z, and (1,1,0)/√2 and (1,1,1)/√3 in a 200 mm cube; IDD versus projected depth | permutations: χ² p > 0.001; obliques: \|ΔR80\| ≤ 0.3 mm and total energy equal within 3σ; zero counters | falsification | LV |
 | T11 | DDA adversarial cases: source exactly on planes, edges and corners, directions with a zero component, grazing entry | no stall or truncation; T4 holds | falsification | CI |
 | T12 | **Statistical parity:** python (4·10³, spawn pool), warp-cpu (10⁶), warp-cuda (10⁶) at 150 MeV with all physics on; also the warp f32 vs f64 bias probe | per-voxel z = Δ/√(σa²+σb²) on the IDD and on lateral profiles at 3 depths⁵ with dose > 1% of max: χ² p > 0.001 and max\|z\| < Bonferroni Φ⁻¹(1−0.001/2n); scalars (R80, total deposit, σ_lat at 0.5R) \|z\| < 3.5. CI runs a reduced version: python 200 vs warp-cpu 2·10⁴ at 70 MeV. | backend parity | CI (reduced) / LV / HR (CUDA) |
@@ -88,3 +90,15 @@ requirements as independently evidenced before T15 passes.
 T12 are z/R ∈ {0.25, 0.5, 0.9} (1 mm slabs, 0.2 mm lateral bins, a subset of the T7 depths), and
 each statistical sample uses a distinct seed (shared seeds would correlate the samples and
 invalidate the z statistic). Tolerances are unchanged.
+
+⁷ Amendment (2026-10-04, task V3-003B, before any T9/T13 result is graded): two frozen probes
+falsified implementation choices — (a) the T9 step-independence probe exposed point-sampling
+aliasing of the midpoint deposit with the IDD bin edges (up to 80 % deviations for steps that are
+not an integer fraction of the bin; details and numbers in decision 0039, "Later validation
+outcome"); scoring is changed to path-length-proportional apportioning along both hinge legs and
+the deterministic T9-CI probe is added with its tolerances frozen here; T9 itself is unchanged.
+(b) The T13 chunk-invariance check failed on CUDA for float32 deposit grids (tallies and counters
+identical, grid outside 1e-5; float32 atomic_add order depends on the chunking); decision 0037 is
+amended to int64 fixed-point accumulators, and the T13 deposit criterion becomes bit-identity
+within each precision (stronger than the former bounds). The failed float32 result is preserved
+in the validation ledger (VAL-20261003-234609-14DE3F).
