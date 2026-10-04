@@ -150,8 +150,8 @@ def deposit_agreement(
 ) -> dict[str, Any]:
     """Elementwise agreement of two deposit arrays: ``|a - b| <= rtol * max(|a|, f max|a|)``
     with ``f = 1 %`` (voxels below 1 % of the peak are compared with an absolute tolerance of
-    ``rtol`` times 1 % of the peak, because float32 accumulation noise is relative to the
-    accumulated magnitude, not to a near-empty voxel).
+    ``rtol`` times 1 % of the peak, because float32 position/direction rounding perturbs
+    the deposit relative to the accumulated magnitude, not to a near-empty voxel).
 
     The verdict carries the diagnostics of the worst voxel: its index (into the array, e.g.
     ``(batch, ix, iy, iz)``), both values, the number of violating voxels and the largest

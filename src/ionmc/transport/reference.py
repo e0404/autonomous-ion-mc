@@ -17,9 +17,12 @@ Draw order (counter ``(history, genealogy 0, block, purpose)``, key from the see
   off). A step that finds ``E <= E_cut`` draws nothing.
 
 Scoring (decision amended in V3-003B): the deposit of a step (after straggling) is distributed
-along both hinge legs proportionally to the path length inside each scoring voxel, for every
-scoring grid, by an incremental DDA over the leg (``seg_piece``); the energy left at the cutoff
-is a point deposit at the end point. Pieces are quantized to int64 quanta (``tally``).
+along both hinge legs for every scoring grid by an incremental DDA over the leg (``seg_piece``):
+a piece of the path inside one voxel receives the integral over the piece of a linear
+stopping-power ramp from S(E_old) to S(E_new), normalised over the step (``ramp_weight``), so the
+pieces sum to the deposit and the residual step dependence is second order (the curvature of S
+along the step); the energy left at the cutoff is a point deposit at the end point. Pieces are
+quantized to int64 quanta (``tally``).
 
 Tallies (MeV, accumulated independently of the grids): ``initial``, ``cutoff`` (local
 deposition below ``E_cut``; scored into the grids like any deposit), ``step_deposit``,

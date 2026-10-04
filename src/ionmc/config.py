@@ -120,8 +120,9 @@ class RunOptions:
     on the ``python`` and ``warp-cpu`` backends (``warp-cuda`` rejects it); a worker that fails
     or exceeds ``worker_timeout_s`` terminates the run without a partial result.
     ``chunk_histories`` (a power of two, at least 2**10, recorded in the effective
-    configuration) bounds the histories per Warp launch; it affects memory and, through the
-    order of float atomic adds, only the rounding of the deposit grids."""
+    configuration) bounds the histories per Warp launch; it affects memory only: the deposit grids
+    are int64 fixed-point quanta with integer atomic adds, so the result is bit-identical for
+    any chunk size within a precision."""
 
     backend: Literal["python", "warp-cpu", "warp-cuda"]
     precision: Literal["float32", "float64"]

@@ -279,9 +279,9 @@ random walk of the roundings is about q/2 sqrt(N) (an expectation, not a bound).
 `in_grid + quantization + outside = step_deposit + cutoff` closes in float64. The conversion to float64
 and the sum over workers happen at the reduction. Capacity: a voxel holds at most `2**62` quanta (about
 `4.3e9` MeV); validation rejects runs whose per-batch energy could reach it, and a voxel at or above it after
-a run raises the counter `accumulator_overflow`, which invalidates the result. Pieces are computed in the
-backend precision, so a float32 run apportions to float32 rounding (about 1e-7 of a step deposit) before
-quantizing.
+a run raises the counter `accumulator_overflow`, which invalidates the result. Piece lengths follow the
+geometry (backend precision for positions and directions); the ramp weights and the deposits are float64 and
+are quantized to quanta.
 
 **Chunking.** A range of histories is launched in chunks of at most `chunk_histories`; after each chunk the rows
 are reduced and the deposit grid stays on the device. On CUDA, `.numpy()` of the rows synchronises, and the

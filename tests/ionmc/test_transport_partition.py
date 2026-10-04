@@ -1,7 +1,8 @@
 """T13: partition invariance (workers, chunks, history ranges) and the fail-closed pool.
 
 Per-history tally rows are reduced exactly, so counters and tallies are bit-identical for any
-partition of the histories; the deposit grids differ only by the order of float additions.
+partition of the histories; the deposit grids are int64 fixed-point quanta (integer atomic
+adds) and are bit-identical as well.
 """
 
 from __future__ import annotations
@@ -128,8 +129,8 @@ def _compare(a: object, b: object) -> dict:  # type: ignore[type-arg]
 
 @pytest.mark.parametrize("precision", ["float32", "float64"])
 def test_t13_warp_cpu_one_versus_three_workers(make_config: MakeConfig, precision: str) -> None:
-    """T13 (CI): 1 versus 3 worker processes on warp-cpu: counters and tallies identical, deposit
-    grid within 1e-5 (float32) or 1e-12 (float64); every worker loaded the cached kernel."""
+    """T13 (CI): 1 versus 3 worker processes on warp-cpu: counters, tallies and int64 deposit
+    grids bit-identical (both precisions); every worker loaded the cached kernel."""
 
     def run(workers: int):  # type: ignore[no-untyped-def]
         cfg = make_config(
@@ -162,8 +163,8 @@ def test_t13_warp_cpu_one_versus_three_workers(make_config: MakeConfig, precisio
 
 
 def test_t13_warp_cpu_chunk_sizes(make_config: MakeConfig) -> None:
-    """Chunking a launch (2**10 versus a single chunk) changes nothing but the order of float
-    adds in the deposit grid."""
+    """Chunking a launch (2**10 versus a single chunk) changes nothing: counters, tallies and the
+    int64 deposit grid are bit-identical."""
 
     def run(chunk: int):  # type: ignore[no-untyped-def]
         cfg = make_config(

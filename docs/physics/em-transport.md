@@ -64,8 +64,10 @@ sampled with the model `bohr_gamma_v1` (the default) or the older `bohr_gauss_cl
   allows 1 %); 0.13 % of the samples are clamped at 0 at `r = 3`.
 
 A Gamma sample is accepted by the Marsaglia-Tsang test; a rejection draws another Philox block, at most 64
-attempts (then the `straggling_rejection` counter invalidates the run). Step energies of 1 mm or more
-at therapeutic energies have `r` well above 3, so the Gamma branch is used near the end of the range.
+attempts (then the `straggling_rejection` counter invalidates the run). Steps of 1 mm or more
+at therapeutic energies have `r` well above 3 (for example 5.4 at 150 MeV), so the Gaussian branch is used for them
+and the Gamma branch (`r < 3`) for short steps (about 0.3 mm and less at 150 MeV), for example the slivers cut by
+voxel planes.
 `test_straggling_gamma_moments_exact_and_gaussian_variance_loss_bounded` checks the Gamma branch for both moments and the Gaussian branch for the mean and the bounded variance deficit on a grid of `(mean, sigma)` that covers both
 branches and the boundary (4e5 draws per point, three standard errors; the Gaussian branch near the boundary
 is given the 1 % clamp allowance). The transport-level validation of straggling is the range

@@ -5,9 +5,9 @@ device ("cpu" or "cuda:0") and returns a :class:`~ionmc.transport.tally.PartialT
 The range is launched in chunks of at most ``RunOptions.chunk_histories`` histories (one
 thread per history). After every chunk the per-history tally rows are reduced exactly
 (:func:`ionmc.transport.tally.exact_components`) and the counters summed in int64; the
-energy-deposit grids stay on the device across chunks and are copied once at the end. The
-result therefore depends on the chunking only through the order of the float atomic adds into
-the deposit grids.
+energy-deposit grids (int64 fixed-point quanta, integer atomic adds: associative) stay on the
+device across chunks and are copied once at the end. The result is therefore bit-identical for
+any chunk size within a precision.
 """
 
 from __future__ import annotations

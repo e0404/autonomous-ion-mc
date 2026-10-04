@@ -148,7 +148,7 @@ def make_em(real: type) -> SimpleNamespace:
         mean_mev: real, var_mev2: real, u0: real, u1: real, u2: real, u3: real
     ) -> tuple[real, int]:
         """One sampling attempt of the energy loss [MeV] for the model ``bohr_gamma_v1``: a Gamma
-        distribution with exactly the Bohr mean and variance for EVERY ratio mean / sigma (shape
+        distribution whose mean and variance are the Bohr values for EVERY ratio mean / sigma (shape
         ``k = ratio^2``, scale ``sigma^2 / mean``; Marsaglia-Tsang, shape ``k + 1`` and a
         ``u3^(1/k)`` factor for ``k < 1``): positive, no clamp, no Gaussian branch. With a common
         scale ``theta = sigma^2 / mean`` along a path the sum of Gamma steps is exactly Gamma with
