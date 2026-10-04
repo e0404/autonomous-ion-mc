@@ -205,3 +205,27 @@ used only for the final qualification runs of this task after the engine is froz
 (rehearsal) and 20271004 (T9 investigation) are preserved as non-qualification evidence and any
 further diagnostic run uses a base from the 2027xxxx family. The runner enforces conformance only
 for base 20281004. Tolerances and history counts are unchanged.
+
+¹⁵ Profile χ² over supported bins, and the qualification seed base re-frozen again (2026-10-04, task V3-003B):
+the T12 qualification run at 0d7b36e (base 20281004) passed every comparison except the lateral
+profile χ² of the 4·10³-history python sample against the accelerated samples at 0.9·R (and
+marginally 0.5·R). A control comparison of the python sample against the float64 Warp-CPU sample —
+algorithmically identical code paths, bit-identical in T1 — failed in exactly the same way
+(permutation p 0.0005 at 0.9·R, 0.001 at 0.5·R; IDD, 0.25·R, R80, σ and total deposit all pass),
+while the Warp-CPU float64 vs CUDA float32 pair passed everything. The χ² is therefore
+miscalibrated for sparse profile bins of the small python sample (discrete per-batch means break
+the exchangeability of the studentized residuals), not evidence of a physics difference. Test
+correction: the profile χ² includes only the supported bins of ¹²(b) (both samples with at least
+max(2, ⌈B/2⌉) non-zero batches; unsupported bins are listed in the result), and for pairs with
+unequal batch structures (the 4·10³-history python sample in 40 batches against accelerated samples
+in 100 batches) its p-value is calibrated by a within-sample studentized bootstrap-t (batches
+resampled with replacement within each sample, ≥ 2000 replicates, recorded seed, null formed by
+recentring the bootstrapped difference at the observed one) — the studentized permutation of ⁹
+remained anti-conservative there (≈ 15 % of sparse-null trials below p = 0.05, because the small
+sample's batch means are skewed) while it is calibrated for equal batch structures (T9, T10 and
+the accelerated-vs-accelerated pairs: χ² 150–160 for same-configuration controls), where it is
+kept. A synthetic sparse-null calibration test (≤ 8 % below 0.05, ≤ 2 % below 0.01 over 200
+trials) guards the method. The python-vs-float64-CPU pair joins the T12 comparisons as the
+same-algorithm control. Because the 20281004 samples were observed, the qualification seed base is re-frozen to
+20291004; 20261004, 20271004 and 20281004 are preserved as non-qualification evidence. Tolerances
+and history counts are unchanged.

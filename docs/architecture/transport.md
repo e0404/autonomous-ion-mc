@@ -325,9 +325,9 @@ period) and `TransportWorkerError` is raised; no partial result is returned. Scr
   `# exit=` trailer (a timed-out step is killed and archived with `exit=124`); `manifest.txt` lists the steps of the
   run; `summarize.py` verifies everything and writes `summary.json`. Any failed step, missing file or mismatch makes the
   exit status non-zero.
-* **Seed base.** `--seed-base` (default 20281004, the qualification base) is the base of every statistical seed; it is
-  recorded in `environment.txt`, the step documents and the sample metadata. Only an archive made with 20281004 can be
-  `conformant`: one made with the rehearsal base 20261004 or with 20271004 (consumed by the T9 investigation; both preserved as non-qualification evidence) or without a recorded base
+* **Seed base.** `--seed-base` (default 20291004, the qualification base) is the base of every statistical seed; it is
+  recorded in `environment.txt`, the step documents and the sample metadata. Only an archive made with 20291004 can be
+  `conformant`: one made with the rehearsal base 20261004, with 20271004 (T9 investigation), with 20281004 (first qualification attempt, consumed) (all preserved as non-qualification evidence) or without a recorded base
   verifies but carries `non_conformant_reasons`. The qualification command is
   `python validation/scripts/transport/run_suite.py --suite hr --out validation/generated/transport/<new-dir> --expected-sha <sha>`
   (no seed flag).
@@ -355,8 +355,19 @@ period) and `TransportWorkerError` is raised; no partial result is returned. Scr
   (energy conservation makes the total deposit deterministic) is not compared with z but with the deterministic T4
   precision bound of the less precise sample (1e-5 relative for float32, 1e-12 for float64 and python); the rule that
   applied is recorded. Only profile bins for which both samples have at least `max(2, ceil(B/2))` batches with a nonzero
-  deposit enter `max|z|` (and its Bonferroni count): the standard error of an undersupported bin is unreliable. The
-  worst bin of all bins is reported with its support.
+  deposit (supported bins) enter `max|z|` (and its Bonferroni count), the profile chi-square (with `n` = the number of
+  supported bins) and its permutation calibration: the batch means of an undersupported bin are discrete and its
+  standard error is unreliable, which breaks the exchangeability of the studentized residuals. The unsupported bins
+  are listed (`unsupported_bins`), the all-bin chi-square is reported for information, and the worst bin of all bins
+  is reported with its support. Calibration method per pair (recorded as `calibration` in the document): the studentized permutation when both
+  samples have the same batch structure (T9, T10, cpu32/cpu64/cuda32 pairs), the within-sample studentized
+  bootstrap-t (`parity.bootstrap_p_value`; batches resampled with replacement within each sample, both means and
+  standard errors recomputed, 2000 resamples, recorded seed, chi-square of the difference recentred at the observed
+  one) when they differ (python 40x100 against an accelerated 100x1e4 sample), where the pooled permutation is
+  anti-conservative (about 15 % of sparse-null trials below 0.05) because the small sample's batch means are skewed.
+* **T12 pairs.** `python:cpu32`, `python:cpu64` and `cpu32:cpu64` (plus `cpu32:cuda32` in HR); `python:cpu64` is the
+  float64 control pair: the code paths are algorithmically identical (T1 bit-identical), so a failure of the python
+  sample against cpu32 that also appears against cpu64 points to the statistic or the sample size, not to the physics.
 * **T9 variants.** `steps.py t9 --physics default|no-straggling|no-mcs` and `--straggling-model` are diagnostics (not in the
   suite manifests); the step reports the depths and signs of the bins with |z| > 3.
 * **Step processes.** Each step runs in its own process group; on a timeout the group gets SIGTERM and then SIGKILL, so

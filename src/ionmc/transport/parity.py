@@ -10,11 +10,12 @@ asserts and the numbers a validation archive records come from the same code.
 * T13 (:func:`compare_partition`): counters, tallies and deposit grids bit-identical (the grids
   are int64 fixed-point accumulators); the old relative bounds (1e-5 float32, 1e-12 float64, see
   :func:`deposit_agreement`) are reported as secondary numbers.
-* T12 (:func:`t12_compare`): per-bin ``z = (a - b) / sqrt(se_a^2 + se_b^2)`` of two independent
+* T12 (:func:`t12_compare`; the suites compare python-cpu32, python-cpu64 (the float64 control),
+  cpu32-cpu64 and cpu32-cuda32): per-bin ``z = (a - b) / sqrt(se_a^2 + se_b^2)`` of two independent
   samples (distinct seeds) on the IDD and the lateral profiles for bins above 1 % of the maximum,
-  the chi-square of the z profile with a batch-level permutation p-value (> 0.001; correlated
-  bins invalidate the independent-bin Wilson-Hilferty approximation, which is reported only for
-  information), the Bonferroni bound on ``max |z|`` and
+  the chi-square of the z profile over the supported bins with a batch-level permutation p-value
+  (> 0.001; correlated bins invalidate the independent-bin Wilson-Hilferty approximation, which
+  is reported only for information), the Bonferroni bound on ``max |z|`` and
   ``|z| < 3.5`` for the scalars (R80, total deposit, lateral sigma at 0.5 R). Standard errors
   come from the batch method of each run, so ``z`` is Student-t rather than normal for few
   batches; the number of batches of every run is recorded with the verdict.
@@ -513,22 +514,69 @@ def permutation_p_value(
     return (1.0 + count) / (1.0 + n_perm)
 
 
+def bootstrap_p_value(
+    xa: NDArray[np.float64],
+    xb: NDArray[np.float64],
+    *,
+    n_boot: int = PERMUTATIONS,
+    seed: int = PERMUTATION_SEED,
+) -> float:
+    """Two-sample studentized bootstrap-t p-value of the profile chi-square.
+
+    The batches of each sample ``xa`` (``Ba, m``) and ``xb`` (``Bb, m``) are resampled with
+    replacement *within the sample*, both means and standard errors are recomputed and the
+    chi-square of the bootstrapped difference recentred at the observed difference,
+    ``((ma* - mb*) - (ma - mb)) / se*``, is formed. The p-value is
+    ``(1 + #{chi2* >= chi2_obs}) / (1 + n_boot)``. Unlike the pooled permutation test it keeps the
+    different shape of the batch-mean distribution of each sample (a small sample of sparse
+    batches is skewed, a large one is not), which is why it is used when the two samples have
+    different batch structures. The generator is ``numpy.random.default_rng(seed)``."""
+    ba, bb = xa.shape[0], xb.shape[0]
+    observed = _chi2_profile(xa, xb)[0]
+    diff = xa.mean(axis=0) - xb.mean(axis=0)
+    rng = np.random.default_rng(seed)
+    count = 0
+    for _ in range(n_boot):
+        ra = xa[rng.integers(0, ba, ba)]
+        rb = xb[rng.integers(0, bb, bb)]
+        _, sa = _mean_se(ra)
+        _, sb = _mean_se(rb)
+        se = np.sqrt(sa**2 + sb**2)
+        delta = (ra.mean(axis=0) - rb.mean(axis=0)) - diff
+        with np.errstate(divide="ignore", invalid="ignore"):
+            z = np.where(se > 0.0, delta / se, np.where(delta == 0.0, 0.0, np.inf))
+        if float((z**2).sum()) >= observed:
+            count += 1
+    return (1.0 + count) / (1.0 + n_boot)
+
+
 def t12_compare(
     a: T12Observables,
     b: T12Observables,
     *,
     n_perm: int = PERMUTATIONS,
     seed: int = PERMUTATION_SEED,
+    n_boot: int = PERMUTATIONS,
 ) -> dict[str, Any]:
     """T12 verdict for two independent samples (see the module docstring).
 
-    For every profile the frozen statistic (chi-square of the per-bin ``z``, bins above 1 % of
-    the maximum) is calibrated with :func:`permutation_p_value` (``p_value``, used for the
-    verdict); the Wilson-Hilferty value is reported as ``p_value_wilson_hilferty`` only. The
-    bound on ``max |z|`` is the frozen Bonferroni bound."""
+    For every profile the frozen statistic (chi-square of the per-bin ``z`` over the bins above
+    1 % of the maximum that both samples support, see below; ``n`` of the chi-square is the
+    number of supported bins, the unsupported bins are listed in ``unsupported_bins`` and the
+    all-bin chi-square is reported as ``chi2_all_selected_bins`` only) is calibrated with
+    :func:`permutation_p_value` (``p_value``, used for the verdict) when the two samples have the
+    same batch structure (number of batches and histories per batch), and with the within-sample
+    studentized bootstrap-t :func:`bootstrap_p_value` (``n_boot`` resamples, same seed) when they
+    differ; the method is recorded as ``calibration`` per profile and for the pair. The
+    Wilson-Hilferty value is reported as ``p_value_wilson_hilferty`` only. The bound on
+    ``max |z|`` is the frozen Bonferroni bound."""
+    equal = (a.n_batches, a.histories_per_batch) == (b.n_batches, b.histories_per_batch)
+    method = "studentized_permutation" if equal else "studentized_bootstrap_t"
     out: dict[str, Any] = {
         "n_batches": [a.n_batches, b.n_batches],
         "permutation": {"n_perm": n_perm, "seed": seed},
+        "bootstrap": {"n_boot": n_boot, "seed": seed},
+        "calibration": method,
         "arrays": {},
         "scalars": {},
     }
@@ -539,37 +587,46 @@ def t12_compare(
         ref = 0.5 * (ma + mb)
         sel = ref > DOSE_FRACTION * ref.max()
         n = int(sel.sum())
-        chi2, _zmax_all, z_sel = _chi2_profile(a.arrays[name][:, sel], b.arrays[name][:, sel])
+        chi2_all, _zmax_all, z_sel = _chi2_profile(a.arrays[name][:, sel], b.arrays[name][:, sel])
         # defined-value rule: only bins that both samples support (at least max(2, ceil(B/2))
-        # batches with a nonzero deposit) enter max|z|; the others have unreliable standard errors
+        # batches with a nonzero deposit) enter max|z| AND the chi-square and its permutation
+        # calibration; the others have discrete batch means and unreliable standard errors that
+        # break the exchangeability of the studentized residuals
         need_a, need_b = max(2, -(-a.n_batches // 2)), max(2, -(-b.n_batches // 2))
         sup_a = (a.arrays[name][:, sel] > 0.0).sum(axis=0)
         sup_b = (b.arrays[name][:, sel] > 0.0).sum(axis=0)
         supported = (sup_a >= need_a) & (sup_b >= need_b)
         n_supported = int(supported.sum())
+        sel_idx = np.nonzero(sel)[0]
+        xa_sup = a.arrays[name][:, sel][:, supported]
+        xb_sup = b.arrays[name][:, sel][:, supported]
+        chi2 = float(_chi2_profile(xa_sup, xb_sup)[0]) if n_supported else 0.0
         zmax = float(np.abs(z_sel[supported]).max()) if n_supported else 0.0
         worst_all = int(np.argmax(np.abs(z_sel))) if z_sel.size else 0
-        sel_idx = np.nonzero(sel)[0]
-        p_wh = wilson_hilferty_p(chi2, n) if n >= 1 else 1.0
-        p = (
-            permutation_p_value(
-                a.arrays[name][:, sel],
+        p_wh = wilson_hilferty_p(chi2, n_supported) if n_supported >= 1 else 1.0
+        if n_supported < 1:
+            p = 1.0
+        elif equal:
+            p = permutation_p_value(
+                xa_sup,
                 a.histories_per_batch,
-                b.arrays[name][:, sel],
+                xb_sup,
                 b.histories_per_batch,
                 n_perm=n_perm,
                 seed=seed + i,
             )
-            if n >= 1
-            else 1.0
-        )
+        else:
+            p = bootstrap_p_value(xa_sup, xb_sup, n_boot=n_boot, seed=seed + i)
         bound = bonferroni_z(n_supported) if n_supported else float("inf")
         passed = bool(p > P_VALUE_MIN and zmax < bound)
         out["arrays"][name] = {
             "n_bins": n,
             "n_supported_bins": n_supported,
             "chi2": chi2,
+            "chi2_all_selected_bins": chi2_all,
+            "unsupported_bins": [int(k) for k in sel_idx[~supported]],
             "p_value": p,
+            "calibration": method,
             "p_value_wilson_hilferty": p_wh,
             "max_abs_z": zmax,
             "max_abs_z_all_bins": float(np.abs(z_sel[worst_all])) if z_sel.size else 0.0,

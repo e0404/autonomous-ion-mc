@@ -155,3 +155,66 @@ def test_max_z_only_counts_bins_that_both_samples_support() -> None:
     b2.arrays["idd"][:, 5] *= 1.5  # a supported bin that really differs
     w = t12_compare(a2, b2, n_perm=50)["arrays"]["idd"]
     assert w["worst_bin_all"]["supported"] and not w["pass"]
+
+
+def _sparse_observables(rng: np.random.Generator, n_batches: int, n_hist: int, scale: float = 1.0):  # type: ignore[no-untyped-def]
+    """Batch means of a sparse per-primary profile: every history deposits one unit in one of 30
+    bins (probabilities falling by a factor 100, summing to 0.7, so the tail bins have discrete
+    batch means)."""
+    from ionmc.transport.parity import T12Observables
+
+    p = np.geomspace(1.0, 0.01, 30)
+    p = 0.7 * p / p.sum()
+    p = np.append(p * scale, 1.0 - (p * scale).sum())
+    counts = rng.multinomial(n_hist, p, size=n_batches)[:, :30] / float(n_hist)
+    return T12Observables(
+        {"lat": counts}, {"mean_bin": counts.mean(axis=1)}, n_batches, n_hist, "float64"
+    )
+
+
+def test_sparse_profile_lists_unsupported_bins_and_uses_supported_ones() -> None:
+    """The chi-square and its calibration use the supported bins only; the unsupported bins of
+    the sparse small sample are listed, the all-bin chi-square is reported for information."""
+    rng = np.random.default_rng(20)
+    a = _sparse_observables(rng, 40, 100)
+    b = _sparse_observables(rng, 100, 10_000)
+    v = t12_compare(a, b, n_boot=200, seed=1)["arrays"]["lat"]
+    assert len(v["unsupported_bins"]) > 0
+    assert v["n_supported_bins"] + len(v["unsupported_bins"]) == v["n_bins"]
+    assert math.isfinite(v["chi2"]) and v["chi2"] <= v["chi2_all_selected_bins"] + 1e-12
+
+
+def test_sparse_null_profile_p_values_are_calibrated_by_the_bootstrap() -> None:
+    """Two samples of the same per-primary distribution with different batch structures (40
+    batches of 100 histories versus 100 batches of 1e4): over 200 null trials the studentized
+    bootstrap-t p-value is below 0.05 in at most 8 % and below 0.01 in at most 2 % of them (a
+    little conservative is accepted; the pooled permutation gave about 15 % and 4 %)."""
+    rng = np.random.default_rng(20)
+    trials, below05, below01 = 200, 0, 0
+    for k in range(trials):
+        a = _sparse_observables(rng, 40, 100)
+        b = _sparse_observables(rng, 100, 10_000)
+        v = t12_compare(a, b, n_boot=500, seed=100 + k)["arrays"]["lat"]
+        assert v["calibration"] == "studentized_bootstrap_t"
+        below05 += v["p_value"] < 0.05
+        below01 += v["p_value"] < 0.01
+    assert below05 <= 0.08 * trials and below01 <= 0.02 * trials, (below05, below01)
+
+
+def test_calibration_method_follows_the_batch_structure() -> None:
+    """Equal batch structures use the studentized permutation, different ones the bootstrap-t."""
+    rng = np.random.default_rng(3)
+    a, a2 = _sparse_observables(rng, 20, 1000), _sparse_observables(rng, 20, 1000)
+    b = _sparse_observables(rng, 40, 1000)
+    assert t12_compare(a, a2, n_perm=50)["calibration"] == "studentized_permutation"
+    v = t12_compare(a, b, n_boot=50)
+    assert v["calibration"] == "studentized_bootstrap_t" and v["bootstrap"]["n_boot"] == 50
+
+
+def test_sparse_shifted_alternative_is_detected() -> None:
+    """A 20 % scale error of the bulk bins is still detected with the supported-bin statistic."""
+    rng = np.random.default_rng(21)
+    a = _sparse_observables(rng, 40, 100)
+    b = _sparse_observables(rng, 100, 10_000, scale=1.2)
+    v = t12_compare(a, b, n_boot=1500, seed=5)["arrays"]["lat"]
+    assert v["p_value"] < 0.001 and not v["pass"]

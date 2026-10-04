@@ -8,8 +8,8 @@ Usage (argv only, no shell; the host runner executes exactly this)::
         [--only STEP ...] [--import-dirs DIR ...] [--seed-base INT]
 
 The qualification command needs no seed flag: the default ``--seed-base`` is the qualification base
-20281004 (a run with the rehearsal base 20261004 or the consumed base 20271004 is archived
-but never conformant)::
+20291004 (a run with the rehearsal base 20261004 or the consumed bases 20271004 and 20281004 is
+archived but never conformant)::
 
     python validation/scripts/transport/run_suite.py --suite hr --expected-sha <sha> --out <new-dir>
 
@@ -66,7 +66,7 @@ SOURCE_FILES = ("pyproject.toml", "uv.lock", "validation/plans/v3-003-acceptance
 """Every tracked file that defines what is executed and judged (code, tests and fixtures, the
 project definition, the lock file and the frozen acceptance plan)."""
 DEFAULT_PYTHON_PARTS = 2
-QUALIFICATION_SEED_BASE = 20281004
+QUALIFICATION_SEED_BASE = 20291004
 REHEARSAL_SEED_BASE = 20261004
 CONSUMED_SEED_BASE = 20271004  # used by the T9 investigation: not a qualification base
 DEFAULT_SEED_BASE = QUALIFICATION_SEED_BASE
@@ -128,7 +128,7 @@ def suite_steps(
             [*st, "t13", "--mode", "chunks", "--backend", "warp-cpu", "--n", n(200_000)],
         )
         add("t-r1-python-repeatability", [*st, "t-r1", "--runs", "python:float64:400", *w])
-        acc, pairs = "cpu32,cpu64", "python:cpu32,cpu32:cpu64"
+        acc, pairs = "cpu32,cpu64", "python:cpu32,python:cpu64,cpu32:cpu64"
     elif suite == "hr":
         add("pytest-cuda", pytest_cmd("tests/ionmc/test_transport_cuda.py", marker="cuda"), cuda)
         add("t2-deterministic-csda-cuda", [*st, "t2", "--backend", "warp-cuda"], cuda)
@@ -142,7 +142,7 @@ def suite_steps(
             [*st, "t-r1", "--runs", "warp-cpu:float64:100000,warp-cuda:float32:100000", *w],
             cuda,
         )
-        acc, pairs = "cpu32,cpu64,cuda32", "python:cpu32,cpu32:cuda32,cpu32:cpu64"
+        acc, pairs = "cpu32,cpu64,cuda32", "python:cpu32,python:cpu64,cpu32:cuda32,cpu32:cpu64"
     else:
         raise SystemExit(f"unknown suite {suite!r}")
     for i in range(1, python_parts + 1):
@@ -322,8 +322,9 @@ def main(argv: list[str] | None = None) -> int:
         "--seed-base",
         type=int,
         default=DEFAULT_SEED_BASE,
-        help="base of all statistical seeds (default: the qualification base 20281004; the "
-        "bases 20261004 and 20271004 give non-conformant archives); recorded in the archive",
+        help="base of all statistical seeds (default: the qualification base 20291004; the "
+        "bases 20261004, 20271004 and 20281004 give non-conformant archives); recorded in the "
+        "archive",
     )
     ap.add_argument(
         "--only",

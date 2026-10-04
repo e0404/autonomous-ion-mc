@@ -14,8 +14,8 @@ production float32 Warp CPU backend unless stated, and the helpers of
 ``ionmc.transport.parity`` and ``ionmc.transport.mcs_checks`` that the tests use.
 
 Seeds: every statistical step derives all its seeds deterministically from one
-``--seed-base`` (default 20281004, the qualification base; 20261004 was the rehearsal and
-20271004 the T9 investigation):
+``--seed-base`` (default 20291004, the qualification base; 20261004 was the rehearsal,
+20271004 the T9 investigation and 20281004 the first, consumed qualification attempt):
   T12 samples ``base + 1000 k`` (k = 1 python, 2 cpu32, 3 cpu64, 4 cuda32);
   T9 ``base + i`` (i-th case); T8 ``base + i`` (theta) and ``base + 10 + i`` (sigma);
   T14 ``base + i`` (theta), ``base + 100 + i`` (sigma), ``base + 1000`` (control);
@@ -173,7 +173,9 @@ def finish(doc: dict[str, Any], frozen_n: int | None, n: int | None) -> int:
     return emit(doc)
 
 
-DEFAULT_SEED_BASE = 20281004  # the qualification base (20261004: rehearsal, 20271004: consumed)
+# the qualification base; 20261004 rehearsal, 20271004 T9 investigation, 20281004 consumed by the
+# first qualification attempt (all non-qualification)
+DEFAULT_SEED_BASE = 20291004
 SEED_BASE = DEFAULT_SEED_BASE
 
 
@@ -1342,7 +1344,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--timeout", type=float, default=None)
     ap.add_argument("--backend", default="warp-cpu")
     ap.add_argument("--mode", choices=("workers", "chunks"), default="workers")
-    ap.add_argument("--pairs", default="python:cpu32,cpu32:cpu64")
+    ap.add_argument("--pairs", default="python:cpu32,python:cpu64,cpu32:cpu64")
     ap.add_argument("--scale", type=float, default=1.0, help="T12 history-count factor")
     ap.add_argument("--lateral-bin", type=float, default=0.2)
     ap.add_argument("--half-width", type=float, default=20.0)
