@@ -60,6 +60,7 @@ SOURCE_FILES = ("pyproject.toml", "uv.lock", "validation/plans/v3-003-acceptance
 """Every tracked file that defines what is executed and judged (code, tests and fixtures, the
 project definition, the lock file and the frozen acceptance plan)."""
 DEFAULT_PYTHON_PARTS = 2
+DEFAULT_SEED_BASE = 20261004
 
 
 def pytest_cmd(*targets: str, marker: str | None = None) -> list[str]:
@@ -75,6 +76,7 @@ def suite_steps(
     out: Path | None = None,
     import_dirs: list[str] | None = None,
     step_timeout: int = 1500,
+    seed_base: int = DEFAULT_SEED_BASE,
 ) -> list[tuple[str, list[str], dict[str, str]]]:
     """``(name, argv, extra environment)`` of the steps of a suite, in execution order (the
     names depend only on ``suite`` and ``python_parts``)."""
@@ -94,7 +96,7 @@ def suite_steps(
 
     def add(name: str, cmd: list[str], env: dict[str, str] | None = None) -> None:
         if cmd[:2] == [PY, str(STEPS)]:
-            cmd = [*cmd, *inner]  # worker_timeout_s slightly below the step timeout
+            cmd = [*cmd, *inner, "--seed-base", str(seed_base)]  # every seed derives from the base
         steps.append((f"{len(steps) + 1:02d}-{name}", cmd, env or {}))
 
     if suite == "lv":
@@ -285,6 +287,7 @@ def environment_text(
         f"workers={workers}",
         f"step_timeout_s={args.step_timeout}",
         f"scale={args.scale}",
+        f"seed_base={args.seed_base}",
         f"python_parts={args.python_parts}",
         f"only={','.join(args.only) if args.only else ''}",
         "source_hashes:",
@@ -306,6 +309,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--workers", default="auto", help="integer >= 2 or 'auto' (all cores)")
     ap.add_argument("--step-timeout", type=int, default=1500)
     ap.add_argument("--python-parts", type=int, default=DEFAULT_PYTHON_PARTS)
+    ap.add_argument(
+        "--seed-base",
+        type=int,
+        default=DEFAULT_SEED_BASE,
+        help="base of all statistical seeds (default: the rehearsal's); recorded in the archive",
+    )
     ap.add_argument(
         "--only",
         nargs="+",
@@ -340,7 +349,14 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit(f"refusing to reuse an existing results directory: {out}")
     sha, source = resolve_sha(args.expected_sha)
     steps = suite_steps(
-        args.suite, workers, args.scale, args.python_parts, out, args.import_dirs, args.step_timeout
+        args.suite,
+        workers,
+        args.scale,
+        args.python_parts,
+        out,
+        args.import_dirs,
+        args.step_timeout,
+        args.seed_base,
     )
     if args.only:
         keep = [x for x in steps if any(x[0] == o or x[0].startswith(f"{o}-") for o in args.only)]

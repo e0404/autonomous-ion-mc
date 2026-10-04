@@ -107,10 +107,11 @@ def run_pool(
     workers = run.cpu_workers
     if run.backend == "warp-cuda":
         raise TransportWorkerError("a process pool is not available for the warp-cuda backend")
+    parent_compile_s = 0.0
     if run.backend == "warp-cpu":
         from ionmc.transport.warp_driver import load_kernel
 
-        load_kernel(eff, "cpu")  # compile once, before the workers start
+        _kernel, parent_compile_s, _regs = load_kernel(eff, "cpu")  # compile once, before spawning
     try:
         payload = pickle.dumps(eff, protocol=pickle.HIGHEST_PROTOCOL)
     except Exception as exc:
@@ -186,4 +187,5 @@ def run_pool(
     elapsed = time.monotonic() - t_start
     for p in parts:
         p.meta["pool_wall_s"] = elapsed
+        p.meta["parent_compile_s"] = parent_compile_s  # the compile before the workers started
     return parts

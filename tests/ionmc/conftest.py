@@ -88,6 +88,16 @@ def make_config(bethe: BetheStoppingSource) -> Callable[..., SimulationConfig]:
     return factory
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _default_device_is_cpu() -> None:
+    """Make the suite independent of the host: Warp's default device is the CPU, so a test that
+    forgets an explicit ``device=`` never allocates on a GPU while its kernel runs on the CPU
+    (a segfault on a CUDA host). CUDA tests name ``cuda:0`` explicitly."""
+    import warp as wp
+
+    wp.set_device("cpu")
+
+
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     """Tests marked ``cuda`` skip without a usable CUDA device; ``IONMC_REQUIRE_CUDA=1`` turns
     that skip into a failure (the GPU host runner sets it, so a missing GPU cannot pass)."""

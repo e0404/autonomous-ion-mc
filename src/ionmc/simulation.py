@@ -274,9 +274,12 @@ class Simulation:
 
 
 def _compile_seconds(raw: RawTransport) -> float:
-    """Kernel compile/load seconds (the slowest worker; 0 for the Python backend)."""
+    """Kernel compile/load seconds: the slowest worker's load plus, for a pool, the parent's
+    compile before the workers were spawned (0 for the Python backend)."""
     parts = raw.meta.get("partials", [])
-    return max((float(p.get("compile_s", 0.0)) for p in parts), default=0.0)
+    worker = max((float(p.get("compile_s", 0.0)) for p in parts), default=0.0)
+    parent = max((float(p.get("parent_compile_s", 0.0)) for p in parts), default=0.0)
+    return worker + parent
 
 
 def _device_description(eff: EffectiveConfig, raw: RawTransport) -> str:

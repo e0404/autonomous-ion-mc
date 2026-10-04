@@ -485,3 +485,30 @@ def test_suites_forward_an_inner_timeout_below_the_step_timeout() -> None:
     for s in scripted:
         assert float(s[1][s[1].index("--timeout") + 1]) < 1000
     assert all("--timeout" not in s[1] for s in steps if "pytest" in s[0])
+
+
+def test_seed_base_is_forwarded_recorded_and_checked(tmp_path: Path) -> None:
+    """``--seed-base`` reaches every scripted step, is part of the archive identity (so subsets made
+    with different bases cannot be combined) and every step document must carry the archive's
+    base."""
+    run_suite, summ = _load("run_suite"), _load("summarize")
+    steps = run_suite.suite_steps("lv", 4, 1.0, seed_base=20271004)
+    scripted = [s for s in steps if "steps.py" in " ".join(s[1])]
+    assert scripted and all(s[1][s[1].index("--seed-base") + 1] == "20271004" for s in scripted)
+    full = _full()
+    env = _env().replace("scale=1.0", "scale=1.0\nseed_base=20271004")
+    good = tmp_path / "good"
+    _archive(good, full, doc={"pass": True}, env=env, identity={"seed_base": 20271004})
+    assert summ.main([str(good), "--expected-sha", SHA]) == 0
+    bad = tmp_path / "bad"  # a step that ran with another base than the archive records
+    _archive(bad, full, doc={"pass": True}, env=env, identity={"seed_base": 20261004})
+    assert summ.main([str(bad), "--expected-sha", SHA]) == 1
+    # archives with different seed bases are not parts of one run
+    a, b = full[:6], full[6:]
+    _archive(tmp_path / "a", a, doc={"pass": True}, env=env, identity={"seed_base": 20271004})
+    other = _env().replace("scale=1.0", "scale=1.0\nseed_base=20261004")
+    _archive(tmp_path / "b", b, doc={"pass": True}, env=other, identity={"seed_base": 20261004})
+    out = tmp_path / "combined.json"
+    assert summ.main(["--combine", str(tmp_path / "a"), str(tmp_path / "b"),
+                      "--expected-sha", SHA, "--out", str(out)]) == 1  # fmt: skip
+    assert any("differ" in p for p in json.loads(out.read_text())["problems"])

@@ -34,7 +34,7 @@ from typing import Any
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
-IDENTITY_KEYS = ("git_sha", "suite", "scale", "python_parts")
+IDENTITY_KEYS = ("git_sha", "suite", "scale", "python_parts", "seed_base")
 
 
 def parse_env(text: str) -> dict[str, Any]:
@@ -89,7 +89,9 @@ def expected_tag(name: str) -> str | None | bool:
     return False
 
 
-def parse_step(path: Path, sha: str, suite: str | None = None) -> dict[str, Any]:
+def parse_step(
+    path: Path, sha: str, suite: str | None = None, seed_base: str | None = None
+) -> dict[str, Any]:
     lines = path.read_text().splitlines()
     problems: list[str] = []
     if len(lines) < 5 or not lines[0].startswith("# command: "):
@@ -117,7 +119,10 @@ def parse_step(path: Path, sha: str, suite: str | None = None) -> dict[str, Any]
         if doc is None:
             problems.append("missing JSON result document")
         else:
-            for key, want in (("step", tag), ("suite", suite), ("git_sha", sha)):
+            checks = [("step", tag), ("suite", suite), ("git_sha", sha)]
+            if seed_base is not None:  # every statistical step used the archive's seed base
+                checks.append(("seed_base", int(seed_base)))
+            for key, want in checks:
                 if doc.get(key) != want:
                     problems.append(f"document {key} is {doc.get(key)!r}, expected {want!r}")
     verdict = (
@@ -201,7 +206,7 @@ def verify(d: Path, sha: str, attest_sha: str | None = None) -> dict[str, Any]:
     for n in names:
         p = d / f"{n}.txt"
         steps[n] = (
-            parse_step(p, sha, env.get("suite"))
+            parse_step(p, sha, env.get("suite"), env.get("seed_base"))
             if p.exists()
             else {"pass": False, "problems": ["missing"]}
         )

@@ -63,8 +63,10 @@ def _draw(mean: float, sigma: float, gamma: bool) -> np.ndarray:
     u = rng.uniform(1e-12, 1.0 - 1e-12, size=(N, 4 * MAX_TRIES))
     out = wp.zeros(N, dtype=wp.float64, device="cpu")
     ok = wp.zeros(N, dtype=wp.int32, device="cpu")
-    wp.launch(_sample, dim=N, inputs=[mean, sigma**2, wp.array(u, dtype=wp.float64), out, ok,
-                                      1 if gamma else 0], device="cpu")  # fmt: skip
+    u_dev = wp.array(u, dtype=wp.float64, device="cpu")  # explicit device: host independent
+    wp.launch(
+        _sample, dim=N, inputs=[mean, sigma**2, u_dev, out, ok, 1 if gamma else 0], device="cpu"
+    )
     assert ok.numpy().all()
     return out.numpy()
 
@@ -127,3 +129,21 @@ def test_reference_and_kernel_follow_the_same_trajectory_with_the_gamma_model(
     ).run()
     assert not np.array_equal(default.diagnostics["trace"]["energy_mev"][:50],
                               runs["python"].diagnostics["trace"]["energy_mev"][:50])  # fmt: skip
+
+
+@pytest.mark.parametrize("ratio", [0.7, 1.9, 3.0, 6.0, 25.0])
+def test_energy_cap_acts_only_when_the_mean_loss_approaches_the_energy(ratio: float) -> None:
+    """Transport caps every sampled loss at the remaining kinetic energy (both models). With the
+    mean loss at the energy-loss step limit (2 % of E, the default) the fraction of draws above
+    E is below 3e-7 for every ratio: the cap only acts in the last step before the cutoff,
+    where the mean loss is a large part of E (then it reduces the mean and the variance of the
+    raw sampler, which is why the moment claims are those of the raw sampler)."""
+    rng = np.random.default_rng(3)
+    k = ratio**2
+    n = 4_000_000
+    frac_cap = {}
+    for mean_over_e in (0.02, 0.5):
+        x = rng.gamma(k, 1.0 / k, size=n) * mean_over_e  # in units of E
+        frac_cap[mean_over_e] = float((x > 1.0).mean())
+    assert frac_cap[0.02] < 3e-7
+    assert frac_cap[0.5] >= frac_cap[0.02]

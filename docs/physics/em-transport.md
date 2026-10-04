@@ -56,7 +56,7 @@ is given the 1 % clamp allowance). The transport-level validation of straggling 
 straggling `sigma_R` of the end depths (criterion T6, local validation), which is not part of the CI tests.
 
 Alternative model `bohr_gamma_v1` (selected with `PhysicsOptions.straggling_model`; the default is unchanged):
-a Gamma distribution with exactly the Bohr mean and variance for every ratio (shape `k = r^2`, scale
+a Gamma distribution whose raw sampler has exactly the Bohr mean and variance for every ratio (shape `k = r^2`, scale
 `sigma^2 / mean`, Marsaglia-Tsang), positive everywhere, no clamp and no Gaussian branch. With a common scale
 `theta = sigma^2 / mean = kappa(E) / S(E)` along a path (`kappa` the Bohr dispersion per unit path, `S` the stopping
 power) the sum of Gamma steps is exactly Gamma with the summed shape, so the whole energy-loss distribution - not only
@@ -64,6 +64,12 @@ its first two moments - is independent of the step length wherever `theta` varie
 branch with the step length (Gamma for `r < 3`, Gaussian above), so its higher moments depend on the step. The two
 models are compared by the T9 step (`--straggling-model`); which one becomes the default is decided from that
 comparison.
+
+Both models: the exact-moment statements above are those of the raw sampler. In transport every sampled loss is
+capped at the remaining kinetic energy (`loss = min(loss, E)`). For a mean loss at the energy-loss step limit (2 % of
+`E`) the fraction of draws above `E` is below 3e-7 for every ratio (test
+`test_energy_cap_acts_only_when_the_mean_loss_approaches_the_energy`), so the cap only acts in the last step before the
+cutoff, where the mean loss is a large part of `E` and the cap reduces the mean and the variance.
 
 ## Multiple Coulomb scattering
 

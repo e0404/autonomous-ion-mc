@@ -187,3 +187,12 @@ listed in the result document. The χ² permutation statistic is unchanged. The 
 float64 probe of T12 keeps its full criteria: the rehearsal showed a significant float32 bias
 (|ΔR80| ≈ 0.02 mm, IDD χ² at the permutation floor), which is treated as a finding to be fixed in
 the engine (float64 energy bookkeeping inside the float32 kernel), not as an allowance.
+
+¹³ Held-out qualification seeds (2026-10-04, task V3-003B, after Codex review REVIEW-2d89ea43c6784baea45cc8946c62850d):
+the full-scale rehearsal of the LV/HR suites at f243b15 (seed base 20261004; validation record
+VAL-20261004-064044-9EEB7A) exposed runner defects and the two degenerate T12 cases of ¹², and the
+statistical rules were clarified after those outcomes were observed. The rehearsal is preserved as
+contrary evidence and is not acceptance evidence. The qualification runs of every statistical step
+(T8, T9, T10, T12 samples, T14, R1) use the independent seed base 20271004, recorded in the
+environment, the step documents and each sample's metadata; samples with different seed bases are
+never compared. All tolerances and the frozen history counts are unchanged.

@@ -13,6 +13,15 @@ conformant result. Everything uses the offline analytic Bethe stopping source (I
 production float32 Warp CPU backend unless stated, and the helpers of
 ``ionmc.transport.parity`` and ``ionmc.transport.mcs_checks`` that the tests use.
 
+Seeds: every statistical step derives all its seeds deterministically from one
+``--seed-base`` (default 20261004, the rehearsal):
+  T12 samples ``base + 1000 k`` (k = 1 python, 2 cpu32, 3 cpu64, 4 cuda32);
+  T9 ``base + i`` (i-th case); T8 ``base + i`` (theta) and ``base + 10 + i`` (sigma);
+  T14 ``base + i`` (theta), ``base + 100 + i`` (sigma), ``base + 1000`` (control);
+  T10 ``base + i`` (i-th orientation); T1, T13 and the repeatability step ``base``.
+The base is recorded in the step documents and in the metadata of every T12 sample, and the
+comparison refuses samples made with another base.
+
 Observables (see ``docs/architecture/transport.md``, section Validation runner): T8 and T14 take
 the lateral sigma from the deposited energy in fixed 0.2 mm lateral bins and 1 mm slabs at
 z/R = 0.5 and 0.9 (scoring grids independent of the transport voxels; Fermi-Eyges A2 comparison)
@@ -163,6 +172,10 @@ def finish(doc: dict[str, Any], frozen_n: int | None, n: int | None) -> int:
     return emit(doc)
 
 
+DEFAULT_SEED_BASE = 20261004
+SEED_BASE = DEFAULT_SEED_BASE
+
+
 def emit(doc: dict[str, Any]) -> int:
     """Print the result document (with the run identity) and return the exit status."""
     if RUN_PLANS:
@@ -181,6 +194,7 @@ def emit(doc: dict[str, Any]) -> int:
         }
     doc = {
         **doc,
+        "seed_base": SEED_BASE,
         "suite": os.environ.get("IONMC_RUN_SUITE", "unknown"),
         "git_sha": os.environ.get("IONMC_RUN_SHA", "unknown"),
     }
@@ -414,6 +428,7 @@ def expected_sample(a: argparse.Namespace, name: str) -> dict[str, Any]:
         "n_total": cfg.run.n_histories,
         "n_batches": cfg.run.n_batches,
         "seed": cfg.run.seed,
+        "seed_base": a.seed,
         "energy_mev": a.energy,
         "lateral_bin_mm": a.lateral_bin,
         "half_width_mm": a.half_width,
@@ -508,6 +523,7 @@ def save_sample_part(
         "n_total": cfg.run.n_histories,
         "n_batches": cfg.run.n_batches,
         "seed": cfg.run.seed,
+        "seed_base": a.seed,
         "h0": h0,
         "h1": h1,
         "energy_mev": a.energy,
@@ -1313,7 +1329,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--n", type=int, default=1_000_000)
     ap.add_argument("--k", type=int, default=256)
     ap.add_argument("--energy", type=float, default=150.0)
-    ap.add_argument("--seed", type=int, default=20261004)
+    ap.add_argument(
+        "--seed-base",
+        "--seed",
+        dest="seed",
+        type=int,
+        default=DEFAULT_SEED_BASE,
+        help="base of every seed of the step (derivation: see the module docstring)",
+    )
     ap.add_argument("--timeout", type=float, default=None)
     ap.add_argument("--backend", default="warp-cpu")
     ap.add_argument("--mode", choices=("workers", "chunks"), default="workers")
@@ -1322,6 +1345,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--lateral-bin", type=float, default=0.2)
     ap.add_argument("--half-width", type=float, default=20.0)
     args = ap.parse_args(argv)
+    global SEED_BASE
+    SEED_BASE = args.seed
     args.workers = (os.cpu_count() or 1) if args.workers == "auto" else int(args.workers)
     return STEPS[args.step](args)
 

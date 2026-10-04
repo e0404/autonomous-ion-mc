@@ -155,6 +155,9 @@ def test_t13_warp_cpu_one_versus_three_workers(make_config: MakeConfig, precisio
     # the parent compiled the kernel before spawning, so workers only load it from the cache
     assert all(p["compile_s"] < 0.5 for p in parts), [p["compile_s"] for p in parts]
     assert three.device.endswith("x 3 processes")
+    # the pooled compile time includes the parent's compile before the workers were spawned
+    assert all("parent_compile_s" in p for p in parts)
+    assert three.timings["compile"] >= max(p["parent_compile_s"] for p in parts)
     assert three.energy_balance.relative_residual < (1e-5 if precision == "float32" else 1e-12)
 
 

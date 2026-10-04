@@ -16,8 +16,10 @@ Result fields of every measurement (JSON ``results[*]``), exactly what each one 
 * ``wall_s``: wall time of ``Simulation(cfg)`` construction (validation, tables) plus ``run()``
   in the measured child process; ``histories_per_s = histories / wall_s``.
 * ``setup_s``: validation and table construction.
-* ``compile_s``: kernel compile/load seconds of the slowest process; for a pool it includes the
-  parent's compile before the workers are spawned (workers then only load the cached module).
+* ``compile_s``: kernel compile/load seconds: the slowest process's load, plus, for a pool, the
+  parent's
+  compile before the workers are spawned (the workers then only load the cached module); it is
+  contained in ``transport_s``.
 * ``transport_s``: the whole ``run_transport`` call (kernel load, launches, exact reductions and,
   for a pool, spawning, pickling and merging); it contains ``compile_s``.
 * ``kernel_sync_transfer_s``: the largest per-worker sum of the chunk times: launch, kernel,
