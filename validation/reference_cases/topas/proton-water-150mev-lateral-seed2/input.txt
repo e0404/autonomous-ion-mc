@@ -48,7 +48,7 @@ sv:Sc/IDD/Report = 2 "Sum" "Standard_Deviation"
 # 3-D dose for the independent lateral-spread check (frozen criterion T15): full 120 x 120 mm field in
 # 0.5 mm lateral bins (240 x 240) and 1 mm depth bins (300). Binary output (.bin + .binheader),
 # Sum only: 240*240*300 = 17.28e6 bins (138 MB if float64). The full field is scored so that the
-# lateral halo (including the outer 10 % used for background estimation) is inside the grid and the
+# lateral halo is inside the grid (the lateral sigma is the Sheppard-corrected second moment over a stated window; no background subtraction) and the
 # scorer shares the Water component with the IDD scorer (a child scoring box would remove its
 # volume from the Water-component IDD).
 s:Sc/Dose3D/Quantity = "DoseToMedium"
@@ -62,7 +62,7 @@ s:Sc/Dose3D/IfOutputFileAlreadyExists = "Overwrite"
 sv:Sc/Dose3D/Report = 1 "Sum"
 
 # Same 3-D scorer restricted to generation-0 (primary) particles: dose without secondaries born in
-# nuclear interactions (nuclear halo), for comparison with EM-only transport backends. If this
+# nuclear interactions (nuclear halo). Informative only: it also drops dose from EM secondaries, so the EM-only all-particle case is the reference for EM-only backends. If this
 # OnlyIncludeParticlesOfGeneration filter is rejected by the build, the smoke run reports it.
 s:Sc/Dose3DPrimary/Quantity = "DoseToMedium"
 s:Sc/Dose3DPrimary/Component = "Water"

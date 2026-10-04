@@ -191,9 +191,10 @@ run is reproducible from its committed bundle; the manifested `inputs/case.json`
   energy fraction in such deltas is a few percent with mean displacement well below 0.5 mm,
   bounding the extra variance by about 0.01 mm^2 against sigma^2 >= 2.9 mm^2, i.e. <= 0.4 % on
   sigma^2 and <= 0.2 % on sigma (range argument, not computed).
-* The comment text about a 'background zone' inside the already executed TOPAS `input.txt` files of
-  the lateral cases is obsolete (no pedestal is subtracted); the files stay byte-identical to what
-  the run manifests hash and the comment will be dropped at the next case revision.
+* The comments inside the lateral TOPAS `input.txt` files were corrected after the archived runs
+  (no 'background zone'; the primary-generation scorer is informative only). Comments do not
+  change the executed physics; the run manifests hash the input copies as executed (source commits
+  0d0bb49 / a17f47a), which carried the old comment text.
 * Replicate gate (`compare_batches.py`): within a group all runs must have identical engine
   identity (request.json engine block, runner/OS/sandbox hashes, clean commit), identical case.json
   (minus `seeds` and `rationale`, the single `-rseed <int>` pair of FRED removed; zero, several or malformed `-rseed` options are rejected), identical native input after deleting only the
