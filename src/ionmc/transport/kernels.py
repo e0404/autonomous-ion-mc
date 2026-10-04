@@ -633,7 +633,12 @@ def make_transport_kernel(real: type, diag: bool):
                 if ctl.c_fshort * r0 <= tt and tt < r0 and e_r1 > energy:
                     c_inv = c_inv + 1  # E1 > E0 from the inverse round trip
                     e_r1 = D(energy)
-                mean = EMD.csda_mean_loss(energy, e_r1, s0, tt, r0, ctl.c_fshort)
+                s_branch = D(s0)  # stopping power of the linear branch: at the midpoint energy
+                if tt < ctl.c_fshort * r0:
+                    e_half = energy - D(0.5) * s0 * tt
+                    ih, fh = FD.log_bin_index(e_half, ln_e0[m], inv_dln_e[m], ctl.n_e)
+                    s_branch = FD.interp_exp(ln_s[m, ih], ln_s[m, ih + 1], fh)
+                mean = EMD.csda_mean_loss(energy, e_r1, s_branch, tt, r0, ctl.c_fshort)
                 attempts = int(1)
                 loss = D(mean)
                 if ctl.straggling == 1:

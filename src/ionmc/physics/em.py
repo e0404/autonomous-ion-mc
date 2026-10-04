@@ -62,8 +62,10 @@ def make_em(real: type) -> SimpleNamespace:
     ) -> real:
         """Mean energy loss [MeV] over mass thickness ``t`` = ``mass_thickness`` [g/cm2].
 
-        ``e_r1_mev`` is Rinv(R0 - t) (clamped to the table), ``s_mass0`` the mass stopping
-        power at ``e0_mev`` [MeV cm2/g], ``r0_g_cm2`` = R(e0). Result in [0, e0].
+        ``e_r1_mev`` is Rinv(R0 - t) (clamped to the table); ``s_mass0`` is the mass stopping
+        power [MeV cm2/g] of the linear branch ``t < f_short R0``, where the caller passes the
+        value at the midpoint energy ``E0 - S(E0) t / 2`` (midpoint rule: no first-order bias in
+        the step length); ``r0_g_cm2`` = R(e0). Result in [0, e0].
         """
         loss = e0_mev - e_r1_mev
         if mass_thickness >= r0_g_cm2:

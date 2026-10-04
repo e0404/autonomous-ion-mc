@@ -538,7 +538,11 @@ class _Reference:
             if f_short_t(tt, r0, self.c_fshort) and e_r1 > energy:
                 self.counters["energy_inversion"] += 1  # E1 > E0 from the inverse round trip
                 e_r1 = energy
-            mean = EM.csda_mean_loss(r(energy), r(e_r1), r(s0), r(tt), r(r0), self.c_fshort)
+            s_branch = s0  # stopping power of the linear branch: at the midpoint energy
+            if tt < float(self.c_fshort) * r0:
+                e_half = energy - 0.5 * s0 * tt
+                s_branch = self._stopping_range(m, e_half)[0]
+            mean = EM.csda_mean_loss(r(energy), r(e_r1), r(s_branch), r(tt), r(r0), self.c_fshort)
             mean_f = float(mean)
             attempts = 1
             if ph.straggling:

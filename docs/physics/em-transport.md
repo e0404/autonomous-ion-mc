@@ -15,9 +15,20 @@ exact inverse, the mean energy after a path of mass thickness `t = rho s / 10` [
 
     E1 = Rinv( R(E) - t )        mean loss = E - E1
 
-which is independent of how the path is divided into steps. For `t < f_short R(E)` with
-`f_short = 1e-3` the loss is `S(E) t` (this avoids cancellation in float32), and for `t >= R(E)` it is
-`E`. `ionmc.transport.tables.TransportTables` stores `ln S`, `ln R` on a uniform `ln E` grid
+which is independent of how the path is divided into steps *if the tables were exact*. They are not: every step
+reads `R(E)` of the new state energy from the table, and the table round trip `R(Rinv(R)) - R` (up to the U2 bound of
+1e-5, a smooth and therefore systematic error) enters once per step, so the accumulated loss depends weakly on the
+number of steps (about 3e-4 of the loss between 0.1 mm and 0.01 mm steps with the telescoping form alone). For
+`t < f_short R(E)` the loss is therefore the linear form at the midpoint energy, `S(E_mid) t` with
+`E_mid = E - S(E) t / 2` (midpoint rule: the step-size error is second order, the loss of the same path agrees
+between 1, 0.1 and 0.01 mm steps to 5e-6 and 1e-7 when every step takes this branch; the former form `S(E) t` had a
+first-order bias of about `s / (2 R)` times the curvature of `S`, which showed as a step dependence of the
+depth-dose at the 1e-3 level in the T9 comparison of 0.1 mm against 1 mm steps). The default is `f_short = 1e-2`, the largest
+value the configuration accepts: for such steps the second-order midpoint error is smaller than the table round-trip
+bias of the telescoping form at small steps, whereas where `s / R` is large (the last steps before the end of the
+range) the midpoint rule is no longer accurate (its error is second order in `s / R`) and the telescoping form takes
+over; the float32 cancellation that the branch once avoided is gone because the energy bookkeeping is in float64.
+For `t >= R(E)` the loss is `E`. `ionmc.transport.tables.TransportTables` stores `ln S`, `ln R` on a uniform `ln E` grid
 (at least 200 points per decade) and `ln E` on a uniform `ln R` grid (800 points per decade);
 values are log-log linear interpolations. The test `test_u2_round_trip_and_monotonicity` requires
 `|Rinv(R(E)) / E - 1| <= 1e-5` over the table range and strictly monotone `R` and `Rinv` for water and

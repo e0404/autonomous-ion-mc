@@ -304,3 +304,36 @@ def test_float32_kernel_keeps_energy_and_range_bookkeeping_in_double(
     a, b = out["float32"][1], out["float64"][1]
     keep = b > 0.01 * b.max()
     assert np.abs(a[keep] / b[keep] - 1.0).max() < 1e-5
+
+
+def _path_loss(make_config: MakeConfig, s_max: float, fraction: float) -> float:
+    """Deterministic energy lost by a 150 MeV proton in 40 mm of water (float64 warp-cpu)."""
+    from dataclasses import replace
+
+    cfg = make_config(
+        energy=150.0, n=2, n_batches=2, position=(0.0, 0.0, -1.0),
+        geometry=BoxPhantom((-20.0, -20.0, 0.0), (40.0, 40.0, 40.0), WATER),
+        scoring=(ScoringGrid((-20.0, -20.0, 0.0), (40.0, 40.0, 40.0), (1, 1, 1)),),
+        mcs=False, straggling=False, max_step=s_max, backend="warp-cpu", precision="float64",
+        diagnostics=DiagnosticsOptions(escape_records=True),
+    )  # fmt: skip
+    cfg = replace(cfg, physics=replace(cfg.physics, short_step_fraction=fraction))
+    res = Simulation(cfg).run()
+    return 150.0 - float(res.diagnostics["escape_energy_mev"][0])
+
+
+def test_short_step_branch_has_no_first_order_step_dependence(make_config: MakeConfig) -> None:
+    """The linear short-step branch uses the stopping power at the midpoint energy
+    ``E - S(E) t / 2`` (second order in the step) and is the default for ``t < 1e-2 R``. With the
+    default fraction the loss over the same path agrees between 1 mm, 0.1 mm and 0.01 mm steps
+    to the second-order level (1 vs 0.1 mm: 5e-6 relative; 0.1 vs 0.01 mm: 1e-7); a first-order
+    branch would differ by about 2e-4 between 0.1 and 0.01 mm, and the telescoping form alone
+    (fraction 1e-5) by about 3e-4 from the table round trip that enters once per step."""
+    from ionmc.config import PhysicsOptions
+
+    assert PhysicsOptions.__dataclass_fields__["short_step_fraction"].default == 1e-2
+    loss = {s: _path_loss(make_config, s, 1e-2) for s in (1.0, 0.1, 0.01)}
+    assert abs(loss[0.1] / loss[1.0] - 1.0) < 5e-6
+    assert abs(loss[0.01] / loss[0.1] - 1.0) < 1e-7
+    telescoping = {s: _path_loss(make_config, s, 1e-5) for s in (0.1, 0.01)}
+    assert abs(telescoping[0.01] / telescoping[0.1] - 1.0) > 1e-4  # the bias the branch removes

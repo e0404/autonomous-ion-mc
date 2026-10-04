@@ -196,3 +196,12 @@ contrary evidence and is not acceptance evidence. The qualification runs of ever
 (T8, T9, T10, T12 samples, T14, R1) use the independent seed base 20271004, recorded in the
 environment, the step documents and each sample's metadata; samples with different seed bases are
 never compared. All tolerances and the frozen history counts are unchanged.
+
+¹⁴ Qualification seed base re-frozen (2026-10-04, task V3-003B, after Codex review REVIEW-bfc1d5ece8d74615ba1dea70f8c3aa72):
+the base 20271004 of ¹³ was consumed by the T9 investigation (its full-scale results were
+inspected and used to choose the Gamma straggling default and the stopping-power-ramp
+apportioning), so it is no longer held out. The qualification seed base is now 20281004 and is
+used only for the final qualification runs of this task after the engine is frozen; 20261004
+(rehearsal) and 20271004 (T9 investigation) are preserved as non-qualification evidence and any
+further diagnostic run uses a base from the 2027xxxx family. The runner enforces conformance only
+for base 20281004. Tolerances and history counts are unchanged.

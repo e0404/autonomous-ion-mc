@@ -2,11 +2,14 @@
 
 A scoring grid is an independent regular grid (same conventions as
 :class:`ionmc.geometry.VoxelGeometry`; it need not align with the transport grid). The energy of
-a step is deposited by path-length apportioning: it is distributed along both hinge legs in
-proportion to the path length inside each scoring voxel (a per-grid incremental voxel walk, see
-``ionmc.transport.reference``), so the result does not depend on how the step length compares
-with the voxel size; the energy left at the cutoff is a point deposit at the end point. Deposits
-are quantized into int64 fixed-point accumulators (``ionmc.transport.tally``). The mass of a scoring
+a step is deposited by track-length apportioning with a linear stopping-power ramp: along the
+hinge path (both legs) the deposit density is taken to vary linearly from S(E_old) to S(E_new), and
+each voxel receives the integral of that density over the path piece inside it (a per-grid
+incremental voxel walk, see ``ionmc.transport.reference``). The result has a residual step
+dependence of second order (the curvature of the stopping power along the step), instead of the
+aliasing of a point deposit with the voxel edges or the first-order error of a uniform deposit;
+the energy left at the cutoff is a point deposit at the end point. Deposits are quantized into int64
+fixed-point accumulators (``ionmc.transport.tally``). The mass of a scoring
 voxel is the exact overlap integral of the piecewise-constant density of the geometry over
 the voxel (the geometry is vacuum outside, so partially covered voxels have a correspondingly
 smaller mass). Dose uses 1 MeV/g = 1.602176634e-10 Gy.

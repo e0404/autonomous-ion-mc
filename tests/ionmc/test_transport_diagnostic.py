@@ -1,6 +1,6 @@
-"""The truncated-hinge diagnostic (T14 negative control): off by default and then
-bit-for-bit the engine of the stored baseline trace; on, python and warp-cpu float64 still
-follow the same trajectory (T1) and the trajectory differs from the default."""
+"""The truncated-hinge diagnostic (T14 negative control): off by default and then the engine
+of the stored baseline trace (see the provenance in the test); on, python and warp-cpu float64
+still follow the same trajectory (T1) and the trajectory differs from the default."""
 
 from __future__ import annotations
 
@@ -30,7 +30,9 @@ from ionmc.transport.tally import TRACE_COLUMNS
 BASELINE = Path(__file__).parent / "data" / "trace_baseline_20mev.npz"
 
 
-def _config(backend: str = "python", *, diagnostic: bool = False) -> SimulationConfig:
+def _config(
+    backend: str = "python", *, diagnostic: bool = False, legacy: bool = False
+) -> SimulationConfig:
     shape = (16, 16, 16)
     geo = VoxelGeometry(
         (-12.0, -12.0, 0.0), (1.5, 1.5, 1.5), shape, (WATER,), np.zeros(shape, dtype=np.int32)
@@ -44,6 +46,11 @@ def _config(backend: str = "python", *, diagnostic: bool = False) -> SimulationC
             stopping=BetheStoppingSource(),
             max_step_mm=1.0,
             truncated_hinge_diagnostic=diagnostic,
+            **(  # the physics defaults of the commit that generated the baseline trace fixture
+                {"straggling_model": "bohr_gauss_clamped_gamma_v1", "short_step_fraction": 1e-3}
+                if legacy
+                else {}
+            ),
         ),
         RunOptions(
             backend=backend,  # type: ignore[arg-type]
@@ -57,18 +64,26 @@ def _config(backend: str = "python", *, diagnostic: bool = False) -> SimulationC
 
 
 def test_default_trace_is_unchanged_from_the_stored_baseline() -> None:
-    """The baseline trace was produced before the diagnostic existed (commit 6d58480): with the
-    flag off the python and warp-cpu float64 traces still reproduce it (rtol 1e-9 across
-    platforms' libm; on the generating host they are bit-identical)."""
+    """Provenance of ``data/trace_baseline_20mev.npz``: generated at commit 6d58480 (before the
+    truncated-hinge diagnostic existed) by the python reference with the physics defaults of that
+    commit, i.e. straggling model ``bohr_gauss_clamped_gamma_v1`` and ``short_step_fraction`` 1e-3
+    (both pinned here; the defaults have since changed). It guards that, with the diagnostic off,
+    the engine reproduces that trajectory: discrete columns exactly, continuous columns to
+    rtol 1e-9 and atol 2e-10. One documented, intended deviation exists: the midpoint rule of the
+    linear short-step energy-loss branch (V3-003B, after 6d58480) changes the loss of the one step
+    of this run that takes that branch by about 8e-11 MeV (the trace differs by at most 8e-11 in
+    energy and 2e-11 mm in position). On the generating host python and warp-cpu otherwise agree
+    bit for bit."""
     base = np.load(BASELINE)
     for backend in ("python", "warp-cpu"):
-        res = Simulation(_config(backend)).run()
+        res = Simulation(_config(backend, legacy=True)).run()
         tr = res.diagnostics["trace"]
         for name in TRACE_COLUMNS:
             if name in ("history", "step", "ix", "iy", "iz", "reason", "blocks", "attempts"):
                 assert np.array_equal(tr[name], base[name]), (backend, name)
             else:
-                np.testing.assert_allclose(tr[name], base[name], rtol=1e-9, atol=1e-12)
+                # atol 2e-10 covers the documented 8e-11 MeV midpoint-rule change of one step
+                np.testing.assert_allclose(tr[name], base[name], rtol=1e-9, atol=2e-10)
 
 
 def test_diagnostic_on_keeps_python_warp_parity_and_changes_trajectories() -> None:

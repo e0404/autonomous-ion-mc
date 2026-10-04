@@ -71,7 +71,7 @@ densities in g/cm3, doses in Gy per primary). All grids use `origin_mm` = corner
 * `ScoringGrid(origin_mm, spacing_mm, shape, name="dose")`: independent of the geometry grid.
 * `PhysicsOptions(nuclear, stopping, straggling=True, multiple_scattering=True,
   e_cut_mev=2.0, max_step_mm=1.0, max_energy_loss_fraction=0.02, range_alpha=0.2,
-  range_rho_f_mm=0.1, short_step_fraction=1e-3, truncated_hinge_diagnostic=False, ...)`: `nuclear` and `stopping` have no default
+  range_rho_f_mm=0.1, short_step_fraction=1e-2, truncated_hinge_diagnostic=False, ...)`: `nuclear` and `stopping` have no default
   (`nuclear=True` is rejected until nuclear interactions exist). Model names are
   `straggling_model="bohr_gamma_v1"` (the older `"bohr_gauss_clamped_gamma_v1"` is selectable), `mcs_model="differential_moliere"`, `delta_electrons="local"`;
   any other string is rejected.
@@ -109,7 +109,7 @@ counter starting at 0.
    planned boundary steps always cross); the particle then snaps onto the plane and the index is
    incremented on that axis. The travelled length is `s_act` = leg 1 + leg 2.
 6. Energy loss for `s_act`: mean loss from the inverse-range expression
-   (`E - Rinv(R - rho s_act / 10)`, or `S t` for `t < 1e-3 R`, or `E` when the whole residual range is
+   (`E - Rinv(R - rho s_act / 10)`, or `S(E_mid) t` with `E_mid = E - S(E) t / 2` for `t < f_short R` (`f_short = 1e-2` by default), or `E` when the whole residual range is
    travelled); with straggling, block B draws (one block per attempt, at most 64; exceeding the limit
    increments `straggling_rejection` and uses the mean); without straggling one block is drawn and ignored.
    The loss is limited to `E`. If the inverse-range energy ever exceeds `E` (round trip of the
@@ -325,9 +325,9 @@ period) and `TransportWorkerError` is raised; no partial result is returned. Scr
   `# exit=` trailer (a timed-out step is killed and archived with `exit=124`); `manifest.txt` lists the steps of the
   run; `summarize.py` verifies everything and writes `summary.json`. Any failed step, missing file or mismatch makes the
   exit status non-zero.
-* **Seed base.** `--seed-base` (default 20271004, the qualification base) is the base of every statistical seed; it is
-  recorded in `environment.txt`, the step documents and the sample metadata. Only an archive made with 20271004 can be
-  `conformant`: one made with the rehearsal base 20261004 (preserved as contrary evidence) or without a recorded base
+* **Seed base.** `--seed-base` (default 20281004, the qualification base) is the base of every statistical seed; it is
+  recorded in `environment.txt`, the step documents and the sample metadata. Only an archive made with 20281004 can be
+  `conformant`: one made with the rehearsal base 20261004 or with 20271004 (consumed by the T9 investigation; both preserved as non-qualification evidence) or without a recorded base
   verifies but carries `non_conformant_reasons`. The qualification command is
   `python validation/scripts/transport/run_suite.py --suite hr --out validation/generated/transport/<new-dir> --expected-sha <sha>`
   (no seed flag).

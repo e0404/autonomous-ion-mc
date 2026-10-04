@@ -33,7 +33,7 @@ are deliberately out of scope here.
 
 | Topic | Candidates | Selected | Rationale |
 |---|---|---|---|
-| Mean energy loss | S(E)·s; range-table inversion | inverse-range telescoping `Rinv(R0) − Rinv(R0 − ρs)` with a linear `S·s` branch when `ρs < 10⁻³ R0` | exact in CSDA, step-size independent, monotone; the short branch avoids float32 cancellation (archived precision measurement) |
+| Mean energy loss | S(E)·s; range-table inversion | inverse-range telescoping `Rinv(R0) − Rinv(R0 − ρs)`; for `ρs < 10⁻² R0` a midpoint-rule branch `S(E₀ − S(E₀)·s/2)·s` (fourth amendment 2026-10-04: the former linear `S(E₀)·s` branch below `10⁻³ R0` carried a first-order step-size bias; the midpoint branch is second order and, for such steps, more consistent than the telescoping form, whose table round-trip error accumulates per step) | exact in CSDA, step-size independent, monotone; the short branch avoids float32 cancellation (archived precision measurement) |
 | Straggling | Gaussian only; Vavilov; Gaussian/Gamma/uniform switch (`G4IonFluctuations`); Gaussian-clamped/Gamma (`bohr_gauss_clamped_gamma_v1`); Gamma for every ratio (`bohr_gamma_v1`) | **Default (third amendment 2026-10-04) `bohr_gamma_v1`:** Bohr variance sampled as Gamma with shape k = (mean/σ)² and scale σ²/mean for every ratio (Marsaglia–Tsang, `u^(1/k)` boost for k < 1; rejection bounded by 64 attempts, exhaustion increments the fail-closed counter `straggling_rejection`); every sampled loss is capped at the remaining kinetic energy. The earlier switch `bohr_gauss_clamped_gamma_v1` (Gamma for mean/σ < 3, Gaussian clamped to [0, 2·mean] above) remains selectable | the Gamma branch reproduces the mean and the Bohr variance exactly; the Gaussian branch preserves the mean and reduces the variance by at most about 0.5 % (0.13 % of samples clamped at 0 at mean/σ = 3; the moment test allows 1 %); the `G4IonFluctuations` uniform branch has variance mean²/3 whatever the Bohr value and the truncated Gaussian near mean/σ = 2 loses variance, so they are not used; sum over steps is Gaussian by the central limit theorem; delta electrons are deposited locally so single-step tails do not reach dose |
 | Multiple scattering | per-step Highland; Molière; differential Highland (Kanematsu); differential Molière (Gottschalk) | **differential Molière** scattering power `T_dM = f_dM(pv, p₁v₁)(E_s/pv)²/X_S`, `E_s = 15.0 MeV`, `f_dM = 0.5244 + 0.1975 lg(1−(pv/p₁v₁)²) + 0.2320 lg(pv) − 0.0098 lg(pv) lg(1−(pv/p₁v₁)²)` (clamped ≥ 0), scattering length `1/(ρX_S) = α N_A r_e² (Z²/A){2 ln(33219 (AZ)^{-1/3}) − 1}` Bragg-additive, applied as a Gaussian polar angle with a random hinge | step-size independent by construction (per-step Highland is not; a negative-control test proves the instrument has power); ranked best against Hanson theory and measurement in the source paper; the research report's label "differential Highland" for these coefficients was wrong and is corrected |
 | Lateral displacement | explicit correlated sampling; random hinge | random hinge (move `a·s`, deflect, move `(1−a)·s`, `a` uniform) | reproduces the Fermi–Eyges second moments exactly without extra draws |
@@ -177,9 +177,29 @@ fail-closed configuration rules.
   apportioning the step deposit uniformly along the path while the stopping
   power changes by up to ≈ 1.6 % within a 2 %-energy-loss step near the
   Bragg peak (T9-CI deviations 5e-4 … 1.3e-3, above the ≈ 3e-4 sensitivity
-  of the statistical T9). The deposit is therefore apportioned with a linear
-  stopping-power ramp S(E₀) → S(E₁) along the hinge path (residual second
-  order in the curvature of S). The T9 results before the change are
-  preserved in the validation ledger (VAL-20261004-070915-E1A618).
+  of the statistical T9). The deposit was therefore apportioned with a linear
+  stopping-power ramp S(E₀) → S(E₁) along the hinge path (kept: residual
+  second order in the curvature of S) — but the rerun at 1e6 histories still
+  failed (χ² 427, max|z| 5.2; VAL-20261004-072852-16E681), so this was NOT
+  the cause. The root cause, found with a calibration control (two seeds of
+  the same configuration give χ² 150–160 over 163 bins, so the statistic is
+  calibrated) and a parameter scan, is the short-step energy-loss branch:
+  for `ρs < 10⁻³ R₀` the loss was taken as `S(E₀)·s`, which omits the
+  first-order term `(s/2)·dS/dx` — about 2e-4 of the energy lost per step,
+  used by 0.1 mm steps down to ≈ 115 MeV (≈ 55 mm depth) and never by 1 mm
+  steps, shifting the range by ≈ 0.009 mm. With the branch threshold at
+  10⁻⁹ or 10⁻⁵ the s_max 0.1 mm vs 1 mm comparison passes (χ² 163–185,
+  p 0.25–0.57, ΔR80 ≤ 0.002 mm). The branch is therefore made
+  second-order accurate (midpoint stopping power) and its threshold set to
+  `10⁻² R₀`: below that the midpoint branch is more step-consistent than the
+  telescoping form (deterministic 40 mm loss at 150 MeV, 0.1 vs 1 mm steps:
+  2.5e-6 with the midpoint branch versus 3e-5 by telescoping; 0.01 vs 0.1 mm:
+  2.6e-8 versus 3e-4), because the inverse-range table round-trip error of
+  the telescoping accumulates per step; above it the telescoping is needed
+  (the midpoint error grows with (s/R)²). The branch's original purpose
+  (float32 cancellation in the telescoping) disappeared with the float64
+  energy bookkeeping. The results before the change are
+  preserved in the validation ledger (VAL-20261004-070915-E1A618,
+  VAL-20261004-072852-16E681).
 
 To be appended from committed result files.

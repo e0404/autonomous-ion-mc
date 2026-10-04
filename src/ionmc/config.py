@@ -63,8 +63,9 @@ class PhysicsOptions:
     ``max_energy_loss_fraction`` bounds the mean energy loss per step as a fraction of the
     kinetic energy; ``range_alpha`` and ``range_rho_f_mm`` parametrise the Geant4 range step
     function; steps shorter than ``short_step_fraction`` of the residual range use the
-    linear loss ``S t``. ``truncated_hinge_diagnostic`` (default off, a diagnostic for the T14
-    negative control, not a physics model) is "truncate-first": the planned step ends at the first
+    linear loss ``S(E_mid) t`` with ``E_mid = E - S(E) t / 2`` (midpoint rule).
+    ``truncated_hinge_diagnostic`` (default off, a diagnostic for the T14 negative control, not a
+    physics model) is "truncate-first": the planned step ends at the first
     plane the straight line reaches, the angle is sampled for that length, leg 2 is not cut again
     and the end point is snapped onto the plane (the displacements are recorded per history; the
     direction is never changed).
@@ -82,7 +83,7 @@ class PhysicsOptions:
     max_energy_loss_fraction: float = 0.02
     range_alpha: float = 0.2
     range_rho_f_mm: float = 0.1
-    short_step_fraction: float = 1.0e-3
+    short_step_fraction: float = 1.0e-2
     truncated_hinge_diagnostic: bool = False
 
     def __post_init__(self) -> None:
