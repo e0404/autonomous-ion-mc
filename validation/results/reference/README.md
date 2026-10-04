@@ -68,9 +68,10 @@ and was superseded; its values are not comparable and are not kept.
   second moment of the dose profile over the stated window, no pedestal subtraction. Values
   (mm, mean +- SE over seeds) at z/R80 = 0.5 and 0.9: full physics, all particles, +-20 mm window
   2.93 +- 0.01 and 4.42 +- 0.01 (full field 5.11 / 6.11); EM-only, all particles, +-20 mm
-  1.154 +- 0.002 and 3.019 +- 0.008 (full field 1.18 / 3.12); EM-only primary-only agrees with
-  EM-only all-particle within the SE, so delta-electron transport is not visible at this
-  precision. The large difference between full physics and EM-only is the nuclear halo (secondary
+  1.154 +- 0.002 and 3.019 +- 0.008 (full field 1.18 / 3.12); EM-only primary-only differs from
+  EM-only all-particle by about 0.0008 mm at both depths (paired over seeds, roughly six standard
+  errors of the paired difference): the delta-electron contribution is detectable but negligible
+  against the 3 % T15 tolerance. The large difference between full physics and EM-only is the nuclear halo (secondary
   particles) plus hadron-elastic deflection of primaries. R80: EM-only 158.81 +- 0.00 mm versus
   full physics 158.61 +- 0.01 mm. The EM-only all-particle values are the T15 reference for the
   EM-only ionmc backends; the acceptance window is +-20 mm (plan clarification 10), and the

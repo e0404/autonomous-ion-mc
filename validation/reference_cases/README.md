@@ -121,8 +121,8 @@ refer to the c6bc047 files, not the current ones.
 Evidence-grade runs use multiple seeds (the seed in `input.txt` / `config.txt` is the per-batch
 seed, varied by the orchestrator), at least 1e5 primaries per batch and depth bins of at most
 0.5 mm. Candidate cases: `topas/proton-water-150mev-fine` (IDD and LETd, ZBins 600) and
-`mcsquare/proton-water-150mev-fine` (CT 60 x 600 x 60 at 2 x 0.5 x 2 mm, anisotropic spacing
-unverified in e0404; fall back to 1 mm isotropic if rejected). The comparison script always labels
+`mcsquare/proton-water-150mev-fine` (CT 60 x 600 x 60 at 2 x 0.5 x 2 mm; the anisotropic spacing
+was accepted by MCsquare e0404 in the archived fine runs, output grid 60 x 600 x 60). The comparison script always labels
 its results exploratory: it analyses single-seed runs and computes no uncertainty. Evidence-grade
 batch analysis is future work; it must read the per-run seeds from each run's manifested
 `inputs/case.json`, group runs by engine and calculate the batch mean, variance and standard error
@@ -157,8 +157,9 @@ run is reproducible from its committed bundle; the manifested `inputs/case.json`
   `OnlyIncludeParticlesOfGeneration = "Primary"` (generation-0 particles, no nuclear-secondary
   dose); it is INFORMATIVE only and not the EM-only reference (the EM-only all-particle run is, see
   below), because it also excludes delta-electron dose; the full-physics all-particle scorer serves
-  the comparison after nuclear physics exists. The parameter name is unverified: the smoke run decides, with fallback
-  `OnlyIncludeParticlesNamed = "proton"` plus a generation filter, reporting what worked. Outputs
+  the comparison after nuclear physics exists. The parameter `OnlyIncludeParticlesOfGeneration =
+  "Primary"` was accepted by TOPAS 4.3 in the smoke run (REF-95ef7515c835ec8c348f-e1a37fc0) and is
+  used by all archived lateral runs (the binheader records the filter). Outputs
   and `compare_batches.py` report sigma_lat for both (`lateral`, `lateral_primary`). Dose3D binary layout and precision are not documented in the
   repository: `ionmc.reference.parsers.parse_topas_binary` infers float32/float64 from the file
   size and `runs.dose_3d` requires the lateral mean of the 3-D dose to reproduce the IDD (1e-4 of the
