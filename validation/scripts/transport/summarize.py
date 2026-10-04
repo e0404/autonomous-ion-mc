@@ -63,7 +63,33 @@ def identity(env: dict[str, Any]) -> str:
     return hashlib.sha256(blob.encode()).hexdigest()
 
 
-def parse_step(path: Path, sha: str) -> dict[str, Any]:
+STEP_TAGS = (
+    ("pytest", None),
+    ("t12-python-sample", "t12-sample"),
+    ("t12-accelerated-samples", "t12-sample"),
+    ("t12-compare", "t12-compare"),
+    ("t-r1-", "t-r1"),
+    ("t13-", "t13"),
+    ("t14-", "t14"),
+    ("t10-", "t10"),
+    ("t1-", "t1"),
+    ("t2-", "t2"),
+    ("t8-", "t8"),
+    ("t9-", "t9"),
+)
+
+
+def expected_tag(name: str) -> str | None | bool:
+    """Document tag a step must print (``None``: a pytest step has no document; ``False``: the
+    step name is unknown, which is a failure)."""
+    base = name.split("-", 1)[1] if "-" in name else name
+    for prefix, tag in STEP_TAGS:
+        if base.startswith(prefix):
+            return tag
+    return False
+
+
+def parse_step(path: Path, sha: str, suite: str | None = None) -> dict[str, Any]:
     lines = path.read_text().splitlines()
     problems: list[str] = []
     if len(lines) < 5 or not lines[0].startswith("# command: "):
@@ -83,7 +109,22 @@ def parse_step(path: Path, sha: str) -> dict[str, Any]:
             doc = json.loads(blob)
         except json.JSONDecodeError:
             problems.append("unparseable JSON document")
-    verdict = code == 0 and not problems and (doc is None or doc.get("pass") is True)
+    tag = expected_tag(path.stem)
+    if tag is False:
+        problems.append("unknown step name")
+    elif tag is not None:
+        # every non-pytest step must print its result document, naming itself, the suite and the SHA
+        if doc is None:
+            problems.append("missing JSON result document")
+        else:
+            for key, want in (("step", tag), ("suite", suite), ("git_sha", sha)):
+                if doc.get(key) != want:
+                    problems.append(f"document {key} is {doc.get(key)!r}, expected {want!r}")
+    verdict = (
+        code == 0
+        and not problems
+        and (tag is None or (doc is not None and doc.get("pass") is True))
+    )
     return {
         "file": path.name,
         "exit": code,
@@ -105,7 +146,10 @@ def _git(*args: str) -> bytes | None:
 
 def attest(env: dict[str, Any], sha: str) -> dict[str, Any]:
     """Compare the archive's ``source_hashes`` with the blobs of commit ``sha``."""
-    prefixes = ("src/ionmc", "validation/scripts/transport", "benchmarks/transport")
+    sys.path.insert(0, str(HERE))
+    import run_suite
+
+    prefixes = run_suite.SOURCE_PREFIXES
     listing = _git("ls-tree", "-r", "--name-only", sha)
     result: dict[str, Any] = {"attested_sha": sha, "valid": False, "mismatches": []}
     if listing is None:
@@ -114,7 +158,9 @@ def attest(env: dict[str, Any], sha: str) -> dict[str, Any]:
     tracked = {
         p
         for p in listing.decode().splitlines()
-        if p.startswith(tuple(prefixes)) and not p.endswith(".pyc") and "__pycache__" not in p
+        if (p.startswith(tuple(prefixes)) or p in run_suite.SOURCE_FILES)
+        and not p.endswith(".pyc")
+        and "__pycache__" not in p
     }
     recorded = env["source_hashes"]
     if env.get("git_sha") != sha:
@@ -154,7 +200,11 @@ def verify(d: Path, sha: str, attest_sha: str | None = None) -> dict[str, Any]:
     steps: dict[str, Any] = {}
     for n in names:
         p = d / f"{n}.txt"
-        steps[n] = parse_step(p, sha) if p.exists() else {"pass": False, "problems": ["missing"]}
+        steps[n] = (
+            parse_step(p, sha, env.get("suite"))
+            if p.exists()
+            else {"pass": False, "problems": ["missing"]}
+        )
     suite = env.get("suite")
     subset = True
     if suite in ("lv", "hr"):

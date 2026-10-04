@@ -81,8 +81,11 @@ def run_cfg(
     timeout: float | None = None,
     chunk: int | None = None,
     trunc_diag: bool = False,
+    memory_budget: int | None = None,
 ) -> Result:
     kw = {"chunk_histories": chunk} if chunk else {}
+    if memory_budget:
+        kw["memory_budget_bytes"] = memory_budget
     cfg = SimulationConfig(
         source=PencilBeamSource(PROTON, position, direction, energy),
         geometry=geometry,
@@ -115,6 +118,16 @@ def finish(doc: dict[str, Any], frozen_n: int | None, n: int | None) -> int:
     doc["reduced"] = bool(frozen_n is not None and n is not None and n < frozen_n)
     doc["frozen_histories"] = frozen_n
     doc["histories"] = n
+    return emit(doc)
+
+
+def emit(doc: dict[str, Any]) -> int:
+    """Print the result document (with the run identity) and return the exit status."""
+    doc = {
+        **doc,
+        "suite": os.environ.get("IONMC_RUN_SUITE", "unknown"),
+        "git_sha": os.environ.get("IONMC_RUN_SHA", "unknown"),
+    }
     print("#JSON-BEGIN")
     print(json.dumps(doc, indent=1, sort_keys=True, default=_json))
     print("#JSON-END")
@@ -200,6 +213,48 @@ def step_t2(a: argparse.Namespace) -> int:
     return finish({"step": "t2", "backend": backend, "t2": out, "pass": ok}, None, None)
 
 
+# -- repeatability (python-scope Warp functions and the kernels must be deterministic) -----------
+def step_repeat(a: argparse.Namespace) -> int:
+    """Run each ``backend:precision:histories`` of ``--runs`` twice (same configuration and seed,
+    150 MeV, all physics on) and require bit-identical tallies, counters, deposit grids and
+    per-history end states."""
+    depth = 1.1 * r_csda_mm(150.0)
+    geo = BoxPhantom((-30.0, -30.0, 0.0), (60.0, 60.0, depth), WATER)
+    grid = (ScoringGrid((-30.0, -30.0, 0.0), (2.0, 2.0, 2.0), (30, 30, int(depth / 2))),)
+    out: dict[str, Any] = {}
+    ok = True
+    n_min = None
+    for spec in a.runs.split(","):
+        backend, prec, n_s = spec.split(":")
+        n = int(n_s)
+        n_min = n if n_min is None else min(n_min, n)
+        runs = []
+        for _ in range(2):
+            runs.append(
+                run_cfg(
+                    energy=150.0,
+                    geometry=geo,
+                    scoring=grid,
+                    backend=backend,
+                    precision=prec,
+                    seed=a.seed,
+                    n=n,
+                    n_batches=20,
+                    workers=a.workers if backend in ("python", "warp-cpu") else 1,
+                    timeout=a.timeout,
+                    max_step=2.0,
+                    diag=DiagnosticsOptions(track_end_positions=True),
+                )
+            )
+        v = parity.compare_runs_bitwise(runs[0], runs[1])
+        v["valid"] = bool(runs[0].valid and runs[1].valid)
+        v["n_histories"] = n
+        out[spec] = v
+        ok &= bool(v["identical"] and v["valid"])
+    frozen = 100_000 if "cuda" in a.runs else None
+    return finish({"step": "t-r1", "t_r1": out, "pass": ok}, frozen, n_min)
+
+
 # -- T13 -----------------------------------------------------------------------------------------
 def step_t13(a: argparse.Namespace) -> int:
     e = a.energy
@@ -271,6 +326,65 @@ def config_fingerprint(eff_summary: dict[str, Any]) -> str:
     s.pop("cpu_workers", None)
     s.pop("chunk_histories", None)
     return hashlib.sha256(json.dumps(s, sort_keys=True, default=str).encode()).hexdigest()
+
+
+def expected_sample(a: argparse.Namespace, name: str) -> dict[str, Any]:
+    """The metadata a sample of this comparison must carry, from the configuration built here
+    (never from the sample file): the effective-configuration fingerprint (a CUDA sample is
+    validated as if a device existed, so the comparison runs on any host), seed, history count,
+    batches, backend, precision, energy, scoring geometry parameters and the frozen count."""
+    import ionmc.config as ionmc_config
+    from ionmc.config import validate
+
+    cfg, _ = sample_config(a, name, 1)
+    real = ionmc_config.cuda_available
+    ionmc_config.cuda_available = lambda: True  # type: ignore[assignment]
+    try:
+        fingerprint = config_fingerprint(validate(cfg).summary())
+    finally:
+        ionmc_config.cuda_available = real  # type: ignore[assignment]
+    return {
+        "format": SAMPLE_FORMAT,
+        "name": name,
+        "backend": cfg.run.backend,
+        "precision": cfg.run.precision,
+        "n_total": cfg.run.n_histories,
+        "n_batches": cfg.run.n_batches,
+        "seed": cfg.run.seed,
+        "energy_mev": a.energy,
+        "lateral_bin_mm": a.lateral_bin,
+        "half_width_mm": a.half_width,
+        "frozen_histories": SAMPLES[name][2],
+        "config_fingerprint": fingerprint,
+    }
+
+
+def verify_archives(dirs: list[Path], expected_sha: str) -> None:
+    """Fail closed unless every archive that supplies samples has the verified source identity:
+    the expected SHA and the same ``source_hashes`` as this run's own archive (``dirs[0]``), or a
+    valid attestation of the expected SHA in its ``summary.json``."""
+    import summarize
+
+    def env_of(d: Path) -> dict[str, Any]:
+        f = d / "environment.txt"
+        if not f.exists():
+            raise SystemExit(f"{d} has no environment.txt: sample source not verifiable")
+        return summarize.parse_env(f.read_text())
+
+    own = env_of(dirs[0])
+    if own.get("git_sha") != expected_sha:
+        raise SystemExit(f"{dirs[0]}: environment SHA {own.get('git_sha')} != {expected_sha}")
+    for d in dirs[1:]:
+        env = env_of(d)
+        if env.get("git_sha") != expected_sha:
+            raise SystemExit(f"{d}: archive SHA {env.get('git_sha')} != {expected_sha}")
+        if env["source_hashes"] == own["source_hashes"]:
+            continue
+        att = None
+        if (d / "summary.json").exists():
+            att = json.loads((d / "summary.json").read_text()).get("attestation")
+        if not (att and att.get("valid") and att.get("attested_sha") == expected_sha):
+            raise SystemExit(f"{d}: source hashes differ from this run and no valid attestation")
 
 
 def file_sha256(path: Path) -> str:
@@ -353,10 +467,7 @@ def _write_parts(a: argparse.Namespace, names: list[str], part: tuple[int, int])
     doc["step"] = "t12-sample"
     reduced = any(e["meta"]["n_total"] < e["meta"]["frozen_histories"] for e in entries)
     doc["reduced"] = reduced
-    print("#JSON-BEGIN")
-    print(json.dumps(doc, indent=1, sort_keys=True, default=_json))
-    print("#JSON-END")
-    return 0 if doc["pass"] else 1
+    return emit(doc)
 
 
 def step_t12_python_sample(a: argparse.Namespace) -> int:
@@ -402,6 +513,8 @@ def load_sample(
     the parts must share one configuration and tile ``[0, n_total)`` exactly."""
     from ionmc.transport.tally import PartialTransport, merge_partials
 
+    verify_archives(dirs, expected_sha)
+    expected = expected_sample(a, name)
     producers = _producer_docs(dirs)
     parts = []
     metas = []
@@ -423,8 +536,12 @@ def load_sample(
         for n in lens:
             comps.append([float(x) for x in flat[pos : pos + int(n)]])
             pos += int(n)
-        edep = [data[k] for k in sorted((k for k in data.files if k.startswith("edep_")),
-                                        key=lambda k: int(k.split("_")[1]))]  # fmt: skip
+        edep = [
+            data[k]
+            for k in sorted(
+                (k for k in data.files if k.startswith("edep_")), key=lambda k: int(k.split("_")[1])
+            )
+        ]
         parts.append(
             PartialTransport(
                 meta["h0"], meta["h1"], comps, [int(x) for x in data["counters"]], edep, None, {}
@@ -433,9 +550,14 @@ def load_sample(
         metas.append(meta)
     if not parts:
         raise SystemExit(f"no parts of sample {name} found")
-    for key in ("config_fingerprint", "seed", "n_total", "n_batches", "git_sha"):
-        if len({m[key] for m in metas}) != 1:
-            raise SystemExit(f"parts of sample {name} disagree on {key}")
+    for m in metas:  # every part against the configuration built here
+        for key, want in expected.items():
+            if m.get(key) != want:
+                raise SystemExit(
+                    f"sample {name}: metadata {key}={m.get(key)!r} differs from expected {want!r}"
+                )
+        if m["git_sha"] != expected_sha:
+            raise SystemExit(f"sample {name}: produced at SHA {m['git_sha']}")
     n_total = metas[0]["n_total"]
     cfg, layout = sample_config(a, name, 1)
     raw = merge_partials(parts, n_total, len(cfg.scoring))  # fails closed on gaps/overlaps
@@ -487,74 +609,13 @@ def step_t12_compare(a: argparse.Namespace) -> int:
         "frozen_histories": {n: i["frozen_histories"] for n, i in info.items()},
         "histories": {n: i["n_histories"] for n, i in info.items()},
     }
-    print("#JSON-BEGIN")
-    print(json.dumps(doc, indent=1, sort_keys=True, default=_json))
-    print("#JSON-END")
-    return 0 if ok else 1
+    return emit(doc)
 
 
 # -- slab observables (T8, T14) ------------------------------------------------------------------
-def slab_observables(
-    *,
-    thickness: float,
-    voxel: float,
-    shift_z: bool,
-    shift_xy: bool,
-    smax: float,
-    n: int,
-    workers: int,
-    seed: int,
-    timeout: float | None,
-    energy: float = 150.0,
-    trunc_diag: bool = False,
-) -> dict[str, float]:
-    """Exit angle and exit-position spread of protons crossing a water slab (MCS on, straggling
-    off). ``voxel`` None-like (<=0) means one voxel (box)."""
-    half = 60.0
-    if voxel <= 0.0:
-        geo: Any = BoxPhantom((-half, -half, 0.0), (2 * half, 2 * half, thickness), WATER)
-        z_end = thickness
-    else:
-        nz = int(round(thickness / voxel)) + (1 if shift_z else 0)
-        nxy = int(round(2 * half / voxel)) + (1 if shift_xy else 0)
-        z0 = -0.5 * voxel if shift_z else 0.0
-        xy0 = -half - (0.5 * voxel if shift_xy else 0.0)
-        shape = (nxy, nxy, nz)
-        geo = VoxelGeometry(
-            (xy0, xy0, z0), (voxel,) * 3, shape, (WATER,), np.zeros(shape, dtype=np.int32)
-        )
-        z_end = z0 + nz * voxel
-    res = run_cfg(
-        energy=energy,
-        geometry=geo,
-        scoring=(
-            ScoringGrid((-half, -half, 0.0), (2 * half, 2 * half, max(thickness, smax)), (1, 1, 1)),
-        ),
-        seed=seed,
-        n=n,
-        n_batches=20,
-        workers=workers,
-        timeout=timeout,
-        mcs=True,
-        straggling=False,
-        max_step=smax,
-        diag=DiagnosticsOptions(escape_records=True),
-        trunc_diag=trunc_diag,
-    )
-    d = res.diagnostics
-    n_esc = len(d["escape_history"])
-    u = d["escape_direction"]
-    tx, ty = u[:, 0] / u[:, 2], u[:, 1] / u[:, 2]
-    theta_rms = math.sqrt(float(np.mean(tx * tx + ty * ty)) / 2.0)
-    p = d["escape_position_mm"]
-    sigma = math.sqrt(float(np.mean(p[:, 0] ** 2 + p[:, 1] ** 2)) / 2.0)
-    return {
-        "theta_rms": theta_rms,
-        "sigma_mm": sigma,
-        "z_end_mm": z_end,
-        "n_escaped": n_esc,
-        "valid": float(res.valid),
-    }
+LATERAL_BIN_MM = 0.2
+SLAB_MM = 1.0
+HALF_WORLD_MM = 60.0
 
 
 def fermi_eyges_a2(path: mc.ProtonPath, z_mm: float) -> float:
@@ -570,90 +631,266 @@ def _thickness(frac: float) -> float:
     return 5.0 * round(frac * r_csda_mm(150.0) / 5.0)
 
 
+def _slab_geometry(depth: float, voxel: float, shift_z: bool, shift_xy: bool) -> tuple[Any, float]:
+    """Water world of the given depth from the source plane z = 0: one voxel (``voxel <= 0``) or a
+    grid of cubic voxels, optionally shifted by half a voxel along the beam and laterally.
+    Returns the geometry and the z of its far face."""
+    half = HALF_WORLD_MM
+    if voxel <= 0.0:
+        return BoxPhantom((-half, -half, 0.0), (2 * half, 2 * half, depth), WATER), depth
+    nz = int(round(depth / voxel)) + (1 if shift_z else 0)
+    nxy = int(round(2 * half / voxel)) + (1 if shift_xy else 0)
+    z0 = -0.5 * voxel if shift_z else 0.0
+    xy0 = -half - (0.5 * voxel if shift_xy else 0.0)
+    shape = (nxy, nxy, nz)
+    geo = VoxelGeometry(
+        (xy0, xy0, z0), (voxel,) * 3, shape, (WATER,), np.zeros(shape, dtype=np.int32)
+    )
+    return geo, z0 + nz * voxel
+
+
+def slab_theta(
+    *,
+    thickness: float,
+    voxel: float,
+    shift_z: bool,
+    shift_xy: bool,
+    smax: float,
+    n: int,
+    workers: int,
+    seed: int,
+    timeout: float | None,
+    trunc_diag: bool = False,
+) -> dict[str, float]:
+    """Exit-angle observable: projected rms angle of protons leaving a water slab of the given
+    thickness (MCS on, straggling off), from the escape records."""
+    geo, z_end = _slab_geometry(thickness, voxel, shift_z, shift_xy)
+    half = HALF_WORLD_MM
+    res = run_cfg(
+        energy=150.0,
+        geometry=geo,
+        scoring=(
+            ScoringGrid((-half, -half, 0.0), (2 * half, 2 * half, max(thickness, 1.0)), (1, 1, 1)),
+        ),
+        seed=seed,
+        n=n,
+        n_batches=20,
+        workers=workers,
+        timeout=timeout,
+        mcs=True,
+        straggling=False,
+        max_step=smax,
+        diag=DiagnosticsOptions(escape_records=True),
+        trunc_diag=trunc_diag,
+    )
+    u = res.diagnostics["escape_direction"]
+    tx, ty = u[:, 0] / u[:, 2], u[:, 1] / u[:, 2]
+    return {
+        "theta_rms": math.sqrt(float(np.mean(tx * tx + ty * ty)) / 2.0),
+        "z_end_mm": z_end,
+        "n_escaped": len(res.diagnostics["escape_history"]),
+        "valid": float(res.valid),
+    }
+
+
+def _profile_var(p: np.ndarray, xc: np.ndarray) -> float:
+    m = float((p * xc).sum() / p.sum())
+    return float((p * (xc - m) ** 2).sum() / p.sum())
+
+
+def sigma_half_width(path: mc.ProtonPath) -> float:
+    """Half width of the lateral scoring grids: 8 sigma of the widest slab (z/R = 0.9) in units of
+    the lateral bin."""
+    sig = math.sqrt(fermi_eyges_a2(path, 0.9 * path.r1_mm))
+    return math.ceil(8.0 * sig / LATERAL_BIN_MM) * LATERAL_BIN_MM
+
+
+def slab_sigma(
+    *,
+    fracs: tuple[float, ...],
+    voxel: float,
+    shift_z: bool,
+    shift_xy: bool,
+    smax: float,
+    n: int,
+    workers: int,
+    seed: int,
+    timeout: float | None,
+    path: mc.ProtonPath,
+) -> dict[str, dict[str, float]]:
+    """The frozen observable of T7/T8/T14: lateral sigma of the deposited energy in fixed
+    0.2 mm lateral bins and 1 mm slabs at z/R in ``fracs`` (scoring grids independent of the
+    transport voxels; water, MCS on, straggling off, 150 MeV), Sheppard-corrected
+    (``sigma^2 - bin^2 / 12``), with the Fermi-Eyges prediction at the slab centre."""
+    zs = {f: math.floor(f * path.r1_mm / SLAB_MM) * SLAB_MM for f in fracs}
+    depth = max(zs.values()) + SLAB_MM + 3.0
+    geo, _ = _slab_geometry(depth, voxel, shift_z, shift_xy)
+    w = sigma_half_width(path)
+    nl = int(round(2 * w / LATERAL_BIN_MM))
+    grids = tuple(
+        ScoringGrid(
+            (-w, -w, zs[f]),
+            (LATERAL_BIN_MM, LATERAL_BIN_MM, SLAB_MM),
+            (nl, nl, 1),
+            name=f"slab{int(round(100 * f))}",
+        )
+        for f in fracs
+    )
+    res = run_cfg(
+        energy=150.0,
+        geometry=geo,
+        scoring=grids,
+        seed=seed,
+        n=n,
+        n_batches=10,
+        workers=workers,
+        timeout=timeout,
+        mcs=True,
+        straggling=False,
+        max_step=smax,
+        memory_budget=2**33,
+    )
+    out: dict[str, dict[str, float]] = {}
+    for f, g in zip(fracs, grids, strict=True):
+        e = np.asarray(res.grid(g.name).energy_mev)[:, :, 0]  # (nx, ny)
+        xc = g.origin_mm[0] + (np.arange(nl) + 0.5) * LATERAL_BIN_MM
+        px, py = e.sum(axis=1), e.sum(axis=0)
+
+        sigma2 = 0.5 * (_profile_var(px, xc) + _profile_var(py, xc)) - LATERAL_BIN_MM**2 / 12.0
+        zc = zs[f] + 0.5 * SLAB_MM
+        a2 = fermi_eyges_a2(path, zc)
+        out[str(f)] = {
+            "sigma_mm": math.sqrt(sigma2),
+            "z_centre_mm": zc,
+            "fermi_eyges_sigma_mm": math.sqrt(a2),
+            "sigma_over_fermi_eyges": math.sqrt(sigma2 / a2),
+            "valid": float(res.valid),
+        }
+    return out
+
+
 def step_t8(a: argparse.Namespace) -> int:
     path = mc.ProtonPath(TABLES, WATER, 150.0)
-    out: dict[str, Any] = {}
-    cases = {"theta_0.5R1": 0.5, "sigma_0.9R": 0.9}
-    ok = True
-    for label, frac in cases.items():
-        x = _thickness(frac)
-        quad_theta = math.sqrt(path.theta2_quadrature(x))
-        quad_sigma = math.sqrt(fermi_eyges_a2(path, x))
-        rows = {}
-        for i, s in enumerate((0.1, 0.5, 1.0, 5.0)):
-            r = slab_observables(
-                thickness=x,
-                voxel=-1.0,
-                shift_z=False,
-                shift_xy=False,
-                smax=s,
+    x = _thickness(0.5)
+    quad_theta = math.sqrt(path.theta2_quadrature(x))
+    steps = (0.1, 0.5, 1.0, 5.0)
+    timings: dict[str, float] = {}
+    theta, sigma = {}, {}
+    for i, sm in enumerate(steps):
+        t0 = time.perf_counter()
+        theta[str(sm)] = slab_theta(
+            thickness=x,
+            voxel=-1.0,
+            shift_z=False,
+            shift_xy=False,
+            smax=sm,
+            n=a.n,
+            workers=a.workers,
+            seed=a.seed + i,
+            timeout=a.timeout,
+        )
+        timings[f"theta_smax{sm}_s"] = time.perf_counter() - t0
+        t0 = time.perf_counter()
+        sigma[str(sm)] = slab_sigma(
+            fracs=(0.9,),
+            voxel=-1.0,
+            shift_z=False,
+            shift_xy=False,
+            smax=sm,
+            n=a.n,
+            workers=a.workers,
+            seed=a.seed + 10 + i,
+            timeout=a.timeout,
+            path=path,
+        )["0.9"]
+        timings[f"sigma_smax{sm}_s"] = time.perf_counter() - t0
+    th = [theta[k]["theta_rms"] for k in theta]
+    sg = [sigma[k]["sigma_mm"] for k in sigma]
+    spread_t, spread_s = max(th) / min(th) - 1.0, max(sg) / min(sg) - 1.0
+    vs_quad = max(abs(v / quad_theta - 1.0) for v in th)
+    ok_t = bool(
+        spread_t <= 0.005 and vs_quad <= 0.005 and all(r["valid"] == 1.0 for r in theta.values())
+    )
+    ok_s = bool(spread_s <= 0.01 and all(r["valid"] == 1.0 for r in sigma.values()))
+    out = {
+        "theta_0.5R1": {
+            "thickness_mm": x,
+            "runs": theta,
+            "pairwise_spread": spread_t,
+            "tolerance_pairwise": 0.005,
+            "quadrature": quad_theta,
+            "max_dev_from_quadrature": vs_quad,
+            "pass": ok_t,
+        },
+        "sigma_0.9R_deposit": {
+            "runs": sigma,
+            "pairwise_spread": spread_s,
+            "tolerance_pairwise": 0.01,
+            "pass": ok_s,
+        },
+    }
+    return finish(
+        {"step": "t8", "t8": out, "timings": timings, "pass": ok_t and ok_s}, 1_000_000, a.n
+    )
+
+
+def step_t14(a: argparse.Namespace) -> int:
+    path = mc.ProtonPath(TABLES, WATER, 150.0)
+    x05 = _thickness(0.5)
+    rows: dict[str, Any] = {}
+    timings: dict[str, float] = {}
+    i = 0
+    for voxel in (0.5, 1.0, 2.0, 5.0):
+        for sz, sxy in ((False, False), (True, True)):
+            key = f"voxel{voxel}_shift{int(sz)}"
+            smax = min(1.0, voxel)
+            i += 1
+            t0 = time.perf_counter()
+            th = slab_theta(
+                thickness=x05,
+                voxel=voxel,
+                shift_z=sz,
+                shift_xy=sxy,
+                smax=smax,
                 n=a.n,
                 workers=a.workers,
                 seed=a.seed + i,
                 timeout=a.timeout,
             )
-            rows[str(s)] = r
-        key = "theta_rms" if frac == 0.5 else "sigma_mm"
-        vals = [rows[k][key] for k in rows]
-        spread = max(vals) / min(vals) - 1.0
-        tol_pair = 0.005 if frac == 0.5 else 0.01
-        ref = quad_theta if frac == 0.5 else quad_sigma
-        vs_quad = max(abs(v / ref - 1.0) for v in vals) if frac == 0.5 else None
-        passed = bool(
-            spread <= tol_pair
-            and (vs_quad is None or vs_quad <= 0.005)
-            and all(r["valid"] == 1.0 for r in rows.values())
-        )
-        out[label] = {
-            "thickness_mm": x,
-            "runs": rows,
-            "pairwise_spread": spread,
-            "tolerance_pairwise": tol_pair,
-            "quadrature": ref,
-            "max_dev_from_quadrature": vs_quad,
-            "pass": passed,
-        }
-        ok &= passed
-    return finish({"step": "t8", "t8": out, "pass": ok}, 1_000_000, a.n)
-
-
-def step_t14(a: argparse.Namespace) -> int:
-    path = mc.ProtonPath(TABLES, WATER, 150.0)
-    rows: dict[str, Any] = {}
-    thick = {"0.5": _thickness(0.5), "0.9": _thickness(0.9)}
-    i = 0
-    for voxel in (0.5, 1.0, 2.0, 5.0):
-        for sz, sxy in ((False, False), (True, True)):
-            key = f"voxel{voxel}_shift{int(sz)}"
-            rows[key] = {}
-            for fk, x in thick.items():
-                i += 1
-                r = slab_observables(
-                    thickness=x,
-                    voxel=voxel,
-                    shift_z=sz,
-                    shift_xy=sxy,
-                    smax=min(1.0, voxel),
-                    n=a.n,
-                    workers=a.workers,
-                    seed=a.seed + i,
-                    timeout=a.timeout,
-                )
-                xa = r["z_end_mm"]
-                r["theta_over_quadrature"] = r["theta_rms"] / math.sqrt(path.theta2_quadrature(xa))
-                r["sigma_over_fermi_eyges"] = r["sigma_mm"] / math.sqrt(fermi_eyges_a2(path, xa))
-                rows[key][fk] = r
+            th["theta_over_quadrature"] = th["theta_rms"] / math.sqrt(
+                path.theta2_quadrature(th["z_end_mm"])
+            )
+            sg = slab_sigma(
+                fracs=(0.5, 0.9),
+                voxel=voxel,
+                shift_z=sz,
+                shift_xy=sxy,
+                smax=smax,
+                n=a.n,
+                workers=a.workers,
+                seed=a.seed + 100 + i,
+                timeout=a.timeout,
+                path=path,
+            )
+            timings[key + "_s"] = time.perf_counter() - t0
+            rows[key] = {"theta": th, "sigma": sg}
     # frozen negative control: the hinge angle sampled for the truncated length (diagnostic
     # switch) must change theta_rms by < 0.5 % at 1 mm voxels (same seed as the default run)
-    x05 = thick["0.5"]
-    default_1mm = slab_observables(
-        thickness=x05, voxel=1.0, shift_z=False, shift_xy=False, smax=1.0, n=a.n,
-        workers=a.workers, seed=a.seed + 1000, timeout=a.timeout,
-    )  # fmt: skip
-    control_1mm = slab_observables(
-        thickness=x05, voxel=1.0, shift_z=False, shift_xy=False, smax=1.0, n=a.n,
-        workers=a.workers, seed=a.seed + 1000, timeout=a.timeout, trunc_diag=True,
-    )  # fmt: skip
+    t0 = time.perf_counter()
+    kw = dict(
+        thickness=x05,
+        voxel=1.0,
+        shift_z=False,
+        shift_xy=False,
+        smax=1.0,
+        n=a.n,
+        workers=a.workers,
+        seed=a.seed + 1000,
+        timeout=a.timeout,
+    )
+    default_1mm = slab_theta(**kw)
+    control_1mm = slab_theta(**kw, trunc_diag=True)
+    timings["negative_control_s"] = time.perf_counter() - t0
     control = {
         "theta_rms_default": default_1mm["theta_rms"],
         "theta_rms_control": control_1mm["theta_rms"],
@@ -662,22 +899,28 @@ def step_t14(a: argparse.Namespace) -> int:
         "valid": bool(default_1mm["valid"] == 1.0 and control_1mm["valid"] == 1.0),
     }
     control["pass"] = bool(abs(control["relative_change"]) < 0.005 and control["valid"])
-    th = [rows[k]["0.5"]["theta_over_quadrature"] for k in rows]
-    s5 = [rows[k]["0.5"]["sigma_over_fermi_eyges"] for k in rows]
-    s9 = [rows[k]["0.9"]["sigma_over_fermi_eyges"] for k in rows]
+    ths = [rows[k]["theta"]["theta_over_quadrature"] for k in rows]
+    s5 = [rows[k]["sigma"]["0.5"]["sigma_over_fermi_eyges"] for k in rows]
+    s9 = [rows[k]["sigma"]["0.9"]["sigma_over_fermi_eyges"] for k in rows]
+    abs_s5 = [rows[k]["sigma"]["0.5"]["sigma_mm"] for k in rows]
+    abs_s9 = [rows[k]["sigma"]["0.9"]["sigma_mm"] for k in rows]
     res = {
-        "theta_pairwise_spread": max(th) / min(th) - 1.0,
-        "theta_max_dev_from_quadrature": max(abs(t - 1.0) for t in th),
-        "sigma_pairwise_spread_0.5R": max(s5) / min(s5) - 1.0,
-        "sigma_pairwise_spread_0.9R": max(s9) / min(s9) - 1.0,
+        "theta_pairwise_spread": max(ths) / min(ths) - 1.0,
+        "theta_max_dev_from_quadrature": max(abs(t - 1.0) for t in ths),
+        "sigma_pairwise_spread_0.5R": max(abs_s5) / min(abs_s5) - 1.0,
+        "sigma_pairwise_spread_0.9R": max(abs_s9) / min(abs_s9) - 1.0,
         "sigma_max_dev_from_fermi_eyges": max(abs(t - 1.0) for t in s5 + s9),
     }
+    valid = all(
+        r["theta"]["valid"] == 1.0 and all(v["valid"] == 1.0 for v in r["sigma"].values())
+        for r in rows.values()
+    )
     res["pass"] = bool(
         res["theta_pairwise_spread"] <= 0.005
         and res["theta_max_dev_from_quadrature"] <= 0.005
         and max(res["sigma_pairwise_spread_0.5R"], res["sigma_pairwise_spread_0.9R"]) <= 0.01
         and res["sigma_max_dev_from_fermi_eyges"] <= 0.02
-        and all(r[f]["valid"] == 1.0 for r in rows.values() for f in r)
+        and valid
         and control["pass"]
     )
     doc = {
@@ -686,6 +929,7 @@ def step_t14(a: argparse.Namespace) -> int:
         "t14": res,
         "pass": res["pass"],
         "negative_control": control,
+        "timings": timings,
     }
     return finish(doc, 1_000_000, a.n)
 
@@ -743,75 +987,93 @@ DIRECTIONS = {
     "(1,1,0)": (1.0, 1.0, 0.0),
     "(1,1,1)": (1.0, 1.0, 1.0),
 }
+T10_BATCHES = 10
+
+
+def _t10_grid(start: np.ndarray, u: np.ndarray, r: float) -> ScoringGrid:
+    """1 mm scoring grid around the path of the beam (axis-aligned bounding box plus 15 mm)."""
+    end = start + r * u
+    lo = np.floor(np.minimum(start, end) - 15.0)
+    hi = np.ceil(np.maximum(start, end) + 15.0)
+    shape = tuple(int(x) for x in (hi - lo))
+    return ScoringGrid(tuple(float(x) for x in lo), (1.0, 1.0, 1.0), shape)  # type: ignore[arg-type]
 
 
 def step_t10(a: argparse.Namespace) -> int:
     e = 150.0
     r = r_csda_mm(e)
     geo = BoxPhantom((-100.0, -100.0, -100.0), (200.0, 200.0, 200.0), WATER)
-    grid = (ScoringGrid((-100.0, -100.0, -100.0), (200.0, 200.0, 200.0), (1, 1, 1)),)
-    nb = int(math.ceil(1.3 * r))
-    obs = {}
+    nb = int(math.ceil(1.3 * r / 0.1))  # 0.1 mm bins of the projected depth
+    obs: dict[str, Any] = {}
     for i, (name, d) in enumerate(DIRECTIONS.items()):
         u = np.array(d) / np.linalg.norm(d)
-        start = tuple(float(x) for x in (-0.5 * r * u))
+        start = -0.5 * r * u
+        grid = _t10_grid(start, u, r)
         res = run_cfg(
             energy=e,
             geometry=geo,
-            scoring=grid,
+            scoring=(grid,),
             seed=a.seed + i,
             n=a.n,
-            n_batches=20,
+            n_batches=T10_BATCHES,
             workers=a.workers,
             timeout=a.timeout,
-            position=start,
+            position=tuple(float(x) for x in start),
             direction=d,
             diag=DiagnosticsOptions(track_end_positions=True),
+            memory_budget=2**35,
         )
-        pos = res.diagnostics["end_position_mm"] - np.array(start)
-        t = pos @ u
-        batch = np.arange(len(t)) % 20
-        hist = np.zeros((20, nb))
-        for b in range(20):
-            hist[b] = np.histogram(t[batch == b], bins=nb, range=(0.0, float(nb)))[0]
-        mean_depth = np.array([t[batch == b].mean() for b in range(20)])
-        total_b = np.asarray(res.grids[0].batch_energy_mev).reshape(20)  # whole-world grid
-        obs[name] = (
-            parity.T12Observables(
-                {"end_depth": hist}, {"mean_end_depth_mm": mean_depth}, 20, a.n // 20
-            ),
-            res.counters.as_dict(),
-            float(t.mean()),
-            total_b,
-        )
-    ref_name = "+z"
+        be = np.asarray(res.grids[0].batch_energy_mev)  # (B, nx, ny, nz) per primary
+        idd = parity.projected_idd(be, grid, tuple(float(x) for x in start), d, n_bins=nb)
+        idd_1mm = idd[:, : nb // 10 * 10].reshape(T10_BATCHES, -1, 10).sum(axis=2)
+        pos = res.diagnostics["end_position_mm"] - start
+        t_end = pos @ u
+        obs[name] = {
+            "r80_mm": parity.r80_of(idd.mean(axis=0), 0.1),
+            "idd_1mm": idd_1mm,
+            "total_b": be.reshape(T10_BATCHES, -1).sum(axis=1),
+            "mean_end_depth_mm": float(t_end.mean()),
+            "counters": res.counters.as_dict(),
+            "valid": res.valid,
+        }
+    ref = obs["+z"]
     out = {}
     ok = True
-    for name, (o, counters, md, total_b) in obs.items():
-        if name == ref_name:
+    for name, o in obs.items():
+        if name == "+z":
             continue
-        v = parity.t12_compare(obs[ref_name][0], o)
-        dmean = abs(md - obs[ref_name][2])
-        # frozen: total energy equal within 3 sigma (batch standard errors of both orientations)
-        e_z = parity.scalar_z(obs[ref_name][3], total_b)
+        v = parity.t12_compare(
+            parity.T12Observables({"idd_1mm": ref["idd_1mm"]}, {}, T10_BATCHES, a.n // T10_BATCHES),
+            parity.T12Observables({"idd_1mm": o["idd_1mm"]}, {}, T10_BATCHES, a.n // T10_BATCHES),
+        )
+        d_r80 = abs(o["r80_mm"] - ref["r80_mm"])
+        e_z = parity.scalar_z(ref["total_b"], o["total_b"])
         oblique = name.startswith("(")
-        chi_ok = v["arrays"]["end_depth"]["p_value"] > parity.P_VALUE_MIN
-        crit = (dmean <= 0.3) if oblique else chi_ok
+        chi_ok = v["arrays"]["idd_1mm"]["p_value"] > parity.P_VALUE_MIN
+        r80_ok = d_r80 <= 0.3
         energy_ok = abs(e_z["z"]) < 3.0
-        passed = bool(crit and energy_ok and not any(counters.values()))
+        # frozen: permutations -> chi-square p > 0.001; obliques -> |dR80| <= 0.3 mm; all: total
+        # energy within 3 sigma and zero counters
+        crit = r80_ok if oblique else chi_ok
+        passed = bool(crit and energy_ok and not any(o["counters"].values()) and o["valid"])
         out[name] = {
-            "delta_mean_end_depth_mm": dmean,
-            "end_depth_chi2": v["arrays"]["end_depth"],
+            "r80_mm": o["r80_mm"],
+            "delta_r80_mm": d_r80,
+            "r80_ok": r80_ok,
+            "idd_chi2": v["arrays"]["idd_1mm"],
             "permutation": v["permutation"],
             "total_energy": {**e_z, "bound": 3.0, "pass": energy_ok},
-            "counters": counters,
+            "mean_end_depth_mm_informative": o["mean_end_depth_mm"],
+            "counters": o["counters"],
             "pass": passed,
         }
         ok &= passed
-    return finish({"step": "t10", "t10": out, "pass": ok}, None, a.n)
+    doc = {"step": "t10", "reference_r80_mm": ref["r80_mm"], "t10": out, "pass": ok}
+    return finish(doc, 1_000_000, a.n)
 
 
 STEPS = {
+    "t-r1": step_repeat,
     "t12-python-sample": step_t12_python_sample,
     "t12-accelerated-samples": step_t12_accelerated,
     "t12-compare": step_t12_compare,
@@ -829,6 +1091,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("step", choices=sorted(STEPS))
     ap.add_argument("--workers", default="1", help="integer or 'auto' (all cores)")
+    ap.add_argument("--runs", default="python:float64:400", help="t-r1: backend:precision:n,...")
     ap.add_argument("--part", default="1/1", help="t12-python-sample: history range i/n")
     ap.add_argument("--samples", default="cpu32", help="t12-accelerated-samples: names")
     ap.add_argument("--out-dir", default="samples", help="directory of the sample files")

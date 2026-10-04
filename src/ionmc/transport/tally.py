@@ -73,6 +73,7 @@ COUNTER_NAMES = (
     "source_energy_out_of_range",
     "energy_inversion",
     "accumulator_overflow",
+    "scoring_pieces_overflow",
 )
 TALLY_NAMES = ("initial", "cutoff", "step_deposit", "escaped", "truncated", "unaccounted")
 N_FIXED_TALLIES = len(TALLY_NAMES)
@@ -82,9 +83,6 @@ QUANTUM_MEV = 2.0**-30
 multiple (``floor(x / q + 1/2)``, a deterministic function of the piece) and accumulated in int64,
 so the grids are bit-identical for any partition of the histories."""
 QUANTUM_SCALE = 2.0**30
-MAX_LEG_PIECES = 8
-"""Pieces walked per leg of the track-length scoring (a leg of at most one scoring spacing crosses
-at most one plane per axis)."""
 MAX_QUANTA = 2**62
 """Capacity bound of one voxel accumulator in quanta (validated before, checked after a run)."""
 
@@ -293,6 +291,7 @@ def build_diagnostics(
     if track_end_positions:
         out["end_position_mm"] = pos
         out["end_code"] = code
+        out["end_direction"] = direc
         out["end_energy_mev"] = energy
     if escape_records:
         sel = np.nonzero(code == END_ESCAPED)[0]

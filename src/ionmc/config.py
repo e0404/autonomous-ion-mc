@@ -43,6 +43,7 @@ DEFAULT_CHUNK_HISTORIES = 2**18
 MIN_CHUNK_HISTORIES = 2**10
 MAX_CPU_WORKERS = 256
 MAX_TRACE_BUFFER_BYTES = 2**30
+MAX_SCORING_PIECES = 4096
 MAX_ENERGY_SIGMA_FRACTION = 0.05
 MAX_ENERGY_LOSS_FRACTION = 0.2
 U01_MAPPING = {
@@ -64,8 +65,8 @@ class PhysicsOptions:
     function; steps shorter than ``short_step_fraction`` of the residual range use the
     linear loss ``S t``. ``truncated_hinge_diagnostic`` (default off, a diagnostic for the T14
     negative control, not a physics model) samples the hinge angle again, from the same
-    uniforms, for the truncated length when the second leg is cut at a transport voxel plane;
-    the new direction is not re-checked against the plane and the cut length and axis are kept.
+    uniforms, for the truncated length (of the first pass) when the second leg is cut at a
+    transport voxel plane, then finds the second-leg boundary again with the new direction.
     """
 
     nuclear: bool
@@ -203,7 +204,8 @@ class EffectiveConfig:
     ``unit_direction`` is the normalised beam direction; ``max_steps`` the per-history step
     bound (``max_steps_origin`` is ``"user"`` or ``"computed"``); ``tables`` the transport
     tables; ``scattering_length_g_cm2`` the Gottschalk ``X_S`` of every material;
-    ``production`` is True only for float32 Warp backends; ``rng`` describes the generator.
+    ``production`` is True only for float32 Warp backends; ``scoring_pieces`` the bound of the
+    voxel pieces per leg of the track-length scoring; ``rng`` describes the generator.
     """
 
     requested: SimulationConfig
@@ -215,6 +217,7 @@ class EffectiveConfig:
     backend: str
     precision: str
     production: bool
+    scoring_pieces: int
     scattering_length_g_cm2: tuple[float, ...]
     rng: dict[str, Any]
 
@@ -233,6 +236,7 @@ class EffectiveConfig:
             "cpu_workers": r.cpu_workers,
             "chunk_histories": r.chunk_histories,
             "max_steps": self.max_steps,
+            "scoring_pieces": self.scoring_pieces,
             "max_steps_origin": self.max_steps_origin,
             "unit_direction": list(self.unit_direction),
             "source": {
@@ -356,6 +360,17 @@ def _computed_max_steps(
     return int(4 * (n_len + n_cross + n_eloss + n_range) + 100)
 
 
+def scoring_pieces_bound(max_step_mm: float, grid: ScoringGrid) -> int:
+    """Bound ``3 ceil(max_step / spacing_min) + 4`` of the voxel pieces of one leg.
+
+    A leg of length ``L <= max_step`` meets at most ``floor(L / d) + 1 <= ceil(max_step / d) + 1``
+    planes of an axis with spacing ``d`` (a start exactly on a plane counts: it is a
+    zero-length hop), so at most ``3 ceil(.) + 3`` planes in all and one more piece than
+    planes. A leg that exceeds the bound at run time increments ``scoring_pieces_overflow`` and
+    invalidates the result."""
+    return 3 * math.ceil(max_step_mm / min(grid.spacing_mm)) + 4
+
+
 def trace_buffer_bytes(trace_histories: int, max_steps: int) -> int:
     """Bytes of the trace buffers (int32 discrete and float64 continuous columns per step)."""
     return trace_histories * max_steps * (4 * TRACE_N_DISCRETE + 8 * TRACE_N_CONTINUOUS)
@@ -432,12 +447,12 @@ def validate(config: SimulationConfig) -> EffectiveConfig:
             f"per worker process), above the memory budget of {run.memory_budget_bytes} bytes "
             "(reduce n_batches, the grids or cpu_workers)"
         )
-    min_spacing = min(min(g.spacing_mm) for g in config.scoring)
-    if ph.max_step_mm > min_spacing:
+    scoring_pieces = max(scoring_pieces_bound(ph.max_step_mm, g) for g in config.scoring)
+    if scoring_pieces > MAX_SCORING_PIECES:
         raise fail(
-            f"max_step_mm ({ph.max_step_mm}) exceeds the smallest scoring spacing "
-            f"({min_spacing} mm): the midpoint deposit needs steps no longer than one scoring "
-            "voxel; reduce max_step_mm (nothing is clamped silently)"
+            f"max_step_mm ({ph.max_step_mm}) against the finest scoring spacing would allow "
+            f"{scoring_pieces} voxel pieces per leg in the track-length scoring, above the "
+            f"limit of {MAX_SCORING_PIECES}; increase the scoring spacing or reduce max_step_mm"
         )
 
     stopping_tables = _stopping_tables(ph.stopping, geometry.materials)
@@ -516,6 +531,7 @@ def validate(config: SimulationConfig) -> EffectiveConfig:
         backend=run.backend,
         precision=run.precision,
         production=run.backend != "python" and run.precision == "float32",
+        scoring_pieces=scoring_pieces,
         scattering_length_g_cm2=tuple(scattering_length_g_cm2(m) for m in geometry.materials),
         rng={
             "generator": "philox4x32-10",

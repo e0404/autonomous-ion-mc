@@ -16,8 +16,9 @@ Rules (the style of ``validation/scripts/warp-architecture/run_all.sh``):
   before any step); if the tree is a snapshot without ``.git`` the declared SHA is recorded as
   ``sha_source=declared`` and later attested with ``summarize.py --attest-sha``;
 * ``environment.txt`` records versions, hardware, the SHA, the dirty state and ``source_hashes``
-  (sha256 of every file under ``src/ionmc``, ``validation/scripts/transport`` and
-  ``benchmarks/transport``), in both the git and the snapshot case;
+  (sha256 of every file under ``src/ionmc``, ``tests/ionmc``, ``validation/scripts/transport`` and
+  ``benchmarks/transport`` and of ``pyproject.toml``, ``uv.lock`` and the acceptance plan), in both
+  the git and the snapshot case;
 * every step archives stdout+stderr in ``NN-name.txt`` between a header (command, SHA, start
   time, timeout) and an ``# exit=`` trailer; a timed-out step is killed and archived with
   ``exit=124``; ``manifest.txt`` lists the step names of this run;
@@ -47,7 +48,15 @@ REPO = HERE.parents[2]
 ALLOWED_PARENTS = (REPO / "validation" / "generated", REPO / "benchmarks" / "generated")
 STEPS = HERE / "steps.py"
 PY = sys.executable
-SOURCE_PREFIXES = ("src/ionmc", "validation/scripts/transport", "benchmarks/transport")
+SOURCE_PREFIXES = (
+    "src/ionmc",
+    "tests/ionmc",
+    "validation/scripts/transport",
+    "benchmarks/transport",
+)
+SOURCE_FILES = ("pyproject.toml", "uv.lock", "validation/plans/v3-003-acceptance.md")
+"""Every tracked file that defines what is executed and judged (code, tests and fixtures, the
+project definition, the lock file and the frozen acceptance plan)."""
 DEFAULT_PYTHON_PARTS = 2
 
 
@@ -100,6 +109,7 @@ def suite_steps(
             "t13-chunks-cpu",
             [*st, "t13", "--mode", "chunks", "--backend", "warp-cpu", "--n", n(200_000)],
         )
+        add("t-r1-python-repeatability", [*st, "t-r1", "--runs", "python:float64:400", *w])
         acc, pairs = "cpu32,cpu64", "python:cpu32,cpu32:cpu64"
     elif suite == "hr":
         add("pytest-cuda", pytest_cmd("tests/ionmc/test_transport_cuda.py", marker="cuda"), cuda)
@@ -107,6 +117,11 @@ def suite_steps(
         add(
             "t13-chunks-cuda",
             [*st, "t13", "--mode", "chunks", "--backend", "warp-cuda", "--n", n(1_000_000)],
+            cuda,
+        )
+        add(
+            "t-r1-warp-repeatability",
+            [*st, "t-r1", "--runs", "warp-cpu:float64:100000,warp-cuda:float32:100000", *w],
             cuda,
         )
         acc, pairs = "cpu32,cpu64,cuda32", "python:cpu32,cpu32:cuda32,cpu32:cpu64"
@@ -173,7 +188,7 @@ def sha256(path: Path) -> str:
 
 def source_files() -> list[Path]:
     """Every source file whose hash identifies the code under test."""
-    files: list[Path] = []
+    files: list[Path] = [REPO / f for f in SOURCE_FILES if (REPO / f).is_file()]
     for prefix in SOURCE_PREFIXES:
         for p in sorted((REPO / prefix).rglob("*")):
             parts = set(p.relative_to(REPO).parts)
@@ -282,6 +297,7 @@ def main(argv: list[str] | None = None) -> int:
     env_base["PYTHONDONTWRITEBYTECODE"] = "1"
     env_base["PYTHONPATH"] = str(REPO / "src") + os.pathsep + env_base.get("PYTHONPATH", "")
     env_base["IONMC_RUN_SHA"] = sha
+    env_base["IONMC_RUN_SUITE"] = args.suite
     failures = 0
     for name, cmd, extra in steps:
         path = out / f"{name}.txt"

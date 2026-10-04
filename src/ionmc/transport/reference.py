@@ -53,7 +53,6 @@ from ionmc.transport.tally import (
     END_MISSED_WORLD,
     END_SOURCE_REJECTED,
     END_TRUNCATED,
-    MAX_LEG_PIECES,
     N_FIXED_TALLIES,
     QUANTUM_MEV,
     QUANTUM_SCALE,
@@ -128,6 +127,7 @@ class _Reference:
         self.c_fshort = r(ph.short_step_fraction)
         self.mass = r(cfg.source.projectile.mass_mev)
         self.trunc_diag = ph.truncated_hinge_diagnostic
+        self.max_pieces = eff.scoring_pieces
         self.one = r(1.0)
         self.mat = self.geo.material_index
         self.dens = self.geo.densities_g_cm3()
@@ -205,7 +205,7 @@ class _Reference:
         uvec = V(r(ux), r(uy), r(uz))
         ix, iy, iz, _inside = F.grid_index(V(r(px), r(py), r(pz)), go, self.g_inv[g], nx, ny, nz)
         remaining = length
-        for _ in range(MAX_LEG_PIECES):
+        for _ in range(self.max_pieces):
             if remaining > 0.0:
                 piece_w, axis = F.seg_piece(V(r(px), r(py), r(pz)), uvec, ix, iy, iz, go, gs,
                                             r(remaining))  # fmt: skip
@@ -230,7 +230,8 @@ class _Reference:
                     else:
                         pz = plane
                         iz = iz + step
-        if remaining > 0.0:  # cannot happen for max_step <= scoring spacing; conserves energy
+        if remaining > 0.0:  # exceeds the validated piece bound: conserve energy, invalidate
+            self.counters["scoring_pieces_overflow"] += 1
             self._deposit_voxel(batch, g, ix, iy, iz, deposit * remaining / s_act)
 
     def _deposit_step(
@@ -445,8 +446,10 @@ class _Reference:
             leg2 = float(leg2_w)
             if self.trunc_diag and ph.multiple_scattering and axis2 >= 0:
                 # DIAGNOSTIC (T14 negative control, default off): the hinge angle is sampled again,
-                # from the same uniforms, for the truncated length s_cut = leg1 + leg2. The new
-                # direction is not re-checked against the plane; the cut length and axis are kept.
+                # from the same uniforms, for the truncated length s_cut = leg1 + leg2 of the first
+                # pass; the second-leg boundary is then found again with the new direction (new
+                # length, axis and sign). One-pass residual: the new truncated length may differ
+                # from s_cut (second order).
                 s_cut = leg1 + leg2
                 e_mid2 = self._energy_from_range(m, r0 - rho * s_cut / 20.0)
                 pv_mid2 = K.pv_mev(r(e_mid2), self.mass)
@@ -469,6 +472,17 @@ class _Reference:
                 theta2 = EM.polar_deflection(r(var2), r(ua[1]))
                 nd2 = EM.rotate_dir(dvec, theta2, r(2.0 * math.pi * ua[2]))
                 d1x, d1y, d1z = float(nd2[0]), float(nd2[1]), float(nd2[2])
+                leg2_w, axis2 = F.leg2_limit(
+                    V(r(hx), r(hy), r(hz)),
+                    V(r(d1x), r(d1y), r(d1z)),
+                    ix,
+                    iy,
+                    iz,
+                    self.origin,
+                    self.spacing,
+                    r(s - leg1),
+                )
+                leg2 = float(leg2_w)
             nxp, nyp, nzp = hx + d1x * leg2, hy + d1y * leg2, hz + d1z * leg2
             exited = False
             if axis2 >= 0:

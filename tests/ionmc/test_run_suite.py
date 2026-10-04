@@ -35,6 +35,7 @@ def _run(*args: str, root: Path = REPO) -> subprocess.CompletedProcess[str]:
         text=True,
         cwd=root,
         timeout=600,
+        env=_git_env(root),
     )
 
 
@@ -114,14 +115,19 @@ def _env(*, dirty: str = "no", source: str = "git", hashes: dict[str, str] | Non
 
 
 def _archive(d: Path, names: list[str], *, doc: dict | None = None, exit_code: int = 0,  # type: ignore[type-arg]
-             env: str | None = None, sha: str = SHA) -> None:  # fmt: skip
+             env: str | None = None, sha: str = SHA, identity: dict | None = None) -> None:  # type: ignore[type-arg]  # fmt: skip
+    """A hand-made archive: every non-pytest step prints a result document naming itself, the
+    suite and the SHA (``identity`` overrides those fields; ``doc=None`` prints no document)."""
+    summ = _load("summarize")
     d.mkdir()
     (d / "environment.txt").write_text(env if env is not None else _env())
     (d / "manifest.txt").write_text("".join(f"{n}\n" for n in names))
     for n in names:
         body = f"# command: x\n# git_sha: {sha}\n# started_utc: now\n# step_timeout_s: 1\n"
-        if doc is not None:
-            body += "#JSON-BEGIN\n" + json.dumps(doc) + "\n#JSON-END\n"
+        tag = summ.expected_tag(n)
+        if doc is not None and tag is not None:
+            full = {**doc, "step": tag, "suite": "lv", "git_sha": SHA, **(identity or {})}
+            body += "#JSON-BEGIN\n" + json.dumps(full) + "\n#JSON-END\n"
         (d / f"{n}.txt").write_text(body + f"\n# exit={exit_code}\n")
 
 
@@ -156,6 +162,10 @@ def test_summarize_verdicts_subset_and_source(tmp_path: Path) -> None:
     assert s["pass"] and not s["source_ok"] and not s["conformant"]
 
     for name, kw in {
+        "no_document": {"doc": None},
+        "wrong_step": {"doc": {"pass": True}, "identity": {"step": "t2"}},
+        "wrong_suite": {"doc": {"pass": True}, "identity": {"suite": "hr"}},
+        "wrong_sha_in_document": {"doc": {"pass": True}, "identity": {"git_sha": "e" * 40}},
         "failed": {"exit_code": 1, "doc": {"pass": True}},
         "failed_verdict": {"doc": {"pass": False}},
         "other_sha": {"sha": "b" * 40},
@@ -216,18 +226,30 @@ def test_combine_requires_exactly_the_full_suite(tmp_path: Path) -> None:
 
 
 # -- git and snapshot end to end -----------------------------------------------------------------
+def _git_env(root: Path) -> dict[str, str]:
+    """Environment for git in sandboxes without a home directory or identity."""
+    return dict(os.environ, HOME=str(root.parent), GIT_CONFIG_GLOBAL="/dev/null",
+                GIT_CONFIG_NOSYSTEM="1")  # fmt: skip
+
+
 def _make_repo(root: Path) -> str:
     """A throw-away git repository (in tmp) holding the scripts and sources under test."""
     ignore = shutil.ignore_patterns("__pycache__", "*.pyc", "generated")
-    for rel in ("src/ionmc", "validation/scripts/transport", "benchmarks/transport"):
+    for rel in ("src/ionmc", "tests/ionmc", "validation/scripts/transport", "benchmarks/transport"):
         shutil.copytree(REPO / rel, root / rel, ignore=ignore)
+    for rel in ("pyproject.toml", "uv.lock", "validation/plans/v3-003-acceptance.md"):
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(REPO / rel, root / rel)
     (root / ".gitignore").write_text("validation/generated/\nbenchmarks/generated/\n")
-    env = dict(os.environ, GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@t", GIT_COMMITTER_NAME="t",
-               GIT_COMMITTER_EMAIL="t@t")  # fmt: skip
-    for cmd in (["init", "-q"], ["add", "-A"], ["commit", "-q", "-m", "snapshot"]):
-        subprocess.run(["git", "-C", str(root), *cmd], check=True, env=env, capture_output=True)
-    return subprocess.run(["git", "-C", str(root), "rev-parse", "HEAD"], capture_output=True,
-                          text=True, check=True).stdout.strip()  # fmt: skip
+    env = _git_env(root)
+    base = ["git", "-c", "user.name=t", "-c", "user.email=t@t", "-C", str(root)]
+    try:
+        for cmd in (["init", "-q"], ["add", "-A"], ["commit", "-q", "-m", "snapshot"]):
+            subprocess.run([*base, *cmd], check=True, env=env, capture_output=True)
+        return subprocess.run([*base, "rev-parse", "HEAD"], capture_output=True, text=True,
+                              check=True, env=env).stdout.strip()  # fmt: skip
+    except (subprocess.CalledProcessError, OSError) as exc:
+        pytest.skip(f"cannot create a throw-away git repository in this sandbox: {exc}")
 
 
 def test_dirty_tree_is_refused_and_clean_tree_runs(tmp_path: Path) -> None:
@@ -268,7 +290,7 @@ def test_snapshot_without_git_is_attested_later(tmp_path: Path) -> None:
     summ = subprocess.run(
         [sys.executable, str(repo / "validation/scripts/transport/summarize.py"),
          str(tmp_path / "archive"), "--expected-sha", sha, "--attest-sha", sha],
-        capture_output=True, text=True,
+        capture_output=True, text=True, env=_git_env(repo),
     )  # fmt: skip
     assert summ.returncode == 0, summ.stderr
     a = json.loads((tmp_path / "archive" / "summary.json").read_text())
@@ -291,26 +313,56 @@ def test_snapshot_without_git_is_attested_later(tmp_path: Path) -> None:
     assert not b["attestation"]["valid"] and not b["source_ok"]
     assert any("content differs: src/ionmc/config.py" in m for m in b["attestation"]["mismatches"])
 
+    # every execution-defining file is covered: an altered test file, fixture, lock file or
+    # plan also fails the attestation
+    for rel in ("tests/ionmc/conftest.py", "uv.lock", "validation/plans/v3-003-acceptance.md",
+                "pyproject.toml"):  # fmt: skip
+        snap3 = tmp_path / f"snap-{Path(rel).name}"
+        shutil.copytree(repo, snap3, ignore=shutil.ignore_patterns(".git", "generated"))
+        (snap3 / rel).write_text((snap3 / rel).read_text() + "\n#t\n")
+        out3 = snap3 / "validation" / "generated" / "transport" / "run"
+        r = _run("--suite", "lv", "--out", str(out3), "--expected-sha", sha, "--workers", "2",
+                 "--only", "03", root=snap3)  # fmt: skip
+        assert r.returncode == 0, r.stderr[-800:]
+        arch = tmp_path / f"arch-{Path(rel).name}"
+        shutil.copytree(out3, arch)
+        subprocess.run([sys.executable, str(repo / "validation/scripts/transport/summarize.py"),
+                        str(arch), "--expected-sha", sha, "--attest-sha", sha],
+                       capture_output=True, text=True, env=_git_env(repo))  # fmt: skip
+        c = json.loads((arch / "summary.json").read_text())
+        assert not c["attestation"]["valid"], rel
+        assert any(f"content differs: {rel}" in m for m in c["attestation"]["mismatches"]), rel
+
 
 def test_t12_split_steps_roundtrip_and_tamper_detection(tmp_path: Path) -> None:
     """The python sample in two history ranges, the accelerated samples and the comparison, each
-    a separate step with its own output; the comparison verifies the sample hashes and fails
-    closed when a file is altered or a part is missing. (Tiny histories: the verdict itself is
-    not asserted, only the plumbing and the per-sample reduced flags.)"""
+    a separate step with its own output. The comparison rebuilds the expected configuration itself
+    and refuses tampered files, tampered metadata, a wrong seed, a wrong SHA, archives with other
+    source hashes (unless attested) and missing parts. (Tiny histories: the verdict itself is not
+    asserted, only the plumbing and the per-sample reduced flags.)"""
+    import numpy as np
+
     sha = "c" * 40
-    env = dict(os.environ, IONMC_RUN_SHA=sha, PYTHONPATH=str(REPO / "src"))
+    env = dict(os.environ, IONMC_RUN_SHA=sha, IONMC_RUN_SUITE="lv", PYTHONPATH=str(REPO / "src"))
     base = ["--energy", "70", "--lateral-bin", "0.5", "--half-width", "8", "--scale", "0.01"]
     steps = str(SCRIPTS / "steps.py")
+    own, prod = tmp_path / "own", tmp_path / "prod"
+    hashes = {"src/ionmc/a.py": "0" * 64}
+    for d in (own, prod):
+        d.mkdir()
+        (d / "environment.txt").write_text(_env(hashes=hashes).replace(SHA, sha))
 
-    def step(name: str, *args: str) -> subprocess.CompletedProcess[str]:
-        return subprocess.run([sys.executable, steps, name, *args, *base], capture_output=True,
-                              text=True, env=env, timeout=900)  # fmt: skip
+    def step(
+        name: str, *args: str, environ: dict | None = None
+    ) -> subprocess.CompletedProcess[str]:  # type: ignore[type-arg]
+        return subprocess.run([sys.executable, steps, name, *base, *args], capture_output=True,
+                              text=True, env=environ or env, timeout=900)  # fmt: skip
 
     def archive(fname: str, proc: subprocess.CompletedProcess[str]) -> None:
         body = f"# command: x\n# git_sha: {sha}\n# started_utc: n\n# step_timeout_s: 1\n"
-        (tmp_path / fname).write_text(body + proc.stdout + f"\n# exit={proc.returncode}\n")
+        (prod / fname).write_text(body + proc.stdout + f"\n# exit={proc.returncode}\n")
 
-    samples = str(tmp_path / "samples")
+    samples = str(prod / "samples")
     for i in (1, 2):
         p = step("t12-python-sample", "--part", f"{i}/2", "--out-dir", samples, "--workers", "2")
         assert p.returncode == 0, p.stdout[-2000:] + p.stderr[-2000:]
@@ -318,25 +370,53 @@ def test_t12_split_steps_roundtrip_and_tamper_detection(tmp_path: Path) -> None:
     p = step("t12-accelerated-samples", "--samples", "cpu32", "--out-dir", samples)
     assert p.returncode == 0, p.stderr[-2000:]
     archive("03-t12-acc.txt", p)
-    c = step("t12-compare", "--pairs", "python:cpu32", "--dirs", str(tmp_path))
+    args = ("t12-compare", "--pairs", "python:cpu32", "--dirs", str(own), str(prod))
+    c = step(*args)
     doc = json.loads(c.stdout.split("#JSON-BEGIN")[1].split("#JSON-END")[0])
+    assert doc["step"] == "t12-compare" and doc["suite"] == "lv" and doc["git_sha"] == sha
     assert doc["reduced"] and doc["samples"]["python"]["parts"] == 2
     assert doc["samples"]["python"]["reduced"] and doc["samples"]["cpu32"]["reduced"]
     assert doc["samples"]["python"]["frozen_histories"] == 4000
     assert doc["samples"]["cpu32"]["frozen_histories"] == 1_000_000
     assert doc["t12"]["python_vs_cpu32"]["permutation"]["n_perm"] == 2000
-    # a different SHA than the producers' is refused
-    wrong = subprocess.run([sys.executable, steps, "t12-compare", "--pairs", "python:cpu32",
-                            "--dirs", str(tmp_path), *base], capture_output=True, text=True,
-                           env=dict(env, IONMC_RUN_SHA="d" * 40), timeout=300)  # fmt: skip
-    assert wrong.returncode != 0 and "SHA" in (wrong.stderr + wrong.stdout)
+
+    def refused(proc: subprocess.CompletedProcess[str], text: str) -> None:
+        assert proc.returncode != 0 and text in (proc.stderr + proc.stdout), proc.stderr[-600:]
+
+    refused(step(*args, environ=dict(env, IONMC_RUN_SHA="d" * 40)), "SHA")  # wrong SHA
+    refused(step(*args, "--seed", "99"), "differs from expected")  # wrong seed
+    refused(step(*args, "--energy", "71"), "differs from expected")  # other configuration
+    # an archive with other source hashes is refused ... unless a valid attestation says it is
+    # the expected commit
+    (prod / "environment.txt").write_text(
+        _env(hashes={"src/ionmc/a.py": "1" * 64}).replace(SHA, sha)
+    )
+    refused(step(*args), "source hashes differ")
+    (prod / "summary.json").write_text(
+        json.dumps({"attestation": {"valid": True, "attested_sha": sha}})
+    )
+    accepted = step(*args)  # accepted: it ran the statistics (the tiny-sample verdict may fail)
+    assert "#JSON-BEGIN" in accepted.stdout, accepted.stderr[-600:]
+    (prod / "summary.json").unlink()
+    (prod / "environment.txt").write_text(_env(hashes=hashes).replace(SHA, sha))
+    # tampered metadata with a consistently updated sha256 in the producer's archive
+    f = prod / "samples" / "t12-python-part-1-of-2.npz"
+    data = dict(np.load(f))
+    meta = json.loads(str(data["meta"]))
+    meta["energy_mev"] = 71.0
+    data["meta"] = np.array(json.dumps(meta, sort_keys=True))
+    old = f.read_bytes()
+    np.savez(f, **data)
+    import hashlib
+
+    arch = prod / "01-t12-python-sample.txt"
+    new_digest = hashlib.sha256(f.read_bytes()).hexdigest()
+    arch.write_text(arch.read_text().replace(hashlib.sha256(old).hexdigest(), new_digest))
+    refused(step(*args), "differs from expected")
     # tampered sample file: sha256 mismatch
-    f = tmp_path / "samples" / "t12-python-part-1-of-2.npz"
     f.write_bytes(f.read_bytes() + b"x")
-    bad = step("t12-compare", "--pairs", "python:cpu32", "--dirs", str(tmp_path))
-    assert bad.returncode != 0 and "sha256 mismatch" in (bad.stderr + bad.stdout)
+    refused(step(*args), "sha256 mismatch")
     # a missing part: the sample no longer tiles the history range
     f.unlink()
-    (tmp_path / "01-t12-python-sample.txt").unlink()
-    gone = step("t12-compare", "--pairs", "python:cpu32", "--dirs", str(tmp_path))
-    assert gone.returncode != 0
+    arch.unlink()
+    assert step(*args).returncode != 0

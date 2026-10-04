@@ -245,10 +245,14 @@ def test_c1_scoring_rules(make_config: MakeConfig) -> None:
     tight = replace(cfg.run, memory_budget_bytes=2 * grid.n_voxels * 8 - 1)
     _rejects(replace(cfg, run=tight))
     validate(replace(cfg, run=replace(cfg.run, memory_budget_bytes=2 * grid.n_voxels * 8)))
-    # max_step above the smallest scoring spacing: rejected, not clamped
-    _rejects(replace(cfg, physics=replace(cfg.physics, max_step_mm=2.5)))
-    fine = ScoringGrid((0.0, 0.0, 0.0), (2.0, 2.0, 0.5), (4, 4, 4))
-    _rejects(replace(cfg, scoring=(grid, fine)))
+    # max_step above the smallest scoring spacing is accepted: the track-length scoring walk is
+    # bounded by pieces = 3 ceil(max_step / spacing) + 4 (recorded), up to a sanity cap
+    eff = validate(replace(cfg, physics=replace(cfg.physics, max_step_mm=2.5)))
+    assert eff.scoring_pieces == 3 * 2 + 4 and eff.summary()["scoring_pieces"] == 10
+    fine = ScoringGrid((0.0, 0.0, 0.0), (2.0, 2.0, 0.5), (4, 4, 4), name="fine")
+    assert validate(replace(cfg, scoring=(grid, fine))).scoring_pieces == 3 * 4 + 4
+    ultra = ScoringGrid((0.0, 0.0, 0.0), (2.0, 2.0, 2.0 / 4096), (4, 4, 4), name="ultra")
+    _rejects(replace(cfg, scoring=(grid, ultra)))  # more than 4096 pieces: sanity cap
     for bad in (0.0, -1.0, float("nan")):
         with pytest.raises(UnsupportedCombinationError):
             ScoringGrid((0, 0, 0), (1.0, bad, 1.0), (2, 2, 2))

@@ -51,7 +51,9 @@ class TransportCounters:
     bookkeeping limits (always 0 until secondaries exist); ``source_energy_out_of_range``:
     sampled source energies outside ``[E_cut, table maximum]``; ``energy_inversion``: steps in
     which the inverse-range energy exceeded the initial energy (clamped to it);
-    ``accumulator_overflow``: a fixed-point voxel accumulator reached its capacity.
+    ``accumulator_overflow``: a fixed-point voxel accumulator reached its capacity;
+    ``scoring_pieces_overflow``: a leg of the track-length scoring crossed more voxel pieces than
+    the validated bound (the remainder is deposited in the last voxel and the result is invalid).
     """
 
     step_truncation: int = 0
@@ -62,6 +64,7 @@ class TransportCounters:
     source_energy_out_of_range: int = 0
     energy_inversion: int = 0
     accumulator_overflow: int = 0
+    scoring_pieces_overflow: int = 0
 
     @property
     def any_nonzero(self) -> bool:
@@ -79,6 +82,7 @@ class TransportCounters:
             "source_energy_out_of_range": self.source_energy_out_of_range,
             "energy_inversion": self.energy_inversion,
             "accumulator_overflow": self.accumulator_overflow,
+            "scoring_pieces_overflow": self.scoring_pieces_overflow,
         }
 
 

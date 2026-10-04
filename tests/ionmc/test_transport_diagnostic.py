@@ -88,3 +88,29 @@ def test_diagnostic_flag_is_validated() -> None:
     cfg = _config()
     with pytest.raises(UnsupportedCombinationError, match="bool"):
         replace(cfg, physics=replace(cfg.physics, truncated_hinge_diagnostic=1))  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("diagnostic", [False, True])
+def test_steps_that_change_voxel_end_exactly_on_the_crossed_plane(diagnostic: bool) -> None:
+    """Whatever the direction used for the second leg (default or the control's re-sampled one),
+    a step that moves to another transport voxel ends exactly on the plane it crossed."""
+    cfg = _config("python", diagnostic=diagnostic)
+    res = Simulation(cfg).run()
+    tr = res.diagnostics["trace"]
+    origin, spacing = (-12.0, -12.0, 0.0), 1.5
+    idx = np.stack([tr["ix"], tr["iy"], tr["iz"]], axis=1).astype(int)
+    pos = np.stack([tr["x_mm"], tr["y_mm"], tr["z_mm"]], axis=1)
+    hist = tr["history"].astype(int)
+    n_checked = 0
+    for k in range(1, len(hist)):
+        if hist[k] != hist[k - 1]:
+            continue
+        d = idx[k] - idx[k - 1]
+        if not d.any():
+            continue
+        assert np.count_nonzero(d) == 1 and abs(d.sum()) == 1
+        a = int(np.nonzero(d)[0][0])
+        plane = origin[a] + (idx[k, a] if d[a] > 0 else idx[k, a] + 1) * spacing
+        assert pos[k, a] == pytest.approx(plane, abs=1e-12)
+        n_checked += 1
+    assert n_checked > 10

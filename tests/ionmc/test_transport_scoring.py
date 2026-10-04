@@ -136,15 +136,56 @@ def test_capacity_guard_and_overflow_counter(make_config: MakeConfig) -> None:
     assert ok.requested.run.n_histories == 2**20
 
     wrapped = PartialTransport(
-        0, 2, [[1.0]] * 8, [0] * 8,
+        0, 2, [[1.0]] * 8, [0] * 9,
         [np.array([[MAX_QUANTA, 0]], dtype=np.int64).repeat(2, axis=0)], None,
     )  # fmt: skip
     from ionmc.transport.tally import rows_to_partial
 
     part = rows_to_partial(
-        0, 2, np.ones((2, 8)), np.zeros((2, 8), dtype=np.int32),
+        0, 2, np.ones((2, 8)), np.zeros((2, 9), dtype=np.int32),
         [np.array([[MAX_QUANTA, 0]], dtype=np.int64)], None,
     )  # fmt: skip
     raw = merge_partials([part], 2, 1)
     assert raw.counters["accumulator_overflow"] == 1
     assert wrapped.h1 == 2
+
+
+@pytest.mark.parametrize("backend", ["python", "warp-cpu"])
+def test_scoring_piece_bound_overflow_invalidates_the_run(
+    make_config: MakeConfig, backend: str
+) -> None:
+    """A leg that needs more voxel pieces than the validated bound is never truncated silently:
+    the remainder is deposited (energy is conserved), the counter is raised, the result invalid."""
+    from dataclasses import replace
+
+    cfg = make_config(
+        energy=20.0,
+        n=2,
+        n_batches=2,
+        direction=(0.3, 0.2, 1.0),
+        geometry=BoxPhantom((-10.0, -10.0, 0.0), (20.0, 20.0, 12.0), WATER),
+        scoring=(ScoringGrid((-10.0, -10.0, 0.0), (0.5, 0.5, 0.5), (40, 40, 24)),),
+        mcs=False,
+        straggling=False,
+        max_step=2.0,
+        backend=backend,
+        allow_invalid=True,
+    )
+    sim = Simulation(cfg)
+    assert sim.effective.scoring_pieces == 3 * 4 + 4
+    assert sim.run().valid  # the computed bound suffices
+    sim.effective = replace(sim.effective, scoring_pieces=1)
+    res = sim.run()
+    assert not res.valid and res.counters.scoring_pieces_overflow > 0
+    assert res.energy_balance.grid_relative_residual(0) <= 1e-12 or backend == "warp-cpu"
+
+
+def test_steps_longer_than_the_scoring_bins_are_apportioned(make_config: MakeConfig) -> None:
+    """Steps of 2.5 mm over 1 mm bins (formerly rejected) are spread over the voxels crossed. The
+    IDD agrees with the 0.1 mm-step run to 1e-2 on the plateau (the deposit is uniform along a
+    step: a shape error of the step length, not a scoring artefact) and the run is valid."""
+    ref = _idd(make_config, 0.1, 1.0)
+    a = _idd(make_config, 2.5, 1.0)
+    z = np.arange(len(ref)) + 0.5
+    keep = (ref > 0.01 * ref.max()) & (z >= 20.0) & (z <= 120.0)
+    assert np.abs(a[keep] / ref[keep] - 1.0).max() <= 1e-2

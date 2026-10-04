@@ -151,8 +151,9 @@ corner), spacing and shape, and the deposit of a step is shared among the voxels
 may be a single box or a refined or shifted voxel grid, so the sensitivity of lateral and angular
 observables to the transport grid can be probed with the reference backend: `escape_records` gives
 position, direction and energy of every escaping particle (exit angles, `theta_rms`), the scoring grids
-give deposits for lateral second moments. One restriction applies to such studies: `max_step_mm` must not
-exceed the smallest scoring spacing (any axis), so a fine lateral scoring grid forces short steps.
+give deposits for lateral second moments. A fine lateral scoring grid does not force short steps: the
+track-length scoring walks each leg over as many scoring voxels as it crosses, up to a validated bound
+(see the fail-closed rules).
 
 ## Fail-closed rules
 
@@ -175,8 +176,12 @@ Each rule raises before any transport and nothing is clamped or substituted (tes
 * material index out of range, density <= 0, spacing <= 0, wrong shapes, non-finite values;
 * zero or more than four scoring grids, duplicate grid names, accumulators
   (`n_batches * voxels * bytes`) above `memory_budget_bytes`;
-* `max_step_mm` larger than the smallest scoring spacing (a leg then crosses at most one plane
-  per axis of a scoring grid, which bounds the DDA walk of the track-length scoring);
+* a bound of voxel pieces per leg above 4096: validation computes `3 ceil(max_step_mm / spacing_min) + 4` per scoring
+  grid (a leg of length at most `max_step_mm` meets at most `ceil(max_step / d) + 1` planes of an axis with spacing
+  `d`, a start exactly on a plane counting as a zero-length hop, and one more piece than planes), takes the maximum over
+  the grids and records it in the effective configuration (`scoring_pieces`); the per-leg walk of the track-length
+  scoring is bounded by it, and a leg that would exceed it at run time deposits the remainder in its last voxel and
+  increments `scoring_pieces_overflow`, which invalidates the result (nothing is truncated silently);
 * `n_histories / n_batches` times the largest source energy above the capacity `2**62` quanta of a fixed-point
   voxel accumulator (quantum 2**-30 MeV);
 * `max_steps * 65 >= 2**32` (the block counter bound).
@@ -192,7 +197,7 @@ After the run a nonzero transport-limit counter makes the result invalid: `run()
 `RunOptions.allow_invalid_result` is set, in which case `result.valid` is `False` and every grid
 result is flagged `valid = False`. Counters: `step_truncation`, `stall`, `straggling_rejection`,
 `genealogy_overflow` and `queue_overflow` (both always 0 until secondaries exist),
-`source_energy_out_of_range` and `energy_inversion`.
+`source_energy_out_of_range`, `energy_inversion`, `accumulator_overflow` and `scoring_pieces_overflow`.
 
 ## Results
 
@@ -298,7 +303,8 @@ period) and `TransportWorkerError` is raised; no partial result is returned. Scr
   `benchmarks/generated/`. When git can read the tree the SHA must equal `git rev-parse HEAD` **and the tree must be
   clean** (a dirty tree is refused before any step). A snapshot without `.git` records the declared SHA
   (`sha_source=declared`, `tree_dirty=unknown`). In both cases `environment.txt` carries `source_hashes` (sha256 of every
-  file under `src/ionmc`, `validation/scripts/transport` and `benchmarks/transport`), versions, hardware and the
+  file under `src/ionmc`, `tests/ionmc` (including fixtures), `validation/scripts/transport` and
+  `benchmarks/transport` and of `pyproject.toml`, `uv.lock` and the acceptance plan), versions, hardware and the
   options. `summarize.py DIR --expected-sha SHA --attest-sha SHA` (run where git exists) compares those hashes with the
   blobs of `git ls-tree -r SHA` and records the attestation; `conformant` requires a clean git tree or a valid
   attestation.
@@ -330,20 +336,35 @@ period) and `TransportWorkerError` is raised; no partial result is returned. Scr
   Wilson-Hilferty value is reported for information; the Bonferroni bound on `max |z|` is the frozen one.
 * **T14 negative control.** `PhysicsOptions.truncated_hinge_diagnostic` (default off, recorded in the effective
   configuration, a diagnostic and not a physics model) samples the hinge angle again, from the same uniforms, for the
-  truncated length `leg1 + leg2` when the second leg is cut at a transport voxel plane; the new direction is not
-  re-checked against the plane and the cut length and axis are kept. It is implemented identically in the reference and
+  truncated length `leg1 + leg2` of the first pass when the second leg is cut at a transport voxel plane, then finds the
+  second-leg boundary again with the new direction (new length, axis and sign; the particle snaps onto that plane, or is
+  not cut at all if the new direction does not reach one). One-pass residual: the new truncated length may differ from
+  the one used for the variance (second order). It is implemented identically in the reference and
   the kernel; with the flag off the engine is unchanged (a stored baseline trace guards this). The T14 step runs it at
   1 mm voxels and requires the relative change of the exit `theta_rms` to be below 0.5 %.
 * **T10 energy.** The total deposited energy of every orientation is compared with that of the `+z` beam with the batch
   standard errors of both and must agree within 3 sigma.
 
-Implementation choices forced by engine rules (listed so the criteria are not read as met more strongly than
-measured): `max_step_mm` must not exceed the smallest scoring spacing, so T8/T14 take the lateral sigma from the
-exit positions of particles leaving a water slab of the stated thickness (the Fermi-Eyges A2 quantity) instead of
-0.2 mm deposit bins; T9 uses 1 mm IDD bins (the deterministic T9-CI check in `test_transport_scoring.py` guards the scoring); T10 uses the distribution of the projected track-end depth
-(oblique deposit grids alias when projected); the T14 along-beam shift changes the slab thickness by half a voxel,
-so T14 compares the ratios to the quadrature at the actual thickness; T12 compares independent samples with distinct seeds using the
-batch-method standard errors (Student-t for few batches; the batch counts are recorded). The deposit grids of T13 must be bit-identical.
+* **T8, T14 observables.** The lateral sigma is the frozen one: the standard deviation of the deposited energy in fixed
+  0.2 mm lateral bins and 1 mm slabs at z/R = 0.5 and 0.9 (scoring grids independent of the transport voxels, Sheppard
+  corrected, compared with Fermi-Eyges A2 at the slab centre); the exit `theta_rms` of a 0.5 R1 slab from the escape
+  records is the second observable. T8 runs `s_max` in {0.1, 0.5, 1, 5} mm, T14 steps of `min(1 mm, voxel)`.
+* **T10.** Every orientation scores a 1 mm grid around its path; the integrated depth-dose is formed by projecting the
+  voxels on the beam axis (`ionmc.transport.parity.projected_idd`: each voxel is spread over the convolution of
+  `|u_i| d_i` boxes it covers, 0.1 mm bins), R80 is read from it (the estimator of T9/T12) and obliques must agree with
+  the `+z` beam within 0.3 mm; permutations use the permutation-calibrated chi-square of the 1 mm-binned depth-dose;
+  the mean track-end depth is reported for information.
+* **Imported samples.** The comparison builds the expected configuration of each sample itself (effective-configuration
+  fingerprint, seed, energy, geometry parameters, backend, precision, frozen count) and refuses any mismatch; archives
+  that supply samples need the expected SHA and the same `source_hashes` as the comparison's own archive, or a valid
+  attestation. Every non-pytest step prints a result document naming its step, the suite and the SHA, which
+  `summarize.py` checks against the manifest (a missing or unparsable document fails the step).
+
+Other choices (listed so the criteria are not read as met more strongly than measured): T9 uses 1 mm IDD bins (the
+deterministic T9-CI check in `test_transport_scoring.py` guards the scoring); the T14 along-beam shift changes the slab
+thickness by half a voxel, so T14 compares the ratios to the quadrature at the actual thickness; T12 compares
+independent samples with distinct seeds using the batch-method standard errors (Student-t for few batches; the batch
+counts are recorded). The deposit grids of T13 must be bit-identical.
 
 Note on T9: with the midpoint scoring of V3-003A and `s_max` comparable to the IDD bin width, point deposits
 aliased with the bin edges (deviations of tens of percent relative to a 0.1 mm-step run in the deterministic

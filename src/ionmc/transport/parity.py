@@ -47,9 +47,12 @@ T12_DEPTHS = (0.25, 0.5, 0.9)
 
 # -- T1: trajectory parity ---------------------------------------------------------------------
 def compare_traces(
-    reference: dict[str, Any], other: dict[str, Any], *, rtol: float = TRACE_RTOL,
+    reference: dict[str, Any],
+    other: dict[str, Any],
+    *,
+    rtol: float = TRACE_RTOL,
     atol: float = TRACE_ATOL,
-) -> dict[str, Any]:  # fmt: skip
+) -> dict[str, Any]:
     """T1 verdict for two ``diagnostics`` dictionaries that contain a trace.
 
     Discrete columns (``history, step, ix, iy, iz, reason, blocks, attempts``) must be equal on
@@ -90,6 +93,52 @@ def compare_traces(
     )
     out["end_codes_equal"] = codes_equal
     out["pass"] = bool(ok and codes_equal and n_a > 0)
+    return out
+
+
+# -- repeatability -----------------------------------------------------------------------------
+def compare_runs_bitwise(a: Result, b: Result) -> dict[str, Any]:
+    """Bit-for-bit comparison of two runs of one configuration (tallies, counters, deposit grids
+    and the per-history end state: position, direction, energy, end code). Both runs must have
+    been made with ``track_end_positions``. ``first_difference`` names the first differing
+    history (or voxel) so that a nondeterminism can be located."""
+    out: dict[str, Any] = {"identical": True, "first_difference": None}
+
+    def note(what: str, **where: Any) -> None:
+        if out["identical"]:
+            out["first_difference"] = {"what": what, **where}
+        out["identical"] = False
+
+    ea, eb = a.energy_balance, b.energy_balance
+    for f in ("initial_mev", "step_deposit_mev", "cutoff_mev", "escaped_mev", "truncated_mev"):
+        if getattr(ea, f) != getattr(eb, f):
+            note(f"tally {f}", a=getattr(ea, f), b=getattr(eb, f))
+    if a.counters.as_dict() != b.counters.as_dict():
+        note("counters", a=a.counters.as_dict(), b=b.counters.as_dict())
+    for ga, gb in zip(a.grids, b.grids, strict=True):
+        x, y = np.asarray(ga.batch_energy_mev), np.asarray(gb.batch_energy_mev)
+        bad = np.argwhere(x != y)
+        if bad.size:
+            note(
+                f"deposit grid {ga.name}",
+                voxel=bad[0].tolist(),
+                a=float(x[tuple(bad[0])]),
+                b=float(y[tuple(bad[0])]),
+                n_differing=int(len(bad)),
+            )
+    keys = ("end_position_mm", "end_direction", "end_energy_mev", "end_code")
+    for k in keys:
+        x, y = np.asarray(a.diagnostics[k]), np.asarray(b.diagnostics[k])
+        differing = np.nonzero((x != y).reshape(len(x), -1).any(axis=1))[0]
+        if len(differing):
+            h = int(differing[0])
+            note(
+                f"end state {k}",
+                history=h,
+                a=np.atleast_1d(x[h]).tolist(),
+                b=np.atleast_1d(y[h]).tolist(),
+                n_histories_differing=int(len(differing)),
+            )
     return out
 
 
@@ -285,6 +334,57 @@ def _r80(profile: NDArray[np.float64], dz: float) -> float:
             f = (profile[i] - level) / (profile[i] - profile[i + 1])
             return float((i + 0.5 + f) * dz)
     return float("nan")
+
+
+def projected_idd(
+    batch_energy: NDArray[np.float64],
+    grid: ScoringGrid,
+    start: tuple[float, float, float],
+    direction: tuple[float, float, float],
+    *,
+    bin_mm: float = 0.1,
+    n_bins: int,
+    fine_mm: float = 0.01,
+) -> NDArray[np.float64]:
+    """Integrated depth-dose of a beam along ``direction`` from a 3-D deposit grid: the energy of
+    every voxel is distributed over the depth ``t = (r - start) . u`` it covers. A cubic-voxel cell
+    of sizes ``d_i`` projects onto the convolution of boxes of widths ``|u_i| d_i`` centred on the
+    projected voxel centre (exact for a uniform deposit inside the voxel); the result is binned in
+    ``bin_mm`` bins. ``batch_energy`` has shape ``(B, nx, ny, nz)`` (per-batch values); returns
+    ``(B, n_bins)``. Needs no rotated grid, so oblique beams use the same estimator as axis-aligned
+    ones."""
+    u = np.asarray(direction, dtype=np.float64)
+    u = u / np.linalg.norm(u)
+    nx, ny, nz = grid.shape
+    c = [
+        grid.origin_mm[a] + (np.arange(grid.shape[a]) + 0.5) * grid.spacing_mm[a] - start[a]
+        for a in range(3)
+    ]
+    t = (
+        c[0][:, None, None] * u[0] + c[1][None, :, None] * u[1] + c[2][None, None, :] * u[2]
+    ).reshape(-1)
+    n_fine = int(round(n_bins * bin_mm / fine_mm))
+    idx = np.floor(t / fine_mm).astype(np.int64)
+    keep = (idx >= 0) & (idx < n_fine)
+    kernel = np.ones(1)
+    for a in range(3):
+        width = abs(u[a]) * grid.spacing_mm[a]
+        m = int(round(width / fine_mm))
+        if m >= 2:
+            kernel = np.convolve(kernel, np.full(m, 1.0 / m))
+    per = int(round(bin_mm / fine_mm))
+    out = np.zeros((batch_energy.shape[0], n_bins))
+    for b in range(batch_energy.shape[0]):
+        w = batch_energy[b].reshape(-1)
+        fine = np.bincount(idx[keep], weights=w[keep], minlength=n_fine)[:n_fine]
+        smooth = np.convolve(fine, kernel, mode="same") if kernel.size > 1 else fine
+        out[b] = smooth[: n_bins * per].reshape(n_bins, per).sum(axis=1)
+    return out
+
+
+def r80_of(profile: NDArray[np.float64], bin_mm: float) -> float:
+    """Distal 80 % depth [mm] of an IDD (the estimator of the T9/T12 observables)."""
+    return _r80(profile, bin_mm)
 
 
 def t12_observables(result: Result, layout: T12Layout) -> T12Observables:
@@ -486,8 +586,7 @@ def t12_config(
 ) -> tuple[Any, T12Layout]:
     """Configuration of one T12 sample: a pencil beam of protons in a water box, all physics on,
     offline analytic (Bethe, I = 78 eV) stopping, the T12 scoring grids. Each sample must use
-    its own ``seed``. ``max_step_mm`` defaults to ``lateral_bin_mm`` (the engine requires steps
-    no longer than the smallest scoring spacing)."""
+    its own ``seed``. ``max_step_mm`` defaults to ``lateral_bin_mm``."""
     from ionmc.config import (
         DEFAULT_CHUNK_HISTORIES,
         PhysicsOptions,

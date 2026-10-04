@@ -38,7 +38,7 @@ are deliberately out of scope here.
 | Multiple scattering | per-step Highland; Molière; differential Highland (Kanematsu); differential Molière (Gottschalk) | **differential Molière** scattering power `T_dM = f_dM(pv, p₁v₁)(E_s/pv)²/X_S`, `E_s = 15.0 MeV`, `f_dM = 0.5244 + 0.1975 lg(1−(pv/p₁v₁)²) + 0.2320 lg(pv) − 0.0098 lg(pv) lg(1−(pv/p₁v₁)²)` (clamped ≥ 0), scattering length `1/(ρX_S) = α N_A r_e² (Z²/A){2 ln(33219 (AZ)^{-1/3}) − 1}` Bragg-additive, applied as a Gaussian polar angle with a random hinge | step-size independent by construction (per-step Highland is not; a negative-control test proves the instrument has power); ranked best against Hanson theory and measurement in the source paper; the research report's label "differential Highland" for these coefficients was wrong and is corrected |
 | Lateral displacement | explicit correlated sampling; random hinge | random hinge (move `a·s`, deflect, move `(1−a)·s`, `a` uniform) | reproduces the Fermi–Eyges second moments exactly without extra draws |
 | Geometry traversal | `floor(p)` with nudge; incremental DDA | incremental DDA with the voxel index as state and plane snapping on crossing | the nudge variant stalled in the archived toy kernel |
-| Scoring | split steps at scoring planes; midpoint deposit; path-length-proportional deposit | **path-length-proportional deposit along both hinge legs** (amendment 2026-10-04, see below); `max_step ≤ min scoring spacing` still enforced | simplest unbiased choice at the enforced step size; grid refinement/misalignment is a falsification probe in V3-011 |
+| Scoring | split steps at scoring planes; midpoint deposit; path-length-proportional deposit | **path-length-proportional deposit along both hinge legs** (amendment 2026-10-04, see below); the former `max_step ≤ min scoring spacing` rule is replaced by a computed, fail-closed bound on the number of scoring pieces per leg (second amendment 2026-10-04, see below) | simplest unbiased choice at the enforced step size; grid refinement/misalignment is a falsification probe in V3-011 |
 | End of range | transport to zero; local deposition below `E_cut` | local deposition below `E_cut = 2 MeV` (protons) | residual range ≈ 0.07 mm in water; the V3-002 table floor (1 MeV/u) must stay ≤ `E_cut/2` |
 | Uniform mapping | `((w>>8)+0.5)·2⁻²⁴` in both precisions | float64: 24-bit form; float32: `((w>>9)+0.5)·2⁻²³` | the 24-bit form rounds to exactly 1.0 in float32 for the top word (amends decision 0037) |
 | CPU parallelism | Python threads; processes | spawned processes with private accumulators, float64 summation by the parent | archived stall of thread-concurrent CPU launches; Warp CPU atomics are plain read-modify-write |
@@ -135,5 +135,32 @@ fail-closed configuration rules.
   here as contrary evidence. Also from V3-003B: the float32 per-batch
   accumulators of decision 0037 were replaced by int64 fixed-point
   accumulators (see decision 0037, amendment 2026-10-04).
+- **2026-10-04 (V3-003B) — step-length rule replaced.** The rule
+  `max_step_mm ≤ smallest scoring spacing` existed only to bound the
+  per-leg walk of the path-length scoring (at most 8 pieces). It made the
+  frozen T8 probe (s_max up to 5 mm with 0.2 mm lateral dose bins) impossible
+  to run as frozen. It is replaced by a per-run computed bound
+  `pieces = 3·⌈max_step/min_spacing⌉ + 2` (maximum over scoring grids, cap
+  4096 beyond which the configuration is rejected) carried in the kernel
+  control structure; exceeding it at run time increments the fail-closed
+  counter `scoring_pieces_overflow` and invalidates the result — the deposit
+  is never silently truncated. Steps may now exceed the scoring spacing; the
+  physics step limits (f_E, s_max, voxel planes) are unchanged.
+- **2026-10-04 (V3-003B) — open determinism observation.** During the
+  V3-003B work the exact partition-independence test of the python
+  reference failed once: the undivided run contained an escaped history of
+  about 10 MeV that did not occur in the two partial runs, and the failure
+  could not be reproduced (30 reruns, cold Warp caches, 8 seeds × 240
+  histories compared bitwise, 192k Python-scope Warp calls under heap
+  churn). Separately, the GPU host runner twice aborted (SIGABRT) inside the
+  Python-scope evaluation of shared Warp functions in the U1 parity test and
+  passed on retry. Both point at the Python-scope `@wp.func` execution path
+  as occasionally unreliable. Mitigations: a frozen repeatability probe (R1:
+  identical runs must be bit-identical in tallies, counters, grids and
+  per-history end states) is added to the CI/LV/HR suites, every reference
+  result used as evidence must come from a run whose R1 passed, and the
+  float64 Warp-CPU kernel — bit-identical to the reference in T1 — is the
+  fallback reference executor if the observation recurs. The anomaly is
+  preserved here as unexplained; it is not attributed to the physics.
 
 To be appended from committed result files.

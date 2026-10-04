@@ -42,7 +42,6 @@ from ionmc.transport.tally import (
     END_MISSED_WORLD,
     END_SOURCE_REJECTED,
     END_TRUNCATED,
-    MAX_LEG_PIECES,
     N_FIXED_TALLIES,
     QUANTUM_MEV,
     QUANTUM_SCALE,
@@ -77,6 +76,7 @@ def make_kernel_support(real: type) -> SimpleNamespace:
         "mcs": int,
         "straggling": int,
         "trunc_diag": int,
+        "max_pieces": int,
         "nx": int,
         "ny": int,
         "nz": int,
@@ -107,7 +107,6 @@ def make_kernel_support(real: type) -> SimpleNamespace:
 
     q_scale = wp.constant(wp.float64(QUANTUM_SCALE))
     q_mev = wp.constant(wp.float64(QUANTUM_MEV))
-    max_pieces = wp.constant(MAX_LEG_PIECES)
 
     @named_func(name)
     def deposit_voxel(
@@ -188,9 +187,11 @@ def make_kernel_support(real: type) -> SimpleNamespace:
         g_shape: wp.array2d(dtype=int),
         g_off: wp.array(dtype=int),
         n_grids: int,
-    ):
+        max_pieces: int,
+    ) -> int:
         """Deposit ``deposit * piece / s_act`` in every voxel of grid ``g`` crossed by the straight
-        segment from ``p0`` along ``u`` (per-grid incremental DDA, ``seg_piece``)."""
+        segment from ``p0`` along ``u`` (per-grid incremental DDA, ``seg_piece``); returns 1 if
+        the walk exceeded ``max_pieces`` (the remainder goes to the last voxel)."""
         go = v3(g_origin[g, 0], g_origin[g, 1], g_origin[g, 2])
         gs = v3(g_spacing[g, 0], g_spacing[g, 1], g_spacing[g, 2])
         gi = v3(g_inv[g, 0], g_inv[g, 1], g_inv[g, 2])
@@ -235,11 +236,14 @@ def make_kernel_support(real: type) -> SimpleNamespace:
                     if axis == 2:
                         pz = F.plane_position(iz, upward, go[2], gs[2])
                         iz = iz + step_i
+        overflow = int(0)
         if remaining > R(0.0):
+            overflow = 1
             deposit_voxel(
                 edep, tally_rows, tid, batch, g, ix, iy, iz, nxg, nyg, nzg, off, n_grids,
                 deposit * remaining / s_act,
             )  # fmt: skip
+        return overflow
 
     @named_func(name)
     def deposit_step(
@@ -261,18 +265,22 @@ def make_kernel_support(real: type) -> SimpleNamespace:
         g_shape: wp.array2d(dtype=int),
         g_off: wp.array(dtype=int),
         n_grids: int,
-    ):
-        """Track-length apportioning of a step deposit along both hinge legs in every grid."""
+        max_pieces: int,
+    ) -> int:
+        """Track-length apportioning of a step deposit along both hinge legs in every grid;
+        returns the number of legs that exceeded ``max_pieces``."""
+        ovf = int(0)
         for g in range(n_grids):
             if s_act > R(0.0):
-                deposit_leg(
+                ovf = ovf + deposit_leg(
                     edep, tally_rows, tid, batch, g, p0[0], p0[1], p0[2], d0[0], d0[1], d0[2],
                     leg1, deposit, s_act, g_origin, g_spacing, g_inv, g_shape, g_off, n_grids,
+                    max_pieces,
                 )  # fmt: skip
-                deposit_leg(
+                ovf = ovf + deposit_leg(
                     edep, tally_rows, tid, batch, g, hinge[0], hinge[1], hinge[2], d1[0], d1[1],
                     d1[2], leg2, deposit, s_act, g_origin, g_spacing, g_inv, g_shape, g_off,
-                    n_grids,
+                    n_grids, max_pieces,
                 )  # fmt: skip
             else:
                 go = v3(g_origin[g, 0], g_origin[g, 1], g_origin[g, 2])
@@ -285,6 +293,7 @@ def make_kernel_support(real: type) -> SimpleNamespace:
                     edep, tally_rows, tid, batch, g, ix, iy, iz, nxg, nyg, nzg, g_off[g], n_grids,
                     deposit,
                 )  # fmt: skip
+        return ovf
 
     @named_func(name)
     def energy_from_range(
@@ -388,6 +397,7 @@ def make_transport_kernel(real: type, diag: bool):
         c_strag = int(0)
         c_src = int(0)
         c_inv = int(0)
+        c_pieces = int(0)
         code = int(-1)
         alive = int(1)
 
@@ -520,7 +530,8 @@ def make_transport_kernel(real: type, diag: bool):
                     v3(hx, hy, hz), v3(d1x, d1y, d1z), ix, iy, iz, ctl.origin, ctl.spacing, s - leg1
                 )
                 if ctl.trunc_diag == 1 and ctl.mcs == 1 and axis2 >= 0:
-                    # DIAGNOSTIC (T14 negative control, default off): see reference._history
+                    # DIAGNOSTIC (T14 negative control, default off): see reference._history;
+                    # the second-leg boundary is found again with the new direction
                     s_cut = leg1 + leg2
                     e_mid2 = energy_from_range(
                         ln_er, ln_r0, inv_dln_r, ctl.n_r, m, r0 - rho * s_cut / R(20.0)
@@ -545,6 +556,10 @@ def make_transport_kernel(real: type, diag: bool):
                     d1x = nd2[0]
                     d1y = nd2[1]
                     d1z = nd2[2]
+                    leg2, axis2 = F.leg2_limit(
+                        v3(hx, hy, hz), v3(d1x, d1y, d1z), ix, iy, iz, ctl.origin, ctl.spacing,
+                        s - leg1,
+                    )  # fmt: skip
                 nxp = hx + d1x * leg2
                 nyp = hy + d1y * leg2
                 nzp = hz + d1z * leg2
@@ -618,10 +633,10 @@ def make_transport_kernel(real: type, diag: bool):
                 deposit = energy - e_new
 
                 if deposit > zero:
-                    deposit_step(
+                    c_pieces = c_pieces + deposit_step(
                         edep, tally_rows, tid, batch, v3(px, py, pz), v3(ux, uy, uz), leg1,
                         v3(hx, hy, hz), v3(d1x, d1y, d1z), leg2, deposit, s_act, g_origin,
-                        g_spacing, g_inv, g_shape, g_off, ctl.n_grids,
+                        g_spacing, g_inv, g_shape, g_off, ctl.n_grids, ctl.max_pieces,
                     )  # fmt: skip
                     t_step = t_step + wp.float64(deposit)
 
@@ -682,6 +697,7 @@ def make_transport_kernel(real: type, diag: bool):
         counter_rows[tid, 2] = c_strag
         counter_rows[tid, 5] = c_src
         counter_rows[tid, 6] = c_inv
+        counter_rows[tid, 8] = c_pieces
         if with_diag:
             end_state[tid, 0] = px
             end_state[tid, 1] = py
