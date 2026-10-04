@@ -36,13 +36,15 @@ results are evidence only after the frozen criteria of the acceptance plan (e.g.
 evaluated against them. `compare_depth_dose.py` still labels its single-run results exploratory.
 Both scripts record git HEAD of the analysis code and a dirty flag; `--code-sha` must equal HEAD.
 
-## Archived batch results (2026-10-04, analysis code 0d0bb49, clean)
+## Archived batch results (2026-10-04, analysis code a17f47a, clean)
 
 Generated with `compare_batches.py` from the materialized runs listed below (1e5 primaries each,
-seeds 20261003 / 20261004 / 20261005, source commit 0d0bb49 for every case bundle); every consumed
-file was verified against its run manifest. Aggregates only; **not graded** against any frozen
-criterion — these files are the reference side of later evaluations (V3-003B T15, V3-005 E1 and the
+seeds 20261003 / 20261004 / 20261005; every run passed the full-configuration replicate gate and
+the manifest hash verification). Aggregates only; **not graded** against any frozen criterion —
+these files are the reference side of later evaluations (V3-003B T15, V3-005 E1 and the
 S-PHYS-PROTON-EM/-NUCLEAR suites), which must be run and graded against the plan, not read off here.
+An earlier version of the lateral file (analysis code 0d0bb49) used a pedestal-subtracted estimator
+and was superseded; its values are not comparable and are not kept.
 
 - `2026-10-04-proton-150mev-water-depth-dose-batches.json` — 0.5 mm depth bins; TOPAS fine
   (REF-b759e74cd1fcb17cad84-1499c6b5, REF-bd3d07f341ae59e10a94-dec77a96,
@@ -55,13 +57,20 @@ S-PHYS-PROTON-EM/-NUCLEAR suites), which must be run and graded against the plan
   (1.2 mm) is far larger than the seed-to-seed uncertainty and is systematic; the different water
   I-values (Geant4 78 eV, FRED 75 eV, MCsquare unprinted) are one known contribution. No claim is
   made here about which engine is closer to the truth.
-- `2026-10-04-proton-150mev-water-lateral-batches.json` — TOPAS lateral case
-  (REF-c005bde2015f55dfa3ac-d542c739, REF-83114c1459cf799954c6-1c5d7e4d,
-  REF-2e65bdfe7e29fe0d0df3-9b24464b; 6.5-12 min each): 3-D dose on 0.5 mm lateral x 1 mm depth bins,
-  all-particle and primary-generation scorers (filter `OnlyIncludeParticlesOfGeneration = "Primary"`,
-  accepted by TOPAS; primary dose is about 88 % of the total). Sheppard-corrected lateral sigma at
-  z/R80 = 0.5 and 0.9, both for the +-20 mm window (core width) and the full +-60 mm field (second
-  moment including the halo): e.g. primary-only, +-20 mm: 1.70 +- 0.02 mm and 3.59 +- 0.02 mm; the
-  full-field values are 2-3 mm larger because 0.4-2 % of the dose lies outside +-20 mm. The
-  primary-only scorer still contains Geant4's hadron-elastic deflections of primaries, which an
-  EM-only ionmc run lacks (plan clarification 6).
+- `2026-10-04-proton-150mev-water-lateral-batches.json` — two TOPAS groups with 3-D dose on
+  0.5 mm lateral x 1 mm depth bins over the full +-60 mm field, each with an all-particle and a
+  primary-generation scorer (the latter informative only, see plan clarification 8):
+  `topas` = full physics (REF-c005bde2015f55dfa3ac-d542c739, REF-83114c1459cf799954c6-1c5d7e4d,
+  REF-2e65bdfe7e29fe0d0df3-9b24464b; 6.5-12 min each) and `topas-emonly` = electromagnetic modules
+  only, `g4em-standard_opt4`, no hadronic/elastic/decay processes in the TOPAS process listing
+  (REF-de1e8f4142b8b17411fc-747e54b9, REF-104a823447078de5446a-a9ecef08,
+  REF-ad4a98a0c3601c281445-f0a4ffb1; about 6 min each). Lateral sigma is the Sheppard-corrected
+  second moment of the dose profile over the stated window, no pedestal subtraction. Values
+  (mm, mean +- SE over seeds) at z/R80 = 0.5 and 0.9: full physics, all particles, +-20 mm window
+  2.93 +- 0.01 and 4.42 +- 0.01 (full field 5.11 / 6.11); EM-only, all particles, +-20 mm
+  1.154 +- 0.002 and 3.019 +- 0.008 (full field 1.18 / 3.12); EM-only primary-only agrees with
+  EM-only all-particle within the SE, so delta-electron transport is not visible at this
+  precision. The large difference between full physics and EM-only is the nuclear halo (secondary
+  particles) plus hadron-elastic deflection of primaries. R80: EM-only 158.81 +- 0.00 mm versus
+  full physics 158.61 +- 0.01 mm. The EM-only all-particle values are the T15 reference for the
+  EM-only ionmc backends.
