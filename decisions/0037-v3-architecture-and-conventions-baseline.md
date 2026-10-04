@@ -133,9 +133,11 @@ whose arguments are not in these units state the unit in the parameter name
   (≈6e-8 of the running sum) random-walks as √N_add (≈1e-5 at 1e⁴ adds,
   3e-5 at 1e⁵). Integer addition is associative, so int64 fixed-point sums
   are bit-identical across chunk sizes, worker counts and CPU/CUDA within a
-  precision; the quantization error is ≤ q/2 per deposit (random walk
-  ≤ q/2·√N_add ≈ 1.5e-7 MeV at 1e⁵ adds) and the per-batch rounding
-  residual is tallied so the energy balance still closes. Capacity is
+  precision; the quantization error is ≤ q/2 per deposit, i.e. a deterministic
+  worst-case bound of N_add·q/2 per voxel (≈ 4.7e-5 MeV at 1e⁵ adds; the
+  random-walk expectation q/2·√N_add ≈ 1.5e-7 MeV is the typical size), and
+  the per-batch rounding residual is tallied so the energy balance still
+  closes exactly. Capacity is
   guarded fail-closed at validation (n_histories_per_batch·E_max/q < 2⁶²) and
   by a runtime overflow check. The per-batch split is kept for the standard
   error; batch grids are converted to float64 and summed in a fixed order.

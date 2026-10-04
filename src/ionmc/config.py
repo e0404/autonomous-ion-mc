@@ -33,7 +33,7 @@ from ionmc.transport.tally import (
     TRACE_N_DISCRETE,
 )
 
-STRAGGLING_MODELS = ("bohr_gauss_clamped_gamma_v1", "bohr_gamma_v1")
+STRAGGLING_MODELS = ("bohr_gamma_v1", "bohr_gauss_clamped_gamma_v1")
 MCS_MODELS = ("differential_moliere",)
 DELTA_ELECTRON_MODELS = ("local",)
 BACKENDS = ("python", "warp-cpu", "warp-cuda")
@@ -73,7 +73,7 @@ class PhysicsOptions:
     nuclear: bool
     stopping: StoppingSource
     straggling: bool = True
-    straggling_model: str = "bohr_gauss_clamped_gamma_v1"
+    straggling_model: str = "bohr_gamma_v1"
     multiple_scattering: bool = True
     mcs_model: str = "differential_moliere"
     delta_electrons: str = "local"

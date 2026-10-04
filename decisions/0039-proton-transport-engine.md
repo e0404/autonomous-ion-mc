@@ -34,7 +34,7 @@ are deliberately out of scope here.
 | Topic | Candidates | Selected | Rationale |
 |---|---|---|---|
 | Mean energy loss | S(E)·s; range-table inversion | inverse-range telescoping `Rinv(R0) − Rinv(R0 − ρs)` with a linear `S·s` branch when `ρs < 10⁻³ R0` | exact in CSDA, step-size independent, monotone; the short branch avoids float32 cancellation (archived precision measurement) |
-| Straggling | Gaussian only; Vavilov; Gaussian/Gamma/uniform switch (`G4IonFluctuations`); Gaussian-clamped/Gamma (`bohr_gauss_clamped_gamma_v1`) | Bohr variance; Gamma with shape k = (mean/σ)² and scale σ²/mean (Marsaglia–Tsang, `u^(1/k)` boost for k < 1; rejection bounded by 64 attempts, exhaustion increments the fail-closed counter `straggling_rejection`) for mean/σ < 3 and a Gaussian clamped to [0, 2·mean] (no resampling) for mean/σ ≥ 3 | the Gamma branch reproduces the mean and the Bohr variance exactly; the Gaussian branch preserves the mean and reduces the variance by at most about 0.5 % (0.13 % of samples clamped at 0 at mean/σ = 3; the moment test allows 1 %); the `G4IonFluctuations` uniform branch has variance mean²/3 whatever the Bohr value and the truncated Gaussian near mean/σ = 2 loses variance, so they are not used; sum over steps is Gaussian by the central limit theorem; delta electrons are deposited locally so single-step tails do not reach dose |
+| Straggling | Gaussian only; Vavilov; Gaussian/Gamma/uniform switch (`G4IonFluctuations`); Gaussian-clamped/Gamma (`bohr_gauss_clamped_gamma_v1`); Gamma for every ratio (`bohr_gamma_v1`) | **Default (third amendment 2026-10-04) `bohr_gamma_v1`:** Bohr variance sampled as Gamma with shape k = (mean/σ)² and scale σ²/mean for every ratio (Marsaglia–Tsang, `u^(1/k)` boost for k < 1; rejection bounded by 64 attempts, exhaustion increments the fail-closed counter `straggling_rejection`); every sampled loss is capped at the remaining kinetic energy. The earlier switch `bohr_gauss_clamped_gamma_v1` (Gamma for mean/σ < 3, Gaussian clamped to [0, 2·mean] above) remains selectable | the Gamma branch reproduces the mean and the Bohr variance exactly; the Gaussian branch preserves the mean and reduces the variance by at most about 0.5 % (0.13 % of samples clamped at 0 at mean/σ = 3; the moment test allows 1 %); the `G4IonFluctuations` uniform branch has variance mean²/3 whatever the Bohr value and the truncated Gaussian near mean/σ = 2 loses variance, so they are not used; sum over steps is Gaussian by the central limit theorem; delta electrons are deposited locally so single-step tails do not reach dose |
 | Multiple scattering | per-step Highland; Molière; differential Highland (Kanematsu); differential Molière (Gottschalk) | **differential Molière** scattering power `T_dM = f_dM(pv, p₁v₁)(E_s/pv)²/X_S`, `E_s = 15.0 MeV`, `f_dM = 0.5244 + 0.1975 lg(1−(pv/p₁v₁)²) + 0.2320 lg(pv) − 0.0098 lg(pv) lg(1−(pv/p₁v₁)²)` (clamped ≥ 0), scattering length `1/(ρX_S) = α N_A r_e² (Z²/A){2 ln(33219 (AZ)^{-1/3}) − 1}` Bragg-additive, applied as a Gaussian polar angle with a random hinge | step-size independent by construction (per-step Highland is not; a negative-control test proves the instrument has power); ranked best against Hanson theory and measurement in the source paper; the research report's label "differential Highland" for these coefficients was wrong and is corrected |
 | Lateral displacement | explicit correlated sampling; random hinge | random hinge (move `a·s`, deflect, move `(1−a)·s`, `a` uniform) | reproduces the Fermi–Eyges second moments exactly without extra draws |
 | Geometry traversal | `floor(p)` with nudge; incremental DDA | incremental DDA with the voxel index as state and plane snapping on crossing | the nudge variant stalled in the archived toy kernel |
@@ -162,5 +162,24 @@ fail-closed configuration rules.
   float64 Warp-CPU kernel — bit-identical to the reference in T1 — is the
   fallback reference executor if the observation recurs. The anomaly is
   preserved here as unexplained; it is not attributed to the physics.
+- **2026-10-04 (V3-003B) — T9 at full scale: straggling default and deposit
+  apportioning changed.** The frozen T9 probe (1e6 histories, held-out seed
+  base 20271004) failed at s_max = 0.1 mm for the clamped-Gaussian/Gamma
+  sampler (IDD χ² 515 over 163 bins, max|z| 6.4, permutation p at the floor,
+  ΔR80 0.026 mm) and still failed with a Gamma sampler for every ratio
+  (χ² 447, max|z| 5.2, p 0.001) although ΔR80 fell to 0.010 mm; s_max 0.5 mm
+  and f_E 0.005 passed in both cases. The Gamma sampler is adopted as the
+  default (`bohr_gamma_v1`): for a common scale θ = σ²/mean the sum of the
+  per-step losses is exactly Gamma-distributed with additive shape, so the
+  full energy-loss distribution — not only its first two moments — is step
+  independent wherever θ varies slowly along the path, which the R80 result
+  confirms. The remaining deviation is deterministic and comes from
+  apportioning the step deposit uniformly along the path while the stopping
+  power changes by up to ≈ 1.6 % within a 2 %-energy-loss step near the
+  Bragg peak (T9-CI deviations 5e-4 … 1.3e-3, above the ≈ 3e-4 sensitivity
+  of the statistical T9). The deposit is therefore apportioned with a linear
+  stopping-power ramp S(E₀) → S(E₁) along the hinge path (residual second
+  order in the curvature of S). The T9 results before the change are
+  preserved in the validation ledger (VAL-20261004-070915-E1A618).
 
 To be appended from committed result files.

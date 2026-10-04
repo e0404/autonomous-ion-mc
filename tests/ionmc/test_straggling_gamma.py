@@ -1,6 +1,7 @@
 """The straggling model ``bohr_gamma_v1`` (Gamma for every ratio mean / sigma): exact mean and
 variance, positivity, the Gamma skewness, parity of the reference and the kernel, and the option
-plumbing. The default model is unchanged (the stored baseline trace guards that)."""
+plumbing. ``bohr_gamma_v1`` is the default model; the older ``bohr_gauss_clamped_gamma_v1`` stays
+selectable."""
 
 from __future__ import annotations
 
@@ -84,7 +85,7 @@ def test_gamma_model_has_exact_moments_skew_and_is_positive(ratio: float) -> Non
 
 
 def test_default_model_differs_where_it_clamps() -> None:
-    """The default Gaussian-clamped branch (ratio >= 3) has no skew; the Gamma model keeps it."""
+    """The older Gaussian-clamped branch (ratio >= 3) has no skew; the Gamma model keeps it."""
     d = _draw(1.0, 1.0 / 6.0, gamma=False)
     g = _draw(1.0, 1.0 / 6.0, gamma=True)
     skew = lambda x: float(np.mean((x - x.mean()) ** 3) / x.std() ** 3)  # noqa: E731
@@ -122,12 +123,17 @@ def test_reference_and_kernel_follow_the_same_trajectory_with_the_gamma_model(
         )  # fmt: skip
         runs[backend] = Simulation(cfg).run()
     assert compare_traces(runs["python"].diagnostics, runs["warp-cpu"].diagnostics)["pass"]
-    default = Simulation(
+    old = Simulation(
         make_config(
-            energy=30.0, n=6, n_batches=2, seed=4, diagnostics=DiagnosticsOptions(trace_histories=6)
+            energy=30.0,
+            n=6,
+            n_batches=2,
+            seed=4,
+            physics_kwargs={"straggling_model": "bohr_gauss_clamped_gamma_v1"},
+            diagnostics=DiagnosticsOptions(trace_histories=6),
         )  # fmt: skip
     ).run()
-    assert not np.array_equal(default.diagnostics["trace"]["energy_mev"][:50],
+    assert not np.array_equal(old.diagnostics["trace"]["energy_mev"][:50],
                               runs["python"].diagnostics["trace"]["energy_mev"][:50])  # fmt: skip
 
 
@@ -147,3 +153,37 @@ def test_energy_cap_acts_only_when_the_mean_loss_approaches_the_energy(ratio: fl
         frac_cap[mean_over_e] = float((x > 1.0).mean())
     assert frac_cap[0.02] < 3e-7
     assert frac_cap[0.5] >= frac_cap[0.02]
+
+
+def test_transport_domain_pairs_keep_the_energy_cap_negligible() -> None:
+    """The (ratio, mean / E) pairs of the table in docs/physics/em-transport.md, computed with the
+    shared Bohr variance and the Bethe tables: where the mean loss is within the energy-loss step
+    limit (2 % of E) the fraction of draws above E is below 3e-7; r = 0.2 at mean = 0.02 E (not a
+    pair that occurs in transport) exceeds E in about 2e-3 of the draws."""
+    from ionmc.materials import WATER
+    from ionmc.physics.projectiles import PROTON
+    from ionmc.physics.stopping import BetheStoppingSource
+    from ionmc.transport.tables import TransportTables
+
+    tab = TransportTables.from_stopping_tables([BetheStoppingSource().table(WATER, PROTON)])
+    rng = np.random.default_rng(11)
+    n_checked = 0
+    for e_mev in (10.0, 50.0, 150.0):
+        for step_mm in (1.0, 0.1, 0.01, 0.001):
+            mean = tab.stopping_mass(0, e_mev) * step_mm / 10.0
+            var = float(
+                EM.bohr_variance(
+                    wp.float64(e_mev - 0.5 * mean), wp.float64(938.272), wp.float64(1.0),
+                    wp.float64(tab.z_over_a[0]), wp.float64(1.0), wp.float64(step_mm),
+                )
+            )  # fmt: skip
+            ratio = mean / np.sqrt(var)
+            if mean / e_mev <= 0.02:  # within the energy-loss step limit
+                k = ratio**2
+                x = rng.gamma(k, 1.0 / k, size=4_000_000) * mean
+                assert float((x > e_mev).mean()) < 3e-7, (e_mev, step_mm, ratio)
+                n_checked += 1
+    assert n_checked >= 8
+    k = 0.2**2
+    exceed = float((rng.gamma(k, 1.0 / k, size=20_000_000) * 0.02 > 1.0).mean())
+    assert 1e-3 < exceed < 4e-3

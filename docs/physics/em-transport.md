@@ -38,7 +38,8 @@ is
 
 with `K = 0.307075 MeV cm2/mol`, `T_max = 2 m_e c^2 beta^2 gamma^2 / (1 + 2 gamma m_e/M + (m_e/M)^2)`.
 This equals the Geant4 dispersion `2 pi r_e^2 m_e c^2 n_el z^2 x T_max (1/beta^2 - 1/2)`. The loss is
-sampled as follows (ratio `r = mean / sigma`; model identifier `bohr_gauss_clamped_gamma_v1`):
+sampled with the model `bohr_gamma_v1` (the default) or the older `bohr_gauss_clamped_gamma_v1` (selectable with
+`PhysicsOptions.straggling_model`). The older model (ratio `r = mean / sigma`):
 
 * `r < 3`: Gamma distribution with shape `k = r^2` and scale `sigma^2 / mean` (Marsaglia-Tsang; for
   `k < 1` the shape-plus-one sample times `u^(1/k)`), which reproduces the mean and the Bohr variance
@@ -55,21 +56,32 @@ branches and the boundary (4e5 draws per point, three standard errors; the Gauss
 is given the 1 % clamp allowance). The transport-level validation of straggling is the range
 straggling `sigma_R` of the end depths (criterion T6, local validation), which is not part of the CI tests.
 
-Alternative model `bohr_gamma_v1` (selected with `PhysicsOptions.straggling_model`; the default is unchanged):
-a Gamma distribution whose raw sampler has exactly the Bohr mean and variance for every ratio (shape `k = r^2`, scale
-`sigma^2 / mean`, Marsaglia-Tsang), positive everywhere, no clamp and no Gaussian branch. With a common scale
-`theta = sigma^2 / mean = kappa(E) / S(E)` along a path (`kappa` the Bohr dispersion per unit path, `S` the stopping
-power) the sum of Gamma steps is exactly Gamma with the summed shape, so the whole energy-loss distribution - not only
-its first two moments - is independent of the step length wherever `theta` varies slowly; the default model switches
-branch with the step length (Gamma for `r < 3`, Gaussian above), so its higher moments depend on the step. The two
-models are compared by the T9 step (`--straggling-model`); which one becomes the default is decided from that
-comparison.
+Default model `bohr_gamma_v1`: a Gamma distribution whose raw sampler has exactly the Bohr mean and variance for every
+ratio (shape `k = r^2`, scale `sigma^2 / mean`, Marsaglia-Tsang), positive everywhere, no clamp and no Gaussian branch.
+With a common scale `theta = sigma^2 / mean = kappa(E) / S(E)` along a path (`kappa` the Bohr dispersion per unit
+path, `S` the stopping power) the sum of Gamma steps is exactly Gamma with the summed shape, so the whole energy-loss
+distribution - not only its first two moments - is independent of the step length wherever `theta` varies slowly; the
+older model switches branch with the step length (Gamma for `r < 3`, Gaussian above), so its higher moments depend on
+the step. The full-scale T9 comparison of the two models is recorded in decision 0039.
 
-Both models: the exact-moment statements above are those of the raw sampler. In transport every sampled loss is
-capped at the remaining kinetic energy (`loss = min(loss, E)`). For a mean loss at the energy-loss step limit (2 % of
-`E`) the fraction of draws above `E` is below 3e-7 for every ratio (test
-`test_energy_cap_acts_only_when_the_mean_loss_approaches_the_energy`), so the cap only acts in the last step before the
-cutoff, where the mean loss is a large part of `E` and the cap reduces the mean and the variance.
+Both models: the exact-moment statements above are those of the raw sampler. In transport every sampled loss is capped
+at the remaining kinetic energy (`loss = min(loss, E)`). The exceedance probability `P(loss > E)` grows as the ratio
+`r` decreases and as `mean / E` increases: for example `r = 0.2` at `mean = 0.02 E` gives about 2e-3, and the
+demonstrated range of the moment tests is `r >= 0.7`. Which pairs `(r, mean / E)` occur in transport is fixed by the
+physics: `r` scales as the square root of the step length at fixed energy, so small `r` occurs only for very short
+steps, whose mean loss is a tiny fraction of `E`, and the energy-loss step limit keeps `mean / E <= 0.02` except in the
+last step before the cutoff. In water (the offline Bethe tables; test
+`test_transport_domain_pairs_keep_the_energy_cap_negligible`):
+
+| E [MeV] | step 1 mm: r, mean/E | 0.1 mm | 0.01 mm | 0.001 mm |
+|---|---|---|---|---|
+| 10 | 48, 0.45 (beyond the limit: a last step) | 15, 0.045 | 4.8, 4.5e-3 | 1.5, 4.5e-4 |
+| 50 | 13, 0.025 | 4.1, 2.5e-3 | 1.3, 2.5e-4 | 0.41, 2.5e-5 |
+| 150 | 5.4, 3.6e-3 | 1.7, 3.6e-4 | 0.54, 3.6e-5 | 0.17, 3.6e-6 |
+
+With `mean / E <= 0.02` the fraction of draws above `E` is below 3e-7 for every ratio of the table (so the cap acts only
+in the last step before the cutoff, where the mean loss is a large part of `E` and the cap reduces the mean and the
+variance).
 
 ## Multiple Coulomb scattering
 

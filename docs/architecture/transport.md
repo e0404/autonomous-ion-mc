@@ -73,7 +73,7 @@ densities in g/cm3, doses in Gy per primary). All grids use `origin_mm` = corner
   e_cut_mev=2.0, max_step_mm=1.0, max_energy_loss_fraction=0.02, range_alpha=0.2,
   range_rho_f_mm=0.1, short_step_fraction=1e-3, truncated_hinge_diagnostic=False, ...)`: `nuclear` and `stopping` have no default
   (`nuclear=True` is rejected until nuclear interactions exist). Model names are
-  `straggling_model="bohr_gauss_clamped_gamma_v1"`, `mcs_model="differential_moliere"`, `delta_electrons="local"`;
+  `straggling_model="bohr_gamma_v1"` (the older `"bohr_gauss_clamped_gamma_v1"` is selectable), `mcs_model="differential_moliere"`, `delta_electrons="local"`;
   any other string is rejected.
 * `RunOptions(backend, precision, seed, n_histories, n_batches=20, cpu_workers=1,
   max_steps=None, allow_invalid_result=False, worker_timeout_s=None, memory_budget_bytes=2**31,
@@ -119,12 +119,16 @@ counter starting at 0.
    state energy `E` replaces `Rinv(R(E))`, because the round-trip offset of the tables would
    otherwise accumulate step after step along a track; the path independence of the CSDA relation
    is kept since the new energy is a function of the old one only.
-7. Deposit `E_old - E_new` into every scoring grid by track-length apportioning: the deposit is
-   distributed along both hinge legs proportionally to the path length inside each scoring voxel
-   (`piece / s_act` of it per piece), using a per-grid incremental DDA over the leg (`seg_piece`, the
-   transport DDA pattern; no floor-and-nudge); a piece outside a grid is tallied in that grid's `outside`.
-   The energy left at the cutoff is a point deposit at the end point. Each piece is quantized (below).
-   (V3-003A scored the midpoint; with steps comparable to the bin width that aliased with the bin edges.)
+7. Deposit `E_old - E_new` into every scoring grid by track-length apportioning with a linear stopping-power ramp: the
+   deposit density along the hinge path (leg 1 then leg 2, path coordinate `t` in `[0, s_act]`) is
+   `w(t) = S0 + (S1 - S0) t / s_act`, with `S0 = S(E_old)` and `S1 = S(E_new)` from the tables, and a piece
+   `[ta, tb]` inside one scoring voxel receives `ΔE · ∫ w dt / ∫ w dt` over the whole step (so the pieces sum to
+   the deposit); the pieces come from a per-grid incremental DDA over each leg (`seg_piece`, the transport DDA pattern;
+   no floor-and-nudge); a piece outside a grid is tallied in that grid's `outside`. The residual is the curvature of
+   `S` along the step (second order in `s / R`). The energy left at the cutoff is a point deposit at the end point.
+   Each piece is quantized (below). (V3-003A scored the midpoint, V3-003B first the uniform track length: with steps
+   comparable to the bin width the former aliased with the bin edges, the latter left a deterministic step dependence of
+   the depth-dose of order 5e-4 to 1e-3, see the T9-CI test.)
 8. Leaving the geometry tallies the remaining energy as `escaped`. More than three consecutive
    zero-length steps tally the energy as `truncated` and increment `stall`.
 
@@ -269,8 +273,9 @@ of the histories (chunks, workers); counters are int64 sums. The reference backe
 q = 2**-30 MeV (`floor(x / q + 1/2)`, a deterministic function of the piece) and added to an int64 voxel
 accumulator. Integer addition is associative, so the grids are bit-identical for any chunk size and any
 number of workers within a precision (test T13 requires `edep_identical`; the old relative bounds are reported
-as secondary numbers). The rounding error is at most q/2 per piece (a random walk of at most q/2 sqrt(N)
-over N pieces in one voxel) and its sum is tallied per history and grid, so the balance
+as secondary numbers). The rounding error is at most q/2 per piece: the deterministic bound for N pieces in one voxel is N q/2
+(worst case, all roundings of the same sign; the test uses this linear bound), while the expected size of the
+random walk of the roundings is about q/2 sqrt(N) (an expectation, not a bound). Its sum is tallied per history and grid, so the balance
 `in_grid + quantization + outside = step_deposit + cutoff` closes in float64. The conversion to float64
 and the sum over workers happen at the reduction. Capacity: a voxel holds at most `2**62` quanta (about
 `4.3e9` MeV); validation rejects runs whose per-batch energy could reach it, and a voxel at or above it after
@@ -320,6 +325,12 @@ period) and `TransportWorkerError` is raised; no partial result is returned. Scr
   `# exit=` trailer (a timed-out step is killed and archived with `exit=124`); `manifest.txt` lists the steps of the
   run; `summarize.py` verifies everything and writes `summary.json`. Any failed step, missing file or mismatch makes the
   exit status non-zero.
+* **Seed base.** `--seed-base` (default 20271004, the qualification base) is the base of every statistical seed; it is
+  recorded in `environment.txt`, the step documents and the sample metadata. Only an archive made with 20271004 can be
+  `conformant`: one made with the rehearsal base 20261004 (preserved as contrary evidence) or without a recorded base
+  verifies but carries `non_conformant_reasons`. The qualification command is
+  `python validation/scripts/transport/run_suite.py --suite hr --out validation/generated/transport/<new-dir> --expected-sha <sha>`
+  (no seed flag).
 * **Subsets.** `--only STEP ...` runs a subset into its own directory; its summary has `subset: true` and is never
   `conformant`. `summarize.py --combine DIR ... --expected-sha SHA --out FILE` verifies that the directories share the
   suite, SHA, scale and source hashes, that no step is duplicated or missing, and only then writes a combined summary

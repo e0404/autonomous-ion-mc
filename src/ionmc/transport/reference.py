@@ -80,6 +80,15 @@ __all__ = [
 ]
 
 
+def ramp_weight(ta: float, tb: float, s_start: float, s_end: float, s_act: float) -> float:
+    """Fraction of a step's energy deposited between the path coordinates ``ta`` and ``tb`` when the
+    deposit density follows the linear stopping-power ramp ``s_start -> s_end`` along the step.
+    (The same expression, in the same order, as ``ionmc.transport.kernels``.)"""
+    return (s_start * (tb - ta) + (s_end - s_start) * (tb * tb - ta * ta) / (2.0 * s_act)) / (
+        0.5 * (s_start + s_end) * s_act
+    )
+
+
 def run_reference(eff: EffectiveConfig) -> RawTransport:
     """Transport ``n_histories`` primaries with the Python reference loop (float64)."""
     n = eff.requested.run.n_histories
@@ -202,9 +211,16 @@ class _Reference:
         length: float,
         deposit: float,
         s_act: float,
+        t_off: float,
+        s_start: float,
+        s_end: float,
     ) -> None:
-        """Deposit ``deposit * piece / s_act`` in every voxel of grid ``g`` crossed by the straight
-        segment from ``p`` along ``u`` of the given length (per-grid incremental DDA)."""
+        """Deposit the share of ``deposit`` that belongs to each piece in every voxel of grid ``g``
+        crossed by the straight segment from ``p`` along ``u`` of the given length (per-grid
+        incremental DDA). The leg starts at the path coordinate ``t_off`` of the step; the share
+        of a piece ``[ta, tb]`` is the integral of the linear stopping-power ramp
+        ``w(t) = s_start + (s_end - s_start) t / s_act`` over it, divided by the integral over the
+        whole step (the pieces of both legs sum to the deposit)."""
         r, F, V = self.R, self.F, self.V
         nx, ny, nz = self.grids[g].shape
         go, gs = self.g_origin[g], self.g_spacing[g]
@@ -214,12 +230,18 @@ class _Reference:
         uvec = V(r(ux), r(uy), r(uz))
         ix, iy, iz, _inside = F.grid_index(V(r(px), r(py), r(pz)), go, self.g_inv[g], nx, ny, nz)
         remaining = length
+        tcur = t_off
         for _ in range(self.max_pieces):
             if remaining > 0.0:
                 piece_w, axis = F.seg_piece(V(r(px), r(py), r(pz)), uvec, ix, iy, iz, go, gs,
                                             r(remaining))  # fmt: skip
                 piece = float(piece_w)
-                self._deposit_voxel(batch, g, ix, iy, iz, deposit * piece / s_act)
+                tb = tcur + piece
+                self._deposit_voxel(
+                    batch, g, ix, iy, iz,
+                    deposit * ramp_weight(tcur, tb, s_start, s_end, s_act),
+                )  # fmt: skip
+                tcur = tb
                 remaining = remaining - piece
                 if axis >= 0:
                     px = px + ux * piece
@@ -241,7 +263,10 @@ class _Reference:
                         iz = iz + step
         if remaining > 0.0:  # exceeds the validated piece bound: conserve energy, invalidate
             self.counters["scoring_pieces_overflow"] += 1
-            self._deposit_voxel(batch, g, ix, iy, iz, deposit * remaining / s_act)
+            self._deposit_voxel(
+                batch, g, ix, iy, iz,
+                deposit * ramp_weight(tcur, tcur + remaining, s_start, s_end, s_act),
+            )  # fmt: skip
 
     def _deposit_step(
         self,
@@ -254,12 +279,16 @@ class _Reference:
         leg2: float,
         deposit: float,
         s_act: float,
+        s_start: float,
+        s_end: float,
     ) -> None:
-        """Track-length apportioning of a step deposit along both hinge legs in every grid."""
+        """Track-length apportioning of a step deposit along both hinge legs in every grid, with
+        the linear stopping-power ramp from ``s_start`` (energy at the step start) to ``s_end``
+        (energy after the step)."""
         for g in range(len(self.grids)):
             if s_act > 0.0:
-                self._deposit_leg(batch, g, p0, d0, leg1, deposit, s_act)
-                self._deposit_leg(batch, g, hinge, d1, leg2, deposit, s_act)
+                self._deposit_leg(batch, g, p0, d0, leg1, deposit, s_act, 0.0, s_start, s_end)
+                self._deposit_leg(batch, g, hinge, d1, leg2, deposit, s_act, leg1, s_start, s_end)
             else:
                 self._deposit_point_grid(batch, g, p0, deposit)
 
@@ -546,11 +575,12 @@ class _Reference:
             e_new = energy - loss
             deposit = energy - e_new
 
-            # scoring: the deposit is apportioned along both legs by path length in each voxel
+            # scoring: the deposit is apportioned along both legs by the linear stopping-power ramp
+            # integrated over the path inside each voxel
             if deposit > 0.0:
                 self._deposit_step(
                     batch, (px, py, pz), (ux, uy, uz), leg1, (hx, hy, hz), (d1x, d1y, d1z), leg2,
-                    deposit, s_act,
+                    deposit, s_act, s0, self._stopping_range(m, e_new)[0],
                 )  # fmt: skip
                 self.tallies["step_deposit"] += deposit
 

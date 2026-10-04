@@ -34,6 +34,9 @@ from typing import Any
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
+QUALIFICATION_SEED_BASE = 20271004
+"""Only an archive made with this seed base can be conformant; the rehearsal base 20261004 is
+preserved as contrary evidence and never qualifies."""
 IDENTITY_KEYS = ("git_sha", "suite", "scale", "python_parts", "seed_base")
 
 
@@ -182,6 +185,18 @@ def attest(env: dict[str, Any], sha: str) -> dict[str, Any]:
     return result
 
 
+def seed_blockers(seed_base: Any) -> list[str]:
+    """Reasons why an archive's seed base cannot qualify (empty for the qualification base)."""
+    if seed_base is None:
+        return ["seed_base not recorded in environment.txt"]
+    if int(seed_base) != QUALIFICATION_SEED_BASE:
+        return [
+            f"seed_base {int(seed_base)} is not the qualification base {QUALIFICATION_SEED_BASE} "
+            "(the rehearsal base 20261004 is contrary evidence, never a qualification)"
+        ]
+    return []
+
+
 def source_ok(env: dict[str, Any], attestation: dict[str, Any] | None) -> bool:
     clean = env.get("tree_dirty") == "no" and str(env.get("sha_source", "")).startswith("git")
     return bool(clean or (attestation and attestation.get("valid")))
@@ -224,12 +239,15 @@ def verify(d: Path, sha: str, attest_sha: str | None = None) -> dict[str, Any]:
     attestation = attest(env, attest_sha) if attest_sha else None
     ok = not problems and all(s["pass"] for s in steps.values())
     src_ok = source_ok(env, attestation)
+    blockers = seed_blockers(env.get("seed_base"))
     return {
         "git_sha": sha,
         "suite": suite,
         "pass": ok,
         "subset": subset,
-        "conformant": bool(ok and not subset and not reduced and src_ok),
+        "conformant": bool(ok and not subset and not reduced and src_ok and not blockers),
+        "non_conformant_reasons": blockers,
+        "seed_base": env.get("seed_base"),
         "reduced_history_counts": reduced,
         "tree_dirty": env.get("tree_dirty"),
         "sha_source": env.get("sha_source"),
@@ -276,7 +294,13 @@ def combine(dirs: list[Path], sha: str, attest_sha: str | None = None) -> dict[s
         "suite": suite,
         "pass": ok,
         "complete": not missing and not problems,
-        "conformant": bool(ok and not reduced and all(p["source_ok"] for p in parts)),
+        "conformant": bool(
+            ok
+            and not reduced
+            and all(p["source_ok"] for p in parts)
+            and all(not p["non_conformant_reasons"] for p in parts)
+        ),
+        "non_conformant_reasons": sorted({r for p in parts for r in p["non_conformant_reasons"]}),
         "reduced_history_counts": reduced,
         "problems": problems,
         "missing_steps": missing,

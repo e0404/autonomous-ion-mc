@@ -14,7 +14,7 @@ production float32 Warp CPU backend unless stated, and the helpers of
 ``ionmc.transport.parity`` and ``ionmc.transport.mcs_checks`` that the tests use.
 
 Seeds: every statistical step derives all its seeds deterministically from one
-``--seed-base`` (default 20261004, the rehearsal):
+``--seed-base`` (default 20271004, the qualification base; the rehearsal used 20261004):
   T12 samples ``base + 1000 k`` (k = 1 python, 2 cpu32, 3 cpu64, 4 cuda32);
   T9 ``base + i`` (i-th case); T8 ``base + i`` (theta) and ``base + 10 + i`` (sigma);
   T14 ``base + i`` (theta), ``base + 100 + i`` (sigma), ``base + 1000`` (control);
@@ -127,7 +127,7 @@ def run_cfg(
     chunk: int | None = None,
     trunc_diag: bool = False,
     memory_budget: int | None = None,
-    straggling_model: str = "bohr_gauss_clamped_gamma_v1",
+    straggling_model: str = "bohr_gamma_v1",
 ) -> Result:
     kw = {"chunk_histories": chunk} if chunk else {}
     plan = plan_workers(
@@ -172,7 +172,7 @@ def finish(doc: dict[str, Any], frozen_n: int | None, n: int | None) -> int:
     return emit(doc)
 
 
-DEFAULT_SEED_BASE = 20261004
+DEFAULT_SEED_BASE = 20271004  # the qualification base; the rehearsal used 20261004
 SEED_BASE = DEFAULT_SEED_BASE
 
 
@@ -1125,7 +1125,8 @@ def step_t14(a: argparse.Namespace) -> int:
 # -- T9 ------------------------------------------------------------------------------------------
 def step_t9(a: argparse.Namespace) -> int:
     """T9; ``--physics`` selects a diagnostic variant (``no-straggling``, ``no-mcs``; not part of
-    the suites) and ``--straggling-model`` the sampler (``bohr_gamma_v1`` for the comparison)."""
+    the suites) and ``--straggling-model`` the sampler (default ``bohr_gamma_v1``; the old
+    ``bohr_gauss_clamped_gamma_v1`` for the comparison)."""
     mcs, straggling = a.physics != "no-mcs", a.physics != "no-straggling"
     e = 150.0
     depth = 1.3 * r_csda_mm(e)
@@ -1319,7 +1320,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     ap.add_argument(
         "--straggling-model",
-        default="bohr_gauss_clamped_gamma_v1",
+        default="bohr_gamma_v1",
         help="t9: straggling sampler (bohr_gauss_clamped_gamma_v1 or bohr_gamma_v1)",
     )
     ap.add_argument("--part", default="1/1", help="t12-python-sample: history range i/n")

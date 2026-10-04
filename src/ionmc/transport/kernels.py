@@ -170,6 +170,14 @@ def make_kernel_support(real: type) -> SimpleNamespace:
             )
 
     @named_func(name)
+    def ramp_weight(ta: D, tb: D, s_start: D, s_end: D, s_act: D) -> D:
+        """Fraction of a step's energy between the path coordinates ``ta`` and ``tb`` for the linear
+        stopping-power ramp ``s_start -> s_end`` (as ``reference.ramp_weight``)."""
+        return (
+            s_start * (tb - ta) + (s_end - s_start) * (tb * tb - ta * ta) / (D(2.0) * s_act)
+        ) / (D(0.5) * (s_start + s_end) * s_act)
+
+    @named_func(name)
     def deposit_leg(
         edep: wp.array2d(dtype=wp.int64),
         tally_rows: wp.array2d(dtype=wp.float64),
@@ -185,6 +193,9 @@ def make_kernel_support(real: type) -> SimpleNamespace:
         length: R,
         deposit: D,
         s_act: R,
+        t_off: D,
+        s_start: D,
+        s_end: D,
         g_origin: wp.array2d(dtype=R),
         g_spacing: wp.array2d(dtype=R),
         g_inv: wp.array2d(dtype=R),
@@ -193,9 +204,9 @@ def make_kernel_support(real: type) -> SimpleNamespace:
         n_grids: int,
         max_pieces: int,
     ) -> int:
-        """Deposit ``deposit * piece / s_act`` in every voxel of grid ``g`` crossed by the straight
-        segment from ``p0`` along ``u`` (per-grid incremental DDA, ``seg_piece``); returns 1 if
-        the walk exceeded ``max_pieces`` (the remainder goes to the last voxel)."""
+        """Deposit the ramp-weighted share of ``deposit`` in every voxel of grid ``g`` crossed by
+        the straight segment from ``p0`` along ``u`` (per-grid incremental DDA, ``seg_piece``);
+        returns 1 if the walk exceeded ``max_pieces`` (the remainder goes to the last voxel)."""
         go = v3(g_origin[g, 0], g_origin[g, 1], g_origin[g, 2])
         gs = v3(g_spacing[g, 0], g_spacing[g, 1], g_spacing[g, 2])
         gi = v3(g_inv[g, 0], g_inv[g, 1], g_inv[g, 2])
@@ -209,13 +220,16 @@ def make_kernel_support(real: type) -> SimpleNamespace:
         uvec = v3(ux, uy, uz)
         ix, iy, iz, inside0 = F.grid_index(v3(px, py, pz), go, gi, nxg, nyg, nzg)
         remaining = R(length)
+        tcur = D(t_off)
         for _it in range(max_pieces):
             if remaining > R(0.0):
                 piece, axis = F.seg_piece(v3(px, py, pz), uvec, ix, iy, iz, go, gs, remaining)
+                tb = tcur + D(piece)
                 deposit_voxel(
                     edep, tally_rows, tid, batch, g, ix, iy, iz, nxg, nyg, nzg, off, n_grids,
-                    deposit * D(piece) / D(s_act),
+                    deposit * ramp_weight(tcur, tb, s_start, s_end, D(s_act)),
                 )  # fmt: skip
+                tcur = tb
                 remaining = remaining - piece
                 if axis >= 0:
                     px = px + ux * piece
@@ -245,7 +259,7 @@ def make_kernel_support(real: type) -> SimpleNamespace:
             overflow = 1
             deposit_voxel(
                 edep, tally_rows, tid, batch, g, ix, iy, iz, nxg, nyg, nzg, off, n_grids,
-                deposit * D(remaining) / D(s_act),
+                deposit * ramp_weight(tcur, tcur + D(remaining), s_start, s_end, D(s_act)),
             )  # fmt: skip
         return overflow
 
@@ -263,6 +277,8 @@ def make_kernel_support(real: type) -> SimpleNamespace:
         leg2: R,
         deposit: D,
         s_act: R,
+        s_start: D,
+        s_end: D,
         g_origin: wp.array2d(dtype=R),
         g_spacing: wp.array2d(dtype=R),
         g_inv: wp.array2d(dtype=R),
@@ -278,13 +294,13 @@ def make_kernel_support(real: type) -> SimpleNamespace:
             if s_act > R(0.0):
                 ovf = ovf + deposit_leg(
                     edep, tally_rows, tid, batch, g, p0[0], p0[1], p0[2], d0[0], d0[1], d0[2],
-                    leg1, deposit, s_act, g_origin, g_spacing, g_inv, g_shape, g_off, n_grids,
-                    max_pieces,
+                    leg1, deposit, s_act, D(0.0), s_start, s_end, g_origin, g_spacing, g_inv,
+                    g_shape, g_off, n_grids, max_pieces,
                 )  # fmt: skip
                 ovf = ovf + deposit_leg(
                     edep, tally_rows, tid, batch, g, hinge[0], hinge[1], hinge[2], d1[0], d1[1],
-                    d1[2], leg2, deposit, s_act, g_origin, g_spacing, g_inv, g_shape, g_off,
-                    n_grids, max_pieces,
+                    d1[2], leg2, deposit, s_act, D(leg1), s_start, s_end, g_origin, g_spacing,
+                    g_inv, g_shape, g_off, n_grids, max_pieces,
                 )  # fmt: skip
             else:
                 go = v3(g_origin[g, 0], g_origin[g, 1], g_origin[g, 2])
@@ -664,10 +680,12 @@ def make_transport_kernel(real: type, diag: bool):
                 deposit = energy - e_new
 
                 if deposit > zd:
+                    ie, fe = FD.log_bin_index(e_new, ln_e0[m], inv_dln_e[m], ctl.n_e)
+                    s_end_pw = FD.interp_exp(ln_s[m, ie], ln_s[m, ie + 1], fe)
                     c_pieces = c_pieces + deposit_step(
                         edep, tally_rows, tid, batch, v3(px, py, pz), v3(ux, uy, uz), leg1,
-                        v3(hx, hy, hz), v3(d1x, d1y, d1z), leg2, deposit, s_act, g_origin,
-                        g_spacing, g_inv, g_shape, g_off, ctl.n_grids, ctl.max_pieces,
+                        v3(hx, hy, hz), v3(d1x, d1y, d1z), leg2, deposit, s_act, s0, s_end_pw,
+                        g_origin, g_spacing, g_inv, g_shape, g_off, ctl.n_grids, ctl.max_pieces,
                     )  # fmt: skip
                     t_step = t_step + wp.float64(deposit)
 

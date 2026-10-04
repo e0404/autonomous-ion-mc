@@ -5,7 +5,12 @@ Usage (argv only, no shell; the host runner executes exactly this)::
     python validation/scripts/transport/run_suite.py --suite {lv,hr} \
         --out validation/generated/transport/<new-dir> --expected-sha <40 hex> \
         [--workers N|auto] [--step-timeout SECONDS] [--scale F] [--python-parts N] \
-        [--only STEP ...] [--import-dirs DIR ...]
+        [--only STEP ...] [--import-dirs DIR ...] [--seed-base INT]
+
+The qualification command needs no seed flag: the default ``--seed-base`` is the qualification base
+20271004 (a run with the rehearsal base 20261004 is archived but never conformant)::
+
+    python validation/scripts/transport/run_suite.py --suite hr --expected-sha <sha> --out <new-dir>
 
 Rules (the style of ``validation/scripts/warp-architecture/run_all.sh``):
 
@@ -60,7 +65,9 @@ SOURCE_FILES = ("pyproject.toml", "uv.lock", "validation/plans/v3-003-acceptance
 """Every tracked file that defines what is executed and judged (code, tests and fixtures, the
 project definition, the lock file and the frozen acceptance plan)."""
 DEFAULT_PYTHON_PARTS = 2
-DEFAULT_SEED_BASE = 20261004
+QUALIFICATION_SEED_BASE = 20271004
+REHEARSAL_SEED_BASE = 20261004
+DEFAULT_SEED_BASE = QUALIFICATION_SEED_BASE
 
 
 def pytest_cmd(*targets: str, marker: str | None = None) -> list[str]:
@@ -313,7 +320,8 @@ def main(argv: list[str] | None = None) -> int:
         "--seed-base",
         type=int,
         default=DEFAULT_SEED_BASE,
-        help="base of all statistical seeds (default: the rehearsal's); recorded in the archive",
+        help="base of all statistical seeds (default: the qualification base 20271004; the "
+        "rehearsal base 20261004 gives a non-conformant archive); recorded in the archive",
     )
     ap.add_argument(
         "--only",
