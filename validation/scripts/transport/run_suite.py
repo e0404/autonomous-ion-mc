@@ -193,6 +193,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--workers", type=int, default=os.cpu_count() or 1)
     ap.add_argument("--step-timeout", type=int, default=1500)
     ap.add_argument(
+        "--only",
+        nargs="+",
+        metavar="STEP",
+        help="run only these steps (full name or two-digit prefix) into this output directory; "
+        "the manifest lists just them (split a long suite over several output directories)",
+    )
+    ap.add_argument(
         "--scale",
         type=float,
         default=1.0,
@@ -209,9 +216,16 @@ def main(argv: list[str] | None = None) -> int:
     if out.exists():
         raise SystemExit(f"refusing to reuse an existing results directory: {out}")
     sha, source = resolve_sha(args.expected_sha)
+    steps = suite_steps(args.suite, args.workers, args.scale)
+    if args.only:
+        keep = [x for x in steps if any(x[0] == o or x[0].startswith(f"{o}-") for o in args.only)]
+        if len(keep) != len(set(args.only)):
+            raise SystemExit(
+                f"--only {args.only} does not select exactly those steps of {args.suite}"
+            )
+        steps = keep
     out.mkdir(parents=True)
     (out / "environment.txt").write_text(environment_text(sha, source, args, args.workers))
-    steps = suite_steps(args.suite, args.workers, args.scale)
     (out / "manifest.txt").write_text("".join(f"{name}\n" for name, _, _ in steps))
     env_base = dict(os.environ)
     env_base.setdefault("WARP_CACHE_PATH", str(out / "warp-cache"))

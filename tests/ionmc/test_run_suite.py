@@ -127,3 +127,11 @@ def test_suite_manifests_are_fixed(suite: str) -> None:
         assert "cuda32" in " ".join(" ".join(s[1]) for s in steps)
     else:
         assert any("t14" in n for n in names) and any("t1-" in n for n in names)
+
+
+def test_only_selects_steps_or_fails_before_creating_anything() -> None:
+    out = REPO / "validation" / "generated" / "transport" / "test-only"
+    assert not out.exists()
+    r = _run("--suite", "lv", "--out", str(out), "--expected-sha", _head(), "--workers", "2",
+             "--only", "99")  # fmt: skip
+    assert r.returncode != 0 and "does not select" in r.stderr and not out.exists()
