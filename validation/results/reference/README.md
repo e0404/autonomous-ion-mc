@@ -1,10 +1,13 @@
 # Reference-engine comparison results
 
-Aggregate metrics only (no dose curves), produced by
-`validation/scripts/reference/compare_depth_dose.py` from materialized runs. Every consumed file
-(and `inputs/case.json`) is verified against `transfer-manifest.json` (size and sha256) before
-analysis, and the file hashes recorded in the JSON are the digests of the bytes actually read.
-Raw engine outputs remain archived by the controlled reference service.
+Aggregate metrics only (no dose curves), produced from materialized runs by
+`validation/scripts/reference/compare_depth_dose.py` (single-run exploratory files) and
+`validation/scripts/reference/compare_batches.py` (batch files). Every consumed file (engine
+outputs, `inputs/case.json`, native inputs, `request.json`, `stdout.txt`) is verified against
+`transfer-manifest.json` (size and sha256) before analysis; the `output_sha256` fields recorded in
+the JSON are the digests of the engine output bytes actually read, and the manifest itself carries
+the digests of the remaining consumed files. Raw engine outputs remain archived by the controlled
+reference service.
 
 ## Evidence status
 
