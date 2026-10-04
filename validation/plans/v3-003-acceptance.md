@@ -94,3 +94,14 @@ primary-generation scorer — the residual difference is Geant4's hadron-elastic
 primaries, which ionmc lacks until V3-005 and which is therefore part of the measured deviation,
 not an allowance; the all-particle scorer is the T15 reference once nuclear interactions exist
 (V3-005). Tolerances are unchanged.
+
+⁸ Correction of clarification ⁶ (2026-10-04, task V3-010B, after Codex review REVIEW-87d6aaa0e15a4866916dfefac62485c4
+and before any T15 grading): the primary-generation-filtered TOPAS scorer excludes dose deposited by
+electromagnetic secondaries (delta electrons), whereas ionmc deposits the entire electronic energy
+loss locally — a different observable. The T15 reference for EM-only backends is therefore a
+matched EM-only, all-particle TOPAS run (electromagnetic physics modules only, same geometry,
+scorers and seeds: case `topas/proton-water-150mev-lateral-emonly`); the generation-filtered scorer
+of the all-physics lateral case is informative only. The remaining known difference between that
+reference and ionmc is Geant4's transport of delta electrons above its production cut versus local
+deposition; it is part of the measured deviation, not an allowance. The all-physics, all-particle
+scorer is the T15 reference once nuclear interactions exist (V3-005). Tolerances are unchanged.

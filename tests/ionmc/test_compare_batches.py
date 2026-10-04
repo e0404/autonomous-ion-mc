@@ -29,8 +29,36 @@ def _amp(z: np.ndarray, r: float) -> np.ndarray:
     return np.where(z <= r - 2, 1 + 0.01 * z, np.clip((r + 2 - z) / 4.0, 0, None) * (1 + 0.01 * r))
 
 
-def _write(tmp: Path, engine: str, files: dict[str, bytes], case: dict, run_id: str) -> Path:
-    files = {**files, "inputs/case.json": json.dumps(case).encode()}
+ENGINE_ID = {"engine": "topas", "version": "OpenTOPAS 4.3", "mounts": [{"sha256": "aa"}]}
+
+
+def _write(
+    tmp: Path,
+    engine: str,
+    files: dict[str, bytes],
+    case: dict,
+    run_id: str,
+    *,
+    stdout: str,
+    identity: dict | None = None,
+) -> Path:
+    files = {**files, "inputs/case.json": json.dumps(case).encode(), "stdout.txt": stdout.encode()}
+    request = {
+        "case": case,
+        "code_sha": "abc",
+        "dirty": False,
+        "engine": identity or {**ENGINE_ID, "engine": engine},
+        "gpu": False,
+        "os_release_sha256": "o",
+        "runner_source_sha256": "r",
+        "sandbox_binary_sha256": "s",
+        "input_files": {
+            rel[len("inputs/") :]: {"sha256": hashlib.sha256(b).hexdigest()}
+            for rel, b in files.items()
+            if rel.startswith("inputs/")
+        },
+    }
+    files["request.json"] = json.dumps(request).encode()
     for rel, blob in files.items():
         p = tmp / rel
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -59,6 +87,11 @@ def topas_run(
     lateral: bool = True,
     idd_wrong: bool = False,
     primary: bool | str = False,
+    modules: str = 'sv:Ph/Default/Modules = 2 "g4em-standard_opt4" "g4h-phy_QGSP_BIC_HP"',
+    native_histories: int | None = None,
+    stdout_histories: int | None = None,
+    lateral_bins: str = "0.5",
+    identity: dict | None = None,
 ) -> Path:
     z1 = (np.arange(NZ) + 0.5) * 1.0
     amp = _amp(z1, range_mm)
@@ -82,7 +115,11 @@ def topas_run(
     )
     files = {
         "work/idd_dose.csv": csv.encode(),
-        "inputs/input.txt": f"i:Ts/Seed = {native_seed or seed}\n".encode(),
+        "inputs/input.txt": (
+            f"i:Ts/Seed = {native_seed or seed}\n{modules}\n"
+            f"i:So/Beam/NumberOfHistoriesInRun = {native_histories or histories}\n"
+            f"i:Sc/Dose3D/XBins = {lateral_bins}\n"
+        ).encode(),
     }
     if lateral:
         files["work/dose3d.bin"] = d3.astype("<f8").ravel(order="F").tobytes()
@@ -93,7 +130,8 @@ def topas_run(
         files["work/dose3d_primary.bin"] = d3p.astype("<f8").ravel(order="F").tobytes()
         files["work/dose3d_primary.binheader"] = hdr.encode()
     case = {"histories": histories, "input": "input.txt", "seeds": [seed]}
-    return _write(tmp, "topas", files, case, f"REF-topas-{seed}")
+    out = f"Particle source Beam: Total number of histories: {stdout_histories or histories}\n"
+    return _write(tmp, "topas", files, case, f"REF-topas-{seed}", stdout=out, identity=identity)
 
 
 def fred_run(tmp: Path, seed: int) -> Path:
@@ -107,14 +145,18 @@ def fred_run(tmp: Path, seed: int) -> Path:
         "histories": 100_000,
         "input": "fred.inp",
         "seeds": [seed],
-        "arguments": ["-rseed", str(seed)],
+        "arguments": ["-nprim", "100000", "-rseed", str(seed)],
     }
     return _write(
         tmp,
         "fred",
-        {"work/out/score/Phantom.Dose.mhd": head + arr.tobytes(), "inputs/fred.inp": b"x\n"},
+        {
+            "work/out/score/Phantom.Dose.mhd": head + arr.tobytes(),
+            "inputs/fred.inp": b"nprim = 100000\n",
+        },
         case,
         f"REF-fred-{seed}",
+        stdout="Num of primaries to deliver: 100000\n",
     )
 
 
@@ -207,6 +249,45 @@ def test_mismatched_runs_fail(tmp_path: Path) -> None:
     # same run directory twice (distinct seeds impossible)
     with pytest.raises(mod.BatchError):
         mod.batch_analysis([a, a])
+
+
+def test_replicate_gate_rejects_any_config_difference(tmp_path: Path) -> None:
+    mod = _load()
+    a = topas_run(tmp_path / "a", 1)
+    ok = topas_run(tmp_path / "ok", 2)
+    assert mod.batch_analysis([a, ok])["evidence_status"] == "batched"
+    cases = {
+        "lateral binning": dict(lateral_bins="0.25"),
+        "physics line": dict(modules='sv:Ph/Default/Modules = 1 "g4h-phy_QGSP_BIC_HP"'),
+        "engine identity": dict(identity={**ENGINE_ID, "version": "other"}),
+    }
+    for name, kw in cases.items():
+        bad = topas_run(tmp_path / name.replace(" ", "_"), 3, **kw)
+        with pytest.raises(mod.BatchError, match="differ"):
+            mod.batch_analysis([a, bad])
+        with pytest.raises(SystemExit):
+            mod.main(["--runs", str(a), str(bad), "--output", str(tmp_path / "o.json")])
+        assert not (tmp_path / "o.json").exists()
+    # native-input histories or engine summary disagree with the declared histories
+    with pytest.raises(mod.BatchError, match="native input histories"):
+        mod.batch_analysis([a, topas_run(tmp_path / "nh", 4, native_histories=99_999)])
+    with pytest.raises(mod.BatchError, match="run summary"):
+        mod.batch_analysis([a, topas_run(tmp_path / "sh", 5, stdout_histories=1000)])
+    # engine summary of a run with different histories (declared consistently) also differs
+    with pytest.raises(mod.BatchError, match="histories"):
+        mod.batch_analysis([a, topas_run(tmp_path / "dh", 6, histories=200_000)])
+
+
+def test_emonly_topas_is_its_own_group(tmp_path: Path) -> None:
+    mod = _load()
+    em = 'sv:Ph/Default/Modules = 1 "g4em-standard_opt4"'
+    full = [topas_run(tmp_path / f"f{i}", 10 + i) for i in range(2)]
+    emo = [topas_run(tmp_path / f"e{i}", 20 + i, modules=em) for i in range(2)]
+    # mixing physics in one call is fine as separate groups only if each group is a valid batch
+    doc = mod.batch_analysis(full + emo)
+    assert set(doc["engines"]) == {"topas", "topas-emonly"}
+    with pytest.raises(mod.BatchError, match="at least 2"):
+        mod.batch_analysis([*full, emo[0]])
 
 
 def test_dose3d_must_reproduce_idd(tmp_path: Path) -> None:

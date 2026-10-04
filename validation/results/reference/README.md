@@ -28,7 +28,10 @@ Evidence-grade runs use several seeded runs per engine (committed `-fine`, `-fin
 manifested `inputs/case.json`, requires at least 2 runs per engine with distinct seeds (otherwise
 exit non-zero, no exploratory fallback) and writes per-engine mean, sample SD, standard error and
 95 % t-interval of R80, peak depth, R90, the distal 80-20 width and (TOPAS lateral case)
-the Sheppard-corrected lateral sigma at z/R80 = 0.5 and 0.9. Its status `batched` is not a grade:
+the Sheppard-corrected lateral sigma (second moment of the dose profile, no pedestal
+subtraction; full field and +-20 mm window) at z/R80 = 0.5 and 0.9. Replicates must share the
+complete executed configuration except the seed (engine identity, case, normalized native input,
+auxiliary inputs, histories; see the case README). Its status `batched` is not a grade:
 results are evidence only after the frozen criteria of the acceptance plan (e.g. T15) have been
 evaluated against them. `compare_depth_dose.py` still labels its single-run results exploratory.
 Both scripts record git HEAD of the analysis code and a dirty flag; `--code-sha` must equal HEAD.

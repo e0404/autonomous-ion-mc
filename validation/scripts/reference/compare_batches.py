@@ -23,6 +23,7 @@ dirty flag; --code-sha, if given, must equal HEAD.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import itertools
 import json
 import math
@@ -179,6 +180,124 @@ def run_seed(run: ReferenceRun) -> int:
     return seed
 
 
+_SEED_LINE = {
+    "topas": re.compile(r"^[ \t]*i:Ts/Seed[ \t]*=.*(?:\n|$)", re.M),
+    "mcsquare": re.compile(r"^[ \t]*RNG_Seed[ \t].*(?:\n|$)", re.M),
+}
+_NATIVE_HISTORIES = {
+    "topas": re.compile(r"^[ \t]*i:So/Beam/NumberOfHistoriesInRun[ \t]*=[ \t]*(\d+)[ \t]*$", re.M),
+    "mcsquare": re.compile(r"^[ \t]*Num_Primaries[ \t]+(\d+)[ \t]*$", re.M),
+    "fred": re.compile(r"^[ \t]*nprim[ \t]*=[ \t]*(\d+)[ \t]*$", re.M),
+}
+_STDOUT_HISTORIES = {
+    "topas": re.compile(r"Particle source Beam: Total number of histories: (\d+)"),
+    "mcsquare": re.compile(r"Nbr primaries simulated: (\d+)"),
+    "fred": re.compile(r"Num of primaries to deliver: (\d+)"),
+}
+_IDENTITY_KEYS = (
+    "engine",
+    "os_release_sha256",
+    "runner_source_sha256",
+    "sandbox_binary_sha256",
+    "gpu",
+    "dirty",
+)
+# case.json fields allowed to differ between seed variants: the seed list and the rationale text
+_CASE_SEED_FIELDS = ("seeds", "rationale")
+
+
+def _sha(blob: bytes) -> str:
+    return hashlib.sha256(blob).hexdigest()
+
+
+def _strip_rseed(args: list[Any]) -> list[Any]:
+    out: list[Any] = []
+    skip = False
+    for a in args:
+        if skip:
+            skip = False
+        elif a == "-rseed":
+            skip = True
+        else:
+            out.append(a)
+    return out
+
+
+def run_fingerprint(run: ReferenceRun) -> dict[str, Any]:
+    """Everything that defines the executed configuration except the seed (fail closed).
+
+    Returns the normalized-input hash, the hashes of all other manifested inputs, the engine and
+    runtime identity from request.json, and the label of the replicate group. Declared histories
+    are cross-checked against the native input, FRED's -nprim and the engine's own run summary.
+    """
+    name = run.case.get("input")
+    if not isinstance(name, str):
+        raise BatchError(f"{run.run_id}: case.json has no input file name")
+    rel = f"inputs/{name}"
+    try:
+        native = read_verified(run, rel).decode("utf-8", errors="replace")
+        aux = {
+            r: _sha(read_verified(run, r))
+            for r in sorted(run.files)
+            if r.startswith("inputs/") and r not in ("inputs/case.json", rel)
+        }
+        stdout = read_verified(run, "stdout.txt").decode("utf-8", errors="replace")
+    except RunError as exc:
+        raise BatchError(str(exc)) from exc
+    if not run.request:
+        raise BatchError(f"{run.run_id}: request.json missing (engine identity unknown)")
+    if run.engine not in _NATIVE_HISTORIES:
+        raise BatchError(f"{run.run_id}: unsupported engine {run.engine!r}")
+    # histories: declared == native input == run summary
+    declared = run.histories
+    found = [int(m) for m in _NATIVE_HISTORIES[run.engine].findall(native)]
+    if found != [declared]:
+        raise BatchError(f"{run.run_id}: native input histories {found} != declared {declared}")
+    args = [str(a) for a in run.case.get("arguments", [])]
+    if "-nprim" in args and args[args.index("-nprim") + 1 : args.index("-nprim") + 2] != [
+        str(declared)
+    ]:
+        raise BatchError(f"{run.run_id}: -nprim argument != declared histories {declared}")
+    summary = [int(m) for m in _STDOUT_HISTORIES[run.engine].findall(stdout)]
+    if declared not in summary or any(v != declared for v in summary if v != 0):
+        raise BatchError(f"{run.run_id}: engine run summary histories {summary} != {declared}")
+    # request.json must describe exactly the manifested inputs
+    if run.request.get("case") != run.case:
+        raise BatchError(f"{run.run_id}: request.json case differs from inputs/case.json")
+    for fname, meta in run.request.get("input_files", {}).items():
+        entry = run.files.get(f"inputs/{fname}")
+        if not entry or entry.get("sha256") != meta.get("sha256"):
+            raise BatchError(f"{run.run_id}: request.json input {fname} != manifested file")
+    if run.request.get("dirty") is not False or run.request.get("code_sha") != run.source_sha:
+        raise BatchError(f"{run.run_id}: run not made from a clean commit == source_sha")
+    # seed-free normalization
+    if run.engine in _SEED_LINE:
+        native = _SEED_LINE[run.engine].sub("", native)
+    case = {k: v for k, v in run.case.items() if k not in _CASE_SEED_FIELDS}
+    case["arguments"] = _strip_rseed(list(case.get("arguments", [])))
+    identity = {k: run.request.get(k) for k in _IDENTITY_KEYS}
+    if identity["engine"] is None:
+        raise BatchError(f"{run.run_id}: request.json lacks the engine identity")
+    parts = {
+        "case_sha256": _sha(json.dumps(case, sort_keys=True).encode()),
+        "native_normalized_sha256": _sha(native.encode()),
+        "aux_inputs_sha256": aux,
+    }
+    label = run.engine
+    if run.engine == "topas":
+        mods = re.findall(r"^[ \t]*sv:Ph/Default/Modules[ \t]*=.*$", native, re.M)
+        if len(mods) != 1:
+            raise BatchError(f"{run.run_id}: expected exactly one Ph/Default/Modules line")
+        if "g4h-" not in mods[0] and "g4ion" not in mods[0]:
+            label = "topas-emonly"
+    return {
+        "group": label,
+        "config_sha256": _sha(json.dumps(parts, sort_keys=True).encode()),
+        "config_parts": parts,
+        "identity_sha256": _sha(json.dumps(identity, sort_keys=True).encode()),
+    }
+
+
 def analyse_run(run: ReferenceRun) -> dict[str, Any]:
     dd = depth_dose(run)
     curve = normalize_to_peak(dd.dose)
@@ -188,6 +307,7 @@ def analyse_run(run: ReferenceRun) -> dict[str, Any]:
         "engine": run.engine,
         "source_sha": run.source_sha,
         "case_input": run.case.get("input"),
+        **run_fingerprint(run),
         "seed": run_seed(run),
         "histories": dd.histories,
         "bin_width_mm": bin_mm,
@@ -225,10 +345,19 @@ def validate_group(engine: str, recs: list[dict[str, Any]]) -> None:
     ids = [r["run_id"] for r in recs]
     if len(set(ids)) != len(ids):
         raise BatchError(f"engine {engine}: the same run given more than once")
-    for key in ("source_sha", "case_input", "histories", "bin_width_mm"):
+    for key in ("source_sha", "case_input", "histories", "bin_width_mm", "identity_sha256"):
         vals = {r[key] for r in recs}
         if len(vals) != 1:
             raise BatchError(f"engine {engine}: runs differ in {key}: {sorted(map(str, vals))}")
+    if len({r["config_sha256"] for r in recs}) != 1:
+        diff = sorted(
+            part
+            for part in recs[0]["config_parts"]
+            if len({json.dumps(r["config_parts"][part], sort_keys=True) for r in recs}) != 1
+        )
+        raise BatchError(
+            f"engine {engine}: runs differ in the executed configuration beyond the seed: {diff}"
+        )
     if recs[0]["histories"] < MIN_HISTORIES:
         raise BatchError(f"engine {engine}: histories {recs[0]['histories']} < {MIN_HISTORIES}")
     if recs[0]["bin_width_mm"] > MAX_BIN_MM + 1e-9:
@@ -263,7 +392,7 @@ def batch_analysis(run_dirs: list[Path]) -> dict[str, Any]:
     recs = [analyse_run(load_run(d)) for d in run_dirs]
     groups: dict[str, list[dict[str, Any]]] = {}
     for r in recs:
-        groups.setdefault(r["engine"], []).append(r)
+        groups.setdefault(r["group"], []).append(r)
     stats: dict[str, Any] = {}
     for engine, g in sorted(groups.items()):
         validate_group(engine, g)

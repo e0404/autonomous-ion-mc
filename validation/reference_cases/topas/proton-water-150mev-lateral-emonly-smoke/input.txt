@@ -1,0 +1,76 @@
+# Native OpenTOPAS 4.3 input. Independent lateral-spread reference input (criterion T15), EM-ONLY physics (no hadronic, no decay); no validation claim.
+i:Ts/NumberOfThreads = 1
+# Ts/Seed is the PER-BATCH seed: fixed per committed seed-variant directory (batch statistics need >= 2 distinct seeds).
+i:Ts/Seed = 20261003
+b:Ts/PauseBeforeQuit = "False"
+
+# Geometry: 120 x 120 x 300 mm G4_WATER box, entrance face at z = 0, beam axis = +z through the face centre.
+s:Ge/World/Material = "Vacuum"
+d:Ge/World/HLX = 20 cm
+d:Ge/World/HLY = 20 cm
+d:Ge/World/HLZ = 40 cm
+s:Ge/Water/Parent = "World"
+s:Ge/Water/Type = "TsBox"
+s:Ge/Water/Material = "G4_WATER"
+d:Ge/Water/HLX = 60 mm
+d:Ge/Water/HLY = 60 mm
+d:Ge/Water/HLZ = 150 mm
+d:Ge/Water/TransZ = 150 mm
+s:Ge/Source/Parent = "World"
+s:Ge/Source/Type = "Group"
+d:Ge/Source/TransZ = -0.001 mm
+
+# Source: monoenergetic, zero-size, zero-divergence pencil beam along +z. BeamEnergy is the proton kinetic energy.
+s:So/Beam/Type = "Beam"
+s:So/Beam/Component = "Source"
+s:So/Beam/BeamParticle = "proton"
+d:So/Beam/BeamEnergy = 150 MeV
+u:So/Beam/BeamEnergySpread = 0
+s:So/Beam/BeamPositionDistribution = "None"
+s:So/Beam/BeamAngularDistribution = "None"
+i:So/Beam/NumberOfHistoriesInRun = 200
+
+# Physics (Geant4 modular) and production cuts
+s:Ph/Default/Type = "Geant4_Modular"
+sv:Ph/Default/Modules = 1 "g4em-standard_opt4"
+d:Ph/Default/CutForAllParticles = 0.05 mm
+
+s:Sc/IDD/Quantity = "DoseToMedium"
+s:Sc/IDD/Component = "Water"
+i:Sc/IDD/XBins = 1
+i:Sc/IDD/YBins = 1
+i:Sc/IDD/ZBins = 600
+s:Sc/IDD/OutputType = "csv"
+s:Sc/IDD/OutputFile = "idd_dose"
+s:Sc/IDD/IfOutputFileAlreadyExists = "Overwrite"
+sv:Sc/IDD/Report = 2 "Sum" "Standard_Deviation"
+
+# 3-D dose for the independent lateral-spread check (frozen criterion T15): full 120 x 120 mm field in
+# 0.5 mm lateral bins (240 x 240) and 1 mm depth bins (300). Binary output (.bin + .binheader),
+# Sum only: 240*240*300 = 17.28e6 bins (138 MB if float64). The full field is scored so that the
+# lateral halo (including the outer 10 % used for background estimation) is inside the grid and the
+# scorer shares the Water component with the IDD scorer (a child scoring box would remove its
+# volume from the Water-component IDD).
+s:Sc/Dose3D/Quantity = "DoseToMedium"
+s:Sc/Dose3D/Component = "Water"
+i:Sc/Dose3D/XBins = 240
+i:Sc/Dose3D/YBins = 240
+i:Sc/Dose3D/ZBins = 300
+s:Sc/Dose3D/OutputType = "Binary"
+s:Sc/Dose3D/OutputFile = "dose3d"
+s:Sc/Dose3D/IfOutputFileAlreadyExists = "Overwrite"
+sv:Sc/Dose3D/Report = 1 "Sum"
+
+# Same 3-D scorer restricted to generation-0 (primary) particles: dose without secondaries born in
+# nuclear interactions (nuclear halo), for comparison with EM-only transport backends. If this
+# OnlyIncludeParticlesOfGeneration filter is rejected by the build, the smoke run reports it.
+s:Sc/Dose3DPrimary/Quantity = "DoseToMedium"
+s:Sc/Dose3DPrimary/Component = "Water"
+i:Sc/Dose3DPrimary/XBins = 240
+i:Sc/Dose3DPrimary/YBins = 240
+i:Sc/Dose3DPrimary/ZBins = 300
+s:Sc/Dose3DPrimary/OnlyIncludeParticlesOfGeneration = "Primary"
+s:Sc/Dose3DPrimary/OutputType = "Binary"
+s:Sc/Dose3DPrimary/OutputFile = "dose3d_primary"
+s:Sc/Dose3DPrimary/IfOutputFileAlreadyExists = "Overwrite"
+sv:Sc/Dose3DPrimary/Report = 1 "Sum"

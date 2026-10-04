@@ -82,27 +82,31 @@ def distal_falloff_80_20(depth: np.ndarray, curve: np.ndarray) -> float:
 
 # --- lateral profile analysis ------------------------------------------------------------------
 #
-# Estimator (all lengths in mm). For a 1-D lateral profile P_i (dose summed over the orthogonal
-# lateral axis) on bins of width h with centres x_i measured from the grid centre (the beam axis):
-#   1. window: keep |x_i| <= W (default: the whole grid);
-#   2. background b = mean of P over the outer ``bg_fraction`` (default 10 %) of the window, i.e.
-#      |x_i| > (1 - bg_fraction) * W; P' = P - b (no clipping, which would bias the moment);
-#   3. second central moment m2 = sum P' (x - mu)^2 / sum P', mu = sum P' x / sum P';
-#   4. Sheppard's correction for binning: sigma^2 = m2 - h^2 / 12.
-# The slab estimate is the mean of the x- and y-projection results.
+# Estimator (all lengths in mm). For a 1-D lateral profile P_i >= 0 (dose summed over the
+# orthogonal lateral axis) on bins of width h with centres x_i measured from the grid centre
+# (the beam axis):
+#   1. window: keep |x_i| <= W (default: the whole grid, W = n h / 2);
+#   2. second central moment of the dose profile m2 = sum P (x - mu)^2 / sum P,
+#      mu = sum P x / sum P;
+#   3. Sheppard's correction for binning: sigma^2 = m2 - h^2 / 12.
+# There is NO background/pedestal subtraction: Monte Carlo dose has no additive background, the
+# tails (nuclear halo, large-angle scatter) are physical, and the weights P are never negative
+# (negative dose is rejected). The slab estimate is the mean of the x- and y-projection results.
 #
-# Bias bounds. (a) Binning: for bin-integrated dose Sheppard's correction is exact for a Gaussian
-# (the binned second moment is sigma^2 + h^2/12); for point samples the remaining error is
-# exponentially small in (sigma/h)^2, < 1e-6 relative at sigma/h >= 4 (tested at 0.5 % for
-# sigma = 2-6 mm at h = 0.5 mm). (b) Truncation at |x| = W: the truncated Gaussian second moment
-# is sigma^2 [1 - 2 a phi(a) / (2 Phi(a) - 1)] with a = W / sigma, 1.5e-5 relative at a = 5.
-# (c) Non-Gaussian tails (nuclear halo) are NOT corrected: a constant pedestal is removed by (2)
-# but the halo shape contributes to m2, so the full-field estimator is the dose-profile second
-# moment, not the core width; ``window_mm`` gives the same estimator in a narrower window, which
-# must have its background zone (0.9 W) at >= 4.5 sigma (tail inside the zone biases sigma low by
-# < 0.1 % at 4.5 sigma, tested for sigma <= 4 mm at W = 20 mm).
-# (d) Noise: the variance of m2 grows with the weight x^2 of the wing bins, so the statistical
-# uncertainty is taken from the spread across independent seeds, never from this routine.
+# Window dependence. The estimator is the second moment of the dose profile inside the window:
+# the full-field value (W = 60 mm) includes all tails by definition and is NOT the Gaussian core
+# width; the W = 20 mm value excludes dose beyond +-20 mm. Both are reported; neither is the
+# "core sigma". Bias bounds. (a) Binning: for bin-integrated dose Sheppard's correction is exact
+# for a Gaussian (binned second moment = sigma^2 + h^2/12). (b) Truncation of a Gaussian core at
+# |x| = W: m2 = sigma^2 [1 - 2 a phi(a) / (2 Phi(a) - 1)], a = W / sigma, with the dose fraction
+# beyond +-W equal to erfc(a / sqrt 2). For W = 20 mm: sigma = 2 / 3 / 4 / 5 / 6 mm gives a = 10 /
+# 6.67 / 5 / 4 / 3.33, fraction beyond 1.5e-23 / 2.6e-11 / 5.7e-7 / 6.3e-5 / 8.6e-4 and relative
+# bias of sigma^2 of -1.5e-21 / -1.2e-9 / -1.5e-5 / -1.1e-3 / -1.0e-2. (c) Tails add
+# (mass_tail / mass_total) * <x^2>_tail to m2 by construction (tested with a power-law tail
+# against the analytic value). (d) Noise: the variance of m2 grows with the weight x^2 of the wing
+# bins, so the statistical uncertainty is taken from the spread across independent seeds, never
+# from this routine; for counting statistics the estimator is unbiased (tested with Poisson/
+# multinomial histograms).
 
 
 def bin_centres(n: int, h: float) -> np.ndarray:
@@ -115,26 +119,28 @@ def lateral_variance_1d(
     profile: np.ndarray,
     bin_mm: float,
     *,
-    bg_fraction: float = 0.1,
     window_mm: float | None = None,
 ) -> float:
-    """Sheppard-corrected variance (mm^2) of a 1-D lateral profile; see the module notes above."""
+    """Sheppard-corrected second moment (mm^2) of a non-negative 1-D lateral dose profile.
+
+    No pedestal subtraction; ``window_mm`` keeps ``|x| <= window_mm`` (default whole grid).
+    See the module notes above for the estimator, window dependence and bias bounds.
+    """
     x = np.asarray(x_mm, dtype=np.float64)
     p = np.asarray(profile, dtype=np.float64)
     if x.ndim != 1 or x.shape != p.shape or x.size < 8:
         raise ValueError("x_mm and profile must be 1D arrays of equal length >= 8")
-    if not np.all(np.isfinite(p)) or not bin_mm > 0 or not 0 < bg_fraction < 0.5:
-        raise ValueError("invalid profile, bin width or background fraction")
-    half = float(np.max(np.abs(x))) + 0.5 * bin_mm if window_mm is None else float(window_mm)
-    keep = np.abs(x) <= half
+    if not np.all(np.isfinite(p)) or not bin_mm > 0:
+        raise ValueError("invalid profile or bin width")
+    if np.any(p < 0.0):
+        raise ValueError("profile has negative dose")
+    keep = np.ones(x.shape, dtype=bool) if window_mm is None else np.abs(x) <= float(window_mm)
     xs, ps = x[keep], p[keep]
-    outer = np.abs(xs) > (1.0 - bg_fraction) * half
-    if xs.size < 8 or outer.sum() < 2:
-        raise ValueError("window too small for the background estimate")
-    ps = ps - float(ps[outer].mean())
+    if xs.size < 8:
+        raise ValueError("window too small")
     m0 = float(ps.sum())
     if not m0 > 0.0:
-        raise ValueError("background-subtracted profile has non-positive integral")
+        raise ValueError("profile has non-positive integral in the window")
     mu = float((ps * xs).sum() / m0)
     m2 = float((ps * (xs - mu) ** 2).sum() / m0)
     return m2 - bin_mm**2 / 12.0
@@ -144,7 +150,6 @@ def lateral_sigma2_slab(
     slab: np.ndarray,
     bin_mm: tuple[float, float],
     *,
-    bg_fraction: float = 0.1,
     window_mm: float | None = None,
 ) -> dict[str, float]:
     """Lateral variance (mm^2) of a 2-D slab ``slab[ix, iy]``: mean of the x and y projections."""
@@ -155,14 +160,12 @@ def lateral_sigma2_slab(
         bin_centres(a.shape[0], bin_mm[0]),
         a.sum(axis=1),
         bin_mm[0],
-        bg_fraction=bg_fraction,
         window_mm=window_mm,
     )
     vy = lateral_variance_1d(
         bin_centres(a.shape[1], bin_mm[1]),
         a.sum(axis=0),
         bin_mm[1],
-        bg_fraction=bg_fraction,
         window_mm=window_mm,
     )
     return {"sigma2_mm2": 0.5 * (vx + vy), "sigma2_x_mm2": vx, "sigma2_y_mm2": vy}
@@ -174,7 +177,6 @@ def lateral_sigma2_at_depth_fractions(
     r80_mm: float,
     fractions: tuple[float, ...] = (0.5, 0.9),
     *,
-    bg_fraction: float = 0.1,
     window_mm: float | None = None,
 ) -> dict[float, dict[str, float]]:
     """Slab lateral variance at ``z = f * R80`` (the bin containing that depth, one bin thick).
@@ -190,9 +192,7 @@ def lateral_sigma2_at_depth_fractions(
         iz = int(np.floor(f * r80_mm / bin_mm[2]))
         if not 0 <= iz < d.shape[2]:
             raise ValueError("slab outside the dose grid")
-        res = lateral_sigma2_slab(
-            d[:, :, iz], (bin_mm[0], bin_mm[1]), bg_fraction=bg_fraction, window_mm=window_mm
-        )
+        res = lateral_sigma2_slab(d[:, :, iz], (bin_mm[0], bin_mm[1]), window_mm=window_mm)
         centre = (iz + 0.5) * bin_mm[2]
         out[f] = {**res, "slab_centre_mm": centre, "slab_centre_over_r80": centre / r80_mm}
     return out

@@ -171,11 +171,32 @@ run is reproducible from its committed bundle; the manifested `inputs/case.json`
   (QGSP_BIC_HP + opt4) and I-values (TOPAS G4_WATER 78 eV, FRED 75 eV, MCsquare not printed) label
   every result.
 * Lateral estimator (`ionmc.reference.metrics.lateral_variance_1d`): per 1 mm slab at z = f R80
-  (f = 0.5, 0.9; R80 from the IDD of the same run), x and y projections, outer-10 % background
-  subtracted, second central moment minus Sheppard h^2/12, mean of the two projections; reported
-  for the full field and a +-20 mm window. The standard error is the spread across seeds.
-  Bias: Sheppard exact for bin-integrated Gaussians, truncation 1.5e-5 relative at 5 sigma; the
-  nuclear halo is not removed (the full-field value is the dose-profile second moment).
+  (f = 0.5, 0.9; R80 from the IDD of the same run), x and y projections, second central moment
+  of the dose profile minus Sheppard h^2/12, mean of the two projections, over the full field and
+  a +-20 mm window. NO pedestal subtraction (Monte Carlo dose has no additive background and
+  the tails are physical; negative dose is rejected). The full-field value includes the tails by
+  definition; the +-20 mm value truncates a Gaussian core by a relative sigma^2 bias of
+  -1.5e-5 (sigma 4 mm), -1.1e-3 (5 mm), -1.0e-2 (6 mm) (formulas in the module notes). The standard
+  error is the spread across seeds.
+* Observables and cases for T15. `topas/proton-water-150mev-lateral-emonly[-seed2|-seed3|-smoke]`
+  is identical to the lateral cases except for the physics list
+  (`sv:Ph/Default/Modules = 1 "g4em-standard_opt4"`: no hadronic, ion or decay modules); its
+  ALL-particle scorer (`dose3d`) is the T15 reference for EM-only backends. The full-physics
+  lateral cases serve the comparison after nuclear physics exists. The generation-filtered
+  `dose3d_primary` scorer (in every lateral case) is INFORMATIVE only: it excludes the dose of EM
+  secondaries (delta electrons), whereas ionmc deposits all electronic energy loss locally.
+  Even the EM-only reference differs from ionmc by Geant4's delta-electron transport above the
+  production cut (CutForAllParticles 0.05 mm, electron cut energy roughly 50 keV in water): Tmax at
+  150 MeV is 0.35 MeV (CSDA range about 1 mm, [unverified] ESTAR value quoted from memory), the
+  energy fraction in such deltas is a few percent with mean displacement well below 0.5 mm,
+  bounding the extra variance by about 0.01 mm^2 against sigma^2 >= 2.9 mm^2, i.e. <= 0.4 % on
+  sigma^2 and <= 0.2 % on sigma (range argument, not computed).
+* Replicate gate (`compare_batches.py`): within a group all runs must have identical engine
+  identity (request.json engine block, runner/OS/sandbox hashes, clean commit), identical case.json
+  (minus `seeds` and `rationale`, `-rseed` removed), identical native input after deleting only the
+  seed line(s) and identical hashes of all other manifested inputs (CT, BDL, Plan), and declared
+  histories equal to the native input, FRED `-nprim` and the engine's own run summary. TOPAS
+  EM-only runs form their own group `topas-emonly`.
 
 Smoke finding (REF-95ef7515c835ec8c348f-e1a37fc0, 200 histories, 2.6 s): the filter
 `OnlyIncludeParticlesOfGeneration = "Primary"` is accepted (recorded in the binheader as
