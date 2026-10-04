@@ -7,7 +7,7 @@
   "cuts": "E_Cut_Pro 0.5 MeV, D_Max 0.2 cm, Epsilon_Max 0.25, Te_Min 0.05 MeV",
   "histories": 100000,
   "seeds": [
-    20261003
+    20261004
   ],
   "scorers": [
     "dose (dose-to-medium) per voxel, Compute_stat_uncertainty True",

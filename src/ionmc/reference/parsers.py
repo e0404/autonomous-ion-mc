@@ -6,6 +6,10 @@ TOPAS CSV scorer output
     statistics ("DoseToMedium ( Gy ) : Sum  Standard_Deviation"). Only those header facts are
     relied upon; row indices (0-based) place values, so row order does not matter.
 
+TOPAS binary scorer output (``.bin`` + ``.binheader``)
+    The header repeats the CSV header facts; the data file holds one value per bin (single
+    statistic). Precision (float32/float64) is inferred from the file size and checked.
+
 MetaImage (.mhd with raw data file)
     ``ElementType = MET_FLOAT`` (and other fixed-width numeric types), little- or big-endian
     as stated by ``ElementByteOrderMSB``. Arrays are returned in numpy order ``(nz, ny, nx)``
@@ -18,7 +22,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 
@@ -51,27 +55,10 @@ class TopasScorer:
     meta: dict[str, Any] = field(default_factory=dict)
 
 
-def read_topas_csv(path: str | Path) -> TopasScorer:
-    """Read a TOPAS CSV scorer file; missing bins (not written by TOPAS) are NaN."""
-    return parse_topas_csv(Path(path).read_text(), str(path))
-
-
-def parse_topas_csv(text: str, path: str = "<memory>") -> TopasScorer:
-    """Parse the text of a TOPAS CSV scorer file (``path`` is only used in messages)."""
-    header: list[str] = []
-    rows: list[list[float]] = []
-    for line_no, raw in enumerate(text.splitlines(), start=1):
-        line = raw.strip()
-        if not line:
-            continue
-        if line.startswith("#"):
-            header.append(line)
-            continue
-        try:
-            rows.append([float(tok) for tok in line.split(",")])
-        except ValueError as exc:
-            raise ParseError(f"{path}:{line_no}: non-numeric data row {line!r}") from exc
-
+def _parse_header(
+    header: list[str], path: str
+) -> tuple[dict[str, tuple[int, float, str]], str, str, list[str], dict[str, Any]]:
+    """Parse the '#' header lines shared by TOPAS CSV and binary-header files."""
     axes: dict[str, tuple[int, float, str]] = {}
     quantity = unit = ""
     statistics: list[str] = []
@@ -97,6 +84,31 @@ def parse_topas_csv(text: str, path: str = "<memory>") -> TopasScorer:
         raise ParseError(f"{path}: header lacks X/Y/Z bin structure")
     if not statistics:
         raise ParseError(f"{path}: header lacks 'Quantity ( unit ) : statistics' line")
+    return axes, quantity, unit, statistics, meta
+
+
+def read_topas_csv(path: str | Path) -> TopasScorer:
+    """Read a TOPAS CSV scorer file; missing bins (not written by TOPAS) are NaN."""
+    return parse_topas_csv(Path(path).read_text(), str(path))
+
+
+def parse_topas_csv(text: str, path: str = "<memory>") -> TopasScorer:
+    """Parse the text of a TOPAS CSV scorer file (``path`` is only used in messages)."""
+    header: list[str] = []
+    rows: list[list[float]] = []
+    for line_no, raw in enumerate(text.splitlines(), start=1):
+        line = raw.strip()
+        if not line:
+            continue
+        if line.startswith("#"):
+            header.append(line)
+            continue
+        try:
+            rows.append([float(tok) for tok in line.split(",")])
+        except ValueError as exc:
+            raise ParseError(f"{path}:{line_no}: non-numeric data row {line!r}") from exc
+
+    axes, quantity, unit, statistics, meta = _parse_header(header, path)
     if not rows:
         raise ParseError(f"{path}: no data rows")
 
@@ -125,6 +137,58 @@ def parse_topas_csv(text: str, path: str = "<memory>") -> TopasScorer:
         values[name] = arr
     return TopasScorer(
         values=values,
+        bins=(nx, ny, nz),
+        bin_width=tuple(axes[a][1] for a in "XYZ"),  # type: ignore[arg-type]
+        bin_unit=tuple(axes[a][2] for a in "XYZ"),  # type: ignore[arg-type]
+        quantity=quantity,
+        unit=unit,
+        statistics=statistics,
+        meta=meta,
+    )
+
+
+def parse_topas_binary(
+    header_text: str, blob: bytes, path: str = "<memory>", order: Literal["C", "F"] = "F"
+) -> TopasScorer:
+    """Parse a TOPAS binary scorer file (``.bin`` bytes plus ``.binheader`` text).
+
+    Fail closed: the header must give the X/Y/Z bin structure and exactly one statistic
+    (``Sum``); the file size must equal ``nx*ny*nz`` little-endian values of 8 bytes (float64)
+    or 4 bytes (float32), otherwise ``ParseError``. ``order`` is the memory order of the bins:
+    ``"F"`` (x fastest; verified for OpenTOPAS 4.3 on a real run, REF-95ef7515c835ec8c348f-e1a37fc0,
+    default) or ``"C"`` (z fastest, the CSV row order). The layout is
+    verified against the IDD scorer of the same run by ``ionmc.reference.runs.dose_3d``.
+    Header lines without a leading '#' are accepted (a '# ' is prepended).
+    """
+    if order not in ("C", "F"):
+        raise ValueError("order must be 'C' or 'F'")
+    lines = [ln.strip() for ln in header_text.splitlines() if ln.strip()]
+    header = [ln if ln.startswith("#") else "# " + ln for ln in lines]
+    axes, quantity, unit, statistics, meta = _parse_header(header, path)
+    if len(statistics) != 1:
+        raise ParseError(
+            f"{path}: binary scorer must report exactly one statistic, got {statistics}"
+        )
+    nx, ny, nz = (axes[a][0] for a in "XYZ")
+    count = nx * ny * nz
+    if count <= 0:
+        raise ParseError(f"{path}: non-positive bin count")
+    if len(blob) == 8 * count:
+        dtype: np.dtype[Any] = np.dtype("<f8")
+    elif len(blob) == 4 * count:
+        dtype = np.dtype("<f4")
+    else:
+        raise ParseError(
+            f"{path}: {len(blob)} data bytes match neither {count} float64 nor float32 values"
+        )
+    flat = np.frombuffer(blob, dtype=dtype).astype(np.float64)
+    if not np.all(np.isfinite(flat)):
+        raise ParseError(f"{path}: non-finite values")
+    meta["dtype"] = dtype.str
+    meta["order"] = order
+    arr = flat.reshape((nx, ny, nz), order=order)
+    return TopasScorer(
+        values={statistics[0]: arr},
         bins=(nx, ny, nz),
         bin_width=tuple(axes[a][1] for a in "XYZ"),  # type: ignore[arg-type]
         bin_unit=tuple(axes[a][2] for a in "XYZ"),  # type: ignore[arg-type]

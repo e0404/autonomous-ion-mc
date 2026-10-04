@@ -1,0 +1,27 @@
+# Native FRED 3.76 input (lengths in cm). Independent Monte Carlo evidence; no validation claim.
+# Phantom: 12 x 12 x 30 cm water, front face at z = 0, voxels 0.5 mm in depth; beam on the axis x=y=0 along +z.
+region<
+    ID = Phantom
+    O = [0, 0, 0]
+    f = [0, 0, 1]
+    u = [0, 1, 0]
+    L = [12, 12, 30]
+    pivot = [0.5, 0.5, 0]
+    voxels = [120, 120, 600]
+    material = water
+    score = [dose, LETd]
+region>
+
+field: 1 ; O = [0, 0, -1] ; f = [0, 0, 1] ; u = [0, 1, 0] ; L = [12, 12, 1] ; pivot = [0.5, 0.5, 0.5]
+pb<
+    ID = 1
+    fieldID = 1
+    particle = proton
+    Emean = 150
+    Xsec = pin
+    P = [0, 0, 0]
+    v = [0, 0, 1]
+pb>
+
+lTracking_nuc = t
+nprim = 100000

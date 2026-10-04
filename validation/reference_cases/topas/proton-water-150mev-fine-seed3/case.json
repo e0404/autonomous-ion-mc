@@ -10,7 +10,7 @@
   "cuts": "CutForAllParticles = 0.05 mm (production range cut for gamma, e-, e+, proton)",
   "histories": 100000,
   "seeds": [
-    20261003
+    20261005
   ],
   "scorers": [
     "IDD: DoseToMedium, 1x1x600 bins (full lateral extent 120x120 mm, 0.5 mm depth bins); Report Sum, Standard_Deviation",
