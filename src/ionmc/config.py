@@ -62,7 +62,10 @@ class PhysicsOptions:
     ``max_energy_loss_fraction`` bounds the mean energy loss per step as a fraction of the
     kinetic energy; ``range_alpha`` and ``range_rho_f_mm`` parametrise the Geant4 range step
     function; steps shorter than ``short_step_fraction`` of the residual range use the
-    linear loss ``S t``.
+    linear loss ``S t``. ``truncated_hinge_diagnostic`` (default off, a diagnostic for the T14
+    negative control, not a physics model) samples the hinge angle again, from the same
+    uniforms, for the truncated length when the second leg is cut at a transport voxel plane;
+    the new direction is not re-checked against the plane and the cut length and axis are kept.
     """
 
     nuclear: bool
@@ -78,9 +81,10 @@ class PhysicsOptions:
     range_alpha: float = 0.2
     range_rho_f_mm: float = 0.1
     short_step_fraction: float = 1.0e-3
+    truncated_hinge_diagnostic: bool = False
 
     def __post_init__(self) -> None:
-        for name in ("nuclear", "straggling", "multiple_scattering"):
+        for name in ("nuclear", "straggling", "multiple_scattering", "truncated_hinge_diagnostic"):
             if not isinstance(getattr(self, name), bool):
                 raise fail(f"{name} must be a bool, got {getattr(self, name)!r}")
         for name in ("straggling_model", "mcs_model", "delta_electrons"):
@@ -251,6 +255,7 @@ class EffectiveConfig:
                 "range_alpha": p.range_alpha,
                 "range_rho_f_mm": p.range_rho_f_mm,
                 "short_step_fraction": p.short_step_fraction,
+                "truncated_hinge_diagnostic": p.truncated_hinge_diagnostic,
                 "scattering_E_s_mev": E_S_MEV,
                 "max_rejection_attempts": MAX_REJECTION_ATTEMPTS,
             },

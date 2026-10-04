@@ -69,7 +69,7 @@ densities in g/cm3, doses in Gy per primary). All grids use `origin_mm` = corner
 * `ScoringGrid(origin_mm, spacing_mm, shape, name="dose")`: independent of the geometry grid.
 * `PhysicsOptions(nuclear, stopping, straggling=True, multiple_scattering=True,
   e_cut_mev=2.0, max_step_mm=1.0, max_energy_loss_fraction=0.02, range_alpha=0.2,
-  range_rho_f_mm=0.1, short_step_fraction=1e-3, ...)`: `nuclear` and `stopping` have no default
+  range_rho_f_mm=0.1, short_step_fraction=1e-3, truncated_hinge_diagnostic=False, ...)`: `nuclear` and `stopping` have no default
   (`nuclear=True` is rejected until nuclear interactions exist). Model names are
   `straggling_model="bohr_gauss_clamped_gamma_v1"`, `mcs_model="differential_moliere"`, `delta_electrons="local"`;
   any other string is rejected.
@@ -293,22 +293,56 @@ period) and `TransportWorkerError` is raised; no partial result is returned. Scr
 `validation/scripts/transport/run_suite.py --suite {lv,hr} --out validation/generated/transport/<new-dir>
 --expected-sha <sha>` runs the local-validation (CPU) or host-runner (CUDA) suite of
 `validation/plans/v3-003-acceptance.md`. It is a Python script because the host runner executes argv without a shell.
-It refuses an existing output directory (and one outside `validation/generated/` or `benchmarks/generated/`),
-requires the SHA to equal `git rev-parse HEAD` when git can read the tree (a snapshot without `.git` records the
-declared SHA), writes `environment.txt` (versions, hardware, SHA, dirty state, script hashes), archives every step
-in `NN-name.txt` with a header and an `# exit=` trailer, writes the fixed `manifest.txt`, and
-`summarize.py` verifies everything and writes `summary.json`. Any failed step, missing file or mismatch makes the
-exit status non-zero. `--scale` below 1 reduces all history counts; such a run is labelled non-conformant in the
-summary. Steps (`steps.py`): T1, T2, T8, T9, T10, T12, T13 (workers, chunks) and T14 on top of the pytest suites
-(T2-T4, T11, C1 on warp-cpu; CUDA tests with `IONMC_REQUIRE_CUDA=1`). The HR suite needs only numpy, Warp and pytest.
+
+* **Provenance.** It refuses an existing output directory and one outside `validation/generated/` or
+  `benchmarks/generated/`. When git can read the tree the SHA must equal `git rev-parse HEAD` **and the tree must be
+  clean** (a dirty tree is refused before any step). A snapshot without `.git` records the declared SHA
+  (`sha_source=declared`, `tree_dirty=unknown`). In both cases `environment.txt` carries `source_hashes` (sha256 of every
+  file under `src/ionmc`, `validation/scripts/transport` and `benchmarks/transport`), versions, hardware and the
+  options. `summarize.py DIR --expected-sha SHA --attest-sha SHA` (run where git exists) compares those hashes with the
+  blobs of `git ls-tree -r SHA` and records the attestation; `conformant` requires a clean git tree or a valid
+  attestation.
+* **Archive.** Every step is archived in `NN-name.txt` with a header (command, SHA, start time, timeout) and an
+  `# exit=` trailer (a timed-out step is killed and archived with `exit=124`); `manifest.txt` lists the steps of the
+  run; `summarize.py` verifies everything and writes `summary.json`. Any failed step, missing file or mismatch makes the
+  exit status non-zero.
+* **Subsets.** `--only STEP ...` runs a subset into its own directory; its summary has `subset: true` and is never
+  `conformant`. `summarize.py --combine DIR ... --expected-sha SHA --out FILE` verifies that the directories share the
+  suite, SHA, scale and source hashes, that no step is duplicated or missing, and only then writes a combined summary
+  that may be `conformant`.
+* **Workers.** `--workers auto` (the default) uses all cores for the python pool and the accelerated samples.
+  `--scale` below 1 reduces all history counts; such a run is labelled reduced and is not conformant.
+* **T12 as separate steps.** `t12-python-sample` (`--python-parts N`, default 2: each part is a step covering a history
+  range of the 4e3-history python sample), `t12-accelerated-samples` (warp-cpu float32 and float64 1e6 histories and, in
+  HR, warp-cuda 1e6) and `t12-compare`. Sample steps write the exact per-batch results (int64 deposit quanta, tally
+  expansions, counters) to `samples/*.npz`; their archive records the sha256 of each file. The comparison loads the
+  files (from its own directory and from `--import-dirs`), verifies the sha256 against the producing step's archive, the
+  SHA headers, one configuration fingerprint and the exact tiling of `[0, n)`, and then applies the frozen statistics.
+  The reduction of every sample is judged against its own frozen count (python 4e3, accelerated 1e6). The step names
+  of the suites are `NN-...` in the order: LV `pytest`, `t1`, `t2`, `t13-workers`, `t13-chunks-cpu`,
+  `t12-python-sample-{1,2}of2`, `t12-accelerated-samples`, `t12-compare`, `t8`, `t9`, `t10`, `t14`; HR `pytest-cuda`,
+  `t2-...-cuda`, `t13-chunks-cuda`, `t12-python-sample-{1,2}of2`, `t12-accelerated-samples`, `t12-compare`.
+* **Statistics.** The profile chi-square of T9, T10 and T12 keeps the frozen statistic (per-bin `z` from batch standard
+  errors) but its p-value is calibrated by a batch-level studentized permutation test
+  (`ionmc.transport.parity.permutation_p_value`): residuals `(m_b - mu) sqrt(n_b)` of all batches of both samples are
+  permuted and the statistic recomputed (2000 permutations, seeded generator; seed and count are recorded). It assumes
+  the same per-primary variance of a bin in both samples under the null and does not assume independent bins. The
+  Wilson-Hilferty value is reported for information; the Bonferroni bound on `max |z|` is the frozen one.
+* **T14 negative control.** `PhysicsOptions.truncated_hinge_diagnostic` (default off, recorded in the effective
+  configuration, a diagnostic and not a physics model) samples the hinge angle again, from the same uniforms, for the
+  truncated length `leg1 + leg2` when the second leg is cut at a transport voxel plane; the new direction is not
+  re-checked against the plane and the cut length and axis are kept. It is implemented identically in the reference and
+  the kernel; with the flag off the engine is unchanged (a stored baseline trace guards this). The T14 step runs it at
+  1 mm voxels and requires the relative change of the exit `theta_rms` to be below 0.5 %.
+* **T10 energy.** The total deposited energy of every orientation is compared with that of the `+z` beam with the batch
+  standard errors of both and must agree within 3 sigma.
 
 Implementation choices forced by engine rules (listed so the criteria are not read as met more strongly than
 measured): `max_step_mm` must not exceed the smallest scoring spacing, so T8/T14 take the lateral sigma from the
 exit positions of particles leaving a water slab of the stated thickness (the Fermi-Eyges A2 quantity) instead of
 0.2 mm deposit bins; T9 uses 1 mm IDD bins (the deterministic T9-CI check in `test_transport_scoring.py` guards the scoring); T10 uses the distribution of the projected track-end depth
 (oblique deposit grids alias when projected); the T14 along-beam shift changes the slab thickness by half a voxel,
-so T14 compares the ratios to the quadrature at the actual thickness; the T14 negative control (a diagnostic
-switch for the hinge angle) is not implemented. T12 compares independent samples with distinct seeds using the
+so T14 compares the ratios to the quadrature at the actual thickness; T12 compares independent samples with distinct seeds using the
 batch-method standard errors (Student-t for few batches; the batch counts are recorded). The deposit grids of T13 must be bit-identical.
 
 Note on T9: with the midpoint scoring of V3-003A and `s_max` comparable to the IDD bin width, point deposits

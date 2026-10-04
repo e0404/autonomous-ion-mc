@@ -90,9 +90,16 @@ def _terminate_all(procs: list[mp.process.BaseProcess]) -> None:
             p.join(_KILL_GRACE_S)
 
 
-def run_pool(eff: EffectiveConfig, *, _fault: str | None = None) -> list[PartialTransport]:
+def run_pool(
+    eff: EffectiveConfig,
+    *,
+    h_range: tuple[int, int] | None = None,
+    _fault: str | None = None,
+) -> list[PartialTransport]:
     """Transport all histories of ``eff`` in ``cpu_workers`` spawned processes.
 
+    ``h_range`` restricts the run to the histories ``[h0, h1)`` (a part of a larger run; the
+    batch of history ``h`` stays ``h mod B``); the workers tile that range.
     ``_fault`` ("raise", "exit" or "hang") injects a failure into worker 1; it exists only for
     the fail-closed tests.
     """
@@ -111,7 +118,10 @@ def run_pool(eff: EffectiveConfig, *, _fault: str | None = None) -> list[Partial
             f"the effective configuration cannot be sent to worker processes: {exc}"
         ) from exc
     ctx = mp.get_context("spawn")
-    ranges = history_ranges(run.n_histories, workers)
+    lo, hi = h_range if h_range is not None else (0, run.n_histories)
+    if not 0 <= lo < hi <= run.n_histories or workers > hi - lo:
+        raise TransportWorkerError(f"invalid history range {lo}..{hi} for {workers} workers")
+    ranges = [(lo + a, lo + b) for a, b in history_ranges(hi - lo, workers)]
     procs: list[mp.process.BaseProcess] = []
     conns: dict[int, Connection] = {}
     results: dict[int, PartialTransport] = {}

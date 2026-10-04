@@ -76,6 +76,7 @@ def make_kernel_support(real: type) -> SimpleNamespace:
         "max_steps": int,
         "mcs": int,
         "straggling": int,
+        "trunc_diag": int,
         "nx": int,
         "ny": int,
         "nz": int,
@@ -518,6 +519,32 @@ def make_transport_kernel(real: type, diag: bool):
                 leg2, axis2 = F.leg2_limit(
                     v3(hx, hy, hz), v3(d1x, d1y, d1z), ix, iy, iz, ctl.origin, ctl.spacing, s - leg1
                 )
+                if ctl.trunc_diag == 1 and ctl.mcs == 1 and axis2 >= 0:
+                    # DIAGNOSTIC (T14 negative control, default off): see reference._history
+                    s_cut = leg1 + leg2
+                    e_mid2 = energy_from_range(
+                        ln_er, ln_r0, inv_dln_r, ctl.n_r, m, r0 - rho * s_cut / R(20.0)
+                    )
+                    pv_mid2 = K.pv_mev(e_mid2, ctl.mass)
+                    var2 = R(0.0)
+                    if birth == 1:
+                        e_end2 = wp.min(
+                            energy_from_range(
+                                ln_er, ln_r0, inv_dln_r, ctl.n_r, m, r0 - rho * s_cut / R(10.0)
+                            ),
+                            energy,
+                        )
+                        var2 = EM.scattering_variance_birth(
+                            pv_mid2, K.pv_mev(e_end2, ctl.mass), p1v1, one, inv_xs[m], rho, s_cut
+                        )
+                    else:
+                        t_pow2 = EM.scattering_power_dm(pv_mid2, p1v1, one, inv_xs[m], rho)
+                        var2 = t_pow2 * s_cut
+                    theta2 = EM.polar_deflection(var2, ua1)
+                    nd2 = EM.rotate_dir(dvec, theta2, two_pi * ua2)
+                    d1x = nd2[0]
+                    d1y = nd2[1]
+                    d1z = nd2[2]
                 nxp = hx + d1x * leg2
                 nyp = hy + d1y * leg2
                 nzp = hz + d1z * leg2

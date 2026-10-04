@@ -103,6 +103,7 @@ def run_warp_range(eff: EffectiveConfig, h0: int, h1: int, device: str) -> Parti
     ctl.max_steps = eff.max_steps
     ctl.mcs = 1 if ph.multiple_scattering else 0
     ctl.straggling = 1 if ph.straggling else 0
+    ctl.trunc_diag = 1 if ph.truncated_hinge_diagnostic else 0
     ctl.nx, ctl.ny, ctl.nz = geo.shape
     ctl.n_grids = len(cfg.scoring)
     ctl.n_e = tab.n_e

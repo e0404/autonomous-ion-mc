@@ -127,6 +127,7 @@ class _Reference:
         self.c_smax = r(ph.max_step_mm)
         self.c_fshort = r(ph.short_step_fraction)
         self.mass = r(cfg.source.projectile.mass_mev)
+        self.trunc_diag = ph.truncated_hinge_diagnostic
         self.one = r(1.0)
         self.mat = self.geo.material_index
         self.dens = self.geo.densities_g_cm3()
@@ -442,6 +443,32 @@ class _Reference:
                 r(s - leg1),
             )
             leg2 = float(leg2_w)
+            if self.trunc_diag and ph.multiple_scattering and axis2 >= 0:
+                # DIAGNOSTIC (T14 negative control, default off): the hinge angle is sampled again,
+                # from the same uniforms, for the truncated length s_cut = leg1 + leg2. The new
+                # direction is not re-checked against the plane; the cut length and axis are kept.
+                s_cut = leg1 + leg2
+                e_mid2 = self._energy_from_range(m, r0 - rho * s_cut / 20.0)
+                pv_mid2 = K.pv_mev(r(e_mid2), self.mass)
+                if birth:
+                    e_end2 = min(self._energy_from_range(m, r0 - rho * s_cut / 10.0), energy)
+                    var2 = float(
+                        EM.scattering_variance_birth(
+                            pv_mid2,
+                            K.pv_mev(r(e_end2), self.mass),
+                            r(p1v1),
+                            self.one,
+                            inv_xs,
+                            r(rho),
+                            r(s_cut),
+                        )
+                    )
+                else:
+                    t_pow2 = EM.scattering_power_dm(pv_mid2, r(p1v1), self.one, inv_xs, r(rho))
+                    var2 = float(t_pow2) * s_cut
+                theta2 = EM.polar_deflection(r(var2), r(ua[1]))
+                nd2 = EM.rotate_dir(dvec, theta2, r(2.0 * math.pi * ua[2]))
+                d1x, d1y, d1z = float(nd2[0]), float(nd2[1]), float(nd2[2])
             nxp, nyp, nzp = hx + d1x * leg2, hy + d1y * leg2, hz + d1z * leg2
             exited = False
             if axis2 >= 0:

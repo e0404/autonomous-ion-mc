@@ -1,12 +1,16 @@
-"""Fail-closed behaviour of the LV/HR runner and its summariser (no transport is run)."""
+"""Fail-closed behaviour of the LV/HR runner and its summariser (subset labelling, combining,
+source attestation, dirty trees); steps are only run for the git/snapshot end-to-end checks."""
 
 from __future__ import annotations
 
 import importlib.util
 import json
+import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
@@ -15,13 +19,22 @@ SCRIPTS = REPO / "validation" / "scripts" / "transport"
 SHA = "a" * 40
 
 
-def _run(*args: str) -> subprocess.CompletedProcess[str]:
+def _load(name: str) -> ModuleType:
+    sys.path.insert(0, str(SCRIPTS))
+    spec = importlib.util.spec_from_file_location(name, SCRIPTS / f"{name}.py")
+    assert spec and spec.loader
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _run(*args: str, root: Path = REPO) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [sys.executable, str(SCRIPTS / "run_suite.py"), *args],
+        [sys.executable, str(root / "validation/scripts/transport/run_suite.py"), *args],
         capture_output=True,
         text=True,
-        cwd=REPO,
-        timeout=300,
+        cwd=root,
+        timeout=600,
     )
 
 
@@ -31,21 +44,13 @@ def _head() -> str:
     ).stdout.strip()
 
 
-def _load_summarize():  # type: ignore[no-untyped-def]
-    spec = importlib.util.spec_from_file_location("summarize", SCRIPTS / "summarize.py")
-    assert spec and spec.loader
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-def test_runner_refuses_existing_output_directory(tmp_path: Path) -> None:
+def test_runner_refuses_existing_output_directory() -> None:
     out = REPO / "validation" / "generated" / "transport" / "test-existing"
     out.mkdir(parents=True, exist_ok=True)
     try:
         r = _run("--suite", "lv", "--out", str(out), "--expected-sha", _head(), "--workers", "2")
         assert r.returncode != 0 and "refusing to reuse" in r.stderr
-        assert list(out.iterdir()) == []  # nothing was written
+        assert list(out.iterdir()) == []
     finally:
         out.rmdir()
 
@@ -62,71 +67,7 @@ def test_runner_requires_generated_directory_and_matching_sha(tmp_path: Path) ->
     assert r.returncode != 0 and "40 lowercase hex" in r.stderr and not out.exists()
     r = _run("--suite", "lv", "--out", str(out), "--expected-sha", _head(), "--workers", "1")
     assert r.returncode != 0 and not out.exists()
-    r = _run("--suite", "lv", "--out", str(out))
-    assert r.returncode != 0  # --expected-sha is mandatory
-
-
-def _archive(d: Path, *, exit_code: int = 0, doc: dict | None = None, sha: str = SHA) -> None:  # type: ignore[type-arg]
-    d.mkdir()
-    (d / "environment.txt").write_text(f"git_sha={SHA}\n")
-    (d / "manifest.txt").write_text("01-a\n")
-    body = f"# command: x\n# git_sha: {sha}\n# started_utc: now\n# step_timeout_s: 1\n"
-    if doc is not None:
-        body += "#JSON-BEGIN\n" + json.dumps(doc) + "\n#JSON-END\n"
-    (d / "01-a.txt").write_text(body + f"\n# exit={exit_code}\n")
-
-
-def test_summarize_verdicts(tmp_path: Path) -> None:
-    summ = _load_summarize()
-    good = tmp_path / "good"
-    _archive(good, doc={"pass": True, "reduced": False})
-    assert summ.main([str(good), "--expected-sha", SHA]) == 0
-    s = json.loads((good / "summary.json").read_text())
-    assert s["pass"] and s["conformant"]
-
-    reduced = tmp_path / "reduced"
-    _archive(reduced, doc={"pass": True, "reduced": True, "histories": 5, "frozen_histories": 9})
-    assert summ.main([str(reduced), "--expected-sha", SHA]) == 0
-    assert not json.loads((reduced / "summary.json").read_text())["conformant"]
-
-    for name, kw in {
-        "failed": {"exit_code": 1, "doc": {"pass": True}},
-        "failed_verdict": {"doc": {"pass": False}},
-        "other_sha": {"sha": "b" * 40},
-    }.items():
-        d = tmp_path / name
-        _archive(d, **kw)
-        assert summ.main([str(d), "--expected-sha", SHA]) == 1, name
-
-    extra = tmp_path / "extra"
-    _archive(extra)
-    (extra / "02-b.txt").write_text("stray")
-    assert summ.main([str(extra), "--expected-sha", SHA]) == 1
-    missing = tmp_path / "missing"
-    _archive(missing)
-    (missing / "01-a.txt").unlink()
-    assert summ.main([str(missing), "--expected-sha", SHA]) == 1
-    trailer = tmp_path / "trailer"
-    _archive(trailer)
-    t = trailer / "01-a.txt"
-    t.write_text(t.read_text().replace("# exit=0", ""))
-    assert summ.main([str(trailer), "--expected-sha", SHA]) == 1
-
-
-@pytest.mark.parametrize("suite", ["lv", "hr"])
-def test_suite_manifests_are_fixed(suite: str) -> None:
-    spec = importlib.util.spec_from_file_location("run_suite", SCRIPTS / "run_suite.py")
-    assert spec and spec.loader
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    steps = mod.suite_steps(suite, 4, 1.0)
-    names = [s[0] for s in steps]
-    assert names == sorted(names) and len(set(names)) == len(names)
-    if suite == "hr":
-        assert all(s[2].get("IONMC_REQUIRE_CUDA") == "1" for s in steps)
-        assert "cuda32" in " ".join(" ".join(s[1]) for s in steps)
-    else:
-        assert any("t14" in n for n in names) and any("t1-" in n for n in names)
+    assert _run("--suite", "lv", "--out", str(out)).returncode != 0  # SHA is mandatory
 
 
 def test_only_selects_steps_or_fails_before_creating_anything() -> None:
@@ -135,3 +76,267 @@ def test_only_selects_steps_or_fails_before_creating_anything() -> None:
     r = _run("--suite", "lv", "--out", str(out), "--expected-sha", _head(), "--workers", "2",
              "--only", "99")  # fmt: skip
     assert r.returncode != 0 and "does not select" in r.stderr and not out.exists()
+
+
+@pytest.mark.parametrize("suite", ["lv", "hr"])
+def test_suite_manifests_are_fixed(suite: str) -> None:
+    mod = _load("run_suite")
+    steps = mod.suite_steps(suite, 4, 1.0)
+    names = [s[0] for s in steps]
+    assert names == sorted(names) and len(set(names)) == len(names)
+    assert names == mod.full_step_names(suite, 2)
+    text = " ".join(" ".join(s[1]) for s in steps)
+    for sub in ("t12-python-sample", "t12-accelerated-samples", "t12-compare"):
+        assert sub in text
+    py = [n for n in names if "t12-python-sample" in n]
+    assert len(py) == 2 and py[0].endswith("1of2") and py[1].endswith("2of2")
+    three = [n for n in mod.full_step_names(suite, 3) if "t12-python-sample" in n]
+    assert [n.split("-")[-1] for n in three] == ["1of3", "2of3", "3of3"]
+    # the comparison comes after all sample steps
+    assert names.index([n for n in names if "t12-compare" in n][0]) > max(
+        names.index(n) for n in names if "sample" in n
+    )
+    if suite == "hr":
+        assert all(s[2].get("IONMC_REQUIRE_CUDA") == "1" for s in steps if "cuda" in s[0])
+        assert "cuda32" in text
+    else:
+        assert any("t14" in n for n in names) and any("t1-" in n for n in names)
+
+
+# -- archives built by hand ------------------------------------------------------------------
+def _env(*, dirty: str = "no", source: str = "git", hashes: dict[str, str] | None = None) -> str:
+    lines = [
+        "suite=lv", f"git_sha={SHA}", f"sha_source={source}", f"tree_dirty={dirty}",
+        "scale=1.0", "python_parts=2", "only=", "source_hashes:",
+    ]  # fmt: skip
+    lines += [f"  {h}  {p}" for p, h in (hashes or {"src/ionmc/a.py": "0" * 64}).items()]
+    return "\n".join(lines) + "\n"
+
+
+def _archive(d: Path, names: list[str], *, doc: dict | None = None, exit_code: int = 0,  # type: ignore[type-arg]
+             env: str | None = None, sha: str = SHA) -> None:  # fmt: skip
+    d.mkdir()
+    (d / "environment.txt").write_text(env if env is not None else _env())
+    (d / "manifest.txt").write_text("".join(f"{n}\n" for n in names))
+    for n in names:
+        body = f"# command: x\n# git_sha: {sha}\n# started_utc: now\n# step_timeout_s: 1\n"
+        if doc is not None:
+            body += "#JSON-BEGIN\n" + json.dumps(doc) + "\n#JSON-END\n"
+        (d / f"{n}.txt").write_text(body + f"\n# exit={exit_code}\n")
+
+
+def _full() -> list[str]:
+    return _load("run_suite").full_step_names("lv", 2)
+
+
+def test_summarize_verdicts_subset_and_source(tmp_path: Path) -> None:
+    summ = _load("summarize")
+    full = _full()
+    good = tmp_path / "good"
+    _archive(good, full, doc={"pass": True, "reduced": False})
+    assert summ.main([str(good), "--expected-sha", SHA]) == 0
+    s = json.loads((good / "summary.json").read_text())
+    assert s["pass"] and not s["subset"] and s["conformant"] and s["source_ok"]
+
+    subset = tmp_path / "subset"  # --only: never conformant
+    _archive(subset, full[:2], doc={"pass": True})
+    assert summ.main([str(subset), "--expected-sha", SHA]) == 0
+    s = json.loads((subset / "summary.json").read_text())
+    assert s["subset"] and not s["conformant"]
+
+    reduced = tmp_path / "reduced"
+    _archive(reduced, full, doc={"pass": True, "reduced": True})
+    assert summ.main([str(reduced), "--expected-sha", SHA]) == 0
+    assert not json.loads((reduced / "summary.json").read_text())["conformant"]
+
+    dirty = tmp_path / "dirty"  # unknown dirty state without attestation: not conformant
+    _archive(dirty, full, doc={"pass": True}, env=_env(dirty="unknown", source="declared"))
+    assert summ.main([str(dirty), "--expected-sha", SHA]) == 0
+    s = json.loads((dirty / "summary.json").read_text())
+    assert s["pass"] and not s["source_ok"] and not s["conformant"]
+
+    for name, kw in {
+        "failed": {"exit_code": 1, "doc": {"pass": True}},
+        "failed_verdict": {"doc": {"pass": False}},
+        "other_sha": {"sha": "b" * 40},
+    }.items():
+        d = tmp_path / name
+        _archive(d, full, **kw)
+        assert summ.main([str(d), "--expected-sha", SHA]) == 1, name
+    extra = tmp_path / "extra"
+    _archive(extra, full)
+    (extra / "99-stray.txt").write_text("stray")
+    assert summ.main([str(extra), "--expected-sha", SHA]) == 1
+    missing = tmp_path / "missing"
+    _archive(missing, full)
+    (missing / f"{full[0]}.txt").unlink()
+    assert summ.main([str(missing), "--expected-sha", SHA]) == 1
+    trailer = tmp_path / "trailer"
+    _archive(trailer, full)
+    t = trailer / f"{full[0]}.txt"
+    t.write_text(t.read_text().replace("# exit=0", ""))
+    assert summ.main([str(trailer), "--expected-sha", SHA]) == 1
+
+
+def test_combine_requires_exactly_the_full_suite(tmp_path: Path) -> None:
+    summ = _load("summarize")
+    full = _full()
+    a, b = full[:6], full[6:]
+    _archive(tmp_path / "a", a, doc={"pass": True})
+    _archive(tmp_path / "b", b, doc={"pass": True})
+    out = tmp_path / "combined.json"
+    assert summ.main(["--combine", str(tmp_path / "a"), str(tmp_path / "b"), "--expected-sha", SHA,
+                      "--out", str(out)]) == 0  # fmt: skip
+    s = json.loads(out.read_text())
+    assert s["pass"] and s["complete"] and s["conformant"] and not s["missing_steps"]
+
+    # a missing step: not complete, not conformant (and the verdict fails)
+    _archive(tmp_path / "c", b[:-1], doc={"pass": True})
+    out2 = tmp_path / "combined2.json"
+    assert summ.main(["--combine", str(tmp_path / "a"), str(tmp_path / "c"), "--expected-sha", SHA,
+                      "--out", str(out2)]) == 1  # fmt: skip
+    s2 = json.loads(out2.read_text())
+    assert not s2["pass"] and not s2["conformant"] and s2["missing_steps"] == [b[-1]]
+
+    # a duplicated step is an error
+    _archive(tmp_path / "d", b + [a[0]], doc={"pass": True})
+    out3 = tmp_path / "combined3.json"
+    assert summ.main(["--combine", str(tmp_path / "a"), str(tmp_path / "d"), "--expected-sha", SHA,
+                      "--out", str(out3)]) == 1  # fmt: skip
+    assert any("appears in" in p for p in json.loads(out3.read_text())["problems"])
+
+    # different source hashes: the archives are not parts of one run
+    _archive(tmp_path / "e", b, doc={"pass": True}, env=_env(hashes={"src/ionmc/a.py": "1" * 64}))
+    out4 = tmp_path / "combined4.json"
+    assert summ.main(["--combine", str(tmp_path / "a"), str(tmp_path / "e"), "--expected-sha", SHA,
+                      "--out", str(out4)]) == 1  # fmt: skip
+    # an existing output file is never overwritten
+    with pytest.raises(SystemExit):
+        summ.main(["--combine", str(tmp_path / "a"), "--expected-sha", SHA, "--out", str(out)])
+
+
+# -- git and snapshot end to end -----------------------------------------------------------------
+def _make_repo(root: Path) -> str:
+    """A throw-away git repository (in tmp) holding the scripts and sources under test."""
+    ignore = shutil.ignore_patterns("__pycache__", "*.pyc", "generated")
+    for rel in ("src/ionmc", "validation/scripts/transport", "benchmarks/transport"):
+        shutil.copytree(REPO / rel, root / rel, ignore=ignore)
+    (root / ".gitignore").write_text("validation/generated/\nbenchmarks/generated/\n")
+    env = dict(os.environ, GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@t", GIT_COMMITTER_NAME="t",
+               GIT_COMMITTER_EMAIL="t@t")  # fmt: skip
+    for cmd in (["init", "-q"], ["add", "-A"], ["commit", "-q", "-m", "snapshot"]):
+        subprocess.run(["git", "-C", str(root), *cmd], check=True, env=env, capture_output=True)
+    return subprocess.run(["git", "-C", str(root), "rev-parse", "HEAD"], capture_output=True,
+                          text=True, check=True).stdout.strip()  # fmt: skip
+
+
+def test_dirty_tree_is_refused_and_clean_tree_runs(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    sha = _make_repo(repo)
+    out = repo / "validation" / "generated" / "transport" / "run"
+    args = ("--suite", "lv", "--out", str(out), "--expected-sha", sha, "--workers", "2",
+            "--only", "03")  # fmt: skip
+    r = _run(*args, root=repo)
+    assert r.returncode == 0, r.stderr[-1500:] + r.stdout[-1500:]
+    s = json.loads((out / "summary.json").read_text())
+    assert s["tree_dirty"] == "no" and s["source_ok"] and s["subset"] and not s["conformant"]
+    env = (out / "environment.txt").read_text()
+    assert "source_hashes:" in env and "src/ionmc/config.py" in env
+    # dirty: refused before anything is written
+    (repo / "src/ionmc/config.py").write_text(
+        (repo / "src/ionmc/config.py").read_text() + "\n# x\n"
+    )
+    out2 = repo / "validation" / "generated" / "transport" / "run2"
+    r = _run(*args[:3], str(out2), *args[4:], root=repo)
+    assert r.returncode != 0 and "dirty working tree" in r.stderr and not out2.exists()
+
+
+def test_snapshot_without_git_is_attested_later(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    sha = _make_repo(repo)
+    snap = tmp_path / "snap"
+    shutil.copytree(repo, snap, ignore=shutil.ignore_patterns(".git", "generated"))
+    out = snap / "validation" / "generated" / "transport" / "run"
+    r = _run("--suite", "lv", "--out", str(out), "--expected-sha", sha, "--workers", "2",
+             "--only", "03", root=snap)  # fmt: skip
+    assert r.returncode == 0, r.stderr[-1500:] + r.stdout[-1500:]
+    s = json.loads((out / "summary.json").read_text())
+    assert s["sha_source"].startswith("declared") and s["tree_dirty"] == "unknown"
+    assert not s["source_ok"]
+    # attest where git exists: the archive's hashes equal the blobs of the commit
+    shutil.copytree(out, tmp_path / "archive")
+    summ = subprocess.run(
+        [sys.executable, str(repo / "validation/scripts/transport/summarize.py"),
+         str(tmp_path / "archive"), "--expected-sha", sha, "--attest-sha", sha],
+        capture_output=True, text=True,
+    )  # fmt: skip
+    assert summ.returncode == 0, summ.stderr
+    a = json.loads((tmp_path / "archive" / "summary.json").read_text())
+    assert a["attestation"]["valid"] and a["source_ok"]
+    # a tampered source in the snapshot is detected
+    snap2 = tmp_path / "snap2"
+    shutil.copytree(repo, snap2, ignore=shutil.ignore_patterns(".git", "generated"))
+    (snap2 / "src/ionmc/config.py").write_text((snap2 / "src/ionmc/config.py").read_text() + "#t\n")
+    out2 = snap2 / "validation" / "generated" / "transport" / "run"
+    r = _run("--suite", "lv", "--out", str(out2), "--expected-sha", sha, "--workers", "2",
+             "--only", "03", root=snap2)  # fmt: skip
+    assert r.returncode == 0
+    shutil.copytree(out2, tmp_path / "archive2")
+    subprocess.run(
+        [sys.executable, str(repo / "validation/scripts/transport/summarize.py"),
+         str(tmp_path / "archive2"), "--expected-sha", sha, "--attest-sha", sha],
+        capture_output=True, text=True,
+    )  # fmt: skip
+    b = json.loads((tmp_path / "archive2" / "summary.json").read_text())
+    assert not b["attestation"]["valid"] and not b["source_ok"]
+    assert any("content differs: src/ionmc/config.py" in m for m in b["attestation"]["mismatches"])
+
+
+def test_t12_split_steps_roundtrip_and_tamper_detection(tmp_path: Path) -> None:
+    """The python sample in two history ranges, the accelerated samples and the comparison, each
+    a separate step with its own output; the comparison verifies the sample hashes and fails
+    closed when a file is altered or a part is missing. (Tiny histories: the verdict itself is
+    not asserted, only the plumbing and the per-sample reduced flags.)"""
+    sha = "c" * 40
+    env = dict(os.environ, IONMC_RUN_SHA=sha, PYTHONPATH=str(REPO / "src"))
+    base = ["--energy", "70", "--lateral-bin", "0.5", "--half-width", "8", "--scale", "0.01"]
+    steps = str(SCRIPTS / "steps.py")
+
+    def step(name: str, *args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run([sys.executable, steps, name, *args, *base], capture_output=True,
+                              text=True, env=env, timeout=900)  # fmt: skip
+
+    def archive(fname: str, proc: subprocess.CompletedProcess[str]) -> None:
+        body = f"# command: x\n# git_sha: {sha}\n# started_utc: n\n# step_timeout_s: 1\n"
+        (tmp_path / fname).write_text(body + proc.stdout + f"\n# exit={proc.returncode}\n")
+
+    samples = str(tmp_path / "samples")
+    for i in (1, 2):
+        p = step("t12-python-sample", "--part", f"{i}/2", "--out-dir", samples, "--workers", "2")
+        assert p.returncode == 0, p.stdout[-2000:] + p.stderr[-2000:]
+        archive(f"0{i}-t12-python-sample.txt", p)
+    p = step("t12-accelerated-samples", "--samples", "cpu32", "--out-dir", samples)
+    assert p.returncode == 0, p.stderr[-2000:]
+    archive("03-t12-acc.txt", p)
+    c = step("t12-compare", "--pairs", "python:cpu32", "--dirs", str(tmp_path))
+    doc = json.loads(c.stdout.split("#JSON-BEGIN")[1].split("#JSON-END")[0])
+    assert doc["reduced"] and doc["samples"]["python"]["parts"] == 2
+    assert doc["samples"]["python"]["reduced"] and doc["samples"]["cpu32"]["reduced"]
+    assert doc["samples"]["python"]["frozen_histories"] == 4000
+    assert doc["samples"]["cpu32"]["frozen_histories"] == 1_000_000
+    assert doc["t12"]["python_vs_cpu32"]["permutation"]["n_perm"] == 2000
+    # a different SHA than the producers' is refused
+    wrong = subprocess.run([sys.executable, steps, "t12-compare", "--pairs", "python:cpu32",
+                            "--dirs", str(tmp_path), *base], capture_output=True, text=True,
+                           env=dict(env, IONMC_RUN_SHA="d" * 40), timeout=300)  # fmt: skip
+    assert wrong.returncode != 0 and "SHA" in (wrong.stderr + wrong.stdout)
+    # tampered sample file: sha256 mismatch
+    f = tmp_path / "samples" / "t12-python-part-1-of-2.npz"
+    f.write_bytes(f.read_bytes() + b"x")
+    bad = step("t12-compare", "--pairs", "python:cpu32", "--dirs", str(tmp_path))
+    assert bad.returncode != 0 and "sha256 mismatch" in (bad.stderr + bad.stdout)
+    # a missing part: the sample no longer tiles the history range
+    f.unlink()
+    (tmp_path / "01-t12-python-sample.txt").unlink()
+    gone = step("t12-compare", "--pairs", "python:cpu32", "--dirs", str(tmp_path))
+    assert gone.returncode != 0

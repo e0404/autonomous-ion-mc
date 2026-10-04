@@ -12,7 +12,9 @@ asserts and the numbers a validation archive records come from the same code.
   :func:`deposit_agreement`) are reported as secondary numbers.
 * T12 (:func:`t12_compare`): per-bin ``z = (a - b) / sqrt(se_a^2 + se_b^2)`` of two independent
   samples (distinct seeds) on the IDD and the lateral profiles for bins above 1 % of the maximum,
-  a Wilson-Hilferty chi-square p-value (> 0.001), the Bonferroni bound on ``max |z|`` and
+  the chi-square of the z profile with a batch-level permutation p-value (> 0.001; correlated
+  bins invalidate the independent-bin Wilson-Hilferty approximation, which is reported only for
+  information), the Bonferroni bound on ``max |z|`` and
   ``|z| < 3.5`` for the scalars (R80, total deposit, lateral sigma at 0.5 R). Standard errors
   come from the batch method of each run, so ``z`` is Student-t rather than normal for few
   batches; the number of batches of every run is recorded with the verdict.
@@ -271,6 +273,7 @@ class T12Observables:
     arrays: dict[str, NDArray[np.float64]]
     scalars: dict[str, NDArray[np.float64]]
     n_batches: int
+    histories_per_batch: int = 1
 
 
 def _r80(profile: NDArray[np.float64], dz: float) -> float:
@@ -286,7 +289,24 @@ def _r80(profile: NDArray[np.float64], dz: float) -> float:
 
 def t12_observables(result: Result, layout: T12Layout) -> T12Observables:
     """Batch-wise IDD, lateral profiles and scalars (R80, total deposit, lateral sigma at 0.5 R)."""
-    idd_b = np.asarray(result.grid(layout.idd).batch_energy_mev)  # (B, 1, 1, nz)
+    grids = {g.name: np.asarray(g.batch_energy_mev) for g in result.grids}
+    return t12_observables_from_grids(
+        grids,
+        result.requested_config.scoring,
+        layout,
+        result.n_histories // result.n_batches,
+    )
+
+
+def t12_observables_from_grids(
+    batch_energy: dict[str, NDArray[np.float64]],
+    scoring: tuple[ScoringGrid, ...],
+    layout: T12Layout,
+    histories_per_batch: int,
+) -> T12Observables:
+    """:func:`t12_observables` from per-batch per-primary grid arrays ``(B, nx, ny, nz)`` by name
+    (also used on samples merged from saved parts)."""
+    idd_b = np.asarray(batch_energy[layout.idd])  # (B, 1, 1, nz)
     b = idd_b.shape[0]
     idd = idd_b.reshape(b, -1)
     arrays = {"idd": idd}
@@ -295,19 +315,18 @@ def t12_observables(result: Result, layout: T12Layout) -> T12Observables:
         "r80_mm": np.array([_r80(idd[k], layout.bin_mm) for k in range(b)]),
     }
     for name, frac in layout.slabs:
-        slab = np.asarray(result.grid(name).batch_energy_mev)  # (B, nx, ny, 1)
+        slab = np.asarray(batch_energy[name])  # (B, nx, ny, 1)
         prof = slab.sum(axis=(2, 3))  # (B, nx): lateral x profile summed over y
         arrays[name] = prof
         if abs(frac - 0.5) < 1e-9:
             nx = prof.shape[1]
-            g = result.requested_config.scoring
-            grid = next(x for x in g if x.name == name)
+            grid = next(x for x in scoring if x.name == name)
             xc = grid.origin_mm[0] + (np.arange(nx) + 0.5) * grid.spacing_mm[0]
             tot = prof.sum(axis=1)
             mean = (prof * xc).sum(axis=1) / tot
             var = (prof * (xc[None, :] - mean[:, None]) ** 2).sum(axis=1) / tot
             scalars["sigma_lat_05R_mm"] = np.sqrt(var)
-    return T12Observables(arrays, scalars, b)
+    return T12Observables(arrays, scalars, b, histories_per_batch)
 
 
 def _mean_se(x: NDArray[np.float64]) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
@@ -315,55 +334,136 @@ def _mean_se(x: NDArray[np.float64]) -> tuple[NDArray[np.float64], NDArray[np.fl
     return x.mean(axis=0), x.std(axis=0, ddof=1) / math.sqrt(b)
 
 
-def t12_compare(a: T12Observables, b: T12Observables) -> dict[str, Any]:
-    """T12 verdict for two independent samples (see the module docstring)."""
-    out: dict[str, Any] = {"n_batches": [a.n_batches, b.n_batches], "arrays": {}, "scalars": {}}
+def scalar_z(xa: NDArray[np.float64], xb: NDArray[np.float64]) -> dict[str, float]:
+    """``z = (mean_a - mean_b) / sqrt(se_a^2 + se_b^2)`` of two samples of batch values (standard
+    errors of the batch method). Values equal within ``DEGENERATE_RTOL`` (a scalar fixed by
+    energy conservation has no variance) give ``z = 0``; a difference without variance gives
+    ``inf``."""
+    ma, sa = float(xa.mean()), float(xa.std(ddof=1)) / math.sqrt(len(xa))
+    mb, sb = float(xb.mean()), float(xb.std(ddof=1)) / math.sqrt(len(xb))
+    se = math.sqrt(sa**2 + sb**2)
+    diff = ma - mb
+    if abs(diff) <= DEGENERATE_RTOL * max(abs(ma), abs(mb)):
+        z = 0.0
+    else:
+        z = diff / se if se > 0.0 else math.inf
+    return {"a": ma, "b": mb, "se_a": sa, "se_b": sb, "z": z}
+
+
+PERMUTATIONS = 2000
+PERMUTATION_SEED = 20261004
+
+
+def _chi2_profile(
+    xa: NDArray[np.float64], xb: NDArray[np.float64]
+) -> tuple[float, float, NDArray[np.float64]]:
+    """``(chi2, max|z|, z)`` of the per-bin difference of two samples of batch means ``(B, m)``,
+    with the standard errors of the batch method."""
+    ma, sa = _mean_se(xa)
+    mb, sb = _mean_se(xb)
+    se = np.sqrt(sa**2 + sb**2)
+    diff = ma - mb
+    with np.errstate(divide="ignore", invalid="ignore"):
+        z: NDArray[np.float64] = np.where(se > 0.0, diff / se, np.where(diff == 0.0, 0.0, np.inf))
+    return float((z**2).sum()), float(np.abs(z).max()) if z.size else 0.0, z
+
+
+def permutation_p_value(
+    xa: NDArray[np.float64],
+    na: float,
+    xb: NDArray[np.float64],
+    nb: float,
+    *,
+    n_perm: int = PERMUTATIONS,
+    seed: int = PERMUTATION_SEED,
+) -> float:
+    """Batch-level studentized permutation p-value of the profile chi-square.
+
+    ``xa`` (``Ba, m``) and ``xb`` (``Bb, m``) are per-batch per-primary means of ``m`` bins,
+    ``na`` and ``nb`` the histories per batch of each sample. With the pooled mean
+    ``mu`` (weighted by the batch sizes) the residuals ``r_b = (m_b - mu) sqrt(n_b)`` of all
+    ``Ba + Bb`` batches are permuted across the two samples, ``m*_b = mu + r*_b / sqrt(n_b)``
+    (the original size ``n_b`` of each batch) are rebuilt, and the same chi-square of the two
+    sample means is recomputed. The p-value is ``(1 + #{chi2* >= chi2}) / (1 + n_perm)``.
+
+    Assumption: under the null hypothesis the per-primary variance of a bin is the same in both
+    samples, so that ``r_b`` are exchangeable; unlike the Wilson-Hilferty approximation this
+    makes no assumption that the bins are independent (neighbouring bins of a profile are
+    correlated because every history deposits in many bins). The generator is
+    ``numpy.random.default_rng(seed)``; ``seed`` and ``n_perm`` are recorded by the caller.
+    """
+    ba, bb = xa.shape[0], xb.shape[0]
+    sizes = np.concatenate([np.full(ba, float(na)), np.full(bb, float(nb))])
+    m = np.concatenate([xa, xb], axis=0)
+    mu = (sizes[:, None] * m).sum(axis=0) / sizes.sum()
+    resid = (m - mu) * np.sqrt(sizes)[:, None]
+    observed = _chi2_profile(xa, xb)[0]
+    rng = np.random.default_rng(seed)
+    count = 0
+    for _ in range(n_perm):
+        perm = rng.permutation(ba + bb)
+        star = mu + resid[perm] / np.sqrt(sizes)[:, None]
+        if _chi2_profile(star[:ba], star[ba:])[0] >= observed:
+            count += 1
+    return (1.0 + count) / (1.0 + n_perm)
+
+
+def t12_compare(
+    a: T12Observables,
+    b: T12Observables,
+    *,
+    n_perm: int = PERMUTATIONS,
+    seed: int = PERMUTATION_SEED,
+) -> dict[str, Any]:
+    """T12 verdict for two independent samples (see the module docstring).
+
+    For every profile the frozen statistic (chi-square of the per-bin ``z``, bins above 1 % of
+    the maximum) is calibrated with :func:`permutation_p_value` (``p_value``, used for the
+    verdict); the Wilson-Hilferty value is reported as ``p_value_wilson_hilferty`` only. The
+    bound on ``max |z|`` is the frozen Bonferroni bound."""
+    out: dict[str, Any] = {
+        "n_batches": [a.n_batches, b.n_batches],
+        "permutation": {"n_perm": n_perm, "seed": seed},
+        "arrays": {},
+        "scalars": {},
+    }
     ok = True
-    for name in a.arrays:
-        ma, sa = _mean_se(a.arrays[name])
-        mb, sb = _mean_se(b.arrays[name])
+    for i, name in enumerate(a.arrays):
+        ma, _ = _mean_se(a.arrays[name])
+        mb, _ = _mean_se(b.arrays[name])
         ref = 0.5 * (ma + mb)
         sel = ref > DOSE_FRACTION * ref.max()
         n = int(sel.sum())
-        diff = (ma - mb)[sel]
-        se = np.sqrt(sa[sel] ** 2 + sb[sel] ** 2)
-        with np.errstate(divide="ignore", invalid="ignore"):
-            z: NDArray[np.float64] = np.where(
-                se > 0.0, diff / se, np.where(diff == 0.0, 0.0, np.inf)
+        chi2, zmax, _z = _chi2_profile(a.arrays[name][:, sel], b.arrays[name][:, sel])
+        p_wh = wilson_hilferty_p(chi2, n) if n >= 1 else 1.0
+        p = (
+            permutation_p_value(
+                a.arrays[name][:, sel],
+                a.histories_per_batch,
+                b.arrays[name][:, sel],
+                b.histories_per_batch,
+                n_perm=n_perm,
+                seed=seed + i,
             )
-        chi2 = float((z**2).sum())
-        p = wilson_hilferty_p(chi2, n) if n >= 1 else 1.0
-        zmax = float(np.abs(z).max()) if n else 0.0
+            if n >= 1
+            else 1.0
+        )
         bound = bonferroni_z(n) if n else float("inf")
         passed = bool(p > P_VALUE_MIN and zmax < bound)
         out["arrays"][name] = {
             "n_bins": n,
             "chi2": chi2,
             "p_value": p,
+            "p_value_wilson_hilferty": p_wh,
             "max_abs_z": zmax,
             "bonferroni_bound": bound,
             "pass": passed,
         }
         ok &= passed
     for name in a.scalars:
-        ma, sa = _mean_se(a.scalars[name])
-        mb, sb = _mean_se(b.scalars[name])
-        se_ab = math.sqrt(float(sa) ** 2 + float(sb) ** 2)
-        diff_s = float(ma) - float(mb)
-        if abs(diff_s) <= DEGENERATE_RTOL * max(abs(float(ma)), abs(float(mb))):
-            zs = 0.0  # fixed by conservation (no variance): equal to the accumulator quantum
-        else:
-            zs = diff_s / se_ab if se_ab > 0.0 else math.inf
-        passed = bool(abs(zs) < SCALAR_Z_MAX)
-        out["scalars"][name] = {
-            "a": float(ma),
-            "b": float(mb),
-            "se_a": float(sa),
-            "se_b": float(sb),
-            "z": zs,
-            "bound": SCALAR_Z_MAX,
-            "pass": passed,
-        }
+        sc = scalar_z(a.scalars[name], b.scalars[name])
+        passed = bool(abs(sc["z"]) < SCALAR_Z_MAX)
+        out["scalars"][name] = {**sc, "bound": SCALAR_Z_MAX, "pass": passed}
         ok &= passed
     out["pass"] = bool(ok)
     return out

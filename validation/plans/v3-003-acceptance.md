@@ -102,3 +102,19 @@ identical, grid outside 1e-5; float32 atomic_add order depends on the chunking);
 amended to int64 fixed-point accumulators, and the T13 deposit criterion becomes bit-identity
 within each precision (stronger than the former bounds). The failed float32 result is preserved
 in the validation ledger (VAL-20261003-234609-14DE3F).
+
+⁹ Statistical clarification (2026-10-04, task V3-003B, after Codex review REVIEW-23d3b5d7946b473d967409284fa816d4
+and before any T9/T10/T12 LV/HR result is graded): the per-bin z statistics use the batch standard
+errors of each sample and are marginally valid; the profile-wide χ² = Σ z² treats bins as
+independent although bins are correlated (a history deposits in several bins and all bins share
+batch fluctuations), so its p-value is calibrated by a batch-level studentized permutation test:
+per-batch per-primary means m_b with batch sizes n_b from both samples are pooled, residuals
+r_b = (m_b − μ̂)·√n_b are permuted across all batches (≥ 2000 permutations, recorded seed), the
+samples are reconstructed as m*_b = μ̂ + r*_b/√n_b and χ² is recomputed; p = (1 + #{χ²* ≥ χ²})/(1 + n_perm).
+The frozen thresholds (p > 0.001; Bonferroni max|z|) are unchanged; the Wilson–Hilferty p-value is
+reported as informative only. The permutation assumes equal per-primary variance under the null.
+Also: the T12 "reduced" label is evaluated per sample against its own frozen count (python 4·10³,
+accelerated 10⁶); the T10 total-energy criterion uses the batch standard error (|z| < 3); runner
+outputs produced with step selection are labelled subset and are conformant only through a
+combined summary covering every step of the suite at the same SHA and environment; a run on a
+dirty tree is refused, and a plain-snapshot run must be attested against the committed blobs.

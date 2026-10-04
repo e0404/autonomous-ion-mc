@@ -203,6 +203,28 @@ def rows_to_partial_many(
     )
 
 
+def concat_partials(partials: list[PartialTransport]) -> PartialTransport:
+    """One partial result for the contiguous range covered by ``partials`` (exact: expansions are
+    concatenated, counters and integer grids are summed; diagnostics are dropped). Fails closed on
+    gaps or overlaps."""
+    parts = sorted(partials, key=lambda p: p.h0)
+    if not parts:
+        raise ValueError("no partial results")
+    for a, b in zip(parts, parts[1:], strict=False):
+        if a.h1 != b.h0:
+            raise ValueError(f"partial results are not contiguous: {a.h1} then {b.h0}")
+    n_cols = len(parts[0].tally_components)
+    comps = [[c for p in parts for c in p.tally_components[col]] for col in range(n_cols)]
+    counters = [sum(p.counter_sums[i] for p in parts) for i in range(len(COUNTER_NAMES))]
+    edep = []
+    for g in range(len(parts[0].edep)):
+        acc = np.zeros_like(parts[0].edep[g], dtype=np.int64)
+        for p in parts:
+            acc += p.edep[g]
+        edep.append(acc)
+    return PartialTransport(parts[0].h0, parts[-1].h1, comps, counters, edep, None, {})
+
+
 def merge_partials(
     partials: list[PartialTransport], n_histories: int, n_grids: int
 ) -> RawTransport:
