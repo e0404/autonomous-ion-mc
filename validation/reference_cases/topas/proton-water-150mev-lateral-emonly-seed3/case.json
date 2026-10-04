@@ -1,0 +1,30 @@
+{
+  "input": "input.txt",
+  "physics": [
+    "Geant4_Modular (OpenTOPAS 4.3 / Geant4 11.4.2), EM ONLY: sv:Ph/Default/Modules = 1 \"g4em-standard_opt4\" (no hadronic, no elastic, no ion, no decay modules)",
+    "EM: g4em-standard_opt4; hadronic: none (EM-only reference for EM-only backends)"
+  ],
+  "source": "150 MeV proton kinetic energy, monoenergetic (BeamEnergySpread 0), pencil beam (BeamPositionDistribution None, BeamAngularDistribution None), starting at z=-0.001 mm on the beam axis x=y=0, direction +z, entering the centre of the water entrance face (z=0)",
+  "geometry": "G4_WATER box 120 x 120 x 300 mm (x,y centred on the beam axis; z from 0 to 300 mm) in a vacuum world 400 x 400 x 800 mm",
+  "materials": "G4_WATER (Geant4 NIST material, I=78 eV, density 1.0 g/cm3)",
+  "cuts": "CutForAllParticles = 0.05 mm (production range cut for gamma, e-, e+, proton). Reference caveat (EM-only matched reference): Geant4 transports delta electrons above the production cut (CutForAllParticles = 0.05 mm, i.e. e- cut energy of roughly 50 keV in water) while ionmc deposits all electronic energy loss locally. Maximum delta-ray energy at 150 MeV is Tmax = 2 m_e c^2 (gamma^2-1) = 0.35 MeV, CSDA range about 1 mm (ESTAR, quoted from memory: [unverified]); the energy fraction in deltas above the cut is a few percent and they move on average well below 0.5 mm, so the extra lateral variance is bounded by about 0.05 x (0.5 mm)^2 = 0.01 mm^2 against sigma^2 >= 2.9 mm^2 (sigma >= 1.7 mm): <= 0.4 % on sigma^2, <= 0.2 % on sigma [bound from range arguments, not computed with Geant4].",
+  "histories": 100000,
+  "seeds": [
+    20261005
+  ],
+  "scorers": [
+    "IDD: DoseToMedium, 1x1x600 bins (full lateral extent 120x120 mm, 0.5 mm depth bins); Report Sum, Standard_Deviation",
+    "Dose3D: DoseToMedium, 240x240x300 bins (0.5 mm lateral over the full 120 x 120 mm field, 1 mm depth); OutputType Binary (dose3d.bin + dose3d.binheader); Report Sum only",
+    "Dose3DPrimary: as Dose3D with filter OnlyIncludeParticlesOfGeneration = Primary (generation-0 particles only; no nuclear-secondary dose); OutputType Binary (dose3d_primary.bin + .binheader) [informative only: in an EM-only list the generation filter is not the T15 observable]"
+  ],
+  "units": "IDD: TOPAS CSV with '#' header, dose in Gy (run total, Gy per NumberOfHistoriesInRun histories; divide by histories for Gy per primary). Dose3D: TOPAS binary (value per bin, run total Gy); layout/precision to be confirmed on the smoke run from dose3d.binheader and file size, then cross-checked against the IDD (ionmc.reference.runs.dose_3d); bins 0-based, x,y centred on the beam axis, z from the entrance face. The seed in input.txt is fixed per committed seed-variant directory; see validation/reference_cases/README.md",
+  "rationale": "EM-only all-particle lateral-spread reference for criterion T15 (EM-only backends) (150 MeV p in water, TOPAS EM-only g4em-standard_opt4, G4_WATER I=78 eV); evidence-grade candidate, seed variant 3",
+  "expected_outputs": [
+    "idd_dose.csv",
+    "dose3d.bin",
+    "dose3d.binheader",
+    "dose3d_primary.bin",
+    "dose3d_primary.binheader"
+  ],
+  "arguments": []
+}

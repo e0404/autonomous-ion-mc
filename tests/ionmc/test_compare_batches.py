@@ -1,0 +1,338 @@
+"""Batch protocol of compare_batches.py on synthetic reference runs."""
+
+from __future__ import annotations
+
+import hashlib
+import importlib.util
+import json
+from pathlib import Path
+
+import numpy as np
+import pytest
+
+from ionmc.reference import RunError, dose_3d, load_run
+from tests.ionmc.test_reference_lateral import gauss_binned
+
+SCRIPT = Path(__file__).resolve().parents[2] / "validation/scripts/reference/compare_batches.py"
+NX, NZ, H = 80, 40, 0.5
+
+
+def _load():
+    spec = importlib.util.spec_from_file_location("compare_batches", SCRIPT)
+    assert spec and spec.loader
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _amp(z: np.ndarray, r: float) -> np.ndarray:
+    return np.where(z <= r - 2, 1 + 0.01 * z, np.clip((r + 2 - z) / 4.0, 0, None) * (1 + 0.01 * r))
+
+
+ENGINE_ID = {"engine": "topas", "version": "OpenTOPAS 4.3", "mounts": [{"sha256": "aa"}]}
+
+
+def _write(
+    tmp: Path,
+    engine: str,
+    files: dict[str, bytes],
+    case: dict,
+    run_id: str,
+    *,
+    stdout: str,
+    identity: dict | None = None,
+) -> Path:
+    files = {**files, "inputs/case.json": json.dumps(case).encode(), "stdout.txt": stdout.encode()}
+    request = {
+        "case": case,
+        "code_sha": "abc",
+        "dirty": False,
+        "engine": identity or {**ENGINE_ID, "engine": engine},
+        "gpu": False,
+        "os_release_sha256": "o",
+        "runner_source_sha256": "r",
+        "sandbox_binary_sha256": "s",
+        "input_files": {
+            rel[len("inputs/") :]: {"sha256": hashlib.sha256(b).hexdigest()}
+            for rel, b in files.items()
+            if rel.startswith("inputs/")
+        },
+    }
+    files["request.json"] = json.dumps(request).encode()
+    for rel, blob in files.items():
+        p = tmp / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_bytes(blob)
+    manifest = {
+        "engine": engine,
+        "run_id": run_id,
+        "source_sha": "abc",
+        "files": {
+            rel: {"bytes": len(b), "sha256": hashlib.sha256(b).hexdigest()}
+            for rel, b in files.items()
+        },
+    }
+    (tmp / "transfer-manifest.json").write_text(json.dumps(manifest))
+    return tmp
+
+
+def topas_run(
+    tmp: Path,
+    seed: int,
+    *,
+    range_mm: float = 30.0,
+    s_scale: float = 1.0,
+    histories: int = 100_000,
+    native_seed: int | None = None,
+    lateral: bool = True,
+    idd_wrong: bool = False,
+    primary: bool | str = False,
+    modules: str = 'sv:Ph/Default/Modules = 2 "g4em-standard_opt4" "g4h-phy_QGSP_BIC_HP"',
+    native_histories: int | None = None,
+    stdout_histories: int | None = None,
+    lateral_bins: str = "0.5",
+    identity: dict | None = None,
+) -> Path:
+    z1 = (np.arange(NZ) + 0.5) * 1.0
+    amp = _amp(z1, range_mm)
+    slabs = [
+        np.outer(*(2 * [gauss_binned(NX, H, (1.5 + 0.05 * z) * s_scale)])) * a
+        for z, a in zip(z1, amp, strict=True)
+    ]
+    d3 = np.stack(slabs, axis=2)
+    lat = d3.mean(axis=(0, 1))  # IDD voxel spans the field: dose = lateral mean
+    if idd_wrong:
+        lat = lat[::-1]
+    idd = np.repeat(lat, 2)
+    rows = "".join(f"0,0,{i},{float(v)!r},0.0\n" for i, v in enumerate(idd))
+    csv = (
+        f"# X in 1 bin of 120 mm\n# Y in 1 bin of 120 mm\n# Z in {idd.size} bins of 0.5 mm\n"
+        f"# DoseToMedium ( Gy ) : Sum Standard_Deviation\n{rows}"
+    )
+    hdr = (
+        f"# X in {NX} bins of 0.5 mm\n# Y in {NX} bins of 0.5 mm\n# Z in {NZ} bins of 1 mm\n"
+        "# DoseToMedium ( Gy ) : Sum\n"
+    )
+    files = {
+        "work/idd_dose.csv": csv.encode(),
+        "inputs/input.txt": (
+            f"i:Ts/Seed = {native_seed or seed}\n{modules}\n"
+            f"i:So/Beam/NumberOfHistoriesInRun = {native_histories or histories}\n"
+            f"i:Sc/Dose3D/XBins = {lateral_bins}\n"
+        ).encode(),
+    }
+    if lateral:
+        files["work/dose3d.bin"] = d3.astype("<f8").ravel(order="F").tobytes()
+        files["work/dose3d.binheader"] = hdr.encode()
+    if lateral and primary:
+        amp_p = 0.9 if primary is True else 1.5  # "exceeds" -> more dose than all particles
+        d3p = d3 * amp_p * 0.8
+        files["work/dose3d_primary.bin"] = d3p.astype("<f8").ravel(order="F").tobytes()
+        files["work/dose3d_primary.binheader"] = hdr.encode()
+    case = {"histories": histories, "input": "input.txt", "seeds": [seed]}
+    out = f"Particle source Beam: Total number of histories: {stdout_histories or histories}\n"
+    return _write(tmp, "topas", files, case, f"REF-topas-{seed}", stdout=out, identity=identity)
+
+
+def fred_run(tmp: Path, seed: int, *, extra_args: list[str] | None = None) -> Path:
+    z = (np.arange(100) + 0.5) * 0.5
+    arr = _amp(z, 25.0).reshape(100, 1, 1).astype("<f4")
+    head = (
+        b"NDims = 3\nDimSize = 1 1 100\nOffset = 0 0 0.25\nElementSpacing = 1 1 0.5\n"
+        b"ElementType = MET_FLOAT\nElementByteOrderMSB = False\nElementDataFile = LOCAL\n"
+    )
+    case = {
+        "histories": 100_000,
+        "input": "fred.inp",
+        "seeds": [seed],
+        "arguments": ["-nprim", "100000", "-rseed", str(seed), *(extra_args or [])],
+    }
+    return _write(
+        tmp,
+        "fred",
+        {
+            "work/out/score/Phantom.Dose.mhd": head + arr.tobytes(),
+            "inputs/fred.inp": b"nprim = 100000\n",
+        },
+        case,
+        f"REF-fred-{seed}",
+        stdout="Num of primaries to deliver: 100000\n",
+    )
+
+
+def test_batch_statistics_and_lateral(tmp_path: Path) -> None:
+    mod = _load()
+    dirs = [
+        topas_run(tmp_path / f"t{i}", 100 + i, range_mm=30.0 + 0.2 * i, s_scale=1 + 0.02 * i)
+        for i in range(3)
+    ]
+    doc = mod.batch_analysis(dirs)
+    assert doc["evidence_status"] == "batched"
+    st = doc["engines"]["topas"]
+    assert st["r80_mm"]["n"] == 3 and st["r80_mm"]["sd"] > 0
+    lo, hi = st["r80_mm"]["ci95"]
+    assert lo < st["r80_mm"]["mean"] < hi
+    assert st["r80_mm"]["se"] == pytest.approx(st["r80_mm"]["sd"] / 3**0.5)
+    assert hi - st["r80_mm"]["mean"] == pytest.approx(4.3027 * st["r80_mm"]["se"])
+    assert set(st["lateral"]) == {"full@0.5", "full@0.9", "w20@0.5", "w20@0.9"}
+    s = st["lateral"]["w20@0.5"]["sigma_mm"]
+    # sigma(z) = (1.5 + 0.05 z) * scale, z about 0.5 R80 (~15 mm): ~2.25 mm * (1..1.04)
+    assert 2.2 < s["mean"] < 2.45 and s["se"] > 0
+    assert mod.t95(1) == 12.7062 and mod.t95(30) == 2.0423 and mod.t95(99) == 1.96
+
+
+def test_primary_scorer_reported_and_checked(tmp_path: Path) -> None:
+    mod = _load()
+    dirs = [
+        topas_run(tmp_path / f"p{i}", 200 + i, s_scale=1 + 0.02 * i, primary=True) for i in range(2)
+    ]
+    doc = mod.batch_analysis(dirs)
+    st = doc["engines"]["topas"]
+    assert set(st["lateral_primary"]) == set(st["lateral"])
+    # the synthetic primary dose has the same shape as the all-particle dose
+    a, b = st["lateral"]["w20@0.9"], st["lateral_primary"]["w20@0.9"]
+    assert b["sigma_mm"]["mean"] == pytest.approx(a["sigma_mm"]["mean"], rel=1e-6)
+    d3p = dose_3d(load_run(dirs[0]), "dose3d_primary")
+    assert d3p.dose.shape == (NX, NX, NZ)
+    with pytest.raises(RunError, match="exceeds"):
+        dose_3d(load_run(topas_run(tmp_path / "x", 5, primary="exceeds")), "dose3d_primary")
+    with pytest.raises(mod.BatchError, match="3-D"):  # primary scored in only one run
+        mod.batch_analysis([dirs[0], topas_run(tmp_path / "y", 6)])
+    with pytest.raises(RunError, match="unknown"):
+        dose_3d(load_run(dirs[0]), "other")
+
+
+def test_single_run_fails(tmp_path: Path) -> None:
+    mod = _load()
+    with pytest.raises(mod.BatchError, match="at least 2"):
+        mod.batch_analysis([topas_run(tmp_path / "a", 1)])
+    with pytest.raises(SystemExit):
+        mod.main(
+            ["--runs", str(topas_run(tmp_path / "b", 2)), "--output", str(tmp_path / "o.json")]
+        )
+    assert not (tmp_path / "o.json").exists()
+
+
+def test_duplicate_seeds_fail(tmp_path: Path) -> None:
+    mod = _load()
+    with pytest.raises(mod.BatchError, match="duplicate seeds"):
+        mod.batch_analysis([topas_run(tmp_path / "a", 7), topas_run(tmp_path / "b", 7)])
+
+
+def test_native_seed_must_match_case_json(tmp_path: Path) -> None:
+    mod = _load()
+    bad = topas_run(tmp_path / "a", 8, native_seed=9)
+    with pytest.raises(mod.BatchError, match="native input seed"):
+        mod.batch_analysis([bad, topas_run(tmp_path / "b", 10)])
+
+
+def test_mismatched_runs_fail(tmp_path: Path) -> None:
+    mod = _load()
+    a = topas_run(tmp_path / "a", 1)
+    # engine with a single run alongside a valid batch
+    with pytest.raises(mod.BatchError, match="engine fred"):
+        mod.batch_analysis([a, topas_run(tmp_path / "b", 2), fred_run(tmp_path / "f", 3)])
+    # mixed histories
+    with pytest.raises(mod.BatchError, match="histories"):
+        mod.batch_analysis([a, topas_run(tmp_path / "c", 4, histories=200_000)])
+    # too few histories
+    with pytest.raises(mod.BatchError, match="histories"):
+        mod.batch_analysis(
+            [
+                topas_run(tmp_path / "d", 5, histories=200),
+                topas_run(tmp_path / "e", 6, histories=200),
+            ]
+        )
+    # 3-D dose present in only some runs
+    with pytest.raises(mod.BatchError, match="3-D"):
+        mod.batch_analysis([a, topas_run(tmp_path / "g", 11, lateral=False)])
+    # same run directory twice (distinct seeds impossible)
+    with pytest.raises(mod.BatchError):
+        mod.batch_analysis([a, a])
+
+
+def test_replicate_gate_rejects_any_config_difference(tmp_path: Path) -> None:
+    mod = _load()
+    a = topas_run(tmp_path / "a", 1)
+    ok = topas_run(tmp_path / "ok", 2)
+    assert mod.batch_analysis([a, ok])["evidence_status"] == "batched"
+    cases = {
+        "lateral binning": dict(lateral_bins="0.25"),
+        "physics line": dict(modules='sv:Ph/Default/Modules = 1 "g4h-phy_QGSP_BIC_HP"'),
+        "engine identity": dict(identity={**ENGINE_ID, "version": "other"}),
+    }
+    for name, kw in cases.items():
+        bad = topas_run(tmp_path / name.replace(" ", "_"), 3, **kw)
+        with pytest.raises(mod.BatchError, match="differ"):
+            mod.batch_analysis([a, bad])
+        with pytest.raises(SystemExit):
+            mod.main(["--runs", str(a), str(bad), "--output", str(tmp_path / "o.json")])
+        assert not (tmp_path / "o.json").exists()
+    # native-input histories or engine summary disagree with the declared histories
+    with pytest.raises(mod.BatchError, match="native input histories"):
+        mod.batch_analysis([a, topas_run(tmp_path / "nh", 4, native_histories=99_999)])
+    with pytest.raises(mod.BatchError, match="run summary"):
+        mod.batch_analysis([a, topas_run(tmp_path / "sh", 5, stdout_histories=1000)])
+    # engine summary of a run with different histories (declared consistently) also differs
+    with pytest.raises(mod.BatchError, match="histories"):
+        mod.batch_analysis([a, topas_run(tmp_path / "dh", 6, histories=200_000)])
+
+
+def test_emonly_topas_is_its_own_group(tmp_path: Path) -> None:
+    mod = _load()
+    em = 'sv:Ph/Default/Modules = 1 "g4em-standard_opt4"'
+    full = [topas_run(tmp_path / f"f{i}", 10 + i) for i in range(2)]
+    emo = [topas_run(tmp_path / f"e{i}", 20 + i, modules=em) for i in range(2)]
+    # mixing physics in one call is fine as separate groups only if each group is a valid batch
+    doc = mod.batch_analysis(full + emo)
+    assert set(doc["engines"]) == {"topas", "topas-emonly"}
+    with pytest.raises(mod.BatchError, match="at least 2"):
+        mod.batch_analysis([*full, emo[0]])
+
+
+def test_dose3d_must_reproduce_idd(tmp_path: Path) -> None:
+    ok = load_run(topas_run(tmp_path / "a", 1))
+    assert dose_3d(ok).dose.shape == (NX, NX, NZ)
+    with pytest.raises(RunError, match="IDD"):
+        dose_3d(load_run(topas_run(tmp_path / "b", 2, idd_wrong=True)))
+    with pytest.raises(RunError, match="engine"):
+        dose_3d(load_run(fred_run(tmp_path / "f", 3)))
+
+
+def test_fred_seed_gate(tmp_path: Path) -> None:
+    mod = _load()
+    a, b = fred_run(tmp_path / "a", 1), fred_run(tmp_path / "b", 2)
+    assert mod.batch_analysis([a, b])["engines"]["fred"]["r80_mm"]["n"] == 2
+    dup = fred_run(tmp_path / "dup", 3, extra_args=["-rseed", "99"])
+    with pytest.raises(mod.BatchError, match="exactly one"):
+        mod.batch_analysis([a, dup])
+    with pytest.raises(SystemExit):
+        mod.main(["--runs", str(a), str(dup), "--output", str(tmp_path / "o.json")])
+    for bad in ("12x", "-5", "0"):
+        run = fred_run(tmp_path / f"m{bad}", 4)
+        case = json.loads((run / "inputs/case.json").read_text())
+        case["arguments"] = ["-nprim", "100000", "-rseed", bad]
+        mal = _rewrite_case(run, case)
+        with pytest.raises(mod.BatchError, match="positive integer"):
+            mod.batch_analysis([a, mal])
+    with pytest.raises(mod.BatchError, match="exactly one"):
+        mod.fred_rseed(["-nprim", "1"])
+    with pytest.raises(mod.BatchError, match="positive integer"):
+        mod.fred_rseed(["-rseed"])
+    assert mod.fred_rseed(["-a", "-rseed", "7", "-b"]) == (7, ["-a", "-b"])
+
+
+def _rewrite_case(run: Path, case: dict) -> Path:
+    """Rewrite inputs/case.json, the request copy and the manifest hashes consistently."""
+    (run / "inputs/case.json").write_text(json.dumps(case))
+    req = json.loads((run / "request.json").read_text())
+    req["case"] = case
+    blob = (run / "inputs/case.json").read_bytes()
+    req["input_files"]["case.json"]["sha256"] = hashlib.sha256(blob).hexdigest()
+    (run / "request.json").write_text(json.dumps(req))
+    man = json.loads((run / "transfer-manifest.json").read_text())
+    for rel in ("inputs/case.json", "request.json"):
+        data = (run / rel).read_bytes()
+        man["files"][rel] = {"bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
+    (run / "transfer-manifest.json").write_text(json.dumps(man))
+    return run

@@ -1,0 +1,30 @@
+{
+  "input": "input.txt",
+  "physics": [
+    "Geant4_Modular (OpenTOPAS 4.3 / Geant4 11.4.2): g4em-standard_opt4, g4h-phy_QGSP_BIC_HP, g4h-elastic_HP, g4stopping, g4ion-binarycascade, g4decay",
+    "EM: g4em-standard_opt4; hadronic: QGSP_BIC_HP + HP elastic + binary-cascade ions"
+  ],
+  "source": "150 MeV proton kinetic energy, monoenergetic (BeamEnergySpread 0), pencil beam (BeamPositionDistribution None, BeamAngularDistribution None), starting at z=-0.001 mm on the beam axis x=y=0, direction +z, entering the centre of the water entrance face (z=0)",
+  "geometry": "G4_WATER box 120 x 120 x 300 mm (x,y centred on the beam axis; z from 0 to 300 mm) in a vacuum world 400 x 400 x 800 mm",
+  "materials": "G4_WATER (Geant4 NIST material, I=78 eV, density 1.0 g/cm3)",
+  "cuts": "CutForAllParticles = 0.05 mm (production range cut for gamma, e-, e+, proton)",
+  "histories": 200,
+  "seeds": [
+    20261003
+  ],
+  "scorers": [
+    "IDD: DoseToMedium, 1x1x600 bins (full lateral extent 120x120 mm, 0.5 mm depth bins); Report Sum, Standard_Deviation",
+    "Dose3D: DoseToMedium, 240x240x300 bins (0.5 mm lateral over the full 120 x 120 mm field, 1 mm depth); OutputType Binary (dose3d.bin + dose3d.binheader); Report Sum only",
+    "Dose3DPrimary: as Dose3D with filter OnlyIncludeParticlesOfGeneration = Primary (generation-0 particles only; no nuclear-secondary dose); OutputType Binary (dose3d_primary.bin + .binheader)"
+  ],
+  "units": "IDD: TOPAS CSV with '#' header, dose in Gy (run total, Gy per NumberOfHistoriesInRun histories; divide by histories for Gy per primary). Dose3D: TOPAS binary (value per bin, run total Gy); layout/precision to be confirmed on the smoke run from dose3d.binheader and file size, then cross-checked against the IDD (ionmc.reference.runs.dose_3d); bins 0-based, x,y centred on the beam axis, z from the entrance face. The seed in input.txt is fixed per committed seed-variant directory; see validation/reference_cases/README.md",
+  "rationale": "independent Monte Carlo lateral-spread reference for criterion T15 (150 MeV p in water, TOPAS QGSP_BIC_HP + opt4, G4_WATER I=78 eV); smoke: execution, output layout and timing only (200 histories)",
+  "expected_outputs": [
+    "idd_dose.csv",
+    "dose3d.bin",
+    "dose3d.binheader",
+    "dose3d_primary.bin",
+    "dose3d_primary.binheader"
+  ],
+  "arguments": []
+}

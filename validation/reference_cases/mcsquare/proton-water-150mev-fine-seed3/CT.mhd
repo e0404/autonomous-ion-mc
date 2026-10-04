@@ -1,0 +1,8 @@
+ObjectType = Image
+NDims = 3
+DimSize = 60 600 60
+ElementSpacing = 2 0.5 2
+Offset = 0 0 0
+ElementType = MET_FLOAT
+ElementByteOrderMSB = False
+ElementDataFile = CT.raw

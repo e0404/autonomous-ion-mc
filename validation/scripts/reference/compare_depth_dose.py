@@ -5,7 +5,8 @@ Writes metrics (mm) per run and pairwise differences; no raw curves.
 
 The evidence status is always "exploratory": each input is a single-seed run with no statistical
 uncertainty. Batch statistics (several runs per engine with distinct seeds read from the manifested
-case.json) are a later task; there is deliberately no option to relabel the status from detached
+case.json) are computed by compare_batches.py; there is deliberately no option to relabel the
+status from detached
 metadata. The analysis code SHA is derived from git HEAD of this repository and a dirty flag is
 recorded; --code-sha, if given, must equal HEAD.
 """
@@ -76,7 +77,7 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
 
     code_sha, dirty = code_state(args.code_sha)
-    runs = []
+    runs: list[dict[str, Any]] = []
     for run_dir in args.runs:
         run = load_run(run_dir)
         dd = depth_dose(run)
@@ -97,7 +98,7 @@ def main(argv: list[str] | None = None) -> int:
                 "falloff_80_20_mm": distal_falloff_80_20(dd.depth_mm, curve),
             }
         )
-    pairs = []
+    pairs: list[dict[str, Any]] = []
     for a, b in itertools.combinations(runs, 2):
         pairs.append(
             {
