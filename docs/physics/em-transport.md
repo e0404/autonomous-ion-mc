@@ -32,8 +32,12 @@ For `t >= R(E)` the loss is `E`. `ionmc.transport.tables.TransportTables` stores
 (at least 200 points per decade) and `ln E` on a uniform `ln R` grid (800 points per decade);
 values are log-log linear interpolations. The test `test_u2_round_trip_and_monotonicity` requires
 `|Rinv(R(E)) / E - 1| <= 1e-5` over the table range and strictly monotone `R` and `Rinv` for water and
-copper, and that `R` follows the source table within 1e-4. Because the transport state energy itself
-is used (not `Rinv(R(E))`), no round-trip offset accumulates along a track.
+copper, and that `R` follows the source table within 1e-4. The transport state energy itself is
+carried along the track (not `Rinv(R(E))`), so the energy variable is never re-derived from the
+range table; the per-step interpolation round-trip error of `E - Rinv(R(E) - t)` (≤ 1e-5 relative
+per evaluation) does, however, accumulate with the number of telescoping steps — the measured
+3e-4 difference between 0.01 mm and 0.1 mm steps above — which is why steps below 1e-2·R use the
+midpoint branch instead.
 
 The step length is limited by the voxel plane, by `f E / S_lin` with `f = 0.02`, by the Geant4 range
 function `alpha R + rho_f (1 - alpha)(2 - rho_f / R)` for `R > rho_f` (otherwise `R`; defaults
