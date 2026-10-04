@@ -58,7 +58,9 @@ def make_kernel_support(real: type) -> SimpleNamespace:
     """Control struct and helper functions of precision ``real`` (shared by the variants)."""
     name = check_real(real)
     R = real
+    D = wp.float64  # energy, range and loss bookkeeping is double precision in every variant
     F = make_transport_funcs(real)
+    FD = make_transport_funcs(D)
     v3 = F.vec3
     n_fixed = wp.constant(N_FIXED_TALLIES)
 
@@ -76,6 +78,7 @@ def make_kernel_support(real: type) -> SimpleNamespace:
         "mcs": int,
         "straggling": int,
         "trunc_diag": int,
+        "straggle_gamma": int,
         "max_pieces": int,
         "z_clip": R,
         "nx": int,
@@ -84,17 +87,17 @@ def make_kernel_support(real: type) -> SimpleNamespace:
         "n_grids": int,
         "n_e": int,
         "n_r": int,
-        "e_cut": R,
-        "e_table_max": R,
-        "e0": R,
-        "sigma_e": R,
+        "e_cut": D,
+        "e_table_max": D,
+        "e0": D,
+        "sigma_e": D,
         "sigma_lat": R,
-        "c_alpha": R,
-        "c_rho_f": R,
-        "c_frac": R,
-        "c_smax": R,
-        "c_fshort": R,
-        "mass": R,
+        "c_alpha": D,
+        "c_rho_f": D,
+        "c_frac": D,
+        "c_smax": D,
+        "c_fshort": D,
+        "mass": D,
         "pos0": v3,
         "dir": v3,
         "origin": v3,
@@ -124,7 +127,7 @@ def make_kernel_support(real: type) -> SimpleNamespace:
         nzg: int,
         off: int,
         n_grids: int,
-        de: R,
+        de: D,
     ):
         """Quantize and add ``de`` to voxel ``(ix, iy, iz)`` of grid ``g`` (int64 atomic add), or
         tally it as outside; the rounding residual is tallied per grid."""
@@ -146,7 +149,7 @@ def make_kernel_support(real: type) -> SimpleNamespace:
         px: R,
         py: R,
         pz: R,
-        de: R,
+        de: D,
         g_origin: wp.array2d(dtype=R),
         g_inv: wp.array2d(dtype=R),
         g_shape: wp.array2d(dtype=int),
@@ -180,7 +183,7 @@ def make_kernel_support(real: type) -> SimpleNamespace:
         uy: R,
         uz: R,
         length: R,
-        deposit: R,
+        deposit: D,
         s_act: R,
         g_origin: wp.array2d(dtype=R),
         g_spacing: wp.array2d(dtype=R),
@@ -211,7 +214,7 @@ def make_kernel_support(real: type) -> SimpleNamespace:
                 piece, axis = F.seg_piece(v3(px, py, pz), uvec, ix, iy, iz, go, gs, remaining)
                 deposit_voxel(
                     edep, tally_rows, tid, batch, g, ix, iy, iz, nxg, nyg, nzg, off, n_grids,
-                    deposit * piece / s_act,
+                    deposit * D(piece) / D(s_act),
                 )  # fmt: skip
                 remaining = remaining - piece
                 if axis >= 0:
@@ -242,7 +245,7 @@ def make_kernel_support(real: type) -> SimpleNamespace:
             overflow = 1
             deposit_voxel(
                 edep, tally_rows, tid, batch, g, ix, iy, iz, nxg, nyg, nzg, off, n_grids,
-                deposit * remaining / s_act,
+                deposit * D(remaining) / D(s_act),
             )  # fmt: skip
         return overflow
 
@@ -258,7 +261,7 @@ def make_kernel_support(real: type) -> SimpleNamespace:
         hinge: v3,
         d1: v3,
         leg2: R,
-        deposit: R,
+        deposit: D,
         s_act: R,
         g_origin: wp.array2d(dtype=R),
         g_spacing: wp.array2d(dtype=R),
@@ -298,16 +301,16 @@ def make_kernel_support(real: type) -> SimpleNamespace:
 
     @named_func(name)
     def energy_from_range(
-        ln_er: wp.array2d(dtype=R),
-        ln_r0: wp.array(dtype=R),
-        inv_dln_r: wp.array(dtype=R),
+        ln_er: wp.array2d(dtype=D),
+        ln_r0: wp.array(dtype=D),
+        inv_dln_r: wp.array(dtype=D),
         n_r: int,
         m: int,
-        r_g_cm2: R,
-    ) -> R:
-        """Energy [MeV] with CSDA range ``r_g_cm2`` (shared bin location, array reads)."""
-        i, f = F.log_bin_index(r_g_cm2, ln_r0[m], inv_dln_r[m], n_r)
-        return F.interp_exp(ln_er[m, i], ln_er[m, i + 1], f)
+        r_g_cm2: D,
+    ) -> D:
+        """Energy [MeV] with CSDA range ``r_g_cm2`` (shared bin location, array reads; double)."""
+        i, f = FD.log_bin_index(r_g_cm2, ln_r0[m], inv_dln_r[m], n_r)
+        return FD.interp_exp(ln_er[m, i], ln_er[m, i + 1], f)
 
     return SimpleNamespace(
         control=control,
@@ -327,10 +330,13 @@ def make_transport_kernel(real: type, diag: bool):
     """
     name = check_real(real)
     R = real
+    D = wp.float64  # energy / range bookkeeping in double precision (positions and angles in R)
     S = make_kernel_support(real)
     F = make_transport_funcs(real)
+    FD = make_transport_funcs(D)
     EM = make_em(real)
-    K = make_kinematics(real)
+    EMD = make_em(D)
+    K = make_kinematics(D)
     PH = make_philox(real)
     v3 = F.vec3
     control = S.control
@@ -353,16 +359,16 @@ def make_transport_kernel(real: type, diag: bool):
     def transport(
         ctl: control,
         mat: wp.array3d(dtype=wp.int32),
-        dens: wp.array3d(dtype=R),
-        ln_s: wp.array2d(dtype=R),
-        ln_r: wp.array2d(dtype=R),
-        ln_er: wp.array2d(dtype=R),
-        ln_e0: wp.array(dtype=R),
-        inv_dln_e: wp.array(dtype=R),
-        ln_r0: wp.array(dtype=R),
-        inv_dln_r: wp.array(dtype=R),
-        z_over_a: wp.array(dtype=R),
-        inv_xs: wp.array(dtype=R),
+        dens: wp.array3d(dtype=D),
+        ln_s: wp.array2d(dtype=D),
+        ln_r: wp.array2d(dtype=D),
+        ln_er: wp.array2d(dtype=D),
+        ln_e0: wp.array(dtype=D),
+        inv_dln_e: wp.array(dtype=D),
+        ln_r0: wp.array(dtype=D),
+        inv_dln_r: wp.array(dtype=D),
+        z_over_a: wp.array(dtype=D),
+        inv_xs: wp.array(dtype=D),
         g_origin: wp.array2d(dtype=R),
         g_spacing: wp.array2d(dtype=R),
         g_inv: wp.array2d(dtype=R),
@@ -385,7 +391,8 @@ def make_transport_kernel(real: type, diag: bool):
         ny = ctl.ny
         nz = ctl.nz
         zero = R(0.0)
-        one = R(1.0)
+        zd = D(0.0)
+        one_d = D(1.0)
 
         # per-history accumulators (a row depends on this history alone)
         t_initial = wp.float64(0.0)
@@ -412,9 +419,9 @@ def make_transport_kernel(real: type, diag: bool):
         z3 = F.gauss_one(PH.u01(w[2]), PH.u01(w[3]))
         d = ctl.dir
         e1v, e2v = F.orthonormal_basis(d)
-        energy = R(ctl.e0)
-        if ctl.sigma_e > zero:
-            energy = energy + ctl.sigma_e * z3
+        energy = D(ctl.e0)
+        if ctl.sigma_e > zd:
+            energy = energy + ctl.sigma_e * D(z3)
         px = R(ctl.pos0[0])
         py = R(ctl.pos0[1])
         pz = R(ctl.pos0[2])
@@ -429,7 +436,7 @@ def make_transport_kernel(real: type, diag: bool):
         ix = int(0)
         iy = int(0)
         iz = int(0)
-        p1v1 = R(0.0)
+        p1v1 = D(0.0)
         t0 = R(0.0)
         src_ok = int(0)
         if energy >= ctl.e_cut and energy <= ctl.e_table_max:
@@ -477,19 +484,20 @@ def make_transport_kernel(real: type, diag: bool):
             if alive == 1:
                 m = int(mat[ix, iy, iz])
                 rho = dens[ix, iy, iz]
-                ib, fb = F.log_bin_index(energy, ln_e0[m], inv_dln_e[m], ctl.n_e)
-                s0 = F.interp_exp(ln_s[m, ib], ln_s[m, ib + 1], fb)
-                r0 = F.interp_exp(ln_r[m, ib], ln_r[m, ib + 1], fb)
-                s_lin = s0 * rho / R(10.0)
-                r_mm = r0 * R(10.0) / rho
+                ib, fb = FD.log_bin_index(energy, ln_e0[m], inv_dln_e[m], ctl.n_e)
+                s0 = FD.interp_exp(ln_s[m, ib], ln_s[m, ib + 1], fb)
+                r0 = FD.interp_exp(ln_r[m, ib], ln_r[m, ib + 1], fb)
+                s_lin = s0 * rho / D(10.0)
+                r_mm = r0 * D(10.0) / rho
                 pvec = v3(px, py, pz)
                 dvec = v3(ux, uy, uz)
                 d_geo, axis_pre = F.dda_next_clip(
                     pvec, dvec, ix, iy, iz, ctl.origin, ctl.spacing, ctl.z_clip
                 )
-                s_el = F.eloss_step_limit(energy, s_lin, ctl.c_frac)
-                s_rg = F.range_step_limit(r_mm, ctl.c_alpha, ctl.c_rho_f)
-                s, reason = F.select_step(d_geo, s_el, s_rg, ctl.c_smax)
+                s_el = FD.eloss_step_limit(energy, s_lin, ctl.c_frac)
+                s_rg = FD.range_step_limit(r_mm, ctl.c_alpha, ctl.c_rho_f)
+                s_d, reason = FD.select_step(D(d_geo), s_el, s_rg, ctl.c_smax)
+                s = R(s_d)  # the step length in the geometry precision
 
                 # block A
                 wa = PH.philox_block(h, u_zero, wp.uint32(blocks), p_transport, key)
@@ -505,26 +513,26 @@ def make_transport_kernel(real: type, diag: bool):
                 d1z = R(uz)
                 if ctl.mcs == 1:
                     e_mid = energy_from_range(
-                        ln_er, ln_r0, inv_dln_r, ctl.n_r, m, r0 - rho * s / R(20.0)
+                        ln_er, ln_r0, inv_dln_r, ctl.n_r, m, r0 - rho * s_d / D(20.0)
                     )
                     inv_x = inv_xs[m]
                     pv_mid = K.pv_mev(e_mid, ctl.mass)
-                    var = R(0.0)
+                    var = D(0.0)
                     if birth == 1:
                         e_end = wp.min(
                             energy_from_range(
-                                ln_er, ln_r0, inv_dln_r, ctl.n_r, m, r0 - rho * s / R(10.0)
+                                ln_er, ln_r0, inv_dln_r, ctl.n_r, m, r0 - rho * s_d / D(10.0)
                             ),
                             energy,
                         )
-                        var = EM.scattering_variance_birth(
-                            pv_mid, K.pv_mev(e_end, ctl.mass), p1v1, one, inv_x, rho, s
+                        var = EMD.scattering_variance_birth(
+                            pv_mid, K.pv_mev(e_end, ctl.mass), p1v1, one_d, inv_x, rho, s_d
                         )
                     else:
-                        t_pow = EM.scattering_power_dm(pv_mid, p1v1, one, inv_x, rho)
-                        var = t_pow * s
-                    theta = EM.polar_deflection(var, ua1)
-                    nd = EM.rotate_dir(dvec, theta, two_pi * ua2)
+                        t_pow = EMD.scattering_power_dm(pv_mid, p1v1, one_d, inv_x, rho)
+                        var = t_pow * s_d
+                    theta = EMD.polar_deflection(var, D(ua1))
+                    nd = EM.rotate_dir(dvec, R(theta), two_pi * ua2)
                     d1x = nd[0]
                     d1y = nd[1]
                     d1z = nd[2]
@@ -603,31 +611,44 @@ def make_transport_kernel(real: type, diag: bool):
                 s_act = leg1 + leg2
 
                 # energy loss
-                tt = rho * s_act / R(10.0)
+                s_act_d = D(s_act)
+                tt = rho * s_act_d / D(10.0)
                 e_r1 = energy_from_range(ln_er, ln_r0, inv_dln_r, ctl.n_r, m, r0 - tt)
                 if ctl.c_fshort * r0 <= tt and tt < r0 and e_r1 > energy:
                     c_inv = c_inv + 1  # E1 > E0 from the inverse round trip
-                    e_r1 = R(energy)
-                mean = EM.csda_mean_loss(energy, e_r1, s0, tt, r0, ctl.c_fshort)
+                    e_r1 = D(energy)
+                mean = EMD.csda_mean_loss(energy, e_r1, s0, tt, r0, ctl.c_fshort)
                 attempts = int(1)
-                loss = R(mean)
+                loss = D(mean)
                 if ctl.straggling == 1:
-                    var_e = EM.bohr_variance(
-                        energy - R(0.5) * mean, ctl.mass, one, z_over_a[m], rho, s_act
+                    var_e = EMD.bohr_variance(
+                        energy - D(0.5) * mean, ctl.mass, one_d, z_over_a[m], rho, s_act_d
                     )
                     accepted = int(0)
                     k = int(0)
                     while k < max_attempts and accepted == 0:
                         wb = PH.philox_block(h, u_zero, wp.uint32(blocks), p_transport, key)
                         blocks = blocks + 1
-                        lw, ok = EM.straggle_attempt(
-                            mean,
-                            var_e,
-                            PH.u01(wb[0]),
-                            PH.u01(wb[1]),
-                            PH.u01(wb[2]),
-                            PH.u01(wb[3]),
-                        )
+                        lw = D(0.0)
+                        ok = int(0)
+                        if ctl.straggle_gamma == 1:  # model bohr_gamma_v1
+                            lw, ok = EMD.straggle_attempt_gamma(
+                                mean,
+                                var_e,
+                                D(PH.u01(wb[0])),
+                                D(PH.u01(wb[1])),
+                                D(PH.u01(wb[2])),
+                                D(PH.u01(wb[3])),
+                            )
+                        else:
+                            lw, ok = EMD.straggle_attempt(
+                                mean,
+                                var_e,
+                                D(PH.u01(wb[0])),
+                                D(PH.u01(wb[1])),
+                                D(PH.u01(wb[2])),
+                                D(PH.u01(wb[3])),
+                            )
                         attempts = k + 1
                         if ok == 1:
                             loss = lw
@@ -635,14 +656,14 @@ def make_transport_kernel(real: type, diag: bool):
                         k = k + 1
                     if accepted == 0:
                         c_strag = c_strag + 1
-                        loss = R(mean)
+                        loss = D(mean)
                 else:
                     blocks = blocks + 1  # one block is drawn and ignored
                 loss = wp.min(loss, energy)
                 e_new = energy - loss
                 deposit = energy - e_new
 
-                if deposit > zero:
+                if deposit > zd:
                     c_pieces = c_pieces + deposit_step(
                         edep, tally_rows, tid, batch, v3(px, py, pz), v3(ux, uy, uz), leg1,
                         v3(hx, hy, hz), v3(d1x, d1y, d1z), leg2, deposit, s_act, g_origin,
@@ -656,7 +677,7 @@ def make_transport_kernel(real: type, diag: bool):
                 ux = R(d1x)
                 uy = R(d1y)
                 uz = R(d1z)
-                energy = R(e_new)
+                energy = D(e_new)
                 steps = steps + 1
                 if s_act > zero:
                     birth = 0
@@ -715,7 +736,7 @@ def make_transport_kernel(real: type, diag: bool):
             end_state[tid, 3] = ux
             end_state[tid, 4] = uy
             end_state[tid, 5] = uz
-            end_state[tid, 6] = energy
+            end_state[tid, 6] = R(energy)
             end_state[tid, 7] = c_res
             end_state[tid, 8] = c_sx
             end_state[tid, 9] = c_sy

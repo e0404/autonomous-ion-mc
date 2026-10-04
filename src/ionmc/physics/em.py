@@ -142,6 +142,48 @@ def make_em(real: type) -> SimpleNamespace:
         return loss, ok
 
     @named_func(name)
+    def straggle_attempt_gamma(
+        mean_mev: real, var_mev2: real, u0: real, u1: real, u2: real, u3: real
+    ) -> tuple[real, int]:
+        """One sampling attempt of the energy loss [MeV] for the model ``bohr_gamma_v1``: a Gamma
+        distribution with exactly the Bohr mean and variance for EVERY ratio mean / sigma (shape
+        ``k = ratio^2``, scale ``sigma^2 / mean``; Marsaglia-Tsang, shape ``k + 1`` and a
+        ``u3^(1/k)`` factor for ``k < 1``): positive, no clamp, no Gaussian branch. With a common
+        scale ``theta = sigma^2 / mean`` along a path the sum of Gamma steps is exactly Gamma with
+        the summed shape, so the whole loss distribution (not only its first two moments) is
+        independent of the step length wherever ``theta`` varies slowly. Same inputs, outputs and
+        rejection protocol as :func:`straggle_attempt`."""
+        loss = real(0.0)
+        ok = int(0)
+        if mean_mev <= real(0.0):
+            ok = 1
+        elif var_mev2 <= real(0.0):
+            loss = mean_mev
+            ok = 1
+        else:
+            sigma = wp.sqrt(var_mev2)
+            ratio = mean_mev / sigma
+            x = wp.sqrt(real(-2.0) * wp.log(u0)) * wp.cos(two_pi * u1)
+            k = ratio * ratio
+            a = k
+            if k < real(1.0):
+                a = k + real(1.0)
+            d = a - real(1.0) / real(3.0)
+            c = real(1.0) / wp.sqrt(real(9.0) * d)
+            v1 = real(1.0) + c * x
+            if v1 > real(0.0):
+                v = v1 * v1 * v1
+                lhs = wp.log(u2)
+                rhs = real(0.5) * x * x + d - d * v + d * wp.log(v)
+                if lhs < rhs:
+                    g = d * v
+                    if k < real(1.0):
+                        g = g * wp.pow(u3, real(1.0) / k)
+                    loss = mean_mev / k * g
+                    ok = 1
+        return loss, ok
+
+    @named_func(name)
     def fdm(pv_mev: real, p1v1_mev: real) -> real:
         """Gottschalk's f_dM(pv, p1v1) >= 0 (zero where the fit diverges, pv -> p1v1)."""
         ratio = pv_mev / p1v1_mev
@@ -228,6 +270,7 @@ def make_em(real: type) -> SimpleNamespace:
         csda_mean_loss=csda_mean_loss,
         bohr_variance=bohr_variance,
         straggle_attempt=straggle_attempt,
+        straggle_attempt_gamma=straggle_attempt_gamma,
         fdm=fdm,
         scattering_power_dm=scattering_power_dm,
         scattering_variance_birth=scattering_variance_birth,

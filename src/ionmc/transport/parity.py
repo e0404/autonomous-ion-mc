@@ -41,6 +41,8 @@ DEPOSIT_FLOOR_FRACTION = 0.01
 P_VALUE_MIN = 0.001
 SCALAR_Z_MAX = 3.5
 DEGENERATE_RTOL = 1e-9
+DEGENERATE_SE_RTOL = 1e-8
+DETERMINISTIC_RTOL = {"float32": 1e-5, "float64": 1e-12}
 DOSE_FRACTION = 0.01
 T12_DEPTHS = (0.25, 0.5, 0.9)
 
@@ -323,6 +325,7 @@ class T12Observables:
     scalars: dict[str, NDArray[np.float64]]
     n_batches: int
     histories_per_batch: int = 1
+    precision: str = "float64"
 
 
 def _r80(profile: NDArray[np.float64], dz: float) -> float:
@@ -395,6 +398,7 @@ def t12_observables(result: Result, layout: T12Layout) -> T12Observables:
         result.requested_config.scoring,
         layout,
         result.n_histories // result.n_batches,
+        result.precision,
     )
 
 
@@ -403,6 +407,7 @@ def t12_observables_from_grids(
     scoring: tuple[ScoringGrid, ...],
     layout: T12Layout,
     histories_per_batch: int,
+    precision: str = "float64",
 ) -> T12Observables:
     """:func:`t12_observables` from per-batch per-primary grid arrays ``(B, nx, ny, nz)`` by name
     (also used on samples merged from saved parts)."""
@@ -426,7 +431,7 @@ def t12_observables_from_grids(
             mean = (prof * xc).sum(axis=1) / tot
             var = (prof * (xc[None, :] - mean[:, None]) ** 2).sum(axis=1) / tot
             scalars["sigma_lat_05R_mm"] = np.sqrt(var)
-    return T12Observables(arrays, scalars, b, histories_per_batch)
+    return T12Observables(arrays, scalars, b, histories_per_batch, precision)
 
 
 def _mean_se(x: NDArray[np.float64]) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
@@ -534,7 +539,17 @@ def t12_compare(
         ref = 0.5 * (ma + mb)
         sel = ref > DOSE_FRACTION * ref.max()
         n = int(sel.sum())
-        chi2, zmax, _z = _chi2_profile(a.arrays[name][:, sel], b.arrays[name][:, sel])
+        chi2, _zmax_all, z_sel = _chi2_profile(a.arrays[name][:, sel], b.arrays[name][:, sel])
+        # defined-value rule: only bins that both samples support (at least max(2, ceil(B/2))
+        # batches with a nonzero deposit) enter max|z|; the others have unreliable standard errors
+        need_a, need_b = max(2, -(-a.n_batches // 2)), max(2, -(-b.n_batches // 2))
+        sup_a = (a.arrays[name][:, sel] > 0.0).sum(axis=0)
+        sup_b = (b.arrays[name][:, sel] > 0.0).sum(axis=0)
+        supported = (sup_a >= need_a) & (sup_b >= need_b)
+        n_supported = int(supported.sum())
+        zmax = float(np.abs(z_sel[supported]).max()) if n_supported else 0.0
+        worst_all = int(np.argmax(np.abs(z_sel))) if z_sel.size else 0
+        sel_idx = np.nonzero(sel)[0]
         p_wh = wilson_hilferty_p(chi2, n) if n >= 1 else 1.0
         p = (
             permutation_p_value(
@@ -548,22 +563,48 @@ def t12_compare(
             if n >= 1
             else 1.0
         )
-        bound = bonferroni_z(n) if n else float("inf")
+        bound = bonferroni_z(n_supported) if n_supported else float("inf")
         passed = bool(p > P_VALUE_MIN and zmax < bound)
         out["arrays"][name] = {
             "n_bins": n,
+            "n_supported_bins": n_supported,
             "chi2": chi2,
             "p_value": p,
             "p_value_wilson_hilferty": p_wh,
             "max_abs_z": zmax,
+            "max_abs_z_all_bins": float(np.abs(z_sel[worst_all])) if z_sel.size else 0.0,
+            "worst_bin_all": {
+                "index": int(sel_idx[worst_all]) if z_sel.size else None,
+                "batches_with_deposit": [int(sup_a[worst_all]), int(sup_b[worst_all])]
+                if z_sel.size
+                else None,
+                "required": [need_a, need_b],
+                "supported": bool(supported[worst_all]) if z_sel.size else None,
+            },
             "bonferroni_bound": bound,
             "pass": passed,
         }
         ok &= passed
     for name in a.scalars:
         sc = scalar_z(a.scalars[name], b.scalars[name])
-        passed = bool(abs(sc["z"]) < SCALAR_Z_MAX)
-        out["scalars"][name] = {**sc, "bound": SCALAR_Z_MAX, "pass": passed}
+        scale = max(abs(sc["a"]), abs(sc["b"]))
+        if scale > 0.0 and max(sc["se_a"], sc["se_b"]) <= DEGENERATE_SE_RTOL * scale:
+            # a deterministic scalar (energy conservation makes the total deposit exact): z is
+            # meaningless; compare with the precision bound of the less precise sample (the
+            # deterministic T4 bound: 1e-5 relative for float32, 1e-12 for float64 / python)
+            tol = max(DETERMINISTIC_RTOL[a.precision], DETERMINISTIC_RTOL[b.precision])
+            rel = abs(sc["a"] - sc["b"]) / scale
+            passed = bool(rel <= tol)
+            out["scalars"][name] = {
+                **sc,
+                "rule": "deterministic_precision_bound",
+                "relative_difference": rel,
+                "bound": tol,
+                "pass": passed,
+            }
+        else:
+            passed = bool(abs(sc["z"]) < SCALAR_Z_MAX)
+            out["scalars"][name] = {**sc, "rule": "z", "bound": SCALAR_Z_MAX, "pass": passed}
         ok &= passed
     out["pass"] = bool(ok)
     return out

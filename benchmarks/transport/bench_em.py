@@ -11,6 +11,25 @@ a 2 mm scoring grid, float32, 1e6 histories. Backends: warp-cpu with W workers (
 cold start (empty Warp kernel cache) is measured once per backend as repeat 0. Metrics: wall
 time, histories/s, compile seconds, kernel/transport seconds, host reduction seconds, peak RSS.
 
+Result fields of every measurement (JSON ``results[*]``), exactly what each one measures:
+
+* ``wall_s``: wall time of ``Simulation(cfg)`` construction (validation, tables) plus ``run()``
+  in the measured child process; ``histories_per_s = histories / wall_s``.
+* ``setup_s``: validation and table construction.
+* ``compile_s``: kernel compile/load seconds of the slowest process; for a pool it includes the
+  parent's compile before the workers are spawned (workers then only load the cached module).
+* ``transport_s``: the whole ``run_transport`` call (kernel load, launches, exact reductions and,
+  for a pool, spawning, pickling and merging); it contains ``compile_s``.
+* ``kernel_sync_transfer_s``: the largest per-worker sum of the chunk times: launch, kernel,
+  synchronisation and the copy of the per-history rows back to the host (not only the kernel).
+* ``result_assembly_s``: assembling the result after the transport (batch statistics, dose, masses),
+  not the reduction of the tallies, which happens inside ``transport_s``.
+* ``parent_peak_rss_mib``: peak resident set of the measuring (parent) process only;
+  ``children_peak_rss_mib``: the largest peak resident set of any terminated child process (the pool
+  workers, ``RUSAGE_CHILDREN``), 0 without workers; the memory of a pool is roughly the parent plus
+  ``workers`` times the child value.
+* ``cold_start`` entries are measured with an empty Warp kernel cache.
+
 Usage::
 
     python benchmarks/transport/bench_em.py --out benchmarks/generated/transport/<new>.json \
@@ -81,9 +100,12 @@ def child(args: argparse.Namespace) -> None:
         "setup_s": res.timings["setup"],
         "compile_s": res.timings["compile"],
         "transport_s": res.timings["transport"],
-        "host_reduce_s": res.timings["reduce"],
-        "kernel_s": max((sum(p.get("chunk_seconds", [])) for p in parts), default=None),
-        "peak_rss_mib": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0,
+        "result_assembly_s": res.timings["reduce"],
+        "kernel_sync_transfer_s": max(
+            (sum(p.get("chunk_seconds", [])) for p in parts), default=None
+        ),
+        "parent_peak_rss_mib": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0,
+        "children_peak_rss_mib": resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss / 1024.0,
         "valid": res.valid,
         "counters_nonzero": res.counters.any_nonzero,
         "device": res.device,

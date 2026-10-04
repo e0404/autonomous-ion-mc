@@ -105,3 +105,53 @@ def test_t12_verdict_records_permutation_and_wilson_hilferty() -> None:
     assert v["permutation"] == {"n_perm": 100, "seed": 11}
     for a in v["arrays"].values():
         assert a["p_value"] == pytest.approx(1.0) and "p_value_wilson_hilferty" in a
+
+
+def _synthetic(seed: int, precision: str, total: float, n_batches: int = 20):  # type: ignore[no-untyped-def]
+    from ionmc.transport.parity import T12Observables
+
+    rng = np.random.default_rng(seed)
+    base = np.linspace(1.0, 2.0, 12)
+    prof = base * (1.0 + 0.01 * rng.normal(size=(n_batches, 12)))
+    return T12Observables(
+        {"idd": prof},
+        {"total_deposit_mev": np.full(n_batches, total)},
+        n_batches, 1000, precision,
+    )  # fmt: skip
+
+
+def test_degenerate_scalars_use_the_deterministic_precision_bound() -> None:
+    """A scalar with no variance (energy conservation fixes the total deposit) is compared with
+    the T4 precision bound of the less precise sample instead of a meaningless z: 1e-5 for float32,
+    1e-12 for float64; the rule that applied is recorded."""
+    f32, f64 = _synthetic(1, "float32", 150.0000003), _synthetic(2, "float64", 150.00000000009)
+    v = t12_compare(f32, f64, n_perm=50)["scalars"]["total_deposit_mev"]
+    assert v["rule"] == "deterministic_precision_bound" and v["pass"] and v["bound"] == 1e-5
+    off = t12_compare(f32, _synthetic(3, "float64", 150.01), n_perm=50)["scalars"][
+        "total_deposit_mev"
+    ]
+    assert not off["pass"]  # 7e-5 relative: beyond the float32 bound
+    two64 = t12_compare(_synthetic(1, "float64", 150.0), _synthetic(2, "float64", 150.0000001),
+                        n_perm=50)["scalars"]["total_deposit_mev"]  # fmt: skip
+    assert not two64["pass"] and two64["bound"] == 1e-12  # float64 pairs are held to 1e-12
+
+
+def test_max_z_only_counts_bins_that_both_samples_support() -> None:
+    """A bin with fewer than max(2, ceil(B/2)) nonzero batches in either sample has an unreliable
+    standard error and does not enter max|z| (it is reported with its support); a well-supported
+    bin with the same deviation does."""
+    a, b = _synthetic(4, "float64", 150.0), _synthetic(5, "float64", 150.0)
+    a.arrays["idd"][:, 11] = 0.0
+    a.arrays["idd"][:2, 11] = [1.0, 1.0]  # 2 of 20 batches nonzero: undersupported
+    b.arrays["idd"][:, 11] = 5.0
+    v = t12_compare(a, b, n_perm=50)["arrays"]["idd"]
+    assert (
+        v["worst_bin_all"]["supported"] is False
+        and v["worst_bin_all"]["batches_with_deposit"][0] == 2
+    )
+    assert v["max_abs_z_all_bins"] > v["max_abs_z"]  # the undersupported bin is excluded
+    assert v["n_supported_bins"] == v["n_bins"] - 1
+    a2, b2 = _synthetic(6, "float64", 150.0), _synthetic(7, "float64", 150.0)
+    b2.arrays["idd"][:, 5] *= 1.5  # a supported bin that really differs
+    w = t12_compare(a2, b2, n_perm=50)["arrays"]["idd"]
+    assert w["worst_bin_all"]["supported"] and not w["pass"]

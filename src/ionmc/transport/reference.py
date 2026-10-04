@@ -127,6 +127,11 @@ class _Reference:
         self.c_fshort = r(ph.short_step_fraction)
         self.mass = r(cfg.source.projectile.mass_mev)
         self.trunc_diag = ph.truncated_hinge_diagnostic
+        self.straggle_attempt = (
+            self.EM.straggle_attempt_gamma
+            if ph.straggling_model == "bohr_gamma_v1"
+            else self.EM.straggle_attempt
+        )
         self.ctrl_res = 0.0
         self.ctrl_sum = [0.0, 0.0, 0.0]
         self.max_pieces = eff.scoring_pieces
@@ -522,7 +527,7 @@ class _Reference:
                     wb = draw_block(key, h, 0, blocks, PURPOSE_TRANSPORT)
                     blocks += 1
                     ub = [u01_py(x, "float64") for x in wb]
-                    lw, ok = EM.straggle_attempt(
+                    lw, ok = self.straggle_attempt(
                         mean, var_e, r(ub[0]), r(ub[1]), r(ub[2]), r(ub[3])
                     )
                     attempts = k + 1

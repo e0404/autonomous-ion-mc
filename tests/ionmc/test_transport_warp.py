@@ -278,3 +278,29 @@ def test_trace_is_float64_only(make_config: MakeConfig) -> None:
     )
     with pytest.raises(UnsupportedCombinationError, match="float64"):
         Simulation(cfg)
+
+
+def test_float32_kernel_keeps_energy_and_range_bookkeeping_in_double(
+    make_config: MakeConfig,
+) -> None:
+    """The float32 kernel holds positions and directions in float32 but energy, range, mean loss,
+    straggling and deposits in float64: a deterministic (straggling and MCS off) 100 MeV track
+    ends at the float64 end depth to well below the old float32 bookkeeping bias (about 2e-5 of
+    the range), and every depth bin of the depth-dose agrees to 1e-5."""
+    out = {}
+    for precision in ("float32", "float64"):
+        cfg = make_config(
+            energy=100.0, n=4, geometry=_water_box(),
+            scoring=(ScoringGrid((-30.0, -30.0, 0.0), (60.0, 60.0, 1.0), (1, 1, 100)),),
+            mcs=False, straggling=False, max_step=1.0, backend="warp-cpu", precision=precision,
+            diagnostics=DiagnosticsOptions(track_end_positions=True),
+        )  # fmt: skip
+        res = Simulation(cfg).run()
+        out[precision] = (
+            float(res.diagnostics["end_position_mm"][:, 2].mean()),
+            np.asarray(res.grids[0].energy_mev).reshape(-1),
+        )
+    assert abs(out["float32"][0] - out["float64"][0]) < 5e-4  # mm (the old bias was ~1.5e-3 mm)
+    a, b = out["float32"][1], out["float64"][1]
+    keep = b > 0.01 * b.max()
+    assert np.abs(a[keep] / b[keep] - 1.0).max() < 1e-5

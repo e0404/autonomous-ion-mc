@@ -433,3 +433,55 @@ def test_t12_split_steps_roundtrip_and_tamper_detection(tmp_path: Path) -> None:
     # a missing part: the sample no longer tiles the history range
     f.unlink()
     assert step(*args).returncode != 0
+
+
+def test_step_timeout_kills_the_whole_process_group(tmp_path: Path) -> None:
+    """A step that spawns a long-sleeping child and exceeds its timeout is archived with exit 124
+    and leaves no descendant alive (the step runs in its own process group)."""
+    run_suite = _load("run_suite")
+    script = (
+        "import subprocess, sys, time\n"
+        "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(300)'])\n"
+        "print('CHILD', child.pid, flush=True)\n"
+        "time.sleep(300)\n"
+    )
+    out = tmp_path / "step.txt"
+    with out.open("w") as fh:
+        code = run_suite.run_step(
+            [sys.executable, "-c", script], cwd=tmp_path, env=dict(os.environ), stdout=fh,
+            timeout=3.0, grace=2.0,
+        )  # fmt: skip
+    assert code == 124
+    pid = int(next(ln for ln in out.read_text().splitlines() if ln.startswith("CHILD")).split()[1])
+    with pytest.raises(ProcessLookupError):
+        os.kill(pid, 0)  # no descendant remains
+
+
+def test_step_that_finishes_leaves_no_orphans_and_keeps_its_exit_code(tmp_path: Path) -> None:
+    run_suite = _load("run_suite")
+    script = (
+        "import subprocess, sys\n"
+        "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(300)'])\n"
+        "print('CHILD', child.pid, flush=True)\n"
+        "sys.exit(3)\n"
+    )
+    out = tmp_path / "step.txt"
+    with out.open("w") as fh:
+        code = run_suite.run_step(
+            [sys.executable, "-c", script], cwd=tmp_path, env=dict(os.environ), stdout=fh,
+            timeout=30.0, grace=2.0,
+        )  # fmt: skip
+    assert code == 3
+    pid = int(next(ln for ln in out.read_text().splitlines() if ln.startswith("CHILD")).split()[1])
+    with pytest.raises(ProcessLookupError):
+        os.kill(pid, 0)
+
+
+def test_suites_forward_an_inner_timeout_below_the_step_timeout() -> None:
+    run_suite = _load("run_suite")
+    steps = run_suite.suite_steps("lv", 4, 1.0, step_timeout=1000)
+    scripted = [s for s in steps if "steps.py" in " ".join(s[1])]
+    assert scripted and all("--timeout" in s[1] for s in scripted)
+    for s in scripted:
+        assert float(s[1][s[1].index("--timeout") + 1]) < 1000
+    assert all("--timeout" not in s[1] for s in steps if "pytest" in s[0])

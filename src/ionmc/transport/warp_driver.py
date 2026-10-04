@@ -105,22 +105,23 @@ def run_warp_range(eff: EffectiveConfig, h0: int, h1: int, device: str) -> Parti
     ctl.mcs = 1 if ph.multiple_scattering else 0
     ctl.straggling = 1 if ph.straggling else 0
     ctl.trunc_diag = 1 if ph.truncated_hinge_diagnostic else 0
+    ctl.straggle_gamma = 1 if ph.straggling_model == "bohr_gamma_v1" else 0
     ctl.max_pieces = eff.scoring_pieces
     ctl.nx, ctl.ny, ctl.nz = geo.shape
     ctl.n_grids = len(cfg.scoring)
     ctl.n_e = tab.n_e
     ctl.n_r = tab.n_r
-    ctl.e_cut = real(ph.e_cut_mev)
-    ctl.e_table_max = real(float(tab.e_max_mev.min()))
-    ctl.e0 = real(src.kinetic_energy_mev)
-    ctl.sigma_e = real(src.energy_sigma_mev)
+    ctl.e_cut = wp.float64(ph.e_cut_mev)
+    ctl.e_table_max = wp.float64(float(tab.e_max_mev.min()))
+    ctl.e0 = wp.float64(src.kinetic_energy_mev)
+    ctl.sigma_e = wp.float64(src.energy_sigma_mev)
     ctl.sigma_lat = real(src.lateral_sigma_mm)
-    ctl.c_alpha = real(ph.range_alpha)
-    ctl.c_rho_f = real(ph.range_rho_f_mm)
-    ctl.c_frac = real(ph.max_energy_loss_fraction)
-    ctl.c_smax = real(ph.max_step_mm)
-    ctl.c_fshort = real(ph.short_step_fraction)
-    ctl.mass = real(src.projectile.mass_mev)
+    ctl.c_alpha = wp.float64(ph.range_alpha)
+    ctl.c_rho_f = wp.float64(ph.range_rho_f_mm)
+    ctl.c_frac = wp.float64(ph.max_energy_loss_fraction)
+    ctl.c_smax = wp.float64(ph.max_step_mm)
+    ctl.c_fshort = wp.float64(ph.short_step_fraction)
+    ctl.mass = wp.float64(src.projectile.mass_mev)
     ctl.pos0 = vec(src.position_mm)
     ctl.dir = vec(eff.unit_direction)
     ctl.origin = vec(geo.origin_mm)
@@ -138,10 +139,12 @@ def run_warp_range(eff: EffectiveConfig, h0: int, h1: int, device: str) -> Parti
     g_spacing = np.array([list(g.spacing_mm) for g in cfg.scoring])
     g_shape = np.array([list(g.shape) for g in cfg.scoring], dtype=np.int32)
 
-    t = tab.to_warp(device, real)
+    t = tab.to_warp(device, wp.float64)  # energy and range tables in double in every variant
     arr_mat: Any = wp.array(np.ascontiguousarray(geo.material_index), dtype=wp.int32, device=device)
     arr_dens: Any = wp.array(
-        np.ascontiguousarray(geo.densities_g_cm3(), dtype=np_real), dtype=real, device=device
+        np.ascontiguousarray(geo.densities_g_cm3(), dtype=np.float64),
+        dtype=wp.float64,
+        device=device,
     )
     arr_gorigin: Any = wp.array(g_origin.astype(np_real), dtype=real, device=device)
     arr_ginv: Any = wp.array(g_inv.astype(np_real), dtype=real, device=device)

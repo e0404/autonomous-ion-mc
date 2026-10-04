@@ -13,11 +13,15 @@ conformant result. Everything uses the offline analytic Bethe stopping source (I
 production float32 Warp CPU backend unless stated, and the helpers of
 ``ionmc.transport.parity`` and ``ionmc.transport.mcs_checks`` that the tests use.
 
-Deviations forced by the engine's rule ``max_step_mm <= smallest scoring spacing`` and by the
-regular-grid geometry are listed in ``docs/architecture/transport.md`` (section Validation
-runner): T8/T14 sigma is the standard deviation of the exit position of particles leaving a water
-slab of the stated thickness (the Fermi-Eyges A2 quantity), T9 uses 1 mm IDD bins, T10 uses the
-distribution of the projected track-end depth.
+Observables (see ``docs/architecture/transport.md``, section Validation runner): T8 and T14 take
+the lateral sigma from the deposited energy in fixed 0.2 mm lateral bins and 1 mm slabs at
+z/R = 0.5 and 0.9 (scoring grids independent of the transport voxels; Fermi-Eyges A2 comparison)
+and the exit ``theta_rms`` of a 0.5 R1 slab from the escape records (T14 ends the world at the
+slab thickness with ``VoxelGeometry.z_exit_mm``); T9 uses 1 mm depth-dose bins; T10 projects
+1 mm path grids onto the beam axis (``projected_idd``, 0.1 mm bins) for R80 and uses a
+whole-world grid for the total energy. Scoring steps may be longer than the scoring voxels: the
+track-length scoring walks each leg over the voxels it crosses up to a piece bound computed at
+validation (there is no step-length rule). The T14 control is the "truncate-first" diagnostic.
 """
 
 from __future__ import annotations
@@ -114,6 +118,7 @@ def run_cfg(
     chunk: int | None = None,
     trunc_diag: bool = False,
     memory_budget: int | None = None,
+    straggling_model: str = "bohr_gauss_clamped_gamma_v1",
 ) -> Result:
     kw = {"chunk_histories": chunk} if chunk else {}
     plan = plan_workers(
@@ -134,6 +139,7 @@ def run_cfg(
             max_step_mm=max_step,
             max_energy_loss_fraction=frac,
             truncated_hinge_diagnostic=trunc_diag,
+            straggling_model=straggling_model,
         ),
         run=RunOptions(
             backend=backend,  # type: ignore[arg-type]
@@ -664,7 +670,8 @@ def load_sample(
         g.name: raw.edep_mev[i].reshape((metas[0]["n_batches"], *g.shape)) / hpb
         for i, g in enumerate(cfg.scoring)
     }
-    return parity.t12_observables_from_grids(grids, cfg.scoring, layout, hpb), info
+    obs = parity.t12_observables_from_grids(grids, cfg.scoring, layout, hpb, metas[0]["precision"])
+    return obs, info
 
 
 def step_t12_compare(a: argparse.Namespace) -> int:
@@ -736,9 +743,13 @@ def _slab_geometry(
     xy0 = -half - (0.5 * voxel if shift_xy else 0.0)
     shape = (nxy, nxy, nz)
     geo = VoxelGeometry(
-        (xy0, xy0, z0), (voxel,) * 3, shape, (WATER,), np.zeros(shape, dtype=np.int32),
+        (xy0, xy0, z0),
+        (voxel,) * 3,
+        shape,
+        (WATER,),
+        np.zeros(shape, dtype=np.int32),
         z_exit_mm=depth if exit_clip else None,
-    )  # fmt: skip
+    )
     return geo, (depth if exit_clip else z0 + nz * voxel)
 
 
@@ -1097,6 +1108,9 @@ def step_t14(a: argparse.Namespace) -> int:
 
 # -- T9 ------------------------------------------------------------------------------------------
 def step_t9(a: argparse.Namespace) -> int:
+    """T9; ``--physics`` selects a diagnostic variant (``no-straggling``, ``no-mcs``; not part of
+    the suites) and ``--straggling-model`` the sampler (``bohr_gamma_v1`` for the comparison)."""
+    mcs, straggling = a.physics != "no-mcs", a.physics != "no-straggling"
     e = 150.0
     depth = 1.3 * r_csda_mm(e)
     nz = int(math.ceil(depth))
@@ -1122,6 +1136,9 @@ def step_t9(a: argparse.Namespace) -> int:
             timeout=a.timeout,
             max_step=s,
             frac=f,
+            mcs=mcs,
+            straggling=straggling,
+            straggling_model=a.straggling_model,
         )
         obs[name] = parity.t12_observables(res, layout)
     ref = obs["s1.0_f0.02"]
@@ -1134,9 +1151,31 @@ def step_t9(a: argparse.Namespace) -> int:
         dr = abs(v["scalars"]["r80_mm"]["a"] - v["scalars"]["r80_mm"]["b"])
         idd = v["arrays"]["idd"]
         passed = bool(dr <= 0.1 and idd["p_value"] > parity.P_VALUE_MIN)
-        out[name] = {"delta_r80_mm": dr, "idd_chi2": idd, "pass": passed}
+        # where the profiles differ: bins (1 mm = depth in mm) with |z| > 3 and the sign of
+        # z = (reference - test) / se for bins above 1 % of the maximum
+        ma, mt = ref.arrays["idd"].mean(axis=0), o.arrays["idd"].mean(axis=0)
+        se = np.sqrt(
+            ref.arrays["idd"].var(axis=0, ddof=1) / ref.n_batches
+            + o.arrays["idd"].var(axis=0, ddof=1) / o.n_batches
+        )
+        sel = 0.5 * (ma + mt) > 0.01 * (0.5 * (ma + mt)).max()
+        zz = np.where(sel & (se > 0), (ma - mt) / np.where(se > 0, se, 1.0), 0.0)
+        far = np.nonzero(np.abs(zz) > 3.0)[0]
+        out[name] = {
+            "delta_r80_mm": dr,
+            "idd_chi2": idd,
+            "z_bins_above_3": {"depth_mm": far.tolist(), "z": [float(zz[i]) for i in far]},
+            "pass": passed,
+        }
         ok &= passed
-    return finish({"step": "t9", "t9": out, "pass": ok}, None, a.n)
+    doc = {
+        "step": "t9",
+        "t9": out,
+        "pass": ok,
+        "variant": a.physics,
+        "straggling_model": a.straggling_model,
+    }
+    return finish(doc, None, a.n)
 
 
 # -- T10 -----------------------------------------------------------------------------------------
@@ -1165,6 +1204,9 @@ def step_t10(a: argparse.Namespace) -> int:
     r = r_csda_mm(e)
     geo = BoxPhantom((-100.0, -100.0, -100.0), (200.0, 200.0, 200.0), WATER)
     nb = int(math.ceil(1.3 * r / 0.1))  # 0.1 mm bins of the projected depth
+    # one voxel covering the whole world: every deposit, so its per-batch value is the total energy
+    # deposited (the path box of the depth-dose omits large-angle tails beyond its margin)
+    world = ScoringGrid((-100.0, -100.0, -100.0), (200.0, 200.0, 200.0), (1, 1, 1), name="world")
     obs: dict[str, Any] = {}
     for i, (name, d) in enumerate(DIRECTIONS.items()):
         u = np.array(d) / np.linalg.norm(d)
@@ -1173,7 +1215,7 @@ def step_t10(a: argparse.Namespace) -> int:
         res = run_cfg(
             energy=e,
             geometry=geo,
-            scoring=(grid,),
+            scoring=(grid, world),  # path box for the depth-dose, whole world for the energy
             seed=a.seed + i,
             n=a.n,
             n_batches=T10_BATCHES,
@@ -1191,7 +1233,8 @@ def step_t10(a: argparse.Namespace) -> int:
         obs[name] = {
             "r80_mm": parity.r80_of(idd.mean(axis=0), 0.1),
             "idd_1mm": idd_1mm,
-            "total_b": be.reshape(T10_BATCHES, -1).sum(axis=1),
+            "total_b": np.asarray(res.grid("world").batch_energy_mev).reshape(T10_BATCHES),
+            "in_path_box_mev": float(be.sum() / T10_BATCHES),
             "mean_end_depth_mm": float(t_end.mean()),
             "counters": res.counters.as_dict(),
             "valid": res.valid,
@@ -1212,8 +1255,8 @@ def step_t10(a: argparse.Namespace) -> int:
         chi_ok = v["arrays"]["idd_1mm"]["p_value"] > parity.P_VALUE_MIN
         r80_ok = d_r80 <= 0.3
         energy_ok = abs(e_z["z"]) < 3.0
-        # frozen: permutations -> chi-square p > 0.001; obliques -> |dR80| <= 0.3 mm; all: total
-        # energy within 3 sigma and zero counters
+        # frozen: axis permutations -> chi-square p > 0.001 (obliques: the chi-square is only
+        # informative); obliques -> |dR80| <= 0.3 mm; all: total energy within 3 sigma, no counters
         crit = r80_ok if oblique else chi_ok
         passed = bool(crit and energy_ok and not any(o["counters"].values()) and o["valid"])
         out[name] = {
@@ -1252,6 +1295,17 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("step", choices=sorted(STEPS))
     ap.add_argument("--workers", default="1", help="integer or 'auto' (all cores)")
     ap.add_argument("--runs", default="python:float64:400", help="t-r1: backend:precision:n,...")
+    ap.add_argument(
+        "--physics",
+        choices=("default", "no-straggling", "no-mcs"),
+        default="default",
+        help="t9 diagnostic variant (not part of the suites)",
+    )
+    ap.add_argument(
+        "--straggling-model",
+        default="bohr_gauss_clamped_gamma_v1",
+        help="t9: straggling sampler (bohr_gauss_clamped_gamma_v1 or bohr_gamma_v1)",
+    )
     ap.add_argument("--part", default="1/1", help="t12-python-sample: history range i/n")
     ap.add_argument("--samples", default="cpu32", help="t12-accelerated-samples: names")
     ap.add_argument("--out-dir", default="samples", help="directory of the sample files")

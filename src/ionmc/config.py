@@ -33,7 +33,7 @@ from ionmc.transport.tally import (
     TRACE_N_DISCRETE,
 )
 
-STRAGGLING_MODELS = ("bohr_gauss_clamped_gamma_v1",)
+STRAGGLING_MODELS = ("bohr_gauss_clamped_gamma_v1", "bohr_gamma_v1")
 MCS_MODELS = ("differential_moliere",)
 DELTA_ELECTRON_MODELS = ("local",)
 BACKENDS = ("python", "warp-cpu", "warp-cuda")

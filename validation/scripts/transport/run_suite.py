@@ -38,10 +38,12 @@ import hashlib
 import os
 import platform
 import re
+import signal
 import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
@@ -72,6 +74,7 @@ def suite_steps(
     python_parts: int = DEFAULT_PYTHON_PARTS,
     out: Path | None = None,
     import_dirs: list[str] | None = None,
+    step_timeout: int = 1500,
 ) -> list[tuple[str, list[str], dict[str, str]]]:
     """``(name, argv, extra environment)`` of the steps of a suite, in execution order (the
     names depend only on ``suite`` and ``python_parts``)."""
@@ -87,7 +90,11 @@ def suite_steps(
     cuda = {"IONMC_REQUIRE_CUDA": "1"} if suite == "hr" else {}
     steps: list[tuple[str, list[str], dict[str, str]]] = []
 
+    inner = ["--timeout", str(max(30, int(0.9 * step_timeout)))]  # the pool cleans up first
+
     def add(name: str, cmd: list[str], env: dict[str, str] | None = None) -> None:
+        if cmd[:2] == [PY, str(STEPS)]:
+            cmd = [*cmd, *inner]  # worker_timeout_s slightly below the step timeout
         steps.append((f"{len(steps) + 1:02d}-{name}", cmd, env or {}))
 
     if suite == "lv":
@@ -154,6 +161,58 @@ def suite_steps(
         add("t10-rotation-invariance", [*st, "t10", "--n", n(1_000_000), *w])
         add("t14-voxel-boundary-bias", [*st, "t14", "--n", n(1_000_000), *w])
     return steps
+
+
+KILL_GRACE_S = 10.0
+
+
+def run_step(
+    cmd: list[str],
+    *,
+    cwd: Path,
+    env: dict[str, str],
+    stdout: Any,
+    timeout: float,
+    grace: float = KILL_GRACE_S,
+) -> int:
+    """Run one step in its own process group and return its exit code (124 on timeout).
+
+    The step may spawn worker processes (the multiprocessing pool of the transport engine); on a
+    timeout, and in any case when the step has ended, the whole group is terminated (SIGTERM, then
+    SIGKILL after ``grace`` seconds) so that no descendant outlives its step."""
+    proc = subprocess.Popen(
+        cmd, cwd=cwd, env=env, stdout=stdout, stderr=subprocess.STDOUT, start_new_session=True
+    )  # noqa: S603
+    pgid = proc.pid  # a new session: the process is the leader of its own group
+    code = 124
+    try:
+        code = proc.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        pass
+    finally:
+        _kill_group(pgid, grace)
+        proc.wait()
+    return code
+
+
+def _kill_group(pgid: int, grace: float) -> None:
+    """Terminate every process of the group ``pgid`` (no error if none is left)."""
+    try:
+        os.killpg(pgid, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+    deadline = time.monotonic() + grace
+    while time.monotonic() < deadline:
+        try:
+            os.killpg(pgid, 0)
+        except ProcessLookupError:
+            return
+        time.sleep(0.1)
+    try:
+        os.killpg(pgid, signal.SIGKILL)
+    except ProcessLookupError:
+        return
+    time.sleep(0.2)
 
 
 def full_step_names(suite: str, python_parts: int) -> list[str]:
@@ -280,7 +339,9 @@ def main(argv: list[str] | None = None) -> int:
     if out.exists():
         raise SystemExit(f"refusing to reuse an existing results directory: {out}")
     sha, source = resolve_sha(args.expected_sha)
-    steps = suite_steps(args.suite, workers, args.scale, args.python_parts, out, args.import_dirs)
+    steps = suite_steps(
+        args.suite, workers, args.scale, args.python_parts, out, args.import_dirs, args.step_timeout
+    )
     if args.only:
         keep = [x for x in steps if any(x[0] == o or x[0].startswith(f"{o}-") for o in args.only)]
         if len(keep) != len(set(args.only)):
@@ -311,18 +372,13 @@ def main(argv: list[str] | None = None) -> int:
             fh.write(f"# command: {' '.join(cmd)}\n# git_sha: {sha}\n# started_utc: {started}\n")
             fh.write(f"# step_timeout_s: {args.step_timeout}\n")
             fh.flush()
-            try:
-                r = subprocess.run(
-                    cmd,
-                    cwd=REPO,
-                    env={**env_base, **extra},
-                    stdout=fh,
-                    stderr=subprocess.STDOUT,
-                    timeout=args.step_timeout,
-                )  # noqa: S603
-                code = r.returncode
-            except subprocess.TimeoutExpired:
-                code = 124
+            code = run_step(
+                cmd,
+                cwd=REPO,
+                env={**env_base, **extra},
+                stdout=fh,
+                timeout=args.step_timeout,
+            )
             fh.write(f"\n# exit={code}\n")
         print(f"== {name}: exit={code}", flush=True)
         failures += code != 0

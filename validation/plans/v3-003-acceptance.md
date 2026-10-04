@@ -173,3 +173,17 @@ obtained with a world exit plane at the slab thickness that is independent of th
 (grid shifts overhang the world instead of lengthening it); the frozen bound "θ_rms within 0.5 %
 of the U5 quadrature" remains part of the T14 verdict; the quadrature ratio across shifts is
 informative only.
+
+¹² Statistical clarifications for T12 (2026-10-04, task V3-003B, written after the first full-scale
+HR T12 rehearsal at f243b15 revealed two degenerate cases, before any T12 result is graded):
+(a) a scalar whose batch standard errors are both below 1e-8 relative (the total deposit is fixed
+by energy conservation) cannot be judged by a z statistic; it is compared with the deterministic
+precision bound of the less precise sample (T4: 1e-5 relative for float32, 1e-12 for float64 and
+python) and the rule applied is recorded; (b) the Bonferroni max|z| statistic includes only bins
+where both samples have at least max(2, ⌈B/2⌉) batches with non-zero content (the same
+defined-value rule as the ratio estimators of V3-004), because a batch standard error estimated
+from a handful of non-zero batches is unreliable in profile tails; bins excluded by this rule are
+listed in the result document. The χ² permutation statistic is unchanged. The float32-versus-
+float64 probe of T12 keeps its full criteria: the rehearsal showed a significant float32 bias
+(|ΔR80| ≈ 0.02 mm, IDD χ² at the permutation floor), which is treated as a finding to be fixed in
+the engine (float64 energy bookkeeping inside the float32 kernel), not as an allowance.

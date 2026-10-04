@@ -55,6 +55,16 @@ branches and the boundary (4e5 draws per point, three standard errors; the Gauss
 is given the 1 % clamp allowance). The transport-level validation of straggling is the range
 straggling `sigma_R` of the end depths (criterion T6, local validation), which is not part of the CI tests.
 
+Alternative model `bohr_gamma_v1` (selected with `PhysicsOptions.straggling_model`; the default is unchanged):
+a Gamma distribution with exactly the Bohr mean and variance for every ratio (shape `k = r^2`, scale
+`sigma^2 / mean`, Marsaglia-Tsang), positive everywhere, no clamp and no Gaussian branch. With a common scale
+`theta = sigma^2 / mean = kappa(E) / S(E)` along a path (`kappa` the Bohr dispersion per unit path, `S` the stopping
+power) the sum of Gamma steps is exactly Gamma with the summed shape, so the whole energy-loss distribution - not only
+its first two moments - is independent of the step length wherever `theta` varies slowly; the default model switches
+branch with the step length (Gamma for `r < 3`, Gaussian above), so its higher moments depend on the step. The two
+models are compared by the T9 step (`--straggling-model`); which one becomes the default is decided from that
+comparison.
+
 ## Multiple Coulomb scattering
 
 The differential Moliere scattering power of B. Gottschalk, Med. Phys. 37 (2010) 352

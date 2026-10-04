@@ -1,8 +1,12 @@
 """Scoring grids, voxel masses and the batch estimator (float64 numpy).
 
 A scoring grid is an independent regular grid (same conventions as
-:class:`ionmc.geometry.VoxelGeometry`; it need not align with the transport grid). Energy is
-deposited at the midpoint of each step into the voxel containing it. The mass of a scoring
+:class:`ionmc.geometry.VoxelGeometry`; it need not align with the transport grid). The energy of
+a step is deposited by path-length apportioning: it is distributed along both hinge legs in
+proportion to the path length inside each scoring voxel (a per-grid incremental voxel walk, see
+``ionmc.transport.reference``), so the result does not depend on how the step length compares
+with the voxel size; the energy left at the cutoff is a point deposit at the end point. Deposits
+are quantized into int64 fixed-point accumulators (``ionmc.transport.tally``). The mass of a scoring
 voxel is the exact overlap integral of the piecewise-constant density of the geometry over
 the voxel (the geometry is vacuum outside, so partially covered voxels have a correspondingly
 smaller mass). Dose uses 1 MeV/g = 1.602176634e-10 Gy.

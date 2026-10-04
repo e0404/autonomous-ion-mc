@@ -248,7 +248,13 @@ order, all physics through the shared `@wp.func` functions, so the float64 kerne
 the same trajectory (test T1). `make_transport_kernel(real, diag)` is cached per precision and diagnostics flag
 (`module="unique"`, backward off); the variants are float32, float32 with diagnostics, float64 and float64 with
 diagnostics, and the trace is validated for float64 only (float32 with a trace is rejected). Inputs are
-structure-of-arrays Warp arrays plus a per-precision `wp.struct` of scalars. Outputs: the deposit grid
+structure-of-arrays Warp arrays plus a per-precision `wp.struct` of scalars. Precision split: positions, directions and
+the geometry are in the backend precision (float32 or float64), but energy, range, step selection, mean energy loss,
+straggling, scattering variance and deposits are computed in float64 in every variant (the stopping, range and
+inverse-range tables and the densities are float64 arrays), so a float32 run has no energy/range bookkeeping bias (the
+old float32 bookkeeping shifted a deterministic end depth by about 2e-5 of the range; the test
+`test_float32_kernel_keeps_energy_and_range_bookkeeping_in_double` guards it); on GPUs with a low float64 rate this is the
+cost of the float64 transcendental functions per step. Outputs: the deposit grid
 `edep[B, sum(n_voxels)]` of int64 fixed-point quanta (integer atomic adds into batch `h mod B`), per-history
 float64 `tally_rows[chunk, 6 + 2 G]` (tallies, outside deposits, quantization residuals) and int32
 `counter_rows[chunk, 8]` (each written by its own thread), and with diagnostics the end state (position,
@@ -334,6 +340,17 @@ period) and `TransportWorkerError` is raised; no partial result is returned. Scr
   of the suites are `NN-...` in the order: LV `pytest`, `t1`, `t2`, `t13-workers`, `t13-chunks-cpu`,
   `t12-python-sample-{1,2}of2`, `t12-accelerated-samples`, `t12-compare`, `t8`, `t9`, `t10`, `t14`; HR `pytest-cuda`,
   `t2-...-cuda`, `t13-chunks-cuda`, `t12-python-sample-{1,2}of2`, `t12-accelerated-samples`, `t12-compare`.
+* **Scalar rule and support rule (T12).** A scalar whose standard errors are below 1e-8 of its value in both samples
+  (energy conservation makes the total deposit deterministic) is not compared with z but with the deterministic T4
+  precision bound of the less precise sample (1e-5 relative for float32, 1e-12 for float64 and python); the rule that
+  applied is recorded. Only profile bins for which both samples have at least `max(2, ceil(B/2))` batches with a nonzero
+  deposit enter `max|z|` (and its Bonferroni count): the standard error of an undersupported bin is unreliable. The
+  worst bin of all bins is reported with its support.
+* **T9 variants.** `steps.py t9 --physics default|no-straggling|no-mcs` and `--straggling-model` are diagnostics (not in the
+  suite manifests); the step reports the depths and signs of the bins with |z| > 3.
+* **Step processes.** Each step runs in its own process group; on a timeout the group gets SIGTERM and then SIGKILL, so
+  spawned workers never outlive their step, and the steps receive an inner `--timeout` (90 % of the step timeout) that
+  the process pool uses as `worker_timeout_s`.
 * **Statistics.** The profile chi-square of T9, T10 and T12 keeps the frozen statistic (per-bin `z` from batch standard
   errors) but its p-value is calibrated by a batch-level studentized permutation test
   (`ionmc.transport.parity.permutation_p_value`): residuals `(m_b - mu) sqrt(n_b)` of all batches of both samples are
