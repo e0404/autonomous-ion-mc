@@ -18,7 +18,7 @@ import pytest
 import warp as wp
 
 from ionmc._wpfunc import python_twin
-from ionmc.physics.em import make_em
+from ionmc.physics.em import FDM_COEFFICIENTS, make_em
 from ionmc.physics.kinematics import make_kinematics
 from ionmc.transport.funcs import make_transport_funcs
 
@@ -27,12 +27,15 @@ wp.config.log_level = wp.LOG_WARNING
 # Frozen criterion U1: 1e4 arguments per function (the environment variable only allows a
 # smaller count for quick local runs; CI uses the default).
 N_ARGS = int(os.environ.get("IONMC_U1_N", "10000"))
-TOL = {"float64": (1e-12, 1e-14), "float32": (1e-5, 1e-5)}
+TOL = {"float64": (1e-12, 1e-14), "float32": (1e-6, 1e-6)}
 """(rtol, atol). float64: twin against kernel, the same double arithmetic (decision 0001 class).
-float32: the float32 kernel against the FLOAT64 twin evaluated on the float32-rounded arguments, so
-the tolerance is the float32 rounding error (eps = 6e-8) propagated through the functions; the
-worst observed relative differences are 1.4e-5 (gamma sampler) and 1e-3 for the Box-Muller normals
-near u -> 1, both inside the absolute 1e-5 floor of values of order one or smaller."""
+float32: the float32 kernel against the FLOAT64 twin evaluated on the float32-rounded arguments
+(plan amendment 18): the default is the frozen 1e-6 / 1e-6 (16.8 u, u = 2^-24 = 5.96e-8, so a
+function of up to about 16 roundings without ill-conditioning meets it); the functions whose
+conditioning is worse have the analytic budgets of ``_float32_budgets`` (derived from the
+condition number times u times the number of roundings, not from observed differences)."""
+U = 2.0**-24
+LN10 = math.log(10.0)
 M_P = 938.27208816
 
 # column layout of the argument pools -------------------------------------------------------
@@ -375,11 +378,114 @@ INT_OUTPUTS = {
 VEC_OUTPUTS = {0: "rotate_dir", 1: "point_on_hinge", 2: "basis_e1", 3: "basis_e2"}
 
 
+def _fdm_abs_budget(
+    pv_om: np.ndarray, p1v1: np.ndarray, pv_log: np.ndarray, shift: float
+) -> np.ndarray:
+    """Absolute float32 error budget of f_dM = c0 + c1 l1 + c2 l2 + c3 l1 l2 (clamped at 0), with
+    ``l1 = lg(om) - shift``, ``om = 1 - (pv / p1v1)^2`` and ``l2 = lg(pv)``.
+
+    Derivation: the ratio (relative error u), its square (u) and the difference ``1 - r^2`` give
+    an absolute error of ``om`` of at most ``3 u`` (r^2 <= 1), hence an absolute error of
+    ``l1`` of ``3 u / (om ln 10)``: the cancellation near pv -> p1v1 is the ill-conditioned part
+    and gives ``(|c1| + |c3 l2|) 3 u / (om ln 10)`` in f. The remaining roundings (two logarithms,
+    two products, three sums, about 6) each contribute u times the magnitude of the terms."""
+    c = FDM_COEFFICIENTS
+    om = 1.0 - (pv_om / p1v1) ** 2
+    pos = om > 0.0
+    omp = np.where(pos, om, 1.0)
+    l1, l2 = np.log10(omp) - shift, np.log10(pv_log)
+    terms = abs(c[0]) + np.abs(c[1] * l1) + np.abs(c[2] * l2) + np.abs(c[3] * l1 * l2)
+    cond = (abs(c[1]) + abs(c[3] * l2)) * 3.0 * U / (omp * LN10)
+    return np.where(pos, cond + 6.0 * U * terms, 0.0)
+
+
+def _box_muller_budget(u0: np.ndarray) -> np.ndarray:
+    """Absolute float32 error of ``r cos(2 pi u1)`` / ``r sin(2 pi u1)``, ``r = sqrt(-2 ln u0)``.
+
+    Derivation: the angle ``2 pi u1`` has an absolute error of at most ``2 pi (u + u)`` (rounding
+    of the constant, rounding of the product; u1 < 1), the sine/cosine adds u; ``r`` has relative
+    error 1.5 u (logarithm of an exact float32 argument, which stays relatively accurate near
+    u0 -> 1, then the square root). The error is absolute (``r (4 pi u + u + 1.5 u)``): near a zero
+    of the cosine the relative error diverges, whatever u0 is. ``r`` is largest for the smallest
+    u0: ``r <= sqrt(2 |ln u0|_max)`` (5.2 in the pool)."""
+    r = np.sqrt(-2.0 * np.log(u0))
+    return r * (4.0 * math.pi + 2.5) * U
+
+
+def _float32_budgets(x: np.ndarray) -> dict[int, tuple[float, np.ndarray | float]]:
+    """Per-function float32 budgets ``{output column: (rtol, atol)}`` (atol may be per element);
+    columns not listed use ``TOL['float32']``. All derived analytically (see each function)."""
+    out: dict[int, tuple[float, np.ndarray | float]] = {}
+    # interp_exp = exp(ly0 (1 - f) + ly1 f): the exponent is a sum of terms of at most 10 in
+    # magnitude with 4 roundings (1 - f, two products, the sum), so its absolute error is
+    # (3 * 10 + 1) u and the relative error of the exponential is that plus u for exp itself.
+    out[12] = (32.0 * U, 1e-6)
+    # f_dM: cancellation of 1 - (pv/p1v1)^2 (see _fdm_abs_budget)
+    fdm_abs = _fdm_abs_budget(x[:, 20], x[:, 21], x[:, 20], 0.0)
+    out[7] = (1e-6, fdm_abs + 1e-6)
+    # scattering power: f_dM (z E_s / pv)^2 rho inv_xs / 10; the error of f_dM is multiplied by the
+    # weight W, the 8 further roundings (q, q^2, three products, a division) meet the default rtol
+    q = 1.0 * 15.0 / x[:, 20]
+    w = q * q * x[:, 23] * x[:, 22] / 10.0
+    out[8] = (1e-6, w * fdm_abs + 1e-6)
+    # birth variance: the same with om from pv_end, l2 from pv_mid, l1 shifted by 1/ln 10, times s
+    shift = 0.4342944819032518
+    fdm_b = _fdm_abs_budget(x[:, 55], x[:, 56], x[:, 54], shift)
+    wb = (15.0 / x[:, 54]) ** 2 * x[:, 59] * x[:, 58] / 10.0 * x[:, 60]
+    out[24] = (1e-6, wb * fdm_b + 1e-6)
+    # Box-Muller normals (pair and single use the same u0, u1 columns 52/53)
+    bm = _box_muller_budget(x[:, 52])
+    out[21] = (1e-6, bm + 1e-6)
+    out[22] = (1e-6, bm + 1e-6)
+    out[23] = (1e-6, bm + 1e-6)
+    out[6] = _straggle_budget(x)
+    return out
+
+
+def _straggle_budget(x: np.ndarray) -> tuple[float, np.ndarray]:
+    """Absolute float32 error budget of the sampled energy loss (column 6).
+
+    Gaussian branch (ratio >= 3): ``loss = clamp(mean + sigma x)``, x a Box-Muller normal of
+    absolute error ``_box_muller_budget``: error ``sigma (eps_x + 3 u |x|) + 4 u |loss|``.
+
+    Gamma branch: first-order relative error of ``loss = (mean / k) d v [u3^(1/k)]`` with
+    ``ratio = mean / sqrt(var)`` (2 u), ``k = ratio^2`` (5 u), ``d = a - 1/3`` (at most 10 u, as
+    ``k / d <= 1.5``), ``c = 1 / sqrt(9 d)`` (10 u), ``v1 = 1 + c x`` with
+    ``dv1 = c eps_x + 10 u c |x| + u v1`` and ``v = v1^3`` (``3 dv1 / v1 + 2 u``), the product and
+    quotient (about 9 u) and, for k < 1, the power ``u3^(1/k)`` whose exponent ``1/k`` (relative
+    error 6 u) multiplies ``y = |ln u3| / k``: ``rel = 3 dv1 / v1 + 21 u + 6 u y``. The relative
+    error diverges as v1 -> 0 (such draws are rare and tiny: v = v1^3), so it is an error budget
+    proportional to the value, never a constant."""
+    mean, var = x[:, 14], x[:, 15]
+    u0, u1, u3 = x[:, 16], x[:, 17], x[:, 19]
+    with np.errstate(divide="ignore", invalid="ignore"):
+        sigma = np.sqrt(var)
+        ratio = np.where(sigma > 0.0, mean / np.where(sigma > 0.0, sigma, 1.0), np.inf)
+        r = np.sqrt(-2.0 * np.log(u0))
+        xn = r * np.cos(2.0 * math.pi * u1)
+        eps_x = r * (4.0 * math.pi + 2.5) * U
+        gauss = ratio >= 3.0
+        k = ratio * ratio
+        a = np.where(k < 1.0, k + 1.0, k)
+        d = a - 1.0 / 3.0
+        c = 1.0 / np.sqrt(9.0 * d)
+        v1 = 1.0 + c * xn
+        dv1 = c * eps_x + 10.0 * U * c * np.abs(xn) + U * np.abs(v1)
+        y = np.where(k < 1.0, np.abs(np.log(u3)) / k, 0.0)
+        rel_g = 3.0 * dv1 / np.where(v1 > 0.0, v1, 1.0) + 21.0 * U + 6.0 * U * y
+        loss = np.where(gauss, 0.0, mean / k * d * np.where(v1 > 0, v1, 0.0) ** 3)
+        abs_gauss = sigma * (eps_x + 3.0 * U * np.abs(xn)) + 4.0 * U * (mean + sigma * np.abs(xn))
+        atol = np.where(gauss, abs_gauss, rel_g * np.abs(loss))
+    atol = np.where(np.isfinite(atol), atol, 0.0)
+    return 1e-6, atol + 1e-6
+
+
 @pytest.mark.parametrize("precision", ["float64", "float32"])
 def test_u1_python_twin_equals_warp_cpu_kernel(precision: str) -> None:
     real = wp.float64 if precision == "float64" else wp.float32
     rtol, atol = TOL[precision]
     x, v, ii = _args(precision)
+    budgets = _float32_budgets(x) if precision == "float32" else {}
     n = x.shape[0]
     kernel = _make_kernel(real)
     v3 = _funcs(real).tf.vec3
@@ -405,7 +511,8 @@ def test_u1_python_twin_equals_warp_cpu_kernel(precision: str) -> None:
     if precision == "float32":
         # the bin index and fraction are discontinuous at bin edges (a float32 rounding moves a
         # value to the neighbouring bin: index i + 1 / fraction 0 against index i / fraction 1);
-        # the continuous position i + f is compared instead
+        # the continuous position i + f is compared instead (t = ln x * inv_dl, relative error
+        # <= 3 u, so the default rtol applies)
         t_py, t_k = p_oi[:, 1] + p_o[:, 10], k_oi[:, 1] + k_o[:, 10]
         assert np.allclose(t_py, t_k, rtol=rtol, atol=atol), "log_bin position i + f differs"
     for col, name in REAL_OUTPUTS.items():
@@ -413,7 +520,8 @@ def test_u1_python_twin_equals_warp_cpu_kernel(precision: str) -> None:
             continue
         a, b = p_o[:, col], k_o[:, col]
         assert np.all(np.isfinite(a)) and np.all(np.isfinite(b)), f"{name}: NaN or inf"
-        bad = ~np.isclose(a, b, rtol=rtol, atol=atol)
+        col_rtol, col_atol = budgets.get(col, (rtol, atol))
+        bad = ~(np.abs(a - b) <= col_atol + col_rtol * np.abs(b))
         assert not bad.any(), (
             f"{name}: {bad.sum()} of {n} mismatches; first python={a[bad][:3]} kernel={b[bad][:3]}"
         )

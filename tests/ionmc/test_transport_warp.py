@@ -337,3 +337,39 @@ def test_short_step_branch_has_no_first_order_step_dependence(make_config: MakeC
     assert abs(loss[0.01] / loss[0.1] - 1.0) < 1e-7
     telescoping = {s: _path_loss(make_config, s, 1e-5) for s in (0.1, 0.01)}
     assert abs(telescoping[0.01] / telescoping[0.1] - 1.0) > 1e-4  # the bias the branch removes
+
+
+def test_deposit_bookkeeping_closes_for_python_and_warp_cpu_f64(make_config: MakeConfig) -> None:
+    """200 histories, same seed: the energy balance closes to 1e-12 for both float64 backends and
+    their per-primary total deposits (grid sum + tallied quantization residual) agree to 1e-12.
+    The bare grid sum alone does not equal the deposit: every piece is rounded to the nearest
+    fixed-point quantum, a zero-mean error of about 1e-8 MeV per history whose realisation is
+    backend- and sample-specific (V3-003B diagnosis of the T12 python-vs-cpu64 total-deposit
+    outlier); it is bounded by the tallied quantization term, not by the 1e-12 relative bound."""
+    n = 200
+
+    def run(backend: str):  # type: ignore[no-untyped-def]
+        cfg = make_config(
+            energy=100.0,
+            n=n,
+            n_batches=4,
+            seed=20261006,
+            geometry=_water_voxels(),
+            scoring=_scoring(),
+            backend=backend,
+            lateral_sigma=1.0,
+            energy_sigma=0.5,
+        )
+        return Simulation(cfg).run()
+
+    totals = {}
+    for backend in ("python", "warp-cpu"):
+        res = run(backend)
+        eb = res.energy_balance
+        assert res.valid and eb.initial_mev > 0.0
+        assert eb.relative_residual <= 1e-12, backend
+        assert eb.grid_relative_residual(0) <= 1e-12, backend
+        totals[backend] = (eb.in_grid_mev[0] + eb.quantization_mev[0] + eb.outside_mev[0]) / n
+        # the rounding term is real (nonzero) and tallied
+        assert eb.quantization_mev[0] != 0.0
+    assert totals["python"] == pytest.approx(totals["warp-cpu"], rel=1e-12)

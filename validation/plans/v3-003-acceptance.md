@@ -21,7 +21,7 @@ Tiers:
 
 | # | Check | Criterion (pass iff) | Evidence class | Tier |
 |---|---|---|---|---|
-| U1 | Every shared func, Python scope vs Warp CPU kernel (f32, f64), 10⁴ args incl. edges | Decision 0001 classes: f64 rtol 1e-12 / atol 1e-14, f32 1e-6 / 1e-6; `dda_next` reasons and indices identical; NaN fails | backend parity | CI |
+| U1¹⁸ | Every shared func, Python scope vs Warp CPU kernel (f32, f64), 10⁴ args incl. edges | Decision 0001 classes: f64 rtol 1e-12 / atol 1e-14, f32 1e-6 / 1e-6; `dda_next` reasons and indices identical; NaN fails | backend parity | CI |
 | U2 | Table round trip \|Rinv(R(E))−E\|/E and monotonicity of R and Rinv | ≤ 1e-5 (f64 build), strictly monotone | self-consistency | CI |
 | U3 | X_S from the formula for water, Be, Al, Cu, Pb | within 0.3% of 46.88 / 92.60 / 28.75 / 14.62 / 6.62 g/cm². This also settles ln vs log10 in eq. XS. | source-model reproduction⁴ (Gottschalk's own X_S table) | CI |
 | U4 | θ_dM(x) by numpy quadrature of T_dM along CSDA E(x), 158.6 MeV, x/R1 ∈ {0.01, 0.1, 0.5, 0.9}, for the materials V3-002 provides | within 1.5% of Gottschalk's θ_Hanson·(1+dM%) (theta0Single table). Residual is from the range-table I-value. | source-model reproduction³ (shared T_dM model and coefficients; not independent) | LV¹ |
@@ -42,7 +42,7 @@ Tiers:
 | T13⁷ (edep) | Partition and chunk invariance of the deposit grid with int64 fixed-point accumulators | edep bit-identical across 1 vs 3 workers (CPU) and chunk sizes 2¹⁰ vs 2¹⁸ (CUDA) within each precision; the former relative bounds (1e-5 f32 / 1e-12 f64) are reported but no longer the criterion | self-consistency | CI (CPU) / HR |
 | T10 | Rotation invariance: beam along +x, +y, +z, −z, and (1,1,0)/√2 and (1,1,1)/√3 in a 200 mm cube; IDD versus projected depth | permutations: χ² p > 0.001; obliques: \|ΔR80\| ≤ 0.3 mm and total energy equal within 3σ; zero counters | falsification | LV |
 | T11 | DDA adversarial cases: source exactly on planes, edges and corners, directions with a zero component, grazing entry | no stall or truncation; T4 holds | falsification | CI |
-| T12 | **Statistical parity:** python (4·10³, spawn pool), warp-cpu (10⁶), warp-cuda (10⁶) at 150 MeV with all physics on; also the warp f32 vs f64 bias probe | per-voxel z = Δ/√(σa²+σb²) on the IDD and on lateral profiles at 3 depths⁵ with dose > 1% of max: χ² p > 0.001 and max\|z\| < Bonferroni Φ⁻¹(1−0.001/2n); scalars (R80, total deposit, σ_lat at 0.5R) \|z\| < 3.5. CI runs a reduced version: python 200 vs warp-cpu 2·10⁴ at 70 MeV.¹⁷ | backend parity | CI (reduced) / LV / HR (CUDA) |
+| T12 | **Statistical parity:** python (4·10³, spawn pool), warp-cpu (10⁶), warp-cuda (10⁶) at 150 MeV with all physics on; also the warp f32 vs f64 bias probe | per-voxel z = Δ/√(σa²+σb²) on the IDD and on lateral profiles at 3 depths⁵ with dose > 1% of max: χ² p > 0.001 and max\|z\| < Bonferroni Φ⁻¹(1−0.001/2n); scalars (R80, total deposit, σ_lat at 0.5R) \|z\| < 3.5. CI runs a reduced version: python 200 vs warp-cpu 2·10⁴ at 70 MeV.¹⁷ ¹⁹ | backend parity | CI (reduced) / LV / HR (CUDA) |
 | T13 | Partition invariance: 1 vs 3 workers, and CUDA chunk sizes 2¹⁰ vs 2¹⁸ | counters and tallies identical; edep within rel 1e-5 (f32) or 1e-12 (f64) | self-consistency | CI (CPU) / HR |
 | C1 | Fail-closed dispatch: each rule in §1 raises before transport; requested and effective configs are present | | capability | CI |
 | T14² | **Voxel-boundary scattering bias (grid size and alignment):** 150 MeV in water, MCS on, straggling off, 10⁶ histories warp-cpu; transport voxel size {0.5, 1, 2, 5} mm, each also with the phantom grid shifted by half a voxel along the beam and laterally; observables: exit θ_rms of a 0.5·R1 slab and the T7 lateral σ at z/R ∈ {0.5, 0.9} (scoring grid fixed at 0.2 mm lateral bins, independent of the transport voxels) | pairwise θ_rms ≤ 0.5 %, σ_lat ≤ 1 % across all voxel sizes and shifts; θ_rms within 0.5 % of the U5 quadrature; σ_lat within 2 % of Fermi-Eyges A2(z) (as T7). Negative control: forcing the hinge angle to be sampled for the truncated length only (diagnostic switch) must change θ_rms by < 0.5 % at 1 mm voxels — if it changes more, the approximation is material and the default must switch | falsification (boundary approximation) | LV (V3-003B) |
@@ -274,3 +274,53 @@ resolution rests on T1 and T13. The rule applies to every use of the profile ver
 T12). (f) The CI reduced version must pass the full verdict. Observed at the new code before this amendment (2026-10-06, fixed seeds 2026100401/2026100402, python 200 histories in 10 batches vs warp-cpu 2·10⁴ in 20 batches, 70 MeV, 0.5 mm bins): IDD, 0.25·R, 0.9·R and all scalars pass; 0.5·R inconclusive by the resolution rule (5 selected bins, groups [13,15), [15,16), [16,18), singleton mass fraction 0.458; p 0.34, p_max_z 0.30, max|z| 1.63). Because the pure-Python reference executor of this commit is about 110 times faster, the reduced python sample is raised to 2000 histories in 20 batches with the same seeds; bin size, energy and the accelerated sample are unchanged (a resolution change, not a reseed). (g) Because the accelerated T12 samples at base 20291004 were observed (at 90986b4),
 the qualification seed base is re-frozen to 20301004; 20261004, 20271004, 20281004 and 20291004
 are preserved as non-qualification evidence. Tolerances and history counts are unchanged.
+
+¹⁸ U1: change of the float32 observable and per-function float32 error budgets (2026-10-06, task
+V3-003B, after Codex review REVIEW-2483396abb16405390c82631bd7f1d7e, which found the float32
+tolerance weakened without an amendment). (a) Observable: the Python-scope Warp evaluation was
+removed on purpose (Warp 1.17 Python-scope dispatch crashed intermittently, decisions 0037/0039), so
+the Python side of U1 is the pure-Python float64 twin of each function (same source text, no Warp
+call). U1-f32 therefore no longer compares two float32 evaluations of one function; it measures the
+float32 kernel against the float64 twin evaluated on the float32-rounded arguments, that is the real
+float32 rounding error of each function. (b) The float64 criterion is unchanged: float64 kernel
+against the twin, rtol 1e-12 / atol 1e-14. (c) Float32 budgets (u = 2⁻²⁴ = 5.96·10⁻⁸): the default
+stays the frozen rtol 1e-6 / atol 1e-6 (16.8 u, i.e. any function of up to about 16 roundings
+without cancellation: the algebraic kinematics, `csda_mean_loss`, `bohr_variance`, `lerp` (error at
+most 3 u (|y0| + |y1|) + u |result| <= 16 u for |y| <= 5), DDA and step functions,
+`polar_deflection`). Non-default budgets, derived from condition number x u x number of roundings and
+not from observed numbers: `interp_exp`: the exponent is a sum of terms up to 10 in magnitude with 4
+roundings, absolute error (3·10 + 1) u, plus u for exp: rtol 32 u = 1.9·10⁻⁶. `fdm` (f_dM): the
+cancellation in om = 1 − (pv/p1v1)² has absolute error <= 3 u, hence an absolute error of lg(om)
+of 3 u/(om ln 10) and of f_dM of (|c1| + |c3 lg pv|) 3 u/(om ln 10) + 6 u Σ|terms| (per element; the
+pool contains no om between 0 and 1.0·10⁻⁴, so no element is on the rounding-to-zero side).
+`scattering_power_dm` and `scattering_variance_birth`: that error multiplied by the weight
+(z E_s/pv)² ρ/X_s/10 (times s for the birth step), plus the default. Box–Muller normals
+`gauss_pair`, `gauss_one`: ABSOLUTE bound r (4π + 2.5) u with r = sqrt(−2 ln u0) (<= 5.2 for the
+smallest u0 of the pool, |ln u0| <= 13.3): the angle 2π u1 carries 2π·2u, the sine/cosine u, r
+1.5 u. The relative error is unbounded at the zeros of cos/sin whatever u0 is; the logarithm of an
+exact float32 argument stays relatively accurate for u0 → 1 (the pool's smallest |ln u0| is
+2.3·10⁻⁵), so the divergence expected for sqrt(−2 ln u) near u0 → 1 does not occur and the
+absolute bound is needed for the trigonometric factor. `straggle_loss`: Gaussian branch
+sigma (eps_x + 3 u |x|) + 4 u |loss|; Gamma branch (Marsaglia–Tsang) first-order relative error
+3 dv1/v1 + 21 u + 6 u |ln u3|/k with dv1 = c eps_x + 10 u c |x| + u v1, k = (mean/sigma)², which
+diverges as v1 → 0 (rare, tiny draws; the budget is proportional to the value). (d) Contrary result
+preserved: against the float64 twin the float32 kernel does NOT meet the former blanket 1e-6 / 1e-6
+as written; observed worst relative differences (|value| > 10⁻³): gamma sampler 2.8·10⁻⁶ at
+`straggle_loss` (1.4·10⁻⁵ relative in an earlier evaluation of the full range, 1.0 for values
+that underflow to ~0), `fdm` 4.6·10⁻⁶, `scattering_power_dm` 2.7·10⁻⁶, `interp_exp` 1.0·10⁻⁶,
+`lerp` 2.4·10⁻⁵ (near zero of the result), Box–Muller 1.6·10⁻⁴ (relative, 1.0·10⁻⁶ to 1.5·10⁻⁶
+absolute; 9.7·10⁻⁴ relative at the smallest values). Every function lies inside its analytic budget
+(at most 53 % of it, `interp_exp`). (e) Unchanged: a NaN or inf in either path fails; integer outputs
+(voxel indices, step reasons, accept flags, DDA axes) must be identical, with one stated exception
+in float32: the log-bin index and fraction are discontinuous at bin edges (815 fraction and 15 index
+mismatches of 10⁴, a float32 rounding moves the value to the neighbouring bin: index i + 1 and
+fraction 0 against index i and fraction 1); the continuous position i + f is compared instead
+(t = ln x · inv_dl has relative error <= 3 u). The analytic budgets are implemented as
+`_float32_budgets` in `tests/ionmc/test_shared_funcs.py`.
+
+¹⁹ Fixed-point rounding noise in the deterministic scalar rule, and the qualification seed base re-frozen (2026-10-06, task V3-003B, observed at 9a27084 with base 20301004, before any result at the new code is observed):
+(a) Observed. At 9a27084 with base 20301004 (RUN-20261005T223540Z-773dc37b, archive hr-9a27084-full), every profile and scalar of all four T12 pairs passed except the python vs warp-cpu float64 `total_deposit_mev`. Python gave 149.9999999998186 ± 1.80e-10 MeV per primary (40 batches × 100 histories) and warp-cpu float64 gave 149.99999999999835 ± 1.16e-11 MeV (100 × 1e4). The relative difference was 1.198e-12, above the deterministic bound 1e-12 of ¹². The combined z is 1.0.
+(b) Diagnosis. `total_deposit_mev` sums the IDD grid quanta only. The tallied quantization residual is omitted. It is zero-mean with a per-history sd of about 1.1e-8 MeV in both backends (python 1.14e-8, cpu64 1.155e-8). The python and Warp float64 deposit code are identical: floor(x/q+½), q = 2^-30 MeV, residual tallied, outside deposits in float64. The energy balance closes to 1e-12 in both backends, and the T1 trace stays bit-identical. The deficit is therefore sampling noise of the grid sum, not a bias, and the previous head's python sample shows the same scatter with no preferred sign. A 1e-12 relative bound is 1.5e-10 MeV, below the 1.8e-10 MeV standard error of a 4000-history sample, so the ¹² rule could fail by chance.
+(c) Amended rule. A scalar with no usable variance passes when |a−b| ≤ bound·scale + 3.5·hypot(se_a, se_b), with bound 1e-5 for float32 and 1e-12 for float64 and python. The allowance is recorded as `noise_allowance`. At the frozen sample sizes the allowance is 3.5 × 1.81e-10 ≈ 6.3e-10 MeV, plus 1.5e-10 MeV from the bound, so the pass limit is about 7.8e-10 MeV per primary (5.2e-12 relative). A systematic offset of order 1e-9 MeV per primary (about 7e-12 relative) or more still fails; the regression test uses 5e-8 MeV. Smaller offsets are covered by the energy-balance tests (1e-12), which close independently of the grid sum.
+(d) The precedent rule of ¹² (deterministic bound alone) is superseded by this rule for the total-deposit scalar only. All other rules of ¹² to ¹⁸ and all tolerances are unchanged. No kernel, shared function or reference-backend physics changed.
+(e) Seed base. The T12 comparison at base 20301004 has been observed, so base 20301004 joins the consumed non-qualification bases 20261004, 20271004, 20281004 and 20291004. The qualification base is re-frozen to 20311004, before any result at the amended code is observed.

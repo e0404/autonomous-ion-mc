@@ -236,4 +236,33 @@ fail-closed configuration rules.
   preserved in the validation ledger (VAL-20261004-070915-E1A618,
   VAL-20261004-072852-16E681).
 
+- **2026-10-06: T12 python-vs-cpu64 total-deposit failure at 9a27084 (seed
+  base 20301004) and its remedy (V3-003B).** The qualification run
+  (RUN-20261005T223540Z-773dc37b, 150 MeV protons in water, 0.2 mm bins) failed
+  exactly one scalar of one pair: `total_deposit_mev`, python (40 x 100
+  histories) 149.9999999998186 (se 1.80e-10) against warp-cpu float64
+  (100 x 1e4) 149.99999999999835 (se 1.16e-11), relative difference 1.198e-12
+  above the deterministic bound 1e-12. Diagnosis: not a bookkeeping bias. The
+  python glue and the Warp kernel quantize identically (`floor(x/q + 1/2)`,
+  q = 2^-30 MeV, residual tallied per grid, outside deposits in float64); the
+  energy balance closes to <= 1e-12 for both (grid identity
+  `in_grid + quantization + outside = step_deposit + cutoff`). The bare IDD
+  grid sum used by `t12_observables` omits the tallied rounding residual, a
+  zero-mean error of about 1.1e-8 MeV per history (per-history sd from the
+  batch spread: python 1.14e-8, cpu64 1.155e-8) that differs between samples.
+  The python mean deficit (-1.81e-10) is 1.0 combined standard errors, the
+  cpu64 mean (-1.7e-12) is 0.14 sigma; the previous head's python sample
+  (hr-90986b4-b, seed base 20291004) shows the same size of scatter
+  (per-history sd 8.7e-9) with no preferred sign. The "deterministic" bound of
+  1e-12 relative (1.5e-10 MeV) is below the sampling noise of a 4000-history
+  python sample (1.8e-10 MeV), so it could fail by chance in either direction.
+  Remedy: the degenerate-scalar rule of `t12_compare` accepts a difference up
+  to `bound * scale + 3.5 * hypot(se_a, se_b)`: the deterministic precision
+  bound for the systematic part plus the rounding-noise allowance (recorded as
+  `noise_allowance`); a systematic offset still fails. No kernel or shared
+  physics function was changed, the T1 trace stays bit-identical. A regression
+  test shows that both float64 backends close the energy balance to 1e-12 and
+  that the per-primary deposit (grid + quantization residual) agrees to 1e-12
+  for identical seeds, and a T12 test covers the allowance.
+
 To be appended from committed result files.

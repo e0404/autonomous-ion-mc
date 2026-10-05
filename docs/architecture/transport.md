@@ -44,7 +44,10 @@ One source text therefore defines kernel function and twin; the twins evaluate t
 expressions in float64. T1 (trajectories identical to the float64 kernel) and
 `tests/ionmc/test_reference_pure_python.py` (no Warp `Function` call at Python scope on the reference
 path; twin versus kernel spot check) guard this. `tests/ionmc/test_shared_funcs.py` compares the
-kernel (float64 and float32) with the float64 twin. **Rule: Warp functions are executed only inside
+kernel (float64 and float32) with the float64 twin (criterion U1, plan amendment 18: float64 rtol 1e-12 /
+atol 1e-14; float32 measures the real float32 rounding error against the float64 twin, with the frozen
+default 1e-6 / 1e-6 and analytic per-function budgets for `interp_exp`, `fdm`, the scattering power and
+variance, the Box-Muller normals and the straggling sampler, `_float32_budgets` in the test). **Rule: Warp functions are executed only inside
 kernels; Python-side evaluation (reference backend, tests, diagnostics) uses the pure-Python twins**
 (or numpy). Tests that need a shared function on the Python side use `python_twin(make_*)` with
 `float` as the real type, and `tests/ionmc/test_reference_pure_python.py` runs the reference backend
@@ -337,9 +340,9 @@ period) and `TransportWorkerError` is raised; no partial result is returned. Scr
   `# exit=` trailer (a timed-out step is killed and archived with `exit=124`); `manifest.txt` lists the steps of the
   run; `summarize.py` verifies everything and writes `summary.json`. Any failed step, missing file or mismatch makes the
   exit status non-zero.
-* **Seed base.** `--seed-base` (default 20301004, the qualification base) is the base of every statistical seed; it is
-  recorded in `environment.txt`, the step documents and the sample metadata. Only an archive made with 20301004 can be
-  `conformant`: one made with the rehearsal base 20261004, with 20271004 (T9 investigation), with 20281004 (first qualification attempt, consumed), with 20291004 (second qualification attempt, consumed: its accelerated T12 samples were observed before the grouped rule of plan footnote 17) (all preserved as non-qualification evidence) or without a recorded base
+* **Seed base.** `--seed-base` (default 20311004, the qualification base) is the base of every statistical seed; it is
+  recorded in `environment.txt`, the step documents and the sample metadata. Only an archive made with 20311004 can be
+  `conformant`: one made with the rehearsal base 20261004, with 20271004 (T9 investigation), with 20281004 (first qualification attempt, consumed), with 20291004 (second qualification attempt, consumed: its accelerated T12 samples were observed before the grouped rule of plan footnote 17), with 20301004 (third qualification attempt, consumed: its python-vs-cpu64 total deposit was observed before the rounding-noise allowance of plan footnote 19) (all preserved as non-qualification evidence) or without a recorded base
   verifies but carries `non_conformant_reasons`. The qualification command is
   `python validation/scripts/transport/run_suite.py --suite hr --out validation/generated/transport/<new-dir> --expected-sha <sha>`
   (no seed flag).
@@ -365,8 +368,9 @@ period) and `TransportWorkerError` is raised; no partial result is returned. Scr
   `t2-...-cuda`, `t13-chunks-cuda`, `t12-python-sample-{1,2}of2`, `t12-accelerated-samples`, `t12-compare`.
 * **Scalar rule and support rule (T12).** A scalar whose standard errors are below 1e-8 of its value in both samples
   (energy conservation makes the total deposit deterministic) is not compared with z but with the deterministic T4
-  precision bound of the less precise sample (1e-5 relative for float32, 1e-12 for float64 and python); the rule that
-  applied is recorded.
+  precision bound of the less precise sample (1e-5 relative for float32, 1e-12 for float64 and python) plus 3.5 combined standard errors of the grid sum, which lacks the tallied
+  fixed-point rounding residual (zero mean, about 1e-8 MeV per history, sample-specific; decision 0039, 2026-10-06);
+  the rule that applied and the noise allowance are recorded.
   **Grouped sparse-bin rule (plan footnote 17).** A bin is selected when it exceeds 1 % of the maximum of either
   sample's own mean profile (union), so a backend that drops or depletes a relevant bin cannot remove it from the
   comparison; the selected region is the contiguous hull. Starting at the mode of the hull and moving outward on each

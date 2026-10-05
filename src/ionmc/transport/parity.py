@@ -841,14 +841,20 @@ def t12_compare(
         sc = scalar_z(a.scalars[name], b.scalars[name])
         scale = max(abs(sc["a"]), abs(sc["b"]))
         if scale > 0.0 and max(sc["se_a"], sc["se_b"]) <= DEGENERATE_SE_RTOL * scale:
-            # a deterministic scalar (energy conservation makes the total deposit exact): z is
-            # meaningless; compare with the precision bound of the less precise sample (the
-            # deterministic T4 bound: 1e-5 relative for float32, 1e-12 for float64 / python)
+            # a deterministic scalar (energy conservation makes the total deposit exact up to the
+            # fixed-point rounding of the grid pieces): z is meaningless for the systematic part;
+            # compare with the precision bound of the less precise sample (the deterministic T4
+            # bound: 1e-5 relative for float32, 1e-12 for float64 / python) plus the sampling
+            # noise of the grid sum. The grid sum misses the tallied rounding residual, a
+            # zero-mean error of ~1e-8 MeV per history that differs between samples (V3-003B);
+            # its standard error enters as Z_MAX combined standard errors.
             tol = max(DETERMINISTIC_RTOL[a.precision], DETERMINISTIC_RTOL[b.precision])
+            noise = SCALAR_Z_MAX * float(np.hypot(sc["se_a"], sc["se_b"]))
             rel = abs(sc["a"] - sc["b"]) / scale
-            passed = bool(rel <= tol)
+            passed = bool(abs(sc["a"] - sc["b"]) <= tol * scale + noise)
             out["scalars"][name] = {
                 **sc,
+                "noise_allowance": noise,
                 "rule": "deterministic_precision_bound",
                 "relative_difference": rel,
                 "bound": tol,

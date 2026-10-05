@@ -1,5 +1,5 @@
-"""T12 (CI, reduced as frozen): python 200 histories versus warp-cpu 2e4 at 70 MeV, all physics
-on, distinct seeds, with the frozen statistics (chi-square p > 0.001, Bonferroni max|z|,
+"""T12 (CI, reduced as frozen): python 2000 histories (20 batches) versus warp-cpu 2e4 at 70 MeV,
+all physics on, distinct seeds, with the frozen statistics (chi-square p > 0.001, Bonferroni max|z|,
 |z| < 3.5 for R80, total deposit and lateral sigma at 0.5 R), evaluated on the grouped profiles
 of plan footnote 17: every profile must be a full `pass` (no `inconclusive` is allowed). Lateral
 bins are 0.5 mm here (the LV and HR runs use 0.2 mm; python at 0.2 mm steps is too slow for CI).
@@ -158,6 +158,25 @@ def test_degenerate_scalars_use_the_deterministic_precision_bound() -> None:
     two64 = t12_compare(_synthetic(1, "float64", 150.0), _synthetic(2, "float64", 150.0000001),
                         n_perm=999)["scalars"]["total_deposit_mev"]  # fmt: skip
     assert not two64["pass"] and two64["bound"] == 1e-12  # float64 pairs are held to 1e-12
+
+
+def test_deterministic_total_allows_the_fixed_point_rounding_noise() -> None:
+    """The grid sum of a sample carries a zero-mean rounding error (~1e-8 MeV per history); two
+    float64 samples whose totals differ within a few combined standard errors of that noise pass,
+    a systematic offset (beyond 1e-12 relative plus the noise allowance) still fails."""
+    from ionmc.transport.parity import T12Observables
+
+    def sample(seed: int, n_batches: int, hpb: int, shift: float) -> T12Observables:
+        rng = np.random.default_rng(seed)
+        tot = 150.0 + shift + 1.14e-8 / np.sqrt(hpb) * rng.normal(size=n_batches)
+        prof = np.linspace(1.0, 2.0, 12) * (1.0 + 0.01 * rng.normal(size=(n_batches, 12)))
+        return T12Observables({"idd": prof}, {"total_deposit_mev": tot}, n_batches, hpb, "float64")
+
+    a, b = sample(1, 40, 100, -1.8e-10), sample(2, 100, 10000, 0.0)
+    v = t12_compare(a, b, n_perm=999)["scalars"]["total_deposit_mev"]
+    assert v["rule"] == "deterministic_precision_bound" and v["pass"]
+    bad = t12_compare(a, sample(3, 100, 10000, 5e-8), n_perm=999)["scalars"]["total_deposit_mev"]
+    assert not bad["pass"]
 
 
 def test_undersupported_bin_is_merged_not_excluded() -> None:
