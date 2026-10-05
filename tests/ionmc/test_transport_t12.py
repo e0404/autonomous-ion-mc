@@ -202,12 +202,39 @@ def test_noise_allowance_is_restricted_to_the_total_deposit() -> None:
     assert r80["rule"] == "z" and "noise_allowance" not in r80 and not r80["pass"]
     assert abs(r80["z"]) > 1e3
     assert v["scalars"]["total_deposit_mev"]["rule"] == "deterministic_precision_bound"
+    # below the former 1e-9 relative "z = 0" shortcut: R80 ~ 100 mm, offset 5e-8 mm, se ~ 1e-12 mm
+    low = t12_compare(sample(1, 100.0, 4e-12), sample(2, 100.0 + 5e-8, 4e-12), n_perm=999)
+    r80 = low["scalars"]["r80_mm"]
+    assert r80["rule"] == "z" and abs(r80["z"]) > 1e3 and not r80["pass"]
     same = t12_compare(sample(1, 100.0, 0.0), sample(2, 100.0, 0.0), n_perm=999)
     assert same["scalars"]["r80_mm"]["rule"] == "z_undefined" and same["scalars"]["r80_mm"]["pass"]
     off = t12_compare(sample(1, 100.0, 0.0), sample(2, 100.5, 0.0), n_perm=999)
     assert (
         off["scalars"]["r80_mm"]["rule"] == "z_undefined" and not off["scalars"]["r80_mm"]["pass"]
     )
+
+
+def test_deterministic_scalar_verdict_both_precisions() -> None:
+    """The shared rule of footnote 19 (T12 total deposit, T10 total energy): bound of the less
+    precise sample times the scale plus 3.5 combined standard errors."""
+    from ionmc.transport.parity import deterministic_scalar_verdict
+
+    rng = np.random.default_rng(5)
+    a = 150.0 + 1e-6 * rng.normal(size=20)  # se ~ 2e-7
+    for prec, bound in (("float32", 1e-5), ("float64", 1e-12)):
+        same = deterministic_scalar_verdict(a, a + 1e-4 * bound * 150.0, prec, prec)
+        assert same["pass"] and same["bound"] == bound and "noise_allowance" in same
+        assert same["rule"] == "deterministic_precision_bound"
+        # offset of the bound plus 20x the noise allowance fails, 0.5x passes
+        allow = bound * 150.0 + same["noise_allowance"]
+        assert not deterministic_scalar_verdict(a, a + 20 * allow, prec, prec)["pass"]
+        assert deterministic_scalar_verdict(a, a + 0.5 * allow, prec, prec)["pass"]
+    # the less precise sample sets the bound
+    assert deterministic_scalar_verdict(a, a, "float32", "float64")["bound"] == 1e-5
+    # zero variance and exact equality
+    c = np.full(10, 150.0)
+    assert deterministic_scalar_verdict(c, c, "float64", "float64")["pass"]
+    assert not deterministic_scalar_verdict(c, c + 1e-6, "float64", "float64")["pass"]
 
 
 def test_undersupported_bin_is_merged_not_excluded() -> None:
@@ -292,14 +319,15 @@ def test_calibration_method_follows_the_batch_structure() -> None:
     b = _sparse_observables(rng, 40, 1000)
     eq = t12_compare(a, a2, n_perm=999)
     assert eq["calibration"] == "studentized_permutation"
-    assert eq["max_z_calibration"] == "bonferroni_normal"
-    assert eq["arrays"]["lat"]["max_z_rule"] == "bonferroni_normal"
+    assert eq["max_z_calibration"] == "permutation_max_t"
+    assert eq["arrays"]["lat"]["max_z_rule"] == "permutation_max_t"
     v = t12_compare(a, b, n_boot=999)
     assert v["calibration"] == "studentized_bootstrap_t" and v["bootstrap"]["n_boot"] == 999
     assert v["max_z_calibration"] == "bootstrap_max_t"
     assert v["arrays"]["lat"]["max_z_rule"] == "bootstrap_max_t"
     assert v["arrays"]["lat"]["p_value_max_z"] is not None
-    assert eq["arrays"]["lat"]["p_value_max_z"] is None
+    assert eq["arrays"]["lat"]["p_value_max_z"] is not None
+    assert isinstance(eq["arrays"]["lat"]["bonferroni_informative_pass"], bool)
 
 
 def test_sparse_shifted_alternative_is_detected() -> None:
@@ -459,6 +487,24 @@ def test_grouped_null_false_alarm_equal() -> None:
     assert not_pass <= 4, not_pass
 
 
+def test_grouped_null_false_alarm_equal_few_batches() -> None:
+    """10 batches of 2000 vs 10 batches of 2000 (the T9/T10 structure): the per-bin z is
+    Student-t-like (about 18 degrees of freedom), so the normal Bonferroni bound would reject a
+    null profile in several of 200 trials; the permutation max-T p-value does not."""
+    rng = np.random.default_rng(102)
+    trials, not_pass, normal_fail = 200, 0, 0
+    for k in range(trials):
+        a = _gaussian_profile_observables(rng, 10, 2000)
+        b = _gaussian_profile_observables(rng, 10, 2000)
+        v = t12_compare(a, b, n_perm=999, seed=100 + k)["arrays"]["lat"]
+        assert v["max_z_rule"] == "permutation_max_t"
+        not_pass += not v["pass"]
+        normal_fail += v["bonferroni_informative_pass"] is False
+    print("few-batch null: not pass", not_pass, "normal Bonferroni would fail", normal_fail)
+    assert not_pass <= 4, (not_pass, normal_fail)
+    assert normal_fail > not_pass, (not_pass, normal_fail)
+
+
 def test_dropped_tail_bin_is_detected_equal() -> None:
     """A backend that empties the outermost bin above 1.5 % of the maximum (a 1 % bin could fall
     below the union threshold of the intact sample by sampling noise; the 1.5 % bin is selected
@@ -557,16 +603,13 @@ def test_union_selection_keeps_a_bin_one_sample_dropped() -> None:
 def test_profile_decision_truth_table() -> None:
     from ionmc.transport.parity import _profile_decision as d
 
-    assert d(True, 0.5, 5.0, 4.0, None) is False  # equal: the normal bound rules
-    assert d(True, 0.5, 3.0, 4.0, 0.0001) is True  # a bootstrap p is ignored for equal
-    assert d(False, 0.5, 5.0, 4.0, 0.2) is True  # unequal: the normal z is ignored
-    assert d(False, 0.5, 2.0, 4.0, 0.0005) is False  # unequal: the bootstrap rules
-    assert d(False, 0.5, 2.0, 4.0, None) is False
-    assert d(True, 0.0005, 1.0, 4.0, None) is False
-    assert d(False, 0.0005, 1.0, 4.0, 0.9) is False
-    assert d(True, float("nan"), 1.0, 4.0, None) is False
-    assert d(False, float("nan"), 1.0, 4.0, 0.9) is False
-    assert d(True, 0.5, float("inf"), 4.0, None) is False
+    assert d(0.5, 0.2) is True  # both calibrated p-values above the level (any structure)
+    assert d(0.5, 0.0005) is False  # the max-T p-value rules (the normal z is not an input)
+    assert d(0.0005, 0.9) is False
+    assert d(0.5, 0.001) is False  # strict: p must exceed 0.001
+    assert d(0.5, None) is False
+    assert d(float("nan"), 0.9) is False
+    assert d(0.5, float("nan")) is False
 
 
 def test_unequal_pair_normal_bonferroni_exceeded_but_max_t_passes() -> None:
@@ -589,9 +632,9 @@ def test_unequal_pair_normal_bonferroni_exceeded_but_max_t_passes() -> None:
     assert v["p_value_max_z"] > 0.001 and v["verdict"] == "pass", v
 
 
-def test_equal_pair_bonferroni_failure_is_not_rescued_by_chi2() -> None:
+def test_equal_pair_max_t_failure_is_not_rescued_by_chi2() -> None:
     """Many bins, one bin shifted to z = +5: the chi-square p-value stays above 0.001 (one bin of
-    100) but max|z| exceeds the frozen Bonferroni bound (4.42 for 100 groups): fail."""
+    100) but the permutation max-T p-value is at its floor: fail."""
     from ionmc.transport.parity import T12Observables, _chi2_profile, _mean_se
 
     rng = np.random.default_rng(55)
@@ -607,7 +650,8 @@ def test_equal_pair_bonferroni_failure_is_not_rescued_by_chi2() -> None:
         n_perm=999,
     )["arrays"]["p"]
     assert v["p_value"] > 0.001
-    assert v["max_abs_z"] >= v["bonferroni_bound"] and v["verdict"] == "fail"
+    assert v["p_value_max_z"] <= 0.001 and v["verdict"] == "fail"
+    assert v["max_abs_z"] >= v["bonferroni_bound"] and v["bonferroni_informative_pass"] is False
 
 
 def test_unequal_pair_max_t_failure_not_rescued_by_chi2() -> None:

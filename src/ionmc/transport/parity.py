@@ -46,7 +46,6 @@ DEPOSIT_RTOL = {"float32": 1e-5, "float64": 1e-12}
 DEPOSIT_FLOOR_FRACTION = 0.01
 P_VALUE_MIN = 0.001
 SCALAR_Z_MAX = 3.5
-DEGENERATE_RTOL = 1e-9
 DEGENERATE_SE_RTOL = 1e-8
 DETERMINISTIC_RTOL = {"float32": 1e-5, "float64": 1e-12}
 DOSE_FRACTION = 0.01
@@ -448,18 +447,44 @@ def _mean_se(x: NDArray[np.float64]) -> tuple[NDArray[np.float64], NDArray[np.fl
 
 def scalar_z(xa: NDArray[np.float64], xb: NDArray[np.float64]) -> dict[str, float]:
     """``z = (mean_a - mean_b) / sqrt(se_a^2 + se_b^2)`` of two samples of batch values (standard
-    errors of the batch method). Values equal within ``DEGENERATE_RTOL`` (a scalar fixed by
-    energy conservation has no variance) give ``z = 0``; a difference without variance gives
-    ``inf``."""
+    errors of the batch method), exactly that whenever the combined standard error is nonzero.
+    With no variance at all, ``z = 0`` for exactly equal means and ``inf`` otherwise. There is no
+    relative-equality shortcut: a scalar fixed by energy conservation goes through
+    :func:`deterministic_scalar_verdict`."""
     ma, sa = float(xa.mean()), float(xa.std(ddof=1)) / math.sqrt(len(xa))
     mb, sb = float(xb.mean()), float(xb.std(ddof=1)) / math.sqrt(len(xb))
     se = math.sqrt(sa**2 + sb**2)
     diff = ma - mb
-    if abs(diff) <= DEGENERATE_RTOL * max(abs(ma), abs(mb)):
+    if diff == 0.0:
         z = 0.0
     else:
         z = diff / se if se > 0.0 else math.inf
     return {"a": ma, "b": mb, "se_a": sa, "se_b": sb, "z": z}
+
+
+def deterministic_scalar_verdict(
+    xa: NDArray[np.float64], xb: NDArray[np.float64], precision_a: str, precision_b: str
+) -> dict[str, Any]:
+    """Verdict of a scalar fixed by energy conservation (the T12 total deposit, the T10 total
+    energy; amendment 19): ``|a - b| <= bound * scale + 3.5 * hypot(se_a, se_b)`` with ``bound``
+    the deterministic T4 bound of the less precise sample (1e-5 relative for float32, 1e-12 for
+    float64 / python) and ``scale = max(|a|, |b|)``. The second term is the sampling noise of the
+    grid sum, which misses the tallied fixed-point rounding residual (zero mean, about 1e-8 MeV
+    per history, differs between samples). Returns the :func:`scalar_z` record plus ``rule``,
+    ``relative_difference``, ``bound``, ``noise_allowance`` and ``pass``."""
+    sc = scalar_z(xa, xb)
+    scale = max(abs(sc["a"]), abs(sc["b"]))
+    tol = max(DETERMINISTIC_RTOL[precision_a], DETERMINISTIC_RTOL[precision_b])
+    noise = SCALAR_Z_MAX * float(np.hypot(sc["se_a"], sc["se_b"]))
+    diff = abs(sc["a"] - sc["b"])
+    return {
+        **sc,
+        "noise_allowance": noise,
+        "rule": "deterministic_precision_bound",
+        "relative_difference": diff / scale if scale > 0.0 else 0.0,
+        "bound": tol,
+        "pass": bool(diff <= tol * scale + noise),
+    }
 
 
 PERMUTATIONS = 2000
@@ -480,7 +505,7 @@ def _chi2_profile(
     return float((z**2).sum()), float(np.abs(z).max()) if z.size else 0.0, z
 
 
-def permutation_p_value(
+def permutation_p_values(
     xa: NDArray[np.float64],
     na: float,
     xb: NDArray[np.float64],
@@ -488,15 +513,18 @@ def permutation_p_value(
     *,
     n_perm: int = PERMUTATIONS,
     seed: int = PERMUTATION_SEED,
-) -> float:
-    """Batch-level studentized permutation p-value of the profile chi-square.
+) -> tuple[float, float]:
+    """Batch-level studentized permutation p-values ``(p_chi2, p_max_z)`` of the profile.
 
     ``xa`` (``Ba, m``) and ``xb`` (``Bb, m``) are per-batch per-primary means of ``m`` bins,
     ``na`` and ``nb`` the histories per batch of each sample. With the pooled mean
     ``mu`` (weighted by the batch sizes) the residuals ``r_b = (m_b - mu) sqrt(n_b)`` of all
     ``Ba + Bb`` batches are permuted across the two samples, ``m*_b = mu + r*_b / sqrt(n_b)``
     (the original size ``n_b`` of each batch) are rebuilt, and the same chi-square of the two
-    sample means is recomputed. The p-value is ``(1 + #{chi2* >= chi2}) / (1 + n_perm)``.
+    sample means is recomputed. ``p_chi2 = (1 + #{chi2* >= chi2}) / (1 + n_perm)`` and
+    ``p_max_z = (1 + #{max|z*| >= max|z|}) / (1 + n_perm)`` (a permutation max-T p-value that
+    absorbs the multiplicity, the correlation of the bins and the Student-t-like tails of the
+    per-bin z at few batches) are counted over the SAME replicates.
 
     Assumption: under the null hypothesis the per-primary variance of a bin is the same in both
     samples, so that ``r_b`` are exchangeable; unlike the Wilson-Hilferty approximation this
@@ -509,15 +537,32 @@ def permutation_p_value(
     m = np.concatenate([xa, xb], axis=0)
     mu = (sizes[:, None] * m).sum(axis=0) / sizes.sum()
     resid = (m - mu) * np.sqrt(sizes)[:, None]
-    observed = _chi2_profile(xa, xb)[0]
+    observed, observed_max, _ = _chi2_profile(xa, xb)
     rng = np.random.default_rng(seed)
-    count = 0
+    count = count_max = 0
     for _ in range(n_perm):
         perm = rng.permutation(ba + bb)
         star = mu + resid[perm] / np.sqrt(sizes)[:, None]
-        if _chi2_profile(star[:ba], star[ba:])[0] >= observed:
+        chi2_star, max_star, _ = _chi2_profile(star[:ba], star[ba:])
+        if chi2_star >= observed:
             count += 1
-    return (1.0 + count) / (1.0 + n_perm)
+        if max_star >= observed_max:
+            count_max += 1
+    return (1.0 + count) / (1.0 + n_perm), (1.0 + count_max) / (1.0 + n_perm)
+
+
+def permutation_p_value(
+    xa: NDArray[np.float64],
+    na: float,
+    xb: NDArray[np.float64],
+    nb: float,
+    *,
+    n_perm: int = PERMUTATIONS,
+    seed: int = PERMUTATION_SEED,
+) -> float:
+    """Studentized permutation p-value of the profile chi-square (the first value of
+    :func:`permutation_p_values`)."""
+    return permutation_p_values(xa, na, xb, nb, n_perm=n_perm, seed=seed)[0]
 
 
 def bootstrap_p_values(
@@ -656,17 +701,13 @@ def _group_bins(
     return left[::-1] + right
 
 
-def _profile_decision(
-    equal: bool, p_chi2: float, max_abs_z: float, bound: float, p_max_z: float | None
-) -> bool:
+def _profile_decision(p_chi2: float, p_max_z: float | None) -> bool:
     """Statistical acceptance of one profile: the chi-square p-value must exceed ``P_VALUE_MIN``
-    AND the max-statistic criterion conditional on the batch structure must hold (equal: the
-    frozen Bonferroni bound ``max |z| < bound``; unequal: the bootstrap max-T ``p_max_z >
-    P_VALUE_MIN``). A NaN p-value fails."""
+    AND the max-T p-value of the max-statistic (permutation for equal batch structures,
+    bootstrap for unequal ones, both from the same replicates as the chi-square) must too. A
+    NaN p-value fails."""
     if not (p_chi2 > P_VALUE_MIN):
         return False
-    if equal:
-        return bool(max_abs_z < bound)
     return p_max_z is not None and bool(p_max_z > P_VALUE_MIN)
 
 
@@ -693,13 +734,13 @@ def t12_compare(
     For every profile the bins above 1 % of the maximum of EITHER sample's own mean profile are
     selected (union; contiguous hull) and rebinned outward from the mode into groups supported by
     both samples (:func:`_group_bins`; ``groups``, ``n_groups``). One test family over the groups:
-    the chi-square of the group ``z`` is calibrated with :func:`permutation_p_value`
+    the chi-square of the group ``z`` is calibrated with :func:`permutation_p_values`
     (``p_value``) when the two samples have the same batch structure (number of batches and
     histories per batch) and with the within-sample studentized bootstrap-t
     :func:`bootstrap_p_values` (``n_boot`` resamples, same seed) otherwise, and must exceed
-    0.001; AND the max-statistic criterion conditional on the structure: equal, the frozen
-    Bonferroni bound on ``max |z|`` over the groups; unequal, the bootstrap max-T p-value
-    ``p_value_max_z > 0.001`` from the same replicates (the normal Bonferroni comparison is
+    0.001; AND the max-T p-value of ``max |z|`` over the groups, ``p_value_max_z > 0.001``,
+    from the same replicates (permutation or bootstrap; plan footnote 22: the normal Bonferroni
+    bound is anti-conservative at few batches, where the per-bin z is Student-t-like; it is
     ``bonferroni_informative_pass`` only). The method is recorded as ``calibration`` and
     ``max_z_calibration``; the Wilson-Hilferty value (``p_value_wilson_hilferty``) and the
     per-selected-bin statistics (``chi2_all_selected_bins``, ``max_abs_z_all_bins``,
@@ -717,7 +758,7 @@ def t12_compare(
     _check_profile_values(b, "b")
     equal = (a.n_batches, a.histories_per_batch) == (b.n_batches, b.histories_per_batch)
     method = "studentized_permutation" if equal else "studentized_bootstrap_t"
-    max_rule = "bonferroni_normal" if equal else "bootstrap_max_t"
+    max_rule = "permutation_max_t" if equal else "bootstrap_max_t"
     out: dict[str, Any] = {
         "n_batches": [a.n_batches, b.n_batches],
         "permutation": {"n_perm": n_perm, "seed": seed},
@@ -798,7 +839,7 @@ def t12_compare(
                 bound = bonferroni_z(n_groups)
                 p_max_z: float | None = None
                 if equal:
-                    p = permutation_p_value(
+                    p, p_max_z = permutation_p_values(
                         ga,
                         a.histories_per_batch,
                         gb,
@@ -808,7 +849,7 @@ def t12_compare(
                     )
                 else:
                     p, p_max_z = bootstrap_p_values(ga, gb, n_boot=n_boot, seed=seed + i)
-                stat_pass = _profile_decision(equal, p, max_abs_z, bound, p_max_z)
+                stat_pass = _profile_decision(p, p_max_z)
                 total = float(ref[lo : hi + 1].sum())
                 single = sum(float(ref[g0]) for g0, g1 in groups if g1 - g0 == 1)
                 frac = single / total if total > 0.0 else 0.0
@@ -823,7 +864,7 @@ def t12_compare(
                     max_abs_z=max_abs_z,
                     bonferroni_bound=bound,
                     p_value_max_z=p_max_z,
-                    bonferroni_informative_pass=None if equal else bool(max_abs_z < bound),
+                    bonferroni_informative_pass=bool(max_abs_z < bound),
                 )
                 if not stat_pass:
                     verdict = "fail"
@@ -840,31 +881,13 @@ def t12_compare(
         ok &= passed
     for name in a.scalars:
         sc = scalar_z(a.scalars[name], b.scalars[name])
-        scale = max(abs(sc["a"]), abs(sc["b"]))
-        if (
-            name == TOTAL_DEPOSIT
-            and scale > 0.0
-            and max(sc["se_a"], sc["se_b"]) <= DEGENERATE_SE_RTOL * scale
-        ):
-            # the total deposit only (amendment 19(d)): energy conservation makes it exact up to
-            # the fixed-point rounding of the grid pieces, so z is meaningless for the systematic
-            # part: compare with the precision bound of the less precise sample (the deterministic
-            # T4 bound: 1e-5 relative for float32, 1e-12 for float64 / python) plus the sampling
-            # noise of the grid sum. The grid sum misses the tallied rounding residual, a
-            # zero-mean error of ~1e-8 MeV per history that differs between samples (V3-003B);
-            # its standard error enters as Z_MAX combined standard errors.
-            tol = max(DETERMINISTIC_RTOL[a.precision], DETERMINISTIC_RTOL[b.precision])
-            noise = SCALAR_Z_MAX * float(np.hypot(sc["se_a"], sc["se_b"]))
-            rel = abs(sc["a"] - sc["b"]) / scale
-            passed = bool(abs(sc["a"] - sc["b"]) <= tol * scale + noise)
-            out["scalars"][name] = {
-                **sc,
-                "noise_allowance": noise,
-                "rule": "deterministic_precision_bound",
-                "relative_difference": rel,
-                "bound": tol,
-                "pass": passed,
-            }
+        if name == TOTAL_DEPOSIT:
+            # amendment 19: energy conservation fixes the total deposit up to the fixed-point
+            # rounding, so z is meaningless; the deterministic rule applies to this scalar only
+            out["scalars"][name] = deterministic_scalar_verdict(
+                a.scalars[name], b.scalars[name], a.precision, b.precision
+            )
+            passed = bool(out["scalars"][name]["pass"])
         elif sc["se_a"] == 0.0 and sc["se_b"] == 0.0:
             # every other scalar keeps the frozen |z| < 3.5 rule even when its standard error is
             # tiny; with no variance at all z is undefined and the comparison fails closed: pass

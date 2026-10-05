@@ -340,9 +340,9 @@ period) and `TransportWorkerError` is raised; no partial result is returned. Scr
   `# exit=` trailer (a timed-out step is killed and archived with `exit=124`); `manifest.txt` lists the steps of the
   run; `summarize.py` verifies everything and writes `summary.json`. Any failed step, missing file or mismatch makes the
   exit status non-zero.
-* **Seed base.** `--seed-base` (default 20321004, the qualification base) is the base of every statistical seed; it is
-  recorded in `environment.txt`, the step documents and the sample metadata. Only an archive made with 20321004 can be
-  `conformant`: one made with the rehearsal base 20261004, with 20271004 (T9 investigation), with 20281004 (first qualification attempt, consumed), with 20291004 (second qualification attempt, consumed: its accelerated T12 samples were observed before the grouped rule of plan footnote 17), with 20301004 (third qualification attempt, consumed: its python-vs-cpu64 total deposit was observed before the rounding-noise allowance of plan footnote 19), with 20311004 (fourth qualification attempt, consumed: its HR T12 comparison was observed before the review-required restriction of the footnote-19 allowance to the total-deposit scalar) (all preserved as non-qualification evidence) or without a recorded base
+* **Seed base.** `--seed-base` (default 20331004, the qualification base) is the base of every statistical seed; it is
+  recorded in `environment.txt`, the step documents and the sample metadata. Only an archive made with 20331004 can be
+  `conformant`: one made with the rehearsal base 20261004, with 20271004 (T9 investigation), with 20281004 (first qualification attempt, consumed), with 20291004 (second qualification attempt, consumed: its accelerated T12 samples were observed before the grouped rule of plan footnote 17), with 20301004 (third qualification attempt, consumed: its python-vs-cpu64 total deposit was observed before the rounding-noise allowance of plan footnote 19), with 20311004 (fourth qualification attempt, consumed: its HR T12 comparison was observed before the review-required restriction of the footnote-19 allowance to the total-deposit scalar), with 20321004 (fifth qualification attempt, consumed: its HR and LV T12 comparisons were observed before the removal of the 1e-9 relative z = 0 shortcut of the scalar statistic for non-deposit scalars, plan footnote 21) (all preserved as non-qualification evidence) or without a recorded base
   verifies but carries `non_conformant_reasons`. The qualification command is
   `python validation/scripts/transport/run_suite.py --suite hr --out validation/generated/transport/<new-dir> --expected-sha <sha>`
   (no seed flag).
@@ -372,7 +372,8 @@ period) and `TransportWorkerError` is raised; no partial result is returned. Scr
   fixed-point rounding residual (zero mean, about 1e-8 MeV per history, sample-specific; decision 0039, 2026-10-06);
   the rule that applied and the noise allowance are recorded. Every other scalar (R80, lateral sigma) keeps the frozen
   |z| < 3.5 rule however small its standard error; with no variance in either sample z is undefined and the comparison
-  fails closed: rule `z_undefined`, pass only if the two values are exactly equal (plan footnote 19(d)).
+  fails closed: rule `z_undefined`, pass only if the two values are exactly equal (plan footnote 19(d)). `scalar_z` is the plain Δ/√(se_a²+se_b²) whenever the combined standard error is nonzero (no relative-equality
+  shortcut). The same deterministic rule (`deterministic_scalar_verdict`) governs the T10 total-energy comparison.
   **Grouped sparse-bin rule (plan footnote 17).** A bin is selected when it exceeds 1 % of the maximum of either
   sample's own mean profile (union), so a backend that drops or depletes a relevant bin cannot remove it from the
   comparison; the selected region is the contiguous hull. Starting at the mode of the hull and moving outward on each
@@ -381,7 +382,10 @@ period) and `TransportWorkerError` is raised; no partial result is returned. Scr
   side. Individually supported bins stay single-bin groups, so dense profiles are unchanged. One test family runs over
   the groups (recorded as `groups`, `n_groups`, `n_merged_groups`): the chi-square of the group `z` (calibration below)
   must have `p > 0.001`, AND the max-statistic criterion conditional on the batch structure must hold: for equal
-  structures the frozen Bonferroni bound `max|z| < Phi^-1(1 - 0.001/(2 n_groups))`, for unequal structures a
+  structures a permutation max-T p-value `p_value_max_z > 0.001` computed from the same permutation replicates as the
+  chi-square p-value (plan footnote 22: at 10 batches the per-bin z is Student-t-like with about 18 degrees of freedom and
+  the normal Bonferroni bound rejected 3 % of synthetic null profiles at a nominal 0.1 %, while the permutation max-T
+  rejected none in 200 trials), for unequal structures a
   bootstrap-t max-T p-value `p_value_max_z > 0.001` computed from the same bootstrap replicates as the chi-square
   p-value (the normal Bonferroni comparison is recorded as `bonferroni_informative_pass` only: in synthetic null
   studies of 200 trials it rejected 3.5 % (python-like 40x100 against 100x1e4) to 11 % (10x20 against 20x1e3) of null
@@ -407,7 +411,7 @@ period) and `TransportWorkerError` is raised; no partial result is returned. Scr
   footnote 17(f)). `t12_compare` raises `ValueError` for `n_perm < 999` or `n_boot < 999` (neither criterion could
   then reject).
   Calibration method per pair (recorded as `calibration` and `max_z_calibration` in the document): the studentized
-  permutation with the normal Bonferroni bound when both samples have the same batch structure (T9, T10,
+  permutation with the permutation max-T (`max_z_calibration = permutation_max_t`) when both samples have the same batch structure (T9, T10,
   cpu32/cpu64/cuda32 pairs), the within-sample studentized bootstrap-t (`parity.bootstrap_p_values`; batches
   resampled with replacement within each sample, both means and standard errors recomputed, 2000 resamples, recorded
   seed, chi-square and max `|z|` of the difference recentred at the observed one, same replicates) with the bootstrap
@@ -427,7 +431,7 @@ period) and `TransportWorkerError` is raised; no partial result is returned. Scr
   (`ionmc.transport.parity.permutation_p_value`): residuals `(m_b - mu) sqrt(n_b)` of all batches of both samples are
   permuted and the statistic recomputed (2000 permutations, seeded generator; seed and count are recorded). It assumes
   the same per-primary variance of a bin in both samples under the null and does not assume independent bins. The
-  Wilson-Hilferty value is reported for information; the Bonferroni bound on `max |z|` is the frozen one.
+  Wilson-Hilferty value is reported for information; the normal Bonferroni bound on `max |z|` is informative only (`bonferroni_informative_pass`); the max statistic is calibrated by the max-T p-value of the same replicates.
 * **T14 negative control.** `PhysicsOptions.truncated_hinge_diagnostic` (default off, recorded in the effective
   configuration, a diagnostic and not a physics model) is "truncate-first": the planned step already ends at the first
   voxel plane the straight line (pre-hinge direction) reaches, the angle is sampled with the variance of that length (same
@@ -443,7 +447,9 @@ period) and `TransportWorkerError` is raised; no partial result is returned. Scr
   are reported as information. It is implemented identically in the reference and the kernel; with the flag off the engine
   is unchanged (a stored baseline trace guards this).
 * **T10 energy.** The total deposited energy of every orientation is compared with that of the `+z` beam with the batch
-  standard errors of both and must agree within 3 sigma.
+  standard errors of both; it is fixed by energy conservation and uses the same deterministic rule as the T12 total deposit
+  (precision bound of the less precise sample plus 3.5 combined standard errors, `deterministic_scalar_verdict`; the T10
+  samples are float32 so the bound is 1e-5 relative). It formerly used a 1e-9 relative shortcut.
 
 * **T8, T14 observables.** The lateral sigma is the frozen one: the standard deviation of the deposited energy in fixed
   0.2 mm lateral bins and 1 mm slabs at z/R = 0.5 and 0.9 (scoring grids independent of the transport voxels, Sheppard
