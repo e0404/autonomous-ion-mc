@@ -6,9 +6,15 @@ Models and sources (decision 0039; derivations in ``docs/physics/em-transport.md
 
 * mean energy loss over a path of mass thickness ``t`` [g/cm2]: the CSDA range inversion
   ``E1 = Rinv(R(E0) - t)``, with the linear branch ``S(E0) t`` when ``t < f_short R(E0)``;
-* straggling: Bohr variance ``(K/2)(Z/A) rho x z^2 Tmax (1/beta^2 - 1/2)``; Gamma with exactly the
-  Bohr mean and variance for mean/sigma < 3, Gaussian clamped to ``[0, 2 mean]`` for
-  mean/sigma >= 3 (mean preserved, variance reduced by at most about 0.5 %);
+* straggling (``PhysicsOptions.straggling_model``), Bohr variance
+  ``(K/2)(Z/A) rho x z^2 Tmax (1/beta^2 - 1/2)``; two selectable models, both with exactly the Bohr
+  mean:
+
+  - ``bohr_gamma_v1`` (the DEFAULT, ``straggle_attempt_gamma``): a Gamma distribution with exactly
+    the Bohr mean and variance at EVERY ratio mean/sigma (no Gaussian branch);
+  - ``bohr_gauss_clamped_gamma_v1`` (legacy hybrid, ``straggle_attempt``): Gamma with exactly the
+    Bohr mean and variance for mean/sigma < 3, Gaussian clamped to ``[0, 2 mean]`` for
+    mean/sigma >= 3 (mean preserved, variance reduced by at most about 0.5 %);
 * multiple Coulomb scattering: the differential Moliere scattering power ``T_dM`` of
   B. Gottschalk, Med. Phys. 37 (2010) 352 (arXiv:0908.1413), ``E_s = 15.0 MeV``, applied
   as a two-dimensional Gaussian polar angle, with the rotation of ``G4ThreeVector::rotateUz``.

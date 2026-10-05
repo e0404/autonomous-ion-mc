@@ -51,6 +51,7 @@ DEGENERATE_SE_RTOL = 1e-8
 DETERMINISTIC_RTOL = {"float32": 1e-5, "float64": 1e-12}
 DOSE_FRACTION = 0.01
 T12_DEPTHS = (0.25, 0.5, 0.9)
+TOTAL_DEPOSIT = "total_deposit_mev"
 
 
 # -- T1: trajectory parity ---------------------------------------------------------------------
@@ -422,7 +423,7 @@ def t12_observables_from_grids(
     idd = idd_b.reshape(b, -1)
     arrays = {"idd": idd}
     scalars = {
-        "total_deposit_mev": idd.sum(axis=1),
+        TOTAL_DEPOSIT: idd.sum(axis=1),
         "r80_mm": np.array([_r80(idd[k], layout.bin_mm) for k in range(b)]),
     }
     for name, frac in layout.slabs:
@@ -840,11 +841,15 @@ def t12_compare(
     for name in a.scalars:
         sc = scalar_z(a.scalars[name], b.scalars[name])
         scale = max(abs(sc["a"]), abs(sc["b"]))
-        if scale > 0.0 and max(sc["se_a"], sc["se_b"]) <= DEGENERATE_SE_RTOL * scale:
-            # a deterministic scalar (energy conservation makes the total deposit exact up to the
-            # fixed-point rounding of the grid pieces): z is meaningless for the systematic part;
-            # compare with the precision bound of the less precise sample (the deterministic T4
-            # bound: 1e-5 relative for float32, 1e-12 for float64 / python) plus the sampling
+        if (
+            name == TOTAL_DEPOSIT
+            and scale > 0.0
+            and max(sc["se_a"], sc["se_b"]) <= DEGENERATE_SE_RTOL * scale
+        ):
+            # the total deposit only (amendment 19(d)): energy conservation makes it exact up to
+            # the fixed-point rounding of the grid pieces, so z is meaningless for the systematic
+            # part: compare with the precision bound of the less precise sample (the deterministic
+            # T4 bound: 1e-5 relative for float32, 1e-12 for float64 / python) plus the sampling
             # noise of the grid sum. The grid sum misses the tallied rounding residual, a
             # zero-mean error of ~1e-8 MeV per history that differs between samples (V3-003B);
             # its standard error enters as Z_MAX combined standard errors.
@@ -860,6 +865,12 @@ def t12_compare(
                 "bound": tol,
                 "pass": passed,
             }
+        elif sc["se_a"] == 0.0 and sc["se_b"] == 0.0:
+            # every other scalar keeps the frozen |z| < 3.5 rule even when its standard error is
+            # tiny; with no variance at all z is undefined and the comparison fails closed: pass
+            # only if the two values are exactly equal
+            passed = bool(sc["a"] == sc["b"])
+            out["scalars"][name] = {**sc, "rule": "z_undefined", "bound": 0.0, "pass": passed}
         else:
             passed = bool(abs(sc["z"]) < SCALAR_Z_MAX)
             out["scalars"][name] = {**sc, "rule": "z", "bound": SCALAR_Z_MAX, "pass": passed}

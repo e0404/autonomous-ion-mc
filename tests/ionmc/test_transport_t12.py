@@ -179,6 +179,37 @@ def test_deterministic_total_allows_the_fixed_point_rounding_noise() -> None:
     assert not bad["pass"]
 
 
+def test_noise_allowance_is_restricted_to_the_total_deposit() -> None:
+    """Any other scalar (R80, lateral sigma) keeps the frozen |z| < 3.5 rule even with a tiny
+    standard error (the 1e-12 + 3.5 SE allowance would pass it); with no variance z is undefined
+    and the comparison fails closed unless the values are exactly equal."""
+    from ionmc.transport.parity import T12Observables
+
+    def sample(seed: int, r80: float, spread: float, n: int = 20) -> T12Observables:
+        rng = np.random.default_rng(seed)
+        prof = np.linspace(1.0, 2.0, 12) * (1.0 + 0.01 * rng.normal(size=(n, 12)))
+        tot = np.full(n, 150.0)
+        return T12Observables(
+            {"idd": prof},
+            {"total_deposit_mev": tot, "r80_mm": r80 + spread * rng.normal(size=n) if spread
+             else np.full(n, r80)},
+            n, 1000, "float64",
+        )  # fmt: skip
+
+    # tiny standard error (~1e-12): the frozen z rule applies and no allowance is recorded
+    v = t12_compare(sample(1, 100.0, 4e-12), sample(2, 100.0 + 1e-6, 4e-12), n_perm=999)
+    r80 = v["scalars"]["r80_mm"]
+    assert r80["rule"] == "z" and "noise_allowance" not in r80 and not r80["pass"]
+    assert abs(r80["z"]) > 1e3
+    assert v["scalars"]["total_deposit_mev"]["rule"] == "deterministic_precision_bound"
+    same = t12_compare(sample(1, 100.0, 0.0), sample(2, 100.0, 0.0), n_perm=999)
+    assert same["scalars"]["r80_mm"]["rule"] == "z_undefined" and same["scalars"]["r80_mm"]["pass"]
+    off = t12_compare(sample(1, 100.0, 0.0), sample(2, 100.5, 0.0), n_perm=999)
+    assert (
+        off["scalars"]["r80_mm"]["rule"] == "z_undefined" and not off["scalars"]["r80_mm"]["pass"]
+    )
+
+
 def test_undersupported_bin_is_merged_not_excluded() -> None:
     """A bin with fewer than max(2, ceil(B/2)) nonzero batches in either sample has an unreliable
     standard error: it is not dropped but merged with its inner neighbour into one supported

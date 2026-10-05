@@ -340,9 +340,9 @@ period) and `TransportWorkerError` is raised; no partial result is returned. Scr
   `# exit=` trailer (a timed-out step is killed and archived with `exit=124`); `manifest.txt` lists the steps of the
   run; `summarize.py` verifies everything and writes `summary.json`. Any failed step, missing file or mismatch makes the
   exit status non-zero.
-* **Seed base.** `--seed-base` (default 20311004, the qualification base) is the base of every statistical seed; it is
-  recorded in `environment.txt`, the step documents and the sample metadata. Only an archive made with 20311004 can be
-  `conformant`: one made with the rehearsal base 20261004, with 20271004 (T9 investigation), with 20281004 (first qualification attempt, consumed), with 20291004 (second qualification attempt, consumed: its accelerated T12 samples were observed before the grouped rule of plan footnote 17), with 20301004 (third qualification attempt, consumed: its python-vs-cpu64 total deposit was observed before the rounding-noise allowance of plan footnote 19) (all preserved as non-qualification evidence) or without a recorded base
+* **Seed base.** `--seed-base` (default 20321004, the qualification base) is the base of every statistical seed; it is
+  recorded in `environment.txt`, the step documents and the sample metadata. Only an archive made with 20321004 can be
+  `conformant`: one made with the rehearsal base 20261004, with 20271004 (T9 investigation), with 20281004 (first qualification attempt, consumed), with 20291004 (second qualification attempt, consumed: its accelerated T12 samples were observed before the grouped rule of plan footnote 17), with 20301004 (third qualification attempt, consumed: its python-vs-cpu64 total deposit was observed before the rounding-noise allowance of plan footnote 19), with 20311004 (fourth qualification attempt, consumed: its HR T12 comparison was observed before the review-required restriction of the footnote-19 allowance to the total-deposit scalar) (all preserved as non-qualification evidence) or without a recorded base
   verifies but carries `non_conformant_reasons`. The qualification command is
   `python validation/scripts/transport/run_suite.py --suite hr --out validation/generated/transport/<new-dir> --expected-sha <sha>`
   (no seed flag).
@@ -366,11 +366,13 @@ period) and `TransportWorkerError` is raised; no partial result is returned. Scr
   of the suites are `NN-...` in the order: LV `pytest`, `t1`, `t2`, `t13-workers`, `t13-chunks-cpu`,
   `t12-python-sample-{1,2}of2`, `t12-accelerated-samples`, `t12-compare`, `t8`, `t9`, `t10`, `t14`; HR `pytest-cuda`,
   `t2-...-cuda`, `t13-chunks-cuda`, `t12-python-sample-{1,2}of2`, `t12-accelerated-samples`, `t12-compare`.
-* **Scalar rule and support rule (T12).** A scalar whose standard errors are below 1e-8 of its value in both samples
-  (energy conservation makes the total deposit deterministic) is not compared with z but with the deterministic T4
+* **Scalar rule and support rule (T12).** Only the total deposit (`total_deposit_mev`) whose standard errors are below 1e-8 of its value in both samples
+  (energy conservation makes it deterministic) is not compared with z but with the deterministic T4
   precision bound of the less precise sample (1e-5 relative for float32, 1e-12 for float64 and python) plus 3.5 combined standard errors of the grid sum, which lacks the tallied
   fixed-point rounding residual (zero mean, about 1e-8 MeV per history, sample-specific; decision 0039, 2026-10-06);
-  the rule that applied and the noise allowance are recorded.
+  the rule that applied and the noise allowance are recorded. Every other scalar (R80, lateral sigma) keeps the frozen
+  |z| < 3.5 rule however small its standard error; with no variance in either sample z is undefined and the comparison
+  fails closed: rule `z_undefined`, pass only if the two values are exactly equal (plan footnote 19(d)).
   **Grouped sparse-bin rule (plan footnote 17).** A bin is selected when it exceeds 1 % of the maximum of either
   sample's own mean profile (union), so a backend that drops or depletes a relevant bin cannot remove it from the
   comparison; the selected region is the contiguous hull. Starting at the mode of the hull and moving outward on each

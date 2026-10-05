@@ -39,7 +39,7 @@ LN10 = math.log(10.0)
 M_P = 938.27208816
 
 # column layout of the argument pools -------------------------------------------------------
-NX = 61  # real columns
+NX = 63  # real columns
 NV = 16  # vec3 columns
 NI = 9  # int columns
 NO = 40  # real outputs
@@ -206,6 +206,41 @@ def _args(precision: str) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     v[:, 11] = np.where(rng.random((n, 3)) < 0.3, lo, rng.uniform(-2, 2, (n, 3)))
     v[:, 12] = _unit(rng, n)
     v[:, 15] = _unit(rng, n)
+    # clipped DDA, clipped leg and scoring piece: the clip plane z_clip (column 61), the length of
+    # the segment still to be walked (column 62). Random rows: the clip plane behind, ahead of
+    # and far beyond the position (30 % at BIG_LENGTH), the remaining length from 1e-3 to 2.
+    big = 1.0e30
+    sz = spacing[:, 2]
+    zc = pos[:, 2] + rng.uniform(-0.3, 1.5, n) * sz * rng.choice([-1.0, 1.0], n)
+    x[:, 61] = np.where(rng.random(n) < 0.3, big, zc)
+    x[:, 62] = logu(1e-3, 2.0)
+    # Edge rows 100..499 (exact in float32 and float64, so that ties are the same in both): the
+    # position on a dyadic point of the voxel, the direction an axis, so that the distance to the
+    # next voxel plane d is exact. Remaining length 0, d (the plane does NOT end the piece), d / 2,
+    # 1.5 d; leg target d (the plane at the leg end), d / 2, 1.5 d; clip plane absent, exactly on
+    # the next voxel plane (tie: the clip plane wins), before it, after it, ignored (u_z = 0).
+    for r in range(100, 500):
+        a = r % 3
+        sgn = 1.0 if (r // 3) % 2 == 0 else -1.0
+        pe = origin[r] + spacing[r] * (ii[r, 0:3] + ((r // 6) % 9) / 8.0)
+        ue = np.zeros(3)
+        ue[a] = sgn
+        v[r, 0] = v[r, 4] = pe
+        v[r, 1] = v[r, 5] = ue
+        up = 1 if sgn > 0 else 0
+        plane = (ii[r, a] + up) * spacing[r, a] + origin[r, a]
+        d = abs(plane - pe[a])
+        x[r, 62] = d * (0.0, 1.0, 0.5, 1.5)[(r // 4) % 4]
+        x[r, 39] = max(d, 1.0 / 64.0) * (1.0, 0.5, 1.5)[(r // 5) % 3]
+        if a == 2:
+            x[r, 61] = (
+                big,
+                plane,
+                pe[2] + 0.5 * (plane - pe[2]),
+                plane + 0.25 * sgn,
+            )[(r // 7) % 4]
+        else:
+            x[r, 61] = pe[2] + 0.3  # u_z = 0: the clip plane is ignored
     return x.astype(dt), v.astype(dt), ii
 
 
@@ -287,6 +322,26 @@ def _make_kernel(real: Any) -> Any:
         b1, b2 = tf.orthonormal_basis(v[i, 15])
         ov[i, 2] = b1
         ov[i, 3] = b2
+        cd, cax = tf.dda_next_clip(
+            v[i, 0], v[i, 1], ii[i, 0], ii[i, 1], ii[i, 2], v[i, 2], v[i, 3], x[i, 61]
+        )
+        o[i, 25] = cd
+        oi[i, 9] = cax
+        cl, clax = tf.leg2_limit_clip(
+            v[i, 4], v[i, 5], ii[i, 0], ii[i, 1], ii[i, 2], v[i, 2], v[i, 3], x[i, 39], x[i, 61]
+        )
+        o[i, 26] = cl
+        oi[i, 10] = clax
+        sp, spax = tf.seg_piece(
+            v[i, 0], v[i, 1], ii[i, 0], ii[i, 1], ii[i, 2], v[i, 2], v[i, 3], x[i, 62]
+        )
+        o[i, 27] = sp
+        oi[i, 11] = spax
+        gl, gok = em.straggle_attempt_gamma(
+            x[i, 14], x[i, 15], x[i, 16], x[i, 17], x[i, 18], x[i, 19]
+        )
+        o[i, 28] = gl
+        oi[i, 12] = gok
 
     return kernel
 
@@ -360,6 +415,18 @@ def _python_scope(real: Any, x: np.ndarray, v: np.ndarray, ii: np.ndarray) -> tu
         b1, b2 = tf.orthonormal_basis(vv[15])
         ov[i, 2] = [float(c) for c in b1]
         ov[i, 3] = [float(c) for c in b2]
+        cd, cax = tf.dda_next_clip(vv[0], vv[1], k[0], k[1], k[2], vv[2], vv[3], r[61])
+        o[i, 25] = float(cd)
+        oi[i, 9] = int(cax)
+        cl, clax = tf.leg2_limit_clip(vv[4], vv[5], k[0], k[1], k[2], vv[2], vv[3], r[39], r[61])
+        o[i, 26] = float(cl)
+        oi[i, 10] = int(clax)
+        sp, spax = tf.seg_piece(vv[0], vv[1], k[0], k[1], k[2], vv[2], vv[3], r[62])
+        o[i, 27] = float(sp)
+        oi[i, 11] = int(spax)
+        gl, gok = em.straggle_attempt_gamma(r[14], r[15], r[16], r[17], r[18], r[19])
+        o[i, 28] = float(gl)
+        oi[i, 12] = int(gok)
     return o, oi, ov
 
 
@@ -370,10 +437,13 @@ REAL_OUTPUTS = {
     13: "plane_position", 14: "dda_distance", 15: "leg2_length", 16: "range_step_limit",
     17: "eloss_step_limit", 18: "select_step", 19: "ray_box_in", 20: "ray_box_out",
     21: "gauss_pair_0", 22: "gauss_pair_1", 23: "gauss_one", 24: "scattering_variance_birth",
+    25: "dda_clip_distance", 26: "leg2_clip_length", 27: "seg_piece_length",
+    28: "straggle_gamma_loss",
 }  # fmt: skip
 INT_OUTPUTS = {
     0: "straggle_ok", 1: "log_bin_index", 2: "dda_axis", 3: "leg2_axis", 4: "select_reason",
     5: "grid_ix", 6: "grid_iy", 7: "grid_iz", 8: "grid_inside",
+    9: "dda_clip_axis", 10: "leg2_clip_axis", 11: "seg_piece_axis", 12: "straggle_gamma_ok",
 }  # fmt: skip
 VEC_OUTPUTS = {0: "rotate_dir", 1: "point_on_hinge", 2: "basis_e1", 3: "basis_e2"}
 
@@ -439,10 +509,17 @@ def _float32_budgets(x: np.ndarray) -> dict[int, tuple[float, np.ndarray | float
     out[22] = (1e-6, bm + 1e-6)
     out[23] = (1e-6, bm + 1e-6)
     out[6] = _straggle_budget(x)
+    # straggle_attempt_gamma (the production default, bohr_gamma_v1): the Gamma branch of
+    # straggle_attempt at EVERY ratio (no Gaussian branch); the same first-order relative budget.
+    out[28] = _straggle_budget(x, gamma_everywhere=True)
+    # dda_next_clip, leg2_limit_clip, seg_piece: dda_next adds a subtraction, a division and a
+    # product-sum per axis (about 4 roundings, no cancellation of computed quantities: the
+    # operands are exact float32 arguments); the clip distance (z_clip - p_z) / u_z is one rounded
+    # difference and one division; comparisons and min/max are exact. All stay within the default.
     return out
 
 
-def _straggle_budget(x: np.ndarray) -> tuple[float, np.ndarray]:
+def _straggle_budget(x: np.ndarray, *, gamma_everywhere: bool = False) -> tuple[float, np.ndarray]:
     """Absolute float32 error budget of the sampled energy loss (column 6).
 
     Gaussian branch (ratio >= 3): ``loss = clamp(mean + sigma x)``, x a Box-Muller normal of
@@ -464,7 +541,7 @@ def _straggle_budget(x: np.ndarray) -> tuple[float, np.ndarray]:
         r = np.sqrt(-2.0 * np.log(u0))
         xn = r * np.cos(2.0 * math.pi * u1)
         eps_x = r * (4.0 * math.pi + 2.5) * U
-        gauss = ratio >= 3.0
+        gauss = (ratio >= 3.0) & (not gamma_everywhere)
         k = ratio * ratio
         a = np.where(k < 1.0, k + 1.0, k)
         d = a - 1.0 / 3.0
@@ -478,6 +555,36 @@ def _straggle_budget(x: np.ndarray) -> tuple[float, np.ndarray]:
         atol = np.where(gauss, abs_gauss, rel_g * np.abs(loss))
     atol = np.where(np.isfinite(atol), atol, 0.0)
     return 1e-6, atol + 1e-6
+
+
+EXERCISED = {
+    "kin": {"pv_mev", "beta2", "gamma", "tmax_mev"},
+    "em": {
+        "csda_mean_loss", "bohr_variance", "straggle_attempt", "straggle_attempt_gamma", "fdm",
+        "scattering_power_dm", "scattering_variance_birth", "polar_deflection", "rotate_dir",
+    },
+    "tf": {
+        "lerp", "interp_exp", "log_bin_index", "plane_position", "dda_next", "dda_next_clip",
+        "leg2_limit", "leg2_limit_clip", "seg_piece", "range_step_limit", "eloss_step_limit",
+        "select_step", "point_on_hinge", "grid_index", "ray_box", "gauss_pair", "gauss_one",
+        "orthonormal_basis",
+    },
+}  # fmt: skip
+"""Functions exercised by the harness (kernel and twin sides, both in ``_make_kernel`` and
+``_python_scope``), per namespace. ``test_u1_harness_covers_every_shared_function`` requires this to
+equal the callables of the twin and of the Warp namespace, so that a new shared function cannot be
+left out of U1 silently."""
+
+
+def test_u1_harness_covers_every_shared_function() -> None:
+    from ionmc.physics.em import make_em as _em
+
+    def names(ns: Any) -> set[str]:
+        return {k for k, val in vars(ns).items() if callable(val) and k != "vec3"}
+
+    for key, factory in (("kin", make_kinematics), ("em", _em), ("tf", make_transport_funcs)):
+        assert names(python_twin(factory)) == EXERCISED[key], key
+        assert names(factory(wp.float64)) == EXERCISED[key], key
 
 
 @pytest.mark.parametrize("precision", ["float64", "float32"])
