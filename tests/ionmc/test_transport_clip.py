@@ -7,8 +7,8 @@ from collections.abc import Callable
 
 import numpy as np
 import pytest
-import warp as wp
 
+from ionmc._wpfunc import python_twin
 from ionmc.config import DiagnosticsOptions, SimulationConfig
 from ionmc.errors import UnsupportedCombinationError
 from ionmc.geometry import VoxelGeometry
@@ -72,8 +72,8 @@ def test_default_geometry_has_no_clip_and_masses_respect_it() -> None:
 
 
 def test_dda_next_clip_picks_the_clip_plane_and_reduces_to_dda_next() -> None:
-    f = make_transport_funcs(wp.float64)
-    v, r = f.vec3, wp.float64
+    f = python_twin(make_transport_funcs)  # pure-Python twin, no Warp call
+    v, r = f.vec3, float
     org, sp = v(r(0.0), r(0.0), r(0.0)), v(r(1.0), r(1.0), r(1.0))
     p, u = v(r(0.5), r(0.5), r(0.5)), v(r(0.0), r(0.0), r(1.0))
     d, ax = f.dda_next_clip(p, u, 0, 0, 0, org, sp, r(BIG_LENGTH_MM))

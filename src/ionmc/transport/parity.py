@@ -12,13 +12,18 @@ asserts and the numbers a validation archive records come from the same code.
   :func:`deposit_agreement`) are reported as secondary numbers.
 * T12 (:func:`t12_compare`; the suites compare python-cpu32, python-cpu64 (the float64 control),
   cpu32-cpu64 and cpu32-cuda32): per-bin ``z = (a - b) / sqrt(se_a^2 + se_b^2)`` of two independent
-  samples (distinct seeds) on the IDD and the lateral profiles for bins above 1 % of the maximum,
-  the chi-square of the z profile over the supported bins with a batch-level permutation p-value
-  (> 0.001; correlated bins invalidate the independent-bin Wilson-Hilferty approximation, which
-  is reported only for information), the Bonferroni bound on ``max |z|`` and
-  ``|z| < 3.5`` for the scalars (R80, total deposit, lateral sigma at 0.5 R). Standard errors
-  come from the batch method of each run, so ``z`` is Student-t rather than normal for few
-  batches; the number of batches of every run is recorded with the verdict.
+  samples (distinct seeds) on the IDD and the lateral profiles. Bins above 1 % of the maximum of
+  either sample's own mean profile are selected (union, contiguous hull) and rebinned outward from
+  the mode into groups that both samples support (plan footnote 17); one test family over the
+  groups: the chi-square of the group z with a batch-level permutation (equal batch structure) or
+  bootstrap-t (unequal) p-value > 0.001 (correlated bins invalidate the independent-bin
+  Wilson-Hilferty approximation, which is reported only for information), AND max |z| below the
+  Bonferroni bound (equal structures) or a bootstrap max-T p-value > 0.001 (unequal structures,
+  where the normal bound is anti-conservative), and ``|z| < 3.5`` for the scalars (R80, total
+  deposit, lateral sigma at 0.5 R). A profile that cannot be evaluated or is resolved mostly by
+  merged groups is ``inconclusive`` and fails the pair. Standard errors come from the batch
+  method of each run, so ``z`` is Student-t rather than normal for few batches; the number of
+  batches of every run is recorded with the verdict.
 """
 
 from __future__ import annotations
@@ -514,28 +519,30 @@ def permutation_p_value(
     return (1.0 + count) / (1.0 + n_perm)
 
 
-def bootstrap_p_value(
+def bootstrap_p_values(
     xa: NDArray[np.float64],
     xb: NDArray[np.float64],
     *,
     n_boot: int = PERMUTATIONS,
     seed: int = PERMUTATION_SEED,
-) -> float:
-    """Two-sample studentized bootstrap-t p-value of the profile chi-square.
+) -> tuple[float, float]:
+    """Two-sample studentized bootstrap-t p-values ``(p_chi2, p_max_z)`` of the profile.
 
     The batches of each sample ``xa`` (``Ba, m``) and ``xb`` (``Bb, m``) are resampled with
     replacement *within the sample*, both means and standard errors are recomputed and the
-    chi-square of the bootstrapped difference recentred at the observed difference,
-    ``((ma* - mb*) - (ma - mb)) / se*``, is formed. The p-value is
-    ``(1 + #{chi2* >= chi2_obs}) / (1 + n_boot)``. Unlike the pooled permutation test it keeps the
-    different shape of the batch-mean distribution of each sample (a small sample of sparse
-    batches is skewed, a large one is not), which is why it is used when the two samples have
-    different batch structures. The generator is ``numpy.random.default_rng(seed)``."""
+    per-bin ``z* = ((ma* - mb*) - (ma - mb)) / se*`` of the bootstrapped difference recentred at
+    the observed difference is formed. ``p_chi2 = (1 + #{sum z*^2 >= chi2_obs}) / (1 + n_boot)``
+    and ``p_max_z = (1 + #{max |z*| >= max |z|_obs}) / (1 + n_boot)`` (a bootstrap max-T
+    p-value, which absorbs the multiplicity and the correlation of the bins) are counted over the
+    SAME replicates. Unlike the pooled permutation test it keeps the different shape of the
+    batch-mean distribution of each sample (a small sample of sparse batches is skewed, a large
+    one is not), which is why it is used when the two samples have different batch structures.
+    The generator is ``numpy.random.default_rng(seed)``."""
     ba, bb = xa.shape[0], xb.shape[0]
-    observed = _chi2_profile(xa, xb)[0]
+    observed, observed_max, _ = _chi2_profile(xa, xb)
     diff = xa.mean(axis=0) - xb.mean(axis=0)
     rng = np.random.default_rng(seed)
-    count = 0
+    count = count_max = 0
     for _ in range(n_boot):
         ra = xa[rng.integers(0, ba, ba)]
         rb = xb[rng.integers(0, bb, bb)]
@@ -547,61 +554,129 @@ def bootstrap_p_value(
             z = np.where(se > 0.0, delta / se, np.where(delta == 0.0, 0.0, np.inf))
         if float((z**2).sum()) >= observed:
             count += 1
-    return (1.0 + count) / (1.0 + n_boot)
+        if z.size and float(np.abs(z).max()) >= observed_max:
+            count_max += 1
+    return (1.0 + count) / (1.0 + n_boot), (1.0 + count_max) / (1.0 + n_boot)
 
 
-def _tail_test(
-    ta: NDArray[np.float64],
-    tb: NDArray[np.float64],
-    n_bins: int,
-    need: tuple[int, int],
-    a: T12Observables,
-    b: T12Observables,
+def bootstrap_p_value(
+    xa: NDArray[np.float64],
+    xb: NDArray[np.float64],
     *,
-    equal: bool,
-    n_perm: int,
-    n_boot: int,
-    seed: int,
-) -> dict[str, Any]:
-    """Aggregate "tail mass" test of the unsupported selected bins of one profile.
+    n_boot: int = PERMUTATIONS,
+    seed: int = PERMUTATION_SEED,
+) -> float:
+    """Studentized bootstrap-t p-value of the profile chi-square (see
+    :func:`bootstrap_p_values`, of which this is the first value)."""
+    return bootstrap_p_values(xa, xb, n_boot=n_boot, seed=seed)[0]
 
-    ``ta`` and ``tb`` are the per-batch sums of the per-primary deposits of the ``n_bins``
-    unsupported bins. The same calibrated scalar statistic as for the profile (``z`` from the batch
-    standard errors; the permutation p-value for equal and the bootstrap-t p-value for unequal
-    batch structures) is applied; it passes when ``|z| < SCALAR_Z_MAX`` or ``p > P_VALUE_MIN``.
-    The aggregate is supported when both samples have at least ``need`` nonzero batches; an
-    unsupported aggregate has ``status = "unsupported"`` and does not pass (the profile is then
-    inconclusive). With no unsupported bins the test is ``status = "empty"`` and passes."""
-    if n_bins == 0:
-        return {"status": "empty", "n_bins": 0, "pass": True}
-    nz = (int((ta > 0.0).sum()), int((tb > 0.0).sum()))
-    sc = scalar_z(ta, tb)
-    out: dict[str, Any] = {
-        "n_bins": n_bins,
-        "mean_a": sc["a"],
-        "mean_b": sc["b"],
-        "se_a": sc["se_a"],
-        "se_b": sc["se_b"],
-        "z": sc["z"],
-        "batches_with_deposit": list(nz),
-        "required": list(need),
-    }
-    if nz[0] < need[0] or nz[1] < need[1]:
-        return {**out, "status": "unsupported", "p_value": None, "pass": False}
-    xa, xb = ta[:, None], tb[:, None]
+
+SINGLETON_MASS_MIN = 0.5
+
+
+def _select_hull(
+    ma: NDArray[np.float64], mb: NDArray[np.float64]
+) -> tuple[NDArray[np.bool_], int, int] | None:
+    """Union selection: a bin is selected when it exceeds ``DOSE_FRACTION`` of the maximum of
+    EITHER sample's own mean profile, so that a backend that drops or depletes a relevant bin
+    cannot remove it from the comparison. Returns the selection mask and the inclusive hull
+    ``[lo, hi]`` from the first to the last selected bin, or ``None`` when nothing is selected."""
+    sel = (ma > DOSE_FRACTION * ma.max()) | (mb > DOSE_FRACTION * mb.max())
+    if not sel.any():
+        return None
+    idx = np.nonzero(sel)[0]
+    return sel, int(idx[0]), int(idx[-1])
+
+
+def _support(
+    xa: NDArray[np.float64],
+    xb: NDArray[np.float64],
+    i0: int,
+    i1: int,
+    need_a: int,
+    need_b: int,
+) -> bool:
+    """Whether the bins ``[i0, i1)`` summed are supported by both samples: at least ``need``
+    batches with a nonzero summed deposit in each."""
+    return bool(
+        np.count_nonzero(xa[:, i0:i1].sum(axis=1) > 0.0) >= need_a
+        and np.count_nonzero(xb[:, i0:i1].sum(axis=1) > 0.0) >= need_b
+    )
+
+
+def _group_bins(
+    xa: NDArray[np.float64],
+    xb: NDArray[np.float64],
+    lo: int,
+    hi: int,
+    mode: int,
+    need_a: int,
+    need_b: int,
+) -> list[list[int]] | None:
+    """Adaptive contiguous rebinning of the hull ``[lo, hi]`` (inclusive) outward from ``mode``.
+
+    On each side of the mode consecutive bins are merged until the group is supported by both
+    samples (:func:`_support`); individually supported bins stay single-bin groups. An outermost
+    remainder that cannot be supported joins the outermost group of its side (or, when its side
+    formed no group, the innermost group of the other side). Deposits are non-negative, so a
+    merged group is at least as well supported as any of its parts. Returns ascending contiguous
+    half-open groups ``[i0, i1)`` that cover ``[lo, hi + 1)`` exactly, or ``None`` when not even
+    the whole hull is supported."""
+
+    def sup(i0: int, i1: int) -> bool:
+        return _support(xa, xb, i0, i1, need_a, need_b)
+
+    right: list[list[int]] = []
+    start = mode
+    for k in range(mode, hi + 1):
+        if sup(start, k + 1):
+            right.append([start, k + 1])
+            start = k + 1
+    right_rem = start <= hi
+    left: list[list[int]] = []
+    stop = mode
+    for k in range(mode - 1, lo - 1, -1):
+        if sup(k, stop):
+            left.append([k, stop])
+            stop = k
+    left_rem = stop > lo
+    if not right and not left:
+        return [[lo, hi + 1]] if sup(lo, hi + 1) else None
+    if right_rem:
+        if right:
+            right[-1][1] = hi + 1
+        else:
+            left[0][1] = hi + 1
+    if left_rem:
+        if left:
+            left[-1][0] = lo
+        else:
+            right[0][0] = lo
+    return left[::-1] + right
+
+
+def _profile_decision(
+    equal: bool, p_chi2: float, max_abs_z: float, bound: float, p_max_z: float | None
+) -> bool:
+    """Statistical acceptance of one profile: the chi-square p-value must exceed ``P_VALUE_MIN``
+    AND the max-statistic criterion conditional on the batch structure must hold (equal: the
+    frozen Bonferroni bound ``max |z| < bound``; unequal: the bootstrap max-T ``p_max_z >
+    P_VALUE_MIN``). A NaN p-value fails."""
+    if not (p_chi2 > P_VALUE_MIN):
+        return False
     if equal:
-        p = permutation_p_value(
-            xa, a.histories_per_batch, xb, b.histories_per_batch, n_perm=n_perm, seed=seed
-        )
-    else:
-        p = bootstrap_p_value(xa, xb, n_boot=n_boot, seed=seed)
-    return {
-        **out,
-        "status": "supported",
-        "p_value": p,
-        "z_bound": SCALAR_Z_MAX,
-        "pass": bool(abs(sc["z"]) < SCALAR_Z_MAX or p > P_VALUE_MIN),
-    }
+        return bool(max_abs_z < bound)
+    return p_max_z is not None and bool(p_max_z > P_VALUE_MIN)
+
+
+def _check_profile_values(obs: T12Observables, label: str) -> None:
+    for name, arr in obs.arrays.items():
+        x = np.asarray(arr)
+        if not np.all(np.isfinite(x)) or bool((x < 0.0).any()):
+            raise ValueError(
+                f"T12 profile {name!r} of sample {label} has negative or non-finite batch values "
+                "(deposits are non-negative; the rebinning support rule relies on it)"
+            )
 
 
 def t12_compare(
@@ -612,131 +687,155 @@ def t12_compare(
     seed: int = PERMUTATION_SEED,
     n_boot: int = PERMUTATIONS,
 ) -> dict[str, Any]:
-    """T12 verdict for two independent samples (see the module docstring).
+    """T12 verdict for two independent samples (see the module docstring and plan footnote 17).
 
-    For every profile the frozen statistic (chi-square of the per-bin ``z`` over the bins above
-    1 % of the maximum that both samples support, see below; ``n`` of the chi-square is the
-    number of supported bins, the unsupported bins are listed in ``unsupported_bins`` and the
-    all-bin chi-square is reported as ``chi2_all_selected_bins`` only) is calibrated with
-    :func:`permutation_p_value` (``p_value``, used for the verdict) when the two samples have the
-    same batch structure (number of batches and histories per batch), and with the within-sample
-    studentized bootstrap-t :func:`bootstrap_p_value` (``n_boot`` resamples, same seed) when they
-    differ; the method is recorded as ``calibration`` per profile and for the pair. The
-    Wilson-Hilferty value is reported as ``p_value_wilson_hilferty`` only. The bound on
-    ``max |z|`` is the frozen Bonferroni bound.
+    For every profile the bins above 1 % of the maximum of EITHER sample's own mean profile are
+    selected (union; contiguous hull) and rebinned outward from the mode into groups supported by
+    both samples (:func:`_group_bins`; ``groups``, ``n_groups``). One test family over the groups:
+    the chi-square of the group ``z`` is calibrated with :func:`permutation_p_value`
+    (``p_value``) when the two samples have the same batch structure (number of batches and
+    histories per batch) and with the within-sample studentized bootstrap-t
+    :func:`bootstrap_p_values` (``n_boot`` resamples, same seed) otherwise, and must exceed
+    0.001; AND the max-statistic criterion conditional on the structure: equal, the frozen
+    Bonferroni bound on ``max |z|`` over the groups; unequal, the bootstrap max-T p-value
+    ``p_value_max_z > 0.001`` from the same replicates (the normal Bonferroni comparison is
+    ``bonferroni_informative_pass`` only). The method is recorded as ``calibration`` and
+    ``max_z_calibration``; the Wilson-Hilferty value (``p_value_wilson_hilferty``) and the
+    per-selected-bin statistics (``chi2_all_selected_bins``, ``max_abs_z_all_bins``,
+    ``worst_bin_all``) are informative only.
 
-    The unsupported selected bins of a profile are pooled into one aggregate tail mass per batch
-    and compared with the same calibrated scalar statistic (:func:`_tail_test`, recorded as
-    ``tail``); the profile passes only when the supported bins AND the tail test pass. A profile
-    is ``inconclusive`` (and fails) when fewer than half of its selected bins are supported or
-    when the aggregate tail is itself unsupported (see ``verdict`` and ``inconclusive_reason``)."""
+    ``verdict`` is ``fail`` when the statistic exists and a criterion fails, ``inconclusive``
+    (also failing the pair) when no bin is selected, when not even the whole hull is supported, or
+    when the statistic passes but less than half of the hull's mean deposit lies in single-bin
+    groups (``singleton_mass_fraction``); otherwise ``pass``. Negative or non-finite batch values
+    raise ``ValueError``; so do ``n_perm < 999`` or ``n_boot < 999`` (the smallest attainable
+    p-value 1/(n+1) must not exceed ``P_VALUE_MIN``, else neither criterion could reject)."""
+    if min(n_perm, n_boot) < 999:
+        raise ValueError(f"n_perm and n_boot must be >= 999 (got {n_perm}, {n_boot})")
+    _check_profile_values(a, "a")
+    _check_profile_values(b, "b")
     equal = (a.n_batches, a.histories_per_batch) == (b.n_batches, b.histories_per_batch)
     method = "studentized_permutation" if equal else "studentized_bootstrap_t"
+    max_rule = "bonferroni_normal" if equal else "bootstrap_max_t"
     out: dict[str, Any] = {
         "n_batches": [a.n_batches, b.n_batches],
         "permutation": {"n_perm": n_perm, "seed": seed},
         "bootstrap": {"n_boot": n_boot, "seed": seed},
         "calibration": method,
+        "max_z_calibration": max_rule,
         "arrays": {},
         "scalars": {},
     }
     ok = True
+    need_a, need_b = max(2, -(-a.n_batches // 2)), max(2, -(-b.n_batches // 2))
     for i, name in enumerate(a.arrays):
-        ma, _ = _mean_se(a.arrays[name])
-        mb, _ = _mean_se(b.arrays[name])
-        ref = 0.5 * (ma + mb)
-        sel = ref > DOSE_FRACTION * ref.max()
-        n = int(sel.sum())
-        chi2_all, _zmax_all, z_sel = _chi2_profile(a.arrays[name][:, sel], b.arrays[name][:, sel])
-        # defined-value rule: only bins that both samples support (at least max(2, ceil(B/2))
-        # batches with a nonzero deposit) enter max|z| AND the chi-square and its permutation
-        # calibration; the others have discrete batch means and unreliable standard errors that
-        # break the exchangeability of the studentized residuals
-        need_a, need_b = max(2, -(-a.n_batches // 2)), max(2, -(-b.n_batches // 2))
-        sup_a = (a.arrays[name][:, sel] > 0.0).sum(axis=0)
-        sup_b = (b.arrays[name][:, sel] > 0.0).sum(axis=0)
-        supported = (sup_a >= need_a) & (sup_b >= need_b)
-        n_supported = int(supported.sum())
-        sel_idx = np.nonzero(sel)[0]
-        xa_sup = a.arrays[name][:, sel][:, supported]
-        xb_sup = b.arrays[name][:, sel][:, supported]
-        chi2 = float(_chi2_profile(xa_sup, xb_sup)[0]) if n_supported else 0.0
-        zmax = float(np.abs(z_sel[supported]).max()) if n_supported else 0.0
-        worst_all = int(np.argmax(np.abs(z_sel))) if z_sel.size else 0
-        p_wh = wilson_hilferty_p(chi2, n_supported) if n_supported >= 1 else 1.0
-        if n_supported < 1:
-            p = 0.0  # no calibrated statistic: never a pass (the profile is inconclusive)
-        elif equal:
-            p = permutation_p_value(
-                xa_sup,
-                a.histories_per_batch,
-                xb_sup,
-                b.histories_per_batch,
-                n_perm=n_perm,
-                seed=seed + i,
-            )
-        else:
-            p = bootstrap_p_value(xa_sup, xb_sup, n_boot=n_boot, seed=seed + i)
-        bound = bonferroni_z(n_supported) if n_supported else float("inf")
-        core_pass = bool(n_supported >= 1 and p > P_VALUE_MIN and zmax < bound)
-        # aggregate tail test: the selected bins that are not supported are pooled into one
-        # per-batch quantity (the sum of their per-primary deposits) so that a backend that
-        # drops or invents rare deposits in a relevant region cannot hide behind the support rule
-        tail = _tail_test(
-            a.arrays[name][:, sel][:, ~supported].sum(axis=1),
-            b.arrays[name][:, sel][:, ~supported].sum(axis=1),
-            int((~supported).sum()),
-            (need_a, need_b),
-            a,
-            b,
-            equal=equal,
-            n_perm=n_perm,
-            n_boot=n_boot,
-            seed=seed + 1000 + i,
-        )
-        inconclusive_reason: str | None = None
-        if n == 0:
-            inconclusive_reason = "no bin above the dose threshold"
-        elif n_supported < 0.5 * n:
-            inconclusive_reason = f"only {n_supported} of {n} selected bins are supported (< 50 %)"
-        elif tail["status"] == "unsupported":
-            inconclusive_reason = (
-                "the aggregate of the unsupported bins is itself unsupported (fewer than "
-                f"{need_a} / {need_b} nonzero batches in sample a / b: "
-                f"{tail['batches_with_deposit']})"
-            )
-        verdict = (
-            "inconclusive"
-            if inconclusive_reason
-            else ("pass" if core_pass and tail["pass"] else "fail")
-        )
-        passed = verdict == "pass"
-        out["arrays"][name] = {
-            "n_bins": n,
-            "n_supported_bins": n_supported,
-            "chi2": chi2,
-            "chi2_all_selected_bins": chi2_all,
-            "unsupported_bins": [int(k) for k in sel_idx[~supported]],
-            "p_value": p,
+        xa_all, xb_all = np.asarray(a.arrays[name]), np.asarray(b.arrays[name])
+        ma, _ = _mean_se(xa_all)
+        mb, _ = _mean_se(xb_all)
+        rec: dict[str, Any] = {
+            "n_bins": 0,
+            "hull": None,
+            "groups": [],
+            "n_groups": 0,
+            "n_merged_groups": 0,
+            "unsupported_bins": [],
+            "n_supported_bins": 0,
+            "singleton_mass_fraction": None,
+            "chi2": None,
+            "chi2_all_selected_bins": None,
+            "p_value": None,
             "calibration": method,
-            "p_value_wilson_hilferty": p_wh,
-            "max_abs_z": zmax,
-            "max_abs_z_all_bins": float(np.abs(z_sel[worst_all])) if z_sel.size else 0.0,
-            "worst_bin_all": {
-                "index": int(sel_idx[worst_all]) if z_sel.size else None,
-                "batches_with_deposit": [int(sup_a[worst_all]), int(sup_b[worst_all])]
-                if z_sel.size
-                else None,
-                "required": [need_a, need_b],
-                "supported": bool(supported[worst_all]) if z_sel.size else None,
-            },
-            "bonferroni_bound": bound,
-            "supported_bins_pass": core_pass,
-            "tail": tail,
-            "verdict": verdict,
-            "inconclusive_reason": inconclusive_reason,
-            "pass": passed,
+            "p_value_wilson_hilferty": None,
+            "max_abs_z": None,
+            "max_z_rule": max_rule,
+            "bonferroni_bound": None,
+            "p_value_max_z": None,
+            "bonferroni_informative_pass": None,
+            "max_abs_z_all_bins": None,
+            "worst_bin_all": None,
         }
+        hull = _select_hull(ma, mb)
+        reason: str | None = None
+        verdict = "inconclusive"
+        if hull is None:
+            reason = "no bin above the dose threshold"
+        else:
+            sel, lo, hi = hull
+            ref = 0.5 * (ma + mb)
+            mode = lo + int(np.argmax(ref[lo : hi + 1]))
+            sel_idx = np.nonzero(sel)[0]
+            chi2_all, _zmax_all, z_sel = _chi2_profile(xa_all[:, sel], xb_all[:, sel])
+            sup_a = (xa_all[:, sel] > 0.0).sum(axis=0)
+            sup_b = (xb_all[:, sel] > 0.0).sum(axis=0)
+            supported = (sup_a >= need_a) & (sup_b >= need_b)
+            worst = int(np.argmax(np.abs(z_sel)))
+            rec.update(
+                n_bins=int(sel.sum()),
+                hull=[lo, hi],
+                unsupported_bins=[int(k) for k in sel_idx[~supported]],
+                n_supported_bins=int(supported.sum()),
+                chi2_all_selected_bins=chi2_all,
+                max_abs_z_all_bins=float(np.abs(z_sel[worst])),
+                worst_bin_all={
+                    "index": int(sel_idx[worst]),
+                    "batches_with_deposit": [int(sup_a[worst]), int(sup_b[worst])],
+                    "required": [need_a, need_b],
+                    "supported": bool(supported[worst]),
+                },
+            )
+            groups = _group_bins(xa_all, xb_all, lo, hi, mode, need_a, need_b)
+            if groups is None:
+                reason = (
+                    "no contiguous group of the selected bins is supported by both samples "
+                    f"(need >= {need_a} / {need_b} nonzero batches in sample a / b)"
+                )
+            else:
+                ga = np.stack([xa_all[:, g0:g1].sum(axis=1) for g0, g1 in groups], axis=1)
+                gb = np.stack([xb_all[:, g0:g1].sum(axis=1) for g0, g1 in groups], axis=1)
+                chi2, max_abs_z, _ = _chi2_profile(ga, gb)
+                n_groups = len(groups)
+                bound = bonferroni_z(n_groups)
+                p_max_z: float | None = None
+                if equal:
+                    p = permutation_p_value(
+                        ga,
+                        a.histories_per_batch,
+                        gb,
+                        b.histories_per_batch,
+                        n_perm=n_perm,
+                        seed=seed + i,
+                    )
+                else:
+                    p, p_max_z = bootstrap_p_values(ga, gb, n_boot=n_boot, seed=seed + i)
+                stat_pass = _profile_decision(equal, p, max_abs_z, bound, p_max_z)
+                total = float(ref[lo : hi + 1].sum())
+                single = sum(float(ref[g0]) for g0, g1 in groups if g1 - g0 == 1)
+                frac = single / total if total > 0.0 else 0.0
+                rec.update(
+                    groups=groups,
+                    n_groups=n_groups,
+                    n_merged_groups=sum(1 for g0, g1 in groups if g1 - g0 > 1),
+                    singleton_mass_fraction=frac,
+                    chi2=chi2,
+                    p_value=p,
+                    p_value_wilson_hilferty=wilson_hilferty_p(chi2, n_groups),
+                    max_abs_z=max_abs_z,
+                    bonferroni_bound=bound,
+                    p_value_max_z=p_max_z,
+                    bonferroni_informative_pass=None if equal else bool(max_abs_z < bound),
+                )
+                if not stat_pass:
+                    verdict = "fail"
+                elif frac < SINGLETON_MASS_MIN:
+                    reason = (
+                        f"only {frac:.3f} of the selected hull's mean deposit lies in "
+                        f"individually supported bins (< {SINGLETON_MASS_MIN})"
+                    )
+                else:
+                    verdict = "pass"
+        passed = verdict == "pass"
+        rec.update(verdict=verdict, inconclusive_reason=reason, **{"pass": passed})
+        out["arrays"][name] = rec
         ok &= passed
     for name in a.scalars:
         sc = scalar_z(a.scalars[name], b.scalars[name])

@@ -58,9 +58,10 @@ coordinate and precision conventions API boundaries use.
   they take sampled uniform random numbers and already-interpolated table
   values as arguments and return the physical result (energy loss, scattering
   angle, interaction outcome). They never index arrays or draw random numbers.
-- The reference backend (`backend="python"`) executes these functions in
-  CPython with float64 arithmetic, history by history. It is slow by design
-  and is the correctness and inspection path.
+- The reference backend (`backend="python"`) executes pure-Python float64
+  twins of these functions (the same source text re-executed without Warp,
+  amendment 2026-10-05) in CPython, history by history. It is the
+  correctness and inspection path.
 - Warp backends (`backend="warp-cpu"`, `backend="warp-cuda"`) execute the
   same functions inside kernels. The two Warp devices share kernel source;
   their equivalence is checked by the parity methodology of decision 0001
@@ -223,5 +224,8 @@ Consequences:
 - 2026-10-04 (V3-003B): Warp 1.17 Python-scope evaluation of `@wp.func`
   bodies (the reference backend's execution path) was found to crash
   intermittently (SIGSEGV/SIGABRT in `context.call_builtin`) under
-  multi-process use; the reference executor's independence from this path is
-  the subject of task V3-003C (see decision 0039, outcome 2026-10-04).
+  multi-process use; the remedy was implemented in V3-003B on 2026-10-05: the
+  reference backend runs pure-Python twins of the shared functions built
+  from the same source text (`ionmc._wpfunc.python_twin`, shim
+  `ionmc._pyshim`) and makes no Warp call at Python scope (see decision
+  0039, outcome 2026-10-04).

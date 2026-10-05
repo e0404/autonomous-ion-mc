@@ -1,7 +1,10 @@
 """Reference backend: the step algorithm of decision 0039 in a Python history loop.
 
-Every physical decision is made by the shared Warp functions called from Python scope with
-``wp.float64`` arguments (``ionmc.physics`` and ``ionmc.transport.funcs``); this module only
+Every physical decision is made by the shared functions of ``ionmc.physics`` and
+``ionmc.transport.funcs`` in their pure-Python float64 twins (``ionmc._wpfunc.python_twin``:
+the same source text re-executed without Warp; no Warp call of any kind is made at Python scope,
+because Warp 1.17 Python-scope dispatch segfaulted intermittently in worker processes);
+this module only
 contains glue: table reads from numpy arrays, state bookkeeping, random-number draws from the
 Python Philox, scoring and tallies. The Warp backends (V3-003B) repeat this glue in a kernel,
 and the per-step trace produced here is the reference for trajectory-level parity.
@@ -36,8 +39,8 @@ from __future__ import annotations
 import math
 
 import numpy as np
-import warp as wp
 
+from ionmc._wpfunc import python_twin
 from ionmc.config import MAX_REJECTION_ATTEMPTS, EffectiveConfig
 from ionmc.physics.em import make_em
 from ionmc.physics.kinematics import make_kinematics
@@ -122,10 +125,11 @@ class _Reference:
         self.cfg = cfg
         self.tab = eff.tables
         self.geo = eff.geometry
-        self.F = make_transport_funcs(wp.float64)
-        self.EM = make_em(wp.float64)
-        self.K = make_kinematics(wp.float64)
-        self.R = wp.float64
+        # pure-Python twins of the shared Warp functions (same source text, no Warp call)
+        self.F = python_twin(make_transport_funcs)
+        self.EM = python_twin(make_em)
+        self.K = python_twin(make_kinematics)
+        self.R = float
         self.V = self.F.vec3
         self.key = key_from_seed(cfg.run.seed)
         self.n_batches = cfg.run.n_batches

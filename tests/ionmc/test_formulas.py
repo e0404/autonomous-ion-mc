@@ -1,7 +1,7 @@
 """Formula checks of the shared functions against independent NumPy implementations.
 
-``test_shared_funcs.py`` shows that Python scope and kernels agree; these tests show that the
-formulas themselves are the documented ones (independent of the Warp code path).
+``test_shared_funcs.py`` shows that the pure-Python twins and kernels agree; these tests show that
+the formulas themselves are the documented ones (independent of the Warp code path).
 """
 
 import math
@@ -10,6 +10,7 @@ import numpy as np
 import pytest
 import warp as wp
 
+from ionmc._wpfunc import python_twin
 from ionmc.physics.em import make_em
 from ionmc.physics.kinematics import make_kinematics
 from ionmc.physics.projectiles import ELECTRON_MASS_MEV, PROJECTILES, PROTON
@@ -17,10 +18,10 @@ from ionmc.physics.stopping import kinematics as numpy_kinematics
 from ionmc.transport.funcs import make_transport_funcs
 
 wp.config.log_level = wp.LOG_WARNING
-R = wp.float64
-KIN = make_kinematics(R)
-EM = make_em(R)
-TF = make_transport_funcs(R)
+R = float  # the pure-Python float64 twins (same source text as the Warp functions)
+KIN = python_twin(make_kinematics)
+EM = python_twin(make_em)
+TF = python_twin(make_transport_funcs)
 V3 = TF.vec3
 RE_CM = 2.8179403262e-13
 N_A = 6.02214076e23

@@ -62,10 +62,12 @@ step 1 mm, Geant4 range step function α = 0.2, ρ_f = 0.1 mm, 20 batches.
 5. Energy loss for the travelled length: mean by telescoping, fluctuation
    from block B (further blocks on rejection, at most 64; exceeding the
    limit is a fail-closed counter); `E₁ = E₀ − loss ≥ 0`.
-6. Deposit `E₀ − E₁` into every scoring grid proportionally to the path
-   length of each hinge leg inside each scoring voxel (per-grid incremental
-   DDA; outside-grid deposits are tallied separately). Until 2026-10-04 this
-   was a point deposit at the hinge-path midpoint — see the amendment below.
+6. Deposit `E₀ − E₁` into every scoring grid along both hinge legs, per
+   scoring voxel by the path length inside the voxel WEIGHTED with the
+   normalized linear stopping-power ramp S(E₀) → S(E₁) over the step (per-grid
+   incremental DDA; outside-grid deposits are tallied separately). Until
+   2026-10-04 this was a point deposit at the hinge-path midpoint, then
+   proportional to path length — see the amendments "T9 at full scale" below.
 7. Leaving the world tallies `E₁` as escaped. Step-count truncation or a
    stall tallies `E₁` as truncated, increments a counter and invalidates the
    result (decision 0037).
@@ -178,10 +180,22 @@ fail-closed configuration rules.
   qualification run must pass — T1 (trajectories bit-identical to the
   float64 kernel), R1 (bit-identical repeats) and the T12 python-vs-float64
   control; (c) the structural remedy — a reference executor that does not
-  depend on Warp's Python-scope dispatch (pure-Python twins of the shared
-  functions generated from the same source and verified bit-identical in
-  T1) — is deferred to the next task, V3-003C, before any further physics
-  lands on the reference backend.
+  depend on Warp's Python-scope dispatch — was implemented in V3-003B on
+  2026-10-05 (originally planned as V3-003C): `ionmc._wpfunc.python_twin`
+  re-executes the source text of each `make_*` factory (`funcs.py`,
+  `physics/em.py`, `physics/kinematics.py`) with `wp` replaced by the
+  pure-Python shim `ionmc._pyshim` (math functions, a 3-vector class), so
+  one source text defines the kernel functions and their twins; the
+  reference backend uses only the twins, T1 (trajectories bit-identical to
+  the float64 kernel, continuous columns 1e-10) still passes unchanged, and a
+  test forbids any Warp `Function` call at Python scope on the reference
+  path. The python backend became about two orders of magnitude faster
+  (100 MeV, 200 histories, one worker, 0.5 mm steps, setup included: 0.54 to
+  59 histories/s). Rule recorded in `docs/architecture/transport.md`: Warp
+  functions run only inside kernels; every Python-side evaluation (reference
+  backend, tests) uses the twins. The Python-scope tests (`test_formulas`,
+  `test_tables_scattering`, `test_transport_scoring`, `test_transport_clip`,
+  `test_straggling_gamma`, `test_shared_funcs`) were converted accordingly.
 - **2026-10-04 (V3-003B) — T9 at full scale: straggling default and deposit
   apportioning changed.** The frozen T9 probe (1e6 histories, held-out seed
   base 20271004) failed at s_max = 0.1 mm for the clamped-Gaussian/Gamma

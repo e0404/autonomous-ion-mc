@@ -12,6 +12,7 @@ import numpy as np
 import pytest
 import warp as wp
 
+from ionmc._wpfunc import python_twin
 from ionmc.config import DiagnosticsOptions, SimulationConfig, validate
 from ionmc.errors import UnsupportedCombinationError
 from ionmc.physics.em import make_em
@@ -172,9 +173,9 @@ def test_transport_domain_pairs_keep_the_energy_cap_negligible() -> None:
         for step_mm in (1.0, 0.1, 0.01, 0.001):
             mean = tab.stopping_mass(0, e_mev) * step_mm / 10.0
             var = float(
-                EM.bohr_variance(
-                    wp.float64(e_mev - 0.5 * mean), wp.float64(938.272), wp.float64(1.0),
-                    wp.float64(tab.z_over_a[0]), wp.float64(1.0), wp.float64(step_mm),
+                python_twin(make_em).bohr_variance(
+                    float(e_mev - 0.5 * mean), 938.272, 1.0,
+                    float(tab.z_over_a[0]), 1.0, float(step_mm),
                 )
             )  # fmt: skip
             ratio = mean / np.sqrt(var)

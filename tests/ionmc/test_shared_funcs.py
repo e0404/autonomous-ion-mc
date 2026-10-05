@@ -1,10 +1,11 @@
-"""U1: every shared physics/transport function, Python scope versus a Warp CPU kernel.
+"""U1: every shared physics/transport function, Python twin versus a Warp CPU kernel.
 
-Both paths evaluate the same ``@wp.func`` on identical arguments (including edge cases):
-Python scope with ``wp.float64``/``wp.float32`` objects, and a compiled kernel. Tolerances are
-the decision 0001 classes (float64 rtol 1e-12 / atol 1e-14, float32 rtol 1e-6 / atol 1e-6);
-a NaN in either path fails; integer outputs (voxel indices, step reasons, accept flags) must
-be identical.
+Warp functions are never called at Python scope; the Python side is the float64 pure-Python twin
+(``python_twin``, the reference backend's functions: the same source text) evaluated on identical
+arguments (including edge cases), the kernel side a compiled float64 or float32 kernel. See
+``TOL`` for the tolerances (float64: decision 0001 class; float32: float32 rounding against the
+float64 twin). A NaN in either path fails; integer outputs (voxel indices, step reasons, accept
+flags) must be identical, except the discontinuous float32 log-bin index (see the test).
 """
 
 import math
@@ -16,6 +17,7 @@ import numpy as np
 import pytest
 import warp as wp
 
+from ionmc._wpfunc import python_twin
 from ionmc.physics.em import make_em
 from ionmc.physics.kinematics import make_kinematics
 from ionmc.transport.funcs import make_transport_funcs
@@ -25,7 +27,12 @@ wp.config.log_level = wp.LOG_WARNING
 # Frozen criterion U1: 1e4 arguments per function (the environment variable only allows a
 # smaller count for quick local runs; CI uses the default).
 N_ARGS = int(os.environ.get("IONMC_U1_N", "10000"))
-TOL = {"float64": (1e-12, 1e-14), "float32": (1e-6, 1e-6)}
+TOL = {"float64": (1e-12, 1e-14), "float32": (1e-5, 1e-5)}
+"""(rtol, atol). float64: twin against kernel, the same double arithmetic (decision 0001 class).
+float32: the float32 kernel against the FLOAT64 twin evaluated on the float32-rounded arguments, so
+the tolerance is the float32 rounding error (eps = 6e-8) propagated through the functions; the
+worst observed relative differences are 1.4e-5 (gamma sampler) and 1e-3 for the Box-Muller normals
+near u -> 1, both inside the absolute 1e-5 floor of values of order one or smaller."""
 M_P = 938.27208816
 
 # column layout of the argument pools -------------------------------------------------------
@@ -282,7 +289,14 @@ def _make_kernel(real: Any) -> Any:
 
 
 def _python_scope(real: Any, x: np.ndarray, v: np.ndarray, ii: np.ndarray) -> tuple[Any, ...]:
-    f = _funcs(real)
+    """Evaluate every function with the pure-Python float64 twins used by the reference backend
+    (same source text as the Warp functions, no Warp call). Warp functions run only in kernels."""
+    f = _Fn(
+        kin=python_twin(make_kinematics),
+        em=python_twin(make_em),
+        tf=python_twin(make_transport_funcs),
+    )
+    real = float
     kin, em, tf = f.kin, f.em, f.tf
     v3 = tf.vec3
     n = x.shape[0]
@@ -362,7 +376,7 @@ VEC_OUTPUTS = {0: "rotate_dir", 1: "point_on_hinge", 2: "basis_e1", 3: "basis_e2
 
 
 @pytest.mark.parametrize("precision", ["float64", "float32"])
-def test_u1_python_scope_equals_warp_cpu_kernel(precision: str) -> None:
+def test_u1_python_twin_equals_warp_cpu_kernel(precision: str) -> None:
     real = wp.float64 if precision == "float64" else wp.float32
     rtol, atol = TOL[precision]
     x, v, ii = _args(precision)
@@ -388,7 +402,15 @@ def test_u1_python_scope_equals_warp_cpu_kernel(precision: str) -> None:
     )
     k_o, k_oi, k_ov = ox.numpy().astype(np.float64), oi.numpy(), ov.numpy().astype(np.float64)
     p_o, p_oi, p_ov = _python_scope(real, x, v, ii)
+    if precision == "float32":
+        # the bin index and fraction are discontinuous at bin edges (a float32 rounding moves a
+        # value to the neighbouring bin: index i + 1 / fraction 0 against index i / fraction 1);
+        # the continuous position i + f is compared instead
+        t_py, t_k = p_oi[:, 1] + p_o[:, 10], k_oi[:, 1] + k_o[:, 10]
+        assert np.allclose(t_py, t_k, rtol=rtol, atol=atol), "log_bin position i + f differs"
     for col, name in REAL_OUTPUTS.items():
+        if precision == "float32" and col == 10:
+            continue
         a, b = p_o[:, col], k_o[:, col]
         assert np.all(np.isfinite(a)) and np.all(np.isfinite(b)), f"{name}: NaN or inf"
         bad = ~np.isclose(a, b, rtol=rtol, atol=atol)
@@ -396,6 +418,8 @@ def test_u1_python_scope_equals_warp_cpu_kernel(precision: str) -> None:
             f"{name}: {bad.sum()} of {n} mismatches; first python={a[bad][:3]} kernel={b[bad][:3]}"
         )
     for col, name in INT_OUTPUTS.items():
+        if precision == "float32" and col == 1:
+            continue
         assert np.array_equal(p_oi[:, col], k_oi[:, col]), f"{name}: integer outputs differ"
     for col, name in VEC_OUTPUTS.items():
         a, b = p_ov[:, col], k_ov[:, col]

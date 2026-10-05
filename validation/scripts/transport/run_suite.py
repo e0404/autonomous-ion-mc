@@ -8,8 +8,8 @@ Usage (argv only, no shell; the host runner executes exactly this)::
         [--only STEP ...] [--import-dirs DIR ...] [--seed-base INT]
 
 The qualification command needs no seed flag: the default ``--seed-base`` is the qualification base
-20291004 (a run with the rehearsal base 20261004 or the consumed bases 20271004 and 20281004 is
-archived but never conformant)::
+20301004 (a run with the rehearsal base 20261004 or the consumed bases 20271004, 20281004 and
+20291004 is archived but never conformant)::
 
     python validation/scripts/transport/run_suite.py --suite hr --expected-sha <sha> --out <new-dir>
 
@@ -66,7 +66,7 @@ SOURCE_FILES = ("pyproject.toml", "uv.lock", "validation/plans/v3-003-acceptance
 """Every tracked file that defines what is executed and judged (code, tests and fixtures, the
 project definition, the lock file and the frozen acceptance plan)."""
 DEFAULT_PYTHON_PARTS = 2
-QUALIFICATION_SEED_BASE = 20291004
+QUALIFICATION_SEED_BASE = 20301004
 REHEARSAL_SEED_BASE = 20261004
 CONSUMED_SEED_BASE = 20271004  # used by the T9 investigation: not a qualification base
 DEFAULT_SEED_BASE = QUALIFICATION_SEED_BASE
@@ -322,9 +322,9 @@ def main(argv: list[str] | None = None) -> int:
         "--seed-base",
         type=int,
         default=DEFAULT_SEED_BASE,
-        help="base of all statistical seeds (default: the qualification base 20291004; the "
-        "bases 20261004, 20271004 and 20281004 give non-conformant archives); recorded in the "
-        "archive",
+        help="base of all statistical seeds (default: the qualification base 20301004; the "
+        "bases 20261004, 20271004, 20281004 and 20291004 give non-conformant archives); "
+        "recorded in the archive",
     )
     ap.add_argument(
         "--only",

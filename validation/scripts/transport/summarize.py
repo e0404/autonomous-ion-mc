@@ -34,10 +34,10 @@ from typing import Any
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
-QUALIFICATION_SEED_BASE = 20291004
+QUALIFICATION_SEED_BASE = 20301004
 """Only an archive made with this seed base can be conformant. The bases 20261004 (rehearsal),
-20271004 (T9 investigation) and 20281004 (first qualification attempt, consumed) are recorded as
-non-qualification evidence and never qualify."""
+20271004 (T9 investigation), 20281004 and 20291004 (first and second qualification attempts,
+consumed) are recorded as non-qualification evidence and never qualify."""
 IDENTITY_KEYS = ("git_sha", "suite", "scale", "python_parts", "seed_base")
 
 
@@ -193,8 +193,9 @@ def seed_blockers(seed_base: Any) -> list[str]:
     if int(seed_base) != QUALIFICATION_SEED_BASE:
         return [
             f"seed_base {int(seed_base)} is not the qualification base {QUALIFICATION_SEED_BASE} "
-            "(20261004 is the rehearsal base, 20271004 was used by the T9 investigation and "
-            "20281004 by the first qualification attempt: all are non-qualification evidence)"
+            "(20261004 is the rehearsal base, 20271004 was used by the T9 investigation, "
+            "20281004 and 20291004 by the first and second qualification attempts: all are "
+            "non-qualification evidence)"
         ]
     return []
 

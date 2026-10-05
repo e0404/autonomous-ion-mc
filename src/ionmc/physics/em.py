@@ -13,6 +13,9 @@ Models and sources (decision 0039; derivations in ``docs/physics/em-transport.md
   B. Gottschalk, Med. Phys. 37 (2010) 352 (arXiv:0908.1413), ``E_s = 15.0 MeV``, applied
   as a two-dimensional Gaussian polar angle, with the rotation of ``G4ThreeVector::rotateUz``.
 
+The Python reference backend uses the pure-Python twins of these functions
+(``ionmc._wpfunc.python_twin(make_em)``: same source text, no Warp call at Python scope).
+
 Units: energies MeV, lengths mm, mass thickness and ranges g/cm2, densities g/cm3,
 scattering power rad^2/mm (projected angle), angles rad. Functions never index arrays or
 draw random numbers; uniforms and table values are arguments.

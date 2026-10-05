@@ -42,7 +42,7 @@ Tiers:
 | T13⁷ (edep) | Partition and chunk invariance of the deposit grid with int64 fixed-point accumulators | edep bit-identical across 1 vs 3 workers (CPU) and chunk sizes 2¹⁰ vs 2¹⁸ (CUDA) within each precision; the former relative bounds (1e-5 f32 / 1e-12 f64) are reported but no longer the criterion | self-consistency | CI (CPU) / HR |
 | T10 | Rotation invariance: beam along +x, +y, +z, −z, and (1,1,0)/√2 and (1,1,1)/√3 in a 200 mm cube; IDD versus projected depth | permutations: χ² p > 0.001; obliques: \|ΔR80\| ≤ 0.3 mm and total energy equal within 3σ; zero counters | falsification | LV |
 | T11 | DDA adversarial cases: source exactly on planes, edges and corners, directions with a zero component, grazing entry | no stall or truncation; T4 holds | falsification | CI |
-| T12 | **Statistical parity:** python (4·10³, spawn pool), warp-cpu (10⁶), warp-cuda (10⁶) at 150 MeV with all physics on; also the warp f32 vs f64 bias probe | per-voxel z = Δ/√(σa²+σb²) on the IDD and on lateral profiles at 3 depths⁵ with dose > 1% of max: χ² p > 0.001 and max\|z\| < Bonferroni Φ⁻¹(1−0.001/2n); scalars (R80, total deposit, σ_lat at 0.5R) \|z\| < 3.5. CI runs a reduced version: python 200 vs warp-cpu 2·10⁴ at 70 MeV. | backend parity | CI (reduced) / LV / HR (CUDA) |
+| T12 | **Statistical parity:** python (4·10³, spawn pool), warp-cpu (10⁶), warp-cuda (10⁶) at 150 MeV with all physics on; also the warp f32 vs f64 bias probe | per-voxel z = Δ/√(σa²+σb²) on the IDD and on lateral profiles at 3 depths⁵ with dose > 1% of max: χ² p > 0.001 and max\|z\| < Bonferroni Φ⁻¹(1−0.001/2n); scalars (R80, total deposit, σ_lat at 0.5R) \|z\| < 3.5. CI runs a reduced version: python 200 vs warp-cpu 2·10⁴ at 70 MeV.¹⁷ | backend parity | CI (reduced) / LV / HR (CUDA) |
 | T13 | Partition invariance: 1 vs 3 workers, and CUDA chunk sizes 2¹⁰ vs 2¹⁸ | counters and tallies identical; edep within rel 1e-5 (f32) or 1e-12 (f64) | self-consistency | CI (CPU) / HR |
 | C1 | Fail-closed dispatch: each rule in §1 raises before transport; requested and effective configs are present | | capability | CI |
 | T14² | **Voxel-boundary scattering bias (grid size and alignment):** 150 MeV in water, MCS on, straggling off, 10⁶ histories warp-cpu; transport voxel size {0.5, 1, 2, 5} mm, each also with the phantom grid shifted by half a voxel along the beam and laterally; observables: exit θ_rms of a 0.5·R1 slab and the T7 lateral σ at z/R ∈ {0.5, 0.9} (scoring grid fixed at 0.2 mm lateral bins, independent of the transport voxels) | pairwise θ_rms ≤ 0.5 %, σ_lat ≤ 1 % across all voxel sizes and shifts; θ_rms within 0.5 % of the U5 quadrature; σ_lat within 2 % of Fermi-Eyges A2(z) (as T7). Negative control: forcing the hinge angle to be sampled for the truncated length only (diagnostic switch) must change θ_rms by < 0.5 % at 1 mm voxels — if it changes more, the approximation is material and the default must switch | falsification (boundary approximation) | LV (V3-003B) |
@@ -240,3 +240,37 @@ is a second, mandatory part of the profile verdict. A profile with fewer than ha
 bins supported, or whose aggregate is itself unsupported, is inconclusive and fails the pair; a
 profile is never passed by default. Tolerances, history counts and the seed base 20291004 are
 unchanged (no T12 comparison at that base has been observed).
+
+¹⁷ Grouped sparse-bin rule for T12 profiles, conditional max-statistic, and the qualification seed
+base re-frozen (2026-10-05, task V3-003B, after Codex review REVIEW-9ebb59f231914ced906127e717bfec52
+and before any T12 result at the new code is observed): (a) Selection: a bin is selected when it
+exceeds 1 % of the maximum of either sample's own mean profile (union), so that a backend that
+drops or depletes a relevant bin cannot remove it from the comparison; the selected region is the
+contiguous hull from the first to the last selected bin. (b) Rebinning: starting at the mode of the
+hull and moving outward on each side, consecutive bins are merged into a group until the group is
+supported by both samples (at least max(2, ⌈B/2⌉) batches with nonzero summed deposit in each);
+an outermost remainder that cannot be supported joins the adjacent group of its side. Individually
+supported bins remain single-bin groups, so dense profiles are unchanged. (c) Test: the χ² of the
+per-group z over all groups (calibration of ⁹/¹⁵ unchanged) must have p > 0.001, and max|z| over
+the groups must satisfy, for equal batch structures, the frozen Bonferroni bound Φ⁻¹(1−0.001/2n)
+with n the number of groups, and for unequal batch structures a bootstrap-t max-T p-value > 0.001
+computed from the same within-sample bootstrap replicates as the χ² p-value; the normal Bonferroni
+comparison is reported as informative for unequal pairs. Reason: synthetic null studies (200 trials
+each) showed the normal Bonferroni bound rejecting 3.5 % (40×100 vs 100×10⁴) to 11 % (10×20 vs
+20×10³) of null profiles — a small sample's sparse batch means are skewed and its batch standard
+error is underestimated when its count is low — while the bootstrap max-T rejected none at 0.001;
+for equal structures the normal bound rejected none and is kept. The aggregate tail test of ¹⁶ is
+withdrawn (pooling allowed spatial cancellation, and its acceptance used either statistic).
+(d) A profile is inconclusive, and fails the pair, when no bin is selected, when even the whole
+hull is unsupported, or when it would pass but less than half of the hull's mean deposit lies in
+single-bin groups (this replaces the bin-count rule of ¹⁶, whose bin count depends on noise bins of
+the small sample); a statistically significant difference is reported as a failure regardless.
+(e) Resolution statement: the pairs of accelerated samples (10⁶ histories each) resolve the loss of
+a single lateral bin carrying 1 % of the maximum (|z| ≈ 11 in the synthetic study) and of mass
+shifts between non-adjacent bins; the python pair (4·10³ histories) cannot, by any test, resolve
+a single such bin (about one history deposits there) and detects only the loss of tail regions of
+order 2 % of the primaries; equivalence of the python reference with the Warp code at finer
+resolution rests on T1 and T13. The rule applies to every use of the profile verdict (T9, T10,
+T12). (f) The CI reduced version must pass the full verdict. Observed at the new code before this amendment (2026-10-06, fixed seeds 2026100401/2026100402, python 200 histories in 10 batches vs warp-cpu 2·10⁴ in 20 batches, 70 MeV, 0.5 mm bins): IDD, 0.25·R, 0.9·R and all scalars pass; 0.5·R inconclusive by the resolution rule (5 selected bins, groups [13,15), [15,16), [16,18), singleton mass fraction 0.458; p 0.34, p_max_z 0.30, max|z| 1.63). Because the pure-Python reference executor of this commit is about 110 times faster, the reduced python sample is raised to 2000 histories in 20 batches with the same seeds; bin size, energy and the accelerated sample are unchanged (a resolution change, not a reseed). (g) Because the accelerated T12 samples at base 20291004 were observed (at 90986b4),
+the qualification seed base is re-frozen to 20301004; 20261004, 20271004, 20281004 and 20291004
+are preserved as non-qualification evidence. Tolerances and history counts are unchanged.

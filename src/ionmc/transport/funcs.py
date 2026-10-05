@@ -2,8 +2,9 @@
 # (Warp function sources use runtime precision types in annotations; see _wpfunc.py.)
 """Shared transport helper functions: table-bin location, DDA, step limits, hinge, scoring.
 
-``make_transport_funcs(R)`` returns precision-generic Warp functions that are callable from
-Python scope (reference backend) and from kernels. They are pure: table reads are split
+``make_transport_funcs(R)`` returns precision-generic Warp functions for kernels; the reference
+backend uses their pure-Python twins (``ionmc._wpfunc.python_twin``: the same source text without
+Warp, so no Warp call happens at Python scope). They are pure: table reads are split
 into the shared bin location ``log_bin_index``, a backend memory read and the shared
 interpolation ``interp_exp`` / ``lerp``. Units: mm for lengths, MeV for energies; a "plane
 index" ``i`` bounds voxel ``i`` between ``origin + i*spacing`` and ``origin + (i+1)*spacing``.

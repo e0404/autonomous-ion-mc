@@ -8,6 +8,7 @@ from collections.abc import Callable
 import numpy as np
 import pytest
 
+from ionmc._wpfunc import python_twin
 from ionmc.config import SimulationConfig, validate
 from ionmc.errors import UnsupportedCombinationError
 from ionmc.geometry import BoxPhantom
@@ -106,11 +107,9 @@ def test_deposits_are_apportioned_over_voxels_and_close_the_balance(
 
 
 def test_seg_piece_walks_a_segment_through_planes() -> None:
-    import warp as wp
-
-    f = make_transport_funcs(wp.float64)
+    f = python_twin(make_transport_funcs)  # pure-Python twin, no Warp call
     v = f.vec3
-    r = wp.float64
+    r = float
     origin, spacing = v(r(0.0), r(0.0), r(0.0)), v(r(1.0), r(1.0), r(1.0))
     # along +x from x = 0.5 in voxel 0: the plane x = 1 ends the piece after 0.5 mm
     piece, axis = f.seg_piece(v(r(0.5), r(0.5), r(0.5)), v(r(1.0), r(0.0), r(0.0)), 0, 0, 0,

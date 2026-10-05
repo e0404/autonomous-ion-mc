@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 import warp as wp
 
+from ionmc._wpfunc import python_twin
 from ionmc.materials import (
     ALUMINIUM,
     BERYLLIUM,
@@ -50,6 +51,9 @@ EM = make_em(F64)
 KIN = make_kinematics(F64)
 TF = make_transport_funcs(F64)
 PH = make_philox(F64)
+# Python-side evaluation uses the pure-Python twins; Warp functions only run inside kernels
+EMP = python_twin(make_em)
+TFP = python_twin(make_transport_funcs)
 M_P = PROTON.mass_mev
 
 
@@ -89,9 +93,9 @@ def test_u2_round_trip_and_monotonicity(bethe: BetheStoppingSource, material: Ma
 def test_u2_shared_funcs_reproduce_table_reads(water_tables: TransportTables) -> None:
     t = water_tables
     for e in np.geomspace(1.2, 450.0, 60):
-        i, f = TF.log_bin_index(F64(e), F64(t.ln_e0[0]), F64(t.inv_dln_e[0]), t.n_e)
+        i, f = TFP.log_bin_index(float(e), float(t.ln_e0[0]), float(t.inv_dln_e[0]), t.n_e)
         row = t.ln_r_mass[0]
-        r = float(TF.interp_exp(F64(row[i]), F64(row[i + 1]), f))
+        r = float(TFP.interp_exp(float(row[i]), float(row[i + 1]), f))
         assert r == pytest.approx(t.range_g_cm2(0, e), rel=1e-13)
 
 
@@ -232,8 +236,14 @@ def test_birth_variance_matches_fine_quadrature(water_tables: TransportTables) -
         assert abs(path.birth_variance(s) / exact - 1.0) <= 1e-3, s
     assert (
         float(
-            EM.scattering_variance_birth(
-                F64(500.0), F64(540.0), F64(540.0), F64(1.0), F64(0.02), F64(1.0), F64(1.0)
+            EMP.scattering_variance_birth(
+                float(500.0),
+                float(540.0),
+                float(540.0),
+                float(1.0),
+                float(0.02),
+                float(1.0),
+                float(1.0),
             )
         )
         == 0.0
@@ -320,21 +330,21 @@ def test_straggling_gamma_moments_exact_and_gaussian_variance_loss_bounded(
 def test_straggling_branch_boundary() -> None:
     """Exactly at ratio 3 the Gaussian branch is used (always accepted, clamped), just below
     it the Gamma branch (a rejection is possible)."""
-    f = EM.straggle_attempt
+    f = EMP.straggle_attempt
     sigma = 1.0
-    hi = f(F64(3.0), F64(sigma**2), F64(0.5), F64(0.0), F64(0.5), F64(0.5))
+    hi = f(float(3.0), float(sigma**2), float(0.5), float(0.0), float(0.5), float(0.5))
     assert hi[1] == 1 and float(hi[0]) == pytest.approx(
         3.0 + sigma * math.sqrt(2.0 * math.log(2.0))
     )
-    clamped = f(F64(3.0), F64(sigma**2), F64(1e-300), F64(0.5), F64(0.5), F64(0.5))
+    clamped = f(float(3.0), float(sigma**2), float(1e-300), float(0.5), float(0.5), float(0.5))
     assert float(clamped[0]) == 0.0 and clamped[1] == 1  # z = -37: clamped at 0
-    upper = f(F64(3.0), F64(sigma**2), F64(1e-300), F64(0.0), F64(0.5), F64(0.5))
+    upper = f(float(3.0), float(sigma**2), float(1e-300), float(0.0), float(0.5), float(0.5))
     assert float(upper[0]) == 6.0  # clamped at 2 mean
     # below the boundary a Gamma sample with a failing acceptance test is rejected
-    rejected = f(F64(2.9), F64(sigma**2), F64(1e-300), F64(0.5), F64(0.5), F64(0.5))
+    rejected = f(float(2.9), float(sigma**2), float(1e-300), float(0.5), float(0.5), float(0.5))
     assert rejected[1] == 0  # 1 + c x <= 0: Marsaglia-Tsang rejects
-    assert f(F64(0.0), F64(1.0), F64(0.5), F64(0.5), F64(0.5), F64(0.5)) == (0.0, 1)
-    assert f(F64(2.0), F64(0.0), F64(0.5), F64(0.5), F64(0.5), F64(0.5)) == (2.0, 1)
+    assert f(float(0.0), float(1.0), float(0.5), float(0.5), float(0.5), float(0.5)) == (0.0, 1)
+    assert f(float(2.0), float(0.0), float(0.5), float(0.5), float(0.5), float(0.5)) == (2.0, 1)
 
 
 def test_polar_deflection_and_rotation_statistics() -> None:
@@ -343,12 +353,12 @@ def test_polar_deflection_and_rotation_statistics() -> None:
     var = 1.7e-4
     u = rng.uniform(0.0, 1.0, 20000)
     u = np.clip(u, 1e-12, 1 - 1e-12)
-    th = np.array([float(EM.polar_deflection(F64(var), F64(v))) for v in u[:2000]])
+    th = np.array([float(EMP.polar_deflection(float(var), float(v))) for v in u[:2000]])
     assert np.mean(th**2) == pytest.approx(2.0 * var, rel=0.1)
-    assert float(EM.polar_deflection(F64(1.0e3), F64(0.5))) == pytest.approx(math.pi)
-    v3 = EM.vec3
+    assert float(EMP.polar_deflection(float(1.0e3), float(0.5))) == pytest.approx(math.pi)
+    v3 = EMP.vec3
     for d in ([0.0, 0.0, 1.0], [0.0, 0.0, -1.0], [0.36, 0.48, 0.8], [1.0, 0.0, 0.0]):
-        out = EM.rotate_dir(v3(F64(d[0]), F64(d[1]), F64(d[2])), F64(0.3), F64(1.1))
+        out = EMP.rotate_dir(v3(float(d[0]), float(d[1]), float(d[2])), float(0.3), float(1.1))
         o = np.array([float(c) for c in out])
         assert np.linalg.norm(o) == pytest.approx(1.0, abs=1e-14)
         assert float(np.dot(o, d)) == pytest.approx(math.cos(0.3), abs=1e-12)
