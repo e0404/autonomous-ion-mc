@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import os
 from collections.abc import Callable
 
 import numpy as np
@@ -21,6 +22,12 @@ from ionmc.transport.tally import MAX_QUANTA, QUANTUM_MEV, PartialTransport, mer
 MakeConfig = Callable[..., SimulationConfig]
 
 
+def _workers(n: int) -> int:
+    """Worker processes used only for speed: 1 in the single-process diagnostic mode (histories
+    and seeds unchanged)."""
+    return 1 if os.environ.get("IONMC_SINGLE_PROCESS") == "1" else n
+
+
 def _idd(make_config: MakeConfig, s_max: float, bin_mm: float, n: int = 20000) -> np.ndarray:
     """IDD [MeV per primary] of 150 MeV protons in a single-voxel water box, straggling and MCS
     off (a deterministic path), bins of ``bin_mm``; warp-cpu float32."""
@@ -37,7 +44,7 @@ def _idd(make_config: MakeConfig, s_max: float, bin_mm: float, n: int = 20000) -
         max_step=s_max,
         backend="warp-cpu",
         precision="float32",
-        run_kwargs={"cpu_workers": 4},
+        run_kwargs={"cpu_workers": _workers(4)},
     )
     res = Simulation(cfg).run()
     assert res.valid and res.energy_balance.grid_relative_residual(0) < 1e-5

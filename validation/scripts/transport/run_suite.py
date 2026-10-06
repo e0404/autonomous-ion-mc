@@ -8,8 +8,8 @@ Usage (argv only, no shell; the host runner executes exactly this)::
         [--only STEP ...] [--import-dirs DIR ...] [--seed-base INT]
 
 The qualification command needs no seed flag: the default ``--seed-base`` is the qualification base
-20331004 (a run with the rehearsal base 20261004 or the consumed bases 20271004, 20281004,
-20291004, 20301004, 20311004 and 20321004 is archived but never conformant)::
+20341004 (a run with the rehearsal base 20261004 or the consumed bases 20271004, 20281004,
+20291004, 20301004, 20311004, 20321004 and 20331004 is archived but never conformant)::
 
     python validation/scripts/transport/run_suite.py --suite hr --expected-sha <sha> --out <new-dir>
 
@@ -34,6 +34,10 @@ Rules (the style of ``validation/scripts/warp-architecture/run_all.sh``):
 * the T12 statistics are split into steps with their own outputs: the python sample (in
   ``--python-parts`` history ranges), the accelerated samples and the comparison, which loads
   the saved samples (hash-verified; ``--import-dirs`` names archives of other runs holding them);
+* ``--workers 1`` (or ``--single-process``) is the single-process diagnostic mode: every step runs
+  with one worker and single-threaded numerics (``SINGLE_PROCESS_ENV``), the steps whose purpose is
+  multiprocessing (``DEFERRED_STEPS``) are archived as ``deferred`` and not run, histories, seeds
+  and criteria are unchanged and the archive is never ``conformant``;
 * any failure exits non-zero.
 """
 
@@ -66,13 +70,41 @@ SOURCE_FILES = ("pyproject.toml", "uv.lock", "validation/plans/v3-003-acceptance
 """Every tracked file that defines what is executed and judged (code, tests and fixtures, the
 project definition, the lock file and the frozen acceptance plan)."""
 DEFAULT_PYTHON_PARTS = 2
-QUALIFICATION_SEED_BASE = 20331004
+QUALIFICATION_SEED_BASE = 20341004
 REHEARSAL_SEED_BASE = 20261004
 CONSUMED_SEED_BASE = 20271004  # used by the T9 investigation: not a qualification base
 DEFAULT_SEED_BASE = QUALIFICATION_SEED_BASE
+EXECUTION_STANDARD = "standard"
+EXECUTION_SINGLE_PROCESS = "single-process-diagnostic"
+SINGLE_PROCESS_ENV = {
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "NUMEXPR_NUM_THREADS": "1",
+    "IONMC_SINGLE_PROCESS": "1",
+}
+"""Environment of every step in the single-process diagnostic mode (``--workers 1``)."""
+DEFERRED_REASON = (
+    "multiprocessing-specific check deferred in single-process diagnostic mode "
+    "(operator directive 2026-10-07)"
+)
+DEFERRED_STEPS = {"lv": ("t13-workers",), "hr": ()}
+"""Steps whose purpose is the worker-partition invariance (1 versus N worker processes): they are
+not executed in the single-process diagnostic mode and recorded as ``deferred``. Steps that merely
+use workers for speed run with one worker, with unchanged histories, seeds and criteria."""
+
+
+def deferred_step_names(suite: str, python_parts: int = DEFAULT_PYTHON_PARTS) -> list[str]:
+    """Full names of the steps deferred in the single-process diagnostic mode."""
+    return [
+        n
+        for n in full_step_names(suite, python_parts)
+        if n.split("-", 1)[1] in DEFERRED_STEPS[suite]
+    ]
 
 
 def pytest_cmd(*targets: str, marker: str | None = None) -> list[str]:
+    """``marker`` is a pytest ``-m`` expression."""
     cmd = [PY, "-m", "pytest", "-q", "-p", "no:cacheprovider", "--no-header", *targets]
     return cmd + (["-m", marker] if marker else [])
 
@@ -86,9 +118,11 @@ def suite_steps(
     import_dirs: list[str] | None = None,
     step_timeout: int = 1500,
     seed_base: int = DEFAULT_SEED_BASE,
+    single_process: bool = False,
 ) -> list[tuple[str, list[str], dict[str, str]]]:
     """``(name, argv, extra environment)`` of the steps of a suite, in execution order (the
-    names depend only on ``suite`` and ``python_parts``)."""
+    names depend only on ``suite`` and ``python_parts``). ``single_process`` deselects the
+    ``multiprocess`` tests of the pytest steps (the deferred steps are chosen by the caller)."""
 
     def n(x: int) -> str:
         return str(max(1000, int(x * scale)))
@@ -115,6 +149,7 @@ def suite_steps(
                 "tests/ionmc/test_transport_warp.py",
                 "tests/ionmc/test_transport_partition.py",
                 "tests/ionmc/test_config_validation.py",
+                marker="not multiprocess" if single_process else None,
             ),
         )
         add(
@@ -130,7 +165,14 @@ def suite_steps(
         add("t-r1-python-repeatability", [*st, "t-r1", "--runs", "python:float64:400", *w])
         acc, pairs = "cpu32,cpu64", "python:cpu32,python:cpu64,cpu32:cpu64"
     elif suite == "hr":
-        add("pytest-cuda", pytest_cmd("tests/ionmc/test_transport_cuda.py", marker="cuda"), cuda)
+        add(
+            "pytest-cuda",
+            pytest_cmd(
+                "tests/ionmc/test_transport_cuda.py",
+                marker="cuda and not multiprocess" if single_process else "cuda",
+            ),
+            cuda,
+        )
         add("t2-deterministic-csda-cuda", [*st, "t2", "--backend", "warp-cuda"], cuda)
         add(
             "t13-chunks-cuda",
@@ -228,7 +270,7 @@ def _kill_group(pgid: int, grace: float) -> None:
 
 def full_step_names(suite: str, python_parts: int) -> list[str]:
     """Names of the complete suite (used to decide ``subset`` and to combine subsets)."""
-    return [s[0] for s in suite_steps(suite, 2, 1.0, python_parts)]
+    return [s[0] for s in suite_steps(suite, 2, 1.0, python_parts)]  # names only
 
 
 def git(*args: str) -> str | None:
@@ -268,7 +310,7 @@ def source_files() -> list[Path]:
 
 
 def environment_text(
-    sha: str, source: str, dirty: str, args: argparse.Namespace, workers: int
+    sha: str, source: str, dirty: str, args: argparse.Namespace, workers: int, single: bool = False
 ) -> str:
     import numpy
     import warp
@@ -294,6 +336,9 @@ def environment_text(
         f"sha_source={source}",
         f"tree_dirty={dirty}",
         f"workers={workers}",
+        f"execution_mode={EXECUTION_SINGLE_PROCESS if single else EXECUTION_STANDARD}",
+        "single_process_env="
+        + (",".join(f"{k}={v}" for k, v in SINGLE_PROCESS_ENV.items()) if single else ""),
         f"step_timeout_s={args.step_timeout}",
         f"scale={args.scale}",
         f"seed_base={args.seed_base}",
@@ -315,16 +360,27 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--suite", choices=("lv", "hr"), required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--expected-sha", required=True)
-    ap.add_argument("--workers", default="auto", help="integer >= 2 or 'auto' (all cores)")
+    ap.add_argument(
+        "--workers",
+        default="auto",
+        help="integer >= 1 or 'auto' (all cores); 1 is the single-process diagnostic mode",
+    )
+    ap.add_argument(
+        "--single-process",
+        action="store_true",
+        help="single-process diagnostic mode (implied by --workers 1): one worker per sample, "
+        "single-threaded numerics, the multiprocessing-specific steps are deferred (recorded, not "
+        "run) and the archive is never conformant; histories, seeds and criteria are unchanged",
+    )
     ap.add_argument("--step-timeout", type=int, default=1500)
     ap.add_argument("--python-parts", type=int, default=DEFAULT_PYTHON_PARTS)
     ap.add_argument(
         "--seed-base",
         type=int,
         default=DEFAULT_SEED_BASE,
-        help="base of all statistical seeds (default: the qualification base 20331004; the "
-        "bases 20261004, 20271004, 20281004, 20291004, 20301004, 20311004 and 20321004 give "
-        "non-conformant archives); "
+        help="base of all statistical seeds (default: the qualification base 20341004; the "
+        "bases 20261004, 20271004, 20281004, 20291004, 20301004, 20311004, 20321004 and "
+        "20331004 give non-conformant archives); "
         "recorded in the archive",
     )
     ap.add_argument(
@@ -347,9 +403,10 @@ def main(argv: list[str] | None = None) -> int:
         help="factor on all history counts (< 1 gives a non-conformant, labelled run)",
     )
     args = ap.parse_args(argv)
-    workers = resolve_workers(args.workers)
-    if workers < 2 or args.step_timeout < 1 or not 0.0 < args.scale <= 1.0:
-        raise SystemExit("need --workers >= 2, --step-timeout >= 1 and 0 < --scale <= 1")
+    workers = 1 if args.single_process else resolve_workers(args.workers)
+    if workers < 1 or args.step_timeout < 1 or not 0.0 < args.scale <= 1.0:
+        raise SystemExit("need --workers >= 1, --step-timeout >= 1 and 0 < --scale <= 1")
+    single = workers == 1
     if not 1 <= args.python_parts <= 64:
         raise SystemExit("--python-parts must be in [1, 64]")
     out = Path(args.out).resolve()
@@ -369,7 +426,9 @@ def main(argv: list[str] | None = None) -> int:
         args.import_dirs,
         args.step_timeout,
         args.seed_base,
+        single,
     )
+    deferred = set(deferred_step_names(args.suite, args.python_parts)) if single else set()
     if args.only:
         keep = [x for x in steps if any(x[0] == o or x[0].startswith(f"{o}-") for o in args.only)]
         if len(keep) != len(set(args.only)):
@@ -384,7 +443,9 @@ def main(argv: list[str] | None = None) -> int:
         )
     dirty = "unknown" if porcelain is None else "no"
     out.mkdir(parents=True)
-    (out / "environment.txt").write_text(environment_text(sha, source, dirty, args, workers))
+    (out / "environment.txt").write_text(
+        environment_text(sha, source, dirty, args, workers, single)
+    )
     (out / "manifest.txt").write_text("".join(f"{name}\n" for name, _, _ in steps))
     env_base = dict(os.environ)
     env_base.setdefault("WARP_CACHE_PATH", str(out / "warp-cache"))
@@ -392,6 +453,10 @@ def main(argv: list[str] | None = None) -> int:
     env_base["PYTHONPATH"] = str(REPO / "src") + os.pathsep + env_base.get("PYTHONPATH", "")
     env_base["IONMC_RUN_SHA"] = sha
     env_base["IONMC_RUN_SUITE"] = args.suite
+    if single:
+        env_base.update(SINGLE_PROCESS_ENV)
+    else:
+        env_base.pop("IONMC_SINGLE_PROCESS", None)  # a standard run is never contaminated
     failures = 0
     for name, cmd, extra in steps:
         path = out / f"{name}.txt"
@@ -399,6 +464,10 @@ def main(argv: list[str] | None = None) -> int:
         with path.open("w") as fh:
             fh.write(f"# command: {' '.join(cmd)}\n# git_sha: {sha}\n# started_utc: {started}\n")
             fh.write(f"# step_timeout_s: {args.step_timeout}\n")
+            if name in deferred:
+                fh.write(f"# status: deferred\n# reason: {DEFERRED_REASON}\n\n# exit=0\n")
+                print(f"== {name}: deferred", flush=True)
+                continue
             fh.flush()
             code = run_step(
                 cmd,

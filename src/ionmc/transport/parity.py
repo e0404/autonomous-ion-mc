@@ -17,13 +17,17 @@ asserts and the numbers a validation archive records come from the same code.
   the mode into groups that both samples support (plan footnote 17); one test family over the
   groups: the chi-square of the group z with a batch-level permutation (equal batch structure) or
   bootstrap-t (unequal) p-value > 0.001 (correlated bins invalidate the independent-bin
-  Wilson-Hilferty approximation, which is reported only for information), AND max |z| below the
-  Bonferroni bound (equal structures) or a bootstrap max-T p-value > 0.001 (unequal structures,
-  where the normal bound is anti-conservative), and ``|z| < 3.5`` for the scalars (R80, total
-  deposit, lateral sigma at 0.5 R). A profile that cannot be evaluated or is resolved mostly by
-  merged groups is ``inconclusive`` and fails the pair. Standard errors come from the batch
-  method of each run, so ``z`` is Student-t rather than normal for few batches; the number of
-  batches of every run is recorded with the verdict.
+  Wilson-Hilferty approximation, which is reported only for information), AND the max-T p-value of
+  max |z| from the same replicates > 0.001 (permutation for equal structures, plan footnote 22;
+  bootstrap for unequal ones, footnote 17(c); the normal Bonferroni bound is anti-conservative at
+  few batches and informative only). The scalars (R80, lateral sigma at 0.5 R, total deposit) obey
+  ``|z| < 3.5``, except a total deposit whose standard errors are below 1e-8 of its value (fixed by
+  energy conservation up to fixed-point rounding), which uses the deterministic precision bound
+  plus 3.5 combined standard errors (:func:`deterministic_scalar_verdict`, footnote 19); a scalar
+  with no variance at all fails closed unless exactly equal. A profile that cannot be evaluated or
+  is resolved mostly by merged groups is ``inconclusive`` and fails the pair. Standard errors come
+  from the batch method of each run, so ``z`` is Student-t rather than normal for few batches; the
+  number of batches of every run is recorded with the verdict.
 """
 
 from __future__ import annotations
@@ -881,9 +885,16 @@ def t12_compare(
         ok &= passed
     for name in a.scalars:
         sc = scalar_z(a.scalars[name], b.scalars[name])
-        if name == TOTAL_DEPOSIT:
+        scale = max(abs(sc["a"]), abs(sc["b"]))
+        if (
+            name == TOTAL_DEPOSIT
+            and scale > 0.0
+            and max(sc["se_a"], sc["se_b"]) <= DEGENERATE_SE_RTOL * scale
+        ):
             # amendment 19: energy conservation fixes the total deposit up to the fixed-point
             # rounding, so z is meaningless; the deterministic rule applies to this scalar only
+            # and only when it has (almost) no variance (standard errors <= 1e-8 of its value);
+            # a genuinely stochastic total keeps the frozen |z| < 3.5 rule
             out["scalars"][name] = deterministic_scalar_verdict(
                 a.scalars[name], b.scalars[name], a.precision, b.precision
             )

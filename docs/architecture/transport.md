@@ -340,12 +340,27 @@ period) and `TransportWorkerError` is raised; no partial result is returned. Scr
   `# exit=` trailer (a timed-out step is killed and archived with `exit=124`); `manifest.txt` lists the steps of the
   run; `summarize.py` verifies everything and writes `summary.json`. Any failed step, missing file or mismatch makes the
   exit status non-zero.
-* **Seed base.** `--seed-base` (default 20331004, the qualification base) is the base of every statistical seed; it is
-  recorded in `environment.txt`, the step documents and the sample metadata. Only an archive made with 20331004 can be
-  `conformant`: one made with the rehearsal base 20261004, with 20271004 (T9 investigation), with 20281004 (first qualification attempt, consumed), with 20291004 (second qualification attempt, consumed: its accelerated T12 samples were observed before the grouped rule of plan footnote 17), with 20301004 (third qualification attempt, consumed: its python-vs-cpu64 total deposit was observed before the rounding-noise allowance of plan footnote 19), with 20311004 (fourth qualification attempt, consumed: its HR T12 comparison was observed before the review-required restriction of the footnote-19 allowance to the total-deposit scalar), with 20321004 (fifth qualification attempt, consumed: its HR and LV T12 comparisons were observed before the removal of the 1e-9 relative z = 0 shortcut of the scalar statistic for non-deposit scalars, plan footnote 21) (all preserved as non-qualification evidence) or without a recorded base
+* **Seed base.** `--seed-base` (default 20341004, the qualification base) is the base of every statistical seed; it is
+  recorded in `environment.txt`, the step documents and the sample metadata. Only an archive made with 20341004 can be
+  `conformant`: one made with the rehearsal base 20261004, with 20271004 (T9 investigation), with 20281004 (first qualification attempt, consumed), with 20291004 (second qualification attempt, consumed: its accelerated T12 samples were observed before the grouped rule of plan footnote 17), with 20301004 (third qualification attempt, consumed: its python-vs-cpu64 total deposit was observed before the rounding-noise allowance of plan footnote 19), with 20311004 (fourth qualification attempt, consumed: its HR T12 comparison was observed before the review-required restriction of the footnote-19 allowance to the total-deposit scalar), with 20321004 (fifth qualification attempt, consumed: its HR and LV T12 comparisons were observed before the removal of the 1e-9 relative z = 0 shortcut of the scalar statistic for non-deposit scalars, plan footnote 21), with 20331004 (sixth qualification attempt, consumed: its HR T12 comparison was observed before the low-standard-error gate of the footnote-19 rule was restored and the T10 retraction recorded, plan footnotes 22 and 23) (all preserved as non-qualification evidence) or without a recorded base
   verifies but carries `non_conformant_reasons`. The qualification command is
   `python validation/scripts/transport/run_suite.py --suite hr --out validation/generated/transport/<new-dir> --expected-sha <sha>`
   (no seed flag).
+* **Single-process diagnostic mode.** `run_suite.py --workers 1` (or `--single-process`) runs every step with one
+  worker and single-threaded numerics (`OMP_NUM_THREADS`, `OPENBLAS_NUM_THREADS`, `MKL_NUM_THREADS`,
+  `NUMEXPR_NUM_THREADS` = 1 and `IONMC_SINGLE_PROCESS=1`, recorded in `environment.txt` and `summary.json`; the plan
+  of the workers of every sample is 1, CUDA already uses 1). Histories, seeds and every criterion are unchanged. The
+  multiprocessing-specific checks are not executed but archived as `status: deferred` with the reason
+  "multiprocessing-specific check deferred in single-process diagnostic mode (operator directive 2026-10-07)": the LV
+  step `04-t13-workers` (1 versus N worker processes) and, in step 01, the tests marked `multiprocess` (worker
+  partition invariance, the fail-closed pool, the worker planning tests), which are deselected with `-m "not
+  multiprocess"` (the deselected count is recorded) or skipped when `IONMC_SINGLE_PROCESS=1`. Tests that use workers
+  only for speed (reduced T12 CI, T9-CI, repeatability) run with one worker. The summary reports `pass` over the
+  executed steps, `deferred_steps`, `execution_mode` and `conformant: false` with the reason "deferred multiprocessing
+  checks": a diagnostic archive never claims conformance, and `summarize.py --combine` carries the deferred list
+  through. The mode exists for hosts where worker pools are unstable; the long steps (T8, T9, T10, T14, the
+  accelerated T12 samples) take about the 32-core wall time times the core count and are best run as separate `--only`
+  subsets.
 * **Subsets.** `--only STEP ...` runs a subset into its own directory; its summary has `subset: true` and is never
   `conformant`. `summarize.py --combine DIR ... --expected-sha SHA --out FILE` verifies that the directories share the
   suite, SHA, scale and source hashes, that no step is duplicated or missing, and only then writes a combined summary
@@ -367,13 +382,13 @@ period) and `TransportWorkerError` is raised; no partial result is returned. Scr
   `t12-python-sample-{1,2}of2`, `t12-accelerated-samples`, `t12-compare`, `t8`, `t9`, `t10`, `t14`; HR `pytest-cuda`,
   `t2-...-cuda`, `t13-chunks-cuda`, `t12-python-sample-{1,2}of2`, `t12-accelerated-samples`, `t12-compare`.
 * **Scalar rule and support rule (T12).** Only the total deposit (`total_deposit_mev`) whose standard errors are below 1e-8 of its value in both samples
-  (energy conservation makes it deterministic) is not compared with z but with the deterministic T4
+  (energy conservation makes it deterministic; a total with larger standard errors keeps the |z| < 3.5 rule) is not compared with z but with the deterministic T4
   precision bound of the less precise sample (1e-5 relative for float32, 1e-12 for float64 and python) plus 3.5 combined standard errors of the grid sum, which lacks the tallied
   fixed-point rounding residual (zero mean, about 1e-8 MeV per history, sample-specific; decision 0039, 2026-10-06);
   the rule that applied and the noise allowance are recorded. Every other scalar (R80, lateral sigma) keeps the frozen
   |z| < 3.5 rule however small its standard error; with no variance in either sample z is undefined and the comparison
   fails closed: rule `z_undefined`, pass only if the two values are exactly equal (plan footnote 19(d)). `scalar_z` is the plain Δ/√(se_a²+se_b²) whenever the combined standard error is nonzero (no relative-equality
-  shortcut). The same deterministic rule (`deterministic_scalar_verdict`) governs the T10 total-energy comparison.
+  shortcut). The deterministic rule is `parity.deterministic_scalar_verdict`.
   **Grouped sparse-bin rule (plan footnote 17).** A bin is selected when it exceeds 1 % of the maximum of either
   sample's own mean profile (union), so a backend that drops or depletes a relevant bin cannot remove it from the
   comparison; the selected region is the contiguous hull. Starting at the mode of the hull and moving outward on each
@@ -447,9 +462,8 @@ period) and `TransportWorkerError` is raised; no partial result is returned. Scr
   are reported as information. It is implemented identically in the reference and the kernel; with the flag off the engine
   is unchanged (a stored baseline trace guards this).
 * **T10 energy.** The total deposited energy of every orientation is compared with that of the `+z` beam with the batch
-  standard errors of both; it is fixed by energy conservation and uses the same deterministic rule as the T12 total deposit
-  (precision bound of the less precise sample plus 3.5 combined standard errors, `deterministic_scalar_verdict`; the T10
-  samples are float32 so the bound is 1e-5 relative). It formerly used a 1e-9 relative shortcut.
+  standard errors of both and must agree within 3 sigma (the plain z; the quantization noise of both orientations is a
+  proper variance, see plan footnote 22, retraction).
 
 * **T8, T14 observables.** The lateral sigma is the frozen one: the standard deviation of the deposited energy in fixed
   0.2 mm lateral bins and 1 mm slabs at z/R = 0.5 and 0.9 (scoring grids independent of the transport voxels, Sheppard

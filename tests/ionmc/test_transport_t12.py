@@ -9,6 +9,7 @@ tail-bin defects of the grouped rule."""
 from __future__ import annotations
 
 import math
+import os
 
 import numpy as np
 import pytest
@@ -21,6 +22,13 @@ from ionmc.transport.parity import (
     t12_sample,
     wilson_hilferty_p,
 )
+
+
+def _workers(n: int) -> int:
+    """Worker processes used only for speed: 1 in the single-process diagnostic mode (histories
+    and seeds unchanged)."""
+    return 1 if os.environ.get("IONMC_SINGLE_PROCESS") == "1" else n
+
 
 KW = {"energy_mev": 70.0, "lateral_bin_mm": 0.5, "half_width_mm": 8.0}
 
@@ -56,7 +64,7 @@ def test_t12_ci_python_vs_warp_cpu() -> None:
     plan footnote 17(f)); seeds, bins and the warp-cpu sample are unchanged."""
     py, layout = t12_sample(
         backend="python", precision="float64", seed=2026100401, n_histories=2000, n_batches=20,
-        workers=4, timeout_s=900.0, **KW,
+        workers=_workers(4), timeout_s=900.0, **KW,
     )  # fmt: skip
     wp, _ = t12_sample(
         backend="warp-cpu", precision="float32", seed=2026100402, n_histories=20000,
@@ -212,6 +220,29 @@ def test_noise_allowance_is_restricted_to_the_total_deposit() -> None:
     assert (
         off["scalars"]["r80_mm"]["rule"] == "z_undefined" and not off["scalars"]["r80_mm"]["pass"]
     )
+
+
+def test_stochastic_total_deposit_keeps_the_z_rule() -> None:
+    """The deterministic rule needs standard errors <= 1e-8 of the value (gate). A float32 total
+    near 100 with se ~ 2e-6 each and a 9e-4 offset is within the 1e-5 relative allowance
+    (1e-3) but |z| ~ 3e2: it must fail under the frozen |z| < 3.5 rule; a low-variance pair
+    uses the deterministic rule."""
+    from ionmc.transport.parity import T12Observables
+
+    def sample(seed: int, shift: float, spread: float) -> T12Observables:
+        rng = np.random.default_rng(seed)
+        n = 20
+        tot = 100.0 + shift + spread * rng.normal(size=n)
+        prof = np.linspace(1.0, 2.0, 12) * (1.0 + 0.01 * rng.normal(size=(n, 12)))
+        return T12Observables({"idd": prof}, {"total_deposit_mev": tot}, n, 1000, "float32")
+
+    sd = 2e-6 * np.sqrt(20.0)  # standard error 2e-6
+    v = t12_compare(sample(1, 0.0, sd), sample(2, 9e-4, sd), n_perm=999)["scalars"]
+    r = v["total_deposit_mev"]
+    assert r["rule"] == "z" and abs(r["z"]) > 100 and not r["pass"]
+    low = t12_compare(sample(1, 0.0, 1e-12), sample(2, 3e-6, 1e-12), n_perm=999)["scalars"]
+    assert low["total_deposit_mev"]["rule"] == "deterministic_precision_bound"
+    assert low["total_deposit_mev"]["pass"]  # 3e-6 relative 3e-8 < 1e-5
 
 
 def test_deterministic_scalar_verdict_both_precisions() -> None:

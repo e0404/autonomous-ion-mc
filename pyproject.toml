@@ -52,6 +52,7 @@ markers = [
   "cuda: requires a CUDA device",
   "slow: long-running test",
   "host: requires the controlled host runner",
+  "multiprocess: requires more than one worker process (skipped in the single-process diagnostic mode, IONMC_SINGLE_PROCESS=1)",
 ]
 
 [tool.ruff]

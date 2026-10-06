@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Callable
 from typing import Any
 
@@ -19,6 +20,8 @@ from ionmc.physics.projectiles import PROTON
 from ionmc.physics.stopping import BetheStoppingSource
 from ionmc.scoring import ScoringGrid
 from ionmc.sources import PencilBeamSource
+
+SINGLE_PROCESS = os.environ.get("IONMC_SINGLE_PROCESS") == "1"
 
 
 @pytest.fixture(scope="session")
@@ -100,9 +103,14 @@ def _default_device_is_cpu() -> None:
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     """Tests marked ``cuda`` skip without a usable CUDA device; ``IONMC_REQUIRE_CUDA=1`` turns
-    that skip into a failure (the GPU host runner sets it, so a missing GPU cannot pass)."""
-    import os
-
+    that skip into a failure (the GPU host runner sets it, so a missing GPU cannot pass).
+    In the single-process diagnostic mode (``IONMC_SINGLE_PROCESS=1``) tests marked
+    ``multiprocess`` (they need several worker processes) are skipped."""
+    if SINGLE_PROCESS:
+        skip_mp = pytest.mark.skip(reason="deferred: single-process diagnostic mode")
+        for item in items:
+            if item.get_closest_marker("multiprocess"):
+                item.add_marker(skip_mp)
     from ionmc.config import cuda_available
 
     if any("cuda" in item.keywords for item in items) and not cuda_available():

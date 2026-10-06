@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import math
 import multiprocessing
+import os
 from collections.abc import Callable
 from fractions import Fraction
 
@@ -28,7 +29,20 @@ from ionmc.transport.tally import (
     rows_to_partial,
 )
 
+
+def _workers(n: int) -> int:
+    """Worker processes used only for speed: 1 in the single-process diagnostic mode (histories
+    and seeds unchanged)."""
+    return 1 if os.environ.get("IONMC_SINGLE_PROCESS") == "1" else n
+
+
 MakeConfig = Callable[..., SimulationConfig]
+
+
+def _workers(n: int) -> int:
+    """Worker processes used only for speed: 1 in the single-process diagnostic mode (histories
+    and seeds unchanged)."""
+    return 1 if os.environ.get("IONMC_SINGLE_PROCESS") == "1" else n
 
 
 def test_exact_components_equal_the_exact_sum() -> None:
@@ -127,6 +141,7 @@ def _compare(a: object, b: object) -> dict:  # type: ignore[type-arg]
     return verdict
 
 
+@pytest.mark.multiprocess
 @pytest.mark.parametrize("precision", ["float32", "float64"])
 def test_t13_warp_cpu_one_versus_three_workers(make_config: MakeConfig, precision: str) -> None:
     """T13 (CI): 1 versus 3 worker processes on warp-cpu: counters, tallies and int64 deposit
@@ -185,6 +200,7 @@ def test_t13_warp_cpu_chunk_sizes(make_config: MakeConfig) -> None:
     assert verdict["tallies_identical"] and verdict["counters_identical"] and verdict["pass"]
 
 
+@pytest.mark.multiprocess
 def test_t13_python_one_versus_three_workers(make_config: MakeConfig) -> None:
     """The python backend also splits over spawned workers (T12 needs it): identical tallies,
     deposit grid to 1e-12, diagnostics concatenated in history order."""
@@ -210,6 +226,7 @@ def test_t13_python_one_versus_three_workers(make_config: MakeConfig) -> None:
         assert np.array_equal(v, three.diagnostics["trace"][col]), col
 
 
+@pytest.mark.multiprocess
 @pytest.mark.parametrize("fault", ["raise", "exit", "hang"])
 def test_pool_fails_closed_without_partial_result(make_config: MakeConfig, fault: str) -> None:
     """A worker that raises, dies or hangs terminates the whole run: no result, no stray
@@ -260,7 +277,7 @@ def test_repeatability_two_runs_identical(make_config: MakeConfig) -> None:
         cfg = make_config(
             energy=40.0, n=40, n_batches=20, seed=seed, lateral_sigma=0.5, energy_sigma=0.3,
             diagnostics=DiagnosticsOptions(track_end_positions=True),
-            run_kwargs={"cpu_workers": 2, "worker_timeout_s": 600.0},
+            run_kwargs={"cpu_workers": _workers(2), "worker_timeout_s": 600.0},
         )  # fmt: skip
         return Simulation(cfg).run()
 

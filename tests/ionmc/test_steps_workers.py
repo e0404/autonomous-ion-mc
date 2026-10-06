@@ -17,6 +17,8 @@ import pytest
 from ionmc.config import SimulationConfig, validate
 from ionmc.scoring import ScoringGrid
 
+pytestmark = pytest.mark.multiprocess  # worker planning is multiprocessing-specific
+
 SCRIPTS = Path(__file__).resolve().parents[2] / "validation" / "scripts" / "transport"
 
 

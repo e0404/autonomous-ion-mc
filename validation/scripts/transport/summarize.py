@@ -15,6 +15,12 @@ run with reduced history counts or a run whose source is neither from a clean gi
 (run where git exists) compares the ``source_hashes`` of the archive with the blobs of
 ``git ls-tree -r SHA`` and records the attestation in ``summary.json``.
 
+Single-process diagnostic archives (``execution_mode=single-process-diagnostic`` in
+``environment.txt``) may contain steps with ``# status: deferred`` (only those listed in
+``run_suite.DEFERRED_STEPS``): they are reported in ``deferred_steps``, ``pass`` is judged over the
+executed steps, and the archive is never ``conformant`` (reasons: the execution mode and
+``deferred multiprocessing checks``); ``--combine`` carries the deferred list through.
+
 ``--combine``: every directory must verify, with the same suite, SHA, scale and
 ``source_hashes`` (the *identity*); the union of the manifests must be exactly the complete step
 list of the suite, with no step duplicated and none missing. Only then is the combined summary
@@ -34,10 +40,11 @@ from typing import Any
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
-QUALIFICATION_SEED_BASE = 20331004
+QUALIFICATION_SEED_BASE = 20341004
 """Only an archive made with this seed base can be conformant. The bases 20261004 (rehearsal),
-20271004 (T9 investigation), 20281004, 20291004, 20301004, 20311004 and 20321004 (first to fifth
-qualification attempts, consumed) are recorded as non-qualification evidence and never qualify."""
+20271004 (T9 investigation), 20281004, 20291004, 20301004, 20311004, 20321004 and 20331004
+(first to sixth qualification attempts, consumed) are recorded as non-qualification evidence
+and never qualify."""
 IDENTITY_KEYS = ("git_sha", "suite", "scale", "python_parts", "seed_base")
 
 
@@ -98,6 +105,23 @@ def parse_step(
 ) -> dict[str, Any]:
     lines = path.read_text().splitlines()
     problems: list[str] = []
+    if "# status: deferred" in lines[:8]:
+        reason = next((x[10:] for x in lines[:8] if x.startswith("# reason: ")), "")
+        if len(lines) < 5 or not lines[0].startswith("# command: ") or lines[-1] != "# exit=0":
+            problems.append("malformed deferred step")
+        if f"# git_sha: {sha}" not in "\n".join(lines[:4]):
+            problems.append("SHA header missing or different")
+        return {
+            "file": path.name,
+            "exit": 0,
+            "pass": False,
+            "status": "deferred",
+            "reason": reason,
+            "problems": problems,
+            "reduced": False,
+            "histories": None,
+            "frozen_histories": None,
+        }
     if len(lines) < 5 or not lines[0].startswith("# command: "):
         problems.append("missing header")
     header = "\n".join(lines[:4])
@@ -134,10 +158,13 @@ def parse_step(
         and not problems
         and (tag is None or (doc is not None and doc.get("pass") is True))
     )
+    sel = re.search(r"(\d+) deselected", text) if tag is None else None
     return {
         "file": path.name,
         "exit": code,
         "pass": bool(verdict),
+        "status": "executed",
+        "deselected_tests": int(sel.group(1)) if sel else None,
         "problems": problems,
         "reduced": bool(doc and doc.get("reduced")),
         "histories": doc.get("histories") if doc else None,
@@ -194,7 +221,7 @@ def seed_blockers(seed_base: Any) -> list[str]:
         return [
             f"seed_base {int(seed_base)} is not the qualification base {QUALIFICATION_SEED_BASE} "
             "(20261004 is the rehearsal base, 20271004 was used by the T9 investigation, "
-            "20281004, 20291004, 20301004, 20311004 and 20321004 by the first to fifth "
+            "20281004, 20291004, 20301004, 20311004, 20321004 and 20331004 by the first to sixth "
             "qualification attempts: all are "
             "non-qualification evidence)"
         ]
@@ -241,10 +268,30 @@ def verify(d: Path, sha: str, attest_sha: str | None = None) -> dict[str, Any]:
         problems.append("environment.txt lacks a valid suite")
     reduced = any(s.get("reduced") for s in steps.values())
     attestation = attest(env, attest_sha) if attest_sha else None
-    ok = not problems and all(s["pass"] for s in steps.values())
+    mode = env.get("execution_mode", "standard")
+    deferred = sorted(n for n, s in steps.items() if s.get("status") == "deferred")
+    if deferred and suite in ("lv", "hr"):
+        import run_suite as _rs
+
+        allowed = set(_rs.deferred_step_names(suite, int(env.get("python_parts", 2))))
+        if mode != _rs.EXECUTION_SINGLE_PROCESS:
+            problems.append("deferred steps in an archive that is not single-process diagnostic")
+        for n in deferred:
+            if n not in allowed:
+                problems.append(f"step {n} may not be deferred")
+    ok = not problems and all(s["pass"] for s in steps.values() if s.get("status") != "deferred")
     src_ok = source_ok(env, attestation)
     blockers = seed_blockers(env.get("seed_base"))
+    if deferred and suite not in ("lv", "hr"):
+        problems.append("deferred steps in an archive of an unknown suite")
+    if mode != "standard":
+        blockers = [*blockers, f"execution mode {mode} (diagnostic, not the qualification mode)"]
+    if deferred:
+        blockers = [*blockers, "deferred multiprocessing checks"]
     return {
+        "execution_mode": mode,
+        "single_process_env": env.get("single_process_env") or None,
+        "deferred_steps": deferred,
         "git_sha": sha,
         "suite": suite,
         "pass": ok,
@@ -293,7 +340,10 @@ def combine(dirs: list[Path], sha: str, attest_sha: str | None = None) -> dict[s
             problems.append(f"unexpected steps: {extra}")
     ok = not problems and all(p["pass"] for p in parts)
     reduced = any(p["reduced_history_counts"] for p in parts)
+    deferred = sorted({n for p in parts for n in p["deferred_steps"]})
     return {
+        "execution_modes": sorted({p["execution_mode"] for p in parts}),
+        "deferred_steps": deferred,
         "git_sha": sha,
         "suite": suite,
         "pass": ok,
