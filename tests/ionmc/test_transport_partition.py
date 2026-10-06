@@ -39,12 +39,6 @@ def _workers(n: int) -> int:
 MakeConfig = Callable[..., SimulationConfig]
 
 
-def _workers(n: int) -> int:
-    """Worker processes used only for speed: 1 in the single-process diagnostic mode (histories
-    and seeds unchanged)."""
-    return 1 if os.environ.get("IONMC_SINGLE_PROCESS") == "1" else n
-
-
 def test_exact_components_equal_the_exact_sum() -> None:
     rng = np.random.default_rng(7)
     x = rng.normal(size=5000) * np.exp(rng.uniform(-30, 30, 5000))

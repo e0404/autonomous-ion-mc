@@ -246,7 +246,7 @@ def test_stochastic_total_deposit_keeps_the_z_rule() -> None:
 
 
 def test_deterministic_scalar_verdict_both_precisions() -> None:
-    """The shared rule of footnote 19 (T12 total deposit, T10 total energy): bound of the less
+    """The rule of footnote 19 (the gated T12 total deposit; T10 keeps |z| < 3): bound of the less
     precise sample times the scale plus 3.5 combined standard errors."""
     from ionmc.transport.parity import deterministic_scalar_verdict
 

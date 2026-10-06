@@ -469,10 +469,12 @@ def scalar_z(xa: NDArray[np.float64], xb: NDArray[np.float64]) -> dict[str, floa
 def deterministic_scalar_verdict(
     xa: NDArray[np.float64], xb: NDArray[np.float64], precision_a: str, precision_b: str
 ) -> dict[str, Any]:
-    """Verdict of a scalar fixed by energy conservation (the T12 total deposit, the T10 total
-    energy; amendment 19): ``|a - b| <= bound * scale + 3.5 * hypot(se_a, se_b)`` with ``bound``
-    the deterministic T4 bound of the less precise sample (1e-5 relative for float32, 1e-12 for
-    float64 / python) and ``scale = max(|a|, |b|)``. The second term is the sampling noise of the
+    """Verdict of a scalar fixed by energy conservation whose batch standard errors are negligible
+    (the T12 total deposit under the ``DEGENERATE_SE_RTOL`` gate; amendment 19; the T10 total
+    energy keeps its frozen ``|z| < 3`` rule):
+    ``|a - b| <= bound * scale + 3.5 * hypot(se_a, se_b)`` with ``bound`` the deterministic T4
+    bound of the less precise sample (1e-5 relative for float32, 1e-12 for float64 / python) and
+    ``scale = max(|a|, |b|)``. The second term is the sampling noise of the
     grid sum, which misses the tallied fixed-point rounding residual (zero mean, about 1e-8 MeV
     per history, differs between samples). Returns the :func:`scalar_z` record plus ``rule``,
     ``relative_difference``, ``bound``, ``noise_allowance`` and ``pass``."""
