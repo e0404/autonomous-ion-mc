@@ -84,7 +84,7 @@ REPO = HERE.parents[2]
 FORMAT = 1
 QUALIFICATION_SEED_BASE = 20421004
 REHEARSAL_SEED_BASE = 20431004
-TABLE_ID = "dfee19d303c7fdd28d2080ebbb37a01b27aa6569cca846ad317a2d91a7a437a3"
+TABLE_ID = "3bcf146e38dd2b5581bd1ff245c127a7d059e6789421a5d3c6760974f2784504"
 A16_R1_DIGEST = "c862edf799dcb83542e5071219b5703c7665f8f792f6bbc49ab32918418b1f8f"
 A16_R1_BASELINE = "f3a1dd62ea2f57a3f4c07999935f317b3c044871"
 R_INDEX = {"v2-100": 1, "v2-150": 2, "v2-200": 3, "v2-probe-s05": 4, "v2-probe-fe": 5,
@@ -241,6 +241,10 @@ def write_partial(a: argparse.Namespace, name: str, doc: dict[str, Any]) -> str:
     doc["content_sha256"] = content_digest(doc)
     path = out / f"{name}.json"
     path.write_text(json.dumps(doc, sort_keys=True, default=base._json))
+    # the host-runner record retains stdout: the orchestrator writes the partials manifest of the
+    # combine steps from these lines (name -> content_sha256), an attestation the archive's own
+    # files cannot forge
+    print(f"PARTIAL {path.name} {doc['content_sha256']}", flush=True)
     return str(path)
 
 
@@ -320,20 +324,51 @@ def step_v2_shard(a: argparse.Namespace) -> int:
     return finish5(doc, V2_SHARD_N, n, n < V2_SHARD_N)
 
 
+def read_manifest(path: str | None) -> dict[str, str]:
+    """The partials manifest: a JSON object mapping a partial file name to its expected
+    ``content_sha256`` (written by the orchestrator from the ``PARTIAL`` lines of the host-runner
+    records of the shard steps)."""
+    if path is None:
+        raise SystemExit("--import-dirs requires --partials-manifest (name -> content_sha256)")
+    doc = json.loads(Path(path).read_text())
+    if not isinstance(doc, dict) or not all(
+        isinstance(k, str) and isinstance(v, str) for k, v in doc.items()
+    ):
+        raise SystemExit(f"partials manifest {path}: need a JSON object of name -> sha256 string")
+    return doc
+
+
 def load_partials(a: argparse.Namespace, names: list[str]) -> list[dict[str, Any]]:
     """Partial files ``names`` of ``--dirs`` (their ``samples`` directories included), verified
     against their ``content_sha256`` (canonical JSON of the document without that field) and the
     run bindings (SHA, suite, table id and table file hash, seed base, scale, format; the same
     ones for every partial because each must equal the current run); a missing, altered or
-    foreign file stops the step. As for the A9 samples of lv4 there is no foreign-SHA override."""
+    foreign file stops the step. ``a.dirs[0]`` is the current output directory, whose partials
+    this run produced; a partial found in any other (imported) directory must be listed in the
+    ``--partials-manifest`` with exactly its recomputed digest, because a ``content_sha256``
+    stored in the file can be recomputed by whoever alters it. Without imported directories only
+    partials of the current directory are accepted. As for the A9 samples of lv4 there is no
+    foreign-SHA override."""
+    imported = len(a.dirs) > 1
+    manifest = read_manifest(getattr(a, "partials_manifest", None)) if imported else {}
     out = []
     for nm in names:
-        hits = [p for d in a.dirs for p in (Path(d) / nm, Path(d) / "samples" / nm) if p.is_file()]
+        hits = [(i, p) for i, d in enumerate(a.dirs)
+                for p in (Path(d) / nm, Path(d) / "samples" / nm) if p.is_file()]  # fmt: skip
         if len(hits) != 1:
             raise SystemExit(f"partial {nm}: found {len(hits)} copies in {a.dirs} (need exactly 1)")
-        doc = json.loads(hits[0].read_text())
-        if doc.get("content_sha256") != content_digest(doc):
+        idx, hit = hits[0]
+        doc = json.loads(hit.read_text())
+        digest = content_digest(doc)
+        if doc.get("content_sha256") != digest:
             raise SystemExit(f"partial {nm}: content_sha256 does not match the document")
+        if idx != 0:
+            if nm not in manifest:
+                raise SystemExit(f"partial {nm}: imported but not in the partials manifest")
+            if manifest[nm] != digest:
+                raise SystemExit(
+                    f"partial {nm}: digest {digest} differs from the manifest value {manifest[nm]}"
+                )
         for key, want in bindings(a).items():
             if doc.get(key) != want:
                 raise SystemExit(f"partial {nm}: {key} is {doc.get(key)!r}, expected {want!r}")
@@ -675,6 +710,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--probe", choices=sorted(PROBES), default="s05", help="v2-probe-shard")
     ap.add_argument("--out-dir", default="samples", help="partial files of the shard steps")
     ap.add_argument("--dirs", nargs="+", default=["."], help="combine steps: archive directories")
+    ap.add_argument("--partials-manifest", default=None, help="combine steps: JSON name -> "
+                    "content_sha256 of the imported partials (required with imported --dirs)")
     ap.add_argument("--seed-base", "--seed", dest="seed", type=int, default=QUALIFICATION_SEED_BASE,
                     help="lv5 base (qualification 20421004; rehearsals 2043xxxx)")  # fmt: skip
     ap.add_argument("--timeout", type=float, default=None)

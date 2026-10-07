@@ -42,7 +42,7 @@ from typing import Any
 import numpy as np
 
 from ionmc._wpfunc import python_twin
-from ionmc.config import MAX_REJECTION_ATTEMPTS, EffectiveConfig
+from ionmc.config import MAX_REJECTION_ATTEMPTS, NUCLEAR_MAX_ENERGY_MEV, EffectiveConfig
 from ionmc.errors import CounterOverflowError
 from ionmc.physics.em import make_em
 from ionmc.physics.kinematics import make_kinematics
@@ -691,6 +691,15 @@ class _Reference:
             px = px + sg * (zz1 * float(e1v[0]) + zz2 * float(e2v[0]))
             py = py + sg * (zz1 * float(e1v[1]) + zz2 * float(e2v[1]))
             pz = pz + sg * (zz1 * float(e1v[2]) + zz2 * float(e2v[2]))
+        if self.nuc is not None and energy > NUCLEAR_MAX_ENERGY_MEV:
+            # nuclear runs: the cross sections end at 250 MeV and the Gaussian source is unbounded
+            # (decision 0041 section 5, amended 2026-10-08), whatever the stopping tables cover;
+            # the energy is booked as initial and unaccounted so that the ledger still closes
+            self.counters["source_energy_out_of_range"] += 1
+            self.tallies["initial"] += energy
+            self.tallies["unaccounted"] += energy
+            self._end(h, END_SOURCE_REJECTED, (px, py, pz), d, energy)
+            return
         if not (self.e_cut <= energy <= self.e_table_max):
             self.counters["source_energy_out_of_range"] += 1
             self._end(h, END_SOURCE_REJECTED, (px, py, pz), d, energy)

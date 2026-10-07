@@ -37,7 +37,11 @@ Rules (the style of ``validation/scripts/warp-architecture/run_all.sh``):
 * the T12 statistics are split into steps with their own outputs: the python sample (in
   ``--python-parts`` history ranges), the accelerated samples and the comparison, which loads
   the saved samples (hash-verified; ``--import-dirs`` names archives of other runs holding them; the lv5 shard
-  partials carry a ``content_sha256`` and are bound to the run SHA, suite, table id and seed);
+  partials carry a ``content_sha256`` and are bound to the run SHA, suite, table id and seed, but that digest
+  is recomputable by whoever alters a file: every partial imported with ``--import-dirs`` must therefore be listed
+  with its exact digest in ``--partials-manifest`` (name -> ``content_sha256``, written by the orchestrator from
+  the ``PARTIAL <name> <digest>`` stdout lines of the shard steps in the protected host-runner records), and
+  without ``--import-dirs`` only partials of the current output directory are accepted);
 * ``--workers 1`` (or ``--single-process``) is the single-process diagnostic mode: every step runs
   with one worker and single-threaded numerics (``SINGLE_PROCESS_ENV``), the steps whose purpose is
   multiprocessing (``DEFERRED_STEPS``) are archived as ``deferred`` and not run, histories, seeds
@@ -203,6 +207,7 @@ def suite_steps(
     step_timeout: int = 1500,
     seed_base: int | None = None,
     single_process: bool = False,
+    partials_manifest: str | None = None,
 ) -> list[tuple[str, list[str], dict[str, str]]]:
     """``(name, argv, extra environment)`` of the steps of a suite, in execution order (the
     names depend only on ``suite`` and ``python_parts``). ``single_process`` deselects the
@@ -233,7 +238,10 @@ def suite_steps(
         steps.append((full, cmd, env or {}))
 
     if suite == "lv5":
-        _suite_steps_v5(add, s5, sc, out_dir, dirs)
+        if import_dirs and partials_manifest is None:
+            raise SystemExit("lv5 --import-dirs requires --partials-manifest (name -> sha256)")
+        pm = ["--partials-manifest", str(partials_manifest)] if import_dirs else []
+        _suite_steps_v5(add, s5, sc, out_dir, [*dirs, *pm])
         return steps
     if suite in ("lv4", "hr4"):
         _suite_steps_v4(suite, add, s4, w, sc, cuda, out_dir, dirs, single_process)
@@ -699,6 +707,13 @@ def main(argv: list[str] | None = None) -> int:
         help="archives of other runs of this suite and SHA that hold T12 sample files",
     )
     ap.add_argument(
+        "--partials-manifest",
+        default=None,
+        help="lv5 with --import-dirs: JSON file mapping each imported partial's file name to its "
+        "content_sha256, written by the orchestrator from the PARTIAL lines of the host-runner "
+        "records of the shard steps",
+    )
+    ap.add_argument(
         "--scale",
         type=float,
         default=1.0,
@@ -731,6 +746,7 @@ def main(argv: list[str] | None = None) -> int:
         args.step_timeout,
         args.seed_base,
         single,
+        args.partials_manifest,
     )
     deferred = set(deferred_step_names(args.suite, args.python_parts)) if single else set()
     if args.only:

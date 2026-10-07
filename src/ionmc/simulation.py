@@ -315,6 +315,10 @@ def _tally_capabilities(nuclear: bool = False) -> dict[str, Any]:
     protons and deuterons, generation >= 1, are transported and accepted)."""
     pairs = sorted(producible(PROTON, nuclear=nuclear))
     producible_generations = sorted({g for _, g in pairs})
+    # nuclear=True runs on the Python reference only (warp kernels are V3-005B): the tally
+    # backends are limited accordingly and the warp ones listed as deferred
+    tally_backends = ("python",) if nuclear else CHANNEL_BACKENDS
+    deferred = {"deferred_backends": {b: "V3-005B" for b in CHANNEL_BACKENDS if b != "python"}}
     return {
         "quantities": list(TALLY_QUANTITIES),
         "backends": {
@@ -322,8 +326,9 @@ def _tally_capabilities(nuclear: bool = False) -> dict[str, Any]:
                 "quantities": list(TALLY_QUANTITIES),
                 "available": b != "warp-cuda" or cuda_available(),
             }
-            for b in CHANNEL_BACKENDS
+            for b in tally_backends
         },
+        **(deferred if nuclear else {}),
         "producible": [{"species": n, "generation": g} for n, g in pairs],
         "generations": {
             "accepted": [
@@ -360,13 +365,19 @@ def _tally_capabilities(nuclear: bool = False) -> dict[str, Any]:
         "automatic_channels": [PIECE_COUNT_NAME, LOCAL_PIECE_COUNT_NAME, EXCLUDED_CHANNEL_NAME],
         "max_channels": MAX_CHANNELS,
         "fail_closed": [
-            "unknown or unproducible species, generation 'secondary'",
+            (
+                "unknown or unproducible species, generation 'secondary' (accepted with "
+                "nuclear=True: secondary protons and deuterons are transported)"
+                if nuclear
+                else "unknown or unproducible species, generation 'secondary'"
+            ),
             "let_medium other than water, dose_reference other than medium",
             "unknown grid or lookup, duplicate or reserved request names, unused lookups",
             "lookup species gaps, axis coverage gaps, sha256 mismatch, non-uniform tables or "
             "spectrum edges, negative or non-finite lookup values",
             "a quantum above the precision floor, accumulator memory above the budget",
-            "a backend without channels",
+            "a backend without channels"
+            + (" (warp backends with nuclear=True until V3-005B)" if nuclear else ""),
         ],
     }
 
@@ -399,6 +410,7 @@ def capabilities(nuclear: bool = False) -> dict[str, Any]:
     report = _capabilities_base()
     if nuclear:
         report["nuclear"] = _nuclear_capabilities()
+        report["physics"]["nuclear"] = True
         report["tallies"] = _tally_capabilities(nuclear=True)
     return report
 

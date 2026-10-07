@@ -110,7 +110,7 @@ source digest): D1/D1b/D2/D2b/D3/D4 CI part — CI and the `lv`/`lv4` pytest ste
 # Nuclear slice-A suite `lv5` (V3-005A, decision 0041)
 
 `run_suite.py --suite lv5` evaluates the slice-A rows of `validation/plans/v3-005-acceptance.md`
-that need the built nuclear table (id `dfee19d3…`)
+that need the built nuclear table (id `3bcf146e…`)
 or nuclear transport on the python backend. Archives are named `lv5-<sha>-...json` (row table of the
 plan, "Evidence archive"); no result exists at the time of writing, so nothing here is evidence.
 Rows P1-P5, V9 and C1 are CI-tier tests and are not suite steps; V2b and V5-V8 are slice B.
@@ -143,7 +143,7 @@ reason) if a step would exceed 2640 s.
 `IONMC_SINGLE_PROCESS=1` and single-threaded numerics, as `run_suite.py --only <step> --step-timeout
 3300`; shards are separate steps and `summarize.py --combine` joins the subset archives (the pooled
 V2 and V2-probe criteria are evaluated by `v2-combine` and `v2-probe-combine` from the verified
-partial files of the shard archives, via `--import-dirs`). Rehearsals use the 2043xxxx family (20431004)
+partial files of the shard archives, via `--import-dirs` together with `--partials-manifest`, a JSON map of each imported partial's file name to its `content_sha256` that the orchestrator writes from the `PARTIAL <name> <digest>` lines of the shard steps in the protected host-runner records; an imported partial that is absent from the manifest or whose recomputed digest differs is refused). Rehearsals use the 2043xxxx family (20431004)
 and `--scale` < 1 and are never qualification evidence.
 
 **Deferred rows.** `v3-workers-partition` (1-vs-N worker partition invariance of nuclear runs on the

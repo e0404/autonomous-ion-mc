@@ -166,9 +166,11 @@ def test_deterministic_npz_bytes(tmp_path: Path) -> None:
 def test_table_id_depends_on_options_and_sources() -> None:
     src = {"a": "1", "b": "2"}
     o = B.BuildOptions()
-    assert B.table_id(src, o) == B.table_id(dict(reversed(src.items())), o)
-    assert B.table_id(src, o) != B.table_id(src, B.BuildOptions(diagnostic_events=1000))
-    assert B.table_id(src, o) != B.table_id({"a": "1", "b": "3"}, o)
+    npz = "a" * 64
+    assert B.table_id(src, o, npz) == B.table_id(dict(reversed(src.items())), o, npz)
+    assert B.table_id(src, o, npz) != B.table_id(src, B.BuildOptions(diagnostic_events=1000), npz)
+    assert B.table_id(src, o, npz) != B.table_id({"a": "1", "b": "3"}, o, npz)
+    assert B.table_id(src, o, npz) != B.table_id(src, o, "b" * 64)  # the id covers the npz bytes
 
 
 def test_d6_definitions_on_synthetic_spectra() -> None:
@@ -384,7 +386,7 @@ def test_load_and_fail_closed_cases(
 ) -> None:
     cdir = _cache_dir()
     # the reduced build need not be qualified: the qualification itself is tested separately
-    monkeypatch.setattr("ionmc.nuclear.tables.qualification_failures", lambda info: [])
+    monkeypatch.setattr("ionmc.nuclear.tables.qualification_failures_npz", lambda derived: [])
     tab = NuclearTable.load(cdir, reduced_build.table_id)
     assert not tab.arrays["sigma_barn"].flags.writeable
     with pytest.raises(NuclearTableMissingError):
@@ -474,22 +476,118 @@ def _tampered_copy(tmp_path: Path, tid: str, edit: Any) -> None:
     jp.write_text(json.dumps(info, indent=2, sort_keys=True) + "\n")
 
 
+def _resealed_copy(
+    root: Path, tid: str, edit_arrays: Any = None, edit_info: Any = None, new_id: bool = True
+) -> str:
+    """Copy the cached table ``tid`` into ``root/derived``, edit its arrays and JSON and reseal:
+    the new npz digest goes into the sidecar and, with ``new_id``, into a recomputed table id
+    (the files are renamed), i.e. a self-consistent table that only a gate can refuse. Returns the
+    id under which the copy loads."""
+    src = _cache_dir() / "derived"
+    d = root / "derived"
+    d.mkdir(parents=True)
+    info = json.loads((src / f"nuclear-proton-{tid}.json").read_text())
+    with np.load(src / f"nuclear-proton-{tid}.npz", allow_pickle=False) as z:
+        arrays = {k: z[k].copy() for k in z.files}
+    if edit_arrays is not None:
+        edit_arrays(arrays)
+    if edit_info is not None:
+        edit_info(info)
+    tmp = d / "tmp.npz"
+    info["npz_sha256"] = B.write_npz_deterministic(tmp, arrays)
+    if new_id:
+        opts = dict(info["options"])
+        if opts.get("diagnostic_nodes_mev") is not None:
+            opts["diagnostic_nodes_mev"] = tuple(opts["diagnostic_nodes_mev"])
+        info["table_id"] = B.table_id(
+            {k: v["sha256"] for k, v in info["sources"].items()},
+            B.BuildOptions(**opts),
+            info["npz_sha256"],
+        )
+    out = info["table_id"] if new_id else tid
+    tmp.replace(d / f"nuclear-proton-{out}.npz")
+    (d / f"nuclear-proton-{out}.json").write_text(json.dumps(info, indent=2, sort_keys=True))
+    return str(out)
+
+
 def test_loader_refuses_unqualified_tables(tmp_path: Path) -> None:
+    """A self-consistent table (arrays, digest and id resealed) whose npz arrays record a failed
+    ceiling or a non-converged node is refused; the npz decides."""
     tid = _qualified_table_id()
-    assert NuclearTable.load(None, tid).info["gate_d6"]["ceiling_pass"] is True
+    tab = NuclearTable.load(None, tid)
+    assert tab.info["gate_d6"]["ceiling_pass"] is True
+    qi = {k: i for i, k in enumerate(B.QUALIFICATION_FIELDS)}
+
+    def fail_flag(name: str, key: str) -> Any:
+        def edit_a(arr: dict[str, Any]) -> None:
+            arr["qualification"][qi[name]] = 0
+
+        def edit_i(info: dict[str, Any]) -> None:
+            info["gate_d6"][key] = False
+
+        return edit_a, edit_i
+
+    def node_a(arr: dict[str, Any]) -> None:
+        arr["lam_converged"][0, 0] = 0
+        arr["qualification"][qi["all_nodes_converged"]] = 0
+
+    def node_i(info: dict[str, Any]) -> None:
+        info["multiplicity"]["non_converged_nodes"] = [{"target": "C-12", "e_mev": 1.0}]
+        info["multiplicity"]["all_nodes_converged"] = False
+
     cases = {
-        "ceiling": lambda i: i["gate_d6"].__setitem__("ceiling_pass", False),
-        "ceiling_energy": lambda i: i["gate_d6"].__setitem__(
-            "ceiling_pass_energy_weighted_range", False
+        "ceiling": fail_flag("ceiling_pass", "ceiling_pass"),
+        "ceiling_energy": fail_flag(
+            "ceiling_pass_energy_weighted_range", "ceiling_pass_energy_weighted_range"
         ),
-        "node": lambda i: i["multiplicity"].__setitem__("non_converged_nodes", [["C-12", 1.0]]),
+        "node": (node_a, node_i),
     }
-    for name, edit in cases.items():
-        d = tmp_path / name
-        d.mkdir()
-        _tampered_copy(d, tid, edit)
+    for name, (edit_a, edit_i) in cases.items():
+        root = tmp_path / name
+        new = _resealed_copy(root, tid, edit_a, edit_i)
         with pytest.raises(NuclearTableUnqualifiedError):
-            NuclearTable.load(d, tid)
+            NuclearTable.load(root, new)
+        # the sidecar flipped back to "passing" on the unqualified npz: stale (the npz decides)
+        root2 = tmp_path / f"{name}-flipped"
+        new2 = _resealed_copy(root2, tid, edit_a, None)
+        with pytest.raises(NuclearTableStaleError):
+            NuclearTable.load(root2, new2)
+
+
+def test_loader_authenticates_the_npz_and_the_bounds(tmp_path: Path) -> None:
+    """Altered array bytes with a resealed sidecar digest keep the pinned id from reproducing; a
+    weakened sidecar bound, or weakened npz bounds under a resealed id and an untouched sidecar,
+    are stale (Codex finding 2)."""
+    tid = _qualified_table_id()
+
+    def bump_sigma(arr: dict[str, Any]) -> None:
+        arr["sigma_barn"] = arr["sigma_barn"] * 1.0000001
+
+    root = tmp_path / "bytes"
+    same = _resealed_copy(root, tid, bump_sigma, None, new_id=False)  # digest resealed, id kept
+    with pytest.raises(NuclearTableStaleError, match="id not reproduced"):
+        NuclearTable.load(root, same)
+
+    def weaker_json(info: dict[str, Any]) -> None:
+        info["history_energy_bound_mev"] *= 0.5
+
+    root = tmp_path / "json-bound"
+    with pytest.raises(NuclearTableStaleError, match="disagrees"):
+        NuclearTable.load(root, _resealed_copy(root, tid, None, weaker_json))
+
+    def weaker_npz(arr: dict[str, Any]) -> None:
+        arr["bounds"][B.BOUND_FIELDS.index("history_energy_bound_mev")] *= 0.5
+
+    root = tmp_path / "npz-bound"
+    with pytest.raises(NuclearTableStaleError, match="disagrees"):
+        NuclearTable.load(root, _resealed_copy(root, tid, weaker_npz, None))
+    # the loaded bounds are those of the npz
+    tab = NuclearTable.load(None, tid)
+    b = B.bounds_from_array(tab.arrays["bounds"])
+    assert b["history_energy_bound_mev"] == tab.info["history_energy_bound_mev"]
+    assert b["transport_path_bound_terms"] == dict(
+        (k, dict(v)) for k, v in tab.info["transport_path_bound_terms"].items()
+    )
 
 
 def test_binding_recomputed_per_event_from_ame_masses_independently() -> None:

@@ -1487,3 +1487,49 @@ def test_v5_partials_are_hash_verified_and_bound(
         v5.load_partials(a, ["p-s0.json"])
     path.write_text(json.dumps(good))
     assert v5.load_partials(a, ["p-s0.json"])[0]["ratio"] == [1.0, 0.5]
+
+
+def test_v5_imported_partials_need_the_attested_manifest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Imported partials are accepted only with their exact digest in ``--partials-manifest``
+    (the PARTIAL stdout lines of the shard steps); a value altered together with a recomputed
+    ``content_sha256`` or a partial absent from the manifest is refused (Codex finding 3)."""
+    v5, rs = _load("steps_v5"), _load("run_suite")
+    monkeypatch.setenv("IONMC_RUN_SHA", SHA)
+    monkeypatch.setenv("IONMC_RUN_SUITE", "lv5")
+    monkeypatch.setattr(
+        v5, "table_record", lambda: {"table_id": v5.TABLE_ID, "npz_sha256": "c" * 64,
+                                     "json_sha256": "d" * 64}
+    )  # fmt: skip
+    shard_dir, cur = tmp_path / "shard", tmp_path / "cur"
+    cur.mkdir()
+    sa = argparse.Namespace(out_dir=str(shard_dir), scale=1.0, dirs=[str(shard_dir)])
+    v5.write_partial(sa, "p-s0", {"row": "p", "shard": 0, "ratio": [1.0, 0.5], "valid": True})
+    line = capsys.readouterr().out.strip()
+    path = shard_dir / "p-s0.json"
+    good = json.loads(path.read_text())
+    assert line == f"PARTIAL p-s0.json {good['content_sha256']}"
+    man = tmp_path / "manifest.json"
+    a = argparse.Namespace(out_dir=str(cur), scale=1.0, dirs=[str(cur), str(shard_dir)],
+                           partials_manifest=str(man))  # fmt: skip
+    with pytest.raises(SystemExit, match="partials-manifest"):  # imported dirs, no manifest
+        v5.load_partials(argparse.Namespace(**{**vars(a), "partials_manifest": None}),
+                         ["p-s0.json"])  # fmt: skip
+    man.write_text(json.dumps({}))
+    with pytest.raises(SystemExit, match="not in the partials manifest"):
+        v5.load_partials(a, ["p-s0.json"])
+    man.write_text(json.dumps({"p-s0.json": good["content_sha256"]}))
+    assert v5.load_partials(a, ["p-s0.json"])[0]["ratio"] == [1.0, 0.5]
+    forged = {**good, "ratio": [1.0, 0.9]}  # altered AND resealed: the file is self-consistent
+    forged["content_sha256"] = v5.content_digest(forged)
+    path.write_text(json.dumps(forged))
+    with pytest.raises(SystemExit, match="differs from the manifest"):
+        v5.load_partials(a, ["p-s0.json"])
+    # run_suite refuses imported directories of lv5 without a manifest and forwards it otherwise
+    with pytest.raises(SystemExit, match="partials-manifest"):
+        rs.suite_steps("lv5", 1, 1.0, out=cur, import_dirs=[str(shard_dir)])
+    steps = rs.suite_steps("lv5", 1, 1.0, out=cur, import_dirs=[str(shard_dir)],
+                           partials_manifest=str(man))  # fmt: skip
+    comb = [s[1] for s in steps if "combine" in s[0]]
+    assert comb and all(str(man) in c for c in comb)

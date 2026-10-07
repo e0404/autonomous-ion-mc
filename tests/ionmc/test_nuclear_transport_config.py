@@ -384,10 +384,19 @@ def test_nuclear_effective_config_and_capabilities(make_config: MakeConfig, tid:
     assert "secondary" in cap["tallies"]["generations"]["accepted"]
     assert "secondary" not in cap["tallies"]["generations"]["rejected"]
     assert "not transported yet" not in cap["tallies"]["generations"]["note"]
+    # nuclear=True: physics.nuclear true, tally backends python only with warp deferred, the
+    # fail-closed list consistent with the accepted secondaries (Codex finding 4)
+    assert cap["physics"]["nuclear"] is True and base["physics"]["nuclear"] is False
+    assert list(cap["tallies"]["backends"]) == ["python"]
+    assert cap["tallies"]["deferred_backends"] == {"warp-cpu": "V3-005B", "warp-cuda": "V3-005B"}
+    assert "deferred_backends" not in base["tallies"]
+    assert "accepted with nuclear=True" in cap["tallies"]["fail_closed"][0]
+    assert "V3-005B" in cap["tallies"]["fail_closed"][-1]
     del cap["nuclear"]
     cap["backends"].pop("warp-cuda")
     assert cap["tallies"] != base["tallies"]
     cap["tallies"] = base["tallies"]
+    cap["physics"] = base["physics"]
     assert cap == base
 
 

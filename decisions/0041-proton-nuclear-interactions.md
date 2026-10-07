@@ -74,7 +74,7 @@ The requirements are V1-MUST-005, V1-MUST-013 and V1-MUST-014, with fail-closed 
   - If the step was nuclear-limited, leg 2 was not truncated, and E₁ > E_cut, a candidate occurs at the post-step point.
   - The candidate is accepted with probability Σ(E₁)/Σ̂(E₀). Otherwise it is fictitious and n_λ is resampled.
 - **Fail closed.** Σ(E₁) > Σ̂(E₀) increments `majorant_violation` and invalidates the result.
-- **Window factor.** The factor 1.02 covers the unbounded Gamma straggling tail (the ratified window [E(1 − 2f_E − 0.01), E] was derived for the clamped Gaussian).
+- **Window factor.** *(corrected 2026-10-08, Codex REVIEW-c5c9149b finding 5)* The factor 1.02 widens the ratified window [E(1 − 2f_E − 0.01), E] (derived for the clamped Gaussian) so that the bulk of the Gamma straggling distribution lies inside it; no finite window covers the unbounded Gamma tail. Exactness of the thinning therefore rests on the fail-closed rule below, which is evaluated after every step of the primary, not only at candidates: any step whose post-step Σ exceeds the majorant used for its optical-depth decrement invalidates the result.
 - **Termination.** The parent proton is terminated at an accepted event; the yields include the leading proton.
 
 ### 3. Event model
@@ -136,11 +136,11 @@ The requirements are V1-MUST-005, V1-MUST-013 and V1-MUST-014, with fail-closed 
   - `path_bound_exceeded` still backstops these at runtime.
 - **Rejected before transport** (`validate()`):
   - an unsupported element;
-  - E₀ + 6σ_E > 250 MeV;
+  - E₀ + 6σ_E > 250 MeV; *(added 2026-10-08, Codex REVIEW-c5c9149b finding 1)* at runtime every sampled source energy above 250 MeV increments `source_energy_out_of_range` and invalidates the result, because the Gaussian source is unbounded;
   - a non-proton source;
   - `nist-star`;
   - any warp backend (until V3-005B);
-  - a missing, stale or mis-pinned table;
+  - a missing, stale or mis-pinned table (*2026-10-08, Codex REVIEW-c5c9149b finding 2:* the table id now covers the npz digest, and the qualification flags, convergence flags and capacity bounds are stored inside the npz, so the pinned id authenticates them; the JSON sidecar is a view that the loader cross-checks);
   - *(added 2026-10-08, Codex finding 3)* an unqualified table: the loader refuses a table whose JSON records `gate_d6.ceiling_pass` false or any non-converged λ node (`NuclearTableUnqualifiedError`); the builder still writes such tables as evidence but they cannot be transported with.
 - **Producible species.** With `nuclear=True` the producible set is {(proton, primary), (proton, secondary), (deuteron, secondary), (nuclear_local, secondary)}.
 
@@ -215,4 +215,5 @@ The python pool path is implemented for `nuclear=True` like any other run: the p
 - 2026-10-07, C7 table `99b51c2c9001bb6f41a87e2092ca70172c14ee2d207f5e4774ff7460409dcdd1` (superseded): D6 neither tier (section 7); N1/V1 failed on the uniform grid (Amendment 3); the λ fixed point did not converge for C-12/N-14 at any node (Amendment 1). All three led to dated amendments before any transport result existed.
 - 2026-10-07, C7b table `2b8d94cf4a82ef8a5119ddb8c84d4a2c11bd3511eb6672bd210562730cc0cf1a` (builder/schema v2, 604 nodes, 12.8 s): D6 recomputed — 150 MeV G 0.6680, D 5.481e-3, 99.9th-percentile α 127.1 MeV / 0.988 g/cm² (energy-weighted 1.109); 250 MeV G 0.8492, D 1.420e-2, 213.9 MeV / 2.529 g/cm² (energy-weighted 2.827); tiers 1 and 2 not passed; the section-7 ceiling (D ≤ 2e-2, range ≤ 3 g/cm²) holds, so local α deposition stands as the declared approximation. N1 2.8e-15, V1 2.2e-16, continuity 1.5e-10. V4 pass; V4b pass under Amendment 4 (raw n ratio 1.0122 for O-16 at 100 MeV, sem 0.0036). Mean `nuclear_imbalance` per event −6.6/−10.8 MeV (C-12) and −8.2/−14.2 MeV (O-16) at 100/150 MeV. Capacity terms: per-particle bound 262.08 MeV, B_L(250 MeV, water) 2489 mm.
 - 2026-10-08: after Codex review REVIEW-d8700e0e (six findings fixed: per-history energy bound, majorant check on every step, loader refuses unqualified tables, independent AME recomputation of `nuclear_binding`, hash-bound shard partials, consistent capability report) the table was rebuilt with builder version 3 as `dfee19d303c7fdd28d2080ebbb37a01b27aa6569cca846ad317a2d91a7a437a3` (604 nodes, 11.6 s; same physics and gate numbers as `2b8d94cf…`, which is superseded); `history_energy_bound_mev` 3154.4 MeV (2 n × 253.3 + 3 p × 262.1 + 1 d × 246.2 + 3 α × 257.4 + 3 γ × 278.9 + recoil 6.3), per-particle bound 262.08 MeV; loader qualification: D6 ceiling true, 0 non-converged nodes.
+- 2026-10-08: after Codex review REVIEW-c5c9149b (five findings fixed: runtime rejection of source energies above 250 MeV, table id covering the npz digest with qualification flags and bounds stored in the npz, orchestrator-attested shard manifests, consistent capability report, corrected window-factor text) the table was rebuilt with builder version 4 / schema 3 as `3bcf146e38dd2b5581bd1ff245c127a7d059e6789421a5d3c6760974f2784504` (604 nodes, 11.7 s; identical physics and gate numbers; `dfee19d3…` and `2b8d94cf…` superseded and now refused as stale).
 - (To be appended: V2; V3; X1; E1; contrary evidence from transport.)

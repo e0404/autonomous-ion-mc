@@ -81,8 +81,8 @@ from ionmc.materials import ELEMENTS, N_A, WATER, Material
 from ionmc.nuclear import events as ev
 from ionmc.physics.tripathi import extension_factor
 
-BUILDER_VERSION = "ionmc-nuclear-proton-builder-3"
-SCHEMA = "ionmc-nuclear-proton-table-2"
+BUILDER_VERSION = "ionmc-nuclear-proton-builder-4"
+SCHEMA = "ionmc-nuclear-proton-table-3"
 SOURCE_IDS = ("endf-b8.0-protons", "ame2020-mass", "nist-astar-water-2005")
 E_MIN_MEV = 1.0
 E_ANCHOR_MEV = 150.0
@@ -180,14 +180,71 @@ class BuildError(RuntimeError):
     """The build failed (a fail-closed rule, or the sources are unusable)."""
 
 
-def table_id(source_hashes: dict[str, str], options: BuildOptions) -> str:
-    """``sha256`` over the source hashes, the builder version and the canonical options."""
+def table_id(source_hashes: dict[str, str], options: BuildOptions, npz_sha256: str) -> str:
+    """``sha256`` over the canonical JSON of the source hashes, the builder version, the options
+    and the SHA-256 of the npz bytes. The id therefore authenticates the arrays, including the
+    ``qualification`` and ``bounds`` arrays that gate transport (decision 0041 section 5)."""
     payload = json.dumps(
-        {"sources": dict(sorted(source_hashes.items())), "builder": BUILDER_VERSION},
+        {
+            "sources": dict(sorted(source_hashes.items())),
+            "builder": BUILDER_VERSION,
+            "options": asdict(options),
+            "npz_sha256": npz_sha256,
+        },
         sort_keys=True,
         separators=(",", ":"),
     )
-    return hashlib.sha256((payload + "\n" + options.canonical()).encode("utf-8")).hexdigest()
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+QUALIFICATION_FIELDS = (
+    "ceiling_pass",
+    "ceiling_pass_energy_weighted_range",
+    "all_nodes_converged",
+    "tier1_pass",
+    "tier2_pass",
+)
+"""Order of the ``qualification`` int8 array of the npz (1 = true)."""
+
+BOUND_SPECIES = ("n", "p", "d", "a", "g")
+BOUND_FIELDS = (
+    "history_energy_bound_mev",
+    "transport_energy_bound_mev",
+    "recoil_t_max_mev",
+    *(f"n_max_{k}" for k in BOUND_SPECIES),
+    *(f"t_lab_max_mev_{k}" for k in BOUND_SPECIES),
+)
+"""Order of the ``bounds`` float64 array of the npz."""
+
+
+def bounds_array(
+    history_bound: float,
+    transport_bound: float,
+    recoil_max: float,
+    path_terms: dict[str, dict[str, float]],
+) -> NDArray[np.float64]:
+    """The ``bounds`` array of the npz (:data:`BOUND_FIELDS`)."""
+    return np.array(
+        [history_bound, transport_bound, recoil_max]
+        + [path_terms[k]["n_max"] for k in BOUND_SPECIES]
+        + [path_terms[k]["t_lab_max_mev"] for k in BOUND_SPECIES],
+        dtype=np.float64,
+    )
+
+
+def bounds_from_array(b: NDArray[np.float64]) -> dict[str, Any]:
+    """Inverse of :func:`bounds_array`: the scalar bounds and ``transport_path_bound_terms``."""
+    if b.shape != (len(BOUND_FIELDS),):
+        raise ValueError(f"bounds array has shape {b.shape}, expected ({len(BOUND_FIELDS)},)")
+    v = [float(x) for x in b]
+    return {
+        "history_energy_bound_mev": v[0],
+        "transport_energy_bound_mev": v[1],
+        "recoil_t_max_mev": v[2],
+        "transport_path_bound_terms": {
+            k: {"n_max": v[3 + i], "t_lab_max_mev": v[8 + i]} for i, k in enumerate(BOUND_SPECIES)
+        },
+    }
 
 
 # ---------------------------------------------------------------------------------------------
@@ -802,7 +859,6 @@ def build_nuclear_proton(
     ame_path = cache.verify("ame2020-mass", cdir)
     astar_path = cache.verify("nist-astar-water-2005", cdir)
     sources = {sid: DATASETS[sid].sha256 for sid in SOURCE_IDS}
-    tid = table_id(sources, opt)
     ame_tab: dict[tuple[int, int], AmeEntry] = load_ame2020(ame_path.read_text(encoding="ascii"))
     astar = load_star_table(astar_path)
 
@@ -957,6 +1013,7 @@ def build_nuclear_proton(
         )
     recoil_max = recoil_t_max(arr["recoil_t_cm_mev"], arr["sigma_barn"] > 0.0)
     hist_bound = history_energy_bound(path_terms, recoil_max, float(grid[-1]))
+    arr["bounds"] = bounds_array(hist_bound, particle_bound, recoil_max, path_terms)
 
     def rows_of(it: int, e: float) -> ev.EnergyRows:
         return ev.interp_rows(
@@ -1037,13 +1094,20 @@ def build_nuclear_proton(
         )
     tier1, tier2 = tiers(gates)
     ceiling, ceiling_energy = ceilings(gates)
+    arr["qualification"] = np.array(
+        [ceiling, ceiling_energy, bool(np.all(arr["lam_converged"] == 1)), tier1, tier2],
+        dtype=np.int8,
+    )
 
     # ---- JSON and files --------------------------------------------------------------------
     out_dir = cdir / "derived"
     out_dir.mkdir(parents=True, exist_ok=True)
+    tmp_path = out_dir / "nuclear-proton-building.npz"
+    npz_sha = write_npz_deterministic(tmp_path, arr)
+    tid = table_id(sources, opt, npz_sha)  # the id covers the npz bytes (decision 0041 section 5)
     npz_path = out_dir / f"nuclear-proton-{tid}.npz"
     json_path = out_dir / f"nuclear-proton-{tid}.json"
-    npz_sha = write_npz_deterministic(npz_path, arr)
+    tmp_path.replace(npz_path)
     info: dict[str, Any] = {
         "schema": SCHEMA,
         "table_id": tid,
@@ -1063,6 +1127,9 @@ def build_nuclear_proton(
             "p_accept": "exact probability that the residual exists in one attempt [target, node]",
             "yield_ratio_post": "exact post-acceptance yield / ENDF yield [target, species, node]",
             "lam_converged": "1 iff max |ratio - 1| <= 1e-3 [target, node]",
+            "qualification": f"int8 flags {list(QUALIFICATION_FIELDS)} (1 = true); the loader's "
+            "gate, the JSON copies are cross-checked",
+            "bounds": f"float64 {list(BOUND_FIELDS)}; the loader's capacity bounds",
             "edges_mev": "MeV, 65 edges of the 64 equiprobable E'_CM bins [target, species, node]",
             "r_pre": "Kalbach pre-compound fraction per bin [target, species, node, 64]",
             "mean_ecm_mev": "MeV, ENDF mean E'_CM of the product [target, species, node]",

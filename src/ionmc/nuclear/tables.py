@@ -16,6 +16,7 @@ twin; :func:`locate` is the python entry point).
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -30,7 +31,13 @@ from ionmc.data import cache
 from ionmc.data.registry import DATASETS
 from ionmc.errors import UnsupportedCombinationError
 from ionmc.materials import N_A, Material
-from ionmc.nuclear.build import BUILDER_VERSION, SCHEMA, BuildOptions
+from ionmc.nuclear.build import (
+    BUILDER_VERSION,
+    QUALIFICATION_FIELDS,
+    SCHEMA,
+    BuildOptions,
+    bounds_from_array,
+)
 from ionmc.nuclear.build import table_id as compute_table_id
 from ionmc.physics.nuclear import make_nuclear
 
@@ -76,6 +83,71 @@ def qualification_failures(info: dict[str, Any]) -> list[str]:
     nodes = mult.get("non_converged_nodes")
     if nodes is None or len(nodes) > 0 or mult.get("all_nodes_converged", True) is not True:
         out.append("multiplicity has non-converged lambda nodes")
+    return out
+
+
+def derive_gates(arrays: dict[str, NDArray[Any]]) -> dict[str, Any]:
+    """The gating quantities read from the npz arrays alone: ``qualification`` (flags of
+    :data:`QUALIFICATION_FIELDS`, with ``all_nodes_converged`` also recomputed from
+    ``lam_converged``), the bounds of ``bounds`` and the number of non-converged lambda nodes. A
+    missing array raises :class:`NuclearTableStaleError`."""
+    for name in ("qualification", "bounds", "lam_converged"):
+        if name not in arrays:
+            raise NuclearTableStaleError(f"nuclear table npz has no {name!r} array (stale)")
+    q = arrays["qualification"]
+    if q.shape != (len(QUALIFICATION_FIELDS),):
+        raise NuclearTableStaleError("nuclear table npz: malformed qualification array (stale)")
+    flags = {k: bool(q[i] == 1) for i, k in enumerate(QUALIFICATION_FIELDS)}
+    n_bad = int(np.sum(arrays["lam_converged"] != 1))
+    out: dict[str, Any] = {"flags": flags, "non_converged_count": n_bad}
+    try:
+        out.update(bounds_from_array(arrays["bounds"]))
+    except ValueError as exc:
+        raise NuclearTableStaleError(f"nuclear table npz: {exc} (stale)") from exc
+    return out
+
+
+def qualification_failures_npz(derived: dict[str, Any]) -> list[str]:
+    """Why the npz-derived gates (:func:`derive_gates`) do not qualify the table (empty list:
+    qualified): both D6 ceilings must pass and every lambda node must have converged."""
+    f = derived["flags"]
+    out: list[str] = []
+    if not f["ceiling_pass"]:
+        out.append("ceiling_pass is not true (count-weighted range ceiling)")
+    if not f["ceiling_pass_energy_weighted_range"]:
+        out.append("ceiling_pass_energy_weighted_range is not true")
+    if derived["non_converged_count"] > 0 or not f["all_nodes_converged"]:
+        out.append("multiplicity has non-converged lambda nodes")
+    return out
+
+
+def sidecar_disagreements(info: dict[str, Any], derived: dict[str, Any]) -> list[str]:
+    """Fields of the JSON sidecar ``info`` that differ from the npz-derived ``derived`` gates."""
+    out: list[str] = []
+    gate = info.get("gate_d6", {})
+    mult = info.get("multiplicity", {})
+    f = derived["flags"]
+    json_flags = {
+        "ceiling_pass": gate.get("ceiling_pass"),
+        "ceiling_pass_energy_weighted_range": gate.get("ceiling_pass_energy_weighted_range"),
+        "all_nodes_converged": mult.get("all_nodes_converged"),
+        "tier1_pass": gate.get("tier1_pass"),
+        "tier2_pass": gate.get("tier2_pass"),
+    }
+    for k, v in json_flags.items():
+        if v is not f[k]:
+            out.append(f"{k}: JSON {v!r}, npz {f[k]!r}")
+    n_json = mult.get("non_converged_nodes")
+    if not isinstance(n_json, list) or (len(n_json) > 0) != (derived["non_converged_count"] > 0):
+        out.append("multiplicity.non_converged_nodes")
+    for k in (
+        "history_energy_bound_mev",
+        "transport_energy_bound_mev",
+        "recoil_t_max_mev",
+        "transport_path_bound_terms",
+    ):
+        if info.get(k) != derived[k]:
+            out.append(f"{k}: JSON {info.get(k)!r}, npz {derived[k]!r}")
     return out
 
 
@@ -176,7 +248,8 @@ class NuclearTable:
             raise NuclearTableMissingError(f"nuclear table {table_id} is not in {cdir / 'derived'}")
         raw = npz_path.read_bytes()
         info = json.loads(json_path.read_text(encoding="utf-8"))
-        if hashlib.sha256(raw).hexdigest() != info.get("npz_sha256"):
+        npz_sha = hashlib.sha256(raw).hexdigest()
+        if npz_sha != info.get("npz_sha256"):
             raise NuclearTableStaleError(f"nuclear table {table_id}: npz bytes changed (stale)")
         for sid, rec in info["sources"].items():
             pin = DATASETS.get(sid)
@@ -199,18 +272,29 @@ class NuclearTable:
             raise NuclearTableStaleError(
                 f"nuclear table {table_id}: unknown build options ({exc}); stale"
             ) from exc
+        # the id covers the npz bytes recomputed here (not the sidecar's digest), so a resealed
+        # sidecar cannot reproduce the pinned id of altered arrays
         expected = compute_table_id(
-            {sid: rec["sha256"] for sid, rec in info["sources"].items()}, build_options
+            {sid: rec["sha256"] for sid, rec in info["sources"].items()}, build_options, npz_sha
         )
         if info["table_id"] != table_id or expected != table_id:
             raise NuclearTableStaleError(f"nuclear table {table_id}: id not reproduced (stale)")
-        reasons = qualification_failures(info)
+        with np.load(io.BytesIO(raw), allow_pickle=False) as z:
+            arrays = {k: freeze_array(z[k], z[k].dtype, k) for k in z.files}
+        # the gating quantities are those of the authenticated arrays; the JSON is a view of them
+        derived = derive_gates(arrays)
+        disagree = sidecar_disagreements(info, derived)
+        if disagree:
+            raise NuclearTableStaleError(
+                f"nuclear table {table_id}: the JSON sidecar disagrees with the npz ("
+                + "; ".join(disagree)
+                + "; stale)"
+            )
+        reasons = qualification_failures_npz(derived)
         if reasons:
             raise NuclearTableUnqualifiedError(
                 f"nuclear table {table_id} is not qualified for transport: " + "; ".join(reasons)
             )
-        with np.load(npz_path, allow_pickle=False) as z:
-            arrays = {k: freeze_array(z[k], z[k].dtype, k) for k in z.files}
         return cls(info, arrays, npz_path)
 
     def material_rows(self, material: Material, f_e: float = DEFAULT_F_E) -> MaterialNuclear:

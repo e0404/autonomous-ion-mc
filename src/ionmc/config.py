@@ -567,7 +567,9 @@ def _nuclear_setup_checks(
     if e_max > NUCLEAR_MAX_ENERGY_MEV:
         raise fail(
             f"nuclear=True supports source energies up to {NUCLEAR_MAX_ENERGY_MEV} MeV "
-            f"(E0 + 6 sigma_E = {e_max} MeV; the cross sections are extended to 250 MeV only)"
+            f"(E0 + 6 sigma_E = {e_max} MeV; the cross sections are extended to 250 MeV only; at "
+            "runtime every sampled source energy above the limit is counted in "
+            "source_energy_out_of_range and invalidates the result)"
         )
     rows = tuple(table.material_rows(m) for m in geometry.materials)
     return table, rows

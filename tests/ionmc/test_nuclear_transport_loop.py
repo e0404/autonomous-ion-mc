@@ -445,3 +445,47 @@ def test_binding_tally_recomputed_from_event_counts_and_ame(
     nuc[k]["light"]["a"] += 1
     assert abs(chk.recompute_binding_total(nuc, targets, ame) - tally) > 1.0
     nuc[k]["light"]["a"] -= 1
+
+
+class _FixedNormal:
+    """Proxy of the transport function namespace whose ``gauss_one`` returns ``z``."""
+
+    def __init__(self, inner: Any, z: float) -> None:
+        self._inner, self._z = inner, z
+
+    def gauss_one(self, u0: Any, u1: Any) -> float:
+        return self._z
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._inner, name)
+
+
+def _source_draw_run(tid: str, monkeypatch: pytest.MonkeyPatch, z: float) -> Any:
+    """Two histories of a 249 MeV source with sigma 0.1 MeV (E0 + 6 sigma passes validate) whose
+    energy normal draw is forced to ``z``: 249 + 0.1 z MeV."""
+    cfg = _config(tid, energy=249.0, n=2, allow_invalid=True)
+    cfg = replace(cfg, source=replace(cfg.source, energy_sigma_mev=0.1))
+    orig = _Reference.__init__
+
+    def init(self: Any, *args: Any, **kw: Any) -> None:
+        orig(self, *args, **kw)
+        self.F = _FixedNormal(self.F, z)
+
+    monkeypatch.setattr(_Reference, "__init__", init)
+    return Simulation(cfg).run()
+
+
+def test_nuclear_source_energy_above_the_limit_invalidates(
+    tid: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Decision 0041 section 5 (amended): with nuclear=True a sampled source energy above 250 MeV
+    (here 250.1 MeV from a forced +11 sigma draw, which the 6 sigma validation cannot exclude for
+    an unbounded Gaussian) increments source_energy_out_of_range, books the energy as unaccounted
+    and invalidates the result; +4 sigma (249.4 MeV) stays valid (Codex finding 1)."""
+    bad = _source_draw_run(tid, monkeypatch, 11.0)
+    assert bad.counters.source_energy_out_of_range == 2 and not bad.valid
+    assert bad.energy_balance.unaccounted_mev == pytest.approx(2 * 250.1)
+    assert bad.energy_balance.relative_residual <= 1e-12
+    with monkeypatch.context() as m:
+        ok = _source_draw_run(tid, m, 4.0)
+    assert ok.counters.source_energy_out_of_range == 0 and ok.valid
