@@ -386,7 +386,20 @@ A13 against Grassberger and Paganetti (2011) is exploratory and non-gating.
   re-calibrates the criterion's noise and does not widen a physics tolerance. Base 20371004 is
   consumed; the qualification base is 20381004.
 
-To be appended from committed result files.
+- 2026-10-07 (V3-004, final outcome at the frozen head fccb687, seed base 20381004): the lv4 and
+  hr4 suites were run on the host in the single-process diagnostic mode of the operator
+  directive of 2026-10-07 (`run_suite.py --workers 1`; histories, seeds and criteria unchanged).
+  Every executed step passed: hr4 pytest-cuda-scoring, a15-chunks-cuda, a11-hr (cpu32:cuda32 and
+  python:cpu64 channel-profile pairs); lv4 pytest, a16 (qualified path bit-identical to
+  a524f209), a11-lv, a15-chunks-cpu, a7 (within the analytic expected-share bound), a8 (offline
+  LET within 0.5 %), a13 (exploratory), a9 under footnote 5 (z sd 0.925 / 1.079 / 0.953, |mean z|
+  <= 0.007 at 0.5 R / Bragg peak / distal 80 %, all-bins mean coverage 0.9611). The combined
+  summaries `validation/results/transport/{lv4,hr4}-fccb687-single-process.json` are `pass: true`
+  and deliberately `conformant: false`: `05-a15-workers` (1-vs-3-workers channel partition
+  invariance) is deferred, not passed, until the host instability is understood, and the
+  diagnostic mode is not the qualification mode. Open observation: the Bragg-peak z sd exceeded
+  one on all three observed bases (1.069, 1.119, 1.079), inside the pre-registered interval.
+  Bases 20361004 and 20371004 are consumed non-qualification evidence. Not a clinical claim.
 
 - 2026-10-07 (V3-004, known limitation recorded before merge): the water row of
   `TransportTables` is indexed by energy per nucleon (`water.energy_per_u`), while the scorer
