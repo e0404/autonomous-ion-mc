@@ -281,4 +281,67 @@ fail-closed configuration rules.
   range table by exact quadrature of the interpolated `S` and/or a range-carrying step; it moves
   the qualified baselines by about 5 um and is a separate re-qualification.
 
+- **2026-10-07: V3-003D design (frozen before any result; outcome to be appended).** Task V3-003D
+  removes the range-table inconsistency recorded in the previous entry. Plan:
+  `validation/plans/v3-003d-acceptance.md` (rows D1 to D7), amendments 24 of the V3-003 plan and 6
+  of the V3-004 plan.
+  *Finding.* Both range constructions (`ionmc.physics.stopping.build_table` and
+  `TransportTables.from_stopping_tables`) integrate `a E / S` over ln E by the trapezoid rule on the
+  200-points-per-decade grid. On an interval of the log-log interpolated `S`, `ln f` (`f = a E / S`)
+  is linear in `u = ln E` with slope `k = d ln f / d ln E` of about 1.78, so the trapezoid error per
+  increment is `(k h)^2 / 12` relative with `h = ln 10 / 200`: 2.2e-5 to 3.6e-5. The table is
+  float64 in every kernel variant, so this is not a precision effect. A pure-Python mock of the
+  deterministic step loop on the real Bethe water tables decomposes the inconsistency between the
+  transported energy and the single-shot table inversion at 150 MeV into (1) the nodal trapezoid
+  bias, of size `eps min(R0, 100 s_max)` with `eps` about 3.5e-5 (dominant: -1.6 / -3.2 / -4.1 /
+  -4.7 um of `R(E_b) - (R(E0) - z_b)` at `s_max` 1 / 0.5 / 0.25 / 0.1 mm), (2) the log-log
+  interpolation of `R` between exact nodes (-3.6e-6 to +1.2e-5 relative, 0.24 to 0.52 um near
+  150 to 200 MeV), which still fails the table-CSDA A4b at 1e-4 near the end of range (1.07e-4,
+  1.18e-4, 1.05e-4), and (3) the accumulation of the round-trip drift, which is negligible (the
+  deviation between energy-state and range-carrying stepping is 0.004 um).
+  *Remedy (a+t): the range is the exact integral of the interpolated `S`.* With `ln f_j =
+  ln(a E_j) - ln S_j`, `d_i = ln f_{i+1} - ln f_i` and `f_i = exp(ln f_i)`, `S` is log-log linear on
+  interval `i` (width `h` in `u`), hence `f(u) = f_i exp(d_i (u - u_i) / h)` and
+  `Delta R_i = h f_i (e^{d_i} - 1) / d_i` (nodal increment, equal to `h (f_{i+1} - f_i) / d_i`);
+  between nodes `R(E) = R_i + h f_i g(d_i, phi)` with `phi = (ln E - u_i) / h` in [0, 1],
+  `g(d, phi) = (exp(d phi) - 1) / d` for `|d phi| >= 1e-5` and `phi (1 + d phi / 2 + (d phi)^2 / 6)`
+  otherwise (relative accuracy 2e-13 of `R`; the series truncation is at most 4e-17). The start
+  range `R_0` is unchanged (Bethe `a E_min / S(E_min)`, or the NIST CSDA range at `E_min`). The
+  exact inverse on interval `i`, used by the builder (numpy) to sample the uniform ln R table, is
+  `phi = log1p(d_i (r - R_i) / (h f_i)) / d_i` (and `(r - R_i) / (h f_i)` for `|d_i| < 1e-12`).
+  Implementation: `exact_loglog_range_increments` (one nodal helper), frozen float64 arrays
+  `r_mass`, `f_mass`, `d_f` in `TransportTables` (in the hash), the shared function
+  `range_in_bin` evaluated by the Python twin and the Warp kernel on the same bin index and
+  fraction as the stopping-power lookup, and the identity field `range_construction =
+  exact-loglog-quadrature-v1`. `energy_from_range` is unchanged. Warp has no guaranteed `expm1`, so
+  `exp - 1` with the series guard is used.
+  *Rejected: a range-carrying step* (the particle state carries the residual range instead of the
+  energy). On the exact-node table it changes the deterministic result by 0.004 um against the
+  energy-state step (no benefit), on the trapezoid table it does not remove the 5 um bias (it still
+  disagrees with `S` by 5 um and gives a 4.2e-2 relative energy error at the end), and with
+  straggling the range state has to be re-derived from the sampled energy anyway. Also rejected:
+  exact range nodes with log-log `R` interpolation (remedy (a); A4b-vs-table 1.07e-4 / 1.18e-4 /
+  1.05e-4 fails 1e-4), a 2000-points-per-decade exact grid (same accuracy as (a+t), extra kernel
+  parameters) and a closed-form inverse with a guide table (gain 1e-5, new search and an integer
+  array). Not included: the short-branch midpoint improvement (`E_half` from the table) and grid
+  density changes; the short branch's accumulated midpoint error of at most 0.17 um at 1 mm steps is
+  left as is.
+  *Predicted shifts (informative).* `R(150 MeV)` 158.62994 to 158.62484 mm (-5.1 um); `R(100 MeV)`,
+  `R(200 MeV)` about -2.7 and -8.2 um; deterministic transported end depth at 150 MeV
+  -3.41 / -1.74 / -0.88 / -0.35 um at `s_max` 1 / 0.5 / 0.25 / 0.1 mm, its spread over `s_max`
+  from 3.1 to at most 0.1 um; transported `E` near the end (z = 158.02 mm, 1 mm steps) from
+  6.6212 to about 6.6000 MeV (-0.3 %); branch mismatch `|R(E_b) - (R(E0) - z_b)|` at most 0.23 um;
+  A4b against the table CSDA energy 7.1e-5 / 5.5e-5 / 3.3e-5 (margin 1.4x at 1 mm; if it fails the
+  bound is not widened but recorded as contrary evidence with a follow-up); round-trip drift at most
+  7.2e-7. Relative-energy agreement of 1e-5 at every depth is not attainable for any remedy
+  (`dE/E = dr / (p r)`, `p` about 1.7), so the consistency criterion D2 is stated as a residual-range
+  distance of at most 0.5 um with a trapezoid control of at least 1.0 um. The source data hashes
+  (`content_sha256`, `source_sha256`) do not change; `TransportTables.sha256` does.
+  *Re-qualification scope.* V3-003: T1 (fixture regenerated by a committed script, plan amendment 24),
+  T2, T9, T10, T12, T14 and the other `lv`/`hr` rows at base 20391004 under unchanged criteria;
+  V3-004: A1 to A16 at base 20401004 (A16 per amendment 6, A4b table reference gating); the V3-002
+  `compare_nist.py` comparison is re-run informatively (range deviations change by at most 3.6e-5).
+  All runs in single-process diagnostic mode (operator directive 2026-10-07), so the archives are
+  diagnostic, non-conformant evidence. Outcome: to be appended from committed result files.
+
 To be appended from committed result files.

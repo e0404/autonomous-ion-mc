@@ -43,7 +43,7 @@ quantiles come from `statistics.NormalDist` plus Wilson-Hilferty, without scipy.
 | A13 | **Exploratory, non-gating:** 150 MeV primaries, LET_d profile | Reported beside Grassberger and Paganetti 2011 (Phys. Med. Biol. 56:6677: distal maximum about 12 keV/um, primaries, other beam). Gating Monte Carlo evidence for LET is TOPAS ProtonLET (V3-010). No pass/fail. | related model | LV |
 | A14 | Voxels without steps, or with `n_nonzero` below the threshold | NaN with `defined_mask` False, never 0 | consistency | CI |
 | A15 | Partition invariance of all channels (mirrors T13) | `acc`, residual tallies and counters bit-identical: CPU chunk sizes 2^10 vs 2^18 (single process, CI); 1 vs 3 workers (CPU, `multiprocess`-marked, CI and LV); CUDA chunk sizes 2^10 vs 2^18 (HR) | self-consistency | CI / LV / HR |
-| A16 | No regression of the qualified path | With `tallies = ()`, and for edep, tallies, counters and traces also with tallies present: python and warp-cpu float32/float64 outputs bit-identical to a524f209 at fixed seeds (T1 config and the T13 config) | regression | CI |
+| A16⁶ | No regression of the qualified path (amended by V3-003D) | (a) Tally neutrality, gating: in the tree under test, the digests with `tallies = ()` equal those with all tallies for edep, the energy balance, counters, end states and traces (bitwise; python and warp-cpu float32/float64; the T1 and T13 configs). (b) Baseline regression, gating: the no-tally digests are bitwise equal to those of the qualified-path baseline, the most recent v3/develop commit that intentionally changed the qualified transport path (a524f209 until V3-003D merges, then the V3-003D merge commit; see footnote 6). (c) V3-003D only: the differences against a524f209 are reported, non-gating | regression | CI |
 
 ## Why A11-HR compares linear channels
 
@@ -59,18 +59,18 @@ Per pair there are 7 profiles at p > 0.001, about 0.7 % family-wise false failur
 
 ## Seeds
 
-The fixed seed bases of V3-004 are distinct from every V3-003 base (20261004 ... 20341004):
+The fixed seed bases of V3-004 are distinct from every V3-003 base (20261004 ... 20341004, and 20391004 re-frozen by V3-003D, amendment 24 of the V3-003 plan):
 
 - **Rehearsal base 20351004.** Full-scale rehearsal and diagnostic runs of the LV/HR steps. Its
   results are preserved as non-qualification evidence and never acceptance evidence.
-- **Qualification base 20381004** (re-frozen from 20371004 by amendment 5; 20361004 by amendment 4 before). Used only for the final qualification runs of this task after the
+- **Qualification base 20401004** (re-frozen from 20381004 by amendment 6; 20381004 was observed at the previous head, 20371004 by amendment 5, 20361004 by amendment 4 before). Used only for the final qualification runs of this task after the
   engine is frozen (A7, A9, A11-LV/HR, A15; A13 is not gating). It is recorded in the environment,
   the step documents and each sample's metadata, and the runner enforces conformance only for this
   base. Samples with different bases are never compared.
 - **Consumption rule.** A base whose full-scale statistical results have been observed (including
   by an investigation or a failed qualification) is consumed: it is preserved as non-qualification
   evidence, it is never reused, and a new amendment re-freezes the qualification base to the next
-  unused value `20381004`, `20391004`, ... before any result at the changed code is observed. CI
+  unused value `20401004`, `20411004`, ... (one consumption list with the V3-003 suites, whose current base is 20391004) before any result at the changed code is observed. CI
   tests use fixed small seeds (documented in the tests) and are not qualification evidence.
 - Tolerances and frozen history counts do not change when a base is re-frozen.
 
@@ -97,10 +97,10 @@ smoke run of 10^3 histories, a configuration that is not A9's, before any A9 res
 
 ## Evidence archives (which archive satisfies which row)
 
-| Rows | Archive (suite, qualification base 20381004) |
+| Rows | Archive (suite, qualification base 20401004; V3-003D, amendment 6) |
 |---|---|
 | A1-A6, A10, A12, A14, A16 (CI part), A15 (CPU chunks, 1 vs 3 workers), A11 CI | CI (GitHub), fixed small seeds; also the `pytest-scoring-warp-cpu` step of `lv4` |
-| A16 against a524f209, A11-LV, A15 (LV), A7, A8, A9, A13 (non-gating) | `lv4` archive (the 1 vs 3 workers part only in a standard-mode run, deferred in single-process mode) |
+| A16 (a) and (b) against the qualified-path baseline, (c) against a524f209 (V3-003D, reported), A11-LV, A15 (LV), A7, A8, A9, A13 (non-gating) | `lv4` archive (the 1 vs 3 workers part only in a standard-mode run, deferred in single-process mode) |
 | A11-HR, A15-CUDA, CUDA tests | `hr4` archive |
 
 Rehearsal runs (base 20351004) are non-qualification evidence only.
@@ -163,3 +163,9 @@ leave-one-out pooled reference are unchanged; A9 runs in two parts of 100 seeds
 *Contrary evidence, preserved.* Only the Bragg-peak bin is suggestively low in the pooled data (sigma ratio 0.927, about 2 sd; pooled z sd 1.093). It is an open observation for a larger-seed, peak-only study (not part of this task's acceptance); it is not explained away here.
 *Amended criterion (derived from first principles for n = 200 seeds, pre-registered for the next base).* At each of the three depths the sample sd of z must lie in [0.87, 1.13] (1 +- 2.58 / sqrt(2 * 200), the 99 % interval of the sd of 200 standard normals) and |mean z| < 0.18 (2.58 / sqrt(200)); and the mean coverage of |z| < 1.96 over all informative bins (dose > 10 % max) must lie in [0.93, 0.97]. Per-bin and per-depth coverages remain reported as informative, with the z sd and mean of every depth and the all-bin coverage minimum and maximum. Both observed bases would pass this criterion (z sd at the peak at 20371004, 1.119, lies inside the interval; the mean all-bin coverages 0.9435 and 0.9464 lie inside [0.93, 0.97]). This is a re-calibration of the criterion's own sampling noise, not a widening of the physics tolerance: the history count per seed, 200 seeds, the leave-one-out pooled reference and the delta-method uncertainty are unchanged.
 *Seeds.* The criterion must be observed at a fresh base. Base 20371004 joins the consumed non-qualification bases (the 3c013f8 hr4/lv4 archives at 20371004 are non-qualification evidence); the qualification base is re-frozen to 20381004.
+
+⁶ **2026-10-07, task V3-003D, before any result at the changed code (A16 wording amended; A4b table reference gating; qualification base re-frozen to 20401004).**
+(a) Reason. V3-003D changes the CSDA range table (exact quadrature of the interpolated S, decision 0039 design entry of 2026-10-07, plan `v3-003d-acceptance.md`) and therefore every physics digest by design; the former A16 text, 'bit-identical to a524f209', cannot pass and would not survive later transport changes either. Merges are squash merges, so the task commits of V3-003D are not on v3/develop; the baseline is a commit of v3/develop.
+(b) Amended A16. (a) Tally neutrality, gating: in the tree under test, the digests with `tallies = ()` equal those with all tallies for edep, the energy balance, counters, end states and traces (bitwise; python, warp-cpu float32 and float64; the T1 and T13 configs). (b) Baseline regression, gating: the no-tally digests are bitwise equal to those of the qualified-path baseline, the most recent v3/develop commit that intentionally changed the qualified transport path. The baseline is a524f209 until V3-003D merges, then the V3-003D merge commit. The constant `A16_BASELINE` of `steps_v4.py` is updated by the first task after the merge, in its first commit, citing this amendment. (c) Intended change, V3-003D only: against a524f209 (and its parent 1e1f73b2) the differing fields are reported (expected: all physics digests); this is non-gating for the regression row and the change is graded by rows D1 to D4 of `v3-003d-acceptance.md`. Implementation: `step_a16` gets `--mode {regression,intended-change}`; `lv4` at V3-003D uses `intended-change`, which grades (a) and reports (c).
+(c) A4b. With the exact range table the comparison with the table CSDA energy Rinv(R(E0) - rho z) becomes gating at 1e-4 (row D3 of the V3-003D plan), in addition to the transported-energy A4b and A4; footnote 1 recorded it as non-gating because of the trapezoid bias.
+(d) Re-qualification. Every other criterion, tolerance and history count of this plan is unchanged and all rows are re-qualified at the changed code (row D6). The qualification base is re-frozen to 20401004 (distinct from the V3-003 base 20391004 of amendment 24 of the V3-003 plan); 20381004 is consumed by observation at the previous head. Rehearsals use the 2041xxxx family. Qualification runs are in single-process diagnostic mode.
