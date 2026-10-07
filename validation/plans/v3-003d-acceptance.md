@@ -126,6 +126,111 @@ To be filled from committed result files (qualification bases 20391004 for `lv`/
 | D6 (HR rows) | `hr4` | pending | pending | pending |
 | D7 | all archives, ledger entry | pending | pending | pending |
 
+<!-- A16-INTENDED-CHANGE-BEGIN -->
+### A16 intended change: gated comparison against a524f209 (record of `run_suite.py`)
+
+The `lv4` step `a16-qualified-path-regression` runs `--mode intended-change` only while the record
+`A16_INTENDED_CHANGE` of `validation/scripts/transport/run_suite.py` exists, and only if the block
+below (delimited by the two comment markers; its sha256 is `plan_block_sha256` of the record, and the
+JSON states the record without that hash) is exactly the record. The step fails closed when the plan
+block hash or content differs, when the table identity `range_construction` of the baseline tree
+(a524f209) is not absent or that of the tree under test is not `exact-loglog-quadrature-v1`, when
+any digest field outside the allowlist differs (counters, valid flags, discrete trace columns of
+t13, tally layout), when a table-dependent field leaves its bound, or when the depth-dose maximum
+moves by a layer. The next task deletes the record and advances `A16_BASELINE` (amendment 6 of the
+V3-004 plan).
+
+Measured at fd69e16 plus this change (baseline a524f209, specs t1 and t13 on python float64, warp-cpu
+float32 and float64; bounds are at most 2x the measured maximum over the specs of the family):
+t13 (150 MeV, 1 mm steps): median end-depth shift 3.3 um (the exact range is shorter than the
+trapezoid range by 3.3 um; D4 gives about 5 um at 150 MeV for R80), maximum end-position change
+6.3 um, end energy at most 0.052 MeV (residual energy below the cut), end direction at most 0.022,
+total in-grid deposit 4.5e-12 relative (python 3.1e-12), total step deposit 2.9e-6 relative (python
+200 histories; 4e-8 on 20000), cutoff energy 2.2e-4 relative (python; the residual kinetic energy
+of 200 histories moves with the range), batch-summed voxel deposit above 1 % of the maximum 1.8 %
+(python, 200 histories; 1.1 % on 20000), depth-dose profile above 1 % of the maximum 0.60 %, depth
+of the maximum unchanged (layer 78), trace columns: energy 3.0 keV, position 3.5 um,
+deposit 8.9e-5 MeV, step 9.4e-5 mm, direction cosines 5.8e-6. t1 (100 MeV, 2 mm steps in 5 mm
+voxels, 32 histories; trajectories branch per history, so only aggregates are bounded): in-grid
+deposit 5.7e-10 relative (float32), step deposit 5.0e-5, cutoff 2.5e-3, depth-dose profile
+difference 4.9 % of its maximum, mean end-depth shift 0.10 mm, trace row count 7027 to 7040
+(0.19 %, the sliver flip of row 37 of the fixture). Counters and valid flags are bit-identical in
+every spec. Unbounded per history in t1 (reported only): per-voxel deposit and end positions
+(up to 4 mm for histories whose discrete branch flipped).
+
+```json
+{
+ "allowed_differing_fields": {
+  "t1": [
+   "grid.dose.batch_energy_mev",
+   "energy_balance.cutoff_mev",
+   "energy_balance.in_grid_mev",
+   "energy_balance.quantization_mev",
+   "energy_balance.step_deposit_mev",
+   "diagnostics.end_direction",
+   "diagnostics.end_energy_mev",
+   "diagnostics.end_position_mm",
+   "diagnostics.trace_end_energy_mev",
+   "diagnostics.trace."
+  ],
+  "t13": [
+   "grid.dose.batch_energy_mev",
+   "energy_balance.cutoff_mev",
+   "energy_balance.in_grid_mev",
+   "energy_balance.quantization_mev",
+   "energy_balance.step_deposit_mev",
+   "diagnostics.end_direction",
+   "diagnostics.end_energy_mev",
+   "diagnostics.end_position_mm",
+   "diagnostics.trace_end_energy_mev",
+   "diagnostics.trace.deposit_mev",
+   "diagnostics.trace.energy_mev",
+   "diagnostics.trace.step_mm",
+   "diagnostics.trace.ux",
+   "diagnostics.trace.uy",
+   "diagnostics.trace.uz",
+   "diagnostics.trace.x_mm",
+   "diagnostics.trace.y_mm",
+   "diagnostics.trace.z_mm"
+  ]
+ },
+ "baseline": "a524f209",
+ "baseline_value": null,
+ "bounds": {
+  "t1": {
+   "cutoff_rel": 0.005,
+   "end_dz_mean_abs_mm": 0.21,
+   "in_grid_rel": 1.2e-09,
+   "profile_abs_over_max": 0.1,
+   "quantization_abs_mev": 3e-06,
+   "step_deposit_rel": 0.0001,
+   "trace_rows_rel": 0.004
+  },
+  "t13": {
+   "cutoff_rel": 0.0005,
+   "end_direction_max": 0.044,
+   "end_dz_median_abs_mm": 0.0066,
+   "end_energy_max_mev": 0.104,
+   "end_position_max_mm": 0.0126,
+   "in_grid_rel": 1.2e-09,
+   "profile_rel_max": 0.012,
+   "quantization_abs_mev": 3e-06,
+   "step_deposit_rel": 6e-06,
+   "trace_deposit_max_mev": 0.00018,
+   "trace_direction_max": 1.2e-05,
+   "trace_energy_max_mev": 0.006,
+   "trace_position_max_mm": 0.0071,
+   "trace_step_max_mm": 0.00019,
+   "voxel_rel_max": 0.037
+  }
+ },
+ "identity_field": "range_construction",
+ "new_value": "exact-loglog-quadrature-v1",
+ "task": "V3-003D"
+}
+```
+<!-- A16-INTENDED-CHANGE-END -->
+
 ## Amendments
 
 (None yet.)

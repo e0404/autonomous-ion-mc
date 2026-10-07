@@ -902,10 +902,14 @@ def _git(*args: str) -> str | None:
     return r.stdout.strip() if r.returncode == 0 else None
 
 
-def _digests(src: Path, tallies: str, specs: str, env_extra: dict[str, str]) -> dict[str, Any]:
+def _digests(
+    src: Path, tallies: str, specs: str, env_extra: dict[str, str], dump: Path | None = None
+) -> dict[str, Any]:
     env = dict(os.environ, PYTHONPATH=str(src), PYTHONDONTWRITEBYTECODE="1", **env_extra)
     cmd = [sys.executable, str(HERE / "a16_digest.py"), "--specs", specs,
            "--tallies", tallies]  # fmt: skip
+    if dump is not None:
+        cmd += ["--dump", str(dump)]
     p = subprocess.run(cmd, capture_output=True, text=True, env=env, timeout=3000)
     if p.returncode != 0 or "#DIGEST-BEGIN" not in p.stdout:
         raise SystemExit(f"digest run failed ({src}, tallies={tallies}):\n{p.stderr[-3000:]}")
@@ -927,7 +931,8 @@ def verify_intended_change(
     if not record:
         raise SystemExit("A16 --mode intended-change needs the A16_INTENDED_CHANGE record "
                          "(none given): fail closed, use --mode regression")  # fmt: skip
-    keys = {"task", "baseline", "identity_field", "baseline_value", "new_value"}
+    keys = {"task", "baseline", "identity_field", "baseline_value", "new_value",
+            "allowed_differing_fields", "bounds", "plan_block_sha256"}  # fmt: skip
     if set(record) != keys:
         raise SystemExit(f"A16 intended-change record must have exactly the keys {sorted(keys)}")
     if not (A16_BASELINE.startswith(str(record["baseline"])) or
@@ -955,6 +960,138 @@ def verify_intended_change(
     }
 
 
+PLAN_FILE = "validation/plans/v3-003d-acceptance.md"
+PLAN_BEGIN, PLAN_END = "<!-- A16-INTENDED-CHANGE-BEGIN -->", "<!-- A16-INTENDED-CHANGE-END -->"
+
+
+def plan_block(text: str) -> str:
+    """The delimited block of the V3-003D plan that states the A16 intended-change record."""
+    if text.count(PLAN_BEGIN) != 1 or text.count(PLAN_END) != 1:
+        raise SystemExit("A16 intended-change: the plan lacks exactly one delimited record block")
+    return text[text.index(PLAN_BEGIN) : text.index(PLAN_END) + len(PLAN_END)]
+
+
+def record_json(record: dict[str, Any]) -> str:
+    """Canonical JSON of the record without its hash (the content of the plan block)."""
+    return json.dumps({k: v for k, v in record.items() if k != "plan_block_sha256"},
+                      sort_keys=True, indent=1)  # fmt: skip
+
+
+def verify_plan_binding(record: dict[str, Any], plan_text: str) -> str:
+    """The plan block hashes to ``plan_block_sha256`` and states exactly the record (so the record
+    is the one reviewed in the plan of the task it names). Returns the verified hash."""
+    import hashlib
+
+    block = plan_block(plan_text)
+    sha = hashlib.sha256(block.encode()).hexdigest()
+    if sha != record["plan_block_sha256"]:
+        raise SystemExit(f"A16 intended-change: the plan block hashes to {sha}, the record binds "
+                         f"{record['plan_block_sha256']}")  # fmt: skip
+    inner = block[len(PLAN_BEGIN) : -len(PLAN_END)]
+    stated = json.loads(inner[inner.index("{") : inner.rindex("}") + 1])
+    if stated != json.loads(record_json(record)):
+        raise SystemExit("A16 intended-change: the plan block does not state the record")
+    return sha
+
+
+def _allowed(name: str, patterns: list[str]) -> bool:
+    return any(name == q or (q.endswith(".") and name.startswith(q)) for q in patterns)
+
+
+def _rel(x: Any, y: Any) -> float:
+    xv, yv = np.asarray(x, dtype=np.float64), np.asarray(y, dtype=np.float64)
+    return float(abs(yv.sum() - xv.sum()) / abs(xv.sum()))
+
+
+def a16_gate(record: dict[str, Any], base: Any, cur: Any) -> dict[str, Any]:
+    """Gated comparison of the raw A16 values (``{"spec|field": array}``) of the baseline tree and
+    the tree under test: per spec, every field outside ``allowed_differing_fields`` must be
+    bit-identical (and present in both), and the measured quantities of the allowed fields must
+    be within ``bounds``. Returns the measured values and the violations (``ok`` when none)."""
+    specs = sorted({k.split("|")[0] for k in base} | {k.split("|")[0] for k in cur})
+    report: dict[str, Any] = {}
+    all_ok = True
+    for spec in specs:
+        fam = spec.split(":")[0]
+        allowed, bnd = record["allowed_differing_fields"][fam], record["bounds"][fam]
+        pre = spec + "|"
+        fb = {k[len(pre) :]: base[k] for k in base if k.startswith(pre)}
+        fc = {k[len(pre) :]: cur[k] for k in cur if k.startswith(pre)}
+        viol: list[str] = []
+        if set(fb) != set(fc):
+            viol.append(f"field sets differ: {sorted(set(fb) ^ set(fc))[:6]}")
+        m: dict[str, float] = {}
+        differing = []
+        for f in sorted(set(fb) & set(fc)):
+            same = fb[f].shape == fc[f].shape and bool(np.array_equal(fb[f], fc[f]))
+            if not same:
+                differing.append(f)
+                if not _allowed(f, allowed):
+                    viol.append(f"non-allowlisted field differs: {f}")
+        n_b = fb.get("diagnostics.trace.step", np.empty(0)).size
+        n_c = fc.get("diagnostics.trace.step", np.empty(0)).size
+        if n_b != n_c:
+            m["trace_rows_rel"] = abs(n_c - n_b) / max(n_b, 1)
+        try:
+            m["in_grid_rel"] = _rel(
+                fb["energy_balance.in_grid_mev"], fc["energy_balance.in_grid_mev"]
+            )
+            m["step_deposit_rel"] = _rel(fb["energy_balance.step_deposit_mev"],
+                                         fc["energy_balance.step_deposit_mev"])  # fmt: skip
+            m["cutoff_rel"] = _rel(fb["energy_balance.cutoff_mev"], fc["energy_balance.cutoff_mev"])
+            m["quantization_abs_mev"] = float(np.abs(fc["energy_balance.quantization_mev"]
+                                                     - fb["energy_balance.quantization_mev"]).max())  # fmt: skip
+            gb = np.asarray(fb["grid.dose.batch_energy_mev"], dtype=np.float64).sum(0)
+            gc = np.asarray(fc["grid.dose.batch_energy_mev"], dtype=np.float64).sum(0)
+            pb, pc = gb.sum((0, 1)), gc.sum((0, 1))
+            if int(np.argmax(pb)) != int(np.argmax(pc)):
+                viol.append("depth-dose maximum moved by a voxel layer")
+            m["profile_abs_over_max"] = float(np.abs(pc - pb).max() / pb.max())
+            sel = pb > 0.01 * pb.max()
+            m["profile_rel_max"] = float(np.max(np.abs(pc[sel] - pb[sel]) / pb[sel]))
+            vox = gb > 0.01 * gb.max()
+            m["voxel_rel_max"] = float(np.max(np.abs(gc[vox] - gb[vox]) / gb[vox]))
+            pos_b, pos_c = fb["diagnostics.end_position_mm"], fc["diagnostics.end_position_mm"]
+            m["end_position_max_mm"] = float(np.abs(pos_c - pos_b).max())
+            dz = pos_c[:, 2] - pos_b[:, 2]
+            m["end_dz_median_abs_mm"] = float(abs(np.median(dz)))
+            m["end_dz_mean_abs_mm"] = float(abs(dz.mean()))
+            m["end_energy_max_mev"] = float(np.abs(fc["diagnostics.end_energy_mev"]
+                                                   - fb["diagnostics.end_energy_mev"]).max())  # fmt: skip
+            m["end_direction_max"] = float(np.abs(fc["diagnostics.end_direction"]
+                                                  - fb["diagnostics.end_direction"]).max())  # fmt: skip
+        except KeyError as e:
+            viol.append(f"missing field {e}")
+        if fam == "t13" and n_b == n_c and n_b:
+
+            def tmax(cols: tuple[str, ...]) -> float:
+                return max(float(np.abs(fc[f"diagnostics.trace.{c}"] - fb[f"diagnostics.trace.{c}"]).max())
+                           for c in cols)  # fmt: skip
+
+            m["trace_energy_max_mev"] = tmax(("energy_mev",))
+            m["trace_position_max_mm"] = tmax(("x_mm", "y_mm", "z_mm"))
+            m["trace_deposit_max_mev"] = tmax(("deposit_mev",))
+            m["trace_step_max_mm"] = tmax(("step_mm",))
+            m["trace_direction_max"] = tmax(("ux", "uy", "uz"))
+        for k, v in m.items():
+            if k not in bnd:
+                continue  # measured, reported, not gated for this family
+            if not v <= bnd[k]:
+                viol.append(f"{k} = {v:.4g} exceeds the bound {bnd[k]:.4g}")
+        for k in bnd:
+            if (
+                k.startswith("trace_")
+                and k != "trace_rows_rel"
+                and fam == "t13"
+                and k not in m
+                and "diagnostics.trace.step" in fb
+            ):
+                viol.append(f"bound {k} could not be evaluated")  # fmt: skip
+        report[spec] = {"differing_fields": differing, "measured": m, "violations": viol}
+        all_ok &= not viol
+    return {"ok": bool(all_ok), "specs": report}
+
+
 def step_a16(a: argparse.Namespace) -> int:
     """Row A16 (plan amendment 6). (a) Tally neutrality, gating in both modes: the digests of the
     tree under test with ``tallies = ()`` equal those with all tallies. (b) ``--mode regression``,
@@ -965,6 +1102,9 @@ def step_a16(a: argparse.Namespace) -> int:
     record = getattr(a, "intended_change_record", None)
     if a.mode == "intended-change" and not record:
         verify_intended_change(None, A16_BASELINE, None, None)  # fail closed before any run
+    plan_sha = None
+    if record:
+        plan_sha = verify_plan_binding(record, (REPO / PLAN_FILE).read_text())
     full = _git("rev-parse", "--verify", f"{A16_BASELINE}^{{commit}}")
     if full is None:
         raise SystemExit(
@@ -972,15 +1112,17 @@ def step_a16(a: argparse.Namespace) -> int:
         )
     specs = ",".join(A16_SPECS)
     env_extra = {k: v for k, v in os.environ.items() if k.startswith("WARP")}
+    dumps = tempfile.TemporaryDirectory(prefix="a16-raw-")
+    raw_b, raw_c = Path(dumps.name) / "baseline.npz", Path(dumps.name) / "current.npz"
     with tempfile.TemporaryDirectory(prefix="a16-baseline-") as tmp:
         tar = subprocess.run(["git", "-C", str(REPO), "archive", "--format=tar", full, "src"],
                              capture_output=True, timeout=300)  # fmt: skip
         if tar.returncode != 0:
             raise SystemExit(f"git archive of {full} failed: {tar.stderr.decode()[-500:]}")
         subprocess.run(["tar", "-x", "-C", tmp], input=tar.stdout, check=True, timeout=300)
-        baseline = _digests(Path(tmp) / "src", "none", specs, env_extra)
+        baseline = _digests(Path(tmp) / "src", "none", specs, env_extra, raw_b)
     current = {
-        "no_tallies": _digests(REPO / "src", "none", specs, env_extra),
+        "no_tallies": _digests(REPO / "src", "none", specs, env_extra, raw_c),
         "with_tallies": _digests(REPO / "src", "all", specs, env_extra),
     }
     regression = a.mode == "regression"
@@ -997,8 +1139,14 @@ def step_a16(a: argparse.Namespace) -> int:
             identities["baseline"].get(field_),
             identities["current"].get(field_),
         )
+    gate = None
+    if not regression:
+        assert record is not None
+        with np.load(raw_b) as nb, np.load(raw_c) as nc:
+            gate = a16_gate(record, {k: nb[k] for k in nb.files}, {k: nc[k] for k in nc.files})
+    dumps.cleanup()
     out: dict[str, Any] = {}
-    ok = True
+    ok = gate is None or gate["ok"]
     for spec in A16_SPECS:
         b = baseline["digests"][spec]
         n, w = current["no_tallies"]["digests"][spec], current["with_tallies"]["digests"][spec]
@@ -1014,6 +1162,8 @@ def step_a16(a: argparse.Namespace) -> int:
                 "gating": regression,
             },
         }
+        if gate is not None:
+            entry["intended_change_gate"] = gate["specs"][spec]
         ok &= not neutral
         if regression:
             ok &= not vs_base
@@ -1024,7 +1174,14 @@ def step_a16(a: argparse.Namespace) -> int:
         "baseline_commit": full,
         "baseline_ref": A16_BASELINE,
         "table_identity": identities,
-        "intended_change": verified,
+        "intended_change": None
+        if verified is None
+        else {
+            **verified,
+            "plan_file": PLAN_FILE,
+            "plan_block_sha256": plan_sha,
+            "gate_ok": gate["ok"] if gate else None,
+        },
         "fields": "per-grid batch energy, energy balance, counters, end state and trace digests",
         "specs": out,
         "pass": bool(ok),

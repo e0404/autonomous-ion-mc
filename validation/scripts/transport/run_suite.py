@@ -345,15 +345,93 @@ A16_INTENDED_CHANGE: dict[str, Any] | None = {
     "identity_field": "range_construction",
     "baseline_value": None,  # the baseline tables carry no range_construction identity
     "new_value": "exact-loglog-quadrature-v1",
+    # Digest fields that may differ (exact name, or a prefix ending in "."), per configuration
+    # family; every other field of every spec (counters, valid flags, the discrete trace columns
+    # of t13) must be bit-identical. The t1 trace (7027 rows at the baseline, 7040 now) changes
+    # its row count through a discrete branch flip of the 2 mm steps (the flip recorded as row 37
+    # of the fixture of tests/ionmc/data/trace_baseline_20mev.npz), so its columns are only
+    # bounded through the row count.
+    "allowed_differing_fields": {
+        "t13": [
+            "grid.dose.batch_energy_mev",
+            "energy_balance.cutoff_mev",
+            "energy_balance.in_grid_mev",
+            "energy_balance.quantization_mev",
+            "energy_balance.step_deposit_mev",
+            "diagnostics.end_direction",
+            "diagnostics.end_energy_mev",
+            "diagnostics.end_position_mm",
+            "diagnostics.trace_end_energy_mev",
+            "diagnostics.trace.deposit_mev",
+            "diagnostics.trace.energy_mev",
+            "diagnostics.trace.step_mm",
+            "diagnostics.trace.ux",
+            "diagnostics.trace.uy",
+            "diagnostics.trace.uz",
+            "diagnostics.trace.x_mm",
+            "diagnostics.trace.y_mm",
+            "diagnostics.trace.z_mm",
+        ],
+        "t1": [
+            "grid.dose.batch_energy_mev",
+            "energy_balance.cutoff_mev",
+            "energy_balance.in_grid_mev",
+            "energy_balance.quantization_mev",
+            "energy_balance.step_deposit_mev",
+            "diagnostics.end_direction",
+            "diagnostics.end_energy_mev",
+            "diagnostics.end_position_mm",
+            "diagnostics.trace_end_energy_mev",
+            "diagnostics.trace.",
+        ],
+    },
+    # Bounds of the allowed differences: 2x the values measured at the reviewed state (the
+    # measured values and their physical derivation are in the plan block bound by
+    # plan_block_sha256). t13: 150 MeV, 1 mm steps, 200 to 20000 histories, stable; t1: 100 MeV,
+    # 2 mm steps, 32 histories, chaotic per history, bounded through aggregates only.
+    "bounds": {
+        "t13": {
+            "in_grid_rel": 1.2e-9,
+            "step_deposit_rel": 6e-6,
+            "cutoff_rel": 5e-4,
+            "quantization_abs_mev": 3e-6,
+            "end_position_max_mm": 0.0126,
+            "end_dz_median_abs_mm": 0.0066,
+            "end_energy_max_mev": 0.104,
+            "end_direction_max": 0.044,
+            "voxel_rel_max": 0.037,
+            "profile_rel_max": 0.012,
+            "trace_energy_max_mev": 0.006,
+            "trace_position_max_mm": 0.0071,
+            "trace_deposit_max_mev": 1.8e-4,
+            "trace_step_max_mm": 1.9e-4,
+            "trace_direction_max": 1.2e-5,
+        },
+        "t1": {
+            "in_grid_rel": 1.2e-9,
+            "step_deposit_rel": 1e-4,
+            "cutoff_rel": 5e-3,
+            "quantization_abs_mev": 3e-6,
+            "profile_abs_over_max": 0.1,
+            "end_dz_mean_abs_mm": 0.21,
+            "trace_rows_rel": 0.004,
+        },
+    },
+    # sha256 of the delimited block of validation/plans/v3-003d-acceptance.md that states this
+    # record (without this key), verified by the step at run time.
+    "plan_block_sha256": "ec312072d7a0b3ccb73eb25507b4c7f450ceb5d846485a580df9167c62a27bb1",
 }
 """The one recorded exception to the fail-closed A16 regression of the ``lv4`` suite (plan
 amendment 6 of V3-004). While it is not ``None``, the ``lv4`` step runs ``--mode intended-change``
-and passes this record to the step, which verifies at run time that the table identity
-``identity_field`` of the baseline tree (``baseline``, which must equal ``A16_BASELINE`` of
-``steps_v4.py``) is ``baseline_value`` and that of the tree under test is ``new_value``, and
-fails closed otherwise. Once V3-003D is merged the baseline tree carries ``new_value``, so the
-step then fails until the next task's first commit deletes this record (sets it to ``None``) and
-advances ``A16_BASELINE``. With ``None`` the step runs ``--mode regression`` (the default)."""
+and passes this record to the step, which (i) verifies that the plan block of
+``validation/plans/v3-003d-acceptance.md`` hashes to ``plan_block_sha256`` and states exactly this
+record, (ii) verifies that the table identity ``identity_field`` of the baseline tree (``baseline``,
+which must equal ``A16_BASELINE`` of ``steps_v4.py``) is ``baseline_value`` and that of the tree
+under test is ``new_value``, and (iii) gates the comparison: only ``allowed_differing_fields`` may
+differ, within ``bounds``; everything else must be bit-identical. It fails closed otherwise. Once
+V3-003D is merged the baseline tree carries ``new_value``, so the step then fails until the next
+task's first commit deletes this record (sets it to ``None``) and advances ``A16_BASELINE``. With
+``None`` the step runs ``--mode regression`` (the default)."""
 
 KILL_GRACE_S = 10.0
 

@@ -112,29 +112,39 @@ def _hash(x: Any) -> str:
     return h.hexdigest()
 
 
+RAW: dict[str, Any] = {}
+"""Raw values of the last digested fields (``field -> array or scalar``), for ``--dump``."""
+
+
+def _put(key: str, obj: Any, out: dict[str, str]) -> None:
+    out[key] = _hash(obj)
+    RAW[key] = obj
+
+
 def _flatten(prefix: str, obj: Any, out: dict[str, str]) -> None:
     if isinstance(obj, dict):
         for k in sorted(obj, key=str):
             _flatten(f"{prefix}.{k}", obj[k], out)
     elif isinstance(obj, np.ndarray):
-        out[prefix] = _hash(obj)
+        _put(prefix, obj, out)
     elif isinstance(obj, tuple | list) and obj and isinstance(obj[0], np.ndarray):
         for i, v in enumerate(obj):
             _flatten(f"{prefix}[{i}]", v, out)
     else:
-        out[prefix] = _hash(obj)
+        _put(prefix, obj, out)
 
 
 def digest(spec: str, tallies: str) -> dict[str, str]:
     name, backend, precision = spec.split(":")
     res = Simulation(_config(name, backend, precision, tallies)).run()
     out: dict[str, str] = {}
+    RAW.clear()
     for g in res.grids:
-        out[f"grid.{g.name}.batch_energy_mev"] = _hash(np.asarray(g.batch_energy_mev))
+        _put(f"grid.{g.name}.batch_energy_mev", np.asarray(g.batch_energy_mev), out)
     _flatten("energy_balance", asdict(res.energy_balance), out)
     _flatten("counters", res.counters.as_dict(), out)
     _flatten("diagnostics", res.diagnostics, out)
-    out["valid"] = _hash(res.valid)
+    _put("valid", res.valid, out)
     return out
 
 
@@ -150,12 +160,21 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--specs", required=True, help="name:backend:precision,...")
     ap.add_argument("--tallies", choices=("none", "all"), default="none")
+    ap.add_argument("--dump", default=None, help="write the raw values to this .npz (A16 bounds)")
     args = ap.parse_args(argv)
+    raw: dict[str, Any] = {}
+    digests: dict[str, dict[str, str]] = {}
+    for sp in args.specs.split(","):
+        digests[sp] = digest(sp, args.tallies)
+        for k, v in RAW.items():
+            raw[f"{sp}|{k}"] = np.asarray(v) if not isinstance(v, str) else np.asarray(repr(v))
+    if args.dump:
+        np.savez(args.dump, **raw)
     doc = {
         "source": str(Path(ionmc.__file__).resolve()),
         "tallies": args.tallies,
         "table_identity": table_identity(),
-        "digests": {s: digest(s, args.tallies) for s in args.specs.split(",")},
+        "digests": digests,
     }
     print("#DIGEST-BEGIN")
     print(json.dumps(doc, sort_keys=True))

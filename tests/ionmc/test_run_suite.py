@@ -928,7 +928,8 @@ def _a16_cmd(mod: ModuleType) -> list[str]:
 def test_a16_suite_default_is_regression_and_exception_is_the_recorded_one() -> None:
     mod = _load("run_suite")
     rec = mod.A16_INTENDED_CHANGE
-    assert rec == {
+    ident = ("task", "baseline", "identity_field", "baseline_value", "new_value")
+    assert {k: rec[k] for k in ident} == {
         "task": "V3-003D", "baseline": "a524f209", "identity_field": "range_construction",
         "baseline_value": None, "new_value": "exact-loglog-quadrature-v1",
     }  # fmt: skip
@@ -976,3 +977,103 @@ def test_lv_pytest_step_requires_the_nist_cache() -> None:
     assert step[2]["IONMC_REQUIRE_NIST"] == "1" and step[2]["IONMC_CACHE_DIR"].endswith(
         ".ionmc-cache/ionmc-data"
     )
+
+
+# -- A16 intended-change: binding to the plan block and the gated comparison ---------------------
+def _synthetic_raw(spec: str = "t13:warp-cpu:float64") -> dict[str, np.ndarray]:
+    """Small raw A16 values with the field layout of ``a16_digest.py``."""
+    rng = np.random.default_rng(3)
+    z = np.arange(40)
+    prof = np.exp(-0.5 * ((z - 30) / 6.0) ** 2) + 0.2
+    grid = (prof[None, None, None, :] * (1.0 + 0.1 * rng.random((4, 3, 3, 40)))).astype(np.float64)
+    raw = {
+        "grid.dose.batch_energy_mev": grid,
+        "energy_balance.in_grid_mev": np.array([grid.sum()]),
+        "energy_balance.step_deposit_mev": np.array(grid.sum() * 0.99),
+        "energy_balance.cutoff_mev": np.array(grid.sum() * 0.01),
+        "energy_balance.quantization_mev": np.array([1e-7]),
+        "diagnostics.end_position_mm": rng.random((20, 3)) * 100,
+        "diagnostics.end_direction": rng.random((20, 3)),
+        "diagnostics.end_energy_mev": rng.random(20),
+        "diagnostics.trace_end_energy_mev": rng.random(4),
+        "counters.n_steps": np.array(1234),
+        "valid": np.array(True),
+        "diagnostics.trace.step": np.arange(10),
+    }
+    for c in ("energy_mev", "x_mm", "y_mm", "z_mm", "deposit_mev", "step_mm", "ux", "uy", "uz"):
+        raw[f"diagnostics.trace.{c}"] = rng.random(10)
+    return {f"{spec}|{k}": v for k, v in raw.items()}
+
+
+def _perturbed(base: dict[str, np.ndarray], **edits: object) -> dict[str, np.ndarray]:
+    cur = {k: v.copy() for k, v in base.items()}
+    spec = "t13:warp-cpu:float64|"
+    # the physics of the change: a 3 um end-depth shift and a 1e-6 relative energy-balance shift
+    cur[spec + "diagnostics.end_position_mm"][:, 2] -= 0.003
+    cur[spec + "energy_balance.step_deposit_mev"] = cur[
+        spec + "energy_balance.step_deposit_mev"
+    ] * (1 + 1e-6)
+    cur[spec + "energy_balance.cutoff_mev"] = cur[spec + "energy_balance.cutoff_mev"] * (1 - 1e-6)
+    for k, v in edits.items():
+        key = spec + k.replace("__", ".")
+        cur[key] = v(cur[key]) if callable(v) else np.asarray(v)  # type: ignore[operator]
+    return cur
+
+
+def test_a16_gate_accepts_the_intended_change_and_rejects_everything_else() -> None:
+    run, st = _load("run_suite"), _load("steps_v4")
+    rec = run.A16_INTENDED_CHANGE
+    base = _synthetic_raw()
+    ok = st.a16_gate(rec, base, _perturbed(base))
+    assert ok["ok"], ok
+    # a non-allowlisted field (a counter) differs
+    bad = st.a16_gate(rec, base, _perturbed(base, counters__n_steps=1235))
+    assert not bad["ok"]
+    assert any("non-allowlisted" in v for v in bad["specs"]["t13:warp-cpu:float64"]["violations"])
+
+    # an allowed field leaves its bound (a scoring bug: 5 % more deposit in one layer)
+    def inflate(g: np.ndarray) -> np.ndarray:
+        g = g.copy()
+        g[..., 30] *= 1.05
+        return g
+
+    bad = st.a16_gate(rec, base, _perturbed(base, grid__dose__batch_energy_mev=inflate))
+    assert not bad["ok"]
+
+    # a 1 mm end-depth shift (wrong kernel branch) exceeds the end-position bound
+    def shift(p: np.ndarray) -> np.ndarray:
+        p = p.copy()
+        p[:, 2] += 1.0
+        return p
+
+    bad = st.a16_gate(rec, base, _perturbed(base, diagnostics__end_position_mm=shift))
+    assert not bad["ok"]
+    # the discrete trace row count changing in t13 is a field-set/shape violation
+    cur = _perturbed(base)
+    cur["t13:warp-cpu:float64|diagnostics.trace.step"] = np.arange(11)
+    assert not st.a16_gate(rec, base, cur)["ok"]
+    # a field that exists only in one tree
+    cur = _perturbed(base)
+    cur["t13:warp-cpu:float64|counters.extra"] = np.array(1)
+    assert not st.a16_gate(rec, base, cur)["ok"]
+
+
+def test_a16_plan_binding_is_verified() -> None:
+    run, st = _load("run_suite"), _load("steps_v4")
+    rec = run.A16_INTENDED_CHANGE
+    text = (REPO / st.PLAN_FILE).read_text()
+    assert st.verify_plan_binding(rec, text) == rec["plan_block_sha256"]
+    with pytest.raises(SystemExit, match="hashes to"):
+        st.verify_plan_binding(rec, text.replace("in_grid_rel", "in_grid_rell", 1))
+    with pytest.raises(SystemExit, match="hashes to"):
+        st.verify_plan_binding(
+            {**rec, "bounds": rec["bounds"]} | {"plan_block_sha256": "0" * 64}, text
+        )
+    changed = {
+        **rec,
+        "bounds": {**rec["bounds"], "t13": {**rec["bounds"]["t13"], "voxel_rel_max": 0.5}},
+    }
+    with pytest.raises(SystemExit, match="does not state the record"):
+        st.verify_plan_binding(changed, text)
+    with pytest.raises(SystemExit, match="exactly one delimited"):
+        st.verify_plan_binding(rec, "no block here")
