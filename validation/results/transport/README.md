@@ -83,3 +83,26 @@ criterion. These archives are diagnostic evidence, not the conformant exact-SHA 
 plan requires; that qualification (standard multi-worker mode, including `05-a15-workers`) is
 pending the lifting of the operator directive. A11-HR cpu32:cuda32 and python:cpu64 channel-profile pairs pass; A16 qualified path
 bit-identical to a524f209; A7 within the analytic expected-share bound. Not a clinical claim.
+
+# Range-table consistency re-qualification (V3-003D)
+
+`hr-637ef82-single-process.json`, `lv-637ef82-single-process.json`, `hr4-637ef82-single-process.json`
+and `lv4-637ef82-single-process.json` are the combined `summarize.py --combine … --attest-sha`
+summaries of all four suites at the frozen V3-003D head `637ef82f37954ae565d97edc58c675b5835f47ec`
+(exact log-log quadrature range table with the closed-form range between nodes; plan
+`validation/plans/v3-003d-acceptance.md` rows D5/D6/D7), seed bases 20391004 (`hr`, `lv`) and
+20401004 (`hr4`, `lv4`), both fresh. Single-process diagnostic mode (operator directive
+2026-10-07): every executed step passed (`pass: true`); `04-t13-workers` and `05-a15-workers`
+are *deferred*, not passed, so the archives are deliberately **not conformant** and the conformant
+exact-SHA qualification remains pending the lifting of the directive. Observed: V3-003 T1 (256
+histories) python vs warp-cpu bit-identical, T2, T8, T9, T10, T12 (all pairs), T14 pass under the
+unchanged criteria; the `lv` pytest step ran the D1 NIST-water case fail-closed; A16 in the gated
+intended-change mode passed (baseline identity none, current `exact-loglog-quadrature-v1`, every
+allowlisted difference inside its bound); A9 under amendment ⁵ passed with z sd 1.014 / 1.056 /
+0.958 at 0.5·R / Bragg peak / distal 80 % and all-bins mean coverage 0.938 — the Bragg-peak z sd
+exceeded one for the fourth base in a row (1.069, 1.119, 1.079, 1.056), still inside [0.87, 1.13],
+which strengthens the open observation of V3-004 amendment ⁵. The earlier `fccb687` archives are
+the V3-004 evidence at the previous range table and are unaffected. Row mapping (the plan's own
+evidence table is intentionally unfilled at this head because the plan file is part of the A16
+source digest): D1/D1b/D2/D2b/D3/D4 CI part — CI and the `lv`/`lv4` pytest steps; D5 — `hr` and
+`lv`; D6 and D3 A4b — `hr4` and `lv4`; D7 — all four archives and the ledger. Not a clinical claim.

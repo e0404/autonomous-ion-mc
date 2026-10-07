@@ -1,10 +1,23 @@
 """Partition-independent reduction of per-history tallies and diagnostics (V3-003B).
 
 Every backend writes, for each history, one row of independently accumulated float64 tallies
-(``TALLY_NAMES``, then the energy deposited outside each scoring grid, then the quantization
-residual of each grid; with scoring channels, one residual column per channel but N and the lookup
-out-of-domain count, ``ionmc.transport.channels``) and one row of
-int32 transport-limit counters (``COUNTER_NAMES``). A history's row depends only on that
+and one row of int32 transport-limit counters (``COUNTER_NAMES``). The tally row has
+``N_FIXED_TALLIES + 2 n_grids + n_channel_columns`` columns, in this order:
+
+* the fixed tallies (``TALLY_NAMES``);
+* the energy deposited outside each scoring grid (``n_grids`` columns);
+* the quantization residual of each grid (``n_grids`` columns);
+* with scoring channels (``n_channel_columns = C_res + 2``, 0 without channels; decision 0040,
+  ``ionmc.transport.channels``): ``C_res`` quantization-residual columns, one per channel but N;
+  then the column ``C_res`` with the number of lookup arguments outside their table axis
+  (``lookup_out_of_domain``); then the column ``C_res + 1`` with ``path_bound_exceeded``, 1.0 for a
+  history whose scored path length exceeded the per-history bound ``B_L`` on which the channel
+  quanta rest, else 0.0 (summed over histories it is ``ChannelRaw.path_bound_exceeded``; a nonzero
+  value invalidates the result).
+
+Column numbers of the channel block count from its first column. ``rows_to_partial`` stores the
+columns unchanged and ``merge_partials`` indexes the last two from the end
+(``n_channel_columns - 2`` and ``n_channel_columns - 1``). A history's row depends only on that
 history, so it does not depend on how histories are split into chunks, worker processes or
 threads. The host reduces the rows *exactly*: the sum of the float64 values of a column is
 held as a Shewchuk-style expansion (a list of floats whose exact sum is the exact sum of the

@@ -251,7 +251,13 @@ class StoppingTable:
     ``s_el_mass`` [MeV cm2/g]; ``s_el_linear`` [MeV/mm] = S rho / 10;
     ``csda_range_g_cm2`` [g/cm2]; ``range_mm`` [mm]. ``metadata`` records source, I-value,
     options and the start-range approximation. Interpolation is log-log (piecewise linear
-    in ln E, ln S and ln R); range is monotone increasing so it can be inverted exactly.
+    in ln E, ln S and ln R); range is monotone increasing so it can be inverted exactly. The range
+    nodes are the exact integral of the log-log interpolated ``S`` (``range_construction`` in the
+    metadata); ``range_at`` interpolates log-log between them. The interpolation error is bounded by
+    ``h^2/8 max|(ln R)''|`` in ln E (``h`` the node spacing in ln E), i.e. it scales as the grid
+    spacing squared; on the default 200-points-per-decade grid (``h = ln 10 / 200``) it is within
+    1.2e-5 relative of the exact range (measured; coarser grids are not covered by that figure).
+    The transport tables evaluate the exact closed form between nodes.
     """
 
     projectile: Projectile
@@ -332,6 +338,33 @@ def log_grid(e_min: float, e_max: float, points_per_decade: int) -> NDArray[np.f
     return np.geomspace(e_min, e_max, n)
 
 
+RANGE_CONSTRUCTION = "exact-loglog-quadrature-v1"
+"""Identity of the CSDA range construction (decision 0039, V3-003D): the exact integral of the
+log-log interpolated stopping power. It enters the table summaries and the transport-table hash."""
+
+
+def exact_loglog_range_increments(
+    ln_e: NDArray[np.float64], ln_s: NDArray[np.float64], a: float
+) -> NDArray[np.float64]:
+    """Exact range increments between grid nodes for log-log interpolated ``S`` [g/cm2].
+
+    With ``f = a E / S`` (``dR/d ln E``) and ``S`` log-log linear between nodes, ``ln f`` is linear
+    in ``u = ln E`` on each interval: ``f(u) = f_i exp(d_i (u - u_i) / h_i)``, ``h_i`` the interval
+    width in ``u`` and ``d_i = ln f_{i+1} - ln f_i``. The increment is the closed form
+    ``int f du = h_i f_i (exp(d_i) - 1) / d_i`` (``= h_i (f_{i+1} - f_i) / d_i``), evaluated with
+    ``expm1`` and the series ``1 + d/2 + d^2/6`` for ``|d| < 1e-8``. The trapezoid rule would
+    overestimate every increment by ``d^2/12`` relative (2e-5 to 4e-5 on the 200-per-decade grid).
+    """
+    u = np.asarray(ln_e, dtype=np.float64)
+    ln_f = math.log(a) + u - np.asarray(ln_s, dtype=np.float64)
+    h = np.diff(u)
+    d = np.diff(ln_f)
+    small = np.abs(d) < 1.0e-8
+    safe = np.where(small, 1.0, d)
+    ratio = np.where(small, 1.0 + d * (0.5 + d / 6.0), np.expm1(safe) / safe)
+    return h * np.exp(ln_f[:-1]) * ratio
+
+
 def build_table(
     projectile: Projectile,
     material: Material,
@@ -342,9 +375,12 @@ def build_table(
 ) -> StoppingTable:
     """Assemble a :class:`StoppingTable` from stopping powers on a log grid.
 
-    ``R(E) = R(E_min) + int dE_total / S`` with ``dE_total = a dE_u``, evaluated by the
-    trapezoid rule of ``E_total/S`` over ln E on the given grid; ``start_range_g_cm2`` is
-    the range at the first grid energy.
+    ``R(E) = R(E_min) + int dE_total / S`` with ``dE_total = a dE_u``, the exact integral of the
+    log-log interpolated ``S`` (:func:`exact_loglog_range_increments`) at the grid nodes;
+    ``start_range_g_cm2`` is the range at the first grid energy. ``range_at`` interpolates
+    log-log between the nodes, which on the default 200-points-per-decade grid differs from the
+    exact range by at most 1.2e-5 relative (the bound scales with the grid spacing squared;
+    transport evaluates the exact closed form between nodes instead).
     """
     e = np.asarray(energy_per_u, dtype=np.float64)
     s = np.asarray(s_el_mass, dtype=np.float64)
@@ -354,9 +390,9 @@ def build_table(
         raise ValueError(
             "energies must be positive and increase; stopping powers and start range positive"
         )
-    f = projectile.a * e / s  # dR/dlnE [g/cm2]
-    dln = np.diff(np.log(e))
-    r = start_range_g_cm2 + np.concatenate(([0.0], np.cumsum(0.5 * (f[1:] + f[:-1]) * dln)))
+    inc = exact_loglog_range_increments(np.log(e), np.log(s), float(projectile.a))
+    r = start_range_g_cm2 + np.concatenate(([0.0], np.cumsum(inc)))
+    metadata = {**metadata, "range_construction": RANGE_CONSTRUCTION}
     rho = material.density_g_cm3
     if not np.all(np.isfinite(r)):
         raise ValueError("computed ranges are not finite")

@@ -40,7 +40,7 @@ LN10 = math.log(10.0)
 M_P = 938.27208816
 
 # column layout of the argument pools -------------------------------------------------------
-NX = 81  # real columns
+NX = 86  # real columns
 NV = 16  # vec3 columns
 NI = 13  # int columns
 NO = 40  # real outputs
@@ -282,6 +282,16 @@ def _args(precision: str) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     x[:, 78] = np.where(ii[:, 11] == 1, np.exp(arg), arg)  # lookup / spectrum argument
     x[:, 79] = a0
     x[:, 80] = inv_da
+    # range_in_bin: r_i, f_i, d_i, h, phi (|d phi| spans 0 to 0.2 and crosses the series guard 1e-5)
+    x[:, 81] = logu(1e-3, 200.0)
+    x[:, 82] = logu(0.05, 300.0)
+    x[:, 83] = logu(1e-9, 0.2) * rng.choice([-1.0, 1.0], n)
+    x[:, 84] = logu(5e-3, 2e-2)
+    x[:, 85] = rng.uniform(0.0, 1.0, n)
+    x[0:8, 85] = [0.0, 1.0, 1.0, 0.5, 1.0, 1.0, 1e-3, 1.0]
+    x[0:8, 83] = [0.1, 0.1, 0.0, -0.1, 1.0e-5, 0.99999e-5, 1.0e-5, -1.0e-5]
+    x[8:12, 85] = 1.0
+    x[8:12, 83] = [1.0e-4, -1.0e-4, 1.0e-6, -3.0e-5]
     return x.astype(dt), v.astype(dt), ii
 
 
@@ -401,6 +411,7 @@ def _make_kernel(real: Any) -> Any:
         lbi, lbf, lbin = sc.lookup_bin(x[i, 78], x[i, 79], x[i, 80], ii[i, 10], ii[i, 11])
         oi[i, 13] = lbi
         o[i, 36] = lbf
+        o[i, 37] = tf.range_in_bin(x[i, 81], x[i, 82], x[i, 83], x[i, 84], x[i, 85])
         oi[i, 14] = lbin
         oi[i, 15] = sc.spectrum_bin(x[i, 78], x[i, 79], x[i, 80], ii[i, 12], ii[i, 11])
 
@@ -499,6 +510,7 @@ def _python_scope(real: Any, x: np.ndarray, v: np.ndarray, ii: np.ndarray) -> tu
         lbi, lbf, lbin = sc.lookup_bin(r[78], r[79], r[80], k[10], k[11])
         oi[i, 13], o[i, 36], oi[i, 14] = int(lbi), float(lbf), int(lbin)
         oi[i, 15] = int(sc.spectrum_bin(r[78], r[79], r[80], k[12], k[11]))
+        o[i, 37] = float(tf.range_in_bin(r[81], r[82], r[83], r[84], r[85]))
     return o, oi, ov
 
 
@@ -512,6 +524,7 @@ REAL_OUTPUTS = {
     25: "dda_clip_distance", 26: "leg2_clip_length", 27: "seg_piece_length",
     28: "straggle_gamma_loss", 29: "loglog_slope", 30: "let_ramp_slope", 31: "piece_s_bar",
     32: "piece_e_bar", 33: "piece_m1", 34: "piece_m2", 35: "channel_value", 36: "lookup_frac",
+    37: "range_in_bin",
 }  # fmt: skip
 INT_OUTPUTS = {
     0: "straggle_ok", 1: "log_bin_index", 2: "dda_axis", 3: "leg2_axis", 4: "select_reason",
@@ -564,6 +577,24 @@ def _float32_budgets(x: np.ndarray) -> dict[int, tuple[float, np.ndarray | float
     # magnitude with 4 roundings (1 - f, two products, the sum), so its absolute error is
     # (3 * 10 + 1) u and the relative error of the exponential is that plus u for exp itself.
     out[12] = (32.0 * U, 1e-6)
+    # range_in_bin = r_i + h f_i g, g = (exp(x) - 1) / d with x = d phi (exact float32 arguments).
+    # exp branch: x has relative error u (one product), exp(x) a further u, the subtraction of 1 a
+    # rounding u |exp(x) - 1|: absolute error of exp(x) - 1 is at most
+    # u (e^x (|x| + 1) + |e^x - 1|);
+    # divided by |d| plus u |g| for the division. Series branch (|x| < 1e-5): about 5 roundings of
+    # terms of at most 1, 5 u |g|. The two further products and the final sum add 3 u of the
+    # result, and the budget is doubled (conservative: the kernel may fuse operations, the
+    # compiled and Python-scope evaluations of the exp may differ by an ulp).
+    r_i, f_i, d_i, h_i, ph = (x[:, c].astype(np.float64) for c in range(81, 86))
+    xx_ = d_i * ph
+    gg = np.where(np.abs(xx_) >= 1e-5, np.expm1(xx_) / np.where(d_i == 0.0, 1.0, d_i), ph)
+    exp_err = U * (np.exp(xx_) * (np.abs(xx_) + 1.0) + np.abs(np.expm1(xx_)))
+    g_err = np.where(
+        np.abs(xx_) >= 0.9e-5,
+        exp_err / np.maximum(np.abs(d_i), 1e-300) + U * np.abs(gg),
+        5.0 * U * np.abs(gg),
+    )
+    out[37] = (0.0, 2.0 * (h_i * f_i * g_err + 3.0 * U * np.abs(r_i + h_i * f_i * gg)) + 1e-6)
     # f_dM: cancellation of 1 - (pv/p1v1)^2 (see _fdm_abs_budget)
     fdm_abs = _fdm_abs_budget(x[:, 20], x[:, 21], x[:, 20], 0.0)
     out[7] = (1e-6, fdm_abs + 1e-6)
@@ -646,7 +677,8 @@ EXERCISED = {
         "lookup_bin", "spectrum_bin",
     },
     "tf": {
-        "lerp", "interp_exp", "log_bin_index", "plane_position", "dda_next", "dda_next_clip",
+        "lerp", "interp_exp", "range_in_bin", "log_bin_index", "plane_position", "dda_next",
+        "dda_next_clip",
         "leg2_limit", "leg2_limit_clip", "seg_piece", "range_step_limit", "eloss_step_limit",
         "select_step", "point_on_hinge", "grid_index", "ray_box", "gauss_pair", "gauss_one",
         "orthonormal_basis",

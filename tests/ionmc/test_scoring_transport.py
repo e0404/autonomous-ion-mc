@@ -204,8 +204,10 @@ def test_a3_pencil_fluence_aligned_grid(make_config: MakeConfig) -> None:
 
 def _energy_at_depth(eff: EffectiveConfig, e0: float, z_mm: np.ndarray) -> np.ndarray:
     """Table CSDA energy ``Rinv(R(E0) - rho z)`` at depth ``z`` in water (single-shot inversion of
-    the run's own range table). Informative only (plan footnote 1): it carries the trapezoid bias
-    of the range table (decision 0039 follow-up V3-003D) and is not the reference of A4/A4b."""
+    the run's own range table). Gating since V3-003D (plan amendment 6, row D3 of the V3-003D
+    plan): the range table is the exact integral of the interpolated S, so the transported energy
+    and this energy agree to 1e-4. Before V3-003D the trapezoid bias of the range table made it
+    informative only."""
     t = eff.tables
     r0 = t.range_g_cm2(0, e0)
     return np.array([t.energy_from_range(0, r0 - z / 10.0) for z in z_mm])
@@ -280,10 +282,11 @@ def test_a4_csda_let_t_and_let_d(make_config: MakeConfig) -> None:
     assert np.all(np.abs(let_t[sel] * 2.0 - de) / de <= 1e-4), np.abs(
         let_t[sel] * 2.0 / de - 1
     ).max()
-    # informative, non-gating (plan footnote 1): deviation from the table CSDA energy
+    # deviation from the table CSDA energy: gated by D3 (the table construction is exact, V3-003D)
+    worst_tab = float(np.max(np.abs(let_t[sel] * 2.0 - de_tab) / de_tab))
     print("A4 worst vs transported E(z):", float(np.max(np.abs(let_t[sel] * 2.0 - de) / de)))
-    print("A4 worst vs table CSDA E(z) (non-gating):",
-          float(np.max(np.abs(let_t[sel] * 2.0 - de_tab) / de_tab)))  # fmt: skip
+    print("A4 worst vs table CSDA E(z):", worst_tab)
+    assert worst_tab <= 1e-4, worst_tab
     # LET_d = int S dE / dE on the same water table (numpy quadrature)
     for j, v in enumerate(sel):
         e = np.linspace(e_lo[j], e_hi[j], 2001)
@@ -297,7 +300,8 @@ def _a4b_worst(
     r: Run, z_cut: float, z_min: float, z_max: float, *, table_csda: bool = False
 ) -> float:
     """Worst relative error of LS_v / N against E(z1) - E(z2) of the transported particle (plan
-    footnote 1; ``table_csda`` selects the single-shot table inversion, informative) over the
+    footnote 1; ``table_csda`` selects the single-shot table inversion, gating since V3-003D) over
+    the
     1.5 mm bins (offset 0.25 mm) fully inside ``[z_min, min(z_max, z_cut)]``."""
     iz = np.arange(113)
     z1, z2 = 0.25 + iz * 1.5, 0.25 + (iz + 1) * 1.5
@@ -318,11 +322,12 @@ def test_a4b_offset_grid_all_bins_proximal_to_cutoff(make_config: MakeConfig) ->
     r = _csda_run(make_config, _reqs("let_t"), 150.0, 1.0, A4B_GRID)
     z_cut = _cut_depth(r)
     assert _a4b_worst(r, z_cut, 100.0, 1e9) <= 1e-4
-    # informative, non-gating record of the table-CSDA comparison (range-table trapezoid bias,
-    # follow-up V3-003D; plan footnote 1)
+    # gating since V3-003D (row D3 of the V3-003D plan; the trapezoid control is in
+    # test_range_quadrature.py): the table CSDA energy agrees as well
     print("A4b worst vs transported E(z):", _a4b_worst(r, z_cut, 100.0, 1e9))
-    print("A4b worst vs table CSDA E(z) (non-gating):",
-          _a4b_worst(r, z_cut, 100.0, 1e9, table_csda=True))  # fmt: skip
+    worst_table = _a4b_worst(r, z_cut, 100.0, 1e9, table_csda=True)
+    print("A4b worst vs table CSDA E(z):", worst_table)
+    assert worst_table <= 1e-4
 
 
 @pytest.mark.parametrize("max_step", [0.5, 0.25])
@@ -849,7 +854,9 @@ class DropSource:
         if material.name == WATER.name:
             return build_table(projectile, material, e, np.full_like(e, 10.0), e[0] / 10.0, {})
         s = 5.0 * np.minimum(1.0, (e / self.e_drop) ** 3)
-        # range integral dE / S on the grid (trapezoid in ln E), start range from the first node
+        # range integral dE / S on the grid (exact log-log quadrature in build_table), start
+        # range from
+        # the first node
         r0 = e[0] / (4.0 * s[0])
         return build_table(projectile, material, e, s, r0, {"source": "drop"})
 

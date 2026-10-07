@@ -43,8 +43,10 @@ confined to the last part of the track.
 `BetheStoppingSource(options, e_min_per_u, e_max_per_u, points_per_decade).table(material,
 projectile)` returns a `StoppingTable` on a log-spaced grid (defaults 1 to 500 MeV/u,
 200 points per decade) with `s_el_mass` [MeV cm^2/g], `s_el_linear` [MeV/mm] =
-S rho / 10, `csda_range_g_cm2` and `range_mm`. The CSDA range is the trapezoid integral
-of `a E_u / S` over ln E_u starting from `a E_min / S(E_min)`, which is the integral of
+S rho / 10, `csda_range_g_cm2` and `range_mm`. The CSDA range is the exact integral
+of the log-log interpolated `a E_u / S` over ln E_u (closed form per grid interval, decision 0039
+V3-003D, `range_construction = exact-loglog-quadrature-v1`; the trapezoid rule overestimated every
+increment by 2e-5 to 4e-5) at the grid nodes, starting from `a E_min / S(E_min)`, which is the integral of
 dE/S below E_min for a constant stopping power equal to S(E_min). This is an approximation,
 not a bound: the stopping power rises below E_min only down to its low-energy maximum
 (around 0.1 MeV/u for protons in water) and falls again at lower velocity, so the true
@@ -52,7 +54,9 @@ residual range can be smaller or larger. The offset is of the order of 0.02 mm o
 for protons and is recorded in the table metadata; transport deposits the energy below
 E_cut locally, so the offset does not enter a transported range. Stopping
 power, range and the inverse `energy_from_range` use one log-log piecewise-linear
-interpolant, so `energy_from_range(range_at(E))` returns E to rounding error.
+interpolant, so `energy_from_range(range_at(E))` returns E to rounding error. `range_at` is log-log
+interpolated between the nodes (within 1.2e-5 relative of the exact integral); the transport tables
+evaluate the exact closed form between nodes instead.
 `NistStarStoppingSource` produces the same structure from a cached PSTAR (protons) or
 ASTAR (alpha) liquid-water table, starting the range from the NIST CSDA range at E_min.
 `NistStarStoppingSource` accepts a material only if it is structurally liquid water

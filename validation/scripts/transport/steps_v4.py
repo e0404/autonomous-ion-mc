@@ -12,8 +12,8 @@ The steps run in the suites ``lv4`` and ``hr4`` of ``run_suite.py`` and follow t
 ``"reduced": true`` and a pass is not a conformant result. Everything uses the offline analytic
 Bethe stopping source (I = 78 eV) and the synthetic lookup fixture ``tests/data/synthetic_lookup.json``.
 
-Seeds derive deterministically from one ``--seed-base`` (default 20381004, the V3-004 qualification
-base; 20351004 is the rehearsal base, see the plan): A7 ``base + i`` (i-th step length), A8
+Seeds derive deterministically from one ``--seed-base`` (default 20401004, the V3-004 qualification
+base (V3-003D; 20381004 consumed); 20351004 is the rehearsal base, see the plan): A7 ``base + i`` (i-th step length), A8
 ``base + 8``, A9 ``base + 10000 + i`` (i-th seed), A11 LV ``base + 11``, A11 HR ``base + 1000 k``
 (k = 1 python, 2 cpu32, 3 cpu64, 4 cuda32, as T12), A13 ``base + 13``, A15 and A16 fixed small
 configurations at ``base`` (A16 digests use the fixed seed documented in ``a16_digest.py``).
@@ -87,7 +87,7 @@ LK_E = LookupTable(
     "validation/scripts/transport/steps_v4.py (f = 1 .. 3 linear in the sample index)", True,
 )  # fmt: skip
 LOOKUPS = (LK_LET, LK_E)
-QUALIFICATION_SEED_BASE = 20381004
+QUALIFICATION_SEED_BASE = 20401004
 REHEARSAL_SEED_BASE = 20351004
 
 ENERGY_MEV = 150.0
@@ -109,6 +109,9 @@ A15_HISTORIES = {"warp-cpu": 200_000, "warp-cuda": 1_000_000}
 A15_BATCHES = 20
 A11_LV_K = 256
 A16_BASELINE = "a524f209"
+"""Qualified-path baseline of row A16 (plan amendment 6): the latest v3/develop commit that
+intentionally changed the qualified transport path. a524f209 until V3-003D merges; the first
+commit of the next task sets it to the V3-003D merge commit, citing amendment 6."""
 A16_SPECS = (
     "t1:python:float64",
     "t1:warp-cpu:float64",
@@ -309,7 +312,7 @@ def step_a7(a: argparse.Namespace) -> int:
         allow = 4.0 * sd + delta
         ratio_allow = np.abs(d[sel]) / allow[sel]
         ratio_delta = np.abs(d[sel]) / delta[sel]
-        n_sel = int(((p["dose"] > 0.1 * p["dose"].max())).sum())
+        n_sel = int((p["dose"] > 0.1 * p["dose"].max()).sum())
         worst = float(np.nanmax(np.abs(zs))) if zs.size else math.nan
         ok = bool(
             zs.size == n_sel and np.all(np.isfinite(ratio_allow)) and ratio_allow.max() <= 1.0
@@ -328,15 +331,15 @@ def step_a7(a: argparse.Namespace) -> int:
             "max_abs_d_over_delta": float(ratio_delta.max()),
             "max_delta_rel": float(np.nanmax(delta[sel] / p["let_d"].mean[sel])),
             "plateau_max_d_over_4sigma_plus_delta": float(ratio_allow[z_pl].max())
-            if z_pl.any() else None,
+            if z_pl.any()
+            else None,
             "distal_max_d_over_4sigma_plus_delta": float(ratio_allow[z_di].max())
-            if z_di.any() else None,
+            if z_di.any()
+            else None,
             "pass": ok,
         }
         ok_eps &= ok
-    change = {
-        f"{s}_vs_1.0": abs(est[s] - est[1.0]) / est[1.0] for s in A7_STEPS_MM if s != 1.0
-    }
+    change = {f"{s}_vs_1.0": abs(est[s] - est[1.0]) / est[1.0] for s in A7_STEPS_MM if s != 1.0}
     ctrl_ok = bool(change["0.1_vs_1.0"] >= 0.10)
     zc = (np.arange(nz) + 0.5)[pm]
     doc = {
@@ -353,7 +356,11 @@ def step_a7(a: argparse.Namespace) -> int:
             for s in A7_STEPS_MM
         },
         "step_independence": {"pairs": pairs, "bound": 0.01, "pass": ok_pairs},
-        "let_d_vs_let_d_eps": {"by_step": eps_cmp, "criterion": "|D| <= 4 sigma_D + delta_v (footnote 2)", "pass": ok_eps},
+        "let_d_vs_let_d_eps": {
+            "by_step": eps_cmp,
+            "criterion": "|D| <= 4 sigma_D + delta_v (footnote 2)",
+            "pass": ok_eps,
+        },
         "negative_control": {
             "estimator": "sum(eps^2/l) / sum(eps) over the traced plateau steps",
             "value_kev_um": {str(s): est[s] for s in A7_STEPS_MM},
@@ -402,7 +409,8 @@ def step_a8(a: argparse.Namespace) -> int:
             "defined_bins": n_def,
             "compared_bins": int(rel.size),
             "max_rel_diff": worst,
-            "worst_depth_mm": float(np.nonzero(defined)[0][np.argmax(rel)] + 0.5) if rel.size
+            "worst_depth_mm": float(np.nonzero(defined)[0][np.argmax(rel)] + 0.5)
+            if rel.size
             else None,
             "max_rel_diff_dose_above_10pct": float(rel_hi.max()) if rel_hi.size else math.nan,
             "bound": 0.005,
@@ -624,8 +632,10 @@ def step_a9_compare(a: argparse.Namespace) -> int:
         "batches": A9_BATCHES,
         "coverage": cov,
         "criterion": {
-            "z_std_band": list(A9_ZSTD_BAND), "z_mean_abs_max": A9_ZMEAN_MAX,
-            "all_bins_coverage_band": list(A9_COVER_ALL_BAND), "plan": "footnote 5",
+            "z_std_band": list(A9_ZSTD_BAND),
+            "z_mean_abs_max": A9_ZMEAN_MAX,
+            "all_bins_coverage_band": list(A9_COVER_ALL_BAND),
+            "plan": "footnote 5",
         },
         "r80_mm": r80,
         "informative_all_bins_dose_above_10pct": {
@@ -673,7 +683,8 @@ def step_a13(a: argparse.Namespace) -> int:
                     "let_d_kev_um": float(m[i]) if dfn[i] else None,
                     "let_d_std": float(ld.std.reshape(-1)[i]) if dfn[i] else None,
                     "let_t_kev_um": float(lt.mean.reshape(-1)[i])
-                    if lt.defined_mask.reshape(-1)[i] else None,
+                    if lt.defined_mask.reshape(-1)[i]
+                    else None,
                     "dose_fraction_of_max": float(dose[i] / dose.max()),
                 }
             )
@@ -723,12 +734,8 @@ def step_a15(a: argparse.Namespace) -> int:
             ok &= bool(v["pass"] and counters_clean(one) and counters_clean(many))
     else:
         for prec in ("float32", "float64"):
-            small = base.run_cfg(
-                backend=a.backend, precision=prec, chunk=2**10, workers=1, **kw
-            )
-            large = base.run_cfg(
-                backend=a.backend, precision=prec, chunk=2**18, workers=1, **kw
-            )
+            small = base.run_cfg(backend=a.backend, precision=prec, chunk=2**10, workers=1, **kw)
+            large = base.run_cfg(backend=a.backend, precision=prec, chunk=2**18, workers=1, **kw)
             v = compare_channel_partition(small, large)
             ns = small.transport_report["partials"][0]["n_chunks"]
             nl = large.transport_report["partials"][0]["n_chunks"]
@@ -778,9 +785,7 @@ def compare_channels_ci(a: Result, b: Result) -> dict[str, Any]:
         for k in qa
     )
     ood = (a.channel_raw.lookup_out_of_domain, b.channel_raw.lookup_out_of_domain)
-    resid = bool(
-        np.allclose(a.channel_raw.residual, b.channel_raw.residual, rtol=1e-9, atol=1e-18)
-    )
+    resid = bool(np.allclose(a.channel_raw.residual, b.channel_raw.residual, rtol=1e-9, atol=1e-18))
     return {
         "worst_over_bound_by_channel": worst,
         "max_over_bound": max(worst.values()),
@@ -897,10 +902,14 @@ def _git(*args: str) -> str | None:
     return r.stdout.strip() if r.returncode == 0 else None
 
 
-def _digests(src: Path, tallies: str, specs: str, env_extra: dict[str, str]) -> dict[str, Any]:
+def _digests(
+    src: Path, tallies: str, specs: str, env_extra: dict[str, str], dump: Path | None = None
+) -> dict[str, Any]:
     env = dict(os.environ, PYTHONPATH=str(src), PYTHONDONTWRITEBYTECODE="1", **env_extra)
     cmd = [sys.executable, str(HERE / "a16_digest.py"), "--specs", specs,
            "--tallies", tallies]  # fmt: skip
+    if dump is not None:
+        cmd += ["--dump", str(dump)]
     p = subprocess.run(cmd, capture_output=True, text=True, env=env, timeout=3000)
     if p.returncode != 0 or "#DIGEST-BEGIN" not in p.stdout:
         raise SystemExit(f"digest run failed ({src}, tallies={tallies}):\n{p.stderr[-3000:]}")
@@ -912,7 +921,280 @@ def _digests(src: Path, tallies: str, specs: str, env_extra: dict[str, str]) -> 
     return doc
 
 
+def verify_intended_change(
+    record: dict[str, Any] | None, baseline_ref: str, baseline_value: Any, current_value: Any
+) -> dict[str, Any]:
+    """Fail-closed check of the A16 intended-change exception (``A16_INTENDED_CHANGE`` of
+    ``run_suite.py``): a record must be given, name this ``A16_BASELINE``, and the table identity
+    of the baseline tree and of the tree under test must be exactly the recorded old and new
+    values. Returns the verified identities for the step output; raises ``SystemExit`` otherwise."""
+    if not record:
+        raise SystemExit("A16 --mode intended-change needs the A16_INTENDED_CHANGE record "
+                         "(none given): fail closed, use --mode regression")  # fmt: skip
+    keys = {"task", "baseline", "identity_field", "baseline_value", "new_value",
+            "allowed_differing_fields", "physical_limits", "bounds", "source_digest",
+            "plan_block_sha256"}  # fmt: skip
+    if set(record) != keys:
+        raise SystemExit(f"A16 intended-change record must have exactly the keys {sorted(keys)}")
+    if not (A16_BASELINE.startswith(str(record["baseline"])) or
+            str(record["baseline"]).startswith(A16_BASELINE)):  # fmt: skip
+        raise SystemExit(f"A16 intended-change record names baseline {record['baseline']}, "
+                         f"but A16_BASELINE is {A16_BASELINE}")  # fmt: skip
+    if baseline_value != record["baseline_value"]:
+        raise SystemExit(
+            f"A16 intended-change: the baseline tree's {record['identity_field']} is "
+            f"{baseline_value!r}, the record expects {record['baseline_value']!r}; if the "
+            f"baseline already carries the new construction, delete A16_INTENDED_CHANGE and "
+            f"advance A16_BASELINE (plan amendment 6)"
+        )
+    if current_value != record["new_value"]:
+        raise SystemExit(
+            f"A16 intended-change: the tree under test's {record['identity_field']} is "
+            f"{current_value!r}, the record expects {record['new_value']!r}"
+        )
+    if baseline_value == current_value:
+        raise SystemExit("A16 intended-change: baseline and current identities do not differ")
+    return {
+        "record": record,
+        "verified_baseline_identity": baseline_value,
+        "verified_current_identity": current_value,
+    }
+
+
+PLAN_FILE = "validation/plans/v3-003d-acceptance.md"
+PLAN_BEGIN, PLAN_END = "<!-- A16-INTENDED-CHANGE-BEGIN -->", "<!-- A16-INTENDED-CHANGE-END -->"
+
+
+def plan_block(text: str) -> str:
+    """The delimited block of the V3-003D plan that states the A16 intended-change record."""
+    if text.count(PLAN_BEGIN) != 1 or text.count(PLAN_END) != 1:
+        raise SystemExit("A16 intended-change: the plan lacks exactly one delimited record block")
+    return text[text.index(PLAN_BEGIN) : text.index(PLAN_END) + len(PLAN_END)]
+
+
+def record_json(record: dict[str, Any]) -> str:
+    """Canonical JSON of the record without its hash (the content of the plan block)."""
+    return json.dumps({k: v for k, v in record.items() if k != "plan_block_sha256"},
+                      sort_keys=True, indent=1)  # fmt: skip
+
+
+def verify_plan_binding(record: dict[str, Any], plan_text: str) -> str:
+    """The plan block hashes to ``plan_block_sha256`` and states exactly the record (so the record
+    is the one reviewed in the plan of the task it names). Returns the verified hash."""
+    import hashlib
+
+    block = plan_block(plan_text)
+    sha = hashlib.sha256(block.encode()).hexdigest()
+    if sha != record["plan_block_sha256"]:
+        raise SystemExit(f"A16 intended-change: the plan block hashes to {sha}, the record binds "
+                         f"{record['plan_block_sha256']}")  # fmt: skip
+    inner = block[len(PLAN_BEGIN) : -len(PLAN_END)]
+    stated = json.loads(inner[inner.index("{") : inner.rindex("}") + 1])
+    if stated != json.loads(record_json(record)):
+        raise SystemExit("A16 intended-change: the plan block does not state the record")
+    return sha
+
+
+def verify_source_digest(record: dict[str, Any], digest: str | None = None) -> str:
+    """The record is valid only for the exact source state it was written for: the digest of the
+    hashed source set of the tree under test (``run_suite.a16_source_digest``) must equal
+    ``source_digest``. Fails closed otherwise."""
+    if digest is None:
+        import run_suite
+
+        digest = run_suite.a16_source_digest()
+    if digest != record["source_digest"]:
+        raise SystemExit(
+            f"A16 intended-change: the source digest of the tree under test is {digest}, the "
+            f"record is bound to {record['source_digest']}. The A16_INTENDED_CHANGE record is valid "
+            f"only for the exact source state it was written for: regenerate it "
+            f"(run_suite.py --print-a16-source-digest, then the plan block hash) or, once V3-003D "
+            f"is merged, delete it and advance A16_BASELINE (plan amendment 6)."
+        )
+    return digest
+
+
+def _rel(x: Any, y: Any) -> float:
+    xv, yv = np.asarray(x, dtype=np.float64), np.asarray(y, dtype=np.float64)
+    return float(abs(yv.sum() - xv.sum()) / abs(xv.sum()))
+
+
+def _over(values: Any, limit: float) -> float:
+    """Amount by which the largest value exceeds ``limit`` (0 when within; infinite for NaN, so a
+    NaN can never satisfy a cap)."""
+    top = float(np.max(values))
+    return math.inf if math.isnan(top) else max(0.0, top - limit)
+
+
+def _outside(pos: Any, lo: Any, hi: Any) -> float:
+    """Largest distance [mm] of any (..., 3) position outside the box ``lo``..``hi`` (0 inside)."""
+    p = np.asarray(pos, dtype=np.float64)
+    if not np.all(np.isfinite(p)):
+        return math.inf
+    return float(max(np.max(np.asarray(lo) - p), np.max(p - np.asarray(hi)), 0.0))
+
+
+TRACE_DISCRETE = ("history", "ix", "iy", "iz", "reason", "step", "blocks")
+
+
+def nonfinite_fields(raw: Any) -> list[str]:
+    """Keys of the raw A16 values (``{key: array}``) that hold a NaN or infinity."""
+    bad = []
+    for k in sorted(raw):
+        a = np.asarray(raw[k])
+        if a.dtype.kind in "fc" and not np.all(np.isfinite(a)):
+            bad.append(k)
+    return bad
+
+
+def a16_metrics(
+    fam: str, lim: dict[str, Any], fb: dict[str, Any], fc: dict[str, Any]
+) -> dict[str, float]:
+    """Measured quantities of the allowed differences of one spec (``fb``, ``fc``: field -> raw
+    value of the baseline tree and of the tree under test; ``lim``: the physical limits of the
+    family). Quantities missing a field raise ``KeyError`` (reported by the caller)."""
+    m: dict[str, float] = {}
+    n_b = fb.get("diagnostics.trace.step", np.empty(0)).size
+    n_c = fc.get("diagnostics.trace.step", np.empty(0)).size
+    m["trace_rows_rel"] = abs(n_c - n_b) / max(n_b, 1)
+    for tag, f_, n_ in (("baseline", fb, n_b), ("current", fc, n_c)):
+        ragged = [k for k, v in f_.items() if k.startswith("diagnostics.trace.") and v.size != n_]
+        if ragged:
+            raise ValueError(f"{tag} trace columns have unequal row counts: {ragged[:3]}")
+    eb, ec = "energy_balance.", "energy_balance."
+    m["in_grid_rel"] = _rel(fb[eb + "in_grid_mev"], fc[ec + "in_grid_mev"])
+    m["step_deposit_rel"] = _rel(fb[eb + "step_deposit_mev"], fc[ec + "step_deposit_mev"])
+    m["cutoff_rel"] = _rel(fb[eb + "cutoff_mev"], fc[ec + "cutoff_mev"])
+    m["quantization_abs_mev"] = float(
+        np.abs(fc[ec + "quantization_mev"] - fb[eb + "quantization_mev"]).max()
+    )
+    grid_c = np.asarray(fc["grid.dose.batch_energy_mev"], dtype=np.float64)
+    gb = np.asarray(fb["grid.dose.batch_energy_mev"], dtype=np.float64).sum(0)
+    gc = grid_c.sum(0)
+    m["grid_negative_mev"] = max(0.0, -float(grid_c.min()))
+    pb, pc = gb.sum((0, 1)), gc.sum((0, 1))
+    m["depth_max_layer_moved"] = float(int(np.argmax(pb)) != int(np.argmax(pc)))
+    m["profile_abs_over_max"] = float(np.abs(pc - pb).max() / pb.max())
+    sel = pb > 0.01 * pb.max()
+    m["profile_rel_max"] = float(np.max(np.abs(pc[sel] - pb[sel]) / pb[sel]))
+    vox = gb > 0.01 * gb.max()
+    m["voxel_rel_max"] = float(np.max(np.abs(gc[vox] - gb[vox]) / gb[vox]))
+    pos_b, pos_c = fb["diagnostics.end_position_mm"], fc["diagnostics.end_position_mm"]
+    dpos = np.abs(pos_c - pos_b)
+    dz = pos_c[:, 2] - pos_b[:, 2]
+    m["end_position_max_mm"] = float(dpos.max())
+    m["end_position_moved_gt1mm_fraction"] = float(np.mean(dpos.max(1) > 1.0))
+    m["end_dz_median_abs_mm"] = float(abs(np.median(dz)))
+    m["end_dz_mean_abs_mm"] = float(abs(dz.mean()))
+    m["end_position_outside_mm"] = _outside(pos_c, lim["box_min_mm"], lim["box_max_mm"])
+    ek = [k for k in ("diagnostics.end_energy_mev", "diagnostics.trace_end_energy_mev") if k in fc]
+    de = [fc[k] - fb[k] for k in ek]
+    m["end_energy_max_mev"] = max(float(np.abs(x).max()) for x in de)
+    m["end_energy_mean_abs"] = max(float(abs(x.mean())) for x in de)
+    m["end_energy_over_cut_mev"] = max(_over(fc[k], lim["e_cut_mev"]) for k in ek)
+    dd = fc["diagnostics.end_direction"] - fb["diagnostics.end_direction"]
+    m["end_direction_max"] = float(np.abs(dd).max())
+    m["end_direction_mean_abs"] = float(np.abs(dd).mean())
+    m["end_direction_norm_err"] = float(
+        np.abs(np.linalg.norm(fc["diagnostics.end_direction"], axis=1) - 1.0).max()
+    )
+    if n_c:
+        t = lambda c, f=fc: np.asarray(f[f"diagnostics.trace.{c}"], dtype=np.float64)  # noqa: E731
+        m["trace_energy_over_e0_mev"] = _over(t("energy_mev"), lim["e0_mev"])
+        m["trace_step_over_max_mm"] = _over(t("step_mm"), lim["max_step_mm"])
+        m["trace_deposit_row_max_mev"] = float(t("deposit_mev").max())
+        m["trace_deposit_negative_mev"] = max(0.0, -float(t("deposit_mev").min()))
+        xyz = np.stack([t("x_mm"), t("y_mm"), t("z_mm")], axis=1)
+        m["trace_position_outside_mm"] = _outside(xyz, lim["box_min_mm"], lim["box_max_mm"])
+        m["trace_direction_over_unit"] = _over(np.abs(np.stack([t("ux"), t("uy"), t("uz")])), 1.0)
+        m["trace_attempts_max"] = float(t("attempts").max())
+        bad = 0
+        for col in TRACE_DISCRETE:
+            vb, vc = t(col, fb), t(col)
+            bad += (
+                int(np.sum(~np.isin(vc, np.unique(vb))))
+                if col == "reason"
+                else int(np.sum((vc < vb.min()) | (vc > vb.max())))
+            )
+        m["trace_discrete_out_of_range"] = float(bad)
+    if n_b == n_c and n_c:
+        tm = lambda cols: max(  # noqa: E731
+            float(np.abs(fc[f"diagnostics.trace.{c}"] - fb[f"diagnostics.trace.{c}"]).max())
+            for c in cols
+        )
+        m["trace_energy_max_mev"] = tm(("energy_mev",))
+        m["trace_position_max_mm"] = tm(("x_mm", "y_mm", "z_mm"))
+        m["trace_deposit_max_mev"] = tm(("deposit_mev",))
+        m["trace_step_max_mm"] = tm(("step_mm",))
+        m["trace_direction_max"] = tm(("ux", "uy", "uz"))
+    return m
+
+
+def a16_gate(record: dict[str, Any], base: Any, cur: Any) -> dict[str, Any]:
+    """Gated comparison of the raw A16 values (``{"spec|field": array}``) of the baseline tree and
+    the tree under test. Per spec: the field sets are equal; a field that is not bit-identical must
+    be listed in ``allowed_differing_fields`` of its family together with the bound keys that
+    constrain it, each of those quantities must be evaluated and within ``bounds``, and every
+    other field must be identical (so no allowlisted field is without a bound, and an unlisted
+    change fails). Quantities with a bound are gated even if no differing field names them."""
+    specs = sorted({k.split("|")[0] for k in base} | {k.split("|")[0] for k in cur})
+    report: dict[str, Any] = {}
+    all_ok = True
+    for spec in specs:
+        fam = spec.split(":")[0]
+        allowed, bnd = record["allowed_differing_fields"][fam], record["bounds"][fam]
+        pre = spec + "|"
+        fb = {k[len(pre) :]: base[k] for k in base if k.startswith(pre)}
+        fc = {k[len(pre) :]: cur[k] for k in cur if k.startswith(pre)}
+        viol: list[str] = []
+        if set(fb) != set(fc):
+            viol.append(f"field sets differ: {sorted(set(fb) ^ set(fc))[:6]}")
+        differing = []
+        for f in sorted(set(fb) & set(fc)):
+            if fb[f].shape != fc[f].shape or not np.array_equal(fb[f], fc[f]):
+                differing.append(f)
+        nonfinite = [f"{t}: non-finite values in {f}"
+                     for t, d in (("baseline", fb), ("current", fc)) for f in nonfinite_fields(d)]  # fmt: skip
+        if nonfinite:
+            viol.extend(nonfinite)
+            report[spec] = {"differing_fields": differing, "measured": {}, "violations": viol}
+            all_ok = False
+            continue
+        try:
+            m = a16_metrics(fam, record["physical_limits"][fam], fb, fc)
+        except (KeyError, ValueError) as e:
+            m = {}
+            viol.append(f"cannot evaluate the bounds: {e}")
+        for f in differing:
+            keys = allowed.get(f)
+            if not keys:
+                viol.append(f"field differs without an allowlisted bound: {f}")
+                continue
+            for k in keys:
+                if k not in bnd or k not in m:
+                    viol.append(f"{f}: bound {k} is not defined or not evaluated")
+        for k, v in m.items():
+            if k in bnd and not v <= bnd[k]:
+                viol.append(f"{k} = {v:.4g} exceeds the bound {bnd[k]:.4g}")
+        report[spec] = {"differing_fields": differing, "measured": m, "violations": viol}
+        all_ok &= not viol
+    return {"ok": bool(all_ok), "specs": report}
+
+
 def step_a16(a: argparse.Namespace) -> int:
+    """Row A16 (plan amendment 6). (a) Tally neutrality, gating in both modes: the digests of the
+    tree under test with ``tallies = ()`` equal those with all tallies. (b) ``--mode regression``,
+    gating: the no-tally digests equal those of ``A16_BASELINE``. (c) ``--mode intended-change``
+    (V3-003D only): the differences against ``A16_BASELINE`` are reported, non-gating, and only if
+    the ``--intended-change-record`` (``A16_INTENDED_CHANGE`` of ``run_suite.py``) is verified
+    against the table identities of the two trees (:func:`verify_intended_change`)."""
+    record = getattr(a, "intended_change_record", None)
+    if a.mode == "intended-change" and not record:
+        verify_intended_change(None, A16_BASELINE, None, None)  # fail closed before any run
+    plan_sha = None
+    if record:
+        plan_sha = verify_plan_binding(record, (REPO / PLAN_FILE).read_text())
+        verify_source_digest(record)
     full = _git("rev-parse", "--verify", f"{A16_BASELINE}^{{commit}}")
     if full is None:
         raise SystemExit(
@@ -920,33 +1202,86 @@ def step_a16(a: argparse.Namespace) -> int:
         )
     specs = ",".join(A16_SPECS)
     env_extra = {k: v for k, v in os.environ.items() if k.startswith("WARP")}
+    dumps = tempfile.TemporaryDirectory(prefix="a16-raw-")
+    raw_b, raw_c = Path(dumps.name) / "baseline.npz", Path(dumps.name) / "current.npz"
+    raw_w = Path(dumps.name) / "with_tallies.npz"
     with tempfile.TemporaryDirectory(prefix="a16-baseline-") as tmp:
         tar = subprocess.run(["git", "-C", str(REPO), "archive", "--format=tar", full, "src"],
                              capture_output=True, timeout=300)  # fmt: skip
         if tar.returncode != 0:
             raise SystemExit(f"git archive of {full} failed: {tar.stderr.decode()[-500:]}")
         subprocess.run(["tar", "-x", "-C", tmp], input=tar.stdout, check=True, timeout=300)
-        baseline = _digests(Path(tmp) / "src", "none", specs, env_extra)
+        baseline = _digests(Path(tmp) / "src", "none", specs, env_extra, raw_b)
     current = {
-        "no_tallies": _digests(REPO / "src", "none", specs, env_extra),
-        "with_tallies": _digests(REPO / "src", "all", specs, env_extra),
+        "no_tallies": _digests(REPO / "src", "none", specs, env_extra, raw_c),
+        "with_tallies": _digests(REPO / "src", "all", specs, env_extra, raw_w),
     }
+    regression = a.mode == "regression"
+    identities = {
+        "baseline": baseline["table_identity"],
+        "current": current["no_tallies"]["table_identity"],
+    }
+    verified = None
+    if not regression:
+        field_ = record["identity_field"] if record else ""
+        verified = verify_intended_change(
+            record,
+            A16_BASELINE,
+            identities["baseline"].get(field_),
+            identities["current"].get(field_),
+        )
+    nonfinite: dict[str, list[str]] = {}
+    for tag, path in (("baseline", raw_b), ("current", raw_c), ("with_tallies", raw_w)):
+        with np.load(path) as z:  # digests compare bytes: NaN bytes would pass, so reject them
+            bad = nonfinite_fields({k: z[k] for k in z.files})
+        if bad:
+            nonfinite[tag] = bad
+    gate = None
+    if not regression:
+        assert record is not None
+        with np.load(raw_b) as nb, np.load(raw_c) as nc:
+            gate = a16_gate(record, {k: nb[k] for k in nb.files}, {k: nc[k] for k in nc.files})
+    dumps.cleanup()
     out: dict[str, Any] = {}
-    ok = True
+    ok = (gate is None or gate["ok"]) and not nonfinite
     for spec in A16_SPECS:
         b = baseline["digests"][spec]
-        entry: dict[str, Any] = {"fields": len(b)}
-        for label, doc in current.items():
-            c = doc["digests"][spec]
-            diff = sorted(k for k in set(b) | set(c) if b.get(k) != c.get(k))
-            entry[label] = {"identical": not diff, "differing_fields": diff[:10]}
-            ok &= not diff
+        n, w = current["no_tallies"]["digests"][spec], current["with_tallies"]["digests"][spec]
+        neutral = sorted(k for k in set(n) | set(w) if n.get(k) != w.get(k))
+        vs_base = sorted(k for k in set(b) | set(n) if b.get(k) != n.get(k))
+        entry: dict[str, Any] = {
+            "fields": len(b),
+            "tally_neutrality": {"identical": not neutral, "differing_fields": neutral[:10]},
+            "no_tallies_vs_baseline": {
+                "identical": not vs_base,
+                "differing_fields": vs_base[:10],
+                "n_differing": len(vs_base),
+                "gating": regression,
+            },
+        }
+        if gate is not None:
+            entry["intended_change_gate"] = gate["specs"][spec]
+        ok &= not neutral
+        if regression:
+            ok &= not vs_base
         out[spec] = entry
     doc2 = {
         "step": "a16",
+        "mode": a.mode,
         "baseline_commit": full,
         "baseline_ref": A16_BASELINE,
+        "table_identity": identities,
+        "intended_change": None
+        if verified is None
+        else {
+            **verified,
+            "plan_file": PLAN_FILE,
+            "plan_block_sha256": plan_sha,
+            "source_digest": record["source_digest"],
+            "gate_ok": gate["ok"] if gate else None,
+        },
         "fields": "per-grid batch energy, energy balance, counters, end state and trace digests",
+        "nonfinite_fields": {t: v[:10] for t, v in nonfinite.items()},
         "specs": out,
         "pass": bool(ok),
     }
@@ -978,7 +1313,19 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--trace-histories", type=int, default=A7_TRACE_HISTORIES)
     ap.add_argument("--energy", type=float, default=ENERGY_MEV, help="a11-hr: beam energy")
     ap.add_argument("--backend", default="warp-cpu", help="a15: warp-cpu or warp-cuda")
-    ap.add_argument("--mode", choices=("workers", "chunks"), default="chunks", help="a15")
+    ap.add_argument(
+        "--mode",
+        choices=("workers", "chunks", "regression", "intended-change"),
+        default=None,
+        help="a15: workers or chunks (default chunks); a16: regression "
+        "(default) or intended-change (V3-003D)",
+    )
+    ap.add_argument(
+        "--intended-change-record",
+        default=None,
+        type=lambda x: json.loads(x),
+        help="a16 --mode intended-change: JSON of A16_INTENDED_CHANGE (run_suite.py)",
+    )
     ap.add_argument("--pairs", default="cpu32:cuda32,python:cpu64", help="a11-hr: sample pairs")
     ap.add_argument(
         "--seed-base",
@@ -993,6 +1340,8 @@ def main(argv: list[str] | None = None) -> int:
     if not 0.0 < args.scale <= 1.0 or args.seeds < 3:
         raise SystemExit("need 0 < --scale <= 1 and --seeds >= 3")
     base.SEED_BASE = args.seed
+    if args.mode is None:
+        args.mode = "regression" if args.step == "a16" else "chunks"
     args.workers = (os.cpu_count() or 1) if args.workers == "auto" else int(args.workers)
     return STEPS[args.step](args)
 

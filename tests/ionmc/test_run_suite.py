@@ -3,6 +3,7 @@ source attestation, dirty trees); steps are only run for the git/snapshot end-to
 
 from __future__ import annotations
 
+import argparse
 import importlib.util
 import json
 import os
@@ -112,7 +113,7 @@ def test_suite_manifests_are_fixed(suite: str) -> None:
 def _env(*, dirty: str = "no", source: str = "git", hashes: dict[str, str] | None = None) -> str:
     lines = [
         "suite=lv", f"git_sha={SHA}", f"sha_source={source}", f"tree_dirty={dirty}",
-        "scale=1.0", "seed_base=20341004", "python_parts=2", "only=", "source_hashes:",
+        "scale=1.0", "seed_base=20391004", "python_parts=2", "only=", "source_hashes:",
     ]  # fmt: skip
     lines += [f"  {h}  {p}" for p, h in (hashes or {"src/ionmc/a.py": "0" * 64}).items()]
     return "\n".join(lines) + "\n"
@@ -130,7 +131,7 @@ def _archive(d: Path, names: list[str], *, doc: dict | None = None, exit_code: i
         body = f"# command: x\n# git_sha: {sha}\n# started_utc: now\n# step_timeout_s: 1\n"
         tag = summ.expected_tag(n)
         if doc is not None and tag is not None:
-            full = {**doc, "step": tag, "suite": "lv", "git_sha": SHA, "seed_base": 20341004,
+            full = {**doc, "step": tag, "suite": "lv", "git_sha": SHA, "seed_base": 20391004,
                     **(identity or {})}  # fmt: skip
             body += "#JSON-BEGIN\n" + json.dumps(full) + "\n#JSON-END\n"
         (d / f"{n}.txt").write_text(body + f"\n# exit={exit_code}\n")
@@ -505,21 +506,21 @@ def test_seed_base_is_forwarded_recorded_and_checked(tmp_path: Path) -> None:
     with different bases cannot be combined) and every step document must carry the archive's
     base."""
     run_suite, summ = _load("run_suite"), _load("summarize")
-    steps = run_suite.suite_steps("lv", 4, 1.0, seed_base=20341004)
+    steps = run_suite.suite_steps("lv", 4, 1.0, seed_base=20391004)
     scripted = [s for s in steps if "steps.py" in " ".join(s[1])]
-    assert scripted and all(s[1][s[1].index("--seed-base") + 1] == "20341004" for s in scripted)
+    assert scripted and all(s[1][s[1].index("--seed-base") + 1] == "20391004" for s in scripted)
     full = _full()
     env = _env()
     good = tmp_path / "good"
-    _archive(good, full, doc={"pass": True}, env=env, identity={"seed_base": 20341004})
+    _archive(good, full, doc={"pass": True}, env=env, identity={"seed_base": 20391004})
     assert summ.main([str(good), "--expected-sha", SHA]) == 0
     bad = tmp_path / "bad"  # a step that ran with another base than the archive records
     _archive(bad, full, doc={"pass": True}, env=env, identity={"seed_base": 20271004})
     assert summ.main([str(bad), "--expected-sha", SHA]) == 1
     # archives with different seed bases are not parts of one run
     a, b = full[:6], full[6:]
-    _archive(tmp_path / "a", a, doc={"pass": True}, env=env, identity={"seed_base": 20341004})
-    other = _env().replace("seed_base=20341004", "seed_base=20271004")
+    _archive(tmp_path / "a", a, doc={"pass": True}, env=env, identity={"seed_base": 20391004})
+    other = _env().replace("seed_base=20391004", "seed_base=20271004")
     _archive(tmp_path / "b", b, doc={"pass": True}, env=other, identity={"seed_base": 20271004})
     out = tmp_path / "combined.json"
     assert summ.main(["--combine", str(tmp_path / "a"), str(tmp_path / "b"),
@@ -528,14 +529,14 @@ def test_seed_base_is_forwarded_recorded_and_checked(tmp_path: Path) -> None:
 
 
 def test_only_the_qualification_seed_base_can_be_conformant(tmp_path: Path) -> None:
-    """The default base is the qualification base 20341004; an archive made with a consumed base
+    """The default base is the qualification base 20391004; an archive made with a consumed base
     (20271004) or without a recorded base verifies but is never conformant, with the reason
     recorded."""
     run_suite, summ = _load("run_suite"), _load("summarize")
-    assert run_suite.DEFAULT_SEED_BASE == 20341004 == summ.QUALIFICATION_SEED_BASE
+    assert run_suite.DEFAULT_SEED_BASE == 20391004 == summ.QUALIFICATION_SEED_BASE
     for suite_args in (run_suite.suite_steps("lv", 4, 1.0), run_suite.suite_steps("hr", 4, 1.0)):
         scripted = [s for s in suite_args if "steps.py" in " ".join(s[1])]
-        assert all(s[1][s[1].index("--seed-base") + 1] == "20341004" for s in scripted)
+        assert all(s[1][s[1].index("--seed-base") + 1] == "20391004" for s in scripted)
     full = _full()
     ok = tmp_path / "ok"
     _archive(ok, full, doc={"pass": True})
@@ -544,28 +545,29 @@ def test_only_the_qualification_seed_base_can_be_conformant(tmp_path: Path) -> N
     assert s["conformant"] and s["non_conformant_reasons"] == []
     rehearsal = tmp_path / "rehearsal"
     _archive(rehearsal, full, doc={"pass": True},
-             env=_env().replace("seed_base=20341004", "seed_base=20271004"),
+             env=_env().replace("seed_base=20391004", "seed_base=20271004"),
              identity={"seed_base": 20271004})  # fmt: skip
     assert summ.main([str(rehearsal), "--expected-sha", SHA]) == 0  # it verifies ...
     r = json.loads((rehearsal / "summary.json").read_text())
     assert r["pass"] and not r["conformant"]  # ... but cannot qualify
     assert any("rehearsal" in x for x in r["non_conformant_reasons"])
     missing = tmp_path / "missing"
-    _archive(missing, full, doc={"pass": True}, env=_env().replace("seed_base=20341004\n", ""))
+    _archive(missing, full, doc={"pass": True}, env=_env().replace("seed_base=20391004\n", ""))
     assert summ.main([str(missing), "--expected-sha", SHA]) == 0
     m = json.loads((missing / "summary.json").read_text())
     assert not m["conformant"] and "not recorded" in m["non_conformant_reasons"][0]
 
 
 @pytest.mark.parametrize(
-    "base", [20261004, 20271004, 20281004, 20291004, 20301004, 20311004, 20321004, 20331004]
+    "base",
+    [20261004, 20271004, 20281004, 20291004, 20301004, 20311004, 20321004, 20331004, 20341004],
 )
 def test_non_qualification_bases_are_recorded_as_such(tmp_path: Path, base: int) -> None:
     """20261004 (rehearsal), 20271004 (T9 investigation), 20281004, 20291004, 20301004, 20311004,
     20321004 and 20331004 (first to sixth qualification attempts) verify but never qualify."""
     summ = _load("summarize")
     d = tmp_path / "x"
-    env = _env().replace("seed_base=20341004", f"seed_base={base}")
+    env = _env().replace("seed_base=20391004", f"seed_base={base}")
     _archive(d, _full(), doc={"pass": True}, env=env, identity={"seed_base": base})
     assert summ.main([str(d), "--expected-sha", SHA]) == 0
     s = json.loads((d / "summary.json").read_text())
@@ -614,8 +616,8 @@ def test_single_process_mode_defers_only_the_worker_partition_step(tmp_path: Pat
     hr = mod.suite_steps("hr", 1, 1.0, single_process=True)
     assert hr[0][1][-1] == "cuda and not multiprocess"
     # histories and seeds are those of the standard suite; only the worker count differs
-    std = mod.suite_steps("lv", 4, 1.0, seed_base=20341004)
-    one = mod.suite_steps("lv", 1, 1.0, seed_base=20341004)
+    std = mod.suite_steps("lv", 4, 1.0, seed_base=20391004)
+    one = mod.suite_steps("lv", 1, 1.0, seed_base=20391004)
     for (n1, c1, _), (n2, c2, _) in zip(std[1:], one[1:], strict=True):
         assert n1 == n2
         norm = [x for i, x in enumerate(c1) if not (c1[i - 1] == "--workers" or x == "--workers")]
@@ -685,14 +687,14 @@ def test_runner_single_process_end_to_end(tmp_path: Path) -> None:
 
 
 # -- V3-004 suites (lv4, hr4) --------------------------------------------------------------------
-QUAL4 = 20381004
+QUAL4 = 20401004
 
 
 def _env4(suite: str = "lv4", base: int = QUAL4) -> str:
     return (
         _env()
         .replace("suite=lv", f"suite={suite}")
-        .replace("seed_base=20341004", f"seed_base={base}")
+        .replace("seed_base=20391004", f"seed_base={base}")
     )
 
 
@@ -734,7 +736,7 @@ def test_v4_suite_manifests_seed_base_and_hashed_files() -> None:
             assert s[1][s[1].index("--seed-base") + 1] == str(QUAL4)
             assert "--timeout" in s[1] and "--scale" in s[1] or "a16" in s[0]
     # the V3-003 suites keep their bases and file sets
-    assert mod.DEFAULT_SEED_BASES["lv"] == 20341004 == mod.DEFAULT_SEED_BASE
+    assert mod.DEFAULT_SEED_BASES["lv"] == 20391004 == mod.DEFAULT_SEED_BASE
     assert mod.source_file_list("lv") == mod.SOURCE_FILES
     assert "validation/plans/v3-004-acceptance.md" in mod.source_file_list("lv4")
     assert "tests/data/synthetic_lookup.json" in mod.source_file_list("hr4")
@@ -796,6 +798,13 @@ def test_v4_summary_conformance_deferred_and_combine(tmp_path: Path) -> None:
     u = json.loads((used / "summary.json").read_text())
     assert u["pass"] and not u["conformant"]
     assert any("consumed" in x for x in u["non_conformant_reasons"])
+    old = (
+        tmp_path / "old-qual"
+    )  # 20381004: the V3-004 base of the previous head, consumed (V3-003D)
+    _archive4(old, full, base=20381004)
+    assert summ.main([str(old), "--expected-sha", SHA]) == 0
+    o = json.loads((old / "summary.json").read_text())
+    assert o["pass"] and not o["conformant"]
     # single-process diagnostic archive: the workers step may be deferred, never conformant
     d = tmp_path / "diag"
     _archive4(d, full, env=_env4() + DIAG_ENV_LINES)
@@ -859,7 +868,7 @@ def test_a9_parts_roundtrip_and_tamper_detection(tmp_path: Path) -> None:
     for d in (own, prod):
         d.mkdir()
         text = _env(hashes=current).replace(SHA, sha).replace("suite=lv", "suite=lv4")
-        (d / "environment.txt").write_text(text.replace("seed_base=20341004", "seed_base=20351004"))
+        (d / "environment.txt").write_text(text.replace("seed_base=20391004", "seed_base=20351004"))
     (prod / "manifest.txt").write_text("".join(f"{n}\n" for n in names))
     common = ["--scale", "0.01", "--seeds", "4", "--seed-base", "20351004"]
 
@@ -908,3 +917,372 @@ def test_a9_amended_criterion_synthetic() -> None:
     assert biased["z_std_ok"] and not biased["z_mean_ok"] and not biased["calibrated"]
     assert mod.a9_cover_all_pass(0.9435) and mod.a9_cover_all_pass(0.9464)
     assert not mod.a9_cover_all_pass(0.92) and not mod.a9_cover_all_pass(0.98)
+
+
+# -- A16 intended-change exception (review finding: bound to V3-003D and verified at run time) ---
+def _a16_cmd(mod: ModuleType) -> list[str]:
+    steps = mod.suite_steps("lv4", 4, 1.0)
+    return next(s[1] for s in steps if s[0].endswith("a16-qualified-path-regression"))
+
+
+def test_a16_suite_default_is_regression_and_exception_is_the_recorded_one() -> None:
+    mod = _load("run_suite")
+    rec = mod.A16_INTENDED_CHANGE
+    ident = ("task", "baseline", "identity_field", "baseline_value", "new_value")
+    assert {k: rec[k] for k in ident} == {
+        "task": "V3-003D", "baseline": "a524f209", "identity_field": "range_construction",
+        "baseline_value": None, "new_value": "exact-loglog-quadrature-v1",
+    }  # fmt: skip
+    cmd = _a16_cmd(mod)
+    assert cmd[cmd.index("--mode") + 1] == "intended-change"
+    assert json.loads(cmd[cmd.index("--intended-change-record") + 1]) == rec
+    mod.A16_INTENDED_CHANGE = None  # record deleted (next task): regression, no exception
+    cmd = _a16_cmd(mod)
+    assert cmd[cmd.index("--mode") + 1] == "regression"
+    assert "--intended-change-record" not in cmd
+
+
+def test_a16_intended_change_verification_is_fail_closed() -> None:
+    run, st = _load("run_suite"), _load("steps_v4")
+    rec = run.A16_INTENDED_CHANGE
+    new = rec["new_value"]
+    assert st.A16_BASELINE == rec["baseline"]
+    ok = st.verify_intended_change(rec, st.A16_BASELINE, None, new)
+    assert ok["verified_baseline_identity"] is None and ok["verified_current_identity"] == new
+    with pytest.raises(SystemExit, match="needs the A16_INTENDED_CHANGE record"):
+        st.verify_intended_change(None, st.A16_BASELINE, None, new)  # no record
+    with pytest.raises(SystemExit, match="already carries"):
+        st.verify_intended_change(rec, st.A16_BASELINE, new, new)  # baseline merged: delete record
+    with pytest.raises(SystemExit, match="record expects"):
+        st.verify_intended_change(rec, st.A16_BASELINE, None, None)  # no change in the tree
+    with pytest.raises(SystemExit, match="record expects"):
+        st.verify_intended_change(rec, st.A16_BASELINE, None, "other-construction")
+    with pytest.raises(SystemExit, match="names baseline"):
+        st.verify_intended_change({**rec, "baseline": "deadbeef"}, st.A16_BASELINE, None, new)
+    with pytest.raises(SystemExit, match="exactly the keys"):
+        st.verify_intended_change({"task": "V3-003D"}, st.A16_BASELINE, None, new)
+
+
+def test_a16_step_refuses_intended_change_without_record() -> None:
+    st = _load("steps_v4")
+    ns = argparse.Namespace(mode="intended-change", intended_change_record=None)
+    with pytest.raises(SystemExit, match="needs the A16_INTENDED_CHANGE record"):
+        st.step_a16(ns)
+
+
+def test_lv_pytest_step_requires_the_nist_cache() -> None:
+    mod = _load("run_suite")
+    step = next(s for s in mod.suite_steps("lv", 4, 1.0) if "pytest-warp-cpu" in s[0])
+    assert "tests/ionmc/test_range_quadrature.py" in step[1]
+    assert step[2]["IONMC_REQUIRE_NIST"] == "1" and step[2]["IONMC_CACHE_DIR"].endswith(
+        ".ionmc-cache/ionmc-data"
+    )
+
+
+# -- A16 intended-change: binding to the plan block and the gated comparison ---------------------
+def _synthetic_raw(spec: str = "t13:warp-cpu:float64") -> dict[str, np.ndarray]:
+    """Small physically valid raw A16 values with the field layout of ``a16_digest.py``."""
+    rng = np.random.default_rng(3)
+    z = np.arange(40)
+    prof = np.exp(-0.5 * ((z - 30) / 6.0) ** 2) + 0.2
+    grid = (prof[None, None, None, :] * (1.0 + 0.1 * rng.random((4, 3, 3, 40)))).astype(np.float64)
+    n, nt = 20, 10
+    u = rng.normal(size=(n, 3))
+    u /= np.linalg.norm(u, axis=1)[:, None]
+    pos = np.column_stack(
+        [rng.uniform(-20, 20, n), rng.uniform(-20, 20, n), rng.uniform(100, 150, n)]
+    )
+    e_end = rng.uniform(1.9, 2.0, n)
+    raw = {
+        "grid.dose.batch_energy_mev": grid,
+        "energy_balance.in_grid_mev": np.array([grid.sum()]),
+        "energy_balance.step_deposit_mev": np.array(grid.sum() * 0.99),
+        "energy_balance.cutoff_mev": np.array(grid.sum() * 0.01),
+        "energy_balance.quantization_mev": np.array([1e-7]),
+        "diagnostics.end_position_mm": pos,
+        "diagnostics.end_direction": u,
+        "diagnostics.end_energy_mev": e_end,
+        "diagnostics.trace_end_energy_mev": e_end[:4].copy(),
+        "counters.n_steps": np.array(1234),
+        "valid": np.array(True),
+        "diagnostics.trace.step": np.arange(1.0, nt + 1),
+        "diagnostics.trace.history": np.repeat(np.arange(2.0), nt // 2),
+        "diagnostics.trace.ix": np.zeros(nt),
+        "diagnostics.trace.iy": np.zeros(nt),
+        "diagnostics.trace.iz": np.arange(nt, dtype=float),
+        "diagnostics.trace.reason": np.ones(nt),
+        "diagnostics.trace.attempts": np.ones(nt),
+        "diagnostics.trace.blocks": np.arange(2.0, 2.0 * nt + 1, 2.0),
+        "diagnostics.trace.energy_mev": np.linspace(90.0, 20.0, nt),
+        "diagnostics.trace.x_mm": rng.uniform(-3, 3, nt),
+        "diagnostics.trace.y_mm": rng.uniform(-3, 3, nt),
+        "diagnostics.trace.z_mm": np.linspace(1.0, 90.0, nt),
+        "diagnostics.trace.deposit_mev": rng.uniform(0.5, 1.5, nt),
+        "diagnostics.trace.step_mm": np.full(nt, 1.0),
+        "diagnostics.trace.ux": np.full(nt, 0.01),
+        "diagnostics.trace.uy": np.full(nt, 0.02),
+        "diagnostics.trace.uz": np.full(nt, 0.99),
+    }
+    return {f"{spec}|{k}": v for k, v in raw.items()}
+
+
+T13, T1 = "t13:warp-cpu:float64", "t1:warp-cpu:float64"
+
+
+def _perturbed(
+    base: dict[str, np.ndarray], spec: str = T13, **edits: object
+) -> dict[str, np.ndarray]:
+    """The intended change in miniature (small end-depth and energy-balance shifts), then ``edits``
+    (``field__with__dots`` -> array or function of the field)."""
+    cur = {k: v.copy() for k, v in base.items()}
+    cur[f"{spec}|diagnostics.end_position_mm"][:, 2] -= 0.003
+    for f, fac in (("step_deposit_mev", 1 + 1e-6), ("cutoff_mev", 1 - 1e-6)):
+        cur[f"{spec}|energy_balance.{f}"] = cur[f"{spec}|energy_balance.{f}"] * fac
+    for k, v in edits.items():
+        key = f"{spec}|" + k.replace("__", ".")
+        cur[key] = v(cur[key]) if callable(v) else np.asarray(v)  # type: ignore[operator]
+    return cur
+
+
+def _violations(rec: dict, base: dict, cur: dict, spec: str) -> list[str]:  # type: ignore[type-arg]
+    res = _load("steps_v4").a16_gate(rec, base, cur)
+    return list(res["specs"][spec]["violations"]) if not res["ok"] else []
+
+
+def _with(fn):  # type: ignore[no-untyped-def]
+    def edit(a: np.ndarray) -> np.ndarray:
+        a = a.copy()
+        fn(a)
+        return a
+
+    return edit
+
+
+def test_a16_gate_accepts_the_intended_change_and_rejects_everything_else() -> None:
+    run, st = _load("run_suite"), _load("steps_v4")
+    rec = run.A16_INTENDED_CHANGE
+    base = _synthetic_raw()
+    ok = st.a16_gate(rec, base, _perturbed(base))
+    assert ok["ok"], ok
+    # a non-allowlisted field (a counter) differs
+    bad = _violations(rec, base, _perturbed(base, counters__n_steps=1235), T13)
+    assert any("without an allowlisted bound" in v for v in bad)
+
+    # an allowed field leaves its bound (a scoring bug: 5 % more deposit in one layer)
+    def bump(g: np.ndarray) -> None:
+        g[..., 30] *= 1.05
+
+    assert _violations(rec, base, _perturbed(base, grid__dose__batch_energy_mev=_with(bump)), T13)
+
+    # a 1 mm end-depth shift (wrong kernel branch) exceeds the end-position bound
+    def shift(p: np.ndarray) -> None:
+        p[:, 2] += 1.0
+
+    assert _violations(rec, base, _perturbed(base, diagnostics__end_position_mm=_with(shift)), T13)
+    # the discrete trace row count changing in t13 is a violation
+    cur = _perturbed(base)
+    cur[f"{T13}|diagnostics.trace.step"] = np.arange(11.0)
+    assert not st.a16_gate(rec, base, cur)["ok"]
+    # a field that exists only in one tree
+    cur = _perturbed(base)
+    cur[f"{T13}|counters.extra"] = np.array(1)
+    assert not st.a16_gate(rec, base, cur)["ok"]
+    # a changed discrete trace column (the t13 digests must stay identical there)
+    assert _violations(rec, base, _perturbed(base, diagnostics__trace__reason=lambda a: a + 1), T13)
+
+
+def test_a16_gate_t1_bounds_every_allowlisted_field() -> None:
+    run = _load("run_suite")
+    rec = run.A16_INTENDED_CHANGE
+    base = _synthetic_raw("t1:warp-cpu:float64")
+    assert _violations(rec, base, _perturbed(base, T1), T1) == []
+    # every differing field of the t1 allowlist is covered by existing bound keys
+    for fam in ("t1", "t13"):
+        for f, keys in rec["allowed_differing_fields"][fam].items():
+            assert keys and all(k in rec["bounds"][fam] for k in keys), (fam, f)
+
+    def edit(**kw: object) -> list[str]:
+        return _violations(rec, base, _perturbed(base, T1, **kw), T1)
+
+    def moved(p: np.ndarray) -> None:
+        p[:15, 0] += 5.0  # 75 % of the histories move by 5 mm
+
+    assert any("moved_gt1mm" in v for v in edit(diagnostics__end_position_mm=_with(moved)))
+    assert any(
+        "outside" in v
+        for v in edit(diagnostics__end_position_mm=_with(lambda p: p.__setitem__((0, 0), 50.0)))
+    )
+    assert any(
+        "end_energy_mean_abs" in v for v in edit(diagnostics__end_energy_mev=lambda e: e - 0.05)
+    )
+    assert any("over_cut" in v for v in edit(diagnostics__end_energy_mev=lambda e: e + 0.5))
+    assert any("end_direction_mean_abs" in v for v in edit(
+        diagnostics__end_direction=lambda d: d[::-1].copy()))  # fmt: skip
+    assert any("norm_err" in v for v in edit(diagnostics__end_direction=lambda d: d * 1.001))
+    assert any(
+        "trace_energy_over_e0" in v for v in edit(diagnostics__trace__energy_mev=lambda e: e + 20)
+    )
+    assert any(
+        "trace_step_over_max" in v for v in edit(diagnostics__trace__step_mm=lambda s: s + 1.5)
+    )
+    assert any(
+        "deposit_row_max" in v for v in edit(diagnostics__trace__deposit_mev=lambda d: d * 4)
+    )
+    assert any(
+        "trace_position_outside" in v for v in edit(diagnostics__trace__x_mm=lambda x: x + 40)
+    )
+    assert any("direction_over_unit" in v for v in edit(diagnostics__trace__uz=lambda u: u + 0.5))
+    assert any("attempts_max" in v for v in edit(diagnostics__trace__attempts=lambda a: a + 9))
+    assert any("discrete_out_of_range" in v for v in edit(diagnostics__trace__iz=lambda a: a + 30))
+    assert any(
+        "discrete_out_of_range" in v for v in edit(diagnostics__trace__reason=lambda a: a + 4)
+    )
+    assert any(
+        "trace_rows_rel" in v or "field" in v
+        for v in edit(diagnostics__trace__energy_mev=lambda e: np.append(e, np.arange(8.0)))
+    )
+    assert any("in_grid_rel" in v for v in edit(energy_balance__in_grid_mev=lambda a: a * 1.001))
+
+    def spike(g: np.ndarray) -> None:
+        g[..., 10] *= 8
+
+    assert any("profile" in v or "depth-dose" in v for v in edit(
+        grid__dose__batch_energy_mev=_with(spike)))  # fmt: skip
+
+
+@pytest.mark.parametrize("bad", [np.nan, np.inf, -np.inf])
+@pytest.mark.parametrize("spec", [T13, T1])
+def test_a16_gate_rejects_non_finite_values_in_every_family(spec: str, bad: float) -> None:
+    """NaN/Inf must never satisfy a bound or pass a digest comparison (fail closed)."""
+    rec = _load("run_suite").A16_INTENDED_CHANGE
+    fam = spec.split(":")[0]
+    base = _synthetic_raw(spec)
+    assert _violations(rec, base, _perturbed(base, spec), spec) == []
+    for field in rec["allowed_differing_fields"][fam]:
+        key = f"{spec}|{field}"
+        assert key in base, field
+
+        def poison(a: np.ndarray) -> np.ndarray:
+            a = np.array(a, dtype=np.float64)
+            a.flat[0] = bad
+            return a
+
+        for tree in ("current", "baseline", "both"):
+            b, c = dict(base), _perturbed(base, spec)
+            if tree in ("current", "both"):
+                c[key] = poison(c[key])
+            if tree in ("baseline", "both"):
+                b[key] = poison(b[key])
+            v = _violations(rec, b, c, spec)
+            assert any("non-finite" in x for x in v), (field, tree, v)
+    # a digest-compared (non-allowlisted) field, stable NaN bytes in both trees
+    b, c = dict(base), _perturbed(base, spec)
+    b[f"{spec}|counters.n_steps"] = c[f"{spec}|counters.n_steps"] = np.array(bad)
+    assert any("non-finite" in x for x in _violations(rec, b, c, spec))
+
+
+def test_a16_caps_are_nan_safe() -> None:
+    st = _load("steps_v4")
+    assert st._over(np.array([1.0, np.nan]), 5.0) == float("inf")
+    assert st._over(np.array([1.0, 7.0]), 5.0) == 2.0 and st._over(np.array([1.0]), 5.0) == 0.0
+    assert st._outside(np.array([[0.0, np.nan, 0.0]]), [-1] * 3, [1] * 3) == float("inf")
+    mixed = {"a": np.array([1.0]), "b": np.array([np.inf]), "c": np.array(True)}
+    mixed["d"] = np.array([np.nan, 1.0])
+    assert st.nonfinite_fields(mixed) == ["b", "d"]
+
+
+def test_a16_normalization_masks_exactly_the_record_literals() -> None:
+    run = _load("run_suite")
+    rec = run.A16_INTENDED_CHANGE
+    text = (REPO / run.A16_RUN_SUITE_FILE).read_text()
+    lo = text.index(run.A16_RECORD_START)
+    hi = text.index(run.A16_RECORD_END, lo) + len(run.A16_RECORD_END)
+    lits = [f'"{k}": "{rec[k]}"' for k in ("source_digest", "plan_block_sha256")]
+    for lit in lits:
+        assert text.count(lit) == 1 and lo < text.index(lit) < hi
+    # decoys with the same shape before and after the record are not masked
+    decoy = '"source_digest": "deadbeef"\n"plan_block_sha256": "cafe"\n'
+    doctored = decoy + text + decoy
+    out = run.a16_normalize(doctored, "record")
+    masked = [f'"{k}": "MASKED"' for k in ("source_digest", "plan_block_sha256")]
+    assert sum(out.count(m) for m in masked) == 2 and out.count(decoy) == 2
+    # exactly the two literals changed, at their positions; every other byte is identical
+    expect = doctored
+    for lit, m in zip(lits, masked, strict=True):
+        expect = expect.replace(lit, m)
+    assert out == expect
+    # the plan: one literal (the source digest) inside the block, decoys outside untouched
+    plan = (REPO / run.A16_PLAN_FILE).read_text()
+    plit = f'"source_digest": "{rec["source_digest"]}"'
+    assert plan.count(plit) == 1
+    pd = run.a16_normalize(decoy + plan + decoy, "plan")
+    assert pd.count('"source_digest": "MASKED"') == 1 and pd.count(decoy) == 2
+    assert pd == (decoy + plan + decoy).replace(plit, '"source_digest": "MASKED"')
+    # a record or block with a missing or extra literal fails closed
+    with pytest.raises(SystemExit, match="expected 2"):
+        run.a16_normalize(text.replace(lits[0], '"source_digest_x": "0"'), "record")
+    with pytest.raises(SystemExit, match="expected 1"):
+        run.a16_normalize(plan.replace(plit, plit + ',\n "plan_block_sha256": "0"'), "plan")
+    # no record: nothing to mask
+    assert run.a16_normalize("no record here", "record") == "no record here"
+
+
+def test_a16_source_digest_binds_the_record_to_the_source_tree() -> None:
+    run, st = _load("run_suite"), _load("steps_v4")
+    rec = run.A16_INTENDED_CHANGE
+    assert (run.A16_PLAN_BEGIN, run.A16_PLAN_END) == (st.PLAN_BEGIN, st.PLAN_END)
+    digest = run.a16_source_digest()
+    # the record is valid for exactly this source state: a later commit that touches a hashed
+    # file must refresh the record (python validation/scripts/transport/run_suite.py
+    # --print-a16-source-digest) or delete it (amendment 6)
+    assert rec["source_digest"] == digest
+    assert st.verify_source_digest(rec, digest) == digest
+    with pytest.raises(SystemExit, match="exact source state"):
+        st.verify_source_digest(rec, "0" * 64)
+    # run_suite.py and the plan block are hashed, with only the two self-referential literals masked
+    entries = run.a16_source_entries()
+    assert run.a16_digest_of(entries) == digest
+    rs, plan = run.A16_RUN_SUITE_FILE, run.A16_PLAN_FILE
+    assert rs in entries and plan in entries
+
+    def changed(rel: str, old: str, new: str) -> str:
+        e = dict(entries)
+        text = e[rel].decode()
+        assert old in text, old
+        e[rel] = text.replace(old, new, 1).encode()
+        return run.a16_digest_of(e)
+
+    assert changed(rs, '"voxel_rel_max": 0.037', '"voxel_rel_max": 0.5') != digest  # a bound
+    assert changed(rs, "def a16_normalize", "def a16_normalise") != digest  # the digest function
+    assert changed(plan, '"voxel_rel_max": 0.037', '"voxel_rel_max": 0.5') != digest  # plan block
+    assert changed(rs, '"MASKED"', '"MASKED"') == digest
+    lit = '"source_digest": "' + rec["source_digest"] + '"'
+    text = (REPO / rs).read_text()
+    assert lit in text and lit in (REPO / plan).read_text()
+    e = dict(entries)
+    e[rs] = run.a16_normalize(text.replace(lit, '"source_digest": "0"'), "record").encode()
+    assert run.a16_digest_of(e) == digest  # only the self-referential value is free
+    cmd = [sys.executable, str(SCRIPTS / "run_suite.py"), "--print-a16-source-digest"]
+    out = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    assert out.stdout.strip() == digest
+
+
+def test_a16_plan_binding_is_verified() -> None:
+    run, st = _load("run_suite"), _load("steps_v4")
+    rec = run.A16_INTENDED_CHANGE
+    text = (REPO / st.PLAN_FILE).read_text()
+    assert st.verify_plan_binding(rec, text) == rec["plan_block_sha256"]
+    with pytest.raises(SystemExit, match="hashes to"):
+        st.verify_plan_binding(rec, text.replace("in_grid_rel", "in_grid_rell", 1))
+    with pytest.raises(SystemExit, match="hashes to"):
+        st.verify_plan_binding(
+            {**rec, "bounds": rec["bounds"]} | {"plan_block_sha256": "0" * 64}, text
+        )
+    changed = {
+        **rec,
+        "bounds": {**rec["bounds"], "t13": {**rec["bounds"]["t13"], "voxel_rel_max": 0.5}},
+    }
+    with pytest.raises(SystemExit, match="does not state the record"):
+        st.verify_plan_binding(changed, text)
+    with pytest.raises(SystemExit, match="exactly one delimited"):
+        st.verify_plan_binding(rec, "no block here")

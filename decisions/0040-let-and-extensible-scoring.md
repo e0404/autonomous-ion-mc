@@ -366,7 +366,10 @@ A13 against Grassberger and Paganetti (2011) is exploratory and non-gating.
   `S` of the transported particle, so the reference is that particle's energy, anchored at the
   engine step boundaries; A4b then gives 5.0e-5 / 4.6e-5 / 3.7e-5 and A4 3.8e-5 (plan footnote 1).
   The table-CSDA comparison stays as a non-gating log. The range-table inconsistency is assigned
-  to the follow-up V3-003D (separate re-qualification, out of scope here).
+  to the follow-up V3-003D (separate re-qualification, out of scope here); its design entry of
+  2026-10-07 is in decision 0039 ("V3-003D design") and its frozen plan is
+  `validation/plans/v3-003d-acceptance.md`; the table-CSDA comparison of A4b becomes gating there
+  (row D3, V3-004 plan amendment 6).
 
 - **2026-10-07: acceptance row A9 (observation at bases 20361004 and 20371004, plan amendment 5).**
   At 20361004 the footnote-3 coverage window [0.91, 0.99] passed (0.945 / 0.93 / 0.97); at

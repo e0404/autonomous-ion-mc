@@ -1,6 +1,6 @@
 """Fail-closed runner of the V3-003 (``lv``, ``hr``) and V3-004 (``lv4``, ``hr4``) local-validation
 (LV) and host-runner (HR) suites. The V3-004 suites use ``steps_v4.py``, the default seed base
-20381004 and, in the hashed set, the V3-004 acceptance plan and the synthetic lookup fixture.
+20401004 and, in the hashed set, the V3-004 acceptance plan and the synthetic lookup fixture.
 
 Usage (argv only, no shell; the host runner executes exactly this)::
 
@@ -10,8 +10,9 @@ Usage (argv only, no shell; the host runner executes exactly this)::
         [--only STEP ...] [--import-dirs DIR ...] [--seed-base INT]
 
 The qualification command needs no seed flag: the default ``--seed-base`` is the qualification base
-20341004 (a run with the rehearsal base 20261004 or the consumed bases 20271004, 20281004,
-20291004, 20301004, 20311004, 20321004 and 20331004 is archived but never conformant)::
+20391004 (a run with the rehearsal base 20261004 or the consumed bases 20271004, 20281004,
+20291004, 20301004, 20311004, 20321004, 20331004 and 20341004 is archived but never conformant;
+V3-003D, plan amendment 24)::
 
     python validation/scripts/transport/run_suite.py --suite hr --expected-sha <sha> --out <new-dir>
 
@@ -47,6 +48,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import os
 import platform
 import re
@@ -70,7 +72,12 @@ SOURCE_PREFIXES = (
     "validation/scripts/transport",
     "benchmarks/transport",
 )
-SOURCE_FILES = ("pyproject.toml", "uv.lock", "validation/plans/v3-003-acceptance.md")
+SOURCE_FILES = (
+    "pyproject.toml",
+    "uv.lock",
+    "validation/plans/v3-003-acceptance.md",
+    "validation/plans/v3-003d-acceptance.md",
+)
 """Every tracked file that defines what is executed and judged (code, tests and fixtures, the
 project definition, the lock file and the frozen acceptance plan)."""
 SOURCE_FILES_V4 = (
@@ -87,11 +94,16 @@ def source_file_list(suite: str | None = None) -> tuple[str, ...]:
     suite = suite or os.environ.get("IONMC_RUN_SUITE", "")
     return SOURCE_FILES_V4 if suite in ("lv4", "hr4") else SOURCE_FILES
 
+
 DEFAULT_PYTHON_PARTS = 2
-QUALIFICATION_SEED_BASE = 20341004
-V4_QUALIFICATION_SEED_BASE = 20381004
-V4_CONSUMED_SEED_BASES = (20361004, 20371004)  # plan amendments 4 and 5
+QUALIFICATION_SEED_BASE = 20391004  # V3-003D plan, amendment 24 of the V3-003 plan
+CONSUMED_SEED_BASES = (
+    20271004, 20281004, 20291004, 20301004, 20311004, 20321004, 20331004, 20341004,
+)  # fmt: skip
+V4_QUALIFICATION_SEED_BASE = 20401004  # amendment 6 of the V3-004 plan
+V4_CONSUMED_SEED_BASES = (20361004, 20371004, 20381004)  # amendments 4 and 5, 20381004 by V3-003D
 V4_REHEARSAL_SEED_BASE = 20351004
+V3003D_REHEARSAL_FAMILY = "2041xxxx"  # rehearsals of V3-003D, never qualification evidence
 DEFAULT_SEED_BASES = {
     "lv": QUALIFICATION_SEED_BASE,
     "hr": QUALIFICATION_SEED_BASE,
@@ -198,8 +210,10 @@ def suite_steps(
                 "tests/ionmc/test_transport_warp.py",
                 "tests/ionmc/test_transport_partition.py",
                 "tests/ionmc/test_config_validation.py",
+                "tests/ionmc/test_range_quadrature.py",
                 marker="not multiprocess" if single_process else None,
             ),
+            NIST_REQUIRED_ENV,
         )
         add(
             "t1-trace-parity-256x150MeV",
@@ -279,7 +293,17 @@ def _suite_steps_v4(suite, add, s4, w, sc, cuda, out_dir, dirs, single_process):
                 marker="not multiprocess" if single_process else None,
             ),
         )
-        add("a16-qualified-path-regression", [*s4, "a16"])
+        rec = A16_INTENDED_CHANGE
+        a16 = [
+            "--mode",
+            "intended-change",
+            "--intended-change-record",
+            json.dumps(rec, sort_keys=True),
+        ]
+        add(
+            "a16-qualified-path-regression",
+            [*s4, "a16", *(a16 if rec else ["--mode", "regression"])],
+        )
         add("a11-lv-python-vs-warp-cpu-256x150MeV", [*s4, "a11-lv", *sc])
         add("a15-chunks-cpu", [*s4, "a15", "--mode", "chunks", "--backend", "warp-cpu", *sc])
         add("a15-workers", [*s4, "a15", "--mode", "workers", "--workers", "3", *sc])
@@ -305,6 +329,178 @@ def _suite_steps_v4(suite, add, s4, w, sc, cuda, out_dir, dirs, single_process):
             cuda)  # fmt: skip
         add("a11-hr-channel-parity", [*s4, "a11-hr", *sc], cuda)
 
+
+NIST_REQUIRED_ENV = {
+    "IONMC_REQUIRE_NIST": "1",
+    "IONMC_CACHE_DIR": str(REPO / ".ionmc-cache" / "ionmc-data"),
+}
+"""Environment of the ``lv`` pytest step that runs the NIST-water case of V3-003D row D1: the
+cached PSTAR table (data layer cache ``IONMC_CACHE_DIR`` with its ``manifests/`` and ``objects/``
+layout, staged by the orchestrator into the git-ignored ``.ionmc-cache/ionmc-data`` of the runner
+workspace from the experiment data cache) is required; a missing cache fails the test instead of
+skipping it."""
+A16_INTENDED_CHANGE: dict[str, Any] | None = {
+    "task": "V3-003D",
+    "baseline": "a524f209",
+    "identity_field": "range_construction",
+    "baseline_value": None,  # the baseline tables carry no range_construction identity
+    "new_value": "exact-loglog-quadrature-v1",
+    # Digest fields that may differ, per configuration family, each with the keys of the `bounds`
+    # quantities that constrain it (a field that differs without bounded quantities fails, and so
+    # does any field not listed); every other field of every spec (counters, valid flags, the
+    # discrete trace columns of t13) must be bit-identical. t13 (150 MeV, 1 mm steps, up to 20000
+    # histories) is the sensitive configuration: tight bounds. t1 (100 MeV, 2 mm steps in 5 mm
+    # voxels, 32 histories) is branch-flip sensitive (the row 37 flip of the fixture of
+    # tests/ionmc/data/trace_baseline_20mev.npz): its per-history outputs cannot be tightly bounded,
+    # so they are bounded through aggregates (means, fractions) and physical caps.
+    "allowed_differing_fields": {
+        "t13": {
+            "grid.dose.batch_energy_mev": ["profile_rel_max", "voxel_rel_max", "in_grid_rel"],
+            "energy_balance.cutoff_mev": ["cutoff_rel"],
+            "energy_balance.in_grid_mev": ["in_grid_rel"],
+            "energy_balance.quantization_mev": ["quantization_abs_mev"],
+            "energy_balance.step_deposit_mev": ["step_deposit_rel"],
+            "diagnostics.end_direction": ["end_direction_max"],
+            "diagnostics.end_energy_mev": ["end_energy_max_mev"],
+            "diagnostics.end_position_mm": ["end_position_max_mm", "end_dz_median_abs_mm"],
+            "diagnostics.trace_end_energy_mev": ["end_energy_max_mev"],
+            "diagnostics.trace.deposit_mev": ["trace_deposit_max_mev"],
+            "diagnostics.trace.energy_mev": ["trace_energy_max_mev"],
+            "diagnostics.trace.step_mm": ["trace_step_max_mm"],
+            "diagnostics.trace.ux": ["trace_direction_max"],
+            "diagnostics.trace.uy": ["trace_direction_max"],
+            "diagnostics.trace.uz": ["trace_direction_max"],
+            "diagnostics.trace.x_mm": ["trace_position_max_mm"],
+            "diagnostics.trace.y_mm": ["trace_position_max_mm"],
+            "diagnostics.trace.z_mm": ["trace_position_max_mm"],
+        },
+        "t1": {
+            "grid.dose.batch_energy_mev": [
+                "profile_abs_over_max",
+                "in_grid_rel",
+                "grid_negative_mev",
+            ],
+            "energy_balance.cutoff_mev": ["cutoff_rel"],
+            "energy_balance.in_grid_mev": ["in_grid_rel"],
+            "energy_balance.quantization_mev": ["quantization_abs_mev"],
+            "energy_balance.step_deposit_mev": ["step_deposit_rel"],
+            "diagnostics.end_direction": ["end_direction_mean_abs", "end_direction_norm_err"],
+            "diagnostics.end_energy_mev": ["end_energy_mean_abs", "end_energy_over_cut_mev"],
+            "diagnostics.end_position_mm": [
+                "end_position_moved_gt1mm_fraction",
+                "end_dz_mean_abs_mm",
+                "end_position_outside_mm",
+            ],
+            "diagnostics.trace_end_energy_mev": ["end_energy_mean_abs", "end_energy_over_cut_mev"],
+            "diagnostics.trace.energy_mev": ["trace_energy_over_e0_mev", "trace_rows_rel"],
+            "diagnostics.trace.step_mm": ["trace_step_over_max_mm"],
+            "diagnostics.trace.deposit_mev": [
+                "trace_deposit_row_max_mev",
+                "trace_deposit_negative_mev",
+            ],
+            "diagnostics.trace.x_mm": ["trace_position_outside_mm"],
+            "diagnostics.trace.y_mm": ["trace_position_outside_mm"],
+            "diagnostics.trace.z_mm": ["trace_position_outside_mm"],
+            "diagnostics.trace.ux": ["trace_direction_over_unit"],
+            "diagnostics.trace.uy": ["trace_direction_over_unit"],
+            "diagnostics.trace.uz": ["trace_direction_over_unit"],
+            "diagnostics.trace.attempts": ["trace_attempts_max"],
+            "diagnostics.trace.history": ["trace_discrete_out_of_range"],
+            "diagnostics.trace.ix": ["trace_discrete_out_of_range"],
+            "diagnostics.trace.iy": ["trace_discrete_out_of_range"],
+            "diagnostics.trace.iz": ["trace_discrete_out_of_range"],
+            "diagnostics.trace.reason": ["trace_discrete_out_of_range"],
+            "diagnostics.trace.step": ["trace_discrete_out_of_range"],
+            "diagnostics.trace.blocks": ["trace_discrete_out_of_range"],
+        },
+    },
+    # Physical limits used by the caps: source energy, energy cut, maximum step, and the extent
+    # of the phantom (x, y in -30..30 mm; z in 0..200 mm for t1 (40 voxels of 5 mm) and
+    # 0..1.1 * 158.6 mm for t13).
+    "physical_limits": {
+        "t13": {
+            "e0_mev": 150.0,
+            "e_cut_mev": 2.0,
+            "max_step_mm": 1.0,
+            "box_min_mm": [-30.0, -30.0, 0.0],
+            "box_max_mm": [30.0, 30.0, 174.46],
+        },
+        "t1": {
+            "e0_mev": 100.0,
+            "e_cut_mev": 2.0,
+            "max_step_mm": 2.0,
+            "box_min_mm": [-30.0, -30.0, 0.0],
+            "box_max_mm": [30.0, 30.0, 200.0],
+        },
+    },  # fmt: skip
+    # Bounds of the allowed differences: 2x the values measured at the reviewed state (measured
+    # values and derivation: the plan block bound by plan_block_sha256), or exact physical caps
+    # (limits 0 or 1e-9) for the "over/outside/negative" quantities.
+    "bounds": {
+        "t13": {
+            "in_grid_rel": 1.2e-9,
+            "step_deposit_rel": 6e-6,
+            "cutoff_rel": 5e-4,
+            "quantization_abs_mev": 3e-6,
+            "end_position_max_mm": 0.0126,
+            "end_dz_median_abs_mm": 0.0066,
+            "end_energy_max_mev": 0.104,
+            "end_direction_max": 0.044,
+            "voxel_rel_max": 0.037,
+            "profile_rel_max": 0.012,
+            "depth_max_layer_moved": 0.0,
+            "grid_negative_mev": 0.0,
+            "trace_energy_max_mev": 0.006,
+            "trace_position_max_mm": 0.0071,
+            "trace_deposit_max_mev": 1.8e-4,
+            "trace_step_max_mm": 1.9e-4,
+            "trace_direction_max": 1.2e-5,
+        },
+        "t1": {
+            "in_grid_rel": 1.2e-9,
+            "step_deposit_rel": 1e-4,
+            "cutoff_rel": 5e-3,
+            "quantization_abs_mev": 3e-6,
+            "profile_abs_over_max": 0.1,
+            "depth_max_layer_moved": 0.0,
+            "grid_negative_mev": 0.0,
+            "end_dz_mean_abs_mm": 0.21,
+            "end_position_moved_gt1mm_fraction": 0.625,
+            "end_position_outside_mm": 1e-6,
+            "end_energy_mean_abs": 0.01,
+            "end_energy_over_cut_mev": 1e-6,
+            "end_direction_mean_abs": 0.071,
+            "end_direction_norm_err": 1.7e-7,
+            "trace_rows_rel": 0.004,
+            "trace_energy_over_e0_mev": 1e-9,
+            "trace_step_over_max_mm": 1e-9,
+            "trace_deposit_row_max_mev": 4.2,
+            "trace_deposit_negative_mev": 0.0,
+            "trace_position_outside_mm": 1e-6,
+            "trace_direction_over_unit": 1e-9,
+            "trace_attempts_max": 6.0,
+            "trace_discrete_out_of_range": 0.0,
+        },
+    },
+    # sha256 of the source set (a16_source_digest(): every hashed file including this one and the
+    # plan block, with only the two self-referential digest literals masked): the record is valid
+    # only for exactly this source state.
+    "source_digest": "24323b959660d6ec4ff658531a70b998f24f60a11b9e16c7ba826930f415fc28",
+    # sha256 of the delimited block of validation/plans/v3-003d-acceptance.md that states this
+    # record (without this key), verified by the step at run time.
+    "plan_block_sha256": "951106d3bd6640a3d20fcb81359683eb586e0877d381f7f0750dfea4d529a89a",
+}
+"""The one recorded exception to the fail-closed A16 regression of the ``lv4`` suite (plan
+amendment 6 of V3-004). While it is not ``None``, the ``lv4`` step runs ``--mode intended-change``
+and passes this record to the step, which (i) verifies that the plan block of
+``validation/plans/v3-003d-acceptance.md`` hashes to ``plan_block_sha256`` and states exactly this
+record, (ii) verifies that the table identity ``identity_field`` of the baseline tree (``baseline``,
+which must equal ``A16_BASELINE`` of ``steps_v4.py``) is ``baseline_value`` and that of the tree
+under test is ``new_value``, and (iii) gates the comparison: only ``allowed_differing_fields`` may
+differ, within ``bounds``; everything else must be bit-identical. It fails closed otherwise. Once
+V3-003D is merged the baseline tree carries ``new_value``, so the step then fails until the next
+task's first commit deletes this record (sets it to ``None``) and advances ``A16_BASELINE``. With
+``None`` the step runs ``--mode regression`` (the default)."""
 
 KILL_GRACE_S = 10.0
 
@@ -400,6 +596,72 @@ def source_files(suite: str | None = None) -> list[Path]:
     return files
 
 
+A16_PLAN_FILE = "validation/plans/v3-003d-acceptance.md"
+A16_PLAN_BEGIN, A16_PLAN_END = (
+    "<!-- A16-INTENDED-CHANGE-BEGIN -->",
+    "<!-- A16-INTENDED-CHANGE-END -->",
+)
+
+
+A16_RUN_SUITE_FILE = "validation/scripts/transport/run_suite.py"
+A16_SELF_REFERENCE = re.compile(r'("(?:source_digest|plan_block_sha256)": )"[^"]*"')
+A16_RECORD_START, A16_RECORD_END = "\nA16_INTENDED_CHANGE: dict[", "\n}\n"
+A16_EXPECTED_MASKS = {"record": 2, "plan": 1}
+"""Number of self-referential literals masked per kind of file: the record in ``run_suite.py``
+holds the source digest and the plan block hash, the plan block states the source digest only."""
+
+
+def a16_normalize(text: str, kind: str) -> str:
+    """``text`` with exactly the self-referential digest literals of the A16 record replaced by
+    the placeholder ``MASKED``: ``kind`` ``"record"`` (``run_suite.py``: only inside the
+    ``A16_INTENDED_CHANGE`` dict literal) or ``"plan"`` (only inside the delimited A16 block of the
+    V3-003D plan). Every other byte, including look-alike text elsewhere, stays hashed. A record
+    or block that is present must hold exactly the expected number of literals (fail closed)."""
+    if kind == "record":
+        lo, hi = text.find(A16_RECORD_START), None
+        if lo >= 0:
+            hi = text.find(A16_RECORD_END, lo) + len(A16_RECORD_END)
+    else:
+        lo = text.find(A16_PLAN_BEGIN)
+        hi = text.find(A16_PLAN_END) + len(A16_PLAN_END) if lo >= 0 else None
+    if lo < 0 or hi is None:
+        return text  # record deleted (the next task's first commit): nothing to mask
+    inner, n = A16_SELF_REFERENCE.subn(r'\1"MASKED"', text[lo:hi])
+    if n != A16_EXPECTED_MASKS[kind]:
+        raise SystemExit(f"A16 normalization: {n} self-referential literals in the {kind}, "
+                         f"expected {A16_EXPECTED_MASKS[kind]}")  # fmt: skip
+    return text[:lo] + inner + text[hi:]
+
+
+def a16_source_entries(suite: str = "lv4") -> dict[str, bytes]:
+    """``{relative path: bytes}`` of the hashed source set of ``suite`` as hashed for the A16
+    binding: ``run_suite.py`` and the V3-003D plan in the normalized form of :func:`a16_normalize`."""
+    out: dict[str, bytes] = {}
+    for f in source_files(suite):
+        rel = str(f.relative_to(REPO))
+        raw = f.read_bytes()
+        if rel in (A16_RUN_SUITE_FILE, A16_PLAN_FILE):
+            kind = "record" if rel == A16_RUN_SUITE_FILE else "plan"
+            raw = a16_normalize(raw.decode(), kind).encode()
+        out[rel] = raw
+    return out
+
+
+def a16_digest_of(entries: dict[str, bytes]) -> str:
+    """sha256 over the sorted ``path sha256`` lines of ``entries``."""
+    lines = [f"{rel} {hashlib.sha256(b).hexdigest()}" for rel, b in entries.items()]
+    return hashlib.sha256("\n".join(sorted(lines)).encode()).hexdigest()
+
+
+def a16_source_digest(suite: str = "lv4") -> str:
+    """The A16 source digest: :func:`a16_digest_of` of :func:`a16_source_entries`, i.e. every
+    hashed source file of ``suite`` including ``run_suite.py`` (the record, its bounds and this
+    function) and the V3-003D plan block, with only the two self-referential digest values masked.
+    The A16 intended-change record is valid only for the source state with this digest: any later
+    change to a hashed file requires a conscious refresh (or deletion) of the record."""
+    return a16_digest_of(a16_source_entries(suite))
+
+
 def environment_text(
     sha: str, source: str, dirty: str, args: argparse.Namespace, workers: int, single: bool = False
 ) -> str:
@@ -447,6 +709,9 @@ def resolve_workers(value: str) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    if "--print-a16-source-digest" in (argv if argv is not None else sys.argv[1:]):
+        print(a16_source_digest())
+        return 0
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--suite", choices=SUITES, required=True)
     ap.add_argument("--out", required=True)
@@ -470,9 +735,10 @@ def main(argv: list[str] | None = None) -> int:
         type=int,
         default=None,
         help="base of all statistical seeds (default: the qualification base of the suite, "
-        "20341004 for lv/hr and 20381004 for lv4/hr4 (20351004 rehearsal and 20361004, 20371004 consumed give non-conformant archives); for lv/hr the "
-        "bases 20261004, 20271004, 20281004, 20291004, 20301004, 20311004, 20321004 and "
-        "20331004 give non-conformant archives); "
+        "20391004 for lv/hr and 20401004 for lv4/hr4 (the 2041xxxx rehearsals, 20351004 and the consumed "
+        "20361004, 20371004, 20381004 give non-conformant archives); for lv/hr the "
+        "bases 20261004, 20271004, 20281004, 20291004, 20301004, 20311004, 20321004, 20331004 and "
+        "20341004 give non-conformant archives); "
         "recorded in the archive",
     )
     ap.add_argument(

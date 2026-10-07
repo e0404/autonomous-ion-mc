@@ -14,7 +14,7 @@ production float32 Warp CPU backend unless stated, and the helpers of
 ``ionmc.transport.parity`` and ``ionmc.transport.mcs_checks`` that the tests use.
 
 Seeds: every statistical step derives all its seeds deterministically from one
-``--seed-base`` (default 20341004, the qualification base; 20261004 was the rehearsal,
+``--seed-base`` (default 20391004, the qualification base (V3-003D); 20341004 was the base of the previous head; 20261004 was the rehearsal,
 20271004 the T9 investigation, 20281004, 20291004, 20301004, 20311004, 20321004 and 20331004 the
 first to sixth consumed qualification attempts):
   T12 samples ``base + 1000 k`` (k = 1 python, 2 cpu32, 3 cpu64, 4 cuda32);
@@ -182,7 +182,7 @@ def finish(doc: dict[str, Any], frozen_n: int | None, n: int | None) -> int:
 # the qualification base; 20261004 rehearsal, 20271004 T9 investigation, 20281004, 20291004,
 # 20301004, 20311004, 20321004 and 20331004 consumed by the first to sixth qualification
 # attempts (all non-qualification)
-DEFAULT_SEED_BASE = 20341004
+DEFAULT_SEED_BASE = 20391004
 SEED_BASE = DEFAULT_SEED_BASE
 
 

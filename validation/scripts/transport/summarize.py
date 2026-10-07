@@ -40,14 +40,15 @@ from typing import Any
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
-QUALIFICATION_SEED_BASE = 20341004
+QUALIFICATION_SEED_BASE = 20391004
 """Only an archive made with this seed base can be conformant. The bases 20261004 (rehearsal),
-20271004 (T9 investigation), 20281004, 20291004, 20301004, 20311004, 20321004 and 20331004
+20271004 (T9 investigation), 20281004, 20291004, 20301004, 20311004, 20321004, 20331004 and
+20341004 (observed at the head before V3-003D)
 (first to sixth qualification attempts, consumed) are recorded as non-qualification evidence
 and never qualify."""
-V4_QUALIFICATION_SEED_BASE = 20381004
+V4_QUALIFICATION_SEED_BASE = 20401004
 """Qualification base of the suites ``lv4`` and ``hr4`` (V3-004); 20351004 is their rehearsal base
-and 20361004 and 20371004 are consumed (observed before amendments 4 and 5 of the plan). A base whose full-scale
+and 20361004, 20371004 and 20381004 are consumed (observed before amendments 4 and 5 of the plan). A base whose full-scale
 results were observed is consumed (plan, section Seeds)."""
 IDENTITY_KEYS = ("git_sha", "suite", "scale", "python_parts", "seed_base")
 
@@ -241,7 +242,7 @@ def seed_blockers(seed_base: Any, suite: str | None = None) -> list[str]:
         if int(seed_base) != V4_QUALIFICATION_SEED_BASE:
             return [
                 f"seed_base {int(seed_base)} is not the qualification base "
-                f"{V4_QUALIFICATION_SEED_BASE} (20351004 is the rehearsal base, 20361004 and 20371004 are consumed; any other "
+                f"{V4_QUALIFICATION_SEED_BASE} (20351004 is the rehearsal base, 20361004, 20371004 and 20381004 are consumed, 2041xxxx are V3-003D rehearsals; any other "
                 "base is non-qualification evidence)"
             ]
         return []
@@ -249,7 +250,7 @@ def seed_blockers(seed_base: Any, suite: str | None = None) -> list[str]:
         return [
             f"seed_base {int(seed_base)} is not the qualification base {QUALIFICATION_SEED_BASE} "
             "(20261004 is the rehearsal base, 20271004 was used by the T9 investigation, "
-            "20281004, 20291004, 20301004, 20311004, 20321004 and 20331004 by the first to sixth "
+            "20281004, 20291004, 20301004, 20311004, 20321004, 20331004 and 20341004 by the first to seventh "
             "qualification attempts: all are "
             "non-qualification evidence)"
         ]

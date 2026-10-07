@@ -281,4 +281,116 @@ fail-closed configuration rules.
   range table by exact quadrature of the interpolated `S` and/or a range-carrying step; it moves
   the qualified baselines by about 5 um and is a separate re-qualification.
 
-To be appended from committed result files.
+- **2026-10-07: V3-003D design (frozen before any result; outcome to be appended).** Task V3-003D
+  removes the range-table inconsistency recorded in the previous entry. Plan:
+  `validation/plans/v3-003d-acceptance.md` (rows D1 to D7), amendments 24 of the V3-003 plan and 6
+  of the V3-004 plan.
+  *Finding.* Both range constructions (`ionmc.physics.stopping.build_table` and
+  `TransportTables.from_stopping_tables`) integrate `a E / S` over ln E by the trapezoid rule on the
+  200-points-per-decade grid. On an interval of the log-log interpolated `S`, `ln f` (`f = a E / S`)
+  is linear in `u = ln E` with slope `k = d ln f / d ln E` of about 1.78, so the trapezoid error per
+  increment is `(k h)^2 / 12` relative with `h = ln 10 / 200`: 2.2e-5 to 3.6e-5. The table is
+  float64 in every kernel variant, so this is not a precision effect. A pure-Python mock of the
+  deterministic step loop on the real Bethe water tables decomposes the inconsistency between the
+  transported energy and the single-shot table inversion at 150 MeV into (1) the nodal trapezoid
+  bias, of size `eps min(R0, 100 s_max)` with `eps` about 3.5e-5 (dominant: -1.6 / -3.2 / -4.1 /
+  -4.7 um of `R(E_b) - (R(E0) - z_b)` at `s_max` 1 / 0.5 / 0.25 / 0.1 mm), (2) the log-log
+  interpolation of `R` between exact nodes (-3.6e-6 to +1.2e-5 relative, 0.24 to 0.52 um near
+  150 to 200 MeV), which still fails the table-CSDA A4b at 1e-4 near the end of range (1.07e-4,
+  1.18e-4, 1.05e-4), and (3) the accumulation of the round-trip drift, which is negligible (the
+  deviation between energy-state and range-carrying stepping is 0.004 um).
+  *Remedy (a+t): the range is the exact integral of the interpolated `S`.* With `ln f_j =
+  ln(a E_j) - ln S_j`, `d_i = ln f_{i+1} - ln f_i` and `f_i = exp(ln f_i)`, `S` is log-log linear on
+  interval `i` (width `h` in `u`), hence `f(u) = f_i exp(d_i (u - u_i) / h)` and
+  `Delta R_i = h f_i (e^{d_i} - 1) / d_i` (nodal increment, equal to `h (f_{i+1} - f_i) / d_i`);
+  between nodes `R(E) = R_i + h f_i g(d_i, phi)` with `phi = (ln E - u_i) / h` in [0, 1],
+  `g(d, phi) = (exp(d phi) - 1) / d` for `|d phi| >= 1e-5` and `phi (1 + d phi / 2 + (d phi)^2 / 6)`
+  otherwise (relative accuracy 2e-13 of `R`; the series truncation is at most 4e-17). The start
+  range `R_0` is unchanged (Bethe `a E_min / S(E_min)`, or the NIST CSDA range at `E_min`). The
+  exact inverse on interval `i`, used by the builder (numpy) to sample the uniform ln R table, is
+  `phi = log1p(d_i (r - R_i) / (h f_i)) / d_i` (and `(r - R_i) / (h f_i)` for `|d_i| < 1e-12`).
+  Implementation: `exact_loglog_range_increments` (one nodal helper), frozen float64 arrays
+  `r_mass`, `f_mass`, `d_f` in `TransportTables` (in the hash), the shared function
+  `range_in_bin` evaluated by the Python twin and the Warp kernel on the same bin index and
+  fraction as the stopping-power lookup, and the identity field `range_construction =
+  exact-loglog-quadrature-v1`. `energy_from_range` is unchanged. Warp has no guaranteed `expm1`, so
+  `exp - 1` with the series guard is used.
+  *Rejected: a range-carrying step* (the particle state carries the residual range instead of the
+  energy). On the exact-node table it changes the deterministic result by 0.004 um against the
+  energy-state step (no benefit), on the trapezoid table it does not remove the 5 um bias (it still
+  disagrees with `S` by 5 um and gives a 4.2e-2 relative energy error at the end), and with
+  straggling the range state has to be re-derived from the sampled energy anyway. Also rejected:
+  exact range nodes with log-log `R` interpolation (remedy (a); A4b-vs-table 1.07e-4 / 1.18e-4 /
+  1.05e-4 fails 1e-4), a 2000-points-per-decade exact grid (same accuracy as (a+t), extra kernel
+  parameters) and a closed-form inverse with a guide table (gain 1e-5, new search and an integer
+  array). Not included: the short-branch midpoint improvement (`E_half` from the table) and grid
+  density changes; the short branch's accumulated midpoint error of at most 0.17 um at 1 mm steps is
+  left as is.
+  *Predicted shifts (informative).* `R(150 MeV)` 158.62994 to 158.62484 mm (-5.1 um); `R(100 MeV)`,
+  `R(200 MeV)` about -2.7 and -8.2 um; deterministic transported end depth at 150 MeV
+  -3.41 / -1.74 / -0.88 / -0.35 um at `s_max` 1 / 0.5 / 0.25 / 0.1 mm, its spread over `s_max`
+  from 3.1 to at most 0.1 um; transported `E` near the end (z = 158.02 mm, 1 mm steps) from
+  6.6212 to about 6.6000 MeV (-0.3 %); branch mismatch `|R(E_b) - (R(E0) - z_b)|` at most 0.23 um;
+  A4b against the table CSDA energy 7.1e-5 / 5.5e-5 / 3.3e-5 (margin 1.4x at 1 mm; if it fails the
+  bound is not widened but recorded as contrary evidence with a follow-up); round-trip drift at most
+  7.2e-7. Relative-energy agreement of 1e-5 at every depth is not attainable for any remedy
+  (`dE/E = dr / (p r)`, `p` about 1.7), so the consistency criterion D2 is stated as a residual-range
+  distance of at most 0.5 um with a trapezoid control of at least 1.0 um. The source data hashes
+  (`content_sha256`, `source_sha256`) do not change; `TransportTables.sha256` does.
+  *Re-qualification scope.* V3-003: T1 (fixture regenerated by a committed script, plan amendment 24),
+  T2, T9, T10, T12, T14 and the other `lv`/`hr` rows at base 20391004 under unchanged criteria;
+  V3-004: A1 to A16 at base 20401004 (A16 per amendment 6, A4b table reference gating); the V3-002
+  `compare_nist.py` comparison is re-run informatively (range deviations change by at most 3.6e-5).
+  All runs in single-process diagnostic mode (operator directive 2026-10-07), so the archives are
+  diagnostic, non-conformant evidence. Outcome: to be appended from committed result files.
+
+- **2026-10-07: V3-003D phase C3 (T1 trace fixture regenerated).** The fixture
+  `tests/ionmc/data/trace_baseline_20mev.npz` (generated at 6d58480, no generator) was regenerated by
+  the committed script `validation/scripts/transport/make_trace_baseline.py` on the clean code commit
+  366d4f4 (python reference, the pinned legacy physics options of the original configuration, the
+  same `_config` as the guard test). The npz carries `meta` (generating commit, `TransportTables.sha256`
+  and identity with `range_construction = exact-loglog-quadrature-v1`, versions, environment flags,
+  the previous fixture's sha256 and the comparison below). The guard test compares discrete columns
+  exactly and continuous columns at rtol 1e-11 / atol 1e-12 for python and warp-cpu float64 (both
+  match; this replaces the former rtol 1e-9 / atol 2e-10 allowance). Differences against the 6d58480
+  fixture: 464 rows instead of 465 (history 0: 115 instead of 116 rows; histories 1 to 3 have identical
+  discrete columns and equal row counts). Rows before the first discrete difference (row 37), max
+  |Delta|: energy 5.2e-4 MeV, deposit 2.2e-4 MeV, x 5.0e-6, y 3.1e-6, z 4.9e-5, step 4.9e-5 mm, ux
+  5.0e-6, uy 8.6e-6, uz 1.4e-6. Histories 1 to 3, whole trace: energy at most 5.4e-4 MeV (relative
+  1.2e-4), z at most 1.5e-4 mm, x 2.4e-5, y 1.1e-5, deposit 2.4e-4 MeV, step 4.9e-5 mm. The one
+  discrete flip is history 0 row 37: a sliver geometry step of 5.6e-12 mm at the z = 3 mm voxel plane
+  (iz 1 to 2, reason 0 instead of 1; the old trace had a zero-length step there).
+  *Is the sliver step a defect?* No. A step limited by the energy-loss or range rule that ends within
+  rounding of a voxel plane (here 1.4e-6 mm short of it, the plane and the limit coincide to that
+  accuracy for the shifted energy) leaves a remaining distance to the plane of the size of the
+  rounding error. The next step is a geometry step (`dda_next_clip`) of exactly that length; the
+  end point is snapped onto the plane (`nzp = plane`), so the state stays consistent, and the plane
+  crossing costs one extra step. The previous table produced a zero-length crossing step at the same
+  place. Both cases are within the existing stall rule (more than three consecutive zero-length steps
+  is a stall; a single sliver is not) and the energy balance and scoring are unaffected (the deposit
+  of such a step is of the order of S times 5.6e-12 mm). The discrete flip is a consequence of a
+  coincidence of two step limits within 1e-6 mm for one history, i.e. the guard test is sensitive to
+  any change of the energy table at the 1e-5 level, which is its purpose; no follow-up is needed.
+  T1 python against warp-cpu at 256 histories of 150 MeV (`steps.py t1 --k 256`, single process,
+  rehearsal-family seed 20411004, not qualification evidence): 72756 steps each, no discrete
+  difference, continuous max |Delta| 0 (bit-identical).
+
+- 2026-10-07 (V3-003D, outcome at the frozen head 637ef82, under the single-process diagnostic
+  directive — NOT a conformant qualification; that remains pending the lifting of the directive and
+  the deferred worker checks): all four suites were re-run on the host. `hr` (base 20391004,
+  RUN-20261007T133232Z-35fbf308) and `lv` (RUN-20261007T135209Z-0cc694da, …135709Z-a5a8011b,
+  …141200Z-9a4fd10a, …141215Z-ab2661d6, …142636Z-17618f9f, …144409Z-5eb8e1ae, …145547Z-b1acf9c7):
+  every executed step passed under the unchanged V3-003 criteria (pytest incl. the fail-closed D1
+  NIST-water case, T1 256 histories bit-identical python vs warp-cpu, T2, T13 chunks, R1, T12 all
+  pairs, T8, T9, T10, T14); `04-t13-workers` deferred. `hr4` (base 20401004,
+  RUN-20261007T152306Z-12322cff) and `lv4` (RUN-20261007T154510Z-9e3d2e1d, …155012Z-d5549bd4,
+  …155216Z-35151115, …161321Z-036bd6e4, …163422Z-694484e7): every executed step passed; A16 in the
+  gated intended-change mode (baseline identity none → `exact-loglog-quadrature-v1`, every allowlisted
+  difference inside its bound); A9 z sd 1.014 / 1.056 / 0.958 and all-bins mean coverage 0.938 — the
+  Bragg-peak z sd exceeded one for the fourth base in a row (1.069, 1.119, 1.079, 1.056; inside
+  [0.87, 1.13]), strengthening the open observation of V3-004 amendment 5; `05-a15-workers` deferred.
+  Combined summaries: `validation/results/transport/{hr,lv,hr4,lv4}-637ef82-single-process.json`
+  (`pass: true`, `conformant: false` by design). The plan's evidence-archive table is intentionally
+  left unfilled at this head because the plan file is part of the A16 source digest (amendment 6 (g));
+  the mapping lives in the results README and here, and the next task's first commit (which deletes
+  the A16 record and advances `A16_BASELINE`) fills the table. Not a clinical claim.

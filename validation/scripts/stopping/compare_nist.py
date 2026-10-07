@@ -118,7 +118,7 @@ def run(cache_dir: str | None, offline: bool) -> dict[str, Any]:
         t75 = BetheStoppingSource().table(water(75.0), proj)
         t78 = BetheStoppingSource().table(water(78.0), proj)
         # ICRU 90 range: log-log interpolation of its coarse grid onto a fine log grid,
-        # then the same trapezoid integral as for the analytic tables.
+        # then the same exact log-log quadrature as for the analytic tables (`build_table`).
         e_u_icru = e_icru / proj.a
         e_fine = log_grid(1.0, min(E_MAX, float(e_u_icru[-1])), 200)
         s_fine = np.exp(np.interp(np.log(e_fine), np.log(e_u_icru), np.log(s_icru)))

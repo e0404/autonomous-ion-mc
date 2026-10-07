@@ -192,9 +192,11 @@ class _Reference:
     def _stopping_range(self, m: int, e: float) -> tuple[float, float]:
         t, r = self.tab, self.R
         i, f = self.F.log_bin_index(r(e), r(t.ln_e0[m]), r(t.inv_dln_e[m]), t.n_e)
-        ls, lr = t.ln_s_mass[m], t.ln_r_mass[m]
+        ls = t.ln_s_mass[m]
         s = self.F.interp_exp(r(ls[i]), r(ls[i + 1]), f)
-        rng = self.F.interp_exp(r(lr[i]), r(lr[i + 1]), f)
+        rng = self.F.range_in_bin(
+            r(t.r_mass[m, i]), r(t.f_mass[m, i]), r(t.d_f[m, i]), r(1.0 / t.inv_dln_e[m]), f
+        )
         return float(s), float(rng)
 
     def _energy_from_range(self, m: int, r_g_cm2: float) -> float:

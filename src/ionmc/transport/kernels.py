@@ -570,7 +570,9 @@ def make_transport_kernel(real: type, diag: bool):
         mat: wp.array3d(dtype=wp.int32),
         dens: wp.array3d(dtype=D),
         ln_s: wp.array2d(dtype=D),
-        ln_r: wp.array2d(dtype=D),
+        r_mass: wp.array2d(dtype=D),
+        f_mass: wp.array2d(dtype=D),
+        d_f: wp.array2d(dtype=D),
         ln_er: wp.array2d(dtype=D),
         ln_e0: wp.array(dtype=D),
         inv_dln_e: wp.array(dtype=D),
@@ -698,7 +700,9 @@ def make_transport_kernel(real: type, diag: bool):
                 rho = dens[ix, iy, iz]
                 ib, fb = FD.log_bin_index(energy, ln_e0[m], inv_dln_e[m], ctl.n_e)
                 s0 = FD.interp_exp(ln_s[m, ib], ln_s[m, ib + 1], fb)
-                r0 = FD.interp_exp(ln_r[m, ib], ln_r[m, ib + 1], fb)
+                r0 = FD.range_in_bin(
+                    r_mass[m, ib], f_mass[m, ib], d_f[m, ib], D(1.0) / inv_dln_e[m], fb
+                )
                 s_lin = s0 * rho / D(10.0)
                 r_mm = r0 * D(10.0) / rho
                 pvec = v3(px, py, pz)
