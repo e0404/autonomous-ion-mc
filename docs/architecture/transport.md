@@ -21,7 +21,10 @@ lookup scoring). The models are described in [EM transport](../physics/em-transp
 | `ionmc.scoring` | `ScoringGrid`, exact voxel-mass overlap `voxel_mass_g`, batch estimator `reduce_batches` |
 | `ionmc.species` | append-only species registry (ids 0 p, 1 d, 2 t, 3 He-3, 4 alpha; pseudo-species `nuclear_local`), `producible()` engine capability |
 | `ionmc.lookup` | `LookupTable` (uniform grid, sha256, provenance), `resample_uniform` |
-| `ionmc.transport.channels` | channel compiler: `compile_channels`, `ChannelPlan`, quantum rule |
+| `ionmc.transport.channels` | channel compiler: `compile_channels`, `ChannelPlan`, quantum rule, shared lookup/spectrum axis parameters |
+| `ionmc.transport.scoring_funcs`, `ionmc.transport.scoring_ref` | shared scoring functions (Warp + Python twin) and the Python channel hook |
+| `ionmc.transport.channel_device` | packs a `ChannelPlan` and the water row into the `ChannelData` struct of the kernels |
+| `ionmc.transport.parity_channels` | A11-HR comparison of linear channel profiles (`t12_compare`), ratio z report, A15 partition comparison |
 | `ionmc.config` | `PhysicsOptions`, `RunOptions`, `DiagnosticsOptions`, `SimulationConfig`, `validate()` returning `EffectiveConfig` |
 | `ionmc.simulation` | `Simulation`, `Result`, `GridResult`, `EnergyBalance`, `TransportCounters`, `capabilities()` |
 | `ionmc.rng.philox` | Philox4x32-10 as a Warp function (`make_philox(real)`) and over Python integers, counter encoding |
@@ -165,6 +168,16 @@ counter starting at 0.
 * `RunOptions.memory_budget_bytes` bounds the accumulators; `PhysicsOptions.stopping` has no default.
 * The energy loss uses the state energy (step 6 above); the cutoff energy is scored (see Results).
 
+* The range table `R(E)` is built by the trapezoid rule in `ln E` of `E/S` on the 200-points-per-decade
+  grid. This overestimates every increment by about 3.5e-5 relative (about 5.1 um of the 158.6 mm range
+  at 150 MeV; the exact quadrature of the log-log interpolated `S` gives 158.625 mm against 158.630 mm
+  tabulated). The short-step branch (`S(E_mid) t`) does not carry the bias, the range-inversion branch
+  does, so the transported `E(z)` depends slightly on the step size. This is a known inconsistency
+  recorded in decision 0039 (outcome of 2026-10-07); the follow-up V3-003D replaces the construction
+  by exact quadrature and/or a range-carrying step and re-qualifies. Scoring tests that compare a
+  scored energy loss with an energy-depth relation use the transported particle's energy
+  (acceptance plan V3-004, footnote 1).
+
 `TransportTables` is immutable: every array is read-only, the identity (source, effective I, dataset id
 and hashes, material fingerprint, metadata) is stored as read-only mappings and tuples, and
 `EffectiveConfig.summary()` returns deep copies.
@@ -228,11 +241,11 @@ result is flagged `valid = False`. Counters: `step_truncation`, `stall`, `stragg
 ## Extensible scoring
 
 Status: the data model, the fail-closed validation, the water LET row, the shared scoring functions
-(`ionmc.transport.scoring_funcs`, twin of the Warp functions, part of the U1 harness) and the
-reference (python) hook `score_piece` (`ionmc.transport.scoring_ref`) of V3-004 are in place, with
-`reduce_ratio`, `QuantityResult` and `GridResult.quantities`; `config.CHANNEL_BACKENDS` is
-`("python",)`: a configuration with `tallies` is rejected on the Warp backends until the kernel hook
-(step 8) lands, never silently ignored. Acceptance rows A1 to A16 are frozen in
+(`ionmc.transport.scoring_funcs`, twin of the Warp functions, part of the U1 harness), the
+reference (python) hook `score_piece` (`ionmc.transport.scoring_ref`) and the Warp kernel hook of
+V3-004 are in place, with `reduce_ratio`, `QuantityResult` and `GridResult.quantities`;
+`config.CHANNEL_BACKENDS` is `("python", "warp-cpu", "warp-cuda")` (a backend missing from it
+rejects a configuration with `tallies`, never silently ignoring them). Acceptance rows A1 to A16 are frozen in
 `validation/plans/v3-004-acceptance.md`.
 
 **Requests.** `SimulationConfig.tallies` is a tuple of `TallyRequest(name, grid, quantity, species,
@@ -324,6 +337,23 @@ straggling attempts, position, direction, energy, deposit, step length). The tra
 for trajectory-level parity with the Warp backends.
 
 ## Warp backends
+
+**Channel scoring in the kernel.** The kernel takes a `ChannelData` struct (`make_kernel_support(real).chan`;
+`ionmc.transport.channel_device`): `n_ch` (0 without tallies: the qualified path), the int64 accumulator
+`acc[B, sum size]`, per-channel integer rows (kind, class mask, generation range, offset, lookup, residual
+column, spectrum bins and log flag) and float rows (`2^k`, `2^-k`, spectrum axis), the int32 species match
+matrix, the lookup tables as one flat float64 array with per-(table, species) row offsets, and the water
+row. Right after the energy deposit of an in-grid piece (`deposit_leg`, the same `eps_p`) `score_piece`
+adds the piece to every channel of the grid that selects its class, species and generation: the value is
+computed in float64 in every variant (`make_scoring_funcs(float64)`, also for float32 transport),
+quantized `floor(x 2^k + 1/2)` and added with an int64 `atomic_add`; the rounding residual and the lookup
+out-of-domain count go to the history's own tally-row columns after the `6 + 2 G` fixed ones (`N` has no
+residual). Per step with `s_act > 0`, `step_state` does one water lookup at `E_mid` (`S_mid`, `k`,
+`Edot`). With channels present the legs of a step with `s_act > 0` are walked even if `eps = 0`;
+cutoff and `s_act = 0` deposits are class "local" (`score_local`). With `n_ch = 0` no scoring code runs
+and the outputs are bit-identical to the qualified path (row A16). The driver merges `acc` across chunks
+(it stays on the device) and workers (exact int64 sums). Python and warp-cpu float64 agree bit for bit
+on the channels in the cases tested (row A11-CI allows `1e-10` relative plus `n_v q_c`).
 
 `warp-cpu` and `warp-cuda` run one kernel thread per history (`ionmc.transport.kernels`). The step loop is a
 statement-by-statement copy of `reference._history`: the same branches in the same order and the same expression

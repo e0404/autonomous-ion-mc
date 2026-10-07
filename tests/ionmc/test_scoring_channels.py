@@ -49,7 +49,7 @@ GRID = ScoringGrid((-30.0, -30.0, 0.0), (2.0, 2.0, 2.0), (30, 30, 30), name="dos
 
 @pytest.fixture
 def channels_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Pretend the backends implement channels so that ``validate`` returns the plan."""
+    """All backends implement channels (kept so the tests state their dependence explicitly)."""
     monkeypatch.setattr(
         config_module, "CHANNEL_BACKENDS", ("python", "warp-cpu", "warp-cuda"), raising=True
     )
@@ -392,11 +392,14 @@ def test_memory_guard_counts_channels(make_config: MakeConfig, channels_enabled:
 # --------------------------------------------------------------------------- A12
 
 
-def test_no_tallies_is_unchanged_and_tallies_are_never_ignored(make_config: MakeConfig) -> None:
+def test_no_tallies_is_unchanged_and_tallies_are_never_ignored(
+    make_config: MakeConfig, monkeypatch: pytest.MonkeyPatch
+) -> None:
     cfg = make_config(energy=20.0)
     assert validate(cfg).channels is None
     assert validate(cfg).summary()["tallies"] is None
-    # a backend without channels (the Warp kernels follow in step 8) rejects a tally request
+    # every backend has channels now; a backend that lacks them (simulated) rejects the request
+    monkeypatch.setattr(config_module, "CHANNEL_BACKENDS", ("python",), raising=True)
     for backend, prec in (("warp-cpu", "float32"), ("warp-cpu", "float64")):
         c = _with(make_config(energy=20.0, backend=backend, precision=prec), _req("ld", "let_d"))
         with pytest.raises(UnsupportedCombinationError, match="does not implement scoring"):

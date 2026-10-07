@@ -197,6 +197,28 @@ class ChannelPlan:
 
 
 # ---------------------------------------------------------------------------------------------
+# axis parameters shared by every backend (the same floating-point numbers everywhere)
+
+
+def lookup_axis_params(lk: LookupTable) -> tuple[float, float, int, int]:
+    """``(a0, inv_da, n, log)`` of a lookup axis for ``lookup_bin``: ``a0`` is the first axis point
+    (its logarithm for a log axis) and ``inv_da`` the inverse spacing in the axis variable."""
+    n = int(lk.axis_values.size)
+    log = lk.axis_spacing == "log"
+    a0 = float(np.log(lk.axis_values[0]) if log else lk.axis_values[0])
+    a1 = float(np.log(lk.axis_values[-1]) if log else lk.axis_values[-1])
+    return a0, (n - 1) / (a1 - a0), n, 1 if log else 0
+
+
+def spectrum_axis_params(spec: SpectrumSpec) -> tuple[float, float, int, int]:
+    """``(a0, inv_da, n_bins, log)`` of a spectrum for ``spectrum_bin``."""
+    e = spec.edges
+    a0 = math.log(e[0]) if spec.log else e[0]
+    a1 = math.log(e[-1]) if spec.log else e[-1]
+    return a0, spec.n_bins / (a1 - a0), spec.n_bins, int(spec.log)
+
+
+# ---------------------------------------------------------------------------------------------
 # quantum rule
 
 

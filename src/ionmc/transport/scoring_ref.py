@@ -25,7 +25,13 @@ import numpy as np
 from ionmc._wpfunc import python_twin
 from ionmc.scoring import ScoringGrid
 from ionmc.species import species_by_id
-from ionmc.transport.channels import CLASS_STEP, KINDS, ChannelPlan
+from ionmc.transport.channels import (
+    CLASS_STEP,
+    KINDS,
+    ChannelPlan,
+    lookup_axis_params,
+    spectrum_axis_params,
+)
 from ionmc.transport.funcs import make_transport_funcs
 from ionmc.transport.scoring_funcs import KIND_CODES, make_scoring_funcs
 from ionmc.transport.tables import TransportTables
@@ -61,22 +67,11 @@ class ReferenceChannelScorer:
         # per lookup table: axis start (ln for a log axis), inverse step, points, per-species rows
         self._lookups = []
         for lk in plan.lookups:
-            n = int(lk.axis_values.size)
-            log = lk.axis_spacing == "log"
-            a0 = float(np.log(lk.axis_values[0]) if log else lk.axis_values[0])
-            a1 = float(np.log(lk.axis_values[-1]) if log else lk.axis_values[-1])
-            rows = {species_of: v for species_of, v in lk.values.items()}
-            self._lookups.append((a0, (n - 1) / (a1 - a0), n, 1 if log else 0, lk.axis, rows))
-        self._spectra: list[tuple[float, float, int, int] | None] = []
-        for c in plan.channels:
-            if c.spectrum is None:
-                self._spectra.append(None)
-                continue
-            e = c.spectrum.edges
-            lg = c.spectrum.log
-            a0 = math.log(e[0]) if lg else e[0]
-            a1 = math.log(e[-1]) if lg else e[-1]
-            self._spectra.append((a0, c.spectrum.n_bins / (a1 - a0), c.spectrum.n_bins, int(lg)))
+            a0, inv, n, log = lookup_axis_params(lk)
+            self._lookups.append((a0, inv, n, log, lk.axis, dict(lk.values.items())))
+        self._spectra: list[tuple[float, float, int, int] | None] = [
+            None if c.spectrum is None else spectrum_axis_params(c.spectrum) for c in plan.channels
+        ]
         self._ny_nz = [(g.shape[1], g.shape[2]) for g in grids]
         self.begin_history()
         self.set_step_state(0.0, 0.0, 0.0, 0.0)

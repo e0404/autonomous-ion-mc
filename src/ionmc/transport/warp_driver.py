@@ -20,8 +20,11 @@ import numpy as np
 import warp as wp
 
 from ionmc.config import EffectiveConfig
+from ionmc.species import species_of_projectile
+from ionmc.transport.channel_device import empty_channel_data, make_channel_data
 from ionmc.transport.funcs import BIG_LENGTH_MM
 from ionmc.transport.kernels import make_kernel_support, make_transport_kernel
+from ionmc.transport.run import channel_columns
 from ionmc.transport.tally import (
     COUNTER_NAMES,
     N_FIXED_TALLIES,
@@ -153,9 +156,20 @@ def run_warp_range(eff: EffectiveConfig, h0: int, h1: int, device: str) -> Parti
     arr_goff: Any = wp.array(offsets, dtype=int, device=device)
     edep = wp.zeros((run.n_batches, total_vox), dtype=wp.int64, device=device)
 
+    n_chan_cols = channel_columns(eff)
+    n_cols = N_FIXED_TALLIES + 2 * n_g + n_chan_cols
+    if eff.channels is None:
+        chan = empty_channel_data(support, device)
+    else:
+        chan = make_channel_data(
+            support, eff.channels, tab, n_batches=run.n_batches, n_grids=n_g,
+            a_nucleon=src.projectile.a, species_id=species_of_projectile(src.projectile).id,
+            generation=0, device=device,
+        )  # fmt: skip
+
     n_local = h1 - h0
     chunk = min(run.chunk_histories, max(n_local, 1))
-    tally_rows = wp.zeros((chunk, N_FIXED_TALLIES + 2 * n_g), dtype=wp.float64, device=device)
+    tally_rows = wp.zeros((chunk, n_cols), dtype=wp.float64, device=device)
     counter_rows = wp.zeros((chunk, len(COUNTER_NAMES)), dtype=wp.int32, device=device)
     if use_diag:
         end_state = wp.zeros((chunk, 11), dtype=real, device=device)
@@ -182,7 +196,7 @@ def run_warp_range(eff: EffectiveConfig, h0: int, h1: int, device: str) -> Parti
         ctl.trace_k = wp.uint32(0)
         ctl.trace_h0 = wp.uint32(0)
 
-    comps: list[list[float]] = [[] for _ in range(N_FIXED_TALLIES + 2 * n_g)]
+    comps: list[list[float]] = [[] for _ in range(n_cols)]
     counter_sums = [0] * len(COUNTER_NAMES)
     chunk_seconds: list[float] = []
     t_loop = time.perf_counter()
@@ -200,13 +214,14 @@ def run_warp_range(eff: EffectiveConfig, h0: int, h1: int, device: str) -> Parti
                 t.inv_dln_e, t.ln_r0, t.inv_dln_r, t.z_over_a, t.inv_rho_xs,
                 arr_gorigin, arr_gspacing, arr_ginv, arr_gshape, arr_goff,
                 edep, tally_rows, counter_rows, end_state, end_code, trace_i, trace_f, trace_n,
+                chan,
             ],
             device=device,
         )  # fmt: skip
         trows = tally_rows.numpy()[:n]  # synchronises
         crows = counter_rows.numpy()[:n]
         chunk_seconds.append(time.perf_counter() - t_c)
-        for c in range(N_FIXED_TALLIES + 2 * n_g):
+        for c in range(n_cols):
             comps[c].extend(exact_components(trows[:, c]))
         for i, x in enumerate(crows.astype(np.int64).sum(axis=0)):
             counter_sums[i] += int(x)
@@ -255,4 +270,7 @@ def run_warp_range(eff: EffectiveConfig, h0: int, h1: int, device: str) -> Parti
         "h0": h0,
         "h1": h1,
     }
-    return rows_to_partial_many(h0, h1, comps, counter_sums, edep_grids, diagnostics, meta)
+    channel_acc = None if eff.channels is None else chan.acc.numpy().astype(np.int64)
+    return rows_to_partial_many(
+        h0, h1, comps, counter_sums, edep_grids, diagnostics, meta, channel_acc
+    )

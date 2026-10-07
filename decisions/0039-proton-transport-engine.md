@@ -265,4 +265,20 @@ fail-closed configuration rules.
   that the per-primary deposit (grid + quantization residual) agrees to 1e-12
   for identical seeds, and a T12 test covers the allowance.
 
+- **2026-10-07: range-table trapezoid bias found by the V3-004 acceptance row A4b
+  (follow-up V3-003D).** `TransportTables.from_stopping_tables` / `build_table` build
+  `R(E)` by the trapezoid rule in `ln E` of `E/S` on the 200-points-per-decade grid. This
+  overestimates every increment by about 3.5e-5 relative (about 5.1 um of the 158.6 mm range at
+  150 MeV; the exact analytic quadrature of the log-log interpolated `S` gives
+  `R(150 MeV)` = 158.625 mm against 158.630 mm tabulated). The engine's short-step branch
+  `S(E_mid) t` agrees with exact quadrature to about 3e-6, the range-inversion branch follows the
+  biased table, and the branch mix (short branch while the remaining range exceeds 100 steps)
+  makes the transported `E(z)` differ from the single-shot table inversion (-0.15 % at 1 mm,
+  -0.41 % at 0.25 mm steps at z = 158.04 mm). Test T2 (end depth within 1e-4 R, about 16 um)
+  cannot see a 5 um bias, so the qualified T1/T9/T12 baselines are unaffected in their own
+  criteria. V3-004 clarified the definition of `E(z)` in its acceptance rows A4/A4b (transported
+  energy anchored at the step boundaries) and did not change the engine. Follow-up V3-003D:
+  range table by exact quadrature of the interpolated `S` and/or a range-carrying step; it moves
+  the qualified baselines by about 5 um and is a separate re-qualification.
+
 To be appended from committed result files.

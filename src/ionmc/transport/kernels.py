@@ -25,6 +25,13 @@ residual, control displacement x, y, z), ``end_code[chunk]``, and for the first 
 histories the trace ``trace_i[K, max_steps, 8]`` (int32), ``trace_f[K, max_steps, 9]``
 (float64) and ``trace_n[K]`` (rows written). A history stops at ``max_steps`` so the trace buffer
 cannot overflow.
+
+Scoring channels (decision 0040): the last kernel argument is the ``ChannelData`` struct
+(``ionmc.transport.channel_device``). Without tallies (``n_ch = 0``) no scoring code runs. With
+channels, every in-grid piece is also added to the int64 channel accumulators ``chan.acc[B, sum
+size]`` by ``score_piece`` (atomic adds), and the tally rows get ``n_res + 1`` extra columns after
+the ``6 + 2 G`` ones: the quantization residual of every channel but N (per history) and the
+lookup out-of-domain count.
 """
 
 import functools
@@ -39,6 +46,7 @@ from ionmc.physics.em import make_em
 from ionmc.physics.kinematics import make_kinematics
 from ionmc.rng.philox import PURPOSE_SOURCE, PURPOSE_TRANSPORT, make_philox
 from ionmc.transport.funcs import make_transport_funcs
+from ionmc.transport.scoring_funcs import make_scoring_funcs
 from ionmc.transport.tally import (
     END_CUTOFF,
     END_ESCAPED,
@@ -112,8 +120,152 @@ def make_kernel_support(real: type) -> SimpleNamespace:
     Control.__qualname__ = Control.__name__
     control = wp.struct(Control)
 
+    class Chan:
+        pass
+
+    Chan.__annotations__ = {
+        "n_ch": int,  # 0 without tallies: the qualified path (no scoring code runs)
+        "n_res": int,  # residual columns (the lookup out-of-domain count follows them)
+        "res_base": int,  # first channel column of the per-history tally rows
+        "n_water": int,
+        "a_nuc": int,
+        "species": int,  # species id and generation of the transported particle
+        "gen": int,
+        "ln_e0_w": D,
+        "inv_dln_e_w": D,
+        "rho_w": D,
+        "acc": wp.array2d(dtype=wp.int64),
+        "ch_i": wp.array2d(
+            dtype=wp.int32
+        ),  # kind, class, gen lo/hi, offset, lookup, res, bins, log
+        "ch_f": wp.array2d(dtype=D),  # 2^k, 2^-k, spectrum a0, inv step
+        "ch_sp": wp.array2d(dtype=wp.int32),  # species match
+        "ch_begin": wp.array(dtype=int),
+        "ch_end": wp.array(dtype=int),
+        "ln_s_w": wp.array(dtype=D),
+        "lk_i": wp.array2d(dtype=int),  # n, log, axis (0 energy per nucleon, 1 LET)
+        "lk_f": wp.array2d(dtype=D),  # a0, inv step
+        "lk_row": wp.array2d(dtype=int),  # offset of the species row in lk_vals (-1: none)
+        "lk_vals": wp.array(dtype=D),
+    }
+    Chan.__name__ = f"ChannelData_{name}"
+    Chan.__qualname__ = Chan.__name__
+    chan_t = wp.struct(Chan)
+    SC = make_scoring_funcs(D)
+    half_d = wp.constant(wp.float64(0.5))
+    ten_d = wp.constant(wp.float64(10.0))
+
     q_scale = wp.constant(wp.float64(QUANTUM_SCALE))
     q_mev = wp.constant(wp.float64(QUANTUM_MEV))
+
+    @named_func(name)
+    def step_state(chan: chan_t, e_mid: D, de_mean: D, s_act: D) -> tuple[D, D, D]:
+        """Step quantities of the channel hook (as ``ReferenceChannelScorer.begin_step``): the
+        water stopping power ``S_mid``, the ramp slope ``k`` and the energy rate ``Edot`` at the
+        midpoint energy ``e_mid`` of a step of path length ``s_act`` and mean loss ``de_mean``."""
+        iw, fw = FD.log_bin_index(e_mid, chan.ln_e0_w, chan.inv_dln_e_w, chan.n_water)
+        ly0 = chan.ln_s_w[iw]
+        ly1 = chan.ln_s_w[iw + 1]
+        s_mass = FD.interp_exp(ly0, ly1, fw)
+        gamma = SC.loglog_slope(ly0, ly1, chan.inv_dln_e_w)
+        s_mid = s_mass * chan.rho_w / ten_d
+        k = SC.let_ramp_slope(s_mid, gamma, de_mean, e_mid, s_act)
+        return s_mid, k, de_mean / s_act
+
+    @named_func(name)
+    def score_piece(
+        chan: chan_t,
+        tally_rows: wp.array2d(dtype=wp.float64),
+        tid: int,
+        batch: int,
+        g: int,
+        vox: int,
+        length: D,
+        tau: D,
+        eps: D,
+        species: int,
+        gen: int,
+        cls: int,
+        s_mid: D,
+        k: D,
+        e_mid: D,
+        e_dot: D,
+    ):
+        """Add one piece (in grid ``g``, flat voxel ``vox``) to every channel of the grid that
+        selects its class (1 step, 2 local), species and generation (as
+        ``ReferenceChannelScorer.score_piece``: same functions, same operation order). The
+        increment is computed in double precision in every kernel variant, quantized
+        ``floor(x 2^k + 1/2)`` and added with an int64 atomic; the rounding residual and the
+        lookup out-of-domain count go to the history's own tally row."""
+        s_bar = D(0.0)
+        e_bar = D(0.0)
+        m1 = D(0.0)
+        m2 = D(0.0)
+        if cls == 1:
+            s_bar, e_bar = SC.piece_state(s_mid, k, e_mid, e_dot, tau)
+            m1, m2 = SC.piece_moments(s_bar, k, length)
+        for ci in range(chan.ch_begin[g], chan.ch_end[g]):
+            sel = int(0)
+            if (chan.ch_i[ci, 1] & cls) != 0 and chan.ch_sp[ci, species] != 0:
+                if gen >= chan.ch_i[ci, 2] and gen <= chan.ch_i[ci, 3]:
+                    sel = 1
+            if sel == 1:
+                kind = chan.ch_i[ci, 0]
+                f = D(1.0)
+                col = chan.ch_i[ci, 4] + vox
+                if kind == 5:  # FE: lookup value at the piece argument
+                    li = chan.ch_i[ci, 5]
+                    xa = s_bar
+                    if chan.lk_i[li, 2] == 0:
+                        xa = e_bar / D(chan.a_nuc)
+                    i, fr, inside = SC.lookup_bin(
+                        xa, chan.lk_f[li, 0], chan.lk_f[li, 1], chan.lk_i[li, 0], chan.lk_i[li, 1]
+                    )
+                    if inside == 0:
+                        c_ood = chan.res_base + chan.n_res
+                        tally_rows[tid, c_ood] = tally_rows[tid, c_ood] + D(1.0)
+                    row = chan.lk_row[li, species]
+                    f = FD.lerp(chan.lk_vals[row + i], chan.lk_vals[row + i + 1], fr)
+                if kind == 6:  # FL: energy bin of the piece (underflow 0, overflow n + 1)
+                    nb = chan.ch_i[ci, 7]
+                    b = SC.spectrum_bin(
+                        e_bar / D(chan.a_nuc), chan.ch_f[ci, 2], chan.ch_f[ci, 3], nb,
+                        chan.ch_i[ci, 8],
+                    )  # fmt: skip
+                    col = chan.ch_i[ci, 4] + vox * (nb + 2) + b
+                x = SC.channel_value(kind, eps, length, m1, m2, s_bar, f)
+                n = wp.int64(wp.floor(x * chan.ch_f[ci, 0] + half_d))
+                wp.atomic_add(chan.acc, batch, col, n)
+                rc = chan.ch_i[ci, 6]
+                if rc >= 0:
+                    c_res = chan.res_base + rc
+                    tally_rows[tid, c_res] = tally_rows[tid, c_res] + (
+                        x - wp.float64(n) * chan.ch_f[ci, 1]
+                    )
+
+    @named_func(name)
+    def score_local(
+        chan: chan_t,
+        tally_rows: wp.array2d(dtype=wp.float64),
+        tid: int,
+        batch: int,
+        g: int,
+        ix: int,
+        iy: int,
+        iz: int,
+        nxg: int,
+        nyg: int,
+        nzg: int,
+        de: D,
+    ):
+        """Class "local" point deposit (cutoff energy, deposit at ``s_act = 0``; ``l = 0``) into
+        the channels, if the voxel is inside the grid and channels are present."""
+        if chan.n_ch > 0:
+            if ix >= 0 and ix < nxg and iy >= 0 and iy < nyg and iz >= 0 and iz < nzg:
+                score_piece(
+                    chan, tally_rows, tid, batch, g, (ix * nyg + iy) * nzg + iz, D(0.0), D(0.0),
+                    de, chan.species, chan.gen, 2, D(0.0), D(0.0), D(0.0), D(0.0),
+                )  # fmt: skip
 
     @named_func(name)
     def deposit_voxel(
@@ -158,6 +310,7 @@ def make_kernel_support(real: type) -> SimpleNamespace:
         g_shape: wp.array2d(dtype=int),
         g_off: wp.array(dtype=int),
         n_grids: int,
+        chan: chan_t,
     ):
         """Point deposit (the energy left at the cutoff) in every grid."""
         p = v3(px, py, pz)
@@ -171,6 +324,7 @@ def make_kernel_support(real: type) -> SimpleNamespace:
             deposit_voxel(
                 edep, tally_rows, tid, batch, g, ix, iy, iz, nxg, nyg, nzg, g_off[g], n_grids, de
             )
+            score_local(chan, tally_rows, tid, batch, g, ix, iy, iz, nxg, nyg, nzg, de)
 
     @named_func(name)
     def ramp_weight(ta: D, tb: D, s_start: D, s_end: D, s_act: D) -> D:
@@ -206,6 +360,11 @@ def make_kernel_support(real: type) -> SimpleNamespace:
         g_off: wp.array(dtype=int),
         n_grids: int,
         max_pieces: int,
+        chan: chan_t,
+        s_mid: D,
+        k_ramp: D,
+        e_mid: D,
+        e_dot: D,
     ) -> int:
         """Deposit the ramp-weighted share of ``deposit`` in every voxel of grid ``g`` crossed by
         the straight segment from ``p0`` along ``u`` (per-grid incremental DDA, ``seg_piece``);
@@ -228,10 +387,17 @@ def make_kernel_support(real: type) -> SimpleNamespace:
             if remaining > R(0.0):
                 piece, axis = F.seg_piece(v3(px, py, pz), uvec, ix, iy, iz, go, gs, remaining)
                 tb = tcur + D(piece)
+                eps_p = deposit * ramp_weight(tcur, tb, s_start, s_end, D(s_act))
                 deposit_voxel(
-                    edep, tally_rows, tid, batch, g, ix, iy, iz, nxg, nyg, nzg, off, n_grids,
-                    deposit * ramp_weight(tcur, tb, s_start, s_end, D(s_act)),
+                    edep, tally_rows, tid, batch, g, ix, iy, iz, nxg, nyg, nzg, off, n_grids, eps_p
                 )  # fmt: skip
+                if chan.n_ch > 0:
+                    if ix >= 0 and ix < nxg and iy >= 0 and iy < nyg and iz >= 0 and iz < nzg:
+                        score_piece(
+                            chan, tally_rows, tid, batch, g, (ix * nyg + iy) * nzg + iz, D(piece),
+                            tcur + half_d * D(piece) - half_d * D(s_act), eps_p, chan.species,
+                            chan.gen, 1, s_mid, k_ramp, e_mid, e_dot,
+                        )  # fmt: skip
                 tcur = tb
                 remaining = remaining - piece
                 if axis >= 0:
@@ -260,10 +426,17 @@ def make_kernel_support(real: type) -> SimpleNamespace:
         overflow = int(0)
         if remaining > R(0.0):
             overflow = 1
+            eps_r = deposit * ramp_weight(tcur, tcur + D(remaining), s_start, s_end, D(s_act))
             deposit_voxel(
-                edep, tally_rows, tid, batch, g, ix, iy, iz, nxg, nyg, nzg, off, n_grids,
-                deposit * ramp_weight(tcur, tcur + D(remaining), s_start, s_end, D(s_act)),
+                edep, tally_rows, tid, batch, g, ix, iy, iz, nxg, nyg, nzg, off, n_grids, eps_r
             )  # fmt: skip
+            if chan.n_ch > 0:
+                if ix >= 0 and ix < nxg and iy >= 0 and iy < nyg and iz >= 0 and iz < nzg:
+                    score_piece(
+                        chan, tally_rows, tid, batch, g, (ix * nyg + iy) * nzg + iz,
+                        D(remaining), tcur + half_d * D(remaining) - half_d * D(s_act), eps_r,
+                        chan.species, chan.gen, 1, s_mid, k_ramp, e_mid, e_dot,
+                    )  # fmt: skip
         return overflow
 
     @named_func(name)
@@ -289,6 +462,11 @@ def make_kernel_support(real: type) -> SimpleNamespace:
         g_off: wp.array(dtype=int),
         n_grids: int,
         max_pieces: int,
+        chan: chan_t,
+        s_mid: D,
+        k_ramp: D,
+        e_mid: D,
+        e_dot: D,
     ) -> int:
         """Track-length apportioning of a step deposit along both hinge legs in every grid;
         returns the number of legs that exceeded ``max_pieces``."""
@@ -298,12 +476,12 @@ def make_kernel_support(real: type) -> SimpleNamespace:
                 ovf = ovf + deposit_leg(
                     edep, tally_rows, tid, batch, g, p0[0], p0[1], p0[2], d0[0], d0[1], d0[2],
                     leg1, deposit, s_act, D(0.0), s_start, s_end, g_origin, g_spacing, g_inv,
-                    g_shape, g_off, n_grids, max_pieces,
+                    g_shape, g_off, n_grids, max_pieces, chan, s_mid, k_ramp, e_mid, e_dot,
                 )  # fmt: skip
                 ovf = ovf + deposit_leg(
                     edep, tally_rows, tid, batch, g, hinge[0], hinge[1], hinge[2], d1[0], d1[1],
                     d1[2], leg2, deposit, s_act, D(leg1), s_start, s_end, g_origin, g_spacing,
-                    g_inv, g_shape, g_off, n_grids, max_pieces,
+                    g_inv, g_shape, g_off, n_grids, max_pieces, chan, s_mid, k_ramp, e_mid, e_dot,
                 )  # fmt: skip
             else:
                 go = v3(g_origin[g, 0], g_origin[g, 1], g_origin[g, 2])
@@ -316,6 +494,7 @@ def make_kernel_support(real: type) -> SimpleNamespace:
                     edep, tally_rows, tid, batch, g, ix, iy, iz, nxg, nyg, nzg, g_off[g], n_grids,
                     deposit,
                 )  # fmt: skip
+                score_local(chan, tally_rows, tid, batch, g, ix, iy, iz, nxg, nyg, nzg, deposit)
         return ovf
 
     @named_func(name)
@@ -333,6 +512,9 @@ def make_kernel_support(real: type) -> SimpleNamespace:
 
     return SimpleNamespace(
         control=control,
+        chan=chan_t,
+        score_piece=score_piece,
+        step_state=step_state,
         deposit_point=deposit_point,
         deposit_step=deposit_step,
         energy_from_range=energy_from_range,
@@ -361,6 +543,8 @@ def make_transport_kernel(real: type, diag: bool):
     control = S.control
     deposit_point = S.deposit_point
     deposit_step = S.deposit_step
+    step_state = S.step_state
+    chan_t = S.chan
     energy_from_range = S.energy_from_range
 
     u_zero = wp.constant(wp.uint32(0))
@@ -401,6 +585,7 @@ def make_transport_kernel(real: type, diag: bool):
         trace_i: wp.array3d(dtype=wp.int32),
         trace_f: wp.array3d(dtype=wp.float64),
         trace_n: wp.array(dtype=wp.int32),
+        chan: chan_t,
     ):
         tid = wp.tid()
         h = ctl.h0 + wp.uint32(tid)
@@ -491,7 +676,7 @@ def make_transport_kernel(real: type, diag: bool):
                 t_cutoff = t_cutoff + wp.float64(energy)
                 deposit_point(
                     edep, tally_rows, tid, batch, px, py, pz, energy, g_origin, g_inv, g_shape,
-                    g_off, ctl.n_grids,
+                    g_off, ctl.n_grids, chan,
                 )  # fmt: skip
                 code = code_cutoff
                 alive = 0
@@ -687,14 +872,30 @@ def make_transport_kernel(real: type, diag: bool):
                 e_new = energy - loss
                 deposit = energy - e_new
 
+                # scoring: the legs of a step with s_act > 0 are walked even when deposit = 0 if
+                # scoring channels are present (fluence and LET do not depend on eps > 0)
+                walk = int(0)
                 if deposit > zd:
+                    walk = 1
+                if chan.n_ch > 0 and s_act > zero:
+                    walk = 1
+                if walk == 1:
                     ie, fe = FD.log_bin_index(e_new, ln_e0[m], inv_dln_e[m], ctl.n_e)
                     s_end_pw = FD.interp_exp(ln_s[m, ie], ln_s[m, ie + 1], fe)
+                    ss_mid = zd
+                    ss_k = zd
+                    ss_e = zd
+                    ss_dot = zd
+                    if chan.n_ch > 0 and s_act > zero:
+                        ss_e = energy - D(0.5) * mean
+                        ss_mid, ss_k, ss_dot = step_state(chan, ss_e, mean, s_act_d)
                     c_pieces = c_pieces + deposit_step(
                         edep, tally_rows, tid, batch, v3(px, py, pz), v3(ux, uy, uz), leg1,
                         v3(hx, hy, hz), v3(d1x, d1y, d1z), leg2, deposit, s_act, s0, s_end_pw,
                         g_origin, g_spacing, g_inv, g_shape, g_off, ctl.n_grids, ctl.max_pieces,
+                        chan, ss_mid, ss_k, ss_e, ss_dot,
                     )  # fmt: skip
+                if deposit > zd:
                     t_step = t_step + wp.float64(deposit)
 
                 px = R(nxp)

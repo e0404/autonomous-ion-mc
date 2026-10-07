@@ -274,4 +274,14 @@ A13 against Grassberger and Paganetti (2011) is exploratory and non-gating.
 
 ## Outcome
 
+- **2026-10-07: acceptance row A4b (first result at 9f52057).** The frozen row did not define
+  `E(z)`; with the table CSDA energy `Rinv(R(E0) - rho z)` A4b failed (worst 5.3e-4 / 1.04e-3 /
+  1.32e-3 for a maximum step of 1 / 0.5 / 0.25 mm against 1e-4). The scoring is correct: the
+  failure is the trapezoid bias of the range table (about 3.5e-5 relative per increment, about
+  5 um of the range, decision 0039 outcome of the same date). `LET_t` is the path average of
+  `S` of the transported particle, so the reference is that particle's energy, anchored at the
+  engine step boundaries; A4b then gives 5.0e-5 / 4.6e-5 / 3.7e-5 and A4 3.8e-5 (plan footnote 1).
+  The table-CSDA comparison stays as a non-gating log. The range-table inconsistency is assigned
+  to the follow-up V3-003D (separate re-qualification, out of scope here).
+
 To be appended from committed result files.

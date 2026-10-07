@@ -194,10 +194,30 @@ def test_a3_pencil_fluence_aligned_grid(make_config: MakeConfig) -> None:
 
 
 def _energy_at_depth(eff: EffectiveConfig, e0: float, z_mm: np.ndarray) -> np.ndarray:
-    """CSDA energy at depth ``z`` in water of the run's own tables."""
+    """Table CSDA energy ``Rinv(R(E0) - rho z)`` at depth ``z`` in water (single-shot inversion of
+    the run's own range table). Informative only (plan footnote 1): it carries the trapezoid bias
+    of the range table (decision 0039 follow-up V3-003D) and is not the reference of A4/A4b."""
     t = eff.tables
     r0 = t.range_g_cm2(0, e0)
     return np.array([t.energy_from_range(0, r0 - z / 10.0) for z in z_mm])
+
+
+def _energy_transported(r: Run, z_mm: np.ndarray) -> np.ndarray:
+    """Energy of the transported particle at depth ``z`` (plan footnote 1 of A4/A4b):
+    ``E(z) = Rinv(R(E_b) - rho (z - z_b))`` anchored at the last engine step boundary
+    ``(z_b, E_b)`` at or before ``z``, from the trace of the deterministic history (the scored
+    ``LET_t`` is the path average of ``S`` of this particle, so ``LET_t dz`` must equal its own
+    energy loss). Water, ``rho`` = 1 g/cm3 (the transport slab is water along z)."""
+    t = r.eff.tables
+    tr = r.raw.diagnostics["trace"]
+    sel = tr["history"] == 0
+    z_b = np.concatenate([[0.0], tr["z_mm"][sel]])
+    e_b = np.concatenate([[r.eff.requested.source.kinetic_energy_mev], tr["energy_mev"][sel]])
+    out = np.empty(len(z_mm))
+    for j, z in enumerate(np.asarray(z_mm, dtype=np.float64)):
+        b = int(np.searchsorted(z_b, z + 1e-12, side="right")) - 1
+        out[j] = t.energy_from_range(0, t.range_g_cm2(0, e_b[b]) - (z - z_b[b]) / 10.0)
+    return out
 
 
 def _csda_run(make_config: MakeConfig, tallies: tuple[TallyRequest, ...], e0: float, dz_t: float,
@@ -215,6 +235,7 @@ def _csda_run(make_config: MakeConfig, tallies: tuple[TallyRequest, ...], e0: fl
             max_step=dz_t,
             geometry=_slab(dz_t, nz),
             scoring=(grid,),
+            diagnostics=DiagnosticsOptions(trace_histories=1),
         )  # fmt: skip
     )
 
@@ -238,15 +259,22 @@ def test_a4_csda_let_t_and_let_d(make_config: MakeConfig) -> None:
     sel = iz[((iz + 1) * 2.0 <= z_cut) & (iz * 2.0 >= 100.0)]
     assert sel.size >= 10
     n_prim = 2
-    e_lo = _energy_at_depth(r.eff, 150.0, (sel + 1) * 2.0)
-    e_hi = _energy_at_depth(r.eff, 150.0, sel * 2.0)
+    e_lo = _energy_transported(r, (sel + 1) * 2.0)
+    e_hi = _energy_transported(r, sel * 2.0)
     de = e_hi - e_lo
+    de_tab = _energy_at_depth(r.eff, 150.0, sel * 2.0) - _energy_at_depth(
+        r.eff, 150.0, (sel + 1) * 2.0
+    )
     lt, ld = r.q_of("let_t"), r.q_of("let_d")
     l_v, ls_v, ls2_v = r.total(lt.denominator), r.total(lt.numerator), r.total(ld.numerator)
     let_t = ls_v / l_v
     assert np.all(np.abs(let_t[sel] * 2.0 - de) / de <= 1e-4), np.abs(
         let_t[sel] * 2.0 / de - 1
     ).max()
+    # informative, non-gating (plan footnote 1): deviation from the table CSDA energy
+    print("A4 worst vs transported E(z):", float(np.max(np.abs(let_t[sel] * 2.0 - de) / de)))
+    print("A4 worst vs table CSDA E(z) (non-gating):",
+          float(np.max(np.abs(let_t[sel] * 2.0 - de_tab) / de_tab)))  # fmt: skip
     # LET_d = int S dE / dE on the same water table (numpy quadrature)
     for j, v in enumerate(sel):
         e = np.linspace(e_lo[j], e_hi[j], 2001)
@@ -256,14 +284,20 @@ def test_a4_csda_let_t_and_let_d(make_config: MakeConfig) -> None:
     assert n_prim == 2
 
 
-def _a4b_worst(r: Run, z_cut: float, z_min: float, z_max: float) -> float:
-    """Worst relative error of LS_v / N against E(z1) - E(z2) over the 1.5 mm bins (offset
-    0.25 mm) fully inside ``[z_min, min(z_max, z_cut)]``."""
+def _a4b_worst(
+    r: Run, z_cut: float, z_min: float, z_max: float, *, table_csda: bool = False
+) -> float:
+    """Worst relative error of LS_v / N against E(z1) - E(z2) of the transported particle (plan
+    footnote 1; ``table_csda`` selects the single-shot table inversion, informative) over the
+    1.5 mm bins (offset 0.25 mm) fully inside ``[z_min, min(z_max, z_cut)]``."""
     iz = np.arange(113)
     z1, z2 = 0.25 + iz * 1.5, 0.25 + (iz + 1) * 1.5
     sel = iz[(z2 <= min(z_cut, z_max)) & (z1 >= z_min)]
     assert sel.size >= 5
-    de = _energy_at_depth(r.eff, 150.0, z1[sel]) - _energy_at_depth(r.eff, 150.0, z2[sel])
+    if table_csda:
+        de = _energy_at_depth(r.eff, 150.0, z1[sel]) - _energy_at_depth(r.eff, 150.0, z2[sel])
+    else:
+        de = _energy_transported(r, z1[sel]) - _energy_transported(r, z2[sel])
     ls = r.total(r.q_of("let_t").numerator)[sel] / 2.0  # per primary
     return float(np.max(np.abs(ls - de) / de))
 
@@ -271,17 +305,22 @@ def _a4b_worst(r: Run, z_cut: float, z_min: float, z_max: float) -> float:
 A4B_GRID = ScoringGrid((-10.0, -10.0, 0.25), (20.0, 20.0, 1.5), (1, 1, 113), name="dose")
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "A4b as frozen FAILS in the last ~10 mm before the cutoff (worst 5.3e-4, 1 mm steps): "
-        "the error grows as the transport step shrinks (1.0 -> 0.5 -> 0.25 mm: 5e-4, 1e-3, "
-        "1.3e-3), i.e. it is the engine's energy-depth drift against the CSDA E(z) from the "
-        "range-table inversion near the end of range, not the ramp; reported to the orchestrator"
-    ),
-)
 def test_a4b_offset_grid_all_bins_proximal_to_cutoff(make_config: MakeConfig) -> None:
     r = _csda_run(make_config, _reqs("let_t"), 150.0, 1.0, A4B_GRID)
+    z_cut = _cut_depth(r)
+    assert _a4b_worst(r, z_cut, 100.0, 1e9) <= 1e-4
+    # informative, non-gating record of the table-CSDA comparison (range-table trapezoid bias,
+    # follow-up V3-003D; plan footnote 1)
+    print("A4b worst vs transported E(z):", _a4b_worst(r, z_cut, 100.0, 1e9))
+    print("A4b worst vs table CSDA E(z) (non-gating):",
+          _a4b_worst(r, z_cut, 100.0, 1e9, table_csda=True))  # fmt: skip
+
+
+@pytest.mark.parametrize("max_step", [0.5, 0.25])
+def test_a4b_smaller_transport_steps(make_config: MakeConfig, max_step: float) -> None:
+    """Supplementary (the plan footnote reports 1 / 0.5 / 0.25 mm): the same criterion with
+    smaller transport steps."""
+    r = _csda_run(make_config, _reqs("let_t"), 150.0, max_step, A4B_GRID)
     assert _a4b_worst(r, _cut_depth(r), 100.0, 1e9) <= 1e-4
 
 

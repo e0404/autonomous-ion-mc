@@ -30,8 +30,8 @@ quantiles come from `statistics.NormalDist` plus Wilson-Hilferty, without scipy.
 | A1 | Synthetic constant-S_w water row, deterministic (MCS and straggling off), water and Al slabs | Every traversed voxel, for (X, Y) in {(LS, L), (LS2, LS), (ES, E_step)}: `\|X/Y - S\| <= rho S + (delta_X + S delta_Y)/Y`. Global closure `sum_v LS + res_LS = S (sum_v L + res_L)` within 1e-12 relative (float64 and python) and 1e-6 (float32). | theory | CI |
 | A2 | Hook-level synthetic stream: 2 species x 2 generations, dyadic (l, S_mid, k, tau, eps) that are exact multiples of every quantum. Both through the Python hook and through a Warp-CPU test kernel calling the kernel-support `score_piece`. | Python and Warp int64 accumulators are bitwise equal. LET_t, LET_d, LET_d^eps and the species partials equal the closed forms exactly (0 tolerance). The species partials recombine to the all-species channels bitwise. Unproducible requests outside the test `producible` set raise. | theory | CI |
 | A3 | Pencil beam, MCS and straggling off, aligned grid | Per voxel before the cutoff depth: `\|L_v/(N V_v) - 1/(dx dy)\| <= rho/(dx dy) + delta_L/(N V_v)`. Batch sd at most the same bound (hinge splits vary per history). Global `sum_v L_v + res_L = N chord` within 1e-12 (float64). | theory | CI |
-| A4 | Deterministic CSDA 150 MeV, analytic water, scoring grid = transport grid, bins proximal to the cutoff | `LET_t dz = E(z1) - E(z2)` within 1e-4; `LET_d = int S dE / dE` (numpy quadrature on the same table) within 1e-3 | theory | CI |
-| A4b | As A4, but transport grid 1 mm, scoring grid 1.5 mm offset 0.25 mm (pieces split), 150 MeV | `\|LS_v/N - (E(z1) - E(z2))\| / (E(z1) - E(z2)) <= 1e-4` in every bin proximal to the cutoff. Negative control: the same run with k forced to 0 (test-only monkeypatch of the twin) exceeds 1e-4 in at least one bin. The numpy estimate gives 2.6e-4 for the control and 5e-8 for the ramp. | falsification | CI |
+| A4¹ | Deterministic CSDA 150 MeV, analytic water, scoring grid = transport grid, bins proximal to the cutoff | `LET_t dz = E(z1) - E(z2)` within 1e-4; `LET_d = int S dE / dE` (numpy quadrature on the same table) within 1e-3 | theory | CI |
+| A4b¹ | As A4, but transport grid 1 mm, scoring grid 1.5 mm offset 0.25 mm (pieces split), 150 MeV | `\|LS_v/N - (E(z1) - E(z2))\| / (E(z1) - E(z2)) <= 1e-4` in every bin proximal to the cutoff. Negative control: the same run with k forced to 0 (test-only monkeypatch of the twin) exceeds 1e-4 in at least one bin. The numpy estimate gives 2.6e-4 for the control and 5e-8 for the ramp. | falsification | CI |
 | A5 | All physics on, transport level (protons only exist) | Integer equality per batch and voxel on every backend: E(species = p) = E(gen = primary) = edep; `E_step` + `edep_excluded_from_let` = edep. The multi-species recombination is graded in A2. | conservation | CI |
 | A6 | Cauchy-Schwarz | `LET_d >= LET_t (1 - rho) - Delta_v`, `Delta_v = LET_t (delta_LS2/LS2 + 2 delta_LS/LS + delta_L/L)`, in every defined voxel | consistency | CI |
 | A7 | Step independence, s_max in {0.1, 0.5, 1} mm, 150 MeV | Plateau LET_d pairwise within 1 %; LET_d vs LET_d^eps within 4 sigma (dose > 10 % of max); negative control: the trace-based `eps/l` estimator changes by at least 10 % | falsification | LV |
@@ -97,4 +97,25 @@ smoke run of 10^3 histories, a configuration that is not A9's, before any A9 res
 
 ## Amendments
 
-None yet.
+¹ **2026-10-07, task V3-004, after the first A4b result at 9f52057 was observed (clarification of
+rows A4 and A4b, no tolerance changed).** The frozen rows did not define `E(z)`. The first
+implementation used the table CSDA energy `Rinv(R(E0) - rho z)` and A4b then failed (worst
+5.3e-4 / 1.04e-3 / 1.32e-3 for a maximum step of 1 / 0.5 / 0.25 mm against 1e-4). The cause is the
+trapezoid bias of the range table (`R(E)` is built by the trapezoid rule in `ln E` of `E/S` on the
+200-points-per-decade grid and overestimates every increment by about 3.5e-5 relative, about 5.1 um
+of the 158.6 mm range at 150 MeV; the exact analytic quadrature of the log-log interpolated `S`
+gives `R(150 MeV)` = 158.625 mm against 158.630 mm tabulated), not the scoring: the engine's
+short-step branch `S(E_mid) t` agrees with exact quadrature to about 3e-6, the range-inversion
+branch follows the biased table, and the branch mix makes the transported `E(z)` differ from the
+single-shot table inversion (-0.15 % at 1 mm, -0.41 % at 0.25 mm steps at z = 158.04 mm). Test
+T2 of V3-003 (end depth within 1e-4 R, about 16 um) cannot see a 5 um bias. Since `LET_t` is the
+path average of `S` of the transported particle, `LET_t dz` must equal that particle's own energy
+loss. The definition is therefore clarified: `E(z)` is the **transported** particle's energy,
+`E(z) = Rinv(R(E_b) - rho (z - z_b))` anchored at the last engine step boundary `(z_b, E_b)` at or
+before `z`, taken from the trace of the deterministic history (`trace_histories = 1`). Under this
+definition A4b gives 5.0e-5 / 4.6e-5 / 3.7e-5 for 1 / 0.5 / 0.25 mm and A4 3.8e-5 (3.7e-5 against
+the table energy). The comparison with the table CSDA energy stays as a non-gating logged record.
+The inconsistency of the range table is recorded as contrary evidence against the qualified
+transport tables and assigned to a follow-up task, V3-003D (range table by exact quadrature of the
+interpolated `S` and/or a range-carrying step); it moves the qualified T1/T9/T12 baselines by about
+5 um, so it is a separate re-qualification and out of the scope of V3-004.

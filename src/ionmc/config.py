@@ -49,10 +49,9 @@ MAX_TRACE_BUFFER_BYTES = 2**30
 MAX_SCORING_PIECES = 4096
 MAX_ENERGY_SIGMA_FRACTION = 0.05
 MAX_ENERGY_LOSS_FRACTION = 0.2
-CHANNEL_BACKENDS: tuple[str, ...] = ("python",)
-"""Backends that implement the scoring channels of decision 0040 (the Warp kernels follow in
-V3-004 step 8); a configuration with tallies is rejected on every other backend, so a requested
-tally is never silently ignored."""
+CHANNEL_BACKENDS: tuple[str, ...] = ("python", "warp-cpu", "warp-cuda")
+"""Backends that implement the scoring channels of decision 0040; a configuration with tallies is
+rejected on every other backend, so a requested tally is never silently ignored."""
 U01_MAPPING = {
     "float64": "((w >> 8) + 0.5) * 2**-24",
     "float32": "((w >> 9) + 0.5) * 2**-23",

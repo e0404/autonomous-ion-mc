@@ -2,7 +2,8 @@
 
 Every backend writes, for each history, one row of independently accumulated float64 tallies
 (``TALLY_NAMES``, then the energy deposited outside each scoring grid, then the quantization
-residual of each grid) and one row of
+residual of each grid; with scoring channels, one residual column per channel but N and the lookup
+out-of-domain count, ``ionmc.transport.channels``) and one row of
 int32 transport-limit counters (``COUNTER_NAMES``). A history's row depends only on that
 history, so it does not depend on how histories are split into chunks, worker processes or
 threads. The host reduces the rows *exactly*: the sum of the float64 values of a column is
@@ -20,6 +21,9 @@ is compared statistically, T12, never bit for bit). The rounding
 error is at most q/2 per piece (random walk q/2 sqrt(N) over N pieces in a voxel) and is
 tallied per history and grid (``quantization`` columns) so that the energy balance closes.
 Conversion to float64 and the sum over workers happen at the reduction.
+
+The scoring channels (decision 0040) are int64 accumulators ``acc[B, sum_c size_c]`` with the same
+associativity argument; they are summed over chunks and workers as exact integers.
 
 Diagnostic arrays are per history (end state) and per step (trace); they are concatenated in
 history order.
