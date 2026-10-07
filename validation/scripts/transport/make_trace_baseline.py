@@ -122,6 +122,8 @@ def main(argv: list[str] | None = None) -> int:
         "generator": "validation/scripts/transport/make_trace_baseline.py",
         "backend": "python",
         "config": "tests/ionmc/test_transport_diagnostic.py::_config(python, legacy=True)",
+        # informative and machine specific (float64 arrays; libm ulps): the portable identity is
+        # table_identity, which the test asserts; this hash is only compared softly
         "transport_tables_sha256": tables.sha256,
         "table_identity": json.loads(json.dumps(_thaw(tables.identity), default=str)),
         "range_construction": tables.identity[0]["range_construction"],

@@ -182,6 +182,12 @@ counter starting at 0.
 and hashes, material fingerprint, metadata) is stored as read-only mappings and tuples, and
 `EffectiveConfig.summary()` returns deep copies.
 
+`TransportTables.sha256` hashes the float64 arrays (`exp`, `expm1` and `log` results whose last bits
+depend on the platform libm), so it is **machine specific**: it is the provenance of a run on one
+machine, equal for equal inputs there, and must not be compared across machines. The portable identity
+is the `identity` dict (source, content and material hashes, grid limits, range construction);
+`tests/ionmc/test_transport_diagnostic.py` asserts that and treats the stored table hash as a soft note.
+
 ## Grids of different size and alignment
 
 Transport voxels (the `VoxelGeometry`, which sets the voxel planes that end steps) and scoring voxels

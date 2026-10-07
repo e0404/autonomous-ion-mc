@@ -55,7 +55,11 @@ class TransportTables:
     Arrays have a leading material axis. ``ln_s_mass`` / ``ln_r_mass`` have ``n_e`` columns,
     ``ln_e_of_r`` has ``n_r`` columns. ``ln_e0``/``inv_dln_e`` and ``ln_r0``/``inv_dln_r``
     locate the uniform grids. ``identity`` lists the source and I-value per material and
-    ``sha256`` hashes all numerical content.
+    ``sha256`` hashes all numerical content. The hashed arrays are float64 results of ``exp``,
+    ``expm1`` and ``log`` whose last bits depend on the platform libm, so ``sha256`` is machine
+    specific: it is the provenance of a run on one machine (equal for equal inputs there), not
+    an identity across machines. The portable identity is the ``identity`` dict (source,
+    content and material hashes, grid limits, range construction).
     """
 
     projectile: Projectile

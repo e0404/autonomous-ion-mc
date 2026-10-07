@@ -26,6 +26,7 @@ from ionmc.scoring import ScoringGrid
 from ionmc.simulation import Simulation
 from ionmc.sources import PencilBeamSource
 from ionmc.transport.parity import compare_traces
+from ionmc.transport.tables import thaw
 from ionmc.transport.tally import TRACE_COLUMNS
 
 BASELINE = Path(__file__).parent / "data" / "trace_baseline_20mev.npz"
@@ -71,7 +72,8 @@ def test_default_trace_is_unchanged_from_the_stored_baseline() -> None:
     ``exact-loglog-quadrature-v1``) with the python reference backend and the physics defaults of
     the original generating commit 6d58480, i.e. straggling model ``bohr_gauss_clamped_gamma_v1``
     and ``short_step_fraction`` 1e-3 (both pinned here; the defaults have since changed). The npz
-    carries ``meta`` (JSON): generating commit, table sha256 and identity, versions, the sha256 of
+    carries ``meta`` (JSON): generating commit, table identity (asserted, platform independent), the
+    table float-array sha256 (informative, machine specific: not asserted), versions, the sha256 of
     the previous fixture and the comparison with it. Against the 6d58480 fixture the energies
     changed by at most 5.4e-4 MeV, positions by at most 1.5e-4 mm, and there is one discrete flip:
     history 0 row 37, a sliver geometry step of 5.6e-12 mm at the z = 3 mm voxel plane (iz 1 to 2,
@@ -89,7 +91,20 @@ def test_default_trace_is_unchanged_from_the_stored_baseline() -> None:
     )
     for backend in ("python", "warp-cpu"):
         sim = Simulation(_config(backend, legacy=True))
-        assert sim.effective.tables.sha256 == meta["transport_tables_sha256"], backend
+        tables = sim.effective.tables
+        # portable provenance: the identity of the table inputs (source, content and material
+        # hashes, grid limits, range construction) is platform independent; the sha256 of the
+        # float64 arrays is not (platform libm ulps), so it is compared softly and never asserts
+        current = json.loads(json.dumps(thaw(tables.identity), default=str))
+        assert current == meta["table_identity"], backend
+        for ident in current:
+            assert ident["range_construction"] == "exact-loglog-quadrature-v1"
+        if tables.sha256 != meta["transport_tables_sha256"]:
+            print(
+                f"note ({backend}): the float-array sha256 of the transport tables "
+                f"{tables.sha256} differs from the fixture's {meta['transport_tables_sha256']}; "
+                "it is machine specific (libm), the trace comparison below is the check"
+            )
         res = sim.run()
         tr = res.diagnostics["trace"]
         for name in TRACE_COLUMNS:

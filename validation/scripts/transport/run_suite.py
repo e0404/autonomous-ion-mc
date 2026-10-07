@@ -485,10 +485,10 @@ A16_INTENDED_CHANGE: dict[str, Any] | None = {
     # sha256 of the source set (a16_source_digest(): every hashed file including this one and the
     # plan block, with only the two self-referential digest literals masked): the record is valid
     # only for exactly this source state.
-    "source_digest": "bb08b4a48b3ec99845e0bc24c1d777540063edccf5c7d2521da14098d3e5503e",
+    "source_digest": "24323b959660d6ec4ff658531a70b998f24f60a11b9e16c7ba826930f415fc28",
     # sha256 of the delimited block of validation/plans/v3-003d-acceptance.md that states this
     # record (without this key), verified by the step at run time.
-    "plan_block_sha256": "6c246e54f37a5f54e165723fc72d480416c407eb197d9d0b2488ecdc922a76ef",
+    "plan_block_sha256": "951106d3bd6640a3d20fcb81359683eb586e0877d381f7f0750dfea4d529a89a",
 }
 """The one recorded exception to the fail-closed A16 regression of the ``lv4`` suite (plan
 amendment 6 of V3-004). While it is not ``None``, the ``lv4`` step runs ``--mode intended-change``
