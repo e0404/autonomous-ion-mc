@@ -106,3 +106,48 @@ the V3-004 evidence at the previous range table and are unaffected. Row mapping 
 evidence table is intentionally unfilled at this head because the plan file is part of the A16
 source digest): D1/D1b/D2/D2b/D3/D4 CI part — CI and the `lv`/`lv4` pytest steps; D5 — `hr` and
 `lv`; D6 and D3 A4b — `hr4` and `lv4`; D7 — all four archives and the ledger. Not a clinical claim.
+
+# Nuclear slice-A suite `lv5` (V3-005A, decision 0041)
+
+`run_suite.py --suite lv5` evaluates the slice-A rows of `validation/plans/v3-005-acceptance.md`
+that need the built nuclear table (id `2b8d94cf4a82ef8a5119ddb8c84d4a2c11bd3511eb6672bd210562730cc0cf1a`)
+or nuclear transport on the python backend. Archives are named `lv5-<sha>-...json` (row table of the
+plan, "Evidence archive"); no result exists at the time of writing, so nothing here is evidence.
+Rows P1-P5, V9 and C1 are CI-tier tests and are not suite steps; V2b and V5-V8 are slice B.
+
+| Row | Step(s) (without the number) | Histories / events | Seed (`20421004 + 1000 r + shard`) |
+|---|---|---|---|
+| N1, V1, V1b, D6 | `n1-v1-v1b-d6` | deterministic | n/a |
+| V2 | `v2-{100,150,200}-s{0,1,2}`, `v2-combine` | 3 x 8e4 per energy (2.4e5 pooled) | r = 1, 2, 3; shard 0..2 |
+| V2-probe s_max 0.5 vs 1 mm | `v2-probe-s05-s{0,1}`, `v2-probe-combine` | 2 x 5e4 (each run for both variants) | r = 4; shard 0..1 |
+| V2-probe f_E 0.005 vs 0.02 | `v2-probe-fe-s{0,1,2}`, `v2-probe-combine` | 3 x 3.4e4 (1.02e5) | r = 5; shard 0..2 |
+| V3 (LV) | `v3-lv` | 2e4 at 150 MeV and 1e4 at 250 MeV in water, tissue, bone | r = 6; shards 0..5 |
+| V4, V4b | `v4-v4b` | 1e5 events per case, 4 cases | r = 9; case i adds i |
+| X1 | `x1` | 2 x 2e4 (on, off, one seed) | r = 7 |
+| E1 (exploratory) | `e1` | 1e5 | r = 8 |
+| R1 | `r1-a16-t1-regression` | fixed A16 configurations; T1 K = 256 | A16 20351004; T1 base |
+| throughput | `lv5-throughput` | 2 x 200 | base |
+| 1-vs-N workers | `v3-workers-partition` | 3000 | **deferred** |
+
+**Shards.** The shard counts follow from the throughput measured by `lv5-throughput` (python,
+`nuclear=True`, 1 process, 200 histories incl. setup, all physics on) and the step limit of 3300 s
+with a 25 % margin (at most 2640 s per step, i.e. `hist/s x 2640` histories): at the worker's
+measurement of 70.5 hist/s (150 MeV) and 44.2 hist/s (250 MeV) a step may hold up to 1.86e5 and
+1.17e5 histories. V2 uses 3 shards of 8e4 per energy (planned 1135 s at 70.5 hist/s, 1809 s at the
+250 MeV rate for 200 MeV); V2-probe s05 (two variants per shard, the 0.5 mm variant about twice the
+steps) 2 x 5e4 and f_E 3 x 3.4e4. Histories and criteria are the frozen ones; the throughput step
+re-measures on the runner and the orchestrator increases the shard count (new seeds, a recorded
+reason) if a step would exceed 2640 s.
+
+**Execution (temporary single-process directive).** Every step runs one process with
+`IONMC_SINGLE_PROCESS=1` and single-threaded numerics, as `run_suite.py --only <step> --step-timeout
+3300`; shards are separate steps and `summarize.py --combine` joins the subset archives (the pooled
+V2 and V2-probe criteria are evaluated by `v2-combine` and `v2-probe-combine` from the verified
+partial files of the shard archives, via `--import-dirs`). Rehearsals use the 2043xxxx family (20431004)
+and `--scale` < 1 and are never qualification evidence.
+
+**Deferred rows.** `v3-workers-partition` (1-vs-N worker partition invariance of nuclear runs on the
+python pool) and any `cpu_workers > 1` LV row are recorded as `deferred`, not passed; a summary is
+`pass` for the executed steps only and carries `conformant: false` until the directive is lifted
+(`summarize.py`, reason "deferred multiprocessing checks"). Warp backends with `nuclear=True` are not
+part of this suite (V3-005B). Not a clinical claim.

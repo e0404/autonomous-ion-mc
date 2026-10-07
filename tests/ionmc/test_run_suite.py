@@ -1349,3 +1349,109 @@ def test_v3_005_acceptance_plan_is_frozen_and_consistent() -> None:
     assert "`A16_INTENDED_CHANGE` stays `None`" in r1
     assert "DEFERRED" in plan and "partition invariance of nuclear runs" in plan
     assert (REPO / "decisions" / "0041-proton-nuclear-interactions.md").is_file()
+
+
+# -- V3-005A slice-A suite (lv5) -------------------------------------------------------------------
+QUAL5 = 20421004
+PLAN5 = REPO / "validation" / "plans" / "v3-005-acceptance.md"
+LV5_STEPS = [
+    "lv5-throughput", "n1-v1-v1b-d6",
+    "v2-100-s0", "v2-100-s1", "v2-100-s2", "v2-150-s0", "v2-150-s1", "v2-150-s2",
+    "v2-200-s0", "v2-200-s1", "v2-200-s2", "v2-combine",
+    "v2-probe-s05-s0", "v2-probe-s05-s1", "v2-probe-fe-s0", "v2-probe-fe-s1", "v2-probe-fe-s2",
+    "v2-probe-combine", "v3-lv", "v4-v4b", "x1", "e1", "r1-a16-t1-regression",
+    "v3-workers-partition",
+]  # fmt: skip
+# plan row -> lv5 step that evaluates it; the rest is CI, slice B, or covered by a pytest tier
+LV5_ROW_STEP = {
+    "N1": "n1-v1-v1b-d6", "V1": "n1-v1-v1b-d6", "V1b": "n1-v1-v1b-d6", "D6": "n1-v1-v1b-d6",
+    "V2": "v2-combine", "V2-probe": "v2-probe-combine", "V3": "v3-lv", "V4": "v4-v4b",
+    "V4b": "v4-v4b", "X1": "x1", "E1": "e1", "R1": "r1-a16-t1-regression",
+}  # fmt: skip
+LV5_NOT_IN_SUITE = {"P1", "P2", "P3", "P4", "P5", "V9", "C1"}  # CI tier (tests/ionmc)
+LV5_SLICE_B = {"V2b", "V5", "V6", "V7", "V8"}
+
+
+def _plan_rows() -> list[str]:
+    rows = re.findall(r"^\| ([A-Z][A-Za-z0-9-]*) \|", PLAN5.read_text(), flags=re.M)
+    return [r for r in rows if r not in ("Tier", "Row(s)", "#", "CI", "LV", "HR")]
+
+
+def test_lv5_manifest_seeds_hashed_files_and_deferred() -> None:
+    mod = _load("run_suite")
+    names = mod.full_step_names("lv5", 2)
+    assert [n.split("-", 1)[1] for n in names] == LV5_STEPS
+    assert names_sorted(names)
+    assert mod.DEFAULT_SEED_BASES["lv5"] == QUAL5 == mod.V5_QUALIFICATION_SEED_BASE
+    for suite in ("lv", "lv4", "hr4"):  # the earlier suites are unchanged
+        assert mod.DEFAULT_SEED_BASES[suite] != QUAL5
+    steps = mod.suite_steps("lv5", 1, 0.5)
+    scripted = [s for s in steps if "steps_v5.py" in " ".join(s[1])]
+    assert len(scripted) == len(steps)  # every lv5 step is a steps_v5 step (no CUDA, no hr5)
+    for name, cmd, env in steps:
+        assert cmd[cmd.index("--seed-base") + 1] == str(QUAL5), name
+        assert "--timeout" in cmd and env["IONMC_REQUIRE_DATA"] == "1", name
+        assert "cuda" not in " ".join(cmd).lower() and "warp" not in cmd[2:3], name
+        if name.split("-", 1)[1] != "lv5-throughput" and "combine" not in name:
+            assert "--scale" in cmd or "workers-partition" in name or "n1-" in name, name
+    assert mod.deferred_step_names("lv5") == ["24-v3-workers-partition"]
+    for e in (100, 150, 200):  # the long steps get the 3300 s floor
+        assert mod.step_timeout_s("lv5", f"03-v2-{e}-s0", 1500) == 3300
+    assert mod.step_timeout_s("lv5", "03-v2-100-s0", 5000) == 5000
+    assert mod.step_timeout_s("lv5", "12-v2-combine", 1500) == 1500
+    got = {str(f.relative_to(mod.REPO)) for f in mod.source_files("lv5")}
+    assert {
+        "validation/plans/v3-005-acceptance.md",
+        "decisions/0041-proton-nuclear-interactions.md",
+        "validation/scripts/transport/steps_v5.py",
+        "validation/scripts/transport/nuclear_checks.py",
+        "validation/plans/v3-004-acceptance.md",
+        "src/ionmc/nuclear/events.py",
+        "src/ionmc/nuclear/tables.py",
+    } <= got  # fmt: skip
+    assert "validation/plans/v3-005-acceptance.md" not in mod.source_file_list("lv4")
+    # lv5 always runs one worker (plan, Execution under the single-process directive)
+    assert all("--workers" not in c or c[c.index("--workers") + 1] == "1" for _, c, _ in steps)
+
+
+def test_lv5_plan_rows_are_all_accounted_for_and_seeds_match_the_plan() -> None:
+    mod, v5 = _load("run_suite"), _load("steps_v5")
+    plan = PLAN5.read_text()
+    rows = set(_plan_rows())
+    assert {"N1", "V1", "V1b", "V2", "V2-probe", "V3", "V4", "V4b", "X1", "E1", "D6", "R1"} <= rows
+    accounted = set(LV5_ROW_STEP) | LV5_NOT_IN_SUITE | LV5_SLICE_B | {"V3-CI"}
+    assert rows - accounted == set(), (
+        rows - accounted
+    )  # a new plan row needs a step or a declaration
+    suite = {n.split("-", 1)[1] for n in mod.full_step_names("lv5", 2)}
+    assert set(LV5_ROW_STEP.values()) <= suite
+    # the r_index table and the base of the plan equal the declarations of steps_v5.py
+    text = re.search(r"`r_index` is fixed in `steps_v5.py` \(([^)]*)\)", plan)
+    assert text
+    pairs = {k.lower(): int(v) for k, v in re.findall(r"([A-Za-z0-9-]+): (\d+)", text.group(1))}
+    assert pairs == {"v2-100": 1, "v2-150": 2, "v2-200": 3, "v2-probe-s05": 4, "v2-probe-fe": 5,
+                     "v3-lv": 6, "x1": 7, "e1": 8, "v4": 9}  # fmt: skip
+    assert pairs == v5.R_INDEX
+    assert (v5.R_INDEX["v2-probe-s05"], v5.R_INDEX["v2-probe-fe"], v5.R_INDEX["v4"]) == (4, 5, 9)
+    assert "20421004" in plan and v5.QUALIFICATION_SEED_BASE == QUAL5
+    assert v5.REHEARSAL_SEED_BASE == 20431004
+    nc = _load("nuclear_checks")
+    assert nc.V4_BASE_SEED == QUAL5 + 1000 * v5.R_INDEX["v4"]
+    # frozen history counts of the plan
+    assert (v5.V2_SHARDS * v5.V2_SHARD_N, v5.V3_HISTORIES, v5.X1_N, v5.E1_N, v5.V4_EVENTS) == (
+        240_000, {150.0: 20_000, 250.0: 10_000}, 20_000, 100_000, 100_000)  # fmt: skip
+    assert v5.PROBES["s05"][0] * v5.PROBES["s05"][1] == 100_000
+    assert v5.PROBES["fe"][0] * v5.PROBES["fe"][1] >= 100_000
+    assert (v5.V2_TOL, v5.PROBE_TOL, v5.PROBE_SIGMA_MAX, v5.X1_Z) == (0.003, 0.002, 7e-4, 3.0)
+
+
+def test_lv5_summary_tags_seed_blockers_and_step_documents() -> None:
+    summ, mod = _load("summarize"), _load("run_suite")
+    v5src = (SCRIPTS / "steps_v5.py").read_text()
+    printed = set(re.findall(r'"step": "([a-z0-9-]+)"', v5src))
+    tags = {summ.expected_tag(n) for n in mod.full_step_names("lv5", 2)}
+    assert tags == printed, tags ^ printed  # every step prints the document its name expects
+    assert summ.seed_blockers(QUAL5, "lv5") == []
+    assert summ.seed_blockers(20431004, "lv5") and summ.seed_blockers(20401004, "lv5")
+    assert summ.seed_blockers(QUAL5, "lv4")  # the lv5 base does not qualify the V3-004 suite
+    assert summ.V5_QUALIFICATION_SEED_BASE == QUAL5

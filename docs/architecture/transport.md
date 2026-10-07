@@ -95,7 +95,7 @@ densities in g/cm3, doses in Gy per primary). All grids use `origin_mm` = corner
 * `PhysicsOptions(nuclear, stopping, straggling=True, multiple_scattering=True,
   e_cut_mev=2.0, max_step_mm=1.0, max_energy_loss_fraction=0.02, range_alpha=0.2,
   range_rho_f_mm=0.1, short_step_fraction=1e-2, truncated_hinge_diagnostic=False, ...)`: `nuclear` and `stopping` have no default
-  (`nuclear=True` is rejected until nuclear interactions exist). Model names are
+  (`nuclear=True` is accepted on the python backend only, with a built nuclear table, a proton Bethe-source water or tissue geometry and E0 + 6 sigma_E <= 250 MeV; see "Nuclear interactions"). Model names are
   `straggling_model="bohr_gamma_v1"` (the older `"bohr_gauss_clamped_gamma_v1"` is selectable), `mcs_model="differential_moliere"`, `delta_electrons="local"`;
   any other string is rejected.
 * `RunOptions(backend, precision, seed, n_histories, n_batches=20, cpu_workers=1,
@@ -379,6 +379,77 @@ the first K histories (`ionmc.transport.reference.TRACE_COLUMNS`: voxel index, s
 straggling attempts, position, direction, energy, deposit, step length). The trace is the reference
 for trajectory-level parity with the Warp backends.
 
+## Nuclear interactions (decision 0041, python reference backend)
+
+`PhysicsOptions(nuclear=True, nuclear_table_id=ID)` adds proton non-elastic interactions (water, soft
+tissue, 1-250 MeV) on top of the unchanged electromagnetic step. The EM random streams do not depend
+on `nuclear` (purpose 2 is separate, decision 0041 section 4), so on/off pairs with one seed share
+their EM history. Warp backends with `nuclear=True` raise `UnsupportedCombinationError` until V3-005B.
+Nuclear interactions apply to primary protons only (decision 0041, approximation 6).
+
+* **Thinning.** A primary draws `n_lambda = -ln u` at birth. `select_step_nuclear` adds the limit
+  `n_lambda / (rho Sigma_hat(E0))` as step-limit reason 4 (geometry wins ties); after the EM step
+  `n_lambda` is reduced by `rho Sigma_hat(E0) s`. If the step was nuclear-limited, leg 2 was not
+  truncated and `E1 > E_cut`, a candidate occurs at the post-step point and is accepted with
+  probability `Sigma(E1)/Sigma_hat(E0)`; otherwise it is fictitious and `n_lambda` is redrawn.
+  `Sigma_hat` is 1.02 times the maximum of `Sigma` over the step's energy window (table rows
+  `sigma_hat_window`, `sigma_hat_end`).
+* **Event.** The target is chosen from the cumulative fractions; multiplicities are
+  `floor(lambda_s) + Bernoulli` for n, p, d, alpha, gamma (`lambda` solved at build time by exact
+  enumeration); kinematics from the 64-bin E' tables and the Kalbach mu; the residual is accepted iff
+  its (Z_r, A_r) has an AME2020 mass or is the empty residual (at most 64 attempts). Per-event energy
+  and momentum conservation are not claimed (decision 0041 section 3, amendment 2026-10-07).
+* **Stack.** Per history a LIFO stack of at most 32 particles holds generation-1 protons and
+  deuterons (position, direction, T, species, genealogy id, generation, the parent's voxel indices,
+  `p1 v1`). Secondaries run the same EM step (deuterons with their own `TransportTables`,
+  `E_cut,d = 4 MeV`) and have no nuclear interactions; children take the next genealogy id
+  (`parent + b 32^g`, decision 0037).
+* **Event disposition.**
+
+  | Product | Treatment |
+  |---|---|
+  | p, d | transported from the stack |
+  | alpha, residual kinetic energy | deposited at the event point (scoring hook, `length = 0`, species `nuclear_local`, generation 1), tallies `nuclear_local` and `nuclear_alpha_local` |
+  | n, gamma | `nuclear_escaped_neutron`, `nuclear_escaped_gamma` |
+  | mass difference | `nuclear_binding` = sum m_out + M_r - m_p - M_t |
+  | per-event ledger residual | `nuclear_imbalance`, signed, never deposited |
+
+* **Tallies and counters.** `result.energy_balance` is a `NuclearEnergyBalance` with
+  `initial = step_deposit + cutoff + nuclear_local + escaped + nuclear_escaped_neutron +
+  nuclear_escaped_gamma + nuclear_binding + nuclear_imbalance + truncated + unaccounted` and the
+  per-grid identity `in_grid + quantization + outside = step_deposit + cutoff + nuclear_local`. The
+  nuclear tallies and the counters `majorant_violation`, `nuclear_rejection_limit` and
+  `nuclear_conservation` exist only with `nuclear=True`; for `nuclear=False` every tally, counter,
+  trace column and digest field is unchanged (row R1, A16 digest bit-identical to f3a1dd62).
+  Generation-resolved fluence, species selection and lookups (decision 0040) see the secondaries.
+* **Fail-closed rules.** Any non-zero counter makes the result invalid. `majorant_violation`
+  (`Sigma(E1) > Sigma_hat(E0)`), `nuclear_rejection_limit` (64 attempts exhausted, energy tallied as
+  `unaccounted`), `nuclear_conservation` (ledger closure above 1e-9 MeV), `queue_overflow` and
+  `genealogy_overflow` (stack), `path_bound_exceeded` (capacity bound
+  `B_L = 1.25 (mixed_path_bound(E_hi) + sum_s N_s,max mixed_path_bound_s(T_lab,max,s))`, table JSON
+  `transport_path_bound_terms`; per-particle energy bound 262.08 MeV in the table
+  `2b8d94cf...`; B_L(250 MeV, water) = 2489 mm). `validate()` rejects before transport an unsupported
+  element, E0 + 6 sigma_E > 250 MeV, a non-proton source, `nist-star`, any warp backend, and a missing,
+  stale or mis-pinned table.
+* **Declared approximations** (decision 0041, "Approximations and known limitations", with the numbers
+  of its Outcome section for the table `2b8d94cf...`):
+  - LA150 p+C is up to about -18 % below measurements at 100 MeV (227 mb against 245-275 mb); the p+O
+    evaluation has an evidence gap between 65 and 250 MeV.
+  - Alpha particles and the residual are deposited at the interaction point. D6: 150 MeV G 0.6680,
+    D 5.481e-3, 99.9th-percentile alpha range 0.988 g/cm2; 250 MeV G 0.8492, D 1.420e-2, 2.529 g/cm2;
+    both tiers false, the ceiling (D <= 2e-2, range <= 3 g/cm2) holds. No statement about alpha dose,
+    alpha LET or secondary-attributable dose structure below 1 cm (150 MeV) / 2.5 cm (250 MeV) is made
+    before V3-008.
+  - No per-event energy or momentum conservation: mean `nuclear_imbalance` per event -6.6/-10.8 MeV
+    (C-12) and -8.2/-14.2 MeV (O-16) at 100/150 MeV; every run reports its sum.
+  - E' is uniform within each of 64 bins: <E'> biased by +3 to +5 % for alpha and +14 to +24 % for
+    gamma (n, p, d within 0.2 %).
+  - Multiplicities preserve mean yields only; no t and He-3; no nuclear interactions of secondaries
+    (estimate 0.3 % of 150 MeV histories); no p-p elastic and no nuclear elastic scattering.
+* **Single-process lv5 and deferred checks.** The python pool path supports `nuclear=True`, but the
+  validation runs one process (operator directive); the 1-vs-N worker partition check
+  (`v3-workers-partition`) is archived as deferred, so lv5 summaries are `conformant: false`.
+
 ## Warp backends
 
 **Channel scoring in the kernel.** The kernel takes a `ChannelData` struct (`make_kernel_support(real).chan`;
@@ -654,6 +725,19 @@ for each A9 part, 1800 s for A7 and 3600 s for the HR sample step.
 A9 runs 200 seeds in two parts of 100 (`--part i/2`, seed `base + 10000 + k`) whose npz files
 `a9-compare` verifies (hash, metadata, SHA, deterministic split) and merges; `a11-hr` runs its four
 samples in one step.
+
+### V3-005 suite `lv5` (slice A, nuclear python backend)
+
+`run_suite.py --suite lv5` runs the rows of `validation/plans/v3-005-acceptance.md` that need
+nuclear transport or the nuclear table (steps in `steps_v5.py`, deterministic checks from
+`nuclear_checks.py`). It always uses one worker and the single-process environment; the default
+`--seed-base` is 20421004 (rehearsals use the 2043xxxx family: 20431004), seeds are
+`base + 1000 r_index + shard`. The hashed set adds the V3-005 plan, decision 0041, `steps_v5.py`
+and `nuclear_checks.py` to the V3-004 set (the nuclear package is under `src/ionmc`). Steps run with
+`IONMC_REQUIRE_DATA=1` and the staged cache `IONMC_CACHE_DIR`. Every step takes `--step-timeout 3300`
+and the V2 and V2-probe shards are pooled by `v2-combine` and `v2-probe-combine`, which read the
+verified partial files of the shard steps (`samples/`, any archive of `--import-dirs`). See
+`validation/results/transport/README.md` for the rows, shards and the deferred step.
 
 ## Benchmarks
 

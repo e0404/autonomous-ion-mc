@@ -64,7 +64,8 @@ REPO = HERE.parents[2]
 ALLOWED_PARENTS = (REPO / "validation" / "generated", REPO / "benchmarks" / "generated")
 STEPS = HERE / "steps.py"
 STEPS_V4 = HERE / "steps_v4.py"
-SUITES = ("lv", "hr", "lv4", "hr4")
+STEPS_V5 = HERE / "steps_v5.py"
+SUITES = ("lv", "hr", "lv4", "hr4", "lv5")
 PY = sys.executable
 SOURCE_PREFIXES = (
     "src/ionmc",
@@ -89,9 +90,24 @@ SOURCE_FILES_V4 = (
 and the synthetic lookup fixture (outside ``tests/ionmc``)."""
 
 
+SOURCE_FILES_V5 = (
+    *SOURCE_FILES_V4,
+    "validation/plans/v3-005-acceptance.md",
+    "decisions/0041-proton-nuclear-interactions.md",
+    "validation/scripts/transport/steps_v5.py",
+    "validation/scripts/transport/nuclear_checks.py",
+)
+"""The hashed set of the suite ``lv5`` (V3-005A, decision 0041): the V3-004 set plus the V3-005
+acceptance plan, decision 0041 and, individually, the lv5 steps and the nuclear checks (the
+prefix ``validation/scripts/transport`` and the nuclear package ``src/ionmc/nuclear`` are hashed in
+every suite)."""
+
+
 def source_file_list(suite: str | None = None) -> tuple[str, ...]:
     """Individually hashed files of ``suite`` (default: the suite named by ``IONMC_RUN_SUITE``)."""
     suite = suite or os.environ.get("IONMC_RUN_SUITE", "")
+    if suite == "lv5":
+        return SOURCE_FILES_V5
     return SOURCE_FILES_V4 if suite in ("lv4", "hr4") else SOURCE_FILES
 
 
@@ -103,12 +119,14 @@ CONSUMED_SEED_BASES = (
 V4_QUALIFICATION_SEED_BASE = 20401004  # amendment 6 of the V3-004 plan
 V4_CONSUMED_SEED_BASES = (20361004, 20371004, 20381004)  # amendments 4 and 5, 20381004 by V3-003D
 V4_REHEARSAL_SEED_BASE = 20351004
+V5_QUALIFICATION_SEED_BASE = 20421004  # plan of V3-005, Seeds (rehearsal family 2043xxxx)
 V3003D_REHEARSAL_FAMILY = "2041xxxx"  # rehearsals of V3-003D, never qualification evidence
 DEFAULT_SEED_BASES = {
     "lv": QUALIFICATION_SEED_BASE,
     "hr": QUALIFICATION_SEED_BASE,
     "lv4": V4_QUALIFICATION_SEED_BASE,
     "hr4": V4_QUALIFICATION_SEED_BASE,
+    "lv5": V5_QUALIFICATION_SEED_BASE,
 }
 REHEARSAL_SEED_BASE = 20261004
 CONSUMED_SEED_BASE = 20271004  # used by the T9 investigation: not a qualification base
@@ -127,7 +145,13 @@ DEFERRED_REASON = (
     "multiprocessing-specific check deferred in single-process diagnostic mode "
     "(operator directive 2026-10-07)"
 )
-DEFERRED_STEPS = {"lv": ("t13-workers",), "hr": (), "lv4": ("a15-workers",), "hr4": ()}
+DEFERRED_STEPS = {
+    "lv": ("t13-workers",),
+    "hr": (),
+    "lv4": ("a15-workers",),
+    "hr4": (),
+    "lv5": ("v3-workers-partition",),
+}
 """Steps whose purpose is the worker-partition invariance (1 versus N worker processes): they are
 not executed in the single-process diagnostic mode and recorded as ``deferred``. Steps that merely
 use workers for speed run with one worker, with unchanged histories, seeds and criteria."""
@@ -136,6 +160,13 @@ use workers for speed run with one worker, with unchanged histories, seeds and c
 STEP_TIMEOUT_FLOOR_S = {
     "lv4": {"a9-part-1of2": 3300, "a9-part-2of2": 3300, "a7-step-independence": 1800},
     "hr4": {"a11-hr-channel-parity": 3600},
+    "lv5": {
+        **{f"v2-{e}-s{k}": 3300 for e in (100, 150, 200) for k in range(3)},
+        **{f"v2-probe-s05-s{k}": 3300 for k in range(2)},
+        **{f"v2-probe-fe-s{k}": 3300 for k in range(3)},
+        "v3-lv": 3300, "x1": 3300, "e1": 3300, "v4-v4b": 3300, "r1-a16-t1-regression": 3300,
+        "n1-v1-v1b-d6": 3300, "v3-workers-partition": 3300,
+    },
 }
 """Minimum step timeout [s] of long steps (the ``--step-timeout`` default is 1500 s); the effective
 timeout is the larger of the two and is recorded in the step header."""
@@ -189,16 +220,20 @@ def suite_steps(
     sc = ["--scale", str(scale)]
     cuda = {"IONMC_REQUIRE_CUDA": "1"} if suite in ("hr", "hr4") else {}
     s4 = [PY, str(STEPS_V4)]
+    s5 = [PY, str(STEPS_V5)]
     steps: list[tuple[str, list[str], dict[str, str]]] = []
 
     def add(name: str, cmd: list[str], env: dict[str, str] | None = None) -> None:
         full = f"{len(steps) + 1:02d}-{name}"
-        if cmd[:2] in ([PY, str(STEPS)], [PY, str(STEPS_V4)]):
+        if cmd[:2] in ([PY, str(STEPS)], [PY, str(STEPS_V4)], [PY, str(STEPS_V5)]):
             eff = step_timeout_s(suite, full, step_timeout)
             inner = ["--timeout", str(max(30, int(0.9 * eff)))]  # the pool cleans up first
             cmd = [*cmd, *inner, "--seed-base", str(seed_base)]  # every seed derives from the base
         steps.append((full, cmd, env or {}))
 
+    if suite == "lv5":
+        _suite_steps_v5(add, s5, sc, out_dir, dirs)
+        return steps
     if suite in ("lv4", "hr4"):
         _suite_steps_v4(suite, add, s4, w, sc, cuda, out_dir, dirs, single_process)
         return steps
@@ -329,6 +364,41 @@ def _suite_steps_v4(suite, add, s4, w, sc, cuda, out_dir, dirs, single_process):
             cuda)  # fmt: skip
         add("a11-hr-channel-parity", [*s4, "a11-hr", *sc], cuda)
 
+
+def _suite_steps_v5(add, s5, sc, out_dir, dirs):  # type: ignore[no-untyped-def]
+    """Steps of the V3-005 slice-A suite ``lv5`` (rows of ``validation/plans/v3-005-acceptance.md``;
+    ``steps_v5.py``); every step runs one process with ``nuclear=True`` on the python backend, the
+    per-step history counts are the frozen ones (the shards of V2 and V2-probe follow from the
+    measured throughput, see ``steps_v5.py``) and every statistical step takes ``--scale``."""
+    env = NUCLEAR_ENV
+    add("lv5-throughput", [*s5, "lv5-throughput"], env)
+    add("n1-v1-v1b-d6", [*s5, "n1"], env)
+    for e in (100, 150, 200):
+        for k in range(3):
+            add(f"v2-{e}-s{k}",
+                [*s5, "v2-shard", "--energy", str(e), "--shard", str(k), "--out-dir", str(out_dir), *sc],
+                env)  # fmt: skip
+    add("v2-combine", [*s5, "v2-combine", "--dirs", *dirs, *sc], env)
+    for name, shards in (("s05", 2), ("fe", 3)):
+        for k in range(shards):
+            add(f"v2-probe-{name}-s{k}",
+                [*s5, "v2-probe-shard", "--probe", name, "--shard", str(k), "--out-dir", str(out_dir), *sc],
+                env)  # fmt: skip
+    add("v2-probe-combine", [*s5, "v2-probe-combine", "--dirs", *dirs, *sc], env)
+    add("v3-lv", [*s5, "v3-lv", *sc], env)
+    add("v4-v4b", [*s5, "v4-v4b", *sc], env)
+    add("x1", [*s5, "x1", *sc], env)
+    add("e1", [*s5, "e1", *sc], env)
+    add("r1-a16-t1-regression", [*s5, "r1", *sc], env)
+    add("v3-workers-partition", [*s5, "v3-workers"], env)  # deferred: runs only when the mode is lifted
+
+
+NUCLEAR_ENV = {
+    "IONMC_REQUIRE_DATA": "1",
+    "IONMC_CACHE_DIR": str(REPO / ".ionmc-cache" / "ionmc-data"),
+}
+"""Environment of the ``lv5`` steps: the built nuclear table (decision 0041; ``steps_v5.TABLE_ID``)
+and the data it derives from are read from the hash-verified cache staged by the orchestrator."""
 
 NIST_REQUIRED_ENV = {
     "IONMC_REQUIRE_NIST": "1",
@@ -636,7 +706,7 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     if args.seed_base is None:
         args.seed_base = DEFAULT_SEED_BASES[args.suite]
-    workers = 1 if args.single_process else resolve_workers(args.workers)
+    workers = 1 if args.single_process or args.suite == "lv5" else resolve_workers(args.workers)
     if workers < 1 or args.step_timeout < 1 or not 0.0 < args.scale <= 1.0:
         raise SystemExit("need --workers >= 1, --step-timeout >= 1 and 0 < --scale <= 1")
     single = workers == 1

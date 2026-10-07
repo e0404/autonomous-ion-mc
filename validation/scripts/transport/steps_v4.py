@@ -44,6 +44,7 @@ Definitions made here where the frozen rows leave them open (all recorded in the
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -1276,6 +1277,9 @@ def step_a16(a: argparse.Namespace) -> int:
         "baseline_commit": full,
         "baseline_ref": A16_BASELINE,
         "table_identity": identities,
+        "baseline_digests_sha256": hashlib.sha256(
+            json.dumps(baseline["digests"], sort_keys=True).encode()
+        ).hexdigest(),
         "intended_change": None
         if verified is None
         else {

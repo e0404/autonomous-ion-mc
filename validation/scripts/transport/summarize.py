@@ -50,6 +50,8 @@ V4_QUALIFICATION_SEED_BASE = 20401004
 """Qualification base of the suites ``lv4`` and ``hr4`` (V3-004); 20351004 is their rehearsal base
 and 20361004, 20371004 and 20381004 are consumed (observed before amendments 4 and 5 of the plan). A base whose full-scale
 results were observed is consumed (plan, section Seeds)."""
+V5_QUALIFICATION_SEED_BASE = 20421004
+"""Qualification base of the suite ``lv5`` (V3-005A); the 2043xxxx family are rehearsals."""
 IDENTITY_KEYS = ("git_sha", "suite", "scale", "python_parts", "seed_base")
 
 
@@ -88,6 +90,18 @@ def identity(env: dict[str, Any]) -> str:
 
 STEP_TAGS = (
     ("pytest", None),
+    ("lv5-throughput", "lv5-throughput"),
+    ("n1-", "n1"),
+    ("v2-combine", "v2-combine"),
+    ("v2-probe-combine", "v2-probe-combine"),
+    ("v2-probe-", "v2-probe-shard"),
+    ("v2-", "v2-shard"),
+    ("v3-lv", "v3-lv"),
+    ("v3-workers-", "v3-workers"),
+    ("v4-v4b", "v4-v4b"),
+    ("x1", "x1"),
+    ("e1", "e1"),
+    ("r1-", "r1"),
     ("a9-part", "a9-part"),
     ("a9-compare", "a9-compare"),
     ("a7-", "a7"),
@@ -238,6 +252,14 @@ def seed_blockers(seed_base: Any, suite: str | None = None) -> list[str]:
     """Reasons why an archive's seed base cannot qualify (empty for the qualification base)."""
     if seed_base is None:
         return ["seed_base not recorded in environment.txt"]
+    if suite == "lv5":
+        if int(seed_base) != V5_QUALIFICATION_SEED_BASE:
+            return [
+                f"seed_base {int(seed_base)} is not the qualification base "
+                f"{V5_QUALIFICATION_SEED_BASE} (the 2043xxxx family are rehearsals; any other base "
+                "is non-qualification evidence)"
+            ]
+        return []
     if suite in ("lv4", "hr4"):
         if int(seed_base) != V4_QUALIFICATION_SEED_BASE:
             return [

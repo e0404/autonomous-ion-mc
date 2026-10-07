@@ -168,3 +168,31 @@ exact P_accept < 0.5 and on sigma > 0 without yields.
   `1.02 max Sigma` over `[E_k (1 - 2 f_E - 0.01), E_{k+1}]` and the end-of-range majorant
   (running maximum); use the step lookup.
 - **Checks.** `validation/scripts/transport/nuclear_checks.py` runs N1, V1, V1b, V4, V4b and the D6 report.
+
+## Nuclear pipeline end to end (decision 0041)
+
+1. **Sources.** `ionmc data fetch|import` places the hash-pinned datasets in the cache: ENDF/B-VIII.0
+   proton sublibrary (`endf-b8.0-protons`, MF3/MT5 and MF6/MT5 per target), AME2020 masses
+   (`ame2020-mass`), NIST ASTAR (`nist-astar-water-2005`, alpha ranges for D6) and the EXFOR and
+   geant-val entries of the V1b manifest. Roles are assigned per decision 0038; a dataset that is
+   missing or whose hash differs stops every later stage.
+2. **Parsers.** `ionmc.data.endf6`, `exfor`, `ame` and `geant_val` read the sources into immutable
+   records (ENDF TAB1/TAB2/LIST with INT 1-5, LAW=1 LANG=1/2, LCT=3; EXFOR units; AME estimated values).
+3. **Event model.** `ionmc.nuclear.events` builds per-target models (AME masses) and the shared
+   functions (floor+Bernoulli multiplicities, inverse-CDF E', Kalbach mu, residual acceptance,
+   ledger) used by the builder, the python reference and the Warp twins.
+4. **Build.** `ionmc data build nuclear-proton` writes `derived/nuclear-proton-<id>.npz` and `.json`
+   (id = sha256 of source hashes, builder version and options) with sigma, product rows, lambda,
+   `p_accept`, the D6 gate, the capacity-bound terms and the diagnostics block.
+5. **Load.** `NuclearTable.load` re-hashes the arrays, re-derives the id, checks the registry pins
+   and freezes the arrays; `material_rows(material, f_e)` composes `Sigma_mass`, the target
+   fractions and the two majorants for a material of the geometry.
+6. **Configuration.** `SimulationConfig` with `nuclear=True` and `nuclear_table_id` is validated
+   (python backend, proton source, supported elements, E0 + 6 sigma_E <= 250 MeV, table present and
+   current); the effective configuration records the table id, the file hashes and the row grids.
+7. **Transport.** The python reference runs the thinning, event and stack logic of
+   `docs/architecture/transport.md` ("Nuclear interactions") and returns the nuclear tallies and
+   counters.
+8. **Checks.** `validation/scripts/transport/nuclear_checks.py` (N1, V1, V1b, V4, V4b, D6) and the
+   `lv5` suite read the same table; every `lv5` document records the table id and the sha256 of
+   the `.json` and `.npz` files.
