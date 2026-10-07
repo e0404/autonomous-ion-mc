@@ -624,6 +624,9 @@ def test_capability_report_matches_the_enforced_scoring_contract() -> None:
     assert t["generations"]["rejected"] == ["secondary"]
     assert t["let_medium"] == ["water"] and t["dose_reference"] == ["medium"]
     assert t["lookup"]["axes"] == list(AXES) and t["lookup"]["uniform_axis_required"] is True
+    from ionmc.transport.channels import FE_F_MAX_EXPONENT, FE_F_MIN_EXPONENT
+
+    assert t["lookup"]["max_value_range"] == [2.0**FE_F_MIN_EXPONENT, 2.0**FE_F_MAX_EXPONENT]
     assert t["max_channels"] == MAX_CHANNELS
     assert set(t["automatic_channels"]) == {
         PIECE_COUNT_NAME, LOCAL_PIECE_COUNT_NAME, EXCLUDED_CHANNEL_NAME

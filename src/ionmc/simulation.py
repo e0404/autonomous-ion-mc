@@ -57,6 +57,8 @@ from ionmc.transport.channels import (
     CLASS_LOCAL,
     CLASS_STEP,
     EXCLUDED_CHANNEL_NAME,
+    FE_F_MAX_EXPONENT,
+    FE_F_MIN_EXPONENT,
     LOCAL_PIECE_COUNT_NAME,
     MAX_CHANNELS,
     MAX_SPECTRUM_BINS,
@@ -277,6 +279,10 @@ def _tally_capabilities() -> dict[str, Any]:
             "non_uniform": "rejected; resample_uniform() is the explicit, recorded alternative",
             "values": "per species, finite and non-negative; clinical tables and RBE models "
             "do not ship",
+            "max_value_range": [2.0**FE_F_MIN_EXPONENT, 2.0**FE_F_MAX_EXPONENT],
+            "max_value_range_note": "the largest value of a requested table must lie in "
+            f"[2^{FE_F_MIN_EXPONENT}, 2^{FE_F_MAX_EXPONENT}] (fixed-point scale and bound "
+            "representable); other magnitudes fail closed",
         },
         "fluence_spectrum": {
             "edges": "uniform in energy or in ln energy (MeV per nucleon), under/overflow bins",
