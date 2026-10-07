@@ -151,7 +151,7 @@ array, which stays untouched (bit-identical to a524f209 for `tallies = ()`; row 
 
 Per-history bound `B_c` and quantum `q_c = 2^-k_c` (`hpb = n_histories / n_batches`,
 `S_max = max S_w` over `[E_cut, E_hi]`, `S_ref = S_w(E_hi)`,
-`B_L = 1.25 max_m R_m(E_hi)/rho_min,m` in mm with a 25 % straggling margin,
+`B_L = min(1.25 int_0^{E_hi} dE / min_m S_lin,m(E), max_steps max_step)` in mm (25 % straggling margin; `S_lin,m = rho_min,m S_mass,m / 10` over the materials present, see the path bound below),
 `r_max = max S_w,lin/(rho_min S_m,lin)` over grid materials and energies, `f_max` the largest
 table value):
 
@@ -185,6 +185,24 @@ envelope started at the table floor) give the coverage of a LET lookup axis. If 
 `validate()`, never clamped. A runtime guard counts any piece with `S_bar <= 0` in the
 out-of-domain counter, which invalidates the result.
 
+**Path bound B_L for heterogeneous transport (review 0352ebfd).** The homogeneous range
+`max_m R_m(E_hi)/rho_min,m` is not a bound for a path that changes material as the energy falls: a
+path that follows the lowest linear stopping power at each energy has the length
+`int dE / min_m S_lin,m(E)`, which can exceed `max_m int dE / S_lin,m` by an arbitrary factor for
+accepted custom tables. The runtime rows are log-log piecewise linear on the union of the material
+nodes; on one interval every `ln S_m` is linear in `ln E`, so `ln min_m S_m` is concave and lies
+above its chord through the node values. Replacing the minimum by that power-law chord can only
+raise the integral, which is then exact per interval (`E_a/S_a (r^(1-g) - 1)/(1-g)`, `ln r` for
+`g = 1`): a rigorous, never-underestimating bound (`mixed_path_bound_mm`). Below the lowest node the
+rows are clamped (constant) as at runtime. The density enters per material through the lowest
+density of its voxels. The compiler also takes `max_steps * max_step_mm` (a step is at most
+`max_step_mm` long and a history makes at most `max_steps` steps; truncation is the engine rule) and
+uses the smaller value; `LS = min(S_max B_L, 1.25 r_max E_hi)` and `LS2 = S_max B_LS` follow. Water
+only: 198.3 mm (the previous homogeneous value differs by under 1 %). Regression
+`test_path_bound_covers_a_path_that_changes_material_with_energy` (PMMA at 1 MeV/mm above 6 MeV,
+aluminium at 1 MeV/mm below, 12 MeV protons, E_cut 2 MeV): legacy bound 8.10 mm, new bound 14.96 mm,
+observed per-history path 9.59 mm; no negative accumulator and no overflow counter.
+
 **Stopping-ratio candidate of the LS bound (review amendment).** `B_LS = min(S_bar_max B_L,
 1.25 r_max E_hi)`; the second candidate is *kept and proven* over the complete reachable midpoint
 domain: `r_max = max (1 + |gamma_w(E)|) S_w(E) / (rho_min S_m(E))` over `[E_cut/2, E_hi]` for every
@@ -210,7 +228,7 @@ and its units).
 **Precision floor (fail closed).** `q_c <= 2^-16 u_c` with `u_c = 1 mm S_ref^j`, `j` the power of S
 in the kind; that bounds the relative rounding of a 1 mm entrance piece by 1.5e-5. A configuration
 that violates the floor raises before transport. Example (water, protons, 150 MeV, E_cut 2 MeV;
-ramp envelope S_bar_max 45.1 MeV/mm (see the ramp envelope below), B_L about 197 mm, B_LS about
+ramp envelope S_bar_max 45.1 MeV/mm (see the ramp envelope below), B_L about 198 mm, B_LS about
 339 MeV (`1.25 r_max E_hi`, `r_max = 1.81`), B_LS2 about 1.53e4): hpb 1e6 gives `q_L = 2^-34`,
 `q_LS = 2^-33`, `q_LS2 = 2^-28`; hpb 1e7 gives `2^-31`, `2^-30`, `2^-24`; hpb 2.86e7 (the E limit)
 gives `2^-29`, `2^-28`, `2^-23`. All are far inside the floor; 1e8 hpb already fails closed on

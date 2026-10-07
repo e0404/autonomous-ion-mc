@@ -436,6 +436,56 @@ def _stopping_ratio_max(
     return float(ratio.max())
 
 
+def mixed_path_bound_mm(
+    tables: TransportTables, rho_min_by_material: dict[int, float], e_hi_mev: float
+) -> float:
+    """``int_0^{E_hi} dE / min_m S_lin,m(E)`` [mm]: the CSDA path of a particle that follows, at
+    every energy, the lowest linear stopping power ``rho_min,m S_mass,m / 10`` of any material
+    present (``rho_min,m`` the lowest density among the voxels of material ``m``).
+
+    A homogeneous range ``max_m R_m(E_hi) / rho_min,m`` does *not* bound a path that changes
+    material as the energy falls: ``int dE / min_m S_m`` can exceed ``max_m int dE / S_m`` by an
+    arbitrary factor. The runtime rows are log-log piecewise linear on the union of the material
+    nodes. On an interval between adjacent union nodes every ``ln S_m`` is linear in ``ln E``, so
+    ``ln min_m S_m`` is concave and lies above its chord through the node values; replacing the
+    minimum by that power-law chord can only *raise* ``1/S`` and so the integral, which is then
+    exact: ``E_a/S_a (r^(1-g) - 1)/(1 - g)`` (``ln r`` for ``g = 1``), ``r = E_b/E_a``. Below the
+    lowest node every row is clamped (constant), as the runtime clamps. The result is a rigorous
+    upper bound on the CSDA path (the straggling margin is applied by the caller)."""
+    mats = sorted(rho_min_by_material)
+    n = int(tables.n_e)
+    nodes = [
+        np.exp(tables.ln_e0[m] + np.arange(n) / tables.inv_dln_e[m]) for m in mats
+    ]  # fmt: skip
+    e_all = np.unique(np.concatenate(nodes))
+    pts = np.concatenate([e_all[e_all < e_hi_mev], [e_hi_mev]])
+    ln_pts = np.log(pts)
+    s_lin = np.min(
+        [
+            np.exp(
+                np.interp(
+                    ln_pts,
+                    tables.ln_e0[m] + np.arange(n) / tables.inv_dln_e[m],
+                    tables.ln_s_mass[m],
+                )
+            )
+            * rho_min_by_material[m]
+            / 10.0
+            for m in mats
+        ],
+        axis=0,
+    )
+    total = float(pts[0] / s_lin[0])  # [0, lowest node]: every row clamped, S constant
+    for e_a, e_b, s_a, s_b in zip(pts[:-1], pts[1:], s_lin[:-1], s_lin[1:], strict=True):
+        g = math.log(s_b / s_a) / math.log(e_b / e_a)
+        ln_r = math.log(e_b / e_a)
+        if abs(1.0 - g) < 1e-9:
+            total += e_a / s_a * ln_r
+        else:
+            total += e_a / s_a * math.expm1((1.0 - g) * ln_r) / (1.0 - g)
+    return total
+
+
 # ---------------------------------------------------------------------------------------------
 # request validation helpers
 
@@ -571,6 +621,7 @@ def compile_channels(
     max_steps: int,
     scoring_pieces: int,
     producible: frozenset[tuple[str, str]],
+    max_step_mm: float | None = None,
 ) -> ChannelPlan:
     """Compile ``requests`` into a :class:`ChannelPlan` (deduplicated, ordered by grid, with
     offsets, quanta and memory guard) or raise ``UnsupportedCombinationError``.
@@ -763,20 +814,27 @@ def compile_channels(
 
     # --- bounds ---------------------------------------------------------------------------
     dens = geometry.densities_g_cm3()
-    b_l = 0.0
     r_max = 0.0
+    rho_min_of: dict[int, float] = {}
     for m in range(len(geometry.materials)):
         mask = geometry.material_index == m
         if not mask.any():
             continue
         rho_min = float(dens[mask].min())
-        b_l = max(b_l, STRAGGLING_MARGIN * tables.range_g_cm2(m, e_hi_mev) * 10.0 / rho_min)
+        rho_min_of[m] = rho_min
         r_max = max(
             r_max,
             _stopping_ratio_max(
                 tables, m, water, rho_min, 0.5 * e_cut_mev, e_hi_mev, a, env["amp"]
             ),
         )
+    # B_L: the CSDA path of the lowest linear stopping power of any material at each energy
+    # (valid for a path that changes material), capped by the engine's truncation bound
+    # max_steps * max_step_mm when that is known (a step is at most max_step_mm long)
+    b_l_csda = STRAGGLING_MARGIN * mixed_path_bound_mm(tables, rho_min_of, e_hi_mev)
+    b_l = b_l_csda
+    if max_step_mm is not None:
+        b_l = min(b_l, float(max_steps) * float(max_step_mm))
     b_ls = min(s_max * b_l, STRAGGLING_MARGIN * r_max * e_hi_mev)
     bound = {
         "E": e_hi_mev,
@@ -891,6 +949,7 @@ def compile_channels(
         "S_w_max_mev_per_mm": s_max,
         "S_w_ref_mev_per_mm": s_ref,
         "B_L_mm": b_l,
+        "B_L_csda_mm": b_l_csda,
         "B_LS_mev": b_ls,
         "B_LS2": bound["LS2"],
         "B_ES": bound["ES"],

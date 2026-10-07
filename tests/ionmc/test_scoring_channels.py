@@ -316,7 +316,7 @@ def test_worked_example_quanta(
     make_config: MakeConfig, channels_enabled: None, hpb: int, kl: int, kls: int, kls2: int
 ) -> None:
     """Delta section (ii): water, protons, 150 MeV, E_cut 2 MeV (ramp envelope
-    S_bar_max 45.1 MeV/mm, B_L about 197 mm, B_LS about 339 MeV, B_LS2 about 1.53e4)."""
+    S_bar_max 45.1 MeV/mm, B_L about 198 mm, B_LS about 339 MeV, B_LS2 about 1.53e4)."""
     cfg = make_config(energy=150.0, n=20 * hpb, n_batches=20, e_cut=2.0)
     plan = _plan(_with(cfg, _req("ld", "let_d"), _req("let", "let_d_eps"), _req("flu", "fluence")))
     k = {c.kind: c.k for c in plan.channels}
@@ -326,7 +326,7 @@ def test_worked_example_quanta(
     s_bar_max = b["S_w_max_mev_per_mm"]  # ramp envelope, E_mid >= E_cut/2
     assert s_bar_max == pytest.approx(45.1, rel=0.02)
     assert 0.0 < b["S_w_min_mev_per_mm"] < 0.5 and b["gamma_max"] == pytest.approx(0.81, rel=0.02)
-    assert b["B_L_mm"] == pytest.approx(197.0, rel=0.02)
+    assert b["B_L_mm"] == pytest.approx(198.3, rel=0.01)
     assert b["r_max"] == pytest.approx(1.81, rel=0.01)  # (1 + |gamma|) over [E_cut/2, E_hi]
     assert b["B_LS_mev"] == pytest.approx(1.25 * b["r_max"] * 150.0, rel=1e-9)
     assert b["B_LS2"] == pytest.approx(1.53e4, rel=0.02)

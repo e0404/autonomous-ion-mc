@@ -23,7 +23,7 @@ from ionmc.config import (
 )
 from ionmc.geometry import BoxPhantom, VoxelGeometry
 from ionmc.lookup import LookupTable
-from ionmc.materials import ALUMINIUM, WATER, Material
+from ionmc.materials import ALUMINIUM, PMMA, WATER, Material
 from ionmc.physics.projectiles import PROTON
 from ionmc.physics.stopping import BetheStoppingSource, StoppingTable, build_table
 from ionmc.scoring import ScoringGrid, TallyRequest, min_defined_batches, reduce_ratio
@@ -996,3 +996,65 @@ def test_ratio_bound_uses_the_runtime_water_row_not_the_source_interpolant(
         per_hist = r.acc[:, c.offset : c.offset + c.size].sum(axis=1) * c.quantum
         assert 0.0 < per_hist.max() <= b[key]
     assert (r.acc >= 0).all()
+
+
+class SwapSource:
+    """Water: constant 10 MeV cm2/g (the LET row). Aluminium and PMMA have *opposite* energy
+    dependence of the linear stopping power (MeV/mm): PMMA 1 above ``e0`` and 10 below, aluminium
+    10 above and 1 below. Each homogeneous CSDA range is short (about 0.55 of the mixed path), but
+    a path through PMMA first and aluminium after follows the lowest linear stopping power at every
+    energy."""
+
+    name = "swap-s"
+
+    def __init__(self, e0: float) -> None:
+        self.e0 = e0
+
+    def table(self, material: Material, projectile: Any) -> StoppingTable:
+        e = np.geomspace(1.0, 500.0, 400)
+        if material.name == WATER.name:
+            return build_table(projectile, material, e, np.full_like(e, 10.0), e[0] / 10.0, {})
+        high = e > self.e0
+        lin = np.where(high == (material.name == PMMA.name), 1.0, 10.0)  # MeV/mm
+        s = lin * 10.0 / material.density_g_cm3  # MeV cm2/g
+        return build_table(projectile, material, e, s, e[0] / (4.0 * s[0]), {"source": "swap"})
+
+
+def test_path_bound_covers_a_path_that_changes_material_with_energy(
+    make_config: MakeConfig,
+) -> None:
+    """Review 0352ebfd: B_L = 1.25 max_m R_m(E_hi)/rho_min,m (legacy) is not a bound for a path that
+    changes material as the energy falls: PMMA (1 MeV/mm above 6 MeV) then aluminium (1 MeV/mm
+    below 6 MeV) is followed at the lowest linear stopping power at every energy. The observed
+    per-history path exceeds the legacy bound, never the compiled B_L (the integral of
+    1/min_m S_lin,m(E), capped by max_steps * max_step); accumulators stay non-negative and no
+    overflow counter fires."""
+    nz, e_hi, e0 = 30, 12.0, 6.0
+    mat_index = np.concatenate([np.zeros(6), np.ones(nz - 6)]).astype(np.int32)  # 6 mm PMMA, Al
+    geo = VoxelGeometry(
+        origin_mm=(-30.0, -30.0, 0.0), spacing_mm=(60.0, 60.0, 1.0), shape=(1, 1, nz),
+        materials=(PMMA, ALUMINIUM), material_index=mat_index.reshape(1, 1, nz),
+    )  # fmt: skip
+    cfg = _cfg(
+        make_config, _reqs("fluence", "let_t"), energy=e_hi, n=4, n_batches=4, seed=3, e_cut=2.0,
+        geometry=geo, stopping=SwapSource(e0), scoring=(_grid(nz=nz, dz=1.0),),
+        straggling=False, mcs=False, max_step=0.5,
+    )  # fmt: skip
+    r = Run(cfg)
+    b, tb = r.plan.bounds, r.eff.tables
+    dens = geo.densities_g_cm3()
+    legacy = 1.25 * max(
+        tb.range_g_cm2(m, e_hi) * 10.0 / float(dens[geo.material_index == m].min()) for m in (0, 1)
+    )
+    c = r.plan.channels[r.q_of("fluence").numerator]
+    per_hist = r.acc[:, c.offset : c.offset + c.size].sum(axis=1) * c.quantum
+    observed = float(per_hist.max())
+    print(f"B_L legacy {legacy:.3f} mm, new {b['B_L_mm']:.3f} mm, observed {observed:.3f} mm")
+    assert observed > legacy  # (b) the legacy bound is exceeded at runtime
+    assert observed <= b["B_L_mm"]  # (a) the compiled bound covers it
+    assert b["B_L_mm"] == pytest.approx(b["B_L_csda_mm"])  # max_steps * max_step is not the cap
+    assert (r.acc >= 0).all() and r.raw.counters["accumulator_overflow"] == 0  # (c)
+    # the truncation cap: max_steps * max_step_mm bounds every path (a step is at most max_step)
+    capped = replace(cfg, run=replace(cfg.run, max_steps=3))
+    assert validate(capped).channels is not None
+    assert validate(capped).channels.bounds["B_L_mm"] == pytest.approx(3 * 0.5)  # type: ignore[union-attr]

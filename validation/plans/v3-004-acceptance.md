@@ -97,7 +97,7 @@ smoke run of 10^3 histories, a configuration that is not A9's, before any A9 res
 
 ## Evidence archives (which archive satisfies which row)
 
-| Rows | Archive (suite, qualification base 20371004) |
+| Rows | Archive (suite, qualification base 20381004) |
 |---|---|
 | A1-A6, A10, A12, A14, A16 (CI part), A15 (CPU chunks, 1 vs 3 workers), A11 CI | CI (GitHub), fixed small seeds; also the `pytest-scoring-warp-cpu` step of `lv4` |
 | A16 against a524f209, A11-LV, A15 (LV), A7, A8, A9, A13 (non-gating) | `lv4` archive (the 1 vs 3 workers part only in a standard-mode run, deferred in single-process mode) |

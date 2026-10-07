@@ -435,6 +435,7 @@ def _compile_tallies(
         max_steps=max_steps,
         scoring_pieces=scoring_pieces,
         producible=producible(src.projectile),
+        max_step_mm=ph.max_step_mm,
     )
     unused = {lk.name for lk in config.lookups} - {t.lookup for t in config.tallies}
     if unused:
