@@ -82,8 +82,18 @@ Runner changes (implementation phase C2):
   and help text are updated.
 - `steps.py`: `DEFAULT_SEED_BASE = 20391004`; `steps_v4.py`: its default as well.
 - The hashed `SOURCE_FILES` of every suite gain `validation/plans/v3-003d-acceptance.md`.
-- `steps_v4.py a16` gets `--mode {regression,intended-change}`; `lv4` at V3-003D uses
-  `intended-change` (amendment 6 of the V3-004 plan).
+- `steps_v4.py a16` gets `--mode {regression,intended-change}`; the suite default is `regression`.
+  The V3-003D exception is the explicit record `A16_INTENDED_CHANGE` in `run_suite.py` (task
+  V3-003D, baseline a524f209, identity field `range_construction`, baseline value absent, new value
+  `exact-loglog-quadrature-v1`); while it is set, `lv4` passes it to `a16 --mode intended-change`,
+  which verifies at run time that the baseline tree's table identity is the baseline value and the
+  tree under test's the new value (fail closed otherwise; after the merge the baseline already
+  carries the new value, so the next task's first commit deletes the record and advances
+  `A16_BASELINE`, amendment 6). The verified identities are written to the step output.
+- The `lv` pytest step `pytest-warp-cpu-t2-t4-t11-c1-t13` gains `tests/ionmc/test_range_quadrature.py`
+  with `IONMC_REQUIRE_NIST=1` and `IONMC_CACHE_DIR=<workspace>/.ionmc-cache`: the NIST-water case
+  of D1 cannot skip in LV (a missing cache fails; only the missing-cache condition is tolerated
+  elsewhere, every other loader error fails). D3 also asserts the A4 table-CSDA error (3.4e-5).
 
 ## Single-process diagnostic mode
 
@@ -109,7 +119,7 @@ To be filled from committed result files (qualification bases 20391004 for `lv`/
 
 | Rows | Archive | Head SHA | Run id | Status |
 |---|---|---|---|---|
-| D1, D1b, D2, D2b, D3, D4 (CI part), T1 CI, U rows | CI (GitHub) and the pytest steps of `lv`, `lv4` | pending | pending | pending |
+| D1, D1b, D2, D2b, D3, D4 (CI part), T1 CI, U rows | CI (GitHub) and the pytest steps of `lv` (incl. D1 NIST water, required) and `lv4` | pending | pending | pending |
 | D4 informative R80 shifts, D5 (LV rows), T1-LV | `lv` | pending | pending | pending |
 | D5 (HR rows: T12, CUDA) | `hr` | pending | pending | pending |
 | D6 (LV rows), D3 A4b | `lv4` | pending | pending | pending |

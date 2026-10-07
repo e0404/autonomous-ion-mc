@@ -11,6 +11,7 @@ stated otherwise, ``E_cut`` = 2 MeV. CI tier, fixed small seeds (the runs are de
 from __future__ import annotations
 
 import math
+import os
 import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -72,12 +73,20 @@ def _grid(t: TransportTables) -> np.ndarray:
 
 
 def _nist_source() -> StoppingSource | None:
-    try:
-        from ionmc.data.acquire import fetch
-        from ionmc.data.nist_star import load_star_table
+    """The NIST PSTAR water source from the local cache, or None when the dataset is not cached.
 
+    Only the cache-missing condition (:class:`~ionmc.data.acquire.OfflineError`, offline fetch of
+    an object that is not cached) returns None; checksum, parsing, registry and loader failures
+    propagate and fail the test. ``IONMC_REQUIRE_NIST=1`` (set by the ``lv`` suite) makes a missing
+    cache a failure, so the NIST-water case of D1 cannot be skipped in the controlled run."""
+    from ionmc.data.acquire import OfflineError, fetch
+    from ionmc.data.nist_star import load_star_table
+
+    try:
         star = load_star_table(fetch("nist-pstar-water-2005", None, offline=True))
-    except Exception:
+    except OfflineError:
+        if os.environ.get("IONMC_REQUIRE_NIST") == "1":
+            pytest.fail("IONMC_REQUIRE_NIST=1 but the NIST PSTAR water table is not cached")
         return None
     return stopping.NistStarStoppingSource(star)
 
@@ -268,3 +277,34 @@ def test_d4_range_shift_against_the_trapezoid_construction(make_config: MakeConf
 def test_range_construction_identity_enters_the_hash() -> None:
     _, t = _source_tables("water")
     assert t.identity[0]["range_construction"] == stopping.RANGE_CONSTRUCTION
+
+
+# --------------------------------------------------------------------------- NIST loader policy
+
+
+def test_nist_source_missing_cache_skips_or_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Only a missing cache is tolerated (None), and ``IONMC_REQUIRE_NIST=1`` makes it a failure;
+    every other loader error propagates."""
+    from ionmc.data import acquire
+
+    def missing(*_a: object, **_k: object) -> None:
+        raise acquire.OfflineError("not cached")
+
+    monkeypatch.setattr(acquire, "fetch", missing)
+    monkeypatch.delenv("IONMC_REQUIRE_NIST", raising=False)
+    assert _nist_source() is None
+    monkeypatch.setenv("IONMC_REQUIRE_NIST", "1")
+    with pytest.raises(pytest.fail.Exception, match="IONMC_REQUIRE_NIST"):
+        _nist_source()
+
+    from ionmc.data.cache import IntegrityError
+
+    def corrupt(*_a: object, **_k: object) -> None:
+        raise IntegrityError("checksum")
+
+    monkeypatch.setattr(acquire, "fetch", corrupt)
+    monkeypatch.delenv("IONMC_REQUIRE_NIST", raising=False)
+    with pytest.raises(IntegrityError):
+        _nist_source()

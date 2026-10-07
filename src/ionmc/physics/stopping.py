@@ -253,8 +253,11 @@ class StoppingTable:
     options and the start-range approximation. Interpolation is log-log (piecewise linear
     in ln E, ln S and ln R); range is monotone increasing so it can be inverted exactly. The range
     nodes are the exact integral of the log-log interpolated ``S`` (``range_construction`` in the
-    metadata); ``range_at`` interpolates log-log between them, within 1.2e-5 relative of the exact
-    range (the transport tables evaluate the exact closed form between nodes).
+    metadata); ``range_at`` interpolates log-log between them. The interpolation error is bounded by
+    ``h^2/8 max|(ln R)''|`` in ln E (``h`` the node spacing in ln E), i.e. it scales as the grid
+    spacing squared; on the default 200-points-per-decade grid (``h = ln 10 / 200``) it is within
+    1.2e-5 relative of the exact range (measured; coarser grids are not covered by that figure).
+    The transport tables evaluate the exact closed form between nodes.
     """
 
     projectile: Projectile
@@ -375,8 +378,9 @@ def build_table(
     ``R(E) = R(E_min) + int dE_total / S`` with ``dE_total = a dE_u``, the exact integral of the
     log-log interpolated ``S`` (:func:`exact_loglog_range_increments`) at the grid nodes;
     ``start_range_g_cm2`` is the range at the first grid energy. ``range_at`` interpolates
-    log-log between the nodes, which differs from the exact range by at most 1.2e-5 relative
-    (transport evaluates the exact closed form between nodes instead).
+    log-log between the nodes, which on the default 200-points-per-decade grid differs from the
+    exact range by at most 1.2e-5 relative (the bound scales with the grid spacing squared;
+    transport evaluates the exact closed form between nodes instead).
     """
     e = np.asarray(energy_per_u, dtype=np.float64)
     s = np.asarray(s_el_mass, dtype=np.float64)

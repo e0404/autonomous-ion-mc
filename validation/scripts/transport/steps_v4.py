@@ -917,11 +917,54 @@ def _digests(src: Path, tallies: str, specs: str, env_extra: dict[str, str]) -> 
     return doc
 
 
+def verify_intended_change(
+    record: dict[str, Any] | None, baseline_ref: str, baseline_value: Any, current_value: Any
+) -> dict[str, Any]:
+    """Fail-closed check of the A16 intended-change exception (``A16_INTENDED_CHANGE`` of
+    ``run_suite.py``): a record must be given, name this ``A16_BASELINE``, and the table identity
+    of the baseline tree and of the tree under test must be exactly the recorded old and new
+    values. Returns the verified identities for the step output; raises ``SystemExit`` otherwise."""
+    if not record:
+        raise SystemExit("A16 --mode intended-change needs the A16_INTENDED_CHANGE record "
+                         "(none given): fail closed, use --mode regression")  # fmt: skip
+    keys = {"task", "baseline", "identity_field", "baseline_value", "new_value"}
+    if set(record) != keys:
+        raise SystemExit(f"A16 intended-change record must have exactly the keys {sorted(keys)}")
+    if not (A16_BASELINE.startswith(str(record["baseline"])) or
+            str(record["baseline"]).startswith(A16_BASELINE)):  # fmt: skip
+        raise SystemExit(f"A16 intended-change record names baseline {record['baseline']}, "
+                         f"but A16_BASELINE is {A16_BASELINE}")  # fmt: skip
+    if baseline_value != record["baseline_value"]:
+        raise SystemExit(
+            f"A16 intended-change: the baseline tree's {record['identity_field']} is "
+            f"{baseline_value!r}, the record expects {record['baseline_value']!r}; if the "
+            f"baseline already carries the new construction, delete A16_INTENDED_CHANGE and "
+            f"advance A16_BASELINE (plan amendment 6)"
+        )
+    if current_value != record["new_value"]:
+        raise SystemExit(
+            f"A16 intended-change: the tree under test's {record['identity_field']} is "
+            f"{current_value!r}, the record expects {record['new_value']!r}"
+        )
+    if baseline_value == current_value:
+        raise SystemExit("A16 intended-change: baseline and current identities do not differ")
+    return {
+        "record": record,
+        "verified_baseline_identity": baseline_value,
+        "verified_current_identity": current_value,
+    }
+
+
 def step_a16(a: argparse.Namespace) -> int:
     """Row A16 (plan amendment 6). (a) Tally neutrality, gating in both modes: the digests of the
     tree under test with ``tallies = ()`` equal those with all tallies. (b) ``--mode regression``,
     gating: the no-tally digests equal those of ``A16_BASELINE``. (c) ``--mode intended-change``
-    (V3-003D only): the differences against ``A16_BASELINE`` are reported, non-gating."""
+    (V3-003D only): the differences against ``A16_BASELINE`` are reported, non-gating, and only if
+    the ``--intended-change-record`` (``A16_INTENDED_CHANGE`` of ``run_suite.py``) is verified
+    against the table identities of the two trees (:func:`verify_intended_change`)."""
+    record = getattr(a, "intended_change_record", None)
+    if a.mode == "intended-change" and not record:
+        verify_intended_change(None, A16_BASELINE, None, None)  # fail closed before any run
     full = _git("rev-parse", "--verify", f"{A16_BASELINE}^{{commit}}")
     if full is None:
         raise SystemExit(
@@ -941,6 +984,19 @@ def step_a16(a: argparse.Namespace) -> int:
         "with_tallies": _digests(REPO / "src", "all", specs, env_extra),
     }
     regression = a.mode == "regression"
+    identities = {
+        "baseline": baseline["table_identity"],
+        "current": current["no_tallies"]["table_identity"],
+    }
+    verified = None
+    if not regression:
+        field_ = record["identity_field"] if record else ""
+        verified = verify_intended_change(
+            record,
+            A16_BASELINE,
+            identities["baseline"].get(field_),
+            identities["current"].get(field_),
+        )
     out: dict[str, Any] = {}
     ok = True
     for spec in A16_SPECS:
@@ -967,6 +1023,8 @@ def step_a16(a: argparse.Namespace) -> int:
         "mode": a.mode,
         "baseline_commit": full,
         "baseline_ref": A16_BASELINE,
+        "table_identity": identities,
+        "intended_change": verified,
         "fields": "per-grid batch energy, energy balance, counters, end state and trace digests",
         "specs": out,
         "pass": bool(ok),
@@ -1005,6 +1063,12 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="a15: workers or chunks (default chunks); a16: regression "
         "(default) or intended-change (V3-003D)",
+    )
+    ap.add_argument(
+        "--intended-change-record",
+        default=None,
+        type=lambda x: json.loads(x),
+        help="a16 --mode intended-change: JSON of A16_INTENDED_CHANGE (run_suite.py)",
     )
     ap.add_argument("--pairs", default="cpu32:cuda32,python:cpu64", help="a11-hr: sample pairs")
     ap.add_argument(

@@ -48,6 +48,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import os
 import platform
 import re
@@ -209,8 +210,10 @@ def suite_steps(
                 "tests/ionmc/test_transport_warp.py",
                 "tests/ionmc/test_transport_partition.py",
                 "tests/ionmc/test_config_validation.py",
+                "tests/ionmc/test_range_quadrature.py",
                 marker="not multiprocess" if single_process else None,
             ),
+            NIST_REQUIRED_ENV,
         )
         add(
             "t1-trace-parity-256x150MeV",
@@ -290,7 +293,17 @@ def _suite_steps_v4(suite, add, s4, w, sc, cuda, out_dir, dirs, single_process):
                 marker="not multiprocess" if single_process else None,
             ),
         )
-        add("a16-qualified-path-regression", [*s4, "a16", "--mode", "intended-change"])
+        rec = A16_INTENDED_CHANGE
+        a16 = [
+            "--mode",
+            "intended-change",
+            "--intended-change-record",
+            json.dumps(rec, sort_keys=True),
+        ]
+        add(
+            "a16-qualified-path-regression",
+            [*s4, "a16", *(a16 if rec else ["--mode", "regression"])],
+        )
         add("a11-lv-python-vs-warp-cpu-256x150MeV", [*s4, "a11-lv", *sc])
         add("a15-chunks-cpu", [*s4, "a15", "--mode", "chunks", "--backend", "warp-cpu", *sc])
         add("a15-workers", [*s4, "a15", "--mode", "workers", "--workers", "3", *sc])
@@ -316,6 +329,31 @@ def _suite_steps_v4(suite, add, s4, w, sc, cuda, out_dir, dirs, single_process):
             cuda)  # fmt: skip
         add("a11-hr-channel-parity", [*s4, "a11-hr", *sc], cuda)
 
+
+NIST_REQUIRED_ENV = {
+    "IONMC_REQUIRE_NIST": "1",
+    "IONMC_CACHE_DIR": str(REPO / ".ionmc-cache" / "ionmc-data"),
+}
+"""Environment of the ``lv`` pytest step that runs the NIST-water case of V3-003D row D1: the
+cached PSTAR table (data layer cache ``IONMC_CACHE_DIR`` with its ``manifests/`` and ``objects/``
+layout, staged by the orchestrator into the git-ignored ``.ionmc-cache/ionmc-data`` of the runner
+workspace from the experiment data cache) is required; a missing cache fails the test instead of
+skipping it."""
+A16_INTENDED_CHANGE: dict[str, Any] | None = {
+    "task": "V3-003D",
+    "baseline": "a524f209",
+    "identity_field": "range_construction",
+    "baseline_value": None,  # the baseline tables carry no range_construction identity
+    "new_value": "exact-loglog-quadrature-v1",
+}
+"""The one recorded exception to the fail-closed A16 regression of the ``lv4`` suite (plan
+amendment 6 of V3-004). While it is not ``None``, the ``lv4`` step runs ``--mode intended-change``
+and passes this record to the step, which verifies at run time that the table identity
+``identity_field`` of the baseline tree (``baseline``, which must equal ``A16_BASELINE`` of
+``steps_v4.py``) is ``baseline_value`` and that of the tree under test is ``new_value``, and
+fails closed otherwise. Once V3-003D is merged the baseline tree carries ``new_value``, so the
+step then fails until the next task's first commit deletes this record (sets it to ``None``) and
+advances ``A16_BASELINE``. With ``None`` the step runs ``--mode regression`` (the default)."""
 
 KILL_GRACE_S = 10.0
 

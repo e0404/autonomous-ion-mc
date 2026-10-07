@@ -138,6 +138,14 @@ def digest(spec: str, tallies: str) -> dict[str, str]:
     return out
 
 
+def table_identity() -> dict[str, Any]:
+    """Identity fields of the analytic water table of the tree under test (``None`` = absent, as
+    at the V3-003D baseline, whose tables carry no ``range_construction``); verified by
+    ``steps_v4.py a16 --mode intended-change``."""
+    meta = BetheStoppingSource().table(WATER, PROTON).metadata
+    return {"range_construction": meta.get("range_construction")}
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--specs", required=True, help="name:backend:precision,...")
@@ -146,6 +154,7 @@ def main(argv: list[str] | None = None) -> int:
     doc = {
         "source": str(Path(ionmc.__file__).resolve()),
         "tallies": args.tallies,
+        "table_identity": table_identity(),
         "digests": {s: digest(s, args.tallies) for s in args.specs.split(",")},
     }
     print("#DIGEST-BEGIN")

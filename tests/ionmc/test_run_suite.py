@@ -3,6 +3,7 @@ source attestation, dirty trees); steps are only run for the git/snapshot end-to
 
 from __future__ import annotations
 
+import argparse
 import importlib.util
 import json
 import os
@@ -916,3 +917,62 @@ def test_a9_amended_criterion_synthetic() -> None:
     assert biased["z_std_ok"] and not biased["z_mean_ok"] and not biased["calibrated"]
     assert mod.a9_cover_all_pass(0.9435) and mod.a9_cover_all_pass(0.9464)
     assert not mod.a9_cover_all_pass(0.92) and not mod.a9_cover_all_pass(0.98)
+
+
+# -- A16 intended-change exception (review finding: bound to V3-003D and verified at run time) ---
+def _a16_cmd(mod: ModuleType) -> list[str]:
+    steps = mod.suite_steps("lv4", 4, 1.0)
+    return next(s[1] for s in steps if s[0].endswith("a16-qualified-path-regression"))
+
+
+def test_a16_suite_default_is_regression_and_exception_is_the_recorded_one() -> None:
+    mod = _load("run_suite")
+    rec = mod.A16_INTENDED_CHANGE
+    assert rec == {
+        "task": "V3-003D", "baseline": "a524f209", "identity_field": "range_construction",
+        "baseline_value": None, "new_value": "exact-loglog-quadrature-v1",
+    }  # fmt: skip
+    cmd = _a16_cmd(mod)
+    assert cmd[cmd.index("--mode") + 1] == "intended-change"
+    assert json.loads(cmd[cmd.index("--intended-change-record") + 1]) == rec
+    mod.A16_INTENDED_CHANGE = None  # record deleted (next task): regression, no exception
+    cmd = _a16_cmd(mod)
+    assert cmd[cmd.index("--mode") + 1] == "regression"
+    assert "--intended-change-record" not in cmd
+
+
+def test_a16_intended_change_verification_is_fail_closed() -> None:
+    run, st = _load("run_suite"), _load("steps_v4")
+    rec = run.A16_INTENDED_CHANGE
+    new = rec["new_value"]
+    assert st.A16_BASELINE == rec["baseline"]
+    ok = st.verify_intended_change(rec, st.A16_BASELINE, None, new)
+    assert ok["verified_baseline_identity"] is None and ok["verified_current_identity"] == new
+    with pytest.raises(SystemExit, match="needs the A16_INTENDED_CHANGE record"):
+        st.verify_intended_change(None, st.A16_BASELINE, None, new)  # no record
+    with pytest.raises(SystemExit, match="already carries"):
+        st.verify_intended_change(rec, st.A16_BASELINE, new, new)  # baseline merged: delete record
+    with pytest.raises(SystemExit, match="record expects"):
+        st.verify_intended_change(rec, st.A16_BASELINE, None, None)  # no change in the tree
+    with pytest.raises(SystemExit, match="record expects"):
+        st.verify_intended_change(rec, st.A16_BASELINE, None, "other-construction")
+    with pytest.raises(SystemExit, match="names baseline"):
+        st.verify_intended_change({**rec, "baseline": "deadbeef"}, st.A16_BASELINE, None, new)
+    with pytest.raises(SystemExit, match="exactly the keys"):
+        st.verify_intended_change({"task": "V3-003D"}, st.A16_BASELINE, None, new)
+
+
+def test_a16_step_refuses_intended_change_without_record() -> None:
+    st = _load("steps_v4")
+    ns = argparse.Namespace(mode="intended-change", intended_change_record=None)
+    with pytest.raises(SystemExit, match="needs the A16_INTENDED_CHANGE record"):
+        st.step_a16(ns)
+
+
+def test_lv_pytest_step_requires_the_nist_cache() -> None:
+    mod = _load("run_suite")
+    step = next(s for s in mod.suite_steps("lv", 4, 1.0) if "pytest-warp-cpu" in s[0])
+    assert "tests/ionmc/test_range_quadrature.py" in step[1]
+    assert step[2]["IONMC_REQUIRE_NIST"] == "1" and step[2]["IONMC_CACHE_DIR"].endswith(
+        ".ionmc-cache/ionmc-data"
+    )

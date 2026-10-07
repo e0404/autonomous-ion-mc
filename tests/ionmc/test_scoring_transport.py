@@ -282,10 +282,11 @@ def test_a4_csda_let_t_and_let_d(make_config: MakeConfig) -> None:
     assert np.all(np.abs(let_t[sel] * 2.0 - de) / de <= 1e-4), np.abs(
         let_t[sel] * 2.0 / de - 1
     ).max()
-    # deviation from the table CSDA energy (informative here; gated by the D3 rows)
+    # deviation from the table CSDA energy: gated by D3 (the table construction is exact, V3-003D)
+    worst_tab = float(np.max(np.abs(let_t[sel] * 2.0 - de_tab) / de_tab))
     print("A4 worst vs transported E(z):", float(np.max(np.abs(let_t[sel] * 2.0 - de) / de)))
-    print("A4 worst vs table CSDA E(z):",
-          float(np.max(np.abs(let_t[sel] * 2.0 - de_tab) / de_tab)))  # fmt: skip
+    print("A4 worst vs table CSDA E(z):", worst_tab)
+    assert worst_tab <= 1e-4, worst_tab
     # LET_d = int S dE / dE on the same water table (numpy quadrature)
     for j, v in enumerate(sel):
         e = np.linspace(e_lo[j], e_hi[j], 2001)
