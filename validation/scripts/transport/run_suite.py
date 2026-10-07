@@ -485,10 +485,10 @@ A16_INTENDED_CHANGE: dict[str, Any] | None = {
     # sha256 of the source set (a16_source_digest(): every hashed file including this one and the
     # plan block, with only the two self-referential digest literals masked): the record is valid
     # only for exactly this source state.
-    "source_digest": "839400c4fcf2ab5faf4035a8198a4c79738642e6deffd4abb0183106519e3f5c",
+    "source_digest": "bb08b4a48b3ec99845e0bc24c1d777540063edccf5c7d2521da14098d3e5503e",
     # sha256 of the delimited block of validation/plans/v3-003d-acceptance.md that states this
     # record (without this key), verified by the step at run time.
-    "plan_block_sha256": "a18202595d4402fbd76343328a48c65d2c3440291b03ac065f4ca8c51dc9b093",
+    "plan_block_sha256": "6c246e54f37a5f54e165723fc72d480416c407eb197d9d0b2488ecdc922a76ef",
 }
 """The one recorded exception to the fail-closed A16 regression of the ``lv4`` suite (plan
 amendment 6 of V3-004). While it is not ``None``, the ``lv4`` step runs ``--mode intended-change``
@@ -605,13 +605,32 @@ A16_PLAN_BEGIN, A16_PLAN_END = (
 
 A16_RUN_SUITE_FILE = "validation/scripts/transport/run_suite.py"
 A16_SELF_REFERENCE = re.compile(r'("(?:source_digest|plan_block_sha256)": )"[^"]*"')
+A16_RECORD_START, A16_RECORD_END = "\nA16_INTENDED_CHANGE: dict[", "\n}\n"
+A16_EXPECTED_MASKS = {"record": 2, "plan": 1}
+"""Number of self-referential literals masked per kind of file: the record in ``run_suite.py``
+holds the source digest and the plan block hash, the plan block states the source digest only."""
 
 
-def a16_normalize(text: str) -> str:
-    """``text`` with only the self-referential digest literals of the A16 record
-    (``"source_digest": "..."`` and ``"plan_block_sha256": "..."``) replaced by a fixed
-    placeholder; everything else (the record, its bounds, the gate, the plan block) stays hashed."""
-    return A16_SELF_REFERENCE.sub(r'\1"MASKED"', text)
+def a16_normalize(text: str, kind: str) -> str:
+    """``text`` with exactly the self-referential digest literals of the A16 record replaced by
+    the placeholder ``MASKED``: ``kind`` ``"record"`` (``run_suite.py``: only inside the
+    ``A16_INTENDED_CHANGE`` dict literal) or ``"plan"`` (only inside the delimited A16 block of the
+    V3-003D plan). Every other byte, including look-alike text elsewhere, stays hashed. A record
+    or block that is present must hold exactly the expected number of literals (fail closed)."""
+    if kind == "record":
+        lo, hi = text.find(A16_RECORD_START), None
+        if lo >= 0:
+            hi = text.find(A16_RECORD_END, lo) + len(A16_RECORD_END)
+    else:
+        lo = text.find(A16_PLAN_BEGIN)
+        hi = text.find(A16_PLAN_END) + len(A16_PLAN_END) if lo >= 0 else None
+    if lo < 0 or hi is None:
+        return text  # record deleted (the next task's first commit): nothing to mask
+    inner, n = A16_SELF_REFERENCE.subn(r'\1"MASKED"', text[lo:hi])
+    if n != A16_EXPECTED_MASKS[kind]:
+        raise SystemExit(f"A16 normalization: {n} self-referential literals in the {kind}, "
+                         f"expected {A16_EXPECTED_MASKS[kind]}")  # fmt: skip
+    return text[:lo] + inner + text[hi:]
 
 
 def a16_source_entries(suite: str = "lv4") -> dict[str, bytes]:
@@ -621,11 +640,10 @@ def a16_source_entries(suite: str = "lv4") -> dict[str, bytes]:
     for f in source_files(suite):
         rel = str(f.relative_to(REPO))
         raw = f.read_bytes()
-        out[rel] = (
-            a16_normalize(raw.decode()).encode()
-            if rel in (A16_RUN_SUITE_FILE, A16_PLAN_FILE)
-            else raw
-        )
+        if rel in (A16_RUN_SUITE_FILE, A16_PLAN_FILE):
+            kind = "record" if rel == A16_RUN_SUITE_FILE else "plan"
+            raw = a16_normalize(raw.decode(), kind).encode()
+        out[rel] = raw
     return out
 
 

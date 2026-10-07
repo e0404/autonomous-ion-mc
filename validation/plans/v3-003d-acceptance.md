@@ -137,7 +137,7 @@ block hash or content differs, when the table identity `range_construction` of t
 (a524f209) is not absent or that of the tree under test is not `exact-loglog-quadrature-v1`, when
 any digest field outside the allowlist differs (counters, valid flags, discrete trace columns of
 t13, tally layout), when a table-dependent field leaves its bound, or when the depth-dose maximum
-moves by a layer. The record is also bound to the exact source state (`source_digest`: sha256 over the hashed source set of the `lv4` suite, excluding `run_suite.py` and this block; `run_suite.py --print-a16-source-digest`), so any later commit touching a hashed file fails A16 until the record is regenerated or deleted. Every allowlisted field is listed with the bounded quantities that constrain it; a field that differs without a bound or an allowlist entry fails. The next task deletes the record and advances `A16_BASELINE` (amendment 6 of the
+moves by a layer. The record is also bound to the exact source state (`source_digest`: sha256 over the hashed source set of the `lv4` suite, including `run_suite.py` (the record, its bounds and the gate code) and this plan with this block, in a normalized form in which only the self-referential digest literals are masked: the source digest and the plan block hash inside the record of `run_suite.py`, and the source digest inside this block; look-alike text elsewhere stays hashed; `run_suite.py --print-a16-source-digest`), so any later commit touching a hashed file fails A16 until the record is regenerated or deleted. Every allowlisted field is listed with the bounded quantities that constrain it; a field that differs without a bound or an allowlist entry fails. The next task deletes the record and advances `A16_BASELINE` (amendment 6 of the
 V3-004 plan).
 
 Measured at fd69e16 plus this change (baseline a524f209, specs t1 and t13 on python float64, warp-cpu
@@ -393,7 +393,7 @@ t1 aggregate and cap quantities added after review REVIEW-fe6c9813fed24e3280d17c
    "max_step_mm": 1.0
   }
  },
- "source_digest": "839400c4fcf2ab5faf4035a8198a4c79738642e6deffd4abb0183106519e3f5c",
+ "source_digest": "bb08b4a48b3ec99845e0bc24c1d777540063edccf5c7d2521da14098d3e5503e",
  "task": "V3-003D"
 }
 ```
@@ -401,7 +401,7 @@ t1 aggregate and cap quantities added after review REVIEW-fe6c9813fed24e3280d17c
 
 ## Amendments
 
-(None yet.)
+¹ **2026-10-07, task V3-003D (A16 source binding; after Codex reviews REVIEW-fe6c9813fed24e3280d17cfd6319ec25, REVIEW-953e11a1e6d64e6e8beaea4e5366dba2 and REVIEW-5da9c2e02c094b1893dbc05254b71893).** The A16 intended-change record is bound to the exact source state through `source_digest`, the sha256 over the hashed source set of the `lv4` suite. An earlier wording excluded `run_suite.py` and the A16 block of this plan from that set; that exclusion model is superseded: both are included in a normalized form in which only the self-referential digest literals (`source_digest`, `plan_block_sha256` in the record; `source_digest` in the block) are masked, anchored to those places. The step also rejects non-finite values and treats NaN as a bound violation. The block above is the current statement; amendment 6(e) to 6(g) of the V3-004 plan carries the same change.
 
 ## Documentation sweep list for phase C2
 

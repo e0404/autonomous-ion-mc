@@ -1191,6 +1191,42 @@ def test_a16_caps_are_nan_safe() -> None:
     assert st.nonfinite_fields(mixed) == ["b", "d"]
 
 
+def test_a16_normalization_masks_exactly_the_record_literals() -> None:
+    run = _load("run_suite")
+    rec = run.A16_INTENDED_CHANGE
+    text = (REPO / run.A16_RUN_SUITE_FILE).read_text()
+    lo = text.index(run.A16_RECORD_START)
+    hi = text.index(run.A16_RECORD_END, lo) + len(run.A16_RECORD_END)
+    lits = [f'"{k}": "{rec[k]}"' for k in ("source_digest", "plan_block_sha256")]
+    for lit in lits:
+        assert text.count(lit) == 1 and lo < text.index(lit) < hi
+    # decoys with the same shape before and after the record are not masked
+    decoy = '"source_digest": "deadbeef"\n"plan_block_sha256": "cafe"\n'
+    doctored = decoy + text + decoy
+    out = run.a16_normalize(doctored, "record")
+    masked = [f'"{k}": "MASKED"' for k in ("source_digest", "plan_block_sha256")]
+    assert sum(out.count(m) for m in masked) == 2 and out.count(decoy) == 2
+    # exactly the two literals changed, at their positions; every other byte is identical
+    expect = doctored
+    for lit, m in zip(lits, masked, strict=True):
+        expect = expect.replace(lit, m)
+    assert out == expect
+    # the plan: one literal (the source digest) inside the block, decoys outside untouched
+    plan = (REPO / run.A16_PLAN_FILE).read_text()
+    plit = f'"source_digest": "{rec["source_digest"]}"'
+    assert plan.count(plit) == 1
+    pd = run.a16_normalize(decoy + plan + decoy, "plan")
+    assert pd.count('"source_digest": "MASKED"') == 1 and pd.count(decoy) == 2
+    assert pd == (decoy + plan + decoy).replace(plit, '"source_digest": "MASKED"')
+    # a record or block with a missing or extra literal fails closed
+    with pytest.raises(SystemExit, match="expected 2"):
+        run.a16_normalize(text.replace(lits[0], '"source_digest_x": "0"'), "record")
+    with pytest.raises(SystemExit, match="expected 1"):
+        run.a16_normalize(plan.replace(plit, plit + ',\n "plan_block_sha256": "0"'), "plan")
+    # no record: nothing to mask
+    assert run.a16_normalize("no record here", "record") == "no record here"
+
+
 def test_a16_source_digest_binds_the_record_to_the_source_tree() -> None:
     run, st = _load("run_suite"), _load("steps_v4")
     rec = run.A16_INTENDED_CHANGE
@@ -1224,7 +1260,7 @@ def test_a16_source_digest_binds_the_record_to_the_source_tree() -> None:
     text = (REPO / rs).read_text()
     assert lit in text and lit in (REPO / plan).read_text()
     e = dict(entries)
-    e[rs] = run.a16_normalize(text.replace(lit, '"source_digest": "0"')).encode()
+    e[rs] = run.a16_normalize(text.replace(lit, '"source_digest": "0"'), "record").encode()
     assert run.a16_digest_of(e) == digest  # only the self-referential value is free
     cmd = [sys.executable, str(SCRIPTS / "run_suite.py"), "--print-a16-source-digest"]
     out = subprocess.run(cmd, capture_output=True, text=True, check=True)
