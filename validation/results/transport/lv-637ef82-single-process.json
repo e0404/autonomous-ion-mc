@@ -1,0 +1,230 @@
+{
+ "complete": true,
+ "conformant": false,
+ "deferred_steps": [
+  "04-t13-workers"
+ ],
+ "directories": [
+  "validation/generated/RUN-20261007T135209Z-0cc694da/transport/lv-637ef82-a",
+  "validation/generated/RUN-20261007T135709Z-a5a8011b/transport/lv-637ef82-e",
+  "validation/generated/RUN-20261007T141200Z-9a4fd10a/transport/lv-637ef82-f",
+  "validation/generated/RUN-20261007T141215Z-ab2661d6/transport/lv-637ef82-t8",
+  "validation/generated/RUN-20261007T142636Z-17618f9f/transport/lv-637ef82-t9",
+  "validation/generated/RUN-20261007T144409Z-5eb8e1ae/transport/lv-637ef82-t10",
+  "validation/generated/RUN-20261007T145547Z-b1acf9c7/transport/lv-637ef82-t14"
+ ],
+ "execution_modes": [
+  "single-process-diagnostic"
+ ],
+ "git_sha": "637ef82f37954ae565d97edc58c675b5835f47ec",
+ "missing_steps": [],
+ "non_conformant_reasons": [
+  "deferred multiprocessing checks",
+  "execution mode single-process-diagnostic (diagnostic, not the qualification mode)"
+ ],
+ "parts": {
+  "validation/generated/RUN-20261007T135209Z-0cc694da/transport/lv-637ef82-a": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "validation/generated/RUN-20261007T135709Z-a5a8011b/transport/lv-637ef82-e": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "validation/generated/RUN-20261007T141200Z-9a4fd10a/transport/lv-637ef82-f": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "validation/generated/RUN-20261007T141215Z-ab2661d6/transport/lv-637ef82-t8": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "validation/generated/RUN-20261007T142636Z-17618f9f/transport/lv-637ef82-t9": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "validation/generated/RUN-20261007T144409Z-5eb8e1ae/transport/lv-637ef82-t10": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "validation/generated/RUN-20261007T145547Z-b1acf9c7/transport/lv-637ef82-t14": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  }
+ },
+ "pass": true,
+ "problems": [],
+ "reduced_history_counts": false,
+ "steps": {
+  "01-pytest-warp-cpu-t2-t4-t11-c1-t13": {
+   "deselected_tests": 6,
+   "exit": 0,
+   "file": "01-pytest-warp-cpu-t2-t4-t11-c1-t13.txt",
+   "frozen_histories": null,
+   "histories": null,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "02-t1-trace-parity-256x150MeV": {
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "02-t1-trace-parity-256x150MeV.txt",
+   "frozen_histories": 256,
+   "histories": 256,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "03-t2-deterministic-csda": {
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "03-t2-deterministic-csda.txt",
+   "frozen_histories": null,
+   "histories": null,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "04-t13-workers": {
+   "exit": 0,
+   "file": "04-t13-workers.txt",
+   "frozen_histories": null,
+   "histories": null,
+   "pass": false,
+   "problems": [],
+   "reason": "multiprocessing-specific check deferred in single-process diagnostic mode (operator directive 2026-10-07)",
+   "reduced": false,
+   "status": "deferred"
+  },
+  "05-t13-chunks-cpu": {
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "05-t13-chunks-cpu.txt",
+   "frozen_histories": null,
+   "histories": 200000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "06-t-r1-python-repeatability": {
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "06-t-r1-python-repeatability.txt",
+   "frozen_histories": null,
+   "histories": 400,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "07-t12-python-sample-1of2": {
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "07-t12-python-sample-1of2.txt",
+   "frozen_histories": null,
+   "histories": null,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "08-t12-python-sample-2of2": {
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "08-t12-python-sample-2of2.txt",
+   "frozen_histories": null,
+   "histories": null,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "09-t12-accelerated-samples": {
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "09-t12-accelerated-samples.txt",
+   "frozen_histories": null,
+   "histories": null,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "10-t12-compare": {
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "10-t12-compare.txt",
+   "frozen_histories": {
+    "cpu32": 1000000,
+    "cpu64": 1000000,
+    "python": 4000
+   },
+   "histories": {
+    "cpu32": 1000000,
+    "cpu64": 1000000,
+    "python": 4000
+   },
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "11-t8-mcs-step-independence": {
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "11-t8-mcs-step-independence.txt",
+   "frozen_histories": 1000000,
+   "histories": 1000000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "12-t9-idd-step-independence": {
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "12-t9-idd-step-independence.txt",
+   "frozen_histories": null,
+   "histories": 1000000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "13-t10-rotation-invariance": {
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "13-t10-rotation-invariance.txt",
+   "frozen_histories": 1000000,
+   "histories": 1000000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "14-t14-voxel-boundary-bias": {
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "14-t14-voxel-boundary-bias.txt",
+   "frozen_histories": 1000000,
+   "histories": 1000000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  }
+ },
+ "suite": "lv"
+}

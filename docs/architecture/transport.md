@@ -634,7 +634,7 @@ case); track-length apportioning removes this, and the T9-CI test records the bo
 `run_suite.py --suite {lv4,hr4}` runs the validation of decision 0040 with the machinery above
 (same fail-closed archive, `--only`, `--import-dirs`, `--scale`, `--workers 1` single-process mode and
 `summarize.py` verification and `--combine`). The step scripts are `steps_v4.py` (and `a16_digest.py`).
-The default `--seed-base` is the V3-004 qualification base 20381004; the rehearsal base 20351004, the consumed bases 20361004 and 20371004
+The default `--seed-base` is the V3-004 qualification base 20401004 (V3-003D); the rehearsal base 20351004, the consumed bases 20361004, 20371004 and 20381004
 (observed before plan amendments 4 and 5) and any other base give a verifying but non-conformant archive (`summarize.py` records the reason). The
 hashed set additionally covers `validation/plans/v3-004-acceptance.md` and
 `tests/data/synthetic_lookup.json`. Per-step timeout floors (`run_suite.STEP_TIMEOUT_FLOOR_S`): 3300 s
@@ -642,7 +642,7 @@ for each A9 part, 1800 s for A7 and 3600 s for the HR sample step.
 
 | Suite | Steps (names without the number) | Rows |
 |---|---|---|
-| `lv4` | `pytest-scoring-warp-cpu`, `a16-qualified-path-regression` (digests against `git archive A16_BASELINE`, currently a524f209, fail closed without git; `--mode intended-change` at V3-003D: tally neutrality gating, differences reported, plan amendment 6), `a11-lv-python-vs-warp-cpu-256x150MeV`, `a15-chunks-cpu`, `a15-workers` (deferred in single-process mode, `DEFERRED_STEPS["lv4"]`), `a7-step-independence`, `a8-offline-let`, `a13-let-profile-exploratory` (non-gating), `a9-part-1of2`, `a9-part-2of2`, `a9-compare` | CI tests, A16, A11-LV, A15, A7, A8, A13, A9 |
+| `lv4` | `pytest-scoring-warp-cpu`, `a16-qualified-path-regression` (digests against `git archive A16_BASELINE`, currently a524f209, fail closed without git; `--mode intended-change` at V3-003D: tally neutrality gating, every differing field allowlisted and bounded, non-finite values rejected, record bound to the source digest and the plan block; plan amendment 6 (e)–(g)), `a11-lv-python-vs-warp-cpu-256x150MeV`, `a15-chunks-cpu`, `a15-workers` (deferred in single-process mode, `DEFERRED_STEPS["lv4"]`), `a7-step-independence`, `a8-offline-let`, `a13-let-profile-exploratory` (non-gating), `a9-part-1of2`, `a9-part-2of2`, `a9-compare` | CI tests, A16, A11-LV, A15, A7, A8, A13, A9 |
 | `hr4` | `pytest-cuda-scoring` (`-m cuda`), `a15-chunks-cuda`, `a11-hr-channel-parity` (cpu-f32 vs cuda-f32 and the python vs cpu-f64 control pair, frozen `t12_compare` on the linear channel profiles) | CUDA tests, A15-CUDA, A11-HR |
 
 A9 runs 200 seeds in two parts of 100 (`--part i/2`, seed `base + 10000 + k`) whose npz files

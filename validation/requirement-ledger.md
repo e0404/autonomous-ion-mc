@@ -44,10 +44,10 @@ related-model, backend-parity, self-consistency.
 | V1-MUST-009 | Beamlet-resolved scoring | S-CAP-PLANNING | self-consistency | planned |
 | V1-MUST-010 | Dose influence matrices | S-CAP-PLANNING | self-consistency | planned |
 | V1-MUST-011 | Changeable scoring grids | S-CAP-PLANNING, S-NUM-FALSIFICATION | self-consistency | planned |
-| V1-MUST-012 | Extensible scoring | S-CAP-PLANNING | self-consistency | implemented (V3-004); diagnostic-mode evidence @fccb687 (lv4/hr4 archives at base 20381004, non-conformant: single-process directive 2026-10-07, a15-workers deferred); conformant exact-SHA qualification pending |
-| V1-MUST-013 | Absorbed dose | S-PHYS-PROTON-EM | independent-monte-carlo | implemented (V3-004); diagnostic-mode self-consistency evidence @fccb687 (non-conformant, see V1-MUST-012); conformant qualification and independent Monte Carlo (T15) pending |
-| V1-MUST-014 | Energy deposition | S-PHYS-PROTON-EM | independent-monte-carlo | implemented (V3-004); diagnostic-mode self-consistency evidence @fccb687 (non-conformant, see V1-MUST-012); conformant qualification and independent Monte Carlo (T15) pending |
-| V1-MUST-015 | LET scoring | S-PHYS-LET | independent-monte-carlo | implemented (V3-004); diagnostic-mode theory/self-consistency evidence @fccb687 (A1-A9, A11, A14-A16; non-conformant, see V1-MUST-012); conformant qualification and independent Monte Carlo (TOPAS ProtonLET, V3-010) pending |
+| V1-MUST-012 | Extensible scoring | S-CAP-PLANNING | self-consistency | implemented (V3-004); diagnostic-mode evidence @fccb687 (base 20381004) and @637ef82 after the V3-003D range-table change (lv4/hr4 archives at base 20401004; non-conformant: single-process directive 2026-10-07, a15-workers deferred); conformant exact-SHA qualification pending |
+| V1-MUST-013 | Absorbed dose | S-PHYS-PROTON-EM | independent-monte-carlo | implemented (V3-004); diagnostic-mode self-consistency evidence @fccb687 and @637ef82 (non-conformant, see V1-MUST-012); conformant qualification and independent Monte Carlo (T15) pending |
+| V1-MUST-014 | Energy deposition | S-PHYS-PROTON-EM | independent-monte-carlo | implemented (V3-004); diagnostic-mode self-consistency evidence @fccb687 and @637ef82 (non-conformant, see V1-MUST-012); conformant qualification and independent Monte Carlo (T15) pending |
+| V1-MUST-015 | LET scoring | S-PHYS-LET | independent-monte-carlo | implemented (V3-004); diagnostic-mode theory/self-consistency evidence @fccb687 (A1-A9, A11, A14-A16) and @637ef82 (non-conformant, see V1-MUST-012); conformant qualification and independent Monte Carlo (TOPAS ProtonLET, V3-010) pending |
 | V1-MUST-016 | External biological lookup data | S-CAP-PLANNING | self-consistency | implemented (V3-004); diagnostic-mode evidence @fccb687 (A10, A12; synthetic fixture only, no clinical tables; non-conformant, see V1-MUST-012); conformant qualification pending |
 | V1-MUST-017 | Analytical physics layer | S-PHYS-PROTON-EM | independent-theory | planned |
 | V1-MUST-018 | External/tabulated data layer | S-PROV-DATA | ion-specific-tabulated | planned |
@@ -79,7 +79,7 @@ related-model, backend-parity, self-consistency.
 | V1-SCOPE | Complete MUST scope-control priorities | all suites | all categories | planned |
 | V2-ION | independently qualified therapeutic ions | S-PHYS-HELIUM, S-PHYS-CARBON, S-PHYS-OXYGEN, S-PHYS-LET | ion-specific-tabulated, independent-monte-carlo, measured | planned |
 | V2-CAP | fail-closed capability contract | S-CAP-CONTRACT | self-consistency | planned |
-| V2-NUM | adversarial numerical falsification | S-NUM-FALSIFICATION, S-NUM-UNCERTAINTY | self-consistency | planned |
+| V2-NUM | adversarial numerical falsification | S-NUM-FALSIFICATION, S-NUM-UNCERTAINTY | self-consistency | implemented (V3-003B T9/T14 negative controls, V3-004 A7/A9, V3-003D D1-D4 with trapezoid negative controls); diagnostic-mode evidence @637ef82 (non-conformant, see V1-MUST-012); conformant qualification pending |
 | V2-EVID | physical evidence lineage and sufficiency | all S-PHYS-* | measured, ion-specific-tabulated, independent-monte-carlo | planned |
 | V2-BIO | external biological lookup functionality | S-CAP-PLANNING | self-consistency | implemented (V3-004); diagnostic-mode evidence @fccb687 (lookup tallies with provenance; synthetic fixture only; non-conformant, see V1-MUST-012); conformant qualification pending |
 | V2-OUTPUT | self-describing persisted scientific results | S-PROV-OUTPUT | self-consistency | planned |

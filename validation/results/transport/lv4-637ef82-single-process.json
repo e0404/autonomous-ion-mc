@@ -1,0 +1,177 @@
+{
+ "complete": true,
+ "conformant": false,
+ "deferred_steps": [
+  "05-a15-workers"
+ ],
+ "directories": [
+  "validation/generated/RUN-20261007T154510Z-9e3d2e1d/transport/lv4-637ef82-a",
+  "validation/generated/RUN-20261007T155012Z-d5549bd4/transport/lv4-637ef82-a7",
+  "validation/generated/RUN-20261007T155216Z-35151115/transport/lv4-637ef82-a9p1",
+  "validation/generated/RUN-20261007T161321Z-036bd6e4/transport/lv4-637ef82-a9p2",
+  "validation/generated/RUN-20261007T163422Z-694484e7/transport/lv4-637ef82-a9c"
+ ],
+ "execution_modes": [
+  "single-process-diagnostic"
+ ],
+ "git_sha": "637ef82f37954ae565d97edc58c675b5835f47ec",
+ "missing_steps": [],
+ "non_conformant_reasons": [
+  "deferred multiprocessing checks",
+  "execution mode single-process-diagnostic (diagnostic, not the qualification mode)"
+ ],
+ "parts": {
+  "validation/generated/RUN-20261007T154510Z-9e3d2e1d/transport/lv4-637ef82-a": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "validation/generated/RUN-20261007T155012Z-d5549bd4/transport/lv4-637ef82-a7": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "validation/generated/RUN-20261007T155216Z-35151115/transport/lv4-637ef82-a9p1": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "validation/generated/RUN-20261007T161321Z-036bd6e4/transport/lv4-637ef82-a9p2": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "validation/generated/RUN-20261007T163422Z-694484e7/transport/lv4-637ef82-a9c": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  }
+ },
+ "pass": true,
+ "problems": [],
+ "reduced_history_counts": false,
+ "steps": {
+  "01-pytest-scoring-warp-cpu": {
+   "deselected_tests": 1,
+   "exit": 0,
+   "file": "01-pytest-scoring-warp-cpu.txt",
+   "frozen_histories": null,
+   "histories": null,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "02-a16-qualified-path-regression": {
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "02-a16-qualified-path-regression.txt",
+   "frozen_histories": null,
+   "histories": null,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "03-a11-lv-python-vs-warp-cpu-256x150MeV": {
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "03-a11-lv-python-vs-warp-cpu-256x150MeV.txt",
+   "frozen_histories": 256,
+   "histories": 256,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "04-a15-chunks-cpu": {
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "04-a15-chunks-cpu.txt",
+   "frozen_histories": 200000,
+   "histories": 200000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "05-a15-workers": {
+   "exit": 0,
+   "file": "05-a15-workers.txt",
+   "frozen_histories": null,
+   "histories": null,
+   "pass": false,
+   "problems": [],
+   "reason": "multiprocessing-specific check deferred in single-process diagnostic mode (operator directive 2026-10-07)",
+   "reduced": false,
+   "status": "deferred"
+  },
+  "06-a7-step-independence": {
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "06-a7-step-independence.txt",
+   "frozen_histories": 100000,
+   "histories": 100000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "07-a8-offline-let": {
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "07-a8-offline-let.txt",
+   "frozen_histories": 100000,
+   "histories": 100000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "08-a13-let-profile-exploratory": {
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "08-a13-let-profile-exploratory.txt",
+   "frozen_histories": 400000,
+   "histories": 400000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "09-a9-part-1of2": {
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "09-a9-part-1of2.txt",
+   "frozen_histories": 100000,
+   "histories": 100000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "10-a9-part-2of2": {
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "10-a9-part-2of2.txt",
+   "frozen_histories": 100000,
+   "histories": 100000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "11-a9-compare": {
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "11-a9-compare.txt",
+   "frozen_histories": 100000,
+   "histories": 100000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  }
+ },
+ "suite": "lv4"
+}

@@ -1,0 +1,72 @@
+{
+ "complete": true,
+ "conformant": false,
+ "deferred_steps": [],
+ "directories": [
+  "validation/generated/RUN-20261007T152306Z-12322cff/transport/hr4-637ef82-full"
+ ],
+ "execution_modes": [
+  "single-process-diagnostic"
+ ],
+ "git_sha": "637ef82f37954ae565d97edc58c675b5835f47ec",
+ "missing_steps": [],
+ "non_conformant_reasons": [
+  "execution mode single-process-diagnostic (diagnostic, not the qualification mode)"
+ ],
+ "parts": {
+  "validation/generated/RUN-20261007T152306Z-12322cff/transport/hr4-637ef82-full": {
+   "pass": true,
+   "source_ok": true,
+   "subset": false
+  }
+ },
+ "pass": true,
+ "problems": [],
+ "reduced_history_counts": false,
+ "steps": {
+  "01-pytest-cuda-scoring": {
+   "deselected_tests": 12,
+   "exit": 0,
+   "file": "01-pytest-cuda-scoring.txt",
+   "frozen_histories": null,
+   "histories": null,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "02-a15-chunks-cuda": {
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "02-a15-chunks-cuda.txt",
+   "frozen_histories": 1000000,
+   "histories": 1000000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "03-a11-hr-channel-parity": {
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "03-a11-hr-channel-parity.txt",
+   "frozen_histories": {
+    "cpu32": 1000000,
+    "cpu64": 1000000,
+    "cuda32": 1000000,
+    "python": 4000
+   },
+   "histories": {
+    "cpu32": 1000000,
+    "cpu64": 1000000,
+    "cuda32": 1000000,
+    "python": 4000
+   },
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  }
+ },
+ "suite": "hr4"
+}

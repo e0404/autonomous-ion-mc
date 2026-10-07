@@ -375,4 +375,22 @@ fail-closed configuration rules.
   rehearsal-family seed 20411004, not qualification evidence): 72756 steps each, no discrete
   difference, continuous max |Delta| 0 (bit-identical).
 
-To be appended from committed result files.
+- 2026-10-07 (V3-003D, outcome at the frozen head 637ef82, under the single-process diagnostic
+  directive — NOT a conformant qualification; that remains pending the lifting of the directive and
+  the deferred worker checks): all four suites were re-run on the host. `hr` (base 20391004,
+  RUN-20261007T133232Z-35fbf308) and `lv` (RUN-20261007T135209Z-0cc694da, …135709Z-a5a8011b,
+  …141200Z-9a4fd10a, …141215Z-ab2661d6, …142636Z-17618f9f, …144409Z-5eb8e1ae, …145547Z-b1acf9c7):
+  every executed step passed under the unchanged V3-003 criteria (pytest incl. the fail-closed D1
+  NIST-water case, T1 256 histories bit-identical python vs warp-cpu, T2, T13 chunks, R1, T12 all
+  pairs, T8, T9, T10, T14); `04-t13-workers` deferred. `hr4` (base 20401004,
+  RUN-20261007T152306Z-12322cff) and `lv4` (RUN-20261007T154510Z-9e3d2e1d, …155012Z-d5549bd4,
+  …155216Z-35151115, …161321Z-036bd6e4, …163422Z-694484e7): every executed step passed; A16 in the
+  gated intended-change mode (baseline identity none → `exact-loglog-quadrature-v1`, every allowlisted
+  difference inside its bound); A9 z sd 1.014 / 1.056 / 0.958 and all-bins mean coverage 0.938 — the
+  Bragg-peak z sd exceeded one for the fourth base in a row (1.069, 1.119, 1.079, 1.056; inside
+  [0.87, 1.13]), strengthening the open observation of V3-004 amendment 5; `05-a15-workers` deferred.
+  Combined summaries: `validation/results/transport/{hr,lv,hr4,lv4}-637ef82-single-process.json`
+  (`pass: true`, `conformant: false` by design). The plan's evidence-archive table is intentionally
+  left unfilled at this head because the plan file is part of the A16 source digest (amendment 6 (g));
+  the mapping lives in the results README and here, and the next task's first commit (which deletes
+  the A16 record and advances `A16_BASELINE`) fills the table. Not a clinical claim.
