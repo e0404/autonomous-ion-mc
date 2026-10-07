@@ -285,6 +285,13 @@ precision floor of 2^-16 of a 1 mm entrance piece; the memory guard is
 `B (sum voxels + sum channel sizes) 8 bytes x workers`. Both are recorded in
 `EffectiveConfig.channels` and in the summary under `"tallies"`.
 
+**Ramp envelope.** The scored LET ramp is `S_bar = S_mid (1 -+ |gamma| f_E / 2)` with `E_mid >= E/2`
+(so a cutoff-crossing step reaches `E_cut/2`) and `f_E = dE/E_mid <= 2`. The compiler takes the
+extrema of `S_w` and `gamma` per bin of the runtime water row over `[E_cut/2, E_hi]`:
+`S_bar_max = max S_w (1 + |gamma|)` bounds LS, LS2 and ES, and `S_bar_min/max` give the LET-axis
+lookup coverage; a table with `|gamma| >= 1` (ramp possibly nonpositive) is rejected by `validate()`.
+Pieces with `S_bar <= 0` are counted in the out-of-domain counter (result invalid).
+
 **Lookup tables.** `LookupTable.from_file(path, expected_sha256=None)` reads JSON on a uniform
 (linear or log) axis in MeV/u or keV/um (water LET), per-species non-negative finite values and
 mandatory `citation`, `license`, `source`, `synthetic`; non-uniform axes are rejected and

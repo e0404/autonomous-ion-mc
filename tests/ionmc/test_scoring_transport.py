@@ -752,3 +752,76 @@ def test_piece_counts_follow_the_class_mask_of_each_channel(make_config: MakeCon
     np.testing.assert_allclose(
         r.delta(e_loc), r.n_pieces(local=True) * plan.channels[e_loc].quantum / 2
     )
+
+
+# --------------------------------------------------------------------------- ramp envelope
+
+
+class SteepSource:
+    """Synthetic stopping source ``S_mass = c E^-1.5`` (log-log slope -1.5 everywhere): the LET
+    ramp ``S_mid (1 -+ |gamma| f_E / 2)`` of a long final step can reach zero or go negative."""
+
+    name = "steep-s"
+
+    def table(self, material: Material, projectile: Any) -> StoppingTable:
+        e = np.geomspace(1.0, 500.0, 400)
+        c = 10.0
+        return build_table(
+            projectile, material, e, c * e**-1.5, e[0] ** 2.5 / (2.5 * c), {"source": "s"}
+        )
+
+
+def test_ramp_envelope_rejects_a_steep_table_at_validate(make_config: MakeConfig) -> None:
+    from ionmc.errors import UnsupportedCombinationError
+
+    cfg = _cfg(make_config, _reqs("let_t"), energy=60.0, scoring=(_grid(),), stopping=SteepSource())
+    with pytest.raises(UnsupportedCombinationError, match="not guaranteed positive"):
+        validate(cfg)
+    # without LET channels the qualified path does not look at the ramp
+    validate(replace(cfg, tallies=()))
+
+
+def test_ramp_envelope_covers_cutoff_crossing_steps(
+    make_config: MakeConfig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A large cutoff makes steps cross it: observed E_mid reaches below E_cut (but stays above
+    E_cut/2), every observed ramp value lies inside the recorded envelope, the adaptive-channel
+    accumulators stay non-negative and no ramp guard fires."""
+    seen: list[tuple[float, float, float]] = []
+    orig = ReferenceChannelScorer.begin_step
+
+    def spy(self: ReferenceChannelScorer, e_mid: float, de_mean: float, s_act: float) -> None:
+        orig(self, e_mid, de_mean, s_act)
+        half = 0.5 * self.k * s_act
+        seen.append((e_mid, self.s_mid - abs(half), self.s_mid + abs(half)))
+
+    monkeypatch.setattr(ReferenceChannelScorer, "begin_step", spy)
+    e_cut = 4.0
+    cfg = _cfg(
+        make_config, _reqs("let_t", "let_d", "let_d_eps"), energy=12.0, n=300, n_batches=6,
+        seed=5, e_cut=e_cut, scoring=(_grid(nz=30, dz=0.5),),
+    )  # fmt: skip
+    r = Run(cfg)
+    assert len(seen) > 100
+    e_mid = np.array([x[0] for x in seen])
+    assert e_mid.min() < e_cut and e_mid.min() >= 0.5 * e_cut  # cutoff-crossing steps exist
+    lo = np.array([x[1] for x in seen])
+    hi = np.array([x[2] for x in seen])
+    b = r.plan.bounds
+    assert lo.min() >= b["S_w_min_mev_per_mm"] > 0.0
+    assert hi.max() <= b["S_w_max_mev_per_mm"]
+    assert (r.acc >= 0).all()
+    assert r.raw.channels is not None and r.raw.channels.lookup_out_of_domain == 0
+
+
+def test_nonpositive_ramp_is_flagged_at_runtime(make_config: MakeConfig) -> None:
+    """The hook never scores a nonpositive ramp silently: a piece with ``S_bar <= 0`` increments
+    the out-of-domain counter (python hook; the kernel has the same guard on the tally row), which
+    invalidates the result. A state inside the envelope does not."""
+    plan, eff = _hook_plan(make_config, _reqs("let_t"), ())
+    sc = ReferenceChannelScorer(plan, eff.requested.scoring, 4, tables=eff.tables)
+    sc.set_step_state(4.0, -3.0, 30.0, 0.5)  # S_bar = 4 - 3 tau
+    sc.score_piece(0, 0, 0, 1.0, 0.5, 0.1, 0, 0, CLASS_STEP)  # tau = 0.5: S_bar = 2.5 > 0
+    assert sc.lookup_ood == 0
+    sc.score_piece(0, 0, 0, 1.0, 2.0, 0.1, 0, 0, CLASS_STEP)  # tau = 2: S_bar = -2 <= 0
+    assert sc.lookup_ood == 1

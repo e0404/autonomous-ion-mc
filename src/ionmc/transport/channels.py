@@ -297,6 +297,84 @@ def water_s_extrema(
     return float(cand.min()), float(cand.max()), s_ref
 
 
+RAMP_LOSS_RATIO_MAX = 2.0
+"""Largest ``f_E = dE_mean / E_mid`` of a step: ``dE_mean <= E`` (the CSDA mean loss is a
+difference ``E - E_1`` of the range inversion with ``E_1 >= 0``, at most the whole energy in the
+final range step) and ``E_mid = E - dE_mean / 2 >= E / 2``, so ``f_E <= 1 / (1/2) = 2``."""
+
+
+def water_ramp_envelope(
+    water: StoppingTable,
+    tables: TransportTables,
+    e_lo_mev: float,
+    e_hi_mev: float,
+    a: int,
+) -> dict[str, float]:
+    """Envelope of the water stopping power *actually scored* by the channels (decision 0040).
+
+    A step starting at ``E in (e_lo, e_hi]`` has the hook midpoint energy ``E_mid = E - dE/2`` with
+    ``0 < dE <= E`` (so ``E_mid >= E/2 > e_lo/2``: a cutoff-crossing step reaches below the
+    cutoff) and the ramp ``S(tau) = S_mid + k tau``, ``k = -gamma S_mid dE / (E_mid s_act)``,
+    ``|tau| <= s_act/2``; hence ``S in S_mid (1 -+ amp(E_mid))`` with
+    ``amp = |gamma(E_mid)| f_E / 2`` (evaluated per table bin, the extrema taken over bins),
+    ``f_E <= RAMP_LOSS_RATIO_MAX = 2``. ``S_mid`` ranges over the
+    water table over ``[e_lo/2, e_hi]`` (clamped to the table floor, where the runtime clamps),
+    ``gamma`` is the largest log-log slope of the runtime water row over the bins of that range.
+    Returns ``S_mid`` extrema, ``gamma_max``, ``amp`` and the ramp extrema ``S_bar_min/max``;
+    fails closed if ``amp >= 1`` (the ramp could reach zero or negative: never clamped)."""
+    floor_mev = float(water.energy_per_u[0]) * a
+    e_lo_mid = max(0.5 * e_lo_mev, floor_mev)
+    s_lo_mid, s_hi_mid, s_ref = water_s_extrema(water, min(e_lo_mid, e_hi_mev), e_hi_mev, a)
+    row = tables.water_ln_s_mass
+    if row is not None and row.size >= 2:
+        inv = tables.water_inv_dln_e
+        n_bins = row.size - 1
+        gam = np.diff(row) * inv  # d ln S / d ln E of every bin
+        edges = tables.water_ln_e0 + np.arange(row.size) / inv  # ln E of the grid points
+        lo, hi = math.log(0.5 * e_lo_mev), math.log(e_hi_mev)
+        pts = np.concatenate([[lo], edges[(edges > lo) & (edges < hi)], [hi]])
+        rho_w = tables.water_density_g_cm3
+
+        def s_at(ln_e: float) -> float:  # as the runtime: clamped, log-log linear in the bin
+            t = min(max((ln_e - tables.water_ln_e0) * inv, 0.0), float(n_bins))
+            i = min(int(math.floor(t)), n_bins - 1)
+            return math.exp(row[i] + (t - i) * (row[i + 1] - row[i])) * rho_w / 10.0
+
+        s_bar_lo, s_bar_hi, gamma, amp = math.inf, 0.0, 0.0, 0.0
+        for x0, x1 in zip(pts[:-1], pts[1:], strict=True):
+            ib = min(max(int(math.floor(((0.5 * (x0 + x1)) - tables.water_ln_e0) * inv)), 0),
+                     n_bins - 1)  # fmt: skip
+            g_i = abs(float(gam[ib]))
+            a_i = g_i * RAMP_LOSS_RATIO_MAX / 2.0
+            ends = (s_at(float(x0)), s_at(float(x1)))
+            s_bar_lo = min(s_bar_lo, min(ends) * (1.0 - a_i))
+            s_bar_hi = max(s_bar_hi, max(ends) * (1.0 + a_i))
+            gamma, amp = max(gamma, g_i), max(amp, a_i)
+    else:  # no runtime row: the nodes of the water table (one global slope, conservative)
+        ln_s = np.log(water.s_el_linear)
+        ln_e = np.log(water.energy_per_u)
+        gamma = float(np.max(np.abs(np.diff(ln_s) / np.diff(ln_e))))
+        amp = gamma * RAMP_LOSS_RATIO_MAX / 2.0
+        s_bar_lo, s_bar_hi = s_lo_mid * (1.0 - amp), s_hi_mid * (1.0 + amp)
+    if not math.isfinite(amp) or amp >= 1.0 or not s_bar_lo > 0.0:
+        raise fail(
+            f"the water stopping-power ramp is not guaranteed positive: the largest log-log slope "
+            f"|gamma| = {gamma:g} of the water table over [{e_lo_mid:g}, {e_hi_mev:g}] MeV gives "
+            f"the ramp amplification {amp:g} >= 1 (S_bar = S_mid (1 -+ |gamma| f_E / 2), "
+            f"f_E <= {RAMP_LOSS_RATIO_MAX:g}), so S_bar could be zero or negative; LET channels "
+            "cannot be scored with this stopping-power table"
+        )
+    return {
+        "s_mid_min": s_lo_mid,
+        "s_mid_max": s_hi_mid,
+        "s_ref": s_ref,
+        "gamma_max": gamma,
+        "amp": amp,
+        "s_bar_min": s_bar_lo,
+        "s_bar_max": s_bar_hi,
+    }
+
+
 def _stopping_ratio_max(
     tables: TransportTables,
     material: int,
@@ -477,9 +555,11 @@ def compile_channels(
         raise fail(f"tally request names must be unique, got {names}")
 
     hpb = n_histories // n_batches
-    s_min, s_max, s_ref = water_s_extrema(water, e_cut_mev, e_hi_mev, a)
+    env = water_ramp_envelope(water, tables, e_cut_mev, e_hi_mev, a)
+    s_min, s_max, s_ref = env["s_bar_min"], env["s_bar_max"], env["s_ref"]
     e_floor_per_u = float(tables.e_min_mev.max()) / a
-    s_floor_min, s_floor_max, _ = water_s_extrema(water, float(tables.e_min_mev.max()), e_hi_mev, a)
+    env_floor = water_ramp_envelope(water, tables, float(tables.e_min_mev.max()), e_hi_mev, a)
+    s_floor_min, s_floor_max = env_floor["s_bar_min"], env_floor["s_bar_max"]
 
     specs: dict[tuple[Any, ...], _Spec] = {}
     qdefs: list[tuple[TallyRequest, str, tuple[Any, ...], tuple[Any, ...] | None, str, str]] = []
@@ -762,6 +842,8 @@ def compile_channels(
         for r, kind, num, den, units, definition in qdefs
     )
     bounds = {
+        "gamma_max": env["gamma_max"],
+        "ramp_amplification": env["amp"],
         "S_w_min_mev_per_mm": s_min,
         "S_w_max_mev_per_mm": s_max,
         "S_w_ref_mev_per_mm": s_ref,

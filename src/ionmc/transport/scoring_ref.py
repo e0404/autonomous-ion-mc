@@ -126,6 +126,8 @@ class ReferenceChannelScorer:
         if cls == CLASS_STEP:
             s_bar, e_bar = SC.piece_state(self.s_mid, self.k, self.e_mid, self.e_dot, tau)
             m1, m2 = SC.piece_moments(s_bar, self.k, length)
+            if s_bar <= 0.0:  # compile-time envelope violated: invalidate the result
+                self.lookup_ood += 1
         else:
             s_bar = e_bar = m1 = m2 = 0.0
         for ci in range(plan.ch_begin[g], plan.ch_end[g]):

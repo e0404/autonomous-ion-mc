@@ -204,6 +204,9 @@ def make_kernel_support(real: type) -> SimpleNamespace:
         if cls == 1:
             s_bar, e_bar = SC.piece_state(s_mid, k, e_mid, e_dot, tau)
             m1, m2 = SC.piece_moments(s_bar, k, length)
+            if s_bar <= D(0.0):  # compile-time envelope violated: invalidate the result
+                c_neg = chan.res_base + chan.n_res
+                tally_rows[tid, c_neg] = tally_rows[tid, c_neg] + D(1.0)
         for ci in range(chan.ch_begin[g], chan.ch_end[g]):
             sel = int(0)
             if (chan.ch_i[ci, 1] & cls) != 0 and chan.ch_sp[ci, species] != 0:

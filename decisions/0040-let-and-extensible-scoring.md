@@ -171,6 +171,20 @@ pseudo-species; the same bound is used). The rounding bound of a channel uses th
 classes in its class mask (edep and dose: both; the excluded-energy channel: local; all others:
 step), so that the reported `rounding_bound` is a deterministic bound.
 
+**Ramp envelope (fail closed, review amendment).** The hook scores `S_bar = S_mid + k tau` with
+`S_mid = S_w(E_mid)`, `E_mid = E - dE/2`, `k = -gamma S_mid dE / (E_mid s_act)` and
+`|tau| <= s_act/2`, hence `S_bar in S_mid (1 -+ |gamma| f_E / 2)`, `f_E = dE/E_mid`. The CSDA mean
+loss is `E - E_1` with `E_1 >= 0`, so `dE <= E` and `E_mid >= E/2`: a step that crosses the cutoff
+(`E > E_cut`) reaches `E_mid > E_cut/2` (the configuration already requires `E_cut >= 2 x` the
+table floor) and `f_E <= 2`, so the amplification is at most `|gamma|`. `compile_channels`
+evaluates, per bin of the runtime water row over `[E_cut/2, E_hi]`, the end values of `S_w` and the
+bin slope `gamma`, and takes `S_bar_max = max S_w (1 + |gamma|)` and `S_bar_min = min S_w
+(1 - |gamma|)`. `S_bar_max` replaces `S_max` in the LS, LS2 and ES bounds; `S_bar_min/max` (with the
+envelope started at the table floor) give the coverage of a LET lookup axis. If any bin has
+`|gamma| >= 1` (the ramp could reach zero or become negative) the configuration is rejected in
+`validate()`, never clamped. A runtime guard counts any piece with `S_bar <= 0` in the
+out-of-domain counter, which invalidates the result.
+
 **Admissible lookup magnitude (fail closed, review amendment).** The largest value of a lookup
 table over the species a request selects must lie in `[2^-60, 2^60]` (or the table is all zero,
 rejected separately). Then the FE exponent `k = 30 - ceil(log2 f_max)` is in `[-30, 90]`, the scale
@@ -181,9 +195,9 @@ and its units).
 **Precision floor (fail closed).** `q_c <= 2^-16 u_c` with `u_c = 1 mm S_ref^j`, `j` the power of S
 in the kind; that bounds the relative rounding of a 1 mm entrance piece by 1.5e-5. A configuration
 that violates the floor raises before transport. Example (water, protons, 150 MeV, E_cut 2 MeV;
-S_max 16.2 MeV/mm, B_L about 197 mm, B_LS about 188 MeV, B_LS2 about 3.0e3): hpb 1e6 gives
-`q_L = q_LS = 2^-34`, `q_LS2 = 2^-30`; hpb 1e7 gives `2^-31`, `2^-31`, `2^-27`; hpb 2.86e7 (the E
-limit) gives `2^-29`, `2^-29`, `2^-25`. All are far inside the floor; 1e8 hpb already fails closed on
+ramp envelope S_bar_max 45.1 MeV/mm (see the ramp envelope below), B_L about 197 mm, B_LS about
+188 MeV, B_LS2 about 8.5e3): hpb 1e6 gives `q_L = q_LS = 2^-34`, `q_LS2 = 2^-29`; hpb 1e7 gives
+`2^-31`, `2^-31`, `2^-25`; hpb 2.86e7 (the E limit) gives `2^-29`, `2^-29`, `2^-24`. All are far inside the floor; 1e8 hpb already fails closed on
 E by the existing rule.
 
 **Residuals.** Every channel except N has one per-history float64 tally column `sum(x - n q_c)`,
