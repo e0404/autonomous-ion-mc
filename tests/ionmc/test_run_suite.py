@@ -1150,6 +1150,47 @@ def test_a16_gate_t1_bounds_every_allowlisted_field() -> None:
         grid__dose__batch_energy_mev=_with(spike)))  # fmt: skip
 
 
+@pytest.mark.parametrize("bad", [np.nan, np.inf, -np.inf])
+@pytest.mark.parametrize("spec", [T13, T1])
+def test_a16_gate_rejects_non_finite_values_in_every_family(spec: str, bad: float) -> None:
+    """NaN/Inf must never satisfy a bound or pass a digest comparison (fail closed)."""
+    rec = _load("run_suite").A16_INTENDED_CHANGE
+    fam = spec.split(":")[0]
+    base = _synthetic_raw(spec)
+    assert _violations(rec, base, _perturbed(base, spec), spec) == []
+    for field in rec["allowed_differing_fields"][fam]:
+        key = f"{spec}|{field}"
+        assert key in base, field
+
+        def poison(a: np.ndarray) -> np.ndarray:
+            a = np.array(a, dtype=np.float64)
+            a.flat[0] = bad
+            return a
+
+        for tree in ("current", "baseline", "both"):
+            b, c = dict(base), _perturbed(base, spec)
+            if tree in ("current", "both"):
+                c[key] = poison(c[key])
+            if tree in ("baseline", "both"):
+                b[key] = poison(b[key])
+            v = _violations(rec, b, c, spec)
+            assert any("non-finite" in x for x in v), (field, tree, v)
+    # a digest-compared (non-allowlisted) field, stable NaN bytes in both trees
+    b, c = dict(base), _perturbed(base, spec)
+    b[f"{spec}|counters.n_steps"] = c[f"{spec}|counters.n_steps"] = np.array(bad)
+    assert any("non-finite" in x for x in _violations(rec, b, c, spec))
+
+
+def test_a16_caps_are_nan_safe() -> None:
+    st = _load("steps_v4")
+    assert st._over(np.array([1.0, np.nan]), 5.0) == float("inf")
+    assert st._over(np.array([1.0, 7.0]), 5.0) == 2.0 and st._over(np.array([1.0]), 5.0) == 0.0
+    assert st._outside(np.array([[0.0, np.nan, 0.0]]), [-1] * 3, [1] * 3) == float("inf")
+    mixed = {"a": np.array([1.0]), "b": np.array([np.inf]), "c": np.array(True)}
+    mixed["d"] = np.array([np.nan, 1.0])
+    assert st.nonfinite_fields(mixed) == ["b", "d"]
+
+
 def test_a16_source_digest_binds_the_record_to_the_source_tree() -> None:
     run, st = _load("run_suite"), _load("steps_v4")
     rec = run.A16_INTENDED_CHANGE
@@ -1162,6 +1203,29 @@ def test_a16_source_digest_binds_the_record_to_the_source_tree() -> None:
     assert st.verify_source_digest(rec, digest) == digest
     with pytest.raises(SystemExit, match="exact source state"):
         st.verify_source_digest(rec, "0" * 64)
+    # run_suite.py and the plan block are hashed, with only the two self-referential literals masked
+    entries = run.a16_source_entries()
+    assert run.a16_digest_of(entries) == digest
+    rs, plan = run.A16_RUN_SUITE_FILE, run.A16_PLAN_FILE
+    assert rs in entries and plan in entries
+
+    def changed(rel: str, old: str, new: str) -> str:
+        e = dict(entries)
+        text = e[rel].decode()
+        assert old in text, old
+        e[rel] = text.replace(old, new, 1).encode()
+        return run.a16_digest_of(e)
+
+    assert changed(rs, '"voxel_rel_max": 0.037', '"voxel_rel_max": 0.5') != digest  # a bound
+    assert changed(rs, "def a16_normalize", "def a16_normalise") != digest  # the digest function
+    assert changed(plan, '"voxel_rel_max": 0.037', '"voxel_rel_max": 0.5') != digest  # plan block
+    assert changed(rs, '"MASKED"', '"MASKED"') == digest
+    lit = '"source_digest": "' + rec["source_digest"] + '"'
+    text = (REPO / rs).read_text()
+    assert lit in text and lit in (REPO / plan).read_text()
+    e = dict(entries)
+    e[rs] = run.a16_normalize(text.replace(lit, '"source_digest": "0"')).encode()
+    assert run.a16_digest_of(e) == digest  # only the self-referential value is free
     cmd = [sys.executable, str(SCRIPTS / "run_suite.py"), "--print-a16-source-digest"]
     out = subprocess.run(cmd, capture_output=True, text=True, check=True)
     assert out.stdout.strip() == digest

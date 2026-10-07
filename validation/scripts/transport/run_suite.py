@@ -482,12 +482,13 @@ A16_INTENDED_CHANGE: dict[str, Any] | None = {
             "trace_discrete_out_of_range": 0.0,
         },
     },
-    # sha256 of the source set (a16_source_digest(), run_suite.py itself and the plan block
-    # excluded): the record is valid only for exactly this source state.
-    "source_digest": "53d5c1002ccd659b9ae7f026afea0751f42224a492b38bccfa9295094a72e64f",
+    # sha256 of the source set (a16_source_digest(): every hashed file including this one and the
+    # plan block, with only the two self-referential digest literals masked): the record is valid
+    # only for exactly this source state.
+    "source_digest": "839400c4fcf2ab5faf4035a8198a4c79738642e6deffd4abb0183106519e3f5c",
     # sha256 of the delimited block of validation/plans/v3-003d-acceptance.md that states this
     # record (without this key), verified by the step at run time.
-    "plan_block_sha256": "816cbb8cfe4285f032685a50fb69141f8f6b3229de4d78f2df0062e3d6588852",
+    "plan_block_sha256": "a18202595d4402fbd76343328a48c65d2c3440291b03ac065f4ca8c51dc9b093",
 }
 """The one recorded exception to the fail-closed A16 regression of the ``lv4`` suite (plan
 amendment 6 of V3-004). While it is not ``None``, the ``lv4`` step runs ``--mode intended-change``
@@ -602,24 +603,45 @@ A16_PLAN_BEGIN, A16_PLAN_END = (
 )
 
 
-def a16_source_digest(suite: str = "lv4") -> str:
-    """sha256 over ``path sha256`` lines of every hashed source file of ``suite``, excluding this
-    file (it holds the A16 record) and, in the V3-003D plan, the A16 block (it states the digest).
-    The A16 intended-change record is valid only for the source state with this digest: any later
-    change to a hashed file requires a conscious refresh (or deletion) of the record."""
-    lines = []
+A16_RUN_SUITE_FILE = "validation/scripts/transport/run_suite.py"
+A16_SELF_REFERENCE = re.compile(r'("(?:source_digest|plan_block_sha256)": )"[^"]*"')
+
+
+def a16_normalize(text: str) -> str:
+    """``text`` with only the self-referential digest literals of the A16 record
+    (``"source_digest": "..."`` and ``"plan_block_sha256": "..."``) replaced by a fixed
+    placeholder; everything else (the record, its bounds, the gate, the plan block) stays hashed."""
+    return A16_SELF_REFERENCE.sub(r'\1"MASKED"', text)
+
+
+def a16_source_entries(suite: str = "lv4") -> dict[str, bytes]:
+    """``{relative path: bytes}`` of the hashed source set of ``suite`` as hashed for the A16
+    binding: ``run_suite.py`` and the V3-003D plan in the normalized form of :func:`a16_normalize`."""
+    out: dict[str, bytes] = {}
     for f in source_files(suite):
         rel = str(f.relative_to(REPO))
-        if rel == "validation/scripts/transport/run_suite.py":
-            continue
-        if rel == A16_PLAN_FILE:
-            t = f.read_text()
-            i, j = t.index(A16_PLAN_BEGIN), t.index(A16_PLAN_END) + len(A16_PLAN_END)
-            h = hashlib.sha256((t[:i] + t[j:]).encode()).hexdigest()
-        else:
-            h = sha256(f)
-        lines.append(f"{rel} {h}")
+        raw = f.read_bytes()
+        out[rel] = (
+            a16_normalize(raw.decode()).encode()
+            if rel in (A16_RUN_SUITE_FILE, A16_PLAN_FILE)
+            else raw
+        )
+    return out
+
+
+def a16_digest_of(entries: dict[str, bytes]) -> str:
+    """sha256 over the sorted ``path sha256`` lines of ``entries``."""
+    lines = [f"{rel} {hashlib.sha256(b).hexdigest()}" for rel, b in entries.items()]
     return hashlib.sha256("\n".join(sorted(lines)).encode()).hexdigest()
+
+
+def a16_source_digest(suite: str = "lv4") -> str:
+    """The A16 source digest: :func:`a16_digest_of` of :func:`a16_source_entries`, i.e. every
+    hashed source file of ``suite`` including ``run_suite.py`` (the record, its bounds and this
+    function) and the V3-003D plan block, with only the two self-referential digest values masked.
+    The A16 intended-change record is valid only for the source state with this digest: any later
+    change to a hashed file requires a conscious refresh (or deletion) of the record."""
+    return a16_digest_of(a16_source_entries(suite))
 
 
 def environment_text(

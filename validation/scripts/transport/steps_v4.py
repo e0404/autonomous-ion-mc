@@ -1020,17 +1020,31 @@ def _rel(x: Any, y: Any) -> float:
 
 
 def _over(values: Any, limit: float) -> float:
-    """Amount by which the largest value exceeds ``limit`` (0 when within)."""
-    return max(0.0, float(np.max(values)) - limit)
+    """Amount by which the largest value exceeds ``limit`` (0 when within; infinite for NaN, so a
+    NaN can never satisfy a cap)."""
+    top = float(np.max(values))
+    return math.inf if math.isnan(top) else max(0.0, top - limit)
 
 
 def _outside(pos: Any, lo: Any, hi: Any) -> float:
     """Largest distance [mm] of any (..., 3) position outside the box ``lo``..``hi`` (0 inside)."""
     p = np.asarray(pos, dtype=np.float64)
+    if not np.all(np.isfinite(p)):
+        return math.inf
     return float(max(np.max(np.asarray(lo) - p), np.max(p - np.asarray(hi)), 0.0))
 
 
 TRACE_DISCRETE = ("history", "ix", "iy", "iz", "reason", "step", "blocks")
+
+
+def nonfinite_fields(raw: Any) -> list[str]:
+    """Keys of the raw A16 values (``{key: array}``) that hold a NaN or infinity."""
+    bad = []
+    for k in sorted(raw):
+        a = np.asarray(raw[k])
+        if a.dtype.kind in "fc" and not np.all(np.isfinite(a)):
+            bad.append(k)
+    return bad
 
 
 def a16_metrics(
@@ -1139,6 +1153,13 @@ def a16_gate(record: dict[str, Any], base: Any, cur: Any) -> dict[str, Any]:
         for f in sorted(set(fb) & set(fc)):
             if fb[f].shape != fc[f].shape or not np.array_equal(fb[f], fc[f]):
                 differing.append(f)
+        nonfinite = [f"{t}: non-finite values in {f}"
+                     for t, d in (("baseline", fb), ("current", fc)) for f in nonfinite_fields(d)]  # fmt: skip
+        if nonfinite:
+            viol.extend(nonfinite)
+            report[spec] = {"differing_fields": differing, "measured": {}, "violations": viol}
+            all_ok = False
+            continue
         try:
             m = a16_metrics(fam, record["physical_limits"][fam], fb, fc)
         except (KeyError, ValueError) as e:
@@ -1183,6 +1204,7 @@ def step_a16(a: argparse.Namespace) -> int:
     env_extra = {k: v for k, v in os.environ.items() if k.startswith("WARP")}
     dumps = tempfile.TemporaryDirectory(prefix="a16-raw-")
     raw_b, raw_c = Path(dumps.name) / "baseline.npz", Path(dumps.name) / "current.npz"
+    raw_w = Path(dumps.name) / "with_tallies.npz"
     with tempfile.TemporaryDirectory(prefix="a16-baseline-") as tmp:
         tar = subprocess.run(["git", "-C", str(REPO), "archive", "--format=tar", full, "src"],
                              capture_output=True, timeout=300)  # fmt: skip
@@ -1192,7 +1214,7 @@ def step_a16(a: argparse.Namespace) -> int:
         baseline = _digests(Path(tmp) / "src", "none", specs, env_extra, raw_b)
     current = {
         "no_tallies": _digests(REPO / "src", "none", specs, env_extra, raw_c),
-        "with_tallies": _digests(REPO / "src", "all", specs, env_extra),
+        "with_tallies": _digests(REPO / "src", "all", specs, env_extra, raw_w),
     }
     regression = a.mode == "regression"
     identities = {
@@ -1208,6 +1230,12 @@ def step_a16(a: argparse.Namespace) -> int:
             identities["baseline"].get(field_),
             identities["current"].get(field_),
         )
+    nonfinite: dict[str, list[str]] = {}
+    for tag, path in (("baseline", raw_b), ("current", raw_c), ("with_tallies", raw_w)):
+        with np.load(path) as z:  # digests compare bytes: NaN bytes would pass, so reject them
+            bad = nonfinite_fields({k: z[k] for k in z.files})
+        if bad:
+            nonfinite[tag] = bad
     gate = None
     if not regression:
         assert record is not None
@@ -1215,7 +1243,7 @@ def step_a16(a: argparse.Namespace) -> int:
             gate = a16_gate(record, {k: nb[k] for k in nb.files}, {k: nc[k] for k in nc.files})
     dumps.cleanup()
     out: dict[str, Any] = {}
-    ok = gate is None or gate["ok"]
+    ok = (gate is None or gate["ok"]) and not nonfinite
     for spec in A16_SPECS:
         b = baseline["digests"][spec]
         n, w = current["no_tallies"]["digests"][spec], current["with_tallies"]["digests"][spec]
@@ -1253,6 +1281,7 @@ def step_a16(a: argparse.Namespace) -> int:
             "gate_ok": gate["ok"] if gate else None,
         },
         "fields": "per-grid batch energy, energy balance, counters, end state and trace digests",
+        "nonfinite_fields": {t: v[:10] for t, v in nonfinite.items()},
         "specs": out,
         "pass": bool(ok),
     }
