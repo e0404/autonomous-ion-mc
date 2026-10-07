@@ -408,8 +408,10 @@ old float32 bookkeeping shifted a deterministic end depth by about 2e-5 of the r
 `test_float32_kernel_keeps_energy_and_range_bookkeeping_in_double` guards it); on GPUs with a low float64 rate this is the
 cost of the float64 transcendental functions per step. Outputs: the deposit grid
 `edep[B, sum(n_voxels)]` of int64 fixed-point quanta (integer atomic adds into batch `h mod B`), per-history
-float64 `tally_rows[chunk, 6 + 2 G]` (tallies, outside deposits, quantization residuals) and int32
-`counter_rows[chunk, 8]` (each written by its own thread), and with diagnostics the end state (position,
+float64 `tally_rows[chunk, 6 + 2 G (+ C_res + 2 with scoring channels)]` (tallies, outside deposits, quantization
+residuals; with channels one residual column per non-count channel, the lookup out-of-domain count and the
+path-bound-exceeded flag) and int32
+`counter_rows[chunk, 9]` (each written by its own thread), and with diagnostics the end state (position,
 direction, energy, code) per history.
 
 **Exact tallies.** The host reduces the per-history rows with exact summation (`exact_components`: repeated
