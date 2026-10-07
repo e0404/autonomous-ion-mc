@@ -190,7 +190,12 @@ out-of-domain counter, which invalidates the result.
 domain: `r_max = max (1 + |gamma_w(E)|) S_w(E) / (rho_min S_m(E))` over `[E_cut/2, E_hi]` for every
 material row (union of material and water-row nodes plus both ends; both stopping powers are
 log-log piecewise linear, so the ratio is monotone between nodes), with the ramp amplification of
-the runtime water-row bin applied to `S_w` as in the envelope above. The previous domain
+the runtime water-row bin applied to `S_w` as in the envelope above. Every quantity of the proof
+(`S_w`, `gamma_w`, `S_m`, `S_ref`, and the envelope and lookup-coverage extrema) is taken from the
+*runtime rows* the scorer evaluates (`water_ln_s_mass` and the material rows), never from the
+source-table interpolant: after resampling onto the uniform runtime grid the two agree only at
+runtime nodes and differ between them (a kink inside a bin), and the candidate set is the union
+of the runtime water and material nodes plus the domain ends. The previous domain
 `[E_cut, E_hi]` was wrong because the scorer evaluates `S_w` down to `E_cut/2` and a custom material
 table may drop sharply below the cutoff. LS2 (`S_bar_max B_LS`) inherits the bound. In water
 `r_max = 1 + |gamma|`, so `B_LS` grows from 188 to 339 MeV for 150 MeV protons.
@@ -323,3 +328,10 @@ A13 against Grassberger and Paganetti (2011) is exploratory and non-gating.
   to the follow-up V3-003D (separate re-qualification, out of scope here).
 
 To be appended from committed result files.
+
+- 2026-10-07 (V3-004, known limitation recorded before merge): the water row of
+  `TransportTables` is indexed by energy per nucleon (`water.energy_per_u`), while the scorer
+  (`water_state`, kernel `step_state`) and the capacity-bound proof look it up with the ion's
+  total kinetic energy. For protons (A = 1, the only producible species in V3-004) the two
+  coincide, so nothing is affected now; when V3-009 appends ions with A > 1 the lookup must use
+  E/A (bound and scorer together). Fail-closed guard: `producible()` rejects every other species.

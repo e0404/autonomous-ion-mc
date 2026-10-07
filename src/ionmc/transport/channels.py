@@ -317,13 +317,15 @@ def water_ramp_envelope(
     cutoff) and the ramp ``S(tau) = S_mid + k tau``, ``k = -gamma S_mid dE / (E_mid s_act)``,
     ``|tau| <= s_act/2``; hence ``S in S_mid (1 -+ amp(E_mid))`` with
     ``amp = |gamma(E_mid)| f_E / 2`` (evaluated per table bin, the extrema taken over bins),
-    ``f_E <= RAMP_LOSS_RATIO_MAX = 2``. ``S_mid`` ranges over the
-    water table over ``[e_lo/2, e_hi]`` (clamped to the table floor, where the runtime clamps),
-    ``gamma`` is the largest log-log slope of the runtime water row over the bins of that range.
+    ``f_E <= RAMP_LOSS_RATIO_MAX = 2``. ``S_mid``, ``gamma`` and ``S_ref``
+    are evaluated on the *runtime* water row (``tables.water_ln_s_mass``, the interpolant the
+    scorer uses; the source table only enters through the coverage check and, without a runtime
+    row, a conservative fallback), per bin over ``[e_lo/2, e_hi]`` (clamped as the runtime clamps).
     Returns ``S_mid`` extrema, ``gamma_max``, ``amp`` and the ramp extrema ``S_bar_min/max``;
     fails closed if ``amp >= 1`` (the ramp could reach zero or negative: never clamped)."""
     floor_mev = float(water.energy_per_u[0]) * a
     e_lo_mid = max(0.5 * e_lo_mev, floor_mev)
+    # coverage of the source table (fails closed); every value below comes from the runtime row
     s_lo_mid, s_hi_mid, s_ref = water_s_extrema(water, min(e_lo_mid, e_hi_mev), e_hi_mev, a)
     row = tables.water_ln_s_mass
     if row is not None and row.size >= 2:
@@ -341,12 +343,15 @@ def water_ramp_envelope(
             return math.exp(row[i] + (t - i) * (row[i + 1] - row[i])) * rho_w / 10.0
 
         s_bar_lo, s_bar_hi, gamma, amp = math.inf, 0.0, 0.0, 0.0
+        s_lo_mid, s_hi_mid = math.inf, 0.0
+        s_ref = s_at(hi)  # runtime row at E_hi
         for x0, x1 in zip(pts[:-1], pts[1:], strict=True):
             ib = min(max(int(math.floor(((0.5 * (x0 + x1)) - tables.water_ln_e0) * inv)), 0),
                      n_bins - 1)  # fmt: skip
             g_i = abs(float(gam[ib]))
             a_i = g_i * RAMP_LOSS_RATIO_MAX / 2.0
             ends = (s_at(float(x0)), s_at(float(x1)))
+            s_lo_mid, s_hi_mid = min(s_lo_mid, min(ends)), max(s_hi_mid, max(ends))
             s_bar_lo = min(s_bar_lo, min(ends) * (1.0 - a_i))
             s_bar_hi = max(s_bar_hi, max(ends) * (1.0 + a_i))
             gamma, amp = max(gamma, g_i), max(amp, a_i)
@@ -392,30 +397,42 @@ def _stopping_ratio_max(
     there, and a custom material table may drop sharply below the cutoff while the ratio stays
     ordinary above it. ``amp(E)`` is the ramp amplification ``|gamma_w(E)|`` of the runtime water
     row bin (the larger of the two bins at a node; ``amp_fallback`` without a row), applied to
-    ``S_w`` as in :func:`water_ramp_envelope`. Both stopping powers are log-log piecewise linear
-    between the union of the material and water nodes, so the ratio is monotone between them and
-    the maximum is attained at a node or an end of the interval; the ratio candidate of the LS
-    bound is therefore *proven* over the complete reachable domain (it is not dropped)."""
+    ``S_w`` as in :func:`water_ramp_envelope`. Both stopping powers are taken from the *runtime*
+    rows the scorer uses (``tables.water_ln_s_mass`` and the material row; never the
+    source-table interpolant, which differs between runtime nodes after resampling) and are
+    log-log piecewise linear
+    between the union of the runtime material and water nodes, so the ratio is monotone between
+    them and the maximum is attained at a node or an end of the interval; the ratio candidate of
+    the LS bound is therefore *proven* over the complete reachable domain (it is not dropped)."""
     n = int(tables.n_e)
     ln_e = tables.ln_e0[material] + np.arange(n) / tables.inv_dln_e[material]
-    nodes = [np.exp(ln_e)]
     row = tables.water_ln_s_mass
-    if row is not None and row.size >= 2:
+    have_row = row is not None and row.size >= 2
+    nodes = [np.exp(ln_e)]
+    if have_row:
+        assert row is not None
         nodes.append(np.exp(tables.water_ln_e0 + np.arange(row.size) / tables.water_inv_dln_e))
     e_all = np.concatenate(nodes)
     pts = np.concatenate([[e_lo_mev, e_hi_mev], e_all[(e_all > e_lo_mev) & (e_all < e_hi_mev)]])
     ln_s_m = np.interp(np.log(pts), ln_e, tables.ln_s_mass[material])
     s_m_mass = np.exp(ln_s_m)
-    s_w_mass = water.stopping_at(pts / a)
     amp = np.full(pts.shape, amp_fallback)
-    if row is not None and row.size >= 2:
+    if have_row:
+        assert row is not None
+        # the runtime water interpolant (log-log linear on the runtime grid), as the scorer
+        ln_ew = tables.water_ln_e0 + np.arange(row.size) / tables.water_inv_dln_e
+        s_w_mass = np.exp(np.interp(np.log(pts), ln_ew, row))
+        rho_w = tables.water_density_g_cm3
         gam = np.abs(np.diff(row)) * tables.water_inv_dln_e
         t = (np.log(pts) - tables.water_ln_e0) * tables.water_inv_dln_e
         i_hi = np.clip(np.floor(t + 1e-9).astype(int), 0, gam.size - 1)
         i_lo = np.clip(np.ceil(t - 1e-9).astype(int) - 1, 0, gam.size - 1)
         amp = np.maximum(gam[i_hi], gam[i_lo]) * RAMP_LOSS_RATIO_MAX / 2.0
+    else:  # no runtime row: the source table (conservative global amplification)
+        s_w_mass = water.stopping_at(pts / a)
+        rho_w = water.material.density_g_cm3
     # S_w,lin = s_w_mass * rho_w / 10 ; S_m,lin(least dense) = s_m_mass * rho_min / 10
-    ratio = (1.0 + amp) * s_w_mass * water.material.density_g_cm3 / (s_m_mass * rho_min)
+    ratio = (1.0 + amp) * s_w_mass * rho_w / (s_m_mass * rho_min)
     return float(ratio.max())
 
 

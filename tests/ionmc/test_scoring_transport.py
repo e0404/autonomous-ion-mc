@@ -887,3 +887,87 @@ def test_ratio_bound_covers_the_cutoff_crossing_midpoint_domain(make_config: Mak
         assert per_hist.max() <= b[key], (key, per_hist.max(), b[key])
         assert per_hist.max() > 0.0
     assert (r.acc >= 0).all()
+
+
+class KinkSource:
+    """Water with a V-shaped kink of ``ln S`` at ``e_kink`` (slopes -0.3 / +0.3), other materials
+    as :class:`DropSource`. The runtime water row is a uniform log grid resampled from this table,
+    so between its nodes the source and the runtime interpolants differ at the kink."""
+
+    name = "kink-s"
+
+    def __init__(self, e_kink: float, e_drop: float) -> None:
+        self.e_kink, self.e_drop = e_kink, e_drop
+
+    def table(self, material: Material, projectile: Any) -> StoppingTable:
+        if material.name != WATER.name:
+            return DropSource(self.e_drop).table(material, projectile)
+        e = np.unique(np.concatenate([np.geomspace(1.0, 500.0, 40), [self.e_kink]]))
+        s = 10.0 * np.exp(0.3 * np.abs(np.log(e / self.e_kink)))
+        return build_table(projectile, material, e, s, e[0] / (4.0 * s[0]), {"source": "kink"})
+
+
+def test_ratio_bound_uses_the_runtime_water_row_not_the_source_interpolant(
+    make_config: MakeConfig,
+) -> None:
+    """Review fb43008e: S_w of the bound must be the runtime-row interpolant. With a kink between
+    runtime grid nodes right at the lower end E_cut/2 of the reachable domain, the runtime
+    S_w exceeds the source-interpolant value there, the ratio bound built from the runtime rows is
+    larger than the source-based one, and it covers the observed per-history LS/LS2."""
+    from ionmc.transport.channels import _stopping_ratio_max
+
+    nz, e_hi = 30, 12.0
+    mat_index = np.concatenate([np.zeros(10), np.ones(nz - 10)]).astype(np.int32)
+    geo = VoxelGeometry(
+        origin_mm=(-30.0, -30.0, 0.0), spacing_mm=(60.0, 60.0, 1.0), shape=(1, 1, nz),
+        materials=(WATER, ALUMINIUM), material_index=mat_index.reshape(1, 1, nz),
+    )  # fmt: skip
+    # place the kink at the middle of the runtime bin that contains E_cut/2 ~ 2 MeV (a runtime
+    # grid taken from a smooth first validation; the grid depends on the energy range only)
+    t0 = validate(
+        _cfg(
+            make_config,
+            _reqs("let_t"),
+            energy=e_hi,
+            e_cut=4.0,
+            geometry=geo,
+            stopping=DropSource(4.0),
+            scoring=(_grid(nz=nz, dz=1.0),),
+        )  # fmt: skip
+    ).tables
+    assert t0 is not None and t0.water_ln_s_mass is not None
+    nodes = np.exp(t0.water_ln_e0 + np.arange(t0.water_ln_s_mass.size) / t0.water_inv_dln_e)
+    k = int(np.searchsorted(nodes, 2.0)) - 1
+    e_kink = float(np.sqrt(nodes[k] * nodes[k + 1]))
+    e_lo = float(nodes[k] ** 0.25 * nodes[k + 1] ** 0.75)  # E_cut/2, inside the kinked bin
+    e_cut = 2.0 * e_lo
+    src = KinkSource(e_kink, e_drop=e_cut)
+    cfg = _cfg(
+        make_config, _reqs("let_t", "let_d"), energy=e_hi, n=240, n_batches=240, seed=11,
+        e_cut=e_cut, geometry=geo, stopping=src, scoring=(_grid(nz=nz, dz=1.0),),
+        straggling=False, mcs=False,
+    )  # fmt: skip
+    r = Run(cfg)
+    tb = r.eff.tables
+    water = src.table(WATER, PROTON)
+    b = r.plan.bounds
+    ln_ew = tb.water_ln_e0 + np.arange(tb.water_ln_s_mass.size) / tb.water_inv_dln_e
+    s_run = float(np.exp(np.interp(np.log(e_lo), ln_ew, tb.water_ln_s_mass)))
+    s_src = float(water.stopping_at(e_lo))
+    assert s_run > s_src * (1.0 + 1e-4)  # discriminating: the two interpolants differ at E_cut/2
+    rho_min = float(geo.densities_g_cm3()[geo.material_index == 1].min())
+    ln_m = tb.ln_e0[1] + np.arange(tb.ln_s_mass[1].size) / tb.inv_dln_e[1]
+    s_m = float(np.exp(np.interp(np.log(e_lo), ln_m, tb.ln_s_mass[1])))
+    amp_e = b["ramp_amplification"]
+    ratio_src = s_src / (s_m * rho_min)  # without the (>= 1) ramp amplification
+    ratio_run = s_run / (s_m * rho_min)
+    assert amp_e == pytest.approx(0.3, rel=0.05)
+    assert ratio_run > ratio_src
+    r_new = _stopping_ratio_max(tb, 1, water, rho_min, 0.5 * e_cut, e_hi, 1, amp_e)
+    assert r_new >= ratio_run * (1 - 1e-9) > ratio_src  # the source-based value would be lower
+    assert b["r_max"] >= r_new * (1 - 1e-12)
+    for ci, key in ((r.q_of("let_t").numerator, "B_LS_mev"), (r.q_of("let_d").numerator, "B_LS2")):
+        c = r.plan.channels[ci]
+        per_hist = r.acc[:, c.offset : c.offset + c.size].sum(axis=1) * c.quantum
+        assert 0.0 < per_hist.max() <= b[key]
+    assert (r.acc >= 0).all()
