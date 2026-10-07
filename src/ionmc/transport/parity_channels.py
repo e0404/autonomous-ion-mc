@@ -2,7 +2,8 @@
 ``validation/plans/v3-004-acceptance.md``; the frozen T12 machinery of
 :mod:`ionmc.transport.parity` is reused unchanged).
 
-* :func:`channel_t12_observables` builds, per batch and per primary, the **linear** depth profiles of
+* :func:`channel_t12_observables` builds, per batch and per primary, the **linear** depth profiles
+  of
   the channels ``L``, ``LS``, ``LS2``, ``ES``, ``E_step`` and ``FE`` (a synthetic lookup, when
   requested), the depth-integrated fluence spectrum, and the channel totals of ``L``, ``LS``,
   ``LS2`` and ``ES`` as scalars. Linear channels are compared because the frozen T12 grouping and
@@ -85,7 +86,9 @@ def channel_t12_observables(result: Result, grid: str = "idd") -> T12Observables
     for label, ci in labels.items():
         v = _batch_values(result, ci)
         if label == "spectrum":
-            nvox = next(g for g in result.effective_config.requested.scoring if g.name == grid).n_voxels
+            nvox = next(
+                g for g in result.effective_config.requested.scoring if g.name == grid
+            ).n_voxels
             v = v.reshape(v.shape[0], nvox, -1).sum(axis=1)  # depth-integrated bins
         arrays[label] = v
         if label in ("L", "LS", "LS2", "ES"):
@@ -125,10 +128,14 @@ def ratio_z_report(a: Result, b: Result, grid: str = "idd") -> dict[str, Any]:
     return out
 
 
-def compare_channel_runs(a: Result, b: Result, grid: str = "idd", **t12_kwargs: Any) -> dict[str, Any]:
+def compare_channel_runs(
+    a: Result, b: Result, grid: str = "idd", **t12_kwargs: Any
+) -> dict[str, Any]:
     """A11 (HR) verdict for two independent samples: ``t12_compare`` of the linear channel
     observables (gating) plus the reported ratio z (non-gating). ``pass`` is the T12 verdict."""
-    t12 = t12_compare(channel_t12_observables(a, grid), channel_t12_observables(b, grid), **t12_kwargs)
+    t12 = t12_compare(
+        channel_t12_observables(a, grid), channel_t12_observables(b, grid), **t12_kwargs
+    )
     return {"t12": t12, "ratio_z": ratio_z_report(a, b, grid), "pass": bool(t12["pass"])}
 
 

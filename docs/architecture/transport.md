@@ -353,7 +353,9 @@ residual). Per step with `s_act > 0`, `step_state` does one water lookup at `E_m
 cutoff and `s_act = 0` deposits are class "local" (`score_local`). With `n_ch = 0` no scoring code runs
 and the outputs are bit-identical to the qualified path (row A16). The driver merges `acc` across chunks
 (it stays on the device) and workers (exact int64 sums). Python and warp-cpu float64 agree bit for bit
-on the channels in the cases tested (row A11-CI allows `1e-10` relative plus `n_v q_c`).
+on the channels in the cases tested (row A11-CI allows `1e-10` relative plus `n_v q_c`). Float64 CUDA and CPU trajectories are not bitwise identical (ulp-level differences of transcendental
+functions amplify through sampling and voxel crossings), so channel parity across devices is statistical (row A11-HR);
+within one device kind the integer channels are bit-identical across chunk sizes (A15).
 
 `warp-cpu` and `warp-cuda` run one kernel thread per history (`ionmc.transport.kernels`). The step loop is a
 statement-by-statement copy of `reference._history`: the same branches in the same order and the same expression
