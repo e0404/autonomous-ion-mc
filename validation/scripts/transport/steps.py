@@ -130,7 +130,10 @@ def run_cfg(
     trunc_diag: bool = False,
     memory_budget: int | None = None,
     straggling_model: str = "bohr_gamma_v1",
+    tallies: tuple[Any, ...] = (),
+    lookups: tuple[Any, ...] = (),
 ) -> Result:
+    """Run one configuration (``tallies``/``lookups``: V3-004 scoring channels, none by default)."""
     kw = {"chunk_histories": chunk} if chunk else {}
     plan = plan_workers(
         workers, backend, n_batches, scoring, n, memory_budget or STEP_MEMORY_BUDGET
@@ -163,6 +166,8 @@ def run_cfg(
             **kw,
         ),
         diagnostics=diag or DiagnosticsOptions(),
+        tallies=tallies,
+        lookups=lookups,
     )
     return Simulation(cfg).run()
 

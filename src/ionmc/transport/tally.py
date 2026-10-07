@@ -1,7 +1,9 @@
 """Partition-independent reduction of per-history tallies and diagnostics (V3-003B).
 
 Every backend writes, for each history, one row of independently accumulated float64 tallies
-(``TALLY_NAMES`` followed by the energy deposited outside each scoring grid) and one row of
+(``TALLY_NAMES``, then the energy deposited outside each scoring grid, then the quantization
+residual of each grid; with scoring channels, one residual column per channel but N and the lookup
+out-of-domain count, ``ionmc.transport.channels``) and one row of
 int32 transport-limit counters (``COUNTER_NAMES``). A history's row depends only on that
 history, so it does not depend on how histories are split into chunks, worker processes or
 threads. The host reduces the rows *exactly*: the sum of the float64 values of a column is
@@ -14,10 +16,14 @@ The per-voxel energy-deposit grids are int64 fixed-point accumulators (quantum `
 2**-30 MeV): each deposit piece (see the track-length scoring in ``ionmc.transport.reference``)
 is rounded to the nearest quantum by a deterministic function of the piece and added with an
 integer (associative) addition, so the grids are bit-identical for any partition of the
-histories and across chunk sizes, workers, and CPU/CUDA within a precision. The rounding
+histories and across chunk sizes and worker processes on one device kind (CPU against CUDA
+is compared statistically, T12, never bit for bit). The rounding
 error is at most q/2 per piece (random walk q/2 sqrt(N) over N pieces in a voxel) and is
 tallied per history and grid (``quantization`` columns) so that the energy balance closes.
 Conversion to float64 and the sum over workers happen at the reduction.
+
+The scoring channels (decision 0040) are int64 accumulators ``acc[B, sum_c size_c]`` with the same
+associativity argument; they are summed over chunks and workers as exact integers.
 
 Diagnostic arrays are per history (end state) and per step (trace); they are concatenated in
 history order.
@@ -88,11 +94,27 @@ MAX_QUANTA = 2**62
 
 
 @dataclass
+class ChannelRaw:
+    """Reduced scoring channels of a run (decision 0040): ``acc`` the int64 accumulators
+    ``[B, sum_c size_c]`` in the quanta of the channels, ``residual[r]`` the exact total of the
+    quantization residual column ``r`` (``sum(x - n q_c)`` over all pieces, float64) and
+    ``lookup_out_of_domain`` the number of lookup arguments outside their table axis (a nonzero
+    value invalidates the result) and ``path_bound_exceeded`` the number of histories whose scored
+    path length exceeded the per-history bound ``B_L`` on which the quanta rest (a nonzero value
+    invalidates the result: the capacity proof is conditional on this check, decision 0040)."""
+
+    acc: NDArray[np.int64]
+    residual: list[float]
+    lookup_out_of_domain: int
+    path_bound_exceeded: int = 0
+
+
+@dataclass
 class RawTransport:
     """Raw reduced output of a transport run (float64).
 
     ``meta`` holds backend facts (device, compile time, chunking, worker reports); it is not
-    part of the physics result.
+    part of the physics result. ``channels`` is None without scoring channels.
     """
 
     edep_mev: list[NDArray[np.float64]]
@@ -102,6 +124,7 @@ class RawTransport:
     quantization_mev: list[float] = field(default_factory=list)
     diagnostics: dict[str, Any] = field(default_factory=dict)
     meta: dict[str, Any] = field(default_factory=dict)
+    channels: ChannelRaw | None = None
 
 
 @dataclass
@@ -142,6 +165,7 @@ class PartialTransport:
     edep: list[NDArray[np.int64]]
     diagnostics: HistoryDiagnostics | None
     meta: dict[str, Any] = field(default_factory=dict)
+    channel_acc: NDArray[np.int64] | None = None
 
 
 def exact_components(values: NDArray[np.float64]) -> list[float]:
@@ -172,8 +196,12 @@ def rows_to_partial(
     edep: list[NDArray[np.int64]],
     diagnostics: HistoryDiagnostics | None,
     meta: dict[str, Any] | None = None,
+    channel_acc: NDArray[np.int64] | None = None,
 ) -> PartialTransport:
-    """Reduce per-history rows ``(n, 6 + G)`` and ``(n, 7)`` of one range to a partial result."""
+    """Reduce per-history rows ``(n, 6 + 2 G [+ C + 2])`` (fixed tallies, outside deposits,
+    quantization residuals, and with scoring channels one residual column per channel but the
+    count channels, the lookup out-of-domain count and the path-bound-exceeded flag) and
+    ``(n, 9)`` (counters) of one range to a partial result."""
     return rows_to_partial_many(
         h0,
         h1,
@@ -182,6 +210,7 @@ def rows_to_partial(
         edep,
         diagnostics,
         meta,
+        channel_acc,
     )
 
 
@@ -193,15 +222,17 @@ def rows_to_partial_many(
     edep: list[NDArray[np.int64]],
     diagnostics: HistoryDiagnostics | None,
     meta: dict[str, Any] | None = None,
+    channel_acc: NDArray[np.int64] | None = None,
 ) -> PartialTransport:
     """Assemble a :class:`PartialTransport` from already reduced pieces (chunked backends). The
-    ``accumulator_overflow`` counter is set here: a voxel at or above ``MAX_QUANTA`` (or
-    negative, i.e. wrapped) invalidates the result."""
+    ``accumulator_overflow`` counter is set here: a voxel of ``edep`` or of a scoring channel at
+    or above ``MAX_QUANTA`` (or negative, i.e. wrapped) invalidates the result."""
     counter_sums = list(counter_sums)
-    bad = any(int(a.max()) >= MAX_QUANTA or int(a.min()) < 0 for a in edep if a.size)
+    grids = list(edep) + ([] if channel_acc is None else [channel_acc])
+    bad = any(int(a.max()) >= MAX_QUANTA or int(a.min()) < 0 for a in grids if a.size)
     counter_sums[COUNTER_NAMES.index("accumulator_overflow")] += int(bad)
     return PartialTransport(
-        h0, h1, tally_components, counter_sums, edep, diagnostics, dict(meta or {})
+        h0, h1, tally_components, counter_sums, edep, diagnostics, dict(meta or {}), channel_acc
     )
 
 
@@ -224,13 +255,26 @@ def concat_partials(partials: list[PartialTransport]) -> PartialTransport:
         for p in parts:
             acc += p.edep[g]
         edep.append(acc)
-    return PartialTransport(parts[0].h0, parts[-1].h1, comps, counters, edep, None, {})
+    chan = None
+    if parts[0].channel_acc is not None:
+        chan = np.zeros_like(parts[0].channel_acc, dtype=np.int64)
+        for p in parts:
+            assert p.channel_acc is not None
+            chan += p.channel_acc
+    return PartialTransport(parts[0].h0, parts[-1].h1, comps, counters, edep, None, {}, chan)
 
 
 def merge_partials(
-    partials: list[PartialTransport], n_histories: int, n_grids: int
+    partials: list[PartialTransport],
+    n_histories: int,
+    n_grids: int,
+    n_channel_columns: int = 0,
 ) -> RawTransport:
     """Reduce the partial results of a complete, contiguous partition of ``[0, n_histories)``.
+
+    ``n_channel_columns`` is 0 without scoring channels, else ``C + 2``: the residual columns of
+    the ``C`` channels with a residual, the lookup out-of-domain count and the number of histories
+    whose path exceeded the bound ``B_L``.
 
     Fails closed (``ValueError``) for gaps, overlaps, a different number of columns or grids.
     """
@@ -244,7 +288,10 @@ def merge_partials(
         pos = p.h1
     if pos != n_histories:
         raise ValueError(f"partial results cover [0, {pos}), expected [0, {n_histories})")
-    n_cols = N_FIXED_TALLIES + 2 * n_grids
+    n_cols = N_FIXED_TALLIES + 2 * n_grids + n_channel_columns
+    for p in parts:
+        if (p.channel_acc is not None) != (n_channel_columns > 0):
+            raise ValueError("partial result and configuration disagree about scoring channels")
     for p in parts:
         if (
             len(p.tally_components) != n_cols
@@ -263,12 +310,26 @@ def merge_partials(
             acc += p.edep[g]
         edep.append(acc.astype(np.float64) * QUANTUM_MEV)
     tallies = dict(zip(TALLY_NAMES, totals[:N_FIXED_TALLIES], strict=True))
+    base = N_FIXED_TALLIES + 2 * n_grids
+    channels = None
+    if n_channel_columns > 0:
+        chan = np.zeros_like(parts[0].channel_acc, dtype=np.int64)
+        for p in parts:
+            assert p.channel_acc is not None
+            chan += p.channel_acc
+        channels = ChannelRaw(
+            acc=chan,
+            residual=totals[base : base + n_channel_columns - 2],
+            lookup_out_of_domain=int(round(totals[base + n_channel_columns - 2])),
+            path_bound_exceeded=int(round(totals[base + n_channel_columns - 1])),
+        )
     return RawTransport(
         edep_mev=edep,
         tallies=tallies,
         outside_mev=totals[N_FIXED_TALLIES : N_FIXED_TALLIES + n_grids],
-        quantization_mev=totals[N_FIXED_TALLIES + n_grids :],
+        quantization_mev=totals[N_FIXED_TALLIES + n_grids : base],
         counters=counters,
+        channels=channels,
     )
 
 

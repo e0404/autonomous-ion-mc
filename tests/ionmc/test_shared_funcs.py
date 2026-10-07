@@ -21,6 +21,7 @@ from ionmc._wpfunc import python_twin
 from ionmc.physics.em import FDM_COEFFICIENTS, make_em
 from ionmc.physics.kinematics import make_kinematics
 from ionmc.transport.funcs import make_transport_funcs
+from ionmc.transport.scoring_funcs import make_scoring_funcs
 
 wp.config.log_level = wp.LOG_WARNING
 
@@ -39,9 +40,9 @@ LN10 = math.log(10.0)
 M_P = 938.27208816
 
 # column layout of the argument pools -------------------------------------------------------
-NX = 63  # real columns
+NX = 81  # real columns
 NV = 16  # vec3 columns
-NI = 9  # int columns
+NI = 13  # int columns
 NO = 40  # real outputs
 NOI = 16  # int outputs
 NOV = 8  # vec3 outputs
@@ -241,6 +242,46 @@ def _args(precision: str) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
             )[(r // 7) % 4]
         else:
             x[r, 61] = pe[2] + 0.3  # u_z = 0: the clip plane is ignored
+    # scoring functions (V3-004): columns 63..80 of x, 9..12 of ii
+    x[:, 63] = rng.uniform(-5, 5, n)  # ly0
+    x[:, 64] = rng.uniform(-5, 5, n)  # ly1
+    x[:, 65] = 86.0  # inv_dl
+    x[:, 66] = logu(0.05, 30.0)  # s_mid
+    x[:, 67] = rng.uniform(-1.2, 0.3, n)  # gamma
+    x[:, 68] = logu(1e-4, 5.0)  # de_mean
+    x[:, 69] = logu(1.0, 300.0)  # e_mid
+    x[:, 70] = logu(1e-3, 2.0)  # s_act
+    x[0:3, 70] = [0.0, 0.0, 1e-3]
+    x[1, 69] = 0.0  # e_mid <= 0 -> k = 0
+    x[:, 71] = rng.uniform(-0.1, 0.1, n)  # k
+    x[4:8, 71] = 0.0
+    x[:, 72] = logu(0.05, 5.0)  # e_dot
+    x[:, 73] = rng.uniform(-1.0, 1.0, n)  # tau
+    x[0:6, 73] = [0.0, 0.5, -0.5, 1.0, -1.0, 0.25]
+    x[:, 74] = logu(1e-3, 2.0)  # length
+    x[0, 74] = 0.0
+    x[:, 75] = logu(1e-4, 5.0)  # eps
+    x[:, 76] = logu(0.05, 30.0)  # s_bar
+    x[:, 77] = rng.uniform(0.0, 20.0, n)  # f
+    ii[:, 9] = rng.integers(-1, 9, n)  # kind, including invalid codes -1 and 8
+    ii[:, 9][:10] = np.arange(-1, 9)
+    ii[:, 10] = rng.integers(2, 41, n)  # axis points n >= 2 (n = 2 included)
+    ii[:, 11] = rng.integers(0, 2, n)  # log axis
+    ii[:, 12] = rng.integers(1, 41, n)  # spectrum bins
+    ii[0:4, 10] = 2
+    a0 = rng.uniform(-1.0, 1.0, n)
+    inv_da = rng.uniform(0.5, 2.0, n)
+    t_target = rng.uniform(-0.6, ii[:, 10] - 0.4)
+    arg = a0 + t_target / inv_da
+    # edge rows: dyadic axis (a0 = 0, inv_da = 1), x exactly on, below and above the edges
+    a0[:12], inv_da[:12] = 0.0, 1.0
+    arg[:12] = [0.0, 4.0, -0.5, 4.5, 2.5, 1.0, 3.0, 0.25, 5.0, 4.999, 2.0, -1e-3]
+    ii[:12, 10] = 5
+    ii[:12, 12] = 4
+    ii[:12, 11] = 0
+    x[:, 78] = np.where(ii[:, 11] == 1, np.exp(arg), arg)  # lookup / spectrum argument
+    x[:, 79] = a0
+    x[:, 80] = inv_da
     return x.astype(dt), v.astype(dt), ii
 
 
@@ -248,15 +289,21 @@ class _Fn(SimpleNamespace):
     kin: Any
     em: Any
     tf: Any
+    sc: Any
 
 
 def _funcs(real: Any) -> _Fn:
-    return _Fn(kin=make_kinematics(real), em=make_em(real), tf=make_transport_funcs(real))
+    return _Fn(
+        kin=make_kinematics(real),
+        em=make_em(real),
+        tf=make_transport_funcs(real),
+        sc=make_scoring_funcs(real),
+    )
 
 
 def _make_kernel(real: Any) -> Any:
     f = _funcs(real)
-    kin, em, tf = f.kin, f.em, f.tf
+    kin, em, tf, sc = f.kin, f.em, f.tf, f.sc
     v3 = tf.vec3
     two = real(2.0)
     del two
@@ -342,6 +389,20 @@ def _make_kernel(real: Any) -> Any:
         )
         o[i, 28] = gl
         oi[i, 12] = gok
+        o[i, 29] = sc.loglog_slope(x[i, 63], x[i, 64], x[i, 65])
+        o[i, 30] = sc.let_ramp_slope(x[i, 66], x[i, 67], x[i, 68], x[i, 69], x[i, 70])
+        ps, pe = sc.piece_state(x[i, 66], x[i, 71], x[i, 69], x[i, 72], x[i, 73])
+        o[i, 31] = ps
+        o[i, 32] = pe
+        pm1, pm2 = sc.piece_moments(x[i, 76], x[i, 71], x[i, 74])
+        o[i, 33] = pm1
+        o[i, 34] = pm2
+        o[i, 35] = sc.channel_value(ii[i, 9], x[i, 75], x[i, 74], pm1, pm2, x[i, 76], x[i, 77])
+        lbi, lbf, lbin = sc.lookup_bin(x[i, 78], x[i, 79], x[i, 80], ii[i, 10], ii[i, 11])
+        oi[i, 13] = lbi
+        o[i, 36] = lbf
+        oi[i, 14] = lbin
+        oi[i, 15] = sc.spectrum_bin(x[i, 78], x[i, 79], x[i, 80], ii[i, 12], ii[i, 11])
 
     return kernel
 
@@ -353,9 +414,10 @@ def _python_scope(real: Any, x: np.ndarray, v: np.ndarray, ii: np.ndarray) -> tu
         kin=python_twin(make_kinematics),
         em=python_twin(make_em),
         tf=python_twin(make_transport_funcs),
+        sc=python_twin(make_scoring_funcs),
     )
     real = float
-    kin, em, tf = f.kin, f.em, f.tf
+    kin, em, tf, sc = f.kin, f.em, f.tf, f.sc
     v3 = tf.vec3
     n = x.shape[0]
     o = np.zeros((n, NO))
@@ -427,6 +489,16 @@ def _python_scope(real: Any, x: np.ndarray, v: np.ndarray, ii: np.ndarray) -> tu
         gl, gok = em.straggle_attempt_gamma(r[14], r[15], r[16], r[17], r[18], r[19])
         o[i, 28] = float(gl)
         oi[i, 12] = int(gok)
+        o[i, 29] = float(sc.loglog_slope(r[63], r[64], r[65]))
+        o[i, 30] = float(sc.let_ramp_slope(r[66], r[67], r[68], r[69], r[70]))
+        ps, pe = sc.piece_state(r[66], r[71], r[69], r[72], r[73])
+        o[i, 31], o[i, 32] = float(ps), float(pe)
+        pm1, pm2 = sc.piece_moments(r[76], r[71], r[74])
+        o[i, 33], o[i, 34] = float(pm1), float(pm2)
+        o[i, 35] = float(sc.channel_value(k[9], r[75], r[74], pm1, pm2, r[76], r[77]))
+        lbi, lbf, lbin = sc.lookup_bin(r[78], r[79], r[80], k[10], k[11])
+        oi[i, 13], o[i, 36], oi[i, 14] = int(lbi), float(lbf), int(lbin)
+        oi[i, 15] = int(sc.spectrum_bin(r[78], r[79], r[80], k[12], k[11]))
     return o, oi, ov
 
 
@@ -438,12 +510,14 @@ REAL_OUTPUTS = {
     17: "eloss_step_limit", 18: "select_step", 19: "ray_box_in", 20: "ray_box_out",
     21: "gauss_pair_0", 22: "gauss_pair_1", 23: "gauss_one", 24: "scattering_variance_birth",
     25: "dda_clip_distance", 26: "leg2_clip_length", 27: "seg_piece_length",
-    28: "straggle_gamma_loss",
+    28: "straggle_gamma_loss", 29: "loglog_slope", 30: "let_ramp_slope", 31: "piece_s_bar",
+    32: "piece_e_bar", 33: "piece_m1", 34: "piece_m2", 35: "channel_value", 36: "lookup_frac",
 }  # fmt: skip
 INT_OUTPUTS = {
     0: "straggle_ok", 1: "log_bin_index", 2: "dda_axis", 3: "leg2_axis", 4: "select_reason",
     5: "grid_ix", 6: "grid_iy", 7: "grid_iz", 8: "grid_inside",
     9: "dda_clip_axis", 10: "leg2_clip_axis", 11: "seg_piece_axis", 12: "straggle_gamma_ok",
+    13: "lookup_index", 14: "lookup_in_domain", 15: "spectrum_bin",
 }  # fmt: skip
 VEC_OUTPUTS = {0: "rotate_dir", 1: "point_on_hinge", 2: "basis_e1", 3: "basis_e2"}
 
@@ -512,6 +586,10 @@ def _float32_budgets(x: np.ndarray) -> dict[int, tuple[float, np.ndarray | float
     # straggle_attempt_gamma (the production default, bohr_gamma_v1): the Gamma branch of
     # straggle_attempt at EVERY ratio (no Gaussian branch); the same first-order relative budget.
     out[28] = _straggle_budget(x, gamma_everywhere=True)
+    # loglog_slope = (ly1 - ly0) inv_dl: the operands are exact float32 arguments, so the difference
+    # has one rounding (u |diff|); the budget 4 u max(|ly0|, |ly1|) inv_dl covers it and the
+    # product's rounding with a margin for operands that were themselves computed (table reads)
+    out[29] = (1e-6, 4.0 * U * np.maximum(np.abs(x[:, 63]), np.abs(x[:, 64])) * x[:, 65] + 1e-6)
     # dda_next_clip, leg2_limit_clip, seg_piece: dda_next adds a subtraction, a division and a
     # product-sum per axis (about 4 roundings, no cancellation of computed quantities: the
     # operands are exact float32 arguments); the clip distance (z_clip - p_z) / u_z is one rounded
@@ -563,6 +641,10 @@ EXERCISED = {
         "csda_mean_loss", "bohr_variance", "straggle_attempt", "straggle_attempt_gamma", "fdm",
         "scattering_power_dm", "scattering_variance_birth", "polar_deflection", "rotate_dir",
     },
+    "sc": {
+        "loglog_slope", "let_ramp_slope", "piece_state", "piece_moments", "channel_value",
+        "lookup_bin", "spectrum_bin",
+    },
     "tf": {
         "lerp", "interp_exp", "log_bin_index", "plane_position", "dda_next", "dda_next_clip",
         "leg2_limit", "leg2_limit_clip", "seg_piece", "range_step_limit", "eloss_step_limit",
@@ -582,7 +664,12 @@ def test_u1_harness_covers_every_shared_function() -> None:
     def names(ns: Any) -> set[str]:
         return {k for k, val in vars(ns).items() if callable(val) and k != "vec3"}
 
-    for key, factory in (("kin", make_kinematics), ("em", _em), ("tf", make_transport_funcs)):
+    for key, factory in (
+        ("kin", make_kinematics),
+        ("em", _em),
+        ("tf", make_transport_funcs),
+        ("sc", make_scoring_funcs),
+    ):
         assert names(python_twin(factory)) == EXERCISED[key], key
         assert names(factory(wp.float64)) == EXERCISED[key], key
 
@@ -622,8 +709,27 @@ def test_u1_python_twin_equals_warp_cpu_kernel(precision: str) -> None:
         # <= 3 u, so the default rtol applies)
         t_py, t_k = p_oi[:, 1] + p_o[:, 10], k_oi[:, 1] + k_o[:, 10]
         assert np.allclose(t_py, t_k, rtol=rtol, atol=atol), "log_bin position i + f differs"
+    if precision == "float32":
+        # bin functions on a uniform axis: t = (v - a0) inv_da with v = x (linear) or ln x. The
+        # float32 error of t is at most 4 u ((|v| + |a0|) inv_da + |t|) (one rounded difference,
+        # one product, the logarithm); the comparisons below skip the rows whose t lies within
+        # that distance of a bin edge (an integer), where the discontinuous outputs may differ
+        xx = x.astype(np.float32).astype(np.float64)
+        a0, inv = xx[:, 79], xx[:, 80]
+        vv = np.where(ii[:, 11] == 1, np.log(np.maximum(xx[:, 78], 1e-30)), xx[:, 78])
+        tt = (vv - a0) * inv
+        tol_t = 4.0 * U * ((np.abs(vv) + np.abs(a0)) * inv + np.abs(tt))
+        near = np.abs(tt - np.round(tt)) <= tol_t
+        cont_py = p_oi[:, 13] + p_o[:, 36]
+        cont_k = k_oi[:, 13] + k_o[:, 36]
+        assert np.all(np.abs(cont_py - cont_k) <= tol_t + rtol * np.abs(cont_k) + atol), (
+            "lookup_bin position i + f differs"
+        )
+        assert np.array_equal(p_oi[~near, 14], k_oi[~near, 14]), "lookup_in_domain differs"
+        assert np.array_equal(p_oi[~near, 15], k_oi[~near, 15]), "spectrum_bin differs"
+        assert (~near).sum() > 0.9 * n
     for col, name in REAL_OUTPUTS.items():
-        if precision == "float32" and col == 10:
+        if precision == "float32" and col in (10, 36):
             continue
         a, b = p_o[:, col], k_o[:, col]
         assert np.all(np.isfinite(a)) and np.all(np.isfinite(b)), f"{name}: NaN or inf"
@@ -633,7 +739,7 @@ def test_u1_python_twin_equals_warp_cpu_kernel(precision: str) -> None:
             f"{name}: {bad.sum()} of {n} mismatches; first python={a[bad][:3]} kernel={b[bad][:3]}"
         )
     for col, name in INT_OUTPUTS.items():
-        if precision == "float32" and col == 1:
+        if precision == "float32" and col in (1, 13, 14, 15):
             continue
         assert np.array_equal(p_oi[:, col], k_oi[:, col]), f"{name}: integer outputs differ"
     for col, name in VEC_OUTPUTS.items():

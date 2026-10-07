@@ -22,16 +22,30 @@ the mean ``sum (x_b - mean)^2 / (B (B - 1))``.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
+from typing import Literal
 
 import numpy as np
 from numpy.typing import NDArray
 
-from ionmc._validate import fail, int_triple, triple
+from ionmc._validate import fail, int_triple, real, triple
 from ionmc.geometry import VoxelGeometry
 
 MEV_PER_G_TO_GY = 1.602176634e-10
 MAX_SCORING_GRIDS = 4
+TALLY_QUANTITIES = (
+    "edep",
+    "dose",
+    "fluence",
+    "let_t",
+    "let_d",
+    "let_d_eps",
+    "lookup_sum",
+    "lookup_dose_avg",
+    "fluence_spectrum",
+)
+GENERATION_CHOICES = ("all", "primary", "secondary")
 
 
 @dataclass(frozen=True)
@@ -61,6 +75,92 @@ class ScoringGrid:
         return self.origin_mm[axis] + self.spacing_mm[axis] * np.arange(
             self.shape[axis] + 1, dtype=np.float64
         )
+
+
+@dataclass(frozen=True)
+class TallyRequest:
+    """A request for one scored quantity on one scoring grid (decision 0040).
+
+    ``quantity``: ``edep`` (MeV), ``dose`` (dose to medium), ``fluence`` (sum of path lengths per
+    voxel volume, mm^-2), ``let_t`` / ``let_d`` (track- and dose-averaged LET in water, keV/um),
+    ``let_d_eps`` (diagnostic, deposit-weighted), ``lookup_sum`` (sum of ``eps f``, MeV times the
+    unit of ``f``), ``lookup_dose_avg`` (``lookup_sum / E_step``, the deposit-weighted average of
+    the lookup ``f``) and ``fluence_spectrum`` (path length per energy bin per nucleon, with an
+    underflow and an overflow bin). ``species`` are registry names (None: all transported charged
+    species; for ``edep``/``dose`` also the non-transported pseudo-species so the total closes);
+    ``generation`` selects primaries, secondaries or all. ``lookup`` names a
+    :class:`~ionmc.lookup.LookupTable` of ``SimulationConfig.lookups`` (required for the
+    ``lookup_*`` quantities only); ``energy_edges_mev_per_u`` are the uniform (linear or log) bin
+    edges of ``fluence_spectrum`` (required for it only).
+
+    ``let_medium`` and ``dose_reference`` exist so that unsupported choices fail closed instead of
+    being unavailable to ask for: only ``"water"`` and ``"medium"`` are supported (the LET medium
+    is part of the definition; dose-to-water needs a later channel kind).
+    """
+
+    name: str
+    grid: str
+    quantity: Literal[
+        "edep",
+        "dose",
+        "fluence",
+        "let_t",
+        "let_d",
+        "let_d_eps",
+        "lookup_sum",
+        "lookup_dose_avg",
+        "fluence_spectrum",
+    ]
+    species: tuple[str, ...] | None = None
+    generation: Literal["all", "primary", "secondary"] = "all"
+    lookup: str | None = None
+    energy_edges_mev_per_u: tuple[float, ...] | None = None
+    let_medium: str = "water"
+    dose_reference: str = "medium"
+
+    def __post_init__(self) -> None:
+        for f in ("name", "grid", "let_medium", "dose_reference"):
+            v = getattr(self, f)
+            if not isinstance(v, str) or not v:
+                raise fail(f"tally request field {f!r} must be a non-empty string")
+        if self.quantity not in TALLY_QUANTITIES:
+            raise fail(f"tally quantity must be one of {TALLY_QUANTITIES}, got {self.quantity!r}")
+        if self.generation not in GENERATION_CHOICES:
+            raise fail(f"generation must be one of {GENERATION_CHOICES}, got {self.generation!r}")
+        if self.species is not None:
+            sp = self.species
+            if (
+                not isinstance(sp, tuple | list)
+                or len(sp) == 0
+                or not all(isinstance(x, str) for x in sp)
+                or len(set(sp)) != len(sp)
+            ):
+                raise fail("species must be None or a non-empty tuple of distinct names")
+            object.__setattr__(self, "species", tuple(sp))
+        needs_lookup = self.quantity in ("lookup_sum", "lookup_dose_avg")
+        if needs_lookup != (self.lookup is not None):
+            raise fail(
+                f"tally {self.name!r}: 'lookup' is required for lookup_* quantities and "
+                "forbidden for all others"
+            )
+        if self.lookup is not None and (not isinstance(self.lookup, str) or not self.lookup):
+            raise fail("lookup must be a non-empty table name")
+        has_edges = self.energy_edges_mev_per_u is not None
+        if (self.quantity == "fluence_spectrum") != has_edges:
+            raise fail(
+                f"tally {self.name!r}: 'energy_edges_mev_per_u' is required for fluence_spectrum "
+                "and forbidden for all other quantities"
+            )
+        if self.energy_edges_mev_per_u is not None:
+            e = tuple(
+                real(f"energy_edges_mev_per_u[{i}]", v, positive=True)
+                for i, v in enumerate(self.energy_edges_mev_per_u)
+            )
+            if len(e) < 2 or any(b <= a for a, b in zip(e, e[1:], strict=False)):
+                raise fail("energy_edges_mev_per_u must be >= 2 strictly increasing values")
+            if not all(math.isfinite(v) for v in e):  # pragma: no cover - real() checks
+                raise fail("energy edges must be finite")
+            object.__setattr__(self, "energy_edges_mev_per_u", e)
 
 
 def overlap_matrix(
@@ -118,3 +218,100 @@ def reduce_batches(batch_sums: NDArray[np.float64], histories_per_batch: int) ->
     mean = x.mean(axis=0)
     var = ((x - mean) ** 2).sum(axis=0) / (b * (b - 1))
     return BatchStatistics(mean, var, (s > 0.0).sum(axis=0).astype(np.int32))
+
+
+@dataclass(frozen=True, eq=False)
+class RatioStatistics:
+    """Delta-method estimate of ``Xbar / Ybar`` per bin (see :func:`reduce_ratio`): ``mean`` and
+    ``variance_of_mean`` are NaN where ``defined_mask`` is False (never 0); ``n_nonzero`` counts the
+    batches with ``y_b > 0``."""
+
+    mean: NDArray[np.float64]
+    variance_of_mean: NDArray[np.float64]
+    defined_mask: NDArray[np.bool_]
+    n_nonzero: NDArray[np.int32]
+
+
+def min_defined_batches(n_batches: int) -> int:
+    """Smallest ``n_nonzero(y)`` of a defined ratio bin: ``max(2, ceil(B / 2))`` (decision 0040,
+    section 5)."""
+    return max(2, math.ceil(n_batches / 2))
+
+
+def reduce_ratio(
+    num_batch_sums: NDArray[np.float64], den_batch_sums: NDArray[np.float64]
+) -> RatioStatistics:
+    """Ratio of channel means with the delta-method variance (decision 0040, section 5).
+
+    ``num_batch_sums`` and ``den_batch_sums`` are per-batch sums ``[B, n_bins]`` of the numerator
+    and denominator channels (``B >= 2``; the common factor 1 / histories-per-batch cancels).
+    With the batch means ``xbar``, ``ybar`` and ``R = xbar / ybar``::
+
+        Var R = [Var xbar - 2 R Cov(xbar, ybar) + R^2 Var ybar] / ybar^2
+        Cov   = sum_b (x_b - xbar)(y_b - ybar) / (B (B - 1))
+
+    The biased mean of per-batch ratios is not used. A bin is defined iff ``ybar > 0`` and
+    ``n_nonzero(y) >= max(2, ceil(B / 2))``; undefined bins are NaN. The variance is clipped at 0
+    against rounding (the quadratic form is non-negative in exact arithmetic).
+    """
+    x = np.asarray(num_batch_sums, dtype=np.float64)
+    y = np.asarray(den_batch_sums, dtype=np.float64)
+    if x.ndim != 2 or x.shape != y.shape or x.shape[0] < 2:
+        raise ValueError("batch sums must have the same shape [B >= 2, n_bins]")
+    if not (np.all(np.isfinite(x)) and np.all(np.isfinite(y))):
+        raise ValueError("batch sums must be finite")
+    b = x.shape[0]
+    xbar = x.mean(axis=0)
+    ybar = y.mean(axis=0)
+    dx, dy = x - xbar, y - ybar
+    denom = float(b * (b - 1))
+    var_x = (dx * dx).sum(axis=0) / denom
+    var_y = (dy * dy).sum(axis=0) / denom
+    cov = (dx * dy).sum(axis=0) / denom
+    n_nonzero = (y > 0.0).sum(axis=0).astype(np.int32)
+    defined = (ybar > 0.0) & (n_nonzero >= min_defined_batches(b))
+    safe_y = np.where(defined, ybar, 1.0)
+    ratio = xbar / safe_y
+    var = (var_x - 2.0 * ratio * cov + ratio * ratio * var_y) / (safe_y * safe_y)
+    var = np.maximum(var, 0.0)
+    return RatioStatistics(
+        mean=np.where(defined, ratio, np.nan),
+        variance_of_mean=np.where(defined, var, np.nan),
+        defined_mask=defined,
+        n_nonzero=n_nonzero,
+    )
+
+
+@dataclass(frozen=True, eq=False)
+class QuantityResult:
+    """One requested tally on its scoring grid (``GridResult.quantities[name]``).
+
+    ``mean`` and ``std`` (standard error of the mean) have the grid shape, with a trailing bin axis
+    of ``n_bins + 2`` for a ``fluence_spectrum`` (underflow, bins, overflow). Linear quantities
+    are per primary; ratios are ratios of per-primary channel means. ``defined_mask`` is True where
+    the value is defined (a ratio: ``ybar > 0`` and ``n_nonzero >= max(2, ceil(B/2))``; a linear
+    quantity: positive mean, dose also positive mass); undefined ratio bins are NaN, never 0.
+    ``n_nonzero`` counts the batches with a nonzero denominator (numerator for a linear quantity).
+    ``rounding_bound`` is the deterministic fixed-point bound of ``mean``: every quantized piece
+    adds at most ``q / 2``, so a channel's bound is ``(n_step [+ n_local]) q / 2`` per voxel and
+    primary with the exact piece counts of the automatic channels N (class "step") and N_local
+    (class "local"), taken according to the channel's class mask (both for edep and dose); ratios
+    use interval arithmetic on the quantized numerator and denominator sums (both corners; +inf
+    where the denominator interval reaches zero, never 0). It bounds the
+    quantization error of the stored sums, not the statistical error; ``quantum_exponents`` the
+    ``k_c`` of the numerator and denominator channels; ``lookup`` the provenance of the lookup
+    table (or None).
+    """
+
+    name: str
+    quantity: str
+    kind: str
+    units: str
+    definition: str
+    mean: NDArray[np.float64]
+    std: NDArray[np.float64]
+    defined_mask: NDArray[np.bool_]
+    n_nonzero: NDArray[np.int32]
+    rounding_bound: NDArray[np.float64]
+    quantum_exponents: tuple[int, ...]
+    lookup: dict[str, object] | None = None

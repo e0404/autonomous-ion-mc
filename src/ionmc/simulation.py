@@ -14,7 +14,9 @@ result) unless ``RunOptions.allow_invalid_result`` is set, in which case the ret
 from __future__ import annotations
 
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass, field
+from types import MappingProxyType
 from typing import Any
 
 import numpy as np
@@ -22,6 +24,7 @@ from numpy.typing import NDArray
 
 from ionmc.config import (
     BACKENDS,
+    CHANNEL_BACKENDS,
     DEFAULT_CHUNK_HISTORIES,
     DELTA_ELECTRON_MODELS,
     MAX_CPU_WORKERS,
@@ -36,9 +39,33 @@ from ionmc.config import (
 )
 from ionmc.environment import describe_environment
 from ionmc.errors import TransportLimitError
-from ionmc.scoring import MEV_PER_G_TO_GY, ScoringGrid, reduce_batches, voxel_mass_g
+from ionmc.lookup import AXES as LOOKUP_AXES
+from ionmc.lookup import AXIS_SPACINGS as LOOKUP_AXIS_SPACINGS
+from ionmc.physics.projectiles import PROTON
+from ionmc.scoring import (
+    GENERATION_CHOICES,
+    MEV_PER_G_TO_GY,
+    TALLY_QUANTITIES,
+    QuantityResult,
+    ScoringGrid,
+    reduce_batches,
+    reduce_ratio,
+    voxel_mass_g,
+)
+from ionmc.species import producible
+from ionmc.transport.channels import (
+    CLASS_LOCAL,
+    CLASS_STEP,
+    EXCLUDED_CHANNEL_NAME,
+    FE_F_MAX_EXPONENT,
+    FE_F_MIN_EXPONENT,
+    LOCAL_PIECE_COUNT_NAME,
+    MAX_CHANNELS,
+    MAX_SPECTRUM_BINS,
+    PIECE_COUNT_NAME,
+)
 from ionmc.transport.run import run_transport
-from ionmc.transport.tally import RawTransport
+from ionmc.transport.tally import ChannelRaw, RawTransport
 
 
 @dataclass(frozen=True)
@@ -166,6 +193,7 @@ class GridResult:
     low_batch_count: bool
     batch_energy_mev: NDArray[np.float64]
     valid: bool
+    quantities: Mapping[str, QuantityResult] = field(default_factory=lambda: MappingProxyType({}))
 
 
 @dataclass(frozen=True, eq=False)
@@ -196,6 +224,18 @@ class Result:
     environment: dict[str, Any]
     diagnostics: dict[str, Any] = field(default_factory=dict)
     transport_report: dict[str, Any] = field(default_factory=dict)
+    channel_raw: ChannelRaw | None = None
+    lookups: tuple[dict[str, Any], ...] = ()
+
+    def channel_batches(self, index: int) -> NDArray[np.int64]:
+        """Integer per-batch accumulators ``[B, size]`` of channel ``index`` of the compiled plan
+        (``effective_config.channels``), in units of its quantum ``2^-k``."""
+        plan = self.effective_config.channels
+        if plan is None or self.channel_raw is None:
+            raise KeyError("this result has no scoring channels")
+        c = plan.channels[index]
+        out: NDArray[np.int64] = self.channel_raw.acc[:, c.offset : c.offset + c.size].copy()
+        return out
 
     def grid(self, name: str) -> GridResult:
         """The grid result named ``name``."""
@@ -203,6 +243,63 @@ class Result:
             if g.name == name:
                 return g
         raise KeyError(f"no scoring grid named {name!r}")
+
+
+def _tally_capabilities() -> dict[str, Any]:
+    """The scoring-channel part of the capability report (decision 0040). Every entry is derived
+    from the objects that enforce it (``CHANNEL_BACKENDS``, ``TALLY_QUANTITIES``, ``AXES``,
+    ``producible``), so the report cannot drift from the validation."""
+    pairs = sorted(producible(PROTON))
+    producible_generations = sorted({g for _, g in pairs})
+    return {
+        "quantities": list(TALLY_QUANTITIES),
+        "backends": {
+            b: {
+                "quantities": list(TALLY_QUANTITIES),
+                "available": b != "warp-cuda" or cuda_available(),
+            }
+            for b in CHANNEL_BACKENDS
+        },
+        "producible": [{"species": n, "generation": g} for n, g in pairs],
+        "generations": {
+            "accepted": [
+                g for g in GENERATION_CHOICES if g == "all" or g in producible_generations
+            ],
+            "rejected": [
+                g for g in GENERATION_CHOICES if g != "all" and g not in producible_generations
+            ],
+            "note": "secondary particles are not transported yet (V3-005A); no secondary species",
+        },
+        "let_medium": ["water"],
+        "dose_reference": ["medium"],
+        "lookup": {
+            "axes": list(LOOKUP_AXES),
+            "axis_spacings": list(LOOKUP_AXIS_SPACINGS),
+            "uniform_axis_required": True,
+            "non_uniform": "rejected; resample_uniform() is the explicit, recorded alternative",
+            "values": "per species, finite and non-negative; clinical tables and RBE models "
+            "do not ship",
+            "max_value_range": [2.0**FE_F_MIN_EXPONENT, 2.0**FE_F_MAX_EXPONENT],
+            "max_value_range_note": "the largest value of a requested table must lie in "
+            f"[2^{FE_F_MIN_EXPONENT}, 2^{FE_F_MAX_EXPONENT}] (fixed-point scale and bound "
+            "representable); other magnitudes fail closed",
+        },
+        "fluence_spectrum": {
+            "edges": "uniform in energy or in ln energy (MeV per nucleon), under/overflow bins",
+            "max_bins": MAX_SPECTRUM_BINS,
+        },
+        "automatic_channels": [PIECE_COUNT_NAME, LOCAL_PIECE_COUNT_NAME, EXCLUDED_CHANNEL_NAME],
+        "max_channels": MAX_CHANNELS,
+        "fail_closed": [
+            "unknown or unproducible species, generation 'secondary'",
+            "let_medium other than water, dose_reference other than medium",
+            "unknown grid or lookup, duplicate or reserved request names, unused lookups",
+            "lookup species gaps, axis coverage gaps, sha256 mismatch, non-uniform tables or "
+            "spectrum edges, negative or non-finite lookup values",
+            "a quantum above the precision floor, accumulator memory above the budget",
+            "a backend without channels",
+        ],
+    }
 
 
 def capabilities() -> dict[str, Any]:
@@ -232,7 +329,12 @@ def capabilities() -> dict[str, Any]:
         },
         "geometry": ["VoxelGeometry", "BoxPhantom"],
         "sources": ["PencilBeamSource"],
-        "scoring": ["ScoringGrid (energy, dose)"],
+        "scoring": [
+            "ScoringGrid (energy, dose)",
+            "TallyRequest (edep, dose, fluence, LET, lookup averages, fluence spectra; "
+            "species and generation channels; see 'tallies')",
+        ],
+        "tallies": _tally_capabilities(),
         "max_scoring_grids": 4,
     }
 
@@ -265,6 +367,10 @@ class Simulation:
         result = _with_timings(result, timings)
         if not result.valid and not self.config.run.allow_invalid_result:
             nonzero = {k: v for k, v in result.counters.as_dict().items() if v}
+            if result.channel_raw is not None and result.channel_raw.lookup_out_of_domain:
+                nonzero["lookup_out_of_domain"] = result.channel_raw.lookup_out_of_domain
+            if result.channel_raw is not None and result.channel_raw.path_bound_exceeded:
+                nonzero["path_bound_exceeded"] = result.channel_raw.path_bound_exceeded
             raise TransportLimitError(
                 f"transport limits violated {nonzero}; the result is invalid "
                 "(set RunOptions.allow_invalid_result to receive it anyway)",
@@ -311,11 +417,158 @@ def _with_timings(result: Result, timings: dict[str, float]) -> Result:
         environment=result.environment,
         diagnostics=result.diagnostics,
         transport_report=result.transport_report,
+        channel_raw=result.channel_raw,
+        lookups=result.lookups,
     )
 
 
+def _channel_sums(eff: EffectiveConfig, ch: ChannelRaw, index: int) -> NDArray[np.float64]:
+    """Per-batch sums ``[B, size]`` of channel ``index`` in the channel unit (float64)."""
+    assert eff.channels is not None
+    c = eff.channels.channels[index]
+    block = ch.acc[:, c.offset : c.offset + c.size].astype(np.float64)
+    return block * c.quantum
+
+
+def ratio_rounding_bound(
+    xhat: NDArray[np.float64],
+    a: NDArray[np.float64],
+    yhat: NDArray[np.float64],
+    b: NDArray[np.float64],
+    rhat: NDArray[np.float64],
+) -> NDArray[np.float64]:
+    """Deterministic fixed-point bound of a ratio ``R = X / Y`` by interval arithmetic: with the
+    quantized sums ``X in [xhat - a, xhat + a]``, ``Y in [yhat - b, yhat + b]``, ``xhat, yhat >= 0``
+    the bound is ``max(|(xhat + a)/(yhat - b) - rhat|, |(xhat - a)/(yhat + b) - rhat|)``. If
+    ``yhat - b <= 0`` the true denominator may be zero and the bound is ``+inf`` (it never
+    silently becomes 0). All arguments are per primary (the level where the counts are defined)."""
+    lower = yhat - b
+    with np.errstate(divide="ignore", invalid="ignore"):
+        hi = np.abs((xhat + a) / lower - rhat)
+        lo = np.abs((xhat - a) / (yhat + b) - rhat)
+    return np.where(lower > 0.0, np.maximum(hi, lo), np.inf)
+
+
+def _grid_quantities(gi: int, eff: EffectiveConfig, raw: RawTransport) -> dict[str, QuantityResult]:
+    """Quantities of grid ``gi`` from the channels (decision 0040): linear ones through
+    ``reduce_batches``, ratios through ``reduce_ratio``, plus the automatic channels."""
+    plan, ch = eff.channels, raw.channels
+    assert plan is not None and ch is not None
+    cfg = eff.requested
+    grid = cfg.scoring[gi]
+    run = cfg.run
+    hpb = run.n_histories // run.n_batches
+    mass = voxel_mass_g(grid, eff.geometry).reshape(-1)
+    vol = float(np.prod(grid.spacing_mm))
+    nvox = grid.n_voxels
+    n_step_ci = plan.count_channel(gi, CLASS_STEP)
+    n_local_ci = plan.count_channel(gi, CLASS_LOCAL)
+    # pieces per primary and voxel, step and local class (exact integer channels)
+    n_step_pp = _channel_sums(eff, ch, n_step_ci).mean(axis=0) / hpb
+    n_local_pp = _channel_sums(eff, ch, n_local_ci).mean(axis=0) / hpb
+
+    def n_pp(ci: int) -> NDArray[np.float64]:
+        """Pieces per primary and voxel that channel ``ci`` can receive (by its class mask)."""
+        total = np.zeros(nvox)
+        for ni in plan.piece_count_indices(ci):
+            total = total + (n_step_pp if ni == n_step_ci else n_local_pp)
+        return total
+
+    out: dict[str, QuantityResult] = {}
+
+    def shape_of(a: NDArray[Any], extra: int) -> NDArray[Any]:
+        return a.reshape((*grid.shape, extra)) if extra else a.reshape(grid.shape)
+
+    def linear(
+        name: str, quantity: str, ci: int, units: str, definition: str, scale: NDArray[Any],
+        lookup: dict[str, Any] | None = None, positive_scale_only: bool = False,
+    ) -> QuantityResult:  # fmt: skip
+        c = plan.channels[ci]
+        sums = _channel_sums(eff, ch, ci)
+        stats = reduce_batches(sums, hpb)
+        bins = c.size // nvox
+        sc = np.repeat(scale, bins) if bins > 1 else scale
+        mean = stats.mean * sc
+        std = np.sqrt(stats.variance_of_mean) * sc
+        bound = np.repeat(n_pp(ci), bins) * (c.quantum / 2.0) * sc
+        defined = mean > 0.0
+        if positive_scale_only:
+            defined = defined & np.repeat(mass > 0.0, bins)
+        extra = bins if bins > 1 else 0
+        return QuantityResult(
+            name, quantity, "linear", units, definition,
+            shape_of(mean, extra), shape_of(std, extra), shape_of(defined, extra),
+            shape_of(stats.n_nonzero, extra),
+            shape_of(bound, extra), (c.k,), lookup,
+        )  # fmt: skip
+
+    ones = np.ones(nvox)
+    for qd in plan.quantities:
+        req = qd.request
+        if req.grid != grid.name:
+            continue
+        lk = None if req.lookup is None else plan.lookups[
+            [t.name for t in plan.lookups].index(req.lookup)
+        ].provenance()  # fmt: skip
+        if qd.kind == "linear":
+            if req.quantity == "dose":
+                with np.errstate(divide="ignore"):
+                    sc = np.where(
+                        mass > 0.0, MEV_PER_G_TO_GY / np.where(mass > 0, mass, 1.0), np.nan
+                    )
+                out[req.name] = linear(
+                    req.name, "dose", qd.numerator, "Gy", qd.definition, sc, lk, True
+                )
+            elif req.quantity in ("fluence", "fluence_spectrum"):
+                out[req.name] = linear(
+                    req.name, req.quantity, qd.numerator, "mm^-2", qd.definition + " per volume",
+                    ones / vol, lk,
+                )  # fmt: skip
+            else:
+                out[req.name] = linear(
+                    req.name, req.quantity, qd.numerator, qd.units, qd.definition, ones, lk
+                )  # fmt: skip
+        else:
+            assert qd.denominator is not None
+            xs = _channel_sums(eff, ch, qd.numerator)
+            ys = _channel_sums(eff, ch, qd.denominator)
+            st = reduce_ratio(xs, ys)
+            cn, cd = plan.channels[qd.numerator], plan.channels[qd.denominator]
+            xbar = xs.mean(axis=0) / hpb
+            ybar = ys.mean(axis=0) / hpb
+            bound = ratio_rounding_bound(
+                xbar, n_pp(qd.numerator) * (cn.quantum / 2.0),
+                ybar, n_pp(qd.denominator) * (cd.quantum / 2.0), st.mean,
+            )  # fmt: skip
+            bound = np.where(st.defined_mask, bound, np.nan)  # inf stays inf where defined
+            out[req.name] = QuantityResult(
+                req.name, req.quantity, "ratio", qd.units, qd.definition,
+                st.mean.reshape(grid.shape), np.sqrt(st.variance_of_mean).reshape(grid.shape),
+                st.defined_mask.reshape(grid.shape), st.n_nonzero.reshape(grid.shape),
+                bound.reshape(grid.shape), (cn.k, cd.k), lk,
+            )  # fmt: skip
+    for ci in plan.channel_index("E", gi):
+        if plan.channels[ci].class_mask == CLASS_LOCAL:
+            out[EXCLUDED_CHANNEL_NAME] = linear(
+                EXCLUDED_CHANNEL_NAME, "edep", ci, "MeV",
+                "energy of cutoff and zero-length deposits, excluded from LET and lookups", ones,
+            )  # fmt: skip
+    out[PIECE_COUNT_NAME] = linear(
+        PIECE_COUNT_NAME, "count", n_step_ci, "1", "scoring pieces of class step per primary", ones
+    )
+    out[LOCAL_PIECE_COUNT_NAME] = linear(
+        LOCAL_PIECE_COUNT_NAME, "count", n_local_ci, "1",
+        "scoring pieces of class local (point deposits) per primary", ones,
+    )  # fmt: skip
+    return out
+
+
 def _grid_result(
-    grid: ScoringGrid, batch_sums: NDArray[np.float64], eff: EffectiveConfig, valid: bool
+    grid: ScoringGrid,
+    batch_sums: NDArray[np.float64],
+    eff: EffectiveConfig,
+    valid: bool,
+    quantities: Mapping[str, QuantityResult] | None = None,
 ) -> GridResult:
     run = eff.requested.run
     stats = reduce_batches(batch_sums, run.n_histories // run.n_batches)
@@ -348,14 +601,27 @@ def _grid_result(
         low_batch_count=run.n_batches < 10,
         batch_energy_mev=per_batch,
         valid=valid,
+        quantities=MappingProxyType(dict(quantities or {})),
     )
 
 
 def _assemble(eff: EffectiveConfig, raw: RawTransport) -> Result:
     cfg = eff.requested
     counters = TransportCounters(**raw.counters)
-    valid = not counters.any_nonzero
-    grids = tuple(_grid_result(g, raw.edep_mev[i], eff, valid) for i, g in enumerate(cfg.scoring))
+    ood = 0 if raw.channels is None else raw.channels.lookup_out_of_domain
+    pbe = 0 if raw.channels is None else raw.channels.path_bound_exceeded
+    valid = not counters.any_nonzero and ood == 0 and pbe == 0
+    used = set() if eff.channels is None else {c.grid for c in eff.channels.channels}
+    grids = tuple(
+        _grid_result(
+            g,
+            raw.edep_mev[i],
+            eff,
+            valid,
+            _grid_quantities(i, eff, raw) if i in used else None,
+        )  # fmt: skip
+        for i, g in enumerate(cfg.scoring)
+    )
     t = raw.tallies
     balance = EnergyBalance(
         initial_mev=t["initial"],
@@ -386,4 +652,8 @@ def _assemble(eff: EffectiveConfig, raw: RawTransport) -> Result:
         environment=describe_environment(),
         diagnostics=raw.diagnostics,
         transport_report=raw.meta,
+        channel_raw=raw.channels,
+        lookups=()
+        if eff.channels is None
+        else tuple(lk.provenance() for lk in eff.channels.lookups),
     )

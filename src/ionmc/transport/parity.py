@@ -453,8 +453,11 @@ def scalar_z(xa: NDArray[np.float64], xb: NDArray[np.float64]) -> dict[str, floa
     """``z = (mean_a - mean_b) / sqrt(se_a^2 + se_b^2)`` of two samples of batch values (standard
     errors of the batch method), exactly that whenever the combined standard error is nonzero.
     With no variance at all, ``z = 0`` for exactly equal means and ``inf`` otherwise. There is no
-    relative-equality shortcut: a scalar fixed by energy conservation goes through
-    :func:`deterministic_scalar_verdict`."""
+    relative-equality shortcut here. Only the T12 total deposit, and only when both batch standard
+    errors are at most ``DEGENERATE_SE_RTOL`` of its value, is graded by
+    :func:`deterministic_scalar_verdict` (amendment 19, in :func:`t12_compare`); every other
+    scalar, including the T10 total energy (frozen ``|z| < 3``, ``steps.step_t10``), is graded on
+    this ``z``."""
     ma, sa = float(xa.mean()), float(xa.std(ddof=1)) / math.sqrt(len(xa))
     mb, sb = float(xb.mean()), float(xb.std(ddof=1)) / math.sqrt(len(xb))
     se = math.sqrt(sa**2 + sb**2)

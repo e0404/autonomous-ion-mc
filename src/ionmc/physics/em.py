@@ -5,7 +5,8 @@
 Models and sources (decision 0039; derivations in ``docs/physics/em-transport.md``):
 
 * mean energy loss over a path of mass thickness ``t`` [g/cm2]: the CSDA range inversion
-  ``E1 = Rinv(R(E0) - t)``, with the linear branch ``S(E0) t`` when ``t < f_short R(E0)``;
+  ``E1 = Rinv(R(E0) - t)``, with the linear branch ``S(E_mid) t``, ``E_mid = E0 - S(E0) t / 2``
+  (midpoint rule; the caller passes ``S(E_mid)``), when ``t < f_short R(E0)``;
 * straggling (``PhysicsOptions.straggling_model``), Bohr variance
   ``(K/2)(Z/A) rho x z^2 Tmax (1/beta^2 - 1/2)``; two selectable models, both with exactly the Bohr
   mean:

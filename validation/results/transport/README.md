@@ -43,3 +43,43 @@ the qualification mode. The earlier multi-worker runs at 46e9a95 (HR and LV conf
 in the host-run records (`RUN-20261005T224849Z-e2cc0092`, `RUN-20261005T225107Z-b5b7b9bb`,
 `RUN-20261005T233144Z-0a459b0d`) and are not qualification results for the final head. Not a
 clinical claim.
+
+# Extensible-scoring qualification summaries (V3-004)
+
+`lv4-86e18c8-single-process.json` and `hr4-86e18c8-single-process.json` are the combined
+`summarize.py --combine … --attest-sha` summaries of the `lv4` and `hr4` suites of
+`validation/plans/v3-004-acceptance.md` (rows A7, A8, A9, A11, A13, A15, A16 and the CUDA
+scoring tests) at the frozen head `86e18c8ba86acdac8833937f89a2bc5a1bff7f4c` with the
+qualification seed base 20361004 (amendments ¹–³ recorded before the respective results); non-qualification evidence (base consumed, plan amendment ⁴). They
+were produced from the subset archives listed in each file (`parts`) in the single-process
+diagnostic mode (operator directive 2026-10-07, `run_suite.py --workers 1`). Every executed step
+passed (`pass: true`); the archives are deliberately **not conformant** (`conformant: false`):
+`05-a15-workers` (1-vs-3-workers channel partition invariance) is recorded as *deferred*, not
+passed, and the mode itself is not the qualification mode. Observed numbers of note: A9 coverage
+of the LET_d delta-method error 0.945 (0.5·R), 0.93 (Bragg peak), 0.97 (distal 80 %) against the
+window [0.91, 0.99]; A11-HR cpu32:cuda32 and python:cpu64 channel-profile pairs pass; A7 at
+1 mm steps sits within the analytic expected-share bound (|D|/(4σ+δ) ≤ 0.38 in the rehearsal).
+A13 is exploratory and non-gating. Not a clinical claim.
+
+The `lv4`/`hr4` archives at head 3c013f8 with seed base 20371004 (A9 coverage 0.935 / 0.91 / 0.90 at
+0.5·R / Bragg peak / distal 80 %, z sd 1.061 / 1.119 / 1.108) are evidence only: the base is consumed
+and the A9 criterion was re-calibrated afterwards (plan amendment ⁵, decision 0040 outcome of
+2026-10-07); the qualification base is 20381004.
+
+## Qualification archives at the frozen head fccb687 (seed base 20381004)
+
+`lv4-fccb687-single-process.json` and `hr4-fccb687-single-process.json` are the combined
+`summarize.py --combine … --attest-sha` summaries of the `lv4` and `hr4` suites at the frozen
+V3-004 head `fccb6879969ae99a182f95427b32c35abf135b9f` with the qualification seed base 20381004
+(every amendment ¹–⁵ was recorded before the corresponding result at this base was observed).
+Single-process diagnostic mode (operator directive 2026-10-07): every executed step passed
+(`pass: true`); `05-a15-workers` is *deferred*, not passed, and the archives are therefore
+**not conformant** by design. Observed numbers: A9 (amended criterion ⁵, first observation at
+this base) z sd 0.925 / 1.079 / 0.953 and z mean 0.002 / 0.000 / −0.007 at 0.5·R / Bragg peak /
+distal 80 %, all-informative-bins mean coverage 0.9611 (window [0.93, 0.97]); the Bragg-peak
+z sd is above one for the third base in a row (1.069, 1.119, 1.079; all inside [0.87, 1.13]),
+which keeps the open observation of amendment ⁵ alive without failing the pre-registered
+criterion. These archives are diagnostic evidence, not the conformant exact-SHA qualification the
+plan requires; that qualification (standard multi-worker mode, including `05-a15-workers`) is
+pending the lifting of the operator directive. A11-HR cpu32:cuda32 and python:cpu64 channel-profile pairs pass; A16 qualified path
+bit-identical to a524f209; A7 within the analytic expected-share bound. Not a clinical claim.

@@ -7,7 +7,9 @@ device) raises `BackendUnavailableError`; nothing falls back to another backend.
 [0037](../generated/decisions/0037-v3-architecture-and-conventions-baseline.md) (shared
 functions, random streams, conventions) and
 [0039](../generated/decisions/0039-proton-transport-engine.md) (models, step algorithm,
-fail-closed contract). The models are described in [EM transport](../physics/em-transport.md).
+fail-closed contract) and
+[0040](../generated/decisions/0040-let-and-extensible-scoring.md) (LET, fluence, species and
+lookup scoring). The models are described in [EM transport](../physics/em-transport.md).
 
 ## Module layout
 
@@ -17,6 +19,12 @@ fail-closed contract). The models are described in [EM transport](../physics/em-
 | `ionmc.geometry` | `VoxelGeometry` (materials per voxel, optional density override), `BoxPhantom` (one-voxel box) |
 | `ionmc.sources` | `PencilBeamSource` |
 | `ionmc.scoring` | `ScoringGrid`, exact voxel-mass overlap `voxel_mass_g`, batch estimator `reduce_batches` |
+| `ionmc.species` | append-only species registry (ids 0 p, 1 d, 2 t, 3 He-3, 4 alpha; pseudo-species `nuclear_local`), `producible()` engine capability |
+| `ionmc.lookup` | `LookupTable` (uniform grid, sha256, provenance), `resample_uniform` |
+| `ionmc.transport.channels` | channel compiler: `compile_channels`, `ChannelPlan`, quantum rule, shared lookup/spectrum axis parameters |
+| `ionmc.transport.scoring_funcs`, `ionmc.transport.scoring_ref` | shared scoring functions (Warp + Python twin) and the Python channel hook |
+| `ionmc.transport.channel_device` | packs a `ChannelPlan` and the water row into the `ChannelData` struct of the kernels |
+| `ionmc.transport.parity_channels` | A11-HR comparison of linear channel profiles (`t12_compare`), ratio z report, A15 partition comparison |
 | `ionmc.config` | `PhysicsOptions`, `RunOptions`, `DiagnosticsOptions`, `SimulationConfig`, `validate()` returning `EffectiveConfig` |
 | `ionmc.simulation` | `Simulation`, `Result`, `GridResult`, `EnergyBalance`, `TransportCounters`, `capabilities()` |
 | `ionmc.rng.philox` | Philox4x32-10 as a Warp function (`make_philox(real)`) and over Python integers, counter encoding |
@@ -160,6 +168,16 @@ counter starting at 0.
 * `RunOptions.memory_budget_bytes` bounds the accumulators; `PhysicsOptions.stopping` has no default.
 * The energy loss uses the state energy (step 6 above); the cutoff energy is scored (see Results).
 
+* The range table `R(E)` is built by the trapezoid rule in `ln E` of `E/S` on the 200-points-per-decade
+  grid. This overestimates every increment by about 3.5e-5 relative (about 5.1 um of the 158.6 mm range
+  at 150 MeV; the exact quadrature of the log-log interpolated `S` gives 158.625 mm against 158.630 mm
+  tabulated). The short-step branch (`S(E_mid) t`) does not carry the bias, the range-inversion branch
+  does, so the transported `E(z)` depends slightly on the step size. This is a known inconsistency
+  recorded in decision 0039 (outcome of 2026-10-07); the follow-up V3-003D replaces the construction
+  by exact quadrature and/or a range-carrying step and re-qualifies. Scoring tests that compare a
+  scored energy loss with an energy-depth relation use the transported particle's energy
+  (acceptance plan V3-004, footnote 1).
+
 `TransportTables` is immutable: every array is read-only, the identity (source, effective I, dataset id
 and hashes, material fingerprint, metadata) is stored as read-only mappings and tuples, and
 `EffectiveConfig.summary()` returns deep copies.
@@ -220,6 +238,102 @@ result is flagged `valid = False`. Counters: `step_truncation`, `stall`, `stragg
 `genealogy_overflow` and `queue_overflow` (both always 0 until secondaries exist),
 `source_energy_out_of_range`, `energy_inversion`, `accumulator_overflow` and `scoring_pieces_overflow`.
 
+## Extensible scoring
+
+Status: the data model, the fail-closed validation, the water LET row, the shared scoring functions
+(`ionmc.transport.scoring_funcs`, twin of the Warp functions, part of the U1 harness), the
+reference (python) hook `score_piece` (`ionmc.transport.scoring_ref`) and the Warp kernel hook of
+V3-004 are in place, with `reduce_ratio`, `QuantityResult` and `GridResult.quantities`;
+`config.CHANNEL_BACKENDS` is `("python", "warp-cpu", "warp-cuda")` (a backend missing from it
+rejects a configuration with `tallies`, never silently ignoring them). Acceptance rows A1 to A16 are frozen in
+`validation/plans/v3-004-acceptance.md`.
+
+**Requests.** `SimulationConfig.tallies` is a tuple of `TallyRequest(name, grid, quantity, species,
+generation, lookup, energy_edges_mev_per_u)` and `SimulationConfig.lookups` a tuple of
+`LookupTable`. Quantities: `edep`, `dose` (dose to medium), `fluence`, `let_t`, `let_d`,
+`let_d_eps`, `lookup_sum`, `lookup_dose_avg`, `fluence_spectrum`. `let_medium` (only `"water"`) and
+`dose_reference` (only `"medium"`) are fields so that unsupported choices fail closed.
+
+**Definitions** (decision 0040): `S` is the unrestricted electronic stopping power in water at the
+midpoint energy of the step (a water row from the same `StoppingSource`), distributed over the
+scoring pieces as a midpoint-anchored linear ramp; `LET_t = sum(l S)/sum(l)`,
+`LET_d = sum(l S^2)/sum(l S)`, `LET_d^eps = sum(eps S)/sum(eps)`; fluence is `sum(l)/V`. All transported
+charged particles contribute; neutrals, cutoff and nuclear-local deposits are excluded from LET and
+lookup averages and reported in the automatic channel `edep_excluded_from_let`.
+
+**Species.** `ionmc.species` holds the append-only registry; the set of species the engine can
+produce is an engine capability (`producible(projectile)`, V3-004: the source projectile as a
+primary). A request for any other species, or generation `"secondary"`, fails closed.
+
+**Channels.** `compile_channels` turns the requests into deduplicated linear channels of the kinds
+E, L, LS, LS2, ES, FE, FL and N (module docstring of `ionmc.transport.channels`), ordered by grid,
+with an int8 `species_match[n_ch, n_species]` matrix, a generation range, a class mask (step or
+local), a lookup index, a spectrum specification (uniform linear or log edges, `n_bins + 2` bins
+with under- and overflow), an offset into one int64 array `acc[B, sum size]`, a per-history
+residual column (every channel but N) and the quantum exponent `k`. Two automatic N channels per
+used grid count the scoring pieces exactly (`k = 0`, int64, no residual, bit-identical across chunk
+sizes and workers): `scoring_pieces` (class step) and `scoring_pieces_local` (class local, the
+cutoff and zero-length point deposits, scored by `score_local`). `QuantityResult.rounding_bound` is
+a deterministic bound built from them: `n q/2` per voxel and primary with `n` the step count, the
+local count or their sum according to the class mask of the channel (edep and dose: both), ratios
+by interval arithmetic on the quantized sums (`max |(X+a)/(Y-b) - R|, |(X-a)/(Y+b) - R|`; `+inf` if `Y - b <= 0`). Quantities map to channels as
+`edep`/`dose`: E (both classes); `fluence`: L; `let_t`: LS/L; `let_d`: LS2/LS; `let_d_eps`: ES/E_step;
+`lookup_sum`: FE; `lookup_dose_avg`: FE/E_step; `fluence_spectrum`: FL. Energy channels use the
+fixed quantum 2^-30 MeV of the qualified `edep` array; the other kinds use
+`k = min(40, floor(62 - log2(hpb B_c)))` with the per-history bound `B_c` of their kind, with a
+precision floor of 2^-16 of a 1 mm entrance piece; the memory guard is
+`B (sum voxels + sum channel sizes) 8 bytes x workers`. Both are recorded in
+`EffectiveConfig.channels` and in the summary under `"tallies"`.
+
+**Ramp envelope.** The scored LET ramp is `S_bar = S_mid (1 -+ |gamma| f_E / 2)` with `E_mid >= E/2`
+(so a cutoff-crossing step reaches `E_cut/2`) and `f_E = dE/E_mid <= 2`. The compiler takes the
+extrema of `S_w` and `gamma` per bin of the runtime water row over `[E_cut/2, E_hi]`:
+`S_bar_max = max S_w (1 + |gamma|)` bounds LS, LS2 and ES, and `S_bar_min/max` give the LET-axis
+lookup coverage; a table with `|gamma| >= 1` (ramp possibly nonpositive) is rejected by `validate()`.
+Pieces with `S_bar <= 0` are counted in the out-of-domain counter (result invalid).
+
+**Path bound (checked).** The quanta of L, FL, LS and LS2 rest on the per-history path bound
+`B_L = 1.25 int dE / min_m S_lin,m(E)` (heterogeneous envelope of the runtime rows, `mixed_path_bound_mm`),
+`B_LS = S_bar_max B_L`, `B_LS2 = S_bar_max^2 B_L` (`B_ES = S_bar_max E_hi` by energy conservation). Because
+no straggling sampler guarantees a history to stop within a multiple of its CSDA path, the engine checks
+the assumption: reference and kernel sum each history's scored path (`s_act`) and set the per-history tally
+column `path_bound_exceeded` when it exceeds `B_L` (column after the residuals and the lookup out-of-domain
+count, present only with channels, so the qualified path and A16 are unchanged). The reduction surfaces it as
+`channel_raw.path_bound_exceeded` and a nonzero count invalidates the result: either every history respected
+the bound and the int64 capacity proof holds as compiled, or the result is invalid and no accumulator value is
+used. `max_steps * max_step_mm` (`B_L_truncation_mm`) is a rigorous but about 20 times coarser bound and only
+recorded (decision 0040 section 4).
+
+**Lookup tables.** `LookupTable.from_file(path, expected_sha256=None)` reads JSON on a uniform
+(linear or log) axis in MeV/u or keV/um (water LET), per-species non-negative finite values and
+mandatory `citation`, `license`, `source`, `synthetic`; non-uniform axes are rejected and
+`resample_uniform` is the explicit, recorded alternative. Provenance (file and content sha256,
+citation, license, synthetic flag, resampling) is part of the effective-configuration summary.
+**No clinical tables and no RBE formulas ship.** The only fixture is
+`tests/data/synthetic_lookup.json`, a mathematical test function `f = 1 + 0.1 L` marked
+`synthetic: true` with no biological meaning: it must never be used for a physical or clinical
+statement.
+
+Lookup magnitudes: the largest value of a table for the species a request selects must lie in
+`[2^-60, 2^60]` (representable FE quantum, scale and bound); `validate()` rejects others.
+
+Fail-closed rules added by V3-004 (test A12, `tests/ionmc/test_scoring_channels.py`): unknown or
+unproducible species, generation `"secondary"` (no secondary transport until V3-005A),
+`let_medium` other than water, dose-to-water, unknown grid or lookup, duplicate request names,
+lookup species gaps, axis coverage gaps (energy axis `[table floor, E_hi]/A`, LET axis the water-S
+interval of that energy range), a sha256 mismatch, non-uniform tables or spectrum edges, negative or
+non-finite lookup values, unused lookups, a quantum above the precision floor, accumulator memory
+above the budget and a backend without channels.
+
+**Capability report.** `ionmc.capabilities()["tallies"]` advertises the scoring contract, derived from the
+objects that enforce it (a test compares it with `CHANNEL_BACKENDS`, `TALLY_QUANTITIES`, the `TallyRequest`
+literals, the lookup axes and `producible`): per backend the supported quantities (`edep`, `dose`,
+`fluence`, `let_t`, `let_d`, `let_d_eps`, `lookup_sum`, `lookup_dose_avg`, `fluence_spectrum`) and its
+availability, the producible `(species, generation)` pairs (proton, primary; no secondaries before V3-005A),
+the accepted and rejected generation choices, `let_medium` water and `dose_reference` medium only, the lookup
+axes with the uniform-axis rule, the spectrum edge rule, the automatic channels and the fail-closed rules.
+The single-process mode of the test suite is a diagnostic and not an engine capability.
+
 ## Results
 
 `Result` fields: `valid`, `requested_config`, `effective_config`, `backend`, `device`, `precision`,
@@ -261,6 +375,25 @@ for trajectory-level parity with the Warp backends.
 
 ## Warp backends
 
+**Channel scoring in the kernel.** The kernel takes a `ChannelData` struct (`make_kernel_support(real).chan`;
+`ionmc.transport.channel_device`): `n_ch` (0 without tallies: the qualified path), the int64 accumulator
+`acc[B, sum size]`, per-channel integer rows (kind, class mask, generation range, offset, lookup, residual
+column, spectrum bins and log flag) and float rows (`2^k`, `2^-k`, spectrum axis), the int32 species match
+matrix, the lookup tables as one flat float64 array with per-(table, species) row offsets, and the water
+row. Right after the energy deposit of an in-grid piece (`deposit_leg`, the same `eps_p`) `score_piece`
+adds the piece to every channel of the grid that selects its class, species and generation: the value is
+computed in float64 in every variant (`make_scoring_funcs(float64)`, also for float32 transport),
+quantized `floor(x 2^k + 1/2)` and added with an int64 `atomic_add`; the rounding residual and the lookup
+out-of-domain count go to the history's own tally-row columns after the `6 + 2 G` fixed ones (`N` and `N_local` have no
+residual). Per step with `s_act > 0`, `step_state` does one water lookup at `E_mid` (`S_mid`, `k`,
+`Edot`). With channels present the legs of a step with `s_act > 0` are walked even if `eps = 0`;
+cutoff and `s_act = 0` deposits are class "local" (`score_local`). With `n_ch = 0` no scoring code runs
+and the outputs are bit-identical to the qualified path (row A16). The driver merges `acc` across chunks
+(it stays on the device) and workers (exact int64 sums). Python and warp-cpu float64 agree bit for bit
+on the channels in the cases tested (row A11-CI allows `1e-10` relative plus `n_v q_c`). Float64 CUDA and CPU trajectories are not bitwise identical (ulp-level differences of transcendental
+functions amplify through sampling and voxel crossings), so channel parity across devices is statistical (row A11-HR);
+within one device kind the integer channels are bit-identical across chunk sizes (A15).
+
 `warp-cpu` and `warp-cuda` run one kernel thread per history (`ionmc.transport.kernels`). The step loop is a
 statement-by-statement copy of `reference._history`: the same branches in the same order and the same expression
 order, all physics through the shared `@wp.func` functions, so the float64 kernel and the Python reference follow
@@ -275,8 +408,10 @@ old float32 bookkeeping shifted a deterministic end depth by about 2e-5 of the r
 `test_float32_kernel_keeps_energy_and_range_bookkeeping_in_double` guards it); on GPUs with a low float64 rate this is the
 cost of the float64 transcendental functions per step. Outputs: the deposit grid
 `edep[B, sum(n_voxels)]` of int64 fixed-point quanta (integer atomic adds into batch `h mod B`), per-history
-float64 `tally_rows[chunk, 6 + 2 G]` (tallies, outside deposits, quantization residuals) and int32
-`counter_rows[chunk, 8]` (each written by its own thread), and with diagnostics the end state (position,
+float64 `tally_rows[chunk, 6 + 2 G (+ C_res + 2 with scoring channels)]` (tallies, outside deposits, quantization
+residuals; with channels one residual column per non-count channel, the lookup out-of-domain count and the
+path-bound-exceeded flag) and int32
+`counter_rows[chunk, 9]` (each written by its own thread), and with diagnostics the end state (position,
 direction, energy, code) per history.
 
 **Exact tallies.** The host reduces the per-history rows with exact summation (`exact_components`: repeated
@@ -493,6 +628,26 @@ counts are recorded). The deposit grids of T13 must be bit-identical.
 Note on T9: with the midpoint scoring of V3-003A and `s_max` comparable to the IDD bin width, point deposits
 aliased with the bin edges (deviations of tens of percent relative to a 0.1 mm-step run in the deterministic
 case); track-length apportioning removes this, and the T9-CI test records the bounds.
+
+### V3-004 suites `lv4` and `hr4`
+
+`run_suite.py --suite {lv4,hr4}` runs the validation of decision 0040 with the machinery above
+(same fail-closed archive, `--only`, `--import-dirs`, `--scale`, `--workers 1` single-process mode and
+`summarize.py` verification and `--combine`). The step scripts are `steps_v4.py` (and `a16_digest.py`).
+The default `--seed-base` is the V3-004 qualification base 20381004; the rehearsal base 20351004, the consumed bases 20361004 and 20371004
+(observed before plan amendments 4 and 5) and any other base give a verifying but non-conformant archive (`summarize.py` records the reason). The
+hashed set additionally covers `validation/plans/v3-004-acceptance.md` and
+`tests/data/synthetic_lookup.json`. Per-step timeout floors (`run_suite.STEP_TIMEOUT_FLOOR_S`): 3300 s
+for each A9 part, 1800 s for A7 and 3600 s for the HR sample step.
+
+| Suite | Steps (names without the number) | Rows |
+|---|---|---|
+| `lv4` | `pytest-scoring-warp-cpu`, `a16-qualified-path-regression` (digests against `git archive a524f209`, fail closed without git), `a11-lv-python-vs-warp-cpu-256x150MeV`, `a15-chunks-cpu`, `a15-workers` (deferred in single-process mode, `DEFERRED_STEPS["lv4"]`), `a7-step-independence`, `a8-offline-let`, `a13-let-profile-exploratory` (non-gating), `a9-part-1of2`, `a9-part-2of2`, `a9-compare` | CI tests, A16, A11-LV, A15, A7, A8, A13, A9 |
+| `hr4` | `pytest-cuda-scoring` (`-m cuda`), `a15-chunks-cuda`, `a11-hr-channel-parity` (cpu-f32 vs cuda-f32 and the python vs cpu-f64 control pair, frozen `t12_compare` on the linear channel profiles) | CUDA tests, A15-CUDA, A11-HR |
+
+A9 runs 200 seeds in two parts of 100 (`--part i/2`, seed `base + 10000 + k`) whose npz files
+`a9-compare` verifies (hash, metadata, SHA, deterministic split) and merges; `a11-hr` runs its four
+samples in one step.
 
 ## Benchmarks
 

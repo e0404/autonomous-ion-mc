@@ -12,6 +12,7 @@ import sys
 from pathlib import Path
 from types import ModuleType
 
+import numpy as np
 import pytest
 
 REPO = Path(__file__).resolve().parents[2]
@@ -241,7 +242,13 @@ def _make_repo(root: Path) -> str:
     ignore = shutil.ignore_patterns("__pycache__", "*.pyc", "generated")
     for rel in ("src/ionmc", "tests/ionmc", "validation/scripts/transport", "benchmarks/transport"):
         shutil.copytree(REPO / rel, root / rel, ignore=ignore)
-    for rel in ("pyproject.toml", "uv.lock", "validation/plans/v3-003-acceptance.md"):
+    for rel in (
+        "pyproject.toml",
+        "uv.lock",
+        "validation/plans/v3-003-acceptance.md",
+        "validation/plans/v3-004-acceptance.md",
+        "tests/data/synthetic_lookup.json",
+    ):
         (root / rel).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(REPO / rel, root / rel)
     (root / ".gitignore").write_text("validation/generated/\nbenchmarks/generated/\n")
@@ -675,3 +682,229 @@ def test_runner_single_process_end_to_end(tmp_path: Path) -> None:
     env = (out / "environment.txt").read_text()
     assert "execution_mode=single-process-diagnostic" in env and "OMP_NUM_THREADS=1" in env
     assert "IONMC_SINGLE_PROCESS=1" in env
+
+
+# -- V3-004 suites (lv4, hr4) --------------------------------------------------------------------
+QUAL4 = 20381004
+
+
+def _env4(suite: str = "lv4", base: int = QUAL4) -> str:
+    return (
+        _env()
+        .replace("suite=lv", f"suite={suite}")
+        .replace("seed_base=20341004", f"seed_base={base}")
+    )
+
+
+def _archive4(d: Path, names: list[str], suite: str = "lv4", base: int = QUAL4,
+              env: str | None = None, doc: dict | None = None) -> None:  # type: ignore[type-arg]  # fmt: skip
+    summ = _load("summarize")
+    d.mkdir()
+    (d / "environment.txt").write_text(env if env is not None else _env4(suite, base))
+    (d / "manifest.txt").write_text("".join(f"{n}\n" for n in names))
+    for n in names:
+        body = f"# command: x\n# git_sha: {SHA}\n# started_utc: now\n# step_timeout_s: 1\n"
+        tag = summ.expected_tag(n)
+        if tag is not None:
+            full = {"pass": True, "reduced": False, "step": tag, "suite": suite, "git_sha": SHA,
+                    "seed_base": base, **(doc or {})}  # fmt: skip
+            body += "#JSON-BEGIN\n" + json.dumps(full) + "\n#JSON-END\n"
+        (d / f"{n}.txt").write_text(body + "\n# exit=0\n")
+
+
+def test_v4_suite_manifests_seed_base_and_hashed_files() -> None:
+    mod = _load("run_suite")
+    lv, hr = mod.full_step_names("lv4", 2), mod.full_step_names("hr4", 2)
+    assert [n.split("-", 1)[1] for n in lv] == [
+        "pytest-scoring-warp-cpu", "a16-qualified-path-regression",
+        "a11-lv-python-vs-warp-cpu-256x150MeV", "a15-chunks-cpu", "a15-workers",
+        "a7-step-independence", "a8-offline-let", "a13-let-profile-exploratory",
+        "a9-part-1of2", "a9-part-2of2", "a9-compare",
+    ]  # fmt: skip
+    assert [n.split("-", 1)[1] for n in hr] == [
+        "pytest-cuda-scoring", "a15-chunks-cuda", "a11-hr-channel-parity"
+    ]  # fmt: skip
+    assert names_sorted(lv) and names_sorted(hr)
+    for suite in ("lv4", "hr4"):
+        assert mod.DEFAULT_SEED_BASES[suite] == QUAL4
+        steps = mod.suite_steps(suite, 4, 0.5)
+        scripted = [s for s in steps if "steps_v4.py" in " ".join(s[1])]
+        assert scripted
+        for s in scripted:
+            assert s[1][s[1].index("--seed-base") + 1] == str(QUAL4)
+            assert "--timeout" in s[1] and "--scale" in s[1] or "a16" in s[0]
+    # the V3-003 suites keep their bases and file sets
+    assert mod.DEFAULT_SEED_BASES["lv"] == 20341004 == mod.DEFAULT_SEED_BASE
+    assert mod.source_file_list("lv") == mod.SOURCE_FILES
+    assert "validation/plans/v3-004-acceptance.md" in mod.source_file_list("lv4")
+    assert "tests/data/synthetic_lookup.json" in mod.source_file_list("hr4")
+    rel = {str(f.relative_to(mod.REPO)) for f in mod.source_files("lv4")}
+    assert {"src/ionmc/let_offline.py", "validation/scripts/transport/steps_v4.py",
+            "validation/plans/v3-004-acceptance.md",
+            "tests/data/synthetic_lookup.json"} <= rel  # fmt: skip
+    assert "validation/plans/v3-004-acceptance.md" not in {
+        str(f.relative_to(mod.REPO)) for f in mod.source_files("lv")
+    }
+    assert all(s[2].get("IONMC_REQUIRE_CUDA") == "1" for s in mod.suite_steps("hr4", 4, 1.0)
+               if "cuda" in s[0] or "hr-" in s[0])  # fmt: skip
+
+
+def names_sorted(names: list[str]) -> bool:
+    return names == sorted(names) and len(set(names)) == len(names)
+
+
+def test_v4_timeouts_deferred_step_and_single_process_markers() -> None:
+    mod = _load("run_suite")
+    assert mod.deferred_step_names("lv4") == ["05-a15-workers"]
+    assert mod.deferred_step_names("hr4") == []
+    one = mod.suite_steps("lv4", 1, 1.0, single_process=True)
+    assert one[0][1][-2:] == ["-m", "not multiprocess"]
+    assert mod.suite_steps("hr4", 1, 1.0, single_process=True)[0][1][-1] == (
+        "cuda and not multiprocess"
+    )
+    assert mod.step_timeout_s("lv4", "09-a9-part-1of2", 1500) == 3300
+    assert mod.step_timeout_s("lv4", "09-a9-part-1of2", 5000) == 5000
+    assert mod.step_timeout_s("hr4", "03-a11-hr-channel-parity", 1500) == 3600
+    assert mod.step_timeout_s("lv4", "04-a15-chunks-cpu", 1500) == 1500
+    std = mod.suite_steps("lv4", 4, 1.0)
+    for (n1, c1, _), (n2, c2, _) in zip(std[1:], one[1:], strict=True):
+        assert n1 == n2
+
+        def strip(c: list[str]) -> list[str]:
+            return [x for i, x in enumerate(c) if not (c[i - 1] == "--workers" or x == "--workers")]
+
+        assert strip(c1) == strip(c2) or "a15-workers" in n1 or "a9" in n1, n1  # fmt: skip
+
+
+def test_v4_summary_conformance_deferred_and_combine(tmp_path: Path) -> None:
+    summ, mod = _load("summarize"), _load("run_suite")
+    full = mod.full_step_names("lv4", 2)
+    ok = tmp_path / "ok"
+    _archive4(ok, full)
+    assert summ.main([str(ok), "--expected-sha", SHA]) == 0
+    s = json.loads((ok / "summary.json").read_text())
+    assert s["pass"] and s["conformant"] and not s["subset"], s["non_conformant_reasons"]
+    reh = tmp_path / "reh"  # the rehearsal base verifies but never qualifies
+    _archive4(reh, full, base=20351004)
+    assert summ.main([str(reh), "--expected-sha", SHA]) == 0
+    r = json.loads((reh / "summary.json").read_text())
+    assert r["pass"] and not r["conformant"]
+    assert any("rehearsal" in x and "non-qualification" in x for x in r["non_conformant_reasons"])
+    used = tmp_path / "used"  # the consumed base 20361004 (amendment 4) never qualifies
+    _archive4(used, full, base=20361004)
+    assert summ.main([str(used), "--expected-sha", SHA]) == 0
+    u = json.loads((used / "summary.json").read_text())
+    assert u["pass"] and not u["conformant"]
+    assert any("consumed" in x for x in u["non_conformant_reasons"])
+    # single-process diagnostic archive: the workers step may be deferred, never conformant
+    d = tmp_path / "diag"
+    _archive4(d, full, env=_env4() + DIAG_ENV_LINES)
+    (d / "05-a15-workers.txt").write_text(
+        f"# command: x\n# git_sha: {SHA}\n# started_utc: now\n# step_timeout_s: 1\n"
+        f"# status: deferred\n# reason: {DEFERRED}\n\n# exit=0\n"
+    )
+    assert summ.main([str(d), "--expected-sha", SHA]) == 0
+    sd = json.loads((d / "summary.json").read_text())
+    assert sd["deferred_steps"] == ["05-a15-workers"] and not sd["conformant"]
+    bad = tmp_path / "bad"  # another step may not be deferred
+    _archive4(bad, full, env=_env4() + DIAG_ENV_LINES)
+    (bad / "06-a7-step-independence.txt").write_text((d / "05-a15-workers.txt").read_text())
+    assert summ.main([str(bad), "--expected-sha", SHA]) == 1
+    # a document of the wrong tag or seed base fails
+    wrong = tmp_path / "wrong"
+    _archive4(wrong, full, doc={"seed_base": 1})
+    assert summ.main([str(wrong), "--expected-sha", SHA]) == 1
+    # combine the two halves
+    a, b = tmp_path / "a", tmp_path / "b"
+    _archive4(a, full[:6])
+    _archive4(b, full[6:])
+    out = tmp_path / "combined.json"
+    assert summ.main(["--combine", str(a), str(b), "--expected-sha", SHA, "--out", str(out)]) == 0
+    c = json.loads(out.read_text())
+    assert c["pass"] and c["complete"] and c["conformant"] and not c["missing_steps"]
+
+
+def test_v4_runner_single_process_smoke_end_to_end(tmp_path: Path) -> None:
+    """The cheapest steps of lv4 through the real runner (a8 at scale 0.01 and the deferred
+    workers step), single-process, rehearsal base."""
+    repo = tmp_path / "repo"
+    sha = _make_repo(repo)
+    out = repo / "validation" / "generated" / "transport" / "run"
+    r = _run("--suite", "lv4", "--out", str(out), "--expected-sha", sha, "--workers", "1",
+             "--scale", "0.01", "--seed-base", "20351004", "--only", "05", "07",
+             root=repo)  # fmt: skip
+    assert r.returncode == 0, r.stderr[-1500:] + r.stdout[-1500:]
+    s = json.loads((out / "summary.json").read_text())
+    assert s["pass"] and s["suite"] == "lv4" and not s["conformant"] and s["subset"]
+    assert s["deferred_steps"] == ["05-a15-workers"]
+    assert s["seed_base"] == "20351004"
+    assert s["steps"]["07-a8-offline-let"]["reduced"] is True
+    assert "validation/plans/v3-004-acceptance.md" in (out / "environment.txt").read_text()
+
+
+def test_a9_parts_roundtrip_and_tamper_detection(tmp_path: Path) -> None:
+    """The two A9 parts and the comparison (tiny: 4 seeds of 1000 histories; the verdict itself is
+    not asserted, only the plumbing): the comparison verifies the producer archive, the file hashes,
+    the metadata and the deterministic seed split, and refuses tampering."""
+    sha = "c" * 40
+    run_suite = _load("run_suite")
+    current = {
+        str(f.relative_to(run_suite.REPO)): run_suite.sha256(f)
+        for f in run_suite.source_files("lv4")
+    }
+    env = dict(os.environ, IONMC_RUN_SHA=sha, IONMC_RUN_SUITE="lv4", PYTHONPATH=str(REPO / "src"))
+    steps = str(SCRIPTS / "steps_v4.py")
+    own, prod = tmp_path / "own", tmp_path / "prod"
+    names = ["01-a9-part-1of2", "02-a9-part-2of2"]
+    for d in (own, prod):
+        d.mkdir()
+        text = _env(hashes=current).replace(SHA, sha).replace("suite=lv", "suite=lv4")
+        (d / "environment.txt").write_text(text.replace("seed_base=20341004", "seed_base=20351004"))
+    (prod / "manifest.txt").write_text("".join(f"{n}\n" for n in names))
+    common = ["--scale", "0.01", "--seeds", "4", "--seed-base", "20351004"]
+
+    def step(*args: str, environ: dict | None = None) -> subprocess.CompletedProcess[str]:  # type: ignore[type-arg]
+        return subprocess.run([sys.executable, steps, *args, *common], capture_output=True,
+                              text=True, env=environ or env, timeout=900)  # fmt: skip
+
+    samples = str(prod / "samples")
+    for i in (1, 2):
+        p = step("a9-part", "--part", f"{i}/2", "--out-dir", samples)
+        assert p.returncode == 0, p.stdout[-1500:] + p.stderr[-1500:]
+        body = f"# command: x\n# git_sha: {sha}\n# started_utc: n\n# step_timeout_s: 1\n"
+        (prod / f"{names[i - 1]}.txt").write_text(body + p.stdout + "\n# exit=0\n")
+    args = ("a9-compare", "--dirs", str(own), str(prod))
+    c = step(*args)
+    assert "#JSON-BEGIN" in c.stdout, c.stderr[-1500:]
+    doc = json.loads(c.stdout.split("#JSON-BEGIN")[1].split("#JSON-END")[0])
+    assert doc["step"] == "a9-compare" and doc["seeds"] == 4 and doc["reduced"]
+    assert doc["criterion"]["z_std_band"] == [0.87, 1.13] and set(doc["coverage"]) == {
+        "plateau_0.5R", "bragg_peak", "distal_80pct"}  # fmt: skip
+
+    def refused(proc: subprocess.CompletedProcess[str], text: str) -> None:
+        assert proc.returncode != 0 and text in (proc.stderr + proc.stdout), proc.stderr[-800:]
+
+    refused(step(*args, environ=dict(env, IONMC_RUN_SHA="d" * 40)), "SHA")
+    f = prod / "samples" / "a9-part-1-of-2.npz"
+    good = f.read_bytes()
+    f.write_bytes(good + b"x")
+    refused(step(*args), "sha256 mismatch")
+    f.write_bytes(good)
+    (prod / "samples" / "a9-part-2-of-2.npz").unlink()
+    assert step(*args).returncode != 0  # a missing part
+
+
+def test_a9_amended_criterion_synthetic() -> None:
+    """Plan footnote 5: z sd in [0.87, 1.13], |mean z| < 0.18, mean coverage in [0.93, 0.97]."""
+    mod = _load("steps_v4")
+    rng = np.random.default_rng(7)
+    z = rng.standard_normal(200)
+    z = (z - z.mean()) / z.std(ddof=1)  # exactly calibrated
+    assert mod.a9_depth_pass(z)["calibrated"]
+    low = mod.a9_depth_pass(z * 1.18)  # sigma 15 % too low
+    assert not low["z_std_ok"] and not low["calibrated"]
+    assert mod.a9_depth_pass(z * 1.119)["calibrated"]  # the observed peak value at 20371004
+    biased = mod.a9_depth_pass(z + 0.3)
+    assert biased["z_std_ok"] and not biased["z_mean_ok"] and not biased["calibrated"]
+    assert mod.a9_cover_all_pass(0.9435) and mod.a9_cover_all_pass(0.9464)
+    assert not mod.a9_cover_all_pass(0.92) and not mod.a9_cover_all_pass(0.98)
