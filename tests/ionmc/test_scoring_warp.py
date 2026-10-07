@@ -36,6 +36,7 @@ from ionmc.transport.parity_channels import (
     channel_t12_observables,
     compare_channel_partition,
     compare_channel_runs,
+    piece_counts_for,
 )
 from ionmc.transport.run import run_transport
 from ionmc.transport.scoring_ref import ReferenceChannelScorer
@@ -113,18 +114,16 @@ def test_a11_ci_python_vs_warp_cpu_float64_all_channels() -> None:
     b = Simulation(_cfg("warp-cpu")).run()
     plan = a.effective_config.channels
     assert plan is not None
-    n_ci = {
-        c.grid: i
-        for i, c in enumerate(plan.channels)
-        if c.kind == "N" and c.class_mask == CLASS_STEP
-    }
-    n_per = a.channel_batches(n_ci[0]) * plan.channels[n_ci[0]].quantum  # [B, nvox]
-    assert np.array_equal(a.channel_batches(n_ci[0]), b.channel_batches(n_ci[0]))
-    assert n_per.sum() > 1000
+    n_step = plan.count_channel(0, CLASS_STEP)
+    n_loc = plan.count_channel(0, CLASS_LOCAL)
+    for ni in (n_step, n_loc):
+        assert np.array_equal(a.channel_batches(ni), b.channel_batches(ni))
+    assert a.channel_batches(n_step).sum() > 1000 and a.channel_batches(n_loc).sum() > 0
     for ci, c in enumerate(plan.channels):
         x = a.channel_batches(ci) * c.quantum
         y = b.channel_batches(ci) * c.quantum
-        nv = np.repeat(n_per, c.size // n_per.shape[1], axis=1)
+        n_c = piece_counts_for(a, ci)  # class-specific counts of this channel
+        nv = np.repeat(n_c, c.size // n_c.shape[1], axis=1)
         bound = 1e-10 * np.maximum(np.abs(x), np.abs(y)) + nv * c.quantum
         assert np.all(np.abs(x - y) <= bound), (ci, c.kind)
     assert a.channel_raw is not None and b.channel_raw is not None

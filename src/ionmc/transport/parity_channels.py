@@ -56,6 +56,20 @@ def _batch_values(result: Result, ci: int) -> NDArray[np.float64]:
     return result.channel_batches(ci).astype(np.float64) * q / hpb
 
 
+def piece_counts_for(result: Result, ci: int) -> NDArray[np.float64]:
+    """Per-batch piece counts ``[B, n_voxels]`` that bound the rounding of channel ``ci``: the
+    step count N, the local count N_local or their sum according to the channel's class mask
+    (``ChannelPlan.piece_count_indices``); a spectrum channel's bins share its voxel counts."""
+    plan = result.effective_config.channels
+    assert plan is not None
+    out: NDArray[np.float64] | None = None
+    for ni in plan.piece_count_indices(ci):
+        v = result.channel_batches(ni).astype(np.float64) * plan.channels[ni].quantum
+        out = v if out is None else out + v
+    assert out is not None
+    return out
+
+
 def channel_labels(result: Result, grid: str) -> dict[str, int]:
     """Channel index of each label (``L``, ``LS``, ``LS2``, ``ES``, ``E_step``, ``FE``,
     ``spectrum``) that the run has on ``grid`` (labels without a request are absent)."""

@@ -76,6 +76,8 @@ CAPACITY_EXPONENT = 62
 FLOOR_EXPONENT = -16
 STRAGGLING_MARGIN = 1.25
 E_QUANTUM_EXPONENT = 30  # QUANTUM_MEV = 2**-30
+FE_F_MIN_EXPONENT = -60  # admissible largest lookup value of a request: [2^-60, 2^60]
+FE_F_MAX_EXPONENT = 60
 EXCLUDED_CHANNEL_NAME = "edep_excluded_from_let"
 PIECE_COUNT_NAME = "scoring_pieces"
 LOCAL_PIECE_COUNT_NAME = "scoring_pieces_local"
@@ -167,6 +169,15 @@ class ChannelPlan:
             if c.kind == "N" and c.grid == grid and c.class_mask == class_mask
         )  # fmt: skip
 
+    def piece_count_indices(self, ci: int) -> tuple[int, ...]:
+        """Indices of the automatic piece-count channels (kind N) whose counts bound channel
+        ``ci``: N (class step) if its class mask contains "step", N_local if it contains "local"
+        (both for edep and dose). The single source of every rounding bound."""
+        c = self.channels[ci]
+        return tuple(
+            self.count_channel(c.grid, m) for m in (CLASS_STEP, CLASS_LOCAL) if c.class_mask & m
+        )
+
     def summary(self) -> dict[str, Any]:
         """JSON-serialisable record for the effective configuration (quanta included)."""
         return {
@@ -251,7 +262,9 @@ def adaptive_exponent(histories_per_batch: int, bound_per_history: float) -> int
 
 
 def fe_exponent(f_max: float) -> int:
-    """Exponent of the FE quantum ``2^-30 2^ceil(log2 f_max)`` (tied to the energy quantum)."""
+    """Exponent of the FE quantum ``2^-30 2^ceil(log2 f_max)`` (tied to the energy quantum);
+    ``f_max`` must be within ``[2^-60, 2^60]`` (checked by the compiler), so ``k`` is in
+    ``[-30, 90]`` and the scale ``2^k`` is a finite float64."""
     return E_QUANTUM_EXPONENT - math.ceil(math.log2(f_max))
 
 
@@ -511,6 +524,16 @@ def compile_channels(
             # per-channel domain (review 67f03e06 b): only the species this request selects
             need_sp = [s for s in selected if s in {p for p, _ in producible}]
             f_req = max(float(table.values[s].max()) for s in need_sp)
+            if f_req > 0.0 and not (
+                math.ldexp(1.0, FE_F_MIN_EXPONENT) <= f_req <= math.ldexp(1.0, FE_F_MAX_EXPONENT)
+            ):
+                raise fail(
+                    f"tally {req.name!r}: the largest value {f_req:g} of lookup table "
+                    f"{table.name!r} is outside the admissible magnitude range "
+                    f"[2^{FE_F_MIN_EXPONENT}, 2^{FE_F_MAX_EXPONENT}] (the fixed-point quantum and "
+                    "scale of the lookup channel must be representable); rescale the table "
+                    "and its units"
+                )
             f_max = max(f_max, f_req)
         if req.energy_edges_mev_per_u is not None:
             spectrum = _spectrum_spec(req.name, req.energy_edges_mev_per_u)

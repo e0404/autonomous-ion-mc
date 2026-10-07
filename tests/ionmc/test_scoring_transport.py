@@ -118,9 +118,7 @@ class Run:
     def delta(self, ci: int) -> np.ndarray:
         """Rounding bound ``n_v q / 2`` of channel ``ci`` with the piece counts of its classes."""
         c = self.plan.channels[ci]
-        n_v = (self.n_pieces(c.grid) if c.class_mask & CLASS_STEP else 0.0) + (
-            self.n_pieces(c.grid, local=True) if c.class_mask & CLASS_LOCAL else 0.0
-        )
+        n_v = sum((self.total(ni) for ni in self.plan.piece_count_indices(ci)), np.zeros(1))
         return n_v * c.quantum / 2.0
 
     def residual(self, ci: int) -> float:
@@ -719,3 +717,38 @@ def test_ratio_rounding_bound_is_interval_arithmetic() -> None:
         for xt in (x - aa, x + aa):
             for yt in (yy - bb, yy + bb):
                 assert abs(xt / yt - x / yy) <= bnd * (1 + 1e-12)
+
+
+def test_piece_counts_follow_the_class_mask_of_each_channel(make_config: MakeConfig) -> None:
+    """One helper (``ChannelPlan.piece_count_indices`` / ``piece_counts_for``) gives every rounding
+    bound its counts: step-only channels use N, local-only channels N_local, edep both."""
+    from ionmc.transport.parity_channels import piece_counts_for
+
+    tallies = (TallyRequest("edep", "dose", "edep"), TallyRequest("lt", "dose", "let_t"))
+    r = _all_physics_run(make_config, tallies)
+    res = Simulation(r.eff.requested).run()
+    plan = r.plan
+    n_s, n_l = plan.count_channel(0, CLASS_STEP), plan.count_channel(0, CLASS_LOCAL)
+    s_cnt, l_cnt = res.channel_batches(n_s) * 1.0, res.channel_batches(n_l) * 1.0
+    assert s_cnt.sum() != l_cnt.sum() and l_cnt.sum() > 0  # the two counts differ
+    q = r.q_of
+    e_both = q("edep").numerator
+    e_loc = next(
+        i for i, c in enumerate(plan.channels) if c.kind == "E" and c.class_mask == CLASS_LOCAL
+    )
+    l_step = q("lt").denominator
+    assert plan.piece_count_indices(e_both) == (n_s, n_l)
+    assert plan.piece_count_indices(e_loc) == (n_l,)
+    assert plan.piece_count_indices(l_step) == (n_s,)
+    assert plan.piece_count_indices(n_s) == (n_s,) and plan.piece_count_indices(n_l) == (n_l,)
+    assert np.array_equal(piece_counts_for(res, e_both), s_cnt + l_cnt)
+    assert np.array_equal(piece_counts_for(res, e_loc), l_cnt)
+    assert np.array_equal(piece_counts_for(res, l_step), s_cnt)
+    assert not np.array_equal(piece_counts_for(res, e_loc), piece_counts_for(res, l_step))
+    # the test helper and the public bound agree with it
+    np.testing.assert_allclose(
+        r.delta(e_both), (r.n_pieces() + r.n_pieces(local=True)) * plan.channels[e_both].quantum / 2
+    )
+    np.testing.assert_allclose(
+        r.delta(e_loc), r.n_pieces(local=True) * plan.channels[e_loc].quantum / 2
+    )

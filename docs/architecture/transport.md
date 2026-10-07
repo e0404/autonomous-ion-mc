@@ -295,6 +295,9 @@ citation, license, synthetic flag, resampling) is part of the effective-configur
 `synthetic: true` with no biological meaning: it must never be used for a physical or clinical
 statement.
 
+Lookup magnitudes: the largest value of a table for the species a request selects must lie in
+`[2^-60, 2^60]` (representable FE quantum, scale and bound); `validate()` rejects others.
+
 Fail-closed rules added by V3-004 (test A12, `tests/ionmc/test_scoring_channels.py`): unknown or
 unproducible species, generation `"secondary"` (no secondary transport until V3-005A),
 `let_medium` other than water, dose-to-water, unknown grid or lookup, duplicate request names,

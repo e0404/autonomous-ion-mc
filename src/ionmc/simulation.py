@@ -461,12 +461,9 @@ def _grid_quantities(gi: int, eff: EffectiveConfig, raw: RawTransport) -> dict[s
 
     def n_pp(ci: int) -> NDArray[np.float64]:
         """Pieces per primary and voxel that channel ``ci`` can receive (by its class mask)."""
-        m = plan.channels[ci].class_mask
         total = np.zeros(nvox)
-        if m & CLASS_STEP:
-            total = total + n_step_pp
-        if m & CLASS_LOCAL:
-            total = total + n_local_pp
+        for ni in plan.piece_count_indices(ci):
+            total = total + (n_step_pp if ni == n_step_ci else n_local_pp)
         return total
 
     out: dict[str, QuantityResult] = {}

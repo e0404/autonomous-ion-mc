@@ -632,3 +632,38 @@ def test_capability_report_matches_the_enforced_scoring_contract() -> None:
     assert cap["species"] == ["proton"]
     # the report is JSON-serialisable
     json.dumps(cap)
+
+
+def _fe_plan_with_scale(make_config: MakeConfig, scale: float) -> ChannelPlan:
+    x = np.linspace(0.0, 100.0, 11)
+    lk = LookupTable("lk", "q", "1", "let_water_kev_um", "linear", x,
+                     {"proton": scale * (1.0 + x) / 101.0}, "c", "l", "s", True)  # fmt: skip
+    cfg = make_config(energy=100.0, n=400, n_batches=20)
+    return _plan(_with(cfg, _req("a", "lookup_sum", lookup="lk"), lookups=(lk,)))
+
+
+@pytest.mark.parametrize("scale", [1e-300, 1e-30, 2.0**-61, 2.0**61, 1e30, 1e300])
+def test_fe_extreme_lookup_magnitudes_fail_closed_in_validate(
+    make_config: MakeConfig, channels_enabled: None, scale: float
+) -> None:
+    """Review 63d3ef7b (1): a finite lookup whose largest value is outside [2^-60, 2^60] cannot
+    give a representable quantum and scale; validate() rejects it (it never reaches a backend)."""
+    with pytest.raises(UnsupportedCombinationError, match="admissible magnitude range"):
+        _fe_plan_with_scale(make_config, scale)
+
+
+@pytest.mark.parametrize("scale", [2.0**-60, 2.0**-40, 1e-3, 1.0, 1e6, 2.0**60])
+def test_fe_admissible_boundary_values_give_representable_scales(
+    make_config: MakeConfig, channels_enabled: None, scale: float
+) -> None:
+    """The boundary values are either accepted with a finite power-of-two scale and a finite
+    bound, or rejected by another fail-closed rule (never by an overflow later)."""
+    try:
+        plan = _fe_plan_with_scale(make_config, scale)
+    except UnsupportedCombinationError as exc:
+        assert "admissible magnitude range" not in str(exc)
+        return
+    for c in plan.channels:
+        assert -64 <= c.k <= 100
+        assert math.isfinite(math.ldexp(1.0, c.k)) and math.isfinite(c.bound_per_history)
+        assert math.isfinite(c.bound_per_history * math.ldexp(1.0, c.k))

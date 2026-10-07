@@ -73,6 +73,7 @@ from ionmc.transport.parity_channels import (
     channel_labels,
     compare_channel_partition,
     compare_channel_runs,
+    piece_counts_for,
 )
 
 HERE = Path(__file__).resolve().parent
@@ -723,13 +724,12 @@ def compare_channels_ci(a: Result, b: Result) -> dict[str, Any]:
     channels, ``n_nonzero`` and ``defined_mask`` identical; equal out-of-domain counts."""
     plan = a.effective_config.channels
     assert plan is not None and a.channel_raw is not None and b.channel_raw is not None
-    n_ci = {c.grid: i for i, c in enumerate(plan.channels) if c.kind == "N"}
     worst: dict[str, float] = {}
     ok = True
     for ci, c in enumerate(plan.channels):
         x = a.channel_batches(ci) * c.quantum
         y = b.channel_batches(ci) * c.quantum
-        n_per = a.channel_batches(n_ci[c.grid]) * plan.channels[n_ci[c.grid]].quantum
+        n_per = piece_counts_for(a, ci)  # N, N_local or both, by the channel's class mask
         nv = np.repeat(n_per, c.size // n_per.shape[1], axis=1)
         bound = 1e-10 * np.maximum(np.abs(x), np.abs(y)) + nv * c.quantum
         with np.errstate(divide="ignore", invalid="ignore"):

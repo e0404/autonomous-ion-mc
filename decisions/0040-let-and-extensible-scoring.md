@@ -171,6 +171,13 @@ pseudo-species; the same bound is used). The rounding bound of a channel uses th
 classes in its class mask (edep and dose: both; the excluded-energy channel: local; all others:
 step), so that the reported `rounding_bound` is a deterministic bound.
 
+**Admissible lookup magnitude (fail closed, review amendment).** The largest value of a lookup
+table over the species a request selects must lie in `[2^-60, 2^60]` (or the table is all zero,
+rejected separately). Then the FE exponent `k = 30 - ceil(log2 f_max)` is in `[-30, 90]`, the scale
+`2^k` and the bound `f_max E_hi` are finite float64 and the accumulator capacity check is
+meaningful; `validate()` rejects anything else with a message naming the range (rescale the table
+and its units).
+
 **Precision floor (fail closed).** `q_c <= 2^-16 u_c` with `u_c = 1 mm S_ref^j`, `j` the power of S
 in the kind; that bounds the relative rounding of a 1 mm entrance piece by 1.5e-5. A configuration
 that violates the floor raises before transport. Example (water, protons, 150 MeV, E_cut 2 MeV;
@@ -182,8 +189,8 @@ E by the existing rule.
 **Residuals.** Every channel except N has one per-history float64 tally column `sum(x - n q_c)`,
 reduced by the exact-sum expansion (`tally_rows` becomes `(n, 6 + 2G + C)`). They give global
 closures at floating-point precision and report the quantization magnitude. Ratios have no
-residual; their quantization error is bounded per voxel by
-the first-order form `|dR| <= (n_v q_X/2 + R n_v q_Y/2) / Y_v` (the reported `rounding_bound` uses the interval form `max |(X+a)/(Y-b) - R|, |(X-a)/(Y+b) - R|` with `a = n_v q_X/2`, `b = n_v q_Y/2`, `+inf` if `Y - b <= 0`, review amendment), with `n_v` the piece count of the classes of the respective channel (N, N_local; both are automatic).
+residual; their quantization error is approximated to first order by
+`|dR| ~ (n_v q_X/2 + R n_v q_Y/2) / Y_v` (an approximation, not a bound: it substitutes the quantized R). The reported, deterministic `rounding_bound` uses the interval form `max |(X+a)/(Y-b) - R|, |(X-a)/(Y+b) - R|` with `a = n_v q_X/2`, `b = n_v q_Y/2`, `+inf` if `Y - b <= 0`, review amendment), with `n_v` the piece count of the classes of the respective channel (N, N_local; both are automatic).
 Fallback if V3-012 measures a CUDA cost: residuals for E-kind channels only (this would drop the
 A1/A3 global closures).
 
