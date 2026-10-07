@@ -59,7 +59,7 @@ The requirements are V1-MUST-005, V1-MUST-013 and V1-MUST-014, with fail-closed 
 
 - **Per-element σ(E).** For C-12 (natural C; C-13 at 1.1 % neglected), N-14, O-16, Al-27, P-31 and Ca-40, σ(E) comes from MF3/MT5. Surrogates are as above.
 - **Hydrogen** contributes 0.
-- **Runtime rows.** The builder writes per-material rows on a uniform ln E grid with ≥ 50 points per decade:
+- **Runtime rows.** The builder writes per-material rows on a uniform ln E grid with ≥ 50 points per decade (*amended 2026-10-07, C7 outcome:* on the union grid of all ENDF MF3/MT5 and MF6/MT5 energies in [1,150] MeV with a uniform ln E grid ≥ 50 points/decade over [1,250] MeV, interpolated lin-lin in E, looked up by the fixed-step binary search `grid_locate`; the builder fails if any MF3/MT5 or MF6 yield TAB1 has an interpolation law other than INT=2 in [1,150] MeV; see acceptance-plan Amendment 3):
   - Σ_mass(E) = N_A Σ_el w_el σ_el/A_el [cm²/g];
   - cumulative target fractions;
   - the majorant Σ̂(E) = 1.02 × max Σ over [E(1 − 2f_E − 0.01), E], or over [0, E] for an end-of-range step.
@@ -91,7 +91,7 @@ The requirements are V1-MUST-005, V1-MUST-013 and V1-MUST-014, with fail-closed 
   - Accept iff the nuclide has an AME2020 mass and m_r ≥ M_r. Then E* = m_r − M_r.
 - **Attempts.** At most 64 attempts. Exhaustion increments `nuclear_rejection_limit`, tallies the energy as `unaccounted` and invalidates the result.
 - **Lab frame.** Boost everything with the p + target CM velocity. Energy, momentum, charge and baryon number are then conserved exactly per event, to floating-point rounding.
-- **Disposition:**
+- **Disposition** (the α row and the residual row are read with the amendment below):
 
   | Product | Treatment |
   |---|---|
@@ -107,6 +107,8 @@ The requirements are V1-MUST-005, V1-MUST-013 and V1-MUST-014, with fail-closed 
   - Deuterons have no nuclear interactions.
   - `nist-star` with `nuclear=True` raises (no deuteron table).
 
+*Amendment 2026-10-07 (C7 outcome).* The event model above failed V4 before qualification (acceptance-plan Amendment 1 quotes the numbers verbatim; the C7 table `99b51c2c…` is archived as superseded evidence). It is replaced by: multiplicities n_s = ⌊λ_s⌋ + [u_s < λ_s − ⌊λ_s⌋] (shared function `multiplicity_round`, cap 16 kept, same RNG slots) with λ solved at build time by exact enumeration of the ≤ 32 outcomes so that the post-acceptance mean yields equal ENDF (tolerance 1e-6, nodes not reaching 1e-3 recorded `converged=false`); acceptance iff the residual (Z_r, A_r) has an AME2020 mass (≤ 64 attempts, exhaustion rule unchanged; the builder fails if the exact P_accept < 0.5 at any node or midpoint, so the runtime exhaustion probability is ≤ 2⁻⁶⁴); products sampled independently as before; the residual receives the ENDF mean heavy-recoil energy Σ_r y_r⟨E_r⟩ (lab, lin-lin in E, stretched above 150 MeV) and is deposited locally with the α; E* is not deposited (residual de-excitation is represented by the ENDF γ yields); the per-event difference Δ = T₁ + m_p + M_t − Σ E_lab − M_r − T_r is tallied as `nuclear_imbalance` (signed, never deposited), so that T₁ = Σ T_lab + T_r + nuclear_binding + Δ exactly. Energy and momentum are conserved on average to the extent the evaluation is, not per event; single histories may deposit more than their initial energy. Reason: with inclusive LA150 yields and spectra any per-event-conserving scheme removes 34–64 % of the product energy and the by-difference residual recoil is 5–10× the evaluated one (planner experiments 2026-10-07). Rejected: a momentum-balancing residual (negative lab kinetic energy for the typical net CM momentum); a per-node product-energy scale κ (breaks the V4 5 % criterion; pre-registered fallback if V5 fails); 256 inverse-CDF bins (×4 memory). The "Products" row of the options table is read with this amendment.
+
 ### 4. Random numbers (amends decision 0037)
 
 - The purpose table becomes: 0 transport (EM), 1 source sampling, **2 nuclear** (`PURPOSE_NUCLEAR`; formerly reserved). The name `PURPOSE_RESERVED` is kept as an alias of the same value 2, so existing imports keep working.
@@ -119,7 +121,7 @@ The requirements are V1-MUST-005, V1-MUST-013 and V1-MUST-014, with fail-closed 
 
 ### 5. Bookkeeping and fail-closed rules
 
-- **Balance.** `initial = step_deposit + cutoff + nuclear_local + escaped + nuclear_escaped_neutron + nuclear_escaped_gamma + nuclear_binding + truncated + unaccounted`.
+- **Balance.** `initial = step_deposit + cutoff + nuclear_local + escaped + nuclear_escaped_neutron + nuclear_escaped_gamma + nuclear_binding + truncated + unaccounted` (*amended 2026-10-07:* `+ nuclear_imbalance`, signed, never deposited; the conditional block also carries `nuclear_alpha_local`, the α part of `nuclear_local`).
 - **Grid identity.** `in_grid + quantization + outside = step_deposit + cutoff + nuclear_local`.
 - **Layout.**
   - The nuclear tallies and the counters `majorant_violation`, `nuclear_rejection_limit` and `nuclear_conservation` form blocks that exist only with `nuclear=True`.
@@ -130,6 +132,7 @@ The requirements are V1-MUST-005, V1-MUST-013 and V1-MUST-014, with fail-closed 
   - The argument: superadditivity of the convex CSDA range, plus R_d ≤ R_p at equal total energy.
   - The scored path sums over all particles of a history.
   - The E bound is E_hi + Q⁺. The piece-count bound is multiplied by the particle bound 32.
+  - *Amended 2026-10-07 (no per-event conservation):* the per-event energy bound is T_sum,max = max over grid nodes of Σ_{s∈{p,d}} ⌈λ_s⌉ · T_lab,max,s (top bin edge, μ = 1 boost), written to the table JSON as `transport_energy_bound_mev`; B_L = 1.25 · (mixed_path_bound(E_hi) + mixed_path_bound(T_sum,max)) by superadditivity of R; the E bound becomes max(E_hi, T_sum,max).
   - `path_bound_exceeded` still backstops these at runtime.
 - **Rejected before transport** (`validate()`):
   - an unsupported element;
@@ -169,6 +172,8 @@ Both tiers below are fixed now, before any G or D value exists.
 - **Tier 2 (fallback, only if tier 1 fails):** local deposition is still accepted iff D ≤ 1e-3 AND the 99.9th-percentile lab α energy has an ASTAR water CSDA range ≤ 2 mm at both energies. Passing via tier 2 is recorded in the Outcome as a documented approximation. It forbids sub-millimetre statements about α dose until V3-008 (z = 2 transport), and the ledger status says so.
 - **Neither tier:** the task stops. The orchestrator decides between blocking α-dependent claims and re-scoping. There is no α transport in slice A.
 
+*Outcome and amendment 2026-10-07.* Neither tier passed on the C7 table (150 MeV: G 0.5718, D 3.78e-3, 99.9th-percentile α range 0.258 g/cm²; 250 MeV: G 0.8038, D 1.10e-2, 0.852 g/cm²; the planner's estimate with the amended sampler: G 0.672 / 0.850, D 5.55e-3 / 1.42e-2, 0.995 / 2.51 g/cm²). Orchestrator decision: local deposition is kept as a documented approximation, valid only if the recomputed D ≤ 2e-2 and the 99.9th-percentile α range ≤ 3 g/cm² at both energies (ceiling set with the estimate known); every nuclear run reports `nuclear_alpha_local`; no statement about α dose, α LET or nuclear-secondary dose structure below 1 cm (150 MeV) / 2.5 cm (250 MeV) until V3-008 re-runs D6 with transported α. Straight-line CSDA α placement was rejected as a re-scope duplicating V3-008. See acceptance-plan Amendment 2.
+
 ### 8. Amendment to decision 0039
 
 The row "Nuclear flag: `nuclear=True` raises until V3-005" becomes:
@@ -188,12 +193,13 @@ The python pool path is implemented for `nuclear=True` like any other run: the p
    - The p+O evaluation has almost no independent data between 65 and 250 MeV (evidence gap).
    - *Planned remedy:* V3-005B evaluates Tripathi-light and the Geant4 BIC/BGG σ_inel as an alternative data role against the post-1997 EXFOR set. Pre-registered fallback D9: refit on pre-1997 entries only, evaluate on the unchanged post-1997 set.
 2. **No t and ³He** (absent in LA150; physically about 0.1–0.2 per event [M]). TOPAS comparisons will show the gap.
-3. **α deposited locally.** This is gated by D6, in two tiers fixed before any value was computed (see "α local-deposition gate D6"); G and D are recorded in the table JSON.
-4. **Residual excitation E\*** is deposited locally, although part of it physically leaves as γ.
-5. **Uncorrelated multiplicities** preserve mean yields only, not fluctuations or correlations. Microdosimetry is out of scope.
+3. **α deposited locally.** *(amended 2026-10-07)* Both D6 tiers failed (section 7); local deposition is kept by orchestrator decision as a documented approximation under the D ≤ 2e-2 / 3 g/cm² ceiling, with the claim restrictions of section 7 until V3-008. About 0.6 % (150 MeV) / 1.4 % (250 MeV) of the beam energy in water is α energy deposited at the interaction point instead of along α tracks of up to ≈ 1 / 2.5 cm (99.9th percentile).
+4. *(amended 2026-10-07)* **No per-event energy or momentum conservation.** Planner estimate of the mean `nuclear_imbalance` per event at 100/150 MeV: C-12 −6.5/−10.5 MeV, O-16 −8.2/−13.7 MeV (products carry more energy than available; 7–10 % of E_avail; sd 50–78 MeV); in water at 150 MeV about 1.5 % of the beam energy appears in non-elastic products (≈ 65 % of it in transported p/d). Every run reports the sum. E* is not deposited; the residual carries only the ENDF mean recoil.
+5. **Uncorrelated floor+Bernoulli multiplicities** preserve mean yields only (minimum-variance choice), not fluctuations or correlations. Microdosimetry is out of scope.
 6. **No nuclear interactions of secondaries.** Estimate [M]: a secondary proton (mean about 40 MeV) undergoes a non-elastic event with P ≈ 1.5 %. That is ≈ 0.3 % of 150 MeV histories, carrying ≲ 0.1 % of the energy. V3-005B quantifies it.
 7. **No p-p elastic and no nuclear elastic scattering** on C/O. No lateral-halo claim is made until V3-005B (V6).
-8. **LCT=3** is interpreted as the p + target CM. The attempt bound may bias near-threshold events (V4 records the distortion).
+8. **LCT=3** is interpreted as the p + target CM. *(amended 2026-10-07)* E′_CM is uniform within each of 64 equiprobable bins: ⟨E′⟩ is biased by +3…+5 % for α and +14…+24 % for γ at 100–150 MeV (n, p, d within 0.2 %); the γ bias affects only the escaped-γ tally. Residual-existence rejection changes yields by < 1 % after the exact λ correction (V4 records it).
+9. **Kalbach separation energies** use the Kalbach (1988) systematics formula, not AME2020 masses (decision at C4, 2026-10-06); the a parameter is insensitive to this at the per-mille level.
 
 ## Validation strategy (frozen before results exist)
 
@@ -205,4 +211,5 @@ The python pool path is implemented for `nuclear=True` like any other run: the p
 
 ## Outcome
 
-(To be appended: D6 gate values G and D, and the tier passed; V1/N1; V2; V3; V4; X1; E1; contrary evidence.)
+- 2026-10-07, C7 table `99b51c2c9001bb6f41a87e2092ca70172c14ee2d207f5e4774ff7460409dcdd1` (superseded): D6 neither tier (section 7); N1/V1 failed on the uniform grid (Amendment 3); the λ fixed point did not converge for C-12/N-14 at any node (Amendment 1). All three led to dated amendments before any transport result existed.
+- (To be appended: C7b table id; D6 recomputed G, D and the ceiling check; V1/N1; V2; V3; V4; V4b; X1; E1; contrary evidence.)

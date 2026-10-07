@@ -116,3 +116,38 @@ that into a failure (the nuclear-data analogue of `IONMC_REQUIRE_NIST`).
 
 `path` never uses the network. Exit code 1 reports a missing, offline-unavailable or
 corrupt dataset.
+
+## Derived nuclear table (decision 0041)
+
+`ionmc data build nuclear-proton [--cache-dir D] [--points-per-decade 100] [--lambda-events N]
+[--no-strict]` (`ionmc.nuclear.build.build_nuclear_proton`) turns the pinned sources
+`endf-b8.0-protons`, `ame2020-mass` and `nist-astar-water-2005` into
+`<cache>/derived/nuclear-proton-<id>.npz` and `.json`; `id = sha256(source hashes, builder version,
+canonical options)`. The build is single-process, deterministic (fixed numpy PCG64 seed for the
+lambda adjustment, counter-based uniforms, fixed-timestamp npz) and writes identical bytes twice.
+
+- **Cross sections.** ENDF MF3/MT5 on its native interpolation up to 150 MeV (0 below threshold);
+  150-250 MeV: `sigma(150) sigma_TL(E)/sigma_TL(150)` (Tripathi light system). Uniform ln E grid
+  from 1 MeV with 150 MeV as a node, at least 50 points per decade, up to the first node >= 250.
+  Surrogates (Na, Mg -> Al-27; S, Cl -> P-31; K, Ar -> Ca-40) are scaled by `(A/A_ref)^(2/3)`
+  (recorded per element); hydrogen is 0; any other element is absent
+  (`UnsupportedCombinationError` from `NuclearTable.material_rows`).
+- **Product rows.** For n, p, d, alpha, gamma: ENDF yield, 64 equiprobable E'_CM bins (quantile
+  interpolation between incident energies) and the Kalbach `r` per bin; above 150 MeV the 150 MeV
+  rows with E' scaled by `E_avail(E)/E_avail(150)`. Kalbach separation energies use the systematics
+  formula (`"kalbach_separation": "systematics-formula"`); AME2020 masses only for the residual-mass
+  test and Q values. Residual recoils are not sampled (mean energies stored for information).
+- **Multiplicities.** Independent Poisson per species; `lam_s(E)` adjusted per energy node by a
+  fixed point with the numpy sampler `ionmc.nuclear.events` (same algorithm as the shared
+  functions; its scalar path uses their twins). Per-node residuals, iterations and the usable
+  (non-exhausting) restriction are in the JSON (`multiplicity.targets`).
+- **D6.** `gate_d6.numbers["150"|"250"]` hold `G`, `D`, `p_event`, the 99.9th-percentile lab alpha
+  energy and its ASTAR CSDA range; `tier1_pass`, `tier2_pass` are recorded, never enforced.
+- **Loading.** `ionmc.nuclear.tables.NuclearTable.load(cache_dir, id)` uses
+  `np.load(allow_pickle=False)`, re-hashes the npz against the JSON, re-derives the id, checks the
+  source pins against the registry and freezes the arrays (`NuclearTableMissingError`,
+  `NuclearTableStaleError`, `NuclearTablePinError`). `material_rows(material, f_e)` gives
+  `Sigma_mass`, cumulative target fractions and two majorant arrays: the window majorant
+  `1.02 max Sigma` over `[E_k (1 - 2 f_E - 0.01), E_{k+1}]` and the end-of-range majorant
+  (running maximum); use the step lookup.
+- **Checks.** `validation/scripts/transport/nuclear_checks.py` runs N1, V1 and V1b.

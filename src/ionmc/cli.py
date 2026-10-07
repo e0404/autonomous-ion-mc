@@ -37,7 +37,40 @@ def build_parser() -> argparse.ArgumentParser:
     imp.add_argument("path", help="local file to import")
     imp.add_argument("--dataset", required=True, dest="dataset_id", help="registered dataset id")
     imp.add_argument("--cache-dir", default=None, help="cache directory")
+    bld = data_sub.add_parser("build", help="build a derived table from cached datasets")
+    bld.add_argument("table", choices=["nuclear-proton"])
+    bld.add_argument("--cache-dir", default=None, help="cache directory")
+    bld.add_argument("--points-per-decade", type=int, default=100)
+    bld.add_argument("--lambda-events", type=int, default=200000)
+    bld.add_argument(
+        "--no-strict", action="store_true", help="do not fail on lambda non-convergence"
+    )
     return parser
+
+
+def _build_nuclear(args: argparse.Namespace) -> int:
+    from ionmc.data import cache
+    from ionmc.nuclear.build import BuildError, BuildOptions, build_nuclear_proton
+
+    opts = BuildOptions(
+        points_per_decade=args.points_per_decade,
+        lambda_events=args.lambda_events,
+        strict=not args.no_strict,
+    )
+    try:
+        res = build_nuclear_proton(cache.resolve_cache_dir(args.cache_dir), opts, log=print)
+    except (BuildError, FileNotFoundError, cache.IntegrityError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    gate = res.info["gate_d6"]
+    print(f"table id {res.table_id}")
+    for key, num in gate["numbers"].items():
+        print(
+            f"D6 {key} MeV: G={num['G']:.4f} D={num['D']:.3e} "
+            f"R99.9={num['percentile_range_g_cm2']:.4f}"
+        )
+    print(f"tier1_pass={gate['tier1_pass']} tier2_pass={gate['tier2_pass']}")
+    return 0
 
 
 def _run_data(args: argparse.Namespace) -> int:
@@ -49,6 +82,8 @@ def _run_data(args: argparse.Namespace) -> int:
     action = args.data_command
     if action is None:
         return 2
+    if action == "build":
+        return _build_nuclear(args)
     cdir = cache.resolve_cache_dir(args.cache_dir)
     if action == "list":
         for ds in DATASETS.values():

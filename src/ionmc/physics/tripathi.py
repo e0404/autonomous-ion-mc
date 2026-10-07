@@ -31,7 +31,7 @@ from numpy.typing import ArrayLike, NDArray
 U_MEV = 931.49410242
 M_E_MEV = 0.51099895
 M_P_MEV = 938.27208816
-R_RMS_FM = {1: 0.875, 12: 2.472, 14: 2.540, 16: 2.730, 27: 3.061, 31: 3.187, 40: 3.478}
+R_RMS_FM = {1: 0.875, 12: 2.472, 14: 2.540, 16: 2.730, 27: 3.061, 28: 3.122, 31: 3.187, 40: 3.478}
 """Rounded rms charge radii [fm] by mass number (proton 0.875 fm)."""
 T1_PROTON = 23.0
 

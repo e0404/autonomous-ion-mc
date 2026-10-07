@@ -13,7 +13,7 @@ related-model, backend-parity, self-consistency.
 | Suite | Category and content |
 |---|---|
 | `S-PHYS-PROTON-EM` | physics: proton stopping, range, straggling, lateral scattering |
-| `S-PHYS-PROTON-NUCLEAR` | physics: proton nuclear attenuation and secondaries (decision 0041; frozen rows `validation/plans/v3-005-acceptance.md`: slice A P1-P5, N1, V1, V1b informative, V2, V3, V4, V9, R1, X1, C1, D6, E1; slice B V2b, V5-V8) |
+| `S-PHYS-PROTON-NUCLEAR` | physics: proton nuclear attenuation and secondaries (decision 0041; frozen rows `validation/plans/v3-005-acceptance.md`: slice A P1-P5, N1, V1, V1b informative, V2, V3, V4, V4b, V9, R1, X1, C1, D6, E1; slice B V2b, V5-V8; amended 2026-10-07: Amendments 1-3 of the plan, D6 both tiers failed and local alpha deposition kept under a declared ceiling) |
 | `S-PHYS-LET` | physics: track- and dose-averaged LET including mixed fields |
 | `S-PHYS-HELIUM` | physics: helium range, primary attenuation, fragment (Z=1,2) yields and distal dose |
 | `S-PHYS-CARBON` | physics: carbon range, attenuation, fragment build-up, distal dose |
