@@ -86,6 +86,8 @@ def _cfg(
         material_index=np.zeros(shape, dtype=np.int32),
     )  # fmt: skip
     extra: dict[str, Any] = {} if chunk is None else {"chunk_histories": chunk}
+    requests = _tallies() if tallies is None else tallies
+    used = {t.lookup for t in requests}
     return SimulationConfig(
         source=PencilBeamSource(PROTON, (0.0, 0.0, 0.0), (0.0, 0.0, 1.0), energy, *sigma),
         geometry=geo,
@@ -97,8 +99,8 @@ def _cfg(
             backend=backend, precision=precision, n_histories=n, n_batches=nb, seed=seed,
             cpu_workers=workers, **extra,
         ),  # type: ignore[arg-type]
-        tallies=_tallies() if tallies is None else tallies,
-        lookups=() if tallies == () else (LK_LET, LK_E),
+        tallies=requests,
+        lookups=tuple(lk for lk in (LK_LET, LK_E) if lk.name in used),
         diagnostics=diag or DiagnosticsOptions(),
     )  # fmt: skip
 
