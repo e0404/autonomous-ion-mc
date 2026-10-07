@@ -296,7 +296,8 @@ class QuantityResult:
     adds at most ``q / 2``, so a channel's bound is ``(n_step [+ n_local]) q / 2`` per voxel and
     primary with the exact piece counts of the automatic channels N (class "step") and N_local
     (class "local"), taken according to the channel's class mask (both for edep and dose); ratios
-    combine numerator and denominator bounds by first-order propagation. It bounds the
+    use interval arithmetic on the quantized numerator and denominator sums (both corners; +inf
+    where the denominator interval reaches zero, never 0). It bounds the
     quantization error of the stored sums, not the statistical error; ``quantum_exponents`` the
     ``k_c`` of the numerator and denominator channels; ``lookup`` the provenance of the lookup
     table (or None).

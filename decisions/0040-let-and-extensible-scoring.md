@@ -183,7 +183,7 @@ E by the existing rule.
 reduced by the exact-sum expansion (`tally_rows` becomes `(n, 6 + 2G + C)`). They give global
 closures at floating-point precision and report the quantization magnitude. Ratios have no
 residual; their quantization error is bounded per voxel by
-`|dR| <= (n_v q_X/2 + R n_v q_Y/2) / Y_v`, with `n_v` the piece count of the classes of the respective channel (N, N_local; both are automatic).
+the first-order form `|dR| <= (n_v q_X/2 + R n_v q_Y/2) / Y_v` (the reported `rounding_bound` uses the interval form `max |(X+a)/(Y-b) - R|, |(X-a)/(Y+b) - R|` with `a = n_v q_X/2`, `b = n_v q_Y/2`, `+inf` if `Y - b <= 0`, review amendment), with `n_v` the piece count of the classes of the respective channel (N, N_local; both are automatic).
 Fallback if V3-012 measures a CUDA cost: residuals for E-kind channels only (this would drop the
 A1/A3 global closures).
 

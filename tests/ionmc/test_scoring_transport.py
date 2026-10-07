@@ -27,7 +27,7 @@ from ionmc.materials import ALUMINIUM, WATER, Material
 from ionmc.physics.projectiles import PROTON
 from ionmc.physics.stopping import BetheStoppingSource, StoppingTable, build_table
 from ionmc.scoring import ScoringGrid, TallyRequest, min_defined_batches, reduce_ratio
-from ionmc.simulation import Simulation
+from ionmc.simulation import Simulation, ratio_rounding_bound
 from ionmc.species import species_by_name
 from ionmc.transport.channels import CLASS_LOCAL, CLASS_STEP, ChannelPlan, compile_channels
 from ionmc.transport.reference import run_reference_range
@@ -687,3 +687,35 @@ def test_reserved_automatic_channel_names(make_config: MakeConfig) -> None:
 
     with pytest.raises(UnsupportedCombinationError, match="reserved"):
         validate(_cfg(make_config, (TallyRequest("edep_excluded_from_let", "dose", "edep"),)))
+
+
+def test_ratio_rounding_bound_is_interval_arithmetic() -> None:
+    """The ratio bound covers the corner error that the first-order formula underestimates for a
+    small denominator, is +inf when ``Y - b <= 0`` and agrees with first order for large Y."""
+    a = np.array([0.5])
+    b = np.array([0.5])
+    xhat, yhat = np.array([2.0]), np.array([1.0])  # R_hat = 2; true corner (X + a)/(Y - b) = 5
+    rhat = xhat / yhat
+    first_order = (a + rhat * b) / yhat  # 1.5
+    corner = np.abs((xhat + a) / (yhat - b) - rhat)  # 3.0
+    got = ratio_rounding_bound(xhat, a, yhat, b, rhat)
+    assert corner[0] > first_order[0]  # discriminating: first order is not conservative
+    assert got[0] == pytest.approx(corner[0], rel=1e-15) and got[0] >= corner[0]
+    # Y_hat - b <= 0: unbounded, never 0 (also for a vanishing numerator)
+    for y in (0.5, 0.25, 0.0):
+        assert np.isinf(ratio_rounding_bound(xhat, a, np.array([y]), b, np.array([0.0]))[0])
+    # large denominator: interval and first-order bounds agree to O(b / Y)
+    y = np.array([1.0e4])
+    r = xhat / y
+    ratio = ratio_rounding_bound(xhat, a, y, b, r)[0] / ((a + r * b) / y)[0]
+    assert abs(ratio - 1.0) <= 4.0 * b[0] / y[0]
+    # random exhaustive check: the bound covers every point of the interval corners
+    rng = np.random.default_rng(1)
+    for _ in range(200):
+        x, yy = rng.uniform(0, 5), rng.uniform(0.2, 5)
+        aa, bb = rng.uniform(0, 0.15), rng.uniform(0, 0.15)
+        bnd = ratio_rounding_bound(np.array([x]), np.array([aa]), np.array([yy]),
+                                   np.array([bb]), np.array([x / yy]))[0]  # fmt: skip
+        for xt in (x - aa, x + aa):
+            for yt in (yy - bb, yy + bb):
+                assert abs(xt / yt - x / yy) <= bnd * (1 + 1e-12)

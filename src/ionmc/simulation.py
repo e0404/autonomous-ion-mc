@@ -422,6 +422,25 @@ def _channel_sums(eff: EffectiveConfig, ch: ChannelRaw, index: int) -> NDArray[n
     return block * c.quantum
 
 
+def ratio_rounding_bound(
+    xhat: NDArray[np.float64],
+    a: NDArray[np.float64],
+    yhat: NDArray[np.float64],
+    b: NDArray[np.float64],
+    rhat: NDArray[np.float64],
+) -> NDArray[np.float64]:
+    """Deterministic fixed-point bound of a ratio ``R = X / Y`` by interval arithmetic: with the
+    quantized sums ``X in [xhat - a, xhat + a]``, ``Y in [yhat - b, yhat + b]``, ``xhat, yhat >= 0``
+    the bound is ``max(|(xhat + a)/(yhat - b) - rhat|, |(xhat - a)/(yhat + b) - rhat|)``. If
+    ``yhat - b <= 0`` the true denominator may be zero and the bound is ``+inf`` (it never
+    silently becomes 0). All arguments are per primary (the level where the counts are defined)."""
+    lower = yhat - b
+    with np.errstate(divide="ignore", invalid="ignore"):
+        hi = np.abs((xhat + a) / lower - rhat)
+        lo = np.abs((xhat - a) / (yhat + b) - rhat)
+    return np.where(lower > 0.0, np.maximum(hi, lo), np.inf)
+
+
 def _grid_quantities(gi: int, eff: EffectiveConfig, raw: RawTransport) -> dict[str, QuantityResult]:
     """Quantities of grid ``gi`` from the channels (decision 0040): linear ones through
     ``reduce_batches``, ratios through ``reduce_ratio``, plus the automatic channels."""
@@ -510,13 +529,13 @@ def _grid_quantities(gi: int, eff: EffectiveConfig, raw: RawTransport) -> dict[s
             ys = _channel_sums(eff, ch, qd.denominator)
             st = reduce_ratio(xs, ys)
             cn, cd = plan.channels[qd.numerator], plan.channels[qd.denominator]
+            xbar = xs.mean(axis=0) / hpb
             ybar = ys.mean(axis=0) / hpb
-            with np.errstate(divide="ignore", invalid="ignore"):
-                bound = (
-                    n_pp(qd.numerator) * (cn.quantum / 2.0)
-                    + st.mean * n_pp(qd.denominator) * (cd.quantum / 2.0)
-                ) / ybar
-            bound = np.where(st.defined_mask, bound, np.nan)
+            bound = ratio_rounding_bound(
+                xbar, n_pp(qd.numerator) * (cn.quantum / 2.0),
+                ybar, n_pp(qd.denominator) * (cd.quantum / 2.0), st.mean,
+            )  # fmt: skip
+            bound = np.where(st.defined_mask, bound, np.nan)  # inf stays inf where defined
             out[req.name] = QuantityResult(
                 req.name, req.quantity, "ratio", qd.units, qd.definition,
                 st.mean.reshape(grid.shape), np.sqrt(st.variance_of_mean).reshape(grid.shape),

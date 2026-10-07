@@ -276,7 +276,7 @@ sizes and workers): `scoring_pieces` (class step) and `scoring_pieces_local` (cl
 cutoff and zero-length point deposits, scored by `score_local`). `QuantityResult.rounding_bound` is
 a deterministic bound built from them: `n q/2` per voxel and primary with `n` the step count, the
 local count or their sum according to the class mask of the channel (edep and dose: both), ratios
-by first-order propagation of numerator and denominator. Quantities map to channels as
+by interval arithmetic on the quantized sums (`max |(X+a)/(Y-b) - R|, |(X-a)/(Y+b) - R|`; `+inf` if `Y - b <= 0`). Quantities map to channels as
 `edep`/`dose`: E (both classes); `fluence`: L; `let_t`: LS/L; `let_d`: LS2/LS; `let_d_eps`: ES/E_step;
 `lookup_sum`: FE; `lookup_dose_avg`: FE/E_step; `fluence_spectrum`: FL. Energy channels use the
 fixed quantum 2^-30 MeV of the qualified `edep` array; the other kinds use
