@@ -229,3 +229,10 @@ Consequences:
   from the same source text (`ionmc._wpfunc.python_twin`, shim
   `ionmc._pyshim`) and makes no Warp call at Python scope (see decision
   0039, outcome 2026-10-04).
+
+- 2026-10-07 (V3-005A, decision 0041): amendment to "Random stream allocation". Purpose `2`
+  becomes **nuclear** (`PURPOSE_NUCLEAR = 2`): the nuclear block counters of a primary (birth
+  draw, candidate acceptance, event attempts) use purpose 2, so the electromagnetic streams
+  (purpose 0) are identical with `nuclear` on and off. The name `PURPOSE_RESERVED` is kept as an
+  alias of the value 2. The remaining rows of the table, including the child-identifier
+  encoding, are unchanged; secondaries use purpose 0 with their own genealogy identifier.

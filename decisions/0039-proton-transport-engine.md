@@ -394,3 +394,11 @@ fail-closed configuration rules.
   left unfilled at this head because the plan file is part of the A16 source digest (amendment 6 (g));
   the mapping lives in the results README and here, and the next task's first commit (which deletes
   the A16 record and advances `A16_BASELINE`) fills the table. Not a clinical claim.
+
+- 2026-10-07 (V3-005A, decision 0041): amendment to the nuclear-flag row of the capability
+  table ("`nuclear=True` raises until V3-005"). `nuclear=True` is supported on the **python**
+  backend from V3-005A; the Warp backends (cpu and cuda) keep raising
+  `UnsupportedCombinationError` until V3-005B. The step selection gains a fifth reason: the
+  nuclear interaction limit is reason **4** of the new `select_step_nuclear`; `select_step`
+  (reasons 0 to 3) and every electromagnetic step with `nuclear=False` are unchanged (row R1 of
+  `validation/plans/v3-005-acceptance.md`).

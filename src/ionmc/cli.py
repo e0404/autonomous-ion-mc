@@ -31,13 +31,19 @@ def build_parser() -> argparse.ArgumentParser:
             p.add_argument("dataset_id")
         p.add_argument("--cache-dir", default=None, help="cache directory")
         p.add_argument("--offline", action="store_true", help="never use the network")
+    imp = data_sub.add_parser(
+        "import", help="import a local file as a registered dataset (hash and size verified)"
+    )
+    imp.add_argument("path", help="local file to import")
+    imp.add_argument("--dataset", required=True, dest="dataset_id", help="registered dataset id")
+    imp.add_argument("--cache-dir", default=None, help="cache directory")
     return parser
 
 
 def _run_data(args: argparse.Namespace) -> int:
     """Execute ``ionmc data <action>``."""
     from ionmc.data import cache
-    from ionmc.data.acquire import OfflineError, fetch
+    from ionmc.data.acquire import OfflineError, fetch, import_file
     from ionmc.data.registry import DATASETS
 
     action = args.data_command
@@ -50,7 +56,9 @@ def _run_data(args: argparse.Namespace) -> int:
             print(f"{ds.id}\t{'cached' if cached else 'missing'}\t{ds.description}")
         return 0
     try:
-        if action == "fetch":
+        if action == "import":
+            print(import_file(args.path, args.dataset_id, cdir))
+        elif action == "fetch":
             print(fetch(args.dataset_id, cdir, offline=args.offline))
         elif action == "verify":
             print(f"OK {cache.verify(args.dataset_id, cdir)}")

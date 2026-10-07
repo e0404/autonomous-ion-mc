@@ -1,0 +1,208 @@
+# 0041 — Proton non-elastic nuclear interactions: data, sampling, secondaries and bookkeeping
+
+- Status: accepted (plan 2026-10-03, slice-A brief 2026-10-04, plan delta 2026-10-07)
+- Date: 2026-10-07
+- Task: V3-005A (data pipeline, shared functions, python reference backend); V3-005B (Warp kernels, generation queue, p-p elastic scattering, kernel parity)
+- Affects: physical accuracy, numerical accuracy, reproducibility, architecture, validation strategy, data provenance
+
+## Problem
+
+The engine of decision 0039 transports protons with electromagnetic physics only, and `nuclear=True` raises. Clinical proton dose needs the non-elastic nuclear channel:
+
+- the attenuation of primaries, about 1 % per cm of water;
+- the secondary protons and deuterons that it creates;
+- the local deposition of heavy fragments;
+- the energy that leaves as neutrons and γ.
+
+The requirements are V1-MUST-005, V1-MUST-013 and V1-MUST-014, with fail-closed capability rules. This decision fixes the data source, the sampling algorithm, the secondary model, the bookkeeping and the validation, before any nuclear result exists.
+
+## Context
+
+- **Primary evidence.** The ENDF/B-VIII.0 proton sublibrary was parsed during planning: sha256 `27bcafb8…03f7`, 14 112 244 B. It contains the LA150 evaluation (Chadwick et al., Nucl. Sci. Eng. 131 (1999) 293; library: Brown et al., Nucl. Data Sheets 148 (2018) 1).
+  - C-12, N-14, O-16, P-31 and Ca-40 carry only MF1/451, MF3/{2,5} and MF6/{2,5}, with EMAX = 150 MeV. Al-27 is also evaluated.
+  - Non-elastic is MF3/**MT5**.
+  - MF6 light products (n, p, d, α) use LAW=1, LANG=2 (Kalbach–Mann) with NA=1. Residuals and γ use LANG=1. LCT=3.
+  - There are **no t and no ³He products**.
+  - H-1 has elastic data only.
+- **MT5 values (mb):**
+
+  | | 20 MeV | 100 MeV | 150 MeV |
+  |---|---|---|---|
+  | C-12 | 441 | 227 | 222 |
+  | O-16 | 535 | 297 | 295 |
+
+- **Measured data.** Auce et al. 2005 (EXFOR D0356) gives p+C 279/275/237 mb at 81/100/119 MeV. geant-val (EXFOR-derived) gives 245 ± 7 mb (99.1 MeV) and 275 ± 21 mb (100 MeV).
+  - LA150 was fitted to data published before 1997, so it shares lineage with them.
+  - The EXFOR Data Explorer API is behind a bot challenge; raw EXFOR master entries are used.
+- **Masses.** AME2020 (Wang et al., Chin. Phys. C 45 (2021) 030003), sha256 `e8599c6d…3307`.
+- **Engine facts.**
+  - Decision 0039: the hinge step, the ramp-apportioned deposit, Gamma straggling and float64 bookkeeping.
+  - Decision 0040: the species registry (pseudo-species `nuclear_local`, id 64), the hook `score_piece(…, species, gen, cls)`, and the runtime-checked capacity bounds.
+  - Decision 0037: Philox counters `(history, genealogy, block, purpose)`.
+
+## Options considered
+
+| Topic | Options | Selected | Reason |
+|---|---|---|---|
+| σ_nonel source | ENDF/B-VIII.0 MT5 (LA150); fit to EXFOR; Tripathi-light; Geant4 BGG | **LA150 MT5 ≤ 150 MeV** | Consistent with the MF6 yields used for the secondaries (one evaluation for σ and products). Fitting to EXFOR would decouple σ from the yields and consume the independent evaluation set. |
+| 150–250 MeV | TENDL-2023 / JENDL-5 (stop at 200 MeV, licences unverified); constant σ; Tripathi shape | **σ_ENDF(150)·σ_TL(E)/σ_TL(150)**, spectra stretched by E_avail(E)/E_avail(150) | Smooth and anchored. Measured p+C is nearly flat over 158–231 MeV. The fraction of events above 150 MeV is recorded. |
+| Unevaluated elements | raise; A-scaling from a neighbour | Na, Mg → Al-27; S, Cl → P-31; K, Ar → Ca-40, scaled by (A/A_ref)^{2/3} and recorded; anything else raises | Tissue mass fractions ≤ ~1 %. Fail closed otherwise. |
+| Hydrogen | none; p-p elastic | Non-elastic 0 below the pion threshold. **p-p elastic (D2) in V3-005B.** | p-p elastic is strong-interaction scattering that T_dM does not cover. A claims no lateral halo. |
+| Interaction sampling | Σ(E_mid)ρs per step; distance sampling with the inverse range; **majorant thinning** | **Majorant thinning with remaining mean free paths**, candidate at the step end | Exact for any step size given Σ ≤ Σ̂. It composes with the hinge and the step limits, and needs no position sampling. |
+| Products | parameterised (Fippel–Soukup style); Geant4-derived event tables; **ENDF MF6 event model** | **ENDF MF6**: Poisson multiplicities (λ adjusted offline), inverse-CDF E′_CM, exact Kalbach μ, residual by four-momentum difference | Uses only the construction data. Gives conservation per event by construction. Independent of the reference engines. |
+| α | transport (z = 2 machinery, V3-008); local | **Local deposition**, subject to the two-tier gate D6 (below) | Mean α energy 4.5–6 MeV; range tens of µm. |
+| Secondaries' nuclear interactions | include; omit | **Omitted in A** (declared, below) | No deuteron data. Secondary-proton interactions are moved to V3-005B with an estimate. |
+
+## Decision
+
+### 1. Cross sections
+
+- **Per-element σ(E).** For C-12 (natural C; C-13 at 1.1 % neglected), N-14, O-16, Al-27, P-31 and Ca-40, σ(E) comes from MF3/MT5. Surrogates are as above.
+- **Hydrogen** contributes 0.
+- **Runtime rows.** The builder writes per-material rows on a uniform ln E grid with ≥ 50 points per decade:
+  - Σ_mass(E) = N_A Σ_el w_el σ_el/A_el [cm²/g];
+  - cumulative target fractions;
+  - the majorant Σ̂(E) = 1.02 × max Σ over [E(1 − 2f_E − 0.01), E], or over [0, E] for an end-of-range step.
+- **Linear cross section.** The linear Σ is ρ_voxel Σ_mass, scaled with density like the stopping tables.
+
+### 2. Sampling (thinning)
+
+- **Birth.** A primary samples n_λ = −ln u at birth.
+- **Step limit.** `select_step_nuclear` adds the limit d_nuc = n_λ/(ρΣ̂(E₀)) as reason 4; geometry still wins ties.
+- **After the unchanged EM step** (hinge, straggling, ramp deposit):
+  - n_λ is reduced by ρΣ̂(E₀)·s_act.
+  - If the step was nuclear-limited, leg 2 was not truncated, and E₁ > E_cut, a candidate occurs at the post-step point.
+  - The candidate is accepted with probability Σ(E₁)/Σ̂(E₀). Otherwise it is fictitious and n_λ is resampled.
+- **Fail closed.** Σ(E₁) > Σ̂(E₀) increments `majorant_violation` and invalidates the result.
+- **Window factor.** The factor 1.02 covers the unbounded Gamma straggling tail (the ratified window [E(1 − 2f_E − 0.01), E] was derived for the clamped Gaussian).
+- **Termination.** The parent proton is terminated at an accepted event; the yields include the leading proton.
+
+### 3. Event model
+
+- **Target and rows.** Select the target from the cumulative fractions. Interpolate its table rows at E₁ (above 150 MeV: the stretched 150 MeV rows).
+- **Multiplicities.** Independent Poisson(λ_s) for s ∈ {n, p, d, α, γ}, with n ≤ 16. λ_s is fixed-point adjusted at build time, so that the post-acceptance mean yields match ENDF within 1 %.
+- **Kinematics.**
+  - Draw E′_CM by inverse CDF (64 equiprobable bins, linear within a bin).
+  - Draw the Kalbach μ with a from the Kalbach (1988) systematics (NA=1) and r from MF6; φ is uniform.
+  - LCT=3 is taken as the p + target CM.
+- **Residual.**
+  - (Z_r, A_r) = (Z_t + 1 − Σz, A_t + 1 − Σa).
+  - Its four-momentum is P_tot − Σp_i.
+  - Accept iff the nuclide has an AME2020 mass and m_r ≥ M_r. Then E* = m_r − M_r.
+- **Attempts.** At most 64 attempts. Exhaustion increments `nuclear_rejection_limit`, tallies the energy as `unaccounted` and invalidates the result.
+- **Lab frame.** Boost everything with the p + target CM velocity. Energy, momentum, charge and baryon number are then conserved exactly per event, to floating-point rounding.
+- **Disposition:**
+
+  | Product | Treatment |
+  |---|---|
+  | p and d | Transported as generation-1 secondaries from a per-history LIFO stack (at most 32 particles per history). Each carries position, direction, T, species, genealogy id, generation, the parent's geometry voxel indices (never recomputed by floor) and p₁v₁ = pv(T). |
+  | α, residual kinetic energy, E* | Deposited at the event point through the scoring hook with `length = 0`, species `nuclear_local` (id 64), generation 1 and class local. They therefore appear in dose and in `edep_excluded_from_let`, never in LET, fluence or lookups. |
+  | n and γ | Tallied as `nuclear_escaped_neutron` / `nuclear_escaped_gamma`. |
+  | Mass difference | Σm_out + M_r − m_p − M_t (from masses, signed) is tallied as `nuclear_binding`. |
+
+- **Deuterons.**
+  - They use their own `TransportTables` from `stopping.table(material, DEUTERON)` (Bethe with q = z = 1), on the total-kinetic-energy axis, and a deuteron water row for LET.
+  - E_cut,d = 4 MeV.
+  - The EM twins take the deuteron mass and charge.
+  - Deuterons have no nuclear interactions.
+  - `nist-star` with `nuclear=True` raises (no deuteron table).
+
+### 4. Random numbers (amends decision 0037)
+
+- The purpose table becomes: 0 transport (EM), 1 source sampling, **2 nuclear** (`PURPOSE_NUCLEAR`; formerly reserved). The name `PURPOSE_RESERVED` is kept as an alias of the same value 2, so existing imports keep working.
+- Each primary has a nuclear block counter `nuc_c2` on purpose 2, with this fixed layout:
+  - birth `(u_nλ, ·, ·, ·)`;
+  - candidate `(u_accept, u_nλ, u_target, ·)`;
+  - event attempt: 2 multiplicity blocks, then per particle `(u_bin, u_frac, u_branch, u_μ)` and `(u_φ, ·, ·, ·)`.
+- Secondaries use purpose 0 with their own genealogy id (decision 0037 encoding: child b of generation g gets parent + b·32^g).
+- EM streams are therefore identical with nuclear on and off, which gives low-variance paired differences.
+
+### 5. Bookkeeping and fail-closed rules
+
+- **Balance.** `initial = step_deposit + cutoff + nuclear_local + escaped + nuclear_escaped_neutron + nuclear_escaped_gamma + nuclear_binding + truncated + unaccounted`.
+- **Grid identity.** `in_grid + quantization + outside = step_deposit + cutoff + nuclear_local`.
+- **Layout.**
+  - The nuclear tallies and the counters `majorant_violation`, `nuclear_rejection_limit` and `nuclear_conservation` form blocks that exist only with `nuclear=True`.
+  - `TALLY_NAMES`, `COUNTER_NAMES` and the trace columns are unchanged.
+  - The existing `genealogy_overflow` and `queue_overflow` guard the stack.
+- **Capacity bounds** (re-derivation required by decision 0040 section 4):
+  - The per-history path bound becomes B_L = 1.25 · mixed_path_bound(E_hi + Q⁺). Q⁺ is the largest positive Q of the reachable channels.
+  - The argument: superadditivity of the convex CSDA range, plus R_d ≤ R_p at equal total energy.
+  - The scored path sums over all particles of a history.
+  - The E bound is E_hi + Q⁺. The piece-count bound is multiplied by the particle bound 32.
+  - `path_bound_exceeded` still backstops these at runtime.
+- **Rejected before transport** (`validate()`):
+  - an unsupported element;
+  - E₀ + 6σ_E > 250 MeV;
+  - a non-proton source;
+  - `nist-star`;
+  - any warp backend (until V3-005B);
+  - a missing, stale or mis-pinned table.
+- **Producible species.** With `nuclear=True` the producible set is {(proton, primary), (proton, secondary), (deuteron, secondary), (nuclear_local, secondary)}.
+
+### 6. Data pipeline and roles
+
+- `ionmc data build nuclear-proton` reads the hash-pinned sources from the cache. It writes `<cache>/derived/nuclear-proton-<id>.npz` plus JSON, where id = sha256(source hashes, builder version, canonical options).
+- The JSON records surrogates, the extension method, the λ residuals, the gate values G and D, and units.
+- Loading uses `np.load(allow_pickle=False)`, re-hashes, checks the source pin, and freezes the arrays.
+- Git holds no raw or derived nuclear data. It holds only the registry entries, the EXFOR manifest (IDs, roles, hashes; no values), synthetic fixtures and aggregate statistics.
+
+| Data | Role | Licence / citation |
+|---|---|---|
+| ENDF/B-VIII.0 protons (LA150) MF3/MF6, sha256 `27bcafb89cf0444c53c6b9f3dd17618c62e2e6b3694f70d31c4f502399f103f7` | construction | No licence text (free NNDC download); cite Brown 2018, Chadwick 1999 |
+| AME2020 `mass_1.mas20.txt`, sha256 `e8599c6d7f724fac91934e59f1b9de8fb8f63e820f4b39456b790665ed2a3307` | construction | Citation only; Wang et al. 2021 |
+| Tripathi light-system parameterisation (NASA TP-1999-209726) | construction (shape above 150 MeV); report-only theory ≤ 150 MeV | US Government work |
+| NIST ASTAR water | construction of the D6 gate only | NIST SRD, public |
+| EXFOR D0356 (Auce et al., PRC 71 (2005) 064606; p+C, p+Ca), sha256 `2ef17fb10aaaeb5096dc92f9c3175f51f2252163eb4a83aa15669027371747bf`, and further raw entries published 1997 or later in the manifest | evaluation, informative (V1b) | CC BY 4.0; cite the experiment and NDS 120 (2014) 272 |
+| EXFOR C1862 (Slaus et al., PRC 12 (1975) 1093; p+C, p+Be, p+O), sha256 `157aca7e1b8f6cb6814a5fa99fa749823721af6829cbf84712a56fce159ae4ef` | exploratory, report-only (published before 1997: shared lineage with LA150) | CC BY 4.0; cite the experiment and NDS 120 (2014) 272 |
+| geant-val EXFOR-derived inelastic data (−7), sha256 `fa7ac90fd259f728e5948c71b7a3636bec7b7d9756abeb60837c7083dc2a4c49` | exploratory, report-only (shared lineage with LA150) | no licence stated |
+| MCsquare (ICRU 63 = LA150 lineage) | shared lineage for σ, not independent | — |
+| TOPAS QGSP_BIC_HP | independent MC (slice B gating, slice A exploratory) | — |
+
+### 7. α local-deposition gate D6
+
+Definitions. G is the share of the MF6/MT5 α energy (water-weighted, lab frame) carried by α with ASTAR water CSDA range > 0.1 mm, at 150 and 250 MeV. D = (α energy carried by α with range > 0.1 mm per event) × P_event(E) / E, where P_event is the non-elastic probability over the full CSDA path in water at that beam energy, computed from the built Σ along the deterministic CSDA path. The builder computes G and D and writes both to the table JSON; both are archived.
+
+Both tiers below are fixed now, before any G or D value exists.
+
+- **Tier 1 (as ratified):** G(150) ≤ 0.05 and G(250) ≤ 0.05. Then α are deposited locally with no further condition.
+- **Tier 2 (fallback, only if tier 1 fails):** local deposition is still accepted iff D ≤ 1e-3 AND the 99.9th-percentile lab α energy has an ASTAR water CSDA range ≤ 2 mm at both energies. Passing via tier 2 is recorded in the Outcome as a documented approximation. It forbids sub-millimetre statements about α dose until V3-008 (z = 2 transport), and the ledger status says so.
+- **Neither tier:** the task stops. The orchestrator decides between blocking α-dependent claims and re-scoping. There is no α transport in slice A.
+
+### 8. Amendment to decision 0039
+
+The row "Nuclear flag: `nuclear=True` raises until V3-005" becomes:
+
+> `nuclear=True` is supported on the python backend from V3-005A (this decision). Warp backends raise until V3-005B.
+
+The nuclear step limit is reason 4 of `select_step_nuclear`; `select_step` (reasons 0–3) is unchanged.
+
+### 9. Multiprocessing
+
+The python pool path is implemented for `nuclear=True` like any other run: the per-history stack is history-local and the partitioning is unchanged. The current operator directive (single-process execution) is an execution mode of the validation, not a property of the engine, and is not baked into `validate()`. The lv5 suite runs `cpu_workers = 1`; the 1-vs-N partition-invariance check of nuclear runs is listed as **deferred** in the acceptance plan until the directive is lifted.
+
+## Approximations and known limitations
+
+1. **LA150 p+C deficiency** (pre-declared before any comparison). σ_LA150(p+C, 100 MeV) = 227 mb, against 245–275 mb measured (Auce 2005; geant-val), i.e. up to about −18 %.
+   - At about −10 % in σ_C, the effect on water attenuation is small, because O dominates (water σ is about 89 % O by mass).
+   - The p+O evaluation has almost no independent data between 65 and 250 MeV (evidence gap).
+   - *Planned remedy:* V3-005B evaluates Tripathi-light and the Geant4 BIC/BGG σ_inel as an alternative data role against the post-1997 EXFOR set. Pre-registered fallback D9: refit on pre-1997 entries only, evaluate on the unchanged post-1997 set.
+2. **No t and ³He** (absent in LA150; physically about 0.1–0.2 per event [M]). TOPAS comparisons will show the gap.
+3. **α deposited locally.** This is gated by D6, in two tiers fixed before any value was computed (see "α local-deposition gate D6"); G and D are recorded in the table JSON.
+4. **Residual excitation E\*** is deposited locally, although part of it physically leaves as γ.
+5. **Uncorrelated multiplicities** preserve mean yields only, not fluctuations or correlations. Microdosimetry is out of scope.
+6. **No nuclear interactions of secondaries.** Estimate [M]: a secondary proton (mean about 40 MeV) undergoes a non-elastic event with P ≈ 1.5 %. That is ≈ 0.3 % of 150 MeV histories, carrying ≲ 0.1 % of the energy. V3-005B quantifies it.
+7. **No p-p elastic and no nuclear elastic scattering** on C/O. No lateral-halo claim is made until V3-005B (V6).
+8. **LCT=3** is interpreted as the p + target CM. The attempt bound may bias near-threshold events (V4 records the distortion).
+
+## Validation strategy (frozen before results exist)
+
+`validation/plans/v3-005-acceptance.md` is committed with this decision.
+
+- **Slice A rows:** P1–P5, N1, V1, V1b (informative), V2, V2-probe, V3, V4, V9, R1 (= A16 re-pointed to f3a1dd62, empty intended-change set), X1, C1, D6 (two tiers), E1 (exploratory).
+- **Slice B rows:** V2b and V5–V8.
+- **Gating physics evidence:** the depth-dose and attenuation comparison with the reference engines (V5, the V3-010B batches) and the measured comparisons of V5/V6 and V3-011. V1b is informative only.
+
+## Outcome
+
+(To be appended: D6 gate values G and D, and the tier passed; V1/N1; V2; V3; V4; X1; E1; contrary evidence.)

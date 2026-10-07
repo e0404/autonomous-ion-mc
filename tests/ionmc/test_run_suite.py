@@ -1333,3 +1333,19 @@ def test_a16_plan_binding_is_verified() -> None:
         st.verify_plan_binding(changed, text)
     with pytest.raises(SystemExit, match="exactly one delimited"):
         st.verify_plan_binding(rec, "no block here")
+
+
+def test_v3_005_acceptance_plan_is_frozen_and_consistent() -> None:
+    plan = (REPO / "validation" / "plans" / "v3-005-acceptance.md").read_text(encoding="utf-8")
+    rows = re.findall(r"^\| ([A-Za-z0-9-]+) \|", plan, flags=re.MULTILINE)
+    for row in ("P1", "P2", "P3", "P4", "P5", "N1", "V1", "V1b", "V2", "V2-probe", "V2b", "V3"):
+        assert row in rows, row
+    for row in ("V4", "V5", "V6", "V7", "V8", "V9", "R1", "X1", "C1", "D6", "E1"):
+        assert row in rows, row
+    d6 = next(line for line in plan.splitlines() if line.startswith("| D6 |"))
+    assert "Tier 1" in d6 and "Tier 2" in d6 and "G(150) ≤ 0.05" in d6 and "D ≤ 1e-3" in d6
+    assert "20421004" in plan and "9448d5e" in plan and "0041" in plan
+    r1 = next(line for line in plan.splitlines() if line.startswith("| R1 |"))
+    assert "`A16_INTENDED_CHANGE` stays `None`" in r1
+    assert "DEFERRED" in plan and "partition invariance of nuclear runs" in plan
+    assert (REPO / "decisions" / "0041-proton-nuclear-interactions.md").is_file()

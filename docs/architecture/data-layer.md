@@ -8,13 +8,24 @@ and used offline afterwards. Design decision:
 ## Registry
 
 `ionmc.data.registry.DATASETS` maps a dataset id to a frozen `Dataset(id, version, url,
-method, post_body, sha256, bytes, license, citation, parser, description)`. Registered:
+method, post_body, sha256, bytes, license, citation, parser, description, role)`. `role` is the
+evidence role (`construction`, `calibration`, `evaluation` or `exploratory`, default
+`exploratory`). Parser names are identifiers; the registry imports no parser. Registered:
 
 | id | Content | Licence |
 |---|---|---|
 | `nist-pstar-water-2005` | NIST PSTAR liquid water (POST to `physics.nist.gov/cgi-bin/Star/apdata.pl`) | NIST SRD 124, copyright all rights reserved: use-only, downloaded by each user, never redistributed |
 | `nist-astar-water-2005` | NIST ASTAR liquid water (same endpoint, `prog=ASTAR`) | NIST SRD 124, copyright all rights reserved: use-only, downloaded by each user, never redistributed |
 | `geant4-icru90-stopping-11.4.2` | `G4ICRU90StoppingData.cc` of Geant4 v11.4.2 (ICRU 90 proton/alpha arrays) | Geant4 Software License |
+| `endf-b8.0-protons` | ENDF/B-VIII.0 proton sublibrary zip (LA150, MF3/MF6; construction) | no licence text, free NNDC download |
+| `ame2020-mass` | AME2020 `mass_1.mas20.txt` (construction) | no licence text, free AMDC download |
+| `exfor-d0356` | EXFOR entry D0356, Auce et al. 2005 (evaluation) | CC BY 4.0 |
+| `exfor-c1862` | EXFOR entry C1862, Slaus et al. 1975 (exploratory, report-only) | CC BY 4.0 |
+| `geant-val-exfor-inelastic-7` | geant-val JSON of EXFOR-derived inelastic curves (exploratory, report-only; import only) | none stated |
+
+The nuclear entries are the data of decision 0041. Git holds only these registry entries and
+`src/ionmc/data/exfor_manifest.json` (EXFOR entry and subentry identifiers, REACTION strings,
+roles, hashes; no cross-section values).
 
 A downloaded payload whose SHA-256 or size differs from the registry is an integrity
 failure (`IntegrityError`): nothing is stored.
@@ -27,6 +38,7 @@ Directory precedence: explicit argument (`--cache-dir`), environment variable
     objects/<sha256>              raw bytes
     manifests/<dataset_id>.json   dataset_id, version, url, method, post_body, sha256,
                                   bytes, retrieved_at (UTC ISO-8601), license, citation
+                                  (an import adds source_path and has method "import")
 
 `ionmc.data.cache.verify` re-hashes the object and compares it with both the manifest and
 the registry.
@@ -42,6 +54,13 @@ no network, so datasets must be fetched before such runs.
 
 Downloads are streamed in chunks and aborted with `IntegrityError` as soon as more than
 the registered `bytes` arrive; a shorter payload fails the hash check.
+
+## Offline import
+
+`ionmc.data.acquire.import_file(path, dataset_id, cache_dir=None)` stores a local file as a
+registered dataset without any network access. The size and SHA-256 are checked against the
+registry first; a mismatch raises `IntegrityError` and nothing is written. The manifest has the
+shape of a download manifest with `method` `"import"` and the `source_path`.
 
 ## Parsers
 
@@ -65,6 +84,7 @@ built from them. `allow_unverified=True` parses any file and records only `conte
     ionmc data fetch <id> [--cache-dir DIR] [--offline]
     ionmc data verify <id> [--cache-dir DIR]
     ionmc data path <id> [--cache-dir DIR]
+    ionmc data import <file> --dataset <id> [--cache-dir DIR]
 
 `path` never uses the network. Exit code 1 reports a missing, offline-unavailable or
 corrupt dataset.
