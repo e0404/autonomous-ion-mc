@@ -383,18 +383,39 @@ def _stopping_ratio_max(
     e_lo_mev: float,
     e_hi_mev: float,
     a: int,
+    amp_fallback: float,
 ) -> float:
-    """``max_E S_w / (rho_min S_m)`` (mass stopping powers, water density 1 g/cm3 factors in) over
-    ``[e_lo, e_hi]``: the bound of ``int S_w dl`` per MeV deposited in the least dense voxel."""
+    """``max_E (1 + amp(E)) S_w / (rho_min S_m)`` (mass stopping powers, the water density factors
+    in) over ``[e_lo, e_hi]``: the bound of ``int S_bar dl`` per MeV deposited in the least dense
+    voxel. The compiler passes ``e_lo = E_cut/2``, the lowest reachable *midpoint* energy of a
+    cutoff-crossing step (``E_mid >= E/2 > E_cut/2``), not ``E_cut``: the scorer evaluates ``S_w``
+    there, and a custom material table may drop sharply below the cutoff while the ratio stays
+    ordinary above it. ``amp(E)`` is the ramp amplification ``|gamma_w(E)|`` of the runtime water
+    row bin (the larger of the two bins at a node; ``amp_fallback`` without a row), applied to
+    ``S_w`` as in :func:`water_ramp_envelope`. Both stopping powers are log-log piecewise linear
+    between the union of the material and water nodes, so the ratio is monotone between them and
+    the maximum is attained at a node or an end of the interval; the ratio candidate of the LS
+    bound is therefore *proven* over the complete reachable domain (it is not dropped)."""
     n = int(tables.n_e)
     ln_e = tables.ln_e0[material] + np.arange(n) / tables.inv_dln_e[material]
-    e = np.exp(ln_e)
-    pts = np.concatenate([[e_lo_mev, e_hi_mev], e[(e > e_lo_mev) & (e < e_hi_mev)]])
+    nodes = [np.exp(ln_e)]
+    row = tables.water_ln_s_mass
+    if row is not None and row.size >= 2:
+        nodes.append(np.exp(tables.water_ln_e0 + np.arange(row.size) / tables.water_inv_dln_e))
+    e_all = np.concatenate(nodes)
+    pts = np.concatenate([[e_lo_mev, e_hi_mev], e_all[(e_all > e_lo_mev) & (e_all < e_hi_mev)]])
     ln_s_m = np.interp(np.log(pts), ln_e, tables.ln_s_mass[material])
     s_m_mass = np.exp(ln_s_m)
     s_w_mass = water.stopping_at(pts / a)
+    amp = np.full(pts.shape, amp_fallback)
+    if row is not None and row.size >= 2:
+        gam = np.abs(np.diff(row)) * tables.water_inv_dln_e
+        t = (np.log(pts) - tables.water_ln_e0) * tables.water_inv_dln_e
+        i_hi = np.clip(np.floor(t + 1e-9).astype(int), 0, gam.size - 1)
+        i_lo = np.clip(np.ceil(t - 1e-9).astype(int) - 1, 0, gam.size - 1)
+        amp = np.maximum(gam[i_hi], gam[i_lo]) * RAMP_LOSS_RATIO_MAX / 2.0
     # S_w,lin = s_w_mass * rho_w / 10 ; S_m,lin(least dense) = s_m_mass * rho_min / 10
-    ratio = s_w_mass * water.material.density_g_cm3 / (s_m_mass * rho_min)
+    ratio = (1.0 + amp) * s_w_mass * water.material.density_g_cm3 / (s_m_mass * rho_min)
     return float(ratio.max())
 
 
@@ -733,7 +754,12 @@ def compile_channels(
             continue
         rho_min = float(dens[mask].min())
         b_l = max(b_l, STRAGGLING_MARGIN * tables.range_g_cm2(m, e_hi_mev) * 10.0 / rho_min)
-        r_max = max(r_max, _stopping_ratio_max(tables, m, water, rho_min, e_cut_mev, e_hi_mev, a))
+        r_max = max(
+            r_max,
+            _stopping_ratio_max(
+                tables, m, water, rho_min, 0.5 * e_cut_mev, e_hi_mev, a, env["amp"]
+            ),
+        )
     b_ls = min(s_max * b_l, STRAGGLING_MARGIN * r_max * e_hi_mev)
     bound = {
         "E": e_hi_mev,

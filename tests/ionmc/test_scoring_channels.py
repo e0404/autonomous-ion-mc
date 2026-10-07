@@ -309,26 +309,27 @@ def test_species_filter_gives_separate_channels(
 
 
 @pytest.mark.parametrize(
-    "hpb, kl, kls2",
-    [(10**6, 34, 29), (10**7, 31, 25), (28_600_000, 29, 24)],
+    "hpb, kl, kls, kls2",
+    [(10**6, 34, 33, 28), (10**7, 31, 30, 24), (28_600_000, 29, 28, 23)],
 )
 def test_worked_example_quanta(
-    make_config: MakeConfig, channels_enabled: None, hpb: int, kl: int, kls2: int
+    make_config: MakeConfig, channels_enabled: None, hpb: int, kl: int, kls: int, kls2: int
 ) -> None:
     """Delta section (ii): water, protons, 150 MeV, E_cut 2 MeV (ramp envelope
-    S_bar_max 45.1 MeV/mm, B_L about 197 mm, B_LS about 188 MeV, B_LS2 about 8.5e3)."""
+    S_bar_max 45.1 MeV/mm, B_L about 197 mm, B_LS about 339 MeV, B_LS2 about 1.53e4)."""
     cfg = make_config(energy=150.0, n=20 * hpb, n_batches=20, e_cut=2.0)
     plan = _plan(_with(cfg, _req("ld", "let_d"), _req("let", "let_d_eps"), _req("flu", "fluence")))
     k = {c.kind: c.k for c in plan.channels}
-    assert k["L"] == kl and k["LS"] == kl and k["LS2"] == kls2
+    assert k["L"] == kl and k["LS"] == kls and k["LS2"] == kls2
     assert k["E"] == 30 and k["N"] == 0
     b = plan.bounds
     s_bar_max = b["S_w_max_mev_per_mm"]  # ramp envelope, E_mid >= E_cut/2
     assert s_bar_max == pytest.approx(45.1, rel=0.02)
     assert 0.0 < b["S_w_min_mev_per_mm"] < 0.5 and b["gamma_max"] == pytest.approx(0.81, rel=0.02)
     assert b["B_L_mm"] == pytest.approx(197.0, rel=0.02)
-    assert b["B_LS_mev"] == pytest.approx(187.5, rel=0.01)  # 1.25 r_max E_hi, r_max = 1 in water
-    assert b["B_LS2"] == pytest.approx(8.46e3, rel=0.02)
+    assert b["r_max"] == pytest.approx(1.81, rel=0.01)  # (1 + |gamma|) over [E_cut/2, E_hi]
+    assert b["B_LS_mev"] == pytest.approx(1.25 * b["r_max"] * 150.0, rel=1e-9)
+    assert b["B_LS2"] == pytest.approx(1.53e4, rel=0.02)
     # capacity: hpb * B_c * 2^k < 2^62 for every adaptive kind, and one more bit would not fit
     for c in plan.channels:
         if c.kind in ("L", "LS", "LS2", "ES"):

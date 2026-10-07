@@ -620,8 +620,8 @@ case); track-length apportioning removes this, and the T9-CI test records the bo
 `run_suite.py --suite {lv4,hr4}` runs the validation of decision 0040 with the machinery above
 (same fail-closed archive, `--only`, `--import-dirs`, `--scale`, `--workers 1` single-process mode and
 `summarize.py` verification and `--combine`). The step scripts are `steps_v4.py` (and `a16_digest.py`).
-The default `--seed-base` is the V3-004 qualification base 20361004; the rehearsal base 20351004 and
-any other base give a verifying but non-conformant archive (`summarize.py` records the reason). The
+The default `--seed-base` is the V3-004 qualification base 20371004; the rehearsal base 20351004, the consumed base 20361004
+(observed before plan amendment 4) and any other base give a verifying but non-conformant archive (`summarize.py` records the reason). The
 hashed set additionally covers `validation/plans/v3-004-acceptance.md` and
 `tests/data/synthetic_lookup.json`. Per-step timeout floors (`run_suite.STEP_TIMEOUT_FLOOR_S`): 3300 s
 for each A9 part, 1800 s for A7 and 3600 s for the HR sample step.

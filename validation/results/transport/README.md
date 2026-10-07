@@ -50,7 +50,7 @@ clinical claim.
 `summarize.py --combine … --attest-sha` summaries of the `lv4` and `hr4` suites of
 `validation/plans/v3-004-acceptance.md` (rows A7, A8, A9, A11, A13, A15, A16 and the CUDA
 scoring tests) at the frozen head `86e18c8ba86acdac8833937f89a2bc5a1bff7f4c` with the
-qualification seed base 20361004 (amendments ¹–³ recorded before the respective results). They
+qualification seed base 20361004 (amendments ¹–³ recorded before the respective results); non-qualification evidence (base consumed, plan amendment ⁴). They
 were produced from the subset archives listed in each file (`parts`) in the single-process
 diagnostic mode (operator directive 2026-10-07, `run_suite.py --workers 1`). Every executed step
 passed (`pass: true`); the archives are deliberately **not conformant** (`conformant: false`):

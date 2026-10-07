@@ -45,9 +45,10 @@ QUALIFICATION_SEED_BASE = 20341004
 20271004 (T9 investigation), 20281004, 20291004, 20301004, 20311004, 20321004 and 20331004
 (first to sixth qualification attempts, consumed) are recorded as non-qualification evidence
 and never qualify."""
-V4_QUALIFICATION_SEED_BASE = 20361004
-"""Qualification base of the suites ``lv4`` and ``hr4`` (V3-004); 20351004 is their rehearsal base.
-A base whose full-scale results were observed is consumed (plan, section Seeds)."""
+V4_QUALIFICATION_SEED_BASE = 20371004
+"""Qualification base of the suites ``lv4`` and ``hr4`` (V3-004); 20351004 is their rehearsal base
+and 20361004 is consumed (observed before amendment 4 of the plan). A base whose full-scale
+results were observed is consumed (plan, section Seeds)."""
 IDENTITY_KEYS = ("git_sha", "suite", "scale", "python_parts", "seed_base")
 
 
@@ -240,8 +241,8 @@ def seed_blockers(seed_base: Any, suite: str | None = None) -> list[str]:
         if int(seed_base) != V4_QUALIFICATION_SEED_BASE:
             return [
                 f"seed_base {int(seed_base)} is not the qualification base "
-                f"{V4_QUALIFICATION_SEED_BASE} (20351004 is the rehearsal base; any other base is "
-                "non-qualification evidence)"
+                f"{V4_QUALIFICATION_SEED_BASE} (20351004 is the rehearsal base, 20361004 is consumed; any other "
+                "base is non-qualification evidence)"
             ]
         return []
     if int(seed_base) != QUALIFICATION_SEED_BASE:

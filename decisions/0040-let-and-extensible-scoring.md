@@ -185,6 +185,16 @@ envelope started at the table floor) give the coverage of a LET lookup axis. If 
 `validate()`, never clamped. A runtime guard counts any piece with `S_bar <= 0` in the
 out-of-domain counter, which invalidates the result.
 
+**Stopping-ratio candidate of the LS bound (review amendment).** `B_LS = min(S_bar_max B_L,
+1.25 r_max E_hi)`; the second candidate is *kept and proven* over the complete reachable midpoint
+domain: `r_max = max (1 + |gamma_w(E)|) S_w(E) / (rho_min S_m(E))` over `[E_cut/2, E_hi]` for every
+material row (union of material and water-row nodes plus both ends; both stopping powers are
+log-log piecewise linear, so the ratio is monotone between nodes), with the ramp amplification of
+the runtime water-row bin applied to `S_w` as in the envelope above. The previous domain
+`[E_cut, E_hi]` was wrong because the scorer evaluates `S_w` down to `E_cut/2` and a custom material
+table may drop sharply below the cutoff. LS2 (`S_bar_max B_LS`) inherits the bound. In water
+`r_max = 1 + |gamma|`, so `B_LS` grows from 188 to 339 MeV for 150 MeV protons.
+
 **Admissible lookup magnitude (fail closed, review amendment).** The largest value of a lookup
 table over the species a request selects must lie in `[2^-60, 2^60]` (or the table is all zero,
 rejected separately). Then the FE exponent `k = 30 - ceil(log2 f_max)` is in `[-30, 90]`, the scale
@@ -196,8 +206,9 @@ and its units).
 in the kind; that bounds the relative rounding of a 1 mm entrance piece by 1.5e-5. A configuration
 that violates the floor raises before transport. Example (water, protons, 150 MeV, E_cut 2 MeV;
 ramp envelope S_bar_max 45.1 MeV/mm (see the ramp envelope below), B_L about 197 mm, B_LS about
-188 MeV, B_LS2 about 8.5e3): hpb 1e6 gives `q_L = q_LS = 2^-34`, `q_LS2 = 2^-29`; hpb 1e7 gives
-`2^-31`, `2^-31`, `2^-25`; hpb 2.86e7 (the E limit) gives `2^-29`, `2^-29`, `2^-24`. All are far inside the floor; 1e8 hpb already fails closed on
+339 MeV (`1.25 r_max E_hi`, `r_max = 1.81`), B_LS2 about 1.53e4): hpb 1e6 gives `q_L = 2^-34`,
+`q_LS = 2^-33`, `q_LS2 = 2^-28`; hpb 1e7 gives `2^-31`, `2^-30`, `2^-24`; hpb 2.86e7 (the E limit)
+gives `2^-29`, `2^-28`, `2^-23`. All are far inside the floor; 1e8 hpb already fails closed on
 E by the existing rule.
 
 **Residuals.** Every channel except N has one per-history float64 tally column `sum(x - n q_c)`,

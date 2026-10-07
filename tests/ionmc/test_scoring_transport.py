@@ -825,3 +825,65 @@ def test_nonpositive_ramp_is_flagged_at_runtime(make_config: MakeConfig) -> None
     assert sc.lookup_ood == 0
     sc.score_piece(0, 0, 0, 1.0, 2.0, 0.1, 0, 0, CLASS_STEP)  # tau = 2: S_bar = -2 <= 0
     assert sc.lookup_ood == 1
+
+
+class DropSource:
+    """Water: constant mass stopping power 10 MeV cm2/g (gamma = 0). Any other material: 5 MeV cm2/g
+    above ``e_drop`` MeV/u and falling as ``(E/e_drop)^3`` below it (log-log slope 3, ordinary above
+    the cutoff, sharply lower stopping below it, so ``S_w / S_m`` grows by 8 between E_cut and
+    E_cut/2)."""
+
+    name = "drop-s"
+
+    def __init__(self, e_drop: float) -> None:
+        self.e_drop = e_drop
+
+    def table(self, material: Material, projectile: Any) -> StoppingTable:
+        e = np.geomspace(1.0, 500.0, 400)
+        if material.name == WATER.name:
+            return build_table(projectile, material, e, np.full_like(e, 10.0), e[0] / 10.0, {})
+        s = 5.0 * np.minimum(1.0, (e / self.e_drop) ** 3)
+        # range integral dE / S on the grid (trapezoid in ln E), start range from the first node
+        r0 = e[0] / (4.0 * s[0])
+        return build_table(projectile, material, e, s, r0, {"source": "drop"})
+
+
+def test_ratio_bound_covers_the_cutoff_crossing_midpoint_domain(make_config: MakeConfig) -> None:
+    """Review f6bd2d53: the stopping-ratio candidate of the LS bound must be evaluated down to
+    E_cut/2. Heterogeneous phantom (water, then a material whose stopping power drops sharply below
+    the cutoff): the recorded r_max exceeds the value of the old domain [E_cut, E_hi], and the
+    recorded LS/LS2 bounds cover every observed per-history LS/LS2 (one history per batch)."""
+    from ionmc.transport.channels import _stopping_ratio_max
+
+    e_cut, e_hi = 4.0, 12.0
+    nz = 30
+    mat_index = np.concatenate([np.zeros(10), np.ones(nz - 10)]).astype(np.int32)
+    mat_index = mat_index.reshape(1, 1, nz)
+    geo = VoxelGeometry(
+        origin_mm=(-30.0, -30.0, 0.0), spacing_mm=(60.0, 60.0, 1.0), shape=(1, 1, nz),
+        materials=(WATER, ALUMINIUM),
+        material_index=mat_index,
+    )  # fmt: skip
+    cfg = _cfg(
+        make_config, _reqs("let_t", "let_d"), energy=e_hi, n=240, n_batches=240, seed=11,
+        e_cut=e_cut, geometry=geo, stopping=DropSource(e_drop=e_cut),
+        scoring=(_grid(nz=nz, dz=1.0),), straggling=False, mcs=False,
+    )  # fmt: skip
+    r = Run(cfg)
+    b = r.plan.bounds
+    water = DropSource(e_cut).table(WATER, PROTON)
+    amp = b["ramp_amplification"]
+    rho_min = float(geo.densities_g_cm3()[geo.material_index == 1].min())
+    old = _stopping_ratio_max(r.eff.tables, 1, water, rho_min, e_cut, e_hi, 1, amp)
+    new = _stopping_ratio_max(r.eff.tables, 1, water, rho_min, 0.5 * e_cut, e_hi, 1, amp)
+    assert new > 1.5 * old  # discriminating: the old domain underestimates the ratio
+    assert b["r_max"] >= new * (1 - 1e-12)
+    # observed per-history sums (one history per batch) stay below the recorded bounds
+    ls_ci = r.q_of("let_t").numerator
+    ls2_ci = r.q_of("let_d").numerator
+    for ci, key in ((ls_ci, "B_LS_mev"), (ls2_ci, "B_LS2")):
+        c = r.plan.channels[ci]
+        per_hist = r.acc[:, c.offset : c.offset + c.size].sum(axis=1) * c.quantum
+        assert per_hist.max() <= b[key], (key, per_hist.max(), b[key])
+        assert per_hist.max() > 0.0
+    assert (r.acc >= 0).all()

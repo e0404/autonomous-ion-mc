@@ -1,6 +1,6 @@
 """Fail-closed runner of the V3-003 (``lv``, ``hr``) and V3-004 (``lv4``, ``hr4``) local-validation
 (LV) and host-runner (HR) suites. The V3-004 suites use ``steps_v4.py``, the default seed base
-20361004 and, in the hashed set, the V3-004 acceptance plan and the synthetic lookup fixture.
+20371004 and, in the hashed set, the V3-004 acceptance plan and the synthetic lookup fixture.
 
 Usage (argv only, no shell; the host runner executes exactly this)::
 
@@ -89,7 +89,8 @@ def source_file_list(suite: str | None = None) -> tuple[str, ...]:
 
 DEFAULT_PYTHON_PARTS = 2
 QUALIFICATION_SEED_BASE = 20341004
-V4_QUALIFICATION_SEED_BASE = 20361004
+V4_QUALIFICATION_SEED_BASE = 20371004
+V4_CONSUMED_SEED_BASES = (20361004,)  # observed before the LS/LS2 capacity-domain amendment (plan 4)
 V4_REHEARSAL_SEED_BASE = 20351004
 DEFAULT_SEED_BASES = {
     "lv": QUALIFICATION_SEED_BASE,
@@ -469,7 +470,7 @@ def main(argv: list[str] | None = None) -> int:
         type=int,
         default=None,
         help="base of all statistical seeds (default: the qualification base of the suite, "
-        "20341004 for lv/hr and 20361004 for lv4/hr4; for lv/hr the "
+        "20341004 for lv/hr and 20371004 for lv4/hr4 (20351004 rehearsal and 20361004 consumed give non-conformant archives); for lv/hr the "
         "bases 20261004, 20271004, 20281004, 20291004, 20301004, 20311004, 20321004 and "
         "20331004 give non-conformant archives); "
         "recorded in the archive",

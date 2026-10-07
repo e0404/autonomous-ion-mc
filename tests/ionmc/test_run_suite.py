@@ -684,7 +684,7 @@ def test_runner_single_process_end_to_end(tmp_path: Path) -> None:
 
 
 # -- V3-004 suites (lv4, hr4) --------------------------------------------------------------------
-QUAL4 = 20361004
+QUAL4 = 20371004
 
 
 def _env4(suite: str = "lv4", base: int = QUAL4) -> str:
@@ -789,6 +789,12 @@ def test_v4_summary_conformance_deferred_and_combine(tmp_path: Path) -> None:
     r = json.loads((reh / "summary.json").read_text())
     assert r["pass"] and not r["conformant"]
     assert any("rehearsal" in x and "non-qualification" in x for x in r["non_conformant_reasons"])
+    used = tmp_path / "used"  # the consumed base 20361004 (amendment 4) never qualifies
+    _archive4(used, full, base=20361004)
+    assert summ.main([str(used), "--expected-sha", SHA]) == 0
+    u = json.loads((used / "summary.json").read_text())
+    assert u["pass"] and not u["conformant"]
+    assert any("consumed" in x for x in u["non_conformant_reasons"])
     # single-process diagnostic archive: the workers step may be deferred, never conformant
     d = tmp_path / "diag"
     _archive4(d, full, env=_env4() + DIAG_ENV_LINES)

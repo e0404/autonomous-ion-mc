@@ -63,7 +63,7 @@ The fixed seed bases of V3-004 are distinct from every V3-003 base (20261004 ...
 
 - **Rehearsal base 20351004.** Full-scale rehearsal and diagnostic runs of the LV/HR steps. Its
   results are preserved as non-qualification evidence and never acceptance evidence.
-- **Qualification base 20361004.** Used only for the final qualification runs of this task after the
+- **Qualification base 20371004** (re-frozen from 20361004 by amendment 4). Used only for the final qualification runs of this task after the
   engine is frozen (A7, A9, A11-LV/HR, A15; A13 is not gating). It is recorded in the environment,
   the step documents and each sample's metadata, and the runner enforces conformance only for this
   base. Samples with different bases are never compared.
@@ -97,7 +97,7 @@ smoke run of 10^3 histories, a configuration that is not A9's, before any A9 res
 
 ## Evidence archives (which archive satisfies which row)
 
-| Rows | Archive (suite, qualification base 20361004) |
+| Rows | Archive (suite, qualification base 20371004) |
 |---|---|
 | A1-A6, A10, A12, A14, A16 (CI part), A15 (CPU chunks, 1 vs 3 workers), A11 CI | CI (GitHub), fixed small seeds; also the `pytest-scoring-warp-cpu` step of `lv4` |
 | A16 against a524f209, A11-LV, A15 (LV), A7, A8, A9, A13 (non-gating) | `lv4` archive (the 1 vs 3 workers part only in a standard-mode run, deferred in single-process mode) |
@@ -154,3 +154,5 @@ replaced by the 99 % binomial interval for p = 0.95 at n = 200, [0.91, 0.99] (ab
 about 3 % over three depths). History count per seed (1e5 in 100 batches), 200 seeds and the
 leave-one-out pooled reference are unchanged; A9 runs in two parts of 100 seeds
 (`a9-part-1of2`, `a9-part-2of2`) merged by `a9-compare`.
+
+⁴ Qualification seed base re-frozen (2026-10-07, task V3-004, after Codex review REVIEW-f6bd2d5331ab4073b8e4000e066377eb): the lv4 and hr4 suites at base 20361004 (head 86e18c8; every executed step passed in single-process diagnostic mode, 05-a15-workers deferred; archived as validation/results/transport/{lv4,hr4}-86e18c8-single-process.json, non-qualification evidence) were observed before the review required the LS/LS2 capacity-bound domain to cover the complete reachable midpoint energies. Base 20361004 joins the consumed non-qualification bases; the qualification base is 20371004. No tolerance, history count or criterion changes.

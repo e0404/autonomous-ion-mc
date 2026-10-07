@@ -12,7 +12,7 @@ The steps run in the suites ``lv4`` and ``hr4`` of ``run_suite.py`` and follow t
 ``"reduced": true`` and a pass is not a conformant result. Everything uses the offline analytic
 Bethe stopping source (I = 78 eV) and the synthetic lookup fixture ``tests/data/synthetic_lookup.json``.
 
-Seeds derive deterministically from one ``--seed-base`` (default 20361004, the V3-004 qualification
+Seeds derive deterministically from one ``--seed-base`` (default 20371004, the V3-004 qualification
 base; 20351004 is the rehearsal base, see the plan): A7 ``base + i`` (i-th step length), A8
 ``base + 8``, A9 ``base + 10000 + i`` (i-th seed), A11 LV ``base + 11``, A11 HR ``base + 1000 k``
 (k = 1 python, 2 cpu32, 3 cpu64, 4 cuda32, as T12), A13 ``base + 13``, A15 and A16 fixed small
@@ -87,7 +87,7 @@ LK_E = LookupTable(
     "validation/scripts/transport/steps_v4.py (f = 1 .. 3 linear in the sample index)", True,
 )  # fmt: skip
 LOOKUPS = (LK_LET, LK_E)
-QUALIFICATION_SEED_BASE = 20361004
+QUALIFICATION_SEED_BASE = 20371004
 REHEARSAL_SEED_BASE = 20351004
 
 ENERGY_MEV = 150.0
