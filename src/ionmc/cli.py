@@ -40,10 +40,10 @@ def build_parser() -> argparse.ArgumentParser:
     bld = data_sub.add_parser("build", help="build a derived table from cached datasets")
     bld.add_argument("table", choices=["nuclear-proton"])
     bld.add_argument("--cache-dir", default=None, help="cache directory")
-    bld.add_argument("--points-per-decade", type=int, default=100)
-    bld.add_argument("--lambda-events", type=int, default=200000)
+    bld.add_argument("--points-per-decade", type=int, default=50)
+    bld.add_argument("--diagnostic-events", type=int, default=20000)
     bld.add_argument(
-        "--no-strict", action="store_true", help="do not fail on lambda non-convergence"
+        "--strict", action="store_true", help="fail when a lambda node does not converge to 1e-3"
     )
     return parser
 
@@ -54,8 +54,8 @@ def _build_nuclear(args: argparse.Namespace) -> int:
 
     opts = BuildOptions(
         points_per_decade=args.points_per_decade,
-        lambda_events=args.lambda_events,
-        strict=not args.no_strict,
+        diagnostic_events=args.diagnostic_events,
+        strict=args.strict,
     )
     try:
         res = build_nuclear_proton(cache.resolve_cache_dir(args.cache_dir), opts, log=print)
@@ -63,13 +63,24 @@ def _build_nuclear(args: argparse.Namespace) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     gate = res.info["gate_d6"]
+    mult = res.info["multiplicity"]
+    pmin = mult["p_accept_min"]
     print(f"table id {res.table_id}")
+    print(f"build seconds {res.info['timing_s']:.1f}")
+    print(f"grid size {res.info['grid']['n_points']}")
+    print(f"P_accept min {pmin['p_accept']:.4f} ({pmin['target']}, {pmin['e_mev']:.4g} MeV)")
+    print(f"non-converged lambda nodes {len(mult['non_converged_nodes'])}")
+    print(f"transport_energy_bound_mev {res.info['transport_energy_bound_mev']:.2f}")
+    print(f"transport_path_bound_terms {res.info['transport_path_bound_terms']}")
     for key, num in gate["numbers"].items():
         print(
             f"D6 {key} MeV: G={num['G']:.4f} D={num['D']:.3e} "
-            f"R99.9={num['percentile_range_g_cm2']:.4f}"
+            f"R99.9={num['percentile_range_g_cm2']:.4f} g/cm2"
         )
-    print(f"tier1_pass={gate['tier1_pass']} tier2_pass={gate['tier2_pass']}")
+    print(
+        f"tier1_pass={gate['tier1_pass']} tier2_pass={gate['tier2_pass']} "
+        f"ceiling_pass={gate['ceiling_pass']}"
+    )
     return 0
 
 

@@ -1,19 +1,26 @@
 """Non-elastic proton event sampler: one algorithm, a numpy batch path and a scalar twin path.
 
-Decision 0041 section 3. An event is assembled from the shared functions of
-``ionmc.physics.nuclear`` (Poisson multiplicities, inverse-CDF E', Kalbach-Mann mu, residual
-four-momentum by difference, AME2020 residual-mass test, at most 64 attempts, CM-to-lab boost):
+Decision 0041 section 3 (amendment 2026-10-07). An event is assembled from the shared functions of
+``ionmc.physics.nuclear`` (floor + Bernoulli multiplicities, inverse-CDF E', Kalbach-Mann mu,
+CM-to-lab boost); the residual only has to exist, it is not given a four-momentum:
 
 1. up to ``MAX_ATTEMPTS`` attempts; attempt ``a`` draws, for the species ``n, p, d, alpha, gamma``
-   (in this order, ``SPECIES``), a Poisson multiplicity ``n_s`` of mean ``lam_s`` (cap 16);
-2. every product (species-major order, running index ``j``) draws ``u_bin, u_frac, u_branch,
-   u_mu, u_phi``: the bin of the 64-bin equiprobable table, the position in the bin (E' linear
-   in the bin), the (unused, layout-reserving) branch uniform, the Kalbach mu uniform and the
-   azimuth; gamma is isotropic (``mu = 2 u_mu - 1``);
-3. the residual four-momentum is ``(sqrt(s), 0) - sum`` of the product CM four-momenta; the
-   attempt is accepted iff the residual nuclide ``(Z_c - sum z, A_c - sum a)`` has an AME2020
-   mass ``M_r`` and its invariant mass ``m_r >= M_r`` (``E* = m_r - M_r``);
-4. an accepted event is boosted to the laboratory frame.
+   (in this order, ``SPECIES``), a multiplicity
+   ``n_s = floor(lam_s) + [u_s < lam_s - floor(lam_s)]``
+   (``multiplicity_round``, cap 16) from the uniform of slot ``s``;
+2. the attempt is accepted iff the residual nuclide ``(Z_c - sum z, A_c - sum a)`` has an AME2020
+   mass ``M_r`` (``m_res`` finite): no mass or energy test; an exhausted event (64 attempts) is
+   reported ``accepted = False``;
+3. every product of the accepted attempt (species-major order, running index ``j``) draws
+   ``u_bin, u_frac, u_branch, u_mu, u_phi``: the bin of the 64-bin equiprobable table, the
+   position in the bin (E' linear in the bin), the (unused, layout-reserving) branch uniform, the
+   Kalbach mu uniform and the azimuth; gamma is isotropic (``mu = 2 u_mu - 1``); each product is
+   boosted to the laboratory frame;
+4. the residual carries the ENDF mean heavy-recoil energy ``T_r = rows.recoil_t_mev`` and is
+   deposited locally with the alphas (local deposit = sum of the alpha lab kinetic energies +
+   ``T_r``); the event ledger is ``imbalance = T_1 + m_p + M_t - sum E_lab - M_r - T_r`` (signed,
+   the tally ``nuclear_imbalance``), so that ``T_1 = sum T_lab + T_r + binding + imbalance``
+   with ``binding = sum m_out + M_r - m_p - M_t``.
 
 ``sample_events`` is the vectorised numpy implementation (used by the table builder, which needs
 10^5-10^6 events per node); ``sample_event_scalar`` evaluates the identical algorithm with the
@@ -23,8 +30,9 @@ path the Python reference backend reuses. Both consume uniforms through the same
 ``SPECIES`` order and the product with running index ``j`` uses the slots ``8 + 8 j + k`` for
 ``k = 0..4`` (``u_bin, u_frac, u_branch, u_mu, u_phi``). ``CounterUniforms`` is a stateless
 counter-based generator (splitmix64 finalizer), so a batch and the scalar path see identical
-uniforms and repeated batches with the same key are common random numbers (the lambda fixed
-point of the builder needs this). ``RngUniforms`` wraps a numpy ``Generator`` for plain sampling.
+uniforms. ``RngUniforms`` wraps a numpy ``Generator`` for plain sampling.
+:func:`exact_post_acceptance` enumerates the at most 32 multiplicity outcomes exactly (the builder
+solves ``lam`` with it).
 
 Units: MeV (c = 1), angles in radians. All numpy functions are float64 and mirror the shared
 functions' operation order; they agree with the twins to rounding of the transcendental
@@ -111,17 +119,44 @@ class EventModel:
 
 @dataclass(frozen=True)
 class EnergyRows:
-    """Rows of one (target, energy): ``lam`` (5,) Poisson means, ``edges_mev`` (5, 65) bin edges
-    of the 64 equiprobable bins of E'_CM, ``r`` (5, 64) pre-compound fraction per bin."""
+    """Rows of one (target, energy): ``lam`` (5,) multiplicity means (floor + Bernoulli),
+    ``edges_mev`` (5, 65) bin edges of the 64 equiprobable bins of E'_CM, ``r`` (5, 64)
+    pre-compound fraction per bin, ``recoil_t_mev`` the ENDF mean heavy-recoil energy
+    ``sum_r y_r <E_r>`` [MeV] given to the residual."""
 
     lam: NDArray[np.float64]
     edges_mev: NDArray[np.float64]
     r: NDArray[np.float64]
+    recoil_t_mev: float
+
+
+def interp_rows(
+    grid: NDArray[np.float64],
+    lam: NDArray[np.float64],
+    edges: NDArray[np.float64],
+    r: NDArray[np.float64],
+    recoil_t: NDArray[np.float64],
+    e_mev: float,
+) -> EnergyRows:
+    """Rows at ``e_mev`` of one target by lin-lin interpolation in E on the table grid (the
+    runtime rule; ``lam`` (5, N), ``edges`` (5, N, 65), ``r`` (5, N, 64), ``recoil_t`` (N,)).
+    Outside the grid the end rows are used."""
+    n = grid.size
+    k = int(np.clip(np.searchsorted(grid, e_mev, side="right") - 1, 0, n - 2))
+    t = min(max((e_mev - grid[k]) / (grid[k + 1] - grid[k]), 0.0), 1.0)
+    return EnergyRows(
+        (1.0 - t) * lam[:, k] + t * lam[:, k + 1],
+        (1.0 - t) * edges[:, k] + t * edges[:, k + 1],
+        (1.0 - t) * r[:, k] + t * r[:, k + 1],
+        float((1.0 - t) * recoil_t[k] + t * recoil_t[k + 1]),
+    )
 
 
 def build_event_model(ame: dict[tuple[int, int], AmeEntry], z_t: int, a_t: int) -> EventModel:
-    """Masses, Kalbach separation energies and the residual-mass table of the target ``(z_t,
-    a_t)``; masses from AME2020 (``nuclear_mass_mev``), separation energies from the Kalbach
+    """The total break-up ``(Z_r, A_r) = (0, 0)`` (for example p + C-12 -> p + 3 alpha) is an
+    existing residual of mass 0 (orchestrator decision 2026-10-07); every other residual needs an
+    AME2020 mass. Masses, Kalbach separation energies and the residual-mass table of the target
+    ``(z_t, a_t)``; masses from AME2020 (``nuclear_mass_mev``), separation energies from the Kalbach
     (1988) systematics formula (not from AME: the systematics were fitted with that formula)."""
     z_c, a_c = z_t + 1, a_t + 1
     masses = np.array(
@@ -145,6 +180,8 @@ def build_event_model(ame: dict[tuple[int, int], AmeEntry], z_t: int, a_t: int) 
             z_r, a_r = z_c - dz, a_c - da
             if z_r >= 0 and a_r >= 1 and (z_r, a_r) in ame:
                 m_res[dz, da] = nuclear_mass_mev(ame, z_r, a_r)
+            elif z_r == 0 and a_r == 0:
+                m_res[dz, da] = 0.0
     return EventModel(
         z_t=z_t,
         a_t=a_t,
@@ -265,20 +302,44 @@ class RngUniforms:
 # ---------------------------------------------------------------------------------------------
 # numpy versions of the shared functions (same operation order)
 # ---------------------------------------------------------------------------------------------
-def poisson_inverse_np(
+def multiplicity_round_np(
     u: NDArray[np.float64], lam: float | NDArray[np.float64]
 ) -> NDArray[np.int64]:
-    """Vectorised ``poisson_inverse`` (``n_max = POISSON_N_MAX``)."""
+    """Vectorised ``multiplicity_round`` (``n_max = POISSON_N_MAX``)."""
     lam_a = np.broadcast_to(np.asarray(lam, dtype=np.float64), u.shape)
-    p = np.exp(-lam_a)
-    cdf = p.copy()
-    n = np.zeros(u.shape, dtype=np.int64)
-    for _ in range(16):
-        step = (u > cdf) & (n < POISSON_N_MAX)
-        n = n + step
-        p = np.where(step, p * lam_a / np.maximum(n, 1), p)
-        cdf = np.where(step, cdf + p, cdf)
-    return n
+    base = np.floor(lam_a)
+    n = base.astype(np.int64) + (u < lam_a - base)
+    return np.minimum(n, POISSON_N_MAX).astype(np.int64)
+
+
+_OUTCOME_BITS = (np.arange(1 << N_SPECIES)[:, None] >> np.arange(N_SPECIES)) & 1
+
+
+def exact_post_acceptance(
+    model: EventModel, lam: NDArray[np.float64]
+) -> tuple[float, NDArray[np.float64]]:
+    """``(p_accept, mean_counts)`` of one attempt by exact enumeration of the 2^5 outcomes of the
+    floor + Bernoulli multiplicities: ``p_accept`` the probability that the residual exists, and
+    ``mean_counts`` (5,) the mean multiplicities of an accepted attempt (the post-acceptance
+    yields; zeros if ``p_accept = 0``)."""
+    lam_a = np.asarray(lam, dtype=np.float64)
+    base = np.floor(lam_a)
+    frac = lam_a - base
+    bits = _OUTCOME_BITS
+    prob = np.prod(np.where(bits == 1, frac, 1.0 - frac), axis=1)
+    counts = np.minimum(base.astype(np.int64) + bits, POISSON_N_MAX)
+    dz = counts @ np.asarray(SPECIES_Z)
+    da = counts @ np.asarray(SPECIES_A)
+    inside = (dz <= DZ_MAX) & (da <= DA_MAX)
+    big_m = np.where(
+        inside, model.m_res_mev[np.minimum(dz, DZ_MAX), np.minimum(da, DA_MAX)], np.inf
+    )
+    ok = np.isfinite(big_m) & (prob > 0.0)
+    p_acc = float(prob[ok].sum())
+    if p_acc <= 0.0:
+        return 0.0, np.zeros(N_SPECIES)
+    mean = (prob[ok, None] * counts[ok]).sum(axis=0) / p_acc
+    return p_acc, np.asarray(mean, dtype=np.float64)
 
 
 def kalbach_a_np(
@@ -365,28 +426,38 @@ def cm_boost_np(t_mev: float, m_p: float, m_t: float) -> tuple[float, float, flo
 # ---------------------------------------------------------------------------------------------
 @dataclass(frozen=True)
 class EventBatch:
-    """Result of :func:`sample_events` for ``n`` events.
+    """Result of :func:`sample_events` for ``n`` events (arrays of length ``n``; NaN / -1 for an
+    event that was not accepted).
 
-    ``accepted`` (n,) bool; ``attempts`` (n,) number of attempts used (``MAX_ATTEMPTS`` for an
-    exhausted event); ``counts`` (n, 5) multiplicities of the accepted attempt (0 for exhausted
-    events); ``e_star_mev`` (n,) residual excitation (NaN if not accepted). With
-    ``want_particles``: arrays of the accepted events' products ``particle_event`` (index into the
-    batch), ``particle_species``, ``e_cm_mev`` (E'), ``mu``, ``phi``, lab ``(e_lab, px, py, pz)``
-    [MeV] in ``particle_lab`` (P, 4), and the residual lab four-momentum ``residual_lab`` (n, 4)
-    (NaN if not accepted)."""
+    ``accepted``; ``attempts`` (``MAX_ATTEMPTS`` for an exhausted event); ``counts`` (n, 5)
+    multiplicities of the accepted attempt; ``z_r``, ``a_r`` the residual nuclide;
+    ``recoil_t_mev`` the residual kinetic energy ``T_r``; ``imbalance_mev`` the signed ledger
+    ``T_1 + m_p + M_t - sum E_lab - M_r - T_r`` (tally ``nuclear_imbalance``); ``binding_mev``
+    ``sum m_out + M_r - m_p - M_t`` (tally ``nuclear_binding``); ``local_deposit_mev`` the sum of
+    the alpha lab kinetic energies + ``T_r``; diagnostics ``imbalance_cm_mev`` (``sqrt(s) - sum
+    E_cm - M_r - T_r``), ``p_cm_sum_mev`` (|sum of the product CM momenta|), ``sum_e_prime_mev``
+    (n, 5) the sum of the sampled E'_CM per species. With ``want_particles``: the accepted events'
+    products ``particle_event`` (index into the batch), ``particle_species``, ``e_cm_mev`` (E'),
+    ``mu``, ``phi`` and the lab ``(e_lab, px, py, pz)`` [MeV] in ``particle_lab`` (P, 4)."""
 
     accepted: NDArray[np.bool_]
     attempts: NDArray[np.int64]
     counts: NDArray[np.int64]
-    e_star_mev: NDArray[np.float64]
+    z_r: NDArray[np.int64]
+    a_r: NDArray[np.int64]
+    recoil_t_mev: NDArray[np.float64]
+    imbalance_mev: NDArray[np.float64]
+    binding_mev: NDArray[np.float64]
+    local_deposit_mev: NDArray[np.float64]
+    imbalance_cm_mev: NDArray[np.float64]
+    p_cm_sum_mev: NDArray[np.float64]
+    sum_e_prime_mev: NDArray[np.float64]
     particle_event: NDArray[np.int64] | None = None
     particle_species: NDArray[np.int64] | None = None
     e_cm_mev: NDArray[np.float64] | None = None
     mu: NDArray[np.float64] | None = None
     phi: NDArray[np.float64] | None = None
     particle_lab: NDArray[np.float64] | None = None
-    residual_lab: NDArray[np.float64] | None = None
-    m_r_mev: NDArray[np.float64] | None = None
 
 
 def sample_events(
@@ -405,108 +476,126 @@ def sample_events(
     masses = model.species_mass_mev
     sp_z = np.asarray(SPECIES_Z, dtype=np.int64)
     sp_a = np.asarray(SPECIES_A, dtype=np.int64)
+    z_c, a_c = model.z_t + 1, model.a_t + 1
+    nan = np.full(n_events, np.nan)
     accepted = np.zeros(n_events, dtype=bool)
     attempts = np.zeros(n_events, dtype=np.int64)
     counts_out = np.zeros((n_events, N_SPECIES), dtype=np.int64)
-    e_star = np.full(n_events, np.nan)
+    z_r = np.full(n_events, -1, dtype=np.int64)
+    a_r = np.full(n_events, -1, dtype=np.int64)
+    t_r = nan.copy()
+    imb, bind, local, imb_cm, p_sum = (nan.copy() for _ in range(5))
+    sum_e_prime = np.full((n_events, N_SPECIES), np.nan)
     keep: dict[str, list[Any]] = {k: [] for k in ("ev", "sp", "ecm", "mu", "phi", "lab")}
-    res_lab = np.full((n_events, 4), np.nan) if want_particles else None
-    m_r_out = np.full(n_events, np.nan) if want_particles else None
     active = np.arange(n_events, dtype=np.int64)
     for attempt in range(1, MAX_ATTEMPTS + 1):
         if active.size == 0:
             break
-        m = active.size
         ev_id = active + event_offset
-        counts = np.empty((m, N_SPECIES), dtype=np.int64)
+        counts = np.empty((active.size, N_SPECIES), dtype=np.int64)
         for s in range(N_SPECIES):
-            counts[:, s] = poisson_inverse_np(source.uniform(ev_id, attempt, s), rows.lam[s])
-        tot = counts.sum(axis=1)
-        n_part = int(tot.sum())
-        sp_flat = np.repeat(np.tile(np.arange(N_SPECIES), m), counts.ravel())
-        ev_loc = np.repeat(np.arange(m), tot)
-        start = np.cumsum(tot) - tot
-        j = np.arange(n_part) - np.repeat(start, tot)
-        ev_part = ev_id[ev_loc]
-        u = [
-            source.uniform(ev_part, attempt, SLOT_PARTICLE_BASE + SLOT_PARTICLE_STRIDE * j + k)
-            for k in range(N_PARTICLE_UNIFORMS)
-        ]
-        k_bin = np.minimum(np.maximum(np.floor(u[0] * N_BINS).astype(np.int64), 0), N_BINS - 1)
-        e_lo = rows.edges_mev[sp_flat, k_bin]
-        e_hi = rows.edges_mev[sp_flat, k_bin + 1]
-        e_p = e_lo + u[1] * (e_hi - e_lo)
-        r_p = rows.r[sp_flat, k_bin]
-        is_g = sp_flat == 4
-        a_k = kalbach_a_np(e_a, e_p + model.s_b_mev[sp_flat], _M_B[sp_flat])
-        mu = kalbach_mu_np(u[3], a_k, r_p)
-        mu = np.where(is_g, 2.0 * u[3] - 1.0, mu)
-        phi = 2.0 * math.pi * u[4]
-        m_s = masses[sp_flat]
-        p_cm = np.sqrt(e_p * (e_p + 2.0 * m_s))
-        st = np.sqrt(np.maximum(1.0 - mu * mu, 0.0))
-        px = p_cm * st * np.cos(phi)
-        py = p_cm * st * np.sin(phi)
-        pz = p_cm * mu
-        e_cm_tot = e_p + m_s
-        sum_e = np.bincount(ev_loc, weights=e_cm_tot, minlength=m)
-        sum_px = np.bincount(ev_loc, weights=px, minlength=m)
-        sum_py = np.bincount(ev_loc, weights=py, minlength=m)
-        sum_pz = np.bincount(ev_loc, weights=pz, minlength=m)
-        e_r = sqrt_s - sum_e
-        pr = -sum_px, -sum_py, -sum_pz
-        p_res = np.sqrt(pr[0] * pr[0] + pr[1] * pr[1] + pr[2] * pr[2])
-        m2 = (e_r - p_res) * (e_r + p_res)
-        m_r = np.sqrt(np.abs(m2))
-        m_r = np.where(m2 < 0.0, -m_r, m_r)
-        dz = (counts * sp_z).sum(axis=1)
-        da = (counts * sp_a).sum(axis=1)
+            counts[:, s] = multiplicity_round_np(source.uniform(ev_id, attempt, s), rows.lam[s])
+        dz = counts @ sp_z
+        da = counts @ sp_a
         inside = (dz <= DZ_MAX) & (da <= DA_MAX)
-        big_m = np.where(
+        big_m_all = np.where(
             inside, model.m_res_mev[np.minimum(dz, DZ_MAX), np.minimum(da, DA_MAX)], np.inf
         )
-        ok = m_r >= big_m
+        ok = np.isfinite(big_m_all)
         attempts[active] = attempt
         if np.any(ok):
             acc = active[ok]
+            counts_a = counts[ok]
+            big_m = big_m_all[ok]
+            m = acc.size
+            ev_a = acc + event_offset
+            tot = counts_a.sum(axis=1)
+            n_part = int(tot.sum())
+            sp_flat = np.repeat(np.tile(np.arange(N_SPECIES), m), counts_a.ravel())
+            ev_loc = np.repeat(np.arange(m), tot)
+            start = np.cumsum(tot) - tot
+            j = np.arange(n_part) - np.repeat(start, tot)
+            ev_part = ev_a[ev_loc]
+            u = [
+                source.uniform(ev_part, attempt, SLOT_PARTICLE_BASE + SLOT_PARTICLE_STRIDE * j + k)
+                for k in range(N_PARTICLE_UNIFORMS)
+            ]
+            k_bin = np.minimum(np.maximum(np.floor(u[0] * N_BINS).astype(np.int64), 0), N_BINS - 1)
+            e_lo = rows.edges_mev[sp_flat, k_bin]
+            e_hi = rows.edges_mev[sp_flat, k_bin + 1]
+            e_p = e_lo + u[1] * (e_hi - e_lo)
+            r_p = rows.r[sp_flat, k_bin]
+            a_k = kalbach_a_np(e_a, e_p + model.s_b_mev[sp_flat], _M_B[sp_flat])
+            mu = kalbach_mu_np(u[3], a_k, r_p)
+            mu = np.where(sp_flat == 4, 2.0 * u[3] - 1.0, mu)
+            phi = 2.0 * math.pi * u[4]
+            m_s = masses[sp_flat]
+            p_cm = np.sqrt(e_p * (e_p + 2.0 * m_s))
+            st = np.sqrt(np.maximum(1.0 - mu * mu, 0.0))
+            px = p_cm * st * np.cos(phi)
+            py = p_cm * st * np.sin(phi)
+            pz = p_cm * mu
+            e_cm_tot = e_p + m_s
+            e_lab = gamma * (e_cm_tot + beta * pz)
+            pz_lab = gamma * (pz + beta * e_cm_tot)
+            sum_e_lab = np.bincount(ev_loc, weights=e_lab, minlength=m)
+            sum_e_cm = np.bincount(ev_loc, weights=e_cm_tot, minlength=m)
+            sum_p = np.sqrt(
+                sum(np.bincount(ev_loc, weights=c, minlength=m) ** 2 for c in (px, py, pz))
+            )
+            alpha = sp_flat == 3
+            alpha_t = np.bincount(ev_loc[alpha], weights=(e_lab - m_s)[alpha], minlength=m)
+            sum_ep = np.bincount(
+                ev_loc * N_SPECIES + sp_flat, weights=e_p, minlength=m * N_SPECIES
+            ).reshape(m, N_SPECIES)
+            m_out = counts_a @ masses
+            recoil = rows.recoil_t_mev
             accepted[acc] = True
-            counts_out[acc] = counts[ok]
-            e_star[acc] = m_r[ok] - big_m[ok]
+            counts_out[acc] = counts_a
+            z_r[acc] = z_c - counts_a @ sp_z
+            a_r[acc] = a_c - counts_a @ sp_a
+            t_r[acc] = recoil
+            imb[acc] = t_lab_mev + model.m_p_mev + model.m_t_mev - sum_e_lab - big_m - recoil
+            bind[acc] = m_out + big_m - model.m_p_mev - model.m_t_mev
+            local[acc] = alpha_t + recoil
+            imb_cm[acc] = sqrt_s - sum_e_cm - big_m - recoil
+            p_sum[acc] = sum_p
+            sum_e_prime[acc] = sum_ep
             if want_particles:
-                assert res_lab is not None and m_r_out is not None
-                sel = ok[ev_loc]
-                e_lab = gamma * (e_cm_tot + beta * pz)
-                pz_lab = gamma * (pz + beta * e_cm_tot)
-                keep["ev"].append(active[ev_loc[sel]])
-                keep["sp"].append(sp_flat[sel])
-                keep["ecm"].append(e_p[sel])
-                keep["mu"].append(mu[sel])
-                keep["phi"].append(phi[sel])
-                keep["lab"].append(np.stack([e_lab[sel], px[sel], py[sel], pz_lab[sel]], axis=1))
-                res_lab[acc, 0] = gamma * (e_r[ok] + beta * pr[2][ok])
-                res_lab[acc, 1] = pr[0][ok]
-                res_lab[acc, 2] = pr[1][ok]
-                res_lab[acc, 3] = gamma * (pr[2][ok] + beta * e_r[ok])
-                m_r_out[acc] = m_r[ok]
+                keep["ev"].append(acc[ev_loc])
+                keep["sp"].append(sp_flat)
+                keep["ecm"].append(e_p)
+                keep["mu"].append(mu)
+                keep["phi"].append(phi)
+                keep["lab"].append(np.stack([e_lab, px, py, pz_lab], axis=1))
         active = active[~ok]
+    common: dict[str, Any] = {
+        "accepted": accepted,
+        "attempts": attempts,
+        "counts": counts_out,
+        "z_r": z_r,
+        "a_r": a_r,
+        "recoil_t_mev": t_r,
+        "imbalance_mev": imb,
+        "binding_mev": bind,
+        "local_deposit_mev": local,
+        "imbalance_cm_mev": imb_cm,
+        "p_cm_sum_mev": p_sum,
+        "sum_e_prime_mev": sum_e_prime,
+    }
     if not want_particles:
-        return EventBatch(accepted, attempts, counts_out, e_star)
+        return EventBatch(**common)
     cat = {k: (np.concatenate(v) if v else np.zeros(0)) for k, v in keep.items()}
     lab = np.concatenate(keep["lab"]) if keep["lab"] else np.zeros((0, 4))
     order = np.argsort(cat["ev"], kind="stable")
     return EventBatch(
-        accepted,
-        attempts,
-        counts_out,
-        e_star,
+        **common,
         particle_event=cat["ev"].astype(np.int64)[order],
         particle_species=cat["sp"].astype(np.int64)[order],
         e_cm_mev=cat["ecm"][order],
         mu=cat["mu"][order],
         phi=cat["phi"][order],
         particle_lab=lab[order],
-        residual_lab=res_lab,
-        m_r_mev=m_r_out,
     )
 
 
@@ -516,17 +605,21 @@ def sample_events(
 @dataclass(frozen=True)
 class ScalarEvent:
     """Result of :func:`sample_event_scalar`: ``accepted``, ``attempts``, ``counts`` (5 ints),
-    ``e_star_mev``, ``m_r_mev``, products ``particles`` as ``(species, e_cm, mu, phi, e_lab, px,
-    py, pz_lab)`` tuples (species index into ``SPECIES``; lab four-momentum in MeV) in running
-    order, and the residual lab four-momentum ``residual_lab`` ``(E, px, py, pz)``."""
+    the residual ``z_r``, ``a_r``, ``recoil_t_mev``, the ledger ``imbalance_mev`` and
+    ``binding_mev``, ``local_deposit_mev`` and the products ``particles`` as ``(species, e_cm,
+    mu, phi, e_lab, px, py, pz_lab)`` tuples (species index into ``SPECIES``; lab four-momentum in
+    MeV) in running order (fields as in :class:`EventBatch`)."""
 
     accepted: bool
     attempts: int
     counts: tuple[int, ...]
-    e_star_mev: float
-    m_r_mev: float
+    z_r: int
+    a_r: int
+    recoil_t_mev: float
+    imbalance_mev: float
+    binding_mev: float
+    local_deposit_mev: float
     particles: tuple[tuple[float, ...], ...]
-    residual_lab: tuple[float, float, float, float]
 
 
 def sample_event_scalar(
@@ -540,14 +633,20 @@ def sample_event_scalar(
     docstring). ``uni(attempt, slot)`` returns the uniform of an address; ``nu`` defaults to
     ``python_twin(make_nuclear)``."""
     nu = python_twin(make_nuclear) if nu is None else nu
-    beta, gamma, sqrt_s = nu.cm_boost(t_lab_mev, model.m_p_mev, model.m_t_mev)
+    beta, gamma, _sqrt_s = nu.cm_boost(t_lab_mev, model.m_p_mev, model.m_t_mev)
     e_a = t_lab_mev * model.a_t / (model.a_t + 1.0) + model.s_a_mev
     masses = [float(x) for x in model.species_mass_mev]
     for attempt in range(1, MAX_ATTEMPTS + 1):
         n = [
-            nu.poisson_inverse(uni(attempt, s), float(rows.lam[s]), POISSON_N_MAX) for s in range(5)
+            nu.multiplicity_round(uni(attempt, s), float(rows.lam[s]), POISSON_N_MAX)
+            for s in range(N_SPECIES)
         ]
-        parts: list[tuple[int, float, float, float]] = []
+        dz = sum(n[s] * SPECIES_Z[s] for s in range(N_SPECIES))
+        da = sum(n[s] * SPECIES_A[s] for s in range(N_SPECIES))
+        big_m = float(model.m_res_mev[dz, da]) if dz <= DZ_MAX and da <= DA_MAX else math.inf
+        if math.isinf(big_m):
+            continue
+        out = []
         j = 0
         for s in range(N_SPECIES):
             for _ in range(n[s]):
@@ -561,37 +660,26 @@ def sample_event_scalar(
                     mu = nu.kalbach_mu(u[3], a, float(rows.r[s, kb]))
                 else:
                     mu = 2.0 * u[3] - 1.0
-                parts.append((s, e_p, mu, 2.0 * math.pi * u[4]))
+                phi = 2.0 * math.pi * u[4]
+                lab = nu.cm_to_lab(e_p, mu, phi, masses[s], beta, gamma)
+                out.append((float(s), e_p, mu, phi, lab[0], lab[1], lab[2], lab[3]))
                 j += 1
-        dz = sum(SPECIES_Z[p[0]] for p in parts)
-        da = sum(SPECIES_A[p[0]] for p in parts)
-        big_m = float(model.m_res_mev[dz, da]) if dz <= DZ_MAX and da <= DA_MAX else math.inf
-        if math.isinf(big_m):
-            continue
-        cm = []
-        for s, e_p, mu, phi in parts:
-            p = math.sqrt(e_p * (e_p + 2.0 * masses[s]))
-            st = math.sqrt(max(1.0 - mu * mu, 0.0))
-            cm.append((e_p + masses[s], p * st * math.cos(phi), p * st * math.sin(phi), p * mu))
-        e_r = sqrt_s - sum(c[0] for c in cm)
-        pr = [-sum(c[i] for c in cm) for i in (1, 2, 3)]
-        m_r = nu.residual_invariant_mass(e_r, pr[0], pr[1], pr[2])
-        if not nu.residual_mass_ok(m_r, big_m):
-            continue
-        out = []
-        for (s, e_p, mu, phi), _c in zip(parts, cm, strict=True):
-            lab = nu.cm_to_lab(e_p, mu, phi, masses[s], beta, gamma)
-            out.append((float(s), e_p, mu, phi, lab[0], lab[1], lab[2], lab[3]))
-        e_r_lab, pz_r_lab = nu.boost_z(e_r, pr[2], beta, gamma)
+        recoil = float(rows.recoil_t_mev)
+        sum_e_lab = sum(p[4] for p in out)
+        alpha_t = sum(p[4] - masses[3] for p in out if p[0] == 3.0)
+        m_out = sum(n[s] * masses[s] for s in range(N_SPECIES))
         return ScalarEvent(
             True,
             attempt,
             tuple(int(x) for x in n),
-            m_r - big_m,
-            m_r,
+            model.z_t + 1 - dz,
+            model.a_t + 1 - da,
+            recoil,
+            t_lab_mev + model.m_p_mev + model.m_t_mev - sum_e_lab - big_m - recoil,
+            m_out + big_m - model.m_p_mev - model.m_t_mev,
+            alpha_t + recoil,
             tuple(out),
-            (e_r_lab, pr[0], pr[1], pz_r_lab),
         )
     return ScalarEvent(
-        False, MAX_ATTEMPTS, (0,) * N_SPECIES, math.nan, math.nan, (), (math.nan,) * 4
+        False, MAX_ATTEMPTS, (0,) * N_SPECIES, -1, -1, math.nan, math.nan, math.nan, math.nan, ()
     )

@@ -17,12 +17,18 @@ Functions
 ``nuclear_step_limit``      distance [mm] to the next candidate interaction, ``10 n / (rho S^)``
 ``thinning_accept``         majorant thinning: accept with probability ``S(E1) / S^(E0)``
 ``select_target``           inverse-CDF choice of the target element from cumulative fractions
-``poisson_inverse``         Poisson multiplicity by CDF inversion (``n <= 16``)
+``poisson_inverse``         Poisson multiplicity by CDF inversion (``n <= 16``; test reference)
+``multiplicity_round``      floor + Bernoulli multiplicity ``floor(lam) + [u < lam - floor(lam)]``
+                            (the sampler's multiplicity, decision 0041 section 3 amended)
+``grid_locate``             fixed-step binary search ``k`` with ``G_k <= e < G_{k+1}`` on the
+                            non-uniform union grid of the nuclear table
 ``inv_cdf_bin`` / ``inv_cdf_sample``  E' by inverse CDF of a table of equiprobable bins
 ``kalbach_a``               Kalbach (1988) slope ``a(e_a, e_b)`` of the angular distribution
 ``kalbach_cdf`` / ``kalbach_pdf`` / ``kalbach_mu``  Kalbach-Mann angular distribution and its
                             exact inverse sampling
-``residual_invariant_mass`` / ``residual_mass_ok``  residual-nucleus mass check
+``residual_invariant_mass`` / ``residual_mass_ok``  residual four-momentum mass check (no longer
+                            used by the sampler since the 2026-10-07 amendment; kept, with
+                            their twin and kernel tests, as shared kinematics helpers)
 ``cm_boost`` / ``boost_z`` / ``cm_to_lab``  p + target centre-of-mass boost
 
 Kalbach-Mann angular distribution (ENDF-6 LAW=1, LANG=2, NA=1)
@@ -215,6 +221,37 @@ def make_nuclear(real: type) -> SimpleNamespace:
         return n
 
     @named_func(name)
+    def multiplicity_round(u: real, lam: real, n_max: int) -> int:
+        """Floor + Bernoulli multiplicity ``floor(lam) + [u < lam - floor(lam)]`` capped at
+        ``min(n_max, POISSON_N_MAX = 16)`` (``u`` in (0, 1), ``lam`` >= 0): the minimum-variance
+        integer variate of mean ``lam`` (decision 0041 section 3, amendment 2026-10-07).
+        ``lam - floor(lam)`` is exact in either precision, so kernels and twin agree exactly."""
+        base = wp.floor(lam)
+        n = int(base)
+        if u < lam - base:
+            n = n + 1
+        return wp.min(n, wp.min(n_max, 16))
+
+    @named_func(name)
+    def grid_locate(e: real, grid: wp.array(dtype=real), n: int) -> int:
+        """Index ``k`` in ``[0, n - 2]`` with ``grid[k] <= e < grid[k + 1]`` of a strictly
+        increasing ``grid`` of ``n >= 2`` nodes, clamped (``e < grid[0]`` gives 0,
+        ``e >= grid[n-1]`` gives ``n - 2``). Bisection of ``[lo, hi] = [0, n - 1]`` with the
+        invariant ``grid[lo] <= e`` or ``lo = 0`` and ``e < grid[hi]`` or ``hi = n - 1``:
+        exactly ``ceil(log2(n - 1))`` halving steps are active whatever ``e`` is (the loop bound
+        31 only fixes the compiled trip count), so the work is data independent."""
+        lo = int(0)
+        hi = n - 1
+        for _step in range(31):
+            if hi - lo > 1:
+                mid = (lo + hi) // 2
+                if grid[mid] <= e:
+                    lo = mid
+                else:
+                    hi = mid
+        return lo
+
+    @named_func(name)
     def inv_cdf_bin(u: real, n_bins: int) -> int:
         """Equiprobable bin ``floor(u n_bins)`` (clamped to ``n_bins - 1``) of an inverse-CDF
         table; exact in any precision for ``n_bins = 64`` (a power of two)."""
@@ -345,6 +382,8 @@ def make_nuclear(real: type) -> SimpleNamespace:
         thinning_accept=thinning_accept,
         select_target=select_target,
         poisson_inverse=poisson_inverse,
+        multiplicity_round=multiplicity_round,
+        grid_locate=grid_locate,
         inv_cdf_bin=inv_cdf_bin,
         inv_cdf_sample=inv_cdf_sample,
         kalbach_a=kalbach_a,

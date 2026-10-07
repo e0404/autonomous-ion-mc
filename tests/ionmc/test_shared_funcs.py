@@ -702,7 +702,8 @@ EXERCISED = {
     },
     "nu": {
         "nuclear_step_limit", "thinning_accept", "select_target", "poisson_inverse",
-        "inv_cdf_bin", "inv_cdf_sample", "kalbach_a", "kalbach_cdf", "kalbach_pdf", "kalbach_mu",
+        "multiplicity_round", "grid_locate", "inv_cdf_bin", "inv_cdf_sample", "kalbach_a",
+        "kalbach_cdf", "kalbach_pdf", "kalbach_mu",
         "residual_invariant_mass", "residual_mass_ok", "cm_boost", "boost_z", "cm_to_lab",
     },
 }  # fmt: skip

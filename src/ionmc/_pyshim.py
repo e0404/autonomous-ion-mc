@@ -131,6 +131,7 @@ wp = SimpleNamespace(
     normalize=_normalize,
     constant=lambda x: x,
     float64=float,
+    array=lambda dtype=None, **_: object,
     types=SimpleNamespace(vector=_vector),
 )
 """Namespace substituted for ``warp`` when a factory is re-executed as a pure-Python twin."""

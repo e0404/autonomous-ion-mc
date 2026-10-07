@@ -6,7 +6,7 @@
   first moment within 4 sigma. The draws are made by a compiled Warp CPU float64 kernel that calls
   the SHARED functions (the same source text as the twins; kernel and twin agree to 1e-12, P5), so
   that 10^6 draws take seconds in single-threaded CI instead of minutes with scalar twins.
-* P3 - per-event conservation of a test-only event assembler built from the shared functions.
+* P3 - ledger closure of the event sampler: ``test_nuclear_table.py`` (synthetic tables).
 * P5 - python twin against a Warp CPU kernel for EVERY function of ``make_nuclear`` (float64:
   discrete outputs equal, continuous within 1e-12 relative; float32 kernel against the float64
   twin within analytic budgets), and the U1 completeness check of ``test_shared_funcs``.
@@ -60,6 +60,7 @@ def test_purpose_nuclear_alias() -> None:
 # ---------------------------------------------------------------------------------------------
 _PH = make_philox(wp.float64)
 _NU = make_nuclear(wp.float64)
+_NU32 = make_nuclear(wp.float32)
 _KEY = key_from_seed(SEED)
 
 
@@ -90,6 +91,20 @@ def _k_poisson(
     key = wp.vec2ui(s0, s1)
     w = _PH.philox_block(wp.uint32(i), stream, wp.uint32(0), wp.uint32(2), key)
     out[i] = _NU.poisson_inverse(_PH.u01(w[0]), lam, 16)
+
+
+@wp.kernel(module="unique")
+def _k_mult(
+    out: wp.array(dtype=int),  # type: ignore[valid-type]
+    lam: wp.float64,
+    stream: wp.uint32,
+    s0: wp.uint32,
+    s1: wp.uint32,
+) -> None:
+    i = wp.tid()
+    key = wp.vec2ui(s0, s1)
+    w = _PH.philox_block(wp.uint32(i), stream, wp.uint32(0), wp.uint32(2), key)
+    out[i] = _NU.multiplicity_round(_PH.u01(w[0]), lam, 16)
 
 
 @wp.kernel(module="unique")
@@ -217,6 +232,38 @@ def test_p2_poisson_chi2(lam: float) -> None:
     )
     assert p > P_MIN
     assert abs(z) < 4.0
+
+
+@pytest.mark.parametrize("lam", [0.1, 1.0, 2.4])
+def test_p2_multiplicity_round_two_point_frequencies(lam: float) -> None:
+    """floor + Bernoulli: exactly two values, floor(lam) and floor(lam) + 1, with probabilities
+    1 - frac and frac (chi-square on the two cells, p > 0.001)."""
+    out = wp.zeros(N_DRAWS, dtype=int, device="cpu")
+    case = 20 + [0.1, 1.0, 2.4].index(lam)
+    wp.launch(_k_mult, dim=N_DRAWS, inputs=[out, lam, case, _KEY[0], _KEY[1]], device="cpu")
+    n = out.numpy()
+    lo = math.floor(lam)
+    frac = lam - lo
+    assert set(np.unique(n)) <= {lo, lo + 1}
+    n_hi = int(np.sum(n == lo + 1))
+    if frac == 0.0:  # integer mean: deterministic
+        assert n_hi == 0 and np.all(n == lo)
+        OBSERVED[f"multiplicity_round lam={lam}"] = 1.0
+        return
+    exp_hi, exp_lo = N_DRAWS * frac, N_DRAWS * (1.0 - frac)
+    chi2 = (n_hi - exp_hi) ** 2 / exp_hi + (N_DRAWS - n_hi - exp_lo) ** 2 / exp_lo
+    p = wilson_hilferty_p(chi2, 1)
+    OBSERVED[f"multiplicity_round lam={lam}"] = p
+    print(f"P2 multiplicity_round lam={lam}: chi2={chi2:.3f} (1 dof) p={p:.4f}")
+    assert p > P_MIN
+    assert abs(float(n.mean()) - lam) < 5.0 * math.sqrt(frac * (1.0 - frac) / N_DRAWS) + 1e-12
+
+
+def test_multiplicity_round_exact_cases_and_cap() -> None:
+    f = NU64.multiplicity_round
+    assert f(0.5, 2.0, 16) == 2 and f(0.999, 2.0, 16) == 2 and f(0.001, 0.0, 16) == 0
+    assert f(0.29, 2.3, 16) == 3 and f(0.31, 2.3, 16) == 2  # u < frac chooses the upper value
+    assert f(0.01, 2.3, 2) == 2 and f(0.01, 40.0, 99) == 16  # n_max and the cap 16
 
 
 def _synthetic_edges() -> np.ndarray:
@@ -438,168 +485,19 @@ def test_select_step_source_is_unchanged() -> None:
 
 
 # ---------------------------------------------------------------------------------------------
-# P3: per-event conservation of a test-only event assembler
-# ---------------------------------------------------------------------------------------------
-SPECIES = (  # name, Z, A, mass, lambda, mean E' [MeV], r (pre-compound fraction)
-    ("n", 0, 1, M_N, 1.4, 6.0, 0.4),
-    ("p", 1, 1, M_P, 1.1, 9.0, 0.5),
-    ("d", 1, 2, M_D, 0.15, 12.0, 0.6),
-    ("a", 2, 4, M_A, 0.30, 8.0, 0.3),
-)
-E_PRIME_CAP = 40.0
-
-
-def _semf_binding(z: int, a: int) -> float:
-    n = a - z
-    pair = 0.0 if (z % 2) != (n % 2) else (34.0 / a**0.75 if z % 2 == 0 else -34.0 / a**0.75)
-    return (
-        15.75 * a - 17.8 * a ** (2 / 3) - 0.711 * z * (z - 1) / a ** (1 / 3)
-        - 23.7 * (a - 2 * z) ** 2 / a + pair
-    )  # fmt: skip
-
-
-def _ground_state_mass(z: int, a: int) -> float | None:
-    """Synthetic 'AME' nuclear mass [MeV]: exact for A <= 4 species, semi-empirical otherwise;
-    None where the test table has no nuclide (a residual without a mass is rejected)."""
-    exact = {(0, 1): M_N, (1, 1): M_P, (1, 2): M_D, (2, 4): M_A}
-    if a <= 4:
-        return exact.get((z, a))
-    if z < 1 or a - z < 1:
-        return None
-    return z * M_P + (a - z) * M_N - _semf_binding(z, a)
-
-
-def _edges(mean: float) -> np.ndarray:
-    q = np.arange(65) / 64.0
-    tail = 1.0 - math.exp(-E_PRIME_CAP / mean)
-    return -mean * np.log(1.0 - q * tail)
-
-
-def assemble_event(
-    rng: np.random.Generator, z_t: int, a_t: int, m_t: float, t_lab: float, nu: Any
-) -> dict[str, Any]:
-    """Assemble one non-elastic event from the shared functions (at most 64 attempts, decision
-    0041 section 3). Returns the lab four-momenta of the products and of the residual, the
-    initial four-momentum, (Z, A) bookkeeping and the number of attempts."""
-    beta, gamma, sqrt_s = nu.cm_boost(t_lab, M_P, m_t)
-    z_c, a_c = z_t + 1, a_t + 1
-    s_a = kalbach_separation_energy(z_c, a_c, z_t, a_t, KALBACH_I["p"])
-    e_cm_a = t_lab * a_t / (a_t + 1.0)
-    for attempt in range(1, 65):
-        parts = []
-        for (name, zs, as_, ms, lam, _mean, r), edges in zip(SPECIES, _EDGES, strict=True):
-            n = nu.poisson_inverse(rng.random(), lam, 16)
-            for _ in range(n):
-                k = nu.inv_cdf_bin(rng.random(), 64)
-                e_p = nu.inv_cdf_sample(rng.random(), edges[k], edges[k + 1])
-                s_b = kalbach_separation_energy(z_c, a_c, z_c - zs, a_c - as_, KALBACH_I[name])
-                a = nu.kalbach_a(e_cm_a + s_a, e_p + s_b, KALBACH_M_B[name])
-                mu = nu.kalbach_mu(rng.random(), a, r)
-                phi = 2.0 * math.pi * rng.random()
-                parts.append((zs, as_, ms, e_p, mu, phi))
-        z_r = z_c - sum(p[0] for p in parts)
-        a_r = a_c - sum(p[1] for p in parts)
-        big_m_r = _ground_state_mass(z_r, a_r) if (z_r >= 0 and a_r >= 1) else None
-        if big_m_r is None:
-            continue
-        # CM four-momenta of the products; the residual takes the rest of (sqrt s, 0)
-        cm = [
-            (
-                p[3] + p[2],
-                math.sqrt(p[3] * (p[3] + 2 * p[2]))
-                * math.sqrt(max(1 - p[4] ** 2, 0.0))
-                * math.cos(p[5]),
-                math.sqrt(p[3] * (p[3] + 2 * p[2]))
-                * math.sqrt(max(1 - p[4] ** 2, 0.0))
-                * math.sin(p[5]),
-                math.sqrt(p[3] * (p[3] + 2 * p[2])) * p[4],
-            )
-            for p in parts
-        ]
-        e_r = sqrt_s - sum(c[0] for c in cm)
-        pr = [-sum(c[i] for c in cm) for i in (1, 2, 3)]
-        m_r = nu.residual_invariant_mass(e_r, pr[0], pr[1], pr[2])
-        if not nu.residual_mass_ok(m_r, big_m_r):
-            continue
-        lab = [nu.cm_to_lab(p[3], p[4], p[5], p[2], beta, gamma) for p in parts]
-        e_r_lab, pz_r_lab = nu.boost_z(e_r, pr[2], beta, gamma)
-        # residual lab energy from its invariant mass (independent of the boosted energy)
-        e_r_inv = math.sqrt(m_r * m_r + pr[0] ** 2 + pr[1] ** 2 + pz_r_lab**2)
-        e_in = t_lab + M_P + m_t
-        p_in = math.sqrt(t_lab * (t_lab + 2 * M_P))
-        return {
-            "attempts": attempt,
-            "z_out": sum(p[0] for p in parts) + z_r,
-            "a_out": sum(p[1] for p in parts) + a_r,
-            "z_in": z_t + 1,
-            "a_in": a_t + 1,
-            "d_e": e_in - (sum(q[0] for q in lab) + e_r_inv),
-            "d_e_boost": e_in - (sum(q[0] for q in lab) + e_r_lab),
-            "d_p": (
-                sum(q[1] for q in lab) + pr[0],
-                sum(q[2] for q in lab) + pr[1],
-                sum(q[3] for q in lab) + pz_r_lab - p_in,
-            ),
-            "m_r": m_r,
-            "big_m_r": big_m_r,
-            "n_products": len(parts),
-        }
-    return {"attempts": 65}
-
-
-_EDGES = [_edges(s[5]) for s in SPECIES]
-
-
-def test_p3_event_conservation_1e5_events() -> None:
-    n_events = int(os.environ.get("IONMC_P3_N", "100000"))
-    rng = np.random.default_rng(SEED)
-    max_de = max_dp = max_de_boost = 0.0
-    exhausted = accepted = 0
-    attempts = 0
-    n_bad_mass = n_dz = 0
-    min_margin = math.inf
-    n_prod = 0
-    for i in range(n_events):
-        z_t, a_t, m_t = (6, 12, M_C12) if i % 2 == 0 else (8, 16, M_O16)
-        t_lab = 60.0 + 90.0 * rng.random()  # 60-150 MeV: enough energy for 2-4 particles
-        ev = assemble_event(rng, z_t, a_t, m_t, t_lab, NU64)
-        attempts += min(ev["attempts"], 64)
-        if ev["attempts"] > 64:
-            exhausted += 1
-            continue
-        accepted += 1
-        n_prod += ev["n_products"]
-        max_de = max(max_de, abs(ev["d_e"]))
-        max_de_boost = max(max_de_boost, abs(ev["d_e_boost"]))
-        max_dp = max(max_dp, *(abs(c) for c in ev["d_p"]))
-        n_dz += int(ev["z_out"] != ev["z_in"] or ev["a_out"] != ev["a_in"])
-        n_bad_mass += int(ev["m_r"] < ev["big_m_r"])
-        min_margin = min(min_margin, ev["m_r"] - ev["big_m_r"])
-    print(
-        f"P3: {accepted} accepted, {exhausted} exhausted, mean attempts "
-        f"{attempts / n_events:.2f}, mean products {n_prod / max(accepted, 1):.2f}, "
-        f"max|dE| {max_de:.2e} (boosted {max_de_boost:.2e}) max|dp| {max_dp:.2e} MeV, "
-        f"min E* {min_margin:.3f} MeV"
-    )
-    assert accepted > 0.95 * n_events  # the rejection loop must not dominate (synthetic spectra)
-    assert max_de <= 1e-9 and max_de_boost <= 1e-9 and max_dp <= 1e-9
-    assert n_dz == 0 and n_bad_mass == 0
-    assert min_margin >= 0.0
-
-
-# ---------------------------------------------------------------------------------------------
 # P5: twin against Warp CPU kernel for every function
 # ---------------------------------------------------------------------------------------------
 COVERED = {
     "nuclear_step_limit", "thinning_accept", "select_target", "poisson_inverse", "inv_cdf_bin",
-    "inv_cdf_sample", "kalbach_a", "kalbach_cdf", "kalbach_pdf", "kalbach_mu",
+    "multiplicity_round", "grid_locate", "inv_cdf_sample", "kalbach_a", "kalbach_cdf",
+    "kalbach_pdf", "kalbach_mu",
     "residual_invariant_mass", "residual_mass_ok", "cm_boost", "boost_z", "cm_to_lab",
 }  # fmt: skip
 
 NXC = 31  # real argument columns
 NIC = 5  # int argument columns
 NOR = 16  # real outputs
-NOIC = 6  # int outputs
+NOIC = 7  # int outputs
 
 
 def _p5_args(precision: str) -> tuple[np.ndarray, np.ndarray]:
@@ -697,6 +595,7 @@ def _p5_kernel(real: Any) -> Any:
         o[i, 5] = nu.kalbach_mu(x[i, 0], x[i, 1], x[i, 2])
         o[i, 6] = nu.residual_invariant_mass(x[i, 16], x[i, 17], x[i, 18], x[i, 19])
         oi[i, 5] = nu.residual_mass_ok(x[i, 29], x[i, 30])
+        oi[i, 6] = nu.multiplicity_round(x[i, 0], x[i, 8], ii[i, 3])
         bt, gm, ss = nu.cm_boost(x[i, 20], x[i, 21], x[i, 22])
         o[i, 7] = bt
         o[i, 8] = gm
@@ -734,6 +633,7 @@ def _p5_twin(x: np.ndarray, ii: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         o[i, 5] = nu.kalbach_mu(r[0], r[1], r[2])
         o[i, 6] = nu.residual_invariant_mass(r[16], r[17], r[18], r[19])
         oi[i, 5] = nu.residual_mass_ok(r[29], r[30])
+        oi[i, 6] = nu.multiplicity_round(r[0], r[8], k[3])
         o[i, 7], o[i, 8], o[i, 9] = nu.cm_boost(r[20], r[21], r[22])
         o[i, 10], o[i, 11] = nu.boost_z(r[16], r[19], r[27], r[28])
         o[i, 12:16] = nu.cm_to_lab(r[25], r[15], r[23], r[24], r[27], r[28])
@@ -748,7 +648,7 @@ NAMES_REAL = {
 }  # fmt: skip
 NAMES_INT = {
     0: "thinning_accepted", 1: "thinning_violation", 2: "select_target", 3: "poisson_inverse",
-    4: "inv_cdf_bin", 5: "residual_mass_ok",
+    4: "inv_cdf_bin", 5: "residual_mass_ok", 6: "multiplicity_round",
 }  # fmt: skip
 
 
@@ -896,3 +796,71 @@ def test_p5_nuclear_twin_equals_warp_cpu_kernel(precision: str) -> None:
     print(f"P5 {precision}: max |twin - kernel| / budget per function: {worst}")
     if precision == "float64":
         assert max(worst.values()) <= 1.0
+
+
+@wp.kernel(module="unique")
+def _k_locate64(
+    out: wp.array(dtype=int),  # type: ignore[valid-type]
+    e: wp.array(dtype=wp.float64),  # type: ignore[valid-type]
+    grid: wp.array(dtype=wp.float64),  # type: ignore[valid-type]
+    n: int,
+) -> None:
+    i = wp.tid()
+    out[i] = _NU.grid_locate(e[i], grid, n)
+
+
+@wp.kernel(module="unique")
+def _k_locate32(
+    out: wp.array(dtype=int),  # type: ignore[valid-type]
+    e: wp.array(dtype=wp.float32),  # type: ignore[valid-type]
+    grid: wp.array(dtype=wp.float32),  # type: ignore[valid-type]
+    n: int,
+) -> None:
+    i = wp.tid()
+    out[i] = _NU32.grid_locate(e[i], grid, n)
+
+
+@pytest.mark.parametrize("precision", ["float64", "float32"])
+@pytest.mark.parametrize("n", [2, 3, 17, 64, 604])
+def test_grid_locate_twin_kernel_and_searchsorted(precision: str, n: int) -> None:
+    """P5 for ``grid_locate``: the twin, the Warp CPU kernel and ``searchsorted(side='right') - 1``
+    (clamped to [0, n - 2]) agree exactly on random energies, every node and the clamps."""
+    dt = np.float64 if precision == "float64" else np.float32
+    rng = np.random.default_rng(20261007 + n)
+    grid = np.unique(np.exp(rng.uniform(0.0, math.log(250.0), n)).astype(dt))
+    grid[0], grid[-1] = dt(1.0), dt(250.0)
+    n_g = grid.size
+    e = np.concatenate(
+        [
+            np.exp(rng.uniform(math.log(0.5), math.log(300.0), 3000)).astype(dt),
+            grid,
+            np.nextafter(grid, dt(0.0)),
+            np.nextafter(grid, dt(1e9)),
+            np.array([0.0, 0.5, 1.0, 249.999, 250.0, 251.0, 1e9], dtype=dt),
+        ]
+    )
+    ref = np.clip(np.searchsorted(grid, e, side="right") - 1, 0, n_g - 2)
+    twin = np.array([NU64.grid_locate(float(v), grid.astype(np.float64), n_g) for v in e])
+    assert np.array_equal(
+        twin,
+        np.clip(
+            np.searchsorted(grid.astype(np.float64), e.astype(np.float64), side="right") - 1,
+            0,
+            n_g - 2,
+        ),
+    )
+    out = wp.zeros(e.size, dtype=int, device="cpu")
+    kernel = _k_locate64 if precision == "float64" else _k_locate32
+    real = wp.float64 if precision == "float64" else wp.float32
+    wp.launch(
+        kernel,
+        dim=e.size,
+        inputs=[
+            out,
+            wp.array(e, dtype=real, device="cpu"),
+            wp.array(grid, dtype=real, device="cpu"),
+            n_g,
+        ],
+        device="cpu",
+    )
+    assert np.array_equal(out.numpy(), ref)

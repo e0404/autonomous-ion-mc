@@ -119,16 +119,25 @@ corrupt dataset.
 
 ## Derived nuclear table (decision 0041)
 
-`ionmc data build nuclear-proton [--cache-dir D] [--points-per-decade 100] [--lambda-events N]
-[--no-strict]` (`ionmc.nuclear.build.build_nuclear_proton`) turns the pinned sources
-`endf-b8.0-protons`, `ame2020-mass` and `nist-astar-water-2005` into
-`<cache>/derived/nuclear-proton-<id>.npz` and `.json`; `id = sha256(source hashes, builder version,
-canonical options)`. The build is single-process, deterministic (fixed numpy PCG64 seed for the
-lambda adjustment, counter-based uniforms, fixed-timestamp npz) and writes identical bytes twice.
+`ionmc data build nuclear-proton [--cache-dir D] [--points-per-decade 50] [--diagnostic-events N]
+[--strict]`
+(`ionmc.nuclear.build.build_nuclear_proton`, builder `ionmc-nuclear-proton-builder-2`, schema
+`ionmc-nuclear-proton-table-2`) turns the pinned sources `endf-b8.0-protons`, `ame2020-mass` and
+`nist-astar-water-2005` into `<cache>/derived/nuclear-proton-<id>.npz` and `.json`;
+`id = sha256(source hashes, builder version, canonical options)`. The build is single-process and
+deterministic (exact lambda enumeration, seeded counter-based uniforms for the diagnostics,
+fixed-timestamp npz) and writes identical bytes twice. The total break-up residual
+(Z_r, A_r) = (0, 0) of mass 0 is always allowed (`empty_residual_allowed: true`); the first yield
+and first distribution row of every product are extended downward (constant) from the first MF6
+energy to the MT5 threshold (`targets[].yield_extended_below_mev`). The build fails closed on
+exact P_accept < 0.5 and on sigma > 0 without yields.
 
 - **Cross sections.** ENDF MF3/MT5 on its native interpolation up to 150 MeV (0 below threshold);
-  150-250 MeV: `sigma(150) sigma_TL(E)/sigma_TL(150)` (Tripathi light system). Uniform ln E grid
-  from 1 MeV with 150 MeV as a node, at least 50 points per decade, up to the first node >= 250.
+  150-250 MeV: `sigma(150) sigma_TL(E)/sigma_TL(150)` (Tripathi light system). Union grid: 1 MeV,
+  all ENDF MF3/MT5 nodes, MF6/MT5 incident energies and yield nodes of all targets in [1, 150] MeV
+  and a uniform ln E grid (>= 50 points/decade, 150 MeV a node) up to the first node >= 250,
+  interpolated lin-lin in E (exact for the INT=2 ENDF data; the build fails on any other law);
+  lookup by the shared fixed-step bisection `grid_locate`.
   Surrogates (Na, Mg -> Al-27; S, Cl -> P-31; K, Ar -> Ca-40) are scaled by `(A/A_ref)^(2/3)`
   (recorded per element); hydrogen is 0; any other element is absent
   (`UnsupportedCombinationError` from `NuclearTable.material_rows`).
@@ -136,18 +145,26 @@ lambda adjustment, counter-based uniforms, fixed-timestamp npz) and writes ident
   interpolation between incident energies) and the Kalbach `r` per bin; above 150 MeV the 150 MeV
   rows with E' scaled by `E_avail(E)/E_avail(150)`. Kalbach separation energies use the systematics
   formula (`"kalbach_separation": "systematics-formula"`); AME2020 masses only for the residual-mass
-  test and Q values. Residual recoils are not sampled (mean energies stored for information).
-- **Multiplicities.** Independent Poisson per species; `lam_s(E)` adjusted per energy node by a
-  fixed point with the numpy sampler `ionmc.nuclear.events` (same algorithm as the shared
-  functions; its scalar path uses their twins). Per-node residuals, iterations and the usable
-  (non-exhausting) restriction are in the JSON (`multiplicity.targets`).
+  test and Q values. The residual gets the ENDF mean heavy-recoil energy `recoil_t_cm_mev` (formally CM under LCT=3; it
+  is deposited locally without a boost, a few-MeV quantity).
+- **Multiplicities.** Floor + Bernoulli per species (`multiplicity_round`), residual-existence
+  acceptance (at most 64 attempts), no E*; `lam_s(E)` solved at every grid node by a fixed point on
+  the exact enumeration of the 2^5 outcomes so that post-acceptance mean yields equal ENDF
+  (`p_accept`, `yield_ratio_post`, `lam_converged` arrays; non-converged nodes and `p_accept_min`
+  in the JSON). The per-event ledger `imbalance = T1 + m_p + M_t - sum E_lab - M_r - T_r` is the
+  signed tally `nuclear_imbalance`; `diagnostics` holds 2e4 seeded events at 18 nodes per target
+  (Delta_lab, Delta_CM, P(Delta<0), mean |sum p_CM|, E' ratios, local deposit);
+  `transport_path_bound_terms` (`n_max`, `t_lab_max_mev` for p and d) give the capacity bound
+  `B_L = 1.25 (mixed_path_bound(E_hi) + sum_s n_max,s mixed_path_bound_s(t_lab_max,s))`;
+  `transport_energy_bound_mev` is the largest per-particle `t_lab_max_mev` (<= 500 MeV).
 - **D6.** `gate_d6.numbers["150"|"250"]` hold `G`, `D`, `p_event`, the 99.9th-percentile lab alpha
-  energy and its ASTAR CSDA range; `tier1_pass`, `tier2_pass` are recorded, never enforced.
+  energy and its ASTAR CSDA range; `tier1_pass`, `tier2_pass`, `ceiling_pass` (D <= 2e-2, 99.9th-percentile range <= 3 g/cm2) are
+  recorded, never enforced.
 - **Loading.** `ionmc.nuclear.tables.NuclearTable.load(cache_dir, id)` uses
   `np.load(allow_pickle=False)`, re-hashes the npz against the JSON, re-derives the id, checks the
   source pins against the registry and freezes the arrays (`NuclearTableMissingError`,
   `NuclearTableStaleError`, `NuclearTablePinError`). `material_rows(material, f_e)` gives
-  `Sigma_mass`, cumulative target fractions and two majorant arrays: the window majorant
+  `Sigma_mass`, cumulative target fractions (and the unnormalised cumulative partial Sigma) and two majorant arrays: the window majorant
   `1.02 max Sigma` over `[E_k (1 - 2 f_E - 0.01), E_{k+1}]` and the end-of-range majorant
   (running maximum); use the step lookup.
-- **Checks.** `validation/scripts/transport/nuclear_checks.py` runs N1, V1 and V1b.
+- **Checks.** `validation/scripts/transport/nuclear_checks.py` runs N1, V1, V1b, V4, V4b and the D6 report.

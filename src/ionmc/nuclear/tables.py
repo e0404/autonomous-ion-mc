@@ -7,7 +7,10 @@ source pin equals the registry pin, and freezes the arrays. Failures are fail-cl
 specific exception types (all subclass :class:`NuclearTableError`).
 
 ``material_rows`` composes ``Sigma_mass(E) = N_A sum_el w_el sigma_el / A_el`` [cm2/g] on the
-table's ln E grid, the cumulative target fractions per node and the majorants (:func:`majorant`).
+table's union grid, the cumulative partial ``Sigma`` per target and the majorants
+(:func:`majorant`). Every runtime row is interpolated lin-lin in E between the union nodes; the
+node is found by ``grid_locate`` (fixed-step bisection, shared function with a bitwise python
+twin; :func:`locate` is the python entry point).
 """
 
 from __future__ import annotations
@@ -22,12 +25,14 @@ import numpy as np
 from numpy.typing import NDArray
 
 from ionmc._frozen import freeze_array, freeze_json
+from ionmc._wpfunc import python_twin
 from ionmc.data import cache
 from ionmc.data.registry import DATASETS
 from ionmc.errors import UnsupportedCombinationError
 from ionmc.materials import N_A, Material
-from ionmc.nuclear.build import BuildOptions
+from ionmc.nuclear.build import BUILDER_VERSION, SCHEMA, BuildOptions
 from ionmc.nuclear.build import table_id as compute_table_id
+from ionmc.physics.nuclear import make_nuclear
 
 MAJORANT_FACTOR = 1.02
 DEFAULT_F_E = 0.02
@@ -49,6 +54,20 @@ class NuclearTablePinError(NuclearTableError):
     """A recorded source hash differs from the registry pin."""
 
 
+def locate(grid: NDArray[np.float64], e_mev: float) -> int:
+    """Interval ``k`` with ``grid[k] <= e < grid[k+1]`` (clamped to ``[0, n-2]``) by the shared
+    ``grid_locate`` (python twin): the lookup of every runtime row."""
+    nu = python_twin(make_nuclear)
+    return int(nu.grid_locate(float(e_mev), grid, int(grid.size)))
+
+
+def interp_row(grid: NDArray[np.float64], row: NDArray[np.float64], e_mev: float) -> float:
+    """``row`` (values on the grid nodes) at ``e_mev``, lin-lin in E, constant outside the grid."""
+    k = locate(grid, e_mev)
+    t = min(max((e_mev - grid[k]) / (grid[k + 1] - grid[k]), 0.0), 1.0)
+    return float((1.0 - t) * row[k] + t * row[k + 1])
+
+
 def majorant(
     grid_e: NDArray[np.float64],
     sigma: NDArray[np.float64],
@@ -57,14 +76,14 @@ def majorant(
 ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
     """``(window, end_of_range)`` majorant arrays on the grid nodes.
 
-    ``sigma`` is interpolated linearly in ln E between nodes (the runtime rule). The window array
-    at node ``k`` is ``factor`` times the maximum of that interpolant over
+    ``sigma`` is interpolated lin-lin in E between the (non-uniform) nodes (the runtime rule); the
+    maximum of that piecewise-linear interpolant over an interval is attained at a node or at the
+    interval ends. The window array at node ``k`` is ``factor`` times the maximum over
     ``[E_k (1 - 2 f_E - 0.01), E_{k+1}]`` (the frozen window ``[E(1-2f_E-0.01), E]`` extended to
     the next node, so that the STEP lookup ``win[k]`` (node at or below ``E0``, no interpolation)
     is a majorant for every ``E0`` in ``[E_k, E_{k+1}]``; interpolating between nodes would not
     be); the end-of-range array is ``factor`` times the running maximum
     over ``[0, E_{k+1}]``."""
-    ln_e = np.log(grid_e)
     n = grid_e.size
     window = np.empty(n)
     for k in range(n):
@@ -73,7 +92,7 @@ def majorant(
         inside = (grid_e >= lo) & (np.arange(n) <= hi_i)
         cand = [float(sigma[inside].max(initial=0.0))]
         if lo > grid_e[0]:
-            cand.append(float(np.interp(np.log(lo), ln_e, sigma)))
+            cand.append(float(np.interp(lo, grid_e, sigma)))
         window[k] = factor * max(cand)
     run = np.maximum.accumulate(sigma)
     end = factor * np.concatenate((run[1:], run[-1:]))
@@ -85,7 +104,10 @@ class MaterialNuclear:
     """Per-material rows on the table grid (read-only): ``grid_e_mev``; ``sigma_mass_cm2_g``;
     ``sigma_hat_window`` and ``sigma_hat_end`` majorants [cm2/g]; ``target_index`` (K,) indices
     into the table targets and ``cum_fraction`` (K, N) cumulative probability of each target per
-    node (the last row is 1; all 0 except the last where Sigma = 0); ``f_e`` of the window."""
+    node (the last row is 1; all 0 except the last where Sigma = 0); ``cum_sigma_mass_cm2_g``
+    (K, N) the unnormalised cumulative partial Sigma per node (runtime: ``cum_k(E) / Sigma(E)``
+    from lin-lin interpolation of both, so ``select_target`` is unchanged); ``f_e`` of the
+    window."""
 
     material: str
     grid_e_mev: NDArray[np.float64]
@@ -94,7 +116,19 @@ class MaterialNuclear:
     sigma_hat_end: NDArray[np.float64]
     target_index: tuple[int, ...]
     cum_fraction: NDArray[np.float64]
+    cum_sigma_mass_cm2_g: NDArray[np.float64]
     f_e: float
+
+    def sigma_at(self, e_mev: float) -> float:
+        """``Sigma_mass(E)`` [cm2/g], lin-lin in E on the union grid."""
+        return interp_row(self.grid_e_mev, self.sigma_mass_cm2_g, e_mev)
+
+    def cum_fraction_at(self, e_mev: float) -> NDArray[np.float64]:
+        """Cumulative target fractions at ``E``: the lin-lin cumulative partial Sigma over the
+        lin-lin total (zeros where ``Sigma = 0``)."""
+        tot = self.sigma_at(e_mev)
+        cum = np.array([interp_row(self.grid_e_mev, c, e_mev) for c in self.cum_sigma_mass_cm2_g])
+        return cum / tot if tot > 0.0 else np.zeros_like(cum)
 
 
 class NuclearTable:
@@ -123,9 +157,16 @@ class NuclearTable:
             pin = DATASETS.get(sid)
             if pin is None or pin.sha256 != rec["sha256"]:
                 raise NuclearTablePinError(f"nuclear table {table_id}: source {sid} pin mismatch")
-        opts = info["options"]
-        opts["lambda_nodes_mev"] = (
-            None if opts.get("lambda_nodes_mev") is None else tuple(opts["lambda_nodes_mev"])
+        if info.get("schema") != SCHEMA or info.get("builder_version") != BUILDER_VERSION:
+            raise NuclearTableStaleError(
+                f"nuclear table {table_id}: schema/builder {info.get('schema')!r}/"
+                f"{info.get('builder_version')!r}, expected {SCHEMA!r}/{BUILDER_VERSION!r}"
+            )
+        opts = dict(info["options"])
+        opts["diagnostic_nodes_mev"] = (
+            None
+            if opts.get("diagnostic_nodes_mev") is None
+            else tuple(opts["diagnostic_nodes_mev"])
         )
         expected = compute_table_id(
             {sid: rec["sha256"] for sid, rec in info["sources"].items()}, BuildOptions(**opts)
@@ -158,12 +199,13 @@ class NuclearTable:
         if per_target:
             total = sum(per_target.values())
             order = sorted(per_target)
-            cum = np.cumsum([per_target[t] for t in order], axis=0)
+            cum_sigma = np.cumsum([per_target[t] for t in order], axis=0)
             with np.errstate(divide="ignore", invalid="ignore"):
-                cum = np.where(total > 0.0, cum / np.where(total > 0.0, total, 1.0), 0.0)
+                cum = np.where(total > 0.0, cum_sigma / np.where(total > 0.0, total, 1.0), 0.0)
             cum[-1] = 1.0
         else:
-            total, order, cum = np.zeros_like(grid), [], np.zeros((0, grid.size))
+            total, order = np.zeros_like(grid), []
+            cum, cum_sigma = np.zeros((0, grid.size)), np.zeros((0, grid.size))
         win, end = majorant(grid, np.asarray(total), f_e)
         return MaterialNuclear(
             material.name,
@@ -173,11 +215,16 @@ class NuclearTable:
             freeze_array(end, np.float64),
             tuple(order),
             freeze_array(cum, np.float64),
+            freeze_array(cum_sigma, np.float64),
             f_e,
         )
 
     def product_rows(self, target: int) -> dict[str, NDArray[np.float64]]:
         """Per-target product rows (read-only views): ``lam`` (5, N), ``edges_mev`` (5, N, 65),
-        ``r_pre`` (5, N, 64), ``yield_endf`` (5, N), ``mean_ecm_mev`` (5, N)."""
-        keys = ("lam", "edges_mev", "r_pre", "yield_endf", "mean_ecm_mev")
+        ``r_pre`` (5, N, 64), ``yield_endf`` (5, N), ``mean_ecm_mev`` (5, N), ``recoil_t_cm_mev``
+        (N,), ``p_accept`` (N,)."""
+        keys = (
+            "lam", "edges_mev", "r_pre", "yield_endf", "mean_ecm_mev", "recoil_t_cm_mev",
+            "p_accept",
+        )  # fmt: skip
         return {k: self.arrays[k][target] for k in keys}
