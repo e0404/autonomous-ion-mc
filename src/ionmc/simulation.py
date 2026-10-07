@@ -369,6 +369,8 @@ class Simulation:
             nonzero = {k: v for k, v in result.counters.as_dict().items() if v}
             if result.channel_raw is not None and result.channel_raw.lookup_out_of_domain:
                 nonzero["lookup_out_of_domain"] = result.channel_raw.lookup_out_of_domain
+            if result.channel_raw is not None and result.channel_raw.path_bound_exceeded:
+                nonzero["path_bound_exceeded"] = result.channel_raw.path_bound_exceeded
             raise TransportLimitError(
                 f"transport limits violated {nonzero}; the result is invalid "
                 "(set RunOptions.allow_invalid_result to receive it anyway)",
@@ -607,7 +609,8 @@ def _assemble(eff: EffectiveConfig, raw: RawTransport) -> Result:
     cfg = eff.requested
     counters = TransportCounters(**raw.counters)
     ood = 0 if raw.channels is None else raw.channels.lookup_out_of_domain
-    valid = not counters.any_nonzero and ood == 0
+    pbe = 0 if raw.channels is None else raw.channels.path_bound_exceeded
+    valid = not counters.any_nonzero and ood == 0 and pbe == 0
     used = set() if eff.channels is None else {c.grid for c in eff.channels.channels}
     grids = tuple(
         _grid_result(

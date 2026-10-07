@@ -292,6 +292,18 @@ extrema of `S_w` and `gamma` per bin of the runtime water row over `[E_cut/2, E_
 lookup coverage; a table with `|gamma| >= 1` (ramp possibly nonpositive) is rejected by `validate()`.
 Pieces with `S_bar <= 0` are counted in the out-of-domain counter (result invalid).
 
+**Path bound (checked).** The quanta of L, FL, LS and LS2 rest on the per-history path bound
+`B_L = 1.25 int dE / min_m S_lin,m(E)` (heterogeneous envelope of the runtime rows, `mixed_path_bound_mm`),
+`B_LS = S_bar_max B_L`, `B_LS2 = S_bar_max^2 B_L` (`B_ES = S_bar_max E_hi` by energy conservation). Because
+no straggling sampler guarantees a history to stop within a multiple of its CSDA path, the engine checks
+the assumption: reference and kernel sum each history's scored path (`s_act`) and set the per-history tally
+column `path_bound_exceeded` when it exceeds `B_L` (column after the residuals and the lookup out-of-domain
+count, present only with channels, so the qualified path and A16 are unchanged). The reduction surfaces it as
+`channel_raw.path_bound_exceeded` and a nonzero count invalidates the result: either every history respected
+the bound and the int64 capacity proof holds as compiled, or the result is invalid and no accumulator value is
+used. `max_steps * max_step_mm` (`B_L_truncation_mm`) is a rigorous but about 20 times coarser bound and only
+recorded (decision 0040 section 4).
+
 **Lookup tables.** `LookupTable.from_file(path, expected_sha256=None)` reads JSON on a uniform
 (linear or log) axis in MeV/u or keV/um (water LET), per-species non-negative finite values and
 mandatory `citation`, `license`, `source`, `synthetic`; non-uniform axes are rejected and

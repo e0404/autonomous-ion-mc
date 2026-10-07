@@ -172,6 +172,7 @@ def compare_channel_partition(a: Result, b: Result) -> dict[str, Any]:
         and len(counts) >= 2,
         "residual": bool(np.array_equal(ca.residual, cb.residual)),
         "lookup_out_of_domain": ca.lookup_out_of_domain == cb.lookup_out_of_domain,
+        "path_bound_exceeded": ca.path_bound_exceeded == cb.path_bound_exceeded,
         "counters": a.counters == b.counters,
         "edep": all(
             np.array_equal(ga.batch_energy_mev, gb.batch_energy_mev)

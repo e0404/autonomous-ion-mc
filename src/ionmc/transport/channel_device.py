@@ -98,6 +98,7 @@ def make_channel_data(
     c = support.chan()
     c.n_ch = n_ch
     c.n_res = plan.n_residual
+    c.path_bound = wp.float64(plan.path_bound_mm)
     c.res_base = N_FIXED_TALLIES + 2 * n_grids  # first channel column of a history's tally row
     c.n_water = tables.n_water
     c.a_nuc = a_nucleon

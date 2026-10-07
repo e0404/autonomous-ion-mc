@@ -75,6 +75,9 @@ K_MAX = 40
 CAPACITY_EXPONENT = 62
 FLOOR_EXPONENT = -16
 STRAGGLING_MARGIN = 1.25
+STEP_LENGTH_MARGIN = 1.0 + 1.0e-6
+"""Relative margin on the informative truncation bound ``max_steps * max_step_mm`` (float32
+rounding of the step limit)."""
 E_QUANTUM_EXPONENT = 30  # QUANTUM_MEV = 2**-30
 FE_F_MIN_EXPONENT = -60  # admissible largest lookup value of a request: [2^-60, 2^60]
 FE_F_MAX_EXPONENT = 60
@@ -156,6 +159,8 @@ class ChannelPlan:
     bounds: dict[str, float]
     memory_bytes: int
     histories_per_batch: int
+    path_bound_mm: float = math.inf
+    """``B_L``: the per-history path length every history must not exceed (checked at runtime)."""
 
     def channel_index(self, kind: str, grid: int) -> list[int]:
         """Indices of the channels of ``kind`` on grid ``grid``."""
@@ -828,21 +833,32 @@ def compile_channels(
                 tables, m, water, rho_min, 0.5 * e_cut_mev, e_hi_mev, a, env["amp"]
             ),
         )
-    # B_L: the CSDA path of the lowest linear stopping power of any material at each energy
-    # (valid for a path that changes material), capped by the engine's truncation bound
-    # max_steps * max_step_mm when that is known (a step is at most max_step_mm long)
-    b_l_csda = STRAGGLING_MARGIN * mixed_path_bound_mm(tables, rho_min_of, e_hi_mev)
-    b_l = b_l_csda
-    if max_step_mm is not None:
-        b_l = min(b_l, float(max_steps) * float(max_step_mm))
-    b_ls = min(s_max * b_l, STRAGGLING_MARGIN * r_max * e_hi_mev)
+    # Per-history path bound B_L (a runtime-CHECKED assumption, decision 0040 section 4): the
+    # heterogeneous CSDA path with a 25 % straggling margin. Neither straggling sampler
+    # guarantees that a history stops within any multiple of its CSDA path (the legacy sampler
+    # can clamp losses to zero, Gamma losses can be very small), so the bound is not provable
+    # from the tables. It is enforced instead: the engine accumulates every history's scored path
+    # (sum of s_act, the quantity of the L channel) and counts a history whose path exceeds B_L in
+    # the per-history tally column ``path_bound_exceeded``; a nonzero count invalidates the
+    # result. Hence either every history satisfied L_h <= B_L (then L, FL, LS = sum l S_bar <=
+    # S_bar_max B_L and LS2 <= S_bar_max^2 B_L hold for every history and the int64 capacity proof
+    # holds exactly as compiled) or the result is invalid and no accumulator is ever used, so a
+    # wrap-around cannot produce a silently wrong result. ES <= S_bar_max E_hi needs no
+    # assumption (sum of eps <= E_hi by energy conservation). The truncation bound
+    # max_steps * max_step_mm (a step is at most max_step_mm long, a history at most max_steps
+    # steps) is rigorous but about 20 times coarser; it is recorded only.
+    b_l = STRAGGLING_MARGIN * mixed_path_bound_mm(tables, rho_min_of, e_hi_mev)
+    b_l_trunc = (
+        None if max_step_mm is None else float(max_steps) * float(max_step_mm) * STEP_LENGTH_MARGIN
+    )
+    b_ls = s_max * b_l  # S_bar <= S_bar_max on every piece
     bound = {
         "E": e_hi_mev,
         "L": b_l,
         "FL": b_l,
         "LS": b_ls,
-        "LS2": s_max * b_ls,
-        "ES": s_max * e_hi_mev,
+        "LS2": s_max * b_ls,  # S_bar^2 <= S_bar_max^2 on every piece
+        "ES": s_max * e_hi_mev,  # sum(eps S) <= S_bar_max sum(eps), sum(eps) <= E_hi (conservation)
         "N": float(max_steps) * 2.0 * scoring_pieces,
     }
     if hpb * e_hi_mev / QUANTUM_MEV >= MAX_QUANTA:
@@ -949,7 +965,7 @@ def compile_channels(
         "S_w_max_mev_per_mm": s_max,
         "S_w_ref_mev_per_mm": s_ref,
         "B_L_mm": b_l,
-        "B_L_csda_mm": b_l_csda,
+        "B_L_truncation_mm": math.nan if b_l_trunc is None else b_l_trunc,  # informative only
         "B_LS_mev": b_ls,
         "B_LS2": bound["LS2"],
         "B_ES": bound["ES"],
@@ -969,4 +985,5 @@ def compile_channels(
         bounds=bounds,
         memory_bytes=memory,
         histories_per_batch=hpb,
+        path_bound_mm=b_l,
     )

@@ -29,7 +29,13 @@ from ionmc.physics.stopping import BetheStoppingSource, StoppingTable, build_tab
 from ionmc.scoring import ScoringGrid, TallyRequest, min_defined_batches, reduce_ratio
 from ionmc.simulation import Simulation, ratio_rounding_bound
 from ionmc.species import species_by_name
-from ionmc.transport.channels import CLASS_LOCAL, CLASS_STEP, ChannelPlan, compile_channels
+from ionmc.transport.channels import (
+    CLASS_LOCAL,
+    CLASS_STEP,
+    ChannelPlan,
+    compile_channels,
+    mixed_path_bound_mm,
+)
 from ionmc.transport.reference import run_reference_range
 from ionmc.transport.run import channel_columns, run_transport
 from ionmc.transport.scoring_ref import ReferenceChannelScorer
@@ -531,7 +537,7 @@ def _hook_plan(
         requests, lookups, cfg.scoring, geometry=eff.geometry, tables=eff.tables, water=water,
         projectile=PROTON, e_cut_mev=2.0, e_hi_mev=60.0, n_histories=40, n_batches=4,
         cpu_workers=1, memory_budget_bytes=2**31, max_steps=1000, scoring_pieces=8,
-        producible=producible,
+        producible=producible, max_step_mm=2.0,
     )  # fmt: skip
     return plan, eff
 
@@ -1052,9 +1058,75 @@ def test_path_bound_covers_a_path_that_changes_material_with_energy(
     print(f"B_L legacy {legacy:.3f} mm, new {b['B_L_mm']:.3f} mm, observed {observed:.3f} mm")
     assert observed > legacy  # (b) the legacy bound is exceeded at runtime
     assert observed <= b["B_L_mm"]  # (a) the compiled bound covers it
-    assert b["B_L_mm"] == pytest.approx(b["B_L_csda_mm"])  # max_steps * max_step is not the cap
     assert (r.acc >= 0).all() and r.raw.counters["accumulator_overflow"] == 0  # (c)
-    # the truncation cap: max_steps * max_step_mm bounds every path (a step is at most max_step)
-    capped = replace(cfg, run=replace(cfg.run, max_steps=3))
-    assert validate(capped).channels is not None
-    assert validate(capped).channels.bounds["B_L_mm"] == pytest.approx(3 * 0.5)  # type: ignore[union-attr]
+    assert r.raw.channels is not None and r.raw.channels.path_bound_exceeded == 0
+    # the recorded bounds are the CSDA-envelope formulas (the truncation bound is informative)
+    s_max = b["S_w_max_mev_per_mm"]
+    assert b["B_LS_mev"] == pytest.approx(s_max * b["B_L_mm"], rel=1e-12)
+    assert b["B_LS2"] == pytest.approx(s_max**2 * b["B_L_mm"], rel=1e-12)
+    assert b["B_ES"] == pytest.approx(s_max * 12.0, rel=1e-12)
+    assert b["B_L_truncation_mm"] == pytest.approx(r.eff.max_steps * 0.5 * (1.0 + 1e-6), rel=1e-12)
+    assert r.plan.path_bound_mm == b["B_L_mm"]
+
+
+@pytest.mark.parametrize("straggling", [True, False])
+def test_bounds_are_the_checked_formulas_with_and_without_straggling(
+    make_config: MakeConfig, straggling: bool
+) -> None:
+    """B_L = 1.25 int dE / min S_lin (heterogeneous envelope), B_LS = S_bar_max B_L,
+    B_LS2 = S_bar_max^2 B_L, B_ES = S_bar_max E_hi, whatever the straggling setting."""
+    cfg = _cfg(
+        make_config, _reqs("fluence", "let_t", "let_d", "let_d_eps"), energy=12.0, n=8,
+        n_batches=4, straggling=straggling, scoring=(_grid(nz=10, dz=1.0),),
+    )  # fmt: skip
+    plan = validate(cfg).channels
+    assert plan is not None
+    b, tb = plan.bounds, validate(cfg).tables
+    rho = {0: float(WATER.density_g_cm3)}
+    expected = 1.25 * mixed_path_bound_mm(tb, rho, 12.0)
+    assert b["B_L_mm"] == pytest.approx(expected, rel=1e-12) and plan.path_bound_mm == b["B_L_mm"]
+    s_max = b["S_w_max_mev_per_mm"]
+    assert b["B_LS_mev"] == pytest.approx(s_max * expected, rel=1e-12)
+    assert b["B_LS2"] == pytest.approx(s_max**2 * expected, rel=1e-12)
+    assert b["B_ES"] == pytest.approx(s_max * 12.0, rel=1e-12)
+    assert b["B_L_truncation_mm"] > 5.0 * expected  # rigorous but coarse: informative only
+
+
+def test_low_loss_sampler_violates_the_path_bound_and_invalidates(
+    make_config: MakeConfig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review 36271bf4 failure mode: a straggling sampler that returns near-zero losses lets a
+    history travel far beyond 1.25 x its CSDA path. The bound B_L is therefore checked at
+    runtime: such histories are counted in ``path_bound_exceeded`` and the result is invalid
+    (fail closed). The ordinary sampler never trips it (1e3 histories)."""
+    from ionmc.simulation import _assemble
+    from ionmc.transport import reference as ref_mod
+
+    def config(n: int) -> SimulationConfig:
+        return _cfg(
+            make_config, _reqs("fluence", "let_t"), energy=12.0, n=n, n_batches=4, seed=9,
+            scoring=(_grid(nz=30, dz=1.0),), straggling=True, mcs=False,
+        )  # fmt: skip
+
+    normal = Run(config(1000))
+    assert normal.raw.channels is not None and normal.raw.channels.path_bound_exceeded == 0
+    assert _assemble(normal.eff, normal.raw).valid
+
+    orig_init = ref_mod._Reference.__init__
+
+    def patched(self: Any, eff: Any) -> None:
+        orig_init(self, eff)
+        self.straggle_attempt = lambda mean, var, *u: (0.01 * mean, True)  # near-zero loss
+
+    monkeypatch.setattr(ref_mod._Reference, "__init__", patched)
+    r = Run(config(12))
+    b = r.plan.bounds
+    c = r.plan.channels[r.q_of("fluence").numerator]
+    per_hist_budget = b["B_L_mm"]
+    # observed path of the near-zero-loss histories: the truncation bound, far above B_L
+    assert r.raw.counters["step_truncation"] > 0
+    assert b["B_L_truncation_mm"] > per_hist_budget
+    assert r.raw.channels is not None and r.raw.channels.path_bound_exceeded > 0
+    path = r.acc[:, c.offset : c.offset + c.size].sum() * c.quantum / 12.0  # mean per history
+    assert path > per_hist_budget  # the CSDA-derived bound is exceeded: it is not a hard bound
+    assert not _assemble(r.eff, r.raw).valid  # fail closed: no accumulator value is used

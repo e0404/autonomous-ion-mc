@@ -99,11 +99,14 @@ class ChannelRaw:
     ``[B, sum_c size_c]`` in the quanta of the channels, ``residual[r]`` the exact total of the
     quantization residual column ``r`` (``sum(x - n q_c)`` over all pieces, float64) and
     ``lookup_out_of_domain`` the number of lookup arguments outside their table axis (a nonzero
-    value invalidates the result)."""
+    value invalidates the result) and ``path_bound_exceeded`` the number of histories whose scored
+    path length exceeded the per-history bound ``B_L`` on which the quanta rest (a nonzero value
+    invalidates the result: the capacity proof is conditional on this check, decision 0040)."""
 
     acc: NDArray[np.int64]
     residual: list[float]
     lookup_out_of_domain: int
+    path_bound_exceeded: int = 0
 
 
 @dataclass
@@ -268,8 +271,9 @@ def merge_partials(
 ) -> RawTransport:
     """Reduce the partial results of a complete, contiguous partition of ``[0, n_histories)``.
 
-    ``n_channel_columns`` is 0 without scoring channels, else ``C + 1``: the residual columns of
-    the ``C`` channels with a residual, then the lookup out-of-domain count.
+    ``n_channel_columns`` is 0 without scoring channels, else ``C + 2``: the residual columns of
+    the ``C`` channels with a residual, the lookup out-of-domain count and the number of histories
+    whose path exceeded the bound ``B_L``.
 
     Fails closed (``ValueError``) for gaps, overlaps, a different number of columns or grids.
     """
@@ -314,8 +318,9 @@ def merge_partials(
             chan += p.channel_acc
         channels = ChannelRaw(
             acc=chan,
-            residual=totals[base : base + n_channel_columns - 1],
-            lookup_out_of_domain=int(round(totals[base + n_channel_columns - 1])),
+            residual=totals[base : base + n_channel_columns - 2],
+            lookup_out_of_domain=int(round(totals[base + n_channel_columns - 2])),
+            path_bound_exceeded=int(round(totals[base + n_channel_columns - 1])),
         )
     return RawTransport(
         edep_mev=edep,

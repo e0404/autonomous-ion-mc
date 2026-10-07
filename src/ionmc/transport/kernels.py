@@ -29,9 +29,11 @@ cannot overflow.
 Scoring channels (decision 0040): the last kernel argument is the ``ChannelData`` struct
 (``ionmc.transport.channel_device``). Without tallies (``n_ch = 0``) no scoring code runs. With
 channels, every in-grid piece is also added to the int64 channel accumulators ``chan.acc[B, sum
-size]`` by ``score_piece`` (atomic adds), and the tally rows get ``n_res + 1`` extra columns after
-the ``6 + 2 G`` ones: the quantization residual of every channel but N (per history) and the
-lookup out-of-domain count.
+size]`` by ``score_piece`` (atomic adds), and the tally rows get ``n_res + 2`` extra columns after
+the ``6 + 2 G`` ones: the quantization residual of every channel but N (per history), the
+lookup out-of-domain count and the path-bound flag (1 if the history's scored path, the sum of
+``s_act``, exceeded ``chan.path_bound``, the per-history bound ``B_L`` the quanta assume; a
+nonzero total invalidates the result).
 """
 
 import functools
@@ -125,7 +127,8 @@ def make_kernel_support(real: type) -> SimpleNamespace:
 
     Chan.__annotations__ = {
         "n_ch": int,  # 0 without tallies: the qualified path (no scoring code runs)
-        "n_res": int,  # residual columns (the lookup out-of-domain count follows them)
+        "n_res": int,  # residual columns (lookup out-of-domain, path flag follow)
+        "path_bound": D,  # B_L: per-history path bound the quanta assume (checked, flag column)
         "res_base": int,  # first channel column of the per-history tally rows
         "n_water": int,
         "a_nuc": int,
@@ -671,6 +674,8 @@ def make_transport_kernel(real: type, diag: bool):
                 iz = wp.min(wp.max(int(wp.floor((pz - ctl.origin[2]) / ctl.spacing[2])), 0), nz - 1)
 
         steps = int(0)
+        path_mm = D(0.0)
+        path_flag = int(0)
         birth = int(1)  # first step of the life: linearized analytic log-average of f_dM
         blocks = int(0)
         zero_run = int(0)
@@ -909,6 +914,10 @@ def make_transport_kernel(real: type, diag: bool):
                 uz = R(d1z)
                 energy = D(e_new)
                 steps = steps + 1
+                if chan.n_ch > 0:
+                    path_mm = path_mm + s_act_d  # the scored path of this history (L channel)
+                    if path_mm > chan.path_bound:
+                        path_flag = 1
                 if s_act > zero:
                     birth = 0
                 if with_diag:
@@ -953,6 +962,8 @@ def make_transport_kernel(real: type, diag: bool):
         tally_rows[tid, 2] = t_step
         tally_rows[tid, 3] = t_escaped
         tally_rows[tid, 4] = t_truncated
+        if chan.n_ch > 0 and path_flag == 1:
+            tally_rows[tid, chan.res_base + chan.n_res + 1] = D(1.0)
         counter_rows[tid, 0] = c_trunc
         counter_rows[tid, 1] = c_stall
         counter_rows[tid, 2] = c_strag

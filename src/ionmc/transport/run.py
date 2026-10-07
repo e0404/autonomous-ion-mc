@@ -13,8 +13,8 @@ from ionmc.transport.tally import PartialTransport, RawTransport, build_diagnost
 
 def channel_columns(eff: EffectiveConfig) -> int:
     """Extra per-history tally columns of the scoring channels: the residual of every channel but
-    N and the lookup out-of-domain count (0 without channels)."""
-    return 0 if eff.channels is None else eff.channels.n_residual + 1
+    N, the lookup out-of-domain count and the path-bound violation flag (0 without channels)."""
+    return 0 if eff.channels is None else eff.channels.n_residual + 2
 
 
 def run_range(eff: EffectiveConfig, h0: int, h1: int) -> PartialTransport:

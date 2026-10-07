@@ -144,6 +144,8 @@ class _Reference:
         self.c_rho_f = r(ph.range_rho_f_mm)
         self.c_frac = r(ph.max_energy_loss_fraction)
         self.c_smax = r(ph.max_step_mm)
+        self.path_bound_mm = math.inf if eff.channels is None else eff.channels.path_bound_mm
+        self.path_exceeded = 0
         self.c_fshort = r(ph.short_step_fraction)
         self.mass = r(cfg.source.projectile.mass_mev)
         self.trunc_diag = ph.truncated_hinge_diagnostic
@@ -365,6 +367,7 @@ class _Reference:
             self.counters = dict.fromkeys(COUNTER_NAMES, 0)
             self.ctrl_res = 0.0
             self.ctrl_sum = [0.0, 0.0, 0.0]
+            self.path_exceeded = 0
             if self.scorer is not None:
                 self.scorer.begin_history()
             self._history(h)
@@ -373,8 +376,9 @@ class _Reference:
             tally_rows[row, N_FIXED_TALLIES : N_FIXED_TALLIES + n_g] = self.outside
             tally_rows[row, N_FIXED_TALLIES + n_g : N_FIXED_TALLIES + 2 * n_g] = self.quant
             if self.scorer is not None:
-                tally_rows[row, N_FIXED_TALLIES + 2 * n_g : -1] = self.scorer.residual
-                tally_rows[row, -1] = self.scorer.lookup_ood
+                tally_rows[row, N_FIXED_TALLIES + 2 * n_g : -2] = self.scorer.residual
+                tally_rows[row, -2] = self.scorer.lookup_ood
+                tally_rows[row, -1] = self.path_exceeded
             counter_rows[row] = [self.counters[k] for k in COUNTER_NAMES]
         diagnostics = None
         if self.want_diag:
@@ -462,6 +466,7 @@ class _Reference:
         iz = min(max(int(math.floor((pz - o[2]) / sp[2])), 0), nz - 1)
 
         steps = 0
+        path_mm = 0.0
         # first step of the particle's life: linearized analytic log-average of f_dM (~1e-3)
         birth = True
         blocks = 0
@@ -645,6 +650,10 @@ class _Reference:
             ux, uy, uz = d1x, d1y, d1z
             energy = e_new
             steps += 1
+            if self.scorer is not None:
+                path_mm += s_act  # the scored path of this history (the L channel's quantity)
+                if path_mm > self.path_bound_mm:  # the capacity proof assumes L_h <= B_L
+                    self.path_exceeded = 1
             if s_act > 0.0:
                 birth = False
             if trace_this:

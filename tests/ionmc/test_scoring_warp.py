@@ -256,7 +256,7 @@ def test_a2_warp_half_bitwise_vs_python_hook(make_config: Callable[..., Simulati
         tuple(reqs), (lk,), cfg.scoring, geometry=eff.geometry, tables=eff.tables,
         water=B().table(W, PROTON), projectile=PROTON, e_cut_mev=2.0, e_hi_mev=60.0,
         n_histories=40, n_batches=4, cpu_workers=1, memory_budget_bytes=2**31, max_steps=1000,
-        scoring_pieces=8, producible=producible,
+        scoring_pieces=8, producible=producible, max_step_mm=2.0,
     )  # fmt: skip
     # stream (dyadic values, exact multiples of every quantum)
     rng = np.random.default_rng(20351004)
@@ -419,3 +419,29 @@ def test_cuda_vs_python_float64_informative_record() -> None:
             f"INFO channel {ci} {c.kind}: max |python - cuda| = {int(d.max())} quanta, "
             f"{int((d > 0).sum())} of {d.size} differing"
         )
+
+
+def test_path_bound_flag_is_written_by_the_kernel_and_matches_python(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The kernel carries the per-history ``path_bound_exceeded`` column: zero in an ordinary run
+    (python and warp-cpu), and with an artificially tiny B_L (the straggling margin shrunk to 1e-6
+    before compilation) every history is flagged on both backends, the count is identical and the
+    result is invalid."""
+    import dataclasses
+
+    import ionmc.transport.channels as channels_mod
+
+    n = 24
+    for backend in ("python", "warp-cpu"):
+        ok = Simulation(_cfg(backend, n=n, nb=4)).run()
+        assert ok.valid and ok.channel_raw is not None and ok.channel_raw.path_bound_exceeded == 0
+    monkeypatch.setattr(channels_mod, "STRAGGLING_MARGIN", 1.0e-6)
+    counts = []
+    for backend in ("python", "warp-cpu"):
+        cfg = _cfg(backend, n=n, nb=4)
+        cfg = dataclasses.replace(cfg, run=dataclasses.replace(cfg.run, allow_invalid_result=True))
+        res = Simulation(cfg).run()
+        assert res.channel_raw is not None and not res.valid
+        counts.append(res.channel_raw.path_bound_exceeded)
+    assert counts == [n, n]
