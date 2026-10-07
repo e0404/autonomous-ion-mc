@@ -51,7 +51,11 @@ from ionmc.rng.philox import (
     key_from_seed,
     u01_py,
 )
+from ionmc.species import species_of_projectile
+from ionmc.transport.channels import CLASS_LOCAL, CLASS_STEP
 from ionmc.transport.funcs import BIG_LENGTH_MM, make_transport_funcs
+from ionmc.transport.run import channel_columns
+from ionmc.transport.scoring_ref import ReferenceChannelScorer
 from ionmc.transport.tally import (
     COUNTER_NAMES,
     END_CUTOFF,
@@ -100,7 +104,7 @@ def run_reference(eff: EffectiveConfig) -> RawTransport:
     n = eff.requested.run.n_histories
     part = run_reference_range(eff, 0, n)
     diag = eff.requested.diagnostics
-    raw = merge_partials([part], n, len(eff.requested.scoring))
+    raw = merge_partials([part], n, len(eff.requested.scoring), channel_columns(eff))
     raw.diagnostics = build_diagnostics(
         [part], diag.track_end_positions, diag.escape_records, diag.trace_histories
     )
@@ -171,6 +175,16 @@ class _Reference:
         self.tallies = dict.fromkeys(TALLY_NAMES, 0.0)
         self.counters = dict.fromkeys(COUNTER_NAMES, 0)
         self.e_table_max = float(self.tab.e_max_mev.min())
+        # scoring channels (decision 0040): None without tallies, then the qualified path is
+        # untouched (no step precompute, no extra leg walks, no extra tally columns)
+        self.scorer: ReferenceChannelScorer | None = None
+        if eff.channels is not None:
+            self.scorer = ReferenceChannelScorer(
+                eff.channels, self.grids, self.n_batches, tables=self.tab,
+                a_nucleon=cfg.source.projectile.a,
+            )  # fmt: skip
+            self.species_id = species_of_projectile(cfg.source.projectile).id
+            self.generation = 0  # primaries only until V3-005A
 
     # -- table reads (shared bin location and interpolation, numpy memory access) -------------
     def _stopping_range(self, m: int, e: float) -> tuple[float, float]:
@@ -191,14 +205,25 @@ class _Reference:
     # Deposits are quantized (nearest multiple of QUANTUM_MEV, floor(x / q + 1/2)) and added to
     # int64 grids; the rounding residual of every in-grid piece is tallied per grid, deposits
     # outside a grid are tallied in float64 (see ionmc.transport.tally).
-    def _deposit_voxel(self, batch: int, g: int, ix: int, iy: int, iz: int, de: float) -> None:
+    def _deposit_voxel(self, batch: int, g: int, ix: int, iy: int, iz: int, de: float) -> int:
+        """Deposit ``de`` into voxel ``(ix, iy, iz)`` of grid ``g``; returns its flat index, or -1
+        if the voxel is outside the grid (the deposit is then tallied as outside)."""
         nx, ny, nz = self.grids[g].shape
         if 0 <= ix < nx and 0 <= iy < ny and 0 <= iz < nz:
             n = math.floor(de * QUANTUM_SCALE + 0.5)
-            self.edep[g][batch, (ix * ny + iy) * nz + iz] += n
+            vox = (ix * ny + iy) * nz + iz
+            self.edep[g][batch, vox] += n
             self.quant[g] += de - n * QUANTUM_MEV
-        else:
-            self.outside[g] += de
+            return vox
+        self.outside[g] += de
+        return -1
+
+    def _score_local(self, batch: int, g: int, vox: int, de: float) -> None:
+        """Class "local" deposit (cutoff energy, deposit at ``s_act = 0``) into the channels."""
+        if self.scorer is not None and vox >= 0:
+            self.scorer.score_piece(
+                batch, g, vox, 0.0, 0.0, de, self.species_id, self.generation, CLASS_LOCAL
+            )
 
     def _deposit_point(self, batch: int, pos: tuple[float, float, float], de: float) -> None:
         """Point deposit (the energy left at the cutoff) in every grid."""
@@ -207,7 +232,7 @@ class _Reference:
         for g, grid in enumerate(self.grids):
             nx, ny, nz = grid.shape
             ix, iy, iz, _inside = self.F.grid_index(p, self.g_origin[g], self.g_inv[g], nx, ny, nz)
-            self._deposit_voxel(batch, g, ix, iy, iz, de)
+            self._score_local(batch, g, self._deposit_voxel(batch, g, ix, iy, iz, de), de)
 
     def _deposit_leg(
         self,
@@ -244,10 +269,13 @@ class _Reference:
                                             r(remaining))  # fmt: skip
                 piece = float(piece_w)
                 tb = tcur + piece
-                self._deposit_voxel(
-                    batch, g, ix, iy, iz,
-                    deposit * ramp_weight(tcur, tb, s_start, s_end, s_act),
-                )  # fmt: skip
+                eps_p = deposit * ramp_weight(tcur, tb, s_start, s_end, s_act)
+                vox = self._deposit_voxel(batch, g, ix, iy, iz, eps_p)
+                if self.scorer is not None and vox >= 0:
+                    self.scorer.score_piece(
+                        batch, g, vox, piece, tcur + 0.5 * piece - 0.5 * s_act, eps_p,
+                        self.species_id, self.generation, CLASS_STEP,
+                    )  # fmt: skip
                 tcur = tb
                 remaining = remaining - piece
                 if axis >= 0:
@@ -270,10 +298,13 @@ class _Reference:
                         iz = iz + step
         if remaining > 0.0:  # exceeds the validated piece bound: conserve energy, invalidate
             self.counters["scoring_pieces_overflow"] += 1
-            self._deposit_voxel(
-                batch, g, ix, iy, iz,
-                deposit * ramp_weight(tcur, tcur + remaining, s_start, s_end, s_act),
-            )  # fmt: skip
+            eps_p = deposit * ramp_weight(tcur, tcur + remaining, s_start, s_end, s_act)
+            vox = self._deposit_voxel(batch, g, ix, iy, iz, eps_p)
+            if self.scorer is not None and vox >= 0:
+                self.scorer.score_piece(
+                    batch, g, vox, remaining, tcur + 0.5 * remaining - 0.5 * s_act, eps_p,
+                    self.species_id, self.generation, CLASS_STEP,
+                )  # fmt: skip
 
     def _deposit_step(
         self,
@@ -307,7 +338,7 @@ class _Reference:
         ix, iy, iz, _inside = self.F.grid_index(
             self.V(r(pos[0]), r(pos[1]), r(pos[2])), self.g_origin[g], self.g_inv[g], nx, ny, nz
         )
-        self._deposit_voxel(batch, g, ix, iy, iz, de)
+        self._score_local(batch, g, self._deposit_voxel(batch, g, ix, iy, iz, de), de)
 
     # -- driver -------------------------------------------------------------------------------
     def run_range(self, h0: int, h1: int) -> PartialTransport:
@@ -323,7 +354,8 @@ class _Reference:
         self.end_ctrl_sum = np.zeros((n, 3))
         self.trace: list[list[float]] = []
         self.h_base = h0
-        tally_rows = np.zeros((n, N_FIXED_TALLIES + 2 * n_g))
+        n_chan_cols = channel_columns(self.eff)
+        tally_rows = np.zeros((n, N_FIXED_TALLIES + 2 * n_g + n_chan_cols))
         counter_rows = np.zeros((n, len(COUNTER_NAMES)), dtype=np.int32)
         for h in range(h0, h1):
             # per-history accumulators: a row depends on this history alone
@@ -333,11 +365,16 @@ class _Reference:
             self.counters = dict.fromkeys(COUNTER_NAMES, 0)
             self.ctrl_res = 0.0
             self.ctrl_sum = [0.0, 0.0, 0.0]
+            if self.scorer is not None:
+                self.scorer.begin_history()
             self._history(h)
             row = h - h0
             tally_rows[row, :N_FIXED_TALLIES] = [self.tallies[k] for k in TALLY_NAMES]
             tally_rows[row, N_FIXED_TALLIES : N_FIXED_TALLIES + n_g] = self.outside
-            tally_rows[row, N_FIXED_TALLIES + n_g :] = self.quant
+            tally_rows[row, N_FIXED_TALLIES + n_g : N_FIXED_TALLIES + 2 * n_g] = self.quant
+            if self.scorer is not None:
+                tally_rows[row, N_FIXED_TALLIES + 2 * n_g : -1] = self.scorer.residual
+                tally_rows[row, -1] = self.scorer.lookup_ood
             counter_rows[row] = [self.counters[k] for k in COUNTER_NAMES]
         diagnostics = None
         if self.want_diag:
@@ -352,7 +389,10 @@ class _Reference:
                 trace_int=tr[:, :8].astype(np.int32),
                 trace_float=tr[:, 8:],
             )
-        return rows_to_partial(h0, h1, tally_rows, counter_rows, self.edep, diagnostics)
+        return rows_to_partial(
+            h0, h1, tally_rows, counter_rows, self.edep, diagnostics,
+            channel_acc=None if self.scorer is None else self.scorer.acc,
+        )  # fmt: skip
 
     def _end(
         self,
@@ -588,11 +628,17 @@ class _Reference:
 
             # scoring: the deposit is apportioned along both legs by the linear stopping-power ramp
             # integrated over the path inside each voxel
-            if deposit > 0.0:
+            # (with scoring channels the legs of a step with s_act > 0 are walked even when
+            # deposit = 0: fluence and LET do not depend on eps > 0)
+            walk = deposit > 0.0 or (self.scorer is not None and s_act > 0.0)
+            if walk:
+                if self.scorer is not None and s_act > 0.0:
+                    self.scorer.begin_step(energy - 0.5 * mean_f, mean_f, s_act)
                 self._deposit_step(
                     batch, (px, py, pz), (ux, uy, uz), leg1, (hx, hy, hz), (d1x, d1y, d1z), leg2,
                     deposit, s_act, s0, self._stopping_range(m, e_new)[0],
                 )  # fmt: skip
+            if deposit > 0.0:
                 self.tallies["step_deposit"] += deposit
 
             px, py, pz = nxp, nyp, nzp

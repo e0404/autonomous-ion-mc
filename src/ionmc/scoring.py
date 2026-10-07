@@ -218,3 +218,95 @@ def reduce_batches(batch_sums: NDArray[np.float64], histories_per_batch: int) ->
     mean = x.mean(axis=0)
     var = ((x - mean) ** 2).sum(axis=0) / (b * (b - 1))
     return BatchStatistics(mean, var, (s > 0.0).sum(axis=0).astype(np.int32))
+
+
+@dataclass(frozen=True, eq=False)
+class RatioStatistics:
+    """Delta-method estimate of ``Xbar / Ybar`` per bin (see :func:`reduce_ratio`): ``mean`` and
+    ``variance_of_mean`` are NaN where ``defined_mask`` is False (never 0); ``n_nonzero`` counts the
+    batches with ``y_b > 0``."""
+
+    mean: NDArray[np.float64]
+    variance_of_mean: NDArray[np.float64]
+    defined_mask: NDArray[np.bool_]
+    n_nonzero: NDArray[np.int32]
+
+
+def min_defined_batches(n_batches: int) -> int:
+    """Smallest ``n_nonzero(y)`` of a defined ratio bin: ``max(2, ceil(B / 2))`` (decision 0040,
+    section 5)."""
+    return max(2, math.ceil(n_batches / 2))
+
+
+def reduce_ratio(
+    num_batch_sums: NDArray[np.float64], den_batch_sums: NDArray[np.float64]
+) -> RatioStatistics:
+    """Ratio of channel means with the delta-method variance (decision 0040, section 5).
+
+    ``num_batch_sums`` and ``den_batch_sums`` are per-batch sums ``[B, n_bins]`` of the numerator
+    and denominator channels (``B >= 2``; the common factor 1 / histories-per-batch cancels).
+    With the batch means ``xbar``, ``ybar`` and ``R = xbar / ybar``::
+
+        Var R = [Var xbar - 2 R Cov(xbar, ybar) + R^2 Var ybar] / ybar^2
+        Cov   = sum_b (x_b - xbar)(y_b - ybar) / (B (B - 1))
+
+    The biased mean of per-batch ratios is not used. A bin is defined iff ``ybar > 0`` and
+    ``n_nonzero(y) >= max(2, ceil(B / 2))``; undefined bins are NaN. The variance is clipped at 0
+    against rounding (the quadratic form is non-negative in exact arithmetic).
+    """
+    x = np.asarray(num_batch_sums, dtype=np.float64)
+    y = np.asarray(den_batch_sums, dtype=np.float64)
+    if x.ndim != 2 or x.shape != y.shape or x.shape[0] < 2:
+        raise ValueError("batch sums must have the same shape [B >= 2, n_bins]")
+    if not (np.all(np.isfinite(x)) and np.all(np.isfinite(y))):
+        raise ValueError("batch sums must be finite")
+    b = x.shape[0]
+    xbar = x.mean(axis=0)
+    ybar = y.mean(axis=0)
+    dx, dy = x - xbar, y - ybar
+    denom = float(b * (b - 1))
+    var_x = (dx * dx).sum(axis=0) / denom
+    var_y = (dy * dy).sum(axis=0) / denom
+    cov = (dx * dy).sum(axis=0) / denom
+    n_nonzero = (y > 0.0).sum(axis=0).astype(np.int32)
+    defined = (ybar > 0.0) & (n_nonzero >= min_defined_batches(b))
+    safe_y = np.where(defined, ybar, 1.0)
+    ratio = xbar / safe_y
+    var = (var_x - 2.0 * ratio * cov + ratio * ratio * var_y) / (safe_y * safe_y)
+    var = np.maximum(var, 0.0)
+    return RatioStatistics(
+        mean=np.where(defined, ratio, np.nan),
+        variance_of_mean=np.where(defined, var, np.nan),
+        defined_mask=defined,
+        n_nonzero=n_nonzero,
+    )
+
+
+@dataclass(frozen=True, eq=False)
+class QuantityResult:
+    """One requested tally on its scoring grid (``GridResult.quantities[name]``).
+
+    ``mean`` and ``std`` (standard error of the mean) have the grid shape, with a trailing bin axis
+    of ``n_bins + 2`` for a ``fluence_spectrum`` (underflow, bins, overflow). Linear quantities
+    are per primary; ratios are ratios of per-primary channel means. ``defined_mask`` is True where
+    the value is defined (a ratio: ``ybar > 0`` and ``n_nonzero >= max(2, ceil(B/2))``; a linear
+    quantity: positive mean, dose also positive mass); undefined ratio bins are NaN, never 0.
+    ``n_nonzero`` counts the batches with a nonzero denominator (numerator for a linear quantity).
+    ``rounding_bound`` is the deterministic fixed-point bound of ``mean`` from the piece counts of
+    the N channel (``n q / 2`` per piece of the class "step"; local point deposits of the E channels
+    add at most ``q / 2`` each, not counted); ``quantum_exponents`` the ``k_c`` of the numerator
+    and denominator channels; ``lookup`` the provenance of the lookup table (or None).
+    """
+
+    name: str
+    quantity: str
+    kind: str
+    units: str
+    definition: str
+    mean: NDArray[np.float64]
+    std: NDArray[np.float64]
+    defined_mask: NDArray[np.bool_]
+    n_nonzero: NDArray[np.int32]
+    rounding_bound: NDArray[np.float64]
+    quantum_exponents: tuple[int, ...]
+    lookup: dict[str, object] | None = None

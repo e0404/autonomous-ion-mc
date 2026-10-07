@@ -90,11 +90,24 @@ MAX_QUANTA = 2**62
 
 
 @dataclass
+class ChannelRaw:
+    """Reduced scoring channels of a run (decision 0040): ``acc`` the int64 accumulators
+    ``[B, sum_c size_c]`` in the quanta of the channels, ``residual[r]`` the exact total of the
+    quantization residual column ``r`` (``sum(x - n q_c)`` over all pieces, float64) and
+    ``lookup_out_of_domain`` the number of lookup arguments outside their table axis (a nonzero
+    value invalidates the result)."""
+
+    acc: NDArray[np.int64]
+    residual: list[float]
+    lookup_out_of_domain: int
+
+
+@dataclass
 class RawTransport:
     """Raw reduced output of a transport run (float64).
 
     ``meta`` holds backend facts (device, compile time, chunking, worker reports); it is not
-    part of the physics result.
+    part of the physics result. ``channels`` is None without scoring channels.
     """
 
     edep_mev: list[NDArray[np.float64]]
@@ -104,6 +117,7 @@ class RawTransport:
     quantization_mev: list[float] = field(default_factory=list)
     diagnostics: dict[str, Any] = field(default_factory=dict)
     meta: dict[str, Any] = field(default_factory=dict)
+    channels: ChannelRaw | None = None
 
 
 @dataclass
@@ -144,6 +158,7 @@ class PartialTransport:
     edep: list[NDArray[np.int64]]
     diagnostics: HistoryDiagnostics | None
     meta: dict[str, Any] = field(default_factory=dict)
+    channel_acc: NDArray[np.int64] | None = None
 
 
 def exact_components(values: NDArray[np.float64]) -> list[float]:
@@ -174,9 +189,11 @@ def rows_to_partial(
     edep: list[NDArray[np.int64]],
     diagnostics: HistoryDiagnostics | None,
     meta: dict[str, Any] | None = None,
+    channel_acc: NDArray[np.int64] | None = None,
 ) -> PartialTransport:
-    """Reduce per-history rows ``(n, 6 + 2 G)`` (fixed tallies, outside deposits, quantization
-    residuals) and ``(n, 9)`` (counters) of one range to a partial result."""
+    """Reduce per-history rows ``(n, 6 + 2 G [+ C + 1])`` (fixed tallies, outside deposits,
+    quantization residuals, and with scoring channels one residual column per channel but N and
+    the lookup out-of-domain count) and ``(n, 9)`` (counters) of one range to a partial result."""
     return rows_to_partial_many(
         h0,
         h1,
@@ -185,6 +202,7 @@ def rows_to_partial(
         edep,
         diagnostics,
         meta,
+        channel_acc,
     )
 
 
@@ -196,15 +214,17 @@ def rows_to_partial_many(
     edep: list[NDArray[np.int64]],
     diagnostics: HistoryDiagnostics | None,
     meta: dict[str, Any] | None = None,
+    channel_acc: NDArray[np.int64] | None = None,
 ) -> PartialTransport:
     """Assemble a :class:`PartialTransport` from already reduced pieces (chunked backends). The
-    ``accumulator_overflow`` counter is set here: a voxel at or above ``MAX_QUANTA`` (or
-    negative, i.e. wrapped) invalidates the result."""
+    ``accumulator_overflow`` counter is set here: a voxel of ``edep`` or of a scoring channel at
+    or above ``MAX_QUANTA`` (or negative, i.e. wrapped) invalidates the result."""
     counter_sums = list(counter_sums)
-    bad = any(int(a.max()) >= MAX_QUANTA or int(a.min()) < 0 for a in edep if a.size)
+    grids = list(edep) + ([] if channel_acc is None else [channel_acc])
+    bad = any(int(a.max()) >= MAX_QUANTA or int(a.min()) < 0 for a in grids if a.size)
     counter_sums[COUNTER_NAMES.index("accumulator_overflow")] += int(bad)
     return PartialTransport(
-        h0, h1, tally_components, counter_sums, edep, diagnostics, dict(meta or {})
+        h0, h1, tally_components, counter_sums, edep, diagnostics, dict(meta or {}), channel_acc
     )
 
 
@@ -227,13 +247,25 @@ def concat_partials(partials: list[PartialTransport]) -> PartialTransport:
         for p in parts:
             acc += p.edep[g]
         edep.append(acc)
-    return PartialTransport(parts[0].h0, parts[-1].h1, comps, counters, edep, None, {})
+    chan = None
+    if parts[0].channel_acc is not None:
+        chan = np.zeros_like(parts[0].channel_acc, dtype=np.int64)
+        for p in parts:
+            assert p.channel_acc is not None
+            chan += p.channel_acc
+    return PartialTransport(parts[0].h0, parts[-1].h1, comps, counters, edep, None, {}, chan)
 
 
 def merge_partials(
-    partials: list[PartialTransport], n_histories: int, n_grids: int
+    partials: list[PartialTransport],
+    n_histories: int,
+    n_grids: int,
+    n_channel_columns: int = 0,
 ) -> RawTransport:
     """Reduce the partial results of a complete, contiguous partition of ``[0, n_histories)``.
+
+    ``n_channel_columns`` is 0 without scoring channels, else ``C + 1``: the residual columns of
+    the ``C`` channels with a residual, then the lookup out-of-domain count.
 
     Fails closed (``ValueError``) for gaps, overlaps, a different number of columns or grids.
     """
@@ -247,7 +279,10 @@ def merge_partials(
         pos = p.h1
     if pos != n_histories:
         raise ValueError(f"partial results cover [0, {pos}), expected [0, {n_histories})")
-    n_cols = N_FIXED_TALLIES + 2 * n_grids
+    n_cols = N_FIXED_TALLIES + 2 * n_grids + n_channel_columns
+    for p in parts:
+        if (p.channel_acc is not None) != (n_channel_columns > 0):
+            raise ValueError("partial result and configuration disagree about scoring channels")
     for p in parts:
         if (
             len(p.tally_components) != n_cols
@@ -266,12 +301,25 @@ def merge_partials(
             acc += p.edep[g]
         edep.append(acc.astype(np.float64) * QUANTUM_MEV)
     tallies = dict(zip(TALLY_NAMES, totals[:N_FIXED_TALLIES], strict=True))
+    base = N_FIXED_TALLIES + 2 * n_grids
+    channels = None
+    if n_channel_columns > 0:
+        chan = np.zeros_like(parts[0].channel_acc, dtype=np.int64)
+        for p in parts:
+            assert p.channel_acc is not None
+            chan += p.channel_acc
+        channels = ChannelRaw(
+            acc=chan,
+            residual=totals[base : base + n_channel_columns - 1],
+            lookup_out_of_domain=int(round(totals[base + n_channel_columns - 1])),
+        )
     return RawTransport(
         edep_mev=edep,
         tallies=tallies,
         outside_mev=totals[N_FIXED_TALLIES : N_FIXED_TALLIES + n_grids],
-        quantization_mev=totals[N_FIXED_TALLIES + n_grids :],
+        quantization_mev=totals[N_FIXED_TALLIES + n_grids : base],
         counters=counters,
+        channels=channels,
     )
 
 

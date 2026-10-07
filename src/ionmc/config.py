@@ -49,10 +49,10 @@ MAX_TRACE_BUFFER_BYTES = 2**30
 MAX_SCORING_PIECES = 4096
 MAX_ENERGY_SIGMA_FRACTION = 0.05
 MAX_ENERGY_LOSS_FRACTION = 0.2
-CHANNEL_BACKENDS: tuple[str, ...] = ()
-"""Backends that implement the scoring channels of decision 0040. Empty until the reference hook
-(V3-004 step 5) and the kernel (step 8) land; a configuration with tallies is rejected on every
-other backend, so a requested tally is never silently ignored."""
+CHANNEL_BACKENDS: tuple[str, ...] = ("python",)
+"""Backends that implement the scoring channels of decision 0040 (the Warp kernels follow in
+V3-004 step 8); a configuration with tallies is rejected on every other backend, so a requested
+tally is never silently ignored."""
 U01_MAPPING = {
     "float64": "((w >> 8) + 0.5) * 2**-24",
     "float32": "((w >> 9) + 0.5) * 2**-23",
@@ -307,6 +307,9 @@ class EffectiveConfig:
                 "materials": thaw(self.tables.identity),
                 "n_e": self.tables.n_e,
                 "n_r": self.tables.n_r,
+                **(
+                    {"water_row": thaw(self.tables.water_identity)} if self.tables.has_water else {}
+                ),
             },
             "scattering_length_g_cm2": list(self.scattering_length_g_cm2),
             "rng": dict(self.rng),
@@ -407,21 +410,15 @@ def _compile_tallies(
     e_hi_mev: float,
     max_steps: int,
     scoring_pieces: int,
+    water: StoppingTable | None,
 ) -> ChannelPlan | None:
     """Fail-closed validation and compilation of the scoring requests (None without tallies)."""
     if not config.tallies:
         if config.lookups:
             raise fail("lookup tables were given but no tally request uses them")
         return None
+    assert water is not None
     src, ph, run = config.source, config.physics, config.run
-    try:
-        water = ph.stopping.table(WATER, src.projectile)
-    except (ValueError, KeyError) as exc:
-        raise fail(
-            f"no water stopping table for the LET definition from source {ph.stopping.name!r}: "
-            f"{exc}"
-        ) from exc
-    _check_table_identity(water, WATER, ph.stopping.name)
     plan = compile_channels(
         config.tallies,
         config.lookups,
@@ -444,6 +441,23 @@ def _compile_tallies(
     if unused:
         raise fail(f"lookup tables {sorted(unused)} are not used by any tally request")
     return plan
+
+
+def _water_table(config: SimulationConfig) -> StoppingTable | None:
+    """The water stopping table of the LET definition from the run's own stopping source (None
+    without tallies); fail closed if the source has none."""
+    if not config.tallies:
+        return None
+    ph = config.physics
+    try:
+        water = ph.stopping.table(WATER, config.source.projectile)
+    except (ValueError, KeyError) as exc:
+        raise fail(
+            f"no water stopping table for the LET definition from source {ph.stopping.name!r}: "
+            f"{exc}"
+        ) from exc
+    _check_table_identity(water, WATER, ph.stopping.name)
+    return water
 
 
 def cuda_available() -> bool:
@@ -526,7 +540,8 @@ def validate(config: SimulationConfig) -> EffectiveConfig:
         )
 
     stopping_tables = _stopping_tables(ph.stopping, geometry.materials)
-    tables = TransportTables.from_stopping_tables(stopping_tables)
+    water_table = _water_table(config)
+    tables = TransportTables.from_stopping_tables(stopping_tables, water=water_table)
     e_lo = float(tables.e_min_mev.max())
     e_hi_table = float(tables.e_max_mev.min())
     if e_lo > 0.5 * ph.e_cut_mev:
@@ -585,7 +600,9 @@ def validate(config: SimulationConfig) -> EffectiveConfig:
                 f"{trace_bytes} bytes, above the limit of {MAX_TRACE_BUFFER_BYTES} bytes"
             )
 
-    channels = _compile_tallies(config, geometry, tables, e_hi, max_steps, scoring_pieces)
+    channels = _compile_tallies(
+        config, geometry, tables, e_hi, max_steps, scoring_pieces, water_table
+    )
     if channels is not None and run.backend not in CHANNEL_BACKENDS:
         raise fail(
             f"backend {run.backend!r} does not implement scoring channels yet "

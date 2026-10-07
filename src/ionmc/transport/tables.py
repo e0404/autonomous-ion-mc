@@ -67,6 +67,11 @@ class TransportTables:
     nominal_density_g_cm3: NDArray[np.float64]
     identity: tuple[dict[str, Any], ...]
     sha256: str
+    water_ln_s_mass: NDArray[np.float64] | None = None
+    water_ln_e0: float = 0.0
+    water_inv_dln_e: float = 0.0
+    water_density_g_cm3: float = 0.0
+    water_identity: dict[str, Any] | None = None
 
     def __post_init__(self) -> None:
         for name in _ARRAY_FIELDS:
@@ -75,6 +80,19 @@ class TransportTables:
                 raise ValueError(f"{name} must be a numpy array")
             object.__setattr__(self, name, freeze_array(a, np.float64, name))
         object.__setattr__(self, "identity", _freeze(self.identity))
+        if self.water_ln_s_mass is not None:
+            w = np.asarray(self.water_ln_s_mass, dtype=np.float64)
+            if (
+                w.ndim != 1
+                or w.size < 2
+                or not np.all(np.isfinite(w))
+                or not (math.isfinite(self.water_ln_e0) and self.water_inv_dln_e > 0.0)
+                or not self.water_density_g_cm3 > 0.0
+                or self.water_identity is None
+            ):
+                raise ValueError("the water row must be a finite 1-D table with identity")
+            object.__setattr__(self, "water_ln_s_mass", freeze_array(w, np.float64, "water row"))
+            object.__setattr__(self, "water_identity", _freeze(self.water_identity))
         nm = len(self.materials)
         if nm < 1:
             raise ValueError("tables need at least one material")
@@ -106,6 +124,16 @@ class TransportTables:
             raise ValueError("grid steps must be positive")
 
     @property
+    def has_water(self) -> bool:
+        """True if the water stopping row of the LET definition (decision 0040) is present."""
+        return self.water_ln_s_mass is not None
+
+    @property
+    def n_water(self) -> int:
+        """Grid points of the water row (0 without a row)."""
+        return 0 if self.water_ln_s_mass is None else int(self.water_ln_s_mass.size)
+
+    @property
     def n_materials(self) -> int:
         """Number of materials."""
         return len(self.materials)
@@ -126,8 +154,14 @@ class TransportTables:
         tables: Sequence[StoppingTable],
         points_per_decade: int = MIN_POINTS_PER_DECADE,
         range_points_per_decade: int = DEFAULT_RANGE_POINTS_PER_DECADE,
+        water: StoppingTable | None = None,
     ) -> TransportTables:
-        """Build transport tables from one proton :class:`StoppingTable` per material."""
+        """Build transport tables from one proton :class:`StoppingTable` per material.
+
+        ``water`` (the proton table of liquid water from the *same* ``StoppingSource``) adds the
+        water stopping row of the LET definition: ``ln S`` on a uniform ``ln E`` grid of at least
+        ``points_per_decade``, resampled like a material row; its identity is recorded and enters
+        the content hash (without it the hash is that of the tables without a water row)."""
         if not tables:
             raise ValueError("at least one stopping table is required")
         if points_per_decade < MIN_POINTS_PER_DECADE or range_points_per_decade < 200:
@@ -207,6 +241,40 @@ class TransportTables:
         for arr in (e_min, e_max, ln_s, ln_r, ln_e_of_r, z_over_a, inv_xs, density):
             h.update(np.ascontiguousarray(arr).tobytes())
         h.update(json.dumps(identity, sort_keys=True).encode())
+        water_kwargs: dict[str, Any] = {}
+        if water is not None:
+            if water.projectile != projectile:
+                raise ValueError("the water table must describe the same projectile")
+            n_w = _count(water.energy_per_u[-1] / water.energy_per_u[0], points_per_decade)
+            wlo, whi = math.log(water.energy_per_u[0]), math.log(water.energy_per_u[-1])
+            wgrid = np.linspace(wlo, whi, n_w)
+            w_ln_s = np.interp(wgrid, np.log(water.energy_per_u), np.log(water.s_el_mass))
+            w_identity = {
+                "material": water.material.name,
+                "projectile": projectile.name,
+                "role": "LET medium (decision 0040)",
+                "source": water.metadata.get("source"),
+                "I_eV_effective": float(
+                    water.metadata.get("I_eV", water.material.mean_excitation_eV)
+                ),
+                "dataset_id": water.metadata.get("dataset_id"),
+                "source_sha256": water.metadata.get("sha256"),
+                "content_sha256": water.metadata.get("content_sha256"),
+                "material_sha256": material_fingerprint(water.material),
+                "e_min_mev": float(water.energy_per_u[0]),
+                "e_max_mev": float(water.energy_per_u[-1]),
+                "n_points": int(n_w),
+                "metadata": _jsonable(water.metadata),
+            }
+            h.update(np.ascontiguousarray(w_ln_s).tobytes())
+            h.update(json.dumps(w_identity, sort_keys=True).encode())
+            water_kwargs = {
+                "water_ln_s_mass": w_ln_s,
+                "water_ln_e0": float(wgrid[0]),
+                "water_inv_dln_e": float((n_w - 1) / (whi - wlo)),
+                "water_density_g_cm3": float(water.material.density_g_cm3),
+                "water_identity": w_identity,
+            }
         return cls(
             projectile=projectile,
             materials=materials,
@@ -226,6 +294,7 @@ class TransportTables:
             nominal_density_g_cm3=density,
             identity=identity,
             sha256=h.hexdigest(),
+            **water_kwargs,
         )
 
     def _locate(
@@ -242,6 +311,24 @@ class TransportTables:
         )
         row = self.ln_s_mass[material]
         return math.exp(row[i] * (1.0 - f) + row[i + 1] * f)
+
+    def s_water(self, energy_mev: float, species: str = "proton") -> float:
+        """Linear unrestricted electronic stopping power of ``species`` in water [MeV/mm]
+        (numerically keV/um) at the kinetic energy ``energy_mev`` (log-log interpolation of the
+        water row; clamped to the table range). Only the proton row exists (V3-004); the species
+        argument is the interface for V3-005A (``S_w(E, species)``)."""
+        if self.water_ln_s_mass is None:
+            raise ValueError("these transport tables have no water stopping row")
+        if species != self.projectile.name:
+            raise ValueError(
+                f"the water row describes {self.projectile.name!r}, not species {species!r}"
+            )
+        i, f = self._locate(
+            0, energy_mev, self.water_ln_e0, self.water_inv_dln_e, int(self.water_ln_s_mass.size)
+        )
+        row = self.water_ln_s_mass
+        mass = math.exp(row[i] * (1.0 - f) + row[i + 1] * f)
+        return mass * self.water_density_g_cm3 / 10.0
 
     def range_g_cm2(self, material: int, energy_mev: float) -> float:
         """CSDA range [g/cm2] at ``energy_mev`` (log-log interpolation)."""
@@ -271,7 +358,19 @@ class TransportTables:
         def arr2(a: NDArray[np.float64]) -> Any:
             return wp.array(a.astype(np_dtype), dtype=dtype, device=device)
 
+        water: dict[str, Any] = {}
+        if self.water_ln_s_mass is not None:
+            water = {
+                "ln_s_water": wp.array(
+                    self.water_ln_s_mass.astype(np_dtype), dtype=dtype, device=device
+                ),
+                "ln_e0_water": float(self.water_ln_e0),
+                "inv_dln_e_water": float(self.water_inv_dln_e),
+                "rho_water": float(self.water_density_g_cm3),
+                "n_water": self.n_water,
+            }
         return SimpleNamespace(
+            **water,
             ln_s_mass=arr2(self.ln_s_mass),
             ln_r_mass=arr2(self.ln_r_mass),
             ln_e_of_r=arr2(self.ln_e_of_r),

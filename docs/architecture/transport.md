@@ -227,10 +227,13 @@ result is flagged `valid = False`. Counters: `step_truncation`, `stall`, `stragg
 
 ## Extensible scoring
 
-Status: the data model and the fail-closed validation of V3-004 (decision 0040) are in place; the
-transport backends do not score channels yet (`config.CHANNEL_BACKENDS` is empty), so a
-configuration with `tallies` is rejected on every backend rather than silently ignored. Acceptance
-rows A1 to A16 are frozen in `validation/plans/v3-004-acceptance.md`.
+Status: the data model, the fail-closed validation, the water LET row, the shared scoring functions
+(`ionmc.transport.scoring_funcs`, twin of the Warp functions, part of the U1 harness) and the
+reference (python) hook `score_piece` (`ionmc.transport.scoring_ref`) of V3-004 are in place, with
+`reduce_ratio`, `QuantityResult` and `GridResult.quantities`; `config.CHANNEL_BACKENDS` is
+`("python",)`: a configuration with `tallies` is rejected on the Warp backends until the kernel hook
+(step 8) lands, never silently ignored. Acceptance rows A1 to A16 are frozen in
+`validation/plans/v3-004-acceptance.md`.
 
 **Requests.** `SimulationConfig.tallies` is a tuple of `TallyRequest(name, grid, quantity, species,
 generation, lookup, energy_edges_mev_per_u)` and `SimulationConfig.lookups` a tuple of

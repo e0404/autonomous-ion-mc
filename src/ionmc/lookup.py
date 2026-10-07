@@ -29,12 +29,13 @@ import math
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
-from ionmc._frozen import freeze_array
+from ionmc._frozen import freeze_array, freeze_json, thaw_json
 from ionmc._validate import fail
 from ionmc.species import species_by_name
 
@@ -120,9 +121,13 @@ class LookupTable:
                 raise fail(f"species {sp!r}: lookup values must be non-negative")
             frozen_values[sp] = freeze_array(arr, np.float64, f"values[{sp}]")
         object.__setattr__(self, "axis_values", freeze_array(axis, np.float64, "axis_values"))
-        object.__setattr__(self, "values", frozen_values)
+        # the mapping itself is read-only too (a plain dict could be replaced or extended after the
+        # hashes were taken)
+        object.__setattr__(self, "values", MappingProxyType(frozen_values))
         if self.resampling is not None:
-            object.__setattr__(self, "resampling", json.loads(json.dumps(dict(self.resampling))))
+            object.__setattr__(
+                self, "resampling", freeze_json(json.loads(json.dumps(thaw_json(self.resampling))))
+            )
         object.__setattr__(self, "content_sha256", self._content_hash())
 
     def _content_hash(self) -> str:
@@ -178,7 +183,7 @@ class LookupTable:
             "license": self.license,
             "source": self.source,
             "synthetic": self.synthetic,
-            "resampling": None if self.resampling is None else dict(self.resampling),
+            "resampling": None if self.resampling is None else thaw_json(self.resampling),
         }
 
     @classmethod

@@ -73,6 +73,7 @@ FLOOR_EXPONENT = -16
 STRAGGLING_MARGIN = 1.25
 E_QUANTUM_EXPONENT = 30  # QUANTUM_MEV = 2**-30
 EXCLUDED_CHANNEL_NAME = "edep_excluded_from_let"
+PIECE_COUNT_NAME = "scoring_pieces"
 # power of the stopping power S in the 1 mm entrance-piece scale u_c = 1 mm S_ref^j
 _FLOOR_POWER = {"E": 1, "FE": 1, "L": 0, "FL": 0, "LS": 1, "LS2": 2, "ES": 2}
 
@@ -332,13 +333,13 @@ def _check_species_generation(
         gens = {g for s, g in producible if s == name}
         wanted = {"all": gens, "primary": {"primary"}, "secondary": {"secondary"}}[req.generation]
         if not (gens & wanted):
-            sp_obj = species_by_name(name)
-            if sp_obj.transported or req.quantity not in ("edep", "dose"):
-                raise fail(
-                    f"tally {req.name!r}: species {name!r} (generation {req.generation!r}) is not "
-                    f"producible by this engine (producible: {sorted(producible)}; there is no "
-                    "secondary transport until V3-005A); nothing silently scores zero"
-                )
+            # also the pseudo-species (nuclear_local): an explicit request is accepted only once
+            # the engine advertises it with its generation, never as an all-zero channel
+            raise fail(
+                f"tally {req.name!r}: species {name!r} (generation {req.generation!r}) is not "
+                f"producible by this engine (producible: {sorted(producible)}; there is no "
+                "secondary transport until V3-005A); nothing silently scores zero"
+            )
     return selected
 
 
@@ -381,6 +382,7 @@ class _Spec:
     gen: tuple[int, int]
     lookup: int
     spectrum: SpectrumSpec | None
+    f_max: float = 0.0  # FE only: largest table value over the selected species (not in the key)
 
     def key(self) -> tuple[Any, ...]:
         sp = None if self.spectrum is None else (self.spectrum.edges, self.spectrum.log)
@@ -420,6 +422,9 @@ def compile_channels(
     if len(lookup_index) != len(lookups):
         raise fail("lookup table names must be unique")
     names = [r.name for r in requests]
+    reserved = {EXCLUDED_CHANNEL_NAME, PIECE_COUNT_NAME} & set(names)
+    if reserved:
+        raise fail(f"tally request names {sorted(reserved)} are reserved for automatic channels")
     if len(set(names)) != len(names):
         raise fail(f"tally request names must be unique, got {names}")
 
@@ -431,7 +436,7 @@ def compile_channels(
     specs: dict[tuple[Any, ...], _Spec] = {}
     qdefs: list[tuple[TallyRequest, str, tuple[Any, ...], tuple[Any, ...] | None, str, str]] = []
     used_grids: set[int] = set()
-    f_max = 0.0
+    f_max = 0.0  # largest over all FE channels (recorded only)
 
     def get(spec: _Spec) -> tuple[Any, ...]:
         specs.setdefault(spec.key(), spec)
@@ -457,6 +462,7 @@ def compile_channels(
         used_grids.add(gi)
         gen = _generation_range(req.generation)
         li = -1
+        f_req = 0.0
         spectrum = None
         if req.lookup is not None:
             if req.lookup not in lookup_index:
@@ -467,7 +473,10 @@ def compile_channels(
                 req, table, selected, producible,
                 e_floor_per_u, e_hi_mev / a, s_floor_min, s_floor_max,
             )  # fmt: skip
-            f_max = max(f_max, *(float(v.max()) for v in table.values.values()))
+            # per-channel domain (review 67f03e06 b): only the species this request selects
+            need_sp = [s for s in selected if s in {p for p, _ in producible}]
+            f_req = max(float(table.values[s].max()) for s in need_sp)
+            f_max = max(f_max, f_req)
         if req.energy_edges_mev_per_u is not None:
             spectrum = _spectrum_spec(req.name, req.energy_edges_mev_per_u)
 
@@ -477,6 +486,7 @@ def compile_channels(
             *,
             li: int = -1,
             sp: SpectrumSpec | None = None,
+            _f: float = 0.0,
             _req: TallyRequest = req,
             _gi: int = gi,
             _gen: tuple[int, int] = gen,
@@ -484,7 +494,14 @@ def compile_channels(
             pseudo = kind == "E" and bool(cls & CLASS_LOCAL) and _req.species is None
             return get(
                 _Spec(
-                    kind, _gi, cls, _species_row(_req.species, include_pseudo=pseudo), _gen, li, sp
+                    kind,
+                    _gi,
+                    cls,
+                    _species_row(_req.species, include_pseudo=pseudo),
+                    _gen,
+                    li,
+                    sp,
+                    _f,
                 )
             )
 
@@ -511,12 +528,12 @@ def compile_channels(
             )  # fmt: skip
         elif q == "lookup_sum":
             qdefs.append(
-                (req, "linear", spec("FE", CLASS_STEP, li=li), None,
+                (req, "linear", spec("FE", CLASS_STEP, li=li, _f=f_req), None,
                  f"MeV*[{lookups[li].units}]", "sum(eps f)")
             )  # fmt: skip
         elif q == "lookup_dose_avg":
             qdefs.append(
-                (req, "ratio", spec("FE", CLASS_STEP, li=li), spec("E", CLASS_STEP),
+                (req, "ratio", spec("FE", CLASS_STEP, li=li, _f=f_req), spec("E", CLASS_STEP),
                  lookups[li].units, "sum(eps f)/sum(eps) over step deposits")
             )  # fmt: skip
         else:  # fluence_spectrum
@@ -550,7 +567,7 @@ def compile_channels(
                 None,
             )
         )
-    if f_max == 0.0 and any(s.kind == "FE" for s in specs.values()):
+    if any(s.kind == "FE" and s.f_max <= 0.0 for s in specs.values()):
         raise fail("a lookup table with no positive value cannot be used (all values are zero)")
 
     ordered = sorted(specs.values(), key=lambda s: s.grid)  # stable: creation order inside a grid
@@ -571,7 +588,6 @@ def compile_channels(
     b_ls = min(s_max * b_l, STRAGGLING_MARGIN * r_max * e_hi_mev)
     bound = {
         "E": e_hi_mev,
-        "FE": f_max * e_hi_mev,
         "L": b_l,
         "FL": b_l,
         "LS": b_ls,
@@ -588,8 +604,7 @@ def compile_channels(
         raise fail("the piece-count channel N could overflow its accumulator; reduce hpb")
 
     k_of: dict[str, int] = {"E": E_QUANTUM_EXPONENT, "N": 0}
-    if f_max > 0.0:
-        k_of["FE"] = fe_exponent(f_max)
+    fe_of: dict[tuple[Any, ...], tuple[int, float]] = {}
     present = {s.kind for s in ordered}
     for kind in ("L", "LS", "LS2", "ES"):
         if kind in present or (kind == "L" and "FL" in present):
@@ -597,14 +612,25 @@ def compile_channels(
     if "FL" in present:  # spectra share the exponent of L (sum over bins = L bitwise)
         k_of["FL"] = k_of["L"]
 
+    # FE: bound, exponent and floor per channel from the table values of its own species
+    for s in ordered:
+        if s.kind == "FE":
+            s_bound = s.f_max * e_hi_mev
+            s_k = fe_exponent(s.f_max)
+            fe_of[s.key()] = (s_k, s_bound)
+
     # --- precision floor ------------------------------------------------------------------
-    for kind in sorted({s.kind for s in ordered}):
-        if kind == "N":
+    checks: set[tuple[str, int, float]] = set()
+    for s in ordered:
+        if s.kind == "N":
             continue
-        u = 1.0 * s_ref ** _FLOOR_POWER[kind]
-        if kind == "FE":
-            u *= f_max
-        k = k_of[kind]
+        u = 1.0 * s_ref ** _FLOOR_POWER[s.kind]
+        if s.kind == "FE":
+            u *= s.f_max
+            checks.add(("FE", fe_of[s.key()][0], u))
+        else:
+            checks.add((s.kind, k_of[s.kind], u))
+    for kind, k, u in sorted(checks):
         if math.ldexp(1.0, -k) > math.ldexp(u, FLOOR_EXPONENT):
             raise fail(
                 f"channel kind {kind}: the quantum 2^-{k} is above the precision floor "
@@ -626,10 +652,14 @@ def compile_channels(
             rc = res_col
             res_col += 1
         key_to_index[s.key()] = len(channels)
+        if s.kind == "FE":
+            k_c, b_c = fe_of[s.key()]
+        else:
+            k_c, b_c = k_of[s.kind], bound[s.kind]
         channels.append(
             Channel(
                 s.kind, s.grid, s.class_mask, s.species, s.gen[0], s.gen[1], s.lookup, s.spectrum,
-                size, offset, k_of[s.kind], bound[s.kind], rc,
+                size, offset, k_c, b_c, rc,
             )
         )  # fmt: skip
         offset += size

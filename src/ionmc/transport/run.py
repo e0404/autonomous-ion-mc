@@ -11,6 +11,12 @@ from ionmc.config import EffectiveConfig
 from ionmc.transport.tally import PartialTransport, RawTransport, build_diagnostics, merge_partials
 
 
+def channel_columns(eff: EffectiveConfig) -> int:
+    """Extra per-history tally columns of the scoring channels: the residual of every channel but
+    N and the lookup out-of-domain count (0 without channels)."""
+    return 0 if eff.channels is None else eff.channels.n_residual + 1
+
+
 def run_range(eff: EffectiveConfig, h0: int, h1: int) -> PartialTransport:
     """Transport histories ``[h0, h1)`` in this process on the backend of ``eff``."""
     if eff.backend == "python":
@@ -33,7 +39,7 @@ def run_transport(eff: EffectiveConfig) -> RawTransport:
     else:
         parts = [run_range(eff, 0, n)]
     diag = eff.requested.diagnostics
-    raw = merge_partials(parts, n, len(eff.requested.scoring))
+    raw = merge_partials(parts, n, len(eff.requested.scoring), channel_columns(eff))
     raw.diagnostics = build_diagnostics(
         parts, diag.track_end_positions, diag.escape_records, diag.trace_histories
     )

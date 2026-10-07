@@ -396,8 +396,8 @@ def test_no_tallies_is_unchanged_and_tallies_are_never_ignored(make_config: Make
     cfg = make_config(energy=20.0)
     assert validate(cfg).channels is None
     assert validate(cfg).summary()["tallies"] is None
-    # with the real (empty) capability list every backend rejects a tally request
-    for backend, prec in (("python", "float64"), ("warp-cpu", "float32"), ("warp-cpu", "float64")):
+    # a backend without channels (the Warp kernels follow in step 8) rejects a tally request
+    for backend, prec in (("warp-cpu", "float32"), ("warp-cpu", "float64")):
         c = _with(make_config(energy=20.0, backend=backend, precision=prec), _req("ld", "let_d"))
         with pytest.raises(UnsupportedCombinationError, match="does not implement scoring"):
             validate(c)
@@ -441,6 +441,9 @@ A12_CASES = [
     ("unused lookup", "let_d", {}, [_lookup()], "not used"),
     ("non-uniform spectrum", "fluence_spectrum", _BAD_EDGES, [], "uniform"),
     ("pseudo species LET", "let_d", {"species": ("nuclear_local",)}, [], "not transported"),
+    # review 67f03e06 (a): an explicit nuclear_local edep/dose request is not producible yet
+    ("nuclear_local edep", "edep", {"species": ("nuclear_local",)}, [], "not producible"),
+    ("nuclear_local dose", "dose", {"species": ("nuclear_local",)}, [], "not producible"),
 ]
 
 
@@ -468,9 +471,7 @@ def test_a12_duplicate_request_names(make_config: MakeConfig, channels_enabled: 
         validate(_with(cfg, _req("x", "let_d"), _req("x", "let_t")))
 
 
-def test_a12_valid_lookup_and_nuclear_local_edep_are_accepted(
-    make_config: MakeConfig, channels_enabled: None
-) -> None:
+def test_a12_valid_lookup_is_accepted(make_config: MakeConfig, channels_enabled: None) -> None:
     cfg = make_config(energy=100.0, n=400, n_batches=20)
     lk = LookupTable.from_file(SYNTHETIC)
     # LET axis must cover the water-S interval of 1..100 MeV (up to about 26 keV/um): ok (0..100)
@@ -479,7 +480,6 @@ def test_a12_valid_lookup_and_nuclear_local_edep_are_accepted(
             cfg,
             _req("lk", "lookup_dose_avg", lookup="synthetic_let_linear"),
             _req("lks", "lookup_sum", lookup="synthetic_let_linear", species=("proton",)),
-            _req("nl", "edep", species=("nuclear_local",)),
             lookups=(lk,),
         )
     )
@@ -510,3 +510,76 @@ def test_a12_lookup_provenance_in_effective_summary(
     assert prov["file_sha256"] == hashlib.sha256(SYNTHETIC.read_bytes()).hexdigest()
     assert prov["citation"] and prov["license"] and prov["source"]
     assert not math.isnan(sum(c["k"] for c in eff.summary()["tallies"]["channels"]))
+
+
+def test_fe_quantum_bound_and_floor_are_per_channel(
+    make_config: MakeConfig, channels_enabled: None
+) -> None:
+    """Review 67f03e06 (b): each FE channel uses the largest value of its own table (and species),
+    not one global f_max over every table."""
+    x = np.linspace(0.0, 100.0, 11)
+    small = LookupTable("small", "q", "1", "let_water_kev_um", "linear", x,
+                        {"proton": 1.0e-3 * (1.0 + x)}, "c", "l", "s", True)  # fmt: skip
+    big = LookupTable("big", "q", "1", "let_water_kev_um", "linear", x,
+                      {"proton": 1.0e3 * (1.0 + x)}, "c", "l", "s", True)  # fmt: skip
+    cfg = make_config(energy=100.0, n=400, n_batches=20)
+    plan = _plan(
+        _with(
+            cfg,
+            _req("a", "lookup_sum", lookup="small"),
+            _req("b", "lookup_sum", lookup="big"),
+            lookups=(small, big),
+        )
+    )
+    fe = {plan.lookups[c.lookup].name: c for c in plan.channels if c.kind == "FE"}
+    f_small = float(small.values["proton"].max())
+    f_big = float(big.values["proton"].max())
+    assert fe["small"].k == fe_exponent(f_small) and fe["big"].k == fe_exponent(f_big)
+    assert fe["small"].k > fe["big"].k + 15  # not one shared exponent
+    e_hi = plan.bounds["E_hi_mev"]
+    assert fe["small"].bound_per_history == pytest.approx(f_small * e_hi)
+    assert fe["big"].bound_per_history == pytest.approx(f_big * e_hi)
+    # alone, the small table gives the same quantum as next to the big one
+    alone = _plan(_with(cfg, _req("a", "lookup_sum", lookup="small"), lookups=(small,)))
+    assert [c.k for c in alone.channels if c.kind == "FE"] == [fe["small"].k]
+
+
+def test_lookup_table_is_deeply_immutable() -> None:
+    """Review 67f03e06 (c): the values mapping and the provenance structures are frozen, not only
+    the arrays; the caller's inputs are not aliased."""
+    x = np.linspace(1.0, 100.0, 5)
+    src_values = {"proton": 1.0 + 0.1 * x}
+    rec = {"method": "m", "nested": {"a": [1, 2]}}
+    lk = LookupTable(
+        "lk", "q", "1", "let_water_kev_um", "linear", x, src_values, "c", "l", "s", True,
+        resampling=rec,
+    )  # fmt: skip
+    before = (lk.content_sha256, lk.provenance())
+    with pytest.raises(TypeError):
+        lk.values["proton"] = np.zeros(5)  # type: ignore[index]  # mapping replacement
+    with pytest.raises(TypeError):
+        lk.values["alpha"] = np.zeros(5)  # type: ignore[index]
+    with pytest.raises(TypeError):
+        del lk.values["proton"]  # type: ignore[attr-defined]
+    with pytest.raises(AttributeError):
+        lk.values.update({})  # type: ignore[attr-defined]
+    with pytest.raises(ValueError):
+        lk.values["proton"][0] = 5.0  # array element
+    with pytest.raises(ValueError):
+        lk.values["proton"].setflags(write=True)
+    with pytest.raises(TypeError):
+        lk.resampling["method"] = "x"  # type: ignore[index]
+    with pytest.raises(TypeError):
+        lk.resampling["nested"]["a"] = 3  # type: ignore[index]
+    assert isinstance(lk.resampling["nested"]["a"], tuple)  # type: ignore[index]
+    # inputs are copied, not aliased
+    src_values["proton"][0] = 99.0
+    src_values["alpha"] = np.zeros(5)
+    rec["nested"]["a"].append(3)
+    assert "alpha" not in lk.values and lk.values["proton"][0] == pytest.approx(1.1)
+    assert lk._content_hash() == lk.content_sha256 == before[0]
+    assert lk.provenance() == before[1]
+    prov = lk.provenance()
+    prov["resampling"]["nested"]["a"].append(4)  # provenance() hands out a fresh plain copy
+    assert lk.provenance() == before[1]
+    json.dumps(prov)
