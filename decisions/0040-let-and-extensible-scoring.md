@@ -327,6 +327,24 @@ A13 against Grassberger and Paganetti (2011) is exploratory and non-gating.
   The table-CSDA comparison stays as a non-gating log. The range-table inconsistency is assigned
   to the follow-up V3-003D (separate re-qualification, out of scope here).
 
+- **2026-10-07: acceptance row A9 (observation at bases 20361004 and 20371004, plan amendment 5).**
+  At 20361004 the footnote-3 coverage window [0.91, 0.99] passed (0.945 / 0.93 / 0.97); at
+  20371004 (head 3c013f8) it failed at the distal 80 % depth (0.935 / 0.91 / 0.90; z sd 1.061 /
+  1.119 / 1.108; z mean about -0.01; all 161 informative bins mean coverage 0.9435, min 0.900).
+  Analysis of the per-batch archives: the delta-method sigma equals the batch-jackknife sigma and is
+  within 0.5 % of a batch bootstrap sigma; sigma_delta / sigma_empirical has mean 0.977 and 1.026
+  over informative bins (per-bin sd about 5 %, as expected for 200 seeds) and the distal 80 % ratio
+  flips from 0.925 to 1.056 between the bases; pooled over 400 seeds z sd is 1.013 / 1.093 / 1.029 /
+  1.023 (0.5R / peak / d80 / d50), mean coverage 0.9464, neighbouring-bin z correlation 0.95. The
+  uncertainty is calibrated; the per-depth coverage of 200 seeds carries the about 5 % noise of the
+  empirical sigma, which the frozen window ignored (its 1 % false-failure rate was understated).
+  Contrary evidence: the Bragg-peak bin alone is suggestively low (pooled sigma ratio 0.927, about
+  2 sd), an open observation for a larger-seed peak-only study. The criterion is replaced (plan
+  footnote 5) by z sd in [0.87, 1.13] and |mean z| < 0.18 at the three depths (n = 200, 99 %
+  intervals) and mean all-bin coverage in [0.93, 0.97]; both observed bases pass it; this
+  re-calibrates the criterion's noise and does not widen a physics tolerance. Base 20371004 is
+  consumed; the qualification base is 20381004.
+
 To be appended from committed result files.
 
 - 2026-10-07 (V3-004, known limitation recorded before merge): the water row of

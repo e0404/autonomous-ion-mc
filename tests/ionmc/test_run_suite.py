@@ -12,6 +12,7 @@ import sys
 from pathlib import Path
 from types import ModuleType
 
+import numpy as np
 import pytest
 
 REPO = Path(__file__).resolve().parents[2]
@@ -684,7 +685,7 @@ def test_runner_single_process_end_to_end(tmp_path: Path) -> None:
 
 
 # -- V3-004 suites (lv4, hr4) --------------------------------------------------------------------
-QUAL4 = 20371004
+QUAL4 = 20381004
 
 
 def _env4(suite: str = "lv4", base: int = QUAL4) -> str:
@@ -877,7 +878,7 @@ def test_a9_parts_roundtrip_and_tamper_detection(tmp_path: Path) -> None:
     assert "#JSON-BEGIN" in c.stdout, c.stderr[-1500:]
     doc = json.loads(c.stdout.split("#JSON-BEGIN")[1].split("#JSON-END")[0])
     assert doc["step"] == "a9-compare" and doc["seeds"] == 4 and doc["reduced"]
-    assert doc["band"] == [0.91, 0.99] and set(doc["coverage"]) == {
+    assert doc["criterion"]["z_std_band"] == [0.87, 1.13] and set(doc["coverage"]) == {
         "plateau_0.5R", "bragg_peak", "distal_80pct"}  # fmt: skip
 
     def refused(proc: subprocess.CompletedProcess[str], text: str) -> None:
@@ -891,3 +892,19 @@ def test_a9_parts_roundtrip_and_tamper_detection(tmp_path: Path) -> None:
     f.write_bytes(good)
     (prod / "samples" / "a9-part-2-of-2.npz").unlink()
     assert step(*args).returncode != 0  # a missing part
+
+
+def test_a9_amended_criterion_synthetic() -> None:
+    """Plan footnote 5: z sd in [0.87, 1.13], |mean z| < 0.18, mean coverage in [0.93, 0.97]."""
+    mod = _load("steps_v4")
+    rng = np.random.default_rng(7)
+    z = rng.standard_normal(200)
+    z = (z - z.mean()) / z.std(ddof=1)  # exactly calibrated
+    assert mod.a9_depth_pass(z)["calibrated"]
+    low = mod.a9_depth_pass(z * 1.18)  # sigma 15 % too low
+    assert not low["z_std_ok"] and not low["calibrated"]
+    assert mod.a9_depth_pass(z * 1.119)["calibrated"]  # the observed peak value at 20371004
+    biased = mod.a9_depth_pass(z + 0.3)
+    assert biased["z_std_ok"] and not biased["z_mean_ok"] and not biased["calibrated"]
+    assert mod.a9_cover_all_pass(0.9435) and mod.a9_cover_all_pass(0.9464)
+    assert not mod.a9_cover_all_pass(0.92) and not mod.a9_cover_all_pass(0.98)

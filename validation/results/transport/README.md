@@ -60,3 +60,8 @@ of the LET_d delta-method error 0.945 (0.5·R), 0.93 (Bragg peak), 0.97 (distal 
 window [0.91, 0.99]; A11-HR cpu32:cuda32 and python:cpu64 channel-profile pairs pass; A7 at
 1 mm steps sits within the analytic expected-share bound (|D|/(4σ+δ) ≤ 0.38 in the rehearsal).
 A13 is exploratory and non-gating. Not a clinical claim.
+
+The `lv4`/`hr4` archives at head 3c013f8 with seed base 20371004 (A9 coverage 0.935 / 0.91 / 0.90 at
+0.5·R / Bragg peak / distal 80 %, z sd 1.061 / 1.119 / 1.108) are evidence only: the base is consumed
+and the A9 criterion was re-calibrated afterwards (plan amendment ⁵, decision 0040 outcome of
+2026-10-07); the qualification base is 20381004.

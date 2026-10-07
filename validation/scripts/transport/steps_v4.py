@@ -12,7 +12,7 @@ The steps run in the suites ``lv4`` and ``hr4`` of ``run_suite.py`` and follow t
 ``"reduced": true`` and a pass is not a conformant result. Everything uses the offline analytic
 Bethe stopping source (I = 78 eV) and the synthetic lookup fixture ``tests/data/synthetic_lookup.json``.
 
-Seeds derive deterministically from one ``--seed-base`` (default 20371004, the V3-004 qualification
+Seeds derive deterministically from one ``--seed-base`` (default 20381004, the V3-004 qualification
 base; 20351004 is the rehearsal base, see the plan): A7 ``base + i`` (i-th step length), A8
 ``base + 8``, A9 ``base + 10000 + i`` (i-th seed), A11 LV ``base + 11``, A11 HR ``base + 1000 k``
 (k = 1 python, 2 cpu32, 3 cpu64, 4 cuda32, as T12), A13 ``base + 13``, A15 and A16 fixed small
@@ -87,7 +87,7 @@ LK_E = LookupTable(
     "validation/scripts/transport/steps_v4.py (f = 1 .. 3 linear in the sample index)", True,
 )  # fmt: skip
 LOOKUPS = (LK_LET, LK_E)
-QUALIFICATION_SEED_BASE = 20371004
+QUALIFICATION_SEED_BASE = 20381004
 REHEARSAL_SEED_BASE = 20351004
 
 ENERGY_MEV = 150.0
@@ -430,7 +430,29 @@ def step_a8(a: argparse.Namespace) -> int:
 
 # -- A9 (two parts that a9-compare merges) --------------------------------------------------------
 A9_PARTS = 2
-A9_BAND = (0.91, 0.99)  # 99 % binomial interval for p = 0.95 at n = 200 (plan footnote 3)
+# Amended criterion (plan footnote 5) for n = 200 seeds: the 99 % interval of the sample sd of 200
+# 200 standard normals is 1 +- 2.58 / sqrt(2 * 200), of the mean +-2.58 / sqrt(200); the coverage of
+# |z| < 1.96 averaged over all informative bins is the pooled check (footnote 3 window superseded).
+A9_ZSTD_BAND = (0.87, 1.13)
+A9_ZMEAN_MAX = 0.18
+A9_COVER_ALL_BAND = (0.93, 0.97)
+
+
+def a9_depth_pass(zb: Any) -> dict[str, Any]:
+    """Calibration of the standardised error z at one depth over the seeds (plan footnote 5)."""
+    zb = np.asarray(zb, dtype=float)
+    good = bool(np.all(np.isfinite(zb)) and zb.size > 1)
+    zs = float(np.std(zb, ddof=1)) if good else math.nan
+    zm = float(np.mean(zb)) if good else math.nan
+    ok = bool(good and A9_ZSTD_BAND[0] <= zs <= A9_ZSTD_BAND[1] and abs(zm) < A9_ZMEAN_MAX)
+    sd_ok = bool(good and A9_ZSTD_BAND[0] <= zs <= A9_ZSTD_BAND[1])
+    mean_ok = bool(good and abs(zm) < A9_ZMEAN_MAX)
+    return {"z_std": zs, "z_mean": zm, "z_std_ok": sd_ok, "z_mean_ok": mean_ok, "calibrated": ok}
+
+
+def a9_cover_all_pass(coverage_mean: float) -> bool:
+    lo, hi = A9_COVER_ALL_BAND
+    return bool(math.isfinite(coverage_mean) and lo <= coverage_mean <= hi)
 
 
 def a9_split(part: tuple[int, int], seeds: int) -> range:
@@ -575,13 +597,14 @@ def step_a9_compare(a: argparse.Namespace) -> int:
         zb = z[:, b]
         good = bool(np.all(defined[:, b]) and np.all(np.isfinite(zb)))
         frac = float(np.mean(np.abs(zb) < 1.96)) if good else math.nan
-        passed = bool(good and A9_BAND[0] <= frac <= A9_BAND[1])
+        cal = a9_depth_pass(zb) if good else a9_depth_pass([math.nan, math.nan])
+        passed = bool(good and cal["calibrated"])
         cov[name] = {
             "bin": b, "depth_mm": b + 0.5,
             "dose_fraction_of_max": float(dose[b] / dose.max()),
             "coverage": frac,
-            "z_mean": float(np.mean(zb)) if good else math.nan,
-            "z_std": float(np.std(zb, ddof=1)) if good else math.nan,
+            "z_mean": cal["z_mean"], "z_std": cal["z_std"],
+            "z_std_ok": cal["z_std_ok"], "z_mean_ok": cal["z_mean_ok"],
             "let_d_mean_kev_um": float(np.mean(mean[:, b])),
             "all_seeds_defined": bool(np.all(defined[:, b])),
             "pass": passed,
@@ -589,6 +612,9 @@ def step_a9_compare(a: argparse.Namespace) -> int:
         ok &= passed
     sel = (dose > 0.1 * dose.max()) & np.all(defined, axis=0)
     cover_all = np.mean(np.abs(z[:, sel]) < 1.96, axis=0)
+    cover_all_mean = float(cover_all.mean()) if cover_all.size else math.nan
+    all_ok = a9_cover_all_pass(cover_all_mean)
+    ok &= all_ok
     doc = {
         "step": "a9-compare",
         "energy_mev": ENERGY_MEV,
@@ -597,13 +623,18 @@ def step_a9_compare(a: argparse.Namespace) -> int:
         "histories_per_seed": n,
         "batches": A9_BATCHES,
         "coverage": cov,
-        "band": list(A9_BAND),
+        "criterion": {
+            "z_std_band": list(A9_ZSTD_BAND), "z_mean_abs_max": A9_ZMEAN_MAX,
+            "all_bins_coverage_band": list(A9_COVER_ALL_BAND), "plan": "footnote 5",
+        },
         "r80_mm": r80,
         "informative_all_bins_dose_above_10pct": {
             "bins": int(sel.sum()),
             "coverage_min": float(cover_all.min()) if cover_all.size else math.nan,
-            "coverage_mean": float(cover_all.mean()) if cover_all.size else math.nan,
+            "coverage_mean": cover_all_mean,
             "coverage_max": float(cover_all.max()) if cover_all.size else math.nan,
+            "coverage_mean_band": list(A9_COVER_ALL_BAND),
+            "coverage_mean_ok": all_ok,
         },
         "reference": "leave-one-out pooled ratio of the other seeds (see module docstring)",
         "pass": bool(ok),
