@@ -407,8 +407,10 @@ def _stopping_ratio_max(
     source-table interpolant, which differs between runtime nodes after resampling) and are
     log-log piecewise linear
     between the union of the runtime material and water nodes, so the ratio is monotone between
-    them and the maximum is attained at a node or an end of the interval; the ratio candidate of
-    the LS bound is therefore *proven* over the complete reachable domain (it is not dropped)."""
+    them and the maximum is attained at a node or an end of the interval. ``r_max`` is recorded
+    as informative only: under the checked path bound (decision 0040 section 4) the LS and LS2
+    capacities are ``S_bar_max B_L`` and ``S_bar_max^2 B_L``; the former energy-derived candidate
+    ``1.25 r_max E_hi`` no longer enters any quantum."""
     n = int(tables.n_e)
     ln_e = tables.ln_e0[material] + np.arange(n) / tables.inv_dln_e[material]
     row = tables.water_ln_s_mass
