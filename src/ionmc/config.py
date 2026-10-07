@@ -498,6 +498,7 @@ class NuclearSetup:
     deuteron_water: StoppingTable | None
     e_cut_deuteron_mev: float
     transport_energy_bound_mev: float
+    history_energy_bound_mev: float
     producible: frozenset[tuple[str, str]]
     capacity: NuclearCapacity | None = None
 
@@ -524,6 +525,8 @@ class NuclearSetup:
             },
             "q_plus_table_mev": float(info["q_plus_table_mev"]),
             "transport_energy_bound_mev": self.transport_energy_bound_mev,
+            "history_energy_bound_mev": self.history_energy_bound_mev,
+            "recoil_t_max_mev": float(info["recoil_t_max_mev"]),
             "transport_path_bound_terms": thaw(info["transport_path_bound_terms"]),
             "grid_size": int(info["grid"]["n_points"]),
             "multiplicity_model": info["multiplicity"]["model"],
@@ -609,14 +612,16 @@ def _nuclear_tables(
             f"e_cut_deuteron_mev ({ph.e_cut_deuteron_mev}); the deuteron cutoff must be at "
             "least twice the table floor"
         )
-    terms = {
+    h_bound = float(nuc_table.info["history_energy_bound_mev"])
+    terms = {  # the transported species (proton, deuteron) enter the path bound
         k: (float(v["n_max"]), float(v["t_lab_max_mev"]))
         for k, v in nuc_table.info["transport_path_bound_terms"].items()
+        if k in ("p", "d")
     }
     capacity = (
         None
         if d_water is None
-        else NuclearCapacity(d_tables, d_water, ph.e_cut_deuteron_mev, t_bound, terms)
+        else NuclearCapacity(d_tables, d_water, ph.e_cut_deuteron_mev, t_bound, h_bound, terms)
     )
     setup = NuclearSetup(
         table=nuc_table,
@@ -625,6 +630,7 @@ def _nuclear_tables(
         deuteron_water=d_water,
         e_cut_deuteron_mev=ph.e_cut_deuteron_mev,
         transport_energy_bound_mev=t_bound,
+        history_energy_bound_mev=h_bound,
         producible=producible(config.source.projectile, True),
         capacity=capacity,
     )
@@ -726,8 +732,8 @@ def validate(config: SimulationConfig) -> EffectiveConfig:
 
     e_hi = min(e0 + 6.0 * src.energy_sigma_mev, e_hi_table)
     # the energy bound of a history: a nuclear history may deposit more than its initial energy
-    # (decision 0041 section 5, amended): max(E_hi, per-event energy bound of the table)
-    e_cap = e_hi if nuclear is None else max(e_hi, nuclear.transport_energy_bound_mev)
+    # (decision 0041 section 5, amended 2026-10-08): max(E_hi, the table's per-history bound)
+    e_cap = e_hi if nuclear is None else max(e_hi, nuclear.history_energy_bound_mev)
     per_batch = run.n_histories // run.n_batches
     if per_batch * e_cap / QUANTUM_MEV >= MAX_QUANTA:
         raise fail(

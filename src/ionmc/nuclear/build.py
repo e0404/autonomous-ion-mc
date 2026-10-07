@@ -81,7 +81,7 @@ from ionmc.materials import ELEMENTS, N_A, WATER, Material
 from ionmc.nuclear import events as ev
 from ionmc.physics.tripathi import extension_factor
 
-BUILDER_VERSION = "ionmc-nuclear-proton-builder-2"
+BUILDER_VERSION = "ionmc-nuclear-proton-builder-3"
 SCHEMA = "ionmc-nuclear-proton-table-2"
 SOURCE_IDS = ("endf-b8.0-protons", "ame2020-mass", "nist-astar-water-2005")
 E_MIN_MEV = 1.0
@@ -515,6 +515,10 @@ def solve_lambda(model: ev.EventModel, y: NDArray[np.float64], tolerance: float)
     }
 
 
+PATH_SPECIES = (("n", 0), ("p", 1), ("d", 2), ("a", 3), ("g", 4))
+"""Species keys of ``transport_path_bound_terms`` and their index into ``ev.SPECIES``."""
+
+
 def transport_path_terms(
     grid: NDArray[np.float64],
     lam: NDArray[np.float64],
@@ -522,17 +526,18 @@ def transport_path_terms(
     models: list[ev.EventModel],
     active: NDArray[np.bool_],
 ) -> dict[str, dict[str, float]]:
-    """Per transported species ``s`` in {p, d} (decision 0041 section 5, amended):
+    """Per product species ``s`` in {n, p, d, a, g} (decision 0041 section 5, amended 2026-10-08):
     ``n_max`` = the maximum over targets and grid nodes with ``sigma > 0`` (``active`` (targets,
     nodes)) of ``ceil(lam_s)`` (cap 16) and ``t_lab_max_mev`` = the maximum of the lab kinetic
     energy of a product of species ``s`` with the top bin edge as CM energy emitted along the
     incident direction (``mu = 1``). The path bound is ``B_L = 1.25 (mixed_path_bound(E_hi) +
-    sum_s n_max,s mixed_path_bound_s(t_lab_max,s))``."""
-    out = {"p": {"n_max": 0.0, "t_lab_max_mev": 0.0}, "d": {"n_max": 0.0, "t_lab_max_mev": 0.0}}
+    sum_s n_max,s mixed_path_bound_s(t_lab_max,s))`` over the transported species p and d; the
+    per-history energy bound sums all five species (:func:`history_energy_bound`)."""
+    out = {key: {"n_max": 0.0, "t_lab_max_mev": 0.0} for key, _ in PATH_SPECIES}
     for it, model in enumerate(models):
         for k in np.nonzero(active[it])[0]:
             beta, gamma, _ = ev.cm_boost_np(float(grid[k]), model.m_p_mev, model.m_t_mev)
-            for s, key in ((1, "p"), (2, "d")):
+            for key, s in PATH_SPECIES:
                 m = float(model.species_mass_mev[s])
                 t_cm = float(edges[it, s, k, -1])
                 p = math.sqrt(t_cm * (t_cm + 2.0 * m))
@@ -541,6 +546,22 @@ def transport_path_terms(
                 n = min(math.ceil(float(lam[it, s, k]) - 1e-12), 16)
                 out[key]["n_max"] = max(out[key]["n_max"], float(n))
     return out
+
+
+def recoil_t_max(recoil_t_cm: NDArray[np.float64], active: NDArray[np.bool_]) -> float:
+    """``T_r,max`` [MeV]: the largest heavy-recoil energy ``T_r`` (the ENDF mean, applied as is
+    by the event sampler) over the active (target, node) pairs."""
+    return float(np.max(np.where(active, recoil_t_cm, 0.0), initial=0.0))
+
+
+def history_energy_bound(
+    terms: dict[str, dict[str, float]], recoil_max_mev: float, e_hi_mev: float
+) -> float:
+    """Per-history energy bound of the table (decision 0041 section 5, amended 2026-10-08):
+    ``max(E_hi, sum over ALL species s of N_s,max T_lab,max,s + T_r,max)``; ``e_hi_mev`` is the
+    largest tabulated proton energy of the table (a history never needs less)."""
+    total = sum(v["n_max"] * v["t_lab_max_mev"] for v in terms.values()) + recoil_max_mev
+    return max(e_hi_mev, total)
 
 
 def diagnostics_block(
@@ -929,10 +950,13 @@ def build_nuclear_proton(
     path_terms = transport_path_terms(
         grid, arr["lam"], arr["edges_mev"], models, arr["sigma_barn"] > 0.0
     )
-    if max(v["t_lab_max_mev"] for v in path_terms.values()) > STOPPING_TABLE_MAX_MEV:
+    particle_bound = max(path_terms[k]["t_lab_max_mev"] for k in ("p", "d"))
+    if particle_bound > STOPPING_TABLE_MAX_MEV:
         raise BuildError(
             f"per-particle energy bound exceeds {STOPPING_TABLE_MAX_MEV} MeV: {path_terms}"
         )
+    recoil_max = recoil_t_max(arr["recoil_t_cm_mev"], arr["sigma_barn"] > 0.0)
+    hist_bound = history_energy_bound(path_terms, recoil_max, float(grid[-1]))
 
     def rows_of(it: int, e: float) -> ev.EnergyRows:
         return ev.interp_rows(
@@ -1083,10 +1107,13 @@ def build_nuclear_proton(
             "converged_tolerance": LAMBDA_CONVERGED_TOLERANCE,
             "p_accept_min": p_min,
             "non_converged_nodes": nonconverged,
+            "all_nodes_converged": not nonconverged,
             "targets": lam_info,
         },
         "empty_residual_allowed": True,
-        "transport_energy_bound_mev": max(v["t_lab_max_mev"] for v in path_terms.values()),
+        "transport_energy_bound_mev": particle_bound,
+        "history_energy_bound_mev": hist_bound,
+        "recoil_t_max_mev": recoil_max,
         "transport_path_bound_terms": path_terms,
         "q_plus_table_mev": q_table,
         "diagnostics": {

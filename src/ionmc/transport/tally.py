@@ -368,6 +368,23 @@ def merge_partials(
     )
 
 
+def merge_nuclear_diagnostics(blocks: list[dict[str, Any]]) -> dict[str, Any]:
+    """Sum the per-target nuclear event records (``events``, ``light`` counts per species,
+    ``residual`` counts by ``"Z_r,A_r"``) of several partial results."""
+    out: dict[str, Any] = {}
+    for blk in blocks:
+        for tgt, rec in blk.items():
+            o = out.setdefault(
+                tgt, {"events": 0, "light": dict.fromkeys(rec["light"], 0), "residual": {}}
+            )
+            o["events"] += rec["events"]
+            for k, v in rec["light"].items():
+                o["light"][k] += v
+            for k, v in rec["residual"].items():
+                o["residual"][k] = o["residual"].get(k, 0) + v
+    return out
+
+
 def build_diagnostics(
     partials: list[PartialTransport],
     track_end_positions: bool,
@@ -377,6 +394,9 @@ def build_diagnostics(
     """Diagnostics dictionary (the keys of the reference backend) from the partial results."""
     parts = sorted(partials, key=lambda p: p.h0)
     out: dict[str, Any] = {}
+    nuc = [p.meta["nuclear_diagnostics"] for p in parts if "nuclear_diagnostics" in p.meta]
+    if nuc:  # nuclear event counts per table target (sum over the partials)
+        out["nuclear"] = merge_nuclear_diagnostics(nuc)
     if not (track_end_positions or escape_records or trace_histories > 0):
         return out
     diags = []

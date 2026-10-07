@@ -601,7 +601,9 @@ class NuclearCapacity:
     """The nuclear-run inputs of the capacity bounds (decision 0041 section 5, amended
     2026-10-07). ``deuteron_tables``/``deuteron_water`` are the deuteron transport tables and the
     deuteron water stopping table (total kinetic energy axis), ``e_cut_deuteron_mev`` the deuteron
-    cutoff, ``transport_energy_bound_mev`` the per-particle energy bound of the nuclear table and
+    cutoff, ``transport_energy_bound_mev`` the per-particle energy bound of the nuclear table (the
+    stopping-table coverage), ``history_energy_bound_mev`` its per-history energy bound (sum over
+    all product species plus the recoil, decision 0041 section 5 as clarified 2026-10-08) and
     ``path_terms`` its ``transport_path_bound_terms`` (species key ``"p"``/``"d"`` to
     ``(N_s,max, T_lab,max,s)``).
 
@@ -610,7 +612,7 @@ class NuclearCapacity:
     * ``B_L = 1.25 (mixed_path_bound(E_hi) + sum_s N_s,max mixed_path_bound_s(T_lab,max,s))``
       (the primary's path plus, per product species, at most ``N_s,max`` secondaries of at most
       ``T_lab,max,s``; ``mixed_path_bound_s`` is the same integral on the species' own tables);
-    * the energy bound ``max(E_hi, transport_energy_bound_mev)`` for ``E``, ``ES`` and the
+    * the energy bound ``max(E_hi, history_energy_bound_mev)`` for ``E``, ``ES`` and the
       ``FE`` bounds (single histories may deposit more than their initial energy because the
       per-event conservation was withdrawn);
     * the piece-count bound times ``MAX_PARTICLES`` (``max_steps`` is per particle);
@@ -622,6 +624,7 @@ class NuclearCapacity:
     deuteron_water: StoppingTable
     e_cut_deuteron_mev: float
     transport_energy_bound_mev: float
+    history_energy_bound_mev: float
     path_terms: dict[str, tuple[float, float]]
 
 
@@ -695,7 +698,10 @@ def compile_channels(
 
     hpb = n_histories // n_batches
     # transported species of the bounds: (water table, tables, cutoff, mass number)
+    # e_top: the largest energy of one particle (stopping-table coverage, envelopes); e_hist: the
+    # energy bound of a whole history (the E, ES and FE accumulators)
     e_top = e_hi_mev if nuclear is None else max(e_hi_mev, nuclear.transport_energy_bound_mev)
+    e_hist = e_top if nuclear is None else max(e_hi_mev, nuclear.history_energy_bound_mev)
     sp_list: list[tuple[StoppingTable, TransportTables, float, int]] = [
         (water, tables, e_cut_mev, a)
     ]
@@ -926,17 +932,17 @@ def compile_channels(
     )
     b_ls = s_max * b_l  # S_bar <= S_bar_max on every piece
     bound = {
-        "E": e_top,
+        "E": e_hist,
         "L": b_l,
         "FL": b_l,
         "LS": b_ls,
         "LS2": s_max * b_ls,  # S_bar^2 <= S_bar_max^2 on every piece
-        "ES": s_max * e_top,  # sum(eps S) <= S_bar_max sum(eps), sum(eps) <= E_hi (conservation)
+        "ES": s_max * e_hist,  # sum(eps S) <= S_bar_max sum(eps), sum(eps) <= E_hi (conservation)
         "N": float(max_steps) * 2.0 * scoring_pieces * (1 if nuclear is None else MAX_PARTICLES),
     }
-    if hpb * e_top / QUANTUM_MEV >= MAX_QUANTA:
+    if hpb * e_hist / QUANTUM_MEV >= MAX_QUANTA:
         raise fail(
-            f"{hpb} histories per batch of up to {e_top:g} MeV exceed the capacity of a "
+            f"{hpb} histories per batch of up to {e_hist:g} MeV exceed the capacity of a "
             "fixed-point accumulator; increase n_batches or reduce n_histories"
         )
     if hpb * bound["N"] >= 2.0**CAPACITY_EXPONENT:
@@ -954,7 +960,7 @@ def compile_channels(
     # FE: bound, exponent and floor per channel from the table values of its own species
     for s in ordered:
         if s.kind == "FE":
-            s_bound = s.f_max * e_top
+            s_bound = s.f_max * e_hist
             s_k = fe_exponent(s.f_max)
             fe_of[s.key()] = (s_k, s_bound)
 
@@ -1047,7 +1053,7 @@ def compile_channels(
         "E_hi_mev": e_hi_mev,
     }
     if nuclear is not None:
-        bounds["E_bound_mev"] = e_top
+        bounds["E_bound_mev"] = e_hist
         for term, v in b_l_terms.items():  # the terms of B_L, with the straggling margin
             bounds[f"B_L_term_{term}_mm"] = STRAGGLING_MARGIN * v
         bounds["max_particles"] = float(MAX_PARTICLES)

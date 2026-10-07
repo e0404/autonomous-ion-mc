@@ -428,11 +428,11 @@ Nuclear interactions apply to primary protons only (decision 0041, approximation
   `genealogy_overflow` (stack), `path_bound_exceeded` (capacity bound
   `B_L = 1.25 (mixed_path_bound(E_hi) + sum_s N_s,max mixed_path_bound_s(T_lab,max,s))`, table JSON
   `transport_path_bound_terms`; per-particle energy bound 262.08 MeV in the table
-  `2b8d94cf...`; B_L(250 MeV, water) = 2489 mm). `validate()` rejects before transport an unsupported
+  `dfee19d3…...`; B_L(250 MeV, water) = 2489 mm). `validate()` rejects before transport an unsupported
   element, E0 + 6 sigma_E > 250 MeV, a non-proton source, `nist-star`, any warp backend, and a missing,
   stale or mis-pinned table.
 * **Declared approximations** (decision 0041, "Approximations and known limitations", with the numbers
-  of its Outcome section for the table `2b8d94cf...`):
+  of its Outcome section for the table `dfee19d3…...`):
   - LA150 p+C is up to about -18 % below measurements at 100 MeV (227 mb against 245-275 mb); the p+O
     evaluation has an evidence gap between 65 and 250 MeV.
   - Alpha particles and the residual are deposited at the interaction point. D6: 150 MeV G 0.6680,

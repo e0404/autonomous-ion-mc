@@ -307,11 +307,13 @@ class Result:
         raise KeyError(f"no scoring grid named {name!r}")
 
 
-def _tally_capabilities() -> dict[str, Any]:
+def _tally_capabilities(nuclear: bool = False) -> dict[str, Any]:
     """The scoring-channel part of the capability report (decision 0040). Every entry is derived
     from the objects that enforce it (``CHANNEL_BACKENDS``, ``TALLY_QUANTITIES``, ``AXES``,
-    ``producible``), so the report cannot drift from the validation."""
-    pairs = sorted(producible(PROTON))
+    ``producible``), so the report cannot drift from the validation. With ``nuclear=True`` the
+    producible species, the generations and their note follow the nuclear engine (secondary
+    protons and deuterons, generation >= 1, are transported and accepted)."""
+    pairs = sorted(producible(PROTON, nuclear=nuclear))
     producible_generations = sorted({g for _, g in pairs})
     return {
         "quantities": list(TALLY_QUANTITIES),
@@ -330,7 +332,12 @@ def _tally_capabilities() -> dict[str, Any]:
             "rejected": [
                 g for g in GENERATION_CHOICES if g != "all" and g not in producible_generations
             ],
-            "note": "secondary particles are not transported yet (V3-005A); no secondary species",
+            "note": (
+                "secondary protons and deuterons (generation >= 1) are transported and accepted "
+                "(nuclear=True, decision 0041)"
+                if nuclear
+                else "secondary particles are not transported yet (V3-005A); no secondary species"
+            ),
         },
         "let_medium": ["water"],
         "dose_reference": ["medium"],
@@ -382,7 +389,7 @@ def _nuclear_capabilities() -> dict[str, Any]:
         "local_deposit": "nuclear_local (alpha, residual recoil; generation = parent + 1)",
         "deuteron_cutoff_mev_default": E_CUT_DEUTERON_DEFAULT_MEV,
         "max_particles_per_history": MAX_PARTICLES,
-        "capacity": "B_L and the E bound follow decision 0041 section 5 (amended 2026-10-07)",
+        "capacity": "B_L and the E bound follow decision 0041 section 5 (amended 2026-10-08)",
     }
 
 
@@ -392,6 +399,7 @@ def capabilities(nuclear: bool = False) -> dict[str, Any]:
     report = _capabilities_base()
     if nuclear:
         report["nuclear"] = _nuclear_capabilities()
+        report["tallies"] = _tally_capabilities(nuclear=True)
     return report
 
 

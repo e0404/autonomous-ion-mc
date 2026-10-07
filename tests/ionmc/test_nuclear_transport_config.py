@@ -357,6 +357,7 @@ def test_nuclear_effective_config_and_capabilities(make_config: MakeConfig, tid:
     assert n["elements"]["O"]["surrogate"] is False
     assert n["q_plus_table_mev"] == info["q_plus_table_mev"]
     assert n["transport_energy_bound_mev"] == info["transport_energy_bound_mev"]
+    assert n["history_energy_bound_mev"] == info["history_energy_bound_mev"]
     assert n["grid_size"] == info["grid"]["n_points"] == 604
     assert n["multiplicity_model"] == info["multiplicity"]["model"]
     assert n["majorant_factor"] == 1.02
@@ -376,8 +377,17 @@ def test_nuclear_effective_config_and_capabilities(make_config: MakeConfig, tid:
     base["backends"].pop("warp-cuda")  # host dependent
     digest = hashlib.sha256(json.dumps(base, sort_keys=True).encode()).hexdigest()
     assert digest == CAPABILITIES_SHA256  # the report of 9913ddc6 (nuclear=False)
+    # the tally section is consistent with the nuclear one (secondaries transported and accepted)
+    assert {(p["species"], p["generation"]) for p in cap["tallies"]["producible"]} == producible(
+        PROTON, True
+    )
+    assert "secondary" in cap["tallies"]["generations"]["accepted"]
+    assert "secondary" not in cap["tallies"]["generations"]["rejected"]
+    assert "not transported yet" not in cap["tallies"]["generations"]["note"]
     del cap["nuclear"]
     cap["backends"].pop("warp-cuda")
+    assert cap["tallies"] != base["tallies"]
+    cap["tallies"] = base["tallies"]
     assert cap == base
 
 
@@ -401,16 +411,23 @@ def test_capacity_bounds_follow_decision_0041_section_5(
     b = eff.channels.bounds
     info = NuclearTable.load(None, tid).info
     t_bound = info["transport_energy_bound_mev"]
+    h_bound = info["history_energy_bound_mev"]
     terms = info["transport_path_bound_terms"]
+    assert set(terms) == {"n", "p", "d", "a", "g"}
+    assert (
+        h_bound
+        == sum(v["n_max"] * v["t_lab_max_mev"] for v in terms.values()) + info["recoil_t_max_mev"]
+    )
+    assert h_bound >= t_bound and h_bound > 2.0 * t_bound
     e_hi = 100.0
     rho = {0: float(eff.geometry.densities_g_cm3().min())}
     mpb_p = mixed_path_bound_mm(eff.tables, rho, e_hi)
     expect = mpb_p
     assert eff.tables.deuteron is not None
-    for key, tab in (("p", eff.tables), ("d", eff.tables.deuteron)):
+    for key, tab in (("p", eff.tables), ("d", eff.tables.deuteron)):  # transported species only
         expect += terms[key]["n_max"] * mixed_path_bound_mm(tab, rho, terms[key]["t_lab_max_mev"])
     assert eff.channels.path_bound_mm == pytest.approx(STRAGGLING_MARGIN * expect, rel=1e-12)
-    assert b["E_bound_mev"] == max(e_hi, t_bound) and b["E_hi_mev"] == e_hi
+    assert b["E_bound_mev"] == max(e_hi, h_bound) and b["E_hi_mev"] == e_hi
     assert eff.channels.path_bound_mm > off.path_bound_mm
     assert b["max_particles"] == MAX_PARTICLES
     # the piece-count capacity is 32 times larger and the E bound is the larger one
@@ -418,7 +435,7 @@ def test_capacity_bounds_follow_decision_0041_section_5(
     n_off = [c for c in off.channels if c.kind == "N"][0]
     assert n_ch.bound_per_history == pytest.approx(MAX_PARTICLES * n_off.bound_per_history)
     e_ch = [c for c in eff.channels.channels if c.kind == "E"][0]
-    assert e_ch.bound_per_history == max(e_hi, t_bound)
+    assert e_ch.bound_per_history == max(e_hi, h_bound)
     # a nuclear=False run is untouched by the new code path
     assert "E_bound_mev" not in off.bounds
 

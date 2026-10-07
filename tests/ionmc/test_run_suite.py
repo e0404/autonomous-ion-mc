@@ -1455,3 +1455,35 @@ def test_lv5_summary_tags_seed_blockers_and_step_documents() -> None:
     assert summ.seed_blockers(20431004, "lv5") and summ.seed_blockers(20401004, "lv5")
     assert summ.seed_blockers(QUAL5, "lv4")  # the lv5 base does not qualify the V3-004 suite
     assert summ.V5_QUALIFICATION_SEED_BASE == QUAL5
+
+
+def test_v5_partials_are_hash_verified_and_bound(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Shard partials carry ``content_sha256`` and the run/table bindings; an altered value or a
+    different table id is rejected, valid partials load (decision 0041, finding 5)."""
+    v5 = _load("steps_v5")
+    monkeypatch.setenv("IONMC_RUN_SHA", SHA)
+    monkeypatch.setenv("IONMC_RUN_SUITE", "lv5")
+    monkeypatch.setattr(
+        v5, "table_record", lambda: {"table_id": v5.TABLE_ID, "npz_sha256": "c" * 64,
+                                     "json_sha256": "d" * 64}
+    )  # fmt: skip
+    a = argparse.Namespace(out_dir=str(tmp_path), scale=1.0, dirs=[str(tmp_path)])
+    v5.write_partial(a, "p-s0", {"row": "p", "shard": 0, "ratio": [1.0, 0.5], "valid": True})
+    docs = v5.load_partials(a, ["p-s0.json"])
+    assert docs[0]["run_sha"] == SHA and docs[0]["table_id"] == v5.TABLE_ID
+    assert docs[0]["content_sha256"] == v5.content_digest(docs[0])
+    path = tmp_path / "p-s0.json"
+    good = json.loads(path.read_text())
+    bad = {**good, "ratio": [1.0, 0.5000001]}  # one altered value, hash left in place
+    path.write_text(json.dumps(bad))
+    with pytest.raises(SystemExit, match="content_sha256"):
+        v5.load_partials(a, ["p-s0.json"])
+    other = {**good, "table_id": "e" * 64}  # re-sealed, but bound to a different table
+    other["content_sha256"] = v5.content_digest(other)
+    path.write_text(json.dumps(other))
+    with pytest.raises(SystemExit, match="table_id"):
+        v5.load_partials(a, ["p-s0.json"])
+    path.write_text(json.dumps(good))
+    assert v5.load_partials(a, ["p-s0.json"])[0]["ratio"] == [1.0, 0.5]

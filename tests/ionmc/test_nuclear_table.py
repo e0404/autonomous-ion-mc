@@ -26,6 +26,7 @@ from ionmc.nuclear.tables import (
     NuclearTableMissingError,
     NuclearTablePinError,
     NuclearTableStaleError,
+    NuclearTableUnqualifiedError,
     majorant,
 )
 
@@ -109,14 +110,6 @@ def test_p3_ledger_closure_on_synthetic_tables_1e5_events() -> None:
         np.isfinite(model.m_res_mev[(model.z_t + 1 - b.z_r[acc]), (model.a_t + 1 - b.a_r[acc])])
     )
     assert np.all(b.recoil_t_mev[acc] == 2.5)
-    # the imbalance is independent of the way it is summed: recompute it from the masses
-    m_out = b.counts[acc] @ model.species_mass_mev
-    assert np.allclose(
-        b.binding_mev[acc]
-        + (t1 + model.m_p_mev + model.m_t_mev - m_out - b.binding_mev[acc])
-        - (t1 + model.m_p_mev + model.m_t_mev - m_out),
-        0.0,
-    )
 
 
 def test_exact_enumeration_matches_monte_carlo_within_3_sigma() -> None:
@@ -376,13 +369,22 @@ def test_reduced_build_twice_is_byte_identical(reduced_build: Any) -> None:
     assert info["schema"] == B.SCHEMA and info["builder_version"] == B.BUILDER_VERSION
     assert 0.0 < info["transport_energy_bound_mev"] <= B.STOPPING_TABLE_MAX_MEV
     assert info["empty_residual_allowed"] is True
-    assert set(info["transport_path_bound_terms"]) == {"p", "d"}
+    assert set(info["transport_path_bound_terms"]) == {"n", "p", "d", "a", "g"}
+    terms = info["transport_path_bound_terms"]
+    expect = sum(v["n_max"] * v["t_lab_max_mev"] for v in terms.values()) + info["recoil_t_max_mev"]
+    assert info["history_energy_bound_mev"] == max(info["grid"]["e_max_mev"], expect)
+    assert info["history_energy_bound_mev"] >= info["transport_energy_bound_mev"]
+    assert info["multiplicity"]["all_nodes_converged"] is (
+        not info["multiplicity"]["non_converged_nodes"]
+    )
 
 
 def test_load_and_fail_closed_cases(
     reduced_build: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     cdir = _cache_dir()
+    # the reduced build need not be qualified: the qualification itself is tested separately
+    monkeypatch.setattr("ionmc.nuclear.tables.qualification_failures", lambda info: [])
     tab = NuclearTable.load(cdir, reduced_build.table_id)
     assert not tab.arrays["sigma_barn"].flags.writeable
     with pytest.raises(NuclearTableMissingError):
@@ -446,3 +448,71 @@ def test_n1_v1_v4_on_the_table(reduced_build: Any) -> None:
     # V4b is a regression guard reported, not asserted: its n <E'> criterion (1 %) is 1.2 % at
     # O-16 100 MeV on the real table (worker report); the numbers are printed.
     print("V4b pass", s["V4"]["V4b_pass"], {k: c["v4b_pass"] for k, c in s["V4"]["cases"].items()})
+
+
+def _qualified_table_id() -> str:
+    cdir = _cache_dir()
+    for p in sorted((cdir / "derived").glob("nuclear-proton-*.json")):
+        tid = p.stem.removeprefix("nuclear-proton-")
+        try:
+            NuclearTable.load(cdir, tid)
+        except UnsupportedCombinationError:
+            continue
+        return tid
+    pytest.skip("no qualified nuclear table in the cache")
+
+
+def _tampered_copy(tmp_path: Path, tid: str, edit: Any) -> None:
+    src = _cache_dir() / "derived"
+    d = tmp_path / "derived"
+    d.mkdir()
+    for ext in ("npz", "json"):
+        shutil.copy(src / f"nuclear-proton-{tid}.{ext}", d / f"nuclear-proton-{tid}.{ext}")
+    jp = d / f"nuclear-proton-{tid}.json"
+    info = json.loads(jp.read_text())
+    edit(info)
+    jp.write_text(json.dumps(info, indent=2, sort_keys=True) + "\n")
+
+
+def test_loader_refuses_unqualified_tables(tmp_path: Path) -> None:
+    tid = _qualified_table_id()
+    assert NuclearTable.load(None, tid).info["gate_d6"]["ceiling_pass"] is True
+    cases = {
+        "ceiling": lambda i: i["gate_d6"].__setitem__("ceiling_pass", False),
+        "ceiling_energy": lambda i: i["gate_d6"].__setitem__(
+            "ceiling_pass_energy_weighted_range", False
+        ),
+        "node": lambda i: i["multiplicity"].__setitem__("non_converged_nodes", [["C-12", 1.0]]),
+    }
+    for name, edit in cases.items():
+        d = tmp_path / name
+        d.mkdir()
+        _tampered_copy(d, tid, edit)
+        with pytest.raises(NuclearTableUnqualifiedError):
+            NuclearTable.load(d, tid)
+
+
+def test_binding_recomputed_per_event_from_ame_masses_independently() -> None:
+    """The binding of 1e3 sampled events recomputed from AME2020 masses (counts and residual only;
+    the sampler's ``binding_mev`` is not an input) agrees per event to 1e-9 MeV; a perturbed AME
+    mass breaks it."""
+    from dataclasses import replace
+
+    from ionmc.data.ame import load_ame2020
+
+    cdir = _cache_dir()
+    ame = load_ame2020(cache.verify("ame2020-mass", cdir).read_text(encoding="ascii"))
+    chk = _checks_module()
+    model = ev.build_event_model(ame, 8, 16)
+    q = np.arange(65) / 64.0
+    edges = np.array([-m * np.log(1.0 - q * (1 - math.exp(-60.0 / m))) for m in (6, 9, 12, 8, 3)])
+    rows = ev.EnergyRows(np.array([1.0, 1.7, 0.3, 0.8, 0.4]), edges, np.full((5, 64), 0.4), 2.5)
+    b = ev.sample_events(model, rows, 100.0, 1000, ev.CounterUniforms(99))
+    acc = b.accepted
+    assert acc.sum() > 900
+    got = chk.recompute_binding_events(b.counts[acc], b.z_r[acc], b.a_r[acc], 8, 16, ame)
+    assert np.abs(got - b.binding_mev[acc]).max() <= 1e-9
+    bad = dict(ame)
+    bad[(8, 16)] = replace(ame[(8, 16)], atomic_mass_u=ame[(8, 16)].atomic_mass_u + 1e-6)
+    off = chk.recompute_binding_events(b.counts[acc], b.z_r[acc], b.a_r[acc], 8, 16, bad)
+    assert np.abs(off - b.binding_mev[acc]).max() > 1e-4

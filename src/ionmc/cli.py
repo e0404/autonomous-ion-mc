@@ -51,6 +51,7 @@ def build_parser() -> argparse.ArgumentParser:
 def _build_nuclear(args: argparse.Namespace) -> int:
     from ionmc.data import cache
     from ionmc.nuclear.build import BuildError, BuildOptions, build_nuclear_proton
+    from ionmc.nuclear.tables import qualification_failures
 
     opts = BuildOptions(
         points_per_decade=args.points_per_decade,
@@ -71,6 +72,8 @@ def _build_nuclear(args: argparse.Namespace) -> int:
     print(f"P_accept min {pmin['p_accept']:.4f} ({pmin['target']}, {pmin['e_mev']:.4g} MeV)")
     print(f"non-converged lambda nodes {len(mult['non_converged_nodes'])}")
     print(f"transport_energy_bound_mev {res.info['transport_energy_bound_mev']:.2f}")
+    print(f"history_energy_bound_mev {res.info['history_energy_bound_mev']:.2f}")
+    print(f"recoil_t_max_mev {res.info['recoil_t_max_mev']:.4f}")
     print(f"transport_path_bound_terms {res.info['transport_path_bound_terms']}")
     for key, num in gate["numbers"].items():
         print(
@@ -81,6 +84,8 @@ def _build_nuclear(args: argparse.Namespace) -> int:
         f"tier1_pass={gate['tier1_pass']} tier2_pass={gate['tier2_pass']} "
         f"ceiling_pass={gate['ceiling_pass']}"
     )
+    reasons = qualification_failures(res.info)
+    print("qualified for transport: " + ("yes" if not reasons else "NO: " + "; ".join(reasons)))
     return 0
 
 

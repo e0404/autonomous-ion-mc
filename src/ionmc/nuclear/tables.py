@@ -51,8 +51,32 @@ class NuclearTableStaleError(NuclearTableError):
     """The npz bytes or the table id do not match the JSON record."""
 
 
+class NuclearTableUnqualifiedError(NuclearTableError):
+    """The table was built but is not qualified for transport: the D6 ceiling failed (count- or
+    energy-weighted range) or a multiplicity node did not converge. The builder writes such tables
+    as evidence; the loader refuses them (decision 0041 section 5)."""
+
+
 class NuclearTablePinError(NuclearTableError):
     """A recorded source hash differs from the registry pin."""
+
+
+def qualification_failures(info: dict[str, Any]) -> list[str]:
+    """Why the table JSON ``info`` is not qualified for transport (empty list: qualified): the D6
+    ceiling must pass in both weightings (``gate_d6.ceiling_pass`` and
+    ``ceiling_pass_energy_weighted_range``) and every lambda node must have converged. A missing
+    field counts as a failure (fail closed)."""
+    out: list[str] = []
+    gate = info.get("gate_d6", {})
+    if gate.get("ceiling_pass") is not True:
+        out.append("gate_d6.ceiling_pass is not true (count-weighted range ceiling)")
+    if gate.get("ceiling_pass_energy_weighted_range") is not True:
+        out.append("gate_d6.ceiling_pass_energy_weighted_range is not true")
+    mult = info.get("multiplicity", {})
+    nodes = mult.get("non_converged_nodes")
+    if nodes is None or len(nodes) > 0 or mult.get("all_nodes_converged", True) is not True:
+        out.append("multiplicity has non-converged lambda nodes")
+    return out
 
 
 def locate(grid: NDArray[np.float64], e_mev: float) -> int:
@@ -180,6 +204,11 @@ class NuclearTable:
         )
         if info["table_id"] != table_id or expected != table_id:
             raise NuclearTableStaleError(f"nuclear table {table_id}: id not reproduced (stale)")
+        reasons = qualification_failures(info)
+        if reasons:
+            raise NuclearTableUnqualifiedError(
+                f"nuclear table {table_id} is not qualified for transport: " + "; ".join(reasons)
+            )
         with np.load(npz_path, allow_pickle=False) as z:
             arrays = {k: freeze_array(z[k], z[k].dtype, k) for k in z.files}
         return cls(info, arrays, npz_path)

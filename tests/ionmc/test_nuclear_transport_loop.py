@@ -323,6 +323,33 @@ def test_majorant_violation_fails_closed(tid: str, monkeypatch: pytest.MonkeyPat
     assert res.energy_balance.unaccounted_mev > 0 and res.energy_balance.relative_residual <= 1e-12
 
 
+def test_majorant_checked_on_every_step_not_only_candidates(
+    tid: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A step that is not a candidate (the stub never reaches one) with Sigma(E1) above the
+    majorant (an arbitrarily low straggling draw) is counted and ends the history invalid."""
+    calls: list[int] = []
+
+    def never(self: Any, h: int, batch: int, gid: int, nc: int, *args: Any) -> Any:
+        calls.append(h)
+        return nc, 1.0, False
+
+    monkeypatch.setattr(_Reference, "_sigma", lambda self, rows, e: 1.0e9)
+    monkeypatch.setattr(_Reference, "_candidate", never)
+    res = _forced(tid, monkeypatch)
+    assert not res.valid and res.counters.as_dict()["majorant_violation"] > 0
+    assert calls == []  # the violation was found before any candidate
+
+
+def test_nuclear_diagnostics_block_counts_events(ci_run: tuple[Any, Simulation]) -> None:
+    res, _ = ci_run
+    nuc = res.diagnostics["nuclear"]
+    n_ev = sum(r["events"] for r in nuc.values())
+    assert n_ev > 0
+    for r in nuc.values():
+        assert sum(r["residual"].values()) == r["events"]
+
+
 def test_nuclear_conservation_counter_fires(tid: str, monkeypatch: pytest.MonkeyPatch) -> None:
     real = events.sample_event_scalar
 
@@ -390,3 +417,31 @@ def test_p4_thinning_reproduces_the_survival(
         worst = max(worst, abs(z))
     print(f"P4 {shape} s_max={s_max}: max |z| = {worst:.2f}")
     assert worst <= 4.0
+
+
+def test_binding_tally_recomputed_from_event_counts_and_ame(
+    ci_run: tuple[Any, Simulation], tid: str
+) -> None:
+    """The ``nuclear_binding`` tally equals the AME2020 recomputation from the per-target event,
+    light-product and residual counts (1e-9 relative + 1e-9 MeV); a shifted count fails it."""
+    import importlib.util
+    from pathlib import Path
+
+    from ionmc.data.ame import load_ame2020
+
+    path = Path(__file__).resolve().parents[2] / "validation/scripts/transport/nuclear_checks.py"
+    spec = importlib.util.spec_from_file_location("nuclear_checks_loop", path)
+    assert spec and spec.loader
+    chk = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(chk)
+    res, _ = ci_run
+    ame = load_ame2020(cache.verify("ame2020-mass", cache.resolve_cache_dir(None)).read_text())
+    targets = NuclearTable.load(None, tid).info["targets"]
+    tally = float(res.energy_balance.nuclear_mev["nuclear_binding"])
+    nuc = res.diagnostics["nuclear"]
+    got = chk.recompute_binding_total(nuc, targets, ame)
+    assert abs(got - tally) <= 1e-9 * abs(tally) + 1e-9
+    k = next(iter(nuc))
+    nuc[k]["light"]["a"] += 1
+    assert abs(chk.recompute_binding_total(nuc, targets, ame) - tally) > 1.0
+    nuc[k]["light"]["a"] -= 1

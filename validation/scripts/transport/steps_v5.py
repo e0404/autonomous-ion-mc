@@ -39,8 +39,9 @@ Definitions made here where the plan leaves them open (all recorded in the docum
   first bin); valid only if the pooled standard error at the deepest depth is <= 7e-4.
 * V3-LV: homogeneous water, ``MUSCLE_SKELETAL_ICRP`` (tissue) and ``BONE_COMPACT_ICRU`` (bone)
   boxes of depth 1.1 R(E) of the Bethe table; the relative residuals of the amended balance and of
-  the per-grid identity are <= 1e-12 and every counter is 0. The per-event binding recomputation from
-  AME masses is covered by the CI ledger tests; the Result carries only its sum.
+  the per-grid identity are <= 1e-12 and every counter is 0. The ``nuclear_binding`` tally is recomputed independently from the
+  reference's per-target event, light-product and residual (Z_r, A_r) counts with AME2020 masses
+  read from the cached AME text: ``|recomputed - tally| <= 1e-9 |tally| + 1e-9`` MeV (gating).
 * X1: peak = the pooled-off-profile peak bin, plateau = mean over bin centres 20-60 mm; the paired
   statistic is the batch difference of ``peak / plateau`` (on - off), z = -mean / sem, pass iff the
   difference is negative and z > 3.
@@ -71,6 +72,7 @@ from ionmc import materials as M
 from ionmc.config import DiagnosticsOptions, PhysicsOptions, RunOptions, SimulationConfig
 from ionmc.data import cache
 from ionmc.geometry import BoxPhantom
+from ionmc.nuclear.tables import NuclearTable
 from ionmc.physics.projectiles import PROTON
 from ionmc.physics.stopping import BetheStoppingSource
 from ionmc.scoring import ScoringGrid, TallyRequest
@@ -82,7 +84,7 @@ REPO = HERE.parents[2]
 FORMAT = 1
 QUALIFICATION_SEED_BASE = 20421004
 REHEARSAL_SEED_BASE = 20431004
-TABLE_ID = "2b8d94cf4a82ef8a5119ddb8c84d4a2c11bd3511eb6672bd210562730cc0cf1a"
+TABLE_ID = "dfee19d303c7fdd28d2080ebbb37a01b27aa6569cca846ad317a2d91a7a437a3"
 A16_R1_DIGEST = "c862edf799dcb83542e5071219b5703c7665f8f792f6bbc49ab32918418b1f8f"
 A16_R1_BASELINE = "f3a1dd62ea2f57a3f4c07999935f317b3c044871"
 R_INDEX = {"v2-100": 1, "v2-150": 2, "v2-200": 3, "v2-probe-s05": 4, "v2-probe-fe": 5,
@@ -211,11 +213,32 @@ def depth_bins(energy: float, nz: int, dz: float = 1.0) -> list[int]:
     return [int(z / dz) for z in np.arange(10.0, r - 5.0 + 1e-9, 10.0) if int(z / dz) < nz]
 
 
+def content_digest(doc: dict[str, Any]) -> str:
+    """sha256 of the canonical JSON (sorted keys, compact separators) of ``doc`` without its
+    ``content_sha256`` field; the document is normalised through one JSON round trip first, so
+    the digest of a written file equals the digest recomputed from the parsed file."""
+    norm = json.loads(json.dumps(doc, default=base._json))
+    norm.pop("content_sha256", None)
+    text = json.dumps(norm, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
+def bindings(a: argparse.Namespace) -> dict[str, Any]:
+    """What a partial is bound to: the run (SHA, suite), the nuclear table and the seed base."""
+    rec = table_record()
+    return {"format": FORMAT, "git_sha": os.environ.get("IONMC_RUN_SHA", "unknown"),
+            "run_sha": os.environ.get("IONMC_RUN_SHA", "unknown"),
+            "suite": os.environ.get("IONMC_RUN_SUITE", "unknown"), "table_id": rec["table_id"],
+            "table_npz_sha256": rec["npz_sha256"], "seed_base": base.SEED_BASE,
+            "scale": a.scale}  # fmt: skip
+
+
 def write_partial(a: argparse.Namespace, name: str, doc: dict[str, Any]) -> str:
+    """Write a hash-sealed partial: the run bindings plus ``content_sha256`` over the rest."""
     out = Path(a.out_dir)
     out.mkdir(parents=True, exist_ok=True)
-    doc = {"format": FORMAT, "git_sha": os.environ.get("IONMC_RUN_SHA", "unknown"),
-           "seed_base": base.SEED_BASE, "scale": a.scale, **doc}  # fmt: skip
+    doc = {**bindings(a), **doc}
+    doc["content_sha256"] = content_digest(doc)
     path = out / f"{name}.json"
     path.write_text(json.dumps(doc, sort_keys=True, default=base._json))
     return str(path)
@@ -299,16 +322,19 @@ def step_v2_shard(a: argparse.Namespace) -> int:
 
 def load_partials(a: argparse.Namespace, names: list[str]) -> list[dict[str, Any]]:
     """Partial files ``names`` of ``--dirs`` (their ``samples`` directories included), verified
-    against the run identity (SHA, seed base, scale); a missing or foreign file stops the step."""
-    sha = os.environ.get("IONMC_RUN_SHA", "unknown")
+    against their ``content_sha256`` (canonical JSON of the document without that field) and the
+    run bindings (SHA, suite, table id and table file hash, seed base, scale, format; the same
+    ones for every partial because each must equal the current run); a missing, altered or
+    foreign file stops the step. As for the A9 samples of lv4 there is no foreign-SHA override."""
     out = []
     for nm in names:
         hits = [p for d in a.dirs for p in (Path(d) / nm, Path(d) / "samples" / nm) if p.is_file()]
         if len(hits) != 1:
             raise SystemExit(f"partial {nm}: found {len(hits)} copies in {a.dirs} (need exactly 1)")
         doc = json.loads(hits[0].read_text())
-        for key, want in (("git_sha", sha), ("seed_base", base.SEED_BASE), ("scale", a.scale),
-                          ("format", FORMAT)):  # fmt: skip
+        if doc.get("content_sha256") != content_digest(doc):
+            raise SystemExit(f"partial {nm}: content_sha256 does not match the document")
+        for key, want in bindings(a).items():
             if doc.get(key) != want:
                 raise SystemExit(f"partial {nm}: {key} is {doc.get(key)!r}, expected {want!r}")
         out.append(doc)
@@ -422,7 +448,29 @@ def step_probe_combine(a: argparse.Namespace) -> int:
 
 
 # -- V3-LV ----------------------------------------------------------------------------------------
+BINDING_RTOL, BINDING_ATOL_MEV = 1e-9, 1e-9
+
+
+def binding_recompute(res: Result, tab_info: dict[str, Any], ame: Any) -> dict[str, Any]:
+    """Independent check of the ``nuclear_binding`` tally: the binding of the run recomputed from
+    the per-target event, light-product and residual counts of the reference (``res.diagnostics
+    ["nuclear"]``) and AME2020 masses read from the cached AME text (not from the table arrays);
+    ``|recomputed - tally| <= 1e-9 |tally| + 1e-9 MeV``."""
+    tally = float(res.energy_balance.nuclear_mev["nuclear_binding"])
+    nuc = res.diagnostics.get("nuclear", {})
+    got = nc.recompute_binding_total(nuc, tab_info["targets"], ame)
+    diff = abs(got - tally)
+    return {"tally_mev": tally, "recomputed_mev": got, "abs_diff_mev": diff,
+            "events": int(sum(r["events"] for r in nuc.values())),
+            "pass": bool(diff <= BINDING_RTOL * abs(tally) + BINDING_ATOL_MEV)}  # fmt: skip
+
+
 def step_v3_lv(a: argparse.Namespace) -> int:
+    from ionmc.data.ame import load_ame2020
+
+    cdir = cache.resolve_cache_dir(None)
+    ame = load_ame2020(cache.verify("ame2020-mass", cdir).read_text(encoding="ascii"))
+    tab_info = NuclearTable.load(cdir, TABLE_ID).info
     out: dict[str, Any] = {}
     ok, used, frozen, reduced, j = True, 0, 0, False, 0
     for mname, mat in V3_MATERIALS:
@@ -436,7 +484,8 @@ def step_v3_lv(a: argparse.Namespace) -> int:
             wall = time.perf_counter() - t0
             b = res.energy_balance
             rel, grel = float(b.relative_residual), float(b.grid_relative_residual(0))
-            row_ok = bool(clean(res) and rel <= 1e-12 and grel <= 1e-12)
+            bind = binding_recompute(res, tab_info, ame)
+            row_ok = bool(clean(res) and rel <= 1e-12 and grel <= 1e-12 and bind["pass"])
             ok &= row_ok
             used, frozen, reduced = used + n, frozen + n_full, reduced or n < n_full
             out[f"{mname}@{e:g}"] = {
@@ -446,11 +495,13 @@ def step_v3_lv(a: argparse.Namespace) -> int:
                 "nuclear_imbalance_over_initial": float(b.nuclear_mev.get("nuclear_imbalance", 0.0))
                 / float(b.initial_mev),
                 "truncated_mev": float(b.truncated_mev), "unaccounted_mev": float(b.unaccounted_mev),
+                "binding_recompute": bind,
                 "valid": bool(res.valid), "counters": res.counters.as_dict(), "pass": row_ok,
             }  # fmt: skip
             j += 1
     doc = {"step": "v3-lv", "table": table_record(), "runs": out, "tolerance": 1e-12,
-           "binding_recompute": "not evaluated here (per-event AME masses are not in the Result)",
+           "binding_recompute": {"rtol": BINDING_RTOL, "atol_mev": BINDING_ATOL_MEV,
+                                 "evaluated": True, "gating": True},
            "pass": bool(ok)}  # fmt: skip
     return finish5(doc, frozen, used, reduced)
 
@@ -460,8 +511,6 @@ def step_v4(a: argparse.Namespace) -> int:
     nc.V4_EVENTS = v4.scaled(V4_EVENTS, a.scale, 2000)
     nc.V4_BASE_SEED = seed_of("v4")
     cdir = cache.resolve_cache_dir(None)
-    from ionmc.nuclear.tables import NuclearTable
-
     tab = NuclearTable.load(cdir, TABLE_ID)
     res = nc.v4_checks(tab, nc._targets(cdir))
     cases = {}

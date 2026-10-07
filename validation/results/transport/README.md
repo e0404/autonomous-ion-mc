@@ -110,7 +110,7 @@ source digest): D1/D1b/D2/D2b/D3/D4 CI part — CI and the `lv`/`lv4` pytest ste
 # Nuclear slice-A suite `lv5` (V3-005A, decision 0041)
 
 `run_suite.py --suite lv5` evaluates the slice-A rows of `validation/plans/v3-005-acceptance.md`
-that need the built nuclear table (id `2b8d94cf4a82ef8a5119ddb8c84d4a2c11bd3511eb6672bd210562730cc0cf1a`)
+that need the built nuclear table (id `dfee19d3…`)
 or nuclear transport on the python backend. Archives are named `lv5-<sha>-...json` (row table of the
 plan, "Evidence archive"); no result exists at the time of writing, so nothing here is evidence.
 Rows P1-P5, V9 and C1 are CI-tier tests and are not suite steps; V2b and V5-V8 are slice B.

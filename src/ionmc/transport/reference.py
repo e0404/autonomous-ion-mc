@@ -37,6 +37,7 @@ outside grid ``g``).
 from __future__ import annotations
 
 import math
+from typing import Any
 
 import numpy as np
 
@@ -98,6 +99,8 @@ __all__ = [
 
 STACK_CAPACITY = MAX_PARTICLES
 """Capacity of the per-history LIFO particle stack (decision 0041 section 3)."""
+NUC_SPECIES_KEYS = ("n", "p", "d", "a", "g")
+"""Light-product keys of the nuclear event diagnostics (``ionmc.nuclear.events.SPECIES``)."""
 END_NUCLEAR = 5
 """History end code (diagnostics only, not part of ``tally``): the primary ended in a nuclear
 event."""
@@ -200,6 +203,7 @@ class _Reference:
         self.nuc = eff.nuclear
         self.counter_names: tuple[str, ...] = COUNTER_NAMES
         self.ntallies: dict[str, float] = {}
+        self.nuc_diag: dict[str, dict[str, Any]] = {}  # nuclear event diagnostics (nuclear runs)
         if self.nuc is not None:  # conditional nuclear blocks (decision 0041 sections 2-5)
             self.counter_names = COUNTER_NAMES + NUCLEAR_COUNTER_NAMES
             self.NU = python_twin(make_nuclear)
@@ -447,10 +451,13 @@ class _Reference:
                 trace_int=tr[:, :8].astype(np.int32),
                 trace_float=tr[:, 8:],
             )
-        return rows_to_partial(
+        part = rows_to_partial(
             h0, h1, tally_rows, counter_rows, self.edep, diagnostics,
             channel_acc=None if self.scorer is None else self.scorer.acc,
         )  # fmt: skip
+        if self.nuc is not None:
+            part.meta["nuclear_diagnostics"] = self.nuc_diag
+        return part
 
     def _end(
         self,
@@ -585,6 +592,17 @@ class _Reference:
             ctr["nuclear_rejection_limit"] += 1
             self.tallies["unaccounted"] += t1
             return
+        # independent event record (per table target): events, light products per species and
+        # residual (Z_r, A_r), from which the binding of the run is recomputed from AME2020 masses
+        rec = self.nuc_diag.setdefault(
+            str(int(tgt_list[chosen])),
+            {"events": 0, "light": dict.fromkeys(NUC_SPECIES_KEYS, 0), "residual": {}},
+        )
+        rec["events"] += 1
+        for key, cnt in zip(NUC_SPECIES_KEYS, ev.counts, strict=True):
+            rec["light"][key] += int(cnt)
+        res_key = f"{int(ev.z_r)},{int(ev.a_r)}"
+        rec["residual"][res_key] = rec["residual"].get(res_key, 0) + 1
         masses = [float(x) for x in model.species_mass_mev]  # type: ignore[attr-defined]
         gen = self.generation + 1
         # e_lab is the total energy of the lab product, T_lab = e_lab - m
@@ -971,6 +989,16 @@ class _Reference:
                 )
             if nuc_on:
                 n_lam -= rho * s_hat * s_act / 10.0
+                # majorant check after EVERY step (decision 0041 section 2): the Gamma straggling
+                # tail is unbounded, so Sigma(E1) <= S^(E0) is not guaranteed by the window
+                _acc, viol = self.NU.thinning_accept(
+                    r(0.5), r(self._sigma(nu_rows, energy)), r(s_hat)
+                )
+                if viol:
+                    self.counters["majorant_violation"] += 1
+                    self.tallies["unaccounted"] += energy
+                    self._end(h, END_NUCLEAR, (px, py, pz), (ux, uy, uz), energy)
+                    return
                 if int(reason) == 4 and axis2 < 0 and not exited and energy > self.e_cut:
                     # candidate at the post-step point (leg 2 not truncated)
                     nc, n_lam, done = self._candidate(

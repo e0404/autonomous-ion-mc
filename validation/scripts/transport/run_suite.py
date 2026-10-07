@@ -36,7 +36,8 @@ Rules (the style of ``validation/scripts/warp-architecture/run_all.sh``):
   and never ``conformant``; ``summarize.py --combine`` joins the subsets of one suite;
 * the T12 statistics are split into steps with their own outputs: the python sample (in
   ``--python-parts`` history ranges), the accelerated samples and the comparison, which loads
-  the saved samples (hash-verified; ``--import-dirs`` names archives of other runs holding them);
+  the saved samples (hash-verified; ``--import-dirs`` names archives of other runs holding them; the lv5 shard
+  partials carry a ``content_sha256`` and are bound to the run SHA, suite, table id and seed);
 * ``--workers 1`` (or ``--single-process``) is the single-process diagnostic mode: every step runs
   with one worker and single-threaded numerics (``SINGLE_PROCESS_ENV``), the steps whose purpose is
   multiprocessing (``DEFERRED_STEPS``) are archived as ``deferred`` and not run, histories, seeds

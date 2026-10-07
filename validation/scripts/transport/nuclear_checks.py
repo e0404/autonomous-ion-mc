@@ -42,6 +42,54 @@ MATERIALS = (
 )
 
 
+def light_masses(ame: dict[tuple[int, int], Any]) -> list[float]:
+    """Nuclear masses [MeV] of n, p, d, alpha and gamma (0) read directly from the AME2020 table."""
+    from ionmc.data.ame import nuclear_mass_mev
+
+    return [nuclear_mass_mev(ame, z, a) for z, a in ((0, 1), (1, 1), (1, 2), (2, 4))] + [0.0]
+
+
+def residual_mass(ame: dict[tuple[int, int], Any], z_r: int, a_r: int) -> float:
+    """AME2020 mass of the residual; the total break-up (0, 0) is the empty residual of mass 0."""
+    from ionmc.data.ame import nuclear_mass_mev
+
+    return 0.0 if (z_r, a_r) == (0, 0) else nuclear_mass_mev(ame, int(z_r), int(a_r))
+
+
+def recompute_binding_events(
+    counts: Any, z_r: Any, a_r: Any, z_t: int, a_t: int, ame: dict[tuple[int, int], Any]
+) -> Any:
+    """Binding ``sum m_out + M_r - m_p - M_t`` of every event from its light-product counts (n, p,
+    d, alpha, gamma) and residual (Z_r, A_r), with all masses read from ``ame`` (the sampler's own
+    ``binding_mev`` is not used)."""
+    from ionmc.data.ame import nuclear_mass_mev
+
+    m = light_masses(ame)
+    m_p, m_t = m[1], nuclear_mass_mev(ame, z_t, a_t)
+    m_r = np.array([residual_mass(ame, int(z), int(a)) for z, a in zip(z_r, a_r, strict=True)])
+    return np.asarray(counts, dtype=np.float64) @ np.array(m) + m_r - m_p - m_t
+
+
+def recompute_binding_total(
+    nuc_diag: dict[str, Any], targets: list[dict[str, Any]], ame: dict[tuple[int, int], Any]
+) -> float:
+    """The run's summed binding [MeV] recomputed from the nuclear diagnostics block of the Result
+    (per-target event, light-product and residual counts) and AME2020 masses."""
+    from ionmc.data.ame import nuclear_mass_mev
+
+    m = light_masses(ame)
+    total = 0.0
+    for tgt, rec in nuc_diag.items():
+        info = targets[int(tgt)]
+        m_t = nuclear_mass_mev(ame, int(info["z"]), int(info["a"]))
+        total += sum(rec["light"][k] * m[i] for i, k in enumerate(("n", "p", "d", "a", "g")))
+        for key, cnt in rec["residual"].items():
+            z_r, a_r = (int(x) for x in key.split(","))
+            total += cnt * residual_mass(ame, z_r, a_r)
+        total -= rec["events"] * (m[1] + m_t)
+    return float(total)
+
+
 def _targets(cdir: Path) -> dict[str, B.TargetTables]:
     from ionmc.data.ame import load_ame2020
 
