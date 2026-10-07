@@ -43,19 +43,30 @@ class Sec:
         self.mf, self.mt, self.lines = mf, mt, []
 
     def cont(self, c1: str, c2: str, l1: int, l2: int, n1: int, n2: int) -> None:
-        self.lines.append(rec(self.mf, self.mt, len(self.lines) + 1, c1, c2, str(l1), str(l2), str(n1), str(n2)))
+        self.lines.append(
+            rec(self.mf, self.mt, len(self.lines) + 1, c1, c2, str(l1), str(l2), str(n1), str(n2))
+        )
 
     def values(self, vals: list[str]) -> None:
         for i in range(0, len(vals), 6):
             self.lines.append(rec(self.mf, self.mt, len(self.lines) + 1, *vals[i : i + 6]))
 
-    def tab1(self, c1: str, c2: str, l1: int, l2: int, nbt_int: list[tuple[int, int]],
-             xy: list[tuple[float, float]]) -> None:
+    def tab1(
+        self,
+        c1: str,
+        c2: str,
+        l1: int,
+        l2: int,
+        nbt_int: list[tuple[int, int]],
+        xy: list[tuple[float, float]],
+    ) -> None:
         self.cont(c1, c2, l1, l2, len(nbt_int), len(xy))
         self.values([str(v) for pair in nbt_int for v in pair])
         self.values([ef(v) for pair in xy for v in pair])
 
-    def tab2(self, c1: str, c2: str, l1: int, l2: int, nbt_int: list[tuple[int, int]], nz: int) -> None:
+    def tab2(
+        self, c1: str, c2: str, l1: int, l2: int, nbt_int: list[tuple[int, int]], nz: int
+    ) -> None:
         self.cont(c1, c2, l1, l2, len(nbt_int), nz)
         self.values([str(v) for pair in nbt_int for v in pair])
 
@@ -101,8 +112,14 @@ def mf6_mt5() -> Sec:
     s.tab1("1.000000+0", "1.000000+0", 0, 1, [(2, 2)], [(1.0e6, 0.0), (1.0e8, 1.5)])
     s.tab2("0.000000+0", "0.000000+0", 2, 1, [(2, 2)], 2)
     s.lst("0.000000+0", ef(5.0e6), 0, 1, 2, [1.0e5, 2.0e-6, 0.25, 2.0e5, 1.0e-5, 0.5])
-    s.lst("0.000000+0", ef(1.0e7), 0, 1, 3,
-          [1.0e5, 1.0e-6, 0.125, 2.0e5, 2.0e-6, 0.25, 3.0e5, 3.0e-6, 0.75])
+    s.lst(
+        "0.000000+0",
+        ef(1.0e7),
+        0,
+        1,
+        3,
+        [1.0e5, 1.0e-6, 0.125, 2.0e5, 2.0e-6, 0.25, 3.0e5, 3.0e-6, 0.75],
+    )
     # product 2: alpha, Legendre NA = 2, LEP = 2
     s.tab1("2.004000+3", "3.972600+0", 1, 1, [(2, 4)], [(1.0e6, 0.0), (1.0e8, 0.5)])
     s.tab2("0.000000+0", "0.000000+0", 1, 2, [(1, 2)], 1)
@@ -166,7 +183,11 @@ def test_mf3_tab1_regions_and_values() -> None:
     assert tab.interpolate(3.0e6)[0] == 2.5
     # nodes, including the region boundary shared by both laws
     assert tab.interpolate(np.array([1.0e6, 2.0e6, 4.0e6, 8.0e6, 1.6e7])).tolist() == [
-        1.0, 3.0, 2.0, 4.0, 16.0,
+        1.0,
+        3.0,
+        2.0,
+        4.0,
+        16.0,
     ]
     # region 2 (log-log): y = 2 (x/4e6)^1 on (4e6, 8e6) and 4 (x/8e6)^2 on (8e6, 1.6e7)
     assert tab.interpolate(6.0e6)[0] == pytest.approx(3.0, rel=1e-14)
@@ -178,16 +199,18 @@ def test_mf3_tab1_regions_and_values() -> None:
 
 
 def _one_region(law: int, x: list[float], y: list[float]) -> endf6.Tab1:
-    return endf6.Tab1(
-        nbt=np.array([len(x)]), interp=np.array([law]), x=np.array(x), y=np.array(y)
-    )
+    return endf6.Tab1(nbt=np.array([len(x)]), interp=np.array([law]), x=np.array(x), y=np.array(y))
 
 
 def test_all_five_interpolation_laws() -> None:
     # 1 histogram: constant y_i over [x_i, x_{i+1})
     t1 = _one_region(1, [1.0, 2.0, 4.0], [10.0, 20.0, 30.0])
     assert t1.interpolate(np.array([1.0, 1.5, 1.999, 2.0, 3.0])).tolist() == [
-        10.0, 10.0, 10.0, 20.0, 20.0,
+        10.0,
+        10.0,
+        10.0,
+        20.0,
+        20.0,
     ]
     # 2 lin-lin
     t2 = _one_region(2, [1.0, 3.0], [10.0, 20.0])
@@ -251,7 +274,9 @@ def test_mf6_law1_lang2_and_lang1() -> None:
     assert (da.nd, da.na, da.nw, da.nep) == (2, 2, 8, 2)
     assert da.rows.tolist() == [[1.0e5, 1.0, 0.5, 0.25], [2.0e5, 2.0, 1.0, 0.75]]
     assert (r.zap, r.distributions[0].na, r.distributions[0].rows.tolist()) == (
-        6011, 0, [[1.0e3, 1.0]]
+        6011,
+        0,
+        [[1.0e3, 1.0]],
     )
 
 
@@ -328,8 +353,12 @@ def test_zip_members_validated(tmp_path: Path) -> None:
         zf.writestr("../evil.endf", "x")
     assert endf6.list_zip_members(zp) == [good]
     assert endf6.parse_endf(endf6.read_member(zp, good)).za == 6012.0
-    for name in ("../evil.endf", "ENDF-B-VIII.0_protons/readme.txt", "/etc/passwd",
-                 "ENDF-B-VIII.0_protons/../p-006_C_012.endf"):
+    for name in (
+        "../evil.endf",
+        "ENDF-B-VIII.0_protons/readme.txt",
+        "/etc/passwd",
+        "ENDF-B-VIII.0_protons/../p-006_C_012.endf",
+    ):
         with pytest.raises(ValueError, match="valid ENDF"):
             endf6.read_member(zp, name)
     with pytest.raises(KeyError):
@@ -346,17 +375,33 @@ AME_HEADER = """1    synthetic fixture, not AME2020 data
 """
 
 
-def ame_line(cc: str, n: int, z: int, a: int, el: str, mass: str, unc: str,
-             hi: int, lo: str, lounc: str, o: str = "") -> str:
-    return (f"{cc}{z - n:3d}{n:5d}{z:5d}{a:5d} {el:>3}{o:>4} {mass:>14}{unc:>12}"
-            f"{'0.0':>13} {'0.0':>10} B-{'*':>13}{'':>11} {hi:3d} {lo:>13}{lounc:>12}")
+def ame_line(
+    cc: str,
+    n: int,
+    z: int,
+    a: int,
+    el: str,
+    mass: str,
+    unc: str,
+    hi: int,
+    lo: str,
+    lounc: str,
+    o: str = "",
+) -> str:
+    return (
+        f"{cc}{z - n:3d}{n:5d}{z:5d}{a:5d} {el:>3}{o:>4} {mass:>14}{unc:>12}"
+        f"{'0.0':>13} {'0.0':>10} B-{'*':>13}{'':>11} {hi:3d} {lo:>13}{lounc:>12}"
+    )
 
 
 AME_TEXT = (
     AME_HEADER
-    + ame_line("0", 1, 1, 2, "H", "100.5", "0.25", 2, "014000.5", "0.5") + "\n"
-    + ame_line("0", 8, 8, 16, "O", "-2000.25", "0.5", 15, "990000.25", "0.75") + "\n"
-    + ame_line("-", 2, 3, 5, "Li", "28667#", "2000#", 5, "030775#", "2147#", " -pp") + "\n"
+    + ame_line("0", 1, 1, 2, "H", "100.5", "0.25", 2, "014000.5", "0.5")
+    + "\n"
+    + ame_line("0", 8, 8, 16, "O", "-2000.25", "0.5", 15, "990000.25", "0.75")
+    + "\n"
+    + ame_line("-", 2, 3, 5, "Li", "28667#", "2000#", 5, "030775#", "2147#", " -pp")
+    + "\n"
 )
 
 
@@ -386,7 +431,9 @@ def test_ame_nuclear_mass_and_errors() -> None:
     with pytest.raises(ame.AmeError, match="no AME2020"):
         ame.load_ame2020(AME_HEADER)
     with pytest.raises(ame.AmeError, match="duplicate"):
-        ame.load_ame2020(AME_TEXT + ame_line("0", 8, 8, 16, "O", "1.0", "1.0", 15, "9.0", "1.0") + "\n")
+        ame.load_ame2020(
+            AME_TEXT + ame_line("0", 8, 8, 16, "O", "1.0", "1.0", 15, "9.0", "1.0") + "\n"
+        )
     with pytest.raises(ame.AmeError, match="cannot parse"):
         ame.load_ame2020(AME_TEXT + "garbage line\n" + "x" * 130 + "\n")
 
@@ -408,50 +455,52 @@ def xhead(*vals: str) -> str:
     return "".join(v.ljust(11) for v in vals).rstrip()
 
 
-EXFOR_TEXT = "\n".join([
-    xl("ENTRY", "      X0001   19990101").replace("ENTRY     ", "ENTRY     ", 1),
-    xl("SUBENT", "     X0001001   19990101"),
-    xl("BIB", "         3          5"),
-    xl("TITLE", "Synthetic cross sections for"),
-    xl("", "an invented target"),
-    xl("AUTHOR", "(A.Smith,B.Jones,"),
-    xl("", "C.Brown)"),
-    xl("REFERENCE", "(J,XX/Y,1,2,1999)"),
-    xl("ENDBIB", "         5          0"),
-    xl("NOCOMMON", "         0          0"),
-    xl("ENDSUBENT", "         9          0"),
-    xl("SUBENT", "     X0001002   19990101"),
-    xl("BIB", "         1          1"),
-    xl("REACTION", "(6-C-12(P,NON),,SIG) invented"),
-    xl("ENDBIB", "         1          0"),
-    xl("COMMON", "         1          3"),
-    xl("ERR-SYS"),
-    xl("PER-CENT"),
-    xl("2.5"),
-    xl("ENDCOMMON", "         3          0"),
-    xl("DATA", "         3          3"),
-    xhead("EN", "DATA", "ERR-S"),
-    xhead("MEV", "MB", "MB"),
-    xrow("100.", "275.", "21."),
-    xrow("150.", "1.5+2", None),
-    xrow("2.E+2", None, "3."),
-    xl("ENDDATA", "         5          0"),
-    xl("ENDSUBENT", "         9          0"),
-    xl("SUBENT", "     X0001003   19990101"),
-    xl("BIB", "         1          2"),
-    xl("REACTION", "(8-O-16(P,NON),,SIG)", ptr="1"),
-    xl("", "(8-O-16(P,NON),,SIG) cont", ptr="2"),
-    xl("ENDBIB", "         2          0"),
-    xl("NOCOMMON", "         0          0"),
-    xl("DATA", "         2          2"),
-    "EN".ljust(11) + "DATA".ljust(10) + "1",
-    xhead("MEV/A", "B"),
-    xrow("10.", "0.25"),
-    xrow("20.", "0.5"),
-    xl("ENDDATA", "         4          0"),
-    xl("ENDSUBENT", "         9          0"),
-    xl("ENDENTRY", "         3          0"),
-])
+EXFOR_TEXT = "\n".join(
+    [
+        xl("ENTRY", "      X0001   19990101").replace("ENTRY     ", "ENTRY     ", 1),
+        xl("SUBENT", "     X0001001   19990101"),
+        xl("BIB", "         3          5"),
+        xl("TITLE", "Synthetic cross sections for"),
+        xl("", "an invented target"),
+        xl("AUTHOR", "(A.Smith,B.Jones,"),
+        xl("", "C.Brown)"),
+        xl("REFERENCE", "(J,XX/Y,1,2,1999)"),
+        xl("ENDBIB", "         5          0"),
+        xl("NOCOMMON", "         0          0"),
+        xl("ENDSUBENT", "         9          0"),
+        xl("SUBENT", "     X0001002   19990101"),
+        xl("BIB", "         1          1"),
+        xl("REACTION", "(6-C-12(P,NON),,SIG) invented"),
+        xl("ENDBIB", "         1          0"),
+        xl("COMMON", "         1          3"),
+        xl("ERR-SYS"),
+        xl("PER-CENT"),
+        xl("2.5"),
+        xl("ENDCOMMON", "         3          0"),
+        xl("DATA", "         3          3"),
+        xhead("EN", "DATA", "ERR-S"),
+        xhead("MEV", "MB", "MB"),
+        xrow("100.", "275.", "21."),
+        xrow("150.", "1.5+2", None),
+        xrow("2.E+2", None, "3."),
+        xl("ENDDATA", "         5          0"),
+        xl("ENDSUBENT", "         9          0"),
+        xl("SUBENT", "     X0001003   19990101"),
+        xl("BIB", "         1          2"),
+        xl("REACTION", "(8-O-16(P,NON),,SIG)", ptr="1"),
+        xl("", "(8-O-16(P,NON),,SIG) cont", ptr="2"),
+        xl("ENDBIB", "         2          0"),
+        xl("NOCOMMON", "         0          0"),
+        xl("DATA", "         2          2"),
+        "EN".ljust(11) + "DATA".ljust(10) + "1",
+        xhead("MEV/A", "B"),
+        xrow("10.", "0.25"),
+        xrow("20.", "0.5"),
+        xl("ENDDATA", "         4          0"),
+        xl("ENDSUBENT", "         9          0"),
+        xl("ENDENTRY", "         3          0"),
+    ]
+)
 
 
 def test_exfor_synthetic_entry() -> None:
@@ -473,7 +522,8 @@ def test_exfor_synthetic_entry() -> None:
     assert col[0] == 21.0 and np.isnan(col[1]) and col[2] == 3.0
     # pointers on REACTION and on a head field; MEV/A and B units
     assert [(r.pointer, r.text) for r in s3.reactions] == [
-        ("1", "(8-O-16(P,NON),,SIG)"), ("2", "(8-O-16(P,NON),,SIG) cont"),
+        ("1", "(8-O-16(P,NON),,SIG)"),
+        ("2", "(8-O-16(P,NON),,SIG) cont"),
     ]
     assert s3.data is not None
     assert s3.data.units == ("MEV/A", "B") and s3.data.pointers == ("", "1")
@@ -507,7 +557,9 @@ def test_exfor_malformed_text_fails_closed() -> None:
         exfor.parse_entry("SUBENT X 1\n")
     with pytest.raises(exfor.ExforError, match="ENDSUBENT"):
         exfor.parse_entry("\n".join(EXFOR_TEXT.splitlines()[:14]))
-    wide = EXFOR_TEXT.replace(xl("DATA", "         3          3"), xl("DATA", "         7          3"))
+    wide = EXFOR_TEXT.replace(
+        xl("DATA", "         3          3"), xl("DATA", "         7          3")
+    )
     with pytest.raises(exfor.ExforError, match="six fields"):
         exfor.parse_entry(wide)
 
@@ -520,19 +572,33 @@ def test_exfor_malformed_text_fails_closed() -> None:
 def _gv_record(rid: int, beam: str) -> dict[str, object]:
     return {
         "id": rid,
-        "metadata": {"observableName": "inelastic cross section", "targetName": "X",
-                     "beamParticle": beam},
-        "chart": {"xAxisName": "E (MeV)", "yAxisName": "cross section, barn",
-                  "xValues": [1.0, 2.0], "yValues": [0.5, 0.75],
-                  "yStatErrorsPlus": [0.0, 0.0], "yStatErrorsMinus": [0.0, 0.0],
-                  "ySysErrorsPlus": [0.125, 0.25], "ySysErrorsMinus": [0.0625, 0.5]},
+        "metadata": {
+            "observableName": "inelastic cross section",
+            "targetName": "X",
+            "beamParticle": beam,
+        },
+        "chart": {
+            "xAxisName": "E (MeV)",
+            "yAxisName": "cross section, barn",
+            "xValues": [1.0, 2.0],
+            "yValues": [0.5, 0.75],
+            "yStatErrorsPlus": [0.0, 0.0],
+            "yStatErrorsMinus": [0.0, 0.0],
+            "ySysErrorsPlus": [0.125, 0.25],
+            "ySysErrorsMinus": [0.0625, 0.5],
+        },
     }
 
 
 def test_geant_val_synthetic() -> None:
     curves = geant_val.parse_geant_val(json.dumps([_gv_record(1, "proton"), _gv_record(2, "C12")]))
     p, c = curves
-    assert (p.record_id, p.target, p.beam, p.observable) == (1, "X", "proton", "inelastic cross section")
+    assert (p.record_id, p.target, p.beam, p.observable) == (
+        1,
+        "X",
+        "proton",
+        "inelastic cross section",
+    )
     assert p.x.tolist() == [1.0, 2.0] and p.y.tolist() == [0.5, 0.75]
     assert p.y_sys_plus.tolist() == [0.125, 0.25] and p.y_sys_minus.tolist() == [0.0625, 0.5]
     assert p.energy_caveat is None
@@ -570,8 +636,16 @@ def _member(zp: Path, element: str) -> endf6.EndfMaterial:
 def test_real_endf_o16_structure_and_cross_section() -> None:
     zp = _cached("endf-b8.0-protons")
     members = endf6.list_zip_members(zp)
-    for tag in ("p-001_H_001", "p-006_C_012", "p-007_N_014", "p-008_O_016", "p-013_Al_027",
-                "p-014_Si_028", "p-015_P_031", "p-020_Ca_040"):
+    for tag in (
+        "p-001_H_001",
+        "p-006_C_012",
+        "p-007_N_014",
+        "p-008_O_016",
+        "p-013_Al_027",
+        "p-014_Si_028",
+        "p-015_P_031",
+        "p-020_Ca_040",
+    ):
         assert f"ENDF-B-VIII.0_protons/{tag}.endf" in members
     o16 = _member(zp, "008_O_016")
     assert o16.za == 8016.0 and o16.emax == 1.5e8

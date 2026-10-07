@@ -68,7 +68,10 @@ def _parse_line(line: str) -> AmeEntry:
 
 
 def load_ame2020(text: str) -> dict[tuple[int, int], AmeEntry]:
-    """Parse the table text into ``{(Z, A): AmeEntry}``; duplicates or bad lines raise ``AmeError``."""
+    """Parse the table text into ``{(Z, A): AmeEntry}``.
+
+    Duplicates or bad lines raise ``AmeError``.
+    """
     entries: dict[tuple[int, int], AmeEntry] = {}
     started = False
     for line in text.splitlines():

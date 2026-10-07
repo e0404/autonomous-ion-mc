@@ -15,7 +15,8 @@ Counter/key encoding (decision 0037)::
     c1  genealogy id: 0 for the primary; child b (1..31) of a particle of generation g
         (primary g = 0, g <= 5) has id = parent_id + b * 32**g  (id < 2^30)
     c2  draw-block index within the particle (four uniforms per block), < 2^32
-    c3  purpose: 0 transport, 1 source sampling of the primary, 2 reserved
+    c3  purpose: 0 transport (EM), 1 source sampling of the primary, 2 nuclear interactions
+        (``PURPOSE_NUCLEAR``; formerly reserved; decision 0041 section 4 amends 0037)
 
 Uniform mapping (decision 0039, amending 0037): ``u = (k + 0.5) * 2^-bits`` with
 ``k = w >> 8, bits = 24`` for float64 and ``k = w >> 9, bits = 23`` for float32, so that
@@ -45,7 +46,8 @@ MAX_CHILDREN = 31
 MAX_PARENT_GENERATION = 5  # a child of a generation-5 particle (generation 6) is the last allowed
 PURPOSE_TRANSPORT = 0
 PURPOSE_SOURCE = 1
-PURPOSE_RESERVED = 2
+PURPOSE_NUCLEAR = 2
+PURPOSE_RESERVED = PURPOSE_NUCLEAR  # alias kept for existing imports (decision 0041 section 4)
 
 _K0 = wp.constant(wp.uint64(_M0))
 _K1 = wp.constant(wp.uint64(_M1))

@@ -20,6 +20,7 @@ import warp as wp
 from ionmc._wpfunc import python_twin
 from ionmc.physics.em import FDM_COEFFICIENTS, make_em
 from ionmc.physics.kinematics import make_kinematics
+from ionmc.physics.nuclear import make_nuclear
 from ionmc.transport.funcs import make_transport_funcs
 from ionmc.transport.scoring_funcs import make_scoring_funcs
 
@@ -40,11 +41,11 @@ LN10 = math.log(10.0)
 M_P = 938.27208816
 
 # column layout of the argument pools -------------------------------------------------------
-NX = 86  # real columns
+NX = 87  # real columns
 NV = 16  # vec3 columns
 NI = 13  # int columns
 NO = 40  # real outputs
-NOI = 16  # int outputs
+NOI = 17  # int outputs
 NOV = 8  # vec3 outputs
 
 
@@ -292,6 +293,14 @@ def _args(precision: str) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     x[0:8, 83] = [0.1, 0.1, 0.0, -0.1, 1.0e-5, 0.99999e-5, 1.0e-5, -1.0e-5]
     x[8:12, 85] = 1.0
     x[8:12, 83] = [1.0e-4, -1.0e-4, 1.0e-6, -3.0e-5]
+    # select_step_nuclear (V3-005A): column 86 is the nuclear limit d_nuc.
+    # Rows 0..3 tie the nuclear limit with each of the EM limits (EM wins) and the
+    # geometry (geometry wins); rows 4..5 are below every limit and BIG.
+    x[:, 86] = logu(1e-3, 5.0)
+    x[0:4, 86] = [x[0, 47], x[1, 48], x[2, 49], x[3, 46]]
+    x[4, 86] = 0.5 * min(x[4, 46:50])
+    x[5, 86] = 1.0e30
+    x[6, 86] = x[6, 46]
     return x.astype(dt), v.astype(dt), ii
 
 
@@ -414,6 +423,9 @@ def _make_kernel(real: Any) -> Any:
         o[i, 37] = tf.range_in_bin(x[i, 81], x[i, 82], x[i, 83], x[i, 84], x[i, 85])
         oi[i, 14] = lbin
         oi[i, 15] = sc.spectrum_bin(x[i, 78], x[i, 79], x[i, 80], ii[i, 12], ii[i, 11])
+        sn, snr = tf.select_step_nuclear(x[i, 46], x[i, 47], x[i, 48], x[i, 49], x[i, 86])
+        o[i, 38] = sn
+        oi[i, 16] = snr
 
     return kernel
 
@@ -511,6 +523,9 @@ def _python_scope(real: Any, x: np.ndarray, v: np.ndarray, ii: np.ndarray) -> tu
         oi[i, 13], o[i, 36], oi[i, 14] = int(lbi), float(lbf), int(lbin)
         oi[i, 15] = int(sc.spectrum_bin(r[78], r[79], r[80], k[12], k[11]))
         o[i, 37] = float(tf.range_in_bin(r[81], r[82], r[83], r[84], r[85]))
+        sn, snr = tf.select_step_nuclear(r[46], r[47], r[48], r[49], r[86])
+        o[i, 38] = float(sn)
+        oi[i, 16] = int(snr)
     return o, oi, ov
 
 
@@ -524,13 +539,14 @@ REAL_OUTPUTS = {
     25: "dda_clip_distance", 26: "leg2_clip_length", 27: "seg_piece_length",
     28: "straggle_gamma_loss", 29: "loglog_slope", 30: "let_ramp_slope", 31: "piece_s_bar",
     32: "piece_e_bar", 33: "piece_m1", 34: "piece_m2", 35: "channel_value", 36: "lookup_frac",
-    37: "range_in_bin",
+    37: "range_in_bin", 38: "select_step_nuclear",
 }  # fmt: skip
 INT_OUTPUTS = {
     0: "straggle_ok", 1: "log_bin_index", 2: "dda_axis", 3: "leg2_axis", 4: "select_reason",
     5: "grid_ix", 6: "grid_iy", 7: "grid_iz", 8: "grid_inside",
     9: "dda_clip_axis", 10: "leg2_clip_axis", 11: "seg_piece_axis", 12: "straggle_gamma_ok",
     13: "lookup_index", 14: "lookup_in_domain", 15: "spectrum_bin",
+    16: "select_reason_nuclear",
 }  # fmt: skip
 VEC_OUTPUTS = {0: "rotate_dir", 1: "point_on_hinge", 2: "basis_e1", 3: "basis_e2"}
 
@@ -680,12 +696,21 @@ EXERCISED = {
         "lerp", "interp_exp", "range_in_bin", "log_bin_index", "plane_position", "dda_next",
         "dda_next_clip",
         "leg2_limit", "leg2_limit_clip", "seg_piece", "range_step_limit", "eloss_step_limit",
-        "select_step", "point_on_hinge", "grid_index", "ray_box", "gauss_pair", "gauss_one",
+        "select_step", "select_step_nuclear", "point_on_hinge", "grid_index", "ray_box",
+        "gauss_pair", "gauss_one",
         "orthonormal_basis",
+    },
+    "nu": {
+        "nuclear_step_limit", "thinning_accept", "select_target", "poisson_inverse",
+        "inv_cdf_bin", "inv_cdf_sample", "kalbach_a", "kalbach_cdf", "kalbach_pdf", "kalbach_mu",
+        "residual_invariant_mass", "residual_mass_ok", "cm_boost", "boost_z", "cm_to_lab",
     },
 }  # fmt: skip
 """Functions exercised by the harness (kernel and twin sides, both in ``_make_kernel`` and
-``_python_scope``), per namespace. ``test_u1_harness_covers_every_shared_function`` requires this to
+``_python_scope``), per namespace. The nuclear namespace ``nu`` (V3-005A) is
+exercised, kernel against twin on recorded inputs, by ``tests/ionmc/test_nuclear_funcs.py``
+(P5), which asserts it covers
+exactly this set. ``test_u1_harness_covers_every_shared_function`` requires this to
 equal the callables of the twin and of the Warp namespace, so that a new shared function cannot be
 left out of U1 silently."""
 
@@ -701,6 +726,7 @@ def test_u1_harness_covers_every_shared_function() -> None:
         ("em", _em),
         ("tf", make_transport_funcs),
         ("sc", make_scoring_funcs),
+        ("nu", make_nuclear),
     ):
         assert names(python_twin(factory)) == EXERCISED[key], key
         assert names(factory(wp.float64)) == EXERCISED[key], key

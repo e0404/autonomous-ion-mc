@@ -192,7 +192,9 @@ def _parse_data(lines: list[str], i: int) -> tuple[DataTable, int]:
     )
 
 
-def _parse_bib(lines: list[str], i: int) -> tuple[dict[str, tuple[str, ...]], tuple[Reaction, ...], int]:
+def _parse_bib(
+    lines: list[str], i: int
+) -> tuple[dict[str, tuple[str, ...]], tuple[Reaction, ...], int]:
     n_keys, n_lines = _block_counts(lines[i])
     bib: dict[str, list[str]] = {}
     reactions: list[Reaction] = []
@@ -271,7 +273,9 @@ def energy_to_mev(values: NDArray[np.float64], unit: str) -> tuple[NDArray[np.fl
     return np.asarray(values, dtype=np.float64) * factor, unit == "MEV/A"
 
 
-def energy_total_mev(values: NDArray[np.float64], unit: str, mass_number: int | None) -> NDArray[np.float64]:
+def energy_total_mev(
+    values: NDArray[np.float64], unit: str, mass_number: int | None
+) -> NDArray[np.float64]:
     """Total projectile kinetic energy [MeV]; ``MEV/A`` needs ``mass_number`` (else ExforError)."""
     out, per_nucleon = energy_to_mev(values, unit)
     if per_nucleon:

@@ -35,9 +35,7 @@ from numpy.typing import NDArray
 _FIELD = 11
 _NFIELDS = 6
 _MAX_MEMBER_BYTES = 256 * 1024 * 1024
-MEMBER_PATTERN = re.compile(
-    r"^ENDF-B-VIII\.0_protons/p-\d{3}_[A-Za-z]{1,2}_\d{3}(?:m\d)?\.endf$"
-)
+MEMBER_PATTERN = re.compile(r"^ENDF-B-VIII\.0_protons/p-\d{3}_[A-Za-z]{1,2}_\d{3}(?:m\d)?\.endf$")
 _MANTISSA_EXPONENT = re.compile(r"^([+-]?(?:\d+\.?\d*|\.\d+))([+-]\d+)$")
 
 
@@ -139,9 +137,7 @@ class _Reader:
         out: list[int] = []
         for _ in range(_lines_for(n)):
             line = self._next_line()
-            out.extend(
-                parse_endf_int(line[i * _FIELD : (i + 1) * _FIELD]) for i in range(_NFIELDS)
-            )
+            out.extend(parse_endf_int(line[i * _FIELD : (i + 1) * _FIELD]) for i in range(_NFIELDS))
         return out[:n]
 
     def list_body(self, head: Cont) -> NDArray[np.float64]:
@@ -267,7 +263,8 @@ class Product:
 
 @dataclass(frozen=True)
 class Mf6Section:
-    """MF6 section: ``lct`` (reference frame, 1 lab, 2 CM, 3 both as per product law) and products."""
+    """MF6 section: ``lct`` (reference frame: 1 lab, 2 CM, 3 light products CM, recoils lab)
+    and products."""
 
     za: float
     awr: float
@@ -299,7 +296,10 @@ class EndfMaterial:
         return parse_mf3(self.sections[(3, mt)])
 
     def products(self, mt: int) -> Mf6Section:
-        """MF6 section ``mt`` (raises :class:`UnsupportedEndfError` outside the supported subset)."""
+        """MF6 section ``mt``.
+
+        Raises :class:`UnsupportedEndfError` outside the supported subset.
+        """
         return parse_mf6(self.sections[(6, mt)])
 
 
