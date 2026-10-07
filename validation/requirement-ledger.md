@@ -44,11 +44,11 @@ related-model, backend-parity, self-consistency.
 | V1-MUST-009 | Beamlet-resolved scoring | S-CAP-PLANNING | self-consistency | planned |
 | V1-MUST-010 | Dose influence matrices | S-CAP-PLANNING | self-consistency | planned |
 | V1-MUST-011 | Changeable scoring grids | S-CAP-PLANNING, S-NUM-FALSIFICATION | self-consistency | planned |
-| V1-MUST-012 | Extensible scoring | S-CAP-PLANNING | self-consistency | evidenced (V3-004 @fccb687: lv4/hr4 archives at base 20381004, single-process diagnostic mode; a15-workers deferred) |
-| V1-MUST-013 | Absorbed dose | S-PHYS-PROTON-EM | independent-monte-carlo | evidenced for self-consistency (V3-004 @fccb687); independent Monte Carlo pending (T15) |
-| V1-MUST-014 | Energy deposition | S-PHYS-PROTON-EM | independent-monte-carlo | evidenced for self-consistency (V3-004 @fccb687); independent Monte Carlo pending (T15) |
-| V1-MUST-015 | LET scoring | S-PHYS-LET | independent-monte-carlo | evidenced for theory/self-consistency (V3-004 @fccb687: A1-A9, A11, A14-A16); independent Monte Carlo pending (TOPAS ProtonLET, V3-010) |
-| V1-MUST-016 | External biological lookup data | S-CAP-PLANNING | self-consistency | evidenced (V3-004 @fccb687: A10, A12; synthetic fixture only, no clinical tables) |
+| V1-MUST-012 | Extensible scoring | S-CAP-PLANNING | self-consistency | implemented (V3-004); diagnostic-mode evidence @fccb687 (lv4/hr4 archives at base 20381004, non-conformant: single-process directive 2026-10-07, a15-workers deferred); conformant exact-SHA qualification pending |
+| V1-MUST-013 | Absorbed dose | S-PHYS-PROTON-EM | independent-monte-carlo | implemented (V3-004); diagnostic-mode self-consistency evidence @fccb687 (non-conformant, see V1-MUST-012); conformant qualification and independent Monte Carlo (T15) pending |
+| V1-MUST-014 | Energy deposition | S-PHYS-PROTON-EM | independent-monte-carlo | implemented (V3-004); diagnostic-mode self-consistency evidence @fccb687 (non-conformant, see V1-MUST-012); conformant qualification and independent Monte Carlo (T15) pending |
+| V1-MUST-015 | LET scoring | S-PHYS-LET | independent-monte-carlo | implemented (V3-004); diagnostic-mode theory/self-consistency evidence @fccb687 (A1-A9, A11, A14-A16; non-conformant, see V1-MUST-012); conformant qualification and independent Monte Carlo (TOPAS ProtonLET, V3-010) pending |
+| V1-MUST-016 | External biological lookup data | S-CAP-PLANNING | self-consistency | implemented (V3-004); diagnostic-mode evidence @fccb687 (A10, A12; synthetic fixture only, no clinical tables; non-conformant, see V1-MUST-012); conformant qualification pending |
 | V1-MUST-017 | Analytical physics layer | S-PHYS-PROTON-EM | independent-theory | planned |
 | V1-MUST-018 | External/tabulated data layer | S-PROV-DATA | ion-specific-tabulated | planned |
 | V1-MUST-019 | Separation of transport from data source | S-CAP-CONTRACT | self-consistency | planned |
@@ -81,7 +81,7 @@ related-model, backend-parity, self-consistency.
 | V2-CAP | fail-closed capability contract | S-CAP-CONTRACT | self-consistency | planned |
 | V2-NUM | adversarial numerical falsification | S-NUM-FALSIFICATION, S-NUM-UNCERTAINTY | self-consistency | planned |
 | V2-EVID | physical evidence lineage and sufficiency | all S-PHYS-* | measured, ion-specific-tabulated, independent-monte-carlo | planned |
-| V2-BIO | external biological lookup functionality | S-CAP-PLANNING | self-consistency | evidenced (V3-004 @fccb687: lookup tallies with provenance; synthetic fixture only) |
+| V2-BIO | external biological lookup functionality | S-CAP-PLANNING | self-consistency | implemented (V3-004); diagnostic-mode evidence @fccb687 (lookup tallies with provenance; synthetic fixture only; non-conformant, see V1-MUST-012); conformant qualification pending |
 | V2-OUTPUT | self-describing persisted scientific results | S-PROV-OUTPUT | self-consistency | planned |
 | V2-USER | complete clean-install scientific workflow | S-WORKFLOW-USER | self-consistency | planned |
 | V2-PERF | frozen application-level performance/resource gates | S-PERF-WORKLOADS | self-consistency | planned |

@@ -79,5 +79,7 @@ this base) z sd 0.925 / 1.079 / 0.953 and z mean 0.002 / 0.000 / −0.007 at 0.5
 distal 80 %, all-informative-bins mean coverage 0.9611 (window [0.93, 0.97]); the Bragg-peak
 z sd is above one for the third base in a row (1.069, 1.119, 1.079; all inside [0.87, 1.13]),
 which keeps the open observation of amendment ⁵ alive without failing the pre-registered
-criterion. A11-HR cpu32:cuda32 and python:cpu64 channel-profile pairs pass; A16 qualified path
+criterion. These archives are diagnostic evidence, not the conformant exact-SHA qualification the
+plan requires; that qualification (standard multi-worker mode, including `05-a15-workers`) is
+pending the lifting of the operator directive. A11-HR cpu32:cuda32 and python:cpu64 channel-profile pairs pass; A16 qualified path
 bit-identical to a524f209; A7 within the analytic expected-share bound. Not a clinical claim.

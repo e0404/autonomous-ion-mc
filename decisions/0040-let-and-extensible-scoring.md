@@ -386,7 +386,9 @@ A13 against Grassberger and Paganetti (2011) is exploratory and non-gating.
   re-calibrates the criterion's noise and does not widen a physics tolerance. Base 20371004 is
   consumed; the qualification base is 20381004.
 
-- 2026-10-07 (V3-004, final outcome at the frozen head fccb687, seed base 20381004): the lv4 and
+- 2026-10-07 (V3-004, outcome under the single-process diagnostic directive at the frozen head
+  fccb687, seed base 20381004; NOT a conformant qualification — that remains pending until the
+  operator lifts the directive and the deferred 1-vs-3-workers check runs): the lv4 and
   hr4 suites were run on the host in the single-process diagnostic mode of the operator
   directive of 2026-10-07 (`run_suite.py --workers 1`; histories, seeds and criteria unchanged).
   Every executed step passed: hr4 pytest-cuda-scoring, a15-chunks-cuda, a11-hr (cpu32:cuda32 and
