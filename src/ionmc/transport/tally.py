@@ -198,9 +198,10 @@ def rows_to_partial(
     meta: dict[str, Any] | None = None,
     channel_acc: NDArray[np.int64] | None = None,
 ) -> PartialTransport:
-    """Reduce per-history rows ``(n, 6 + 2 G [+ C + 1])`` (fixed tallies, outside deposits,
-    quantization residuals, and with scoring channels one residual column per channel but N and
-    the lookup out-of-domain count) and ``(n, 9)`` (counters) of one range to a partial result."""
+    """Reduce per-history rows ``(n, 6 + 2 G [+ C + 2])`` (fixed tallies, outside deposits,
+    quantization residuals, and with scoring channels one residual column per channel but the
+    count channels, the lookup out-of-domain count and the path-bound-exceeded flag) and
+    ``(n, 9)`` (counters) of one range to a partial result."""
     return rows_to_partial_many(
         h0,
         h1,

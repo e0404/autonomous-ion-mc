@@ -224,9 +224,10 @@ Regressions: `test_path_bound_covers_a_path_that_changes_material_with_energy` (
 9.59 mm), `test_low_loss_sampler_violates_the_path_bound_and_invalidates` (patched near-zero-loss
 sampler: flagged and invalid; ordinary sampler: 0 of 1000 histories) and the warp-cpu flag test.
 
-**Stopping-ratio candidate of the LS bound (review amendment).** `B_LS = min(S_bar_max B_L,
-1.25 r_max E_hi)`; the second candidate is *kept and proven* over the complete reachable midpoint
-domain: `r_max = max (1 + |gamma_w(E)|) S_w(E) / (rho_min S_m(E))` over `[E_cut/2, E_hi]` for every
+**Stopping-ratio `r_max` (historical: formerly the second LS candidate, review amendments).**
+SUPERSEDED for the capacity bound by the checked-path-bound design above: `B_LS = S_bar_max B_L` and
+`B_LS2 = S_bar_max^2 B_L` only; the energy-derived candidate `1.25 r_max E_hi` is NOT used. `r_max`
+is still computed and recorded (informative) over the complete reachable midpoint domain: `r_max = max (1 + |gamma_w(E)|) S_w(E) / (rho_min S_m(E))` over `[E_cut/2, E_hi]` for every
 material row (union of material and water-row nodes plus both ends; both stopping powers are
 log-log piecewise linear, so the ratio is monotone between nodes), with the ramp amplification of
 the runtime water-row bin applied to `S_w` as in the envelope above. Every quantity of the proof
@@ -236,8 +237,8 @@ source-table interpolant: after resampling onto the uniform runtime grid the two
 runtime nodes and differ between them (a kink inside a bin), and the candidate set is the union
 of the runtime water and material nodes plus the domain ends. The previous domain
 `[E_cut, E_hi]` was wrong because the scorer evaluates `S_w` down to `E_cut/2` and a custom material
-table may drop sharply below the cutoff. LS2 (`S_bar_max B_LS`) inherits the bound. In water
-`r_max = 1 + |gamma|`, so `B_LS` grows from 188 to 339 MeV for 150 MeV protons.
+table may drop sharply below the cutoff. In water `r_max = 1 + |gamma|`. (Historical: while the candidate was in use, `B_LS` grew from 188 to
+339 MeV for 150 MeV protons; with the checked path bound `B_LS = S_bar_max B_L` = 8.95e3 MeV.)
 
 **Admissible lookup magnitude (fail closed, review amendment).** The largest value of a lookup
 table over the species a request selects must lie in `[2^-60, 2^60]` (or the table is all zero,
