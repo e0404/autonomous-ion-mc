@@ -339,168 +339,33 @@ cached PSTAR table (data layer cache ``IONMC_CACHE_DIR`` with its ``manifests/``
 layout, staged by the orchestrator into the git-ignored ``.ionmc-cache/ionmc-data`` of the runner
 workspace from the experiment data cache) is required; a missing cache fails the test instead of
 skipping it."""
-A16_INTENDED_CHANGE: dict[str, Any] | None = {
-    "task": "V3-003D",
-    "baseline": "a524f209",
-    "identity_field": "range_construction",
-    "baseline_value": None,  # the baseline tables carry no range_construction identity
-    "new_value": "exact-loglog-quadrature-v1",
-    # Digest fields that may differ, per configuration family, each with the keys of the `bounds`
-    # quantities that constrain it (a field that differs without bounded quantities fails, and so
-    # does any field not listed); every other field of every spec (counters, valid flags, the
-    # discrete trace columns of t13) must be bit-identical. t13 (150 MeV, 1 mm steps, up to 20000
-    # histories) is the sensitive configuration: tight bounds. t1 (100 MeV, 2 mm steps in 5 mm
-    # voxels, 32 histories) is branch-flip sensitive (the row 37 flip of the fixture of
-    # tests/ionmc/data/trace_baseline_20mev.npz): its per-history outputs cannot be tightly bounded,
-    # so they are bounded through aggregates (means, fractions) and physical caps.
-    "allowed_differing_fields": {
-        "t13": {
-            "grid.dose.batch_energy_mev": ["profile_rel_max", "voxel_rel_max", "in_grid_rel"],
-            "energy_balance.cutoff_mev": ["cutoff_rel"],
-            "energy_balance.in_grid_mev": ["in_grid_rel"],
-            "energy_balance.quantization_mev": ["quantization_abs_mev"],
-            "energy_balance.step_deposit_mev": ["step_deposit_rel"],
-            "diagnostics.end_direction": ["end_direction_max"],
-            "diagnostics.end_energy_mev": ["end_energy_max_mev"],
-            "diagnostics.end_position_mm": ["end_position_max_mm", "end_dz_median_abs_mm"],
-            "diagnostics.trace_end_energy_mev": ["end_energy_max_mev"],
-            "diagnostics.trace.deposit_mev": ["trace_deposit_max_mev"],
-            "diagnostics.trace.energy_mev": ["trace_energy_max_mev"],
-            "diagnostics.trace.step_mm": ["trace_step_max_mm"],
-            "diagnostics.trace.ux": ["trace_direction_max"],
-            "diagnostics.trace.uy": ["trace_direction_max"],
-            "diagnostics.trace.uz": ["trace_direction_max"],
-            "diagnostics.trace.x_mm": ["trace_position_max_mm"],
-            "diagnostics.trace.y_mm": ["trace_position_max_mm"],
-            "diagnostics.trace.z_mm": ["trace_position_max_mm"],
-        },
-        "t1": {
-            "grid.dose.batch_energy_mev": [
-                "profile_abs_over_max",
-                "in_grid_rel",
-                "grid_negative_mev",
-            ],
-            "energy_balance.cutoff_mev": ["cutoff_rel"],
-            "energy_balance.in_grid_mev": ["in_grid_rel"],
-            "energy_balance.quantization_mev": ["quantization_abs_mev"],
-            "energy_balance.step_deposit_mev": ["step_deposit_rel"],
-            "diagnostics.end_direction": ["end_direction_mean_abs", "end_direction_norm_err"],
-            "diagnostics.end_energy_mev": ["end_energy_mean_abs", "end_energy_over_cut_mev"],
-            "diagnostics.end_position_mm": [
-                "end_position_moved_gt1mm_fraction",
-                "end_dz_mean_abs_mm",
-                "end_position_outside_mm",
-            ],
-            "diagnostics.trace_end_energy_mev": ["end_energy_mean_abs", "end_energy_over_cut_mev"],
-            "diagnostics.trace.energy_mev": ["trace_energy_over_e0_mev", "trace_rows_rel"],
-            "diagnostics.trace.step_mm": ["trace_step_over_max_mm"],
-            "diagnostics.trace.deposit_mev": [
-                "trace_deposit_row_max_mev",
-                "trace_deposit_negative_mev",
-            ],
-            "diagnostics.trace.x_mm": ["trace_position_outside_mm"],
-            "diagnostics.trace.y_mm": ["trace_position_outside_mm"],
-            "diagnostics.trace.z_mm": ["trace_position_outside_mm"],
-            "diagnostics.trace.ux": ["trace_direction_over_unit"],
-            "diagnostics.trace.uy": ["trace_direction_over_unit"],
-            "diagnostics.trace.uz": ["trace_direction_over_unit"],
-            "diagnostics.trace.attempts": ["trace_attempts_max"],
-            "diagnostics.trace.history": ["trace_discrete_out_of_range"],
-            "diagnostics.trace.ix": ["trace_discrete_out_of_range"],
-            "diagnostics.trace.iy": ["trace_discrete_out_of_range"],
-            "diagnostics.trace.iz": ["trace_discrete_out_of_range"],
-            "diagnostics.trace.reason": ["trace_discrete_out_of_range"],
-            "diagnostics.trace.step": ["trace_discrete_out_of_range"],
-            "diagnostics.trace.blocks": ["trace_discrete_out_of_range"],
-        },
-    },
-    # Physical limits used by the caps: source energy, energy cut, maximum step, and the extent
-    # of the phantom (x, y in -30..30 mm; z in 0..200 mm for t1 (40 voxels of 5 mm) and
-    # 0..1.1 * 158.6 mm for t13).
-    "physical_limits": {
-        "t13": {
-            "e0_mev": 150.0,
-            "e_cut_mev": 2.0,
-            "max_step_mm": 1.0,
-            "box_min_mm": [-30.0, -30.0, 0.0],
-            "box_max_mm": [30.0, 30.0, 174.46],
-        },
-        "t1": {
-            "e0_mev": 100.0,
-            "e_cut_mev": 2.0,
-            "max_step_mm": 2.0,
-            "box_min_mm": [-30.0, -30.0, 0.0],
-            "box_max_mm": [30.0, 30.0, 200.0],
-        },
-    },  # fmt: skip
-    # Bounds of the allowed differences: 2x the values measured at the reviewed state (measured
-    # values and derivation: the plan block bound by plan_block_sha256), or exact physical caps
-    # (limits 0 or 1e-9) for the "over/outside/negative" quantities.
-    "bounds": {
-        "t13": {
-            "in_grid_rel": 1.2e-9,
-            "step_deposit_rel": 6e-6,
-            "cutoff_rel": 5e-4,
-            "quantization_abs_mev": 3e-6,
-            "end_position_max_mm": 0.0126,
-            "end_dz_median_abs_mm": 0.0066,
-            "end_energy_max_mev": 0.104,
-            "end_direction_max": 0.044,
-            "voxel_rel_max": 0.037,
-            "profile_rel_max": 0.012,
-            "depth_max_layer_moved": 0.0,
-            "grid_negative_mev": 0.0,
-            "trace_energy_max_mev": 0.006,
-            "trace_position_max_mm": 0.0071,
-            "trace_deposit_max_mev": 1.8e-4,
-            "trace_step_max_mm": 1.9e-4,
-            "trace_direction_max": 1.2e-5,
-        },
-        "t1": {
-            "in_grid_rel": 1.2e-9,
-            "step_deposit_rel": 1e-4,
-            "cutoff_rel": 5e-3,
-            "quantization_abs_mev": 3e-6,
-            "profile_abs_over_max": 0.1,
-            "depth_max_layer_moved": 0.0,
-            "grid_negative_mev": 0.0,
-            "end_dz_mean_abs_mm": 0.21,
-            "end_position_moved_gt1mm_fraction": 0.625,
-            "end_position_outside_mm": 1e-6,
-            "end_energy_mean_abs": 0.01,
-            "end_energy_over_cut_mev": 1e-6,
-            "end_direction_mean_abs": 0.071,
-            "end_direction_norm_err": 1.7e-7,
-            "trace_rows_rel": 0.004,
-            "trace_energy_over_e0_mev": 1e-9,
-            "trace_step_over_max_mm": 1e-9,
-            "trace_deposit_row_max_mev": 4.2,
-            "trace_deposit_negative_mev": 0.0,
-            "trace_position_outside_mm": 1e-6,
-            "trace_direction_over_unit": 1e-9,
-            "trace_attempts_max": 6.0,
-            "trace_discrete_out_of_range": 0.0,
-        },
-    },
-    # sha256 of the source set (a16_source_digest(): every hashed file including this one and the
-    # plan block, with only the two self-referential digest literals masked): the record is valid
-    # only for exactly this source state.
-    "source_digest": "24323b959660d6ec4ff658531a70b998f24f60a11b9e16c7ba826930f415fc28",
-    # sha256 of the delimited block of validation/plans/v3-003d-acceptance.md that states this
-    # record (without this key), verified by the step at run time.
-    "plan_block_sha256": "951106d3bd6640a3d20fcb81359683eb586e0877d381f7f0750dfea4d529a89a",
-}
-"""The one recorded exception to the fail-closed A16 regression of the ``lv4`` suite (plan
-amendment 6 of V3-004). While it is not ``None``, the ``lv4`` step runs ``--mode intended-change``
-and passes this record to the step, which (i) verifies that the plan block of
-``validation/plans/v3-003d-acceptance.md`` hashes to ``plan_block_sha256`` and states exactly this
-record, (ii) verifies that the table identity ``identity_field`` of the baseline tree (``baseline``,
-which must equal ``A16_BASELINE`` of ``steps_v4.py``) is ``baseline_value`` and that of the tree
-under test is ``new_value``, and (iii) gates the comparison: only ``allowed_differing_fields`` may
+A16_INTENDED_CHANGE: dict[str, Any] | None = None
+"""The recorded exception to the fail-closed A16 regression of the ``lv4`` suite (plan amendment 6
+of V3-004); ``None`` while there is none, which is the normal state: the step then runs
+``--mode regression`` (the default), which is GATED: the no-tally digests of the tree under test
+must equal those of ``A16_BASELINE`` (``steps_v4.py``) in every compared field, and tally
+neutrality must hold. The V3-003D record (baseline a524f209, identity field
+``range_construction``) was deleted by the first commit of V3-005A after the V3-003D merge, which
+also advanced ``A16_BASELINE`` to the merge commit f3a1dd62; the record is preserved in the
+delimited block of ``validation/plans/v3-003d-acceptance.md``.
+
+A task that intentionally changes the qualified transport path re-introduces a record: it assigns a
+dict literal on the line ``A16_INTENDED_CHANGE: dict[str, Any] | None = {`` (the line must start
+exactly so, and the literal must end with a line ``}`` followed by a newline, because
+:func:`a16_normalize` finds the record between ``A16_RECORD_START`` and ``A16_RECORD_END``) with the
+keys of ``steps_v4.verify_intended_change`` (``task``, ``baseline``, ``identity_field``,
+``baseline_value``, ``new_value``, ``allowed_differing_fields``, ``physical_limits``, ``bounds``,
+``source_digest``, ``plan_block_sha256``), states the same record (without ``plan_block_sha256``)
+in a delimited block of its own plan file (``A16_PLAN_FILE`` and ``steps_v4.PLAN_FILE`` are then
+pointed at that plan), and refreshes ``source_digest`` with ``--print-a16-source-digest``. While
+it is not ``None`` the ``lv4`` step runs ``--mode intended-change`` and passes the record to the
+step, which (i) verifies that the plan block hashes to ``plan_block_sha256`` and states exactly
+this record, (ii) verifies that the table identity ``identity_field`` of the baseline tree
+(``baseline``, which must equal ``A16_BASELINE``) is ``baseline_value`` and that of the tree under
+test is ``new_value``, and (iii) gates the comparison: only ``allowed_differing_fields`` may
 differ, within ``bounds``; everything else must be bit-identical. It fails closed otherwise. Once
-V3-003D is merged the baseline tree carries ``new_value``, so the step then fails until the next
-task's first commit deletes this record (sets it to ``None``) and advances ``A16_BASELINE``. With
-``None`` the step runs ``--mode regression`` (the default)."""
+that task is merged the baseline tree carries ``new_value``, so the next task's first commit sets
+this back to ``None`` and advances ``A16_BASELINE`` (the form above)."""
 
 KILL_GRACE_S = 10.0
 
@@ -616,11 +481,19 @@ def a16_normalize(text: str, kind: str) -> str:
     the placeholder ``MASKED``: ``kind`` ``"record"`` (``run_suite.py``: only inside the
     ``A16_INTENDED_CHANGE`` dict literal) or ``"plan"`` (only inside the delimited A16 block of the
     V3-003D plan). Every other byte, including look-alike text elsewhere, stays hashed. A record
-    or block that is present must hold exactly the expected number of literals (fail closed)."""
+    or block that is present must hold exactly the expected number of literals (fail closed). In the
+    ``A16_INTENDED_CHANGE: dict[str, Any] | None = None`` form (no record) the ``run_suite.py`` text
+    is returned unchanged."""
     if kind == "record":
         lo, hi = text.find(A16_RECORD_START), None
         if lo >= 0:
-            hi = text.find(A16_RECORD_END, lo) + len(A16_RECORD_END)
+            eol = text.find("\n", lo + 1)
+            if not text[lo + 1 : eol].rstrip().endswith("= {"):
+                return text  # the ``= None`` form: no record, nothing to mask
+            end = text.find(A16_RECORD_END, lo)
+            if end < 0:
+                raise SystemExit("A16 normalization: the A16_INTENDED_CHANGE literal is not closed")
+            hi = end + len(A16_RECORD_END)
     else:
         lo = text.find(A16_PLAN_BEGIN)
         hi = text.find(A16_PLAN_END) + len(A16_PLAN_END) if lo >= 0 else None

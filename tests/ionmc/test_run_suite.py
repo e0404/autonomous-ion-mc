@@ -4,9 +4,11 @@ source attestation, dirty trees); steps are only run for the git/snapshot end-to
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -925,28 +927,48 @@ def _a16_cmd(mod: ModuleType) -> list[str]:
     return next(s[1] for s in steps if s[0].endswith("a16-qualified-path-regression"))
 
 
-def test_a16_suite_default_is_regression_and_exception_is_the_recorded_one() -> None:
+def _v3003d_record() -> dict:  # type: ignore[type-arg]
+    """The V3-003D A16 intended-change record as the historical block of the V3-003D plan states
+    it (``A16_INTENDED_CHANGE`` of ``run_suite.py`` is ``None`` since V3-005A): the fixture of the
+    gate and binding tests, which exercise the machinery a future task re-introduces."""
+    st = _load("steps_v4")
+    text = (REPO / st.PLAN_FILE).read_text()
+    block = st.plan_block(text)
+    inner = block[len(st.PLAN_BEGIN) : -len(st.PLAN_END)]
+    rec = json.loads(inner[inner.index("{") : inner.rindex("}") + 1])
+    rec["plan_block_sha256"] = hashlib.sha256(block.encode()).hexdigest()
+    return rec  # type: ignore[no-any-return]
+
+
+def test_a16_has_no_recorded_exception_and_the_baseline_is_the_v3_003d_merge() -> None:
+    run, st = _load("run_suite"), _load("steps_v4")
+    assert run.A16_INTENDED_CHANGE is None  # V3-003D record deleted (amendment 6 of V3-004)
+    assert re.fullmatch(r"[0-9a-f]{40}", st.A16_BASELINE)  # a full develop merge SHA
+    assert st.A16_BASELINE.startswith("f3a1dd62")  # V3-003D merge commit
+    assert not st.A16_BASELINE.startswith(_v3003d_record()["baseline"])  # advanced past a524f209
+    cmd = _a16_cmd(run)  # the suite runs the gated regression mode, without a record
+    assert cmd[cmd.index("--mode") + 1] == "regression"
+    assert "--intended-change-record" not in cmd
+
+
+def test_a16_suite_passes_a_recorded_exception_to_the_intended_change_mode() -> None:
     mod = _load("run_suite")
-    rec = mod.A16_INTENDED_CHANGE
+    rec = _v3003d_record()
     ident = ("task", "baseline", "identity_field", "baseline_value", "new_value")
     assert {k: rec[k] for k in ident} == {
         "task": "V3-003D", "baseline": "a524f209", "identity_field": "range_construction",
         "baseline_value": None, "new_value": "exact-loglog-quadrature-v1",
     }  # fmt: skip
+    mod.A16_INTENDED_CHANGE = rec  # a future task records its exception
     cmd = _a16_cmd(mod)
     assert cmd[cmd.index("--mode") + 1] == "intended-change"
     assert json.loads(cmd[cmd.index("--intended-change-record") + 1]) == rec
-    mod.A16_INTENDED_CHANGE = None  # record deleted (next task): regression, no exception
-    cmd = _a16_cmd(mod)
-    assert cmd[cmd.index("--mode") + 1] == "regression"
-    assert "--intended-change-record" not in cmd
 
 
 def test_a16_intended_change_verification_is_fail_closed() -> None:
-    run, st = _load("run_suite"), _load("steps_v4")
-    rec = run.A16_INTENDED_CHANGE
+    st = _load("steps_v4")
+    rec = {**_v3003d_record(), "baseline": st.A16_BASELINE[:8]}  # a record naming this baseline
     new = rec["new_value"]
-    assert st.A16_BASELINE == rec["baseline"]
     ok = st.verify_intended_change(rec, st.A16_BASELINE, None, new)
     assert ok["verified_baseline_identity"] is None and ok["verified_current_identity"] == new
     with pytest.raises(SystemExit, match="needs the A16_INTENDED_CHANGE record"):
@@ -959,6 +981,8 @@ def test_a16_intended_change_verification_is_fail_closed() -> None:
         st.verify_intended_change(rec, st.A16_BASELINE, None, "other-construction")
     with pytest.raises(SystemExit, match="names baseline"):
         st.verify_intended_change({**rec, "baseline": "deadbeef"}, st.A16_BASELINE, None, new)
+    with pytest.raises(SystemExit, match="names baseline"):  # the V3-003D record is out of date
+        st.verify_intended_change(_v3003d_record(), st.A16_BASELINE, None, new)
     with pytest.raises(SystemExit, match="exactly the keys"):
         st.verify_intended_change({"task": "V3-003D"}, st.A16_BASELINE, None, new)
 
@@ -1059,8 +1083,8 @@ def _with(fn):  # type: ignore[no-untyped-def]
 
 
 def test_a16_gate_accepts_the_intended_change_and_rejects_everything_else() -> None:
-    run, st = _load("run_suite"), _load("steps_v4")
-    rec = run.A16_INTENDED_CHANGE
+    st = _load("steps_v4")
+    rec = _v3003d_record()
     base = _synthetic_raw()
     ok = st.a16_gate(rec, base, _perturbed(base))
     assert ok["ok"], ok
@@ -1092,8 +1116,7 @@ def test_a16_gate_accepts_the_intended_change_and_rejects_everything_else() -> N
 
 
 def test_a16_gate_t1_bounds_every_allowlisted_field() -> None:
-    run = _load("run_suite")
-    rec = run.A16_INTENDED_CHANGE
+    rec = _v3003d_record()
     base = _synthetic_raw("t1:warp-cpu:float64")
     assert _violations(rec, base, _perturbed(base, T1), T1) == []
     # every differing field of the t1 allowlist is covered by existing bound keys
@@ -1154,7 +1177,7 @@ def test_a16_gate_t1_bounds_every_allowlisted_field() -> None:
 @pytest.mark.parametrize("spec", [T13, T1])
 def test_a16_gate_rejects_non_finite_values_in_every_family(spec: str, bad: float) -> None:
     """NaN/Inf must never satisfy a bound or pass a digest comparison (fail closed)."""
-    rec = _load("run_suite").A16_INTENDED_CHANGE
+    rec = _v3003d_record()
     fam = spec.split(":")[0]
     base = _synthetic_raw(spec)
     assert _violations(rec, base, _perturbed(base, spec), spec) == []
@@ -1191,15 +1214,18 @@ def test_a16_caps_are_nan_safe() -> None:
     assert st.nonfinite_fields(mixed) == ["b", "d"]
 
 
+_RECORD_TEXT = (
+    "head = 1\nA16_INTENDED_CHANGE: dict[str, Any] | None = {\n"
+    '    "bounds": {"a": 1},\n    "source_digest": "1111",\n'
+    '    "plan_block_sha256": "2222",\n}\n"""doc"""\ntail = 2\n'
+)
+
+
 def test_a16_normalization_masks_exactly_the_record_literals() -> None:
     run = _load("run_suite")
-    rec = run.A16_INTENDED_CHANGE
-    text = (REPO / run.A16_RUN_SUITE_FILE).read_text()
-    lo = text.index(run.A16_RECORD_START)
-    hi = text.index(run.A16_RECORD_END, lo) + len(run.A16_RECORD_END)
-    lits = [f'"{k}": "{rec[k]}"' for k in ("source_digest", "plan_block_sha256")]
-    for lit in lits:
-        assert text.count(lit) == 1 and lo < text.index(lit) < hi
+    rec = _v3003d_record()
+    text = _RECORD_TEXT
+    lits = ['"source_digest": "1111"', '"plan_block_sha256": "2222"']
     # decoys with the same shape before and after the record are not masked
     decoy = '"source_digest": "deadbeef"\n"plan_block_sha256": "cafe"\n'
     doctored = decoy + text + decoy
@@ -1223,23 +1249,40 @@ def test_a16_normalization_masks_exactly_the_record_literals() -> None:
         run.a16_normalize(text.replace(lits[0], '"source_digest_x": "0"'), "record")
     with pytest.raises(SystemExit, match="expected 1"):
         run.a16_normalize(plan.replace(plit, plit + ',\n "plan_block_sha256": "0"'), "plan")
+    with pytest.raises(SystemExit, match="not closed"):
+        run.a16_normalize(text.replace("}\n", ""), "record")
     # no record: nothing to mask
     assert run.a16_normalize("no record here", "record") == "no record here"
 
 
-def test_a16_source_digest_binds_the_record_to_the_source_tree() -> None:
+def test_a16_normalization_handles_the_none_form() -> None:
+    """With ``A16_INTENDED_CHANGE = None`` (the normal state) nothing is masked, even if a later
+    brace-closed literal or look-alike digest literals exist (they stay hashed)."""
+    run = _load("run_suite")
+    none_form = "A16_INTENDED_CHANGE: dict[str, Any] | None = None\n"
+    later = 'X = {\n    "source_digest": "1111",\n    "plan_block_sha256": "2222",\n}\n'
+    for text in (
+        "head = 1\n" + none_form + '"""doc"""\n',
+        "head = 1\n" + none_form + later,
+        "head = 1\n" + none_form + '"""doc"""\n}\n' + later,
+    ):
+        assert run.a16_normalize(text, "record") == text
+    # the checked-in file is in the None form: its text is hashed unchanged
+    rs = (REPO / run.A16_RUN_SUITE_FILE).read_text()
+    assert run.A16_RECORD_START in rs and "\n" + none_form in rs
+    assert run.a16_normalize(rs, "record") == rs
+    # re-introducing a record in the documented form is masked again
+    recorded = rs.replace(none_form, _RECORD_TEXT.split("\n", 1)[1].split('"""doc"""')[0], 1)
+    norm = run.a16_normalize(recorded, "record")
+    assert recorded != rs and norm.count('"source_digest": "MASKED"') == 1
+    assert norm.count('"plan_block_sha256": "MASKED"') == 1
+
+
+def test_a16_source_digest_binds_the_source_tree() -> None:
     run, st = _load("run_suite"), _load("steps_v4")
-    rec = run.A16_INTENDED_CHANGE
     assert (run.A16_PLAN_BEGIN, run.A16_PLAN_END) == (st.PLAN_BEGIN, st.PLAN_END)
     digest = run.a16_source_digest()
-    # the record is valid for exactly this source state: a later commit that touches a hashed
-    # file must refresh the record (python validation/scripts/transport/run_suite.py
-    # --print-a16-source-digest) or delete it (amendment 6)
-    assert rec["source_digest"] == digest
-    assert st.verify_source_digest(rec, digest) == digest
-    with pytest.raises(SystemExit, match="exact source state"):
-        st.verify_source_digest(rec, "0" * 64)
-    # run_suite.py and the plan block are hashed, with only the two self-referential literals masked
+    assert re.fullmatch(r"[0-9a-f]{64}", digest)
     entries = run.a16_source_entries()
     assert run.a16_digest_of(entries) == digest
     rs, plan = run.A16_RUN_SUITE_FILE, run.A16_PLAN_FILE
@@ -1252,24 +1295,28 @@ def test_a16_source_digest_binds_the_record_to_the_source_tree() -> None:
         e[rel] = text.replace(old, new, 1).encode()
         return run.a16_digest_of(e)
 
-    assert changed(rs, '"voxel_rel_max": 0.037', '"voxel_rel_max": 0.5') != digest  # a bound
+    # run_suite.py (the gate bounds' home when a record exists, and the digest function) and the
+    # plan block are hashed; only the self-referential literals are masked
     assert changed(rs, "def a16_normalize", "def a16_normalise") != digest  # the digest function
     assert changed(plan, '"voxel_rel_max": 0.037', '"voxel_rel_max": 0.5') != digest  # plan block
-    assert changed(rs, '"MASKED"', '"MASKED"') == digest
-    lit = '"source_digest": "' + rec["source_digest"] + '"'
-    text = (REPO / rs).read_text()
-    assert lit in text and lit in (REPO / plan).read_text()
+    raw = (REPO / plan).read_text()
+    lit = f'"source_digest": "{_v3003d_record()["source_digest"]}"'
+    assert raw.count(lit) == 1  # the historical block's literal is masked, not hashed
     e = dict(entries)
-    e[rs] = run.a16_normalize(text.replace(lit, '"source_digest": "0"'), "record").encode()
-    assert run.a16_digest_of(e) == digest  # only the self-referential value is free
+    e[plan] = run.a16_normalize(raw.replace(lit, '"source_digest": "0"'), "plan").encode()
+    assert run.a16_digest_of(e) == digest
+    assert changed(rs, '"MASKED"', '"MASKED"') == digest
+    assert st.verify_source_digest({"source_digest": digest}, digest) == digest
+    with pytest.raises(SystemExit, match="exact source state"):
+        st.verify_source_digest({"source_digest": digest}, "0" * 64)
     cmd = [sys.executable, str(SCRIPTS / "run_suite.py"), "--print-a16-source-digest"]
     out = subprocess.run(cmd, capture_output=True, text=True, check=True)
     assert out.stdout.strip() == digest
 
 
 def test_a16_plan_binding_is_verified() -> None:
-    run, st = _load("run_suite"), _load("steps_v4")
-    rec = run.A16_INTENDED_CHANGE
+    st = _load("steps_v4")
+    rec = _v3003d_record()
     text = (REPO / st.PLAN_FILE).read_text()
     assert st.verify_plan_binding(rec, text) == rec["plan_block_sha256"]
     with pytest.raises(SystemExit, match="hashes to"):
