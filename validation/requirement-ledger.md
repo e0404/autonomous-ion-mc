@@ -44,11 +44,11 @@ related-model, backend-parity, self-consistency.
 | V1-MUST-009 | Beamlet-resolved scoring | S-CAP-PLANNING | self-consistency | planned |
 | V1-MUST-010 | Dose influence matrices | S-CAP-PLANNING | self-consistency | planned |
 | V1-MUST-011 | Changeable scoring grids | S-CAP-PLANNING, S-NUM-FALSIFICATION | self-consistency | planned |
-| V1-MUST-012 | Extensible scoring | S-CAP-PLANNING | self-consistency | planned |
-| V1-MUST-013 | Absorbed dose | S-PHYS-PROTON-EM | independent-monte-carlo | planned |
-| V1-MUST-014 | Energy deposition | S-PHYS-PROTON-EM | independent-monte-carlo | planned |
-| V1-MUST-015 | LET scoring | S-PHYS-LET | independent-monte-carlo | planned |
-| V1-MUST-016 | External biological lookup data | S-CAP-PLANNING | self-consistency | planned |
+| V1-MUST-012 | Extensible scoring | S-CAP-PLANNING | self-consistency | in progress (V3-004) |
+| V1-MUST-013 | Absorbed dose | S-PHYS-PROTON-EM | independent-monte-carlo | in progress (V3-004) |
+| V1-MUST-014 | Energy deposition | S-PHYS-PROTON-EM | independent-monte-carlo | in progress (V3-004) |
+| V1-MUST-015 | LET scoring | S-PHYS-LET | independent-monte-carlo | in progress (V3-004) |
+| V1-MUST-016 | External biological lookup data | S-CAP-PLANNING | self-consistency | in progress (V3-004) |
 | V1-MUST-017 | Analytical physics layer | S-PHYS-PROTON-EM | independent-theory | planned |
 | V1-MUST-018 | External/tabulated data layer | S-PROV-DATA | ion-specific-tabulated | planned |
 | V1-MUST-019 | Separation of transport from data source | S-CAP-CONTRACT | self-consistency | planned |
@@ -87,5 +87,5 @@ related-model, backend-parity, self-consistency.
 | V2-PERF | frozen application-level performance/resource gates | S-PERF-WORKLOADS | self-consistency | planned |
 | V2-RELEASE | complete qualification and promotion | all suites | all categories | planned |
 
-Status vocabulary: planned, implemented (code merged, evidence pending),
+Status vocabulary: planned, in progress (task open, nothing merged as evidence), implemented (code merged, evidence pending),
 evidenced (exact-SHA evidence recorded), satisfied (full qualification pass).

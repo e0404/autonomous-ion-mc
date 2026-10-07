@@ -1,7 +1,8 @@
 """Partition-independent reduction of per-history tallies and diagnostics (V3-003B).
 
 Every backend writes, for each history, one row of independently accumulated float64 tallies
-(``TALLY_NAMES`` followed by the energy deposited outside each scoring grid) and one row of
+(``TALLY_NAMES``, then the energy deposited outside each scoring grid, then the quantization
+residual of each grid) and one row of
 int32 transport-limit counters (``COUNTER_NAMES``). A history's row depends only on that
 history, so it does not depend on how histories are split into chunks, worker processes or
 threads. The host reduces the rows *exactly*: the sum of the float64 values of a column is
@@ -14,7 +15,8 @@ The per-voxel energy-deposit grids are int64 fixed-point accumulators (quantum `
 2**-30 MeV): each deposit piece (see the track-length scoring in ``ionmc.transport.reference``)
 is rounded to the nearest quantum by a deterministic function of the piece and added with an
 integer (associative) addition, so the grids are bit-identical for any partition of the
-histories and across chunk sizes, workers, and CPU/CUDA within a precision. The rounding
+histories and across chunk sizes and worker processes on one device kind (CPU against CUDA
+is compared statistically, T12, never bit for bit). The rounding
 error is at most q/2 per piece (random walk q/2 sqrt(N) over N pieces in a voxel) and is
 tallied per history and grid (``quantization`` columns) so that the energy balance closes.
 Conversion to float64 and the sum over workers happen at the reduction.
@@ -173,7 +175,8 @@ def rows_to_partial(
     diagnostics: HistoryDiagnostics | None,
     meta: dict[str, Any] | None = None,
 ) -> PartialTransport:
-    """Reduce per-history rows ``(n, 6 + G)`` and ``(n, 7)`` of one range to a partial result."""
+    """Reduce per-history rows ``(n, 6 + 2 G)`` (fixed tallies, outside deposits, quantization
+    residuals) and ``(n, 9)`` (counters) of one range to a partial result."""
     return rows_to_partial_many(
         h0,
         h1,

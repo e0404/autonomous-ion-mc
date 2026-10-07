@@ -22,16 +22,30 @@ the mean ``sum (x_b - mean)^2 / (B (B - 1))``.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
+from typing import Literal
 
 import numpy as np
 from numpy.typing import NDArray
 
-from ionmc._validate import fail, int_triple, triple
+from ionmc._validate import fail, int_triple, real, triple
 from ionmc.geometry import VoxelGeometry
 
 MEV_PER_G_TO_GY = 1.602176634e-10
 MAX_SCORING_GRIDS = 4
+TALLY_QUANTITIES = (
+    "edep",
+    "dose",
+    "fluence",
+    "let_t",
+    "let_d",
+    "let_d_eps",
+    "lookup_sum",
+    "lookup_dose_avg",
+    "fluence_spectrum",
+)
+GENERATION_CHOICES = ("all", "primary", "secondary")
 
 
 @dataclass(frozen=True)
@@ -61,6 +75,92 @@ class ScoringGrid:
         return self.origin_mm[axis] + self.spacing_mm[axis] * np.arange(
             self.shape[axis] + 1, dtype=np.float64
         )
+
+
+@dataclass(frozen=True)
+class TallyRequest:
+    """A request for one scored quantity on one scoring grid (decision 0040).
+
+    ``quantity``: ``edep`` (MeV), ``dose`` (dose to medium), ``fluence`` (sum of path lengths per
+    voxel volume, mm^-2), ``let_t`` / ``let_d`` (track- and dose-averaged LET in water, keV/um),
+    ``let_d_eps`` (diagnostic, deposit-weighted), ``lookup_sum`` (sum of ``eps f``, MeV times the
+    unit of ``f``), ``lookup_dose_avg`` (``lookup_sum / E_step``, the deposit-weighted average of
+    the lookup ``f``) and ``fluence_spectrum`` (path length per energy bin per nucleon, with an
+    underflow and an overflow bin). ``species`` are registry names (None: all transported charged
+    species; for ``edep``/``dose`` also the non-transported pseudo-species so the total closes);
+    ``generation`` selects primaries, secondaries or all. ``lookup`` names a
+    :class:`~ionmc.lookup.LookupTable` of ``SimulationConfig.lookups`` (required for the
+    ``lookup_*`` quantities only); ``energy_edges_mev_per_u`` are the uniform (linear or log) bin
+    edges of ``fluence_spectrum`` (required for it only).
+
+    ``let_medium`` and ``dose_reference`` exist so that unsupported choices fail closed instead of
+    being unavailable to ask for: only ``"water"`` and ``"medium"`` are supported (the LET medium
+    is part of the definition; dose-to-water needs a later channel kind).
+    """
+
+    name: str
+    grid: str
+    quantity: Literal[
+        "edep",
+        "dose",
+        "fluence",
+        "let_t",
+        "let_d",
+        "let_d_eps",
+        "lookup_sum",
+        "lookup_dose_avg",
+        "fluence_spectrum",
+    ]
+    species: tuple[str, ...] | None = None
+    generation: Literal["all", "primary", "secondary"] = "all"
+    lookup: str | None = None
+    energy_edges_mev_per_u: tuple[float, ...] | None = None
+    let_medium: str = "water"
+    dose_reference: str = "medium"
+
+    def __post_init__(self) -> None:
+        for f in ("name", "grid", "let_medium", "dose_reference"):
+            v = getattr(self, f)
+            if not isinstance(v, str) or not v:
+                raise fail(f"tally request field {f!r} must be a non-empty string")
+        if self.quantity not in TALLY_QUANTITIES:
+            raise fail(f"tally quantity must be one of {TALLY_QUANTITIES}, got {self.quantity!r}")
+        if self.generation not in GENERATION_CHOICES:
+            raise fail(f"generation must be one of {GENERATION_CHOICES}, got {self.generation!r}")
+        if self.species is not None:
+            sp = self.species
+            if (
+                not isinstance(sp, tuple | list)
+                or len(sp) == 0
+                or not all(isinstance(x, str) for x in sp)
+                or len(set(sp)) != len(sp)
+            ):
+                raise fail("species must be None or a non-empty tuple of distinct names")
+            object.__setattr__(self, "species", tuple(sp))
+        needs_lookup = self.quantity in ("lookup_sum", "lookup_dose_avg")
+        if needs_lookup != (self.lookup is not None):
+            raise fail(
+                f"tally {self.name!r}: 'lookup' is required for lookup_* quantities and "
+                "forbidden for all others"
+            )
+        if self.lookup is not None and (not isinstance(self.lookup, str) or not self.lookup):
+            raise fail("lookup must be a non-empty table name")
+        has_edges = self.energy_edges_mev_per_u is not None
+        if (self.quantity == "fluence_spectrum") != has_edges:
+            raise fail(
+                f"tally {self.name!r}: 'energy_edges_mev_per_u' is required for fluence_spectrum "
+                "and forbidden for all other quantities"
+            )
+        if self.energy_edges_mev_per_u is not None:
+            e = tuple(
+                real(f"energy_edges_mev_per_u[{i}]", v, positive=True)
+                for i, v in enumerate(self.energy_edges_mev_per_u)
+            )
+            if len(e) < 2 or any(b <= a for a, b in zip(e, e[1:], strict=False)):
+                raise fail("energy_edges_mev_per_u must be >= 2 strictly increasing values")
+            if not all(math.isfinite(v) for v in e):  # pragma: no cover - real() checks
+                raise fail("energy edges must be finite")
+            object.__setattr__(self, "energy_edges_mev_per_u", e)
 
 
 def overlap_matrix(

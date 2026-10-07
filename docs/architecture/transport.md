@@ -7,7 +7,9 @@ device) raises `BackendUnavailableError`; nothing falls back to another backend.
 [0037](../generated/decisions/0037-v3-architecture-and-conventions-baseline.md) (shared
 functions, random streams, conventions) and
 [0039](../generated/decisions/0039-proton-transport-engine.md) (models, step algorithm,
-fail-closed contract). The models are described in [EM transport](../physics/em-transport.md).
+fail-closed contract) and
+[0040](../generated/decisions/0040-let-and-extensible-scoring.md) (LET, fluence, species and
+lookup scoring). The models are described in [EM transport](../physics/em-transport.md).
 
 ## Module layout
 
@@ -17,6 +19,9 @@ fail-closed contract). The models are described in [EM transport](../physics/em-
 | `ionmc.geometry` | `VoxelGeometry` (materials per voxel, optional density override), `BoxPhantom` (one-voxel box) |
 | `ionmc.sources` | `PencilBeamSource` |
 | `ionmc.scoring` | `ScoringGrid`, exact voxel-mass overlap `voxel_mass_g`, batch estimator `reduce_batches` |
+| `ionmc.species` | append-only species registry (ids 0 p, 1 d, 2 t, 3 He-3, 4 alpha; pseudo-species `nuclear_local`), `producible()` engine capability |
+| `ionmc.lookup` | `LookupTable` (uniform grid, sha256, provenance), `resample_uniform` |
+| `ionmc.transport.channels` | channel compiler: `compile_channels`, `ChannelPlan`, quantum rule |
 | `ionmc.config` | `PhysicsOptions`, `RunOptions`, `DiagnosticsOptions`, `SimulationConfig`, `validate()` returning `EffectiveConfig` |
 | `ionmc.simulation` | `Simulation`, `Result`, `GridResult`, `EnergyBalance`, `TransportCounters`, `capabilities()` |
 | `ionmc.rng.philox` | Philox4x32-10 as a Warp function (`make_philox(real)`) and over Python integers, counter encoding |
@@ -219,6 +224,62 @@ After the run a nonzero transport-limit counter makes the result invalid: `run()
 result is flagged `valid = False`. Counters: `step_truncation`, `stall`, `straggling_rejection`,
 `genealogy_overflow` and `queue_overflow` (both always 0 until secondaries exist),
 `source_energy_out_of_range`, `energy_inversion`, `accumulator_overflow` and `scoring_pieces_overflow`.
+
+## Extensible scoring
+
+Status: the data model and the fail-closed validation of V3-004 (decision 0040) are in place; the
+transport backends do not score channels yet (`config.CHANNEL_BACKENDS` is empty), so a
+configuration with `tallies` is rejected on every backend rather than silently ignored. Acceptance
+rows A1 to A16 are frozen in `validation/plans/v3-004-acceptance.md`.
+
+**Requests.** `SimulationConfig.tallies` is a tuple of `TallyRequest(name, grid, quantity, species,
+generation, lookup, energy_edges_mev_per_u)` and `SimulationConfig.lookups` a tuple of
+`LookupTable`. Quantities: `edep`, `dose` (dose to medium), `fluence`, `let_t`, `let_d`,
+`let_d_eps`, `lookup_sum`, `lookup_dose_avg`, `fluence_spectrum`. `let_medium` (only `"water"`) and
+`dose_reference` (only `"medium"`) are fields so that unsupported choices fail closed.
+
+**Definitions** (decision 0040): `S` is the unrestricted electronic stopping power in water at the
+midpoint energy of the step (a water row from the same `StoppingSource`), distributed over the
+scoring pieces as a midpoint-anchored linear ramp; `LET_t = sum(l S)/sum(l)`,
+`LET_d = sum(l S^2)/sum(l S)`, `LET_d^eps = sum(eps S)/sum(eps)`; fluence is `sum(l)/V`. All transported
+charged particles contribute; neutrals, cutoff and nuclear-local deposits are excluded from LET and
+lookup averages and reported in the automatic channel `edep_excluded_from_let`.
+
+**Species.** `ionmc.species` holds the append-only registry; the set of species the engine can
+produce is an engine capability (`producible(projectile)`, V3-004: the source projectile as a
+primary). A request for any other species, or generation `"secondary"`, fails closed.
+
+**Channels.** `compile_channels` turns the requests into deduplicated linear channels of the kinds
+E, L, LS, LS2, ES, FE, FL and N (module docstring of `ionmc.transport.channels`), ordered by grid,
+with an int8 `species_match[n_ch, n_species]` matrix, a generation range, a class mask (step or
+local), a lookup index, a spectrum specification (uniform linear or log edges, `n_bins + 2` bins
+with under- and overflow), an offset into one int64 array `acc[B, sum size]`, a per-history
+residual column (every channel but N) and the quantum exponent `k`. Quantities map to channels as
+`edep`/`dose`: E (both classes); `fluence`: L; `let_t`: LS/L; `let_d`: LS2/LS; `let_d_eps`: ES/E_step;
+`lookup_sum`: FE; `lookup_dose_avg`: FE/E_step; `fluence_spectrum`: FL. Energy channels use the
+fixed quantum 2^-30 MeV of the qualified `edep` array; the other kinds use
+`k = min(40, floor(62 - log2(hpb B_c)))` with the per-history bound `B_c` of their kind, with a
+precision floor of 2^-16 of a 1 mm entrance piece; the memory guard is
+`B (sum voxels + sum channel sizes) 8 bytes x workers`. Both are recorded in
+`EffectiveConfig.channels` and in the summary under `"tallies"`.
+
+**Lookup tables.** `LookupTable.from_file(path, expected_sha256=None)` reads JSON on a uniform
+(linear or log) axis in MeV/u or keV/um (water LET), per-species non-negative finite values and
+mandatory `citation`, `license`, `source`, `synthetic`; non-uniform axes are rejected and
+`resample_uniform` is the explicit, recorded alternative. Provenance (file and content sha256,
+citation, license, synthetic flag, resampling) is part of the effective-configuration summary.
+**No clinical tables and no RBE formulas ship.** The only fixture is
+`tests/data/synthetic_lookup.json`, a mathematical test function `f = 1 + 0.1 L` marked
+`synthetic: true` with no biological meaning: it must never be used for a physical or clinical
+statement.
+
+Fail-closed rules added by V3-004 (test A12, `tests/ionmc/test_scoring_channels.py`): unknown or
+unproducible species, generation `"secondary"` (no secondary transport until V3-005A),
+`let_medium` other than water, dose-to-water, unknown grid or lookup, duplicate request names,
+lookup species gaps, axis coverage gaps (energy axis `[table floor, E_hi]/A`, LET axis the water-S
+interval of that energy range), a sha256 mismatch, non-uniform tables or spectrum edges, negative or
+non-finite lookup values, unused lookups, a quantum above the precision floor, accumulator memory
+above the budget and a backend without channels.
 
 ## Results
 

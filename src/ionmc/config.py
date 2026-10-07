@@ -18,13 +18,16 @@ from typing import Any, Literal
 from ionmc._validate import choice, fail, integer, real
 from ionmc.errors import BackendUnavailableError
 from ionmc.geometry import BoxPhantom, VoxelGeometry
-from ionmc.materials import Material
+from ionmc.lookup import LookupTable
+from ionmc.materials import WATER, Material
 from ionmc.physics.em import E_S_MEV
 from ionmc.physics.projectiles import PROTON
 from ionmc.physics.scattering import scattering_length_g_cm2
 from ionmc.physics.stopping import StoppingSource, StoppingTable
-from ionmc.scoring import MAX_SCORING_GRIDS, ScoringGrid
+from ionmc.scoring import MAX_SCORING_GRIDS, ScoringGrid, TallyRequest
 from ionmc.sources import PencilBeamSource
+from ionmc.species import producible
+from ionmc.transport.channels import ChannelPlan, compile_channels
 from ionmc.transport.tables import TransportTables, thaw
 from ionmc.transport.tally import (
     MAX_QUANTA,
@@ -46,6 +49,10 @@ MAX_TRACE_BUFFER_BYTES = 2**30
 MAX_SCORING_PIECES = 4096
 MAX_ENERGY_SIGMA_FRACTION = 0.05
 MAX_ENERGY_LOSS_FRACTION = 0.2
+CHANNEL_BACKENDS: tuple[str, ...] = ()
+"""Backends that implement the scoring channels of decision 0040. Empty until the reference hook
+(V3-004 step 5) and the kernel (step 8) land; a configuration with tallies is rejected on every
+other backend, so a requested tally is never silently ignored."""
 U01_MAPPING = {
     "float64": "((w >> 8) + 0.5) * 2**-24",
     "float32": "((w >> 9) + 0.5) * 2**-23",
@@ -182,6 +189,8 @@ class SimulationConfig:
     physics: PhysicsOptions
     run: RunOptions
     diagnostics: DiagnosticsOptions = DiagnosticsOptions()
+    tallies: tuple[TallyRequest, ...] = ()
+    lookups: tuple[LookupTable, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.source, PencilBeamSource):
@@ -198,6 +207,14 @@ class SimulationConfig:
             raise fail("run must be RunOptions")
         if not isinstance(self.diagnostics, DiagnosticsOptions):
             raise fail("diagnostics must be DiagnosticsOptions")
+        if not isinstance(self.tallies, tuple) or not all(
+            isinstance(t, TallyRequest) for t in self.tallies
+        ):
+            raise fail("tallies must be a tuple of TallyRequest")
+        if not isinstance(self.lookups, tuple) or not all(
+            isinstance(t, LookupTable) for t in self.lookups
+        ):
+            raise fail("lookups must be a tuple of LookupTable")
 
 
 @dataclass(frozen=True, eq=False)
@@ -208,7 +225,8 @@ class EffectiveConfig:
     bound (``max_steps_origin`` is ``"user"`` or ``"computed"``); ``tables`` the transport
     tables; ``scattering_length_g_cm2`` the Gottschalk ``X_S`` of every material;
     ``production`` is True only for float32 Warp backends; ``scoring_pieces`` the bound of the
-    voxel pieces per leg of the track-length scoring; ``rng`` describes the generator.
+    voxel pieces per leg of the track-length scoring; ``rng`` describes the generator;
+    ``channels`` the compiled scoring channels (None without tallies).
     """
 
     requested: SimulationConfig
@@ -223,6 +241,7 @@ class EffectiveConfig:
     scoring_pieces: int
     scattering_length_g_cm2: tuple[float, ...]
     rng: dict[str, Any]
+    channels: ChannelPlan | None = None
 
     def summary(self) -> dict[str, Any]:
         """JSON-serialisable summary of the effective configuration."""
@@ -291,6 +310,7 @@ class EffectiveConfig:
             },
             "scattering_length_g_cm2": list(self.scattering_length_g_cm2),
             "rng": dict(self.rng),
+            "tallies": None if self.channels is None else self.channels.summary(),
         }
 
 
@@ -378,6 +398,52 @@ def scoring_pieces_bound(max_step_mm: float, grid: ScoringGrid) -> int:
 def trace_buffer_bytes(trace_histories: int, max_steps: int) -> int:
     """Bytes of the trace buffers (int32 discrete and float64 continuous columns per step)."""
     return trace_histories * max_steps * (4 * TRACE_N_DISCRETE + 8 * TRACE_N_CONTINUOUS)
+
+
+def _compile_tallies(
+    config: SimulationConfig,
+    geometry: VoxelGeometry,
+    tables: TransportTables,
+    e_hi_mev: float,
+    max_steps: int,
+    scoring_pieces: int,
+) -> ChannelPlan | None:
+    """Fail-closed validation and compilation of the scoring requests (None without tallies)."""
+    if not config.tallies:
+        if config.lookups:
+            raise fail("lookup tables were given but no tally request uses them")
+        return None
+    src, ph, run = config.source, config.physics, config.run
+    try:
+        water = ph.stopping.table(WATER, src.projectile)
+    except (ValueError, KeyError) as exc:
+        raise fail(
+            f"no water stopping table for the LET definition from source {ph.stopping.name!r}: "
+            f"{exc}"
+        ) from exc
+    _check_table_identity(water, WATER, ph.stopping.name)
+    plan = compile_channels(
+        config.tallies,
+        config.lookups,
+        config.scoring,
+        geometry=geometry,
+        tables=tables,
+        water=water,
+        projectile=src.projectile,
+        e_cut_mev=ph.e_cut_mev,
+        e_hi_mev=e_hi_mev,
+        n_histories=run.n_histories,
+        n_batches=run.n_batches,
+        cpu_workers=run.cpu_workers,
+        memory_budget_bytes=run.memory_budget_bytes,
+        max_steps=max_steps,
+        scoring_pieces=scoring_pieces,
+        producible=producible(src.projectile),
+    )
+    unused = {lk.name for lk in config.lookups} - {t.lookup for t in config.tallies}
+    if unused:
+        raise fail(f"lookup tables {sorted(unused)} are not used by any tally request")
+    return plan
 
 
 def cuda_available() -> bool:
@@ -519,6 +585,13 @@ def validate(config: SimulationConfig) -> EffectiveConfig:
                 f"{trace_bytes} bytes, above the limit of {MAX_TRACE_BUFFER_BYTES} bytes"
             )
 
+    channels = _compile_tallies(config, geometry, tables, e_hi, max_steps, scoring_pieces)
+    if channels is not None and run.backend not in CHANNEL_BACKENDS:
+        raise fail(
+            f"backend {run.backend!r} does not implement scoring channels yet "
+            f"(supported: {list(CHANNEL_BACKENDS)}); tallies are never silently ignored"
+        )
+
     if run.backend == "warp-cuda" and not cuda_available():
         raise BackendUnavailableError(
             "backend 'warp-cuda' requires a CUDA device (cuda:0) that Warp can use; none is "
@@ -537,6 +610,7 @@ def validate(config: SimulationConfig) -> EffectiveConfig:
         production=run.backend != "python" and run.precision == "float32",
         scoring_pieces=scoring_pieces,
         scattering_length_g_cm2=tuple(scattering_length_g_cm2(m) for m in geometry.materials),
+        channels=channels,
         rng={
             "generator": "philox4x32-10",
             "key": "seed low/high 32 bits",

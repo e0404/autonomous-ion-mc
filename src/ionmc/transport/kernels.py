@@ -14,14 +14,17 @@ shared ``@wp.func`` functions of ``ionmc.physics`` and ``ionmc.transport.funcs``
 only holds the glue (table reads, state bookkeeping, random-number draws, scoring, tallies).
 State lives in registers.
 
-Outputs (no atomics except the energy-deposit grid): ``edep[B, sum(n_voxels)]`` of the backend
-precision, accumulated with ``atomic_add`` into batch ``h % B``; per-history float64
-``tally_rows[chunk, 6 + G]`` (``ionmc.transport.tally.TALLY_NAMES`` then the outside deposit of
-every grid) and int32 ``counter_rows[chunk, 7]`` (``COUNTER_NAMES``), each row written only by
-its own thread; with ``diag``: ``end_state[chunk, 7]`` (position, direction, energy),
-``end_code[chunk]``, and for the first ``trace_k`` histories the trace
-``trace_i[K, max_steps, 8]`` (int32), ``trace_f[K, max_steps, 9]`` (float64) and ``trace_n[K]``
-(rows written). A history stops at ``max_steps`` so the trace buffer cannot overflow.
+Outputs (no atomics except the energy-deposit grid): ``edep[B, sum(n_voxels)]`` of int64
+fixed-point quanta (``QUANTUM_MEV`` = 2**-30 MeV), accumulated with integer ``atomic_add`` into
+batch ``h % B``; per-history float64 ``tally_rows[chunk, 6 + 2 G]``
+(``ionmc.transport.tally.TALLY_NAMES``, then the outside deposit of every grid, then the
+quantization residual of every grid) and int32 ``counter_rows[chunk, 9]`` (the nine
+``COUNTER_NAMES``; ``accumulator_overflow`` is set at the host reduction), each row written only
+by its own thread; with ``diag``: ``end_state[chunk, 11]`` (position, direction, energy, control
+residual, control displacement x, y, z), ``end_code[chunk]``, and for the first ``trace_k``
+histories the trace ``trace_i[K, max_steps, 8]`` (int32), ``trace_f[K, max_steps, 9]``
+(float64) and ``trace_n[K]`` (rows written). A history stops at ``max_steps`` so the trace buffer
+cannot overflow.
 """
 
 import functools
