@@ -323,6 +323,8 @@ def test_capabilities_report() -> None:
     cap = capabilities()
     assert cap["species"] == ["proton"] and cap["physics"]["nuclear"] is False
     assert cap["backends"]["python"].startswith("available")
+    assert cap["backends"]["warp-cpu"].startswith("available")
+    assert cap["chunk_histories"]["default"] == 2**18
     assert "warp-cuda" in cap["backend_names"]
     import ionmc
 
@@ -376,4 +378,4 @@ def test_history_belongs_to_batch_history_mod_b(make_config: MakeConfig) -> None
     assert len(set(np.round(energy, 9))) == n  # distinct per-history energies
     per_batch = res.grids[0].batch_energy_mev[:, 0, 0, 0] * (n // b)
     for k in range(b):
-        assert per_batch[k] == pytest.approx(energy[k::b].sum(), rel=1e-12)
+        assert per_batch[k] == pytest.approx(energy[k::b].sum(), rel=1e-12, abs=1e-6)  # + quantum

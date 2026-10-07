@@ -26,13 +26,24 @@ from ionmc.physics.stopping import StoppingSource, StoppingTable
 from ionmc.scoring import MAX_SCORING_GRIDS, ScoringGrid
 from ionmc.sources import PencilBeamSource
 from ionmc.transport.tables import TransportTables, thaw
+from ionmc.transport.tally import (
+    MAX_QUANTA,
+    QUANTUM_MEV,
+    TRACE_N_CONTINUOUS,
+    TRACE_N_DISCRETE,
+)
 
-STRAGGLING_MODELS = ("bohr_gauss_clamped_gamma_v1",)
+STRAGGLING_MODELS = ("bohr_gamma_v1", "bohr_gauss_clamped_gamma_v1")
 MCS_MODELS = ("differential_moliere",)
 DELTA_ELECTRON_MODELS = ("local",)
 BACKENDS = ("python", "warp-cpu", "warp-cuda")
 PRECISIONS = ("float32", "float64")
 MAX_REJECTION_ATTEMPTS = 64
+DEFAULT_CHUNK_HISTORIES = 2**18
+MIN_CHUNK_HISTORIES = 2**10
+MAX_CPU_WORKERS = 256
+MAX_TRACE_BUFFER_BYTES = 2**30
+MAX_SCORING_PIECES = 4096
 MAX_ENERGY_SIGMA_FRACTION = 0.05
 MAX_ENERGY_LOSS_FRACTION = 0.2
 U01_MAPPING = {
@@ -52,13 +63,18 @@ class PhysicsOptions:
     ``max_energy_loss_fraction`` bounds the mean energy loss per step as a fraction of the
     kinetic energy; ``range_alpha`` and ``range_rho_f_mm`` parametrise the Geant4 range step
     function; steps shorter than ``short_step_fraction`` of the residual range use the
-    linear loss ``S t``.
+    linear loss ``S(E_mid) t`` with ``E_mid = E - S(E) t / 2`` (midpoint rule).
+    ``truncated_hinge_diagnostic`` (default off, a diagnostic for the T14 negative control, not a
+    physics model) is "truncate-first": the planned step ends at the first
+    plane the straight line reaches, the angle is sampled for that length, leg 2 is not cut again
+    and the end point is snapped onto the plane (the displacements are recorded per history; the
+    direction is never changed).
     """
 
     nuclear: bool
     stopping: StoppingSource
     straggling: bool = True
-    straggling_model: str = "bohr_gauss_clamped_gamma_v1"
+    straggling_model: str = "bohr_gamma_v1"
     multiple_scattering: bool = True
     mcs_model: str = "differential_moliere"
     delta_electrons: str = "local"
@@ -67,10 +83,11 @@ class PhysicsOptions:
     max_energy_loss_fraction: float = 0.02
     range_alpha: float = 0.2
     range_rho_f_mm: float = 0.1
-    short_step_fraction: float = 1.0e-3
+    short_step_fraction: float = 1.0e-2
+    truncated_hinge_diagnostic: bool = False
 
     def __post_init__(self) -> None:
-        for name in ("nuclear", "straggling", "multiple_scattering"):
+        for name in ("nuclear", "straggling", "multiple_scattering", "truncated_hinge_diagnostic"):
             if not isinstance(getattr(self, name), bool):
                 raise fail(f"{name} must be a bool, got {getattr(self, name)!r}")
         for name in ("straggling_model", "mcs_model", "delta_electrons"):
@@ -98,9 +115,14 @@ class RunOptions:
     split into ``n_batches`` interleaved batches (history ``h`` belongs to batch ``h mod B``).
     ``max_steps`` (per history) defaults to a computed bound that is recorded. A nonzero
     transport-limit counter raises ``TransportLimitError`` unless ``allow_invalid_result``.
-    ``memory_budget_bytes`` bounds the per-batch accumulators. ``cpu_workers`` (> 1) and
-    ``worker_timeout_s`` belong to the multi-process Warp CPU driver (V3-003B); the python
-    backend runs in-process and rejects ``cpu_workers > 1``."""
+    ``memory_budget_bytes`` bounds the energy-deposit accumulators (of all worker processes
+    together). ``cpu_workers`` > 1 splits the histories over that many spawned worker processes
+    on the ``python`` and ``warp-cpu`` backends (``warp-cuda`` rejects it); a worker that fails
+    or exceeds ``worker_timeout_s`` terminates the run without a partial result.
+    ``chunk_histories`` (a power of two, at least 2**10, recorded in the effective
+    configuration) bounds the histories per Warp launch; it affects memory only: the deposit grids
+    are int64 fixed-point quanta with integer atomic adds, so the result is bit-identical for
+    any chunk size within a precision."""
 
     backend: Literal["python", "warp-cpu", "warp-cuda"]
     precision: Literal["float32", "float64"]
@@ -112,6 +134,7 @@ class RunOptions:
     allow_invalid_result: bool = False
     worker_timeout_s: float | None = None
     memory_budget_bytes: int = 2**31
+    chunk_histories: int = DEFAULT_CHUNK_HISTORIES
 
     def __post_init__(self) -> None:
         choice("backend", self.backend, BACKENDS)
@@ -127,6 +150,9 @@ class RunOptions:
         if self.worker_timeout_s is not None:
             real("worker_timeout_s", self.worker_timeout_s, positive=True)
         integer("memory_budget_bytes", self.memory_budget_bytes, minimum=1)
+        chunk = integer("chunk_histories", self.chunk_histories, minimum=MIN_CHUNK_HISTORIES)
+        if chunk & (chunk - 1) != 0:
+            raise fail(f"chunk_histories must be a power of two, got {chunk}")
 
 
 @dataclass(frozen=True)
@@ -181,7 +207,8 @@ class EffectiveConfig:
     ``unit_direction`` is the normalised beam direction; ``max_steps`` the per-history step
     bound (``max_steps_origin`` is ``"user"`` or ``"computed"``); ``tables`` the transport
     tables; ``scattering_length_g_cm2`` the Gottschalk ``X_S`` of every material;
-    ``production`` is True only for float32 Warp backends; ``rng`` describes the generator.
+    ``production`` is True only for float32 Warp backends; ``scoring_pieces`` the bound of the
+    voxel pieces per leg of the track-length scoring; ``rng`` describes the generator.
     """
 
     requested: SimulationConfig
@@ -193,6 +220,7 @@ class EffectiveConfig:
     backend: str
     precision: str
     production: bool
+    scoring_pieces: int
     scattering_length_g_cm2: tuple[float, ...]
     rng: dict[str, Any]
 
@@ -209,7 +237,9 @@ class EffectiveConfig:
             "n_histories": r.n_histories,
             "n_batches": r.n_batches,
             "cpu_workers": r.cpu_workers,
+            "chunk_histories": r.chunk_histories,
             "max_steps": self.max_steps,
+            "scoring_pieces": self.scoring_pieces,
             "max_steps_origin": self.max_steps_origin,
             "unit_direction": list(self.unit_direction),
             "source": {
@@ -232,6 +262,7 @@ class EffectiveConfig:
                 "range_alpha": p.range_alpha,
                 "range_rho_f_mm": p.range_rho_f_mm,
                 "short_step_fraction": p.short_step_fraction,
+                "truncated_hinge_diagnostic": p.truncated_hinge_diagnostic,
                 "scattering_E_s_mev": E_S_MEV,
                 "max_rejection_attempts": MAX_REJECTION_ATTEMPTS,
             },
@@ -240,6 +271,7 @@ class EffectiveConfig:
                 "spacing_mm": list(self.geometry.spacing_mm),
                 "shape": list(self.geometry.shape),
                 "materials": [m.name for m in self.geometry.materials],
+                "z_exit_mm": self.geometry.z_exit_mm,
             },
             "scoring": [
                 {
@@ -332,6 +364,32 @@ def _computed_max_steps(
     return int(4 * (n_len + n_cross + n_eloss + n_range) + 100)
 
 
+def scoring_pieces_bound(max_step_mm: float, grid: ScoringGrid) -> int:
+    """Bound ``3 ceil(max_step / spacing_min) + 4`` of the voxel pieces of one leg.
+
+    A leg of length ``L <= max_step`` meets at most ``floor(L / d) + 1 <= ceil(max_step / d) + 1``
+    planes of an axis with spacing ``d`` (a start exactly on a plane counts: it is a
+    zero-length hop), so at most ``3 ceil(.) + 3`` planes in all and one more piece than
+    planes. A leg that exceeds the bound at run time increments ``scoring_pieces_overflow`` and
+    invalidates the result."""
+    return 3 * math.ceil(max_step_mm / min(grid.spacing_mm)) + 4
+
+
+def trace_buffer_bytes(trace_histories: int, max_steps: int) -> int:
+    """Bytes of the trace buffers (int32 discrete and float64 continuous columns per step)."""
+    return trace_histories * max_steps * (4 * TRACE_N_DISCRETE + 8 * TRACE_N_CONTINUOUS)
+
+
+def cuda_available() -> bool:
+    """True if Warp sees a usable CUDA device (``cuda:0``)."""
+    import warp as wp
+
+    try:
+        return bool(wp.is_cuda_available())
+    except Exception:  # pragma: no cover - driver probing differs between hosts
+        return False
+
+
 def validate(config: SimulationConfig) -> EffectiveConfig:
     """Check every fail-closed rule and return the effective configuration.
 
@@ -371,9 +429,11 @@ def validate(config: SimulationConfig) -> EffectiveConfig:
         raise fail(
             f"n_histories ({run.n_histories}) must be a multiple of n_batches ({run.n_batches})"
         )
-    if run.cpu_workers > 1 and run.backend == "python":
-        raise BackendUnavailableError(
-            "multi-process execution (cpu_workers > 1) is implemented in V3-003B"
+    if run.cpu_workers > MAX_CPU_WORKERS:
+        raise fail(f"cpu_workers must be <= {MAX_CPU_WORKERS}, got {run.cpu_workers}")
+    if run.cpu_workers > run.n_histories:
+        raise fail(
+            f"cpu_workers ({run.cpu_workers}) must not exceed n_histories ({run.n_histories})"
         )
 
     if not 1 <= len(config.scoring) <= MAX_SCORING_GRIDS:
@@ -381,19 +441,22 @@ def validate(config: SimulationConfig) -> EffectiveConfig:
     names = [g.name for g in config.scoring]
     if len(set(names)) != len(names):
         raise fail(f"scoring grid names must be unique, got {names}")
-    bytes_per = 4 if run.precision == "float32" else 8
-    accumulator_bytes = run.n_batches * sum(g.n_voxels for g in config.scoring) * bytes_per
+    bytes_per = 8  # int64 fixed-point accumulators on every backend
+    accumulator_bytes = (
+        run.n_batches * sum(g.n_voxels for g in config.scoring) * bytes_per * run.cpu_workers
+    )
     if accumulator_bytes > run.memory_budget_bytes:
         raise fail(
-            f"per-batch accumulators need {accumulator_bytes} bytes, above the memory budget "
-            f"of {run.memory_budget_bytes} bytes (reduce n_batches or the grids)"
+            f"per-batch accumulators need {accumulator_bytes} bytes (including one private copy "
+            f"per worker process), above the memory budget of {run.memory_budget_bytes} bytes "
+            "(reduce n_batches, the grids or cpu_workers)"
         )
-    min_spacing = min(min(g.spacing_mm) for g in config.scoring)
-    if ph.max_step_mm > min_spacing:
+    scoring_pieces = max(scoring_pieces_bound(ph.max_step_mm, g) for g in config.scoring)
+    if scoring_pieces > MAX_SCORING_PIECES:
         raise fail(
-            f"max_step_mm ({ph.max_step_mm}) exceeds the smallest scoring spacing "
-            f"({min_spacing} mm): the midpoint deposit needs steps no longer than one scoring "
-            "voxel; reduce max_step_mm (nothing is clamped silently)"
+            f"max_step_mm ({ph.max_step_mm}) against the finest scoring spacing would allow "
+            f"{scoring_pieces} voxel pieces per leg in the track-length scoring, above the "
+            f"limit of {MAX_SCORING_PIECES}; increase the scoring spacing or reduce max_step_mm"
         )
 
     stopping_tables = _stopping_tables(ph.stopping, geometry.materials)
@@ -417,6 +480,15 @@ def validate(config: SimulationConfig) -> EffectiveConfig:
             f"{MAX_ENERGY_SIGMA_FRACTION} of the source energy"
         )
 
+    e_hi = min(e0 + 6.0 * src.energy_sigma_mev, e_hi_table)
+    per_batch = run.n_histories // run.n_batches
+    if per_batch * e_hi / QUANTUM_MEV >= MAX_QUANTA:
+        raise fail(
+            f"{per_batch} histories per batch of up to {e_hi:g} MeV exceed the capacity "
+            f"{MAX_QUANTA * QUANTUM_MEV:g} MeV of a fixed-point voxel accumulator (quantum "
+            f"{QUANTUM_MEV:g} MeV); increase n_batches or reduce n_histories"
+        )
+
     max_steps_origin = "user" if run.max_steps is not None else "computed"
     max_steps = (
         run.max_steps
@@ -429,10 +501,28 @@ def validate(config: SimulationConfig) -> EffectiveConfig:
             "reaches the 2**32 block-counter bound"
         )
 
-    if run.backend in ("warp-cpu", "warp-cuda"):
+    diag = config.diagnostics
+    if diag.trace_histories > 0:
+        if run.precision != "float64":
+            raise fail(
+                "the per-step trace is only available in float64 (trace_histories > 0 with "
+                f"precision {run.precision!r}); the trace is the trajectory-parity reference"
+            )
+        if diag.trace_histories > run.n_histories:
+            raise fail(
+                f"trace_histories ({diag.trace_histories}) exceeds n_histories ({run.n_histories})"
+            )
+        trace_bytes = trace_buffer_bytes(diag.trace_histories, max_steps)
+        if trace_bytes > MAX_TRACE_BUFFER_BYTES:
+            raise fail(
+                f"the trace buffers ({diag.trace_histories} histories x {max_steps} steps) need "
+                f"{trace_bytes} bytes, above the limit of {MAX_TRACE_BUFFER_BYTES} bytes"
+            )
+
+    if run.backend == "warp-cuda" and not cuda_available():
         raise BackendUnavailableError(
-            f"backend {run.backend!r} is implemented in V3-003B; only backend 'python' is "
-            "available (no fallback is performed)"
+            "backend 'warp-cuda' requires a CUDA device (cuda:0) that Warp can use; none is "
+            "available and nothing falls back to another backend"
         )
 
     return EffectiveConfig(
@@ -445,6 +535,7 @@ def validate(config: SimulationConfig) -> EffectiveConfig:
         backend=run.backend,
         precision=run.precision,
         production=run.backend != "python" and run.precision == "float32",
+        scoring_pieces=scoring_pieces,
         scattering_length_g_cm2=tuple(scattering_length_g_cm2(m) for m in geometry.materials),
         rng={
             "generator": "philox4x32-10",

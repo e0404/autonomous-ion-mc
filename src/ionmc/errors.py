@@ -32,3 +32,7 @@ class TransportLimitError(RuntimeError):
 
 class CounterOverflowError(OverflowError):
     """A random-stream counter field exceeded its documented bound (decision 0037)."""
+
+
+class TransportWorkerError(RuntimeError):
+    """A worker process failed, died or exceeded ``worker_timeout_s``; no result is returned."""

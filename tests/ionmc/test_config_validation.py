@@ -15,7 +15,6 @@ from ionmc.config import (
     validate,
 )
 from ionmc.errors import (
-    BackendUnavailableError,
     TransportLimitError,
     UnsupportedCombinationError,
 )
@@ -103,17 +102,42 @@ def test_c1_backend_and_precision_rules(make_config: MakeConfig) -> None:
         RunOptions(backend="gpu", precision="float64", seed=1, n_histories=2)  # type: ignore[arg-type]
     with pytest.raises(UnsupportedCombinationError):
         RunOptions(backend="python", precision="float16", seed=1, n_histories=2)  # type: ignore[arg-type]
-    for backend in ("warp-cpu", "warp-cuda"):
-        for precision in ("float32", "float64"):
-            _rejects(
-                replace(cfg, run=replace(run, backend=backend, precision=precision)),
-                BackendUnavailableError,
-            )
-    # a warp-cuda request never falls back; cpu_workers on CUDA is rejected first
+    # warp-cpu is available in both precisions and validates
+    for precision in ("float32", "float64"):
+        eff = validate(replace(cfg, run=replace(run, backend="warp-cpu", precision=precision)))
+        assert eff.backend == "warp-cpu" and eff.production == (precision == "float32")
+    # a warp-cuda request never falls back when no device exists; cpu_workers on CUDA is rejected
     _rejects(
         replace(cfg, run=replace(run, backend="warp-cuda", precision="float32", cpu_workers=2))
     )
-    _rejects(replace(cfg, run=replace(run, cpu_workers=2)), BackendUnavailableError)
+    # multi-process execution is supported on python and warp-cpu
+    assert validate(replace(cfg, run=replace(run, n_histories=4, cpu_workers=2))).requested
+    # float32 with a trace, oversized traces, chunk and worker bounds
+    _rejects(
+        replace(
+            cfg,
+            run=replace(run, backend="warp-cpu", precision="float32"),
+            diagnostics=DiagnosticsOptions(trace_histories=1),
+        )
+    )
+    _rejects(replace(cfg, diagnostics=DiagnosticsOptions(trace_histories=3)))  # > n_histories
+    _rejects(
+        replace(
+            cfg,
+            run=replace(run, n_histories=2, n_batches=2, max_steps=10**8),
+            diagnostics=DiagnosticsOptions(trace_histories=2),
+        )
+    )  # 1 GiB trace limit
+    _rejects(replace(cfg, run=replace(run, cpu_workers=3)))  # more workers than histories
+    _rejects(replace(cfg, run=replace(run, n_histories=2000, n_batches=2, cpu_workers=1000)))
+    _rejects(
+        replace(
+            cfg,
+            run=replace(
+                run, memory_budget_bytes=8 * 30 * 30 * 30 * 2 * 3 - 1, n_histories=6, cpu_workers=3
+            ),
+        )
+    )  # one copy per worker
     with pytest.raises(UnsupportedCombinationError):
         RunOptions(backend="python", precision="float64", seed=1, n_histories=2, cpu_workers=0)
 
@@ -221,10 +245,14 @@ def test_c1_scoring_rules(make_config: MakeConfig) -> None:
     tight = replace(cfg.run, memory_budget_bytes=2 * grid.n_voxels * 8 - 1)
     _rejects(replace(cfg, run=tight))
     validate(replace(cfg, run=replace(cfg.run, memory_budget_bytes=2 * grid.n_voxels * 8)))
-    # max_step above the smallest scoring spacing: rejected, not clamped
-    _rejects(replace(cfg, physics=replace(cfg.physics, max_step_mm=2.5)))
-    fine = ScoringGrid((0.0, 0.0, 0.0), (2.0, 2.0, 0.5), (4, 4, 4))
-    _rejects(replace(cfg, scoring=(grid, fine)))
+    # max_step above the smallest scoring spacing is accepted: the track-length scoring walk is
+    # bounded by pieces = 3 ceil(max_step / spacing) + 4 (recorded), up to a sanity cap
+    eff = validate(replace(cfg, physics=replace(cfg.physics, max_step_mm=2.5)))
+    assert eff.scoring_pieces == 3 * 2 + 4 and eff.summary()["scoring_pieces"] == 10
+    fine = ScoringGrid((0.0, 0.0, 0.0), (2.0, 2.0, 0.5), (4, 4, 4), name="fine")
+    assert validate(replace(cfg, scoring=(grid, fine))).scoring_pieces == 3 * 4 + 4
+    ultra = ScoringGrid((0.0, 0.0, 0.0), (2.0, 2.0, 2.0 / 4096), (4, 4, 4), name="ultra")
+    _rejects(replace(cfg, scoring=(grid, ultra)))  # more than 4096 pieces: sanity cap
     for bad in (0.0, -1.0, float("nan")):
         with pytest.raises(UnsupportedCombinationError):
             ScoringGrid((0, 0, 0), (1.0, bad, 1.0), (2, 2, 2))
@@ -567,3 +595,17 @@ def test_voxel_geometry_arrays_are_deeply_immutable() -> None:
         assert isinstance(root, bytes)
         assert arr.tobytes() == before
     assert g.densities_g_cm3().tolist() == [[[1.0]], [[1.1]]]
+
+
+def test_c1_cuda_backend_unavailable_raises_without_fallback(
+    make_config: MakeConfig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from ionmc.errors import BackendUnavailableError
+
+    monkeypatch.setattr("ionmc.config.cuda_available", lambda: False)
+    cfg = make_config(backend="warp-cuda", precision="float32")
+    with pytest.raises(BackendUnavailableError, match="no fallback|nothing falls back"):
+        validate(cfg)
+    monkeypatch.setattr("ionmc.config.cuda_available", lambda: True)
+    assert validate(cfg).backend == "warp-cuda"
+    assert "requested" in validate(cfg).__dict__ and validate(cfg).requested is cfg

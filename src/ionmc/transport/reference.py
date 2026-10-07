@@ -1,7 +1,10 @@
 """Reference backend: the step algorithm of decision 0039 in a Python history loop.
 
-Every physical decision is made by the shared Warp functions called from Python scope with
-``wp.float64`` arguments (``ionmc.physics`` and ``ionmc.transport.funcs``); this module only
+Every physical decision is made by the shared functions of ``ionmc.physics`` and
+``ionmc.transport.funcs`` in their pure-Python float64 twins (``ionmc._wpfunc.python_twin``:
+the same source text re-executed without Warp; no Warp call of any kind is made at Python scope,
+because Warp 1.17 Python-scope dispatch segfaulted intermittently in worker processes);
+this module only
 contains glue: table reads from numpy arrays, state bookkeeping, random-number draws from the
 Python Philox, scoring and tallies. The Warp backends (V3-003B) repeat this glue in a kernel,
 and the per-step trace produced here is the reference for trajectory-level parity.
@@ -16,6 +19,14 @@ Draw order (counter ``(history, genealogy 0, block, purpose)``, key from the see
   block B (straggling attempts, at most 64; exactly one ignored block when straggling is
   off). A step that finds ``E <= E_cut`` draws nothing.
 
+Scoring (decision amended in V3-003B): the deposit of a step (after straggling) is distributed
+along both hinge legs for every scoring grid by an incremental DDA over the leg (``seg_piece``):
+a piece of the path inside one voxel receives the integral over the piece of a linear
+stopping-power ramp from S(E_old) to S(E_new), normalised over the step (``ramp_weight``), so the
+pieces sum to the deposit and the residual step dependence is second order (the curvature of S
+along the step); the energy left at the cutoff is a point deposit at the end point. Pieces are
+quantized to int64 quanta (``tally``).
+
 Tallies (MeV, accumulated independently of the grids): ``initial``, ``cutoff`` (local
 deposition below ``E_cut``; scored into the grids like any deposit), ``step_deposit``,
 ``escaped``, ``truncated`` (energy of histories stopped by the step limit or a stall, never
@@ -26,13 +37,10 @@ outside grid ``g``).
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
-from typing import Any
 
 import numpy as np
-import warp as wp
-from numpy.typing import NDArray
 
+from ionmc._wpfunc import python_twin
 from ionmc.config import MAX_REJECTION_ATTEMPTS, EffectiveConfig
 from ionmc.physics.em import make_em
 from ionmc.physics.kinematics import make_kinematics
@@ -43,62 +51,66 @@ from ionmc.rng.philox import (
     key_from_seed,
     u01_py,
 )
-from ionmc.transport.funcs import make_transport_funcs
-
-END_CUTOFF = 0
-END_ESCAPED = 1
-END_TRUNCATED = 2
-END_SOURCE_REJECTED = 3
-END_MISSED_WORLD = 4
-
-TRACE_COLUMNS = (
-    "history",
-    "step",
-    "ix",
-    "iy",
-    "iz",
-    "reason",
-    "blocks",
-    "attempts",
-    "x_mm",
-    "y_mm",
-    "z_mm",
-    "ux",
-    "uy",
-    "uz",
-    "energy_mev",
-    "deposit_mev",
-    "step_mm",
-)
-"""Columns of the per-step trace (state after the step; ``blocks`` is the number of Philox
-blocks drawn by the history so far, ``reason`` the step-limit reason of the shared
-``select_step`` (0 geometry, 1 energy loss, 2 range, 3 maximum step))."""
-
-COUNTER_NAMES = (
-    "step_truncation",
-    "stall",
-    "straggling_rejection",
-    "genealogy_overflow",
-    "queue_overflow",
-    "source_energy_out_of_range",
-    "energy_inversion",
+from ionmc.transport.funcs import BIG_LENGTH_MM, make_transport_funcs
+from ionmc.transport.tally import (
+    COUNTER_NAMES,
+    END_CUTOFF,
+    END_ESCAPED,
+    END_MISSED_WORLD,
+    END_SOURCE_REJECTED,
+    END_TRUNCATED,
+    N_FIXED_TALLIES,
+    QUANTUM_MEV,
+    QUANTUM_SCALE,
+    TALLY_NAMES,
+    TRACE_COLUMNS,
+    HistoryDiagnostics,
+    PartialTransport,
+    RawTransport,
+    build_diagnostics,
+    merge_partials,
+    rows_to_partial,
 )
 
+__all__ = [
+    "COUNTER_NAMES",
+    "END_CUTOFF",
+    "END_ESCAPED",
+    "END_MISSED_WORLD",
+    "END_SOURCE_REJECTED",
+    "END_TRUNCATED",
+    "TRACE_COLUMNS",
+    "RawTransport",
+    "run_reference",
+    "run_reference_range",
+]
 
-@dataclass
-class RawTransport:
-    """Raw output of the reference transport (float64)."""
 
-    edep_mev: list[NDArray[np.float64]]
-    tallies: dict[str, float]
-    outside_mev: list[float]
-    counters: dict[str, int]
-    diagnostics: dict[str, Any] = field(default_factory=dict)
+def ramp_weight(ta: float, tb: float, s_start: float, s_end: float, s_act: float) -> float:
+    """Fraction of a step's energy deposited between the path coordinates ``ta`` and ``tb`` when the
+    deposit density follows the linear stopping-power ramp ``s_start -> s_end`` along the step.
+    (The same expression, in the same order, as ``ionmc.transport.kernels``.)"""
+    return (s_start * (tb - ta) + (s_end - s_start) * (tb * tb - ta * ta) / (2.0 * s_act)) / (
+        0.5 * (s_start + s_end) * s_act
+    )
 
 
 def run_reference(eff: EffectiveConfig) -> RawTransport:
     """Transport ``n_histories`` primaries with the Python reference loop (float64)."""
-    return _Reference(eff).run()
+    n = eff.requested.run.n_histories
+    part = run_reference_range(eff, 0, n)
+    diag = eff.requested.diagnostics
+    raw = merge_partials([part], n, len(eff.requested.scoring))
+    raw.diagnostics = build_diagnostics(
+        [part], diag.track_end_positions, diag.escape_records, diag.trace_histories
+    )
+    raw.meta = {"workers": 1}
+    return raw
+
+
+def run_reference_range(eff: EffectiveConfig, h0: int, h1: int) -> PartialTransport:
+    """Transport the histories ``[h0, h1)``; the result depends on no other history."""
+    return _Reference(eff).run_range(h0, h1)
 
 
 def f_short_t(tt: float, r0: float, f_short: object) -> bool:
@@ -113,10 +125,11 @@ class _Reference:
         self.cfg = cfg
         self.tab = eff.tables
         self.geo = eff.geometry
-        self.F = make_transport_funcs(wp.float64)
-        self.EM = make_em(wp.float64)
-        self.K = make_kinematics(wp.float64)
-        self.R = wp.float64
+        # pure-Python twins of the shared Warp functions (same source text, no Warp call)
+        self.F = python_twin(make_transport_funcs)
+        self.EM = python_twin(make_em)
+        self.K = python_twin(make_kinematics)
+        self.R = float
         self.V = self.F.vec3
         self.key = key_from_seed(cfg.run.seed)
         self.n_batches = cfg.run.n_batches
@@ -129,6 +142,15 @@ class _Reference:
         self.c_smax = r(ph.max_step_mm)
         self.c_fshort = r(ph.short_step_fraction)
         self.mass = r(cfg.source.projectile.mass_mev)
+        self.trunc_diag = ph.truncated_hinge_diagnostic
+        self.straggle_attempt = (
+            self.EM.straggle_attempt_gamma
+            if ph.straggling_model == "bohr_gamma_v1"
+            else self.EM.straggle_attempt
+        )
+        self.ctrl_res = 0.0
+        self.ctrl_sum = [0.0, 0.0, 0.0]
+        self.max_pieces = eff.scoring_pieces
         self.one = r(1.0)
         self.mat = self.geo.material_index
         self.dens = self.geo.densities_g_cm3()
@@ -136,16 +158,17 @@ class _Reference:
         self.origin = self.V(*(r(x) for x in self.geo.origin_mm))
         self.spacing = self.V(*(r(x) for x in self.geo.spacing_mm))
         self.lo = self.V(*(r(x) for x in self.geo.lower_mm))
-        self.hi = self.V(*(r(x) for x in self.geo.upper_mm))
+        self.hi = self.V(*(r(x) for x in self.geo.world_upper_mm))
+        zc = self.geo.z_exit_mm
+        self.z_clip = r(BIG_LENGTH_MM if zc is None else float(zc))
         self.grids = cfg.scoring
         self.g_origin = [self.V(*(r(x) for x in g.origin_mm)) for g in self.grids]
         self.g_inv = [self.V(*(r(1.0 / x) for x in g.spacing_mm)) for g in self.grids]
-        self.edep = [np.zeros((self.n_batches, g.n_voxels), dtype=np.float64) for g in self.grids]
+        self.g_spacing = [self.V(*(r(x) for x in g.spacing_mm)) for g in self.grids]
+        self.edep = [np.zeros((self.n_batches, g.n_voxels), dtype=np.int64) for g in self.grids]
         self.outside = [0.0] * len(self.grids)
-        self.tallies = {
-            k: 0.0
-            for k in ("initial", "cutoff", "step_deposit", "escaped", "truncated", "unaccounted")
-        }
+        self.quant = [0.0] * len(self.grids)
+        self.tallies = dict.fromkeys(TALLY_NAMES, 0.0)
         self.counters = dict.fromkeys(COUNTER_NAMES, 0)
         self.e_table_max = float(self.tab.e_max_mev.min())
 
@@ -165,58 +188,187 @@ class _Reference:
         return float(self.F.interp_exp(r(row[i]), r(row[i + 1]), f))
 
     # -- scoring ------------------------------------------------------------------------------
-    def _score(self, batch: int, pos: tuple[float, float, float], deposit: float) -> None:
+    # Deposits are quantized (nearest multiple of QUANTUM_MEV, floor(x / q + 1/2)) and added to
+    # int64 grids; the rounding residual of every in-grid piece is tallied per grid, deposits
+    # outside a grid are tallied in float64 (see ionmc.transport.tally).
+    def _deposit_voxel(self, batch: int, g: int, ix: int, iy: int, iz: int, de: float) -> None:
+        nx, ny, nz = self.grids[g].shape
+        if 0 <= ix < nx and 0 <= iy < ny and 0 <= iz < nz:
+            n = math.floor(de * QUANTUM_SCALE + 0.5)
+            self.edep[g][batch, (ix * ny + iy) * nz + iz] += n
+            self.quant[g] += de - n * QUANTUM_MEV
+        else:
+            self.outside[g] += de
+
+    def _deposit_point(self, batch: int, pos: tuple[float, float, float], de: float) -> None:
+        """Point deposit (the energy left at the cutoff) in every grid."""
         r = self.R
         p = self.V(r(pos[0]), r(pos[1]), r(pos[2]))
         for g, grid in enumerate(self.grids):
             nx, ny, nz = grid.shape
-            ix, iy, iz, inside = self.F.grid_index(p, self.g_origin[g], self.g_inv[g], nx, ny, nz)
-            if inside:
-                self.edep[g][batch, (ix * ny + iy) * nz + iz] += deposit
+            ix, iy, iz, _inside = self.F.grid_index(p, self.g_origin[g], self.g_inv[g], nx, ny, nz)
+            self._deposit_voxel(batch, g, ix, iy, iz, de)
+
+    def _deposit_leg(
+        self,
+        batch: int,
+        g: int,
+        p: tuple[float, float, float],
+        u: tuple[float, float, float],
+        length: float,
+        deposit: float,
+        s_act: float,
+        t_off: float,
+        s_start: float,
+        s_end: float,
+    ) -> None:
+        """Deposit the share of ``deposit`` that belongs to each piece in every voxel of grid ``g``
+        crossed by the straight segment from ``p`` along ``u`` of the given length (per-grid
+        incremental DDA). The leg starts at the path coordinate ``t_off`` of the step; the share
+        of a piece ``[ta, tb]`` is the integral of the linear stopping-power ramp
+        ``w(t) = s_start + (s_end - s_start) t / s_act`` over it, divided by the integral over the
+        whole step (the pieces of both legs sum to the deposit)."""
+        r, F, V = self.R, self.F, self.V
+        nx, ny, nz = self.grids[g].shape
+        go, gs = self.g_origin[g], self.g_spacing[g]
+        og, sg = self.grids[g].origin_mm, self.grids[g].spacing_mm
+        px, py, pz = p
+        ux, uy, uz = u
+        uvec = V(r(ux), r(uy), r(uz))
+        ix, iy, iz, _inside = F.grid_index(V(r(px), r(py), r(pz)), go, self.g_inv[g], nx, ny, nz)
+        remaining = length
+        tcur = t_off
+        for _ in range(self.max_pieces):
+            if remaining > 0.0:
+                piece_w, axis = F.seg_piece(V(r(px), r(py), r(pz)), uvec, ix, iy, iz, go, gs,
+                                            r(remaining))  # fmt: skip
+                piece = float(piece_w)
+                tb = tcur + piece
+                self._deposit_voxel(
+                    batch, g, ix, iy, iz,
+                    deposit * ramp_weight(tcur, tb, s_start, s_end, s_act),
+                )  # fmt: skip
+                tcur = tb
+                remaining = remaining - piece
+                if axis >= 0:
+                    px = px + ux * piece
+                    py = py + uy * piece
+                    pz = pz + uz * piece
+                    ua = (ux, uy, uz)[axis]
+                    upward = 1 if ua > 0.0 else 0
+                    idx = (ix, iy, iz)[axis]
+                    plane = float(F.plane_position(idx, upward, r(og[axis]), r(sg[axis])))
+                    step = 1 if upward else -1
+                    if axis == 0:
+                        px = plane
+                        ix = ix + step
+                    elif axis == 1:
+                        py = plane
+                        iy = iy + step
+                    else:
+                        pz = plane
+                        iz = iz + step
+        if remaining > 0.0:  # exceeds the validated piece bound: conserve energy, invalidate
+            self.counters["scoring_pieces_overflow"] += 1
+            self._deposit_voxel(
+                batch, g, ix, iy, iz,
+                deposit * ramp_weight(tcur, tcur + remaining, s_start, s_end, s_act),
+            )  # fmt: skip
+
+    def _deposit_step(
+        self,
+        batch: int,
+        p0: tuple[float, float, float],
+        d0: tuple[float, float, float],
+        leg1: float,
+        hinge: tuple[float, float, float],
+        d1: tuple[float, float, float],
+        leg2: float,
+        deposit: float,
+        s_act: float,
+        s_start: float,
+        s_end: float,
+    ) -> None:
+        """Track-length apportioning of a step deposit along both hinge legs in every grid, with
+        the linear stopping-power ramp from ``s_start`` (energy at the step start) to ``s_end``
+        (energy after the step)."""
+        for g in range(len(self.grids)):
+            if s_act > 0.0:
+                self._deposit_leg(batch, g, p0, d0, leg1, deposit, s_act, 0.0, s_start, s_end)
+                self._deposit_leg(batch, g, hinge, d1, leg2, deposit, s_act, leg1, s_start, s_end)
             else:
-                self.outside[g] += deposit
+                self._deposit_point_grid(batch, g, p0, deposit)
+
+    def _deposit_point_grid(
+        self, batch: int, g: int, pos: tuple[float, float, float], de: float
+    ) -> None:
+        r = self.R
+        nx, ny, nz = self.grids[g].shape
+        ix, iy, iz, _inside = self.F.grid_index(
+            self.V(r(pos[0]), r(pos[1]), r(pos[2])), self.g_origin[g], self.g_inv[g], nx, ny, nz
+        )
+        self._deposit_voxel(batch, g, ix, iy, iz, de)
 
     # -- driver -------------------------------------------------------------------------------
-    def run(self) -> RawTransport:
-        cfg = self.cfg
-        n = cfg.run.n_histories
-        diag = cfg.diagnostics
-        self.end_pos = np.full((n, 3), np.nan) if diag.track_end_positions else None
-        self.end_code = np.full(n, -1, dtype=np.int8) if diag.track_end_positions else None
-        self.end_energy = np.full(n, np.nan) if diag.track_end_positions else None
-        self.escapes: list[tuple[int, float, float, float, float, float, float, float]] = []
+    def run_range(self, h0: int, h1: int) -> PartialTransport:
+        n = h1 - h0
+        diag = self.cfg.diagnostics
+        n_g = len(self.grids)
+        self.want_diag = diag.track_end_positions or diag.escape_records or diag.trace_histories > 0
+        self.end_pos = np.full((n, 3), np.nan)
+        self.end_dir = np.full((n, 3), np.nan)
+        self.end_code = np.full(n, -1, dtype=np.int8)
+        self.end_energy = np.full(n, np.nan)
+        self.end_ctrl = np.zeros(n)
+        self.end_ctrl_sum = np.zeros((n, 3))
         self.trace: list[list[float]] = []
-        self.trace_end: list[tuple[int, int, float]] = []
-        for h in range(n):
+        self.h_base = h0
+        tally_rows = np.zeros((n, N_FIXED_TALLIES + 2 * n_g))
+        counter_rows = np.zeros((n, len(COUNTER_NAMES)), dtype=np.int32)
+        for h in range(h0, h1):
+            # per-history accumulators: a row depends on this history alone
+            self.tallies = dict.fromkeys(TALLY_NAMES, 0.0)
+            self.outside = [0.0] * n_g
+            self.quant = [0.0] * n_g
+            self.counters = dict.fromkeys(COUNTER_NAMES, 0)
+            self.ctrl_res = 0.0
+            self.ctrl_sum = [0.0, 0.0, 0.0]
             self._history(h)
-        diagnostics: dict[str, Any] = {}
-        if diag.track_end_positions:
-            diagnostics["end_position_mm"] = self.end_pos
-            diagnostics["end_code"] = self.end_code
-            diagnostics["end_energy_mev"] = self.end_energy
-        if diag.escape_records:
-            arr = np.array(self.escapes, dtype=np.float64).reshape(-1, 8)
-            diagnostics["escape_history"] = arr[:, 0].astype(np.int64)
-            diagnostics["escape_position_mm"] = arr[:, 1:4]
-            diagnostics["escape_direction"] = arr[:, 4:7]
-            diagnostics["escape_energy_mev"] = arr[:, 7]
-        if diag.trace_histories > 0:
+            row = h - h0
+            tally_rows[row, :N_FIXED_TALLIES] = [self.tallies[k] for k in TALLY_NAMES]
+            tally_rows[row, N_FIXED_TALLIES : N_FIXED_TALLIES + n_g] = self.outside
+            tally_rows[row, N_FIXED_TALLIES + n_g :] = self.quant
+            counter_rows[row] = [self.counters[k] for k in COUNTER_NAMES]
+        diagnostics = None
+        if self.want_diag:
             tr = np.array(self.trace, dtype=np.float64).reshape(-1, len(TRACE_COLUMNS))
-            diagnostics["trace"] = {name: tr[:, i] for i, name in enumerate(TRACE_COLUMNS)}
-            diagnostics["trace_columns"] = TRACE_COLUMNS
-            te = np.array(self.trace_end, dtype=np.float64).reshape(-1, 3)
-            diagnostics["trace_end_history"] = te[:, 0].astype(np.int64)
-            diagnostics["trace_end_code"] = te[:, 1].astype(np.int64)
-            diagnostics["trace_end_energy_mev"] = te[:, 2]
-        return RawTransport(self.edep, self.tallies, self.outside, self.counters, diagnostics)
+            diagnostics = HistoryDiagnostics(
+                end_position_mm=self.end_pos,
+                end_direction=self.end_dir,
+                end_energy_mev=self.end_energy,
+                end_code=self.end_code,
+                control_residual=self.end_ctrl,
+                control_displacement=self.end_ctrl_sum,
+                trace_int=tr[:, :8].astype(np.int32),
+                trace_float=tr[:, 8:],
+            )
+        return rows_to_partial(h0, h1, tally_rows, counter_rows, self.edep, diagnostics)
 
-    def _end(self, h: int, code: int, pos: tuple[float, float, float], energy: float) -> None:
-        if self.end_pos is not None and self.end_code is not None and self.end_energy is not None:
-            self.end_pos[h] = pos
-            self.end_code[h] = code
-            self.end_energy[h] = energy
-        if h < self.cfg.diagnostics.trace_histories:
-            self.trace_end.append((h, code, energy))
+    def _end(
+        self,
+        h: int,
+        code: int,
+        pos: tuple[float, float, float],
+        direction: tuple[float, float, float],
+        energy: float,
+    ) -> None:
+        i = h - self.h_base
+        self.end_pos[i] = pos
+        self.end_dir[i] = direction
+        self.end_code[i] = code
+        self.end_energy[i] = energy
+        self.end_ctrl[i] = self.ctrl_res
+        self.end_ctrl_sum[i] = self.ctrl_sum
 
     # -- one history --------------------------------------------------------------------------
     def _history(self, h: int) -> None:
@@ -246,7 +398,7 @@ class _Reference:
             pz = pz + sg * (zz1 * float(e1v[2]) + zz2 * float(e2v[2]))
         if not (self.e_cut <= energy <= self.e_table_max):
             self.counters["source_energy_out_of_range"] += 1
-            self._end(h, END_SOURCE_REJECTED, (px, py, pz), energy)
+            self._end(h, END_SOURCE_REJECTED, (px, py, pz), d, energy)
             return
         self.tallies["initial"] += energy
         p1v1 = float(K.pv_mev(r(energy), self.mass))
@@ -257,10 +409,10 @@ class _Reference:
         t_in, t_out = float(t_in), float(t_out)
         if t_in > t_out or t_out < 0.0:
             self.tallies["escaped"] += energy
-            self._end(h, END_MISSED_WORLD, (px, py, pz), energy)
+            self._end(h, END_MISSED_WORLD, (px, py, pz), (ux, uy, uz), energy)
             return
         t0 = max(t_in, 0.0)
-        lo, hi = self.geo.lower_mm, self.geo.upper_mm
+        lo, hi = self.geo.lower_mm, self.geo.world_upper_mm
         px = min(max(px + ux * t0, lo[0]), hi[0])
         py = min(max(py + uy * t0, lo[1]), hi[1])
         pz = min(max(pz + uz * t0, lo[2]), hi[2])
@@ -278,13 +430,13 @@ class _Reference:
         while True:
             if energy <= self.e_cut:
                 self.tallies["cutoff"] += energy
-                self._score(batch, (px, py, pz), energy)
-                self._end(h, END_CUTOFF, (px, py, pz), energy)
+                self._deposit_point(batch, (px, py, pz), energy)
+                self._end(h, END_CUTOFF, (px, py, pz), (ux, uy, uz), energy)
                 return
             if steps >= max_steps:
                 self.tallies["truncated"] += energy
                 self.counters["step_truncation"] += 1
-                self._end(h, END_TRUNCATED, (px, py, pz), energy)
+                self._end(h, END_TRUNCATED, (px, py, pz), (ux, uy, uz), energy)
                 return
 
             m = int(self.mat[ix, iy, iz])
@@ -294,7 +446,9 @@ class _Reference:
             r_mm = r0 * 10.0 / rho
             pvec = V(r(px), r(py), r(pz))
             dvec = V(r(ux), r(uy), r(uz))
-            d_geo, _axis = F.dda_next(pvec, dvec, ix, iy, iz, self.origin, self.spacing)
+            d_geo, axis_pre = F.dda_next_clip(
+                pvec, dvec, ix, iy, iz, self.origin, self.spacing, self.z_clip
+            )
             s_el = F.eloss_step_limit(r(energy), r(s_lin), self.c_frac)
             s_rg = F.range_step_limit(r(r_mm), self.c_alpha, self.c_rho_f)
             s_w, reason = F.select_step(d_geo, s_el, s_rg, self.c_smax)
@@ -334,24 +488,46 @@ class _Reference:
 
             # hinge and second leg
             hx, hy, hz = px + ux * leg1, py + uy * leg1, pz + uz * leg1
-            leg2_w, axis2 = F.leg2_limit(
-                V(r(hx), r(hy), r(hz)),
-                V(r(d1x), r(d1y), r(d1z)),
-                ix,
-                iy,
-                iz,
-                self.origin,
-                self.spacing,
-                r(s - leg1),
-            )
-            leg2 = float(leg2_w)
+            if self.trunc_diag:
+                # DIAGNOSTIC (T14 negative control, default off), "truncate-first": the planned
+                # step already ends at the first plane the straight line (pre-hinge direction)
+                # reaches (reason 0, axis_pre); the angle was sampled for that length, and the two
+                # legs are travelled without cutting leg 2 again; the end point is then snapped
+                # onto that plane (below) keeping the lateral displacement of the hinge path.
+                leg2 = s - leg1
+                axis2 = int(axis_pre) if int(reason) == 0 else -1
+            else:
+                leg2_w, axis2 = F.leg2_limit_clip(
+                    V(r(hx), r(hy), r(hz)),
+                    V(r(d1x), r(d1y), r(d1z)),
+                    ix,
+                    iy,
+                    iz,
+                    self.origin,
+                    self.spacing,
+                    r(s - leg1),
+                    self.z_clip,
+                )
+                leg2 = float(leg2_w)
             nxp, nyp, nzp = hx + d1x * leg2, hy + d1y * leg2, hz + d1z * leg2
             exited = False
-            if axis2 >= 0:
-                d1a = (d1x, d1y, d1z)[axis2]
+            if axis2 == 3:  # the clip plane z = z_exit: the particle leaves the world there
+                if self.trunc_diag and s > 0.0:
+                    self.ctrl_res = max(self.ctrl_res, abs(nzp - float(self.z_clip)) / s)
+                    self.ctrl_sum[2] += float(self.z_clip) - nzp
+                nzp = float(self.z_clip)
+                exited = True
+            elif axis2 >= 0:
+                # the plane crossed: by the bent leg 2 normally, by the pre-hinge direction in the
+                # truncate-first control
+                d1a = (ux, uy, uz)[axis2] if self.trunc_diag else (d1x, d1y, d1z)[axis2]
                 upward = 1 if d1a > 0.0 else 0
                 idx = [ix, iy, iz]
                 plane = float(F.plane_position(idx[axis2], upward, r(o[axis2]), r(sp[axis2])))
+                if self.trunc_diag and s > 0.0:  # snap displacement relative to the step
+                    got = (nxp, nyp, nzp)[axis2]
+                    self.ctrl_res = max(self.ctrl_res, abs(got - plane) / s)
+                    self.ctrl_sum[axis2] += plane - got
                 idx[axis2] += 1 if upward else -1
                 if axis2 == 0:
                     nxp = plane
@@ -369,7 +545,11 @@ class _Reference:
             if f_short_t(tt, r0, self.c_fshort) and e_r1 > energy:
                 self.counters["energy_inversion"] += 1  # E1 > E0 from the inverse round trip
                 e_r1 = energy
-            mean = EM.csda_mean_loss(r(energy), r(e_r1), r(s0), r(tt), r(r0), self.c_fshort)
+            s_branch = s0  # stopping power of the linear branch: at the midpoint energy
+            if tt < float(self.c_fshort) * r0:
+                e_half = energy - 0.5 * s0 * tt
+                s_branch = self._stopping_range(m, e_half)[0]
+            mean = EM.csda_mean_loss(r(energy), r(e_r1), r(s_branch), r(tt), r(r0), self.c_fshort)
             mean_f = float(mean)
             attempts = 1
             if ph.straggling:
@@ -387,7 +567,7 @@ class _Reference:
                     wb = draw_block(key, h, 0, blocks, PURPOSE_TRANSPORT)
                     blocks += 1
                     ub = [u01_py(x, "float64") for x in wb]
-                    lw, ok = EM.straggle_attempt(
+                    lw, ok = self.straggle_attempt(
                         mean, var_e, r(ub[0]), r(ub[1]), r(ub[2]), r(ub[3])
                     )
                     attempts = k + 1
@@ -406,12 +586,13 @@ class _Reference:
             e_new = energy - loss
             deposit = energy - e_new
 
-            # scoring at the hinge-path midpoint
+            # scoring: the deposit is apportioned along both legs by the linear stopping-power ramp
+            # integrated over the path inside each voxel
             if deposit > 0.0:
-                mid = F.point_on_hinge(
-                    pvec, dvec, r(leg1), V(r(d1x), r(d1y), r(d1z)), r(0.5 * s_act)
-                )
-                self._score(batch, (float(mid[0]), float(mid[1]), float(mid[2])), deposit)
+                self._deposit_step(
+                    batch, (px, py, pz), (ux, uy, uz), leg1, (hx, hy, hz), (d1x, d1y, d1z), leg2,
+                    deposit, s_act, s0, self._stopping_range(m, e_new)[0],
+                )  # fmt: skip
                 self.tallies["step_deposit"] += deposit
 
             px, py, pz = nxp, nyp, nzp
@@ -444,13 +625,11 @@ class _Reference:
                 )
             if exited:
                 self.tallies["escaped"] += energy
-                if self.cfg.diagnostics.escape_records:
-                    self.escapes.append((h, px, py, pz, ux, uy, uz, energy))
-                self._end(h, END_ESCAPED, (px, py, pz), energy)
+                self._end(h, END_ESCAPED, (px, py, pz), (ux, uy, uz), energy)
                 return
             zero_run = zero_run + 1 if s_act <= 0.0 else 0
             if zero_run > 3:
                 self.tallies["truncated"] += energy
                 self.counters["stall"] += 1
-                self._end(h, END_TRUNCATED, (px, py, pz), energy)
+                self._end(h, END_TRUNCATED, (px, py, pz), (ux, uy, uz), energy)
                 return

@@ -58,9 +58,10 @@ coordinate and precision conventions API boundaries use.
   they take sampled uniform random numbers and already-interpolated table
   values as arguments and return the physical result (energy loss, scattering
   angle, interaction outcome). They never index arrays or draw random numbers.
-- The reference backend (`backend="python"`) executes these functions in
-  CPython with float64 arithmetic, history by history. It is slow by design
-  and is the correctness and inspection path.
+- The reference backend (`backend="python"`) executes pure-Python float64
+  twins of these functions (the same source text re-executed without Warp,
+  amendment 2026-10-05) in CPython, history by history. It is the
+  correctness and inspection path.
 - Warp backends (`backend="warp-cpu"`, `backend="warp-cuda"`) execute the
   same functions inside kernels. The two Warp devices share kernel source;
   their equivalence is checked by the parity methodology of decision 0001
@@ -123,6 +124,24 @@ whose arguments are not in these units state the unit in the parameter name
   to below 1e-6. A float64 build of the same kernels (float64 state, tables
   and accumulators) is provided for numerical falsification probes and
   trajectory-level parity with the reference; it is not a production mode.
+  **Amendment (2026-10-04, task V3-003B):** the per-batch deposit
+  accumulators are int64 fixed-point (quantum q = 2⁻³⁰ MeV) on every
+  backend instead of float32. Reason (contrary evidence preserved): on the
+  GPU host the frozen partition-invariance check T13 failed for float32
+  deposit grids — tallies and counters were identical across CUDA chunk sizes
+  2¹⁰ vs 2¹⁸ but the deposit grid missed the 1e-5 relative bound, because the
+  order of float32 `atomic_add` depends on the chunking and per-add rounding
+  (≈6e-8 of the running sum) random-walks as √N_add (≈1e-5 at 1e⁴ adds,
+  3e-5 at 1e⁵). Integer addition is associative, so int64 fixed-point sums
+  are bit-identical across chunk sizes, worker counts and CPU/CUDA within a
+  precision; the quantization error is ≤ q/2 per deposit, i.e. a deterministic
+  worst-case bound of N_add·q/2 per voxel (≈ 4.7e-5 MeV at 1e⁵ adds; the
+  random-walk expectation q/2·√N_add ≈ 1.5e-7 MeV is the typical size), and
+  the per-batch rounding residual is tallied so the energy balance still
+  closes exactly. Capacity is
+  guarded fail-closed at validation (n_histories_per_batch·E_max/q < 2⁶²) and
+  by a runtime overflow check. The per-batch split is kept for the standard
+  error; batch grids are converted to float64 and summed in a fixed order.
 - Random numbers: all backends use the same counter-based generator,
   Philox4x32-10 (Salmon et al., SC'11; the Random123 construction). Warp's
   built-in `wp.rand_init`/`wp.randf` is **not** used anywhere: it is a
@@ -199,4 +218,14 @@ Consequences:
 
 ## Later validation outcome
 
-To be appended as tasks merge.
+- 2026-10-04 (V3-003B): the float32 per-batch accumulator rule was falsified
+  on CUDA by the frozen T13 chunk-invariance check (see the amendment under
+  "Precision and randomness"); replaced by int64 fixed-point accumulators.
+- 2026-10-04 (V3-003B): Warp 1.17 Python-scope evaluation of `@wp.func`
+  bodies (the reference backend's execution path) was found to crash
+  intermittently (SIGSEGV/SIGABRT in `context.call_builtin`) under
+  multi-process use; the remedy was implemented in V3-003B on 2026-10-05: the
+  reference backend runs pure-Python twins of the shared functions built
+  from the same source text (`ionmc._wpfunc.python_twin`, shim
+  `ionmc._pyshim`) and makes no Warp call at Python scope (see decision
+  0039, outcome 2026-10-04).

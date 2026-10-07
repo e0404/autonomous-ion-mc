@@ -6,12 +6,21 @@ Models and sources (decision 0039; derivations in ``docs/physics/em-transport.md
 
 * mean energy loss over a path of mass thickness ``t`` [g/cm2]: the CSDA range inversion
   ``E1 = Rinv(R(E0) - t)``, with the linear branch ``S(E0) t`` when ``t < f_short R(E0)``;
-* straggling: Bohr variance ``(K/2)(Z/A) rho x z^2 Tmax (1/beta^2 - 1/2)``; Gamma with exactly the
-  Bohr mean and variance for mean/sigma < 3, Gaussian clamped to ``[0, 2 mean]`` for
-  mean/sigma >= 3 (mean preserved, variance reduced by at most about 0.5 %);
+* straggling (``PhysicsOptions.straggling_model``), Bohr variance
+  ``(K/2)(Z/A) rho x z^2 Tmax (1/beta^2 - 1/2)``; two selectable models, both with exactly the Bohr
+  mean:
+
+  - ``bohr_gamma_v1`` (the DEFAULT, ``straggle_attempt_gamma``): a Gamma distribution with exactly
+    the Bohr mean and variance at EVERY ratio mean/sigma (no Gaussian branch);
+  - ``bohr_gauss_clamped_gamma_v1`` (legacy hybrid, ``straggle_attempt``): Gamma with exactly the
+    Bohr mean and variance for mean/sigma < 3, Gaussian clamped to ``[0, 2 mean]`` for
+    mean/sigma >= 3 (mean preserved, variance reduced by at most about 0.5 %);
 * multiple Coulomb scattering: the differential Moliere scattering power ``T_dM`` of
   B. Gottschalk, Med. Phys. 37 (2010) 352 (arXiv:0908.1413), ``E_s = 15.0 MeV``, applied
   as a two-dimensional Gaussian polar angle, with the rotation of ``G4ThreeVector::rotateUz``.
+
+The Python reference backend uses the pure-Python twins of these functions
+(``ionmc._wpfunc.python_twin(make_em)``: same source text, no Warp call at Python scope).
 
 Units: energies MeV, lengths mm, mass thickness and ranges g/cm2, densities g/cm3,
 scattering power rad^2/mm (projected angle), angles rad. Functions never index arrays or
@@ -62,8 +71,10 @@ def make_em(real: type) -> SimpleNamespace:
     ) -> real:
         """Mean energy loss [MeV] over mass thickness ``t`` = ``mass_thickness`` [g/cm2].
 
-        ``e_r1_mev`` is Rinv(R0 - t) (clamped to the table), ``s_mass0`` the mass stopping
-        power at ``e0_mev`` [MeV cm2/g], ``r0_g_cm2`` = R(e0). Result in [0, e0].
+        ``e_r1_mev`` is Rinv(R0 - t) (clamped to the table); ``s_mass0`` is the mass stopping
+        power [MeV cm2/g] of the linear branch ``t < f_short R0``, where the caller passes the
+        value at the midpoint energy ``E0 - S(E0) t / 2`` (midpoint rule: no first-order bias in
+        the step length); ``r0_g_cm2`` = R(e0). Result in [0, e0].
         """
         loss = e0_mev - e_r1_mev
         if mass_thickness >= r0_g_cm2:
@@ -139,6 +150,48 @@ def make_em(real: type) -> SimpleNamespace:
                             g = g * wp.pow(u3, real(1.0) / k)
                         loss = mean_mev / k * g
                         ok = 1
+        return loss, ok
+
+    @named_func(name)
+    def straggle_attempt_gamma(
+        mean_mev: real, var_mev2: real, u0: real, u1: real, u2: real, u3: real
+    ) -> tuple[real, int]:
+        """One sampling attempt of the energy loss [MeV] for the model ``bohr_gamma_v1``: a Gamma
+        distribution whose mean and variance are the Bohr values for EVERY ratio mean / sigma (shape
+        ``k = ratio^2``, scale ``sigma^2 / mean``; Marsaglia-Tsang, shape ``k + 1`` and a
+        ``u3^(1/k)`` factor for ``k < 1``): positive, no clamp, no Gaussian branch. With a common
+        scale ``theta = sigma^2 / mean`` along a path the sum of Gamma steps is exactly Gamma with
+        the summed shape, so the whole loss distribution (not only its first two moments) is
+        independent of the step length wherever ``theta`` varies slowly. Same inputs, outputs and
+        rejection protocol as :func:`straggle_attempt`."""
+        loss = real(0.0)
+        ok = int(0)
+        if mean_mev <= real(0.0):
+            ok = 1
+        elif var_mev2 <= real(0.0):
+            loss = mean_mev
+            ok = 1
+        else:
+            sigma = wp.sqrt(var_mev2)
+            ratio = mean_mev / sigma
+            x = wp.sqrt(real(-2.0) * wp.log(u0)) * wp.cos(two_pi * u1)
+            k = ratio * ratio
+            a = k
+            if k < real(1.0):
+                a = k + real(1.0)
+            d = a - real(1.0) / real(3.0)
+            c = real(1.0) / wp.sqrt(real(9.0) * d)
+            v1 = real(1.0) + c * x
+            if v1 > real(0.0):
+                v = v1 * v1 * v1
+                lhs = wp.log(u2)
+                rhs = real(0.5) * x * x + d - d * v + d * wp.log(v)
+                if lhs < rhs:
+                    g = d * v
+                    if k < real(1.0):
+                        g = g * wp.pow(u3, real(1.0) / k)
+                    loss = mean_mev / k * g
+                    ok = 1
         return loss, ok
 
     @named_func(name)
@@ -228,6 +281,7 @@ def make_em(real: type) -> SimpleNamespace:
         csda_mean_loss=csda_mean_loss,
         bohr_variance=bohr_variance,
         straggle_attempt=straggle_attempt,
+        straggle_attempt_gamma=straggle_attempt_gamma,
         fdm=fdm,
         scattering_power_dm=scattering_power_dm,
         scattering_variance_birth=scattering_variance_birth,

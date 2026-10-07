@@ -15,14 +15,29 @@ exact inverse, the mean energy after a path of mass thickness `t = rho s / 10` [
 
     E1 = Rinv( R(E) - t )        mean loss = E - E1
 
-which is independent of how the path is divided into steps. For `t < f_short R(E)` with
-`f_short = 1e-3` the loss is `S(E) t` (this avoids cancellation in float32), and for `t >= R(E)` it is
-`E`. `ionmc.transport.tables.TransportTables` stores `ln S`, `ln R` on a uniform `ln E` grid
+which is independent of how the path is divided into steps *if the tables were exact*. They are not: every step
+reads `R(E)` of the new state energy from the table, and the table round trip `R(Rinv(R)) - R` (up to the U2 bound of
+1e-5, a smooth and therefore systematic error) enters once per step, so the accumulated loss depends weakly on the
+number of steps (about 3e-4 of the loss between 0.1 mm and 0.01 mm steps with the telescoping form alone). For
+`t < f_short R(E)` the loss is therefore the linear form at the midpoint energy, `S(E_mid) t` with
+`E_mid = E - S(E) t / 2` (midpoint rule: the step-size error is second order, the loss of the same path agrees
+between 1, 0.1 and 0.01 mm steps to 5e-6 and 1e-7 when every step takes this branch; the former form `S(E) t` had a
+first-order bias of about `s / (2 R)` times the curvature of `S`, which showed as a step dependence of the
+depth-dose at the 1e-3 level in the T9 comparison of 0.1 mm against 1 mm steps). The default is `f_short = 1e-2`, the largest
+value the configuration accepts: for such steps the second-order midpoint error is smaller than the table round-trip
+bias of the telescoping form at small steps, whereas where `s / R` is large (the last steps before the end of the
+range) the midpoint rule is no longer accurate (its error is second order in `s / R`) and the telescoping form takes
+over; the float32 cancellation that the branch once avoided is gone because the energy bookkeeping is in float64.
+For `t >= R(E)` the loss is `E`. `ionmc.transport.tables.TransportTables` stores `ln S`, `ln R` on a uniform `ln E` grid
 (at least 200 points per decade) and `ln E` on a uniform `ln R` grid (800 points per decade);
 values are log-log linear interpolations. The test `test_u2_round_trip_and_monotonicity` requires
 `|Rinv(R(E)) / E - 1| <= 1e-5` over the table range and strictly monotone `R` and `Rinv` for water and
-copper, and that `R` follows the source table within 1e-4. Because the transport state energy itself
-is used (not `Rinv(R(E))`), no round-trip offset accumulates along a track.
+copper, and that `R` follows the source table within 1e-4. The transport state energy itself is
+carried along the track (not `Rinv(R(E))`), so the energy variable is never re-derived from the
+range table; the per-step interpolation round-trip error of `E - Rinv(R(E) - t)` (≤ 1e-5 relative
+per evaluation) does, however, accumulate with the number of telescoping steps — the measured
+3e-4 difference between 0.01 mm and 0.1 mm steps above — which is why steps below 1e-2·R use the
+midpoint branch instead.
 
 The step length is limited by the voxel plane, by `f E / S_lin` with `f = 0.02`, by the Geant4 range
 function `alpha R + rho_f (1 - alpha)(2 - rho_f / R)` for `R > rho_f` (otherwise `R`; defaults
@@ -38,7 +53,8 @@ is
 
 with `K = 0.307075 MeV cm2/mol`, `T_max = 2 m_e c^2 beta^2 gamma^2 / (1 + 2 gamma m_e/M + (m_e/M)^2)`.
 This equals the Geant4 dispersion `2 pi r_e^2 m_e c^2 n_el z^2 x T_max (1/beta^2 - 1/2)`. The loss is
-sampled as follows (ratio `r = mean / sigma`; model identifier `bohr_gauss_clamped_gamma_v1`):
+sampled with the model `bohr_gamma_v1` (the default) or the older `bohr_gauss_clamped_gamma_v1` (selectable with
+`PhysicsOptions.straggling_model`). The older model (ratio `r = mean / sigma`):
 
 * `r < 3`: Gamma distribution with shape `k = r^2` and scale `sigma^2 / mean` (Marsaglia-Tsang; for
   `k < 1` the shape-plus-one sample times `u^(1/k)`), which reproduces the mean and the Bohr variance
@@ -48,12 +64,41 @@ sampled as follows (ratio `r = mean / sigma`; model identifier `bohr_gauss_clamp
   allows 1 %); 0.13 % of the samples are clamped at 0 at `r = 3`.
 
 A Gamma sample is accepted by the Marsaglia-Tsang test; a rejection draws another Philox block, at most 64
-attempts (then the `straggling_rejection` counter invalidates the run). Step energies of 1 mm or more
-at therapeutic energies have `r` well above 3, so the Gamma branch is used near the end of the range.
+attempts (then the `straggling_rejection` counter invalidates the run). Steps of 1 mm or more
+at therapeutic energies have `r` well above 3 (for example 5.4 at 150 MeV), so the Gaussian branch is used for them
+and the Gamma branch (`r < 3`) for short steps (about 0.3 mm and less at 150 MeV), for example the slivers cut by
+voxel planes.
 `test_straggling_gamma_moments_exact_and_gaussian_variance_loss_bounded` checks the Gamma branch for both moments and the Gaussian branch for the mean and the bounded variance deficit on a grid of `(mean, sigma)` that covers both
 branches and the boundary (4e5 draws per point, three standard errors; the Gaussian branch near the boundary
 is given the 1 % clamp allowance). The transport-level validation of straggling is the range
 straggling `sigma_R` of the end depths (criterion T6, local validation), which is not part of the CI tests.
+
+Default model `bohr_gamma_v1`: a Gamma distribution whose raw sampler has exactly the Bohr mean and variance for every
+ratio (shape `k = r^2`, scale `sigma^2 / mean`, Marsaglia-Tsang), positive everywhere, no clamp and no Gaussian branch.
+With a common scale `theta = sigma^2 / mean = kappa(E) / S(E)` along a path (`kappa` the Bohr dispersion per unit
+path, `S` the stopping power) the sum of Gamma steps is exactly Gamma with the summed shape, so the whole energy-loss
+distribution - not only its first two moments - is independent of the step length wherever `theta` varies slowly; the
+older model switches branch with the step length (Gamma for `r < 3`, Gaussian above), so its higher moments depend on
+the step. The full-scale T9 comparison of the two models is recorded in decision 0039.
+
+Both models: the exact-moment statements above are those of the raw sampler. In transport every sampled loss is capped
+at the remaining kinetic energy (`loss = min(loss, E)`). The exceedance probability `P(loss > E)` grows as the ratio
+`r` decreases and as `mean / E` increases: for example `r = 0.2` at `mean = 0.02 E` gives about 2e-3, and the
+demonstrated range of the moment tests is `r >= 0.7`. Which pairs `(r, mean / E)` occur in transport is fixed by the
+physics: `r` scales as the square root of the step length at fixed energy, so small `r` occurs only for very short
+steps, whose mean loss is a tiny fraction of `E`, and the energy-loss step limit keeps `mean / E <= 0.02` except in the
+last step before the cutoff. In water (the offline Bethe tables; test
+`test_transport_domain_pairs_keep_the_energy_cap_negligible`):
+
+| E [MeV] | step 1 mm: r, mean/E | 0.1 mm | 0.01 mm | 0.001 mm |
+|---|---|---|---|---|
+| 10 | 48, 0.45 (beyond the limit: a last step) | 15, 0.045 | 4.8, 4.5e-3 | 1.5, 4.5e-4 |
+| 50 | 13, 0.025 | 4.1, 2.5e-3 | 1.3, 2.5e-4 | 0.41, 2.5e-5 |
+| 150 | 5.4, 3.6e-3 | 1.7, 3.6e-4 | 0.54, 3.6e-5 | 0.17, 3.6e-6 |
+
+With `mean / E <= 0.02` the fraction of draws above `E` is below 3e-7 for every ratio of the table (so the cap acts only
+in the last step before the cutoff, where the mean loss is a large part of `E` and the cap reduces the mean and the
+variance).
 
 ## Multiple Coulomb scattering
 
@@ -87,8 +132,9 @@ direction is rotated with the `rotateUz` construction of Geant4 and renormalised
 The step of length `s` is split at a uniformly distributed fraction: the particle moves `a s` along
 the old direction, is deflected, and moves `(1 - a) s` along the new direction (cut at a voxel plane
 if necessary, in which case the particle snaps onto the plane). This reproduces the Fermi-Eyges
-second moments of a thin layer without an extra draw; energy is deposited at the midpoint of the
-path. The angle is sampled for the planned `s`, so a second leg cut by a plane carries a small
+second moments of a thin layer without an extra draw; the energy of the step is deposited along both legs
+according to the normalized linear stopping-power ramp over the step, integrated over the path in each scoring
+voxel (not in proportion to path length). The angle is sampled for the planned `s`, so a second leg cut by a plane carries a small
 overestimate of scattering on boundary steps.
 
 ### Validation status of this model (tests in `tests/ionmc/test_tables_scattering.py`)

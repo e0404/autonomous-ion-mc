@@ -3,7 +3,8 @@
 """Relativistic kinematics as precision-generic Warp functions (decision 0039).
 
 ``make_kinematics(R)`` returns functions for ``R`` = ``wp.float32`` or ``wp.float64``.
-Every function is callable from Python scope with ``R`` arguments and from a kernel. Units:
+Every function is for use in kernels; the Python reference backend uses its pure-Python twin
+(``ionmc._wpfunc.python_twin(make_kinematics)``, same source text, no Warp). Units:
 kinetic energy ``t_mev`` and rest energy ``m_mev`` in MeV, momentum times velocity ``pv`` in
 MeV (``p c * beta``).
 """

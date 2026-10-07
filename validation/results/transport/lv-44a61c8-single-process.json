@@ -1,0 +1,236 @@
+{
+ "complete": true,
+ "conformant": false,
+ "deferred_steps": [
+  "04-t13-workers"
+ ],
+ "directories": [
+  "validation/generated/RUN-20261006T232155Z-b4c79fb7/transport/lv-44a61c8-a",
+  "validation/generated/RUN-20261006T232258Z-fb443c92/transport/lv-44a61c8-b",
+  "validation/generated/RUN-20261006T232645Z-bd105529/transport/lv-44a61c8-e",
+  "validation/generated/RUN-20261006T233843Z-e0f95f64/transport/lv-44a61c8-f",
+  "validation/generated/RUN-20261006T233856Z-7d374c14/transport/lv-44a61c8-t8",
+  "validation/generated/RUN-20261006T235213Z-64402089/transport/lv-44a61c8-t9",
+  "validation/generated/RUN-20261007T000754Z-4057efe7/transport/lv-44a61c8-t10",
+  "validation/generated/RUN-20261007T001754Z-f4e4220f/transport/lv-44a61c8-t14"
+ ],
+ "execution_modes": [
+  "single-process-diagnostic"
+ ],
+ "git_sha": "44a61c88a89e63d989950f255890633af9efb635",
+ "missing_steps": [],
+ "non_conformant_reasons": [
+  "deferred multiprocessing checks",
+  "execution mode single-process-diagnostic (diagnostic, not the qualification mode)"
+ ],
+ "parts": {
+  "validation/generated/RUN-20261006T232155Z-b4c79fb7/transport/lv-44a61c8-a": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "validation/generated/RUN-20261006T232258Z-fb443c92/transport/lv-44a61c8-b": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "validation/generated/RUN-20261006T232645Z-bd105529/transport/lv-44a61c8-e": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "validation/generated/RUN-20261006T233843Z-e0f95f64/transport/lv-44a61c8-f": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "validation/generated/RUN-20261006T233856Z-7d374c14/transport/lv-44a61c8-t8": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "validation/generated/RUN-20261006T235213Z-64402089/transport/lv-44a61c8-t9": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "validation/generated/RUN-20261007T000754Z-4057efe7/transport/lv-44a61c8-t10": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "validation/generated/RUN-20261007T001754Z-f4e4220f/transport/lv-44a61c8-t14": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  }
+ },
+ "pass": true,
+ "problems": [],
+ "reduced_history_counts": false,
+ "steps": {
+  "01-pytest-warp-cpu-t2-t4-t11-c1-t13": {
+   "deselected_tests": 6,
+   "exit": 0,
+   "file": "01-pytest-warp-cpu-t2-t4-t11-c1-t13.txt",
+   "frozen_histories": null,
+   "histories": null,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "02-t1-trace-parity-256x150MeV": {
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "02-t1-trace-parity-256x150MeV.txt",
+   "frozen_histories": 256,
+   "histories": 256,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "03-t2-deterministic-csda": {
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "03-t2-deterministic-csda.txt",
+   "frozen_histories": null,
+   "histories": null,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "04-t13-workers": {
+   "exit": 0,
+   "file": "04-t13-workers.txt",
+   "frozen_histories": null,
+   "histories": null,
+   "pass": false,
+   "problems": [],
+   "reason": "multiprocessing-specific check deferred in single-process diagnostic mode (operator directive 2026-10-07)",
+   "reduced": false,
+   "status": "deferred"
+  },
+  "05-t13-chunks-cpu": {
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "05-t13-chunks-cpu.txt",
+   "frozen_histories": null,
+   "histories": 200000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "06-t-r1-python-repeatability": {
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "06-t-r1-python-repeatability.txt",
+   "frozen_histories": null,
+   "histories": 400,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "07-t12-python-sample-1of2": {
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "07-t12-python-sample-1of2.txt",
+   "frozen_histories": null,
+   "histories": null,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "08-t12-python-sample-2of2": {
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "08-t12-python-sample-2of2.txt",
+   "frozen_histories": null,
+   "histories": null,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "09-t12-accelerated-samples": {
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "09-t12-accelerated-samples.txt",
+   "frozen_histories": null,
+   "histories": null,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "10-t12-compare": {
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "10-t12-compare.txt",
+   "frozen_histories": {
+    "cpu32": 1000000,
+    "cpu64": 1000000,
+    "python": 4000
+   },
+   "histories": {
+    "cpu32": 1000000,
+    "cpu64": 1000000,
+    "python": 4000
+   },
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "11-t8-mcs-step-independence": {
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "11-t8-mcs-step-independence.txt",
+   "frozen_histories": 1000000,
+   "histories": 1000000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "12-t9-idd-step-independence": {
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "12-t9-idd-step-independence.txt",
+   "frozen_histories": null,
+   "histories": 1000000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "13-t10-rotation-invariance": {
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "13-t10-rotation-invariance.txt",
+   "frozen_histories": 1000000,
+   "histories": 1000000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "14-t14-voxel-boundary-bias": {
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "14-t14-voxel-boundary-bias.txt",
+   "frozen_histories": 1000000,
+   "histories": 1000000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  }
+ },
+ "suite": "lv"
+}

@@ -40,6 +40,8 @@ confirmed by the archive.]*
 
 ## 1. Shared physics across three backends (incorporating the coordinator's correction)
 
+Later finding (V3-003B, decisions 0037/0039): Python-scope execution of `@wp.func` builtins crashed intermittently (SIGSEGV in `context.call_builtin`) in spawned worker processes, so the Python reference backend no longer relies on it: it runs pure-Python twins of the shared functions built from the same source text (`ionmc._wpfunc.python_twin`). The facts below describe Warp itself and remain true but are not used by the reference path.
+
 These Python-scope facts were verified in Warp 1.17:
 - `wp.array` item indexing fails.
 - `wp.rand_init` fails.

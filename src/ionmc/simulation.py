@@ -22,18 +22,23 @@ from numpy.typing import NDArray
 
 from ionmc.config import (
     BACKENDS,
+    DEFAULT_CHUNK_HISTORIES,
     DELTA_ELECTRON_MODELS,
+    MAX_CPU_WORKERS,
     MCS_MODELS,
+    MIN_CHUNK_HISTORIES,
     PRECISIONS,
     STRAGGLING_MODELS,
     EffectiveConfig,
     SimulationConfig,
+    cuda_available,
     validate,
 )
 from ionmc.environment import describe_environment
 from ionmc.errors import TransportLimitError
 from ionmc.scoring import MEV_PER_G_TO_GY, ScoringGrid, reduce_batches, voxel_mass_g
-from ionmc.transport.reference import RawTransport, run_reference
+from ionmc.transport.run import run_transport
+from ionmc.transport.tally import RawTransport
 
 
 @dataclass(frozen=True)
@@ -45,7 +50,10 @@ class TransportCounters:
     that exceeded 64 attempts; ``genealogy_overflow`` and ``queue_overflow``: secondary
     bookkeeping limits (always 0 until secondaries exist); ``source_energy_out_of_range``:
     sampled source energies outside ``[E_cut, table maximum]``; ``energy_inversion``: steps in
-    which the inverse-range energy exceeded the initial energy (clamped to it).
+    which the inverse-range energy exceeded the initial energy (clamped to it);
+    ``accumulator_overflow``: a fixed-point voxel accumulator reached its capacity;
+    ``scoring_pieces_overflow``: a leg of the track-length scoring crossed more voxel pieces than
+    the validated bound (the remainder is deposited in the last voxel and the result is invalid).
     """
 
     step_truncation: int = 0
@@ -55,6 +63,8 @@ class TransportCounters:
     queue_overflow: int = 0
     source_energy_out_of_range: int = 0
     energy_inversion: int = 0
+    accumulator_overflow: int = 0
+    scoring_pieces_overflow: int = 0
 
     @property
     def any_nonzero(self) -> bool:
@@ -71,6 +81,8 @@ class TransportCounters:
             "queue_overflow": self.queue_overflow,
             "source_energy_out_of_range": self.source_energy_out_of_range,
             "energy_inversion": self.energy_inversion,
+            "accumulator_overflow": self.accumulator_overflow,
+            "scoring_pieces_overflow": self.scoring_pieces_overflow,
         }
 
 
@@ -81,7 +93,8 @@ class EnergyBalance:
     Every tally is accumulated independently. ``cutoff_mev`` (energy deposited locally below
     ``E_cut``) is part of the grid and outside deposits; the closure identity is
     ``initial = step_deposit + cutoff + escaped + truncated + unaccounted`` and, for every
-    grid, ``in_grid + outside = step_deposit + cutoff``.
+    grid, ``in_grid + quantization + outside = step_deposit + cutoff`` (``quantization`` is the
+    summed rounding residual of the fixed-point grids, at most q/2 per deposited piece).
     """
 
     initial_mev: float
@@ -92,6 +105,7 @@ class EnergyBalance:
     unaccounted_mev: float
     in_grid_mev: tuple[float, ...]
     outside_mev: tuple[float, ...]
+    quantization_mev: tuple[float, ...] = ()
 
     @property
     def closure_residual_mev(self) -> float:
@@ -112,11 +126,14 @@ class EnergyBalance:
         return abs(self.closure_residual_mev) / self.initial_mev
 
     def grid_relative_residual(self, grid: int) -> float:
-        """``|in_grid + outside - (step_deposit + cutoff)| / initial`` for grid ``grid``."""
+        """``|in_grid + quantization + outside - (step_deposit + cutoff)| / initial``."""
         if self.initial_mev == 0.0:
             return 0.0
         total = self.step_deposit_mev + self.cutoff_mev
-        return abs(self.in_grid_mev[grid] + self.outside_mev[grid] - total) / self.initial_mev
+        quant = self.quantization_mev[grid] if self.quantization_mev else 0.0
+        return abs(self.in_grid_mev[grid] + quant + self.outside_mev[grid] - total) / (
+            self.initial_mev
+        )
 
 
 @dataclass(frozen=True, eq=False)
@@ -157,7 +174,9 @@ class Result:
 
     ``valid`` is False if any transport-limit counter is nonzero. ``timings`` in seconds:
     ``setup``, ``compile`` (0 for the Python backend), ``transport``, ``reduce``, ``total``.
-    ``diagnostics`` holds the optional diagnostics requested in the configuration.
+    ``diagnostics`` holds the optional diagnostics requested in the configuration;
+    ``transport_report`` holds backend facts (workers, per-worker device, compile seconds,
+    chunking, register count) that are not part of the physics result.
     """
 
     valid: bool
@@ -176,6 +195,7 @@ class Result:
     timings: dict[str, float]
     environment: dict[str, Any]
     diagnostics: dict[str, Any] = field(default_factory=dict)
+    transport_report: dict[str, Any] = field(default_factory=dict)
 
     def grid(self, name: str) -> GridResult:
         """The grid result named ``name``."""
@@ -190,10 +210,17 @@ def capabilities() -> dict[str, Any]:
     return {
         "species": ["proton"],
         "backends": {
-            "python": "available (float64 reference)",
-            "warp-cpu": "not available (V3-003B)",
-            "warp-cuda": "not available (V3-003B)",
+            "python": "available (float64 reference; cpu_workers > 1 splits over processes)",
+            "warp-cpu": "available (float32 production, float64 validation; cpu_workers > 1)",
+            "warp-cuda": (
+                "available (cuda:0, float32 and float64; chunked launches)"
+                if cuda_available()
+                else "not available (no usable CUDA device; no fallback)"
+            ),
         },
+        "trace": "float64 only (float32 with trace_histories > 0 is rejected)",
+        "chunk_histories": {"default": DEFAULT_CHUNK_HISTORIES, "minimum": MIN_CHUNK_HISTORIES},
+        "max_cpu_workers": MAX_CPU_WORKERS,
         "backend_names": list(BACKENDS),
         "precisions": list(PRECISIONS),
         "physics": {
@@ -224,13 +251,13 @@ class Simulation:
         """Run the transport and return the result (raises on invalid results unless allowed)."""
         t_start = time.perf_counter()
         eff = self.effective
-        raw = run_reference(eff)
+        raw = run_transport(eff)
         t_transport = time.perf_counter()
         result = _assemble(eff, raw)
         t_end = time.perf_counter()
         timings = {
             "setup": self._setup_s,
-            "compile": 0.0,
+            "compile": _compile_seconds(raw),
             "transport": t_transport - t_start,
             "reduce": t_end - t_transport,
             "total": self._setup_s + (t_end - t_start),
@@ -244,6 +271,25 @@ class Simulation:
                 result,
             )
         return result
+
+
+def _compile_seconds(raw: RawTransport) -> float:
+    """Kernel compile/load seconds: the slowest worker's load plus, for a pool, the parent's
+    compile before the workers were spawned (0 for the Python backend)."""
+    parts = raw.meta.get("partials", [])
+    worker = max((float(p.get("compile_s", 0.0)) for p in parts), default=0.0)
+    parent = max((float(p.get("parent_compile_s", 0.0)) for p in parts), default=0.0)
+    return worker + parent
+
+
+def _device_description(eff: EffectiveConfig, raw: RawTransport) -> str:
+    parts = raw.meta.get("partials", [])
+    if eff.backend == "python":
+        base = "python (float64)"
+    else:
+        base = str(parts[0].get("device", eff.backend)) if parts else eff.backend
+    workers = eff.requested.run.cpu_workers
+    return f"{base} x {workers} processes" if workers > 1 else base
 
 
 def _with_timings(result: Result, timings: dict[str, float]) -> Result:
@@ -264,6 +310,7 @@ def _with_timings(result: Result, timings: dict[str, float]) -> Result:
         timings=timings,
         environment=result.environment,
         diagnostics=result.diagnostics,
+        transport_report=result.transport_report,
     )
 
 
@@ -319,13 +366,14 @@ def _assemble(eff: EffectiveConfig, raw: RawTransport) -> Result:
         unaccounted_mev=t["unaccounted"],
         in_grid_mev=tuple(float(a.sum()) for a in raw.edep_mev),
         outside_mev=tuple(float(x) for x in raw.outside_mev),
+        quantization_mev=tuple(float(x) for x in raw.quantization_mev),
     )
     return Result(
         valid=valid,
         requested_config=cfg,
         effective_config=eff,
         backend=eff.backend,
-        device="python (float64)",
+        device=_device_description(eff, raw),
         precision=eff.precision,
         seed=cfg.run.seed,
         rng=dict(eff.rng),
@@ -337,4 +385,5 @@ def _assemble(eff: EffectiveConfig, raw: RawTransport) -> Result:
         timings={},
         environment=describe_environment(),
         diagnostics=raw.diagnostics,
+        transport_report=raw.meta,
     )
