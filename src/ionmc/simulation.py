@@ -38,7 +38,7 @@ from ionmc.config import (
     validate,
 )
 from ionmc.environment import describe_environment
-from ionmc.errors import TransportLimitError, UnsupportedCombinationError
+from ionmc.errors import TransportLimitError
 from ionmc.lookup import AXES as LOOKUP_AXES
 from ionmc.lookup import AXIS_SPACINGS as LOOKUP_AXIS_SPACINGS
 from ionmc.physics.projectiles import PROTON
@@ -66,7 +66,7 @@ from ionmc.transport.channels import (
     PIECE_COUNT_NAME,
 )
 from ionmc.transport.run import run_transport
-from ionmc.transport.tally import ChannelRaw, RawTransport
+from ionmc.transport.tally import NUCLEAR_TALLY_NAMES, ChannelRaw, RawTransport
 
 
 @dataclass(frozen=True)
@@ -115,6 +115,28 @@ class TransportCounters:
 
 
 @dataclass(frozen=True)
+class NuclearTransportCounters(TransportCounters):
+    """The counters of a ``nuclear=True`` run (decision 0041 section 5): the transport-limit
+    counters plus the conditional block. ``majorant_violation``: candidates with
+    ``Sigma(E1) > S^(E0)``; ``nuclear_rejection_limit``: events that exhausted 64 attempts;
+    ``nuclear_conservation``: events whose ledger ``T1 = sum T_lab + T_r + binding + imbalance``
+    missed by more than 1e-9 T1 (should never fire). Any nonzero value invalidates the result."""
+
+    majorant_violation: int = 0
+    nuclear_rejection_limit: int = 0
+    nuclear_conservation: int = 0
+
+    def as_dict(self) -> dict[str, int]:
+        """The counters as a dictionary (with the nuclear block)."""
+        return {
+            **super().as_dict(),
+            "majorant_violation": self.majorant_violation,
+            "nuclear_rejection_limit": self.nuclear_rejection_limit,
+            "nuclear_conservation": self.nuclear_conservation,
+        }
+
+
+@dataclass(frozen=True)
 class EnergyBalance:
     """Energy bookkeeping summed over all histories [MeV] (not per primary).
 
@@ -136,6 +158,16 @@ class EnergyBalance:
     quantization_mev: tuple[float, ...] = ()
 
     @property
+    def nuclear_destinations_mev(self) -> float:
+        """Energy in the conditional nuclear destinations (0 here; see the nuclear subclass)."""
+        return 0.0
+
+    @property
+    def local_deposit_mev(self) -> float:
+        """Local deposits counted in the grid identity besides step deposit and cutoff (0 here)."""
+        return 0.0
+
+    @property
     def closure_residual_mev(self) -> float:
         """``initial`` minus the sum of all independently tallied destinations."""
         return self.initial_mev - (
@@ -144,6 +176,7 @@ class EnergyBalance:
             + self.escaped_mev
             + self.truncated_mev
             + self.unaccounted_mev
+            + self.nuclear_destinations_mev
         )
 
     @property
@@ -157,11 +190,39 @@ class EnergyBalance:
         """``|in_grid + quantization + outside - (step_deposit + cutoff)| / initial``."""
         if self.initial_mev == 0.0:
             return 0.0
-        total = self.step_deposit_mev + self.cutoff_mev
+        total = self.step_deposit_mev + self.cutoff_mev + self.local_deposit_mev
         quant = self.quantization_mev[grid] if self.quantization_mev else 0.0
         return abs(self.in_grid_mev[grid] + quant + self.outside_mev[grid] - total) / (
             self.initial_mev
         )
+
+
+@dataclass(frozen=True)
+class NuclearEnergyBalance(EnergyBalance):
+    """Energy balance of a ``nuclear=True`` run (decision 0041 section 5, amended 2026-10-07):
+    ``initial = step_deposit + cutoff + nuclear_local + escaped + nuclear_escaped_neutron +
+    nuclear_escaped_gamma + nuclear_binding + nuclear_imbalance + truncated + unaccounted`` and,
+    for every grid, ``in_grid + quantization + outside = step_deposit + cutoff + nuclear_local``.
+    ``nuclear_mev`` holds the six ``NUCLEAR_TALLY_NAMES`` (``nuclear_alpha_local`` is the alpha
+    part of ``nuclear_local``, not a separate destination; ``nuclear_binding`` and
+    ``nuclear_imbalance`` are signed)."""
+
+    nuclear_mev: Mapping[str, float] = field(default_factory=dict)
+
+    @property
+    def nuclear_destinations_mev(self) -> float:
+        n = self.nuclear_mev
+        return (
+            n["nuclear_local"]
+            + n["nuclear_escaped_neutron"]
+            + n["nuclear_escaped_gamma"]
+            + n["nuclear_binding"]
+            + n["nuclear_imbalance"]
+        )
+
+    @property
+    def local_deposit_mev(self) -> float:
+        return float(self.nuclear_mev["nuclear_local"])
 
 
 @dataclass(frozen=True, eq=False)
@@ -384,11 +445,6 @@ class Simulation:
         """Run the transport and return the result (raises on invalid results unless allowed)."""
         t_start = time.perf_counter()
         eff = self.effective
-        if eff.nuclear is not None:  # never run a nuclear configuration as electromagnetic-only
-            raise UnsupportedCombinationError(
-                "nuclear=True validates, but the nuclear transport loop is not wired into the "
-                "Python reference yet (V3-005A work packages C10 to C12)"
-            )
         raw = run_transport(eff)
         t_transport = time.perf_counter()
         result = _assemble(eff, raw)
@@ -643,7 +699,11 @@ def _grid_result(
 
 def _assemble(eff: EffectiveConfig, raw: RawTransport) -> Result:
     cfg = eff.requested
-    counters = TransportCounters(**raw.counters)
+    counters = (
+        NuclearTransportCounters(**raw.counters)
+        if eff.nuclear is not None
+        else TransportCounters(**raw.counters)
+    )
     ood = 0 if raw.channels is None else raw.channels.lookup_out_of_domain
     pbe = 0 if raw.channels is None else raw.channels.path_bound_exceeded
     valid = not counters.any_nonzero and ood == 0 and pbe == 0
@@ -659,7 +719,13 @@ def _assemble(eff: EffectiveConfig, raw: RawTransport) -> Result:
         for i, g in enumerate(cfg.scoring)
     )
     t = raw.tallies
-    balance = EnergyBalance(
+    balance_cls = EnergyBalance if eff.nuclear is None else NuclearEnergyBalance
+    extra: dict[str, Any] = (
+        {}
+        if eff.nuclear is None
+        else {"nuclear_mev": {k: float(t[k]) for k in NUCLEAR_TALLY_NAMES}}
+    )
+    balance = balance_cls(
         initial_mev=t["initial"],
         step_deposit_mev=t["step_deposit"],
         cutoff_mev=t["cutoff"],
@@ -669,6 +735,7 @@ def _assemble(eff: EffectiveConfig, raw: RawTransport) -> Result:
         in_grid_mev=tuple(float(a.sum()) for a in raw.edep_mev),
         outside_mev=tuple(float(x) for x in raw.outside_mev),
         quantization_mev=tuple(float(x) for x in raw.quantization_mev),
+        **extra,
     )
     return Result(
         valid=valid,

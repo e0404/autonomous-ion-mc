@@ -39,7 +39,9 @@ def run_transport(eff: EffectiveConfig) -> RawTransport:
     else:
         parts = [run_range(eff, 0, n)]
     diag = eff.requested.diagnostics
-    raw = merge_partials(parts, n, len(eff.requested.scoring), channel_columns(eff))
+    raw = merge_partials(
+        parts, n, len(eff.requested.scoring), channel_columns(eff), eff.nuclear is not None
+    )
     raw.diagnostics = build_diagnostics(
         parts, diag.track_end_positions, diag.escape_records, diag.trace_histories
     )

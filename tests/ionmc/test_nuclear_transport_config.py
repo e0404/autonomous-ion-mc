@@ -435,11 +435,3 @@ def test_bounds_at_250_mev_in_water(make_config: MakeConfig, tid: str) -> None:
         f"MeV, terms {ch.bounds}"
     )
     assert ch.bounds["E_bound_mev"] >= 250.0
-
-
-def test_a_validated_nuclear_run_is_never_executed_as_em_only(
-    make_config: MakeConfig, tid: str
-) -> None:
-    sim = Simulation(_nuc(make_config(energy=100.0), tid))
-    with pytest.raises(UnsupportedCombinationError, match="C10"):
-        sim.run()
