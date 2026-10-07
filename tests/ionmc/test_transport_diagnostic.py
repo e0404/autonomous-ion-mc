@@ -4,6 +4,7 @@ still follow the same trajectory (T1) and the trajectory differs from the defaul
 
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 from pathlib import Path
 
@@ -63,31 +64,39 @@ def _config(
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="fixture regenerated in phase C3 at the clean code commit (V3-003D, plan amendment 24)",
-)
 def test_default_trace_is_unchanged_from_the_stored_baseline() -> None:
-    """Provenance of ``data/trace_baseline_20mev.npz``: generated at commit 6d58480 (before the
-    truncated-hinge diagnostic existed) by the python reference with the physics defaults of that
-    commit, i.e. straggling model ``bohr_gauss_clamped_gamma_v1`` and ``short_step_fraction`` 1e-3
-    (both pinned here; the defaults have since changed). It guards that, with the diagnostic off,
-    the engine reproduces that trajectory: discrete columns exactly, continuous columns to
-    rtol 1e-9 and atol 2e-10. One documented, intended deviation exists: the midpoint rule of the
-    linear short-step energy-loss branch (V3-003B, after 6d58480) changes the loss of the one step
-    of this run that takes that branch by about 8e-11 MeV (the trace differs by at most 8e-11 in
-    energy and 2e-11 mm in position). On the generating host python and warp-cpu otherwise agree
-    bit for bit."""
+    """Provenance of ``data/trace_baseline_20mev.npz``: regenerated for V3-003D (plan amendment 24
+    of the V3-003 plan) by ``validation/scripts/transport/make_trace_baseline.py`` on the clean
+    commit 366d4f4 (the exact log-log quadrature range table, ``range_construction``
+    ``exact-loglog-quadrature-v1``) with the python reference backend and the physics defaults of
+    the original generating commit 6d58480, i.e. straggling model ``bohr_gauss_clamped_gamma_v1``
+    and ``short_step_fraction`` 1e-3 (both pinned here; the defaults have since changed). The npz
+    carries ``meta`` (JSON): generating commit, table sha256 and identity, versions, the sha256 of
+    the previous fixture and the comparison with it. Against the 6d58480 fixture the energies
+    changed by at most 5.4e-4 MeV, positions by at most 1.5e-4 mm, and there is one discrete flip:
+    history 0 row 37, a sliver geometry step of 5.6e-12 mm at the z = 3 mm voxel plane (iz 1 to 2,
+    reason 0 instead of 1), 464 rows instead of 465. The test guards that, with the diagnostic off,
+    the engine reproduces the trajectory: discrete columns exactly, continuous columns to
+    rtol 1e-11 and atol 1e-12 (this replaces the allowance rtol 1e-9 / atol 2e-10 of the 6d58480
+    fixture, which covered a documented 8e-11 MeV midpoint-rule change). It holds for the python
+    and the warp-cpu float64 backends."""
     base = np.load(BASELINE)
+    meta = json.loads(str(base["meta"]))
+    assert meta["generating_commit"].startswith("366d4f4")
+    assert meta["range_construction"] == "exact-loglog-quadrature-v1"
+    assert all(
+        i["range_construction"] == "exact-loglog-quadrature-v1" for i in meta["table_identity"]
+    )
     for backend in ("python", "warp-cpu"):
-        res = Simulation(_config(backend, legacy=True)).run()
+        sim = Simulation(_config(backend, legacy=True))
+        assert sim.effective.tables.sha256 == meta["transport_tables_sha256"], backend
+        res = sim.run()
         tr = res.diagnostics["trace"]
         for name in TRACE_COLUMNS:
             if name in ("history", "step", "ix", "iy", "iz", "reason", "blocks", "attempts"):
                 assert np.array_equal(tr[name], base[name]), (backend, name)
             else:
-                # atol 2e-10 covers the documented 8e-11 MeV midpoint-rule change of one step
-                np.testing.assert_allclose(tr[name], base[name], rtol=1e-9, atol=2e-10)
+                np.testing.assert_allclose(tr[name], base[name], rtol=1e-11, atol=1e-12)
 
 
 def test_diagnostic_on_keeps_python_warp_parity_and_changes_trajectories() -> None:
