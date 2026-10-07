@@ -45,7 +45,17 @@ QUALIFICATION_SEED_BASE = 20341004
 20271004 (T9 investigation), 20281004, 20291004, 20301004, 20311004, 20321004 and 20331004
 (first to sixth qualification attempts, consumed) are recorded as non-qualification evidence
 and never qualify."""
+V4_QUALIFICATION_SEED_BASE = 20361004
+"""Qualification base of the suites ``lv4`` and ``hr4`` (V3-004); 20351004 is their rehearsal base.
+A base whose full-scale results were observed is consumed (plan, section Seeds)."""
 IDENTITY_KEYS = ("git_sha", "suite", "scale", "python_parts", "seed_base")
+
+
+def run_suite_suites() -> tuple[str, ...]:
+    sys.path.insert(0, str(HERE))
+    import run_suite
+
+    return tuple(run_suite.SUITES)
 
 
 def parse_env(text: str) -> dict[str, Any]:
@@ -76,6 +86,14 @@ def identity(env: dict[str, Any]) -> str:
 
 STEP_TAGS = (
     ("pytest", None),
+    ("a9-part", "a9-part"),
+    ("a9-compare", "a9-compare"),
+    ("a7-", "a7"),
+    ("a8-", "a8"),
+    ("a11-", "a11"),
+    ("a13-", "a13"),
+    ("a15-", "a15"),
+    ("a16-", "a16"),
     ("t12-python-sample", "t12-sample"),
     ("t12-accelerated-samples", "t12-sample"),
     ("t12-compare", "t12-compare"),
@@ -186,6 +204,7 @@ def attest(env: dict[str, Any], sha: str) -> dict[str, Any]:
     import run_suite
 
     prefixes = run_suite.SOURCE_PREFIXES
+    suite_files = run_suite.source_file_list(env.get("suite"))
     listing = _git("ls-tree", "-r", "--name-only", sha)
     result: dict[str, Any] = {"attested_sha": sha, "valid": False, "mismatches": []}
     if listing is None:
@@ -194,7 +213,7 @@ def attest(env: dict[str, Any], sha: str) -> dict[str, Any]:
     tracked = {
         p
         for p in listing.decode().splitlines()
-        if (p.startswith(tuple(prefixes)) or p in run_suite.SOURCE_FILES)
+        if (p.startswith(tuple(prefixes)) or p in suite_files)
         and not p.endswith(".pyc")
         and "__pycache__" not in p
     }
@@ -213,10 +232,18 @@ def attest(env: dict[str, Any], sha: str) -> dict[str, Any]:
     return result
 
 
-def seed_blockers(seed_base: Any) -> list[str]:
+def seed_blockers(seed_base: Any, suite: str | None = None) -> list[str]:
     """Reasons why an archive's seed base cannot qualify (empty for the qualification base)."""
     if seed_base is None:
         return ["seed_base not recorded in environment.txt"]
+    if suite in ("lv4", "hr4"):
+        if int(seed_base) != V4_QUALIFICATION_SEED_BASE:
+            return [
+                f"seed_base {int(seed_base)} is not the qualification base "
+                f"{V4_QUALIFICATION_SEED_BASE} (20351004 is the rehearsal base; any other base is "
+                "non-qualification evidence)"
+            ]
+        return []
     if int(seed_base) != QUALIFICATION_SEED_BASE:
         return [
             f"seed_base {int(seed_base)} is not the qualification base {QUALIFICATION_SEED_BASE} "
@@ -258,7 +285,7 @@ def verify(d: Path, sha: str, attest_sha: str | None = None) -> dict[str, Any]:
         )
     suite = env.get("suite")
     subset = True
-    if suite in ("lv", "hr"):
+    if suite in run_suite_suites():
         sys.path.insert(0, str(HERE))
         import run_suite
 
@@ -270,7 +297,7 @@ def verify(d: Path, sha: str, attest_sha: str | None = None) -> dict[str, Any]:
     attestation = attest(env, attest_sha) if attest_sha else None
     mode = env.get("execution_mode", "standard")
     deferred = sorted(n for n, s in steps.items() if s.get("status") == "deferred")
-    if deferred and suite in ("lv", "hr"):
+    if deferred and suite in run_suite_suites():
         import run_suite as _rs
 
         allowed = set(_rs.deferred_step_names(suite, int(env.get("python_parts", 2))))
@@ -281,8 +308,8 @@ def verify(d: Path, sha: str, attest_sha: str | None = None) -> dict[str, Any]:
                 problems.append(f"step {n} may not be deferred")
     ok = not problems and all(s["pass"] for s in steps.values() if s.get("status") != "deferred")
     src_ok = source_ok(env, attestation)
-    blockers = seed_blockers(env.get("seed_base"))
-    if deferred and suite not in ("lv", "hr"):
+    blockers = seed_blockers(env.get("seed_base"), suite)
+    if deferred and suite not in run_suite_suites():
         problems.append("deferred steps in an archive of an unknown suite")
     if mode != "standard":
         blockers = [*blockers, f"execution mode {mode} (diagnostic, not the qualification mode)"]
@@ -326,7 +353,7 @@ def combine(dirs: list[Path], sha: str, attest_sha: str | None = None) -> dict[s
             seen[name] = str(d)
     suite = parts[0]["suite"] if parts else None
     missing: list[str] = []
-    if suite in ("lv", "hr"):
+    if suite in run_suite_suites():
         sys.path.insert(0, str(HERE))
         import run_suite
 

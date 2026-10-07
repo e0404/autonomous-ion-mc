@@ -1,8 +1,10 @@
-"""Fail-closed runner of the V3-003 local-validation (LV) and host-runner (HR) suites.
+"""Fail-closed runner of the V3-003 (``lv``, ``hr``) and V3-004 (``lv4``, ``hr4``) local-validation
+(LV) and host-runner (HR) suites. The V3-004 suites use ``steps_v4.py``, the default seed base
+20361004 and, in the hashed set, the V3-004 acceptance plan and the synthetic lookup fixture.
 
 Usage (argv only, no shell; the host runner executes exactly this)::
 
-    python validation/scripts/transport/run_suite.py --suite {lv,hr} \
+    python validation/scripts/transport/run_suite.py --suite {lv,hr,lv4,hr4} \
         --out validation/generated/transport/<new-dir> --expected-sha <40 hex> \
         [--workers N|auto] [--step-timeout SECONDS] [--scale F] [--python-parts N] \
         [--only STEP ...] [--import-dirs DIR ...] [--seed-base INT]
@@ -59,6 +61,8 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
 ALLOWED_PARENTS = (REPO / "validation" / "generated", REPO / "benchmarks" / "generated")
 STEPS = HERE / "steps.py"
+STEPS_V4 = HERE / "steps_v4.py"
+SUITES = ("lv", "hr", "lv4", "hr4")
 PY = sys.executable
 SOURCE_PREFIXES = (
     "src/ionmc",
@@ -69,8 +73,30 @@ SOURCE_PREFIXES = (
 SOURCE_FILES = ("pyproject.toml", "uv.lock", "validation/plans/v3-003-acceptance.md")
 """Every tracked file that defines what is executed and judged (code, tests and fixtures, the
 project definition, the lock file and the frozen acceptance plan)."""
+SOURCE_FILES_V4 = (
+    *SOURCE_FILES,
+    "validation/plans/v3-004-acceptance.md",
+    "tests/data/synthetic_lookup.json",
+)
+"""The hashed set of the suites ``lv4`` and ``hr4``: the V3-003 set plus the V3-004 acceptance plan
+and the synthetic lookup fixture (outside ``tests/ionmc``)."""
+
+
+def source_file_list(suite: str | None = None) -> tuple[str, ...]:
+    """Individually hashed files of ``suite`` (default: the suite named by ``IONMC_RUN_SUITE``)."""
+    suite = suite or os.environ.get("IONMC_RUN_SUITE", "")
+    return SOURCE_FILES_V4 if suite in ("lv4", "hr4") else SOURCE_FILES
+
 DEFAULT_PYTHON_PARTS = 2
 QUALIFICATION_SEED_BASE = 20341004
+V4_QUALIFICATION_SEED_BASE = 20361004
+V4_REHEARSAL_SEED_BASE = 20351004
+DEFAULT_SEED_BASES = {
+    "lv": QUALIFICATION_SEED_BASE,
+    "hr": QUALIFICATION_SEED_BASE,
+    "lv4": V4_QUALIFICATION_SEED_BASE,
+    "hr4": V4_QUALIFICATION_SEED_BASE,
+}
 REHEARSAL_SEED_BASE = 20261004
 CONSUMED_SEED_BASE = 20271004  # used by the T9 investigation: not a qualification base
 DEFAULT_SEED_BASE = QUALIFICATION_SEED_BASE
@@ -88,10 +114,23 @@ DEFERRED_REASON = (
     "multiprocessing-specific check deferred in single-process diagnostic mode "
     "(operator directive 2026-10-07)"
 )
-DEFERRED_STEPS = {"lv": ("t13-workers",), "hr": ()}
+DEFERRED_STEPS = {"lv": ("t13-workers",), "hr": (), "lv4": ("a15-workers",), "hr4": ()}
 """Steps whose purpose is the worker-partition invariance (1 versus N worker processes): they are
 not executed in the single-process diagnostic mode and recorded as ``deferred``. Steps that merely
 use workers for speed run with one worker, with unchanged histories, seeds and criteria."""
+
+
+STEP_TIMEOUT_FLOOR_S = {
+    "lv4": {"a9-part-1of2": 3300, "a9-part-2of2": 3300, "a7-step-independence": 1800},
+    "hr4": {"a11-hr-channel-parity": 3600},
+}
+"""Minimum step timeout [s] of long steps (the ``--step-timeout`` default is 1500 s); the effective
+timeout is the larger of the two and is recorded in the step header."""
+
+
+def step_timeout_s(suite: str, name: str, default: int) -> int:
+    floor = STEP_TIMEOUT_FLOOR_S.get(suite, {}).get(name.split("-", 1)[1], 0)
+    return max(default, floor)
 
 
 def deferred_step_names(suite: str, python_parts: int = DEFAULT_PYTHON_PARTS) -> list[str]:
@@ -117,12 +156,15 @@ def suite_steps(
     out: Path | None = None,
     import_dirs: list[str] | None = None,
     step_timeout: int = 1500,
-    seed_base: int = DEFAULT_SEED_BASE,
+    seed_base: int | None = None,
     single_process: bool = False,
 ) -> list[tuple[str, list[str], dict[str, str]]]:
     """``(name, argv, extra environment)`` of the steps of a suite, in execution order (the
     names depend only on ``suite`` and ``python_parts``). ``single_process`` deselects the
     ``multiprocess`` tests of the pytest steps (the deferred steps are chosen by the caller)."""
+
+    if seed_base is None:
+        seed_base = DEFAULT_SEED_BASES.get(suite, DEFAULT_SEED_BASE)
 
     def n(x: int) -> str:
         return str(max(1000, int(x * scale)))
@@ -132,15 +174,21 @@ def suite_steps(
     st = [PY, str(STEPS)]
     w = ["--workers", str(workers)]
     sc = ["--scale", str(scale)]
-    cuda = {"IONMC_REQUIRE_CUDA": "1"} if suite == "hr" else {}
+    cuda = {"IONMC_REQUIRE_CUDA": "1"} if suite in ("hr", "hr4") else {}
+    s4 = [PY, str(STEPS_V4)]
     steps: list[tuple[str, list[str], dict[str, str]]] = []
 
-    inner = ["--timeout", str(max(30, int(0.9 * step_timeout)))]  # the pool cleans up first
-
     def add(name: str, cmd: list[str], env: dict[str, str] | None = None) -> None:
-        if cmd[:2] == [PY, str(STEPS)]:
+        full = f"{len(steps) + 1:02d}-{name}"
+        if cmd[:2] in ([PY, str(STEPS)], [PY, str(STEPS_V4)]):
+            eff = step_timeout_s(suite, full, step_timeout)
+            inner = ["--timeout", str(max(30, int(0.9 * eff)))]  # the pool cleans up first
             cmd = [*cmd, *inner, "--seed-base", str(seed_base)]  # every seed derives from the base
-        steps.append((f"{len(steps) + 1:02d}-{name}", cmd, env or {}))
+        steps.append((full, cmd, env or {}))
+
+    if suite in ("lv4", "hr4"):
+        _suite_steps_v4(suite, add, s4, w, sc, cuda, out_dir, dirs, single_process)
+        return steps
 
     if suite == "lv":
         add(
@@ -214,6 +262,47 @@ def suite_steps(
         add("t10-rotation-invariance", [*st, "t10", "--n", n(1_000_000), *w])
         add("t14-voxel-boundary-bias", [*st, "t14", "--n", n(1_000_000), *w])
     return steps
+
+
+def _suite_steps_v4(suite, add, s4, w, sc, cuda, out_dir, dirs, single_process):  # type: ignore[no-untyped-def]
+    """Steps of the V3-004 suites (rows A7, A8, A9, A11, A13, A15, A16 of
+    ``validation/plans/v3-004-acceptance.md``); every statistical step takes ``--scale``."""
+    if suite == "lv4":
+        add(
+            "pytest-scoring-warp-cpu",
+            pytest_cmd(
+                "tests/ionmc/test_let_offline.py",
+                "tests/ionmc/test_scoring_channels.py",
+                "tests/ionmc/test_scoring_transport.py",
+                "tests/ionmc/test_scoring_warp.py",
+                marker="not multiprocess" if single_process else None,
+            ),
+        )
+        add("a16-qualified-path-regression", [*s4, "a16"])
+        add("a11-lv-python-vs-warp-cpu-256x150MeV", [*s4, "a11-lv", *sc])
+        add("a15-chunks-cpu", [*s4, "a15", "--mode", "chunks", "--backend", "warp-cpu", *sc])
+        add("a15-workers", [*s4, "a15", "--mode", "workers", "--workers", "3", *sc])
+        add("a7-step-independence", [*s4, "a7", *sc, *w])
+        add("a8-offline-let", [*s4, "a8", *sc, *w])
+        add("a13-let-profile-exploratory", [*s4, "a13", *sc, *w])
+        for i in (1, 2):
+            add(
+                f"a9-part-{i}of2",
+                [*s4, "a9-part", "--part", f"{i}/2", "--out-dir", str(out_dir), *sc, *w],
+            )
+        add("a9-compare", [*s4, "a9-compare", "--dirs", *dirs, *sc])
+    else:
+        add(
+            "pytest-cuda-scoring",
+            pytest_cmd(
+                "tests/ionmc/test_scoring_warp.py",
+                marker="cuda and not multiprocess" if single_process else "cuda",
+            ),
+            cuda,
+        )
+        add("a15-chunks-cuda", [*s4, "a15", "--mode", "chunks", "--backend", "warp-cuda", *sc],
+            cuda)  # fmt: skip
+        add("a11-hr-channel-parity", [*s4, "a11-hr", *sc], cuda)
 
 
 KILL_GRACE_S = 10.0
@@ -298,9 +387,10 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def source_files() -> list[Path]:
-    """Every source file whose hash identifies the code under test."""
-    files: list[Path] = [REPO / f for f in SOURCE_FILES if (REPO / f).is_file()]
+def source_files(suite: str | None = None) -> list[Path]:
+    """Every source file whose hash identifies the code under test (the set of ``suite``, default
+    the suite of ``IONMC_RUN_SUITE``)."""
+    files: list[Path] = [REPO / f for f in source_file_list(suite) if (REPO / f).is_file()]
     for prefix in SOURCE_PREFIXES:
         for p in sorted((REPO / prefix).rglob("*")):
             parts = set(p.relative_to(REPO).parts)
@@ -346,7 +436,7 @@ def environment_text(
         f"only={','.join(args.only) if args.only else ''}",
         "source_hashes:",
     ]
-    lines += [f"  {sha256(f)}  {f.relative_to(REPO)}" for f in source_files()]
+    lines += [f"  {sha256(f)}  {f.relative_to(REPO)}" for f in source_files(args.suite)]
     return "\n".join(lines) + "\n"
 
 
@@ -357,7 +447,7 @@ def resolve_workers(value: str) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--suite", choices=("lv", "hr"), required=True)
+    ap.add_argument("--suite", choices=SUITES, required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--expected-sha", required=True)
     ap.add_argument(
@@ -377,8 +467,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument(
         "--seed-base",
         type=int,
-        default=DEFAULT_SEED_BASE,
-        help="base of all statistical seeds (default: the qualification base 20341004; the "
+        default=None,
+        help="base of all statistical seeds (default: the qualification base of the suite, "
+        "20341004 for lv/hr and 20361004 for lv4/hr4; for lv/hr the "
         "bases 20261004, 20271004, 20281004, 20291004, 20301004, 20311004, 20321004 and "
         "20331004 give non-conformant archives); "
         "recorded in the archive",
@@ -403,6 +494,8 @@ def main(argv: list[str] | None = None) -> int:
         help="factor on all history counts (< 1 gives a non-conformant, labelled run)",
     )
     args = ap.parse_args(argv)
+    if args.seed_base is None:
+        args.seed_base = DEFAULT_SEED_BASES[args.suite]
     workers = 1 if args.single_process else resolve_workers(args.workers)
     if workers < 1 or args.step_timeout < 1 or not 0.0 < args.scale <= 1.0:
         raise SystemExit("need --workers >= 1, --step-timeout >= 1 and 0 < --scale <= 1")
@@ -463,7 +556,8 @@ def main(argv: list[str] | None = None) -> int:
         started = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         with path.open("w") as fh:
             fh.write(f"# command: {' '.join(cmd)}\n# git_sha: {sha}\n# started_utc: {started}\n")
-            fh.write(f"# step_timeout_s: {args.step_timeout}\n")
+            eff_timeout = step_timeout_s(args.suite, name, args.step_timeout)
+            fh.write(f"# step_timeout_s: {eff_timeout}\n")
             if name in deferred:
                 fh.write(f"# status: deferred\n# reason: {DEFERRED_REASON}\n\n# exit=0\n")
                 print(f"== {name}: deferred", flush=True)
@@ -474,7 +568,7 @@ def main(argv: list[str] | None = None) -> int:
                 cwd=REPO,
                 env={**env_base, **extra},
                 stdout=fh,
-                timeout=args.step_timeout,
+                timeout=eff_timeout,
             )
             fh.write(f"\n# exit={code}\n")
         print(f"== {name}: exit={code}", flush=True)
