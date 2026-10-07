@@ -43,3 +43,20 @@ the qualification mode. The earlier multi-worker runs at 46e9a95 (HR and LV conf
 in the host-run records (`RUN-20261005T224849Z-e2cc0092`, `RUN-20261005T225107Z-b5b7b9bb`,
 `RUN-20261005T233144Z-0a459b0d`) and are not qualification results for the final head. Not a
 clinical claim.
+
+# Extensible-scoring qualification summaries (V3-004)
+
+`lv4-86e18c8-single-process.json` and `hr4-86e18c8-single-process.json` are the combined
+`summarize.py --combine … --attest-sha` summaries of the `lv4` and `hr4` suites of
+`validation/plans/v3-004-acceptance.md` (rows A7, A8, A9, A11, A13, A15, A16 and the CUDA
+scoring tests) at the frozen head `86e18c8ba86acdac8833937f89a2bc5a1bff7f4c` with the
+qualification seed base 20361004 (amendments ¹–³ recorded before the respective results). They
+were produced from the subset archives listed in each file (`parts`) in the single-process
+diagnostic mode (operator directive 2026-10-07, `run_suite.py --workers 1`). Every executed step
+passed (`pass: true`); the archives are deliberately **not conformant** (`conformant: false`):
+`05-a15-workers` (1-vs-3-workers channel partition invariance) is recorded as *deferred*, not
+passed, and the mode itself is not the qualification mode. Observed numbers of note: A9 coverage
+of the LET_d delta-method error 0.945 (0.5·R), 0.93 (Bragg peak), 0.97 (distal 80 %) against the
+window [0.91, 0.99]; A11-HR cpu32:cuda32 and python:cpu64 channel-profile pairs pass; A7 at
+1 mm steps sits within the analytic expected-share bound (|D|/(4σ+δ) ≤ 0.38 in the rehearsal).
+A13 is exploratory and non-gating. Not a clinical claim.
