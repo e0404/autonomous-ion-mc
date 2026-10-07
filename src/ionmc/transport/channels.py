@@ -15,13 +15,17 @@ LS2    ``l_p (S_p^2 + k^2 l_p^2/12)``  ``LET_d`` (numerator)
 ES     ``eps_p S_p``               ``LET_d^eps`` (numerator)
 FE     ``eps_p f(x_p)``            ``lookup_sum``, ``lookup_dose_avg`` (numerator)
 FL     ``l_p`` per energy bin      ``fluence_spectrum`` (f = bin indicator, with under/overflow)
-N      1                           piece count (automatic, bounds the fixed-point error)
+N      1                           piece count (automatic, bounds the fixed-point error);
+                                   one channel counts class "step" pieces, one class "local"
 =====  ==========================  ===========================================================
 
 Ratios are ``LET_t = LS/L``, ``LET_d = LS2/LS``, ``LET_d^eps = ES/E_step`` and
 ``lookup_dose_avg = FE/E_step``; their reduction (delta method) is ``reduce_ratio`` (later step).
-The automatic channels per used grid are ``N`` and ``edep_excluded_from_let`` (E, class "local",
-all species including the pseudo-species).
+The automatic channels per used grid are ``N`` (class "step"), ``N_local`` (class "local", all
+species including the pseudo-species: it counts the local point deposits that the E channels
+quantize) and ``edep_excluded_from_let`` (E, class "local", all species including the
+pseudo-species). Together the two counts give the deterministic rounding bound of every
+channel according to its class mask.
 
 Channels live in one int64 array ``acc[B, sum_c size_c]``; channel ``c`` owns a contiguous block
 of ``size_c`` columns (``n_voxels``, times ``n_bins + 2`` for a spectrum) at ``offset_c``. An
@@ -74,6 +78,7 @@ STRAGGLING_MARGIN = 1.25
 E_QUANTUM_EXPONENT = 30  # QUANTUM_MEV = 2**-30
 EXCLUDED_CHANNEL_NAME = "edep_excluded_from_let"
 PIECE_COUNT_NAME = "scoring_pieces"
+LOCAL_PIECE_COUNT_NAME = "scoring_pieces_local"
 # power of the stopping power S in the 1 mm entrance-piece scale u_c = 1 mm S_ref^j
 _FLOOR_POWER = {"E": 1, "FE": 1, "L": 0, "FL": 0, "LS": 1, "LS2": 2, "ES": 2}
 
@@ -153,6 +158,14 @@ class ChannelPlan:
     def channel_index(self, kind: str, grid: int) -> list[int]:
         """Indices of the channels of ``kind`` on grid ``grid``."""
         return [i for i, c in enumerate(self.channels) if c.kind == kind and c.grid == grid]
+
+    def count_channel(self, grid: int, class_mask: int) -> int:
+        """Index of the automatic piece-count channel (kind N) of ``grid`` for the class
+        ``class_mask`` (``CLASS_STEP`` or ``CLASS_LOCAL``)."""
+        return next(
+            i for i, c in enumerate(self.channels)
+            if c.kind == "N" and c.grid == grid and c.class_mask == class_mask
+        )  # fmt: skip
 
     def summary(self) -> dict[str, Any]:
         """JSON-serialisable record for the effective configuration (quanta included)."""
@@ -444,7 +457,7 @@ def compile_channels(
     if len(lookup_index) != len(lookups):
         raise fail("lookup table names must be unique")
     names = [r.name for r in requests]
-    reserved = {EXCLUDED_CHANNEL_NAME, PIECE_COUNT_NAME} & set(names)
+    reserved = {EXCLUDED_CHANNEL_NAME, PIECE_COUNT_NAME, LOCAL_PIECE_COUNT_NAME} & set(names)
     if reserved:
         raise fail(f"tally request names {sorted(reserved)} are reserved for automatic channels")
     if len(set(names)) != len(names):
@@ -578,6 +591,17 @@ def compile_channels(
                 None,
             )
         )
+        get(
+            _Spec(
+                "N",
+                gi,
+                CLASS_LOCAL,
+                _species_row(None, include_pseudo=True),
+                (0, GEN_MAX),
+                -1,
+                None,
+            )
+        )
         auto_excluded[gi] = get(
             _Spec(
                 "E",
@@ -623,7 +647,7 @@ def compile_channels(
             "fixed-point accumulator; increase n_batches or reduce n_histories"
         )
     if hpb * bound["N"] >= 2.0**CAPACITY_EXPONENT:
-        raise fail("the piece-count channel N could overflow its accumulator; reduce hpb")
+        raise fail("a piece-count channel (N, N_local) could overflow its accumulator; reduce hpb")
 
     k_of: dict[str, int] = {"E": E_QUANTUM_EXPONENT, "N": 0}
     fe_of: dict[tuple[Any, ...], tuple[int, float]] = {}

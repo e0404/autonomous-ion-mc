@@ -270,7 +270,13 @@ E, L, LS, LS2, ES, FE, FL and N (module docstring of `ionmc.transport.channels`)
 with an int8 `species_match[n_ch, n_species]` matrix, a generation range, a class mask (step or
 local), a lookup index, a spectrum specification (uniform linear or log edges, `n_bins + 2` bins
 with under- and overflow), an offset into one int64 array `acc[B, sum size]`, a per-history
-residual column (every channel but N) and the quantum exponent `k`. Quantities map to channels as
+residual column (every channel but N) and the quantum exponent `k`. Two automatic N channels per
+used grid count the scoring pieces exactly (`k = 0`, int64, no residual, bit-identical across chunk
+sizes and workers): `scoring_pieces` (class step) and `scoring_pieces_local` (class local, the
+cutoff and zero-length point deposits, scored by `score_local`). `QuantityResult.rounding_bound` is
+a deterministic bound built from them: `n q/2` per voxel and primary with `n` the step count, the
+local count or their sum according to the class mask of the channel (edep and dose: both), ratios
+by first-order propagation of numerator and denominator. Quantities map to channels as
 `edep`/`dose`: E (both classes); `fluence`: L; `let_t`: LS/L; `let_d`: LS2/LS; `let_d_eps`: ES/E_step;
 `lookup_sum`: FE; `lookup_dose_avg`: FE/E_step; `fluence_spectrum`: FL. Energy channels use the
 fixed quantum 2^-30 MeV of the qualified `edep` array; the other kinds use
@@ -296,6 +302,15 @@ lookup species gaps, axis coverage gaps (energy axis `[table floor, E_hi]/A`, LE
 interval of that energy range), a sha256 mismatch, non-uniform tables or spectrum edges, negative or
 non-finite lookup values, unused lookups, a quantum above the precision floor, accumulator memory
 above the budget and a backend without channels.
+
+**Capability report.** `ionmc.capabilities()["tallies"]` advertises the scoring contract, derived from the
+objects that enforce it (a test compares it with `CHANNEL_BACKENDS`, `TALLY_QUANTITIES`, the `TallyRequest`
+literals, the lookup axes and `producible`): per backend the supported quantities (`edep`, `dose`,
+`fluence`, `let_t`, `let_d`, `let_d_eps`, `lookup_sum`, `lookup_dose_avg`, `fluence_spectrum`) and its
+availability, the producible `(species, generation)` pairs (proton, primary; no secondaries before V3-005A),
+the accepted and rejected generation choices, `let_medium` water and `dose_reference` medium only, the lookup
+axes with the uniform-axis rule, the spectrum edge rule, the automatic channels and the fail-closed rules.
+The single-process mode of the test suite is a diagnostic and not an engine capability.
 
 ## Results
 
@@ -347,7 +362,7 @@ row. Right after the energy deposit of an in-grid piece (`deposit_leg`, the same
 adds the piece to every channel of the grid that selects its class, species and generation: the value is
 computed in float64 in every variant (`make_scoring_funcs(float64)`, also for float32 transport),
 quantized `floor(x 2^k + 1/2)` and added with an int64 `atomic_add`; the rounding residual and the lookup
-out-of-domain count go to the history's own tally-row columns after the `6 + 2 G` fixed ones (`N` has no
+out-of-domain count go to the history's own tally-row columns after the `6 + 2 G` fixed ones (`N` and `N_local` have no
 residual). Per step with `s_act > 0`, `step_state` does one water lookup at `E_mid` (`S_mid`, `k`,
 `Edot`). With channels present the legs of a step with `s_act > 0` are walked even if `eps = 0`;
 cutoff and `s_act = 0` deposits are class "local" (`score_local`). With `n_ch = 0` no scoring code runs

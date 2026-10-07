@@ -165,6 +165,12 @@ table value):
 | ES (MeV^2/mm) | adaptive | `S_max E_hi` | fits by construction |
 | N (count) | `k = 0` | `max_steps 2 scoring_pieces` | exact |
 
+Two automatic N channels exist per used grid (review amendment, V3-004): `N` counts the pieces of
+class "step" and `N_local` the pieces of class "local" (point deposits, all species including the
+pseudo-species; the same bound is used). The rounding bound of a channel uses the counts of the
+classes in its class mask (edep and dose: both; the excluded-energy channel: local; all others:
+step), so that the reported `rounding_bound` is a deterministic bound.
+
 **Precision floor (fail closed).** `q_c <= 2^-16 u_c` with `u_c = 1 mm S_ref^j`, `j` the power of S
 in the kind; that bounds the relative rounding of a 1 mm entrance piece by 1.5e-5. A configuration
 that violates the floor raises before transport. Example (water, protons, 150 MeV, E_cut 2 MeV;
@@ -177,7 +183,7 @@ E by the existing rule.
 reduced by the exact-sum expansion (`tally_rows` becomes `(n, 6 + 2G + C)`). They give global
 closures at floating-point precision and report the quantization magnitude. Ratios have no
 residual; their quantization error is bounded per voxel by
-`|dR| <= (n_v q_X/2 + R n_v q_Y/2) / Y_v`, with `n_v` from the N channel when requested.
+`|dR| <= (n_v q_X/2 + R n_v q_Y/2) / Y_v`, with `n_v` the piece count of the classes of the respective channel (N, N_local; both are automatic).
 Fallback if V3-012 measures a CUDA cost: residuals for E-kind channels only (this would drop the
 A1/A3 global closures).
 

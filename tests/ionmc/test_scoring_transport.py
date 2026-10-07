@@ -111,11 +111,17 @@ class Run:
         c = self.plan.channels[ci]
         return self.acc[:, c.offset : c.offset + c.size].sum(axis=0) * c.quantum
 
-    def delta(self, ci: int, n_v: np.ndarray) -> np.ndarray:
-        return n_v * self.plan.channels[ci].quantum / 2.0
+    def n_pieces(self, grid: int = 0, local: bool = False) -> np.ndarray:
+        """Exact piece counts per voxel of the automatic N channels (step or local class)."""
+        return self.total(self.plan.count_channel(grid, CLASS_LOCAL if local else CLASS_STEP))
 
-    def n_pieces(self, grid: int = 0) -> np.ndarray:
-        return self.total(self.plan.channel_index("N", grid)[0])
+    def delta(self, ci: int) -> np.ndarray:
+        """Rounding bound ``n_v q / 2`` of channel ``ci`` with the piece counts of its classes."""
+        c = self.plan.channels[ci]
+        n_v = (self.n_pieces(c.grid) if c.class_mask & CLASS_STEP else 0.0) + (
+            self.n_pieces(c.grid, local=True) if c.class_mask & CLASS_LOCAL else 0.0
+        )
+        return n_v * c.quantum / 2.0
 
     def residual(self, ci: int) -> float:
         assert self.raw.channels is not None
@@ -142,7 +148,7 @@ def test_a1_constant_s_closed_forms(make_config: MakeConfig, material: Material)
     for qname in ("let_t", "let_d", "let_d_eps"):
         qd = r.q_of(qname)
         x, y = r.total(qd.numerator), r.total(qd.denominator)
-        dx, dy = r.delta(qd.numerator, n_v), r.delta(qd.denominator, n_v)
+        dx, dy = r.delta(qd.numerator), r.delta(qd.denominator)
         ok = y > 0
         assert ok.any()
         err = np.abs(x[ok] / y[ok] - s_w)
@@ -174,11 +180,10 @@ def test_a3_pencil_fluence_aligned_grid(make_config: MakeConfig) -> None:
     area = grid.spacing_mm[0] * grid.spacing_mm[1]
     ci = r.q_of("fluence").numerator
     l_v = r.total(ci)
-    n_v = r.n_pieces()
     z_end = float(r.raw.diagnostics["end_position_mm"][0, 2])
     full = np.arange(grid.n_voxels)[(np.arange(grid.n_voxels) + 1) * dz <= z_end - 1e-9]
     assert full.size >= 10
-    bound = RHO / area + r.delta(ci, n_v)[full] / (n * vol)
+    bound = RHO / area + r.delta(ci)[full] / (n * vol)
     err = np.abs(l_v[full] / (n * vol) - 1.0 / area)
     assert np.all(err <= bound), err.max()
     # batch standard deviation of the per-primary fluence is at most the same bound
@@ -353,6 +358,32 @@ def _all_physics_run(make_config: MakeConfig, tallies: tuple[TallyRequest, ...],
     )  # fmt: skip
 
 
+def test_rounding_bound_counts_step_and_local_pieces(make_config: MakeConfig) -> None:
+    """``QuantityResult.rounding_bound`` uses the exact piece counts of the channel's classes:
+    edep/dose and the excluded-energy channel include the local point deposits (N_local)."""
+    tallies = (TallyRequest("edep", "dose", "edep"), TallyRequest("fl", "dose", "fluence"))
+    r = _all_physics_run(make_config, tallies)
+    res = Simulation(r.eff.requested).run()
+    qs = res.grids[0].quantities
+    hpb = res.n_histories // res.n_batches
+    n_step = r.n_pieces() / res.n_batches / hpb
+    n_loc = r.n_pieces(local=True) / res.n_batches / hpb
+    assert n_loc.sum() > 0
+    e_ci = r.q_of("edep").numerator
+    q = r.plan.channels[e_ci].quantum
+    np.testing.assert_allclose(
+        qs["edep"].rounding_bound.reshape(-1), (n_step + n_loc) * q / 2.0, rtol=1e-12
+    )
+    f_ci = r.q_of("fl").numerator
+    np.testing.assert_allclose(
+        qs["fl"].rounding_bound.reshape(-1) * np.prod(r.eff.requested.scoring[0].spacing_mm),
+        n_step * r.plan.channels[f_ci].quantum / 2.0, rtol=1e-12,
+    )  # fmt: skip
+    ex = qs["edep_excluded_from_let"].rounding_bound.reshape(-1)
+    np.testing.assert_allclose(ex, n_loc * q / 2.0, rtol=1e-12)
+    assert qs["scoring_pieces_local"].mean.sum() == pytest.approx(n_loc.sum(), rel=1e-12)
+
+
 def test_a5_integer_conservation_all_physics(make_config: MakeConfig) -> None:
     tallies = (
         TallyRequest("edep", "dose", "edep"),
@@ -374,7 +405,9 @@ def test_a5_integer_conservation_all_physics(make_config: MakeConfig) -> None:
     assert np.array_equal(block(r.q_of("edep_p").numerator), e_all)
     assert np.array_equal(block(r.q_of("edep_prim").numerator), e_all)
     e_step = block(r.q_of("e_step").denominator)
-    local = [i for i, c in enumerate(ch.channels) if c.class_mask == CLASS_LOCAL][0]
+    local = [i for i, c in enumerate(ch.channels) if c.class_mask == CLASS_LOCAL and c.kind == "E"][
+        0
+    ]
     assert np.array_equal(e_step + block(local), e_all)
     assert block(local).sum() > 0  # the cutoff energy is excluded from the step channel
 
@@ -382,9 +415,8 @@ def test_a5_integer_conservation_all_physics(make_config: MakeConfig) -> None:
 def test_a6_cauchy_schwarz_and_a14_undefined_bins(make_config: MakeConfig) -> None:
     r = _all_physics_run(make_config, _reqs("let_t", "let_d"), n=48, nb=12)
     lt, ld = r.q_of("let_t"), r.q_of("let_d")
-    n_v = r.n_pieces()
     l_v, ls_v, ls2_v = r.total(lt.denominator), r.total(lt.numerator), r.total(ld.numerator)
-    dl, dls, dls2 = (r.delta(i, n_v) for i in (lt.denominator, lt.numerator, ld.numerator))
+    dl, dls, dls2 = (r.delta(i) for i in (lt.denominator, lt.numerator, ld.numerator))
     res = Simulation(r.eff.requested).run()
     q_ld = res.grids[0].quantities["let_d"]
     q_lt = res.grids[0].quantities["let_t"]
@@ -395,7 +427,7 @@ def test_a6_cauchy_schwarz_and_a14_undefined_bins(make_config: MakeConfig) -> No
         delta_v = let_t * (dls2 / ls2_v + 2.0 * dls / ls_v + dl / l_v)
     assert np.all(let_d[defined] >= let_t[defined] * (1.0 - RHO) - delta_v[defined])
     # A14: voxels without steps are NaN with defined_mask False (never 0)
-    empty = n_v == 0
+    empty = r.n_pieces() == 0
     assert empty.any()
     for q in (q_ld, q_lt):
         assert np.all(np.isnan(q.mean.reshape(-1)[empty]))
@@ -464,13 +496,12 @@ def test_a10_lookup_linear_in_s_and_constant_energy_table(
         TallyRequest("fe2", "dose", "lookup_sum", lookup="const2"),
     )
     r = _all_physics_run(make_config, tallies, lookups=(lk, const))
-    n_v = r.n_pieces()
     fe, es = r.q_of("fe").numerator, r.q_of("es").numerator
     e_step = r.q_of("es").denominator
     assert r.q_of("avg").denominator == e_step
     lhs = r.total(fe)
     rhs = a * r.total(e_step) + b * r.total(es)
-    bound = RHO * lhs + r.delta(fe, n_v) + a * r.delta(e_step, n_v) + b * r.delta(es, n_v)
+    bound = RHO * lhs + r.delta(fe) + a * r.delta(e_step) + b * r.delta(es)
     assert np.all(np.abs(lhs - rhs) <= bound), np.abs(lhs - rhs).max()
     assert (lhs > 0).sum() >= 5
     # constant table f = 2: FE = 2 E_step bitwise (integer accumulators in quanta of 2^-29 / 2^-30)
@@ -569,10 +600,10 @@ def test_a2_hook_two_species_two_generations_exact(make_config: MakeConfig) -> N
                 fv = {0: 1 + frac(0.125) * sb, 1: Fraction(1, 2) + frac(0.25) * sb}[pc["species"]]
                 val["FE"] = frac(pc["eps"]) * fv
             out[pc["batch"]][pc["vox"]] += val[c.kind]
-        if c.class_mask & CLASS_LOCAL and c.kind == "E":
+        if c.class_mask & CLASS_LOCAL and c.kind in ("E", "N"):
             for b, v, e, spc, gn in local:
                 if plan.species_match[ci, spc] and c.gen_lo <= gn <= c.gen_hi:
-                    out[b][v] += frac(e)
+                    out[b][v] += frac(e) if c.kind == "E" else Fraction(1)
         return np.array(out, dtype=object)
 
     for ci, c in enumerate(plan.channels):

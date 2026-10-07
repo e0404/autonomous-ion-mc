@@ -113,7 +113,11 @@ def test_a11_ci_python_vs_warp_cpu_float64_all_channels() -> None:
     b = Simulation(_cfg("warp-cpu")).run()
     plan = a.effective_config.channels
     assert plan is not None
-    n_ci = {c.grid: i for i, c in enumerate(plan.channels) if c.kind == "N"}
+    n_ci = {
+        c.grid: i
+        for i, c in enumerate(plan.channels)
+        if c.kind == "N" and c.class_mask == CLASS_STEP
+    }
     n_per = a.channel_batches(n_ci[0]) * plan.channels[n_ci[0]].quantum  # [B, nvox]
     assert np.array_equal(a.channel_batches(n_ci[0]), b.channel_batches(n_ci[0]))
     assert n_per.sum() > 1000
@@ -389,7 +393,9 @@ def test_cuda_a5_integer_identities_and_internal_consistency(precision: str) -> 
     e_all = r.channel_batches(q["edep"].numerator)
     assert np.array_equal(r.channel_batches(q["edep_p"].numerator), e_all)
     assert np.array_equal(r.channel_batches(q["edep_prim"].numerator), e_all)
-    local = next(i for i, c in enumerate(plan.channels) if c.class_mask == CLASS_LOCAL)
+    local = next(
+        i for i, c in enumerate(plan.channels) if c.class_mask == CLASS_LOCAL and c.kind == "E"
+    )
     e_step = r.channel_batches(q["e_step"].denominator)
     assert np.array_equal(e_step + r.channel_batches(local), e_all)
     n_ci = next(i for i, c in enumerate(plan.channels) if c.kind == "N")

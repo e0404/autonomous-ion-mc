@@ -292,10 +292,14 @@ class QuantityResult:
     the value is defined (a ratio: ``ybar > 0`` and ``n_nonzero >= max(2, ceil(B/2))``; a linear
     quantity: positive mean, dose also positive mass); undefined ratio bins are NaN, never 0.
     ``n_nonzero`` counts the batches with a nonzero denominator (numerator for a linear quantity).
-    ``rounding_bound`` is the deterministic fixed-point bound of ``mean`` from the piece counts of
-    the N channel (``n q / 2`` per piece of the class "step"; local point deposits of the E channels
-    add at most ``q / 2`` each, not counted); ``quantum_exponents`` the ``k_c`` of the numerator
-    and denominator channels; ``lookup`` the provenance of the lookup table (or None).
+    ``rounding_bound`` is the deterministic fixed-point bound of ``mean``: every quantized piece
+    adds at most ``q / 2``, so a channel's bound is ``(n_step [+ n_local]) q / 2`` per voxel and
+    primary with the exact piece counts of the automatic channels N (class "step") and N_local
+    (class "local"), taken according to the channel's class mask (both for edep and dose); ratios
+    combine numerator and denominator bounds by first-order propagation. It bounds the
+    quantization error of the stored sums, not the statistical error; ``quantum_exponents`` the
+    ``k_c`` of the numerator and denominator channels; ``lookup`` the provenance of the lookup
+    table (or None).
     """
 
     name: str

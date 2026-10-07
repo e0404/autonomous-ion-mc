@@ -21,7 +21,7 @@ from ionmc.geometry import BoxPhantom
 from ionmc.lookup import LookupTable, resample_uniform
 from ionmc.materials import AIR
 from ionmc.physics.projectiles import DEUTERON, PROTON
-from ionmc.scoring import ScoringGrid, TallyRequest
+from ionmc.scoring import TALLY_QUANTITIES, ScoringGrid, TallyRequest
 from ionmc.species import (
     N_SPECIES_SLOTS,
     REGISTRY,
@@ -35,6 +35,9 @@ from ionmc.transport.channels import (
     CLASS_LOCAL,
     CLASS_STEP,
     EXCLUDED_CHANNEL_NAME,
+    LOCAL_PIECE_COUNT_NAME,
+    MAX_CHANNELS,
+    PIECE_COUNT_NAME,
     ChannelPlan,
     adaptive_exponent,
     fe_exponent,
@@ -218,9 +221,16 @@ def test_compile_dedup_offsets_and_automatic_channels(
     plan = _plan(cfg)
     kinds = [c.kind for c in plan.channels]
     # L (shared by let_t and fluence), LS (shared by let_t and let_d), LS2, ES, E_step, E (edep =
-    # dose), N and the excluded-energy channel: 8 channels, no duplicates
-    assert sorted(kinds) == sorted(["L", "LS", "LS2", "ES", "E", "E", "N", "E"])
-    assert len(plan.channels) == 8
+    # dose), N (step), N_local, and the excluded-energy channel: 9 channels, no duplicates
+    assert sorted(kinds) == sorted(["L", "LS", "LS2", "ES", "E", "E", "N", "N", "E"])
+    assert len(plan.channels) == 9
+    n_step = plan.channels[plan.count_channel(0, CLASS_STEP)]
+    n_loc = plan.channels[plan.count_channel(0, CLASS_LOCAL)]
+    assert n_step.k == n_loc.k == 0 and n_step.residual_column == n_loc.residual_column == -1
+    assert (
+        plan.species_match[plan.count_channel(0, CLASS_LOCAL), species_by_name("nuclear_local").id]
+        == 1
+    )
     q = {d.name: d for d in plan.quantities}
     assert q["dose"].numerator == q["edep"].numerator
     assert q["flu"].numerator == q["let_t"].denominator
@@ -230,23 +240,23 @@ def test_compile_dedup_offsets_and_automatic_channels(
     e_edep = plan.channels[q["edep"].numerator]
     e_step = plan.channels[q["let_e"].denominator]
     assert e_edep.class_mask == CLASS_STEP | CLASS_LOCAL and e_step.class_mask == CLASS_STEP
-    local = [c for c in plan.channels if c.class_mask == CLASS_LOCAL]
-    assert len(local) == 1 and local[0].kind == "E"
+    local = [c for c in plan.channels if c.class_mask == CLASS_LOCAL and c.kind == "E"]
+    assert len(local) == 1
     assert (
         plan.species_match[plan.channels.index(local[0]), species_by_name("nuclear_local").id] == 1
     )
     assert plan.species_match[plan.channels.index(e_step), species_by_name("nuclear_local").id] == 0
     assert plan.species_match.dtype == np.int8
-    assert plan.species_match.shape == (8, N_SPECIES_SLOTS)
+    assert plan.species_match.shape == (9, N_SPECIES_SLOTS)
     # offsets are contiguous, sizes are the grid voxels, residual column for every channel but N
     off = 0
     for c in plan.channels:
         assert c.offset == off and c.size == GRID.n_voxels
         off += c.size
     assert plan.total_size == off
-    assert plan.ch_begin == (0,) and plan.ch_end == (8,)
+    assert plan.ch_begin == (0,) and plan.ch_end == (9,)
     res = sorted(c.residual_column for c in plan.channels)
-    assert res == [-1, 0, 1, 2, 3, 4, 5, 6] and plan.n_residual == 7
+    assert res == [-1, -1, 0, 1, 2, 3, 4, 5, 6] and plan.n_residual == 7
     assert EXCLUDED_CHANNEL_NAME == "edep_excluded_from_let"
     assert plan.memory_bytes == 20 * (GRID.n_voxels + plan.total_size) * 8
     json.dumps(validate(cfg).summary())  # the effective configuration stays serialisable
@@ -586,3 +596,39 @@ def test_lookup_table_is_deeply_immutable() -> None:
     prov["resampling"]["nested"]["a"].append(4)  # provenance() hands out a fresh plain copy
     assert lk.provenance() == before[1]
     json.dumps(prov)
+
+
+def test_capability_report_matches_the_enforced_scoring_contract() -> None:
+    """The public capability report is derived from, and checked against, the objects that
+    enforce the scoring contract (it cannot drift again)."""
+    import typing
+
+    import ionmc
+    from ionmc.config import CHANNEL_BACKENDS
+    from ionmc.lookup import AXES
+    from ionmc.physics.projectiles import PROTON
+    from ionmc.species import producible
+
+    cap = ionmc.capabilities()
+    t = cap["tallies"]
+    literal = list(typing.get_args(typing.get_type_hints(TallyRequest)["quantity"]))
+    assert t["quantities"] == literal == list(TALLY_QUANTITIES)
+    assert set(t["backends"]) == set(CHANNEL_BACKENDS) <= set(cap["backend_names"])
+    for b, entry in t["backends"].items():
+        assert entry["quantities"] == literal, b
+        assert isinstance(entry["available"], bool)
+    assert t["backends"]["python"]["available"] is True
+    assert {(d["species"], d["generation"]) for d in t["producible"]} == set(producible(PROTON))
+    assert t["producible"] == [{"species": "proton", "generation": "primary"}]
+    assert t["generations"]["accepted"] == ["all", "primary"]
+    assert t["generations"]["rejected"] == ["secondary"]
+    assert t["let_medium"] == ["water"] and t["dose_reference"] == ["medium"]
+    assert t["lookup"]["axes"] == list(AXES) and t["lookup"]["uniform_axis_required"] is True
+    assert t["max_channels"] == MAX_CHANNELS
+    assert set(t["automatic_channels"]) == {
+        PIECE_COUNT_NAME, LOCAL_PIECE_COUNT_NAME, EXCLUDED_CHANNEL_NAME
+    }  # fmt: skip
+    assert t["fail_closed"] and any("secondary" in r for r in t["fail_closed"])
+    assert cap["species"] == ["proton"]
+    # the report is JSON-serialisable
+    json.dumps(cap)

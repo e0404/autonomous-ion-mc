@@ -24,6 +24,7 @@ from numpy.typing import NDArray
 
 from ionmc.config import (
     BACKENDS,
+    CHANNEL_BACKENDS,
     DEFAULT_CHUNK_HISTORIES,
     DELTA_ELECTRON_MODELS,
     MAX_CPU_WORKERS,
@@ -38,15 +39,29 @@ from ionmc.config import (
 )
 from ionmc.environment import describe_environment
 from ionmc.errors import TransportLimitError
+from ionmc.lookup import AXES as LOOKUP_AXES
+from ionmc.lookup import AXIS_SPACINGS as LOOKUP_AXIS_SPACINGS
+from ionmc.physics.projectiles import PROTON
 from ionmc.scoring import (
+    GENERATION_CHOICES,
     MEV_PER_G_TO_GY,
+    TALLY_QUANTITIES,
     QuantityResult,
     ScoringGrid,
     reduce_batches,
     reduce_ratio,
     voxel_mass_g,
 )
-from ionmc.transport.channels import CLASS_LOCAL, EXCLUDED_CHANNEL_NAME, PIECE_COUNT_NAME
+from ionmc.species import producible
+from ionmc.transport.channels import (
+    CLASS_LOCAL,
+    CLASS_STEP,
+    EXCLUDED_CHANNEL_NAME,
+    LOCAL_PIECE_COUNT_NAME,
+    MAX_CHANNELS,
+    MAX_SPECTRUM_BINS,
+    PIECE_COUNT_NAME,
+)
 from ionmc.transport.run import run_transport
 from ionmc.transport.tally import ChannelRaw, RawTransport
 
@@ -228,6 +243,59 @@ class Result:
         raise KeyError(f"no scoring grid named {name!r}")
 
 
+def _tally_capabilities() -> dict[str, Any]:
+    """The scoring-channel part of the capability report (decision 0040). Every entry is derived
+    from the objects that enforce it (``CHANNEL_BACKENDS``, ``TALLY_QUANTITIES``, ``AXES``,
+    ``producible``), so the report cannot drift from the validation."""
+    pairs = sorted(producible(PROTON))
+    producible_generations = sorted({g for _, g in pairs})
+    return {
+        "quantities": list(TALLY_QUANTITIES),
+        "backends": {
+            b: {
+                "quantities": list(TALLY_QUANTITIES),
+                "available": b != "warp-cuda" or cuda_available(),
+            }
+            for b in CHANNEL_BACKENDS
+        },
+        "producible": [{"species": n, "generation": g} for n, g in pairs],
+        "generations": {
+            "accepted": [
+                g for g in GENERATION_CHOICES if g == "all" or g in producible_generations
+            ],
+            "rejected": [
+                g for g in GENERATION_CHOICES if g != "all" and g not in producible_generations
+            ],
+            "note": "secondary particles are not transported yet (V3-005A); no secondary species",
+        },
+        "let_medium": ["water"],
+        "dose_reference": ["medium"],
+        "lookup": {
+            "axes": list(LOOKUP_AXES),
+            "axis_spacings": list(LOOKUP_AXIS_SPACINGS),
+            "uniform_axis_required": True,
+            "non_uniform": "rejected; resample_uniform() is the explicit, recorded alternative",
+            "values": "per species, finite and non-negative; clinical tables and RBE models "
+            "do not ship",
+        },
+        "fluence_spectrum": {
+            "edges": "uniform in energy or in ln energy (MeV per nucleon), under/overflow bins",
+            "max_bins": MAX_SPECTRUM_BINS,
+        },
+        "automatic_channels": [PIECE_COUNT_NAME, LOCAL_PIECE_COUNT_NAME, EXCLUDED_CHANNEL_NAME],
+        "max_channels": MAX_CHANNELS,
+        "fail_closed": [
+            "unknown or unproducible species, generation 'secondary'",
+            "let_medium other than water, dose_reference other than medium",
+            "unknown grid or lookup, duplicate or reserved request names, unused lookups",
+            "lookup species gaps, axis coverage gaps, sha256 mismatch, non-uniform tables or "
+            "spectrum edges, negative or non-finite lookup values",
+            "a quantum above the precision floor, accumulator memory above the budget",
+            "a backend without channels",
+        ],
+    }
+
+
 def capabilities() -> dict[str, Any]:
     """What the engine supports (reported, not negotiated: unsupported requests raise)."""
     return {
@@ -255,7 +323,12 @@ def capabilities() -> dict[str, Any]:
         },
         "geometry": ["VoxelGeometry", "BoxPhantom"],
         "sources": ["PencilBeamSource"],
-        "scoring": ["ScoringGrid (energy, dose)"],
+        "scoring": [
+            "ScoringGrid (energy, dose)",
+            "TallyRequest (edep, dose, fluence, LET, lookup averages, fluence spectra; "
+            "species and generation channels; see 'tallies')",
+        ],
+        "tallies": _tally_capabilities(),
         "max_scoring_grids": 4,
     }
 
@@ -361,8 +434,22 @@ def _grid_quantities(gi: int, eff: EffectiveConfig, raw: RawTransport) -> dict[s
     mass = voxel_mass_g(grid, eff.geometry).reshape(-1)
     vol = float(np.prod(grid.spacing_mm))
     nvox = grid.n_voxels
-    n_idx = [i for i in plan.channel_index("N", gi)]
-    n_pp = _channel_sums(eff, ch, n_idx[0]).mean(axis=0) / hpb  # pieces per primary and voxel
+    n_step_ci = plan.count_channel(gi, CLASS_STEP)
+    n_local_ci = plan.count_channel(gi, CLASS_LOCAL)
+    # pieces per primary and voxel, step and local class (exact integer channels)
+    n_step_pp = _channel_sums(eff, ch, n_step_ci).mean(axis=0) / hpb
+    n_local_pp = _channel_sums(eff, ch, n_local_ci).mean(axis=0) / hpb
+
+    def n_pp(ci: int) -> NDArray[np.float64]:
+        """Pieces per primary and voxel that channel ``ci`` can receive (by its class mask)."""
+        m = plan.channels[ci].class_mask
+        total = np.zeros(nvox)
+        if m & CLASS_STEP:
+            total = total + n_step_pp
+        if m & CLASS_LOCAL:
+            total = total + n_local_pp
+        return total
+
     out: dict[str, QuantityResult] = {}
 
     def shape_of(a: NDArray[Any], extra: int) -> NDArray[Any]:
@@ -379,7 +466,7 @@ def _grid_quantities(gi: int, eff: EffectiveConfig, raw: RawTransport) -> dict[s
         sc = np.repeat(scale, bins) if bins > 1 else scale
         mean = stats.mean * sc
         std = np.sqrt(stats.variance_of_mean) * sc
-        bound = np.repeat(n_pp, bins) * (c.quantum / 2.0) * sc
+        bound = np.repeat(n_pp(ci), bins) * (c.quantum / 2.0) * sc
         defined = mean > 0.0
         if positive_scale_only:
             defined = defined & np.repeat(mass > 0.0, bins)
@@ -425,7 +512,10 @@ def _grid_quantities(gi: int, eff: EffectiveConfig, raw: RawTransport) -> dict[s
             cn, cd = plan.channels[qd.numerator], plan.channels[qd.denominator]
             ybar = ys.mean(axis=0) / hpb
             with np.errstate(divide="ignore", invalid="ignore"):
-                bound = n_pp * (cn.quantum / 2.0 + st.mean * cd.quantum / 2.0) / ybar
+                bound = (
+                    n_pp(qd.numerator) * (cn.quantum / 2.0)
+                    + st.mean * n_pp(qd.denominator) * (cd.quantum / 2.0)
+                ) / ybar
             bound = np.where(st.defined_mask, bound, np.nan)
             out[req.name] = QuantityResult(
                 req.name, req.quantity, "ratio", qd.units, qd.definition,
@@ -440,8 +530,12 @@ def _grid_quantities(gi: int, eff: EffectiveConfig, raw: RawTransport) -> dict[s
                 "energy of cutoff and zero-length deposits, excluded from LET and lookups", ones,
             )  # fmt: skip
     out[PIECE_COUNT_NAME] = linear(
-        PIECE_COUNT_NAME, "count", n_idx[0], "1", "scoring pieces of class step per primary", ones
+        PIECE_COUNT_NAME, "count", n_step_ci, "1", "scoring pieces of class step per primary", ones
     )
+    out[LOCAL_PIECE_COUNT_NAME] = linear(
+        LOCAL_PIECE_COUNT_NAME, "count", n_local_ci, "1",
+        "scoring pieces of class local (point deposits) per primary", ones,
+    )  # fmt: skip
     return out
 
 

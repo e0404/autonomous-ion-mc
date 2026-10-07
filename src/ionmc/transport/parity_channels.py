@@ -14,8 +14,9 @@
   at p > 0.001 and max-T p > 0.001, inconclusive fails; scalars ``|z| < 3.5``; the deterministic
   total-deposit rule is *not* used) and reports the delta-method z of the ``LET_t`` and ``LET_d``
   ratio profiles (:func:`ratio_z_report`), which is informative and never gates.
-* :func:`compare_channel_partition` (A15) requires bit-identical accumulators, residuals,
-  out-of-domain counts, counters and deposits of two runs that differ only in the partition.
+* :func:`compare_channel_partition` (A15) requires bit-identical accumulators (N and N_local
+  included), residuals, out-of-domain counts, counters and deposits of two runs that differ only
+  in the partition.
 """
 
 from __future__ import annotations
@@ -146,8 +147,15 @@ def compare_channel_partition(a: Result, b: Result) -> dict[str, Any]:
     ca, cb = a.channel_raw, b.channel_raw
     if ca is None or cb is None:
         raise ValueError("both results need scoring channels")
+    pa, pb = a.effective_config.channels, b.effective_config.channels
+    assert pa is not None and pb is not None
+    counts = [i for i, c in enumerate(pa.channels) if c.kind == "N"]  # N (step) and N_local
     checks = {
         "acc": bool(np.array_equal(ca.acc, cb.acc)),
+        "piece_counts": all(
+            np.array_equal(a.channel_batches(i), b.channel_batches(i)) for i in counts
+        )
+        and len(counts) >= 2,
         "residual": bool(np.array_equal(ca.residual, cb.residual)),
         "lookup_out_of_domain": ca.lookup_out_of_domain == cb.lookup_out_of_domain,
         "counters": a.counters == b.counters,
