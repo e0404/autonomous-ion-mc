@@ -137,7 +137,7 @@ block hash or content differs, when the table identity `range_construction` of t
 (a524f209) is not absent or that of the tree under test is not `exact-loglog-quadrature-v1`, when
 any digest field outside the allowlist differs (counters, valid flags, discrete trace columns of
 t13, tally layout), when a table-dependent field leaves its bound, or when the depth-dose maximum
-moves by a layer. The next task deletes the record and advances `A16_BASELINE` (amendment 6 of the
+moves by a layer. The record is also bound to the exact source state (`source_digest`: sha256 over the hashed source set of the `lv4` suite, excluding `run_suite.py` and this block; `run_suite.py --print-a16-source-digest`), so any later commit touching a hashed file fails A16 until the record is regenerated or deleted. Every allowlisted field is listed with the bounded quantities that constrain it; a field that differs without a bound or an allowlist entry fails. The next task deletes the record and advances `A16_BASELINE` (amendment 6 of the
 V3-004 plan).
 
 Measured at fd69e16 plus this change (baseline a524f209, specs t1 and t13 on python float64, warp-cpu
@@ -158,60 +158,195 @@ difference 4.9 % of its maximum, mean end-depth shift 0.10 mm, trace row count 7
 every spec. Unbounded per history in t1 (reported only): per-voxel deposit and end positions
 (up to 4 mm for histories whose discrete branch flipped).
 
+t1 aggregate and cap quantities added after review REVIEW-fe6c9813fed24e3280d17cfd6319ec25 (measured on python float64 / warp-cpu float32; bound): fraction of histories whose end position moves by more than 1 mm 0.3125 / 0.3125, bound 0.625; |mean end-energy change| 0.0024 / 0.0049 MeV, bound 0.01 MeV; mean absolute end-direction change 0.0353 / 0.0352, bound 0.071; norm error of the end direction 1.1e-16 / 8.2e-8, bound 1.7e-7; maximum trace deposit per row 2.06 MeV (baseline 1.99), bound 4.2 MeV; maximum trace attempts 3 (baseline 2), bound 6. Exact caps (measured 0): end energy not above e_cut = 2 MeV, end and trace positions inside the phantom (x, y within 30 mm, z within 0 and 200 mm for t1, 174.46 mm for t13), trace energy not above E0 (100 MeV), trace step not above max_step (2 mm), direction cosines not above 1, no negative grid or deposit values, discrete trace columns (history, ix, iy, iz, reason, step, blocks) within the baseline ranges, depth-dose maximum in the same layer. t1 is the branch-flip-sensitive configuration (32 histories, 2 mm steps in 5 mm voxels): its per-history outputs cannot be tightly bounded, the t13 family provides the sensitivity.
 ```json
 {
  "allowed_differing_fields": {
-  "t1": [
-   "grid.dose.batch_energy_mev",
-   "energy_balance.cutoff_mev",
-   "energy_balance.in_grid_mev",
-   "energy_balance.quantization_mev",
-   "energy_balance.step_deposit_mev",
-   "diagnostics.end_direction",
-   "diagnostics.end_energy_mev",
-   "diagnostics.end_position_mm",
-   "diagnostics.trace_end_energy_mev",
-   "diagnostics.trace."
-  ],
-  "t13": [
-   "grid.dose.batch_energy_mev",
-   "energy_balance.cutoff_mev",
-   "energy_balance.in_grid_mev",
-   "energy_balance.quantization_mev",
-   "energy_balance.step_deposit_mev",
-   "diagnostics.end_direction",
-   "diagnostics.end_energy_mev",
-   "diagnostics.end_position_mm",
-   "diagnostics.trace_end_energy_mev",
-   "diagnostics.trace.deposit_mev",
-   "diagnostics.trace.energy_mev",
-   "diagnostics.trace.step_mm",
-   "diagnostics.trace.ux",
-   "diagnostics.trace.uy",
-   "diagnostics.trace.uz",
-   "diagnostics.trace.x_mm",
-   "diagnostics.trace.y_mm",
-   "diagnostics.trace.z_mm"
-  ]
+  "t1": {
+   "diagnostics.end_direction": [
+    "end_direction_mean_abs",
+    "end_direction_norm_err"
+   ],
+   "diagnostics.end_energy_mev": [
+    "end_energy_mean_abs",
+    "end_energy_over_cut_mev"
+   ],
+   "diagnostics.end_position_mm": [
+    "end_position_moved_gt1mm_fraction",
+    "end_dz_mean_abs_mm",
+    "end_position_outside_mm"
+   ],
+   "diagnostics.trace.attempts": [
+    "trace_attempts_max"
+   ],
+   "diagnostics.trace.blocks": [
+    "trace_discrete_out_of_range"
+   ],
+   "diagnostics.trace.deposit_mev": [
+    "trace_deposit_row_max_mev",
+    "trace_deposit_negative_mev"
+   ],
+   "diagnostics.trace.energy_mev": [
+    "trace_energy_over_e0_mev",
+    "trace_rows_rel"
+   ],
+   "diagnostics.trace.history": [
+    "trace_discrete_out_of_range"
+   ],
+   "diagnostics.trace.ix": [
+    "trace_discrete_out_of_range"
+   ],
+   "diagnostics.trace.iy": [
+    "trace_discrete_out_of_range"
+   ],
+   "diagnostics.trace.iz": [
+    "trace_discrete_out_of_range"
+   ],
+   "diagnostics.trace.reason": [
+    "trace_discrete_out_of_range"
+   ],
+   "diagnostics.trace.step": [
+    "trace_discrete_out_of_range"
+   ],
+   "diagnostics.trace.step_mm": [
+    "trace_step_over_max_mm"
+   ],
+   "diagnostics.trace.ux": [
+    "trace_direction_over_unit"
+   ],
+   "diagnostics.trace.uy": [
+    "trace_direction_over_unit"
+   ],
+   "diagnostics.trace.uz": [
+    "trace_direction_over_unit"
+   ],
+   "diagnostics.trace.x_mm": [
+    "trace_position_outside_mm"
+   ],
+   "diagnostics.trace.y_mm": [
+    "trace_position_outside_mm"
+   ],
+   "diagnostics.trace.z_mm": [
+    "trace_position_outside_mm"
+   ],
+   "diagnostics.trace_end_energy_mev": [
+    "end_energy_mean_abs",
+    "end_energy_over_cut_mev"
+   ],
+   "energy_balance.cutoff_mev": [
+    "cutoff_rel"
+   ],
+   "energy_balance.in_grid_mev": [
+    "in_grid_rel"
+   ],
+   "energy_balance.quantization_mev": [
+    "quantization_abs_mev"
+   ],
+   "energy_balance.step_deposit_mev": [
+    "step_deposit_rel"
+   ],
+   "grid.dose.batch_energy_mev": [
+    "profile_abs_over_max",
+    "in_grid_rel",
+    "grid_negative_mev"
+   ]
+  },
+  "t13": {
+   "diagnostics.end_direction": [
+    "end_direction_max"
+   ],
+   "diagnostics.end_energy_mev": [
+    "end_energy_max_mev"
+   ],
+   "diagnostics.end_position_mm": [
+    "end_position_max_mm",
+    "end_dz_median_abs_mm"
+   ],
+   "diagnostics.trace.deposit_mev": [
+    "trace_deposit_max_mev"
+   ],
+   "diagnostics.trace.energy_mev": [
+    "trace_energy_max_mev"
+   ],
+   "diagnostics.trace.step_mm": [
+    "trace_step_max_mm"
+   ],
+   "diagnostics.trace.ux": [
+    "trace_direction_max"
+   ],
+   "diagnostics.trace.uy": [
+    "trace_direction_max"
+   ],
+   "diagnostics.trace.uz": [
+    "trace_direction_max"
+   ],
+   "diagnostics.trace.x_mm": [
+    "trace_position_max_mm"
+   ],
+   "diagnostics.trace.y_mm": [
+    "trace_position_max_mm"
+   ],
+   "diagnostics.trace.z_mm": [
+    "trace_position_max_mm"
+   ],
+   "diagnostics.trace_end_energy_mev": [
+    "end_energy_max_mev"
+   ],
+   "energy_balance.cutoff_mev": [
+    "cutoff_rel"
+   ],
+   "energy_balance.in_grid_mev": [
+    "in_grid_rel"
+   ],
+   "energy_balance.quantization_mev": [
+    "quantization_abs_mev"
+   ],
+   "energy_balance.step_deposit_mev": [
+    "step_deposit_rel"
+   ],
+   "grid.dose.batch_energy_mev": [
+    "profile_rel_max",
+    "voxel_rel_max",
+    "in_grid_rel"
+   ]
+  }
  },
  "baseline": "a524f209",
  "baseline_value": null,
  "bounds": {
   "t1": {
    "cutoff_rel": 0.005,
+   "depth_max_layer_moved": 0.0,
+   "end_direction_mean_abs": 0.071,
+   "end_direction_norm_err": 1.7e-07,
    "end_dz_mean_abs_mm": 0.21,
+   "end_energy_mean_abs": 0.01,
+   "end_energy_over_cut_mev": 1e-06,
+   "end_position_moved_gt1mm_fraction": 0.625,
+   "end_position_outside_mm": 1e-06,
+   "grid_negative_mev": 0.0,
    "in_grid_rel": 1.2e-09,
    "profile_abs_over_max": 0.1,
    "quantization_abs_mev": 3e-06,
    "step_deposit_rel": 0.0001,
-   "trace_rows_rel": 0.004
+   "trace_attempts_max": 6.0,
+   "trace_deposit_negative_mev": 0.0,
+   "trace_deposit_row_max_mev": 4.2,
+   "trace_direction_over_unit": 1e-09,
+   "trace_discrete_out_of_range": 0.0,
+   "trace_energy_over_e0_mev": 1e-09,
+   "trace_position_outside_mm": 1e-06,
+   "trace_rows_rel": 0.004,
+   "trace_step_over_max_mm": 1e-09
   },
   "t13": {
    "cutoff_rel": 0.0005,
+   "depth_max_layer_moved": 0.0,
    "end_direction_max": 0.044,
    "end_dz_median_abs_mm": 0.0066,
    "end_energy_max_mev": 0.104,
    "end_position_max_mm": 0.0126,
+   "grid_negative_mev": 0.0,
    "in_grid_rel": 1.2e-09,
    "profile_rel_max": 0.012,
    "quantization_abs_mev": 3e-06,
@@ -226,6 +361,39 @@ every spec. Unbounded per history in t1 (reported only): per-voxel deposit and e
  },
  "identity_field": "range_construction",
  "new_value": "exact-loglog-quadrature-v1",
+ "physical_limits": {
+  "t1": {
+   "box_max_mm": [
+    30.0,
+    30.0,
+    200.0
+   ],
+   "box_min_mm": [
+    -30.0,
+    -30.0,
+    0.0
+   ],
+   "e0_mev": 100.0,
+   "e_cut_mev": 2.0,
+   "max_step_mm": 2.0
+  },
+  "t13": {
+   "box_max_mm": [
+    30.0,
+    30.0,
+    174.46
+   ],
+   "box_min_mm": [
+    -30.0,
+    -30.0,
+    0.0
+   ],
+   "e0_mev": 150.0,
+   "e_cut_mev": 2.0,
+   "max_step_mm": 1.0
+  }
+ },
+ "source_digest": "53d5c1002ccd659b9ae7f026afea0751f42224a492b38bccfa9295094a72e64f",
  "task": "V3-003D"
 }
 ```

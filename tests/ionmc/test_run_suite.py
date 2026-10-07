@@ -981,43 +981,81 @@ def test_lv_pytest_step_requires_the_nist_cache() -> None:
 
 # -- A16 intended-change: binding to the plan block and the gated comparison ---------------------
 def _synthetic_raw(spec: str = "t13:warp-cpu:float64") -> dict[str, np.ndarray]:
-    """Small raw A16 values with the field layout of ``a16_digest.py``."""
+    """Small physically valid raw A16 values with the field layout of ``a16_digest.py``."""
     rng = np.random.default_rng(3)
     z = np.arange(40)
     prof = np.exp(-0.5 * ((z - 30) / 6.0) ** 2) + 0.2
     grid = (prof[None, None, None, :] * (1.0 + 0.1 * rng.random((4, 3, 3, 40)))).astype(np.float64)
+    n, nt = 20, 10
+    u = rng.normal(size=(n, 3))
+    u /= np.linalg.norm(u, axis=1)[:, None]
+    pos = np.column_stack(
+        [rng.uniform(-20, 20, n), rng.uniform(-20, 20, n), rng.uniform(100, 150, n)]
+    )
+    e_end = rng.uniform(1.9, 2.0, n)
     raw = {
         "grid.dose.batch_energy_mev": grid,
         "energy_balance.in_grid_mev": np.array([grid.sum()]),
         "energy_balance.step_deposit_mev": np.array(grid.sum() * 0.99),
         "energy_balance.cutoff_mev": np.array(grid.sum() * 0.01),
         "energy_balance.quantization_mev": np.array([1e-7]),
-        "diagnostics.end_position_mm": rng.random((20, 3)) * 100,
-        "diagnostics.end_direction": rng.random((20, 3)),
-        "diagnostics.end_energy_mev": rng.random(20),
-        "diagnostics.trace_end_energy_mev": rng.random(4),
+        "diagnostics.end_position_mm": pos,
+        "diagnostics.end_direction": u,
+        "diagnostics.end_energy_mev": e_end,
+        "diagnostics.trace_end_energy_mev": e_end[:4].copy(),
         "counters.n_steps": np.array(1234),
         "valid": np.array(True),
-        "diagnostics.trace.step": np.arange(10),
+        "diagnostics.trace.step": np.arange(1.0, nt + 1),
+        "diagnostics.trace.history": np.repeat(np.arange(2.0), nt // 2),
+        "diagnostics.trace.ix": np.zeros(nt),
+        "diagnostics.trace.iy": np.zeros(nt),
+        "diagnostics.trace.iz": np.arange(nt, dtype=float),
+        "diagnostics.trace.reason": np.ones(nt),
+        "diagnostics.trace.attempts": np.ones(nt),
+        "diagnostics.trace.blocks": np.arange(2.0, 2.0 * nt + 1, 2.0),
+        "diagnostics.trace.energy_mev": np.linspace(90.0, 20.0, nt),
+        "diagnostics.trace.x_mm": rng.uniform(-3, 3, nt),
+        "diagnostics.trace.y_mm": rng.uniform(-3, 3, nt),
+        "diagnostics.trace.z_mm": np.linspace(1.0, 90.0, nt),
+        "diagnostics.trace.deposit_mev": rng.uniform(0.5, 1.5, nt),
+        "diagnostics.trace.step_mm": np.full(nt, 1.0),
+        "diagnostics.trace.ux": np.full(nt, 0.01),
+        "diagnostics.trace.uy": np.full(nt, 0.02),
+        "diagnostics.trace.uz": np.full(nt, 0.99),
     }
-    for c in ("energy_mev", "x_mm", "y_mm", "z_mm", "deposit_mev", "step_mm", "ux", "uy", "uz"):
-        raw[f"diagnostics.trace.{c}"] = rng.random(10)
     return {f"{spec}|{k}": v for k, v in raw.items()}
 
 
-def _perturbed(base: dict[str, np.ndarray], **edits: object) -> dict[str, np.ndarray]:
+T13, T1 = "t13:warp-cpu:float64", "t1:warp-cpu:float64"
+
+
+def _perturbed(
+    base: dict[str, np.ndarray], spec: str = T13, **edits: object
+) -> dict[str, np.ndarray]:
+    """The intended change in miniature (small end-depth and energy-balance shifts), then ``edits``
+    (``field__with__dots`` -> array or function of the field)."""
     cur = {k: v.copy() for k, v in base.items()}
-    spec = "t13:warp-cpu:float64|"
-    # the physics of the change: a 3 um end-depth shift and a 1e-6 relative energy-balance shift
-    cur[spec + "diagnostics.end_position_mm"][:, 2] -= 0.003
-    cur[spec + "energy_balance.step_deposit_mev"] = cur[
-        spec + "energy_balance.step_deposit_mev"
-    ] * (1 + 1e-6)
-    cur[spec + "energy_balance.cutoff_mev"] = cur[spec + "energy_balance.cutoff_mev"] * (1 - 1e-6)
+    cur[f"{spec}|diagnostics.end_position_mm"][:, 2] -= 0.003
+    for f, fac in (("step_deposit_mev", 1 + 1e-6), ("cutoff_mev", 1 - 1e-6)):
+        cur[f"{spec}|energy_balance.{f}"] = cur[f"{spec}|energy_balance.{f}"] * fac
     for k, v in edits.items():
-        key = spec + k.replace("__", ".")
+        key = f"{spec}|" + k.replace("__", ".")
         cur[key] = v(cur[key]) if callable(v) else np.asarray(v)  # type: ignore[operator]
     return cur
+
+
+def _violations(rec: dict, base: dict, cur: dict, spec: str) -> list[str]:  # type: ignore[type-arg]
+    res = _load("steps_v4").a16_gate(rec, base, cur)
+    return list(res["specs"][spec]["violations"]) if not res["ok"] else []
+
+
+def _with(fn):  # type: ignore[no-untyped-def]
+    def edit(a: np.ndarray) -> np.ndarray:
+        a = a.copy()
+        fn(a)
+        return a
+
+    return edit
 
 
 def test_a16_gate_accepts_the_intended_change_and_rejects_everything_else() -> None:
@@ -1027,35 +1065,106 @@ def test_a16_gate_accepts_the_intended_change_and_rejects_everything_else() -> N
     ok = st.a16_gate(rec, base, _perturbed(base))
     assert ok["ok"], ok
     # a non-allowlisted field (a counter) differs
-    bad = st.a16_gate(rec, base, _perturbed(base, counters__n_steps=1235))
-    assert not bad["ok"]
-    assert any("non-allowlisted" in v for v in bad["specs"]["t13:warp-cpu:float64"]["violations"])
+    bad = _violations(rec, base, _perturbed(base, counters__n_steps=1235), T13)
+    assert any("without an allowlisted bound" in v for v in bad)
 
     # an allowed field leaves its bound (a scoring bug: 5 % more deposit in one layer)
-    def inflate(g: np.ndarray) -> np.ndarray:
-        g = g.copy()
+    def bump(g: np.ndarray) -> None:
         g[..., 30] *= 1.05
-        return g
 
-    bad = st.a16_gate(rec, base, _perturbed(base, grid__dose__batch_energy_mev=inflate))
-    assert not bad["ok"]
+    assert _violations(rec, base, _perturbed(base, grid__dose__batch_energy_mev=_with(bump)), T13)
 
     # a 1 mm end-depth shift (wrong kernel branch) exceeds the end-position bound
-    def shift(p: np.ndarray) -> np.ndarray:
-        p = p.copy()
+    def shift(p: np.ndarray) -> None:
         p[:, 2] += 1.0
-        return p
 
-    bad = st.a16_gate(rec, base, _perturbed(base, diagnostics__end_position_mm=shift))
-    assert not bad["ok"]
-    # the discrete trace row count changing in t13 is a field-set/shape violation
+    assert _violations(rec, base, _perturbed(base, diagnostics__end_position_mm=_with(shift)), T13)
+    # the discrete trace row count changing in t13 is a violation
     cur = _perturbed(base)
-    cur["t13:warp-cpu:float64|diagnostics.trace.step"] = np.arange(11)
+    cur[f"{T13}|diagnostics.trace.step"] = np.arange(11.0)
     assert not st.a16_gate(rec, base, cur)["ok"]
     # a field that exists only in one tree
     cur = _perturbed(base)
-    cur["t13:warp-cpu:float64|counters.extra"] = np.array(1)
+    cur[f"{T13}|counters.extra"] = np.array(1)
     assert not st.a16_gate(rec, base, cur)["ok"]
+    # a changed discrete trace column (the t13 digests must stay identical there)
+    assert _violations(rec, base, _perturbed(base, diagnostics__trace__reason=lambda a: a + 1), T13)
+
+
+def test_a16_gate_t1_bounds_every_allowlisted_field() -> None:
+    run = _load("run_suite")
+    rec = run.A16_INTENDED_CHANGE
+    base = _synthetic_raw("t1:warp-cpu:float64")
+    assert _violations(rec, base, _perturbed(base, T1), T1) == []
+    # every differing field of the t1 allowlist is covered by existing bound keys
+    for fam in ("t1", "t13"):
+        for f, keys in rec["allowed_differing_fields"][fam].items():
+            assert keys and all(k in rec["bounds"][fam] for k in keys), (fam, f)
+
+    def edit(**kw: object) -> list[str]:
+        return _violations(rec, base, _perturbed(base, T1, **kw), T1)
+
+    def moved(p: np.ndarray) -> None:
+        p[:15, 0] += 5.0  # 75 % of the histories move by 5 mm
+
+    assert any("moved_gt1mm" in v for v in edit(diagnostics__end_position_mm=_with(moved)))
+    assert any(
+        "outside" in v
+        for v in edit(diagnostics__end_position_mm=_with(lambda p: p.__setitem__((0, 0), 50.0)))
+    )
+    assert any(
+        "end_energy_mean_abs" in v for v in edit(diagnostics__end_energy_mev=lambda e: e - 0.05)
+    )
+    assert any("over_cut" in v for v in edit(diagnostics__end_energy_mev=lambda e: e + 0.5))
+    assert any("end_direction_mean_abs" in v for v in edit(
+        diagnostics__end_direction=lambda d: d[::-1].copy()))  # fmt: skip
+    assert any("norm_err" in v for v in edit(diagnostics__end_direction=lambda d: d * 1.001))
+    assert any(
+        "trace_energy_over_e0" in v for v in edit(diagnostics__trace__energy_mev=lambda e: e + 20)
+    )
+    assert any(
+        "trace_step_over_max" in v for v in edit(diagnostics__trace__step_mm=lambda s: s + 1.5)
+    )
+    assert any(
+        "deposit_row_max" in v for v in edit(diagnostics__trace__deposit_mev=lambda d: d * 4)
+    )
+    assert any(
+        "trace_position_outside" in v for v in edit(diagnostics__trace__x_mm=lambda x: x + 40)
+    )
+    assert any("direction_over_unit" in v for v in edit(diagnostics__trace__uz=lambda u: u + 0.5))
+    assert any("attempts_max" in v for v in edit(diagnostics__trace__attempts=lambda a: a + 9))
+    assert any("discrete_out_of_range" in v for v in edit(diagnostics__trace__iz=lambda a: a + 30))
+    assert any(
+        "discrete_out_of_range" in v for v in edit(diagnostics__trace__reason=lambda a: a + 4)
+    )
+    assert any(
+        "trace_rows_rel" in v or "field" in v
+        for v in edit(diagnostics__trace__energy_mev=lambda e: np.append(e, np.arange(8.0)))
+    )
+    assert any("in_grid_rel" in v for v in edit(energy_balance__in_grid_mev=lambda a: a * 1.001))
+
+    def spike(g: np.ndarray) -> None:
+        g[..., 10] *= 8
+
+    assert any("profile" in v or "depth-dose" in v for v in edit(
+        grid__dose__batch_energy_mev=_with(spike)))  # fmt: skip
+
+
+def test_a16_source_digest_binds_the_record_to_the_source_tree() -> None:
+    run, st = _load("run_suite"), _load("steps_v4")
+    rec = run.A16_INTENDED_CHANGE
+    assert (run.A16_PLAN_BEGIN, run.A16_PLAN_END) == (st.PLAN_BEGIN, st.PLAN_END)
+    digest = run.a16_source_digest()
+    # the record is valid for exactly this source state: a later commit that touches a hashed
+    # file must refresh the record (python validation/scripts/transport/run_suite.py
+    # --print-a16-source-digest) or delete it (amendment 6)
+    assert rec["source_digest"] == digest
+    assert st.verify_source_digest(rec, digest) == digest
+    with pytest.raises(SystemExit, match="exact source state"):
+        st.verify_source_digest(rec, "0" * 64)
+    cmd = [sys.executable, str(SCRIPTS / "run_suite.py"), "--print-a16-source-digest"]
+    out = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    assert out.stdout.strip() == digest
 
 
 def test_a16_plan_binding_is_verified() -> None:

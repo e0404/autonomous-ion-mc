@@ -345,50 +345,97 @@ A16_INTENDED_CHANGE: dict[str, Any] | None = {
     "identity_field": "range_construction",
     "baseline_value": None,  # the baseline tables carry no range_construction identity
     "new_value": "exact-loglog-quadrature-v1",
-    # Digest fields that may differ (exact name, or a prefix ending in "."), per configuration
-    # family; every other field of every spec (counters, valid flags, the discrete trace columns
-    # of t13) must be bit-identical. The t1 trace (7027 rows at the baseline, 7040 now) changes
-    # its row count through a discrete branch flip of the 2 mm steps (the flip recorded as row 37
-    # of the fixture of tests/ionmc/data/trace_baseline_20mev.npz), so its columns are only
-    # bounded through the row count.
+    # Digest fields that may differ, per configuration family, each with the keys of the `bounds`
+    # quantities that constrain it (a field that differs without bounded quantities fails, and so
+    # does any field not listed); every other field of every spec (counters, valid flags, the
+    # discrete trace columns of t13) must be bit-identical. t13 (150 MeV, 1 mm steps, up to 20000
+    # histories) is the sensitive configuration: tight bounds. t1 (100 MeV, 2 mm steps in 5 mm
+    # voxels, 32 histories) is branch-flip sensitive (the row 37 flip of the fixture of
+    # tests/ionmc/data/trace_baseline_20mev.npz): its per-history outputs cannot be tightly bounded,
+    # so they are bounded through aggregates (means, fractions) and physical caps.
     "allowed_differing_fields": {
-        "t13": [
-            "grid.dose.batch_energy_mev",
-            "energy_balance.cutoff_mev",
-            "energy_balance.in_grid_mev",
-            "energy_balance.quantization_mev",
-            "energy_balance.step_deposit_mev",
-            "diagnostics.end_direction",
-            "diagnostics.end_energy_mev",
-            "diagnostics.end_position_mm",
-            "diagnostics.trace_end_energy_mev",
-            "diagnostics.trace.deposit_mev",
-            "diagnostics.trace.energy_mev",
-            "diagnostics.trace.step_mm",
-            "diagnostics.trace.ux",
-            "diagnostics.trace.uy",
-            "diagnostics.trace.uz",
-            "diagnostics.trace.x_mm",
-            "diagnostics.trace.y_mm",
-            "diagnostics.trace.z_mm",
-        ],
-        "t1": [
-            "grid.dose.batch_energy_mev",
-            "energy_balance.cutoff_mev",
-            "energy_balance.in_grid_mev",
-            "energy_balance.quantization_mev",
-            "energy_balance.step_deposit_mev",
-            "diagnostics.end_direction",
-            "diagnostics.end_energy_mev",
-            "diagnostics.end_position_mm",
-            "diagnostics.trace_end_energy_mev",
-            "diagnostics.trace.",
-        ],
+        "t13": {
+            "grid.dose.batch_energy_mev": ["profile_rel_max", "voxel_rel_max", "in_grid_rel"],
+            "energy_balance.cutoff_mev": ["cutoff_rel"],
+            "energy_balance.in_grid_mev": ["in_grid_rel"],
+            "energy_balance.quantization_mev": ["quantization_abs_mev"],
+            "energy_balance.step_deposit_mev": ["step_deposit_rel"],
+            "diagnostics.end_direction": ["end_direction_max"],
+            "diagnostics.end_energy_mev": ["end_energy_max_mev"],
+            "diagnostics.end_position_mm": ["end_position_max_mm", "end_dz_median_abs_mm"],
+            "diagnostics.trace_end_energy_mev": ["end_energy_max_mev"],
+            "diagnostics.trace.deposit_mev": ["trace_deposit_max_mev"],
+            "diagnostics.trace.energy_mev": ["trace_energy_max_mev"],
+            "diagnostics.trace.step_mm": ["trace_step_max_mm"],
+            "diagnostics.trace.ux": ["trace_direction_max"],
+            "diagnostics.trace.uy": ["trace_direction_max"],
+            "diagnostics.trace.uz": ["trace_direction_max"],
+            "diagnostics.trace.x_mm": ["trace_position_max_mm"],
+            "diagnostics.trace.y_mm": ["trace_position_max_mm"],
+            "diagnostics.trace.z_mm": ["trace_position_max_mm"],
+        },
+        "t1": {
+            "grid.dose.batch_energy_mev": [
+                "profile_abs_over_max",
+                "in_grid_rel",
+                "grid_negative_mev",
+            ],
+            "energy_balance.cutoff_mev": ["cutoff_rel"],
+            "energy_balance.in_grid_mev": ["in_grid_rel"],
+            "energy_balance.quantization_mev": ["quantization_abs_mev"],
+            "energy_balance.step_deposit_mev": ["step_deposit_rel"],
+            "diagnostics.end_direction": ["end_direction_mean_abs", "end_direction_norm_err"],
+            "diagnostics.end_energy_mev": ["end_energy_mean_abs", "end_energy_over_cut_mev"],
+            "diagnostics.end_position_mm": [
+                "end_position_moved_gt1mm_fraction",
+                "end_dz_mean_abs_mm",
+                "end_position_outside_mm",
+            ],
+            "diagnostics.trace_end_energy_mev": ["end_energy_mean_abs", "end_energy_over_cut_mev"],
+            "diagnostics.trace.energy_mev": ["trace_energy_over_e0_mev", "trace_rows_rel"],
+            "diagnostics.trace.step_mm": ["trace_step_over_max_mm"],
+            "diagnostics.trace.deposit_mev": [
+                "trace_deposit_row_max_mev",
+                "trace_deposit_negative_mev",
+            ],
+            "diagnostics.trace.x_mm": ["trace_position_outside_mm"],
+            "diagnostics.trace.y_mm": ["trace_position_outside_mm"],
+            "diagnostics.trace.z_mm": ["trace_position_outside_mm"],
+            "diagnostics.trace.ux": ["trace_direction_over_unit"],
+            "diagnostics.trace.uy": ["trace_direction_over_unit"],
+            "diagnostics.trace.uz": ["trace_direction_over_unit"],
+            "diagnostics.trace.attempts": ["trace_attempts_max"],
+            "diagnostics.trace.history": ["trace_discrete_out_of_range"],
+            "diagnostics.trace.ix": ["trace_discrete_out_of_range"],
+            "diagnostics.trace.iy": ["trace_discrete_out_of_range"],
+            "diagnostics.trace.iz": ["trace_discrete_out_of_range"],
+            "diagnostics.trace.reason": ["trace_discrete_out_of_range"],
+            "diagnostics.trace.step": ["trace_discrete_out_of_range"],
+            "diagnostics.trace.blocks": ["trace_discrete_out_of_range"],
+        },
     },
-    # Bounds of the allowed differences: 2x the values measured at the reviewed state (the
-    # measured values and their physical derivation are in the plan block bound by
-    # plan_block_sha256). t13: 150 MeV, 1 mm steps, 200 to 20000 histories, stable; t1: 100 MeV,
-    # 2 mm steps, 32 histories, chaotic per history, bounded through aggregates only.
+    # Physical limits used by the caps: source energy, energy cut, maximum step, and the extent
+    # of the phantom (x, y in -30..30 mm; z in 0..200 mm for t1 (40 voxels of 5 mm) and
+    # 0..1.1 * 158.6 mm for t13).
+    "physical_limits": {
+        "t13": {
+            "e0_mev": 150.0,
+            "e_cut_mev": 2.0,
+            "max_step_mm": 1.0,
+            "box_min_mm": [-30.0, -30.0, 0.0],
+            "box_max_mm": [30.0, 30.0, 174.46],
+        },
+        "t1": {
+            "e0_mev": 100.0,
+            "e_cut_mev": 2.0,
+            "max_step_mm": 2.0,
+            "box_min_mm": [-30.0, -30.0, 0.0],
+            "box_max_mm": [30.0, 30.0, 200.0],
+        },
+    },  # fmt: skip
+    # Bounds of the allowed differences: 2x the values measured at the reviewed state (measured
+    # values and derivation: the plan block bound by plan_block_sha256), or exact physical caps
+    # (limits 0 or 1e-9) for the "over/outside/negative" quantities.
     "bounds": {
         "t13": {
             "in_grid_rel": 1.2e-9,
@@ -401,6 +448,8 @@ A16_INTENDED_CHANGE: dict[str, Any] | None = {
             "end_direction_max": 0.044,
             "voxel_rel_max": 0.037,
             "profile_rel_max": 0.012,
+            "depth_max_layer_moved": 0.0,
+            "grid_negative_mev": 0.0,
             "trace_energy_max_mev": 0.006,
             "trace_position_max_mm": 0.0071,
             "trace_deposit_max_mev": 1.8e-4,
@@ -413,13 +462,32 @@ A16_INTENDED_CHANGE: dict[str, Any] | None = {
             "cutoff_rel": 5e-3,
             "quantization_abs_mev": 3e-6,
             "profile_abs_over_max": 0.1,
+            "depth_max_layer_moved": 0.0,
+            "grid_negative_mev": 0.0,
             "end_dz_mean_abs_mm": 0.21,
+            "end_position_moved_gt1mm_fraction": 0.625,
+            "end_position_outside_mm": 1e-6,
+            "end_energy_mean_abs": 0.01,
+            "end_energy_over_cut_mev": 1e-6,
+            "end_direction_mean_abs": 0.071,
+            "end_direction_norm_err": 1.7e-7,
             "trace_rows_rel": 0.004,
+            "trace_energy_over_e0_mev": 1e-9,
+            "trace_step_over_max_mm": 1e-9,
+            "trace_deposit_row_max_mev": 4.2,
+            "trace_deposit_negative_mev": 0.0,
+            "trace_position_outside_mm": 1e-6,
+            "trace_direction_over_unit": 1e-9,
+            "trace_attempts_max": 6.0,
+            "trace_discrete_out_of_range": 0.0,
         },
     },
+    # sha256 of the source set (a16_source_digest(), run_suite.py itself and the plan block
+    # excluded): the record is valid only for exactly this source state.
+    "source_digest": "53d5c1002ccd659b9ae7f026afea0751f42224a492b38bccfa9295094a72e64f",
     # sha256 of the delimited block of validation/plans/v3-003d-acceptance.md that states this
     # record (without this key), verified by the step at run time.
-    "plan_block_sha256": "ec312072d7a0b3ccb73eb25507b4c7f450ceb5d846485a580df9167c62a27bb1",
+    "plan_block_sha256": "816cbb8cfe4285f032685a50fb69141f8f6b3229de4d78f2df0062e3d6588852",
 }
 """The one recorded exception to the fail-closed A16 regression of the ``lv4`` suite (plan
 amendment 6 of V3-004). While it is not ``None``, the ``lv4`` step runs ``--mode intended-change``
@@ -527,6 +595,33 @@ def source_files(suite: str | None = None) -> list[Path]:
     return files
 
 
+A16_PLAN_FILE = "validation/plans/v3-003d-acceptance.md"
+A16_PLAN_BEGIN, A16_PLAN_END = (
+    "<!-- A16-INTENDED-CHANGE-BEGIN -->",
+    "<!-- A16-INTENDED-CHANGE-END -->",
+)
+
+
+def a16_source_digest(suite: str = "lv4") -> str:
+    """sha256 over ``path sha256`` lines of every hashed source file of ``suite``, excluding this
+    file (it holds the A16 record) and, in the V3-003D plan, the A16 block (it states the digest).
+    The A16 intended-change record is valid only for the source state with this digest: any later
+    change to a hashed file requires a conscious refresh (or deletion) of the record."""
+    lines = []
+    for f in source_files(suite):
+        rel = str(f.relative_to(REPO))
+        if rel == "validation/scripts/transport/run_suite.py":
+            continue
+        if rel == A16_PLAN_FILE:
+            t = f.read_text()
+            i, j = t.index(A16_PLAN_BEGIN), t.index(A16_PLAN_END) + len(A16_PLAN_END)
+            h = hashlib.sha256((t[:i] + t[j:]).encode()).hexdigest()
+        else:
+            h = sha256(f)
+        lines.append(f"{rel} {h}")
+    return hashlib.sha256("\n".join(sorted(lines)).encode()).hexdigest()
+
+
 def environment_text(
     sha: str, source: str, dirty: str, args: argparse.Namespace, workers: int, single: bool = False
 ) -> str:
@@ -574,6 +669,9 @@ def resolve_workers(value: str) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    if "--print-a16-source-digest" in (argv if argv is not None else sys.argv[1:]):
+        print(a16_source_digest())
+        return 0
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--suite", choices=SUITES, required=True)
     ap.add_argument("--out", required=True)

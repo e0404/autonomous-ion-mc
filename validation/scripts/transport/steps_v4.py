@@ -932,7 +932,8 @@ def verify_intended_change(
         raise SystemExit("A16 --mode intended-change needs the A16_INTENDED_CHANGE record "
                          "(none given): fail closed, use --mode regression")  # fmt: skip
     keys = {"task", "baseline", "identity_field", "baseline_value", "new_value",
-            "allowed_differing_fields", "bounds", "plan_block_sha256"}  # fmt: skip
+            "allowed_differing_fields", "physical_limits", "bounds", "source_digest",
+            "plan_block_sha256"}  # fmt: skip
     if set(record) != keys:
         raise SystemExit(f"A16 intended-change record must have exactly the keys {sorted(keys)}")
     if not (A16_BASELINE.startswith(str(record["baseline"])) or
@@ -994,8 +995,23 @@ def verify_plan_binding(record: dict[str, Any], plan_text: str) -> str:
     return sha
 
 
-def _allowed(name: str, patterns: list[str]) -> bool:
-    return any(name == q or (q.endswith(".") and name.startswith(q)) for q in patterns)
+def verify_source_digest(record: dict[str, Any], digest: str | None = None) -> str:
+    """The record is valid only for the exact source state it was written for: the digest of the
+    hashed source set of the tree under test (``run_suite.a16_source_digest``) must equal
+    ``source_digest``. Fails closed otherwise."""
+    if digest is None:
+        import run_suite
+
+        digest = run_suite.a16_source_digest()
+    if digest != record["source_digest"]:
+        raise SystemExit(
+            f"A16 intended-change: the source digest of the tree under test is {digest}, the "
+            f"record is bound to {record['source_digest']}. The A16_INTENDED_CHANGE record is valid "
+            f"only for the exact source state it was written for: regenerate it "
+            f"(run_suite.py --print-a16-source-digest, then the plan block hash) or, once V3-003D "
+            f"is merged, delete it and advance A16_BASELINE (plan amendment 6)."
+        )
+    return digest
 
 
 def _rel(x: Any, y: Any) -> float:
@@ -1003,11 +1019,110 @@ def _rel(x: Any, y: Any) -> float:
     return float(abs(yv.sum() - xv.sum()) / abs(xv.sum()))
 
 
+def _over(values: Any, limit: float) -> float:
+    """Amount by which the largest value exceeds ``limit`` (0 when within)."""
+    return max(0.0, float(np.max(values)) - limit)
+
+
+def _outside(pos: Any, lo: Any, hi: Any) -> float:
+    """Largest distance [mm] of any (..., 3) position outside the box ``lo``..``hi`` (0 inside)."""
+    p = np.asarray(pos, dtype=np.float64)
+    return float(max(np.max(np.asarray(lo) - p), np.max(p - np.asarray(hi)), 0.0))
+
+
+TRACE_DISCRETE = ("history", "ix", "iy", "iz", "reason", "step", "blocks")
+
+
+def a16_metrics(
+    fam: str, lim: dict[str, Any], fb: dict[str, Any], fc: dict[str, Any]
+) -> dict[str, float]:
+    """Measured quantities of the allowed differences of one spec (``fb``, ``fc``: field -> raw
+    value of the baseline tree and of the tree under test; ``lim``: the physical limits of the
+    family). Quantities missing a field raise ``KeyError`` (reported by the caller)."""
+    m: dict[str, float] = {}
+    n_b = fb.get("diagnostics.trace.step", np.empty(0)).size
+    n_c = fc.get("diagnostics.trace.step", np.empty(0)).size
+    m["trace_rows_rel"] = abs(n_c - n_b) / max(n_b, 1)
+    for tag, f_, n_ in (("baseline", fb, n_b), ("current", fc, n_c)):
+        ragged = [k for k, v in f_.items() if k.startswith("diagnostics.trace.") and v.size != n_]
+        if ragged:
+            raise ValueError(f"{tag} trace columns have unequal row counts: {ragged[:3]}")
+    eb, ec = "energy_balance.", "energy_balance."
+    m["in_grid_rel"] = _rel(fb[eb + "in_grid_mev"], fc[ec + "in_grid_mev"])
+    m["step_deposit_rel"] = _rel(fb[eb + "step_deposit_mev"], fc[ec + "step_deposit_mev"])
+    m["cutoff_rel"] = _rel(fb[eb + "cutoff_mev"], fc[ec + "cutoff_mev"])
+    m["quantization_abs_mev"] = float(
+        np.abs(fc[ec + "quantization_mev"] - fb[eb + "quantization_mev"]).max()
+    )
+    grid_c = np.asarray(fc["grid.dose.batch_energy_mev"], dtype=np.float64)
+    gb = np.asarray(fb["grid.dose.batch_energy_mev"], dtype=np.float64).sum(0)
+    gc = grid_c.sum(0)
+    m["grid_negative_mev"] = max(0.0, -float(grid_c.min()))
+    pb, pc = gb.sum((0, 1)), gc.sum((0, 1))
+    m["depth_max_layer_moved"] = float(int(np.argmax(pb)) != int(np.argmax(pc)))
+    m["profile_abs_over_max"] = float(np.abs(pc - pb).max() / pb.max())
+    sel = pb > 0.01 * pb.max()
+    m["profile_rel_max"] = float(np.max(np.abs(pc[sel] - pb[sel]) / pb[sel]))
+    vox = gb > 0.01 * gb.max()
+    m["voxel_rel_max"] = float(np.max(np.abs(gc[vox] - gb[vox]) / gb[vox]))
+    pos_b, pos_c = fb["diagnostics.end_position_mm"], fc["diagnostics.end_position_mm"]
+    dpos = np.abs(pos_c - pos_b)
+    dz = pos_c[:, 2] - pos_b[:, 2]
+    m["end_position_max_mm"] = float(dpos.max())
+    m["end_position_moved_gt1mm_fraction"] = float(np.mean(dpos.max(1) > 1.0))
+    m["end_dz_median_abs_mm"] = float(abs(np.median(dz)))
+    m["end_dz_mean_abs_mm"] = float(abs(dz.mean()))
+    m["end_position_outside_mm"] = _outside(pos_c, lim["box_min_mm"], lim["box_max_mm"])
+    ek = [k for k in ("diagnostics.end_energy_mev", "diagnostics.trace_end_energy_mev") if k in fc]
+    de = [fc[k] - fb[k] for k in ek]
+    m["end_energy_max_mev"] = max(float(np.abs(x).max()) for x in de)
+    m["end_energy_mean_abs"] = max(float(abs(x.mean())) for x in de)
+    m["end_energy_over_cut_mev"] = max(_over(fc[k], lim["e_cut_mev"]) for k in ek)
+    dd = fc["diagnostics.end_direction"] - fb["diagnostics.end_direction"]
+    m["end_direction_max"] = float(np.abs(dd).max())
+    m["end_direction_mean_abs"] = float(np.abs(dd).mean())
+    m["end_direction_norm_err"] = float(
+        np.abs(np.linalg.norm(fc["diagnostics.end_direction"], axis=1) - 1.0).max()
+    )
+    if n_c:
+        t = lambda c, f=fc: np.asarray(f[f"diagnostics.trace.{c}"], dtype=np.float64)  # noqa: E731
+        m["trace_energy_over_e0_mev"] = _over(t("energy_mev"), lim["e0_mev"])
+        m["trace_step_over_max_mm"] = _over(t("step_mm"), lim["max_step_mm"])
+        m["trace_deposit_row_max_mev"] = float(t("deposit_mev").max())
+        m["trace_deposit_negative_mev"] = max(0.0, -float(t("deposit_mev").min()))
+        xyz = np.stack([t("x_mm"), t("y_mm"), t("z_mm")], axis=1)
+        m["trace_position_outside_mm"] = _outside(xyz, lim["box_min_mm"], lim["box_max_mm"])
+        m["trace_direction_over_unit"] = _over(np.abs(np.stack([t("ux"), t("uy"), t("uz")])), 1.0)
+        m["trace_attempts_max"] = float(t("attempts").max())
+        bad = 0
+        for col in TRACE_DISCRETE:
+            vb, vc = t(col, fb), t(col)
+            bad += (
+                int(np.sum(~np.isin(vc, np.unique(vb))))
+                if col == "reason"
+                else int(np.sum((vc < vb.min()) | (vc > vb.max())))
+            )
+        m["trace_discrete_out_of_range"] = float(bad)
+    if n_b == n_c and n_c:
+        tm = lambda cols: max(  # noqa: E731
+            float(np.abs(fc[f"diagnostics.trace.{c}"] - fb[f"diagnostics.trace.{c}"]).max())
+            for c in cols
+        )
+        m["trace_energy_max_mev"] = tm(("energy_mev",))
+        m["trace_position_max_mm"] = tm(("x_mm", "y_mm", "z_mm"))
+        m["trace_deposit_max_mev"] = tm(("deposit_mev",))
+        m["trace_step_max_mm"] = tm(("step_mm",))
+        m["trace_direction_max"] = tm(("ux", "uy", "uz"))
+    return m
+
+
 def a16_gate(record: dict[str, Any], base: Any, cur: Any) -> dict[str, Any]:
     """Gated comparison of the raw A16 values (``{"spec|field": array}``) of the baseline tree and
-    the tree under test: per spec, every field outside ``allowed_differing_fields`` must be
-    bit-identical (and present in both), and the measured quantities of the allowed fields must
-    be within ``bounds``. Returns the measured values and the violations (``ok`` when none)."""
+    the tree under test. Per spec: the field sets are equal; a field that is not bit-identical must
+    be listed in ``allowed_differing_fields`` of its family together with the bound keys that
+    constrain it, each of those quantities must be evaluated and within ``bounds``, and every
+    other field must be identical (so no allowlisted field is without a bound, and an unlisted
+    change fails). Quantities with a bound are gated even if no differing field names them."""
     specs = sorted({k.split("|")[0] for k in base} | {k.split("|")[0] for k in cur})
     report: dict[str, Any] = {}
     all_ok = True
@@ -1020,73 +1135,26 @@ def a16_gate(record: dict[str, Any], base: Any, cur: Any) -> dict[str, Any]:
         viol: list[str] = []
         if set(fb) != set(fc):
             viol.append(f"field sets differ: {sorted(set(fb) ^ set(fc))[:6]}")
-        m: dict[str, float] = {}
         differing = []
         for f in sorted(set(fb) & set(fc)):
-            same = fb[f].shape == fc[f].shape and bool(np.array_equal(fb[f], fc[f]))
-            if not same:
+            if fb[f].shape != fc[f].shape or not np.array_equal(fb[f], fc[f]):
                 differing.append(f)
-                if not _allowed(f, allowed):
-                    viol.append(f"non-allowlisted field differs: {f}")
-        n_b = fb.get("diagnostics.trace.step", np.empty(0)).size
-        n_c = fc.get("diagnostics.trace.step", np.empty(0)).size
-        if n_b != n_c:
-            m["trace_rows_rel"] = abs(n_c - n_b) / max(n_b, 1)
         try:
-            m["in_grid_rel"] = _rel(
-                fb["energy_balance.in_grid_mev"], fc["energy_balance.in_grid_mev"]
-            )
-            m["step_deposit_rel"] = _rel(fb["energy_balance.step_deposit_mev"],
-                                         fc["energy_balance.step_deposit_mev"])  # fmt: skip
-            m["cutoff_rel"] = _rel(fb["energy_balance.cutoff_mev"], fc["energy_balance.cutoff_mev"])
-            m["quantization_abs_mev"] = float(np.abs(fc["energy_balance.quantization_mev"]
-                                                     - fb["energy_balance.quantization_mev"]).max())  # fmt: skip
-            gb = np.asarray(fb["grid.dose.batch_energy_mev"], dtype=np.float64).sum(0)
-            gc = np.asarray(fc["grid.dose.batch_energy_mev"], dtype=np.float64).sum(0)
-            pb, pc = gb.sum((0, 1)), gc.sum((0, 1))
-            if int(np.argmax(pb)) != int(np.argmax(pc)):
-                viol.append("depth-dose maximum moved by a voxel layer")
-            m["profile_abs_over_max"] = float(np.abs(pc - pb).max() / pb.max())
-            sel = pb > 0.01 * pb.max()
-            m["profile_rel_max"] = float(np.max(np.abs(pc[sel] - pb[sel]) / pb[sel]))
-            vox = gb > 0.01 * gb.max()
-            m["voxel_rel_max"] = float(np.max(np.abs(gc[vox] - gb[vox]) / gb[vox]))
-            pos_b, pos_c = fb["diagnostics.end_position_mm"], fc["diagnostics.end_position_mm"]
-            m["end_position_max_mm"] = float(np.abs(pos_c - pos_b).max())
-            dz = pos_c[:, 2] - pos_b[:, 2]
-            m["end_dz_median_abs_mm"] = float(abs(np.median(dz)))
-            m["end_dz_mean_abs_mm"] = float(abs(dz.mean()))
-            m["end_energy_max_mev"] = float(np.abs(fc["diagnostics.end_energy_mev"]
-                                                   - fb["diagnostics.end_energy_mev"]).max())  # fmt: skip
-            m["end_direction_max"] = float(np.abs(fc["diagnostics.end_direction"]
-                                                  - fb["diagnostics.end_direction"]).max())  # fmt: skip
-        except KeyError as e:
-            viol.append(f"missing field {e}")
-        if fam == "t13" and n_b == n_c and n_b:
-
-            def tmax(cols: tuple[str, ...]) -> float:
-                return max(float(np.abs(fc[f"diagnostics.trace.{c}"] - fb[f"diagnostics.trace.{c}"]).max())
-                           for c in cols)  # fmt: skip
-
-            m["trace_energy_max_mev"] = tmax(("energy_mev",))
-            m["trace_position_max_mm"] = tmax(("x_mm", "y_mm", "z_mm"))
-            m["trace_deposit_max_mev"] = tmax(("deposit_mev",))
-            m["trace_step_max_mm"] = tmax(("step_mm",))
-            m["trace_direction_max"] = tmax(("ux", "uy", "uz"))
+            m = a16_metrics(fam, record["physical_limits"][fam], fb, fc)
+        except (KeyError, ValueError) as e:
+            m = {}
+            viol.append(f"cannot evaluate the bounds: {e}")
+        for f in differing:
+            keys = allowed.get(f)
+            if not keys:
+                viol.append(f"field differs without an allowlisted bound: {f}")
+                continue
+            for k in keys:
+                if k not in bnd or k not in m:
+                    viol.append(f"{f}: bound {k} is not defined or not evaluated")
         for k, v in m.items():
-            if k not in bnd:
-                continue  # measured, reported, not gated for this family
-            if not v <= bnd[k]:
+            if k in bnd and not v <= bnd[k]:
                 viol.append(f"{k} = {v:.4g} exceeds the bound {bnd[k]:.4g}")
-        for k in bnd:
-            if (
-                k.startswith("trace_")
-                and k != "trace_rows_rel"
-                and fam == "t13"
-                and k not in m
-                and "diagnostics.trace.step" in fb
-            ):
-                viol.append(f"bound {k} could not be evaluated")  # fmt: skip
         report[spec] = {"differing_fields": differing, "measured": m, "violations": viol}
         all_ok &= not viol
     return {"ok": bool(all_ok), "specs": report}
@@ -1105,6 +1173,7 @@ def step_a16(a: argparse.Namespace) -> int:
     plan_sha = None
     if record:
         plan_sha = verify_plan_binding(record, (REPO / PLAN_FILE).read_text())
+        verify_source_digest(record)
     full = _git("rev-parse", "--verify", f"{A16_BASELINE}^{{commit}}")
     if full is None:
         raise SystemExit(
@@ -1180,6 +1249,7 @@ def step_a16(a: argparse.Namespace) -> int:
             **verified,
             "plan_file": PLAN_FILE,
             "plan_block_sha256": plan_sha,
+            "source_digest": record["source_digest"],
             "gate_ok": gate["ok"] if gate else None,
         },
         "fields": "per-grid batch energy, energy balance, counters, end state and trace digests",
