@@ -12,8 +12,8 @@ The steps run in the suites ``lv4`` and ``hr4`` of ``run_suite.py`` and follow t
 ``"reduced": true`` and a pass is not a conformant result. Everything uses the offline analytic
 Bethe stopping source (I = 78 eV) and the synthetic lookup fixture ``tests/data/synthetic_lookup.json``.
 
-Seeds derive deterministically from one ``--seed-base`` (default 20381004, the V3-004 qualification
-base; 20351004 is the rehearsal base, see the plan): A7 ``base + i`` (i-th step length), A8
+Seeds derive deterministically from one ``--seed-base`` (default 20401004, the V3-004 qualification
+base (V3-003D; 20381004 consumed); 20351004 is the rehearsal base, see the plan): A7 ``base + i`` (i-th step length), A8
 ``base + 8``, A9 ``base + 10000 + i`` (i-th seed), A11 LV ``base + 11``, A11 HR ``base + 1000 k``
 (k = 1 python, 2 cpu32, 3 cpu64, 4 cuda32, as T12), A13 ``base + 13``, A15 and A16 fixed small
 configurations at ``base`` (A16 digests use the fixed seed documented in ``a16_digest.py``).
@@ -87,7 +87,7 @@ LK_E = LookupTable(
     "validation/scripts/transport/steps_v4.py (f = 1 .. 3 linear in the sample index)", True,
 )  # fmt: skip
 LOOKUPS = (LK_LET, LK_E)
-QUALIFICATION_SEED_BASE = 20381004
+QUALIFICATION_SEED_BASE = 20401004
 REHEARSAL_SEED_BASE = 20351004
 
 ENERGY_MEV = 150.0
@@ -109,6 +109,9 @@ A15_HISTORIES = {"warp-cpu": 200_000, "warp-cuda": 1_000_000}
 A15_BATCHES = 20
 A11_LV_K = 256
 A16_BASELINE = "a524f209"
+"""Qualified-path baseline of row A16 (plan amendment 6): the latest v3/develop commit that
+intentionally changed the qualified transport path. a524f209 until V3-003D merges; the first
+commit of the next task sets it to the V3-003D merge commit, citing amendment 6."""
 A16_SPECS = (
     "t1:python:float64",
     "t1:warp-cpu:float64",
@@ -309,7 +312,7 @@ def step_a7(a: argparse.Namespace) -> int:
         allow = 4.0 * sd + delta
         ratio_allow = np.abs(d[sel]) / allow[sel]
         ratio_delta = np.abs(d[sel]) / delta[sel]
-        n_sel = int(((p["dose"] > 0.1 * p["dose"].max())).sum())
+        n_sel = int((p["dose"] > 0.1 * p["dose"].max()).sum())
         worst = float(np.nanmax(np.abs(zs))) if zs.size else math.nan
         ok = bool(
             zs.size == n_sel and np.all(np.isfinite(ratio_allow)) and ratio_allow.max() <= 1.0
@@ -328,15 +331,15 @@ def step_a7(a: argparse.Namespace) -> int:
             "max_abs_d_over_delta": float(ratio_delta.max()),
             "max_delta_rel": float(np.nanmax(delta[sel] / p["let_d"].mean[sel])),
             "plateau_max_d_over_4sigma_plus_delta": float(ratio_allow[z_pl].max())
-            if z_pl.any() else None,
+            if z_pl.any()
+            else None,
             "distal_max_d_over_4sigma_plus_delta": float(ratio_allow[z_di].max())
-            if z_di.any() else None,
+            if z_di.any()
+            else None,
             "pass": ok,
         }
         ok_eps &= ok
-    change = {
-        f"{s}_vs_1.0": abs(est[s] - est[1.0]) / est[1.0] for s in A7_STEPS_MM if s != 1.0
-    }
+    change = {f"{s}_vs_1.0": abs(est[s] - est[1.0]) / est[1.0] for s in A7_STEPS_MM if s != 1.0}
     ctrl_ok = bool(change["0.1_vs_1.0"] >= 0.10)
     zc = (np.arange(nz) + 0.5)[pm]
     doc = {
@@ -353,7 +356,11 @@ def step_a7(a: argparse.Namespace) -> int:
             for s in A7_STEPS_MM
         },
         "step_independence": {"pairs": pairs, "bound": 0.01, "pass": ok_pairs},
-        "let_d_vs_let_d_eps": {"by_step": eps_cmp, "criterion": "|D| <= 4 sigma_D + delta_v (footnote 2)", "pass": ok_eps},
+        "let_d_vs_let_d_eps": {
+            "by_step": eps_cmp,
+            "criterion": "|D| <= 4 sigma_D + delta_v (footnote 2)",
+            "pass": ok_eps,
+        },
         "negative_control": {
             "estimator": "sum(eps^2/l) / sum(eps) over the traced plateau steps",
             "value_kev_um": {str(s): est[s] for s in A7_STEPS_MM},
@@ -402,7 +409,8 @@ def step_a8(a: argparse.Namespace) -> int:
             "defined_bins": n_def,
             "compared_bins": int(rel.size),
             "max_rel_diff": worst,
-            "worst_depth_mm": float(np.nonzero(defined)[0][np.argmax(rel)] + 0.5) if rel.size
+            "worst_depth_mm": float(np.nonzero(defined)[0][np.argmax(rel)] + 0.5)
+            if rel.size
             else None,
             "max_rel_diff_dose_above_10pct": float(rel_hi.max()) if rel_hi.size else math.nan,
             "bound": 0.005,
@@ -624,8 +632,10 @@ def step_a9_compare(a: argparse.Namespace) -> int:
         "batches": A9_BATCHES,
         "coverage": cov,
         "criterion": {
-            "z_std_band": list(A9_ZSTD_BAND), "z_mean_abs_max": A9_ZMEAN_MAX,
-            "all_bins_coverage_band": list(A9_COVER_ALL_BAND), "plan": "footnote 5",
+            "z_std_band": list(A9_ZSTD_BAND),
+            "z_mean_abs_max": A9_ZMEAN_MAX,
+            "all_bins_coverage_band": list(A9_COVER_ALL_BAND),
+            "plan": "footnote 5",
         },
         "r80_mm": r80,
         "informative_all_bins_dose_above_10pct": {
@@ -673,7 +683,8 @@ def step_a13(a: argparse.Namespace) -> int:
                     "let_d_kev_um": float(m[i]) if dfn[i] else None,
                     "let_d_std": float(ld.std.reshape(-1)[i]) if dfn[i] else None,
                     "let_t_kev_um": float(lt.mean.reshape(-1)[i])
-                    if lt.defined_mask.reshape(-1)[i] else None,
+                    if lt.defined_mask.reshape(-1)[i]
+                    else None,
                     "dose_fraction_of_max": float(dose[i] / dose.max()),
                 }
             )
@@ -723,12 +734,8 @@ def step_a15(a: argparse.Namespace) -> int:
             ok &= bool(v["pass"] and counters_clean(one) and counters_clean(many))
     else:
         for prec in ("float32", "float64"):
-            small = base.run_cfg(
-                backend=a.backend, precision=prec, chunk=2**10, workers=1, **kw
-            )
-            large = base.run_cfg(
-                backend=a.backend, precision=prec, chunk=2**18, workers=1, **kw
-            )
+            small = base.run_cfg(backend=a.backend, precision=prec, chunk=2**10, workers=1, **kw)
+            large = base.run_cfg(backend=a.backend, precision=prec, chunk=2**18, workers=1, **kw)
             v = compare_channel_partition(small, large)
             ns = small.transport_report["partials"][0]["n_chunks"]
             nl = large.transport_report["partials"][0]["n_chunks"]
@@ -778,9 +785,7 @@ def compare_channels_ci(a: Result, b: Result) -> dict[str, Any]:
         for k in qa
     )
     ood = (a.channel_raw.lookup_out_of_domain, b.channel_raw.lookup_out_of_domain)
-    resid = bool(
-        np.allclose(a.channel_raw.residual, b.channel_raw.residual, rtol=1e-9, atol=1e-18)
-    )
+    resid = bool(np.allclose(a.channel_raw.residual, b.channel_raw.residual, rtol=1e-9, atol=1e-18))
     return {
         "worst_over_bound_by_channel": worst,
         "max_over_bound": max(worst.values()),
@@ -913,6 +918,10 @@ def _digests(src: Path, tallies: str, specs: str, env_extra: dict[str, str]) -> 
 
 
 def step_a16(a: argparse.Namespace) -> int:
+    """Row A16 (plan amendment 6). (a) Tally neutrality, gating in both modes: the digests of the
+    tree under test with ``tallies = ()`` equal those with all tallies. (b) ``--mode regression``,
+    gating: the no-tally digests equal those of ``A16_BASELINE``. (c) ``--mode intended-change``
+    (V3-003D only): the differences against ``A16_BASELINE`` are reported, non-gating."""
     full = _git("rev-parse", "--verify", f"{A16_BASELINE}^{{commit}}")
     if full is None:
         raise SystemExit(
@@ -931,19 +940,31 @@ def step_a16(a: argparse.Namespace) -> int:
         "no_tallies": _digests(REPO / "src", "none", specs, env_extra),
         "with_tallies": _digests(REPO / "src", "all", specs, env_extra),
     }
+    regression = a.mode == "regression"
     out: dict[str, Any] = {}
     ok = True
     for spec in A16_SPECS:
         b = baseline["digests"][spec]
-        entry: dict[str, Any] = {"fields": len(b)}
-        for label, doc in current.items():
-            c = doc["digests"][spec]
-            diff = sorted(k for k in set(b) | set(c) if b.get(k) != c.get(k))
-            entry[label] = {"identical": not diff, "differing_fields": diff[:10]}
-            ok &= not diff
+        n, w = current["no_tallies"]["digests"][spec], current["with_tallies"]["digests"][spec]
+        neutral = sorted(k for k in set(n) | set(w) if n.get(k) != w.get(k))
+        vs_base = sorted(k for k in set(b) | set(n) if b.get(k) != n.get(k))
+        entry: dict[str, Any] = {
+            "fields": len(b),
+            "tally_neutrality": {"identical": not neutral, "differing_fields": neutral[:10]},
+            "no_tallies_vs_baseline": {
+                "identical": not vs_base,
+                "differing_fields": vs_base[:10],
+                "n_differing": len(vs_base),
+                "gating": regression,
+            },
+        }
+        ok &= not neutral
+        if regression:
+            ok &= not vs_base
         out[spec] = entry
     doc2 = {
         "step": "a16",
+        "mode": a.mode,
         "baseline_commit": full,
         "baseline_ref": A16_BASELINE,
         "fields": "per-grid batch energy, energy balance, counters, end state and trace digests",
@@ -978,7 +999,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--trace-histories", type=int, default=A7_TRACE_HISTORIES)
     ap.add_argument("--energy", type=float, default=ENERGY_MEV, help="a11-hr: beam energy")
     ap.add_argument("--backend", default="warp-cpu", help="a15: warp-cpu or warp-cuda")
-    ap.add_argument("--mode", choices=("workers", "chunks"), default="chunks", help="a15")
+    ap.add_argument(
+        "--mode",
+        choices=("workers", "chunks", "regression", "intended-change"),
+        default=None,
+        help="a15: workers or chunks (default chunks); a16: regression "
+        "(default) or intended-change (V3-003D)",
+    )
     ap.add_argument("--pairs", default="cpu32:cuda32,python:cpu64", help="a11-hr: sample pairs")
     ap.add_argument(
         "--seed-base",
@@ -993,6 +1020,8 @@ def main(argv: list[str] | None = None) -> int:
     if not 0.0 < args.scale <= 1.0 or args.seeds < 3:
         raise SystemExit("need 0 < --scale <= 1 and --seeds >= 3")
     base.SEED_BASE = args.seed
+    if args.mode is None:
+        args.mode = "regression" if args.step == "a16" else "chunks"
     args.workers = (os.cpu_count() or 1) if args.workers == "auto" else int(args.workers)
     return STEPS[args.step](args)
 

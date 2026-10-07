@@ -63,6 +63,10 @@ def _config(
     )
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason="fixture regenerated in phase C3 at the clean code commit (V3-003D, plan amendment 24)",
+)
 def test_default_trace_is_unchanged_from_the_stored_baseline() -> None:
     """Provenance of ``data/trace_baseline_20mev.npz``: generated at commit 6d58480 (before the
     truncated-hinge diagnostic existed) by the python reference with the physics defaults of that

@@ -2,7 +2,7 @@
 ``validation/plans/v3-004-acceptance.md``).
 
 Standalone and deliberately restricted to the public API that exists at the baseline commit
-a524f209 (``SimulationConfig`` without scoring channels), so that ``steps_v4.py a16`` can run
+the qualified-path baseline commit (``A16_BASELINE`` of ``steps_v4.py``, a524f209 at V3-003D; ``SimulationConfig`` without scoring channels), so that ``steps_v4.py a16`` can run
 it twice against two source trees (the baseline extracted with ``git archive`` and the tree under
 test) with ``PYTHONPATH`` set accordingly. ``--tallies all`` adds scoring channels of every
 quantity kind to the configuration (only possible with the tree under test).

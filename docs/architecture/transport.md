@@ -168,15 +168,15 @@ counter starting at 0.
 * `RunOptions.memory_budget_bytes` bounds the accumulators; `PhysicsOptions.stopping` has no default.
 * The energy loss uses the state energy (step 6 above); the cutoff energy is scored (see Results).
 
-* The range table `R(E)` is built by the trapezoid rule in `ln E` of `E/S` on the 200-points-per-decade
-  grid. This overestimates every increment by about 3.5e-5 relative (about 5.1 um of the 158.6 mm range
-  at 150 MeV; the exact quadrature of the log-log interpolated `S` gives 158.625 mm against 158.630 mm
-  tabulated). The short-step branch (`S(E_mid) t`) does not carry the bias, the range-inversion branch
-  does, so the transported `E(z)` depends slightly on the step size. This is a known inconsistency
-  recorded in decision 0039 (outcome of 2026-10-07); the follow-up V3-003D replaces the construction
-  by exact quadrature and/or a range-carrying step and re-qualifies. Scoring tests that compare a
-  scored energy loss with an energy-depth relation use the transported particle's energy
-  (acceptance plan V3-004, footnote 1).
+* The range table `R(E)` is the exact integral of the log-log interpolated `S` (V3-003D,
+  `range_construction = exact-loglog-quadrature-v1`; decision 0039): closed form per grid interval, the
+  range between nodes by the shared `range_in_bin`, the inverse table from the exact inverse. Until
+  V3-003D the trapezoid rule in `ln E` overestimated every increment by about 3.5e-5 relative (5.1 um of
+  the 158.6 mm range at 150 MeV), so the range-inversion branch disagreed with the short-step branch and
+  the transported `E(z)` depended on the step size; the change moves R(150 MeV) from 158.6301 to
+  158.6248 mm. Scoring tests that compare a scored energy loss with an energy-depth relation use the
+  transported particle's energy (V3-004 plan, footnote 1) and, since V3-003D, also the table CSDA
+  energy (row D3).
 
 `TransportTables` is immutable: every array is read-only, the identity (source, effective I, dataset id
 and hashes, material fingerprint, metadata) is stored as read-only mappings and tuples, and
@@ -475,8 +475,8 @@ period) and `TransportWorkerError` is raised; no partial result is returned. Scr
   `# exit=` trailer (a timed-out step is killed and archived with `exit=124`); `manifest.txt` lists the steps of the
   run; `summarize.py` verifies everything and writes `summary.json`. Any failed step, missing file or mismatch makes the
   exit status non-zero.
-* **Seed base.** `--seed-base` (default 20341004, the qualification base) is the base of every statistical seed; it is
-  recorded in `environment.txt`, the step documents and the sample metadata. Only an archive made with 20341004 can be
+* **Seed base.** `--seed-base` (default 20391004, the qualification base since V3-003D; 20341004 was consumed at the previous head) is the base of every statistical seed; it is
+  recorded in `environment.txt`, the step documents and the sample metadata. Only an archive made with 20391004 (lv/hr) or 20401004 (lv4/hr4) can be
   `conformant`: one made with the rehearsal base 20261004, with 20271004 (T9 investigation), with 20281004 (first qualification attempt, consumed), with 20291004 (second qualification attempt, consumed: its accelerated T12 samples were observed before the grouped rule of plan footnote 17), with 20301004 (third qualification attempt, consumed: its python-vs-cpu64 total deposit was observed before the rounding-noise allowance of plan footnote 19), with 20311004 (fourth qualification attempt, consumed: its HR T12 comparison was observed before the review-required restriction of the footnote-19 allowance to the total-deposit scalar), with 20321004 (fifth qualification attempt, consumed: its HR and LV T12 comparisons were observed before the removal of the 1e-9 relative z = 0 shortcut of the scalar statistic for non-deposit scalars, plan footnote 21), with 20331004 (sixth qualification attempt, consumed: its HR T12 comparison was observed before the low-standard-error gate of the footnote-19 rule was restored and the T10 retraction recorded, plan footnotes 22 and 23) (all preserved as non-qualification evidence) or without a recorded base
   verifies but carries `non_conformant_reasons`. The qualification command is
   `python validation/scripts/transport/run_suite.py --suite hr --out validation/generated/transport/<new-dir> --expected-sha <sha>`
@@ -642,7 +642,7 @@ for each A9 part, 1800 s for A7 and 3600 s for the HR sample step.
 
 | Suite | Steps (names without the number) | Rows |
 |---|---|---|
-| `lv4` | `pytest-scoring-warp-cpu`, `a16-qualified-path-regression` (digests against `git archive a524f209`, fail closed without git), `a11-lv-python-vs-warp-cpu-256x150MeV`, `a15-chunks-cpu`, `a15-workers` (deferred in single-process mode, `DEFERRED_STEPS["lv4"]`), `a7-step-independence`, `a8-offline-let`, `a13-let-profile-exploratory` (non-gating), `a9-part-1of2`, `a9-part-2of2`, `a9-compare` | CI tests, A16, A11-LV, A15, A7, A8, A13, A9 |
+| `lv4` | `pytest-scoring-warp-cpu`, `a16-qualified-path-regression` (digests against `git archive A16_BASELINE`, currently a524f209, fail closed without git; `--mode intended-change` at V3-003D: tally neutrality gating, differences reported, plan amendment 6), `a11-lv-python-vs-warp-cpu-256x150MeV`, `a15-chunks-cpu`, `a15-workers` (deferred in single-process mode, `DEFERRED_STEPS["lv4"]`), `a7-step-independence`, `a8-offline-let`, `a13-let-profile-exploratory` (non-gating), `a9-part-1of2`, `a9-part-2of2`, `a9-compare` | CI tests, A16, A11-LV, A15, A7, A8, A13, A9 |
 | `hr4` | `pytest-cuda-scoring` (`-m cuda`), `a15-chunks-cuda`, `a11-hr-channel-parity` (cpu-f32 vs cuda-f32 and the python vs cpu-f64 control pair, frozen `t12_compare` on the linear channel profiles) | CUDA tests, A15-CUDA, A11-HR |
 
 A9 runs 200 seeds in two parts of 100 (`--part i/2`, seed `base + 10000 + k`) whose npz files

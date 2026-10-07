@@ -94,9 +94,21 @@ def test_u2_shared_funcs_reproduce_table_reads(water_tables: TransportTables) ->
     t = water_tables
     for e in np.geomspace(1.2, 450.0, 60):
         i, f = TFP.log_bin_index(float(e), float(t.ln_e0[0]), float(t.inv_dln_e[0]), t.n_e)
-        row = t.ln_r_mass[0]
-        r = float(TFP.interp_exp(float(row[i]), float(row[i + 1]), f))
+        # the range is the exact closed form in the bin (V3-003D), not a log-log interpolation
+        r = float(
+            TFP.range_in_bin(
+                float(t.r_mass[0, i]),
+                float(t.f_mass[0, i]),
+                float(t.d_f[0, i]),
+                1.0 / float(t.inv_dln_e[0]),
+                f,
+            )
+        )
         assert r == pytest.approx(t.range_g_cm2(0, e), rel=1e-13)
+        # the stopping power read is unchanged: log-log interpolation of ln S
+        row = t.ln_s_mass[0]
+        s = float(TFP.interp_exp(float(row[i]), float(row[i + 1]), f))
+        assert s == pytest.approx(t.stopping_mass(0, e), rel=1e-13)
 
 
 def test_tables_reject_non_protons_and_clamp_outside(bethe: BetheStoppingSource) -> None:

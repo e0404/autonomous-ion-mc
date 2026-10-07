@@ -1,6 +1,6 @@
 """Fail-closed runner of the V3-003 (``lv``, ``hr``) and V3-004 (``lv4``, ``hr4``) local-validation
 (LV) and host-runner (HR) suites. The V3-004 suites use ``steps_v4.py``, the default seed base
-20381004 and, in the hashed set, the V3-004 acceptance plan and the synthetic lookup fixture.
+20401004 and, in the hashed set, the V3-004 acceptance plan and the synthetic lookup fixture.
 
 Usage (argv only, no shell; the host runner executes exactly this)::
 
@@ -10,8 +10,9 @@ Usage (argv only, no shell; the host runner executes exactly this)::
         [--only STEP ...] [--import-dirs DIR ...] [--seed-base INT]
 
 The qualification command needs no seed flag: the default ``--seed-base`` is the qualification base
-20341004 (a run with the rehearsal base 20261004 or the consumed bases 20271004, 20281004,
-20291004, 20301004, 20311004, 20321004 and 20331004 is archived but never conformant)::
+20391004 (a run with the rehearsal base 20261004 or the consumed bases 20271004, 20281004,
+20291004, 20301004, 20311004, 20321004, 20331004 and 20341004 is archived but never conformant;
+V3-003D, plan amendment 24)::
 
     python validation/scripts/transport/run_suite.py --suite hr --expected-sha <sha> --out <new-dir>
 
@@ -70,7 +71,12 @@ SOURCE_PREFIXES = (
     "validation/scripts/transport",
     "benchmarks/transport",
 )
-SOURCE_FILES = ("pyproject.toml", "uv.lock", "validation/plans/v3-003-acceptance.md")
+SOURCE_FILES = (
+    "pyproject.toml",
+    "uv.lock",
+    "validation/plans/v3-003-acceptance.md",
+    "validation/plans/v3-003d-acceptance.md",
+)
 """Every tracked file that defines what is executed and judged (code, tests and fixtures, the
 project definition, the lock file and the frozen acceptance plan)."""
 SOURCE_FILES_V4 = (
@@ -87,11 +93,16 @@ def source_file_list(suite: str | None = None) -> tuple[str, ...]:
     suite = suite or os.environ.get("IONMC_RUN_SUITE", "")
     return SOURCE_FILES_V4 if suite in ("lv4", "hr4") else SOURCE_FILES
 
+
 DEFAULT_PYTHON_PARTS = 2
-QUALIFICATION_SEED_BASE = 20341004
-V4_QUALIFICATION_SEED_BASE = 20381004
-V4_CONSUMED_SEED_BASES = (20361004, 20371004)  # plan amendments 4 and 5
+QUALIFICATION_SEED_BASE = 20391004  # V3-003D plan, amendment 24 of the V3-003 plan
+CONSUMED_SEED_BASES = (
+    20271004, 20281004, 20291004, 20301004, 20311004, 20321004, 20331004, 20341004,
+)  # fmt: skip
+V4_QUALIFICATION_SEED_BASE = 20401004  # amendment 6 of the V3-004 plan
+V4_CONSUMED_SEED_BASES = (20361004, 20371004, 20381004)  # amendments 4 and 5, 20381004 by V3-003D
 V4_REHEARSAL_SEED_BASE = 20351004
+V3003D_REHEARSAL_FAMILY = "2041xxxx"  # rehearsals of V3-003D, never qualification evidence
 DEFAULT_SEED_BASES = {
     "lv": QUALIFICATION_SEED_BASE,
     "hr": QUALIFICATION_SEED_BASE,
@@ -279,7 +290,7 @@ def _suite_steps_v4(suite, add, s4, w, sc, cuda, out_dir, dirs, single_process):
                 marker="not multiprocess" if single_process else None,
             ),
         )
-        add("a16-qualified-path-regression", [*s4, "a16"])
+        add("a16-qualified-path-regression", [*s4, "a16", "--mode", "intended-change"])
         add("a11-lv-python-vs-warp-cpu-256x150MeV", [*s4, "a11-lv", *sc])
         add("a15-chunks-cpu", [*s4, "a15", "--mode", "chunks", "--backend", "warp-cpu", *sc])
         add("a15-workers", [*s4, "a15", "--mode", "workers", "--workers", "3", *sc])
@@ -470,9 +481,10 @@ def main(argv: list[str] | None = None) -> int:
         type=int,
         default=None,
         help="base of all statistical seeds (default: the qualification base of the suite, "
-        "20341004 for lv/hr and 20381004 for lv4/hr4 (20351004 rehearsal and 20361004, 20371004 consumed give non-conformant archives); for lv/hr the "
-        "bases 20261004, 20271004, 20281004, 20291004, 20301004, 20311004, 20321004 and "
-        "20331004 give non-conformant archives); "
+        "20391004 for lv/hr and 20401004 for lv4/hr4 (the 2041xxxx rehearsals, 20351004 and the consumed "
+        "20361004, 20371004, 20381004 give non-conformant archives); for lv/hr the "
+        "bases 20261004, 20271004, 20281004, 20291004, 20301004, 20311004, 20321004, 20331004 and "
+        "20341004 give non-conformant archives); "
         "recorded in the archive",
     )
     ap.add_argument(

@@ -2,16 +2,24 @@
 
 Built (float64) from :class:`ionmc.physics.stopping.StoppingTable` objects:
 
-* ``ln S(E)`` and ``ln R(E)`` on a uniform grid in ``ln E`` (at least 200 points per decade),
-  with ``S`` log-log interpolated from the source table and ``R`` integrated from the same
-  resampled ``S`` by the trapezoid rule in ``ln E`` (``dR = E dlnE / S``) starting from the
-  source table's range at the first grid energy;
+* ``ln S(E)`` on a uniform grid in ``ln E`` (at least 200 points per decade), log-log interpolated
+  from the source table;
+* the CSDA range as the exact integral of that interpolated ``S``
+  (``range_construction = exact-loglog-quadrature-v1``, decision 0039, V3-003D). On interval ``i``
+  ``f = E / S`` is ``f_i exp(d_i (u - u_i) / h)`` (``u = ln E``, ``d_i = ln f_{i+1} - ln f_i``,
+  ``h`` the grid step), so the node ranges are ``R_{i+1} = R_i + h f_i (e^{d_i} - 1) / d_i``
+  starting from the source table's range at the first grid energy, and the range at the fraction
+  ``phi`` of a bin is ``R_i + h f_i (e^{d_i phi} - 1) / d_i`` (shared function ``range_in_bin``).
+  The arrays ``r_mass``, ``f_mass`` and ``d_f`` hold ``R_i``, ``f_i`` and ``d_i``; ``ln_r_mass``
+  is ``ln R_i`` (checks only);
 * ``ln E(R)`` on a uniform grid in ``ln R`` (800 points per decade by default), the exact
-  inverse of the piecewise log-log linear ``R(E)`` sampled at those ranges.
+  inverse of that closed-form ``R(E)``, ``phi = log1p(d_i (r - R_i) / (h f_i)) / d_i`` on the
+  bin that contains ``r``, sampled at those ranges (the end points are pinned).
 
-Reading a value is the shared bin location (``log_bin_index``), two array reads and the
-shared interpolation (``interp_exp``), so the Python and Warp backends differ only in the
-memory access. The projectile must be a proton so that MeV per nucleon equals MeV.
+Reading the stopping power is the shared bin location (``log_bin_index``), two array reads and
+the shared interpolation (``interp_exp``); reading the range is the same bin and ``range_in_bin``;
+the Python and Warp backends differ only in the memory access. The projectile must be a proton so
+that MeV per nucleon equals MeV.
 
 Units: energies MeV, mass stopping power MeV cm2/g, ranges g/cm2, ``inv_rho_xs`` cm2/g.
 """
@@ -31,9 +39,10 @@ from numpy.typing import NDArray
 
 from ionmc._frozen import freeze_array
 from ionmc.materials import Material
+from ionmc.physics import stopping as _stopping
 from ionmc.physics.projectiles import Projectile
 from ionmc.physics.scattering import inverse_scattering_length_cm2_per_g
-from ionmc.physics.stopping import StoppingTable
+from ionmc.physics.stopping import RANGE_CONSTRUCTION, StoppingTable
 
 MIN_POINTS_PER_DECADE = 200
 DEFAULT_RANGE_POINTS_PER_DECADE = 800
@@ -57,6 +66,9 @@ class TransportTables:
     inv_dln_e: NDArray[np.float64]
     ln_s_mass: NDArray[np.float64]
     ln_r_mass: NDArray[np.float64]
+    r_mass: NDArray[np.float64]
+    f_mass: NDArray[np.float64]
+    d_f: NDArray[np.float64]
     r_min_g_cm2: NDArray[np.float64]
     r_max_g_cm2: NDArray[np.float64]
     ln_r0: NDArray[np.float64]
@@ -112,7 +124,7 @@ class TransportTables:
             a = getattr(self, name)
             if a.shape != (nm,) or not np.all(np.isfinite(a)):
                 raise ValueError(f"{name} must be finite with shape ({nm},)")
-        for name in ("ln_s_mass", "ln_r_mass", "ln_e_of_r"):
+        for name in ("ln_s_mass", "ln_r_mass", "r_mass", "f_mass", "d_f", "ln_e_of_r"):
             a = getattr(self, name)
             if a.ndim != 2 or a.shape[0] != nm or a.shape[1] < 2 or not np.all(np.isfinite(a)):
                 raise ValueError(f"{name} must be finite with shape ({nm}, n >= 2)")
@@ -186,6 +198,9 @@ class TransportTables:
         inv_dln_e = np.empty(nm)
         ln_s = np.empty((nm, n_e))
         ln_r = np.empty((nm, n_e))
+        r_mass = np.empty((nm, n_e))
+        f_mass = np.empty((nm, n_e))
+        d_f = np.zeros((nm, n_e))
         r_min = np.empty(nm)
         r_max = np.empty(nm)
         ln_r0 = np.empty(nm)
@@ -197,12 +212,12 @@ class TransportTables:
             e = np.exp(grid)
             e[0], e[-1] = t.energy_per_u[0], t.energy_per_u[-1]
             lns = np.interp(grid, np.log(t.energy_per_u), np.log(t.s_el_mass))
-            s = np.exp(lns)
-            f = e / s  # dR/dlnE [g/cm2]
-            dl = np.diff(grid)
-            r = float(t.csda_range_g_cm2[0]) + np.concatenate(
-                ([0.0], np.cumsum(0.5 * (f[1:] + f[:-1]) * dl))
-            )
+            ln_f = grid - lns  # ln(E / S): dR/d ln E is f = E / S for a proton
+            inc = _stopping.exact_loglog_range_increments(grid, lns, 1.0)
+            r = float(t.csda_range_g_cm2[0]) + np.concatenate(([0.0], np.cumsum(inc)))
+            r_mass[m] = r
+            f_mass[m] = np.exp(ln_f)
+            d_f[m, :-1] = np.diff(ln_f)
             e_min[m], e_max[m] = e[0], e[-1]
             ln_e0[m] = grid[0]
             inv_dln_e[m] = (n_e - 1) / (hi - lo)
@@ -213,7 +228,10 @@ class TransportTables:
             rgrid = np.linspace(rlo, rhi, n_r)
             ln_r0[m] = rgrid[0]
             inv_dln_r[m] = (n_r - 1) / (rhi - rlo)
-            ln_e_of_r[m] = np.interp(rgrid, ln_r[m], grid)
+            ln_e_of_r[m] = _exact_inverse(
+                np.exp(rgrid), r, f_mass[m], d_f[m], 1.0 / inv_dln_e[m], grid
+            )
+            ln_e_of_r[m, 0], ln_e_of_r[m, -1] = grid[0], grid[-1]
         materials = tuple(t.material for t in tables)
         z_over_a = np.array([mat.z_over_a for mat in materials])
         inv_xs = np.array([inverse_scattering_length_cm2_per_g(mat) for mat in materials])
@@ -233,12 +251,25 @@ class TransportTables:
                 "material_sha256": material_fingerprint(mat),
                 "e_min_mev": float(e_min[i]),
                 "e_max_mev": float(e_max[i]),
+                "range_construction": RANGE_CONSTRUCTION,
                 "metadata": _jsonable(t.metadata),
             }
             for i, (mat, t) in enumerate(zip(materials, tables, strict=True))
         )
         h = hashlib.sha256()
-        for arr in (e_min, e_max, ln_s, ln_r, ln_e_of_r, z_over_a, inv_xs, density):
+        for arr in (
+            e_min,
+            e_max,
+            ln_s,
+            ln_r,
+            r_mass,
+            f_mass,
+            d_f,
+            ln_e_of_r,
+            z_over_a,
+            inv_xs,
+            density,
+        ):
             h.update(np.ascontiguousarray(arr).tobytes())
         h.update(json.dumps(identity, sort_keys=True).encode())
         water_kwargs: dict[str, Any] = {}
@@ -284,6 +315,9 @@ class TransportTables:
             inv_dln_e=inv_dln_e,
             ln_s_mass=ln_s,
             ln_r_mass=ln_r,
+            r_mass=r_mass,
+            f_mass=f_mass,
+            d_f=d_f,
             r_min_g_cm2=r_min,
             r_max_g_cm2=r_max,
             ln_r0=ln_r0,
@@ -331,12 +365,18 @@ class TransportTables:
         return mass * self.water_density_g_cm3 / 10.0
 
     def range_g_cm2(self, material: int, energy_mev: float) -> float:
-        """CSDA range [g/cm2] at ``energy_mev`` (log-log interpolation)."""
+        """CSDA range [g/cm2] at ``energy_mev``: the exact integral of the log-log interpolated
+        ``S`` (closed form in the bin, the same arithmetic as the shared ``range_in_bin``)."""
         i, f = self._locate(
             material, energy_mev, self.ln_e0[material], self.inv_dln_e[material], self.n_e
         )
-        row = self.ln_r_mass[material]
-        return math.exp(row[i] * (1.0 - f) + row[i + 1] * f)
+        d = float(self.d_f[material, i])
+        x = d * f
+        g = f * (1.0 + x * 0.5 + x * x / 6.0)
+        if abs(x) >= 1.0e-5:
+            g = (math.exp(x) - 1.0) / d
+        h = 1.0 / float(self.inv_dln_e[material])
+        return float(self.r_mass[material, i]) + h * float(self.f_mass[material, i]) * g
 
     def energy_from_range(self, material: int, range_g_cm2: float) -> float:
         """Energy [MeV] whose CSDA range is ``range_g_cm2``; clamped to the table range."""
@@ -373,6 +413,9 @@ class TransportTables:
             **water,
             ln_s_mass=arr2(self.ln_s_mass),
             ln_r_mass=arr2(self.ln_r_mass),
+            r_mass=arr2(self.r_mass),
+            f_mass=arr2(self.f_mass),
+            d_f=arr2(self.d_f),
             ln_e_of_r=arr2(self.ln_e_of_r),
             ln_e0=arr2(self.ln_e0),
             inv_dln_e=arr2(self.inv_dln_e),
@@ -392,6 +435,9 @@ _ARRAY_FIELDS = (
     "inv_dln_e",
     "ln_s_mass",
     "ln_r_mass",
+    "r_mass",
+    "f_mass",
+    "d_f",
     "r_min_g_cm2",
     "r_max_g_cm2",
     "ln_r0",
@@ -401,6 +447,25 @@ _ARRAY_FIELDS = (
     "inv_rho_xs_cm2_g",
     "nominal_density_g_cm3",
 )
+
+
+def _exact_inverse(
+    r: NDArray[np.float64],
+    r_nodes: NDArray[np.float64],
+    f_nodes: NDArray[np.float64],
+    d_nodes: NDArray[np.float64],
+    h: float,
+    grid: NDArray[np.float64],
+) -> NDArray[np.float64]:
+    """``ln E`` at the ranges ``r``: the exact inverse of the closed-form range on its bin,
+    ``phi = log1p(d (r - R_i) / (h f_i)) / d`` (``(r - R_i) / (h f_i)`` for ``|d| < 1e-12``)."""
+    n = r_nodes.size
+    i = np.clip(np.searchsorted(r_nodes, r, side="right") - 1, 0, n - 2)
+    d = d_nodes[i]
+    x = (r - r_nodes[i]) / (h * f_nodes[i])
+    flat = np.abs(d) < 1.0e-12
+    phi = np.where(flat, x, np.log1p(d * x) / np.where(flat, 1.0, d))
+    return grid[i] + np.clip(phi, 0.0, 1.0) * h
 
 
 def _freeze(value: Any) -> Any:

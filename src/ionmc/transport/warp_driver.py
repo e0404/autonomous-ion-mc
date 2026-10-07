@@ -210,7 +210,8 @@ def run_warp_range(eff: EffectiveConfig, h0: int, h1: int, device: str) -> Parti
             kernel,
             dim=n,
             inputs=[
-                ctl, arr_mat, arr_dens, t.ln_s_mass, t.ln_r_mass, t.ln_e_of_r, t.ln_e0,
+                ctl, arr_mat, arr_dens, t.ln_s_mass, t.r_mass, t.f_mass, t.d_f, t.ln_e_of_r,
+                t.ln_e0,
                 t.inv_dln_e, t.ln_r0, t.inv_dln_r, t.z_over_a, t.inv_rho_xs,
                 arr_gorigin, arr_gspacing, arr_ginv, arr_gshape, arr_goff,
                 edep, tally_rows, counter_rows, end_state, end_code, trace_i, trace_f, trace_n,

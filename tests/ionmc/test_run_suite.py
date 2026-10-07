@@ -112,7 +112,7 @@ def test_suite_manifests_are_fixed(suite: str) -> None:
 def _env(*, dirty: str = "no", source: str = "git", hashes: dict[str, str] | None = None) -> str:
     lines = [
         "suite=lv", f"git_sha={SHA}", f"sha_source={source}", f"tree_dirty={dirty}",
-        "scale=1.0", "seed_base=20341004", "python_parts=2", "only=", "source_hashes:",
+        "scale=1.0", "seed_base=20391004", "python_parts=2", "only=", "source_hashes:",
     ]  # fmt: skip
     lines += [f"  {h}  {p}" for p, h in (hashes or {"src/ionmc/a.py": "0" * 64}).items()]
     return "\n".join(lines) + "\n"
@@ -130,7 +130,7 @@ def _archive(d: Path, names: list[str], *, doc: dict | None = None, exit_code: i
         body = f"# command: x\n# git_sha: {sha}\n# started_utc: now\n# step_timeout_s: 1\n"
         tag = summ.expected_tag(n)
         if doc is not None and tag is not None:
-            full = {**doc, "step": tag, "suite": "lv", "git_sha": SHA, "seed_base": 20341004,
+            full = {**doc, "step": tag, "suite": "lv", "git_sha": SHA, "seed_base": 20391004,
                     **(identity or {})}  # fmt: skip
             body += "#JSON-BEGIN\n" + json.dumps(full) + "\n#JSON-END\n"
         (d / f"{n}.txt").write_text(body + f"\n# exit={exit_code}\n")
@@ -505,21 +505,21 @@ def test_seed_base_is_forwarded_recorded_and_checked(tmp_path: Path) -> None:
     with different bases cannot be combined) and every step document must carry the archive's
     base."""
     run_suite, summ = _load("run_suite"), _load("summarize")
-    steps = run_suite.suite_steps("lv", 4, 1.0, seed_base=20341004)
+    steps = run_suite.suite_steps("lv", 4, 1.0, seed_base=20391004)
     scripted = [s for s in steps if "steps.py" in " ".join(s[1])]
-    assert scripted and all(s[1][s[1].index("--seed-base") + 1] == "20341004" for s in scripted)
+    assert scripted and all(s[1][s[1].index("--seed-base") + 1] == "20391004" for s in scripted)
     full = _full()
     env = _env()
     good = tmp_path / "good"
-    _archive(good, full, doc={"pass": True}, env=env, identity={"seed_base": 20341004})
+    _archive(good, full, doc={"pass": True}, env=env, identity={"seed_base": 20391004})
     assert summ.main([str(good), "--expected-sha", SHA]) == 0
     bad = tmp_path / "bad"  # a step that ran with another base than the archive records
     _archive(bad, full, doc={"pass": True}, env=env, identity={"seed_base": 20271004})
     assert summ.main([str(bad), "--expected-sha", SHA]) == 1
     # archives with different seed bases are not parts of one run
     a, b = full[:6], full[6:]
-    _archive(tmp_path / "a", a, doc={"pass": True}, env=env, identity={"seed_base": 20341004})
-    other = _env().replace("seed_base=20341004", "seed_base=20271004")
+    _archive(tmp_path / "a", a, doc={"pass": True}, env=env, identity={"seed_base": 20391004})
+    other = _env().replace("seed_base=20391004", "seed_base=20271004")
     _archive(tmp_path / "b", b, doc={"pass": True}, env=other, identity={"seed_base": 20271004})
     out = tmp_path / "combined.json"
     assert summ.main(["--combine", str(tmp_path / "a"), str(tmp_path / "b"),
@@ -528,14 +528,14 @@ def test_seed_base_is_forwarded_recorded_and_checked(tmp_path: Path) -> None:
 
 
 def test_only_the_qualification_seed_base_can_be_conformant(tmp_path: Path) -> None:
-    """The default base is the qualification base 20341004; an archive made with a consumed base
+    """The default base is the qualification base 20391004; an archive made with a consumed base
     (20271004) or without a recorded base verifies but is never conformant, with the reason
     recorded."""
     run_suite, summ = _load("run_suite"), _load("summarize")
-    assert run_suite.DEFAULT_SEED_BASE == 20341004 == summ.QUALIFICATION_SEED_BASE
+    assert run_suite.DEFAULT_SEED_BASE == 20391004 == summ.QUALIFICATION_SEED_BASE
     for suite_args in (run_suite.suite_steps("lv", 4, 1.0), run_suite.suite_steps("hr", 4, 1.0)):
         scripted = [s for s in suite_args if "steps.py" in " ".join(s[1])]
-        assert all(s[1][s[1].index("--seed-base") + 1] == "20341004" for s in scripted)
+        assert all(s[1][s[1].index("--seed-base") + 1] == "20391004" for s in scripted)
     full = _full()
     ok = tmp_path / "ok"
     _archive(ok, full, doc={"pass": True})
@@ -544,28 +544,29 @@ def test_only_the_qualification_seed_base_can_be_conformant(tmp_path: Path) -> N
     assert s["conformant"] and s["non_conformant_reasons"] == []
     rehearsal = tmp_path / "rehearsal"
     _archive(rehearsal, full, doc={"pass": True},
-             env=_env().replace("seed_base=20341004", "seed_base=20271004"),
+             env=_env().replace("seed_base=20391004", "seed_base=20271004"),
              identity={"seed_base": 20271004})  # fmt: skip
     assert summ.main([str(rehearsal), "--expected-sha", SHA]) == 0  # it verifies ...
     r = json.loads((rehearsal / "summary.json").read_text())
     assert r["pass"] and not r["conformant"]  # ... but cannot qualify
     assert any("rehearsal" in x for x in r["non_conformant_reasons"])
     missing = tmp_path / "missing"
-    _archive(missing, full, doc={"pass": True}, env=_env().replace("seed_base=20341004\n", ""))
+    _archive(missing, full, doc={"pass": True}, env=_env().replace("seed_base=20391004\n", ""))
     assert summ.main([str(missing), "--expected-sha", SHA]) == 0
     m = json.loads((missing / "summary.json").read_text())
     assert not m["conformant"] and "not recorded" in m["non_conformant_reasons"][0]
 
 
 @pytest.mark.parametrize(
-    "base", [20261004, 20271004, 20281004, 20291004, 20301004, 20311004, 20321004, 20331004]
+    "base",
+    [20261004, 20271004, 20281004, 20291004, 20301004, 20311004, 20321004, 20331004, 20341004],
 )
 def test_non_qualification_bases_are_recorded_as_such(tmp_path: Path, base: int) -> None:
     """20261004 (rehearsal), 20271004 (T9 investigation), 20281004, 20291004, 20301004, 20311004,
     20321004 and 20331004 (first to sixth qualification attempts) verify but never qualify."""
     summ = _load("summarize")
     d = tmp_path / "x"
-    env = _env().replace("seed_base=20341004", f"seed_base={base}")
+    env = _env().replace("seed_base=20391004", f"seed_base={base}")
     _archive(d, _full(), doc={"pass": True}, env=env, identity={"seed_base": base})
     assert summ.main([str(d), "--expected-sha", SHA]) == 0
     s = json.loads((d / "summary.json").read_text())
@@ -614,8 +615,8 @@ def test_single_process_mode_defers_only_the_worker_partition_step(tmp_path: Pat
     hr = mod.suite_steps("hr", 1, 1.0, single_process=True)
     assert hr[0][1][-1] == "cuda and not multiprocess"
     # histories and seeds are those of the standard suite; only the worker count differs
-    std = mod.suite_steps("lv", 4, 1.0, seed_base=20341004)
-    one = mod.suite_steps("lv", 1, 1.0, seed_base=20341004)
+    std = mod.suite_steps("lv", 4, 1.0, seed_base=20391004)
+    one = mod.suite_steps("lv", 1, 1.0, seed_base=20391004)
     for (n1, c1, _), (n2, c2, _) in zip(std[1:], one[1:], strict=True):
         assert n1 == n2
         norm = [x for i, x in enumerate(c1) if not (c1[i - 1] == "--workers" or x == "--workers")]
@@ -685,14 +686,14 @@ def test_runner_single_process_end_to_end(tmp_path: Path) -> None:
 
 
 # -- V3-004 suites (lv4, hr4) --------------------------------------------------------------------
-QUAL4 = 20381004
+QUAL4 = 20401004
 
 
 def _env4(suite: str = "lv4", base: int = QUAL4) -> str:
     return (
         _env()
         .replace("suite=lv", f"suite={suite}")
-        .replace("seed_base=20341004", f"seed_base={base}")
+        .replace("seed_base=20391004", f"seed_base={base}")
     )
 
 
@@ -734,7 +735,7 @@ def test_v4_suite_manifests_seed_base_and_hashed_files() -> None:
             assert s[1][s[1].index("--seed-base") + 1] == str(QUAL4)
             assert "--timeout" in s[1] and "--scale" in s[1] or "a16" in s[0]
     # the V3-003 suites keep their bases and file sets
-    assert mod.DEFAULT_SEED_BASES["lv"] == 20341004 == mod.DEFAULT_SEED_BASE
+    assert mod.DEFAULT_SEED_BASES["lv"] == 20391004 == mod.DEFAULT_SEED_BASE
     assert mod.source_file_list("lv") == mod.SOURCE_FILES
     assert "validation/plans/v3-004-acceptance.md" in mod.source_file_list("lv4")
     assert "tests/data/synthetic_lookup.json" in mod.source_file_list("hr4")
@@ -796,6 +797,13 @@ def test_v4_summary_conformance_deferred_and_combine(tmp_path: Path) -> None:
     u = json.loads((used / "summary.json").read_text())
     assert u["pass"] and not u["conformant"]
     assert any("consumed" in x for x in u["non_conformant_reasons"])
+    old = (
+        tmp_path / "old-qual"
+    )  # 20381004: the V3-004 base of the previous head, consumed (V3-003D)
+    _archive4(old, full, base=20381004)
+    assert summ.main([str(old), "--expected-sha", SHA]) == 0
+    o = json.loads((old / "summary.json").read_text())
+    assert o["pass"] and not o["conformant"]
     # single-process diagnostic archive: the workers step may be deferred, never conformant
     d = tmp_path / "diag"
     _archive4(d, full, env=_env4() + DIAG_ENV_LINES)
@@ -859,7 +867,7 @@ def test_a9_parts_roundtrip_and_tamper_detection(tmp_path: Path) -> None:
     for d in (own, prod):
         d.mkdir()
         text = _env(hashes=current).replace(SHA, sha).replace("suite=lv", "suite=lv4")
-        (d / "environment.txt").write_text(text.replace("seed_base=20341004", "seed_base=20351004"))
+        (d / "environment.txt").write_text(text.replace("seed_base=20391004", "seed_base=20351004"))
     (prod / "manifest.txt").write_text("".join(f"{n}\n" for n in names))
     common = ["--scale", "0.01", "--seeds", "4", "--seed-base", "20351004"]
 

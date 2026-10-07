@@ -53,6 +53,20 @@ def make_transport_funcs(real: type) -> SimpleNamespace:
         return wp.exp(ly0 * (real(1.0) - f) + ly1 * f)
 
     @named_func(name)
+    def range_in_bin(r_i: real, f_i: real, d_i: real, h: real, phi: real) -> real:
+        """CSDA range [g/cm2] at the fraction ``phi`` of a log-log interval: ``R_i + h f_i g`` with
+        ``g = (exp(d_i phi) - 1) / d_i``, the exact integral of the log-log interpolated
+        ``a E / S`` (``f_i`` its value at the node, ``d_i`` the change of its logarithm over the
+        interval, ``h`` the interval width in ``ln E``; decision 0039, V3-003D). For
+        ``|d_i phi| < 1e-5`` the series ``phi (1 + x/2 + x^2/6)``, ``x = d_i phi``, is used
+        (no ``expm1`` is guaranteed in Warp)."""
+        x = d_i * phi
+        g = phi * (real(1.0) + x * real(0.5) + x * x / real(6.0))
+        if wp.abs(x) >= real(1.0e-5):
+            g = (wp.exp(x) - real(1.0)) / d_i
+        return r_i + h * f_i * g
+
+    @named_func(name)
     def log_bin_index(x: real, lx0: real, inv_dl: real, n: int) -> tuple[int, real]:
         """Bin ``i`` in [0, n-2] and fraction ``f`` in [0, 1] of ``ln x`` on a uniform grid.
 
@@ -284,6 +298,7 @@ def make_transport_funcs(real: type) -> SimpleNamespace:
     return SimpleNamespace(
         lerp=lerp,
         interp_exp=interp_exp,
+        range_in_bin=range_in_bin,
         log_bin_index=log_bin_index,
         plane_position=plane_position,
         dda_next=dda_next,

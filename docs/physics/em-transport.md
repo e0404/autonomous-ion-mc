@@ -10,8 +10,8 @@ range g/cm2, density g/cm3, scattering power rad2/mm.
 ## Mean energy loss
 
 Condensed-history steps use the continuous-slowing-down (CSDA) relation. With `R(E)` the CSDA range
-integrated from the same stopping power as the transport table (`dR = E d ln E / S`) and `Rinv` its
-exact inverse, the mean energy after a path of mass thickness `t = rho s / 10` [g/cm2] from `E` is
+the exact integral of the log-log interpolated stopping power of the transport table (`dR = E d ln E / S`,
+closed form per interval, V3-003D) and `Rinv` its exact inverse, the mean energy after a path of mass thickness `t = rho s / 10` [g/cm2] from `E` is
 
     E1 = Rinv( R(E) - t )        mean loss = E - E1
 
@@ -28,9 +28,10 @@ value the configuration accepts: for such steps the second-order midpoint error 
 bias of the telescoping form at small steps, whereas where `s / R` is large (the last steps before the end of the
 range) the midpoint rule is no longer accurate (its error is second order in `s / R`) and the telescoping form takes
 over; the float32 cancellation that the branch once avoided is gone because the energy bookkeeping is in float64.
-For `t >= R(E)` the loss is `E`. `ionmc.transport.tables.TransportTables` stores `ln S`, `ln R` on a uniform `ln E` grid
+For `t >= R(E)` the loss is `E`. `ionmc.transport.tables.TransportTables` stores `ln S` and the range nodes `R_i`, `f_i = E_i/S_i`, `d_i = ln f_{i+1} - ln f_i` on a uniform `ln E` grid
 (at least 200 points per decade) and `ln E` on a uniform `ln R` grid (800 points per decade);
-values are log-log linear interpolations. The test `test_u2_round_trip_and_monotonicity` requires
+`S` and `E(R)` are log-log linear interpolations and the range in a bin is the closed form
+`R_i + h f_i (exp(d_i phi) - 1) / d_i` (`range_in_bin`). The test `test_u2_round_trip_and_monotonicity` requires
 `|Rinv(R(E)) / E - 1| <= 1e-5` over the table range and strictly monotone `R` and `Rinv` for water and
 copper, and that `R` follows the source table within 1e-4. The transport state energy itself is
 carried along the track (not `Rinv(R(E))`), so the energy variable is never re-derived from the
