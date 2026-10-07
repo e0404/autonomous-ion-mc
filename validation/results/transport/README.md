@@ -24,3 +24,22 @@ implied by U4 with the paper's dM % column. U5 is deterministic self-consistency
 cross-check is a related model. The only independent scattering qualification is T15 (independent Monte
 Carlo comparison, pending). Not a clinical claim. The U4 venue is local validation (LV): the source is not
 in Git, so the corresponding tests skip in CI.
+
+# Transport qualification summaries (V3-003B)
+
+`hr-44a61c8-single-process.json` and `lv-44a61c8-single-process.json` are the combined
+`summarize.py --combine … --attest-sha` summaries of the host-runner (HR, CUDA host) and
+local-validation (LV) suites of `validation/plans/v3-003-acceptance.md` at the frozen head
+`44a61c88a89e63d989950f255890633af9efb635` with the qualification seed base 20341004 (plan
+amendments ¹⁷–²³). They were produced from the subset archives of the host runs listed in each
+file (`parts`), generated at the clean committed SHA, in the **single-process diagnostic mode**
+of the operator directive of 2026-10-07 (`run_suite.py --workers 1`: one worker process per
+sample, native-library thread limits of one, histories, seeds and criteria unchanged). In that
+mode every executed step passed (`pass: true`), but the archives are deliberately
+**not conformant** (`conformant: false`): the multiprocessing-specific check `04-t13-workers`
+(worker-partition invariance) is recorded as *deferred*, not passed, and the mode itself is not
+the qualification mode. The earlier multi-worker runs at 46e9a95 (HR and LV conformant, base
+20311004) and fca41d0 (HR conformant, base 20331004) are preserved as non-qualification evidence
+in the host-run records (`RUN-20261005T224849Z-e2cc0092`, `RUN-20261005T225107Z-b5b7b9bb`,
+`RUN-20261005T233144Z-0a459b0d`) and are not qualification results for the final head. Not a
+clinical claim.
