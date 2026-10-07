@@ -39,9 +39,15 @@ Rules (the style of ``validation/scripts/warp-architecture/run_all.sh``):
   the saved samples (hash-verified; ``--import-dirs`` names archives of other runs holding them; the lv5 shard
   partials carry a ``content_sha256`` and are bound to the run SHA, suite, table id and seed, but that digest
   is recomputable by whoever alters a file: every partial imported with ``--import-dirs`` must therefore be listed
-  with its exact digest in ``--partials-manifest`` (name -> ``content_sha256``, written by the orchestrator from
-  the ``PARTIAL <name> <digest>`` stdout lines of the shard steps in the protected host-runner records), and
-  without ``--import-dirs`` only partials of the current output directory are accepted);
+  with its exact digest and a ``host_run_id`` in ``--partials-manifest`` (schema in
+  ``steps_v5.read_manifest``). The orchestrator builds the manifest ONLY from the ``PARTIAL <name>
+  <digest>`` stdout lines of the shard steps in the protected host-runner records and lists the run ids in
+  record_local_validation; the code cannot verify those records. The manifest path and its sha256 are
+  recorded in ``environment.txt`` (``partials_manifest``, ``partials_manifest_sha256``), the combine steps
+  print an ``attestation`` block (manifest sha256, every name/digest/host_run_id used, the run SHA) that
+  ``summarize.py --combine`` carries into the combined summary, ``conformant: false`` unless every imported
+  partial has a host_run_id; without ``--import-dirs`` only partials of the current output directory are
+  accepted);
 * ``--workers 1`` (or ``--single-process``) is the single-process diagnostic mode: every step runs
   with one worker and single-threaded numerics (``SINGLE_PROCESS_ENV``), the steps whose purpose is
   multiprocessing (``DEFERRED_STEPS``) are archived as ``deferred`` and not run, histories, seeds
@@ -620,6 +626,10 @@ def environment_text(
     import numpy
     import warp
 
+    manifest_path = getattr(args, "partials_manifest", None)
+    manifest_sha = ""
+    if manifest_path and Path(manifest_path).is_file():
+        manifest_sha = hashlib.sha256(Path(manifest_path).read_bytes()).hexdigest()
     cpu = "unknown"
     try:
         for line in Path("/proc/cpuinfo").read_text().splitlines():
@@ -649,6 +659,8 @@ def environment_text(
         f"seed_base={args.seed_base}",
         f"python_parts={args.python_parts}",
         f"only={','.join(args.only) if args.only else ''}",
+        f"partials_manifest={manifest_path or ''}",
+        f"partials_manifest_sha256={manifest_sha}",
         "source_hashes:",
     ]
     lines += [f"  {sha256(f)}  {f.relative_to(REPO)}" for f in source_files(args.suite)]

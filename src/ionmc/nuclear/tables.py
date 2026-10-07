@@ -2,9 +2,10 @@
 
 ``NuclearTable.load(cache_dir, table_id)`` reads ``<cache>/derived/nuclear-proton-<id>.npz`` and
 ``.json`` with ``np.load(allow_pickle=False)``, re-hashes the npz bytes against the JSON, checks
-that the recorded table id is reproduced by the recorded sources/builder/options and that every
-source pin equals the registry pin, and freezes the arrays. Failures are fail-closed with
-specific exception types (all subclass :class:`NuclearTableError`).
+that the pinned table id is the sha256 of the canonical JSON of the whole sidecar without its id
+(so it binds the npz digest and every sidecar field) and that every source pin equals the registry
+pin, derives qualification and bounds from the npz arrays and freezes them. Failures are
+fail-closed with specific exception types (all subclass :class:`NuclearTableError`).
 
 ``material_rows`` composes ``Sigma_mass(E) = N_A sum_el w_el sigma_el / A_el`` [cm2/g] on the
 table's union grid, the cumulative partial ``Sigma`` per target and the majorants
@@ -35,7 +36,6 @@ from ionmc.nuclear.build import (
     BUILDER_VERSION,
     QUALIFICATION_FIELDS,
     SCHEMA,
-    BuildOptions,
     bounds_from_array,
 )
 from ionmc.nuclear.build import table_id as compute_table_id
@@ -260,24 +260,10 @@ class NuclearTable:
                 f"nuclear table {table_id}: schema/builder {info.get('schema')!r}/"
                 f"{info.get('builder_version')!r}, expected {SCHEMA!r}/{BUILDER_VERSION!r}"
             )
-        opts = dict(info["options"])
-        opts["diagnostic_nodes_mev"] = (
-            None
-            if opts.get("diagnostic_nodes_mev") is None
-            else tuple(opts["diagnostic_nodes_mev"])
-        )
-        try:
-            build_options = BuildOptions(**opts)
-        except TypeError as exc:  # options of another builder revision: the id cannot be checked
-            raise NuclearTableStaleError(
-                f"nuclear table {table_id}: unknown build options ({exc}); stale"
-            ) from exc
-        # the id covers the npz bytes recomputed here (not the sidecar's digest), so a resealed
-        # sidecar cannot reproduce the pinned id of altered arrays
-        expected = compute_table_id(
-            {sid: rec["sha256"] for sid, rec in info["sources"].items()}, build_options, npz_sha
-        )
-        if info["table_id"] != table_id or expected != table_id:
+        # the id is the hash of the complete sidecar without the id field; the sidecar holds the
+        # npz digest recomputed above, so no sidecar field (element scales, targets, D6 numbers,
+        # options, sources) can be altered without changing the id the config pins
+        if info.get("table_id") != table_id or compute_table_id(info) != table_id:
             raise NuclearTableStaleError(f"nuclear table {table_id}: id not reproduced (stale)")
         with np.load(io.BytesIO(raw), allow_pickle=False) as z:
             arrays = {k: freeze_array(z[k], z[k].dtype, k) for k in z.files}

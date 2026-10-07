@@ -1516,16 +1516,52 @@ def test_v5_imported_partials_need_the_attested_manifest(
     with pytest.raises(SystemExit, match="partials-manifest"):  # imported dirs, no manifest
         v5.load_partials(argparse.Namespace(**{**vars(a), "partials_manifest": None}),
                          ["p-s0.json"])  # fmt: skip
-    man.write_text(json.dumps({}))
+
+    def write_manifest(entries: dict[str, object]) -> None:
+        man.write_text(json.dumps({"partials": entries, "source": v5.MANIFEST_SOURCE}))
+
+    write_manifest({})
     with pytest.raises(SystemExit, match="not in the partials manifest"):
         v5.load_partials(a, ["p-s0.json"])
-    man.write_text(json.dumps({"p-s0.json": good["content_sha256"]}))
+    man.write_text(json.dumps({"p-s0.json": good["content_sha256"]}))  # the old flat schema
+    with pytest.raises(SystemExit, match="need"):
+        v5.load_partials(a, ["p-s0.json"])
+    for bad_entry in ({"content_sha256": good["content_sha256"]},
+                      {"content_sha256": good["content_sha256"], "host_run_id": " "}):  # fmt: skip
+        write_manifest({"p-s0.json": bad_entry})  # no host_run_id: rejected
+        with pytest.raises(SystemExit, match="host_run_id"):
+            v5.load_partials(a, ["p-s0.json"])
+    write_manifest({"p-s0.json": {"content_sha256": good["content_sha256"], "host_run_id": "H1"}})
     assert v5.load_partials(a, ["p-s0.json"])[0]["ratio"] == [1.0, 0.5]
     forged = {**good, "ratio": [1.0, 0.9]}  # altered AND resealed: the file is self-consistent
     forged["content_sha256"] = v5.content_digest(forged)
     path.write_text(json.dumps(forged))
     with pytest.raises(SystemExit, match="differs from the manifest"):
         v5.load_partials(a, ["p-s0.json"])
+    # a resealed manifest as well: the code accepts it (it cannot read the protected host-runner
+    # records) but the combine document exposes the digest and host_run_id it relied on
+    write_manifest({"p-s0.json": {"content_sha256": forged["content_sha256"],
+                                  "host_run_id": "H-forged"}})  # fmt: skip
+    a2 = argparse.Namespace(**{k: v for k, v in vars(a).items() if not k.startswith("attested")})
+    assert v5.load_partials(a2, ["p-s0.json"])[0]["ratio"] == [1.0, 0.9]
+    att = v5.attestation_block(a2)
+    assert att["partials"] == [{"name": "p-s0.json", "content_sha256": forged["content_sha256"],
+                                "origin": "imported", "host_run_id": "H-forged"}]  # fmt: skip
+    assert att["manifest_sha256"] == hashlib.sha256(man.read_bytes()).hexdigest()
+    assert att["manifest_path"] == str(man) and att["run_sha"] == SHA
+    assert att["manifest_source"] == v5.MANIFEST_SOURCE
+    assert att["protected_host_records_verified_by_code"] is False
+    assert "cannot verify the protected host-runner records" in att["statement"]
+    # the summary side: a missing host_run_id or a manifest digest differing from the one recorded
+    # in environment.txt makes the archive non-conformant
+    summ = _load("summarize")
+    env = {"partials_manifest_sha256": att["manifest_sha256"]}
+    assert summ.attestation_problems(att, SHA, env) == []
+    assert summ.attestation_problems(None, SHA, env) == []
+    no_id = {**att, "partials": [{**att["partials"][0], "host_run_id": ""}]}
+    assert any("host_run_id" in m for m in summ.attestation_problems(no_id, SHA, env))
+    assert any("environment.txt" in m for m in summ.attestation_problems(att, SHA, {}))
+    assert any("run_sha" in m for m in summ.attestation_problems(att, "f" * 40, env))
     # run_suite refuses imported directories of lv5 without a manifest and forwards it otherwise
     with pytest.raises(SystemExit, match="partials-manifest"):
         rs.suite_steps("lv5", 1, 1.0, out=cur, import_dirs=[str(shard_dir)])
@@ -1533,3 +1569,12 @@ def test_v5_imported_partials_need_the_attested_manifest(
                            partials_manifest=str(man))  # fmt: skip
     comb = [s[1] for s in steps if "combine" in s[0]]
     assert comb and all(str(man) in c for c in comb)
+    # the archived environment records the manifest path and its sha256 (and nothing without one)
+    envtxt = rs.environment_text(SHA, "git", "no", argparse.Namespace(
+        suite="lv5", step_timeout=1, scale=1.0, seed_base=1, python_parts=1, only=None,
+        partials_manifest=str(man)), 1)  # fmt: skip
+    assert f"partials_manifest={man}\n" in envtxt
+    assert f"partials_manifest_sha256={hashlib.sha256(man.read_bytes()).hexdigest()}\n" in envtxt
+    no_manifest = argparse.Namespace(suite="lv5", step_timeout=1, scale=1.0, seed_base=1,
+                                     python_parts=1, only=None, partials_manifest=None)  # fmt: skip
+    assert "partials_manifest_sha256=\n" in rs.environment_text(SHA, "git", "no", no_manifest, 1)

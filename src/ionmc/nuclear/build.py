@@ -3,9 +3,9 @@
 ``build_nuclear_proton(cache_dir, options)`` reads the hash-pinned sources from the cache
 (ENDF/B-VIII.0 proton sublibrary = LA150 evaluations, AME2020 masses, NIST ASTAR water for the D6
 gate) and writes ``<cache>/derived/nuclear-proton-<id>.npz`` and ``.json``. Everything is numpy
-and stdlib, single process, deterministic: the table id is ``sha256`` of the source hashes, the
-builder version and the canonical JSON of the options, and two builds with equal options write
-identical bytes.
+and stdlib, single process, deterministic: the table id is ``sha256`` of the canonical JSON of the
+complete sidecar without its ``table_id`` field (the sidecar holds ``npz_sha256``, so the id binds
+the npz bytes and every sidecar field), and two builds with equal options write identical bytes.
 
 Grid (amendment 2026-10-07, acceptance Amendment 3)
 ---------------------------------------------------
@@ -81,7 +81,7 @@ from ionmc.materials import ELEMENTS, N_A, WATER, Material
 from ionmc.nuclear import events as ev
 from ionmc.physics.tripathi import extension_factor
 
-BUILDER_VERSION = "ionmc-nuclear-proton-builder-4"
+BUILDER_VERSION = "ionmc-nuclear-proton-builder-5"
 SCHEMA = "ionmc-nuclear-proton-table-3"
 SOURCE_IDS = ("endf-b8.0-protons", "ame2020-mass", "nist-astar-water-2005")
 E_MIN_MEV = 1.0
@@ -180,20 +180,13 @@ class BuildError(RuntimeError):
     """The build failed (a fail-closed rule, or the sources are unusable)."""
 
 
-def table_id(source_hashes: dict[str, str], options: BuildOptions, npz_sha256: str) -> str:
-    """``sha256`` over the canonical JSON of the source hashes, the builder version, the options
-    and the SHA-256 of the npz bytes. The id therefore authenticates the arrays, including the
-    ``qualification`` and ``bounds`` arrays that gate transport (decision 0041 section 5)."""
-    payload = json.dumps(
-        {
-            "sources": dict(sorted(source_hashes.items())),
-            "builder": BUILDER_VERSION,
-            "options": asdict(options),
-            "npz_sha256": npz_sha256,
-        },
-        sort_keys=True,
-        separators=(",", ":"),
-    )
+def table_id(sidecar: dict[str, Any]) -> str:
+    """``sha256`` of the canonical JSON (sorted keys, separators ``,`` and ``:``) of the complete
+    sidecar document without its ``table_id`` field. The sidecar contains ``npz_sha256``, so the id
+    binds the npz bytes (arrays, ``qualification``, ``bounds``) and every sidecar field (sources,
+    options, builder, element scales, targets, D6 numbers; decision 0041 section 5)."""
+    doc = {k: v for k, v in sidecar.items() if k != "table_id"}
+    payload = json.dumps(doc, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
@@ -858,7 +851,6 @@ def build_nuclear_proton(
     zip_path = cache.verify("endf-b8.0-protons", cdir)
     ame_path = cache.verify("ame2020-mass", cdir)
     astar_path = cache.verify("nist-astar-water-2005", cdir)
-    sources = {sid: DATASETS[sid].sha256 for sid in SOURCE_IDS}
     ame_tab: dict[tuple[int, int], AmeEntry] = load_ame2020(ame_path.read_text(encoding="ascii"))
     astar = load_star_table(astar_path)
 
@@ -1104,13 +1096,8 @@ def build_nuclear_proton(
     out_dir.mkdir(parents=True, exist_ok=True)
     tmp_path = out_dir / "nuclear-proton-building.npz"
     npz_sha = write_npz_deterministic(tmp_path, arr)
-    tid = table_id(sources, opt, npz_sha)  # the id covers the npz bytes (decision 0041 section 5)
-    npz_path = out_dir / f"nuclear-proton-{tid}.npz"
-    json_path = out_dir / f"nuclear-proton-{tid}.json"
-    tmp_path.replace(npz_path)
     info: dict[str, Any] = {
         "schema": SCHEMA,
-        "table_id": tid,
         "builder_version": BUILDER_VERSION,
         "options": asdict(opt),
         "sources": {
@@ -1206,6 +1193,12 @@ def build_nuclear_proton(
             "ceiling_pass_energy_weighted_range": ceiling_energy,
         },
     }
+    # the id covers the complete sidecar (including npz_sha256), then is added to it
+    tid = table_id(info)
+    info["table_id"] = tid
+    npz_path = out_dir / f"nuclear-proton-{tid}.npz"
+    json_path = out_dir / f"nuclear-proton-{tid}.json"
+    tmp_path.replace(npz_path)
     json_path.write_text(json.dumps(info, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     info_out = dict(info)
     info_out["timing_s"] = time.perf_counter() - t_start

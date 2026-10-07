@@ -390,7 +390,14 @@ def test_nuclear_effective_config_and_capabilities(make_config: MakeConfig, tid:
     assert list(cap["tallies"]["backends"]) == ["python"]
     assert cap["tallies"]["deferred_backends"] == {"warp-cpu": "V3-005B", "warp-cuda": "V3-005B"}
     assert "deferred_backends" not in base["tallies"]
-    assert "accepted with nuclear=True" in cap["tallies"]["fail_closed"][0]
+    fc = cap["tallies"]["fail_closed"]
+    assert fc[0] == "unknown or unproducible species"  # no sentence lists 'secondary' as an error
+    assert "not an error with nuclear=True" in fc[1] and "'secondary'" in fc[1]
+    assert [e for e in fc if "secondary" in e] == [fc[1]]
+    assert any("secondary" in e for e in base["tallies"]["fail_closed"])  # nuclear=False: pinned
+    assert base["tallies"]["fail_closed"][0] == (
+        "unknown or unproducible species, generation 'secondary'"
+    )
     assert "V3-005B" in cap["tallies"]["fail_closed"][-1]
     del cap["nuclear"]
     cap["backends"].pop("warp-cuda")

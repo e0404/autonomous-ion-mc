@@ -163,14 +163,15 @@ def test_deterministic_npz_bytes(tmp_path: Path) -> None:
         assert np.array_equal(z["b"], arrays["b"])
 
 
-def test_table_id_depends_on_options_and_sources() -> None:
-    src = {"a": "1", "b": "2"}
-    o = B.BuildOptions()
-    npz = "a" * 64
-    assert B.table_id(src, o, npz) == B.table_id(dict(reversed(src.items())), o, npz)
-    assert B.table_id(src, o, npz) != B.table_id(src, B.BuildOptions(diagnostic_events=1000), npz)
-    assert B.table_id(src, o, npz) != B.table_id({"a": "1", "b": "3"}, o, npz)
-    assert B.table_id(src, o, npz) != B.table_id(src, o, "b" * 64)  # the id covers the npz bytes
+def test_table_id_binds_every_sidecar_field_but_not_the_key_order() -> None:
+    doc = {"b": {"y": 1, "x": [1.5, 2]}, "a": "1", "npz_sha256": "a" * 64, "options": {"n": 3}}
+    tid = B.table_id(doc)
+    assert tid == B.table_id(dict(reversed(doc.items())))
+    assert tid == B.table_id({**doc, "table_id": "anything"})  # the id field is excluded
+    assert tid != B.table_id({**doc, "npz_sha256": "b" * 64})  # the id covers the npz bytes
+    assert tid != B.table_id({**doc, "options": {"n": 4}})
+    assert tid != B.table_id({**doc, "b": {"y": 1, "x": [1.5, 2.0000001]}})
+    assert tid != B.table_id({**doc, "extra": 0})
 
 
 def test_d6_definitions_on_synthetic_spectra() -> None:
@@ -496,14 +497,7 @@ def _resealed_copy(
     tmp = d / "tmp.npz"
     info["npz_sha256"] = B.write_npz_deterministic(tmp, arrays)
     if new_id:
-        opts = dict(info["options"])
-        if opts.get("diagnostic_nodes_mev") is not None:
-            opts["diagnostic_nodes_mev"] = tuple(opts["diagnostic_nodes_mev"])
-        info["table_id"] = B.table_id(
-            {k: v["sha256"] for k, v in info["sources"].items()},
-            B.BuildOptions(**opts),
-            info["npz_sha256"],
-        )
+        info["table_id"] = B.table_id(info)
     out = info["table_id"] if new_id else tid
     tmp.replace(d / f"nuclear-proton-{out}.npz")
     (d / f"nuclear-proton-{out}.json").write_text(json.dumps(info, indent=2, sort_keys=True))
@@ -614,3 +608,46 @@ def test_binding_recomputed_per_event_from_ame_masses_independently() -> None:
     bad[(8, 16)] = replace(ame[(8, 16)], atomic_mass_u=ame[(8, 16)].atomic_mass_u + 1e-6)
     off = chk.recompute_binding_events(b.counts[acc], b.z_r[acc], b.a_r[acc], 8, 16, bad)
     assert np.abs(off - b.binding_mev[acc]).max() > 1e-4
+
+
+def test_sidecar_fields_are_bound_to_the_pinned_id(tmp_path: Path) -> None:
+    """Codex review 3, finding 1: elements[*].sigma_scale, targets[*].z and gate_d6.numbers are
+    sidecar-only fields; editing any of them (npz and pinned id kept) is stale, and resealing the id
+    produces a different id that the config pin does not name (missing under the pinned id)."""
+    tid = _qualified_table_id()
+
+    def scale(info: dict[str, Any]) -> None:
+        key = next(iter(info["elements"]))
+        info["elements"][key]["sigma_scale"] *= 1.01
+
+    def target_z(info: dict[str, Any]) -> None:
+        info["targets"][0]["z"] += 1
+
+    def d6(info: dict[str, Any]) -> None:
+        k = next(iter(info["gate_d6"]["numbers"]))
+        info["gate_d6"]["numbers"][k]["D"] *= 0.5
+
+    for name, edit in {"sigma_scale": scale, "z": target_z, "d6": d6}.items():
+        root = tmp_path / name
+        root.mkdir()
+        _tampered_copy(root, tid, edit)  # id and npz bytes untouched
+        with pytest.raises(NuclearTableStaleError, match="id not reproduced"):
+            NuclearTable.load(root, tid)
+        # resealed id: the edited document is self-consistent under another id, the pinned id
+        # names no table in that cache and the id differs from the pin
+        sealed = tmp_path / f"{name}-sealed"
+        new = _resealed_copy(sealed, tid, None, edit)
+        assert new != tid
+        with pytest.raises(NuclearTableMissingError):
+            NuclearTable.load(sealed, tid)
+        # the edited sidecar copied over the pinned file names: its own id disagrees with the pin
+        shutil.copy(
+            sealed / "derived" / f"nuclear-proton-{new}.json",
+            sealed / "derived" / f"nuclear-proton-{tid}.json",
+        )
+        shutil.copy(
+            sealed / "derived" / f"nuclear-proton-{new}.npz",
+            sealed / "derived" / f"nuclear-proton-{tid}.npz",
+        )
+        with pytest.raises(NuclearTableStaleError, match="id not reproduced"):
+            NuclearTable.load(sealed, tid)

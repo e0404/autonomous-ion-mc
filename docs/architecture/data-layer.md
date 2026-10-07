@@ -121,10 +121,14 @@ corrupt dataset.
 
 `ionmc data build nuclear-proton [--cache-dir D] [--points-per-decade 50] [--diagnostic-events N]
 [--strict]`
-(`ionmc.nuclear.build.build_nuclear_proton`, builder `ionmc-nuclear-proton-builder-2`, schema
-`ionmc-nuclear-proton-table-2`) turns the pinned sources `endf-b8.0-protons`, `ame2020-mass` and
+(`ionmc.nuclear.build.build_nuclear_proton`, builder `ionmc-nuclear-proton-builder-5`, schema
+`ionmc-nuclear-proton-table-3`) turns the pinned sources `endf-b8.0-protons`, `ame2020-mass` and
 `nist-astar-water-2005` into `<cache>/derived/nuclear-proton-<id>.npz` and `.json`;
-`id = sha256(source hashes, builder version, canonical options)`. The build is single-process and
+`id = sha256(canonical JSON of the complete sidecar without its `table_id` field)` (sorted keys,
+separators `,` `:`); the sidecar holds `npz_sha256`, so the id binds the npz bytes (arrays, the
+`qualification` flags and the capacity `bounds`) and every sidecar field (sources, options, builder
+and schema, element scales, targets, D6 numbers). The builder writes the npz, hashes it, assembles
+the sidecar, computes the id and renames the files to it. The build is single-process and
 deterministic (exact lambda enumeration, seeded counter-based uniforms for the diagnostics,
 fixed-timestamp npz) and writes identical bytes twice. The total break-up residual
 (Z_r, A_r) = (0, 0) of mass 0 is always allowed (`empty_residual_allowed: true`); the first yield
@@ -159,11 +163,19 @@ exact P_accept < 0.5 and on sigma > 0 without yields.
   `transport_energy_bound_mev` is the largest per-particle `t_lab_max_mev` (<= 500 MeV).
 - **D6.** `gate_d6.numbers["150"|"250"]` hold `G`, `D`, `p_event`, the 99.9th-percentile lab alpha
   energy and its ASTAR CSDA range; `tier1_pass`, `tier2_pass`, `ceiling_pass` (D <= 2e-2, 99.9th-percentile range <= 3 g/cm2) are
-  recorded, never enforced.
+  recorded in the JSON, but the gate is the `qualification` array of the npz (ceiling flags,
+  all nodes converged, tiers), authenticated by the id: the loader derives it from the arrays,
+  cross-checks the JSON copies (`NuclearTableStaleError` on any disagreement) and refuses a table
+  whose D6 ceiling or convergence gate failed (`NuclearTableUnqualifiedError`; the tiers are
+  reported, only the ceiling and the convergence are enforced). The `bounds` array of the npz holds
+  the capacity bounds the transport uses; the JSON bounds are a view of it.
 - **Loading.** `ionmc.nuclear.tables.NuclearTable.load(cache_dir, id)` uses
-  `np.load(allow_pickle=False)`, re-hashes the npz against the JSON, re-derives the id, checks the
-  source pins against the registry and freezes the arrays (`NuclearTableMissingError`,
-  `NuclearTableStaleError`, `NuclearTablePinError`). `material_rows(material, f_e)` gives
+  `np.load(allow_pickle=False)`, re-hashes the npz against the JSON `npz_sha256`, recomputes the id from
+  the canonical sidecar without its id and requires it to equal the id it was asked for (the
+  config pin), checks the source pins against the registry, derives qualification and bounds from
+  the npz arrays and freezes them (`NuclearTableMissingError`, `NuclearTableStaleError`,
+  `NuclearTablePinError`, `NuclearTableUnqualifiedError`); editing any sidecar field keeping
+  the id is stale, resealing the id gives another id that the pin does not name. `material_rows(material, f_e)` gives
   `Sigma_mass`, cumulative target fractions (and the unnormalised cumulative partial Sigma) and two majorant arrays: the window majorant
   `1.02 max Sigma` over `[E_k (1 - 2 f_E - 0.01), E_{k+1}]` and the end-of-range majorant
   (running maximum); use the step lookup.
@@ -182,9 +194,9 @@ exact P_accept < 0.5 and on sigma > 0 without yields.
    functions (floor+Bernoulli multiplicities, inverse-CDF E', Kalbach mu, residual acceptance,
    ledger) used by the builder, the python reference and the Warp twins.
 4. **Build.** `ionmc data build nuclear-proton` writes `derived/nuclear-proton-<id>.npz` and `.json`
-   (id = sha256 of source hashes, builder version and options) with sigma, product rows, lambda,
+   (id = sha256 of the canonical sidecar without its id, which contains the npz sha256) with sigma, product rows, lambda,
    `p_accept`, the D6 gate, the capacity-bound terms and the diagnostics block.
-5. **Load.** `NuclearTable.load` re-hashes the arrays, re-derives the id, checks the registry pins
+5. **Load.** `NuclearTable.load` re-hashes the arrays, recomputes the id from the sidecar, checks the registry pins
    and freezes the arrays; `material_rows(material, f_e)` composes `Sigma_mass`, the target
    fractions and the two majorants for a material of the geometry.
 6. **Configuration.** `SimulationConfig` with `nuclear=True` and `nuclear_table_id` is validated

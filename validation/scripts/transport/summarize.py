@@ -203,7 +203,29 @@ def parse_step(
         "reduced": bool(doc and doc.get("reduced")),
         "histories": doc.get("histories") if doc else None,
         "frozen_histories": doc.get("frozen_histories") if doc else None,
+        "attestation": doc.get("attestation") if doc else None,
     }
+
+
+def attestation_problems(att: dict[str, Any] | None, sha: str, env: dict[str, Any]) -> list[str]:
+    """Defects of the partials attestation block of a combine step (None: not a combine step).
+    An imported partial without a ``host_run_id``, a manifest digest that is not the one recorded
+    in ``environment.txt`` or a run SHA other than the archive's makes the archive non-conformant;
+    the protected host-runner records themselves cannot be verified here."""
+    if att is None:
+        return []
+    out = []
+    imported = [p for p in att.get("partials", []) if p.get("origin") == "imported"]
+    if imported and not att.get("manifest_sha256"):
+        out.append("imported partials without a recorded manifest sha256")
+    out += [f"imported partial {p.get('name')} lacks a host_run_id"
+            for p in imported if not str(p.get("host_run_id") or "").strip()]  # fmt: skip
+    recorded = env.get("partials_manifest_sha256")
+    if att.get("manifest_sha256") and recorded != att["manifest_sha256"]:
+        out.append("combine manifest sha256 differs from the one recorded in environment.txt")
+    if att.get("run_sha") != sha:
+        out.append("combine attestation run_sha differs from the archive SHA")
+    return out
 
 
 def _git(*args: str) -> bytes | None:
@@ -318,6 +340,11 @@ def verify(d: Path, sha: str, attest_sha: str | None = None) -> dict[str, Any]:
     else:
         problems.append("environment.txt lacks a valid suite")
     reduced = any(s.get("reduced") for s in steps.values())
+    att_problems = [
+        f"{n}: {m}"
+        for n, s in steps.items()
+        for m in attestation_problems(s.get("attestation"), sha, env)
+    ]
     attestation = attest(env, attest_sha) if attest_sha else None
     mode = env.get("execution_mode", "standard")
     deferred = sorted(n for n, s in steps.items() if s.get("status") == "deferred")
@@ -347,8 +374,11 @@ def verify(d: Path, sha: str, attest_sha: str | None = None) -> dict[str, Any]:
         "suite": suite,
         "pass": ok,
         "subset": subset,
-        "conformant": bool(ok and not subset and not reduced and src_ok and not blockers),
-        "non_conformant_reasons": blockers,
+        "conformant": bool(
+            ok and not subset and not reduced and src_ok and not blockers and not att_problems
+        ),
+        "non_conformant_reasons": [*blockers, *att_problems],
+        "partials_attestation_problems": att_problems,
         "seed_base": env.get("seed_base"),
         "reduced_history_counts": reduced,
         "tree_dirty": env.get("tree_dirty"),
@@ -390,6 +420,7 @@ def combine(dirs: list[Path], sha: str, attest_sha: str | None = None) -> dict[s
         if extra:
             problems.append(f"unexpected steps: {extra}")
     ok = not problems and all(p["pass"] for p in parts)
+    att_problems = [m for p in parts for m in p["partials_attestation_problems"]]
     reduced = any(p["reduced_history_counts"] for p in parts)
     deferred = sorted({n for p in parts for n in p["deferred_steps"]})
     return {
@@ -404,7 +435,30 @@ def combine(dirs: list[Path], sha: str, attest_sha: str | None = None) -> dict[s
             and not reduced
             and all(p["source_ok"] for p in parts)
             and all(not p["non_conformant_reasons"] for p in parts)
+            and not att_problems
         ),
+        "attestation": {
+            "run_sha": sha,
+            "manifests": sorted(
+                {
+                    a["manifest_sha256"]
+                    for p in parts
+                    for s in p["steps"].values()
+                    if (a := s.get("attestation")) and a.get("manifest_sha256")
+                }
+            ),
+            "partials": [
+                {"step": n, **q}
+                for p in parts
+                for n, s in p["steps"].items()
+                if s.get("attestation")
+                for q in s["attestation"].get("partials", [])
+            ],
+            "protected_host_records_verified_by_code": False,
+            "statement": "the manifest was built by the orchestrator from the protected "
+            "host-runner PARTIAL stdout lines; this code cannot verify those records, compare "
+            "the digests and host_run_ids above with them and with record_local_validation",
+        },
         "non_conformant_reasons": sorted({r for p in parts for r in p["non_conformant_reasons"]}),
         "reduced_history_counts": reduced,
         "problems": problems,

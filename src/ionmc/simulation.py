@@ -365,11 +365,16 @@ def _tally_capabilities(nuclear: bool = False) -> dict[str, Any]:
         "automatic_channels": [PIECE_COUNT_NAME, LOCAL_PIECE_COUNT_NAME, EXCLUDED_CHANNEL_NAME],
         "max_channels": MAX_CHANNELS,
         "fail_closed": [
-            (
-                "unknown or unproducible species, generation 'secondary' (accepted with "
-                "nuclear=True: secondary protons and deuterons are transported)"
+            "unknown or unproducible species"
+            if nuclear
+            else "unknown or unproducible species, generation 'secondary'",
+            *(
+                [
+                    "(not an error with nuclear=True: generation 'secondary' requests are "
+                    "accepted because secondary protons and deuterons are transported)"
+                ]
                 if nuclear
-                else "unknown or unproducible species, generation 'secondary'"
+                else []
             ),
             "let_medium other than water, dose_reference other than medium",
             "unknown grid or lookup, duplicate or reserved request names, unused lookups",

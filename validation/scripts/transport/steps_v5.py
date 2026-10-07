@@ -84,7 +84,7 @@ REPO = HERE.parents[2]
 FORMAT = 1
 QUALIFICATION_SEED_BASE = 20421004
 REHEARSAL_SEED_BASE = 20431004
-TABLE_ID = "3bcf146e38dd2b5581bd1ff245c127a7d059e6789421a5d3c6760974f2784504"
+TABLE_ID = "00e8031d5f67704f256e904ebab89b0c2a75845bcf1887c29e1518bffaafe5fb"
 A16_R1_DIGEST = "c862edf799dcb83542e5071219b5703c7665f8f792f6bbc49ab32918418b1f8f"
 A16_R1_BASELINE = "f3a1dd62ea2f57a3f4c07999935f317b3c044871"
 R_INDEX = {"v2-100": 1, "v2-150": 2, "v2-200": 3, "v2-probe-s05": 4, "v2-probe-fe": 5,
@@ -242,8 +242,8 @@ def write_partial(a: argparse.Namespace, name: str, doc: dict[str, Any]) -> str:
     path = out / f"{name}.json"
     path.write_text(json.dumps(doc, sort_keys=True, default=base._json))
     # the host-runner record retains stdout: the orchestrator writes the partials manifest of the
-    # combine steps from these lines (name -> content_sha256), an attestation the archive's own
-    # files cannot forge
+    # combine steps ONLY from these lines (name -> content_sha256, plus the host run id), the
+    # attestation the archive's own files cannot forge
     print(f"PARTIAL {path.name} {doc['content_sha256']}", flush=True)
     return str(path)
 
@@ -324,18 +324,61 @@ def step_v2_shard(a: argparse.Namespace) -> int:
     return finish5(doc, V2_SHARD_N, n, n < V2_SHARD_N)
 
 
-def read_manifest(path: str | None) -> dict[str, str]:
-    """The partials manifest: a JSON object mapping a partial file name to its expected
-    ``content_sha256`` (written by the orchestrator from the ``PARTIAL`` lines of the host-runner
-    records of the shard steps)."""
+MANIFEST_SOURCE = "host-runner protected stdout PARTIAL lines"
+ATTESTATION_STATEMENT = (
+    "the code verifies each imported partial against the manifest entry (digest) and requires a "
+    "host_run_id per entry; it cannot verify the protected host-runner records that the manifest "
+    "is built from. The orchestrator must have written the manifest only from the PARTIAL <name> "
+    "<sha> stdout lines of those records and must list the host_run_ids in record_local_validation"
+)
+
+
+def read_manifest(path: str | None) -> tuple[dict[str, dict[str, str]], str]:
+    """The partials manifest and its own ``sha256`` (of the file bytes). Schema::
+
+        {"partials": {"<name>.json": {"content_sha256": "<64 hex>", "host_run_id": "<id>"}},
+         "source": "host-runner protected stdout PARTIAL lines"}
+
+    The orchestrator builds it ONLY from the protected host-runner records of the shard steps (the
+    ``PARTIAL <name> <sha>`` stdout lines, whose run ids go to ``host_run_id`` and are listed in
+    ``record_local_validation``). A caller-supplied file can be resealed together with a forged
+    partial and the code cannot read the protected records, so it does not decide the case: it
+    requires a digest and a non-empty ``host_run_id`` for every imported partial and puts the
+    manifest sha256 and every ``(name, digest, host_run_id)`` it used into the combine document
+    (``attestation``), where they can be compared with the protected records."""
     if path is None:
-        raise SystemExit("--import-dirs requires --partials-manifest (name -> content_sha256)")
-    doc = json.loads(Path(path).read_text())
-    if not isinstance(doc, dict) or not all(
-        isinstance(k, str) and isinstance(v, str) for k, v in doc.items()
-    ):
-        raise SystemExit(f"partials manifest {path}: need a JSON object of name -> sha256 string")
-    return doc
+        raise SystemExit("--import-dirs requires --partials-manifest (see steps_v5.read_manifest)")
+    raw = Path(path).read_bytes()
+    doc = json.loads(raw)
+    parts = doc.get("partials") if isinstance(doc, dict) else None
+    if not isinstance(parts, dict) or doc.get("source") != MANIFEST_SOURCE:
+        raise SystemExit(
+            f"partials manifest {path}: need {{'partials': {{name: {{content_sha256, host_run_id}}}}, "
+            f"'source': {MANIFEST_SOURCE!r}}}"
+        )
+    for nm, ent in parts.items():
+        ok = isinstance(ent, dict) and isinstance(ent.get("content_sha256"), str)
+        if not ok or not isinstance(ent.get("host_run_id"), str) or not ent["host_run_id"].strip():
+            raise SystemExit(
+                f"partials manifest {path}: entry {nm!r} needs a content_sha256 and a non-empty "
+                "host_run_id"
+            )
+    return parts, hashlib.sha256(raw).hexdigest()
+
+
+def attestation_block(a: argparse.Namespace) -> dict[str, Any]:
+    """The evidence the combine step relied on (recorded by ``load_partials``): the manifest path
+    and sha256, the run SHA and every partial used with its digest and, if imported, its
+    ``host_run_id``."""
+    return {
+        "manifest_path": getattr(a, "attested_manifest_path", None),
+        "manifest_sha256": getattr(a, "attested_manifest_sha256", None),
+        "manifest_source": MANIFEST_SOURCE if getattr(a, "attested_manifest_sha256", None) else None,
+        "run_sha": os.environ.get("IONMC_RUN_SHA"),
+        "partials": list(getattr(a, "attested_partials", [])),
+        "protected_host_records_verified_by_code": False,
+        "statement": ATTESTATION_STATEMENT,
+    }
 
 
 def load_partials(a: argparse.Namespace, names: list[str]) -> list[dict[str, Any]]:
@@ -345,12 +388,22 @@ def load_partials(a: argparse.Namespace, names: list[str]) -> list[dict[str, Any
     ones for every partial because each must equal the current run); a missing, altered or
     foreign file stops the step. ``a.dirs[0]`` is the current output directory, whose partials
     this run produced; a partial found in any other (imported) directory must be listed in the
-    ``--partials-manifest`` with exactly its recomputed digest, because a ``content_sha256``
-    stored in the file can be recomputed by whoever alters it. Without imported directories only
-    partials of the current directory are accepted. As for the A9 samples of lv4 there is no
-    foreign-SHA override."""
+    ``--partials-manifest`` with exactly its recomputed digest and a ``host_run_id`` (see
+    :func:`read_manifest`), because a ``content_sha256`` stored in the file can be recomputed by
+    whoever alters it, and so can a caller-supplied manifest: the attestation chain is the
+    protected host-runner record, which this code cannot read. Every partial used is appended to
+    ``a.attested_partials`` (``name``, ``content_sha256``, ``origin``, ``host_run_id``) for the
+    combine document (:func:`attestation_block`). Without imported directories only partials of
+    the current directory are accepted. As for the A9 samples of lv4 there is no foreign-SHA
+    override."""
     imported = len(a.dirs) > 1
-    manifest = read_manifest(getattr(a, "partials_manifest", None)) if imported else {}
+    manifest: dict[str, dict[str, str]] = {}
+    if imported:
+        manifest, msha = read_manifest(getattr(a, "partials_manifest", None))
+        a.attested_manifest_path = str(a.partials_manifest)
+        a.attested_manifest_sha256 = msha
+    if not hasattr(a, "attested_partials"):
+        a.attested_partials = []
     out = []
     for nm in names:
         hits = [(i, p) for i, d in enumerate(a.dirs)
@@ -362,16 +415,21 @@ def load_partials(a: argparse.Namespace, names: list[str]) -> list[dict[str, Any
         digest = content_digest(doc)
         if doc.get("content_sha256") != digest:
             raise SystemExit(f"partial {nm}: content_sha256 does not match the document")
+        record: dict[str, Any] = {"name": nm, "content_sha256": digest, "origin": "current-run",
+                                  "host_run_id": None}  # fmt: skip
         if idx != 0:
             if nm not in manifest:
                 raise SystemExit(f"partial {nm}: imported but not in the partials manifest")
-            if manifest[nm] != digest:
+            if manifest[nm]["content_sha256"] != digest:
                 raise SystemExit(
-                    f"partial {nm}: digest {digest} differs from the manifest value {manifest[nm]}"
+                    f"partial {nm}: digest {digest} differs from the manifest value "
+                    f"{manifest[nm]['content_sha256']}"
                 )
+            record.update(origin="imported", host_run_id=manifest[nm]["host_run_id"])
         for key, want in bindings(a).items():
             if doc.get(key) != want:
                 raise SystemExit(f"partial {nm}: {key} is {doc.get(key)!r}, expected {want!r}")
+        a.attested_partials.append(record)
         out.append(doc)
     return out
 
@@ -417,7 +475,8 @@ def step_v2_combine(a: argparse.Namespace) -> int:
             "max_abs_diff": float(np.abs(t["mean"]).max()), "tolerance": V2_TOL,
             "alpha": V2_ALPHA, "pass": row_ok,
         }  # fmt: skip
-    doc = {"step": "v2-combine", "table": table_record(), "v2": out, "pass": bool(ok)}
+    doc = {"step": "v2-combine", "table": table_record(), "v2": out, "pass": bool(ok),
+           "attestation": attestation_block(a)}  # fmt: skip
     return finish5(doc, 3 * V2_SHARDS * V2_SHARD_N, used, reduced)
 
 
@@ -478,7 +537,8 @@ def step_probe_combine(a: argparse.Namespace) -> int:
             "sigma_delta_deepest": float(sem[-1]), "sigma_max": PROBE_SIGMA_MAX,
             "conclusive": conclusive, "tolerance": PROBE_TOL, "pass": row_ok,
         }  # fmt: skip
-    doc = {"step": "v2-probe-combine", "table": table_record(), "probes": out, "pass": bool(ok)}
+    doc = {"step": "v2-probe-combine", "table": table_record(), "probes": out, "pass": bool(ok),
+           "attestation": attestation_block(a)}  # fmt: skip
     return finish5(doc, frozen, used, reduced)
 
 
