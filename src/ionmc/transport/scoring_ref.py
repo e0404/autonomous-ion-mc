@@ -12,7 +12,12 @@ The scientifically relevant arithmetic is in the shared functions of
 :mod:`ionmc.transport.scoring_funcs` (twin of the Warp functions); this class is glue: channel
 selection by grid, class mask, species and generation, table reads from numpy arrays,
 quantization ``n = floor(x 2^k + 1/2)`` in float64, the integer add and the residual ``x - n q``.
-V3-005A supplies other ``species`` and ``gen`` values; nothing here assumes primaries.
+V3-005A supplies other ``species`` and ``gen`` values; nothing here assumes primaries: with
+deuteron companion tables (``tables.deuteron``, a nuclear run) :meth:`begin_step` selects the
+water row *and* the mass number per species (the rows are on the total kinetic energy axis of
+their species; the per-nucleon axes of spectra and lookups divide by the species' ``A``).
+Without companion tables every species uses the constructor's ``a_nucleon`` and the proton row
+exactly as before.
 """
 
 from __future__ import annotations
@@ -56,6 +61,9 @@ class ReferenceChannelScorer:
         self.grids = tuple(grids)
         self.a = a_nucleon
         self.tables = tables
+        self._species_a: dict[int, int] = {}
+        if tables is not None and tables.deuteron is not None:
+            self._species_a = {0: tables.projectile.a, 1: tables.deuteron.projectile.a}
         self.SC = python_twin(make_scoring_funcs)
         self.F = python_twin(make_transport_funcs)
         self.acc = np.zeros((n_batches, plan.total_size), dtype=np.int64)
@@ -82,9 +90,19 @@ class ReferenceChannelScorer:
         self.residual = np.zeros(self.plan.n_residual)
         self.lookup_ood = 0
 
-    def water_state(self, e_mid: float) -> tuple[float, float]:
-        """``(S_mid [MeV/mm], gamma)`` of the water row at ``e_mid`` (one lookup per step)."""
+    def _a_of(self, species: int) -> int:
+        """Mass number of ``species`` (the constructor's ``a_nucleon`` without companions)."""
+        return self._species_a.get(species, self.a)
+
+    def water_state(self, e_mid: float, species: int = 0) -> tuple[float, float]:
+        """``(S_mid [MeV/mm], gamma)`` of the species' water row at the total kinetic energy
+        ``e_mid`` (one lookup per step). Species 0 (proton) and, with companion tables,
+        1 (deuteron); any other species raises."""
         t = self.tables
+        if t is not None and species != 0:
+            if t.deuteron is None or species != 1:
+                raise ValueError(f"no water row for species id {species}")
+            t = t.deuteron
         if t is None or t.water_ln_s_mass is None:
             raise ValueError("the scorer needs transport tables with a water row")
         row = t.water_ln_s_mass
@@ -94,17 +112,21 @@ class ReferenceChannelScorer:
         gamma = self.SC.loglog_slope(ly0, ly1, t.water_inv_dln_e)
         return float(s_mass) * t.water_density_g_cm3 / 10.0, float(gamma)
 
-    def begin_step(self, e_mid: float, de_mean: float, s_act: float) -> None:
+    def begin_step(self, e_mid: float, de_mean: float, s_act: float, species: int = 0) -> None:
         """Step-level quantities from the step's midpoint energy, CSDA mean loss and path length
-        (``s_act > 0``): ``S_mid``, the ramp slope ``k`` and the energy rate ``Edot``."""
-        s_mid, gamma = self.water_state(e_mid)
+        (``s_act > 0``) of a particle of ``species``: ``S_mid`` (that species' water row), the
+        ramp slope ``k`` and the energy rate ``Edot``; the species' mass number is kept for the
+        per-nucleon axes of the pieces that follow."""
+        s_mid, gamma = self.water_state(e_mid, species)
         k = float(self.SC.let_ramp_slope(s_mid, gamma, de_mean, e_mid, s_act))
         e_dot = de_mean / s_act
         self.set_step_state(s_mid, k, e_mid, e_dot)
+        self.a_step = self._a_of(species)  # after set_step_state, which resets it
 
     def set_step_state(self, s_mid: float, k: float, e_mid: float, e_dot: float) -> None:
         """Set the step quantities directly (hook-level tests with a synthetic stream)."""
         self.s_mid, self.k, self.e_mid, self.e_dot = s_mid, k, e_mid, e_dot
+        self.a_step = self.a
 
     # -- per piece ---------------------------------------------------------------------------
     def score_piece(
@@ -139,12 +161,12 @@ class ReferenceChannelScorer:
             f = 1.0
             col = c.offset + vox
             if c.kind == "FE":
-                f = self._lookup_value(c.lookup, species, s_bar, e_bar)
+                f = self._lookup_value(c.lookup, species, s_bar, e_bar, self._piece_a(species))
             elif c.kind == "FL":
                 spec = self._spectra[ci]
                 assert spec is not None
                 a0, inv, nb, lg = spec
-                b = int(SC.spectrum_bin(e_bar / self.a, a0, inv, nb, lg))
+                b = int(SC.spectrum_bin(e_bar / self._piece_a(species), a0, inv, nb, lg))
                 col = c.offset + vox * (nb + 2) + b
             x = float(SC.channel_value(self._kind[ci], eps, length, m1, m2, s_bar, f))
             n = math.floor(x * self._scale[ci] + 0.5)
@@ -152,9 +174,15 @@ class ReferenceChannelScorer:
             if c.residual_column >= 0:
                 self.residual[c.residual_column] += x - n * self._quantum[ci]
 
-    def _lookup_value(self, li: int, species: int, s_bar: float, e_bar: float) -> float:
+    def _piece_a(self, species: int) -> int:
+        """Mass number of the piece's species (the step's ``a_step`` without companions)."""
+        return self.a_step if not self._species_a else self._a_of(species)
+
+    def _lookup_value(
+        self, li: int, species: int, s_bar: float, e_bar: float, a: int | None = None
+    ) -> float:
         a0, inv, n, lg, axis, rows = self._lookups[li]
-        x = e_bar / self.a if axis == "energy_per_nucleon_mev" else s_bar
+        x = e_bar / (self.a if a is None else a) if axis == "energy_per_nucleon_mev" else s_bar
         i, fr, inside = self.SC.lookup_bin(x, a0, inv, n, lg)
         if not inside:
             self.lookup_ood += 1

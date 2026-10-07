@@ -38,8 +38,9 @@ MAJORANT_FACTOR = 1.02
 DEFAULT_F_E = 0.02
 
 
-class NuclearTableError(RuntimeError):
-    """Base class of nuclear-table load failures."""
+class NuclearTableError(UnsupportedCombinationError, RuntimeError):
+    """Base class of nuclear-table load failures (also an ``UnsupportedCombinationError``, so
+    that ``validate()`` lets them propagate as fail-closed configuration errors)."""
 
 
 class NuclearTableMissingError(NuclearTableError, FileNotFoundError):
@@ -168,8 +169,14 @@ class NuclearTable:
             if opts.get("diagnostic_nodes_mev") is None
             else tuple(opts["diagnostic_nodes_mev"])
         )
+        try:
+            build_options = BuildOptions(**opts)
+        except TypeError as exc:  # options of another builder revision: the id cannot be checked
+            raise NuclearTableStaleError(
+                f"nuclear table {table_id}: unknown build options ({exc}); stale"
+            ) from exc
         expected = compute_table_id(
-            {sid: rec["sha256"] for sid, rec in info["sources"].items()}, BuildOptions(**opts)
+            {sid: rec["sha256"] for sid, rec in info["sources"].items()}, build_options
         )
         if info["table_id"] != table_id or expected != table_id:
             raise NuclearTableStaleError(f"nuclear table {table_id}: id not reproduced (stale)")

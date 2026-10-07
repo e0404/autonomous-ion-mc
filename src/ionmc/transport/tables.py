@@ -18,8 +18,17 @@ Built (float64) from :class:`ionmc.physics.stopping.StoppingTable` objects:
 
 Reading the stopping power is the shared bin location (``log_bin_index``), two array reads and
 the shared interpolation (``interp_exp``); reading the range is the same bin and ``range_in_bin``;
-the Python and Warp backends differ only in the memory access. The projectile must be a proton so
-that MeV per nucleon equals MeV.
+the Python and Warp backends differ only in the memory access.
+
+Projectiles (V3-005A, decision 0041 section 3): protons, and deuterons (``z = 1``, ``A = 2``) with
+``energy_axis = "total_kinetic_mev"``. Every table is then indexed by the *total* kinetic energy
+``E = A e`` (``e`` MeV per nucleon, the axis of the source ``StoppingTable``): the grid is
+``ln(A e)`` and ``S(E) = S_u(E / A)``, so ``f = E / S`` and the exact range increments
+(``exact_loglog_range_increments(ln E, ln S, 1)``) integrate ``dE / S`` unchanged, the shared
+``range_in_bin`` is untouched and the transport reads total energies as for a proton. For
+``A = 1`` the conversion adds ``ln 1 = 0.0`` and the proton tables are bit-identical to those
+built before V3-005A (their ``identity`` does not gain an entry for the same reason).
+The optional ``deuteron`` field carries the deuteron companion tables of a nuclear run.
 
 Units: energies MeV, mass stopping power MeV cm2/g, ranges g/cm2, ``inv_rho_xs`` cm2/g.
 """
@@ -40,7 +49,7 @@ from numpy.typing import NDArray
 from ionmc._frozen import freeze_array
 from ionmc.materials import Material
 from ionmc.physics import stopping as _stopping
-from ionmc.physics.projectiles import Projectile
+from ionmc.physics.projectiles import PROTON, Projectile
 from ionmc.physics.scattering import inverse_scattering_length_cm2_per_g
 from ionmc.physics.stopping import RANGE_CONSTRUCTION, StoppingTable
 
@@ -88,6 +97,7 @@ class TransportTables:
     water_inv_dln_e: float = 0.0
     water_density_g_cm3: float = 0.0
     water_identity: dict[str, Any] | None = None
+    deuteron: TransportTables | None = None
 
     def __post_init__(self) -> None:
         for name in _ARRAY_FIELDS:
@@ -171,8 +181,13 @@ class TransportTables:
         points_per_decade: int = MIN_POINTS_PER_DECADE,
         range_points_per_decade: int = DEFAULT_RANGE_POINTS_PER_DECADE,
         water: StoppingTable | None = None,
+        *,
+        projectile: Projectile = PROTON,
+        energy_axis: str = "total_kinetic_mev",
     ) -> TransportTables:
-        """Build transport tables from one proton :class:`StoppingTable` per material.
+        """Build transport tables from one :class:`StoppingTable` per material (``projectile`` a
+        proton or, with ``energy_axis="total_kinetic_mev"``, any ``z = 1`` projectile such as the
+        deuteron: the grids are ``ln(A e)``, see the module docstring).
 
         ``water`` (the proton table of liquid water from the *same* ``StoppingSource``) adds the
         water stopping row of the LET definition: ``ln S`` on a uniform ``ln E`` grid of at least
@@ -182,9 +197,19 @@ class TransportTables:
             raise ValueError("at least one stopping table is required")
         if points_per_decade < MIN_POINTS_PER_DECADE or range_points_per_decade < 200:
             raise ValueError(f"tables need at least {MIN_POINTS_PER_DECADE} points per decade")
-        projectile = tables[0].projectile
-        if projectile.a != 1 or projectile.z != 1:
-            raise ValueError("transport tables are implemented for protons only (MeV/u = MeV)")
+        if projectile.z != 1:
+            raise ValueError("transport tables are implemented for z = 1 projectiles only")
+        if energy_axis != "total_kinetic_mev":
+            raise ValueError(f"energy_axis must be 'total_kinetic_mev', got {energy_axis!r}")
+        if projectile == PROTON and tables[0].projectile.z != 1:
+            raise ValueError("transport tables are implemented for protons only (z = 1 ions)")
+        if tables[0].projectile != projectile:
+            raise ValueError(
+                f"the stopping tables describe {tables[0].projectile.name!r}, not the requested "
+                f"projectile {projectile.name!r}"
+            )
+        a_proj = float(projectile.a)
+        ln_a = math.log(a_proj)  # 0.0 for A = 1: the proton tables are unchanged bit for bit
         for t in tables:
             if t.projectile != projectile:
                 raise ValueError("all stopping tables must describe the same projectile")
@@ -212,11 +237,12 @@ class TransportTables:
         ln_e_of_r = np.empty((nm, n_r))
         for m, t in enumerate(tables):
             lo, hi = math.log(t.energy_per_u[0]), math.log(t.energy_per_u[-1])
-            grid = np.linspace(lo, hi, n_e)
+            grid_u = np.linspace(lo, hi, n_e)
+            lns = np.interp(grid_u, np.log(t.energy_per_u), np.log(t.s_el_mass))
+            grid = grid_u + ln_a  # ln of the total kinetic energy A e
             e = np.exp(grid)
-            e[0], e[-1] = t.energy_per_u[0], t.energy_per_u[-1]
-            lns = np.interp(grid, np.log(t.energy_per_u), np.log(t.s_el_mass))
-            ln_f = grid - lns  # ln(E / S): dR/d ln E is f = E / S for a proton
+            e[0], e[-1] = t.energy_per_u[0] * a_proj, t.energy_per_u[-1] * a_proj
+            ln_f = grid - lns  # ln(E / S): dR/d ln E is f = E / S (E the total kinetic energy)
             inc = _stopping.exact_loglog_range_increments(grid, lns, 1.0)
             r = float(t.csda_range_g_cm2[0]) + np.concatenate(([0.0], np.cumsum(inc)))
             r_mass[m] = r
@@ -260,6 +286,8 @@ class TransportTables:
             }
             for i, (mat, t) in enumerate(zip(materials, tables, strict=True))
         )
+        if projectile.a != 1:  # protons keep their identity (and hash) unchanged
+            identity = tuple({**d, "energy_axis": energy_axis} for d in identity)
         h = hashlib.sha256()
         for arr in (
             e_min,
@@ -282,8 +310,9 @@ class TransportTables:
                 raise ValueError("the water table must describe the same projectile")
             n_w = _count(water.energy_per_u[-1] / water.energy_per_u[0], points_per_decade)
             wlo, whi = math.log(water.energy_per_u[0]), math.log(water.energy_per_u[-1])
-            wgrid = np.linspace(wlo, whi, n_w)
-            w_ln_s = np.interp(wgrid, np.log(water.energy_per_u), np.log(water.s_el_mass))
+            wgrid_u = np.linspace(wlo, whi, n_w)
+            wgrid = wgrid_u + ln_a
+            w_ln_s = np.interp(wgrid_u, np.log(water.energy_per_u), np.log(water.s_el_mass))
             w_identity = {
                 "material": water.material.name,
                 "projectile": projectile.name,
@@ -296,11 +325,13 @@ class TransportTables:
                 "source_sha256": water.metadata.get("sha256"),
                 "content_sha256": water.metadata.get("content_sha256"),
                 "material_sha256": material_fingerprint(water.material),
-                "e_min_mev": float(water.energy_per_u[0]),
-                "e_max_mev": float(water.energy_per_u[-1]),
+                "e_min_mev": float(water.energy_per_u[0] * a_proj),
+                "e_max_mev": float(water.energy_per_u[-1] * a_proj),
                 "n_points": int(n_w),
                 "metadata": _jsonable(water.metadata),
             }
+            if projectile.a != 1:
+                w_identity["energy_axis"] = energy_axis
             h.update(np.ascontiguousarray(w_ln_s).tobytes())
             h.update(json.dumps(w_identity, sort_keys=True).encode())
             water_kwargs = {
@@ -352,15 +383,18 @@ class TransportTables:
 
     def s_water(self, energy_mev: float, species: str = "proton") -> float:
         """Linear unrestricted electronic stopping power of ``species`` in water [MeV/mm]
-        (numerically keV/um) at the kinetic energy ``energy_mev`` (log-log interpolation of the
-        water row; clamped to the table range). Only the proton row exists (V3-004); the species
-        argument is the interface for V3-005A (``S_w(E, species)``)."""
-        if self.water_ln_s_mass is None:
-            raise ValueError("these transport tables have no water stopping row")
+        (numerically keV/um) at the *total* kinetic energy ``energy_mev`` (log-log interpolation
+        of the species' water row; clamped to the table range). Species 0 (proton) and 1
+        (deuteron, from the ``deuteron`` companion tables of a nuclear run) have a row; species
+        2 to 4 are not producible and raise."""
         if species != self.projectile.name:
+            if self.deuteron is not None and species == self.deuteron.projectile.name:
+                return self.deuteron.s_water(energy_mev, species)
             raise ValueError(
                 f"the water row describes {self.projectile.name!r}, not species {species!r}"
             )
+        if self.water_ln_s_mass is None:
+            raise ValueError("these transport tables have no water stopping row")
         i, f = self._locate(
             0, energy_mev, self.water_ln_e0, self.water_inv_dln_e, int(self.water_ln_s_mass.size)
         )

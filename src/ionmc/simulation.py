@@ -38,7 +38,7 @@ from ionmc.config import (
     validate,
 )
 from ionmc.environment import describe_environment
-from ionmc.errors import TransportLimitError
+from ionmc.errors import TransportLimitError, UnsupportedCombinationError
 from ionmc.lookup import AXES as LOOKUP_AXES
 from ionmc.lookup import AXIS_SPACINGS as LOOKUP_AXIS_SPACINGS
 from ionmc.physics.projectiles import PROTON
@@ -61,6 +61,7 @@ from ionmc.transport.channels import (
     FE_F_MIN_EXPONENT,
     LOCAL_PIECE_COUNT_NAME,
     MAX_CHANNELS,
+    MAX_PARTICLES,
     MAX_SPECTRUM_BINS,
     PIECE_COUNT_NAME,
 )
@@ -302,8 +303,38 @@ def _tally_capabilities() -> dict[str, Any]:
     }
 
 
-def capabilities() -> dict[str, Any]:
-    """What the engine supports (reported, not negotiated: unsupported requests raise)."""
+E_CUT_DEUTERON_DEFAULT_MEV = 4.0  # PhysicsOptions.e_cut_deuteron_mev (checked by a test)
+
+
+def _nuclear_capabilities() -> dict[str, Any]:
+    """The ``nuclear`` section of the capability report (only with ``nuclear=True``)."""
+    pairs = sorted(producible(PROTON, nuclear=True))
+    return {
+        "backends": ["python"],
+        "warp_backends": "not before V3-005B (rejected before transport)",
+        "source": "proton only; E0 + 6 sigma_E <= 250 MeV",
+        "stopping": "analytic Bethe (deuteron table needed); 'nist-star' is rejected",
+        "table": "derived nuclear-proton table by id (loaded, re-hashed, source pins checked)",
+        "elements": "every element of every material needs an evaluated or surrogate entry",
+        "producible": [{"species": n, "generation": g} for n, g in pairs],
+        "secondaries": ["proton", "deuteron"],
+        "local_deposit": "nuclear_local (alpha, residual recoil; generation = parent + 1)",
+        "deuteron_cutoff_mev_default": E_CUT_DEUTERON_DEFAULT_MEV,
+        "max_particles_per_history": MAX_PARTICLES,
+        "capacity": "B_L and the E bound follow decision 0041 section 5 (amended 2026-10-07)",
+    }
+
+
+def capabilities(nuclear: bool = False) -> dict[str, Any]:
+    """What the engine supports (reported, not negotiated: unsupported requests raise).
+    ``nuclear=True`` adds the ``nuclear`` section; the default report is unchanged."""
+    report = _capabilities_base()
+    if nuclear:
+        report["nuclear"] = _nuclear_capabilities()
+    return report
+
+
+def _capabilities_base() -> dict[str, Any]:
     return {
         "species": ["proton"],
         "backends": {
@@ -353,6 +384,11 @@ class Simulation:
         """Run the transport and return the result (raises on invalid results unless allowed)."""
         t_start = time.perf_counter()
         eff = self.effective
+        if eff.nuclear is not None:  # never run a nuclear configuration as electromagnetic-only
+            raise UnsupportedCombinationError(
+                "nuclear=True validates, but the nuclear transport loop is not wired into the "
+                "Python reference yet (V3-005A work packages C10 to C12)"
+            )
         raw = run_transport(eff)
         t_transport = time.perf_counter()
         result = _assemble(eff, raw)
