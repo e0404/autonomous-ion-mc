@@ -890,82 +890,107 @@ def test_ratio_bound_covers_the_cutoff_crossing_midpoint_domain(make_config: Mak
 
 
 class KinkSource:
-    """Water with a V-shaped kink of ``ln S`` at ``e_kink`` (slopes -0.3 / +0.3), other materials
-    as :class:`DropSource`. The runtime water row is a uniform log grid resampled from this table,
-    so between its nodes the source and the runtime interpolants differ at the kink."""
+    """Water: constant 10 MeV cm2/g except a narrow V-shaped dip of ``ln S`` (``depth``) around
+    ``e_kink`` that lies entirely *inside one runtime-grid bin* (source nodes at ``e_kink exp(+-w)``
+    with ``w`` a fraction of the bin). The runtime water row samples the source at its own nodes,
+    so it is flat 10 there (zero slope in every bin: no ramp amplification anywhere), while the
+    source interpolant dips below it. Other materials: 5 MeV cm2/g above ``e_drop`` and falling as
+    ``(E/e_drop)^power`` below it (the ratio ``S_w/S_m`` grows steeply towards low energies)."""
 
     name = "kink-s"
 
-    def __init__(self, e_kink: float, e_drop: float) -> None:
-        self.e_kink, self.e_drop = e_kink, e_drop
+    def __init__(self, e_kink: float, w: float, e_drop: float, depth: float = 0.5,
+                 power: float = 8.0, skip: tuple[float, float] = (0.0, 0.0)) -> None:  # fmt: skip
+        self.e_kink, self.w, self.e_drop = e_kink, w, e_drop
+        self.depth, self.power, self.skip = depth, power, skip
 
     def table(self, material: Material, projectile: Any) -> StoppingTable:
+        e = np.geomspace(1.0, 500.0, 40)
         if material.name != WATER.name:
-            return DropSource(self.e_drop).table(material, projectile)
-        e = np.unique(np.concatenate([np.geomspace(1.0, 500.0, 40), [self.e_kink]]))
-        s = 10.0 * np.exp(0.3 * np.abs(np.log(e / self.e_kink)))
+            s = 5.0 * np.minimum(1.0, (e / self.e_drop) ** self.power)
+            return build_table(projectile, material, e, s, e[0] / (4.0 * s[0]), {"source": "drop"})
+        e = e[(e <= self.skip[0]) | (e >= self.skip[1])]  # keep the runtime bin of the dip clean
+        v = self.e_kink * np.exp([-self.w, 0.0, self.w])
+        e = np.unique(np.concatenate([e, v]))
+        s = np.full_like(e, 10.0)
+        s[e == v[1]] = 10.0 * np.exp(-self.depth)
         return build_table(projectile, material, e, s, e[0] / (4.0 * s[0]), {"source": "kink"})
+
+
+def _ratio_max_on_runtime_rows(tb: Any, material: int, rho_min: float, e_lo: float, e_hi: float,
+                               water: StoppingTable | None = None) -> float:  # fmt: skip
+    """Independent re-computation of the stopping-ratio bound. ``water=None``: S_w from the runtime
+    row (the fixed computation); otherwise S_w from the source table ``water.stopping_at`` with the
+    same candidate set and the same ``(1 + amp)`` as the pre-fix code at 952f248 (the legacy
+    bound)."""
+    row = tb.water_ln_s_mass
+    ln_ew = tb.water_ln_e0 + np.arange(row.size) / tb.water_inv_dln_e
+    ln_em = tb.ln_e0[material] + np.arange(tb.ln_s_mass[material].size) / tb.inv_dln_e[material]
+    cand = np.exp(np.concatenate([ln_ew, ln_em]))
+    pts = np.concatenate([[e_lo, e_hi], cand[(cand > e_lo) & (cand < e_hi)]])
+    s_m = np.exp(np.interp(np.log(pts), ln_em, tb.ln_s_mass[material]))
+    if water is None:
+        s_w = np.exp(np.interp(np.log(pts), ln_ew, row))
+        rho_w = tb.water_density_g_cm3
+    else:
+        s_w = water.stopping_at(pts)
+        rho_w = water.material.density_g_cm3
+    gam = np.abs(np.diff(row)) * tb.water_inv_dln_e  # amplification |gamma| f_E / 2, f_E = 2
+    t = (np.log(pts) - tb.water_ln_e0) * tb.water_inv_dln_e
+    i_hi = np.clip(np.floor(t + 1e-9).astype(int), 0, gam.size - 1)
+    i_lo = np.clip(np.ceil(t - 1e-9).astype(int) - 1, 0, gam.size - 1)
+    amp = np.maximum(gam[i_hi], gam[i_lo])
+    return float(((1.0 + amp) * s_w * rho_w / (s_m * rho_min)).max())
 
 
 def test_ratio_bound_uses_the_runtime_water_row_not_the_source_interpolant(
     make_config: MakeConfig,
 ) -> None:
-    """Review fb43008e: S_w of the bound must be the runtime-row interpolant. With a kink between
-    runtime grid nodes right at the lower end E_cut/2 of the reachable domain, the runtime
-    S_w exceeds the source-interpolant value there, the ratio bound built from the runtime rows is
-    larger than the source-based one, and it covers the observed per-history LS/LS2."""
-    from ionmc.transport.channels import _stopping_ratio_max
+    """Review fb43008e / f1baadf0: the stopping-ratio bound must take S_w from the runtime water
+    row. A narrow dip of the source table lies inside one runtime bin at E_cut/2 (all runtime bins
+    flat, so amp = 0 everywhere and no amplified neighbour can compensate): the legacy bound
+    (source interpolant, same candidates and amplification as before the fix) is lower than the
+    fixed one by a stated margin, and the compiled r_max equals the fixed computation.
 
+    The observed per-history LS stays far below even the legacy-derived bound in a CI-sized run
+    (the bound is conservative by design), so the gating discriminator is the legacy-vs-fixed
+    comparison (b); the recorded bounds are still checked to cover the observed LS/LS2."""
     nz, e_hi = 30, 12.0
     mat_index = np.concatenate([np.zeros(10), np.ones(nz - 10)]).astype(np.int32)
     geo = VoxelGeometry(
         origin_mm=(-30.0, -30.0, 0.0), spacing_mm=(60.0, 60.0, 1.0), shape=(1, 1, nz),
         materials=(WATER, ALUMINIUM), material_index=mat_index.reshape(1, 1, nz),
     )  # fmt: skip
-    # place the kink at the middle of the runtime bin that contains E_cut/2 ~ 2 MeV (a runtime
-    # grid taken from a smooth first validation; the grid depends on the energy range only)
-    t0 = validate(
-        _cfg(
-            make_config,
-            _reqs("let_t"),
-            energy=e_hi,
-            e_cut=4.0,
-            geometry=geo,
-            stopping=DropSource(4.0),
-            scoring=(_grid(nz=nz, dz=1.0),),
+
+    def config(src: Any, e_cut: float) -> SimulationConfig:
+        return _cfg(
+            make_config, _reqs("let_t", "let_d"), energy=e_hi, n=240, n_batches=240, seed=11,
+            e_cut=e_cut, geometry=geo, stopping=src, scoring=(_grid(nz=nz, dz=1.0),),
+            straggling=False, mcs=False,
         )  # fmt: skip
-    ).tables
+
+    t0 = validate(
+        config(KinkSource(2.0, 0.0, 4.0, depth=0.0), 4.0)
+    ).tables  # the runtime grid (energy range)
     assert t0 is not None and t0.water_ln_s_mass is not None
     nodes = np.exp(t0.water_ln_e0 + np.arange(t0.water_ln_s_mass.size) / t0.water_inv_dln_e)
     k = int(np.searchsorted(nodes, 2.0)) - 1
-    e_kink = float(np.sqrt(nodes[k] * nodes[k + 1]))
-    e_lo = float(nodes[k] ** 0.25 * nodes[k + 1] ** 0.75)  # E_cut/2, inside the kinked bin
-    e_cut = 2.0 * e_lo
-    src = KinkSource(e_kink, e_drop=e_cut)
-    cfg = _cfg(
-        make_config, _reqs("let_t", "let_d"), energy=e_hi, n=240, n_batches=240, seed=11,
-        e_cut=e_cut, geometry=geo, stopping=src, scoring=(_grid(nz=nz, dz=1.0),),
-        straggling=False, mcs=False,
-    )  # fmt: skip
-    r = Run(cfg)
-    tb = r.eff.tables
+    dln = 1.0 / t0.water_inv_dln_e
+    e_kink = float(np.sqrt(nodes[k] * nodes[k + 1]))  # middle of the bin; E_cut/2 sits on the dip
+    src = KinkSource(e_kink, 0.2 * dln, e_drop=2.0 * e_kink, skip=(nodes[k], nodes[k + 1]))
+    r = Run(config(src, 2.0 * e_kink))
+    tb, b = r.eff.tables, r.plan.bounds
+    assert np.allclose(tb.water_ln_s_mass, np.log(10.0), atol=1e-9)  # runtime row is flat
+    assert b["ramp_amplification"] == pytest.approx(0.0, abs=1e-9)
     water = src.table(WATER, PROTON)
-    b = r.plan.bounds
-    ln_ew = tb.water_ln_e0 + np.arange(tb.water_ln_s_mass.size) / tb.water_inv_dln_e
-    s_run = float(np.exp(np.interp(np.log(e_lo), ln_ew, tb.water_ln_s_mass)))
-    s_src = float(water.stopping_at(e_lo))
-    assert s_run > s_src * (1.0 + 1e-4)  # discriminating: the two interpolants differ at E_cut/2
-    rho_min = float(geo.densities_g_cm3()[geo.material_index == 1].min())
-    ln_m = tb.ln_e0[1] + np.arange(tb.ln_s_mass[1].size) / tb.inv_dln_e[1]
-    s_m = float(np.exp(np.interp(np.log(e_lo), ln_m, tb.ln_s_mass[1])))
-    amp_e = b["ramp_amplification"]
-    ratio_src = s_src / (s_m * rho_min)  # without the (>= 1) ramp amplification
-    ratio_run = s_run / (s_m * rho_min)
-    assert amp_e == pytest.approx(0.3, rel=0.05)
-    assert ratio_run > ratio_src
-    r_new = _stopping_ratio_max(tb, 1, water, rho_min, 0.5 * e_cut, e_hi, 1, amp_e)
-    assert r_new >= ratio_run * (1 - 1e-9) > ratio_src  # the source-based value would be lower
-    assert b["r_max"] >= r_new * (1 - 1e-12)
+    e_lo = 0.5 * (2.0 * e_kink)
+    s_run = float(np.exp(np.interp(np.log(e_lo), np.log(nodes), tb.water_ln_s_mass)))
+    assert s_run > 1.5 * float(water.stopping_at(e_lo))  # the source interpolant dips at E_cut/2
+    rho_al = float(geo.densities_g_cm3()[geo.material_index == 1].min())
+    fixed = _ratio_max_on_runtime_rows(tb, 1, rho_al, e_lo, e_hi)
+    legacy = _ratio_max_on_runtime_rows(tb, 1, rho_al, e_lo, e_hi, water=water)
+    assert b["r_max"] == pytest.approx(max(fixed, 1.0), rel=1e-9)  # (a) compiled = fixed (runtime)
+    assert fixed > 1.04 * legacy  # (b) the legacy bound is lower by more than 4 %
     for ci, key in ((r.q_of("let_t").numerator, "B_LS_mev"), (r.q_of("let_d").numerator, "B_LS2")):
         c = r.plan.channels[ci]
         per_hist = r.acc[:, c.offset : c.offset + c.size].sum(axis=1) * c.quantum
