@@ -202,7 +202,8 @@ DATASETS: dict[str, Dataset] = {
             parser="geant_val_json",
             description=(
                 "geant-val JSON export of EXFOR-derived proton inelastic cross-section curves; "
-                "exploratory, report-only; acquired through the provenance tool and staged with `ionmc data import`."
+                "exploratory, report-only; acquired through the provenance tool and staged "
+                "with `ionmc data import`."
             ),
             role="exploratory",
         ),

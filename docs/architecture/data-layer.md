@@ -78,6 +78,34 @@ built from them. `allow_unverified=True` parses any file and records only `conte
   `{G4_AIR, G4_WATER, G4_GRAPHITE}`) proton and alpha electronic stopping arrays
   [MeV cm^2/g] and their energy grids [MeV] from the C++ source.
 
+## Nuclear-data parsers (decision 0041)
+
+The datasets of the proton non-elastic model are read by pure-Python parsers that carry no
+data values; the real files stay in the cache. Fixtures in the tests are hand-written synthetic
+text. A dataset that is not cached skips the data-backed tests; `IONMC_REQUIRE_DATA=1` turns
+that into a failure (the nuclear-data analogue of `IONMC_REQUIRE_NIST`).
+
+- `ionmc.data.endf6` (basis: ENDF-6 Formats Manual, BNL-203218-2018-INRE, chapters 0-3 and 6):
+  `parse_endf(text)` returns an `EndfMaterial` (`za`, `awr`, `emax` from MF1/MT451, raw
+  `sections[(MF, MT)]`); `cross_section(mt)` reads MF3 into a `Tab1` (E in eV, sigma in b) whose
+  `interpolate` honours NR > 1 regions and INT laws 1-5; `products(mt)` reads MF6 into
+  `Product` records (ZAP, AWP, LIP, LAW, yield, LCT) with LAW=1 distributions (LANG=1 Legendre,
+  LANG=2 Kalbach-Mann with NA=1: `b_0 = f_0`, `b_1 = r`; LEP 1 and 2). LAW=5 is stored opaque;
+  any other LAW or LANG raises `UnsupportedEndfError` (fail closed). `list_zip_members` and
+  `read_member` read the sublibrary zip with name validation (no path traversal).
+- `ionmc.data.ame`: `load_ame2020(text)` returns `{(Z, A): AmeEntry}` (mass excess [keV], atomic
+  mass [u], uncertainties, `estimated` for `#` values); `nuclear_mass_mev` is the atomic mass
+  times u minus Z electron masses (CODATA 2018), electron binding energy ignored (about 2 keV
+  for oxygen).
+- `ionmc.data.exfor`: `parse_entry(text)` returns an `ExforEntry` of subentries with BIB keys,
+  `REACTION` pointers, COMMON and DATA blocks (11-character fields, `None` for blanks);
+  `energy_to_mev` flags `MEV/A`, `energy_total_mev` multiplies by the projectile mass number,
+  `xs_to_mb` and `percent_to_fraction` convert units.
+- `ionmc.data.geant_val`: `parse_geant_val(text)` returns one `GeantValCurve` per record (target,
+  beam, observable, x, y, statistical and systematic y errors). Non-proton projectiles carry an
+  `energy_caveat` because the file does not state whether their energy axis is total or per
+  nucleon.
+
 ## Command line
 
     ionmc data list
