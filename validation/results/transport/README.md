@@ -65,3 +65,19 @@ The `lv4`/`hr4` archives at head 3c013f8 with seed base 20371004 (A9 coverage 0.
 0.5·R / Bragg peak / distal 80 %, z sd 1.061 / 1.119 / 1.108) are evidence only: the base is consumed
 and the A9 criterion was re-calibrated afterwards (plan amendment ⁵, decision 0040 outcome of
 2026-10-07); the qualification base is 20381004.
+
+## Qualification archives at the frozen head fccb687 (seed base 20381004)
+
+`lv4-fccb687-single-process.json` and `hr4-fccb687-single-process.json` are the combined
+`summarize.py --combine … --attest-sha` summaries of the `lv4` and `hr4` suites at the frozen
+V3-004 head `fccb6879969ae99a182f95427b32c35abf135b9f` with the qualification seed base 20381004
+(every amendment ¹–⁵ was recorded before the corresponding result at this base was observed).
+Single-process diagnostic mode (operator directive 2026-10-07): every executed step passed
+(`pass: true`); `05-a15-workers` is *deferred*, not passed, and the archives are therefore
+**not conformant** by design. Observed numbers: A9 (amended criterion ⁵, first observation at
+this base) z sd 0.925 / 1.079 / 0.953 and z mean 0.002 / 0.000 / −0.007 at 0.5·R / Bragg peak /
+distal 80 %, all-informative-bins mean coverage 0.9611 (window [0.93, 0.97]); the Bragg-peak
+z sd is above one for the third base in a row (1.069, 1.119, 1.079; all inside [0.87, 1.13]),
+which keeps the open observation of amendment ⁵ alive without failing the pre-registered
+criterion. A11-HR cpu32:cuda32 and python:cpu64 channel-profile pairs pass; A16 qualified path
+bit-identical to a524f209; A7 within the analytic expected-share bound. Not a clinical claim.
