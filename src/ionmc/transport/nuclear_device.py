@@ -147,6 +147,17 @@ def _hash_arrays(table_id: str, named: dict[str, NDArray[Any]]) -> str:
     return h.hexdigest()
 
 
+def host_sha256(host: NuclearHost, precision: str) -> str:
+    """``NuclearDevice.sha256`` of ``host`` in ``precision`` ("float32" or "float64") computed
+    without a device (the same bytes: arrays cast to the kernel precision, integer rows int32)."""
+    np_real = {"float32": np.float32, "float64": np.float64}[precision]
+    cast: dict[str, NDArray[Any]] = {
+        k: np.ascontiguousarray(host.arrays[k], dtype=np_real) for k in REAL_FIELDS
+    }
+    cast.update({k: np.ascontiguousarray(host.arrays[k], dtype=np.int32) for k in INT_FIELDS})
+    return _hash_arrays(host.table_id, cast)
+
+
 class NuclearDevice:
     """The packed nuclear arrays on one device in one precision.
 
@@ -197,4 +208,4 @@ class NuclearDevice:
         return _hash_arrays(self.table_id, self.readback())
 
 
-__all__ = ["NuclearDevice", "NuclearHost", "pack_nuclear"]
+__all__ = ["NuclearDevice", "NuclearHost", "host_sha256", "pack_nuclear"]

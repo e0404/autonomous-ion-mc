@@ -266,12 +266,9 @@ def test_c1_nuclear_configuration_cases_raise_before_transport(
 ) -> None:
     ok = _nuc(make_config(energy=100.0), tid)
     validate(ok)  # the reference case is valid
+    # the Warp backends accept nuclear=True since V3-005B (C11); the cases were rejected before
+    validate(_nuc(make_config(energy=100.0, backend="warp-cpu", precision="float32"), tid))
     cases: dict[str, tuple[SimulationConfig, str]] = {
-        "warp-cpu backend": (
-            _nuc(make_config(energy=100.0, backend="warp-cpu", precision="float32"), tid),
-            "V3-005B",
-        ),
-        "warp-cuda backend": (_nuc(make_config(energy=100.0, backend="warp-cuda"), tid), "V3-005B"),
         "E0 + 6 sigma_E above 250 MeV": (
             _nuc(make_config(energy=245.0, energy_sigma=1.0), tid),
             "250",
@@ -370,7 +367,10 @@ def test_nuclear_effective_config_and_capabilities(make_config: MakeConfig, tid:
     assert "nuclear" not in off and "e_cut_deuteron_mev" not in off["physics"]
     # capability report: nuclear section only on request; the default report is the pre-V3-005A one
     cap = ionmc.capabilities(nuclear=True)
-    assert cap["nuclear"]["backends"] == ["python"] and "nuclear" not in ionmc.capabilities()
+    assert (
+        cap["nuclear"]["backends"] == ["python", "warp-cpu", "warp-cuda"]
+        and "nuclear" not in ionmc.capabilities()
+    )
     assert cap["nuclear"]["deuteron_cutoff_mev_default"] == cfg.physics.e_cut_deuteron_mev
     assert cap["nuclear"]["max_particles_per_history"] == MAX_PARTICLES
     base = ionmc.capabilities()
@@ -387,9 +387,9 @@ def test_nuclear_effective_config_and_capabilities(make_config: MakeConfig, tid:
     # nuclear=True: physics.nuclear true, tally backends python only with warp deferred, the
     # fail-closed list consistent with the accepted secondaries (Codex finding 4)
     assert cap["physics"]["nuclear"] is True and base["physics"]["nuclear"] is False
-    assert list(cap["tallies"]["backends"]) == ["python"]
-    assert cap["tallies"]["deferred_backends"] == {"warp-cpu": "V3-005B", "warp-cuda": "V3-005B"}
-    assert "deferred_backends" not in base["tallies"]
+    assert list(cap["tallies"]["backends"]) == ["python", "warp-cpu", "warp-cuda"]
+    assert cap["tallies"]["untested_in_sandbox"] == ["warp-cuda"]  # CUDA: no GPU in the sandbox
+    assert "untested_in_sandbox" not in base["tallies"]
     fc = cap["tallies"]["fail_closed"]
     assert fc[0] == "unknown or unproducible species"  # no sentence lists 'secondary' as an error
     assert not any("secondary" in e or "not an error" in e for e in fc)  # accepted only above
@@ -397,7 +397,6 @@ def test_nuclear_effective_config_and_capabilities(make_config: MakeConfig, tid:
     assert base["tallies"]["fail_closed"][0] == (
         "unknown or unproducible species, generation 'secondary'"
     )
-    assert "V3-005B" in cap["tallies"]["fail_closed"][-1]
     del cap["nuclear"]
     cap["backends"].pop("warp-cuda")
     assert cap["tallies"] != base["tallies"]

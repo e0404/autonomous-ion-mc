@@ -68,6 +68,7 @@ select = ["E", "F", "I", "B", "UP", "W"]
 "src/ionmc/physics/nuclear.py" = ["UP018"]
 "src/ionmc/transport/funcs.py" = ["UP018"]
 "src/ionmc/transport/kernels.py" = ["UP018"]
+"src/ionmc/transport/kernels_nuclear.py" = ["UP018"]
 "tests/ionmc/test_tables_scattering.py" = ["UP018"]
 "tests/ionmc/test_straggling_gamma.py" = ["UP018"]
 

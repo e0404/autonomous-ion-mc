@@ -328,6 +328,12 @@ class EffectiveConfig:
         if self.nuclear is not None:  # nuclear=False summaries are unchanged
             out["physics"]["e_cut_deuteron_mev"] = p.e_cut_deuteron_mev
             out["nuclear"] = self.nuclear.summary(self.geometry)
+            if self.backend != "python":  # the uploaded arrays of the Warp kernels (V3-005B)
+                from ionmc.transport.nuclear_device import host_sha256, pack_nuclear
+
+                out["nuclear"]["device_sha256"] = host_sha256(
+                    pack_nuclear(self.nuclear.table, self.geometry.materials), self.precision
+                )
         return out
 
 
@@ -542,18 +548,13 @@ def _nuclear_setup_checks(
     config: SimulationConfig, geometry: VoxelGeometry
 ) -> tuple[Any, tuple[Any, ...]]:
     """Fail-closed rules of ``nuclear=True`` that need no tables (decision 0041 section 5): any
-    warp backend, ``nist-star`` (no deuteron table), a missing table id, a missing / stale /
+    ``nist-star`` (no deuteron table), a missing table id, a missing / stale /
     mis-pinned table (the loader's ``NuclearTableError``, an ``UnsupportedCombinationError``),
     ``E0 + 6 sigma_E > 250 MeV`` and an element of a material without a table entry. Returns
     the loaded table and the per-material rows."""
     from ionmc.nuclear.tables import NuclearTable  # lazy: heavy and only for nuclear runs
 
-    src, ph, run = config.source, config.physics, config.run
-    if run.backend != "python":
-        raise fail(
-            f"nuclear=True requires backend 'python' (got {run.backend!r}): the Warp nuclear "
-            "kernels are V3-005B"
-        )
+    src, ph = config.source, config.physics
     if ph.stopping.name == "nist-star":
         raise fail(
             "nuclear=True is not available with the 'nist-star' stopping source: secondary "

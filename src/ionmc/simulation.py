@@ -315,10 +315,7 @@ def _tally_capabilities(nuclear: bool = False) -> dict[str, Any]:
     protons and deuterons, generation >= 1, are transported and accepted)."""
     pairs = sorted(producible(PROTON, nuclear=nuclear))
     producible_generations = sorted({g for _, g in pairs})
-    # nuclear=True runs on the Python reference only (warp kernels are V3-005B): the tally
-    # backends are limited accordingly and the warp ones listed as deferred
-    tally_backends = ("python",) if nuclear else CHANNEL_BACKENDS
-    deferred = {"deferred_backends": {b: "V3-005B" for b in CHANNEL_BACKENDS if b != "python"}}
+    tally_backends = CHANNEL_BACKENDS  # nuclear=True: the Warp kernels (V3-005B) carry the tallies
     return {
         "quantities": list(TALLY_QUANTITIES),
         "backends": {
@@ -328,7 +325,9 @@ def _tally_capabilities(nuclear: bool = False) -> dict[str, Any]:
             }
             for b in tally_backends
         },
-        **(deferred if nuclear else {}),
+        **(
+            {"untested_in_sandbox": ["warp-cuda"]} if nuclear else {}
+        ),  # CUDA code path: no GPU in the development sandbox
         "producible": [{"species": n, "generation": g} for n, g in pairs],
         "generations": {
             "accepted": [
@@ -373,8 +372,7 @@ def _tally_capabilities(nuclear: bool = False) -> dict[str, Any]:
             "lookup species gaps, axis coverage gaps, sha256 mismatch, non-uniform tables or "
             "spectrum edges, negative or non-finite lookup values",
             "a quantum above the precision floor, accumulator memory above the budget",
-            "a backend without channels"
-            + (" (warp backends with nuclear=True until V3-005B)" if nuclear else ""),
+            "a backend without channels",
         ],
     }
 
@@ -386,8 +384,12 @@ def _nuclear_capabilities() -> dict[str, Any]:
     """The ``nuclear`` section of the capability report (only with ``nuclear=True``)."""
     pairs = sorted(producible(PROTON, nuclear=True))
     return {
-        "backends": ["python"],
-        "warp_backends": "not before V3-005B (rejected before transport)",
+        "backends": ["python", "warp-cpu", "warp-cuda"],
+        "warp_backends": (
+            "warp-cpu (float64 validation, float32); warp-cuda written device-agnostic, "
+            "untested in the development sandbox (no GPU)"
+        ),
+        "warp_cuda_chunk_cap": 1 << 14,
         "source": "proton only; E0 + 6 sigma_E <= 250 MeV",
         "stopping": "analytic Bethe (deuteron table needed); 'nist-star' is rejected",
         "table": "derived nuclear-proton table by id (loaded, re-hashed, source pins checked)",

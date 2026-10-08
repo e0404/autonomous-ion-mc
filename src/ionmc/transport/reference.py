@@ -204,6 +204,11 @@ class _Reference:
         self.counter_names: tuple[str, ...] = COUNTER_NAMES
         self.ntallies: dict[str, float] = {}
         self.nuc_diag: dict[str, dict[str, Any]] = {}  # nuclear event diagnostics (nuclear runs)
+        # diagnostics-only nuclear trace of the first trace_histories histories: accepted events
+        # (h, gid, target, counts[5], Z_r, A_r, attempts, T1) and pushed secondaries (h, gid,
+        # parent gid, species, generation, T, direction, position); no effect on the transport
+        self.want_diag = False  # set by run_range
+        self.nuc_trace: dict[str, list[list[float]]] = {"events": [], "secondaries": []}
         if self.nuc is not None:  # conditional nuclear blocks (decision 0041 sections 2-5)
             self.counter_names = COUNTER_NAMES + NUCLEAR_COUNTER_NAMES
             self.NU = python_twin(make_nuclear)
@@ -457,6 +462,11 @@ class _Reference:
         )  # fmt: skip
         if self.nuc is not None:
             part.meta["nuclear_diagnostics"] = self.nuc_diag
+            if self.want_diag:
+                part.meta["nuclear_trace"] = {
+                    k: np.array(v, dtype=np.float64).reshape(-1, 12)
+                    for k, v in self.nuc_trace.items()
+                }
         return part
 
     def _end(
@@ -598,6 +608,11 @@ class _Reference:
             str(int(tgt_list[chosen])),
             {"events": 0, "light": dict.fromkeys(NUC_SPECIES_KEYS, 0), "residual": {}},
         )
+        if self.want_diag and h < self.cfg.diagnostics.trace_histories:
+            self.nuc_trace["events"].append(
+                [h, gid, int(tgt_list[chosen]), *(int(c) for c in ev.counts), int(ev.z_r),
+                 int(ev.a_r), ev.attempts, t1]
+            )  # fmt: skip
         rec["events"] += 1
         for key, cnt in zip(NUC_SPECIES_KEYS, ev.counts, strict=True):
             rec["light"][key] += int(cnt)
@@ -649,6 +664,10 @@ class _Reference:
                     dx, dy, dz = direction
                 mass = self.mass_p if species == 0 else self.mass_d
                 pv = float(self.K.pv_mev(r(t_lab), mass))
+                if self.want_diag and h < self.cfg.diagnostics.trace_histories:
+                    self.nuc_trace["secondaries"].append(
+                        [h, cid, gid, species, gen, t_lab, dx, dy, dz, pos[0], pos[1], pos[2]]
+                    )
                 stack.append(
                     (pos[0], pos[1], pos[2], dx, dy, dz, t_lab, float(species), float(cid),
                      float(gen), float(vox[0]), float(vox[1]), float(vox[2]), pv)
