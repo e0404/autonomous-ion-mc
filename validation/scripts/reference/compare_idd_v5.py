@@ -3,6 +3,7 @@
 Usage::
 
     compare_idd_v5.py --ionmc-dir DIR --topas-runs RUN_DIR... --mcsquare-runs RUN_DIR... --output OUT.json
+                      [--cases-dir validation/reference_cases]
 
 ``DIR`` holds the four partials ``v5-{150,200}-{on,off}.json`` written by
 ``validation/scripts/transport/steps_v5b.py v5-ionmc`` (per-batch IDD in MeV/(g/cm^2)/primary,
@@ -18,7 +19,17 @@ input (MCsquare energy: the ``####Energy (MeV)`` entry of the manifested Plan.tx
 derived nuclear flag); the replicates of a group must have the same fingerprint configuration and
 engine identity, and every group needs >= 3 runs with distinct seeds (read from the manifested
 case.json and cross-checked against the native input by ``compare_batches.run_seed``) and 1e5
-histories. The fingerprints are recorded in the verdict. The CLI exits 1 when the gating verdict
+histories. The fingerprints are recorded in the verdict.
+
+Binding to the frozen cases (C20 G1, review 0f1aa5d9): the fingerprint only compares replicates with
+each other, so every run must also be BYTE-IDENTICAL (all of ``inputs/``, case.json included, equal
+file-name sets) to exactly one committed case directory ``--cases-dir/<engine>/<name>``; that case must
+carry the V5 block, may be bound by one run only, and supplies the (energy, nuclear) group. The native
+input is cross-checked against the frozen physics (TOPAS: Modules exactly the full QGSP_BIC_HP set or
+exactly ``g4em-standard_opt4``, BeamEnergy integral and equal, BeamEnergySpread 0, a
+CutForAllParticles line; MCsquare: the four Simulate_* flags all True or all False, Plan.txt energy
+integral and equal). The bound case names of a group must be the seed variants ``<family>-seed<k>`` of
+one family; case, file hashes and family are recorded in the verdict. The CLI exits 1 when the gating verdict
 (TOPAS) fails, after writing the verdict JSON.
 
 Units. TOPAS: dose [Gy] x bin mass [kg] / 1.602176634e-13 J/MeV = MeV in the bin, divided by
@@ -76,6 +87,7 @@ UNIT = "MeV/(g/cm^2)/primary"
 DEP_CONTAINED = (0.85, 1.02)  # in-grid total / beam energy; catches a wrong unit
 MCSQUARE_UNIT_MEV = 1e-6  # Dose.mhd value -> MeV/g (inferred eV/g)
 KAPPA_MAX_D = 0.015
+DEFAULT_CASES_DIR = Path(__file__).resolve().parents[3] / "validation" / "reference_cases"
 # frozen V5 tolerances: (name, kind, tolerance)
 TOLERANCES = {
     "plateau": ("relative", 0.02),
@@ -304,47 +316,119 @@ _ENGINE_IDD: dict[str, Callable[[ReferenceRun], tuple[np.ndarray, list[str]]]] =
     "topas": _topas_idd, "mcsquare": _mcsquare_idd}  # fmt: skip
 
 
+TOPAS_MODULES_FULL = frozenset({"g4em-standard_opt4", "g4h-phy_QGSP_BIC_HP", "g4h-elastic_HP",
+                                "g4stopping", "g4ion-binarycascade", "g4decay"})
+TOPAS_MODULES_EMONLY = frozenset({"g4em-standard_opt4"})
+MC_NUCLEAR_FLAGS = ("Simulate_Nuclear_Interactions", "Simulate_Secondary_Protons",
+                    "Simulate_Secondary_Deuterons", "Simulate_Secondary_Alphas")
+_TOPAS_MODULES = re.compile(r"^[ \t]*sv:Ph/Default/Modules[ \t]*=[ \t]*(\d+)((?:[ \t]+\"[^\"\n]*\")*)[ \t]*$", re.M)
+_TOPAS_SPREAD = re.compile(r"^[ \t]*[ud]:So/Beam/BeamEnergySpread[ \t]*=[ \t]*([0-9.eE+-]+)[ \t]*(?:%)?[ \t]*$", re.M)
+_TOPAS_CUT = re.compile(r"^[ \t]*d:Ph/Default/CutForAllParticles[ \t]*=[ \t]*[0-9.eE+-]+[ \t]*\w+[ \t]*$", re.M)
+_SEED_FAMILY = re.compile(r"^(?P<family>.+)-seed(?P<k>\d+)$")
 _TOPAS_ENERGY = re.compile(r"^[ \t]*d:So/Beam/BeamEnergy[ \t]*=[ \t]*([0-9.eE+-]+)[ \t]*MeV[ \t]*$", re.M)
-_MC_NUCLEAR = re.compile(r"^[ \t]*Simulate_Nuclear_Interactions[ \t]+(True|False)[ \t]*$", re.M)
 _MC_PLAN_ENERGY = re.compile(r"^####Energy \(MeV\)[ \t]*\n[ \t]*([0-9.eE+-]+)[ \t]*$", re.M)
 
 
+def _mc_flag(native: str, name: str, run_id: str) -> bool:
+    hits = re.findall(rf"^[ \t]*{name}[ \t]+(True|False)[ \t]*$", native, re.M)
+    if len(hits) != 1:
+        raise IddError(f"{run_id}: expected exactly one {name} line, found {len(hits)}")
+    return hits[0] == "True"
+
+
 def derive_config(run: ReferenceRun, fp: dict[str, Any]) -> tuple[int, bool]:
-    """(energy in MeV, nuclear flag) from the verified native input of the run (fail closed)."""
+    """(energy in MeV, nuclear flag) from the verified native input of the run (fail closed).
+
+    The frozen physics is enforced: TOPAS Modules exactly the full set (nuclear on) or exactly
+    ``g4em-standard_opt4`` (EM-only), BeamEnergySpread 0, CutForAllParticles present; MCsquare the four
+    Simulate_* flags all True or all False."""
     native = read_verified(run, f"inputs/{run.case['input']}").decode("utf-8", errors="replace")
     if run.engine == "topas":
         hits = _TOPAS_ENERGY.findall(native)
-        nuclear = fp["group"] != "topas-emonly"
+        mods = _TOPAS_MODULES.findall(native)
+        if len(mods) != 1:
+            raise IddError(f"{run.run_id}: expected exactly one parsable Ph/Default/Modules line")
+        names = re.findall(r'"([^"\n]*)"', mods[0][1])
+        if int(mods[0][0]) != len(names) or len(set(names)) != len(names):
+            raise IddError(f"{run.run_id}: Modules count/duplicates inconsistent: {names}")
+        if set(names) == TOPAS_MODULES_FULL:
+            nuclear = True
+        elif set(names) == TOPAS_MODULES_EMONLY:
+            nuclear = False
+        else:
+            raise IddError(
+                f"{run.run_id}: TOPAS Modules {sorted(names)} are neither the frozen full set "
+                f"{sorted(TOPAS_MODULES_FULL)} nor {sorted(TOPAS_MODULES_EMONLY)}")  # fmt: skip
+        if nuclear != (fp["group"] != "topas-emonly"):
+            raise IddError(f"{run.run_id}: fingerprint group {fp['group']!r} contradicts the Modules line")
+        spread = _TOPAS_SPREAD.findall(native)
+        if len(spread) != 1 or float(spread[0]) != 0.0:
+            raise IddError(f"{run.run_id}: BeamEnergySpread must be exactly one line equal to 0: {spread}")
+        if len(_TOPAS_CUT.findall(native)) != 1:
+            raise IddError(f"{run.run_id}: expected exactly one Ph/Default/CutForAllParticles line")
     else:
         hits = _MC_PLAN_ENERGY.findall(read_verified(run, "inputs/Plan.txt").decode("utf-8"))
-        flags = _MC_NUCLEAR.findall(native)
-        if len(flags) != 1:
-            raise IddError(f"{run.run_id}: expected exactly one Simulate_Nuclear_Interactions line")
-        nuclear = flags[0] == "True"
+        flags = {n: _mc_flag(native, n, run.run_id) for n in MC_NUCLEAR_FLAGS}
+        if len(set(flags.values())) != 1:
+            raise IddError(f"{run.run_id}: nuclear/secondary flags are not all equal: {flags}")
+        nuclear = flags[MC_NUCLEAR_FLAGS[0]]
     if len(hits) != 1 or float(hits[0]) != int(float(hits[0])):
         raise IddError(f"{run.run_id}: beam energy not unique/integral in the native input: {hits}")
     return int(float(hits[0])), nuclear
 
 
-def load_engine_groups(run_dirs: list[Path], engine: str, nz: dict[int, int]
+# -- binding to the frozen committed cases (C20 G1) -----------------------------------------------
+def _committed_cases(cases_dir: Path, engine: str) -> dict[str, dict[str, bytes]]:
+    """``{case name: {relative file name: bytes}}`` of every committed case of ``engine``."""
+    root = cases_dir / engine
+    if not root.is_dir():
+        raise IddError(f"no committed cases directory {root}")
+    out: dict[str, dict[str, bytes]] = {}
+    for d in sorted(p for p in root.iterdir() if p.is_dir()):
+        out[d.name] = {f.relative_to(d).as_posix(): f.read_bytes()
+                       for f in sorted(d.rglob("*")) if f.is_file()}  # fmt: skip
+    return out
+
+
+def bind_run(run: ReferenceRun, committed: dict[str, dict[str, bytes]]) -> tuple[str, dict[str, str]]:
+    """The one committed case whose files equal ``inputs/`` of the run byte for byte (names included)."""
+    inputs = {r[len("inputs/"):]: read_verified(run, r)
+              for r in sorted(run.files) if r.startswith("inputs/")}  # fmt: skip
+    hits = [n for n, files in committed.items() if files == inputs]
+    if len(hits) != 1:
+        raise IddError(
+            f"{run.run_id}: inputs/ ({sorted(inputs)}) match {len(hits)} committed {run.engine} cases "
+            f"{hits}, exactly one is required (run not frozen in the repository?)")  # fmt: skip
+    return hits[0], {f: hashlib.sha256(b).hexdigest() for f, b in sorted(committed[hits[0]].items())}
+
+
+def load_engine_groups(run_dirs: list[Path], engine: str, nz: dict[int, int], cases_dir: Path
                        ) -> dict[tuple[int, bool], dict[str, Any]]:  # fmt: skip
-    """Per (energy, nuclear): curves ``[seeds, nz]`` cut to the ionmc grid, with seeds and hashes."""
+    """Per (energy, nuclear): curves ``[seeds, nz]`` cut to the ionmc grid, with seeds and hashes.
+    Every run is bound to its frozen committed case under ``cases_dir/<engine>``."""
     cb = _batches_module()
+    committed = _committed_cases(cases_dir, engine)
+    bound: dict[str, str] = {}
     groups: dict[tuple[int, bool], dict[str, Any]] = {}
     for rd in run_dirs:
         try:
             run = load_run(rd)
             if run.engine != engine:
                 raise IddError(f"{rd}: engine {run.engine!r}, expected {engine!r}")
-            v5 = run.case.get("v5")
+            case_name, case_hashes = bind_run(run, committed)  # byte-identical to a frozen case
+            if case_name in bound:
+                raise IddError(f"{run.run_id}: committed case {case_name} is already bound by "
+                               f"{bound[case_name]}")  # fmt: skip
+            bound[case_name] = run.run_id
+            v5 = json.loads(committed[case_name]["case.json"]).get("v5")
             if not isinstance(v5, dict) or v5.get("row") != "V5":
-                raise IddError(f"{run.run_id}: case.json has no V5 block")
+                raise IddError(f"{run.run_id}: committed case {case_name} has no V5 block")
             fp = cb.run_fingerprint(run)  # fail closed: lineage of the run
             e, nuc = derive_config(run, fp)
             if (int(v5["energy_mev"]), bool(v5["nuclear"])) != (e, nuc):
                 raise IddError(
-                    f"{run.run_id}: case.json v5 label ({v5['energy_mev']}, {v5['nuclear']}) != "
-                    f"native input ({e}, {nuc}): mislabeled run")  # fmt: skip
+                    f"{run.run_id}: committed case {case_name} v5 label ({v5['energy_mev']}, "
+                    f"{v5['nuclear']}) != native input ({e}, {nuc}): mislabeled run")  # fmt: skip
             if e not in nz:
                 raise IddError(f"{run.run_id}: energy {e} not in {sorted(nz)}")
             if run.histories != HISTORIES:
@@ -362,7 +446,8 @@ def load_engine_groups(run_dirs: list[Path], engine: str, nz: dict[int, int]
                 f"{run.run_id}: in-grid total {total:.3f} MeV is {total / e:.3f} of the beam energy, "
                 f"outside {DEP_CONTAINED}: unit or geometry error")  # fmt: skip
         g = groups.setdefault(
-            (e, nuc), {"curves": [], "seeds": [], "runs": [], "hashes": {}, "fingerprints": {}})  # fmt: skip
+            (e, nuc), {"curves": [], "seeds": [], "runs": [], "hashes": {}, "fingerprints": {},
+                       "bound_cases": {}})  # fmt: skip
         if seed in g["seeds"]:
             raise IddError(f"{run.run_id}: duplicate seed {seed} in group {(e, nuc)}")
         g["curves"].append(cut)
@@ -370,6 +455,8 @@ def load_engine_groups(run_dirs: list[Path], engine: str, nz: dict[int, int]
         g["runs"].append(run.run_id)
         g["hashes"][run.run_id] = file_hashes(run, [*files, "inputs/case.json"])
         g["fingerprints"][run.run_id] = {k: fp[k] for k in ("group", "config_sha256", "identity_sha256")}
+        g["bound_cases"][run.run_id] = {"bound_case": f"{engine}/{case_name}",
+                                        "committed_sha256": case_hashes}  # fmt: skip
     for key, g in groups.items():
         if len(g["curves"]) < MIN_SEEDS:
             raise IddError(f"{engine} group {key}: {len(g['curves'])} runs, need >= {MIN_SEEDS}")
@@ -377,6 +464,14 @@ def load_engine_groups(run_dirs: list[Path], engine: str, nz: dict[int, int]
             if len({f[field] for f in g["fingerprints"].values()}) != 1:
                 raise IddError(f"{engine} group {key}: replicates differ in {field} "
                                f"(configuration or engine identity): {g['fingerprints']}")  # fmt: skip
+        names = [c["bound_case"].split("/", 1)[1] for c in g["bound_cases"].values()]
+        parsed = [_SEED_FAMILY.match(n) for n in names]
+        if not all(parsed):
+            raise IddError(f"{engine} group {key}: bound cases {names} are not '<family>-seed<k>' variants")
+        families = {m.group("family") for m in parsed if m}
+        if len(families) != 1:
+            raise IddError(f"{engine} group {key}: bound cases belong to several families {sorted(families)}")
+        g["family"] = families.pop()
         g["curves"] = np.stack(g["curves"])
     return groups
 
@@ -414,7 +509,8 @@ def evaluate(ion: dict[tuple[int, bool], np.ndarray],
     return out
 
 
-def build_verdict(ionmc_dir: Path, topas_runs: list[Path], mcsquare_runs: list[Path]) -> dict[str, Any]:
+def build_verdict(ionmc_dir: Path, topas_runs: list[Path], mcsquare_runs: list[Path],
+                  cases_dir: Path | None = None) -> dict[str, Any]:  # fmt: skip
     """The V5 verdict document (``pass`` = the gating TOPAS verdict) from the four ionmc partials
     of ``ionmc_dir`` and the engine run directories; raises :class:`IddError` (fail closed)."""
     ion: dict[tuple[int, bool], np.ndarray] = {}
@@ -427,7 +523,11 @@ def build_verdict(ionmc_dir: Path, topas_runs: list[Path], mcsquare_runs: list[P
     if any(ion[(e, False)].shape[1] != nz[e] for e in ENERGIES):
         raise IddError("ionmc on/off grids differ")
     sources = {"topas": topas_runs, "mcsquare": mcsquare_runs}
-    groups = {eng: load_engine_groups(dirs, eng, nz) for eng, dirs in sources.items() if dirs}
+    absent = [eng for eng, dirs in sources.items() if not dirs]
+    if absent:
+        raise IddError(f"no {absent[0]} reference runs: V5 needs both engines (missing: {absent})")
+    cases = DEFAULT_CASES_DIR if cases_dir is None else Path(cases_dir)
+    groups = {eng: load_engine_groups(dirs, eng, nz, cases) for eng, dirs in sources.items()}
     missing = [(eng, e, n) for eng, g in groups.items() for e in ENERGIES for n in (True, False)
                if (e, n) not in g]  # fmt: skip
     if missing:
@@ -437,10 +537,11 @@ def build_verdict(ionmc_dir: Path, topas_runs: list[Path], mcsquare_runs: list[P
     doc.update({
         "row": "V5", "unit": UNIT, "analysis_code_sha": code_sha, "analysis_code_dirty": dirty,
         "tolerances": {k: {"kind": v[0], "tolerance": v[1]} for k, v in TOLERANCES.items()},
-        "ionmc_inputs": ion_src,
+        "ionmc_inputs": ion_src, "cases_dir": str(cases),
         "engine_inputs": {eng: {f"{e}-{'on' if n else 'off'}":
                                 {"seeds": g["seeds"], "runs": g["runs"], "output_sha256": g["hashes"],
-                                 "fingerprints": g["fingerprints"]}
+                                 "fingerprints": g["fingerprints"], "family": g["family"],
+                                 "binding": g["bound_cases"]}
                                 for (e, n), g in gr.items()} for eng, gr in groups.items()},
     })  # fmt: skip
     return doc
@@ -451,9 +552,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--ionmc-dir", required=True, type=Path)
     ap.add_argument("--topas-runs", nargs="+", required=True, type=Path)
     ap.add_argument("--mcsquare-runs", nargs="+", type=Path, default=[])
+    ap.add_argument("--cases-dir", type=Path, default=DEFAULT_CASES_DIR,
+                    help="committed reference cases the runs must be byte-identical to")
     ap.add_argument("--output", required=True, type=Path)
     args = ap.parse_args(argv)
-    doc = build_verdict(args.ionmc_dir, args.topas_runs, args.mcsquare_runs)
+    doc = build_verdict(args.ionmc_dir, args.topas_runs, args.mcsquare_runs, args.cases_dir)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(doc, indent=2) + "\n")
     for eng, ev in doc["engines"].items():

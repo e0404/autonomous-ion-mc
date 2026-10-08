@@ -547,7 +547,8 @@ def step_v5_compare(a: argparse.Namespace) -> int:
     """Row V5 verdict (C19 F3): the four verified ``v5-ionmc`` partials against the materialized
     TOPAS and MCsquare runs (``--reference-dir``, default ``<repo>/.ionmc-cache/reference-runs``;
     ``/workspace/...`` in the host snapshot) through ``compare_idd_v5.build_verdict``. The step
-    consumes partials only (no seed of its own). ``pass`` is the gating (TOPAS) verdict; any
+    consumes partials only (no seed of its own). Every run must be byte-identical to a committed case
+    of ``<repo>/validation/reference_cases`` (C20 G1; the bound file hashes are in the verdict). ``pass`` is the gating (TOPAS) verdict; any
     lineage or input error is a failed document with the reason, never a silent skip."""
     import importlib.util
     import tempfile
@@ -560,7 +561,9 @@ def step_v5_compare(a: argparse.Namespace) -> int:
     names = [f"v5-{e}-{t}.json" for e in (150, 200) for t in ("on", "off")]
     parts = v5.load_partials(a, names)  # hash- and binding-verified, attested
     ref_dir = Path(a.reference_dir) if a.reference_dir else REPO / ".ionmc-cache" / "reference-runs"
+    cases_dir = REPO / "validation" / "reference_cases"  # frozen cases of this snapshot (C20 G1)
     doc: dict[str, Any] = {"step": "v5-compare", "reference_dir": str(ref_dir),
+                           "cases_dir": str(cases_dir),
                            "attestation": v5.attestation_block(a)}  # fmt: skip
     reduced = any(p["reduced"] for p in parts)
     try:
@@ -568,7 +571,7 @@ def step_v5_compare(a: argparse.Namespace) -> int:
         with tempfile.TemporaryDirectory() as tmp:
             for nm, p in zip(names, parts, strict=True):
                 (Path(tmp) / nm).write_text(json.dumps(p, sort_keys=True))
-            verdict = cmp.build_verdict(Path(tmp), topas, mc)
+            verdict = cmp.build_verdict(Path(tmp), topas, mc, cases_dir)
         doc.update(verdict=verdict, pass_gating=bool(verdict["pass"]), error=None)
         doc["pass"] = bool(verdict["pass"] and not reduced)
     except (cmp.IddError, SystemExit, ValueError, OSError) as exc:

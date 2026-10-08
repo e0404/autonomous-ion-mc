@@ -1844,3 +1844,32 @@ def test_v5_compare_step_registered_and_fails_closed(
     ns = argparse.Namespace(dirs=[str(tmp_path)], reference_dir=str(tmp_path / "no-runs"))
     assert v5b.step_v5_compare(ns) == 1
     assert seen["pass"] is False and seen["verdict"] is None and seen["error"]
+
+
+def test_v5_compare_step_without_engine_runs_is_a_failed_document(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """C20 G2: valid partials with an empty reference dir give a failed document whose reason is
+    the missing engine runs (not an unrelated error), and the frozen cases dir is recorded."""
+    from tests.ionmc import test_compare_idd_v5 as t5
+
+    v5b = _load("steps_v5b")
+    parts = []
+    for e in (150, 200):
+        for nuc in (True, False):
+            f = tmp_path / f"p{e}{nuc}.json"
+            t5._partial(f, e, nuc, t5.noisy(t5._scaled(e, nuc), 20, 0.03, e))
+            parts.append(json.loads(f.read_text()) | {"reduced": False})
+    # the step re-serialises the partials: recompute the content digest after adding fields
+    for p in parts:
+        p["content_sha256"] = t5.M.content_digest(p)
+    seen: dict = {}
+    monkeypatch.setattr(v5b.v5, "load_partials", lambda a, names: parts)
+    monkeypatch.setattr(v5b.v5, "attestation_block", lambda a: {})
+    monkeypatch.setattr(v5b, "finish5b", lambda doc, frozen, used, reduced: seen.update(doc) or 1)
+    (tmp_path / "refs").mkdir()
+    ns = argparse.Namespace(dirs=[str(tmp_path)], reference_dir=str(tmp_path / "refs"))
+    assert v5b.step_v5_compare(ns) == 1
+    assert seen["pass"] is False and seen["verdict"] is None
+    assert "IddError" in seen["error"] and "no topas reference runs" in seen["error"]
+    assert seen["cases_dir"].endswith("validation/reference_cases")
