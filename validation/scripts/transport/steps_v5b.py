@@ -187,6 +187,7 @@ V7_MIN_PROFILE_BINS = 10
 # at alpha_tost per side, see ``v7_estimator_verdict``.
 V7_PAIR_DF, V7_COV_MARGIN = 38, 0.03  # paired statistic ~ t_38; region c0 +- 0.03, c0 = P(|t_38| <= 1)
 V7_MAX_REL_SE = 0.5  # bin resolvability: expected relative SE of a replicate must be below 50 %
+V7_ALPHA_BOX, V7_BOOT_N, V7_BOOT_Q = 0.01, 5000, 0.99  # single-interval gate: reference box and bootstrap check
 V7_ALPHA_TOST = 0.04  # per side; false acceptance <= 0.04 exactly (Clopper-Pearson / empirical Bernstein)
 V7_MIN_INTERVALS = 300
 # former point-estimate gate (pooled coverage within 0.68 +- 0.03): reported only, no longer decides ``pass``
@@ -978,9 +979,10 @@ def v7_region() -> tuple[float, float, float]:
 
 
 def v7_tost_verdict(lower: float, upper: float, bins_used: int, pairs: int, *, low: float | None = None,
-                    high: float | None = None, min_bins: int = 1) -> dict[str, Any]:  # fmt: skip
+                    high: float | None = None, min_bins: int = 1, unit: str = "pairs"
+                    ) -> dict[str, Any]:  # fmt: skip
     """Equivalence verdict from the exact finite-sample confidence bounds ``lower`` / ``upper`` of the
-    paired coverage: PASS iff ``lower >= low`` and ``upper <= high`` (``v7_region`` by default), ``pairs
+    paired (or single-interval, ``unit="replicates"``) coverage: PASS iff ``lower >= low`` and ``upper <= high`` (``v7_region`` by default), ``pairs
     >= V7_MIN_INTERVALS`` and ``bins_used >= min_bins``. Pure function."""
     c0, lo_r, hi_r = v7_region()
     low, high = (lo_r if low is None else low), (hi_r if high is None else high)
@@ -990,11 +992,178 @@ def v7_tost_verdict(lower: float, upper: float, bins_used: int, pairs: int, *, l
     if upper > high:
         reasons.append(f"CI upper bound {upper:.4f} above {high:.4f}")
     if pairs < V7_MIN_INTERVALS:
-        reasons.append(f"pairs {pairs} < {V7_MIN_INTERVALS}")
+        reasons.append(f"{unit} {pairs} < {V7_MIN_INTERVALS}")
     if bins_used < min_bins:
         reasons.append(f"bins_used {bins_used} < {min_bins}")
     return {"ci": [lower, upper], "low": low, "high": high, "c0": c0, "pass": not reasons,
             "reasons": reasons}  # fmt: skip
+
+
+def v7_coverage_extrema(x: NDArray[np.float64], half: NDArray[np.float64], z_box: float,
+                        n_total: int | None = None) -> tuple[float, float, float, float]:  # fmt: skip
+    """Exact minimum and maximum over ``delta`` in ``[-z_box, z_box]`` of the coverage ``C(delta) =
+    (1 / n_total) #{j : lo_j <= delta <= hi_j}`` of closed intervals ``[x_j - half_j, x_j + half_j]``
+    (replicate j is a hit iff ``|x_j - delta| <= half_j``), and the shifts attaining them
+    ``(c_min, c_max, delta_min, delta_max)``. ``x`` and ``half`` are in units of the reference standard
+    error; replicates left out of the arrays (degenerate uncertainty) count as misses through
+    ``n_total`` (default: the array length). ``C`` is a step function: its count is ``#(lo <= delta) -
+    #(hi < delta)``, constant between consecutive breakpoints, so it is evaluated at the clipped
+    breakpoints, at ``+-z_box`` and at the midpoints between consecutive ones (midpoints first, so
+    that ties prefer interior points; they include the open gaps just after an interval end, where the
+    minimum is attained)."""
+    n_total = x.size if n_total is None else n_total
+    if x.size == 0:
+        return 0.0, 0.0, 0.0, 0.0
+    lo, hi = np.sort(x - half), np.sort(x + half)
+    pts = np.concatenate([[-z_box, z_box], lo[(lo > -z_box) & (lo < z_box)],
+                          hi[(hi > -z_box) & (hi < z_box)]])  # fmt: skip
+    pts.sort()
+    q = np.concatenate([0.5 * (pts[:-1] + pts[1:]), pts])
+    cnt = np.searchsorted(lo, q, side="right") - np.searchsorted(hi, q, side="left")
+    i0, i1 = int(np.argmin(cnt)), int(np.argmax(cnt))
+    return float(cnt[i0] / n_total), float(cnt[i1] / n_total), float(q[i0]), float(q[i1])
+
+
+def v7_boot_z(means: NDArray[np.float64], n_h: int, mu_all: NDArray[np.float64], sem_h: NDArray[np.float64],
+              seed: int, n_boot: int = V7_BOOT_N, quantile: float = V7_BOOT_Q) -> float:  # fmt: skip
+    """Empirical simultaneous quantile of the standardized reference error: the ``quantile`` of
+    ``max_b |mean of n_h resampled replicate means - mu_all,b| / SEM_H,b`` over ``n_boot`` bootstrap
+    resamples (with replacement, the same replicate indices for all bins) of the ``means`` ``[R, B]``
+    (all replicates), vectorised, ``numpy`` generator seeded with ``seed``."""
+    rng = np.random.default_rng(seed)
+    out = np.empty(n_boot)
+    chunk = 250
+    for a in range(0, n_boot, chunk):
+        c = min(chunk, n_boot - a)
+        idx = rng.integers(0, means.shape[0], (c, n_h))
+        out[a : a + c] = np.max(np.abs(means[idx].mean(axis=1) - mu_all) / sem_h, axis=1)
+    return float(np.quantile(out, quantile))
+
+
+def v7_welch(n_h: int) -> tuple[float, float, float, float, float]:
+    """Single-interval nominal under Gaussian batch means. The hit statistic ``(X_j - mu_H) / sqrt(s_j^2
+    + SEM_H^2)`` has the Welch-Satterthwaite degrees of freedom ``nu = (a + b)^2 / (a^2 / 19 + b^2 /
+    (n_H - 1))`` with ``a = s_j^2`` (19 degrees of freedom) and ``b = SEM_H^2 = a / n_H`` (variance ratio
+    ``1 / n_H``, ``n_H - 1`` degrees of freedom): ``nu`` = 19.02 for ``n_H`` = 1800. Returns ``(nu, c1,
+    low, high, ratio)`` with ``c1 = P(|t_nu| <= 1)`` (about 0.6702) and the region ``c1 -/+ 0.03``."""
+    ratio = 1.0 / n_h
+    nu = (1.0 + ratio) ** 2 / (1.0 / (V7_BATCHES_PER_REP - 1) + ratio**2 / (n_h - 1))
+    c1 = student_abs_prob(nu, 1.0)
+    return nu, c1, c1 - V7_COV_MARGIN, c1 + V7_COV_MARGIN, ratio
+
+
+def v7_heldout_split(replicates: int) -> int:
+    """Number of evaluation replicates E (shards 0..5: the first three quarters); the held-out
+    reference H is the last quarter (shards 6..7)."""
+    if replicates < 8 or replicates % 4:
+        raise SystemExit(f"v7-rep: {replicates} replicates cannot be split 3:1 into E and H")
+    return replicates - replicates // 4
+
+
+def v7_single_gate(kind: str, means: NDArray[np.float64], sems: NDArray[np.float64], used: NDArray[np.bool_], *,
+                   boot_seed: int = 0, n_boot: int = V7_BOOT_N, z_boot_override: float | None = None
+                   ) -> dict[str, Any]:  # fmt: skip
+    """Single-interval gate (Codex REVIEW-25b77cf0): coverage of each replicate's ``mean +- sem`` interval
+    against a held-out reference with the reference uncertainty folded into the width (Welch form).
+
+    H = the last quarter of the replicates (shards 6..7, ``n_H`` = 1800), E = the first three quarters
+    (shards 0..5, 5400). ``mu_H,b`` is the mean of the H replicate means, ``SEM_H,b = sd_H,b / sqrt(n_H)``.
+    The bins are the mask ``used`` fixed by the independent 1e6 reference run. Hit for ``j`` in E:
+    ``|mean_jb - mu_H,b| <= w_jb`` with ``w_jb = sqrt(sem_jb^2 + SEM_H,b^2)``; ``sem_jb = 0`` (undefined
+    uncertainty) or ``SEM_H,b = 0`` (no information in H) is a miss. ``g_j`` = hits / bins used. Nothing
+    from E enters H or the mask, so given H the 5400 ``g_j`` in [0, 1] are exactly i.i.d. The nominal
+    coverage is ``c1 = P(|t_nu| <= 1)`` with the Welch degrees of freedom ``nu`` of ``v7_welch`` and the
+    region is ``c1 +- 0.03``.
+
+    Reference-error box. The error of ``mu_H,b`` has standard error ``SEM_H,b``; the box half width is
+    ``Z_box SEM_H,b`` with ``Z_box = max(Z_t, Z_boot)``, ``Z_t`` the Student-t quantile at ``1 -
+    alpha_box / (2 B)`` (``alpha_box`` = 0.01, ``n_H - 1`` degrees of freedom) and ``Z_boot`` the 0.99
+    quantile of ``max_b |mean of n_H resampled replicate means - mu_all,b| / SEM_H,b`` over 5000
+    bootstrap resamples of all replicate means (``boot_seed``, reported). With ``x_jb = mean_jb -
+    mu_H,b`` the coverage of bin ``b`` as a function of the shift ``delta`` (units ``SEM_H,b``) of the
+    reference is the number of closed intervals ``[(x_jb - w_jb) / SEM_H,b, (x_jb + w_jb) / SEM_H,b]``
+    containing ``delta`` divided by ``n_E``; its exact minimum and maximum over the box come from the
+    endpoint sweep (``v7_coverage_extrema``); each bin depends on its own shift only, so ``m_lo`` and
+    ``m_hi`` are the means over bins of the per-bin minimum and maximum, and the extremal shift vectors
+    give two more vectors ``g_j`` for the variance.
+
+    Bounds, conditional on H, at ``alpha_tost`` = 0.04 per side (exact for bounded i.i.d. variables):
+    scalar, Clopper-Pearson on the counts at the box-minimising and box-maximising shift; profiles,
+    empirical Bernstein with the largest sample variance of ``g_j`` over the unshifted and the two
+    extremal shift vectors. Pass iff ``lower >= c1 - 0.03`` and ``upper <= c1 + 0.03`` with at least 300
+    replicates and (profiles) 10 bins. What is exact: the bounds conditional on H and the sweep. What
+    rests on an assumption: the 0.99 level of the box needs Gaussian marginals of the H mean (a mean of
+    1800 replicate means, 36 000 blocks; the t quantile is exact under Gaussianity and the bootstrap
+    checks it on the actual replicate means); the paired gate carries the finite-sample guarantee."""
+    r, nbins = means.shape
+    n_e = v7_heldout_split(r)
+    n_h = r - n_e
+    me, se_ = means[:n_e], sems[:n_e]
+    mh = means[n_e:]
+    mu_h, sd_h = mh.mean(axis=0), mh.std(axis=0, ddof=1)
+    sem_h = sd_h / math.sqrt(n_h)
+    nu, c1, low, high, ratio = v7_welch(n_h)
+    nused = int(used.sum())
+    w = np.sqrt(se_**2 + sem_h**2)
+    valid = (se_ > 0.0) & (sem_h > 0.0) & used  # [n_e, bins]
+    hit = (np.abs(me - mu_h) <= w) & valid
+    covered = hit.sum(axis=1).astype(np.int64)
+    degenerate = used & ~valid
+    out: dict[str, Any] = {"c1": c1, "nu": nu, "low": low, "high": high, "variance_ratio": ratio,
+                           "replicates_eval": n_e, "replicates_heldout": n_h, "alpha_box": V7_ALPHA_BOX,
+                           "boot_seed": boot_seed, "boot_n": n_boot, "mu_heldout": mu_h.tolist(),
+                           "sem_heldout": sem_h.tolist(), "degenerate_bins": [int(c) for c in degenerate.sum(axis=0)],
+                           "degenerate_total": int(degenerate.sum()),
+                           "degenerate_replicates": int(degenerate.any(axis=1).sum()),
+                           "degenerate_fraction": float(degenerate.any(axis=1).mean()) if n_e else math.nan,
+                           "per_replicate_covered": [int(c) for c in covered],
+                           "per_bin_coverage": [None if not used[b] else float(hit[:, b].mean()) for b in range(nbins)]}  # fmt: skip
+    nan = math.nan
+    out.update(m=nan, m_lo=nan, m_hi=nan, z_t=nan, z_boot=nan, z_box=nan, bound_kind="none", eb_eps=nan,
+               variance_max=nan, cp_count_min=-1, cp_count_max=-1, per_bin_box_coverage_min_max=[[nan, nan]] * nbins)  # fmt: skip
+    lower = upper = nan
+    if nused:
+        g = covered / nused
+        out["m"] = float(g.mean())
+        z_t = student_t_quantile(1.0 - V7_ALPHA_BOX / (2.0 * nused), n_h - 1)
+        z_boot = (v7_boot_z(means[:, used], n_h, means[:, used].mean(axis=0), np.maximum(sem_h[used], 1e-300), boot_seed, n_boot)
+                  if z_boot_override is None else z_boot_override)  # the override is for the calibration only
+        z_box = max(z_t, z_boot)
+        d_min, d_max = np.zeros(nbins), np.zeros(nbins)
+        lo_b, hi_b = np.zeros(nbins), np.zeros(nbins)
+        box = [[nan, nan] for _ in range(nbins)]
+        for b in np.flatnonzero(used):
+            v = valid[:, b]
+            if not v.any():
+                lo_b[b] = hi_b[b] = 0.0
+            else:
+                lo_b[b], hi_b[b], d_min[b], d_max[b] = v7_coverage_extrema(
+                    (me[v, b] - mu_h[b]) / sem_h[b], w[v, b] / sem_h[b], z_box, n_e)
+            box[int(b)] = [float(lo_b[b]), float(hi_b[b])]
+        m_lo, m_hi = float(lo_b[used].mean()), float(hi_b[used].mean())
+
+        def g_at(delta: NDArray[np.float64]) -> NDArray[np.float64]:
+            h = (np.abs(me - (mu_h + delta * sem_h)) <= w) & valid
+            return h.sum(axis=1) / nused
+
+        g_lo, g_hi = g_at(d_min), g_at(d_max)
+        k_min, k_max = int(round(float(g_lo.sum()))), int(round(float(g_hi.sum())))
+        v_max = float(max(np.var(g_lo, ddof=1), np.var(g_hi, ddof=1), np.var(g, ddof=1)))
+        if kind == "scalar" and nused == 1:
+            lower, upper = cp_lower(k_min, n_e, V7_ALPHA_TOST), cp_upper(k_max, n_e, V7_ALPHA_TOST)
+            bound, eps = "clopper-pearson", nan
+        else:
+            eps = empirical_bernstein_eps(v_max, n_e, V7_ALPHA_TOST)
+            lower, upper = m_lo - eps, m_hi + eps
+            bound = "empirical-bernstein"
+        out.update(m_lo=m_lo, m_hi=m_hi, z_t=z_t, z_boot=float(z_boot), z_box=float(z_box), bound_kind=bound, eb_eps=eps,
+                   variance_max=v_max, cp_count_min=k_min, cp_count_max=k_max, per_bin_box_coverage_min_max=box)  # fmt: skip
+    min_bins = V7_MIN_PROFILE_BINS if kind == "profile" else 1
+    if nused:
+        out.update(v7_tost_verdict(lower, upper, nused, n_e, low=low, high=high, min_bins=min_bins, unit="replicates"))
+    else:
+        out.update({"pass": False, "reasons": ["no bin used"], "ci": [nan, nan]})
+    return out
 
 
 def v7_pair_indices(replicates: int) -> tuple[NDArray[np.int64], NDArray[np.int64]]:
@@ -1010,8 +1179,14 @@ def v7_pair_indices(replicates: int) -> tuple[NDArray[np.int64], NDArray[np.int6
 def v7_estimator_verdict(kind: str, means: NDArray[np.float64], sems: NDArray[np.float64],
                          ref: NDArray[np.float64], ref_sem: NDArray[np.float64],
                          ref_blocks: NDArray[np.float64] | None = None, *, n_ref: int = V7_REF_N,
-                         n_rep: int = V7_REP_N) -> dict[str, Any]:  # fmt: skip
-    """Coverage verdict of one estimator by the reference-free paired design (Codex REVIEW-22711e6f).
+                         n_rep: int = V7_REP_N, boot_seed: int = 0, n_boot: int = V7_BOOT_N,
+                         z_boot_override: float | None = None) -> dict[str, Any]:  # fmt: skip
+    """Coverage verdict of one estimator by two gates, both of which must pass: the reference-free PAIRED
+    gate (Codex REVIEW-22711e6f, described here; it carries the finite-sample guarantee) and the
+    SINGLE-INTERVAL gate against a held-out reference (``v7_single_gate``, Codex REVIEW-25b77cf0). The
+    returned ``pass`` is their conjunction; ``pass_paired`` / ``pass_single``, ``reasons_paired`` /
+    ``reasons_single`` and the sub-document ``single`` report both. The remaining fields describe the
+    paired gate.
 
     ``means`` / ``sems`` ``[R, bins]`` are the replicate means and sample SEMs of their 20 batches
     (concatenated over the shards 0..7). The ``R`` replicates form ``P = R / 2`` = 3600 fixed disjoint
@@ -1111,21 +1286,29 @@ def v7_estimator_verdict(kind: str, means: NDArray[np.float64], sems: NDArray[np
     else:
         tost = {"pass": False, "reasons": ["no bin used"], "ci": [math.nan, math.nan], "low": low, "high": high, "c0": c0}
     legacy = bool(nused >= min_bins and pairs >= V7_MIN_INTERVALS and abs(m - V7_LEGACY_TARGET) <= V7_LEGACY_TOL)
-    return {"kind": kind, "bins": int(nbins), "bins_used": nused, "bin_mask": [bool(u) for u in used],
-            "bin_mask_source": "independent 1e6 reference run (v7-rep-ref) only", "n_pairs": pairs,
-            "rel_se_per_replicate": [None if not np.isfinite(x) else float(x) for x in rel],
-            "max_rel_se": V7_MAX_REL_SE, "excluded_bins": excluded,
-            "covered": k, "m": m, **tost, "pair_df": V7_PAIR_DF, "margin": V7_COV_MARGIN,
-            "alpha_tost": V7_ALPHA_TOST, "bound_kind": bound, "eb_eps": eps, "variance": v,
-            "per_bin_coverage": [None if np.isnan(x) else float(x) for x in per_bin],
-            "replicate_mean_skewness": skew, "legacy_point_gate_pass": legacy, "m_ref1e6": m_ref,
-            "degenerate_pair_bins": [int(c) for c in degenerate.sum(axis=0)],
-            "degenerate_pairs_total": int(degenerate.sum()),
-            "degenerate_pairs": int(degenerate.any(axis=1).sum()),
-            "degenerate_pair_fraction": float(degenerate.any(axis=1).mean()),
-            "single_interval_diagnostic": "m_ref1e6: coverage of single replicates against the 1e6 reference",
-            "per_pair_covered": [int(c) for c in covered_p], "reference": ref.tolist(),
-            "reference_sem": ref_sem.tolist()}  # fmt: skip
+    doc = {"kind": kind, "bins": int(nbins), "bins_used": nused, "bin_mask": [bool(u) for u in used],
+           "bin_mask_source": "independent 1e6 reference run (v7-rep-ref) only", "n_pairs": pairs,
+           "rel_se_per_replicate": [None if not np.isfinite(x) else float(x) for x in rel],
+           "max_rel_se": V7_MAX_REL_SE, "excluded_bins": excluded,
+           "covered": k, "m": m, **tost, "pair_df": V7_PAIR_DF, "margin": V7_COV_MARGIN,
+           "alpha_tost": V7_ALPHA_TOST, "bound_kind": bound, "eb_eps": eps, "variance": v,
+           "per_bin_coverage": [None if np.isnan(x) else float(x) for x in per_bin],
+           "replicate_mean_skewness": skew, "legacy_point_gate_pass": legacy, "m_ref1e6": m_ref,
+           "degenerate_pair_bins": [int(c) for c in degenerate.sum(axis=0)],
+           "degenerate_pairs_total": int(degenerate.sum()),
+           "degenerate_pairs": int(degenerate.any(axis=1).sum()),
+           "degenerate_pair_fraction": float(degenerate.any(axis=1).mean()),
+           "single_interval_diagnostic": "m_ref1e6: coverage of single replicates against the 1e6 reference "
+                                         "(diagnostic; the single-interval GATE is in 'single')",
+           "per_pair_covered": [int(c) for c in covered_p], "reference": ref.tolist(),
+           "reference_sem": ref_sem.tolist()}  # fmt: skip
+    single = v7_single_gate(kind, means, sems, used, boot_seed=boot_seed, n_boot=n_boot,
+                            z_boot_override=z_boot_override)  # fmt: skip
+    doc.update({"pass_paired": doc["pass"], "reasons_paired": list(doc["reasons"]), "pass_single": single["pass"],
+                "reasons_single": [f"single: {x}" for x in single["reasons"]], "single": single})
+    doc["pass"] = bool(doc["pass_paired"] and doc["pass_single"])
+    doc["reasons"] = doc["reasons_paired"] + doc["reasons_single"]
+    return doc
 
 
 def v7_replicate_stats(
@@ -1224,7 +1407,7 @@ def v7_rep_combine(shards: list[dict[str, Any]], ref: dict[str, Any]) -> dict[st
                 or not np.all(np.isfinite([rmean, rsem]))):  # fmt: skip
             raise SystemExit(f"v7-rep: estimator {name}: inconsistent shapes or non-finite values")
         estimators[name] = v7_estimator_verdict(kind, means, sems, rmean, rsem, rblocks, n_ref=int(ref["n"]),
-                                                n_rep=V7_REP_N)
+                                                n_rep=V7_REP_N, boot_seed=int(ref["seed"]))
     return {"replicates": int(sum(p["replicates"] for p in shards)), "estimators": estimators,
             "histories_per_replicate": V7_REP_N, "reference_histories": ref["n"],
             "shard_histories": [p["n"] for p in shards], "bins": V7_BINS,
@@ -1232,7 +1415,8 @@ def v7_rep_combine(shards: list[dict[str, Any]], ref: dict[str, Any]) -> dict[st
                      "margin": V7_COV_MARGIN, "pair_df": V7_PAIR_DF, "alpha_tost": V7_ALPHA_TOST,
                      "pairs": int(sum(p["replicates"] for p in shards)) // 2,
                      "pairing": "(shard s, replicate j) with (shard s + 4, replicate j)",
-                     "bins_from": "v7-rep-ref only", "max_rel_se": V7_MAX_REL_SE, "min_pairs": V7_MIN_INTERVALS,
+                     "bins_from": "v7-rep-ref only", "single_gate": "held-out shards 6-7 reference, Welch width, box + bootstrap",
+                     "alpha_box": V7_ALPHA_BOX, "boot_n": V7_BOOT_N, "max_rel_se": V7_MAX_REL_SE, "min_pairs": V7_MIN_INTERVALS,
                      "min_profile_bins": V7_MIN_PROFILE_BINS},
             "pass": bool(all(e["pass"] for e in estimators.values()))}  # fmt: skip
 
