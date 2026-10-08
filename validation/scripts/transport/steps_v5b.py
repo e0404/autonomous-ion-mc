@@ -773,6 +773,90 @@ def tally_batches(res: Result, name: str) -> NDArray[np.float64]:
     return v4.batch_values(res, {q.name: q.numerator for q in plan.quantities}[name])
 
 
+def _betacf(a: float, b: float, x: float) -> float:
+    """Continued fraction of the regularized incomplete beta function (modified Lentz)."""
+    tiny = 1e-300
+    qab, qap, qam = a + b, a + 1.0, a - 1.0
+    c, d = 1.0, 1.0 - qab * x / qap
+    d = 1.0 / (d if abs(d) > tiny else tiny)
+    h = d
+    for m in range(1, 500):
+        m2 = 2 * m
+        for aa in (m * (b - m) * x / ((qam + m2) * (a + m2)), -(a + m) * (qab + m) * x / ((a + m2) * (qap + m2))):
+            d = 1.0 + aa * d
+            d = 1.0 / (d if abs(d) > tiny else tiny)
+            c = 1.0 + aa / c
+            c = c if abs(c) > tiny else tiny
+            h *= d * c
+        if abs(d * c - 1.0) < 1e-15 and m > 1:
+            break
+    return h
+
+
+def betainc_reg(a: float, b: float, x: float) -> float:
+    """Regularized incomplete beta function I_x(a, b) (continued fraction; no scipy)."""
+    if x <= 0.0:
+        return 0.0
+    if x >= 1.0:
+        return 1.0
+    lbt = math.lgamma(a + b) - math.lgamma(a) - math.lgamma(b) + a * math.log(x) + b * math.log1p(-x)
+    if x < (a + 1.0) / (a + b + 2.0):
+        return math.exp(lbt) * _betacf(a, b, x) / a
+    return 1.0 - math.exp(lbt) * _betacf(b, a, 1.0 - x) / b
+
+
+def student_abs_prob(df: int, h: float) -> float:
+    """P(|t_df| <= h) = 1 - I_{df/(df+h^2)}(df/2, 1/2) for the Student t distribution."""
+    return 1.0 - betainc_reg(df / 2.0, 0.5, df / (df + h * h))
+
+
+def student_t_quantile(p: float, df: int) -> float:
+    """Quantile of Student t with ``df`` degrees of freedom (``0.5 < p < 1``), by bisection on the
+    exact CDF ``student_abs_prob``: P(t <= q) = (1 + P(|t| <= q)) / 2."""
+    lo, hi = 0.0, 1.0
+    while (1.0 + student_abs_prob(df, hi)) / 2.0 < p:
+        hi *= 2.0
+    for _ in range(200):
+        mid = 0.5 * (lo + hi)
+        if (1.0 + student_abs_prob(df, mid)) / 2.0 < p:
+            lo = mid
+        else:
+            hi = mid
+    return 0.5 * (lo + hi)
+
+
+def coverage_cluster_stats(covered_j: NDArray[np.int64], bins_used: int, n_batches: int) -> dict[str, Any]:
+    """Cluster-aware coverage statistics: the replicates are the independent clusters (the bins of
+    one replicate come from the same histories). ``f_j = covered_j / bins_used``; the SE of the pooled
+    coverage (their mean) is ``sd(f_j, ddof=1) / sqrt(R)`` with a 90 % t interval on R - 1 df.
+    ``nominal_coverage`` is P(|t_{nb-1}| <= 1): the coverage a one-sigma interval built from the sample
+    SEM of ``n_batches`` batches has for a normal estimator."""
+    f = np.asarray(covered_j, dtype=float) / bins_used
+    r = f.size
+    se = float(f.std(ddof=1) / math.sqrt(r))
+    half = student_t_quantile(0.95, r - 1) * se
+    return {"per_replicate_covered": [int(c) for c in covered_j], "per_replicate_fraction": f.tolist(),
+            "coverage_cluster_se": se, "t_quantile_90": student_t_quantile(0.95, r - 1),
+            "coverage_ci90_cluster": [float(f.mean() - half), float(f.mean() + half)],
+            "nominal_coverage": student_abs_prob(n_batches - 1, 1.0)}  # fmt: skip
+
+
+def cluster_doc(covered_j: NDArray[np.int64], used: NDArray[np.bool_], ref: NDArray[np.float64],
+                ref_sem: NDArray[np.float64], rep_means: NDArray[np.float64], nb: int) -> dict[str, Any]:
+    """Cluster-level record of the v7-rep coverage (Amendment 11, review db4474cd). The reference
+    is one finite sample shared by every replicate, so its variance is a common-mode term:
+    ``reference_variance_ratio`` is the mean over used bins of ``SEM_ref^2`` over the variance of the
+    replicate means (expected ~ n_rep / n_ref)."""
+    out = coverage_cluster_stats(covered_j, int(used.sum()), nb)
+    var_rep = rep_means[:, used].var(axis=0, ddof=1)
+    ratio = ref_sem[used] ** 2 / var_rep
+    out.update({"reference_profile_sem": ref_sem.tolist(),
+                "reference_relative_se": np.where(used, ref_sem / np.where(used, ref, 1.0), 0.0).tolist(),
+                "reference_variance_ratio_per_bin": ratio.tolist(),
+                "reference_variance_ratio": float(ratio.mean())})  # fmt: skip
+    return out
+
+
 def step_v7_rep(a: argparse.Namespace) -> int:
     geo, grid = coarse_depth(V7_BINS)
     n_rep = scaled(V7_REP_N, a.scale, 2000, V7_REP_BATCHES)
@@ -787,10 +871,14 @@ def step_v7_rep(a: argparse.Namespace) -> int:
         return tally_batches(res, "sec_p")
 
     t0 = time.perf_counter()
-    ref = run(n_ref, V7_REPLICATES).mean(axis=0)
+    ref_b = run(n_ref, V7_REPLICATES)
+    ref = ref_b.mean(axis=0)
+    ref_sem = ref_b.std(axis=0, ddof=1) / math.sqrt(ref_b.shape[0])
     used = ref > 0.0
     covered = intervals = 0
     per_bin = np.zeros(V7_BINS)
+    covered_j = np.zeros(V7_REPLICATES, dtype=np.int64)
+    rep_means = np.zeros((V7_REPLICATES, V7_BINS))
     for j in range(V7_REPLICATES):
         b = run(n_rep, j)
         mean, sem = b.mean(axis=0), b.std(axis=0, ddof=1) / math.sqrt(b.shape[0])
@@ -798,6 +886,8 @@ def step_v7_rep(a: argparse.Namespace) -> int:
         covered += int(hit.sum())
         intervals += int(used.sum())
         per_bin += hit
+        covered_j[j] = int(hit.sum())
+        rep_means[j] = mean
     cov = covered / intervals if intervals else math.nan
     ok = bool(intervals >= V7_MIN_INTERVALS and int(used.sum()) >= 10
               and abs(cov - V7_COVERAGE) <= V7_COVERAGE_TOL)  # fmt: skip
@@ -806,6 +896,7 @@ def step_v7_rep(a: argparse.Namespace) -> int:
            "bins_used": int(used.sum()), "intervals": intervals, "covered": covered,
            "coverage": cov, "target": V7_COVERAGE, "tolerance": V7_COVERAGE_TOL,
            "per_bin_covered": per_bin.tolist(), "reference_profile": ref.tolist(),
+           **cluster_doc(covered_j, used, ref, ref_sem, rep_means, V7_REP_BATCHES),
            "wall_s": time.perf_counter() - t0, "pass": ok}  # fmt: skip
     return finish5b(doc, V7_REPLICATES * V7_REP_N + V7_REF_N, V7_REPLICATES * n_rep + n_ref,
                     n_rep < V7_REP_N)

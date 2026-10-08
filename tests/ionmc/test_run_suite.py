@@ -2031,3 +2031,43 @@ def test_lv5b_consumed_base_refused_and_new_base_accepted() -> None:
     lo = v5b.base.SEED_BASE + 1000 * v5b.R_INDEX["v7-rep"]
     assert seeds == list(range(lo, lo + 91)) and seeds[-1] < lo + 1000
     assert len(set(seeds)) == 91 and v5b.V7_REPLICATES * v5b.V7_BINS >= v5b.V7_MIN_INTERVALS
+
+
+def test_v7_rep_cluster_coverage_statistics() -> None:
+    """Amendment 11 review db4474cd: v7-rep records per-replicate (cluster) coverage, a cluster SE
+    with a t interval, the nominal one-sigma coverage of nb batches and the reference variance."""
+    v5b = _load("steps_v5b")
+    # Student t quantiles and the nominal coverage, without scipy
+    for p, df, ref in ((0.95, 19, 1.7291), (0.95, 29, 1.6991), (0.95, 89, 1.6622)):
+        assert abs(v5b.student_t_quantile(p, df) - ref) < 5e-4
+    assert abs(v5b.student_abs_prob(19, 1.0) - 0.670) < 0.002
+    assert abs(v5b.student_abs_prob(1, 1.0) - 0.5) < 1e-9  # Cauchy: (2/pi) atan(1)
+    # synthetic matrix: 30 replicates, 12 bins used, covered counts with known mean and sd
+    covered = np.array([8, 9, 7, 8, 8, 6, 9, 10, 8, 8] * 3, dtype=np.int64)
+    st = v5b.coverage_cluster_stats(covered, 12, 20)
+    f = covered / 12.0
+    se = f.std(ddof=1) / np.sqrt(30)
+    assert st["per_replicate_covered"] == covered.tolist()
+    assert abs(st["coverage_cluster_se"] - se) < 1e-15
+    half = v5b.student_t_quantile(0.95, 29) * se
+    assert abs(st["coverage_ci90_cluster"][0] - (f.mean() - half)) < 1e-12
+    assert abs(st["coverage_ci90_cluster"][1] - (f.mean() + half)) < 1e-12
+    assert abs(st["nominal_coverage"] - 0.670) < 0.002
+    # reference variance ratio: replicate means with var 1 per bin, reference SEM^2 = 0.01
+    rng = np.random.default_rng(3)
+    means = rng.standard_normal((90, 12))
+    used = np.ones(12, dtype=bool)
+    doc = v5b.cluster_doc(
+        covered[:1].repeat(90), used, np.full(12, 5.0), np.full(12, 0.1), means, 20
+    )
+    assert abs(doc["reference_variance_ratio"] - 0.01) < 0.003
+    for key in (
+        "reference_profile_sem",
+        "reference_relative_se",
+        "per_replicate_covered",
+        "coverage_cluster_se",
+        "coverage_ci90_cluster",
+        "nominal_coverage",
+    ):
+        assert key in doc
+    assert abs(doc["reference_relative_se"][0] - 0.02) < 1e-12

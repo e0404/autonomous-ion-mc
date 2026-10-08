@@ -197,14 +197,14 @@ invocation (Amendment 5). Crash observations during this task: two intermittent 
 
 ## Slice B suites `lv5b` and `hr5` (V3-005B, `steps_v5b.py`)
 
-`lv5b` (base 20441004; rehearsals 2046xxxx): throughput and shard table, V8-LV (python vs warp-cpu float64
+`lv5b` (qualification base 20471004, 20441004 consumed by Amendment 11; rehearsals 2046xxxx): throughput and shard table, V8-LV (python vs warp-cpu float64
 trajectory parity incl. the nuclear trace and a nuclear-dense set), R1-nuc (A16 `nuclear=False` plus a
 python nuclear-on digest equal to the one measured with the source tree of b84fdf38), V5 ionmc side
 (four steps; the partials hold the per-batch IDD in MeV/(g/cm^2)/primary for `compare_idd_v5.py`), V2b
 (shards plus combine) and V7 (N-scan with f32/f64, grid shift/refinement, coverage replicates). `hr5`
-(base 20451004; `IONMC_REQUIRE_CUDA=1`, one controlling process): V8 statistical parity samples
+(7 steps; base 20451004; `IONMC_REQUIRE_CUDA=1`, one controlling process): V8 statistical parity samples
 (python in two shards, warp-cpu float64, CUDA float32 and float64), their T12 comparison and V7 f32 vs
-f64 on CUDA. Step 16 of `lv5b` (1-vs-N worker partition) is deferred in the single-process mode. Any
+f64 on CUDA. Step 15 of `lv5b` (1-vs-N worker partition; two V2b shards) is deferred in the single-process mode. Any
 combine that uses imported partials is `conformant: false` (Amendment 5). V6 and E1-B (r_index 12, 13,
 hr5 r_index 3) belong to V3-005C.
 
