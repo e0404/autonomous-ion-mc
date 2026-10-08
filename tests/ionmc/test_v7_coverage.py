@@ -331,17 +331,18 @@ def test_resolvability_criterion_excludes_exactly_the_sparse_bin(v5b: ModuleType
     assert sc["bin_mask"] == [True] and sc["excluded_bins"] == {}
 
 
-def test_welch_nu_and_single_interval_nominal(v5b: ModuleType) -> None:
-    """nu = (a + b)^2 / (a^2 / 19 + b^2 / (n_H - 1)) with b / a = 1 / n_H: 19.02 for n_H = 1800;
-    c1 = P(|t_nu| <= 1) about 0.6702; region c1 -/+ 0.03."""
-    nu, c1, low, high, ratio = v5b.v7_welch(1800)
-    assert abs(ratio - 1 / 1800) < 1e-18 and abs(nu - 19.0213) < 2e-3
-    a, b = 1.0, 1.0 / 1800
-    assert abs(nu - (a + b) ** 2 / (a**2 / 19 + b**2 / 1799)) < 1e-12
-    assert abs(c1 - v5b.student_abs_prob(nu, 1.0)) < 1e-15 and abs(c1 - 0.6702) < 2e-4
+def test_single_interval_region_and_hoeffding_radius(v5b: ModuleType) -> None:
+    """One-sample target c1 = P(|t_19| <= 1) = 0.6701, region c1 -/+ 0.03; the fixed Hoeffding radius of
+    the single gate for n = 5400 and alpha = 0.04 is sqrt(ln 25 / 10800) = 0.01726."""
+    c1, low, high = v5b.v7_single_region()
+    assert abs(c1 - v5b.student_abs_prob(19, 1.0)) < 1e-15 and abs(c1 - 0.6701) < 2e-4
     assert abs(low - (c1 - 0.03)) < 1e-15 and abs(high - (c1 + 0.03)) < 1e-15
-    print("v7 Welch single-interval nominal", {"nu": nu, "c1": c1, "low": low, "high": high})
-    assert abs(v5b.student_abs_prob(19, 1.0) - 0.6701) < 2e-4  # the pure t_19 value for comparison
+    print("v7 single-interval nominal", {"c1": c1, "low": low, "high": high})
+    eps = v5b.v7_hoeffding_radius(5400, 0.04)
+    assert abs(eps - math.sqrt(math.log(25.0) / 10800)) < 1e-15 and abs(eps - 0.017256) < 1e-5
+    assert not hasattr(
+        v5b, "v7_welch"
+    )  # the Welch width is gone: the interval is mean +- sem alone
 
 
 def test_coverage_sweep_matches_brute_force(v5b: ModuleType) -> None:
@@ -391,8 +392,9 @@ def test_box_quantiles_and_bootstrap(v5b: ModuleType) -> None:
 
 
 def test_single_interval_gate_hand_case_and_heldout_independence(v5b: ModuleType) -> None:
-    """Scalar, 8 replicates: E = first 6, H = last 2. Hit iff |x - mu_H| <= sqrt(sem^2 + SEM_H^2);
-    nothing from E enters mu_H, SEM_H or the bin mask; row pass needs both gates."""
+    """Scalar, 8 replicates: E = first 6, H = last 2. Hit iff |x - mu_H| <= sem_j ALONE (no SEM_H in the
+    width); the hit interval in the shift variable is [(x - sem) / SEM_H, (x + sem) / SEM_H]; nothing
+    from E enters mu_H, SEM_H or the bin mask; row pass needs both gates."""
     means = np.array([[1.02], [1.21], [0.83], [0.98], [0.91], [1.13], [1.00], [1.20]])
     sems = np.full((8, 1), 0.10)
     ref, rsem = np.array([1.0]), np.array([0.01])
@@ -401,16 +403,15 @@ def test_single_interval_gate_hand_case_and_heldout_independence(v5b: ModuleType
     mu_h = 1.1
     sem_h = float(np.std([1.0, 1.2], ddof=1)) / math.sqrt(2.0)  # 0.1
     assert abs(sg["mu_heldout"][0] - mu_h) < 1e-15 and abs(sg["sem_heldout"][0] - sem_h) < 1e-15
-    w = math.hypot(0.10, sem_h)
-    want = (np.abs(means[:6, 0] - mu_h) <= w).astype(
+    want = (np.abs(means[:6, 0] - mu_h) <= 0.10).astype(
         int
-    )  # 0.08 y, 0.11 y, 0.27 n, 0.12 y, 0.19 n, 0.03 y
+    )  # 0.08 y, 0.11 n, 0.27 n, 0.12 n, 0.19 n, 0.03 y
     assert (
-        sg["per_replicate_covered"] == want.tolist() == [1, 1, 0, 1, 0, 1]
-        and abs(sg["m"] - 4 / 6) < 1e-15
+        sg["per_replicate_covered"] == want.tolist() == [1, 0, 0, 0, 0, 1]
+        and abs(sg["m"] - 2 / 6) < 1e-15
     )
-    nu, c1, low, high, _ = v5b.v7_welch(2)
-    assert sg["nu"] == nu and sg["c1"] == c1 and sg["low"] == low and sg["high"] == high
+    c1, low, high = v5b.v7_single_region()
+    assert sg["c1"] == c1 and sg["low"] == low and sg["high"] == high and "nu" not in sg
     zt = v5b.student_t_quantile(1.0 - 0.01 / 2.0, 1)
     assert (
         abs(sg["z_t"] - zt) < 1e-12
@@ -418,7 +419,9 @@ def test_single_interval_gate_hand_case_and_heldout_independence(v5b: ModuleType
         and sg["boot_seed"] == 3
     )
     x = (means[:6, 0] - mu_h) / sem_h
-    mn, mx, _, _ = v5b.v7_coverage_extrema(x, np.full(6, w / sem_h), sg["z_box"])
+    mn, mx, _, _ = v5b.v7_coverage_extrema(
+        x, np.full(6, 0.10 / sem_h), sg["z_box"]
+    )  # half width sem / SEM_H
     assert (
         sg["per_bin_box_coverage_min_max"] == [[mn, mx]] and sg["m_lo"] == mn and sg["m_hi"] == mx
     )
@@ -430,9 +433,8 @@ def test_single_interval_gate_hand_case_and_heldout_independence(v5b: ModuleType
     assert any(r.startswith("single:") for r in e["reasons"]) and "replicates 6 < 300" in " ".join(
         e["reasons"]
     )
-    # an evaluation replicate does not move the reference; a held-out replicate does
     m2 = means.copy()
-    m2[2, 0] += 0.3
+    m2[2, 0] += 0.3  # an evaluation replicate does not move the reference
     e2 = v5b.v7_estimator_verdict("scalar", m2, sems, ref, rsem, None, boot_seed=3, n_boot=300)
     assert (
         e2["single"]["mu_heldout"] == sg["mu_heldout"]
@@ -440,18 +442,52 @@ def test_single_interval_gate_hand_case_and_heldout_independence(v5b: ModuleType
     )
     assert e2["bin_mask"] == e["bin_mask"]
     m3 = means.copy()
-    m3[6, 0] += 0.3
+    m3[6, 0] += 0.3  # a held-out replicate does
     e3 = v5b.v7_estimator_verdict("scalar", m3, sems, ref, rsem, None, boot_seed=3, n_boot=300)
     assert abs(e3["single"]["mu_heldout"][0] - (mu_h + 0.15)) < 1e-12
-    # degenerate sem = 0 is a miss in the single-interval gate; SEM_H = 0 (no information) is a miss for all
     s4 = sems.copy()
-    s4[0, 0] = 0.0
+    s4[0, 0] = 0.0  # degenerate sem = 0 is a miss
     e4 = v5b.v7_estimator_verdict("scalar", means, s4, ref, rsem, None, boot_seed=3, n_boot=300)
     assert e4["single"]["per_replicate_covered"][0] == 0 and e4["single"]["degenerate_total"] == 1
     m5 = means.copy()
-    m5[6:, 0] = 1.0  # identical H means: SEM_H = 0
+    m5[6:, 0] = 1.0  # identical H means: SEM_H = 0, no information: all misses
     e5 = v5b.v7_estimator_verdict("scalar", m5, sems, ref, rsem, None, boot_seed=3, n_boot=300)
     assert e5["single"]["m"] == 0.0 and e5["single"]["degenerate_total"] == 6
+
+
+def test_single_gate_monotonicity_m_lo_m_hi_bracket_every_shift(v5b: ModuleType) -> None:
+    """For any shift vector inside the box the mean coverage lies in [m_lo, m_hi] (the extrema over the
+    box), so a bound on m_lo / m_hi (K_min / K_max) is conservative for the unknown true shift; the
+    profile bound is the fixed Hoeffding radius (no data-selected variance)."""
+    rng = np.random.default_rng(6)
+    means = 5.0 + rng.normal(0.0, 1.0, (400, 4))
+    sems = 0.9 * np.abs(1.0 + 0.2 * rng.normal(0.0, 1.0, (400, 4)))
+    ref, rsem = np.full(4, 5.0), np.full(4, 0.01)
+    e = v5b.v7_estimator_verdict("profile", means, sems, ref, rsem, None, boot_seed=5, n_boot=200)
+    sg = e["single"]
+    n_e = sg["replicates_eval"]
+    me, se_ = means[:n_e], sems[:n_e]
+    mu_h, sem_h = np.array(sg["mu_heldout"]), np.array(sg["sem_heldout"])
+    for _ in range(300):
+        delta = rng.uniform(-sg["z_box"], sg["z_box"], 4)
+        m_delta = float(
+            np.mean(
+                [
+                    (np.abs(me[:, b] - (mu_h[b] + delta[b] * sem_h[b])) <= se_[:, b]).mean()
+                    for b in range(4)
+                ]
+            )
+        )
+        assert sg["m_lo"] - 1e-12 <= m_delta <= sg["m_hi"] + 1e-12
+    assert (
+        sg["bound_kind"] == "hoeffding"
+        and abs(sg["radius"] - v5b.v7_hoeffding_radius(n_e, 0.04)) < 1e-15
+    )
+    assert (
+        abs(sg["ci"][0] - (sg["m_lo"] - sg["radius"])) < 1e-15
+        and abs(sg["ci"][1] - (sg["m_hi"] + sg["radius"])) < 1e-15
+    )
+    assert "variance_max" not in sg
 
 
 def test_bin_mask_comes_from_the_reference_only(v5b: ModuleType) -> None:
@@ -593,11 +629,10 @@ def test_combine_document_and_fail_closed(v5b: ModuleType) -> None:
             name,
             e["reasons"],
         )
-        assert (
-            abs(sg["nu"] - 19.0213) < 2e-3
-            and abs(sg["c1"] - 0.6702) < 2e-4
-            and sg["bound_kind"] == e["bound_kind"]
+        assert abs(sg["c1"] - 0.6701) < 2e-4 and sg["bound_kind"] == (
+            "clopper-pearson" if kind == "scalar" else "hoeffding"
         )
+        assert "nu" not in sg and abs(sg["low"] - (sg["c1"] - 0.03)) < 1e-15
         assert (
             sg["z_box"] == max(sg["z_t"], sg["z_boot"])
             and sg["boot_seed"] == ref["seed"]
@@ -679,9 +714,9 @@ N_BOOT_CAL = 500  # bootstrap resamples inside the Monte Carlo (5000 in the impl
 def _verdicts(
     v5b: ModuleType, kind: str, mean: np.ndarray, sem0: np.ndarray, kappas: tuple[float, ...],
     blocks: np.ndarray | None = None,
-) -> tuple[list[bool], list[bool]]:  # fmt: skip
-    """``v7_estimator_verdict`` pass flags at each kappa (half width kappa * sqrt(s_j^2 + s_k^2)) and the
-    bin mask of the first one. Reference: the simulated block means ``blocks`` (resolvability criterion
+) -> tuple[np.ndarray, list[bool]]:  # fmt: skip
+    """``v7_estimator_verdict`` pass flags ``[row, paired gate, single gate]`` at each kappa (reported
+    half width kappa * sem) ``[3, len(kappas)]`` and the bin mask of the first one. Reference: the simulated block means ``blocks`` (resolvability criterion
     applied) or, for the Gaussian cases, a dense dummy (ref 1, SEM 0.01: r_b = 0.1, all bins used)."""
     if blocks is not None:
         ref, rsem = blocks.mean(axis=0), blocks.std(axis=0, ddof=1) / math.sqrt(blocks.shape[0])
@@ -693,22 +728,23 @@ def _verdicts(
                                      z_boot_override=zb)  # fmt: skip
         zb = r["single"]["z_boot"]
         res.append(r)
-    return [bool(r["pass"]) for r in res], list(res[0]["bin_mask"])
+    flags = np.array([[bool(r[k]) for r in res] for k in ("pass", "pass_paired", "pass_single")])
+    return flags, list(res[0]["bin_mask"])
 
 
 def _gauss_passes(v5b: ModuleType, kappas: tuple[float, ...], bins: int, trials: int,
                   rng: np.random.Generator, rho: float = 0.0, reps: int = 7200) -> np.ndarray:  # fmt: skip
-    """Pass indicators ``[len(kappas), trials]``. Replicate means X_b = sigma_b (sqrt(rho) g + sqrt(1 -
+    """Pass indicators ``[3 (row, paired, single), len(kappas), trials]``. Replicate means X_b = sigma_b (sqrt(rho) g + sqrt(1 -
     rho) e_b) with a replicate-level common factor g (bin correlation ``rho``, as for bins sharing
     histories), batch SEMs s = sigma_b sqrt(chi2_19 / 19 / 20-batch scaling); true mean 0 (shifted to 100)."""
     sigma = np.linspace(0.5, 2.0, bins) if bins > 1 else np.array([1.3])
-    out = np.zeros((len(kappas), trials), dtype=bool)
+    out = np.zeros((3, len(kappas), trials), dtype=bool)
     kind = "profile" if bins > 1 else "scalar"
     for i in range(trials):
         g = rng.standard_normal((reps, 1))
         x = sigma * (math.sqrt(rho) * g + math.sqrt(1.0 - rho) * rng.standard_normal((reps, bins)))
         s0 = sigma * np.sqrt(rng.chisquare(19, (reps, bins)) / 19.0)
-        out[:, i] = _verdicts(v5b, kind, 100.0 + x, s0, kappas)[0]
+        out[:, :, i] = _verdicts(v5b, kind, 100.0 + x, s0, kappas)[0]
     return out
 
 
@@ -733,7 +769,7 @@ def gauss_rates(v5b: ModuleType) -> dict[str, np.ndarray]:
     """Pass indicators ``[3, trials]`` (true paired coverage low / c0 / high) per Gaussian case."""
     rng = np.random.default_rng(20471004)
     c0, low, high = v5b.v7_region()
-    _, c1, s_low, s_high, _ = v5b.v7_welch(1800)
+    c1, s_low, s_high = v5b.v7_single_region()
     # kappas: paired true coverage at low / high, single-interval true coverage P(|t_19| <= kappa) at
     # c1 -/+ 0.03, and the nominal; the ROW (both gates) must reject at all four margins
     ks = (
@@ -747,8 +783,9 @@ def gauss_rates(v5b: ModuleType) -> dict[str, np.ndarray]:
     print("v7 gaussian kappas [paired low, paired high, single low, single high, 1]", ks,
           "single true coverage at those kappas", [v5b.student_abs_prob(19, k) for k in ks],
           "paired true coverage", [v5b.student_abs_prob(38, k) for k in ks])  # fmt: skip
-    print("v7 gaussian ROW rates at [paired low, paired high, single low, single high, nominal] with CP95 upper bounds",
-          {k: _rate_report(v5b, v) for k, v in passes.items()}, "regions", (low, c0, high), (s_low, c1, s_high))  # fmt: skip
+    for gate, gi in (("ROW", 0), ("PAIRED gate", 1), ("SINGLE gate", 2)):
+        print(f"v7 gaussian {gate} rates at [paired low, paired high, single low, single high, nominal] with CP95 upper bounds",
+              {k: _rate_report(v5b, v[gi]) for k, v in passes.items()}, "regions", (low, c0, high), (s_low, c1, s_high))  # fmt: skip
     return passes
 
 
@@ -757,33 +794,49 @@ def gauss_rates(v5b: ModuleType) -> dict[str, np.ndarray]:
 def test_v7_pipeline_gaussian_false_acceptance(
     v5b: ModuleType, gauss_rates: dict, label: str
 ) -> None:
-    """Gaussian pipeline, row = paired gate AND single-interval gate (3600 pairs, 5400 + 1800 replicates):
-    the 95 % Clopper-Pearson upper bound of the row false-acceptance rate is <= 0.05 at the true paired
-    coverage c0 -/+ 0.03 and at the true single-interval coverage c1 -/+ 0.03 (profiles: bin correlation
-    0 and 0.8, and the scalar). Scalar, paired margins: the EXACT false-acceptance probability of the
-    paired gate (``test_scalar_exact_false_acceptance_at_both_margins``) bounds the row rate, which must
-    not exceed it by more than 3 binomial standard errors."""
-    rep = _rate_report(v5b, gauss_rates[label])
-    for r in rep[:4]:
-        assert r["cp95_upper"] <= 0.05, (label, rep)
-    if label == "scalar":
-        kl, kc = _scalar_acceptance(v5b)
-        _, low, high = v5b.v7_region()
-        for r, p in ((rep[0], low), (rep[1], high)):
-            exact = _binom_interval_prob(3600, p, kl, kc)
-            se = math.sqrt(exact * (1.0 - exact) / r["n"])
-            assert r["rate"] <= exact + 3.0 * se, (r, exact, se)
+    """Gaussian pipeline (3600 pairs, 5400 + 1800 replicates), asserted separately: (a) the paired gate's
+    false-acceptance rate, 95 % Clopper-Pearson upper bound <= 0.05 at the true paired coverage c0 -/+
+    0.03 (profiles; the scalar paired gate is gated by its exact value, see below); (b) the single-interval gate's, <= 0.05 at the true single-interval coverage c1 -/+ 0.03
+    (kappa calibrated on sem_j alone against the true mean); (c) the row (both gates) at all four
+    margins. Scalar, paired margins: the paired-gate rate must not exceed the EXACT paired false
+    acceptance (``test_scalar_exact_false_acceptance_at_both_margins``) by more than 3 standard errors."""
+    row, paired, single = (_rate_report(v5b, gauss_rates[label][g]) for g in (0, 1, 2))
+    assert all(r["cp95_upper"] <= 0.05 for r in row[:4]), ("row", label, row)
+    assert all(r["cp95_upper"] <= 0.05 for r in (single[2], single[3])), ("single", label, single)
+    if label != "scalar":
+        assert all(r["cp95_upper"] <= 0.05 for r in (paired[0], paired[1])), (
+            "paired",
+            label,
+            paired,
+        )
+        return
+    # scalar paired gate alone: the exact value (<= 0.04, about 0.0387) is the gate; the simulated rate is
+    # a consistency check, one-sided at 4 standard errors (it is compared at two margins of one stream)
+    kl, kc = _scalar_acceptance(v5b)
+    _, low, high = v5b.v7_region()
+    for r, p in ((paired[0], low), (paired[1], high)):
+        exact = _binom_interval_prob(3600, p, kl, kc)
+        se = math.sqrt(exact * (1.0 - exact) / r["n"])
+        assert r["rate"] <= exact + 4.0 * se, (r, exact, se)
 
 
 @pytest.mark.calibration
 def test_v7_pipeline_gaussian_power_targets(gauss_rates: dict) -> None:
     """Power at the nominal coverage (kappa = 1): profiles >= 0.95, scalar >= 0.90, joint row
     (independent draws of the two profiles and the scalar) >= 0.85."""
-    power = {k: float(v[4].mean()) for k, v in gauss_rates.items()}
+    power = {k: float(v[0][4].mean()) for k, v in gauss_rates.items()}
+    single_power = {k: float(v[2][4].mean()) for k, v in gauss_rates.items()}
     n = 600
-    joint = float((gauss_rates["profile12_rho0.0"][4][:n] & gauss_rates["profile12_rho0.8"][4][:n]
-                   & gauss_rates["scalar"][4][:n]).mean())  # fmt: skip
-    print("v7 gaussian power at nominal", power, "joint row (independent draws)", joint)
+    joint = float((gauss_rates["profile12_rho0.0"][0][4][:n] & gauss_rates["profile12_rho0.8"][0][4][:n]
+                   & gauss_rates["scalar"][0][4][:n]).mean())  # fmt: skip
+    print(
+        "v7 gaussian ROW power at nominal",
+        power,
+        "single gate alone",
+        single_power,
+        "joint row (independent draws)",
+        joint,
+    )
     assert power["profile12_rho0.0"] >= 0.95 and power["profile12_rho0.8"] >= 0.95, power
     assert power["scalar"] >= 0.90 and joint >= 0.85, (power, joint)
 
@@ -889,7 +942,7 @@ def _skew_kappas(
             lo, hi = (mid, hi) if cov(mid, which) < target else (lo, mid)
         return 0.5 * (lo + hi)
 
-    _, c1, s_low, s_high, _ = v5b.v7_welch(1800)
+    c1, s_low, s_high = v5b.v7_single_region()
     k_lo, k_hi = solve(low, 1), solve(high, 1)  # paired margins
     ks_lo, ks_hi = solve(s_low, 2), solve(s_high, 2)  # single-interval margins c1 -/+ 0.03
     assert abs(cov(k_lo, 1) - low) < 2e-3 and abs(cov(k_hi, 1) - high) < 2e-3
@@ -901,11 +954,11 @@ def _skew_kappas(
 
 def _skew_passes(v5b: ModuleType, shape: float, correlated: bool, zero: bool, kappas: tuple[float, ...],
                  trials: int, rng: np.random.Generator, bins: int = 12, reps: int = 7200) -> tuple[np.ndarray, np.ndarray]:  # fmt: skip
-    """Pass indicators ``[len(kappas), trials]`` and the bin masks ``[trials, bins]`` on Gamma-block tallies (20 blocks per replicate and bin,
+    """Pass indicators ``[3 (row, paired, single), len(kappas), trials]`` and the bin masks ``[trials, bins]`` on Gamma-block tallies (20 blocks per replicate and bin,
     replicate mean and SEM from the blocks, per-bin scales 0.5..2): the implemented paired procedure with
     a simulated reference run (20 blocks of 5e4 histories) for the bin mask (resolvability criterion)."""
     scale = np.linspace(0.5, 2.0, bins)
-    out = np.zeros((len(kappas), trials), dtype=bool)
+    out = np.zeros((3, len(kappas), trials), dtype=bool)
     masks: list[list[bool]] = []
     for i in range(trials):
         g = (
@@ -917,7 +970,7 @@ def _skew_passes(v5b: ModuleType, shape: float, correlated: bool, zero: bool, ka
             (g.std(axis=1, ddof=1) / math.sqrt(20)).astype(float),
         )
         blocks = _sim_reference(shape, correlated, zero, rng, bins)
-        out[:, i], mask = _verdicts(v5b, "profile", mean, sem, kappas, blocks)
+        out[:, :, i], mask = _verdicts(v5b, "profile", mean, sem, kappas, blocks)
         masks.append(mask)
     return out, np.array(masks)
 
@@ -943,6 +996,7 @@ def skew_result(request: pytest.FixtureRequest, v5b: ModuleType) -> dict:
         mask.sum() < v5b.V7_MIN_PROFILE_BINS
     ):  # fewer than 10 resolvable bins: the profile fails closed
         passes, masks = _skew_passes(v5b, shape, corr, zero, (1.0,), 100, rng)
+        passes = passes[0]
         out = {"shape": shape, "correlated": corr, "zero_inflated": zero, "expected_bins_used": int(mask.sum()),
                "excluded_bins": [int(b) for b in np.flatnonzero(~mask)], "r_b_mean": [round(float(x), 3) for x in rel],
                "fail_closed": True, "passes_at_kappa1": int(passes.sum()),
@@ -958,12 +1012,14 @@ def skew_result(request: pytest.FixtureRequest, v5b: ModuleType) -> dict:
         1.0,
     )
     passes, masks = _skew_passes(v5b, shape, corr, zero, ks, 300, rng)
-    rep = _rate_report(v5b, passes)
+    row, paired, single = (_rate_report(v5b, passes[g]) for g in (0, 1, 2))
     out = {"shape": shape, "correlated": corr, "zero_inflated": zero, "expected_bins_used": int(mask.sum()),
            "excluded_bins": [int(b) for b in np.flatnonzero(~mask)], "r_b_mean": [round(float(x), 3) for x in rel],
            "trials_with_expected_mask": float(np.mean((masks == mask).all(axis=1))), **kap,
-           "ROW_FA_paired_low": rep[0], "ROW_FA_paired_high": rep[1], "ROW_FA_single_low": rep[2],
-           "ROW_FA_single_high": rep[3], "ROW_power_kappa1": rep[4]}  # fmt: skip
+           "PAIRED_FA_low": paired[0], "PAIRED_FA_high": paired[1], "SINGLE_FA_low": single[2],
+           "SINGLE_FA_high": single[3], "ROW_FA_paired_low": row[0], "ROW_FA_paired_high": row[1],
+           "ROW_FA_single_low": row[2], "ROW_FA_single_high": row[3], "ROW_power_kappa1": row[4],
+           "PAIRED_power_kappa1": paired[4], "SINGLE_power_kappa1": single[4]}  # fmt: skip
     print("v7 skewed-tally calibration", out)
     return out
 
@@ -982,11 +1038,9 @@ def test_v7_pipeline_skewed_tally_false_acceptance(skew_result: dict) -> None:
         ), skew_result
         return
     for key in (
-        "ROW_FA_paired_low",
-        "ROW_FA_paired_high",
-        "ROW_FA_single_low",
-        "ROW_FA_single_high",
-    ):
+        "PAIRED_FA_low", "PAIRED_FA_high", "SINGLE_FA_low", "SINGLE_FA_high",
+        "ROW_FA_paired_low", "ROW_FA_paired_high", "ROW_FA_single_low", "ROW_FA_single_high",
+    ):  # fmt: skip
         assert skew_result[key]["cp95_upper"] <= 0.05, (key, skew_result)
 
 

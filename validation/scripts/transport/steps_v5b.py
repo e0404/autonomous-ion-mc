@@ -1040,16 +1040,18 @@ def v7_boot_z(means: NDArray[np.float64], n_h: int, mu_all: NDArray[np.float64],
     return float(np.quantile(out, quantile))
 
 
-def v7_welch(n_h: int) -> tuple[float, float, float, float, float]:
-    """Single-interval nominal under Gaussian batch means. The hit statistic ``(X_j - mu_H) / sqrt(s_j^2
-    + SEM_H^2)`` has the Welch-Satterthwaite degrees of freedom ``nu = (a + b)^2 / (a^2 / 19 + b^2 /
-    (n_H - 1))`` with ``a = s_j^2`` (19 degrees of freedom) and ``b = SEM_H^2 = a / n_H`` (variance ratio
-    ``1 / n_H``, ``n_H - 1`` degrees of freedom): ``nu`` = 19.02 for ``n_H`` = 1800. Returns ``(nu, c1,
-    low, high, ratio)`` with ``c1 = P(|t_nu| <= 1)`` (about 0.6702) and the region ``c1 -/+ 0.03``."""
-    ratio = 1.0 / n_h
-    nu = (1.0 + ratio) ** 2 / (1.0 / (V7_BATCHES_PER_REP - 1) + ratio**2 / (n_h - 1))
-    c1 = student_abs_prob(nu, 1.0)
-    return nu, c1, c1 - V7_COV_MARGIN, c1 + V7_COV_MARGIN, ratio
+def v7_single_region() -> tuple[float, float, float]:
+    """One-sample single-interval target: for Gaussian batch means with correct standard errors the
+    coverage of ``mean +- sem`` of one replicate (20 batches) against the true mean is ``c1 = P(|t_19| <=
+    1)`` (0.6701); the region is ``c1 -/+ 0.03`` = [0.6401, 0.7001]. Returns ``(c1, low, high)``."""
+    c1 = student_abs_prob(V7_BATCHES_PER_REP - 1, 1.0)
+    return c1, c1 - V7_COV_MARGIN, c1 + V7_COV_MARGIN
+
+
+def v7_hoeffding_radius(n: int, alpha: float = V7_ALPHA_TOST) -> float:
+    """Fixed distribution-free Hoeffding radius ``sqrt(ln(1 / alpha) / (2 n))`` of the mean of ``n``
+    independent variables in [0, 1] (one-sided level ``alpha``; 0.01726 for ``n`` = 5400, 0.04)."""
+    return math.sqrt(math.log(1.0 / alpha) / (2.0 * n))
 
 
 def v7_heldout_split(replicates: int) -> int:
@@ -1063,38 +1065,46 @@ def v7_heldout_split(replicates: int) -> int:
 def v7_single_gate(kind: str, means: NDArray[np.float64], sems: NDArray[np.float64], used: NDArray[np.bool_], *,
                    boot_seed: int = 0, n_boot: int = V7_BOOT_N, z_boot_override: float | None = None
                    ) -> dict[str, Any]:  # fmt: skip
-    """Single-interval gate (Codex REVIEW-25b77cf0): coverage of each replicate's ``mean +- sem`` interval
-    against a held-out reference with the reference uncertainty folded into the width (Welch form).
+    """Single-interval gate (Codex REVIEW-25b77cf0, -0af7808c): coverage of each REPORTED interval
+    ``mean_j +- sem_j`` (half width ``sem_j`` alone) of the true mean, where the true mean is only known
+    through a held-out reference confidence box.
 
     H = the last quarter of the replicates (shards 6..7, ``n_H`` = 1800), E = the first three quarters
     (shards 0..5, 5400). ``mu_H,b`` is the mean of the H replicate means, ``SEM_H,b = sd_H,b / sqrt(n_H)``.
-    The bins are the mask ``used`` fixed by the independent 1e6 reference run. Hit for ``j`` in E:
-    ``|mean_jb - mu_H,b| <= w_jb`` with ``w_jb = sqrt(sem_jb^2 + SEM_H,b^2)``; ``sem_jb = 0`` (undefined
-    uncertainty) or ``SEM_H,b = 0`` (no information in H) is a miss. ``g_j`` = hits / bins used. Nothing
-    from E enters H or the mask, so given H the 5400 ``g_j`` in [0, 1] are exactly i.i.d. The nominal
-    coverage is ``c1 = P(|t_nu| <= 1)`` with the Welch degrees of freedom ``nu`` of ``v7_welch`` and the
-    region is ``c1 +- 0.03``.
+    The bins are the mask ``used`` fixed by the independent 1e6 reference run. At a candidate true mean
+    ``mu_H,b + delta SEM_H,b`` replicate ``j`` in E is a hit iff ``|mean_jb - mu_H,b - delta SEM_H,b| <=
+    sem_jb``; ``sem_jb = 0`` (undefined uncertainty) or ``SEM_H,b = 0`` (no information in H) is a miss.
+    In the shift variable the hit interval is ``[(x_jb - sem_jb) / SEM_H,b, (x_jb + sem_jb) / SEM_H,b]``
+    with ``x_jb = mean_jb - mu_H,b``. Nothing from E enters H or the mask, so given H and the candidate
+    shift the 5400 ``g_j`` (hits / bins used) are i.i.d. in [0, 1]. The target is the one-sample
+    coverage ``c1 = P(|t_19| <= 1)`` and the region ``c1 -/+ 0.03`` (``v7_single_region``); the reference
+    uncertainty enters only through the box, never the interval width.
 
     Reference-error box. The error of ``mu_H,b`` has standard error ``SEM_H,b``; the box half width is
     ``Z_box SEM_H,b`` with ``Z_box = max(Z_t, Z_boot)``, ``Z_t`` the Student-t quantile at ``1 -
     alpha_box / (2 B)`` (``alpha_box`` = 0.01, ``n_H - 1`` degrees of freedom) and ``Z_boot`` the 0.99
     quantile of ``max_b |mean of n_H resampled replicate means - mu_all,b| / SEM_H,b`` over 5000
-    bootstrap resamples of all replicate means (``boot_seed``, reported). With ``x_jb = mean_jb -
-    mu_H,b`` the coverage of bin ``b`` as a function of the shift ``delta`` (units ``SEM_H,b``) of the
-    reference is the number of closed intervals ``[(x_jb - w_jb) / SEM_H,b, (x_jb + w_jb) / SEM_H,b]``
-    containing ``delta`` divided by ``n_E``; its exact minimum and maximum over the box come from the
-    endpoint sweep (``v7_coverage_extrema``); each bin depends on its own shift only, so ``m_lo`` and
-    ``m_hi`` are the means over bins of the per-bin minimum and maximum, and the extremal shift vectors
-    give two more vectors ``g_j`` for the variance.
+    bootstrap resamples of all replicate means (``boot_seed``, reported). The per-bin coverage as a
+    function of the shift is the number of closed hit intervals containing ``delta`` divided by ``n_E``;
+    its exact minimum and maximum over the box come from the endpoint sweep (``v7_coverage_extrema``);
+    each bin depends on its own shift only, so ``m_lo`` / ``m_hi`` are the means over bins of the per-bin
+    minimum / maximum.
 
-    Bounds, conditional on H, at ``alpha_tost`` = 0.04 per side (exact for bounded i.i.d. variables):
-    scalar, Clopper-Pearson on the counts at the box-minimising and box-maximising shift; profiles,
-    empirical Bernstein with the largest sample variance of ``g_j`` over the unshifted and the two
-    extremal shift vectors. Pass iff ``lower >= c1 - 0.03`` and ``upper <= c1 + 0.03`` with at least 300
-    replicates and (profiles) 10 bins. What is exact: the bounds conditional on H and the sweep. What
-    rests on an assumption: the 0.99 level of the box needs Gaussian marginals of the H mean (a mean of
-    1800 replicate means, 36 000 blocks; the t quantile is exact under Gaussianity and the bootstrap
-    checks it on the actual replicate means); the paired gate carries the finite-sample guarantee."""
+    Uniform validity by monotonicity. If the box contains the true shift ``delta*`` (probability >= 0.99
+    under Gaussian marginals of the H mean), then the minimum over the box of the hit count (scalar) is
+    ``K_min <= K(delta*)`` and the mean coverage satisfies ``m_lo <= m(delta*) <= m_hi``. A one-sided
+    bound applied to ``K_min`` / ``m_lo`` (lower) or ``K_max`` / ``m_hi`` (upper) is therefore at least as
+    conservative as the same bound at the unknown ``delta*``, where the hits are i.i.d. given H.
+    Bounds at ``alpha_tost`` = 0.04 per side, exact for bounded i.i.d. variables: scalar,
+    Clopper-Pearson on ``K_min`` (lower) and ``K_max`` (upper); profiles, a FIXED distribution-free
+    Hoeffding radius ``eps_H = sqrt(ln(1 / alpha_tost) / (2 n))`` (0.01726 for n = 5400, no variance
+    term, hence uniform over the box): ``lower = m_lo - eps_H``, ``upper = m_hi + eps_H``. Pass iff
+    ``lower >= c1 - 0.03`` and ``upper <= c1 + 0.03`` with at least 300 replicates and (profiles) 10
+    bins. What is exact: the bounds conditional on H and the candidate shift, the sweep, the
+    monotonicity step. What rests on an assumption: the 0.99 box level needs Gaussian marginals of the H
+    mean (1800 replicate means, 36 000 blocks; the t quantile is exact under Gaussianity and the
+    bootstrap checks it on the actual replicate means). The paired gate carries the finite-sample
+    guarantee."""
     r, nbins = means.shape
     n_e = v7_heldout_split(r)
     n_h = r - n_e
@@ -1102,14 +1112,13 @@ def v7_single_gate(kind: str, means: NDArray[np.float64], sems: NDArray[np.float
     mh = means[n_e:]
     mu_h, sd_h = mh.mean(axis=0), mh.std(axis=0, ddof=1)
     sem_h = sd_h / math.sqrt(n_h)
-    nu, c1, low, high, ratio = v7_welch(n_h)
+    c1, low, high = v7_single_region()
     nused = int(used.sum())
-    w = np.sqrt(se_**2 + sem_h**2)
     valid = (se_ > 0.0) & (sem_h > 0.0) & used  # [n_e, bins]
-    hit = (np.abs(me - mu_h) <= w) & valid
+    hit = (np.abs(me - mu_h) <= se_) & valid
     covered = hit.sum(axis=1).astype(np.int64)
     degenerate = used & ~valid
-    out: dict[str, Any] = {"c1": c1, "nu": nu, "low": low, "high": high, "variance_ratio": ratio,
+    out: dict[str, Any] = {"c1": c1, "low": low, "high": high, "target": "one-sample P(|t_19| <= 1)",
                            "replicates_eval": n_e, "replicates_heldout": n_h, "alpha_box": V7_ALPHA_BOX,
                            "boot_seed": boot_seed, "boot_n": n_boot, "mu_heldout": mu_h.tolist(),
                            "sem_heldout": sem_h.tolist(), "degenerate_bins": [int(c) for c in degenerate.sum(axis=0)],
@@ -1119,45 +1128,36 @@ def v7_single_gate(kind: str, means: NDArray[np.float64], sems: NDArray[np.float
                            "per_replicate_covered": [int(c) for c in covered],
                            "per_bin_coverage": [None if not used[b] else float(hit[:, b].mean()) for b in range(nbins)]}  # fmt: skip
     nan = math.nan
-    out.update(m=nan, m_lo=nan, m_hi=nan, z_t=nan, z_boot=nan, z_box=nan, bound_kind="none", eb_eps=nan,
-               variance_max=nan, cp_count_min=-1, cp_count_max=-1, per_bin_box_coverage_min_max=[[nan, nan]] * nbins)  # fmt: skip
+    out.update(m=nan, m_lo=nan, m_hi=nan, z_t=nan, z_boot=nan, z_box=nan, bound_kind="none", radius=nan,
+               cp_count_min=-1, cp_count_max=-1, per_bin_box_coverage_min_max=[[nan, nan]] * nbins)  # fmt: skip
     lower = upper = nan
     if nused:
-        g = covered / nused
-        out["m"] = float(g.mean())
+        out["m"] = float((covered / nused).mean())
         z_t = student_t_quantile(1.0 - V7_ALPHA_BOX / (2.0 * nused), n_h - 1)
         z_boot = (v7_boot_z(means[:, used], n_h, means[:, used].mean(axis=0), np.maximum(sem_h[used], 1e-300), boot_seed, n_boot)
                   if z_boot_override is None else z_boot_override)  # the override is for the calibration only
         z_box = max(z_t, z_boot)
-        d_min, d_max = np.zeros(nbins), np.zeros(nbins)
         lo_b, hi_b = np.zeros(nbins), np.zeros(nbins)
         box = [[nan, nan] for _ in range(nbins)]
+        k_min = k_max = 0.0
         for b in np.flatnonzero(used):
             v = valid[:, b]
-            if not v.any():
-                lo_b[b] = hi_b[b] = 0.0
-            else:
-                lo_b[b], hi_b[b], d_min[b], d_max[b] = v7_coverage_extrema(
-                    (me[v, b] - mu_h[b]) / sem_h[b], w[v, b] / sem_h[b], z_box, n_e)
+            if v.any():
+                lo_b[b], hi_b[b], _, _ = v7_coverage_extrema((me[v, b] - mu_h[b]) / sem_h[b], se_[v, b] / sem_h[b], z_box, n_e)
             box[int(b)] = [float(lo_b[b]), float(hi_b[b])]
         m_lo, m_hi = float(lo_b[used].mean()), float(hi_b[used].mean())
-
-        def g_at(delta: NDArray[np.float64]) -> NDArray[np.float64]:
-            h = (np.abs(me - (mu_h + delta * sem_h)) <= w) & valid
-            return h.sum(axis=1) / nused
-
-        g_lo, g_hi = g_at(d_min), g_at(d_max)
-        k_min, k_max = int(round(float(g_lo.sum()))), int(round(float(g_hi.sum())))
-        v_max = float(max(np.var(g_lo, ddof=1), np.var(g_hi, ddof=1), np.var(g, ddof=1)))
+        k_min, k_max = m_lo * n_e * nused, m_hi * n_e * nused  # profile-mean counts (scalar: nused = 1)
         if kind == "scalar" and nused == 1:
+            k_min, k_max = int(round(k_min)), int(round(k_max))
             lower, upper = cp_lower(k_min, n_e, V7_ALPHA_TOST), cp_upper(k_max, n_e, V7_ALPHA_TOST)
-            bound, eps = "clopper-pearson", nan
+            bound, radius = "clopper-pearson", nan
         else:
-            eps = empirical_bernstein_eps(v_max, n_e, V7_ALPHA_TOST)
-            lower, upper = m_lo - eps, m_hi + eps
-            bound = "empirical-bernstein"
-        out.update(m_lo=m_lo, m_hi=m_hi, z_t=z_t, z_boot=float(z_boot), z_box=float(z_box), bound_kind=bound, eb_eps=eps,
-                   variance_max=v_max, cp_count_min=k_min, cp_count_max=k_max, per_bin_box_coverage_min_max=box)  # fmt: skip
+            radius = v7_hoeffding_radius(n_e, V7_ALPHA_TOST)
+            lower, upper = m_lo - radius, m_hi + radius
+            bound = "hoeffding"
+        out.update(m_lo=m_lo, m_hi=m_hi, z_t=z_t, z_boot=float(z_boot), z_box=float(z_box), bound_kind=bound, radius=radius,
+                   cp_count_min=k_min if bound == "clopper-pearson" else -1,
+                   cp_count_max=k_max if bound == "clopper-pearson" else -1, per_bin_box_coverage_min_max=box)  # fmt: skip
     min_bins = V7_MIN_PROFILE_BINS if kind == "profile" else 1
     if nused:
         out.update(v7_tost_verdict(lower, upper, nused, n_e, low=low, high=high, min_bins=min_bins, unit="replicates"))
@@ -1415,7 +1415,7 @@ def v7_rep_combine(shards: list[dict[str, Any]], ref: dict[str, Any]) -> dict[st
                      "margin": V7_COV_MARGIN, "pair_df": V7_PAIR_DF, "alpha_tost": V7_ALPHA_TOST,
                      "pairs": int(sum(p["replicates"] for p in shards)) // 2,
                      "pairing": "(shard s, replicate j) with (shard s + 4, replicate j)",
-                     "bins_from": "v7-rep-ref only", "single_gate": "held-out shards 6-7 reference, Welch width, box + bootstrap",
+                     "bins_from": "v7-rep-ref only", "single_gate": "held-out shards 6-7 reference box (t + bootstrap), sem_j half width, Hoeffding / Clopper-Pearson",
                      "alpha_box": V7_ALPHA_BOX, "boot_n": V7_BOOT_N, "max_rel_se": V7_MAX_REL_SE, "min_pairs": V7_MIN_INTERVALS,
                      "min_profile_bins": V7_MIN_PROFILE_BINS},
             "pass": bool(all(e["pass"] for e in estimators.values()))}  # fmt: skip
