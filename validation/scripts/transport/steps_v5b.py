@@ -7,7 +7,8 @@ Usage::
 Rows (``validation/plans/v3-005-acceptance.md``, Amendments 6 and 7): V8 (trajectory parity python vs
 warp-cpu float64 with nuclear on; statistical parity python / warp-cpu / CUDA), R1 for the nuclear
 branch, V5 (the ionmc side: absolute IDD at r = 20 cm; the comparison with TOPAS and MCsquare is
-``validation/scripts/reference/compare_idd_v5.py`` on the written partials), V2b and V7, plus the
+``validation/scripts/reference/compare_idd_v5.py`` on the written partials; the step ``v5-compare``
+runs it, enforced, after the four ``v5-ionmc`` steps and consumes the partials only, no seed), V2b and V7, plus the
 throughput measurement and its shard table. V6, E1-B and the p-p elastic rows belong to V3-005C
 (``R_INDEX`` 12 and 13 stay reserved). Every step prints one JSON document between ``#JSON-BEGIN``
 and ``#JSON-END`` (the conventions of ``steps_v5.py``); ``--scale`` < 1 gives a labelled,
@@ -527,6 +528,54 @@ def step_v5_ionmc(a: argparse.Namespace) -> int:
     return finish5b(doc, V5_N, n, n < V5_N)
 
 
+def _v5_reference_runs(ref_dir: Path) -> tuple[list[Path], list[Path]]:
+    """TOPAS and MCsquare run directories of ``ref_dir/REF-*`` whose case.json carries a V5 block
+    (other materialized runs are not V5 evidence); an unreadable directory stops the step."""
+    from ionmc.reference.runs import load_run
+
+    topas: list[Path] = []
+    mc: list[Path] = []
+    for d in sorted(ref_dir.glob("REF-*")):
+        run = load_run(d)
+        v5blk = run.case.get("v5")
+        if isinstance(v5blk, dict) and v5blk.get("row") == "V5":
+            {"topas": topas, "mcsquare": mc}.setdefault(run.engine, []).append(d)
+    return topas, mc
+
+
+def step_v5_compare(a: argparse.Namespace) -> int:
+    """Row V5 verdict (C19 F3): the four verified ``v5-ionmc`` partials against the materialized
+    TOPAS and MCsquare runs (``--reference-dir``, default ``<repo>/.ionmc-cache/reference-runs``;
+    ``/workspace/...`` in the host snapshot) through ``compare_idd_v5.build_verdict``. The step
+    consumes partials only (no seed of its own). ``pass`` is the gating (TOPAS) verdict; any
+    lineage or input error is a failed document with the reason, never a silent skip."""
+    import importlib.util
+    import tempfile
+
+    path = REPO / "validation" / "scripts" / "reference" / "compare_idd_v5.py"
+    spec = importlib.util.spec_from_file_location("compare_idd_v5", path)
+    assert spec and spec.loader
+    cmp = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cmp)
+    names = [f"v5-{e}-{t}.json" for e in (150, 200) for t in ("on", "off")]
+    parts = v5.load_partials(a, names)  # hash- and binding-verified, attested
+    ref_dir = Path(a.reference_dir) if a.reference_dir else REPO / ".ionmc-cache" / "reference-runs"
+    doc: dict[str, Any] = {"step": "v5-compare", "reference_dir": str(ref_dir),
+                           "attestation": v5.attestation_block(a)}  # fmt: skip
+    reduced = any(p["reduced"] for p in parts)
+    try:
+        topas, mc = _v5_reference_runs(ref_dir)
+        with tempfile.TemporaryDirectory() as tmp:
+            for nm, p in zip(names, parts, strict=True):
+                (Path(tmp) / nm).write_text(json.dumps(p, sort_keys=True))
+            verdict = cmp.build_verdict(Path(tmp), topas, mc)
+        doc.update(verdict=verdict, pass_gating=bool(verdict["pass"]), error=None)
+        doc["pass"] = bool(verdict["pass"] and not reduced)
+    except (cmp.IddError, SystemExit, ValueError, OSError) as exc:
+        doc.update(verdict=None, error=f"{type(exc).__name__}: {exc}", **{"pass": False})
+    return finish5b(doc, V5_N, min(p["n"] for p in parts), reduced)
+
+
 # -- V2b -----------------------------------------------------------------------------------------
 def step_v2b_shard(a: argparse.Namespace) -> int:
     k = a.shard
@@ -801,6 +850,7 @@ STEPS = {
     "v8-lv": step_v8_lv,
     "r1-nuc": step_r1_nuc,
     "v5-ionmc": step_v5_ionmc,
+    "v5-compare": step_v5_compare,
     "v2b-shard": step_v2b_shard,
     "v2b-combine": step_v2b_combine,
     "v7-scan": step_v7_scan,
@@ -823,6 +873,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--sample", choices=sorted(V8_SAMPLES), default="cpu64", help="v8-stat-sample")
     ap.add_argument("--out-dir", default="samples", help="partial files")
     ap.add_argument("--dirs", nargs="+", default=["."], help="combine steps: archive directories")
+    ap.add_argument("--reference-dir", default=None, help="v5-compare: dir of REF-* runs")
     ap.add_argument("--partials-manifest", default=None, help="combine steps: manifest of imports")
     ap.add_argument("--seed-base", "--seed", dest="seed", type=int, default=QUALIFICATION_SEED_BASE,
                     help="lv5b base 20441004, hr5 base 20451004, rehearsals 2046xxxx")  # fmt: skip

@@ -103,6 +103,7 @@ STEP_TAGS = (
     ("v8-stat-compare", "v8-stat-compare"),
     ("v8-stat-", "v8-stat-sample"),
     ("r1-nuc", "r1-nuc"),
+    ("v5-compare", "v5-compare"),
     ("v5-", "v5-ionmc"),
     ("v2b-combine", "v2b-combine"),
     ("v2b-", "v2b-shard"),

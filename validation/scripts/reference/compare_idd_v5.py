@@ -9,9 +9,17 @@ Usage::
 20 batches, 0.5 mm bins, 400 x 400 mm water box). The engine runs are materialised reference runs of
 the committed cases ``topas/proton-water-{150,200}mev-idd-r20[-emonly]-seed{1,2,3}`` and
 ``mcsquare/proton-water-{150,200}mev-idd-r20-{on,off}-seed{1,2,3}`` (each case.json carries a ``v5``
-block: energy, nuclear flag). Engine runs are grouped by (engine, energy, nuclear flag); every group
-needs >= 3 runs with distinct seeds (read from the manifested case.json and cross-checked against the
-native input by ``compare_batches.run_seed``) and 1e5 histories.
+block, a LABEL only). Lineage (C19 F2): every engine run passes ``compare_batches.run_fingerprint``
+(clean-commit request.json, manifested inputs, histories == native input == engine summary); the
+beam energy and the configuration (TOPAS full vs EM-only from the ``Ph/Default/Modules`` line,
+MCsquare nuclear on/off from ``Simulate_Nuclear_Interactions``) are DERIVED from the verified native
+input (MCsquare energy: the ``####Energy (MeV)`` entry of the manifested Plan.txt), the case.json
+``v5`` label must agree or the run is refused. Engine runs are grouped by (engine, derived energy,
+derived nuclear flag); the replicates of a group must have the same fingerprint configuration and
+engine identity, and every group needs >= 3 runs with distinct seeds (read from the manifested
+case.json and cross-checked against the native input by ``compare_batches.run_seed``) and 1e5
+histories. The fingerprints are recorded in the verdict. The CLI exits 1 when the gating verdict
+(TOPAS) fails, after writing the verdict JSON.
 
 Units. TOPAS: dose [Gy] x bin mass [kg] / 1.602176634e-13 J/MeV = MeV in the bin, divided by
 histories x rho x dz [g/cm^2] (bin mass from the CSV header widths, rho = 1 g/cm^3).
@@ -44,6 +52,7 @@ import hashlib
 import importlib.util
 import json
 import math
+import re
 import subprocess
 import sys
 from collections.abc import Callable
@@ -295,6 +304,28 @@ _ENGINE_IDD: dict[str, Callable[[ReferenceRun], tuple[np.ndarray, list[str]]]] =
     "topas": _topas_idd, "mcsquare": _mcsquare_idd}  # fmt: skip
 
 
+_TOPAS_ENERGY = re.compile(r"^[ \t]*d:So/Beam/BeamEnergy[ \t]*=[ \t]*([0-9.eE+-]+)[ \t]*MeV[ \t]*$", re.M)
+_MC_NUCLEAR = re.compile(r"^[ \t]*Simulate_Nuclear_Interactions[ \t]+(True|False)[ \t]*$", re.M)
+_MC_PLAN_ENERGY = re.compile(r"^####Energy \(MeV\)[ \t]*\n[ \t]*([0-9.eE+-]+)[ \t]*$", re.M)
+
+
+def derive_config(run: ReferenceRun, fp: dict[str, Any]) -> tuple[int, bool]:
+    """(energy in MeV, nuclear flag) from the verified native input of the run (fail closed)."""
+    native = read_verified(run, f"inputs/{run.case['input']}").decode("utf-8", errors="replace")
+    if run.engine == "topas":
+        hits = _TOPAS_ENERGY.findall(native)
+        nuclear = fp["group"] != "topas-emonly"
+    else:
+        hits = _MC_PLAN_ENERGY.findall(read_verified(run, "inputs/Plan.txt").decode("utf-8"))
+        flags = _MC_NUCLEAR.findall(native)
+        if len(flags) != 1:
+            raise IddError(f"{run.run_id}: expected exactly one Simulate_Nuclear_Interactions line")
+        nuclear = flags[0] == "True"
+    if len(hits) != 1 or float(hits[0]) != int(float(hits[0])):
+        raise IddError(f"{run.run_id}: beam energy not unique/integral in the native input: {hits}")
+    return int(float(hits[0])), nuclear
+
+
 def load_engine_groups(run_dirs: list[Path], engine: str, nz: dict[int, int]
                        ) -> dict[tuple[int, bool], dict[str, Any]]:  # fmt: skip
     """Per (energy, nuclear): curves ``[seeds, nz]`` cut to the ionmc grid, with seeds and hashes."""
@@ -308,7 +339,12 @@ def load_engine_groups(run_dirs: list[Path], engine: str, nz: dict[int, int]
             v5 = run.case.get("v5")
             if not isinstance(v5, dict) or v5.get("row") != "V5":
                 raise IddError(f"{run.run_id}: case.json has no V5 block")
-            e, nuc = int(v5["energy_mev"]), bool(v5["nuclear"])
+            fp = cb.run_fingerprint(run)  # fail closed: lineage of the run
+            e, nuc = derive_config(run, fp)
+            if (int(v5["energy_mev"]), bool(v5["nuclear"])) != (e, nuc):
+                raise IddError(
+                    f"{run.run_id}: case.json v5 label ({v5['energy_mev']}, {v5['nuclear']}) != "
+                    f"native input ({e}, {nuc}): mislabeled run")  # fmt: skip
             if e not in nz:
                 raise IddError(f"{run.run_id}: energy {e} not in {sorted(nz)}")
             if run.histories != HISTORIES:
@@ -325,16 +361,22 @@ def load_engine_groups(run_dirs: list[Path], engine: str, nz: dict[int, int]
             raise IddError(
                 f"{run.run_id}: in-grid total {total:.3f} MeV is {total / e:.3f} of the beam energy, "
                 f"outside {DEP_CONTAINED}: unit or geometry error")  # fmt: skip
-        g = groups.setdefault((e, nuc), {"curves": [], "seeds": [], "runs": [], "hashes": {}})
+        g = groups.setdefault(
+            (e, nuc), {"curves": [], "seeds": [], "runs": [], "hashes": {}, "fingerprints": {}})  # fmt: skip
         if seed in g["seeds"]:
             raise IddError(f"{run.run_id}: duplicate seed {seed} in group {(e, nuc)}")
         g["curves"].append(cut)
         g["seeds"].append(seed)
         g["runs"].append(run.run_id)
         g["hashes"][run.run_id] = file_hashes(run, [*files, "inputs/case.json"])
+        g["fingerprints"][run.run_id] = {k: fp[k] for k in ("group", "config_sha256", "identity_sha256")}
     for key, g in groups.items():
         if len(g["curves"]) < MIN_SEEDS:
             raise IddError(f"{engine} group {key}: {len(g['curves'])} runs, need >= {MIN_SEEDS}")
+        for field in ("config_sha256", "identity_sha256"):
+            if len({f[field] for f in g["fingerprints"].values()}) != 1:
+                raise IddError(f"{engine} group {key}: replicates differ in {field} "
+                               f"(configuration or engine identity): {g['fingerprints']}")  # fmt: skip
         g["curves"] = np.stack(g["curves"])
     return groups
 
@@ -372,24 +414,19 @@ def evaluate(ion: dict[tuple[int, bool], np.ndarray],
     return out
 
 
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--ionmc-dir", required=True, type=Path)
-    ap.add_argument("--topas-runs", nargs="+", required=True, type=Path)
-    ap.add_argument("--mcsquare-runs", nargs="+", type=Path, default=[])
-    ap.add_argument("--output", required=True, type=Path)
-    args = ap.parse_args(argv)
-
+def build_verdict(ionmc_dir: Path, topas_runs: list[Path], mcsquare_runs: list[Path]) -> dict[str, Any]:
+    """The V5 verdict document (``pass`` = the gating TOPAS verdict) from the four ionmc partials
+    of ``ionmc_dir`` and the engine run directories; raises :class:`IddError` (fail closed)."""
     ion: dict[tuple[int, bool], np.ndarray] = {}
     ion_src: dict[str, Any] = {}
     for e in ENERGIES:
         for nuc in (True, False):
             name = f"v5-{e}-{'on' if nuc else 'off'}.json"
-            ion[(e, nuc)], ion_src[name] = load_ionmc(args.ionmc_dir / name, e, nuc)
+            ion[(e, nuc)], ion_src[name] = load_ionmc(ionmc_dir / name, e, nuc)
     nz = {e: ion[(e, True)].shape[1] for e in ENERGIES}
     if any(ion[(e, False)].shape[1] != nz[e] for e in ENERGIES):
         raise IddError("ionmc on/off grids differ")
-    sources = {"topas": args.topas_runs, "mcsquare": args.mcsquare_runs}
+    sources = {"topas": topas_runs, "mcsquare": mcsquare_runs}
     groups = {eng: load_engine_groups(dirs, eng, nz) for eng, dirs in sources.items() if dirs}
     missing = [(eng, e, n) for eng, g in groups.items() for e in ENERGIES for n in (True, False)
                if (e, n) not in g]  # fmt: skip
@@ -402,9 +439,21 @@ def main(argv: list[str] | None = None) -> int:
         "tolerances": {k: {"kind": v[0], "tolerance": v[1]} for k, v in TOLERANCES.items()},
         "ionmc_inputs": ion_src,
         "engine_inputs": {eng: {f"{e}-{'on' if n else 'off'}":
-                                {"seeds": g["seeds"], "runs": g["runs"], "output_sha256": g["hashes"]}
+                                {"seeds": g["seeds"], "runs": g["runs"], "output_sha256": g["hashes"],
+                                 "fingerprints": g["fingerprints"]}
                                 for (e, n), g in gr.items()} for eng, gr in groups.items()},
     })  # fmt: skip
+    return doc
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--ionmc-dir", required=True, type=Path)
+    ap.add_argument("--topas-runs", nargs="+", required=True, type=Path)
+    ap.add_argument("--mcsquare-runs", nargs="+", type=Path, default=[])
+    ap.add_argument("--output", required=True, type=Path)
+    args = ap.parse_args(argv)
+    doc = build_verdict(args.ionmc_dir, args.topas_runs, args.mcsquare_runs)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(doc, indent=2) + "\n")
     for eng, ev in doc["engines"].items():
@@ -412,7 +461,7 @@ def main(argv: list[str] | None = None) -> int:
             line = "  ".join(f"{k}:{'ok' if rows[k]['pass'] else 'FAIL'}" for k in TOLERANCES)
             print(f"{eng:9s} {e} MeV  {line}")
     print(f"kappa rule: {doc['kappa_rule']['decision']}; V5 (TOPAS gating): {'PASS' if doc['pass'] else 'FAIL'}")
-    return 0
+    return 0 if doc["pass"] else 1
 
 
 if __name__ == "__main__":

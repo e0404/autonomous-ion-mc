@@ -123,6 +123,8 @@ every suite)."""
 SOURCE_FILES_V5B = (
     *SOURCE_FILES_V5,
     "validation/scripts/transport/steps_v5b.py",
+    "validation/scripts/reference/compare_idd_v5.py",
+    "validation/scripts/reference/compare_batches.py",
 )
 """The hashed set of the suites ``lv5b`` and ``hr5`` (V3-005B): the lv5 set plus the slice-B steps
 (the nuclear kernels, ``src/ionmc`` and the tests are hashed through the prefixes)."""
@@ -203,6 +205,7 @@ STEP_TIMEOUT_FLOOR_S = {
     "lv5b": {
         "lv5b-throughput": 3300, "v8-lv-python-vs-warp-cpu": 3300, "r1-nuc-regression": 3300,
         **{f"v5-{e}-{t}": 3300 for e in (150, 200) for t in ("on", "off")},
+        "v5-compare": 1800,
         **{f"v2b-s{k}": 3300 for k in range(8)}, "v7-scan": 3300, "v7-shift": 3300,
         "v7-rep": 3300, "v3-workers-partition": 3300,
     },
@@ -467,6 +470,9 @@ def _suite_steps_v5b(add, s5, s5b, sc, out_dir, dirs):  # type: ignore[no-untype
         for t in ("on", "off"):
             add(f"v5-{e}-{t}", [*s5b, "v5-ionmc", "--energy", str(e), "--nuclear", t,
                                 "--out-dir", str(out_dir), *sc], env)  # fmt: skip
+    # row V5 verdict: the four partials against the materialized TOPAS/MCsquare runs
+    # (``/workspace/.ionmc-cache/reference-runs/REF-*`` of the host snapshot); consumes partials only
+    add("v5-compare", [*s5b, "v5-compare", "--dirs", *dirs, *sc], env)
     for k in range(shards):
         add(f"v2b-s{k}", [*s5b, "v2b-shard", "--shard", str(k), "--out-dir", str(out_dir), *sc], env)
     add("v2b-combine", [*s5b, "v2b-combine", "--dirs", *dirs, *sc], env)

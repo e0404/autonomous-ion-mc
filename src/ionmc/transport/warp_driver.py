@@ -130,6 +130,8 @@ def _nuclear_inputs(
     nd.mass_d = wp.float64(td.projectile.mass_mev)
     nd.e_cut_d = wp.float64(nuc.e_cut_deuteron_mev)
     nd.e_source_max = wp.float64(NUCLEAR_MAX_ENERGY_MEV)
+    nd.e_domain_max = wp.float64(kn.NUCLEAR_DOMAIN_MAX_MEV)
+    nd.sec_shift = wp.float64(kn.SECONDARY_ENERGY_SHIFT_MEV)
     nd.stack_cap = kn.STACK_CAPACITY
     nd.child_limit = kn.CHILD_LIMIT
     nd.secondary_nuclear = int(kn.SECONDARY_NUCLEAR)
@@ -149,6 +151,7 @@ def _nuclear_inputs(
     nd.ev_n = wp.zeros(k, dtype=wp.int32, device=device)
     nd.sec_tr = wp.zeros((k, 32, TRACE_WIDTH), dtype=wp.float64, device=device)
     nd.sec_n = wp.zeros(k, dtype=wp.int32, device=device)
+    nd.above_n = wp.zeros(1, dtype=wp.int32, device=device)
     return cat, nd, dev
 
 
@@ -377,6 +380,7 @@ def run_warp_range(eff: EffectiveConfig, h0: int, h1: int, device: str) -> Parti
     }
     if nuclear:
         meta["nuclear_device_sha256"] = nuc_dev.sha256
+        meta["nuclear_secondaries_above_domain"] = int(nd.above_n.numpy()[0])
         if use_diag:
             meta["nuclear_trace"] = _nuclear_trace(nd, k_hist)
     channel_acc = None if eff.channels is None else chan.acc.numpy().astype(np.int64)

@@ -213,3 +213,62 @@ def test_secondary_event_rate_against_the_plan(tid: str, energy: float) -> None:
         # histories give 0.01008 +- 0.00050 (share 0.00329 +- 0.00019), consistent with the
         # plan's 0.0096 / 0.0032; the +-40 % guard refers to the default (truncated) geometry
         assert abs(rate / PLAN_RATE[energy] - 1.0) <= 0.4
+
+
+DOMAIN = 150.0  # lowered table domain of the F1 tests (the 250 MeV boundary has the same path)
+
+
+def _force_above_domain(mp: pytest.MonkeyPatch, scale: float = 15.0) -> None:
+    """Secondary protons are pushed 100 MeV above their sampled energy (booked as initial energy,
+    so the ledger closes): 150 MeV beam, domain lowered to 150 MeV, secondaries of 100 to 250 MeV,
+    a part of them born above the domain."""
+    for mod in (reference, kn):
+        mp.setattr(mod, "SECONDARY_ENERGY_SHIFT_MEV", 100.0)
+        mp.setattr(mod, "NUCLEAR_DOMAIN_MAX_MEV", DOMAIN)
+    _scaled_rows(mp, scale)
+
+
+@pytest.mark.parametrize("backend", ["python", "warp-cpu"])
+def test_no_nuclear_candidate_above_the_table_domain(
+    tid: str, monkeypatch: pytest.MonkeyPatch, backend: str
+) -> None:
+    """C19 F1: forced secondaries above the domain fly without a nuclear candidate while above
+    it (no event at T1 > domain, no fail-closed counter), are counted, interact after slowing
+    below it, and the balance closes. Without the gate the python assertion (sigma_at above the
+    domain) fires and the warp candidate fails closed."""
+    _force_above_domain(monkeypatch)
+    n = 96
+    part = _part(_eff(tid, backend, "float64", n=n, energy=150.0), backend, n)
+    ev = np.asarray(part.meta["nuclear_trace"]["events"])
+    sec = np.asarray(part.meta["nuclear_trace"]["secondaries"])
+    assert part.meta["nuclear_secondaries_above_domain"] > 0
+    assert float(sec[:, 5].max()) > DOMAIN  # a secondary really was born above the domain
+    assert len(ev) > 0 and float(ev[:, 11].max()) <= DOMAIN
+    assert int(np.sum(ev[:, 1] > 0)) > 0  # secondaries interact after entering the domain
+    assert part.counter_sums[9] == 0 and part.counter_sums[10] == 0  # no fail-closed counter
+
+
+@pytest.mark.parametrize("backend", ["python", "warp-cpu"])
+def test_above_domain_secondaries_balance_closes(
+    tid: str, monkeypatch: pytest.MonkeyPatch, backend: str
+) -> None:
+    _force_above_domain(monkeypatch, 3.0)
+    cfg = _config(tid, energy=150.0, n=48, track_end=False)
+    cfg = replace(cfg, run=replace(cfg.run, backend=backend, precision="float64"))
+    res = Simulation(cfg).run()
+    assert res.valid and res.energy_balance.relative_residual <= 1e-12
+
+
+def test_domain_boundary_parity_python_warp_cpu(tid: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    """C19 F1: python and warp-cpu agree with the forced above-domain secondaries (V8 tolerance,
+    equal counts of secondaries born above the domain)."""
+    _force_above_domain(monkeypatch)
+    n = 64
+    py = run_reference_range(_eff(tid, "python", "float64", n=n, energy=150.0), 0, n)
+    wr = run_warp_range(_eff(tid, "warp-cpu", "float64", n=n, energy=150.0), 0, n, "cpu")
+    m = _compare(py, wr)
+    assert max(m.values()) <= TOL, m
+    assert (
+        py.meta["nuclear_secondaries_above_domain"] == wr.meta["nuclear_secondaries_above_domain"]
+    )
+    assert py.meta["nuclear_secondaries_above_domain"] > 0

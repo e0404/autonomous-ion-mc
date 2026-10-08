@@ -98,6 +98,11 @@ __all__ = [
 
 
 STACK_CAPACITY = MAX_PARTICLES
+SECONDARY_ENERGY_SHIFT_MEV = 0.0  # test hook, see kernels_nuclear; always 0 in production
+NUCLEAR_DOMAIN_MAX_MEV = NUCLEAR_MAX_ENERGY_MEV
+"""Largest kinetic energy at which a proton can take a nuclear candidate (the table domain,
+decision 0041 section 5); a secondary above it flies without nuclear thinning until it slows
+below (C19 review F1). Lowered by tests only."""
 SECONDARY_NUCLEAR = True
 """Secondary protons (generation >= 1) undergo non-elastic interactions (V3-005B C13, decision 0041
 section 3). ``False`` restores the primary-only histories of slice A for the regression check;
@@ -211,6 +216,7 @@ class _Reference:
         self.counter_names: tuple[str, ...] = COUNTER_NAMES
         self.ntallies: dict[str, float] = {}
         self.nuc_diag: dict[str, dict[str, Any]] = {}  # nuclear event diagnostics (nuclear runs)
+        self.nuc_above = 0  # secondary protons born above the table domain (C19 F1)
         # diagnostics-only nuclear trace of the first trace_histories histories: accepted events
         # (h, gid, target, counts[5], Z_r, A_r, attempts, T1) and pushed secondaries (h, gid,
         # parent gid, species, generation, T, direction, position); no effect on the transport
@@ -469,6 +475,7 @@ class _Reference:
         )  # fmt: skip
         if self.nuc is not None:
             part.meta["nuclear_diagnostics"] = self.nuc_diag
+            part.meta["nuclear_secondaries_above_domain"] = self.nuc_above
             if self.want_diag:
                 part.meta["nuclear_trace"] = {
                     k: np.array(v, dtype=np.float64).reshape(-1, 12)
@@ -503,6 +510,7 @@ class _Reference:
     def _sigma(self, rows: object, e: float) -> float:
         """``Sigma_mass(E)`` [cm2/g] of a material's rows: step lookup of the cell by the shared
         ``grid_locate``, lin-lin in E (clamped), as ``MaterialNuclear.sigma_at``."""
+        assert e <= NUCLEAR_DOMAIN_MAX_MEV, "sigma_at above the nuclear table domain"
         g = rows.grid_e_mev  # type: ignore[attr-defined]
         k = int(self.NU.grid_locate(e, g, g.size))
         t = min(max((e - g[k]) / (g[k + 1] - g[k]), 0.0), 1.0)
@@ -581,6 +589,7 @@ class _Reference:
         section 3 with the amendment of 2026-10-07)."""
         from ionmc.nuclear.events import interp_rows, sample_event_scalar
 
+        assert t1 <= NUCLEAR_DOMAIN_MAX_MEV, "nuclear event above the table domain"
         r, nt, ctr = self.R, self.ntallies, self.counters
         cum = rows.cum_fraction_at(t1)  # type: ignore[attr-defined]
         tgt_list = rows.target_index  # type: ignore[attr-defined]
@@ -675,6 +684,9 @@ class _Reference:
                 else:
                     dx, dy, dz = direction
                 mass = self.mass_p if species == 0 else self.mass_d
+                if species == 0 and SECONDARY_ENERGY_SHIFT_MEV != 0.0:  # test hook
+                    t_lab += SECONDARY_ENERGY_SHIFT_MEV
+                    self.tallies["initial"] += SECONDARY_ENERGY_SHIFT_MEV
                 pv = float(self.K.pv_mev(r(t_lab), mass))
                 if (
                     self.want_diag
@@ -805,6 +817,11 @@ class _Reference:
         if nuc_on:  # birth: the optical depth to the first candidate (nuclear block 0, slot 0)
             n_lam = -math.log(self._nuc_u(h, gid, 0)[0])
             nc = 1
+            if energy > NUCLEAR_DOMAIN_MAX_MEV and gen > 0:
+                # C19 F1: no candidate while above the table domain; the birth optical depth is
+                # kept (the draw is a fixed block of the particle's own stream, no desync) and
+                # starts to run down at the first step that begins inside the domain
+                self.nuc_above += 1
         steps = 0
         # first step of the particle's life: linearized analytic log-average of f_dM (~1e-3)
         birth = True
@@ -836,7 +853,8 @@ class _Reference:
             )
             s_el = F.eloss_step_limit(r(energy), r(s_lin), self.c_frac)
             s_rg = F.range_step_limit(r(r_mm), self.c_alpha, self.c_rho_f)
-            if nuc_on:
+            nuc_step = nuc_on and energy <= NUCLEAR_DOMAIN_MAX_MEV
+            if nuc_step:
                 # majorant of the step: window value at the grid cell of E0 (step lookup) or the
                 # end-of-range value for a range-limited step; d_nuc in mm (rate rho * S^ / cm)
                 assert self.nuc is not None
@@ -1034,7 +1052,7 @@ class _Reference:
                         s_act,
                     ]
                 )
-            if nuc_on:
+            if nuc_step:
                 n_lam -= rho * s_hat * s_act / 10.0
                 # majorant check after EVERY step (decision 0041 section 2): the Gamma straggling
                 # tail is unbounded, so Sigma(E1) <= S^(E0) is not guaranteed by the window

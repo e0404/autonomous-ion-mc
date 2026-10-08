@@ -1658,13 +1658,13 @@ def test_imported_partials_make_the_summary_non_conformant_by_code(tmp_path: Pat
 QUAL5B, QUALHR5, REH5B = 20441004, 20451004, 20461004
 LV5B_STEPS = [
     "lv5b-throughput", "v8-lv-python-vs-warp-cpu", "r1-nuc-regression",
-    "v5-150-on", "v5-150-off", "v5-200-on", "v5-200-off",
+    "v5-150-on", "v5-150-off", "v5-200-on", "v5-200-off", "v5-compare",
 ]  # fmt: skip
 HR5_STEPS = ["v8-stat-python-s0", "v8-stat-python-s1", "v8-stat-cpu64", "v8-stat-cuda32",
              "v8-stat-cuda64", "v8-stat-compare", "v7-f32-f64-cuda"]  # fmt: skip
 # slice-B rows evaluated by V3-005B -> (suite, step); V6 is V3-005C
 SLICE_B_ROWS = {
-    "V2b": ("lv5b", "v2b-combine"), "V5": ("lv5b", "v5-150-on"), "V7": ("lv5b", "v7-scan"),
+    "V2b": ("lv5b", "v2b-combine"), "V5": ("lv5b", "v5-compare"), "V7": ("lv5b", "v7-scan"),
     "V8": ("lv5b", "v8-lv-python-vs-warp-cpu"),
 }  # fmt: skip
 SLICE_B_DEFERRED = {"V6": "V3-005C"}
@@ -1673,8 +1673,8 @@ SLICE_B_DEFERRED = {"V6": "V3-005C"}
 def test_lv5b_hr5_manifest_seeds_hashed_set_and_deferred() -> None:
     mod, v5b = _load("run_suite"), _load("steps_v5b")
     names = [n.split("-", 1)[1] for n in mod.full_step_names("lv5b", 2)]
-    assert names[:7] == LV5B_STEPS
-    assert names[7:] == [*(f"v2b-s{k}" for k in range(v5b.V2B_SHARDS)), "v2b-combine", "v7-scan",
+    assert names[:8] == LV5B_STEPS
+    assert names[8:] == [*(f"v2b-s{k}" for k in range(v5b.V2B_SHARDS)), "v2b-combine", "v7-scan",
                          "v7-shift", "v7-rep", "v3-workers-partition"]  # fmt: skip
     assert [n.split("-", 1)[1] for n in mod.full_step_names("hr5", 2)] == HR5_STEPS
     assert mod.DEFAULT_SEED_BASES["lv5b"] == QUAL5B == v5b.QUALIFICATION_SEED_BASE
@@ -1821,3 +1821,26 @@ def test_v8_stat_compare_sparse_profile_is_inconclusive_not_a_bug() -> None:
     rec = res["arrays"]["nuc_local"]
     assert res["pass"] is False and rec["verdict"] == "inconclusive"
     assert rec["singleton_mass_fraction"] < 0.5 and rec["p_value"] == 1.0
+
+
+def test_v5_compare_step_registered_and_fails_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """C19 F3: ``v5-compare`` is an lv5b step after the four producers, tagged for summarize, its
+    timeout and source hashes are registered, and without usable reference runs the document is a
+    failed one carrying the reason (never a skip)."""
+    mod, v5b, summ = _load("run_suite"), _load("steps_v5b"), _load("summarize")
+    assert "v5-compare" in v5b.STEPS and "v5-ionmc" in v5b.STEPS
+    assert summ.expected_tag("07-v5-compare") == "v5-compare"
+    assert summ.expected_tag("06-v5-200-off") == "v5-ionmc"
+    assert mod.step_timeout_s("lv5b", "08-v5-compare", 1500) >= 1800
+    files = mod.source_file_list("lv5b")
+    assert "validation/scripts/reference/compare_idd_v5.py" in files
+    fake = [{"reduced": False, "n": 100000} for _ in range(4)]
+    seen: dict = {}
+    monkeypatch.setattr(v5b.v5, "load_partials", lambda a, names: fake)
+    monkeypatch.setattr(v5b.v5, "attestation_block", lambda a: {})
+    monkeypatch.setattr(v5b, "finish5b", lambda doc, frozen, used, reduced: seen.update(doc) or 1)
+    ns = argparse.Namespace(dirs=[str(tmp_path)], reference_dir=str(tmp_path / "no-runs"))
+    assert v5b.step_v5_compare(ns) == 1
+    assert seen["pass"] is False and seen["verdict"] is None and seen["error"]

@@ -155,7 +155,29 @@ def _scaled(e: int, nuc: bool) -> np.ndarray:
     return curve(extra=0.2 if nuc else 0.0) * (0.90 * e / (off.sum() * 0.05))  # common scale
 
 
-def _topas_run(tmp: Path, e: int, nuc: bool, seed: int, noise: float) -> Path:
+def _topas_input(e: int, nuc: bool, seed: int, extra: str = "") -> bytes:
+    mods = (
+        'sv:Ph/Default/Modules = 2 "g4em-standard_opt4" "g4h-phy_QGSP_BIC_HP"'
+        if nuc
+        else 'sv:Ph/Default/Modules = 1 "g4em-standard_opt4"'
+    )
+    return (
+        f"i:Ts/Seed = {seed}\nd:So/Beam/BeamEnergy = {e} MeV\n{mods}\n"
+        f"i:So/Beam/NumberOfHistoriesInRun = 100000\n{extra}"
+    ).encode()
+
+
+def _mc_input(nuc: bool, seed: int, extra: str = "") -> bytes:
+    return (
+        f"RNG_Seed {seed}\nNum_Primaries 100000\n"
+        f"Simulate_Nuclear_Interactions {'True' if nuc else 'False'}\n{extra}"
+    ).encode()
+
+
+def _topas_run(
+    tmp: Path, e: int, nuc: bool, seed: int, noise: float, label: tuple[int, bool] | None = None,
+    extra: str = "",
+) -> Path:  # fmt: skip
     idd = _scaled(e, nuc) * (1.0 + noise)
     gy = idd * 1e5 * 0.05 * M.MEV_J / 0.08  # 400 x 400 x 0.5 mm = 80 cm3 = 0.08 kg
     rows = "".join(f"0,0,{i},{float(v)!r},0.0\n" for i, v in enumerate(gy))
@@ -167,16 +189,24 @@ def _topas_run(tmp: Path, e: int, nuc: bool, seed: int, noise: float) -> Path:
         "histories": 100000,
         "seeds": [seed],
         "input": "input.txt",
-        "v5": {"row": "V5", "energy_mev": e, "nuclear": nuc},
+        "v5": {
+            "row": "V5",
+            "energy_mev": (label or (e, nuc))[0],
+            "nuclear": (label or (e, nuc))[1],
+        },
     }
     files = {
         "work/idd_dose.csv": csv.encode(),
-        "inputs/input.txt": f"i:Ts/Seed = {seed}\n".encode(),
+        "inputs/input.txt": _topas_input(e, nuc, seed, extra),
     }
-    return _write(tmp, "topas", files, case, f"T-{seed}", stdout="")
+    out = "Particle source Beam: Total number of histories: 100000\n"
+    return _write(tmp, "topas", files, case, f"T-{seed}", stdout=out)
 
 
-def _mc_run(tmp: Path, e: int, nuc: bool, seed: int, noise: float) -> Path:
+def _mc_run(
+    tmp: Path, e: int, nuc: bool, seed: int, noise: float, label: tuple[int, bool] | None = None,
+    extra: str = "",
+) -> Path:  # fmt: skip
     idd = _scaled(e, nuc) * (1.0 + noise)
     vol = np.zeros((5, NZ, 5), dtype="<f4")  # (z, y, x); beam in the centre voxel
     vol[2, ::-1, 2] = idd / 64.0 * 1e6  # MeV/g/primary x 1e6 -> eV/g; 8 x 8 cm2 voxel face
@@ -188,14 +218,21 @@ def _mc_run(tmp: Path, e: int, nuc: bool, seed: int, noise: float) -> Path:
         "histories": 100000,
         "seeds": [seed],
         "input": "config.txt",
-        "v5": {"row": "V5", "energy_mev": e, "nuclear": nuc},
+        "v5": {
+            "row": "V5",
+            "energy_mev": (label or (e, nuc))[0],
+            "nuclear": (label or (e, nuc))[1],
+        },
     }
     files = {
         "work/Outputs/Dose.mhd": mhd.encode(),
         "work/Outputs/Dose.raw": vol.tobytes(),
-        "inputs/config.txt": f"RNG_Seed {seed}\n".encode(),
+        "inputs/config.txt": _mc_input(nuc, seed, extra),
+        "inputs/Plan.txt": f"####Energy (MeV)\n{e}\n####NbOfScannedSpots\n".encode(),
     }
-    return _write(tmp, "mcsquare", files, case, f"M-{seed}", stdout="")
+    return _write(
+        tmp, "mcsquare", files, case, f"M-{seed}", stdout="Nbr primaries simulated: 100000\n"
+    )
 
 
 def test_engine_loaders_reproduce_the_idd(tmp_path: Path) -> None:
@@ -290,3 +327,66 @@ def test_cli_end_to_end_and_partial_checks(tmp_path: Path) -> None:
     p.write_text(json.dumps(d))
     with pytest.raises(M.IddError, match="content_sha256"):
         M.main(argv)
+
+
+def test_lineage_mislabeled_case_json_is_refused(tmp_path: Path) -> None:
+    """C19 F2: energy and configuration come from the verified native input; a case.json label
+    that disagrees (150 MeV EM-only labelled as 200 MeV full) is refused, not trusted."""
+    for engine, maker in (("topas", _topas_run), ("mcsquare", _mc_run)):
+        bad = maker(tmp_path / f"{engine}-e", 150, False, 5, 0.0, label=(200, False))
+        with pytest.raises(M.IddError, match="mislabeled"):
+            M.load_engine_groups([bad], engine, {150: NZ, 200: NZ})
+        bad = maker(tmp_path / f"{engine}-n", 150, False, 5, 0.0, label=(150, True))
+        with pytest.raises(M.IddError, match="mislabeled"):
+            M.load_engine_groups([bad], engine, {150: NZ, 200: NZ})
+
+
+def test_lineage_derives_the_group_from_the_native_input(tmp_path: Path) -> None:
+    runs = [_topas_run(tmp_path / f"t{s}", 200, False, 1 + s, 0.0) for s in range(3)]
+    g = M.load_engine_groups(runs, "topas", {150: NZ, 200: NZ})
+    assert set(g) == {(200, False)}
+    fps = g[(200, False)]["fingerprints"]
+    assert len(fps) == 3 and {f["group"] for f in fps.values()} == {"topas-emonly"}
+    assert len({f["config_sha256"] for f in fps.values()}) == 1
+
+
+def test_lineage_failed_fingerprint_and_differing_replicate_are_refused(tmp_path: Path) -> None:
+    ok = [_topas_run(tmp_path / f"t{s}", 150, True, 1 + s, 0.0) for s in range(2)]
+    odd = _topas_run(
+        tmp_path / "odd", 150, True, 3, 0.0, extra="d:Ph/Default/CutForProton = 1 mm\n"
+    )
+    with pytest.raises(M.IddError, match="replicates differ in config_sha256"):
+        M.load_engine_groups([*ok, odd], "topas", {150: NZ})
+    # a run whose engine summary contradicts the declared histories fails the fingerprint
+    bad = _mc_run(tmp_path / "m", 150, True, 3, 0.0)
+    (bad / "stdout.txt").write_text("Nbr primaries simulated: 5\n")
+    mf = json.loads((bad / "transfer-manifest.json").read_text())
+    import hashlib
+
+    blob = (bad / "stdout.txt").read_bytes()
+    mf["files"]["stdout.txt"] = {"bytes": len(blob), "sha256": hashlib.sha256(blob).hexdigest()}
+    (bad / "transfer-manifest.json").write_text(json.dumps(mf))
+    with pytest.raises(M.IddError, match="summary histories"):
+        M.load_engine_groups([bad], "mcsquare", {150: NZ})
+
+
+def test_cli_exits_nonzero_when_the_gating_verdict_fails(tmp_path: Path) -> None:
+    ion = tmp_path / "ion"
+    ion.mkdir()
+    for e in (150, 200):
+        for nuc in (True, False):
+            b = noisy(_scaled(e, nuc) * 0.9, 20, 0.03, e + nuc)  # plateau 10 % low: V5 fails
+            _partial(ion / f"v5-{e}-{'on' if nuc else 'off'}.json", e, nuc, b)
+    topas = [
+        _topas_run(tmp_path / f"t{e}{n}{s}", e, n, 100 * e + 10 * n + s + 1, 0.001 * (s - 1))
+        for e in (150, 200)
+        for n in (True, False)
+        for s in range(3)
+    ]
+    out = tmp_path / "out.json"
+    argv = ["--ionmc-dir", str(ion), "--topas-runs", *map(str, topas), "--output", str(out)]
+    assert M.main(argv) == 1
+    doc = json.loads(out.read_text())
+    assert doc["pass"] is False
+    fp = doc["engine_inputs"]["topas"]["150-on"]["fingerprints"]
+    assert len(fp) == 3 and all(len(v["config_sha256"]) == 64 for v in fp.values())

@@ -48,7 +48,7 @@ from types import SimpleNamespace
 import warp as wp
 
 from ionmc._wpfunc import check_real, named_func
-from ionmc.config import MAX_REJECTION_ATTEMPTS
+from ionmc.config import MAX_REJECTION_ATTEMPTS, NUCLEAR_MAX_ENERGY_MEV
 from ionmc.physics.em import make_em
 from ionmc.physics.kinematics import make_kinematics
 from ionmc.physics.nuclear import _nuc_u01_32, _nuc_u01_64, make_nuclear
@@ -74,6 +74,9 @@ MAX_EVENT_ROWS = 8
 STACK_CAPACITY = MAX_PARTICLES
 CHILD_LIMIT = 31
 MAX_PARENT_GENERATION = 5  # as ionmc.rng.philox: a child of generation 5 (generation 6) is the last
+SECONDARY_ENERGY_SHIFT_MEV = 0.0  # test hook: energy added to pushed secondary protons (and
+# booked as initial) to force secondaries above the table domain; always 0 in production
+NUCLEAR_DOMAIN_MAX_MEV = NUCLEAR_MAX_ENERGY_MEV  # table domain: no nuclear candidate above (C19 F1)
 SECONDARY_NUCLEAR = True  # secondary protons interact (C13); False: primary-only (regression)
 LEDGER_TOL = 1.0e-9
 """Runtime limits written to ``NucData`` by the driver (tests lower them to force the counters)."""
@@ -96,6 +99,8 @@ def make_nuclear_support(real: type) -> SimpleNamespace:
         "mass_d": D,
         "e_cut_d": D,
         "e_source_max": D,
+        "e_domain_max": D,
+        "sec_shift": D,
         "n_mat": int,
         "stack_cap": int,
         "child_limit": int,
@@ -123,6 +128,7 @@ def make_nuclear_support(real: type) -> SimpleNamespace:
         "ev_n": wp.array(dtype=wp.int32),
         "sec_tr": wp.array3d(dtype=D),
         "sec_n": wp.array(dtype=wp.int32),
+        "above_n": wp.array(dtype=wp.int32),
     }
     NucData.__name__ = f"NuclearData_{name}"
     NucData.__qualname__ = NucData.__name__
@@ -349,6 +355,10 @@ def make_nuclear_transport_kernel(real: type, diag: bool):
                 u_birth = nuc_u(h, gid_u, 0, 0, key)
                 n_lam = -wp.log(D(u_birth))
                 nc = 1
+                if energy > nd.e_domain_max and gen > 0:
+                    # C19 F1: no candidate above the table domain (birth n_lam kept, see the
+                    # python reference); the secondary is counted in ``above_n``
+                    wp.atomic_add(nd.above_n, 0, 1)
             steps = int(0)
             birth = int(1)  # first step of the life: linearized analytic log-average of f_dM
             blocks = int(0)
@@ -388,7 +398,10 @@ def make_nuclear_transport_kernel(real: type, diag: bool):
                     s_hat = D(0.0)
                     s_d = D(0.0)
                     reason = int(0)
-                    if nuc_on == 1:
+                    nuc_step = int(0)
+                    if nuc_on == 1 and energy <= nd.e_domain_max:
+                        nuc_step = 1
+                    if nuc_step == 1:
                         # majorant of the step: window value at the grid cell of E0 (step lookup)
                         # or the end-of-range value for a range-limited step
                         k0 = NU.grid_locate(R(energy), nd.grid, nd.n_grid)
@@ -636,7 +649,7 @@ def make_nuclear_transport_kernel(real: type, diag: bool):
                             trace_f[ti, row, 7] = wp.float64(deposit)
                             trace_f[ti, row, 8] = wp.float64(s_act)
                             trace_n[ti] = steps
-                    if nuc_on == 1:
+                    if nuc_step == 1:
                         n_lam = n_lam - rho * s_hat * s_act_d / D(10.0)
                         # majorant check after EVERY step (decision 0041 section 2): the Gamma
                         # straggling tail is unbounded, so Sigma(E1) <= S^(E0) is not guaranteed
@@ -655,7 +668,7 @@ def make_nuclear_transport_kernel(real: type, diag: bool):
                                 ub2 = nuc_u(h, gid_u, nc, 2, key)
                                 nc = nc + 1
                                 accepted_c, viol_c = ND.thinning_accept(D(ub0), sig_e, s_hat)
-                                if viol_c == 1:  # fail closed: the majorant was violated
+                                if viol_c == 1 or energy > nd.e_domain_max:  # fail closed
                                     c_major = c_major + 1
                                     t_unacc = t_unacc + wp.float64(energy)
                                     code = code_nuclear
@@ -787,14 +800,18 @@ def make_nuclear_transport_kernel(real: type, diag: bool):
                                                             dzs = (
                                                                 c0 * e1f[2] + c1 * e2f[2] + c2 * uz
                                                             )
-                                                        pv_s = K.pv_mev(t_lab, mass_c)
+                                                        t_push = t_lab
+                                                        if sp_new == 0:  # test hook (default 0)
+                                                            t_push = t_lab + nd.sec_shift
+                                                            t_initial = t_initial + nd.sec_shift
+                                                        pv_s = K.pv_mev(t_push, mass_c)
                                                         nd.stack[tid, n_st, 0] = D(px)
                                                         nd.stack[tid, n_st, 1] = D(py)
                                                         nd.stack[tid, n_st, 2] = D(pz)
                                                         nd.stack[tid, n_st, 3] = D(dxs)
                                                         nd.stack[tid, n_st, 4] = D(dys)
                                                         nd.stack[tid, n_st, 5] = D(dzs)
-                                                        nd.stack[tid, n_st, 6] = t_lab
+                                                        nd.stack[tid, n_st, 6] = t_push
                                                         nd.stack[tid, n_st, 7] = D(sp_new)
                                                         nd.stack[tid, n_st, 8] = D(cid)
                                                         nd.stack[tid, n_st, 9] = D(gen_c)
@@ -820,7 +837,7 @@ def make_nuclear_transport_kernel(real: type, diag: bool):
                                                                     gen_c
                                                                 )
                                                                 nd.sec_tr[ti2, n_sec_rows, 5] = (
-                                                                    t_lab
+                                                                    t_push
                                                                 )
                                                                 nd.sec_tr[ti2, n_sec_rows, 6] = D(
                                                                     dxs
