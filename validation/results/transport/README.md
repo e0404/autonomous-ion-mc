@@ -201,7 +201,7 @@ invocation (Amendment 5). Crash observations during this task: two intermittent 
 trajectory parity incl. the nuclear trace and a nuclear-dense set), R1-nuc (A16 `nuclear=False` plus a
 python nuclear-on digest equal to the one measured with the source tree of b84fdf38), V5 ionmc side
 (four steps; the partials hold the per-batch IDD in MeV/(g/cm^2)/primary for `compare_idd_v5.py`), V2b
-(shards plus combine) and V7 (N-scan with f32/f64, grid shift/refinement, coverage replicates). `hr5`
+(shards plus combine) and V7 (N-scan with f32/f64, grid shift/refinement, coverage replicates; the V7 coverage rule is a replicate-level TOST with 300 replicates of 1e4 histories, passing when the 90 % t interval of the mean per-replicate coverage lies inside [0.640, 0.700] (Amendment 12, Codex REVIEW-d3f216ca)). `hr5`
 (7 steps; base 20451004; `IONMC_REQUIRE_CUDA=1`, one controlling process): V8 statistical parity samples
 (python in two shards, warp-cpu float64, CUDA float32 and float64), their T12 comparison and V7 f32 vs
 f64 on CUDA. Step 15 of `lv5b` (1-vs-N worker partition; two V2b shards) is deferred in the single-process mode. Any

@@ -45,6 +45,11 @@ Definitions made here where the plan leaves them open (all recorded in the docum
   standard error of the slope of ln(SE) against ln N (about 0.02) resolves the frozen +-0.05.
   Coverage: ``V7_REPLICATES`` replicates of ``V7_REP_N`` histories, ``V7_BINS`` depth bins of the
   secondary-proton dose profile, 1 sigma intervals against the mean of a ``V7_REF_N`` reference.
+  Pass rule (Amendment 12, Codex REVIEW-d3f216ca; ``v7_tost_verdict``): replicate-level TOST. With
+  ``f_j`` = covered bins / bins used of replicate j, the 90 % two-sided t interval of mean(f_j)
+  (``t_{0.95,R-1}`` times sd/sqrt(R)) must lie inside [``V7_COV_LOW``, ``V7_COV_HIGH``] = [0.640, 0.700],
+  with at least ``V7_MIN_INTERVALS`` intervals and 10 bins used. The pooled-point gate 0.68 +- 0.03 is
+  only reported (``legacy_point_gate_pass``).
   Grid shift and refinement (decision of this module, no frozen tolerance): the whole-grid secondary
   proton dose of a lateral half-voxel shift agrees to ``V7_SHIFT_RTOL`` (edge strips) and of a 2x
   lateral refinement to ``V7_REFINE_RTOL`` (quantisation). f32 vs f64 on the same backend: paired
@@ -141,9 +146,16 @@ V2B_VARIANTS = ((0.1, 0.02), (1.0, 0.02))  # (s_max mm, f_E): a, b
 V7_SCAN_N, V7_BATCHES, V7_SLOPE, V7_SLOPE_TOL = (10_000, 100_000, 1_000_000), 100, -0.5, 0.05
 V7_F32_N, V7_F32_Z = 100_000, 3.0
 V7_SHIFT_N, V7_SHIFT_BATCHES, V7_SHIFT_RTOL, V7_REFINE_RTOL = 100_000, 20, 1e-3, 1e-6
-# Amendment 11: 90 replicates (was 30); the reference shard index V7_REPLICATES = 90 stays in the row block
-V7_REPLICATES, V7_REP_N, V7_REF_N, V7_BINS, V7_REP_BATCHES = 90, 10_000, 1_000_000, 12, 20
-V7_COVERAGE, V7_COVERAGE_TOL, V7_MIN_INTERVALS = 0.68, 0.03, 300
+# Amendment 12 (Codex REVIEW-d3f216ca): 300 replicates (30 -> 90 in Amendment 11); the reference shard
+# index V7_REPLICATES = 300 stays inside the row's 1000-seed block.
+V7_REPLICATES, V7_REP_N, V7_REF_N, V7_BINS, V7_REP_BATCHES = 300, 10_000, 1_000_000, 12, 20
+# Replicate-level TOST (two one-sided tests, alpha = 0.05 each, i.e. a 90 % two-sided t interval of the
+# mean per-replicate coverage) against the equivalence region [V7_COV_LOW, V7_COV_HIGH]: centre 0.670 =
+# P(|t_19| <= 1), the nominal coverage of one-sigma intervals from the SEM of 20 batches, margin +-0.03.
+V7_COV_LOW, V7_COV_HIGH, V7_TOST_ALPHA = 0.640, 0.700, 0.05
+V7_MIN_INTERVALS = 300
+# former point-estimate gate (pooled coverage within 0.68 +- 0.03): reported only, no longer decides ``pass``
+V7_LEGACY_TARGET, V7_LEGACY_TOL = 0.68, 0.03
 HR5_PYTHON_SHARDS, HR5_PYTHON_N, HR5_PYTHON_BATCHES = 2, 12_000, 20
 HR5_WARP_N, HR5_WARP_BATCHES, HR5_F32_N = 1_000_000, 100, 1_000_000
 V8_SAMPLES = {  # name -> (backend, precision, shard index, histories, batches)
@@ -315,7 +327,7 @@ def step_throughput(a: argparse.Namespace) -> int:
         "v2b (both variants)": (V2B_N, "v2b", V2B_SHARDS),
         "v7-scan (1e4 + 1e5 + 1e6, f64, plus f32 1e5)": (sum(V7_SCAN_N) + V7_F32_N, "warp-cpu-f64", 1),
         "v7-shift (3 layouts)": (3 * V7_SHIFT_N, "warp-cpu-f64", 1),
-        "v7-rep (90 x 1e4 + 1e6 reference)": (V7_REPLICATES * V7_REP_N + V7_REF_N, "warp-cpu-f64", 1),
+        "v7-rep (300 x 1e4 + 1e6 reference)": (V7_REPLICATES * V7_REP_N + V7_REF_N, "warp-cpu-f64", 1),
         "hr5 python sample (2.4e4)": (HR5_PYTHON_SHARDS * HR5_PYTHON_N, "python", HR5_PYTHON_SHARDS),
     }, {**rates, "v2b": v2b_rate})  # fmt: skip
     ok = all(v["counters_clean"] for v in out.values())
@@ -857,6 +869,31 @@ def cluster_doc(covered_j: NDArray[np.int64], used: NDArray[np.bool_], ref: NDAr
     return out
 
 
+def v7_tost_verdict(covered_j: NDArray[np.int64], bins_used: int, intervals: int,
+                    low: float, high: float, alpha: float) -> dict[str, Any]:
+    """Replicate-level TOST of the v7-rep coverage (Amendment 12, Codex REVIEW-d3f216ca): with
+    ``f_j = covered_j / bins_used`` the 1 - 2 alpha two-sided t interval of ``mean(f_j)`` (replicates
+    are the independent clusters) must lie entirely inside ``[low, high]``; also requires
+    ``intervals >= V7_MIN_INTERVALS`` and ``bins_used >= 10``. Pure function of its arguments."""
+    f = np.asarray(covered_j, dtype=float) / bins_used
+    r = f.size
+    m = float(f.mean())
+    se = float(f.std(ddof=1) / math.sqrt(r))
+    t = student_t_quantile(1.0 - alpha, r - 1)
+    ci = [m - t * se, m + t * se]
+    reasons = []
+    if ci[0] < low:
+        reasons.append(f"CI lower bound {ci[0]:.4f} below {low}")
+    if ci[1] > high:
+        reasons.append(f"CI upper bound {ci[1]:.4f} above {high}")
+    if intervals < V7_MIN_INTERVALS:
+        reasons.append(f"intervals {intervals} < {V7_MIN_INTERVALS}")
+    if bins_used < 10:
+        reasons.append(f"bins_used {bins_used} < 10")
+    return {"mean": m, "se": se, "t": t, "ci": ci, "low": low, "high": high, "alpha": alpha,
+            "replicates": r, "pass": not reasons, "reasons": reasons}  # fmt: skip
+
+
 def step_v7_rep(a: argparse.Namespace) -> int:
     geo, grid = coarse_depth(V7_BINS)
     n_rep = scaled(V7_REP_N, a.scale, 2000, V7_REP_BATCHES)
@@ -889,15 +926,17 @@ def step_v7_rep(a: argparse.Namespace) -> int:
         covered_j[j] = int(hit.sum())
         rep_means[j] = mean
     cov = covered / intervals if intervals else math.nan
-    ok = bool(intervals >= V7_MIN_INTERVALS and int(used.sum()) >= 10
-              and abs(cov - V7_COVERAGE) <= V7_COVERAGE_TOL)  # fmt: skip
+    tost = v7_tost_verdict(covered_j, int(used.sum()), intervals, V7_COV_LOW, V7_COV_HIGH, V7_TOST_ALPHA)
+    legacy = bool(intervals >= V7_MIN_INTERVALS and int(used.sum()) >= 10
+                  and abs(cov - V7_LEGACY_TARGET) <= V7_LEGACY_TOL)  # fmt: skip
     doc = {"step": "v7-rep", "table": v5.table_record(), "replicates": V7_REPLICATES,
            "histories_per_replicate": n_rep, "reference_histories": n_ref, "bins": V7_BINS,
            "bins_used": int(used.sum()), "intervals": intervals, "covered": covered,
-           "coverage": cov, "target": V7_COVERAGE, "tolerance": V7_COVERAGE_TOL,
+           "coverage": cov, "target": V7_LEGACY_TARGET, "tolerance": V7_LEGACY_TOL,
+           "tost": tost, "legacy_point_gate_pass": legacy,
            "per_bin_covered": per_bin.tolist(), "reference_profile": ref.tolist(),
            **cluster_doc(covered_j, used, ref, ref_sem, rep_means, V7_REP_BATCHES),
-           "wall_s": time.perf_counter() - t0, "pass": ok}  # fmt: skip
+           "wall_s": time.perf_counter() - t0, "pass": bool(tost["pass"])}  # fmt: skip
     return finish5b(doc, V7_REPLICATES * V7_REP_N + V7_REF_N, V7_REPLICATES * n_rep + n_ref,
                     n_rep < V7_REP_N)
 
