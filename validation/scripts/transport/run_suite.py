@@ -221,6 +221,12 @@ not executed in the single-process diagnostic mode and recorded as ``deferred``.
 use workers for speed run with one worker, with unchanged histories, seeds and criteria."""
 
 
+V7_REP_SHARDS = 5
+"""Number of shard steps ``v7-rep-s{k}`` of the V7 replicate coverage (Amendment 13: five simulations of 9e6
+histories, 4500 replicates); defined here for the same reason as ``V2B_SHARDS``; ``steps_v5b.V7_SHARDS`` is
+taken from it."""
+
+
 STEP_TIMEOUT_FLOOR_S = {
     "lv4": {"a9-part-1of2": 3300, "a9-part-2of2": 3300, "a7-step-independence": 1800},
     "hr4": {"a11-hr-channel-parity": 3600},
@@ -236,7 +242,8 @@ STEP_TIMEOUT_FLOOR_S = {
         **{f"v5-{e}-{t}": 3300 for e in (150, 200) for t in ("on", "off")},
         "v5-compare": 1800,
         **{f"v2b-s{k}": 3300 for k in range(8)}, "v7-scan": 3300, "v7-shift": 3300,
-        "v7-rep": 3300, "v3-workers-partition": 3300,
+        **{f"v7-rep-s{k}": 3300 for k in range(V7_REP_SHARDS)}, "v7-rep-ref": 3300,
+        "v3-workers-partition": 3300,
     },
     "hr5": {
         "v8-stat-python-s0": 3600, "v8-stat-python-s1": 3600, "v8-stat-cpu64": 3600,
@@ -511,7 +518,10 @@ def _suite_steps_v5b(add, s5, s5b, sc, out_dir, dirs):  # type: ignore[no-untype
     add("v2b-combine", [*s5b, "v2b-combine", "--dirs", *dirs, *sc], env)
     add("v7-scan", [*s5b, "v7-scan", *sc], env)
     add("v7-shift", [*s5b, "v7-shift", *sc], env)
-    add("v7-rep", [*s5b, "v7-rep", *sc], env)
+    for k in range(V7_REP_SHARDS):  # one simulation of 9e6 histories each (4500 replicates in total)
+        add(f"v7-rep-s{k}", [*s5b, "v7-rep-shard", "--shard", str(k), "--out-dir", str(out_dir), *sc], env)
+    add("v7-rep-ref", [*s5b, "v7-rep-ref", "--out-dir", str(out_dir), *sc], env)
+    add("v7-rep-combine", [*s5b, "v7-rep-combine", "--dirs", *dirs, *sc], env)
     add("v3-workers-partition", [*s5, "v3-workers"], env)  # deferred: runs only when the mode is lifted
 
 

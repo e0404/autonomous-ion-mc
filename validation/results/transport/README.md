@@ -201,10 +201,10 @@ invocation (Amendment 5). Crash observations during this task: two intermittent 
 trajectory parity incl. the nuclear trace and a nuclear-dense set), R1-nuc (A16 `nuclear=False` plus a
 python nuclear-on digest equal to the one measured with the source tree of b84fdf38), V5 ionmc side
 (four steps; the partials hold the per-batch IDD in MeV/(g/cm^2)/primary for `compare_idd_v5.py`), V2b
-(shards plus combine) and V7 (N-scan with f32/f64, grid shift/refinement, coverage replicates; the V7 coverage rule is a replicate-level TOST with 300 replicates of 1e4 histories, passing when the 90 % t interval of the mean per-replicate coverage lies inside [0.640, 0.700] (Amendment 12, Codex REVIEW-d3f216ca)). `hr5`
+(shards plus combine) and V7 (N-scan with f32/f64, grid shift/refinement, coverage replicates; the V7 coverage rule (Amendment 13, Codex REVIEW-be30e621) uses 4500 replicates of 1e4 histories, taken as groups of 20 batches (of 500 histories) of five sharded 9e6-history simulations (`v7-rep-s0..4`), against a 1e6-history reference simulation (`v7-rep-ref`; combine `v7-rep-combine`, which consumes the four partials). For each of the three estimators of the frozen row (12-bin profiles `sec_p` and `nuclear_local`, scalar `escaped_neutral`) a replicate-level TOST is applied: the 90 % t interval of the mean per-replicate coverage, bias-corrected for the shared reference error (`m + b_ref`, `b_ref = phi(1) mean_b (SEM_ref,b / sigma_b)^2`) and widened by its realised common-mode sd `s_ref` (`steps_v5b.v7_reference_correction`), must lie inside [0.640, 0.700]; the row passes iff all three estimators pass) `hr5`
 (7 steps; base 20451004; `IONMC_REQUIRE_CUDA=1`, one controlling process): V8 statistical parity samples
 (python in two shards, warp-cpu float64, CUDA float32 and float64), their T12 comparison and V7 f32 vs
-f64 on CUDA. Step 15 of `lv5b` (1-vs-N worker partition; two V2b shards) is deferred in the single-process mode. Any
+f64 on CUDA. `lv5b` has 21 steps (01 throughput, 02 V8-LV, 03 R1-nuc, 04-07 V5, 08 `v5-compare`, 09-10 V2b shards, 11 V2b combine, 12 `v7-scan`, 13 `v7-shift`, 14-18 `v7-rep-s0..4`, 19 `v7-rep-ref`, 20 `v7-rep-combine`, 21 worker partition); step 21 (1-vs-N worker partition) is deferred in the single-process mode. Any
 combine that uses imported partials is `conformant: false` (Amendment 5). V6 and E1-B (r_index 12, 13,
 hr5 r_index 3) belong to V3-005C.
 

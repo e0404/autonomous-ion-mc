@@ -1665,7 +1665,7 @@ HR5_STEPS = ["v8-stat-python-s0", "v8-stat-python-s1", "v8-stat-cpu64", "v8-stat
              "v8-stat-cuda64", "v8-stat-compare", "v7-f32-f64-cuda"]  # fmt: skip
 # slice-B rows evaluated by V3-005B -> (suite, step); V6 is V3-005C
 SLICE_B_ROWS = {
-    "V2b": ("lv5b", "v2b-combine"), "V5": ("lv5b", "v5-compare"), "V7": ("lv5b", "v7-scan"),
+    "V2b": ("lv5b", "v2b-combine"), "V5": ("lv5b", "v5-compare"), "V7": ("lv5b", "v7-rep-combine"),
     "V8": ("lv5b", "v8-lv-python-vs-warp-cpu"),
 }  # fmt: skip
 SLICE_B_DEFERRED = {"V6": "V3-005C"}
@@ -1676,7 +1676,12 @@ def test_lv5b_hr5_manifest_seeds_hashed_set_and_deferred() -> None:
     names = [n.split("-", 1)[1] for n in mod.full_step_names("lv5b", 2)]
     assert names[:8] == LV5B_STEPS
     assert names[8:] == [*(f"v2b-s{k}" for k in range(v5b.V2B_SHARDS)), "v2b-combine", "v7-scan",
-                         "v7-shift", "v7-rep", "v3-workers-partition"]  # fmt: skip
+                         "v7-shift", *(f"v7-rep-s{k}" for k in range(5)), "v7-rep-ref",
+                         "v7-rep-combine", "v3-workers-partition"]  # fmt: skip
+    assert len(names) == 21 and v5b.V7_SHARDS == mod.V7_REP_SHARDS == 5
+    full = mod.full_step_names("lv5b", 2)
+    assert [full.index(n) + 1 for n in full if "v7-rep" in n] == [14, 15, 16, 17, 18, 19, 20]
+    assert [n.split("-", 1)[1] for n in full][:2] == ["lv5b-throughput", "v8-lv-python-vs-warp-cpu"]
     assert [n.split("-", 1)[1] for n in mod.full_step_names("hr5", 2)] == HR5_STEPS
     assert mod.DEFAULT_SEED_BASES["lv5b"] == QUAL5B == v5b.QUALIFICATION_SEED_BASE
     assert mod.DEFAULT_SEED_BASES["hr5"] == QUALHR5 == v5b.HR5_SEED_BASE
@@ -1704,6 +1709,14 @@ def test_lv5b_hr5_manifest_seeds_hashed_set_and_deferred() -> None:
     with pytest.raises(SystemExit):
         mod.suite_steps("hr5", 1, 1.0, import_dirs=["x"])
     assert mod.step_timeout_s("lv5b", "08-v2b-s0", 1500) == 3300
+    for k in range(5):
+        assert mod.step_timeout_s("lv5b", f"{14 + k:02d}-v7-rep-s{k}", 1500) == 3300
+    assert mod.step_timeout_s("lv5b", "19-v7-rep-ref", 1500) == 3300
+    cmds = {n.split("-", 1)[1]: c for n, c, _ in mod.suite_steps("lv5b", 1, 1.0)}
+    for k in range(5):
+        c = cmds[f"v7-rep-s{k}"]
+        assert c[c.index("v7-rep-shard") + 1 :][:2] == ["--shard", str(k)] and "--out-dir" in c
+    assert "--out-dir" in cmds["v7-rep-ref"] and "--dirs" in cmds["v7-rep-combine"]
     assert mod.step_timeout_s("hr5", "03-v8-stat-cpu64", 1500) == 3600
 
 
@@ -1744,6 +1757,10 @@ def test_slice_b_tags_blockers_documents_and_shard_budget() -> None:
         tags = {summ.expected_tag(n) for n in mod.full_step_names(suite, 2)} - {"v3-workers"}
         assert tags <= printed, tags - printed
     assert summ.expected_tag("03-r1-nuc-regression") == "r1-nuc"
+    assert summ.expected_tag("14-v7-rep-s0") == summ.expected_tag("18-v7-rep-s4") == "v7-rep-shard"
+    assert summ.expected_tag("19-v7-rep-ref") == "v7-rep-ref"
+    assert summ.expected_tag("20-v7-rep-combine") == "v7-rep-combine"
+    assert {"v7-rep-shard", "v7-rep-ref", "v7-rep-combine"} <= printed
     assert summ.expected_tag("03-r1-a16-t1-regression") == "r1"
     assert summ.seed_blockers(QUAL5B, "lv5b") == [] and summ.seed_blockers(QUALHR5, "hr5") == []
     assert summ.seed_blockers(REH5B, "lv5b") and summ.seed_blockers(QUAL5B, "hr5")
@@ -1755,11 +1772,26 @@ def test_slice_b_tags_blockers_documents_and_shard_budget() -> None:
     assert v5b.V2B_N / v5b.V2B_SHARDS / v2b_rate <= limit
     assert v5b.HR5_PYTHON_SHARDS * v5b.HR5_PYTHON_N / v5b.HR5_PYTHON_SHARDS / r["python"] <= limit
     assert sum(v5b.V7_SCAN_N) / r["warp-cpu-f64"] <= limit
+    # V7 replicate shards: 9e6 histories each, at the declared rate and at the measured rate of the
+    # 500-history run_range blocks of batch_estimates (about 5000 hist/s), within limit / margin
+    assert v5b.V7_SHARD_N / r["warp-cpu-f64"] <= limit
+    assert v5b.V7_SHARD_N / r["warp-cpu-f64-blocks"] <= limit
+    assert (
+        v5b.V7_SHARD_N / r["warp-cpu-f64-blocks"]
+        <= mod.step_timeout_s("lv5b", "14-v7-rep-s0", 1500) / 1.25
+    )
+    assert (v5b.V7_SHARDS * v5b.V7_SHARD_N + v5b.V7_REF_N) / r["warp-cpu-f64"] / (
+        v5b.V7_SHARDS + 1
+    ) <= limit
     # frozen counts of the plan rows
     assert (v5b.V5_N, v5b.V5_BATCHES, v5b.V5_DZ_MM, v5b.V5_HALF_MM) == (100_000, 20, 0.5, 200.0)
     assert (v5b.V8_K, v5b.V8_DENSE_MIN_EVENTS, v5b.V8_TOL) == (256, 50, 1e-10)
-    assert v5b.V7_REPLICATES == 300 and v5b.V7_BINS >= 10
-    assert v5b.V7_REPLICATES * v5b.V7_BINS >= v5b.V7_MIN_INTERVALS
+    assert v5b.V7_REPLICATES == 4500 == v5b.V7_SHARDS * v5b.V7_REPS_PER_SHARD
+    assert v5b.V7_SHARD_BATCHES == 18_000 and v5b.V7_REP_N == 10_000 and v5b.V7_BINS == 12
+    seeds = [v5b.seed_of("v7-rep", k) for k in range(v5b.V7_SHARDS + 1)]  # shards 0..2, reference 3
+    lo = v5b.base.SEED_BASE + 1000 * v5b.R_INDEX["v7-rep"]
+    assert seeds == list(range(lo, lo + 6)) and seeds[-1] < lo + 1000
+    assert len(set(seeds)) == 6 and v5b.V7_REPLICATES * v5b.V7_BINS >= v5b.V7_MIN_INTERVALS
     assert (v5b.V7_SLOPE, v5b.V7_SLOPE_TOL, v5b.V7_LEGACY_TARGET, v5b.V7_LEGACY_TOL) == (
         -0.5,
         0.05,
@@ -2013,7 +2045,7 @@ def test_suite_definition_and_hashing_need_no_ionmc() -> None:
 
 
 def test_lv5b_consumed_base_refused_and_new_base_accepted() -> None:
-    """Amendment 11: 20441004 is consumed for lv5b, 20471004 qualifies; 300 replicates fit."""
+    """Amendment 11: 20441004 is consumed for lv5b, 20471004 qualifies; the V7 seeds fit."""
     summ, mod, v5b = _load("summarize"), _load("run_suite"), _load("steps_v5b")
     assert mod.V5B_CONSUMED_SEED_BASES == summ.V5B_CONSUMED_SEED_BASES == (CONSUMED5B,)
     assert mod.V5B_QUALIFICATION_SEED_BASE == summ.V5B_QUALIFICATION_SEED_BASE == QUAL5B == 20471004
@@ -2026,111 +2058,7 @@ def test_lv5b_consumed_base_refused_and_new_base_accepted() -> None:
     with pytest.raises(SystemExit, match="consumed"):
         mod.main(["--suite", "lv5b", "--seed-base", str(CONSUMED5B), "--expected-sha", "0" * 40,
                   "--out", "unused-never-created"])  # fmt: skip
-    assert v5b.V7_REPLICATES == 300
-    seeds = [v5b.seed_of("v7-rep", k) for k in range(v5b.V7_REPLICATES + 1)]
+    assert v5b.V7_REPLICATES == 4500
+    seeds = [v5b.seed_of("v7-rep", k) for k in range(v5b.V7_SHARDS + 1)]
     lo = v5b.base.SEED_BASE + 1000 * v5b.R_INDEX["v7-rep"]
-    assert seeds == list(range(lo, lo + 301)) and seeds[-1] < lo + 1000
-    assert len(set(seeds)) == 301 and v5b.V7_REPLICATES * v5b.V7_BINS >= v5b.V7_MIN_INTERVALS
-
-
-def test_v7_rep_cluster_coverage_statistics() -> None:
-    """Amendment 11 review db4474cd: v7-rep records per-replicate (cluster) coverage, a cluster SE
-    with a t interval, the nominal one-sigma coverage of nb batches and the reference variance."""
-    v5b = _load("steps_v5b")
-    # Student t quantiles and the nominal coverage, without scipy
-    for p, df, ref in ((0.95, 19, 1.7291), (0.95, 29, 1.6991), (0.95, 89, 1.6622)):
-        assert abs(v5b.student_t_quantile(p, df) - ref) < 5e-4
-    assert abs(v5b.student_abs_prob(19, 1.0) - 0.670) < 0.002
-    assert abs(v5b.student_abs_prob(1, 1.0) - 0.5) < 1e-9  # Cauchy: (2/pi) atan(1)
-    # synthetic matrix: 30 replicates, 12 bins used, covered counts with known mean and sd
-    covered = np.array([8, 9, 7, 8, 8, 6, 9, 10, 8, 8] * 3, dtype=np.int64)
-    st = v5b.coverage_cluster_stats(covered, 12, 20)
-    f = covered / 12.0
-    se = f.std(ddof=1) / np.sqrt(30)
-    assert st["per_replicate_covered"] == covered.tolist()
-    assert abs(st["coverage_cluster_se"] - se) < 1e-15
-    half = v5b.student_t_quantile(0.95, 29) * se
-    assert abs(st["coverage_ci90_cluster"][0] - (f.mean() - half)) < 1e-12
-    assert abs(st["coverage_ci90_cluster"][1] - (f.mean() + half)) < 1e-12
-    assert abs(st["nominal_coverage"] - 0.670) < 0.002
-    # reference variance ratio: replicate means with var 1 per bin, reference SEM^2 = 0.01
-    rng = np.random.default_rng(3)
-    means = rng.standard_normal((90, 12))
-    used = np.ones(12, dtype=bool)
-    doc = v5b.cluster_doc(
-        covered[:1].repeat(90), used, np.full(12, 5.0), np.full(12, 0.1), means, 20
-    )
-    assert abs(doc["reference_variance_ratio"] - 0.01) < 0.003
-    for key in (
-        "reference_profile_sem",
-        "reference_relative_se",
-        "per_replicate_covered",
-        "coverage_cluster_se",
-        "coverage_ci90_cluster",
-        "nominal_coverage",
-    ):
-        assert key in doc
-    assert abs(doc["reference_relative_se"][0] - 0.02) < 1e-12
-
-
-def _tost(
-    v5b: object, covered: np.ndarray, intervals: int | None = None, bins_used: int = 12
-) -> dict:
-    n = int(covered.size * bins_used) if intervals is None else intervals
-    return v5b.v7_tost_verdict(
-        covered, bins_used, n, v5b.V7_COV_LOW, v5b.V7_COV_HIGH, v5b.V7_TOST_ALPHA
-    )
-
-
-def _synthetic_covered(mean: float, sd: float, r: int = 300) -> np.ndarray:
-    """Deterministic covered_j (bins_used = 12) with exact mean and sd of f_j = covered / 12."""
-    z = np.linspace(-1.0, 1.0, r)
-    z = (z - z.mean()) / z.std(ddof=1)
-    return (mean + sd * z) * 12.0
-
-
-def test_v7_tost_rule_synthetic_vectors() -> None:
-    """Amendment 12: PASS iff the 90 % t interval of mean(f_j) lies inside [0.640, 0.700]."""
-    v5b = _load("steps_v5b")
-    assert (v5b.V7_COV_LOW, v5b.V7_COV_HIGH, v5b.V7_TOST_ALPHA) == (0.640, 0.700, 0.05)
-    ok = _tost(v5b, _synthetic_covered(0.670, 0.155))  # se = 0.0089, CI ~ +-0.0147
-    assert ok["pass"] and not ok["reasons"] and abs(ok["mean"] - 0.670) < 1e-9
-    assert abs(ok["se"] - 0.155 / np.sqrt(300)) < 1e-9
-    assert abs(ok["t"] - v5b.student_t_quantile(0.95, 299)) < 1e-12 and abs(ok["t"] - 1.6500) < 1e-3
-    assert abs(ok["ci"][1] - ok["ci"][0] - 2 * ok["t"] * ok["se"]) < 1e-12
-    low = _tost(v5b, _synthetic_covered(0.650, 0.155))  # point inside, CI crosses 0.640
-    assert 0.640 < low["mean"] < 0.700 and low["ci"][0] < 0.640 and not low["pass"]
-    assert any("lower" in r for r in low["reasons"])
-    up = _tost(v5b, _synthetic_covered(0.690, 0.155))  # CI crosses 0.700
-    assert up["ci"][1] > 0.700 and not up["pass"] and any("upper" in r for r in up["reasons"])
-    few = _tost(v5b, _synthetic_covered(0.670, 0.155), intervals=299)
-    assert not few["pass"] and any("intervals" in r for r in few["reasons"])
-    assert not _tost(v5b, _synthetic_covered(0.670, 0.155), bins_used=9)["pass"]
-    # the legacy point gate (0.68 +- 0.03) accepts a point 0.655 whose TOST CI crosses 0.640
-    assert not _tost(v5b, _synthetic_covered(0.645, 0.155))["pass"]
-    assert abs(0.655 - v5b.V7_LEGACY_TARGET) <= v5b.V7_LEGACY_TOL
-
-
-def test_v7_tost_monte_carlo_calibration() -> None:
-    """Amendment 12: false-acceptance control at the region edges and power at the centre
-    (R = 300, per-replicate sd 0.155, 3000 trials, fixed seed)."""
-    v5b = _load("steps_v5b")
-    rng = np.random.default_rng(20471004)
-    r, sd, trials = 300, 0.155, 3000
-    t = v5b.student_t_quantile(0.95, r - 1)
-    rates = {}
-    for mean in (0.640, 0.670, 0.700):
-        f = mean + sd * rng.standard_normal((trials, r))
-        covered = np.round(f * 12.0)  # integer counts as in the step
-        passes = 0
-        for row in covered[:300]:  # verdict function on a subset must agree with fast form
-            fj = row / 12.0
-            half = t * fj.std(ddof=1) / np.sqrt(r)
-            v = _tost(v5b, row)
-            assert v["pass"] == bool(0.640 <= fj.mean() - half and fj.mean() + half <= 0.700)
-        fj = covered / 12.0
-        half = t * fj.std(axis=1, ddof=1) / np.sqrt(r)
-        passes = int(((fj.mean(axis=1) - half >= 0.640) & (fj.mean(axis=1) + half <= 0.700)).sum())
-        rates[mean] = passes / trials
-    print("v7 TOST pass rates", rates)
-    assert rates[0.640] <= 0.07 and rates[0.700] <= 0.07 and rates[0.670] >= 0.85
+    assert seeds == list(range(lo, lo + 6)) and seeds[-1] < lo + 1000

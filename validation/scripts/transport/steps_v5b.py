@@ -16,8 +16,8 @@ non-conformant run; the rehearsal base is ``REHEARSAL_SEED_BASE`` (2046xxxx, nev
 
 Seeds (Amendment 6): ``seed = base + 1000 * r_index + shard`` with the lv5b base 20471004 (Amendment 11; 20441004 consumed) and the
 hr5 base 20451004; ``R_INDEX`` (lv5b): throughput 1, v8-lv 2, r1-nuc 3, v5-150-on 4, v5-150-off 5,
-v5-200-on 6, v5-200-off 7, v2b 8, v7-scan 9, v7-shift 10, v7-rep 11 (replicate j: shard j, the
-1e6 reference: shard ``V7_REPLICATES``); ``R_INDEX_HR`` (hr5): v8-stat 1, v7-f32 2. The python and
+v5-200-on 6, v5-200-off 7, v2b 8, v7-scan 9, v7-shift 10, v7-rep 11 (the five
+replicate shards: shards 0..4, the 1e6 reference: shard ``V7_SHARDS`` = 5); ``R_INDEX_HR`` (hr5): v8-stat 1, v7-f32 2. The python and
 warp samples of v8-stat use the shards of ``V8_SAMPLES``.
 
 Definitions made here where the plan leaves them open (all recorded in the documents):
@@ -43,13 +43,18 @@ Definitions made here where the plan leaves them open (all recorded in the docum
   the exact batch partials (``run_range`` over the batch history ranges, which equals the batch
   decomposition of the full run). The N-scan uses ``V7_BATCHES`` = 100 batches per N so that the
   standard error of the slope of ln(SE) against ln N (about 0.02) resolves the frozen +-0.05.
-  Coverage: ``V7_REPLICATES`` replicates of ``V7_REP_N`` histories, ``V7_BINS`` depth bins of the
-  secondary-proton dose profile, 1 sigma intervals against the mean of a ``V7_REF_N`` reference.
-  Pass rule (Amendment 12, Codex REVIEW-d3f216ca; ``v7_tost_verdict``): replicate-level TOST. With
-  ``f_j`` = covered bins / bins used of replicate j, the 90 % two-sided t interval of mean(f_j)
-  (``t_{0.95,R-1}`` times sd/sqrt(R)) must lie inside [``V7_COV_LOW``, ``V7_COV_HIGH``] = [0.640, 0.700],
-  with at least ``V7_MIN_INTERVALS`` intervals and 10 bins used. The pooled-point gate 0.68 +- 0.03 is
-  only reported (``legacy_point_gate_pass``).
+  Coverage (Amendment 13, Codex REVIEW-be30e621): ``V7_REPLICATES`` = 4500 replicates of ``V7_REP_N`` =
+  1e4 histories from ``V7_SHARDS`` = 5 single simulations (steps ``v7-rep-s{0..4}``) of ``V7_SHARD_N`` = 9e6
+  histories in ``V7_SHARD_BATCHES`` = 18000 batches of 500 histories; the histories are independent
+  (counter-based RNG per history), so replicate j is the contiguous group of ``V7_BATCHES_PER_REP`` = 20
+  batches [20 j, 20 j + 20) with mean and sample SEM (ddof = 1) of its 20 batches. One reference simulation
+  (``v7-rep-ref``, ``V7_REF_N`` = 1e6 histories, 20 batches) gives the reference mean and SEM. The three
+  estimators of the frozen V7 row are covered: the ``V7_BINS`` = 12-bin secondary-proton dose profile
+  ``sec_p``, and the 12-bin ``nuclear_local`` dose profile (``nuc_local`` channel) and the scalar ``escaped_neutral`` (neutron + gamma), 1 sigma intervals
+  against the reference mean. ``v7-rep-combine`` consumes the four partials (no seed) and applies
+  ``v7_tost_verdict`` per estimator, with the reference-uncertainty treatment of ``v7_reference_correction``
+  (derivation there). Row V7 coverage passes iff all three estimators pass; the pooled-point gate
+  0.68 +- 0.03 is only reported (``legacy_point_gate_pass``).
   Grid shift and refinement (decision of this module, no frozen tolerance): the whole-grid secondary
   proton dose of a lateral half-voxel shift agrees to ``V7_SHIFT_RTOL`` (edge strips) and of a 2x
   lateral refinement to ``V7_REFINE_RTOL`` (quantisation). f32 vs f64 on the same backend: paired
@@ -146,11 +151,23 @@ V2B_VARIANTS = ((0.1, 0.02), (1.0, 0.02))  # (s_max mm, f_E): a, b
 V7_SCAN_N, V7_BATCHES, V7_SLOPE, V7_SLOPE_TOL = (10_000, 100_000, 1_000_000), 100, -0.5, 0.05
 V7_F32_N, V7_F32_Z = 100_000, 3.0
 V7_SHIFT_N, V7_SHIFT_BATCHES, V7_SHIFT_RTOL, V7_REFINE_RTOL = 100_000, 20, 1e-3, 1e-6
-# Amendment 12 (Codex REVIEW-d3f216ca): 300 replicates (30 -> 90 in Amendment 11); the reference shard
-# index V7_REPLICATES = 300 stays inside the row's 1000-seed block.
-V7_REPLICATES, V7_REP_N, V7_REF_N, V7_BINS, V7_REP_BATCHES = 300, 10_000, 1_000_000, 12, 20
+# Amendment 13 (Codex REVIEW-be30e621): 4500 replicates from 5 sharded simulations of 9e6 histories in 18000
+# batches of 500 (replicate = 20 consecutive batches) plus a 1e6-history reference simulation; shards use
+# seed indices 0..4 and the reference index V7_SHARDS = 3 of r_index 11 (inside the row's 1000-seed block).
+V7_SHARDS = run_suite.V7_REP_SHARDS  # 5, defined in run_suite.py
+V7_SHARD_N, V7_BATCH_N, V7_BATCHES_PER_REP = 9_000_000, 500, 20
+V7_REP_N = V7_BATCH_N * V7_BATCHES_PER_REP  # histories per replicate (1e4)
+V7_SHARD_BATCHES = V7_SHARD_N // V7_BATCH_N  # 18000
+V7_REPS_PER_SHARD = V7_SHARD_BATCHES // V7_BATCHES_PER_REP  # 900
+V7_REPLICATES = V7_SHARDS * V7_REPS_PER_SHARD  # 4500
+V7_REF_N, V7_REF_BATCHES, V7_BINS = 1_000_000, 20, 12
+V7_COVERAGE_ESTIMATORS = (("sec_p", "profile"), ("nuclear_local", "profile"),
+                          ("escaped_neutral", "scalar"))  # fmt: skip
+V7_MIN_PROFILE_BINS = 10
+PHI_1 = math.exp(-0.5) / math.sqrt(2.0 * math.pi)  # standard normal density at 1: 0.24197
 # Replicate-level TOST (two one-sided tests, alpha = 0.05 each, i.e. a 90 % two-sided t interval of the
-# mean per-replicate coverage) against the equivalence region [V7_COV_LOW, V7_COV_HIGH]: centre 0.670 =
+# mean per-replicate coverage, bias-corrected for the shared reference, see ``v7_reference_correction``)
+# against the equivalence region [V7_COV_LOW, V7_COV_HIGH]: centre 0.670 =
 # P(|t_19| <= 1), the nominal coverage of one-sigma intervals from the SEM of 20 batches, margin +-0.03.
 V7_COV_LOW, V7_COV_HIGH, V7_TOST_ALPHA = 0.640, 0.700, 0.05
 V7_MIN_INTERVALS = 300
@@ -169,7 +186,8 @@ V8_PAIRS = (("python", "cpu64"), ("cpu64", "cuda32"), ("cpu64", "cuda64"), ("cud
 # measured warp-cpu / python rates of this host (hist/s, single process, nuclear on, 150 MeV): the
 # declared shard counts must keep every step at or below STEP_LIMIT_S / MARGIN at these rates;
 # the throughput step re-measures them and fails if a declared count no longer fits
-DECLARED_RATES = {"python": 63.8, "warp-cpu-f64": 10185.0, "v2b-a": 1500.0, "v2b-b": 7000.0}
+DECLARED_RATES = {"python": 63.8, "warp-cpu-f64": 10185.0, "v2b-a": 1500.0, "v2b-b": 7000.0,
+                  "warp-cpu-f64-blocks": 5000.0}  # last: batch_estimates (500-history run_range blocks)
 
 
 def seed_of(row: str, shard: int = 0) -> int:
@@ -327,7 +345,7 @@ def step_throughput(a: argparse.Namespace) -> int:
         "v2b (both variants)": (V2B_N, "v2b", V2B_SHARDS),
         "v7-scan (1e4 + 1e5 + 1e6, f64, plus f32 1e5)": (sum(V7_SCAN_N) + V7_F32_N, "warp-cpu-f64", 1),
         "v7-shift (3 layouts)": (3 * V7_SHIFT_N, "warp-cpu-f64", 1),
-        "v7-rep (300 x 1e4 + 1e6 reference)": (V7_REPLICATES * V7_REP_N + V7_REF_N, "warp-cpu-f64", 1),
+        "v7-rep (5 shards x 9e6 + 1e6 reference)": (V7_SHARDS * V7_SHARD_N + V7_REF_N, "warp-cpu-f64", V7_SHARDS + 1),
         "hr5 python sample (2.4e4)": (HR5_PYTHON_SHARDS * HR5_PYTHON_N, "python", HR5_PYTHON_SHARDS),
     }, {**rates, "v2b": v2b_rate})  # fmt: skip
     ok = all(v["counters_clean"] for v in out.values())
@@ -837,50 +855,43 @@ def student_t_quantile(p: float, df: int) -> float:
     return 0.5 * (lo + hi)
 
 
-def coverage_cluster_stats(covered_j: NDArray[np.int64], bins_used: int, n_batches: int) -> dict[str, Any]:
-    """Cluster-aware coverage statistics: the replicates are the independent clusters (the bins of
-    one replicate come from the same histories). ``f_j = covered_j / bins_used``; the SE of the pooled
-    coverage (their mean) is ``sd(f_j, ddof=1) / sqrt(R)`` with a 90 % t interval on R - 1 df.
-    ``nominal_coverage`` is P(|t_{nb-1}| <= 1): the coverage a one-sigma interval built from the sample
-    SEM of ``n_batches`` batches has for a normal estimator."""
-    f = np.asarray(covered_j, dtype=float) / bins_used
-    r = f.size
-    se = float(f.std(ddof=1) / math.sqrt(r))
-    half = student_t_quantile(0.95, r - 1) * se
-    return {"per_replicate_covered": [int(c) for c in covered_j], "per_replicate_fraction": f.tolist(),
-            "coverage_cluster_se": se, "t_quantile_90": student_t_quantile(0.95, r - 1),
-            "coverage_ci90_cluster": [float(f.mean() - half), float(f.mean() + half)],
-            "nominal_coverage": student_abs_prob(n_batches - 1, 1.0)}  # fmt: skip
+def v7_reference_correction(sem_ref: NDArray[np.float64], sigma: NDArray[np.float64]) -> dict[str, Any]:
+    """Effect of the shared reference error on the observed coverage (Amendment 13, Codex
+    REVIEW-be30e621). All replicates are compared with ONE reference whose mean in bin ``b`` is off by
+    a common error ``eps_b`` with variance ``SEM_ref,b^2``. For a replicate mean ``X ~ N(mu, sigma_b^2)``
+    and a one-sigma interval of half width ``s``, the probability to cover the reference,
+    ``g(eps) = Phi((s + eps) / sigma) - Phi((eps - s) / sigma)``, is even in ``eps`` (first derivative 0
+    at 0) with second derivative ``-2 (s / sigma) phi(s / sigma) / sigma^2``, which at ``s = sigma``
+    (the nominal one-sigma interval) is ``-2 phi(1) / sigma^2``. Hence a reference error lowers the
+    expected observed coverage of bin ``b`` by ``b_b = phi(1) r_b^2`` with ``r_b = SEM_ref,b / sigma_b``
+    (``E eps^2 = SEM_ref,b^2``), and the realised common-mode shift, ``phi(1) (eps_b^2 - E eps_b^2) /
+    sigma_b^2``, has standard deviation ``phi(1) sqrt(2) r_b^2`` (``Var eps^2 = 2 SEM^4``). Averaged
+    over the ``B`` used bins (independent reference errors): ``b_ref = mean_b b_b`` and
+    ``s_ref = phi(1) sqrt(2) sqrt(sum_b r_b^4) / B``. ``sigma_b`` is the sample sd of the replicate
+    means. Pure function of its arguments (arrays over the used bins)."""
+    r = np.asarray(sem_ref, dtype=float) / np.asarray(sigma, dtype=float)
+    nb = r.size
+    return {"r_b": r.tolist(), "b_ref": float(PHI_1 * np.mean(r**2)),
+            "s_ref": float(PHI_1 * math.sqrt(2.0) * math.sqrt(float(np.sum(r**4))) / nb)}  # fmt: skip
 
 
-def cluster_doc(covered_j: NDArray[np.int64], used: NDArray[np.bool_], ref: NDArray[np.float64],
-                ref_sem: NDArray[np.float64], rep_means: NDArray[np.float64], nb: int) -> dict[str, Any]:
-    """Cluster-level record of the v7-rep coverage (Amendment 11, review db4474cd). The reference
-    is one finite sample shared by every replicate, so its variance is a common-mode term:
-    ``reference_variance_ratio`` is the mean over used bins of ``SEM_ref^2`` over the variance of the
-    replicate means (expected ~ n_rep / n_ref)."""
-    out = coverage_cluster_stats(covered_j, int(used.sum()), nb)
-    var_rep = rep_means[:, used].var(axis=0, ddof=1)
-    ratio = ref_sem[used] ** 2 / var_rep
-    out.update({"reference_profile_sem": ref_sem.tolist(),
-                "reference_relative_se": np.where(used, ref_sem / np.where(used, ref, 1.0), 0.0).tolist(),
-                "reference_variance_ratio_per_bin": ratio.tolist(),
-                "reference_variance_ratio": float(ratio.mean())})  # fmt: skip
-    return out
-
-
-def v7_tost_verdict(covered_j: NDArray[np.int64], bins_used: int, intervals: int,
-                    low: float, high: float, alpha: float) -> dict[str, Any]:
-    """Replicate-level TOST of the v7-rep coverage (Amendment 12, Codex REVIEW-d3f216ca): with
-    ``f_j = covered_j / bins_used`` the 1 - 2 alpha two-sided t interval of ``mean(f_j)`` (replicates
-    are the independent clusters) must lie entirely inside ``[low, high]``; also requires
-    ``intervals >= V7_MIN_INTERVALS`` and ``bins_used >= 10``. Pure function of its arguments."""
+def v7_tost_verdict(covered_j: NDArray[np.int64], bins_used: int, intervals: int, b_ref: float,
+                    s_ref: float, *, low: float = V7_COV_LOW, high: float = V7_COV_HIGH,
+                    alpha: float = V7_TOST_ALPHA, min_bins: int = 1) -> dict[str, Any]:  # fmt: skip
+    """Replicate-level TOST of one estimator of the v7-rep coverage with the reference-uncertainty
+    treatment (Amendment 13): ``f_j = covered_j / bins_used`` (replicates are the independent
+    clusters), ``m = mean(f_j)``, ``s = sd(f_j, ddof=1) / sqrt(R)``; ``m_corr = m + b_ref`` (bias
+    correction toward the true coverage), ``s_tot = sqrt(s^2 + s_ref^2)`` and ``t = t_{1-alpha, R-1}``.
+    PASS iff ``[m_corr - t s_tot, m_corr + t s_tot]`` lies inside ``[low, high]``,
+    ``intervals >= V7_MIN_INTERVALS`` and ``bins_used >= min_bins``. Pure function of its arguments."""
     f = np.asarray(covered_j, dtype=float) / bins_used
     r = f.size
     m = float(f.mean())
     se = float(f.std(ddof=1) / math.sqrt(r))
+    m_corr = m + b_ref
+    s_tot = math.sqrt(se**2 + s_ref**2)
     t = student_t_quantile(1.0 - alpha, r - 1)
-    ci = [m - t * se, m + t * se]
+    ci = [m_corr - t * s_tot, m_corr + t * s_tot]
     reasons = []
     if ci[0] < low:
         reasons.append(f"CI lower bound {ci[0]:.4f} below {low}")
@@ -888,57 +899,150 @@ def v7_tost_verdict(covered_j: NDArray[np.int64], bins_used: int, intervals: int
         reasons.append(f"CI upper bound {ci[1]:.4f} above {high}")
     if intervals < V7_MIN_INTERVALS:
         reasons.append(f"intervals {intervals} < {V7_MIN_INTERVALS}")
-    if bins_used < 10:
-        reasons.append(f"bins_used {bins_used} < 10")
-    return {"mean": m, "se": se, "t": t, "ci": ci, "low": low, "high": high, "alpha": alpha,
-            "replicates": r, "pass": not reasons, "reasons": reasons}  # fmt: skip
+    if bins_used < min_bins:
+        reasons.append(f"bins_used {bins_used} < {min_bins}")
+    return {"m": m, "s": se, "b_ref": b_ref, "s_ref": s_ref, "m_corr": m_corr, "s_tot": s_tot, "t": t,
+            "ci": ci, "low": low, "high": high, "alpha": alpha, "replicates": r,
+            "pass": not reasons, "reasons": reasons}  # fmt: skip
 
 
-def step_v7_rep(a: argparse.Namespace) -> int:
-    geo, grid = coarse_depth(V7_BINS)
-    n_rep = scaled(V7_REP_N, a.scale, 2000, V7_REP_BATCHES)
-    n_ref = scaled(V7_REF_N, a.scale, 20_000, V7_REP_BATCHES)
-
-    def run(n: int, k: int) -> NDArray[np.float64]:
-        cfg = wcfg("warp-cpu", "float64", energy=150.0, n=n, seed=seed_of("v7-rep", k), geometry=geo,
-                   grid=grid, n_batches=V7_REP_BATCHES, tallies=(SEC_P,), timeout=a.timeout)  # fmt: skip
-        res = Simulation(cfg).run()
-        if not v5.clean(res):
-            raise SystemExit(f"v7-rep shard {k}: invalid result")
-        return tally_batches(res, "sec_p")
-
-    t0 = time.perf_counter()
-    ref_b = run(n_ref, V7_REPLICATES)
-    ref = ref_b.mean(axis=0)
-    ref_sem = ref_b.std(axis=0, ddof=1) / math.sqrt(ref_b.shape[0])
-    used = ref > 0.0
-    covered = intervals = 0
-    per_bin = np.zeros(V7_BINS)
-    covered_j = np.zeros(V7_REPLICATES, dtype=np.int64)
-    rep_means = np.zeros((V7_REPLICATES, V7_BINS))
-    for j in range(V7_REPLICATES):
-        b = run(n_rep, j)
-        mean, sem = b.mean(axis=0), b.std(axis=0, ddof=1) / math.sqrt(b.shape[0])
-        hit = (np.abs(mean - ref) <= sem) & used
-        covered += int(hit.sum())
-        intervals += int(used.sum())
-        per_bin += hit
-        covered_j[j] = int(hit.sum())
-        rep_means[j] = mean
-    cov = covered / intervals if intervals else math.nan
-    tost = v7_tost_verdict(covered_j, int(used.sum()), intervals, V7_COV_LOW, V7_COV_HIGH, V7_TOST_ALPHA)
-    legacy = bool(intervals >= V7_MIN_INTERVALS and int(used.sum()) >= 10
+def v7_estimator_verdict(kind: str, means: NDArray[np.float64], sems: NDArray[np.float64],
+                         ref: NDArray[np.float64], ref_sem: NDArray[np.float64]) -> dict[str, Any]:  # fmt: skip
+    """Coverage verdict of one estimator: ``means`` / ``sems`` ``[R, bins]`` (replicate means and
+    sample SEMs of their 20 batches), ``ref`` / ``ref_sem`` ``[bins]``. Bins used: reference > 0 and
+    a positive replicate sd; hit: ``|mean - ref| <= sem``. ``kind`` is ``profile`` (at least
+    ``V7_MIN_PROFILE_BINS`` bins used) or ``scalar``."""
+    means, sems = np.asarray(means, float), np.asarray(sems, float)
+    ref, ref_sem = np.asarray(ref, float), np.asarray(ref_sem, float)
+    r = means.shape[0]
+    sigma = means.std(axis=0, ddof=1)
+    used = (ref > 0.0) & (sigma > 0.0)
+    nused = int(used.sum())
+    hit = (np.abs(means - ref) <= sems) & used
+    covered_j = hit.sum(axis=1).astype(np.int64)
+    intervals = r * nused
+    if nused:
+        corr = v7_reference_correction(ref_sem[used], sigma[used])
+    else:
+        corr = {"r_b": [], "b_ref": math.nan, "s_ref": math.nan}
+    min_bins = V7_MIN_PROFILE_BINS if kind == "profile" else 1
+    if nused:
+        tost = v7_tost_verdict(covered_j, nused, intervals, corr["b_ref"], corr["s_ref"], min_bins=min_bins)
+    else:
+        tost = {"pass": False, "reasons": ["no bin used"], "ci": [math.nan, math.nan]}
+    cov = float(covered_j.sum() / intervals) if intervals else math.nan
+    legacy = bool(intervals >= V7_MIN_INTERVALS and nused >= min_bins
                   and abs(cov - V7_LEGACY_TARGET) <= V7_LEGACY_TOL)  # fmt: skip
-    doc = {"step": "v7-rep", "table": v5.table_record(), "replicates": V7_REPLICATES,
-           "histories_per_replicate": n_rep, "reference_histories": n_ref, "bins": V7_BINS,
-           "bins_used": int(used.sum()), "intervals": intervals, "covered": covered,
-           "coverage": cov, "target": V7_LEGACY_TARGET, "tolerance": V7_LEGACY_TOL,
-           "tost": tost, "legacy_point_gate_pass": legacy,
-           "per_bin_covered": per_bin.tolist(), "reference_profile": ref.tolist(),
-           **cluster_doc(covered_j, used, ref, ref_sem, rep_means, V7_REP_BATCHES),
-           "wall_s": time.perf_counter() - t0, "pass": bool(tost["pass"])}  # fmt: skip
-    return finish5b(doc, V7_REPLICATES * V7_REP_N + V7_REF_N, V7_REPLICATES * n_rep + n_ref,
-                    n_rep < V7_REP_N)
+    return {"kind": kind, "bins": int(means.shape[1]), "bins_used": nused, "intervals": intervals,
+            "covered": int(covered_j.sum()), "coverage": cov, **tost, "r_b": corr["r_b"],
+            "legacy_point_gate_pass": legacy, "nominal_coverage": student_abs_prob(V7_BATCHES_PER_REP - 1, 1.0),
+            "per_replicate_covered": [int(c) for c in covered_j],
+            "reference": ref.tolist(), "reference_sem": ref_sem.tolist(),
+            "replicate_sd": sigma.tolist()}  # fmt: skip
+
+
+def v7_replicate_stats(batches: NDArray[np.float64]) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    """Per-replicate mean and sample SEM (ddof = 1) of ``[B, bins]`` batch values: replicate ``j`` is
+    the contiguous batch group ``[20 j, 20 j + 20)``; arrays ``[B / 20, bins]``."""
+    b = np.asarray(batches, dtype=float)
+    if b.ndim == 1:
+        b = b[:, None]
+    g = b.reshape(-1, V7_BATCHES_PER_REP, b.shape[1])
+    return g.mean(axis=1), g.std(axis=1, ddof=1) / math.sqrt(V7_BATCHES_PER_REP)
+
+
+def v7_batch_arrays(est: dict[str, Any]) -> dict[str, NDArray[np.float64]]:
+    return {"sec_p": est["sec_p"], "nuclear_local": est["nuc_local_dose"],
+            "escaped_neutral": est["escaped_neutral"]}  # fmt: skip
+
+
+def step_v7_rep_shard(a: argparse.Namespace) -> int:
+    k = a.shard
+    n = scaled(V7_SHARD_N, a.scale, 2 * V7_REP_N, V7_REP_N)
+    nb = n // V7_BATCH_N
+    geo, grid = coarse_depth(V7_BINS)
+    t0 = time.perf_counter()
+    est = batch_estimates(v7_config("warp-cpu", "float64", n, nb, seed_of("v7-rep", k), grid=grid,
+                                    geo=geo, timeout=a.timeout))  # fmt: skip
+    wall = time.perf_counter() - t0
+    ok = bool(est["counters_sum"] == 0 and est["batch_assignment_ok"])
+    stats = {name: v7_replicate_stats(x) for name, x in v7_batch_arrays(est).items()}
+    path = v5.write_partial(a, f"v7-rep-s{k}", {
+        "row": "v7-rep", "kind": "shard", "shard": k, "seed": seed_of("v7-rep", k), "n": n,
+        "n_batches": nb, "batch_histories": V7_BATCH_N, "batches_per_replicate": V7_BATCHES_PER_REP,
+        "replicates": nb // V7_BATCHES_PER_REP, "bins": V7_BINS, "valid": ok,
+        "counters_sum": est["counters_sum"], "wall_s": wall,
+        "estimators": {nm: {"mean": m.tolist(), "sem": s.tolist()} for nm, (m, s) in stats.items()},
+        "reduced": n < V7_SHARD_N})  # fmt: skip
+    doc = {"step": "v7-rep-shard", "shard": k, "seed": seed_of("v7-rep", k), "table": v5.table_record(),
+           "histories": n, "batches": nb, "replicates": nb // V7_BATCHES_PER_REP, "wall_s": wall,
+           "hist_per_s": n / wall, "counters_sum": est["counters_sum"], "partial": path, "pass": ok}  # fmt: skip
+    return finish5b(doc, V7_SHARD_N, n, n < V7_SHARD_N)
+
+
+def step_v7_rep_ref(a: argparse.Namespace) -> int:
+    n = scaled(V7_REF_N, a.scale, 20_000, V7_REF_BATCHES)
+    geo, grid = coarse_depth(V7_BINS)
+    seed = seed_of("v7-rep", V7_SHARDS)
+    t0 = time.perf_counter()
+    est = batch_estimates(v7_config("warp-cpu", "float64", n, V7_REF_BATCHES, seed, grid=grid, geo=geo,
+                                    timeout=a.timeout))  # fmt: skip
+    wall = time.perf_counter() - t0
+    ok = bool(est["counters_sum"] == 0 and est["batch_assignment_ok"])
+    ref = {}
+    for nm, x in v7_batch_arrays(est).items():
+        x = np.asarray(x, float).reshape(V7_REF_BATCHES, -1)
+        ref[nm] = {"mean": x.mean(axis=0).tolist(),
+                   "sem": (x.std(axis=0, ddof=1) / math.sqrt(V7_REF_BATCHES)).tolist()}  # fmt: skip
+    path = v5.write_partial(a, "v7-rep-ref", {
+        "row": "v7-rep", "kind": "reference", "seed": seed, "n": n, "n_batches": V7_REF_BATCHES,
+        "bins": V7_BINS, "valid": ok, "counters_sum": est["counters_sum"], "wall_s": wall,
+        "estimators": ref, "reduced": n < V7_REF_N})  # fmt: skip
+    doc = {"step": "v7-rep-ref", "seed": seed, "table": v5.table_record(), "histories": n,
+           "batches": V7_REF_BATCHES, "wall_s": wall, "hist_per_s": n / wall,
+           "counters_sum": est["counters_sum"], "partial": path, "pass": ok}  # fmt: skip
+    return finish5b(doc, V7_REF_N, n, n < V7_REF_N)
+
+
+def v7_rep_combine(shards: list[dict[str, Any]], ref: dict[str, Any]) -> dict[str, Any]:
+    """Row V7 coverage document from the five shard partials and the reference partial (pure; any
+    missing or inconsistent item raises ``SystemExit``: fail closed)."""
+    if len(shards) != V7_SHARDS:
+        raise SystemExit(f"v7-rep: need {V7_SHARDS} shard partials, got {len(shards)}")
+    for k, p in enumerate(shards):
+        if p.get("seed") != seed_of("v7-rep", k) or p.get("shard") != k or not p.get("valid"):
+            raise SystemExit(f"v7-rep shard {k}: seed/shard mismatch or invalid result")
+    if ref.get("seed") != seed_of("v7-rep", V7_SHARDS) or not ref.get("valid"):
+        raise SystemExit("v7-rep reference: seed mismatch or invalid result")
+    estimators: dict[str, Any] = {}
+    for name, kind in V7_COVERAGE_ESTIMATORS:
+        try:
+            means = np.concatenate([np.array(p["estimators"][name]["mean"], float) for p in shards])
+            sems = np.concatenate([np.array(p["estimators"][name]["sem"], float) for p in shards])
+            rmean = np.array(ref["estimators"][name]["mean"], float)
+            rsem = np.array(ref["estimators"][name]["sem"], float)
+        except (KeyError, TypeError, ValueError) as exc:
+            raise SystemExit(f"v7-rep: estimator {name} missing or malformed in a partial: {exc!r}") from exc
+        if (means.ndim != 2 or means.shape != sems.shape or rmean.shape != (means.shape[1],)
+                or rsem.shape != rmean.shape or not np.all(np.isfinite([means, sems]))
+                or not np.all(np.isfinite([rmean, rsem]))):  # fmt: skip
+            raise SystemExit(f"v7-rep: estimator {name}: inconsistent shapes or non-finite values")
+        estimators[name] = v7_estimator_verdict(kind, means, sems, rmean, rsem)
+    return {"replicates": int(sum(p["replicates"] for p in shards)), "estimators": estimators,
+            "histories_per_replicate": V7_REP_N, "reference_histories": ref["n"],
+            "shard_histories": [p["n"] for p in shards], "bins": V7_BINS,
+            "rule": {"low": V7_COV_LOW, "high": V7_COV_HIGH, "alpha": V7_TOST_ALPHA,
+                     "min_intervals": V7_MIN_INTERVALS, "min_profile_bins": V7_MIN_PROFILE_BINS},
+            "pass": bool(all(e["pass"] for e in estimators.values()))}  # fmt: skip
+
+
+def step_v7_rep_combine(a: argparse.Namespace) -> int:
+    names = [f"v7-rep-s{k}.json" for k in range(V7_SHARDS)] + ["v7-rep-ref.json"]
+    parts = v5.load_partials(a, names)
+    doc = {"step": "v7-rep-combine", "table": v5.table_record(), **v7_rep_combine(parts[:-1], parts[-1]),
+           "attestation": v5.attestation_block(a)}  # fmt: skip
+    n = sum(p["n"] for p in parts)
+    return finish5b(doc, V7_SHARDS * V7_SHARD_N + V7_REF_N, n, any(p["reduced"] for p in parts))
 
 
 # -- hr5 -----------------------------------------------------------------------------------------
@@ -1026,7 +1130,9 @@ STEPS = {
     "v2b-combine": step_v2b_combine,
     "v7-scan": step_v7_scan,
     "v7-shift": step_v7_shift,
-    "v7-rep": step_v7_rep,
+    "v7-rep-shard": step_v7_rep_shard,
+    "v7-rep-ref": step_v7_rep_ref,
+    "v7-rep-combine": step_v7_rep_combine,
     "v8-stat-sample": step_v8_stat_sample,
     "v8-stat-compare": step_v8_stat_compare,
     "v7-f32": step_v7_f32_cuda,
@@ -1040,7 +1146,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--workers", default="1", help="accepted for uniformity; slice B runs one process")
     ap.add_argument("--energy", type=float, default=150.0, help="v5-ionmc: 150 or 200")
     ap.add_argument("--nuclear", choices=("on", "off"), default="on", help="v5-ionmc")
-    ap.add_argument("--shard", type=int, default=0, help="v2b-shard: shard index")
+    ap.add_argument("--shard", type=int, default=0, help="v2b-shard / v7-rep-shard: shard index")
     ap.add_argument("--sample", choices=sorted(V8_SAMPLES), default="cpu64", help="v8-stat-sample")
     ap.add_argument("--out-dir", default="samples", help="partial files")
     ap.add_argument("--dirs", nargs="+", default=["."], help="combine steps: archive directories")
@@ -1056,6 +1162,8 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("v5-ionmc: --energy 150 or 200")
     if args.step == "v2b-shard" and not 0 <= args.shard < V2B_SHARDS:
         raise SystemExit("v2b-shard: --shard outside 0..V2B_SHARDS-1")
+    if args.step == "v7-rep-shard" and not 0 <= args.shard < V7_SHARDS:
+        raise SystemExit("v7-rep-shard: --shard outside 0..V7_SHARDS-1")
     base.SEED_BASE = args.seed
     v4.base.SEED_BASE = args.seed
     return STEPS[args.step](args)
