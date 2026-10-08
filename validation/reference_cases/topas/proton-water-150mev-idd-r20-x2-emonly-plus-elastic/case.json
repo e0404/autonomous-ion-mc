@@ -1,0 +1,37 @@
+{
+  "input": "input.txt",
+  "physics": [
+    "Geant4_Modular (OpenTOPAS 4.3 / Geant4 11.4.2): g4em-standard_opt4, g4h-elastic_HP",
+    "EXPLORATORY X2: EM-only plus g4h-elastic_HP only (hadronic elastic without inelastic)"
+  ],
+  "source": "150 MeV proton kinetic energy, monoenergetic (BeamEnergySpread 0), zero-size zero-divergence pencil beam (BeamPositionDistribution None, BeamAngularDistribution None), starting at z=-0.001 mm on the beam axis x=y=0, direction +z, entering the centre of the water entrance face (z=0); same source as the V3-010B -fine/-lateral cases",
+  "geometry": "G4_WATER box 400 x 400 x 320 mm (x,y centred on the beam axis; z from 0 to 320 mm) in a vacuum world 500 x 500 x 800 mm; the box is at least 1.2 R(CSDA) deep (158 mm) and holds r <= 200 mm laterally",
+  "materials": "G4_WATER (Geant4 NIST material, I=78 eV, density 1.0 g/cm3)",
+  "cuts": "CutForAllParticles = 0.05 mm (production range cut for gamma, e-, e+, proton)",
+  "histories": 100000,
+  "seeds": [
+    20279002
+  ],
+  "scorers": [
+    "IDD: DoseToMedium, 1x1x640 bins (one lateral bin over the full 400 x 400 mm box, so every dose deposit with |x|,|y| <= 200 mm, which contains r <= 200 mm, is summed; 0.5 mm depth bins); Report Sum, Standard_Deviation"
+  ],
+  "units": "IDD: TOPAS CSV with '#' header, dose in Gy (run total, Gy per NumberOfHistoriesInRun histories). Conversion in compare_idd_v5.py: energy in a bin [MeV] = Gy x bin mass [kg] / 1.602176634e-13 J/MeV with bin mass = 1 g/cm3 x bin width x/y/z read from the CSV header (400 x 400 x 0.5 mm = 80 cm3 = 0.08 kg); IDD [MeV/(g/cm2)/primary] = energy / (1e5 histories x 1 g/cm3 x 0.05 cm). The 400 x 400 mm square contains the r = 20 cm circle; its four corners (r > 200 mm, up to 283 mm) are included in the sum (their dose is negligible for a pencil beam; stated deviation from a strict cylinder). The seed in input.txt is fixed per committed seed-variant directory; see validation/reference_cases/README.md",
+  "rationale": "V3-005B exploratory physics attribution X2 (not evidence; single seed, no batch statistics): orchestrator's C18a dry-run finding for acceptance row V5 at 150 MeV, 0.5 mm bins: the nuclear-on/off IDD ratio agrees between TOPAS and ionmc up to ~6 mm before the Bragg peak but TOPAS peak(full)/peak(EM-only) = 0.769 against ionmc 0.872 (TOPAS full peak 0.5 mm proximal, R80 0.19 mm shorter); ionmc has no hadronic elastic scattering (p-p and p-nucleus). This case EM-only plus g4h-elastic_HP only (hadronic elastic without inelastic); it isolates the hadronic elastic effect on the peak without any inelastic channel",
+  "expected_outputs": [
+    "idd_dose.csv"
+  ],
+  "arguments": [],
+  "role": "exploratory",
+  "exploratory": {
+    "row": "V5",
+    "case": "X2",
+    "energy_mev": 150,
+    "bin_mm": 0.5,
+    "depth_bins": 640,
+    "lateral_box_mm": 400.0,
+    "modules": [
+      "g4em-standard_opt4",
+      "g4h-elastic_HP"
+    ]
+  }
+}

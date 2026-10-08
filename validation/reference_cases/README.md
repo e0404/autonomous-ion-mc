@@ -248,3 +248,22 @@ Unverified until the engines run: (a) MCsquare e0404 accepting 80 mm lateral vox
 `Simulate_Nuclear_Interactions False` switch (fallback: 20 mm voxels, 21 x N x 21, 1 MB each; if nuclear cannot be switched
 off, commit only the "on" cases); (b) the eV/g unit of `Dose.mhd` (the in-grid total check
 catches a wrong factor); (c) the lateral-voxel invariance of the MCsquare depth-dose.
+
+### Exploratory physics-attribution cases (V3-005B C18b; not evidence)
+
+Four single-seed TOPAS cases at 150 MeV (1e5 primaries, geometry, source, 0.5 mm IDD scorer, cuts and
+`NumberOfThreads` identical to `proton-water-150mev-idd-r20-seed1`) probe the V5 peak discrepancy seen in the
+C18a dry run: the nuclear-on/off IDD ratio agrees between TOPAS and ionmc up to about 6 mm before the Bragg
+peak, but TOPAS peak(full)/peak(EM-only) = 0.769 against ionmc 0.872 (TOPAS full-physics peak 0.5 mm proximal
+of the EM-only peak, R80 0.19 mm shorter). ionmc has no hadronic elastic scattering (p-p and p-nucleus; decision
+0041 limitation 7, V3-005C). They differ from the full case only in `Ph/Default/Modules` (and the seed). Each
+`case.json` has `"role": "exploratory"` and an `exploratory` block instead of a `v5` block, so
+`compare_idd_v5.py` never groups them with the evidence runs. They carry no validation claim and no
+batch statistics (one seed each).
+
+| Case (`topas/proton-water-150mev-idd-r20-...`) | Seed | Modules | Purpose |
+| --- | --- | --- | --- |
+| `x1-no-hadron-elastic` | 20279001 | opt4, QGSP_BIC_HP, stopping, ion-binarycascade, decay | full minus `g4h-elastic_HP`: is the peak deficit hadronic elastic? |
+| `x2-emonly-plus-elastic` | 20279002 | opt4, `g4h-elastic_HP` | EM-only plus elastic without inelastic |
+| `x3-no-ion-physics` | 20279003 | opt4, QGSP_BIC_HP, elastic_HP, decay | full minus `g4ion-binarycascade` and `g4stopping` (control) |
+| `x4-no-hp-neutrons` | 20279004 | opt4, `g4h-phy_QGSP_BIC`, elastic_HP, stopping, ion-binarycascade, decay | control; the full and EM-only inputs already share every EM setting (same `g4em-standard_opt4`, `CutForAllParticles = 0.05 mm`, no step limits), so X4 swaps `QGSP_BIC_HP` for `QGSP_BIC` (no HP neutrons) |
