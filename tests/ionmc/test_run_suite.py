@@ -1655,7 +1655,8 @@ def test_imported_partials_make_the_summary_non_conformant_by_code(tmp_path: Pat
 
 
 # -- V3-005B slice-B suites (lv5b, hr5) ------------------------------------------------------------
-QUAL5B, QUALHR5, REH5B = 20441004, 20451004, 20461004
+QUAL5B, QUALHR5, REH5B = 20471004, 20451004, 20461004
+CONSUMED5B = 20441004  # amendment 11
 LV5B_STEPS = [
     "lv5b-throughput", "v8-lv-python-vs-warp-cpu", "r1-nuc-regression",
     "v5-150-on", "v5-150-off", "v5-200-on", "v5-200-off", "v5-compare",
@@ -1732,7 +1733,7 @@ def test_slice_b_rows_have_steps_or_are_declared_and_seeds_match_plan() -> None:
         "v8-stat": 1,
         "v7-f32": 2,
     }
-    assert "20441004" in plan and "20451004" in plan
+    assert "20471004" in plan and "20451004" in plan
 
 
 def test_slice_b_tags_blockers_documents_and_shard_budget() -> None:
@@ -1757,7 +1758,7 @@ def test_slice_b_tags_blockers_documents_and_shard_budget() -> None:
     # frozen counts of the plan rows
     assert (v5b.V5_N, v5b.V5_BATCHES, v5b.V5_DZ_MM, v5b.V5_HALF_MM) == (100_000, 20, 0.5, 200.0)
     assert (v5b.V8_K, v5b.V8_DENSE_MIN_EVENTS, v5b.V8_TOL) == (256, 50, 1e-10)
-    assert v5b.V7_REPLICATES >= 30 and v5b.V7_BINS >= 10
+    assert v5b.V7_REPLICATES == 90 and v5b.V7_BINS >= 10
     assert v5b.V7_REPLICATES * v5b.V7_BINS >= v5b.V7_MIN_INTERVALS
     assert (v5b.V7_SLOPE, v5b.V7_SLOPE_TOL, v5b.V7_COVERAGE, v5b.V7_COVERAGE_TOL) == (
         -0.5,
@@ -2009,3 +2010,24 @@ def test_suite_definition_and_hashing_need_no_ionmc() -> None:
     text = (SCRIPTS / "run_suite.py").read_text()
     assert 'import_module("steps' not in text
     assert not re.search(r"^import steps|^from steps", text, re.M)
+
+
+def test_lv5b_consumed_base_refused_and_new_base_accepted() -> None:
+    """Amendment 11: 20441004 is consumed for lv5b, 20471004 qualifies; 90 replicates fit."""
+    summ, mod, v5b = _load("summarize"), _load("run_suite"), _load("steps_v5b")
+    assert mod.V5B_CONSUMED_SEED_BASES == summ.V5B_CONSUMED_SEED_BASES == (CONSUMED5B,)
+    assert mod.V5B_QUALIFICATION_SEED_BASE == summ.V5B_QUALIFICATION_SEED_BASE == QUAL5B == 20471004
+    assert mod.DEFAULT_SEED_BASES["lv5b"] == QUAL5B and mod.DEFAULT_SEED_BASES["hr5"] == 20451004
+    assert CONSUMED5B not in mod.DEFAULT_SEED_BASES.values()
+    reasons = summ.seed_blockers(CONSUMED5B, "lv5b")
+    assert reasons and "consumed" in reasons[0]
+    assert summ.seed_blockers(QUAL5B, "lv5b") == []
+    assert summ.seed_blockers(20451004, "hr5") == []
+    with pytest.raises(SystemExit, match="consumed"):
+        mod.main(["--suite", "lv5b", "--seed-base", str(CONSUMED5B), "--expected-sha", "0" * 40,
+                  "--out", "unused-never-created"])  # fmt: skip
+    assert v5b.V7_REPLICATES == 90
+    seeds = [v5b.seed_of("v7-rep", k) for k in range(v5b.V7_REPLICATES + 1)]
+    lo = v5b.base.SEED_BASE + 1000 * v5b.R_INDEX["v7-rep"]
+    assert seeds == list(range(lo, lo + 91)) and seeds[-1] < lo + 1000
+    assert len(set(seeds)) == 91 and v5b.V7_REPLICATES * v5b.V7_BINS >= v5b.V7_MIN_INTERVALS

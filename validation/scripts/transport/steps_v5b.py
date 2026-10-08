@@ -14,7 +14,7 @@ throughput measurement and its shard table. V6, E1-B and the p-p elastic rows be
 and ``#JSON-END`` (the conventions of ``steps_v5.py``); ``--scale`` < 1 gives a labelled,
 non-conformant run; the rehearsal base is ``REHEARSAL_SEED_BASE`` (2046xxxx, never evidence).
 
-Seeds (Amendment 6): ``seed = base + 1000 * r_index + shard`` with the lv5b base 20441004 and the
+Seeds (Amendment 6): ``seed = base + 1000 * r_index + shard`` with the lv5b base 20471004 (Amendment 11; 20441004 consumed) and the
 hr5 base 20451004; ``R_INDEX`` (lv5b): throughput 1, v8-lv 2, r1-nuc 3, v5-150-on 4, v5-150-off 5,
 v5-200-on 6, v5-200-off 7, v2b 8, v7-scan 9, v7-shift 10, v7-rep 11 (replicate j: shard j, the
 1e6 reference: shard ``V7_REPLICATES``); ``R_INDEX_HR`` (hr5): v8-stat 1, v7-f32 2. The python and
@@ -89,7 +89,7 @@ from ionmc.transport.tally import NUCLEAR_TALLY_NAMES, QUANTUM_MEV
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
 FORMAT = 1
-QUALIFICATION_SEED_BASE = 20441004  # lv5b (Amendment 6)
+QUALIFICATION_SEED_BASE = 20471004  # lv5b (Amendment 11; 20441004 consumed by the failed V7 replicate step)
 HR5_SEED_BASE = 20451004  # hr5 (Amendment 6)
 REHEARSAL_SEED_BASE = 20461004  # V3-005B rehearsals, never evidence
 R_INDEX = {"throughput": 1, "v8-lv": 2, "r1-nuc": 3, "v5-150-on": 4, "v5-150-off": 5,
@@ -141,7 +141,8 @@ V2B_VARIANTS = ((0.1, 0.02), (1.0, 0.02))  # (s_max mm, f_E): a, b
 V7_SCAN_N, V7_BATCHES, V7_SLOPE, V7_SLOPE_TOL = (10_000, 100_000, 1_000_000), 100, -0.5, 0.05
 V7_F32_N, V7_F32_Z = 100_000, 3.0
 V7_SHIFT_N, V7_SHIFT_BATCHES, V7_SHIFT_RTOL, V7_REFINE_RTOL = 100_000, 20, 1e-3, 1e-6
-V7_REPLICATES, V7_REP_N, V7_REF_N, V7_BINS, V7_REP_BATCHES = 30, 10_000, 1_000_000, 12, 20
+# Amendment 11: 90 replicates (was 30); the reference shard index V7_REPLICATES = 90 stays in the row block
+V7_REPLICATES, V7_REP_N, V7_REF_N, V7_BINS, V7_REP_BATCHES = 90, 10_000, 1_000_000, 12, 20
 V7_COVERAGE, V7_COVERAGE_TOL, V7_MIN_INTERVALS = 0.68, 0.03, 300
 HR5_PYTHON_SHARDS, HR5_PYTHON_N, HR5_PYTHON_BATCHES = 2, 12_000, 20
 HR5_WARP_N, HR5_WARP_BATCHES, HR5_F32_N = 1_000_000, 100, 1_000_000
@@ -314,7 +315,7 @@ def step_throughput(a: argparse.Namespace) -> int:
         "v2b (both variants)": (V2B_N, "v2b", V2B_SHARDS),
         "v7-scan (1e4 + 1e5 + 1e6, f64, plus f32 1e5)": (sum(V7_SCAN_N) + V7_F32_N, "warp-cpu-f64", 1),
         "v7-shift (3 layouts)": (3 * V7_SHIFT_N, "warp-cpu-f64", 1),
-        "v7-rep (30 x 1e4 + 1e6 reference)": (V7_REPLICATES * V7_REP_N + V7_REF_N, "warp-cpu-f64", 1),
+        "v7-rep (90 x 1e4 + 1e6 reference)": (V7_REPLICATES * V7_REP_N + V7_REF_N, "warp-cpu-f64", 1),
         "hr5 python sample (2.4e4)": (HR5_PYTHON_SHARDS * HR5_PYTHON_N, "python", HR5_PYTHON_SHARDS),
     }, {**rates, "v2b": v2b_rate})  # fmt: skip
     ok = all(v["counters_clean"] for v in out.values())
@@ -916,7 +917,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--reference-dir", default=None, help="v5-compare: dir of REF-* runs")
     ap.add_argument("--partials-manifest", default=None, help="combine steps: manifest of imports")
     ap.add_argument("--seed-base", "--seed", dest="seed", type=int, default=QUALIFICATION_SEED_BASE,
-                    help="lv5b base 20441004, hr5 base 20451004, rehearsals 2046xxxx")  # fmt: skip
+                    help="lv5b base 20471004, hr5 base 20451004, rehearsals 2046xxxx")  # fmt: skip
     ap.add_argument("--timeout", type=float, default=None)
     args = ap.parse_args(argv)
     if not 0.0 < args.scale <= 1.0:

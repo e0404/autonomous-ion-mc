@@ -55,8 +55,10 @@ and 20361004, 20371004 and 20381004 are consumed (observed before amendments 4 a
 results were observed is consumed (plan, section Seeds)."""
 V5_QUALIFICATION_SEED_BASE = 20421004
 """Qualification base of the suite ``lv5`` (V3-005A); the 2043xxxx family are rehearsals."""
-V5B_QUALIFICATION_SEED_BASE = 20441004
-"""Qualification base of the suite ``lv5b`` (V3-005B, amendment 6); 2046xxxx are rehearsals."""
+V5B_QUALIFICATION_SEED_BASE = 20471004
+"""Qualification base of the suite ``lv5b`` (V3-005B, amendment 11); 2046xxxx are rehearsals."""
+V5B_CONSUMED_SEED_BASES = (20441004,)
+"""Consumed lv5b bases: 20441004 was consumed by the failed V7 replicate step (amendment 11)."""
 HR5_QUALIFICATION_SEED_BASE = 20451004
 """Qualification base of the suite ``hr5`` (V3-005B, amendment 6)."""
 IDENTITY_KEYS = ("git_sha", "suite", "scale", "python_parts", "seed_base")
@@ -304,6 +306,11 @@ def seed_blockers(seed_base: Any, suite: str | None = None) -> list[str]:
         return ["seed_base not recorded in environment.txt"]
     if suite in ("lv5b", "hr5"):
         want = V5B_QUALIFICATION_SEED_BASE if suite == "lv5b" else HR5_QUALIFICATION_SEED_BASE
+        if suite == "lv5b" and int(seed_base) in V5B_CONSUMED_SEED_BASES:
+            return [
+                f"seed_base {int(seed_base)} is consumed for lv5b (amendment 11: observed in the "
+                f"failed V7 replicate step); the qualification base is {want}"
+            ]
         if int(seed_base) != want:
             return [
                 f"seed_base {int(seed_base)} is not the qualification base {want} of {suite} (the "

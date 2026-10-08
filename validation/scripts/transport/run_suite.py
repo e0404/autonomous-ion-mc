@@ -176,7 +176,9 @@ V4_QUALIFICATION_SEED_BASE = 20401004  # amendment 6 of the V3-004 plan
 V4_CONSUMED_SEED_BASES = (20361004, 20371004, 20381004)  # amendments 4 and 5, 20381004 by V3-003D
 V4_REHEARSAL_SEED_BASE = 20351004
 V5_QUALIFICATION_SEED_BASE = 20421004  # plan of V3-005, Seeds (rehearsal family 2043xxxx)
-V5B_QUALIFICATION_SEED_BASE = 20441004  # amendment 6 of the V3-005 plan (lv5b); rehearsals 2046xxxx
+V5B_QUALIFICATION_SEED_BASE = 20471004  # amendment 11 of the V3-005 plan (lv5b); rehearsals 2046xxxx
+V5B_CONSUMED_SEED_BASES = (20441004,)  # amendment 11: consumed by the failed V7 replicate step
+# (host run RUN-20261008T132316Z-11c02312 at b40d8121)
 HR5_QUALIFICATION_SEED_BASE = 20451004  # amendment 6 (hr5)
 V3003D_REHEARSAL_FAMILY = "2041xxxx"  # rehearsals of V3-003D, never qualification evidence
 DEFAULT_SEED_BASES = {
@@ -878,6 +880,11 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     if args.seed_base is None:
         args.seed_base = DEFAULT_SEED_BASES[args.suite]
+    if args.suite == "lv5b" and args.seed_base in V5B_CONSUMED_SEED_BASES:
+        raise SystemExit(
+            f"seed base {args.seed_base} is consumed for lv5b (amendment 11 of the V3-005 plan); "
+            f"the qualification base is {V5B_QUALIFICATION_SEED_BASE}"
+        )
     workers = 1 if args.single_process or args.suite in ("lv5", "lv5b", "hr5") else resolve_workers(args.workers)
     if workers < 1 or args.step_timeout < 1 or not 0.0 < args.scale <= 1.0:
         raise SystemExit("need --workers >= 1, --step-timeout >= 1 and 0 < --scale <= 1")
