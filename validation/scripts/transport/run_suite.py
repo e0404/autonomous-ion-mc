@@ -489,6 +489,15 @@ def run_step(
     return code
 
 
+def echo_partial_lines(archive: Path) -> None:
+    """Forward every ``PARTIAL <name> <digest>`` line of the archived step output verbatim to this
+    process's stdout (nothing else of the step output), so that the protected host-runner record,
+    which keeps only this stdout, carries the shard partial digests."""
+    for line in archive.read_text(errors="replace").splitlines():
+        if line.startswith("PARTIAL "):
+            print(line, flush=True)
+
+
 def _kill_group(pgid: int, grace: float) -> None:
     """Terminate every process of the group ``pgid`` (no error if none is left)."""
     try:
@@ -815,6 +824,7 @@ def main(argv: list[str] | None = None) -> int:
                 timeout=eff_timeout,
             )
             fh.write(f"\n# exit={code}\n")
+        echo_partial_lines(path)
         print(f"== {name}: exit={code}", flush=True)
         failures += code != 0
     sys.path.insert(0, str(HERE))

@@ -493,6 +493,29 @@ def test_step_that_finishes_leaves_no_orphans_and_keeps_its_exit_code(tmp_path: 
         os.kill(pid, 0)
 
 
+def test_partial_lines_are_echoed_to_stdout_and_archive_keeps_everything(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    run_suite = _load("run_suite")
+    partial = "PARTIAL shard-0 " + "ab" * 32
+    script = (
+        f"print('noise line'); print({partial!r}); print('PARTIALX not a partial'); print('tail')"
+    )
+    out = tmp_path / "step.txt"
+    with out.open("w") as fh:
+        fh.write("# command: fake\n")
+        code = run_suite.run_step(
+            [sys.executable, "-c", script], cwd=tmp_path, env=dict(os.environ), stdout=fh,
+            timeout=30.0, grace=2.0,
+        )  # fmt: skip
+    capsys.readouterr()
+    run_suite.echo_partial_lines(out)
+    assert code == 0
+    assert capsys.readouterr().out == partial + "\n"  # exactly the PARTIAL line, nothing else
+    archived = out.read_text()
+    assert "noise line" in archived and partial in archived and "tail" in archived
+
+
 def test_suites_forward_an_inner_timeout_below_the_step_timeout() -> None:
     run_suite = _load("run_suite")
     steps = run_suite.suite_steps("lv", 4, 1.0, step_timeout=1000)
