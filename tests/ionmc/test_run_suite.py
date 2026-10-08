@@ -497,7 +497,7 @@ def test_partial_lines_are_echoed_to_stdout_and_archive_keeps_everything(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     run_suite = _load("run_suite")
-    partial = "PARTIAL shard-0 " + "ab" * 32
+    partial = "PARTIAL shard-0.json " + "ab" * 32
     script = (
         f"print('noise line'); print({partial!r}); print('PARTIALX not a partial'); print('tail')"
     )
@@ -514,6 +514,14 @@ def test_partial_lines_are_echoed_to_stdout_and_archive_keeps_everything(
     assert capsys.readouterr().out == partial + "\n"  # exactly the PARTIAL line, nothing else
     archived = out.read_text()
     assert "noise line" in archived and partial in archived and "tail" in archived
+    bad = tmp_path / "bad.txt"
+    bad.write_text(partial + "\nPARTIAL x.json notahex\n")
+    with pytest.raises(SystemExit, match="malformed PARTIAL"):
+        run_suite.echo_partial_lines(bad)
+    dup = tmp_path / "dup.txt"
+    dup.write_text(partial + "\n" + partial + "\n")
+    with pytest.raises(SystemExit, match="duplicate PARTIAL"):
+        run_suite.echo_partial_lines(dup)
 
 
 def test_suites_forward_an_inner_timeout_below_the_step_timeout() -> None:

@@ -489,13 +489,26 @@ def run_step(
     return code
 
 
+_PARTIAL_LINE = re.compile(r"^PARTIAL (\S+\.json) ([0-9a-f]{64})$")
+
+
 def echo_partial_lines(archive: Path) -> None:
-    """Forward every ``PARTIAL <name> <digest>`` line of the archived step output verbatim to this
-    process's stdout (nothing else of the step output), so that the protected host-runner record,
-    which keeps only this stdout, carries the shard partial digests."""
+    """Forward every ``PARTIAL <name>.json <64 lowercase hex>`` line of the archived step output
+    verbatim to this process's stdout (nothing else of the step output), so that the protected
+    host-runner record, which keeps only this stdout, carries the shard partial digests.  Fail
+    closed: a line starting with ``PARTIAL `` that does not match exactly, or a name repeated
+    within one archive, raises SystemExit (unrelated child output must not pass as shard evidence)."""
+    seen: set[str] = set()
     for line in archive.read_text(errors="replace").splitlines():
-        if line.startswith("PARTIAL "):
-            print(line, flush=True)
+        if not line.startswith("PARTIAL "):
+            continue
+        match = _PARTIAL_LINE.match(line)
+        if match is None:
+            raise SystemExit(f"malformed PARTIAL line in {archive}: {line!r}")
+        if match.group(1) in seen:
+            raise SystemExit(f"duplicate PARTIAL name {match.group(1)!r} in {archive}: {line!r}")
+        seen.add(match.group(1))
+        print(line, flush=True)
 
 
 def _kill_group(pgid: int, grace: float) -> None:
