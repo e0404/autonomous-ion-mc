@@ -226,7 +226,8 @@ def test_secondary_cutoffs_and_generation_labels(tid: str, monkeypatch: pytest.M
     p_sec = [x for x in seen if x[0] == 0 and x[1] >= 1]
     assert d and p_sec and all(g == 1 for _, g, _ in d)
     assert all(0.0 < e <= 4.0 for _, _, e in d)  # deuteron cutoff deposits (end of transport)
-    assert all(0.0 < e <= 2.0 for _, _, e in p_sec if e < 4.0) or True
+    bad = [e for _, _, e in p_sec if not 0.0 < e <= 2.0]
+    assert not bad, f"secondary-proton point deposits above E_cut = 2 MeV: {bad[:8]}"
     assert local and set(local) == {(64, 1)}
 
 
