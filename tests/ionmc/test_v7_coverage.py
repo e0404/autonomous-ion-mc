@@ -198,6 +198,136 @@ def test_paired_hit_rule_hand_case_scalar(v5b: ModuleType) -> None:
     assert abs(e["m_ref1e6"] - want) < 1e-15 and e["legacy_point_gate_pass"] is False
 
 
+def test_degenerate_uncertainty_is_a_miss_and_is_counted(v5b: ModuleType) -> None:
+    """A pair-bin with sem == 0 for either replicate (blocks identical, e.g. all zero) is a miss even if
+    |difference| <= 0; counts are reported per bin, in total and as a fraction of pairs."""
+    means = np.array(
+        [
+            [0.0, 5.0],
+            [0.0, 5.0],
+            [1.0, 5.0],
+            [0.0, 5.0],
+            [0.0, 5.0],
+            [1.0, 5.0],
+            [2.0, 5.0],
+            [0.0, 5.0],
+        ]
+    )
+    sems = np.array(
+        [
+            [0.0, 1.0],
+            [0.0, 1.0],
+            [0.5, 1.0],
+            [0.0, 1.0],
+            [0.0, 1.0],
+            [0.5, 1.0],
+            [0.5, 1.0],
+            [0.3, 1.0],
+        ]
+    )
+    ref = np.array([1.0, 5.0])
+    e = v5b.v7_estimator_verdict("profile", means, sems, ref, np.array([0.01, 0.01]), None)
+    # pairs (j, j + 4): (0,4) both sem 0 mean 0 -> degenerate miss; (1,5): sem 0 and .5 -> degenerate miss;
+    # (2,6): |1-2| = 1 > sqrt(.25+.25) = .707 -> ordinary miss; (3,7): sem 0 and .3 -> degenerate miss
+    assert e["degenerate_pair_bins"] == [3, 0] and e["degenerate_pairs_total"] == 3
+    assert e["degenerate_pairs"] == 3 and e["degenerate_pair_fraction"] == 0.75
+    assert e["per_pair_covered"] == [
+        1,
+        1,
+        1,
+        1,
+    ]  # only bin 1 (identical means, sem 1) hits; bin 0 never
+    assert e["per_bin_coverage"] == [0.0, 1.0]
+    ok = np.array([[0.0], [0.0], [0.0], [0.0]])
+    z = v5b.v7_estimator_verdict(
+        "scalar", ok, np.zeros((4, 1)), np.array([1.0]), np.array([0.1]), None
+    )
+    assert (
+        z["covered"] == 0
+        and z["degenerate_pairs_total"] == 2
+        and z["degenerate_pair_fraction"] == 1.0
+    )
+
+
+def test_paired_region_maps_to_a_single_interval_coverage_band(v5b: ModuleType) -> None:
+    """Gaussian batch means with error scale kappa: single-interval coverage P(|t_19| <= kappa), paired
+    coverage P(|t_38| <= kappa), both strictly increasing; the paired region [c0 -/+ 0.03] is a kappa
+    band and a single-interval coverage band (the justified link for Gaussian tallies)."""
+    c0, low, high = v5b.v7_region()
+    ks = np.linspace(0.5, 1.6, 23)
+    single = np.array([v5b.student_abs_prob(19, k) for k in ks])
+    paired = np.array([v5b.student_abs_prob(38, k) for k in ks])
+    assert (np.diff(single) > 0).all() and (np.diff(paired) > 0).all()
+
+    def kappa_for(df: int, cov: float) -> float:
+        a, b = 0.1, 5.0
+        for _ in range(80):
+            m = 0.5 * (a + b)
+            a, b = (m, b) if v5b.student_abs_prob(df, m) < cov else (a, m)
+        return 0.5 * (a + b)
+
+    k_lo, k_hi = kappa_for(38, low), kappa_for(38, high)
+    s_lo, s_c, s_hi = (v5b.student_abs_prob(19, k) for k in (k_lo, 1.0, k_hi))
+    print("v7 paired region -> kappa band and single-interval coverage band",
+          {"kappa": (k_lo, k_hi), "single": (s_lo, s_c, s_hi), "paired": (low, c0, high)})  # fmt: skip
+    assert k_lo < 1.0 < k_hi and abs(kappa_for(38, c0) - 1.0) < 1e-9
+    assert abs(s_c - 0.670) < 0.002 and s_lo < s_c < s_hi
+    assert abs(s_lo - 0.640) < 0.01 and abs(s_hi - 0.700) < 0.01  # close to 0.670 -/+ 0.03
+
+
+def test_resolvability_criterion_excludes_exactly_the_sparse_bin(v5b: ModuleType) -> None:
+    """Bin used iff ref mean > 0, spread > 0 and r_b = (SEM_ref / ref_mean) sqrt(n_ref / n_rep) < 0.5: a
+    synthetic reference with one sparse bin excludes exactly that bin; the n_ref / n_rep scaling holds."""
+    assert v5b.V7_MAX_REL_SE == 0.5
+    rng = np.random.default_rng(8)
+    means = 5.0 + rng.normal(0.0, 1.0, (16, 4))
+    sems = np.full_like(means, 0.8)
+    ref = np.array([5.0, 5.0, 5.0, 5.0])
+    rsem = np.array([0.1, 0.1, 0.1, 0.1])
+    rsem[2] = 0.3  # sparse bin: rel SEM_ref = 0.06 -> r = 0.6 at n_ref / n_rep = 100
+    e = v5b.v7_estimator_verdict(
+        "profile", means, sems, ref, rsem, None, n_ref=1_000_000, n_rep=10_000
+    )
+    assert e["bin_mask"] == [True, True, False, True] and e["bins_used"] == 3
+    assert np.allclose(e["rel_se_per_replicate"], [0.2, 0.2, 0.6, 0.2])
+    assert (
+        list(e["excluded_bins"]) == [2]
+        and "relative SE" in e["excluded_bins"][2]
+        and e["max_rel_se"] == 0.5
+    )
+    # a smaller reference run (reduced rehearsal: n_ref / n_rep = 2) scales r_b by sqrt(2 / 100)
+    e2 = v5b.v7_estimator_verdict(
+        "profile", means, sems, ref, rsem, None, n_ref=20_000, n_rep=10_000
+    )
+    assert np.allclose(
+        e2["rel_se_per_replicate"], np.array([0.2, 0.2, 0.6, 0.2]) * math.sqrt(2.0 / 100.0)
+    )
+    assert e2["bin_mask"] == [True] * 4
+    # just below the cut a bin is used, exactly at the cut (strict inequality) it is excluded
+    just = np.array([0.1, 0.1, 0.1, 0.1])
+    just[0], just[1] = 0.249, 0.25  # r = 0.498 and 0.5
+    e3 = v5b.v7_estimator_verdict(
+        "profile", means, sems, ref, just, None, n_ref=1_000_000, n_rep=10_000
+    )
+    assert e3["bin_mask"] == [True, False, True, True]
+    # ref mean 0 and zero spread keep their own reasons
+    ref4 = np.array([5.0, 0.0, 5.0, 5.0])
+    blocks = np.array([[5.0, 0.0, 4.0 + i % 3, 5.0 + (i % 3) * 0.1] for i in range(20)])
+    e4 = v5b.v7_estimator_verdict(
+        "profile", means, sems, ref4, rsem, None, n_ref=1_000_000, n_rep=10_000
+    )
+    assert e4["bin_mask"][1] is False and "reference mean" in e4["excluded_bins"][1]
+    e5 = v5b.v7_estimator_verdict(
+        "profile", means, sems, ref4, rsem, blocks, n_ref=1_000_000, n_rep=10_000
+    )
+    assert 1 in e5["excluded_bins"] and e5["bins_used"] <= 3
+    # the scalar has no resolvability criterion
+    sc = v5b.v7_estimator_verdict(
+        "scalar", means[:, :1], sems[:, :1], np.array([5.0]), np.array([4.0]), None
+    )
+    assert sc["bin_mask"] == [True] and sc["excluded_bins"] == {}
+
+
 def test_bin_mask_comes_from_the_reference_only(v5b: ModuleType) -> None:
     rng = np.random.default_rng(4)
     means = 5.0 + rng.normal(0.0, 1.0, (16, 3))
@@ -218,7 +348,7 @@ def test_bin_mask_comes_from_the_reference_only(v5b: ModuleType) -> None:
     e2 = v5b.v7_estimator_verdict("profile", means2, sems, ref, np.array([0.1, 0.1, 0.1]), blocks)
     assert e2["bin_mask"] == e["bin_mask"]
     blocks3 = np.array(
-        [[5.0 + i % 4, 1.0, 4.0 + i % 3] for i in range(20)]
+        [[5.0 + (i % 4) * 0.3, 1.0, 4.0 + (i % 3) * 0.3] for i in range(20)]
     )  # spreads positive, ref bin 1 is 0
     e3 = v5b.v7_estimator_verdict("profile", means, sems, ref, np.array([0.1, 0.1, 0.1]), blocks3)
     assert e3["bin_mask"] == [True, False, True] and e3["covered"] >= 0
@@ -396,14 +526,18 @@ def _kappa_for(v5b: ModuleType, coverage: float) -> float:
 
 
 def _verdicts(
-    v5b: ModuleType, kind: str, mean: np.ndarray, sem0: np.ndarray, kappas: tuple[float, ...]
-) -> list[bool]:
-    """``v7_estimator_verdict`` pass flags at each kappa (half width kappa * sqrt(s_j^2 + s_k^2))."""
-    ref, rsem = np.ones(mean.shape[1]), np.full(mean.shape[1], 0.1)
-    return [
-        bool(v5b.v7_estimator_verdict(kind, mean, k * sem0, ref, rsem, None)["pass"])
-        for k in kappas
-    ]
+    v5b: ModuleType, kind: str, mean: np.ndarray, sem0: np.ndarray, kappas: tuple[float, ...],
+    blocks: np.ndarray | None = None,
+) -> tuple[list[bool], list[bool]]:  # fmt: skip
+    """``v7_estimator_verdict`` pass flags at each kappa (half width kappa * sqrt(s_j^2 + s_k^2)) and the
+    bin mask of the first one. Reference: the simulated block means ``blocks`` (resolvability criterion
+    applied) or, for the Gaussian cases, a dense dummy (ref 1, SEM 0.01: r_b = 0.1, all bins used)."""
+    if blocks is not None:
+        ref, rsem = blocks.mean(axis=0), blocks.std(axis=0, ddof=1) / math.sqrt(blocks.shape[0])
+    else:
+        ref, rsem = np.ones(mean.shape[1]), np.full(mean.shape[1], 0.01)
+    res = [v5b.v7_estimator_verdict(kind, mean, k * sem0, ref, rsem, blocks) for k in kappas]
+    return [bool(r["pass"]) for r in res], list(res[0]["bin_mask"])
 
 
 def _gauss_passes(v5b: ModuleType, kappas: tuple[float, ...], bins: int, trials: int,
@@ -418,7 +552,7 @@ def _gauss_passes(v5b: ModuleType, kappas: tuple[float, ...], bins: int, trials:
         g = rng.standard_normal((reps, 1))
         x = sigma * (math.sqrt(rho) * g + math.sqrt(1.0 - rho) * rng.standard_normal((reps, bins)))
         s0 = sigma * np.sqrt(rng.chisquare(19, (reps, bins)) / 19.0)
-        out[:, i] = _verdicts(v5b, kind, 100.0 + x, s0, kappas)
+        out[:, i] = _verdicts(v5b, kind, 100.0 + x, s0, kappas)[0]
     return out
 
 
@@ -445,6 +579,8 @@ def gauss_rates(v5b: ModuleType) -> dict[str, np.ndarray]:
     c0, low, high = v5b.v7_region()
     ks = (_kappa_for(v5b, low), 1.0, _kappa_for(v5b, high))
     passes = {lab: _gauss_passes(v5b, ks, b, n, rng, rho=rho) for lab, b, n, rho in GAUSS_CASES}
+    print("v7 gaussian single-interval true coverage at the same kappas [low, 1, high]",
+          [v5b.student_abs_prob(19, k) for k in ks])  # fmt: skip
     print("v7 gaussian rates [low, c0, high] with CP95 upper bounds",
           {k: _rate_report(v5b, v) for k, v in passes.items()}, "region", (low, c0, high))  # fmt: skip
     return passes
@@ -507,52 +643,99 @@ def _gamma_blocks(shape: float, size: tuple[int, ...], rng: np.random.Generator,
 
 def _ratios(
     shape: float, correlated: bool, zero: bool, rng: np.random.Generator, n: int = 300_000
-) -> np.ndarray:
-    """Paired statistic ``|X_j - X_k| / sqrt(s_j^2 + s_k^2)`` of one bin over ``n`` pairs of independent
-    replicates (20 Gamma blocks each; 0 where both SEMs vanish: an exact hit)."""
+) -> tuple[np.ndarray, np.ndarray]:
+    """Paired ``|X_j - X_k| / sqrt(s_j^2 + s_k^2)`` of one bin over ``n`` pairs of independent replicates
+    (20 Gamma blocks each) and the single-interval ``|X_j - true| / s_j`` (true mean ``shape`` or
+    ``0.1 shape`` for a zero-inflated bin); a vanishing SEM (either replicate for the pair, the replicate
+    for the single interval) gives infinity: a miss (undefined uncertainty never certifies coverage)."""
     g = _gamma_blocks(shape, (2, n, 20, 1), rng, correlated, (0,) if zero else ()).astype(float)[
         ..., 0
     ]
     mean, sem = g.mean(axis=2), g.std(axis=2, ddof=1) / math.sqrt(20)
-    den = np.sqrt(sem[0] ** 2 + sem[1] ** 2)
-    num = np.abs(mean[0] - mean[1])
+    true = shape * (ZERO_KEEP if zero else 1.0)
     with np.errstate(divide="ignore", invalid="ignore"):
-        r = np.where(den > 0, num / den, np.where(num > 0, np.inf, 0.0))
-    return r
+        paired = np.abs(mean[0] - mean[1]) / np.sqrt(sem[0] ** 2 + sem[1] ** 2)
+        single = np.abs(mean[0] - true) / sem[0]
+    paired = np.where((sem[0] > 0) & (sem[1] > 0), paired, np.inf)
+    single = np.where(sem[0] > 0, single, np.inf)
+    return paired, single
+
+
+def _sim_reference(
+    shape: float, correlated: bool, zero: bool, rng: np.random.Generator, bins: int = 12
+) -> np.ndarray:
+    """Simulated reference run: 20 blocks of n_ref / 20 = 5e4 histories, each the mean of 100 replicate
+    blocks (500 histories) of the same bin distributions (shared factor and zero inflation included);
+    returns the block means ``[20, bins]``."""
+    scale = np.linspace(0.5, 2.0, bins)
+    g = _gamma_blocks(shape, (20, 100, bins), rng, correlated, ZERO_BINS if zero else ()) * scale
+    return g.astype(float).mean(axis=1)
+
+
+def _expected_mask(v5b: ModuleType, shape: float, correlated: bool, zero: bool, rng: np.random.Generator,
+                   draws: int = 40) -> tuple[np.ndarray, np.ndarray]:  # fmt: skip
+    """Expected bin mask and mean r_b of the resolvability criterion over simulated reference runs."""
+    rel = np.zeros(12)
+    for _ in range(draws):
+        blk = _sim_reference(shape, correlated, zero, rng)
+        rel += (
+            blk.std(axis=0, ddof=1)
+            / math.sqrt(20)
+            / blk.mean(axis=0)
+            * math.sqrt(1_000_000 / 10_000)
+        )
+    rel /= draws
+    return rel < v5b.V7_MAX_REL_SE, rel
 
 
 def _skew_kappas(
-    v5b: ModuleType, shape: float, correlated: bool, zero: bool, rng: np.random.Generator
-) -> tuple[float, float, float]:
+    v5b: ModuleType, shape: float, correlated: bool, zero: bool, rng: np.random.Generator,
+    mask: np.ndarray | None = None,
+) -> dict[str, float]:  # fmt: skip
     """kappa giving the TRUE bin-averaged paired coverage low and high (large-sample simulation of the
-    paired statistic, bisection with common random numbers over the bin marginals: 10 Gamma bins and,
-    if ``zero``, 2 zero-inflated bins) and the true coverage at kappa = 1."""
+    paired statistic with the miss rule, bisection with common random numbers over the bin marginals: 10
+    Gamma bins and, if ``zero``, 2 zero-inflated bins), the paired true coverage at kappa = 1, and the
+    single-interval true coverage (against the true mean) at the same three kappas (report only)."""
     _, low, high = v5b.v7_region()
-    marg = [(1.0, np.sort(_ratios(shape, correlated, False, rng)))]
+    mask = np.ones(12, dtype=bool) if mask is None else mask
+    zb = np.zeros(12, dtype=bool)
     if zero:
-        marg = [(10 / 12, marg[0][1]), (2 / 12, np.sort(_ratios(shape, correlated, True, rng)))]
+        zb[list(ZERO_BINS)] = True
+    n_g, n_z, n_all = int((mask & ~zb).sum()), int((mask & zb).sum()), int(mask.sum())
+    marg = []
+    if n_g:
+        pa, si = _ratios(shape, correlated, False, rng)
+        marg.append((n_g / n_all, np.sort(pa), np.sort(si)))
+    if n_z:
+        pz, sz = _ratios(shape, correlated, True, rng)
+        marg.append((n_z / n_all, np.sort(pz), np.sort(sz)))
 
-    def cov(k: float) -> float:
-        return float(sum(w * np.searchsorted(r, k, side="right") / r.size for w, r in marg))
+    def cov(k: float, which: int) -> float:
+        return float(
+            sum(m[0] * np.searchsorted(m[which], k, side="right") / m[which].size for m in marg)
+        )
 
     def solve(target: float) -> float:
         lo, hi = 0.05, 30.0
         for _ in range(60):
             mid = 0.5 * (lo + hi)
-            lo, hi = (mid, hi) if cov(mid) < target else (lo, mid)
+            lo, hi = (mid, hi) if cov(mid, 1) < target else (lo, mid)
         return 0.5 * (lo + hi)
 
     k_lo, k_hi = solve(low), solve(high)
-    assert abs(cov(k_lo) - low) < 2e-3 and abs(cov(k_hi) - high) < 2e-3
-    return k_lo, k_hi, cov(1.0)
+    assert abs(cov(k_lo, 1) - low) < 2e-3 and abs(cov(k_hi, 1) - high) < 2e-3
+    return {"kappa_low": k_lo, "kappa_high": k_hi, "paired_at_kappa1": cov(1.0, 1),
+            "single_at_low": cov(k_lo, 2), "single_at_kappa1": cov(1.0, 2), "single_at_high": cov(k_hi, 2)}  # fmt: skip
 
 
 def _skew_passes(v5b: ModuleType, shape: float, correlated: bool, zero: bool, kappas: tuple[float, ...],
-                 trials: int, rng: np.random.Generator, bins: int = 12, reps: int = 7200) -> np.ndarray:  # fmt: skip
-    """Pass indicators ``[len(kappas), trials]`` on Gamma-block tallies (20 blocks per replicate and bin,
-    replicate mean and SEM from the blocks, per-bin scales 0.5..2): the implemented paired procedure."""
+                 trials: int, rng: np.random.Generator, bins: int = 12, reps: int = 7200) -> tuple[np.ndarray, np.ndarray]:  # fmt: skip
+    """Pass indicators ``[len(kappas), trials]`` and the bin masks ``[trials, bins]`` on Gamma-block tallies (20 blocks per replicate and bin,
+    replicate mean and SEM from the blocks, per-bin scales 0.5..2): the implemented paired procedure with
+    a simulated reference run (20 blocks of 5e4 histories) for the bin mask (resolvability criterion)."""
     scale = np.linspace(0.5, 2.0, bins)
     out = np.zeros((len(kappas), trials), dtype=bool)
+    masks: list[list[bool]] = []
     for i in range(trials):
         g = (
             _gamma_blocks(shape, (reps, 20, bins), rng, correlated, ZERO_BINS if zero else ())
@@ -562,8 +745,10 @@ def _skew_passes(v5b: ModuleType, shape: float, correlated: bool, zero: bool, ka
             g.mean(axis=1).astype(float),
             (g.std(axis=1, ddof=1) / math.sqrt(20)).astype(float),
         )
-        out[:, i] = _verdicts(v5b, "profile", mean, sem, kappas)
-    return out
+        blocks = _sim_reference(shape, correlated, zero, rng, bins)
+        out[:, i], mask = _verdicts(v5b, "profile", mean, sem, kappas, blocks)
+        masks.append(mask)
+    return out, np.array(masks)
 
 
 SKEW_CASES = [(sh, corr, False) for sh in (2.0, 0.5) for corr in (False, True)] + [
@@ -582,10 +767,26 @@ def skew_result(request: pytest.FixtureRequest, v5b: ModuleType) -> dict:
     rng = np.random.default_rng(
         20471005 + int(2 * shape) + (7 if corr else 0) + (13 if zero else 0)
     )
-    k_lo, k_hi, true_nominal = _skew_kappas(v5b, shape, corr, zero, rng)
-    rep = _rate_report(v5b, _skew_passes(v5b, shape, corr, zero, (k_lo, 1.0, k_hi), 500, rng))
-    out = {"shape": shape, "correlated": corr, "zero_inflated": zero, "kappa_low": k_lo, "kappa_high": k_hi,
-           "true_coverage_at_kappa1": true_nominal, "FA_low": rep[0], "power_kappa1": rep[1], "FA_high": rep[2]}  # fmt: skip
+    mask, rel = _expected_mask(v5b, shape, corr, zero, rng)
+    if (
+        mask.sum() < v5b.V7_MIN_PROFILE_BINS
+    ):  # fewer than 10 resolvable bins: the profile fails closed
+        passes, masks = _skew_passes(v5b, shape, corr, zero, (1.0,), 100, rng)
+        out = {"shape": shape, "correlated": corr, "zero_inflated": zero, "expected_bins_used": int(mask.sum()),
+               "excluded_bins": [int(b) for b in np.flatnonzero(~mask)], "r_b_mean": [round(float(x), 3) for x in rel],
+               "fail_closed": True, "passes_at_kappa1": int(passes.sum()),
+               "trials_with_fewer_than_10_bins": float(np.mean(masks.sum(axis=1) < v5b.V7_MIN_PROFILE_BINS))}  # fmt: skip
+        print("v7 skewed-tally calibration", out)
+        return out
+    kap = _skew_kappas(v5b, shape, corr, zero, rng, mask)
+    passes, masks = _skew_passes(
+        v5b, shape, corr, zero, (kap["kappa_low"], 1.0, kap["kappa_high"]), 500, rng
+    )
+    rep = _rate_report(v5b, passes)
+    out = {"shape": shape, "correlated": corr, "zero_inflated": zero, "expected_bins_used": int(mask.sum()),
+           "excluded_bins": [int(b) for b in np.flatnonzero(~mask)], "r_b_mean": [round(float(x), 3) for x in rel],
+           "trials_with_expected_mask": float(np.mean((masks == mask).all(axis=1))), **kap,
+           "FA_low": rep[0], "power_kappa1": rep[1], "FA_high": rep[2]}  # fmt: skip
     print("v7 skewed-tally calibration", out)
     return out
 
@@ -595,6 +796,14 @@ def test_v7_pipeline_skewed_tally_false_acceptance(skew_result: dict) -> None:
     """The 95 % Clopper-Pearson upper bound of the false-acceptance rate is <= 0.05 at the true paired
     coverage c0 - 0.03 and c0 + 0.03 for Gamma-block tallies: independent, correlated (shared-history)
     and zero-inflated bins."""
+    if skew_result.get(
+        "fail_closed"
+    ):  # no resolvable profile: the gate never passes (FA = 0 by design)
+        assert (
+            skew_result["passes_at_kappa1"] == 0
+            and skew_result["trials_with_fewer_than_10_bins"] > 0.9
+        ), skew_result
+        return
     assert (
         skew_result["FA_low"]["cp95_upper"] <= 0.05 and skew_result["FA_high"]["cp95_upper"] <= 0.05
     ), skew_result

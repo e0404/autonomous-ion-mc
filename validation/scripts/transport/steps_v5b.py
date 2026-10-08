@@ -186,6 +186,7 @@ V7_MIN_PROFILE_BINS = 10
 # c0 = P(|t_38| <= 1), region c0 +- 0.03; exact finite-sample bounds (Clopper-Pearson / empirical Bernstein)
 # at alpha_tost per side, see ``v7_estimator_verdict``.
 V7_PAIR_DF, V7_COV_MARGIN = 38, 0.03  # paired statistic ~ t_38; region c0 +- 0.03, c0 = P(|t_38| <= 1)
+V7_MAX_REL_SE = 0.5  # bin resolvability: expected relative SE of a replicate must be below 50 %
 V7_ALPHA_TOST = 0.04  # per side; false acceptance <= 0.04 exactly (Clopper-Pearson / empirical Bernstein)
 V7_MIN_INTERVALS = 300
 # former point-estimate gate (pooled coverage within 0.68 +- 0.03): reported only, no longer decides ``pass``
@@ -1008,7 +1009,8 @@ def v7_pair_indices(replicates: int) -> tuple[NDArray[np.int64], NDArray[np.int6
 
 def v7_estimator_verdict(kind: str, means: NDArray[np.float64], sems: NDArray[np.float64],
                          ref: NDArray[np.float64], ref_sem: NDArray[np.float64],
-                         ref_blocks: NDArray[np.float64] | None = None) -> dict[str, Any]:  # fmt: skip
+                         ref_blocks: NDArray[np.float64] | None = None, *, n_ref: int = V7_REF_N,
+                         n_rep: int = V7_REP_N) -> dict[str, Any]:  # fmt: skip
     """Coverage verdict of one estimator by the reference-free paired design (Codex REVIEW-22711e6f).
 
     ``means`` / ``sems`` ``[R, bins]`` are the replicate means and sample SEMs of their 20 batches
@@ -1020,10 +1022,19 @@ def v7_estimator_verdict(kind: str, means: NDArray[np.float64], sems: NDArray[np
     is no reference, no box, no bootstrap and no shift. Nominal coverage ``c0 = P(|t_38| <= 1)`` and the
     region ``[c0 - 0.03, c0 + 0.03]`` follow from ``v7_region``.
 
-    Bins used: those whose mean in the independent 1e6-history reference run (``ref``, ``ref_blocks``;
-    independent of all eight shards) is positive and whose block spread there is positive (the reference
-    standard error when the blocks are not given); the mask comes from the reference run only, never from
-    the replicates. The scalar has one bin.
+    Bins used (pre-registered, from the independent reference run only, never from the replicates):
+    reference mean > 0, reference block spread > 0 (``ref_blocks``; the reference standard error when
+    the blocks are not given) and, for the profiles, the resolvability criterion ``r_b = (SEM_ref,b /
+    ref_mean_b) sqrt(n_ref / n_rep) < V7_MAX_REL_SE`` = 0.5: ``SEM_ref,b`` is the standard error of the
+    reference over its blocks and ``sqrt(n_ref / n_rep)`` converts it to the expected relative error of
+    one replicate of ``n_rep`` histories (``n_ref`` = 1e6, ``n_rep`` = 1e4: rel-SEM_ref < 0.05). The batch
+    standard error of a replicate is a usable uncertainty only where its expected relative error is
+    below 50 % (the cut lies well inside the gap between the resolvable bins, r_b up to about 0.15 in the
+    rehearsal, and the unresolvable distal bin, r_b about 1.0, so that no bin's inclusion is decided by
+    reference noise); in sparser bins most replicates record nothing and their standard error is
+    undefined, which the miss rule below counts as non-coverage, so such bins are excluded from the gate
+    before any qualification data is seen. ``r_b``, the mask and the excluded bins with the reason are reported.
+    The scalar has one bin (no resolvability criterion).
 
     Bounds, each at ``alpha_tost`` = 0.04 per side and exact for i.i.d. bounded variables with no other
     assumption. Scalar (``f_p`` in {0, 1}): one-sided Clopper-Pearson, ``(CP_lower(k, P), CP_upper(k, P))``
@@ -1034,6 +1045,20 @@ def v7_estimator_verdict(kind: str, means: NDArray[np.float64], sems: NDArray[np
     used. A true paired coverage outside the region is therefore accepted with probability at most
     ``alpha_tost`` = 0.04 (<= 0.05), exactly.
 
+    Degenerate uncertainty fails closed: in a used bin a pair in which either replicate has ``sem == 0``
+    (its 20 blocks identical, in practice all zero) is counted as a MISS, never a hit, because an
+    undefined standard error cannot certify coverage (V2-NUM); such pair-bins are counted per bin
+    (``degenerate_pair_bins``), in total (``degenerate_pairs_total``) and as the number and fraction of
+    pairs affected, and are reported.
+
+    Link to single-interval coverage. The gated quantity is the paired one-sigma agreement; it tests the
+    same calibration of the batch standard error as the coverage of a single interval of a replicate
+    against the true mean. For Gaussian batch means with an error scale ``kappa`` (``sem = kappa`` times
+    the true standard error) the single-interval coverage is ``P(|t_19| <= kappa)`` and the paired one is
+    ``P(|t_38| <= kappa)``; both are strictly increasing in ``kappa``, so the paired region maps to a
+    ``kappa`` band and to a single-interval coverage band close to 0.670 +- 0.03 (reported by the tests).
+    Single-interval coverage is reported as a diagnostic (``m_ref1e6``).
+
     Diagnostics (not gating): the per-bin paired coverage, the per-bin skewness of the replicate means,
     the legacy pooled-point gate (``m`` within 0.68 +- 0.03) and the coverage of the single replicates
     against the 1e6 reference (``m_ref1e6``, hit ``|mean - ref| <= sem``)."""
@@ -1042,10 +1067,20 @@ def v7_estimator_verdict(kind: str, means: NDArray[np.float64], sems: NDArray[np
     r, nbins = means.shape
     ia, ib = v7_pair_indices(r)
     pairs = ia.size
-    spread = (np.asarray(ref_blocks, float).std(axis=0, ddof=1) if ref_blocks is not None else ref_sem)
-    used = (ref > 0.0) & (spread > 0.0)  # bin mask from the 1e6 reference run only
+    if ref_blocks is not None:
+        blk = np.asarray(ref_blocks, float)
+        spread, sem_ref = blk.std(axis=0, ddof=1), blk.std(axis=0, ddof=1) / math.sqrt(blk.shape[0])
+    else:
+        spread, sem_ref = ref_sem, ref_sem
+    with np.errstate(divide="ignore", invalid="ignore"):
+        rel = np.where(ref > 0.0, sem_ref / ref * math.sqrt(n_ref / n_rep), np.inf)
+    resolvable = (rel < V7_MAX_REL_SE) if kind == "profile" else np.ones(nbins, dtype=bool)
+    used = (ref > 0.0) & (spread > 0.0) & resolvable  # bin mask from the 1e6 reference run only
+    excluded = {int(b): ("reference mean <= 0" if not ref[b] > 0.0 else "reference spread = 0" if not spread[b] > 0.0
+                         else f"relative SE {rel[b]:.3g} >= {V7_MAX_REL_SE:g}") for b in np.flatnonzero(~used)}  # fmt: skip
     nused = int(used.sum())
-    hit = (np.abs(means[ia] - means[ib]) <= np.sqrt(sems[ia] ** 2 + sems[ib] ** 2)) & used
+    degenerate = ((sems[ia] == 0.0) | (sems[ib] == 0.0)) & used  # undefined uncertainty: never a hit
+    hit = (np.abs(means[ia] - means[ib]) <= np.sqrt(sems[ia] ** 2 + sems[ib] ** 2)) & used & ~degenerate
     covered_p = hit.sum(axis=1).astype(np.int64)
     per_bin = np.where(used, hit.mean(axis=0), np.nan)
     c0, low, high = v7_region()
@@ -1078,10 +1113,17 @@ def v7_estimator_verdict(kind: str, means: NDArray[np.float64], sems: NDArray[np
     legacy = bool(nused >= min_bins and pairs >= V7_MIN_INTERVALS and abs(m - V7_LEGACY_TARGET) <= V7_LEGACY_TOL)
     return {"kind": kind, "bins": int(nbins), "bins_used": nused, "bin_mask": [bool(u) for u in used],
             "bin_mask_source": "independent 1e6 reference run (v7-rep-ref) only", "n_pairs": pairs,
+            "rel_se_per_replicate": [None if not np.isfinite(x) else float(x) for x in rel],
+            "max_rel_se": V7_MAX_REL_SE, "excluded_bins": excluded,
             "covered": k, "m": m, **tost, "pair_df": V7_PAIR_DF, "margin": V7_COV_MARGIN,
             "alpha_tost": V7_ALPHA_TOST, "bound_kind": bound, "eb_eps": eps, "variance": v,
             "per_bin_coverage": [None if np.isnan(x) else float(x) for x in per_bin],
             "replicate_mean_skewness": skew, "legacy_point_gate_pass": legacy, "m_ref1e6": m_ref,
+            "degenerate_pair_bins": [int(c) for c in degenerate.sum(axis=0)],
+            "degenerate_pairs_total": int(degenerate.sum()),
+            "degenerate_pairs": int(degenerate.any(axis=1).sum()),
+            "degenerate_pair_fraction": float(degenerate.any(axis=1).mean()),
+            "single_interval_diagnostic": "m_ref1e6: coverage of single replicates against the 1e6 reference",
             "per_pair_covered": [int(c) for c in covered_p], "reference": ref.tolist(),
             "reference_sem": ref_sem.tolist()}  # fmt: skip
 
@@ -1181,7 +1223,8 @@ def v7_rep_combine(shards: list[dict[str, Any]], ref: dict[str, Any]) -> dict[st
                 or rblocks.shape != (V7_REF_BATCHES, means.shape[1]) or not np.all(np.isfinite(rblocks))
                 or not np.all(np.isfinite([rmean, rsem]))):  # fmt: skip
             raise SystemExit(f"v7-rep: estimator {name}: inconsistent shapes or non-finite values")
-        estimators[name] = v7_estimator_verdict(kind, means, sems, rmean, rsem, rblocks)
+        estimators[name] = v7_estimator_verdict(kind, means, sems, rmean, rsem, rblocks, n_ref=int(ref["n"]),
+                                                n_rep=V7_REP_N)
     return {"replicates": int(sum(p["replicates"] for p in shards)), "estimators": estimators,
             "histories_per_replicate": V7_REP_N, "reference_histories": ref["n"],
             "shard_histories": [p["n"] for p in shards], "bins": V7_BINS,
@@ -1189,7 +1232,7 @@ def v7_rep_combine(shards: list[dict[str, Any]], ref: dict[str, Any]) -> dict[st
                      "margin": V7_COV_MARGIN, "pair_df": V7_PAIR_DF, "alpha_tost": V7_ALPHA_TOST,
                      "pairs": int(sum(p["replicates"] for p in shards)) // 2,
                      "pairing": "(shard s, replicate j) with (shard s + 4, replicate j)",
-                     "bins_from": "v7-rep-ref only", "min_pairs": V7_MIN_INTERVALS,
+                     "bins_from": "v7-rep-ref only", "max_rel_se": V7_MAX_REL_SE, "min_pairs": V7_MIN_INTERVALS,
                      "min_profile_bins": V7_MIN_PROFILE_BINS},
             "pass": bool(all(e["pass"] for e in estimators.values()))}  # fmt: skip
 
