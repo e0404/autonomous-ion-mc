@@ -16,8 +16,8 @@ non-conformant run; the rehearsal base is ``REHEARSAL_SEED_BASE`` (2046xxxx, nev
 
 Seeds (Amendment 6): ``seed = base + 1000 * r_index + shard`` with the lv5b base 20471004 (Amendment 11; 20441004 consumed) and the
 hr5 base 20451004; ``R_INDEX`` (lv5b): throughput 1, v8-lv 2, r1-nuc 3, v5-150-on 4, v5-150-off 5,
-v5-200-on 6, v5-200-off 7, v2b 8, v7-scan 9, v7-shift 10, v7-rep 11 (the six
-replicate shards: shards 0..5, the 1e6 reference: shard ``V7_SHARDS`` = 6); ``R_INDEX_HR`` (hr5): v8-stat 1, v7-f32 2. The python and
+v5-200-on 6, v5-200-off 7, v2b 8, v7-scan 9, v7-shift 10, v7-rep 11 (the eight
+replicate shards: shards 0..7, the 1e6 reference: shard ``V7_SHARDS`` = 8); ``R_INDEX_HR`` (hr5): v8-stat 1, v7-f32 2. The python and
 warp samples of v8-stat use the shards of ``V8_SAMPLES``.
 
 Definitions made here where the plan leaves them open (all recorded in the documents):
@@ -43,23 +43,24 @@ Definitions made here where the plan leaves them open (all recorded in the docum
   the exact batch partials (``run_range`` over the batch history ranges, which equals the batch
   decomposition of the full run). The N-scan uses ``V7_BATCHES`` = 100 batches per N so that the
   standard error of the slope of ln(SE) against ln N (about 0.02) resolves the frozen +-0.05.
-  Coverage (Amendment 13, Codex REVIEW-be30e621): ``V7_REPLICATES`` = 5400 replicates of ``V7_REP_N`` =
-  1e4 histories from ``V7_SHARDS`` = 6 single simulations (steps ``v7-rep-s{0..5}``) of ``V7_SHARD_N`` = 9e6
+  Coverage (Amendment 13, Codex REVIEW-be30e621, -873ab9cd, -edb9970b, -f1b32614): ``V7_REPLICATES`` = 7200 replicates of ``V7_REP_N`` =
+  1e4 histories from ``V7_SHARDS`` = 8 single simulations (steps ``v7-rep-s{0..7}``) of ``V7_SHARD_N`` = 9e6
   histories in ``V7_SHARD_BATCHES`` = 18000 batches of 500 histories; the histories are independent
   (counter-based RNG per history), so replicate j is the contiguous group of ``V7_BATCHES_PER_REP`` = 20
   batches [20 j, 20 j + 20) with mean and sample SEM (ddof = 1) of its 20 batches. One reference simulation
   (``v7-rep-ref``, ``V7_REF_N`` = 1e6 histories, 20 batches) gives the cross-check reference mean and SEM. The three
   estimators of the frozen V7 row are covered: the ``V7_BINS`` = 12-bin secondary-proton dose profile
   ``sec_p``, and the 12-bin ``nuclear_local`` dose profile (``nuc_local`` channel) and the scalar ``escaped_neutral`` (neutron + gamma), 1 sigma intervals
-  against the leave-one-out pooled mean of the replicates (the 1e6 run is a cross-check). ``v7-rep-combine`` consumes the seven partials (six shards and the reference; no seed) and applies
-  ``v7_tost_verdict`` per estimator, with the reference-uncertainty treatment of ``v7_estimator_verdict``
-  (gating reference: the leave-one-out pooled mean of the replicates, ``mu_(-j) = (sum_k mean_k - mean_j) /
-  (R - 1)``, with pooled standard error ``SEM_pool = sigma / sqrt(R)``; Bonferroni box: the worst case of
-  the mean coverage over ``mu_(-j) +/- Z_B SEM_pool`` per bin, ``Z_B = Phi^{-1}(1 - alpha_box / (2 B))``,
-  ``alpha_box`` = 0.01, valid for any covariance between the bins, and the equivalence test at
-  ``alpha_tost`` = 0.04, so that the total false-acceptance probability is at most 0.05; derivation in the
-  docstring of ``v7_estimator_verdict``; the independent 1e6 reference run is a cross-check only: coverage
-  against it ``m_ref1e6``, the per-bin agreement ``z_b`` and ``max |z_b|``, ``s_ref_cov``, ``b_ref``).
+  against the pooled mean of the OTHER fold (fold A = shards 0..3, fold B = shards 4..7, 3600 replicates each;
+  the 1e6 run is a cross-check). ``v7-rep-combine`` consumes the nine partials (eight shards and the
+  reference; no seed) and applies ``v7_tost_verdict`` per estimator, with the reference treatment of
+  ``v7_estimator_verdict``: the replicates of one fold are conditionally independent given the two fold
+  means; Bonferroni box over the 2 B fold-reference coordinates, ``Z_B = Phi^{-1}(1 - alpha_box / (4 B))``,
+  ``alpha_box`` = 0.01; EXACT worst-case coverage over the box by a sweep over the interval endpoints
+  (``v7_coverage_extrema``); Hoeffding deviation ``eps = sqrt(ln(1 / alpha_tost) / (2 R))`` with
+  ``alpha_tost`` = 0.04; total false-acceptance probability at most 0.05; derivation in the docstring
+  of ``v7_estimator_verdict``; the independent 1e6 reference run is a cross-check only: coverage
+  against it ``m_ref1e6``, the per-bin agreement ``z_b`` and ``max |z_b|``, ``s_ref_cov``).
   Row V7 coverage passes iff all three estimators pass; the pooled-point gate
   0.68 +- 0.03 is only reported (``legacy_point_gate_pass``).
   Grid shift and refinement (decision of this module, no frozen tolerance): the whole-grid secondary
@@ -166,27 +167,26 @@ V2B_VARIANTS = ((0.1, 0.02), (1.0, 0.02))  # (s_max mm, f_E): a, b
 V7_SCAN_N, V7_BATCHES, V7_SLOPE, V7_SLOPE_TOL = (10_000, 100_000, 1_000_000), 100, -0.5, 0.05
 V7_F32_N, V7_F32_Z = 100_000, 3.0
 V7_SHIFT_N, V7_SHIFT_BATCHES, V7_SHIFT_RTOL, V7_REFINE_RTOL = 100_000, 20, 1e-3, 1e-6
-# Amendment 13 (Codex REVIEW-be30e621): 5400 replicates from 6 sharded simulations of 9e6 histories in 18000
+# Amendment 13 (Codex REVIEW-be30e621): 7200 replicates from 8 sharded simulations of 9e6 histories in 18000
 # batches of 500 (replicate = 20 consecutive batches) plus a 1e6-history reference simulation; shards use
-# seed indices 0..5 and the reference index V7_SHARDS = 6 of r_index 11 (inside the row's 1000-seed block).
-V7_SHARDS = run_suite.V7_REP_SHARDS  # 6, defined in run_suite.py
+# seed indices 0..7 and the reference index V7_SHARDS = 8 of r_index 11 (inside the row's 1000-seed block).
+V7_SHARDS = run_suite.V7_REP_SHARDS  # 8, defined in run_suite.py
 V7_SHARD_N, V7_BATCH_N, V7_BATCHES_PER_REP = 9_000_000, 500, 20
 V7_REP_N = V7_BATCH_N * V7_BATCHES_PER_REP  # histories per replicate (1e4)
 V7_SHARD_BATCHES = V7_SHARD_N // V7_BATCH_N  # 18000
 V7_REPS_PER_SHARD = V7_SHARD_BATCHES // V7_BATCHES_PER_REP  # 900
-V7_REPLICATES = V7_SHARDS * V7_REPS_PER_SHARD  # 5400
+V7_REPLICATES = V7_SHARDS * V7_REPS_PER_SHARD  # 7200
 V7_REF_N, V7_REF_BATCHES, V7_BINS = 1_000_000, 20, 12
 V7_COVERAGE_ESTIMATORS = (("sec_p", "profile"), ("nuclear_local", "profile"),
                           ("escaped_neutral", "scalar"))  # fmt: skip
 V7_MIN_PROFILE_BINS = 10
 PHI_1 = math.exp(-0.5) / math.sqrt(2.0 * math.pi)  # standard normal density at 1: 0.24197
-# Replicate-level TOST (two one-sided tests with t = t_{1 - alpha_tost / 2, R - 1} = t_{0.98, R - 1}) of the mean
-# per-replicate coverage against the equivalence region [V7_COV_LOW, V7_COV_HIGH], with the worst case of the
-# leave-one-out reference over a Bonferroni box (alpha_box), see ``v7_estimator_verdict``: centre 0.670 =
-# P(|t_19| <= 1), the nominal coverage of one-sigma intervals from the SEM of 20 batches, margin +-0.03.
+# Replicate-level equivalence test of the mean per-replicate coverage against the region [V7_COV_LOW,
+# V7_COV_HIGH] (centre 0.670 = P(|t_19| <= 1), the nominal coverage of one-sigma intervals from the SEM of 20
+# batches, margin +-0.03): exact worst case over a Bonferroni box of the two-fold reference (alpha_box) and a
+# Hoeffding deviation bound (alpha_tost), see ``v7_estimator_verdict``.
 V7_COV_LOW, V7_COV_HIGH = 0.640, 0.700
 V7_ALPHA_BOX, V7_ALPHA_TOST = 0.01, 0.04  # total false-acceptance level <= alpha_box + alpha_tost = 0.05
-V7_BOX_GRID = 9  # points of the symmetric grid over the Bonferroni box of each bin
 V7_MIN_INTERVALS = 300
 # former point-estimate gate (pooled coverage within 0.68 +- 0.03): reported only, no longer decides ``pass``
 V7_LEGACY_TARGET, V7_LEGACY_TOL = 0.68, 0.03
@@ -370,7 +370,7 @@ def step_throughput(a: argparse.Namespace) -> int:
         "v2b (both variants)": (V2B_N, "v2b", V2B_SHARDS),
         "v7-scan (1e4 + 1e5 + 1e6, f64, plus f32 1e5)": (sum(V7_SCAN_N) + V7_F32_N, "warp-cpu-f64", 1),
         "v7-shift (3 layouts)": (3 * V7_SHIFT_N, "warp-cpu-f64", 1),
-        "v7-rep (6 shards x 9e6 + 1e6 reference)": (V7_SHARDS * V7_SHARD_N + V7_REF_N, "warp-cpu-f64", V7_SHARDS + 1),
+        "v7-rep (8 shards x 9e6 + 1e6 reference)": (V7_SHARDS * V7_SHARD_N + V7_REF_N, "warp-cpu-f64", V7_SHARDS + 1),
         "hr5 python sample (2.4e4)": (HR5_PYTHON_SHARDS * HR5_PYTHON_N, "python", HR5_PYTHON_SHARDS),
     }, {**rates, "v2b": v2b_rate})  # fmt: skip
     ok = all(v["counters_clean"] for v in out.values())
@@ -967,25 +967,31 @@ def normal_quantile(p: float) -> float:
     return 0.5 * (lo + hi)
 
 
+def v7_hoeffding_eps(replicates: int, alpha_tost: float = V7_ALPHA_TOST) -> float:
+    """Hoeffding deviation ``sqrt(ln(1 / alpha_tost) / (2 R))``: for ``R`` independent variables in
+    [0, 1], ``P(mean - E mean <= -eps) <= exp(-2 R eps^2) = alpha_tost`` (and likewise upward)."""
+    return math.sqrt(math.log(1.0 / alpha_tost) / (2.0 * replicates))
+
+
 def v7_tost_verdict(covered_j: NDArray[np.int64], bins_used: int, intervals: int,
                     m_lo: float | None = None, m_hi: float | None = None, *,
                     low: float = V7_COV_LOW, high: float = V7_COV_HIGH,
                     alpha_tost: float = V7_ALPHA_TOST, min_bins: int = 1) -> dict[str, Any]:  # fmt: skip
-    """Replicate-level TOST of one estimator of the v7-rep coverage against the worst case over the
-    reference box: ``f_j = covered_j / bins_used`` (unshifted reference), ``m = mean(f_j)``, ``s = sd(f_j,
-    ddof=1) / sqrt(R)``, ``t = t_{1 - alpha_tost / 2, R - 1}`` (``alpha_tost = 0.04``: t_{0.98}). ``m_lo``
-    / ``m_hi`` are the smallest / largest mean coverage over the box (``m`` when ``None``; both always
-    bracket ``m``). PASS iff ``m_lo - t s >= low`` and ``m_hi + t s <= high``, ``intervals >=
-    V7_MIN_INTERVALS`` and ``bins_used >= min_bins``. There is no reference term in ``s``: given the box
-    event the reference effect is covered deterministically (see ``v7_estimator_verdict``). Pure function."""
+    """Equivalence verdict of one estimator of the v7-rep coverage: ``f_j = covered_j / bins_used`` in
+    [0, 1] (unshifted reference), ``m = mean(f_j)``, ``eps`` the Hoeffding deviation of ``R`` replicates
+    at ``alpha_tost`` (``v7_hoeffding_eps``; distribution free and valid for every reference shift of the
+    box and any dependence between bins), ``s = sd(f_j, ddof=1) / sqrt(R)`` a diagnostic. ``m_lo`` /
+    ``m_hi`` are the smallest / largest mean coverage over the reference box (``m`` when ``None``; clipped
+    to bracket ``m``). PASS iff ``m_lo - eps >= low`` and ``m_hi + eps <= high``, ``intervals >=
+    V7_MIN_INTERVALS`` and ``bins_used >= min_bins``. Pure function."""
     f = np.asarray(covered_j, dtype=float) / bins_used
     r = f.size
     m = float(f.mean())
     se = float(f.std(ddof=1) / math.sqrt(r))
     m_lo = m if m_lo is None else min(m_lo, m)
     m_hi = m if m_hi is None else max(m_hi, m)
-    t = student_t_quantile(1.0 - alpha_tost / 2.0, r - 1)
-    ci = [m_lo - t * se, m_hi + t * se]
+    eps = v7_hoeffding_eps(r, alpha_tost)
+    ci = [m_lo - eps, m_hi + eps]
     reasons = []
     if ci[0] < low:
         reasons.append(f"CI lower bound {ci[0]:.4f} below {low}")
@@ -995,68 +1001,108 @@ def v7_tost_verdict(covered_j: NDArray[np.int64], bins_used: int, intervals: int
         reasons.append(f"intervals {intervals} < {V7_MIN_INTERVALS}")
     if bins_used < min_bins:
         reasons.append(f"bins_used {bins_used} < {min_bins}")
-    return {"m": m, "m_lo": m_lo, "m_hi": m_hi, "s": se, "t": t, "ci": ci, "low": low, "high": high,
-            "alpha_tost": alpha_tost, "replicates": r, "pass": not reasons, "reasons": reasons}  # fmt: skip
+    return {"m": m, "m_lo": m_lo, "m_hi": m_hi, "s": se, "hoeffding_eps": eps, "ci": ci, "low": low,
+            "high": high, "alpha_tost": alpha_tost, "replicates": r, "pass": not reasons,
+            "reasons": reasons}  # fmt: skip
+
+
+def v7_coverage_extrema(x: NDArray[np.float64], sem: NDArray[np.float64], z_box: float
+                        ) -> tuple[float, float]:  # fmt: skip
+    """Exact minimum and maximum over ``delta`` in ``[-z_box, z_box]`` of the coverage ``C(delta) =
+    mean_j [ lo_j <= delta <= hi_j ]`` of closed intervals ``[lo_j, hi_j]``; ``x`` and ``sem`` are in
+    units of the reference standard error: ``lo_j = x_j - sem_j``, ``hi_j = x_j + sem_j`` (replicate j
+    is a hit iff ``|x_j - delta| <= sem_j``). ``C`` is a step function: its count is
+    ``#(lo <= delta) - #(hi < delta)``, constant between consecutive breakpoints, so it is evaluated at
+    the clipped breakpoints, at ``+-z_box`` and at the midpoints between consecutive ones (which
+    include the open gaps just after an interval end, where the minimum is attained)."""
+    lo, hi = np.sort(x - sem), np.sort(x + sem)
+    pts = np.concatenate([[-z_box, z_box], lo[(lo > -z_box) & (lo < z_box)],
+                          hi[(hi > -z_box) & (hi < z_box)]])  # fmt: skip
+    pts.sort()
+    q = np.concatenate([pts, 0.5 * (pts[:-1] + pts[1:])])
+    cnt = np.searchsorted(lo, q, side="right") - np.searchsorted(hi, q, side="left")
+    return float(cnt.min() / x.size), float(cnt.max() / x.size)
+
+
+def v7_fold_split(replicates: int) -> int:
+    """Number of replicates of fold A (shards 0..3: the first half of the concatenated replicates)."""
+    if replicates < 4 or replicates % 2:
+        raise SystemExit(f"v7-rep: {replicates} replicates cannot be split into two equal folds")
+    return replicates // 2
 
 
 def v7_estimator_verdict(kind: str, means: NDArray[np.float64], sems: NDArray[np.float64],
                          ref: NDArray[np.float64], ref_sem: NDArray[np.float64],
                          ref_blocks: NDArray[np.float64] | None = None) -> dict[str, Any]:  # fmt: skip
     """Coverage verdict of one estimator: ``means`` / ``sems`` ``[R, bins]`` (replicate means and
-    sample SEMs of their 20 batches), ``ref`` / ``ref_sem`` ``[bins]`` (the independent 1e6-history
-    reference, DIAGNOSTIC only), ``ref_blocks`` ``[K, bins]`` its per-block means.
+    sample SEMs of their 20 batches; the first ``R / 2`` rows are fold A = shards 0..3, the rest fold B =
+    shards 3..5), ``ref`` / ``ref_sem`` ``[bins]`` (the independent 1e6-history reference, DIAGNOSTIC
+    only), ``ref_blocks`` ``[K, bins]`` its per-block means.
 
-    Gating reference (Codex REVIEW-873ab9cd, REVIEW-edb9970b): the leave-one-out pooled mean of the
-    replicates, ``mu_(-j),b = (sum_k mean_kb - mean_jb) / (R - 1)``, independent of replicate ``j``; hit
-    ``|mean_jb - mu_(-j),b| <= sem_jb``. Bins used: pooled mean > 0 and ``sigma_b > 0``
-    (``sigma_b`` = sample sd of the replicate means), ``B`` bins in all.
+    Gating reference (Codex REVIEW-873ab9cd, -edb9970b, -f1b32614): two-fold cross reference. The
+    replicates of fold A are judged against the pooled mean ``mu_B,b`` of the replicate means of fold B
+    (``SEM_B,b = sd_B,b / sqrt(R_B)``) and vice versa; hit ``|mean_jb - mu_ref(j),b| <= sem_jb``. The two
+    fold means are independent and a replicate's own value never enters its reference. CONDITIONAL on the
+    two reference vectors every ``f_j`` depends on its own replicate only, so the ``R`` values ``f_j`` are
+    conditionally independent (the leave-one-out construction, whose references share replicates, is
+    withdrawn). Bins used: both fold means > 0 and both fold spreads > 0 (``B`` bins).
 
-    Derivation (Bonferroni box). The pooled mean error ``e_b = mu_pool,b - mu_true,b`` has standard error
-    ``SEM_pool,b = sigma_b / sqrt(R)`` and, by the central limit theorem over the ``R`` replicate means,
-    a Gaussian marginal. With ``Z_B = Phi^{-1}(1 - alpha_box / (2 B))`` the union bound gives ``P(exists
-    b: |e_b| > Z_B SEM_pool,b) <= sum_b alpha_box / B = alpha_box`` for ANY covariance between the bins,
-    so the box ``prod_b [-Z_B SEM_pool,b, +Z_B SEM_pool,b]`` contains the true joint error with
-    probability >= ``1 - alpha_box`` (0.99). The coverage of bin ``b`` against a reference shifted by
-    ``delta`` depends only on that bin's shift, ``C_b(delta) = mean_j |mean_jb - mu_(-j),b - delta| <=
-    sem_jb`` (the leave-one-out reference of bin ``b`` moved by ``delta SEM_pool,b``), so the worst case of
-    the profile-mean coverage over the box is the mean over bins of the per-bin worst case:
-    ``m_lo = (1/B) sum_b min_{delta in G} C_b(delta SEM_pool,b)``, ``m_hi`` likewise with ``max``, where
-    ``G`` is a symmetric grid of ``V7_BOX_GRID`` = 9 points over ``[-Z_B, Z_B]`` (0 and the endpoints
-    included; the unshifted coverage is the ``delta = 0`` point, so ``m_lo <= m <= m_hi``). The
-    equivalence test runs at ``alpha_tost`` = 0.04 (``t = t_{0.98, R - 1}``) on ``f_j`` of the unshifted
-    hits, with ``s = sd(f_j) / sqrt(R)`` and no reference term. The false-acceptance probability is at
-    most ``alpha_box + alpha_tost`` = 0.05 (on the box event the TOST at ``alpha_tost`` is conservative
-    for the true mean coverage, which lies between ``m_lo`` and ``m_hi``; the ``f_j`` are i.i.d. up to the
-    O(1 / R) dependence through the leave-one-out mean). ``kind`` is ``profile`` (at least
-    ``V7_MIN_PROFILE_BINS`` bins used) or ``scalar``.
+    Derivation. The errors ``e_Fb = mu_F,b - mu_true,b`` of the two references are Gaussian by the
+    central limit theorem over the 3600 replicate means of a fold, with standard errors ``SEM_F,b``. The
+    box ``prod_{F,b} [-Z_B SEM_F,b, Z_B SEM_F,b]`` with ``Z_B = Phi^{-1}(1 - alpha_box / (2 * 2B))``
+    (``alpha_box`` = 0.01: 3.53 for 12 bins, 3.09 for one) contains the true joint error of all ``2B``
+    coordinates with probability >= 0.99 for ANY covariance (union bound). For fold ``F`` and bin ``b``
+    the coverage as a function of the shift ``delta`` (units ``SEM_ref,b``) of its reference is the number
+    of closed intervals ``[(x_jb - sem_jb) / SEM_ref,b, (x_jb + sem_jb) / SEM_ref,b]`` containing ``delta``
+    (``x_jb = mean_jb - mu_ref,b``) divided by ``R_F``; its exact minimum and maximum over the box come
+    from a sweep over the sorted endpoints (``v7_coverage_extrema``). Every (fold, bin) coverage depends on
+    its own shift only, so the worst case of the mean coverage over the box is separable: ``m_lo = sum_F
+    (R_F / R) (1/B) sum_b min C_Fb`` and ``m_hi`` likewise with ``max``. Given the box event the true
+    mean coverage lies in ``[m_lo, m_hi]`` (a function of the references' errors only; the exact extremum
+    makes the worst case exact, not a grid approximation), and given the references the ``R`` variables
+    ``f_j`` in [0, 1] are independent, so Hoeffding gives ``P(mean f - E f <= -eps) <= exp(-2 R eps^2)``
+    with ``eps = sqrt(ln(1 / alpha_tost) / (2 R))``, ``alpha_tost`` = 0.04 (``eps`` = 0.01495 for R = 7200),
+    valid for every shift in the box and any dependence between the bins. PASS iff ``m_lo - eps >= 0.640``
+    and ``m_hi + eps <= 0.700``; the false-acceptance probability is at most ``alpha_box + alpha_tost`` =
+    0.05 by the union bound. ``kind`` is ``profile`` (at least ``V7_MIN_PROFILE_BINS`` bins used) or
+    ``scalar``.
 
-    Diagnostics (not gating): coverage of the unshifted hits against the 1e6 reference
-    (``m_ref1e6``), the per-bin agreement ``z_b = (mu_pool,b - ref_b) / sqrt(SEM_pool,b^2 +
-    SEM_ref,b^2)`` and ``max |z_b|``, ``s_ref_cov`` and the mean absolute off-diagonal correlation of
-    the 1e6 reference bins, ``b_ref`` and the per-bin skewness of the replicate means."""
+    Diagnostics (not gating): the two fold means and SEMs, the per-bin fold agreement ``z_b = (mu_A,b -
+    mu_B,b) / sqrt(SEM_A,b^2 + SEM_B,b^2)`` and ``max |z_b|``, the coverage of the unshifted hits against
+    the 1e6 reference (``m_ref1e6``), ``z_b`` of the pooled mean against it, ``s_ref_cov`` and the mean
+    absolute off-diagonal correlation of its bins, and the per-bin skewness of the replicate means."""
     means, sems = np.asarray(means, float), np.asarray(sems, float)
     ref, ref_sem = np.asarray(ref, float), np.asarray(ref_sem, float)
     r, nbins = means.shape
+    na = v7_fold_split(r)
+    folds = {"A": slice(0, na), "B": slice(na, r)}
+    mu = {k: means[sl].mean(axis=0) for k, sl in folds.items()}
+    sd = {k: means[sl].std(axis=0, ddof=1) for k, sl in folds.items()}
+    nf = {k: means[sl].shape[0] for k, sl in folds.items()}
+    sem_f = {k: sd[k] / math.sqrt(nf[k]) for k in folds}
+    other = {"A": "B", "B": "A"}
     sigma = means.std(axis=0, ddof=1)
     pooled = means.mean(axis=0)
-    loo = (means.sum(axis=0) - means) / (r - 1)  # [R, bins]: mean of the other replicates
     sem_pool = sigma / math.sqrt(r)
-    used = (pooled > 0.0) & (sigma > 0.0)
+    used = (mu["A"] > 0) & (mu["B"] > 0) & (sd["A"] > 0) & (sd["B"] > 0) & (sigma > 0)
     nused = int(used.sum())
-    z_box = normal_quantile(1.0 - V7_ALPHA_BOX / (2.0 * nused)) if nused else math.nan
-    grid = np.linspace(-z_box, z_box, V7_BOX_GRID) if nused else np.zeros(0)
-    unshifted = (np.abs(means - loo) <= sems) & used
+    z_box = normal_quantile(1.0 - V7_ALPHA_BOX / (2.0 * 2.0 * nused)) if nused else math.nan
+    refvec = np.empty_like(means)  # [R, bins]: the reference of each replicate (other fold's mean)
+    for k, sl in folds.items():
+        refvec[sl] = mu[other[k]]
+    unshifted = (np.abs(means - refvec) <= sems) & used
     covered_j = unshifted.sum(axis=1).astype(np.int64)
     intervals = r * nused
     skew = [math.nan] * nbins
     for b in np.flatnonzero(used):
         skew[int(b)] = float(np.mean(((means[:, b] - means[:, b].mean()) / sigma[b]) ** 3))
-    nan_corr = {"r_b": [], "b_ref": math.nan, "s_ref_bound": math.nan, "s_ref_cov": math.nan,
-                "ref_corr_mean_abs_offdiag": math.nan}  # fmt: skip
-    m_ref, z_b, zmax = math.nan, [math.nan] * nbins, math.nan
-    box = [[math.nan, math.nan] for _ in range(nbins)]
+    nan_corr = {"s_ref_cov": math.nan, "ref_corr_mean_abs_offdiag": math.nan}
+    m_ref, z_b1e6, zmax1e6 = math.nan, [math.nan] * nbins, math.nan
+    z_fold, zmax_fold = [math.nan] * nbins, math.nan
+    box: dict[str, list[list[float]]] = {k: [[math.nan, math.nan] for _ in range(nbins)] for k in folds}
+    m_lo = m_hi = math.nan
+    diag = nan_corr
     if nused:
-        corr = v7_reference_correction(sem_pool[used], sigma[used], None)  # b_ref diagnostic
         blocks = None if ref_blocks is None else np.asarray(ref_blocks, float)[:, used]
         diag = v7_reference_correction(ref_sem[used], sigma[used], blocks)  # 1e6 reference
         d_used = used & (ref > 0.0)
@@ -1064,16 +1110,22 @@ def v7_estimator_verdict(kind: str, means: NDArray[np.float64], sems: NDArray[np
             hit1e6 = (np.abs(means - ref) <= sems) & d_used
             m_ref = float(hit1e6.sum() / (r * int(d_used.sum())))
         zz = (pooled - ref) / np.sqrt(sem_pool**2 + ref_sem**2)
-        z_b = [float(zz[b]) if used[b] else math.nan for b in range(nbins)]
-        zmax = float(np.max(np.abs(zz[used])))
-        cov_grid = np.stack([  # [grid, bins]: C_b(delta SEM_pool,b)
-            ((np.abs(means - (loo + d * sem_pool)) <= sems)).mean(axis=0) for d in grid])
-        lo_b, hi_b = cov_grid.min(axis=0), cov_grid.max(axis=0)
-        for b in np.flatnonzero(used):
-            box[int(b)] = [float(lo_b[b]), float(hi_b[b])]
-        m_lo, m_hi = float(lo_b[used].mean()), float(hi_b[used].mean())
-    else:
-        corr, diag, m_lo, m_hi = nan_corr, nan_corr, math.nan, math.nan
+        z_b1e6 = [float(zz[b]) if used[b] else math.nan for b in range(nbins)]
+        zmax1e6 = float(np.max(np.abs(zz[used])))
+        zf = (mu["A"] - mu["B"]) / np.sqrt(sem_f["A"] ** 2 + sem_f["B"] ** 2)
+        z_fold = [float(zf[b]) if used[b] else math.nan for b in range(nbins)]
+        zmax_fold = float(np.max(np.abs(zf[used])))
+        lo_f, hi_f = {}, {}
+        for k, sl in folds.items():
+            ref_sem_k = sem_f[other[k]]
+            lo_k, hi_k = np.zeros(nbins), np.zeros(nbins)
+            for b in np.flatnonzero(used):
+                lo_k[b], hi_k[b] = v7_coverage_extrema(
+                    (means[sl, b] - mu[other[k]][b]) / ref_sem_k[b], sems[sl, b] / ref_sem_k[b], z_box)
+                box[k][int(b)] = [float(lo_k[b]), float(hi_k[b])]
+            lo_f[k], hi_f[k] = lo_k, hi_k
+        m_lo = float(sum(nf[k] / r * lo_f[k][used].mean() for k in folds))
+        m_hi = float(sum(nf[k] / r * hi_f[k][used].mean() for k in folds))
     min_bins = V7_MIN_PROFILE_BINS if kind == "profile" else 1
     if nused:
         tost = v7_tost_verdict(covered_j, nused, intervals, m_lo, m_hi, min_bins=min_bins)
@@ -1084,11 +1136,12 @@ def v7_estimator_verdict(kind: str, means: NDArray[np.float64], sems: NDArray[np
                   and abs(cov - V7_LEGACY_TARGET) <= V7_LEGACY_TOL)  # fmt: skip
     return {"kind": kind, "bins": int(nbins), "bins_used": nused, "intervals": intervals,
             "covered": int(covered_j.sum()), "coverage": cov, **tost,
-            "z_box": z_box, "alpha_box": V7_ALPHA_BOX, "box_grid": grid.tolist(),
-            "per_bin_box_coverage_min_max": box, "r_b": corr["r_b"], "b_ref": corr["b_ref"],
-            "reference_kind": "leave-one-out pooled mean of the replicates",
+            "z_box": z_box, "alpha_box": V7_ALPHA_BOX,
+            "reference_kind": "two-fold cross reference (fold A = shards 0-3, fold B = shards 4-7)",
+            "fold_means": {k: mu[k].tolist() for k in folds}, "fold_sems": {k: sem_f[k].tolist() for k in folds},
+            "per_fold_bin_box_coverage_min_max": box, "z_b_folds": z_fold, "max_abs_z_folds": zmax_fold,
             "pooled_mean": pooled.tolist(), "pooled_sem": sem_pool.tolist(),
-            "m_ref1e6": m_ref, "z_b_ref1e6": z_b, "max_abs_z_ref1e6": zmax,
+            "m_ref1e6": m_ref, "z_b_ref1e6": z_b1e6, "max_abs_z_ref1e6": zmax1e6,
             "s_ref_cov": diag["s_ref_cov"], "ref_corr_mean_abs_offdiag": diag["ref_corr_mean_abs_offdiag"],
             "replicate_mean_skewness": skew,
             "legacy_point_gate_pass": legacy, "nominal_coverage": student_abs_prob(V7_BATCHES_PER_REP - 1, 1.0),
@@ -1164,7 +1217,7 @@ def step_v7_rep_ref(a: argparse.Namespace) -> int:
 
 
 def v7_rep_combine(shards: list[dict[str, Any]], ref: dict[str, Any]) -> dict[str, Any]:
-    """Row V7 coverage document from the six shard partials and the reference partial (pure; any
+    """Row V7 coverage document from the eight shard partials and the reference partial (pure; any
     missing or inconsistent item raises ``SystemExit``: fail closed)."""
     if len(shards) != V7_SHARDS:
         raise SystemExit(f"v7-rep: need {V7_SHARDS} shard partials, got {len(shards)}")
@@ -1173,6 +1226,8 @@ def v7_rep_combine(shards: list[dict[str, Any]], ref: dict[str, Any]) -> dict[st
             raise SystemExit(f"v7-rep shard {k}: seed/shard mismatch or invalid result")
     if ref.get("seed") != seed_of("v7-rep", V7_SHARDS) or not ref.get("valid"):
         raise SystemExit("v7-rep reference: seed mismatch or invalid result")
+    if sum(p["replicates"] for p in shards[: V7_SHARDS // 2]) * 2 != sum(p["replicates"] for p in shards):
+        raise SystemExit("v7-rep: the two folds (shards 0..3 and 4..7) must hold equal replicate counts")
     estimators: dict[str, Any] = {}
     for name, kind in V7_COVERAGE_ESTIMATORS:
         try:
@@ -1195,7 +1250,7 @@ def v7_rep_combine(shards: list[dict[str, Any]], ref: dict[str, Any]) -> dict[st
             "histories_per_replicate": V7_REP_N, "reference_histories": ref["n"],
             "shard_histories": [p["n"] for p in shards], "bins": V7_BINS,
             "rule": {"low": V7_COV_LOW, "high": V7_COV_HIGH, "alpha_box": V7_ALPHA_BOX,
-                     "alpha_tost": V7_ALPHA_TOST, "box_grid": V7_BOX_GRID,
+                     "alpha_tost": V7_ALPHA_TOST, "hoeffding_eps": v7_hoeffding_eps(int(sum(p["replicates"] for p in shards))),
                      "min_intervals": V7_MIN_INTERVALS, "min_profile_bins": V7_MIN_PROFILE_BINS},
             "pass": bool(all(e["pass"] for e in estimators.values()))}  # fmt: skip
 

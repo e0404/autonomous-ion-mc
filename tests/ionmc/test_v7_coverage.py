@@ -1,6 +1,7 @@
 # ruff: noqa: E501
-"""V7 replicate-coverage rule (plan Amendment 13, Codex REVIEW-be30e621, REVIEW-873ab9cd, REVIEW-edb9970b):
-leave-one-out pooled reference with a Bonferroni box over the bins, TOST at alpha_tost = 0.04, combine of
+"""V7 replicate-coverage rule (plan Amendment 13, Codex REVIEW-be30e621, -873ab9cd, -edb9970b, -f1b32614):
+two-fold cross reference (conditionally independent replicates), Bonferroni box over both fold references with the
+exact worst-case coverage by an endpoint sweep, Hoeffding deviation bound at alpha_tost = 0.04, combine of
 shard/reference partials (fail closed), and (marker ``calibration``, minutes, not in CI) Monte Carlo
 calibration of the whole pipeline with Clopper-Pearson bounds of the false-acceptance rates: Gaussian
 profiles and scalar, Gamma-block tallies with independent and with correlated (shared-history) bins."""
@@ -110,116 +111,173 @@ def test_tost_rule_synthetic_vectors(v5b: ModuleType) -> None:
         0.04,
     )
     n = v5b.V7_REPLICATES * 12
-    assert v5b.V7_REPLICATES == 5400
+    assert v5b.V7_REPLICATES == 7200
 
     def verdict(cov: np.ndarray, m_lo=None, m_hi=None, **kw: object) -> dict:  # type: ignore[no-untyped-def]
         return v5b.v7_tost_verdict(cov, 12, kw.pop("intervals", n), m_lo, m_hi, min_bins=10, **kw)
 
-    ok = verdict(_synthetic_covered(0.670, 0.135, r=5400))
+    ok = verdict(_synthetic_covered(0.670, 0.135, r=7200))
+    eps = ok["hoeffding_eps"]
     assert ok["pass"] and not ok["reasons"] and abs(ok["m"] - 0.670) < 1e-9
-    assert abs(ok["s"] - 0.135 / math.sqrt(5400)) < 1e-9 and ok["replicates"] == 5400
-    assert abs(ok["t"] - v5b.student_t_quantile(0.98, 5399)) < 1e-12 and ok["alpha_tost"] == 0.04
-    assert ok["m_lo"] == ok["m_hi"] == ok["m"]  # no box: collapses to the point
-    assert abs(ok["ci"][1] - ok["ci"][0] - 2 * ok["t"] * ok["s"]) < 1e-12
-    half = ok["t"] * ok["s"]
-    low = verdict(_synthetic_covered(0.6425, 0.135, r=5400))  # CI crosses 0.640
+    assert abs(ok["s"] - 0.135 / math.sqrt(7200)) < 1e-9 and ok["replicates"] == 7200
+    assert abs(eps - math.sqrt(math.log(25.0) / (2 * 7200))) < 1e-15 and abs(eps - 0.014951) < 5e-5
+    assert ok["m_lo"] == ok["m_hi"] == ok["m"] and "t" not in ok  # no box: collapses to the point
+    assert abs(ok["ci"][0] - (0.670 - eps)) < 1e-9 and abs(ok["ci"][1] - (0.670 + eps)) < 1e-9
+    low = verdict(_synthetic_covered(0.653, 0.135, r=7200))  # lower bound 0.638
     assert 0.640 < low["m"] < 0.700 and low["ci"][0] < 0.640 and not low["pass"]
     assert any("lower" in x for x in low["reasons"])
-    up = verdict(_synthetic_covered(0.6985, 0.135, r=5400))
+    up = verdict(_synthetic_covered(0.688, 0.135, r=7200))  # upper bound 0.703
     assert up["ci"][1] > 0.700 and not up["pass"] and any("upper" in x for x in up["reasons"])
-    # the box widens both sides: m_lo / m_hi enter the interval, s carries no reference term
-    cov = _synthetic_covered(0.670, 0.135, r=5400)
+    assert verdict(_synthetic_covered(0.656, 0.135, r=7200))["pass"]
+    # the box widens both sides: m_lo / m_hi enter the interval
+    cov = _synthetic_covered(0.670, 0.135, r=7200)
     band = verdict(cov, 0.660, 0.680)
     assert (band["m_lo"], band["m_hi"]) == (0.660, 0.680) and band["pass"]
-    assert (
-        abs(band["ci"][0] - (0.660 - half)) < 1e-12 and abs(band["ci"][1] - (0.680 + half)) < 1e-12
-    )
-    assert not verdict(cov, 0.640 + 0.5 * half, 0.670)["pass"]
-    lo_fail = verdict(cov, 0.640 + 0.5 * half, 0.670)
-    assert any("lower" in x for x in lo_fail["reasons"])
-    hi_fail = verdict(cov, 0.670, 0.700 - 0.5 * half)
+    assert abs(band["ci"][0] - (0.660 - eps)) < 1e-12 and abs(band["ci"][1] - (0.680 + eps)) < 1e-12
+    lo_fail = verdict(cov, 0.640 + 0.5 * eps, 0.670)
+    assert not lo_fail["pass"] and any("lower" in x for x in lo_fail["reasons"])
+    hi_fail = verdict(cov, 0.670, 0.700 - 0.5 * eps)
     assert not hi_fail["pass"] and any("upper" in x for x in hi_fail["reasons"])
     br = verdict(cov, 0.69, 0.60)  # inconsistent inputs are clipped so that m_lo <= m <= m_hi
     assert br["m_lo"] == br["m_hi"] == br["m"]
-    assert "s_tot" not in ok and "s_ref_bound" not in ok
     assert not verdict(cov, intervals=299)["pass"]
     assert not v5b.v7_tost_verdict(_synthetic_covered(0.670, 0.135, 9), 9, n, min_bins=10)["pass"]
 
 
-def test_box_quantile_and_z_values(v5b: ModuleType) -> None:
-    """Z_B = Phi^{-1}(1 - alpha_box / (2 B)): 3.34 for 12 bins, 2.58 for one bin."""
-    assert abs(v5b.normal_quantile(0.975) - 1.959964) < 1e-5
-    assert abs(v5b.normal_quantile(0.5)) < 1e-12
-    z12 = v5b.normal_quantile(1.0 - 0.01 / 24.0)
-    z1 = v5b.normal_quantile(1.0 - 0.01 / 2.0)
-    assert abs(z12 - 3.3415) < 5e-4 and abs(z1 - 2.5758) < 5e-4
+def test_box_quantile_hoeffding_and_z_values(v5b: ModuleType) -> None:
+    """Z_B = Phi^{-1}(1 - alpha_box / (2 * 2B)): 3.53 for 12 bins, 2.81 for one bin; eps = 0.01495."""
+    assert (
+        abs(v5b.normal_quantile(0.975) - 1.959964) < 1e-5 and abs(v5b.normal_quantile(0.5)) < 1e-12
+    )
+    z12 = v5b.normal_quantile(1.0 - 0.01 / 48.0)
+    z1 = v5b.normal_quantile(1.0 - 0.01 / 4.0)
+    assert abs(z12 - 3.5293) < 2e-3 and abs(z1 - 2.8070) < 2e-3
+    assert abs(v5b.v7_hoeffding_eps(7200) - 0.014951) < 1e-5
+    assert abs(v5b.v7_hoeffding_eps(7200) - math.sqrt(math.log(1.0 / 0.04) / 14400)) < 1e-15
 
 
-def test_leave_one_out_reference_is_independent_of_own_replicate(v5b: ModuleType) -> None:
-    """mu_(-j) = (sum_k x_k - x_j) / (R - 1) equals the mean of the other replicates; replicate j's own
-    value does not enter its reference (it enters the pooled mean only through 1 / R)."""
-    x = np.array([[1.0, 5.0], [1.2, 4.0], [0.8, 6.0], [1.0, 5.5]])
-    sem = np.full_like(x, 0.15)
-    ref, rsem = np.array([1.0, 5.0]), np.array([0.1, 0.1])
-    for j in range(4):
-        direct = np.delete(x, j, axis=0).mean(axis=0)
-        assert np.allclose(direct, (x.sum(axis=0) - x[j]) / 3)
+def test_coverage_sweep_matches_brute_force(v5b: ModuleType) -> None:
+    """The exact sweep equals a brute-force evaluation of C(delta) at all clipped breakpoints, at
+    +-Z and at the midpoints between them (a fine grid cannot beat it), on random small inputs."""
+    rng = np.random.default_rng(11)
+    for _ in range(200):
+        n = int(rng.integers(1, 9))
+        x = rng.normal(0.0, 2.0, n)
+        sem = rng.uniform(0.05, 2.0, n)
+        z = float(rng.uniform(0.3, 4.0))
+        lo, hi = x - sem, x + sem
+        pts = np.unique(
+            np.concatenate([[-z, z], lo[(lo > -z) & (lo < z)], hi[(hi > -z) & (hi < z)]])
+        )
+        cand = np.concatenate([pts, 0.5 * (pts[:-1] + pts[1:])])
+
+        def cov(d: float, x=x, sem=sem) -> float:  # noqa: ANN001
+            return float(np.mean(np.abs(x - d) <= sem))
+
+        brute = [cov(d) for d in cand]
+        mn, mx = v5b.v7_coverage_extrema(x, sem, z)
+        assert mn == min(brute) and mx == max(brute)
+        fine = [cov(d) for d in np.linspace(-z, z, 4001)]  # a fine grid never goes beyond the sweep
+        assert mn <= min(fine) + 1e-12 and mx >= max(fine) - 1e-12
+    # closed intervals: a single interval [0, 1], box [-2, 2]: max 1 at 0..1, min 0 outside
+    assert v5b.v7_coverage_extrema(np.array([0.5]), np.array([0.5]), 2.0) == (0.0, 1.0)
+    assert v5b.v7_coverage_extrema(np.array([0.5]), np.array([0.5]), 0.25) == (
+        0.0,
+        1.0,
+    )  # box [-.25,.25]: lo = 0 inside
+    assert v5b.v7_coverage_extrema(np.array([0.0]), np.array([5.0]), 2.0) == (
+        1.0,
+        1.0,
+    )  # covers the box
+
+
+def test_fold_reference_never_contains_own_replicate(v5b: ModuleType) -> None:
+    """Replicates of fold A are judged against the mean of fold B and vice versa: changing a replicate's
+    own value changes its own hit only, and never the reference of its own fold."""
+    rng = np.random.default_rng(2)
+    x = 5.0 + rng.normal(0.0, 1.0, (8, 2))
+    sem = np.full_like(x, 0.8)
+    ref, rsem = np.array([5.0, 5.0]), np.array([0.1, 0.1])
     e0 = v5b.v7_estimator_verdict("profile", x, sem, ref, rsem, None)
+    mu_a, mu_b = x[:4].mean(axis=0), x[4:].mean(axis=0)
+    assert np.allclose(e0["fold_means"]["A"], mu_a) and np.allclose(e0["fold_means"]["B"], mu_b)
+    assert np.allclose(e0["fold_sems"]["A"], x[:4].std(axis=0, ddof=1) / 2.0)
+    hits = np.concatenate([np.abs(x[:4] - mu_b) <= 0.8, np.abs(x[4:] - mu_a) <= 0.8])
+    assert e0["per_replicate_covered"] == hits.sum(axis=1).tolist()
     x2 = x.copy()
-    x2[0, 0] += 0.05
+    x2[1, 0] += 0.3  # replicate 1 (fold A): the reference of fold A is the fold-B mean, unchanged
     e1 = v5b.v7_estimator_verdict("profile", x2, sem, ref, rsem, None)
-    assert abs(e1["pooled_mean"][0] - (e0["pooled_mean"][0] + 0.05 / 4)) < 1e-15
-    hits0 = np.abs(x[:, 0] - (x[:, 0].sum() - x[:, 0]) / 3) <= 0.15  # loo = 1.0, .9333, 1.0667, 1.0
-    assert hits0.tolist() == [True, False, False, True]
-    assert abs(e0["pooled_sem"][0] - x[:, 0].std(ddof=1) / 2.0) < 1e-15
+    assert e1["fold_means"]["B"] == e0["fold_means"]["B"]  # fold A's reference is untouched
+    assert (
+        abs(e1["fold_means"]["A"][0] - (mu_a[0] + 0.075)) < 1e-12
+    )  # only the other fold's reference moves
+    sd_a = x[:4].std(axis=0, ddof=1)
+    z_f = (mu_a - mu_b) / np.sqrt(sd_a**2 / 4 + x[4:].std(axis=0, ddof=1) ** 2 / 4)
+    assert (
+        np.allclose(e0["z_b_folds"], z_f)
+        and abs(e0["max_abs_z_folds"] - np.max(np.abs(z_f))) < 1e-12
+    )
 
 
 def test_estimator_verdict_box_and_cross_check_fields(v5b: ModuleType) -> None:
-    """Hand-checkable scalar case, 4 replicates: Z_B = 2.5758, 9-point grid, per-bin min / max coverage."""
+    """Hand-checkable scalar case, 4 replicates (folds of two): Z_B = 2.807, exact per-fold extrema."""
     means = np.array([[1.0], [1.2], [0.8], [1.0]])
     sems = np.array([[0.15]] * 4)
     ref, rsem = np.array([1.0]), np.array([0.1])
     e = v5b.v7_estimator_verdict("scalar", means, sems, ref, rsem, None)
-    assert (
-        e["per_replicate_covered"] == [1, 0, 0, 1] and e["m"] == 0.5
-    )  # loo: 1.0, .9333, 1.0667, 1.0
-    zb = v5b.normal_quantile(0.995)
+    mu_a, mu_b = 1.1, 0.9  # fold A = rows 0-1, fold B = rows 2-3
+    assert e["per_replicate_covered"] == [1, 0, 0, 1]  # |1.0-.9|, |1.2-.9|, |.8-1.1|, |1.0-1.1|
+    zb = v5b.normal_quantile(1.0 - 0.01 / 4.0)
     assert abs(e["z_box"] - zb) < 1e-12 and e["alpha_box"] == 0.01
-    grid = np.linspace(-zb, zb, 9)
-    assert np.allclose(e["box_grid"], grid) and grid[4] == 0.0
-    sem_pool = float(means.std(ddof=1)) / 2.0
-    loo = (means.sum() - means[:, 0]) / 3.0
-    cov = [float((np.abs(means[:, 0] - (loo + d * sem_pool)) <= 0.15).mean()) for d in grid]
-    assert e["per_bin_box_coverage_min_max"] == [[min(cov), max(cov)]]
-    assert e["m_lo"] == min(cov) <= e["m"] <= e["m_hi"] == max(cov) and cov[4] == 0.5
-    assert e["m_hi"] > e["m"] or e["m_lo"] < e["m"]
-    assert not e["pass"] and len(e["replicate_mean_skewness"]) == 1
-    # profile: m_lo / m_hi are the means over bins of the per-bin min / max
+    sem_a = float(np.std([1.0, 1.2], ddof=1)) / math.sqrt(2.0)
+    sem_b = float(np.std([0.8, 1.0], ddof=1)) / math.sqrt(2.0)
+    lo_a, hi_a = (
+        v5b.v7_coverage_extrema(np.array([1.0, 1.2]) - mu_b, np.array([0.15, 0.15]), 0.0)
+        if False
+        else (None, None)
+    )
+    ma = v5b.v7_coverage_extrema(
+        (np.array([1.0, 1.2]) - mu_b) / sem_b, np.array([0.15, 0.15]) / sem_b, zb
+    )
+    mb = v5b.v7_coverage_extrema(
+        (np.array([0.8, 1.0]) - mu_a) / sem_a, np.array([0.15, 0.15]) / sem_a, zb
+    )
+    assert e["per_fold_bin_box_coverage_min_max"] == {"A": [list(ma)], "B": [list(mb)]}
+    assert (
+        abs(e["m_lo"] - 0.5 * (ma[0] + mb[0])) < 1e-15
+        and abs(e["m_hi"] - 0.5 * (ma[1] + mb[1])) < 1e-15
+    )
+    assert e["m_lo"] <= e["m"] <= e["m_hi"] and not e["pass"]
+    assert abs(e["hoeffding_eps"] - v5b.v7_hoeffding_eps(4)) < 1e-15
+    assert abs(e["ci"][0] - (e["m_lo"] - e["hoeffding_eps"])) < 1e-15
+    # 1e6 cross-check: hits |x - 1.0| <= 0.15 -> 1, 0, 0, 1
+    assert e["m_ref1e6"] == 0.5
+    z = (means.mean() - 1.0) / math.hypot(float(means.std(ddof=1)) / 2.0, 0.1)
+    assert abs(e["z_b_ref1e6"][0] - z) < 1e-15 and math.isnan(e["s_ref_cov"])
+    # profile: m_lo / m_hi are the (fold-weighted) means over bins of the per-(fold, bin) minima / maxima
     x = np.array([[1.0, 5.0], [1.2, 4.0], [0.8, 6.0], [1.0, 5.5], [0.9, 5.2], [1.1, 4.7]])
     p = v5b.v7_estimator_verdict(
         "profile", x, np.full_like(x, 0.4), np.array([1.0, 5.0]), np.array([0.1, 0.1])
     )
-    mm = np.array(p["per_bin_box_coverage_min_max"])
-    assert abs(p["m_lo"] - mm[:, 0].mean()) < 1e-15 and abs(p["m_hi"] - mm[:, 1].mean()) < 1e-15
-    assert abs(p["z_box"] - v5b.normal_quantile(1.0 - 0.01 / 4.0)) < 1e-12
-    # cross-check against the 1e6 reference: hits |x - 1.0| <= 0.15 -> 1, 0, 0, 1
-    assert e["m_ref1e6"] == 0.5
-    z = (means.mean() - 1.0) / math.hypot(sem_pool, 0.1)
-    assert abs(e["z_b_ref1e6"][0] - z) < 1e-15 and abs(e["max_abs_z_ref1e6"] - abs(z)) < 1e-15
-    assert math.isnan(e["s_ref_cov"]) and e["b_ref"] > 0
+    bx = p["per_fold_bin_box_coverage_min_max"]
+    lo = 0.5 * (np.mean([b[0] for b in bx["A"]]) + np.mean([b[0] for b in bx["B"]]))
+    assert (
+        abs(p["m_lo"] - lo) < 1e-15
+        and abs(p["z_box"] - v5b.normal_quantile(1.0 - 0.01 / 8.0)) < 1e-12
+    )
 
 
-def _binary_hits(frac: float, r: int = 5400) -> np.ndarray:
+def _binary_hits(frac: float, r: int = 7200) -> np.ndarray:
     h = np.zeros(r, dtype=np.int64)
     h[: int(round(frac * r))] = 1
     return h
 
 
 def test_scalar_estimator_with_binary_hits(v5b: ModuleType) -> None:
-    ok = v5b.v7_tost_verdict(_binary_hits(0.670), 1, 5400)
+    ok = v5b.v7_tost_verdict(_binary_hits(0.670), 1, 7200)
     assert ok["pass"] and abs(ok["m"] - 0.670) < 1e-3  # sd 0.47, s = 0.0064, CI +- 0.0105
-    assert abs(ok["s"] - math.sqrt(0.67 * 0.33 * 5400 / 5399) / math.sqrt(5400)) < 1e-4
-    edge = v5b.v7_tost_verdict(_binary_hits(0.650), 1, 5400)
+    assert abs(ok["s"] - math.sqrt(0.67 * 0.33 * 7200 / 7199) / math.sqrt(7200)) < 1e-4
+    edge = v5b.v7_tost_verdict(_binary_hits(0.650), 1, 7200)
     assert not edge["pass"] and any("lower" in x for x in edge["reasons"])
 
 
@@ -268,9 +326,9 @@ def _synthetic_partials(
 
 def test_combine_document_and_fail_closed(v5b: ModuleType) -> None:
     shards, ref = _synthetic_partials(v5b)
-    assert len(shards) == 6
+    assert len(shards) == 8
     doc = v5b.v7_rep_combine(shards, ref)
-    assert doc["replicates"] == 5400 and set(doc["estimators"]) == {
+    assert doc["replicates"] == 7200 and set(doc["estimators"]) == {
         "sec_p",
         "nuclear_local",
         "escaped_neutral",
@@ -278,7 +336,7 @@ def test_combine_document_and_fail_closed(v5b: ModuleType) -> None:
     assert (
         doc["rule"]["alpha_box"] == 0.01
         and doc["rule"]["alpha_tost"] == 0.04
-        and doc["rule"]["box_grid"] == 9
+        and abs(doc["rule"]["hoeffding_eps"] - 0.014951) < 1e-5
     )
     for name, kind, bins in (
         ("sec_p", "profile", 12),
@@ -286,45 +344,42 @@ def test_combine_document_and_fail_closed(v5b: ModuleType) -> None:
         ("escaped_neutral", "scalar", 1),
     ):
         e = doc["estimators"][name]
-        assert e["kind"] == kind and e["bins_used"] == bins and e["intervals"] == 5400 * bins
-        assert len(e["per_replicate_covered"]) == 5400 and all(
+        assert e["kind"] == kind and e["bins_used"] == bins and e["intervals"] == 7200 * bins
+        assert len(e["per_replicate_covered"]) == 7200 and all(
             isinstance(c, int) for c in e["per_replicate_covered"]
         )
-        assert len(e["r_b"]) == bins and abs(e["nominal_coverage"] - 0.670) < 0.002
+        assert abs(e["nominal_coverage"] - 0.670) < 0.002
         for key in (
+            *("m", "m_lo", "m_hi", "z_box", "alpha_box", "alpha_tost", "hoeffding_eps", "s", "ci"),
             *(
-                "m",
-                "m_lo",
-                "m_hi",
-                "z_box",
-                "alpha_box",
-                "alpha_tost",
-                "per_bin_box_coverage_min_max",
+                "per_fold_bin_box_coverage_min_max",
+                "fold_means",
+                "fold_sems",
+                "z_b_folds",
+                "max_abs_z_folds",
             ),
-            *(
-                "s",
-                "t",
-                "s_ref_cov",
-                "b_ref",
-                "ref_corr_mean_abs_offdiag",
-                "replicate_mean_skewness",
-            ),
-            *("ci", "reasons", "legacy_point_gate_pass", "pass"),
-            *("m_ref1e6", "z_b_ref1e6", "max_abs_z_ref1e6", "pooled_mean", "pooled_sem"),
+            *("s_ref_cov", "ref_corr_mean_abs_offdiag", "replicate_mean_skewness", "reasons"),
+            *("legacy_point_gate_pass", "pass", "m_ref1e6", "z_b_ref1e6", "max_abs_z_ref1e6"),
         ):
             assert key in e
-        assert not {"m_corr", "s_tot", "s_ref_bound", "means_ref_shift"} & set(e)
-        assert "leave-one-out" in e["reference_kind"]
-        zb = v5b.normal_quantile(1.0 - 0.01 / (2.0 * bins))
+        assert not {"m_corr", "s_tot", "s_ref_bound", "t", "box_grid", "r_b"} & set(e)
+        assert "two-fold" in e["reference_kind"]
+        zb = v5b.normal_quantile(1.0 - 0.01 / (4.0 * bins))
         assert abs(e["z_box"] - zb) < 1e-12 and (
-            abs(zb - 3.3415) < 5e-4 if bins == 12 else abs(zb - 2.5758) < 5e-4
+            abs(zb - 3.5293) < 2e-3 if bins == 12 else abs(zb - 2.8070) < 2e-3
         )
-        assert len(e["per_bin_box_coverage_min_max"]) == bins and e["m_lo"] <= e["m"] <= e["m_hi"]
-        assert abs(e["ci"][0] - (e["m_lo"] - e["t"] * e["s"])) < 1e-12
-        assert abs(e["ci"][1] - (e["m_hi"] + e["t"] * e["s"])) < 1e-12
-        assert abs(e["t"] - v5b.student_t_quantile(0.98, 5399)) < 1e-12
-        assert np.allclose(e["r_b"], 1.0 / math.sqrt(5400))
-        assert e["max_abs_z_ref1e6"] < 6.0 and 0.5 < e["m_ref1e6"] < 0.85
+        assert (
+            len(e["per_fold_bin_box_coverage_min_max"]["A"]) == bins
+            and e["m_lo"] <= e["m"] <= e["m_hi"]
+        )
+        assert abs(e["ci"][0] - (e["m_lo"] - e["hoeffding_eps"])) < 1e-12
+        assert abs(e["ci"][1] - (e["m_hi"] + e["hoeffding_eps"])) < 1e-12
+        assert abs(e["hoeffding_eps"] - 0.014951) < 1e-5
+        assert (
+            e["max_abs_z_ref1e6"] < 6.0
+            and e["max_abs_z_folds"] < 6.0
+            and 0.5 < e["m_ref1e6"] < 0.85
+        )
         assert len(e["replicate_mean_skewness"]) == bins
     assert doc["pass"] == all(e["pass"] for e in doc["estimators"].values())
     # a clearly overconfident estimator (SEM x 0.5: coverage ~ 0.38) fails the row
@@ -343,7 +398,7 @@ def test_combine_document_and_fail_closed(v5b: ModuleType) -> None:
     with pytest.raises(SystemExit):
         v5b.v7_rep_combine([{**shards[0], "valid": False}, *shards[1:]], ref)
     with pytest.raises(SystemExit):
-        v5b.v7_rep_combine(shards[:5], ref)
+        v5b.v7_rep_combine(shards[:7], ref)
     with pytest.raises(SystemExit):
         v5b.v7_rep_combine(shards, {**ref, "valid": False})
     short = copy.deepcopy(ref)
@@ -368,9 +423,12 @@ def test_replicate_grouping_and_estimator_verdict(v5b: ModuleType) -> None:
     assert np.allclose(s[1], b[20:].std(axis=0, ddof=1) / math.sqrt(20))
     m1, _ = v5b.v7_replicate_stats(np.arange(40.0))  # scalar estimator: [B] -> [R, 1]
     assert m1.shape == (2, 1)
-    e = v5b.v7_estimator_verdict("scalar", np.array([[1.0], [3.0], [2.0]]), np.array([[0.5]] * 3),
+    e = v5b.v7_estimator_verdict("scalar", np.array([[1.0], [3.0], [2.0], [2.2]]), np.array([[0.5]] * 4),
                                  np.array([2.0]), np.array([0.1]))  # fmt: skip
-    assert e["per_replicate_covered"] == [0, 0, 1] and e["intervals"] == 3 and not e["pass"]
+    assert e["per_replicate_covered"] == [0, 0, 1, 1] and e["intervals"] == 4 and not e["pass"]
+    with pytest.raises(SystemExit, match="two equal folds"):
+        v5b.v7_estimator_verdict("scalar", np.array([[1.0], [3.0], [2.0]]), np.array([[0.5]] * 3),
+                                 np.array([2.0]), np.array([0.1]))  # fmt: skip
 
 
 # -- Monte Carlo calibration of the full pipeline (marker ``calibration``: not in CI) ---------
@@ -397,44 +455,50 @@ def _cp_upper(v5b: ModuleType, k: int, n: int, level: float = 0.95) -> float:
     return 0.5 * (lo + hi)
 
 
-def _box_pass(v5b: ModuleType, tq: float, mean: np.ndarray, sem: np.ndarray) -> bool:
-    """Vectorised form of ``v7_estimator_verdict`` (all bins used): leave-one-out pooled reference of
-    each replicate, per-bin worst case over the 9-point grid of the Bonferroni box (Z_B SEM_pool),
-    PASS iff m_lo - t s >= 0.640 and m_hi + t s <= 0.700 with t = t_{0.98, R - 1}."""
+def _box_pass(v5b: ModuleType, mean: np.ndarray, sem: np.ndarray) -> bool:
+    """Vectorised form of ``v7_estimator_verdict`` (all bins used): the replicates of fold A (first half)
+    are judged against the fold-B mean and vice versa, exact worst-case coverage per (fold, bin) over the
+    box Z_B = Phi^{-1}(1 - alpha_box / (4 B)) of the reference (``v7_coverage_extrema``), PASS iff m_lo -
+    eps >= 0.640 and m_hi + eps <= 0.700 with the Hoeffding eps of R replicates at alpha_tost."""
     reps, bins = mean.shape
-    sig = mean.std(axis=0, ddof=1)
-    loo = (mean.sum(axis=0) - mean) / (reps - 1)
-    d0 = mean - loo
-    grid = np.linspace(-1.0, 1.0, v5b.V7_BOX_GRID) * v5b.normal_quantile(
-        1.0 - v5b.V7_ALPHA_BOX / (2.0 * bins)
-    )
-    sp = sig / math.sqrt(reps)
-    cov = np.stack([(np.abs(d0 - d * sp) <= sem).mean(axis=0) for d in grid])
-    s = (np.abs(d0) <= sem).mean(axis=1).std(ddof=1) / math.sqrt(reps)
-    m_lo, m_hi = cov.min(axis=0).mean(), cov.max(axis=0).mean()
-    return bool(m_lo - tq * s >= v5b.V7_COV_LOW and m_hi + tq * s <= v5b.V7_COV_HIGH)
-
-
-def _t98(v5b: ModuleType, reps: int = 5400) -> float:
-    return v5b.student_t_quantile(1.0 - v5b.V7_ALPHA_TOST / 2.0, reps - 1)
+    na = reps // 2
+    z = v5b.normal_quantile(1.0 - v5b.V7_ALPHA_BOX / (4.0 * bins))
+    folds = (slice(0, na), slice(na, reps))
+    mu = [mean[sl].mean(axis=0) for sl in folds]
+    se = [mean[sl].std(axis=0, ddof=1) / math.sqrt(mean[sl].shape[0]) for sl in folds]
+    f = np.zeros(reps)
+    lo = hi = 0.0
+    for k in (0, 1):
+        sl, o = folds[k], 1 - k
+        x = mean[sl] - mu[o]
+        f[sl] = (np.abs(x) <= sem[sl]).sum(axis=1)
+        ext = [
+            v5b.v7_coverage_extrema(x[:, b] / se[o][b], sem[sl][:, b] / se[o][b], z)
+            for b in range(bins)
+        ]
+        lo += mean[sl].shape[0] / reps * float(np.mean([e[0] for e in ext]))
+        hi += mean[sl].shape[0] / reps * float(np.mean([e[1] for e in ext]))
+    f /= bins
+    m = f.mean()
+    eps = v5b.v7_hoeffding_eps(reps)
+    return bool(min(lo, m) - eps >= v5b.V7_COV_LOW and max(hi, m) + eps <= v5b.V7_COV_HIGH)
 
 
 def _gauss_passes(v5b: ModuleType, kappas: tuple[float, ...], bins: int, trials: int,
-                  rng: np.random.Generator, rho: float = 0.0, reps: int = 5400) -> np.ndarray:  # fmt: skip
+                  rng: np.random.Generator, rho: float = 0.0, reps: int = 7200) -> np.ndarray:  # fmt: skip
     """Pass indicators ``[len(kappas), trials]``. Replicate means X_b = sigma_b (sqrt(rho) g + sqrt(1 -
     rho) e_b) with a replicate-level common factor g (the bins of one replicate share histories: bin
     correlation ``rho``), batch SEMs s = kappa sigma_b sqrt(chi2_19 / 19); true mean 0, reference = the
-    pooled leave-one-out mean. The same draws serve all kappas. First trial checked against the pure
+    two-fold cross mean. The same draws serve all kappas. First trial checked against the pure
     ``v7_estimator_verdict``."""
     sigma = np.linspace(0.5, 2.0, bins) if bins > 1 else np.array([1.3])
-    tq = _t98(v5b, reps)
     out = np.zeros((len(kappas), trials), dtype=bool)
     for i in range(trials):
         g = rng.standard_normal((reps, 1))
         x = sigma * (math.sqrt(rho) * g + math.sqrt(1.0 - rho) * rng.standard_normal((reps, bins)))
         s0 = sigma * np.sqrt(rng.chisquare(19, (reps, bins)) / 19.0)
         for j, kappa in enumerate(kappas):
-            out[j, i] = _box_pass(v5b, tq, 100.0 + x, kappa * s0)
+            out[j, i] = _box_pass(v5b, 100.0 + x, kappa * s0)
         if i == 0:
             e = v5b.v7_estimator_verdict("scalar", 100.0 + x, kappas[0] * s0, np.full(bins, 100.0),
                                          np.full(bins, 0.01))  # fmt: skip
@@ -475,7 +539,7 @@ def gauss_rates(v5b: ModuleType) -> dict[str, np.ndarray]:
 def test_v7_pipeline_gaussian_false_acceptance(
     v5b: ModuleType, gauss_rates: dict, label: str
 ) -> None:
-    """Gaussian pipeline, R = 5400, pooled leave-one-out reference, 12 bins with replicate-level bin
+    """Gaussian pipeline, R = 7200, two-fold cross reference, 12 bins with replicate-level bin
     correlation 0 and 0.8 and the scalar: the 95 % Clopper-Pearson upper bound of the false-acceptance
     rate is <= 0.05 at true coverage 0.640 and at 0.700."""
     rep = _rate_report(v5b, gauss_rates[label])
@@ -483,16 +547,21 @@ def test_v7_pipeline_gaussian_false_acceptance(
 
 
 @pytest.mark.calibration
-def test_v7_pipeline_gaussian_power_targets(gauss_rates: dict) -> None:
-    """Power at the nominal coverage (kappa = 1, true coverage 0.670): profiles >= 0.95, scalar >= 0.90,
-    joint row (independent draws of the two profiles and the scalar) >= 0.85."""
+def test_v7_pipeline_gaussian_power_profiles(gauss_rates: dict) -> None:
+    """Power at the nominal coverage (kappa = 1, true coverage 0.670): profiles >= 0.95."""
     power = {k: float(v[1].mean()) for k, v in gauss_rates.items()}
-    n = 3000
+    print("v7 gaussian power at nominal", power)
+    assert power["profile12_rho0.0"] >= 0.95 and power["profile12_rho0.8"] >= 0.95, power
+
+
+@pytest.mark.calibration
+def test_v7_pipeline_gaussian_power_scalar_and_joint_targets(gauss_rates: dict) -> None:
+    n = 1500
+    scalar = float(gauss_rates["scalar"][1].mean())
     joint = float((gauss_rates["profile12_rho0.0"][1][:n] & gauss_rates["profile12_rho0.8"][1][:n]
                    & gauss_rates["scalar"][1][:n]).mean())  # fmt: skip
-    print("v7 gaussian power at nominal", power, "joint row (independent draws)", joint)
-    assert power["profile12_rho0.0"] >= 0.95 and power["profile12_rho0.8"] >= 0.95
-    assert power["scalar"] >= 0.90 and joint >= 0.85, (power, joint)
+    print("v7 gaussian scalar power", scalar, "joint row (independent draws)", joint)
+    assert scalar >= 0.90 and joint >= 0.85, (scalar, joint)
 
 
 W_SHARED = 0.5  # shape of the shared per-block Gamma factor of the correlated sparse bins (mean 1)
@@ -525,18 +594,17 @@ def _skew_kappas(
 
 
 def _skew_passes(v5b: ModuleType, shape: float, correlated: bool, kappas: tuple[float, ...], trials: int,
-                 rng: np.random.Generator, bins: int = 12, reps: int = 5400) -> np.ndarray:  # fmt: skip
+                 rng: np.random.Generator, bins: int = 12, reps: int = 7200) -> np.ndarray:  # fmt: skip
     """Pass indicators ``[len(kappas), trials]`` on Gamma-block tallies (20 blocks per replicate and bin,
     replicate mean and SEM from the blocks, half width kappa * SEM, per-bin scales 0.5..2) against the
-    pooled leave-one-out reference; ``correlated`` bins as in ``_gamma_blocks``."""
+    two-fold cross reference; ``correlated`` bins as in ``_gamma_blocks``."""
     scale = np.linspace(0.5, 2.0, bins)
-    tq = _t98(v5b, reps)
     out = np.zeros((len(kappas), trials), dtype=bool)
     for i in range(trials):
         g = _gamma_blocks(shape, (reps, 20, bins), rng, correlated) * scale
         mean, sem = g.mean(axis=1), g.std(axis=1, ddof=1) / math.sqrt(20)
         for j, kappa in enumerate(kappas):
-            out[j, i] = _box_pass(v5b, tq, mean.astype(float), (kappa * sem).astype(float))
+            out[j, i] = _box_pass(v5b, mean.astype(float), (kappa * sem).astype(float))
         if i == 0:
             e = v5b.v7_estimator_verdict("profile", mean.astype(float), (kappas[0] * sem).astype(float),
                                          shape * scale, 0.01 * scale)  # fmt: skip
@@ -553,13 +621,13 @@ SKEW_CASES = [(sh, corr) for sh in (2.0, 0.5) for corr in (False, True)]
     ids=[f"gamma{sh}-{'correlated' if c else 'independent'}" for sh, c in SKEW_CASES],
 )
 def skew_result(request: pytest.FixtureRequest, v5b: ModuleType) -> dict:
-    """Gamma shape 2 and 0.5, independent and correlated sparse bins, 12 bins, R = 5400: kappa scales
+    """Gamma shape 2 and 0.5, independent and correlated sparse bins, 12 bins, R = 7200: kappa scales
     the SEM so that the TRUE coverage is 0.640 and 0.700; pass rates with CP bounds there, power at
     kappa = 1 and the true coverage at kappa = 1."""
     shape, corr = request.param
     rng = np.random.default_rng(20471005 + int(2 * shape) + (7 if corr else 0))
     k_lo, k_hi, true_nominal = _skew_kappas(shape, corr, rng)
-    rep = _rate_report(v5b, _skew_passes(v5b, shape, corr, (k_lo, 1.0, k_hi), 2000, rng))
+    rep = _rate_report(v5b, _skew_passes(v5b, shape, corr, (k_lo, 1.0, k_hi), 800, rng))
     out = {"shape": shape, "correlated": corr, "kappa_0.640": k_lo, "kappa_0.700": k_hi,
            "true_coverage_at_kappa1": true_nominal, "FA_0.640": rep[0], "power_kappa1": rep[1], "FA_0.700": rep[2]}  # fmt: skip
     print("v7 skewed-tally calibration", out)

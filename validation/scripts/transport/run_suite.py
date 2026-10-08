@@ -221,9 +221,9 @@ not executed in the single-process diagnostic mode and recorded as ``deferred``.
 use workers for speed run with one worker, with unchanged histories, seeds and criteria."""
 
 
-V7_REP_SHARDS = 6
-"""Number of shard steps ``v7-rep-s{k}`` of the V7 replicate coverage (Amendment 13: six simulations of 9e6
-histories, 5400 replicates); defined here for the same reason as ``V2B_SHARDS``; ``steps_v5b.V7_SHARDS`` is
+V7_REP_SHARDS = 8
+"""Number of shard steps ``v7-rep-s{k}`` of the V7 replicate coverage (Amendment 13: eight simulations of 9e6
+histories, 7200 replicates); defined here for the same reason as ``V2B_SHARDS``; ``steps_v5b.V7_SHARDS`` is
 taken from it."""
 
 
@@ -518,7 +518,7 @@ def _suite_steps_v5b(add, s5, s5b, sc, out_dir, dirs):  # type: ignore[no-untype
     add("v2b-combine", [*s5b, "v2b-combine", "--dirs", *dirs, *sc], env)
     add("v7-scan", [*s5b, "v7-scan", *sc], env)
     add("v7-shift", [*s5b, "v7-shift", *sc], env)
-    for k in range(V7_REP_SHARDS):  # one simulation of 9e6 histories each (5400 replicates in total)
+    for k in range(V7_REP_SHARDS):  # one simulation of 9e6 histories each (7200 replicates in total)
         add(f"v7-rep-s{k}", [*s5b, "v7-rep-shard", "--shard", str(k), "--out-dir", str(out_dir), *sc], env)
     add("v7-rep-ref", [*s5b, "v7-rep-ref", "--out-dir", str(out_dir), *sc], env)
     add(  # Monte Carlo calibration of the V7 rule (minutes); its pass is the pytest exit status

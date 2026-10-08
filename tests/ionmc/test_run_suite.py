@@ -1680,22 +1680,12 @@ def test_lv5b_hr5_manifest_seeds_hashed_set_and_deferred() -> None:
     names = [n.split("-", 1)[1] for n in mod.full_step_names("lv5b", 2)]
     assert names[:8] == LV5B_STEPS
     assert names[8:] == [*(f"v2b-s{k}" for k in range(v5b.V2B_SHARDS)), "v2b-combine", "v7-scan",
-                         "v7-shift", *(f"v7-rep-s{k}" for k in range(6)), "v7-rep-ref",
+                         "v7-shift", *(f"v7-rep-s{k}" for k in range(8)), "v7-rep-ref",
                          "pytest-v7-rep-calibration", "v7-rep-combine",
                          "v3-workers-partition"]  # fmt: skip
-    assert len(names) == 23 and v5b.V7_SHARDS == mod.V7_REP_SHARDS == 6
+    assert len(names) == 25 and v5b.V7_SHARDS == mod.V7_REP_SHARDS == 8
     full = mod.full_step_names("lv5b", 2)
-    assert [full.index(n) + 1 for n in full if "v7-rep" in n] == [
-        14,
-        15,
-        16,
-        17,
-        18,
-        19,
-        20,
-        21,
-        22,
-    ]
+    assert [full.index(n) + 1 for n in full if "v7-rep" in n] == list(range(14, 25))
     assert [n.split("-", 1)[1] for n in full][:2] == ["lv5b-throughput", "v8-lv-python-vs-warp-cpu"]
     assert [n.split("-", 1)[1] for n in mod.full_step_names("hr5", 2)] == HR5_STEPS
     assert mod.DEFAULT_SEED_BASES["lv5b"] == QUAL5B == v5b.QUALIFICATION_SEED_BASE
@@ -1728,21 +1718,21 @@ def test_lv5b_hr5_manifest_seeds_hashed_set_and_deferred() -> None:
     with pytest.raises(SystemExit):
         mod.suite_steps("hr5", 1, 1.0, import_dirs=["x"])
     assert mod.step_timeout_s("lv5b", "08-v2b-s0", 1500) == 3300
-    for k in range(6):
+    for k in range(8):
         assert mod.step_timeout_s("lv5b", f"{14 + k:02d}-v7-rep-s{k}", 1500) == 3300
-    assert mod.step_timeout_s("lv5b", "20-v7-rep-ref", 1500) == 3300
+    assert mod.step_timeout_s("lv5b", "22-v7-rep-ref", 1500) == 3300
     cmds = {n.split("-", 1)[1]: c for n, c, _ in mod.suite_steps("lv5b", 1, 1.0)}
-    for k in range(6):
+    for k in range(8):
         c = cmds[f"v7-rep-s{k}"]
         assert c[c.index("v7-rep-shard") + 1 :][:2] == ["--shard", str(k)] and "--out-dir" in c
     assert "--out-dir" in cmds["v7-rep-ref"] and "--dirs" in cmds["v7-rep-combine"]
-    assert mod.step_timeout_s("lv5b", "21-pytest-v7-rep-calibration", 1500) == 3300
+    assert mod.step_timeout_s("lv5b", "23-pytest-v7-rep-calibration", 1500) == 3300
     cal = cmds["pytest-v7-rep-calibration"]  # the calibration runs in exact-SHA local validation
     assert cal[1:3] == ["-m", "pytest"] and "tests/ionmc/test_v7_coverage.py" in cal
     assert (
         cal[cal.index("-m", 3) + 1] == "calibration" and "-p" in cal and "no:cacheprovider" in cal
     )
-    assert summ_tag_none("21-pytest-v7-rep-calibration")
+    assert summ_tag_none("23-pytest-v7-rep-calibration")
     assert mod.step_timeout_s("hr5", "03-v8-stat-cpu64", 1500) == 3600
 
 
@@ -1786,9 +1776,9 @@ def test_slice_b_tags_blockers_documents_and_shard_budget() -> None:
         }  # None: pytest step
         assert tags <= printed, tags - printed
     assert summ.expected_tag("03-r1-nuc-regression") == "r1-nuc"
-    assert summ.expected_tag("14-v7-rep-s0") == summ.expected_tag("19-v7-rep-s5") == "v7-rep-shard"
-    assert summ.expected_tag("20-v7-rep-ref") == "v7-rep-ref"
-    assert summ.expected_tag("22-v7-rep-combine") == "v7-rep-combine"
+    assert summ.expected_tag("14-v7-rep-s0") == summ.expected_tag("21-v7-rep-s7") == "v7-rep-shard"
+    assert summ.expected_tag("22-v7-rep-ref") == "v7-rep-ref"
+    assert summ.expected_tag("24-v7-rep-combine") == "v7-rep-combine"
     assert {"v7-rep-shard", "v7-rep-ref", "v7-rep-combine"} <= printed
     assert summ.expected_tag("03-r1-a16-t1-regression") == "r1"
     assert summ.seed_blockers(QUAL5B, "lv5b") == [] and summ.seed_blockers(QUALHR5, "hr5") == []
@@ -1815,12 +1805,12 @@ def test_slice_b_tags_blockers_documents_and_shard_budget() -> None:
     # frozen counts of the plan rows
     assert (v5b.V5_N, v5b.V5_BATCHES, v5b.V5_DZ_MM, v5b.V5_HALF_MM) == (100_000, 20, 0.5, 200.0)
     assert (v5b.V8_K, v5b.V8_DENSE_MIN_EVENTS, v5b.V8_TOL) == (256, 50, 1e-10)
-    assert v5b.V7_REPLICATES == 5400 == v5b.V7_SHARDS * v5b.V7_REPS_PER_SHARD
+    assert v5b.V7_REPLICATES == 7200 == v5b.V7_SHARDS * v5b.V7_REPS_PER_SHARD
     assert v5b.V7_SHARD_BATCHES == 18_000 and v5b.V7_REP_N == 10_000 and v5b.V7_BINS == 12
-    seeds = [v5b.seed_of("v7-rep", k) for k in range(v5b.V7_SHARDS + 1)]  # shards 0..5, reference 6
+    seeds = [v5b.seed_of("v7-rep", k) for k in range(v5b.V7_SHARDS + 1)]  # shards 0..7, reference 8
     lo = v5b.base.SEED_BASE + 1000 * v5b.R_INDEX["v7-rep"]
-    assert seeds == list(range(lo, lo + 7)) and seeds[-1] < lo + 1000
-    assert len(set(seeds)) == 7 and v5b.V7_REPLICATES * v5b.V7_BINS >= v5b.V7_MIN_INTERVALS
+    assert seeds == list(range(lo, lo + 9)) and seeds[-1] < lo + 1000
+    assert len(set(seeds)) == 9 and v5b.V7_REPLICATES * v5b.V7_BINS >= v5b.V7_MIN_INTERVALS
     assert (v5b.V7_SLOPE, v5b.V7_SLOPE_TOL, v5b.V7_LEGACY_TARGET, v5b.V7_LEGACY_TOL) == (
         -0.5,
         0.05,
@@ -2087,7 +2077,7 @@ def test_lv5b_consumed_base_refused_and_new_base_accepted() -> None:
     with pytest.raises(SystemExit, match="consumed"):
         mod.main(["--suite", "lv5b", "--seed-base", str(CONSUMED5B), "--expected-sha", "0" * 40,
                   "--out", "unused-never-created"])  # fmt: skip
-    assert v5b.V7_REPLICATES == 5400
+    assert v5b.V7_REPLICATES == 7200
     seeds = [v5b.seed_of("v7-rep", k) for k in range(v5b.V7_SHARDS + 1)]
     lo = v5b.base.SEED_BASE + 1000 * v5b.R_INDEX["v7-rep"]
-    assert seeds == list(range(lo, lo + 7)) and seeds[-1] < lo + 1000
+    assert seeds == list(range(lo, lo + 9)) and seeds[-1] < lo + 1000

@@ -23,8 +23,16 @@ uv run mypy src/ionmc                  # type checking
 uv run pre-commit run --all-files      # ruff, ruff-format, mypy, hygiene hooks
 ```
 
-Pytest markers: `cuda` (needs a CUDA device), `slow`, and `host` (controlled
-host runner only). Selection is left to the caller.
+Pytest markers: `cuda` (needs a CUDA device), `slow`, `host` (controlled
+host runner only), `multiprocess` (needs more than one worker process) and
+`calibration` (Monte Carlo calibration of the V7 coverage rule in
+`tests/ionmc/test_v7_coverage.py`; minutes of runtime). Selection is left to the caller:
+
+- lightweight selection, what CI runs (the small deterministic rule tests stay in):
+  `uv run pytest tests -m "not cuda and not host and not calibration"`;
+- calibration only: `uv run pytest tests/ionmc/test_v7_coverage.py -m calibration`; it is part of the
+  exact-SHA local validation as the `lv5b` step `pytest-v7-rep-calibration`;
+- full local run, including the calibration: `uv run pytest tests/ionmc -p no:cacheprovider`.
 
 ## Controlled host runner
 
