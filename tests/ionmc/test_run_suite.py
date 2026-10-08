@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib
 import importlib.util
 import json
 import os
@@ -1766,3 +1767,57 @@ def test_slice_b_tags_blockers_documents_and_shard_budget() -> None:
     )
     assert v5b.V2B_N == 1_000_000 and v5b.V8_SAMPLES["cuda32"][3] == 1_000_000
     assert len(v5b.R1_NUC_DIGEST) == 64
+
+
+# -- hr5 v8-stat-compare: T12 on identical, independent and biased samples (C18a) ----------
+def _v8_sample(seed: int, hpb: int, nb: int = 100, nz: int = 120, rate: float = 6.0) -> dict:
+    """A synthetic partial of ``v8-stat-sample``: Bragg-like IDD with batch noise, sparse Poisson
+    ``sec_p`` / ``nuc_local`` profiles (``rate`` events per bin and batch at 1000 histories per
+    batch, scaling with ``hpb``) and scalar channels."""
+    rng = np.random.default_rng(seed)
+    z = (np.arange(nz) + 0.5) / nz
+    shape = 1.0 + 4.0 * np.exp(-(((z - 0.8) / 0.05) ** 2)) * (z < 0.82)
+    shape = np.where(z > 0.85, 0.0, shape)
+    idd = shape[None, :] * (1.0 + 0.5 / np.sqrt(hpb) * rng.standard_normal((nb, nz)))
+    lam = rate * hpb / 1000.0
+    return {
+        "n": hpb * nb, "n_batches": nb, "precision": "float64",
+        "idd": idd.tolist(),
+        "sec_p": (rng.poisson(lam, (nb, nz)) / lam * 1e-3).tolist(),
+        "nuc_local": (rng.poisson(lam, (nb, nz)) / lam * 1e-3).tolist(),
+        "nuclear_local": (1.3 + 0.1 * rng.standard_normal(nb)).tolist(),
+        "escaped_neutral": (2.5 + 0.1 * rng.standard_normal(nb)).tolist(),
+    }  # fmt: skip
+
+
+def test_v8_stat_compare_identical_independent_biased() -> None:
+    v5b = _load("steps_v5b")
+    parity = importlib.import_module("ionmc.transport.parity")
+    a, b = _v8_sample(11, 1000), _v8_sample(12, 1000)
+    # (a) a sample compared with itself: every profile passes (p = 1), every scalar is equal
+    same = parity.t12_compare(v5b.observables([a]), v5b.observables([a]))
+    assert same["pass"] is True
+    assert all(r["verdict"] == "pass" and r["p_value"] == 1.0 for r in same["arrays"].values())
+    # (b) two independent samples of the same distribution (different seeds) pass the T12 tolerances
+    indep = parity.t12_compare(v5b.observables([a]), v5b.observables([b]))
+    assert indep["pass"] is True, indep
+    # (c) a deliberately biased sample (IDD +2 %) fails, on the IDD profile and the total deposit
+    bad = dict(b, idd=(np.array(b["idd"]) * 1.02).tolist())
+    biased = parity.t12_compare(v5b.observables([a]), v5b.observables([bad]))
+    assert biased["pass"] is False
+    assert biased["arrays"]["idd"]["verdict"] == "fail"
+    assert biased["scalars"]["total_deposit_mev"]["pass"] is False
+
+
+def test_v8_stat_compare_sparse_profile_is_inconclusive_not_a_bug() -> None:
+    """Root cause of the C18a rehearsal failure at 100 batches x 200 histories: the sparse
+    ``nuc_local`` profile has no individually supported bin (singleton mass fraction 0 < 0.5), so
+    T12 fails closed as ``inconclusive`` even for a sample compared with itself; with the frozen
+    batch size (10^4 histories per batch, here 1000) the same data pass."""
+    v5b = _load("steps_v5b")
+    parity = importlib.import_module("ionmc.transport.parity")
+    sparse = _v8_sample(21, 200, rate=0.5)
+    res = parity.t12_compare(v5b.observables([sparse]), v5b.observables([sparse]))
+    rec = res["arrays"]["nuc_local"]
+    assert res["pass"] is False and rec["verdict"] == "inconclusive"
+    assert rec["singleton_mass_fraction"] < 0.5 and rec["p_value"] == 1.0
