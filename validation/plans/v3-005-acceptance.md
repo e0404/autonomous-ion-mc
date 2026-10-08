@@ -90,10 +90,10 @@ A summary carrying them is `pass` only for the executed rows and is `conformant:
 
 | Row(s) | Archive (`validation/results/transport/...`) | Head SHA | Seed base | Result |
 |---|---|---|---|---|
-| P1–P5, V3-CI, V9, R1, C1 | CI run | — | fixed CI seeds | — |
-| N1, V1, V1b, D6 | `lv5-<sha>-...json` | — | n/a (deterministic) | — |
-| V2 (100/150/200), V2-probe | `lv5-<sha>-...json` | — | 20421004 | — |
-| V3-LV, V4, V4b, X1, E1 | `lv5-<sha>-...json` | — | 20421004 | — |
+| P1–P5, V3-CI, V9, R1, C1 | CI run; R1 also in `lv5-b84fdf3-single-process.json` | b84fdf3 | fixed CI seeds | pass |
+| N1, V1, V1b, D6 | `lv5-b84fdf3-single-process.json` | b84fdf3 | n/a (deterministic) | pass (D6: tiers failed, ceiling holds); non-conformant by code |
+| V2 (100/150/200), V2-probe | `lv5-b84fdf3-single-process.json` | b84fdf3 | 20421004 | pass (imported partials → non-conformant by code, Amendment 5) |
+| V3-LV, V4, V4b, X1, E1 | `lv5-b84fdf3-single-process.json` | b84fdf3 | 20421004 | pass (E1 exploratory); non-conformant by code (diagnostic mode) |
 | V2b, V5–V8 | slice B | — | declared in B | — |
 
 ## Amendments
