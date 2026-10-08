@@ -1,8 +1,9 @@
 # ruff: noqa: E501
-"""V7 replicate-coverage rule (plan Amendment 13, Codex REVIEW-be30e621 and REVIEW-873ab9cd):
-reference sensitivity band (coherent +/- 1.645 SEM_ref shift) and fully correlated common-mode bound, TOST per
-estimator, combine of shard/reference partials (fail closed) and Monte Carlo calibration
-of the whole pipeline: Gaussian with correlated reference errors, and skewed (Gamma) blocks."""
+"""V7 replicate-coverage rule (plan Amendment 13, Codex REVIEW-be30e621, REVIEW-873ab9cd, REVIEW-edb9970b):
+leave-one-out pooled reference with a Bonferroni box over the bins, TOST at alpha_tost = 0.04, combine of
+shard/reference partials (fail closed), and (marker ``calibration``, minutes, not in CI) Monte Carlo
+calibration of the whole pipeline with Clopper-Pearson bounds of the false-acceptance rates: Gaussian
+profiles and scalar, Gamma-block tallies with independent and with correlated (shared-history) bins."""
 
 from __future__ import annotations
 
@@ -102,98 +103,105 @@ def test_s_ref_cov_known_covariance_and_bound(v5b: ModuleType) -> None:
 
 
 def test_tost_rule_synthetic_vectors(v5b: ModuleType) -> None:
-    assert (v5b.V7_COV_LOW, v5b.V7_COV_HIGH, v5b.V7_TOST_ALPHA, v5b.V7_REF_Z) == (
+    assert (v5b.V7_COV_LOW, v5b.V7_COV_HIGH, v5b.V7_ALPHA_BOX, v5b.V7_ALPHA_TOST) == (
         0.640,
         0.700,
-        0.05,
-        1.645,
+        0.01,
+        0.04,
     )
     n = v5b.V7_REPLICATES * 12
     assert v5b.V7_REPLICATES == 5400
 
-    def verdict(cov: np.ndarray, s: float = 0.0, shifted=None, **kw: object) -> dict:  # type: ignore[no-untyped-def]
-        return v5b.v7_tost_verdict(cov, 12, kw.pop("intervals", n), s, shifted, min_bins=10, **kw)
+    def verdict(cov: np.ndarray, m_lo=None, m_hi=None, **kw: object) -> dict:  # type: ignore[no-untyped-def]
+        return v5b.v7_tost_verdict(cov, 12, kw.pop("intervals", n), m_lo, m_hi, min_bins=10, **kw)
 
     ok = verdict(_synthetic_covered(0.670, 0.135, r=5400))
     assert ok["pass"] and not ok["reasons"] and abs(ok["m"] - 0.670) < 1e-9
     assert abs(ok["s"] - 0.135 / math.sqrt(5400)) < 1e-9 and ok["replicates"] == 5400
-    assert abs(ok["t"] - v5b.student_t_quantile(0.95, 5399)) < 1e-12
-    assert ok["m_lo"] == ok["m_hi"] == ok["m"]  # no shifted means: band collapses to the point
-    assert abs(ok["ci"][1] - ok["ci"][0] - 2 * ok["t"] * ok["s_tot"]) < 1e-12
-    half = ok["t"] * ok["s_tot"]
-    low = verdict(_synthetic_covered(0.6415, 0.135, r=5400))  # CI crosses 0.640
+    assert abs(ok["t"] - v5b.student_t_quantile(0.98, 5399)) < 1e-12 and ok["alpha_tost"] == 0.04
+    assert ok["m_lo"] == ok["m_hi"] == ok["m"]  # no box: collapses to the point
+    assert abs(ok["ci"][1] - ok["ci"][0] - 2 * ok["t"] * ok["s"]) < 1e-12
+    half = ok["t"] * ok["s"]
+    low = verdict(_synthetic_covered(0.6425, 0.135, r=5400))  # CI crosses 0.640
     assert 0.640 < low["m"] < 0.700 and low["ci"][0] < 0.640 and not low["pass"]
     assert any("lower" in x for x in low["reasons"])
     up = verdict(_synthetic_covered(0.6985, 0.135, r=5400))
     assert up["ci"][1] > 0.700 and not up["pass"] and any("upper" in x for x in up["reasons"])
-    # sensitivity band: m_lo / m_hi are the min / max of the three means, s from the unshifted f_j
+    # the box widens both sides: m_lo / m_hi enter the interval, s carries no reference term
     cov = _synthetic_covered(0.670, 0.135, r=5400)
-    band = verdict(cov, shifted=(0.6600, 0.6800))
-    assert (band["m_lo"], band["m_hi"]) == (0.6600, 0.6800) and band["pass"]
+    band = verdict(cov, 0.660, 0.680)
+    assert (band["m_lo"], band["m_hi"]) == (0.660, 0.680) and band["pass"]
     assert (
-        abs(band["ci"][0] - (0.6600 - half)) < 1e-12
-        and abs(band["ci"][1] - (0.6800 + half)) < 1e-12
+        abs(band["ci"][0] - (0.660 - half)) < 1e-12 and abs(band["ci"][1] - (0.680 + half)) < 1e-12
     )
-    assert band["means_ref_shift"] == {"0": band["m"], "+": 0.6600, "-": 0.6800}
-    # the old corrected rule passed m = 0.6415 with an upward bias correction; the band does not move up
-    assert not verdict(_synthetic_covered(0.6415, 0.135, r=5400), shifted=(0.6415, 0.6415))["pass"]
-    # a shifted mean below / above the region fails the respective side although m itself is inside
-    lo_fail = verdict(cov, shifted=(0.640 + 0.5 * half, 0.670))
-    assert not lo_fail["pass"] and any("lower" in x for x in lo_fail["reasons"])
-    hi_fail = verdict(cov, shifted=(0.670, 0.700 - 0.5 * half))
+    assert not verdict(cov, 0.640 + 0.5 * half, 0.670)["pass"]
+    lo_fail = verdict(cov, 0.640 + 0.5 * half, 0.670)
+    assert any("lower" in x for x in lo_fail["reasons"])
+    hi_fail = verdict(cov, 0.670, 0.700 - 0.5 * half)
     assert not hi_fail["pass"] and any("upper" in x for x in hi_fail["reasons"])
-    wide = verdict(cov, s=0.02)
-    assert abs(wide["s_tot"] - math.hypot(wide["s"], 0.02)) < 1e-15 and not wide["pass"]
-    assert wide["s_ref_bound"] == 0.02 and "b_ref" not in wide and "m_corr" not in wide
+    br = verdict(cov, 0.69, 0.60)  # inconsistent inputs are clipped so that m_lo <= m <= m_hi
+    assert br["m_lo"] == br["m_hi"] == br["m"]
+    assert "s_tot" not in ok and "s_ref_bound" not in ok
     assert not verdict(cov, intervals=299)["pass"]
-    assert not v5b.v7_tost_verdict(_synthetic_covered(0.670, 0.135, 9), 9, n, 0.0, min_bins=10)[
-        "pass"
-    ]
+    assert not v5b.v7_tost_verdict(_synthetic_covered(0.670, 0.135, 9), 9, n, min_bins=10)["pass"]
+
+
+def test_box_quantile_and_z_values(v5b: ModuleType) -> None:
+    """Z_B = Phi^{-1}(1 - alpha_box / (2 B)): 3.34 for 12 bins, 2.58 for one bin."""
+    assert abs(v5b.normal_quantile(0.975) - 1.959964) < 1e-5
+    assert abs(v5b.normal_quantile(0.5)) < 1e-12
+    z12 = v5b.normal_quantile(1.0 - 0.01 / 24.0)
+    z1 = v5b.normal_quantile(1.0 - 0.01 / 2.0)
+    assert abs(z12 - 3.3415) < 5e-4 and abs(z1 - 2.5758) < 5e-4
 
 
 def test_leave_one_out_reference_is_independent_of_own_replicate(v5b: ModuleType) -> None:
-    """mu_(-j) = (sum_k x_k - x_j) / (R - 1) equals the mean of the other replicates, and changing
-    replicate j's own value does not change its reference (only the hit does)."""
+    """mu_(-j) = (sum_k x_k - x_j) / (R - 1) equals the mean of the other replicates; replicate j's own
+    value does not enter its reference (it enters the pooled mean only through 1 / R)."""
     x = np.array([[1.0, 5.0], [1.2, 4.0], [0.8, 6.0], [1.0, 5.5]])
     sem = np.full_like(x, 0.15)
     ref, rsem = np.array([1.0, 5.0]), np.array([0.1, 0.1])
     for j in range(4):
         direct = np.delete(x, j, axis=0).mean(axis=0)
-        loo = (x.sum(axis=0) - x[j]) / (4 - 1)
-        assert np.allclose(direct, loo)
-    # replicate 0's per-bin hit depends on its own value only through |x_0 - mu_(-0)|: moving x_0
-    # leaves the others' hits determined by the others' own values and mu_(-k) shifting by dx / 3
+        assert np.allclose(direct, (x.sum(axis=0) - x[j]) / 3)
     e0 = v5b.v7_estimator_verdict("profile", x, sem, ref, rsem, None)
     x2 = x.copy()
     x2[0, 0] += 0.05
     e1 = v5b.v7_estimator_verdict("profile", x2, sem, ref, rsem, None)
-    pooled0 = e0["pooled_mean"][0]
-    assert abs(e1["pooled_mean"][0] - (pooled0 + 0.05 / 4)) < 1e-15
-    # hand check, bin 0: loo = (4.0 - x)/3 = 1.0, 0.9333, 1.0667, 1.0 -> |x - loo| = 0, .2667, .2667, 0
-    sig0 = x[:, 0].std(ddof=1)
-    hits0 = np.abs(x[:, 0] - (x[:, 0].sum() - x[:, 0]) / 3) <= 0.15
+    assert abs(e1["pooled_mean"][0] - (e0["pooled_mean"][0] + 0.05 / 4)) < 1e-15
+    hits0 = np.abs(x[:, 0] - (x[:, 0].sum() - x[:, 0]) / 3) <= 0.15  # loo = 1.0, .9333, 1.0667, 1.0
     assert hits0.tolist() == [True, False, False, True]
-    assert abs(e0["pooled_sem"][0] - sig0 / 2.0) < 1e-15
-    assert abs(e0["r_b"][0] - 0.5) < 1e-12 and abs(e0["r_b"][1] - 0.5) < 1e-12  # 1 / sqrt(R), R = 4
+    assert abs(e0["pooled_sem"][0] - x[:, 0].std(ddof=1) / 2.0) < 1e-15
 
 
-def test_estimator_verdict_band_and_cross_check_fields(v5b: ModuleType) -> None:
-    """Hand-checkable scalar case, 4 replicates; hits recomputed at mu_(-j), mu_(-j) +/- Z SEM_pool."""
+def test_estimator_verdict_box_and_cross_check_fields(v5b: ModuleType) -> None:
+    """Hand-checkable scalar case, 4 replicates: Z_B = 2.5758, 9-point grid, per-bin min / max coverage."""
     means = np.array([[1.0], [1.2], [0.8], [1.0]])
     sems = np.array([[0.15]] * 4)
     ref, rsem = np.array([1.0]), np.array([0.1])
     e = v5b.v7_estimator_verdict("scalar", means, sems, ref, rsem, None)
-    # unshifted: mu_(-j) = 1.0, 0.9333, 1.0667, 1.0 -> hits 1, 0, 0, 1
-    assert e["per_replicate_covered"] == [1, 0, 0, 1] and e["m"] == 0.5
+    assert (
+        e["per_replicate_covered"] == [1, 0, 0, 1] and e["m"] == 0.5
+    )  # loo: 1.0, .9333, 1.0667, 1.0
+    zb = v5b.normal_quantile(0.995)
+    assert abs(e["z_box"] - zb) < 1e-12 and e["alpha_box"] == 0.01
+    grid = np.linspace(-zb, zb, 9)
+    assert np.allclose(e["box_grid"], grid) and grid[4] == 0.0
     sem_pool = float(means.std(ddof=1)) / 2.0
-    sh = 1.645 * sem_pool  # 0.1343 -> hits (+): 1, 1, 0, 1 ; (-): 1, 0, 1, 1
-    for sign in (1, -1):
-        loo = (means.sum() - means[:, 0]) / 3.0
-        hit = (np.abs(means[:, 0] - (loo + sign * sh)) <= 0.15).mean()
-        assert hit == 0.75
-    assert e["means_ref_shift"] == {"0": 0.5, "+": 0.75, "-": 0.75}
-    assert e["m_lo"] == 0.5 and e["m_hi"] == 0.75 and e["ref_z"] == 1.645
-    assert len(e["replicate_mean_skewness"]) == 1 and not e["pass"]
+    loo = (means.sum() - means[:, 0]) / 3.0
+    cov = [float((np.abs(means[:, 0] - (loo + d * sem_pool)) <= 0.15).mean()) for d in grid]
+    assert e["per_bin_box_coverage_min_max"] == [[min(cov), max(cov)]]
+    assert e["m_lo"] == min(cov) <= e["m"] <= e["m_hi"] == max(cov) and cov[4] == 0.5
+    assert e["m_hi"] > e["m"] or e["m_lo"] < e["m"]
+    assert not e["pass"] and len(e["replicate_mean_skewness"]) == 1
+    # profile: m_lo / m_hi are the means over bins of the per-bin min / max
+    x = np.array([[1.0, 5.0], [1.2, 4.0], [0.8, 6.0], [1.0, 5.5], [0.9, 5.2], [1.1, 4.7]])
+    p = v5b.v7_estimator_verdict(
+        "profile", x, np.full_like(x, 0.4), np.array([1.0, 5.0]), np.array([0.1, 0.1])
+    )
+    mm = np.array(p["per_bin_box_coverage_min_max"])
+    assert abs(p["m_lo"] - mm[:, 0].mean()) < 1e-15 and abs(p["m_hi"] - mm[:, 1].mean()) < 1e-15
+    assert abs(p["z_box"] - v5b.normal_quantile(1.0 - 0.01 / 4.0)) < 1e-12
     # cross-check against the 1e6 reference: hits |x - 1.0| <= 0.15 -> 1, 0, 0, 1
     assert e["m_ref1e6"] == 0.5
     z = (means.mean() - 1.0) / math.hypot(sem_pool, 0.1)
@@ -208,10 +216,10 @@ def _binary_hits(frac: float, r: int = 5400) -> np.ndarray:
 
 
 def test_scalar_estimator_with_binary_hits(v5b: ModuleType) -> None:
-    ok = v5b.v7_tost_verdict(_binary_hits(0.670), 1, 5400, 0.0)
+    ok = v5b.v7_tost_verdict(_binary_hits(0.670), 1, 5400)
     assert ok["pass"] and abs(ok["m"] - 0.670) < 1e-3  # sd 0.47, s = 0.0064, CI +- 0.0105
     assert abs(ok["s"] - math.sqrt(0.67 * 0.33 * 5400 / 5399) / math.sqrt(5400)) < 1e-4
-    edge = v5b.v7_tost_verdict(_binary_hits(0.650), 1, 5400, 0.0)
+    edge = v5b.v7_tost_verdict(_binary_hits(0.650), 1, 5400)
     assert not edge["pass"] and any("lower" in x for x in edge["reasons"])
 
 
@@ -267,7 +275,11 @@ def test_combine_document_and_fail_closed(v5b: ModuleType) -> None:
         "nuclear_local",
         "escaped_neutral",
     }
-    assert doc["rule"]["ref_z"] == 1.645
+    assert (
+        doc["rule"]["alpha_box"] == 0.01
+        and doc["rule"]["alpha_tost"] == 0.04
+        and doc["rule"]["box_grid"] == 9
+    )
     for name, kind, bins in (
         ("sec_p", "profile", 12),
         ("nuclear_local", "profile", 12),
@@ -280,21 +292,39 @@ def test_combine_document_and_fail_closed(v5b: ModuleType) -> None:
         )
         assert len(e["r_b"]) == bins and abs(e["nominal_coverage"] - 0.670) < 0.002
         for key in (
-            *("m", "m_lo", "m_hi", "means_ref_shift", "s", "s_ref_bound", "s_ref_cov", "b_ref"),
-            *("ref_corr_mean_abs_offdiag", "replicate_mean_skewness", "ci", "reasons"),
+            *(
+                "m",
+                "m_lo",
+                "m_hi",
+                "z_box",
+                "alpha_box",
+                "alpha_tost",
+                "per_bin_box_coverage_min_max",
+            ),
+            *(
+                "s",
+                "t",
+                "s_ref_cov",
+                "b_ref",
+                "ref_corr_mean_abs_offdiag",
+                "replicate_mean_skewness",
+            ),
+            *("ci", "reasons", "legacy_point_gate_pass", "pass"),
             *("m_ref1e6", "z_b_ref1e6", "max_abs_z_ref1e6", "pooled_mean", "pooled_sem"),
-            *("legacy_point_gate_pass", "pass"),
         ):
             assert key in e
-        assert "m_corr" not in e and "leave-one-out" in e["reference_kind"]
-        assert np.allclose(e["r_b"], 1.0 / math.sqrt(5400))  # pooled SEM / sigma
-        assert abs(e["s_ref_bound"] - PHI1 * math.sqrt(2.0) / 5400) < 1e-15
+        assert not {"m_corr", "s_tot", "s_ref_bound", "means_ref_shift"} & set(e)
+        assert "leave-one-out" in e["reference_kind"]
+        zb = v5b.normal_quantile(1.0 - 0.01 / (2.0 * bins))
+        assert abs(e["z_box"] - zb) < 1e-12 and (
+            abs(zb - 3.3415) < 5e-4 if bins == 12 else abs(zb - 2.5758) < 5e-4
+        )
+        assert len(e["per_bin_box_coverage_min_max"]) == bins and e["m_lo"] <= e["m"] <= e["m_hi"]
+        assert abs(e["ci"][0] - (e["m_lo"] - e["t"] * e["s"])) < 1e-12
+        assert abs(e["ci"][1] - (e["m_hi"] + e["t"] * e["s"])) < 1e-12
+        assert abs(e["t"] - v5b.student_t_quantile(0.98, 5399)) < 1e-12
+        assert np.allclose(e["r_b"], 1.0 / math.sqrt(5400))
         assert e["max_abs_z_ref1e6"] < 6.0 and 0.5 < e["m_ref1e6"] < 0.85
-        assert abs(e["b_ref"] - PHI1 * np.mean(np.square(e["r_b"]))) < 1e-14
-        mm = e["means_ref_shift"]
-        assert e["m_lo"] == min(mm.values()) and e["m_hi"] == max(mm.values()) and mm["0"] == e["m"]
-        assert abs(e["ci"][0] - (e["m_lo"] - e["t"] * e["s_tot"])) < 1e-12
-        assert abs(e["ci"][1] - (e["m_hi"] + e["t"] * e["s_tot"])) < 1e-12
         assert len(e["replicate_mean_skewness"]) == bins
     assert doc["pass"] == all(e["pass"] for e in doc["estimators"].values())
     # a clearly overconfident estimator (SEM x 0.5: coverage ~ 0.38) fails the row
@@ -343,7 +373,7 @@ def test_replicate_grouping_and_estimator_verdict(v5b: ModuleType) -> None:
     assert e["per_replicate_covered"] == [0, 0, 1] and e["intervals"] == 3 and not e["pass"]
 
 
-# -- Monte Carlo calibration of the full pipeline, including the shared reference ------------
+# -- Monte Carlo calibration of the full pipeline (marker ``calibration``: not in CI) ---------
 def _kappa_for(v5b: ModuleType, coverage: float) -> float:
     """kappa with P(|t_19| <= kappa) = coverage (intervals s = kappa sigma sqrt(chi2_19 / 19))."""
     lo, hi = 0.1, 5.0
@@ -353,46 +383,79 @@ def _kappa_for(v5b: ModuleType, coverage: float) -> float:
     return 0.5 * (lo + hi)
 
 
-def _band_pass(v5b: ModuleType, mean: np.ndarray, sem: np.ndarray) -> bool:
-    """Vectorised form of ``v7_estimator_verdict`` (all bins used): the reference of replicate j is the
-    leave-one-out pooled mean, shifted coherently by 0 / +Z / -Z SEM_pool (SEM_pool = sd / sqrt(R)),
-    s_ref_bound = phi(1) sqrt(2) mean r_b^2 with r_b = 1 / sqrt(R), PASS iff m_lo - t s_tot >= 0.640
-    and m_hi + t s_tot <= 0.700."""
-    reps = mean.shape[0]
-    z = v5b.V7_REF_Z
+def _cp_upper(v5b: ModuleType, k: int, n: int, level: float = 0.95) -> float:
+    """One-sided Clopper-Pearson upper confidence bound of a binomial rate (k of n)."""
+    if k >= n:
+        return 1.0
+    lo, hi = k / n, 1.0
+    for _ in range(80):  # P(X <= k | p) = 1 - I_p(k + 1, n - k) = 1 - level
+        mid = 0.5 * (lo + hi)
+        if v5b.betainc_reg(k + 1.0, n - k, mid) < level:
+            lo = mid
+        else:
+            hi = mid
+    return 0.5 * (lo + hi)
+
+
+def _box_pass(v5b: ModuleType, tq: float, mean: np.ndarray, sem: np.ndarray) -> bool:
+    """Vectorised form of ``v7_estimator_verdict`` (all bins used): leave-one-out pooled reference of
+    each replicate, per-bin worst case over the 9-point grid of the Bonferroni box (Z_B SEM_pool),
+    PASS iff m_lo - t s >= 0.640 and m_hi + t s <= 0.700 with t = t_{0.98, R - 1}."""
+    reps, bins = mean.shape
     sig = mean.std(axis=0, ddof=1)
     loo = (mean.sum(axis=0) - mean) / (reps - 1)
-    f = [
-        (np.abs(mean - (loo + k * z * sig / math.sqrt(reps))) <= sem).mean(axis=1)
-        for k in (0, 1, -1)
-    ]
-    s_tot = math.hypot(f[0].std(ddof=1) / math.sqrt(reps), PHI1 * math.sqrt(2.0) / reps)
-    t = v5b.student_t_quantile(0.95, reps - 1)
-    ms = [float(x.mean()) for x in f]
-    return bool(min(ms) - t * s_tot >= v5b.V7_COV_LOW and max(ms) + t * s_tot <= v5b.V7_COV_HIGH)
+    d0 = mean - loo
+    grid = np.linspace(-1.0, 1.0, v5b.V7_BOX_GRID) * v5b.normal_quantile(
+        1.0 - v5b.V7_ALPHA_BOX / (2.0 * bins)
+    )
+    sp = sig / math.sqrt(reps)
+    cov = np.stack([(np.abs(d0 - d * sp) <= sem).mean(axis=0) for d in grid])
+    s = (np.abs(d0) <= sem).mean(axis=1).std(ddof=1) / math.sqrt(reps)
+    m_lo, m_hi = cov.min(axis=0).mean(), cov.max(axis=0).mean()
+    return bool(m_lo - tq * s >= v5b.V7_COV_LOW and m_hi + tq * s <= v5b.V7_COV_HIGH)
+
+
+def _t98(v5b: ModuleType, reps: int = 5400) -> float:
+    return v5b.student_t_quantile(1.0 - v5b.V7_ALPHA_TOST / 2.0, reps - 1)
 
 
 def _gauss_passes(v5b: ModuleType, kappas: tuple[float, ...], bins: int, trials: int,
                   rng: np.random.Generator, rho: float = 0.0, reps: int = 5400) -> np.ndarray:  # fmt: skip
-    """Pass indicators ``[len(kappas), trials]`` of the pooled leave-one-out band rule. Replicate means
-    X_b = sigma_b (sqrt(rho) g + sqrt(1 - rho) e_b) with a replicate-level common factor g (the bins of
-    one replicate share histories: correlation ``rho`` between bins), batch SEMs s = kappa sigma_b
-    sqrt(chi2_19 / 19); the true mean is 0 and the reference is the pooled mean of the replicates (no
-    separately drawn reference error). The same replicate draws serve all kappas. Checked against the
-    pure ``v7_estimator_verdict`` on the first trial."""
+    """Pass indicators ``[len(kappas), trials]``. Replicate means X_b = sigma_b (sqrt(rho) g + sqrt(1 -
+    rho) e_b) with a replicate-level common factor g (the bins of one replicate share histories: bin
+    correlation ``rho``), batch SEMs s = kappa sigma_b sqrt(chi2_19 / 19); true mean 0, reference = the
+    pooled leave-one-out mean. The same draws serve all kappas. First trial checked against the pure
+    ``v7_estimator_verdict``."""
     sigma = np.linspace(0.5, 2.0, bins) if bins > 1 else np.array([1.3])
+    tq = _t98(v5b, reps)
     out = np.zeros((len(kappas), trials), dtype=bool)
     for i in range(trials):
         g = rng.standard_normal((reps, 1))
         x = sigma * (math.sqrt(rho) * g + math.sqrt(1.0 - rho) * rng.standard_normal((reps, bins)))
         s0 = sigma * np.sqrt(rng.chisquare(19, (reps, bins)) / 19.0)
         for j, kappa in enumerate(kappas):
-            out[j, i] = _band_pass(v5b, 100.0 + x, kappa * s0)
+            out[j, i] = _box_pass(v5b, tq, 100.0 + x, kappa * s0)
         if i == 0:
             e = v5b.v7_estimator_verdict("scalar", 100.0 + x, kappas[0] * s0, np.full(bins, 100.0),
                                          np.full(bins, 0.01))  # fmt: skip
             assert e["pass"] == out[0, 0]
     return out
+
+
+def _rate_report(v5b: ModuleType, passes: np.ndarray) -> list[dict[str, float]]:
+    """Rate and 95 % Clopper-Pearson upper bound per row of a ``[kappas, trials]`` pass array."""
+    n = passes.shape[1]
+    return [
+        {"rate": float(row.mean()), "cp95_upper": _cp_upper(v5b, int(row.sum()), n), "n": n}
+        for row in passes
+    ]
+
+
+GAUSS_CASES = (
+    ("profile12_rho0.0", 12, 3000, 0.0),
+    ("profile12_rho0.8", 12, 3000, 0.8),
+    ("scalar", 1, 5000, 0.0),
+)
 
 
 @pytest.fixture(scope="module")
@@ -401,45 +464,59 @@ def gauss_rates(v5b: ModuleType) -> dict[str, np.ndarray]:
     rng = np.random.default_rng(20471004)
     ks = (_kappa_for(v5b, 0.640), 1.0, _kappa_for(v5b, 0.700))
     assert abs(v5b.student_abs_prob(19, 1.0) - 0.670) < 0.002
-    cases = (("profile12_rho0.0", 12, 1500, 0.0), ("profile12_rho0.8", 12, 1500, 0.8),
-             ("scalar", 1, 3000, 0.0))  # fmt: skip
-    passes = {lab: _gauss_passes(v5b, ks, b, n, rng, rho=rho) for lab, b, n, rho in cases}
-    print(
-        "v7 gaussian pass rates [0.640, 0.670, 0.700]",
-        {k: v.mean(axis=1) for k, v in passes.items()},
-    )
+    passes = {lab: _gauss_passes(v5b, ks, b, n, rng, rho=rho) for lab, b, n, rho in GAUSS_CASES}
+    print("v7 gaussian rates [0.640, 0.670, 0.700] with CP95 upper bounds",
+          {k: _rate_report(v5b, v) for k, v in passes.items()})  # fmt: skip
     return passes
 
 
-@pytest.mark.parametrize("label", ["profile12_rho0.0", "profile12_rho0.8", "scalar"])
-def test_v7_pipeline_gaussian_false_acceptance(gauss_rates: dict, label: str) -> None:
-    """Gaussian pipeline, R = 5400, pooled leave-one-out reference, 12 bins with replicate-level
-    correlation 0 and 0.8 between bins: false acceptance <= 0.07 at true coverage 0.640 and 0.700."""
-    p = gauss_rates[label]
-    assert p[0].mean() <= 0.07 and p[2].mean() <= 0.07, (label, p.mean(axis=1))
+@pytest.mark.calibration
+@pytest.mark.parametrize("label", [c[0] for c in GAUSS_CASES])
+def test_v7_pipeline_gaussian_false_acceptance(
+    v5b: ModuleType, gauss_rates: dict, label: str
+) -> None:
+    """Gaussian pipeline, R = 5400, pooled leave-one-out reference, 12 bins with replicate-level bin
+    correlation 0 and 0.8 and the scalar: the 95 % Clopper-Pearson upper bound of the false-acceptance
+    rate is <= 0.05 at true coverage 0.640 and at 0.700."""
+    rep = _rate_report(v5b, gauss_rates[label])
+    assert rep[0]["cp95_upper"] <= 0.05 and rep[2]["cp95_upper"] <= 0.05, (label, rep)
 
 
+@pytest.mark.calibration
 def test_v7_pipeline_gaussian_power_targets(gauss_rates: dict) -> None:
     """Power at the nominal coverage (kappa = 1, true coverage 0.670): profiles >= 0.95, scalar >= 0.90,
-    joint row (independent draws of two profiles and the scalar) >= 0.85."""
+    joint row (independent draws of the two profiles and the scalar) >= 0.85."""
     power = {k: float(v[1].mean()) for k, v in gauss_rates.items()}
-    joint = float((gauss_rates["profile12_rho0.0"][1] & gauss_rates["profile12_rho0.8"][1]
-                   & gauss_rates["scalar"][1][:1500]).mean())  # fmt: skip
+    n = 3000
+    joint = float((gauss_rates["profile12_rho0.0"][1][:n] & gauss_rates["profile12_rho0.8"][1][:n]
+                   & gauss_rates["scalar"][1][:n]).mean())  # fmt: skip
     print("v7 gaussian power at nominal", power, "joint row (independent draws)", joint)
     assert power["profile12_rho0.0"] >= 0.95 and power["profile12_rho0.8"] >= 0.95
     assert power["scalar"] >= 0.90 and joint >= 0.85, (power, joint)
 
 
-def _skew_ratios(shape: float, n: int, rng: np.random.Generator) -> np.ndarray:
-    """|replicate mean - true mean| / replicate SEM of 20 Gamma(shape) blocks (scale-free)."""
-    g = rng.standard_gamma(shape, (n, 20))
-    return np.abs(g.mean(axis=1) - shape) / (g.std(axis=1, ddof=1) / math.sqrt(20))
+W_SHARED = 0.5  # shape of the shared per-block Gamma factor of the correlated sparse bins (mean 1)
 
 
-def _skew_kappas(shape: float, rng: np.random.Generator) -> tuple[float, float, float]:
-    """kappa giving TRUE coverage 0.640 and 0.700 (large-sample quantiles of |mean - mu| / SEM, the
-    bisection with common random numbers) and the true coverage at kappa = 1."""
-    ratios = _skew_ratios(shape, 400_000, rng)
+def _gamma_blocks(
+    shape: float, size: tuple[int, ...], rng: np.random.Generator, correlated: bool
+) -> np.ndarray:
+    """Block values ``[..., bins]`` with mean ``shape``. Independent: Gamma(shape) per bin. Correlated
+    sparse bins as from shared histories: the same Gamma draws times ONE factor W_b ~ Gamma(0.5) / 0.5
+    (mean 1) per block shared by all bins, so that a block with few histories is sparse in every bin."""
+    g = rng.standard_gamma(shape, size, dtype=np.float32)
+    if correlated:
+        g = g * (rng.standard_gamma(W_SHARED, (*size[:-1], 1), dtype=np.float32) / W_SHARED)
+    return g
+
+
+def _skew_kappas(
+    shape: float, correlated: bool, rng: np.random.Generator
+) -> tuple[float, float, float]:
+    """kappa giving TRUE coverage 0.640 and 0.700 (large-sample quantiles of |mean - mu| / SEM of the
+    marginal bin, the bisection with common random numbers) and the true coverage at kappa = 1."""
+    g = _gamma_blocks(shape, (400_000, 20, 1), rng, correlated).astype(float)[..., 0]
+    ratios = np.abs(g.mean(axis=1) - shape) / (g.std(axis=1, ddof=1) / math.sqrt(20))
     k_lo, k_hi = (float(np.quantile(ratios, c)) for c in (0.640, 0.700))
     assert (
         abs(np.mean(ratios <= k_lo) - 0.640) < 1e-4 and abs(np.mean(ratios <= k_hi) - 0.700) < 1e-4
@@ -447,40 +524,60 @@ def _skew_kappas(shape: float, rng: np.random.Generator) -> tuple[float, float, 
     return k_lo, k_hi, float(np.mean(ratios <= 1.0))
 
 
-def _skew_passes(v5b: ModuleType, shape: float, kappas: tuple[float, ...], trials: int,
+def _skew_passes(v5b: ModuleType, shape: float, correlated: bool, kappas: tuple[float, ...], trials: int,
                  rng: np.random.Generator, bins: int = 12, reps: int = 5400) -> np.ndarray:  # fmt: skip
-    """Band-rule pass indicators ``[len(kappas), trials]`` on sparse Gamma-block tallies (20 blocks per
-    replicate and bin, replicate mean and SEM from the blocks, half width kappa * SEM) against the
-    pooled leave-one-out reference."""
+    """Pass indicators ``[len(kappas), trials]`` on Gamma-block tallies (20 blocks per replicate and bin,
+    replicate mean and SEM from the blocks, half width kappa * SEM, per-bin scales 0.5..2) against the
+    pooled leave-one-out reference; ``correlated`` bins as in ``_gamma_blocks``."""
     scale = np.linspace(0.5, 2.0, bins)
+    tq = _t98(v5b, reps)
     out = np.zeros((len(kappas), trials), dtype=bool)
     for i in range(trials):
-        g = rng.standard_gamma(shape, (reps, 20, bins), dtype=np.float32) * scale
+        g = _gamma_blocks(shape, (reps, 20, bins), rng, correlated) * scale
         mean, sem = g.mean(axis=1), g.std(axis=1, ddof=1) / math.sqrt(20)
         for j, kappa in enumerate(kappas):
-            out[j, i] = _band_pass(v5b, mean, kappa * sem)
+            out[j, i] = _box_pass(v5b, tq, mean.astype(float), (kappa * sem).astype(float))
         if i == 0:
-            e = v5b.v7_estimator_verdict(
-                "profile", mean, kappas[0] * sem, shape * scale, 0.01 * scale
-            )
+            e = v5b.v7_estimator_verdict("profile", mean.astype(float), (kappas[0] * sem).astype(float),
+                                         shape * scale, 0.01 * scale)  # fmt: skip
             assert e["pass"] == out[0, 0]
     return out
 
 
-@pytest.fixture(scope="module", params=[2.0, 0.5], ids=["gamma2.0", "gamma0.5"])
+SKEW_CASES = [(sh, corr) for sh in (2.0, 0.5) for corr in (False, True)]
+
+
+@pytest.fixture(
+    scope="module",
+    params=SKEW_CASES,
+    ids=[f"gamma{sh}-{'correlated' if c else 'independent'}" for sh, c in SKEW_CASES],
+)
 def skew_result(request: pytest.FixtureRequest, v5b: ModuleType) -> dict:
-    """Gamma shape 2 and 0.5, 12 bins, R = 5400: kappa scales the SEM so that the TRUE coverage is 0.640
-    and 0.700; pass rates there, power at kappa = 1 and the true coverage at kappa = 1."""
-    shape = request.param
-    rng = np.random.default_rng(20471005 + int(2 * shape))
-    k_lo, k_hi, true_nominal = _skew_kappas(shape, rng)
-    p = _skew_passes(v5b, shape, (k_lo, 1.0, k_hi), 1000, rng)
-    out = {"shape": shape, "kappa_0.640": k_lo, "kappa_0.700": k_hi, "true_coverage_at_kappa1": true_nominal,
-           "FA_0.640": float(p[0].mean()), "power_kappa1": float(p[1].mean()), "FA_0.700": float(p[2].mean())}  # fmt: skip
+    """Gamma shape 2 and 0.5, independent and correlated sparse bins, 12 bins, R = 5400: kappa scales
+    the SEM so that the TRUE coverage is 0.640 and 0.700; pass rates with CP bounds there, power at
+    kappa = 1 and the true coverage at kappa = 1."""
+    shape, corr = request.param
+    rng = np.random.default_rng(20471005 + int(2 * shape) + (7 if corr else 0))
+    k_lo, k_hi, true_nominal = _skew_kappas(shape, corr, rng)
+    rep = _rate_report(v5b, _skew_passes(v5b, shape, corr, (k_lo, 1.0, k_hi), 2000, rng))
+    out = {"shape": shape, "correlated": corr, "kappa_0.640": k_lo, "kappa_0.700": k_hi,
+           "true_coverage_at_kappa1": true_nominal, "FA_0.640": rep[0], "power_kappa1": rep[1], "FA_0.700": rep[2]}  # fmt: skip
     print("v7 skewed-tally calibration", out)
     return out
 
 
+@pytest.mark.calibration
 def test_v7_pipeline_skewed_tally_false_acceptance(skew_result: dict) -> None:
-    """False acceptance <= 0.07 at true coverage 0.640 and 0.700 for Gamma-block tallies."""
-    assert skew_result["FA_0.640"] <= 0.07 and skew_result["FA_0.700"] <= 0.07, skew_result
+    """The 95 % Clopper-Pearson upper bound of the false-acceptance rate is <= 0.05 at true coverage
+    0.640 and 0.700 for Gamma-block tallies, independent and correlated (shared-history) bins."""
+    assert (
+        skew_result["FA_0.640"]["cp95_upper"] <= 0.05
+        and skew_result["FA_0.700"]["cp95_upper"] <= 0.05
+    ), skew_result
+
+
+def test_calibration_marker_registered_and_excluded_from_ci() -> None:
+    """The Monte Carlo calibration is out of the lightweight CI selection and registered as a marker."""
+    ci = (REPO / ".github" / "workflows" / "ci.yml").read_text()
+    assert '-m "not cuda and not host and not calibration"' in ci
+    assert '"calibration:' in (REPO / "pyproject.toml").read_text()

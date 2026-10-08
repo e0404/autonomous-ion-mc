@@ -243,7 +243,7 @@ STEP_TIMEOUT_FLOOR_S = {
         "v5-compare": 1800,
         **{f"v2b-s{k}": 3300 for k in range(8)}, "v7-scan": 3300, "v7-shift": 3300,
         **{f"v7-rep-s{k}": 3300 for k in range(V7_REP_SHARDS)}, "v7-rep-ref": 3300,
-        "v3-workers-partition": 3300,
+        "pytest-v7-rep-calibration": 3300, "v3-workers-partition": 3300,
     },
     "hr5": {
         "v8-stat-python-s0": 3600, "v8-stat-python-s1": 3600, "v8-stat-cpu64": 3600,
@@ -521,6 +521,11 @@ def _suite_steps_v5b(add, s5, s5b, sc, out_dir, dirs):  # type: ignore[no-untype
     for k in range(V7_REP_SHARDS):  # one simulation of 9e6 histories each (5400 replicates in total)
         add(f"v7-rep-s{k}", [*s5b, "v7-rep-shard", "--shard", str(k), "--out-dir", str(out_dir), *sc], env)
     add("v7-rep-ref", [*s5b, "v7-rep-ref", "--out-dir", str(out_dir), *sc], env)
+    add(  # Monte Carlo calibration of the V7 rule (minutes); its pass is the pytest exit status
+        "pytest-v7-rep-calibration",
+        pytest_cmd("tests/ionmc/test_v7_coverage.py", marker="calibration"),
+        env,
+    )
     add("v7-rep-combine", [*s5b, "v7-rep-combine", "--dirs", *dirs, *sc], env)
     add("v3-workers-partition", [*s5, "v3-workers"], env)  # deferred: runs only when the mode is lifted
 

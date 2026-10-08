@@ -18,7 +18,7 @@ resolved environment is locked in `uv.lock`; CI uses `uv sync --extra dev --lock
 
 ```bash
 uv run pytest                          # tests under tests/
-uv run pytest -m "not cuda and not host"  # what CI runs
+uv run pytest -m "not cuda and not host and not calibration"  # what CI runs
 uv run mypy src/ionmc                  # type checking
 uv run pre-commit run --all-files      # ruff, ruff-format, mypy, hygiene hooks
 ```
