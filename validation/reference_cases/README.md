@@ -13,6 +13,8 @@ topas/proton-water-150mev[-smoke]/       150 MeV p, QGSP_BIC_HP + opt4, dose 1 m
 topas/carbon-water-290mevu-smoke/        12C 3480 MeV total, QMD, Edep + primary-carbon Fluence (1/mm2) vs depth
 topas/proton-water-150mev-fine[-seed2|-seed3]/   0.5 mm depth bins, 1e5 histories (evidence-grade candidates)
 topas/proton-water-150mev-lateral[-seed2|-seed3|-smoke]/  T15 lateral case: IDD 0.5 mm + binary 3-D dose 240x240x300 (0.5 x 0.5 x 1 mm)
+topas/proton-water-{150,200}mev-idd-r20[-emonly]-seed{1,2,3}/  V3-005B row V5: IDD over a 400 x 400 mm water box, 0.5 mm bins (full / EM-only physics)
+mcsquare/proton-water-{150,200}mev-idd-r20-{on,off}-seed{1,2,3}/  V3-005B row V5: same grid, nuclear interactions on / off
 fred/proton-water-150mev-fine[-seed2|-seed3]/    1 x 1 x 0.5 mm voxels, 1e5 primaries (evidence-grade candidates)
 mcsquare/proton-water-150mev-fine[-seed2|-seed3]/ 0.5 mm depth bins, 1e5 primaries (evidence-grade candidates)
 mcsquare/proton-water-150mev[-smoke]/    150 MeV p, hand-written BDL (sigma 1.0 mm), 2 mm water CT, dose + LET
@@ -209,3 +211,40 @@ Smoke finding (REF-95ef7515c835ec8c348f-e1a37fc0, 200 histories, 2.6 s): the fil
 `OnlyIncludeParticlesOfGeneration = "Primary"` is accepted (recorded in the binheader as
 "Filtered by"); binary files are float64, x fastest ("F" order), dose = energy / voxel mass, so
 the lateral mean of the 3-D dose equals the IDD dose of the same slab (agreement 2e-8).
+
+## V5 reference cases (V3-005B, acceptance row V5; Amendment 7 (b))
+
+Absolute integral depth dose of ionmc at r = 20 cm against TOPAS (gating) and MCsquare (report-only),
+150 and 200 MeV, nuclear on and off. 24 committed bundles (12 TOPAS, 12 MCsquare), 1e5 primaries,
+0.5 mm depth bins, three seeds per configuration; each `case.json` carries a `v5` block (`energy_mev`,
+`mode`, `nuclear`, `depth_bins`) used by `validation/scripts/reference/compare_idd_v5.py` to group runs.
+Seeds are `20270000 + 1000 * row + k` (k = 1, 2, 3; distinct per configuration so that on/off and full/EM-only
+runs are statistically independent); row = TOPAS full 150 / 200 = 1 / 2, TOPAS EM-only = 3 / 4,
+MCsquare on = 5 / 6, off = 7 / 8 (e.g. TOPAS full 150 MeV seeds 20271001-20271003; MCsquare off 200 MeV
+20278001-20278003). Directories: `topas/proton-water-{E}mev-idd-r20-seed{k}` (full: opt4 + QGSP_BIC_HP + HP
+elastic + stopping + binary-cascade ions + decay, as the V3-010B cases), `topas/proton-water-{E}mev-idd-r20-emonly-seed{k}`
+(`g4em-standard_opt4` only), `mcsquare/proton-water-{E}mev-idd-r20-{on,off}-seed{k}`.
+
+| Item | TOPAS | MCsquare |
+| --- | --- | --- |
+| Geometry | G4_WATER 400 x 400 x 320 mm (150 MeV) / 330 mm (200 MeV), ZBins 640 / 660 | CT 5 x 640 (660) x 5 voxels of 80 x 0.5 x 80 mm (CT.raw 64-66 kB zeros) |
+| Lateral extent | one lateral bin over the whole 400 x 400 mm box (contains r = 20 cm; corners r > 200 mm are summed, negligible for a pencil beam) | same (5 x 5 coarse voxels summed) |
+| Source | zero-size pencil, BeamEnergySpread 0 (as V3-010B) | BDL sigma 1.0 mm, divergence 1e-6 rad (as V3-010B; 190/200/210 MeV rows for 200 MeV) |
+| Nuclear on/off | full vs EM-only module list | `Simulate_Nuclear_Interactions` and the three `Simulate_Secondary_*` flags True / False |
+| Native unit | Gy per run (1e5 histories) | file value, inferred eV/g per primary |
+| IDD conversion | MeV = Gy x 0.08 kg / 1.602176634e-13 J/MeV per bin; IDD = MeV / (1e5 x 1 g/cm3 x 0.05 cm) | IDD = sum_xz (value x 1e-6 MeV/g) x (8 cm x 8 cm) (density cancels) |
+
+Output unit of the comparison: MeV/(g/cm^2)/primary. The script cuts every curve to the depth range
+of the ionmc grid (1.1 R(CSDA)), refuses an engine run whose in-grid total is outside 0.85-1.02 of the
+beam energy (unit or geometry error), requires >= 3 runs with distinct seeds per (engine, energy, nuclear) group, and
+verifies each ionmc partial against its `content_sha256`. The comparison is:
+
+```
+uv run python validation/scripts/reference/compare_idd_v5.py --ionmc-dir <partials dir> \
+  --topas-runs <12 TOPAS run dirs> --mcsquare-runs <12 MCsquare run dirs> --output <out>.json
+```
+
+Unverified until the engines run: (a) MCsquare e0404 accepting 80 mm lateral voxels and the
+`Simulate_Nuclear_Interactions False` switch (fallback: 20 mm voxels, 21 x N x 21, 1 MB each; if nuclear cannot be switched
+off, commit only the "on" cases); (b) the eV/g unit of `Dose.mhd` (the in-grid total check
+catches a wrong factor); (c) the lateral-voxel invariance of the MCsquare depth-dose.
