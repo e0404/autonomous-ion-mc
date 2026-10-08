@@ -242,7 +242,7 @@ After the run a nonzero transport-limit counter makes the result invalid: `run()
 `TransportLimitError` (its `.result` is the invalid result) unless
 `RunOptions.allow_invalid_result` is set, in which case `result.valid` is `False` and every grid
 result is flagged `valid = False`. Counters: `step_truncation`, `stall`, `straggling_rejection`,
-`genealogy_overflow` and `queue_overflow` (both always 0 until secondaries exist),
+`genealogy_overflow` and `queue_overflow` (both 0 unless nuclear secondaries exceed their bounds),
 `source_energy_out_of_range`, `energy_inversion`, `accumulator_overflow` and `scoring_pieces_overflow`.
 
 ## Extensible scoring
@@ -385,9 +385,10 @@ for trajectory-level parity with the Warp backends.
 `PhysicsOptions(nuclear=True, nuclear_table_id=ID)` adds proton non-elastic interactions (water, soft
 tissue, 1-250 MeV) on top of the unchanged electromagnetic step. The EM random streams do not depend
 on `nuclear` (purpose 2 is separate, decision 0041 section 4), so on/off pairs with one seed share
-their EM history. Warp backends with `nuclear=True` raise `UnsupportedCombinationError` until V3-005B.
+their EM history. Warp backends support `nuclear=True` since V3-005B C11 (warp-cpu float32 and float64 tested; warp-cuda written device-agnostic, untested in the sandbox).
 The whole event sampler is already one shared Warp-scope function (`make_nuclear(real).sample_event`, with `choose_target`; V3-005B C10): the Python reference path calls its pure-Python twin (`ionmc.nuclear.events.sample_event_scalar`), the kernels will call the `@wp.func` on the arrays of `NuclearDevice`; it draws its own PURPOSE_NUCLEAR uniforms, writes at most 32 products x 8 columns and sums the ledger with the compensated sum of CPython 3.12 `sum()`. Event-level parity of the twin and a Warp CPU float64 kernel on 1e4 recorded inputs is bitwise (`tests/ionmc/test_nuclear_device.py`).
-Nuclear interactions apply to primary protons only (decision 0041, approximation 6).
+Nuclear interactions apply to protons of every generation (decision 0041; secondary protons from V3-005B C13, both backends); deuterons have none.
+A secondary proton draws its own birth optical depth and uses the same thinning, majorant checks (after every step) and event sampler as the primary, on its own PURPOSE_NUCLEAR stream `(h, genealogy id, block)`: block 0 slot 0 is the birth draw, blocks 1.. the candidates and event attempts, exactly the layout of the primary (genealogy id 0). The primary's streams are untouched, so primary-only histories are bit-identical to the pre-C13 code (`SECONDARY_NUCLEAR = False` in `ionmc.transport.reference` / `kernels_nuclear` is the regression toggle). Events of secondaries push generation parent + 1; beyond generation 6 the child is refused (`genealogy_overflow`, energy `unaccounted`, result invalid). A sampler status 2 (more than 32 products) is, on both backends, a `nuclear_rejection_limit` event (energy `unaccounted`). The diagnostics-only nuclear trace holds at most 8 events and 32 secondaries per traced history.
 
 * **Thinning.** A primary draws `n_lambda = -ln u` at birth. `select_step_nuclear` adds the limit
   `n_lambda / (rho Sigma_hat(E0))` as step-limit reason 4 (geometry wins ties); after the EM step
@@ -404,7 +405,7 @@ Nuclear interactions apply to primary protons only (decision 0041, approximation
 * **Stack.** Per history a LIFO stack of at most 32 particles holds generation-1 protons and
   deuterons (position, direction, T, species, genealogy id, generation, the parent's voxel indices,
   `p1 v1`). Secondaries run the same EM step (deuterons with their own `TransportTables`,
-  `E_cut,d = 4 MeV`) and have no nuclear interactions; children take the next genealogy id
+  `E_cut,d = 4 MeV`); secondary protons interact (C13), deuterons do not; children take the next genealogy id
   (`parent + b 32^g`, decision 0037).
 * **Event disposition.**
 
@@ -446,8 +447,8 @@ Nuclear interactions apply to primary protons only (decision 0041, approximation
     (C-12) and -8.2/-14.2 MeV (O-16) at 100/150 MeV; every run reports its sum.
   - E' is uniform within each of 64 bins: <E'> biased by +3 to +5 % for alpha and +14 to +24 % for
     gamma (n, p, d within 0.2 %).
-  - Multiplicities preserve mean yields only; no t and He-3; no nuclear interactions of secondaries
-    (estimate 0.3 % of 150 MeV histories); no p-p elastic and no nuclear elastic scattering.
+  - Multiplicities preserve mean yields only; no t and He-3; no nuclear interactions of secondary
+    deuterons (secondary protons interact from C13); no p-p elastic and no nuclear elastic scattering.
 * **Single-process lv5 and deferred checks.** The python pool path supports `nuclear=True`, but the
   validation runs one process (operator directive); the 1-vs-N worker partition check
   (`v3-workers-partition`) is archived as deferred, so lv5 summaries are `conformant: false`.

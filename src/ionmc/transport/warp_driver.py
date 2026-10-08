@@ -132,6 +132,8 @@ def _nuclear_inputs(
     nd.e_source_max = wp.float64(NUCLEAR_MAX_ENERGY_MEV)
     nd.stack_cap = kn.STACK_CAPACITY
     nd.child_limit = kn.CHILD_LIMIT
+    nd.secondary_nuclear = int(kn.SECONDARY_NUCLEAR)
+    nd.max_parent_gen = kn.MAX_PARENT_GENERATION
     nd.ledger_tol = wp.float64(kn.LEDGER_TOL)
     for f in (
         "grid", "lam", "edges", "rpre", "recoil", "tconst", "m_res", "sigma", "sigma_win",

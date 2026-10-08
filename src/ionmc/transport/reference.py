@@ -98,6 +98,13 @@ __all__ = [
 
 
 STACK_CAPACITY = MAX_PARTICLES
+SECONDARY_NUCLEAR = True
+"""Secondary protons (generation >= 1) undergo non-elastic interactions (V3-005B C13, decision 0041
+section 3). ``False`` restores the primary-only histories of slice A for the regression check;
+the Warp kernel reads the same switch (``kernels_nuclear.SECONDARY_NUCLEAR``)."""
+TRACE_EVENT_ROWS = 8
+TRACE_SECONDARY_ROWS = 32
+"""Per-history capacity of the diagnostics-only nuclear trace (the Warp trace arrays' rows)."""
 """Capacity of the per-history LIFO particle stack (decision 0041 section 3)."""
 NUC_SPECIES_KEYS = ("n", "p", "d", "a", "g")
 """Light-product keys of the nuclear event diagnostics (``ionmc.nuclear.events.SPECIES``)."""
@@ -608,7 +615,12 @@ class _Reference:
             str(int(tgt_list[chosen])),
             {"events": 0, "light": dict.fromkeys(NUC_SPECIES_KEYS, 0), "residual": {}},
         )
-        if self.want_diag and h < self.cfg.diagnostics.trace_histories:
+        if (
+            self.want_diag
+            and h < self.cfg.diagnostics.trace_histories
+            and self._n_ev_rows < TRACE_EVENT_ROWS
+        ):
+            self._n_ev_rows += 1
             self.nuc_trace["events"].append(
                 [h, gid, int(tgt_list[chosen]), *(int(c) for c in ev.counts), int(ev.z_r),
                  int(ev.a_r), ev.attempts, t1]
@@ -664,7 +676,12 @@ class _Reference:
                     dx, dy, dz = direction
                 mass = self.mass_p if species == 0 else self.mass_d
                 pv = float(self.K.pv_mev(r(t_lab), mass))
-                if self.want_diag and h < self.cfg.diagnostics.trace_histories:
+                if (
+                    self.want_diag
+                    and h < self.cfg.diagnostics.trace_histories
+                    and self._n_sec_rows < TRACE_SECONDARY_ROWS
+                ):
+                    self._n_sec_rows += 1
                     self.nuc_trace["secondaries"].append(
                         [h, cid, gid, species, gen, t_lab, dx, dy, dz, pos[0], pos[1], pos[2]]
                     )
@@ -692,6 +709,7 @@ class _Reference:
         nx, ny, nz = self.shape
 
         self.generation = 0
+        self._n_ev_rows = self._n_sec_rows = 0  # nuclear trace rows of this history
         self._set_species(0)
         # source sampling (purpose 1)
         w = draw_block(key, h, 0, 0, PURPOSE_SOURCE)
@@ -777,9 +795,10 @@ class _Reference:
         self.generation = gen
         self._set_species(species)
         trace_this = h < cfg.diagnostics.trace_histories and gen == 0
-        # nuclear interactions of the PRIMARY proton only (decision 0041 section 3: secondaries
-        # and deuterons have none in slice A)
-        nuc_on = self.nuc is not None and gen == 0
+        # nuclear interactions of protons: the primary and, from C13, the secondary protons
+        # (generation >= 1) with the same thinning, majorant checks and event sampler, on their
+        # own streams (purpose NUCLEAR, genealogy id of the particle); deuterons have none
+        nuc_on = self.nuc is not None and species == 0 and (gen == 0 or SECONDARY_NUCLEAR)
         nu_rows = None
         n_lam = 0.0
         nc = 0

@@ -56,7 +56,6 @@ from ionmc.physics.nuclear import (
     DZ_MAX,
     EVENT_ACCEPTED,
     EVENT_BLOCKS_PER_ATTEMPT,
-    EVENT_EXHAUSTED,
     EVF_STRIDE,
     EVI_STRIDE,
     KALBACH_A_MAX,
@@ -685,7 +684,10 @@ def sample_event_scalar(
             event_constants(model), np.ravel(model.m_res_mev), evi, evf, prod, 0,
         )
     )  # fmt: skip
-    if status == EVENT_EXHAUSTED:
+    if status != EVENT_ACCEPTED:
+        # 64 attempts exhausted (status 0) or an accepted attempt with more than MAX_PRODUCTS
+        # products (status 2): both fail closed in the transport (``nuclear_rejection_limit``,
+        # the energy to ``unaccounted``), as in the Warp kernel (V3-005B C13)
         return ScalarEvent(
             False,
             MAX_ATTEMPTS,
@@ -697,10 +699,6 @@ def sample_event_scalar(
             math.nan,
             math.nan,
             (),
-        )
-    if status != EVENT_ACCEPTED:
-        raise RuntimeError(
-            f"nuclear event with more than {MAX_PRODUCTS} products (status {status})"
         )
     n_prod = int(evi[8])
     return ScalarEvent(

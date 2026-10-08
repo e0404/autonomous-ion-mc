@@ -104,7 +104,33 @@ V8_K, V8_DENSE_N, V8_DENSE_FACTOR, V8_DENSE_MIN_EVENTS, V8_TOL = 256, 96, 40.0, 
 R1_NUC_N, R1_NUC_SEED = 400, 20351004
 R1_NUC_BASELINE = "b84fdf389e8bae3b3820b73497086d071c3325ad"
 R1_NUC_DIGEST = "3edfce9ce5af0e1008d3012440dce09c22e86a308d80fe4b2c926882dc208749"
-R1_NUC_INTENDED_CHANGE: dict[str, Any] | None = None  # set by C13 (secondary-proton interactions)
+NUCLEAR_INTENDED_CHANGE: dict[str, Any] = {
+    "task": "V3-005B-C13",
+    "change": "secondary protons (generation >= 1, species 0) undergo non-elastic interactions on "
+              "the python and warp backends (decision 0041 section 3; deuterons still none)",
+    "baseline": R1_NUC_BASELINE,
+    "baseline_digest": R1_NUC_DIGEST,
+    "regression_toggle": "SECONDARY_NUCLEAR = False (ionmc.transport.reference and "
+                         "ionmc.transport.kernels_nuclear): primary-only histories, which must "
+                         "reproduce baseline_digest bitwise",
+    "may_change": ["nuclear event count per history", "secondary-proton dose and fluence",
+                   "nuclear tallies (nuclear_local, escaped neutral energy, binding, alpha_local)",
+                   "nuclear diagnostics block", "energy_balance nuclear fields"],
+    "must_not_change": ["the nuclear=False digest (A16 c862edf7...)",
+                        "primary-only histories (toggle off) vs baseline_digest",
+                        "per-particle RNG streams and slot layout of the primary",
+                        "energy balance closure (<= 1e-12) and zero fail-closed counters"],
+    "expected": {  # plan Amendment 7: secondary-proton events per history and their kinetic energy
+        "150": {"events_per_history": 0.0037, "energy_share_of_e0": 0.0012},
+        "200": {"events_per_history": 0.0096, "energy_share_of_e0": 0.0032},
+    },
+    "measured_by": "tests/ionmc/test_nuclear_secondary.py::test_secondary_event_rate_against_the_plan",
+}
+"""The intended-change record of the nuclear-on outputs after C13 (A16-style, decision 0039 section
+A16): the R1-nuc step compares the nuclear-on digest with the lv5 archive baseline only through
+this record: with ``SECONDARY_NUCLEAR`` off the digest must still equal ``R1_NUC_DIGEST`` (gated),
+with it on the digest differs by the secondary interactions and the run must be valid."""
+R1_NUC_INTENDED_CHANGE: dict[str, Any] | None = NUCLEAR_INTENDED_CHANGE
 V5_N, V5_BATCHES, V5_DZ_MM, V5_HALF_MM = 100_000, 20, 0.5, 200.0
 V5_ENERGIES = (150.0, 200.0)
 V2B_N, V2B_SHARDS, V2B_BATCHES = 1_000_000, 2, 20  # per variant in total
@@ -422,7 +448,19 @@ def step_r1_nuc(a: argparse.Namespace) -> int:
     wall = time.perf_counter() - t0
     recorded = R1_NUC_DIGEST
     match = dig["sha256"] == recorded
-    nuc_ok = bool(dig["valid"] and (match if R1_NUC_INTENDED_CHANGE is None else True))
+    toggle = None
+    if R1_NUC_INTENDED_CHANGE is None:
+        nuc_ok = bool(dig["valid"] and match)
+    else:  # intended change: the primary-only toggle reproduces the baseline, the run is valid
+        import ionmc.transport.reference as reference
+
+        old = reference.SECONDARY_NUCLEAR
+        reference.SECONDARY_NUCLEAR = False
+        try:
+            toggle = r1_nuc_digest()
+        finally:
+            reference.SECONDARY_NUCLEAR = old
+        nuc_ok = bool(dig["valid"] and toggle["valid"] and toggle["sha256"] == recorded)
     doc = {
         "step": "r1-nuc", "a16_regression": {"pass": a16["pass"], "baseline": a16["a16_baseline"],
                                              "digest_sha256": a16["digest_sha256"],
@@ -431,7 +469,9 @@ def step_r1_nuc(a: argparse.Namespace) -> int:
         "nuclear_on_python": {"histories": R1_NUC_N, "seed": R1_NUC_SEED, "digest": dig["sha256"],
                               "recorded": recorded, "baseline_commit": R1_NUC_BASELINE,
                               "matches_recorded": match, "summary": dig["summary"], "wall_s": wall,
-                              "intended_change": R1_NUC_INTENDED_CHANGE},
+                              "intended_change": R1_NUC_INTENDED_CHANGE,
+                              "primary_only_toggle_digest": None if toggle is None
+                              else toggle["sha256"]},
         "a16_intended_change_none": run_suite.A16_INTENDED_CHANGE is None,
         "pass": bool(a16["pass"] and nuc_ok and run_suite.A16_INTENDED_CHANGE is None),
     }  # fmt: skip

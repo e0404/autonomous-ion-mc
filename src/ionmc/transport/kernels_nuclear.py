@@ -15,9 +15,11 @@ order of the Python reference ``ionmc.transport.reference._Reference`` (the sema
 * species-aware stepping: the proton and deuteron tables are concatenated along the material
   axis by the driver (material row ``m + species * n_materials``), the deuteron cutoff and mass
   come from ``nd``; the scoring hook of the deuteron is the second channel struct ``chan_d``;
-* majorant thinning for generation-0 protons only (``n_lambda`` bookkeeping, window or
-  end-of-range majorant of the grid cell of ``E0`` by ``grid_locate``, candidate at the end of a
-  nuclear-limited step, ``Sigma(E1) <= S^(E0)`` checked after EVERY primary step);
+* majorant thinning for protons of every generation (primary and, from C13, secondary protons;
+  deuterons none; ``SECONDARY_NUCLEAR = False`` restores primary-only;
+  ``n_lambda`` bookkeeping, window or end-of-range majorant of the grid cell of ``E0`` by
+  ``grid_locate``, candidate at the end of a nuclear-limited step, ``Sigma(E1) <= S^(E0)``
+  checked after EVERY step);
 * the event of ``make_nuclear(real).sample_event`` on the PURPOSE_NUCLEAR stream with the slot
   layout of the Python reference (secondaries pushed with generation parent + 1, alpha and
   residual recoil deposited locally with species 64 / class local, neutron / gamma / binding /
@@ -28,7 +30,8 @@ event ledger ``binding`` and ``imbalance`` are recomputed in float64 from the sa
 lab energies (the sampler's own float32 ledger entries carry ~1e-5 MeV of rounding that would
 trip the 1e-9 conservation check); in float64 the sampler's entries are used as they are.
 An event with more than 32 products (sampler status 2, never produced by the Python reference
-below 80 products) fails closed like an exhausted rejection loop (``nuclear_rejection_limit``).
+below 80 products; the Python reference mirrors it) fails closed like an exhausted
+rejection loop (``nuclear_rejection_limit``).
 
 Counter columns after the nine of ``COUNTER_NAMES``: ``majorant_violation`` (9),
 ``nuclear_rejection_limit`` (10), ``nuclear_conservation`` (11). Tally columns: the unaccounted
@@ -67,9 +70,11 @@ _MAX_ATTEMPTS = MAX_REJECTION_ATTEMPTS
 END_NUCLEAR = 5
 STACK_COLUMNS = 16
 TRACE_WIDTH = 12
-MAX_EVENT_ROWS = 2
+MAX_EVENT_ROWS = 8
 STACK_CAPACITY = MAX_PARTICLES
 CHILD_LIMIT = 31
+MAX_PARENT_GENERATION = 5  # as ionmc.rng.philox: a child of generation 5 (generation 6) is the last
+SECONDARY_NUCLEAR = True  # secondary protons interact (C13); False: primary-only (regression)
 LEDGER_TOL = 1.0e-9
 """Runtime limits written to ``NucData`` by the driver (tests lower them to force the counters)."""
 
@@ -94,6 +99,8 @@ def make_nuclear_support(real: type) -> SimpleNamespace:
         "n_mat": int,
         "stack_cap": int,
         "child_limit": int,
+        "secondary_nuclear": int,
+        "max_parent_gen": int,
         "ledger_tol": D,
         "grid": wp.array(dtype=R),
         "lam": wp.array(dtype=R),
@@ -337,7 +344,7 @@ def make_nuclear_transport_kernel(real: type, diag: bool):
             nuc_on = int(0)
             n_lam = D(0.0)
             nc = int(0)
-            if gen == 0:
+            if species == 0 and (gen == 0 or nd.secondary_nuclear == 1):
                 nuc_on = 1
                 u_birth = nuc_u(h, gid_u, 0, 0, key)
                 n_lam = -wp.log(D(u_birth))
@@ -680,7 +687,7 @@ def make_nuclear_transport_kernel(real: type, diag: bool):
                                         m_t_e = D(nd.tconst[tb_e + 1])
                                         n_prod = nd.evi[ib_e + 8]
                                         if with_diag:
-                                            if h < ctl.trace_k and n_ev_rows < 2:
+                                            if h < ctl.trace_k and n_ev_rows < 8:
                                                 ti = int(h - ctl.trace_h0)
                                                 nd.ev_tr[ti, n_ev_rows, 0] = D(h)
                                                 nd.ev_tr[ti, n_ev_rows, 1] = D(gid)
@@ -746,7 +753,10 @@ def make_nuclear_transport_kernel(real: type, diag: bool):
                                                     for _g in range(gen):
                                                         mult = mult * 32
                                                     cid = gid + n_children * mult
-                                                    if n_children > nd.child_limit or gen > 6:
+                                                    if (
+                                                        n_children > nd.child_limit
+                                                        or gen > nd.max_parent_gen
+                                                    ):
                                                         gen_ok = 0
                                                     if cid >= 1073741824:
                                                         gen_ok = 0

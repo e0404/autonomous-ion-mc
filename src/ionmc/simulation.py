@@ -338,7 +338,8 @@ def _tally_capabilities(nuclear: bool = False) -> dict[str, Any]:
             ],
             "note": (
                 "secondary protons and deuterons (generation >= 1) are transported and accepted "
-                "(nuclear=True, decision 0041)"
+                "(nuclear=True, decision 0041); secondary protons undergo non-elastic "
+                "interactions (V3-005B C13, generations up to 6), deuterons do not"
                 if nuclear
                 else "secondary particles are not transported yet (V3-005A); no secondary species"
             ),
