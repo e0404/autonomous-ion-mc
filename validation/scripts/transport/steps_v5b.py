@@ -72,6 +72,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
+import run_suite
 import steps as base
 import steps_v4 as v4
 import steps_v5 as v5
@@ -134,7 +135,8 @@ with it on the digest differs by the secondary interactions and the run must be 
 R1_NUC_INTENDED_CHANGE: dict[str, Any] | None = NUCLEAR_INTENDED_CHANGE
 V5_N, V5_BATCHES, V5_DZ_MM, V5_HALF_MM = 100_000, 20, 0.5, 200.0
 V5_ENERGIES = (150.0, 200.0)
-V2B_N, V2B_SHARDS, V2B_BATCHES = 1_000_000, 2, 20  # per variant in total
+V2B_N, V2B_BATCHES = 1_000_000, 20  # per variant in total
+V2B_SHARDS = run_suite.V2B_SHARDS  # defined in run_suite.py (host interpreter has no ionmc)
 V2B_VARIANTS = ((0.1, 0.02), (1.0, 0.02))  # (s_max mm, f_E): a, b
 V7_SCAN_N, V7_BATCHES, V7_SLOPE, V7_SLOPE_TOL = (10_000, 100_000, 1_000_000), 100, -0.5, 0.05
 V7_F32_N, V7_F32_Z = 100_000, 3.0

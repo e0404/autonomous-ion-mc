@@ -1986,3 +1986,26 @@ def test_v5_compare_records_that_bound_cases_are_in_the_source_identity(tmp_path
         )
     with pytest.raises(SystemExit, match="no bound case"):
         v5b.bound_cases_source_identity({}, cases)
+
+
+def test_suite_definition_and_hashing_need_no_ionmc() -> None:
+    """The host interpreter running ``run_suite.py`` has no ``ionmc``: defining and hashing every
+    suite must not import the step modules (regression of RUN-20261008T130049Z-5a04b473)."""
+    code = (
+        "import sys\n"
+        "sys.modules['ionmc'] = None\n"
+        f"sys.path.insert(0, {str(SCRIPTS)!r})\n"
+        "import run_suite\n"
+        "for s in run_suite.SUITES:\n"
+        "    assert run_suite.suite_steps(s, 1, 1.0, single_process=True), s\n"
+        "assert run_suite.source_files('lv5b')\n"
+        "assert run_suite.V2B_SHARDS == 2\n"
+        "assert not any(m.startswith('steps') for m in sys.modules)\n"
+    )
+    r = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, cwd=REPO, timeout=120
+    )
+    assert r.returncode == 0, r.stderr
+    text = (SCRIPTS / "run_suite.py").read_text()
+    assert 'import_module("steps' not in text
+    assert not re.search(r"^import steps|^from steps", text, re.M)

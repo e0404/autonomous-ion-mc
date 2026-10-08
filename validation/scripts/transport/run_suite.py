@@ -245,6 +245,12 @@ STEP_TIMEOUT_FLOOR_S = {
 timeout is the larger of the two and is recorded in the step header."""
 
 
+V2B_SHARDS = 2
+"""Number of shards of the V2b statistics of the V3-005B plan (Amendment 8). Defined here, not imported
+from ``steps_v5b.py``: the host interpreter running this script has no ``ionmc`` (the steps get it via
+``PYTHONPATH``), and ``steps_v5b`` imports it; ``steps_v5b.V2B_SHARDS`` is taken from this value."""
+
+
 def step_timeout_s(suite: str, name: str, default: int) -> int:
     floor = STEP_TIMEOUT_FLOOR_S.get(suite, {}).get(name.split("-", 1)[1], 0)
     return max(default, floor)
@@ -486,9 +492,7 @@ def _suite_steps_v5b(add, s5, s5b, sc, out_dir, dirs):  # type: ignore[no-untype
     warp-cpu float64 backends in one process, ``nuclear=True``. V6 and E1-B (r_index 12 and 13) belong
     to V3-005C (steps 12/13 reserved). The deferred step is the 1-vs-N worker partition of nuclear
     runs; any ``cpu_workers > 1`` is deferred with it."""
-    from importlib import import_module
-
-    shards = import_module("steps_v5b").V2B_SHARDS
+    shards = V2B_SHARDS
     env = NUCLEAR_ENV
     add("lv5b-throughput", [*s5b, "lv5b-throughput", *sc], env)
     add("v8-lv-python-vs-warp-cpu", [*s5b, "v8-lv", *sc], env)
