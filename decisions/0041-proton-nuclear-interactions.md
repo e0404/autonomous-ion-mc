@@ -146,9 +146,9 @@ The requirements are V1-MUST-005, V1-MUST-013 and V1-MUST-014, with fail-closed 
 
 ### 6. Data pipeline and roles
 
-- `ionmc data build nuclear-proton` reads the hash-pinned sources from the cache. It writes `<cache>/derived/nuclear-proton-<id>.npz` plus JSON, where id = sha256(source hashes, builder version, canonical options).
+- `ionmc data build nuclear-proton` reads the hash-pinned sources from the cache. It writes `<cache>/derived/nuclear-proton-<id>.npz` plus JSON. *(Amended 2026-10-08, Codex REVIEW-7d0fb725 / REVIEW-3a1a1c8b:)* id = sha256 of the canonical JSON (sorted keys, compact separators) of the whole JSON sidecar without the `table_id` field; the sidecar carries `npz_sha256`, the source hashes, the builder version and the canonical options, so the id authenticates the npz bytes and every sidecar field. The original formula sha256(source hashes, builder version, canonical options) is superseded.
 - The JSON records surrogates, the extension method, the λ residuals, the gate values G and D, and units.
-- Loading uses `np.load(allow_pickle=False)`, re-hashes, checks the source pin, and freezes the arrays.
+- Loading uses `np.load(allow_pickle=False)`, re-hashes the npz, recomputes the id from the sidecar, checks the source pin, derives the qualification flags and capacity bounds from the npz arrays (refusing an unqualified table), cross-checks the sidecar, and freezes the arrays.
 - Git holds no raw or derived nuclear data. It holds only the registry entries, the EXFOR manifest (IDs, roles, hashes; no values), synthetic fixtures and aggregate statistics.
 
 | Data | Role | Licence / citation |

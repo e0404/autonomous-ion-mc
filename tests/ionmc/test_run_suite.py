@@ -1538,8 +1538,8 @@ def test_v5_imported_partials_need_the_attested_manifest(
     path.write_text(json.dumps(forged))
     with pytest.raises(SystemExit, match="differs from the manifest"):
         v5.load_partials(a, ["p-s0.json"])
-    # a resealed manifest as well: the code accepts it (it cannot read the protected host-runner
-    # records) but the combine document exposes the digest and host_run_id it relied on
+    # a resealed manifest as well: the step evaluates (it cannot read the protected host-runner
+    # records) but is never conformant by code; the combine document exposes what it relied on
     write_manifest({"p-s0.json": {"content_sha256": forged["content_sha256"],
                                   "host_run_id": "H-forged"}})  # fmt: skip
     a2 = argparse.Namespace(**{k: v for k, v in vars(a).items() if not k.startswith("attested")})
@@ -1556,9 +1556,18 @@ def test_v5_imported_partials_need_the_attested_manifest(
     # in environment.txt makes the archive non-conformant
     summ = _load("summarize")
     env = {"partials_manifest_sha256": att["manifest_sha256"]}
-    assert summ.attestation_problems(att, SHA, env) == []
+    reason = "imported_partials_unverified_by_code"
+    assert summ.attestation_problems(att, SHA, env) == [
+        reason
+    ]  # forged + resealed: pass, not conformant
+    current = {**att, "partials": [{**att["partials"][0], "origin": "current-run",
+                                    "host_run_id": None}]}  # fmt: skip
+    assert (
+        summ.attestation_problems(current, SHA, env) == []
+    )  # same-invocation partials: conformant
     assert summ.attestation_problems(None, SHA, env) == []
     no_id = {**att, "partials": [{**att["partials"][0], "host_run_id": ""}]}
+    assert reason in summ.attestation_problems(no_id, SHA, env)
     assert any("host_run_id" in m for m in summ.attestation_problems(no_id, SHA, env))
     assert any("environment.txt" in m for m in summ.attestation_problems(att, SHA, {}))
     assert any("run_sha" in m for m in summ.attestation_problems(att, "f" * 40, env))
@@ -1578,3 +1587,36 @@ def test_v5_imported_partials_need_the_attested_manifest(
     no_manifest = argparse.Namespace(suite="lv5", step_timeout=1, scale=1.0, seed_base=1,
                                      python_parts=1, only=None, partials_manifest=None)  # fmt: skip
     assert "partials_manifest_sha256=\n" in rs.environment_text(SHA, "git", "no", no_manifest, 1)
+
+
+def test_imported_partials_make_the_summary_non_conformant_by_code(tmp_path: Path) -> None:
+    """A step that used any imported partial passes on its criterion but is ``conformant: false``
+    with ``imported_partials_unverified_by_code`` (also when the manifest is valid or resealed);
+    partials of the current output directory keep the archive conformant (Codex review 4)."""
+    summ, reason = _load("summarize"), "imported_partials_unverified_by_code"
+    msha = "e" * 64
+    env = _env().replace("source_hashes:", f"partials_manifest_sha256={msha}\nsource_hashes:")
+
+    def att(origin: str, host: str | None) -> dict[str, object]:
+        return {"run_sha": SHA, "manifest_sha256": msha, "partials": [
+            {"name": "p-s0.json", "content_sha256": "a" * 64, "origin": origin,
+             "host_run_id": host}]}  # fmt: skip
+
+    for tag, origin, host in (
+        ("imported", "imported", "H-forged"),
+        ("current", "current-run", None),
+    ):
+        d = tmp_path / tag
+        _archive(d, _full(), doc={"pass": True, "attestation": att(origin, host)}, env=env)
+        s, c = summ.verify(d, SHA), summ.combine([d], SHA)
+        assert s["pass"] and not s["subset"] and c["pass"] and c["complete"]
+        if tag == "imported":
+            assert not s["conformant"] and any(
+                r.endswith(reason) for r in s["non_conformant_reasons"]
+            )
+            assert not c["conformant"] and any(
+                r.endswith(reason) for r in c["non_conformant_reasons"]
+            )
+        else:
+            assert s["conformant"] and s["non_conformant_reasons"] == []
+            assert c["conformant"] and c["non_conformant_reasons"] == []

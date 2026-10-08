@@ -24,7 +24,10 @@ executed steps, and the archive is never ``conformant`` (reasons: the execution 
 ``--combine``: every directory must verify, with the same suite, SHA, scale and
 ``source_hashes`` (the *identity*); the union of the manifests must be exactly the complete step
 list of the suite, with no step duplicated and none missing. Only then is the combined summary
-``conformant`` (if every part is clean or attested and none is reduced).
+``conformant`` (if every part is clean or attested and none is reduced) and no step used a partial
+imported from another output directory: the code cannot verify the protected host-runner records
+behind ``--partials-manifest``, so such a step is ``conformant: false`` with the reason
+``imported_partials_unverified_by_code`` (its ``pass`` is unaffected).
 """
 
 from __future__ import annotations
@@ -207,15 +210,23 @@ def parse_step(
     }
 
 
+IMPORTED_UNVERIFIED = "imported_partials_unverified_by_code"
+
+
 def attestation_problems(att: dict[str, Any] | None, sha: str, env: dict[str, Any]) -> list[str]:
     """Defects of the partials attestation block of a combine step (None: not a combine step).
-    An imported partial without a ``host_run_id``, a manifest digest that is not the one recorded
-    in ``environment.txt`` or a run SHA other than the archive's makes the archive non-conformant;
-    the protected host-runner records themselves cannot be verified here."""
+    Any imported partial (origin other than the current output directory) makes the archive
+    non-conformant by code (``imported_partials_unverified_by_code``), whatever the manifest says:
+    the protected host-runner records cannot be verified here, so a manifest (even a resealed
+    one) is documentation of what was relied on, not proof. A missing ``host_run_id``, a manifest
+    digest that is not the one recorded in ``environment.txt`` or a run SHA other than the
+    archive's are further defects."""
     if att is None:
         return []
     out = []
     imported = [p for p in att.get("partials", []) if p.get("origin") == "imported"]
+    if imported:
+        out.append(IMPORTED_UNVERIFIED)
     if imported and not att.get("manifest_sha256"):
         out.append("imported partials without a recorded manifest sha256")
     out += [f"imported partial {p.get('name')} lacks a host_run_id"

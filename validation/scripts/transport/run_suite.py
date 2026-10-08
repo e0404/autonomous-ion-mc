@@ -45,8 +45,13 @@ Rules (the style of ``validation/scripts/warp-architecture/run_all.sh``):
   record_local_validation; the code cannot verify those records. The manifest path and its sha256 are
   recorded in ``environment.txt`` (``partials_manifest``, ``partials_manifest_sha256``), the combine steps
   print an ``attestation`` block (manifest sha256, every name/digest/host_run_id used, the run SHA) that
-  ``summarize.py --combine`` carries into the combined summary, ``conformant: false`` unless every imported
-  partial has a host_run_id; without ``--import-dirs`` only partials of the current output directory are
+  ``summarize.py --combine`` carries into the combined summary. These records document what was relied on;
+  they do not make the archive conformant: any step that used an imported partial (origin other than the
+  current output directory) is ``conformant: false`` with the reason ``imported_partials_unverified_by_code``
+  (``pass`` unaffected). Under the single-process directive sharded rows are therefore combined from imported
+  partials and are non-conformant by code; they become conformant only when all shards and the combine run in
+  one invocation after the operator lifts the directive; the protected validation record lists the host run
+  ids; without ``--import-dirs`` only partials of the current output directory are
   accepted);
 * ``--workers 1`` (or ``--single-process``) is the single-process diagnostic mode: every step runs
   with one worker and single-threaded numerics (``SINGLE_PROCESS_ENV``), the steps whose purpose is

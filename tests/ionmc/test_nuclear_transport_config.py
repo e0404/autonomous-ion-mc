@@ -392,8 +392,7 @@ def test_nuclear_effective_config_and_capabilities(make_config: MakeConfig, tid:
     assert "deferred_backends" not in base["tallies"]
     fc = cap["tallies"]["fail_closed"]
     assert fc[0] == "unknown or unproducible species"  # no sentence lists 'secondary' as an error
-    assert "not an error with nuclear=True" in fc[1] and "'secondary'" in fc[1]
-    assert [e for e in fc if "secondary" in e] == [fc[1]]
+    assert not any("secondary" in e or "not an error" in e for e in fc)  # accepted only above
     assert any("secondary" in e for e in base["tallies"]["fail_closed"])  # nuclear=False: pinned
     assert base["tallies"]["fail_closed"][0] == (
         "unknown or unproducible species, generation 'secondary'"

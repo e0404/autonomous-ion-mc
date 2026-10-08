@@ -327,7 +327,8 @@ def step_v2_shard(a: argparse.Namespace) -> int:
 MANIFEST_SOURCE = "host-runner protected stdout PARTIAL lines"
 ATTESTATION_STATEMENT = (
     "the code verifies each imported partial against the manifest entry (digest) and requires a "
-    "host_run_id per entry; it cannot verify the protected host-runner records that the manifest "
+    "host_run_id per entry, but any imported partial makes the summary non-conformant "
+    "(imported_partials_unverified_by_code); it cannot verify the protected host-runner records that the manifest "
     "is built from. The orchestrator must have written the manifest only from the PARTIAL <name> "
     "<sha> stdout lines of those records and must list the host_run_ids in record_local_validation"
 )

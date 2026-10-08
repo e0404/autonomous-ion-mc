@@ -368,14 +368,6 @@ def _tally_capabilities(nuclear: bool = False) -> dict[str, Any]:
             "unknown or unproducible species"
             if nuclear
             else "unknown or unproducible species, generation 'secondary'",
-            *(
-                [
-                    "(not an error with nuclear=True: generation 'secondary' requests are "
-                    "accepted because secondary protons and deuterons are transported)"
-                ]
-                if nuclear
-                else []
-            ),
             "let_medium other than water, dose_reference other than medium",
             "unknown grid or lookup, duplicate or reserved request names, unused lookups",
             "lookup species gaps, axis coverage gaps, sha256 mismatch, non-uniform tables or "
