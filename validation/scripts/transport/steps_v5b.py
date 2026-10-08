@@ -16,8 +16,8 @@ non-conformant run; the rehearsal base is ``REHEARSAL_SEED_BASE`` (2046xxxx, nev
 
 Seeds (Amendment 6): ``seed = base + 1000 * r_index + shard`` with the lv5b base 20471004 (Amendment 11; 20441004 consumed) and the
 hr5 base 20451004; ``R_INDEX`` (lv5b): throughput 1, v8-lv 2, r1-nuc 3, v5-150-on 4, v5-150-off 5,
-v5-200-on 6, v5-200-off 7, v2b 8, v7-scan 9, v7-shift 10, v7-rep 11 (the five
-replicate shards: shards 0..4, the 1e6 reference: shard ``V7_SHARDS`` = 5); ``R_INDEX_HR`` (hr5): v8-stat 1, v7-f32 2. The python and
+v5-200-on 6, v5-200-off 7, v2b 8, v7-scan 9, v7-shift 10, v7-rep 11 (the six
+replicate shards: shards 0..5, the 1e6 reference: shard ``V7_SHARDS`` = 6); ``R_INDEX_HR`` (hr5): v8-stat 1, v7-f32 2. The python and
 warp samples of v8-stat use the shards of ``V8_SAMPLES``.
 
 Definitions made here where the plan leaves them open (all recorded in the documents):
@@ -43,17 +43,23 @@ Definitions made here where the plan leaves them open (all recorded in the docum
   the exact batch partials (``run_range`` over the batch history ranges, which equals the batch
   decomposition of the full run). The N-scan uses ``V7_BATCHES`` = 100 batches per N so that the
   standard error of the slope of ln(SE) against ln N (about 0.02) resolves the frozen +-0.05.
-  Coverage (Amendment 13, Codex REVIEW-be30e621): ``V7_REPLICATES`` = 4500 replicates of ``V7_REP_N`` =
-  1e4 histories from ``V7_SHARDS`` = 5 single simulations (steps ``v7-rep-s{0..4}``) of ``V7_SHARD_N`` = 9e6
+  Coverage (Amendment 13, Codex REVIEW-be30e621): ``V7_REPLICATES`` = 5400 replicates of ``V7_REP_N`` =
+  1e4 histories from ``V7_SHARDS`` = 6 single simulations (steps ``v7-rep-s{0..5}``) of ``V7_SHARD_N`` = 9e6
   histories in ``V7_SHARD_BATCHES`` = 18000 batches of 500 histories; the histories are independent
   (counter-based RNG per history), so replicate j is the contiguous group of ``V7_BATCHES_PER_REP`` = 20
   batches [20 j, 20 j + 20) with mean and sample SEM (ddof = 1) of its 20 batches. One reference simulation
-  (``v7-rep-ref``, ``V7_REF_N`` = 1e6 histories, 20 batches) gives the reference mean and SEM. The three
+  (``v7-rep-ref``, ``V7_REF_N`` = 1e6 histories, 20 batches) gives the cross-check reference mean and SEM. The three
   estimators of the frozen V7 row are covered: the ``V7_BINS`` = 12-bin secondary-proton dose profile
   ``sec_p``, and the 12-bin ``nuclear_local`` dose profile (``nuc_local`` channel) and the scalar ``escaped_neutral`` (neutron + gamma), 1 sigma intervals
-  against the reference mean. ``v7-rep-combine`` consumes the four partials (no seed) and applies
-  ``v7_tost_verdict`` per estimator, with the reference-uncertainty treatment of ``v7_reference_correction``
-  (derivation there). Row V7 coverage passes iff all three estimators pass; the pooled-point gate
+  against the leave-one-out pooled mean of the replicates (the 1e6 run is a cross-check). ``v7-rep-combine`` consumes the seven partials (six shards and the reference; no seed) and applies
+  ``v7_tost_verdict`` per estimator, with the reference-uncertainty treatment of ``v7_estimator_verdict``
+  (gating reference: the leave-one-out pooled mean of the replicates, ``mu_(-j) = (sum_k mean_k - mean_j) /
+  (R - 1)``, with pooled standard error ``SEM_pool = sigma / sqrt(R)``; sensitivity band: the hits are
+  recomputed with the reference shifted coherently over all bins by +/- ``V7_REF_Z`` SEM_pool, ``m_lo`` /
+  ``m_hi`` are the smallest / largest of the three mean coverages, and the interval is ``[m_lo - t s_tot,
+  m_hi + t s_tot]`` with the fully correlated common-mode sd bound ``s_ref_bound`` of
+  ``v7_reference_correction``; the independent 1e6 reference run is a cross-check only: coverage against
+  it ``m_ref1e6``, the per-bin agreement ``z_b`` and ``max |z_b|``, ``s_ref_cov``, ``b_ref``). Row V7 coverage passes iff all three estimators pass; the pooled-point gate
   0.68 +- 0.03 is only reported (``legacy_point_gate_pass``).
   Grid shift and refinement (decision of this module, no frozen tolerance): the whole-grid secondary
   proton dose of a lateral half-voxel shift agrees to ``V7_SHIFT_RTOL`` (edge strips) and of a 2x
@@ -99,7 +105,9 @@ from ionmc.transport.tally import NUCLEAR_TALLY_NAMES, QUANTUM_MEV
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
 FORMAT = 1
-QUALIFICATION_SEED_BASE = 20471004  # lv5b (Amendment 11; 20441004 consumed by the failed V7 replicate step)
+QUALIFICATION_SEED_BASE = (
+    20471004  # lv5b (Amendment 11; 20441004 consumed by the failed V7 replicate step)
+)
 HR5_SEED_BASE = 20451004  # hr5 (Amendment 6)
 REHEARSAL_SEED_BASE = 20461004  # V3-005B rehearsals, never evidence
 R_INDEX = {"throughput": 1, "v8-lv": 2, "r1-nuc": 3, "v5-150-on": 4, "v5-150-off": 5,
@@ -119,19 +127,25 @@ R1_NUC_DIGEST = "3edfce9ce5af0e1008d3012440dce09c22e86a308d80fe4b2c926882dc20874
 NUCLEAR_INTENDED_CHANGE: dict[str, Any] = {
     "task": "V3-005B-C13",
     "change": "secondary protons (generation >= 1, species 0) undergo non-elastic interactions on "
-              "the python and warp backends (decision 0041 section 3; deuterons still none)",
+    "the python and warp backends (decision 0041 section 3; deuterons still none)",
     "baseline": R1_NUC_BASELINE,
     "baseline_digest": R1_NUC_DIGEST,
     "regression_toggle": "SECONDARY_NUCLEAR = False (ionmc.transport.reference and "
-                         "ionmc.transport.kernels_nuclear): primary-only histories, which must "
-                         "reproduce baseline_digest bitwise",
-    "may_change": ["nuclear event count per history", "secondary-proton dose and fluence",
-                   "nuclear tallies (nuclear_local, escaped neutral energy, binding, alpha_local)",
-                   "nuclear diagnostics block", "energy_balance nuclear fields"],
-    "must_not_change": ["the nuclear=False digest (A16 c862edf7...)",
-                        "primary-only histories (toggle off) vs baseline_digest",
-                        "per-particle RNG streams and slot layout of the primary",
-                        "energy balance closure (<= 1e-12) and zero fail-closed counters"],
+    "ionmc.transport.kernels_nuclear): primary-only histories, which must "
+    "reproduce baseline_digest bitwise",
+    "may_change": [
+        "nuclear event count per history",
+        "secondary-proton dose and fluence",
+        "nuclear tallies (nuclear_local, escaped neutral energy, binding, alpha_local)",
+        "nuclear diagnostics block",
+        "energy_balance nuclear fields",
+    ],
+    "must_not_change": [
+        "the nuclear=False digest (A16 c862edf7...)",
+        "primary-only histories (toggle off) vs baseline_digest",
+        "per-particle RNG streams and slot layout of the primary",
+        "energy balance closure (<= 1e-12) and zero fail-closed counters",
+    ],
     "expected": {  # plan Amendment 7: secondary-proton events per history and their kinetic energy
         "150": {"events_per_history": 0.0037, "energy_share_of_e0": 0.0012},
         "200": {"events_per_history": 0.0096, "energy_share_of_e0": 0.0032},
@@ -151,28 +165,29 @@ V2B_VARIANTS = ((0.1, 0.02), (1.0, 0.02))  # (s_max mm, f_E): a, b
 V7_SCAN_N, V7_BATCHES, V7_SLOPE, V7_SLOPE_TOL = (10_000, 100_000, 1_000_000), 100, -0.5, 0.05
 V7_F32_N, V7_F32_Z = 100_000, 3.0
 V7_SHIFT_N, V7_SHIFT_BATCHES, V7_SHIFT_RTOL, V7_REFINE_RTOL = 100_000, 20, 1e-3, 1e-6
-# Amendment 13 (Codex REVIEW-be30e621): 4500 replicates from 5 sharded simulations of 9e6 histories in 18000
+# Amendment 13 (Codex REVIEW-be30e621): 5400 replicates from 6 sharded simulations of 9e6 histories in 18000
 # batches of 500 (replicate = 20 consecutive batches) plus a 1e6-history reference simulation; shards use
-# seed indices 0..4 and the reference index V7_SHARDS = 3 of r_index 11 (inside the row's 1000-seed block).
-V7_SHARDS = run_suite.V7_REP_SHARDS  # 5, defined in run_suite.py
+# seed indices 0..5 and the reference index V7_SHARDS = 6 of r_index 11 (inside the row's 1000-seed block).
+V7_SHARDS = run_suite.V7_REP_SHARDS  # 6, defined in run_suite.py
 V7_SHARD_N, V7_BATCH_N, V7_BATCHES_PER_REP = 9_000_000, 500, 20
 V7_REP_N = V7_BATCH_N * V7_BATCHES_PER_REP  # histories per replicate (1e4)
 V7_SHARD_BATCHES = V7_SHARD_N // V7_BATCH_N  # 18000
 V7_REPS_PER_SHARD = V7_SHARD_BATCHES // V7_BATCHES_PER_REP  # 900
-V7_REPLICATES = V7_SHARDS * V7_REPS_PER_SHARD  # 4500
+V7_REPLICATES = V7_SHARDS * V7_REPS_PER_SHARD  # 5400
 V7_REF_N, V7_REF_BATCHES, V7_BINS = 1_000_000, 20, 12
 V7_COVERAGE_ESTIMATORS = (("sec_p", "profile"), ("nuclear_local", "profile"),
                           ("escaped_neutral", "scalar"))  # fmt: skip
 V7_MIN_PROFILE_BINS = 10
 PHI_1 = math.exp(-0.5) / math.sqrt(2.0 * math.pi)  # standard normal density at 1: 0.24197
 # Replicate-level TOST (two one-sided tests, alpha = 0.05 each, i.e. a 90 % two-sided t interval of the
-# mean per-replicate coverage, bias-corrected for the shared reference, see ``v7_reference_correction``)
+# mean per-replicate coverage, widened by the reference sensitivity band, see ``v7_estimator_verdict``)
 # against the equivalence region [V7_COV_LOW, V7_COV_HIGH]: centre 0.670 =
 # P(|t_19| <= 1), the nominal coverage of one-sigma intervals from the SEM of 20 batches, margin +-0.03.
 V7_COV_LOW, V7_COV_HIGH, V7_TOST_ALPHA = 0.640, 0.700, 0.05
 V7_MIN_INTERVALS = 300
 # former point-estimate gate (pooled coverage within 0.68 +- 0.03): reported only, no longer decides ``pass``
 V7_LEGACY_TARGET, V7_LEGACY_TOL = 0.68, 0.03
+V7_REF_Z = 1.645  # one-sided 95 % normal quantile: reference sensitivity shift in SEM_ref units
 HR5_PYTHON_SHARDS, HR5_PYTHON_N, HR5_PYTHON_BATCHES = 2, 12_000, 20
 HR5_WARP_N, HR5_WARP_BATCHES, HR5_F32_N = 1_000_000, 100, 1_000_000
 V8_SAMPLES = {  # name -> (backend, precision, shard index, histories, batches)
@@ -186,8 +201,13 @@ V8_PAIRS = (("python", "cpu64"), ("cpu64", "cuda32"), ("cpu64", "cuda64"), ("cud
 # measured warp-cpu / python rates of this host (hist/s, single process, nuclear on, 150 MeV): the
 # declared shard counts must keep every step at or below STEP_LIMIT_S / MARGIN at these rates;
 # the throughput step re-measures them and fails if a declared count no longer fits
-DECLARED_RATES = {"python": 63.8, "warp-cpu-f64": 10185.0, "v2b-a": 1500.0, "v2b-b": 7000.0,
-                  "warp-cpu-f64-blocks": 5000.0}  # last: batch_estimates (500-history run_range blocks)
+DECLARED_RATES = {
+    "python": 63.8,
+    "warp-cpu-f64": 10185.0,
+    "v2b-a": 1500.0,
+    "v2b-b": 7000.0,
+    "warp-cpu-f64-blocks": 5000.0,
+}  # last: batch_estimates (500-history run_range blocks)
 
 
 def seed_of(row: str, shard: int = 0) -> int:
@@ -249,8 +269,9 @@ def batch_estimates(cfg: SimulationConfig) -> dict[str, Any]:
     off_l, size_l, q_l = channel_slice(eff, "nuc_local")
     k0 = len(NUCLEAR_TALLY_NAMES)
     ix = {name: i for i, name in enumerate(NUCLEAR_TALLY_NAMES)}
-    out: dict[str, list[Any]] = {k: [] for k in
-                                 ("sec_p", "nuc_local_dose", "idd", "nuclear_local", "escaped_neutral")}
+    out: dict[str, list[Any]] = {
+        k: [] for k in ("sec_p", "nuc_local_dose", "idd", "nuclear_local", "escaped_neutral")
+    }
     counters = 0
     for b in range(nb):
         part = run_range(eff, b * hpb, (b + 1) * hpb)
@@ -291,7 +312,9 @@ def measure(backend: str, precision: str, e: float, n: int, **kw: Any) -> dict[s
     if backend != "python":  # compile once, outside the timed run
         Simulation(wcfg(backend, precision, energy=e, n=200, seed=1, geometry=geo, grid=grid,
                         n_batches=2)).run()  # fmt: skip
-    cfg = wcfg(backend, precision, energy=e, n=n, seed=1, geometry=geo, grid=grid, n_batches=2, **kw)
+    cfg = wcfg(
+        backend, precision, energy=e, n=n, seed=1, geometry=geo, grid=grid, n_batches=2, **kw
+    )
     t0 = time.perf_counter()
     res = Simulation(cfg).run()
     return rate_of(res, n, time.perf_counter() - t0)
@@ -345,7 +368,7 @@ def step_throughput(a: argparse.Namespace) -> int:
         "v2b (both variants)": (V2B_N, "v2b", V2B_SHARDS),
         "v7-scan (1e4 + 1e5 + 1e6, f64, plus f32 1e5)": (sum(V7_SCAN_N) + V7_F32_N, "warp-cpu-f64", 1),
         "v7-shift (3 layouts)": (3 * V7_SHIFT_N, "warp-cpu-f64", 1),
-        "v7-rep (5 shards x 9e6 + 1e6 reference)": (V7_SHARDS * V7_SHARD_N + V7_REF_N, "warp-cpu-f64", V7_SHARDS + 1),
+        "v7-rep (6 shards x 9e6 + 1e6 reference)": (V7_SHARDS * V7_SHARD_N + V7_REF_N, "warp-cpu-f64", V7_SHARDS + 1),
         "hr5 python sample (2.4e4)": (HR5_PYTHON_SHARDS * HR5_PYTHON_N, "python", HR5_PYTHON_SHARDS),
     }, {**rates, "v2b": v2b_rate})  # fmt: skip
     ok = all(v["counters_clean"] for v in out.values())
@@ -382,10 +405,14 @@ def trace_compare(py: Any, wp_: Any) -> dict[str, Any]:
     """Parity of a python and a warp partial (the discrete columns identical, continuous maxima)."""
     out: dict[str, Any] = {}
     dp, dw = py.diagnostics, wp_.diagnostics
-    ident = bool(np.array_equal(dp.trace_int, dw.trace_int) and np.array_equal(dp.end_code, dw.end_code))
+    ident = bool(
+        np.array_equal(dp.trace_int, dw.trace_int) and np.array_equal(dp.end_code, dw.end_code)
+    )
     out["trace"] = float(np.max(np.abs(dp.trace_float - dw.trace_float), initial=0.0))
-    out["end"] = max(float(np.max(np.abs(dp.end_position_mm - dw.end_position_mm), initial=0.0)),
-                     float(np.max(np.abs(dp.end_energy_mev - dw.end_energy_mev), initial=0.0)))
+    out["end"] = max(
+        float(np.max(np.abs(dp.end_position_mm - dw.end_position_mm), initial=0.0)),
+        float(np.max(np.abs(dp.end_energy_mev - dw.end_energy_mev), initial=0.0)),
+    )
     tp, tw = py.meta["nuclear_trace"], wp_.meta["nuclear_trace"]
     for key in ("events", "secondaries"):
         x, y = tp[key], tw[key]
@@ -401,7 +428,10 @@ def trace_compare(py: Any, wp_: Any) -> dict[str, Any]:
     sw = [math.fsum(c) for c in wp_.tally_components]
     ident &= list(py.counter_sums) == list(wp_.counter_sums)
     out["tallies"] = max(abs(x - y) for x, y in zip(sp, sw, strict=True))
-    out["edep"] = max(float(np.max(np.abs(x - y))) for x, y in zip(py.edep, wp_.edep, strict=True)) * QUANTUM_MEV
+    out["edep"] = (
+        max(float(np.max(np.abs(x - y))) for x, y in zip(py.edep, wp_.edep, strict=True))
+        * QUANTUM_MEV
+    )
     out["discrete_identical"] = bool(ident)
     cont_keys = ("trace", "end", "events", "secondaries", "tallies", "edep")
     out["max_continuous"] = max(out[k] for k in cont_keys)
@@ -418,7 +448,9 @@ def v8_pair(e: float, n: int, seed: int, a: argparse.Namespace) -> dict[str, Any
     for backend in ("python", "warp-cpu"):
         cfg = wcfg(backend, "float64", energy=e, n=n, seed=seed, geometry=geo, grid=grid, n_batches=2,
                    timeout=a.timeout)  # fmt: skip
-        cfg = replace(cfg, diagnostics=DiagnosticsOptions(track_end_positions=True, trace_histories=n))
+        cfg = replace(
+            cfg, diagnostics=DiagnosticsOptions(track_end_positions=True, trace_histories=n)
+        )
         effs[backend] = Simulation(cfg).effective
     t0 = time.perf_counter()
     py = run_reference_range(effs["python"], 0, n)
@@ -643,7 +675,12 @@ def step_v5_compare(a: argparse.Namespace) -> int:
         doc.update(verdict=verdict, pass_gating=bool(verdict["pass"]), error=None)
         doc["pass"] = bool(verdict["pass"] and not reduced)
     except (cmp.IddError, SystemExit, ValueError, OSError) as exc:
-        doc.update(cases_in_source_identity=False, verdict=None, error=f"{type(exc).__name__}: {exc}", **{"pass": False})
+        doc.update(
+            cases_in_source_identity=False,
+            verdict=None,
+            error=f"{type(exc).__name__}: {exc}",
+            **{"pass": False},
+        )
     return finish5b(doc, V5_N, min(p["n"] for p in parts), reduced)
 
 
@@ -705,7 +742,9 @@ def scalar_estimators(est: dict[str, Any]) -> dict[str, NDArray[np.float64]]:
             "escaped_neutral": est["escaped_neutral"]}  # fmt: skip
 
 
-def f32_vs_f64(backend: str, n: int, nb: int, seed_f64: int, seed_f32: int, timeout: Any) -> dict[str, Any]:
+def f32_vs_f64(
+    backend: str, n: int, nb: int, seed_f64: int, seed_f32: int, timeout: Any
+) -> dict[str, Any]:
     """Paired z of every V7 estimator between float32 and float64 on ``backend`` (independent
     seeds: the trajectories diverge chaotically, so the samples are independent)."""
     runs, wall = {}, {}
@@ -713,7 +752,10 @@ def f32_vs_f64(backend: str, n: int, nb: int, seed_f64: int, seed_f32: int, time
         t0 = time.perf_counter()
         runs[prec] = batch_estimates(v7_config(backend, prec, n, nb, sd, timeout=timeout))
         wall[prec] = time.perf_counter() - t0
-    out, ok = {}, bool(all(r["counters_sum"] == 0 and r["batch_assignment_ok"] for r in runs.values()))
+    out, ok = (
+        {},
+        bool(all(r["counters_sum"] == 0 and r["batch_assignment_ok"] for r in runs.values())),
+    )
     for name in ESTIMATORS:
         x, y = (scalar_estimators(runs[p])[name] for p in ("float64", "float32"))
         z = parity.scalar_z(x, y)
@@ -749,7 +791,9 @@ def step_v7_scan(a: argparse.Namespace) -> int:
                         "pass": s_ok}  # fmt: skip
         ok &= s_ok
     nf = scaled(V7_F32_N, a.scale, 2000, V7_BATCHES)
-    f32 = f32_vs_f64("warp-cpu", nf, V7_BATCHES, seed_of("v7-scan", 3), seed_of("v7-scan", 4), a.timeout)
+    f32 = f32_vs_f64(
+        "warp-cpu", nf, V7_BATCHES, seed_of("v7-scan", 3), seed_of("v7-scan", 4), a.timeout
+    )
     ok &= f32["pass"]
     doc = {"step": "v7-scan", "table": v5.table_record(), "batches": V7_BATCHES, "runs": rows,
            "slopes": slopes, "f32_vs_f64": f32, "pass": bool(ok)}  # fmt: skip
@@ -812,7 +856,10 @@ def _betacf(a: float, b: float, x: float) -> float:
     h = d
     for m in range(1, 500):
         m2 = 2 * m
-        for aa in (m * (b - m) * x / ((qam + m2) * (a + m2)), -(a + m) * (qab + m) * x / ((a + m2) * (qap + m2))):
+        for aa in (
+            m * (b - m) * x / ((qam + m2) * (a + m2)),
+            -(a + m) * (qab + m) * x / ((a + m2) * (qap + m2)),
+        ):
             d = 1.0 + aa * d
             d = 1.0 / (d if abs(d) > tiny else tiny)
             c = 1.0 + aa / c
@@ -829,7 +876,9 @@ def betainc_reg(a: float, b: float, x: float) -> float:
         return 0.0
     if x >= 1.0:
         return 1.0
-    lbt = math.lgamma(a + b) - math.lgamma(a) - math.lgamma(b) + a * math.log(x) + b * math.log1p(-x)
+    lbt = (
+        math.lgamma(a + b) - math.lgamma(a) - math.lgamma(b) + a * math.log(x) + b * math.log1p(-x)
+    )
     if x < (a + 1.0) / (a + b + 2.0):
         return math.exp(lbt) * _betacf(a, b, x) / a
     return 1.0 - math.exp(lbt) * _betacf(b, a, 1.0 - x) / b
@@ -855,43 +904,75 @@ def student_t_quantile(p: float, df: int) -> float:
     return 0.5 * (lo + hi)
 
 
-def v7_reference_correction(sem_ref: NDArray[np.float64], sigma: NDArray[np.float64]) -> dict[str, Any]:
+def v7_reference_correction(sem_ref: NDArray[np.float64], sigma: NDArray[np.float64],
+                            ref_blocks: NDArray[np.float64] | None = None) -> dict[str, Any]:  # fmt: skip
     """Effect of the shared reference error on the observed coverage (Amendment 13, Codex
-    REVIEW-be30e621). All replicates are compared with ONE reference whose mean in bin ``b`` is off by
-    a common error ``eps_b`` with variance ``SEM_ref,b^2``. For a replicate mean ``X ~ N(mu, sigma_b^2)``
-    and a one-sigma interval of half width ``s``, the probability to cover the reference,
-    ``g(eps) = Phi((s + eps) / sigma) - Phi((eps - s) / sigma)``, is even in ``eps`` (first derivative 0
-    at 0) with second derivative ``-2 (s / sigma) phi(s / sigma) / sigma^2``, which at ``s = sigma``
-    (the nominal one-sigma interval) is ``-2 phi(1) / sigma^2``. Hence a reference error lowers the
-    expected observed coverage of bin ``b`` by ``b_b = phi(1) r_b^2`` with ``r_b = SEM_ref,b / sigma_b``
-    (``E eps^2 = SEM_ref,b^2``), and the realised common-mode shift, ``phi(1) (eps_b^2 - E eps_b^2) /
-    sigma_b^2``, has standard deviation ``phi(1) sqrt(2) r_b^2`` (``Var eps^2 = 2 SEM^4``). Averaged
-    over the ``B`` used bins (independent reference errors): ``b_ref = mean_b b_b`` and
-    ``s_ref = phi(1) sqrt(2) sqrt(sum_b r_b^4) / B``. ``sigma_b`` is the sample sd of the replicate
-    means. Pure function of its arguments (arrays over the used bins)."""
+    REVIEW-be30e621 and REVIEW-873ab9cd). In the verdict the gating reference is the leave-one-out
+    pooled mean of the replicates, ``SEM_ref,b = sigma_b / sqrt(R)`` (``r_b = 1 / sqrt(R)``); the same
+    algebra applies to the 1e6 cross-check reference. All replicates are compared with ONE reference whose mean in
+    bin ``b`` is off by a common error ``eps_b`` with variance ``SEM_ref,b^2``. For a replicate mean
+    ``X ~ N(mu, sigma_b^2)`` and a one-sigma interval of half width ``s``, the probability to cover the
+    reference, ``g(eps) = Phi((s + eps) / sigma) - Phi((eps - s) / sigma)``, is even in ``eps`` (first
+    derivative 0 at 0) with second derivative ``-2 (s / sigma) phi(s / sigma) / sigma^2``, which at
+    ``s = sigma`` (the nominal one-sigma interval) is ``-2 phi(1) / sigma^2``. Hence, with
+    ``r_b = SEM_ref,b / sigma_b`` (``sigma_b`` = sample sd of the replicate means), a reference error
+    lowers the expected observed coverage of bin ``b`` by ``b_b = phi(1) r_b^2`` (``E eps^2 =
+    SEM_ref,b^2``); the profile value is ``b_ref = phi(1) mean_b r_b^2`` (diagnostic only: the verdict
+    uses the empirical sensitivity band of ``v7_estimator_verdict``, which also covers the first-order
+    shift of skewed tallies that this second-order term does not).
+
+    The realised common-mode shift of bin ``b`` is ``phi(1) (eps_b^2 - E eps_b^2) / sigma_b^2``. With
+    ``eps_b`` jointly Gaussian with correlation ``rho_bc`` (both profiles come from the same reference
+    histories, so the bins are NOT independent), ``Cov(eps_b^2, eps_c^2) = 2 rho_bc^2 SEM_b^2 SEM_c^2``
+    and the variance of the bin-averaged shift is ``(phi(1) / B)^2 * 2 * sum_bc rho_bc^2 r_b^2 r_c^2``.
+    Using ``|rho_bc| <= 1`` (fully correlated bins) this is bounded by ``2 phi(1)^2 (mean_b r_b^2)^2``:
+    ``s_ref_bound = phi(1) sqrt(2) mean_b r_b^2`` (used in the verdict; conservative, executable). The
+    independent-bin value ``phi(1) sqrt(2) sqrt(sum_b r_b^4) / B`` is the lower end and is not used.
+
+    Diagnostic only (not used in the verdict), from ``ref_blocks`` ``[K, B]`` (the reference's K per-block
+    per-bin means, K = 20): ``Cov_bc = cov_block(b, c) / K`` (covariance of the reference means) and
+    ``s_ref_cov^2 = (phi(1) / B)^2 * 2 * sum_bc (Cov_bc / (sigma_b sigma_c))^2``, together with
+    ``ref_corr_mean_abs_offdiag``, the mean absolute off-diagonal correlation of the reference bins
+    (NaN for ``B = 1`` or without blocks). Always ``s_ref_cov <= s_ref_bound`` (Cauchy-Schwarz, when the
+    diagonal of ``Cov`` equals ``SEM_ref^2``). Pure function of its arguments (arrays over used bins)."""
     r = np.asarray(sem_ref, dtype=float) / np.asarray(sigma, dtype=float)
+    sg = np.asarray(sigma, dtype=float)
     nb = r.size
+    s_cov, corr_abs = math.nan, math.nan
+    if ref_blocks is not None:
+        x = np.asarray(ref_blocks, dtype=float).reshape(-1, nb)
+        k = x.shape[0]
+        cov = np.atleast_2d(np.cov(x, rowvar=False, ddof=1)) / k  # covariance of the means
+        s_cov = float(PHI_1 / nb * math.sqrt(2.0 * float(np.sum((cov / np.outer(sg, sg)) ** 2))))
+        if nb > 1:
+            d = np.sqrt(np.diag(cov))
+            c = np.abs(cov / np.outer(d, d))
+            corr_abs = float((c.sum() - np.trace(c)) / (nb * (nb - 1)))
     return {"r_b": r.tolist(), "b_ref": float(PHI_1 * np.mean(r**2)),
-            "s_ref": float(PHI_1 * math.sqrt(2.0) * math.sqrt(float(np.sum(r**4))) / nb)}  # fmt: skip
+            "s_ref_bound": float(PHI_1 * math.sqrt(2.0) * np.mean(r**2)),
+            "s_ref_cov": s_cov, "ref_corr_mean_abs_offdiag": corr_abs}  # fmt: skip
 
 
-def v7_tost_verdict(covered_j: NDArray[np.int64], bins_used: int, intervals: int, b_ref: float,
-                    s_ref: float, *, low: float = V7_COV_LOW, high: float = V7_COV_HIGH,
-                    alpha: float = V7_TOST_ALPHA, min_bins: int = 1) -> dict[str, Any]:  # fmt: skip
-    """Replicate-level TOST of one estimator of the v7-rep coverage with the reference-uncertainty
-    treatment (Amendment 13): ``f_j = covered_j / bins_used`` (replicates are the independent
-    clusters), ``m = mean(f_j)``, ``s = sd(f_j, ddof=1) / sqrt(R)``; ``m_corr = m + b_ref`` (bias
-    correction toward the true coverage), ``s_tot = sqrt(s^2 + s_ref^2)`` and ``t = t_{1-alpha, R-1}``.
-    PASS iff ``[m_corr - t s_tot, m_corr + t s_tot]`` lies inside ``[low, high]``,
-    ``intervals >= V7_MIN_INTERVALS`` and ``bins_used >= min_bins``. Pure function of its arguments."""
+def v7_tost_verdict(covered_j: NDArray[np.int64], bins_used: int, intervals: int, s_ref_bound: float,
+                    shifted_means: tuple[float, float] | None = None, *, low: float = V7_COV_LOW,
+                    high: float = V7_COV_HIGH, alpha: float = V7_TOST_ALPHA,
+                    min_bins: int = 1) -> dict[str, Any]:  # fmt: skip
+    """Replicate-level TOST of one estimator of the v7-rep coverage with the reference sensitivity band
+    (Amendment 13): ``f_j = covered_j / bins_used`` (unshifted reference; replicates are the independent
+    clusters), ``m = mean(f_j)``, ``s = sd(f_j, ddof=1) / sqrt(R)``, ``s_tot = sqrt(s^2 + s_ref_bound^2)``
+    and ``t = t_{1-alpha, R-1}``. ``shifted_means`` are the mean coverages with the reference moved
+    coherently over all bins by +Z and -Z SEM_ref; ``m_lo`` / ``m_hi`` are the smallest / largest of the
+    three means (``m`` alone when ``None``). PASS iff ``m_lo - t s_tot >= low`` and ``m_hi + t s_tot <=
+    high``, ``intervals >= V7_MIN_INTERVALS`` and ``bins_used >= min_bins``. Pure function."""
     f = np.asarray(covered_j, dtype=float) / bins_used
     r = f.size
     m = float(f.mean())
     se = float(f.std(ddof=1) / math.sqrt(r))
-    m_corr = m + b_ref
-    s_tot = math.sqrt(se**2 + s_ref**2)
+    means = [m, *(() if shifted_means is None else shifted_means)]
+    m_lo, m_hi = min(means), max(means)
+    s_tot = math.sqrt(se**2 + s_ref_bound**2)
     t = student_t_quantile(1.0 - alpha, r - 1)
-    ci = [m_corr - t * s_tot, m_corr + t * s_tot]
+    ci = [m_lo - t * s_tot, m_hi + t * s_tot]
     reasons = []
     if ci[0] < low:
         reasons.append(f"CI lower bound {ci[0]:.4f} below {low}")
@@ -901,33 +982,70 @@ def v7_tost_verdict(covered_j: NDArray[np.int64], bins_used: int, intervals: int
         reasons.append(f"intervals {intervals} < {V7_MIN_INTERVALS}")
     if bins_used < min_bins:
         reasons.append(f"bins_used {bins_used} < {min_bins}")
-    return {"m": m, "s": se, "b_ref": b_ref, "s_ref": s_ref, "m_corr": m_corr, "s_tot": s_tot, "t": t,
-            "ci": ci, "low": low, "high": high, "alpha": alpha, "replicates": r,
-            "pass": not reasons, "reasons": reasons}  # fmt: skip
+    return {"m": m, "m_lo": m_lo, "m_hi": m_hi, "means_ref_shift": {"0": m, "+": means[1] if len(means) > 1 else m,
+            "-": means[2] if len(means) > 2 else m}, "s": se, "s_ref_bound": s_ref_bound,
+            "s_tot": s_tot, "t": t, "ci": ci, "low": low, "high": high, "alpha": alpha,
+            "replicates": r, "pass": not reasons, "reasons": reasons}  # fmt: skip
 
 
 def v7_estimator_verdict(kind: str, means: NDArray[np.float64], sems: NDArray[np.float64],
-                         ref: NDArray[np.float64], ref_sem: NDArray[np.float64]) -> dict[str, Any]:  # fmt: skip
+                         ref: NDArray[np.float64], ref_sem: NDArray[np.float64],
+                         ref_blocks: NDArray[np.float64] | None = None) -> dict[str, Any]:  # fmt: skip
     """Coverage verdict of one estimator: ``means`` / ``sems`` ``[R, bins]`` (replicate means and
-    sample SEMs of their 20 batches), ``ref`` / ``ref_sem`` ``[bins]``. Bins used: reference > 0 and
-    a positive replicate sd; hit: ``|mean - ref| <= sem``. ``kind`` is ``profile`` (at least
-    ``V7_MIN_PROFILE_BINS`` bins used) or ``scalar``."""
+    sample SEMs of their 20 batches), ``ref`` / ``ref_sem`` ``[bins]`` (the independent 1e6-history
+    reference, DIAGNOSTIC only), ``ref_blocks`` ``[K, bins]`` its per-block means.
+
+    Gating reference (decision after Codex REVIEW-873ab9cd): the leave-one-out pooled mean of the
+    replicates, ``mu_(-j),b = (sum_k mean_kb - mean_jb) / (R - 1)``, which is independent of replicate
+    ``j``; hit ``|mean_jb - mu_(-j),b| <= sem_jb``. Its uncertainty is the pooled standard error
+    ``SEM_pool,b = sigma_b / sqrt(R)`` (``sigma_b`` = sample sd of the replicate means), i.e. ``r_b =
+    1 / sqrt(R)`` in ``v7_reference_correction``; the sensitivity band recomputes the hits with
+    ``mu_(-j) +/- V7_REF_Z SEM_pool`` (coherent over the bins). Bins used: pooled mean > 0 and
+    ``sigma_b > 0``. ``kind`` is ``profile`` (at least ``V7_MIN_PROFILE_BINS`` bins used) or ``scalar``.
+
+    Diagnostics (not gating): coverage of the unshifted hits against the 1e6 reference
+    (``m_ref1e6``), the per-bin agreement ``z_b = (mu_pool,b - ref_b) / sqrt(SEM_pool,b^2 +
+    SEM_ref,b^2)`` and ``max |z_b|``, ``s_ref_cov`` and the mean absolute off-diagonal correlation of
+    the 1e6 reference bins, and the per-bin skewness of the replicate means."""
     means, sems = np.asarray(means, float), np.asarray(sems, float)
     ref, ref_sem = np.asarray(ref, float), np.asarray(ref_sem, float)
     r = means.shape[0]
     sigma = means.std(axis=0, ddof=1)
-    used = (ref > 0.0) & (sigma > 0.0)
+    pooled = means.mean(axis=0)
+    loo = (means.sum(axis=0) - means) / (r - 1)  # [R, bins]: mean of the other replicates
+    sem_pool = sigma / math.sqrt(r)
+    used = (pooled > 0.0) & (sigma > 0.0)
     nused = int(used.sum())
-    hit = (np.abs(means - ref) <= sems) & used
-    covered_j = hit.sum(axis=1).astype(np.int64)
+
+    def covered(shift: float) -> NDArray[np.int64]:
+        hit = (np.abs(means - (loo + shift * sem_pool)) <= sems) & used
+        return hit.sum(axis=1).astype(np.int64)
+
+    covered_j = covered(0.0)
     intervals = r * nused
+    skew = [math.nan] * means.shape[1]
+    for b in np.flatnonzero(used):
+        skew[int(b)] = float(np.mean(((means[:, b] - means[:, b].mean()) / sigma[b]) ** 3))
+    nan_corr = {"r_b": [], "b_ref": math.nan, "s_ref_bound": math.nan, "s_ref_cov": math.nan,
+                "ref_corr_mean_abs_offdiag": math.nan}  # fmt: skip
+    m_ref, z_b, zmax = math.nan, [math.nan] * means.shape[1], math.nan
     if nused:
-        corr = v7_reference_correction(ref_sem[used], sigma[used])
+        corr = v7_reference_correction(sem_pool[used], sigma[used], None)  # gating terms
+        blocks = None if ref_blocks is None else np.asarray(ref_blocks, float)[:, used]
+        diag = v7_reference_correction(ref_sem[used], sigma[used], blocks)  # 1e6 reference
+        d_used = used & (ref > 0.0)
+        if d_used.any():
+            hit1e6 = (np.abs(means - ref) <= sems) & d_used
+            m_ref = float(hit1e6.sum() / (r * int(d_used.sum())))
+        zz = (pooled - ref) / np.sqrt(sem_pool**2 + ref_sem**2)
+        z_b = [float(zz[b]) if used[b] else math.nan for b in range(means.shape[1])]
+        zmax = float(np.max(np.abs(zz[used])))
     else:
-        corr = {"r_b": [], "b_ref": math.nan, "s_ref": math.nan}
+        corr, diag = nan_corr, nan_corr
     min_bins = V7_MIN_PROFILE_BINS if kind == "profile" else 1
     if nused:
-        tost = v7_tost_verdict(covered_j, nused, intervals, corr["b_ref"], corr["s_ref"], min_bins=min_bins)
+        shifted = tuple(float(covered(z).mean() / nused) for z in (V7_REF_Z, -V7_REF_Z))
+        tost = v7_tost_verdict(covered_j, nused, intervals, corr["s_ref_bound"], shifted, min_bins=min_bins)
     else:
         tost = {"pass": False, "reasons": ["no bin used"], "ci": [math.nan, math.nan]}
     cov = float(covered_j.sum() / intervals) if intervals else math.nan
@@ -935,13 +1053,20 @@ def v7_estimator_verdict(kind: str, means: NDArray[np.float64], sems: NDArray[np
                   and abs(cov - V7_LEGACY_TARGET) <= V7_LEGACY_TOL)  # fmt: skip
     return {"kind": kind, "bins": int(means.shape[1]), "bins_used": nused, "intervals": intervals,
             "covered": int(covered_j.sum()), "coverage": cov, **tost, "r_b": corr["r_b"],
+            "b_ref": corr["b_ref"], "reference_kind": "leave-one-out pooled mean of the replicates",
+            "pooled_mean": pooled.tolist(), "pooled_sem": sem_pool.tolist(),
+            "m_ref1e6": m_ref, "z_b_ref1e6": z_b, "max_abs_z_ref1e6": zmax,
+            "s_ref_cov": diag["s_ref_cov"], "ref_corr_mean_abs_offdiag": diag["ref_corr_mean_abs_offdiag"],
+            "ref_z": V7_REF_Z, "replicate_mean_skewness": skew,
             "legacy_point_gate_pass": legacy, "nominal_coverage": student_abs_prob(V7_BATCHES_PER_REP - 1, 1.0),
             "per_replicate_covered": [int(c) for c in covered_j],
             "reference": ref.tolist(), "reference_sem": ref_sem.tolist(),
             "replicate_sd": sigma.tolist()}  # fmt: skip
 
 
-def v7_replicate_stats(batches: NDArray[np.float64]) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+def v7_replicate_stats(
+    batches: NDArray[np.float64],
+) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
     """Per-replicate mean and sample SEM (ddof = 1) of ``[B, bins]`` batch values: replicate ``j`` is
     the contiguous batch group ``[20 j, 20 j + 20)``; arrays ``[B / 20, bins]``."""
     b = np.asarray(batches, dtype=float)
@@ -993,7 +1118,8 @@ def step_v7_rep_ref(a: argparse.Namespace) -> int:
     for nm, x in v7_batch_arrays(est).items():
         x = np.asarray(x, float).reshape(V7_REF_BATCHES, -1)
         ref[nm] = {"mean": x.mean(axis=0).tolist(),
-                   "sem": (x.std(axis=0, ddof=1) / math.sqrt(V7_REF_BATCHES)).tolist()}  # fmt: skip
+                   "sem": (x.std(axis=0, ddof=1) / math.sqrt(V7_REF_BATCHES)).tolist(),
+                   "blocks": x.tolist()}  # fmt: skip
     path = v5.write_partial(a, "v7-rep-ref", {
         "row": "v7-rep", "kind": "reference", "seed": seed, "n": n, "n_batches": V7_REF_BATCHES,
         "bins": V7_BINS, "valid": ok, "counters_sum": est["counters_sum"], "wall_s": wall,
@@ -1005,7 +1131,7 @@ def step_v7_rep_ref(a: argparse.Namespace) -> int:
 
 
 def v7_rep_combine(shards: list[dict[str, Any]], ref: dict[str, Any]) -> dict[str, Any]:
-    """Row V7 coverage document from the five shard partials and the reference partial (pure; any
+    """Row V7 coverage document from the six shard partials and the reference partial (pure; any
     missing or inconsistent item raises ``SystemExit``: fail closed)."""
     if len(shards) != V7_SHARDS:
         raise SystemExit(f"v7-rep: need {V7_SHARDS} shard partials, got {len(shards)}")
@@ -1021,17 +1147,21 @@ def v7_rep_combine(shards: list[dict[str, Any]], ref: dict[str, Any]) -> dict[st
             sems = np.concatenate([np.array(p["estimators"][name]["sem"], float) for p in shards])
             rmean = np.array(ref["estimators"][name]["mean"], float)
             rsem = np.array(ref["estimators"][name]["sem"], float)
+            rblocks = np.array(ref["estimators"][name]["blocks"], float)
         except (KeyError, TypeError, ValueError) as exc:
-            raise SystemExit(f"v7-rep: estimator {name} missing or malformed in a partial: {exc!r}") from exc
+            raise SystemExit(
+                f"v7-rep: estimator {name} missing or malformed in a partial: {exc!r}"
+            ) from exc
         if (means.ndim != 2 or means.shape != sems.shape or rmean.shape != (means.shape[1],)
                 or rsem.shape != rmean.shape or not np.all(np.isfinite([means, sems]))
+                or rblocks.shape != (V7_REF_BATCHES, means.shape[1]) or not np.all(np.isfinite(rblocks))
                 or not np.all(np.isfinite([rmean, rsem]))):  # fmt: skip
             raise SystemExit(f"v7-rep: estimator {name}: inconsistent shapes or non-finite values")
-        estimators[name] = v7_estimator_verdict(kind, means, sems, rmean, rsem)
+        estimators[name] = v7_estimator_verdict(kind, means, sems, rmean, rsem, rblocks)
     return {"replicates": int(sum(p["replicates"] for p in shards)), "estimators": estimators,
             "histories_per_replicate": V7_REP_N, "reference_histories": ref["n"],
             "shard_histories": [p["n"] for p in shards], "bins": V7_BINS,
-            "rule": {"low": V7_COV_LOW, "high": V7_COV_HIGH, "alpha": V7_TOST_ALPHA,
+            "rule": {"low": V7_COV_LOW, "high": V7_COV_HIGH, "alpha": V7_TOST_ALPHA, "ref_z": V7_REF_Z,
                      "min_intervals": V7_MIN_INTERVALS, "min_profile_bins": V7_MIN_PROFILE_BINS},
             "pass": bool(all(e["pass"] for e in estimators.values()))}  # fmt: skip
 
@@ -1075,8 +1205,10 @@ def step_v8_stat_sample(a: argparse.Namespace) -> int:
 
 
 def observables(parts: list[dict[str, Any]]) -> parity.T12Observables:
-    cat = {k: np.concatenate([np.array(p[k]) for p in parts]) for k in
-           ("idd", "sec_p", "nuc_local", "nuclear_local", "escaped_neutral")}
+    cat = {
+        k: np.concatenate([np.array(p[k]) for p in parts])
+        for k in ("idd", "sec_p", "nuc_local", "nuclear_local", "escaped_neutral")
+    }
     idd = cat["idd"]
     nb = idd.shape[0]
     arrays = {"idd": idd, "sec_p": cat["sec_p"], "nuc_local": cat["nuc_local"]}
@@ -1096,8 +1228,12 @@ def step_v8_stat_compare(a: argparse.Namespace) -> int:
     for nm, p in docs.items():
         if p["seed"] != seed_hr("v8-stat", V8_SAMPLES[nm][2]) or not p["valid"]:
             raise SystemExit(f"v8-stat {nm}: seed mismatch or invalid result")
-    groups = {"python": [docs["python-s0"], docs["python-s1"]], "cpu64": [docs["cpu64"]],
-              "cuda32": [docs["cuda32"]], "cuda64": [docs["cuda64"]]}
+    groups = {
+        "python": [docs["python-s0"], docs["python-s1"]],
+        "cpu64": [docs["cpu64"]],
+        "cuda32": [docs["cuda32"]],
+        "cuda64": [docs["cuda64"]],
+    }
     obs = {g: observables(ps) for g, ps in groups.items()}
     out, ok = {}, True
     for x, y in V8_PAIRS:
@@ -1115,7 +1251,9 @@ def step_v8_stat_compare(a: argparse.Namespace) -> int:
 
 def step_v7_f32_cuda(a: argparse.Namespace) -> int:
     n = scaled(HR5_F32_N, a.scale, 2000, V7_BATCHES)
-    out = f32_vs_f64("warp-cuda", n, V7_BATCHES, seed_hr("v7-f32", 0), seed_hr("v7-f32", 1), a.timeout)
+    out = f32_vs_f64(
+        "warp-cuda", n, V7_BATCHES, seed_hr("v7-f32", 0), seed_hr("v7-f32", 1), a.timeout
+    )
     doc = {"step": "v7-f32", "table": v5.table_record(), "result": out, "pass": out["pass"]}
     return finish5b(doc, HR5_F32_N, n, n < HR5_F32_N)
 
@@ -1143,7 +1281,9 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("step", choices=sorted(STEPS))
     ap.add_argument("--scale", type=float, default=1.0, help="history-count factor (reduced run)")
-    ap.add_argument("--workers", default="1", help="accepted for uniformity; slice B runs one process")
+    ap.add_argument(
+        "--workers", default="1", help="accepted for uniformity; slice B runs one process"
+    )
     ap.add_argument("--energy", type=float, default=150.0, help="v5-ionmc: 150 or 200")
     ap.add_argument("--nuclear", choices=("on", "off"), default="on", help="v5-ionmc")
     ap.add_argument("--shard", type=int, default=0, help="v2b-shard / v7-rep-shard: shard index")
