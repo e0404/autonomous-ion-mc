@@ -1651,3 +1651,118 @@ def test_imported_partials_make_the_summary_non_conformant_by_code(tmp_path: Pat
         else:
             assert s["conformant"] and s["non_conformant_reasons"] == []
             assert c["conformant"] and c["non_conformant_reasons"] == []
+
+
+# -- V3-005B slice-B suites (lv5b, hr5) ------------------------------------------------------------
+QUAL5B, QUALHR5, REH5B = 20441004, 20451004, 20461004
+LV5B_STEPS = [
+    "lv5b-throughput", "v8-lv-python-vs-warp-cpu", "r1-nuc-regression",
+    "v5-150-on", "v5-150-off", "v5-200-on", "v5-200-off",
+]  # fmt: skip
+HR5_STEPS = ["v8-stat-python-s0", "v8-stat-python-s1", "v8-stat-cpu64", "v8-stat-cuda32",
+             "v8-stat-cuda64", "v8-stat-compare", "v7-f32-f64-cuda"]  # fmt: skip
+# slice-B rows evaluated by V3-005B -> (suite, step); V6 is V3-005C
+SLICE_B_ROWS = {
+    "V2b": ("lv5b", "v2b-combine"), "V5": ("lv5b", "v5-150-on"), "V7": ("lv5b", "v7-scan"),
+    "V8": ("lv5b", "v8-lv-python-vs-warp-cpu"),
+}  # fmt: skip
+SLICE_B_DEFERRED = {"V6": "V3-005C"}
+
+
+def test_lv5b_hr5_manifest_seeds_hashed_set_and_deferred() -> None:
+    mod, v5b = _load("run_suite"), _load("steps_v5b")
+    names = [n.split("-", 1)[1] for n in mod.full_step_names("lv5b", 2)]
+    assert names[:7] == LV5B_STEPS
+    assert names[7:] == [*(f"v2b-s{k}" for k in range(v5b.V2B_SHARDS)), "v2b-combine", "v7-scan",
+                         "v7-shift", "v7-rep", "v3-workers-partition"]  # fmt: skip
+    assert [n.split("-", 1)[1] for n in mod.full_step_names("hr5", 2)] == HR5_STEPS
+    assert mod.DEFAULT_SEED_BASES["lv5b"] == QUAL5B == v5b.QUALIFICATION_SEED_BASE
+    assert mod.DEFAULT_SEED_BASES["hr5"] == QUALHR5 == v5b.HR5_SEED_BASE
+    assert v5b.REHEARSAL_SEED_BASE == REH5B
+    assert mod.deferred_step_names("lv5b") == [f"{len(names):02d}-v3-workers-partition"]
+    assert mod.deferred_step_names("hr5") == []
+    for suite, base_ in (("lv5b", QUAL5B), ("hr5", QUALHR5)):
+        for name, cmd, env in mod.suite_steps(suite, 1, 0.5):
+            assert cmd[cmd.index("--seed-base") + 1] == str(base_), name
+            assert env["IONMC_REQUIRE_DATA"] == "1", name
+            assert ("IONMC_REQUIRE_CUDA" in env) == (suite == "hr5"), name
+            if "workers-partition" not in name:
+                assert "steps_v5b.py" in " ".join(cmd), name
+            assert "--workers" not in cmd or cmd[cmd.index("--workers") + 1] == "1", name
+    for suite in ("lv5b", "hr5"):
+        got = {str(f.relative_to(mod.REPO)) for f in mod.source_files(suite)}
+        assert {
+            "validation/scripts/transport/steps_v5b.py",
+            "validation/plans/v3-005-acceptance.md",
+            "src/ionmc/transport/kernels_nuclear.py",
+        } <= got
+    assert "validation/scripts/transport/steps_v5b.py" not in mod.source_file_list("lv5")
+    with pytest.raises(SystemExit):  # imports need a manifest
+        mod.suite_steps("lv5b", 1, 1.0, import_dirs=["x"])
+    with pytest.raises(SystemExit):
+        mod.suite_steps("hr5", 1, 1.0, import_dirs=["x"])
+    assert mod.step_timeout_s("lv5b", "08-v2b-s0", 1500) == 3300
+    assert mod.step_timeout_s("hr5", "03-v8-stat-cpu64", 1500) == 3600
+
+
+def test_slice_b_rows_have_steps_or_are_declared_and_seeds_match_plan() -> None:
+    mod, v5b = _load("run_suite"), _load("steps_v5b")
+    plan = PLAN5.read_text()
+    rows = set(_plan_rows())
+    assert set(SLICE_B_ROWS) | set(SLICE_B_DEFERRED) == LV5_SLICE_B
+    assert LV5_SLICE_B <= rows
+    for row, (suite, step) in SLICE_B_ROWS.items():
+        assert step in {n.split("-", 1)[1] for n in mod.full_step_names(suite, 2)}, row
+    assert "V3-005C" in plan  # V6 and E1-B are declared as belonging to V3-005C
+    am6 = plan[plan.index("**Amendment 6") : plan.index("**Amendment 7")]
+    pairs = {
+        k.lower(): int(v)
+        for k, v in re.findall(r"([A-Za-z0-9]+(?:-[A-Za-z0-9]+)*) (\d+)(?=[ ,)])", am6)
+    }
+    want = {
+        "throughput": 1, "v8-lv": 2, "r1-nuc": 3, "v5-150-on": 4, "v5-150-off": 5,
+        "v5-200-on": 6, "v5-200-off": 7, "v2b": 8, "v7-scan": 9, "v7-shift": 10,
+        "v7-replicates": 11,
+    }  # fmt: skip
+    assert {k: pairs[k] for k in want} == want
+    assert {**v5b.R_INDEX, "v7-replicates": v5b.R_INDEX["v7-rep"]}.keys() >= want.keys()
+    assert all(v5b.R_INDEX[k if k != "v7-replicates" else "v7-rep"] == v for k, v in want.items())
+    assert v5b.R_INDEX_RESERVED == {"v6": 12, "e1-b": 13} and v5b.R_INDEX_HR == {
+        "v8-stat": 1,
+        "v7-f32": 2,
+    }
+    assert "20441004" in plan and "20451004" in plan
+
+
+def test_slice_b_tags_blockers_documents_and_shard_budget() -> None:
+    summ, mod, v5b = _load("summarize"), _load("run_suite"), _load("steps_v5b")
+    src = (SCRIPTS / "steps_v5b.py").read_text()
+    printed = set(re.findall(r'"step": "([a-z0-9-]+)"', src))
+    for suite in ("lv5b", "hr5"):
+        tags = {summ.expected_tag(n) for n in mod.full_step_names(suite, 2)} - {"v3-workers"}
+        assert tags <= printed, tags - printed
+    assert summ.expected_tag("03-r1-nuc-regression") == "r1-nuc"
+    assert summ.expected_tag("03-r1-a16-t1-regression") == "r1"
+    assert summ.seed_blockers(QUAL5B, "lv5b") == [] and summ.seed_blockers(QUALHR5, "hr5") == []
+    assert summ.seed_blockers(REH5B, "lv5b") and summ.seed_blockers(QUAL5B, "hr5")
+    assert summ.seed_blockers(QUAL5B, "lv5")
+    # the declared shard counts keep every step within limit/margin at the declared host rates
+    r = v5b.DECLARED_RATES
+    limit = v5b.STEP_LIMIT_S / v5b.MARGIN
+    v2b_rate = 1.0 / (1.0 / r["v2b-a"] + 1.0 / r["v2b-b"])
+    assert v5b.V2B_N / v5b.V2B_SHARDS / v2b_rate <= limit
+    assert v5b.HR5_PYTHON_SHARDS * v5b.HR5_PYTHON_N / v5b.HR5_PYTHON_SHARDS / r["python"] <= limit
+    assert sum(v5b.V7_SCAN_N) / r["warp-cpu-f64"] <= limit
+    # frozen counts of the plan rows
+    assert (v5b.V5_N, v5b.V5_BATCHES, v5b.V5_DZ_MM, v5b.V5_HALF_MM) == (100_000, 20, 0.5, 200.0)
+    assert (v5b.V8_K, v5b.V8_DENSE_MIN_EVENTS, v5b.V8_TOL) == (256, 50, 1e-10)
+    assert v5b.V7_REPLICATES >= 30 and v5b.V7_BINS >= 10
+    assert v5b.V7_REPLICATES * v5b.V7_BINS >= v5b.V7_MIN_INTERVALS
+    assert (v5b.V7_SLOPE, v5b.V7_SLOPE_TOL, v5b.V7_COVERAGE, v5b.V7_COVERAGE_TOL) == (
+        -0.5,
+        0.05,
+        0.68,
+        0.03,
+    )
+    assert v5b.V2B_N == 1_000_000 and v5b.V8_SAMPLES["cuda32"][3] == 1_000_000
+    assert len(v5b.R1_NUC_DIGEST) == 64

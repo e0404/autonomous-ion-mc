@@ -4,7 +4,7 @@
 
 Usage (argv only, no shell; the host runner executes exactly this)::
 
-    python validation/scripts/transport/run_suite.py --suite {lv,hr,lv4,hr4} \
+    python validation/scripts/transport/run_suite.py --suite {lv,hr,lv4,hr4,lv5,lv5b,hr5} \
         --out validation/generated/transport/<new-dir> --expected-sha <40 hex> \
         [--workers N|auto] [--step-timeout SECONDS] [--scale F] [--python-parts N] \
         [--only STEP ...] [--import-dirs DIR ...] [--seed-base INT]
@@ -81,7 +81,8 @@ ALLOWED_PARENTS = (REPO / "validation" / "generated", REPO / "benchmarks" / "gen
 STEPS = HERE / "steps.py"
 STEPS_V4 = HERE / "steps_v4.py"
 STEPS_V5 = HERE / "steps_v5.py"
-SUITES = ("lv", "hr", "lv4", "hr4", "lv5")
+STEPS_V5B = HERE / "steps_v5b.py"
+SUITES = ("lv", "hr", "lv4", "hr4", "lv5", "lv5b", "hr5")
 PY = sys.executable
 SOURCE_PREFIXES = (
     "src/ionmc",
@@ -119,9 +120,19 @@ prefix ``validation/scripts/transport`` and the nuclear package ``src/ionmc/nucl
 every suite)."""
 
 
+SOURCE_FILES_V5B = (
+    *SOURCE_FILES_V5,
+    "validation/scripts/transport/steps_v5b.py",
+)
+"""The hashed set of the suites ``lv5b`` and ``hr5`` (V3-005B): the lv5 set plus the slice-B steps
+(the nuclear kernels, ``src/ionmc`` and the tests are hashed through the prefixes)."""
+
+
 def source_file_list(suite: str | None = None) -> tuple[str, ...]:
     """Individually hashed files of ``suite`` (default: the suite named by ``IONMC_RUN_SUITE``)."""
     suite = suite or os.environ.get("IONMC_RUN_SUITE", "")
+    if suite in ("lv5b", "hr5"):
+        return SOURCE_FILES_V5B
     if suite == "lv5":
         return SOURCE_FILES_V5
     return SOURCE_FILES_V4 if suite in ("lv4", "hr4") else SOURCE_FILES
@@ -136,6 +147,8 @@ V4_QUALIFICATION_SEED_BASE = 20401004  # amendment 6 of the V3-004 plan
 V4_CONSUMED_SEED_BASES = (20361004, 20371004, 20381004)  # amendments 4 and 5, 20381004 by V3-003D
 V4_REHEARSAL_SEED_BASE = 20351004
 V5_QUALIFICATION_SEED_BASE = 20421004  # plan of V3-005, Seeds (rehearsal family 2043xxxx)
+V5B_QUALIFICATION_SEED_BASE = 20441004  # amendment 6 of the V3-005 plan (lv5b); rehearsals 2046xxxx
+HR5_QUALIFICATION_SEED_BASE = 20451004  # amendment 6 (hr5)
 V3003D_REHEARSAL_FAMILY = "2041xxxx"  # rehearsals of V3-003D, never qualification evidence
 DEFAULT_SEED_BASES = {
     "lv": QUALIFICATION_SEED_BASE,
@@ -143,6 +156,8 @@ DEFAULT_SEED_BASES = {
     "lv4": V4_QUALIFICATION_SEED_BASE,
     "hr4": V4_QUALIFICATION_SEED_BASE,
     "lv5": V5_QUALIFICATION_SEED_BASE,
+    "lv5b": V5B_QUALIFICATION_SEED_BASE,
+    "hr5": HR5_QUALIFICATION_SEED_BASE,
 }
 REHEARSAL_SEED_BASE = 20261004
 CONSUMED_SEED_BASE = 20271004  # used by the T9 investigation: not a qualification base
@@ -167,6 +182,8 @@ DEFERRED_STEPS = {
     "lv4": ("a15-workers",),
     "hr4": (),
     "lv5": ("v3-workers-partition",),
+    "lv5b": ("v3-workers-partition",),
+    "hr5": (),
 }
 """Steps whose purpose is the worker-partition invariance (1 versus N worker processes): they are
 not executed in the single-process diagnostic mode and recorded as ``deferred``. Steps that merely
@@ -182,6 +199,16 @@ STEP_TIMEOUT_FLOOR_S = {
         **{f"v2-probe-fe-s{k}": 3300 for k in range(3)},
         "v3-lv": 3300, "x1": 3300, "e1": 3300, "v4-v4b": 3300, "r1-a16-t1-regression": 3300,
         "n1-v1-v1b-d6": 3300, "v3-workers-partition": 3300,
+    },
+    "lv5b": {
+        "lv5b-throughput": 3300, "v8-lv-python-vs-warp-cpu": 3300, "r1-nuc-regression": 3300,
+        **{f"v5-{e}-{t}": 3300 for e in (150, 200) for t in ("on", "off")},
+        **{f"v2b-s{k}": 3300 for k in range(8)}, "v7-scan": 3300, "v7-shift": 3300,
+        "v7-rep": 3300, "v3-workers-partition": 3300,
+    },
+    "hr5": {
+        "v8-stat-python-s0": 3600, "v8-stat-python-s1": 3600, "v8-stat-cpu64": 3600,
+        "v8-stat-cuda32": 3600, "v8-stat-cuda64": 3600, "v7-f32-f64-cuda": 3600,
     },
 }
 """Minimum step timeout [s] of long steps (the ``--step-timeout`` default is 1500 s); the effective
@@ -235,14 +262,15 @@ def suite_steps(
     st = [PY, str(STEPS)]
     w = ["--workers", str(workers)]
     sc = ["--scale", str(scale)]
-    cuda = {"IONMC_REQUIRE_CUDA": "1"} if suite in ("hr", "hr4") else {}
+    cuda = {"IONMC_REQUIRE_CUDA": "1"} if suite in ("hr", "hr4", "hr5") else {}
     s4 = [PY, str(STEPS_V4)]
     s5 = [PY, str(STEPS_V5)]
+    s5b = [PY, str(STEPS_V5B)]
     steps: list[tuple[str, list[str], dict[str, str]]] = []
 
     def add(name: str, cmd: list[str], env: dict[str, str] | None = None) -> None:
         full = f"{len(steps) + 1:02d}-{name}"
-        if cmd[:2] in ([PY, str(STEPS)], [PY, str(STEPS_V4)], [PY, str(STEPS_V5)]):
+        if cmd[:2] in ([PY, str(STEPS)], [PY, str(STEPS_V4)], [PY, str(STEPS_V5)], [PY, str(STEPS_V5B)]):
             eff = step_timeout_s(suite, full, step_timeout)
             inner = ["--timeout", str(max(30, int(0.9 * eff)))]  # the pool cleans up first
             cmd = [*cmd, *inner, "--seed-base", str(seed_base)]  # every seed derives from the base
@@ -253,6 +281,15 @@ def suite_steps(
             raise SystemExit("lv5 --import-dirs requires --partials-manifest (name -> sha256)")
         pm = ["--partials-manifest", str(partials_manifest)] if import_dirs else []
         _suite_steps_v5(add, s5, sc, out_dir, [*dirs, *pm])
+        return steps
+    if suite in ("lv5b", "hr5"):
+        if import_dirs and partials_manifest is None:
+            raise SystemExit(f"{suite} --import-dirs requires --partials-manifest (name -> sha256)")
+        pm = ["--partials-manifest", str(partials_manifest)] if import_dirs else []
+        if suite == "lv5b":
+            _suite_steps_v5b(add, s5, s5b, sc, out_dir, [*dirs, *pm])
+        else:
+            _suite_steps_hr5(add, s5b, sc, out_dir, [*dirs, *pm], cuda)
         return steps
     if suite in ("lv4", "hr4"):
         _suite_steps_v4(suite, add, s4, w, sc, cuda, out_dir, dirs, single_process)
@@ -411,6 +448,43 @@ def _suite_steps_v5(add, s5, sc, out_dir, dirs):  # type: ignore[no-untyped-def]
     add("e1", [*s5, "e1", *sc], env)
     add("r1-a16-t1-regression", [*s5, "r1", *sc], env)
     add("v3-workers-partition", [*s5, "v3-workers"], env)  # deferred: runs only when the mode is lifted
+
+
+def _suite_steps_v5b(add, s5, s5b, sc, out_dir, dirs):  # type: ignore[no-untyped-def]
+    """Steps of the V3-005B slice-B suite ``lv5b`` (``steps_v5b.py``; rows V8-LV, R1 for the nuclear
+    branch, V5 (ionmc side), V2b, V7 of ``validation/plans/v3-005-acceptance.md``): the python and
+    warp-cpu float64 backends in one process, ``nuclear=True``. V6 and E1-B (r_index 12 and 13) belong
+    to V3-005C (steps 12/13 reserved). The deferred step is the 1-vs-N worker partition of nuclear
+    runs; any ``cpu_workers > 1`` is deferred with it."""
+    from importlib import import_module
+
+    shards = import_module("steps_v5b").V2B_SHARDS
+    env = NUCLEAR_ENV
+    add("lv5b-throughput", [*s5b, "lv5b-throughput", *sc], env)
+    add("v8-lv-python-vs-warp-cpu", [*s5b, "v8-lv", *sc], env)
+    add("r1-nuc-regression", [*s5b, "r1-nuc", *sc], env)
+    for e in (150, 200):
+        for t in ("on", "off"):
+            add(f"v5-{e}-{t}", [*s5b, "v5-ionmc", "--energy", str(e), "--nuclear", t,
+                                "--out-dir", str(out_dir), *sc], env)  # fmt: skip
+    for k in range(shards):
+        add(f"v2b-s{k}", [*s5b, "v2b-shard", "--shard", str(k), "--out-dir", str(out_dir), *sc], env)
+    add("v2b-combine", [*s5b, "v2b-combine", "--dirs", *dirs, *sc], env)
+    add("v7-scan", [*s5b, "v7-scan", *sc], env)
+    add("v7-shift", [*s5b, "v7-shift", *sc], env)
+    add("v7-rep", [*s5b, "v7-rep", *sc], env)
+    add("v3-workers-partition", [*s5, "v3-workers"], env)  # deferred: runs only when the mode is lifted
+
+
+def _suite_steps_hr5(add, s5b, sc, out_dir, dirs, cuda):  # type: ignore[no-untyped-def]
+    """Steps of the V3-005B host-runner suite ``hr5`` (rows V8 statistical parity and V7 f32/f64 on
+    CUDA); every CUDA step runs in one controlling process with ``IONMC_REQUIRE_CUDA=1``. Step 03
+    (V6 on CUDA) is reserved for V3-005C."""
+    env = {**NUCLEAR_ENV, **cuda}
+    for nm in ("python-s0", "python-s1", "cpu64", "cuda32", "cuda64"):
+        add(f"v8-stat-{nm}", [*s5b, "v8-stat-sample", "--sample", nm, "--out-dir", str(out_dir), *sc], env)
+    add("v8-stat-compare", [*s5b, "v8-stat-compare", "--dirs", *dirs, *sc], env)
+    add("v7-f32-f64-cuda", [*s5b, "v7-f32", *sc], env)
 
 
 NUCLEAR_ENV = {
@@ -761,7 +835,7 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     if args.seed_base is None:
         args.seed_base = DEFAULT_SEED_BASES[args.suite]
-    workers = 1 if args.single_process or args.suite == "lv5" else resolve_workers(args.workers)
+    workers = 1 if args.single_process or args.suite in ("lv5", "lv5b", "hr5") else resolve_workers(args.workers)
     if workers < 1 or args.step_timeout < 1 or not 0.0 < args.scale <= 1.0:
         raise SystemExit("need --workers >= 1, --step-timeout >= 1 and 0 < --scale <= 1")
     single = workers == 1
