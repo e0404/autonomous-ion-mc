@@ -605,3 +605,114 @@ def test_calibration_marker_registered_and_excluded_from_ci() -> None:
     ci = (REPO / ".github" / "workflows" / "ci.yml").read_text()
     assert '-m "not cuda and not host and not calibration"' in ci
     assert '"calibration:' in (REPO / "pyproject.toml").read_text()
+
+
+# -- full-scale block configurations and the fixed-point accumulator guard (C32) ------------
+def _guard_env(v5b: ModuleType, fn):  # type: ignore[no-untyped-def]
+    """Run ``fn`` (builds an effective configuration: needs the nuclear table of the cache); skip
+    without it unless ``IONMC_REQUIRE_DATA=1`` (then a failure)."""
+    import os
+
+    try:
+        return fn()
+    except Exception as exc:  # noqa: BLE001
+        if "table" in str(exc).lower() or type(exc).__name__.startswith("NuclearTable"):
+            if os.environ.get("IONMC_REQUIRE_DATA") == "1":
+                raise
+            pytest.skip(f"no built nuclear table in the cache: {exc!r}")
+        raise
+
+
+def test_full_scale_block_configurations_pass_the_accumulator_guard(v5b: ModuleType) -> None:
+    """The nominal two-batch configuration of a 9e6-history shard exceeds the fixed-point voxel
+    accumulator guard of ``validate`` (the host failure of C32); ``batch_estimates`` now validates
+    through ``block_effective`` (smallest batch count 2, 4, 8, ... that satisfies the guard), and the
+    full-scale shard, reference and scan configurations all pass through the same entry path."""
+    from ionmc.config import MAX_QUANTA, QUANTUM_MEV
+    from ionmc.errors import UnsupportedCombinationError
+    from ionmc.simulation import Simulation
+
+    geo, grid = v5b.coarse_depth(v5b.V7_BINS)
+    shard = v5b.v7_config(
+        "warp-cpu", "float64", v5b.V7_SHARD_N, v5b.V7_SHARD_BATCHES, 1, grid=grid, geo=geo
+    )
+    assert (shard.run.n_histories, shard.run.n_batches) == (9_000_000, 18000)
+    nominal2 = v5b.replace(shard, run=v5b.replace(shard.run, n_batches=2))
+    with pytest.raises(UnsupportedCombinationError, match="fixed-point voxel accumulator"):
+        _guard_env(v5b, lambda: Simulation(nominal2).effective)  # the old code path
+    eff_nominal = _guard_env(
+        v5b, lambda: Simulation(shard).effective
+    )  # the shard's own batch structure
+    e_cap = max(
+        eff_nominal.nuclear.history_energy_bound_mev if eff_nominal.nuclear is not None else 0.0,
+        0.0,
+    )
+    assert abs(e_cap - 3154.43) < 0.01
+    eff = _guard_env(v5b, lambda: v5b.block_effective(shard))
+    b = eff.requested.run.n_batches
+    assert (
+        b == 8
+        and 9_000_000 // b * e_cap / QUANTUM_MEV
+        < MAX_QUANTA
+        <= 9_000_000 // (b // 2) * e_cap / QUANTUM_MEV
+    )
+    for n, nb in (
+        (v5b.V7_REF_N, v5b.V7_REF_BATCHES),
+        (1_000_000, v5b.V7_BATCHES),
+    ):  # reference, scan
+        cfg = v5b.v7_config("warp-cpu", "float64", n, nb, 1, grid=grid, geo=geo)
+        assert (
+            _guard_env(v5b, lambda cfg=cfg: v5b.block_effective(cfg)).requested.run.n_batches == 2
+        )
+        assert _guard_env(v5b, lambda cfg=cfg: Simulation(cfg).effective) is not None
+
+
+def test_guard_table_of_every_step_configuration(v5b: ModuleType) -> None:
+    """Histories per batch x the history energy bound (3154.43 MeV, nuclear) against the capacity of the
+    fixed-point voxel accumulator (4.29497e9 MeV) for every nominal configuration of the V3-005B steps:
+    each must be below, or run through ``block_effective``."""
+    from ionmc.config import MAX_QUANTA, QUANTUM_MEV
+
+    cap = MAX_QUANTA * QUANTUM_MEV
+    e_cap = 3154.43
+    steps = {  # name -> (histories, batches) of the configuration validated at full scale
+        "lv5b-throughput python": (v5b.THROUGHPUT_PY_N, 2),
+        "lv5b-throughput warp / v2b / v5 geometry": (v5b.THROUGHPUT_WARP_N, 2),
+        "v8-lv python vs warp-cpu (256, dense 96)": (v5b.V8_K, 2),
+        "r1-nuc": (v5b.R1_NUC_N, 2),
+        "v5-ionmc 150/200 on/off": (v5b.V5_N, v5b.V5_BATCHES),
+        "v2b shard (per variant)": (v5b.V2B_N // v5b.V2B_SHARDS, v5b.V2B_BATCHES),
+        "v7-scan N = 1e6 (block_effective, 2 batches)": (1_000_000, 2),
+        "v7-scan nominal": (1_000_000, v5b.V7_BATCHES),
+        "v7-shift": (v5b.V7_SHIFT_N, v5b.V7_SHIFT_BATCHES),
+        "v7-rep-ref 1e6 (block_effective, 2 batches)": (v5b.V7_REF_N, 2),
+        "v7-rep-s{k} 9e6 (block_effective, 8 batches)": (v5b.V7_SHARD_N, 8),
+        "v7-rep-s{k} 9e6 nominal 18000": (v5b.V7_SHARD_N, v5b.V7_SHARD_BATCHES),
+        "hr5 python sample": (v5b.HR5_PYTHON_N, v5b.HR5_PYTHON_BATCHES),
+        "hr5 warp samples 1e6": (v5b.HR5_WARP_N, v5b.HR5_WARP_BATCHES),
+        "hr5 v7-f32 1e6": (v5b.HR5_F32_N, v5b.V7_BATCHES),
+    }
+    table = {k: (n // b, n // b * e_cap) for k, (n, b) in steps.items()}
+    print(f"v7 accumulator guard table (histories per batch, MeV; capacity {cap:.5g} MeV)", table)
+    for k, (_per, mev) in table.items():
+        assert mev < cap, (k, mev)
+    assert 9_000_000 // 2 * e_cap >= cap  # the old nominal two-batch shard configuration fails
+    assert abs(cap - 4.29497e9) < 1e4
+
+
+def test_block_estimates_independent_of_the_effective_batch_count(v5b: ModuleType) -> None:
+    """``batch_estimates`` over 4 blocks of a 2000-history run is bitwise identical for effective
+    configurations of 2 (the old nominal two-batch configuration), 4 and the default (smallest valid)
+    batch count: the trajectories do not depend on the batch structure and the accumulators are
+    fixed-point integers."""
+    geo, grid = v5b.coarse_depth(v5b.V7_BINS)
+    cfg = v5b.v7_config("warp-cpu", "float64", 2000, 4, 20461004, grid=grid, geo=geo)
+    ref = _guard_env(v5b, lambda: v5b.batch_estimates(cfg, 2))
+    for eb in (4, None):
+        got = v5b.batch_estimates(cfg, eb)
+        for key in ("sec_p", "nuc_local_dose", "idd", "nuclear_local", "escaped_neutral"):
+            assert got[key].shape == ref[key].shape and np.array_equal(got[key], ref[key]), (
+                key,
+                eb,
+            )
+        assert got["counters_sum"] == ref["counters_sum"] == 0

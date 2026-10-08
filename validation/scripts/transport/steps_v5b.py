@@ -96,6 +96,7 @@ import steps_v4 as v4
 import steps_v5 as v5
 from ionmc import materials as M
 from ionmc.config import DiagnosticsOptions, SimulationConfig
+from ionmc.errors import UnsupportedCombinationError
 from ionmc.geometry import BoxPhantom
 from ionmc.nuclear.tables import NuclearTable
 from ionmc.scoring import ScoringGrid, TallyRequest
@@ -251,17 +252,38 @@ def channel_slice(eff: Any, name: str) -> tuple[int, int, float]:
     return c.offset, c.size, float(c.quantum)
 
 
-def batch_estimates(cfg: SimulationConfig) -> dict[str, Any]:
+def block_effective(cfg: SimulationConfig, batches: int | None = None) -> Any:
+    """Effective configuration used to run the history blocks of ``batch_estimates``. The blocks are run
+    as partial results (``run_range``) whose rows are summed, so only the validated configuration is
+    needed: its batch structure does not enter the trajectories. The nominal ``n_batches`` of a full-scale
+    shard (18000 batches of 500 histories) is not used as is, because per-batch accumulator rows
+    ``[n_batches, ...]`` would be allocated by every one of the 18000 block runs; instead the SMALLEST
+    batch count ``B`` of the sequence 2, 4, 8, ... (capped at the nominal count) that satisfies the
+    fixed-point accumulator guard of ``ionmc.config.validate`` (``histories // B * e_cap / QUANTUM_MEV <
+    MAX_QUANTA``) is used; ``batches`` forces a count. The guard is exercised by ``validate`` itself."""
+    nb = cfg.run.n_batches
+    b = 2 if batches is None else batches
+    while True:
+        b = min(b, nb) if batches is None else b
+        try:
+            return Simulation(replace(cfg, run=replace(cfg.run, n_batches=b))).effective
+        except UnsupportedCombinationError:
+            if batches is not None or b >= nb:
+                raise
+            b *= 2
+
+
+def batch_estimates(cfg: SimulationConfig, effective_batches: int | None = None) -> dict[str, Any]:
     """Per-block, per-primary estimators of ``cfg`` (nuclear on, tallies ``sec_p`` and ``nuc_local``
     on grid 0): ``sec_p`` / ``nuc_local_dose`` and ``idd`` profiles ``[B, voxels]``, the scalars
     ``nuclear_local``, ``escaped_neutral`` ``[B]`` and the summed counters. The ``B = n_batches``
     batches are the CONTIGUOUS history blocks ``[b N/B, (b+1) N/B)`` (the kernels assign the
     internal batch index ``h mod B``, which interleaves, and the exact tally columns exist only per
-    partial result, so the blocks are run as partial results of a two-batch configuration whose rows are summed); histories
+    partial result, so the blocks are run as partial results of a configuration with few batches
+    (``block_effective``) whose rows are summed); histories
     are independent, so the blocks are valid batches. The trajectories do not depend on the batch
     structure (counter-based RNG per history), so the sum over blocks equals the full run."""
-    cfg1 = replace(cfg, run=replace(cfg.run, n_batches=2))
-    eff = Simulation(cfg1).effective
+    eff = block_effective(cfg, effective_batches)
     n, nb = cfg.run.n_histories, cfg.run.n_batches
     if n % nb:
         raise SystemExit("batch_estimates: n_histories must be a multiple of n_batches")
