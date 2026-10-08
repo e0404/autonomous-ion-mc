@@ -26,8 +26,9 @@ Rules (the style of ``validation/scripts/warp-architecture/run_all.sh``):
   ``sha_source=declared`` and later attested with ``summarize.py --attest-sha``;
 * ``environment.txt`` records versions, hardware, the SHA, the dirty state and ``source_hashes``
   (sha256 of every file under ``src/ionmc``, ``tests/ionmc``, ``validation/scripts/transport`` and
-  ``benchmarks/transport`` and of ``pyproject.toml``, ``uv.lock`` and the acceptance plan), in both
-  the git and the snapshot case;
+  ``benchmarks/transport`` and of ``pyproject.toml``, ``uv.lock`` and the acceptance plan; the suites
+  ``lv5b`` and ``hr5`` add the 96 files of the 24 frozen V5 reference cases, ``V5_CASE_FILES``), in
+  both the git and the snapshot case;
 * every step archives stdout+stderr in ``NN-name.txt`` between a header (command, SHA, start
   time, timeout) and an ``# exit=`` trailer; a timed-out step is killed and archived with
   ``exit=124``; ``manifest.txt`` lists the step names of this run;
@@ -120,14 +121,40 @@ prefix ``validation/scripts/transport`` and the nuclear package ``src/ionmc/nucl
 every suite)."""
 
 
+V5_CASE_ROOT = "validation/reference_cases"
+V5_CASE_FILES = (
+    *(
+        f"{V5_CASE_ROOT}/topas/proton-water-{e}mev-idd-r20{tag}-seed{k}/{f}"
+        for e in (150, 200)
+        for tag in ("", "-emonly")
+        for k in (1, 2, 3)
+        for f in ("case.json", "input.txt")
+    ),
+    *(
+        f"{V5_CASE_ROOT}/mcsquare/proton-water-{e}mev-idd-r20-{nuc}-seed{k}/{f}"
+        for e in (150, 200)
+        for nuc in ("on", "off")
+        for k in (1, 2, 3)
+        for f in ("case.json", "config.txt", "Plan.txt", "BDL_mono.txt", "CT.mhd", "CT.raw")
+    ),
+)
+"""The 96 files of the 24 frozen V5 case directories (TOPAS ``proton-water-{150,200}mev-idd-r20
+[-emonly]-seed{1,2,3}``, MCsquare ``proton-water-{150,200}mev-idd-r20-{on,off}-seed{1,2,3}``) that
+``compare_idd_v5`` binds the V5 reference runs to byte for byte (C20). Enumerated, not a prefix: the
+V3-010B cases and the exploratory X1-X4 cases are not V5 evidence. Every file must exist
+(``source_files`` fails loudly otherwise)."""
+
 SOURCE_FILES_V5B = (
     *SOURCE_FILES_V5,
     "validation/scripts/transport/steps_v5b.py",
     "validation/scripts/reference/compare_idd_v5.py",
     "validation/scripts/reference/compare_batches.py",
+    *V5_CASE_FILES,
 )
 """The hashed set of the suites ``lv5b`` and ``hr5`` (V3-005B): the lv5 set plus the slice-B steps
-(the nuclear kernels, ``src/ionmc`` and the tests are hashed through the prefixes)."""
+and the 96 files of the 24 frozen V5 reference cases (``V5_CASE_FILES``, so that the gitless-snapshot
+attestation covers the inputs the V5 comparator binds to; the nuclear kernels, ``src/ionmc`` and the
+tests are hashed through the prefixes)."""
 
 
 def source_file_list(suite: str | None = None) -> tuple[str, ...]:
@@ -644,7 +671,13 @@ def sha256(path: Path) -> str:
 def source_files(suite: str | None = None) -> list[Path]:
     """Every source file whose hash identifies the code under test (the set of ``suite``, default
     the suite of ``IONMC_RUN_SUITE``)."""
-    files: list[Path] = [REPO / f for f in source_file_list(suite) if (REPO / f).is_file()]
+    listed = source_file_list(suite)
+    missing = [f for f in V5_CASE_FILES if f in listed and not (REPO / f).is_file()]
+    if missing:
+        raise SystemExit(
+            f"{len(missing)} frozen V5 case file(s) missing from the source tree, first: "
+            f"{missing[0]}; the hashed set cannot be completed")
+    files: list[Path] = [REPO / f for f in listed if (REPO / f).is_file()]
     for prefix in SOURCE_PREFIXES:
         for p in sorted((REPO / prefix).rglob("*")):
             parts = set(p.relative_to(REPO).parts)

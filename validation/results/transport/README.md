@@ -207,3 +207,5 @@ python nuclear-on digest equal to the one measured with the source tree of b84fd
 f64 on CUDA. Step 16 of `lv5b` (1-vs-N worker partition) is deferred in the single-process mode. Any
 combine that uses imported partials is `conformant: false` (Amendment 5). V6 and E1-B (r_index 12, 13,
 hr5 r_index 3) belong to V3-005C.
+
+The hashed source identity of `lv5b` and `hr5` (`environment.txt` `source_hashes`, attested by `summarize.py --attest-sha`) includes the 96 files of the 24 frozen V5 reference case directories under `validation/reference_cases` (`run_suite.V5_CASE_FILES`, enumerated, no tree prefix), so a changed frozen case is reported as `content differs`; the `v5-compare` document records `cases_in_source_identity` and the bound case paths.

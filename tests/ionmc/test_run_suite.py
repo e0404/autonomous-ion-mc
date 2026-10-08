@@ -1873,3 +1873,116 @@ def test_v5_compare_step_without_engine_runs_is_a_failed_document(
     assert seen["pass"] is False and seen["verdict"] is None
     assert "IddError" in seen["error"] and "no topas reference runs" in seen["error"]
     assert seen["cases_dir"].endswith("validation/reference_cases")
+
+
+def _lv5b_environment(mod: ModuleType) -> dict[str, object]:
+    return {"suite": "lv5b", "git_sha": SHA,
+            "source_hashes": {str(f.relative_to(mod.REPO)): mod.sha256(f)
+                              for f in mod.source_files("lv5b")}}  # fmt: skip
+
+
+def test_v5_case_files_are_enumerated_hashed_and_present() -> None:
+    """Review fe367d22: the 96 files of the 24 frozen V5 cases are in the hashed set of lv5b/hr5
+    (and of no other suite), enumerated (no prefix) and all present."""
+    mod = _load("run_suite")
+    files = mod.V5_CASE_FILES
+    assert len(files) == len(set(files)) == 96
+    topas = [f for f in files if "/topas/" in f]
+    mcs = [f for f in files if "/mcsquare/" in f]
+    assert len(topas) == 24 and len(mcs) == 72
+    names = {f.split("/")[2] + "/" + f.split("/")[3] for f in files}
+    assert names == {
+        f"topas/proton-water-{e}mev-idd-r20{t}-seed{k}"
+        for e in (150, 200)
+        for t in ("", "-emonly")
+        for k in (1, 2, 3)  # fmt: skip
+    } | {
+        f"mcsquare/proton-water-{e}mev-idd-r20-{n}-seed{k}"
+        for e in (150, 200)
+        for n in ("on", "off")
+        for k in (1, 2, 3)  # fmt: skip
+    }
+    assert not any(
+        "x1" in f or "x2" in f or "x3" in f or "x4" in f or "lateral" in f for f in files
+    )
+    assert "validation/reference_cases" not in mod.SOURCE_PREFIXES
+    for suite in ("lv5b", "hr5"):
+        listed = mod.source_file_list(suite)
+        assert set(files) <= set(listed)
+        assert {str(f.relative_to(mod.REPO)) for f in mod.source_files(suite)} >= set(files)
+    for suite in ("lv", "hr", "lv4", "hr4", "lv5"):
+        assert not set(files) & set(mod.source_file_list(suite))
+    for f in files:
+        assert (mod.REPO / f).is_file(), f
+    # every file of every V5 case directory is listed (no unlisted aux file)
+    dirs = {Path(f).parent for f in files}
+    on_disk = {p.relative_to(mod.REPO).as_posix() for d in dirs for p in (mod.REPO / d).iterdir()}
+    assert on_disk == set(files)
+
+
+def test_missing_v5_case_file_fails_the_hashing_loudly(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    mod = _load("run_suite")
+    monkeypatch.setattr(mod, "REPO", tmp_path)
+    with pytest.raises(SystemExit, match="frozen V5 case file"):
+        mod.source_files("lv5b")
+    with pytest.raises(SystemExit, match="frozen V5 case file"):
+        mod.source_files("hr5")
+
+
+def test_attestation_detects_a_changed_frozen_v5_case_file(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Gitless-snapshot workflow: the archive's recorded hash of a case file differs from the
+    commit's blob -> ``content differs``; an unrecorded one is ``tracked but not hashed``."""
+    mod, summ = _load("run_suite"), _load("summarize")
+    env = _lv5b_environment(mod)
+    hashes: dict[str, str] = env["source_hashes"]  # type: ignore[assignment]
+    case = mod.V5_CASE_FILES[0]
+    assert case in hashes and mod.V5_CASE_FILES[-1] in hashes
+
+    tracked = sorted(hashes)
+
+    def fake_git(*args: str) -> bytes | None:
+        if args[0] == "ls-tree":
+            return "\n".join(tracked).encode()
+        if args[0] == "cat-file":  # the commit's blob = the current file on disk
+            return (mod.REPO / args[2].split(":", 1)[1]).read_bytes()
+        return None
+
+    monkeypatch.setattr(summ, "_git", fake_git)
+    ok = summ.attest(env, SHA)
+    assert ok["valid"], ok["mismatches"]
+    hashes[case] = "0" * 64  # the snapshot's case file was modified
+    bad = summ.attest(env, SHA)
+    assert not bad["valid"]
+    assert bad["mismatches"] == [f"content differs: {case}"]
+    del hashes[case]  # or not hashed at all
+    assert f"tracked but not hashed: {case}" in summ.attest(env, SHA)["mismatches"]
+
+
+def test_v5_compare_records_that_bound_cases_are_in_the_source_identity(tmp_path: Path) -> None:
+    mod, v5b = _load("run_suite"), _load("steps_v5b")
+    cases = mod.REPO / "validation" / "reference_cases"
+    t_case = "topas/proton-water-150mev-idd-r20-seed1"
+    m_case = "mcsquare/proton-water-150mev-idd-r20-on-seed1"
+    verdict = {"groups": [{"binding": {"T-1": {"bound_case": t_case},
+                                       "M-1": {"bound_case": m_case}}}]}  # fmt: skip
+    rec = v5b.bound_cases_source_identity(verdict, cases)
+    assert rec["cases_in_source_identity"] is True
+    assert len(rec["bound_case_paths"]) == 2 + 6
+    assert set(rec["bound_case_paths"]) <= set(mod.source_file_list("lv5b"))
+    # a bound case that is not in the frozen set (e.g. exploratory X1) fails the document
+    x1 = {"b": {"bound_case": "topas/proton-water-150mev-idd-r20-x1-no-hadron-elastic"}}
+    with pytest.raises(SystemExit, match="not in the suite source identity"):
+        v5b.bound_cases_source_identity(x1, cases)
+    # an extra unlisted file in a bound case directory fails as well
+    extra = tmp_path / "topas" / "proton-water-150mev-idd-r20-seed1"
+    extra.mkdir(parents=True)
+    (extra / "case.json").write_text("{}")
+    (extra / "surprise.txt").write_text("x")
+    with pytest.raises(SystemExit, match="not in the suite source identity"):
+        v5b.bound_cases_source_identity(
+            {"b": {"bound_case": "topas/proton-water-150mev-idd-r20-seed1"}}, tmp_path
+        )
+    with pytest.raises(SystemExit, match="no bound case"):
+        v5b.bound_cases_source_identity({}, cases)

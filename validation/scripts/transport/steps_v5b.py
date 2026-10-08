@@ -543,6 +543,40 @@ def _v5_reference_runs(ref_dir: Path) -> tuple[list[Path], list[Path]]:
     return topas, mc
 
 
+def _bound_case_names(node: Any) -> set[str]:
+    """Every ``bound_case`` string (``<engine>/<case>``) anywhere in a comparator verdict."""
+    if isinstance(node, dict):
+        found = {node["bound_case"]} if isinstance(node.get("bound_case"), str) else set()
+        return found.union(*(_bound_case_names(v) for v in node.values()))
+    if isinstance(node, list):
+        return set().union(*(_bound_case_names(v) for v in node))
+    return set()
+
+
+def bound_cases_source_identity(verdict: dict[str, Any], cases_dir: Path) -> dict[str, Any]:
+    """Record that the cases the V5 runs were bound to are part of the suite source identity
+    (review fe367d22): every file of every bound case directory must be in
+    ``run_suite.source_file_list('lv5b')`` (hashed into ``environment.txt`` and attested), else
+    ``SystemExit``."""
+    import run_suite
+
+    listed = set(run_suite.source_file_list("lv5b"))
+    paths: list[str] = []
+    for name in sorted(_bound_case_names(verdict)):
+        d = cases_dir / name
+        rels = sorted(f"{run_suite.V5_CASE_ROOT}/{name}/{f.relative_to(d).as_posix()}"
+                      for f in d.rglob("*") if f.is_file())  # fmt: skip
+        if not rels:
+            raise SystemExit(f"bound case {name}: no files under {d}")
+        absent = [r for r in rels if r not in listed]
+        if absent:
+            raise SystemExit(f"bound case {name}: {absent} not in the suite source identity")
+        paths += rels
+    if not paths:
+        raise SystemExit("v5-compare: the verdict records no bound case")
+    return {"cases_in_source_identity": True, "bound_case_paths": paths}
+
+
 def step_v5_compare(a: argparse.Namespace) -> int:
     """Row V5 verdict (C19 F3): the four verified ``v5-ionmc`` partials against the materialized
     TOPAS and MCsquare runs (``--reference-dir``, default ``<repo>/.ionmc-cache/reference-runs``;
@@ -572,10 +606,11 @@ def step_v5_compare(a: argparse.Namespace) -> int:
             for nm, p in zip(names, parts, strict=True):
                 (Path(tmp) / nm).write_text(json.dumps(p, sort_keys=True))
             verdict = cmp.build_verdict(Path(tmp), topas, mc, cases_dir)
+        doc.update(bound_cases_source_identity(verdict, cases_dir))  # SystemExit: failed document
         doc.update(verdict=verdict, pass_gating=bool(verdict["pass"]), error=None)
         doc["pass"] = bool(verdict["pass"] and not reduced)
     except (cmp.IddError, SystemExit, ValueError, OSError) as exc:
-        doc.update(verdict=None, error=f"{type(exc).__name__}: {exc}", **{"pass": False})
+        doc.update(cases_in_source_identity=False, verdict=None, error=f"{type(exc).__name__}: {exc}", **{"pass": False})
     return finish5b(doc, V5_N, min(p["n"] for p in parts), reduced)
 
 
