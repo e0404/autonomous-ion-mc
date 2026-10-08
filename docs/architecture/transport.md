@@ -24,6 +24,7 @@ lookup scoring). The models are described in [EM transport](../physics/em-transp
 | `ionmc.transport.channels` | channel compiler: `compile_channels`, `ChannelPlan`, quantum rule, shared lookup/spectrum axis parameters |
 | `ionmc.transport.scoring_funcs`, `ionmc.transport.scoring_ref` | shared scoring functions (Warp + Python twin) and the Python channel hook |
 | `ionmc.transport.channel_device` | packs a `ChannelPlan` and the water row into the `ChannelData` struct of the kernels |
+| `ionmc.transport.nuclear_device` | `pack_nuclear` / `NuclearDevice`: the nuclear table rows and per-material `Sigma_mass`, majorants and cumulative target rows as flat `wp.array` of the kernel precision on an explicit device, with a `sha256` identity of the uploaded bytes (V3-005B C10) |
 | `ionmc.transport.parity_channels` | A11-HR comparison of linear channel profiles (`t12_compare`), ratio z report, A15 partition comparison |
 | `ionmc.config` | `PhysicsOptions`, `RunOptions`, `DiagnosticsOptions`, `SimulationConfig`, `validate()` returning `EffectiveConfig` |
 | `ionmc.simulation` | `Simulation`, `Result`, `GridResult`, `EnergyBalance`, `TransportCounters`, `capabilities()` |
@@ -385,6 +386,7 @@ for trajectory-level parity with the Warp backends.
 tissue, 1-250 MeV) on top of the unchanged electromagnetic step. The EM random streams do not depend
 on `nuclear` (purpose 2 is separate, decision 0041 section 4), so on/off pairs with one seed share
 their EM history. Warp backends with `nuclear=True` raise `UnsupportedCombinationError` until V3-005B.
+The whole event sampler is already one shared Warp-scope function (`make_nuclear(real).sample_event`, with `choose_target`; V3-005B C10): the Python reference path calls its pure-Python twin (`ionmc.nuclear.events.sample_event_scalar`), the kernels will call the `@wp.func` on the arrays of `NuclearDevice`; it draws its own PURPOSE_NUCLEAR uniforms, writes at most 32 products x 8 columns and sums the ledger with the compensated sum of CPython 3.12 `sum()`. Event-level parity of the twin and a Warp CPU float64 kernel on 1e4 recorded inputs is bitwise (`tests/ionmc/test_nuclear_device.py`).
 Nuclear interactions apply to primary protons only (decision 0041, approximation 6).
 
 * **Thinning.** A primary draws `n_lambda = -ln u` at birth. `select_step_nuclear` adds the limit

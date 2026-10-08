@@ -52,6 +52,13 @@ from numpy.typing import NDArray
 from ionmc._wpfunc import python_twin
 from ionmc.data.ame import AmeEntry, nuclear_mass_mev
 from ionmc.physics.nuclear import (
+    DA_MAX,
+    DZ_MAX,
+    EVENT_ACCEPTED,
+    EVENT_BLOCKS_PER_ATTEMPT,
+    EVENT_EXHAUSTED,
+    EVF_STRIDE,
+    EVI_STRIDE,
     KALBACH_A_MAX,
     KALBACH_A_MIN,
     KALBACH_C1,
@@ -64,27 +71,40 @@ from ionmc.physics.nuclear import (
     KALBACH_M_B,
     KALBACH_NEWTON_ITERATIONS,
     KALBACH_TOLERANCE,
+    MAX_ATTEMPTS,
+    MAX_PRODUCTS,
+    N_BINS,
+    N_PARTICLE_UNIFORMS,
+    N_SPECIES,
     POISSON_N_MAX,
+    PROD_STRIDE,
+    SLOT_PARTICLE_BASE,
+    SLOT_PARTICLE_STRIDE,
+    SPECIES_A,
+    SPECIES_Z,
+    TCONST_STRIDE,
     kalbach_separation_energy,
     make_nuclear,
 )
 
 SPECIES = ("n", "p", "d", "a", "g")
-"""Sampled product species: neutron, proton, deuteron, alpha, gamma (decision 0041 section 3)."""
-N_SPECIES = 5
-N_BINS = 64
-MAX_ATTEMPTS = 64
-SPECIES_Z = (0, 1, 1, 2, 0)
-SPECIES_A = (1, 1, 2, 4, 0)
-DZ_MAX = POISSON_N_MAX * (1 + 1 + 2)
-"""Largest total charge of the products of the multiplicity bound (16 p + 16 d + 16 alpha)."""
-DA_MAX = POISSON_N_MAX * (1 + 1 + 2 + 4)
-"""Largest total mass number of the products (16 of each of n, p, d, alpha)."""
 _KALBACH_KEYS = ("n", "p", "d", "a")  # the charged/neutral nucleons; gamma has no Kalbach a
 _M_B = np.array([KALBACH_M_B[k] for k in _KALBACH_KEYS] + [0.0], dtype=np.float64)
-SLOT_PARTICLE_BASE = 8
-SLOT_PARTICLE_STRIDE = 8
-N_PARTICLE_UNIFORMS = 5
+
+
+__all__ = [
+    "DA_MAX",
+    "DZ_MAX",
+    "MAX_ATTEMPTS",
+    "N_BINS",
+    "N_PARTICLE_UNIFORMS",
+    "N_SPECIES",
+    "SLOT_PARTICLE_BASE",
+    "SLOT_PARTICLE_STRIDE",
+    "SPECIES",
+    "SPECIES_A",
+    "SPECIES_Z",
+]  # fmt: skip  (constants shared with ionmc.physics.nuclear, re-exported)
 
 
 def particle_slot(j: int, k: int) -> int:
@@ -192,6 +212,17 @@ def build_event_model(ame: dict[tuple[int, int], AmeEntry], z_t: int, a_t: int) 
         s_b_mev=s_b,
         m_res_mev=m_res,
     )
+
+
+def event_constants(model: EventModel) -> NDArray[np.float64]:
+    """The ``TCONST_STRIDE`` row of ``model`` for ``sample_event``: ``m_p, m_t, s_a, a_t``, the five
+    species masses, the five separation energies, ``z_t``, 0."""
+    row = np.zeros(TCONST_STRIDE)
+    row[0:4] = (model.m_p_mev, model.m_t_mev, model.s_a_mev, float(model.a_t))
+    row[4:9] = model.species_mass_mev
+    row[9:14] = model.s_b_mev
+    row[14] = float(model.z_t)
+    return row
 
 
 def reachable_residuals(model: EventModel) -> NDArray[np.bool_]:
@@ -633,53 +664,57 @@ def sample_event_scalar(
     docstring). ``uni(attempt, slot)`` returns the uniform of an address; ``nu`` defaults to
     ``python_twin(make_nuclear)``."""
     nu = python_twin(make_nuclear) if nu is None else nu
-    beta, gamma, _sqrt_s = nu.cm_boost(t_lab_mev, model.m_p_mev, model.m_t_mev)
-    e_a = t_lab_mev * model.a_t / (model.a_t + 1.0) + model.s_a_mev
-    masses = [float(x) for x in model.species_mass_mev]
-    for attempt in range(1, MAX_ATTEMPTS + 1):
-        n = [
-            nu.multiplicity_round(uni(attempt, s), float(rows.lam[s]), POISSON_N_MAX)
-            for s in range(N_SPECIES)
-        ]
-        dz = sum(n[s] * SPECIES_Z[s] for s in range(N_SPECIES))
-        da = sum(n[s] * SPECIES_A[s] for s in range(N_SPECIES))
-        big_m = float(model.m_res_mev[dz, da]) if dz <= DZ_MAX and da <= DA_MAX else math.inf
-        if math.isinf(big_m):
-            continue
-        out = []
-        j = 0
-        for s in range(N_SPECIES):
-            for _ in range(n[s]):
-                u = [uni(attempt, particle_slot(j, k)) for k in range(N_PARTICLE_UNIFORMS)]
-                kb = nu.inv_cdf_bin(u[0], N_BINS)
-                e_p = nu.inv_cdf_sample(
-                    u[1], float(rows.edges_mev[s, kb]), float(rows.edges_mev[s, kb + 1])
-                )
-                if s < 4:
-                    a = nu.kalbach_a(e_a, e_p + float(model.s_b_mev[s]), float(_M_B[s]))
-                    mu = nu.kalbach_mu(u[3], a, float(rows.r[s, kb]))
-                else:
-                    mu = 2.0 * u[3] - 1.0
-                phi = 2.0 * math.pi * u[4]
-                lab = nu.cm_to_lab(e_p, mu, phi, masses[s], beta, gamma)
-                out.append((float(s), e_p, mu, phi, lab[0], lab[1], lab[2], lab[3]))
-                j += 1
-        recoil = float(rows.recoil_t_mev)
-        sum_e_lab = sum(p[4] for p in out)
-        alpha_t = sum(p[4] - masses[3] for p in out if p[0] == 3.0)
-        m_out = sum(n[s] * masses[s] for s in range(N_SPECIES))
-        return ScalarEvent(
-            True,
-            attempt,
-            tuple(int(x) for x in n),
-            model.z_t + 1 - dz,
-            model.a_t + 1 - da,
-            recoil,
-            t_lab_mev + model.m_p_mev + model.m_t_mev - sum_e_lab - big_m - recoil,
-            m_out + big_m - model.m_p_mev - model.m_t_mev,
-            alpha_t + recoil,
-            tuple(out),
+    t = float(t_lab_mev)
+    # rows already interpolated at t: a two-node grid [t, t + 1] gives the weight 0, so that the
+    # shared sampler reproduces the rows exactly ((1 - 0) x + 0 x = x)
+    two = np.array([t, t + 1.0])
+    lam = np.repeat(np.asarray(rows.lam, dtype=np.float64), 2)
+    edges = np.repeat(np.asarray(rows.edges_mev, dtype=np.float64)[:, None, :], 2, axis=1).ravel()
+    rpre = np.repeat(np.asarray(rows.r, dtype=np.float64)[:, None, :], 2, axis=1).ravel()
+    recoil = np.full(2, float(rows.recoil_t_mev))
+    evi = np.zeros(EVI_STRIDE, dtype=np.int64)
+    evf = np.zeros(EVF_STRIDE)
+    prod = np.zeros(MAX_PRODUCTS * PROD_STRIDE)
+
+    def key(_h: int, _gid: int, blk: int, word: int) -> float:
+        return uni(blk // EVENT_BLOCKS_PER_ATTEMPT + 1, (blk % EVENT_BLOCKS_PER_ATTEMPT) * 4 + word)
+
+    status = int(
+        nu.sample_event(
+            0, 0, 0, key, 0, t, two, 2, lam, edges, rpre, recoil,
+            event_constants(model), np.ravel(model.m_res_mev), evi, evf, prod, 0,
         )
+    )  # fmt: skip
+    if status == EVENT_EXHAUSTED:
+        return ScalarEvent(
+            False,
+            MAX_ATTEMPTS,
+            (0,) * N_SPECIES,
+            -1,
+            -1,
+            math.nan,
+            math.nan,
+            math.nan,
+            math.nan,
+            (),
+        )
+    if status != EVENT_ACCEPTED:
+        raise RuntimeError(
+            f"nuclear event with more than {MAX_PRODUCTS} products (status {status})"
+        )
+    n_prod = int(evi[8])
     return ScalarEvent(
-        False, MAX_ATTEMPTS, (0,) * N_SPECIES, -1, -1, math.nan, math.nan, math.nan, math.nan, ()
+        True,
+        int(evi[0]),
+        tuple(int(x) for x in evi[1:6]),
+        int(evi[6]),
+        int(evi[7]),
+        float(evf[0]),
+        float(evf[1]),
+        float(evf[2]),
+        float(evf[3]),
+        tuple(
+            tuple(float(x) for x in prod[j * PROD_STRIDE : (j + 1) * PROD_STRIDE])
+            for j in range(n_prod)
+        ),
     )
