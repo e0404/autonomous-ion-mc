@@ -36,7 +36,23 @@ Rules (the style of ``validation/scripts/warp-architecture/run_all.sh``):
   and never ``conformant``; ``summarize.py --combine`` joins the subsets of one suite;
 * the T12 statistics are split into steps with their own outputs: the python sample (in
   ``--python-parts`` history ranges), the accelerated samples and the comparison, which loads
-  the saved samples (hash-verified; ``--import-dirs`` names archives of other runs holding them);
+  the saved samples (hash-verified; ``--import-dirs`` names archives of other runs holding them; the lv5 shard
+  partials carry a ``content_sha256`` and are bound to the run SHA, suite, table id and seed, but that digest
+  is recomputable by whoever alters a file: every partial imported with ``--import-dirs`` must therefore be listed
+  with its exact digest and a ``host_run_id`` in ``--partials-manifest`` (schema in
+  ``steps_v5.read_manifest``). The orchestrator builds the manifest ONLY from the ``PARTIAL <name>
+  <digest>`` stdout lines of the shard steps in the protected host-runner records and lists the run ids in
+  record_local_validation; the code cannot verify those records. The manifest path and its sha256 are
+  recorded in ``environment.txt`` (``partials_manifest``, ``partials_manifest_sha256``), the combine steps
+  print an ``attestation`` block (manifest sha256, every name/digest/host_run_id used, the run SHA) that
+  ``summarize.py --combine`` carries into the combined summary. These records document what was relied on;
+  they do not make the archive conformant: any step that used an imported partial (origin other than the
+  current output directory) is ``conformant: false`` with the reason ``imported_partials_unverified_by_code``
+  (``pass`` unaffected). Under the single-process directive sharded rows are therefore combined from imported
+  partials and are non-conformant by code; they become conformant only when all shards and the combine run in
+  one invocation after the operator lifts the directive; the protected validation record lists the host run
+  ids; without ``--import-dirs`` only partials of the current output directory are
+  accepted);
 * ``--workers 1`` (or ``--single-process``) is the single-process diagnostic mode: every step runs
   with one worker and single-threaded numerics (``SINGLE_PROCESS_ENV``), the steps whose purpose is
   multiprocessing (``DEFERRED_STEPS``) are archived as ``deferred`` and not run, histories, seeds
@@ -64,7 +80,8 @@ REPO = HERE.parents[2]
 ALLOWED_PARENTS = (REPO / "validation" / "generated", REPO / "benchmarks" / "generated")
 STEPS = HERE / "steps.py"
 STEPS_V4 = HERE / "steps_v4.py"
-SUITES = ("lv", "hr", "lv4", "hr4")
+STEPS_V5 = HERE / "steps_v5.py"
+SUITES = ("lv", "hr", "lv4", "hr4", "lv5")
 PY = sys.executable
 SOURCE_PREFIXES = (
     "src/ionmc",
@@ -89,9 +106,24 @@ SOURCE_FILES_V4 = (
 and the synthetic lookup fixture (outside ``tests/ionmc``)."""
 
 
+SOURCE_FILES_V5 = (
+    *SOURCE_FILES_V4,
+    "validation/plans/v3-005-acceptance.md",
+    "decisions/0041-proton-nuclear-interactions.md",
+    "validation/scripts/transport/steps_v5.py",
+    "validation/scripts/transport/nuclear_checks.py",
+)
+"""The hashed set of the suite ``lv5`` (V3-005A, decision 0041): the V3-004 set plus the V3-005
+acceptance plan, decision 0041 and, individually, the lv5 steps and the nuclear checks (the
+prefix ``validation/scripts/transport`` and the nuclear package ``src/ionmc/nuclear`` are hashed in
+every suite)."""
+
+
 def source_file_list(suite: str | None = None) -> tuple[str, ...]:
     """Individually hashed files of ``suite`` (default: the suite named by ``IONMC_RUN_SUITE``)."""
     suite = suite or os.environ.get("IONMC_RUN_SUITE", "")
+    if suite == "lv5":
+        return SOURCE_FILES_V5
     return SOURCE_FILES_V4 if suite in ("lv4", "hr4") else SOURCE_FILES
 
 
@@ -103,12 +135,14 @@ CONSUMED_SEED_BASES = (
 V4_QUALIFICATION_SEED_BASE = 20401004  # amendment 6 of the V3-004 plan
 V4_CONSUMED_SEED_BASES = (20361004, 20371004, 20381004)  # amendments 4 and 5, 20381004 by V3-003D
 V4_REHEARSAL_SEED_BASE = 20351004
+V5_QUALIFICATION_SEED_BASE = 20421004  # plan of V3-005, Seeds (rehearsal family 2043xxxx)
 V3003D_REHEARSAL_FAMILY = "2041xxxx"  # rehearsals of V3-003D, never qualification evidence
 DEFAULT_SEED_BASES = {
     "lv": QUALIFICATION_SEED_BASE,
     "hr": QUALIFICATION_SEED_BASE,
     "lv4": V4_QUALIFICATION_SEED_BASE,
     "hr4": V4_QUALIFICATION_SEED_BASE,
+    "lv5": V5_QUALIFICATION_SEED_BASE,
 }
 REHEARSAL_SEED_BASE = 20261004
 CONSUMED_SEED_BASE = 20271004  # used by the T9 investigation: not a qualification base
@@ -127,7 +161,13 @@ DEFERRED_REASON = (
     "multiprocessing-specific check deferred in single-process diagnostic mode "
     "(operator directive 2026-10-07)"
 )
-DEFERRED_STEPS = {"lv": ("t13-workers",), "hr": (), "lv4": ("a15-workers",), "hr4": ()}
+DEFERRED_STEPS = {
+    "lv": ("t13-workers",),
+    "hr": (),
+    "lv4": ("a15-workers",),
+    "hr4": (),
+    "lv5": ("v3-workers-partition",),
+}
 """Steps whose purpose is the worker-partition invariance (1 versus N worker processes): they are
 not executed in the single-process diagnostic mode and recorded as ``deferred``. Steps that merely
 use workers for speed run with one worker, with unchanged histories, seeds and criteria."""
@@ -136,6 +176,13 @@ use workers for speed run with one worker, with unchanged histories, seeds and c
 STEP_TIMEOUT_FLOOR_S = {
     "lv4": {"a9-part-1of2": 3300, "a9-part-2of2": 3300, "a7-step-independence": 1800},
     "hr4": {"a11-hr-channel-parity": 3600},
+    "lv5": {
+        **{f"v2-{e}-s{k}": 3300 for e in (100, 150, 200) for k in range(3)},
+        **{f"v2-probe-s05-s{k}": 3300 for k in range(2)},
+        **{f"v2-probe-fe-s{k}": 3300 for k in range(3)},
+        "v3-lv": 3300, "x1": 3300, "e1": 3300, "v4-v4b": 3300, "r1-a16-t1-regression": 3300,
+        "n1-v1-v1b-d6": 3300, "v3-workers-partition": 3300,
+    },
 }
 """Minimum step timeout [s] of long steps (the ``--step-timeout`` default is 1500 s); the effective
 timeout is the larger of the two and is recorded in the step header."""
@@ -171,6 +218,7 @@ def suite_steps(
     step_timeout: int = 1500,
     seed_base: int | None = None,
     single_process: bool = False,
+    partials_manifest: str | None = None,
 ) -> list[tuple[str, list[str], dict[str, str]]]:
     """``(name, argv, extra environment)`` of the steps of a suite, in execution order (the
     names depend only on ``suite`` and ``python_parts``). ``single_process`` deselects the
@@ -189,16 +237,23 @@ def suite_steps(
     sc = ["--scale", str(scale)]
     cuda = {"IONMC_REQUIRE_CUDA": "1"} if suite in ("hr", "hr4") else {}
     s4 = [PY, str(STEPS_V4)]
+    s5 = [PY, str(STEPS_V5)]
     steps: list[tuple[str, list[str], dict[str, str]]] = []
 
     def add(name: str, cmd: list[str], env: dict[str, str] | None = None) -> None:
         full = f"{len(steps) + 1:02d}-{name}"
-        if cmd[:2] in ([PY, str(STEPS)], [PY, str(STEPS_V4)]):
+        if cmd[:2] in ([PY, str(STEPS)], [PY, str(STEPS_V4)], [PY, str(STEPS_V5)]):
             eff = step_timeout_s(suite, full, step_timeout)
             inner = ["--timeout", str(max(30, int(0.9 * eff)))]  # the pool cleans up first
             cmd = [*cmd, *inner, "--seed-base", str(seed_base)]  # every seed derives from the base
         steps.append((full, cmd, env or {}))
 
+    if suite == "lv5":
+        if import_dirs and partials_manifest is None:
+            raise SystemExit("lv5 --import-dirs requires --partials-manifest (name -> sha256)")
+        pm = ["--partials-manifest", str(partials_manifest)] if import_dirs else []
+        _suite_steps_v5(add, s5, sc, out_dir, [*dirs, *pm])
+        return steps
     if suite in ("lv4", "hr4"):
         _suite_steps_v4(suite, add, s4, w, sc, cuda, out_dir, dirs, single_process)
         return steps
@@ -330,6 +385,41 @@ def _suite_steps_v4(suite, add, s4, w, sc, cuda, out_dir, dirs, single_process):
         add("a11-hr-channel-parity", [*s4, "a11-hr", *sc], cuda)
 
 
+def _suite_steps_v5(add, s5, sc, out_dir, dirs):  # type: ignore[no-untyped-def]
+    """Steps of the V3-005 slice-A suite ``lv5`` (rows of ``validation/plans/v3-005-acceptance.md``;
+    ``steps_v5.py``); every step runs one process with ``nuclear=True`` on the python backend, the
+    per-step history counts are the frozen ones (the shards of V2 and V2-probe follow from the
+    measured throughput, see ``steps_v5.py``) and every statistical step takes ``--scale``."""
+    env = NUCLEAR_ENV
+    add("lv5-throughput", [*s5, "lv5-throughput"], env)
+    add("n1-v1-v1b-d6", [*s5, "n1"], env)
+    for e in (100, 150, 200):
+        for k in range(3):
+            add(f"v2-{e}-s{k}",
+                [*s5, "v2-shard", "--energy", str(e), "--shard", str(k), "--out-dir", str(out_dir), *sc],
+                env)  # fmt: skip
+    add("v2-combine", [*s5, "v2-combine", "--dirs", *dirs, *sc], env)
+    for name, shards in (("s05", 2), ("fe", 3)):
+        for k in range(shards):
+            add(f"v2-probe-{name}-s{k}",
+                [*s5, "v2-probe-shard", "--probe", name, "--shard", str(k), "--out-dir", str(out_dir), *sc],
+                env)  # fmt: skip
+    add("v2-probe-combine", [*s5, "v2-probe-combine", "--dirs", *dirs, *sc], env)
+    add("v3-lv", [*s5, "v3-lv", *sc], env)
+    add("v4-v4b", [*s5, "v4-v4b", *sc], env)
+    add("x1", [*s5, "x1", *sc], env)
+    add("e1", [*s5, "e1", *sc], env)
+    add("r1-a16-t1-regression", [*s5, "r1", *sc], env)
+    add("v3-workers-partition", [*s5, "v3-workers"], env)  # deferred: runs only when the mode is lifted
+
+
+NUCLEAR_ENV = {
+    "IONMC_REQUIRE_DATA": "1",
+    "IONMC_CACHE_DIR": str(REPO / ".ionmc-cache" / "ionmc-data"),
+}
+"""Environment of the ``lv5`` steps: the built nuclear table (decision 0041; ``steps_v5.TABLE_ID``)
+and the data it derives from are read from the hash-verified cache staged by the orchestrator."""
+
 NIST_REQUIRED_ENV = {
     "IONMC_REQUIRE_NIST": "1",
     "IONMC_CACHE_DIR": str(REPO / ".ionmc-cache" / "ionmc-data"),
@@ -339,168 +429,33 @@ cached PSTAR table (data layer cache ``IONMC_CACHE_DIR`` with its ``manifests/``
 layout, staged by the orchestrator into the git-ignored ``.ionmc-cache/ionmc-data`` of the runner
 workspace from the experiment data cache) is required; a missing cache fails the test instead of
 skipping it."""
-A16_INTENDED_CHANGE: dict[str, Any] | None = {
-    "task": "V3-003D",
-    "baseline": "a524f209",
-    "identity_field": "range_construction",
-    "baseline_value": None,  # the baseline tables carry no range_construction identity
-    "new_value": "exact-loglog-quadrature-v1",
-    # Digest fields that may differ, per configuration family, each with the keys of the `bounds`
-    # quantities that constrain it (a field that differs without bounded quantities fails, and so
-    # does any field not listed); every other field of every spec (counters, valid flags, the
-    # discrete trace columns of t13) must be bit-identical. t13 (150 MeV, 1 mm steps, up to 20000
-    # histories) is the sensitive configuration: tight bounds. t1 (100 MeV, 2 mm steps in 5 mm
-    # voxels, 32 histories) is branch-flip sensitive (the row 37 flip of the fixture of
-    # tests/ionmc/data/trace_baseline_20mev.npz): its per-history outputs cannot be tightly bounded,
-    # so they are bounded through aggregates (means, fractions) and physical caps.
-    "allowed_differing_fields": {
-        "t13": {
-            "grid.dose.batch_energy_mev": ["profile_rel_max", "voxel_rel_max", "in_grid_rel"],
-            "energy_balance.cutoff_mev": ["cutoff_rel"],
-            "energy_balance.in_grid_mev": ["in_grid_rel"],
-            "energy_balance.quantization_mev": ["quantization_abs_mev"],
-            "energy_balance.step_deposit_mev": ["step_deposit_rel"],
-            "diagnostics.end_direction": ["end_direction_max"],
-            "diagnostics.end_energy_mev": ["end_energy_max_mev"],
-            "diagnostics.end_position_mm": ["end_position_max_mm", "end_dz_median_abs_mm"],
-            "diagnostics.trace_end_energy_mev": ["end_energy_max_mev"],
-            "diagnostics.trace.deposit_mev": ["trace_deposit_max_mev"],
-            "diagnostics.trace.energy_mev": ["trace_energy_max_mev"],
-            "diagnostics.trace.step_mm": ["trace_step_max_mm"],
-            "diagnostics.trace.ux": ["trace_direction_max"],
-            "diagnostics.trace.uy": ["trace_direction_max"],
-            "diagnostics.trace.uz": ["trace_direction_max"],
-            "diagnostics.trace.x_mm": ["trace_position_max_mm"],
-            "diagnostics.trace.y_mm": ["trace_position_max_mm"],
-            "diagnostics.trace.z_mm": ["trace_position_max_mm"],
-        },
-        "t1": {
-            "grid.dose.batch_energy_mev": [
-                "profile_abs_over_max",
-                "in_grid_rel",
-                "grid_negative_mev",
-            ],
-            "energy_balance.cutoff_mev": ["cutoff_rel"],
-            "energy_balance.in_grid_mev": ["in_grid_rel"],
-            "energy_balance.quantization_mev": ["quantization_abs_mev"],
-            "energy_balance.step_deposit_mev": ["step_deposit_rel"],
-            "diagnostics.end_direction": ["end_direction_mean_abs", "end_direction_norm_err"],
-            "diagnostics.end_energy_mev": ["end_energy_mean_abs", "end_energy_over_cut_mev"],
-            "diagnostics.end_position_mm": [
-                "end_position_moved_gt1mm_fraction",
-                "end_dz_mean_abs_mm",
-                "end_position_outside_mm",
-            ],
-            "diagnostics.trace_end_energy_mev": ["end_energy_mean_abs", "end_energy_over_cut_mev"],
-            "diagnostics.trace.energy_mev": ["trace_energy_over_e0_mev", "trace_rows_rel"],
-            "diagnostics.trace.step_mm": ["trace_step_over_max_mm"],
-            "diagnostics.trace.deposit_mev": [
-                "trace_deposit_row_max_mev",
-                "trace_deposit_negative_mev",
-            ],
-            "diagnostics.trace.x_mm": ["trace_position_outside_mm"],
-            "diagnostics.trace.y_mm": ["trace_position_outside_mm"],
-            "diagnostics.trace.z_mm": ["trace_position_outside_mm"],
-            "diagnostics.trace.ux": ["trace_direction_over_unit"],
-            "diagnostics.trace.uy": ["trace_direction_over_unit"],
-            "diagnostics.trace.uz": ["trace_direction_over_unit"],
-            "diagnostics.trace.attempts": ["trace_attempts_max"],
-            "diagnostics.trace.history": ["trace_discrete_out_of_range"],
-            "diagnostics.trace.ix": ["trace_discrete_out_of_range"],
-            "diagnostics.trace.iy": ["trace_discrete_out_of_range"],
-            "diagnostics.trace.iz": ["trace_discrete_out_of_range"],
-            "diagnostics.trace.reason": ["trace_discrete_out_of_range"],
-            "diagnostics.trace.step": ["trace_discrete_out_of_range"],
-            "diagnostics.trace.blocks": ["trace_discrete_out_of_range"],
-        },
-    },
-    # Physical limits used by the caps: source energy, energy cut, maximum step, and the extent
-    # of the phantom (x, y in -30..30 mm; z in 0..200 mm for t1 (40 voxels of 5 mm) and
-    # 0..1.1 * 158.6 mm for t13).
-    "physical_limits": {
-        "t13": {
-            "e0_mev": 150.0,
-            "e_cut_mev": 2.0,
-            "max_step_mm": 1.0,
-            "box_min_mm": [-30.0, -30.0, 0.0],
-            "box_max_mm": [30.0, 30.0, 174.46],
-        },
-        "t1": {
-            "e0_mev": 100.0,
-            "e_cut_mev": 2.0,
-            "max_step_mm": 2.0,
-            "box_min_mm": [-30.0, -30.0, 0.0],
-            "box_max_mm": [30.0, 30.0, 200.0],
-        },
-    },  # fmt: skip
-    # Bounds of the allowed differences: 2x the values measured at the reviewed state (measured
-    # values and derivation: the plan block bound by plan_block_sha256), or exact physical caps
-    # (limits 0 or 1e-9) for the "over/outside/negative" quantities.
-    "bounds": {
-        "t13": {
-            "in_grid_rel": 1.2e-9,
-            "step_deposit_rel": 6e-6,
-            "cutoff_rel": 5e-4,
-            "quantization_abs_mev": 3e-6,
-            "end_position_max_mm": 0.0126,
-            "end_dz_median_abs_mm": 0.0066,
-            "end_energy_max_mev": 0.104,
-            "end_direction_max": 0.044,
-            "voxel_rel_max": 0.037,
-            "profile_rel_max": 0.012,
-            "depth_max_layer_moved": 0.0,
-            "grid_negative_mev": 0.0,
-            "trace_energy_max_mev": 0.006,
-            "trace_position_max_mm": 0.0071,
-            "trace_deposit_max_mev": 1.8e-4,
-            "trace_step_max_mm": 1.9e-4,
-            "trace_direction_max": 1.2e-5,
-        },
-        "t1": {
-            "in_grid_rel": 1.2e-9,
-            "step_deposit_rel": 1e-4,
-            "cutoff_rel": 5e-3,
-            "quantization_abs_mev": 3e-6,
-            "profile_abs_over_max": 0.1,
-            "depth_max_layer_moved": 0.0,
-            "grid_negative_mev": 0.0,
-            "end_dz_mean_abs_mm": 0.21,
-            "end_position_moved_gt1mm_fraction": 0.625,
-            "end_position_outside_mm": 1e-6,
-            "end_energy_mean_abs": 0.01,
-            "end_energy_over_cut_mev": 1e-6,
-            "end_direction_mean_abs": 0.071,
-            "end_direction_norm_err": 1.7e-7,
-            "trace_rows_rel": 0.004,
-            "trace_energy_over_e0_mev": 1e-9,
-            "trace_step_over_max_mm": 1e-9,
-            "trace_deposit_row_max_mev": 4.2,
-            "trace_deposit_negative_mev": 0.0,
-            "trace_position_outside_mm": 1e-6,
-            "trace_direction_over_unit": 1e-9,
-            "trace_attempts_max": 6.0,
-            "trace_discrete_out_of_range": 0.0,
-        },
-    },
-    # sha256 of the source set (a16_source_digest(): every hashed file including this one and the
-    # plan block, with only the two self-referential digest literals masked): the record is valid
-    # only for exactly this source state.
-    "source_digest": "24323b959660d6ec4ff658531a70b998f24f60a11b9e16c7ba826930f415fc28",
-    # sha256 of the delimited block of validation/plans/v3-003d-acceptance.md that states this
-    # record (without this key), verified by the step at run time.
-    "plan_block_sha256": "951106d3bd6640a3d20fcb81359683eb586e0877d381f7f0750dfea4d529a89a",
-}
-"""The one recorded exception to the fail-closed A16 regression of the ``lv4`` suite (plan
-amendment 6 of V3-004). While it is not ``None``, the ``lv4`` step runs ``--mode intended-change``
-and passes this record to the step, which (i) verifies that the plan block of
-``validation/plans/v3-003d-acceptance.md`` hashes to ``plan_block_sha256`` and states exactly this
-record, (ii) verifies that the table identity ``identity_field`` of the baseline tree (``baseline``,
-which must equal ``A16_BASELINE`` of ``steps_v4.py``) is ``baseline_value`` and that of the tree
-under test is ``new_value``, and (iii) gates the comparison: only ``allowed_differing_fields`` may
+A16_INTENDED_CHANGE: dict[str, Any] | None = None
+"""The recorded exception to the fail-closed A16 regression of the ``lv4`` suite (plan amendment 6
+of V3-004); ``None`` while there is none, which is the normal state: the step then runs
+``--mode regression`` (the default), which is GATED: the no-tally digests of the tree under test
+must equal those of ``A16_BASELINE`` (``steps_v4.py``) in every compared field, and tally
+neutrality must hold. The V3-003D record (baseline a524f209, identity field
+``range_construction``) was deleted by the first commit of V3-005A after the V3-003D merge, which
+also advanced ``A16_BASELINE`` to the merge commit f3a1dd62; the record is preserved in the
+delimited block of ``validation/plans/v3-003d-acceptance.md``.
+
+A task that intentionally changes the qualified transport path re-introduces a record: it assigns a
+dict literal on the line ``A16_INTENDED_CHANGE: dict[str, Any] | None = {`` (the line must start
+exactly so, and the literal must end with a line ``}`` followed by a newline, because
+:func:`a16_normalize` finds the record between ``A16_RECORD_START`` and ``A16_RECORD_END``) with the
+keys of ``steps_v4.verify_intended_change`` (``task``, ``baseline``, ``identity_field``,
+``baseline_value``, ``new_value``, ``allowed_differing_fields``, ``physical_limits``, ``bounds``,
+``source_digest``, ``plan_block_sha256``), states the same record (without ``plan_block_sha256``)
+in a delimited block of its own plan file (``A16_PLAN_FILE`` and ``steps_v4.PLAN_FILE`` are then
+pointed at that plan), and refreshes ``source_digest`` with ``--print-a16-source-digest``. While
+it is not ``None`` the ``lv4`` step runs ``--mode intended-change`` and passes the record to the
+step, which (i) verifies that the plan block hashes to ``plan_block_sha256`` and states exactly
+this record, (ii) verifies that the table identity ``identity_field`` of the baseline tree
+(``baseline``, which must equal ``A16_BASELINE``) is ``baseline_value`` and that of the tree under
+test is ``new_value``, and (iii) gates the comparison: only ``allowed_differing_fields`` may
 differ, within ``bounds``; everything else must be bit-identical. It fails closed otherwise. Once
-V3-003D is merged the baseline tree carries ``new_value``, so the step then fails until the next
-task's first commit deletes this record (sets it to ``None``) and advances ``A16_BASELINE``. With
-``None`` the step runs ``--mode regression`` (the default)."""
+that task is merged the baseline tree carries ``new_value``, so the next task's first commit sets
+this back to ``None`` and advances ``A16_BASELINE`` (the form above)."""
 
 KILL_GRACE_S = 10.0
 
@@ -532,6 +487,28 @@ def run_step(
         _kill_group(pgid, grace)
         proc.wait()
     return code
+
+
+_PARTIAL_LINE = re.compile(r"^PARTIAL (\S+\.json) ([0-9a-f]{64})$")
+
+
+def echo_partial_lines(archive: Path) -> None:
+    """Forward every ``PARTIAL <name>.json <64 lowercase hex>`` line of the archived step output
+    verbatim to this process's stdout (nothing else of the step output), so that the protected
+    host-runner record, which keeps only this stdout, carries the shard partial digests.  Fail
+    closed: a line starting with ``PARTIAL `` that does not match exactly, or a name repeated
+    within one archive, raises SystemExit (unrelated child output must not pass as shard evidence)."""
+    seen: set[str] = set()
+    for line in archive.read_text(errors="replace").splitlines():
+        if not line.startswith("PARTIAL "):
+            continue
+        match = _PARTIAL_LINE.match(line)
+        if match is None:
+            raise SystemExit(f"malformed PARTIAL line in {archive}: {line!r}")
+        if match.group(1) in seen:
+            raise SystemExit(f"duplicate PARTIAL name {match.group(1)!r} in {archive}: {line!r}")
+        seen.add(match.group(1))
+        print(line, flush=True)
 
 
 def _kill_group(pgid: int, grace: float) -> None:
@@ -616,11 +593,19 @@ def a16_normalize(text: str, kind: str) -> str:
     the placeholder ``MASKED``: ``kind`` ``"record"`` (``run_suite.py``: only inside the
     ``A16_INTENDED_CHANGE`` dict literal) or ``"plan"`` (only inside the delimited A16 block of the
     V3-003D plan). Every other byte, including look-alike text elsewhere, stays hashed. A record
-    or block that is present must hold exactly the expected number of literals (fail closed)."""
+    or block that is present must hold exactly the expected number of literals (fail closed). In the
+    ``A16_INTENDED_CHANGE: dict[str, Any] | None = None`` form (no record) the ``run_suite.py`` text
+    is returned unchanged."""
     if kind == "record":
         lo, hi = text.find(A16_RECORD_START), None
         if lo >= 0:
-            hi = text.find(A16_RECORD_END, lo) + len(A16_RECORD_END)
+            eol = text.find("\n", lo + 1)
+            if not text[lo + 1 : eol].rstrip().endswith("= {"):
+                return text  # the ``= None`` form: no record, nothing to mask
+            end = text.find(A16_RECORD_END, lo)
+            if end < 0:
+                raise SystemExit("A16 normalization: the A16_INTENDED_CHANGE literal is not closed")
+            hi = end + len(A16_RECORD_END)
     else:
         lo = text.find(A16_PLAN_BEGIN)
         hi = text.find(A16_PLAN_END) + len(A16_PLAN_END) if lo >= 0 else None
@@ -668,6 +653,10 @@ def environment_text(
     import numpy
     import warp
 
+    manifest_path = getattr(args, "partials_manifest", None)
+    manifest_sha = ""
+    if manifest_path and Path(manifest_path).is_file():
+        manifest_sha = hashlib.sha256(Path(manifest_path).read_bytes()).hexdigest()
     cpu = "unknown"
     try:
         for line in Path("/proc/cpuinfo").read_text().splitlines():
@@ -697,6 +686,8 @@ def environment_text(
         f"seed_base={args.seed_base}",
         f"python_parts={args.python_parts}",
         f"only={','.join(args.only) if args.only else ''}",
+        f"partials_manifest={manifest_path or ''}",
+        f"partials_manifest_sha256={manifest_sha}",
         "source_hashes:",
     ]
     lines += [f"  {sha256(f)}  {f.relative_to(REPO)}" for f in source_files(args.suite)]
@@ -755,6 +746,13 @@ def main(argv: list[str] | None = None) -> int:
         help="archives of other runs of this suite and SHA that hold T12 sample files",
     )
     ap.add_argument(
+        "--partials-manifest",
+        default=None,
+        help="lv5 with --import-dirs: JSON file mapping each imported partial's file name to its "
+        "content_sha256, written by the orchestrator from the PARTIAL lines of the host-runner "
+        "records of the shard steps",
+    )
+    ap.add_argument(
         "--scale",
         type=float,
         default=1.0,
@@ -763,7 +761,7 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     if args.seed_base is None:
         args.seed_base = DEFAULT_SEED_BASES[args.suite]
-    workers = 1 if args.single_process else resolve_workers(args.workers)
+    workers = 1 if args.single_process or args.suite == "lv5" else resolve_workers(args.workers)
     if workers < 1 or args.step_timeout < 1 or not 0.0 < args.scale <= 1.0:
         raise SystemExit("need --workers >= 1, --step-timeout >= 1 and 0 < --scale <= 1")
     single = workers == 1
@@ -787,6 +785,7 @@ def main(argv: list[str] | None = None) -> int:
         args.step_timeout,
         args.seed_base,
         single,
+        args.partials_manifest,
     )
     deferred = set(deferred_step_names(args.suite, args.python_parts)) if single else set()
     if args.only:
@@ -838,6 +837,7 @@ def main(argv: list[str] | None = None) -> int:
                 timeout=eff_timeout,
             )
             fh.write(f"\n# exit={code}\n")
+        echo_partial_lines(path)
         print(f"== {name}: exit={code}", flush=True)
         failures += code != 0
     sys.path.insert(0, str(HERE))

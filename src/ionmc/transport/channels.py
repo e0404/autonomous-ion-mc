@@ -85,6 +85,8 @@ EXCLUDED_CHANNEL_NAME = "edep_excluded_from_let"
 PIECE_COUNT_NAME = "scoring_pieces"
 LOCAL_PIECE_COUNT_NAME = "scoring_pieces_local"
 # power of the stopping power S in the 1 mm entrance-piece scale u_c = 1 mm S_ref^j
+MAX_PARTICLES = 32  # particles of one history (primary + stack): decision 0041 section 3
+
 _FLOOR_POWER = {"E": 1, "FE": 1, "L": 0, "FL": 0, "LS": 1, "LS2": 2, "ES": 2}
 
 
@@ -594,6 +596,47 @@ def _check_lookup(
 # the compiler
 
 
+@dataclass(frozen=True)
+class NuclearCapacity:
+    """The nuclear-run inputs of the capacity bounds (decision 0041 section 5, amended
+    2026-10-07). ``deuteron_tables``/``deuteron_water`` are the deuteron transport tables and the
+    deuteron water stopping table (total kinetic energy axis), ``e_cut_deuteron_mev`` the deuteron
+    cutoff, ``transport_energy_bound_mev`` the per-particle energy bound of the nuclear table (the
+    stopping-table coverage), ``history_energy_bound_mev`` its per-history energy bound (sum over
+    all product species plus the recoil, decision 0041 section 5 as clarified 2026-10-08) and
+    ``path_terms`` its ``transport_path_bound_terms`` (species key ``"p"``/``"d"`` to
+    ``(N_s,max, T_lab,max,s)``).
+
+    With them the compiler uses, per history,
+
+    * ``B_L = 1.25 (mixed_path_bound(E_hi) + sum_s N_s,max mixed_path_bound_s(T_lab,max,s))``
+      (the primary's path plus, per product species, at most ``N_s,max`` secondaries of at most
+      ``T_lab,max,s``; ``mixed_path_bound_s`` is the same integral on the species' own tables);
+    * the energy bound ``max(E_hi, history_energy_bound_mev)`` for ``E``, ``ES`` and the
+      ``FE`` bounds (single histories may deposit more than their initial energy because the
+      per-event conservation was withdrawn);
+    * the piece-count bound times ``MAX_PARTICLES`` (``max_steps`` is per particle);
+    * the water-ramp envelope, ``S_w / S_m`` ratio, lookup-coverage extrema over the producible
+      transported species (proton and deuteron: min / max).
+    """
+
+    deuteron_tables: TransportTables
+    deuteron_water: StoppingTable
+    e_cut_deuteron_mev: float
+    transport_energy_bound_mev: float
+    history_energy_bound_mev: float
+    path_terms: dict[str, tuple[float, float]]
+
+
+def _combine_envelopes(envs: Sequence[dict[str, float]]) -> dict[str, float]:
+    """Min / max of the water-ramp envelopes of several species (a single one is returned as
+    is, so the proton-only path is unchanged)."""
+    if len(envs) == 1:
+        return envs[0]
+    lo = ("s_mid_min", "s_ref", "s_bar_min")
+    return {k: (min if k in lo else max)(e[k] for e in envs) for k in envs[0]}
+
+
 @dataclass
 class _Spec:
     kind: str
@@ -629,6 +672,7 @@ def compile_channels(
     scoring_pieces: int,
     producible: frozenset[tuple[str, str]],
     max_step_mm: float | None = None,
+    nuclear: NuclearCapacity | None = None,
 ) -> ChannelPlan:
     """Compile ``requests`` into a :class:`ChannelPlan` (deduplicated, ordered by grid, with
     offsets, quanta and memory guard) or raise ``UnsupportedCombinationError``.
@@ -636,6 +680,8 @@ def compile_channels(
     ``e_hi_mev`` is the largest source energy (mean plus 6 sigma, capped at the table maximum).
     ``producible`` is the engine capability (``ionmc.species.producible``). The bounds use the
     water stopping power over ``[E_cut, E_hi]`` as decision 0040 section 4 prescribes.
+    ``nuclear`` (a nuclear run, decision 0041 section 5) extends the bounds to the secondary
+    protons and deuterons as documented at :class:`NuclearCapacity`.
     """
     a = projectile.a
     species_of_projectile(projectile)  # registry membership
@@ -651,10 +697,30 @@ def compile_channels(
         raise fail(f"tally request names must be unique, got {names}")
 
     hpb = n_histories // n_batches
-    env = water_ramp_envelope(water, tables, e_cut_mev, e_hi_mev, a)
+    # transported species of the bounds: (water table, tables, cutoff, mass number)
+    # e_top: the largest energy of one particle (stopping-table coverage, envelopes); e_hist: the
+    # energy bound of a whole history (the E, ES and FE accumulators)
+    e_top = e_hi_mev if nuclear is None else max(e_hi_mev, nuclear.transport_energy_bound_mev)
+    e_hist = e_top if nuclear is None else max(e_hi_mev, nuclear.history_energy_bound_mev)
+    sp_list: list[tuple[StoppingTable, TransportTables, float, int]] = [
+        (water, tables, e_cut_mev, a)
+    ]
+    if nuclear is not None:
+        sp_list.append(
+            (
+                nuclear.deuteron_water,
+                nuclear.deuteron_tables,
+                nuclear.e_cut_deuteron_mev,
+                nuclear.deuteron_tables.projectile.a,
+            )
+        )
+    env = _combine_envelopes([water_ramp_envelope(w, t, ec, e_top, k) for w, t, ec, k in sp_list])
     s_min, s_max, s_ref = env["s_bar_min"], env["s_bar_max"], env["s_ref"]
-    e_floor_per_u = float(tables.e_min_mev.max()) / a
-    env_floor = water_ramp_envelope(water, tables, float(tables.e_min_mev.max()), e_hi_mev, a)
+    e_floor_per_u = min(float(t.e_min_mev.max()) / k for _, t, _, k in sp_list)
+    e_hi_per_u = max(e_top / k for _, _, _, k in sp_list)
+    env_floor = _combine_envelopes(
+        [water_ramp_envelope(w, t, float(t.e_min_mev.max()), e_top, k) for w, t, _, k in sp_list]
+    )
     s_floor_min, s_floor_max = env_floor["s_bar_min"], env_floor["s_bar_max"]
 
     specs: dict[tuple[Any, ...], _Spec] = {}
@@ -695,7 +761,7 @@ def compile_channels(
             table = lookups[li]
             _check_lookup(
                 req, table, selected, producible,
-                e_floor_per_u, e_hi_mev / a, s_floor_min, s_floor_max,
+                e_floor_per_u, e_hi_per_u, s_floor_min, s_floor_max,
             )  # fmt: skip
             # per-channel domain (review 67f03e06 b): only the species this request selects
             need_sp = [s for s in selected if s in {p for p, _ in producible}]
@@ -829,12 +895,11 @@ def compile_channels(
             continue
         rho_min = float(dens[mask].min())
         rho_min_of[m] = rho_min
-        r_max = max(
-            r_max,
-            _stopping_ratio_max(
-                tables, m, water, rho_min, 0.5 * e_cut_mev, e_hi_mev, a, env["amp"]
-            ),
-        )
+        for w, t, ec, k in sp_list:
+            r_max = max(
+                r_max,
+                _stopping_ratio_max(t, m, w, rho_min, 0.5 * ec, e_top, k, env["amp"]),
+            )
     # Per-history path bound B_L (a runtime-CHECKED assumption, decision 0040 section 4): the
     # heterogeneous CSDA path with a 25 % straggling margin. Neither straggling sampler
     # guarantees that a history stops within any multiple of its CSDA path (the legacy sampler
@@ -849,23 +914,35 @@ def compile_channels(
     # assumption (sum of eps <= E_hi by energy conservation). The truncation bound
     # max_steps * max_step_mm (a step is at most max_step_mm long, a history at most max_steps
     # steps) is rigorous but about 20 times coarser; it is recorded only.
-    b_l = STRAGGLING_MARGIN * mixed_path_bound_mm(tables, rho_min_of, e_hi_mev)
+    # Nuclear runs (decision 0041 section 5, amended 2026-10-07): the scored path sums over all
+    # particles of a history. B_L = 1.25 (mpb(E_hi) + sum_s N_s,max mpb_s(T_lab,max,s)), s in
+    # {p, d}, N_s,max and T_lab,max,s from the nuclear table (path_terms), mpb_s on the species'
+    # own tables; the same runtime check ``path_bound_exceeded`` backstops it.
+    if nuclear is None:
+        b_l = STRAGGLING_MARGIN * mixed_path_bound_mm(tables, rho_min_of, e_hi_mev)
+        b_l_terms: dict[str, float] = {}
+    else:
+        sp_tables = {"p": tables, "d": nuclear.deuteron_tables}
+        b_l_terms = {"primary": mixed_path_bound_mm(tables, rho_min_of, e_hi_mev)}
+        for key, (n_max, t_max) in sorted(nuclear.path_terms.items()):
+            b_l_terms[key] = float(n_max) * mixed_path_bound_mm(sp_tables[key], rho_min_of, t_max)
+        b_l = STRAGGLING_MARGIN * sum(b_l_terms.values())
     b_l_trunc = (
         None if max_step_mm is None else float(max_steps) * float(max_step_mm) * STEP_LENGTH_MARGIN
     )
     b_ls = s_max * b_l  # S_bar <= S_bar_max on every piece
     bound = {
-        "E": e_hi_mev,
+        "E": e_hist,
         "L": b_l,
         "FL": b_l,
         "LS": b_ls,
         "LS2": s_max * b_ls,  # S_bar^2 <= S_bar_max^2 on every piece
-        "ES": s_max * e_hi_mev,  # sum(eps S) <= S_bar_max sum(eps), sum(eps) <= E_hi (conservation)
-        "N": float(max_steps) * 2.0 * scoring_pieces,
+        "ES": s_max * e_hist,  # sum(eps S) <= S_bar_max sum(eps), sum(eps) <= E_hi (conservation)
+        "N": float(max_steps) * 2.0 * scoring_pieces * (1 if nuclear is None else MAX_PARTICLES),
     }
-    if hpb * e_hi_mev / QUANTUM_MEV >= MAX_QUANTA:
+    if hpb * e_hist / QUANTUM_MEV >= MAX_QUANTA:
         raise fail(
-            f"{hpb} histories per batch of up to {e_hi_mev:g} MeV exceed the capacity of a "
+            f"{hpb} histories per batch of up to {e_hist:g} MeV exceed the capacity of a "
             "fixed-point accumulator; increase n_batches or reduce n_histories"
         )
     if hpb * bound["N"] >= 2.0**CAPACITY_EXPONENT:
@@ -883,7 +960,7 @@ def compile_channels(
     # FE: bound, exponent and floor per channel from the table values of its own species
     for s in ordered:
         if s.kind == "FE":
-            s_bound = s.f_max * e_hi_mev
+            s_bound = s.f_max * e_hist
             s_k = fe_exponent(s.f_max)
             fe_of[s.key()] = (s_k, s_bound)
 
@@ -975,6 +1052,11 @@ def compile_channels(
         "f_max": f_max,
         "E_hi_mev": e_hi_mev,
     }
+    if nuclear is not None:
+        bounds["E_bound_mev"] = e_hist
+        for term, v in b_l_terms.items():  # the terms of B_L, with the straggling margin
+            bounds[f"B_L_term_{term}_mm"] = STRAGGLING_MARGIN * v
+        bounds["max_particles"] = float(MAX_PARTICLES)
     return ChannelPlan(
         channels=tuple(channels),
         quantities=quantities,

@@ -115,3 +115,55 @@ def fetch(
     }
     write_manifest(record, cdir)
     return path
+
+
+def import_file(
+    path: str | os.PathLike[str],
+    dataset_id: str,
+    cache_dir: str | os.PathLike[str] | None = None,
+) -> Path:
+    """Import a local file as the registered dataset ``dataset_id`` (no network).
+
+    The file size and SHA-256 are checked against the registry before anything is written
+    (:class:`IntegrityError` on mismatch: no object, no manifest and no directory are created).
+    The bytes are then stored in the cache and a manifest of the same shape as the download
+    path writes is recorded, with ``method`` ``"import"`` and the ``source_path`` of the file.
+    Returns the path of the cached object. Raises ``KeyError`` for unknown ids and
+    ``FileNotFoundError`` for a missing file.
+    """
+    if dataset_id not in DATASETS:
+        raise KeyError(f"unknown dataset {dataset_id!r}; known: {sorted(DATASETS)}")
+    dataset = DATASETS[dataset_id]
+    source = Path(path).expanduser()
+    if not source.is_file():
+        raise FileNotFoundError(f"{source} is not a file")
+    size = source.stat().st_size
+    if size != dataset.bytes:
+        raise IntegrityError(
+            f"{dataset_id}: {source} has {size} bytes, the registry pins {dataset.bytes}; "
+            "nothing stored"
+        )
+    data = source.read_bytes()
+    digest = sha256_bytes(data)
+    if digest != dataset.sha256 or len(data) != dataset.bytes:
+        raise IntegrityError(
+            f"{dataset_id}: {source} has sha256 {digest} ({len(data)} bytes), the registry pins "
+            f"{dataset.sha256} ({dataset.bytes} bytes); nothing stored"
+        )
+    cdir = resolve_cache_dir(cache_dir)
+    stored = store_object(data, cdir)
+    record: dict[str, Any] = {
+        "dataset_id": dataset.id,
+        "version": dataset.version,
+        "url": dataset.url,
+        "method": "import",
+        "post_body": None,
+        "sha256": digest,
+        "bytes": len(data),
+        "retrieved_at": datetime.now(UTC).isoformat(timespec="seconds"),
+        "license": dataset.license,
+        "citation": dataset.citation,
+        "source_path": str(source.resolve()),
+    }
+    write_manifest(record, cdir)
+    return stored

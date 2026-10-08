@@ -24,7 +24,10 @@ executed steps, and the archive is never ``conformant`` (reasons: the execution 
 ``--combine``: every directory must verify, with the same suite, SHA, scale and
 ``source_hashes`` (the *identity*); the union of the manifests must be exactly the complete step
 list of the suite, with no step duplicated and none missing. Only then is the combined summary
-``conformant`` (if every part is clean or attested and none is reduced).
+``conformant`` (if every part is clean or attested and none is reduced) and no step used a partial
+imported from another output directory: the code cannot verify the protected host-runner records
+behind ``--partials-manifest``, so such a step is ``conformant: false`` with the reason
+``imported_partials_unverified_by_code`` (its ``pass`` is unaffected).
 """
 
 from __future__ import annotations
@@ -50,6 +53,8 @@ V4_QUALIFICATION_SEED_BASE = 20401004
 """Qualification base of the suites ``lv4`` and ``hr4`` (V3-004); 20351004 is their rehearsal base
 and 20361004, 20371004 and 20381004 are consumed (observed before amendments 4 and 5 of the plan). A base whose full-scale
 results were observed is consumed (plan, section Seeds)."""
+V5_QUALIFICATION_SEED_BASE = 20421004
+"""Qualification base of the suite ``lv5`` (V3-005A); the 2043xxxx family are rehearsals."""
 IDENTITY_KEYS = ("git_sha", "suite", "scale", "python_parts", "seed_base")
 
 
@@ -88,6 +93,18 @@ def identity(env: dict[str, Any]) -> str:
 
 STEP_TAGS = (
     ("pytest", None),
+    ("lv5-throughput", "lv5-throughput"),
+    ("n1-", "n1"),
+    ("v2-combine", "v2-combine"),
+    ("v2-probe-combine", "v2-probe-combine"),
+    ("v2-probe-", "v2-probe-shard"),
+    ("v2-", "v2-shard"),
+    ("v3-lv", "v3-lv"),
+    ("v3-workers-", "v3-workers"),
+    ("v4-v4b", "v4-v4b"),
+    ("x1", "x1"),
+    ("e1", "e1"),
+    ("r1-", "r1"),
     ("a9-part", "a9-part"),
     ("a9-compare", "a9-compare"),
     ("a7-", "a7"),
@@ -189,7 +206,37 @@ def parse_step(
         "reduced": bool(doc and doc.get("reduced")),
         "histories": doc.get("histories") if doc else None,
         "frozen_histories": doc.get("frozen_histories") if doc else None,
+        "attestation": doc.get("attestation") if doc else None,
     }
+
+
+IMPORTED_UNVERIFIED = "imported_partials_unverified_by_code"
+
+
+def attestation_problems(att: dict[str, Any] | None, sha: str, env: dict[str, Any]) -> list[str]:
+    """Defects of the partials attestation block of a combine step (None: not a combine step).
+    Any imported partial (origin other than the current output directory) makes the archive
+    non-conformant by code (``imported_partials_unverified_by_code``), whatever the manifest says:
+    the protected host-runner records cannot be verified here, so a manifest (even a resealed
+    one) is documentation of what was relied on, not proof. A missing ``host_run_id``, a manifest
+    digest that is not the one recorded in ``environment.txt`` or a run SHA other than the
+    archive's are further defects."""
+    if att is None:
+        return []
+    out = []
+    imported = [p for p in att.get("partials", []) if p.get("origin") == "imported"]
+    if imported:
+        out.append(IMPORTED_UNVERIFIED)
+    if imported and not att.get("manifest_sha256"):
+        out.append("imported partials without a recorded manifest sha256")
+    out += [f"imported partial {p.get('name')} lacks a host_run_id"
+            for p in imported if not str(p.get("host_run_id") or "").strip()]  # fmt: skip
+    recorded = env.get("partials_manifest_sha256")
+    if att.get("manifest_sha256") and recorded != att["manifest_sha256"]:
+        out.append("combine manifest sha256 differs from the one recorded in environment.txt")
+    if att.get("run_sha") != sha:
+        out.append("combine attestation run_sha differs from the archive SHA")
+    return out
 
 
 def _git(*args: str) -> bytes | None:
@@ -238,6 +285,14 @@ def seed_blockers(seed_base: Any, suite: str | None = None) -> list[str]:
     """Reasons why an archive's seed base cannot qualify (empty for the qualification base)."""
     if seed_base is None:
         return ["seed_base not recorded in environment.txt"]
+    if suite == "lv5":
+        if int(seed_base) != V5_QUALIFICATION_SEED_BASE:
+            return [
+                f"seed_base {int(seed_base)} is not the qualification base "
+                f"{V5_QUALIFICATION_SEED_BASE} (the 2043xxxx family are rehearsals; any other base "
+                "is non-qualification evidence)"
+            ]
+        return []
     if suite in ("lv4", "hr4"):
         if int(seed_base) != V4_QUALIFICATION_SEED_BASE:
             return [
@@ -296,6 +351,11 @@ def verify(d: Path, sha: str, attest_sha: str | None = None) -> dict[str, Any]:
     else:
         problems.append("environment.txt lacks a valid suite")
     reduced = any(s.get("reduced") for s in steps.values())
+    att_problems = [
+        f"{n}: {m}"
+        for n, s in steps.items()
+        for m in attestation_problems(s.get("attestation"), sha, env)
+    ]
     attestation = attest(env, attest_sha) if attest_sha else None
     mode = env.get("execution_mode", "standard")
     deferred = sorted(n for n, s in steps.items() if s.get("status") == "deferred")
@@ -325,8 +385,11 @@ def verify(d: Path, sha: str, attest_sha: str | None = None) -> dict[str, Any]:
         "suite": suite,
         "pass": ok,
         "subset": subset,
-        "conformant": bool(ok and not subset and not reduced and src_ok and not blockers),
-        "non_conformant_reasons": blockers,
+        "conformant": bool(
+            ok and not subset and not reduced and src_ok and not blockers and not att_problems
+        ),
+        "non_conformant_reasons": [*blockers, *att_problems],
+        "partials_attestation_problems": att_problems,
         "seed_base": env.get("seed_base"),
         "reduced_history_counts": reduced,
         "tree_dirty": env.get("tree_dirty"),
@@ -368,6 +431,7 @@ def combine(dirs: list[Path], sha: str, attest_sha: str | None = None) -> dict[s
         if extra:
             problems.append(f"unexpected steps: {extra}")
     ok = not problems and all(p["pass"] for p in parts)
+    att_problems = [m for p in parts for m in p["partials_attestation_problems"]]
     reduced = any(p["reduced_history_counts"] for p in parts)
     deferred = sorted({n for p in parts for n in p["deferred_steps"]})
     return {
@@ -382,7 +446,30 @@ def combine(dirs: list[Path], sha: str, attest_sha: str | None = None) -> dict[s
             and not reduced
             and all(p["source_ok"] for p in parts)
             and all(not p["non_conformant_reasons"] for p in parts)
+            and not att_problems
         ),
+        "attestation": {
+            "run_sha": sha,
+            "manifests": sorted(
+                {
+                    a["manifest_sha256"]
+                    for p in parts
+                    for s in p["steps"].values()
+                    if (a := s.get("attestation")) and a.get("manifest_sha256")
+                }
+            ),
+            "partials": [
+                {"step": n, **q}
+                for p in parts
+                for n, s in p["steps"].items()
+                if s.get("attestation")
+                for q in s["attestation"].get("partials", [])
+            ],
+            "protected_host_records_verified_by_code": False,
+            "statement": "the manifest was built by the orchestrator from the protected "
+            "host-runner PARTIAL stdout lines; this code cannot verify those records, compare "
+            "the digests and host_run_ids above with them and with record_local_validation",
+        },
         "non_conformant_reasons": sorted({r for p in parts for r in p["non_conformant_reasons"]}),
         "reduced_history_counts": reduced,
         "problems": problems,

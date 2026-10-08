@@ -13,7 +13,7 @@ related-model, backend-parity, self-consistency.
 | Suite | Category and content |
 |---|---|
 | `S-PHYS-PROTON-EM` | physics: proton stopping, range, straggling, lateral scattering |
-| `S-PHYS-PROTON-NUCLEAR` | physics: proton nuclear attenuation and secondaries |
+| `S-PHYS-PROTON-NUCLEAR` | physics: proton nuclear attenuation and secondaries (decision 0041; frozen rows `validation/plans/v3-005-acceptance.md`: slice A P1-P5, N1, V1, V1b informative, V2, V3, V4, V4b, V9, R1, X1, C1, D6, E1; slice B V2b, V5-V8; amended 2026-10-07: Amendments 1-3 of the plan, D6 both tiers failed and local alpha deposition kept under a declared ceiling) |
 | `S-PHYS-LET` | physics: track- and dose-averaged LET including mixed fields |
 | `S-PHYS-HELIUM` | physics: helium range, primary attenuation, fragment (Z=1,2) yields and distal dose |
 | `S-PHYS-CARBON` | physics: carbon range, attenuation, fragment build-up, distal dose |
@@ -37,7 +37,7 @@ related-model, backend-parity, self-consistency.
 | V1-MUST-002 | Python-first implementation | S-WORKFLOW-QUALITY | self-consistency | planned |
 | V1-MUST-003 | Reference Python execution | S-NUM-PARITY | backend-parity | planned |
 | V1-MUST-004 | NVIDIA Warp acceleration | S-NUM-PARITY | backend-parity | planned |
-| V1-MUST-005 | Ion transport | S-PHYS-PROTON-EM, S-PHYS-HELIUM, S-PHYS-CARBON, S-PHYS-OXYGEN | ion-specific-tabulated, independent-monte-carlo, measured | planned |
+| V1-MUST-005 | Ion transport | S-PHYS-PROTON-EM, S-PHYS-PROTON-NUCLEAR, S-PHYS-HELIUM, S-PHYS-CARBON, S-PHYS-OXYGEN | ion-specific-tabulated, independent-monte-carlo, measured | in progress (proton EM implemented V3-003A/B; proton non-elastic nuclear V3-005A python reference backend with diagnostic-mode evidence @b84fdf3 (VAL-20261008-064717-C8A3EE; every lv5 row passes; non-conformant by code: single-process directive, deferred partition row, imported partials), Warp kernels V3-005B; evidence grade per `validation/plans/v3-005-acceptance.md`; He/C/O planned) |
 | V1-MUST-006 | Homogeneous reference geometries | S-PHYS-PROTON-EM | ion-specific-tabulated | planned |
 | V1-MUST-007 | Voxelized geometries | S-CAP-PLANNING, S-NUM-FALSIFICATION | self-consistency | planned |
 | V1-MUST-008 | Material assignment | S-CAP-PLANNING | self-consistency | planned |
@@ -45,8 +45,8 @@ related-model, backend-parity, self-consistency.
 | V1-MUST-010 | Dose influence matrices | S-CAP-PLANNING | self-consistency | planned |
 | V1-MUST-011 | Changeable scoring grids | S-CAP-PLANNING, S-NUM-FALSIFICATION | self-consistency | planned |
 | V1-MUST-012 | Extensible scoring | S-CAP-PLANNING | self-consistency | implemented (V3-004); diagnostic-mode evidence @fccb687 (base 20381004) and @637ef82 after the V3-003D range-table change (lv4/hr4 archives at base 20401004; non-conformant: single-process directive 2026-10-07, a15-workers deferred); conformant exact-SHA qualification pending |
-| V1-MUST-013 | Absorbed dose | S-PHYS-PROTON-EM | independent-monte-carlo | implemented (V3-004); diagnostic-mode self-consistency evidence @fccb687 and @637ef82 (non-conformant, see V1-MUST-012); conformant qualification and independent Monte Carlo (T15) pending |
-| V1-MUST-014 | Energy deposition | S-PHYS-PROTON-EM | independent-monte-carlo | implemented (V3-004); diagnostic-mode self-consistency evidence @fccb687 and @637ef82 (non-conformant, see V1-MUST-012); conformant qualification and independent Monte Carlo (T15) pending |
+| V1-MUST-013 | Absorbed dose | S-PHYS-PROTON-EM, S-PHYS-PROTON-NUCLEAR | independent-monte-carlo, measured | implemented (V3-004); diagnostic-mode self-consistency evidence @fccb687 and @637ef82 (non-conformant, see V1-MUST-012); nuclear contribution implemented on the python backend (V3-005A: nuclear_local and secondary-p/d dose, rows V3/X1/E1 pass, diagnostic-mode evidence @b84fdf3 (VAL-20261008-064717-C8A3EE; every lv5 row passes; non-conformant by code: single-process directive, deferred partition row, imported partials); gating independent MC V5 and measured V6 in V3-005B); conformant qualification and independent Monte Carlo (T15) pending |
+| V1-MUST-014 | Energy deposition | S-PHYS-PROTON-EM, S-PHYS-PROTON-NUCLEAR | independent-monte-carlo, self-consistency | implemented (V3-004); diagnostic-mode self-consistency evidence @fccb687 and @637ef82 (non-conformant, see V1-MUST-012); nuclear energy bookkeeping implemented (V3-005A: nuclear_local / alpha_local / escaped neutron and gamma / binding / signed imbalance tallies, balance row V3 at 1e-12 with independent AME recomputation of the binding term, diagnostic-mode evidence @b84fdf3 (VAL-20261008-064717-C8A3EE; every lv5 row passes; non-conformant by code: single-process directive, deferred partition row, imported partials)); conformant qualification and independent Monte Carlo (T15) pending |
 | V1-MUST-015 | LET scoring | S-PHYS-LET | independent-monte-carlo | implemented (V3-004); diagnostic-mode theory/self-consistency evidence @fccb687 (A1-A9, A11, A14-A16) and @637ef82 (non-conformant, see V1-MUST-012); conformant qualification and independent Monte Carlo (TOPAS ProtonLET, V3-010) pending |
 | V1-MUST-016 | External biological lookup data | S-CAP-PLANNING | self-consistency | implemented (V3-004); diagnostic-mode evidence @fccb687 (A10, A12; synthetic fixture only, no clinical tables; non-conformant, see V1-MUST-012); conformant qualification pending |
 | V1-MUST-017 | Analytical physics layer | S-PHYS-PROTON-EM | independent-theory | planned |
@@ -78,9 +78,9 @@ related-model, backend-parity, self-consistency.
 | V1-MUST-043 | Pre-commit framework | S-WORKFLOW-QUALITY | self-consistency | planned |
 | V1-SCOPE | Complete MUST scope-control priorities | all suites | all categories | planned |
 | V2-ION | independently qualified therapeutic ions | S-PHYS-HELIUM, S-PHYS-CARBON, S-PHYS-OXYGEN, S-PHYS-LET | ion-specific-tabulated, independent-monte-carlo, measured | planned |
-| V2-CAP | fail-closed capability contract | S-CAP-CONTRACT | self-consistency | planned |
-| V2-NUM | adversarial numerical falsification | S-NUM-FALSIFICATION, S-NUM-UNCERTAINTY | self-consistency | implemented (V3-003B T9/T14 negative controls, V3-004 A7/A9, V3-003D D1-D4 with trapezoid negative controls); diagnostic-mode evidence @637ef82 (non-conformant, see V1-MUST-012); conformant qualification pending |
-| V2-EVID | physical evidence lineage and sufficiency | all S-PHYS-* | measured, ion-specific-tabulated, independent-monte-carlo | planned |
+| V2-CAP | fail-closed capability contract | S-CAP-CONTRACT, S-PHYS-PROTON-NUCLEAR | self-consistency | implemented for nuclear runs (V3-005A row C1, diagnostic-mode evidence @b84fdf3 (VAL-20261008-064717-C8A3EE; every lv5 row passes; non-conformant by code: single-process directive, deferred partition row, imported partials): unsupported element, E > 250 MeV, non-proton source, nist-star, warp backend with nuclear, missing/stale/mis-pinned table, unproducible species, every nuclear overflow raises or invalidates) |
+| V2-NUM | adversarial numerical falsification | S-NUM-FALSIFICATION, S-NUM-UNCERTAINTY | self-consistency | implemented (V3-003B T9/T14 negative controls, V3-004 A7/A9, V3-003D D1-D4 with trapezoid negative controls); diagnostic-mode evidence @637ef82 (non-conformant, see V1-MUST-012); V3-005A thinning step-independence probes P4 and V2-probe (s_max 0.1 mm transport probe V2b in V3-005B) in progress; conformant qualification pending |
+| V2-EVID | physical evidence lineage and sufficiency | all S-PHYS-* | measured, ion-specific-tabulated, independent-monte-carlo | in progress (decision 0041 data-role table: LA150 and AME2020 construction; EXFOR from 1997 on evaluation, informative V1b with the pre-declared LA150 p+C deficiency; pre-1997 EXFOR and geant-val report-only; MCsquare shared sigma lineage; TOPAS independent MC) |
 | V2-BIO | external biological lookup functionality | S-CAP-PLANNING | self-consistency | implemented (V3-004); diagnostic-mode evidence @fccb687 (lookup tallies with provenance; synthetic fixture only; non-conformant, see V1-MUST-012); conformant qualification pending |
 | V2-OUTPUT | self-describing persisted scientific results | S-PROV-OUTPUT | self-consistency | planned |
 | V2-USER | complete clean-install scientific workflow | S-WORKFLOW-USER | self-consistency | planned |

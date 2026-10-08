@@ -106,3 +106,91 @@ the V3-004 evidence at the previous range table and are unaffected. Row mapping 
 evidence table is intentionally unfilled at this head because the plan file is part of the A16
 source digest): D1/D1b/D2/D2b/D3/D4 CI part — CI and the `lv`/`lv4` pytest steps; D5 — `hr` and
 `lv`; D6 and D3 A4b — `hr4` and `lv4`; D7 — all four archives and the ledger. Not a clinical claim.
+
+# Nuclear slice-A suite `lv5` (V3-005A, decision 0041)
+
+`run_suite.py --suite lv5` evaluates the slice-A rows of `validation/plans/v3-005-acceptance.md`
+that need the built nuclear table (id `00e8031d…`)
+or nuclear transport on the python backend. Archives are named `lv5-<sha>-...json` (row table of the
+plan, "Evidence archive"); the archive at head b84fdf3 (section below) is the slice-A diagnostic-mode evidence.
+Rows P1-P5, V9 and C1 are CI-tier tests and are not suite steps; V2b and V5-V8 are slice B.
+
+| Row | Step(s) (without the number) | Histories / events | Seed (`20421004 + 1000 r + shard`) |
+|---|---|---|---|
+| N1, V1, V1b, D6 | `n1-v1-v1b-d6` | deterministic | n/a |
+| V2 | `v2-{100,150,200}-s{0,1,2}`, `v2-combine` | 3 x 8e4 per energy (2.4e5 pooled) | r = 1, 2, 3; shard 0..2 |
+| V2-probe s_max 0.5 vs 1 mm | `v2-probe-s05-s{0,1}`, `v2-probe-combine` | 2 x 5e4 (each run for both variants) | r = 4; shard 0..1 |
+| V2-probe f_E 0.005 vs 0.02 | `v2-probe-fe-s{0,1,2}`, `v2-probe-combine` | 3 x 3.4e4 (1.02e5) | r = 5; shard 0..2 |
+| V3 (LV) | `v3-lv` | 2e4 at 150 MeV and 1e4 at 250 MeV in water, tissue, bone | r = 6; shards 0..5 |
+| V4, V4b | `v4-v4b` | 1e5 events per case, 4 cases | r = 9; case i adds i |
+| X1 | `x1` | 2 x 2e4 (on, off, one seed) | r = 7 |
+| E1 (exploratory) | `e1` | 1e5 | r = 8 |
+| R1 | `r1-a16-t1-regression` | fixed A16 configurations; T1 K = 256 | A16 20351004; T1 base |
+| throughput | `lv5-throughput` | 2 x 200 | base |
+| 1-vs-N workers | `v3-workers-partition` | 3000 | **deferred** |
+
+**Shards.** The shard counts follow from the throughput measured by `lv5-throughput` (python,
+`nuclear=True`, 1 process, 200 histories incl. setup, all physics on) and the step limit of 3300 s
+with a 25 % margin (at most 2640 s per step, i.e. `hist/s x 2640` histories): at the worker's
+measurement of 70.5 hist/s (150 MeV) and 44.2 hist/s (250 MeV) a step may hold up to 1.86e5 and
+1.17e5 histories. V2 uses 3 shards of 8e4 per energy (planned 1135 s at 70.5 hist/s, 1809 s at the
+250 MeV rate for 200 MeV); V2-probe s05 (two variants per shard, the 0.5 mm variant about twice the
+steps) 2 x 5e4 and f_E 3 x 3.4e4. Histories and criteria are the frozen ones; the throughput step
+re-measures on the runner and the orchestrator increases the shard count (new seeds, a recorded
+reason) if a step would exceed 2640 s.
+
+**Execution (temporary single-process directive).** Every step runs one process with
+`IONMC_SINGLE_PROCESS=1` and single-threaded numerics, as `run_suite.py --only <step> --step-timeout
+3300`; shards are separate steps and `summarize.py --combine` joins the subset archives (the pooled
+V2 and V2-probe criteria are evaluated by `v2-combine` and `v2-probe-combine` from the verified
+partial files of the shard archives, via `--import-dirs` together with `--partials-manifest`, a JSON manifest `{"partials": {name: {"content_sha256", "host_run_id"}}, "source": "host-runner protected stdout PARTIAL lines"}` that the orchestrator builds ONLY from the `PARTIAL <name> <digest>` stdout lines of the shard steps in the protected host-runner records and whose host run ids it lists in record_local_validation; an imported partial that is absent from the manifest, lacks a `host_run_id` or whose recomputed digest differs is refused. The code cannot verify the protected records and says so: the archived `environment.txt` carries `partials_manifest` and `partials_manifest_sha256`, the combine steps print an `attestation` block (manifest sha256, every name, digest and host_run_id used, the run SHA) that `summarize.py --combine` carries into the combined summary under `attestation` with `protected_host_records_verified_by_code: false`, and any step that used an imported partial is `conformant: false` with the reason `imported_partials_unverified_by_code` (its `pass` is unaffected), because a resealed partial plus resealed manifest is detectable only by comparing those values with the protected records. Under the single-process directive sharded rows are combined from imported partials and are therefore non-conformant by code; they become conformant only when all shards and the combine run in one invocation after the operator lifts the directive, and the protected validation record lists the host run ids). Rehearsals use the 2043xxxx family (20431004)
+and `--scale` < 1 and are never qualification evidence.
+
+**Deferred rows.** `v3-workers-partition` (1-vs-N worker partition invariance of nuclear runs on the
+python pool) and any `cpu_workers > 1` LV row are recorded as `deferred`, not passed; a summary is
+`pass` for the executed steps only and carries `conformant: false` until the directive is lifted
+(`summarize.py`, reason "deferred multiprocessing checks"). Warp backends with `nuclear=True` are not
+part of this suite (V3-005B). Not a clinical claim.
+
+## Archive at head b84fdf3 (lv5, seed base 20421004, single-process diagnostic mode)
+
+`lv5-b84fdf3-single-process.json` is the `summarize.py --combine` summary of 22 host-runner subset runs
+(`run_suite.py --suite lv5 --single-process --step-timeout 3300 --only …`) at the exact head
+`b84fdf389e8bae3b3820b73497086d071c3325ad` (Codex review REVIEW-f42657b6 passed at this head). Validation record VAL-20261008-064717-C8A3EE.
+Every executed step passes its frozen criterion; the summary is `conformant: false` by code for the four
+recorded reasons: single-process diagnostic execution mode (operator directive), the deferred step
+`24-v3-workers-partition`, and the two combine steps (`12`, `18`) that read imported shard partials
+(`imported_partials_unverified_by_code`, plan Amendment 5).
+
+| Step(s) | Host run id | Wall [s] | Result |
+|---|---|---|---|
+| 01 throughput, 02 N1/V1/V1b/D6 | RUN-20261008T004833Z-615b6940 | 10 | 63.8 / 42.1 hist/s at 150 / 250 MeV; N1 2.8e-15, V1 2.2e-16, D6 ceiling holds (tiers 1, 2 not passed) |
+| 03–05 V2 100 MeV shards | RUN-20261008T004848Z-0ab728cb, RUN-20261008T010115Z-caa02dbc, RUN-20261008T011347Z-55f103f9 | 735, 741, 731 | 3 × 8e4 |
+| 06–08 V2 150 MeV shards | RUN-20261008T012610Z-cbdf940b, RUN-20261008T014312Z-6a9e24a1, RUN-20261008T020007Z-be613aa8 | 1012, 1003, 1011 | 3 × 8e4 |
+| 09–11 V2 200 MeV shards | RUN-20261008T021708Z-3aec645e, RUN-20261008T023949Z-332232b9, RUN-20261008T030223Z-ac230f0f | 1351, 1343, 1353 | 3 × 8e4 |
+| 12 V2 combine | RUN-20261008T032514Z-fb61ecef | 2 | pooled 2.4e5 per energy; max abs diff of the survival 5.4e-4 (100), 8.3e-4 (150), 8.7e-4 (200 MeV); pass |
+| 13–14 V2-probe s_max 0.5 mm | RUN-20261008T032533Z-b2a3456c, RUN-20261008T035142Z-2455ad44 | 1558, 1566 | 2 × 5e4 paired |
+| 15–17 V2-probe f_E 0.005 | RUN-20261008T041757Z-37fa61e5, RUN-20261008T044725Z-e28d9ada, RUN-20261008T051632Z-c0458a5c | 1752, 1734, 1734 | 3 × 3.4e4 paired |
+| 18 V2-probe combine | RUN-20261008T054544Z-84bc3b40 | 1 | max abs diff 5.1e-5 (s05), 2.4e-5 (fE); σ_Δ at the deepest depth 4.2e-5 / 4.5e-5; both conclusive; pass |
+| 19 V3-LV | RUN-20261008T054556Z-6729a99b | 1403 | 6 runs (water, tissue, bone × 150, 250 MeV; 2e4 + 1e4): relative residual ≤ 6.2e-16, grid identity 0; AME recomputation of `nuclear_binding` within 6.2e-9 MeV |
+| 20 V4 + V4b | RUN-20261008T060924Z-01816b8f | 3 | 1e5 events per case, pass under Amendment 4 |
+| 21 X1 | RUN-20261008T060947Z-216940c8 | 654 | 2 × 2e4 paired on/off, pass, all counters 0 |
+| 22 E1 (exploratory) | RUN-20261008T062045Z-e5e949bf | 1426 | 1e5 at 150 MeV: peak 156.75 mm, R80 158.46 mm, R90 158.00 mm, 80–20 fall-off 2.27 mm, plateau/peak 0.2015; nuclear ledger per history: imbalance −1.047 MeV, α local 0.879 MeV, escaped n 2.306 MeV, escaped γ 0.383 MeV |
+| 23 R1 (A16 + T1), 24 partition (deferred) | RUN-20261008T064436Z-40e3b593 | 30 | A16 field-by-field identical with baseline f3a1dd62, T1 identical; 24 archived as deferred |
+
+**Attestation of the imported partials.** The orchestrator built `manifest.json` only from the
+`PARTIAL <name> <sha256>` lines in the protected host-runner stdout of the shard runs above (each copied
+partial was re-hashed and had to equal that digest before staging). The validation record VAL-20261008-064717-C8A3EE
+lists every (name, digest, run id); the combined summary's `attestation` block carries the same digests.
+The code cannot read the protected records, hence `conformant: false` (plan Amendment 5).
+
+**R1 digest note.** The step's informational aggregate `digest_sha256` (abd3b3ba…) is the sha256 of the
+sorted-key JSON of the per-spec digests with the step's own separators; the value recorded earlier in this
+task (c862edf7…) used `json.dumps(sort_keys=True)` with default separators over the same digests. The gating
+comparison is the field-by-field identity with the baseline, which passed.
+
+**Deferred (operator directive).** `24-v3-workers-partition` (1-vs-N partition invariance of nuclear runs)
+and any `cpu_workers > 1` row; conformance of V2 / V2-probe needs all shards and the combine in one
+invocation (Amendment 5). Crash observations during this task: two intermittent sandbox pytest crashes
+(one segfault, one faulthandler trace) in worker sessions, each clean on an identical rerun; none of the
+22 host runs failed.

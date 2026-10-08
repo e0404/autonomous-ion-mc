@@ -114,17 +114,20 @@ pending".
 
 ## Evidence archives (which archive satisfies which row)
 
-To be filled from committed result files (qualification bases 20391004 for `lv`/`hr`, 20401004 for
-`lv4`/`hr4`).
+Filled 2026-10-07 by the first commit of V3-005A from the committed combined summaries
+(`summarize.py --combine ... --attest-sha`; qualification bases 20391004 for `lv`/`hr`, 20401004 for
+`lv4`/`hr4`; frozen V3-003D head `637ef82f37954ae565d97edc58c675b5835f47ec`; V3-003D merged as `f3a1dd62ea2f57a3f4c07999935f317b3c044871`
+(PR #80)). Every archive is `complete: true`, `pass: true` (every executed step passed),
+`conformant: false` (single-process diagnostic mode, D7; deferred checks are not evidence).
 
 | Rows | Archive | Head SHA | Run id | Status |
 |---|---|---|---|---|
-| D1, D1b, D2, D2b, D3, D4 (CI part), T1 CI, U rows | CI (GitHub) and the pytest steps of `lv` (incl. D1 NIST water, required) and `lv4` | pending | pending | pending |
-| D4 informative R80 shifts, D5 (LV rows), T1-LV | `lv` | pending | pending | pending |
-| D5 (HR rows: T12, CUDA) | `hr` | pending | pending | pending |
-| D6 (LV rows), D3 A4b | `lv4` | pending | pending | pending |
-| D6 (HR rows) | `hr4` | pending | pending | pending |
-| D7 | all archives, ledger entry | pending | pending | pending |
+| D1, D1b, D2, D2b, D3, D4 (CI part), T1 CI, U rows | CI (GitHub) at the PR head (PR #80); the pytest steps `01-pytest-warp-cpu-t2-t4-t11-c1-t13` of `lv` (incl. D1 NIST water, required) and `01-pytest-scoring-warp-cpu` of `lv4`, in the archives below | `637ef82f37954ae565d97edc58c675b5835f47ec` (the archives' head) | `lv`: RUN-20261007T135209Z-0cc694da; `lv4`: RUN-20261007T154510Z-9e3d2e1d (the CI run itself is not archived here) | pass (both pytest steps executed, exit 0); archives non-conformant |
+| D4 informative R80 shifts, D5 (LV rows), T1-LV | `validation/results/transport/lv-637ef82-single-process.json` (suite `lv`, base 20391004) | `637ef82f37954ae565d97edc58c675b5835f47ec` | RUN-20261007T135209Z-0cc694da, RUN-20261007T135709Z-a5a8011b, RUN-20261007T141200Z-9a4fd10a, RUN-20261007T141215Z-ab2661d6, RUN-20261007T142636Z-17618f9f, RUN-20261007T144409Z-5eb8e1ae, RUN-20261007T145547Z-b1acf9c7 | pass for every executed step; `04-t13-workers` deferred (not evidence); non-conformant |
+| D5 (HR rows: T12, CUDA) | `validation/results/transport/hr-637ef82-single-process.json` (suite `hr`, base 20391004) | `637ef82f37954ae565d97edc58c675b5835f47ec` | RUN-20261007T133232Z-35fbf308 | pass (all 8 steps executed); non-conformant (single-process diagnostic mode) |
+| D6 (LV rows), D3 A4b | `validation/results/transport/lv4-637ef82-single-process.json` (suite `lv4`, base 20401004) | `637ef82f37954ae565d97edc58c675b5835f47ec` | RUN-20261007T154510Z-9e3d2e1d, RUN-20261007T155012Z-d5549bd4, RUN-20261007T155216Z-35151115, RUN-20261007T161321Z-036bd6e4, RUN-20261007T163422Z-694484e7 | pass for every executed step (A16 in the gated intended-change mode included); `05-a15-workers` deferred (not evidence); non-conformant |
+| D6 (HR rows) | `validation/results/transport/hr4-637ef82-single-process.json` (suite `hr4`, base 20401004) | `637ef82f37954ae565d97edc58c675b5835f47ec` | RUN-20261007T152306Z-12322cff | pass (all 3 steps executed); non-conformant (single-process diagnostic mode) |
+| D7 | all four archives above, ledger entry "implemented; diagnostic evidence; conformant qualification pending" | `637ef82f37954ae565d97edc58c675b5835f47ec` | as above | non-conformant by design: `execution_modes` is `single-process-diagnostic` in every archive; `lv`/`lv4` list the deferred multiprocessing checks; the conformant exact-SHA qualification remains pending the lifting of the operator directive |
 
 <!-- A16-INTENDED-CHANGE-BEGIN -->
 ### A16 intended change: gated comparison against a524f209 (record of `run_suite.py`)
@@ -402,6 +405,8 @@ t1 aggregate and cap quantities added after review REVIEW-fe6c9813fed24e3280d17c
 ## Amendments
 
 ¹ **2026-10-07, task V3-003D (A16 source binding; after Codex reviews REVIEW-fe6c9813fed24e3280d17cfd6319ec25, REVIEW-953e11a1e6d64e6e8beaea4e5366dba2 and REVIEW-5da9c2e02c094b1893dbc05254b71893).** The A16 intended-change record is bound to the exact source state through `source_digest`, the sha256 over the hashed source set of the `lv4` suite. An earlier wording excluded `run_suite.py` and the A16 block of this plan from that set; that exclusion model is superseded: both are included in a normalized form in which only the self-referential digest literals (`source_digest`, `plan_block_sha256` in the record; `source_digest` in the block) are masked, anchored to those places. The step also rejects non-finite values and treats NaN as a bound violation. The block above is the current statement; amendment 6(e) to 6(g) of the V3-004 plan carries the same change.
+
+² **2026-10-07, task V3-005A (first commit; evidence table filled, A16 record deleted).** Housekeeping required by the plan and by amendment 6 of the V3-004 plan; no criterion, bound, seed or result changes. (a) The evidence-archive table above was left unfilled at the frozen head because this plan file is part of the A16 source digest (amendment ¹ and 6(g)); it is filled from the committed summaries named in it, with the head SHA, run ids and status exactly as recorded in those files. (b) Since the V3-003D merge commit `f3a1dd62ea2f57a3f4c07999935f317b3c044871` carries `range_construction = exact-loglog-quadrature-v1`, `A16_INTENDED_CHANGE` of `run_suite.py` is set to `None` and `A16_BASELINE` of `steps_v4.py` is advanced to that commit. The block of this plan between the A16 markers is kept as the historical statement of the record that graded the archives above; it is no longer read by the `lv4` suite (the step runs the gated `--mode regression`).
 
 ## Documentation sweep list for phase C2
 

@@ -4,9 +4,11 @@ source attestation, dirty trees); steps are only run for the git/snapshot end-to
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -491,6 +493,37 @@ def test_step_that_finishes_leaves_no_orphans_and_keeps_its_exit_code(tmp_path: 
         os.kill(pid, 0)
 
 
+def test_partial_lines_are_echoed_to_stdout_and_archive_keeps_everything(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    run_suite = _load("run_suite")
+    partial = "PARTIAL shard-0.json " + "ab" * 32
+    script = (
+        f"print('noise line'); print({partial!r}); print('PARTIALX not a partial'); print('tail')"
+    )
+    out = tmp_path / "step.txt"
+    with out.open("w") as fh:
+        fh.write("# command: fake\n")
+        code = run_suite.run_step(
+            [sys.executable, "-c", script], cwd=tmp_path, env=dict(os.environ), stdout=fh,
+            timeout=30.0, grace=2.0,
+        )  # fmt: skip
+    capsys.readouterr()
+    run_suite.echo_partial_lines(out)
+    assert code == 0
+    assert capsys.readouterr().out == partial + "\n"  # exactly the PARTIAL line, nothing else
+    archived = out.read_text()
+    assert "noise line" in archived and partial in archived and "tail" in archived
+    bad = tmp_path / "bad.txt"
+    bad.write_text(partial + "\nPARTIAL x.json notahex\n")
+    with pytest.raises(SystemExit, match="malformed PARTIAL"):
+        run_suite.echo_partial_lines(bad)
+    dup = tmp_path / "dup.txt"
+    dup.write_text(partial + "\n" + partial + "\n")
+    with pytest.raises(SystemExit, match="duplicate PARTIAL"):
+        run_suite.echo_partial_lines(dup)
+
+
 def test_suites_forward_an_inner_timeout_below_the_step_timeout() -> None:
     run_suite = _load("run_suite")
     steps = run_suite.suite_steps("lv", 4, 1.0, step_timeout=1000)
@@ -925,28 +958,48 @@ def _a16_cmd(mod: ModuleType) -> list[str]:
     return next(s[1] for s in steps if s[0].endswith("a16-qualified-path-regression"))
 
 
-def test_a16_suite_default_is_regression_and_exception_is_the_recorded_one() -> None:
+def _v3003d_record() -> dict:  # type: ignore[type-arg]
+    """The V3-003D A16 intended-change record as the historical block of the V3-003D plan states
+    it (``A16_INTENDED_CHANGE`` of ``run_suite.py`` is ``None`` since V3-005A): the fixture of the
+    gate and binding tests, which exercise the machinery a future task re-introduces."""
+    st = _load("steps_v4")
+    text = (REPO / st.PLAN_FILE).read_text()
+    block = st.plan_block(text)
+    inner = block[len(st.PLAN_BEGIN) : -len(st.PLAN_END)]
+    rec = json.loads(inner[inner.index("{") : inner.rindex("}") + 1])
+    rec["plan_block_sha256"] = hashlib.sha256(block.encode()).hexdigest()
+    return rec  # type: ignore[no-any-return]
+
+
+def test_a16_has_no_recorded_exception_and_the_baseline_is_the_v3_003d_merge() -> None:
+    run, st = _load("run_suite"), _load("steps_v4")
+    assert run.A16_INTENDED_CHANGE is None  # V3-003D record deleted (amendment 6 of V3-004)
+    assert re.fullmatch(r"[0-9a-f]{40}", st.A16_BASELINE)  # a full develop merge SHA
+    assert st.A16_BASELINE.startswith("f3a1dd62")  # V3-003D merge commit
+    assert not st.A16_BASELINE.startswith(_v3003d_record()["baseline"])  # advanced past a524f209
+    cmd = _a16_cmd(run)  # the suite runs the gated regression mode, without a record
+    assert cmd[cmd.index("--mode") + 1] == "regression"
+    assert "--intended-change-record" not in cmd
+
+
+def test_a16_suite_passes_a_recorded_exception_to_the_intended_change_mode() -> None:
     mod = _load("run_suite")
-    rec = mod.A16_INTENDED_CHANGE
+    rec = _v3003d_record()
     ident = ("task", "baseline", "identity_field", "baseline_value", "new_value")
     assert {k: rec[k] for k in ident} == {
         "task": "V3-003D", "baseline": "a524f209", "identity_field": "range_construction",
         "baseline_value": None, "new_value": "exact-loglog-quadrature-v1",
     }  # fmt: skip
+    mod.A16_INTENDED_CHANGE = rec  # a future task records its exception
     cmd = _a16_cmd(mod)
     assert cmd[cmd.index("--mode") + 1] == "intended-change"
     assert json.loads(cmd[cmd.index("--intended-change-record") + 1]) == rec
-    mod.A16_INTENDED_CHANGE = None  # record deleted (next task): regression, no exception
-    cmd = _a16_cmd(mod)
-    assert cmd[cmd.index("--mode") + 1] == "regression"
-    assert "--intended-change-record" not in cmd
 
 
 def test_a16_intended_change_verification_is_fail_closed() -> None:
-    run, st = _load("run_suite"), _load("steps_v4")
-    rec = run.A16_INTENDED_CHANGE
+    st = _load("steps_v4")
+    rec = {**_v3003d_record(), "baseline": st.A16_BASELINE[:8]}  # a record naming this baseline
     new = rec["new_value"]
-    assert st.A16_BASELINE == rec["baseline"]
     ok = st.verify_intended_change(rec, st.A16_BASELINE, None, new)
     assert ok["verified_baseline_identity"] is None and ok["verified_current_identity"] == new
     with pytest.raises(SystemExit, match="needs the A16_INTENDED_CHANGE record"):
@@ -959,6 +1012,8 @@ def test_a16_intended_change_verification_is_fail_closed() -> None:
         st.verify_intended_change(rec, st.A16_BASELINE, None, "other-construction")
     with pytest.raises(SystemExit, match="names baseline"):
         st.verify_intended_change({**rec, "baseline": "deadbeef"}, st.A16_BASELINE, None, new)
+    with pytest.raises(SystemExit, match="names baseline"):  # the V3-003D record is out of date
+        st.verify_intended_change(_v3003d_record(), st.A16_BASELINE, None, new)
     with pytest.raises(SystemExit, match="exactly the keys"):
         st.verify_intended_change({"task": "V3-003D"}, st.A16_BASELINE, None, new)
 
@@ -1059,8 +1114,8 @@ def _with(fn):  # type: ignore[no-untyped-def]
 
 
 def test_a16_gate_accepts_the_intended_change_and_rejects_everything_else() -> None:
-    run, st = _load("run_suite"), _load("steps_v4")
-    rec = run.A16_INTENDED_CHANGE
+    st = _load("steps_v4")
+    rec = _v3003d_record()
     base = _synthetic_raw()
     ok = st.a16_gate(rec, base, _perturbed(base))
     assert ok["ok"], ok
@@ -1092,8 +1147,7 @@ def test_a16_gate_accepts_the_intended_change_and_rejects_everything_else() -> N
 
 
 def test_a16_gate_t1_bounds_every_allowlisted_field() -> None:
-    run = _load("run_suite")
-    rec = run.A16_INTENDED_CHANGE
+    rec = _v3003d_record()
     base = _synthetic_raw("t1:warp-cpu:float64")
     assert _violations(rec, base, _perturbed(base, T1), T1) == []
     # every differing field of the t1 allowlist is covered by existing bound keys
@@ -1154,7 +1208,7 @@ def test_a16_gate_t1_bounds_every_allowlisted_field() -> None:
 @pytest.mark.parametrize("spec", [T13, T1])
 def test_a16_gate_rejects_non_finite_values_in_every_family(spec: str, bad: float) -> None:
     """NaN/Inf must never satisfy a bound or pass a digest comparison (fail closed)."""
-    rec = _load("run_suite").A16_INTENDED_CHANGE
+    rec = _v3003d_record()
     fam = spec.split(":")[0]
     base = _synthetic_raw(spec)
     assert _violations(rec, base, _perturbed(base, spec), spec) == []
@@ -1191,15 +1245,18 @@ def test_a16_caps_are_nan_safe() -> None:
     assert st.nonfinite_fields(mixed) == ["b", "d"]
 
 
+_RECORD_TEXT = (
+    "head = 1\nA16_INTENDED_CHANGE: dict[str, Any] | None = {\n"
+    '    "bounds": {"a": 1},\n    "source_digest": "1111",\n'
+    '    "plan_block_sha256": "2222",\n}\n"""doc"""\ntail = 2\n'
+)
+
+
 def test_a16_normalization_masks_exactly_the_record_literals() -> None:
     run = _load("run_suite")
-    rec = run.A16_INTENDED_CHANGE
-    text = (REPO / run.A16_RUN_SUITE_FILE).read_text()
-    lo = text.index(run.A16_RECORD_START)
-    hi = text.index(run.A16_RECORD_END, lo) + len(run.A16_RECORD_END)
-    lits = [f'"{k}": "{rec[k]}"' for k in ("source_digest", "plan_block_sha256")]
-    for lit in lits:
-        assert text.count(lit) == 1 and lo < text.index(lit) < hi
+    rec = _v3003d_record()
+    text = _RECORD_TEXT
+    lits = ['"source_digest": "1111"', '"plan_block_sha256": "2222"']
     # decoys with the same shape before and after the record are not masked
     decoy = '"source_digest": "deadbeef"\n"plan_block_sha256": "cafe"\n'
     doctored = decoy + text + decoy
@@ -1223,23 +1280,40 @@ def test_a16_normalization_masks_exactly_the_record_literals() -> None:
         run.a16_normalize(text.replace(lits[0], '"source_digest_x": "0"'), "record")
     with pytest.raises(SystemExit, match="expected 1"):
         run.a16_normalize(plan.replace(plit, plit + ',\n "plan_block_sha256": "0"'), "plan")
+    with pytest.raises(SystemExit, match="not closed"):
+        run.a16_normalize(text.replace("}\n", ""), "record")
     # no record: nothing to mask
     assert run.a16_normalize("no record here", "record") == "no record here"
 
 
-def test_a16_source_digest_binds_the_record_to_the_source_tree() -> None:
+def test_a16_normalization_handles_the_none_form() -> None:
+    """With ``A16_INTENDED_CHANGE = None`` (the normal state) nothing is masked, even if a later
+    brace-closed literal or look-alike digest literals exist (they stay hashed)."""
+    run = _load("run_suite")
+    none_form = "A16_INTENDED_CHANGE: dict[str, Any] | None = None\n"
+    later = 'X = {\n    "source_digest": "1111",\n    "plan_block_sha256": "2222",\n}\n'
+    for text in (
+        "head = 1\n" + none_form + '"""doc"""\n',
+        "head = 1\n" + none_form + later,
+        "head = 1\n" + none_form + '"""doc"""\n}\n' + later,
+    ):
+        assert run.a16_normalize(text, "record") == text
+    # the checked-in file is in the None form: its text is hashed unchanged
+    rs = (REPO / run.A16_RUN_SUITE_FILE).read_text()
+    assert run.A16_RECORD_START in rs and "\n" + none_form in rs
+    assert run.a16_normalize(rs, "record") == rs
+    # re-introducing a record in the documented form is masked again
+    recorded = rs.replace(none_form, _RECORD_TEXT.split("\n", 1)[1].split('"""doc"""')[0], 1)
+    norm = run.a16_normalize(recorded, "record")
+    assert recorded != rs and norm.count('"source_digest": "MASKED"') == 1
+    assert norm.count('"plan_block_sha256": "MASKED"') == 1
+
+
+def test_a16_source_digest_binds_the_source_tree() -> None:
     run, st = _load("run_suite"), _load("steps_v4")
-    rec = run.A16_INTENDED_CHANGE
     assert (run.A16_PLAN_BEGIN, run.A16_PLAN_END) == (st.PLAN_BEGIN, st.PLAN_END)
     digest = run.a16_source_digest()
-    # the record is valid for exactly this source state: a later commit that touches a hashed
-    # file must refresh the record (python validation/scripts/transport/run_suite.py
-    # --print-a16-source-digest) or delete it (amendment 6)
-    assert rec["source_digest"] == digest
-    assert st.verify_source_digest(rec, digest) == digest
-    with pytest.raises(SystemExit, match="exact source state"):
-        st.verify_source_digest(rec, "0" * 64)
-    # run_suite.py and the plan block are hashed, with only the two self-referential literals masked
+    assert re.fullmatch(r"[0-9a-f]{64}", digest)
     entries = run.a16_source_entries()
     assert run.a16_digest_of(entries) == digest
     rs, plan = run.A16_RUN_SUITE_FILE, run.A16_PLAN_FILE
@@ -1252,24 +1326,28 @@ def test_a16_source_digest_binds_the_record_to_the_source_tree() -> None:
         e[rel] = text.replace(old, new, 1).encode()
         return run.a16_digest_of(e)
 
-    assert changed(rs, '"voxel_rel_max": 0.037', '"voxel_rel_max": 0.5') != digest  # a bound
+    # run_suite.py (the gate bounds' home when a record exists, and the digest function) and the
+    # plan block are hashed; only the self-referential literals are masked
     assert changed(rs, "def a16_normalize", "def a16_normalise") != digest  # the digest function
     assert changed(plan, '"voxel_rel_max": 0.037', '"voxel_rel_max": 0.5') != digest  # plan block
-    assert changed(rs, '"MASKED"', '"MASKED"') == digest
-    lit = '"source_digest": "' + rec["source_digest"] + '"'
-    text = (REPO / rs).read_text()
-    assert lit in text and lit in (REPO / plan).read_text()
+    raw = (REPO / plan).read_text()
+    lit = f'"source_digest": "{_v3003d_record()["source_digest"]}"'
+    assert raw.count(lit) == 1  # the historical block's literal is masked, not hashed
     e = dict(entries)
-    e[rs] = run.a16_normalize(text.replace(lit, '"source_digest": "0"'), "record").encode()
-    assert run.a16_digest_of(e) == digest  # only the self-referential value is free
+    e[plan] = run.a16_normalize(raw.replace(lit, '"source_digest": "0"'), "plan").encode()
+    assert run.a16_digest_of(e) == digest
+    assert changed(rs, '"MASKED"', '"MASKED"') == digest
+    assert st.verify_source_digest({"source_digest": digest}, digest) == digest
+    with pytest.raises(SystemExit, match="exact source state"):
+        st.verify_source_digest({"source_digest": digest}, "0" * 64)
     cmd = [sys.executable, str(SCRIPTS / "run_suite.py"), "--print-a16-source-digest"]
     out = subprocess.run(cmd, capture_output=True, text=True, check=True)
     assert out.stdout.strip() == digest
 
 
 def test_a16_plan_binding_is_verified() -> None:
-    run, st = _load("run_suite"), _load("steps_v4")
-    rec = run.A16_INTENDED_CHANGE
+    st = _load("steps_v4")
+    rec = _v3003d_record()
     text = (REPO / st.PLAN_FILE).read_text()
     assert st.verify_plan_binding(rec, text) == rec["plan_block_sha256"]
     with pytest.raises(SystemExit, match="hashes to"):
@@ -1286,3 +1364,290 @@ def test_a16_plan_binding_is_verified() -> None:
         st.verify_plan_binding(changed, text)
     with pytest.raises(SystemExit, match="exactly one delimited"):
         st.verify_plan_binding(rec, "no block here")
+
+
+def test_v3_005_acceptance_plan_is_frozen_and_consistent() -> None:
+    plan = (REPO / "validation" / "plans" / "v3-005-acceptance.md").read_text(encoding="utf-8")
+    rows = re.findall(r"^\| ([A-Za-z0-9-]+) \|", plan, flags=re.MULTILINE)
+    for row in ("P1", "P2", "P3", "P4", "P5", "N1", "V1", "V1b", "V2", "V2-probe", "V2b", "V3"):
+        assert row in rows, row
+    for row in ("V4", "V5", "V6", "V7", "V8", "V9", "R1", "X1", "C1", "D6", "E1"):
+        assert row in rows, row
+    d6 = next(line for line in plan.splitlines() if line.startswith("| D6 |"))
+    assert "Tier 1" in d6 and "Tier 2" in d6 and "G(150) ≤ 0.05" in d6 and "D ≤ 1e-3" in d6
+    assert "20421004" in plan and "9448d5e" in plan and "0041" in plan
+    r1 = next(line for line in plan.splitlines() if line.startswith("| R1 |"))
+    assert "`A16_INTENDED_CHANGE` stays `None`" in r1
+    assert "DEFERRED" in plan and "partition invariance of nuclear runs" in plan
+    assert (REPO / "decisions" / "0041-proton-nuclear-interactions.md").is_file()
+
+
+# -- V3-005A slice-A suite (lv5) -------------------------------------------------------------------
+QUAL5 = 20421004
+PLAN5 = REPO / "validation" / "plans" / "v3-005-acceptance.md"
+LV5_STEPS = [
+    "lv5-throughput", "n1-v1-v1b-d6",
+    "v2-100-s0", "v2-100-s1", "v2-100-s2", "v2-150-s0", "v2-150-s1", "v2-150-s2",
+    "v2-200-s0", "v2-200-s1", "v2-200-s2", "v2-combine",
+    "v2-probe-s05-s0", "v2-probe-s05-s1", "v2-probe-fe-s0", "v2-probe-fe-s1", "v2-probe-fe-s2",
+    "v2-probe-combine", "v3-lv", "v4-v4b", "x1", "e1", "r1-a16-t1-regression",
+    "v3-workers-partition",
+]  # fmt: skip
+# plan row -> lv5 step that evaluates it; the rest is CI, slice B, or covered by a pytest tier
+LV5_ROW_STEP = {
+    "N1": "n1-v1-v1b-d6", "V1": "n1-v1-v1b-d6", "V1b": "n1-v1-v1b-d6", "D6": "n1-v1-v1b-d6",
+    "V2": "v2-combine", "V2-probe": "v2-probe-combine", "V3": "v3-lv", "V4": "v4-v4b",
+    "V4b": "v4-v4b", "X1": "x1", "E1": "e1", "R1": "r1-a16-t1-regression",
+}  # fmt: skip
+LV5_NOT_IN_SUITE = {"P1", "P2", "P3", "P4", "P5", "V9", "C1"}  # CI tier (tests/ionmc)
+LV5_SLICE_B = {"V2b", "V5", "V6", "V7", "V8"}
+
+
+def _plan_rows() -> list[str]:
+    rows = re.findall(r"^\| ([A-Z][A-Za-z0-9-]*) \|", PLAN5.read_text(), flags=re.M)
+    return [r for r in rows if r not in ("Tier", "Row(s)", "#", "CI", "LV", "HR")]
+
+
+def test_lv5_manifest_seeds_hashed_files_and_deferred() -> None:
+    mod = _load("run_suite")
+    names = mod.full_step_names("lv5", 2)
+    assert [n.split("-", 1)[1] for n in names] == LV5_STEPS
+    assert names_sorted(names)
+    assert mod.DEFAULT_SEED_BASES["lv5"] == QUAL5 == mod.V5_QUALIFICATION_SEED_BASE
+    for suite in ("lv", "lv4", "hr4"):  # the earlier suites are unchanged
+        assert mod.DEFAULT_SEED_BASES[suite] != QUAL5
+    steps = mod.suite_steps("lv5", 1, 0.5)
+    scripted = [s for s in steps if "steps_v5.py" in " ".join(s[1])]
+    assert len(scripted) == len(steps)  # every lv5 step is a steps_v5 step (no CUDA, no hr5)
+    for name, cmd, env in steps:
+        assert cmd[cmd.index("--seed-base") + 1] == str(QUAL5), name
+        assert "--timeout" in cmd and env["IONMC_REQUIRE_DATA"] == "1", name
+        assert "cuda" not in " ".join(cmd).lower() and "warp" not in cmd[2:3], name
+        if name.split("-", 1)[1] != "lv5-throughput" and "combine" not in name:
+            assert "--scale" in cmd or "workers-partition" in name or "n1-" in name, name
+    assert mod.deferred_step_names("lv5") == ["24-v3-workers-partition"]
+    for e in (100, 150, 200):  # the long steps get the 3300 s floor
+        assert mod.step_timeout_s("lv5", f"03-v2-{e}-s0", 1500) == 3300
+    assert mod.step_timeout_s("lv5", "03-v2-100-s0", 5000) == 5000
+    assert mod.step_timeout_s("lv5", "12-v2-combine", 1500) == 1500
+    got = {str(f.relative_to(mod.REPO)) for f in mod.source_files("lv5")}
+    assert {
+        "validation/plans/v3-005-acceptance.md",
+        "decisions/0041-proton-nuclear-interactions.md",
+        "validation/scripts/transport/steps_v5.py",
+        "validation/scripts/transport/nuclear_checks.py",
+        "validation/plans/v3-004-acceptance.md",
+        "src/ionmc/nuclear/events.py",
+        "src/ionmc/nuclear/tables.py",
+    } <= got  # fmt: skip
+    assert "validation/plans/v3-005-acceptance.md" not in mod.source_file_list("lv4")
+    # lv5 always runs one worker (plan, Execution under the single-process directive)
+    assert all("--workers" not in c or c[c.index("--workers") + 1] == "1" for _, c, _ in steps)
+
+
+def test_lv5_plan_rows_are_all_accounted_for_and_seeds_match_the_plan() -> None:
+    mod, v5 = _load("run_suite"), _load("steps_v5")
+    plan = PLAN5.read_text()
+    rows = set(_plan_rows())
+    assert {"N1", "V1", "V1b", "V2", "V2-probe", "V3", "V4", "V4b", "X1", "E1", "D6", "R1"} <= rows
+    accounted = set(LV5_ROW_STEP) | LV5_NOT_IN_SUITE | LV5_SLICE_B | {"V3-CI"}
+    assert rows - accounted == set(), (
+        rows - accounted
+    )  # a new plan row needs a step or a declaration
+    suite = {n.split("-", 1)[1] for n in mod.full_step_names("lv5", 2)}
+    assert set(LV5_ROW_STEP.values()) <= suite
+    # the r_index table and the base of the plan equal the declarations of steps_v5.py
+    text = re.search(r"`r_index` is fixed in `steps_v5.py` \(([^)]*)\)", plan)
+    assert text
+    pairs = {k.lower(): int(v) for k, v in re.findall(r"([A-Za-z0-9-]+): (\d+)", text.group(1))}
+    assert pairs == {"v2-100": 1, "v2-150": 2, "v2-200": 3, "v2-probe-s05": 4, "v2-probe-fe": 5,
+                     "v3-lv": 6, "x1": 7, "e1": 8, "v4": 9}  # fmt: skip
+    assert pairs == v5.R_INDEX
+    assert (v5.R_INDEX["v2-probe-s05"], v5.R_INDEX["v2-probe-fe"], v5.R_INDEX["v4"]) == (4, 5, 9)
+    assert "20421004" in plan and v5.QUALIFICATION_SEED_BASE == QUAL5
+    assert v5.REHEARSAL_SEED_BASE == 20431004
+    nc = _load("nuclear_checks")
+    assert nc.V4_BASE_SEED == QUAL5 + 1000 * v5.R_INDEX["v4"]
+    # frozen history counts of the plan
+    assert (v5.V2_SHARDS * v5.V2_SHARD_N, v5.V3_HISTORIES, v5.X1_N, v5.E1_N, v5.V4_EVENTS) == (
+        240_000, {150.0: 20_000, 250.0: 10_000}, 20_000, 100_000, 100_000)  # fmt: skip
+    assert v5.PROBES["s05"][0] * v5.PROBES["s05"][1] == 100_000
+    assert v5.PROBES["fe"][0] * v5.PROBES["fe"][1] >= 100_000
+    assert (v5.V2_TOL, v5.PROBE_TOL, v5.PROBE_SIGMA_MAX, v5.X1_Z) == (0.003, 0.002, 7e-4, 3.0)
+
+
+def test_lv5_summary_tags_seed_blockers_and_step_documents() -> None:
+    summ, mod = _load("summarize"), _load("run_suite")
+    v5src = (SCRIPTS / "steps_v5.py").read_text()
+    printed = set(re.findall(r'"step": "([a-z0-9-]+)"', v5src))
+    tags = {summ.expected_tag(n) for n in mod.full_step_names("lv5", 2)}
+    assert tags == printed, tags ^ printed  # every step prints the document its name expects
+    assert summ.seed_blockers(QUAL5, "lv5") == []
+    assert summ.seed_blockers(20431004, "lv5") and summ.seed_blockers(20401004, "lv5")
+    assert summ.seed_blockers(QUAL5, "lv4")  # the lv5 base does not qualify the V3-004 suite
+    assert summ.V5_QUALIFICATION_SEED_BASE == QUAL5
+
+
+def test_v5_partials_are_hash_verified_and_bound(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Shard partials carry ``content_sha256`` and the run/table bindings; an altered value or a
+    different table id is rejected, valid partials load (decision 0041, finding 5)."""
+    v5 = _load("steps_v5")
+    monkeypatch.setenv("IONMC_RUN_SHA", SHA)
+    monkeypatch.setenv("IONMC_RUN_SUITE", "lv5")
+    monkeypatch.setattr(
+        v5, "table_record", lambda: {"table_id": v5.TABLE_ID, "npz_sha256": "c" * 64,
+                                     "json_sha256": "d" * 64}
+    )  # fmt: skip
+    a = argparse.Namespace(out_dir=str(tmp_path), scale=1.0, dirs=[str(tmp_path)])
+    v5.write_partial(a, "p-s0", {"row": "p", "shard": 0, "ratio": [1.0, 0.5], "valid": True})
+    docs = v5.load_partials(a, ["p-s0.json"])
+    assert docs[0]["run_sha"] == SHA and docs[0]["table_id"] == v5.TABLE_ID
+    assert docs[0]["content_sha256"] == v5.content_digest(docs[0])
+    path = tmp_path / "p-s0.json"
+    good = json.loads(path.read_text())
+    bad = {**good, "ratio": [1.0, 0.5000001]}  # one altered value, hash left in place
+    path.write_text(json.dumps(bad))
+    with pytest.raises(SystemExit, match="content_sha256"):
+        v5.load_partials(a, ["p-s0.json"])
+    other = {**good, "table_id": "e" * 64}  # re-sealed, but bound to a different table
+    other["content_sha256"] = v5.content_digest(other)
+    path.write_text(json.dumps(other))
+    with pytest.raises(SystemExit, match="table_id"):
+        v5.load_partials(a, ["p-s0.json"])
+    path.write_text(json.dumps(good))
+    assert v5.load_partials(a, ["p-s0.json"])[0]["ratio"] == [1.0, 0.5]
+
+
+def test_v5_imported_partials_need_the_attested_manifest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Imported partials are accepted only with their exact digest in ``--partials-manifest``
+    (the PARTIAL stdout lines of the shard steps); a value altered together with a recomputed
+    ``content_sha256`` or a partial absent from the manifest is refused (Codex finding 3)."""
+    v5, rs = _load("steps_v5"), _load("run_suite")
+    monkeypatch.setenv("IONMC_RUN_SHA", SHA)
+    monkeypatch.setenv("IONMC_RUN_SUITE", "lv5")
+    monkeypatch.setattr(
+        v5, "table_record", lambda: {"table_id": v5.TABLE_ID, "npz_sha256": "c" * 64,
+                                     "json_sha256": "d" * 64}
+    )  # fmt: skip
+    shard_dir, cur = tmp_path / "shard", tmp_path / "cur"
+    cur.mkdir()
+    sa = argparse.Namespace(out_dir=str(shard_dir), scale=1.0, dirs=[str(shard_dir)])
+    v5.write_partial(sa, "p-s0", {"row": "p", "shard": 0, "ratio": [1.0, 0.5], "valid": True})
+    line = capsys.readouterr().out.strip()
+    path = shard_dir / "p-s0.json"
+    good = json.loads(path.read_text())
+    assert line == f"PARTIAL p-s0.json {good['content_sha256']}"
+    man = tmp_path / "manifest.json"
+    a = argparse.Namespace(out_dir=str(cur), scale=1.0, dirs=[str(cur), str(shard_dir)],
+                           partials_manifest=str(man))  # fmt: skip
+    with pytest.raises(SystemExit, match="partials-manifest"):  # imported dirs, no manifest
+        v5.load_partials(argparse.Namespace(**{**vars(a), "partials_manifest": None}),
+                         ["p-s0.json"])  # fmt: skip
+
+    def write_manifest(entries: dict[str, object]) -> None:
+        man.write_text(json.dumps({"partials": entries, "source": v5.MANIFEST_SOURCE}))
+
+    write_manifest({})
+    with pytest.raises(SystemExit, match="not in the partials manifest"):
+        v5.load_partials(a, ["p-s0.json"])
+    man.write_text(json.dumps({"p-s0.json": good["content_sha256"]}))  # the old flat schema
+    with pytest.raises(SystemExit, match="need"):
+        v5.load_partials(a, ["p-s0.json"])
+    for bad_entry in ({"content_sha256": good["content_sha256"]},
+                      {"content_sha256": good["content_sha256"], "host_run_id": " "}):  # fmt: skip
+        write_manifest({"p-s0.json": bad_entry})  # no host_run_id: rejected
+        with pytest.raises(SystemExit, match="host_run_id"):
+            v5.load_partials(a, ["p-s0.json"])
+    write_manifest({"p-s0.json": {"content_sha256": good["content_sha256"], "host_run_id": "H1"}})
+    assert v5.load_partials(a, ["p-s0.json"])[0]["ratio"] == [1.0, 0.5]
+    forged = {**good, "ratio": [1.0, 0.9]}  # altered AND resealed: the file is self-consistent
+    forged["content_sha256"] = v5.content_digest(forged)
+    path.write_text(json.dumps(forged))
+    with pytest.raises(SystemExit, match="differs from the manifest"):
+        v5.load_partials(a, ["p-s0.json"])
+    # a resealed manifest as well: the step evaluates (it cannot read the protected host-runner
+    # records) but is never conformant by code; the combine document exposes what it relied on
+    write_manifest({"p-s0.json": {"content_sha256": forged["content_sha256"],
+                                  "host_run_id": "H-forged"}})  # fmt: skip
+    a2 = argparse.Namespace(**{k: v for k, v in vars(a).items() if not k.startswith("attested")})
+    assert v5.load_partials(a2, ["p-s0.json"])[0]["ratio"] == [1.0, 0.9]
+    att = v5.attestation_block(a2)
+    assert att["partials"] == [{"name": "p-s0.json", "content_sha256": forged["content_sha256"],
+                                "origin": "imported", "host_run_id": "H-forged"}]  # fmt: skip
+    assert att["manifest_sha256"] == hashlib.sha256(man.read_bytes()).hexdigest()
+    assert att["manifest_path"] == str(man) and att["run_sha"] == SHA
+    assert att["manifest_source"] == v5.MANIFEST_SOURCE
+    assert att["protected_host_records_verified_by_code"] is False
+    assert "cannot verify the protected host-runner records" in att["statement"]
+    # the summary side: a missing host_run_id or a manifest digest differing from the one recorded
+    # in environment.txt makes the archive non-conformant
+    summ = _load("summarize")
+    env = {"partials_manifest_sha256": att["manifest_sha256"]}
+    reason = "imported_partials_unverified_by_code"
+    assert summ.attestation_problems(att, SHA, env) == [
+        reason
+    ]  # forged + resealed: pass, not conformant
+    current = {**att, "partials": [{**att["partials"][0], "origin": "current-run",
+                                    "host_run_id": None}]}  # fmt: skip
+    assert (
+        summ.attestation_problems(current, SHA, env) == []
+    )  # same-invocation partials: conformant
+    assert summ.attestation_problems(None, SHA, env) == []
+    no_id = {**att, "partials": [{**att["partials"][0], "host_run_id": ""}]}
+    assert reason in summ.attestation_problems(no_id, SHA, env)
+    assert any("host_run_id" in m for m in summ.attestation_problems(no_id, SHA, env))
+    assert any("environment.txt" in m for m in summ.attestation_problems(att, SHA, {}))
+    assert any("run_sha" in m for m in summ.attestation_problems(att, "f" * 40, env))
+    # run_suite refuses imported directories of lv5 without a manifest and forwards it otherwise
+    with pytest.raises(SystemExit, match="partials-manifest"):
+        rs.suite_steps("lv5", 1, 1.0, out=cur, import_dirs=[str(shard_dir)])
+    steps = rs.suite_steps("lv5", 1, 1.0, out=cur, import_dirs=[str(shard_dir)],
+                           partials_manifest=str(man))  # fmt: skip
+    comb = [s[1] for s in steps if "combine" in s[0]]
+    assert comb and all(str(man) in c for c in comb)
+    # the archived environment records the manifest path and its sha256 (and nothing without one)
+    envtxt = rs.environment_text(SHA, "git", "no", argparse.Namespace(
+        suite="lv5", step_timeout=1, scale=1.0, seed_base=1, python_parts=1, only=None,
+        partials_manifest=str(man)), 1)  # fmt: skip
+    assert f"partials_manifest={man}\n" in envtxt
+    assert f"partials_manifest_sha256={hashlib.sha256(man.read_bytes()).hexdigest()}\n" in envtxt
+    no_manifest = argparse.Namespace(suite="lv5", step_timeout=1, scale=1.0, seed_base=1,
+                                     python_parts=1, only=None, partials_manifest=None)  # fmt: skip
+    assert "partials_manifest_sha256=\n" in rs.environment_text(SHA, "git", "no", no_manifest, 1)
+
+
+def test_imported_partials_make_the_summary_non_conformant_by_code(tmp_path: Path) -> None:
+    """A step that used any imported partial passes on its criterion but is ``conformant: false``
+    with ``imported_partials_unverified_by_code`` (also when the manifest is valid or resealed);
+    partials of the current output directory keep the archive conformant (Codex review 4)."""
+    summ, reason = _load("summarize"), "imported_partials_unverified_by_code"
+    msha = "e" * 64
+    env = _env().replace("source_hashes:", f"partials_manifest_sha256={msha}\nsource_hashes:")
+
+    def att(origin: str, host: str | None) -> dict[str, object]:
+        return {"run_sha": SHA, "manifest_sha256": msha, "partials": [
+            {"name": "p-s0.json", "content_sha256": "a" * 64, "origin": origin,
+             "host_run_id": host}]}  # fmt: skip
+
+    for tag, origin, host in (
+        ("imported", "imported", "H-forged"),
+        ("current", "current-run", None),
+    ):
+        d = tmp_path / tag
+        _archive(d, _full(), doc={"pass": True, "attestation": att(origin, host)}, env=env)
+        s, c = summ.verify(d, SHA), summ.combine([d], SHA)
+        assert s["pass"] and not s["subset"] and c["pass"] and c["complete"]
+        if tag == "imported":
+            assert not s["conformant"] and any(
+                r.endswith(reason) for r in s["non_conformant_reasons"]
+            )
+            assert not c["conformant"] and any(
+                r.endswith(reason) for r in c["non_conformant_reasons"]
+            )
+        else:
+            assert s["conformant"] and s["non_conformant_reasons"] == []
+            assert c["conformant"] and c["non_conformant_reasons"] == []

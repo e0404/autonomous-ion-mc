@@ -97,6 +97,19 @@ COUNTER_NAMES = (
 TALLY_NAMES = ("initial", "cutoff", "step_deposit", "escaped", "truncated", "unaccounted")
 N_FIXED_TALLIES = len(TALLY_NAMES)
 
+NUCLEAR_TALLY_NAMES = (
+    "nuclear_local",
+    "nuclear_alpha_local",
+    "nuclear_escaped_neutron",
+    "nuclear_escaped_gamma",
+    "nuclear_binding",
+    "nuclear_imbalance",
+)
+"""Conditional tally block of a ``nuclear=True`` run (decision 0041 section 5): extra per-history
+tally columns appended AFTER every other column (``TALLY_NAMES`` is never extended)."""
+NUCLEAR_COUNTER_NAMES = ("majorant_violation", "nuclear_rejection_limit", "nuclear_conservation")
+"""Conditional counter block of a ``nuclear=True`` run, appended after ``COUNTER_NAMES``."""
+
 QUANTUM_MEV = 2.0**-30
 """Fixed-point quantum of the deposit grids [MeV]: every deposit piece is rounded to the nearest
 multiple (``floor(x / q + 1/2)``, a deterministic function of the piece) and accumulated in int64,
@@ -261,7 +274,7 @@ def concat_partials(partials: list[PartialTransport]) -> PartialTransport:
             raise ValueError(f"partial results are not contiguous: {a.h1} then {b.h0}")
     n_cols = len(parts[0].tally_components)
     comps = [[c for p in parts for c in p.tally_components[col]] for col in range(n_cols)]
-    counters = [sum(p.counter_sums[i] for p in parts) for i in range(len(COUNTER_NAMES))]
+    counters = [sum(p.counter_sums[i] for p in parts) for i in range(len(parts[0].counter_sums))]
     edep = []
     for g in range(len(parts[0].edep)):
         acc = np.zeros_like(parts[0].edep[g], dtype=np.int64)
@@ -282,12 +295,17 @@ def merge_partials(
     n_histories: int,
     n_grids: int,
     n_channel_columns: int = 0,
+    nuclear: bool = False,
 ) -> RawTransport:
     """Reduce the partial results of a complete, contiguous partition of ``[0, n_histories)``.
 
     ``n_channel_columns`` is 0 without scoring channels, else ``C + 2``: the residual columns of
     the ``C`` channels with a residual, the lookup out-of-domain count and the number of histories
     whose path exceeded the bound ``B_L``.
+
+    ``nuclear`` (a ``nuclear=True`` run) adds the conditional blocks: the ``NUCLEAR_TALLY_NAMES``
+    columns after all others and the ``NUCLEAR_COUNTER_NAMES`` counters after ``COUNTER_NAMES``;
+    they appear in ``tallies`` / ``counters`` only then.
 
     Fails closed (``ValueError``) for gaps, overlaps, a different number of columns or grids.
     """
@@ -301,20 +319,22 @@ def merge_partials(
         pos = p.h1
     if pos != n_histories:
         raise ValueError(f"partial results cover [0, {pos}), expected [0, {n_histories})")
-    n_cols = N_FIXED_TALLIES + 2 * n_grids + n_channel_columns
+    n_nuc_t = len(NUCLEAR_TALLY_NAMES) if nuclear else 0
+    counter_names = COUNTER_NAMES + (NUCLEAR_COUNTER_NAMES if nuclear else ())
+    n_cols = N_FIXED_TALLIES + 2 * n_grids + n_channel_columns + n_nuc_t
     for p in parts:
         if (p.channel_acc is not None) != (n_channel_columns > 0):
             raise ValueError("partial result and configuration disagree about scoring channels")
     for p in parts:
         if (
             len(p.tally_components) != n_cols
-            or len(p.counter_sums) != len(COUNTER_NAMES)
+            or len(p.counter_sums) != len(counter_names)
             or len(p.edep) != n_grids
         ):
             raise ValueError("partial result has the wrong number of tally columns or grids")
     totals = [math.fsum(c for p in parts for c in p.tally_components[col]) for col in range(n_cols)]
     counters = {
-        name: int(sum(p.counter_sums[i] for p in parts)) for i, name in enumerate(COUNTER_NAMES)
+        name: int(sum(p.counter_sums[i] for p in parts)) for i, name in enumerate(counter_names)
     }
     edep = []
     for g in range(n_grids):
@@ -323,6 +343,8 @@ def merge_partials(
             acc += p.edep[g]
         edep.append(acc.astype(np.float64) * QUANTUM_MEV)
     tallies = dict(zip(TALLY_NAMES, totals[:N_FIXED_TALLIES], strict=True))
+    if nuclear:
+        tallies.update(zip(NUCLEAR_TALLY_NAMES, totals[n_cols - n_nuc_t :], strict=True))
     base = N_FIXED_TALLIES + 2 * n_grids
     channels = None
     if n_channel_columns > 0:
@@ -346,6 +368,23 @@ def merge_partials(
     )
 
 
+def merge_nuclear_diagnostics(blocks: list[dict[str, Any]]) -> dict[str, Any]:
+    """Sum the per-target nuclear event records (``events``, ``light`` counts per species,
+    ``residual`` counts by ``"Z_r,A_r"``) of several partial results."""
+    out: dict[str, Any] = {}
+    for blk in blocks:
+        for tgt, rec in blk.items():
+            o = out.setdefault(
+                tgt, {"events": 0, "light": dict.fromkeys(rec["light"], 0), "residual": {}}
+            )
+            o["events"] += rec["events"]
+            for k, v in rec["light"].items():
+                o["light"][k] += v
+            for k, v in rec["residual"].items():
+                o["residual"][k] = o["residual"].get(k, 0) + v
+    return out
+
+
 def build_diagnostics(
     partials: list[PartialTransport],
     track_end_positions: bool,
@@ -355,6 +394,9 @@ def build_diagnostics(
     """Diagnostics dictionary (the keys of the reference backend) from the partial results."""
     parts = sorted(partials, key=lambda p: p.h0)
     out: dict[str, Any] = {}
+    nuc = [p.meta["nuclear_diagnostics"] for p in parts if "nuclear_diagnostics" in p.meta]
+    if nuc:  # nuclear event counts per table target (sum over the partials)
+        out["nuclear"] = merge_nuclear_diagnostics(nuc)
     if not (track_end_positions or escape_records or trace_histories > 0):
         return out
     diags = []

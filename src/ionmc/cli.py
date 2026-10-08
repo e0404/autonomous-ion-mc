@@ -31,18 +31,75 @@ def build_parser() -> argparse.ArgumentParser:
             p.add_argument("dataset_id")
         p.add_argument("--cache-dir", default=None, help="cache directory")
         p.add_argument("--offline", action="store_true", help="never use the network")
+    imp = data_sub.add_parser(
+        "import", help="import a local file as a registered dataset (hash and size verified)"
+    )
+    imp.add_argument("path", help="local file to import")
+    imp.add_argument("--dataset", required=True, dest="dataset_id", help="registered dataset id")
+    imp.add_argument("--cache-dir", default=None, help="cache directory")
+    bld = data_sub.add_parser("build", help="build a derived table from cached datasets")
+    bld.add_argument("table", choices=["nuclear-proton"])
+    bld.add_argument("--cache-dir", default=None, help="cache directory")
+    bld.add_argument("--points-per-decade", type=int, default=50)
+    bld.add_argument("--diagnostic-events", type=int, default=20000)
+    bld.add_argument(
+        "--strict", action="store_true", help="fail when a lambda node does not converge to 1e-3"
+    )
     return parser
+
+
+def _build_nuclear(args: argparse.Namespace) -> int:
+    from ionmc.data import cache
+    from ionmc.nuclear.build import BuildError, BuildOptions, build_nuclear_proton
+    from ionmc.nuclear.tables import qualification_failures
+
+    opts = BuildOptions(
+        points_per_decade=args.points_per_decade,
+        diagnostic_events=args.diagnostic_events,
+        strict=args.strict,
+    )
+    try:
+        res = build_nuclear_proton(cache.resolve_cache_dir(args.cache_dir), opts, log=print)
+    except (BuildError, FileNotFoundError, cache.IntegrityError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    gate = res.info["gate_d6"]
+    mult = res.info["multiplicity"]
+    pmin = mult["p_accept_min"]
+    print(f"table id {res.table_id}")
+    print(f"build seconds {res.info['timing_s']:.1f}")
+    print(f"grid size {res.info['grid']['n_points']}")
+    print(f"P_accept min {pmin['p_accept']:.4f} ({pmin['target']}, {pmin['e_mev']:.4g} MeV)")
+    print(f"non-converged lambda nodes {len(mult['non_converged_nodes'])}")
+    print(f"transport_energy_bound_mev {res.info['transport_energy_bound_mev']:.2f}")
+    print(f"history_energy_bound_mev {res.info['history_energy_bound_mev']:.2f}")
+    print(f"recoil_t_max_mev {res.info['recoil_t_max_mev']:.4f}")
+    print(f"transport_path_bound_terms {res.info['transport_path_bound_terms']}")
+    for key, num in gate["numbers"].items():
+        print(
+            f"D6 {key} MeV: G={num['G']:.4f} D={num['D']:.3e} "
+            f"R99.9={num['percentile_range_g_cm2']:.4f} g/cm2"
+        )
+    print(
+        f"tier1_pass={gate['tier1_pass']} tier2_pass={gate['tier2_pass']} "
+        f"ceiling_pass={gate['ceiling_pass']}"
+    )
+    reasons = qualification_failures(res.info)
+    print("qualified for transport: " + ("yes" if not reasons else "NO: " + "; ".join(reasons)))
+    return 0
 
 
 def _run_data(args: argparse.Namespace) -> int:
     """Execute ``ionmc data <action>``."""
     from ionmc.data import cache
-    from ionmc.data.acquire import OfflineError, fetch
+    from ionmc.data.acquire import OfflineError, fetch, import_file
     from ionmc.data.registry import DATASETS
 
     action = args.data_command
     if action is None:
         return 2
+    if action == "build":
+        return _build_nuclear(args)
     cdir = cache.resolve_cache_dir(args.cache_dir)
     if action == "list":
         for ds in DATASETS.values():
@@ -50,7 +107,9 @@ def _run_data(args: argparse.Namespace) -> int:
             print(f"{ds.id}\t{'cached' if cached else 'missing'}\t{ds.description}")
         return 0
     try:
-        if action == "fetch":
+        if action == "import":
+            print(import_file(args.path, args.dataset_id, cdir))
+        elif action == "fetch":
             print(fetch(args.dataset_id, cdir, offline=args.offline))
         elif action == "verify":
             print(f"OK {cache.verify(args.dataset_id, cdir)}")

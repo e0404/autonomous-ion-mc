@@ -25,6 +25,7 @@ REASON_GEOMETRY = 0
 REASON_ELOSS = 1
 REASON_RANGE = 2
 REASON_MAX_STEP = 3
+REASON_NUCLEAR = 4
 BIG_LENGTH_MM = 1.0e30
 DIRECTION_EPS = 1.0e-12
 LEG_TOLERANCE = {"float64": 1.0e-9, "float32": 1.0e-5}
@@ -232,6 +233,35 @@ def make_transport_funcs(real: type) -> SimpleNamespace:
         return s, reason
 
     @named_func(name)
+    def select_step_nuclear(
+        d_geo_mm: real,
+        s_eloss_mm: real,
+        s_range_mm: real,
+        s_max_mm: real,
+        d_nuc_mm: real,
+    ) -> tuple[real, int]:
+        """:func:`select_step` plus the nuclear limit ``d_nuc_mm`` (reason 4; decision 0041): the
+        smallest limit, geometry wins ties exactly as in :func:`select_step`; the nuclear limit
+        replaces the EM limits only when STRICTLY smaller (an EM limit wins a tie with it), so
+        ``d_nuc_mm = BIG_LENGTH_MM`` or ``+inf`` returns exactly the result of
+        :func:`select_step`."""
+        s = s_eloss_mm
+        reason = int(1)
+        if s_range_mm < s:
+            s = s_range_mm
+            reason = 2
+        if s_max_mm < s:
+            s = s_max_mm
+            reason = 3
+        if d_nuc_mm < s:
+            s = d_nuc_mm
+            reason = 4
+        if d_geo_mm <= s:
+            s = d_geo_mm
+            reason = 0
+        return s, reason
+
+    @named_func(name)
     def point_on_hinge(p0: v3, d0: v3, leg1_mm: real, d1: v3, l_mm: real) -> v3:
         """Position at path length ``l_mm`` along leg 1 (direction ``d0``, length ``leg1_mm``)
         followed by leg 2 (direction ``d1``)."""
@@ -309,6 +339,7 @@ def make_transport_funcs(real: type) -> SimpleNamespace:
         range_step_limit=range_step_limit,
         eloss_step_limit=eloss_step_limit,
         select_step=select_step,
+        select_step_nuclear=select_step_nuclear,
         point_on_hinge=point_on_hinge,
         grid_index=grid_index,
         ray_box=ray_box,

@@ -98,8 +98,20 @@ def transported_ids() -> tuple[int, ...]:
     return tuple(s.id for s in REGISTRY if s.transported)
 
 
-def producible(projectile: Projectile) -> frozenset[tuple[str, str]]:
+def producible(projectile: Projectile, nuclear: bool = False) -> frozenset[tuple[str, str]]:
     """Engine capability: the ``(species name, generation)`` pairs the engine can create from a
-    source of ``projectile``. V3-004 (no secondary transport): the source projectile as a
-    primary. V3-005A extends this set; nothing else may be requested until then."""
-    return frozenset({(species_of_projectile(projectile).name, "primary")})
+    source of ``projectile``. Without nuclear interactions (V3-004): the source projectile as a
+    primary. With ``nuclear=True`` (V3-005A, decision 0041, proton source only): additionally
+    secondary protons, secondary deuterons (generation >= 1) and the pseudo-species
+    ``nuclear_local`` (alpha, residual recoil: local deposits whose generation label is the
+    parent's generation + 1, so a primary's nuclear event deposits as generation 1 ``secondary``
+    and ``generation="primary"`` channels contain only primary electromagnetic deposits). Species
+    2 to 4 (triton, helium3, alpha as transported species) stay unproducible and fail closed."""
+    base = {(species_of_projectile(projectile).name, "primary")}
+    if not nuclear:
+        return frozenset(base)
+    if projectile != PROTON:
+        raise ValueError("nuclear interactions are implemented for a proton source only")
+    return frozenset(
+        base | {("proton", "secondary"), ("deuteron", "secondary"), (NUCLEAR_LOCAL, "secondary")}
+    )

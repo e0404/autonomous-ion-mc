@@ -14,7 +14,7 @@ from ionmc.cli import main
 from ionmc.data import acquire, cache
 from ionmc.data.icru90 import parse_icru90_source
 from ionmc.data.nist_star import parse_star_text
-from ionmc.data.registry import DATASETS, Dataset
+from ionmc.data.registry import DATASETS, ROLES, Dataset
 
 # Synthetic layout fixture, not NIST data: made-up numbers in the text layout of a STAR
 # response (title, material, three header lines, seven numeric columns).
@@ -64,11 +64,42 @@ def _fake_dataset(sha: str = PAYLOAD_SHA, size: int = len(PAYLOAD)) -> Dataset:
     )
 
 
-def test_registry_has_exactly_the_three_datasets() -> None:
+NUCLEAR_DATASETS = {
+    # id: (sha256, bytes, role)
+    "endf-b8.0-protons": (
+        "27bcafb89cf0444c53c6b9f3dd17618c62e2e6b3694f70d31c4f502399f103f7",
+        14112244,
+        "construction",
+    ),
+    "ame2020-mass": (
+        "e8599c6d7f724fac91934e59f1b9de8fb8f63e820f4b39456b790665ed2a3307",
+        472648,
+        "construction",
+    ),
+    "exfor-d0356": (
+        "2ef17fb10aaaeb5096dc92f9c3175f51f2252163eb4a83aa15669027371747bf",
+        12798,
+        "evaluation",
+    ),
+    "exfor-c1862": (
+        "157aca7e1b8f6cb6814a5fa99fa749823721af6829cbf84712a56fce159ae4ef",
+        18063,
+        "exploratory",
+    ),
+    "geant-val-exfor-inelastic-7": (
+        "fa7ac90fd259f728e5948c71b7a3636bec7b7d9756abeb60837c7083dc2a4c49",
+        12233,
+        "exploratory",
+    ),
+}
+
+
+def test_registry_has_exactly_the_registered_datasets() -> None:
     assert set(DATASETS) == {
         "nist-pstar-water-2005",
         "nist-astar-water-2005",
         "geant4-icru90-stopping-11.4.2",
+        *NUCLEAR_DATASETS,
     }
     for ds in DATASETS.values():
         assert ds.url.startswith("https://")
@@ -345,3 +376,108 @@ def test_store_replaces_corrupt_object(tmp_path: Path) -> None:
     obj.parent.mkdir(parents=True)
     obj.write_bytes(b"corrupt")
     assert cache.store_object(PAYLOAD, tmp_path).read_bytes() == PAYLOAD
+
+
+def test_nuclear_registry_entries_pinned() -> None:
+    for dataset_id, (sha, size, role) in NUCLEAR_DATASETS.items():
+        ds = DATASETS[dataset_id]
+        assert (ds.sha256, ds.bytes, ds.role) == (sha, size, role), dataset_id
+        assert ds.url.startswith("https://") and ds.method == "GET" and ds.post_body is None
+        assert ds.license and ds.citation and ds.parser and ds.description
+    assert DATASETS["endf-b8.0-protons"].url.endswith("/ENDF-B-VIII.0_protons.zip")
+    assert DATASETS["ame2020-mass"].url.endswith("/mass_1.mas20.txt")
+    assert {d.parser for d in DATASETS.values() if d.id in NUCLEAR_DATASETS} == {
+        "endf6",
+        "ame2020",
+        "exfor",
+        "geant_val_json",
+    }
+    assert all(DATASETS[i].license.startswith("CC BY 4.0") for i in ("exfor-d0356", "exfor-c1862"))
+    for ds in DATASETS.values():
+        assert ds.role in ROLES
+    assert DATASETS["nist-pstar-water-2005"].role == "evaluation"
+
+
+def test_dataset_role_validated_and_defaulted() -> None:
+    assert _fake_dataset().role == "exploratory"  # least privilege when unspecified
+    with pytest.raises(ValueError, match="role"):
+        Dataset(**{**_fake_dataset().__dict__, "role": "gold-standard"})
+
+
+def test_import_stores_object_and_manifest(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setitem(DATASETS, "fake", _fake_dataset())
+    src = tmp_path / "payload.bin"
+    src.write_bytes(PAYLOAD)
+    cdir = tmp_path / "cache"
+    path = acquire.import_file(src, "fake", cdir)
+    assert path == cdir / "objects" / PAYLOAD_SHA and path.read_bytes() == PAYLOAD
+    manifest = json.loads((cdir / "manifests" / "fake.json").read_text())
+    assert set(cache.MANIFEST_FIELDS) <= set(manifest)
+    assert manifest["method"] == "import" and manifest["post_body"] is None
+    assert manifest["source_path"] == str(src.resolve())
+    assert manifest["sha256"] == PAYLOAD_SHA and manifest["bytes"] == len(PAYLOAD)
+    assert manifest["retrieved_at"].endswith("+00:00")
+    assert cache.verify("fake", cdir) == path
+    # a cached dataset is served without network
+    assert acquire.fetch("fake", cdir, offline=True) == path
+
+
+def test_import_mismatch_raises_and_writes_nothing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setitem(DATASETS, "fake", _fake_dataset())
+    cdir = tmp_path / "cache"
+    same_size = tmp_path / "same_size.bin"
+    same_size.write_bytes(b"X" * len(PAYLOAD))  # right size, wrong hash
+    wrong_size = tmp_path / "wrong_size.bin"
+    wrong_size.write_bytes(PAYLOAD + b"extra")
+    for bad in (same_size, wrong_size):
+        with pytest.raises(cache.IntegrityError, match="nothing stored"):
+            acquire.import_file(bad, "fake", cdir)
+        assert not cdir.exists()
+    with pytest.raises(FileNotFoundError):
+        acquire.import_file(tmp_path / "missing", "fake", cdir)
+    with pytest.raises(KeyError):
+        acquire.import_file(same_size, "nope", cdir)
+    assert not cdir.exists()
+
+
+def test_cli_data_import(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setitem(DATASETS, "fake", _fake_dataset())
+    src = tmp_path / "payload.bin"
+    src.write_bytes(PAYLOAD)
+    bad = tmp_path / "bad.bin"
+    bad.write_bytes(b"Y" * len(PAYLOAD))
+    cdir = str(tmp_path / "cache")
+    assert main(["data", "import", str(bad), "--dataset", "fake", "--cache-dir", cdir]) == 1
+    assert not (tmp_path / "cache").exists()
+    assert main(["data", "import", str(src), "--dataset", "fake", "--cache-dir", cdir]) == 0
+    assert str(tmp_path / "cache" / "objects" / PAYLOAD_SHA) in capsys.readouterr().out
+    assert main(["data", "verify", "fake", "--cache-dir", cdir]) == 0
+    assert main(["data", "import", str(src), "--cache-dir", cdir]) == 2  # --dataset is required
+
+
+def test_exfor_manifest_matches_registry() -> None:
+    path = Path(__file__).resolve().parents[2] / "src" / "ionmc" / "data" / "exfor_manifest.json"
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    assert manifest["schema"] == "ionmc-exfor-manifest-1"
+    by_entry = {e["entry"]: e for e in manifest["entries"]}
+    assert set(by_entry) == {"D0356", "C1862"}
+    for entry in by_entry.values():
+        ds = DATASETS[entry["dataset_id"]]
+        assert entry["sha256"] == ds.sha256 and entry["role"] == ds.role
+        assert entry["subentries"] and all(len(s["sha256"]) == 64 for s in entry["subentries"])
+        assert all(s["subentry"].startswith(entry["entry"]) for s in entry["subentries"])
+    # roles follow the publication year (decision 0041: 1997 or later is evaluation)
+    assert [e["role"] for e in manifest["entries"] if e["year"] >= 1997] == ["evaluation"]
+    assert [e["role"] for e in manifest["entries"] if e["year"] < 1997] == ["exploratory"]
+    reactions = {
+        s["subentry"]: " ".join(s["reaction"]) for e in manifest["entries"] for s in e["subentries"]
+    }
+    assert "6-C-12(P,NON)" in reactions["D0356002"] and "20-CA-40(P,NON)" in reactions["D0356003"]
+    assert "6-C-12(P,NON)" in reactions["C1862002"] and "4-BE-9(P,NON)" in reactions["C1862003"]
+    assert "8-O-16(P,NON)" in reactions["C1862004"]
+    # identifiers and hashes only: no numeric cross-section values
+    assert "mb" not in json.dumps(manifest).lower().replace("embedded", "")

@@ -90,6 +90,20 @@ def _exp(x: float) -> float:
         return _INF
 
 
+def _sinh(x: float) -> float:
+    try:
+        return math.sinh(x)
+    except OverflowError:
+        return math.copysign(_INF, x)
+
+
+def _cosh(x: float) -> float:
+    try:
+        return math.cosh(x)
+    except OverflowError:
+        return _INF
+
+
 def _floor(x: float) -> float:
     """Warp ``floor`` returns a float (non-finite values pass through)."""
     return float(math.floor(x)) if math.isfinite(x) else x
@@ -108,6 +122,8 @@ wp = SimpleNamespace(
     pow=_pow,
     cos=math.cos,
     sin=math.sin,
+    sinh=_sinh,
+    cosh=_cosh,
     floor=_floor,
     abs=abs,
     min=min,
@@ -115,6 +131,7 @@ wp = SimpleNamespace(
     normalize=_normalize,
     constant=lambda x: x,
     float64=float,
+    array=lambda dtype=None, **_: object,
     types=SimpleNamespace(vector=_vector),
 )
 """Namespace substituted for ``warp`` when a factory is re-executed as a pure-Python twin."""

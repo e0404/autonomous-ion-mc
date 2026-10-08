@@ -44,6 +44,7 @@ Definitions made here where the frozen rows leave them open (all recorded in the
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -108,10 +109,12 @@ A13_BATCHES = 20
 A15_HISTORIES = {"warp-cpu": 200_000, "warp-cuda": 1_000_000}
 A15_BATCHES = 20
 A11_LV_K = 256
-A16_BASELINE = "a524f209"
+A16_BASELINE = "f3a1dd62ea2f57a3f4c07999935f317b3c044871"
 """Qualified-path baseline of row A16 (plan amendment 6): the latest v3/develop commit that
-intentionally changed the qualified transport path. a524f209 until V3-003D merges; the first
-commit of the next task sets it to the V3-003D merge commit, citing amendment 6."""
+intentionally changed the qualified transport path. It is the V3-003D merge commit f3a1dd62 (range
+table construction ``exact-loglog-quadrature-v1``); a task that intentionally changes the qualified
+path again leaves it unchanged, records the exception in ``A16_INTENDED_CHANGE`` of ``run_suite.py``
+and the first commit of the task after it advances this to that merge commit, citing amendment 6."""
 A16_SPECS = (
     "t1:python:float64",
     "t1:warp-cpu:float64",
@@ -1182,12 +1185,15 @@ def a16_gate(record: dict[str, Any], base: Any, cur: Any) -> dict[str, Any]:
 
 
 def step_a16(a: argparse.Namespace) -> int:
-    """Row A16 (plan amendment 6). (a) Tally neutrality, gating in both modes: the digests of the
-    tree under test with ``tallies = ()`` equal those with all tallies. (b) ``--mode regression``,
-    gating: the no-tally digests equal those of ``A16_BASELINE``. (c) ``--mode intended-change``
-    (V3-003D only): the differences against ``A16_BASELINE`` are reported, non-gating, and only if
-    the ``--intended-change-record`` (``A16_INTENDED_CHANGE`` of ``run_suite.py``) is verified
-    against the table identities of the two trees (:func:`verify_intended_change`)."""
+    """Row A16 (plan amendment 6), GATING in both modes. (a) Tally neutrality: the digests of the
+    tree under test with ``tallies = ()`` equal those with all tallies. (b) ``--mode regression``
+    (the default and the normal state, ``A16_INTENDED_CHANGE`` is ``None``): the no-tally digests
+    of the tree under test equal those of ``A16_BASELINE`` in every compared field. (c) ``--mode
+    intended-change`` (only while a task has recorded ``A16_INTENDED_CHANGE`` in ``run_suite.py``;
+    none at V3-005A): the differences against ``A16_BASELINE`` pass iff the record is verified
+    against its plan block, the source digest and the table identities of the two trees
+    (:func:`verify_intended_change`) and :func:`a16_gate` finds every differing field allowlisted
+    and within its bound. Non-finite values fail in both modes."""
     record = getattr(a, "intended_change_record", None)
     if a.mode == "intended-change" and not record:
         verify_intended_change(None, A16_BASELINE, None, None)  # fail closed before any run
@@ -1271,6 +1277,9 @@ def step_a16(a: argparse.Namespace) -> int:
         "baseline_commit": full,
         "baseline_ref": A16_BASELINE,
         "table_identity": identities,
+        "baseline_digests_sha256": hashlib.sha256(
+            json.dumps(baseline["digests"], sort_keys=True).encode()
+        ).hexdigest(),
         "intended_change": None
         if verified is None
         else {

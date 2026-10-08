@@ -1,0 +1,74 @@
+{
+  "schema": "ionmc-exfor-manifest-1",
+  "note": "Identifiers, roles and hashes only; no cross-section values. Roles per decision 0041: published 1997 or later = evaluation (informative row V1b); before 1997 = exploratory, report-only (shared lineage with ENDF/B-VIII.0 LA150). 'sha256' of an entry is the hash of the raw EXFOR master entry (equal to the registry hash of its dataset); a subentry hash covers its SUBENT..ENDSUBENT lines joined by LF with a final LF. EXFOR entries: CC BY 4.0; Otuka et al., Nucl. Data Sheets 120 (2014) 272.",
+  "entries": [
+    {
+      "entry": "D0356",
+      "dataset_id": "exfor-d0356",
+      "sha256": "2ef17fb10aaaeb5096dc92f9c3175f51f2252163eb4a83aa15669027371747bf",
+      "first_author": "A. Auce",
+      "reference": "PR/C 71 (2005) 064606",
+      "year": 2005,
+      "role": "evaluation",
+      "quantity": "proton-induced non-elastic (reaction) cross section, SIG",
+      "subentries": [
+        {
+          "subentry": "D0356002",
+          "reaction": [
+            "(6-C-12(P,NON),,SIG) Total reaction cross section"
+          ],
+          "sha256": "cb7edffffce198535f21fff0e29e9fdd7b89dee19cf587d411854b1ff2fded79"
+        },
+        {
+          "subentry": "D0356003",
+          "reaction": [
+            "(20-CA-40(P,NON),,SIG) Total reaction cross section"
+          ],
+          "sha256": "337135b642693a85c6061bafc00890dd0a3e7e8445be4c6d584f110b54f690fd"
+        }
+      ],
+      "omitted_subentries": [
+        "004",
+        "005",
+        "006"
+      ]
+    },
+    {
+      "entry": "C1862",
+      "dataset_id": "exfor-c1862",
+      "sha256": "157aca7e1b8f6cb6814a5fa99fa749823721af6829cbf84712a56fce159ae4ef",
+      "first_author": "I. Slaus",
+      "reference": "PR/C 12 (1975) 1093",
+      "year": 1975,
+      "role": "exploratory",
+      "quantity": "proton-induced non-elastic (reaction) cross section, SIG",
+      "subentries": [
+        {
+          "subentry": "C1862002",
+          "reaction": [
+            "1(6-C-12(P,NON),,SIG)",
+            "2(6-C-12(P,NON),,SIG)"
+          ],
+          "sha256": "6fe9984eea6897a68c79f9059766825d6f85fcf4a0a3b3ca48bff8df7635c40d"
+        },
+        {
+          "subentry": "C1862003",
+          "reaction": [
+            "(4-BE-9(P,NON),,SIG)"
+          ],
+          "sha256": "cd64787a461e32e06854fdb1c06f1afd69454293d71111ca96df9470f7f852ab"
+        },
+        {
+          "subentry": "C1862004",
+          "reaction": [
+            "(8-O-16(P,NON),,SIG)"
+          ],
+          "sha256": "03c640f675ebc7f8368640a8f0c5d334afa2682e78934ac41197177e344c1110"
+        }
+      ],
+      "omitted_subentries": [
+        "005"
+      ]
+    }
+  ]
+}

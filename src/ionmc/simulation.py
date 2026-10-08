@@ -61,11 +61,12 @@ from ionmc.transport.channels import (
     FE_F_MIN_EXPONENT,
     LOCAL_PIECE_COUNT_NAME,
     MAX_CHANNELS,
+    MAX_PARTICLES,
     MAX_SPECTRUM_BINS,
     PIECE_COUNT_NAME,
 )
 from ionmc.transport.run import run_transport
-from ionmc.transport.tally import ChannelRaw, RawTransport
+from ionmc.transport.tally import NUCLEAR_TALLY_NAMES, ChannelRaw, RawTransport
 
 
 @dataclass(frozen=True)
@@ -114,6 +115,28 @@ class TransportCounters:
 
 
 @dataclass(frozen=True)
+class NuclearTransportCounters(TransportCounters):
+    """The counters of a ``nuclear=True`` run (decision 0041 section 5): the transport-limit
+    counters plus the conditional block. ``majorant_violation``: candidates with
+    ``Sigma(E1) > S^(E0)``; ``nuclear_rejection_limit``: events that exhausted 64 attempts;
+    ``nuclear_conservation``: events whose ledger ``T1 = sum T_lab + T_r + binding + imbalance``
+    missed by more than 1e-9 T1 (should never fire). Any nonzero value invalidates the result."""
+
+    majorant_violation: int = 0
+    nuclear_rejection_limit: int = 0
+    nuclear_conservation: int = 0
+
+    def as_dict(self) -> dict[str, int]:
+        """The counters as a dictionary (with the nuclear block)."""
+        return {
+            **super().as_dict(),
+            "majorant_violation": self.majorant_violation,
+            "nuclear_rejection_limit": self.nuclear_rejection_limit,
+            "nuclear_conservation": self.nuclear_conservation,
+        }
+
+
+@dataclass(frozen=True)
 class EnergyBalance:
     """Energy bookkeeping summed over all histories [MeV] (not per primary).
 
@@ -135,6 +158,16 @@ class EnergyBalance:
     quantization_mev: tuple[float, ...] = ()
 
     @property
+    def nuclear_destinations_mev(self) -> float:
+        """Energy in the conditional nuclear destinations (0 here; see the nuclear subclass)."""
+        return 0.0
+
+    @property
+    def local_deposit_mev(self) -> float:
+        """Local deposits counted in the grid identity besides step deposit and cutoff (0 here)."""
+        return 0.0
+
+    @property
     def closure_residual_mev(self) -> float:
         """``initial`` minus the sum of all independently tallied destinations."""
         return self.initial_mev - (
@@ -143,6 +176,7 @@ class EnergyBalance:
             + self.escaped_mev
             + self.truncated_mev
             + self.unaccounted_mev
+            + self.nuclear_destinations_mev
         )
 
     @property
@@ -156,11 +190,39 @@ class EnergyBalance:
         """``|in_grid + quantization + outside - (step_deposit + cutoff)| / initial``."""
         if self.initial_mev == 0.0:
             return 0.0
-        total = self.step_deposit_mev + self.cutoff_mev
+        total = self.step_deposit_mev + self.cutoff_mev + self.local_deposit_mev
         quant = self.quantization_mev[grid] if self.quantization_mev else 0.0
         return abs(self.in_grid_mev[grid] + quant + self.outside_mev[grid] - total) / (
             self.initial_mev
         )
+
+
+@dataclass(frozen=True)
+class NuclearEnergyBalance(EnergyBalance):
+    """Energy balance of a ``nuclear=True`` run (decision 0041 section 5, amended 2026-10-07):
+    ``initial = step_deposit + cutoff + nuclear_local + escaped + nuclear_escaped_neutron +
+    nuclear_escaped_gamma + nuclear_binding + nuclear_imbalance + truncated + unaccounted`` and,
+    for every grid, ``in_grid + quantization + outside = step_deposit + cutoff + nuclear_local``.
+    ``nuclear_mev`` holds the six ``NUCLEAR_TALLY_NAMES`` (``nuclear_alpha_local`` is the alpha
+    part of ``nuclear_local``, not a separate destination; ``nuclear_binding`` and
+    ``nuclear_imbalance`` are signed)."""
+
+    nuclear_mev: Mapping[str, float] = field(default_factory=dict)
+
+    @property
+    def nuclear_destinations_mev(self) -> float:
+        n = self.nuclear_mev
+        return (
+            n["nuclear_local"]
+            + n["nuclear_escaped_neutron"]
+            + n["nuclear_escaped_gamma"]
+            + n["nuclear_binding"]
+            + n["nuclear_imbalance"]
+        )
+
+    @property
+    def local_deposit_mev(self) -> float:
+        return float(self.nuclear_mev["nuclear_local"])
 
 
 @dataclass(frozen=True, eq=False)
@@ -245,12 +307,18 @@ class Result:
         raise KeyError(f"no scoring grid named {name!r}")
 
 
-def _tally_capabilities() -> dict[str, Any]:
+def _tally_capabilities(nuclear: bool = False) -> dict[str, Any]:
     """The scoring-channel part of the capability report (decision 0040). Every entry is derived
     from the objects that enforce it (``CHANNEL_BACKENDS``, ``TALLY_QUANTITIES``, ``AXES``,
-    ``producible``), so the report cannot drift from the validation."""
-    pairs = sorted(producible(PROTON))
+    ``producible``), so the report cannot drift from the validation. With ``nuclear=True`` the
+    producible species, the generations and their note follow the nuclear engine (secondary
+    protons and deuterons, generation >= 1, are transported and accepted)."""
+    pairs = sorted(producible(PROTON, nuclear=nuclear))
     producible_generations = sorted({g for _, g in pairs})
+    # nuclear=True runs on the Python reference only (warp kernels are V3-005B): the tally
+    # backends are limited accordingly and the warp ones listed as deferred
+    tally_backends = ("python",) if nuclear else CHANNEL_BACKENDS
+    deferred = {"deferred_backends": {b: "V3-005B" for b in CHANNEL_BACKENDS if b != "python"}}
     return {
         "quantities": list(TALLY_QUANTITIES),
         "backends": {
@@ -258,8 +326,9 @@ def _tally_capabilities() -> dict[str, Any]:
                 "quantities": list(TALLY_QUANTITIES),
                 "available": b != "warp-cuda" or cuda_available(),
             }
-            for b in CHANNEL_BACKENDS
+            for b in tally_backends
         },
+        **(deferred if nuclear else {}),
         "producible": [{"species": n, "generation": g} for n, g in pairs],
         "generations": {
             "accepted": [
@@ -268,7 +337,12 @@ def _tally_capabilities() -> dict[str, Any]:
             "rejected": [
                 g for g in GENERATION_CHOICES if g != "all" and g not in producible_generations
             ],
-            "note": "secondary particles are not transported yet (V3-005A); no secondary species",
+            "note": (
+                "secondary protons and deuterons (generation >= 1) are transported and accepted "
+                "(nuclear=True, decision 0041)"
+                if nuclear
+                else "secondary particles are not transported yet (V3-005A); no secondary species"
+            ),
         },
         "let_medium": ["water"],
         "dose_reference": ["medium"],
@@ -291,19 +365,54 @@ def _tally_capabilities() -> dict[str, Any]:
         "automatic_channels": [PIECE_COUNT_NAME, LOCAL_PIECE_COUNT_NAME, EXCLUDED_CHANNEL_NAME],
         "max_channels": MAX_CHANNELS,
         "fail_closed": [
-            "unknown or unproducible species, generation 'secondary'",
+            "unknown or unproducible species"
+            if nuclear
+            else "unknown or unproducible species, generation 'secondary'",
             "let_medium other than water, dose_reference other than medium",
             "unknown grid or lookup, duplicate or reserved request names, unused lookups",
             "lookup species gaps, axis coverage gaps, sha256 mismatch, non-uniform tables or "
             "spectrum edges, negative or non-finite lookup values",
             "a quantum above the precision floor, accumulator memory above the budget",
-            "a backend without channels",
+            "a backend without channels"
+            + (" (warp backends with nuclear=True until V3-005B)" if nuclear else ""),
         ],
     }
 
 
-def capabilities() -> dict[str, Any]:
-    """What the engine supports (reported, not negotiated: unsupported requests raise)."""
+E_CUT_DEUTERON_DEFAULT_MEV = 4.0  # PhysicsOptions.e_cut_deuteron_mev (checked by a test)
+
+
+def _nuclear_capabilities() -> dict[str, Any]:
+    """The ``nuclear`` section of the capability report (only with ``nuclear=True``)."""
+    pairs = sorted(producible(PROTON, nuclear=True))
+    return {
+        "backends": ["python"],
+        "warp_backends": "not before V3-005B (rejected before transport)",
+        "source": "proton only; E0 + 6 sigma_E <= 250 MeV",
+        "stopping": "analytic Bethe (deuteron table needed); 'nist-star' is rejected",
+        "table": "derived nuclear-proton table by id (loaded, re-hashed, source pins checked)",
+        "elements": "every element of every material needs an evaluated or surrogate entry",
+        "producible": [{"species": n, "generation": g} for n, g in pairs],
+        "secondaries": ["proton", "deuteron"],
+        "local_deposit": "nuclear_local (alpha, residual recoil; generation = parent + 1)",
+        "deuteron_cutoff_mev_default": E_CUT_DEUTERON_DEFAULT_MEV,
+        "max_particles_per_history": MAX_PARTICLES,
+        "capacity": "B_L and the E bound follow decision 0041 section 5 (amended 2026-10-08)",
+    }
+
+
+def capabilities(nuclear: bool = False) -> dict[str, Any]:
+    """What the engine supports (reported, not negotiated: unsupported requests raise).
+    ``nuclear=True`` adds the ``nuclear`` section; the default report is unchanged."""
+    report = _capabilities_base()
+    if nuclear:
+        report["nuclear"] = _nuclear_capabilities()
+        report["physics"]["nuclear"] = True
+        report["tallies"] = _tally_capabilities(nuclear=True)
+    return report
+
+
+def _capabilities_base() -> dict[str, Any]:
     return {
         "species": ["proton"],
         "backends": {
@@ -607,7 +716,11 @@ def _grid_result(
 
 def _assemble(eff: EffectiveConfig, raw: RawTransport) -> Result:
     cfg = eff.requested
-    counters = TransportCounters(**raw.counters)
+    counters = (
+        NuclearTransportCounters(**raw.counters)
+        if eff.nuclear is not None
+        else TransportCounters(**raw.counters)
+    )
     ood = 0 if raw.channels is None else raw.channels.lookup_out_of_domain
     pbe = 0 if raw.channels is None else raw.channels.path_bound_exceeded
     valid = not counters.any_nonzero and ood == 0 and pbe == 0
@@ -623,7 +736,13 @@ def _assemble(eff: EffectiveConfig, raw: RawTransport) -> Result:
         for i, g in enumerate(cfg.scoring)
     )
     t = raw.tallies
-    balance = EnergyBalance(
+    balance_cls = EnergyBalance if eff.nuclear is None else NuclearEnergyBalance
+    extra: dict[str, Any] = (
+        {}
+        if eff.nuclear is None
+        else {"nuclear_mev": {k: float(t[k]) for k in NUCLEAR_TALLY_NAMES}}
+    )
+    balance = balance_cls(
         initial_mev=t["initial"],
         step_deposit_mev=t["step_deposit"],
         cutoff_mev=t["cutoff"],
@@ -633,6 +752,7 @@ def _assemble(eff: EffectiveConfig, raw: RawTransport) -> Result:
         in_grid_mev=tuple(float(a.sum()) for a in raw.edep_mev),
         outside_mev=tuple(float(x) for x in raw.outside_mev),
         quantization_mev=tuple(float(x) for x in raw.quantization_mev),
+        **extra,
     )
     return Result(
         valid=valid,
