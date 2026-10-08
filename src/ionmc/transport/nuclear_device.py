@@ -61,15 +61,13 @@ def pack_nuclear(
     materials: tuple[Material, ...],
     ame: dict[tuple[int, int], AmeEntry] | None = None,
     f_e: float = DEFAULT_F_E,
+    rows: Any = None,
 ) -> NuclearHost:
     """Pack ``table`` and the per-material rows of ``materials`` (``ame``: AME2020 entries for
-    the event constants; default: the verified file of the data cache)."""
+    the event constants; default: the process-cached verified file of the data cache; ``rows``: the
+    ``MaterialNuclear`` rows of ``materials``, default ``table.material_rows(m, f_e)``)."""
     if ame is None:
-        from ionmc.data import cache
-        from ionmc.data.ame import load_ame2020
-
-        path = cache.verify("ame2020-mass", cache.resolve_cache_dir(None))
-        ame = load_ame2020(path.read_text(encoding="ascii"))
+        ame = cached_ame2020()
     a = table.arrays
     grid = np.asarray(a["grid_e_mev"], dtype=np.float64)
     n = grid.size
@@ -81,7 +79,7 @@ def pack_nuclear(
         model = build_event_model(ame, int(info["z"]), int(info["a"]))
         tconst[t] = event_constants(model)
         m_res[t] = model.m_res_mev
-    rows = [table.material_rows(m, f_e) for m in materials]
+    rows = [table.material_rows(m, f_e) for m in materials] if rows is None else list(rows)
     n_m = max(len(rows), 1)
     kmax = max([len(r.target_index) for r in rows] + [1])
     sigma, win, end = (np.zeros((n_m, n)) for _ in range(3))
@@ -127,6 +125,28 @@ def pack_nuclear(
         arrays,
         dict(bounds_from_array(a["bounds"])),
     )
+
+
+_AME_CACHE: dict[str, dict[tuple[int, int], AmeEntry]] = {}
+_DEVICE_CACHE: dict[tuple[Any, ...], NuclearDevice] = {}
+_MAX_CACHED_DEVICES = 4
+
+
+def cached_ame2020() -> dict[tuple[int, int], AmeEntry]:
+    """AME2020 entries of the verified cache file, verified and parsed ONCE per process.
+
+    Key: the resolved cache directory (``cache.verify`` is content-addressed). The returned
+    mapping is shared: callers must not modify it."""
+    from ionmc.data import cache
+    from ionmc.data.ame import load_ame2020
+
+    cdir = cache.resolve_cache_dir(None)
+    key = str(cdir)
+    if key not in _AME_CACHE:
+        path = cache.verify("ame2020-mass", cdir)
+        _AME_CACHE.clear()  # one directory at a time: the cache never grows
+        _AME_CACHE[key] = load_ame2020(path.read_text(encoding="ascii"))
+    return _AME_CACHE[key]
 
 
 def _np_dtype(real: Any) -> Any:
@@ -195,9 +215,10 @@ class NuclearDevice:
         device: str,
         ame: dict[tuple[int, int], AmeEntry] | None = None,
         f_e: float = DEFAULT_F_E,
+        rows: Any = None,
     ) -> NuclearDevice:
         """Pack and upload ``table`` with the rows of ``materials`` (see :func:`pack_nuclear`)."""
-        return cls(pack_nuclear(table, materials, ame, f_e), real, device)
+        return cls(pack_nuclear(table, materials, ame, f_e, rows), real, device)
 
     def readback(self) -> dict[str, NDArray[Any]]:
         """The uploaded arrays copied back to the host (their device dtype)."""
@@ -208,4 +229,93 @@ class NuclearDevice:
         return _hash_arrays(self.table_id, self.readback())
 
 
-__all__ = ["NuclearDevice", "NuclearHost", "host_sha256", "pack_nuclear"]
+def _rows_digest(rows: Any) -> str:
+    """sha256 of the per-material rows that are packed (so that a device never outlives a change
+    of the
+    rows it was built from)."""
+    h = hashlib.sha256()
+    for r in rows:
+        for a in (r.target_index, r.sigma_mass_cm2_g, r.sigma_hat_window, r.sigma_hat_end,
+                  r.cum_sigma_mass_cm2_g):  # fmt: skip
+            arr = np.ascontiguousarray(a)
+            h.update(f"{arr.dtype.str}|{arr.shape}".encode())
+            h.update(arr.tobytes())
+    return h.hexdigest()
+
+
+def nuclear_device_key(
+    table: NuclearTable,
+    materials: tuple[Material, ...],
+    f_e: float,
+    real: Any,
+    device: str,
+    rows: Any = None,
+) -> tuple[Any, ...]:
+    """Cache key of a packed device.
+
+    The table identity (``table_id`` and the npz sha256 of its sidecar), the material names in
+    order, ``f_e``, the real dtype name, the device string and the digest of the packed material
+    rows (default ``table.material_rows``)."""
+    if rows is None:
+        rows = [table.material_rows(m, f_e) for m in materials]
+    return (
+        table.table_id,
+        table.info.get("npz_sha256"),
+        tuple(m.name for m in materials),
+        float(f_e),
+        np.dtype(_np_dtype(real)).name,
+        str(device),
+        _rows_digest(rows),
+    )
+
+
+def cached_nuclear_device(
+    table: NuclearTable,
+    materials: tuple[Material, ...],
+    *,
+    real: Any,
+    device: str,
+    f_e: float = DEFAULT_F_E,
+    rows: Any = None,
+) -> NuclearDevice:
+    """The packed :class:`NuclearDevice` of ``table`` / ``materials`` for ``real`` on ``device``.
+
+    Packed and uploaded ONCE per process and key (``nuclear_device_key``) and reused by every later
+    call (``rows``: the effective ``MaterialNuclear`` rows, which the key digests and the pack
+    uses). The device arrays are read-only for the kernels (the nuclear sampler only reads
+    ``grid``, ``lam``, ``edges``, ``rpre``, ``recoil``, ``tconst``, ``m_res``, ``sigma*``,
+    ``cum_sigma`` and the material rows); the per-run scratch arrays (stack, event buffers, traces,
+    counters) belong to ``NucData`` and are allocated per call by the driver. ``sha256`` is the
+    unchanged identity of the uploaded bytes. A different key adds an entry; at most
+    ``_MAX_CACHED_DEVICES`` are kept. Rebuilding the device for every ``run_range`` call (18000
+    times per V7 shard) caused intermittent native crashes from allocation churn."""
+    if rows is None:
+        rows = [table.material_rows(m, f_e) for m in materials]
+    key = nuclear_device_key(table, materials, f_e, real, device, rows)
+    dev = _DEVICE_CACHE.get(key)
+    if dev is None:
+        dev = NuclearDevice.from_table(
+            table, materials, real=real, device=device, f_e=f_e, rows=rows
+        )
+        while len(_DEVICE_CACHE) >= _MAX_CACHED_DEVICES:
+            _DEVICE_CACHE.pop(next(iter(_DEVICE_CACHE)))
+        _DEVICE_CACHE[key] = dev
+    return dev
+
+
+def clear_nuclear_device_cache() -> None:
+    """Drop the per-process caches of the packed device and of the parsed AME2020 table."""
+    _DEVICE_CACHE.clear()
+    _AME_CACHE.clear()
+
+
+__all__ = [
+    "NuclearDevice",
+    "NuclearHost",
+    "cached_ame2020",
+    "cached_nuclear_device",
+    "clear_nuclear_device_cache",
+    "host_sha256",
+    "nuclear_device_key",
+    "pack_nuclear",
+]

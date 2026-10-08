@@ -109,7 +109,7 @@ def _nuclear_inputs(
         TRACE_WIDTH,
         make_nuclear_support,
     )
-    from ionmc.transport.nuclear_device import NuclearDevice
+    from ionmc.transport.nuclear_device import cached_nuclear_device
 
     tab, nuc = eff.tables, eff.nuclear
     td = tab.deuteron
@@ -120,9 +120,9 @@ def _nuclear_inputs(
     for f in _TABLE_FIELDS:
         a, b = getattr(tp_w, f).numpy(), getattr(td_w, f).numpy()
         setattr(cat, f, wp.array(np.concatenate([a, b]), dtype=wp.float64, device=device))
-    dev = NuclearDevice.from_table(
-        nuc.table, eff.geometry.materials, real=real, device=device
-    )  # fmt: skip
+    dev = cached_nuclear_device(
+        nuc.table, eff.geometry.materials, real=real, device=device, rows=nuc.rows
+    )  # packed once per process
     ns = make_nuclear_support(real)
     nd = ns.nuc()
     nd.n_grid, nd.kmax, nd.n_mat = dev.n_grid, dev.kmax, len(eff.geometry.materials)

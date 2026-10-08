@@ -544,6 +544,7 @@ def _suite_steps_hr5(add, s5b, sc, out_dir, dirs, cuda):  # type: ignore[no-unty
 NUCLEAR_ENV = {
     "IONMC_REQUIRE_DATA": "1",
     "IONMC_CACHE_DIR": str(REPO / ".ionmc-cache" / "ionmc-data"),
+    "PYTHONFAULTHANDLER": "1",
 }
 """Environment of the ``lv5`` steps: the built nuclear table (decision 0041; ``steps_v5.TABLE_ID``)
 and the data it derives from are read from the hash-verified cache staged by the orchestrator."""
@@ -584,6 +585,11 @@ test is ``new_value``, and (iii) gates the comparison: only ``allowed_differing_
 differ, within ``bounds``; everything else must be bit-identical. It fails closed otherwise. Once
 that task is merged the baseline tree carries ``new_value``, so the next task's first commit sets
 this back to ``None`` and advances ``A16_BASELINE`` (the form above)."""
+
+STEP_BASE_ENV = {"PYTHONDONTWRITEBYTECODE": "1", "PYTHONFAULTHANDLER": "1"}
+"""Environment given to every step of every suite: no bytecode files and the Python fault handler, so
+that a native crash (SIGSEGV of a Warp kernel or allocation, V7 shard crash of the 2026-10-08 host runs)
+leaves a Python traceback in the step document."""
 
 KILL_GRACE_S = 10.0
 
@@ -947,7 +953,7 @@ def main(argv: list[str] | None = None) -> int:
     (out / "manifest.txt").write_text("".join(f"{name}\n" for name, _, _ in steps))
     env_base = dict(os.environ)
     env_base.setdefault("WARP_CACHE_PATH", str(out / "warp-cache"))
-    env_base["PYTHONDONTWRITEBYTECODE"] = "1"
+    env_base.update(STEP_BASE_ENV)
     env_base["PYTHONPATH"] = str(REPO / "src") + os.pathsep + env_base.get("PYTHONPATH", "")
     env_base["IONMC_RUN_SHA"] = sha
     env_base["IONMC_RUN_SUITE"] = args.suite

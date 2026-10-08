@@ -2081,3 +2081,15 @@ def test_lv5b_consumed_base_refused_and_new_base_accepted() -> None:
     seeds = [v5b.seed_of("v7-rep", k) for k in range(v5b.V7_SHARDS + 1)]
     lo = v5b.base.SEED_BASE + 1000 * v5b.R_INDEX["v7-rep"]
     assert seeds == list(range(lo, lo + 9)) and seeds[-1] < lo + 1000
+
+
+def test_every_step_gets_the_fault_handler_environment() -> None:
+    """PYTHONFAULTHANDLER=1 is in the base environment of every step (a native crash of a step, as
+    the V7 shard SIGSEGV of the 2026-10-08 host runs, then leaves a Python traceback) and in the
+    environment of every lv5b / hr5 step."""
+    mod = _load("run_suite")
+    assert mod.STEP_BASE_ENV["PYTHONFAULTHANDLER"] == "1"
+    assert mod.STEP_BASE_ENV["PYTHONDONTWRITEBYTECODE"] == "1"
+    for suite in ("lv5b", "hr5"):
+        for name, _cmd, env in mod.suite_steps(suite, 1, 0.5):
+            assert env.get("PYTHONFAULTHANDLER") == "1", (suite, name)
