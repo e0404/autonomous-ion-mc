@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "git_sha": "087a70a19c0b896008c762643d03f8f7854ebf4e",
+  "request_id": "IR-20261009-032741-C590CF",
+  "created_at_utc": "2026-10-09T03:27:41.708009+00:00",
+  "task_id": "V3-005B",
+  "category": "experiment-boundary",
+  "summary": "V3-005B (PR #82, head 2f5f16ab, base v3/develop) is complete, Codex-reviewed and CI-green, but its pre-registered qualification records two scientific failures and one inconclusive result: V5 absolute IDD vs TOPAS fails on peak/plateau (+12.5 % / +12.3 %) and the plateau-integrated nuclear on-off difference (−18.5 % / −14.7 %), pre-attributed to the hadronic elastic channel that ionmc does not yet have (D2, deferred to V3-005C by Amendment 7); V7 replicate coverage fails the pre-registered paired gate on the escaped-neutral scalar (0.6586, exact lower bound 0.6445 against 0.6464; the two other estimators pass both gates); the python-vs-warp nuclear_local profile parity is inconclusive by the frozen sparse-profile rule. EXPERIMENT.md requires that \"relevant validation must pass\" before integration into develop; plan Amendment 11 (frozen before the observation) requires that a failed V7 re-run be recorded as a scientific failure without a further base and handed to V3-005C; the protocol requires failed attempts to be preserved. The two readings of \"relevant validation\" are materially incompatible for a task whose implementation validation passes but whose scientific acceptance rows fail, and the repository documentation does not say which applies. The validation-manager merge gate refuses the merge with the (truthful) failed records, so the orchestrator cannot resolve this by itself.",
+  "investigation": {
+    "blocked_claim": "Integration of task V3-005B (PR #82, head 2f5f16abaf57ab9dbce3163cad1ff2d8d7ace4ad) into v3/develop: whether a task whose implementation validation passes but whose pre-registered scientific acceptance rows (V5, V7 replicate coverage) fail and are recorded per the frozen plan may be merged under EXPERIMENT.md 'relevant validation must pass'. No scientific claim is blocked; the ledger already records V1-MUST-005/013 independent-MC and V2-NUM uncertainty-coverage evidence as not established.",
+    "budget": "Spent on V3-005B: 30 task-branch commits, 22 Codex review rounds, two full lv5b qualification chains at bases 20441004 (consumed) and 20471004 plus hr5 (32 host-runner steps, about 7 h of single-process host time at the final SHA), one SIGSEGV root-cause fix. Remaining for this question: none needed; the decision is a protocol interpretation. V3-005C planning continues without repository integration until the answer arrives.",
+    "alternatives": [
+      "Record an additional passing 'integration-gate' validation limited to the implementation checks so that merge_task_pull_request accepts the merge — not done without authorisation, because the plan rows that fail are part of the task's declared validation and recording a passing gate could be read as circumventing the truthful failed records.",
+      "Re-scope or re-run the failed rows (further seed base, larger samples, relaxed tolerances) — forbidden: Amendment 11 fixes 'no further base' for V7 before the observation, and tolerances are frozen; a post-hoc amendment after observation is excluded by the plan.",
+      "Keep the branch unmerged and continue V3-005C on top of it — possible, but it stacks the elastic-channel work (new decision rows, V6 measured data) onto an unmerged 30-commit branch and delays integration of reviewed kernel code; the choice between this and merging is the operator's.",
+      "Wait for V3-005C to make V5/V7 pass and merge both together — same as the previous alternative with a longer horizon; V5 may still fail after elastic scattering (X1-X4 show elastic explains most, not all, of the peak deficit)."
+    ],
+    "attempts": [
+      {
+        "approach": "Read EXPERIMENT.md (Integration into develop, Permitted Human Intervention), AGENTS.md (Local validation gate), the frozen plan Amendments 6-13 and decision 0041 for a rule covering tasks with recorded scientific failures",
+        "outcome": "EXPERIMENT.md requires 'relevant validation must pass' without defining 'relevant' for pre-registered scientific rows; Amendment 11 requires recording the V7 failure and handing it to V3-005C; no text states whether such a task merges",
+        "artifact": "EXPERIMENT.md sections 'Integration into develop' and 'Permitted Human Intervention'; validation/plans/v3-005-acceptance.md Amendment 11; AGENTS.md 'Local validation gate'"
+      },
+      {
+        "approach": "Record every validation truthfully at the PR head and inspect the merge gate",
+        "outcome": "lv5b and hr5 recorded as failed, pytest-sandbox and ci recorded as passed; inspect_local_validation reports the gate as not passed (two failing records), so merge_task_pull_request cannot be used",
+        "artifact": "VAL-20261009-031623-77E7C6, VAL-20261009-031638-326695, VAL-20261009-032543-E47A52, VAL-20261009-032548-17B65D under validation/V3-005B/2f5f16abaf57ab9dbce3163cad1ff2d8d7ace4ad/"
+      },
+      {
+        "approach": "Complete the task deliverable independently of the answer: evidence write-up, Codex review at the final head, push, PR, CI",
+        "outcome": "Codex REVIEW-87590762dcfd4dacb808a4c64fcf529b pass with no findings; CI run 37878590336 success (docs, pre-commit, tests); PR #82 open against v3/develop",
+        "artifact": "https://github.com/e0404/autonomous-ion-mc/pull/82; validation/results/transport/README.md (lv5b/hr5 sections at 7aae5bb1); decisions/0041-proton-nuclear-interactions.md slice-B outcome"
+      }
+    ],
+    "pr": "https://github.com/e0404/autonomous-ion-mc/pull/82",
+    "head_sha": "2f5f16abaf57ab9dbce3163cad1ff2d8d7ace4ad",
+    "qualification_sha": "7aae5bb126924c27f0a61622384b23623c2877e3",
+    "failed_rows": {
+      "V5": "peak/plateau +12.46 %/+12.27 %, dIDD plateau integral -18.5 %/-14.7 % vs TOPAS; plateau, R80, total deposit pass; kappa not used; attribution to the absent hadronic elastic channel to be tested in V3-005C (exploratory X1-X4: removing g4h-elastic_HP from TOPAS moves the peak/EM-only ratio from 0.769 to 0.854; elastic alone gives 0.909; product 0.776)",
+      "V7-replicates": "escaped_neutral paired gate 0.6586, Clopper-Pearson lower 0.6445 < 0.6464; single gate passes; sec_p and nuclear_local pass both gates; no further base (Amendment 11)",
+      "V8-stat python:cpu64 nuclear_local": "inconclusive by the frozen T12 sparse-profile rule at 2.4e4 python histories; all CPU/CUDA pairs pass"
+    },
+    "execution_mode": "single-process diagnostic per operator directive; multiprocess rows deferred; summaries non-conformant by code"
+  },
+  "reason_autonomous_resolution_not_possible": "Interpretation A: the relevant validation for integrating the Warp nuclear kernels into develop is the implementation validation (sandbox pytest 810 passed at the head, VAL-20261009-032543-E47A52; CI run 37878590336 success, VAL-20261009-032548-17B65D; Codex REVIEW-87590762dcfd4dacb808a4c64fcf529b pass; V8 trajectory parity 1e-10, R1/A16 bit-identical regression, V2b, V7 scan/shift, V7 f32/f64 and all CPU/CUDA statistical-parity pairs pass), while the failed scientific rows are ledger facts (V1-MUST-005/013 independent-MC evidence and V2-NUM uncertainty-coverage evidence not established) carried into V3-005C; develop is not the release branch, and qualification/promotion to v3/main stays gated. Interpretation B: any failed acceptance row of a task's qualification suite blocks integration; the branch stays unmerged until V3-005C (elastic channel D2, V5/V6 re-run on a fresh base, pre-registered V7 re-test) makes the rows pass on top of this branch, or the rows are re-scoped — which would be a post-hoc amendment after observation and is forbidden by the plan. Scientific uncertainty is not the reason for this request; the integration rule is. Records: lv5b VAL-20261009-031623-77E7C6 (failed), hr5 VAL-20261009-031638-326695 (failed), pytest-sandbox and ci (passed), all keyed to 2f5f16ab; archives validation/results/transport/lv5b-7aae5bb-single-process.json and hr5-7aae5bb-single-process.json; narrative in validation/results/transport/README.md and decisions/0041 slice-B outcome.",
+  "requested_input": "One of: (1) \"Merge under interpretation A\": authorise merging PR #82 at head 2f5f16ab with the failed lv5b/hr5 records preserved. State whether the operator merges it or whether the orchestrator may record an additional passing \"integration-gate\" validation limited to the implementation validation (pytest, CI, Codex, parity/regression rows) so that merge_task_pull_request accepts the merge; the scientific records stay failed in either case. (2) \"Keep unmerged under interpretation B\": V3-005C continues on top of this task branch and PR #82 is merged only after V5 and V7 pass. (3) Any other instruction, e.g. a general rule for tasks whose pre-registered scientific rows fail, to be recorded in EXPERIMENT.md or AGENTS.md by a follow-up task. Decisions that depend on the answer: whether V3-005C (D2 p-p and p-nucleus elastic, V6 Gottschalk, V5/V6 re-run on a fresh base, pre-registered V7 re-test, larger python sample for the nuclear_local parity) branches from v3/develop or from task/v3-005b; the ledger status wording for V1-MUST-005/013 and V2-NUM. Planning of V3-005C (research and plan drafting, no repository integration) continues meanwhile.",
+  "decisions_or_tasks_blocked": "V3-005C branch point (v3/develop vs task/v3-005b); PR #82 merge; ledger wording for V1-MUST-005/013 and V2-NUM",
+  "status": "open",
+  "notification": {
+    "status": "sent",
+    "http_status": 200
+  }
+}
