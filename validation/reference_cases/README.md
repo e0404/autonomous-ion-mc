@@ -267,3 +267,27 @@ batch statistics (one seed each).
 | `x2-emonly-plus-elastic` | 20279002 | opt4, `g4h-elastic_HP` | EM-only plus elastic without inelastic |
 | `x3-no-ion-physics` | 20279003 | opt4, QGSP_BIC_HP, elastic_HP, decay | full minus `g4ion-binarycascade` and `g4stopping` (control) |
 | `x4-no-hp-neutrons` | 20279004 | opt4, `g4h-phy_QGSP_BIC`, elastic_HP, stopping, ion-binarycascade, decay | control; the full and EM-only inputs already share every EM setting (same `g4em-standard_opt4`, `CutForAllParticles = 0.05 mm`, no step limits), so X4 swaps `QGSP_BIC_HP` for `QGSP_BIC` (no HP neutrons) |
+
+**Outcomes (exploratory, not evidence).** Derived locally from `work/idd_dose.csv` of each materialized run with the
+`compare_idd_v5.py` loader and `curve_metrics` (0.5 mm IDD in MeV cm⁻¹ per primary; plateau = mean over 20–60 mm;
+peak depth is the bin centre; total = integral over the 320 mm grid, MeV per primary; R80 distal, interpolated).
+Baselines are the committed frozen runs `proton-water-150mev-idd-r20[-emonly]-seed{1,2,3}` (REF-cec79def…, REF-e4f252d8…,
+REF-f306bdc1… full; REF-7072862d…, REF-278f82f0…, REF-b9387263… EM-only), seed-averaged curves.
+
+| Case (run id) | Peak | Peak depth (mm) | Plateau | Peak/plateau | R80 (mm) | Total (MeV) | Peak / EM-only | Plateau / EM-only | Total / EM-only |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| EM-only (3 seeds) | 37.371 | 157.25 | 6.0891 | 6.137 | 158.818 | 149.9996 | 1 | 1 | 1 |
+| full (3 seeds) | 28.732 | 156.75 | 6.5271 | 4.402 | 158.636 | 144.905 | 0.7688 | 1.0719 | 0.9660 |
+| X1 REF-e1fcaab4cb3a1d312991-36cabeda | 31.899 | 157.25 | 6.4270 | 4.963 | 158.776 | 144.390 | 0.8536 | 1.0555 | 0.9626 |
+| X2 REF-1a17d04f66bf3f4861be-e248591a | 33.975 | 156.75 | 6.1922 | 5.487 | 158.608 | 150.002 | 0.9091 | 1.0169 | 1.0000 |
+| X3 REF-fb22060d63a6943329fc-ded17160 | 28.699 | 156.75 | 6.5302 | 4.395 | 158.640 | 144.906 | 0.7679 | 1.0724 | 0.9660 |
+| X4 REF-52f701f35ff7d797669e-b6824a24 | 28.778 | 156.75 | 6.5244 | 4.411 | 158.625 | 144.938 | 0.7701 | 1.0715 | 0.9663 |
+
+Per-seed spread of the baselines (sample standard deviation, n = 3): full peak 0.106 (per-seed peak/EM-only 0.7655,
+0.7706, 0.7703), plateau 0.010, peak/plateau 0.017, R80 0.003 mm, total 0.028 MeV; EM-only peak 0.061, plateau 0.0013,
+peak/plateau 0.011, R80 0.015 mm, total 0.0007 MeV. Peak depth is 156.75 mm (full) and 157.25 mm (EM-only) in every
+seed, one bin apart. Reading: removing hadronic elastic (X1) restores 0.085 of the 0.231 peak deficit of the full
+case, and elastic alone without inelastic (X2) lowers the EM-only peak by 0.091; the product X1×X2 = 0.776 is close to
+the full value 0.769 (multiplicative reading only, X1 and X2 are single seeds, so the seed spread of about 0.003 in
+the ratio applies). X3 and X4 are indistinguishable from full within that spread. Elastic scattering is thus a large
+but not the only contributor to the peak deficit; the attribution is to be tested by V3-005C.

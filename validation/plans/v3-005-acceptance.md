@@ -95,6 +95,21 @@ A summary carrying them is `pass` only for the executed rows and is `conformant:
 | V2 (100/150/200), V2-probe | `lv5-b84fdf3-single-process.json` | b84fdf3 | 20421004 | pass (imported partials → non-conformant by code, Amendment 5) |
 | V3-LV, V4, V4b, X1, E1 | `lv5-b84fdf3-single-process.json` | b84fdf3 | 20421004 | pass (E1 exploratory); non-conformant by code (diagnostic mode) |
 | V2b, V5–V8 | slice B | — | declared in B | — |
+| V8-LV, R1-nuc, V5, V2b, V7 (scan, shift, replicates) — consumed base | `lv5b-b40d812-single-process.json` | b40d812 | 20441004 (consumed, Amendment 11) | not evidence: V7 replicate step failed under the pooled rule (232/360 = 0.644); V5 fail (peak/plateau +12.6 % / +11.9 %, ΔIDD −20.8 % / −13.4 % vs TOPAS; total deposit, plateau, R80 pass; κ not used); other executed steps pass |
+| V8-LV, R1-nuc | `lv5b-7aae5bb-single-process.json` (steps 02, 03) | 7aae5bb | 20471004 | pass (trajectory parity: maximum continuous difference 0.0, tolerance 1e-10; A16 bit-identical, empty intended-change set); non-conformant by code (diagnostic mode) |
+| V5 | `lv5b-7aae5bb-single-process.json` (steps 04–08) | 7aae5bb | 20471004 | **fail** vs TOPAS: peak/plateau +12.5 % / +12.3 %, ΔIDD −18.5 % / −14.7 %; plateau, R80, total deposit (−0.30 % / −0.54 %) pass; κ not used; attributed to the absent hadronic elastic channel (V3-005C); imported partials → non-conformant by code |
+| V2b | `lv5b-7aae5bb-single-process.json` (steps 09–11) | 7aae5bb | 20471004 | pass (max abs diff 8.7e-6 vs 2e-3, σ_Δ 1.4e-5 vs 7e-4, 1e6 per variant); imported partials → non-conformant by code |
+| V7 N-scan, grid shift/refinement, f32/f64 (warp-cpu) | `lv5b-7aae5bb-single-process.json` (steps 12, 13) | 7aae5bb | 20471004 | pass (slopes −0.495 / −0.518 / −0.480; shift 5.4e-4, refinement 1.4e-13) |
+| V7 replicate coverage (Amendment 13) | `lv5b-7aae5bb-single-process.json` (steps 14–24) | 7aae5bb | 20471004 | **fail**: `escaped_neutral` paired gate (Clopper–Pearson lower bound 0.6445 < 0.6464; single gate passes); `sec_p` and `nuclear_local` pass both gates; calibration step 23 pass; no further base (Amendment 11); imported partials → non-conformant by code |
+| 1-vs-N worker partition | `lv5b-7aae5bb-single-process.json` (step 25) | 7aae5bb | — | deferred (single-process directive) |
+| V8 statistical parity | `hr5-7aae5bb-single-process.json` (steps 01–06) | 7aae5bb | 20451004 | all CPU/CUDA pairs pass; python:cpu64 `idd`, `sec_p` pass; python:cpu64 `nuc_local` **inconclusive** (T12 sparse-profile rule: 60/161 bins supported, hull mass 0.259 < 0.5); imported partials → non-conformant by code |
+| V7 f32 vs f64 (CUDA) | `hr5-7aae5bb-single-process.json` (step 07) | 7aae5bb | 20451004 | pass (\|z\| ≤ 2.55 of 3.0) |
+| V6, D2, E1-B | — | — | — | re-assigned to V3-005C (Amendment 7(a)) |
+
+**Execution of Amendments 11–13 (recorded 2026-10-09; the amendment texts above are unchanged).**
+- Amendment 11: the re-run at base 20471004 was executed at head 7aae5bb (archive `lv5b-7aae5bb-single-process.json`) with the replicate design that Amendment 13 later fixed; row V7 failed there, so no further base is taken and the failure is handed to V3-005C as declared.
+- Amendment 12: superseded by Amendment 13 before any V7 observation at 20471004; its 300-replicate rule was never executed.
+- Amendment 13: executed at 7aae5bb (steps 14–24, 7200 replicates, calibration step passed); `sec_p` and `nuclear_local` passed both gates, `escaped_neutral` failed the paired gate (m 0.6586, lower bound 0.6445 < 0.6464) and passed the single-interval gate, so row V7 fails.
 
 ## Amendments
 
