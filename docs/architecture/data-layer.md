@@ -213,7 +213,7 @@ exact P_accept < 0.5 and on sigma > 0 without yields.
 
 `ionmc data build elastic-proton` writes `derived/elastic-proton-<id>.npz` and `.json` from the
 hash-pinned LA150 proton sublibrary, AME2020 and the Geant4 11.4.2 Barashenkov/BGG sources (registry
-ids `geant4-*-11.4.2`, `pdg-rpp2022-pp-elastic`). Git holds only the registry entries, the EXFOR
+ids `geant4-*-11.4.2`; the PDG p-p compilation `pdg-rpp2022-pp-elastic` has role "evaluation" and is not a construction input). Git holds only the registry entries, the EXFOR
 manifest and `src/ionmc/data/elastic_table_pin.json` (id and hashes); the table is not in Git. This
 step builds data only: no transport kernel uses the table yet (C3 to C5).
 
@@ -236,11 +236,31 @@ step builds data only: no transport kernel uses the table yet (C3 to C5).
   `NI = sigma_e - sigma_c` over `|mu_CM| <= 0.96` (theta_CM >= 16.26 deg). `sigma` is the
   half-sphere integral (`2 pi`, each event of identical protons once); the edges cover the
   symmetric range [-0.96, 0.96]. `e_min_pp` (12.53 MeV) is the lowest node from which every node and
-  midpoint has a non-negative density, `sigma = 0` below it, the first-negative diagnostics are in
-  the JSON. Above 150 MeV `sigma = sigma_NI(150) S(E)/S(150)` with the BGG p-p systematics and the
-  shape fixed.
+  midpoint has a non-negative density, `sigma = 0` below it. The frozen row P6 (negativity) FAILS
+  for H-1 below `e_min_pp`; this is kept as a recorded failure and not converted into a pass:
+  `negative_density_below_e_min_pp: true` with every negative node/midpoint and its value
+  (`first_negative_nodes`), while `e_min_pp` and `no_negative_density_in_domain: true` record the
+  separate revised-domain check (the qualification gate). Above 150 MeV `sigma = sigma_NI(150)
+  S(E)/S(150)` with the Geant4 `G4HadronNucleonXsc` p-p formula only (no PDG data enter the table
+  or its identity) and the shape fixed.
+- **Domain (declared limitation).** The JSON `elastic_domain` block gives `[e_min, 250]` MeV per target (H-1: `E_min,pp`;
+  p+A: `e_min_shape`) and `sigma_bgg_below_domain_max_mb` per target; `ElasticTable.elastic_domain()`
+  returns a dict, the loader asserts `sigma = 0` and `valid = 0` below it, the npz carries
+  `target_e_min_mev` and the packed `ElasticDevice` the fields `e_min_shape` and `e_min_pp`, so that
+  the transport can count `elastic_below_domain` and `pp_below_domain` crossings. The builder also
+  fails if `E_min,pp` exceeds 15 MeV. P6-D is evaluated in a pass separate from the one that fixes
+  `E_min,pp`. The builder fails (`BuildError`) if any
+  `e_min_shape` exceeds 10 MeV. The JSON records the NI cross section above the cut at 15 and 20
+  MeV (`sigma_ni_above_cut_mb`), the S-wave unitarity bound on the omitted p-p events per 150 MeV
+  history in water (`pp_omitted_events_bound_per_history_150mev`, sigma <= 2 pi 0.96/k_CM^2, a bound
+  not a reconstruction) and the p+O estimate below `e_min_shape(O-16)` with the BGG `sigma_el`
+  (`pa_omitted_events_per_history_150mev`). `model_revisions` references
+  Amendment 15.
 - **Findings and report-only data.** The builder asserts, fail closed, that the LA150 O-16 MT2 is a
-  numerical copy of C-12 from 24 MeV (recorded) and never uses LAW=5 data other than H-1 as a
+  numerical copy of C-12 from 24 MeV (recorded), that the O-16 MF3/MT5 sigma_nonel (the input of the
+  disk radius) is not a copy of C-12's (`o16_mt5_copy_check`: relative difference above 1e-3
+  at more than 50 % of the shared nodes and a coefficient of variation of the O/C ratio above 1e-3;
+  recorded as `o16_mt5_finding` with the per-product MF6 yield comparison) and never uses LAW=5 data other than H-1 as a
   construction input. The LA150 C-12/N-14/Ca-40 LTP=12 NI densities (ratio interpolation in mu) at
   20-40 deg and 50/100/150 MeV are stored next to the model values (row X-ENDF, report-only).
   `sigma_el` at 10 MeV per target is recorded for the comparison with the decision-0041 planning

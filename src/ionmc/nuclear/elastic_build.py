@@ -37,16 +37,21 @@ H-1
     cover
     the symmetric range [-0.96, 0.96] of the same density. ``e_min_pp`` = the lowest grid node from
     which every node and node midpoint has a non-negative density over |mu| <= 0.96 (decision 0041,
-    ratified); ``sigma = 0`` below it, the value and the first-negative diagnostics are recorded.
+    ratified); ``sigma = 0`` below it. The frozen row P6 FAILS for H-1 below ``e_min_pp``: this is
+    kept as a recorded failure (``p6_negative_density_found``, all negative nodes/midpoints with
+    their values), the revised-domain check (``no_negative_density_in_domain``) is separate.
     150-250 MeV: "sigma(E) = sigma_NI(150) S(E)/S(150), with S = 1.0115 (23 + 50 sqrt(ln(0.73/p)^7))
-    mb (BGG/PDG systematics, p_lab in GeV/c). The shape is held fixed in mu_CM."
+    mb (Geant4 ``G4HadronNucleonXsc`` p-p formula, p_lab in GeV/c; no PDG data enter). The shape is
+    held fixed in mu_CM."
 
 X-ENDF (report-only) and the O-16 finding
     LA150 C-12/N-14/Ca-40 LTP=12 NI densities (ratio interpolation in mu) at 20-40 deg for
     50/100/150
     MeV are stored for the cross-check row. The builder asserts, fail closed, that the O-16 MT2 data
-    are a numerical copy of C-12 above 24 MeV (decision 0041 data finding) and never uses LAW=5 data
-    of any target except H-1 as a construction input.
+    are a numerical copy of C-12 above 24 MeV (decision 0041 data finding), that the LA150 O-16
+    MF3/MT5 sigma_nonel is NOT a copy of C-12's (``o16_mt5_copy_check``: the R rule and the
+    nuclear table use MT5) and never uses LAW=5 data of any target except H-1 as a construction
+    input.
 """
 
 from __future__ import annotations
@@ -81,8 +86,8 @@ from ionmc.nuclear.build import (
     write_npz_deterministic,
 )
 
-BUILDER_VERSION = "ionmc-elastic-proton-builder-1"
-SCHEMA = "ionmc-elastic-proton-table-1"
+BUILDER_VERSION = "ionmc-elastic-proton-builder-2"
+SCHEMA = "ionmc-elastic-proton-table-2"
 SOURCE_IDS = (
     "endf-b8.0-protons",
     "ame2020-mass",
@@ -93,8 +98,9 @@ SOURCE_IDS = (
     "geant4-g4hadronnucleonxsc-cc-11.4.2",
     "geant4-g4nuclearradii-cc-11.4.2",
     "geant4-g4isotopelist-hh-11.4.2",
-    "pdg-rpp2022-pp-elastic",
 )
+"""Construction sources (Amendment 15 (c)): S(E) uses the Geant4 p-p formula only; the PDG p-p
+compilation is the report-only V10 comparison and is not a source of this table."""
 E_MAX_MEV = 250.0
 E_ANCHOR_MEV = 150.0
 N_Q = 256
@@ -102,7 +108,20 @@ HBARC = 197.3269804
 MP = 938.27208816
 PP_TARGET = "H-1"
 TARGET_NAMES = (PP_TARGET, *(t.name for t in TARGETS))
-QUALIFICATION_FIELDS = ("no_negative_density", "o16_copy_asserted", "shape_normalised")
+QUALIFICATION_FIELDS = ("no_negative_density_in_domain", "o16_mt5_not_c12_copy", "shape_normalised")
+E_MIN_PP_LIMIT_MEV = 15.0
+"""The builder fails if E_min,pp exceeds this (Amendment 15 (a)3)."""
+E_MIN_SHAPE_LIMIT_MEV = 10.0
+"""The builder fails if any target's ``e_min_shape`` exceeds this (declared low-energy limitation
+of p + A elastic scattering, Amendment 15 (b)5)."""
+N_H_WATER_CM3 = 6.69e22
+N_O_WATER_CM3 = 3.34e22
+MODEL_REVISIONS = (
+    "Amendment 15: P6 negativity of H-1 below E_min,pp is a recorded failure of the "
+    "frozen row, not a pass; the table domain is revised to [E_min,pp, 250] MeV (p-p) and "
+    "[e_min_shape(target), 250] MeV (p + A); S(E) uses the Geant4 p-p formula only (PDG data "
+    "are report-only); the o16_mt5_copy_check is implemented."
+)
 XENDF_TARGETS = ("C-12", "N-14", "Ca-40")
 XENDF_ENERGIES_MEV = (50.0, 100.0, 150.0)
 XENDF_THETA_DEG = tuple(float(x) for x in np.arange(20.0, 40.0001, 2.5))
@@ -287,6 +306,109 @@ def o16_copy_finding(c12: endf6.EndfMaterial, o16: endf6.EndfMaterial) -> dict[s
     return out
 
 
+def o16_mt5_copy_check(c12: endf6.EndfMaterial, o16: endf6.EndfMaterial) -> dict[str, Any]:
+    """The LA150 O-16 MF3/MT5 sigma_nonel (the input of the black-disk radius and of the nuclear
+    table) must not be a numerical copy of C-12's, as the MT2 data are. On the energy nodes shared
+    by both MF3/MT5 tabulations (both sigma > 0) the relative difference ``|s_C - s_O| / max`` must
+    exceed 1e-3 at more than 50 % of the nodes; the MF6/MT5 summed product yields are compared on
+    the same nodes and recorded when both materials are parseable. In addition the coefficient of
+    variation of the ratio ``sigma_O / sigma_C`` over the nodes must exceed 1e-3 (a scaled copy has
+    a constant ratio). ``BuildError`` if either condition fails (fail closed)."""
+    tc, to = c12.cross_section(5), o16.cross_section(5)
+    shared = np.intersect1d(tc.x, to.x)
+    vc = np.array([float(tc.interpolate(float(e))[0]) for e in shared])
+    vo = np.array([float(to.interpolate(float(e))[0]) for e in shared])
+    keep = (vc > 0.0) | (vo > 0.0)
+    if not np.any(keep):
+        raise BuildError("O-16 and C-12 MF3/MT5 share no node with a positive sigma_nonel")
+    rel = np.abs(vc[keep] - vo[keep]) / np.maximum(vc[keep], vo[keep])
+    frac = float(np.mean(rel > REL_DIFF_THRESHOLD))
+    ratio = vo[keep] / np.where(vc[keep] > 0.0, vc[keep], np.nan)
+    ratio = ratio[np.isfinite(ratio)]
+    cv = float(np.std(ratio) / np.mean(ratio)) if ratio.size > 1 else 0.0
+    out: dict[str, Any] = {
+        "nodes_compared": int(rel.size), "fraction_rel_diff_gt_1e-3": frac,
+        "max_relative_difference": float(rel.max()), "min_relative_difference": float(rel.min()),
+        "median_relative_difference": float(np.median(rel)),
+        "threshold": REL_DIFF_THRESHOLD, "required_fraction_gt": 0.5,
+        "ratio_o16_over_c12_cv": cv, "required_cv_gt": REL_DIFF_THRESHOLD,
+        "o16_mt5_not_c12_copy": bool(frac > 0.5 and cv > REL_DIFF_THRESHOLD),
+    }  # fmt: skip
+    try:  # report-only per-product comparison (n, p, d, alpha, gamma), not a gate
+        yc, yo = _mf6_yields(c12, shared[keep]), _mf6_yields(o16, shared[keep])
+        per: dict[str, Any] = {}
+        for zap, name in ((1, "n"), (1001, "p"), (1002, "d"), (2004, "alpha"), (0, "gamma")):
+            if zap not in yc or zap not in yo or not (yc[zap].mean() > 0 or yo[zap].mean() > 0):
+                per[name] = None
+                continue
+            r6 = np.abs(yc[zap] - yo[zap]) / np.maximum(np.maximum(yc[zap], yo[zap]), 1e-30)
+            per[name] = {
+                "fraction_rel_diff_gt_1e-3": float(np.mean(r6 > REL_DIFF_THRESHOLD)),
+                "max_relative_difference": float(r6.max()),
+                "min_relative_difference": float(r6.min()),
+            }
+        out["mf6_yields_per_product"] = per
+    except (endf6.EndfError, KeyError, ValueError):
+        out["mf6_yields_per_product"] = None
+    if not out["o16_mt5_not_c12_copy"]:
+        raise BuildError(f"LA150 O-16 MF3/MT5 looks like a copy of C-12 (fail closed): {out}")
+    return out
+
+
+REL_DIFF_THRESHOLD = 1.0e-3
+
+
+def _mf6_yields(
+    mat: endf6.EndfMaterial, e_ev: NDArray[np.float64]
+) -> dict[int, NDArray[np.float64]]:
+    """MF6/MT5 yield of each product (by ZAP) at ``e_ev`` (clipped to each yield's range)."""
+    out: dict[int, NDArray[np.float64]] = {}
+    for prod in mat.products(5).products:
+        yt = prod.yield_
+        v = np.array([float(yt.interpolate(float(min(max(e, yt.x[0]), yt.x[-1])))[0])
+                      for e in e_ev])  # fmt: skip
+        out[prod.zap] = out.get(prod.zap, 0.0) + v
+    return out
+
+
+def check_domain_limit(name: str, e_min_shape_mev: float) -> None:
+    """``BuildError`` if a p + A target's ``e_min_shape`` exceeds :data:`E_MIN_SHAPE_LIMIT_MEV`."""
+    if e_min_shape_mev > E_MIN_SHAPE_LIMIT_MEV:
+        raise BuildError(
+            f"{name}: e_min_shape = {e_min_shape_mev:.4g} MeV exceeds the declared limitation "
+            f"bound {E_MIN_SHAPE_LIMIT_MEV} MeV"
+        )
+
+
+def residual_range_g_cm2(e_mev: float) -> float:
+    """CSDA range [g/cm2] of a proton of ``e_mev`` in liquid water (project Bethe table)."""
+    return float(_water_tables().range_g_cm2(0, e_mev))
+
+
+def _water_tables() -> Any:
+    from ionmc.materials import WATER
+    from ionmc.physics.projectiles import PROTON
+    from ionmc.physics.stopping import BetheStoppingSource
+    from ionmc.transport.tables import TransportTables
+
+    return TransportTables.from_stopping_tables([BetheStoppingSource().table(WATER, PROTON)])
+
+
+def omitted_events_per_history(
+    e_cut_mev: float, n_cm3: float, sigma_mb: Callable[[float], float], e_lo_mev: float = 1.0
+) -> float:
+    """Expected number of omitted elastic events per history of a proton that slows down through
+    ``[0, e_cut]`` in liquid water: ``n int sigma(E) dx`` with ``dx = dE / S(E)`` (project Bethe
+    stopping table, density 1 g/cm3) over ``[e_lo, e_cut]`` plus, below ``e_lo``, ``sigma(e_lo)``
+    held constant over the residual range ``R(e_lo)``. Nuclear attrition is ignored (<< 1)."""
+    tab = _water_tables()
+    e = np.linspace(e_lo_mev, e_cut_mev, 4001)
+    f = np.array([sigma_mb(float(x)) * 1e-27 / tab.stopping_mass(0, float(x)) for x in e])
+    integral = float(np.sum(0.5 * (f[1:] + f[:-1]) * np.diff(e)))
+    tail = sigma_mb(e_lo_mev) * 1e-27 * tab.range_g_cm2(0, e_lo_mev)
+    return float(n_cm3 * (integral + tail))
+
+
 def reject_endf_mt2_construction(target: str) -> None:
     """C1-ext: the LA150 LAW=5 data of any target other than H-1 may not be a construction input
     (O-16 is a C-12 copy; C-12/N-14/Ca-40 are report-only cross-checks)."""
@@ -404,6 +526,62 @@ def _shape_norm_deviation(r_fm: float, pcm_mev: float, n_s: int) -> float:
     return abs(out[0] / out[1] - 1.0)
 
 
+def pp_scan(
+    grid: NDArray[np.float64],
+    min_node: NDArray[np.float64],
+    min_mid: NDArray[np.float64],
+    i150: int,
+) -> tuple[int, list[dict[str, Any]]]:
+    """Pass 1 of P6/P6-D: ``(k_pp, negative points)``. ``k_pp`` is the lowest node from which every
+    node and node midpoint up to ``grid[i150]`` has a non-negative density; the points list holds
+    EVERY negative node/midpoint (the recorded failure of the frozen P6 item (4)). ``BuildError``
+    if ``E_min,pp`` exceeds ``i150`` or :data:`E_MIN_PP_LIMIT_MEV`."""
+    ok = (min_node[: i150 + 1] >= 0.0) & (np.append(min_mid[:i150], np.inf) >= 0.0)
+    bad = np.nonzero(~ok)[0]
+    k_pp = int(bad.max()) + 1 if bad.size else 0
+    if k_pp > i150:
+        raise BuildError("no energy up to 150 MeV has a non-negative p-p density")
+    if float(grid[k_pp]) > E_MIN_PP_LIMIT_MEV:
+        raise BuildError(
+            f"E_min,pp = {float(grid[k_pp]):.4g} MeV exceeds the bound {E_MIN_PP_LIMIT_MEV} MeV"
+        )
+    pts: list[dict[str, Any]] = [
+        {"kind": "node", "e_mev": float(grid[k]), "min_density_mb_sr": 1e3 * float(min_node[k])}
+        for k in range(i150 + 1) if min_node[k] < 0.0
+    ] + [
+        {"kind": "midpoint", "e_mev": 0.5 * float(grid[k] + grid[k + 1]),
+         "min_density_mb_sr": 1e3 * float(min_mid[k])}
+        for k in range(i150) if min_mid[k] < 0.0
+    ]  # fmt: skip
+    pts.sort(key=lambda r: float(r["e_mev"]))
+    return k_pp, pts
+
+
+def verify_pp_domain(
+    grid: NDArray[np.float64], k_pp: int, i150: int, check: Callable[[float], float]
+) -> dict[str, Any]:
+    """Pass 2 of P6-D (1), separate from the pass that fixed ``k_pp`` (the density is re-evaluated
+    by ``check(e_mev) -> min density over |mu| <= 0.96`` on a finer mu grid): every node and node
+    midpoint in ``[E_min,pp, 150]`` MeV must be non-negative, else ``BuildError``."""
+    pts = [float(grid[k]) for k in range(k_pp, i150 + 1)]
+    pts += [0.5 * float(grid[k] + grid[k + 1]) for k in range(k_pp, i150)]
+    worst = min(float(check(e)) for e in pts)
+    if worst < 0.0:
+        raise BuildError(
+            f"P6-D: a negative p-p density ({1e3 * worst:.3g} mb/sr) at or above E_min,pp = "
+            f"{float(grid[k_pp]):.4g} MeV"
+        )
+    return {"n_points_checked": len(pts), "min_density_mb_sr": 1e3 * worst}
+
+
+def unitarity_bound_sigma_mb(e_mev: float) -> float:
+    """S-wave unitarity bound on the transported p-p cross section, ``dsigma/dOmega_CM <= 1/k^2``
+    over the half sphere ``mu_CM <= 0.96``:
+    ``2 pi 0.96 / k_CM^2`` [mb] (Amendment 15 (a)2 (iii))."""
+    pcm, _ = kinematics_cm(e_mev, MP)
+    return 2.0 * math.pi * law5.MU_CUT_PP * (HBARC / pcm) ** 2 * 10.0
+
+
 def build_elastic_proton(
     cache_dir: str | Path | None = None,
     options: ElasticBuildOptions | None = None,
@@ -432,6 +610,8 @@ def build_elastic_proton(
     tts = {t.name: TargetTables(t, mats[t.name], models[t.name]) for t in TARGETS}
     o16 = o16_copy_finding(mats["C-12"], mats["O-16"])
     log(f"O-16 MT2 is a C-12 copy from {o16['from_mev']} MeV: recorded")
+    o16_mt5 = o16_mt5_copy_check(mats["C-12"], mats["O-16"])
+    log(f"O-16 MT5 differs from C-12 at {o16_mt5['fraction_rel_diff_gt_1e-3']:.0%} of the nodes")
 
     e_h1 = sec.energies_ev * 1e-6
     grid = build_grid_elastic(e_h1[(e_h1 >= 1.0) & (e_h1 <= E_ANCHOR_MEV)], opt.points_per_decade)
@@ -478,17 +658,14 @@ def build_elastic_proton(
         if k < i150:
             dm = law5.ni_density_ltp1(sec, 0.5 * (grid[k] + grid[k + 1]) * 1e6, mu_h, awi, 1, 1)
             min_mid[k] = float(dm.min())
-    ok = (min_node >= 0.0) & (min_mid >= 0.0)
-    ok[i150 + 1 :] = True
-    bad = np.nonzero(~ok)[0]
-    k_pp = int(bad.max()) + 1 if bad.size else 0
-    if k_pp > i150:
-        raise BuildError("no energy up to 150 MeV has a non-negative p-p density")
-    first_neg = [
-        {"e_mev": float(grid[k]), "min_node_mb_sr": 1e3 * float(min_node[k]),
-         "min_midpoint_mb_sr": 1e3 * float(min_mid[k])}
-        for k in bad[-12:]
-    ]  # fmt: skip
+    k_pp, p6_points = pp_scan(grid, min_node, min_mid, i150)  # pass 1; P6 failure diagnostic
+    p6_found = bool(p6_points)  # recorded: the frozen P6 item (4) fails below E_min,pp
+    mu_fine = np.linspace(0.0, law5.MU_CUT_PP, 2 * opt.n_mu_check - 1)
+    pp_check = verify_pp_domain(  # pass 2 (P6-D (1)): independent finer-mu re-evaluation
+        grid, k_pp, i150,
+        lambda e: float(law5.ni_density_ltp1(sec, e * 1e6, mu_fine, awi, 1, 1).min()),
+    )  # fmt: skip
+    in_domain_ok = True  # verify_pp_domain raised otherwise
     s_ref = bgg.pp_bgg_mb(E_ANCHOR_MEV)
     for k in range(k_pp, n_grid):
         if k <= i150:
@@ -512,7 +689,10 @@ def build_elastic_proton(
         h_mid_err = max(h_mid_err, abs(0.5 * (sigma[0, k] + sigma[0, k + 1]) - direct) / direct)
     info_t.append(
         {"name": PP_TARGET, "z": 1, "a": 1, "kind": "law5-ltp1", "e_min_pp_mev": float(grid[k_pp]),
-         "e_min_pp_index": k_pp, "first_negative_nodes": first_neg,
+         "e_min_pp_index": k_pp, "negative_density_below_e_min_pp": p6_found,
+         "p6_negative_density_found": p6_found, "first_negative_nodes": p6_points,
+         "e_min_pp": float(grid[k_pp]), "no_negative_density_in_domain": in_domain_ok,
+         "p6d_pass2": pp_check,
          "sigma_150_mev_barn": float(sigma[0, i150]), "s_150_mb": s_ref,
          "max_midpoint_interpolation_error": h_mid_err,
          "half_sphere": "sigma counts each event once (0 <= mu <= 0.96, 2 pi); edges cover the "
@@ -537,6 +717,7 @@ def build_elastic_proton(
         k_min = int(bad_idx.max()) + 1 if bad_idx.size else 0
         if k_min >= n_grid:
             raise BuildError(f"{spec.name}: no node with a positive disk radius")
+        check_domain_limit(spec.name, float(grid[k_min]))
         sig_mb = np.array([bgg.bgg_elastic_mb(float(e), spec.z, model.m_t_mev) for e in grid])
         sigma[it, k_min:] = sig_mb[k_min:] * 1e-3
         valid[it, k_min:] = 1
@@ -602,12 +783,63 @@ def build_elastic_proton(
             )  # fmt: skip
 
     qual = np.array(
-        [bool(k_pp <= i150), bool(o16["o16_mt2_is_c12_copy"]), bool(max_dev <= 1e-6)], dtype=np.int8
+        [
+            bool(k_pp <= i150 and in_domain_ok),
+            bool(o16_mt5["o16_mt5_not_c12_copy"]),
+            bool(max_dev <= 1e-6),
+        ],
+        dtype=np.int8,
     )
+    e_min_t = np.array([float(grid[k_pp])] + [info_t[i]["e_min_shape_mev"] for i in range(1, n_t)])
+    # NI cross section above the cut and the expected omitted events below the domain
+    sigma_ni_mb = {
+        f"{e:g}_mev": 1e3 * 2.0 * math.pi * law5.simpson(
+            law5.ni_density_ltp1(sec, e * 1e6, mu_h, awi, 1, 1), mu_h
+        )
+        for e in (15.0, 20.0)
+    }  # fmt: skip
+    i_o = [t.name for t in TARGETS].index("O-16") + 1
+    spec_o = next(t for t in TARGETS if t.name == "O-16")
+    e_o = float(e_min_t[i_o])
+    basis = (
+        "per history of a proton slowing down through the residual range of the cut energy in "
+        "liquid water (Bethe stopping table, 1 g/cm3), nuclear attrition ignored"
+    )
+    pp_bound = {
+        "basis": basis,
+        "e_cut_mev": float(grid[k_pp]),
+        "n_h_cm3": N_H_WATER_CM3,
+        "sigma_bound_at_cut_mb": unitarity_bound_sigma_mb(float(grid[k_pp])),
+        "bound": "S-wave unitarity dsigma/dOmega_CM <= 1/k^2 over mu_CM <= 0.96, "
+        "sigma <= 2 pi 0.96 / k_CM^2 (grows as 1/E below the cut); NOT a reconstruction value",
+        "events_per_history_bound": omitted_events_per_history(
+            float(grid[k_pp]), N_H_WATER_CM3, unitarity_bound_sigma_mb
+        ),
+        "residual_range_g_cm2": residual_range_g_cm2(float(grid[k_pp])),
+    }
+    pa_omitted = {
+        "basis": basis, "target": "O-16", "e_cut_mev": e_o, "n_o_cm3": N_O_WATER_CM3,
+        "sigma": "BGG sigma_el below e_min_shape (1 MeV to the cut; held at the 1 MeV value below)",
+        "events_per_history": omitted_events_per_history(
+            e_o, N_O_WATER_CM3, lambda e: bgg.bgg_elastic_mb(e, spec_o.z, models["O-16"].m_t_mev)
+        ),
+        "residual_range_g_cm2": residual_range_g_cm2(e_o),
+    }  # fmt: skip
+    elastic_domain = {PP_TARGET: [float(grid[k_pp]), E_MAX_MEV]}
+    elastic_domain.update(
+        {t.name: [float(e_min_t[i + 1]), E_MAX_MEV] for i, t in enumerate(TARGETS)}
+    )
+    for i, t in enumerate(TARGETS, start=1):
+        info_t[i]["sigma_bgg_below_domain_max_mb"] = max(
+            bgg.bgg_elastic_mb(float(e), t.z, models[t.name].m_t_mev)
+            for e in np.linspace(1.0, float(e_min_t[i]), 200)
+        )
+    info_t[0]["sigma_bgg_below_domain_max_mb"] = None  # H-1: not BGG
     arr: dict[str, NDArray[Any]] = {
         "grid_e_mev": grid, "sigma_barn": sigma, "edges_mu": edges, "radius_fm": r_fm,
         "sigma_nonel_barn": sig_nonel, "lambda_bar_fm": lam_bar, "p_cm_mev": pcm_arr,
         "valid": valid, "inversion_residual": resid, "qualification": qual,
+        "target_e_min_mev": e_min_t,
         "xendf_theta_deg": th, "xendf_energies_mev": np.asarray(XENDF_ENERGIES_MEV),
         "xendf_la150_ni_mb_sr": xe_la150, "xendf_model_mb_sr": xe_model,
         "target_z": np.array([1] + [t.z for t in TARGETS], dtype=np.int64),
@@ -644,7 +876,17 @@ def build_elastic_proton(
                        "pp_cut_mu": law5.MU_CUT_PP,
                        "pp_above_150_mev": "sigma_NI(150) S(E)/S(150), shape fixed in mu_CM"},
         "sigma_el_10_mev_mb": sigma_10,
-        "o16_finding": o16, "transcription_verified": transcription,
+        "o16_finding": o16, "o16_mt2_copy_recorded": o16["o16_mt2_is_c12_copy"],
+        "o16_mt5_finding": o16_mt5, "transcription_verified": transcription,
+        "elastic_domain": elastic_domain, "model_revisions": MODEL_REVISIONS,
+        "negative_density_below_e_min_pp": p6_found,
+        "p6": {"negative_density_below_e_min_pp": p6_found, "first_negative_nodes": p6_points,
+               "e_min_pp": float(grid[k_pp]), "no_negative_density_in_domain": in_domain_ok,
+               "note": "the frozen row P6 item (4) fails for H-1 below e_min_pp; recorded as a "
+               "failure, not converted into a pass by the revised domain (row P6-D)"},
+        "sigma_ni_above_cut_mb": sigma_ni_mb,
+        "pp_omitted_events_bound_per_history_150mev": pp_bound,
+        "pa_omitted_events_per_history_150mev": pa_omitted,
         "xendf": {"targets": list(XENDF_TARGETS), "energies_mev": list(XENDF_ENERGIES_MEV),
                   "report_only": True,
                   "note": "LA150 NI contains Coulomb-nuclear interference, the model does not"},

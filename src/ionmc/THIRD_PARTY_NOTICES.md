@@ -28,8 +28,9 @@ Parts of this repository derive from Geant4 source code, release 11.4.2:
   The BGG rule below 14 MeV also follows `G4NuclearRadii.cc` (Coulomb factor with the `r0[Z]`
   table) and the Z interpolation of the Barashenkov component uses `aeff[Z]` of
   `G4IsotopeList.hh`; the same notice and licence apply (files downloaded by users, not
-  redistributed). The p-p scaling above 150 MeV uses the PDG rpp2022 `pp_elastic.dat`
-  compilation (downloaded by users, not redistributed).
+  redistributed). The p-p scaling above 150 MeV uses the Geant4 `G4HadronNucleonXsc` formula only; the PDG
+  rpp2022 `pp_elastic.dat` compilation is a report-only comparison dataset (V10), not a
+  construction input (downloaded by users, not redistributed).
 
 This product includes software developed by Members of the Geant4 Collaboration
 ( http://cern.ch/geant4 ).

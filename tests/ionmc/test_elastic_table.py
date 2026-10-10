@@ -159,10 +159,14 @@ def _synthetic(root: Path, *, qual: tuple[int, ...] = (1, 1, 1)) -> str:
     n, n_t = grid.size, len(EB.TARGET_NAMES)
     sigma = np.tile(0.1 * (1 + np.arange(n_t))[:, None], (1, n)) * (1 + 0.1 * np.sin(grid))
     edges = np.tile(np.linspace(-1.0, 1.0, 5), (n_t, n, 1))
+    e_min = np.array([12.5, 6.0, 3.0, 6.5, 2.5, 4.0, 2.5, 5.7])
+    valid = (grid[None, :] >= e_min[:, None]).astype(np.int8)
+    sigma = sigma * valid  # sigma = 0 and valid = 0 below the domain
     arrays: dict[str, Any] = {
         "grid_e_mev": grid, "sigma_barn": sigma, "edges_mu": edges,
         "qualification": np.array(qual, dtype=np.int8),
         "target_mass_mev": np.arange(1.0, n_t + 1.0),
+        "target_e_min_mev": e_min, "valid": valid,
     }  # fmt: skip
     (root / "derived").mkdir(parents=True)
     tmp = root / "derived" / "x.npz"
@@ -283,6 +287,18 @@ def test_loader_fail_closed_cases_c1_ext(tmp_path: Path) -> None:
             ElasticTable.load(tmp_path / f"q{i}", new)
 
 
+def test_loader_rejects_nonzero_sigma_below_the_domain(tmp_path: Path) -> None:
+    root = tmp_path / "d"
+    tid = _synthetic(root)
+
+    def bad(a: dict[str, Any]) -> None:
+        a["sigma_barn"][3, 0] = 0.5  # O-16 below e_min = 6.5 MeV
+
+    new = _reseal(root, tid, tmp_path / "bad", bad, None)
+    with pytest.raises(ElasticTableUnqualifiedError, match="below"):
+        ElasticTable.load(tmp_path / "bad", new)
+
+
 def test_unsupported_error_hierarchy_is_fail_closed() -> None:
     assert issubclass(ElasticTableMissingError, UnsupportedCombinationError)
     assert issubclass(ElasticTableUnqualifiedError, UnsupportedCombinationError)
@@ -307,6 +323,10 @@ def test_device_pack_hash_and_process_cache(tmp_path: Path) -> None:
     dev32 = D.ElasticDevice(host, wp.float32, "cpu")
     assert dev32.sha256 == D.host_sha256(host, "float32") != dev.sha256
     assert np.array_equal(dev.readback()["mat_target"][:2], [0, 3])
+    rb = dev.readback()
+    assert np.array_equal(rb["e_min_shape"][1:], tab.arrays["target_e_min_mev"][1:])
+    assert rb["e_min_shape"][0] == 0.0 and rb["e_min_pp"].tolist() == [12.5]
+    assert tab.elastic_domain()["O-16"] == (6.5, 250.0)
     D.clear_elastic_device_cache()
     a = D.cached_elastic_device(tab, (WATER,), real=wp.float64, device="cpu")
     assert D.cached_elastic_device(tab, (WATER,), real=wp.float64, device="cpu") is a
@@ -363,7 +383,9 @@ def test_real_table_nodes_midpoints_and_records(real: Any) -> None:
     assert info["transcription_verified"] and all(info["transcription_verified"].values())
     # p-p: E_min_pp with first-negative diagnostics; sigma = 0 below
     h = info["targets"][0]
-    assert h["first_negative_nodes"] and 12.0 < h["e_min_pp_mev"] < 13.5
+    assert h["negative_density_below_e_min_pp"] and h["first_negative_nodes"]
+    assert 12.0 < h["e_min_pp_mev"] < 13.5 and h["e_min_pp"] == h["e_min_pp_mev"]
+    assert h["no_negative_density_in_domain"] is True
     k_pp = h["e_min_pp_index"]
     assert np.all(a["sigma_barn"][0, :k_pp] == 0.0) and np.all(a["sigma_barn"][0, k_pp:] > 0.0)
     k150 = int(np.searchsorted(grid, 150.0))
@@ -382,16 +404,48 @@ def test_real_table_nodes_midpoints_and_records(real: Any) -> None:
     assert info["xendf"]["report_only"] is True
 
 
-def test_real_table_h1_density_positive_above_e_min_pp(real: Any) -> None:
+def test_real_table_h1_p6_failure_recorded_and_positive_in_domain(real: Any) -> None:
+    """The frozen row P6 fails for H-1 below E_min,pp (recorded, not converted into a pass);
+    the density is non-negative at and above E_min,pp (revised domain)."""
     res, tab = real
     grid = tab.arrays["grid_e_mev"]
-    k_pp = res.info["targets"][0]["e_min_pp_index"]
+    h = res.info["targets"][0]
+    k_pp = h["e_min_pp_index"]
+    # recorded failure: every negative point lies below E_min,pp and has a negative value
+    pts = h["first_negative_nodes"]
+    assert pts and all(p["min_density_mb_sr"] < 0.0 for p in pts)
+    assert max(p["e_mev"] for p in pts) < h["e_min_pp"]
+    assert res.info["negative_density_below_e_min_pp"] is True
+    assert res.info["o16_mt2_copy_recorded"] is True
+    assert res.info["p6"]["no_negative_density_in_domain"] is True
     m = _material("p-001_H_001")
     sec, awi = law5.parse_law5(m.sections[(6, 2)]), law5.projectile_awi(m)
     mu = np.linspace(0.0, law5.MU_CUT_PP, 2001)
+    # independent re-evaluation: negative at the recorded points, positive at/above E_min,pp
+    for p in pts[-3:]:
+        assert law5.ni_density_ltp1(sec, p["e_mev"] * 1e6, mu, awi, 1, 1).min() < 0.0
     for k in range(k_pp, int(np.searchsorted(grid, 150.0))):
         for e in (grid[k], 0.5 * (grid[k] + grid[k + 1])):
             assert law5.ni_density_ltp1(sec, float(e) * 1e6, mu, awi, 1, 1).min() >= 0.0
+    # domain block, model revisions, NI above the cut, omitted-event estimates
+    assert res.info["elastic_domain"]["H-1"] == [h["e_min_pp"], 250.0]
+    dom = tab.elastic_domain()
+    assert dom["H-1"] == (h["e_min_pp"], 250.0) and len(dom) == 8
+    assert 12.0 < h["e_min_pp"] <= EB.E_MIN_PP_LIMIT_MEV
+    for it, spec in enumerate(TARGETS, start=1):
+        lo = res.info["targets"][it]["e_min_shape_mev"]
+        assert res.info["elastic_domain"][spec.name] == [lo, 250.0] and lo <= 10.0
+        assert dom[spec.name] == (lo, 250.0)
+        assert res.info["targets"][it]["sigma_bgg_below_domain_max_mb"] > 0.0
+    assert "Amendment 15" in res.info["model_revisions"]
+    ni = res.info["sigma_ni_above_cut_mb"]
+    assert ni["15_mev"] > 0.0 and ni["20_mev"] > 0.0
+    pb = res.info["pp_omitted_events_bound_per_history_150mev"]
+    assert 380.0 < pb["sigma_bound_at_cut_mb"] < 420.0  # 397 mb at 12.53 MeV (Amendment 15)
+    assert 0.0 < pb["events_per_history_bound"] < 0.1
+    assert 0.18 < pb["residual_range_g_cm2"] < 0.21
+    pa = res.info["pa_omitted_events_per_history_150mev"]
+    assert 0.0 < pa["events_per_history"] < 0.01 and 0.05 < pa["residual_range_g_cm2"] < 0.07
 
 
 def _material(member: str) -> endf6.EndfMaterial:
@@ -409,6 +463,71 @@ def test_o16_copy_assertion_passes_on_la150_and_fails_closed_otherwise(real: Any
     )
     with pytest.raises(BuildError):
         EB.o16_copy_finding(c12, n14)  # a genuine second evaluation: the assertion fails closed
+
+
+def test_o16_mt5_not_a_copy_real_data_and_synthetic_copy(real: Any) -> None:
+    c12, o16 = _material("p-006_C_012"), _material("p-008_O_016")
+    f = EB.o16_mt5_copy_check(c12, o16)
+    assert f["o16_mt5_not_c12_copy"] and f["fraction_rel_diff_gt_1e-3"] > 0.5
+    assert f["ratio_o16_over_c12_cv"] > 1e-3
+    assert f["max_relative_difference"] >= f["min_relative_difference"] >= 0.0
+    # a synthetic copy fails closed
+    with pytest.raises(BuildError):
+        EB.o16_mt5_copy_check(c12, c12)
+
+    class Copy:
+        def __init__(self, base: endf6.EndfMaterial, scale: float) -> None:
+            self.base, self.scale = base, scale
+
+        def cross_section(self, mt: int) -> Any:
+            t = self.base.cross_section(mt)
+            return endf6.Tab1(t.nbt, t.interp, t.x.copy(), t.y * self.scale)
+
+        def products(self, mt: int) -> Any:
+            raise KeyError(mt)
+
+    with pytest.raises(BuildError, match="copy"):
+        EB.o16_mt5_copy_check(c12, Copy(c12, 1.0 + 1e-6))  # type: ignore[arg-type]
+    with pytest.raises(BuildError, match="copy"):  # a scaled copy: differs by 33 %, constant ratio
+        EB.o16_mt5_copy_check(c12, Copy(c12, (16.0 / 12.0) ** (2.0 / 3.0)))  # type: ignore[arg-type]
+
+
+def test_pp_domain_sign_fixtures_p6d() -> None:
+    grid = np.array([1.0, 5.0, 10.0, 12.0, 13.0, 14.0, 20.0, 150.0, 250.0])
+    i150 = 7
+    # a density negative only below the domain: recorded, the build proceeds
+    node = np.array([-3.0, -2.0, -1.0, -0.1, 0.5, 0.6, 0.7, 0.8, np.inf])
+    mid = np.array([-2.5, -1.5, -0.5, 0.2, 0.5, 0.6, 0.7, np.inf, np.inf])
+    k_pp, pts = EB.pp_scan(grid, node, mid, i150)
+    assert k_pp == 4 and len(pts) == 7 and all(p["min_density_mb_sr"] < 0 for p in pts)
+    ok = EB.verify_pp_domain(grid, k_pp, i150, lambda e: 0.1)
+    assert ok["n_points_checked"] == 4 + 3
+    # the separate pass fails the build on a negative in-domain midpoint
+    with pytest.raises(BuildError, match="P6-D"):
+        EB.verify_pp_domain(grid, k_pp, i150, lambda e: -1e-9 if abs(e - 13.5) < 1e-9 else 0.1)
+    # E_min,pp above the 15 MeV bound fails closed
+    node2 = np.array([-3.0] * 6 + [0.7, 0.8, np.inf])
+    with pytest.raises(BuildError, match="exceeds"):
+        EB.pp_scan(grid, node2, np.full(9, np.inf), i150)
+    # a unitarity bound of 397 mb at 12.53 MeV
+    assert EB.unitarity_bound_sigma_mb(12.532) == pytest.approx(397.0, abs=5.0)
+
+
+def test_domain_limit_fails_closed_above_10_mev() -> None:
+    EB.check_domain_limit("O-16", 6.58)
+    EB.check_domain_limit("X", 10.0)
+    with pytest.raises(BuildError, match="exceeds"):
+        EB.check_domain_limit("X", 10.5)
+
+
+def test_pdg_is_not_a_construction_source() -> None:
+    assert "pdg-rpp2022-pp-elastic" not in EB.SOURCE_IDS
+    src = (
+        Path(EB.__file__).read_text() + (Path(EB.__file__).parent / "elastic_tables.py").read_text()
+    )
+    assert "pdg-rpp2022" not in src
+    pdg = DATASETS["pdg-rpp2022-pp-elastic"]
+    assert pdg.role == "evaluation" and "NOT a construction input" in pdg.lineage
 
 
 @pytest.mark.parametrize(

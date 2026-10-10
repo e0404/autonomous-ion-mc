@@ -34,6 +34,8 @@ REAL_FIELDS = (
     "edges",
     "sigma_target",
     "target_mass",
+    "e_min_shape",
+    "e_min_pp",
     "sigma",
     "sigma_win",
     "sigma_end",
@@ -83,6 +85,10 @@ def pack_elastic(
         "edges": np.ascontiguousarray(a["edges_mu"], dtype=np.float64).ravel(),
         "sigma_target": np.ascontiguousarray(a["sigma_barn"], dtype=np.float64).ravel(),
         "target_mass": np.asarray(a["target_mass_mev"], dtype=np.float64),
+        # per-target lower domain bound of the p + A shape (H-1 entry 0) and E_min,pp (size 1), so
+        # that the transport can count elastic_below_domain and pp_below_domain
+        "e_min_shape": np.concatenate(([0.0], np.asarray(a["target_e_min_mev"][1:], np.float64))),
+        "e_min_pp": np.asarray(a["target_e_min_mev"][:1], dtype=np.float64),
         "sigma": sigma.ravel(), "sigma_win": win.ravel(), "sigma_end": end.ravel(),
         "cum_sigma": cum.ravel(), "mat_ntargets": n_k, "mat_target": tgt.ravel(),
     }  # fmt: skip

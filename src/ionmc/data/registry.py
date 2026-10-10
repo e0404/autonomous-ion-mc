@@ -812,12 +812,16 @@ DATASETS: dict[str, Dataset] = {
             parser="pdg-xsec",
             description=(
                 "PDG compilation of the p-p elastic cross section (acquisition "
-                "b742ae4345934c188eb664de5bed355d). Tool role construction: it feeds the "
-                "above-150 MeV scaling ratio S(E). It is also the report-only V10 comparison "
-                "(shared lineage with S(E))."
+                "b742ae4345934c188eb664de5bed355d). Evaluation role: the report-only V10 "
+                "comparison. It was first registered as construction in error (the builder only "
+                "hashed it, no value is used); it is NOT a construction input (S(E) uses the "
+                "Geant4 p-p formula)."
             ),
-            role="construction",
-            lineage="construction input for S(E) and report-only V10 comparison (shared lineage)",
+            role="evaluation",
+            lineage=(
+                "report-only V10 comparison; NOT a construction input - S(E) uses the Geant4 "
+                "p-p BGG formula (G4HadronNucleonXsc/G4BGGNucleonElasticXS)"
+            ),
         ),
     )
 }

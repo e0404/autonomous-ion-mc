@@ -8,7 +8,10 @@ sidecar without its id, that every source pin equals the registry pin, derives t
 flags from the npz arrays and freezes them. Failures are fail-closed with specific exception types
 (all subclass :class:`ElasticTableError`, itself an ``UnsupportedCombinationError``): missing, stale
 (re-hash or id mismatch, schema/builder), source pin mismatch, unqualified (a qualification flag is
-false). An element without elastic data and an energy outside [1, 250] MeV raise
+false). The per-target lower domain bound ``e_min`` (``elastic_domain``) is the declared limitation
+of the table: below it ``sigma = 0`` (H-1: ``E_min,pp``; p + A: ``e_min_shape``); the transport
+counts such crossings as ``elastic_below_domain``. An element without elastic data and an energy
+outside [1, 250] MeV raise
 ``UnsupportedCombinationError``.
 
 ``material_rows`` composes ``Sigma_mass(E) = N_A sum_el w_el scale_el sigma_el / A_el`` [cm2/g]
@@ -58,8 +61,9 @@ class ElasticTablePinError(ElasticTableError):
 
 
 class ElasticTableUnqualifiedError(ElasticTableError):
-    """A qualification flag of the npz is false (no negative density, O-16 copy asserted, shape
-    normalised); the builder writes such tables as evidence, the loader refuses them."""
+    """A qualification flag of the npz is false (no negative density in the domain, O-16 MT2 copy
+    asserted, O-16 MT5 not a copy, shape normalised); the builder writes such tables as evidence,
+    the loader refuses them."""
 
 
 def flags_from_array(q: NDArray[Any]) -> dict[str, bool]:
@@ -125,6 +129,16 @@ class ElasticTable:
             arrays = {k: freeze_array(z[k], z[k].dtype, k) for k in z.files}
         if "qualification" not in arrays:
             raise ElasticTableStaleError("elastic table npz has no qualification array (stale)")
+        if "target_e_min_mev" not in arrays:
+            raise ElasticTableStaleError("elastic table npz has no target_e_min_mev (stale)")
+        grid, e_min = arrays["grid_e_mev"], arrays["target_e_min_mev"]
+        for i in range(len(e_min)):
+            below = grid < e_min[i]
+            if np.any(arrays["sigma_barn"][i][below] != 0.0) or np.any(arrays["valid"][i][below]):
+                raise ElasticTableUnqualifiedError(
+                    f"elastic table {table_id}: target {i} has sigma != 0 or valid != 0 below "
+                    "its domain (stale)"
+                )
         flags = flags_from_array(arrays["qualification"])
         failed = [k for k, v in flags.items() if not v]
         if failed:
@@ -141,6 +155,13 @@ class ElasticTable:
                 f"elastic scattering: energy {e_mev} MeV outside the table domain "
                 f"[{E_MIN_MEV}, {E_MAX_MEV}] MeV"
             )
+
+    def elastic_domain(self) -> dict[str, tuple[float, float]]:
+        """``{target: (e_min, e_max)}`` [MeV] over which each table target is defined (H-1:
+        ``E_min,pp``; p + A: ``e_min_shape``). Below ``e_min`` the elastic channel is omitted
+        (declared limitation; ``sigma = 0`` and ``valid = 0``, asserted at load)."""
+        e_min = self.arrays["target_e_min_mev"]
+        return {n: (float(e_min[i]), E_MAX_MEV) for i, n in enumerate(self.target_names)}
 
     def sigma_barn(self, target: int, e_mev: float) -> float:
         """sigma_el of table target ``target`` at ``e_mev`` [b], lin-lin in E."""
