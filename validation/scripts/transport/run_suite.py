@@ -346,7 +346,10 @@ def suite_steps(
             eff = step_timeout_s(suite, full, step_timeout)
             inner = ["--timeout", str(max(30, int(0.9 * eff)))]  # the pool cleans up first
             cmd = [*cmd, *inner, "--seed-base", str(seed_base)]  # every seed derives from the base
-        steps.append((full, cmd, env or {}))
+        env = dict(env or {})
+        if name.startswith(V7R_CALIBRATION_STEP_PREFIX):  # a missing fixture fails, a skip is a failure
+            env["IONMC_V7R_FIXTURES"] = "required"
+        steps.append((full, cmd, env))
 
     if suite == "lv5":
         if import_dirs and partials_manifest is None:
@@ -761,6 +764,28 @@ def source_files(suite: str | None = None) -> list[Path]:
     return files
 
 
+V7R_CALIBRATION_STEP_PREFIX = "pytest-v7r-calibration"
+REHEARSAL_FIXTURE_PREFIX = "tests/ionmc/fixtures/v7r/rehearsal/"
+"""The V7-R rehearsal fixtures (partials, sidecars, ``PROVENANCE.json``) are committed under
+``tests/ionmc`` (a hashed prefix) but are outside the hashed set of the rehearsal digest, otherwise
+committing them would change the digest they record (plan Amendment 17 (a)7: a commit that changes only
+fixtures keeps the rehearsal valid)."""
+
+
+def hashed_source_digest(suite: str = "lv5c") -> str:
+    """sha256 over the sorted ``path sha256`` lines of the hashed source set of ``suite`` in the working
+    tree, without the rehearsal fixtures (:data:`REHEARSAL_FIXTURE_PREFIX`). The rehearsal document
+    (``tests/ionmc/fixtures/v7r/rehearsal/PROVENANCE.json``, field ``hashed_source_digest``) records it
+    and the calibration accepts the rehearsal only if it equals the current value (Amendment 17 (a)7).
+    ``--print-hashed-source-digest`` prints it."""
+    lines = []
+    for f in source_files(suite):
+        rel = str(f.relative_to(REPO))
+        if not rel.startswith(REHEARSAL_FIXTURE_PREFIX):
+            lines.append(f"{rel} {hashlib.sha256(f.read_bytes()).hexdigest()}")
+    return hashlib.sha256("\n".join(sorted(lines)).encode()).hexdigest()
+
+
 A16_PLAN_FILE = "validation/plans/v3-003d-acceptance.md"
 A16_PLAN_BEGIN, A16_PLAN_END = (
     "<!-- A16-INTENDED-CHANGE-BEGIN -->",
@@ -888,6 +913,9 @@ def resolve_workers(value: str) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    if "--print-hashed-source-digest" in (argv if argv is not None else sys.argv[1:]):
+        print(hashed_source_digest("lv5c"))
+        return 0
     if "--print-a16-source-digest" in (argv if argv is not None else sys.argv[1:]):
         print(a16_source_digest())
         return 0

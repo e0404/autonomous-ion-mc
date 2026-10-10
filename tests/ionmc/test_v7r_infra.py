@@ -3,7 +3,6 @@ fix, and (with ``validation/scripts/transport/v7r.py`` and ``steps_v5c.py``) the
 sidecar, the bootstrap-t gates and the suite registration. No transport beyond a few hundred
 histories."""
 
-# ruff: noqa: E501
 from __future__ import annotations
 
 import importlib.util
@@ -40,7 +39,8 @@ def _cfg(v5b: ModuleType, elastic: bool, n: int = 600, nb: int = 3):  # type: ig
 
 
 def _old_batch_estimates(v5b: ModuleType, cfg):  # type: ignore[no-untyped-def]
-    """The pre-fix column addressing (the LAST six columns), valid only with the elastic block off."""
+    """The pre-fix column addressing (the LAST six columns), valid only with the elastic block
+    off."""
     from ionmc.transport.run import run_range
     from ionmc.transport.tally import NUCLEAR_TALLY_NAMES
 
@@ -86,9 +86,9 @@ def test_batch_estimates_elastic_off_is_bit_identical_to_the_last_six_columns(
 def test_batch_estimates_elastic_on_reads_the_nuclear_block_not_the_elastic_tail(
     v5b: ModuleType,
 ) -> None:
-    """With elastic on the three elastic columns follow the nuclear block: the per-block values equal
-    the ``merge_partials`` tallies of the same block (1e-12 relative), and differ from the old tail
-    addressing (the defect)."""
+    """With elastic on the three elastic columns follow the nuclear block: the per-block values
+    equal the ``merge_partials`` tallies of the same block (1e-12 relative), and differ from the
+    old tail addressing (the defect)."""
     from ionmc.transport.run import channel_columns, run_range
     from ionmc.transport.tally import merge_partials
 
@@ -130,7 +130,7 @@ def test_tally_column_index_matches_the_merge_partials_layout() -> None:
         tally_column_index(n, True, "initial")
 
 
-# -- v7r.py: constants, streams, bootstrap-t, gates -------------------------------------------------
+# -- v7r.py: constants, streams, bootstrap-t, gates -------------------------------------------
 @pytest.fixture(scope="module")
 def v7r(v5b: ModuleType) -> ModuleType:  # v5b first: v7r imports steps_v5b
     return _load("v7r")
@@ -198,7 +198,8 @@ def test_boot_t_interval_is_deterministic_and_about_the_t_interval_on_gaussian_b
     lo, hi, m, se, diag = i1
     assert m == pytest.approx(x.mean()) and se == pytest.approx(x.std(ddof=1) / math.sqrt(20))
     assert lo < m < hi and diag["n_resamples_degenerate"] == 0
-    # the coverage of the TRUE mean over 400 synthetic replicates is the nominal 0.6827 within 4 sigma
+    # the coverage of the TRUE mean over 400 synthetic replicates is the nominal 0.6827 within
+    # 4 sigma
     hits = 0
     for r in range(400):
         xr = _gauss_blocks(1, rng)[0]
@@ -581,6 +582,17 @@ def test_lv5c_suite_registration_names_seeds_timeouts_tags(
         )
 
 
+CAL_CMD = (
+    "python -m pytest -q -p no:cacheprovider --no-header "
+    "tests/ionmc/test_v7r_coverage.py -m calibration"
+)
+
+
+def _cal(ok: bool = True, counts: dict | None = None, cmd: str = CAL_CMD) -> dict:  # type: ignore[type-arg]
+    counts = {"passed": 4, "deselected": 37} if counts is None else counts
+    return {"pass": ok, "status": "executed", "pytest_command": cmd, "pytest_counts": counts}
+
+
 def test_v7r_row_is_the_conjunction_of_calibration_and_gates() -> None:
     sm = _load("summarize")
 
@@ -589,25 +601,25 @@ def test_v7r_row_is_the_conjunction_of_calibration_and_gates() -> None:
 
     full = {
         "17-v7r-ref": st(True),
-        "18-pytest-v7r-calibration": st(True),
+        "18-pytest-v7r-calibration": _cal(),
         "19-v7r-combine": st(True),
     }
     assert sm.slice_c_rows("lv5c", full)["V7-R"]["pass"] is True
-    for key in ("18-pytest-v7r-calibration", "19-v7r-combine"):
-        bad = {**full, key: st(False)}
-        row = sm.slice_c_rows("lv5c", bad)["V7-R"]
-        assert (
-            row["pass"] is False
-            and row["verdict"] == "uncertainty-coverage evidence not established"
-        )
+    for key, bad_step in (
+        ("18-pytest-v7r-calibration", _cal(False)),
+        ("19-v7r-combine", st(False)),
+    ):
+        row = sm.slice_c_rows("lv5c", {**full, key: bad_step})["V7-R"]
+        assert row["pass"] is False
+        assert row["verdict"] == "uncertainty-coverage evidence not established"
     no_cal = {k: v for k, v in full.items() if "pytest" not in k}
     assert (
         sm.slice_c_rows("lv5c", no_cal)["V7-R"]["pass"] is False
     )  # gates alone never pass the row
     shards = {
         **full,
-        "18-pytest-v7r-calibration-s0": st(True),
-        "19-pytest-v7r-calibration-s1": st(False),
+        "18-pytest-v7r-calibration-s0": _cal(),
+        "19-pytest-v7r-calibration-s1": _cal(False),
     }
     assert (
         sm.slice_c_rows("lv5c", shards)["V7-R"]["pass"] is False
@@ -615,13 +627,79 @@ def test_v7r_row_is_the_conjunction_of_calibration_and_gates() -> None:
     assert sm.slice_c_rows("lv5b", full) == {}
 
 
+@pytest.mark.parametrize(
+    "step",
+    [
+        _cal(counts={"passed": 3, "skipped": 1, "deselected": 37}),  # a skip exits 0 but is no pass
+        _cal(counts={"passed": 4, "deselected": 37, "xfailed": 1}),
+        _cal(counts={"passed": 4, "failed": 1}),
+        _cal(counts={"passed": 2, "deselected": 37}),  # fewer than the three calibration tests
+        _cal(counts={"skipped": 4}),  # nothing passed at all
+        _cal(counts={}),
+        {**_cal(), "pytest_counts": None},  # unreadable output: not established
+        {k: v for k, v in _cal().items() if k != "pytest_counts"},
+        _cal(cmd=CAL_CMD + " -k archive"),  # a narrowed selection deselects calibration tests
+        _cal(cmd=CAL_CMD + " --deselect tests/ionmc/test_v7r_coverage.py::test_x"),
+        _cal(cmd=CAL_CMD.replace("-m calibration", "-m 'not calibration'")),
+        _cal(cmd=CAL_CMD.replace(" -m calibration", "")),
+    ],
+)
+def test_v7r_calibration_row_rejects_skips_deselection_and_unreadable_output(
+    step: dict,  # type: ignore[type-arg]
+) -> None:
+    sm = _load("summarize")
+    steps = {"17-v7r-ref": _cal(), "19-v7r-combine": {"pass": True, "status": "executed"},
+             "18-pytest-v7r-calibration": step}  # fmt: skip
+    row = sm.slice_c_rows("lv5c", steps)["V7-R"]
+    assert row["gates_pass"] is True and row["calibration_pass"] is False and row["pass"] is False
+    assert row["verdict"] == "uncertainty-coverage evidence not established"
+
+
+def test_pytest_summary_parser_and_parse_step_record_the_counts(tmp_path: Path) -> None:
+    sm = _load("summarize")
+    pc = sm.pytest_counts
+    assert pc("...\n4 passed, 37 deselected, 1 warning in 12.30s (0:00:12)") == {
+        "passed": 4, "deselected": 37, "warning": 1}  # fmt: skip
+    assert pc("=== 3 passed, 2 skipped in 1.0s ===") == {"passed": 3, "skipped": 2}
+    assert pc("1 failed, 2 passed, 1 error in 3.00s") == {"failed": 1, "passed": 2, "error": 1}
+    assert pc("no summary here") is None and pc("") is None
+    sha = "a" * 40
+    p = tmp_path / "18-pytest-v7r-calibration.txt"
+    body = ["# command: " + CAL_CMD, f"# git_sha: {sha}", "# started_utc: t", "# step_timeout_s: 1",
+            "", "....", "4 passed, 37 deselected in 12.30s", "", "# exit=0"]  # fmt: skip
+    p.write_text("\n".join(body))
+    st = sm.parse_step(p, sha, "lv5c", "20481004")
+    assert st["pass"] and st["pytest_counts"] == {"passed": 4, "deselected": 37}
+    assert st["pytest_command"] == CAL_CMD
+    assert sm.calibration_step_established(st)
+    p.write_text(
+        "\n".join(body).replace("4 passed, 37 deselected", "3 passed, 1 skipped, 37 deselected")
+    )
+    st = sm.parse_step(p, sha, "lv5c", "20481004")
+    assert st["pass"] is True and not sm.calibration_step_established(st)  # exit 0 with a skip
+    p.write_text("\n".join(body).replace("4 passed, 37 deselected in 12.30s", "garbled"))
+    st = sm.parse_step(p, sha, "lv5c", "20481004")
+    assert st["pytest_counts"] is None and not sm.calibration_step_established(st)
+
+
+def test_lv5c_calibration_steps_run_with_the_fixtures_required() -> None:
+    rs = _load("run_suite")
+    steps = rs.suite_steps("lv5c", 1, 1.0)
+    cal = [(n, e) for n, _, e in steps if "pytest-v7r-calibration" in n]
+    assert cal and all(e["IONMC_V7R_FIXTURES"] == "required" for _, e in cal)
+    assert all("IONMC_V7R_FIXTURES" not in e for n, _, e in steps if "pytest" not in n)
+    shared = rs.NUCLEAR_ENV
+    assert "IONMC_V7R_FIXTURES" not in shared  # the shared dict is not mutated
+
+
 def test_sub_block_run_range_250_plus_250_equals_the_500_history_block_bit_for_bit(
     v5c: ModuleType, v5b: ModuleType
 ) -> None:
-    """Exploratory sub-blocks (b = 40, 80) need no change of the RNG keying: the counter-based RNG is per
-    history, and the exact component expansions of the sub-ranges, summed with ``math.fsum``, give the
-    correctly rounded total of the block: every tally column (elastic on, warp-cpu float64), the
-    escaped-neutral block sum and the integer grids / counters are identical."""
+    """Exploratory sub-blocks (b = 40, 80) need no change of the RNG keying: the counter-based RNG
+    is per history, and the exact component expansions of the sub-ranges, summed with
+    ``math.fsum``, give the correctly rounded total of the block: every tally column (elastic on,
+    warp-cpu float64), the escaped-neutral block sum and the integer grids / counters are
+    identical."""
     from ionmc.transport.run import run_range
     from ionmc.transport.tally import NUCLEAR_TALLY_NAMES, tally_column_index
 

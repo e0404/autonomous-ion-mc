@@ -281,10 +281,13 @@ def pair_gate(ing: dict[str, NDArray[np.float64]], kappa: float = 1.0, *,
 
 
 def single_gate(ing: dict[str, NDArray[np.float64]], means: NDArray[np.float64], kappa: float = 1.0, *,
-                boot_seed: int = 0, n_boot: int = v5b.V7_BOOT_N, z_boot_override: float | None = None,
+                boot_seed: int = 0, n_boot: int | None = None, z_boot_override: float | None = None,
                 region: tuple[float, float] = V7R_REGION) -> dict[str, Any]:  # fmt: skip
     """Single-interval gate from ``single_ingredients`` and ALL replicate means ``means`` ``[R]`` (E
-    first, then H; module docstring). ``z_boot_override`` is for the calibration only."""
+    first, then H; module docstring). ``z_boot_override`` is for the calibration only. ``n_boot=None``
+    is the frozen qualification value ``steps_v5b.V7_BOOT_N``, read at call time (the calibration uses
+    the same default, so the two cannot differ)."""
+    n_boot = v5b.V7_BOOT_N if n_boot is None else n_boot
     r = means.size
     n_e = v5b.v7_heldout_split(r)
     n_h = r - n_e
@@ -340,7 +343,7 @@ def interval_from_quantiles_array(ing: dict[str, NDArray[np.float64]], kappa: fl
 def escaped_neutral_verdict(
     sums: NDArray[np.float64], seed_base: int, *, boot_seed: int, ref_used: bool = True,
     reps_per_shard: int = V7R_REPS_PER_SHARD, b: int = V7R_B, alpha: float = V7R_ALPHA,
-    n_boot: int = v5b.V7_BOOT_N,
+    n_boot: int | None = None,
 ) -> dict[str, Any]:  # fmt: skip
     """Both bootstrap-t gates of ``escaped_neutral`` on the block sums ``sums`` ``[R, 20]`` (rows in
     shard order); the document fields of ``step_v7r_combine``. ``ref_used`` is the bin mask of the

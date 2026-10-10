@@ -225,18 +225,35 @@ def parse_step(
         and (tag is None or (doc is not None and doc.get("pass") is True))
     )
     sel = re.search(r"(\d+) deselected", text) if tag is None else None
+    counts = pytest_counts(text) if tag is None else None
     return {
         "file": path.name,
         "exit": code,
         "pass": bool(verdict),
         "status": "executed",
         "deselected_tests": int(sel.group(1)) if sel else None,
+        "pytest_counts": counts,
+        "pytest_command": lines[0][len("# command: ") :] if lines[0].startswith("# command: ") else "",
         "problems": problems,
         "reduced": bool(doc and doc.get("reduced")),
         "histories": doc.get("histories") if doc else None,
         "frozen_histories": doc.get("frozen_histories") if doc else None,
         "attestation": doc.get("attestation") if doc else None,
     }
+
+
+_PYTEST_SUMMARY = re.compile(r"^=*\s*((?:\d+ [a-z]+(?: [a-z]+)?(?:, )?)+) in [0-9.]+s\b.*$")
+
+
+def pytest_counts(text: str) -> dict[str, int] | None:
+    """Outcome counts of the last pytest summary line of an archived step output
+    (``3 passed, 40 deselected in 12.3s`` gives ``{"passed": 3, "deselected": 40}``); ``None`` if no
+    summary line can be read."""
+    for line in reversed(text.splitlines()):
+        m = _PYTEST_SUMMARY.match(line.strip())
+        if m:
+            return {w.split(" ", 1)[1]: int(w.split(" ", 1)[0]) for w in m.group(1).split(", ")}
+    return None
 
 
 IMPORTED_UNVERIFIED = "imported_partials_unverified_by_code"
@@ -372,11 +389,36 @@ def source_ok(env: dict[str, Any], attestation: dict[str, Any] | None) -> bool:
 V7R_NOT_ESTABLISHED = "uncertainty-coverage evidence not established"
 
 
+V7R_MIN_CALIBRATION_PASSED = 3  # the three calibration tests of tests/ionmc/test_v7r_coverage.py
+_FILTER_FLAGS = ("-k", "--deselect", "--ignore", "--lf", "--ff", "--sw", "--maxfail", "-x")
+
+
+def calibration_step_established(step: dict[str, Any]) -> bool:
+    """A ``pytest-v7r-calibration*`` step establishes the calibration only if it passed, its archived
+    pytest summary line is readable and reports at least ``V7R_MIN_CALIBRATION_PASSED`` passed tests with
+    no skipped, failed, errored, xfailed or xpassed test, and its command narrows the selection only by
+    ``-m calibration`` (no ``-k`` / ``--deselect`` / ``--ignore``), so that the tests deselected by the
+    marker are the non-calibration ones. An unreadable step output is not established."""
+    if not step.get("pass") or step.get("status") == "deferred":
+        return False
+    counts = step.get("pytest_counts")
+    if not isinstance(counts, dict) or counts.get("passed", 0) < V7R_MIN_CALIBRATION_PASSED:
+        return False
+    if any(v for k, v in counts.items() if k not in ("passed", "deselected", "warning", "warnings")):
+        return False  # skipped, failed, error(s), xfailed, xpassed, rerun ...
+    toks = str(step.get("pytest_command", "")).split()
+    cmd = toks[toks.index("pytest") + 1 :] if "pytest" in toks else []  # after "python -m pytest"
+    marker = cmd[cmd.index("-m") + 1 : cmd.index("-m") + 2] if "-m" in cmd else []
+    return (bool(cmd) and cmd.count("-m") == 1 and marker == ["calibration"]
+            and not any(t in _FILTER_FLAGS or t.startswith("--deselect=") for t in cmd))  # fmt: skip
+
+
 def slice_c_rows(suite: str | None, steps: dict[str, Any]) -> dict[str, Any]:
     """Row verdicts that are a conjunction of steps (suite ``lv5c``). Row V7-R (plan Amendment 14 (h)
     and Amendment 17 (a)6) passes iff ``v7r-combine`` passed (the three estimators, both gates each)
     AND every ``pytest-v7r-calibration`` / ``pytest-v7r-calibration-s{k}`` step of the archive passed
-    (at least one present); the steps of one archive share one SHA. A pytest step has no document, so
+    (at least one present) with a readable pytest summary of >= 3 passed and no skipped / failed /
+    xfailed test (``calibration_step_established``); the steps of one archive share one SHA. A pytest step has no document, so
     the conjunction cannot be made by a step. Otherwise the row verdict is "uncertainty-coverage evidence not established"."""
     if suite != "lv5c":
         return {}
@@ -384,7 +426,7 @@ def slice_c_rows(suite: str | None, steps: dict[str, Any]) -> dict[str, Any]:
     comb = by.get("v7r-combine")
     cal = {k: v for k, v in by.items() if k.startswith("pytest-v7r-calibration")}
     gates = bool(comb and comb.get("pass") and comb.get("status") != "deferred")
-    calibration = bool(cal) and all(v.get("pass") and v.get("status") != "deferred" for v in cal.values())
+    calibration = bool(cal) and all(calibration_step_established(v) for v in cal.values())
     row = {"gates_pass": gates, "calibration_pass": calibration, "calibration_steps": sorted(cal),
            "pass": gates and calibration}  # fmt: skip
     if not row["pass"]:

@@ -1061,7 +1061,9 @@ def _guard_env(v5b: ModuleType, fn):  # type: ignore[no-untyped-def]
         return fn()
     except Exception as exc:  # noqa: BLE001
         if "table" in str(exc).lower() or type(exc).__name__.startswith("NuclearTable"):
-            if os.environ.get("IONMC_REQUIRE_DATA") == "1":
+            if "1" == os.environ.get("IONMC_REQUIRE_DATA") or "required" == os.environ.get(
+                "IONMC_V7R_FIXTURES"
+            ):  # required mode (V7-R calibration step): never a skip
                 raise
             pytest.skip(f"no built nuclear table in the cache: {exc!r}")
         raise
