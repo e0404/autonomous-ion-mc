@@ -529,12 +529,18 @@ def make_kernel_support(real: type) -> SimpleNamespace:
 
 
 @functools.cache
-def make_transport_kernel(real: type, diag: bool):
+def make_transport_kernel(real: type, diag: bool, nuclear: bool = False):
     """Return the cached transport kernel for precision ``real`` and diagnostics flag ``diag``.
 
     ``enable_backward`` is off and ``module="unique"`` gives every variant its own Warp module
-    (its own compile unit and cache entry).
+    (its own compile unit and cache entry). ``nuclear=True`` returns the separate nuclear compile
+    unit of ``ionmc.transport.kernels_nuclear``; the code below is the ``nuclear=False`` kernel
+    and is not touched by it. Callers pass ``nuclear`` only when it is True.
     """
+    if nuclear:
+        from ionmc.transport.kernels_nuclear import make_nuclear_transport_kernel
+
+        return make_nuclear_transport_kernel(real, diag)
     name = check_real(real)
     R = real
     D = wp.float64  # energy / range bookkeeping in double precision (positions and angles in R)

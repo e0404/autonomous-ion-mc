@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+import re
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -94,12 +96,29 @@ NUCLEAR_DATASETS = {
 }
 
 
+SLICE_C_DATASETS = {
+    *(f"exfor-{e}" for e in (
+        "c0063", "c0141", "c0148", "c0550", "o0274", "o0553", "c0055", "c0057", "c1420",
+        "13753", "13569", "o0579", "o1226", "o0145", "c2637", "c2606", "o2057",
+    )),
+    "arxiv-1409-1938-source",
+    "arxiv-0908-1413-source",
+    *(f"geant4-{f}-11.4.2" for f in (
+        "g4barashenkovdata-hh", "g4bggnucleonelasticxs-cc", "g4nucleonnuclearcrosssection-cc",
+        "g4componentbarnucleonnucleusxsc-cc", "g4hadronnucleonxsc-cc",
+        "g4hadronelasticphysics-cc", "g4nuclearradii-cc", "g4isotopelist-hh",
+    )),
+    "pdg-rpp2022-pp-elastic",
+}  # fmt: skip
+
+
 def test_registry_has_exactly_the_registered_datasets() -> None:
     assert set(DATASETS) == {
         "nist-pstar-water-2005",
         "nist-astar-water-2005",
         "geant4-icru90-stopping-11.4.2",
         *NUCLEAR_DATASETS,
+        *SLICE_C_DATASETS,
     }
     for ds in DATASETS.values():
         assert ds.url.startswith("https://")
@@ -464,20 +483,80 @@ def test_exfor_manifest_matches_registry() -> None:
     manifest = json.loads(path.read_text(encoding="utf-8"))
     assert manifest["schema"] == "ionmc-exfor-manifest-1"
     by_entry = {e["entry"]: e for e in manifest["entries"]}
-    assert set(by_entry) == {"D0356", "C1862"}
+    slice_c = {
+        "C0063", "C0141", "C0148", "C0550", "O0274", "O0553", "C0055", "C0057", "C1420",
+        "13753", "13569", "O0579", "O1226", "O0145", "C2637", "C2606", "O2057",
+    }  # fmt: skip
+    assert set(by_entry) == {"D0356", "C1862"} | slice_c
     for entry in by_entry.values():
         ds = DATASETS[entry["dataset_id"]]
         assert entry["sha256"] == ds.sha256 and entry["role"] == ds.role
         assert entry["subentries"] and all(len(s["sha256"]) == 64 for s in entry["subentries"])
         assert all(s["subentry"].startswith(entry["entry"]) for s in entry["subentries"])
-    # roles follow the publication year (decision 0041: 1997 or later is evaluation)
-    assert [e["role"] for e in manifest["entries"] if e["year"] >= 1997] == ["evaluation"]
-    assert [e["role"] for e in manifest["entries"] if e["year"] < 1997] == ["exploratory"]
+        assert ds.parser == "exfor" and ds.license == "CC BY 4.0 (EXFOR, IAEA Nuclear Data Section)"
+    # slice A/B entries: role follows the publication year (decision 0041)
+    assert by_entry["D0356"]["role"] == "evaluation" and by_entry["C1862"]["role"] == "exploratory"
+    # slice C (Amendment 14 (l)): tool roles, finer labels in `lineage`
+    related = "related-model evidence (shared/related lineage)"
+    for e in ("C0063", "C0141", "C0148", "C0550", "O0274", "O0553", "C0055", "C0057", "C1420"):
+        assert by_entry[e]["role"] == "evaluation"
+        assert by_entry[e]["lineage"].startswith(related) and by_entry[e]["year"] < 1997
+    for e in ("13753", "O0579"):
+        assert by_entry[e]["role"] == "evaluation" and by_entry[e]["year"] >= 1997
+        assert by_entry[e]["lineage"].startswith("evaluation (post-1997)")
+    for e in ("13569", "O1226", "O0145", "C2637", "C2606", "O2057"):
+        assert by_entry[e]["role"] == "exploratory" and "report-only" in by_entry[e]["lineage"]
     reactions = {
         s["subentry"]: " ".join(s["reaction"]) for e in manifest["entries"] for s in e["subentries"]
     }
     assert "6-C-12(P,NON)" in reactions["D0356002"] and "20-CA-40(P,NON)" in reactions["D0356003"]
-    assert "6-C-12(P,NON)" in reactions["C1862002"] and "4-BE-9(P,NON)" in reactions["C1862003"]
     assert "8-O-16(P,NON)" in reactions["C1862004"]
+    assert "8-O-16(P,EL)" in reactions["C0063002"] and "6-C-0(N,TOT)" in reactions["13753007"]
+    assert "8-O-16(P,NON)" in reactions["O0579004"] and "1-H-1(P,EL)" in reactions["O1226002"]
     # identifiers and hashes only: no numeric cross-section values
-    assert "mb" not in json.dumps(manifest).lower().replace("embedded", "")
+    assert not re.search(r"\d\s*mb\b", json.dumps(manifest).lower())
+
+
+def test_slice_c_registry_roles_licences_and_lineage() -> None:
+    """C1b: the 24 acquisitions of Amendment 14 (l) are registered with the tool roles, the
+    finer labels in ``lineage``, the licences, and the Geant4 files are construction inputs."""
+    geant4 = [
+        d for d in DATASETS.values() if d.id.startswith("geant4-g4") and d.id.endswith("11.4.2")
+    ]
+    assert len(geant4) == 8
+    for d in geant4:
+        assert d.role == "construction" and d.license == "Geant4 Software License"
+        assert d.url.startswith("https://raw.githubusercontent.com/Geant4/geant4/v11.4.2/")
+        assert (
+            "hand-transcribed" in d.description
+            or "re-implemented" in d.description
+            or "lineage" in d.description
+        )
+    arx = DATASETS["arxiv-1409-1938-source"]
+    assert arx.role == "evaluation" and "shared beam lineage" in arx.lineage
+    assert arx.sha256.startswith("92cdaffb")
+    fdm = DATASETS["arxiv-0908-1413-source"]
+    assert fdm.role == "evaluation" and "construction lineage" in fdm.lineage
+    assert "report-only" in fdm.lineage and "construction" in fdm.description
+    assert fdm.sha256.startswith("67fb1478")
+    ex = [d for d in DATASETS.values() if d.id.startswith("exfor-")]
+    assert len(ex) == 19  # D0356, C1862 and the 17 slice-C entries
+    assert len({d.sha256 for d in DATASETS.values()}) == len(DATASETS)
+    notice = Path(__file__).resolve().parents[2] / "src" / "ionmc" / "THIRD_PARTY_NOTICES.md"
+    assert "G4BGGNucleonElasticXS.cc" in notice.read_text(encoding="utf-8")
+
+
+def test_slice_c_cached_objects_match_pins() -> None:
+    """Data-backed: every cached slice-C object re-hashes to its pin (skips without a cache,
+    fails under IONMC_REQUIRE_DATA=1 when a staged dataset is absent)."""
+    from ionmc.data import cache
+
+    cdir = cache.resolve_cache_dir(None)
+    ids = [i for i in DATASETS if i.startswith(("geant4-g4", "arxiv-", "exfor-", "pdg-"))]
+    missing = [i for i in ids if cache.read_manifest(i, cdir) is None]
+    if missing:
+        if os.environ.get("IONMC_REQUIRE_DATA") == "1":
+            pytest.fail(f"datasets not cached: {missing}")
+        pytest.skip("slice-C datasets not cached")
+    for i in ids:
+        assert cache.verify(i, cdir).is_file()

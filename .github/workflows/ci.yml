@@ -55,7 +55,7 @@ jobs:
         run: uv sync --extra dev --locked
 
       - name: Run lightweight tests
-        run: uv run pytest tests -q -m "not cuda and not host"
+        run: uv run pytest tests -q -m "not cuda and not host and not calibration"
 
   docs:
     name: docs

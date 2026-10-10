@@ -44,6 +44,7 @@ import numpy as np
 from ionmc._wpfunc import python_twin
 from ionmc.config import MAX_REJECTION_ATTEMPTS, NUCLEAR_MAX_ENERGY_MEV, EffectiveConfig
 from ionmc.errors import CounterOverflowError
+from ionmc.physics.elastic import make_elastic
 from ionmc.physics.em import make_em
 from ionmc.physics.kinematics import make_kinematics
 from ionmc.physics.nuclear import make_nuclear
@@ -63,6 +64,8 @@ from ionmc.transport.run import channel_columns
 from ionmc.transport.scoring_ref import ReferenceChannelScorer
 from ionmc.transport.tally import (
     COUNTER_NAMES,
+    ELASTIC_COUNTER_NAMES,
+    ELASTIC_TALLY_NAMES,
     END_CUTOFF,
     END_ESCAPED,
     END_MISSED_WORLD,
@@ -98,12 +101,30 @@ __all__ = [
 
 
 STACK_CAPACITY = MAX_PARTICLES
+SECONDARY_ENERGY_SHIFT_MEV = 0.0  # test hook, see kernels_nuclear; always 0 in production
+NUCLEAR_DOMAIN_MAX_MEV = NUCLEAR_MAX_ENERGY_MEV
+"""Largest kinetic energy at which a proton can take a nuclear candidate (the table domain,
+decision 0041 section 5); a secondary above it flies without nuclear thinning until it slows
+below (C19 review F1). Lowered by tests only."""
+SECONDARY_NUCLEAR = True
+"""Secondary protons (generation >= 1) undergo non-elastic interactions (V3-005B C13, decision 0041
+section 3). ``False`` restores the primary-only histories of slice A for the regression check;
+the Warp kernel reads the same switch (``kernels_nuclear.SECONDARY_NUCLEAR``)."""
+TRACE_EVENT_ROWS = 8
+TRACE_SECONDARY_ROWS = 32
+"""Per-history capacity of the diagnostics-only nuclear trace (the Warp trace arrays' rows)."""
 """Capacity of the per-history LIFO particle stack (decision 0041 section 3)."""
 NUC_SPECIES_KEYS = ("n", "p", "d", "a", "g")
 """Light-product keys of the nuclear event diagnostics (``ionmc.nuclear.events.SPECIES``)."""
 END_NUCLEAR = 5
 """History end code (diagnostics only, not part of ``tally``): the primary ended in a nuclear
 event."""
+EL_TRACE_COLUMNS = 21
+"""Columns of the diagnostics-only elastic event record ``meta["elastic_trace"]`` (recorded inputs
+and outputs of every accepted elastic event, the P5-ext replay hook): history, genealogy id,
+generation, table target, T_in, u_target, u_mu, u_phi, incident direction (3), mu_CM, phi,
+T_primary, primary direction (3), T_other, other direction (3) (21 columns; the recoil energy of a
+p + A event is ``T_other``)."""
 EVENT_BLOCKS_PER_ATTEMPT = 164
 """Philox blocks reserved per event attempt: the largest slot ``particle_slot(79, 4) = 644`` of 80
 products lies in block 161 (4 uniforms per block)."""
@@ -125,8 +146,9 @@ def run_reference(eff: EffectiveConfig) -> RawTransport:
     part = run_reference_range(eff, 0, n)
     diag = eff.requested.diagnostics
     raw = merge_partials(
-        [part], n, len(eff.requested.scoring), channel_columns(eff), eff.nuclear is not None
-    )
+        [part], n, len(eff.requested.scoring), channel_columns(eff), eff.nuclear is not None,
+        eff.nuclear is not None and eff.nuclear.elastic is not None,
+    )  # fmt: skip
     raw.diagnostics = build_diagnostics(
         [part], diag.track_end_positions, diag.escape_records, diag.trace_histories
     )
@@ -204,6 +226,12 @@ class _Reference:
         self.counter_names: tuple[str, ...] = COUNTER_NAMES
         self.ntallies: dict[str, float] = {}
         self.nuc_diag: dict[str, dict[str, Any]] = {}  # nuclear event diagnostics (nuclear runs)
+        self.nuc_above = 0  # secondary protons born above the table domain (C19 F1)
+        # diagnostics-only nuclear trace of the first trace_histories histories: accepted events
+        # (h, gid, target, counts[5], Z_r, A_r, attempts, T1) and pushed secondaries (h, gid,
+        # parent gid, species, generation, T, direction, position); no effect on the transport
+        self.want_diag = False  # set by run_range
+        self.nuc_trace: dict[str, list[list[float]]] = {"events": [], "secondaries": []}
         if self.nuc is not None:  # conditional nuclear blocks (decision 0041 sections 2-5)
             self.counter_names = COUNTER_NAMES + NUCLEAR_COUNTER_NAMES
             self.NU = python_twin(make_nuclear)
@@ -213,6 +241,18 @@ class _Reference:
             self._models: dict[int, tuple[object, dict[str, np.ndarray]]] = {}
             self.counters = dict.fromkeys(self.counter_names, 0)
             self.ntallies = dict.fromkeys(NUCLEAR_TALLY_NAMES, 0.0)
+        # hadronic elastic channel (V3-005C): None unless nuclear=True with elastic=True
+        self.el = None if self.nuc is None else self.nuc.elastic
+        self.n_el_t = 0
+        self._n_children = 0
+        self._dom_pa = self._dom_pp = False
+        self.el_trace: list[list[float]] = []
+        if self.el is not None:
+            self.EL = python_twin(make_elastic)
+            self.counter_names = COUNTER_NAMES + NUCLEAR_COUNTER_NAMES + ELASTIC_COUNTER_NAMES
+            self.counters = dict.fromkeys(self.counter_names, 0)
+            self.ntallies.update(dict.fromkeys(ELASTIC_TALLY_NAMES, 0.0))
+            self.n_el_t = len(ELASTIC_TALLY_NAMES)
         self.e_table_max = float(self.tab.e_max_mev.min())
         # scoring channels (decision 0040): None without tallies, then the qualified path is
         # untouched (no step precompute, no extra leg walks, no extra tally columns)
@@ -411,8 +451,10 @@ class _Reference:
         self.h_base = h0
         n_chan_cols = channel_columns(self.eff)
         counter_rows = np.zeros((n, len(self.counter_names)), dtype=np.int32)
-        n_nuc_t = len(NUCLEAR_TALLY_NAMES) if self.nuc is not None else 0
-        tally_rows = np.zeros((n, N_FIXED_TALLIES + 2 * n_g + n_chan_cols + n_nuc_t))
+        all_t: tuple[str, ...] = ()
+        if self.nuc is not None:
+            all_t = NUCLEAR_TALLY_NAMES + (ELASTIC_TALLY_NAMES if self.el is not None else ())
+        tally_rows = np.zeros((n, N_FIXED_TALLIES + 2 * n_g + n_chan_cols + len(all_t)))
         c_chan = N_FIXED_TALLIES + 2 * n_g
         for h in range(h0, h1):
             # per-history accumulators: a row depends on this history alone
@@ -420,7 +462,7 @@ class _Reference:
             self.outside = [0.0] * n_g
             self.quant = [0.0] * n_g
             self.counters = dict.fromkeys(self.counter_names, 0)
-            self.ntallies = dict.fromkeys(NUCLEAR_TALLY_NAMES, 0.0) if self.nuc is not None else {}
+            self.ntallies = dict.fromkeys(all_t, 0.0)
             self.ctrl_res = 0.0
             self.ctrl_sum = [0.0, 0.0, 0.0]
             self.path_exceeded = 0
@@ -436,7 +478,7 @@ class _Reference:
                 tally_rows[row, c_chan + n_chan_cols - 2] = self.scorer.lookup_ood
                 tally_rows[row, c_chan + n_chan_cols - 1] = self.path_exceeded
             if self.nuc is not None:
-                tally_rows[row, -n_nuc_t:] = [self.ntallies[k] for k in NUCLEAR_TALLY_NAMES]
+                tally_rows[row, -len(all_t) :] = [self.ntallies[k] for k in all_t]
             counter_rows[row] = [self.counters[k] for k in self.counter_names]
         diagnostics = None
         if self.want_diag:
@@ -457,6 +499,16 @@ class _Reference:
         )  # fmt: skip
         if self.nuc is not None:
             part.meta["nuclear_diagnostics"] = self.nuc_diag
+            part.meta["nuclear_secondaries_above_domain"] = self.nuc_above
+            if self.el is not None and self.cfg.diagnostics.trace_histories > 0:
+                part.meta["elastic_trace"] = np.array(self.el_trace, dtype=np.float64).reshape(
+                    -1, EL_TRACE_COLUMNS
+                )
+            if self.want_diag:
+                part.meta["nuclear_trace"] = {
+                    k: np.array(v, dtype=np.float64).reshape(-1, 12)
+                    for k, v in self.nuc_trace.items()
+                }
         return part
 
     def _end(
@@ -486,6 +538,7 @@ class _Reference:
     def _sigma(self, rows: object, e: float) -> float:
         """``Sigma_mass(E)`` [cm2/g] of a material's rows: step lookup of the cell by the shared
         ``grid_locate``, lin-lin in E (clamped), as ``MaterialNuclear.sigma_at``."""
+        assert e <= NUCLEAR_DOMAIN_MAX_MEV, "sigma_at above the nuclear table domain"
         g = rows.grid_e_mev  # type: ignore[attr-defined]
         k = int(self.NU.grid_locate(e, g, g.size))
         t = min(max((e - g[k]) / (g[k + 1] - g[k]), 0.0), 1.0)
@@ -511,6 +564,23 @@ class _Reference:
             )
         return self._models[tgt]
 
+    def _sigma_el(self, rows: object, e: float) -> float:
+        """``Sigma_el(E)`` [cm2/g] of a material's elastic rows (lin-lin in E on the elastic grid,
+        clamped; ``MaterialElastic.sigma_at`` with the shared ``grid_locate``)."""
+        g = rows.grid_e_mev  # type: ignore[attr-defined]
+        k = int(self.NU.grid_locate(e, g, g.size))
+        t = min(max((e - g[k]) / (g[k + 1] - g[k]), 0.0), 1.0)
+        row = rows.sigma_mass_cm2_g  # type: ignore[attr-defined]
+        return float((1.0 - t) * row[k] + t * row[k + 1])
+
+    def _sigma_tot(self, nu_rows: object, el_rows: object | None, e: float) -> tuple[float, float]:
+        """``(Sigma_nonel, Sigma_el)`` at ``e`` [cm2/g]; ``Sigma_nonel`` is 0 with ``elastic_only``
+        and ``Sigma_el`` is 0 without the elastic channel."""
+        if el_rows is None:
+            return self._sigma(nu_rows, e), 0.0
+        sn = 0.0 if self.el.elastic_only else self._sigma(nu_rows, e)  # type: ignore[union-attr]
+        return sn, self._sigma_el(el_rows, e)
+
     def _candidate(
         self,
         h: int,
@@ -518,32 +588,115 @@ class _Reference:
         gid: int,
         nc: int,
         rows: object,
+        el_rows: object | None,
         s_hat: float,
         energy: float,
         pos: tuple[float, float, float],
         direction: tuple[float, float, float],
         vox: tuple[int, int, int],
         stack: list[tuple[float, ...]],
-    ) -> tuple[int, float, bool]:
-        """A nuclear candidate at the post-step point with energy ``energy`` = E1: accept with
-        probability ``Sigma(E1) / S^(E0)`` (``thinning_accept``). Returns the next nuclear block
-        counter, the (resampled) optical depth and whether the primary has ended."""
-        u = self._nuc_u(h, gid, nc)  # (u_accept, u_n_lambda, u_target, .)
+    ) -> tuple[int, float, bool, tuple[float, ...] | None]:
+        """A candidate at the post-step point with energy ``energy`` = E1: accept with probability
+        ``Sigma_tot(E1) / S^_tot(E0)`` (``thinning_accept``), ``Sigma_tot = Sigma_nonel +
+        Sigma_el``; an accepted candidate is elastic iff ``u3 Sigma_tot < Sigma_el`` (free slot 3 of
+        the candidate block), else non-elastic. Returns the next nuclear block counter, the
+        (resampled) optical depth, whether the particle has ended and, after an elastic event, the
+        new ``(E, ux, uy, uz)`` of the continuing primary."""
+        u = self._nuc_u(h, gid, nc)  # (u_accept, u_n_lambda, u_target, u_channel)
         nc += 1
         r = self.R
-        accepted, violation = self.NU.thinning_accept(
-            r(u[0]), r(self._sigma(rows, energy)), r(s_hat)
-        )
+        s_n, s_e = self._sigma_tot(rows, el_rows, energy)
+        accepted, violation = self.NU.thinning_accept(r(u[0]), r(s_n + s_e), r(s_hat))
         if violation:  # fail closed: the majorant was violated
             self.counters["majorant_violation"] += 1
             self.tallies["unaccounted"] += energy
             self._end(h, END_NUCLEAR, pos, direction, energy)
-            return nc, 0.0, True
+            return nc, 0.0, True, None
         if not accepted:  # fictitious: resample the optical depth
-            return nc, -math.log(u[1]), False
+            return nc, -math.log(u[1]), False, None
+        if el_rows is not None and int(self.EL.channel_is_elastic(r(u[3]), r(s_e), r(s_n + s_e))):
+            new = self._elastic_event(
+                h, batch, gid, nc, el_rows, u[2], energy, pos, direction, vox, stack
+            )
+            return nc + 1, -math.log(u[1]), False, new
         self._event(h, batch, gid, nc, rows, u[2], energy, pos, direction, vox, stack)
         self._end(h, END_NUCLEAR, pos, direction, energy)
-        return nc, 0.0, True
+        return nc, 0.0, True, None
+
+    def _elastic_event(
+        self,
+        h: int,
+        batch: int,
+        gid: int,
+        nc: int,
+        el_rows: object,
+        u_target: float,
+        t1: float,
+        pos: tuple[float, float, float],
+        direction: tuple[float, float, float],
+        vox: tuple[int, int, int],
+        stack: list[tuple[float, ...]],
+    ) -> tuple[float, ...]:
+        """An accepted elastic event of a proton of energy ``t1`` (block ``nc`` of its nuclear
+        stream: slot 0 the CM-cosine uniform, slot 1 the azimuth uniform; the particle goes on).
+        Returns the new ``(E, ux, uy, uz)`` of the continuing primary. p-p: the slower proton is
+        pushed as a transported secondary of generation + 1. p + A: the recoil nucleus energy is
+        deposited locally (``elastic_recoil_local``)."""
+        from ionmc.nuclear.elastic_events import sample_elastic_event
+
+        r, nt, ctr = self.R, self.ntallies, self.counters
+        el = self.el
+        assert el is not None
+        u = self._nuc_u(h, gid, nc)
+        d3 = self.V(r(direction[0]), r(direction[1]), r(direction[2]))
+        e1, e2 = self.F.orthonormal_basis(d3)
+        ev = sample_elastic_event(
+            self.EL, self.NU, el.table.arrays, el_rows, self.mass_p, t1,
+            u_target, u[0], u[1], direction, e1, e2,
+        )  # fmt: skip
+        if h < self.cfg.diagnostics.trace_histories:
+            self.el_trace.append(
+                [h, gid, self.generation, ev.target, t1, u_target, u[0], u[1], *direction,
+                 ev.mu_cm, ev.phi, ev.t_primary_mev, *ev.dir_primary, ev.t_other_mev,
+                 *ev.dir_other]
+            )  # fmt: skip
+        gen = self.generation + 1
+        if ev.pp:
+            nt["elastic_pp_events"] += 1.0
+            t_o = ev.t_other_mev
+            if t_o < self.e_cut_p:  # below the proton cutoff: deposited locally as cutoff energy
+                self.tallies["cutoff"] += t_o
+                self._deposit_point(batch, pos, t_o, 0, gen)
+            else:
+                self._n_children += 1
+                try:
+                    cid = child_genealogy_id(gid, self.generation, self._n_children)
+                except CounterOverflowError:
+                    ctr["genealogy_overflow"] += 1
+                    self.tallies["unaccounted"] += t_o
+                    cid = -1
+                if cid >= 0 and len(stack) >= STACK_CAPACITY:
+                    ctr["queue_overflow"] += 1
+                    self.tallies["unaccounted"] += t_o
+                elif cid >= 0:
+                    dx, dy, dz = ev.dir_other
+                    pv = float(self.K.pv_mev(r(t_o), self.mass_p))
+                    stack.append(
+                        (pos[0], pos[1], pos[2], dx, dy, dz, t_o, 0.0, float(cid), float(gen),
+                         float(vox[0]), float(vox[1]), float(vox[2]), pv)
+                    )  # fmt: skip
+            miss = t1 - (ev.t_primary_mev + t_o)
+        else:
+            nt["elastic_pa_events"] += 1.0
+            t_r = ev.t_other_mev
+            nt["elastic_recoil_local"] += t_r
+            self._deposit_point(batch, pos, t_r, PSEUDO_BASE, gen)
+            miss = t1 - (ev.t_primary_mev + t_r)
+        if abs(miss) > 1.0e-9 * t1:  # per-event energy ledger (should never fire)
+            ctr["nuclear_conservation"] += 1
+            self.tallies["unaccounted"] += miss
+        ux, uy, uz = ev.dir_primary
+        return (ev.t_primary_mev, ux, uy, uz)
 
     def _event(
         self,
@@ -564,6 +717,7 @@ class _Reference:
         section 3 with the amendment of 2026-10-07)."""
         from ionmc.nuclear.events import interp_rows, sample_event_scalar
 
+        assert t1 <= NUCLEAR_DOMAIN_MAX_MEV, "nuclear event above the table domain"
         r, nt, ctr = self.R, self.ntallies, self.counters
         cum = rows.cum_fraction_at(t1)  # type: ignore[attr-defined]
         tgt_list = rows.target_index  # type: ignore[attr-defined]
@@ -598,6 +752,16 @@ class _Reference:
             str(int(tgt_list[chosen])),
             {"events": 0, "light": dict.fromkeys(NUC_SPECIES_KEYS, 0), "residual": {}},
         )
+        if (
+            self.want_diag
+            and h < self.cfg.diagnostics.trace_histories
+            and self._n_ev_rows < TRACE_EVENT_ROWS
+        ):
+            self._n_ev_rows += 1
+            self.nuc_trace["events"].append(
+                [h, gid, int(tgt_list[chosen]), *(int(c) for c in ev.counts), int(ev.z_r),
+                 int(ev.a_r), ev.attempts, t1]
+            )  # fmt: skip
         rec["events"] += 1
         for key, cnt in zip(NUC_SPECIES_KEYS, ev.counts, strict=True):
             rec["light"][key] += int(cnt)
@@ -610,7 +774,7 @@ class _Reference:
         # frame of the parent direction: e1, e2 perpendicular, the event frame has z along the beam
         d3 = self.V(r(direction[0]), r(direction[1]), r(direction[2]))
         e1, e2 = self.F.orthonormal_basis(d3)
-        n_children = 0
+        n_children = self._n_children
         for sp_i, _ecm, _mu, _phi, e_lab, qx, qy, qz in ev.particles:
             si = int(sp_i)
             t_lab = e_lab - masses[si] if si < 4 else e_lab
@@ -648,11 +812,24 @@ class _Reference:
                 else:
                     dx, dy, dz = direction
                 mass = self.mass_p if species == 0 else self.mass_d
+                if species == 0 and SECONDARY_ENERGY_SHIFT_MEV != 0.0:  # test hook
+                    t_lab += SECONDARY_ENERGY_SHIFT_MEV
+                    self.tallies["initial"] += SECONDARY_ENERGY_SHIFT_MEV
                 pv = float(self.K.pv_mev(r(t_lab), mass))
+                if (
+                    self.want_diag
+                    and h < self.cfg.diagnostics.trace_histories
+                    and self._n_sec_rows < TRACE_SECONDARY_ROWS
+                ):
+                    self._n_sec_rows += 1
+                    self.nuc_trace["secondaries"].append(
+                        [h, cid, gid, species, gen, t_lab, dx, dy, dz, pos[0], pos[1], pos[2]]
+                    )
                 stack.append(
                     (pos[0], pos[1], pos[2], dx, dy, dz, t_lab, float(species), float(cid),
                      float(gen), float(vox[0]), float(vox[1]), float(vox[2]), pv)
                 )  # fmt: skip
+        self._n_children = n_children
         local = alpha_t + ev.recoil_t_mev
         nt["nuclear_local"] += local
         nt["nuclear_alpha_local"] += alpha_t
@@ -673,6 +850,7 @@ class _Reference:
         nx, ny, nz = self.shape
 
         self.generation = 0
+        self._n_ev_rows = self._n_sec_rows = 0  # nuclear trace rows of this history
         self._set_species(0)
         # source sampling (purpose 1)
         w = draw_block(key, h, 0, 0, PURPOSE_SOURCE)
@@ -757,16 +935,25 @@ class _Reference:
         p1v1 = entry[13]
         self.generation = gen
         self._set_species(species)
+        self._n_children = 0  # children pushed by this particle (elastic events do not end it)
+        self._dom_pa = self._dom_pp = False  # domain diagnostics fire once per proton
         trace_this = h < cfg.diagnostics.trace_histories and gen == 0
-        # nuclear interactions of the PRIMARY proton only (decision 0041 section 3: secondaries
-        # and deuterons have none in slice A)
-        nuc_on = self.nuc is not None and gen == 0
+        # nuclear interactions of protons: the primary and, from C13, the secondary protons
+        # (generation >= 1) with the same thinning, majorant checks and event sampler, on their
+        # own streams (purpose NUCLEAR, genealogy id of the particle); deuterons have none
+        nuc_on = self.nuc is not None and species == 0 and (gen == 0 or SECONDARY_NUCLEAR)
         nu_rows = None
+        el_rows = None
         n_lam = 0.0
         nc = 0
         if nuc_on:  # birth: the optical depth to the first candidate (nuclear block 0, slot 0)
             n_lam = -math.log(self._nuc_u(h, gid, 0)[0])
             nc = 1
+            if energy > NUCLEAR_DOMAIN_MAX_MEV and gen > 0:
+                # C19 F1: no candidate while above the table domain; the birth optical depth is
+                # kept (the draw is a fixed block of the particle's own stream, no desync) and
+                # starts to run down at the first step that begins inside the domain
+                self.nuc_above += 1
         steps = 0
         # first step of the particle's life: linearized analytic log-average of f_dM (~1e-3)
         birth = True
@@ -798,7 +985,8 @@ class _Reference:
             )
             s_el = F.eloss_step_limit(r(energy), r(s_lin), self.c_frac)
             s_rg = F.range_step_limit(r(r_mm), self.c_alpha, self.c_rho_f)
-            if nuc_on:
+            nuc_step = nuc_on and energy <= NUCLEAR_DOMAIN_MAX_MEV
+            if nuc_step:
                 # majorant of the step: window value at the grid cell of E0 (step lookup) or the
                 # end-of-range value for a range-limited step; d_nuc in mm (rate rho * S^ / cm)
                 assert self.nuc is not None
@@ -808,6 +996,20 @@ class _Reference:
                     nu_rows.sigma_hat_end if float(s_rg) < float(s_el) else nu_rows.sigma_hat_window
                 )
                 s_hat = float(majorant_row[k0])
+                if self.el is not None:
+                    # Sigma_tot majorant = non-elastic majorant + elastic majorant (each on its own
+                    # grid, step lookup); elastic_only drops the non-elastic part. With Sigma_el = 0
+                    # this is the non-elastic majorant bit for bit (x + 0.0).
+                    el_rows = self.el.rows[m]
+                    ke = int(
+                        self.NU.grid_locate(energy, el_rows.grid_e_mev, el_rows.grid_e_mev.size)
+                    )
+                    el_row = (
+                        el_rows.sigma_hat_end
+                        if float(s_rg) < float(s_el)
+                        else el_rows.sigma_hat_window
+                    )
+                    s_hat = (0.0 if self.el.elastic_only else s_hat) + float(el_row[ke])
                 d_nuc = float(self.NU.nuclear_step_limit(r(n_lam), r(rho), r(s_hat)))
                 s_w, reason = F.select_step_nuclear(d_geo, s_el, s_rg, self.c_smax, r(d_nuc))
             else:
@@ -968,6 +1170,14 @@ class _Reference:
             ux, uy, uz = d1x, d1y, d1z
             energy = e_new
             steps += 1
+            if self.el is not None and species == 0:
+                # declared model domain (Amendment 15 (b)2): diagnostics, once per proton
+                if not self._dom_pa and energy < self.el.e_min_pa[m]:
+                    self._dom_pa = True
+                    self.counters["elastic_below_domain"] += 1
+                if not self._dom_pp and energy < self.el.e_min_pp[m]:
+                    self._dom_pp = True
+                    self.counters["pp_below_domain"] += 1
             if self.scorer is not None:
                 self._path_mm += s_act  # scored path of this history (the L channel's quantity)
                 if self._path_mm > self.path_bound_mm:  # the capacity proof assumes L_h <= B_L
@@ -996,13 +1206,12 @@ class _Reference:
                         s_act,
                     ]
                 )
-            if nuc_on:
+            if nuc_step:
                 n_lam -= rho * s_hat * s_act / 10.0
                 # majorant check after EVERY step (decision 0041 section 2): the Gamma straggling
                 # tail is unbounded, so Sigma(E1) <= S^(E0) is not guaranteed by the window
-                _acc, viol = self.NU.thinning_accept(
-                    r(0.5), r(self._sigma(nu_rows, energy)), r(s_hat)
-                )
+                s_n, s_e = self._sigma_tot(nu_rows, el_rows, energy)
+                _acc, viol = self.NU.thinning_accept(r(0.5), r(s_n + s_e), r(s_hat))
                 if viol:
                     self.counters["majorant_violation"] += 1
                     self.tallies["unaccounted"] += energy
@@ -1010,12 +1219,14 @@ class _Reference:
                     return
                 if int(reason) == 4 and axis2 < 0 and not exited and energy > self.e_cut:
                     # candidate at the post-step point (leg 2 not truncated)
-                    nc, n_lam, done = self._candidate(
-                        h, batch, gid, nc, nu_rows, s_hat, energy, (px, py, pz), (ux, uy, uz),
-                        (ix, iy, iz), stack,
+                    nc, n_lam, done, new = self._candidate(
+                        h, batch, gid, nc, nu_rows, el_rows, s_hat, energy, (px, py, pz),
+                        (ux, uy, uz), (ix, iy, iz), stack,
                     )  # fmt: skip
                     if done:
                         return
+                    if new is not None:  # an elastic event: the primary goes on
+                        energy, ux, uy, uz = new
             if exited:
                 self.tallies["escaped"] += energy
                 self._end(h, END_ESCAPED, (px, py, pz), (ux, uy, uz), energy)

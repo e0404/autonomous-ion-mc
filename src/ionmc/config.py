@@ -68,6 +68,15 @@ class PhysicsOptions:
     backend, proton source only) additionally needs ``nuclear_table_id`` (the derived nuclear
     table, loaded and verified by ``validate()``) and uses ``e_cut_deuteron_mev`` (the deuteron
     cutoff, an engineering default of 4 MeV = twice the 2 MeV total-energy Bethe table floor).
+    ``elastic`` (default ``True``, V3-005C, decision 0041 slice C) adds the hadronic elastic channel
+    (p-p and p + A, all backends since C4) to a ``nuclear=True`` run: ``Sigma_tot =
+    Sigma_nonel + Sigma_el`` in the thinning, the p-p slower proton as a transported secondary and
+    the p + A recoil deposited locally (``elastic_recoil_local``). ``elastic=False`` reproduces the
+    pre-D2 non-elastic-only behaviour bit for bit; without ``nuclear=True`` the switch has no
+    effect. ``elastic_table_id`` names the derived elastic table (default: the id pinned in
+    ``src/ionmc/data/elastic_table_pin.json``); it is loaded, re-hashed and qualification-checked
+    fail-closed. ``elastic_only`` (internal, row V11) switches the non-elastic channel off so that
+    only EM and elastic scattering act; it needs ``nuclear=True`` and ``elastic=True``.
     ``stopping`` supplies the electronic stopping tables (for example an
     analytic :class:`~ionmc.physics.stopping.BetheStoppingSource`). Below ``e_cut_mev`` the
     remaining kinetic energy is deposited locally; ``max_step_mm`` bounds the step length;
@@ -98,9 +107,19 @@ class PhysicsOptions:
     truncated_hinge_diagnostic: bool = False
     e_cut_deuteron_mev: float = 4.0
     nuclear_table_id: str | None = None
+    elastic: bool = True
+    elastic_only: bool = False
+    elastic_table_id: str | None = None
 
     def __post_init__(self) -> None:
-        for name in ("nuclear", "straggling", "multiple_scattering", "truncated_hinge_diagnostic"):
+        for name in (
+            "nuclear",
+            "straggling",
+            "multiple_scattering",
+            "truncated_hinge_diagnostic",
+            "elastic",
+            "elastic_only",
+        ):
             if not isinstance(getattr(self, name), bool):
                 raise fail(f"{name} must be a bool, got {getattr(self, name)!r}")
         for name in ("straggling_model", "mcs_model", "delta_electrons"):
@@ -112,6 +131,10 @@ class PhysicsOptions:
         real("e_cut_deuteron_mev", self.e_cut_deuteron_mev, positive=True)
         if self.nuclear_table_id is not None and not isinstance(self.nuclear_table_id, str):
             raise fail("nuclear_table_id must be a string or None")
+        if self.elastic_table_id is not None and not isinstance(self.elastic_table_id, str):
+            raise fail("elastic_table_id must be a string or None")
+        if self.elastic_only and not (self.nuclear and self.elastic):
+            raise fail("elastic_only needs nuclear=True and elastic=True")
         real("max_step_mm", self.max_step_mm, positive=True)
         f = real("max_energy_loss_fraction", self.max_energy_loss_fraction, positive=True)
         if f > MAX_ENERGY_LOSS_FRACTION:
@@ -328,6 +351,22 @@ class EffectiveConfig:
         if self.nuclear is not None:  # nuclear=False summaries are unchanged
             out["physics"]["e_cut_deuteron_mev"] = p.e_cut_deuteron_mev
             out["nuclear"] = self.nuclear.summary(self.geometry)
+            if self.nuclear.elastic is not None:  # elastic=False summaries are unchanged
+                out["elastic"] = self.nuclear.elastic.summary()
+            if self.backend != "python":  # the uploaded arrays of the Warp kernels (V3-005B)
+                from ionmc.transport.nuclear_device import host_sha256, pack_nuclear
+
+                out["nuclear"]["device_sha256"] = host_sha256(
+                    pack_nuclear(self.nuclear.table, self.geometry.materials), self.precision
+                )
+                if self.nuclear.elastic is not None:
+                    from ionmc.transport import elastic_device as ed
+
+                    el = self.nuclear.elastic
+                    out["elastic"]["device_sha256"] = ed.host_sha256(
+                        ed.pack_elastic(el.table, self.geometry.materials, rows=el.rows),
+                        self.precision,
+                    )
         return out
 
 
@@ -484,6 +523,66 @@ def _water_table(
 
 
 @dataclass(frozen=True, eq=False)
+class ElasticSetup:
+    """The verified elastic inputs of a run with the hadronic elastic channel (V3-005C): the loaded
+    ``table`` (an ``ElasticTable``), its per-material ``rows`` (``MaterialElastic``),
+    ``elastic_only`` (non-elastic channel off), the per-material lower domain bounds used by the
+    diagnostic counters (``e_min_pa``: largest ``e_min_shape`` over the material's p + A targets;
+    ``e_min_pp``: ``E_min,pp`` if the material contains hydrogen, else 0) and whether the table is
+    the one pinned in ``elastic_table_pin.json``."""
+
+    table: Any
+    rows: tuple[Any, ...]
+    elastic_only: bool
+    e_min_pa: tuple[float, ...]
+    e_min_pp: tuple[float, ...]
+    pinned: bool
+
+    def summary(self) -> dict[str, Any]:
+        info = self.table.info
+        return {
+            "table_id": self.table.table_id,
+            "pinned": self.pinned,
+            "schema": info["schema"],
+            "builder_version": info["builder_version"],
+            "npz_sha256": info["npz_sha256"],
+            "elastic_only": self.elastic_only,
+            "elastic_domain": {k: list(v) for k, v in self.table.elastic_domain().items()},
+        }
+
+
+def _pinned_elastic_table_id() -> str:
+    import json
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parent / "data" / "elastic_table_pin.json"
+    return str(json.loads(path.read_text(encoding="utf-8"))["table_id"])
+
+
+def _elastic_setup(config: SimulationConfig, geometry: VoxelGeometry) -> ElasticSetup:
+    """Fail-closed rules of the elastic channel (all backends since C4): a loaded, re-hashed
+    and qualified table, every element of every material covered (UnsupportedCombinationError)."""
+    from ionmc.nuclear.elastic_tables import ElasticTable
+
+    ph = config.physics
+    pin = _pinned_elastic_table_id()
+    tid = ph.elastic_table_id if ph.elastic_table_id is not None else pin
+    table = ElasticTable.load(None, tid)
+    rows = tuple(table.material_rows(m) for m in geometry.materials)
+    dom = table.elastic_domain()
+    e_pa, e_pp = [], []
+    for m in geometry.materials:
+        pa = [
+            dom[table.info["elements"][sym]["target"]][0]
+            for sym in m.mass_fractions
+            if table.info["elements"][sym]["target"] != "H-1"
+        ]
+        e_pa.append(max(pa, default=0.0))
+        e_pp.append(dom["H-1"][0] if "H" in m.mass_fractions else 0.0)
+    return ElasticSetup(table, rows, ph.elastic_only, tuple(e_pa), tuple(e_pp), tid == pin)
+
+
+@dataclass(frozen=True, eq=False)
 class NuclearSetup:
     """The verified nuclear inputs of a ``nuclear=True`` run (decision 0041 sections 5, 6):
     the loaded ``table`` (a ``NuclearTable``), its per-material ``rows`` (``MaterialNuclear``, one
@@ -501,6 +600,7 @@ class NuclearSetup:
     history_energy_bound_mev: float
     producible: frozenset[tuple[str, str]]
     capacity: NuclearCapacity | None = None
+    elastic: ElasticSetup | None = None
 
     def summary(self, geometry: VoxelGeometry) -> dict[str, Any]:
         """JSON-serialisable record of the nuclear configuration (the effective config)."""
@@ -542,18 +642,13 @@ def _nuclear_setup_checks(
     config: SimulationConfig, geometry: VoxelGeometry
 ) -> tuple[Any, tuple[Any, ...]]:
     """Fail-closed rules of ``nuclear=True`` that need no tables (decision 0041 section 5): any
-    warp backend, ``nist-star`` (no deuteron table), a missing table id, a missing / stale /
+    ``nist-star`` (no deuteron table), a missing table id, a missing / stale /
     mis-pinned table (the loader's ``NuclearTableError``, an ``UnsupportedCombinationError``),
     ``E0 + 6 sigma_E > 250 MeV`` and an element of a material without a table entry. Returns
     the loaded table and the per-material rows."""
     from ionmc.nuclear.tables import NuclearTable  # lazy: heavy and only for nuclear runs
 
-    src, ph, run = config.source, config.physics, config.run
-    if run.backend != "python":
-        raise fail(
-            f"nuclear=True requires backend 'python' (got {run.backend!r}): the Warp nuclear "
-            "kernels are V3-005B"
-        )
+    src, ph = config.source, config.physics
     if ph.stopping.name == "nist-star":
         raise fail(
             "nuclear=True is not available with the 'nist-star' stopping source: secondary "
@@ -713,6 +808,8 @@ def validate(config: SimulationConfig) -> EffectiveConfig:
     nuclear: NuclearSetup | None = None
     if nuc_table is not None:
         tables, nuclear = _nuclear_tables(config, geometry, tables, nuc_table, nuc_rows)
+        if ph.elastic:
+            nuclear = replace(nuclear, elastic=_elastic_setup(config, geometry))
     e_lo = float(tables.e_min_mev.max())
     e_hi_table = float(tables.e_max_mev.min())
     if e_lo > 0.5 * ph.e_cut_mev:

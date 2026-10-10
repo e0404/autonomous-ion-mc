@@ -208,3 +208,88 @@ exact P_accept < 0.5 and on sigma > 0 without yields.
 8. **Checks.** `validation/scripts/transport/nuclear_checks.py` (N1, V1, V1b, V4, V4b, D6) and the
    `lv5` suite read the same table; every `lv5` document records the table id and the sha256 of
    the `.json` and `.npz` files.
+
+## Derived elastic table (decision 0041 slice C, V3-005C step C2)
+
+`ionmc data build elastic-proton` writes `derived/elastic-proton-<id>.npz` and `.json` from the
+hash-pinned LA150 proton sublibrary, AME2020 and the Geant4 11.4.2 Barashenkov/BGG sources (registry
+ids `geant4-*-11.4.2`; the PDG p-p compilation `pdg-rpp2022-pp-elastic` has role "evaluation" and is not a construction input). Git holds only the registry entries, the EXFOR
+manifest and `src/ionmc/data/elastic_table_pin.json` (id and hashes); the table is not in Git. This
+step builds data only: no transport kernel uses the table yet (C3 to C5).
+
+- **Targets.** `H-1` followed by the seven LA150 targets of the nuclear table (same
+  `ELEMENT_TARGET` map and `(A_el/A_ref)^(2/3)` surrogate scaling; hydrogen has its own target).
+  Grid: the nuclear union-grid convention (1 MeV, the H-1 ENDF nodes, uniform ln E with at least
+  50 points per decade) plus every Barashenkov node, cut at 250 MeV, with midpoint refinement below
+  14 MeV (BGG Coulomb rule) and for H-1 above 13 MeV so that lin-lin interpolation of `sigma` in E
+  reproduces the direct evaluation to 5e-4 (`nodes_added_*` in the JSON).
+- **p + A.** `sigma_el` is the BGG/Barashenkov value (`ionmc.nuclear.bgg`: arrays hand-transcribed
+  from `G4BarashenkovData.hh` and compared with the pinned file by the builder, the exact Geant4
+  rules including the Coulomb factor below 14 MeV). The angular shape is the black-disk form
+  `|2 J1(qR)/(qR)|^2`, `q = 2 p_CM sin(theta_CM/2)`, with `pi (R + lambdabar)^2 = sigma_nonel` of
+  the transport's own LA150 MT5 (Tripathi shape above 150 MeV); R, lambdabar, `sigma_nonel` (and
+  its sha256) and the inversion residual are stored per node. The inverse CDF of `mu_CM` over
+  [-1, 1] is stored as 257 edges of 256 equiprobable bins per node. Nodes without a real radius
+  (`R <= 0` or `sigma_nonel = 0`) set `sigma_el = 0` below `e_min_shape` (per target, recorded).
+- **H-1.** The LA150 Hale LAW=5 LTP=1 reconstruction (`ionmc.nuclear.law5`, ENDF-102 eqs 6.9, 6.10,
+  6.14, b/sr CM) with ratio interpolation `sigma_e/sigma_c` in E; the transported density is
+  `NI = sigma_e - sigma_c` over `|mu_CM| <= 0.96` (theta_CM >= 16.26 deg). `sigma` is the
+  half-sphere integral (`2 pi`, each event of identical protons once); the edges cover the
+  symmetric range [-0.96, 0.96]. `e_min_pp` (12.53 MeV) is the lowest node from which every node and
+  midpoint has a non-negative density, `sigma = 0` below it. The frozen row P6 (negativity) FAILS
+  for H-1 below `e_min_pp`; this is kept as a recorded failure and not converted into a pass:
+  `negative_density_below_e_min_pp: true` with every negative node/midpoint and its value
+  (`first_negative_nodes`), while `e_min_pp` and `no_negative_density_in_domain: true` record the
+  separate revised-domain check (the qualification gate). Above 150 MeV `sigma = sigma_NI(150)
+  S(E)/S(150)` with the Geant4 `G4HadronNucleonXsc` p-p formula only (no PDG data enter the table
+  or its identity) and the shape fixed.
+- **Domain (declared limitation).** The JSON `elastic_domain` block gives `[e_min, 250]` MeV per target (H-1: `E_min,pp`;
+  p+A: `e_min_shape`) and `sigma_bgg_below_domain_max_mb` per target; `ElasticTable.elastic_domain()`
+  returns a dict, the loader asserts `sigma = 0` and `valid = 0` below it, the npz carries
+  `target_e_min_mev` and the packed `ElasticDevice` the fields `e_min_shape` and `e_min_pp`, so that
+  the transport can count `elastic_below_domain` and `pp_below_domain` crossings. The builder also
+  fails if `E_min,pp` exceeds 15 MeV. P6-D is evaluated in a pass separate from the one that fixes
+  `E_min,pp`. The builder fails (`BuildError`) if any
+  `e_min_shape` exceeds 10 MeV. The JSON records the NI cross section above the cut at 15 and 20
+  MeV (`sigma_ni_above_cut_mb`), the p+O estimate below `e_min_shape(O-16)` with the BGG `sigma_el`
+  (`pa_omitted_events_per_history_150mev`) and the omitted p-p correction below `E_min,pp`
+  as a total-variation diagnostic: `pp_omitted_ni_correction_total_variation_per_history_150mev`
+  and `pp_omitted_ni_correction_weighted_total_variation_mev`, with the nodes, M(E), W(E), the
+  residual range and a `semantics` string in the block `pp_omitted_ni_correction`. The quantity is
+  the total variation of the signed nuclear-plus-interference correction to Rutherford scattering
+  over the half sphere above the cut (`|rho_NI|` integrated over `0 <= mu_CM <= 0.96`), integrated
+  along the residual path in water from `E_min,pp` to 1 MeV; it is an event-equivalent magnitude,
+  not an expected number of physical events, and the weighted form (recoil-energy weighted) is not
+  energy transferred. Limitations: the signed correction can cancel, and the physical sigma_pp below
+  `E_min,pp` is not available from the evaluation. (The S-wave unitarity bound of the C2b build was
+  not a bound on the full amplitude and was withdrawn.) The P6 failure record, P6-D and the
+  MF6 per-product gating of the O-16 check are described under the findings below.
+  `model_revisions` references Amendment 15.
+- **Findings and report-only data.** The builder asserts, fail closed, that the LA150 O-16 MT2 is a
+  numerical copy of C-12 from 24 MeV (recorded), that the O-16 MF3/MT5 sigma_nonel (the input of the
+  disk radius) is not a copy of C-12's (`o16_mt5_copy_check`: relative difference above 1e-3
+  at more than 50 % of the shared nodes and a coefficient of variation of the O/C ratio above 1e-3;
+  flag `o16_mt5_sigma_not_c12_copy`, recorded as `o16_mt5_finding`). The MF6/MT5 per-product yield rule
+  as frozen (all compared energies in the denominator) fails on LA150 (zap 3007 14/30 and zap 5012
+  10/30, both-zero nodes 16 and 20) and is kept as `mf6_rule_as_frozen` with `passes: false`; the
+  informative-node revision (`mf6_rule_revised`) was written after that outcome and is report-only
+  and influences no flag (Amendment 16 item 1). Independence of the O-16 product data is instead
+  checked on the energy spectra (`o16_mt5_spectra_check`, row X-MT5-SPEC): for n, p and alpha at
+  50, 100 and 150 MeV the normalised angle-integrated MF6/MT5 secondary-energy distributions
+  (LAW=1, LEP=1, read by the same `SpeciesTables` reader as the nuclear table builder; exact
+  histogram cumulative at a tabulated incident energy, the builder's quantile interpolation
+  otherwise) of O-16 and C-12 are compared by the Kolmogorov-Smirnov distance D on the union E'
+  grid; `o16_mt5_spectra_independent` is true iff D > 0.02 at at least 8 of the 9 combinations and
+  D > 0 at all 9 (D below 1e-12 counts as 0, a floating-point floor), recorded in
+  `o16_mt5_spectra_finding`, and the build fails closed otherwise. The qualification flags are
+  `no_negative_density_in_domain`, `o16_mt5_sigma_not_c12_copy`, `o16_mt5_spectra_independent`
+  and `shape_normalised`. The builder never uses LAW=5 data other than H-1 as a
+  construction input. The LA150 C-12/N-14/Ca-40 LTP=12 NI densities (ratio interpolation in mu) at
+  20-40 deg and 50/100/150 MeV are stored next to the model values (row X-ENDF, report-only).
+  `sigma_el` at 10 MeV per target is recorded for the comparison with the decision-0041 planning
+  value.
+- **Load and device.** `ElasticTable.load` re-hashes the npz, recomputes the id, checks the registry
+  pins and the qualification flags and refuses missing, stale, mis-pinned and unqualified tables
+  (all `UnsupportedCombinationError`); `material_rows` gives `Sigma_el` and the majorants;
+  `ElasticDevice` / `cached_elastic_device` (`ionmc.transport.elastic_device`) pack the arrays per
+  process and key as `NuclearDevice` does. Exact two-body kinematics: `ionmc.nuclear.elastic_kin`.

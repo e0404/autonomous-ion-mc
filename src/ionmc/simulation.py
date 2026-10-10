@@ -66,7 +66,12 @@ from ionmc.transport.channels import (
     PIECE_COUNT_NAME,
 )
 from ionmc.transport.run import run_transport
-from ionmc.transport.tally import NUCLEAR_TALLY_NAMES, ChannelRaw, RawTransport
+from ionmc.transport.tally import (
+    ELASTIC_TALLY_NAMES,
+    NUCLEAR_TALLY_NAMES,
+    ChannelRaw,
+    RawTransport,
+)
 
 
 @dataclass(frozen=True)
@@ -133,6 +138,32 @@ class NuclearTransportCounters(TransportCounters):
             "majorant_violation": self.majorant_violation,
             "nuclear_rejection_limit": self.nuclear_rejection_limit,
             "nuclear_conservation": self.nuclear_conservation,
+        }
+
+
+@dataclass(frozen=True)
+class ElasticTransportCounters(NuclearTransportCounters):
+    """The counters of a run with the elastic channel (V3-005C): the nuclear counters plus the
+    two domain diagnostics (Amendment 15 (b)2). ``elastic_below_domain``: protons that fell below
+    the p + A ``e_min_shape`` of a target of their material (counted once per proton, at the first
+    such step); ``pp_below_domain``: protons below ``E_min,pp`` in a material containing hydrogen.
+    Both are reported in :meth:`as_dict` but are diagnostics: they never set ``valid = False``
+    (``any_nonzero`` ignores them, ``as_dict`` of the other counters is unchanged)."""
+
+    elastic_below_domain: int = 0
+    pp_below_domain: int = 0
+
+    DIAGNOSTIC = ("elastic_below_domain", "pp_below_domain")
+
+    @property
+    def any_nonzero(self) -> bool:
+        return any(v for k, v in self.as_dict().items() if k not in self.DIAGNOSTIC)
+
+    def as_dict(self) -> dict[str, int]:
+        return {
+            **super().as_dict(),
+            "elastic_below_domain": self.elastic_below_domain,
+            "pp_below_domain": self.pp_below_domain,
         }
 
 
@@ -208,6 +239,10 @@ class NuclearEnergyBalance(EnergyBalance):
     ``nuclear_imbalance`` are signed)."""
 
     nuclear_mev: Mapping[str, float] = field(default_factory=dict)
+    elastic_mev: Mapping[str, float] = field(default_factory=dict)
+    """With the elastic channel: ``elastic_recoil_local`` (energy of the p + A recoil nuclei,
+    deposited locally, a destination and a local deposit of the grid identity) and the event
+    counts ``elastic_pp_events`` / ``elastic_pa_events`` (no energy)."""
 
     @property
     def nuclear_destinations_mev(self) -> float:
@@ -218,11 +253,14 @@ class NuclearEnergyBalance(EnergyBalance):
             + n["nuclear_escaped_gamma"]
             + n["nuclear_binding"]
             + n["nuclear_imbalance"]
+            + float(self.elastic_mev.get("elastic_recoil_local", 0.0))
         )
 
     @property
     def local_deposit_mev(self) -> float:
-        return float(self.nuclear_mev["nuclear_local"])
+        return float(self.nuclear_mev["nuclear_local"]) + float(
+            self.elastic_mev.get("elastic_recoil_local", 0.0)
+        )
 
 
 @dataclass(frozen=True, eq=False)
@@ -315,10 +353,7 @@ def _tally_capabilities(nuclear: bool = False) -> dict[str, Any]:
     protons and deuterons, generation >= 1, are transported and accepted)."""
     pairs = sorted(producible(PROTON, nuclear=nuclear))
     producible_generations = sorted({g for _, g in pairs})
-    # nuclear=True runs on the Python reference only (warp kernels are V3-005B): the tally
-    # backends are limited accordingly and the warp ones listed as deferred
-    tally_backends = ("python",) if nuclear else CHANNEL_BACKENDS
-    deferred = {"deferred_backends": {b: "V3-005B" for b in CHANNEL_BACKENDS if b != "python"}}
+    tally_backends = CHANNEL_BACKENDS  # nuclear=True: the Warp kernels (V3-005B) carry the tallies
     return {
         "quantities": list(TALLY_QUANTITIES),
         "backends": {
@@ -328,7 +363,9 @@ def _tally_capabilities(nuclear: bool = False) -> dict[str, Any]:
             }
             for b in tally_backends
         },
-        **(deferred if nuclear else {}),
+        **(
+            {"untested_in_sandbox": ["warp-cuda"]} if nuclear else {}
+        ),  # CUDA code path: no GPU in the development sandbox
         "producible": [{"species": n, "generation": g} for n, g in pairs],
         "generations": {
             "accepted": [
@@ -339,7 +376,8 @@ def _tally_capabilities(nuclear: bool = False) -> dict[str, Any]:
             ],
             "note": (
                 "secondary protons and deuterons (generation >= 1) are transported and accepted "
-                "(nuclear=True, decision 0041)"
+                "(nuclear=True, decision 0041); secondary protons undergo non-elastic "
+                "interactions (V3-005B C13, generations up to 6), deuterons do not"
                 if nuclear
                 else "secondary particles are not transported yet (V3-005A); no secondary species"
             ),
@@ -373,8 +411,7 @@ def _tally_capabilities(nuclear: bool = False) -> dict[str, Any]:
             "lookup species gaps, axis coverage gaps, sha256 mismatch, non-uniform tables or "
             "spectrum edges, negative or non-finite lookup values",
             "a quantum above the precision floor, accumulator memory above the budget",
-            "a backend without channels"
-            + (" (warp backends with nuclear=True until V3-005B)" if nuclear else ""),
+            "a backend without channels",
         ],
     }
 
@@ -386,8 +423,12 @@ def _nuclear_capabilities() -> dict[str, Any]:
     """The ``nuclear`` section of the capability report (only with ``nuclear=True``)."""
     pairs = sorted(producible(PROTON, nuclear=True))
     return {
-        "backends": ["python"],
-        "warp_backends": "not before V3-005B (rejected before transport)",
+        "backends": ["python", "warp-cpu", "warp-cuda"],
+        "warp_backends": (
+            "warp-cpu (float64 validation, float32); warp-cuda written device-agnostic, "
+            "untested in the development sandbox (no GPU)"
+        ),
+        "warp_cuda_chunk_cap": 1 << 14,
         "source": "proton only; E0 + 6 sigma_E <= 250 MeV",
         "stopping": "analytic Bethe (deuteron table needed); 'nist-star' is rejected",
         "table": "derived nuclear-proton table by id (loaded, re-hashed, source pins checked)",
@@ -397,6 +438,18 @@ def _nuclear_capabilities() -> dict[str, Any]:
         "local_deposit": "nuclear_local (alpha, residual recoil; generation = parent + 1)",
         "deuteron_cutoff_mev_default": E_CUT_DEUTERON_DEFAULT_MEV,
         "max_particles_per_history": MAX_PARTICLES,
+        "elastic": {
+            "default": "included with nuclear=True (PhysicsOptions.elastic=True); elastic=False "
+            "reproduces the V3-005B non-elastic-only model bit for bit",
+            "backends": ["python"],
+            "channels": "p-p (H-1, [E_min,pp, 250] MeV) and p + A (per target [e_min_shape, 250])",
+            "thinning": "Sigma_tot = Sigma_nonel + Sigma_el; channel by the free slot u3",
+            "local_deposit": "elastic_recoil_local (p + A recoil nucleus); the slower p-p proton "
+            "is a transported secondary",
+            "diagnostic_counters": ["elastic_below_domain", "pp_below_domain"],
+            "table": "pinned in src/ionmc/data/elastic_table_pin.json; fail-closed loader",
+            "elastic_only": "internal switch (EM + elastic) for row V11",
+        },
         "capacity": "B_L and the E bound follow decision 0041 section 5 (amended 2026-10-08)",
     }
 
@@ -475,7 +528,11 @@ class Simulation:
         }
         result = _with_timings(result, timings)
         if not result.valid and not self.config.run.allow_invalid_result:
-            nonzero = {k: v for k, v in result.counters.as_dict().items() if v}
+            nonzero = {
+                k: v
+                for k, v in result.counters.as_dict().items()
+                if v and k not in getattr(result.counters, "DIAGNOSTIC", ())
+            }
             if result.channel_raw is not None and result.channel_raw.lookup_out_of_domain:
                 nonzero["lookup_out_of_domain"] = result.channel_raw.lookup_out_of_domain
             if result.channel_raw is not None and result.channel_raw.path_bound_exceeded:
@@ -716,11 +773,13 @@ def _grid_result(
 
 def _assemble(eff: EffectiveConfig, raw: RawTransport) -> Result:
     cfg = eff.requested
-    counters = (
-        NuclearTransportCounters(**raw.counters)
-        if eff.nuclear is not None
-        else TransportCounters(**raw.counters)
-    )
+    counters: TransportCounters
+    if eff.nuclear is None:
+        counters = TransportCounters(**raw.counters)
+    elif eff.nuclear.elastic is None:
+        counters = NuclearTransportCounters(**raw.counters)
+    else:
+        counters = ElasticTransportCounters(**raw.counters)
     ood = 0 if raw.channels is None else raw.channels.lookup_out_of_domain
     pbe = 0 if raw.channels is None else raw.channels.path_bound_exceeded
     valid = not counters.any_nonzero and ood == 0 and pbe == 0
@@ -742,6 +801,8 @@ def _assemble(eff: EffectiveConfig, raw: RawTransport) -> Result:
         if eff.nuclear is None
         else {"nuclear_mev": {k: float(t[k]) for k in NUCLEAR_TALLY_NAMES}}
     )
+    if eff.nuclear is not None and eff.nuclear.elastic is not None:
+        extra["elastic_mev"] = {k: float(t[k]) for k in ELASTIC_TALLY_NAMES}
     balance = balance_cls(
         initial_mev=t["initial"],
         step_deposit_mev=t["step_deposit"],

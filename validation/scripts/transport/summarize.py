@@ -55,6 +55,16 @@ and 20361004, 20371004 and 20381004 are consumed (observed before amendments 4 a
 results were observed is consumed (plan, section Seeds)."""
 V5_QUALIFICATION_SEED_BASE = 20421004
 """Qualification base of the suite ``lv5`` (V3-005A); the 2043xxxx family are rehearsals."""
+V5B_QUALIFICATION_SEED_BASE = 20471004
+"""Qualification base of the suite ``lv5b`` (V3-005B, amendment 11); 2046xxxx are rehearsals."""
+V5B_CONSUMED_SEED_BASES = (20441004,)
+"""Consumed lv5b bases: 20441004 was consumed by the failed V7 replicate step (amendment 11)."""
+HR5_QUALIFICATION_SEED_BASE = 20451004
+"""Qualification base of the suite ``hr5`` (V3-005B, amendment 6)."""
+V5C_QUALIFICATION_SEED_BASE = 20481004
+"""Qualification base of the suite ``lv5c`` (V3-005C, Amendment 14 (j)); 2050xxxx are rehearsals."""
+V5C_CONSUMED_SEED_BASES = (20471004, 20451004, 20441004)
+"""Evidence bases consumed by lv5b, hr5 and the failed b40d8121 V7 step: refused for lv5c."""
 IDENTITY_KEYS = ("git_sha", "suite", "scale", "python_parts", "seed_base")
 
 
@@ -94,6 +104,27 @@ def identity(env: dict[str, Any]) -> str:
 STEP_TAGS = (
     ("pytest", None),
     ("lv5-throughput", "lv5-throughput"),
+    ("lv5b-throughput", "lv5b-throughput"),
+    ("v8-lv", "v8-lv"),
+    ("v8-stat-compare", "v8-stat-compare"),
+    ("v8-stat-", "v8-stat-sample"),
+    ("r1-nuc", "r1-nuc"),
+    ("v5-compare", "v5-compare"),
+    ("v5-", "v5-ionmc"),
+    ("v2b-combine", "v2b-combine"),
+    ("v2b-", "v2b-shard"),
+    ("v7-scan", "v7-scan"),
+    ("v7-shift", "v7-shift"),
+    ("v7-rep-combine", "v7-rep-combine"),
+    ("v7-rep-ref", "v7-rep-ref"),
+    ("v7-rep-s", "v7-rep-shard"),
+    ("v7-f32-", "v7-f32"),
+    ("v7r-combine", "v7r-combine"),
+    ("v7r-ref", "v7r-ref"),
+    ("v7r-s", "v7r-shard"),
+    ("v7r-diag", "v7r-diag"),
+    ("v11-compare", "v11-compare"),
+    ("v11-", "v11-ionmc"),
     ("n1-", "n1"),
     ("v2-combine", "v2-combine"),
     ("v2-probe-combine", "v2-probe-combine"),
@@ -196,18 +227,35 @@ def parse_step(
         and (tag is None or (doc is not None and doc.get("pass") is True))
     )
     sel = re.search(r"(\d+) deselected", text) if tag is None else None
+    counts = pytest_counts(text) if tag is None else None
     return {
         "file": path.name,
         "exit": code,
         "pass": bool(verdict),
         "status": "executed",
         "deselected_tests": int(sel.group(1)) if sel else None,
+        "pytest_counts": counts,
+        "pytest_command": lines[0][len("# command: ") :] if lines[0].startswith("# command: ") else "",
         "problems": problems,
         "reduced": bool(doc and doc.get("reduced")),
         "histories": doc.get("histories") if doc else None,
         "frozen_histories": doc.get("frozen_histories") if doc else None,
         "attestation": doc.get("attestation") if doc else None,
     }
+
+
+_PYTEST_SUMMARY = re.compile(r"^=*\s*((?:\d+ [a-z]+(?: [a-z]+)?(?:, )?)+) in [0-9.]+s\b.*$")
+
+
+def pytest_counts(text: str) -> dict[str, int] | None:
+    """Outcome counts of the last pytest summary line of an archived step output
+    (``3 passed, 40 deselected in 12.3s`` gives ``{"passed": 3, "deselected": 40}``); ``None`` if no
+    summary line can be read."""
+    for line in reversed(text.splitlines()):
+        m = _PYTEST_SUMMARY.match(line.strip())
+        if m:
+            return {w.split(" ", 1)[1]: int(w.split(" ", 1)[0]) for w in m.group(1).split(", ")}
+    return None
 
 
 IMPORTED_UNVERIFIED = "imported_partials_unverified_by_code"
@@ -285,6 +333,29 @@ def seed_blockers(seed_base: Any, suite: str | None = None) -> list[str]:
     """Reasons why an archive's seed base cannot qualify (empty for the qualification base)."""
     if seed_base is None:
         return ["seed_base not recorded in environment.txt"]
+    if suite == "lv5c":
+        if int(seed_base) in V5C_CONSUMED_SEED_BASES:
+            return [f"seed_base {int(seed_base)} is a consumed evidence base (lv5b/hr5/b40d8121)"]
+        if int(seed_base) != V5C_QUALIFICATION_SEED_BASE:
+            return [
+                f"seed_base {int(seed_base)} is not the qualification base "
+                f"{V5C_QUALIFICATION_SEED_BASE} of lv5c (the 2050xxxx family are rehearsals; any "
+                "other base is non-qualification evidence)"
+            ]
+        return []
+    if suite in ("lv5b", "hr5"):
+        want = V5B_QUALIFICATION_SEED_BASE if suite == "lv5b" else HR5_QUALIFICATION_SEED_BASE
+        if suite == "lv5b" and int(seed_base) in V5B_CONSUMED_SEED_BASES:
+            return [
+                f"seed_base {int(seed_base)} is consumed for lv5b (amendment 11: observed in the "
+                f"failed V7 replicate step); the qualification base is {want}"
+            ]
+        if int(seed_base) != want:
+            return [
+                f"seed_base {int(seed_base)} is not the qualification base {want} of {suite} (the "
+                "2046xxxx family are rehearsals; any other base is non-qualification evidence)"
+            ]
+        return []
     if suite == "lv5":
         if int(seed_base) != V5_QUALIFICATION_SEED_BASE:
             return [
@@ -315,6 +386,82 @@ def seed_blockers(seed_base: Any, suite: str | None = None) -> list[str]:
 def source_ok(env: dict[str, Any], attestation: dict[str, Any] | None) -> bool:
     clean = env.get("tree_dirty") == "no" and str(env.get("sha_source", "")).startswith("git")
     return bool(clean or (attestation and attestation.get("valid")))
+
+
+V7R_NOT_ESTABLISHED = "uncertainty-coverage evidence not established"
+
+
+_SHARD_NAME = re.compile(r"^pytest-v7r-calibration-s(\d+)$")
+
+
+def calibration_step_established(step: dict[str, Any], shard: int | None = None) -> bool:
+    """A ``pytest-v7r-calibration`` step (``shard=None``) or ``-s{shard}`` step establishes its part of
+    the calibration only if it passed, its archived command is EXACTLY the expected one
+    (``run_suite.calibration_selection``: the two positional targets and ``-m calibration``, plus the
+    fixed ``-k`` of a shard; nothing else selects or deselects), its archived pytest summary is
+    readable and its passed count equals the complete expected case count of that command
+    (``EXPECTED_CALIBRATION_CASES``), with no skipped, failed, errored, xfailed or xpassed test.
+    Unreadable output is not established."""
+    sys.path.insert(0, str(HERE))
+    import run_suite
+
+    if not step.get("pass") or step.get("status") == "deferred":
+        return False
+    try:
+        targets, k_expr, want = run_suite.calibration_selection(shard)
+    except IndexError:
+        return False
+    toks = str(step.get("pytest_command", "")).split()
+    cmd = toks[toks.index("pytest") + 1 :] if "pytest" in toks else None
+    if k_expr:  # the expression has spaces: compare with the joined command
+        exact = cmd is not None and " ".join(cmd) == " ".join(
+            run_suite.calibration_args(targets, k_expr))
+    else:
+        exact = cmd == run_suite.calibration_args(targets, None)
+    counts = step.get("pytest_counts")
+    if not exact or not isinstance(counts, dict) or counts.get("passed") != want:
+        return False
+    return not any(v for k, v in counts.items() if k not in ("passed", "deselected", "warning", "warnings"))
+
+
+def calibration_established(cal: list[tuple[str, dict[str, Any]]]) -> bool:
+    """Calibration condition of row V7-R from the ``(base name, step)`` pairs of the archive: exactly
+    one un-sharded step, or the complete set of shards 0..n-1 (each exactly once, each established
+    with its own fixed selection, so that the union covers the expected case set exactly once);
+    never a mixture, a missing or a repeated shard, or a stray calibration step."""
+    sys.path.insert(0, str(HERE))
+    import run_suite
+
+    names = [n for n, _ in cal]
+    if names == ["pytest-v7r-calibration"]:
+        return calibration_step_established(cal[0][1], None)
+    idx = [int(m.group(1)) if (m := _SHARD_NAME.match(n)) else -1 for n in names]
+    if not idx or sorted(idx) != list(range(len(run_suite.V7R_CALIBRATION_PARTITION))):
+        return False
+    return all(calibration_step_established(st, i) for i, (_, st) in zip(idx, cal, strict=True))
+
+
+def slice_c_rows(suite: str | None, steps: dict[str, Any]) -> dict[str, Any]:
+    """Row verdicts that are a conjunction of steps (suite ``lv5c``). Row V7-R (plan Amendment 14 (h)
+    and Amendment 17 (a)6) passes iff ``v7r-combine`` passed (the three estimators, both gates each)
+    AND the calibration is established: the single ``pytest-v7r-calibration`` step, or the complete set of
+    ``pytest-v7r-calibration-s{k}`` shards each exactly once, each with its exact expected command and
+    its complete expected passed count and no skip (``calibration_established``). A pytest step has no
+    document, so the conjunction cannot be made by a step. Otherwise the row verdict is
+    "uncertainty-coverage evidence not established"."""
+    if suite != "lv5c":
+        return {}
+    by = {n.split("-", 1)[1]: s for n, s in steps.items() if "-" in n}
+    comb = by.get("v7r-combine")
+    cal = [(n.split("-", 1)[1], st) for n, st in steps.items() if "-" in n]
+    cal = [(n, st) for n, st in cal if n.startswith("pytest-v7r-calibration")]
+    gates = bool(comb and comb.get("pass") and comb.get("status") != "deferred")
+    calibration = calibration_established(cal)
+    row = {"gates_pass": gates, "calibration_pass": calibration, "calibration_steps": sorted(n for n, _ in cal),
+           "pass": gates and calibration}  # fmt: skip
+    if not row["pass"]:
+        row["verdict"] = V7R_NOT_ESTABLISHED
+    return {"V7-R": row}
 
 
 def verify(d: Path, sha: str, attest_sha: str | None = None) -> dict[str, Any]:
@@ -390,6 +537,7 @@ def verify(d: Path, sha: str, attest_sha: str | None = None) -> dict[str, Any]:
         ),
         "non_conformant_reasons": [*blockers, *att_problems],
         "partials_attestation_problems": att_problems,
+        "rows": slice_c_rows(suite, steps),
         "seed_base": env.get("seed_base"),
         "reduced_history_counts": reduced,
         "tree_dirty": env.get("tree_dirty"),
@@ -480,6 +628,7 @@ def combine(dirs: list[Path], sha: str, attest_sha: str | None = None) -> dict[s
             for d, p in zip(dirs, parts, strict=True)
         },
         "steps": {n: s for p in parts for n, s in p["steps"].items()},
+        "rows": slice_c_rows(suite, {n: s for p in parts for n, s in p["steps"].items()}),
     }
 
 

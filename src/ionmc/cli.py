@@ -38,7 +38,7 @@ def build_parser() -> argparse.ArgumentParser:
     imp.add_argument("--dataset", required=True, dest="dataset_id", help="registered dataset id")
     imp.add_argument("--cache-dir", default=None, help="cache directory")
     bld = data_sub.add_parser("build", help="build a derived table from cached datasets")
-    bld.add_argument("table", choices=["nuclear-proton"])
+    bld.add_argument("table", choices=["nuclear-proton", "elastic-proton"])
     bld.add_argument("--cache-dir", default=None, help="cache directory")
     bld.add_argument("--points-per-decade", type=int, default=50)
     bld.add_argument("--diagnostic-events", type=int, default=20000)
@@ -89,6 +89,29 @@ def _build_nuclear(args: argparse.Namespace) -> int:
     return 0
 
 
+def _build_elastic(args: argparse.Namespace) -> int:
+    from ionmc.data import cache
+    from ionmc.nuclear.build import BuildError
+    from ionmc.nuclear.elastic_build import ElasticBuildOptions, build_elastic_proton
+
+    opts = ElasticBuildOptions(points_per_decade=args.points_per_decade)
+    try:
+        res = build_elastic_proton(cache.resolve_cache_dir(args.cache_dir), opts, log=print)
+    except (BuildError, FileNotFoundError, cache.IntegrityError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    info = res.info
+    print(f"table id {res.table_id}")
+    print(f"npz sha256 {info['npz_sha256']}")
+    print(f"build seconds {info['timing_s']:.1f}")
+    print(f"grid size {info['grid']['n_points']}")
+    for t in info["targets"]:
+        key = "e_min_pp_mev" if t["kind"] == "law5-ltp1" else "e_min_shape_mev"
+        print(f"{t['name']}: {key} {t[key]:.4g}")
+    print(f"O-16 MT2 is a C-12 copy: {info['o16_finding']['o16_mt2_is_c12_copy']}")
+    return 0
+
+
 def _run_data(args: argparse.Namespace) -> int:
     """Execute ``ionmc data <action>``."""
     from ionmc.data import cache
@@ -99,7 +122,7 @@ def _run_data(args: argparse.Namespace) -> int:
     if action is None:
         return 2
     if action == "build":
-        return _build_nuclear(args)
+        return _build_elastic(args) if args.table == "elastic-proton" else _build_nuclear(args)
     cdir = cache.resolve_cache_dir(args.cache_dir)
     if action == "list":
         for ds in DATASETS.values():

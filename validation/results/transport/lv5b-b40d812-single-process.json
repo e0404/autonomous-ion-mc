@@ -1,0 +1,390 @@
+{
+ "attestation": {
+  "manifests": [
+   "669dc8e540a4986380c70205715c2fb8ebfb08a5e7b89c1c17ac81b8b898ebec",
+   "d35d02bfa1cd475e3ebc354b17d0dfca5d301122aca50325d1e986248fe68596"
+  ],
+  "partials": [
+   {
+    "content_sha256": "de0d8919ea7d6ef474a787f11380bcb4ccc8c76f8d61cc4ba946e5a9f0cf4d4f",
+    "host_run_id": "RUN-20261008T130528Z-20c21dd2",
+    "name": "v5-150-on.json",
+    "origin": "imported",
+    "step": "08-v5-compare"
+   },
+   {
+    "content_sha256": "64217ffb33267bc933730f161c698dd2b4bf9c5aa167c1436380c0585ba78731",
+    "host_run_id": "RUN-20261008T130551Z-5eaae4e0",
+    "name": "v5-150-off.json",
+    "origin": "imported",
+    "step": "08-v5-compare"
+   },
+   {
+    "content_sha256": "d615330e681b8729b796da2f4d4c10dc3159e9dd2a59bdd244b08c02af21ea2f",
+    "host_run_id": "RUN-20261008T130606Z-2a213262",
+    "name": "v5-200-on.json",
+    "origin": "imported",
+    "step": "08-v5-compare"
+   },
+   {
+    "content_sha256": "bcaf932ab2023d56258989b45e7f6daa6afb04b8bfa20147a3b4fa602f52493c",
+    "host_run_id": "RUN-20261008T130630Z-98c2ef55",
+    "name": "v5-200-off.json",
+    "origin": "imported",
+    "step": "08-v5-compare"
+   },
+   {
+    "content_sha256": "0095bd3be21db9b1b82d98c93a59b7e0850eb3bc7ce735ae040447509c4c6db9",
+    "host_run_id": "RUN-20261008T130651Z-735b7458",
+    "name": "v2b-s0.json",
+    "origin": "imported",
+    "step": "11-v2b-combine"
+   },
+   {
+    "content_sha256": "b395126cc708794e1922defacd2228076d56f22183505d3180f23fee53464ab7",
+    "host_run_id": "RUN-20261008T131253Z-0eac64f3",
+    "name": "v2b-s1.json",
+    "origin": "imported",
+    "step": "11-v2b-combine"
+   }
+  ],
+  "protected_host_records_verified_by_code": false,
+  "run_sha": "b40d8121744db1a711876c152957fb795f929710",
+  "statement": "the manifest was built by the orchestrator from the protected host-runner PARTIAL stdout lines; this code cannot verify those records, compare the digests and host_run_ids above with them and with record_local_validation"
+ },
+ "complete": false,
+ "conformant": false,
+ "deferred_steps": [],
+ "directories": [
+  "validation/generated/RUN-20261008T130339Z-b361445c/transport/lv5b-b40d812-01",
+  "validation/generated/RUN-20261008T130421Z-d5b7e84d/transport/lv5b-b40d812-02",
+  "validation/generated/RUN-20261008T130436Z-10614b04/transport/lv5b-b40d812-03",
+  "validation/generated/RUN-20261008T130528Z-20c21dd2/transport/lv5b-b40d812-04",
+  "validation/generated/RUN-20261008T130551Z-5eaae4e0/transport/lv5b-b40d812-05",
+  "validation/generated/RUN-20261008T130606Z-2a213262/transport/lv5b-b40d812-06",
+  "validation/generated/RUN-20261008T130630Z-98c2ef55/transport/lv5b-b40d812-07",
+  "validation/generated/RUN-20261008T131240Z-5de67a82/transport/lv5b-b40d812-08",
+  "validation/generated/RUN-20261008T130651Z-735b7458/transport/lv5b-b40d812-09",
+  "validation/generated/RUN-20261008T131253Z-0eac64f3/transport/lv5b-b40d812-10",
+  "validation/generated/RUN-20261008T131837Z-f74939f7/transport/lv5b-b40d812-11",
+  "validation/generated/RUN-20261008T131844Z-2486c4e7/transport/lv5b-b40d812-12",
+  "validation/generated/RUN-20261008T132223Z-a52144f6/transport/lv5b-b40d812-13",
+  "validation/generated/RUN-20261008T132316Z-11c02312/transport/lv5b-b40d812-14"
+ ],
+ "execution_modes": [
+  "single-process-diagnostic"
+ ],
+ "git_sha": "b40d8121744db1a711876c152957fb795f929710",
+ "missing_steps": [
+  "15-v3-workers-partition"
+ ],
+ "non_conformant_reasons": [
+  "08-v5-compare: imported_partials_unverified_by_code",
+  "11-v2b-combine: imported_partials_unverified_by_code",
+  "execution mode single-process-diagnostic (diagnostic, not the qualification mode)"
+ ],
+ "parts": {
+  "validation/generated/RUN-20261008T130339Z-b361445c/transport/lv5b-b40d812-01": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "validation/generated/RUN-20261008T130421Z-d5b7e84d/transport/lv5b-b40d812-02": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "validation/generated/RUN-20261008T130436Z-10614b04/transport/lv5b-b40d812-03": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "validation/generated/RUN-20261008T130528Z-20c21dd2/transport/lv5b-b40d812-04": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "validation/generated/RUN-20261008T130551Z-5eaae4e0/transport/lv5b-b40d812-05": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "validation/generated/RUN-20261008T130606Z-2a213262/transport/lv5b-b40d812-06": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "validation/generated/RUN-20261008T130630Z-98c2ef55/transport/lv5b-b40d812-07": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "validation/generated/RUN-20261008T130651Z-735b7458/transport/lv5b-b40d812-09": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "validation/generated/RUN-20261008T131240Z-5de67a82/transport/lv5b-b40d812-08": {
+   "pass": false,
+   "source_ok": true,
+   "subset": true
+  },
+  "validation/generated/RUN-20261008T131253Z-0eac64f3/transport/lv5b-b40d812-10": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "validation/generated/RUN-20261008T131837Z-f74939f7/transport/lv5b-b40d812-11": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "validation/generated/RUN-20261008T131844Z-2486c4e7/transport/lv5b-b40d812-12": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "validation/generated/RUN-20261008T132223Z-a52144f6/transport/lv5b-b40d812-13": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "validation/generated/RUN-20261008T132316Z-11c02312/transport/lv5b-b40d812-14": {
+   "pass": false,
+   "source_ok": true,
+   "subset": true
+  }
+ },
+ "pass": false,
+ "problems": [
+  "validation/generated/RUN-20261008T131240Z-5de67a82/transport/lv5b-b40d812-08: archive does not verify ([])",
+  "validation/generated/RUN-20261008T132316Z-11c02312/transport/lv5b-b40d812-14: archive does not verify ([])",
+  "missing steps: ['15-v3-workers-partition']"
+ ],
+ "reduced_history_counts": false,
+ "steps": {
+  "01-lv5b-throughput": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "01-lv5b-throughput.txt",
+   "frozen_histories": 10000,
+   "histories": 10000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "02-v8-lv-python-vs-warp-cpu": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "02-v8-lv-python-vs-warp-cpu.txt",
+   "frozen_histories": 352,
+   "histories": 352,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "03-r1-nuc-regression": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "03-r1-nuc-regression.txt",
+   "frozen_histories": 656,
+   "histories": 656,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "04-v5-150-on": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "04-v5-150-on.txt",
+   "frozen_histories": 100000,
+   "histories": 100000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "05-v5-150-off": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "05-v5-150-off.txt",
+   "frozen_histories": 100000,
+   "histories": 100000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "06-v5-200-on": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "06-v5-200-on.txt",
+   "frozen_histories": 100000,
+   "histories": 100000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "07-v5-200-off": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "07-v5-200-off.txt",
+   "frozen_histories": 100000,
+   "histories": 100000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "08-v5-compare": {
+   "attestation": {
+    "manifest_path": "/workspace/.ionmc-cache/transport-samples/b40d8121744db1a711876c152957fb795f929710/manifest.json",
+    "manifest_sha256": "d35d02bfa1cd475e3ebc354b17d0dfca5d301122aca50325d1e986248fe68596",
+    "manifest_source": "host-runner protected stdout PARTIAL lines",
+    "partials": [
+     {
+      "content_sha256": "de0d8919ea7d6ef474a787f11380bcb4ccc8c76f8d61cc4ba946e5a9f0cf4d4f",
+      "host_run_id": "RUN-20261008T130528Z-20c21dd2",
+      "name": "v5-150-on.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "64217ffb33267bc933730f161c698dd2b4bf9c5aa167c1436380c0585ba78731",
+      "host_run_id": "RUN-20261008T130551Z-5eaae4e0",
+      "name": "v5-150-off.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "d615330e681b8729b796da2f4d4c10dc3159e9dd2a59bdd244b08c02af21ea2f",
+      "host_run_id": "RUN-20261008T130606Z-2a213262",
+      "name": "v5-200-on.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "bcaf932ab2023d56258989b45e7f6daa6afb04b8bfa20147a3b4fa602f52493c",
+      "host_run_id": "RUN-20261008T130630Z-98c2ef55",
+      "name": "v5-200-off.json",
+      "origin": "imported"
+     }
+    ],
+    "protected_host_records_verified_by_code": false,
+    "run_sha": "b40d8121744db1a711876c152957fb795f929710",
+    "statement": "the code verifies each imported partial against the manifest entry (digest) and requires a host_run_id per entry, but any imported partial makes the summary non-conformant (imported_partials_unverified_by_code); it cannot verify the protected host-runner records that the manifest is built from. The orchestrator must have written the manifest only from the PARTIAL <name> <sha> stdout lines of those records and must list the host_run_ids in record_local_validation"
+   },
+   "deselected_tests": null,
+   "exit": 1,
+   "file": "08-v5-compare.txt",
+   "frozen_histories": 100000,
+   "histories": 100000,
+   "pass": false,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "09-v2b-s0": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "09-v2b-s0.txt",
+   "frozen_histories": 500000,
+   "histories": 500000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "10-v2b-s1": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "10-v2b-s1.txt",
+   "frozen_histories": 500000,
+   "histories": 500000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "11-v2b-combine": {
+   "attestation": {
+    "manifest_path": "/workspace/.ionmc-cache/transport-samples/b40d8121744db1a711876c152957fb795f929710/manifest.json",
+    "manifest_sha256": "669dc8e540a4986380c70205715c2fb8ebfb08a5e7b89c1c17ac81b8b898ebec",
+    "manifest_source": "host-runner protected stdout PARTIAL lines",
+    "partials": [
+     {
+      "content_sha256": "0095bd3be21db9b1b82d98c93a59b7e0850eb3bc7ce735ae040447509c4c6db9",
+      "host_run_id": "RUN-20261008T130651Z-735b7458",
+      "name": "v2b-s0.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "b395126cc708794e1922defacd2228076d56f22183505d3180f23fee53464ab7",
+      "host_run_id": "RUN-20261008T131253Z-0eac64f3",
+      "name": "v2b-s1.json",
+      "origin": "imported"
+     }
+    ],
+    "protected_host_records_verified_by_code": false,
+    "run_sha": "b40d8121744db1a711876c152957fb795f929710",
+    "statement": "the code verifies each imported partial against the manifest entry (digest) and requires a host_run_id per entry, but any imported partial makes the summary non-conformant (imported_partials_unverified_by_code); it cannot verify the protected host-runner records that the manifest is built from. The orchestrator must have written the manifest only from the PARTIAL <name> <sha> stdout lines of those records and must list the host_run_ids in record_local_validation"
+   },
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "11-v2b-combine.txt",
+   "frozen_histories": 1000000,
+   "histories": 1000000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "12-v7-scan": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "12-v7-scan.txt",
+   "frozen_histories": 1210000,
+   "histories": 1210000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "13-v7-shift": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "13-v7-shift.txt",
+   "frozen_histories": 100000,
+   "histories": 100000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "14-v7-rep": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 1,
+   "file": "14-v7-rep.txt",
+   "frozen_histories": 1300000,
+   "histories": 1300000,
+   "pass": false,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  }
+ },
+ "suite": "lv5b"
+}

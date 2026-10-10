@@ -705,6 +705,7 @@ EXERCISED = {
         "multiplicity_round", "grid_locate", "inv_cdf_bin", "inv_cdf_sample", "kalbach_a",
         "kalbach_cdf", "kalbach_pdf", "kalbach_mu",
         "residual_invariant_mass", "residual_mass_ok", "cm_boost", "boost_z", "cm_to_lab",
+        "choose_target", "sample_event",
     },
 }  # fmt: skip
 """Functions exercised by the harness (kernel and twin sides, both in ``_make_kernel`` and

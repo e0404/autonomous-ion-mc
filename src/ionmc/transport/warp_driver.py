@@ -27,7 +27,11 @@ from ionmc.transport.kernels import make_kernel_support, make_transport_kernel
 from ionmc.transport.run import channel_columns
 from ionmc.transport.tally import (
     COUNTER_NAMES,
+    ELASTIC_COUNTER_NAMES,
+    ELASTIC_TALLY_NAMES,
     N_FIXED_TALLIES,
+    NUCLEAR_COUNTER_NAMES,
+    NUCLEAR_TALLY_NAMES,
     TRACE_N_CONTINUOUS,
     TRACE_N_DISCRETE,
     HistoryDiagnostics,
@@ -37,6 +41,12 @@ from ionmc.transport.tally import (
 )
 
 _CU_FUNC_ATTRIBUTE_NUM_REGS = 4
+NUCLEAR_CUDA_CHUNK_CAP = 1 << 14
+"""Largest chunk of the nuclear variant on CUDA (per-history stack scratch, decision 0041)."""
+_TABLE_FIELDS = (
+    "ln_s_mass", "r_mass", "f_mass", "d_f", "ln_e_of_r", "ln_e0", "inv_dln_e", "ln_r0",
+    "inv_dln_r", "z_over_a", "inv_rho_xs",
+)  # fmt: skip
 
 
 def device_for_backend(backend: str) -> str:
@@ -73,12 +83,138 @@ def _register_count(kernel: Any, device: Any) -> int | None:
 def load_kernel(eff: EffectiveConfig, device: str) -> tuple[Any, float, int | None]:
     """Compile and load the kernel for ``eff`` on ``device``: ``(kernel, seconds, registers)``."""
     real = wp.float32 if eff.precision == "float32" else wp.float64
-    kernel = make_transport_kernel(real, wants_diagnostics(eff))
+    if eff.nuclear is not None and eff.nuclear.elastic is not None:
+        from ionmc.transport.kernels_nuclear import make_nuclear_transport_kernel
+
+        kernel = make_nuclear_transport_kernel(real, wants_diagnostics(eff), True)
+    elif eff.nuclear is not None:
+        kernel = make_transport_kernel(real, wants_diagnostics(eff), True)
+    else:
+        kernel = make_transport_kernel(real, wants_diagnostics(eff))
     dev = wp.get_device(device)
     t0 = time.perf_counter()
     wp.load_module(kernel.module, device=dev)
     seconds = time.perf_counter() - t0
     return kernel, seconds, _register_count(kernel, dev)
+
+
+def _nuclear_inputs(
+    eff: EffectiveConfig, real: Any, device: str, chunk: int, k_hist: int, n_cols: int
+) -> tuple[Any, Any, Any]:
+    """Nuclear kernel inputs: ``(tables, nd, nuc_device)``. ``tables`` are the proton and deuteron
+    transport tables concatenated along the material axis (row ``m + species * n_materials``),
+    ``nd`` the ``NucData`` struct (nuclear arrays, constants, per-history scratch and trace
+    buffers for ``k_hist`` histories) and ``nuc_device`` the uploaded :class:`NuclearDevice`."""
+    from types import SimpleNamespace
+
+    from ionmc.config import NUCLEAR_MAX_ENERGY_MEV
+    from ionmc.transport import kernels_nuclear as kn
+    from ionmc.transport.kernels_nuclear import (
+        MAX_EVENT_ROWS,
+        STACK_COLUMNS,
+        TRACE_WIDTH,
+        make_nuclear_support,
+    )
+    from ionmc.transport.nuclear_device import cached_nuclear_device
+
+    tab, nuc = eff.tables, eff.nuclear
+    td = tab.deuteron
+    if nuc is None or td is None or td.n_e != tab.n_e or td.n_r != tab.n_r:
+        raise ValueError("nuclear kernels need deuteron tables on the proton grid sizes")
+    tp_w, td_w = tab.to_warp(device, wp.float64), td.to_warp(device, wp.float64)
+    cat = SimpleNamespace(n_e=tab.n_e, n_r=tab.n_r)
+    for f in _TABLE_FIELDS:
+        a, b = getattr(tp_w, f).numpy(), getattr(td_w, f).numpy()
+        setattr(cat, f, wp.array(np.concatenate([a, b]), dtype=wp.float64, device=device))
+    dev = cached_nuclear_device(
+        nuc.table, eff.geometry.materials, real=real, device=device, rows=nuc.rows
+    )  # packed once per process
+    ns = make_nuclear_support(real)
+    nd = ns.nuc()
+    nd.n_grid, nd.kmax, nd.n_mat = dev.n_grid, dev.kmax, len(eff.geometry.materials)
+    el_dev = None if nuc.elastic is None else _elastic_device(eff, real, device)
+    n_el_t = 0 if el_dev is None else len(ELASTIC_TALLY_NAMES)
+    nd.nt_base = n_cols - len(NUCLEAR_TALLY_NAMES) - n_el_t
+    nd.mass_d = wp.float64(td.projectile.mass_mev)
+    nd.e_cut_d = wp.float64(nuc.e_cut_deuteron_mev)
+    nd.e_source_max = wp.float64(NUCLEAR_MAX_ENERGY_MEV)
+    nd.e_domain_max = wp.float64(kn.NUCLEAR_DOMAIN_MAX_MEV)
+    nd.sec_shift = wp.float64(kn.SECONDARY_ENERGY_SHIFT_MEV)
+    nd.stack_cap = kn.STACK_CAPACITY
+    nd.child_limit = kn.CHILD_LIMIT
+    nd.secondary_nuclear = int(kn.SECONDARY_NUCLEAR)
+    nd.max_parent_gen = kn.MAX_PARENT_GENERATION
+    nd.ledger_tol = wp.float64(kn.LEDGER_TOL)
+    for f in (
+        "grid", "lam", "edges", "rpre", "recoil", "tconst", "m_res", "sigma", "sigma_win",
+        "sigma_end", "cum_sigma", "mat_ntargets", "mat_target",
+    ):  # fmt: skip
+        setattr(nd, f, getattr(dev, f))
+    names = {  # NucData field -> ElasticDevice field
+        "el_grid": "grid", "el_edges": "edges",
+        "el_e_min_shape": "e_min_shape", "el_e_min_pp": "e_min_pp", "el_sigma": "sigma",
+        "el_sigma_win": "sigma_win", "el_sigma_end": "sigma_end", "el_cum": "cum_sigma",
+        "el_mat_nt": "mat_ntargets", "el_mat_target": "mat_target",
+    }  # fmt: skip
+    if el_dev is not None:
+        nd.el_n_grid, nd.el_n_edges, nd.el_kmax = el_dev.n_grid, el_dev.n_edges, el_dev.kmax
+        nd.el_only = int(nuc.elastic.elastic_only)  # type: ignore[union-attr]
+        for f, g in names.items():
+            setattr(nd, f, getattr(el_dev, g))
+        nd.el_mass = el_dev.el_mass  # float64 in every variant, cached and hash-verified
+    else:  # dummies: the elastic=False compile unit never reads them
+        nd.el_n_grid, nd.el_n_edges, nd.el_kmax, nd.el_only = 2, 2, 1, 0
+        for f in names:
+            ints = f in ("el_mat_nt", "el_mat_target")
+            setattr(nd, f, wp.zeros(2, dtype=wp.int32 if ints else real, device=device))
+        nd.el_mass = wp.zeros(2, dtype=wp.float64, device=device)
+    nd.stack = wp.zeros((chunk, 32, STACK_COLUMNS), dtype=wp.float64, device=device)
+    nd.evi = wp.zeros(chunk * 16, dtype=int, device=device)
+    nd.evf = wp.zeros(chunk * 8, dtype=real, device=device)
+    nd.prod = wp.zeros(chunk * 32 * 8, dtype=real, device=device)
+    k = max(k_hist, 1)
+    nd.ev_tr = wp.zeros((k, MAX_EVENT_ROWS, TRACE_WIDTH), dtype=wp.float64, device=device)
+    nd.ev_n = wp.zeros(k, dtype=wp.int32, device=device)
+    nd.sec_tr = wp.zeros((k, 32, TRACE_WIDTH), dtype=wp.float64, device=device)
+    nd.sec_n = wp.zeros(k, dtype=wp.int32, device=device)
+    nd.above_n = wp.zeros(1, dtype=wp.int32, device=device)
+    return cat, nd, dev
+
+
+def _elastic_device(eff: EffectiveConfig, real: Any, device: str) -> Any:
+    """The packed elastic table on ``device`` (once per process and key), fail closed: the table
+    and material count must be those of the effective config, the uploaded bytes must hash to the
+    packed identity (read back once per cached device) and to the ``device_sha256`` recorded in the
+    effective-config summary."""
+    from ionmc.transport.elastic_device import cached_elastic_device
+
+    if (real is wp.float32) != (eff.precision == "float32"):
+        raise ValueError("elastic device precision differs from the effective configuration")
+    assert eff.nuclear is not None and eff.nuclear.elastic is not None
+    el = eff.nuclear.elastic
+    dev = cached_elastic_device(
+        el.table, eff.geometry.materials, real=real, device=device, rows=el.rows
+    )
+    if dev.table_id != el.table.table_id or dev.n_materials != len(eff.geometry.materials):
+        raise ValueError("elastic device arrays do not match the effective configuration")
+    if not dev.verified:
+        if dev.device_sha256() != dev.sha256:
+            raise ValueError("elastic device arrays differ from the packed table (sha256)")
+        want = eff.summary().get("elastic", {}).get("device_sha256")
+        if want is not None and want != dev.sha256:
+            raise ValueError("elastic device sha256 differs from the effective-config summary")
+        dev.verified = True
+    return dev
+
+
+def _nuclear_trace(nd: Any, k_hist: int) -> dict[str, Any]:
+    """The nuclear trace of the first ``k_hist`` histories (rows in history, then event order)."""
+    out: dict[str, Any] = {}
+    for key, tr, cnt in (("events", nd.ev_tr, nd.ev_n), ("secondaries", nd.sec_tr, nd.sec_n)):
+        a, n = tr.numpy(), cnt.numpy()
+        rows = [a[k, : n[k]] for k in range(k_hist)]
+        out[key] = np.concatenate(rows, axis=0) if rows else np.zeros((0, a.shape[2]))
+    return out
 
 
 def run_warp_range(eff: EffectiveConfig, h0: int, h1: int, device: str) -> PartialTransport:
@@ -142,6 +278,16 @@ def run_warp_range(eff: EffectiveConfig, h0: int, h1: int, device: str) -> Parti
     g_spacing = np.array([list(g.spacing_mm) for g in cfg.scoring])
     g_shape = np.array([list(g.shape) for g in cfg.scoring], dtype=np.int32)
 
+    nuclear = eff.nuclear is not None
+    if nuclear:
+        n_nuc_t = len(NUCLEAR_TALLY_NAMES)
+        counter_names: tuple[str, ...] = COUNTER_NAMES + NUCLEAR_COUNTER_NAMES
+        if eff.nuclear.elastic is not None:  # type: ignore[union-attr]
+            n_nuc_t += len(ELASTIC_TALLY_NAMES)
+            counter_names = counter_names + ELASTIC_COUNTER_NAMES
+    else:
+        n_nuc_t = 0
+        counter_names = COUNTER_NAMES
     t = tab.to_warp(device, wp.float64)  # energy and range tables in double in every variant
     arr_mat: Any = wp.array(np.ascontiguousarray(geo.material_index), dtype=wp.int32, device=device)
     arr_dens: Any = wp.array(
@@ -157,7 +303,7 @@ def run_warp_range(eff: EffectiveConfig, h0: int, h1: int, device: str) -> Parti
     edep = wp.zeros((run.n_batches, total_vox), dtype=wp.int64, device=device)
 
     n_chan_cols = channel_columns(eff)
-    n_cols = N_FIXED_TALLIES + 2 * n_g + n_chan_cols
+    n_cols = N_FIXED_TALLIES + 2 * n_g + n_chan_cols + n_nuc_t
     if eff.channels is None:
         chan = empty_channel_data(support, device)
     else:
@@ -169,8 +315,24 @@ def run_warp_range(eff: EffectiveConfig, h0: int, h1: int, device: str) -> Parti
 
     n_local = h1 - h0
     chunk = min(run.chunk_histories, max(n_local, 1))
+    if nuclear and wp.get_device(device).is_cuda:
+        chunk = min(chunk, NUCLEAR_CUDA_CHUNK_CAP)
+    extra: list[Any] = []
+    if nuclear:
+        k_hist = max(0, min(h1, diag.trace_histories) - h0) if use_diag else 0
+        t, nd, nuc_dev = _nuclear_inputs(eff, real, device, chunk, k_hist, n_cols)
+        assert tab.deuteron is not None
+        if eff.channels is None:
+            chan_d = empty_channel_data(support, device)
+        else:
+            chan_d = make_channel_data(
+                support, eff.channels, tab.deuteron, n_batches=run.n_batches, n_grids=n_g,
+                a_nucleon=tab.deuteron.projectile.a, species_id=1, generation=0, device=device,
+            )  # fmt: skip
+            chan_d.acc = chan.acc  # one accumulator, both species
+        extra = [nd, chan_d]
     tally_rows = wp.zeros((chunk, n_cols), dtype=wp.float64, device=device)
-    counter_rows = wp.zeros((chunk, len(COUNTER_NAMES)), dtype=wp.int32, device=device)
+    counter_rows = wp.zeros((chunk, len(counter_names)), dtype=wp.int32, device=device)
     if use_diag:
         end_state = wp.zeros((chunk, 11), dtype=real, device=device)
         end_code = wp.zeros(chunk, dtype=wp.int32, device=device)
@@ -197,7 +359,7 @@ def run_warp_range(eff: EffectiveConfig, h0: int, h1: int, device: str) -> Parti
         ctl.trace_h0 = wp.uint32(0)
 
     comps: list[list[float]] = [[] for _ in range(n_cols)]
-    counter_sums = [0] * len(COUNTER_NAMES)
+    counter_sums = [0] * len(counter_names)
     chunk_seconds: list[float] = []
     t_loop = time.perf_counter()
     for c0 in range(h0, h1, chunk):
@@ -215,7 +377,7 @@ def run_warp_range(eff: EffectiveConfig, h0: int, h1: int, device: str) -> Parti
                 t.inv_dln_e, t.ln_r0, t.inv_dln_r, t.z_over_a, t.inv_rho_xs,
                 arr_gorigin, arr_gspacing, arr_ginv, arr_gshape, arr_goff,
                 edep, tally_rows, counter_rows, end_state, end_code, trace_i, trace_f, trace_n,
-                chan,
+                chan, *extra,
             ],
             device=device,
         )  # fmt: skip
@@ -271,6 +433,13 @@ def run_warp_range(eff: EffectiveConfig, h0: int, h1: int, device: str) -> Parti
         "h0": h0,
         "h1": h1,
     }
+    if nuclear:
+        meta["nuclear_device_sha256"] = nuc_dev.sha256
+        if eff.nuclear.elastic is not None:  # type: ignore[union-attr]
+            meta["elastic_device_sha256"] = _elastic_device(eff, real, device).sha256
+        meta["nuclear_secondaries_above_domain"] = int(nd.above_n.numpy()[0])
+        if use_diag:
+            meta["nuclear_trace"] = _nuclear_trace(nd, k_hist)
     channel_acc = None if eff.channels is None else chan.acc.numpy().astype(np.int64)
     return rows_to_partial_many(
         h0, h1, comps, counter_sums, edep_grids, diagnostics, meta, channel_acc

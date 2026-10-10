@@ -52,6 +52,7 @@ markers = [
   "cuda: requires a CUDA device",
   "slow: long-running test",
   "host: requires the controlled host runner",
+  "calibration: Monte Carlo calibration of the V7 coverage rule (minutes; excluded from CI, run by the lv5b step pytest-v7-rep-calibration)",
   "multiprocess: requires more than one worker process (skipped in the single-process diagnostic mode, IONMC_SINGLE_PROCESS=1)",
 ]
 
@@ -66,8 +67,10 @@ select = ["E", "F", "I", "B", "UP", "W"]
 # Warp needs ``x = int(0)`` to declare a mutable (dynamic) variable inside functions/kernels.
 "src/ionmc/physics/em.py" = ["UP018"]
 "src/ionmc/physics/nuclear.py" = ["UP018"]
+"src/ionmc/physics/elastic.py" = ["UP018"]
 "src/ionmc/transport/funcs.py" = ["UP018"]
 "src/ionmc/transport/kernels.py" = ["UP018"]
+"src/ionmc/transport/kernels_nuclear.py" = ["UP018"]
 "tests/ionmc/test_tables_scattering.py" = ["UP018"]
 "tests/ionmc/test_straggling_gamma.py" = ["UP018"]
 
