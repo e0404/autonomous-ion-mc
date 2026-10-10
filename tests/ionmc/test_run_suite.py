@@ -1402,6 +1402,14 @@ LV5_ROW_STEP = {
 }  # fmt: skip
 LV5_NOT_IN_SUITE = {"P1", "P2", "P3", "P4", "P5", "V9", "C1"}  # CI tier (tests/ionmc)
 LV5_SLICE_B = {"V2b", "V5", "V6", "V7", "V8"}
+# V3-005C rows frozen by Amendment 14; each must be removed when its lv5c/hr5c step lands (step C9);
+# the set must be empty before the V3-005C evidence commit.
+PLAN_ROWS_PENDING_STEPS = frozenset(
+    {
+        "P6", "P7", "P5-ext", "V10", "V10-A", "X-ENDF", "V11", "C1-ext", "R1-D2", "E1-B",
+        "D9-BGG", "V6-sens", "V7-R", "V8-nuc", "V2b-el", "V7-scan-el", "V7-shift-el",
+    }
+)  # fmt: skip
 
 
 def _plan_rows() -> list[str]:
@@ -1446,12 +1454,21 @@ def test_lv5_manifest_seeds_hashed_files_and_deferred() -> None:
     assert all("--workers" not in c or c[c.index("--workers") + 1] == "1" for _, c, _ in steps)
 
 
+def test_plan_rows_pending_steps_are_plan_rows() -> None:
+    """Every allowlisted V3-005C row (Amendment 14) exists in the plan, so stale entries fail."""
+    rows = set(_plan_rows())
+    assert PLAN_ROWS_PENDING_STEPS <= rows, PLAN_ROWS_PENDING_STEPS - rows
+    assert not PLAN_ROWS_PENDING_STEPS & (set(LV5_ROW_STEP) | LV5_NOT_IN_SUITE | LV5_SLICE_B)
+
+
 def test_lv5_plan_rows_are_all_accounted_for_and_seeds_match_the_plan() -> None:
     mod, v5 = _load("run_suite"), _load("steps_v5")
     plan = PLAN5.read_text()
     rows = set(_plan_rows())
     assert {"N1", "V1", "V1b", "V2", "V2-probe", "V3", "V4", "V4b", "X1", "E1", "D6", "R1"} <= rows
-    accounted = set(LV5_ROW_STEP) | LV5_NOT_IN_SUITE | LV5_SLICE_B | {"V3-CI"}
+    accounted = (
+        set(LV5_ROW_STEP) | LV5_NOT_IN_SUITE | LV5_SLICE_B | {"V3-CI"} | PLAN_ROWS_PENDING_STEPS
+    )
     assert rows - accounted == set(), (
         rows - accounted
     )  # a new plan row needs a step or a declaration

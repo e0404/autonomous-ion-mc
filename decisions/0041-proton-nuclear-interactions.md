@@ -247,3 +247,73 @@ Acceptance-plan Amendments 6 (seeds) and 7 (scope and decision rules) are the bi
   - **V7 f32 vs f64 on CUDA:** pass (z −1.66, −2.16, −2.55 against 3.0; 1e6 histories in 10.7 s float32 and 15.0 s float64). All three float32 means are lower than float64 by 1.0–1.2 %, recorded as an observation.
 - **Execution incidents (chain ba8751a0, superseded):** two native SIGSEGV of V7 shards (RUN-20261008T205127Z-ccc40171 after 691 s, RUN-20261008T213342Z-dbb8a88c after 318 s; the re-run RUN-20261008T210343Z-dccacb06 with the first crash's seed passed), traced in a sandbox reproduction with the fault handler to the per-block rebuild of the packed nuclear device (`build_event_model`); fixed by the per-process device cache (C37, 41e4bc36): bitwise-identical estimators, about 29 % less wall time per shard. The MCP client's 1800 s idle limit aborted the 1838 s `v7-rep-s0` call (RUN-20261008T201947Z-6a3036f4) while the host run completed; its digest came from the published step document, for that superseded chain only. All partials of the 7aae5bb1 chain came from the protected stdout.
 - **Inherited by V3-005C:** D2 (p-p elastic) and p-nucleus elastic scattering, then V5 and V6 re-run on a fresh base; a pre-registered V7 re-test with a replicate-level criterion that tests the escaped-neutral hypothesis above; a larger python sample for the python:cpu64 `nuc_local` profile parity; the BGG part of D9; the multiprocess rows once the operator lifts the single-process directive.
+
+## Slice C (V3-005C, executed on the V3-005B branch) — ratified 2026-10-10, before any slice-C result
+
+Acceptance-plan Amendment 14 is the binding record for rows, tolerances, seeds and execution. This section records the physics decisions (orchestrator D-1 to D-6) and the alternatives that were rejected.
+
+The operator resolved IR-20261009-032741-C590CF on 2026-10-10. Under that resolution:
+- PR #82 stays unmerged, and V3-005C continues on this branch under task id V3-005B.
+- All failed and inconclusive records are preserved.
+- Follow-up validation is pre-registered before new results are generated, and no threshold is relaxed or seed repeated to obtain a pass.
+- In the operator's words, "missing elastic scattering is a hypothesis to test, not an assumed complete explanation".
+- The task merges only after the scientific and the implementation gates pass.
+
+### D-1: model for hadronic elastic scattering (D2)
+
+1. **p + nucleus (C, N, O, Ca and the surrogates of section 1), 1–250 MeV.**
+   - The integrated cross section is σ_el(E) = max(σ_tot(n+A) − σ_inel(p+A), 0) from the Barashenkov tables, as used by Geant4 `G4BGGNucleonElasticXS` / `G4NucleonNuclearCrossSection::GetElasticCrossSection`. It uses linear interpolation in E, A^{2/3} interpolation for untabulated Z, and the BGG rule below 14 MeV.
+   - The numbers are hand-transcribed from Geant4 11.4.2 `G4BarashenkovData.hh` and the formulas are re-implemented by hand. No code is copied. The Geant4 Software License notice and per-file sha256 are recorded.
+   - **Lineage:** TOPAS (QGSP_BIC_HP with `g4h-elastic_HP`) uses the same σ_el, so V5 and V11 cannot test this normalisation.
+   - The angular distribution is the nuclear-only black-disk form |2J₁(qR)/(qR)|², with q = 2p_CM sin(θ_CM/2). The radius comes from π(R + ƛ)² = σ_nonel(E) of the transport's own non-elastic table (LA150 MT5, Tripathi-shape extension above 150 MeV). The form is parameter-free, and no elastic data enter the shape.
+   - It is tabulated as σ_el(E) plus an inverse-CDF in μ_CM per energy node and sampled over all angles.
+   - Planning values: R_O = 2.58 / 2.60 / 2.64 fm and θ_rms(p+O) = 21 / 17 / 14° at 100 / 150 / 200 MeV. σ_el(p+O) = 1060 / 817 / 352 / 159 / 102 / 92 mb at 10 / 50 / 100 / 150 / 200 / 250 MeV.
+2. **Coulomb scattering** stays entirely in the multiple-scattering model, and no Coulomb–nuclear interference is modelled for p+A. This is the same split as in the gating engine (hadronic elastic plus EM Coulomb).
+3. **Recoil nucleus.** It is deposited locally via `nuclear_local` (species 64, class local, excluded from LET). ⟨T_r⟩ is about 0.55–0.8 MeV at 100–150 MeV for O, and its range in tissue is ≪ 10 µm.
+4. **p-p (H-1).**
+   - ≤ 150 MeV: the LA150 Hale R-matrix evaluation (LAW=5, LTP=1, LIDP=1), reconstructed with ENDF-102 eqs 6.9/6.10/6.14. Units are b/sr CM, so integrated cross sections carry 2π, and the identical-particle interference coefficient is −1/2.
+   - The tables interpolate the ratio σ_e/σ_c in μ and between energy nodes, never P_NI. The transported density is NI = σ_e − σ_c over θ_CM ≥ 16.26° (|μ_CM| ≤ 0.96, the NJOY `umin` convention), where NI ≥ 0 at every checked node.
+   - Above 150 MeV: σ(E) = σ_NI(150)·S(E)/S(150), with S the BGG/PDG systematics 1.0115·(23 + 50·√(ln(0.73/p)^7)) mb, and the shape held fixed in μ_CM.
+   - Kinematics are exact relativistic two-body. The faster proton continues as the primary, and the slower one (⟨T⟩ ≈ T/4, 37.9 MeV at 150 MeV) is transported as a secondary proton.
+   - The p-p channel is independent of TOPAS (BGG pp).
+   - Hale's π·b₀ is 14–16 % above the PDG σ_el(pp) at 100–150 MeV, while the transported NI above 16° agrees with PDG to 1–7 %. The excess is recorded, not corrected, because it is a property of the evaluation.
+5. **Sampling.** Σ_tot = Σ_nonel + Σ_el in the existing thinning, with the channel chosen by Σ_el/Σ_tot. `majorant_violation` stays fail-closed, the EM streams are identical with nuclear on and off, and the bounds of section 5 (32 particles, CUDA chunk ≤ 2^14) are unchanged. Elastic adds at most one secondary per event.
+
+### Rejected alternatives
+
+| Option | Reason |
+|---|---|
+| (i) LA150 LTP=12 nuclear-plus-interference for p+A | **Data finding:** above about 20 MeV the O-16 MT2 data (MF3 and the full MF6 P_NI tables, 24–150 MeV) are a numerical copy of C-12. MF3 agrees to ≤ 1e-5 relative. The backward floor σ_e/σ_c = 0.4152 at 100 / 120 / 150 MeV equals 1 − σ_c(Z=6)/σ_c(Z=8) exactly, i.e. an NI clipped against the carbon Coulomb amplitude and re-used with the oxygen one. The MF1 texts give no hint of copying. ENDF/B-VIII.1 changed only ⁴He in the proton sublibrary. O carries about 89 % of the nuclear-elastic mass in water. Beyond the copy: lin-lin P_NI goes negative between 5° and 10° (C-12, Ca-40), and CNI above 5° would double-count with the multiple-scattering model. Kept only as the report-only cross-check X-ENDF (C-12, N-14, Ca-40). |
+| (ii′) shape from the ENDF/B-VIII.0 **neutron** O-16 / C-12 MF4/MT2 | The isospin-mirror error is 5–10 %. It needs a new acquisition and an MF1 copy check. It is the **pre-registered fallback**, entered only if V10-A (a) or (b) fails for p+O while V10-A (c) and P7 pass (Amendment 14 (e)9). Its V10-A results would be exploratory. |
+| (iii) global optical model plus a partial-wave solver | The verification burden is high. Koning–Delaroche is not valid for A < 24. The Weppner 2009 light-nucleus fit contains Rolland 1966, which would remove the independence of V10-A. |
+| TENDL-2023 p-O016 | Not reachable from the sandbox (proxy 502), so its content is unverified. |
+| Gaussian form exp(−q²R²/4) | It is the small-q limit of the adopted form and has no diffraction minimum. Kept as a report-only sensitivity. |
+| R from the Barashenkov σ_inel, or the CHIPS t-slope | Either would make the angular shape share TOPAS lineage too. |
+| p-p cut at 5° or 10° CM | NI is negative below about 14° CM at ≤ 100 MeV (down to −11.2 mb/sr at 50 MeV), so the density would not be positive-definite. |
+| Local deposition of the p-p recoil proton | Its ranges reach centimetres, and it carries about 1–1.5 % of E₀. |
+| Correcting Hale's π·b₀ excess | It is a property of the evaluation, and the transported NI already agrees with PDG. |
+| CNI for p+A | Not in the gating engine; Coulomb is owned by the multiple-scattering model; the ENDF CNI is unusable for O. |
+| Recording block sums of all V7 bins (28.8 MB) | Only `escaped_neutral` failed. `sec_p` and `nuclear_local` passed both Amendment 13 gates. |
+
+### D-2 to D-6 (summary; details in Amendment 14)
+
+- **D-2:** V10-A is **gating** for any p+A elastic validation claim. Its tolerances are frozen now: ±30 % per angle at 10° / 15° / 20° CM, 20 % on the partial integral, 12 % on the C level. EXFOR is acquired from the IAEA raw master with the GitHub mirror as the recorded fallback, and no intervention is needed.
+  - **Per-channel independence.** The pre-1997 p+16O / p+12C angular data (Kelly 1989 / 1990, Seifert 1993, Glover 1985, Meyer 1981 / 1983 / 1988, Rolland 1966, Strauch & Titus 1956) have the role "evaluation (shape test)", because the shape uses no elastic data in its construction. This is an explicit exception argued from the construction, and it does not change the pre-1997 rule of section 6. Two caveats apply:
+    - the σ_el level comes from Barashenkov's compilation (shared lineage);
+    - LA150's σ_nonel, which sets R, may rest on optical potentials fitted to such data (one scalar per energy).
+  - **Level.** The σ_el level is gated only by post-1997 data for C (Abfalterer 2001 n+C σ_tot minus Auce 2005 / Ingemarsson 1999 p+C σ_R). For O, only Ingemarsson 1999 (65.5 MeV) minus the pre-1997 Finlay 1993 n+O σ_tot exists, so it is report-only. **The p+O elastic level is therefore an evidence gap.**
+- **D-3:** the (ii′) trigger above is adopted, and its results are exploratory.
+- **D-4:** the V7 re-test records the 20 block sums per replicate for `escaped_neutral` only and judges it with the bootstrap-t interval under the two-gate structure of Amendment 13. `sec_p` and `nuclear_local` keep their Amendment 13 rule at the new base. The Amendment 13 failure stands whatever the re-test gives.
+- **D-5:** seeds are lv5c 20481004 and hr5c 20491004; rehearsals use 20505000–20509999; later fresh bases are 20511004 (lv) and 20521004 (hr).
+- **D-6:** all work happens on this branch.
+
+### Additional limitations (slice C)
+
+1. The p+A elastic **level** is shared with TOPAS. For O it is not independently tested (D-2).
+2. The black-disk radius from σ_nonel is about 2.6 fm for O, about 20 % below typical strong-absorption radii. The angular distribution may therefore be too wide; V10-A (a) and V11 discriminate this. At 10–50 MeV, p+O elastic (σ_el ≈ 0.8–1.1 b, θ_rms 28–90°) is outside the diffraction regime (compound elastic). Its dose effect is small because the residual ranges are short, but it raises the event count to P(p-O) ≈ 0.21–0.24 per primary at 150–200 MeV.
+3. No CNI. Coulomb remains in the multiple-scattering model only.
+4. V10 is not blind: the PDG point at 160 MeV was seen during research.
+
+### Slice C work breakdown
+
+C0 (Amendment 14 and this section) to C10, as listed in Amendment 14 (m). Every commit goes through the Codex review loop until it passes. Validation is recorded at the exact SHA. A Codex approval is not scientific validation.
