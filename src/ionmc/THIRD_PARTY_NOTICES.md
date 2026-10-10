@@ -16,6 +16,20 @@ Parts of this repository derive from Geant4 source code, release 11.4.2:
   regime idea of `G4IonFluctuations` (energy-loss straggling), the range-limited step function of Geant4's
   energy-loss processes and the `G4ThreeVector::rotateUz` rotation in
   `src/ionmc/physics/em.py` and `src/ionmc/transport/funcs.py`.
+- V3-005C (hadronic elastic scattering, acceptance Amendment 14 (b), (l)): the proton-nucleus
+  elastic cross section follows `G4BGGNucleonElasticXS.cc`, `G4NucleonNuclearCrossSection.cc` and
+  `G4ComponentBarNucleonNucleusXsc.cc`, the Barashenkov arrays (V. S. Barashenkov, JINR
+  P2-89-770, 1989) are hand-transcribed from `G4BarashenkovData.hh`, and the proton-proton
+  systematics 1.0115 x (23 + 50 sqrt(ln(0.73/p)^7)) mb follows `G4HadronNucleonXsc.cc`, all
+  release 11.4.2. The formulas are re-implemented by hand, no Geant4 code is copied, and the six
+  source files (sha256 in `src/ionmc/data/registry.py`, ids `geant4-*-11.4.2`) are downloaded by
+  users, not redistributed. `G4HadronElasticPhysics.cc` is registered as the record that the
+  TOPAS reference engine uses the same cross section (shared lineage).
+  The BGG rule below 14 MeV also follows `G4NuclearRadii.cc` (Coulomb factor with the `r0[Z]`
+  table) and the Z interpolation of the Barashenkov component uses `aeff[Z]` of
+  `G4IsotopeList.hh`; the same notice and licence apply (files downloaded by users, not
+  redistributed). The p-p scaling above 150 MeV uses the PDG rpp2022 `pp_elastic.dat`
+  compilation (downloaded by users, not redistributed).
 
 This product includes software developed by Members of the Geant4 Collaboration
 ( http://cern.ch/geant4 ).

@@ -208,3 +208,45 @@ exact P_accept < 0.5 and on sigma > 0 without yields.
 8. **Checks.** `validation/scripts/transport/nuclear_checks.py` (N1, V1, V1b, V4, V4b, D6) and the
    `lv5` suite read the same table; every `lv5` document records the table id and the sha256 of
    the `.json` and `.npz` files.
+
+## Derived elastic table (decision 0041 slice C, V3-005C step C2)
+
+`ionmc data build elastic-proton` writes `derived/elastic-proton-<id>.npz` and `.json` from the
+hash-pinned LA150 proton sublibrary, AME2020 and the Geant4 11.4.2 Barashenkov/BGG sources (registry
+ids `geant4-*-11.4.2`, `pdg-rpp2022-pp-elastic`). Git holds only the registry entries, the EXFOR
+manifest and `src/ionmc/data/elastic_table_pin.json` (id and hashes); the table is not in Git. This
+step builds data only: no transport kernel uses the table yet (C3 to C5).
+
+- **Targets.** `H-1` followed by the seven LA150 targets of the nuclear table (same
+  `ELEMENT_TARGET` map and `(A_el/A_ref)^(2/3)` surrogate scaling; hydrogen has its own target).
+  Grid: the nuclear union-grid convention (1 MeV, the H-1 ENDF nodes, uniform ln E with at least
+  50 points per decade) plus every Barashenkov node, cut at 250 MeV, with midpoint refinement below
+  14 MeV (BGG Coulomb rule) and for H-1 above 13 MeV so that lin-lin interpolation of `sigma` in E
+  reproduces the direct evaluation to 5e-4 (`nodes_added_*` in the JSON).
+- **p + A.** `sigma_el` is the BGG/Barashenkov value (`ionmc.nuclear.bgg`: arrays hand-transcribed
+  from `G4BarashenkovData.hh` and compared with the pinned file by the builder, the exact Geant4
+  rules including the Coulomb factor below 14 MeV). The angular shape is the black-disk form
+  `|2 J1(qR)/(qR)|^2`, `q = 2 p_CM sin(theta_CM/2)`, with `pi (R + lambdabar)^2 = sigma_nonel` of
+  the transport's own LA150 MT5 (Tripathi shape above 150 MeV); R, lambdabar, `sigma_nonel` (and
+  its sha256) and the inversion residual are stored per node. The inverse CDF of `mu_CM` over
+  [-1, 1] is stored as 257 edges of 256 equiprobable bins per node. Nodes without a real radius
+  (`R <= 0` or `sigma_nonel = 0`) set `sigma_el = 0` below `e_min_shape` (per target, recorded).
+- **H-1.** The LA150 Hale LAW=5 LTP=1 reconstruction (`ionmc.nuclear.law5`, ENDF-102 eqs 6.9, 6.10,
+  6.14, b/sr CM) with ratio interpolation `sigma_e/sigma_c` in E; the transported density is
+  `NI = sigma_e - sigma_c` over `|mu_CM| <= 0.96` (theta_CM >= 16.26 deg). `sigma` is the
+  half-sphere integral (`2 pi`, each event of identical protons once); the edges cover the
+  symmetric range [-0.96, 0.96]. `e_min_pp` (12.53 MeV) is the lowest node from which every node and
+  midpoint has a non-negative density, `sigma = 0` below it, the first-negative diagnostics are in
+  the JSON. Above 150 MeV `sigma = sigma_NI(150) S(E)/S(150)` with the BGG p-p systematics and the
+  shape fixed.
+- **Findings and report-only data.** The builder asserts, fail closed, that the LA150 O-16 MT2 is a
+  numerical copy of C-12 from 24 MeV (recorded) and never uses LAW=5 data other than H-1 as a
+  construction input. The LA150 C-12/N-14/Ca-40 LTP=12 NI densities (ratio interpolation in mu) at
+  20-40 deg and 50/100/150 MeV are stored next to the model values (row X-ENDF, report-only).
+  `sigma_el` at 10 MeV per target is recorded for the comparison with the decision-0041 planning
+  value.
+- **Load and device.** `ElasticTable.load` re-hashes the npz, recomputes the id, checks the registry
+  pins and the qualification flags and refuses missing, stale, mis-pinned and unqualified tables
+  (all `UnsupportedCombinationError`); `material_rows` gives `Sigma_el` and the majorants;
+  `ElasticDevice` / `cached_elastic_device` (`ionmc.transport.elastic_device`) pack the arrays per
+  process and key as `NuclearDevice` does. Exact two-body kinematics: `ionmc.nuclear.elastic_kin`.
