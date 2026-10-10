@@ -158,8 +158,20 @@ attestation covers the inputs the V5 comparator binds to; the nuclear kernels, `
 tests are hashed through the prefixes)."""
 
 
+V11_CASE_FILES = tuple(
+    f"{V5_CASE_ROOT}/topas/proton-water-{e}mev-idd-r20-{mode}-seed{k}/{f}"
+    for e in (150, 200)
+    for mode in ("emelastic", "noelastic")
+    for k in (1, 2, 3)
+    for f in ("case.json", "input.txt")
+)
+"""The 24 files of the 12 V3-005C TOPAS case directories ``proton-water-{150,200}mev-idd-r20-{emelastic,
+noelastic}-seed{1,2,3}`` (plan Amendment 14 (f) rows 10-13) that ``compare_idd_v5.build_v11_verdict`` binds
+the V11 reference runs to byte for byte; with ``V5_CASE_FILES`` the 120 case files of the lv5c set."""
+
 SOURCE_FILES_V5C = (
     *SOURCE_FILES_V5B,
+    *V11_CASE_FILES,
     "validation/scripts/transport/steps_v5c.py",
     "validation/scripts/transport/v7r.py",
 )
@@ -270,6 +282,8 @@ STEP_TIMEOUT_FLOOR_S = {
         **{f"v7r-s{k}": 3300 for k in range(V7R_SHARDS)}, "v7r-ref": 3300,
         "pytest-v7r-calibration": 3300, "v7r-combine": 1800, "v7r-diag": 1800,
         **{f"pytest-v7r-calibration-s{k}": 3300 for k in range(3)},
+        **{f"v11-ionmc-{e}-{m}": 3300 for e in (150, 200) for m in ("emel", "emonly")},
+        "v11-compare": 1800,
     },
     "hr5": {
         "v8-stat-python-s0": 3600, "v8-stat-python-s1": 3600, "v8-stat-cpu64": 3600,
@@ -569,7 +583,7 @@ def _suite_steps_v5b(add, s5, s5b, sc, out_dir, dirs):  # type: ignore[no-untype
 
 def _suite_steps_v5c(add, sc, out_dir, dirs, s5c):  # type: ignore[no-untyped-def]
     """Steps of the V3-005C suite ``lv5c`` registered so far (``steps_v5c.py``): row V7-R (plan Amendment
-    14 (h), Amendment 17 (a)), in the order of the C9 plan. Other lv5c rows are added by their steps.
+    14 (h), Amendment 17 (a)) and row V11 (Amendment 14 (c)), in the order of the C9 plan. Other lv5c rows are added by their steps.
     ``pytest-v7r-calibration`` has no seed and no document: its pass is the pytest exit status, and
     ``summarize.py`` makes the conjunction with ``v7r-combine``."""
     env = NUCLEAR_ENV
@@ -588,6 +602,11 @@ def _suite_steps_v5c(add, sc, out_dir, dirs, s5c):  # type: ignore[no-untyped-de
                 pytest_cmd(*targets, marker="calibration", k=k_expr), env)
     add("v7r-combine", [*s5c, "v7r-combine", "--dirs", *dirs, *sc], env)
     add("v7r-diag", [*s5c, "v7r-diag", "--dirs", *dirs, *sc], env)
+    for e in (150, 200):  # row V11: EM+elastic and EM-only share the seed of the energy (r_index 14)
+        for m in ("emel", "emonly"):
+            add(f"v11-ionmc-{e}-{m}", [*s5c, "v11-ionmc", "--energy", str(e), "--mode", m,
+                                       "--out-dir", str(out_dir), *sc], env)  # fmt: skip
+    add("v11-compare", [*s5c, "v11-compare", "--dirs", *dirs, *sc], env)
 
 
 def _suite_steps_hr5(add, s5b, sc, out_dir, dirs, cuda):  # type: ignore[no-untyped-def]

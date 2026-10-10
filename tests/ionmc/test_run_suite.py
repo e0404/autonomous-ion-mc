@@ -1406,7 +1406,7 @@ LV5_SLICE_B = {"V2b", "V5", "V6", "V7", "V8"}
 # the set must be empty before the V3-005C evidence commit.
 PLAN_ROWS_PENDING_STEPS = frozenset(
     {
-        "P6", "P7", "P5-ext", "V10", "V10-A", "X-ENDF", "V11", "C1-ext", "R1-D2", "E1-B",
+        "P6", "P7", "P5-ext", "V10", "V10-A", "X-ENDF", "C1-ext", "R1-D2", "E1-B",
         "D9-BGG", "V6-sens", "V8-nuc", "V2b-el", "V7-scan-el", "V7-shift-el",
         "P6-D", "E-shape", "X-MT5-SPEC",
     }
@@ -1414,7 +1414,7 @@ PLAN_ROWS_PENDING_STEPS = frozenset(
 
 
 # V3-005C rows whose lv5c/hr5c step has landed -> (suite, step)
-SLICE_C_ROWS = {"V7-R": ("lv5c", "v7r-combine")}
+SLICE_C_ROWS = {"V7-R": ("lv5c", "v7r-combine"), "V11": ("lv5c", "v11-compare")}
 
 
 def _plan_rows() -> list[str]:

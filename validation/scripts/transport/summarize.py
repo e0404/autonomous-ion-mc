@@ -123,6 +123,8 @@ STEP_TAGS = (
     ("v7r-ref", "v7r-ref"),
     ("v7r-s", "v7r-shard"),
     ("v7r-diag", "v7r-diag"),
+    ("v11-compare", "v11-compare"),
+    ("v11-", "v11-ionmc"),
     ("n1-", "n1"),
     ("v2-combine", "v2-combine"),
     ("v2-probe-combine", "v2-probe-combine"),

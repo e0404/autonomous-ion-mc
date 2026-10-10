@@ -544,7 +544,7 @@ def test_lv5c_suite_registration_names_seeds_timeouts_tags(
     assert "lv5c" in rs.SUITES and rs.DEFERRED_STEPS["lv5c"] == ()
     names = [n.split("-", 1)[1] for n in rs.full_step_names("lv5c", 2)]
     assert names == [*(f"v7r-s{k}" for k in range(16)), "v7r-ref", "pytest-v7r-calibration",
-                     "v7r-combine", "v7r-diag"]  # fmt: skip
+                     "v7r-combine", "v7r-diag", *v5c.V11_STEP_NAMES, "v11-compare"]  # fmt: skip
     steps = rs.suite_steps("lv5c", 1, 1.0)
     for name, cmd, env in steps:
         assert env["IONMC_REQUIRE_DATA"] == "1"
@@ -564,7 +564,7 @@ def test_lv5c_suite_registration_names_seeds_timeouts_tags(
     full = rs.full_step_names("lv5c", 2)
     for n in full:
         base_name = n.split("-", 1)[1]
-        want = 1800 if base_name in ("v7r-combine", "v7r-diag") else 3300
+        want = 1800 if base_name in ("v7r-combine", "v7r-diag", "v11-compare") else 3300
         assert rs.step_timeout_s("lv5c", n, 1500) == want, n
     tags = {nm: sm.expected_tag(nm) for nm in full}
     assert tags["01-v7r-s0"] == tags["16-v7r-s15"] == "v7r-shard"

@@ -7,7 +7,8 @@ Usage::
 Configuration builders of the elastic-on suites (C6 brief section 1) and the steps of row V7-R
 (plan Amendment 14 (h), Amendment 17 (a)): ``v7r-shard`` (one of 16 shards of 4.5e6 histories with the
 block-sum sidecar), ``v7r-ref``, ``v7r-combine`` (the gates of ``v7r.py``) and ``v7r-diag``
-(exploratory). The frozen steps of ``steps_v5.py`` / ``steps_v5b.py`` are imported, never edited, and
+(exploratory); row V11 (plan Amendment 14 (c)): ``v11-ionmc`` (EM+elastic and EM-only producers,
+r_index 14, common random numbers per energy) and ``v11-compare``. The frozen steps of ``steps_v5.py`` / ``steps_v5b.py`` are imported, never edited, and
 build their configurations with ``elastic=False``; this module re-enables the elastic channel
 explicitly with the table id pinned in ``src/ionmc/data/elastic_table_pin.json``.
 
@@ -432,11 +433,186 @@ def step_v7r_diag(a: argparse.Namespace) -> int:
     return v5b.finish5b(doc, V7R_SHARDS * v7r.V7R_SHARD_N, n, any(p["reduced"] for p, _ in parts))
 
 
+# -- V11 (plan Amendment 14 (c) row V11; Amendment 14 (j) r_index 14) -----------------------------
+V11_R_INDEX = 14
+V11_K = {150: 0, 200: 1}  # shard index k per energy; emel and emonly of an energy share the seed (CRN)
+V11_MODES = ("emel", "emonly")
+V11_NAMES = tuple(f"v11-{e}-{m}.json" for e in (150, 200) for m in V11_MODES)
+V11_STEP_NAMES = tuple(f"v11-ionmc-{e}-{m}" for e in (150, 200) for m in V11_MODES)
+
+
+def v11_seed(energy: float) -> int:
+    """``base + 1000 * 14 + k`` with k = 0 (150 MeV) or 1 (200 MeV); EM+elastic and EM-only share it."""
+    return base.SEED_BASE + 1000 * V11_R_INDEX + V11_K[int(energy)]
+
+
+def v11_config(energy: float, mode: str, n: int, seed: int, geometry: Any, grid: Any,
+               timeout: float | None = None) -> SimulationConfig:
+    """warp-cpu float64, V5 geometry, 20 batches. ``emel``: ``nuc_config_c_elastic_only`` (non-elastic
+    channel off, elastic on); ``emonly``: ``nuc_config_c(nuclear=False)``, the same EM model as the
+    frozen lv5b V5 "off" producer (the elastic switches have no effect without ``nuclear=True``)."""
+    if mode not in V11_MODES:
+        raise SystemExit(f"v11: mode {mode!r} not in {V11_MODES}")
+    build = nuc_config_c_elastic_only if mode == "emel" else nuc_config_c
+    cfg = build(energy=energy, n=n, seed=seed, geometry=geometry, grid=grid,
+                nuclear=mode == "emel", n_batches=v5b.V5_BATCHES, timeout=timeout)  # fmt: skip
+    return replace(cfg, run=replace(cfg.run, backend="warp-cpu", precision="float64"))
+
+
+def step_v11_ionmc(a: argparse.Namespace) -> int:
+    from ionmc.reference import metrics as rm
+
+    e, mode = a.energy, a.mode
+    row = f"v11-{e:g}-{mode}"
+    seed = v11_seed(e)
+    n = v5b.scaled(v5b.V5_N, a.scale, 2000, v5b.V5_BATCHES)
+    geo, grid, nz, r_mm = v5b.v5_geometry(e)
+    cfg = v11_config(e, mode, n, seed, geo, grid, timeout=a.timeout)
+    t0 = time.perf_counter()
+    res = v5b.Simulation(cfg).run()
+    wall = time.perf_counter() - t0
+    g = res.grid("dose")
+    rho = v5b.M.WATER.density_g_cm3
+    bin_g_cm2 = rho * v5b.V5_DZ_MM / 10.0
+    idd_b = g.batch_energy_mev.reshape(v5b.V5_BATCHES, nz) / bin_g_cm2  # MeV/(g/cm^2)/primary
+    idd = idd_b.mean(axis=0)
+    depth = (np.arange(nz) + 0.5) * v5b.V5_DZ_MM
+    curve = rm.normalize_to_peak(idd)
+    plateau = (depth >= 20.0) & (depth <= 60.0)
+    tot_b = idd_b.sum(axis=1) * bin_g_cm2
+    met = {"peak_depth_mm": rm.peak_depth(depth, curve), "r80_mm": rm.r80(depth, curve),
+           "plateau_mean_20_60_mm": float(idd[plateau].mean()),
+           "peak_over_plateau": float(idd.max() / idd[plateau].mean()),
+           "total_in_grid_mev_per_primary": float(tot_b.mean()),
+           "in_grid_over_e0": float(tot_b.mean() / e)}  # fmt: skip
+    ok = bool(v5.clean(res) and res.energy_balance.relative_residual <= 1e-12)
+    part = write_partial_c(a, row, {
+        "row": row, "mode": mode, "energy": e, "nuclear": mode == "emel", "elastic_only": mode == "emel",
+        "seed": seed, "n": n, "n_batches": v5b.V5_BATCHES, "bin_mm": v5b.V5_DZ_MM,
+        "lateral_half_mm": v5b.V5_HALF_MM, "density_g_cm3": rho, "unit": "MeV/(g/cm^2)/primary",
+        "idd_batches": idd_b.tolist(), "metrics": met, "valid": ok, "reduced": n < v5b.V5_N})  # fmt: skip
+    doc = {"step": "v11-ionmc", "row": row, "mode": mode, "seed": seed, "range_csda_mm": r_mm,
+           "table": v5.table_record(), **elastic_table_record(), "wall_s": wall,
+           "hist_per_s": n / wall, "metrics": met,
+           "relative_residual": float(res.energy_balance.relative_residual),
+           "counters": res.counters.as_dict(), "partial": part,
+           "comparison": "pending: step v11-compare", "pass": ok}  # fmt: skip
+    return v5b.finish5b(doc, v5b.V5_N, n, n < v5b.V5_N)
+
+
+def v11_seed_check(parts: list[dict[str, Any]]) -> dict[str, Any]:
+    """Seed rules of row V11 (fail closed, ``SystemExit``): each energy's emel and emonly partials carry
+    the shared seed ``base + 14000 + k``, the two energies differ, the set is disjoint from every
+    consumed evidence seed, and every partial carries the run's seed base."""
+    by = {p["row"]: p for p in parts}
+    sd = parts[0].get("seed_base") if parts else None
+    seeds: dict[str, int] = {}
+    for e in (150, 200):
+        want = int(sd) + 1000 * V11_R_INDEX + V11_K[e] if sd is not None else -1
+        for m in V11_MODES:
+            p = by.get(f"v11-{e}-{m}")
+            if p is None or p.get("seed") != want or p.get("seed_base") != sd or not p.get("valid"):
+                raise SystemExit(f"v11 {e} {m}: missing, invalid or seed != {want}")
+            seeds[f"{e}-{m}"] = want
+    if seeds["150-emel"] == seeds["200-emel"]:
+        raise SystemExit("v11: the two energies share a seed")
+    bad = sorted(set(seeds.values()) & consumed_seed_set())
+    if bad:
+        raise SystemExit(f"v11: seeds {bad} belong to a consumed evidence seed set (fail closed)")
+    return {"seeds": seeds, "seed_base": sd, "r_index": V11_R_INDEX, "common_random_numbers": True,
+            "seeds_disjoint_from_consumed": True}  # fmt: skip
+
+
+def _partial_present(a: argparse.Namespace, name: str) -> bool:
+    return any(p.is_file() for d in a.dirs for p in (Path(d) / name, Path(d) / "samples" / name))
+
+
+def v11_bound_cases_identity(verdict: dict[str, Any], cases_dir: Path) -> dict[str, Any]:
+    """Every file of every bound case directory is in ``run_suite.source_file_list('lv5c')``."""
+    import run_suite
+
+    listed = set(run_suite.source_file_list("lv5c"))
+    paths: list[str] = []
+    for name in sorted(v5b._bound_case_names(verdict)):
+        d = cases_dir / name
+        rels = sorted(f"{run_suite.V5_CASE_ROOT}/{name}/{f.relative_to(d).as_posix()}"
+                      for f in d.rglob("*") if f.is_file())  # fmt: skip
+        absent = [r for r in rels if r not in listed] if rels else ["<no files>"]
+        if absent:
+            raise SystemExit(f"bound case {name}: {absent} not in the lv5c source identity")
+        paths += rels
+    return {"cases_in_source_identity": True, "bound_case_paths": paths}
+
+
+def _cases_dir() -> Path:
+    """The frozen committed cases of this snapshot (the only directory the V11 runs may be bound to)."""
+    return v5b.REPO / "validation" / "reference_cases"
+
+
+def _v11_reference_runs(ref_dir: Path) -> list[Path]:
+    """TOPAS runs of ``ref_dir/REF-*`` whose case.json carries a V5 (full, emonly), V11 (emelastic) or
+    X-elastic-factor (noelastic) block; other materialized runs are not V11 evidence."""
+    from ionmc.reference.runs import load_run
+
+    out = []
+    for d in sorted(ref_dir.glob("REF-*")):
+        run = load_run(d)
+        blk = run.case.get("v5")
+        if run.engine == "topas" and isinstance(blk, dict) and blk.get("row") in (
+                "V5", "V11", "X-elastic-factor"):  # fmt: skip
+            out.append(d)
+    return out
+
+
+def step_v11_compare(a: argparse.Namespace) -> int:
+    """Row V11 verdict from the four ``v11-*`` partials (and the optional lv5c ``v5-{e}-on`` partials
+    for F_ne) against the materialized TOPAS runs through ``compare_idd_v5.build_v11_verdict``.
+    Consumes partials only. Lineage or input errors give a failed document, never a silent skip."""
+    import importlib.util
+    import tempfile
+
+    path = v5b.REPO / "validation" / "scripts" / "reference" / "compare_idd_v5.py"
+    spec = importlib.util.spec_from_file_location("compare_idd_v5", path)
+    assert spec and spec.loader
+    cmp = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cmp)
+    parts = [p for p, _ in load_partials_c(a, list(V11_NAMES))]
+    on_names = [f"v5-{e}-on.json" for e in (150, 200) if _partial_present(a, f"v5-{e}-on.json")]
+    on_parts = [p for p, _ in load_partials_c(a, on_names)] if on_names else []
+    seeds = v11_seed_check(parts)
+    for p in on_parts:
+        if p["seed"] in set(seeds["seeds"].values()):
+            raise SystemExit(f"v11: V5-on seed {p['seed']} equals a V11 seed (F_ne needs independence)")
+    ref_dir = Path(a.reference_dir) if a.reference_dir else v5b.REPO / ".ionmc-cache" / "reference-runs"
+    cases_dir = _cases_dir()
+    doc: dict[str, Any] = {"step": "v11-compare", "reference_dir": str(ref_dir),
+                           "cases_dir": str(cases_dir), **seeds,
+                           "v5_on_partials_used": on_names,
+                           "attestation": v5.attestation_block(a)}  # fmt: skip
+    reduced = any(p["reduced"] for p in [*parts, *on_parts])
+    try:
+        topas = _v11_reference_runs(ref_dir)
+        with tempfile.TemporaryDirectory() as tmp:
+            for p in [*parts, *on_parts]:
+                (Path(tmp) / f"{p['row']}.json").write_text(json.dumps(p, sort_keys=True))
+            verdict = cmp.build_v11_verdict(Path(tmp), topas, cases_dir)
+        doc.update(v11_bound_cases_identity(verdict, cases_dir))
+        doc.update(verdict=verdict, plan_rule=verdict["plan_rule"], pass_gating=bool(verdict["pass"]),
+                   error=None)  # fmt: skip
+        doc["pass"] = bool(verdict["pass"] and not reduced)
+    except (cmp.IddError, SystemExit, ValueError, OSError) as exc:
+        doc.update(cases_in_source_identity=False, verdict=None, plan_rule=cmp.V11_PLAN_RULE,
+                   error=f"{type(exc).__name__}: {exc}", **{"pass": False})  # fmt: skip
+    return v5b.finish5b(doc, v5b.V5_N, min(p["n"] for p in parts), reduced)
+
+
 STEPS = {
     "v7r-shard": step_v7r_shard,
     "v7r-ref": step_v7r_ref,
     "v7r-combine": step_v7r_combine,
     "v7r-diag": step_v7r_diag,
+    "v11-ionmc": step_v11_ionmc,
+    "v11-compare": step_v11_compare,
 }
 
 
@@ -446,6 +622,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--scale", type=float, default=1.0, help="history-count factor (reduced run)")
     ap.add_argument("--workers", default="1", help="accepted for uniformity; one process")
     ap.add_argument("--shard", type=int, default=0, help="v7r-shard: shard index 0..15")
+    ap.add_argument("--energy", type=float, default=150.0, help="v11-ionmc: 150 or 200")
+    ap.add_argument("--mode", choices=V11_MODES, default="emel", help="v11-ionmc: emel or emonly")
+    ap.add_argument("--reference-dir", default=None, help="v11-compare: dir of REF-* runs")
     ap.add_argument("--out-dir", default="samples", help="partial files")
     ap.add_argument("--dirs", nargs="+", default=["."], help="combine steps: archive directories")
     ap.add_argument("--partials-manifest", default=None, help="combine steps: manifest of imports")
@@ -457,6 +636,8 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("need 0 < --scale <= 1")
     if args.step == "v7r-shard" and not 0 <= args.shard < V7R_SHARDS:
         raise SystemExit("v7r-shard: --shard outside 0..15")
+    if args.step == "v11-ionmc" and int(args.energy) not in V11_K:
+        raise SystemExit("v11-ionmc: --energy 150 or 200")
     base.SEED_BASE = args.seed
     v4.base.SEED_BASE = args.seed
     return STEPS[args.step](args)

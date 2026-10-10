@@ -54,6 +54,13 @@ both total-deposit criteria pass -> kappa not used; a failing energy with D > 0 
 build kappa (if every failing energy qualifies); a failing energy with D < 0 or |D| > 1.5 % ->
 kappa cannot be the remedy, stop (this also applies when failures are mixed).
 The analysis code SHA is git HEAD of this repository with a dirty flag.
+
+V3-005C (C7) adds, without changing any of the above, the TOPAS modes ``emelastic`` (Modules exactly
+``g4em-standard_opt4`` + ``g4h-elastic_HP``; cases ``...-r20-emelastic-seed{1,2,3}``, row V11, plan rows
+10/11) and ``noelastic`` (the six frozen modules minus ``g4h-elastic_HP``; ``...-r20-noelastic-seed{1,2,3}``,
+``v5.row`` X-elastic-factor, rows 12/13, report-only) with :func:`build_v11_verdict` (row V11), the rung-2
+test :func:`f_ne_test` and :func:`elastic_factor_report`; see the V11 section below and the plan quotes
+in ``V11_PLAN_RULE``.
 """
 
 from __future__ import annotations
@@ -406,10 +413,31 @@ def load_engine_groups(run_dirs: list[Path], engine: str, nz: dict[int, int], ca
                        ) -> dict[tuple[int, bool], dict[str, Any]]:  # fmt: skip
     """Per (energy, nuclear): curves ``[seeds, nz]`` cut to the ionmc grid, with seeds and hashes.
     Every run is bound to its frozen committed case under ``cases_dir/<engine>``."""
+
+    def classify(run: ReferenceRun, case_name: str, case_doc: dict[str, Any], cb: Any
+                 ) -> tuple[tuple[int, bool], int, dict[str, Any]]:  # fmt: skip
+        v5 = case_doc.get("v5")
+        if not isinstance(v5, dict) or v5.get("row") != "V5":
+            raise IddError(f"{run.run_id}: committed case {case_name} has no V5 block")
+        fp = cb.run_fingerprint(run)  # fail closed: lineage of the run
+        e, nuc = derive_config(run, fp)
+        if (int(v5["energy_mev"]), bool(v5["nuclear"])) != (e, nuc):
+            raise IddError(
+                f"{run.run_id}: committed case {case_name} v5 label ({v5['energy_mev']}, "
+                f"{v5['nuclear']}) != native input ({e}, {nuc}): mislabeled run")  # fmt: skip
+        return (e, nuc), e, fp
+
+    return _load_groups(run_dirs, engine, nz, cases_dir, classify)  # type: ignore[return-value]
+
+
+def _load_groups(run_dirs: list[Path], engine: str, nz: dict[int, int], cases_dir: Path,
+                 classify: Callable[..., Any]) -> dict[Any, dict[str, Any]]:  # fmt: skip
+    """Shared loader: ``classify(run, case_name, case_doc, cb)`` returns ``(group key, energy,
+    fingerprint)`` after the label and native-input checks of its mode (fail closed)."""
     cb = _batches_module()
     committed = _committed_cases(cases_dir, engine)
     bound: dict[str, str] = {}
-    groups: dict[tuple[int, bool], dict[str, Any]] = {}
+    groups: dict[Any, dict[str, Any]] = {}
     for rd in run_dirs:
         try:
             run = load_run(rd)
@@ -420,15 +448,7 @@ def load_engine_groups(run_dirs: list[Path], engine: str, nz: dict[int, int], ca
                 raise IddError(f"{run.run_id}: committed case {case_name} is already bound by "
                                f"{bound[case_name]}")  # fmt: skip
             bound[case_name] = run.run_id
-            v5 = json.loads(committed[case_name]["case.json"]).get("v5")
-            if not isinstance(v5, dict) or v5.get("row") != "V5":
-                raise IddError(f"{run.run_id}: committed case {case_name} has no V5 block")
-            fp = cb.run_fingerprint(run)  # fail closed: lineage of the run
-            e, nuc = derive_config(run, fp)
-            if (int(v5["energy_mev"]), bool(v5["nuclear"])) != (e, nuc):
-                raise IddError(
-                    f"{run.run_id}: committed case {case_name} v5 label ({v5['energy_mev']}, "
-                    f"{v5['nuclear']}) != native input ({e}, {nuc}): mislabeled run")  # fmt: skip
+            key, e, fp = classify(run, case_name, json.loads(committed[case_name]["case.json"]), cb)
             if e not in nz:
                 raise IddError(f"{run.run_id}: energy {e} not in {sorted(nz)}")
             if run.histories != HISTORIES:
@@ -446,10 +466,10 @@ def load_engine_groups(run_dirs: list[Path], engine: str, nz: dict[int, int], ca
                 f"{run.run_id}: in-grid total {total:.3f} MeV is {total / e:.3f} of the beam energy, "
                 f"outside {DEP_CONTAINED}: unit or geometry error")  # fmt: skip
         g = groups.setdefault(
-            (e, nuc), {"curves": [], "seeds": [], "runs": [], "hashes": {}, "fingerprints": {},
+            key, {"curves": [], "seeds": [], "runs": [], "hashes": {}, "fingerprints": {},
                        "bound_cases": {}})  # fmt: skip
         if seed in g["seeds"]:
-            raise IddError(f"{run.run_id}: duplicate seed {seed} in group {(e, nuc)}")
+            raise IddError(f"{run.run_id}: duplicate seed {seed} in group {key}")
         g["curves"].append(cut)
         g["seeds"].append(seed)
         g["runs"].append(run.run_id)
@@ -545,6 +565,273 @@ def build_verdict(ionmc_dir: Path, topas_runs: list[Path], mcsquare_runs: list[P
                                 for (e, n), g in gr.items()} for eng, gr in groups.items()},
     })  # fmt: skip
     return doc
+
+
+# -- V11 (plan Amendment 14 (c) row V11, (f) rung 2 and rows 10-13) ------------------------------------
+V11_TOL_F = 0.02  # |F_ionmc / F_TOPAS - 1|, frozen (plan row V11); never a CLI option
+V11_TOL_GAIN = 0.005  # absolute, plateau gain; frozen
+V11_NE_TOL = 0.02  # rung-2 threshold on F_ne,ionmc / F_ne,TOPAS - 1
+V11_WINDOW_MM = 10.0  # depth window before R80 of the F_ne depth-resolved report
+V11_PLAN_RULE = {
+    "source": "validation/plans/v3-005-acceptance.md, Amendment 14 (c) row V11 (l.204), (f) (l.253-277)",
+    "V11": ("Elastic-only effect, ionmc vs TOPAS, at 150 and 200 MeV. F = (peak/plateau)_EM+el / "
+            "(peak/plateau)_EM | |F_ionmc/F_TOPAS - 1| within 0.02, and the plateau gain "
+            "(plateau_EM+el/plateau_EM - 1) within 0.005 absolute. Both use the V5 TOST on the 90 % "
+            "interval with Welch df (Amendment 9)"),
+    "F_ne": ("F_ne = (peak/plateau)_nuclear on / (peak/plateau)_elastic only, ionmc (V5 \"on\" vs V11) "
+             "against TOPAS (full vs rows 10/11). Attributed iff the 90 % interval of "
+             "F_ne,ionmc/F_ne,TOPAS - 1 lies beyond 0.02 on the side of the residual. The "
+             "depth-resolved difference in the last 10 mm before R80 is reported."),
+    "rows_12_13": "Rows 12/13 give the full/X1 elastic factor, report-only.",
+}  # fmt: skip
+MODES = ("full", "emonly", "emelastic", "noelastic")
+TOPAS_MODULES_ELASTIC_ONLY = frozenset({"g4em-standard_opt4", "g4h-elastic_HP"})
+TOPAS_MODULES_NOELASTIC = TOPAS_MODULES_FULL - {"g4h-elastic_HP"}
+MODE_MODULES = {"full": TOPAS_MODULES_FULL, "emonly": TOPAS_MODULES_EMONLY,
+                "emelastic": TOPAS_MODULES_ELASTIC_ONLY, "noelastic": TOPAS_MODULES_NOELASTIC}  # fmt: skip
+MODE_FP_GROUP = {"full": "topas", "emonly": "topas-emonly", "emelastic": "topas", "noelastic": "topas"}
+"""``compare_batches.run_fingerprint`` labels every Modules line with a ``g4h-``/``g4ion`` module
+``topas``: emelastic and noelastic share that label with full, and ``config_sha256`` plus the exact
+module-set check separate them."""
+MODE_ROW = {"full": "V5", "emonly": "V5", "emelastic": "V11", "noelastic": "X-elastic-factor"}
+MODE_NUCLEAR = {"full": True, "emonly": False, "emelastic": False, "noelastic": True}
+
+
+def _topas_module_names(run: ReferenceRun, native: str) -> list[str]:
+    mods = _TOPAS_MODULES.findall(native)
+    if len(mods) != 1:
+        raise IddError(f"{run.run_id}: expected exactly one parsable Ph/Default/Modules line")
+    names = re.findall(r'"([^"\n]*)"', mods[0][1])
+    if int(mods[0][0]) != len(names) or len(set(names)) != len(names):
+        raise IddError(f"{run.run_id}: Modules count/duplicates inconsistent: {names}")
+    return names
+
+
+def derive_mode(run: ReferenceRun, fp: dict[str, Any]) -> tuple[int, str]:
+    """(energy in MeV, mode) of a TOPAS run from its verified native input: the Modules set must be
+    EXACTLY one of ``MODE_MODULES`` (full, emonly, emelastic, noelastic), the fingerprint group the
+    one of the mode, BeamEnergySpread 0, one CutForAllParticles line, an integral unique energy."""
+    if run.engine != "topas":
+        raise IddError(f"{run.run_id}: V11 modes are TOPAS only, engine {run.engine!r}")
+    native = read_verified(run, f"inputs/{run.case['input']}").decode("utf-8", errors="replace")
+    names = _topas_module_names(run, native)
+    modes = [m for m in MODES if set(names) == MODE_MODULES[m]]
+    if len(modes) != 1:
+        raise IddError(f"{run.run_id}: TOPAS Modules {sorted(names)} are none of the frozen sets "
+                       f"{ {m: sorted(v) for m, v in MODE_MODULES.items()} }")  # fmt: skip
+    mode = modes[0]
+    if fp["group"] != MODE_FP_GROUP[mode]:
+        raise IddError(f"{run.run_id}: fingerprint group {fp['group']!r} contradicts the {mode} Modules line")
+    spread = _TOPAS_SPREAD.findall(native)
+    if len(spread) != 1 or float(spread[0]) != 0.0:
+        raise IddError(f"{run.run_id}: BeamEnergySpread must be exactly one line equal to 0: {spread}")
+    if len(_TOPAS_CUT.findall(native)) != 1:
+        raise IddError(f"{run.run_id}: expected exactly one Ph/Default/CutForAllParticles line")
+    hits = _TOPAS_ENERGY.findall(native)
+    if len(hits) != 1 or float(hits[0]) != int(float(hits[0])):
+        raise IddError(f"{run.run_id}: beam energy not unique/integral in the native input: {hits}")
+    return int(float(hits[0])), mode
+
+
+def load_topas_mode_groups(run_dirs: list[Path], nz: dict[int, int], cases_dir: Path,
+                           modes: tuple[str, ...] = MODES) -> dict[tuple[int, str], dict[str, Any]]:  # fmt: skip
+    """TOPAS groups keyed ``(energy, mode)`` for ``modes`` with the V5 lineage and binding checks; a run
+    of another mode, a label (row, mode, energy, nuclear flag, modules) that disagrees with the verified
+    native input, or an unbound run is refused (fail closed)."""
+
+    def classify(run: ReferenceRun, case_name: str, case_doc: dict[str, Any], cb: Any
+                 ) -> tuple[tuple[int, str], int, dict[str, Any]]:  # fmt: skip
+        v5 = case_doc.get("v5")
+        if not isinstance(v5, dict):
+            raise IddError(f"{run.run_id}: committed case {case_name} has no v5 block")
+        fp = cb.run_fingerprint(run)
+        e, mode = derive_mode(run, fp)
+        if mode not in modes:
+            raise IddError(f"{run.run_id}: derived mode {mode!r} is not accepted here {modes}")
+        label = (v5.get("row"), v5.get("mode", "full" if v5.get("nuclear") else "emonly"),
+                 int(v5["energy_mev"]), bool(v5["nuclear"]))  # fmt: skip
+        if label != (MODE_ROW[mode], mode, e, MODE_NUCLEAR[mode]):
+            raise IddError(
+                f"{run.run_id}: committed case {case_name} v5 label {label} != native input "
+                f"{(MODE_ROW[mode], mode, e, MODE_NUCLEAR[mode])}: mislabeled run")  # fmt: skip
+        if "modules" in v5 and set(v5["modules"]) != MODE_MODULES[mode]:
+            raise IddError(f"{run.run_id}: committed case {case_name} lists modules {v5['modules']}")
+        return (e, mode), e, fp
+
+    return _load_groups(run_dirs, "topas", nz, cases_dir, classify)
+
+
+def ratio_est(a: Est, b: Est) -> Est:
+    """``a / b`` for independent estimates (delta method, Welch df)."""
+    if b.value == 0.0:
+        raise IddError("ratio to a zero reference")
+    r = a.value / b.value
+    return Est(r, math.hypot(a.se, r * b.se) / abs(b.value), welch_df(a.se, a.df, b.se, b.df))
+
+
+def paired_ratio_jackknife(num: np.ndarray, den: np.ndarray) -> dict[str, Est]:
+    """``peak_over_plateau`` and ``plateau`` ratios (num / den) of the pooled batch-mean curves of two
+    common-random-number runs, with the delete-one jackknife that removes the SAME batch from both
+    (df = batches - 1); keys ``pp_ratio`` and ``plateau_ratio``."""
+    if num.shape != den.shape or num.ndim != 2 or num.shape[0] < 2:
+        raise IddError("paired jackknife needs two equal [batches >= 2, nz] arrays")
+    nb = num.shape[0]
+
+    def ratios(a: np.ndarray, b: np.ndarray) -> dict[str, float]:
+        ma, mb = curve_metrics(a), curve_metrics(b)
+        return {"pp_ratio": ma["peak_over_plateau"] / mb["peak_over_plateau"],
+                "plateau_ratio": ma["plateau"] / mb["plateau"]}  # fmt: skip
+
+    full = ratios(num.mean(axis=0), den.mean(axis=0))
+    tn, td = num.sum(axis=0), den.sum(axis=0)
+    loo = [ratios((tn - num[i]) / (nb - 1), (td - den[i]) / (nb - 1)) for i in range(nb)]
+    out = {}
+    for k, v in full.items():
+        vals = np.array([r[k] for r in loo])
+        out[k] = Est(v, math.sqrt((nb - 1) / nb * float(((vals - vals.mean()) ** 2).sum())), nb - 1)
+    return out
+
+
+def _ci90(d: Est) -> dict[str, Any]:
+    q = t95(d.df)
+    return {"value": d.value, "se": d.se, "df": d.df, "t95": q,
+            "ci90": [d.value - q * d.se, d.value + q * d.se]}  # fmt: skip
+
+
+def v11_energy(ion_emel: np.ndarray, ion_emonly: np.ndarray, top_emel: np.ndarray,
+               top_emonly: np.ndarray) -> dict[str, Any]:  # fmt: skip
+    """Row V11 at one energy: F and the plateau gain, ionmc (paired jackknife) vs TOPAS (seed means)."""
+    ion = paired_ratio_jackknife(ion_emel, ion_emonly)
+    te, tn = seed_metrics(top_emel), seed_metrics(top_emonly)
+    f_top = ratio_est(te["peak_over_plateau"], tn["peak_over_plateau"])
+    g_top_ratio = ratio_est(te["plateau"], tn["plateau"])
+    g_top = Est(g_top_ratio.value - 1.0, g_top_ratio.se, g_top_ratio.df)
+    g_ion = Est(ion["plateau_ratio"].value - 1.0, ion["plateau_ratio"].se, ion["plateau_ratio"].df)
+    f_row = {"ionmc": ion["pp_ratio"].as_dict(), "reference": f_top.as_dict(), "kind": "relative",
+             **tost(difference(ion["pp_ratio"], f_top, relative=True), V11_TOL_F)}  # fmt: skip
+    g_row = {"ionmc": g_ion.as_dict(), "reference": g_top.as_dict(), "kind": "absolute",
+             **tost(difference(g_ion, g_top, relative=False), V11_TOL_GAIN)}  # fmt: skip
+    return {"F": f_row, "plateau_gain": g_row, "pass": bool(f_row["pass"] and g_row["pass"]),
+            "F_diff_sign": "ionmc above TOPAS" if f_row["diff"] > 0 else "ionmc below TOPAS"}  # fmt: skip
+
+
+def f_ne_test(ion_on: np.ndarray, ion_emel: np.ndarray, top_full: np.ndarray,
+              top_emel: np.ndarray) -> dict[str, Any]:  # fmt: skip
+    """Rung-2 non-elastic factor test (plan (f)): F_ne = (peak/plateau)_on / (peak/plateau)_elastic-only,
+    ionmc (V5 "on" vs V11 emelastic; independent samples) against TOPAS (full vs row 10/11). The 90 %
+    interval of ``F_ne,ionmc / F_ne,TOPAS - 1`` is attributed iff it lies beyond 0.02 on the side of the
+    residual (both sides reported; the residual side belongs to the V5 verdict). Also reports the
+    depth-resolved relative differences in the last 10 mm before the TOPAS-full R80. Never gates."""
+    on_m, el_m = jackknife_metrics(ion_on), jackknife_metrics(ion_emel)
+    f_ion = ratio_est(on_m["peak_over_plateau"], el_m["peak_over_plateau"])
+    tf, te = seed_metrics(top_full), seed_metrics(top_emel)
+    f_top = ratio_est(tf["peak_over_plateau"], te["peak_over_plateau"])
+    d = difference(f_ion, f_top, relative=True)
+    ci = _ci90(d)
+    lo, hi = ci["ci90"]
+    top_full_mean, top_el_mean = top_full.mean(axis=0), top_emel.mean(axis=0)
+    depth = depth_centres(top_full_mean.size)
+    r80 = rm.r80(depth, rm.normalize_to_peak(top_full_mean))
+    sel = (depth >= r80 - V11_WINDOW_MM) & (depth <= r80)
+    on_mean, el_mean = ion_on.mean(axis=0), ion_emel.mean(axis=0)
+    idd_diff = (on_mean[sel] / top_full_mean[sel] - 1.0)
+    ratio_diff = (on_mean[sel] / el_mean[sel]) / (top_full_mean[sel] / top_el_mean[sel]) - 1.0
+    return {
+        "F_ne_ionmc": f_ion.as_dict(), "F_ne_TOPAS": f_top.as_dict(), "ratio_minus_1": ci,
+        "threshold": V11_NE_TOL,
+        "attributed_if_residual_above": bool(lo > V11_NE_TOL),
+        "attributed_if_residual_below": bool(hi < -V11_NE_TOL),
+        "window_mm": [float(r80 - V11_WINDOW_MM), float(r80)], "r80_topas_full_mm": float(r80),
+        "window_depth_mm": depth[sel].tolist(),
+        "window_idd_on_over_topas_full_minus_1": idd_diff.tolist(),
+        "window_idd_on_over_topas_full_mean": float(idd_diff.mean()),
+        "window_Fne_depth_ratio_minus_1": ratio_diff.tolist(),
+        "window_Fne_depth_ratio_mean": float(ratio_diff.mean()),
+        "role": "report-only for V11; read with the V5 residual side (rung 2)",
+    }  # fmt: skip
+
+
+def elastic_factor_report(top_full: np.ndarray, top_noel: np.ndarray) -> dict[str, Any]:
+    """Rows 12/13, report-only: TOPAS full / no-hadronic-elastic factors of peak/plateau and plateau."""
+    a, b = seed_metrics(top_full), seed_metrics(top_noel)
+    return {"F_el_pp": _ci90(ratio_est(a["peak_over_plateau"], b["peak_over_plateau"])),
+            "plateau_ratio": _ci90(ratio_est(a["plateau"], b["plateau"])), "role": "report-only"}  # fmt: skip
+
+
+def load_ionmc_v11(path: Path, energy: int, mode: str) -> tuple[np.ndarray, dict[str, Any]]:
+    """A ``v11-{energy}-{emel|emonly}`` partial: ``load_ionmc`` checks plus the V11 labels."""
+    nuclear = mode == "emel"
+    batches, src = load_ionmc(path, energy, nuclear)
+    doc = json.loads(path.read_bytes())
+    expect = {"row": f"v11-{energy}-{mode}", "mode": mode, "elastic": True, "elastic_only": nuclear}
+    for k, v in expect.items():
+        if doc.get(k) != v:
+            raise IddError(f"{path.name}: {k} = {doc.get(k)!r}, expected {v!r}")
+    return batches, src
+
+
+def build_v11_verdict(ionmc_dir: Path, topas_runs: list[Path],
+                      cases_dir: Path | None = None) -> dict[str, Any]:  # fmt: skip
+    """Row V11 verdict (``pass``: both TOSTs at both energies) from the four ``v11-*`` partials of
+    ``ionmc_dir`` and the TOPAS run directories (emelastic and emonly required; full and noelastic
+    optional). F_ne is computed iff ``v5-{e}-on.json`` partials exist in ``ionmc_dir`` and the full
+    group is present; the elastic factor (rows 12/13) iff full and noelastic are present. Both are
+    report-only. Raises :class:`IddError`."""
+    ion: dict[tuple[int, str], np.ndarray] = {}
+    ion_src: dict[str, Any] = {}
+    for e in ENERGIES:
+        for mode in ("emel", "emonly"):
+            name = f"v11-{e}-{mode}.json"
+            ion[(e, mode)], ion_src[name] = load_ionmc_v11(ionmc_dir / name, e, mode)
+    nz = {e: ion[(e, "emel")].shape[1] for e in ENERGIES}
+    if any(ion[(e, "emonly")].shape[1] != nz[e] for e in ENERGIES):
+        raise IddError("ionmc emel/emonly grids differ")
+    for e in ENERGIES:
+        if ion_src[f"v11-{e}-emel.json"]["seed"] != ion_src[f"v11-{e}-emonly.json"]["seed"]:
+            raise IddError(f"{e} MeV: emel and emonly must share the seed (common random numbers)")
+    if not topas_runs:
+        raise IddError("no TOPAS reference runs: V11 needs the emelastic and the frozen emonly runs")
+    cases = DEFAULT_CASES_DIR if cases_dir is None else Path(cases_dir)
+    groups = load_topas_mode_groups(topas_runs, nz, cases)
+    missing = [(e, m) for e in ENERGIES for m in ("emelastic", "emonly") if (e, m) not in groups]
+    if missing:
+        raise IddError(f"missing TOPAS groups (energy, mode): {missing}")
+    per_e: dict[str, Any] = {}
+    f_ne: dict[str, Any] = {}
+    el: dict[str, Any] = {}
+    for e in ENERGIES:
+        c = {m: groups[(e, m)]["curves"] for m in MODES if (e, m) in groups}
+        per_e[str(e)] = v11_energy(ion[(e, "emel")], ion[(e, "emonly")], c["emelastic"], c["emonly"])
+        on_path = ionmc_dir / f"v5-{e}-on.json"
+        if "full" not in c:
+            f_ne[str(e)] = {"computed": False, "reason": "TOPAS full runs not supplied"}
+        elif not on_path.is_file():
+            f_ne[str(e)] = {"computed": False, "reason": "v5-on partial absent; computed in v5-attribution"}
+        else:
+            on, on_src = load_ionmc(on_path, e, True)
+            if on.shape[1] != nz[e]:
+                raise IddError(f"v5-{e}-on grid differs from the V11 grid")
+            if on_src["seed"] == ion_src[f"v11-{e}-emel.json"]["seed"]:
+                raise IddError(f"{e} MeV: V5-on and V11 share a seed (F_ne needs independent samples)")
+            f_ne[str(e)] = {"computed": True, **f_ne_test(on, ion[(e, "emel")], c["full"], c["emelastic"]),
+                            "ionmc_on_input": on_src}  # fmt: skip
+        if "full" in c and "noelastic" in c:
+            el[str(e)] = {"computed": True, **elastic_factor_report(c["full"], c["noelastic"])}
+        else:
+            el[str(e)] = {"computed": False, "reason": "TOPAS full and noelastic groups not both supplied"}
+    code_sha, dirty = _git("rev-parse", "HEAD"), bool(_git("status", "--porcelain"))
+    return {
+        "row": "V11", "pass": bool(all(per_e[str(e)]["pass"] for e in ENERGIES)),
+        "plan_rule": V11_PLAN_RULE,
+        "tolerances": {"F_relative": V11_TOL_F, "plateau_gain_absolute": V11_TOL_GAIN},
+        "energies": per_e, "f_ne": f_ne, "elastic_factor_rows_12_13": el,
+        "analysis_code_sha": code_sha, "analysis_code_dirty": dirty, "cases_dir": str(cases),
+        "ionmc_inputs": ion_src,
+        "engine_inputs": {f"{e}-{m}": {"seeds": g["seeds"], "runs": g["runs"], "output_sha256": g["hashes"],
+                                       "fingerprints": g["fingerprints"], "family": g["family"],
+                                       "binding": g["bound_cases"]}
+                          for (e, m), g in sorted(groups.items())},
+    }  # fmt: skip
 
 
 def main(argv: list[str] | None = None) -> int:
