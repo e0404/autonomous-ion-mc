@@ -136,13 +136,19 @@ def welch_df(sa: float, dfa: float, sb: float, dfb: float) -> float:
 
 
 def difference(a: Est, b: Est, relative: bool) -> Est:
-    """``a - b`` (absolute) or ``(a - b) / b`` (relative, delta method) with Welch df."""
-    df = welch_df(a.se, a.df, b.se, b.df)
+    """``a - b`` (absolute) or ``(a - b) / b`` (relative, delta method) with Welch df.
+
+    Relative: with ``r = a / b`` the standard error is ``hypot(a.se, r b.se) / |b|``; the
+    Welch-Satterthwaite df uses the SAME variance components, ``a.se`` and ``r b.se`` (the common scale
+    ``1/|b|`` cancels in the df), i.e. ``(sa^2 + sb'^2)^2 / (sa^4/dfa + sb'^4/dfb)`` with
+    ``sb' = |r| b.se``. (Corrected 2026-10-11, C7 review: the df used the unscaled ``b.se``, which
+    can overstate the df and select a too narrow t quantile.) The absolute path is unchanged."""
     if not relative:
-        return Est(a.value - b.value, math.hypot(a.se, b.se), df)
+        return Est(a.value - b.value, math.hypot(a.se, b.se), welch_df(a.se, a.df, b.se, b.df))
     if b.value == 0.0:
         raise IddError("relative difference to a zero reference")
     ratio = a.value / b.value
+    df = welch_df(a.se, a.df, abs(ratio) * b.se, b.df)
     return Est(ratio - 1.0, math.hypot(a.se, ratio * b.se) / abs(b.value), df)
 
 
@@ -662,11 +668,13 @@ def load_topas_mode_groups(run_dirs: list[Path], nz: dict[int, int], cases_dir: 
 
 
 def ratio_est(a: Est, b: Est) -> Est:
-    """``a / b`` for independent estimates (delta method, Welch df)."""
+    """``a / b`` for independent estimates (delta method). SE ``hypot(a.se, r b.se) / |b|``; the
+    Welch df uses the same components ``a.se`` and ``|r| b.se`` (see :func:`difference`)."""
     if b.value == 0.0:
         raise IddError("ratio to a zero reference")
     r = a.value / b.value
-    return Est(r, math.hypot(a.se, r * b.se) / abs(b.value), welch_df(a.se, a.df, b.se, b.df))
+    return Est(r, math.hypot(a.se, r * b.se) / abs(b.value),
+               welch_df(a.se, a.df, abs(r) * b.se, b.df))
 
 
 def paired_ratio_jackknife(num: np.ndarray, den: np.ndarray) -> dict[str, Est]:

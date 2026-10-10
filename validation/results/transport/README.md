@@ -366,6 +366,11 @@ continuous columns within 1e-10); a larger python sample is an option for V3-005
 float32 − float64 z are +0.44 / −0.51 / −0.68. The consistent sign on CUDA is recorded for V3-005C; it is not a
 failure under the frozen row.
 
+## Corrections recorded after the lv5b/hr5 archives (V3-005C)
+
+- **Welch degrees of freedom of ratio estimates (comparator defect, 2026-10-11, Codex REVIEW-ead8a4be at fe10311).** `compare_idd_v5.difference(..., relative=True)` propagated the denominator uncertainty as `r·b.se` in the standard error but used the unscaled `b.se` in the Welch–Satterthwaite degrees of freedom. Corrected in C7b (and in the new V11 ratio estimator) to use the components `(a.se, |r|·b.se)` consistently. The recorded lv5b V5 verdict at 7aae5bb1 was re-evaluated under the corrected df from the archived `08-v5-compare.txt` estimates (`validation/scripts/reference/v5_df_recheck.py`, recorded SEs and t table unchanged, only the df swapped): **0 of 20 TOST components change** (TOPAS and MCsquare, 150 and 200 MeV, peak/plateau, plateau, R80, total deposit, ΔIDD); the largest df change is 10.86 → 13.95 (MCsquare 200 MeV ΔIDD) and the 90 % intervals move at most in the fourth decimal. The archived record stays as written; the correction applies to every later evaluation (lv5c V5 re-run, V11).
+- **Research-tool record (2026-10-10).** `record_scientific_event` of the research server failed with a bare error for the f_dM provenance resolution (known-broken tool; see `v3-environment` notes of the orchestrator); the event is recorded in decision 0041 (commit 45a0d11) with the acquisition `beefd9b3238c43aa91d3fbb3281b6954` as its artifact.
+
 ## Execution incidents and superseded chains (V3-005B)
 
 - **Native crashes of the long V7 shards (chain ba8751a0).** `v7-rep-s1` crashed with SIGSEGV (exit −11) in

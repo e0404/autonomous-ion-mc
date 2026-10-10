@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 from dataclasses import replace
 from pathlib import Path
@@ -635,3 +636,115 @@ def test_v11_producers_smoke_at_ci_scale(
     assert docs["v11-150-emel"]["pass"] and docs["v11-150-emonly"]["pass"]
     with pytest.raises(M.IddError, match="reduced"):
         M.load_ionmc_v11(tmp_path / "v11-150-emel.json", 150, "emel")
+
+
+# -- Welch df of ratios (C7 review): df uses the components of the SE ------------------------------
+def _old_welch_ratio(a: Any, b: Any) -> Any:
+    """The pre-correction relative difference: SE with r b.se, df with the unscaled b.se."""
+    ratio = a.value / b.value
+    return M.Est(
+        ratio - 1.0,
+        (a.se**2 + (ratio * b.se) ** 2) ** 0.5 / abs(b.value),
+        M.welch_df(a.se, a.df, b.se, b.df),
+    )
+
+
+def test_relative_difference_df_uses_the_scaled_components_boundary_case() -> None:
+    # three seeds each (df 2), F ratio 0.97: components (0.01, 0.0097) instead of (0.01, 0.01)
+    a, b = M.Est(0.97, 0.01, 2), M.Est(1.0, 0.01, 2)
+    old, new = _old_welch_ratio(a, b), M.difference(a, b, relative=True)
+    assert old.df == 4.0 and new.se == old.se and new.value == old.value
+    expect = (0.01**2 + 0.0097**2) ** 2 / (0.01**4 / 2 + 0.0097**4 / 2)
+    assert new.df == pytest.approx(expect, rel=1e-12) and 3.99 < new.df < 4.0
+    assert (M.t95(old.df), M.t95(new.df)) == (2.1318, 2.3534)  # the floored table: df 4 vs 3
+    t_old, t_new = M.tost(old, 0.06), M.tost(new, 0.06)
+    assert t_old["pass"] and not t_new["pass"]  # the narrower critical value hid a failure
+    assert t_old["ci90"][0] == pytest.approx(-0.03 - 2.1318 * new.se) and t_new["ci90"][
+        0
+    ] == pytest.approx(-0.03 - 2.3534 * new.se)
+    # the 0.894 case with three seeds (F_TOPAS-like): df drops 4.0 -> 3.95, same floored quantile step
+    f = M.difference(M.Est(0.894, 0.01, 2), M.Est(1.0, 0.01, 2), relative=True)
+    assert f.df == pytest.approx(3.9508094700100345, rel=1e-12) and M.t95(f.df) == 2.3534
+    # ratio_est carries the same rule
+    r = M.ratio_est(a, b)
+    assert r.df == pytest.approx(expect, rel=1e-12) and r.value == 0.97
+    assert r.se == pytest.approx(new.se)
+
+
+def test_relative_difference_df_unchanged_when_the_ratio_is_one_or_a_se_is_zero() -> None:
+    for a, b in ((M.Est(1.0, 0.01, 2), M.Est(1.0, 0.02, 5)), (M.Est(2.0, 0.0, 19), M.Est(2.0, 0.05, 2)),
+                 (M.Est(0.5, 0.01, 19), M.Est(0.5, 0.0, 2))):  # fmt: skip
+        old, new = _old_welch_ratio(a, b), M.difference(a, b, relative=True)
+        assert new.df == old.df and new.se == old.se and new.value == old.value
+    # a ratio well away from 1 changes the df (here the corrected df is larger as well)
+    a, b = M.Est(2.0, 0.02, 19), M.Est(1.0, 0.02, 2)
+    assert M.difference(a, b, relative=True).df != _old_welch_ratio(a, b).df
+
+
+def test_absolute_difference_path_is_bit_identical() -> None:
+    for a, b in ((M.Est(1.5, 0.01, 19), M.Est(1.2, 0.02, 2)), (M.Est(0.3, 0.0, 19), M.Est(-1.2, 0.02, 4)),
+                 (M.Est(7.0, 0.3, 3), M.Est(7.1, 0.3, 3))):  # fmt: skip
+        d = M.difference(a, b, relative=False)
+        assert (d.value, d.se, d.df) == (
+            a.value - b.value,
+            math.hypot(a.se, b.se),
+            M.welch_df(a.se, a.df, b.se, b.df),
+        )
+
+
+def test_v5_df_recheck_script_on_a_synthetic_archive(tmp_path: Path) -> None:
+    mod = _load_recheck()
+    a, b = M.Est(0.97, 0.01, 2), M.Est(1.0, 0.01, 2)
+    old = _old_welch_ratio(a, b)
+    row = {"ionmc": a.as_dict(), "reference": b.as_dict(), "kind": "relative", **M.tost(old, 0.06)}
+    doc = {
+        "verdict": {
+            "engines": {
+                "topas": {"energies": {"150": {"peak_over_plateau": row, "_all_pass": True}}}
+            }
+        }
+    }
+    p = tmp_path / "03-v5-compare.txt"
+    p.write_text("# header\n#JSON-BEGIN\n" + json.dumps(doc) + "\n#JSON-END\n")
+    rows = mod.recheck(mod.load_document(p)["verdict"], M)
+    (r,) = rows
+    assert (r["recorded_df"], r["old_df_recomputed"]) == (4.0, 4.0) and 3.99 < r["new_df"] < 4.0
+    assert r["old_pass"] is True and r["new_pass"] is False and r["changed"] is True
+    assert mod.main([str(p)]) == 0
+    with pytest.raises(SystemExit, match="no verdict"):
+        bad = tmp_path / "bad.txt"
+        bad.write_text('#JSON-BEGIN\n{"verdict": null, "error": "x"}\n#JSON-END\n')
+        mod.load_document(bad)
+
+
+def _load_recheck() -> ModuleType:
+    import importlib.util
+
+    path = REPO / "validation/scripts/reference/v5_df_recheck.py"
+    spec = importlib.util.spec_from_file_location("v5_df_recheck", path)
+    assert spec and spec.loader
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_recheck_of_the_archived_lv5b_verdict_changes_no_component() -> None:
+    arch = next(
+        iter(
+            sorted(
+                (REPO / "validation/generated").glob(
+                    "RUN-*/transport/lv5b-7aae5bb-*/*-v5-compare.txt"
+                )
+            )
+        ),
+        None,
+    )
+    if arch is None:
+        pytest.skip("archived lv5b v5-compare output not present")
+    mod = _load_recheck()
+    rows = mod.recheck(mod.load_document(arch)["verdict"], M)
+    assert len(rows) == 20 and not any(r["changed"] for r in rows)
+    assert all(
+        abs(r["old_df_recomputed"] - r["recorded_df"]) < 1e-9 * max(1.0, r["recorded_df"])
+        for r in rows
+    )
