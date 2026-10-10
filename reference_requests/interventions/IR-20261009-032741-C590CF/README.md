@@ -2,7 +2,7 @@
 
 **Task:** V3-005B
 **Category:** experiment-boundary
-**Status:** open
+**Status:** resolved
 
 ## Summary
 
@@ -19,3 +19,11 @@ One of: (1) "Merge under interpretation A": authorise merging PR #82 at head 2f5
 ## Decision or task depending on this request
 
 V3-005C branch point (v3/develop vs task/v3-005b); PR #82 merge; ledger wording for V1-MUST-005/013 and V2-NUM
+
+## Operator response
+
+Resolved at 2026-10-10T13:48:52.889044+00:00 (`response.json`). Received 2026-10-10 from the experiment operator through the Claude Code session; recorded verbatim by the orchestrator.
+
+> Regarding IR-20261009-032741-C590CF: Keep PR #82 unmerged under interpretation B. Continue V3-005C on top of the V3-005B task branch. Address the dose discrepancies, investigate the escaped-neutral uncertainty calibration, and obtain sufficient statistics for the inconclusive Python/Warp comparison.
+> Preserve all existing failed and inconclusive records. Pre-register follow-up validation before generating new results; do not relax acceptance thresholds or repeat seeds merely to obtain a pass. Missing elastic scattering is a hypothesis to test, not an assumed complete explanation.
+> Merge only after the applicable scientific and implementation gates pass. Do not create an implementation-only passing record to bypass the failed scientific gate.

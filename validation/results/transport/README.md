@@ -222,7 +222,7 @@ passed at this head; it contains the per-process nuclear device cache of C37, co
 citing this head, the run ids above and the archives) are keyed to the evidence commit that follows this write-up and are
 listed by `inspect_local_validation V3-005B`.
 
-**Verdict.** `pass: false`: two rows fail their pre-registered criteria, V5 (step 08, attributed, below) and V7
+**Verdict.** `pass: false`: two rows fail their pre-registered criteria, V5 (step 08, hypothesis below) and V7
 (step 24, below); every other executed step passes. `conformant: false` by code, for the reasons the summary lists:
 the single-process diagnostic execution mode (operator directive 2026-10-07), the imported partials of the combine
 steps 08, 11 and 24 (`imported_partials_unverified_by_code`, Amendment 5) and the deferred step
@@ -289,7 +289,7 @@ document records `cases_in_source_identity: true`, `analysis_code` `7aae5bb12692
 
 κ rule (Amendments 7(c), 9): total deposit passes at both energies (D = −0.30 % / −0.54 %), so κ is **not used**
 (`kappa-not-used`, no failing energy). Row V5 **fails** on peak/plateau and on the ΔIDD plateau integral at both
-energies. Attribution (pre-declared before this observation, Amendments 7(d) and 11; decision 0041 limitation 7):
+energies. Hypothesis, not an attribution (pre-declared before this observation, Amendments 7(d) and 11; decision 0041 limitation 7; to be tested by V11/V5 in V3-005C):
 ionmc has no hadronic elastic scattering (p-p and p-nucleus), which the gating TOPAS physics list contains; the
 exploratory TOPAS cases X1–X4 (`validation/reference_cases/README.md`, C18b, single seed each, not evidence) were
 defined to test this. Outcomes at 150 MeV (peak relative to the seed-averaged TOPAS EM-only
@@ -297,7 +297,7 @@ run; full-physics baseline 0.769, per-seed 0.766–0.771): X1 (full minus hadron
 hadronic elastic) 0.909, product X1×X2 0.776 against 0.769 for full; the controls X3 (no ion physics) 0.768 and X4
 (no HP) 0.770 reproduce full. Hadronic elastic scattering is therefore a large, not the only, contributor to the
 TOPAS peak deficit (table and run ids in `validation/reference_cases/README.md`, single seed, not evidence). The
-attribution is an explanation to be tested by V3-005C (D2 p-p and p-nucleus elastic, V5 re-run on a fresh base),
+hypothesis is to be tested by V3-005C (D2 p-p and p-nucleus elastic, V5 re-run on a fresh base),
 not a pass. MCsquare, report-only, also disagrees with ionmc on plateau and R80 (and agrees on total deposit).
 The consumed run at base 20441004 (code b40d8121, independent samples) gave the same verdict pattern against
 TOPAS: peak/plateau +12.6 % / +11.9 %, ΔIDD −20.8 % / −13.4 %, plateau −1.1 % / −1.4 %, R80 −0.15 / −0.004 mm,

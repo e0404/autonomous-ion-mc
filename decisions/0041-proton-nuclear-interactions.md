@@ -248,7 +248,9 @@ Acceptance-plan Amendments 6 (seeds) and 7 (scope and decision rules) are the bi
 - **Execution incidents (chain ba8751a0, superseded):** two native SIGSEGV of V7 shards (RUN-20261008T205127Z-ccc40171 after 691 s, RUN-20261008T213342Z-dbb8a88c after 318 s; the re-run RUN-20261008T210343Z-dccacb06 with the first crash's seed passed), traced in a sandbox reproduction with the fault handler to the per-block rebuild of the packed nuclear device (`build_event_model`); fixed by the per-process device cache (C37, 41e4bc36): bitwise-identical estimators, about 29 % less wall time per shard. The MCP client's 1800 s idle limit aborted the 1838 s `v7-rep-s0` call (RUN-20261008T201947Z-6a3036f4) while the host run completed; its digest came from the published step document, for that superseded chain only. All partials of the 7aae5bb1 chain came from the protected stdout.
 - **Inherited by V3-005C:** D2 (p-p elastic) and p-nucleus elastic scattering, then V5 and V6 re-run on a fresh base; a pre-registered V7 re-test with a replicate-level criterion that tests the escaped-neutral hypothesis above; a larger python sample for the python:cpu64 `nuc_local` profile parity; the BGG part of D9; the multiprocess rows once the operator lifts the single-process directive.
 
-## Slice C (V3-005C, executed on the V3-005B branch) — ratified 2026-10-10, before any slice-C result
+- *Correction note 2026-10-10 (Codex REVIEW-7d749e6a):* the words "attributed to the absent hadronic elastic channel" (slice-B addendum on V7 replicates) and "Attribution" in the V5 bullet above are to be read as "hypothesis: the absent hadronic elastic channel (to be tested by V11/V5 in V3-005C; the exploratory X cases show elastic is not the only contributor)". The original text is left unchanged.
+
+## Slice C (V3-005C, executed on the V3-005B branch) — ratified 2026-10-10 (revised the same day after Codex REVIEW-7d749e6a), before any slice-C result
 
 Acceptance-plan Amendment 14 is the binding record for rows, tolerances, seeds and execution. This section records the physics decisions (orchestrator D-1 to D-6) and the alternatives that were rejected.
 
@@ -298,9 +300,10 @@ The operator resolved IR-20261009-032741-C590CF on 2026-10-10. Under that resolu
 ### D-2 to D-6 (summary; details in Amendment 14)
 
 - **D-2:** V10-A is **gating** for any p+A elastic validation claim. Its tolerances are frozen now: ±30 % per angle at 10° / 15° / 20° CM, 20 % on the partial integral, 12 % on the C level. EXFOR is acquired from the IAEA raw master with the GitHub mirror as the recorded fallback, and no intervention is needed.
-  - **Per-channel independence.** The pre-1997 p+16O / p+12C angular data (Kelly 1989 / 1990, Seifert 1993, Glover 1985, Meyer 1981 / 1983 / 1988, Rolland 1966, Strauch & Titus 1956) have the role "evaluation (shape test)", because the shape uses no elastic data in its construction. This is an explicit exception argued from the construction, and it does not change the pre-1997 rule of section 6. Two caveats apply:
-    - the σ_el level comes from Barashenkov's compilation (shared lineage);
-    - LA150's σ_nonel, which sets R, may rest on optical potentials fitted to such data (one scalar per energy).
+  - **Data role (revised after Codex REVIEW-7d749e6a).** The pre-1997 p+16O / p+12C angular data are **related-model evidence (shared/related lineage)**: Kelly 1989 / 1990, Seifert 1993, Glover 1985, Meyer 1981 / 1983 / 1988, Rolland 1966, Strauch & Titus 1956. Two lineage paths connect them to the model:
+    - LA150's σ_nonel, which sets R and hence the whole angular scale qR, may have been adjusted to the same elastic measurements;
+    - Barashenkov's compilation, which sets the level, may contain them.
+  - V10-A stays gating as a **model-consistency test**. **No fully independent p+O elastic angular data exist.**
   - **Level.** The σ_el level is gated only by post-1997 data for C (Abfalterer 2001 n+C σ_tot minus Auce 2005 / Ingemarsson 1999 p+C σ_R). For O, only Ingemarsson 1999 (65.5 MeV) minus the pre-1997 Finlay 1993 n+O σ_tot exists, so it is report-only. **The p+O elastic level is therefore an evidence gap.**
 - **D-3:** the (ii′) trigger above is adopted, and its results are exploratory.
 - **D-4:** the V7 re-test records the 20 block sums per replicate for `escaped_neutral` only and judges it with the bootstrap-t interval under the two-gate structure of Amendment 13. `sec_p` and `nuclear_local` keep their Amendment 13 rule at the new base. The Amendment 13 failure stands whatever the re-test gives.
@@ -312,7 +315,8 @@ The operator resolved IR-20261009-032741-C590CF on 2026-10-10. Under that resolu
 1. The p+A elastic **level** is shared with TOPAS. For O it is not independently tested (D-2).
 2. The black-disk radius from σ_nonel is about 2.6 fm for O, about 20 % below typical strong-absorption radii. The angular distribution may therefore be too wide; V10-A (a) and V11 discriminate this. At 10–50 MeV, p+O elastic (σ_el ≈ 0.8–1.1 b, θ_rms 28–90°) is outside the diffraction regime (compound elastic). Its dose effect is small because the residual ranges are short, but it raises the event count to P(p-O) ≈ 0.21–0.24 per primary at 150–200 MeV.
 3. No CNI. Coulomb remains in the multiple-scattering model only.
-4. V10 is not blind: the PDG point at 160 MeV was seen during research.
+4. V10 is report-only. S(E) is PDG/BGG-derived, the PDG point at 160 MeV was seen during research, and no p-p elastic data independent of the Hale fit and of the PDG compilation were identified above 150 MeV (evidence gap).
+5. V6 has shared beam lineage: p1 and p5–p7 come from the paper's fit to the same `tbl:dmlg` data. No independent entrance-beam measurement exists in the source, and none was obtained. Every r = 0 point gates at 2 %, and the r ≥ 1 cm halo gates only under the V6-sens condition (Amendment 14 (g)).
 
 ### Slice C work breakdown
 
