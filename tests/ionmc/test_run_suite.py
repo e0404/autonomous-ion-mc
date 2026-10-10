@@ -1407,10 +1407,14 @@ LV5_SLICE_B = {"V2b", "V5", "V6", "V7", "V8"}
 PLAN_ROWS_PENDING_STEPS = frozenset(
     {
         "P6", "P7", "P5-ext", "V10", "V10-A", "X-ENDF", "V11", "C1-ext", "R1-D2", "E1-B",
-        "D9-BGG", "V6-sens", "V7-R", "V8-nuc", "V2b-el", "V7-scan-el", "V7-shift-el",
+        "D9-BGG", "V6-sens", "V8-nuc", "V2b-el", "V7-scan-el", "V7-shift-el",
         "P6-D", "E-shape", "X-MT5-SPEC",
     }
 )  # fmt: skip
+
+
+# V3-005C rows whose lv5c/hr5c step has landed -> (suite, step)
+SLICE_C_ROWS = {"V7-R": ("lv5c", "v7r-combine")}
 
 
 def _plan_rows() -> list[str]:
@@ -1460,6 +1464,10 @@ def test_plan_rows_pending_steps_are_plan_rows() -> None:
     rows = set(_plan_rows())
     assert PLAN_ROWS_PENDING_STEPS <= rows, PLAN_ROWS_PENDING_STEPS - rows
     assert not PLAN_ROWS_PENDING_STEPS & (set(LV5_ROW_STEP) | LV5_NOT_IN_SUITE | LV5_SLICE_B)
+    assert not PLAN_ROWS_PENDING_STEPS & set(SLICE_C_ROWS)
+    mod = _load("run_suite")
+    for row, (suite, step) in SLICE_C_ROWS.items():
+        assert row in rows and step in {n.split("-", 1)[1] for n in mod.full_step_names(suite, 2)}
 
 
 def test_lv5_plan_rows_are_all_accounted_for_and_seeds_match_the_plan() -> None:
@@ -1468,7 +1476,12 @@ def test_lv5_plan_rows_are_all_accounted_for_and_seeds_match_the_plan() -> None:
     rows = set(_plan_rows())
     assert {"N1", "V1", "V1b", "V2", "V2-probe", "V3", "V4", "V4b", "X1", "E1", "D6", "R1"} <= rows
     accounted = (
-        set(LV5_ROW_STEP) | LV5_NOT_IN_SUITE | LV5_SLICE_B | {"V3-CI"} | PLAN_ROWS_PENDING_STEPS
+        set(LV5_ROW_STEP)
+        | LV5_NOT_IN_SUITE
+        | LV5_SLICE_B
+        | {"V3-CI"}
+        | PLAN_ROWS_PENDING_STEPS
+        | set(SLICE_C_ROWS)
     )
     assert rows - accounted == set(), (
         rows - accounted

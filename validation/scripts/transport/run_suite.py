@@ -4,7 +4,7 @@
 
 Usage (argv only, no shell; the host runner executes exactly this)::
 
-    python validation/scripts/transport/run_suite.py --suite {lv,hr,lv4,hr4,lv5,lv5b,hr5} \
+    python validation/scripts/transport/run_suite.py --suite {lv,hr,lv4,hr4,lv5,lv5b,hr5,lv5c} \
         --out validation/generated/transport/<new-dir> --expected-sha <40 hex> \
         [--workers N|auto] [--step-timeout SECONDS] [--scale F] [--python-parts N] \
         [--only STEP ...] [--import-dirs DIR ...] [--seed-base INT]
@@ -83,7 +83,8 @@ STEPS = HERE / "steps.py"
 STEPS_V4 = HERE / "steps_v4.py"
 STEPS_V5 = HERE / "steps_v5.py"
 STEPS_V5B = HERE / "steps_v5b.py"
-SUITES = ("lv", "hr", "lv4", "hr4", "lv5", "lv5b", "hr5")
+STEPS_V5C = HERE / "steps_v5c.py"
+SUITES = ("lv", "hr", "lv4", "hr4", "lv5", "lv5b", "hr5", "lv5c")
 PY = sys.executable
 SOURCE_PREFIXES = (
     "src/ionmc",
@@ -157,9 +158,21 @@ attestation covers the inputs the V5 comparator binds to; the nuclear kernels, `
 tests are hashed through the prefixes)."""
 
 
+SOURCE_FILES_V5C = (
+    *SOURCE_FILES_V5B,
+    "validation/scripts/transport/steps_v5c.py",
+    "validation/scripts/transport/v7r.py",
+)
+"""The hashed set of the suite ``lv5c`` (V3-005C): the lv5b set plus the slice-C step modules (the
+``src/ionmc`` package, the tests and ``validation/scripts/transport`` are hashed through the prefixes;
+"the evidence code SHA" of a rehearsal is the digest of this set, plan Amendment 17 (a)7)."""
+
+
 def source_file_list(suite: str | None = None) -> tuple[str, ...]:
     """Individually hashed files of ``suite`` (default: the suite named by ``IONMC_RUN_SUITE``)."""
     suite = suite or os.environ.get("IONMC_RUN_SUITE", "")
+    if suite == "lv5c":
+        return SOURCE_FILES_V5C
     if suite in ("lv5b", "hr5"):
         return SOURCE_FILES_V5B
     if suite == "lv5":
@@ -180,6 +193,8 @@ V5B_QUALIFICATION_SEED_BASE = 20471004  # amendment 11 of the V3-005 plan (lv5b)
 V5B_CONSUMED_SEED_BASES = (20441004,)  # amendment 11: consumed by the failed V7 replicate step
 # (host run RUN-20261008T132316Z-11c02312 at b40d8121)
 HR5_QUALIFICATION_SEED_BASE = 20451004  # amendment 6 (hr5)
+V5C_CONSUMED_SEED_BASES = (20471004, 20451004, 20441004)  # lv5b, hr5, b40d8121 evidence bases
+V5C_QUALIFICATION_SEED_BASE = 20481004  # amendment 14 (j) (lv5c); rehearsals 20505000-20509499
 V3003D_REHEARSAL_FAMILY = "2041xxxx"  # rehearsals of V3-003D, never qualification evidence
 DEFAULT_SEED_BASES = {
     "lv": QUALIFICATION_SEED_BASE,
@@ -189,6 +204,7 @@ DEFAULT_SEED_BASES = {
     "lv5": V5_QUALIFICATION_SEED_BASE,
     "lv5b": V5B_QUALIFICATION_SEED_BASE,
     "hr5": HR5_QUALIFICATION_SEED_BASE,
+    "lv5c": V5C_QUALIFICATION_SEED_BASE,
 }
 REHEARSAL_SEED_BASE = 20261004
 CONSUMED_SEED_BASE = 20271004  # used by the T9 investigation: not a qualification base
@@ -215,11 +231,16 @@ DEFERRED_STEPS = {
     "lv5": ("v3-workers-partition",),
     "lv5b": ("v3-workers-partition",),
     "hr5": (),
+    "lv5c": (),
 }
 """Steps whose purpose is the worker-partition invariance (1 versus N worker processes): they are
 not executed in the single-process diagnostic mode and recorded as ``deferred``. Steps that merely
 use workers for speed run with one worker, with unchanged histories, seeds and criteria."""
 
+
+V7R_SHARDS = 16
+"""Number of shard steps ``v7r-s{k}`` of V7-R (Amendment 14 (h): sixteen simulations of 4.5e6 histories); defined
+here for the same reason as ``V7_REP_SHARDS``; ``steps_v5c.V7R_SHARDS`` (``v7r.V7R_SHARDS``) must equal it (a test)."""
 
 V7_REP_SHARDS = 8
 """Number of shard steps ``v7-rep-s{k}`` of the V7 replicate coverage (Amendment 13: eight simulations of 9e6
@@ -244,6 +265,10 @@ STEP_TIMEOUT_FLOOR_S = {
         **{f"v2b-s{k}": 3300 for k in range(8)}, "v7-scan": 3300, "v7-shift": 3300,
         **{f"v7-rep-s{k}": 3300 for k in range(V7_REP_SHARDS)}, "v7-rep-ref": 3300,
         "pytest-v7-rep-calibration": 3300, "v3-workers-partition": 3300,
+    },
+    "lv5c": {
+        **{f"v7r-s{k}": 3300 for k in range(V7R_SHARDS)}, "v7r-ref": 3300,
+        "pytest-v7r-calibration": 3300, "v7r-combine": 1800, "v7r-diag": 1800,
     },
     "hr5": {
         "v8-stat-python-s0": 3600, "v8-stat-python-s1": 3600, "v8-stat-cpu64": 3600,
@@ -311,11 +336,13 @@ def suite_steps(
     s4 = [PY, str(STEPS_V4)]
     s5 = [PY, str(STEPS_V5)]
     s5b = [PY, str(STEPS_V5B)]
+    s5c = [PY, str(STEPS_V5C)]
     steps: list[tuple[str, list[str], dict[str, str]]] = []
 
     def add(name: str, cmd: list[str], env: dict[str, str] | None = None) -> None:
         full = f"{len(steps) + 1:02d}-{name}"
-        if cmd[:2] in ([PY, str(STEPS)], [PY, str(STEPS_V4)], [PY, str(STEPS_V5)], [PY, str(STEPS_V5B)]):
+        if cmd[:2] in ([PY, str(STEPS)], [PY, str(STEPS_V4)], [PY, str(STEPS_V5)], [PY, str(STEPS_V5B)],
+                      [PY, str(STEPS_V5C)]):
             eff = step_timeout_s(suite, full, step_timeout)
             inner = ["--timeout", str(max(30, int(0.9 * eff)))]  # the pool cleans up first
             cmd = [*cmd, *inner, "--seed-base", str(seed_base)]  # every seed derives from the base
@@ -335,6 +362,12 @@ def suite_steps(
             _suite_steps_v5b(add, s5, s5b, sc, out_dir, [*dirs, *pm])
         else:
             _suite_steps_hr5(add, s5b, sc, out_dir, [*dirs, *pm], cuda)
+        return steps
+    if suite == "lv5c":
+        if import_dirs and partials_manifest is None:
+            raise SystemExit("lv5c --import-dirs requires --partials-manifest (name -> sha256)")
+        pm = ["--partials-manifest", str(partials_manifest)] if import_dirs else []
+        _suite_steps_v5c(add, sc, out_dir, [*dirs, *pm], s5c)
         return steps
     if suite in ("lv4", "hr4"):
         _suite_steps_v4(suite, add, s4, w, sc, cuda, out_dir, dirs, single_process)
@@ -528,6 +561,21 @@ def _suite_steps_v5b(add, s5, s5b, sc, out_dir, dirs):  # type: ignore[no-untype
     )
     add("v7-rep-combine", [*s5b, "v7-rep-combine", "--dirs", *dirs, *sc], env)
     add("v3-workers-partition", [*s5, "v3-workers"], env)  # deferred: runs only when the mode is lifted
+
+
+def _suite_steps_v5c(add, sc, out_dir, dirs, s5c):  # type: ignore[no-untyped-def]
+    """Steps of the V3-005C suite ``lv5c`` registered so far (``steps_v5c.py``): row V7-R (plan Amendment
+    14 (h), Amendment 17 (a)), in the order of the C9 plan. Other lv5c rows are added by their steps.
+    ``pytest-v7r-calibration`` has no seed and no document: its pass is the pytest exit status, and
+    ``summarize.py`` makes the conjunction with ``v7r-combine``."""
+    env = NUCLEAR_ENV
+    for k in range(V7R_SHARDS):  # one simulation of 4.5e6 histories each (7200 replicates in total)
+        add(f"v7r-s{k}", [*s5c, "v7r-shard", "--shard", str(k), "--out-dir", str(out_dir), *sc], env)
+    add("v7r-ref", [*s5c, "v7r-ref", "--out-dir", str(out_dir), *sc], env)
+    add("pytest-v7r-calibration",
+        pytest_cmd("tests/ionmc/test_v7r_coverage.py", "tests/ionmc/test_v7_coverage.py", marker="calibration"), env)
+    add("v7r-combine", [*s5c, "v7r-combine", "--dirs", *dirs, *sc], env)
+    add("v7r-diag", [*s5c, "v7r-diag", "--dirs", *dirs, *sc], env)
 
 
 def _suite_steps_hr5(add, s5b, sc, out_dir, dirs, cuda):  # type: ignore[no-untyped-def]
@@ -906,7 +954,12 @@ def main(argv: list[str] | None = None) -> int:
             f"seed base {args.seed_base} is consumed for lv5b (amendment 11 of the V3-005 plan); "
             f"the qualification base is {V5B_QUALIFICATION_SEED_BASE}"
         )
-    workers = 1 if args.single_process or args.suite in ("lv5", "lv5b", "hr5") else resolve_workers(args.workers)
+    if args.suite == "lv5c" and args.seed_base in V5C_CONSUMED_SEED_BASES:
+        raise SystemExit(
+            f"seed base {args.seed_base} is a consumed evidence base (lv5b/hr5/b40d8121); the lv5c "
+            f"qualification base is {V5C_QUALIFICATION_SEED_BASE}"
+        )
+    workers = 1 if args.single_process or args.suite in ("lv5", "lv5b", "hr5", "lv5c") else resolve_workers(args.workers)
     if workers < 1 or args.step_timeout < 1 or not 0.0 < args.scale <= 1.0:
         raise SystemExit("need --workers >= 1, --step-timeout >= 1 and 0 < --scale <= 1")
     single = workers == 1

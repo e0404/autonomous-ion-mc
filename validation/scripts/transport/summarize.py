@@ -61,6 +61,10 @@ V5B_CONSUMED_SEED_BASES = (20441004,)
 """Consumed lv5b bases: 20441004 was consumed by the failed V7 replicate step (amendment 11)."""
 HR5_QUALIFICATION_SEED_BASE = 20451004
 """Qualification base of the suite ``hr5`` (V3-005B, amendment 6)."""
+V5C_QUALIFICATION_SEED_BASE = 20481004
+"""Qualification base of the suite ``lv5c`` (V3-005C, Amendment 14 (j)); 2050xxxx are rehearsals."""
+V5C_CONSUMED_SEED_BASES = (20471004, 20451004, 20441004)
+"""Evidence bases consumed by lv5b, hr5 and the failed b40d8121 V7 step: refused for lv5c."""
 IDENTITY_KEYS = ("git_sha", "suite", "scale", "python_parts", "seed_base")
 
 
@@ -115,6 +119,10 @@ STEP_TAGS = (
     ("v7-rep-ref", "v7-rep-ref"),
     ("v7-rep-s", "v7-rep-shard"),
     ("v7-f32-", "v7-f32"),
+    ("v7r-combine", "v7r-combine"),
+    ("v7r-ref", "v7r-ref"),
+    ("v7r-s", "v7r-shard"),
+    ("v7r-diag", "v7r-diag"),
     ("n1-", "n1"),
     ("v2-combine", "v2-combine"),
     ("v2-probe-combine", "v2-probe-combine"),
@@ -306,6 +314,16 @@ def seed_blockers(seed_base: Any, suite: str | None = None) -> list[str]:
     """Reasons why an archive's seed base cannot qualify (empty for the qualification base)."""
     if seed_base is None:
         return ["seed_base not recorded in environment.txt"]
+    if suite == "lv5c":
+        if int(seed_base) in V5C_CONSUMED_SEED_BASES:
+            return [f"seed_base {int(seed_base)} is a consumed evidence base (lv5b/hr5/b40d8121)"]
+        if int(seed_base) != V5C_QUALIFICATION_SEED_BASE:
+            return [
+                f"seed_base {int(seed_base)} is not the qualification base "
+                f"{V5C_QUALIFICATION_SEED_BASE} of lv5c (the 2050xxxx family are rehearsals; any "
+                "other base is non-qualification evidence)"
+            ]
+        return []
     if suite in ("lv5b", "hr5"):
         want = V5B_QUALIFICATION_SEED_BASE if suite == "lv5b" else HR5_QUALIFICATION_SEED_BASE
         if suite == "lv5b" and int(seed_base) in V5B_CONSUMED_SEED_BASES:
@@ -349,6 +367,29 @@ def seed_blockers(seed_base: Any, suite: str | None = None) -> list[str]:
 def source_ok(env: dict[str, Any], attestation: dict[str, Any] | None) -> bool:
     clean = env.get("tree_dirty") == "no" and str(env.get("sha_source", "")).startswith("git")
     return bool(clean or (attestation and attestation.get("valid")))
+
+
+V7R_NOT_ESTABLISHED = "uncertainty-coverage evidence not established"
+
+
+def slice_c_rows(suite: str | None, steps: dict[str, Any]) -> dict[str, Any]:
+    """Row verdicts that are a conjunction of steps (suite ``lv5c``). Row V7-R (plan Amendment 14 (h)
+    and Amendment 17 (a)6) passes iff ``v7r-combine`` passed (the three estimators, both gates each)
+    AND every ``pytest-v7r-calibration`` / ``pytest-v7r-calibration-s{k}`` step of the archive passed
+    (at least one present); the steps of one archive share one SHA. A pytest step has no document, so
+    the conjunction cannot be made by a step. Otherwise the row verdict is "uncertainty-coverage evidence not established"."""
+    if suite != "lv5c":
+        return {}
+    by = {n.split("-", 1)[1]: s for n, s in steps.items() if "-" in n}
+    comb = by.get("v7r-combine")
+    cal = {k: v for k, v in by.items() if k.startswith("pytest-v7r-calibration")}
+    gates = bool(comb and comb.get("pass") and comb.get("status") != "deferred")
+    calibration = bool(cal) and all(v.get("pass") and v.get("status") != "deferred" for v in cal.values())
+    row = {"gates_pass": gates, "calibration_pass": calibration, "calibration_steps": sorted(cal),
+           "pass": gates and calibration}  # fmt: skip
+    if not row["pass"]:
+        row["verdict"] = V7R_NOT_ESTABLISHED
+    return {"V7-R": row}
 
 
 def verify(d: Path, sha: str, attest_sha: str | None = None) -> dict[str, Any]:
@@ -424,6 +465,7 @@ def verify(d: Path, sha: str, attest_sha: str | None = None) -> dict[str, Any]:
         ),
         "non_conformant_reasons": [*blockers, *att_problems],
         "partials_attestation_problems": att_problems,
+        "rows": slice_c_rows(suite, steps),
         "seed_base": env.get("seed_base"),
         "reduced_history_counts": reduced,
         "tree_dirty": env.get("tree_dirty"),
@@ -514,6 +556,7 @@ def combine(dirs: list[Path], sha: str, attest_sha: str | None = None) -> dict[s
             for d, p in zip(dirs, parts, strict=True)
         },
         "steps": {n: s for p in parts for n, s in p["steps"].items()},
+        "rows": slice_c_rows(suite, {n: s for p in parts for n, s in p["steps"].items()}),
     }
 
 

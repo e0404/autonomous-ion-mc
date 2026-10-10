@@ -303,6 +303,19 @@ def concat_partials(partials: list[PartialTransport]) -> PartialTransport:
     return PartialTransport(parts[0].h0, parts[-1].h1, comps, counters, edep, None, {}, chan)
 
 
+def tally_column_index(n_cols: int, elastic: bool, name: str) -> int:
+    """Column index of the conditional tally ``name`` in a partial result with ``n_cols`` tally
+    columns of a ``nuclear=True`` run (``elastic`` says whether the ``ELASTIC_TALLY_NAMES`` block
+    follows the nuclear block). The conditional blocks are the LAST columns, the nuclear block
+    ending where the elastic block begins, as in ``merge_partials``."""
+    n_el_t = len(ELASTIC_TALLY_NAMES) if elastic else 0
+    if name in NUCLEAR_TALLY_NAMES:
+        return n_cols - n_el_t - len(NUCLEAR_TALLY_NAMES) + NUCLEAR_TALLY_NAMES.index(name)
+    if elastic and name in ELASTIC_TALLY_NAMES:
+        return n_cols - n_el_t + ELASTIC_TALLY_NAMES.index(name)
+    raise ValueError(f"tally column {name!r} is not a conditional column of this configuration")
+
+
 def merge_partials(
     partials: list[PartialTransport],
     n_histories: int,

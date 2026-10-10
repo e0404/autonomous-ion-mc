@@ -106,7 +106,7 @@ from ionmc.scoring import ScoringGrid, TallyRequest
 from ionmc.simulation import Result, Simulation
 from ionmc.transport import parity
 from ionmc.transport.run import run_range
-from ionmc.transport.tally import NUCLEAR_TALLY_NAMES, QUANTUM_MEV
+from ionmc.transport.tally import NUCLEAR_TALLY_NAMES, QUANTUM_MEV, tally_column_index
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
@@ -281,7 +281,8 @@ def block_effective(cfg: SimulationConfig, batches: int | None = None) -> Any:
 def batch_estimates(cfg: SimulationConfig, effective_batches: int | None = None) -> dict[str, Any]:
     """Per-block, per-primary estimators of ``cfg`` (nuclear on, tallies ``sec_p`` and ``nuc_local``
     on grid 0): ``sec_p`` / ``nuc_local_dose`` and ``idd`` profiles ``[B, voxels]``, the scalars
-    ``nuclear_local``, ``escaped_neutral`` ``[B]`` and the summed counters. The ``B = n_batches``
+    ``nuclear_local``, ``escaped_neutral`` ``[B]`` (per primary), ``block_sums`` ``[B]`` (the escaped
+    neutral energy summed over the histories of each block [MeV], V7-R) and the summed counters. The ``B = n_batches``
     batches are the CONTIGUOUS history blocks ``[b N/B, (b+1) N/B)`` (the kernels assign the
     internal batch index ``h mod B``, which interleaves, and the exact tally columns exist only per
     partial result, so the blocks are run as partial results of a configuration with few batches
@@ -295,16 +296,21 @@ def batch_estimates(cfg: SimulationConfig, effective_batches: int | None = None)
     hpb = n // nb
     off_s, size_s, q_s = channel_slice(eff, "sec_p")
     off_l, size_l, q_l = channel_slice(eff, "nuc_local")
-    k0 = len(NUCLEAR_TALLY_NAMES)
-    ix = {name: i for i, name in enumerate(NUCLEAR_TALLY_NAMES)}
+    elastic = eff.nuclear is not None and eff.nuclear.elastic is not None
     out: dict[str, list[Any]] = {
         k: [] for k in ("sec_p", "nuc_local_dose", "idd", "nuclear_local", "escaped_neutral")
     }
+    sums: list[float] = []
     counters = 0
+    counter_vec: Any = 0
     for b in range(nb):
         part = run_range(eff, b * hpb, (b + 1) * hpb)
         comps = part.tally_components
-        col = {name: math.fsum(comps[len(comps) - k0 + i]) for name, i in ix.items()}
+        # columns by NAME: with the elastic channel the ELASTIC_TALLY_NAMES block follows the nuclear one
+        col = {
+            name: math.fsum(comps[tally_column_index(len(comps), elastic, name)])
+            for name in NUCLEAR_TALLY_NAMES
+        }
         acc = part.channel_acc
         assert acc is not None
         out["sec_p"].append(acc[:, off_s : off_s + size_s].sum(axis=0) * q_s / hpb)
@@ -313,8 +319,13 @@ def batch_estimates(cfg: SimulationConfig, effective_batches: int | None = None)
         out["nuclear_local"].append(col["nuclear_local"] / hpb)
         out["escaped_neutral"].append(
             (col["nuclear_escaped_neutron"] + col["nuclear_escaped_gamma"]) / hpb)  # fmt: skip
+        # the true block SUM [MeV] (before the division by the histories of the block), V7-R sidecar
+        sums.append(col["nuclear_escaped_neutron"] + col["nuclear_escaped_gamma"])
         counters += int(sum(part.counter_sums))
+        counter_vec = counter_vec + np.asarray(part.counter_sums, dtype=np.int64)
     res = {k: np.array(v) for k, v in out.items()}
+    res["counter_vector"] = np.asarray(counter_vec)  # per-counter sums, order of the merge_partials names
+    res["block_sums"] = np.array(sums)  # escaped neutral energy per block [MeV], not per primary
     res["counters_sum"] = counters
     res["batch_assignment_ok"] = True  # blocks by construction (kept for the document schema)
     return res
