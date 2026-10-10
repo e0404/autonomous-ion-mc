@@ -768,15 +768,21 @@ DATASETS: dict[str, Dataset] = {
             ),
             parser="latex-source",
             description=(
-                "Primary source of the differential-Moliere factor f_dM of "
-                "ionmc.physics.em.scattering_power_dm, read to settle plan Amendment 15 (d)2 "
-                "(decision 0041, C3 review): f_dM is a bilinear fit to the ratio T_Hanson/T_IC "
-                "computed from Moliere/Fano/Hanson theory for Be, Cu and Pb; no measured "
-                "scattering data enter the fit. Report-only provenance evidence; not a "
-                "construction or calibration input."
+                "Primary source of the differential-Moliere scattering power T_dM and of the "
+                "f_dM coefficients implemented in ionmc.physics.em.scattering_power_dm "
+                "(decision 0039): a CONSTRUCTION input of the MCS model, itself a fit to "
+                "Moliere/Fano/Hanson theory (theory-calibrated, no measured scattering data "
+                "in the fit). Acquired 2026-10-10 to settle plan Amendment 15 (d)2 (decision "
+                "0041, C3 review); that provenance use is report-only. Roles recorded by the "
+                "tool: evaluation (2026-10-10 acquisition) and construction (appended, shared "
+                "lineage with the MCS model, V2-EVID). Not independent evaluation data."
             ),
             role="evaluation",
-            lineage="report-only (provenance of the MCS model; theory-only calibration)",
+            lineage=(
+                "construction lineage (primary source of the f_dM coefficients of the MCS model, "
+                "decision 0039; theory-calibrated); report-only use for the Amendment 15 (d)2 "
+                "provenance question"
+            ),
         ),
         Dataset(
             id="geant4-g4nuclearradii-cc-11.4.2",

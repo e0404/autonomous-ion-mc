@@ -161,11 +161,7 @@ def _nuclear_inputs(
         nd.el_only = int(nuc.elastic.elastic_only)  # type: ignore[union-attr]
         for f, g in names.items():
             setattr(nd, f, getattr(el_dev, g))
-        nd.el_mass = wp.array(  # double precision in every variant (the kinematics are float64)
-            np.asarray(nuc.elastic.table.arrays["target_mass_mev"], dtype=np.float64),  # type: ignore[union-attr]
-            dtype=wp.float64,
-            device=device,
-        )
+        nd.el_mass = el_dev.el_mass  # float64 in every variant, cached and hash-verified
     else:  # dummies: the elastic=False compile unit never reads them
         nd.el_n_grid, nd.el_n_edges, nd.el_kmax, nd.el_only = 2, 2, 1, 0
         for f in names:

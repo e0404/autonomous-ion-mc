@@ -2,15 +2,16 @@
 
 Mirrors :mod:`ionmc.transport.nuclear_device`: :func:`pack_elastic` flattens the table and the
 per-material rows (``ElasticTable.material_rows``) into flat arrays (grid; per-target ``sigma`` and
-mu_CM edges ``[target, node, n_q + 1]``; target masses ``[m_p, M_t...]``; per material the total
+mu_CM edges ``[target, node, n_q + 1]``; target masses ``[m_p, M_t...]`` (float64 ``el_mass`` in
+every precision, plus the precision-cast ``target_mass``); per material the total
 ``Sigma_mass``, the window and end-of-range majorants and the cumulative target ``Sigma``).
 :class:`ElasticDevice` uploads them as ``wp.array`` of the kernel precision (float32 or float64;
 index rows int32) with a ``sha256`` identity of the uploaded bytes (:meth:`device_sha256` re-hashes
-the bytes read back). :func:`cached_elastic_device` packs and uploads ONCE per process and key
-(table
-id and npz sha256, material names, ``f_e``, dtype, device and the digest of the packed rows),
-keeps at
-most four devices and never rebuilds per ``run_range`` call (allocation churn).
+the bytes read back; the hash covers the precision-cast arrays and the float64 ``el_mass`` bytes
+the kernel consumes, and the one-time readback verification covers all of them).
+:func:`cached_elastic_device` packs and uploads ONCE per process and key (table id and npz sha256,
+material names, ``f_e``, dtype, device and the digest of the packed rows), keeps at most four
+devices and never rebuilds per ``run_range`` call (no table array is uploaded per run).
 The elastic compile unit of the nuclear kernel (V3-005C C4) reads these arrays
 (``warp_driver._elastic_device``).
 """
@@ -43,6 +44,9 @@ REAL_FIELDS = (
     "cum_sigma",
 )
 INT_FIELDS = ("mat_ntargets", "mat_target")
+F64_FIELDS = ("el_mass",)
+"""Arrays uploaded in float64 in every precision: the target masses consumed by the (float64)
+two-body kinematics. They are hashed and read back with the other arrays."""
 _MAX_CACHED_DEVICES = 4
 _DEVICE_CACHE: dict[tuple[Any, ...], ElasticDevice] = {}
 
@@ -101,7 +105,7 @@ def pack_elastic(
 def _hash_arrays(table_id: str, named: dict[str, NDArray[Any]]) -> str:
     h = hashlib.sha256()
     h.update(table_id.encode())
-    for name in (*REAL_FIELDS, *INT_FIELDS):
+    for name in (*REAL_FIELDS, *F64_FIELDS, *INT_FIELDS):
         arr = np.ascontiguousarray(named[name])
         h.update(f"{name}|{arr.dtype.str}|{arr.shape}".encode())
         h.update(arr.tobytes())
@@ -112,13 +116,16 @@ def _cast(host: ElasticHost, np_real: Any) -> dict[str, NDArray[Any]]:
     cast: dict[str, NDArray[Any]] = {
         k: np.ascontiguousarray(host.arrays[k], dtype=np_real) for k in REAL_FIELDS
     }
+    # the float64 masses the kernel actually consumes (not the precision-cast ``target_mass``)
+    cast["el_mass"] = np.ascontiguousarray(host.arrays["target_mass"], dtype=np.float64)
     cast.update({k: np.ascontiguousarray(host.arrays[k], dtype=np.int32) for k in INT_FIELDS})
     return cast
 
 
 def host_sha256(host: ElasticHost, precision: str) -> str:
     """``ElasticDevice.sha256`` of ``host`` in ``precision`` ("float32" / "float64") without a
-    device."""
+    device. The hash covers the precision-cast arrays and the float64 ``el_mass`` bytes the
+    kernel consumes; the two precisions differ only through the precision-cast arrays."""
     return _hash_arrays(
         host.table_id, _cast(host, {"float32": np.float32, "float64": np.float64}[precision])
     )
@@ -138,11 +145,13 @@ class ElasticDevice:
         self.verified = False  # set by the driver after the readback check
         for k in REAL_FIELDS:
             setattr(self, k, wp.array(cast[k], dtype=real, device=device))
+        for k in F64_FIELDS:
+            setattr(self, k, wp.array(cast[k], dtype=wp.float64, device=device))
         for k in INT_FIELDS:
             setattr(self, k, wp.array(cast[k], dtype=wp.int32, device=device))
 
     def readback(self) -> dict[str, NDArray[Any]]:
-        return {k: getattr(self, k).numpy() for k in (*REAL_FIELDS, *INT_FIELDS)}
+        return {k: getattr(self, k).numpy() for k in (*REAL_FIELDS, *F64_FIELDS, *INT_FIELDS)}
 
     def device_sha256(self) -> str:
         return _hash_arrays(self.table_id, self.readback())

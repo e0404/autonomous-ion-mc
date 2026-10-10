@@ -536,7 +536,8 @@ def test_slice_c_registry_roles_licences_and_lineage() -> None:
     assert arx.role == "evaluation" and "shared beam lineage" in arx.lineage
     assert arx.sha256.startswith("92cdaffb")
     fdm = DATASETS["arxiv-0908-1413-source"]
-    assert fdm.role == "evaluation" and "report-only" in fdm.lineage
+    assert fdm.role == "evaluation" and "construction lineage" in fdm.lineage
+    assert "report-only" in fdm.lineage and "construction" in fdm.description
     assert fdm.sha256.startswith("67fb1478")
     ex = [d for d in DATASETS.values() if d.id.startswith("exfor-")]
     assert len(ex) == 19  # D0356, C1862 and the 17 slice-C entries
