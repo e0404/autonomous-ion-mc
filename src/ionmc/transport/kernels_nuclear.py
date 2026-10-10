@@ -36,6 +36,15 @@ rejection loop (``nuclear_rejection_limit``).
 Counter columns after the nine of ``COUNTER_NAMES``: ``majorant_violation`` (9),
 ``nuclear_rejection_limit`` (10), ``nuclear_conservation`` (11). Tally columns: the unaccounted
 column 5 is written, the six ``NUCLEAR_TALLY_NAMES`` are the last columns (``nd.nt_base``).
+With ``elastic=True`` (V3-005C C4, a separate compile unit) the hadronic elastic channel is added
+in the order of the Python reference: ``Sigma_tot`` majorant and thinning, the channel by the free
+slot ``u3`` of the candidate block, one extra block per accepted elastic event (the particle
+continues), the slower p-p proton on the stack, the p + A recoil as a local point deposit, the
+per-particle child counter and the once-per-proton domain counters; tally columns
+``elastic_recoil_local``, ``elastic_pp_events``, ``elastic_pa_events`` follow the nuclear columns
+and the counters ``elastic_below_domain``, ``pp_below_domain`` (12, 13) the nuclear counters. The
+kinematics are float64 in both precisions. With ``elastic=False`` the code of this module executes
+exactly the V3-005B arithmetic.
 With ``diag`` and ``h < trace_k`` the nuclear trace ``nd.ev_tr`` (per accepted event: h, gid,
 target, counts[5], Z_r, A_r, attempts, T1) and ``nd.sec_tr`` (per pushed secondary: h, gid,
 parent gid, species, generation, T, direction, position) is written.
@@ -49,6 +58,7 @@ import warp as wp
 
 from ionmc._wpfunc import check_real, named_func
 from ionmc.config import MAX_REJECTION_ATTEMPTS, NUCLEAR_MAX_ENERGY_MEV
+from ionmc.physics.elastic import make_elastic
 from ionmc.physics.em import make_em
 from ionmc.physics.kinematics import make_kinematics
 from ionmc.physics.nuclear import _nuc_u01_32, _nuc_u01_64, make_nuclear
@@ -129,6 +139,22 @@ def make_nuclear_support(real: type) -> SimpleNamespace:
         "sec_tr": wp.array3d(dtype=D),
         "sec_n": wp.array(dtype=wp.int32),
         "above_n": wp.array(dtype=wp.int32),
+        # hadronic elastic channel (V3-005C C4; one-element dummies when the channel is off)
+        "el_n_grid": int,
+        "el_n_edges": int,
+        "el_kmax": int,
+        "el_only": int,
+        "el_grid": wp.array(dtype=R),
+        "el_edges": wp.array(dtype=R),
+        "el_mass": wp.array(dtype=D),  # target masses in double precision (kinematics)
+        "el_e_min_shape": wp.array(dtype=R),
+        "el_e_min_pp": wp.array(dtype=R),
+        "el_sigma": wp.array(dtype=R),
+        "el_sigma_win": wp.array(dtype=R),
+        "el_sigma_end": wp.array(dtype=R),
+        "el_cum": wp.array(dtype=R),
+        "el_mat_nt": wp.array(dtype=wp.int32),
+        "el_mat_target": wp.array(dtype=wp.int32),
     }
     NucData.__name__ = f"NuclearData_{name}"
     NucData.__qualname__ = NucData.__name__
@@ -136,8 +162,10 @@ def make_nuclear_support(real: type) -> SimpleNamespace:
 
 
 @functools.cache
-def make_nuclear_transport_kernel(real: type, diag: bool):
-    """Return the cached nuclear transport kernel for precision ``real`` and diagnostics flag."""
+def make_nuclear_transport_kernel(real: type, diag: bool, elastic: bool = False):
+    """Return the cached nuclear transport kernel for precision ``real`` and diagnostics flag;
+    ``elastic=True`` is the compile unit with the hadronic elastic channel (V3-005C C4, see the
+    module docstring); ``elastic=False`` executes the V3-005B arithmetic only."""
     name = check_real(real)
     R = real
     D = wp.float64
@@ -151,6 +179,8 @@ def make_nuclear_transport_kernel(real: type, diag: bool):
     PH = make_philox(real)
     NU = make_nuclear(real)
     ND = make_nuclear(D)
+    EL = make_elastic(real)
+    ELD = make_elastic(D)  # kinematics and outgoing states in double precision in both variants
     v3 = F.vec3
     control = S.control
     deposit_point = S.deposit_point
@@ -174,6 +204,8 @@ def make_nuclear_transport_kernel(real: type, diag: bool):
     pseudo_local = wp.constant(PSEUDO_BASE)
     is_f32 = wp.constant(1 if name == "float32" else 0)
     with_diag = wp.constant(diag)
+    with_el = wp.constant(elastic)
+    two_pi_d = wp.constant(D(_TWO_PI))
 
     nuc_u01 = _nuc_u01_64 if name == "float64" else _nuc_u01_32
 
@@ -248,6 +280,11 @@ def make_nuclear_transport_kernel(real: type, diag: bool):
         n_gamma = wp.float64(0.0)
         n_binding = wp.float64(0.0)
         n_imbal = wp.float64(0.0)
+        n_el_rec = wp.float64(0.0)
+        n_el_pp = wp.float64(0.0)
+        n_el_pa = wp.float64(0.0)
+        c_dom_pa = int(0)
+        c_dom_pp = int(0)
         c_trunc = int(0)
         c_stall = int(0)
         c_strag = int(0)
@@ -359,6 +396,9 @@ def make_nuclear_transport_kernel(real: type, diag: bool):
                     # C19 F1: no candidate above the table domain (birth n_lam kept, see the
                     # python reference); the secondary is counted in ``above_n``
                     wp.atomic_add(nd.above_n, 0, 1)
+            n_child_p = int(0)  # children pushed by this particle (elastic events do not end it)
+            dom_pa = int(0)
+            dom_pp = int(0)
             steps = int(0)
             birth = int(1)  # first step of the life: linearized analytic log-average of f_dM
             blocks = int(0)
@@ -409,6 +449,16 @@ def make_nuclear_transport_kernel(real: type, diag: bool):
                             s_hat = D(nd.sigma_end[m * nd.n_grid + k0])
                         else:
                             s_hat = D(nd.sigma_win[m * nd.n_grid + k0])
+                        if with_el:
+                            # Sigma_tot majorant: non-elastic (dropped with elastic_only) plus the
+                            # elastic majorant of the elastic grid cell of E0, same s_rg < s_el rule
+                            ke = NU.grid_locate(R(energy), nd.el_grid, nd.el_n_grid)
+                            if nd.el_only == 1:
+                                s_hat = D(0.0)
+                            if s_rg < s_el:
+                                s_hat = s_hat + D(nd.el_sigma_end[m * nd.el_n_grid + ke])
+                            else:
+                                s_hat = s_hat + D(nd.el_sigma_win[m * nd.el_n_grid + ke])
                         d_nuc = ND.nuclear_step_limit(n_lam, rho, s_hat)
                         s_d, reason = FD.select_step_nuclear(
                             D(d_geo), s_el, s_rg, ctl.c_smax, d_nuc
@@ -625,6 +675,22 @@ def make_nuclear_transport_kernel(real: type, diag: bool):
                         path_mm = path_mm + s_act_d  # the scored path of this history (L channel)
                         if path_mm > chan.path_bound:
                             path_flag = 1
+                    if with_el:
+                        if species == 0:  # declared model domain: diagnostics, once per proton
+                            e_pa = D(0.0)
+                            e_pp = D(0.0)
+                            for jt in range(int(nd.el_mat_nt[m])):
+                                t_jt = int(nd.el_mat_target[m * nd.el_kmax + jt])
+                                if t_jt == 0:
+                                    e_pp = D(nd.el_e_min_pp[0])
+                                else:
+                                    e_pa = wp.max(e_pa, D(nd.el_e_min_shape[t_jt]))
+                            if dom_pa == 0 and energy < e_pa:
+                                dom_pa = 1
+                                c_dom_pa = c_dom_pa + 1
+                            if dom_pp == 0 and energy < e_pp:
+                                dom_pp = 1
+                                c_dom_pp = c_dom_pp + 1
                     if s_act > zero:
                         birth = 0
                     if with_diag:
@@ -654,6 +720,14 @@ def make_nuclear_transport_kernel(real: type, diag: bool):
                         # majorant check after EVERY step (decision 0041 section 2): the Gamma
                         # straggling tail is unbounded, so Sigma(E1) <= S^(E0) is not guaranteed
                         sig_e = sigma_at(energy, nd.grid, nd.n_grid, nd.sigma, m * nd.n_grid)
+                        sig_el = D(0.0)
+                        if with_el:
+                            sig_el = sigma_at(
+                                energy, nd.el_grid, nd.el_n_grid, nd.el_sigma, m * nd.el_n_grid
+                            )
+                            if nd.el_only == 1:
+                                sig_e = D(0.0)
+                            sig_e = sig_e + sig_el
                         acc_x, viol = ND.thinning_accept(D(0.5), sig_e, s_hat)
                         if viol == 1:
                             c_major = c_major + 1
@@ -666,8 +740,15 @@ def make_nuclear_transport_kernel(real: type, diag: bool):
                                 ub0 = nuc_u(h, gid_u, nc, 0, key)
                                 ub1 = nuc_u(h, gid_u, nc, 1, key)
                                 ub2 = nuc_u(h, gid_u, nc, 2, key)
+                                ub3 = R(0.0)
+                                if with_el:
+                                    ub3 = nuc_u(h, gid_u, nc, 3, key)  # channel (free slot 3)
                                 nc = nc + 1
                                 accepted_c, viol_c = ND.thinning_accept(D(ub0), sig_e, s_hat)
+                                is_el = int(0)
+                                if with_el:
+                                    if viol_c == 0 and accepted_c == 1:
+                                        is_el = EL.channel_is_elastic(ub3, R(sig_el), R(sig_e))
                                 if viol_c == 1 or energy > nd.e_domain_max:  # fail closed
                                     c_major = c_major + 1
                                     t_unacc = t_unacc + wp.float64(energy)
@@ -675,6 +756,100 @@ def make_nuclear_transport_kernel(real: type, diag: bool):
                                     alive = 0
                                 elif accepted_c == 0:  # fictitious: resample the optical depth
                                     n_lam = -wp.log(D(ub1))
+                                elif is_el == 1:
+                                    # hadronic elastic event (V3-005C): one extra block nc (slot 0
+                                    # CM cosine, slot 1 azimuth); the particle goes on
+                                    ue0 = nuc_u(h, gid_u, nc, 0, key)
+                                    ue1 = nuc_u(h, gid_u, nc, 1, key)
+                                    nc = nc + 1
+                                    n_lam = -wp.log(D(ub1))
+                                    e1e, e2e = F.orthonormal_basis(v3(ux, uy, uz))
+                                    tgt_e, mu_e = EL.elastic_sample(
+                                        ub2, ue0, R(energy), m, int(nd.el_mat_nt[m]), nd.el_kmax,
+                                        nd.el_n_grid, nd.el_n_edges, nd.el_grid, nd.el_sigma,
+                                        nd.el_cum, nd.el_edges, nd.el_mat_target,
+                                    )  # fmt: skip
+                                    pp_e = int(0)
+                                    if tgt_e == 0:
+                                        pp_e = 1
+                                    phi_e = two_pi_d * D(ue1)
+                                    ta_e, ax_e, ay_e, az_e, tb_e2, bx_e, by_e, bz_e = (
+                                        ELD.elastic_outgoing(
+                                            energy, D(ctl.mass), D(nd.el_mass[tgt_e]), D(mu_e),
+                                            phi_e, pp_e, D(e1e[0]), D(e1e[1]), D(e1e[2]),
+                                            D(e2e[0]), D(e2e[1]), D(e2e[2]), D(ux), D(uy), D(uz),
+                                        )
+                                    )  # fmt: skip
+                                    gen_e = gen + 1
+                                    if pp_e == 1:
+                                        n_el_pp = n_el_pp + D(1.0)
+                                        if tb_e2 < D(ctl.e_cut):
+                                            # below the proton cutoff: deposited locally as cutoff
+                                            t_cutoff = t_cutoff + tb_e2
+                                            cl_e = chan
+                                            cl_e.species = 0
+                                            cl_e.gen = gen_e
+                                            deposit_point(
+                                                edep, tally_rows, tid, batch, px, py, pz, tb_e2,
+                                                g_origin, g_inv, g_shape, g_off, ctl.n_grids, cl_e,
+                                            )  # fmt: skip
+                                        else:
+                                            n_child_p = n_child_p + 1
+                                            gen_ok_e = int(1)
+                                            mult_e = int(1)
+                                            for _ge in range(gen):
+                                                mult_e = mult_e * 32
+                                            cid_e = gid + n_child_p * mult_e
+                                            if (
+                                                n_child_p > nd.child_limit
+                                                or gen > nd.max_parent_gen
+                                            ):
+                                                gen_ok_e = 0
+                                            if cid_e >= 1073741824:
+                                                gen_ok_e = 0
+                                            if gen_ok_e == 0:
+                                                c_gen = c_gen + 1
+                                                t_unacc = t_unacc + tb_e2
+                                            elif n_st >= nd.stack_cap:
+                                                c_queue = c_queue + 1
+                                                t_unacc = t_unacc + tb_e2
+                                            else:
+                                                nd.stack[tid, n_st, 0] = D(px)
+                                                nd.stack[tid, n_st, 1] = D(py)
+                                                nd.stack[tid, n_st, 2] = D(pz)
+                                                nd.stack[tid, n_st, 3] = D(R(bx_e))
+                                                nd.stack[tid, n_st, 4] = D(R(by_e))
+                                                nd.stack[tid, n_st, 5] = D(R(bz_e))
+                                                nd.stack[tid, n_st, 6] = tb_e2
+                                                nd.stack[tid, n_st, 7] = D(0.0)
+                                                nd.stack[tid, n_st, 8] = D(cid_e)
+                                                nd.stack[tid, n_st, 9] = D(gen_e)
+                                                nd.stack[tid, n_st, 10] = D(ix)
+                                                nd.stack[tid, n_st, 11] = D(iy)
+                                                nd.stack[tid, n_st, 12] = D(iz)
+                                                nd.stack[tid, n_st, 13] = K.pv_mev(
+                                                    tb_e2, D(ctl.mass)
+                                                )
+                                                n_st = n_st + 1
+                                    else:
+                                        # p + A: the recoil nucleus is deposited locally
+                                        n_el_pa = n_el_pa + D(1.0)
+                                        n_el_rec = n_el_rec + tb_e2
+                                        cl_r = chan
+                                        cl_r.species = pseudo_local
+                                        cl_r.gen = gen_e
+                                        deposit_point(
+                                            edep, tally_rows, tid, batch, px, py, pz, tb_e2,
+                                            g_origin, g_inv, g_shape, g_off, ctl.n_grids, cl_r,
+                                        )  # fmt: skip
+                                    miss_e = energy - (ta_e + tb_e2)
+                                    if wp.abs(miss_e) > nd.ledger_tol * energy:
+                                        c_cons = c_cons + 1
+                                        t_unacc = t_unacc + miss_e
+                                    energy = ta_e
+                                    ux = R(ax_e)
+                                    uy = R(ay_e)
+                                    uz = R(az_e)
                                 else:
                                     alive = 0
                                     code = code_nuclear
@@ -719,7 +894,7 @@ def make_nuclear_transport_kernel(real: type, diag: bool):
                                         alpha_t = D(0.0)
                                         sum_elab = D(0.0)
                                         m_out = D(0.0)
-                                        n_children = int(0)
+                                        n_children = n_child_p
                                         # frame of the parent direction: e1, e2 perpendicular,
                                         # the event frame has z along the beam
                                         e1f, e2f = F.orthonormal_basis(v3(ux, uy, uz))
@@ -981,7 +1156,15 @@ def make_nuclear_transport_kernel(real: type, diag: bool):
         counter_rows[tid, 9] = c_major
         counter_rows[tid, 10] = c_rejlim
         counter_rows[tid, 11] = c_cons
+        if with_el:
+            tally_rows[tid, nb + 6] = n_el_rec
+            tally_rows[tid, nb + 7] = n_el_pp
+            tally_rows[tid, nb + 8] = n_el_pa
+            counter_rows[tid, 12] = c_dom_pa
+            counter_rows[tid, 13] = c_dom_pp
 
-    transport.__name__ = f"transport_nuclear_{name}_{'diag' if diag else 'plain'}"
+    transport.__name__ = (
+        f"transport_nuclear_{name}_{'diag' if diag else 'plain'}{'_el' if elastic else ''}"
+    )
     transport.__qualname__ = transport.__name__
     return wp.kernel(enable_backward=False, module="unique")(transport)

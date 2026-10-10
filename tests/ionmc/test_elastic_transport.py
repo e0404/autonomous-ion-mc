@@ -283,8 +283,8 @@ def test_fail_closed_cases(tid: str, table: ElasticTable) -> None:
     cfg = _cfg(tid, 100.0, 8)
     with pytest.raises(UnsupportedCombinationError, match="elastic_only"):
         replace(cfg.physics, nuclear=False, elastic_only=True)
-    with pytest.raises(UnsupportedCombinationError, match="python backend"):
-        Simulation(replace(cfg, run=replace(cfg.run, backend="warp-cpu", precision="float64")))
+    # the Warp backends accept the channel since C4 (tests/ionmc/test_elastic_warp.py)
+    Simulation(replace(cfg, run=replace(cfg.run, backend="warp-cpu", precision="float64")))
     with pytest.raises(ElasticTableMissingError):
         Simulation(replace(cfg, physics=replace(cfg.physics, elastic_table_id="0" * 64)))
     with pytest.raises(UnsupportedCombinationError, match="no elastic"):

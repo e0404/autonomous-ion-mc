@@ -69,7 +69,7 @@ class PhysicsOptions:
     table, loaded and verified by ``validate()``) and uses ``e_cut_deuteron_mev`` (the deuteron
     cutoff, an engineering default of 4 MeV = twice the 2 MeV total-energy Bethe table floor).
     ``elastic`` (default ``True``, V3-005C, decision 0041 slice C) adds the hadronic elastic channel
-    (p-p and p + A, python backend only until C4) to a ``nuclear=True`` run: ``Sigma_tot =
+    (p-p and p + A, all backends since C4) to a ``nuclear=True`` run: ``Sigma_tot =
     Sigma_nonel + Sigma_el`` in the thinning, the p-p slower proton as a transported secondary and
     the p + A recoil deposited locally (``elastic_recoil_local``). ``elastic=False`` reproduces the
     pre-D2 non-elastic-only behaviour bit for bit; without ``nuclear=True`` the switch has no
@@ -359,6 +359,14 @@ class EffectiveConfig:
                 out["nuclear"]["device_sha256"] = host_sha256(
                     pack_nuclear(self.nuclear.table, self.geometry.materials), self.precision
                 )
+                if self.nuclear.elastic is not None:
+                    from ionmc.transport import elastic_device as ed
+
+                    el = self.nuclear.elastic
+                    out["elastic"]["device_sha256"] = ed.host_sha256(
+                        ed.pack_elastic(el.table, self.geometry.materials, rows=el.rows),
+                        self.precision,
+                    )
         return out
 
 
@@ -552,17 +560,11 @@ def _pinned_elastic_table_id() -> str:
 
 
 def _elastic_setup(config: SimulationConfig, geometry: VoxelGeometry) -> ElasticSetup:
-    """Fail-closed rules of the elastic channel: python backend only until C4, a loaded, re-hashed
+    """Fail-closed rules of the elastic channel (all backends since C4): a loaded, re-hashed
     and qualified table, every element of every material covered (UnsupportedCombinationError)."""
     from ionmc.nuclear.elastic_tables import ElasticTable
 
     ph = config.physics
-    if config.run.backend != "python":
-        raise fail(
-            "the hadronic elastic channel (nuclear=True, elastic=True) is implemented on the "
-            "python backend only (Warp kernels: V3-005C C4); use elastic=False for the "
-            f"non-elastic-only model on backend {config.run.backend!r}"
-        )
     pin = _pinned_elastic_table_id()
     tid = ph.elastic_table_id if ph.elastic_table_id is not None else pin
     table = ElasticTable.load(None, tid)

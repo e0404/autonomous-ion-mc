@@ -4,7 +4,7 @@
 slice C, V3-005C step C3).
 
 Written as ``@wp.func`` factories like :mod:`ionmc.physics.nuclear`: the Python reference backend
-calls the pure-Python twins (``ionmc._wpfunc.python_twin``), the Warp kernels of C4 will call the
+calls the pure-Python twins (``ionmc._wpfunc.python_twin``), the Warp nuclear kernel (C4) calls the
 same source. Scalar arithmetic only, so that the twin and the kernel agree.
 
 ``elastic_two_body`` is the exact relativistic two-body kinematics of
@@ -28,14 +28,13 @@ and the block counter advances by one (the particle goes on). Non-elastic events
 from ``nc + 1`` as before (the particle ends there), so the non-elastic layout is unchanged.
 """
 
-from __future__ import annotations
-
 import functools
 from types import SimpleNamespace
 
 import warp as wp
 
 from ionmc._wpfunc import check_real, named_func
+from ionmc.physics.nuclear import make_nuclear
 
 __all__ = ["make_elastic"]
 
@@ -44,6 +43,7 @@ __all__ = ["make_elastic"]
 def make_elastic(real: type) -> SimpleNamespace:
     """Return the shared elastic-scattering functions for precision ``real``."""
     name = check_real(real)
+    NU = make_nuclear(real)
 
     @named_func(name)
     def sample_mu_edges(
@@ -111,10 +111,116 @@ def make_elastic(real: type) -> SimpleNamespace:
                 r = 1
         return r
 
+    @named_func(name)
+    def elastic_sample(
+        u_target: real,
+        u_mu: real,
+        t1: real,
+        mat: int,
+        k_count: int,
+        kmax: int,
+        n_grid: int,
+        n_e: int,
+        grid: wp.array(dtype=real),
+        sigma: wp.array(dtype=real),
+        cum_sigma: wp.array(dtype=real),
+        edges: wp.array(dtype=real),
+        mat_target: wp.array(dtype=wp.int32),
+    ) -> tuple[int, real]:
+        """Target and CM cosine of an elastic event of a proton of energy ``t1`` in material row
+        ``mat``: the target by the cumulative elastic rows (``NU.choose_target`` on the elastic
+        arrays, lin-lin cum / total as ``cum_fraction_at``), the cosine by
+        :func:`sample_mu_edges` on the grid cell of ``t1`` (``n_e = n_q + 1`` edges per node,
+        ``edges[(tgt n_grid + k) n_e + i]``). Returns ``(table target, mu_CM)``."""
+        j = NU.choose_target(u_target, t1, grid, n_grid, sigma, cum_sigma, mat, kmax, k_count)
+        tgt = int(0)
+        if j >= 0:
+            tgt = int(mat_target[mat * kmax + j])
+        k = NU.grid_locate(t1, grid, n_grid)
+        t = wp.min(
+            wp.max((t1 - grid[k]) / (grid[k + 1] - grid[k]), real(0.0)), real(1.0)
+        )  # lin-in-E weight of node k + 1
+        mu = sample_mu_edges(
+            u_mu, edges, (tgt * n_grid + k) * n_e, (tgt * n_grid + k + 1) * n_e, t, n_e - 1
+        )
+        return tgt, mu
+
+    @named_func(name)
+    def frame_dir(
+        px: real,
+        pz: real,
+        phi: real,
+        e1x: real,
+        e1y: real,
+        e1z: real,
+        e2x: real,
+        e2y: real,
+        e2z: real,
+        dx: real,
+        dy: real,
+        dz: real,
+    ) -> tuple[real, real, real]:
+        """Lab direction of a momentum with transverse component ``px`` (azimuth ``phi``) and
+        longitudinal component ``pz`` in the frame ``(e1, e2, d)`` (``d`` the incident direction);
+        ``d`` itself for a vanishing momentum."""
+        pm = wp.sqrt(px * px + pz * pz)
+        ox = dx
+        oy = dy
+        oz = dz
+        if pm > real(0.0):
+            cx = px * wp.cos(phi) / pm
+            cy = px * wp.sin(phi) / pm
+            cz = pz / pm
+            ox = cx * e1x + cy * e2x + cz * dx
+            oy = cx * e1y + cy * e2y + cz * dy
+            oz = cx * e1z + cy * e2z + cz * dz
+        return ox, oy, oz
+
+    @named_func(name)
+    def elastic_outgoing(
+        t1: real,
+        m1: real,
+        m2: real,
+        mu: real,
+        phi: real,
+        pp: int,
+        e1x: real,
+        e1y: real,
+        e1z: real,
+        e2x: real,
+        e2y: real,
+        e2z: real,
+        dx: real,
+        dy: real,
+        dz: real,
+    ) -> tuple[real, real, real, real, real, real, real, real]:
+        """The outgoing states of the event: ``(T_a, dir_a, T_b, dir_b)`` with ``a`` the continuing
+        primary and ``b`` the other body (the p-p slower proton or the p + A recoil, whose
+        direction is not used). Exact two-body kinematics; for p-p (``pp = 1``) the faster proton
+        continues (:func:`faster_is_recoil`)."""
+        ta, pxa, pza, tb, pxb, pzb = elastic_two_body(t1, m1, m2, mu)
+        if pp == 1:
+            if faster_is_recoil(ta, tb) == 1:
+                t_s = ta
+                px_s = pxa
+                pz_s = pza
+                ta = tb
+                pxa = pxb
+                pza = pzb
+                tb = t_s
+                pxb = px_s
+                pzb = pz_s
+        ax, ay, az = frame_dir(pxa, pza, phi, e1x, e1y, e1z, e2x, e2y, e2z, dx, dy, dz)
+        bx, by, bz = frame_dir(pxb, pzb, phi, e1x, e1y, e1z, e2x, e2y, e2z, dx, dy, dz)
+        return ta, ax, ay, az, tb, bx, by, bz
+
     return SimpleNamespace(
         sample_mu_edges=sample_mu_edges,
         elastic_two_body=elastic_two_body,
         faster_is_recoil=faster_is_recoil,
         channel_is_elastic=channel_is_elastic,
+        elastic_sample=elastic_sample,
+        frame_dir=frame_dir,
+        elastic_outgoing=elastic_outgoing,
         real=name,
     )

@@ -10,8 +10,9 @@ the bytes read back). :func:`cached_elastic_device` packs and uploads ONCE per p
 (table
 id and npz sha256, material names, ``f_e``, dtype, device and the digest of the packed rows),
 keeps at
-most four devices and never rebuilds per ``run_range`` call (allocation churn). No kernel uses these
-arrays yet (the elastic channel lands in C4/C5).
+most four devices and never rebuilds per ``run_range`` call (allocation churn).
+The elastic compile unit of the nuclear kernel (V3-005C C4) reads these arrays
+(``warp_driver._elastic_device``).
 """
 
 from __future__ import annotations
@@ -134,6 +135,7 @@ class ElasticDevice:
         self.n_grid, self.n_targets, self.n_edges = host.n_grid, host.n_targets, host.n_edges
         self.kmax, self.n_materials = host.kmax, host.n_materials
         self.sha256 = _hash_arrays(host.table_id, cast)
+        self.verified = False  # set by the driver after the readback check
         for k in REAL_FIELDS:
             setattr(self, k, wp.array(cast[k], dtype=real, device=device))
         for k in INT_FIELDS:
