@@ -251,16 +251,32 @@ step builds data only: no transport kernel uses the table yet (C3 to C5).
   fails if `E_min,pp` exceeds 15 MeV. P6-D is evaluated in a pass separate from the one that fixes
   `E_min,pp`. The builder fails (`BuildError`) if any
   `e_min_shape` exceeds 10 MeV. The JSON records the NI cross section above the cut at 15 and 20
-  MeV (`sigma_ni_above_cut_mb`), the S-wave unitarity bound on the omitted p-p events per 150 MeV
-  history in water (`pp_omitted_events_bound_per_history_150mev`, sigma <= 2 pi 0.96/k_CM^2, a bound
-  not a reconstruction) and the p+O estimate below `e_min_shape(O-16)` with the BGG `sigma_el`
-  (`pa_omitted_events_per_history_150mev`). `model_revisions` references
-  Amendment 15.
+  MeV (`sigma_ni_above_cut_mb`), the p+O estimate below `e_min_shape(O-16)` with the BGG `sigma_el`
+  (`pa_omitted_events_per_history_150mev`) and the omitted p-p correction below `E_min,pp`
+  as a total-variation diagnostic: `pp_omitted_ni_correction_total_variation_per_history_150mev`
+  and `pp_omitted_ni_correction_weighted_total_variation_mev`, with the nodes, M(E), W(E), the
+  residual range and a `semantics` string in the block `pp_omitted_ni_correction`. The quantity is
+  the total variation of the signed nuclear-plus-interference correction to Rutherford scattering
+  over the half sphere above the cut (`|rho_NI|` integrated over `0 <= mu_CM <= 0.96`), integrated
+  along the residual path in water from `E_min,pp` to 1 MeV; it is an event-equivalent magnitude,
+  not an expected number of physical events, and the weighted form (recoil-energy weighted) is not
+  energy transferred. Limitations: the signed correction can cancel, and the physical sigma_pp below
+  `E_min,pp` is not available from the evaluation. (The S-wave unitarity bound of the C2b build was
+  not a bound on the full amplitude and was withdrawn.) The P6 failure record, P6-D and the
+  MF6 per-product gating of the O-16 check are described under the findings below.
+  `model_revisions` references Amendment 15.
 - **Findings and report-only data.** The builder asserts, fail closed, that the LA150 O-16 MT2 is a
   numerical copy of C-12 from 24 MeV (recorded), that the O-16 MF3/MT5 sigma_nonel (the input of the
   disk radius) is not a copy of C-12's (`o16_mt5_copy_check`: relative difference above 1e-3
   at more than 50 % of the shared nodes and a coefficient of variation of the O/C ratio above 1e-3;
-  recorded as `o16_mt5_finding` with the per-product MF6 yield comparison) and never uses LAW=5 data other than H-1 as a
+  recorded as `o16_mt5_finding`). The MF6/MT5 yields are gated per product (specification
+  revision of Amendment 15 (d)1, before any transport result): the denominator is the number of
+  informative compared energies (at least one material nonzero; relative difference 1 where exactly
+  one yield is zero), a product gates only with at least 10 informative energies (else
+  report-only) and every gating product must differ at more than 50 % of them
+  (`mf6_rule_revised`). The rule as frozen (all compared energies in the denominator) is kept as
+  `mf6_rule_as_frozen` with `passes: false` (zap 3007 14/30 and zap 5012 10/30, both-zero nodes 16
+  and 20). The builder never uses LAW=5 data other than H-1 as a
   construction input. The LA150 C-12/N-14/Ca-40 LTP=12 NI densities (ratio interpolation in mu) at
   20-40 deg and 50/100/150 MeV are stored next to the model values (row X-ENDF, report-only).
   `sigma_el` at 10 MeV per target is recorded for the comparison with the decision-0041 planning

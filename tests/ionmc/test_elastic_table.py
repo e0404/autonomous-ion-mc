@@ -441,11 +441,15 @@ def test_real_table_h1_p6_failure_recorded_and_positive_in_domain(real: Any) -> 
     ni = res.info["sigma_ni_above_cut_mb"]
     assert ni["15_mev"] > 0.0 and ni["20_mev"] > 0.0
     po = res.info["pp_omitted_ni_correction"]
-    assert (
-        res.info["pp_omitted_ni_correction_events_per_history_150mev"] == po["events_per_history"]
-    )
-    assert res.info["pp_omitted_ni_correction_energy_mev"] == po["energy_mev"]
-    assert 0.0 < po["events_per_history"] < 0.1 and 0.0 < po["energy_mev"] < 1.0
+    tv = "pp_omitted_ni_correction_total_variation_per_history_150mev"
+    assert res.info[tv] == po["total_variation_per_history"]
+    wtv = "pp_omitted_ni_correction_weighted_total_variation_mev"
+    assert res.info[wtv] == po["weighted_total_variation_mev"]
+    assert not any("events_per_history_150mev" in k for k in res.info if k.startswith("pp_"))
+    assert "not an expected number of physical events" in po["semantics"]
+    assert "can cancel" in po["semantics"]
+    assert 0.0 < po["total_variation_per_history"] < 0.1
+    assert 0.0 < po["weighted_total_variation_mev"] < 1.0
     assert po["nodes_mev"][0] == 1.0 and po["nodes_mev"][-1] == po["e_cut_mev"]
     assert len(po["m_barn"]) == len(po["nodes_mev"]) and min(po["m_barn"]) >= 0.0
     assert po["max_mean_recoil_fraction_of_t"] <= 0.5 + 1e-12  # (1 - mu)/2 <= 1/2 on mu >= 0
@@ -509,9 +513,24 @@ def test_o16_mt5_not_a_copy_real_data(real: Any) -> None:
     assert f["sigma_not_copy"] and f["mf6_yields_not_copy"]
     assert f["ratio_o16_over_c12_cv"] > 1e-3
     assert f["max_relative_difference"] >= f["min_relative_difference"] >= 0.0
-    prods = {k: v for k, v in f["mf6_yields_per_product"].items() if v is not None}
-    assert prods and all(v["differs_from_c12"] for v in prods.values())
-    assert {"n", "p"} <= set(prods)
+    rev, fro = f["mf6_rule_revised"], f["mf6_rule_as_frozen"]
+    assert rev["passes"] and {"n", "p"} <= set(rev["products"])
+    gating = {k: v for k, v in rev["products"].items() if v and v["role"] == "gating"}
+    assert gating and all(v["differs_from_c12"] and v["informative_nodes"] >= 10
+                          for v in gating.values())  # fmt: skip
+    # the as-frozen evaluation is preserved: it fails for the two sparse products
+    assert fro["passes"] is False
+    assert fro["failing_products"] == ["zap3007", "zap5012"]
+    assert (
+        fro["products"]["zap3007"]["numerator"],
+        fro["products"]["zap3007"]["nodes_both_zero"],
+    ) == (14, 16)
+    assert (
+        fro["products"]["zap5012"]["numerator"],
+        fro["products"]["zap5012"]["nodes_both_zero"],
+    ) == (10, 20)
+    for v in fro["products"].values():
+        assert v is None or v["denominator"] == f["n_compared"] == 30
 
 
 @pytest.mark.parametrize(
@@ -579,6 +598,38 @@ def test_o16_mt5_union_grid_fallback_with_fewer_than_ten_shared_nodes() -> None:
     # the same fallback still fails closed for a copy
     with pytest.raises(BuildError, match="copy"):
         EB.o16_mt5_copy_check(_syn(xc, sc, yc), _syn(xc, sc, yc))
+
+
+def _sparse_pair(n_inf: int) -> tuple[Any, Any]:
+    """30 shared nodes; product 2004 nonzero in both materials at ``n_inf`` nodes, identical
+    except at one node; n differs everywhere."""
+    xs = [1e6 * (7.0 + 4.8 * i) for i in range(30)]
+    sc = [0.1 + 0.001 * i for i in range(30)]
+    so = [v * (1.0 + 0.1 * np.sin(i)) for i, v in enumerate(sc)]
+    a_c = [0.2 if i < n_inf else 0.0 for i in range(30)]
+    a_o = list(a_c)
+    a_o[0] = 0.5
+    yc = {1: [1.0 + 0.01 * i for i in range(30)], 2004: a_c}
+    yo = {1: [1.5 + 0.01 * i for i in range(30)], 2004: a_o}
+    return _syn(xs, sc, yc), _syn(xs, so, yo)
+
+
+def test_o16_mt5_sparse_yield_gating_under_revised_rule() -> None:
+    # 12 informative nodes, 1 differing: gates and fails the revised rule (1/12)
+    with pytest.raises(BuildError, match="copy") as ei:
+        EB.o16_mt5_copy_check(*_sparse_pair(12))
+    assert "'informative_nodes': 12" in str(ei.value) and "'role': 'gating'" in str(ei.value)
+    # 9 informative nodes: report-only, does not gate; the as-frozen record still fails
+    f = EB.o16_mt5_copy_check(*_sparse_pair(9))
+    a = f["mf6_rule_revised"]["products"]["alpha"]
+    assert a["role"] == "report-only" and a["informative_nodes"] == 9 and a["numerator"] == 1
+    assert f["mf6_rule_revised"]["passes"] and f["o16_mt5_not_c12_copy"]
+    fa = f["mf6_rule_as_frozen"]
+    assert fa["passes"] is False and fa["failing_products"] == ["alpha"]
+    assert (
+        fa["products"]["alpha"]["numerator"] == 1 and fa["products"]["alpha"]["denominator"] == 30
+    )
+    assert fa["products"]["alpha"]["nodes_both_zero"] == 21
 
 
 def test_pp_domain_sign_fixtures_p6d() -> None:

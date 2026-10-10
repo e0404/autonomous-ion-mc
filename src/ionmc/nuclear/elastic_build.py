@@ -86,7 +86,8 @@ from ionmc.nuclear.build import (
     write_npz_deterministic,
 )
 
-BUILDER_VERSION = "ionmc-elastic-proton-builder-3"
+BUILDER_VERSION = "ionmc-elastic-proton-builder-4"
+MF6_MIN_INFORMATIVE = 10
 SCHEMA = "ionmc-elastic-proton-table-2"
 SOURCE_IDS = (
     "endf-b8.0-protons",
@@ -358,9 +359,13 @@ def o16_mt5_copy_check(c12: endf6.EndfMaterial, o16: endf6.EndfMaterial) -> dict
     Compared energies: the shared MF3/MT5 nodes in ``[max threshold, 150 MeV]``, or (fewer than 10
     shared) the union grid with linear interpolation. ``o16_mt5_not_c12_copy`` is true only if
     (a) sigma: ``|s_C - s_O| / max`` > 1e-3 at > 50 % of the energies AND the coefficient of
-    variation of ``s_O / s_C`` > 1e-3 (a scaled copy has a constant ratio), and (b) EVERY product
-    yield of MF6/MT5 that is nonzero in either material (n, p, d, alpha, gamma and any other)
-    differs from C-12's by > 1e-3 at > 50 % of the energies. A missing product counts as a zero
+    variation of ``s_O / s_C`` > 1e-3 (a scaled copy has a constant ratio), and (b) the revised MF6
+    rule (specification revision before any transport result): per product of MF6/MT5 the
+    denominator is the number of INFORMATIVE compared energies (at least one material nonzero; the
+    relative difference is 1.0 where exactly one yield is zero); a product with at least
+    ``MF6_MIN_INFORMATIVE`` informative energies gates and must differ by > 1e-3 at > 50 % of them,
+    the others are report-only. The rule as frozen (all compared energies as denominator) is
+    recorded as ``mf6_rule_as_frozen`` with its pass flag. A missing product counts as a zero
     yield. Parser or data errors propagate as :class:`BuildError` (never swallowed), and so does a
     failed check (fail closed)."""
     try:
@@ -381,26 +386,56 @@ def o16_mt5_copy_check(c12: endf6.EndfMaterial, o16: endf6.EndfMaterial) -> dict
     ratio = ratio[np.isfinite(ratio)]
     cv = float(np.std(ratio) / np.mean(ratio)) if ratio.size > 1 else 0.0
     sigma_ok = bool(frac > 0.5 and cv > REL_DIFF_THRESHOLD)
-    per: dict[str, Any] = {}
-    yields_ok = True
+    frozen_prod: dict[str, Any] = {}
+    revised_prod: dict[str, Any] = {}
     for zap in sorted(set(yc) | set(yo)):
         a = yc.get(zap, np.zeros(e_ev.size))
         b = yo.get(zap, np.zeros(e_ev.size))
         name = _PRODUCT_NAMES.get(zap, f"zap{zap}")
         d6 = np.maximum(a, b)
         if not np.any(d6 > 0.0):
-            per[name] = None  # identically zero in both: nothing to compare
+            frozen_prod[name] = revised_prod[name] = None  # zero in both: nothing to compare
             continue
-        r6 = np.abs(a - b)[d6 > 0.0] / d6[d6 > 0.0]
-        f6 = float(np.mean(r6 > REL_DIFF_THRESHOLD))
-        per[name] = {
-            "zap": zap, "nodes_compared": int(r6.size), "fraction_rel_diff_gt_1e-3": f6,
-            "median_relative_difference": float(np.median(r6)),
-            "max_relative_difference": float(r6.max()),
-            "min_relative_difference": float(r6.min()),
-            "differs_from_c12": bool(f6 > 0.5),
+        # relative difference at every compared energy; both zero -> 0 (not differing), one zero
+        # and the other nonzero -> 1.0
+        inform = d6 > 0.0
+        r6 = np.zeros(e_ev.size)
+        r6[inform] = np.abs(a - b)[inform] / d6[inform]
+        differs = r6 > REL_DIFF_THRESHOLD
+        n_all, n_inf, n_diff = int(e_ev.size), int(np.sum(inform)), int(np.sum(differs))
+        f_all, f_inf = n_diff / n_all, n_diff / n_inf
+        frozen_prod[name] = {
+            "zap": zap, "numerator": n_diff, "denominator": n_all, "fraction": f_all,
+            "nodes_both_zero": n_all - n_inf, "differs_from_c12": bool(f_all > 0.5),
         }  # fmt: skip
-        yields_ok = yields_ok and bool(f6 > 0.5)
+        gating = n_inf >= MF6_MIN_INFORMATIVE
+        revised_prod[name] = {
+            "zap": zap, "informative_nodes": n_inf, "numerator": n_diff, "fraction": f_inf,
+            "median_relative_difference": float(np.median(r6[inform])),
+            "max_relative_difference": float(r6[inform].max()),
+            "min_relative_difference": float(r6[inform].min()),
+            "role": "gating" if gating else "report-only",
+            "differs_from_c12": bool(f_inf > 0.5),
+        }  # fmt: skip
+    frozen_fail = sorted(
+        k for k, v in frozen_prod.items() if v is not None and not v["differs_from_c12"]
+    )
+    mf6_frozen = {
+        "rule": "all compared energies are the denominator (both-zero nodes count as not "
+        "differing); every nonzero product must exceed 50 %",
+        "products": frozen_prod,
+        "passes": not frozen_fail,
+        "failing_products": frozen_fail,
+    }
+    mf6_revised = {
+        "rule": "denominator = informative compared energies (at least one material nonzero); a "
+        f"product gates only with >= {MF6_MIN_INFORMATIVE} informative energies, else report-only; "
+        "every gating product must exceed 50 %",
+        "min_informative": MF6_MIN_INFORMATIVE, "products": revised_prod,
+        "passes": all(v["differs_from_c12"] for v in revised_prod.values()
+                      if v is not None and v["role"] == "gating"),
+    }  # fmt: skip
+    yields_ok = bool(mf6_revised["passes"])
     out: dict[str, Any] = {
         "compared_grid": grid_kind, "n_compared": int(e_ev.size),
         "compared_from_mev": float(e_ev[0] * 1e-6), "compared_to_mev": float(e_ev[-1] * 1e-6),
@@ -410,7 +445,7 @@ def o16_mt5_copy_check(c12: endf6.EndfMaterial, o16: endf6.EndfMaterial) -> dict
         "threshold": REL_DIFF_THRESHOLD, "required_fraction_gt": 0.5,
         "ratio_o16_over_c12_cv": cv, "required_cv_gt": REL_DIFF_THRESHOLD,
         "sigma_not_copy": sigma_ok, "mf6_yields_not_copy": yields_ok,
-        "mf6_yields_per_product": per,
+        "mf6_rule_as_frozen": mf6_frozen, "mf6_rule_revised": mf6_revised,
         "o16_mt5_not_c12_copy": bool(sigma_ok and yields_ok),
     }  # fmt: skip
     if not out["o16_mt5_not_c12_copy"]:
@@ -458,6 +493,16 @@ def omitted_events_per_history(
     return float(n_cm3 * integral)
 
 
+PP_OMIT_SEMANTICS = (
+    "total variation of the signed nuclear-plus-interference correction to Rutherford scattering "
+    "over the half sphere above the cut, integrated along the residual path; an event-equivalent "
+    "magnitude, not an expected number of physical events; the weighted form is the "
+    "recoil-energy-weighted total variation, not energy transferred; limitations: the signed "
+    "correction can cancel, the physical sigma_pp below E_min,pp is not available from the "
+    "evaluation"
+)
+
+
 def pp_omitted_ni_correction(
     sec: law5.Law5Section,
     awi: float,
@@ -466,17 +511,18 @@ def pp_omitted_ni_correction(
     mu_h: NDArray[np.float64],
     e_lo_mev: float = 1.0,
 ) -> dict[str, Any]:
-    """DATA-BASED measure of the omitted p-p nuclear-plus-interference (NI) correction to Coulomb
-    scattering below E_min,pp (Amendment 15 (a)2; not a model bound).
+    """DATA-BASED total-variation diagnostic of the omitted p-p nuclear-plus-interference (NI)
+    correction to Coulomb scattering below E_min,pp (Amendment 15 (a)2; see ``PP_OMIT_SEMANTICS``;
+    not a model bound and not an event count).
 
     At each grid node ``E`` in ``[e_lo, E_min,pp]`` the Hale LAW=5 reconstruction gives
     ``M(E) = 2 pi int_0^{0.96} |rho_NI(mu, E)| dmu`` (absolute value, so cancellations do not hide
     magnitude; half sphere, each event once) and the energy-weighted ``W(E) = 2 pi int |rho_NI|
     T (1 - mu)/2 dmu`` (kinetic energy handed to the recoil at CM angle theta_CM, equal masses).
-    Then ``N = n_H int M (dx/dE) dE`` and ``E_omit = n_H int W (dx/dE) dE`` over the path of a
-    proton slowing down from E_min,pp to ``e_lo`` (``dx/dE = 1/S``, project water Bethe table,
-    trapezoid on the grid nodes). Below ``e_lo`` M is not extrapolated: the residual range
-    ``R(e_lo)`` is reported separately."""
+    Then the total variation ``N = n_H int M (dx/dE) dE`` and ``E_omit = n_H int W (dx/dE) dE``
+    over the path of a proton slowing down from E_min,pp to ``e_lo`` (``dx/dE = 1/S``, project
+    water Bethe table, trapezoid on the grid nodes). Below ``e_lo`` M is not extrapolated: the
+    residual range ``R(e_lo)`` is reported separately."""
     tab = _water_tables()
     nodes = grid[(grid >= e_lo_mev) & (grid <= float(grid[k_pp]))]
     m = np.zeros(nodes.size)
@@ -493,11 +539,12 @@ def pp_omitted_ni_correction(
         return float(np.sum(0.5 * (f[1:] + f[:-1]) * de))
 
     return {
-        "events_per_history": n_h * 1e-24 * trap(m * inv_s),
-        "energy_mev": n_h * 1e-24 * trap(w * inv_s),
+        "total_variation_per_history": n_h * 1e-24 * trap(m * inv_s),
+        "weighted_total_variation_mev": n_h * 1e-24 * trap(w * inv_s),
         "nodes_mev": nodes.tolist(), "m_barn": m.tolist(), "w_barn_mev": w.tolist(),
         "max_mean_recoil_fraction_of_t": float(np.max(w / (nodes * np.maximum(m, 1e-300)))),
         "residual_range_below_1mev_g_cm2": float(tab.range_g_cm2(0, e_lo_mev)),
+        "semantics": PP_OMIT_SEMANTICS,
         "n_h_cm3": n_h, "e_cut_mev": float(grid[k_pp]), "e_lo_mev": e_lo_mev,
         "method": (
             "data-based, not a model estimate: below E_min,pp the transport omits the nuclear-plus-"
@@ -974,8 +1021,12 @@ def build_elastic_proton(
                "note": "the frozen row P6 item (4) fails for H-1 below e_min_pp; recorded as a "
                "failure, not converted into a pass by the revised domain (row P6-D)"},
         "sigma_ni_above_cut_mb": sigma_ni_mb,
-        "pp_omitted_ni_correction_events_per_history_150mev": pp_omit["events_per_history"],
-        "pp_omitted_ni_correction_energy_mev": pp_omit["energy_mev"],
+        "pp_omitted_ni_correction_total_variation_per_history_150mev": pp_omit[
+            "total_variation_per_history"
+        ],
+        "pp_omitted_ni_correction_weighted_total_variation_mev": pp_omit[
+            "weighted_total_variation_mev"
+        ],
         "pp_omitted_ni_correction": pp_omit,
         "pa_omitted_events_per_history_150mev": pa_omitted,
         "xendf": {"targets": list(XENDF_TARGETS), "energies_mev": list(XENDF_ENERGIES_MEV),

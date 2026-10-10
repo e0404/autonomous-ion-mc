@@ -407,7 +407,9 @@ deterministically from the registered sources; it is not stored in Git.
   flags `no_negative_density_in_domain`, `o16_mt5_not_c12_copy`, `shape_normalised`. **C2c build (table of record):**
   id `25361f8125c9ae03ed4e2b1808ab5ba90a85b6738a57c5cc7c83ca0173a3cfcc`, builder `ionmc-elastic-proton-builder-3`,
   identical npz arrays (sha256 `68c765f5e10e6d35264b10ce138590c5665d03e4054fd2d6d6ea020639f6b480`); only the JSON
-  diagnostics changed (omitted-correction measure, MF6 per-product gating record).
+  diagnostics changed (omitted-correction measure, MF6 per-product gating record). **C2d build (table of record):** id
+  `045c31a2b5681b2d8b718c14645d562ecb787c5c81f0871b24bf092d4004d95c`, builder `ionmc-elastic-proton-builder-4`, identical npz arrays; only the JSON diagnostics changed (total-variation
+  relabelling and field names, MF6 `mf6_rule_as_frozen` and `mf6_rule_revised` records).
 - **P6 (frozen row), item (4): FAIL, recorded.** The LA150 H-1 (Hale, LAW=5 LTP=1) reconstruction has a negative
   nuclear-plus-interference density at the 16.26° CM cut below E_min,pp = 12.532 MeV: 542 negative nodes and node
   midpoints (table JSON `p6.first_negative_nodes`, `negative_density_below_e_min_pp = true`), the last at 12.5 MeV
@@ -416,24 +418,31 @@ deterministically from the registered sources; it is not stored in Git.
 
   | Row | Evidence | Head | Seeds | Result |
   |---|---|---|---|---|
-  | P6 item (4), H-1 < E_min,pp | table JSON `elastic-proton-25361f81….json` (C2b: `…f932d6ae….json`), field `negative_density_below_e_min_pp` | C2b head 7f8e80a | n/a (deterministic) | **fail**, recorded; revised-domain row P6-D below |
+  | P6 item (4), H-1 < E_min,pp | table JSON `elastic-proton-045c31a2….json` (C2b: `…f932d6ae….json`), field `negative_density_below_e_min_pp` | C2b head 7f8e80a | n/a (deterministic) | **fail**, recorded; revised-domain row P6-D below |
   | P6-D (revised p-p domain [12.532, 250] MeV) | table JSON flag `no_negative_density_in_domain` (separate sign-test pass) | C2b head 7f8e80a | n/a (deterministic) | pass: 227 nodes and midpoints, minimum +0.0198 mb/sr (C2b build) |
 
 - **Model domains.** p-p [12.532, 250] MeV; p+A [e_min_shape, 250] MeV with C 6.0, N 3.252, O 6.585, Al 2.588,
   Si 3.971, P 2.475, Ca 5.736 MeV (table JSON `elastic_domain`); σ = 0 below, asserted by the loader. σ_NI above the
   cut: 191.56 mb at 15 MeV and 140.12 mb at 20 MeV. p+A events below the domain (declared limitation, C2b estimate,
   p+O in water): 1.468e-3 per 150 MeV history, residual range 0.060 g/cm².
-- **Omitted p-p physics below E_min,pp (C2c measure; replaces the withdrawn S-wave unitarity "bound" of Amendment 15
+- **Omitted p-p correction below E_min,pp (total-variation diagnostic; replaces the withdrawn S-wave unitarity "bound" of Amendment 15
   (a)2(iii), whose value 1.095e-2 is in the C2b JSON field `pp_omitted_events_bound_per_history_150mev`).**
   M(E) = 2π ∫ |ρ_NI| dμ_CM over 0 ≤ μ_CM ≤ 0.96 from the Hale reconstruction at the grid nodes in [1 MeV, E_min,pp],
   integrated with n_H = 6.69e22 cm⁻³ over the residual path in water (project range table) down to 1 MeV:
-  4.775e-3 events per 150 MeV history; 9.23e-3 MeV. The residual range below 1 MeV is reported separately and not
-  extrapolated. The 15 MeV ceiling on E_min,pp is pre-registered, not derived from this measure.
-- **O-16 findings.** MF3/MT5 and MF6/MT5 not a C-12 copy (frozen check passes): fraction of the 30 shared MF3/MT5 nodes (7–150 MeV)
-  with relative difference > 1e-3 is 1.0 (median 0.22, max 0.28), CV of σ_O/σ_C 0.058; every nonzero MF6/MT5
-  product yield differs at fraction 1.0 (gating; medians n 0.117, p 0.082, d 0.268, α 0.688, γ 0.307; preliminary C2b
-  report-only values were CV 0.192 and fractions α 1.0, d 0.71, γ 0.97, n 0.61, p 1.0). MT2 remains a recorded C-12 copy (MF3 maximum relative difference 9.09e-5 over 34 nodes from 24 MeV;
-  never a construction input).
+  4.775e-3 per 150 MeV history (`pp_omitted_ni_correction_total_variation_per_history_150mev`); 9.23e-3 MeV
+  (`pp_omitted_ni_correction_weighted_total_variation_mev`). Total variation of the signed correction: an event-equivalent
+  magnitude, not an expected number of physical events; the weighted form is not energy transferred; the signed
+  correction can cancel and the physical σ_pp below E_min,pp is not available from the evaluation. The residual range
+  below 1 MeV is reported separately and not extrapolated. The 15 MeV ceiling on E_min,pp is pre-registered, not derived from this measure.
+- **O-16 findings.** MF3/MT5 sigma not a C-12 copy: fraction of the 30 shared nodes (7-150 MeV) with relative difference
+  > 1e-3 is 1.0 (median 0.22, max 0.28), CV of σ_O/σ_C 0.058. MF6/MT5 yields as frozen (all compared energies in the
+  denominator, `mf6_rule_as_frozen`): FAIL (`passes: false`); two products are below 50 % because of both-zero nodes,
+  zap 3007 14/30 = 0.467 (16 both-zero nodes) and zap 5012 10/30 = 0.333 (20 both-zero nodes). Revised rule (plan
+  Amendment 15 addendum, specification revision before any transport result; `mf6_rule_revised`; denominator = informative
+  energies, gating at ≥ 10 informative energies, tolerances unchanged): every product gates and differs at fraction 1.0
+  (informative counts n 19, d 22, zap3007 14, zap5009 24, zap5012 10, zap7012 17, zap7015 23, zap9016 19, others 30;
+  medians n 0.117, p 0.082, d 0.268, α 0.688, γ 0.307). MT2 remains a recorded C-12 copy (MF3 maximum relative difference
+  9.09e-5 over 34 nodes from 24 MeV; never a construction input).
 - **MCS no-hadronic-term check:** pass (`test_mcs_scattering_power_has_no_hadronic_term`), with the import-closure
   caveat (EM-only `ionmc.data.cache`, `nist_star`, `registry` are in the closure) and f_dM provenance unverified
   (open finding before C4); details in `docs/architecture/transport.md`.
