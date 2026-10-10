@@ -154,7 +154,7 @@ def test_chi2_utility_p_values() -> None:
 # ---------------------------------------------------------------------------------------------
 # synthetic sealed table (CI-fast): loader, C1-ext fail-closed cases, composition, device
 # ---------------------------------------------------------------------------------------------
-def _synthetic(root: Path, *, qual: tuple[int, ...] = (1, 1, 1)) -> str:
+def _synthetic(root: Path, *, qual: tuple[int, ...] = (1, 1, 1, 1)) -> str:
     grid = np.array([1.0, 2.0, 5.0, 10.0, 14.0, 50.0, 100.0, 150.0, 250.0])
     n, n_t = grid.size, len(EB.TARGET_NAMES)
     sigma = np.tile(0.1 * (1 + np.arange(n_t))[:, None], (1, n)) * (1 + 0.1 * np.sin(grid))
@@ -509,15 +509,13 @@ class _Mat:
 def test_o16_mt5_not_a_copy_real_data(real: Any) -> None:
     c12, o16 = _material("p-006_C_012"), _material("p-008_O_016")
     f = EB.o16_mt5_copy_check(c12, o16)
-    assert f["o16_mt5_not_c12_copy"] and f["fraction_rel_diff_gt_1e-3"] > 0.5
-    assert f["sigma_not_copy"] and f["mf6_yields_not_copy"]
+    assert f["o16_mt5_sigma_not_c12_copy"] and f["fraction_rel_diff_gt_1e-3"] > 0.5
+    assert "o16_mt5_not_c12_copy" not in f
     assert f["ratio_o16_over_c12_cv"] > 1e-3
     assert f["max_relative_difference"] >= f["min_relative_difference"] >= 0.0
     rev, fro = f["mf6_rule_revised"], f["mf6_rule_as_frozen"]
-    assert rev["passes"] and {"n", "p"} <= set(rev["products"])
-    gating = {k: v for k, v in rev["products"].items() if v and v["role"] == "gating"}
-    assert gating and all(v["differs_from_c12"] and v["informative_nodes"] >= 10
-                          for v in gating.values())  # fmt: skip
+    # the revised rule is report-only (post-outcome analysis) and cannot influence a flag
+    assert rev["role"].startswith("report-only") and {"n", "p"} <= set(rev["products"])
     # the as-frozen evaluation is preserved: it fails for the two sparse products
     assert fro["passes"] is False
     assert fro["failing_products"] == ["zap3007", "zap5012"]
@@ -533,13 +531,23 @@ def test_o16_mt5_not_a_copy_real_data(real: Any) -> None:
         assert v is None or v["denominator"] == f["n_compared"] == 30
 
 
+def test_o16_mt5_spectra_real_data(real: Any) -> None:
+    """Amendment 16 item 2 on the LA150 data: the nine recorded KS distances satisfy the rule."""
+    c12, o16 = _material("p-006_C_012"), _material("p-008_O_016")
+    f = EB.o16_mt5_spectra_check(c12, o16)
+    d = [r["D"] for r in f["combinations"]]
+    assert len(d) == 9 and all(x > 0.0 for x in d) and sum(x > 0.02 for x in d) >= 8
+    assert f["o16_mt5_spectra_independent"] is True
+    stored = real[0].info["o16_mt5_spectra_finding"]
+    assert stored["D_values"] == f["D_values"] and stored["o16_mt5_spectra_independent"]
+
+
 @pytest.mark.parametrize(
     "case",
-    ["exact", "copy_1e-6", "scaled", "copied_yields_different_sigma"],
+    ["exact", "copy_1e-6", "scaled"],
 )
 def test_o16_mt5_copy_variants_fail_closed(real: Any, case: str) -> None:
     c12 = _material("p-006_C_012")
-    wiggle = lambda e, y: y * (1.0 + 0.2 * np.sin(np.arange(y.size)))  # noqa: E731
     if case == "exact":
         fake = _Mat(c12)
     elif case == "copy_1e-6":
@@ -547,14 +555,10 @@ def test_o16_mt5_copy_variants_fail_closed(real: Any, case: str) -> None:
     elif case == "scaled":
         k = (16.0 / 12.0) ** (2.0 / 3.0)
         fake = _Mat(c12, sigma=lambda e, y: y * k, yields=lambda e, y: y * k)
-    else:  # sigma genuinely different (non-constant ratio), yields copied
-        fake = _Mat(c12, sigma=wiggle)
+    else:
+        raise AssertionError(case)
     with pytest.raises(BuildError, match="copy"):
         EB.o16_mt5_copy_check(c12, fake)  # type: ignore[arg-type]
-    # distinct yields but copied (scaled) sigma also fail: the sigma half is gated independently
-    if case == "scaled":
-        with pytest.raises(BuildError, match="copy"):
-            EB.o16_mt5_copy_check(c12, _Mat(c12, sigma=lambda e, y: y * k, yields=wiggle))  # type: ignore[arg-type]
 
 
 def test_o16_mt5_parser_errors_propagate_as_build_error(real: Any) -> None:
@@ -594,7 +598,7 @@ def test_o16_mt5_union_grid_fallback_with_fewer_than_ten_shared_nodes() -> None:
     }
     f = EB.o16_mt5_copy_check(_syn(xc, sc, yc), _syn(xo, so, yo))
     assert f["compared_grid"] == "union_linear_interpolation" and f["n_compared"] == 10
-    assert f["o16_mt5_not_c12_copy"]
+    assert f["o16_mt5_sigma_not_c12_copy"]
     # the same fallback still fails closed for a copy
     with pytest.raises(BuildError, match="copy"):
         EB.o16_mt5_copy_check(_syn(xc, sc, yc), _syn(xc, sc, yc))
@@ -614,22 +618,102 @@ def _sparse_pair(n_inf: int) -> tuple[Any, Any]:
     return _syn(xs, sc, yc), _syn(xs, so, yo)
 
 
-def test_o16_mt5_sparse_yield_gating_under_revised_rule() -> None:
-    # 12 informative nodes, 1 differing: gates and fails the revised rule (1/12)
+def test_o16_mt5_mf6_rule_is_recorded_but_never_gates() -> None:
+    """Amendment 16 item 1: the as-frozen MF6 rule fails and the informative-node revision is
+    report-only; neither changes the sigma flag."""
+    for n_inf in (12, 9):
+        f = EB.o16_mt5_copy_check(*_sparse_pair(n_inf))
+        assert f["o16_mt5_sigma_not_c12_copy"] is True
+        fa, fr = f["mf6_rule_as_frozen"], f["mf6_rule_revised"]
+        assert fa["passes"] is False and fa["failing_products"] == ["alpha"]
+        assert fa["products"]["alpha"]["denominator"] == 30
+        assert fa["products"]["alpha"]["nodes_both_zero"] == 30 - n_inf
+        assert fr["role"].startswith("report-only")
+        assert fr["products"]["alpha"]["informative_nodes"] == n_inf
+        assert fr["passes"] is (n_inf < 10)  # n_inf=12 would fail the revised rule: no effect
+
+
+def _spec_mat(spectra: dict[int, Any]) -> Any:
+    """Synthetic material: MF6/MT5 LAW=1 LEP=1 products with histogram spectra at 50, 100, 150
+    MeV (and 25 MeV so that 75 MeV is a non-node); ``spectra[zap](e_mev) -> (E' eV, f)``."""
+    import types
+
+    prods = []
+    for zap, fn in spectra.items():
+        dists = []
+        for e in (25.0, 50.0, 100.0, 150.0):
+            x, f = fn(e)
+            rows = np.column_stack([x, f, np.zeros_like(x)])
+            dists.append(endf6.EnergyDistribution(e * 1e6, 0, 1, 3 * x.size, x.size, rows))
+        yt = endf6.Tab1(np.array([2]), np.array([2]), np.array([1e6, 2e8]), np.array([1.0, 1.0]))
+        prods.append(types.SimpleNamespace(
+            zap=zap, law=1, lang=2, lep=1, yield_=yt, energy_interp=np.array([2]),
+            distributions=tuple(dists),
+        ))  # fmt: skip
+    return types.SimpleNamespace(products=lambda mt: types.SimpleNamespace(products=prods))
+
+
+def _shape(e: float, scale: float = 1.0, mean_frac: float = 0.3, scale_f: float = 1.0) -> Any:
+    x = np.linspace(0.0, 0.6 * e, 41) * 1e6
+    m = mean_frac * e * 1e6
+    f = scale_f * scale * np.exp(-(((x - m) / (0.25 * m)) ** 2)) + 1e-3 * scale_f * scale
+    return x, f
+
+
+def test_x_mt5_spec_fixtures() -> None:
+    """Row X-MT5-SPEC (Amendment 16 item 2) on synthetic spectra."""
+    zaps = (1, 1001, 2004)
+    base = _spec_mat({z: (lambda e: _shape(e)) for z in zaps})
+    # (a) copied spectra: every D = 0, flag false, BuildError on qualification
+    with pytest.raises(BuildError, match="copy"):
+        EB.o16_mt5_spectra_check(base, _spec_mat({z: (lambda e: _shape(e)) for z in zaps}))
+    # (b) an overall 1e-6 scale only: D = 0 after normalisation, flag false
     with pytest.raises(BuildError, match="copy") as ei:
-        EB.o16_mt5_copy_check(*_sparse_pair(12))
-    assert "'informative_nodes': 12" in str(ei.value) and "'role': 'gating'" in str(ei.value)
-    # 9 informative nodes: report-only, does not gate; the as-frozen record still fails
-    f = EB.o16_mt5_copy_check(*_sparse_pair(9))
-    a = f["mf6_rule_revised"]["products"]["alpha"]
-    assert a["role"] == "report-only" and a["informative_nodes"] == 9 and a["numerator"] == 1
-    assert f["mf6_rule_revised"]["passes"] and f["o16_mt5_not_c12_copy"]
-    fa = f["mf6_rule_as_frozen"]
-    assert fa["passes"] is False and fa["failing_products"] == ["alpha"]
-    assert (
-        fa["products"]["alpha"]["numerator"] == 1 and fa["products"]["alpha"]["denominator"] == 30
+        EB.o16_mt5_spectra_check(
+            base, _spec_mat({z: (lambda e: _shape(e, scale_f=1e-6)) for z in zaps})
+        )
+    assert "'n_zero': 9" in str(ei.value) and "'o16_mt5_spectra_independent': False" in str(
+        ei.value
     )
-    assert fa["products"]["alpha"]["nodes_both_zero"] == 21
+    # (c) genuinely different shapes: true, nine D values recorded with grids and the law
+    other = _spec_mat({z: (lambda e: _shape(e, mean_frac=0.45)) for z in zaps})
+    f = EB.o16_mt5_spectra_check(base, other)
+    assert f["o16_mt5_spectra_independent"] is True
+    assert len(f["combinations"]) == 9 and all(r["D"] > 0.02 for r in f["combinations"])
+    assert all(r["c12_reconstruction"] == "tabulated_node_histogram" for r in f["combinations"])
+    assert "LAW=1" in f["law"]
+
+    # 8 of 9 above 0.02 with the ninth small but nonzero passes; a ninth with D = 0 fails
+    def mix(frac_150: float) -> Any:
+        far = lambda e: _shape(e, mean_frac=0.45)  # noqa: E731
+        n_spec = lambda e: _shape(e, mean_frac=0.3 + (frac_150 if e == 150.0 else 0.15))  # noqa: E731
+        return _spec_mat({1: n_spec, 1001: far, 2004: far})
+
+    f8 = EB.o16_mt5_spectra_check(base, mix(0.002))
+    assert f8["n_above_threshold"] == 8 and f8["n_zero"] == 0
+    assert f8["o16_mt5_spectra_independent"] is True
+    with pytest.raises(BuildError, match="copy") as e0:
+        EB.o16_mt5_spectra_check(base, mix(0.0))
+    assert "'n_zero': 1" in str(e0.value)
+    # a missing product fails closed
+    with pytest.raises(BuildError, match="no MF6/MT5"):
+        EB.o16_mt5_spectra_check(base, _spec_mat({1: lambda e: _shape(e)}))
+
+
+def test_spectra_cdf_non_node_uses_quantile_interpolation() -> None:
+    import types
+
+    m = _spec_mat({1: lambda e: _shape(e)})
+    prod = m.products(5).products[0]
+    from ionmc.nuclear.build import SpeciesTables
+
+    sp = SpeciesTables(prod)
+    x, c, kind = EB._spectrum_cdf(prod, sp, 75.0)
+    assert kind == "quantile_interpolation_between_nodes" and c[0] == 0.0 and c[-1] == 1.0
+    assert np.all(np.diff(x) >= 0.0)
+    with pytest.raises(BuildError, match="outside"):
+        EB._spectrum_cdf(prod, sp, 200.0)
+    del types
 
 
 def test_pp_domain_sign_fixtures_p6d() -> None:

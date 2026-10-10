@@ -409,7 +409,10 @@ deterministically from the registered sources; it is not stored in Git.
   identical npz arrays (sha256 `68c765f5e10e6d35264b10ce138590c5665d03e4054fd2d6d6ea020639f6b480`); only the JSON
   diagnostics changed (omitted-correction measure, MF6 per-product gating record). **C2d build (table of record):** id
   `045c31a2b5681b2d8b718c14645d562ecb787c5c81f0871b24bf092d4004d95c`, builder `ionmc-elastic-proton-builder-4`, identical npz arrays; only the JSON diagnostics changed (total-variation
-  relabelling and field names, MF6 `mf6_rule_as_frozen` and `mf6_rule_revised` records).
+  relabelling and field names, MF6 `mf6_rule_as_frozen` and `mf6_rule_revised` records). **C2e build (table of record, Amendment 16):** id
+  `1fd24cff23d3f7e72aabcda2af8bc70ad47b81755f94a2ca55890cb6ae52c591`, builder `ionmc-elastic-proton-builder-5`, npz sha256
+  `1028bb67f57bc96edafe6d3dbcce532013edbbd31b9b80861239b09d9ad4202a` (the qualification array has four flags: `no_negative_density_in_domain`,
+  `o16_mt5_sigma_not_c12_copy`, `o16_mt5_spectra_independent`, `shape_normalised`; all numeric arrays unchanged).
 - **P6 (frozen row), item (4): FAIL, recorded.** The LA150 H-1 (Hale, LAW=5 LTP=1) reconstruction has a negative
   nuclear-plus-interference density at the 16.26° CM cut below E_min,pp = 12.532 MeV: 542 negative nodes and node
   midpoints (table JSON `p6.first_negative_nodes`, `negative_density_below_e_min_pp = true`), the last at 12.5 MeV
@@ -438,10 +441,11 @@ deterministically from the registered sources; it is not stored in Git.
   > 1e-3 is 1.0 (median 0.22, max 0.28), CV of σ_O/σ_C 0.058. MF6/MT5 yields as frozen (all compared energies in the
   denominator, `mf6_rule_as_frozen`): FAIL (`passes: false`); two products are below 50 % because of both-zero nodes,
   zap 3007 14/30 = 0.467 (16 both-zero nodes) and zap 5012 10/30 = 0.333 (20 both-zero nodes). Revised rule (plan
-  Amendment 15 addendum, specification revision before any transport result; `mf6_rule_revised`; denominator = informative
-  energies, gating at ≥ 10 informative energies, tolerances unchanged): every product gates and differs at fraction 1.0
-  (informative counts n 19, d 22, zap3007 14, zap5009 24, zap5012 10, zap7012 17, zap7015 23, zap9016 19, others 30;
-  medians n 0.117, p 0.082, d 0.268, α 0.688, γ 0.307). MT2 remains a recorded C-12 copy (MF3 maximum relative difference
+  Amendment 15 addendum, `mf6_rule_revised`; informative-node denominator; every product differs at fraction 1.0) was written after the outcome
+  was observed and is **report-only (post-outcome analysis, Amendment 16 item 1)**; it influences no flag. The sigma half gives
+  `o16_mt5_sigma_not_c12_copy` = true. Amendment 16 spectra evidence (`o16_mt5_spectra_finding`, row X-MT5-SPEC): KS distance D between the
+  O-16 and C-12 MF6/MT5 product energy spectra, n@50 0.04226, n@100 0.06621, n@150 0.05736, p@50 0.06928, p@100 0.05830, p@150 0.05599, α@50 0.23019, α@100 0.18874, α@150 0.20834; D > 0.02 at 9 of 9, D > 0 at all 9: PASS, `o16_mt5_spectra_independent` = true.
+  MT2 remains a recorded C-12 copy (MF3 maximum relative difference
   9.09e-5 over 34 nodes from 24 MeV; never a construction input).
 - **MCS no-hadronic-term check:** pass (`test_mcs_scattering_power_has_no_hadronic_term`), with the import-closure
   caveat (EM-only `ionmc.data.cache`, `nist_star`, `registry` are in the closure) and f_dM provenance unverified

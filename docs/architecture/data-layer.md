@@ -269,14 +269,21 @@ step builds data only: no transport kernel uses the table yet (C3 to C5).
   numerical copy of C-12 from 24 MeV (recorded), that the O-16 MF3/MT5 sigma_nonel (the input of the
   disk radius) is not a copy of C-12's (`o16_mt5_copy_check`: relative difference above 1e-3
   at more than 50 % of the shared nodes and a coefficient of variation of the O/C ratio above 1e-3;
-  recorded as `o16_mt5_finding`). The MF6/MT5 yields are gated per product (specification
-  revision of Amendment 15 (d)1, before any transport result): the denominator is the number of
-  informative compared energies (at least one material nonzero; relative difference 1 where exactly
-  one yield is zero), a product gates only with at least 10 informative energies (else
-  report-only) and every gating product must differ at more than 50 % of them
-  (`mf6_rule_revised`). The rule as frozen (all compared energies in the denominator) is kept as
-  `mf6_rule_as_frozen` with `passes: false` (zap 3007 14/30 and zap 5012 10/30, both-zero nodes 16
-  and 20). The builder never uses LAW=5 data other than H-1 as a
+  flag `o16_mt5_sigma_not_c12_copy`, recorded as `o16_mt5_finding`). The MF6/MT5 per-product yield rule
+  as frozen (all compared energies in the denominator) fails on LA150 (zap 3007 14/30 and zap 5012
+  10/30, both-zero nodes 16 and 20) and is kept as `mf6_rule_as_frozen` with `passes: false`; the
+  informative-node revision (`mf6_rule_revised`) was written after that outcome and is report-only
+  and influences no flag (Amendment 16 item 1). Independence of the O-16 product data is instead
+  checked on the energy spectra (`o16_mt5_spectra_check`, row X-MT5-SPEC): for n, p and alpha at
+  50, 100 and 150 MeV the normalised angle-integrated MF6/MT5 secondary-energy distributions
+  (LAW=1, LEP=1, read by the same `SpeciesTables` reader as the nuclear table builder; exact
+  histogram cumulative at a tabulated incident energy, the builder's quantile interpolation
+  otherwise) of O-16 and C-12 are compared by the Kolmogorov-Smirnov distance D on the union E'
+  grid; `o16_mt5_spectra_independent` is true iff D > 0.02 at at least 8 of the 9 combinations and
+  D > 0 at all 9 (D below 1e-12 counts as 0, a floating-point floor), recorded in
+  `o16_mt5_spectra_finding`, and the build fails closed otherwise. The qualification flags are
+  `no_negative_density_in_domain`, `o16_mt5_sigma_not_c12_copy`, `o16_mt5_spectra_independent`
+  and `shape_normalised`. The builder never uses LAW=5 data other than H-1 as a
   construction input. The LA150 C-12/N-14/Ca-40 LTP=12 NI densities (ratio interpolation in mu) at
   20-40 deg and 50/100/150 MeV are stored next to the model values (row X-ENDF, report-only).
   `sigma_el` at 10 MeV per target is recorded for the comparison with the decision-0041 planning

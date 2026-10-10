@@ -79,6 +79,7 @@ from ionmc.nuclear import events as ev
 from ionmc.nuclear.build import (
     TARGETS,
     BuildError,
+    SpeciesTables,
     TargetTables,
     element_rows,
     table_id,
@@ -86,7 +87,7 @@ from ionmc.nuclear.build import (
     write_npz_deterministic,
 )
 
-BUILDER_VERSION = "ionmc-elastic-proton-builder-4"
+BUILDER_VERSION = "ionmc-elastic-proton-builder-5"
 MF6_MIN_INFORMATIVE = 10
 SCHEMA = "ionmc-elastic-proton-table-2"
 SOURCE_IDS = (
@@ -109,7 +110,12 @@ HBARC = 197.3269804
 MP = 938.27208816
 PP_TARGET = "H-1"
 TARGET_NAMES = (PP_TARGET, *(t.name for t in TARGETS))
-QUALIFICATION_FIELDS = ("no_negative_density_in_domain", "o16_mt5_not_c12_copy", "shape_normalised")
+QUALIFICATION_FIELDS = (
+    "no_negative_density_in_domain",
+    "o16_mt5_sigma_not_c12_copy",
+    "o16_mt5_spectra_independent",
+    "shape_normalised",
+)
 E_MIN_PP_LIMIT_MEV = 15.0
 """The builder fails if E_min,pp exceeds this (Amendment 15 (a)3)."""
 E_MIN_SHAPE_LIMIT_MEV = 10.0
@@ -121,7 +127,9 @@ MODEL_REVISIONS = (
     "Amendment 15: P6 negativity of H-1 below E_min,pp is a recorded failure of the "
     "frozen row, not a pass; the table domain is revised to [E_min,pp, 250] MeV (p-p) and "
     "[e_min_shape(target), 250] MeV (p + A); S(E) uses the Geant4 p-p formula only (PDG data "
-    "are report-only); the o16_mt5_copy_check is implemented."
+    "are report-only); the o16_mt5_copy_check is implemented. Amendment 16: the frozen MF6 "
+    "per-product rule stays recorded as failed; the flag o16_mt5_not_c12_copy is replaced by "
+    "o16_mt5_sigma_not_c12_copy and o16_mt5_spectra_independent (KS test of the product spectra)."
 )
 XENDF_TARGETS = ("C-12", "N-14", "Ca-40")
 XENDF_ENERGIES_MEV = (50.0, 100.0, 150.0)
@@ -357,17 +365,16 @@ def o16_mt5_copy_check(c12: endf6.EndfMaterial, o16: endf6.EndfMaterial) -> dict
     """O-16 MF3/MT5 and MF6/MT5 are not a C-12 copy (Amendment 15 (d)1, both parts required).
 
     Compared energies: the shared MF3/MT5 nodes in ``[max threshold, 150 MeV]``, or (fewer than 10
-    shared) the union grid with linear interpolation. ``o16_mt5_not_c12_copy`` is true only if
-    (a) sigma: ``|s_C - s_O| / max`` > 1e-3 at > 50 % of the energies AND the coefficient of
-    variation of ``s_O / s_C`` > 1e-3 (a scaled copy has a constant ratio), and (b) the revised MF6
-    rule (specification revision before any transport result): per product of MF6/MT5 the
-    denominator is the number of INFORMATIVE compared energies (at least one material nonzero; the
-    relative difference is 1.0 where exactly one yield is zero); a product with at least
-    ``MF6_MIN_INFORMATIVE`` informative energies gates and must differ by > 1e-3 at > 50 % of them,
-    the others are report-only. The rule as frozen (all compared energies as denominator) is
-    recorded as ``mf6_rule_as_frozen`` with its pass flag. A missing product counts as a zero
-    yield. Parser or data errors propagate as :class:`BuildError` (never swallowed), and so does a
-    failed check (fail closed)."""
+    shared) the union grid with linear interpolation. ``o16_mt5_sigma_not_c12_copy`` (the sigma
+    half of Amendment 15 (d)1 as frozen) is true only if ``|s_C - s_O| / max`` > 1e-3 at > 50 % of
+    the energies AND the coefficient of variation of ``s_O / s_C`` > 1e-3 (a scaled copy has a
+    constant ratio); it is the only flag set here. The MF6 per-product rule as frozen (all compared
+    energies as denominator) is recorded as ``mf6_rule_as_frozen`` with its pass flag (it FAILS on
+    LA150 for two sparse products and no longer qualifies anything, Amendment 16 item 1); the
+    informative-node revision, written after that outcome was observed, is recorded as
+    ``mf6_rule_revised`` and is report-only. A missing product counts as a zero yield. Parser or
+    data errors propagate as :class:`BuildError` (never swallowed), and so does a failed check
+    (fail closed)."""
     try:
         tc, to = c12.cross_section(5), o16.cross_section(5)
         e_ev, grid_kind = _mt5_compare_grid(tc, to)
@@ -414,7 +421,7 @@ def o16_mt5_copy_check(c12: endf6.EndfMaterial, o16: endf6.EndfMaterial) -> dict
             "median_relative_difference": float(np.median(r6[inform])),
             "max_relative_difference": float(r6[inform].max()),
             "min_relative_difference": float(r6[inform].min()),
-            "role": "gating" if gating else "report-only",
+            "would_gate_under_revised_rule": gating,
             "differs_from_c12": bool(f_inf > 0.5),
         }  # fmt: skip
     frozen_fail = sorted(
@@ -428,14 +435,14 @@ def o16_mt5_copy_check(c12: endf6.EndfMaterial, o16: endf6.EndfMaterial) -> dict
         "failing_products": frozen_fail,
     }
     mf6_revised = {
+        "role": "report-only (post-outcome analysis, Amendment 16 item 1)",
         "rule": "denominator = informative compared energies (at least one material nonzero); a "
         f"product gates only with >= {MF6_MIN_INFORMATIVE} informative energies, else report-only; "
         "every gating product must exceed 50 %",
         "min_informative": MF6_MIN_INFORMATIVE, "products": revised_prod,
         "passes": all(v["differs_from_c12"] for v in revised_prod.values()
-                      if v is not None and v["role"] == "gating"),
+                      if v is not None and v["would_gate_under_revised_rule"]),
     }  # fmt: skip
-    yields_ok = bool(mf6_revised["passes"])
     out: dict[str, Any] = {
         "compared_grid": grid_kind, "n_compared": int(e_ev.size),
         "compared_from_mev": float(e_ev[0] * 1e-6), "compared_to_mev": float(e_ev[-1] * 1e-6),
@@ -444,13 +451,106 @@ def o16_mt5_copy_check(c12: endf6.EndfMaterial, o16: endf6.EndfMaterial) -> dict
         "median_relative_difference": float(np.median(rel)),
         "threshold": REL_DIFF_THRESHOLD, "required_fraction_gt": 0.5,
         "ratio_o16_over_c12_cv": cv, "required_cv_gt": REL_DIFF_THRESHOLD,
-        "sigma_not_copy": sigma_ok, "mf6_yields_not_copy": yields_ok,
+        "o16_mt5_sigma_not_c12_copy": sigma_ok,
         "mf6_rule_as_frozen": mf6_frozen, "mf6_rule_revised": mf6_revised,
-        "o16_mt5_not_c12_copy": bool(sigma_ok and yields_ok),
     }  # fmt: skip
-    if not out["o16_mt5_not_c12_copy"]:
+    if not sigma_ok:
+        raise BuildError(f"LA150 O-16 MF3/MT5 sigma looks like a copy of C-12 (fail closed): {out}")
+    return out
+
+
+SPECTRA_PRODUCTS = (("n", 1), ("p", 1001), ("alpha", 2004))
+SPECTRA_ENERGIES_MEV = (50.0, 100.0, 150.0)
+SPECTRA_D_MIN = 0.02
+SPECTRA_MIN_COMBINATIONS = 8
+SPECTRA_ZERO_FLOOR = 1.0e-12
+"""A KS distance below this is floating-point noise of the normalisation and counts as exactly 0
+(a 1e-6 rescaling of a spectrum changes the normalised cumulative at the 1e-16 level)."""
+
+
+def _spectrum_cdf(
+    prod: endf6.Product, sp: SpeciesTables, e_mev: float
+) -> tuple[NDArray[np.float64], NDArray[np.float64], str]:
+    """Normalised angle-integrated E' cumulative distribution of one MF6/MT5 product at the
+    incident energy ``e_mev``: ``(E' knots [MeV], cumulative at the knots, kind)``.
+
+    LAW=1, LEP=1 (histogram pdf b_0 on [E'_j, E'_j+1)), exactly as the nuclear table builder reads
+    it (:class:`SpeciesTables`). At a tabulated incident energy the cumulative is the exact
+    piecewise-linear integral of the histogram; between nodes the builder's quantile
+    interpolation of the 65 equiprobable edges is used (cumulative i/64 at edge i). A product
+    outside the tabulated incident range fails closed."""
+    en = sp.energies
+    if not (en[0] <= e_mev <= en[-1]):
+        raise BuildError(f"incident energy {e_mev} MeV outside the MF6 range of ZAP={sp.zap}")
+    node = np.nonzero(np.abs(en - e_mev) <= 1e-9 * e_mev)[0]
+    if node.size:
+        d = prod.distributions[int(node[0])]
+        x = d.rows[:, 0] * 1.0e-6
+        w = d.rows[:-1, 1] * np.diff(x)
+        total = float(w.sum())
+        if not total > 0.0:
+            raise BuildError(f"ZAP={sp.zap} has no positive spectrum weight at {e_mev} MeV")
+        return x, np.concatenate(([0.0], np.cumsum(w) / total)), "tabulated_node_histogram"
+    edges = sp.rows_at(e_mev)[0]
+    return edges, np.arange(edges.size) / (edges.size - 1.0), "quantile_interpolation_between_nodes"
+
+
+def o16_mt5_spectra_check(c12: endf6.EndfMaterial, o16: endf6.EndfMaterial) -> dict[str, Any]:
+    """O-16 MF6/MT5 product energy spectra are not a C-12 copy (Amendment 16 item 2, X-MT5-SPEC).
+
+    For n, p, alpha at 50, 100 and 150 MeV the normalised angle-integrated secondary-energy
+    distributions of both nuclei are compared by the Kolmogorov-Smirnov distance D = max |F_O -
+    F_C| on the union E' grid. ``o16_mt5_spectra_independent`` is true iff D > 0.02 at >= 8 of the
+    9 combinations AND D > 0 at all 9 (D below :data:`SPECTRA_ZERO_FLOOR` counts as 0). Fail closed
+    (:class:`BuildError`) if a product or incident energy cannot be reconstructed or the flag is
+    false."""
+    try:
+        secs = {"C-12": c12.products(5), "O-16": o16.products(5)}
+        tabs: dict[str, dict[int, tuple[endf6.Product, SpeciesTables]]] = {}
+        for name, sec in secs.items():
+            by_zap = {p.zap: p for p in sec.products}
+            tabs[name] = {}
+            for pname, zap in SPECTRA_PRODUCTS:
+                prod = by_zap.get(zap)
+                if prod is None or prod.law != 1:
+                    raise BuildError(f"{name}: no MF6/MT5 LAW=1 product {pname} (ZAP={zap})")
+                tabs[name][zap] = (prod, SpeciesTables(prod))
+        rows: list[dict[str, Any]] = []
+        for pname, zap in SPECTRA_PRODUCTS:
+            for e in SPECTRA_ENERGIES_MEV:
+                xc, fc, kc = _spectrum_cdf(*tabs["C-12"][zap], e)
+                xo, fo, ko = _spectrum_cdf(*tabs["O-16"][zap], e)
+                grid = np.union1d(xc, xo)
+                d = float(np.max(np.abs(np.interp(grid, xo, fo) - np.interp(grid, xc, fc))))
+                rows.append({
+                    "product": pname, "zap": zap, "incident_mev": e, "D": d,
+                    "D_effective": 0.0 if d < SPECTRA_ZERO_FLOOR else d,
+                    "n_union_grid": int(grid.size),
+                    "grid_from_mev": float(grid[0]), "grid_to_mev": float(grid[-1]),
+                    "c12_reconstruction": kc, "o16_reconstruction": ko,
+                })  # fmt: skip
+    except BuildError:
+        raise
+    except (endf6.EndfError, KeyError, ValueError, AttributeError) as exc:
+        raise BuildError(f"O-16 / C-12 MT5 spectra cannot be evaluated: {exc!r}") from exc
+    d_eff = np.array([r["D_effective"] for r in rows])
+    n_above = int(np.sum(d_eff > SPECTRA_D_MIN))
+    independent = bool(n_above >= SPECTRA_MIN_COMBINATIONS and np.all(d_eff > 0.0))
+    out: dict[str, Any] = {
+        "law": "MF6/MT5 LAW=1 (continuum energy-angle), LEP=1 histogram, angle-integrated (b_0), "
+        "read by SpeciesTables as in the nuclear table builder; between incident nodes the "
+        "builder's quantile interpolation is used",
+        "statistic": "Kolmogorov-Smirnov distance on the union E' grid",
+        "rule": f"D > {SPECTRA_D_MIN} at >= {SPECTRA_MIN_COMBINATIONS} of 9 combinations and "
+        "D > 0 at all 9",
+        "zero_floor": SPECTRA_ZERO_FLOOR, "combinations": rows,
+        "D_values": {f"{r['product']}@{r['incident_mev']:g}": r["D"] for r in rows},
+        "n_above_threshold": n_above, "n_zero": int(np.sum(d_eff == 0.0)),
+        "o16_mt5_spectra_independent": independent,
+    }  # fmt: skip
+    if not independent:
         raise BuildError(
-            f"LA150 O-16 MF3/MT5 or MF6/MT5 looks like a copy of C-12 (fail closed): {out}"
+            f"LA150 O-16 MF6/MT5 product spectra look like a copy of C-12 (fail closed): {out}"
         )
     return out
 
@@ -754,6 +854,8 @@ def build_elastic_proton(
     log(f"O-16 MT2 is a C-12 copy from {o16['from_mev']} MeV: recorded")
     o16_mt5 = o16_mt5_copy_check(mats["C-12"], mats["O-16"])
     log(f"O-16 MT5 differs from C-12 at {o16_mt5['fraction_rel_diff_gt_1e-3']:.0%} of the nodes")
+    o16_spec = o16_mt5_spectra_check(mats["C-12"], mats["O-16"])
+    log(f"O-16 MT5 spectra KS D: {o16_spec['D_values']}")
 
     e_h1 = sec.energies_ev * 1e-6
     grid = build_grid_elastic(e_h1[(e_h1 >= 1.0) & (e_h1 <= E_ANCHOR_MEV)], opt.points_per_decade)
@@ -927,7 +1029,8 @@ def build_elastic_proton(
     qual = np.array(
         [
             bool(k_pp <= i150 and in_domain_ok),
-            bool(o16_mt5["o16_mt5_not_c12_copy"]),
+            bool(o16_mt5["o16_mt5_sigma_not_c12_copy"]),
+            bool(o16_spec["o16_mt5_spectra_independent"]),
             bool(max_dev <= 1e-6),
         ],
         dtype=np.int8,
@@ -1013,7 +1116,8 @@ def build_elastic_proton(
                        "pp_above_150_mev": "sigma_NI(150) S(E)/S(150), shape fixed in mu_CM"},
         "sigma_el_10_mev_mb": sigma_10,
         "o16_finding": o16, "o16_mt2_copy_recorded": o16["o16_mt2_is_c12_copy"],
-        "o16_mt5_finding": o16_mt5, "transcription_verified": transcription,
+        "o16_mt5_finding": o16_mt5, "o16_mt5_spectra_finding": o16_spec,
+        "transcription_verified": transcription,
         "elastic_domain": elastic_domain, "model_revisions": MODEL_REVISIONS,
         "negative_density_below_e_min_pp": p6_found,
         "p6": {"negative_density_below_e_min_pp": p6_found, "first_negative_nodes": p6_points,
