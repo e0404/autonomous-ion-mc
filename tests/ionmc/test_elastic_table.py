@@ -440,12 +440,21 @@ def test_real_table_h1_p6_failure_recorded_and_positive_in_domain(real: Any) -> 
     assert "Amendment 15" in res.info["model_revisions"]
     ni = res.info["sigma_ni_above_cut_mb"]
     assert ni["15_mev"] > 0.0 and ni["20_mev"] > 0.0
-    pb = res.info["pp_omitted_events_bound_per_history_150mev"]
-    assert 380.0 < pb["sigma_bound_at_cut_mb"] < 420.0  # 397 mb at 12.53 MeV (Amendment 15)
-    assert 0.0 < pb["events_per_history_bound"] < 0.1
-    assert 0.18 < pb["residual_range_g_cm2"] < 0.21
+    po = res.info["pp_omitted_ni_correction"]
+    assert (
+        res.info["pp_omitted_ni_correction_events_per_history_150mev"] == po["events_per_history"]
+    )
+    assert res.info["pp_omitted_ni_correction_energy_mev"] == po["energy_mev"]
+    assert 0.0 < po["events_per_history"] < 0.1 and 0.0 < po["energy_mev"] < 1.0
+    assert po["nodes_mev"][0] == 1.0 and po["nodes_mev"][-1] == po["e_cut_mev"]
+    assert len(po["m_barn"]) == len(po["nodes_mev"]) and min(po["m_barn"]) >= 0.0
+    assert po["max_mean_recoil_fraction_of_t"] <= 0.5 + 1e-12  # (1 - mu)/2 <= 1/2 on mu >= 0
+    assert 0.0 < po["residual_range_below_1mev_g_cm2"] < 0.01
+    assert 0.18 < po["residual_range_at_cut_g_cm2"] < 0.21 and "method" in po
+    assert "bound" not in " ".join(k for k in res.info if k.startswith("pp_omitted"))
     pa = res.info["pa_omitted_events_per_history_150mev"]
     assert 0.0 < pa["events_per_history"] < 0.01 and 0.05 < pa["residual_range_g_cm2"] < 0.07
+    assert 0.0 < pa["residual_range_below_1mev_g_cm2"] < 0.01
 
 
 def _material(member: str) -> endf6.EndfMaterial:
@@ -465,31 +474,111 @@ def test_o16_copy_assertion_passes_on_la150_and_fails_closed_otherwise(real: Any
         EB.o16_copy_finding(c12, n14)  # a genuine second evaluation: the assertion fails closed
 
 
-def test_o16_mt5_not_a_copy_real_data_and_synthetic_copy(real: Any) -> None:
+class _Mat:
+    """Fixture material: MF3/MT5 sigma and MF6/MT5 yields built from a base material."""
+
+    def __init__(
+        self,
+        base: Any,
+        sigma: Any = lambda e, y: y,
+        yields: Any = lambda e, y: y,
+    ) -> None:
+        self.base, self.sigma, self.yields = base, sigma, yields
+
+    def cross_section(self, mt: int) -> Any:
+        t = self.base.cross_section(mt)
+        return endf6.Tab1(t.nbt, t.interp, t.x.copy(), self.sigma(t.x, t.y))
+
+    def products(self, mt: int) -> Any:
+        import types
+
+        out = []
+        for p in self.base.products(mt).products:
+            y = p.yield_
+            out.append(types.SimpleNamespace(
+                zap=p.zap,
+                yield_=endf6.Tab1(y.nbt, y.interp, y.x.copy(), self.yields(y.x, y.y)),
+            ))  # fmt: skip
+        return types.SimpleNamespace(products=out)
+
+
+def test_o16_mt5_not_a_copy_real_data(real: Any) -> None:
     c12, o16 = _material("p-006_C_012"), _material("p-008_O_016")
     f = EB.o16_mt5_copy_check(c12, o16)
     assert f["o16_mt5_not_c12_copy"] and f["fraction_rel_diff_gt_1e-3"] > 0.5
+    assert f["sigma_not_copy"] and f["mf6_yields_not_copy"]
     assert f["ratio_o16_over_c12_cv"] > 1e-3
     assert f["max_relative_difference"] >= f["min_relative_difference"] >= 0.0
-    # a synthetic copy fails closed
-    with pytest.raises(BuildError):
-        EB.o16_mt5_copy_check(c12, c12)
+    prods = {k: v for k, v in f["mf6_yields_per_product"].items() if v is not None}
+    assert prods and all(v["differs_from_c12"] for v in prods.values())
+    assert {"n", "p"} <= set(prods)
 
-    class Copy:
-        def __init__(self, base: endf6.EndfMaterial, scale: float) -> None:
-            self.base, self.scale = base, scale
 
-        def cross_section(self, mt: int) -> Any:
-            t = self.base.cross_section(mt)
-            return endf6.Tab1(t.nbt, t.interp, t.x.copy(), t.y * self.scale)
+@pytest.mark.parametrize(
+    "case",
+    ["exact", "copy_1e-6", "scaled", "copied_yields_different_sigma"],
+)
+def test_o16_mt5_copy_variants_fail_closed(real: Any, case: str) -> None:
+    c12 = _material("p-006_C_012")
+    wiggle = lambda e, y: y * (1.0 + 0.2 * np.sin(np.arange(y.size)))  # noqa: E731
+    if case == "exact":
+        fake = _Mat(c12)
+    elif case == "copy_1e-6":
+        fake = _Mat(c12, sigma=lambda e, y: y * (1.0 + 1e-6), yields=lambda e, y: y * (1.0 + 1e-6))
+    elif case == "scaled":
+        k = (16.0 / 12.0) ** (2.0 / 3.0)
+        fake = _Mat(c12, sigma=lambda e, y: y * k, yields=lambda e, y: y * k)
+    else:  # sigma genuinely different (non-constant ratio), yields copied
+        fake = _Mat(c12, sigma=wiggle)
+    with pytest.raises(BuildError, match="copy"):
+        EB.o16_mt5_copy_check(c12, fake)  # type: ignore[arg-type]
+    # distinct yields but copied (scaled) sigma also fail: the sigma half is gated independently
+    if case == "scaled":
+        with pytest.raises(BuildError, match="copy"):
+            EB.o16_mt5_copy_check(c12, _Mat(c12, sigma=lambda e, y: y * k, yields=wiggle))  # type: ignore[arg-type]
 
+
+def test_o16_mt5_parser_errors_propagate_as_build_error(real: Any) -> None:
+    c12 = _material("p-006_C_012")
+
+    class NoProducts(_Mat):
         def products(self, mt: int) -> Any:
             raise KeyError(mt)
 
+    with pytest.raises(BuildError, match="cannot be evaluated"):
+        EB.o16_mt5_copy_check(c12, NoProducts(c12, sigma=lambda e, y: y * 2.0))  # type: ignore[arg-type]
+
+
+def _syn(xs: list[float], sig: list[float], ys: dict[int, list[float]]) -> Any:
+    import types
+
+    def tab(x: list[float], y: list[float]) -> Any:
+        return endf6.Tab1(np.array([len(x)]), np.array([2]), np.array(x), np.array(y))
+
+    prods = [types.SimpleNamespace(zap=z, yield_=tab(xs, y)) for z, y in ys.items()]
+    return types.SimpleNamespace(
+        cross_section=lambda mt: tab(xs, sig),
+        products=lambda mt: types.SimpleNamespace(products=prods),
+    )
+
+
+def test_o16_mt5_union_grid_fallback_with_fewer_than_ten_shared_nodes() -> None:
+    xc = [1e6 * x for x in (5.0, 10.0, 20.0, 40.0, 80.0, 150.0)]
+    xo = [1e6 * x for x in (5.0, 12.0, 25.0, 50.0, 100.0, 150.0)]  # 2 shared nodes
+    sc = [0.1, 0.2, 0.3, 0.25, 0.2, 0.15]
+    so = [0.1, 0.25, 0.3, 0.35, 0.22, 0.18]
+    yc = {1: [1.0, 1.1, 1.2, 1.3, 1.4, 1.5], 1001: [0.5, 0.6, 0.7, 0.6, 0.5, 0.4]}
+    yo = {
+        1: [1.0, 1.4, 1.1, 1.0, 1.6, 1.2],
+        1001: [0.5, 0.3, 0.9, 0.8, 0.3, 0.6],
+        2004: [0.0, 0.1, 0.2, 0.2, 0.1, 0.1],
+    }
+    f = EB.o16_mt5_copy_check(_syn(xc, sc, yc), _syn(xo, so, yo))
+    assert f["compared_grid"] == "union_linear_interpolation" and f["n_compared"] == 10
+    assert f["o16_mt5_not_c12_copy"]
+    # the same fallback still fails closed for a copy
     with pytest.raises(BuildError, match="copy"):
-        EB.o16_mt5_copy_check(c12, Copy(c12, 1.0 + 1e-6))  # type: ignore[arg-type]
-    with pytest.raises(BuildError, match="copy"):  # a scaled copy: differs by 33 %, constant ratio
-        EB.o16_mt5_copy_check(c12, Copy(c12, (16.0 / 12.0) ** (2.0 / 3.0)))  # type: ignore[arg-type]
+        EB.o16_mt5_copy_check(_syn(xc, sc, yc), _syn(xc, sc, yc))
 
 
 def test_pp_domain_sign_fixtures_p6d() -> None:
@@ -509,8 +598,6 @@ def test_pp_domain_sign_fixtures_p6d() -> None:
     node2 = np.array([-3.0] * 6 + [0.7, 0.8, np.inf])
     with pytest.raises(BuildError, match="exceeds"):
         EB.pp_scan(grid, node2, np.full(9, np.inf), i150)
-    # a unitarity bound of 397 mb at 12.53 MeV
-    assert EB.unitarity_bound_sigma_mb(12.532) == pytest.approx(397.0, abs=5.0)
 
 
 def test_domain_limit_fails_closed_above_10_mev() -> None:
@@ -584,3 +671,17 @@ def test_pin_file_matches_the_built_table(real: Any) -> None:
     assert pin["builder_version"] == EB.BUILDER_VERSION and pin["table_schema"] == EB.SCHEMA
     assert pin["table_id"] == res.table_id and pin["npz_sha256"] == res.info["npz_sha256"]
     assert pin["grid_points"] == res.info["grid"]["n_points"]
+
+
+def test_omitted_events_never_evaluate_sigma_below_the_table_floor() -> None:
+    seen: list[float] = []
+
+    def sigma(e: float) -> float:
+        seen.append(e)
+        return 100.0
+
+    n = EB.omitted_events_per_history(6.0, 1.0e22, sigma)
+    assert min(seen) >= 1.0 and n > 0.0
+    # integral only: n * sigma * (R(6 MeV) - R(1 MeV)) with the project range table
+    r = EB.residual_range_g_cm2
+    assert n == pytest.approx(1.0e22 * 100.0e-27 * (r(6.0) - r(1.0)), rel=2e-3)

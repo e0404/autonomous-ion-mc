@@ -1,9 +1,9 @@
 {
   "schema": "ionmc-elastic-table-pin-1",
   "note": "Pin of the derived proton elastic table of V3-005C step C2 (decision 0041 slice C). Identifiers and hashes only; the table lives in the data cache, never in Git. Any change of the builder, its sources or its options changes the id and requires a new pin in the same commit.",
-  "builder_version": "ionmc-elastic-proton-builder-2",
+  "builder_version": "ionmc-elastic-proton-builder-3",
   "table_schema": "ionmc-elastic-proton-table-2",
-  "table_id": "f932d6ae21dd24135a8f98f8dcb7c8357dbf292e3c7f6ce183e64fb194a8f584",
+  "table_id": "25361f8125c9ae03ed4e2b1808ab5ba90a85b6738a57c5cc7c83ca0173a3cfcc",
   "npz_sha256": "68c765f5e10e6d35264b10ce138590c5665d03e4054fd2d6d6ea020639f6b480",
   "grid_points": 400,
   "built_with": "ionmc data build elastic-proton (default options), single process"

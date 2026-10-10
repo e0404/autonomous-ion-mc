@@ -391,3 +391,57 @@ failure under the frozen row.
   `hr5` step (`v8-stat-python-s0`, RUN-20261008T132716Z-49247654) ran at b40d8121 and was superseded with that
   chain. The consumed lv5b run at b40d8121 (base 20441004) is preserved as
   `lv5b-b40d812-single-process.json` (`pass: false`, step 14 V7 failed under the earlier pooled rule; Amendment 11).
+
+# V3-005C C2 (elastic data layer, no transport result)
+
+Archive record of steps C2, C2b and C2c of V3-005C (executed on the V3-005B branch; plan
+`validation/plans/v3-005-acceptance.md` Amendments 14 and 15 and the Amendment 15 row-table addendum; decision 0041,
+slice C, "Revised 2026-10-10 (C2b/C2c)"). These steps build and qualify the hadronic elastic table only. **No ionmc
+transport with elastic scattering has been run; nothing in this record is a transport, dose or V5/V11 result.** The
+table is a derived cache artefact (`.ionmc-cache/ionmc-data/derived/elastic-proton-<id>.json` / `.npz`), rebuilt
+deterministically from the registered sources; it is not stored in Git.
+
+- **Table of record (C2b build).** id `f932d6ae21dd24135a8f98f8dcb7c8357dbf292e3c7f6ce183e64fb194a8f584`, npz sha256
+  `68c765f5e10e6d35264b10ce138590c5665d03e4054fd2d6d6ea020639f6b480`, 400 energy nodes on 1–250 MeV (lin-lin in E),
+  schema `ionmc-elastic-proton-table-2`, builder `ionmc-elastic-proton-builder-2`, build time 14.8 s; qualification
+  flags `no_negative_density_in_domain`, `o16_mt5_not_c12_copy`, `shape_normalised`. **C2c build (table of record):**
+  id `25361f8125c9ae03ed4e2b1808ab5ba90a85b6738a57c5cc7c83ca0173a3cfcc`, builder `ionmc-elastic-proton-builder-3`,
+  identical npz arrays (sha256 `68c765f5e10e6d35264b10ce138590c5665d03e4054fd2d6d6ea020639f6b480`); only the JSON
+  diagnostics changed (omitted-correction measure, MF6 per-product gating record).
+- **P6 (frozen row), item (4): FAIL, recorded.** The LA150 H-1 (Hale, LAW=5 LTP=1) reconstruction has a negative
+  nuclear-plus-interference density at the 16.26° CM cut below E_min,pp = 12.532 MeV: 542 negative nodes and node
+  midpoints (table JSON `p6.first_negative_nodes`, `negative_density_below_e_min_pp = true`), the last at 12.5 MeV
+  with −0.0219 mb/sr (−0.75 mb/sr at 12 MeV, −5.6 mb/sr at 10 MeV). P6 items (1)-(3) and (5)-(7) pass. The failure
+  stays in the record and is not converted into a pass.
+
+  | Row | Evidence | Head | Seeds | Result |
+  |---|---|---|---|---|
+  | P6 item (4), H-1 < E_min,pp | table JSON `elastic-proton-25361f81….json` (C2b: `…f932d6ae….json`), field `negative_density_below_e_min_pp` | C2b head 7f8e80a | n/a (deterministic) | **fail**, recorded; revised-domain row P6-D below |
+  | P6-D (revised p-p domain [12.532, 250] MeV) | table JSON flag `no_negative_density_in_domain` (separate sign-test pass) | C2b head 7f8e80a | n/a (deterministic) | pass: 227 nodes and midpoints, minimum +0.0198 mb/sr (C2b build) |
+
+- **Model domains.** p-p [12.532, 250] MeV; p+A [e_min_shape, 250] MeV with C 6.0, N 3.252, O 6.585, Al 2.588,
+  Si 3.971, P 2.475, Ca 5.736 MeV (table JSON `elastic_domain`); σ = 0 below, asserted by the loader. σ_NI above the
+  cut: 191.56 mb at 15 MeV and 140.12 mb at 20 MeV. p+A events below the domain (declared limitation, C2b estimate,
+  p+O in water): 1.468e-3 per 150 MeV history, residual range 0.060 g/cm².
+- **Omitted p-p physics below E_min,pp (C2c measure; replaces the withdrawn S-wave unitarity "bound" of Amendment 15
+  (a)2(iii), whose value 1.095e-2 is in the C2b JSON field `pp_omitted_events_bound_per_history_150mev`).**
+  M(E) = 2π ∫ |ρ_NI| dμ_CM over 0 ≤ μ_CM ≤ 0.96 from the Hale reconstruction at the grid nodes in [1 MeV, E_min,pp],
+  integrated with n_H = 6.69e22 cm⁻³ over the residual path in water (project range table) down to 1 MeV:
+  4.775e-3 events per 150 MeV history; 9.23e-3 MeV. The residual range below 1 MeV is reported separately and not
+  extrapolated. The 15 MeV ceiling on E_min,pp is pre-registered, not derived from this measure.
+- **O-16 findings.** MF3/MT5 and MF6/MT5 not a C-12 copy (frozen check passes): fraction of the 30 shared MF3/MT5 nodes (7–150 MeV)
+  with relative difference > 1e-3 is 1.0 (median 0.22, max 0.28), CV of σ_O/σ_C 0.058; every nonzero MF6/MT5
+  product yield differs at fraction 1.0 (gating; medians n 0.117, p 0.082, d 0.268, α 0.688, γ 0.307; preliminary C2b
+  report-only values were CV 0.192 and fractions α 1.0, d 0.71, γ 0.97, n 0.61, p 1.0). MT2 remains a recorded C-12 copy (MF3 maximum relative difference 9.09e-5 over 34 nodes from 24 MeV;
+  never a construction input).
+- **MCS no-hadronic-term check:** pass (`test_mcs_scattering_power_has_no_hadronic_term`), with the import-closure
+  caveat (EM-only `ionmc.data.cache`, `nist_star`, `registry` are in the closure) and f_dM provenance unverified
+  (open finding before C4); details in `docs/architecture/transport.md`.
+- **Construction-source correction.** S(E) above 150 MeV from the Geant4 BGG p-p formula only; PDG rpp2022 p-p
+  compilation reclassified as evaluation (report-only V10), removed from the table identity (role use id
+  770debc97dbd4d00b4cb2e6e44a6a8b0).
+- **Reserved diagnostics.** `elastic_below_domain`, `pp_below_domain` (land with C4/C5).
+- **Reviews.** Codex REVIEW-c856e576: changes_required (findings F1-F4, resolved by Amendment 15 and the C2b commit
+  7f8e80a); Codex REVIEW-54fe3b7b: changes_required (F1 unitarity bound, F3 plan-row accounting, F4 records; resolved
+  in C2c by the row-table addendum, the data-based omitted-physics measure, decision 0041 and this record). A Codex
+  approval is not scientific validation.

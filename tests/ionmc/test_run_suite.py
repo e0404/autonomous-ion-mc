@@ -1408,6 +1408,7 @@ PLAN_ROWS_PENDING_STEPS = frozenset(
     {
         "P6", "P7", "P5-ext", "V10", "V10-A", "X-ENDF", "V11", "C1-ext", "R1-D2", "E1-B",
         "D9-BGG", "V6-sens", "V7-R", "V8-nuc", "V2b-el", "V7-scan-el", "V7-shift-el",
+        "P6-D", "E-shape",
     }
 )  # fmt: skip
 
