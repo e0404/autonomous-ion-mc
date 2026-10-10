@@ -122,6 +122,7 @@ wp = SimpleNamespace(
     pow=_pow,
     cos=math.cos,
     sin=math.sin,
+    tan=math.tan,
     sinh=_sinh,
     cosh=_cosh,
     floor=_floor,

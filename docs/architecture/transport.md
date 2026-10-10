@@ -88,11 +88,23 @@ densities in g/cm3, doses in Gy per primary). All grids use `origin_mm` = corner
   lateral offsets (perpendicular to the beam, deterministic orthonormal basis, no axis privileged)
   are Gaussian. The beam travels in vacuum until it enters the geometry; a beam that misses the
   geometry is tallied as escaped.
+  `angular_sigma_mrad=0` and `x_theta_correlation=0` (V3-005C C8) add a per-plane bivariate Gaussian (x, theta):
+  `theta = sigma_theta (rho g1 + sqrt(1 - rho^2) g2)` with `g1` the plane's lateral normal (purpose 1 block 0) and
+  `g2` a normal of purpose 1 block 1, drawn only when `angular_sigma_mrad > 0` so that every existing
+  configuration is bit-identical. The direction is `normalise(d + tan(theta_1) e1 + tan(theta_2) e2)`, i.e.
+  (tan thx, tan thy, 1) normalised for `d = z`, from the shared `source_direction` (python twin and Warp kernels).
+  Validation: `angular_sigma_mrad <= 100`, `|rho| < 1`, nonzero `rho` needs both spreads.
 * `VoxelGeometry(origin_mm, spacing_mm, shape, materials, material_index, density_g_cm3=None, z_exit_mm=None)`:
   world = union of voxels, vacuum outside; `z_exit_mm` (optional, in `(lower z, upper z]`) makes the plane `z = z_exit_mm`
   the far face of the world independent of the grid (the grid may overhang it; particles reaching it leave; the DDA
   and the second-leg limit know it as axis 3, scoring voxel masses ignore the part beyond it). Vacuum voxels (density <= 0) are rejected.
-* `ScoringGrid(origin_mm, spacing_mm, shape, name="dose")`: independent of the geometry grid.
+* `ScoringGrid(origin_mm, spacing_mm, shape, name="dose", kind="cartesian")`: independent of the geometry grid.
+  `kind="annular"` (V3-005C C8) is an axisymmetric (r, z) tally of the energy deposit: shape `(n_r, 1, n_z)`,
+  spacing `(dr, dr, dz)`, origin `(axis x, axis y, z0)`; cell `(ir, 0, iz)` is the annulus `ir dr <= r < (ir + 1) dr`
+  times the z slab, scored by a cylindrical DDA (`cyl_index`, `seg_piece_cyl`) with the same ramp apportioning,
+  int64 accumulators and flat layout as a Cartesian grid, on the python reference and in the Warp kernels (column 3
+  of `g_shape` is the kind). Its mass is `rho pi (R_o^2 - R_i^2) dz` (the grid must lie inside one uniform-density
+  geometry); tally requests on it are refused. The Cartesian path is unchanged (A16 bit-identity).
 * `PhysicsOptions(nuclear, stopping, straggling=True, multiple_scattering=True,
   e_cut_mev=2.0, max_step_mm=1.0, max_energy_loss_fraction=0.02, range_alpha=0.2,
   range_rho_f_mm=0.1, short_step_fraction=1e-2, truncated_hinge_diagnostic=False, ...)`: `nuclear` and `stopping` have no default
@@ -741,6 +753,18 @@ for each A9 part, 1800 s for A7 and 3600 s for the HR sample step.
 A9 runs 200 seeds in two parts of 100 (`--part i/2`, seed `base + 10000 + k`) whose npz files
 `a9-compare` verifies (hash, metadata, SHA, deterministic split) and merges; `a11-hr` runs its four
 samples in one step.
+
+### Row V6 / V6-sens and suite `hr5c` (V3-005C C8)
+
+`validation/scripts/reference/gottschalk_v6.py` parses `halo.tex` of arXiv:1409.1938 from the hash-verified cache
+(tarball `92cdaffb...`, member `e5a270e7...`; a mismatch is recorded) and holds E0 (bisection of the V3-003D water range table
+to R0 = 21.321 cm, tolerance 1e-6, exact-inverse cross-check, transport-table comparison recorded as a report-only
+finding), the beam (sigma_x 5.948 mm, sigma_theta 31.55 mrad, rho = -sqrt(1 - f^2) = -0.5206, f = -(1 + p7)), the
+0.4 cm sphere overlap weights over the 0.5 mm annular (r, z) tally and the comparator of plan Amendment 17 (c).
+`steps_v6.py` provides `v6-shard` (lv5c, warp-cpu f64, r_index 12), `v6-sens-shard` (r_index 20, nominal plus eight variants with
+common random numbers), `v6-cuda-shard` (hr5c, warp-cuda f32, r_index 3, base 20491004), `v6-compare`, `v6-cuda-compare`
+and `v6-e0`; `V6_SHARDS` stays `None` (the suites fail closed through `v6-unsized`) until Amendment 14a. `tbl:parms` is a beam
+construction input only; `tbl:dmlg` is read only by the comparator.
 
 ### V3-005 suite `lv5` (slice A, nuclear python backend)
 

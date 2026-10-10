@@ -316,6 +316,10 @@ def make_nuclear_transport_kernel(real: type, diag: bool, elastic: bool = False)
         z3 = F.gauss_one(PH.u01(w[2]), PH.u01(w[3]))
         d = ctl.dir
         e1v, e2v = F.orthonormal_basis(d)
+        if ctl.sigma_theta > zero:  # purpose 1 block 1 is drawn only for an angular spread
+            w1 = PH.philox_block(h, u_zero, wp.uint32(1), p_source, key)
+            g2a, g2b = F.gauss_pair(PH.u01(w1[0]), PH.u01(w1[1]))
+            d = F.source_direction(d, e1v, e2v, z1, z2, g2a, g2b, ctl.sigma_theta, ctl.rho_xt)
         energy = D(ctl.e0)
         if ctl.sigma_e > zd:
             energy = energy + ctl.sigma_e * D(z3)

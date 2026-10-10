@@ -63,6 +63,8 @@ HR5_QUALIFICATION_SEED_BASE = 20451004
 """Qualification base of the suite ``hr5`` (V3-005B, amendment 6)."""
 V5C_QUALIFICATION_SEED_BASE = 20481004
 """Qualification base of the suite ``lv5c`` (V3-005C, Amendment 14 (j)); 2050xxxx are rehearsals."""
+HR5C_QUALIFICATION_SEED_BASE = 20491004
+"""Qualification base of the suite ``hr5c`` (V6 on CUDA, Amendment 14 (j))."""
 V5C_CONSUMED_SEED_BASES = (20471004, 20451004, 20441004)
 """Evidence bases consumed by lv5b, hr5 and the failed b40d8121 V7 step: refused for lv5c."""
 IDENTITY_KEYS = ("git_sha", "suite", "scale", "python_parts", "seed_base")
@@ -124,6 +126,12 @@ STEP_TAGS = (
     ("v7r-s", "v7r-shard"),
     ("v7r-diag", "v7r-diag"),
     ("v11-compare", "v11-compare"),
+    ("v6-cuda-compare", "v6-cuda-compare"),
+    ("v6-compare", "v6-compare"),
+    ("v6-unsized", "v6-unsized"),
+    ("v6-sens-", "v6-sens-shard"),
+    ("v6-cuda-s", "v6-cuda-shard"),
+    ("v6-s", "v6-shard"),
     ("v11-", "v11-ionmc"),
     ("n1-", "n1"),
     ("v2-combine", "v2-combine"),
@@ -333,6 +341,12 @@ def seed_blockers(seed_base: Any, suite: str | None = None) -> list[str]:
     """Reasons why an archive's seed base cannot qualify (empty for the qualification base)."""
     if seed_base is None:
         return ["seed_base not recorded in environment.txt"]
+    if suite == "hr5c":
+        if int(seed_base) in (*V5C_CONSUMED_SEED_BASES, V5C_QUALIFICATION_SEED_BASE):
+            return [f"seed_base {int(seed_base)} is consumed or belongs to lv5c"]
+        if int(seed_base) != HR5C_QUALIFICATION_SEED_BASE:
+            return [f"seed_base {int(seed_base)} is not the qualification base {HR5C_QUALIFICATION_SEED_BASE} of hr5c"]
+        return []
     if suite == "lv5c":
         if int(seed_base) in V5C_CONSUMED_SEED_BASES:
             return [f"seed_base {int(seed_base)} is a consumed evidence base (lv5b/hr5/b40d8121)"]

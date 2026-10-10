@@ -184,6 +184,112 @@ def make_transport_funcs(real: type) -> SimpleNamespace:
         return leg, axis
 
     @named_func(name)
+    def s_neg(b: real, disc: real) -> real:
+        """``-b + sqrt(disc)`` (the cancellation-free denominator of the smaller root)."""
+        return wp.sqrt(disc) - b
+
+    @named_func(name)
+    def source_direction(
+        d: v3,
+        e1: v3,
+        e2: v3,
+        z1: real,
+        z2: real,
+        g2a: real,
+        g2b: real,
+        sigma_theta: real,
+        rho: real,
+    ) -> v3:
+        """Pencil-beam direction with the angular spread and the x-theta correlation: per plane
+        ``theta_k = sigma_theta (rho z_k + sqrt(1 - rho^2) g2_k)`` (``z_k`` the plane's lateral
+        normal, ``g2_k`` the independent normal of purpose 1 block 1, ``sigma_theta`` in rad) and
+        ``u = (d + tan(theta_1) e1 + tan(theta_2) e2) / norm``: (tan thx, tan thy, 1) normalised
+        for ``d = z``."""
+        s2 = wp.sqrt(real(1.0) - rho * rho)
+        t1 = wp.tan(sigma_theta * (rho * z1 + s2 * g2a))
+        t2 = wp.tan(sigma_theta * (rho * z2 + s2 * g2b))
+        ux = d[0] + t1 * e1[0] + t2 * e2[0]
+        uy = d[1] + t1 * e1[1] + t2 * e2[1]
+        uz = d[2] + t1 * e1[2] + t2 * e2[2]
+        n = wp.sqrt(ux * ux + uy * uy + uz * uz)
+        return v3(ux / n, uy / n, uz / n)
+
+    @named_func(name)
+    def cyl_index(p: v3, origin: v3, inv_spacing: v3, nr: int, nz: int) -> tuple[int, int, int]:
+        """Cell ``(ir, iz)`` (floor) of ``p`` in an annular (r, z) grid with its axis through
+        ``(origin[0], origin[1])``, radial pitch ``1 / inv_spacing[0]`` and z origin
+        ``origin[2]``; ``inside`` is 1 for ``0 <= ir < nr`` and ``0 <= iz < nz``."""
+        qx = p[0] - origin[0]
+        qy = p[1] - origin[1]
+        ir = int(wp.floor(wp.sqrt(qx * qx + qy * qy) * inv_spacing[0]))
+        iz = int(wp.floor((p[2] - origin[2]) * inv_spacing[2]))
+        inside = 0
+        if ir >= 0 and ir < nr and iz >= 0 and iz < nz:
+            inside = 1
+        return ir, iz, inside
+
+    @named_func(name)
+    def cyl_next(p: v3, u: v3, ir: int, iz: int, origin: v3, spacing: v3) -> tuple[real, int]:
+        """Distance [mm] from ``p`` (inside cell ``(ir, iz)``) along ``u`` to the next cell face
+        of an annular grid and its code: 0 outer cylinder (ir + 1), 1 inner cylinder (ir - 1),
+        2 upper z plane, 3 lower z plane (-1 if the ray never leaves the cell). The cylinder
+        crossings use the cancellation-free quadratic forms (``a = |u_xy|^2``, ``b = q.u_xy``)."""
+        qx = p[0] - origin[0]
+        qy = p[1] - origin[1]
+        a = u[0] * u[0] + u[1] * u[1]
+        b = qx * u[0] + qy * u[1]
+        q2 = qx * qx + qy * qy
+        best = big
+        code = int(-1)
+        if a > eps * eps:
+            ro = real(ir + 1) * spacing[0]
+            dlt = wp.max(ro * ro - q2, real(0.0))
+            s = wp.sqrt(b * b + a * dlt)
+            t = real(0.0)
+            if b < real(0.0):
+                t = (s - b) / a
+            elif b + s > real(0.0):
+                t = dlt / (b + s)
+            best = t
+            code = 0
+            if ir > 0 and b < real(0.0):
+                ri = real(ir) * spacing[0]
+                dli = wp.max(q2 - ri * ri, real(0.0))
+                disc = b * b - a * dli
+                if disc >= real(0.0):
+                    ti = dli / (s_neg(b, disc))
+                    if ti < best:
+                        best = ti
+                        code = 1
+        if wp.abs(u[2]) >= eps:
+            if u[2] > real(0.0):
+                dzv = wp.max((real(iz + 1) * spacing[2] + origin[2] - p[2]) / u[2], real(0.0))
+                if dzv < best:
+                    best = dzv
+                    code = 2
+            else:
+                dzv = wp.max((real(iz) * spacing[2] + origin[2] - p[2]) / u[2], real(0.0))
+                if dzv < best:
+                    best = dzv
+                    code = 3
+        return best, code
+
+    @named_func(name)
+    def seg_piece_cyl(
+        p: v3, u: v3, ir: int, iz: int, origin: v3, spacing: v3, remaining_mm: real
+    ) -> tuple[real, int]:
+        """:func:`seg_piece` of an annular grid: length [mm] of the next piece inside cell
+        ``(ir, iz)`` and the :func:`cyl_next` code of the face that ends it (-1 if the segment
+        ends inside the cell)."""
+        d, code = cyl_next(p, u, ir, iz, origin, spacing)
+        piece = remaining_mm
+        c = int(-1)
+        if d < remaining_mm:
+            piece = d
+            c = code
+        return piece, c
+
+    @named_func(name)
     def seg_piece(
         p: v3, u: v3, ix: int, iy: int, iz: int, origin: v3, spacing: v3, remaining_mm: real
     ) -> tuple[real, int]:
@@ -342,6 +448,10 @@ def make_transport_funcs(real: type) -> SimpleNamespace:
         select_step_nuclear=select_step_nuclear,
         point_on_hinge=point_on_hinge,
         grid_index=grid_index,
+        source_direction=source_direction,
+        cyl_index=cyl_index,
+        cyl_next=cyl_next,
+        seg_piece_cyl=seg_piece_cyl,
         ray_box=ray_box,
         gauss_pair=gauss_pair,
         gauss_one=gauss_one,

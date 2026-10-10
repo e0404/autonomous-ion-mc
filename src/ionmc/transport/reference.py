@@ -285,6 +285,17 @@ class _Reference:
     # Deposits are quantized (nearest multiple of QUANTUM_MEV, floor(x / q + 1/2)) and added to
     # int64 grids; the rounding residual of every in-grid piece is tallied per grid, deposits
     # outside a grid are tallied in float64 (see ionmc.transport.tally).
+    def _cell(self, g: int, p: object) -> tuple[int, int, int]:
+        """Cell of the point ``p`` in grid ``g``: the Cartesian voxel or, for an annular grid,
+        ``(ir, 0, iz)`` (the same functions as the Warp ``cell_index``)."""
+        grid = self.grids[g]
+        nx, ny, nz = grid.shape
+        if grid.kind == "annular":
+            ir, iz, _ = self.F.cyl_index(p, self.g_origin[g], self.g_inv[g], nx, nz)
+            return int(ir), 0, int(iz)
+        ix, iy, iz, _inside = self.F.grid_index(p, self.g_origin[g], self.g_inv[g], nx, ny, nz)
+        return ix, iy, iz
+
     def _deposit_voxel(self, batch: int, g: int, ix: int, iy: int, iz: int, de: float) -> int:
         """Deposit ``de`` into voxel ``(ix, iy, iz)`` of grid ``g``; returns its flat index, or -1
         if the voxel is outside the grid (the deposit is then tallied as outside)."""
@@ -322,9 +333,8 @@ class _Reference:
         """Point deposit (the energy left at the cutoff) in every grid."""
         r = self.R
         p = self.V(r(pos[0]), r(pos[1]), r(pos[2]))
-        for g, grid in enumerate(self.grids):
-            nx, ny, nz = grid.shape
-            ix, iy, iz, _inside = self.F.grid_index(p, self.g_origin[g], self.g_inv[g], nx, ny, nz)
+        for g in range(len(self.grids)):
+            ix, iy, iz = self._cell(g, p)
             self._score_local(
                 batch, g, self._deposit_voxel(batch, g, ix, iy, iz, de), de, species, gen
             )
@@ -349,19 +359,23 @@ class _Reference:
         ``w(t) = s_start + (s_end - s_start) t / s_act`` over it, divided by the integral over the
         whole step (the pieces of both legs sum to the deposit)."""
         r, F, V = self.R, self.F, self.V
-        nx, ny, nz = self.grids[g].shape
         go, gs = self.g_origin[g], self.g_spacing[g]
         og, sg = self.grids[g].origin_mm, self.grids[g].spacing_mm
+        annular = self.grids[g].kind == "annular"
         px, py, pz = p
         ux, uy, uz = u
         uvec = V(r(ux), r(uy), r(uz))
-        ix, iy, iz, _inside = F.grid_index(V(r(px), r(py), r(pz)), go, self.g_inv[g], nx, ny, nz)
+        ix, iy, iz = self._cell(g, V(r(px), r(py), r(pz)))
         remaining = length
         tcur = t_off
         for _ in range(self.max_pieces):
             if remaining > 0.0:
-                piece_w, axis = F.seg_piece(V(r(px), r(py), r(pz)), uvec, ix, iy, iz, go, gs,
-                                            r(remaining))  # fmt: skip
+                if annular:
+                    piece_w, axis = F.seg_piece_cyl(V(r(px), r(py), r(pz)), uvec, ix, iz, go, gs,
+                                                    r(remaining))  # fmt: skip
+                else:
+                    piece_w, axis = F.seg_piece(V(r(px), r(py), r(pz)), uvec, ix, iy, iz, go, gs,
+                                                r(remaining))  # fmt: skip
                 piece = float(piece_w)
                 tb = tcur + piece
                 eps_p = deposit * ramp_weight(tcur, tb, s_start, s_end, s_act)
@@ -373,7 +387,21 @@ class _Reference:
                     )  # fmt: skip
                 tcur = tb
                 remaining = remaining - piece
-                if axis >= 0:
+                if axis >= 0 and annular:
+                    px = px + ux * piece
+                    py = py + uy * piece
+                    pz = pz + uz * piece
+                    if axis == 0:
+                        ix = ix + 1
+                    elif axis == 1:
+                        ix = ix - 1
+                    elif axis == 2:
+                        pz = float(F.plane_position(iz, 1, r(og[2]), r(sg[2])))
+                        iz = iz + 1
+                    else:
+                        pz = float(F.plane_position(iz, 0, r(og[2]), r(sg[2])))
+                        iz = iz - 1
+                elif axis >= 0:
                     px = px + ux * piece
                     py = py + uy * piece
                     pz = pz + uz * piece
@@ -429,10 +457,7 @@ class _Reference:
         self, batch: int, g: int, pos: tuple[float, float, float], de: float
     ) -> None:
         r = self.R
-        nx, ny, nz = self.grids[g].shape
-        ix, iy, iz, _inside = self.F.grid_index(
-            self.V(r(pos[0]), r(pos[1]), r(pos[2])), self.g_origin[g], self.g_inv[g], nx, ny, nz
-        )
+        ix, iy, iz = self._cell(g, self.V(r(pos[0]), r(pos[1]), r(pos[2])))
         self._score_local(batch, g, self._deposit_voxel(batch, g, ix, iy, iz, de), de)
 
     # -- driver -------------------------------------------------------------------------------
@@ -859,6 +884,8 @@ class _Reference:
         z3 = F.gauss_one(r(u[2]), r(u[3]))
         d = self.eff.unit_direction
         e1v, e2v = F.orthonormal_basis(V(r(d[0]), r(d[1]), r(d[2])))
+        if src.angular_sigma_mrad > 0.0:  # purpose 1 block 1 is drawn only for an angular spread
+            d = self._angular_direction(key, h, d, e1v, e2v, z1, z2)
         energy = src.kinetic_energy_mev
         if src.energy_sigma_mev > 0.0:
             energy = energy + src.energy_sigma_mev * float(z3)
@@ -911,6 +938,30 @@ class _Reference:
         # species id, genealogy id, generation, the parent's geometry voxel indices, p1v1)
         while stack:
             self._particle(h, stack.pop(), stack)
+
+    def _angular_direction(
+        self,
+        key: tuple[int, int],
+        h: int,
+        d: tuple[float, float, float],
+        e1v: object,
+        e2v: object,
+        z1: float,
+        z2: float,
+    ) -> tuple[float, float, float]:
+        """Source direction with the angular spread (purpose 1 block 1: the normals ``g2``) and
+        the x-theta correlation, by the shared ``source_direction`` (the Warp kernels call the
+        same function)."""
+        r = self.R
+        src = self.cfg.source
+        w1 = draw_block(key, h, 0, 1, PURPOSE_SOURCE)
+        u1 = [u01_py(x, "float64") for x in w1]
+        g2a, g2b = self.F.gauss_pair(r(u1[0]), r(u1[1]))
+        dv = self.F.source_direction(
+            self.V(r(d[0]), r(d[1]), r(d[2])), e1v, e2v, z1, z2, g2a, g2b,
+            r(src.angular_sigma_mrad * 1.0e-3), r(src.x_theta_correlation),
+        )  # fmt: skip
+        return float(dv[0]), float(dv[1]), float(dv[2])
 
     def _set_species(self, species: int) -> None:
         """Switch the per-particle table, mass, cutoff and species id (nuclear runs: p or d)."""

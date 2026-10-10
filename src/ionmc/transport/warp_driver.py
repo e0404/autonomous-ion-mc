@@ -255,6 +255,8 @@ def run_warp_range(eff: EffectiveConfig, h0: int, h1: int, device: str) -> Parti
     ctl.e0 = wp.float64(src.kinetic_energy_mev)
     ctl.sigma_e = wp.float64(src.energy_sigma_mev)
     ctl.sigma_lat = real(src.lateral_sigma_mm)
+    ctl.sigma_theta = real(src.angular_sigma_mrad * 1.0e-3)
+    ctl.rho_xt = real(src.x_theta_correlation)
     ctl.c_alpha = wp.float64(ph.range_alpha)
     ctl.c_rho_f = wp.float64(ph.range_rho_f_mm)
     ctl.c_frac = wp.float64(ph.max_energy_loss_fraction)
@@ -276,7 +278,9 @@ def run_warp_range(eff: EffectiveConfig, h0: int, h1: int, device: str) -> Parti
     g_origin = np.array([list(g.origin_mm) for g in cfg.scoring])
     g_inv = np.array([[1.0 / x for x in g.spacing_mm] for g in cfg.scoring])
     g_spacing = np.array([list(g.spacing_mm) for g in cfg.scoring])
-    g_shape = np.array([list(g.shape) for g in cfg.scoring], dtype=np.int32)
+    g_shape = np.array(
+        [[*g.shape, 1 if g.kind == "annular" else 0] for g in cfg.scoring], dtype=np.int32
+    )  # column 3: grid kind
 
     nuclear = eff.nuclear is not None
     if nuclear:

@@ -543,8 +543,17 @@ def test_lv5c_suite_registration_names_seeds_timeouts_tags(
     assert rs.DEFAULT_SEED_BASES["lv5c"] == 20481004 == sm.V5C_QUALIFICATION_SEED_BASE
     assert "lv5c" in rs.SUITES and rs.DEFERRED_STEPS["lv5c"] == ()
     names = [n.split("-", 1)[1] for n in rs.full_step_names("lv5c", 2)]
-    assert names == [*(f"v7r-s{k}" for k in range(16)), "v7r-ref", "pytest-v7r-calibration",
-                     "v7r-combine", "v7r-diag", *v5c.V11_STEP_NAMES, "v11-compare"]  # fmt: skip
+    assert names == [
+        *(f"v7r-s{k}" for k in range(16)),
+        "v7r-ref",
+        "pytest-v7r-calibration",
+        "v7r-combine",
+        "v7r-diag",
+        *v5c.V11_STEP_NAMES,
+        "v11-compare",
+        "v6-unsized",
+        "v6-compare",
+    ]  # fmt: skip  (V6 steps, V3-005C C8; sized after Amendment 14a)
     steps = rs.suite_steps("lv5c", 1, 1.0)
     for name, cmd, env in steps:
         assert env["IONMC_REQUIRE_DATA"] == "1"
@@ -552,7 +561,9 @@ def test_lv5c_suite_registration_names_seeds_timeouts_tags(
             assert "tests/ionmc/test_v7r_coverage.py" in cmd and "--seed-base" not in cmd
             assert cmd[cmd.index("-m", 3) + 1] == "calibration"
             continue
-        assert "steps_v5c.py" in " ".join(cmd) and cmd[cmd.index("--seed-base") + 1] == "20481004"
+        assert ("steps_v5c.py" in " ".join(cmd) or "steps_v6.py" in " ".join(cmd)) and cmd[
+            cmd.index("--seed-base") + 1
+        ] == "20481004"
         assert "--timeout" in cmd
     by = {n.split("-", 1)[1]: c for n, c, _ in steps}
     for k in (0, 15):
@@ -564,7 +575,11 @@ def test_lv5c_suite_registration_names_seeds_timeouts_tags(
     full = rs.full_step_names("lv5c", 2)
     for n in full:
         base_name = n.split("-", 1)[1]
-        want = 1800 if base_name in ("v7r-combine", "v7r-diag", "v11-compare") else 3300
+        want = (
+            1800
+            if base_name in ("v7r-combine", "v7r-diag", "v11-compare", "v6-unsized", "v6-compare")
+            else 3300
+        )
         assert rs.step_timeout_s("lv5c", n, 1500) == want, n
     tags = {nm: sm.expected_tag(nm) for nm in full}
     assert tags["01-v7r-s0"] == tags["16-v7r-s15"] == "v7r-shard"

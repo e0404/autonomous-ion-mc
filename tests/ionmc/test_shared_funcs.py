@@ -699,6 +699,8 @@ EXERCISED = {
         "select_step", "select_step_nuclear", "point_on_hinge", "grid_index", "ray_box",
         "gauss_pair", "gauss_one",
         "orthonormal_basis",
+        # V3-005C C8: exercised by test_scoring_annular.py::test_u1_new_funcs_twin_equals_warp_cpu
+        "source_direction", "cyl_index", "cyl_next", "seg_piece_cyl",
     },
     "nu": {
         "nuclear_step_limit", "thinning_accept", "select_target", "poisson_inverse",

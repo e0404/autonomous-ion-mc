@@ -749,6 +749,11 @@ def compile_channels(
             )
         selected = _check_species_generation(req, producible)
         gi = grid_index[req.grid]
+        if grids[gi].kind != "cartesian":
+            raise fail(
+                f"tally {req.name!r}: scoring grid {req.grid!r} is annular; it scores the energy "
+                "deposit only (no tally channels)"
+            )
         used_grids.add(gi)
         gen = _generation_range(req.generation)
         li = -1

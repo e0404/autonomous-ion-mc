@@ -745,10 +745,18 @@ DATASETS: dict[str, Dataset] = {
                 "Gottschalk et al. e-print source with the measured log10 dose table (46 depths x "
                 "10 radii, 177 MeV beam) for row V6. Tool role evaluation; Amendment 14 label: "
                 "evaluation with shared beam lineage (calibration-type inputs: p1 and p5-p7 come "
-                "from the paper's fit to the same table)."
+                "from the paper's fit to the same table). Two uses (Amendment 17 (c)10): tbl:dmlg "
+                "is evaluation (measured) and is read only by the V6 comparator; tbl:parms "
+                "(p1, p2, p5-p7) is a construction input of the V6 beam (E0 from R0, sigma_x, "
+                "sigma_theta and the x-theta correlation), never used for the dose comparison. "
+                "The construction role is appended to the arXiv:1409.1938 acquisition's "
+                "role record."
             ),
             role="evaluation",
-            lineage="evaluation with shared beam lineage (calibration-type inputs)",
+            lineage=(
+                "evaluation with shared beam lineage (calibration-type inputs); tbl:parms is "
+                "construction for the beam only"
+            ),
         ),
         Dataset(
             id="arxiv-0908-1413-source",

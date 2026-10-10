@@ -105,6 +105,8 @@ def make_kernel_support(real: type) -> SimpleNamespace:
         "e0": D,
         "sigma_e": D,
         "sigma_lat": R,
+        "sigma_theta": R,
+        "rho_xt": R,
         "c_alpha": D,
         "c_rho_f": D,
         "c_frac": D,
@@ -274,6 +276,35 @@ def make_kernel_support(real: type) -> SimpleNamespace:
                 )  # fmt: skip
 
     @named_func(name)
+    def cell_index(
+        p: v3, go: v3, gi: v3, nxg: int, nyg: int, nzg: int, kind: int
+    ) -> tuple[int, int, int, int]:
+        """Cell of ``p`` in a scoring grid: Cartesian voxel ``(ix, iy, iz)`` (``kind`` 0) or the
+        annular cell ``(ir, 0, iz)`` (``kind`` 1, shape ``(n_r, 1, n_z)``)."""
+        ix, iy, iz, inside = F.grid_index(p, go, gi, nxg, nyg, nzg)
+        if kind != 0:
+            ir, izc, inside_c = F.cyl_index(p, go, gi, nxg, nzg)
+            ix = ir
+            iy = 0
+            iz = izc
+            inside = inside_c
+        return ix, iy, iz, inside
+
+    @named_func(name)
+    def piece_any(
+        p: v3, u: v3, ix: int, iy: int, iz: int, go: v3, gs: v3, remaining: R, kind: int
+    ) -> tuple[R, int]:
+        """Next DDA piece of a leg in a Cartesian (``seg_piece``) or annular (``seg_piece_cyl``)
+        grid; ``axis`` is the crossed axis (Cartesian) or the ``cyl_next`` face code."""
+        piece = R(remaining)
+        axis = int(-1)
+        if kind == 0:
+            piece, axis = F.seg_piece(p, u, ix, iy, iz, go, gs, remaining)
+        else:
+            piece, axis = F.seg_piece_cyl(p, u, ix, iz, go, gs, remaining)
+        return piece, axis
+
+    @named_func(name)
     def deposit_voxel(
         edep: wp.array2d(dtype=wp.int64),
         tally_rows: wp.array2d(dtype=wp.float64),
@@ -326,7 +357,7 @@ def make_kernel_support(real: type) -> SimpleNamespace:
             nxg = g_shape[g, 0]
             nyg = g_shape[g, 1]
             nzg = g_shape[g, 2]
-            ix, iy, iz, inside = F.grid_index(p, go, gi, nxg, nyg, nzg)
+            ix, iy, iz, inside = cell_index(p, go, gi, nxg, nyg, nzg, g_shape[g, 3])
             deposit_voxel(
                 edep, tally_rows, tid, batch, g, ix, iy, iz, nxg, nyg, nzg, g_off[g], n_grids, de
             )
@@ -382,16 +413,17 @@ def make_kernel_support(real: type) -> SimpleNamespace:
         nyg = g_shape[g, 1]
         nzg = g_shape[g, 2]
         off = g_off[g]
+        kind = g_shape[g, 3]
         px = R(px0)
         py = R(py0)
         pz = R(pz0)
         uvec = v3(ux, uy, uz)
-        ix, iy, iz, inside0 = F.grid_index(v3(px, py, pz), go, gi, nxg, nyg, nzg)
+        ix, iy, iz, inside0 = cell_index(v3(px, py, pz), go, gi, nxg, nyg, nzg, kind)
         remaining = R(length)
         tcur = D(t_off)
         for _it in range(max_pieces):
             if remaining > R(0.0):
-                piece, axis = F.seg_piece(v3(px, py, pz), uvec, ix, iy, iz, go, gs, remaining)
+                piece, axis = piece_any(v3(px, py, pz), uvec, ix, iy, iz, go, gs, remaining, kind)
                 tb = tcur + D(piece)
                 eps_p = deposit * ramp_weight(tcur, tb, s_start, s_end, D(s_act))
                 deposit_voxel(
@@ -410,25 +442,37 @@ def make_kernel_support(real: type) -> SimpleNamespace:
                     px = px + ux * piece
                     py = py + uy * piece
                     pz = pz + uz * piece
-                    ua = R(ux)
-                    if axis == 1:
-                        ua = uy
-                    if axis == 2:
-                        ua = uz
-                    upward = int(0)
-                    step_i = int(-1)
-                    if ua > R(0.0):
-                        upward = 1
-                        step_i = 1
-                    if axis == 0:
-                        px = F.plane_position(ix, upward, go[0], gs[0])
-                        ix = ix + step_i
-                    if axis == 1:
-                        py = F.plane_position(iy, upward, go[1], gs[1])
-                        iy = iy + step_i
-                    if axis == 2:
-                        pz = F.plane_position(iz, upward, go[2], gs[2])
-                        iz = iz + step_i
+                    if kind == 0:
+                        ua = R(ux)
+                        if axis == 1:
+                            ua = uy
+                        if axis == 2:
+                            ua = uz
+                        upward = int(0)
+                        step_i = int(-1)
+                        if ua > R(0.0):
+                            upward = 1
+                            step_i = 1
+                        if axis == 0:
+                            px = F.plane_position(ix, upward, go[0], gs[0])
+                            ix = ix + step_i
+                        if axis == 1:
+                            py = F.plane_position(iy, upward, go[1], gs[1])
+                            iy = iy + step_i
+                        if axis == 2:
+                            pz = F.plane_position(iz, upward, go[2], gs[2])
+                            iz = iz + step_i
+                    else:
+                        if axis == 0:
+                            ix = ix + 1
+                        if axis == 1:
+                            ix = ix - 1
+                        if axis == 2:
+                            pz = F.plane_position(iz, 1, go[2], gs[2])
+                            iz = iz + 1
+                        if axis == 3:
+                            pz = F.plane_position(iz, 0, go[2], gs[2])
+                            iz = iz - 1
         overflow = int(0)
         if remaining > R(0.0):
             overflow = 1
@@ -495,7 +539,7 @@ def make_kernel_support(real: type) -> SimpleNamespace:
                 nxg = g_shape[g, 0]
                 nyg = g_shape[g, 1]
                 nzg = g_shape[g, 2]
-                ix, iy, iz, inside = F.grid_index(p0, go, gi, nxg, nyg, nzg)
+                ix, iy, iz, inside = cell_index(p0, go, gi, nxg, nyg, nzg, g_shape[g, 3])
                 deposit_voxel(
                     edep, tally_rows, tid, batch, g, ix, iy, iz, nxg, nyg, nzg, g_off[g], n_grids,
                     deposit,
@@ -637,6 +681,10 @@ def make_transport_kernel(real: type, diag: bool, nuclear: bool = False):
         z3 = F.gauss_one(PH.u01(w[2]), PH.u01(w[3]))
         d = ctl.dir
         e1v, e2v = F.orthonormal_basis(d)
+        if ctl.sigma_theta > zero:  # purpose 1 block 1 is drawn only for an angular spread
+            w1 = PH.philox_block(h, u_zero, wp.uint32(1), p_source, key)
+            g2a, g2b = F.gauss_pair(PH.u01(w1[0]), PH.u01(w1[1]))
+            d = F.source_direction(d, e1v, e2v, z1, z2, g2a, g2b, ctl.sigma_theta, ctl.rho_xt)
         energy = D(ctl.e0)
         if ctl.sigma_e > zd:
             energy = energy + ctl.sigma_e * D(z3)

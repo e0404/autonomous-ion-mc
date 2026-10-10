@@ -4,7 +4,7 @@
 
 Usage (argv only, no shell; the host runner executes exactly this)::
 
-    python validation/scripts/transport/run_suite.py --suite {lv,hr,lv4,hr4,lv5,lv5b,hr5,lv5c} \
+    python validation/scripts/transport/run_suite.py --suite {lv,hr,lv4,hr4,lv5,lv5b,hr5,lv5c,hr5c} \
         --out validation/generated/transport/<new-dir> --expected-sha <40 hex> \
         [--workers N|auto] [--step-timeout SECONDS] [--scale F] [--python-parts N] \
         [--only STEP ...] [--import-dirs DIR ...] [--seed-base INT]
@@ -84,7 +84,8 @@ STEPS_V4 = HERE / "steps_v4.py"
 STEPS_V5 = HERE / "steps_v5.py"
 STEPS_V5B = HERE / "steps_v5b.py"
 STEPS_V5C = HERE / "steps_v5c.py"
-SUITES = ("lv", "hr", "lv4", "hr4", "lv5", "lv5b", "hr5", "lv5c")
+STEPS_V6 = HERE / "steps_v6.py"
+SUITES = ("lv", "hr", "lv4", "hr4", "lv5", "lv5b", "hr5", "lv5c", "hr5c")
 PY = sys.executable
 SOURCE_PREFIXES = (
     "src/ionmc",
@@ -173,6 +174,8 @@ SOURCE_FILES_V5C = (
     *SOURCE_FILES_V5B,
     *V11_CASE_FILES,
     "validation/scripts/transport/steps_v5c.py",
+    "validation/scripts/transport/steps_v6.py",
+    "validation/scripts/reference/gottschalk_v6.py",
     "validation/scripts/transport/v7r.py",
 )
 """The hashed set of the suite ``lv5c`` (V3-005C): the lv5b set plus the slice-C step modules (the
@@ -183,7 +186,7 @@ SOURCE_FILES_V5C = (
 def source_file_list(suite: str | None = None) -> tuple[str, ...]:
     """Individually hashed files of ``suite`` (default: the suite named by ``IONMC_RUN_SUITE``)."""
     suite = suite or os.environ.get("IONMC_RUN_SUITE", "")
-    if suite == "lv5c":
+    if suite in ("lv5c", "hr5c"):
         return SOURCE_FILES_V5C
     if suite in ("lv5b", "hr5"):
         return SOURCE_FILES_V5B
@@ -207,6 +210,7 @@ V5B_CONSUMED_SEED_BASES = (20441004,)  # amendment 11: consumed by the failed V7
 HR5_QUALIFICATION_SEED_BASE = 20451004  # amendment 6 (hr5)
 V5C_CONSUMED_SEED_BASES = (20471004, 20451004, 20441004)  # lv5b, hr5, b40d8121 evidence bases
 V5C_QUALIFICATION_SEED_BASE = 20481004  # amendment 14 (j) (lv5c); rehearsals 20505000-20509499
+HR5C_QUALIFICATION_SEED_BASE = 20491004  # amendment 14 (j) (hr5c: V6 on CUDA, r_index 3)
 V3003D_REHEARSAL_FAMILY = "2041xxxx"  # rehearsals of V3-003D, never qualification evidence
 DEFAULT_SEED_BASES = {
     "lv": QUALIFICATION_SEED_BASE,
@@ -217,6 +221,7 @@ DEFAULT_SEED_BASES = {
     "lv5b": V5B_QUALIFICATION_SEED_BASE,
     "hr5": HR5_QUALIFICATION_SEED_BASE,
     "lv5c": V5C_QUALIFICATION_SEED_BASE,
+    "hr5c": HR5C_QUALIFICATION_SEED_BASE,
 }
 REHEARSAL_SEED_BASE = 20261004
 CONSUMED_SEED_BASE = 20271004  # used by the T9 investigation: not a qualification base
@@ -244,11 +249,18 @@ DEFERRED_STEPS = {
     "lv5b": ("v3-workers-partition",),
     "hr5": (),
     "lv5c": (),
+    "hr5c": (),
 }
 """Steps whose purpose is the worker-partition invariance (1 versus N worker processes): they are
 not executed in the single-process diagnostic mode and recorded as ``deferred``. Steps that merely
 use workers for speed run with one worker, with unchanged histories, seeds and criteria."""
 
+
+V6_SENS_VARIANTS = ("nominal", "sx-lo", "sx-hi", "st-lo", "st-hi", "rho-lo", "rho-hi", "r0-lo", "r0-hi")
+"""The nine V6-sens runs (common random numbers); ``gottschalk_v6.SENS_NAMES`` must equal it (a test)."""
+V6_SHARDS: int | None = None
+"""N_V6, the number of 1e6-history shards of row V6 (plan Amendment 14 (g)): ``None`` until Amendment 14a fixes it
+after the C8 rehearsal; the V6 steps then fail closed (``v6-unsized``). ``steps_v6.V6_SHARDS`` must equal it (a test)."""
 
 V7R_SHARDS = 16
 """Number of shard steps ``v7r-s{k}`` of V7-R (Amendment 14 (h): sixteen simulations of 4.5e6 histories); defined
@@ -284,7 +296,10 @@ STEP_TIMEOUT_FLOOR_S = {
         **{f"pytest-v7r-calibration-s{k}": 3300 for k in range(3)},
         **{f"v11-ionmc-{e}-{m}": 3300 for e in (150, 200) for m in ("emel", "emonly")},
         "v11-compare": 1800,
+        **{f"v6-s{k}": 3300 for k in range(64)}, "v6-unsized": 1800, "v6-compare": 1800,
+        **{f"v6-sens-{v}-s{k}": 3300 for v in V6_SENS_VARIANTS for k in range(64)},
     },
+    "hr5c": {**{f"v6-cuda-s{k}": 3600 for k in range(64)}, "v6-unsized": 1800, "v6-cuda-compare": 1800},
     "hr5": {
         "v8-stat-python-s0": 3600, "v8-stat-python-s1": 3600, "v8-stat-cpu64": 3600,
         "v8-stat-cuda32": 3600, "v8-stat-cuda64": 3600, "v7-f32-f64-cuda": 3600,
@@ -347,17 +362,18 @@ def suite_steps(
     st = [PY, str(STEPS)]
     w = ["--workers", str(workers)]
     sc = ["--scale", str(scale)]
-    cuda = {"IONMC_REQUIRE_CUDA": "1"} if suite in ("hr", "hr4", "hr5") else {}
+    cuda = {"IONMC_REQUIRE_CUDA": "1"} if suite in ("hr", "hr4", "hr5", "hr5c") else {}
     s4 = [PY, str(STEPS_V4)]
     s5 = [PY, str(STEPS_V5)]
     s5b = [PY, str(STEPS_V5B)]
     s5c = [PY, str(STEPS_V5C)]
+    s6 = [PY, str(STEPS_V6)]
     steps: list[tuple[str, list[str], dict[str, str]]] = []
 
     def add(name: str, cmd: list[str], env: dict[str, str] | None = None) -> None:
         full = f"{len(steps) + 1:02d}-{name}"
         if cmd[:2] in ([PY, str(STEPS)], [PY, str(STEPS_V4)], [PY, str(STEPS_V5)], [PY, str(STEPS_V5B)],
-                      [PY, str(STEPS_V5C)]):
+                      [PY, str(STEPS_V5C)], [PY, str(STEPS_V6)]):
             eff = step_timeout_s(suite, full, step_timeout)
             inner = ["--timeout", str(max(30, int(0.9 * eff)))]  # the pool cleans up first
             cmd = [*cmd, *inner, "--seed-base", str(seed_base)]  # every seed derives from the base
@@ -386,6 +402,13 @@ def suite_steps(
             raise SystemExit("lv5c --import-dirs requires --partials-manifest (name -> sha256)")
         pm = ["--partials-manifest", str(partials_manifest)] if import_dirs else []
         _suite_steps_v5c(add, sc, out_dir, [*dirs, *pm], s5c)
+        _suite_steps_v6(add, sc, out_dir, [*dirs, *pm], s6, cuda=False)
+        return steps
+    if suite == "hr5c":
+        if import_dirs and partials_manifest is None:
+            raise SystemExit("hr5c --import-dirs requires --partials-manifest (name -> sha256)")
+        pm = ["--partials-manifest", str(partials_manifest)] if import_dirs else []
+        _suite_steps_v6(add, sc, out_dir, [*dirs, *pm], s6, cuda=True)
         return steps
     if suite in ("lv4", "hr4"):
         _suite_steps_v4(suite, add, s4, w, sc, cuda, out_dir, dirs, single_process)
@@ -607,6 +630,30 @@ def _suite_steps_v5c(add, sc, out_dir, dirs, s5c):  # type: ignore[no-untyped-de
             add(f"v11-ionmc-{e}-{m}", [*s5c, "v11-ionmc", "--energy", str(e), "--mode", m,
                                        "--out-dir", str(out_dir), *sc], env)  # fmt: skip
     add("v11-compare", [*s5c, "v11-compare", "--dirs", *dirs, *sc], env)
+
+
+def _suite_steps_v6(add, sc, out_dir, dirs, s6, cuda):  # type: ignore[no-untyped-def]
+    """Steps of row V6 / V6-sens (``steps_v6.py``; plan Amendment 14 (g), Amendment 17 (c)). lv5c: ``v6-s{k}``
+    (r_index 12), the nine ``v6-sens-{variant}-s{k}`` (r_index 20, common random numbers) and ``v6-compare``;
+    hr5c: ``v6-cuda-s{k}`` (r_index 3, one controlling process) and ``v6-cuda-compare``. While
+    ``V6_SHARDS`` is ``None`` (until Amendment 14a) the single step ``v6-unsized`` fails closed in place of the
+    shards."""
+    env = {**NUCLEAR_ENV, **({"IONMC_REQUIRE_CUDA": "1"} if cuda else {})}
+    n = V6_SHARDS
+    if n is None:
+        add("v6-unsized", [*s6, "v6-unsized", *sc], env)
+    elif cuda:
+        for k in range(n):
+            add(f"v6-cuda-s{k}", [*s6, "v6-cuda-shard", "--shard", str(k), "--out-dir", str(out_dir), *sc], env)
+    else:
+        for k in range(n):
+            add(f"v6-s{k}", [*s6, "v6-shard", "--shard", str(k), "--out-dir", str(out_dir), *sc], env)
+        for v in V6_SENS_VARIANTS:
+            for k in range(n):
+                add(f"v6-sens-{v}-s{k}", [*s6, "v6-sens-shard", "--variant", v, "--shard", str(k),
+                                          "--out-dir", str(out_dir), *sc], env)  # fmt: skip
+    add("v6-cuda-compare" if cuda else "v6-compare",
+        [*s6, "v6-cuda-compare" if cuda else "v6-compare", "--dirs", *dirs, *sc], env)
 
 
 def _suite_steps_hr5(add, s5b, sc, out_dir, dirs, cuda):  # type: ignore[no-untyped-def]
@@ -1066,12 +1113,17 @@ def main(argv: list[str] | None = None) -> int:
             f"seed base {args.seed_base} is consumed for lv5b (amendment 11 of the V3-005 plan); "
             f"the qualification base is {V5B_QUALIFICATION_SEED_BASE}"
         )
+    if args.suite == "hr5c" and args.seed_base in (*V5C_CONSUMED_SEED_BASES, V5C_QUALIFICATION_SEED_BASE):
+        raise SystemExit(
+            f"seed base {args.seed_base} is consumed or belongs to lv5c; the hr5c qualification base is "
+            f"{HR5C_QUALIFICATION_SEED_BASE}"
+        )
     if args.suite == "lv5c" and args.seed_base in V5C_CONSUMED_SEED_BASES:
         raise SystemExit(
             f"seed base {args.seed_base} is a consumed evidence base (lv5b/hr5/b40d8121); the lv5c "
             f"qualification base is {V5C_QUALIFICATION_SEED_BASE}"
         )
-    workers = 1 if args.single_process or args.suite in ("lv5", "lv5b", "hr5", "lv5c") else resolve_workers(args.workers)
+    workers = 1 if args.single_process or args.suite in ("lv5", "lv5b", "hr5", "lv5c", "hr5c") else resolve_workers(args.workers)
     if workers < 1 or args.step_timeout < 1 or not 0.0 < args.scale <= 1.0:
         raise SystemExit("need --workers >= 1, --step-timeout >= 1 and 0 < --scale <= 1")
     single = workers == 1

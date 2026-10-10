@@ -1407,14 +1407,18 @@ LV5_SLICE_B = {"V2b", "V5", "V6", "V7", "V8"}
 PLAN_ROWS_PENDING_STEPS = frozenset(
     {
         "P6", "P7", "P5-ext", "V10", "V10-A", "X-ENDF", "C1-ext", "R1-D2", "E1-B",
-        "D9-BGG", "V6-sens", "V8-nuc", "V2b-el", "V7-scan-el", "V7-shift-el",
+        "D9-BGG", "V8-nuc", "V2b-el", "V7-scan-el", "V7-shift-el",
         "P6-D", "E-shape", "X-MT5-SPEC",
     }
 )  # fmt: skip
 
 
 # V3-005C rows whose lv5c/hr5c step has landed -> (suite, step)
-SLICE_C_ROWS = {"V7-R": ("lv5c", "v7r-combine"), "V11": ("lv5c", "v11-compare")}
+SLICE_C_ROWS = {
+    "V7-R": ("lv5c", "v7r-combine"), "V11": ("lv5c", "v11-compare"),
+    "V6-sens": ("lv5c", "v6-compare"),  # the V6-sens status is evaluated inside v6-compare
+    "V6": (("lv5c", "v6-compare"), ("hr5c", "v6-cuda-compare")),  # both backends must pass
+}  # fmt: skip
 
 
 def _plan_rows() -> list[str]:
@@ -1466,8 +1470,12 @@ def test_plan_rows_pending_steps_are_plan_rows() -> None:
     assert not PLAN_ROWS_PENDING_STEPS & (set(LV5_ROW_STEP) | LV5_NOT_IN_SUITE | LV5_SLICE_B)
     assert not PLAN_ROWS_PENDING_STEPS & set(SLICE_C_ROWS)
     mod = _load("run_suite")
-    for row, (suite, step) in SLICE_C_ROWS.items():
-        assert row in rows and step in {n.split("-", 1)[1] for n in mod.full_step_names(suite, 2)}
+    for row, spec in SLICE_C_ROWS.items():
+        pairs = spec if isinstance(spec[0], tuple) else (spec,)
+        for suite, step in pairs:
+            assert row in rows and step in {
+                n.split("-", 1)[1] for n in mod.full_step_names(suite, 2)
+            }
 
 
 def test_lv5_plan_rows_are_all_accounted_for_and_seeds_match_the_plan() -> None:
@@ -1699,7 +1707,7 @@ SLICE_B_ROWS = {
     "V2b": ("lv5b", "v2b-combine"), "V5": ("lv5b", "v5-compare"), "V7": ("lv5b", "v7-rep-combine"),
     "V8": ("lv5b", "v8-lv-python-vs-warp-cpu"),
 }  # fmt: skip
-SLICE_B_DEFERRED = {"V6": "V3-005C"}
+SLICE_B_DEFERRED: dict[str, str] = {}  # V6 moved to SLICE_C_ROWS (V3-005C C8)
 
 
 def summ_tag_none(name: str) -> bool:
@@ -1771,7 +1779,9 @@ def test_slice_b_rows_have_steps_or_are_declared_and_seeds_match_plan() -> None:
     mod, v5b = _load("run_suite"), _load("steps_v5b")
     plan = PLAN5.read_text()
     rows = set(_plan_rows())
-    assert set(SLICE_B_ROWS) | set(SLICE_B_DEFERRED) == LV5_SLICE_B
+    assert (
+        set(SLICE_B_ROWS) | set(SLICE_B_DEFERRED) | {"V6"} == LV5_SLICE_B and "V6" in SLICE_C_ROWS
+    )
     assert LV5_SLICE_B <= rows
     for row, (suite, step) in SLICE_B_ROWS.items():
         assert step in {n.split("-", 1)[1] for n in mod.full_step_names(suite, 2)}, row
@@ -2201,3 +2211,73 @@ def test_lv5b_warp_cpu_producer_config_validates() -> None:
     )
     eff = validate(cfg)
     assert eff.nuclear is not None and eff.nuclear.elastic is None
+
+
+# ---- V6 / V6-sens registration (V3-005C C8) ------------------------------------------------------
+def test_v6_registration_lv5c_hr5c_and_fail_closed_shards() -> None:
+    mod = _load("run_suite")
+    assert mod.V6_SHARDS is None and "hr5c" in mod.SUITES
+    lv = [n.split("-", 1)[1] for n in mod.full_step_names("lv5c", 2)]
+    assert (
+        "v6-unsized" in lv and lv[-1] == "v6-compare" and not any(n.startswith("v6-s") for n in lv)
+    )
+    assert [n.split("-", 1)[1] for n in mod.full_step_names("hr5c", 2)] == [
+        "v6-unsized",
+        "v6-cuda-compare",
+    ]
+    assert mod.DEFAULT_SEED_BASES["hr5c"] == 20491004
+    mod.V6_SHARDS = 2
+    try:
+        names = [n.split("-", 1)[1] for n in mod.full_step_names("lv5c", 2)]
+        assert "v6-unsized" not in names and {"v6-s0", "v6-s1", "v6-compare"} <= set(names)
+        for v in (
+            "nominal",
+            "sx-lo",
+            "sx-hi",
+            "st-lo",
+            "st-hi",
+            "rho-lo",
+            "rho-hi",
+            "r0-lo",
+            "r0-hi",
+        ):
+            assert {f"v6-sens-{v}-s0", f"v6-sens-{v}-s1"} <= set(names)
+        assert [n.split("-", 1)[1] for n in mod.full_step_names("hr5c", 2)] == [
+            "v6-cuda-s0",
+            "v6-cuda-s1",
+            "v6-cuda-compare",
+        ]
+        steps = mod.suite_steps("hr5c", 1, 1.0, python_parts=2)
+        for _, cmd, env in steps:
+            assert (
+                env["IONMC_REQUIRE_CUDA"] == "1"
+                and "--seed-base" in cmd
+                and cmd[cmd.index("--seed-base") + 1] == "20491004"
+            )
+        assert mod.step_timeout_s("hr5c", "01-v6-cuda-s0", 1500) == 3600
+        assert (
+            mod.step_timeout_s("lv5c", "02-v6-s0", 1500) == 3300
+            and mod.step_timeout_s("lv5c", "99-v6-compare", 1500) == 1800
+        )
+    finally:
+        mod.V6_SHARDS = None
+
+
+def test_v6_tags_hashed_set_and_seed_refusals() -> None:
+    mod, summ = _load("run_suite"), _load("summarize")
+    for name, tag in (
+        ("03-v6-s0", "v6-shard"),
+        ("04-v6-sens-nominal-s1", "v6-sens-shard"),
+        ("09-v6-compare", "v6-compare"),
+        ("02-v6-cuda-s3", "v6-cuda-shard"),
+        ("05-v6-cuda-compare", "v6-cuda-compare"),
+    ):
+        assert summ.expected_tag(name) == tag, name
+    for suite in ("lv5c", "hr5c"):
+        listed = mod.source_file_list(suite)
+        assert (
+            "validation/scripts/reference/gottschalk_v6.py" in listed
+            and "validation/scripts/transport/steps_v6.py" in listed
+        )
+    assert summ.seed_blockers(20491004, "hr5c") == [] and summ.seed_blockers(20481004, "hr5c")
+    assert summ.seed_blockers(20471004, "hr5c") and summ.seed_blockers(20491004, "lv5c")

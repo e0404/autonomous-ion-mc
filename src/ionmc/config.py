@@ -300,6 +300,14 @@ class EffectiveConfig:
                 "kinetic_energy_mev": s.kinetic_energy_mev,
                 "energy_sigma_mev": s.energy_sigma_mev,
                 "lateral_sigma_mm": s.lateral_sigma_mm,
+                **(
+                    {
+                        "angular_sigma_mrad": s.angular_sigma_mrad,
+                        "x_theta_correlation": s.x_theta_correlation,
+                    }
+                    if s.angular_sigma_mrad > 0.0
+                    else {}
+                ),
             },
             "physics": {
                 "nuclear": p.nuclear,
@@ -331,6 +339,7 @@ class EffectiveConfig:
                     "origin_mm": list(g.origin_mm),
                     "spacing_mm": list(g.spacing_mm),
                     "shape": list(g.shape),
+                    **({"kind": g.kind} if g.kind != "cartesian" else {}),
                 }
                 for g in self.requested.scoring
             ],
