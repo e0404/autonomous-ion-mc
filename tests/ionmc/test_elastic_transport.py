@@ -170,6 +170,41 @@ def test_event_parity_on_recorded_inputs(many: tuple[Any, Any]) -> None:
     assert n_pp > 0 and n_pa > 0
 
 
+def _many_part(tid: str, *, trace: int, track_end: bool = False) -> Any:
+    n = 32
+    with pytest.MonkeyPatch.context() as mp:
+        _scale_elastic(mp, 30.0)
+        cfg = _cfg(tid, 150.0, n)
+        cfg = replace(
+            cfg,
+            diagnostics=DiagnosticsOptions(track_end_positions=track_end, trace_histories=trace),
+        )
+        return run_reference_range(Simulation(cfg).effective, 0, n)
+
+
+def test_elastic_trace_off_with_trace_histories_zero(tid: str) -> None:
+    """Finding B: endpoint diagnostics alone do not record elastic events; with trace_histories == 0
+    the elastic trace is absent (as the nuclear-trace rows are empty), the tallies are unchanged."""
+    part = _many_part(tid, trace=0, track_end=True)
+    assert "elastic_trace" not in part.meta
+    assert all(v.shape[0] == 0 for v in part.meta["nuclear_trace"].values())
+    ref = _many_part(tid, trace=0)
+    assert _digest(part) == _digest(ref)
+
+
+def test_elastic_trace_limited_to_first_k_histories(tid: str) -> None:
+    """Finding B: with trace_histories = k only the events of histories < k are recorded (rows equal
+    the history < k rows of the full trace); the tallies still count the events of all histories."""
+    k = 8
+    full = _many_part(tid, trace=32)
+    part = _many_part(tid, trace=k, track_end=True)
+    tf, tk = full.meta["elastic_trace"], part.meta["elastic_trace"]
+    assert (tf[:, 0] >= k).any() and tk.shape[0] > 0
+    assert (tk[:, 0] < k).all()
+    np.testing.assert_array_equal(tk, tf[tf[:, 0] < k])
+    assert _digest(part) == _digest(full)
+
+
 def test_kinematics_closure_and_energy_conservation(many: tuple[Any, Any]) -> None:
     """Row P6 (7) and per-event conservation: T_in = T_primary + T_other to 1e-9 MeV, the primary
     direction is a unit vector, p-p keeps the faster proton, and the numpy oracle closes."""

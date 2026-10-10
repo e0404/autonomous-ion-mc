@@ -11,15 +11,14 @@ Every dataset carries an evidence ``role`` (``experiment/v3/TELEMETRY.md``): ``c
 imports no parser.
 
 V3-005C (acceptance Amendment 14 (l), step C1b): the elastic-scattering acquisitions are registered
-here (EXFOR entries, the arXiv:1409.1938 e-print, six Geant4 11.4.2 source files). ``role`` is the
-role recorded by the acquisition tool (the tool accepts only the four roles above); the finer
-label of the amendment (e.g. "related-model evidence (shared/related lineage)", "report-only",
-"evaluation with shared beam lineage") is in ``lineage`` and in the description, and where the two
-differ the label decides how a row is judged. Data finding (decision 0041, rejected alternative
-(i)): above about 20 MeV the O-16 MT2 data of the LA150 proton evaluation (MF3 and the MF6 LAW=5
-tables) are a numerical copy of C-12; the elastic builder asserts this fail-closed and never uses
-the O-16 MT2 as a construction input.
-"""
+here (EXFOR entries, the arXiv:1409.1938 and arXiv:0908.1413 e-prints, Geant4 11.4.2 source files).
+``role`` is the role recorded by the acquisition tool (the tool accepts only the four roles above);
+the finer label of the amendment (e.g. "related-model evidence (shared/related lineage)",
+"report-only", "evaluation with shared beam lineage") is in ``lineage`` and in the description, and
+where the two differ the label decides how a row is judged. Data finding (decision 0041, rejected
+alternative (i)): above about 20 MeV the O-16 MT2 data of the LA150 proton evaluation (MF3 and the
+MF6 LAW=5 tables) are a numerical copy of C-12; the elastic builder asserts this fail-closed and
+never uses the O-16 MT2 as a construction input."""
 
 from __future__ import annotations
 
@@ -750,6 +749,34 @@ DATASETS: dict[str, Dataset] = {
             ),
             role="evaluation",
             lineage="evaluation with shared beam lineage (calibration-type inputs)",
+        ),
+        Dataset(
+            id="arxiv-0908-1413-source",
+            version="arXiv:0908.1413 e-print (source tarball, https://arxiv.org/src/0908.1413)",
+            url="https://arxiv.org/src/0908.1413",
+            method="GET",
+            post_body=None,
+            sha256="67fb1478e51534064f0e5363b1ee4160da2a37a600f51897b56dd74ea22ba5ed",
+            bytes=508858,
+            license=(
+                "arXiv non-exclusive distribution licence unless stated by the author "
+                "(licence field of the abs page not verified)"
+            ),
+            citation=(
+                "B. Gottschalk, On the scattering power of radiotherapy protons, arXiv:0908.1413 "
+                "(2009), e-print source (ScatPowerV2.tex); published as Med. Phys. 37 (2010) 352"
+            ),
+            parser="latex-source",
+            description=(
+                "Primary source of the differential-Moliere factor f_dM of "
+                "ionmc.physics.em.scattering_power_dm, read to settle plan Amendment 15 (d)2 "
+                "(decision 0041, C3 review): f_dM is a bilinear fit to the ratio T_Hanson/T_IC "
+                "computed from Moliere/Fano/Hanson theory for Be, Cu and Pb; no measured "
+                "scattering data enter the fit. Report-only provenance evidence; not a "
+                "construction or calibration input."
+            ),
+            role="evaluation",
+            lineage="report-only (provenance of the MCS model; theory-only calibration)",
         ),
         Dataset(
             id="geant4-g4nuclearradii-cc-11.4.2",

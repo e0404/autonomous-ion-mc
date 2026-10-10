@@ -2111,3 +2111,80 @@ def test_every_step_gets_the_fault_handler_environment() -> None:
     for suite in ("lv5b", "hr5"):
         for name, _cmd, env in mod.suite_steps(suite, 1, 0.5):
             assert env.get("PYTHONFAULTHANDLER") == "1", (suite, name)
+
+
+# ---- frozen suites lv5 / lv5b / hr5 pin elastic=False (V3-005C C3 review finding A) ------------
+def _frozen_suite_configs() -> list[tuple[str, object]]:
+    """Every nuclear-on configuration the producers of lv5, lv5b and hr5 build without running
+    transport: the shared ``steps_v5.nuc_config`` (all lv5 steps), its re-targeting ``wcfg`` for
+    every backend, the V7 shard config and the V8 statistical sample configs of hr5."""
+    v5, v5b = _load("steps_v5"), _load("steps_v5b")
+    from ionmc import materials as M
+
+    geo, grid, _, _ = v5.depth_box(M.WATER, 60.0)
+    kw = dict(energy=60.0, n=8, seed=1, geometry=geo, grid=grid, n_batches=2)
+    out: list[tuple[str, object]] = [("v5.nuc_config", v5.nuc_config(**kw))]
+    for backend, prec in (("python", "float64"), ("warp-cpu", "float64"), ("warp-cuda", "float32")):
+        out.append((f"v5b.wcfg:{backend}", v5b.wcfg(backend, prec, **kw)))
+        out.append((f"v5b.v7_config:{backend}", v5b.v7_config(backend, prec, 8, 2, 1)))
+    ns = argparse.Namespace(scale=1e-3, timeout=None)
+    for name in v5b.V8_SAMPLES:
+        out.append((f"v5b.v8_config:{name}", v5b.v8_config(name, ns)[0]))
+    return out
+
+
+def test_frozen_suite_producers_pin_elastic_false() -> None:
+    import ast
+
+    for label, cfg in _frozen_suite_configs():
+        assert cfg.physics.nuclear is True, label  # type: ignore[attr-defined]
+        assert cfg.physics.elastic is False, label  # type: ignore[attr-defined]
+    # no other producer of the frozen suites constructs a PhysicsOptions / SimulationConfig: every
+    # nuclear-on configuration comes from nuc_config (steps_v5b only re-targets it with replace)
+    for fname in ("steps_v5.py", "steps_v5b.py"):
+        tree = ast.parse((SCRIPTS / fname).read_text())
+        for fn in ast.walk(tree):
+            if isinstance(fn, ast.FunctionDef):
+                for call in ast.walk(fn):
+                    if (
+                        isinstance(call, ast.Call)
+                        and isinstance(call.func, ast.Name)
+                        and call.func.id in ("PhysicsOptions", "SimulationConfig")
+                    ):
+                        assert (fname, fn.name) == ("steps_v5.py", "nuc_config")
+
+
+def test_lv5_nuclear_producer_is_bit_identical_to_non_elastic_run() -> None:
+    from dataclasses import replace
+
+    from ionmc import materials as M
+    from ionmc.simulation import Simulation
+
+    v5 = _load("steps_v5")
+    geo, grid, _, _ = v5.depth_box(M.WATER, 60.0)
+    cfg = v5.nuc_config(energy=60.0, n=16, seed=20351004, geometry=geo, grid=grid, n_batches=2)
+    ref = replace(
+        cfg,
+        physics=replace(cfg.physics, nuclear=True, nuclear_table_id=v5.TABLE_ID, elastic=False),
+    )
+    assert cfg == ref
+    a, b = Simulation(cfg).run(), Simulation(ref).run()
+    assert a.valid and b.valid
+    assert "elastic" not in a.diagnostics.get("nuclear", {})
+    for ga, gb in zip(a.grids, b.grids, strict=True):
+        np.testing.assert_array_equal(ga.batch_energy_mev, gb.batch_energy_mev)
+    assert a.energy_balance == b.energy_balance
+    assert a.counters == b.counters
+
+
+def test_lv5b_warp_cpu_producer_config_validates() -> None:
+    from ionmc import materials as M
+    from ionmc.config import validate
+
+    v5, v5b = _load("steps_v5"), _load("steps_v5b")
+    geo, grid, _, _ = v5.depth_box(M.WATER, 60.0)
+    cfg = v5b.wcfg(
+        "warp-cpu", "float64", energy=60.0, n=8, seed=1, geometry=geo, grid=grid, n_batches=2
+    )
+    eff = validate(cfg)
+    assert eff.nuclear is not None and eff.nuclear.elastic is None

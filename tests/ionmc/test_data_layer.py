@@ -102,6 +102,7 @@ SLICE_C_DATASETS = {
         "13753", "13569", "o0579", "o1226", "o0145", "c2637", "c2606", "o2057",
     )),
     "arxiv-1409-1938-source",
+    "arxiv-0908-1413-source",
     *(f"geant4-{f}-11.4.2" for f in (
         "g4barashenkovdata-hh", "g4bggnucleonelasticxs-cc", "g4nucleonnuclearcrosssection-cc",
         "g4componentbarnucleonnucleusxsc-cc", "g4hadronnucleonxsc-cc",
@@ -534,6 +535,9 @@ def test_slice_c_registry_roles_licences_and_lineage() -> None:
     arx = DATASETS["arxiv-1409-1938-source"]
     assert arx.role == "evaluation" and "shared beam lineage" in arx.lineage
     assert arx.sha256.startswith("92cdaffb")
+    fdm = DATASETS["arxiv-0908-1413-source"]
+    assert fdm.role == "evaluation" and "report-only" in fdm.lineage
+    assert fdm.sha256.startswith("67fb1478")
     ex = [d for d in DATASETS.values() if d.id.startswith("exfor-")]
     assert len(ex) == 19  # D0356, C1862 and the 17 slice-C entries
     assert len({d.sha256 for d in DATASETS.values()}) == len(DATASETS)

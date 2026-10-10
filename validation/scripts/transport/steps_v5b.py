@@ -9,7 +9,10 @@ warp-cpu float64 with nuclear on; statistical parity python / warp-cpu / CUDA), 
 branch, V5 (the ionmc side: absolute IDD at r = 20 cm; the comparison with TOPAS and MCsquare is
 ``validation/scripts/reference/compare_idd_v5.py`` on the written partials; the step ``v5-compare``
 runs it, enforced, after the four ``v5-ionmc`` steps and consumes the partials only, no seed), V2b and V7, plus the
-throughput measurement and its shard table. V6, E1-B and the p-p elastic rows belong to V3-005C
+throughput measurement and its shard table. All nuclear-on configurations come from
+``steps_v5.nuc_config`` and are pinned to ``elastic=False`` (frozen V3-005A/B physics, non-elastic only, on every
+backend; the elastic channel is enabled explicitly by the V3-005C suites lv5c/hr5c, plan Amendment 14, intended
+change R1-D2). V6, E1-B and the p-p elastic rows belong to V3-005C
 (``R_INDEX`` 12 and 13 stay reserved). Every step prints one JSON document between ``#JSON-BEGIN``
 and ``#JSON-END`` (the conventions of ``steps_v5.py``); ``--scale`` < 1 gives a labelled,
 non-conformant run; the rehearsal base is ``REHEARSAL_SEED_BASE`` (2046xxxx, never evidence).

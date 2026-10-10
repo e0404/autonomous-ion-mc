@@ -500,7 +500,7 @@ class _Reference:
         if self.nuc is not None:
             part.meta["nuclear_diagnostics"] = self.nuc_diag
             part.meta["nuclear_secondaries_above_domain"] = self.nuc_above
-            if self.el is not None and self.want_diag:
+            if self.el is not None and self.cfg.diagnostics.trace_histories > 0:
                 part.meta["elastic_trace"] = np.array(self.el_trace, dtype=np.float64).reshape(
                     -1, EL_TRACE_COLUMNS
                 )
@@ -654,7 +654,7 @@ class _Reference:
             self.EL, self.NU, el.table.arrays, el_rows, self.mass_p, t1,
             u_target, u[0], u[1], direction, e1, e2,
         )  # fmt: skip
-        if self.want_diag:
+        if h < self.cfg.diagnostics.trace_histories:
             self.el_trace.append(
                 [h, gid, self.generation, ev.target, t1, u_target, u[0], u[1], *direction,
                  ev.mu_cm, ev.phi, ev.t_primary_mev, *ev.dir_primary, ev.t_other_mev,
