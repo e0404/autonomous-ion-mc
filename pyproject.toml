@@ -67,6 +67,7 @@ select = ["E", "F", "I", "B", "UP", "W"]
 # Warp needs ``x = int(0)`` to declare a mutable (dynamic) variable inside functions/kernels.
 "src/ionmc/physics/em.py" = ["UP018"]
 "src/ionmc/physics/nuclear.py" = ["UP018"]
+"src/ionmc/physics/elastic.py" = ["UP018"]
 "src/ionmc/transport/funcs.py" = ["UP018"]
 "src/ionmc/transport/kernels.py" = ["UP018"]
 "src/ionmc/transport/kernels_nuclear.py" = ["UP018"]

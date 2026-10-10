@@ -72,7 +72,7 @@ def tid() -> str:
 def _nuc(cfg: SimulationConfig, tid: str, **run: Any) -> SimulationConfig:
     return replace(
         cfg,
-        physics=replace(cfg.physics, nuclear=True, nuclear_table_id=tid),
+        physics=replace(cfg.physics, nuclear=True, nuclear_table_id=tid, elastic=False),
         run=replace(cfg.run, **run),
     )
 
@@ -126,6 +126,7 @@ def _config(
         tallies=tallies,
         physics=PhysicsOptions(
             nuclear=True,
+            elastic=False,  # pre-D2 (V3-005B) physics: these tests anchor the non-elastic path
             stopping=BetheStoppingSource(),
             straggling=straggling,
             multiple_scattering=mcs,

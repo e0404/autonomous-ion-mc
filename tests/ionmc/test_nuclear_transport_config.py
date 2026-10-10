@@ -246,7 +246,12 @@ def tid() -> str:
 
 
 def _nuc(cfg: SimulationConfig, tid: str | None, **phys: Any) -> SimulationConfig:
-    return replace(cfg, physics=replace(cfg.physics, nuclear=True, nuclear_table_id=tid, **phys))
+    return replace(
+        cfg,
+        physics=replace(
+            cfg.physics, nuclear=True, nuclear_table_id=tid, **{"elastic": False, **phys}
+        ),
+    )
 
 
 def test_physics_options_defaults_and_validation(make_config: MakeConfig) -> None:

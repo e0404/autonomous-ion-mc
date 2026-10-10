@@ -1081,6 +1081,8 @@ def test_full_scale_block_configurations_pass_the_accumulator_guard(v5b: ModuleT
         "warp-cpu", "float64", v5b.V7_SHARD_N, v5b.V7_SHARD_BATCHES, 1, grid=grid, geo=geo
     )
     assert (shard.run.n_histories, shard.run.n_batches) == (9_000_000, 18000)
+    # pre-D2 anchor: the Warp backends have no elastic channel until C4
+    shard = v5b.replace(shard, physics=v5b.replace(shard.physics, elastic=False))
     nominal2 = v5b.replace(shard, run=v5b.replace(shard.run, n_batches=2))
     with pytest.raises(UnsupportedCombinationError, match="fixed-point voxel accumulator"):
         _guard_env(v5b, lambda: Simulation(nominal2).effective)  # the old code path
@@ -1105,6 +1107,7 @@ def test_full_scale_block_configurations_pass_the_accumulator_guard(v5b: ModuleT
         (1_000_000, v5b.V7_BATCHES),
     ):  # reference, scan
         cfg = v5b.v7_config("warp-cpu", "float64", n, nb, 1, grid=grid, geo=geo)
+        cfg = v5b.replace(cfg, physics=v5b.replace(cfg.physics, elastic=False))  # pre-D2 anchor
         assert (
             _guard_env(v5b, lambda cfg=cfg: v5b.block_effective(cfg)).requested.run.n_batches == 2
         )
@@ -1151,6 +1154,8 @@ def test_block_estimates_independent_of_the_effective_batch_count(v5b: ModuleTyp
     fixed-point integers."""
     geo, grid = v5b.coarse_depth(v5b.V7_BINS)
     cfg = v5b.v7_config("warp-cpu", "float64", 2000, 4, 20461004, grid=grid, geo=geo)
+    # pre-D2 anchor: the Warp backends have no elastic channel until C4
+    cfg = v5b.replace(cfg, physics=v5b.replace(cfg.physics, elastic=False))
     ref = _guard_env(v5b, lambda: v5b.batch_estimates(cfg, 2))
     for eb in (4, None):
         got = v5b.batch_estimates(cfg, eb)

@@ -495,4 +495,3 @@ The frozen rows V5, V6, V8 and R1 are evaluated again with their tolerances unch
 | # | Check | Pass iff | Class | Tier | Slice |
 |---|---|---|---|---|---|
 | X-MT5-SPEC | O-16 vs C-12 MF6/MT5 product energy spectra (n, p, α at 50/100/150 MeV) | KS distance D > 0.02 at ≥ 8 of 9 combinations and D > 0 at all 9 (Amendment 16) | self-consistency | CI | C |
-
