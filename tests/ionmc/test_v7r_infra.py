@@ -582,15 +582,23 @@ def test_lv5c_suite_registration_names_seeds_timeouts_tags(
         )
 
 
-CAL_CMD = (
-    "python -m pytest -q -p no:cacheprovider --no-header "
-    "tests/ionmc/test_v7r_coverage.py -m calibration"
-)
+def _args(shard: int | None = None) -> str:
+    rs = _load("run_suite")
+    targets, k_expr, _ = rs.calibration_selection(shard)
+    return "python -m pytest " + " ".join(rs.calibration_args(targets, k_expr))
 
 
-def _cal(ok: bool = True, counts: dict | None = None, cmd: str = CAL_CMD) -> dict:  # type: ignore[type-arg]
-    counts = {"passed": 4, "deselected": 37} if counts is None else counts
-    return {"pass": ok, "status": "executed", "pytest_command": cmd, "pytest_counts": counts}
+def _cal(  # type: ignore[no-untyped-def]
+    ok: bool = True, counts: dict | None = None, cmd: str | None = None, shard: int | None = None
+) -> dict:  # type: ignore[type-arg]
+    rs = _load("run_suite")
+    want = rs.calibration_selection(shard)[2]
+    counts = {"passed": want, "deselected": 37} if counts is None else counts
+    return {"pass": ok, "status": "executed", "pytest_counts": counts,
+            "pytest_command": _args(shard) if cmd is None else cmd}  # fmt: skip
+
+
+CAL_CMD = _args(None)
 
 
 def test_v7r_row_is_the_conjunction_of_calibration_and_gates() -> None:
@@ -627,21 +635,31 @@ def test_v7r_row_is_the_conjunction_of_calibration_and_gates() -> None:
     assert sm.slice_c_rows("lv5b", full) == {}
 
 
+ONLY_V7R = CAL_CMD.replace(" tests/ionmc/test_v7_coverage.py", "")
+SHARD0 = _args(0)
+
+
 @pytest.mark.parametrize(
     "step",
     [
-        _cal(counts={"passed": 3, "skipped": 1, "deselected": 37}),  # a skip exits 0 but is no pass
-        _cal(counts={"passed": 4, "deselected": 37, "xfailed": 1}),
-        _cal(counts={"passed": 4, "failed": 1}),
-        _cal(counts={"passed": 2, "deselected": 37}),  # fewer than the three calibration tests
-        _cal(counts={"skipped": 4}),  # nothing passed at all
+        _cal(counts={"passed": 12, "skipped": 1, "deselected": 37}),  # a skip exits 0, no pass
+        _cal(counts={"passed": 13, "deselected": 37, "xfailed": 1}),
+        _cal(counts={"passed": 12, "failed": 1}),
+        _cal(counts={"passed": 3, "deselected": 37}),  # the old 3-case count of one file
+        _cal(counts={"passed": 12}),  # count mismatch: not the complete expected case set
+        _cal(counts={"passed": 14}),
+        _cal(counts={"skipped": 13}),  # nothing passed at all
         _cal(counts={}),
         {**_cal(), "pytest_counts": None},  # unreadable output: not established
         {k: v for k, v in _cal().items() if k != "pytest_counts"},
+        _cal(counts={"passed": 3}, cmd=ONLY_V7R),  # only the V7-R target: no Amendment 13 file
+        _cal(cmd=ONLY_V7R),  # right count for the full set but the wrong command
         _cal(cmd=CAL_CMD + " -k archive"),  # a narrowed selection deselects calibration tests
         _cal(cmd=CAL_CMD + " --deselect tests/ionmc/test_v7r_coverage.py::test_x"),
         _cal(cmd=CAL_CMD.replace("-m calibration", "-m 'not calibration'")),
         _cal(cmd=CAL_CMD.replace(" -m calibration", "")),
+        _cal(cmd=CAL_CMD + " tests/ionmc/test_other.py"),
+        _cal(shard=0, cmd=SHARD0.replace("archive_fitted", "archive")),  # not the fixed -k
     ],
 )
 def test_v7r_calibration_row_rejects_skips_deselection_and_unreadable_output(
@@ -666,18 +684,18 @@ def test_pytest_summary_parser_and_parse_step_record_the_counts(tmp_path: Path) 
     sha = "a" * 40
     p = tmp_path / "18-pytest-v7r-calibration.txt"
     body = ["# command: " + CAL_CMD, f"# git_sha: {sha}", "# started_utc: t", "# step_timeout_s: 1",
-            "", "....", "4 passed, 37 deselected in 12.30s", "", "# exit=0"]  # fmt: skip
+            "", "....", "13 passed, 37 deselected in 12.30s", "", "# exit=0"]  # fmt: skip
     p.write_text("\n".join(body))
     st = sm.parse_step(p, sha, "lv5c", "20481004")
-    assert st["pass"] and st["pytest_counts"] == {"passed": 4, "deselected": 37}
+    assert st["pass"] and st["pytest_counts"] == {"passed": 13, "deselected": 37}
     assert st["pytest_command"] == CAL_CMD
     assert sm.calibration_step_established(st)
     p.write_text(
-        "\n".join(body).replace("4 passed, 37 deselected", "3 passed, 1 skipped, 37 deselected")
+        "\n".join(body).replace("13 passed, 37 deselected", "12 passed, 1 skipped, 37 deselected")
     )
     st = sm.parse_step(p, sha, "lv5c", "20481004")
     assert st["pass"] is True and not sm.calibration_step_established(st)  # exit 0 with a skip
-    p.write_text("\n".join(body).replace("4 passed, 37 deselected in 12.30s", "garbled"))
+    p.write_text("\n".join(body).replace("13 passed, 37 deselected in 12.30s", "garbled"))
     st = sm.parse_step(p, sha, "lv5c", "20481004")
     assert st["pytest_counts"] is None and not sm.calibration_step_established(st)
 
@@ -687,6 +705,7 @@ def test_lv5c_calibration_steps_run_with_the_fixtures_required() -> None:
     steps = rs.suite_steps("lv5c", 1, 1.0)
     cal = [(n, e) for n, _, e in steps if "pytest-v7r-calibration" in n]
     assert cal and all(e["IONMC_V7R_FIXTURES"] == "required" for _, e in cal)
+    assert all("IONMC_V7R_REHEARSAL_DIR" not in e for _, e in cal)
     assert all("IONMC_V7R_FIXTURES" not in e for n, _, e in steps if "pytest" not in n)
     shared = rs.NUCLEAR_ENV
     assert "IONMC_V7R_FIXTURES" not in shared  # the shared dict is not mutated
@@ -726,3 +745,125 @@ def test_sub_block_run_range_250_plus_250_equals_the_500_history_block_bit_for_b
     s_whole = math.fsum(math.fsum(whole.tally_components[i]) for i in esc)
     s_parts = math.fsum(math.fsum(c for p in parts for c in p.tally_components[i]) for i in esc)
     assert s_whole == s_parts
+
+
+# -- calibration step environment, expected case counts and sharding ------------------------------
+def test_calibration_step_environment_never_inherits_the_rehearsal_override() -> None:
+    rs = _load("run_suite")
+    host = {"IONMC_V7R_REHEARSAL_DIR": "/tmp/evil", "PATH": "/usr/bin"}
+    for name in ("18-pytest-v7r-calibration", "18-pytest-v7r-calibration-s1"):
+        env = rs.step_environment(host, name, {"IONMC_V7R_FIXTURES": "required"})
+        assert "IONMC_V7R_REHEARSAL_DIR" not in env and env["IONMC_V7R_FIXTURES"] == "required"
+        assert env["PATH"] == "/usr/bin"
+    other = rs.step_environment(host, "17-v7r-ref", {})
+    assert other["IONMC_V7R_REHEARSAL_DIR"] == "/tmp/evil"  # only the calibration steps are pinned
+    assert host["IONMC_V7R_REHEARSAL_DIR"] == "/tmp/evil"  # the input is not mutated
+
+
+def test_rehearsal_fixture_digest_is_recorded_for_the_committed_directory(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    rs = _load("run_suite")
+    monkeypatch.setattr(rs, "REPO", tmp_path)
+    assert rs.rehearsal_fixture_digest() == "absent"
+    d = tmp_path / rs.REHEARSAL_FIXTURE_DIR
+    d.mkdir(parents=True)
+    (d / "a.json").write_text("1")
+    first = rs.rehearsal_fixture_digest()
+    assert len(first) == 64 and first == rs.rehearsal_fixture_digest()
+    (d / "a.json").write_text("2")
+    assert rs.rehearsal_fixture_digest() != first
+    assert rs.REHEARSAL_FIXTURE_DIR == "tests/ionmc/fixtures/v7r/rehearsal"
+
+
+def _collect(*args: str) -> list[str]:
+    import subprocess
+
+    rs = _load("run_suite")
+    out = subprocess.run(
+        [sys.executable, "-m", "pytest", "--collect-only", "-q", "-p", "no:cacheprovider",
+         "-m", "calibration", *args],
+        cwd=rs.REPO, capture_output=True, text=True, check=True,
+    ).stdout  # fmt: skip
+    return [ln for ln in out.splitlines() if "::" in ln]
+
+
+def test_expected_calibration_cases_match_the_collection() -> None:
+    rs = _load("run_suite")
+    for target, n in rs.EXPECTED_CALIBRATION_CASES.items():
+        assert len(_collect(target)) == n, target
+    full = _collect(*rs.calibration_selection(None)[0])
+    assert len(full) == sum(rs.EXPECTED_CALIBRATION_CASES.values()) == 13
+
+
+def test_calibration_partition_is_disjoint_and_complete() -> None:
+    rs = _load("run_suite")
+    full = _collect(*rs.calibration_selection(None)[0])
+    seen: list[str] = []
+    for i, (targets, k_expr, want) in enumerate(rs.V7R_CALIBRATION_PARTITION):
+        ids = _collect(*targets, "-k", k_expr)
+        assert len(ids) == want, i
+        seen += ids
+    assert sorted(seen) == sorted(full) and len(set(seen)) == len(seen)
+
+
+def test_sharded_registration_only_when_the_constant_is_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rs = _load("run_suite")
+    names = [n.split("-", 1)[1] for n, _, _ in rs.suite_steps("lv5c", 1, 1.0)]
+    assert "pytest-v7r-calibration" in names and not any("calibration-s" in n for n in names)
+    monkeypatch.setattr(rs, "V7R_CALIBRATION_SHARDS", 3)
+    steps = rs.suite_steps("lv5c", 1, 1.0)
+    cal = [(n.split("-", 1)[1], c, e) for n, c, e in steps if "pytest-v7r-calibration" in n]
+    assert [n for n, _, _ in cal] == [f"pytest-v7r-calibration-s{k}" for k in range(3)]
+    for k, (_, cmd, env) in enumerate(cal):
+        assert " ".join(cmd[3:]).startswith(
+            " ".join(rs.calibration_args(*rs.calibration_selection(k)[:2]))
+        )
+        assert env["IONMC_V7R_FIXTURES"] == "required"
+    for n in rs.full_step_names("lv5c", 2):
+        assert rs.step_timeout_s("lv5c", n, 1500) >= 1500
+    monkeypatch.setattr(rs, "V7R_CALIBRATION_SHARDS", 2)
+    with pytest.raises(SystemExit):
+        rs.suite_steps("lv5c", 1, 1.0)
+
+
+def _sharded() -> dict:  # type: ignore[type-arg]
+    steps = {"17-v7r-ref": _cal(), "19-v7r-combine": {"pass": True, "status": "executed"}}
+    for k in range(3):
+        steps[f"{18 + k}-pytest-v7r-calibration-s{k}"] = _cal(shard=k)
+    return steps
+
+
+def test_sharded_calibration_set_must_be_complete_exact_and_disjoint() -> None:
+    sm = _load("summarize")
+    ok = sm.slice_c_rows("lv5c", _sharded())["V7-R"]
+    assert ok["pass"] is True and ok["calibration_steps"] == [
+        f"pytest-v7r-calibration-s{k}" for k in range(3)]  # fmt: skip
+
+    def verdict(steps: dict) -> bool:  # type: ignore[type-arg]
+        return sm.slice_c_rows("lv5c", steps)["V7-R"]["calibration_pass"]
+
+    missing = _sharded()
+    del missing["20-pytest-v7r-calibration-s2"]
+    assert verdict(missing) is False
+    double = _sharded()
+    double["23-pytest-v7r-calibration-s1"] = _cal(shard=1)  # shard 1 twice: double cover
+    assert verdict(double) is False
+    swapped = _sharded()
+    swapped["19-pytest-v7r-calibration-s1"] = _cal(shard=0)  # s1 name with the s0 selection
+    assert verdict(swapped) is False
+    failed = _sharded()
+    failed["20-pytest-v7r-calibration-s2"] = _cal(ok=False, shard=2)
+    assert verdict(failed) is False
+    short = _sharded()
+    short["20-pytest-v7r-calibration-s2"] = _cal(shard=2, counts={"passed": 10})
+    assert verdict(short) is False
+    mixed = _sharded()
+    mixed["24-pytest-v7r-calibration"] = _cal()  # un-sharded step next to the shards
+    assert verdict(mixed) is False
+    assert verdict({**_sharded(), "18-pytest-v7r-calibration-s3": _cal(shard=2)}) is False
+    only = {"17-v7r-ref": _cal(), "19-v7r-combine": {"pass": True, "status": "executed"},
+            "18-pytest-v7r-calibration": _cal()}  # fmt: skip
+    assert verdict(only) is True  # the un-sharded default

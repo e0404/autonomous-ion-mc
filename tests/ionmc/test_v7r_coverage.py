@@ -66,10 +66,10 @@ with a reason, and FAILs when the environment variable ``IONMC_V7R_FIXTURES`` is
 required mode NO calibration test skips for any reason (every skip path is ``_skip_or_fail``;
 ``test_no_skip_path_outside_skip_or_fail`` scans both calibration files); ``run_suite.py`` sets the
 variable for every ``pytest-v7r-calibration*`` step and ``summarize.py`` rejects a step whose
-archived
-pytest summary shows a skipped test. ``IONMC_V7R_REHEARSAL_DIR`` points the rehearsal loader at
-another
-directory (tests and smoke runs; the evidence step uses the committed one):
+archived pytest summary shows a skipped test. ``IONMC_V7R_REHEARSAL_DIR`` points the rehearsal
+loader at another directory (tests and smoke runs only; it is REJECTED, a failure, in required
+mode, and ``run_suite`` removes it from the environment of every calibration step and records the
+digest of the committed fixture directory in the step header):
 
 * ``lv5b-7aae5bb-escaped-neutral-replicates.json`` (``v7r_fixture.py``): schema
   ``ionmc-v7r-lv5b-escaped-neutral-replicates-1``; keys ``mean``, ``sem`` (7200 floats each, shard
@@ -193,6 +193,11 @@ def _need(path: Path, what: str) -> None:
 def rehearsal_dir() -> Path:
     """The rehearsal fixture directory (``IONMC_V7R_REHEARSAL_DIR`` overrides the committed one)."""
     env = os.environ.get("IONMC_V7R_REHEARSAL_DIR")
+    if env and _fixtures_required():
+        pytest.fail(
+            "IONMC_V7R_REHEARSAL_DIR is set in required mode: the qualification step must use the "
+            "committed rehearsal fixture directory (the override is for tests and smoke runs only)"
+        )
     return Path(env) if env else REHEARSAL_DIR
 
 
@@ -696,6 +701,20 @@ def test_gate_alone_requirement_applies_at_each_gates_own_margins_only(v5b: Modu
     # the joint requirement is gated at every margin
     out = evaluate(v5b, {"paired_low": _rates(1, 1, 1, n), "nominal": nominal}, n)
     assert "joint" in out["failures"][0]
+
+
+def test_rehearsal_override_is_rejected_in_required_mode(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("IONMC_V7R_REHEARSAL_DIR", str(tmp_path))
+    monkeypatch.setenv("IONMC_V7R_FIXTURES", "required")
+    with pytest.raises(pytest.fail.Exception, match="IONMC_V7R_REHEARSAL_DIR is set in required"):
+        rehearsal_dir()
+    monkeypatch.setenv("IONMC_V7R_FIXTURES", "")
+    assert rehearsal_dir() == tmp_path  # tests and smoke runs only
+    monkeypatch.delenv("IONMC_V7R_REHEARSAL_DIR")
+    monkeypatch.setenv("IONMC_V7R_FIXTURES", "required")
+    assert rehearsal_dir() == REHEARSAL_DIR  # the committed directory
 
 
 def test_cal_reps_default_and_environment(monkeypatch: pytest.MonkeyPatch) -> None:

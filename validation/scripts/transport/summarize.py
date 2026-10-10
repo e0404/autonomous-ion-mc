@@ -389,45 +389,73 @@ def source_ok(env: dict[str, Any], attestation: dict[str, Any] | None) -> bool:
 V7R_NOT_ESTABLISHED = "uncertainty-coverage evidence not established"
 
 
-V7R_MIN_CALIBRATION_PASSED = 3  # the three calibration tests of tests/ionmc/test_v7r_coverage.py
-_FILTER_FLAGS = ("-k", "--deselect", "--ignore", "--lf", "--ff", "--sw", "--maxfail", "-x")
+_SHARD_NAME = re.compile(r"^pytest-v7r-calibration-s(\d+)$")
 
 
-def calibration_step_established(step: dict[str, Any]) -> bool:
-    """A ``pytest-v7r-calibration*`` step establishes the calibration only if it passed, its archived
-    pytest summary line is readable and reports at least ``V7R_MIN_CALIBRATION_PASSED`` passed tests with
-    no skipped, failed, errored, xfailed or xpassed test, and its command narrows the selection only by
-    ``-m calibration`` (no ``-k`` / ``--deselect`` / ``--ignore``), so that the tests deselected by the
-    marker are the non-calibration ones. An unreadable step output is not established."""
+def calibration_step_established(step: dict[str, Any], shard: int | None = None) -> bool:
+    """A ``pytest-v7r-calibration`` step (``shard=None``) or ``-s{shard}`` step establishes its part of
+    the calibration only if it passed, its archived command is EXACTLY the expected one
+    (``run_suite.calibration_selection``: the two positional targets and ``-m calibration``, plus the
+    fixed ``-k`` of a shard; nothing else selects or deselects), its archived pytest summary is
+    readable and its passed count equals the complete expected case count of that command
+    (``EXPECTED_CALIBRATION_CASES``), with no skipped, failed, errored, xfailed or xpassed test.
+    Unreadable output is not established."""
+    sys.path.insert(0, str(HERE))
+    import run_suite
+
     if not step.get("pass") or step.get("status") == "deferred":
         return False
-    counts = step.get("pytest_counts")
-    if not isinstance(counts, dict) or counts.get("passed", 0) < V7R_MIN_CALIBRATION_PASSED:
+    try:
+        targets, k_expr, want = run_suite.calibration_selection(shard)
+    except IndexError:
         return False
-    if any(v for k, v in counts.items() if k not in ("passed", "deselected", "warning", "warnings")):
-        return False  # skipped, failed, error(s), xfailed, xpassed, rerun ...
     toks = str(step.get("pytest_command", "")).split()
-    cmd = toks[toks.index("pytest") + 1 :] if "pytest" in toks else []  # after "python -m pytest"
-    marker = cmd[cmd.index("-m") + 1 : cmd.index("-m") + 2] if "-m" in cmd else []
-    return (bool(cmd) and cmd.count("-m") == 1 and marker == ["calibration"]
-            and not any(t in _FILTER_FLAGS or t.startswith("--deselect=") for t in cmd))  # fmt: skip
+    cmd = toks[toks.index("pytest") + 1 :] if "pytest" in toks else None
+    if k_expr:  # the expression has spaces: compare with the joined command
+        exact = cmd is not None and " ".join(cmd) == " ".join(
+            run_suite.calibration_args(targets, k_expr))
+    else:
+        exact = cmd == run_suite.calibration_args(targets, None)
+    counts = step.get("pytest_counts")
+    if not exact or not isinstance(counts, dict) or counts.get("passed") != want:
+        return False
+    return not any(v for k, v in counts.items() if k not in ("passed", "deselected", "warning", "warnings"))
+
+
+def calibration_established(cal: list[tuple[str, dict[str, Any]]]) -> bool:
+    """Calibration condition of row V7-R from the ``(base name, step)`` pairs of the archive: exactly
+    one un-sharded step, or the complete set of shards 0..n-1 (each exactly once, each established
+    with its own fixed selection, so that the union covers the expected case set exactly once);
+    never a mixture, a missing or a repeated shard, or a stray calibration step."""
+    sys.path.insert(0, str(HERE))
+    import run_suite
+
+    names = [n for n, _ in cal]
+    if names == ["pytest-v7r-calibration"]:
+        return calibration_step_established(cal[0][1], None)
+    idx = [int(m.group(1)) if (m := _SHARD_NAME.match(n)) else -1 for n in names]
+    if not idx or sorted(idx) != list(range(len(run_suite.V7R_CALIBRATION_PARTITION))):
+        return False
+    return all(calibration_step_established(st, i) for i, (_, st) in zip(idx, cal, strict=True))
 
 
 def slice_c_rows(suite: str | None, steps: dict[str, Any]) -> dict[str, Any]:
     """Row verdicts that are a conjunction of steps (suite ``lv5c``). Row V7-R (plan Amendment 14 (h)
     and Amendment 17 (a)6) passes iff ``v7r-combine`` passed (the three estimators, both gates each)
-    AND every ``pytest-v7r-calibration`` / ``pytest-v7r-calibration-s{k}`` step of the archive passed
-    (at least one present) with a readable pytest summary of >= 3 passed and no skipped / failed /
-    xfailed test (``calibration_step_established``); the steps of one archive share one SHA. A pytest step has no document, so
-    the conjunction cannot be made by a step. Otherwise the row verdict is "uncertainty-coverage evidence not established"."""
+    AND the calibration is established: the single ``pytest-v7r-calibration`` step, or the complete set of
+    ``pytest-v7r-calibration-s{k}`` shards each exactly once, each with its exact expected command and
+    its complete expected passed count and no skip (``calibration_established``). A pytest step has no
+    document, so the conjunction cannot be made by a step. Otherwise the row verdict is
+    "uncertainty-coverage evidence not established"."""
     if suite != "lv5c":
         return {}
     by = {n.split("-", 1)[1]: s for n, s in steps.items() if "-" in n}
     comb = by.get("v7r-combine")
-    cal = {k: v for k, v in by.items() if k.startswith("pytest-v7r-calibration")}
+    cal = [(n.split("-", 1)[1], st) for n, st in steps.items() if "-" in n]
+    cal = [(n, st) for n, st in cal if n.startswith("pytest-v7r-calibration")]
     gates = bool(comb and comb.get("pass") and comb.get("status") != "deferred")
-    calibration = bool(cal) and all(calibration_step_established(v) for v in cal.values())
-    row = {"gates_pass": gates, "calibration_pass": calibration, "calibration_steps": sorted(cal),
+    calibration = calibration_established(cal)
+    row = {"gates_pass": gates, "calibration_pass": calibration, "calibration_steps": sorted(n for n, _ in cal),
            "pass": gates and calibration}  # fmt: skip
     if not row["pass"]:
         row["verdict"] = V7R_NOT_ESTABLISHED

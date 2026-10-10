@@ -269,6 +269,7 @@ STEP_TIMEOUT_FLOOR_S = {
     "lv5c": {
         **{f"v7r-s{k}": 3300 for k in range(V7R_SHARDS)}, "v7r-ref": 3300,
         "pytest-v7r-calibration": 3300, "v7r-combine": 1800, "v7r-diag": 1800,
+        **{f"pytest-v7r-calibration-s{k}": 3300 for k in range(3)},
     },
     "hr5": {
         "v8-stat-python-s0": 3600, "v8-stat-python-s1": 3600, "v8-stat-cpu64": 3600,
@@ -299,10 +300,10 @@ def deferred_step_names(suite: str, python_parts: int = DEFAULT_PYTHON_PARTS) ->
     ]
 
 
-def pytest_cmd(*targets: str, marker: str | None = None) -> list[str]:
-    """``marker`` is a pytest ``-m`` expression."""
+def pytest_cmd(*targets: str, marker: str | None = None, k: str | None = None) -> list[str]:
+    """``marker`` is a pytest ``-m`` expression, ``k`` a ``-k`` expression."""
     cmd = [PY, "-m", "pytest", "-q", "-p", "no:cacheprovider", "--no-header", *targets]
-    return cmd + (["-m", marker] if marker else [])
+    return cmd + (["-m", marker] if marker else []) + (["-k", k] if k else [])
 
 
 def suite_steps(
@@ -575,8 +576,16 @@ def _suite_steps_v5c(add, sc, out_dir, dirs, s5c):  # type: ignore[no-untyped-de
     for k in range(V7R_SHARDS):  # one simulation of 4.5e6 histories each (7200 replicates in total)
         add(f"v7r-s{k}", [*s5c, "v7r-shard", "--shard", str(k), "--out-dir", str(out_dir), *sc], env)
     add("v7r-ref", [*s5c, "v7r-ref", "--out-dir", str(out_dir), *sc], env)
-    add("pytest-v7r-calibration",
-        pytest_cmd("tests/ionmc/test_v7r_coverage.py", "tests/ionmc/test_v7_coverage.py", marker="calibration"), env)
+    if V7R_CALIBRATION_SHARDS is None:
+        targets, k_expr, _ = calibration_selection(None)
+        add("pytest-v7r-calibration", pytest_cmd(*targets, marker="calibration", k=k_expr), env)
+    else:
+        if V7R_CALIBRATION_SHARDS != len(V7R_CALIBRATION_PARTITION):
+            raise SystemExit("V7R_CALIBRATION_SHARDS must equal the number of shards of the partition")
+        for i in range(V7R_CALIBRATION_SHARDS):
+            targets, k_expr, _ = calibration_selection(i)
+            add(f"pytest-v7r-calibration-s{i}",
+                pytest_cmd(*targets, marker="calibration", k=k_expr), env)
     add("v7r-combine", [*s5c, "v7r-combine", "--dirs", *dirs, *sc], env)
     add("v7r-diag", [*s5c, "v7r-diag", "--dirs", *dirs, *sc], env)
 
@@ -765,6 +774,62 @@ def source_files(suite: str | None = None) -> list[Path]:
 
 
 V7R_CALIBRATION_STEP_PREFIX = "pytest-v7r-calibration"
+REHEARSAL_DIR_ENV = "IONMC_V7R_REHEARSAL_DIR"
+REHEARSAL_FIXTURE_DIR = "tests/ionmc/fixtures/v7r/rehearsal"
+V7R_FILE = "tests/ionmc/test_v7r_coverage.py"
+A13_FILE = "tests/ionmc/test_v7_coverage.py"
+EXPECTED_CALIBRATION_CASES = {V7R_FILE: 3, A13_FILE: 10}
+"""Collected ``-m calibration`` cases per file (3 V7-R cases; 10 Amendment 13 parametrized cases). The
+single source of truth of the V7-R calibration step: ``summarize.calibration_step_established``
+requires the passed count to equal it, and a CI test (``test_expected_calibration_cases_match_the_
+collection``) checks it against ``pytest --collect-only``, so a change of the parametrization cannot
+silently desynchronise the two."""
+V7R_CALIBRATION_SHARDS: int | None = None
+"""``None``: the lv5c suite registers the single step ``pytest-v7r-calibration``. An integer (the
+number of shards, 3; fixed by Amendment 14a if needed) registers ``pytest-v7r-calibration-s{k}``
+instead (Amendment 17 (a)6)."""
+V7R_CALIBRATION_PARTITION = (
+    ((V7R_FILE,), "archive_fitted", 1),
+    ((V7R_FILE,), "rehearsal_block_sums", 1),
+    ((V7R_FILE, A13_FILE), "not archive_fitted and not rehearsal_block_sums", 1 + 10),
+)
+"""Shard ``i``: (pytest targets, ``-k`` expression, expected passed count). s0 the archive-fitted
+surrogate, s1 the rehearsal surrogate, s2 the V7-R readings report and the ten Amendment 13 cases.
+The selections are disjoint and cover the 13 cases exactly once (CI test
+``test_calibration_partition_is_disjoint_and_complete``)."""
+
+
+def calibration_selection(shard: int | None) -> tuple[tuple[str, ...], str | None, int]:
+    """(targets, ``-k`` expression, expected passed count) of the un-sharded step (``None``) or of
+    shard ``shard``."""
+    if shard is None:
+        return (V7R_FILE, A13_FILE), None, sum(EXPECTED_CALIBRATION_CASES.values())
+    return V7R_CALIBRATION_PARTITION[shard]
+
+
+def calibration_args(targets: tuple[str, ...], k_expr: str | None) -> list[str]:
+    """The exact arguments after ``python -m pytest`` of a calibration step."""
+    return pytest_cmd(*targets, marker="calibration", k=k_expr)[3:]
+
+
+def rehearsal_fixture_digest() -> str:
+    """sha256 over the sorted ``relative path sha256`` lines of the committed rehearsal fixture
+    directory (``absent`` if it does not exist)."""
+    d = REPO / REHEARSAL_FIXTURE_DIR
+    if not d.is_dir():
+        return "absent"
+    lines = [f"{p.relative_to(REPO)} {hashlib.sha256(p.read_bytes()).hexdigest()}"
+             for p in sorted(d.rglob("*")) if p.is_file()]  # fmt: skip
+    return hashlib.sha256("\n".join(lines).encode()).hexdigest()
+
+
+def step_environment(env_base: dict[str, str], name: str, extra: dict[str, str]) -> dict[str, str]:
+    """Environment of one step: ``env_base`` plus ``extra``; the V7-R calibration steps never inherit
+    ``IONMC_V7R_REHEARSAL_DIR`` (the committed fixture directory is the only one they may use)."""
+    env = {**env_base, **extra}
+    if V7R_CALIBRATION_STEP_PREFIX in name:
+        env.pop(REHEARSAL_DIR_ENV, None)
+    return env
 REHEARSAL_FIXTURE_PREFIX = "tests/ionmc/fixtures/v7r/rehearsal/"
 """The V7-R rehearsal fixtures (partials, sidecars, ``PROVENANCE.json``) are committed under
 ``tests/ionmc`` (a hashed prefix) but are outside the hashed set of the rehearsal digest, otherwise
@@ -1050,6 +1115,9 @@ def main(argv: list[str] | None = None) -> int:
             fh.write(f"# command: {' '.join(cmd)}\n# git_sha: {sha}\n# started_utc: {started}\n")
             eff_timeout = step_timeout_s(args.suite, name, args.step_timeout)
             fh.write(f"# step_timeout_s: {eff_timeout}\n")
+            if V7R_CALIBRATION_STEP_PREFIX in name:
+                fh.write(f"# v7r_rehearsal_fixture: {REHEARSAL_FIXTURE_DIR} "
+                         f"sha256={rehearsal_fixture_digest()}\n")  # fmt: skip
             if name in deferred:
                 fh.write(f"# status: deferred\n# reason: {DEFERRED_REASON}\n\n# exit=0\n")
                 print(f"== {name}: deferred", flush=True)
@@ -1058,7 +1126,7 @@ def main(argv: list[str] | None = None) -> int:
             code = run_step(
                 cmd,
                 cwd=REPO,
-                env={**env_base, **extra},
+                env=step_environment(env_base, name, extra),
                 stdout=fh,
                 timeout=eff_timeout,
             )
