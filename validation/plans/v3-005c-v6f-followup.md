@@ -4,13 +4,13 @@ Governing summary: validation/plans/v3-005-acceptance.md, Amendment 18 (b). This
 
 ---
 
-# V6-F — draft pre-registration text (proposed Amendment 18, V6-F items), revision 2
+# V6-F — pre-registration text (Amendment 18, V6-F items), revision 2 — FROZEN 2026-10-11 at the commit that adds this file
 
 **Status.**
 
 - Revision 2 answers the independent review `review.md` and the orchestrator's decisions on it. They are
   listed in "Changes after review" at the end. Revision 1 is kept in `v1/`.
-- This is a draft. It is not committed and has not been executed.
+- Status: frozen with Amendment 18 (this file is committed; the row has not been executed and is not executed in V3-005C). The wording "draft" inside the review record below is historical (it reviewed revisions 1 and 2 before this freeze) and is kept verbatim.
 - Numbers marked (T) are from `se_table.json` / `se_table.py`, revision 2. The planning estimates (E)
   are from `core_sens_estimate.py`.
 - Neither script reads any ionmc dose output other than precision quantities of the three C8 rehearsal
@@ -19,7 +19,7 @@ Governing summary: validation/plans/v3-005-acceptance.md, Amendment 18 (b). This
 
 ---
 
-**Amendment 18 — V6-F items (draft, 2026-10-11; after the C8 rehearsal and Amendment 14a (a)4; before any
+**Amendment 18 — V6-F items (frozen 2026-10-11; after the C8 rehearsal and Amendment 14a (a)4; before any
 V6, V6-F or V6-sens-F evidence).** These items do not change:
 
 - the frozen rows V6 and V6-sens;
@@ -388,6 +388,21 @@ measured-normalised σ′ of revision 2 (≤ 0.037 at every H_F point) were both
   was run.
 - It is recorded here in the manner of Amendment 14a (a)5. The reviewer's copy of the revision-1 table
   must not be combined with the revision-2 table.
+
+
+## Derivation artifacts (committed with this file; sha256 at the freeze)
+
+The numerical derivation of the point set, N_F, k and the coverage expectation is reproducible from these files (`python3 -I se_table.py <worktree>` regenerates `se_table.json` byte for byte from the three rehearsal partials named in the design; `python3 -I core_sens_estimate.py` reproduces the coverage estimate). `v1/` holds the revision-1 text and checklist and the NEUTRALISED revision-1 script (its per-point precision columns removed); no revision-1 per-point table exists or may be committed. The operator's intervention record is `reference_requests/interventions/IR-20261011-031924-C205C8/` (request.json, response.json).
+
+| file | bytes | sha256 |
+|---|---|---|
+| `validation/plans/v3-005c-v6f/core_sens_estimate.py` | 5253 | `4105071f00555a84910d3b9b62de0bb7ded3f753a3bf392cde09b2ebf938324d` |
+| `validation/plans/v3-005c-v6f/review_checklist.md` | 7183 | `f4a603e0002dd1ec7030ec2312fa4d5ed32444cf2fd3c33bd6b381d96aeed3a2` |
+| `validation/plans/v3-005c-v6f/se_table.json` | 261735 | `b929408aed193dbd31f459e654f09c5a4afb90f5454258d131a1771f8645cd0b` |
+| `validation/plans/v3-005c-v6f/se_table.py` | 14319 | `ba4d0e34f75661bd743a481e418bdfa0ea453457970ae28fd224db96196d8869` |
+| `validation/plans/v3-005c-v6f/v1/design.md` | 18496 | `78408160e26ac3835e8634fbd926bf70a604fb267de1c45249d4c285eb81b439` |
+| `validation/plans/v3-005c-v6f/v1/review_checklist.md` | 7251 | `577f743c1df96e873d87ec5c86d7604b6c7cfcc403611d700ee6e52ff512f713` |
+| `validation/plans/v3-005c-v6f/v1/se_table.py` | 13930 | `e33a7a06a8e61c90324e7d2d423fa46ebd4f7d45e005ebfe64dc5958e9fdeaae` |
 
 ---
 

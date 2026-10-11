@@ -245,7 +245,23 @@ def step_v6_cuda_shard(a: argparse.Namespace) -> int:
 
 UNSIZED_REASON = "not sized under the pre-registered rule"
 UNSIZED_RUN_IDS = ("RUN-20261011T030353Z-0b25db97", "RUN-20261011T030829Z-537a9857", "RUN-20261011T031141Z-88a536e0")
-UNSIZED_INTERVENTION = "IR-20261011-031924-C205C8 (on record; not awaited)"
+UNSIZED_INTERVENTION_ID = "IR-20261011-031924-C205C8"
+UNSIZED_INTERVENTION_STATUS = (
+    f"{UNSIZED_INTERVENTION_ID}: resolved 2026-10-11 \u2014 operator acknowledged the autonomous resolution "
+    "(Amendment 18 (a)); V6/V6-sens stay failed at the sizing stage"
+)
+
+
+def unsized_intervention() -> str:
+    """Status of the intervention, derived from the committed record ``reference_requests/interventions/<id>/
+    response.json``. The record is part of the branch, so an absent directory or response fails closed."""
+    rec = REPO / "reference_requests" / "interventions" / UNSIZED_INTERVENTION_ID
+    resp = rec / "response.json"
+    if not rec.is_dir() or not resp.is_file():
+        raise SystemExit(f"v6 fail-closed record: the intervention record {resp} is absent (it is part of the branch)")
+    return UNSIZED_INTERVENTION_STATUS
+
+
 UNSIZED_BOUND = {
     "r0_clause": {
         "se_scaling_shards_at_z_22.4_cm": 8910, "se_scaling_histories_at_z_22.4_cm": 8.9e9,
@@ -275,7 +291,7 @@ def unsized_document(a: argparse.Namespace, step: str, verdict: str) -> dict[str
     """The fail-closed record of rows V6 and V6-sens (Amendment 14a (a)4, Codex REVIEW-7b4d96c9): the pre-registered
     history-count rule defines no feasible N_V6, so no shard is run and no reading is amended. ``pass`` is False."""
     return {"step": step, "row": "V6", "rows": ["V6", "V6-sens"], "verdict": verdict, "reason": UNSIZED_REASON,
-            "rehearsal_run_ids": list(UNSIZED_RUN_IDS), "bound": UNSIZED_BOUND, "intervention": UNSIZED_INTERVENTION,
+            "rehearsal_run_ids": list(UNSIZED_RUN_IDS), "bound": UNSIZED_BOUND, "intervention": unsized_intervention(),
             "sized": False, "pass": False, "attestation": v5.attestation_block(a)}  # fmt: skip
 
 

@@ -41,6 +41,33 @@ def test_v6_shards_fail_closed_until_14a(
         s6.main(["v6-shard", "--seed-base", "20471004", "--out-dir", str(tmp_path)])
 
 
+def _fake_record(
+    monkeypatch: pytest.MonkeyPatch, s6: ModuleType, repo: Path, *, with_response: bool
+) -> Path:
+    rec = repo / "reference_requests" / "interventions" / "IR-20261011-031924-C205C8"
+    rec.mkdir(parents=True)
+    (rec / "request.json").write_text("{}")
+    if with_response:
+        (rec / "response.json").write_text("{}")
+    monkeypatch.setattr(s6, "REPO", repo)
+    return rec
+
+
+@pytest.mark.parametrize("with_response", [False, True])
+def test_unsized_intervention_is_derived_from_the_committed_record(
+    s6: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, with_response: bool
+) -> None:
+    monkeypatch.setattr(s6, "REPO", tmp_path / "no-record")  # directory absent
+    with pytest.raises(SystemExit, match=r"IR-20261011-031924-C205C8/response\.json"):
+        s6.unsized_intervention()
+    _fake_record(monkeypatch, s6, tmp_path / "repo", with_response=with_response)
+    if with_response:
+        assert s6.unsized_intervention() == s6.UNSIZED_INTERVENTION_STATUS
+    else:
+        with pytest.raises(SystemExit, match=r"response\.json"):
+            s6.unsized_intervention()
+
+
 @pytest.mark.parametrize(
     ("step", "verdict"),
     [
@@ -50,8 +77,14 @@ def test_v6_shards_fail_closed_until_14a(
     ],
 )
 def test_unsized_steps_record_a_failed_document_and_exit_nonzero(
-    s6: ModuleType, tmp_path: Path, capsys: pytest.CaptureFixture[str], step: str, verdict: str
+    s6: ModuleType,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    step: str,
+    verdict: str,
 ) -> None:
+    _fake_record(monkeypatch, s6, tmp_path / "repo", with_response=True)
     rc = s6.main([step, "--dirs", str(tmp_path)])
     doc = _json_of(capsys.readouterr().out)
     assert rc != 0 and doc["pass"] is False and doc["step"] == step
@@ -60,7 +93,11 @@ def test_unsized_steps_record_a_failed_document_and_exit_nonzero(
     assert doc["rehearsal_run_ids"] == [
         "RUN-20261011T030353Z-0b25db97", "RUN-20261011T030829Z-537a9857", "RUN-20261011T031141Z-88a536e0",
     ]  # fmt: skip
-    assert doc["intervention"] == "IR-20261011-031924-C205C8 (on record; not awaited)"
+    assert doc["intervention"] == (
+        "IR-20261011-031924-C205C8: resolved 2026-10-11 \u2014 operator acknowledged the autonomous resolution "
+        "(Amendment 18 (a)); V6/V6-sens stay failed at the sizing stage"
+    )
+    assert "not awaited" not in doc["intervention"]
     b = doc["bound"]
     r0 = b["r0_clause"]
     assert (
