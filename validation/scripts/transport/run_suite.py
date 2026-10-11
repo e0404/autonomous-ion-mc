@@ -1012,6 +1012,12 @@ REHEARSAL_SEED_FAMILY = (20505000, 20509499)
 V7R_SHARD_STEP = re.compile(r"v7r-s\d+")
 
 
+def step_base_name(name: str) -> str:
+    """``v7r-s0`` for the registered step name ``30-v7r-s0`` (the ``NN-`` prefix stripped; a bare name is
+    returned unchanged)."""
+    return re.sub(r"^\d+-", "", name)
+
+
 def rehearsal_generation_run(only: list[str] | None, seed_base: int | None) -> bool:
     """True for the controlled rehearsal-generation path: ``--only`` selects solely ``v7r-s{k}`` steps (k a shard
     index) AND the seed base lies in the rehearsal family 20505000-20509499. Both conditions are required."""
@@ -1019,7 +1025,8 @@ def rehearsal_generation_run(only: list[str] | None, seed_base: int | None) -> b
         return False
     if not REHEARSAL_SEED_FAMILY[0] <= seed_base <= REHEARSAL_SEED_FAMILY[1]:
         return False
-    return all(V7R_SHARD_STEP.fullmatch(o) and int(o[5:]) < V7R_SHARDS for o in only)
+    names = [step_base_name(o) for o in only]
+    return all(V7R_SHARD_STEP.fullmatch(o) and int(o[5:]) < V7R_SHARDS for o in names)
 
 
 def rehearsal_preflight(suite: str, only: list[str] | None = None, seed_base: int | None = None) -> str | None:
@@ -1298,10 +1305,6 @@ def main(argv: list[str] | None = None) -> int:
         )
     if out.exists():
         raise SystemExit(f"refusing to reuse an existing results directory: {out}")
-    refusal = rehearsal_preflight(args.suite, args.only, args.seed_base)
-    if refusal:
-        raise SystemExit(refusal)
-    sha, source = resolve_sha(args.expected_sha)
     steps = suite_steps(
         args.suite,
         workers,
@@ -1322,6 +1325,14 @@ def main(argv: list[str] | None = None) -> int:
                 f"--only {args.only} does not select exactly those steps of {args.suite}"
             )
         steps = keep
+    # The preflight sees the SELECTED step names (``--only`` takes step numbers such as ``30``; the names
+    # carry the ``NN-`` prefix), so the generation-path exemption can recognise ``v7r-s{k}`` selections.
+    refusal = rehearsal_preflight(
+        args.suite, [step_base_name(x[0]) for x in steps] if args.only else None, args.seed_base
+    )
+    if refusal:
+        raise SystemExit(refusal)
+    sha, source = resolve_sha(args.expected_sha)
     porcelain = git("status", "--porcelain")
     if porcelain:
         raise SystemExit(

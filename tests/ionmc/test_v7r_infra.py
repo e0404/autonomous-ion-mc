@@ -849,6 +849,13 @@ def test_lv5c_start_preflight_refuses_an_absent_or_stale_rehearsal_fixture(
         (["v7r-s0"], 20505000, True),
         (["v7r-s0", "v7r-s15"], 20509499, True),
         (["v7r-s3"], 20507123, True),
+        (
+            ["30-v7r-s0"],
+            20505000,
+            True,
+        ),  # registered names as main() passes them (--only takes numbers)
+        (["30-v7r-s0", "31-v7r-s1"], 20505000, True),
+        (["47-pytest-v7r-calibration-s0"], 20505000, False),
         (None, 20505000, False),  # the full suite
         ([], 20505000, False),
         (["v7r-s0"], 20481004, False),  # the evidence base
@@ -883,6 +890,13 @@ def test_rehearsal_generation_path_exemption(
     assert (
         rs.rehearsal_preflight("lv5b", only, seed_base) is None
     )  # other suites are not preflighted
+
+
+def test_step_base_name_strips_the_registration_prefix() -> None:
+    rs = _load("run_suite")
+    assert rs.step_base_name("30-v7r-s0") == "v7r-s0"
+    assert rs.step_base_name("v7r-s0") == "v7r-s0"
+    assert rs.step_base_name("07-lv5c-throughput") == "lv5c-throughput"
 
 
 def test_run_suite_main_exits_on_the_preflight_refusal(
