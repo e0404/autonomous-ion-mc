@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import math
@@ -29,6 +30,7 @@ def _load():
 
 
 M = _load()
+cb = M._batches_module()
 
 
 def curve(shift_mm: float = 0.0, plateau_scale: float = 1.0, extra: float = 0.0) -> np.ndarray:
@@ -185,7 +187,7 @@ def _mc_input(nuc: bool, seed: int, extra: str = "") -> bytes:
 
 def _topas_run(
     tmp: Path, e: int, nuc: bool, seed: int, noise: float, label: tuple[int, bool] | None = None,
-    extra: str = "", input_bytes: bytes | None = None,
+    extra: str = "", input_bytes: bytes | None = None, v5_seed: bool = False,
 ) -> Path:  # fmt: skip
     idd = _scaled(e, nuc) * (1.0 + noise)
     gy = idd * 1e5 * 0.05 * M.MEV_J / 0.08  # 400 x 400 x 0.5 mm = 80 cm3 = 0.08 kg
@@ -205,6 +207,8 @@ def _topas_run(
             "mode": "full" if (label or (e, nuc))[1] else "emonly",
         },
     }
+    if v5_seed:  # the V11 cases also carry the per-seed value in the nested v5 block
+        case["v5"]["seed"] = seed
     files = {
         "work/idd_dose.csv": csv.encode(),
         "inputs/input.txt": input_bytes or _topas_input(e, nuc, seed, extra),
@@ -648,3 +652,72 @@ def test_build_verdict_without_engine_runs_is_refused(tmp_path: Path) -> None:
         M.build_verdict(ion, topas, [], cases)
     with pytest.raises(M.IddError, match="no topas reference runs"):
         M.build_verdict(ion, [], [], cases)
+
+
+# -- seed-free normalisation of the nested v5.seed (C9a) -------------------------------------------
+def test_replicates_carrying_v5_seed_share_one_fingerprint(tmp_path: Path) -> None:
+    """Fails if ``("v5", "seed")`` is dropped from ``_CASE_SEED_PATHS`` (checked by reverting it)."""
+    runs = [_topas_run(tmp_path / f"t{s}", 150, True, 1 + s, 0.0, v5_seed=True) for s in range(3)]
+    assert all(load_run(r).case["v5"]["seed"] == load_run(r).case["seeds"][0] for r in runs)
+    g = _load_groups(tmp_path, runs, "topas")[(150, True)]
+    assert len({f["config_sha256"] for f in g["fingerprints"].values()}) == 1
+    assert g["seeds"] == [1, 2, 3]
+
+
+def test_seed_free_case_strips_only_the_seed_paths() -> None:
+    case = {"seeds": [1], "rationale": "r", "histories": 5, "v5": {"seed": 1, "row": "V11"}}
+    assert cb.seed_free_case(case) == {"histories": 5, "v5": {"row": "V11"}}
+    assert case["v5"]["seed"] == 1  # input not mutated
+    assert cb.seed_free_case({"histories": 5}) == {"histories": 5}
+    assert cb.seed_free_case({"v5": "x"}) == {"v5": "x"}
+
+
+_REF = Path(__file__).resolve().parents[2] / "validation/reference_cases"
+
+
+def _committed_parts(engine: str, d: Path) -> dict:
+    case = json.loads((d / "case.json").read_text())
+    native = (d / case["input"]).read_text()
+    aux = {
+        f"inputs/{f.name}": hashlib.sha256(f.read_bytes()).hexdigest()
+        for f in sorted(d.iterdir())
+        if f.name not in ("case.json", case["input"])
+    }
+    return cb.seed_free_parts(engine, case, native, aux)
+
+
+def _config_sha(parts: dict) -> str:
+    return hashlib.sha256(json.dumps(parts, sort_keys=True).encode()).hexdigest()
+
+
+def test_frozen_v5_config_sha256_is_pinned() -> None:
+    """The seed-free fingerprints of the frozen V5 cases must not change with the normalisation."""
+    pins = {
+        (
+            "topas",
+            "proton-water-150mev-idd-r20-seed1",
+        ): "5189051f75977b41f1fb4d151856564ea665b77fee207554bb762f16c9b28cc1",
+        (
+            "mcsquare",
+            "proton-water-150mev-idd-r20-on-seed1",
+        ): "c3880b122f6d2f943006fb3b5d3592327515b668149c4493c3ed7a275f75d7b6",
+    }
+    for (engine, name), pin in pins.items():
+        got = _config_sha(_committed_parts(engine, _REF / engine / name))
+        assert got == pin, (engine, name)
+
+
+def test_committed_v5_v11_groups_are_seed_free_identical_and_distinct() -> None:
+    groups: dict[tuple[str, str], list[str]] = {}
+    for engine in ("topas", "mcsquare"):
+        for d in sorted((_REF / engine).glob("proton-water-*mev-idd-r20-*-seed[123]")) + sorted(
+            (_REF / engine).glob("proton-water-*mev-idd-r20-seed[123]")
+        ):
+            family = d.name.rsplit("-seed", 1)[0]
+            groups.setdefault((engine, family), []).append(_config_sha(_committed_parts(engine, d)))
+    # topas: 150/200 x {full, emonly, emelastic, noelastic}; mcsquare: 150/200 x {on, off}
+    assert len([k for k in groups if k[0] == "topas"]) == 8
+    assert len([k for k in groups if k[0] == "mcsquare"]) == 4
+    for key, shas in groups.items():
+        assert len(shas) == 3 and len(set(shas)) == 1, key
+    assert len({v[0] for v in groups.values()}) == len(groups)  # distinct groups differ

@@ -7,6 +7,8 @@ MIN_RUNS runs with DISTINCT seeds are required. A run's seed is read only from i
 ``inputs/case.json`` (``seeds`` must hold exactly one integer) and cross-checked against the
 native input that was actually run (TOPAS ``Ts/Seed``, MCsquare ``RNG_Seed``, FRED ``-rseed``),
 both verified against the transfer manifest; no CLI or detached metadata can supply seeds.
+The replicate-group fingerprint (``config_sha256``) is seed-free: the native seed line and the
+case.json key paths ``seeds``, ``rationale`` and the nested ``v5.seed`` are excluded, nothing else.
 Within an engine all runs must share source commit, case ``input`` name, histories
 (>= MIN_HISTORIES) and depth-bin width (<= MAX_BIN_MM). Any violation exits non-zero: this
 script has no exploratory fallback (use compare_depth_dose.py for single runs). Statistics:
@@ -23,6 +25,7 @@ dirty flag; --code-sha, if given, must equal HEAD.
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import itertools
 import json
@@ -203,8 +206,10 @@ _IDENTITY_KEYS = (
     "gpu",
     "dirty",
 )
-# case.json fields allowed to differ between seed variants: the seed list and the rationale text
-_CASE_SEED_FIELDS = ("seeds", "rationale")
+# case.json fields allowed to differ between seed variants, as key paths: the seed list, the
+# rationale text and the per-seed copy of the seed inside the nested ``v5`` block (carried by the
+# V11 / X-elastic-factor cases ``...-{emelastic,noelastic}-seed<k>``; the frozen V5 cases have none)
+_CASE_SEED_PATHS: tuple[tuple[str, ...], ...] = (("seeds",), ("rationale",), ("v5", "seed"))
 
 
 def _sha(blob: bytes) -> str:
@@ -224,6 +229,40 @@ def fred_rseed(args: list[Any]) -> tuple[int, list[Any]]:
     if i + 1 >= len(args) or not re.fullmatch(r"[1-9][0-9]*", str(args[i + 1])):
         raise BatchError("'-rseed' must be followed by a positive integer")
     return int(args[i + 1]), args[:i] + args[i + 2 :]
+
+
+def seed_free_case(case: dict[str, Any]) -> dict[str, Any]:
+    """Copy of a case.json without the per-seed fields listed in ``_CASE_SEED_PATHS``.
+
+    The seed variants of one group differ in the seed list, the rationale text and, for the V11
+    cases, in the nested ``v5.seed``; excluding exactly these key paths (nothing else, and a missing
+    path is a no-op) lets the replicates share one ``config_sha256``. Cases without ``v5.seed``
+    normalise exactly as before.
+    """
+    out = copy.deepcopy(case)
+    for path in _CASE_SEED_PATHS:
+        node: Any = out
+        for key in path[:-1]:
+            node = node.get(key) if isinstance(node, dict) else None
+        if isinstance(node, dict):
+            node.pop(path[-1], None)
+    return out
+
+
+def seed_free_parts(
+    engine: str, case: dict[str, Any], native: str, aux: dict[str, str]
+) -> dict[str, Any]:
+    """The seed-free ``config_parts`` of a run (case, native input, other input hashes)."""
+    if engine in _SEED_LINE:
+        native = _SEED_LINE[engine].sub("", native)
+    case = seed_free_case(case)
+    if engine == "fred":
+        case["arguments"] = fred_rseed(list(case.get("arguments", [])))[1]
+    return {
+        "case_sha256": _sha(json.dumps(case, sort_keys=True).encode()),
+        "native_normalized_sha256": _sha(native.encode()),
+        "aux_inputs_sha256": aux,
+    }
 
 
 def run_fingerprint(run: ReferenceRun) -> dict[str, Any]:
@@ -274,19 +313,10 @@ def run_fingerprint(run: ReferenceRun) -> dict[str, Any]:
     if run.request.get("dirty") is not False or run.request.get("code_sha") != run.source_sha:
         raise BatchError(f"{run.run_id}: run not made from a clean commit == source_sha")
     # seed-free normalization
-    if run.engine in _SEED_LINE:
-        native = _SEED_LINE[run.engine].sub("", native)
-    case = {k: v for k, v in run.case.items() if k not in _CASE_SEED_FIELDS}
-    if run.engine == "fred":
-        case["arguments"] = fred_rseed(list(case.get("arguments", [])))[1]
+    parts = seed_free_parts(run.engine, run.case, native, aux)
     identity = {k: run.request.get(k) for k in _IDENTITY_KEYS}
     if identity["engine"] is None:
         raise BatchError(f"{run.run_id}: request.json lacks the engine identity")
-    parts = {
-        "case_sha256": _sha(json.dumps(case, sort_keys=True).encode()),
-        "native_normalized_sha256": _sha(native.encode()),
-        "aux_inputs_sha256": aux,
-    }
     label = run.engine
     if run.engine == "topas":
         mods = re.findall(r"^[ \t]*sv:Ph/Default/Modules[ \t]*=.*$", native, re.M)
