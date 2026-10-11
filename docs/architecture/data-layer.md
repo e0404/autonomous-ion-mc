@@ -215,7 +215,10 @@ exact P_accept < 0.5 and on sigma > 0 without yields.
 hash-pinned LA150 proton sublibrary, AME2020 and the Geant4 11.4.2 Barashenkov/BGG sources (registry
 ids `geant4-*-11.4.2`; the PDG p-p compilation `pdg-rpp2022-pp-elastic` has role "evaluation" and is not a construction input). Git holds only the registry entries, the EXFOR
 manifest and `src/ionmc/data/elastic_table_pin.json` (id and hashes); the table is not in Git. This
-step builds data only: no transport kernel uses the table yet (C3 to C5).
+step builds data only. The table is now consumed by the elastic transport of the python reference
+(V3-005C C3) and of the Warp CPU/CUDA kernels (C4) through the packed `ElasticDevice`; transport uses the pinned table
+id of `elastic_table_pin.json` (`PhysicsOptions.elastic_table_id`, the lv5c/hr5c suites pin it explicitly), see "Hadronic
+elastic channel" in `transport.md`.
 
 - **Targets.** `H-1` followed by the seven LA150 targets of the nuclear table (same
   `ELEMENT_TARGET` map and `(A_el/A_ref)^(2/3)` surrogate scaling; hydrogen has its own target).

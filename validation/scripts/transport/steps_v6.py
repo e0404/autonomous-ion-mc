@@ -200,6 +200,8 @@ def _produce(a: argparse.Namespace, name: str, kind: str, variant: str, r_index:
         "precision": precision, "beam": bp, "grid": grid_record(v6_geometry()[1]),
         "weights_digest": digest, "sphere": {"diameter_mm": g.SPHERE_DIAMETER_MM, "subsamples": g.SPHERE_SUBSAMPLES},
         "depths_cm": list(g.DEPTHS_CM), "radii_cm": list(g.RADII_CM), "unit": "MeV/g per primary",
+        "effective": {"backend": res.effective_config.backend, "precision": res.effective_config.precision,
+                      "device": res.device},
         "dose_batches": avg.tolist(), "valid": ok, "reduced": n < V6_SHARD_N,
         "outside_over_initial": float(eb.outside_mev[0] / eb.initial_mev),
         "convention": "(tan thx, tan thy, 1) normalised; theta = sigma_theta (rho g1 + sqrt(1 - rho^2) g2)",
@@ -224,16 +226,16 @@ def step_v6_sens_shard(a: argparse.Namespace) -> int:
                     "warp-cpu", "float64")  # fmt: skip
 
 
+_CUDA_TARGET = ("warp-cuda", "float32")
+"""``(backend, precision)`` of the hr5c producers. Never taken from the environment: only a test process may
+replace this module constant (monkeypatch) to emulate the CUDA path on a host without a GPU."""
+_TEST_ACCEPT_REDUCED_LV5C = False
+"""Test-only (monkeypatched in the test process, never from the environment): accept a sealed lv5c verdict that
+is not the full-scale qualification run (other seed base, reduced scale)."""
+
+
 def cuda_target() -> tuple[str, str]:
-    """``(backend, precision)`` of the hr5c producers: warp-cuda float32. A test-only override
-    (``IONMC_V6_CUDA_TEST_BACKEND``, e.g. warp-cpu) emulates the sens-free CUDA path on a host without a GPU; it
-    is refused unless running under pytest."""
-    over = os.environ.get("IONMC_V6_CUDA_TEST_BACKEND")
-    if over:
-        if "PYTEST_CURRENT_TEST" not in os.environ:
-            raise SystemExit("IONMC_V6_CUDA_TEST_BACKEND is a test-only override (refused outside pytest)")
-        return over, "float64"  # float64 so that the emulation can be made bit-identical to the lv5c sample
-    return "warp-cuda", "float32"
+    return _CUDA_TARGET
 
 
 def step_v6_cuda_shard(a: argparse.Namespace) -> int:
@@ -265,7 +267,7 @@ def step_v6_e0(a: argparse.Namespace) -> int:
              "range_construction": "exact-loglog-quadrature-v1", "water_I_eV": M.WATER.mean_excitation_eV,
              "primary_range_call": "BetheStoppingSource().table(M.WATER, PROTON).range_at (as steps_v5.depth_box)"}  # fmt: skip
     rec = g.e0_record(g.PARMS_FROZEN["p1"], f["rho"], f["range"], f["inverse"], f["stopping"],
-                      lambda e: float(tabs.range_g_cm2(0, e)), ident, code_sha=base.os.environ.get("IONMC_RUN_SHA"))
+                      lambda e: float(tabs.range_g_cm2(0, e)), ident, code_sha=os.environ.get("IONMC_RUN_SHA"))
     record: dict[str, Any] = {}
     try:
         tex, record = g.load_halo_tex()
@@ -296,6 +298,12 @@ def _load_group(a: argparse.Namespace, names: tuple[str, ...], r_index: int, kin
             raise SystemExit(f"{d.get('name')}: shard binding (seed/shard/kind/variant/backend/valid) mismatch")
     if len(docs) != n_shards:
         raise SystemExit("incomplete shard set")
+    for d in docs:  # the backend that actually ran (effective configuration and run metadata), not the request
+        eff = d.get("effective") or {}
+        if eff.get("backend") != backend or eff.get("precision") != precision:
+            raise SystemExit(f"{d.get('name')}: effective backend/precision {eff!r} is not {backend}/{precision}")
+        if backend == "warp-cuda" and "cuda" not in str(eff.get("device", "")).lower():
+            raise SystemExit(f"{d.get('name')}: recorded device {eff.get('device')!r} is not a CUDA device")
     return docs
 
 
@@ -345,7 +353,7 @@ def _compare(a: argparse.Namespace, *, cuda: bool) -> int:
     n_shards = require_shards()
     check_base(base.SEED_BASE)
     step = "v6-cuda-compare" if cuda else "v6-compare"
-    doc: dict[str, Any] = {"step": step, "row": "V6", "lineage": g.LINEAGE, "attestation": v5.attestation_block(a)}
+    doc: dict[str, Any] = {"step": step, "row": "V6", "lineage": g.LINEAGE}
     reasons: list[str] = []
     reasons_extra: list[str] = []
     try:
@@ -406,7 +414,9 @@ def _compare(a: argparse.Namespace, *, cuda: bool) -> int:
             else:
                 reasons_extra.append("no usable sealed lv5c verdict (v6-lv5c-verdict.json): fail closed")
         else:
-            v5c_seal = v5c.write_partial_c(a, LV5C_VERDICT.removesuffix(".json"), {"row": "V6", "verdict": _compact(ver)})
+            v5c_seal = v5c.write_partial_c(a, LV5C_VERDICT.removesuffix(".json"), {
+                "row": "V6", "verdict": _compact(ver), "n_shards": n_shards, "n_per_shard": docs[0]["n"],
+                "n_batches_per_shard": docs[0]["n_batches"], "reduced": any(d["reduced"] for d in docs)})
             doc["verdict_partial"] = v5c_seal
         status = doc["status"]
         if cuda:
@@ -434,6 +444,7 @@ def _compare(a: argparse.Namespace, *, cuda: bool) -> int:
         doc["pass"] = False
         reasons = [str(exc)]
     doc["reasons"] = reasons
+    doc["attestation"] = v5.attestation_block(a)  # after ALL loads (partials, imported lv5c verdict)
     return v5b.finish5b(doc, V6_SHARD_N * n_shards, V6_SHARD_N * n_shards, False)
 
 
@@ -481,10 +492,22 @@ def _optional_verdict(a: argparse.Namespace) -> dict[str, Any] | None:
             raise SystemExit(f"{LV5C_VERDICT}: {key} is {doc.get(key)!r}, expected {want[key]!r}")
     if doc.get("suite") != "lv5c" or doc.get("seed_base") in SEED_BASES_REFUSED:
         raise SystemExit(f"{LV5C_VERDICT}: not a verdict of an unconsumed lv5c run")
+    shape = {"seed_base": doc.get("seed_base"), "scale": doc.get("scale"), "n_shards": doc.get("n_shards"),
+             "n_per_shard": doc.get("n_per_shard"), "n_batches_per_shard": doc.get("n_batches_per_shard"),
+             "reduced": doc.get("reduced")}  # fmt: skip
+    if not _TEST_ACCEPT_REDUCED_LV5C:
+        want_shape = {"seed_base": LV5C_SEED_BASE, "scale": 1.0, "n_shards": V6_SHARDS, "n_per_shard": V6_SHARD_N,
+                      "n_batches_per_shard": V6_BATCHES, "reduced": False}  # fmt: skip
+        if V6_SHARDS is None or shape != want_shape:
+            raise SystemExit(
+                f"{LV5C_VERDICT}: not the designated lv5c qualification run (recorded {shape}, required {want_shape})"
+            )
+    verdict = dict(doc["verdict"])
+    verdict["_binding"] = shape
     if not hasattr(a, "attested_partials"):
         a.attested_partials = []
     a.attested_partials.append(record)
-    return doc["verdict"]
+    return verdict
 
 
 def _reasons(doc: dict[str, Any]) -> list[str]:

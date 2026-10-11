@@ -892,7 +892,7 @@ def rehearsal_fixture_digest() -> str:
 def step_environment(env_base: dict[str, str], name: str, extra: dict[str, str]) -> dict[str, str]:
     """Environment of one step: ``env_base`` plus ``extra``; the V7-R calibration steps never inherit
     ``IONMC_V7R_REHEARSAL_DIR`` (the committed fixture directory is the only one they may use)."""
-    env = {**env_base, **extra}
+    env = {k: v for k, v in {**env_base, **extra}.items() if not k.startswith("IONMC_V6_")}  # no V6 override
     if V7R_CALIBRATION_STEP_PREFIX in name:
         env.pop(REHEARSAL_DIR_ENV, None)
     return env

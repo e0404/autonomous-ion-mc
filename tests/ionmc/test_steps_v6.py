@@ -248,7 +248,7 @@ def e2e(s6: ModuleType, tmp_path_factory: pytest.TempPathFactory) -> dict[str, P
             assert s6.main(["v6-sens-shard", "--variant", v, *common]) == 0
         out["cpu"] = cpu
         mp.setenv("IONMC_RUN_SUITE", "hr5c")
-        mp.setenv("IONMC_V6_CUDA_TEST_BACKEND", "warp-cpu")
+        mp.setattr(s6, "_CUDA_TARGET", ("warp-cpu", "float64"))
         for name, base_ in (
             ("same", 20514000),
             ("diff", 20515000),
@@ -267,15 +267,18 @@ def _run_compare(
     s6: ModuleType,
     mp: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
-    dirs: Path,
+    dirs: Path | list[Path],
     cuda: bool,
     base_: int,
     suite: str,
     sens_holds: bool | None,
     meas_from: Path,
+    extra: list[str] | None = None,
+    accept_reduced: bool = True,
 ) -> tuple[int, dict[str, Any]]:
     g = s6.gv6()
     orig = s6._data
+    dl = dirs if isinstance(dirs, list) else [dirs]
     cpu_mean = np.array(
         json.loads((meas_from / "samples" / "v6-s0.json").read_text())["dose_batches"]
     ).mean(axis=0)
@@ -288,25 +291,15 @@ def _run_compare(
 
     mp.setattr(s6, "_data", fake)
     mp.setattr(s6, "V6_SHARDS", 1)
+    mp.setattr(s6, "_TEST_ACCEPT_REDUCED_LV5C", accept_reduced)
     if sens_holds is not None:
         mp.setattr(
             g, "_sens_status", lambda *a, **k: {"condition_holds": sens_holds, "variants": {}}
         )
     mp.setenv("IONMC_RUN_SUITE", suite)
     step = "v6-cuda-compare" if cuda else "v6-compare"
-    rc = s6.main(
-        [
-            step,
-            "--dirs",
-            str(dirs),
-            "--scale",
-            "0.002",
-            "--seed-base",
-            str(base_),
-            "--out-dir",
-            str(dirs / "samples"),
-        ]
-    )
+    rc = s6.main([step, "--dirs", *map(str, dl), "--scale", "0.002", "--seed-base", str(base_),
+                  "--out-dir", str(dl[0] / "samples"), *(extra or [])])  # fmt: skip
     return rc, _json_of(capsys.readouterr().out)
 
 
@@ -333,7 +326,7 @@ def test_cuda_compare_inherits_lv5c_status_and_enforces_agreement(
         )
         base_ = 20514000 if name == "same" else 20515000
         with monkeypatch.context() as mp:
-            mp.setenv("IONMC_V6_CUDA_TEST_BACKEND", "warp-cpu")
+            mp.setattr(s6, "_CUDA_TARGET", ("warp-cpu", "float64"))
             rc, doc = _run_compare(s6, mp, capsys, d, True, base_, "hr5c", sens_holds, e2e["cpu"])
         comb = doc["backend_combination"]
         # the CUDA sample is judged under the lv5c status; its gate is a boolean, never pending
@@ -378,7 +371,7 @@ def test_cuda_compare_without_sealed_lv5c_verdict_fails_closed(
     shutil.copytree(e2e["same"], d)
     (d / "samples" / "v6-lv5c-verdict.json").unlink(missing_ok=True)
     with monkeypatch.context() as mp:
-        mp.setenv("IONMC_V6_CUDA_TEST_BACKEND", "warp-cpu")
+        mp.setattr(s6, "_CUDA_TARGET", ("warp-cpu", "float64"))
         rc, doc = _run_compare(s6, mp, capsys, d, True, 20514000, "hr5c", None, e2e["cpu"])
     assert (
         rc == 1
@@ -389,13 +382,61 @@ def test_cuda_compare_without_sealed_lv5c_verdict_fails_closed(
     assert any("fail closed" in r for r in doc["reasons"])
 
 
-def test_cuda_test_backend_override_refused_outside_pytest(
-    s6: ModuleType, monkeypatch: pytest.MonkeyPatch
+def test_no_environment_variable_can_change_the_cuda_backend(
+    s6: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    rs = _load("run_suite")
     monkeypatch.setenv("IONMC_V6_CUDA_TEST_BACKEND", "warp-cpu")
-    monkeypatch.delenv("PYTEST_CURRENT_TEST")
-    with pytest.raises(SystemExit, match="test-only"):
-        s6.cuda_target()
+    monkeypatch.setenv("PYTEST_CURRENT_TEST", "spoofed")
+    assert (
+        s6.cuda_target() == ("warp-cuda", "float32")
+        and "IONMC_V6_CUDA_TEST_BACKEND" not in Path(s6.__file__).read_text()
+    )
+    env = rs.step_environment({"IONMC_V6_CUDA_TEST_BACKEND": "warp-cpu", "IONMC_V6_X": "1", "A": "b"}, "01-v6-cuda-s0",
+                              {"IONMC_V6_Y": "2"})  # fmt: skip
+    assert env == {"A": "b"}
+    monkeypatch.setattr(s6, "V6_SHARDS", 1)
+    monkeypatch.setenv("IONMC_RUN_SUITE", "hr5c")
+    try:
+        rc = s6.main(
+            [
+                "v6-cuda-shard",
+                "--shard",
+                "0",
+                "--scale",
+                "0.002",
+                "--out-dir",
+                str(tmp_path),
+                "--seed-base",
+                "20491004",
+            ]
+        )
+        ok = rc == 0  # a host with CUDA: the partial must record warp-cuda
+    except Exception:  # noqa: BLE001  (no CUDA on this host: the real step fails closed)
+        ok = False
+    if ok:
+        assert (
+            json.loads((tmp_path / "v6-cuda-s0.json").read_text())["effective"]["backend"]
+            == "warp-cuda"
+        )
+    else:
+        assert not (tmp_path / "v6-cuda-s0.json").exists()
+
+
+def test_cuda_compare_refuses_a_partial_that_did_not_run_on_cuda(
+    s6: ModuleType,
+    e2e: dict[str, Path],
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The emulated samples record warp-cpu: with the real target (warp-cuda) the loader refuses them."""
+    import shutil
+
+    d = e2e["root"] / "notcuda"
+    shutil.copytree(e2e["same"], d)
+    with monkeypatch.context() as mp:
+        with pytest.raises(SystemExit, match="shard binding|effective backend"):
+            _run_compare(s6, mp, capsys, d, True, 20514000, "hr5c", None, e2e["cpu"])
 
 
 def test_combine_backends_pending_cpu_and_sensfree_cuda_regression() -> None:
@@ -437,3 +478,154 @@ def test_combine_backends_pending_cpu_and_sensfree_cuda_regression() -> None:
     c = g.combine_backends(rep, bad)
     assert c["pass"] is False and "r0" in c["disagreement_components"]
     assert g.combine_backends(rep, rep)["pass"] is True
+
+
+# ---- review fixes F1/F2: the imported lv5c verdict is bound to the qualification run and attested ----
+@pytest.fixture(scope="module")
+def e2e_qual(
+    s6: ModuleType, e2e: dict[str, Path], tmp_path_factory: pytest.TempPathFactory
+) -> Path:
+    """lv5c shards at the QUALIFICATION base 20481004 but at reduced scale (the scale refusal)."""
+    mp = pytest.MonkeyPatch()
+    root = tmp_path_factory.mktemp("v6qual")
+    try:
+        mp.setattr(s6, "V6_SHARDS", 1)
+        mp.setenv("IONMC_RUN_SUITE", "lv5c")
+        common = [
+            "--shard",
+            "0",
+            "--scale",
+            "0.002",
+            "--out-dir",
+            str(root / "samples"),
+            "--seed-base",
+            "20481004",
+        ]
+        assert s6.main(["v6-shard", *common]) == 0
+        for v in s6.gv6().SENS_NAMES:
+            assert s6.main(["v6-sens-shard", "--variant", v, *common]) == 0
+    finally:
+        mp.undo()
+    return root
+
+
+def _imported(
+    s6: ModuleType, verdict_dir: Path, tmp: Path, name: str
+) -> tuple[Path, Path, dict[str, Any]]:
+    """An imported copy of ``verdict_dir``'s sealed lv5c verdict with its partials manifest."""
+    import shutil
+
+    imp = tmp / f"imp-{name}"
+    (imp / "samples").mkdir(parents=True)
+    src = verdict_dir / "samples" / "v6-lv5c-verdict.json"
+    shutil.copy(src, imp / "samples" / src.name)
+    digest = json.loads(src.read_text())["content_sha256"]
+    man = tmp / f"manifest-{name}.json"
+    man.write_text(json.dumps({"partials": {src.name: {"content_sha256": digest, "host_run_id": "RUN-TEST"}},
+                               "source": s6.v5.MANIFEST_SOURCE}))  # fmt: skip
+    return (
+        imp,
+        man,
+        {
+            "digest": digest,
+            "manifest_sha256": __import__("hashlib").sha256(man.read_bytes()).hexdigest(),
+        },
+    )
+
+
+def _cuda_run_imported(s6, e2e, capsys, monkeypatch, imp, man, accept):  # type: ignore[no-untyped-def]
+    import shutil
+
+    d = e2e["root"] / f"cuda-{imp.name}"
+    shutil.copytree(e2e["same"], d, dirs_exist_ok=True)
+    (d / "samples" / "v6-lv5c-verdict.json").unlink(missing_ok=True)
+    with monkeypatch.context() as mp:
+        mp.setattr(s6, "_CUDA_TARGET", ("warp-cpu", "float64"))
+        return _run_compare(s6, mp, capsys, [d, imp], True, 20514000, "hr5c", None, e2e["cpu"],
+                            extra=["--partials-manifest", str(man)], accept_reduced=accept)  # fmt: skip
+
+
+def _make_verdict(s6, capsys, monkeypatch, shards_dir, base_):  # type: ignore[no-untyped-def]
+    with monkeypatch.context() as mp:
+        rc, doc = _run_compare(s6, mp, capsys, shards_dir, False, base_, "lv5c", True, shards_dir)
+    return doc
+
+
+def test_imported_verdict_of_a_rehearsal_base_is_refused(
+    s6: ModuleType,
+    e2e: dict[str, Path],
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _make_verdict(s6, capsys, monkeypatch, e2e["cpu"], 20505000)  # rehearsal base 2050xxxx
+    imp, man, _ = _imported(s6, e2e["cpu"], tmp_path, "reh")
+    with pytest.raises(SystemExit, match="designated lv5c qualification run") as ei:
+        _cuda_run_imported(s6, e2e, capsys, monkeypatch, imp, man, accept=False)
+    assert "'seed_base': 20505000" in str(ei.value) and "'scale': 0.002" in str(ei.value)
+
+
+def test_imported_verdict_of_the_qualification_base_at_reduced_scale_is_refused(
+    s6: ModuleType,
+    e2e: dict[str, Path],
+    e2e_qual: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _make_verdict(s6, capsys, monkeypatch, e2e_qual, 20481004)
+    imp, man, _ = _imported(s6, e2e_qual, tmp_path, "qual")
+    with pytest.raises(SystemExit, match="designated lv5c qualification run") as ei:
+        _cuda_run_imported(s6, e2e, capsys, monkeypatch, imp, man, accept=False)
+    assert (
+        "'seed_base': 20481004" in str(ei.value)
+        and "'scale': 0.002" in str(ei.value)
+        and "'reduced': True" in str(ei.value)
+    )
+    # without the manifest entry an imported verdict is refused as well
+    man.write_text(json.dumps({"partials": {}, "source": s6.v5.MANIFEST_SOURCE}))
+    with pytest.raises(SystemExit, match="manifest"):
+        _cuda_run_imported(s6, e2e, capsys, monkeypatch, imp, man, accept=True)
+
+
+def test_imported_verdict_is_attested_in_the_v6_document(
+    s6: ModuleType,
+    e2e: dict[str, Path],
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    summ = _load("summarize")
+    _make_verdict(s6, capsys, monkeypatch, e2e["cpu"], 20505000)
+    imp, man, info = _imported(s6, e2e["cpu"], tmp_path, "att")
+    rc, doc = _cuda_run_imported(
+        s6, e2e, capsys, monkeypatch, imp, man, accept=True
+    )  # test-only acceptance
+    att = doc["attestation"]
+    ent = [p for p in att["partials"] if p["name"] == "v6-lv5c-verdict.json"]
+    assert (
+        len(ent) == 1
+        and ent[0]["origin"] == "imported"
+        and ent[0]["content_sha256"] == info["digest"]
+    )
+    assert ent[0]["host_run_id"] == "RUN-TEST" and att["manifest_sha256"] == info["manifest_sha256"]
+    assert {p["name"] for p in att["partials"]} >= {"v6-cuda-s0.json", "v6-lv5c-verdict.json"}
+    probs = summ.attestation_problems(
+        att, att["run_sha"], {"partials_manifest_sha256": info["manifest_sha256"]}
+    )
+    assert summ.IMPORTED_UNVERIFIED in probs
+    assert (
+        doc["lv5c_verdict"]["_binding"]["seed_base"] == 20505000
+        and doc["lv5c_verdict"]["_binding"]["scale"] == 0.002
+    )
+    # the lv5c compare document lists its own (current-run) partials too
+    _, lv = _run_compare_lv5c_attested(s6, e2e, capsys, monkeypatch)
+    assert {p["name"] for p in lv["attestation"]["partials"]} >= {
+        "v6-s0.json",
+        "v6-sens-nominal-s0.json",
+    }
+
+
+def _run_compare_lv5c_attested(s6, e2e, capsys, monkeypatch):  # type: ignore[no-untyped-def]
+    with monkeypatch.context() as mp:
+        return _run_compare(s6, mp, capsys, e2e["cpu"], False, 20505000, "lv5c", True, e2e["cpu"])
