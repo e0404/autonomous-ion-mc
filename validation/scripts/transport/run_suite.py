@@ -1000,6 +1000,34 @@ def rehearsal_fixture_digest() -> str:
     return hashlib.sha256("\n".join(lines).encode()).hexdigest()
 
 
+REHEARSAL_PREFLIGHT_STEP = "v7r-rehearsal-fixture-preflight"
+
+
+def rehearsal_preflight(suite: str) -> str | None:
+    """Refusal message of the lv5c suite start (``None``: proceed). The calibration shards s15-s29 of
+    ``rehearsal_block_sums`` need the committed rehearsal fixture, valid for the CURRENT hashed-source digest
+    (Amendment 14a (b)2); a missing or stale fixture would only fail those shards hours into the run, so the
+    suite refuses to start. The full verification (``load_rehearsal``) is the CI test
+    ``test_committed_rehearsal_fixture_is_current``; this preflight checks presence and the digest."""
+    if suite != "lv5c":
+        return None
+    d = REPO / REHEARSAL_FIXTURE_DIR
+    prefix = (f"preflight step {REHEARSAL_PREFLIGHT_STEP} (the calibration shards "
+              f"{V7R_CALIBRATION_STEP_PREFIX}-s15..s29 need {REHEARSAL_FIXTURE_DIR}): ")  # fmt: skip
+    prov = d / "PROVENANCE.json"
+    if not d.is_dir() or not prov.is_file():
+        return prefix + "the rehearsal fixture is absent; run the rehearsal shards and commit the fixture first"
+    try:
+        recorded = json.loads(prov.read_text()).get("hashed_source_digest")
+    except ValueError as exc:
+        return prefix + f"PROVENANCE.json unreadable ({exc})"
+    now = hashed_source_digest(suite)
+    if recorded != now:
+        return prefix + (f"the rehearsal fixture is stale (recorded hashed-source digest {recorded!r}, "
+                         f"current {now}); re-run the rehearsal shards at the current hashed sources")  # fmt: skip
+    return None
+
+
 def step_environment(env_base: dict[str, str], name: str, extra: dict[str, str]) -> dict[str, str]:
     """Environment of one step: ``env_base`` plus ``extra``; the V7-R calibration steps never inherit
     ``IONMC_V7R_REHEARSAL_DIR`` (the committed fixture directory is the only one they may use)."""
@@ -1248,6 +1276,9 @@ def main(argv: list[str] | None = None) -> int:
         )
     if out.exists():
         raise SystemExit(f"refusing to reuse an existing results directory: {out}")
+    refusal = rehearsal_preflight(args.suite)
+    if refusal:
+        raise SystemExit(refusal)
     sha, source = resolve_sha(args.expected_sha)
     steps = suite_steps(
         args.suite,

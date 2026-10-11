@@ -506,8 +506,9 @@ def step_v7r_calibration_combine(a: argparse.Namespace) -> int:
     verdict = v7r.calibration_combine(records, reps=v7r.V7R_CAL_REPS)
     doc = {"step": "v7r-calibration-combine", **verdict, "records": len(records),
            "requirements": "per surrogate: joint CP95 upper <= 0.02 at each non-nominal margin; power CP95 lower "
-                           ">= 0.9 at the nominal; each gate alone <= 0.04 by construction (reported rate and CP95 "
-                           "interval; refuted iff CP95 lower > 0.04; contrary reading CP95 upper <= 0.04 reported)",
+                           ">= 0.9 at the nominal; each gate alone CP95 upper <= 0.04 at its own "
+                           "margins (n = 3200: <= 109 accepted); the construction reading (refuted iff CP95 lower > "
+                           "0.04) is reported as gate_alone_construction_reading and never gates",
            "rng": v7r.rng_record(), "attestation": v5.attestation_block(a)}  # fmt: skip
     path = write_partial_c(a, CAL_STATUS_NAME[:-5], doc)
     doc["partial"] = {

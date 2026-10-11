@@ -161,18 +161,30 @@ def test_combine_requirement_verdicts() -> None:
         "power" in f for f in _failures({"nominal": (2908, 2908, 2908)})
     )  # one short of 2909
     assert _failures({"nominal": (2909, 2909, 2909)}) == []
-    # gate alone by construction: refuted only if the CP95 lower bound exceeds 0.04 at the gate's own margin
+    # gate alone (Amendment 14a (b)4): CP95 UPPER <= 0.04 at the gate's own margin, i.e. <= 109 of 3200
+    assert _failures({"paired_high": (0, 109, 0)}) == []
+    assert any("paired gate" in f for f in _failures({"paired_high": (0, 110, 0)}))
+    assert _failures({"single_low": (0, 0, 109)}) == []
+    assert any("single gate" in f for f in _failures({"single_low": (0, 0, 110)}))
     assert any(
-        "refuted" in f and "paired gate" in f for f in _failures({"paired_high": (0, 160, 0)})
+        "paired gate" in f and "CP95 upper" in f for f in _failures({"paired_high": (0, 140, 0)})
     )
-    assert _failures({"paired_high": (0, 140, 0)}) == []  # rate 0.044, lower bound < 0.04: stands
     assert (
         _failures({"single_low": (0, 400, 0)}) == []
     )  # the paired gate at a single margin: not gated
     out = V7R.calibration_combine(_records({"paired_high": (0, 140, 0)}))
-    alone = out["surrogates"]["archive_fitted"]["margins"]["paired_high"]["gate_alone"]["paired"]
-    assert alone["construction_refuted"] is False
-    assert alone["contrary_reading_cp95_upper_le_0.04"] is False and alone["cp95_upper"] > 0.04
+    m = out["surrogates"]["archive_fitted"]["margins"]["paired_high"]
+    alone = m["gate_alone"]["paired"]
+    assert alone["cp95_upper_le_0.04"] is False and alone["cp95_upper"] > 0.04
+    # report-only construction reading: 140/3200 has CP95 lower 0.0380 <= 0.04, not refuted; never gates
+    reading = m["gate_alone_construction_reading"]["paired"]
+    assert reading["construction_refuted"] is False and "not refuted" in reading["verdict"]
+    assert out["pass"] is False
+    out = V7R.calibration_combine(_records({"paired_high": (0, 160, 0)}))
+    reading = out["surrogates"]["archive_fitted"]["margins"]["paired_high"][
+        "gate_alone_construction_reading"
+    ]["paired"]
+    assert reading["construction_refuted"] is True and "refuted" in reading["verdict"]
 
 
 def _write(d: Path, recs: list[dict[str, Any]]) -> None:

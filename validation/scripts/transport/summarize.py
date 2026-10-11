@@ -271,6 +271,8 @@ def parse_step(
         "histories": doc.get("histories") if doc else None,
         "frozen_histories": doc.get("frozen_histories") if doc else None,
         "attestation": doc.get("attestation") if doc else None,
+        "verdict": doc.get("verdict") if doc else None,
+        "reason": doc.get("reason") if doc else None,
     }
 
 
@@ -508,7 +510,21 @@ def step_rows(suite: str | None, steps: dict[str, Any]) -> dict[str, Any]:
         else:
             ok = bool(st.get("pass")) and st.get("status") != "deferred"
             out[row] = {"pass": ok, "step": step, "status": st.get("status", "executed")}
-    return out
+    return {**out, **v6_unsized_rows(suite, steps)}
+
+
+def v6_unsized_rows(suite: str | None, steps: dict[str, Any]) -> dict[str, Any]:
+    """Rows V6 and V6-sens are "failed" (never "pending") when a V6 step recorded the unsized fail-closed document
+    (plan Amendment 14a (a)4): the ``v6-unsized`` step (verdict ``failed``) or the compare step (``failed (unsized)``)."""
+    if suite not in ("lv5c", "hr5c"):
+        return {}
+    for n, st in steps.items():
+        base = n.split("-", 1)[1] if "-" in n else n
+        if base in ("v6-unsized", "v6-compare", "v6-cuda-compare") and str(st.get("verdict") or "").startswith("failed"):
+            rec = {"pass": False, "verdict": "failed", "step": base, "status": "executed",
+                   "reason": st.get("reason")}  # fmt: skip
+            return {"V6": dict(rec), "V6-sens": dict(rec)}
+    return {}
 
 
 def slice_c_rows(suite: str | None, steps: dict[str, Any]) -> dict[str, Any]:

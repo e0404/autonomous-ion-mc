@@ -35,11 +35,38 @@ def test_v6_shards_fail_closed_until_14a(
     s6: ModuleType, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     assert s6.V6_SHARDS is None
-    for step in ("v6-compare", "v6-cuda-compare", "v6-unsized"):
-        with pytest.raises(SystemExit, match="V6_SHARDS"):
-            s6.main([step, "--dirs", str(tmp_path)])
+    with pytest.raises(SystemExit, match="V6_SHARDS"):
+        s6.require_shards()
     with pytest.raises(SystemExit, match="consumed"):
         s6.main(["v6-shard", "--seed-base", "20471004", "--out-dir", str(tmp_path)])
+
+
+@pytest.mark.parametrize(
+    ("step", "verdict"),
+    [
+        ("v6-unsized", "failed"),
+        ("v6-compare", "failed (unsized)"),
+        ("v6-cuda-compare", "failed (unsized)"),
+    ],
+)
+def test_unsized_steps_record_a_failed_document_and_exit_nonzero(
+    s6: ModuleType, tmp_path: Path, capsys: pytest.CaptureFixture[str], step: str, verdict: str
+) -> None:
+    rc = s6.main([step, "--dirs", str(tmp_path)])
+    doc = _json_of(capsys.readouterr().out)
+    assert rc != 0 and doc["pass"] is False and doc["step"] == step
+    assert doc["verdict"] == verdict and doc["verdict"] != "pending"
+    assert doc["reason"] == "not sized under the pre-registered rule"
+    assert doc["rehearsal_run_ids"] == [
+        "RUN-20261011T030353Z-0b25db97", "RUN-20261011T030829Z-537a9857", "RUN-20261011T031141Z-88a536e0",
+    ]  # fmt: skip
+    assert doc["intervention"] == "IR-20261011-031924-C205C8 (on record; not awaited)"
+    b = doc["bound"]
+    assert (
+        b["r0_clause_histories_min_at_z_22.4_cm"] == 3e9
+        and b["r0_clause_histories_min_at_z_22.6_cm"] == 1.3e10
+    )
+    assert b["v6_sens_histories_per_variant_range"] == [1e8, 1e10]
 
 
 def test_seeds_and_names(s6: ModuleType) -> None:

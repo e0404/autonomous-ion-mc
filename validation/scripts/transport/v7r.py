@@ -407,7 +407,7 @@ CAL_MARGINS = ("nominal", "paired_low", "paired_high", "single_low", "single_hig
 CAL_PARTS = 15
 CAL_SEED = 20507000
 CAL_SCHEMA = "ionmc-v7r-calibration-record-1"
-CAL_GATE_LIMIT = 0.04  # alpha_tost of the construction of each gate
+CAL_GATE_LIMIT = 0.04  # each gate alone: CP95 UPPER of its Monte Carlo rate at its own margin <= 0.04
 CAL_JOINT_LIMIT = 0.02
 CAL_POWER_MIN = 0.9
 
@@ -445,10 +445,14 @@ def calibration_evaluate(counts: dict[str, dict[str, int]]) -> dict[str, Any]:
     * joint false acceptance: the one-sided 95 % Clopper-Pearson UPPER bound <= 0.02 at every margin but
       ``nominal``;
     * power: the 95 % CP LOWER bound of the joint rate at ``nominal`` (kappa = 1) >= 0.9;
-    * gate alone (Amendment 14a): <= 0.04 holds BY CONSTRUCTION (the alpha_tost of the gate). The Monte
-      Carlo rate with its CP95 interval is reported at the gate's own margins; the construction is refuted
-      (a failure) iff the CP95 LOWER bound exceeds 0.04, i.e. the data reject a rate of 0.04 or less. The
-      contrary reading (CP95 UPPER <= 0.04) is reported per margin, never gated."""
+    * gate alone (Amendment 14a (b)4, as implemented before the rehearsal): the CP95 UPPER bound of the
+      Monte Carlo rate of each gate at its OWN margins <= 0.04 (n = 3200: at most 109 accepted). The
+      "construction reading" (the gate is refuted iff the CP95 LOWER bound exceeds 0.04) is reported as
+      ``gate_alone_construction_reading`` with its verdict and never gates.
+
+    Bounds at n = 3200 (``steps_v5b.cp_upper/cp_lower``): joint max 50 accepted (observed 0.0156, CP95
+    upper 0.0197; 51 gives 0.0201), gate alone max 109 (upper 0.0398; 110 gives 0.0402), power min 2909
+    (lower 0.9003; 2908 gives 0.8999). Table of n = 200..3200 in ``tests/ionmc/test_v7r_coverage.py``."""
     margins: dict[str, Any] = {}
     failures: list[str] = []
     for name, c in counts.items():
@@ -473,23 +477,29 @@ def calibration_evaluate(counts: dict[str, dict[str, int]]) -> dict[str, Any]:
                     f"{CAL_JOINT_LIMIT} ({rep['joint']}/{n})"
                 )
             alone = {}
+            reading = {}
             for gate in _own_gates(name):
-                refuted = rep[f"{gate}_cp95_lower"] > CAL_GATE_LIMIT
+                upper = rep[f"{gate}_cp95_upper"]
+                lower = rep[f"{gate}_cp95_lower"]
+                ok = upper <= CAL_GATE_LIMIT
+                refuted = lower > CAL_GATE_LIMIT
                 alone[gate] = {
                     "rate": rep[f"{gate}_rate"],
-                    "cp95_lower": rep[f"{gate}_cp95_lower"],
-                    "cp95_upper": rep[f"{gate}_cp95_upper"],
-                    "construction_refuted": refuted,
-                    "contrary_reading_cp95_upper_le_0.04": rep[f"{gate}_cp95_upper"]
-                    <= CAL_GATE_LIMIT,
+                    "cp95_lower": lower,
+                    "cp95_upper": upper,
+                    "cp95_upper_le_0.04": ok,
                 }
-                if refuted:
+                reading[gate] = {
+                    "construction_refuted": refuted,
+                    "verdict": "refuted (CP95 lower > 0.04)" if refuted else "not refuted",
+                }
+                if not ok:
                     failures.append(
-                        f"{name}: {gate} gate alone: CP95 lower {rep[f'{gate}_cp95_lower']:.4f} > "
-                        f"{CAL_GATE_LIMIT}, the construction (alpha_tost) is refuted "
+                        f"{name}: {gate} gate alone: CP95 upper {upper:.4f} > {CAL_GATE_LIMIT} "
                         f"({rep[gate]}/{n})"
                     )
             rep["gate_alone"] = alone
+            rep["gate_alone_construction_reading"] = reading
         margins[name] = rep
     return {"margins": margins, "failures": failures, "pass": not failures}
 

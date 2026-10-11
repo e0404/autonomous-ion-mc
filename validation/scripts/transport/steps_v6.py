@@ -8,7 +8,7 @@ Usage::
 Steps: ``v6-shard`` (lv5c, warp-cpu float64, r_index 12), ``v6-sens-shard`` (lv5c, r_index 20, the nominal
 and the eight variants with common random numbers), ``v6-cuda-shard`` (hr5c, warp-cuda float32,
 r_index 3), ``v6-compare`` / ``v6-cuda-compare`` (consumers, no seed), ``v6-e0`` (the deterministic E0
-record) and ``v6-unsized`` (fails closed until Amendment 14a fixes ``V6_SHARDS``).
+record) and ``v6-unsized`` (records the fail-closed verdict of rows V6 and V6-sens while ``V6_SHARDS`` is unset).
 
 Producers never read the measured dose table: the beam parameters are the plan-frozen ``tbl:parms``
 values (``gottschalk_v6.PARMS_FROZEN``, verified against the e-print by ``v6-e0`` and ``v6-compare``), the
@@ -243,9 +243,31 @@ def step_v6_cuda_shard(a: argparse.Namespace) -> int:
     return _produce(a, f"v6-cuda-s{a.shard}", "cuda", "nominal", V6_CUDA_R_INDEX, backend, precision)
 
 
+UNSIZED_REASON = "not sized under the pre-registered rule"
+UNSIZED_RUN_IDS = ("RUN-20261011T030353Z-0b25db97", "RUN-20261011T030829Z-537a9857", "RUN-20261011T031141Z-88a536e0")
+UNSIZED_INTERVENTION = "IR-20261011-031924-C205C8 (on record; not awaited)"
+UNSIZED_BOUND = {
+    "r0_clause_histories_min_at_z_22.4_cm": 3e9, "r0_clause_histories_min_at_z_22.6_cm": 1.3e10,
+    "v6_sens_histories_per_variant_range": [1e8, 1e10],
+    "statement": "a relative SE <= 0.5 % needs >= 4e4 depositing histories at a point: >= 3e9 histories at "
+                 "z = 22.4 cm and >= 1.3e10 at 22.6 cm; V6-sens (paired SE <= 0.075 at the 32 zero-dose halo points) "
+                 ">= 1e8-1e10 per variant (plan Amendment 14a (a)4)",
+}  # fmt: skip
+
+
+def unsized_document(a: argparse.Namespace, step: str, verdict: str) -> dict[str, Any]:
+    """The fail-closed record of rows V6 and V6-sens (Amendment 14a (a)4, Codex REVIEW-7b4d96c9): the pre-registered
+    history-count rule defines no feasible N_V6, so no shard is run and no reading is amended. ``pass`` is False."""
+    return {"step": step, "row": "V6", "rows": ["V6", "V6-sens"], "verdict": verdict, "reason": UNSIZED_REASON,
+            "rehearsal_run_ids": list(UNSIZED_RUN_IDS), "bound": UNSIZED_BOUND, "intervention": UNSIZED_INTERVENTION,
+            "sized": False, "pass": False, "attestation": v5.attestation_block(a)}  # fmt: skip
+
+
 def step_v6_unsized(a: argparse.Namespace) -> int:
-    require_shards()
-    return 0
+    """Records the fail-closed document (exit status 1: the step is recorded failed)."""
+    if V6_SHARDS is not None:
+        return 0
+    return v5b.finish5b(unsized_document(a, "v6-unsized", "failed"), None, None, False)
 
 
 # -- E0 record ----------------------------------------------------------------------------------
@@ -349,10 +371,12 @@ def _beam_doc(g: Any, common: dict[str, Any]) -> dict[str, Any]:
 
 
 def _compare(a: argparse.Namespace, *, cuda: bool) -> int:
+    step = "v6-cuda-compare" if cuda else "v6-compare"
+    if V6_SHARDS is None:  # no shards exist: the unsized fail-closed verdict, not "pending"
+        return v5b.finish5b(unsized_document(a, step, "failed (unsized)"), None, None, False)
     g = gv6()
     n_shards = require_shards()
     check_base(base.SEED_BASE)
-    step = "v6-cuda-compare" if cuda else "v6-compare"
     doc: dict[str, Any] = {"step": step, "row": "V6", "lineage": g.LINEAGE}
     reasons: list[str] = []
     reasons_extra: list[str] = []

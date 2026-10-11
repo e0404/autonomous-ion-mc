@@ -14,17 +14,16 @@ Requirements (per surrogate, for the two bootstrap-t gates of ``escaped_neutral`
   coverage equal to the low and the high edge of [0.6527, 0.7127], reached by a scale ``kappa`` on
   the
   offsets of the intervals from the point estimate (as Amendment 13);
-* each gate alone <= 0.04 holds BY CONSTRUCTION (the exact alpha_tost of the gate; Amendment 14a): the
-  Monte Carlo rate with its 95 % CP interval is reported at that gate's OWN margins (paired gate at the
-  paired_low/high kappas, single gate at the single_low/high kappas; the other gate's values are
-  reported, not gated). The construction is refuted, a failure, iff the CP95 LOWER bound exceeds 0.04.
-  The contrary reading (CP95 UPPER <= 0.04) is reported per margin and never gated;
+* each gate alone: the 95 % CP UPPER bound of its Monte Carlo false-acceptance rate <= 0.04 at that gate's
+  OWN margins (paired gate at the paired_low/high kappas, single gate at the single_low/high kappas; the
+  other gate's values are reported, not gated; Amendment 14a (b)4, as implemented before the rehearsal).
+  The "construction reading" (the gate is refuted iff the CP95 LOWER bound exceeds 0.04) is reported per
+  margin as ``gate_alone_construction_reading`` and never gates;
 * power >= 0.9: the 95 % CP LOWER bound of the joint pass rate at kappa = 1 (the unscaled gates) is
   >= 0.9.
 
 The joint requirement uses the one-sided 95 % Clopper-Pearson UPPER bound (``cp_upper(k, n, 0.05)``),
-the power requirement and the refutation of the gate construction the LOWER bound. (The "each gate"
-column below is the contrary reading, reported only.) Maximum number of accepted repetitions ``k`` of ``n`` for
+the power requirement the LOWER bound. Maximum number of accepted repetitions ``k`` of ``n`` for
 which the upper bound is still <= the limit, and the minimum number of accepted repetitions at the
 nominal for a lower bound >= 0.9 (exact values, ``steps_v5b.cp_upper/cp_lower``):
 
@@ -36,12 +35,13 @@ n     joint <= 0.02      each gate <= 0.04  power >= 0.9
 400   3 (0.0193)         9 (0.0389)         371 (0.9025)
 800   9 (0.0195)         22 (0.0390)        735 (0.9011)
 1600  22 (0.0196)        50 (0.0394)        1461 (0.9007)
+3200  50 (0.0197)        109 (0.0398)       2909 (0.9003)
 ====  =================  =================  ==================
 
 One more acceptance than the maximum gives the bound 0.0235 / 0.0227 / 0.0211 / 0.0203 (joint) and
-0.0452 / 0.0420 / 0.0405 / 0.0401 (each gate); one fewer than the minimum gives the lower bound
-0.8986
-/ 0.8996 / 0.8997 / 0.9000 (power).
+0.0452 / 0.0420 / 0.0405 / 0.0401 / 0.0402 (each gate); one fewer than the minimum gives the lower
+bound 0.8986 / 0.8996 / 0.8997 / 0.9000 / 0.8999 (power). At n = 3200 the joint maximum 50 is the observed rate
+0.0156 with CP95 upper 0.0197 (51 gives 0.0201).
 
 (The tests ``test_requirement_bounds_*`` pin these numbers.) The repetition count is
 ``IONMC_V7R_CAL_REPS`` (default 200 for sandbox smoke; the calibration steps export 3200). A true false-acceptance rate at the limit (0.02) needs several
@@ -667,45 +667,60 @@ def _verdict(v7r: ModuleType, margin: tuple[int, int, int], nominal: int, n: int
     return evaluate(v7r, rates, n)["failures"]
 
 
-def _refuted_min(v5b: ModuleType, n: int) -> int:
-    """Smallest acceptance count whose CP95 LOWER bound exceeds 0.04 (the construction is refuted)."""
-    return next(k for k in range(n + 1) if v5b.cp_lower(k, n, 0.05) > 0.04)
+def _gate_max(v5b: ModuleType, n: int) -> int:
+    """Largest acceptance count whose CP95 UPPER bound is <= 0.04 (the gate-alone requirement)."""
+    return next(k for k in range(n + 1) if v5b.cp_upper(k, n, 0.05) > 0.04) - 1
 
 
 @pytest.mark.parametrize(
-    ("n", "joint_max", "power_min"),
-    [(200, 0, 188), (400, 3, 371), (800, 9, 735), (1600, 22, 1461), (3200, 50, 2909)],
+    ("n", "joint_max", "gate_max", "power_min"),
+    [
+        (200, 0, 3, 188),
+        (400, 3, 9, 371),
+        (800, 9, 22, 735),
+        (1600, 22, 50, 1461),
+        (3200, 50, 109, 2909),
+    ],
 )
 def test_requirement_bounds_boundaries_match_the_docstring_table(
-    v5b: ModuleType, v7r: ModuleType, n: int, joint_max: int, power_min: int
+    v5b: ModuleType, v7r: ModuleType, n: int, joint_max: int, gate_max: int, power_min: int
 ) -> None:
-    gate_ok = _refuted_min(v5b, n) - 1
-    ok = (joint_max, gate_ok, gate_ok)
+    assert _gate_max(v5b, n) == gate_max
+    ok = (joint_max, gate_max, gate_max)
     assert _verdict(v7r, ok, power_min, n) == []
-    assert _verdict(v7r, (joint_max + 1, gate_ok, gate_ok), power_min, n)  # joint: one more
-    assert _verdict(v7r, (0, gate_ok + 1, gate_ok), power_min, n)  # paired construction refuted
-    assert _verdict(v7r, (0, gate_ok, gate_ok + 1), power_min, n)  # single construction refuted
+    assert _verdict(v7r, (joint_max + 1, gate_max, gate_max), power_min, n)  # joint: one more
+    assert _verdict(v7r, (0, gate_max + 1, gate_max), power_min, n)  # paired gate alone fails
+    assert _verdict(v7r, (0, gate_max, gate_max + 1), power_min, n)  # single gate alone fails
     assert _verdict(v7r, ok, power_min - 1, n)  # power one short
     assert v5b.cp_upper(joint_max, n, 0.05) <= 0.02 < v5b.cp_upper(joint_max + 1, n, 0.05)
-    assert v5b.cp_lower(gate_ok, n, 0.05) <= 0.04 < v5b.cp_lower(gate_ok + 1, n, 0.05)
+    assert v5b.cp_upper(gate_max, n, 0.05) <= 0.04 < v5b.cp_upper(gate_max + 1, n, 0.05)
     assert v5b.cp_lower(power_min, n, 0.05) >= 0.9 > v5b.cp_lower(power_min - 1, n, 0.05)
 
 
-def test_gate_alone_is_by_construction_and_the_contrary_reading_is_reported(
+def test_n3200_bounds_row_numbers(v5b: ModuleType) -> None:
+    assert round(50 / 3200, 4) == 0.0156
+    assert round(v5b.cp_upper(50, 3200, 0.05), 4) == 0.0197
+    assert round(v5b.cp_upper(51, 3200, 0.05), 4) == 0.0201
+    assert round(v5b.cp_upper(109, 3200, 0.05), 4) == 0.0398
+    assert round(v5b.cp_upper(110, 3200, 0.05), 4) == 0.0402
+    assert round(v5b.cp_lower(2909, 3200, 0.05), 4) == 0.9003
+
+
+def test_gate_alone_uses_the_upper_bound_and_the_construction_reading_is_report_only(
     v5b: ModuleType, v7r: ModuleType
 ) -> None:
-    """10/200: the CP95 lower bound (0.027) is not above 0.04, so the construction stands (pass) while the
-    contrary reading (upper 0.083 <= 0.04) is reported as not met; the joint requirement still uses the
-    UPPER bound (1/200 gives 0.0235 > 0.02)."""
+    """10/200: the CP95 upper bound (0.083) exceeds 0.04, so the gate-alone clause FAILS, while the CP95 lower
+    bound (0.027) does not exceed 0.04, so the report-only construction reading is "not refuted"."""
     assert v5b.cp_lower(10, 200, 0.05) < 0.04 < v5b.cp_upper(10, 200, 0.05)
     out = evaluate(
         v7r, {"paired_low": _rates(0, 10, 0, 200), "nominal": _rates(190, 190, 190, 200)}, 200
     )
-    assert out["failures"] == [] and out["pass"] is True
-    alone = out["margins"]["paired_low"]["gate_alone"]
-    assert set(alone) == {"paired"} and alone["paired"]["rate"] == 0.05
-    assert alone["paired"]["construction_refuted"] is False
-    assert alone["paired"]["contrary_reading_cp95_upper_le_0.04"] is False
+    assert out["pass"] is False and len(out["failures"]) == 1
+    assert "paired gate alone" in out["failures"][0] and "CP95 upper" in out["failures"][0]
+    m = out["margins"]["paired_low"]
+    assert set(m["gate_alone"]) == {"paired"} and m["gate_alone"]["paired"]["rate"] == 0.05
+    assert m["gate_alone"]["paired"]["cp95_upper_le_0.04"] is False
+    assert m["gate_alone_construction_reading"]["paired"]["construction_refuted"] is False
     assert "joint" in _verdict(v7r, (1, 1, 1), 200, 200)[0]
     assert _verdict(v7r, (0, 0, 0), 200, 200) == []
     assert "power" in _verdict(v7r, (0, 0, 0), 180, 200)[0]  # 180/200: lower bound 0.85
@@ -716,18 +731,18 @@ def test_gate_alone_requirement_applies_at_each_gates_own_margins_only(
     v5b: ModuleType, v7r: ModuleType
 ) -> None:
     n = 3200
-    bad = _refuted_min(v5b, n)
+    bad = _gate_max(v5b, n) + 1
     nominal = _rates(2950, 2950, 2950, n)
-    # the paired gate accepts far above 0.04 at a SINGLE margin: reported, not gated
+    # the paired gate accepts above the limit at a SINGLE margin: reported, not gated
     out = evaluate(v7r, {"single_low": _rates(0, bad, 0, n), "nominal": nominal}, n)
-    assert out["failures"] == [] and out["margins"]["single_low"]["paired_cp95_lower"] > 0.04
+    assert out["failures"] == [] and out["margins"]["single_low"]["paired_cp95_upper"] > 0.04
     assert set(out["margins"]["single_low"]["gate_alone"]) == {"single"}
     # the same acceptances at the PAIRED margin refute the construction
     out = evaluate(v7r, {"paired_high": _rates(0, bad, 0, n), "nominal": nominal}, n)
     assert (
         len(out["failures"]) == 1
         and "paired gate" in out["failures"][0]
-        and "refuted" in out["failures"][0]
+        and "CP95 upper" in out["failures"][0]
     )
     out = evaluate(v7r, {"single_high": _rates(0, 0, bad, n), "nominal": nominal}, n)
     assert len(out["failures"]) == 1 and "single gate" in out["failures"][0]
@@ -985,6 +1000,25 @@ def test_rehearsal_loader_missing_directory_is_a_violation(
 ) -> None:
     with pytest.raises(RehearsalError, match="PROVENANCE.json missing"):
         load_rehearsal(tmp_path / "absent", steps_c, run_suite_mod)
+
+
+def test_committed_rehearsal_fixture_is_current(
+    steps_c: ModuleType, run_suite_mod: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Amendment 14a (b)2: whenever the committed rehearsal fixture directory exists it must load in required
+    mode against the CURRENT hashed-source digest, so a hashed-source change without a re-run fails CI. When it
+    is absent the calibration shards s15-s29 fail closed in required mode; this test then passes only outside
+    required mode (a plain assertion message, not a skip)."""
+    if not REHEARSAL_DIR.is_dir():
+        assert not _fixtures_required(), (
+            "fixture absent: calibration shards s15-s29 will fail closed in required mode"
+        )
+        return
+    monkeypatch.setenv("IONMC_V7R_FIXTURES", "required")
+    monkeypatch.delenv("IONMC_V7R_REHEARSAL_DIR", raising=False)
+    blocks, info = load_rehearsal(rehearsal_dir(), steps_c, run_suite_mod)
+    assert info["hashed_source_digest"] == run_suite_mod.hashed_source_digest("lv5c")
+    assert blocks.shape[1] == 20
 
 
 def test_no_skip_path_outside_skip_or_fail() -> None:

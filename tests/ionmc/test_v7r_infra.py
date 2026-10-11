@@ -823,6 +823,36 @@ def test_rehearsal_fixture_digest_is_recorded_for_the_committed_directory(
     assert rs.REHEARSAL_FIXTURE_DIR == "tests/ionmc/fixtures/v7r/rehearsal"
 
 
+def test_lv5c_start_preflight_refuses_an_absent_or_stale_rehearsal_fixture(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    import json
+
+    rs = _load("run_suite")
+    monkeypatch.setattr(rs, "hashed_source_digest", lambda suite="lv5c": "d" * 64)
+    monkeypatch.setattr(rs, "REPO", tmp_path)
+    assert rs.rehearsal_preflight("lv5b") is None and rs.rehearsal_preflight("hr5c") is None
+    absent = rs.rehearsal_preflight("lv5c")
+    assert absent and rs.REHEARSAL_PREFLIGHT_STEP in absent and "absent" in absent
+    d = tmp_path / rs.REHEARSAL_FIXTURE_DIR
+    d.mkdir(parents=True)
+    (d / "PROVENANCE.json").write_text(json.dumps({"hashed_source_digest": "e" * 64}))
+    stale = rs.rehearsal_preflight("lv5c")
+    assert stale and rs.REHEARSAL_PREFLIGHT_STEP in stale and "stale" in stale
+    (d / "PROVENANCE.json").write_text(json.dumps({"hashed_source_digest": "d" * 64}))
+    assert rs.rehearsal_preflight("lv5c") is None
+
+
+def test_run_suite_main_exits_on_the_preflight_refusal(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    rs = _load("run_suite")
+    monkeypatch.setattr(rs, "rehearsal_preflight", lambda suite: "preflight refused")
+    with pytest.raises(SystemExit, match="preflight refused"):
+        rs.main(["--suite", "lv5c", "--out", str(rs.REPO / "validation/generated/x-preflight"),
+                 "--expected-sha", "0" * 40])  # fmt: skip
+
+
 def _collect(*args: str) -> list[str]:
     import subprocess
 

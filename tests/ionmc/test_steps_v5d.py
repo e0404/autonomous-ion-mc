@@ -473,6 +473,27 @@ def test_slice_c_step_rows_in_summarize() -> None:
     assert su.slice_c_rows("lv5b", {}) == {}
 
 
+def test_v6_rows_are_failed_not_pending_from_the_unsized_documents() -> None:
+    su = _load("summarize")
+    doc = {
+        "pass": False,
+        "status": "executed",
+        "verdict": "failed",
+        "reason": "not sized under the pre-registered rule",
+    }
+    for suite in ("lv5c", "hr5c"):
+        for step, verdict in (("v6-unsized", "failed"), ("v6-compare", "failed (unsized)"),
+                              ("v6-cuda-compare", "failed (unsized)")):  # fmt: skip
+            rows = su.slice_c_rows(suite, {f"05-{step}": {**doc, "verdict": verdict}})
+            for row in ("V6", "V6-sens"):
+                assert rows[row]["verdict"] == "failed" and rows[row]["pass"] is False
+                assert rows[row]["reason"] == "not sized under the pre-registered rule"
+    # a sized V6 compare has no unsized verdict: the ordinary one-step row stays
+    assert "V6-sens" not in su.slice_c_rows(
+        "lv5c", {"05-v6-compare": {"pass": True, "verdict": None}}
+    )
+
+
 # -- nuclear_v10 building blocks --------------------------------------------------------------
 def test_rutherford_nonrelativistic_limit(v10: ModuleType) -> None:
     # 1 MeV proton on a heavy target: classical Rutherford (Z1 Z2 e^2 / (4 E))^2 / sin^4 with E in the CM
