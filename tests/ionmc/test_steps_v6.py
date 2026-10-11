@@ -12,6 +12,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
+import numpy as np
 import pytest
 
 from tests.ionmc.test_v7r_infra import _load
@@ -217,3 +218,222 @@ def test_constants_match_run_suite(s6: ModuleType) -> None:
         s6.HR5C_SEED_BASE == rs.HR5C_QUALIFICATION_SEED_BASE
         and s6.LV5C_SEED_BASE == rs.V5C_QUALIFICATION_SEED_BASE
     )
+
+
+# ---- review fix: the sens-free CUDA path under the sealed lv5c status (end to end, reduced scale) ----
+@pytest.fixture(scope="module")
+def e2e(s6: ModuleType, tmp_path_factory: pytest.TempPathFactory) -> dict[str, Path]:
+    """lv5c shards (V6 + nine V6-sens variants) and two emulated hr5c sample sets on warp-cpu float64 (the
+    test-only backend override): ``same`` has the SAME seed as the lv5c V6 sample (identical batches), ``diff``
+    another one. 2000 histories per shard."""
+    mp = pytest.MonkeyPatch()
+    root = tmp_path_factory.mktemp("v6e2e")
+    mp.setattr(s6, "V6_SHARDS", 1)
+    out: dict[str, Path] = {"root": root}
+    try:
+        mp.setenv("IONMC_RUN_SUITE", "lv5c")
+        cpu = root / "cpu"
+        common = [
+            "--shard",
+            "0",
+            "--scale",
+            "0.002",
+            "--out-dir",
+            str(cpu / "samples"),
+            "--seed-base",
+            "20505000",
+        ]
+        assert s6.main(["v6-shard", *common]) == 0
+        for v in s6.gv6().SENS_NAMES:
+            assert s6.main(["v6-sens-shard", "--variant", v, *common]) == 0
+        out["cpu"] = cpu
+        mp.setenv("IONMC_RUN_SUITE", "hr5c")
+        mp.setenv("IONMC_V6_CUDA_TEST_BACKEND", "warp-cpu")
+        for name, base_ in (
+            ("same", 20514000),
+            ("diff", 20515000),
+        ):  # 20514000 + 3000 = 20505000 + 12000
+            d = root / name
+            assert s6.main(["v6-cuda-shard", "--shard", "0", "--scale", "0.002", "--out-dir", str(d / "samples"),
+                            "--seed-base", str(base_)]) == 0  # fmt: skip
+            out[name] = d
+        yield_dirs = out
+    finally:
+        mp.undo()
+    return yield_dirs
+
+
+def _run_compare(
+    s6: ModuleType,
+    mp: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    dirs: Path,
+    cuda: bool,
+    base_: int,
+    suite: str,
+    sens_holds: bool | None,
+    meas_from: Path,
+) -> tuple[int, dict[str, Any]]:
+    g = s6.gv6()
+    orig = s6._data
+    cpu_mean = np.array(
+        json.loads((meas_from / "samples" / "v6-s0.json").read_text())["dose_batches"]
+    ).mean(axis=0)
+
+    def fake(gg: Any) -> Any:
+        z, r, _m, data = orig(gg)
+        m = np.where(cpu_mean > 0, cpu_mean, np.nan)
+        m[0, 1] = np.nan
+        return z, r, m, data
+
+    mp.setattr(s6, "_data", fake)
+    mp.setattr(s6, "V6_SHARDS", 1)
+    if sens_holds is not None:
+        mp.setattr(
+            g, "_sens_status", lambda *a, **k: {"condition_holds": sens_holds, "variants": {}}
+        )
+    mp.setenv("IONMC_RUN_SUITE", suite)
+    step = "v6-cuda-compare" if cuda else "v6-compare"
+    rc = s6.main(
+        [
+            step,
+            "--dirs",
+            str(dirs),
+            "--scale",
+            "0.002",
+            "--seed-base",
+            str(base_),
+            "--out-dir",
+            str(dirs / "samples"),
+        ]
+    )
+    return rc, _json_of(capsys.readouterr().out)
+
+
+@pytest.mark.parametrize("sens_holds", [True, False])
+def test_cuda_compare_inherits_lv5c_status_and_enforces_agreement(
+    s6: ModuleType,
+    e2e: dict[str, Path],
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    sens_holds: bool,
+) -> None:
+    import shutil
+
+    status = "gating" if sens_holds else "report-only"
+    for name, agree in (("same", True), ("diff", False)):
+        with monkeypatch.context() as mp:
+            rc_cpu, cpu = _run_compare(
+                s6, mp, capsys, e2e["cpu"], False, 20505000, "lv5c", sens_holds, e2e["cpu"]
+            )
+        assert cpu["status"] == status and cpu["r0"]["pass"] and cpu["halo"]["pass"]
+        d = e2e[name]
+        shutil.copy(
+            e2e["cpu"] / "samples" / "v6-lv5c-verdict.json", d / "samples" / "v6-lv5c-verdict.json"
+        )
+        base_ = 20514000 if name == "same" else 20515000
+        with monkeypatch.context() as mp:
+            mp.setenv("IONMC_V6_CUDA_TEST_BACKEND", "warp-cpu")
+            rc, doc = _run_compare(s6, mp, capsys, d, True, base_, "hr5c", sens_holds, e2e["cpu"])
+        comb = doc["backend_combination"]
+        # the CUDA sample is judged under the lv5c status; its gate is a boolean, never pending
+        assert doc["status"] == status and comb["evaluated_status_both"] == [status, status]
+        assert (
+            doc["v6_sens"]["inherited_from"] == "lv5c"
+            and doc["v6_sens"]["condition_holds"] is sens_holds
+        )
+        assert doc["halo"]["gating"] is sens_holds and doc["r0"]["pass"] in (True, False)
+        if sens_holds:
+            assert isinstance(doc["gate_pass"], bool) is True and comb["pass"] is not None
+        if agree:
+            assert (
+                comb["disagreement_components"] == []
+                and comb["pass"] is True
+                and doc["pass"] is True
+                and rc == 0
+            )
+        else:
+            assert (
+                comb["disagreement_components"]
+                and comb["pass"] is False
+                and doc["pass"] is False
+                and rc == 1
+            )
+            assert any("backend disagreement" in r for r in doc["reasons"])
+            if not sens_holds:  # report-only status: the disagreement is still a recorded failure
+                assert doc["status"] == "report-only" and any(
+                    "backend disagreement" in r for r in doc["reasons"]
+                )
+
+
+def test_cuda_compare_without_sealed_lv5c_verdict_fails_closed(
+    s6: ModuleType,
+    e2e: dict[str, Path],
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    d = e2e["root"] / "noverdict"
+    import shutil
+
+    shutil.copytree(e2e["same"], d)
+    (d / "samples" / "v6-lv5c-verdict.json").unlink(missing_ok=True)
+    with monkeypatch.context() as mp:
+        mp.setenv("IONMC_V6_CUDA_TEST_BACKEND", "warp-cpu")
+        rc, doc = _run_compare(s6, mp, capsys, d, True, 20514000, "hr5c", None, e2e["cpu"])
+    assert (
+        rc == 1
+        and doc["pass"] is False
+        and doc["status"] == "pending"
+        and "backend_combination" not in doc
+    )
+    assert any("fail closed" in r for r in doc["reasons"])
+
+
+def test_cuda_test_backend_override_refused_outside_pytest(
+    s6: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("IONMC_V6_CUDA_TEST_BACKEND", "warp-cpu")
+    monkeypatch.delenv("PYTEST_CURRENT_TEST")
+    with pytest.raises(SystemExit, match="test-only"):
+        s6.cuda_target()
+
+
+def test_combine_backends_pending_cpu_and_sensfree_cuda_regression() -> None:
+    """The defect of the review: a sens-free CUDA verdict (status pending, gate None) against a gating CPU one
+    can never pass; evaluate(fixed_status=...) gives the CUDA sample the CPU status and a boolean gate."""
+    import importlib.util as iu
+
+    spec = iu.spec_from_file_location(
+        "gv6_t", REPO / "validation" / "scripts" / "reference" / "gottschalk_v6.py"
+    )
+    assert spec and spec.loader
+    g = iu.module_from_spec(spec)
+    spec.loader.exec_module(g)
+    z, r = np.array(g.DEPTHS_CM), np.array(g.RADII_CM, dtype=float)
+    meas = 10.0 ** (-1.0 - 0.01 * np.arange(46)[:, None] - 0.1 * np.arange(10)[None, :])
+    b = np.broadcast_to(meas, (20, 46, 10)) * (
+        1.0 + 1e-9 * np.random.default_rng(1).standard_normal((20, 46, 10))
+    )
+    pending = g.evaluate(z, r, meas, b)
+    assert pending["status"] == "pending" and pending["gate_pass"] is None
+    gating = g.evaluate(z, r, meas, b, fixed_status="gating")
+    rep = g.evaluate(z, r, meas, b, fixed_status="report-only")
+    assert gating["gate_pass"] is True and gating["status"] == "gating" and rep["gate_pass"] is None
+    assert g.combine_backends(gating, gating)["pass"] is True
+    assert (
+        g.combine_backends(gating, pending)["pass"] is False
+    )  # status disagreement, never a silent pass
+    assert "status" in g.combine_backends(gating, pending)["disagreement_components"]
+    with pytest.raises(ValueError):
+        g.evaluate(z, r, meas, b, fixed_status="pending")
+    bad = g.evaluate(
+        z,
+        r,
+        meas,
+        b * np.where(np.arange(10) == 0, 1.05, 1.0)[None, None, :],
+        fixed_status="report-only",
+    )
+    assert bad["r0"]["pass"] is False
+    c = g.combine_backends(rep, bad)
+    assert c["pass"] is False and "r0" in c["disagreement_components"]
+    assert g.combine_backends(rep, rep)["pass"] is True

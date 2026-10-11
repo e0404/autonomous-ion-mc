@@ -24,7 +24,9 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
+import json
 import math
+import os
 import sys
 import time
 from dataclasses import replace
@@ -222,8 +224,21 @@ def step_v6_sens_shard(a: argparse.Namespace) -> int:
                     "warp-cpu", "float64")  # fmt: skip
 
 
+def cuda_target() -> tuple[str, str]:
+    """``(backend, precision)`` of the hr5c producers: warp-cuda float32. A test-only override
+    (``IONMC_V6_CUDA_TEST_BACKEND``, e.g. warp-cpu) emulates the sens-free CUDA path on a host without a GPU; it
+    is refused unless running under pytest."""
+    over = os.environ.get("IONMC_V6_CUDA_TEST_BACKEND")
+    if over:
+        if "PYTEST_CURRENT_TEST" not in os.environ:
+            raise SystemExit("IONMC_V6_CUDA_TEST_BACKEND is a test-only override (refused outside pytest)")
+        return over, "float64"  # float64 so that the emulation can be made bit-identical to the lv5c sample
+    return "warp-cuda", "float32"
+
+
 def step_v6_cuda_shard(a: argparse.Namespace) -> int:
-    return _produce(a, f"v6-cuda-s{a.shard}", "cuda", "nominal", V6_CUDA_R_INDEX, "warp-cuda", "float32")
+    backend, precision = cuda_target()
+    return _produce(a, f"v6-cuda-s{a.shard}", "cuda", "nominal", V6_CUDA_R_INDEX, backend, precision)
 
 
 def step_v6_unsized(a: argparse.Namespace) -> int:
@@ -332,9 +347,10 @@ def _compare(a: argparse.Namespace, *, cuda: bool) -> int:
     step = "v6-cuda-compare" if cuda else "v6-compare"
     doc: dict[str, Any] = {"step": step, "row": "V6", "lineage": g.LINEAGE, "attestation": v5.attestation_block(a)}
     reasons: list[str] = []
+    reasons_extra: list[str] = []
     try:
         if cuda:
-            docs = _load_group(a, cuda_names(), V6_CUDA_R_INDEX, "cuda", "nominal", "warp-cuda", "float32", n_shards)
+            docs = _load_group(a, cuda_names(), V6_CUDA_R_INDEX, "cuda", "nominal", *cuda_target(), n_shards)
         else:
             docs = _load_group(a, shard_names(), V6_R_INDEX, "v6", "nominal", "warp-cpu", "float64", n_shards)
         common = _consistent(docs)
@@ -363,7 +379,9 @@ def _compare(a: argparse.Namespace, *, cuda: bool) -> int:
         all_seeds = [*own, *sens_seeds]
         z, r, meas, data = _data(g)
         batches = _stack(docs)
-        ver = g.evaluate(z, r, meas, batches, sens, nominal)
+        lv = _optional_verdict(a) if cuda else None
+        fixed = lv["status"] if lv is not None and lv.get("status") in ("gating", "report-only") else None
+        ver = g.evaluate(z, r, meas, batches, sens, nominal, fixed_status=fixed)
         if not cuda:
             ver["v6_sens"]["r0_variants_report"] = g.r0_variants_report(
                 z, r, sens_all(sens_docs), nominal, ver["halo"]["points"])
@@ -379,14 +397,16 @@ def _compare(a: argparse.Namespace, *, cuda: bool) -> int:
             plan_rule=g.PLAN_QUOTE_STATUS,
         )  # fmt: skip
         if cuda:
-            lv = _optional_verdict(a)
             doc["lv5c_verdict"] = lv
-            if lv is not None:
+            if lv is not None and fixed is not None:
                 comb = g.combine_backends(lv, ver)
                 doc["backend_combination"] = comb
                 doc["status"] = lv["status"]
+                doc["evaluated_status_both"] = comb["evaluated_status_both"]
+            else:
+                reasons_extra.append("no usable sealed lv5c verdict (v6-lv5c-verdict.json): fail closed")
         else:
-            v5c_seal = v5.write_partial(a, "v6-lv5c-verdict", {"row": "V6", "verdict": _compact(ver)})
+            v5c_seal = v5c.write_partial_c(a, LV5C_VERDICT.removesuffix(".json"), {"row": "V6", "verdict": _compact(ver)})
             doc["verdict_partial"] = v5c_seal
         status = doc["status"]
         if cuda:
@@ -395,8 +415,14 @@ def _compare(a: argparse.Namespace, *, cuda: bool) -> int:
         else:
             gp = ver["gate_pass"]
             doc["gate_pass"] = gp
-        reasons = _reasons(doc)
-        doc["pass"] = bool(gp) if status == "gating" else (status == "report-only" and True)
+        reasons = [*_reasons(doc), *reasons_extra]
+        if cuda:  # the backend combination decides (both statuses); no sealed verdict: fail closed
+            comb_pass = doc.get("backend_combination", {}).get("pass")
+            doc["pass"] = bool(comb_pass) if comb_pass is not None else False
+            if comb_pass is False and doc["backend_combination"]["disagreement_components"]:
+                reasons.append("backend disagreement on " + ", ".join(doc["backend_combination"]["disagreement_components"]))
+        else:
+            doc["pass"] = bool(gp) if status == "gating" else (status == "report-only" and True)
         if status == "pending":
             doc["pass"] = False
     except g.V6DataError as exc:
@@ -420,11 +446,44 @@ def _compact(ver: dict[str, Any]) -> dict[str, Any]:
             "status": ver["status"], "gate_pass": ver["gate_pass"], "v6_sens": {"condition_holds": ver["v6_sens"]["condition_holds"]}}  # fmt: skip
 
 
+LV5C_VERDICT = "v6-lv5c-verdict.json"
+LV5C_VERDICT_BINDINGS = ("git_sha", "run_sha", "table_id", "table_npz_sha256", "elastic", "elastic_table_id",
+                         "elastic_table_npz_sha256")  # fmt: skip
+
+
 def _optional_verdict(a: argparse.Namespace) -> dict[str, Any] | None:
-    try:
-        (doc, _), = v5c.load_partials_c(a, ["v6-lv5c-verdict.json"])
-    except SystemExit:
+    """The sealed lv5c verdict of ``v6-compare`` (``None`` if absent; any defect is a SystemExit). It is written
+    by another suite (``lv5c``, its own seed base), so the run bindings of ``load_partials`` (suite and seed base)
+    do not apply; instead the seal, the manifest entry of an imported file, the code and table bindings, the
+    producing suite and the recorded seed base are checked."""
+    hits = [(i, p) for i, d in enumerate(a.dirs) for p in (Path(d) / LV5C_VERDICT, Path(d) / "samples" / LV5C_VERDICT)
+            if p.is_file()]  # fmt: skip
+    if not hits:
         return None
+    if len(hits) != 1:
+        raise SystemExit(f"{LV5C_VERDICT}: found {len(hits)} copies in {a.dirs} (need exactly 1)")
+    idx, hit = hits[0]
+    doc = json.loads(hit.read_text())
+    digest = v5.content_digest(doc)
+    if doc.get("content_sha256") != digest:
+        raise SystemExit(f"{LV5C_VERDICT}: content_sha256 does not match the document")
+    record: dict[str, Any] = {"name": LV5C_VERDICT, "content_sha256": digest, "origin": "current-run", "host_run_id": None}
+    if idx != 0:
+        manifest, msha = v5.read_manifest(getattr(a, "partials_manifest", None))
+        ent = manifest.get(LV5C_VERDICT)
+        if ent is None or ent["content_sha256"] != digest:
+            raise SystemExit(f"{LV5C_VERDICT}: imported but not in the partials manifest with this digest")
+        record.update(origin="imported", host_run_id=ent["host_run_id"])
+        a.attested_manifest_path, a.attested_manifest_sha256 = str(a.partials_manifest), msha
+    want = v5c.bindings_c(a)
+    for key in LV5C_VERDICT_BINDINGS:
+        if doc.get(key) != want[key]:
+            raise SystemExit(f"{LV5C_VERDICT}: {key} is {doc.get(key)!r}, expected {want[key]!r}")
+    if doc.get("suite") != "lv5c" or doc.get("seed_base") in SEED_BASES_REFUSED:
+        raise SystemExit(f"{LV5C_VERDICT}: not a verdict of an unconsumed lv5c run")
+    if not hasattr(a, "attested_partials"):
+        a.attested_partials = []
+    a.attested_partials.append(record)
     return doc["verdict"]
 
 

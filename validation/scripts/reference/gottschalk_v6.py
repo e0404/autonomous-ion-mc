@@ -426,7 +426,7 @@ def _range_shift_mm(z_cm: NDArray[np.float64], d_meas: NDArray[np.float64], j: i
 def evaluate(
     z_cm: NDArray[np.float64], r_cm: NDArray[np.float64], d_meas: NDArray[np.float64],
     batches: NDArray[np.float64], sens: dict[str, NDArray[np.float64]] | None = None,
-    sens_nominal: NDArray[np.float64] | None = None,
+    sens_nominal: NDArray[np.float64] | None = None, fixed_status: str | None = None,
 ) -> dict[str, Any]:
     """The V6 verdict of one backend (Amendment 14 (g), Amendment 17 (c)).
 
@@ -485,7 +485,15 @@ def evaluate(
     p_sign = binom_two_sided_p(n_used, n_pos)
     sizing = [p for p in halo_pts if p["in_sizing_set"]]
     halo_pass = bool(len(halo_pts) > 0 and frac >= HALO_FRAC and med <= HALO_MEDIAN and p_sign > SIGN_P)
-    sens_doc = _sens_status(halo_pts, z_cm, r_cm, sens, sens_nominal)
+    if fixed_status is not None:
+        # the V6-sens condition is evaluated once, on lv5c (Amendment 14 (g), Amendment 17 (c)4/(c)7); another
+        # backend's sample is judged under that same status and gating flag
+        if fixed_status not in ("gating", "report-only"):
+            raise ValueError(f"fixed_status must be 'gating' or 'report-only', got {fixed_status!r}")
+        sens_doc = {"condition_holds": fixed_status == "gating", "variants": {}, "inherited_from": "lv5c",
+                    "note": "V6-sens condition evaluated once on the lv5c samples; status inherited"}  # fmt: skip
+    else:
+        sens_doc = _sens_status(halo_pts, z_cm, r_cm, sens, sens_nominal)
     gating = sens_doc["condition_holds"]
     status = "gating" if gating else ("pending" if gating is None else "report-only")
     gate_pass: bool | None
@@ -580,10 +588,19 @@ def combine_backends(cpu: dict[str, Any], cuda: dict[str, Any]) -> dict[str, Any
             if math.isfinite(z) and abs(z) > BACKEND_Z_FINDING:
                 findings.append(rec)
     status = cpu["status"]
+    if cuda["status"] != status:
+        disagree = sorted({*disagree, "status"})
     both = bool(cpu["gate_pass"]) and bool(cuda["gate_pass"])
+    if status == "pending":
+        verdict: bool | None = None
+    elif status == "gating":
+        verdict = bool(both and not disagree)
+    else:  # report-only: the component verdicts are still compared; a disagreement is a recorded failure
+        verdict = not disagree
     return {
         "disagreement_components": disagree, "paired_z": zs, "findings_abs_z_gt_4": findings,
-        "status": status, "pass": (None if status != "gating" else bool(both and not disagree)),
+        "status": status, "evaluated_status_both": [cpu["status"], cuda["status"]], "pass": verdict,
         "r0_pass_both": bool(cpu["r0"]["pass"] and cuda["r0"]["pass"]),
-        "rule": "V6 fails if the verdicts of lv5c and hr5c differ on any gate component",
+        "rule": "V6 fails if the verdicts of lv5c and hr5c differ on any gate component (r0, halo, overall), in "
+                "both statuses; in report-only status the step pass is the absence of a disagreement",
     }  # fmt: skip
