@@ -1032,6 +1032,41 @@ def test_hashed_source_digest_is_deterministic_and_excludes_the_rehearsal_fixtur
             REHEARSAL_DIR.rmdir()
 
 
+def test_rehearsal_digest_excludes_documentation_but_the_attestation_set_keeps_it(
+    run_suite_mod: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Amendment 17 (a)7: documentation changes keep the rehearsal valid, code/test changes do not."""
+    doc = (
+        "validation/plans/p.md",
+        "decisions/d.md",
+        "README.md",
+        "validation/results/README.md",
+        "docs/a/b.md",
+    )
+    code = ("src/ionmc/x.py", "validation/scripts/transport/s.py", "tests/ionmc/test_x.py")
+    fixture = "tests/ionmc/fixtures/v7r/rehearsal/PROVENANCE.json"
+    paths = [tmp_path / r for r in (*doc, *code, fixture)]
+    for p in paths:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text("v0")
+    monkeypatch.setattr(run_suite_mod, "REPO", tmp_path)
+    monkeypatch.setattr(run_suite_mod, "source_files", lambda suite=None: list(paths))
+    d0 = run_suite_mod.hashed_source_digest("lv5c")
+    for r in (*doc, fixture):
+        (tmp_path / r).write_text("changed")
+        assert run_suite_mod.hashed_source_digest("lv5c") == d0, r
+    for r in code:
+        (tmp_path / r).write_text("changed")
+        d1 = run_suite_mod.hashed_source_digest("lv5c")
+        assert d1 != d0, r
+        (tmp_path / r).write_text("v0")
+    # the attestation set is unchanged: plans and decisions are still source files of lv5c
+    monkeypatch.undo()
+    listed = {str(f.relative_to(REPO)) for f in run_suite_mod.source_files("lv5c")}
+    assert "validation/plans/v3-005-acceptance.md" in listed
+    assert any(x.startswith("decisions/") for x in listed)
+
+
 def test_rehearsal_loader_missing_directory_is_a_violation(
     tmp_path: Path, steps_c: ModuleType, run_suite_mod: ModuleType
 ) -> None:
