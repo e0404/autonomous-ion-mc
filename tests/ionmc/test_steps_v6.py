@@ -62,11 +62,25 @@ def test_unsized_steps_record_a_failed_document_and_exit_nonzero(
     ]  # fmt: skip
     assert doc["intervention"] == "IR-20261011-031924-C205C8 (on record; not awaited)"
     b = doc["bound"]
+    r0 = b["r0_clause"]
     assert (
-        b["r0_clause_histories_min_at_z_22.4_cm"] == 3e9
-        and b["r0_clause_histories_min_at_z_22.6_cm"] == 1.3e10
+        r0["se_scaling_shards_at_z_22.4_cm"] == 8910
+        and r0["se_scaling_histories_at_z_22.4_cm"] == 8.9e9
     )
-    assert b["v6_sens_histories_per_variant_range"] == [1e8, 1e10]
+    assert r0["depositing_rate_upper_95_at_z_22.6_cm_per_history"] == 3.0e-6
+    assert r0["histories_for_4e4_depositing_at_z_22.6_cm_min"] == 1.3e10
+    assert r0["host_days_at_5437_hist_per_s"] == {"z_22.4_cm": 19, "z_22.6_cm": 28}
+    fin = b["v6_sens_finite_points"]
+    assert fin["n_points"] == 229 and fin["se_scaling_shards_per_variant"] == 345
+    assert fin["se_scaling_histories_per_variant"] == 3.45e8
+    tail = b["v6_sens_tail_rate"]
+    assert (
+        tail["n_points_undefined_in_rehearsal"] == 32
+        and tail["depositing_histories_per_point"] == 180
+    )
+    assert tail["histories_per_variant_min"] == 6e7
+    text = json.dumps(b)
+    assert "3e9" not in text and "1e8-1e10" not in text and "imply" not in text
 
 
 def test_seeds_and_names(s6: ModuleType) -> None:

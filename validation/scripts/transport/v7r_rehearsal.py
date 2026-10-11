@@ -71,6 +71,10 @@ def load_rehearsal(
             bad.append(
                 f"PROVENANCE.json seed_base {prov.get('seed_base')!r} outside {SEED_BASE_RANGE}"
             )
+        if "head_sha" in prov and prov["head_sha"] != prov.get("code_sha"):
+            bad.append(
+                f"PROVENANCE.json head_sha {prov['head_sha']!r} differs from code_sha {prov.get('code_sha')!r}"
+            )
         have = digest if digest is not None else run_suite.hashed_source_digest("lv5c")
         if prov.get("hashed_source_digest") != have:
             bad.append(

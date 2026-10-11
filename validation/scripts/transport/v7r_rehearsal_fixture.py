@@ -11,10 +11,12 @@ the rehearsal family 20505000-20509499 is exempt from the fixture preflight. Thi
 directories named by ``--run-ids`` (``<archive>/RUN-*/transport/*/samples/`` and ``<archive>/RUN-*/transport/*/``)
 for ``v7r-s{k}.json`` and the npz sidecar bound in each partial, copies them byte-identically, requires every
 partial's ``git_sha`` to equal ``--code-sha``, writes ``PROVENANCE.json`` (sorted keys: ``host_run_ids``,
-``partial_digests``, ``hashed_source_digest`` of the CURRENT tree, ``seed_base``, ``code_sha``, numpy and python
+``partial_digests``, ``hashed_source_digest`` of the CURRENT tree, ``seed_base``, ``code_sha``, ``head_sha``, ``clean_tree``, numpy and python
 versions, ``created_from``) and then runs ``v7r_rehearsal.load_rehearsal``, the verification of the CI test,
-exiting non-zero on any violation (nothing is left in ``--out`` in that case). The fixture can only be
-produced at the code whose hashed-source digest it records. An existing ``--out`` is refused unless ``--force``.
+exiting non-zero on any violation (nothing is left in ``--out`` in that case). The builder refuses unless the
+repository HEAD is exactly ``--code-sha`` and ``git status --porcelain`` (untracked included) is empty, so the
+recorded digest is that of the commit's hashed sources. The fixture can only be produced at the code whose
+hashed-source digest it records. An existing ``--out`` is refused unless ``--force``.
 """
 
 from __future__ import annotations
@@ -23,6 +25,7 @@ import argparse
 import json
 import platform
 import shutil
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -35,6 +38,26 @@ DEFAULT_SEED_BASE = 20505000
 
 def _fail(msg: str) -> None:
     raise SystemExit(f"v7r_rehearsal_fixture: {msg}")
+
+
+def _git(*args: str) -> str:
+    """Output of ``git <args>`` in ``REPO`` (module-level so tests can point it at a temporary repository)."""
+    res = subprocess.run(["git", *args], cwd=REPO, capture_output=True, text=True, check=False)
+    if res.returncode != 0:
+        _fail(f"git {' '.join(args)} failed: {res.stderr.strip()}")
+    return res.stdout
+
+
+def require_clean_head(code_sha: str) -> str:
+    """Refuses unless HEAD is exactly ``code_sha`` and the tree is clean (untracked files included), so the
+    recorded hashed-source digest is the digest of that commit's hashed sources. Returns HEAD."""
+    head = _git("rev-parse", "HEAD").strip()
+    if head != code_sha:
+        _fail(f"repository HEAD {head} differs from --code-sha {code_sha}")
+    dirty = _git("status", "--porcelain", "--untracked-files=all").strip()
+    if dirty:
+        _fail(f"working tree is not clean (the digest would not be that of {code_sha}):\n{dirty}")
+    return head
 
 
 def scan_partials(archive: Path, run_ids: list[str]) -> list[Path]:
@@ -59,6 +82,7 @@ def build(archive: Path, run_ids: list[str], code_sha: str, seed_base: int, out:
         _fail(f"{out} exists (use --force to replace it)")
     if len(code_sha) != 40 or any(c not in "0123456789abcdef" for c in code_sha):
         _fail("--code-sha must be the full 40-hex-digit lowercase SHA")
+    head = require_clean_head(code_sha)
     hits = scan_partials(archive, run_ids)
     names = [p.name for p in hits]
     dup = sorted({n for n in names if names.count(n) > 1})
@@ -92,7 +116,7 @@ def build(archive: Path, run_ids: list[str], code_sha: str, seed_base: int, out:
         prov = {
             "host_run_ids": sorted(run_ids), "partial_digests": digests,
             "hashed_source_digest": run_suite.hashed_source_digest("lv5c"), "seed_base": seed_base,
-            "code_sha": code_sha, "numpy_version": np.__version__,
+            "code_sha": code_sha, "head_sha": head, "clean_tree": True, "numpy_version": np.__version__,
             "python_version": platform.python_version(), "created_from": sorted(created_from),
         }  # fmt: skip
         (stage / "PROVENANCE.json").write_text(json.dumps(prov, sort_keys=True, indent=1) + "\n")

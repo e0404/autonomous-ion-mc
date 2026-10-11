@@ -135,6 +135,7 @@ import math
 import os
 import platform
 import shutil
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -712,6 +713,7 @@ def _build_rehearsal(  # type: ignore[no-untyped-def]
     doc_hook=None,
     prov_hook=None,
     post=None,
+    code_sha: str = "c0de" * 10,
 ):
     """Write a synthetic, valid rehearsal into ``d`` (450 x 20 block sums per shard) and return the
     provenance; ``doc_hook(k, doc)`` mutates a partial before it is sealed, ``prov_hook(prov)`` the
@@ -719,7 +721,7 @@ def _build_rehearsal(  # type: ignore[no-untyped-def]
     d.mkdir(parents=True, exist_ok=True)
     base_seed, rng = 20505004, np.random.default_rng(11)
     prov = {"host_run_ids": ["RUN-SYNTH-1"], "partial_digests": {}, "hashed_source_digest": digest,
-            "seed_base": base_seed, "code_sha": "c0de" * 10}  # fmt: skip
+            "seed_base": base_seed, "code_sha": code_sha}  # fmt: skip
     for k in range(n_shards):
         sums = rng.gamma(2.0, 100.0, (450, 20))
         side = steps.write_v7r_sidecar(d / f"v7r-s{k}-escaped_neutral.npz", sums)
@@ -820,6 +822,8 @@ VIOLATIONS = {
     "provenance lacks field": ({"prov_hook": _drop_prov("host_run_ids")}, "lacks host_run_ids"),
     "provenance empty run ids": ({"prov_hook": _prov(host_run_ids=[])}, "non-empty list"),
     "provenance lacks code_sha": ({"prov_hook": _drop_prov("code_sha")}, "lacks code_sha"),
+    "head_sha differs from code_sha": (
+        {"prov_hook": _prov(head_sha="a" * 40, clean_tree=True)}, "head_sha"),
     "code_sha differs": ({"prov_hook": _prov(code_sha="deadbeef")}, "differs from code_sha"),
     "provenance partial digest wrong": (
         {"prov_hook": _bad_digest}, "differs from the digest recorded"),
@@ -878,10 +882,11 @@ def _synthetic_archive(
     digest: str,
     *,
     doc_hook=None,  # type: ignore[no-untyped-def]
+    code_sha: str = "c0de" * 10,
 ) -> Path:
     """A host archive with shard 0 in ``RUN-A`` (samples dir, sidecar one level up) and shard 1 in ``RUN-B``."""
     src = tmp_path / "src"
-    _build_rehearsal(src, steps, digest, doc_hook=doc_hook)
+    _build_rehearsal(src, steps, digest, doc_hook=doc_hook, code_sha=code_sha)
     arch = tmp_path / "archive"
     for k, rid in enumerate(("RUN-A", "RUN-B")):
         suite = arch / rid / "transport" / "lv5c-x"
@@ -898,18 +903,43 @@ def builder() -> ModuleType:
     return _load("v7r_rehearsal_fixture")
 
 
-def test_builder_produces_a_verifying_fixture(
-    tmp_path: Path, steps_c: ModuleType, run_suite_mod: ModuleType, builder: ModuleType
-) -> None:
-    arch = _synthetic_archive(tmp_path, steps_c, "0" * 64)
-    out = tmp_path / "fixture"
-    argv = ["--archive", str(arch), "--run-ids", "RUN-A", "RUN-B", "--code-sha", "c0de" * 10,
+@pytest.fixture
+def git_repo(
+    tmp_path: Path, builder: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> tuple[Path, str]:
+    """A temporary git repository with one commit, installed as the builder's ``REPO``; returns it and HEAD."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "a.txt").write_text("x\n")
+    env = ["-c", "user.name=t", "-c", "user.email=t@example.org", "-c", "commit.gpgsign=false"]
+    for cmd in (["init", "-q"], ["add", "a.txt"], [*env, "commit", "-q", "-m", "init"]):
+        subprocess.run(["git", *cmd], cwd=repo, check=True, capture_output=True)
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=repo, check=True, capture_output=True, text=True
+    ).stdout.strip()
+    monkeypatch.setattr(builder, "REPO", repo)
+    return repo, head
+
+
+def _argv(arch: Path, out: Path, sha: str) -> list[str]:
+    return ["--archive", str(arch), "--run-ids", "RUN-A", "RUN-B", "--code-sha", sha,
             "--seed-base", "20505004", "--out", str(out)]  # fmt: skip
+
+
+def test_builder_produces_a_verifying_fixture(
+    tmp_path: Path, steps_c: ModuleType, run_suite_mod: ModuleType, builder: ModuleType,
+    git_repo: tuple[Path, str],
+) -> None:  # fmt: skip
+    _, head = git_repo
+    arch = _synthetic_archive(tmp_path, steps_c, "0" * 64, code_sha=head)
+    out = tmp_path / "fixture"
+    argv = _argv(arch, out, head)
     assert builder.main(argv) == 0
     prov = json.loads((out / "PROVENANCE.json").read_text())
     assert prov["hashed_source_digest"] == run_suite_mod.hashed_source_digest("lv5c")
     assert prov["host_run_ids"] == ["RUN-A", "RUN-B"] and prov["seed_base"] == 20505004
-    assert prov["code_sha"] == "c0de" * 10 and prov["numpy_version"] and prov["python_version"]
+    assert prov["code_sha"] == head and prov["head_sha"] == head and prov["clean_tree"] is True
+    assert prov["numpy_version"] and prov["python_version"]
     assert sorted(prov["partial_digests"]) == ["v7r-s0.json", "v7r-s1.json"]
     assert len(prov["created_from"]) == 4
     assert list(prov) == sorted(prov)  # sorted keys
@@ -922,27 +952,55 @@ def test_builder_produces_a_verifying_fixture(
     assert builder.main([*argv, "--force"]) == 0
 
 
-def test_builder_refuses_a_shard_with_the_wrong_git_sha(
-    tmp_path: Path, steps_c: ModuleType, builder: ModuleType
+def test_builder_refuses_when_head_differs_from_code_sha(
+    tmp_path: Path, steps_c: ModuleType, builder: ModuleType, git_repo: tuple[Path, str]
 ) -> None:
-    arch = _synthetic_archive(tmp_path, steps_c, "0" * 64, doc_hook=_doc0(git_sha="b" * 40))
+    _, head = git_repo
+    other = "c0de" * 10
+    arch = _synthetic_archive(tmp_path, steps_c, "0" * 64, code_sha=other)
+    out = tmp_path / "fixture"
+    with pytest.raises(SystemExit, match="HEAD .* differs from --code-sha"):
+        builder.main(_argv(arch, out, other))
+    assert head != other and not out.exists()
+
+
+@pytest.mark.parametrize("how", ["modified", "untracked"])
+def test_builder_refuses_a_dirty_tree(
+    how: str, tmp_path: Path, steps_c: ModuleType, builder: ModuleType, git_repo: tuple[Path, str]
+) -> None:
+    repo, head = git_repo
+    (repo / ("a.txt" if how == "modified" else "new.txt")).write_text("changed\n")
+    arch = _synthetic_archive(tmp_path, steps_c, "0" * 64, code_sha=head)
+    out = tmp_path / "fixture"
+    with pytest.raises(SystemExit, match="not clean"):
+        builder.main(_argv(arch, out, head))
+    assert not out.exists()
+
+
+def test_builder_refuses_a_shard_with_the_wrong_git_sha(
+    tmp_path: Path, steps_c: ModuleType, builder: ModuleType, git_repo: tuple[Path, str]
+) -> None:
+    _, head = git_repo
+    arch = _synthetic_archive(
+        tmp_path, steps_c, "0" * 64, doc_hook=_doc0(git_sha="b" * 40), code_sha=head
+    )
     out = tmp_path / "fixture"
     with pytest.raises(SystemExit, match="differs from --code-sha"):
-        builder.main(["--archive", str(arch), "--run-ids", "RUN-A", "RUN-B", "--code-sha", "c0de" * 10,
-                      "--seed-base", "20505004", "--out", str(out)])  # fmt: skip
+        builder.main(_argv(arch, out, head))
     assert not out.exists()
 
 
 def test_builder_run_ids_restrict_the_scan_and_a_missing_shard_set_fails(
-    tmp_path: Path, steps_c: ModuleType, builder: ModuleType
+    tmp_path: Path, steps_c: ModuleType, builder: ModuleType, git_repo: tuple[Path, str]
 ) -> None:
-    arch = _synthetic_archive(tmp_path, steps_c, "0" * 64)
+    _, head = git_repo
+    arch = _synthetic_archive(tmp_path, steps_c, "0" * 64, code_sha=head)
     out = tmp_path / "fixture"
     with pytest.raises(SystemExit, match="verification failed.*need >= 2 shards"):
-        builder.main(["--archive", str(arch), "--run-ids", "RUN-A", "--code-sha", "c0de" * 10,
+        builder.main(["--archive", str(arch), "--run-ids", "RUN-A", "--code-sha", head,
                       "--seed-base", "20505004", "--out", str(out)])  # fmt: skip
     with pytest.raises(SystemExit, match="not found"):
-        builder.main(["--archive", str(arch), "--run-ids", "RUN-Z", "--code-sha", "c0de" * 10,
+        builder.main(["--archive", str(arch), "--run-ids", "RUN-Z", "--code-sha", head,
                       "--out", str(out)])  # fmt: skip
     assert not out.exists()
 

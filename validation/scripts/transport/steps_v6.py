@@ -247,11 +247,27 @@ UNSIZED_REASON = "not sized under the pre-registered rule"
 UNSIZED_RUN_IDS = ("RUN-20261011T030353Z-0b25db97", "RUN-20261011T030829Z-537a9857", "RUN-20261011T031141Z-88a536e0")
 UNSIZED_INTERVENTION = "IR-20261011-031924-C205C8 (on record; not awaited)"
 UNSIZED_BOUND = {
-    "r0_clause_histories_min_at_z_22.4_cm": 3e9, "r0_clause_histories_min_at_z_22.6_cm": 1.3e10,
-    "v6_sens_histories_per_variant_range": [1e8, 1e10],
-    "statement": "a relative SE <= 0.5 % needs >= 4e4 depositing histories at a point: >= 3e9 histories at "
-                 "z = 22.4 cm and >= 1.3e10 at 22.6 cm; V6-sens (paired SE <= 0.075 at the 32 zero-dose halo points) "
-                 ">= 1e8-1e10 per variant (plan Amendment 14a (a)4)",
+    "r0_clause": {
+        "se_scaling_shards_at_z_22.4_cm": 8910, "se_scaling_histories_at_z_22.4_cm": 8.9e9,
+        "depositing_rate_upper_95_at_z_22.6_cm_per_history": 3.0e-6,
+        "histories_for_4e4_depositing_at_z_22.6_cm_min": 1.3e10,
+        "host_days_at_5437_hist_per_s": {"z_22.4_cm": 19, "z_22.6_cm": 28},
+        "statement": "r = 0 clause: SE scaling (SE ~ N^-1/2) from the 1e6-history rehearsal shard needs 8910 shards = "
+                     "8.9e9 histories at z = 22.4 cm; at z = 22.6 cm no depositing history was observed in 1e6, so the "
+                     "depositing rate is < 3.0e-6 per history (95 % upper bound) and the >= 4e4 depositing histories "
+                     "required for a 0.5 % relative SE need >= 1.3e10 histories; at 5437 hist/s these are >= 19 and "
+                     ">= 28 days of host time for one sample (plan Amendment 14a (a)4)",
+    },
+    "v6_sens_finite_points": {
+        "n_points": 229, "se_scaling_shards_per_variant": 345, "se_scaling_histories_per_variant": 3.45e8,
+        "statement": "SE scaling on the 229 points with a finite paired SE needs 345 shards = 3.45e8 histories per variant",
+    },
+    "v6_sens_tail_rate": {
+        "n_points_undefined_in_rehearsal": 32, "depositing_histories_per_point": 180,
+        "histories_per_variant_min": 6e7,
+        "statement": "at the 32 points undefined in the rehearsal the tail-rate bound gives >= 6e7 histories per variant "
+                     "for even 180 depositing histories per point, with SE scaling far above that",
+    },
 }  # fmt: skip
 
 
