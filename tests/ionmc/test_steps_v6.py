@@ -41,31 +41,91 @@ def test_v6_shards_fail_closed_until_14a(
         s6.main(["v6-shard", "--seed-base", "20471004", "--out-dir", str(tmp_path)])
 
 
+IR_ID = "IR-20261011-031924-C205C8"
+IR_REAL = REPO / "reference_requests" / "interventions" / IR_ID
+
+
 def _fake_record(
-    monkeypatch: pytest.MonkeyPatch, s6: ModuleType, repo: Path, *, with_response: bool
-) -> Path:
-    rec = repo / "reference_requests" / "interventions" / "IR-20261011-031924-C205C8"
+    monkeypatch: pytest.MonkeyPatch, s6: ModuleType, repo: Path, *, request: Any = None, response: Any = None,
+    raw_response: bytes | None = None, pin_to_response: bool = False,
+) -> Path:  # fmt: skip
+    """A copy of the committed record under ``repo`` with optional replacements (dict -> JSON, None -> real file)."""
+    rec = repo / "reference_requests" / "interventions" / IR_ID
     rec.mkdir(parents=True)
-    (rec / "request.json").write_text("{}")
-    if with_response:
-        (rec / "response.json").write_text("{}")
+    (rec / "request.json").write_bytes(
+        (IR_REAL / "request.json").read_bytes() if request is None else json.dumps(request).encode()
+    )
+    if raw_response is not None:
+        (rec / "response.json").write_bytes(raw_response)
+    else:
+        (rec / "response.json").write_bytes(
+            (IR_REAL / "response.json").read_bytes()
+            if response is None
+            else json.dumps(response).encode()
+        )
+    if pin_to_response:  # isolate the structural checks from the sha binding
+        import hashlib
+
+        monkeypatch.setattr(
+            s6,
+            "UNSIZED_INTERVENTION_RESPONSE_SHA256",
+            hashlib.sha256((rec / "response.json").read_bytes()).hexdigest(),
+        )
     monkeypatch.setattr(s6, "REPO", repo)
     return rec
 
 
-@pytest.mark.parametrize("with_response", [False, True])
-def test_unsized_intervention_is_derived_from_the_committed_record(
-    s6: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, with_response: bool
+def test_unsized_intervention_validates_the_real_committed_record(s6: ModuleType) -> None:
+    status = s6.unsized_intervention()
+    assert status.startswith(f"{IR_ID}: resolved 2026-10-11 (response.json sha256 49d7889dbf40")
+    assert "Amendment 18 (a)" in status
+
+
+def test_unsized_intervention_absent_record_fails_closed(
+    s6: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(s6, "REPO", tmp_path / "no-record")  # directory absent
-    with pytest.raises(SystemExit, match=r"IR-20261011-031924-C205C8/response\.json"):
+    monkeypatch.setattr(s6, "REPO", tmp_path / "no-record")
+    with pytest.raises(SystemExit, match=r"IR-20261011-031924-C205C8/request\.json.*absent"):
         s6.unsized_intervention()
-    _fake_record(monkeypatch, s6, tmp_path / "repo", with_response=with_response)
-    if with_response:
-        assert s6.unsized_intervention() == s6.UNSIZED_INTERVENTION_STATUS
-    else:
-        with pytest.raises(SystemExit, match=r"response\.json"):
-            s6.unsized_intervention()
+
+
+def _real(name: str) -> dict[str, Any]:
+    return json.loads((IR_REAL / name).read_text())
+
+
+@pytest.mark.parametrize(
+    ("case", "match"),
+    [
+        ("empty", r"response\.json: check failed: request_id"),
+        ("wrong_request_id", r"response\.json: check failed: request_id"),
+        ("status_open", r"request\.json: check failed: status == resolved"),
+        ("empty_text", r"response\.json: check failed: non-empty response text"),
+        ("no_resolved_at", r"response\.json: check failed: non-empty resolved_at_utc"),
+        ("wrong_task", r"request\.json: check failed: task_id"),
+        ("one_byte", r"response\.json: check failed: sha256 == pinned"),
+    ],
+)
+def test_unsized_intervention_fails_closed_on_a_violated_check(
+    s6: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, case: str, match: str
+) -> None:
+    kw: dict[str, Any] = {"pin_to_response": True}
+    if case == "empty":
+        kw["response"] = {}
+    elif case == "wrong_request_id":
+        kw["response"] = {**_real("response.json"), "request_id": "IR-20260101-000000-000000"}
+    elif case == "status_open":
+        kw["request"] = {**_real("request.json"), "status": "open"}
+    elif case == "empty_text":
+        kw["response"] = {**_real("response.json"), "response": "  "}
+    elif case == "no_resolved_at":
+        kw["response"] = {**_real("response.json"), "resolved_at_utc": ""}
+    elif case == "wrong_task":
+        kw["request"] = {**_real("request.json"), "task_id": "V3-005C"}
+    else:  # one byte appended to the real response, pinned sha of the real file kept
+        kw = {"raw_response": (IR_REAL / "response.json").read_bytes() + b"\n"}
+    _fake_record(monkeypatch, s6, tmp_path / "repo", **kw)
+    with pytest.raises(SystemExit, match=match):
+        s6.unsized_intervention()
 
 
 @pytest.mark.parametrize(
@@ -84,7 +144,7 @@ def test_unsized_steps_record_a_failed_document_and_exit_nonzero(
     step: str,
     verdict: str,
 ) -> None:
-    _fake_record(monkeypatch, s6, tmp_path / "repo", with_response=True)
+    _fake_record(monkeypatch, s6, tmp_path / "repo")
     rc = s6.main([step, "--dirs", str(tmp_path)])
     doc = _json_of(capsys.readouterr().out)
     assert rc != 0 and doc["pass"] is False and doc["step"] == step
@@ -94,8 +154,8 @@ def test_unsized_steps_record_a_failed_document_and_exit_nonzero(
         "RUN-20261011T030353Z-0b25db97", "RUN-20261011T030829Z-537a9857", "RUN-20261011T031141Z-88a536e0",
     ]  # fmt: skip
     assert doc["intervention"] == (
-        "IR-20261011-031924-C205C8: resolved 2026-10-11 \u2014 operator acknowledged the autonomous resolution "
-        "(Amendment 18 (a)); V6/V6-sens stay failed at the sizing stage"
+        "IR-20261011-031924-C205C8: resolved 2026-10-11 (response.json sha256 49d7889dbf40) \u2014 operator "
+        "acknowledged the autonomous resolution (Amendment 18 (a)); V6/V6-sens stay failed at the sizing stage"
     )
     assert "not awaited" not in doc["intervention"]
     b = doc["bound"]

@@ -2,7 +2,7 @@
 
 **Task:** V3-005B
 **Category:** experiment-boundary
-**Status:** open
+**Status:** resolved (2026-10-11T18:08:29Z; operator response in `response.json`, recorded through `resolve_human_intervention`; the README status line was reconciled in the task branch after the response, the request tooling does not rewrite it)
 
 ## Summary
 

@@ -23,6 +23,7 @@ primary, averaged over the 0.4 cm diameter sphere at each data (r, z) with the r
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import json
 import math
@@ -246,20 +247,59 @@ def step_v6_cuda_shard(a: argparse.Namespace) -> int:
 UNSIZED_REASON = "not sized under the pre-registered rule"
 UNSIZED_RUN_IDS = ("RUN-20261011T030353Z-0b25db97", "RUN-20261011T030829Z-537a9857", "RUN-20261011T031141Z-88a536e0")
 UNSIZED_INTERVENTION_ID = "IR-20261011-031924-C205C8"
-UNSIZED_INTERVENTION_STATUS = (
-    f"{UNSIZED_INTERVENTION_ID}: resolved 2026-10-11 \u2014 operator acknowledged the autonomous resolution "
-    "(Amendment 18 (a)); V6/V6-sens stay failed at the sizing stage"
-)
+UNSIZED_INTERVENTION_TASK_ID = "V3-005B"
+UNSIZED_INTERVENTION_RESPONSE_SHA256 = "49d7889dbf40b1752a8a14bf3473779e1088fd9fda7c8c209edad4e72f43bd52"
+
+
+def _intervention_json(path: Path, what: str) -> dict[str, Any]:
+    if not path.is_file():
+        raise SystemExit(f"v6 fail-closed record: the intervention record {path} is absent (it is part of the branch)")
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8"))
+    except ValueError as exc:
+        raise SystemExit(f"v6 fail-closed record: {path} is not valid JSON ({what}): {exc}") from exc
+    if not isinstance(doc, dict):
+        raise SystemExit(f"v6 fail-closed record: {path} is not a JSON object ({what})")
+    return doc
 
 
 def unsized_intervention() -> str:
-    """Status of the intervention, derived from the committed record ``reference_requests/interventions/<id>/
-    response.json``. The record is part of the branch, so an absent directory or response fails closed."""
+    """Status of the intervention, bound to the exact committed record ``reference_requests/interventions/<id>/``.
+
+    ``request.json`` and ``response.json`` are parsed; both must carry the pinned request id and task id,
+    ``request.json.status`` must be ``resolved``, ``response.json`` must carry a non-empty ``resolved_at_utc``
+    and operator ``response`` text, and the sha256 of ``response.json`` must equal the pinned
+    ``UNSIZED_INTERVENTION_RESPONSE_SHA256`` (exact-record binding, so a different or edited response is not
+    accepted). Any violation fails closed with a ``SystemExit`` naming the path and the failed check."""
     rec = REPO / "reference_requests" / "interventions" / UNSIZED_INTERVENTION_ID
-    resp = rec / "response.json"
-    if not rec.is_dir() or not resp.is_file():
-        raise SystemExit(f"v6 fail-closed record: the intervention record {resp} is absent (it is part of the branch)")
-    return UNSIZED_INTERVENTION_STATUS
+    req_path, resp_path = rec / "request.json", rec / "response.json"
+    req = _intervention_json(req_path, "request")
+    resp = _intervention_json(resp_path, "response")
+
+    def fail(path: Path, check: str) -> SystemExit:
+        return SystemExit(f"v6 fail-closed record: {path}: check failed: {check}")
+
+    for path, doc in ((req_path, req), (resp_path, resp)):
+        if doc.get("request_id") != UNSIZED_INTERVENTION_ID:
+            raise fail(path, f"request_id == {UNSIZED_INTERVENTION_ID}")
+        if doc.get("task_id") != UNSIZED_INTERVENTION_TASK_ID:
+            raise fail(path, f"task_id == {UNSIZED_INTERVENTION_TASK_ID}")
+    if req.get("status") != "resolved":
+        raise fail(req_path, "status == resolved")
+    resolved_at = resp.get("resolved_at_utc")
+    if not isinstance(resolved_at, str) or not resolved_at.strip():
+        raise fail(resp_path, "non-empty resolved_at_utc")
+    text = resp.get("response")
+    if not isinstance(text, str) or not text.strip():
+        raise fail(resp_path, "non-empty response text")
+    digest = hashlib.sha256(resp_path.read_bytes()).hexdigest()
+    if digest != UNSIZED_INTERVENTION_RESPONSE_SHA256:
+        raise fail(resp_path, f"sha256 == pinned {UNSIZED_INTERVENTION_RESPONSE_SHA256} (found {digest})")
+    return (
+        f"{UNSIZED_INTERVENTION_ID}: resolved {resolved_at[:10]} (response.json sha256 "
+        f"{UNSIZED_INTERVENTION_RESPONSE_SHA256[:12]}) \u2014 operator acknowledged the autonomous resolution "
+        "(Amendment 18 (a)); V6/V6-sens stay failed at the sizing stage"
+    )
 
 
 UNSIZED_BOUND = {
