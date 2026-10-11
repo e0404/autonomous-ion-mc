@@ -266,14 +266,27 @@ V6_SHARDS: int | None = None
 """N_V6, the number of 1e6-history shards of row V6 (plan Amendment 14 (g)): ``None`` until Amendment 14a fixes it
 after the C8 rehearsal; the V6 steps then fail closed (``v6-unsized``). ``steps_v6.V6_SHARDS`` must equal it (a test)."""
 
-E1B_SHARDS: int | None = None
-"""Number of ``e1-b-s{k}`` shards of row E1-B (>= 2, total >= 1e5 histories; Amendment 17 (b)6): ``None`` until Amendment 14a
-fixes it from the throughput step; the step ``e1-b-unsized`` then fails closed in place of the shards.
+E1B_SHARDS: int | None = 3
+"""Number of ``e1-b-s{k}`` shards of row E1-B (>= 2, total >= 1e5 histories; Amendment 17 (b)6, fixed to 3 by
+Amendment 14a); ``None`` registers the step ``e1-b-unsized``, which fails closed in place of the shards.
 ``steps_v5d.E1B_SHARDS`` must equal it (a test)."""
 
 V8NUC_PYTHON_SHARDS = 4
 """``v8-stat-python-s{k}`` shards of the hr5c V8-nuc sample (4 x 20 batches x 1500 histories, Amendment 14 (i));
 ``steps_v5d.V8NUC_PYTHON_SHARDS`` must equal it (a test)."""
+
+V7R_CAL_REPS = 3200
+"""Monte Carlo replicates per surrogate and margin of the V7-R ``escaped_neutral`` calibration (Amendment 14a); exported
+to every calibration step as ``IONMC_V7R_CAL_REPS`` (``v7r.V7R_CAL_REPS`` must equal it; a test)."""
+V7R_CAL_OUT_ENV = "IONMC_V7R_CAL_OUT"
+V7R_CAL_REPS_ENV = "IONMC_V7R_CAL_REPS"
+V7R_CAL_SURROGATES = ("archive_fitted", "rehearsal_block_sums")
+V7R_CAL_MARGINS = ("nominal", "paired_low", "paired_high", "single_low", "single_high")
+V7R_CAL_PARTS = 15
+"""The calibration grid (``v7r.CAL_*`` must equal these; a test): each (surrogate, part) is one pytest shard
+evaluating all five margins on 214 / 213 replicates (one shared bootstrap per replicate, measured about 4.86 s per
+replicate plus about 42 s of fit and kappa) and writing one sealed record into ``IONMC_V7R_CAL_OUT`` (the suite
+output ``samples`` directory)."""
 
 V7R_SHARDS = 16
 """Number of shard steps ``v7r-s{k}`` of V7-R (Amendment 14 (h): sixteen simulations of 4.5e6 histories); defined
@@ -323,7 +336,7 @@ STEP_TIMEOUT_FLOOR_S = {
         **{f"e1-b-s{k}": 3300 for k in range(64)}, "e-shape-exploratory": 3300, "v3-workers-partition": 3300,
         **{f"v7r-s{k}": 3300 for k in range(V7R_SHARDS)}, "v7r-ref": 3300,
         "pytest-v7r-calibration": 3300, "v7r-combine": 1800, "v7r-diag": 1800,
-        **{f"pytest-v7r-calibration-s{k}": 3300 for k in range(3)},
+        **{f"pytest-v7r-calibration-s{k}": 3300 for k in range(31)}, "v7r-calibration-combine": 1800,
         **{f"v11-ionmc-{e}-{m}": 3300 for e in (150, 200) for m in ("emel", "emonly")},
         "v11-compare": 1800,
         **{f"v6-s{k}": 3300 for k in range(64)}, "v6-unsized": 1800, "v6-compare": 1800,
@@ -409,6 +422,8 @@ def suite_steps(
         env = dict(env or {})
         if name.startswith(V7R_CALIBRATION_STEP_PREFIX):  # a missing fixture fails, a skip is a failure
             env["IONMC_V7R_FIXTURES"] = "required"
+            env[V7R_CAL_REPS_ENV] = str(V7R_CAL_REPS)
+            env[V7R_CAL_OUT_ENV] = str(out_dir)
         steps.append((full, cmd, env))
 
     if suite == "lv5":
@@ -707,6 +722,8 @@ def _suite_steps_v7r(add, sc, out_dir, dirs, s5c):  # type: ignore[no-untyped-de
             targets, k_expr, _ = calibration_selection(i)
             add(f"pytest-v7r-calibration-s{i}",
                 pytest_cmd(*targets, marker="calibration", k=k_expr), env)
+    if V7R_CALIBRATION_SHARDS is not None:  # the consumer of the shard records (Amendment 14a)
+        add("v7r-calibration-combine", [*s5c, "v7r-calibration-combine", "--dirs", *dirs, *sc], env)
     add("v7r-combine", [*s5c, "v7r-combine", "--dirs", *dirs, *sc], env)
     add("v7r-diag", [*s5c, "v7r-diag", "--dirs", *dirs, *sc], env)
 
@@ -923,25 +940,40 @@ REHEARSAL_DIR_ENV = "IONMC_V7R_REHEARSAL_DIR"
 REHEARSAL_FIXTURE_DIR = "tests/ionmc/fixtures/v7r/rehearsal"
 V7R_FILE = "tests/ionmc/test_v7r_coverage.py"
 A13_FILE = "tests/ionmc/test_v7_coverage.py"
-EXPECTED_CALIBRATION_CASES = {V7R_FILE: 3, A13_FILE: 10}
-"""Collected ``-m calibration`` cases per file (3 V7-R cases; 10 Amendment 13 parametrized cases). The
-single source of truth of the V7-R calibration step: ``summarize.calibration_step_established``
-requires the passed count to equal it, and a CI test (``test_expected_calibration_cases_match_the_
-collection``) checks it against ``pytest --collect-only``, so a change of the parametrization cannot
-silently desynchronise the two."""
-V7R_CALIBRATION_SHARDS: int | None = None
-"""``None``: the lv5c suite registers the single step ``pytest-v7r-calibration``. An integer (the
-number of shards, 3; fixed by Amendment 14a if needed) registers ``pytest-v7r-calibration-s{k}``
-instead (Amendment 17 (a)6)."""
+V7R_CAL_PART = "test_v7r_calibration_shard"
+CAL_SHARD_TESTS = len(V7R_CAL_SURROGATES) * V7R_CAL_PARTS  # 30
+EXPECTED_CALIBRATION_CASES = {V7R_FILE: CAL_SHARD_TESTS + 1, A13_FILE: 10}
+"""Collected ``-m calibration`` cases per file (30 parametrized ``escaped_neutral`` shard tests and the V7-R readings
+report; the 10 Amendment 13 parametrized cases). The single source of truth of the V7-R calibration steps:
+``summarize.calibration_step_established`` requires the passed count to equal it, and a CI test
+(``test_expected_calibration_cases_match_the_collection``) checks it against ``pytest --collect-only``, so a change of
+the parametrization cannot silently desynchronise the two."""
+V7R_CALIBRATION_SHARDS: int | None = 31
+"""``None``: the lv5c suite registers the single step ``pytest-v7r-calibration``. An integer (the length of
+``V7R_CALIBRATION_PARTITION``: 31, Amendment 14a) registers ``pytest-v7r-calibration-s{k}`` and the consumer
+``v7r-calibration-combine`` instead."""
+
+
+def cal_case_id(surrogate: str, part: int) -> str:
+    """Parametrization id of one shard test (``test_v7r_calibration_shard[<id>]``); the part is zero padded so that
+    the ``-k`` substring of one part never matches another (``part01`` versus ``part11``)."""
+    return f"{surrogate}-part{part:02d}"
+
+
+GAUSSIAN_SHARD = ((V7R_FILE, A13_FILE), f"not {V7R_CAL_PART}", 1 + 10)
+"""The readings report and the ten Amendment 13 Gaussian-profile cases (sec_p / nuclear_local) in one shard (308 s
+on the host, RUN-20261011T034222Z-16d64100). To split per test case, replace this entry by one entry per case."""
 V7R_CALIBRATION_PARTITION = (
-    ((V7R_FILE,), "archive_fitted", 1),
-    ((V7R_FILE,), "rehearsal_block_sums", 1),
-    ((V7R_FILE, A13_FILE), "not archive_fitted and not rehearsal_block_sums", 1 + 10),
+    *(
+        ((V7R_FILE,), f"{V7R_CAL_PART} and {cal_case_id(surrogate, part)}", 1)
+        for surrogate in V7R_CAL_SURROGATES
+        for part in range(V7R_CAL_PARTS)
+    ),
+    GAUSSIAN_SHARD,
 )
-"""Shard ``i``: (pytest targets, ``-k`` expression, expected passed count). s0 the archive-fitted
-surrogate, s1 the rehearsal surrogate, s2 the V7-R readings report and the ten Amendment 13 cases.
-The selections are disjoint and cover the 13 cases exactly once (CI test
-``test_calibration_partition_is_disjoint_and_complete``)."""
+"""Shard ``i``: (pytest targets, ``-k`` expression, expected passed count). s0..s14 the ``escaped_neutral`` shard tests of
+``archive_fitted``, s15..s29 of ``rehearsal_block_sums`` (parts 0..14, all five margins each); s30 the readings report and the Amendment 13 cases. The selections are disjoint and cover
+the 41 cases exactly once (CI test ``test_calibration_partition_is_disjoint_and_complete``)."""
 
 
 def calibration_selection(shard: int | None) -> tuple[tuple[str, ...], str | None, int]:
@@ -974,6 +1006,7 @@ def step_environment(env_base: dict[str, str], name: str, extra: dict[str, str])
     env = {k: v for k, v in {**env_base, **extra}.items() if not k.startswith("IONMC_V6_")}  # no V6 override
     if V7R_CALIBRATION_STEP_PREFIX in name:
         env.pop(REHEARSAL_DIR_ENV, None)
+        env[V7R_CAL_REPS_ENV] = str(V7R_CAL_REPS)  # never overridden by the caller's environment
     return env
 REHEARSAL_FIXTURE_PREFIX = "tests/ionmc/fixtures/v7r/rehearsal/"
 """The V7-R rehearsal fixtures (partials, sidecars, ``PROVENANCE.json``) are committed under
@@ -1268,6 +1301,7 @@ def main(argv: list[str] | None = None) -> int:
             if V7R_CALIBRATION_STEP_PREFIX in name:
                 fh.write(f"# v7r_rehearsal_fixture: {REHEARSAL_FIXTURE_DIR} "
                          f"sha256={rehearsal_fixture_digest()}\n")  # fmt: skip
+                fh.write(f"# v7r_cal_reps: {V7R_CAL_REPS}\n")
             if name in deferred:
                 fh.write(f"# status: deferred\n# reason: {DEFERRED_REASON}\n\n# exit=0\n")
                 print(f"== {name}: deferred", flush=True)

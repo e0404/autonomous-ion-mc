@@ -14,6 +14,12 @@ counts such crossings as ``elastic_below_domain``. An element without elastic da
 outside [1, 250] MeV raise
 ``UnsupportedCombinationError``.
 
+The domain statement above holds for the evidence table. The exploratory forced-isotropic E-shape
+table (``allow_exploratory=True``, never evidence) is the exception: it carries the BGG ``sigma``
+(nonzero) and ``valid = 1`` nodes below ``e_min`` (that is its purpose), so for it the nodes below
+the domain are not zero and the load does not assert it; ``elastic_domain`` still reports the
+declared ``e_min`` of the targets.
+
 ``material_rows`` composes ``Sigma_mass(E) = N_A sum_el w_el scale_el sigma_el / A_el`` [cm2/g]
 (hydrogen contributes through the p-p target) and the cumulative partial ``Sigma`` per target with
 the majorants of :func:`ionmc.nuclear.tables.majorant`, on the table grid, lin-lin in E.
@@ -173,7 +179,10 @@ class ElasticTable:
     def elastic_domain(self) -> dict[str, tuple[float, float]]:
         """``{target: (e_min, e_max)}`` [MeV] over which each table target is defined (H-1:
         ``E_min,pp``; p + A: ``e_min_shape``). Below ``e_min`` the elastic channel is omitted
-        (declared limitation; ``sigma = 0`` and ``valid = 0``, asserted at load)."""
+        (declared limitation; ``sigma = 0`` and ``valid = 0``, asserted at load for the evidence
+        table). The exploratory forced-isotropic table (E-shape only) is the exception: it has
+        nonzero BGG ``sigma`` and valid nodes below the reported ``e_min`` (the domain is then the
+        declared, not the tabulated, one)."""
         e_min = self.arrays["target_e_min_mev"]
         return {n: (float(e_min[i]), E_MAX_MEV) for i, n in enumerate(self.target_names)}
 

@@ -140,6 +140,7 @@ STEP_TAGS = (
     ("v7-rep-ref", "v7-rep-ref"),
     ("v7-rep-s", "v7-rep-shard"),
     ("v7-f32-", "v7-f32"),
+    ("v7r-calibration-combine", "v7r-calibration-combine"),
     ("v7r-combine", "v7r-combine"),
     ("v7r-ref", "v7r-ref"),
     ("v7r-s", "v7r-shard"),
@@ -263,6 +264,8 @@ def parse_step(
         "deselected_tests": int(sel.group(1)) if sel else None,
         "pytest_counts": counts,
         "pytest_command": lines[0][len("# command: ") :] if lines[0].startswith("# command: ") else "",
+        "v7r_cal_reps": next((int(x.split(": ", 1)[1]) for x in lines[:10]
+                              if re.fullmatch(r"# v7r_cal_reps: \d+", x)), None),
         "problems": problems,
         "reduced": bool(doc and doc.get("reduced")),
         "histories": doc.get("histories") if doc else None,
@@ -431,7 +434,8 @@ def calibration_step_established(step: dict[str, Any], shard: int | None = None)
     """A ``pytest-v7r-calibration`` step (``shard=None``) or ``-s{shard}`` step establishes its part of
     the calibration only if it passed, its archived command is EXACTLY the expected one
     (``run_suite.calibration_selection``: the two positional targets and ``-m calibration``, plus the
-    fixed ``-k`` of a shard; nothing else selects or deselects), its archived pytest summary is
+    fixed ``-k`` of a shard; nothing else selects or deselects), its header declares ``# v7r_cal_reps:`` equal
+    to ``run_suite.V7R_CAL_REPS`` (3200; Amendment 14a), its archived pytest summary is
     readable and its passed count equals the complete expected case count of that command
     (``EXPECTED_CALIBRATION_CASES``), with no skipped, failed, errored, xfailed or xpassed test.
     Unreadable output is not established."""
@@ -452,6 +456,10 @@ def calibration_step_established(step: dict[str, Any], shard: int | None = None)
     else:
         exact = cmd == run_suite.calibration_args(targets, None)
     counts = step.get("pytest_counts")
+    if (
+        step.get("v7r_cal_reps") != run_suite.V7R_CAL_REPS
+    ):  # the step header declares the replicate count (A14a)
+        return False
     if not exact or not isinstance(counts, dict) or counts.get("passed") != want:
         return False
     return not any(v for k, v in counts.items() if k not in ("passed", "deselected", "warning", "warnings"))

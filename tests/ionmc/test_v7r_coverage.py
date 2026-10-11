@@ -1,9 +1,10 @@
 """Calibration of the V7-R bootstrap-t gates of ``escaped_neutral`` (V3-005C C5; plan Amendment 14
-(h), Amendment 17 (a)5-7). Marker ``calibration`` (host, exact SHA; excluded from CI). The step
-``pytest-v7r-calibration`` runs this file and the unchanged Amendment 13 calibration
-``tests/ionmc/test_v7_coverage.py``; its pass is the pytest exit status and ``summarize.py`` makes
-the
-conjunction with ``v7r-combine`` for row V7-R.
+(h), Amendment 17 (a)5-7, Amendment 14a). Marker ``calibration`` (host, exact SHA; excluded from CI).
+The steps ``pytest-v7r-calibration-s{k}`` run this file and the unchanged Amendment 13 calibration
+``tests/ionmc/test_v7_coverage.py``: 30 shards of ``test_v7r_calibration_shard`` (surrogate x 15 parts, all margins; each writes a sealed record into ``IONMC_V7R_CAL_OUT`` and asserts execution integrity only) and
+one shard of the Gaussian cases. The consumer step ``v7r-calibration-combine`` makes the verdict
+(``v7r.calibration_combine``) and ``v7r-combine`` requires it; ``summarize.py`` makes the conjunction
+with the pytest steps for row V7-R.
 
 Requirements (per surrogate, for the two bootstrap-t gates of ``escaped_neutral``)
 -----------------------------------------------------------------------------------
@@ -13,16 +14,17 @@ Requirements (per surrogate, for the two bootstrap-t gates of ``escaped_neutral`
   coverage equal to the low and the high edge of [0.6527, 0.7127], reached by a scale ``kappa`` on
   the
   offsets of the intervals from the point estimate (as Amendment 13);
-* each gate alone <= 0.04 (the exact alpha_tost of its construction): the 95 % CP UPPER bound of the
-  Monte Carlo acceptance rate of that gate is <= 0.04 at that gate's OWN margins (paired gate at the
-  paired_low/high kappas, single gate at the single_low/high kappas); the other gate's values at a
-  margin are reported, not gated;
+* each gate alone <= 0.04 holds BY CONSTRUCTION (the exact alpha_tost of the gate; Amendment 14a): the
+  Monte Carlo rate with its 95 % CP interval is reported at that gate's OWN margins (paired gate at the
+  paired_low/high kappas, single gate at the single_low/high kappas; the other gate's values are
+  reported, not gated). The construction is refuted, a failure, iff the CP95 LOWER bound exceeds 0.04.
+  The contrary reading (CP95 UPPER <= 0.04) is reported per margin and never gated;
 * power >= 0.9: the 95 % CP LOWER bound of the joint pass rate at kappa = 1 (the unscaled gates) is
   >= 0.9.
 
-Every "<=" requirement uses the one-sided 95 % Clopper-Pearson UPPER bound (``cp_upper(k, n,
-0.05)``)
-and the power requirement the LOWER bound. Maximum number of accepted repetitions ``k`` of ``n`` for
+The joint requirement uses the one-sided 95 % Clopper-Pearson UPPER bound (``cp_upper(k, n, 0.05)``),
+the power requirement and the refutation of the gate construction the LOWER bound. (The "each gate"
+column below is the contrary reading, reported only.) Maximum number of accepted repetitions ``k`` of ``n`` for
 which the upper bound is still <= the limit, and the minimum number of accepted repetitions at the
 nominal for a lower bound >= 0.9 (exact values, ``steps_v5b.cp_upper/cp_lower``):
 
@@ -42,7 +44,7 @@ One more acceptance than the maximum gives the bound 0.0235 / 0.0227 / 0.0211 / 
 / 0.8996 / 0.8997 / 0.9000 (power).
 
 (The tests ``test_requirement_bounds_*`` pin these numbers.) The repetition count is
-``IONMC_V7R_CAL_REPS`` (default 200). A true false-acceptance rate at the limit (0.02) needs several
+``IONMC_V7R_CAL_REPS`` (default 200 for sandbox smoke; the calibration steps export 3200). A true false-acceptance rate at the limit (0.02) needs several
 hundred repetitions to be certified; 200 repetitions can only certify a rate near 0 for the joint
 requirement, which is why more repetitions may be chosen before the evidence run (Amendment 14 (h)
 4).
@@ -123,12 +125,15 @@ that variable is set. Under the literal reading the row cannot pass for sec_p/nu
 verdict uses the reading of Amendment 17 (a)5.
 """
 
+# ruff: noqa: E501
+
 from __future__ import annotations
 
 import importlib.util
 import json
 import math
 import os
+import platform
 import sys
 import time
 from pathlib import Path
@@ -152,6 +157,11 @@ EXPECTED_SHARD = {
     "blocks_per_replicate": 20,
 }
 SEED_BASE_RANGE = (20505000, 20509499)
+
+
+CAL_SURROGATES = ("archive_fitted", "rehearsal_block_sums")
+CAL_MARGINS = ("nominal", "paired_low", "paired_high", "single_low", "single_high")
+CAL_PARTS = 15
 
 
 def _load(name: str, path: Path | None = None) -> ModuleType:
@@ -404,15 +414,18 @@ def margin_kappas(
 def run_calibration(  # type: ignore[no-untyped-def]
     v7r: ModuleType, v5b: ModuleType, sampler, kappas: dict[str, float], reps: int, *,
     replicates: int = 7200, reps_per_shard: int = 450, b: int = 1999, n_boot: int | None = None,
+    data_seed0: int = SEED_DATA0, boot_seed0: int = SEED_BOOT0,
 ) -> dict[str, np.ndarray]:  # fmt: skip
     """Monte Carlo of both gates at each named ``kappa``: ``{name: [reps, 2]}`` booleans (paired,
     single). One bootstrap per repetition serves every kappa (the resamples do not depend on it).
     ``n_boot=None`` is the qualification value of the single gate (``steps_v5b.V7_BOOT_N``, read by
-    ``v7r.single_gate``); only the CI-scale test passes a number."""
+    ``v7r.single_gate``); only the CI-scale test passes a number. Replicate ``r`` draws its data from
+    ``default_rng(data_seed0 + r)`` and bootstraps with ``boot_seed0 + r`` (the calibration shards pass the
+    seeds of ``v7r.cal_part_seeds``)."""
     out = {k: np.zeros((reps, 2), dtype=bool) for k in kappas}
     for r in range(reps):
-        x = sampler(np.random.default_rng(SEED_DATA0 + r), replicates)
-        seed_base = SEED_BOOT0 + r
+        x = sampler(np.random.default_rng(data_seed0 + r), replicates)
+        seed_base = boot_seed0 + r
         pi = v7r.pair_ingredients(x, seed_base, reps_per_shard, b)
         si = v7r.single_ingredients(x, seed_base, reps_per_shard, b)
         means = x.mean(axis=1)
@@ -425,55 +438,60 @@ def run_calibration(  # type: ignore[no-untyped-def]
     return out
 
 
-def _own_gates(margin: str) -> tuple[str, ...]:
-    """Gates whose "alone <= 0.04" requirement applies at ``margin``: the paired gate at the
-    ``paired_*`` margins and the single gate at the ``single_*`` margins (its alpha_tost
-    construction). The other gate's values at that margin are reported (``*_cp95_upper``) but not
-    gated; a margin name with neither prefix (synthetic tests) gates both."""
-    for gate in ("paired", "single"):
-        if margin.startswith(gate):
-            return (gate,)
-    return ("paired", "single")
+def _seal(doc: dict) -> dict:  # type: ignore[type-arg]
+    """``doc`` with ``content_sha256`` (``steps_v5.content_digest``: sha256 of the canonical JSON of the
+    document without that field, after one JSON round trip)."""
+    import hashlib
+
+    norm = json.loads(json.dumps(doc))
+    norm.pop("content_sha256", None)
+    text = json.dumps(norm, sort_keys=True, separators=(",", ":"))
+    return {**doc, "content_sha256": hashlib.sha256(text.encode()).hexdigest()}
 
 
-def evaluate(v5b: ModuleType, rates: dict[str, np.ndarray], reps: int) -> dict:  # type: ignore[type-arg]
-    """Verdict of the three requirements from ``run_calibration`` output (margins: every name but
-    ``nominal``). The gate-alone requirement is checked at each gate's own margins only
-    (``_own_gates``; cross-margin values are report-only). Every "<=" requirement uses the
-    one-sided 95 % CP UPPER bound, the power the LOWER."""
-    rep = {}
-    for name, p in rates.items():
-        joint = p.all(axis=1)
-        kj, kp, ks = int(joint.sum()), int(p[:, 0].sum()), int(p[:, 1].sum())
-        rep[name] = {
-            "joint": kj, "paired": kp, "single": ks, "n": reps,
-            "joint_cp95_upper": v5b.cp_upper(kj, reps, 0.05),
-            "paired_cp95_upper": v5b.cp_upper(kp, reps, 0.05),
-            "single_cp95_upper": v5b.cp_upper(ks, reps, 0.05),
-            "joint_cp95_lower": v5b.cp_lower(kj, reps, 0.05),
-            "joint_rate": float(joint.mean()),
-        }  # fmt: skip
-    failures = []
-    for name, r in rep.items():
-        if name == "nominal":
-            if r["joint_cp95_lower"] < 0.9:
-                failures.append(
-                    f"power: joint CP95 lower {r['joint_cp95_lower']:.4f} < 0.9 at the nominal "
-                    f"({r['joint']}/{reps})"
-                )
-            continue
-        if r["joint_cp95_upper"] > 0.02:
-            failures.append(
-                f"{name}: joint false acceptance CP95 upper {r['joint_cp95_upper']:.4f} > 0.02 "
-                f"({r['joint']}/{reps})"
-            )
-        for gate in _own_gates(name):
-            if r[f"{gate}_cp95_upper"] > 0.04:
-                failures.append(
-                    f"{name}: {gate} gate false acceptance CP95 upper "
-                    f"{r[f'{gate}_cp95_upper']:.4f} > 0.04 ({r[gate]}/{reps})"
-                )
-    return {"margins": rep, "failures": failures}
+def _surrogate(v7r: ModuleType, name: str):  # type: ignore[no-untyped-def]
+    """``(sampler, fit record)`` of a calibration surrogate (deterministic: identical in every part)."""
+    if name == "archive_fitted":
+        _need(ARCHIVE_FIXTURE, "archived lv5b replicates (mean, sem)")
+        doc = json.loads(ARCHIVE_FIXTURE.read_text())
+        assert doc["schema"] == "ionmc-v7r-lv5b-escaped-neutral-replicates-1"
+        assert doc["git_sha_prefix"] == "7aae5bb1" and len(doc["mean"]) == len(doc["sem"]) == 7200
+        m, s = np.array(doc["mean"]), np.array(doc["sem"])
+        targets = np.quantile((m - m.mean()) / s, QUANTILE_PROBS)
+        assert abs(targets[0] + 2.228) < 0.01 and abs(targets[3] - 2.005) < 0.01, (
+            targets
+        )  # plan values
+        fit = fit_zero_inflated_gamma(targets)
+        print("V7R-FIT", json.dumps(fit, sort_keys=True))
+        assert fit["max_abs_error"] < 0.1, fit  # the surrogate reproduces the four quantiles
+        return ZeroInflatedGamma(fit["k"], fit["pi"]), {
+            "surrogate": "archive-fitted zero-inflated Gamma",
+            **fit,
+        }
+    try:
+        pool_blocks, info = load_rehearsal(rehearsal_dir(), _load("steps_v5c"), _load("run_suite"))
+    except RehearsalError as exc:
+        _skip_or_fail(f"rehearsal fixture rejected: {exc}")
+        raise
+    pool = pool_blocks.ravel()
+    return PooledBlocks(pool), {
+        "surrogate": "pooled rehearsal block sums",
+        "blocks": int(pool.size),
+        **info,
+    }
+
+
+def _margin_kappas(v7r: ModuleType, sampler) -> dict[str, float]:  # type: ignore[no-untyped-def]
+    """kappa of each margin (``nominal`` is 1; single and paired margins by bisection on the large-sample
+    coverage at the edges of the region)."""
+    lo, hi = v7r.V7R_REGION
+    return {
+        "nominal": 1.0,
+        "paired_low": margin_kappas(v7r, sampler, "pair", lo, SEED_KAPPA + 1),
+        "paired_high": margin_kappas(v7r, sampler, "pair", hi, SEED_KAPPA + 1),
+        "single_low": margin_kappas(v7r, sampler, "single", lo, SEED_KAPPA),
+        "single_high": margin_kappas(v7r, sampler, "single", hi, SEED_KAPPA),
+    }
 
 
 def _report(label: str, doc: dict) -> None:  # type: ignore[type-arg]
@@ -486,63 +504,58 @@ def _report(label: str, doc: dict) -> None:  # type: ignore[type-arg]
         )
 
 
-def _calibrate(v7r: ModuleType, v5b: ModuleType, sampler, label: str, extra: dict) -> dict:  # type: ignore[no-untyped-def,type-arg]
-    reps = cal_reps()
-    lo, hi = v7r.V7R_REGION
-    t0 = time.perf_counter()
-    kappas = {
-        "single_low": margin_kappas(v7r, sampler, "single", lo, SEED_KAPPA),
-        "single_high": margin_kappas(v7r, sampler, "single", hi, SEED_KAPPA),
-        "paired_low": margin_kappas(v7r, sampler, "pair", lo, SEED_KAPPA + 1),
-        "paired_high": margin_kappas(v7r, sampler, "pair", hi, SEED_KAPPA + 1),
-        "nominal": 1.0,
-    }
-    t1 = time.perf_counter()
-    rates = run_calibration(v7r, v5b, sampler, kappas, reps)
-    verdict = evaluate(v5b, rates, reps)
-    seeds = {"fit": SEED_FIT, "kappa": SEED_KAPPA, "boot": SEED_BOOT0, "data": SEED_DATA0}
-    doc = {**extra, "kappas": kappas, "reps": reps, **verdict, "wall_kappa_s": t1 - t0,
-           "wall_mc_s": time.perf_counter() - t1, "seeds": seeds, "rng": v7r.rng_record(),
-           "B": v7r.V7R_B, "boot_n": v5b.V7_BOOT_N}  # fmt: skip
-    _report(label, doc)
-    return doc
+CAL_CASES = [(s, p) for s in CAL_SURROGATES for p in range(CAL_PARTS)]
+CAL_IDS = [f"{s}-part{p:02d}" for s, p in CAL_CASES]
 
 
 # -- calibration tests (host) --------------------------------------------------------------------
 @pytest.mark.calibration
-def test_v7r_calibration_archive_fitted_skewed_surrogate(v7r: ModuleType, v5b: ModuleType) -> None:
-    _need(ARCHIVE_FIXTURE, "archived lv5b replicates (mean, sem)")
-    doc = json.loads(ARCHIVE_FIXTURE.read_text())
-    assert doc["schema"] == "ionmc-v7r-lv5b-escaped-neutral-replicates-1"
-    assert doc["git_sha_prefix"] == "7aae5bb1" and len(doc["mean"]) == len(doc["sem"]) == 7200
-    m, s = np.array(doc["mean"]), np.array(doc["sem"])
-    targets = np.quantile((m - m.mean()) / s, QUANTILE_PROBS)
-    assert abs(targets[0] + 2.228) < 0.01 and abs(targets[3] - 2.005) < 0.01, targets  # plan values
-    fit = fit_zero_inflated_gamma(targets)
-    print("V7R-FIT", json.dumps(fit, sort_keys=True))
-    assert fit["max_abs_error"] < 0.1, fit  # the surrogate reproduces the four quantiles
-    sampler = ZeroInflatedGamma(fit["k"], fit["pi"])
-    out = _calibrate(
-        v7r,
-        v5b,
-        sampler,
-        "archive",
-        {"surrogate": "archive-fitted zero-inflated Gamma", "fit": fit},
+@pytest.mark.parametrize(("surrogate", "part"), CAL_CASES, ids=CAL_IDS)
+def test_v7r_calibration_shard(v7r: ModuleType, v5b: ModuleType, surrogate: str, part: int) -> None:
+    """One part (214 or 213 of the 3200 replicates, Amendment 14a) of one surrogate, all five margins: fit and
+    kappas (deterministic, identical in the parts), the slice of the Monte Carlo (one bootstrap per replicate
+    serves every kappa) with the seeds of ``v7r.cal_part_seeds(surrogate_idx, part)``
+    (``SeedSequence([20507000, surrogate_idx, part])``) and one sealed record written to ``IONMC_V7R_CAL_OUT``
+    (required in required mode). The verdict is made by the consumer step ``v7r-calibration-combine``; this test
+    asserts execution integrity only. Measured cost: about 4.86 s per replicate for all margins together plus
+    about 42 s for the fit and the kappas (recorded as ``wall_per_replicate_s`` / ``wall_fit_kappa_s``)."""
+    out_dir = os.environ.get("IONMC_V7R_CAL_OUT")
+    if _fixtures_required() and not out_dir:
+        pytest.fail("IONMC_V7R_CAL_OUT is not set in required mode: the record has nowhere to go")
+    reps = cal_reps()
+    n = v7r.cal_part_sizes(reps)[part]
+    seeds = v7r.cal_part_seeds(CAL_SURROGATES.index(surrogate), part)
+    t0 = time.perf_counter()
+    sampler, fit = _surrogate(v7r, surrogate)
+    kappas = _margin_kappas(v7r, sampler)
+    t1 = time.perf_counter()
+    rates = run_calibration(
+        v7r, v5b, sampler, kappas, n, data_seed0=seeds["data"], boot_seed0=seeds["boot"]
     )
-    assert not out["failures"], out["failures"]
-
-
-@pytest.mark.calibration
-def test_v7r_calibration_rehearsal_block_sums_surrogate(v7r: ModuleType, v5b: ModuleType) -> None:
-    try:
-        pool_blocks, info = load_rehearsal(rehearsal_dir(), _load("steps_v5c"), _load("run_suite"))
-    except RehearsalError as exc:
-        _skip_or_fail(f"rehearsal fixture rejected: {exc}")
-        return
-    pool = pool_blocks.ravel()
-    extra = {"surrogate": "pooled rehearsal block sums", "blocks": int(pool.size), **info}
-    out = _calibrate(v7r, v5b, PooledBlocks(pool), "rehearsal", extra)
-    assert not out["failures"], out["failures"]
+    wall_mc = time.perf_counter() - t1
+    margins = {}
+    for m, kap in kappas.items():
+        p = rates[m]
+        assert p.shape == (n, 2) and np.isfinite(kap) and kap > 0.0
+        margins[m] = {"kappa": kap, "accepted_joint": int(p.all(axis=1).sum()),
+                      "accepted_paired": int(p[:, 0].sum()), "accepted_single": int(p[:, 1].sum())}  # fmt: skip
+        assert margins[m]["accepted_joint"] <= min(
+            margins[m]["accepted_paired"], margins[m]["accepted_single"]
+        )
+    rec = {"schema": v7r.CAL_SCHEMA, "surrogate": surrogate, "part": part, "n": n, "margins": margins,
+           "fit": fit, "reps_env": reps, "seeds": seeds,
+           "run_sha": os.environ.get("IONMC_RUN_SHA", "unknown"),
+           "suite": os.environ.get("IONMC_RUN_SUITE", "unknown"), "wall_fit_kappa_s": t1 - t0,
+           "wall_mc_s": wall_mc, "wall_per_replicate_s": wall_mc / n, "rng": v7r.rng_record(),
+           "B": v7r.V7R_B, "boot_n": v5b.V7_BOOT_N, "python": platform.python_version()}  # fmt: skip
+    _report(f"{surrogate}-part{part:02d}", rec)
+    if out_dir:
+        d = Path(out_dir)
+        d.mkdir(parents=True, exist_ok=True)
+        path = d / f"v7r-calibration-{surrogate}-p{part:02d}.json"
+        path.write_text(json.dumps(_seal(rec), sort_keys=True))
+        print(f"RECORD {path.name}")
+        assert path.is_file()
 
 
 @pytest.mark.calibration
@@ -586,7 +599,7 @@ def test_calibration_machinery_at_ci_scale(v7r: ModuleType, v5b: ModuleType) -> 
     rates = run_calibration(v7r, v5b, sampler, {"low": k_lo, "nominal": 1.0}, 3, replicates=120,
                             reps_per_shard=15, b=199, n_boot=50)  # fmt: skip
     assert all(v.shape == (3, 2) for v in rates.values())
-    rep = evaluate(v5b, rates, 3)
+    rep = evaluate(v7r, rates, 3)
     assert set(rep["margins"]) == {"low", "nominal"} and isinstance(rep["failures"], list)
     again = run_calibration(v7r, v5b, sampler, {"low": k_lo, "nominal": 1.0}, 3, replicates=120,
                             reps_per_shard=15, b=199, n_boot=50)  # fmt: skip
@@ -642,64 +655,87 @@ def _rates(joint: int, paired: int, single: int, n: int) -> np.ndarray:
     return p
 
 
-def _verdict(v5b: ModuleType, margin: tuple[int, int, int], nominal: int, n: int) -> list[str]:
+def evaluate(v7r: ModuleType, rates: dict[str, np.ndarray], reps: int) -> dict:  # type: ignore[type-arg]
+    """``v7r.calibration_evaluate`` of ``run_calibration`` output (the counts of each margin)."""
+    counts = {name: {"n": reps, "joint": int(p.all(axis=1).sum()), "paired": int(p[:, 0].sum()),
+                     "single": int(p[:, 1].sum())} for name, p in rates.items()}  # fmt: skip
+    return v7r.calibration_evaluate(counts)
+
+
+def _verdict(v7r: ModuleType, margin: tuple[int, int, int], nominal: int, n: int) -> list[str]:
     rates = {"m": _rates(*margin, n), "nominal": _rates(nominal, nominal, nominal, n)}
-    return evaluate(v5b, rates, n)["failures"]
+    return evaluate(v7r, rates, n)["failures"]
+
+
+def _refuted_min(v5b: ModuleType, n: int) -> int:
+    """Smallest acceptance count whose CP95 LOWER bound exceeds 0.04 (the construction is refuted)."""
+    return next(k for k in range(n + 1) if v5b.cp_lower(k, n, 0.05) > 0.04)
 
 
 @pytest.mark.parametrize(
-    ("n", "joint_max", "gate_max", "power_min"),
-    [(200, 0, 3, 188), (400, 3, 9, 371), (800, 9, 22, 735), (1600, 22, 50, 1461)],
+    ("n", "joint_max", "power_min"),
+    [(200, 0, 188), (400, 3, 371), (800, 9, 735), (1600, 22, 1461), (3200, 50, 2909)],
 )
 def test_requirement_bounds_boundaries_match_the_docstring_table(
-    v5b: ModuleType, n: int, joint_max: int, gate_max: int, power_min: int
+    v5b: ModuleType, v7r: ModuleType, n: int, joint_max: int, power_min: int
 ) -> None:
-    ok = (joint_max, gate_max, gate_max)
-    assert _verdict(v5b, ok, power_min, n) == []
-    assert _verdict(v5b, (joint_max + 1, gate_max, gate_max), power_min, n)  # joint: one more
-    assert _verdict(v5b, (0, gate_max + 1, gate_max), power_min, n)  # paired gate alone
-    assert _verdict(v5b, (0, gate_max, gate_max + 1), power_min, n)  # single gate alone
-    assert _verdict(v5b, ok, power_min - 1, n)  # power one short
+    gate_ok = _refuted_min(v5b, n) - 1
+    ok = (joint_max, gate_ok, gate_ok)
+    assert _verdict(v7r, ok, power_min, n) == []
+    assert _verdict(v7r, (joint_max + 1, gate_ok, gate_ok), power_min, n)  # joint: one more
+    assert _verdict(v7r, (0, gate_ok + 1, gate_ok), power_min, n)  # paired construction refuted
+    assert _verdict(v7r, (0, gate_ok, gate_ok + 1), power_min, n)  # single construction refuted
+    assert _verdict(v7r, ok, power_min - 1, n)  # power one short
     assert v5b.cp_upper(joint_max, n, 0.05) <= 0.02 < v5b.cp_upper(joint_max + 1, n, 0.05)
-    assert v5b.cp_upper(gate_max, n, 0.05) <= 0.04 < v5b.cp_upper(gate_max + 1, n, 0.05)
+    assert v5b.cp_lower(gate_ok, n, 0.05) <= 0.04 < v5b.cp_lower(gate_ok + 1, n, 0.05)
     assert v5b.cp_lower(power_min, n, 0.05) >= 0.9 > v5b.cp_lower(power_min - 1, n, 0.05)
 
 
-def test_requirement_bounds_use_the_upper_bound_not_the_lower(v5b: ModuleType) -> None:
-    """10/200 gate acceptances: the 95 % lower bound (0.027) is below 0.04, so the former
-    lower-bound check would pass, the upper bound (0.083) fails; 1/200 (joint) likewise."""
+def test_gate_alone_is_by_construction_and_the_contrary_reading_is_reported(
+    v5b: ModuleType, v7r: ModuleType
+) -> None:
+    """10/200: the CP95 lower bound (0.027) is not above 0.04, so the construction stands (pass) while the
+    contrary reading (upper 0.083 <= 0.04) is reported as not met; the joint requirement still uses the
+    UPPER bound (1/200 gives 0.0235 > 0.02)."""
     assert v5b.cp_lower(10, 200, 0.05) < 0.04 < v5b.cp_upper(10, 200, 0.05)
-    assert (
-        _verdict(v5b, (0, 10, 0), 200, 200)
-        and "paired gate" in _verdict(v5b, (0, 10, 0), 200, 200)[0]
+    out = evaluate(
+        v7r, {"paired_low": _rates(0, 10, 0, 200), "nominal": _rates(190, 190, 190, 200)}, 200
     )
-    assert "single gate" in _verdict(v5b, (0, 0, 10), 200, 200)[0]
-    assert v5b.cp_lower(1, 200, 0.05) < 0.02 < v5b.cp_upper(1, 200, 0.05)
-    assert "joint" in _verdict(v5b, (1, 1, 1), 200, 200)[0]
-    assert _verdict(v5b, (0, 0, 0), 200, 200) == []
-    # power: 180/200 (rate 0.90, lower bound 0.85) fails, 190/200 passes
-    assert "power" in _verdict(v5b, (0, 0, 0), 180, 200)[0]
-    assert _verdict(v5b, (0, 0, 0), 190, 200) == []
+    assert out["failures"] == [] and out["pass"] is True
+    alone = out["margins"]["paired_low"]["gate_alone"]
+    assert set(alone) == {"paired"} and alone["paired"]["rate"] == 0.05
+    assert alone["paired"]["construction_refuted"] is False
+    assert alone["paired"]["contrary_reading_cp95_upper_le_0.04"] is False
+    assert "joint" in _verdict(v7r, (1, 1, 1), 200, 200)[0]
+    assert _verdict(v7r, (0, 0, 0), 200, 200) == []
+    assert "power" in _verdict(v7r, (0, 0, 0), 180, 200)[0]  # 180/200: lower bound 0.85
+    assert _verdict(v7r, (0, 0, 0), 190, 200) == []
 
 
-def test_gate_alone_requirement_applies_at_each_gates_own_margins_only(v5b: ModuleType) -> None:
-    n = 200
-    nominal = _rates(190, 190, 190, n)
-    # the paired gate accepts 10/200 at a SINGLE margin: reported, not gated
-    rates = {"single_low": _rates(0, 10, 0, n), "nominal": nominal}
-    out = evaluate(v5b, rates, n)
-    assert out["failures"] == [] and out["margins"]["single_low"]["paired_cp95_upper"] > 0.04
-    # the same acceptances at the PAIRED margin are gated
-    out = evaluate(v5b, {"paired_high": _rates(0, 10, 0, n), "nominal": nominal}, n)
-    assert len(out["failures"]) == 1 and "paired gate" in out["failures"][0]
-    # the single gate at a single margin is gated; at a paired margin it is not
-    out = evaluate(v5b, {"single_high": _rates(0, 0, 10, n), "nominal": nominal}, n)
+def test_gate_alone_requirement_applies_at_each_gates_own_margins_only(
+    v5b: ModuleType, v7r: ModuleType
+) -> None:
+    n = 3200
+    bad = _refuted_min(v5b, n)
+    nominal = _rates(2950, 2950, 2950, n)
+    # the paired gate accepts far above 0.04 at a SINGLE margin: reported, not gated
+    out = evaluate(v7r, {"single_low": _rates(0, bad, 0, n), "nominal": nominal}, n)
+    assert out["failures"] == [] and out["margins"]["single_low"]["paired_cp95_lower"] > 0.04
+    assert set(out["margins"]["single_low"]["gate_alone"]) == {"single"}
+    # the same acceptances at the PAIRED margin refute the construction
+    out = evaluate(v7r, {"paired_high": _rates(0, bad, 0, n), "nominal": nominal}, n)
+    assert (
+        len(out["failures"]) == 1
+        and "paired gate" in out["failures"][0]
+        and "refuted" in out["failures"][0]
+    )
+    out = evaluate(v7r, {"single_high": _rates(0, 0, bad, n), "nominal": nominal}, n)
     assert len(out["failures"]) == 1 and "single gate" in out["failures"][0]
     assert (
-        evaluate(v5b, {"paired_low": _rates(0, 0, 10, n), "nominal": nominal}, n)["failures"] == []
+        evaluate(v7r, {"paired_low": _rates(0, 0, bad, n), "nominal": nominal}, n)["failures"] == []
     )
     # the joint requirement is gated at every margin
-    out = evaluate(v5b, {"paired_low": _rates(1, 1, 1, n), "nominal": nominal}, n)
+    out = evaluate(v7r, {"paired_low": _rates(100, 100, 100, n), "nominal": nominal}, n)
     assert "joint" in out["failures"][0]
 
 

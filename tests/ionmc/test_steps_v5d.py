@@ -376,7 +376,14 @@ def test_registration_order_seeds_timeouts_and_tags() -> None:
         < lv.index("e1-b-compare")
     )
     tail = lv[lv.index("v7r-diag") + 1 :]
-    assert tail == ["e1-b-unsized", "e1-b-compare", "e-shape-exploratory", "v3-workers-partition"]
+    assert tail == [
+        "e1-b-s0",
+        "e1-b-s1",
+        "e1-b-s2",
+        "e1-b-compare",
+        "e-shape-exploratory",
+        "v3-workers-partition",
+    ]
     assert rs.deferred_step_names("lv5c") == [f"{len(lv):02d}-v3-workers-partition"]
     assert rs.deferred_step_names("hr5c") == []
     hr = [n.split("-", 1)[1] for n in rs.full_step_names("hr5c", 2)]
@@ -421,7 +428,7 @@ def test_registration_order_seeds_timeouts_and_tags() -> None:
 
 def test_constants_equal_between_run_suite_and_the_steps(d: ModuleType) -> None:
     rs = _load("run_suite")
-    assert rs.E1B_SHARDS is d.E1B_SHARDS is None
+    assert rs.E1B_SHARDS == d.E1B_SHARDS == 3
     assert rs.V8NUC_PYTHON_SHARDS == d.V8NUC_PYTHON_SHARDS
 
 
@@ -432,19 +439,18 @@ def test_source_identity_lists_the_new_modules() -> None:
 
 
 def test_e1b_unsized_fails_closed_and_sizing_rules(d: ModuleType) -> None:
-    with pytest.raises(SystemExit, match="Amendment 14a"):
-        d.e1b_shards()
-    d.E1B_SHARDS = 1
+    assert d.e1b_shards() == 3
+    d.E1B_SHARDS = None
     try:
+        with pytest.raises(SystemExit, match="Amendment 14a"):
+            d.e1b_shards()
+        d.E1B_SHARDS = 1
         with pytest.raises(SystemExit, match=">= 2"):
             d.e1b_shards()
         d.E1B_SHARDS = 2
         assert d.e1b_shards() == 2
-        d.E1B_SHARDS = 3  # 3 x 33333 < 1e5
-        with pytest.raises(SystemExit):
-            d.e1b_shards()
     finally:
-        d.E1B_SHARDS = None
+        d.E1B_SHARDS = 3
 
 
 def test_slice_c_step_rows_in_summarize() -> None:
@@ -840,7 +846,7 @@ def test_throughput_plan_is_sized_for_1500_s(d: ModuleType) -> None:
     assert all(v["limit_s"] == 1500.0 for v in tab2.values())
     assert (
         tab2["e1-b (python 150 MeV, 1e5)"]["rate_key"] == "python"
-        and tab2["e1-b (python 150 MeV, 1e5)"]["ok"] is None
+        and tab2["e1-b (python 150 MeV, 1e5)"]["ok"] is True
     )
     assert (
         tab2["v7r (16 shards x 4.5e6, block rate)"]["ok"] is True

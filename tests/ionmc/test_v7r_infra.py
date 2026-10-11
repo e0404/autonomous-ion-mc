@@ -3,6 +3,8 @@ fix, and (with ``validation/scripts/transport/v7r.py`` and ``steps_v5c.py``) the
 sidecar, the bootstrap-t gates and the suite registration. No transport beyond a few hundred
 histories."""
 
+# ruff: noqa: E501
+
 from __future__ import annotations
 
 import importlib.util
@@ -475,11 +477,14 @@ def _synthetic_v7r(
     return shards, ref, allsums
 
 
+CAL_OK = {"step": "v7r-calibration-combine", "pass": True, "reps": 3200, "content_sha256": "0" * 64}
+
+
 def test_v7r_combine_dry_run_document_and_fail_closed(
     v5c: ModuleType, v7r: ModuleType, tmp_path: Path
 ) -> None:
     shards, ref, allsums = _synthetic_v7r(v5c, v7r, tmp_path)
-    doc = v5c.v7r_combine(shards, ref, 20505000, n_shards=4, n_boot=100)
+    doc = v5c.v7r_combine(shards, ref, 20505000, n_shards=4, n_boot=100, calibration=CAL_OK)
     en = doc["estimators"]["escaped_neutral"]
     assert en["interval"] == "bootstrap-t" and en["B"] == 1999 and en["alpha"] == 0.3173
     assert "amendment13_rule_report_only" in en and "pass_paired" in en and "pass_single" in en
@@ -491,21 +496,33 @@ def test_v7r_combine_dry_run_document_and_fail_closed(
         "reference"
     ] == [20521016]
     assert doc["rng"]["bit_generator"] == "PCG64" and doc["units"] == "MeV per 500-history block"
-    assert doc["pass"] == doc["gates_pass"]
+    assert doc["pass"] == doc["gates_pass"] and doc["calibration_status"]["pass"] is True
+    # Amendment 14a: the sealed calibration status is part of the row: a failed one fails the document, a missing
+    # or malformed one fails closed
+    failed = v5c.v7r_combine(
+        shards, ref, 20505000, n_shards=4, n_boot=100, calibration={**CAL_OK, "pass": False}
+    )
+    assert failed["gates_pass"] == doc["gates_pass"] and failed["pass"] is False
+    with pytest.raises(SystemExit, match="calibration status"):
+        v5c.v7r_combine(shards, ref, 20505000, n_shards=4, calibration={})
     # fail closed: seed mismatch, invalid shard, unequal replicates, wrong shard count
     with pytest.raises(SystemExit):
-        v5c.v7r_combine(shards, {**ref, "seed": 1}, 20505000, n_shards=4)
+        v5c.v7r_combine(shards, {**ref, "seed": 1}, 20505000, n_shards=4, calibration=CAL_OK)
     with pytest.raises(SystemExit):
-        v5c.v7r_combine(shards[:3], ref, 20505000, n_shards=4)
+        v5c.v7r_combine(shards[:3], ref, 20505000, n_shards=4, calibration=CAL_OK)
     bad = [dict(shards[0][0], valid=False), *[s[0] for s in shards[1:]]]
     with pytest.raises(SystemExit):
         v5c.v7r_combine(
-            [(d, p) for d, (_, p) in zip(bad, shards, strict=True)], ref, 20505000, n_shards=4
+            [(d, p) for d, (_, p) in zip(bad, shards, strict=True)],
+            ref,
+            20505000,
+            n_shards=4,
+            calibration=CAL_OK,
         )
     # a seed base whose lists intersect a consumed evidence seed set is refused
     with pytest.raises(SystemExit):
         shards2, ref2, _ = _synthetic_v7r(v5c, v7r, tmp_path, seed_base=20471004 - 16000 + 5000)
-        v5c.v7r_combine(shards2, ref2, 20471004 - 16000 + 5000, n_shards=4)
+        v5c.v7r_combine(shards2, ref2, 20471004 - 16000 + 5000, n_shards=4, calibration=CAL_OK)
     # consumed sets contain the lv5b V7-replicate seeds 20482004..20482012
     cs = v5c.consumed_seed_set()
     assert set(range(20482004, 20482013)) <= cs and not (cs & set(range(20497004, 20497021)))
@@ -546,7 +563,8 @@ def test_lv5c_suite_registration_names_seeds_timeouts_tags(
     assert names[names.index("v7r-s0") : names.index("v7r-diag") + 1] == [
         *(f"v7r-s{k}" for k in range(16)),
         "v7r-ref",
-        "pytest-v7r-calibration",
+        *(f"pytest-v7r-calibration-s{k}" for k in range(31)),
+        "v7r-calibration-combine",
         "v7r-combine",
         "v7r-diag",
     ]  # fmt: skip  (the V7-R block; the C9 order puts V6 before it and E1-B / E-shape after it)
@@ -579,13 +597,25 @@ def test_lv5c_suite_registration_names_seeds_timeouts_tags(
             want = (
                 1800
                 if base_name
-                in ("v7r-combine", "v7r-diag", "v11-compare", "v6-unsized", "v6-compare", "v6-e0")
+                in (
+                    "v7r-combine",
+                    "v7r-calibration-combine",
+                    "v7r-diag",
+                    "v11-compare",
+                    "v6-unsized",
+                    "v6-compare",
+                    "v6-e0",
+                )
                 else 3300
             )
             assert rs.step_timeout_s("lv5c", n, 1500) == want, n
     tags = {n.split("-", 1)[1]: sm.expected_tag(n) for n in full}
     assert tags["v7r-s0"] == tags["v7r-s15"] == "v7r-shard"
-    assert tags["v7r-ref"] == "v7r-ref" and tags["pytest-v7r-calibration"] is None
+    assert (
+        tags["v7r-ref"] == "v7r-ref"
+        and tags["pytest-v7r-calibration-s0"] is None
+        and tags["v7r-calibration-combine"] == "v7r-calibration-combine"
+    )
     assert tags["v7r-combine"] == "v7r-combine" and tags["v7r-diag"] == "v7r-diag"
     got = {str(f.relative_to(rs.REPO)) for f in rs.source_files("lv5c")}
     assert {"validation/scripts/transport/steps_v5c.py", "validation/scripts/transport/v7r.py",
@@ -611,7 +641,7 @@ def _cal(  # type: ignore[no-untyped-def]
     rs = _load("run_suite")
     want = rs.calibration_selection(shard)[2]
     counts = {"passed": want, "deselected": 37} if counts is None else counts
-    return {"pass": ok, "status": "executed", "pytest_counts": counts,
+    return {"pass": ok, "status": "executed", "pytest_counts": counts, "v7r_cal_reps": rs.V7R_CAL_REPS,
             "pytest_command": _args(shard) if cmd is None else cmd}  # fmt: skip
 
 
@@ -700,19 +730,19 @@ def test_pytest_summary_parser_and_parse_step_record_the_counts(tmp_path: Path) 
     assert pc("no summary here") is None and pc("") is None
     sha = "a" * 40
     p = tmp_path / "18-pytest-v7r-calibration.txt"
-    body = ["# command: " + CAL_CMD, f"# git_sha: {sha}", "# started_utc: t", "# step_timeout_s: 1",
-            "", "....", "13 passed, 37 deselected in 12.30s", "", "# exit=0"]  # fmt: skip
+    body = ["# command: " + CAL_CMD, f"# git_sha: {sha}", "# started_utc: t", "# step_timeout_s: 1", "# v7r_cal_reps: 3200",
+            "", "....", "41 passed, 37 deselected in 12.30s", "", "# exit=0"]  # fmt: skip
     p.write_text("\n".join(body))
     st = sm.parse_step(p, sha, "lv5c", "20481004")
-    assert st["pass"] and st["pytest_counts"] == {"passed": 13, "deselected": 37}
+    assert st["pass"] and st["pytest_counts"] == {"passed": 41, "deselected": 37}
     assert st["pytest_command"] == CAL_CMD
     assert sm.calibration_step_established(st)
     p.write_text(
-        "\n".join(body).replace("13 passed, 37 deselected", "12 passed, 1 skipped, 37 deselected")
+        "\n".join(body).replace("41 passed, 37 deselected", "40 passed, 1 skipped, 37 deselected")
     )
     st = sm.parse_step(p, sha, "lv5c", "20481004")
     assert st["pass"] is True and not sm.calibration_step_established(st)  # exit 0 with a skip
-    p.write_text("\n".join(body).replace("13 passed, 37 deselected in 12.30s", "garbled"))
+    p.write_text("\n".join(body).replace("41 passed, 37 deselected in 12.30s", "garbled"))
     st = sm.parse_step(p, sha, "lv5c", "20481004")
     assert st["pytest_counts"] is None and not sm.calibration_step_established(st)
 
@@ -810,7 +840,7 @@ def test_expected_calibration_cases_match_the_collection() -> None:
     for target, n in rs.EXPECTED_CALIBRATION_CASES.items():
         assert len(_collect(target)) == n, target
     full = _collect(*rs.calibration_selection(None)[0])
-    assert len(full) == sum(rs.EXPECTED_CALIBRATION_CASES.values()) == 13
+    assert len(full) == sum(rs.EXPECTED_CALIBRATION_CASES.values()) == 41
 
 
 def test_calibration_partition_is_disjoint_and_complete() -> None:
@@ -828,17 +858,23 @@ def test_sharded_registration_only_when_the_constant_is_set(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     rs = _load("run_suite")
+    monkeypatch.setattr(rs, "V7R_CALIBRATION_SHARDS", None)
     names = [n.split("-", 1)[1] for n, _, _ in rs.suite_steps("lv5c", 1, 1.0)]
-    assert "pytest-v7r-calibration" in names and not any("calibration-s" in n for n in names)
-    monkeypatch.setattr(rs, "V7R_CALIBRATION_SHARDS", 3)
+    assert (
+        "v7r-calibration-combine" not in names
+        and "pytest-v7r-calibration" in names
+        and not any("calibration-s" in n for n in names)
+    )
+    monkeypatch.setattr(rs, "V7R_CALIBRATION_SHARDS", 31)
     steps = rs.suite_steps("lv5c", 1, 1.0)
     cal = [(n.split("-", 1)[1], c, e) for n, c, e in steps if "pytest-v7r-calibration" in n]
-    assert [n for n, _, _ in cal] == [f"pytest-v7r-calibration-s{k}" for k in range(3)]
+    assert [n for n, _, _ in cal] == [f"pytest-v7r-calibration-s{k}" for k in range(31)]
     for k, (_, cmd, env) in enumerate(cal):
         assert " ".join(cmd[3:]).startswith(
             " ".join(rs.calibration_args(*rs.calibration_selection(k)[:2]))
         )
         assert env["IONMC_V7R_FIXTURES"] == "required"
+        assert env["IONMC_V7R_CAL_REPS"] == "3200" and env["IONMC_V7R_CAL_OUT"].endswith("samples")
     for n in rs.full_step_names("lv5c", 2):
         assert rs.step_timeout_s("lv5c", n, 1500) >= 1500
     monkeypatch.setattr(rs, "V7R_CALIBRATION_SHARDS", 2)
@@ -848,8 +884,8 @@ def test_sharded_registration_only_when_the_constant_is_set(
 
 def _sharded() -> dict:  # type: ignore[type-arg]
     steps = {"17-v7r-ref": _cal(), "19-v7r-combine": {"pass": True, "status": "executed"}}
-    for k in range(3):
-        steps[f"{18 + k}-pytest-v7r-calibration-s{k}"] = _cal(shard=k)
+    for k in range(31):
+        steps[f"{20 + k}-pytest-v7r-calibration-s{k}"] = _cal(shard=k)
     return steps
 
 
@@ -857,30 +893,39 @@ def test_sharded_calibration_set_must_be_complete_exact_and_disjoint() -> None:
     sm = _load("summarize")
     ok = sm.slice_c_rows("lv5c", _sharded())["V7-R"]
     assert ok["pass"] is True and ok["calibration_steps"] == [
-        f"pytest-v7r-calibration-s{k}" for k in range(3)]  # fmt: skip
+        f"pytest-v7r-calibration-s{k}" for k in sorted(range(31), key=str)]  # fmt: skip
 
     def verdict(steps: dict) -> bool:  # type: ignore[type-arg]
         return sm.slice_c_rows("lv5c", steps)["V7-R"]["calibration_pass"]
 
     missing = _sharded()
-    del missing["20-pytest-v7r-calibration-s2"]
+    del missing["22-pytest-v7r-calibration-s2"]
     assert verdict(missing) is False
     double = _sharded()
-    double["23-pytest-v7r-calibration-s1"] = _cal(shard=1)  # shard 1 twice: double cover
+    double["99-pytest-v7r-calibration-s1"] = _cal(shard=1)  # shard 1 twice: double cover
     assert verdict(double) is False
     swapped = _sharded()
-    swapped["19-pytest-v7r-calibration-s1"] = _cal(shard=0)  # s1 name with the s0 selection
+    swapped["21-pytest-v7r-calibration-s1"] = _cal(shard=0)  # s1 name with the s0 selection
     assert verdict(swapped) is False
     failed = _sharded()
-    failed["20-pytest-v7r-calibration-s2"] = _cal(ok=False, shard=2)
+    failed["22-pytest-v7r-calibration-s2"] = _cal(ok=False, shard=2)
     assert verdict(failed) is False
     short = _sharded()
-    short["20-pytest-v7r-calibration-s2"] = _cal(shard=2, counts={"passed": 10})
+    short["22-pytest-v7r-calibration-s2"] = _cal(shard=2, counts={"passed": 10})
+    wrong_reps = _sharded()
+    wrong_reps["22-pytest-v7r-calibration-s2"] = {
+        **_cal(shard=2),
+        "v7r_cal_reps": 200,
+    }  # header says 200
+    assert verdict(wrong_reps) is False
+    no_reps = _sharded()
+    no_reps["22-pytest-v7r-calibration-s2"] = {**_cal(shard=2), "v7r_cal_reps": None}
+    assert verdict(no_reps) is False
     assert verdict(short) is False
     mixed = _sharded()
     mixed["24-pytest-v7r-calibration"] = _cal()  # un-sharded step next to the shards
     assert verdict(mixed) is False
-    assert verdict({**_sharded(), "18-pytest-v7r-calibration-s3": _cal(shard=2)}) is False
+    assert verdict({**_sharded(), "98-pytest-v7r-calibration-s31": _cal(shard=2)}) is False
     only = {"17-v7r-ref": _cal(), "19-v7r-combine": {"pass": True, "status": "executed"},
             "18-pytest-v7r-calibration": _cal()}  # fmt: skip
     assert verdict(only) is True  # the un-sharded default

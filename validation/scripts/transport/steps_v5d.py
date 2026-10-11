@@ -55,10 +55,20 @@ R_INDEX_C = {"throughput": 1, "v8-lv": 2, "r1-d2": 3, "v5-150-on": 4, "v5-150-of
 R_INDEX_HRC = {"v8-stat": 1, "v7-f32": 2, "v6-cuda": 3}
 E_SHAPE_BASE = 20509500  # absolute seeds of the rehearsal family, Amendment 15 (b)6 / 17 (b)3
 REHEARSAL_RANGE = (20505000, 20509999)
-E1B_SHARDS: int | None = None
-"""Number of ``e1-b-s{k}`` shards (>= 2, total >= 1e5): ``None`` until Amendment 14a; the step ``e1-b-unsized``
-then fails closed (Amendment 17 (b)6). ``run_suite.E1B_SHARDS`` must equal it (a test)."""
+E1B_SHARDS: int | None = 3
+"""Number of ``e1-b-s{k}`` shards (>= 2, total >= 1e5; Amendment 14a: 3); ``None`` makes the step ``e1-b-unsized``
+fail closed (Amendment 17 (b)6). ``run_suite.E1B_SHARDS`` must equal it (a test)."""
 E1B_N = 100_000
+E1B_BATCHES = 20
+
+
+def e1b_shard_n(shards: int) -> int:
+    """Histories per ``e1-b`` shard: ``ceil(1e5 / shards)`` rounded up to a multiple of the 20 batches (the
+    configuration requires ``n_histories % n_batches == 0``): 33340 for 3 shards (total 100020 >= 1e5; the
+    split 33334/33333/33333 is not a multiple of 20)."""
+    return -(-(-(-E1B_N // shards)) // E1B_BATCHES) * E1B_BATCHES
+
+
 V8NUC_PYTHON_SHARDS, V8NUC_PYTHON_N, V8NUC_BATCHES = 4, 30_000, 20  # 4 x 20 batches x 1500 (Amendment 14 (i))
 V8NUC_WARP_N, V8NUC_WARP_BATCHES = 1_000_000, 100
 V8_SAMPLES_C = {  # name -> (backend, precision, shard index k, histories, batches), Amendment 17 (b)2
@@ -1044,7 +1054,7 @@ def step_v7_shift_el(a: argparse.Namespace) -> int:
 def e1b_shards() -> int:
     if E1B_SHARDS is None:
         raise SystemExit("e1-b: the shard count is fixed in Amendment 14a (E1B_SHARDS is None); fail closed")
-    if E1B_SHARDS < 2 or E1B_SHARDS * (E1B_N // E1B_SHARDS) < E1B_N:
+    if E1B_SHARDS < 2 or E1B_SHARDS * e1b_shard_n(E1B_SHARDS) < E1B_N:
         raise SystemExit("e1-b: need >= 2 shards with a total of >= 1e5 histories")
     return E1B_SHARDS
 
@@ -1065,8 +1075,8 @@ def step_e1_b_shard(a: argparse.Namespace) -> int:
     k = a.shard
     if not 0 <= k < ns:
         raise SystemExit("e1-b-shard: --shard outside 0..E1B_SHARDS-1")
-    nfull = E1B_N // ns
-    nb = 20
+    nfull = e1b_shard_n(ns)
+    nb = E1B_BATCHES
     n = v5b.scaled(nfull, a.scale, 2000, nb)
     g = E1B_GEOMETRY
     geo = v5b.BoxPhantom((-g["half_mm"],) * 2 + (0.0,), (2 * g["half_mm"], 2 * g["half_mm"], g["depth_mm"]), M.WATER)

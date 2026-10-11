@@ -31,6 +31,7 @@ import argparse
 import hashlib
 import json
 import math
+import os
 import sys
 import time
 from dataclasses import replace
@@ -320,12 +321,19 @@ def v7r_seed_list(seed_base: int, n_shards: int = V7R_SHARDS) -> dict[str, list[
 
 def v7r_combine(
     shards: list[tuple[dict[str, Any], Path]], ref: dict[str, Any], seed_base: int, *,
-    n_shards: int = V7R_SHARDS, n_boot: int = v5b.V7_BOOT_N,
+    calibration: dict[str, Any], n_shards: int = V7R_SHARDS, n_boot: int = v5b.V7_BOOT_N,
 ) -> dict[str, Any]:
     """Document of row V7-R from the 16 shard partials (with sidecars) and the reference partial.
     Pure given its inputs; ``n_shards`` and ``n_boot`` exist for the CI-scale dry run only (the step
     uses the defaults). Fails closed (``SystemExit``) on a missing/invalid item, unequal replicate
-    counts, a seed mismatch or a seed set intersecting a consumed evidence seed set."""
+    counts, a seed mismatch or a seed set intersecting a consumed evidence seed set. ``calibration`` is the
+    loaded ``v7r-calibration-status`` partial (Amendment 14a): ``pass`` requires its ``pass``."""
+    if calibration.get("step") != "v7r-calibration-combine" or not isinstance(
+        calibration.get("pass"), bool
+    ):
+        raise SystemExit(
+            "v7r: the calibration status partial is missing or malformed (fail closed)"
+        )
     if len(shards) != n_shards:
         raise SystemExit(f"v7r: need {n_shards} shard partials, got {len(shards)}")
     seeds = v7r_seed_list(seed_base, n_shards)
@@ -397,23 +405,116 @@ def v7r_combine(
                  "profile_estimators": "Amendment 13 two-gate rule, frozen functions",
                  "escaped_neutral": "bootstrap-t two-gate rule; Amendment 13 rule report-only"},
         "gates_pass": gates,
+        "calibration_status": {"partial": CAL_STATUS_NAME, "pass": calibration["pass"],
+                               "content_sha256": calibration.get("content_sha256"),
+                               "reps": calibration.get("reps")},
         "row_pass_condition": (
-            "V7-R passes iff every pytest-v7r-calibration[-s{k}] step passed at the evidence SHA "
-            "(identical hashed-source digest, Amendment 17 (a)7) AND gates_pass; the conjunction is "
-            "made by summarize.py (a step cannot read the pytest step status)"),
-        "pass": gates,  # the gates alone; summarize.py adds the calibration conjunction
+            "V7-R passes iff every pytest-v7r-calibration-s{k} step passed at the evidence SHA "
+            "(identical hashed-source digest, Amendment 17 (a)7; summarize.py), the sealed "
+            "v7r-calibration-status partial of v7r-calibration-combine passed (Amendment 14a) AND "
+            "gates_pass; the pytest conjunction is made by summarize.py (a step cannot read the "
+            "pytest step status)"),
+        "pass": bool(gates and calibration["pass"]),
     }  # fmt: skip
 
 
 def step_v7r_combine(a: argparse.Namespace) -> int:
-    names = [f"v7r-s{k}.json" for k in range(V7R_SHARDS)] + ["v7r-ref.json"]
+    names = [f"v7r-s{k}.json" for k in range(V7R_SHARDS)] + ["v7r-ref.json", CAL_STATUS_NAME]
     parts = load_partials_c(a, names)
+    status = parts.pop()[0]
     doc = {"step": "v7r-combine", "table": v5.table_record(), **elastic_table_record(),
-           **v7r_combine(parts[:-1], parts[-1][0], base.SEED_BASE),
+           **v7r_combine(parts[:-1], parts[-1][0], base.SEED_BASE, calibration=status),
            "attestation": v5.attestation_block(a)}  # fmt: skip
     n = sum(p["n"] for p, _ in parts)
     return v5b.finish5b(doc, V7R_SHARDS * v7r.V7R_SHARD_N + v7r.V7R_REF_N, n,
                         any(p["reduced"] for p, _ in parts))  # fmt: skip
+
+
+# -- calibration combine (plan Amendment 14a) ----------------------------------------------------
+CAL_STATUS_NAME = "v7r-calibration-status.json"
+CAL_RECORD_FIELDS = ("surrogate", "part", "n", "margins", "fit", "reps_env", "seeds")
+
+
+def cal_record_name(surrogate: str, part: int) -> str:
+    """File name of the sealed record of one calibration shard test (``tests/ionmc/test_v7r_coverage.py``)."""
+    return f"v7r-calibration-{surrogate}-p{part:02d}.json"
+
+
+def load_calibration_records(a: argparse.Namespace) -> list[dict[str, Any]]:
+    """The 30 sealed records (2 surrogates x 15 parts) of the calibration shards, each found exactly once in ``--dirs``, verified
+    against their ``content_sha256``, the schema and the run (``run_sha``, ``suite``); a record found in an
+    imported directory must be in the partials manifest with exactly its digest (as ``steps_v5.load_partials``).
+    Every record used is appended to ``a.attested_partials`` (the attestation is built after all loads)."""
+    imported = len(a.dirs) > 1
+    manifest: dict[str, dict[str, str]] = {}
+    if imported:
+        manifest, msha = v5.read_manifest(getattr(a, "partials_manifest", None))
+        a.attested_manifest_path = str(a.partials_manifest)
+        a.attested_manifest_sha256 = msha
+    if not hasattr(a, "attested_partials"):
+        a.attested_partials = []
+    out = []
+    for s in v7r.CAL_SURROGATES:
+        for p in range(v7r.CAL_PARTS):
+            nm = cal_record_name(s, p)
+            hits = [(i, q) for i, d in enumerate(a.dirs)
+                    for q in (Path(d) / nm, Path(d) / "samples" / nm) if q.is_file()]  # fmt: skip
+            if len(hits) != 1:
+                raise SystemExit(
+                    f"calibration record {nm}: found {len(hits)} copies in {a.dirs} (need exactly 1)"
+                )
+            idx, hit = hits[0]
+            doc = json.loads(hit.read_text())
+            digest = v5.content_digest(doc)
+            if doc.get("content_sha256") != digest:
+                raise SystemExit(
+                    f"calibration record {nm}: content_sha256 does not match the document"
+                )
+            if doc.get("schema") != v7r.CAL_SCHEMA or any(k not in doc for k in CAL_RECORD_FIELDS):
+                raise SystemExit(f"calibration record {nm}: wrong schema or missing field")
+            if (doc["surrogate"], doc["part"]) != (s, p):
+                raise SystemExit(f"calibration record {nm}: identity differs from the file name")
+            for key, want in (
+                ("run_sha", os.environ.get("IONMC_RUN_SHA", "unknown")),
+                ("suite", os.environ.get("IONMC_RUN_SUITE", "unknown")),
+            ):
+                if doc.get(key) != want:
+                    raise SystemExit(
+                        f"calibration record {nm}: {key} is {doc.get(key)!r}, expected {want!r}"
+                    )
+            rec: dict[str, Any] = {
+                "name": nm,
+                "content_sha256": digest,
+                "origin": "current-run",
+                "host_run_id": None,
+            }
+            if idx != 0:
+                if nm not in manifest or manifest[nm]["content_sha256"] != digest:
+                    raise SystemExit(
+                        f"calibration record {nm}: imported but not in the manifest with this digest"
+                    )
+                rec.update(origin="imported", host_run_id=manifest[nm]["host_run_id"])
+            a.attested_partials.append(rec)
+            out.append(doc)
+    return out
+
+
+def step_v7r_calibration_combine(a: argparse.Namespace) -> int:
+    """Consumer of the calibration shard records: pools the counts per (surrogate, margin) and writes the sealed
+    ``v7r-calibration-status`` partial read by ``v7r-combine`` (``pass`` = every requirement of every surrogate)."""
+    records = load_calibration_records(a)
+    verdict = v7r.calibration_combine(records, reps=v7r.V7R_CAL_REPS)
+    doc = {"step": "v7r-calibration-combine", **verdict, "records": len(records),
+           "requirements": "per surrogate: joint CP95 upper <= 0.02 at each non-nominal margin; power CP95 lower "
+                           ">= 0.9 at the nominal; each gate alone <= 0.04 by construction (reported rate and CP95 "
+                           "interval; refuted iff CP95 lower > 0.04; contrary reading CP95 upper <= 0.04 reported)",
+           "rng": v7r.rng_record(), "attestation": v5.attestation_block(a)}  # fmt: skip
+    path = write_partial_c(a, CAL_STATUS_NAME[:-5], doc)
+    doc["partial"] = {
+        "file": CAL_STATUS_NAME,
+        "content_sha256": json.loads(Path(path).read_text())["content_sha256"],
+    }
+    return v5b.finish5b(doc, None, None, False)
 
 
 # -- exploratory diagnostic ----------------------------------------------------------------------
@@ -625,6 +726,7 @@ def step_v11_compare(a: argparse.Namespace) -> int:
 STEPS = {
     "v7r-shard": step_v7r_shard,
     "v7r-ref": step_v7r_ref,
+    "v7r-calibration-combine": step_v7r_calibration_combine,
     "v7r-combine": step_v7r_combine,
     "v7r-diag": step_v7r_diag,
     "v11-ionmc": step_v11_ionmc,

@@ -132,6 +132,6 @@ def producible(
     if projectile != PROTON:
         raise ValueError("nuclear interactions are implemented for a proton source only")
     out = base | {("proton", "secondary"), ("deuteron", "secondary"), (NUCLEAR_LOCAL, "secondary")}
-    if elastic:  # the p + A recoil of the elastic channel, deposited at the projectile's generation
+    if elastic:  # the p + A recoil of the elastic channel: parent generation + 1 (both backends)
         out |= {(ELASTIC_RECOIL, "secondary")}
     return frozenset(out)
