@@ -1,6 +1,8 @@
 """Fail-closed behaviour of the LV/HR runner and its summariser (subset labelling, combining,
 source attestation, dirty trees); steps are only run for the git/snapshot end-to-end checks."""
 
+# ruff: noqa: E501
+
 from __future__ import annotations
 
 import argparse
@@ -1404,20 +1406,31 @@ LV5_NOT_IN_SUITE = {"P1", "P2", "P3", "P4", "P5", "V9", "C1"}  # CI tier (tests/
 LV5_SLICE_B = {"V2b", "V5", "V6", "V7", "V8"}
 # V3-005C rows frozen by Amendment 14; each must be removed when its lv5c/hr5c step lands (step C9);
 # the set must be empty before the V3-005C evidence commit.
-PLAN_ROWS_PENDING_STEPS = frozenset(
-    {
-        "P6", "P7", "P5-ext", "V10", "V10-A", "X-ENDF", "C1-ext", "R1-D2", "E1-B",
-        "D9-BGG", "V8-nuc", "V2b-el", "V7-scan-el", "V7-shift-el",
-        "P6-D", "E-shape", "X-MT5-SPEC",
-    }
-)  # fmt: skip
+PLAN_ROWS_PENDING_STEPS: frozenset[str] = frozenset()
+"""Emptied by V3-005C C6 (plan Amendment 14 (m), Amendment 17 (d)): every Amendment 14-16 row has a step or a CI test."""
 
 
-# V3-005C rows whose lv5c/hr5c step has landed -> (suite, step)
+# V3-005C rows whose lv5c/hr5c step has landed -> (suite, step); several pairs: every backend must pass
 SLICE_C_ROWS = {
     "V7-R": ("lv5c", "v7r-combine"), "V11": ("lv5c", "v11-compare"),
     "V6-sens": ("lv5c", "v6-compare"),  # the V6-sens status is evaluated inside v6-compare
     "V6": (("lv5c", "v6-compare"), ("hr5c", "v6-cuda-compare")),  # both backends must pass
+    "R1-D2": ("lv5c", "r1-d2-regression"), "P7": ("lv5c", "p7-sampler"), "V2b-el": ("lv5c", "v2b-el-combine"),
+    "V7-scan-el": ("lv5c", "v7-scan-el"), "V7-shift-el": ("lv5c", "v7-shift-el"), "E1-B": ("lv5c", "e1-b-compare"),
+    "E-shape": ("lv5c", "e-shape-exploratory"), "V8-nuc": ("hr5c", "v8-stat-compare"),
+    "V10": ("lv5c", "v10-pp-level"), "V10-A": ("lv5c", "v10-a"), "X-ENDF": ("lv5c", "x-endf"),
+    "D9-BGG": ("lv5c", "d9-bgg"),
+}  # fmt: skip
+# rows evaluated by CI tests (node ids relative to the repository root; several: all must pass)
+SLICE_C_CI_ROWS: dict[str, tuple[str, ...]] = {
+    "P6": ("tests/ionmc/test_elastic_table.py::test_real_table_h1_p6_failure_recorded_and_positive_in_domain",
+           "tests/ionmc/test_elastic_law5.py::test_h1_ni_cross_sections_match_la150_reconstruction",
+           "tests/ionmc/test_elastic_bgg.py::test_calcium_100_mev_is_767_not_912"),  # recorded FAIL stays in the ledger
+    "P6-D": ("tests/ionmc/test_elastic_table.py::test_pp_domain_sign_fixtures_p6d",),
+    "X-MT5-SPEC": ("tests/ionmc/test_elastic_table.py::test_x_mt5_spec_fixtures",),
+    "P5-ext": ("tests/ionmc/test_elastic_warp.py::test_event_parity_recorded_inputs_float64_bit_equal",),
+    "C1-ext": ("tests/ionmc/test_elastic_table.py::test_loader_fail_closed_cases_c1_ext",
+               "tests/ionmc/test_elastic_transport.py::test_fail_closed_cases"),
 }  # fmt: skip
 
 
@@ -1468,7 +1481,10 @@ def test_plan_rows_pending_steps_are_plan_rows() -> None:
     rows = set(_plan_rows())
     assert PLAN_ROWS_PENDING_STEPS <= rows, PLAN_ROWS_PENDING_STEPS - rows
     assert not PLAN_ROWS_PENDING_STEPS & (set(LV5_ROW_STEP) | LV5_NOT_IN_SUITE | LV5_SLICE_B)
-    assert not PLAN_ROWS_PENDING_STEPS & set(SLICE_C_ROWS)
+    assert not PLAN_ROWS_PENDING_STEPS & set(SLICE_C_ROWS) and not set(SLICE_C_CI_ROWS) & set(
+        SLICE_C_ROWS
+    )
+    assert set(SLICE_C_ROWS) | set(SLICE_C_CI_ROWS) <= rows
     mod = _load("run_suite")
     for row, spec in SLICE_C_ROWS.items():
         pairs = spec if isinstance(spec[0], tuple) else (spec,)
@@ -1476,6 +1492,21 @@ def test_plan_rows_pending_steps_are_plan_rows() -> None:
             assert row in rows and step in {
                 n.split("-", 1)[1] for n in mod.full_step_names(suite, 2)
             }
+
+
+def test_pending_plan_rows_allowlist_is_empty() -> None:
+    """Amendment 14 (m): the set must be empty before the V3-005C evidence commit (C9)."""
+    assert PLAN_ROWS_PENDING_STEPS == frozenset()
+
+
+def test_slice_c_ci_rows_name_existing_tests() -> None:
+    """Every CI node id of ``SLICE_C_CI_ROWS`` exists in its file (def of that name), so a rename fails here."""
+    for row, ids in SLICE_C_CI_ROWS.items():
+        assert ids, row
+        for node in ids:
+            path, name = node.split("::")
+            text = (REPO / path).read_text()
+            assert re.search(rf"^def {re.escape(name)}\(", text, flags=re.M), (row, node)
 
 
 def test_lv5_plan_rows_are_all_accounted_for_and_seeds_match_the_plan() -> None:
@@ -1490,6 +1521,7 @@ def test_lv5_plan_rows_are_all_accounted_for_and_seeds_match_the_plan() -> None:
         | {"V3-CI"}
         | PLAN_ROWS_PENDING_STEPS
         | set(SLICE_C_ROWS)
+        | set(SLICE_C_CI_ROWS)
     )
     assert rows - accounted == set(), (
         rows - accounted
@@ -2219,9 +2251,10 @@ def test_v6_registration_lv5c_hr5c_and_fail_closed_shards() -> None:
     assert mod.V6_SHARDS is None and "hr5c" in mod.SUITES
     lv = [n.split("-", 1)[1] for n in mod.full_step_names("lv5c", 2)]
     assert (
-        "v6-unsized" in lv and lv[-1] == "v6-compare" and not any(n.startswith("v6-s") for n in lv)
-    )
-    assert [n.split("-", 1)[1] for n in mod.full_step_names("hr5c", 2)] == [
+        "v6-unsized" in lv and "v6-compare" in lv and not any(n.startswith("v6-s") for n in lv)
+        and lv.index("v6-unsized") + 1 == lv.index("v6-compare")
+    )  # fmt: skip
+    assert [n.split("-", 1)[1] for n in mod.full_step_names("hr5c", 2)][-2:] == [
         "v6-unsized",
         "v6-cuda-compare",
     ]
@@ -2242,7 +2275,7 @@ def test_v6_registration_lv5c_hr5c_and_fail_closed_shards() -> None:
             "r0-hi",
         ):
             assert {f"v6-sens-{v}-s0", f"v6-sens-{v}-s1"} <= set(names)
-        assert [n.split("-", 1)[1] for n in mod.full_step_names("hr5c", 2)] == [
+        assert [n.split("-", 1)[1] for n in mod.full_step_names("hr5c", 2)][-3:] == [
             "v6-cuda-s0",
             "v6-cuda-s1",
             "v6-cuda-compare",
@@ -2254,7 +2287,7 @@ def test_v6_registration_lv5c_hr5c_and_fail_closed_shards() -> None:
                 and "--seed-base" in cmd
                 and cmd[cmd.index("--seed-base") + 1] == "20491004"
             )
-        assert mod.step_timeout_s("hr5c", "01-v6-cuda-s0", 1500) == 3600
+        assert mod.step_timeout_s("hr5c", "10-v6-cuda-s0", 1500) == 3600
         assert (
             mod.step_timeout_s("lv5c", "02-v6-s0", 1500) == 3300
             and mod.step_timeout_s("lv5c", "99-v6-compare", 1500) == 1800

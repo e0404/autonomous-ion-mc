@@ -84,6 +84,7 @@ STEPS_V4 = HERE / "steps_v4.py"
 STEPS_V5 = HERE / "steps_v5.py"
 STEPS_V5B = HERE / "steps_v5b.py"
 STEPS_V5C = HERE / "steps_v5c.py"
+STEPS_V5D = HERE / "steps_v5d.py"
 STEPS_V6 = HERE / "steps_v6.py"
 SUITES = ("lv", "hr", "lv4", "hr4", "lv5", "lv5b", "hr5", "lv5c", "hr5c")
 PY = sys.executable
@@ -174,6 +175,9 @@ SOURCE_FILES_V5C = (
     *SOURCE_FILES_V5B,
     *V11_CASE_FILES,
     "validation/scripts/transport/steps_v5c.py",
+    "validation/scripts/transport/steps_v5d.py",
+    "validation/scripts/transport/nuclear_v10.py",
+    "validation/scripts/transport/nuclear_d9.py",
     "validation/scripts/transport/steps_v6.py",
     "validation/scripts/reference/gottschalk_v6.py",
     "validation/scripts/transport/v7r.py",
@@ -248,7 +252,7 @@ DEFERRED_STEPS = {
     "lv5": ("v3-workers-partition",),
     "lv5b": ("v3-workers-partition",),
     "hr5": (),
-    "lv5c": (),
+    "lv5c": ("v3-workers-partition",),
     "hr5c": (),
 }
 """Steps whose purpose is the worker-partition invariance (1 versus N worker processes): they are
@@ -262,6 +266,15 @@ V6_SHARDS: int | None = None
 """N_V6, the number of 1e6-history shards of row V6 (plan Amendment 14 (g)): ``None`` until Amendment 14a fixes it
 after the C8 rehearsal; the V6 steps then fail closed (``v6-unsized``). ``steps_v6.V6_SHARDS`` must equal it (a test)."""
 
+E1B_SHARDS: int | None = None
+"""Number of ``e1-b-s{k}`` shards of row E1-B (>= 2, total >= 1e5 histories; Amendment 17 (b)6): ``None`` until Amendment 14a
+fixes it from the throughput step; the step ``e1-b-unsized`` then fails closed in place of the shards.
+``steps_v5d.E1B_SHARDS`` must equal it (a test)."""
+
+V8NUC_PYTHON_SHARDS = 4
+"""``v8-stat-python-s{k}`` shards of the hr5c V8-nuc sample (4 x 20 batches x 1500 histories, Amendment 14 (i));
+``steps_v5d.V8NUC_PYTHON_SHARDS`` must equal it (a test)."""
+
 V7R_SHARDS = 16
 """Number of shard steps ``v7r-s{k}`` of V7-R (Amendment 14 (h): sixteen simulations of 4.5e6 histories); defined
 here for the same reason as ``V7_REP_SHARDS``; ``steps_v5c.V7R_SHARDS`` (``v7r.V7R_SHARDS``) must equal it (a test)."""
@@ -270,6 +283,12 @@ V7_REP_SHARDS = 8
 """Number of shard steps ``v7-rep-s{k}`` of the V7 replicate coverage (Amendment 13: eight simulations of 9e6
 histories, 7200 replicates); defined here for the same reason as ``V2B_SHARDS``; ``steps_v5b.V7_SHARDS`` is
 taken from it."""
+
+
+V2B_SHARDS = 2
+"""Number of shards of the V2b statistics of the V3-005B plan (Amendment 8). Defined here, not imported
+from ``steps_v5b.py``: the host interpreter running this script has no ``ionmc`` (the steps get it via
+``PYTHONPATH``), and ``steps_v5b`` imports it; ``steps_v5b.V2B_SHARDS`` is taken from this value."""
 
 
 STEP_TIMEOUT_FLOOR_S = {
@@ -291,6 +310,12 @@ STEP_TIMEOUT_FLOOR_S = {
         "pytest-v7-rep-calibration": 3300, "v3-workers-partition": 3300,
     },
     "lv5c": {
+        "v6-e0": 1800, "v10-pp-level": 1800, "v10-a": 1800, "v10-a-xcheck": 3300, "x-endf": 3300, "d9-bgg": 1800,
+        "lv5c-throughput": 3300, "r1-d2-regression": 3300, "v8-lv-python-vs-warp-cpu": 3300, "p7-sampler": 3300,
+        **{f"v5-{e}-{t}": 3300 for e in (150, 200) for t in ("on", "off")}, "v5-compare": 1800,
+        "v5-attribution": 1800, **{f"v2b-el-s{k}": 3300 for k in range(V2B_SHARDS)}, "v2b-el-combine": 1800,
+        "v7-scan-el": 3300, "v7-shift-el": 3300, "e1-b-unsized": 1800, "e1-b-compare": 1800,
+        **{f"e1-b-s{k}": 3300 for k in range(64)}, "e-shape-exploratory": 3300, "v3-workers-partition": 3300,
         **{f"v7r-s{k}": 3300 for k in range(V7R_SHARDS)}, "v7r-ref": 3300,
         "pytest-v7r-calibration": 3300, "v7r-combine": 1800, "v7r-diag": 1800,
         **{f"pytest-v7r-calibration-s{k}": 3300 for k in range(3)},
@@ -299,7 +324,11 @@ STEP_TIMEOUT_FLOOR_S = {
         **{f"v6-s{k}": 3300 for k in range(64)}, "v6-unsized": 1800, "v6-compare": 1800,
         **{f"v6-sens-{v}-s{k}": 3300 for v in V6_SENS_VARIANTS for k in range(64)},
     },
-    "hr5c": {**{f"v6-cuda-s{k}": 3600 for k in range(64)}, "v6-unsized": 1800, "v6-cuda-compare": 1800},
+    "hr5c": {
+        **{f"v8-stat-python-s{k}": 3600 for k in range(V8NUC_PYTHON_SHARDS)}, "v8-stat-cpu64": 3600,
+        "v8-stat-cuda32": 3600, "v8-stat-cuda64": 3600, "v8-stat-compare": 1800, "v7-f32-f64-cuda": 3600,
+        **{f"v6-cuda-s{k}": 3600 for k in range(64)}, "v6-unsized": 1800, "v6-cuda-compare": 1800,
+    },
     "hr5": {
         "v8-stat-python-s0": 3600, "v8-stat-python-s1": 3600, "v8-stat-cpu64": 3600,
         "v8-stat-cuda32": 3600, "v8-stat-cuda64": 3600, "v7-f32-f64-cuda": 3600,
@@ -307,12 +336,6 @@ STEP_TIMEOUT_FLOOR_S = {
 }
 """Minimum step timeout [s] of long steps (the ``--step-timeout`` default is 1500 s); the effective
 timeout is the larger of the two and is recorded in the step header."""
-
-
-V2B_SHARDS = 2
-"""Number of shards of the V2b statistics of the V3-005B plan (Amendment 8). Defined here, not imported
-from ``steps_v5b.py``: the host interpreter running this script has no ``ionmc`` (the steps get it via
-``PYTHONPATH``), and ``steps_v5b`` imports it; ``steps_v5b.V2B_SHARDS`` is taken from this value."""
 
 
 def step_timeout_s(suite: str, name: str, default: int) -> int:
@@ -367,13 +390,14 @@ def suite_steps(
     s5 = [PY, str(STEPS_V5)]
     s5b = [PY, str(STEPS_V5B)]
     s5c = [PY, str(STEPS_V5C)]
+    s5d = [PY, str(STEPS_V5D)]
     s6 = [PY, str(STEPS_V6)]
     steps: list[tuple[str, list[str], dict[str, str]]] = []
 
     def add(name: str, cmd: list[str], env: dict[str, str] | None = None) -> None:
         full = f"{len(steps) + 1:02d}-{name}"
         if cmd[:2] in ([PY, str(STEPS)], [PY, str(STEPS_V4)], [PY, str(STEPS_V5)], [PY, str(STEPS_V5B)],
-                      [PY, str(STEPS_V5C)], [PY, str(STEPS_V6)]):
+                      [PY, str(STEPS_V5C)], [PY, str(STEPS_V5D)], [PY, str(STEPS_V6)]):
             eff = step_timeout_s(suite, full, step_timeout)
             inner = ["--timeout", str(max(30, int(0.9 * eff)))]  # the pool cleans up first
             cmd = [*cmd, *inner, "--seed-base", str(seed_base)]  # every seed derives from the base
@@ -401,14 +425,13 @@ def suite_steps(
         if import_dirs and partials_manifest is None:
             raise SystemExit("lv5c --import-dirs requires --partials-manifest (name -> sha256)")
         pm = ["--partials-manifest", str(partials_manifest)] if import_dirs else []
-        _suite_steps_v5c(add, sc, out_dir, [*dirs, *pm], s5c)
-        _suite_steps_v6(add, sc, out_dir, [*dirs, *pm], s6, cuda=False)
+        _suite_steps_lv5c(add, sc, out_dir, [*dirs, *pm], s5, s5c, s5d, s6)
         return steps
     if suite == "hr5c":
         if import_dirs and partials_manifest is None:
             raise SystemExit("hr5c --import-dirs requires --partials-manifest (name -> sha256)")
         pm = ["--partials-manifest", str(partials_manifest)] if import_dirs else []
-        _suite_steps_v6(add, sc, out_dir, [*dirs, *pm], s6, cuda=True)
+        _suite_steps_hr5c(add, sc, out_dir, [*dirs, *pm], s5d, s6, cuda)
         return steps
     if suite in ("lv4", "hr4"):
         _suite_steps_v4(suite, add, s4, w, sc, cuda, out_dir, dirs, single_process)
@@ -604,11 +627,66 @@ def _suite_steps_v5b(add, s5, s5b, sc, out_dir, dirs):  # type: ignore[no-untype
     add("v3-workers-partition", [*s5, "v3-workers"], env)  # deferred: runs only when the mode is lifted
 
 
-def _suite_steps_v5c(add, sc, out_dir, dirs, s5c):  # type: ignore[no-untyped-def]
-    """Steps of the V3-005C suite ``lv5c`` registered so far (``steps_v5c.py``): row V7-R (plan Amendment
-    14 (h), Amendment 17 (a)) and row V11 (Amendment 14 (c)), in the order of the C9 plan. Other lv5c rows are added by their steps.
-    ``pytest-v7r-calibration`` has no seed and no document: its pass is the pytest exit status, and
-    ``summarize.py`` makes the conjunction with ``v7r-combine``."""
+def _suite_steps_lv5c(add, sc, out_dir, dirs, s5, s5c, s5d, s6):  # type: ignore[no-untyped-def]
+    """Steps of the V3-005C suite ``lv5c`` in the order of plan Amendment 14 (m) C9: the deterministic rows first
+    (``v6-e0``, V10, V10-A with its r18 cross-check, X-ENDF, D9-BGG), then R1-D2, V8-LV, P7, V11, V5 (re-run,
+    comparator, attribution), V2b-el, V7-scan-el, V7-shift-el, V6 / V6-sens, V7-R, E1-B and E-shape; the deferred
+    worker-partition step is last. The producers are ``steps_v5c.py`` (V7-R, V11), ``steps_v5d.py`` (the rest) and
+    ``steps_v6.py``."""
+    env = NUCLEAR_ENV
+    add("v6-e0", [*s6, "v6-e0", "--out-dir", str(out_dir), *sc], env)  # deterministic E0 record, archived first
+    add("v10-pp-level", [*s5d, "v10-pp-level", *sc], env)
+    add("v10-a", [*s5d, "v10-a", "--dirs", *dirs, *sc], env)
+    add("v10-a-xcheck", [*s5d, "v10-a-xcheck", *sc], env)
+    add("x-endf", [*s5d, "x-endf", *sc], env)
+    add("d9-bgg", [*s5d, "d9-bgg", *sc], env)
+    add("lv5c-throughput", [*s5d, "lv5c-throughput", *sc], env)
+    add("r1-d2-regression", [*s5d, "r1-d2", "--out-dir", str(out_dir), *sc], env)
+    add("v8-lv-python-vs-warp-cpu", [*s5d, "v8-lv", "--out-dir", str(out_dir), *sc], env)
+    add("p7-sampler", [*s5d, "p7-sampler", "--out-dir", str(out_dir), *sc], env)
+    for e in (150, 200):  # row V11: EM+elastic and EM-only share the seed of the energy (r_index 14)
+        for m in ("emel", "emonly"):
+            add(f"v11-ionmc-{e}-{m}", [*s5c, "v11-ionmc", "--energy", str(e), "--mode", m,
+                                       "--out-dir", str(out_dir), *sc], env)  # fmt: skip
+    add("v11-compare", [*s5c, "v11-compare", "--dirs", *dirs, *sc], env)
+    for e in (150, 200):  # V5 re-run (r_index 4-7): "on" = nuclear + elastic with the recoil depth channel
+        for t in ("on", "off"):
+            add(f"v5-{e}-{t}", [*s5d, "v5-ionmc", "--energy", str(e), "--nuclear", t, "--out-dir", str(out_dir),
+                                *sc], env)  # fmt: skip
+    add("v5-compare", [*s5d, "v5-compare", "--dirs", *dirs, *sc], env)
+    add("v5-attribution", [*s5d, "v5-attribution", "--dirs", *dirs, *sc], env)
+    for k in range(V2B_SHARDS):
+        add(f"v2b-el-s{k}", [*s5d, "v2b-el-shard", "--shard", str(k), "--out-dir", str(out_dir), *sc], env)
+    add("v2b-el-combine", [*s5d, "v2b-el-combine", "--dirs", *dirs, *sc], env)
+    add("v7-scan-el", [*s5d, "v7-scan-el", *sc], env)
+    add("v7-shift-el", [*s5d, "v7-shift-el", *sc], env)
+    _suite_steps_v6(add, sc, out_dir, dirs, s6, cuda=False)
+    _suite_steps_v7r(add, sc, out_dir, dirs, s5c)
+    if E1B_SHARDS is None:
+        add("e1-b-unsized", [*s5d, "e1-b-unsized", *sc], env)
+    else:
+        for k in range(E1B_SHARDS):
+            add(f"e1-b-s{k}", [*s5d, "e1-b-shard", "--shard", str(k), "--out-dir", str(out_dir), *sc], env)
+    add("e1-b-compare", [*s5d, "e1-b-compare", "--dirs", *dirs, *sc], env)
+    add("e-shape-exploratory", [*s5d, "e-shape", "--shard", "0", *sc], env)
+    add("v3-workers-partition", [*s5, "v3-workers"], env)  # deferred: runs only when the mode is lifted
+
+
+def _suite_steps_hr5c(add, sc, out_dir, dirs, s5d, s6, cuda):  # type: ignore[no-untyped-def]
+    """Steps of the V3-005C suite ``hr5c`` (one controlling process, ``IONMC_REQUIRE_CUDA=1``): V8-stat with V8-nuc (the
+    python sample of 4 shards x 20 batches x 1500 histories, cpu64, cuda32, cuda64), the comparison, V7 f32 / f64 on
+    CUDA and the V6 CUDA block."""
+    env = {**NUCLEAR_ENV, **cuda}
+    for nm in (*(f"python-s{k}" for k in range(V8NUC_PYTHON_SHARDS)), "cpu64", "cuda32", "cuda64"):
+        add(f"v8-stat-{nm}", [*s5d, "v8-stat-sample", "--sample", nm, "--out-dir", str(out_dir), *sc], env)
+    add("v8-stat-compare", [*s5d, "v8-stat-compare", "--dirs", *dirs, *sc], env)
+    add("v7-f32-f64-cuda", [*s5d, "v7-f32", *sc], env)
+    _suite_steps_v6(add, sc, out_dir, dirs, s6, cuda=True)
+
+
+def _suite_steps_v7r(add, sc, out_dir, dirs, s5c):  # type: ignore[no-untyped-def]
+    """Row V7-R (``steps_v5c.py``; plan Amendment 14 (h), Amendment 17 (a)). ``pytest-v7r-calibration`` has no seed and
+    no document: its pass is the pytest exit status, and ``summarize.py`` makes the conjunction with ``v7r-combine``."""
     env = NUCLEAR_ENV
     for k in range(V7R_SHARDS):  # one simulation of 4.5e6 histories each (7200 replicates in total)
         add(f"v7r-s{k}", [*s5c, "v7r-shard", "--shard", str(k), "--out-dir", str(out_dir), *sc], env)
@@ -625,11 +703,6 @@ def _suite_steps_v5c(add, sc, out_dir, dirs, s5c):  # type: ignore[no-untyped-de
                 pytest_cmd(*targets, marker="calibration", k=k_expr), env)
     add("v7r-combine", [*s5c, "v7r-combine", "--dirs", *dirs, *sc], env)
     add("v7r-diag", [*s5c, "v7r-diag", "--dirs", *dirs, *sc], env)
-    for e in (150, 200):  # row V11: EM+elastic and EM-only share the seed of the energy (r_index 14)
-        for m in ("emel", "emonly"):
-            add(f"v11-ionmc-{e}-{m}", [*s5c, "v11-ionmc", "--energy", str(e), "--mode", m,
-                                       "--out-dir", str(out_dir), *sc], env)  # fmt: skip
-    add("v11-compare", [*s5c, "v11-compare", "--dirs", *dirs, *sc], env)
 
 
 def _suite_steps_v6(add, sc, out_dir, dirs, s6, cuda):  # type: ignore[no-untyped-def]

@@ -85,6 +85,7 @@ def test_registry_ids_are_frozen_and_append_only() -> None:
     ]
     assert species_by_name("nuclear_local").transported is False
     assert species_by_name("nuclear_local").id == 64 < N_SPECIES_SLOTS
+    assert species_by_name("elastic_recoil").id == 65 < N_SPECIES_SLOTS == 66  # appended (V3-005C)
     assert species_by_id(0).name == "proton"
     assert transported_ids() == (0, 1, 2, 3, 4)
     with pytest.raises(ValueError):

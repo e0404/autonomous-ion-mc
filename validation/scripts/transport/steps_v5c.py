@@ -57,7 +57,9 @@ V7R_ESTIMATORS = (("sec_p", "profile"), ("nuclear_local", "profile"), ("escaped_
 SIDECAR_ARRAY = "escaped_neutral_block_sums"
 SIDECAR_ESTIMATOR = "escaped_neutral"
 CONSUMED_SEED_BASES_C = (20471004, 20451004, 20441004)  # lv5b, hr5, b40d8121 (evidence, consumed)
-CONSUMED_R_INDICES = range(0, 13)  # r_index 0..12 of the consumed bases (lv5b uses 1..11, hr5 1..3)
+CONSUMED_R_INDICES = range(0, 12)
+"""r_index 0..11 of the consumed bases (lv5b used 1..11, hr5 1..3). r_index 12 of the lv5b base was reserved
+for V6 and never run, so lv5c r_index 2 (20483004 + k = 20471004 + 12000 + k) is not a consumed seed."""
 CONSUMED_SHARDS = range(0, 33)
 
 

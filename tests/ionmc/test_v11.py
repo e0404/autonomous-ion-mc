@@ -440,8 +440,8 @@ def test_lv5c_registration_of_v11_names_timeouts_tags_and_sources() -> None:
     rs, sm = _load("run_suite"), _load("summarize")
     full = rs.full_step_names("lv5c", 2)
     names = [n.split("-", 1)[1] for n in full]
-    i = names.index("v7r-diag")
-    assert names[i + 1 :][:5] == [  # the V6 steps (V3-005C C8) follow
+    i = names.index("v11-ionmc-150-emel") - 1  # the C9 order: V11 follows P7 and precedes V5
+    assert names[i + 1 :][:5] == [
         "v11-ionmc-150-emel",
         "v11-ionmc-150-emonly",
         "v11-ionmc-200-emel",

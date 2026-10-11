@@ -107,10 +107,28 @@ STEP_TAGS = (
     ("pytest", None),
     ("lv5-throughput", "lv5-throughput"),
     ("lv5b-throughput", "lv5b-throughput"),
+    ("lv5c-throughput", "lv5c-throughput"),
     ("v8-lv", "v8-lv"),
     ("v8-stat-compare", "v8-stat-compare"),
     ("v8-stat-", "v8-stat-sample"),
     ("r1-nuc", "r1-nuc"),
+    ("r1-d2", "r1-d2"),
+    ("p7-", "p7-sampler"),
+    ("v6-e0", "v6-e0"),
+    ("v10-pp", "v10-pp-level"),
+    ("v10-a-xcheck", "v10-a-xcheck"),
+    ("v10-a", "v10-a"),
+    ("x-endf", "x-endf"),
+    ("d9-bgg", "d9-bgg"),
+    ("e1-b-compare", "e1-b-compare"),
+    ("e1-b-unsized", "e1-b-unsized"),
+    ("e1-b-s", "e1-b-shard"),
+    ("e-shape", "e-shape"),
+    ("v7-scan-el", "v7-scan-el"),
+    ("v7-shift-el", "v7-shift-el"),
+    ("v2b-el-combine", "v2b-el-combine"),
+    ("v2b-el-", "v2b-el-shard"),
+    ("v5-attribution", "v5-attribution"),
     ("v5-compare", "v5-compare"),
     ("v5-", "v5-ionmc"),
     ("v2b-combine", "v2b-combine"),
@@ -455,6 +473,35 @@ def calibration_established(cal: list[tuple[str, dict[str, Any]]]) -> bool:
     return all(calibration_step_established(st, i) for i, (_, st) in zip(idx, cal, strict=True))
 
 
+SLICE_C_STEP_ROWS = {
+    "lv5c": {
+        "R1-D2": "r1-d2-regression", "P7": "p7-sampler", "V2b-el": "v2b-el-combine", "V7-scan-el": "v7-scan-el",
+        "V7-shift-el": "v7-shift-el", "E1-B": "e1-b-compare", "E-shape": "e-shape-exploratory",
+        "V5": "v5-compare", "V8": "v8-lv-python-vs-warp-cpu", "V11": "v11-compare", "V6": "v6-compare",
+        "V10": "v10-pp-level", "V10-A": "v10-a", "X-ENDF": "x-endf", "D9-BGG": "d9-bgg",
+    },
+    "hr5c": {"V8-nuc": "v8-stat-compare", "V8": "v8-stat-compare", "V6": "v6-cuda-compare"},
+}
+"""Rows whose verdict is the pass of one step (plan Amendment 17 (d); row V6 is the verdict of ``v6-compare`` on lv5c and
+of ``v6-cuda-compare`` on hr5c, the backend combination lives in the latter). Report-only rows (V10, X-ENDF, D9-BGG,
+E1-B, E-shape) pass when executed. The V7-R conjunction is built separately in :func:`slice_c_rows`."""
+
+
+def step_rows(suite: str | None, steps: dict[str, Any]) -> dict[str, Any]:
+    """The one-step rows of ``SLICE_C_STEP_ROWS`` of ``suite``: ``{"pass", "step", "status"}`` (``"not run"`` when the
+    step is absent from the archive, which is never a pass)."""
+    by = {n.split("-", 1)[1]: s for n, s in steps.items() if "-" in n}
+    out: dict[str, Any] = {}
+    for row, step in SLICE_C_STEP_ROWS.get(suite or "", {}).items():
+        st = by.get(step)
+        if st is None:
+            out[row] = {"pass": False, "step": step, "status": "not run"}
+        else:
+            ok = bool(st.get("pass")) and st.get("status") != "deferred"
+            out[row] = {"pass": ok, "step": step, "status": st.get("status", "executed")}
+    return out
+
+
 def slice_c_rows(suite: str | None, steps: dict[str, Any]) -> dict[str, Any]:
     """Row verdicts that are a conjunction of steps (suite ``lv5c``). Row V7-R (plan Amendment 14 (h)
     and Amendment 17 (a)6) passes iff ``v7r-combine`` passed (the three estimators, both gates each)
@@ -463,6 +510,8 @@ def slice_c_rows(suite: str | None, steps: dict[str, Any]) -> dict[str, Any]:
     its complete expected passed count and no skip (``calibration_established``). A pytest step has no
     document, so the conjunction cannot be made by a step. Otherwise the row verdict is
     "uncertainty-coverage evidence not established"."""
+    if suite == "hr5c":
+        return step_rows(suite, steps)
     if suite != "lv5c":
         return {}
     by = {n.split("-", 1)[1]: s for n, s in steps.items() if "-" in n}
@@ -475,7 +524,7 @@ def slice_c_rows(suite: str | None, steps: dict[str, Any]) -> dict[str, Any]:
            "pass": gates and calibration}  # fmt: skip
     if not row["pass"]:
         row["verdict"] = V7R_NOT_ESTABLISHED
-    return {"V7-R": row}
+    return {**step_rows(suite, steps), "V7-R": row}
 
 
 def verify(d: Path, sha: str, attest_sha: str | None = None) -> dict[str, Any]:

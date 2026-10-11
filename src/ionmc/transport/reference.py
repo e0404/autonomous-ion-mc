@@ -57,7 +57,7 @@ from ionmc.rng.philox import (
     key_from_seed,
     u01_py,
 )
-from ionmc.species import PSEUDO_BASE, species_of_projectile
+from ionmc.species import ELASTIC_RECOIL_ID, PSEUDO_BASE, species_of_projectile
 from ionmc.transport.channels import CLASS_LOCAL, CLASS_STEP, MAX_PARTICLES
 from ionmc.transport.funcs import BIG_LENGTH_MM, make_transport_funcs
 from ionmc.transport.run import channel_columns
@@ -715,7 +715,7 @@ class _Reference:
             nt["elastic_pa_events"] += 1.0
             t_r = ev.t_other_mev
             nt["elastic_recoil_local"] += t_r
-            self._deposit_point(batch, pos, t_r, PSEUDO_BASE, gen)
+            self._deposit_point(batch, pos, t_r, ELASTIC_RECOIL_ID, gen)
             miss = t1 - (ev.t_primary_mev + t_r)
         if abs(miss) > 1.0e-9 * t1:  # per-event energy ledger (should never fire)
             ctr["nuclear_conservation"] += 1

@@ -27,7 +27,10 @@ from ionmc.physics.projectiles import (
 
 MAX_ION_SPECIES = 64
 PSEUDO_BASE = 64
-N_SPECIES_SLOTS = 65  # ids 0..63 ions, 64 nuclear_local (room for more pseudo-species by growth)
+N_SPECIES_SLOTS = (
+    66  # ids 0..63 ions, 64 nuclear_local, 65 elastic_recoil (room for more by growth)
+)
+ELASTIC_RECOIL_ID = 65
 GENERATIONS = ("all", "primary", "secondary")
 
 
@@ -54,10 +57,19 @@ _ION_ENTRIES: tuple[Species, ...] = (
     _ion(3, HELIUM3),
     _ion(4, ALPHA),
 )
-_PSEUDO_ENTRIES: tuple[Species, ...] = (Species(PSEUDO_BASE, "nuclear_local", False),)
+# ``nuclear_local`` is the local-deposit class (non-elastic alpha/recoil deposits and the elastic
+# p + A recoil); ``elastic_recoil`` (V3-005C, plan Amendment 17 (b)5) is its elastic subset. The
+# elastic recoil is deposited with id ``ELASTIC_RECOIL_ID``; a channel selecting ``nuclear_local``
+# matches both ids (``ionmc.transport.channels._species_row``), so every ``nuclear_local`` channel
+# is unchanged.
+_PSEUDO_ENTRIES: tuple[Species, ...] = (
+    Species(PSEUDO_BASE, "nuclear_local", False),
+    Species(ELASTIC_RECOIL_ID, "elastic_recoil", False),
+)
 
 REGISTRY: tuple[Species, ...] = _ION_ENTRIES + _PSEUDO_ENTRIES
 NUCLEAR_LOCAL = "nuclear_local"
+ELASTIC_RECOIL = "elastic_recoil"
 _BY_NAME = {s.name: s for s in REGISTRY}
 _BY_ID = {s.id: s for s in REGISTRY}
 
@@ -98,7 +110,9 @@ def transported_ids() -> tuple[int, ...]:
     return tuple(s.id for s in REGISTRY if s.transported)
 
 
-def producible(projectile: Projectile, nuclear: bool = False) -> frozenset[tuple[str, str]]:
+def producible(
+    projectile: Projectile, nuclear: bool = False, elastic: bool = False
+) -> frozenset[tuple[str, str]]:
     """Engine capability: the ``(species name, generation)`` pairs the engine can create from a
     source of ``projectile``. Without nuclear interactions (V3-004): the source projectile as a
     primary. With ``nuclear=True`` (V3-005A, decision 0041, proton source only): additionally
@@ -106,12 +120,16 @@ def producible(projectile: Projectile, nuclear: bool = False) -> frozenset[tuple
     ``nuclear_local`` (alpha, residual recoil: local deposits whose generation label is the
     parent's generation + 1, so a primary's nuclear event deposits as generation 1 ``secondary``
     and ``generation="primary"`` channels contain only primary electromagnetic deposits). Species
-    2 to 4 (triton, helium3, alpha as transported species) stay unproducible and fail closed."""
+    2 to 4 (triton, helium3, alpha as transported species) stay unproducible and fail closed. With
+    ``elastic=True`` (V3-005C) the pseudo-species ``elastic_recoil`` (the elastic p + A recoil, a
+    subset of the ``nuclear_local`` class) is producible at the projectile's generation (primary or
+    secondary); with ``elastic=False`` the set is unchanged and a request for it fails closed."""
     base = {(species_of_projectile(projectile).name, "primary")}
     if not nuclear:
         return frozenset(base)
     if projectile != PROTON:
         raise ValueError("nuclear interactions are implemented for a proton source only")
-    return frozenset(
-        base | {("proton", "secondary"), ("deuteron", "secondary"), (NUCLEAR_LOCAL, "secondary")}
-    )
+    out = base | {("proton", "secondary"), ("deuteron", "secondary"), (NUCLEAR_LOCAL, "secondary")}
+    if elastic:  # the p + A recoil of the elastic channel, deposited at the projectile's generation
+        out |= {(ELASTIC_RECOIL, "primary"), (ELASTIC_RECOIL, "secondary")}
+    return frozenset(out)

@@ -63,7 +63,7 @@ from ionmc.physics.em import make_em
 from ionmc.physics.kinematics import make_kinematics
 from ionmc.physics.nuclear import _nuc_u01_32, _nuc_u01_64, make_nuclear
 from ionmc.rng.philox import PURPOSE_SOURCE, PURPOSE_TRANSPORT, make_philox
-from ionmc.species import PSEUDO_BASE
+from ionmc.species import ELASTIC_RECOIL_ID, PSEUDO_BASE
 from ionmc.transport.channels import MAX_PARTICLES
 from ionmc.transport.funcs import make_transport_funcs
 from ionmc.transport.kernels import make_kernel_support
@@ -202,6 +202,7 @@ def make_nuclear_transport_kernel(real: type, diag: bool, elastic: bool = False)
     code_missed = wp.constant(END_MISSED_WORLD)
     code_nuclear = wp.constant(END_NUCLEAR)
     pseudo_local = wp.constant(PSEUDO_BASE)
+    pseudo_el_recoil = wp.constant(ELASTIC_RECOIL_ID)
     is_f32 = wp.constant(1 if name == "float32" else 0)
     with_diag = wp.constant(diag)
     with_el = wp.constant(elastic)
@@ -840,7 +841,7 @@ def make_nuclear_transport_kernel(real: type, diag: bool, elastic: bool = False)
                                         n_el_pa = n_el_pa + D(1.0)
                                         n_el_rec = n_el_rec + tb_e2
                                         cl_r = chan
-                                        cl_r.species = pseudo_local
+                                        cl_r.species = pseudo_el_recoil
                                         cl_r.gen = gen_e
                                         deposit_point(
                                             edep, tally_rows, tid, batch, px, py, pz, tb_e2,

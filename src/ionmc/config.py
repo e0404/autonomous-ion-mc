@@ -500,7 +500,7 @@ def _compile_tallies(
         memory_budget_bytes=run.memory_budget_bytes,
         max_steps=max_steps,
         scoring_pieces=scoring_pieces,
-        producible=producible(src.projectile, ph.nuclear),
+        producible=producible(src.projectile, ph.nuclear, ph.nuclear and ph.elastic),
         max_step_mm=ph.max_step_mm,
         nuclear=None if nuclear is None else nuclear.capacity,
     )
@@ -737,7 +737,7 @@ def _nuclear_tables(
         e_cut_deuteron_mev=ph.e_cut_deuteron_mev,
         transport_energy_bound_mev=t_bound,
         history_energy_bound_mev=h_bound,
-        producible=producible(config.source.projectile, True),
+        producible=producible(config.source.projectile, True, ph.elastic),
         capacity=capacity,
     )
     return replace(tables, deuteron=d_tables), setup

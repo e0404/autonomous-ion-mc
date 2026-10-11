@@ -192,7 +192,7 @@ def test_scorer_selects_the_water_row_and_mass_number_per_species(
     from ionmc.transport.channels import ChannelPlan
 
     plan = ChannelPlan(
-        channels=(), quantities=(), species_match=np.zeros((0, 65), dtype=np.int8),
+        channels=(), quantities=(), species_match=np.zeros((0, 66), dtype=np.int8),
         ch_begin=(0,), ch_end=(0,), total_size=0, n_residual=0, lookups=(), bounds={},
         memory_bytes=0, histories_per_batch=1, path_bound_mm=1.0,
     )  # fmt: skip

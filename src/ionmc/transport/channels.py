@@ -56,6 +56,7 @@ from ionmc.physics.projectiles import Projectile
 from ionmc.physics.stopping import StoppingTable
 from ionmc.scoring import ScoringGrid, TallyRequest
 from ionmc.species import (
+    ELASTIC_RECOIL_ID,
     N_SPECIES_SLOTS,
     NUCLEAR_LOCAL,
     species_by_name,
@@ -524,9 +525,12 @@ def _species_row(species: tuple[str, ...] | None, *, include_pseudo: bool) -> tu
             row[i] = 1
         if include_pseudo:
             row[species_by_name(NUCLEAR_LOCAL).id] = 1
+            row[ELASTIC_RECOIL_ID] = 1
     else:
         for name in species:
             row[species_by_name(name).id] = 1
+            if name == NUCLEAR_LOCAL:  # the local-deposit class contains its elastic subset
+                row[ELASTIC_RECOIL_ID] = 1
     return tuple(row)
 
 
