@@ -291,6 +291,11 @@ from ``steps_v5b.py``: the host interpreter running this script has no ``ionmc``
 ``PYTHONPATH``), and ``steps_v5b`` imports it; ``steps_v5b.V2B_SHARDS`` is taken from this value."""
 
 
+HOST_STEP_WALL_LIMIT_S = 1500
+"""Plan Amendment 14 (k): every host step is SIZED for at most this wall time [s] (the MCP client aborts at 1800 s
+idle). The timeout floors of ``STEP_TIMEOUT_FLOOR_S`` (3300 / 3600) are kill guards only and stay unchanged; the
+throughput step sizes the shard plans against this limit (with its safety margin)."""
+
 STEP_TIMEOUT_FLOOR_S = {
     "lv4": {"a9-part-1of2": 3300, "a9-part-2of2": 3300, "a7-step-independence": 1800},
     "hr4": {"a11-hr-channel-parity": 3600},
@@ -310,7 +315,7 @@ STEP_TIMEOUT_FLOOR_S = {
         "pytest-v7-rep-calibration": 3300, "v3-workers-partition": 3300,
     },
     "lv5c": {
-        "v6-e0": 1800, "v10-pp-level": 1800, "v10-a": 1800, "v10-a-xcheck": 3300, "x-endf": 3300, "d9-bgg": 1800,
+        "v6-e0": 1800, "v10-pp-level": 1800, "v10-a": 1800, "v10-a-trigger": 1800, "v10-a-xcheck": 3300, "x-endf": 3300, "d9-bgg": 1800,
         "lv5c-throughput": 3300, "r1-d2-regression": 3300, "v8-lv-python-vs-warp-cpu": 3300, "p7-sampler": 3300,
         **{f"v5-{e}-{t}": 3300 for e in (150, 200) for t in ("on", "off")}, "v5-compare": 1800,
         "v5-attribution": 1800, **{f"v2b-el-s{k}": 3300 for k in range(V2B_SHARDS)}, "v2b-el-combine": 1800,
@@ -636,7 +641,7 @@ def _suite_steps_lv5c(add, sc, out_dir, dirs, s5, s5c, s5d, s6):  # type: ignore
     env = NUCLEAR_ENV
     add("v6-e0", [*s6, "v6-e0", "--out-dir", str(out_dir), *sc], env)  # deterministic E0 record, archived first
     add("v10-pp-level", [*s5d, "v10-pp-level", *sc], env)
-    add("v10-a", [*s5d, "v10-a", "--dirs", *dirs, *sc], env)
+    add("v10-a", [*s5d, "v10-a", "--out-dir", str(out_dir), *sc], env)
     add("v10-a-xcheck", [*s5d, "v10-a-xcheck", *sc], env)
     add("x-endf", [*s5d, "x-endf", *sc], env)
     add("d9-bgg", [*s5d, "d9-bgg", *sc], env)
@@ -644,6 +649,7 @@ def _suite_steps_lv5c(add, sc, out_dir, dirs, s5, s5c, s5d, s6):  # type: ignore
     add("r1-d2-regression", [*s5d, "r1-d2", "--out-dir", str(out_dir), *sc], env)
     add("v8-lv-python-vs-warp-cpu", [*s5d, "v8-lv", "--out-dir", str(out_dir), *sc], env)
     add("p7-sampler", [*s5d, "p7-sampler", "--out-dir", str(out_dir), *sc], env)
+    add("v10-a-trigger", [*s5d, "v10-a-trigger", "--dirs", *dirs, *sc], env)  # (e)9 trigger, needs v10-a and p7
     for e in (150, 200):  # row V11: EM+elastic and EM-only share the seed of the energy (r_index 14)
         for m in ("emel", "emonly"):
             add(f"v11-ionmc-{e}-{m}", [*s5c, "v11-ionmc", "--energy", str(e), "--mode", m,

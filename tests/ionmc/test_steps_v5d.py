@@ -363,7 +363,7 @@ def test_registration_order_seeds_timeouts_and_tags() -> None:
     rs, su = _load("run_suite"), _load("summarize")
     lv = [n.split("-", 1)[1] for n in rs.full_step_names("lv5c", 2)]
     head = ["v6-e0", "v10-pp-level", "v10-a", "v10-a-xcheck", "x-endf", "d9-bgg", "lv5c-throughput", "r1-d2-regression",
-            "v8-lv-python-vs-warp-cpu", "p7-sampler", "v11-ionmc-150-emel", "v11-ionmc-150-emonly", "v11-ionmc-200-emel",
+            "v8-lv-python-vs-warp-cpu", "p7-sampler", "v10-a-trigger", "v11-ionmc-150-emel", "v11-ionmc-150-emonly", "v11-ionmc-200-emel",
             "v11-ionmc-200-emonly", "v11-compare", "v5-150-on", "v5-150-off", "v5-200-on", "v5-200-off", "v5-compare",
             "v5-attribution", "v2b-el-s0", "v2b-el-s1", "v2b-el-combine", "v7-scan-el", "v7-shift-el"]  # fmt: skip
     assert lv[: len(head)] == head
@@ -583,7 +583,16 @@ def test_v10_steps_dry_run_and_the_fallback_block(d: ModuleType, tmp_path: Path)
         and a["status"] in ("pass", "fail", "not executed (evidence missing)")
     )
     trig = a["fallback_ii_prime_trigger"]
-    assert set(trig) == {"rule", "a_or_b_fails_for_pO", "c_passes", "p7_passes", "fires", "reason"}
+    assert set(trig) == {
+        "rule",
+        "a_or_b_fails_for_pO",
+        "c_passes",
+        "p7_passes",
+        "fires",
+        "reason",
+        "provisional",
+    }
+    assert trig["provisional"] is True
     assert trig["p7_passes"] == "ci-only" and trig["fires"] is False
     assert a["result"]["coverage"]["a_points"] >= 12 and set(a["failures"]) == {"a", "b", "c"}
     for f in a["failures"]["a"]:
@@ -620,16 +629,6 @@ def test_v10a_coverage_rule_never_passes_without_coverage(
 
 def test_e_shape_and_e1b_documents_state_the_rules(d: ModuleType, tmp_path: Path) -> None:
     _data_or_skip()
-    doc = _run_step(d, ["e-shape", "--scale", "0.05"], tmp_path)
-    assert (
-        doc["seed"] == 20509500
-        and doc["tag"] == "exploratory"
-        and doc["verdict"] == "executed (model variant only)"
-    )
-    assert (
-        doc["variant_forced_isotropic"] == "not run (builder option not implemented)"
-        and doc["pass"]
-    )
     un = _run_step(d, ["e1-b-unsized"], tmp_path)
     assert un["pass"] is False and "Amendment 14a" in un["error"]
 
@@ -639,3 +638,260 @@ def test_hr5c_and_lv5c_partials_carry_the_elastic_bindings(d: ModuleType, tmp_pa
     _run_step(d, ["v2b-el-shard", "--shard", "1", "--scale", "0.01"], tmp_path)
     p = json.loads((tmp_path / "v2b-el-s1.json").read_text())
     assert p["elastic"] is True and len(p["elastic_table_id"]) == 64 and p["seed"] == 20489005
+
+
+# -- F1: the attestation is built after all loads ----------------------------------------------------
+def _imported_v5_partials(d: ModuleType, c: ModuleType, imp: Path, cur: Path) -> Path:
+    import argparse
+
+    import steps_v5 as v5
+
+    ns = argparse.Namespace(out_dir=str(imp), scale=1.0)
+    d.base.SEED_BASE = LV5C_BASE
+    entries = {}
+    for e in (150, 200):
+        for on in (True, False):
+            row = f"v5-{e}-{'on' if on else 'off'}"
+            path = c.write_partial_c(ns, row, {"row": row, "energy": float(e), "nuclear": on,
+                                               "seed": d.v5_seed(float(e), on), "valid": True, "reduced": False,
+                                               "n": 100_000})  # fmt: skip
+            doc = json.loads(Path(path).read_text())
+            entries[f"{row}.json"] = {
+                "content_sha256": doc["content_sha256"],
+                "host_run_id": "HOST-RUN-1",
+            }
+    manifest = cur / "manifest.json"
+    manifest.write_text(json.dumps({"partials": entries, "source": v5.MANIFEST_SOURCE}))
+    return manifest
+
+
+@pytest.mark.parametrize("step", ["v5-compare", "v5-attribution"])
+def test_v5_consumers_list_imported_partials_in_their_attestation(
+    d: ModuleType, c: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, step: str
+) -> None:
+    _data_or_skip()
+    sm = _load("summarize")
+    monkeypatch.setenv("IONMC_RUN_SUITE", "lv5c")
+    monkeypatch.setenv("IONMC_RUN_SHA", "a" * 40)
+    cur, imp = tmp_path / "cur", tmp_path / "imp"
+    cur.mkdir()
+    imp.mkdir()
+    manifest = _imported_v5_partials(d, c, imp, cur)
+    doc = _run_step(d, [step, "--dirs", str(cur), str(imp), "--partials-manifest", str(manifest),
+                        "--reference-dir", str(tmp_path / "none")], cur)  # fmt: skip
+    att = doc["attestation"]
+    names = {p["name"] for p in att["partials"]}
+    assert {f"v5-{e}-{t}.json" for e in (150, 200) for t in ("on", "off")} <= names
+    assert all(
+        p["origin"] == "imported" and p["host_run_id"] == "HOST-RUN-1" for p in att["partials"]
+    )
+    assert att["manifest_sha256"]
+    probs = sm.attestation_problems(
+        att, "a" * 40, {"partials_manifest_sha256": att["manifest_sha256"]}
+    )
+    assert sm.IMPORTED_UNVERIFIED in probs  # never bypassed
+
+
+def test_every_consumer_builds_its_attestation_after_its_loads() -> None:
+    import re
+
+    for fn in ("step_v5_compare", "step_v5_attribution", "step_v10_a_trigger", "step_v2b_el_combine",
+               "step_e1_b_compare", "step_v8_stat_compare"):  # fmt: skip
+        src = (SCRIPTS / "steps_v5d.py").read_text()
+        body = src[src.index(f"def {fn}(") :]
+        body = body[: body.index("\ndef ", 10)]
+        last_load = max(m.start() for m in re.finditer(r"load_partials_c|v5_verdict\(", body))
+        first_att = min(m.start() for m in re.finditer(r"attestation_block", body))
+        assert first_att > last_load, fn
+
+
+# -- F4: the (e)9 fallback trigger as a consumer step ------------------------------------------------
+@pytest.mark.parametrize(("ab", "cpass", "p7", "fires"), [
+    (True, True, True, True), (True, False, True, False), (False, True, True, False),
+    (True, True, False, False), (True, True, "ci-only", False)])  # fmt: skip
+def test_fallback_trigger_matrix(
+    d: ModuleType, ab: bool, cpass: bool, p7: Any, fires: bool
+) -> None:
+    t = d.fallback_trigger(ab, cpass, p7, provisional=False)
+    assert t["fires"] is fires and t["provisional"] is False and t["p7_passes"] == p7
+    assert d.fallback_trigger(ab, cpass, p7, provisional=True)["provisional"] is True
+    if not cpass:
+        assert t["reason"].startswith("(c) fails")
+
+
+def _status(d: ModuleType, c: ModuleType, out: Path, name: str, **doc: Any) -> None:
+    import argparse
+
+    d.base.SEED_BASE = LV5C_BASE
+    d.status_partial(argparse.Namespace(out_dir=str(out), scale=1.0), name, {"step": name, **doc})
+
+
+@pytest.mark.parametrize(
+    ("ab", "cpass", "p7", "fires"),
+    [
+        (True, True, True, True),
+        (True, False, True, False),
+        (False, True, True, False),
+        (True, True, False, False),
+    ],
+)
+def test_trigger_step_reads_the_sealed_partials(d: ModuleType, c: ModuleType, tmp_path: Path,
+                                                monkeypatch: pytest.MonkeyPatch, ab: bool, cpass: bool,
+                                                p7: bool, fires: bool) -> None:  # fmt: skip
+    _data_or_skip()
+    monkeypatch.setenv("IONMC_RUN_SUITE", "lv5c")
+    _status(d, c, tmp_path, "v10-a-status", pass_=False, status="fail", a_or_b_fails_for_pO=ab, c_pass=cpass,
+            **{"pass": not ab and cpass})  # fmt: skip
+    _status(d, c, tmp_path, "p7-status", **{"pass": p7})
+    doc = _run_step(d, ["v10-a-trigger", "--dirs", str(tmp_path)], tmp_path)
+    t = doc["fallback_ii_prime_trigger"]
+    assert (
+        doc["pass"] is True
+        and t["fires"] is fires
+        and t["provisional"] is False
+        and t["p7_passes"] is p7
+    )
+    assert set(doc["inputs"]) == {"v10-a-status", "p7-status"} and doc["attestation"]["partials"]
+
+
+def test_trigger_step_fails_closed_without_its_inputs(
+    d: ModuleType, c: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _data_or_skip()
+    monkeypatch.setenv("IONMC_RUN_SUITE", "lv5c")
+    _status(
+        d,
+        c,
+        tmp_path,
+        "v10-a-status",
+        status="fail",
+        a_or_b_fails_for_pO=True,
+        c_pass=True,
+        **{"pass": False},
+    )
+    doc = _run_step(d, ["v10-a-trigger", "--dirs", str(tmp_path)], tmp_path)  # no p7 partial
+    assert (
+        doc["pass"] is False
+        and "p7-status" in doc["error"]
+        and "fallback_ii_prime_trigger" not in doc
+    )
+
+
+def test_trigger_through_the_registered_suite_path(tmp_path: Path) -> None:
+    """v10-a, p7-sampler and v10-a-trigger run as registered by run_suite (reduced scale, real data): the final
+    trigger takes P7 from its partial, and (c) fails, so it does not fire."""
+    import subprocess
+    import sys
+
+    _data_or_skip()
+    rs = _load("run_suite")
+    steps = {
+        n.split("-", 1)[1]: (n, cmd, env)
+        for n, cmd, env in rs.suite_steps("lv5c", 1, 0.1, out=tmp_path)
+    }
+    order = [n for n, _, _ in rs.suite_steps("lv5c", 1, 0.1, out=tmp_path)]
+    names = [n.split("-", 1)[1] for n in order]
+    assert names.index("p7-sampler") < names.index("v10-a-trigger") and names.index(
+        "v10-a"
+    ) < names.index("p7-sampler")
+    env = {**os.environ, "IONMC_RUN_SHA": "b" * 40, "IONMC_RUN_SUITE": "lv5c"}
+    docs = {}
+    for nm in ("v10-a", "p7-sampler", "v10-a-trigger"):
+        _, cmd, extra = steps[nm]
+        r = subprocess.run([sys.executable, *cmd[1:]], capture_output=True, text=True, env={**env, **extra},
+                           cwd=str(tmp_path))  # fmt: skip
+        out = r.stdout
+        docs[nm] = json.loads(out.split("#JSON-BEGIN", 1)[1].split("#JSON-END", 1)[0])
+    assert docs["v10-a"]["fallback_ii_prime_trigger"]["provisional"] is True
+    t = docs["v10-a-trigger"]["fallback_ii_prime_trigger"]
+    assert (
+        docs["p7-sampler"]["pass"]
+        and t["p7_passes"] is True
+        and t["provisional"] is False
+        and t["fires"] is False
+    )
+    assert t["c_passes"] is False and docs["v10-a-trigger"]["pass"] is True
+    assert (tmp_path / "samples" / "v10-a-status.json").is_file()
+
+
+# -- F5: throughput sized for 1500 s -------------------------------------------------------------------
+def test_throughput_plan_is_sized_for_1500_s(d: ModuleType) -> None:
+    rs = _load("run_suite")
+    assert rs.HOST_STEP_WALL_LIMIT_S == 1500
+    assert (
+        rs.STEP_TIMEOUT_FLOOR_S["lv5c"]["lv5c-throughput"] == 3300
+        and rs.STEP_TIMEOUT_FLOOR_S["hr5c"]["v8-stat-cpu64"] == 3600
+    )
+    plans = {
+        "py": (100_000, "python", None),
+        "fits": (1_000_000, "w", 1),
+        "too_big": (8_000_000, "w", 1),
+    }
+    tab = d.shard_plan_c(plans, {"python": 55.9, "w": 5000.0}, 1500.0, 1.25)
+    assert (
+        tab["py"]["shards_needed_with_margin"] == 2
+        and tab["py"]["ok"] is None
+        and tab["py"]["limit_s"] == 1500.0
+    )
+    assert tab["fits"]["ok"] is True and tab["too_big"]["ok"] is False
+    assert tab["fits"]["histories_per_step_with_margin"] == int(1200 * 5000.0)
+    rates = {"python": 55.9, "python@250": 36.9, "v5": 6486.0, "blocks": 5684.0, "v2b": 1200.0}
+    tab2 = d.plan_table(rates, d.declared_plans())
+    assert all(v["limit_s"] == 1500.0 for v in tab2.values())
+    assert (
+        tab2["e1-b (python 150 MeV, 1e5)"]["rate_key"] == "python"
+        and tab2["e1-b (python 150 MeV, 1e5)"]["ok"] is None
+    )
+    assert (
+        tab2["v7r (16 shards x 4.5e6, block rate)"]["ok"] is True
+    )  # 4.5e6 / 5684 = 792 s <= 1200 s
+    assert tab2["v8-nuc python sample (4 x 3e4, 150 MeV)"]["ok"] is True
+
+
+def test_throughput_step_document_states_the_limit(d: ModuleType, tmp_path: Path) -> None:
+    _data_or_skip()
+    doc = _run_step(d, ["lv5c-throughput", "--scale", "0.02"], tmp_path)
+    assert doc["step_limit_s"] == 1500 and doc["effective_s_per_step"] == 1200.0
+    assert "python@250" in doc["rates_hist_per_s"] and doc["timeout_floors_are_kill_guards"] == {
+        "lv5c": 3300,
+        "hr5c": 3600,
+    }
+    assert all(v["limit_s"] == 1500.0 for v in doc["shard_table"].values())
+
+
+# -- F3: E-shape -----------------------------------------------------------------------------------------
+def test_e_shape_comparison_function(d: ModuleType) -> None:
+    depth = (np.arange(400) + 0.5) * 0.5
+    peak = np.exp(-(((depth - 150.0) / 6.0) ** 2)) * 6.0 + 1.0
+    peak[depth > 156.0] = 0.0
+    rng = np.random.default_rng(3)
+    a = peak + 0.01 * rng.normal(size=(20, depth.size))
+    same = d.e_shape_compare(a, a.copy(), depth)
+    assert same["delta_idd_window_mean"] == 0.0 and same["r80"]["shift_mm"] == 0.0
+    assert same["window_mm"][1] - same["window_mm"][0] == 10.0 and len(same["depth_mm"]) == len(
+        same["delta_idd"]
+    )
+    shifted = np.where(depth[None, :] > 100.0, a * 1.01, a)
+    cmp = d.e_shape_compare(a, shifted, depth)
+    assert cmp["delta_idd_window_mean"] > 0 and all(
+        x > 0 for x in cmp["delta_idd_relative_to_model"]
+    )
+    assert set(cmp["r80"]) == {"model_mm", "forced_isotropic_mm", "shift_mm", "se_mm"}
+
+
+def test_e_shape_step_runs_both_variants(d: ModuleType, tmp_path: Path) -> None:
+    _data_or_skip()
+    doc = _run_step(d, ["e-shape", "--scale", "0.05"], tmp_path)
+    assert (
+        doc["verdict"] == "executed"
+        and doc["seed"] == 20509500
+        and doc["tag"] == "exploratory"
+        and doc["pass"]
+    )
+    v = doc["variants"]
+    assert v["model"]["exploratory"] is False and v["forced_isotropic"]["exploratory"] is True
+    assert (
+        v["model"]["table_id"] != v["forced_isotropic"]["table_id"] == doc["exploratory_table_id"]
+    )
+    assert {"delta_idd", "delta_idd_se", "r80", "r90", "window_mm"} <= set(doc["comparison"])
+    assert "Amendment 15 (b)6" in doc["plan_row"] and doc["never_evidence"] is True

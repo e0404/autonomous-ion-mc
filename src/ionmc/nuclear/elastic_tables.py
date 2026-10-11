@@ -97,6 +97,7 @@ class ElasticTable:
     """A loaded, verified, frozen elastic table."""
 
     def __init__(self, info: dict[str, Any], arrays: dict[str, NDArray[Any]], npz_path: Path):
+        self.exploratory: bool = info.get("exploratory") is not None
         self.info = freeze_json(info)
         self.arrays = arrays
         self.npz_path = npz_path
@@ -104,7 +105,9 @@ class ElasticTable:
         self.target_names: tuple[str, ...] = tuple(info["target_names"])
 
     @classmethod
-    def load(cls, cache_dir: str | Path | None, table_id: str) -> ElasticTable:
+    def load(
+        cls, cache_dir: str | Path | None, table_id: str, allow_exploratory: bool = False
+    ) -> ElasticTable:
         cdir = cache.resolve_cache_dir(cache_dir)
         npz_path = cdir / "derived" / f"elastic-proton-{table_id}.npz"
         json_path = npz_path.with_suffix(".json")
@@ -125,6 +128,13 @@ class ElasticTable:
             )
         if info.get("table_id") != table_id or compute_table_id(info) != table_id:
             raise ElasticTableStaleError(f"elastic table {table_id}: id not reproduced (stale)")
+        exploratory = info.get("exploratory") is not None
+        if exploratory and not allow_exploratory:
+            raise ElasticTableUnqualifiedError(
+                f"elastic table {table_id} is an exploratory table (E-shape only): it is "
+                "loaded only when the configuration names it and sets "
+                "allow_exploratory_table=True; never evidence"
+            )
         with np.load(io.BytesIO(raw), allow_pickle=False) as z:
             arrays = {k: freeze_array(z[k], z[k].dtype, k) for k in z.files}
         if "qualification" not in arrays:
@@ -134,6 +144,10 @@ class ElasticTable:
         grid, e_min = arrays["grid_e_mev"], arrays["target_e_min_mev"]
         for i in range(len(e_min)):
             below = grid < e_min[i]
+            if (
+                exploratory
+            ):  # the forced-isotropic variant carries BGG sigma below the declared domain
+                continue
             if np.any(arrays["sigma_barn"][i][below] != 0.0) or np.any(arrays["valid"][i][below]):
                 raise ElasticTableUnqualifiedError(
                     f"elastic table {table_id}: target {i} has sigma != 0 or valid != 0 below "

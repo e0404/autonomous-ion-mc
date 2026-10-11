@@ -68,12 +68,26 @@ def nuc_config_c(**kw: Any) -> SimulationConfig:
     """``steps_v5.nuc_config`` with the hadronic elastic channel ON and the pinned table id. Do not
     use ``steps_v5.nuc_config`` directly for lv5c/hr5c: it is pinned ``elastic=False`` (frozen suites)."""
     cfg = v5.nuc_config(**kw)
-    return replace(
-        cfg,
-        physics=replace(
-            cfg.physics, elastic=True, elastic_only=False, elastic_table_id=ELASTIC_TABLE_ID
-        ),
+    return require_evidence_config(
+        replace(
+            cfg,
+            physics=replace(
+                cfg.physics, elastic=True, elastic_only=False, elastic_table_id=ELASTIC_TABLE_ID
+            ),
+        )
     )
+
+
+def require_evidence_config(cfg: SimulationConfig) -> SimulationConfig:
+    """Fail closed (``SystemExit``) unless ``cfg`` uses no exploratory elastic table: ``allow_exploratory_table`` is
+    off and, with the elastic channel on, the table id is the pinned one (E-shape alone builds exploratory variants,
+    through its own configuration, and writes no partial)."""
+    ph = cfg.physics
+    if ph.allow_exploratory_table:
+        raise SystemExit("an exploratory elastic table cannot be used by an lv5c/hr5c evidence producer")
+    if ph.nuclear and ph.elastic and ph.elastic_table_id not in (None, ELASTIC_TABLE_ID):
+        raise SystemExit(f"elastic table {ph.elastic_table_id} is not the pinned table {ELASTIC_TABLE_ID[:8]}")
+    return cfg
 
 
 def nuc_config_c_elastic_only(**kw: Any) -> SimulationConfig:

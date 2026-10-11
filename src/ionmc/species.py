@@ -122,8 +122,10 @@ def producible(
     and ``generation="primary"`` channels contain only primary electromagnetic deposits). Species
     2 to 4 (triton, helium3, alpha as transported species) stay unproducible and fail closed. With
     ``elastic=True`` (V3-005C) the pseudo-species ``elastic_recoil`` (the elastic p + A recoil, a
-    subset of the ``nuclear_local`` class) is producible at the projectile's generation (primary or
-    secondary); with ``elastic=False`` the set is unchanged and a request for it fails closed."""
+    subset of the ``nuclear_local`` class) is producible as a ``secondary`` only: reference and Warp
+    transport score every recoil at the parent's generation + 1 (a primary's event deposits as
+    generation 1), so a ``generation="primary"`` request fails closed instead of silently scoring
+    zero. With ``elastic=False`` the set is unchanged and a request for it fails closed."""
     base = {(species_of_projectile(projectile).name, "primary")}
     if not nuclear:
         return frozenset(base)
@@ -131,5 +133,5 @@ def producible(
         raise ValueError("nuclear interactions are implemented for a proton source only")
     out = base | {("proton", "secondary"), ("deuteron", "secondary"), (NUCLEAR_LOCAL, "secondary")}
     if elastic:  # the p + A recoil of the elastic channel, deposited at the projectile's generation
-        out |= {(ELASTIC_RECOIL, "primary"), (ELASTIC_RECOIL, "secondary")}
+        out |= {(ELASTIC_RECOIL, "secondary")}
     return frozenset(out)

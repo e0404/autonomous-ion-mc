@@ -828,8 +828,17 @@ def build_elastic_proton(
     cache_dir: str | Path | None = None,
     options: ElasticBuildOptions | None = None,
     log: Callable[[str], None] = _noop,
+    *,
+    exploratory_forced_isotropic: bool = False,
 ) -> ElasticBuildResult:
-    """Build the table (module docstring). ``BuildError`` on any fail-closed rule."""
+    """Build the table (module docstring). ``BuildError`` on any fail-closed rule.
+
+    ``exploratory_forced_isotropic`` (E-shape only, plan Amendment 15 (b)6; never evidence): the
+    nodes of every p + A target BELOW its declared domain ``e_min_shape`` carry the BGG
+    ``sigma_el`` (valid) with an isotropic ``mu_CM`` distribution (edges uniform in [-1, 1]);
+    every node inside the domain, every ``sigma_el`` there, the grid and H-1 are those of the
+    model table. The table JSON carries ``exploratory`` (so its id differs and the loader
+    refuses it unless the configuration names it and sets ``allow_exploratory_table``)."""
     t_start = time.perf_counter()
     opt = options or ElasticBuildOptions()
     cdir = cache.resolve_cache_dir(cache_dir)
@@ -1074,6 +1083,16 @@ def build_elastic_proton(
             for e in np.linspace(1.0, float(e_min_t[i]), 200)
         )
     info_t[0]["sigma_bgg_below_domain_max_mb"] = None  # H-1: not BGG
+    if exploratory_forced_isotropic:
+        iso = np.linspace(-1.0, 1.0, n_q + 1)
+        for it, spec in enumerate(TARGETS, start=1):
+            k_min = int(info_t[it]["e_min_shape_index"])
+            for k in range(k_min):
+                sigma[it, k] = (
+                    bgg.bgg_elastic_mb(float(grid[k]), spec.z, models[spec.name].m_t_mev) * 1e-3
+                )
+                valid[it, k] = 1
+                edges[it, k] = iso
     arr: dict[str, NDArray[Any]] = {
         "grid_e_mev": grid, "sigma_barn": sigma, "edges_mu": edges, "radius_fm": r_fm,
         "sigma_nonel_barn": sig_nonel, "lambda_bar_fm": lam_bar, "p_cm_mev": pcm_arr,
@@ -1139,6 +1158,13 @@ def build_elastic_proton(
         "shape_normalisation_max_deviation": max_dev,
         "qualification_fields": list(QUALIFICATION_FIELDS),
     }  # fmt: skip
+    if exploratory_forced_isotropic:
+        info["exploratory"] = {
+            "exploratory_forced_isotropic": True,
+            "purpose": "E-shape (Amendment 15 (b)6), report-only, never evidence",
+            "change": "p + A nodes below e_min_shape: BGG sigma_el (valid) with mu_CM isotropic on "
+            "[-1, 1]; everything inside the declared domain, the grid and H-1 as the model table",
+        }
     tid = table_id(info)
     info["table_id"] = tid
     npz_path, json_path = (

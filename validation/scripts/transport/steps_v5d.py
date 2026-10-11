@@ -34,6 +34,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
+import run_suite
 import steps as base
 import steps_v4 as v4
 import steps_v5 as v5
@@ -194,8 +195,6 @@ def block_rate(n: int) -> float:
 def declared_plans() -> dict[str, tuple[int, str, int | None]]:
     """``name -> (histories, rate key, declared shards)`` of every lv5c / hr5c step that must fit
     ``STEP_LIMIT_S / MARGIN`` (``None`` shards: not yet declared, reported as needed)."""
-    import run_suite
-
     v6 = run_suite.V6_SHARDS
     out: dict[str, tuple[int, str, int | None]] = {
         "v7r (16 shards x 4.5e6, block rate)": (16 * 4_500_000, "blocks", 16),
@@ -204,24 +203,36 @@ def declared_plans() -> dict[str, tuple[int, str, int | None]]:
         "v7-shift-el (3 layouts)": (3 * v5b.V7_SHIFT_N, "blocks", 1),
         "v5-ionmc (per step)": (v5b.V5_N, "v5", 1),
         "v11-ionmc (per step)": (v5b.V5_N, "v5", 1),
-        "v8-nuc python sample (4 x 3e4)": (V8NUC_PYTHON_SHARDS * V8NUC_PYTHON_N, "python", V8NUC_PYTHON_SHARDS),
-        "e1-b (python, 1e5)": (E1B_N, "python", E1B_SHARDS),
-        "e-shape (python, 2 x 2e4)": (2 * E_SHAPE_N, "python", 1),
+        "v8-nuc python sample (4 x 3e4, 150 MeV)": (V8NUC_PYTHON_SHARDS * V8NUC_PYTHON_N, "python", V8NUC_PYTHON_SHARDS),
+        "e1-b (python 150 MeV, 1e5)": (E1B_N, "python", E1B_SHARDS),
+        "e-shape (python 150 MeV, 2 x 2e4)": (2 * E_SHAPE_N, "python", 1),
     }  # fmt: skip
     if v6 is not None:
         out[f"v6 ({v6} shards x 1e6)"] = (v6 * 1_000_000, "v5", v6)
     return out
 
 
+def shard_plan_c(items: dict[str, tuple[int, str, int | None]], rates: dict[str, float],
+                 limit_s: float, margin: float) -> dict[str, Any]:
+    """``name -> (histories, rate key, declared shards)``: planned time per shard at the measured rate, the shards
+    needed so that one step takes at most ``limit_s / margin`` and whether the declared count suffices. An
+    undeclared count (``None``) is reported with the shards needed and ``ok = None`` (fixed in Amendment 14a)."""
+    out = {}
+    for name, (n, key, declared) in items.items():
+        r = rates[key]
+        need = max(1, math.ceil(n / r / (limit_s / margin)))
+        d = declared
+        out[name] = {"histories": n, "rate_key": key, "rate_hist_per_s": r, "planned_s_total": n / r,
+                     "planned_s_per_declared_shard": None if d is None else n / r / d, "declared_shards": d,
+                     "shards_needed_with_margin": need, "histories_per_step_with_margin": int(limit_s / margin * r),
+                     "limit_s": limit_s, "ok": None if d is None else bool(d >= need)}  # fmt: skip
+    return out
+
+
 def plan_table(rates: dict[str, float], plans: dict[str, tuple[int, str, int | None]]) -> dict[str, Any]:
-    """``v5b.shard_plan`` for the declared plans; an undeclared shard count (``None``) is reported with the
-    shards needed and is NOT ok (fails closed: a declared count that no longer fits fails the step)."""
-    tab = v5b.shard_plan({k: (n, key, d or 1) for k, (n, key, d) in plans.items()}, rates)
-    for k, (_, _, d) in plans.items():
-        if d is None:
-            tab[k]["declared_shards"] = None
-            tab[k]["ok"] = None  # not declared: informative, fixed in Amendment 14a
-    return tab
+    """The shard table against ``run_suite.HOST_STEP_WALL_LIMIT_S`` (1500 s; Amendment 14 (k)) with the margin of
+    ``steps_v5.MARGIN``; the timeout floors (3300 / 3600) are kill guards and play no role here."""
+    return shard_plan_c(plans, rates, float(run_suite.HOST_STEP_WALL_LIMIT_S), v5.MARGIN)
 
 
 E_SHAPE_N = 20_000
@@ -248,7 +259,8 @@ def step_throughput(a: argparse.Namespace) -> int:
         t0 = time.perf_counter()
         res = Simulation(cfg).run()
         out[f"v5-geometry@{e:g}"] = v5b.rate_of(res, nw, time.perf_counter() - t0)
-    rates = {"python": min(out[f"python-f64@{e:g}"]["hist_per_s"] for e in v5.THROUGHPUT_ENERGIES),
+    rates = {"python": out["python-f64@150"]["hist_per_s"],  # E1-B, E-shape and V8-nuc are 150 MeV python runs
+             "python@250": out["python-f64@250"]["hist_per_s"],  # reported alongside, used by no plan
              "v5": min(out[f"v5-geometry@{e:g}"]["hist_per_s"] for e in v5b.V5_ENERGIES),
              "blocks": block_rate(v5b.scaled(20 * v5b.V7_BATCH_N, a.scale, 2 * v5b.V7_BATCH_N,
                                              v5b.V7_BATCH_N))}  # fmt: skip
@@ -258,7 +270,9 @@ def step_throughput(a: argparse.Namespace) -> int:
     fits = all(v["ok"] for v in table.values() if v["ok"] is not None)
     doc = {"step": "lv5c-throughput", "table": v5.table_record(), **c.elastic_table_record(),
            "seed": seed_c("throughput"), "throughput": out, "rates_hist_per_s": rates,
-           "step_limit_s": v5b.STEP_LIMIT_S, "margin": v5b.MARGIN, "shard_table": table,
+           "step_limit_s": run_suite.HOST_STEP_WALL_LIMIT_S, "margin": v5.MARGIN,
+           "effective_s_per_step": run_suite.HOST_STEP_WALL_LIMIT_S / v5.MARGIN,
+           "timeout_floors_are_kill_guards": {"lv5c": 3300, "hr5c": 3600}, "shard_table": table,
            "shard_table_ok": bool(fits),
            "undeclared": sorted(k for k, v in table.items() if v["ok"] is None),
            "row": "none (throughput yields no verdict; lv5c r_index 1 seeds equal the consumed lv5b "
@@ -363,8 +377,6 @@ def r1d2_measure(e: float, k: int, n: int, timeout: float | None) -> dict[str, A
 
 
 def step_r1_d2(a: argparse.Namespace) -> int:
-    import run_suite
-
     a16 = v5._captured(v5.step_r1, argparse.Namespace(scale=a.scale, timeout=a.timeout))
     # (B) Sigma_el = 0 is bit-identical to elastic=False, and the elastic=False python nuclear-on digest
     # with the primary-only toggle equals the lv5b record (3edfce9c = b84fdf38)
@@ -698,8 +710,7 @@ def v5_verdict(a: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str, An
 
 
 def step_v5_compare(a: argparse.Namespace) -> int:
-    doc: dict[str, Any] = {"step": "v5-compare", "plan_rule": V5_COMPARE_PLAN,
-                           "attestation": v5.attestation_block(a)}  # fmt: skip
+    doc: dict[str, Any] = {"step": "v5-compare", "plan_rule": V5_COMPARE_PLAN}
     reduced = False
     try:
         verdict, parts = v5_verdict(a)
@@ -710,6 +721,7 @@ def step_v5_compare(a: argparse.Namespace) -> int:
     except (_cmp().IddError, SystemExit, ValueError, OSError) as exc:
         doc.update(cases_in_source_identity=False, verdict=None, error=f"{type(exc).__name__}: {exc}",
                    **{"pass": False})  # fmt: skip
+    doc["attestation"] = v5.attestation_block(a)  # after ALL loads: imported partials are listed (never omitted)
     return finish(doc, v5b.V5_N, v5b.V5_N, reduced)
 
 
@@ -817,7 +829,7 @@ def step_v5_attribution(a: argparse.Namespace) -> int:
 
     from ionmc.reference import metrics as rm
 
-    doc: dict[str, Any] = {"step": "v5-attribution", "report_only": True, "attestation": v5.attestation_block(a)}
+    doc: dict[str, Any] = {"step": "v5-attribution", "report_only": True}
     cmp_ = _cmp()
     try:
         verdict, parts = v5_verdict(a)
@@ -875,6 +887,7 @@ def step_v5_attribution(a: argparse.Namespace) -> int:
                    **c.elastic_table_record())  # fmt: skip
     except (cmp_.IddError, SystemExit, ValueError, OSError, KeyError) as exc:
         doc.update(error=f"{type(exc).__name__}: {exc}", stop_rule_triggered=False, **{"pass": False})
+    doc["attestation"] = v5.attestation_block(a)  # after ALL loads: imported partials are listed (never omitted)
     return finish(doc, v5b.V5_N, v5b.V5_N, False)
 
 
@@ -1108,32 +1121,84 @@ E_SHAPE_PLAN = ("E-shape (plan Amendment 15 (b)6 and the addendum table; Amendme
                 "the rehearsal family, base 20509500, shard k -> 20509500 + k | Report-only, never evidence")
 
 
-def step_e_shape(a: argparse.Namespace) -> int:
-    """E-shape. The test-only variant needs a table built with the forced-isotropic option (a different table id
-    that the loader refuses outside this step); while no such table is available in the cache the step records
-    the model variant and reports the other as not available (never a verdict)."""
+E_SHAPE_WINDOW_MM = 10.0
+
+
+def exploratory_table_id() -> str:
+    """Build (deterministically, from the pinned sources) the forced-isotropic E-shape table into the cache and
+    return its id (never committed; the loader refuses it unless a configuration names it explicitly)."""
+    from ionmc.data import cache
+    from ionmc.nuclear import elastic_build as eb
+
+    return str(eb.build_elastic_proton(cache.resolve_cache_dir(None), exploratory_forced_isotropic=True).table_id)
+
+
+def e_shape_compare(idd_a: NDArray[np.float64], idd_b: NDArray[np.float64], depth: NDArray[np.float64],
+                    window_mm: float = E_SHAPE_WINDOW_MM) -> dict[str, Any]:
+    """Amendment 15 (b)6 comparison of two variants run with the same seeds (batch ``b`` of one is paired with batch
+    ``b`` of the other): ``delta IDD(z) = B - A`` in the last ``window_mm`` before the model's R80 with the batch
+    standard error, and the R80 / R90 shift (mean of the paired per-batch differences and its standard error)."""
     from ionmc.reference import metrics as rm
 
+    nb = idd_a.shape[0]
+    mean_a = idd_a.mean(axis=0)
+    r80 = float(rm.r80(depth, rm.normalize_to_peak(mean_a)))
+    sel = (depth >= r80 - window_mm) & (depth <= r80)
+    d = idd_b - idd_a
+    se = d.std(axis=0, ddof=1) / math.sqrt(nb)
+
+    def shift(fn: Any) -> dict[str, float]:
+        a = np.array([fn(depth, rm.normalize_to_peak(x)) for x in idd_a])
+        b = np.array([fn(depth, rm.normalize_to_peak(x)) for x in idd_b])
+        dd = b - a
+        return {"model_mm": float(fn(depth, rm.normalize_to_peak(mean_a))),
+                "forced_isotropic_mm": float(fn(depth, rm.normalize_to_peak(idd_b.mean(axis=0)))),
+                "shift_mm": float(dd.mean()), "se_mm": float(dd.std(ddof=1) / math.sqrt(nb))}  # fmt: skip
+
+    return {"window_mm": [r80 - window_mm, r80], "depth_mm": depth[sel].tolist(),
+            "delta_idd": d.mean(axis=0)[sel].tolist(), "delta_idd_se": se[sel].tolist(),
+            "delta_idd_relative_to_model": (d.mean(axis=0)[sel] / mean_a[sel]).tolist(),
+            "delta_idd_window_mean": float(d.mean(axis=0)[sel].mean()),
+            "r80": shift(rm.r80), "r90": shift(rm.r90)}  # fmt: skip
+
+
+def step_e_shape(a: argparse.Namespace) -> int:
+    """E-shape (Amendment 15 (b)6): python, 150 MeV, water, ``E_SHAPE_N`` histories per variant with the same seed
+    20509500 + k: the model (sigma_el below E_min,shape off) and the forced-isotropic exploratory table
+    (``allow_exploratory_table``, built into the cache at step time). Report-only, never evidence."""
     n = v5b.scaled(E_SHAPE_N, a.scale, 2000, 20)
     seed = E_SHAPE_BASE + a.shard
     guard = seed_guard({"e-shape": [seed]}, allow_rehearsal=True)
     geo, grid, nz, _ = v5.depth_box(M.WATER, 150.0, dz=0.5, half_mm=40.0)
-    cfg = c.nuc_config_c(energy=150.0, n=n, seed=seed, geometry=geo, grid=grid, n_batches=20,
-                         timeout=a.timeout)  # fmt: skip
-    t0 = time.perf_counter()
-    res = Simulation(cfg).run()
-    wall = time.perf_counter() - t0
-    idd_b = res.grid("dose").batch_energy_mev.reshape(20, nz)
+    cfg_a = c.nuc_config_c(energy=150.0, n=n, seed=seed, geometry=geo, grid=grid, n_batches=20, timeout=a.timeout)
+    tid_b = exploratory_table_id()
+    cfg_b = replace(cfg_a, physics=replace(cfg_a.physics, elastic_table_id=tid_b, allow_exploratory_table=True))
+    out: dict[str, Any] = {}
+    idd: dict[str, NDArray[np.float64]] = {}
+    wall = {}
+    for name, cfg in (("model", cfg_a), ("forced_isotropic", cfg_b)):
+        t0 = time.perf_counter()
+        res = Simulation(cfg).run()
+        wall[name] = time.perf_counter() - t0
+        idd[name] = res.grid("dose").batch_energy_mev.reshape(20, nz) / (n / 20)  # MeV per history, per batch
+        cnt = res.counters.as_dict()
+        out[name] = {"valid": bool(v5.clean(res)), "exploratory": bool(res.diagnostics.get("exploratory", False)),
+                     "elastic_below_domain": int(cnt.get("elastic_below_domain", 0)),
+                     "pp_below_domain": int(cnt.get("pp_below_domain", 0)),
+                     "table_id": res.effective_config.summary()["elastic"]["table_id"]}  # fmt: skip
     depth = (np.arange(nz) + 0.5) * 0.5
-    curve = rm.normalize_to_peak(idd_b.mean(axis=0))
-    r80, r90 = float(rm.r80(depth, curve)), float(rm.r90(depth, curve))
-    doc = {"step": "e-shape", "plan_row": E_SHAPE_PLAN, "verdict": "executed (model variant only)", "report_only": True,
-           "tag": "exploratory", "seed": seed, "seeds": guard, "variant_model": {"r80_mm": r80, "r90_mm": r90,
-           "elastic_below_domain": int(res.counters.as_dict().get("elastic_below_domain", 0)),
-           "pp_below_domain": int(res.counters.as_dict().get("pp_below_domain", 0))},
-           "variant_forced_isotropic": "not run (builder option not implemented)",
-           "table": v5.table_record(), **c.elastic_table_record(), "wall_s": wall, "histories": n,
-           "pass": bool(v5.clean(res))}  # fmt: skip
+    cmpd = e_shape_compare(idd["model"], idd["forced_isotropic"], depth)
+    ok = bool(out["model"]["valid"] and out["forced_isotropic"]["valid"] and not out["model"]["exploratory"]
+              and out["forced_isotropic"]["exploratory"])  # fmt: skip
+    doc = {"step": "e-shape", "plan_row": E_SHAPE_PLAN, "verdict": "executed", "report_only": True,
+           "tag": "exploratory", "never_evidence": True, "seed": seed, "seeds": guard, "histories_per_variant": n,
+           "variants": out, "comparison": cmpd, "exploratory_table_id": tid_b,
+           "reading": "forced isotropic in mu_CM with BGG sigma_el below E_min,shape (p + A), the model inside the "
+           "declared domain unchanged; window = the last 10 mm before the model's R80; the batches of the two "
+           "variants are paired (same seed). With about 45 expected affected events in 2e4 histories the "
+           "comparison is an upper-bound check; it changes no row and no tolerance (Amendment 15 (b)6).",
+           **c.elastic_table_record(), "table": v5.table_record(), "wall_s": wall, "histories": n,
+           "pass": ok}  # fmt: skip
     return finish(doc, E_SHAPE_N, n, n < E_SHAPE_N)
 
 
@@ -1275,27 +1340,61 @@ def step_v10_pp_level(a: argparse.Namespace) -> int:
     return base.emit(doc)
 
 
+FALLBACK_RULE = ("plan (e)9 (l.241): the neutron shape replaces the Bessel shape only if V10-A (a) or (b) fails for p+O, "
+                 "V10-A (c) passes and P7 passes; never because of V5 or V11 alone")
+
+
+def fallback_trigger(a_or_b_fails_for_po: bool, c_passes: bool, p7_passes: bool | str, *,
+                     provisional: bool) -> dict[str, Any]:
+    """The (e)9 fallback trigger. ``p7_passes`` is ``True`` / ``False`` or ``"ci-only"`` (not established here);
+    the trigger fires only with all three conditions established."""
+    fires = bool(a_or_b_fails_for_po and c_passes and p7_passes is True)
+    if not c_passes:
+        reason = ("(c) fails, so the pre-registered neutron-shape fallback is not triggered; recorded scientific "
+                  "failure, new decision required (orchestrator)")
+    elif not a_or_b_fails_for_po:
+        reason = "(a)/(b) do not fail for p+O: the fallback is not triggered"
+    elif p7_passes is not True:
+        reason = ("P7 fails: the fallback is not triggered" if p7_passes is False
+                  else "P7 not established here (provisional): evaluated by the step v10-a-trigger")
+    else:
+        reason = "all three conditions of (e)9 hold: the (ii') fallback fires (exploratory results; new decision, next base)"
+    return {"rule": FALLBACK_RULE, "a_or_b_fails_for_pO": bool(a_or_b_fails_for_po), "c_passes": bool(c_passes),
+            "p7_passes": p7_passes, "fires": fires, "reason": reason, "provisional": provisional}  # fmt: skip
+
+
 def step_v10_a(a: argparse.Namespace) -> int:
     import nuclear_v10 as v10
 
     res = v10.v10_a(_model())
-    p7: bool | str = "ci-only"  # the p7-sampler step runs after this one in the C9 order; its status partial is used if present
-    if c._partial_present(a, "p7-status.json"):
-        p7 = bool(c.load_partials_c(a, ["p7-status.json"])[0][0]["pass"])
-    c_pass = bool(res["c_pass"])
-    fires = bool(res["a_or_b_fails_for_pO"] and c_pass and p7 is True)
-    reason = ("(c) fails, so the pre-registered neutron-shape fallback is not triggered; recorded scientific failure, new decision "
-              "required (orchestrator)" if not c_pass else
-              "(a)/(b) do not fail for p+O: the fallback is not triggered" if not res["a_or_b_fails_for_pO"] else
-              "P7 not established as passing: the fallback is not triggered here" if p7 is not True else
-              "all three conditions of (e)9 hold: the (ii') fallback fires (exploratory results; new decision, next base)")
-    trigger = {"rule": "plan (e)9 (l.241): the neutron shape replaces the Bessel shape only if V10-A (a) or (b) fails for p+O, V10-A (c) "
-               "passes and P7 passes; never because of V5 or V11 alone", "a_or_b_fails_for_pO": res["a_or_b_fails_for_pO"],
-               "c_passes": c_pass, "p7_passes": p7, "fires": fires, "reason": reason}  # fmt: skip
+    trigger = fallback_trigger(res["a_or_b_fails_for_pO"], bool(res["c_pass"]), "ci-only", provisional=True)
     doc = {"step": "v10-a", "row": "V10-A", **_plan_doc("V10-A"), "execution_rules": _plan_doc("V10-A-execution"),
            **c.elastic_table_record(), "result": res, "status": res["status"],
            "fallback_ii_prime_trigger": trigger, "failures": res["failures"],
+           "trigger_final": "evaluated by the step v10-a-trigger (after p7-sampler)",
            "pass": bool(res["pass"])}  # fmt: skip
+    doc["status_partial"] = status_partial(a, "v10-a-status", {"step": "v10-a", "pass": bool(res["pass"]),
+                                           "status": res["status"], "a_or_b_fails_for_pO": res["a_or_b_fails_for_pO"],
+                                           "c_pass": bool(res["c_pass"])})
+    return base.emit(doc)
+
+
+def step_v10_a_trigger(a: argparse.Namespace) -> int:
+    """Final evaluation of the (e)9 fallback trigger from the sealed v10-a status partial and the p7 status partial
+    (fails closed when either is missing); report only: ``fires`` is information for the orchestrator."""
+    doc: dict[str, Any] = {"step": "v10-a-trigger", "row": "V10-A", "report_only": True, **_plan_doc("V10-A-execution")}
+    try:
+        va = c.load_partials_c(a, ["v10-a-status.json"])[0][0]
+        p7 = c.load_partials_c(a, ["p7-status.json"])[0][0]
+        if va.get("reduced") or p7.get("reduced"):
+            doc["reduced_inputs"] = True
+        trig = fallback_trigger(bool(va["a_or_b_fails_for_pO"]), bool(va["c_pass"]), bool(p7["pass"]), provisional=False)
+        doc.update(fallback_ii_prime_trigger=trig, v10_a_status=va["status"], v10_a_pass=bool(va["pass"]),
+                   inputs={"v10-a-status": va["content_sha256"], "p7-status": p7["content_sha256"]},
+                   **c.elastic_table_record(), error=None, **{"pass": True})  # fmt: skip
+    except (SystemExit, KeyError, OSError, ValueError) as exc:
+        doc.update(error=f"{type(exc).__name__}: {exc}", **{"pass": False})
+    doc["attestation"] = v5.attestation_block(a)  # after ALL loads
     return base.emit(doc)
 
 
@@ -1358,6 +1457,7 @@ STEPS = {
     "v7-f32": step_v7_f32_cuda,
     "v10-pp-level": step_v10_pp_level,
     "v10-a": step_v10_a,
+    "v10-a-trigger": step_v10_a_trigger,
     "v10-a-xcheck": step_v10_a_xcheck,
     "x-endf": step_x_endf,
     "d9-bgg": step_d9_bgg,

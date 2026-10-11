@@ -117,6 +117,7 @@ STEP_TAGS = (
     ("v6-e0", "v6-e0"),
     ("v10-pp", "v10-pp-level"),
     ("v10-a-xcheck", "v10-a-xcheck"),
+    ("v10-a-trigger", "v10-a-trigger"),
     ("v10-a", "v10-a"),
     ("x-endf", "x-endf"),
     ("d9-bgg", "d9-bgg"),
@@ -478,7 +479,7 @@ SLICE_C_STEP_ROWS = {
         "R1-D2": "r1-d2-regression", "P7": "p7-sampler", "V2b-el": "v2b-el-combine", "V7-scan-el": "v7-scan-el",
         "V7-shift-el": "v7-shift-el", "E1-B": "e1-b-compare", "E-shape": "e-shape-exploratory",
         "V5": "v5-compare", "V8": "v8-lv-python-vs-warp-cpu", "V11": "v11-compare", "V6": "v6-compare",
-        "V10": "v10-pp-level", "V10-A": "v10-a", "X-ENDF": "x-endf", "D9-BGG": "d9-bgg",
+        "V10": "v10-pp-level", "V10-A": "v10-a", "V10-A-trigger": "v10-a-trigger", "X-ENDF": "x-endf", "D9-BGG": "d9-bgg",
     },
     "hr5c": {"V8-nuc": "v8-stat-compare", "V8": "v8-stat-compare", "V6": "v6-cuda-compare"},
 }

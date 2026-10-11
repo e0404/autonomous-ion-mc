@@ -831,10 +831,19 @@ def _assemble(eff: EffectiveConfig, raw: RawTransport) -> Result:
         counters=counters,
         timings={},
         environment=describe_environment(),
-        diagnostics=raw.diagnostics,
+        diagnostics=_mark_exploratory(raw.diagnostics, eff),
         transport_report=raw.meta,
         channel_raw=raw.channels,
         lookups=()
         if eff.channels is None
         else tuple(lk.provenance() for lk in eff.channels.lookups),
     )
+
+
+def _mark_exploratory(diagnostics: dict[str, Any], eff: Any) -> dict[str, Any]:
+    """``diagnostics`` with ``exploratory: True`` when the run used an exploratory elastic table
+    (E-shape only; such a result is never evidence). Unchanged otherwise."""
+    el = None if eff.nuclear is None else eff.nuclear.elastic
+    if el is not None and el.exploratory:
+        return {**diagnostics, "exploratory": True}
+    return diagnostics

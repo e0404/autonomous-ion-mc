@@ -50,7 +50,7 @@ def test_registry_entry_and_width() -> None:
     assert species_by_name("elastic_recoil").id == ELASTIC_RECOIL_ID == 65 < N_SPECIES_SLOTS == 66
     assert species_by_name("elastic_recoil").transported is False
     on, off = producible(PROTON, True, True), producible(PROTON, True, False)
-    assert ("elastic_recoil", "primary") in on and ("elastic_recoil", "secondary") in on
+    assert {p for p in on if p[0] == "elastic_recoil"} == {("elastic_recoil", "secondary")}
     assert not {p for p in off if p[0] == "elastic_recoil"}
     assert producible(PROTON, False, True) == producible(PROTON, False, False)
 
@@ -101,3 +101,18 @@ def test_nuclear_local_channel_is_unchanged_by_requesting_the_recoil(tid: str) -
     for name in ("nuc_local", "all"):
         assert np.array_equal(_channel(e1, p1, name), _channel(e2, p2, name))
     assert all(np.array_equal(a, b) for a, b in zip(p1.edep, p2.edep, strict=True))
+
+
+def test_primary_request_refused_secondary_matches_all(tid: str) -> None:  # noqa: F811
+    """Every recoil is scored at parent generation + 1: a primary request is refused (it would be
+    all zero); secondary and all-generation requests give the same channel on both backends."""
+    prim = replace(REC, name="rec_p", generation="primary")
+    sec = replace(REC, name="rec_s", generation="secondary")
+    with pytest.raises(UnsupportedCombinationError):
+        _ = Simulation(_cfgt(tid, 10, (prim,))).effective
+    with pytest.MonkeyPatch.context() as mp:
+        _scale_elastic(mp, 30.0)
+        for backend in ("python", "warp-cpu"):
+            eff, part = _run(tid, backend, (REC, sec), 40)
+            a, b = _channel(eff, part, "recoil"), _channel(eff, part, "rec_s")
+            assert a.sum() > 0 and np.array_equal(a, b), backend

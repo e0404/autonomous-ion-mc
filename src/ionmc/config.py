@@ -110,6 +110,7 @@ class PhysicsOptions:
     elastic: bool = True
     elastic_only: bool = False
     elastic_table_id: str | None = None
+    allow_exploratory_table: bool = False
 
     def __post_init__(self) -> None:
         for name in (
@@ -119,6 +120,7 @@ class PhysicsOptions:
             "truncated_hinge_diagnostic",
             "elastic",
             "elastic_only",
+            "allow_exploratory_table",
         ):
             if not isinstance(getattr(self, name), bool):
                 raise fail(f"{name} must be a bool, got {getattr(self, name)!r}")
@@ -135,6 +137,13 @@ class PhysicsOptions:
             raise fail("elastic_table_id must be a string or None")
         if self.elastic_only and not (self.nuclear and self.elastic):
             raise fail("elastic_only needs nuclear=True and elastic=True")
+        if self.allow_exploratory_table and not (
+            self.nuclear and self.elastic and self.elastic_table_id is not None
+        ):
+            raise fail(
+                "allow_exploratory_table needs nuclear=True, elastic=True and an explicit "
+                "elastic_table_id (an exploratory table is never selected implicitly)"
+            )
         real("max_step_mm", self.max_step_mm, positive=True)
         f = real("max_energy_loss_fraction", self.max_energy_loss_fraction, positive=True)
         if f > MAX_ENERGY_LOSS_FRACTION:
@@ -546,10 +555,11 @@ class ElasticSetup:
     e_min_pa: tuple[float, ...]
     e_min_pp: tuple[float, ...]
     pinned: bool
+    exploratory: bool = False
 
     def summary(self) -> dict[str, Any]:
         info = self.table.info
-        return {
+        out = {
             "table_id": self.table.table_id,
             "pinned": self.pinned,
             "schema": info["schema"],
@@ -558,6 +568,9 @@ class ElasticSetup:
             "elastic_only": self.elastic_only,
             "elastic_domain": {k: list(v) for k, v in self.table.elastic_domain().items()},
         }
+        if self.exploratory:  # summaries of evidence tables are unchanged
+            out["exploratory"] = True
+        return out
 
 
 def _pinned_elastic_table_id() -> str:
@@ -576,7 +589,7 @@ def _elastic_setup(config: SimulationConfig, geometry: VoxelGeometry) -> Elastic
     ph = config.physics
     pin = _pinned_elastic_table_id()
     tid = ph.elastic_table_id if ph.elastic_table_id is not None else pin
-    table = ElasticTable.load(None, tid)
+    table = ElasticTable.load(None, tid, allow_exploratory=ph.allow_exploratory_table)
     rows = tuple(table.material_rows(m) for m in geometry.materials)
     dom = table.elastic_domain()
     e_pa, e_pp = [], []
@@ -588,7 +601,9 @@ def _elastic_setup(config: SimulationConfig, geometry: VoxelGeometry) -> Elastic
         ]
         e_pa.append(max(pa, default=0.0))
         e_pp.append(dom["H-1"][0] if "H" in m.mass_fractions else 0.0)
-    return ElasticSetup(table, rows, ph.elastic_only, tuple(e_pa), tuple(e_pp), tid == pin)
+    return ElasticSetup(
+        table, rows, ph.elastic_only, tuple(e_pa), tuple(e_pp), tid == pin, table.exploratory
+    )
 
 
 @dataclass(frozen=True, eq=False)
