@@ -843,11 +843,55 @@ def test_lv5c_start_preflight_refuses_an_absent_or_stale_rehearsal_fixture(
     assert rs.rehearsal_preflight("lv5c") is None
 
 
+@pytest.mark.parametrize(
+    ("only", "seed_base", "exempt"),
+    [
+        (["v7r-s0"], 20505000, True),
+        (["v7r-s0", "v7r-s15"], 20509499, True),
+        (["v7r-s3"], 20507123, True),
+        (None, 20505000, False),  # the full suite
+        ([], 20505000, False),
+        (["v7r-s0"], 20481004, False),  # the evidence base
+        (["v7r-s0"], 20509500, False),  # E-shape family, outside the rehearsal family
+        (["v7r-s0"], 20504999, False),
+        (["v7r-s0"], None, False),
+        (["v7r-s16"], 20505000, False),  # no such shard
+        (["v7r-s0", "v7r-ref"], 20505000, False),  # a non-shard step
+        (["v7r-combine"], 20505000, False),  # a consumer
+        (["v7r-s0", "v7r-calibration-combine"], 20505000, False),
+        (["pytest-v7r-calibration-s15"], 20505000, False),
+        (["v7r-s"], 20505000, False),
+        (["v7r-s1-x"], 20505000, False),
+    ],
+)
+def test_rehearsal_generation_path_exemption(
+    only: list[str] | None,
+    seed_base: int | None,
+    exempt: bool,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Amendment 14a (b)2: only ``--only`` of ``v7r-s{k}`` steps AND a seed base 20505000-20509499 skip the fixture preflight."""
+    rs = _load("run_suite")
+    monkeypatch.setattr(rs, "REPO", tmp_path)  # no fixture present
+    monkeypatch.setattr(rs, "hashed_source_digest", lambda suite="lv5c": "d" * 64)
+    assert rs.rehearsal_generation_run(only, seed_base) is exempt
+    refusal = rs.rehearsal_preflight("lv5c", only, seed_base)
+    assert (refusal is None) is exempt
+    if not exempt:
+        assert refusal and "absent" in refusal
+    assert (
+        rs.rehearsal_preflight("lv5b", only, seed_base) is None
+    )  # other suites are not preflighted
+
+
 def test_run_suite_main_exits_on_the_preflight_refusal(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     rs = _load("run_suite")
-    monkeypatch.setattr(rs, "rehearsal_preflight", lambda suite: "preflight refused")
+    monkeypatch.setattr(
+        rs, "rehearsal_preflight", lambda suite, only=None, seed_base=None: "preflight refused"
+    )
     with pytest.raises(SystemExit, match="preflight refused"):
         rs.main(["--suite", "lv5c", "--out", str(rs.REPO / "validation/generated/x-preflight"),
                  "--expected-sha", "0" * 40])  # fmt: skip

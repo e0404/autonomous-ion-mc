@@ -83,7 +83,7 @@ digest of the committed fixture directory in the step header):
   sidecars (schema of ``steps_v5c``: ``escaped_neutral_block_sums`` ``[450, 20]`` float64, MeV per
   500-history block), and ``PROVENANCE.json`` (required) with ``host_run_ids`` (non-empty list),
   ``partial_digests`` ({partial file name: content_sha256}, exactly the partials present),
-  ``hashed_source_digest``, ``seed_base`` and ``code_sha``. ``load_rehearsal`` enforces (every
+  ``hashed_source_digest``, ``seed_base`` and ``code_sha``. ``load_rehearsal`` (``v7r_rehearsal.py``, shared with the builder ``v7r_rehearsal_fixture.py``) enforces (every
   violation
   is reported): each partial's ``content_sha256`` reproduces (``steps_v5.content_digest``),
   ``valid``
@@ -134,6 +134,7 @@ import json
 import math
 import os
 import platform
+import shutil
 import sys
 import time
 from pathlib import Path
@@ -150,13 +151,6 @@ REHEARSAL_DIR = FIXTURE_DIR / "rehearsal"
 SEED_FIT, SEED_KAPPA, SEED_BOOT0, SEED_DATA0 = 20505000, 20508000, 20506000, 20507000
 QUANTILE_PROBS = (0.025, 0.1587, 0.8413, 0.975)
 DEFAULT_REPS = 200
-EXPECTED_SHARD = {
-    "n": 4_500_000,
-    "replicates": 450,
-    "batch_histories": 500,
-    "blocks_per_replicate": 20,
-}
-SEED_BASE_RANGE = (20505000, 20509499)
 
 
 CAL_SURROGATES = ("archive_fitted", "rehearsal_block_sums")
@@ -171,6 +165,13 @@ def _load(name: str, path: Path | None = None) -> ModuleType:
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
+
+
+_REHEARSAL = _load(
+    "v7r_rehearsal"
+)  # the loader is shared with the builder v7r_rehearsal_fixture.py
+RehearsalError = _REHEARSAL.RehearsalError
+load_rehearsal = _REHEARSAL.load_rehearsal
 
 
 @pytest.fixture(scope="module")
@@ -213,113 +214,6 @@ def rehearsal_dir() -> Path:
 
 def cal_reps() -> int:
     return int(os.environ.get("IONMC_V7R_CAL_REPS", str(DEFAULT_REPS)))
-
-
-class RehearsalError(Exception):
-    """The rehearsal fixture violates at least one requirement; ``str`` lists every violation."""
-
-
-def load_rehearsal(
-    directory: Path, steps: ModuleType, run_suite: ModuleType, digest: str | None = None
-) -> tuple[np.ndarray, dict]:  # type: ignore[type-arg]
-    """Verified pooled block sums ``[replicates, 20]`` of the rehearsal in ``directory`` and a
-    record of what was verified, or ``RehearsalError`` listing every violation (module docstring).
-    Seed reading (Amendment 14 (j)): the rehearsal BASE lies in 20505000-20509499 and shard seeds
-    are ``base + 16000 + k`` (20521000+ for base 20505000). These coincide with the declared future
-    hr5c base 20521004 only as a number, never as a used seed (hr5c seeds are
-    ``base + 1000 r + k``, r >= 1).
-    ``digest`` overrides the current hashed-source digest (tests only)."""
-    bad: list[str] = []
-    v7r = steps.v7r
-    prov_path = directory / "PROVENANCE.json"
-    prov: dict = {}  # type: ignore[type-arg]
-    if not prov_path.is_file():
-        bad.append(f"PROVENANCE.json missing in {directory}")
-    else:
-        try:
-            prov = json.loads(prov_path.read_text())
-        except ValueError as exc:
-            bad.append(f"PROVENANCE.json unreadable: {exc}")
-    if prov:
-        for key in (
-            "host_run_ids",
-            "partial_digests",
-            "hashed_source_digest",
-            "seed_base",
-            "code_sha",
-        ):
-            if key not in prov:
-                bad.append(f"PROVENANCE.json lacks {key}")
-        ids = prov.get("host_run_ids")
-        if not (isinstance(ids, list) and ids and all(isinstance(i, str) and i for i in ids)):
-            bad.append("PROVENANCE.json host_run_ids must be a non-empty list of run ids")
-        if not (
-            isinstance(prov.get("seed_base"), int)
-            and SEED_BASE_RANGE[0] <= prov["seed_base"] <= SEED_BASE_RANGE[1]
-        ):
-            bad.append(
-                f"PROVENANCE.json seed_base {prov.get('seed_base')!r} outside {SEED_BASE_RANGE}"
-            )
-        have = digest if digest is not None else run_suite.hashed_source_digest("lv5c")
-        if prov.get("hashed_source_digest") != have:
-            bad.append(
-                "hashed_source_digest differs from the current hashed source set of lv5c "
-                "(the rehearsal is not at the evidence code, Amendment 17 (a)7)"
-            )
-    parts = sorted(directory.glob("v7r-s*.json"))
-    if len(parts) < 2:
-        bad.append(f"{len(parts)} rehearsal partial(s) in {directory}, need >= 2 shards")
-    recorded = prov.get("partial_digests") if isinstance(prov.get("partial_digests"), dict) else {}
-    if prov and {p.name for p in parts} != set(recorded):
-        bad.append(f"partial_digests names {sorted(recorded)} differ from the partials present")
-    blocks, shards, seeds = [], [], []
-    for path in parts:
-        nm = path.name
-        try:
-            doc = json.loads(path.read_text())
-        except ValueError as exc:
-            bad.append(f"{nm}: unreadable: {exc}")
-            continue
-        dig = steps.v5.content_digest(doc)
-        if doc.get("content_sha256") != dig:
-            bad.append(f"{nm}: content_sha256 does not reproduce")
-        if nm in recorded and recorded[nm] != dig:
-            bad.append(f"{nm}: differs from the digest recorded in PROVENANCE.json")
-        if doc.get("valid") is not True:
-            bad.append(f"{nm}: valid is not true")
-        if doc.get("reduced") is not False:
-            bad.append(f"{nm}: reduced is not false")
-        for key, want in EXPECTED_SHARD.items():
-            if doc.get(key) != want:
-                bad.append(f"{nm}: {key} is {doc.get(key)!r}, expected {want}")
-        shards.append(doc.get("shard"))
-        seeds.append(doc.get("seed"))
-        sb = doc.get("seed_base")
-        if not (isinstance(sb, int) and SEED_BASE_RANGE[0] <= sb <= SEED_BASE_RANGE[1]):
-            bad.append(f"{nm}: seed_base {sb!r} outside {SEED_BASE_RANGE}")
-        if prov and sb != prov.get("seed_base"):
-            bad.append(f"{nm}: seed_base differs from PROVENANCE.json")
-        if (
-            isinstance(sb, int)
-            and isinstance(doc.get("shard"), int)
-            and (doc.get("seed") != sb + 1000 * v7r.V7R_R_INDEX + doc["shard"])
-        ):
-            bad.append(f"{nm}: seed is not seed_base + 1000 * 16 + shard")
-        if prov and doc.get("git_sha") != prov.get("code_sha"):
-            bad.append(f"{nm}: git_sha differs from code_sha of PROVENANCE.json")
-        try:
-            blocks.append(steps.load_v7r_sidecar(doc, path))
-        except SystemExit as exc:
-            bad.append(f"{nm}: sidecar rejected: {exc}")
-    if len(set(shards)) != len(shards):
-        bad.append(f"shard indices not unique: {shards}")
-    if len(set(seeds)) != len(seeds):
-        bad.append(f"seeds not unique: {seeds}")
-    if bad:
-        raise RehearsalError("; ".join(bad))
-    info = {"shards": len(parts), **{k: prov[k] for k in
-            ("seed_base", "code_sha", "host_run_ids", "hashed_source_digest")}}  # fmt: skip
-    return np.concatenate(blocks), info
 
 
 # -- samplers ------------------------------------------------------------------------------------
@@ -977,6 +871,91 @@ def test_rehearsal_loader_rejects_each_violation(
         _skip_or_fail(f"rehearsal fixture rejected: {err.value}")
 
 
+# -- builder v7r_rehearsal_fixture.py ----------------------------------------------------------------
+def _synthetic_archive(
+    tmp_path: Path,
+    steps: ModuleType,
+    digest: str,
+    *,
+    doc_hook=None,  # type: ignore[no-untyped-def]
+) -> Path:
+    """A host archive with shard 0 in ``RUN-A`` (samples dir, sidecar one level up) and shard 1 in ``RUN-B``."""
+    src = tmp_path / "src"
+    _build_rehearsal(src, steps, digest, doc_hook=doc_hook)
+    arch = tmp_path / "archive"
+    for k, rid in enumerate(("RUN-A", "RUN-B")):
+        suite = arch / rid / "transport" / "lv5c-x"
+        (suite / "samples").mkdir(parents=True)
+        shutil.copyfile(src / f"v7r-s{k}.json", suite / "samples" / f"v7r-s{k}.json")
+        shutil.copyfile(
+            src / f"v7r-s{k}-escaped_neutral.npz", suite / f"v7r-s{k}-escaped_neutral.npz"
+        )
+    return arch
+
+
+@pytest.fixture(scope="module")
+def builder() -> ModuleType:
+    return _load("v7r_rehearsal_fixture")
+
+
+def test_builder_produces_a_verifying_fixture(
+    tmp_path: Path, steps_c: ModuleType, run_suite_mod: ModuleType, builder: ModuleType
+) -> None:
+    arch = _synthetic_archive(tmp_path, steps_c, "0" * 64)
+    out = tmp_path / "fixture"
+    argv = ["--archive", str(arch), "--run-ids", "RUN-A", "RUN-B", "--code-sha", "c0de" * 10,
+            "--seed-base", "20505004", "--out", str(out)]  # fmt: skip
+    assert builder.main(argv) == 0
+    prov = json.loads((out / "PROVENANCE.json").read_text())
+    assert prov["hashed_source_digest"] == run_suite_mod.hashed_source_digest("lv5c")
+    assert prov["host_run_ids"] == ["RUN-A", "RUN-B"] and prov["seed_base"] == 20505004
+    assert prov["code_sha"] == "c0de" * 10 and prov["numpy_version"] and prov["python_version"]
+    assert sorted(prov["partial_digests"]) == ["v7r-s0.json", "v7r-s1.json"]
+    assert len(prov["created_from"]) == 4
+    assert list(prov) == sorted(prov)  # sorted keys
+    for f in ("v7r-s0.json", "v7r-s1-escaped_neutral.npz"):  # byte-identical copies
+        assert (out / f).read_bytes() == next(arch.rglob(f)).read_bytes()
+    blocks, _ = load_rehearsal(out, steps_c, run_suite_mod)
+    assert blocks.shape == (900, 20)
+    with pytest.raises(SystemExit, match="exists"):  # no silent overwrite
+        builder.main(argv)
+    assert builder.main([*argv, "--force"]) == 0
+
+
+def test_builder_refuses_a_shard_with_the_wrong_git_sha(
+    tmp_path: Path, steps_c: ModuleType, builder: ModuleType
+) -> None:
+    arch = _synthetic_archive(tmp_path, steps_c, "0" * 64, doc_hook=_doc0(git_sha="b" * 40))
+    out = tmp_path / "fixture"
+    with pytest.raises(SystemExit, match="differs from --code-sha"):
+        builder.main(["--archive", str(arch), "--run-ids", "RUN-A", "RUN-B", "--code-sha", "c0de" * 10,
+                      "--seed-base", "20505004", "--out", str(out)])  # fmt: skip
+    assert not out.exists()
+
+
+def test_builder_run_ids_restrict_the_scan_and_a_missing_shard_set_fails(
+    tmp_path: Path, steps_c: ModuleType, builder: ModuleType
+) -> None:
+    arch = _synthetic_archive(tmp_path, steps_c, "0" * 64)
+    out = tmp_path / "fixture"
+    with pytest.raises(SystemExit, match="verification failed.*need >= 2 shards"):
+        builder.main(["--archive", str(arch), "--run-ids", "RUN-A", "--code-sha", "c0de" * 10,
+                      "--seed-base", "20505004", "--out", str(out)])  # fmt: skip
+    with pytest.raises(SystemExit, match="not found"):
+        builder.main(["--archive", str(arch), "--run-ids", "RUN-Z", "--code-sha", "c0de" * 10,
+                      "--out", str(out)])  # fmt: skip
+    assert not out.exists()
+
+
+def test_loader_refuses_a_stale_digest_of_a_built_fixture(
+    tmp_path: Path, steps_c: ModuleType, run_suite_mod: ModuleType
+) -> None:
+    _build_rehearsal(tmp_path, steps_c, run_suite_mod.hashed_source_digest("lv5c"))
+    load_rehearsal(tmp_path, steps_c, run_suite_mod)
+    with pytest.raises(RehearsalError, match="hashed_source_digest differs"):
+        load_rehearsal(tmp_path, steps_c, run_suite_mod, digest="f" * 64)
+
+
 def test_hashed_source_digest_is_deterministic_and_excludes_the_rehearsal_fixtures(
     run_suite_mod: ModuleType, tmp_path: Path
 ) -> None:
@@ -1005,15 +984,13 @@ def test_rehearsal_loader_missing_directory_is_a_violation(
 def test_committed_rehearsal_fixture_is_current(
     steps_c: ModuleType, run_suite_mod: ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Amendment 14a (b)2: whenever the committed rehearsal fixture directory exists it must load in required
-    mode against the CURRENT hashed-source digest, so a hashed-source change without a re-run fails CI. When it
-    is absent the calibration shards s15-s29 fail closed in required mode; this test then passes only outside
-    required mode (a plain assertion message, not a skip)."""
-    if not REHEARSAL_DIR.is_dir():
-        assert not _fixtures_required(), (
-            "fixture absent: calibration shards s15-s29 will fail closed in required mode"
-        )
-        return
+    """Amendment 14a (b)2: the committed rehearsal fixture must exist (no environment condition) and load in
+    required mode against the CURRENT hashed-source digest, so a hashed-source change without a re-run fails CI.
+    Produce it with ``v7r_rehearsal_fixture.py`` at the current hashed-source digest."""
+    assert REHEARSAL_DIR.is_dir(), (
+        "rehearsal fixture absent — produce it with v7r_rehearsal_fixture.py at the current hashed-source "
+        "digest (Amendment 14a (b)2)"
+    )
     monkeypatch.setenv("IONMC_V7R_FIXTURES", "required")
     monkeypatch.delenv("IONMC_V7R_REHEARSAL_DIR", raising=False)
     blocks, info = load_rehearsal(rehearsal_dir(), steps_c, run_suite_mod)

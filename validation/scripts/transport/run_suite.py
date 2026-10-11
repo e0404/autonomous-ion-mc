@@ -16,6 +16,10 @@ V3-003D, plan amendment 24)::
 
     python validation/scripts/transport/run_suite.py --suite hr --expected-sha <sha> --out <new-dir>
 
+The lv5c suite start refuses to run without a current V7-R rehearsal fixture (``rehearsal_preflight``); the
+only exemption is the rehearsal generation path: ``--only`` of ``v7r-s{k}`` steps alone AND ``--seed-base`` in
+20505000-20509499, whose partials ``v7r_rehearsal_fixture.py`` turns into the fixture.
+
 Rules (the style of ``validation/scripts/warp-architecture/run_all.sh``):
 
 * the output directory must not exist and must lie under ``validation/generated/`` or
@@ -1003,13 +1007,31 @@ def rehearsal_fixture_digest() -> str:
 REHEARSAL_PREFLIGHT_STEP = "v7r-rehearsal-fixture-preflight"
 
 
-def rehearsal_preflight(suite: str) -> str | None:
+REHEARSAL_SEED_FAMILY = (20505000, 20509499)
+"""The seed bases of the C8 rehearsal family (plan Amendment 14 (j)); never evidence."""
+V7R_SHARD_STEP = re.compile(r"v7r-s\d+")
+
+
+def rehearsal_generation_run(only: list[str] | None, seed_base: int | None) -> bool:
+    """True for the controlled rehearsal-generation path: ``--only`` selects solely ``v7r-s{k}`` steps (k a shard
+    index) AND the seed base lies in the rehearsal family 20505000-20509499. Both conditions are required."""
+    if not only or seed_base is None:
+        return False
+    if not REHEARSAL_SEED_FAMILY[0] <= seed_base <= REHEARSAL_SEED_FAMILY[1]:
+        return False
+    return all(V7R_SHARD_STEP.fullmatch(o) and int(o[5:]) < V7R_SHARDS for o in only)
+
+
+def rehearsal_preflight(suite: str, only: list[str] | None = None, seed_base: int | None = None) -> str | None:
     """Refusal message of the lv5c suite start (``None``: proceed). The calibration shards s15-s29 of
     ``rehearsal_block_sums`` need the committed rehearsal fixture, valid for the CURRENT hashed-source digest
     (Amendment 14a (b)2); a missing or stale fixture would only fail those shards hours into the run, so the
     suite refuses to start. The full verification (``load_rehearsal``) is the CI test
-    ``test_committed_rehearsal_fixture_is_current``; this preflight checks presence and the digest."""
-    if suite != "lv5c":
+    ``test_committed_rehearsal_fixture_is_current``; this preflight checks presence and the digest.
+    Exempt is only the controlled generation path (:func:`rehearsal_generation_run`: ``--only v7r-s{k}`` steps at
+    a seed base of the rehearsal family), which produces the fixture (``v7r_rehearsal_fixture.py``); the full
+    suite, any consumer and any evidence base are refused."""
+    if suite != "lv5c" or rehearsal_generation_run(only, seed_base):
         return None
     d = REPO / REHEARSAL_FIXTURE_DIR
     prefix = (f"preflight step {REHEARSAL_PREFLIGHT_STEP} (the calibration shards "
@@ -1276,7 +1298,7 @@ def main(argv: list[str] | None = None) -> int:
         )
     if out.exists():
         raise SystemExit(f"refusing to reuse an existing results directory: {out}")
-    refusal = rehearsal_preflight(args.suite)
+    refusal = rehearsal_preflight(args.suite, args.only, args.seed_base)
     if refusal:
         raise SystemExit(refusal)
     sha, source = resolve_sha(args.expected_sha)
