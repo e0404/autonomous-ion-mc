@@ -192,6 +192,7 @@ def test_seeds_and_names(s6: ModuleType) -> None:
     assert s6.cuda_names(3) == ("v6-cuda-s0.json", "v6-cuda-s1.json", "v6-cuda-s2.json")
 
 
+@pytest.mark.requires_tables("nuclear", "elastic")
 def test_e0_step_record_and_cross_checks(
     s6: ModuleType, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -227,6 +228,7 @@ def test_e0_step_record_and_cross_checks(
     assert rc == 0 and rec["pass"] is True and set(rec["beam_table"]) == set(s6.gv6().SENS_NAMES)
 
 
+@pytest.mark.requires_tables("nuclear", "elastic")
 def test_producers_compare_and_mismatch_refusal(
     s6: ModuleType,
     tmp_path: Path,
@@ -441,6 +443,7 @@ def _run_compare(
     return rc, _json_of(capsys.readouterr().out)
 
 
+@pytest.mark.requires_tables("nuclear", "elastic")
 @pytest.mark.parametrize("sens_holds", [True, False])
 def test_cuda_compare_inherits_lv5c_status_and_enforces_agreement(
     s6: ModuleType,
@@ -497,6 +500,7 @@ def test_cuda_compare_inherits_lv5c_status_and_enforces_agreement(
                 )
 
 
+@pytest.mark.requires_tables("nuclear", "elastic")
 def test_cuda_compare_without_sealed_lv5c_verdict_fails_closed(
     s6: ModuleType,
     e2e: dict[str, Path],
@@ -561,6 +565,7 @@ def test_no_environment_variable_can_change_the_cuda_backend(
         assert not (tmp_path / "v6-cuda-s0.json").exists()
 
 
+@pytest.mark.requires_tables("nuclear", "elastic")
 def test_cuda_compare_refuses_a_partial_that_did_not_run_on_cuda(
     s6: ModuleType,
     e2e: dict[str, Path],
@@ -689,6 +694,7 @@ def _make_verdict(s6, capsys, monkeypatch, shards_dir, base_):  # type: ignore[n
     return doc
 
 
+@pytest.mark.requires_tables("nuclear", "elastic")
 def test_imported_verdict_of_a_rehearsal_base_is_refused(
     s6: ModuleType,
     e2e: dict[str, Path],
@@ -703,6 +709,7 @@ def test_imported_verdict_of_a_rehearsal_base_is_refused(
     assert "'seed_base': 20505000" in str(ei.value) and "'scale': 0.002" in str(ei.value)
 
 
+@pytest.mark.requires_tables("nuclear", "elastic")
 def test_imported_verdict_of_the_qualification_base_at_reduced_scale_is_refused(
     s6: ModuleType,
     e2e: dict[str, Path],
@@ -726,6 +733,7 @@ def test_imported_verdict_of_the_qualification_base_at_reduced_scale_is_refused(
         _cuda_run_imported(s6, e2e, capsys, monkeypatch, imp, man, accept=True)
 
 
+@pytest.mark.requires_tables("nuclear", "elastic")
 def test_imported_verdict_is_attested_in_the_v6_document(
     s6: ModuleType,
     e2e: dict[str, Path],

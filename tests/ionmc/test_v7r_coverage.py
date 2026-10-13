@@ -1035,7 +1035,8 @@ def test_hashed_source_digest_is_deterministic_and_excludes_the_rehearsal_fixtur
 def test_rehearsal_digest_excludes_documentation_but_the_attestation_set_keeps_it(
     run_suite_mod: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Amendment 17 (a)7: documentation changes keep the rehearsal valid, code/test changes do not."""
+    """Amendment 17 (a)7: documentation and test changes keep the rehearsal valid, code changes
+    (src/, validation/scripts/transport/) do not."""
     doc = (
         "validation/plans/p.md",
         "decisions/d.md",
@@ -1043,16 +1044,17 @@ def test_rehearsal_digest_excludes_documentation_but_the_attestation_set_keeps_i
         "validation/results/README.md",
         "docs/a/b.md",
     )
-    code = ("src/ionmc/x.py", "validation/scripts/transport/s.py", "tests/ionmc/test_x.py")
+    tests = ("tests/ionmc/test_x.py", "tests/ionmc/conftest.py", "tests/conftest.py")
+    code = ("src/ionmc/x.py", "validation/scripts/transport/s.py")
     fixture = "tests/ionmc/fixtures/v7r/rehearsal/PROVENANCE.json"
-    paths = [tmp_path / r for r in (*doc, *code, fixture)]
+    paths = [tmp_path / r for r in (*doc, *tests, *code, fixture)]
     for p in paths:
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text("v0")
     monkeypatch.setattr(run_suite_mod, "REPO", tmp_path)
     monkeypatch.setattr(run_suite_mod, "source_files", lambda suite=None: list(paths))
     d0 = run_suite_mod.hashed_source_digest("lv5c")
-    for r in (*doc, fixture):
+    for r in (*doc, *tests, fixture):  # tests/ outside the fixture directory too
         (tmp_path / r).write_text("changed")
         assert run_suite_mod.hashed_source_digest("lv5c") == d0, r
     for r in code:

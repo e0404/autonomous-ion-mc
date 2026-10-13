@@ -53,6 +53,7 @@ markers = [
   "slow: long-running test",
   "host: requires the controlled host runner",
   "calibration: Monte Carlo calibration of the V7 coverage rule (minutes; excluded from CI, run by the lv5b step pytest-v7-rep-calibration)",
+  "requires_tables: needs the pinned derived nuclear and/or elastic table in the data cache; skipped without it unless IONMC_REQUIRE_DATA=1 (then it runs and a missing table fails)",
   "multiprocess: requires more than one worker process (skipped in the single-process diagnostic mode, IONMC_SINGLE_PROCESS=1)",
 ]
 

@@ -1075,26 +1075,28 @@ committing them would change the digest they record (plan Amendment 17 (a)7: a c
 fixtures keeps the rehearsal valid)."""
 
 
-REHEARSAL_DIGEST_EXCLUDED = ("validation/plans/", "decisions/", "README.md", "docs/")
-"""Documentation excluded from the REHEARSAL digest (:func:`hashed_source_digest`), in addition to
-:data:`REHEARSAL_FIXTURE_PREFIX`: path prefixes relative to the repository (``validation/plans/``,
-``decisions/``, ``docs/``) and every file whose path ends in ``README.md``. The rehearsal block sums
-depend on code and data only; documentation changes cannot alter them, so (plan Amendment 17 (a)7) a
-commit that changes only plans, decisions, fixtures, README or tests outside the hashed set keeps the
-rehearsal valid. Only the rehearsal digest is narrowed: the suite source identity
-(:func:`source_file_list`, ``environment.txt``, ``summarize.attest()``) still hashes every file."""
+REHEARSAL_DIGEST_EXCLUDED = ("validation/plans/", "decisions/", "README.md", "docs/", "tests/")
+"""Files excluded from the REHEARSAL digest (:func:`hashed_source_digest`): path prefixes relative to
+the repository (``validation/plans/``, ``decisions/``, ``docs/``, ``tests/``) and every file whose
+path ends in ``README.md``. :data:`REHEARSAL_FIXTURE_PREFIX` lies under ``tests/`` and stays its own
+named exclusion. The rehearsal block sums depend on code and data only (the shard computation never
+imports a test); documentation and tests cannot alter them, so (plan Amendment 17 (a)7) a commit that
+changes only plans, decisions, README, docs, tests or fixtures keeps the rehearsal valid. Only the
+rehearsal digest is narrowed: the suite source identity (:func:`source_file_list`,
+``environment.txt``, ``summarize.attest()``) still hashes every file."""
 
 
 def rehearsal_digest_excluded(rel: str) -> bool:
     """True if repository-relative path ``rel`` is outside the rehearsal digest."""
-    return (rel.startswith(REHEARSAL_FIXTURE_PREFIX) or rel.startswith(REHEARSAL_DIGEST_EXCLUDED[:2])
-            or rel.startswith(REHEARSAL_DIGEST_EXCLUDED[3]) or rel.endswith(REHEARSAL_DIGEST_EXCLUDED[2]))
+    plans, decisions, readme, docs, tests = REHEARSAL_DIGEST_EXCLUDED
+    return (rel.startswith(REHEARSAL_FIXTURE_PREFIX) or rel.startswith((plans, decisions, docs, tests))
+            or rel.endswith(readme))
 
 
 def hashed_source_digest(suite: str = "lv5c") -> str:
     """The REHEARSAL digest: sha256 over the sorted ``path sha256`` lines of the hashed source set of
     ``suite`` in the working tree, without the rehearsal fixtures (:data:`REHEARSAL_FIXTURE_PREFIX`) and
-    without documentation (:data:`REHEARSAL_DIGEST_EXCLUDED`: plans, decisions, README files, docs).
+    without documentation and tests (:data:`REHEARSAL_DIGEST_EXCLUDED`: plans, decisions, README files, docs, tests).
     Rationale: the rehearsal block sums depend on code and data only. The rehearsal document
     (``tests/ionmc/fixtures/v7r/rehearsal/PROVENANCE.json``, field ``hashed_source_digest``) records it
     and the calibration accepts the rehearsal only if it equals the current value (Amendment 17 (a)7).

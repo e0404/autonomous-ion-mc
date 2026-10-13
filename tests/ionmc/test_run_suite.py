@@ -2238,6 +2238,7 @@ def test_frozen_suite_producers_pin_elastic_false() -> None:
                         assert (fname, fn.name) == ("steps_v5.py", "nuc_config")
 
 
+@pytest.mark.requires_tables("nuclear")
 def test_lv5_nuclear_producer_is_bit_identical_to_non_elastic_run() -> None:
     from dataclasses import replace
 
@@ -2261,6 +2262,7 @@ def test_lv5_nuclear_producer_is_bit_identical_to_non_elastic_run() -> None:
     assert a.counters == b.counters
 
 
+@pytest.mark.requires_tables("nuclear")
 def test_lv5b_warp_cpu_producer_config_validates() -> None:
     from ionmc import materials as M
     from ionmc.config import validate

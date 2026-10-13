@@ -253,6 +253,7 @@ def test_domain_counters_once_per_proton_and_never_invalidate(tid: str) -> None:
     assert c["pp_below_domain"] < 2 * n  # once per proton, not once per step (thousands of steps)
 
 
+@pytest.mark.requires_tables("elastic")
 def test_table_domain_has_no_cross_section_below_e_min(table: ElasticTable) -> None:
     dom = table.elastic_domain()
     assert dom["H-1"][0] == pytest.approx(12.532211034734628)
@@ -353,6 +354,7 @@ def test_r1_d2_record_matches_the_observed_changes(
 
 
 # ---- P7: sampler vs the built table -----------------------------------------------------------
+@pytest.mark.requires_tables("elastic")
 @pytest.mark.parametrize("target,name", [(0, "H-1"), (3, "O-16")])
 @pytest.mark.parametrize("energy", [20.0, 100.0, 200.0])
 def test_p7_sampler_chi2_against_the_table(

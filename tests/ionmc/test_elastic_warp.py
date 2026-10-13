@@ -536,6 +536,7 @@ def _mu_kernel(real: Any) -> Any:
     return wp.kernel(enable_backward=False, module="unique")(mu_k)
 
 
+@pytest.mark.requires_tables("elastic")
 @pytest.mark.parametrize("real", [wp.float64, wp.float32])
 @pytest.mark.parametrize("target,name", [(0, "H-1"), (3, "O-16")])
 @pytest.mark.parametrize("energy", [20.0, 100.0, 200.0])

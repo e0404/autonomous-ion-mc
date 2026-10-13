@@ -61,6 +61,7 @@ def _old_batch_estimates(v5b: ModuleType, cfg):  # type: ignore[no-untyped-def]
     return np.array(loc), np.array(esc)
 
 
+@pytest.mark.requires_tables("nuclear", "elastic")
 def test_batch_estimates_elastic_off_is_bit_identical_to_the_last_six_columns(
     v5b: ModuleType,
 ) -> None:
@@ -86,6 +87,7 @@ def test_batch_estimates_elastic_off_is_bit_identical_to_the_last_six_columns(
     np.testing.assert_allclose(new["block_sums"] / hpb, new["escaped_neutral"], rtol=1e-14, atol=0)
 
 
+@pytest.mark.requires_tables("nuclear", "elastic")
 def test_batch_estimates_elastic_on_reads_the_nuclear_block_not_the_elastic_tail(
     v5b: ModuleType,
 ) -> None:
@@ -303,6 +305,7 @@ def v5c(v5b: ModuleType, v7r: ModuleType) -> ModuleType:
     return _load("steps_v5c")
 
 
+@pytest.mark.requires_tables("nuclear", "elastic")
 def test_elastic_table_id_equals_the_pin_and_builders_set_elastic(
     v5b: ModuleType, v5c: ModuleType
 ) -> None:
@@ -804,6 +807,7 @@ def test_lv5c_calibration_steps_run_with_the_fixtures_required() -> None:
     assert "IONMC_V7R_FIXTURES" not in shared  # the shared dict is not mutated
 
 
+@pytest.mark.requires_tables("nuclear", "elastic")
 def test_sub_block_run_range_250_plus_250_equals_the_500_history_block_bit_for_bit(
     v5c: ModuleType, v5b: ModuleType
 ) -> None:

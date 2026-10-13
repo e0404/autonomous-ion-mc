@@ -524,6 +524,7 @@ def _write_partials(v5c: ModuleType, out: Path, seed_base: int = 20481004) -> No
                 "reduced": False})  # fmt: skip
 
 
+@pytest.mark.requires_tables("nuclear", "elastic")
 def test_v11_compare_dry_run_on_synthetic_partials(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -611,6 +612,7 @@ def test_v11_seed_check_fails_closed() -> None:
         )
 
 
+@pytest.mark.requires_tables("nuclear", "elastic")
 def test_v11_producers_smoke_at_ci_scale(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
