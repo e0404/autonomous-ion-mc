@@ -869,6 +869,35 @@ def test_v4_summary_conformance_deferred_and_combine(tmp_path: Path) -> None:
     assert c["pass"] and c["complete"] and c["conformant"] and not c["missing_steps"]
 
 
+def test_combine_reports_a_failed_step_as_a_failed_verdict_not_an_unverified_archive(
+    tmp_path: Path,
+) -> None:
+    """C11: a failed step is a verified archive with a failed verdict: complete stays true, no verification problem,
+    pass false, the step is listed in failed_steps."""
+    summ, mod = _load("summarize"), _load("run_suite")
+    full = mod.full_step_names("lv4", 2)
+    a, b = tmp_path / "a", tmp_path / "b"
+    _archive4(a, full[:6])
+    _archive4(b, full[6:])
+    clean = summ.combine([a, b], SHA)
+    assert clean["pass"] and clean["complete"] and clean["failed_steps"] == []
+    bad = next(n for n in full[6:] if summ.expected_tag(n) is not None)
+    shutil.rmtree(b)
+    _archive4(b, full[6:])
+    txt = (b / f"{bad}.txt").read_text().replace('"pass": true', '"pass": false')
+    (b / f"{bad}.txt").write_text(txt)
+    c = summ.combine([a, b], SHA)
+    assert c["pass"] is False and c["conformant"] is False
+    assert c["complete"] is True and c["problems"] == [] and c["missing_steps"] == []
+    assert c["failed_steps"] == [bad]
+    wrong = tmp_path / "w"
+    _archive4(
+        wrong, full[6:], doc={"seed_base": 1}
+    )  # a real verification problem is still a problem
+    w = summ.combine([a, wrong], SHA)
+    assert w["complete"] is False and any("archive does not verify" in p for p in w["problems"])
+
+
 def test_v4_runner_single_process_smoke_end_to_end(tmp_path: Path) -> None:
     """The cheapest steps of lv4 through the real runner (a8 at scale 0.01 and the deferred
     workers step), single-process, rehearsal base."""

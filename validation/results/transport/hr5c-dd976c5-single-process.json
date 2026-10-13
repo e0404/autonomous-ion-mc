@@ -1,0 +1,443 @@
+{
+ "attestation": {
+  "manifests": [
+   "9ec4ba4f747940bbd0106337c27ac04862dcf58e60b0ade6d23f5a770b4e1976"
+  ],
+  "partials": [
+   {
+    "content_sha256": "422a9b75a01d98085529663801e0d668d3eac7f1ade6f23afc047506fae62f5b",
+    "host_run_id": "RUN-20261013T042034Z-554308c4",
+    "name": "v8-stat-python-s0.json",
+    "origin": "imported",
+    "step": "08-v8-stat-compare"
+   },
+   {
+    "content_sha256": "3e0697ed4b12c97d1e1254f8b501705f9c9cc4e3a65db5de04108f0d693b0e6f",
+    "host_run_id": "RUN-20261013T042946Z-6bf1a3d8",
+    "name": "v8-stat-python-s1.json",
+    "origin": "imported",
+    "step": "08-v8-stat-compare"
+   },
+   {
+    "content_sha256": "bfb6669a868aeccc2fb8b4e4e37b3c34f70289e5cc8f444a56cf2e6173cfefad",
+    "host_run_id": "RUN-20261013T043853Z-ce931090",
+    "name": "v8-stat-python-s2.json",
+    "origin": "imported",
+    "step": "08-v8-stat-compare"
+   },
+   {
+    "content_sha256": "28148d9919a42a9a3ce87fdcce8d1e77e1b4c55ef293b8f5f59cd3fd2243a5b1",
+    "host_run_id": "RUN-20261013T044759Z-278eb9a9",
+    "name": "v8-stat-python-s3.json",
+    "origin": "imported",
+    "step": "08-v8-stat-compare"
+   },
+   {
+    "content_sha256": "fc34d81ec2f93b51fa5ede2deeda9a45571cef55e6e7141a662334bde9b91ff0",
+    "host_run_id": "RUN-20261013T045704Z-adb3630a",
+    "name": "v8-stat-cpu64.json",
+    "origin": "imported",
+    "step": "08-v8-stat-compare"
+   },
+   {
+    "content_sha256": "71b5bccc472bc6d26403b7aa4f000cb94d0d0e9c8538ed3ab3ac93f274c06476",
+    "host_run_id": "RUN-20261013T050002Z-35c80ac8",
+    "name": "v8-stat-cuda32.json",
+    "origin": "imported",
+    "step": "08-v8-stat-compare"
+   },
+   {
+    "content_sha256": "02564049c2f3d9117d2e7c9d263854a335c69bc7f164935d5a9e6f327747557f",
+    "host_run_id": "RUN-20261013T050030Z-f22739b4",
+    "name": "v8-stat-cuda64.json",
+    "origin": "imported",
+    "step": "08-v8-stat-compare"
+   }
+  ],
+  "protected_host_records_verified_by_code": false,
+  "run_sha": "dd976c5a69850b9597ac4da938792d4273a71719",
+  "statement": "the manifest was built by the orchestrator from the protected host-runner PARTIAL stdout lines; this code cannot verify those records, compare the digests and host_run_ids above with them and with record_local_validation"
+ },
+ "complete": true,
+ "conformant": false,
+ "deferred_steps": [],
+ "directories": [
+  "validation/generated/RUN-20261013T042034Z-554308c4/transport/hr5c-dd976c5-01",
+  "validation/generated/RUN-20261013T042946Z-6bf1a3d8/transport/hr5c-dd976c5-02",
+  "validation/generated/RUN-20261013T043853Z-ce931090/transport/hr5c-dd976c5-03",
+  "validation/generated/RUN-20261013T044759Z-278eb9a9/transport/hr5c-dd976c5-04",
+  "validation/generated/RUN-20261013T045704Z-adb3630a/transport/hr5c-dd976c5-05",
+  "validation/generated/RUN-20261013T050002Z-35c80ac8/transport/hr5c-dd976c5-06",
+  "validation/generated/RUN-20261013T050030Z-f22739b4/transport/hr5c-dd976c5-07",
+  "validation/generated/RUN-20261013T050112Z-f82a2dc5/transport/hr5c-dd976c5-08",
+  "validation/generated/RUN-20261013T050123Z-9d30dcc9/transport/hr5c-dd976c5-09",
+  "validation/generated/RUN-20261013T050157Z-16c75ab8/transport/hr5c-dd976c5-10",
+  "validation/generated/RUN-20261013T050202Z-a824f328/transport/hr5c-dd976c5-11"
+ ],
+ "execution_modes": [
+  "single-process-diagnostic"
+ ],
+ "failed_steps": [
+  "10-v6-unsized",
+  "11-v6-cuda-compare"
+ ],
+ "git_sha": "dd976c5a69850b9597ac4da938792d4273a71719",
+ "missing_steps": [],
+ "non_conformant_reasons": [
+  "08-v8-stat-compare: imported_partials_unverified_by_code",
+  "execution mode single-process-diagnostic (diagnostic, not the qualification mode)"
+ ],
+ "parts": {
+  "validation/generated/RUN-20261013T042034Z-554308c4/transport/hr5c-dd976c5-01": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "validation/generated/RUN-20261013T042946Z-6bf1a3d8/transport/hr5c-dd976c5-02": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "validation/generated/RUN-20261013T043853Z-ce931090/transport/hr5c-dd976c5-03": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "validation/generated/RUN-20261013T044759Z-278eb9a9/transport/hr5c-dd976c5-04": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "validation/generated/RUN-20261013T045704Z-adb3630a/transport/hr5c-dd976c5-05": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "validation/generated/RUN-20261013T050002Z-35c80ac8/transport/hr5c-dd976c5-06": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "validation/generated/RUN-20261013T050030Z-f22739b4/transport/hr5c-dd976c5-07": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "validation/generated/RUN-20261013T050112Z-f82a2dc5/transport/hr5c-dd976c5-08": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "validation/generated/RUN-20261013T050123Z-9d30dcc9/transport/hr5c-dd976c5-09": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "validation/generated/RUN-20261013T050157Z-16c75ab8/transport/hr5c-dd976c5-10": {
+   "pass": false,
+   "source_ok": true,
+   "subset": true
+  },
+  "validation/generated/RUN-20261013T050202Z-a824f328/transport/hr5c-dd976c5-11": {
+   "pass": false,
+   "source_ok": true,
+   "subset": true
+  }
+ },
+ "pass": false,
+ "problems": [],
+ "reduced_history_counts": false,
+ "rows": {
+  "V6": {
+   "pass": false,
+   "reason": "not sized under the pre-registered rule",
+   "status": "executed",
+   "step": "v6-unsized",
+   "verdict": "failed"
+  },
+  "V6-sens": {
+   "pass": false,
+   "reason": "not sized under the pre-registered rule",
+   "status": "executed",
+   "step": "v6-unsized",
+   "verdict": "failed"
+  },
+  "V8": {
+   "pass": true,
+   "status": "executed",
+   "step": "v8-stat-compare"
+  },
+  "V8-nuc": {
+   "pass": true,
+   "status": "executed",
+   "step": "v8-stat-compare"
+  }
+ },
+ "steps": {
+  "01-v8-stat-python-s0": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "01-v8-stat-python-s0.txt",
+   "frozen_histories": 30000,
+   "histories": 30000,
+   "pass": true,
+   "problems": [],
+   "pytest_command": "/home/wahln/.cache/ionmc-experiment/experiment-v3/host-runner/venv/bin/python /workspace/validation/scripts/transport/steps_v5d.py v8-stat-sample --sample python-s0 --out-dir /workspace/validation/generated/transport/hr5c-dd976c5-01/samples --scale 1.0 --timeout 3240 --seed-base 20491004",
+   "pytest_counts": null,
+   "reason": null,
+   "reduced": false,
+   "status": "executed",
+   "v7r_cal_reps": null,
+   "verdict": null
+  },
+  "02-v8-stat-python-s1": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "02-v8-stat-python-s1.txt",
+   "frozen_histories": 30000,
+   "histories": 30000,
+   "pass": true,
+   "problems": [],
+   "pytest_command": "/home/wahln/.cache/ionmc-experiment/experiment-v3/host-runner/venv/bin/python /workspace/validation/scripts/transport/steps_v5d.py v8-stat-sample --sample python-s1 --out-dir /workspace/validation/generated/transport/hr5c-dd976c5-02/samples --scale 1.0 --timeout 3240 --seed-base 20491004",
+   "pytest_counts": null,
+   "reason": null,
+   "reduced": false,
+   "status": "executed",
+   "v7r_cal_reps": null,
+   "verdict": null
+  },
+  "03-v8-stat-python-s2": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "03-v8-stat-python-s2.txt",
+   "frozen_histories": 30000,
+   "histories": 30000,
+   "pass": true,
+   "problems": [],
+   "pytest_command": "/home/wahln/.cache/ionmc-experiment/experiment-v3/host-runner/venv/bin/python /workspace/validation/scripts/transport/steps_v5d.py v8-stat-sample --sample python-s2 --out-dir /workspace/validation/generated/transport/hr5c-dd976c5-03/samples --scale 1.0 --timeout 3240 --seed-base 20491004",
+   "pytest_counts": null,
+   "reason": null,
+   "reduced": false,
+   "status": "executed",
+   "v7r_cal_reps": null,
+   "verdict": null
+  },
+  "04-v8-stat-python-s3": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "04-v8-stat-python-s3.txt",
+   "frozen_histories": 30000,
+   "histories": 30000,
+   "pass": true,
+   "problems": [],
+   "pytest_command": "/home/wahln/.cache/ionmc-experiment/experiment-v3/host-runner/venv/bin/python /workspace/validation/scripts/transport/steps_v5d.py v8-stat-sample --sample python-s3 --out-dir /workspace/validation/generated/transport/hr5c-dd976c5-04/samples --scale 1.0 --timeout 3240 --seed-base 20491004",
+   "pytest_counts": null,
+   "reason": null,
+   "reduced": false,
+   "status": "executed",
+   "v7r_cal_reps": null,
+   "verdict": null
+  },
+  "05-v8-stat-cpu64": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "05-v8-stat-cpu64.txt",
+   "frozen_histories": 1000000,
+   "histories": 1000000,
+   "pass": true,
+   "problems": [],
+   "pytest_command": "/home/wahln/.cache/ionmc-experiment/experiment-v3/host-runner/venv/bin/python /workspace/validation/scripts/transport/steps_v5d.py v8-stat-sample --sample cpu64 --out-dir /workspace/validation/generated/transport/hr5c-dd976c5-05/samples --scale 1.0 --timeout 3240 --seed-base 20491004",
+   "pytest_counts": null,
+   "reason": null,
+   "reduced": false,
+   "status": "executed",
+   "v7r_cal_reps": null,
+   "verdict": null
+  },
+  "06-v8-stat-cuda32": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "06-v8-stat-cuda32.txt",
+   "frozen_histories": 1000000,
+   "histories": 1000000,
+   "pass": true,
+   "problems": [],
+   "pytest_command": "/home/wahln/.cache/ionmc-experiment/experiment-v3/host-runner/venv/bin/python /workspace/validation/scripts/transport/steps_v5d.py v8-stat-sample --sample cuda32 --out-dir /workspace/validation/generated/transport/hr5c-dd976c5-06/samples --scale 1.0 --timeout 3240 --seed-base 20491004",
+   "pytest_counts": null,
+   "reason": null,
+   "reduced": false,
+   "status": "executed",
+   "v7r_cal_reps": null,
+   "verdict": null
+  },
+  "07-v8-stat-cuda64": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "07-v8-stat-cuda64.txt",
+   "frozen_histories": 1000000,
+   "histories": 1000000,
+   "pass": true,
+   "problems": [],
+   "pytest_command": "/home/wahln/.cache/ionmc-experiment/experiment-v3/host-runner/venv/bin/python /workspace/validation/scripts/transport/steps_v5d.py v8-stat-sample --sample cuda64 --out-dir /workspace/validation/generated/transport/hr5c-dd976c5-07/samples --scale 1.0 --timeout 3240 --seed-base 20491004",
+   "pytest_counts": null,
+   "reason": null,
+   "reduced": false,
+   "status": "executed",
+   "v7r_cal_reps": null,
+   "verdict": null
+  },
+  "08-v8-stat-compare": {
+   "attestation": {
+    "manifest_path": "/workspace/.ionmc-cache/transport-samples/dd976c5-hr5c/manifest-08.json",
+    "manifest_sha256": "9ec4ba4f747940bbd0106337c27ac04862dcf58e60b0ade6d23f5a770b4e1976",
+    "manifest_source": "host-runner protected stdout PARTIAL lines",
+    "partials": [
+     {
+      "content_sha256": "422a9b75a01d98085529663801e0d668d3eac7f1ade6f23afc047506fae62f5b",
+      "host_run_id": "RUN-20261013T042034Z-554308c4",
+      "name": "v8-stat-python-s0.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "3e0697ed4b12c97d1e1254f8b501705f9c9cc4e3a65db5de04108f0d693b0e6f",
+      "host_run_id": "RUN-20261013T042946Z-6bf1a3d8",
+      "name": "v8-stat-python-s1.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "bfb6669a868aeccc2fb8b4e4e37b3c34f70289e5cc8f444a56cf2e6173cfefad",
+      "host_run_id": "RUN-20261013T043853Z-ce931090",
+      "name": "v8-stat-python-s2.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "28148d9919a42a9a3ce87fdcce8d1e77e1b4c55ef293b8f5f59cd3fd2243a5b1",
+      "host_run_id": "RUN-20261013T044759Z-278eb9a9",
+      "name": "v8-stat-python-s3.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "fc34d81ec2f93b51fa5ede2deeda9a45571cef55e6e7141a662334bde9b91ff0",
+      "host_run_id": "RUN-20261013T045704Z-adb3630a",
+      "name": "v8-stat-cpu64.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "71b5bccc472bc6d26403b7aa4f000cb94d0d0e9c8538ed3ab3ac93f274c06476",
+      "host_run_id": "RUN-20261013T050002Z-35c80ac8",
+      "name": "v8-stat-cuda32.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "02564049c2f3d9117d2e7c9d263854a335c69bc7f164935d5a9e6f327747557f",
+      "host_run_id": "RUN-20261013T050030Z-f22739b4",
+      "name": "v8-stat-cuda64.json",
+      "origin": "imported"
+     }
+    ],
+    "protected_host_records_verified_by_code": false,
+    "run_sha": "dd976c5a69850b9597ac4da938792d4273a71719",
+    "statement": "the code verifies each imported partial against the manifest entry (digest) and requires a host_run_id per entry, but any imported partial makes the summary non-conformant (imported_partials_unverified_by_code); it cannot verify the protected host-runner records that the manifest is built from. The orchestrator must have written the manifest only from the PARTIAL <name> <sha> stdout lines of those records and must list the host_run_ids in record_local_validation"
+   },
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "08-v8-stat-compare.txt",
+   "frozen_histories": {
+    "cpu64": 1000000,
+    "cuda32": 1000000,
+    "cuda64": 1000000,
+    "python": 120000
+   },
+   "histories": {
+    "cpu64": 1000000,
+    "cuda32": 1000000,
+    "cuda64": 1000000,
+    "python": 120000
+   },
+   "pass": true,
+   "problems": [],
+   "pytest_command": "/home/wahln/.cache/ionmc-experiment/experiment-v3/host-runner/venv/bin/python /workspace/validation/scripts/transport/steps_v5d.py v8-stat-compare --dirs /workspace/validation/generated/transport/hr5c-dd976c5-08 /workspace/.ionmc-cache/transport-samples/dd976c5-hr5c/01 /workspace/.ionmc-cache/transport-samples/dd976c5-hr5c/02 /workspace/.ionmc-cache/transport-samples/dd976c5-hr5c/03 /workspace/.ionmc-cache/transport-samples/dd976c5-hr5c/04 /workspace/.ionmc-cache/transport-samples/dd976c5-hr5c/05 /workspace/.ionmc-cache/transport-samples/dd976c5-hr5c/06 /workspace/.ionmc-cache/transport-samples/dd976c5-hr5c/07 --partials-manifest /workspace/.ionmc-cache/transport-samples/dd976c5-hr5c/manifest-08.json --scale 1.0 --timeout 1620 --seed-base 20491004",
+   "pytest_counts": null,
+   "reason": null,
+   "reduced": false,
+   "status": "executed",
+   "v7r_cal_reps": null,
+   "verdict": null
+  },
+  "09-v7-f32-f64-cuda": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "09-v7-f32-f64-cuda.txt",
+   "frozen_histories": 1000000,
+   "histories": 1000000,
+   "pass": true,
+   "problems": [],
+   "pytest_command": "/home/wahln/.cache/ionmc-experiment/experiment-v3/host-runner/venv/bin/python /workspace/validation/scripts/transport/steps_v5d.py v7-f32 --scale 1.0 --timeout 3240 --seed-base 20491004",
+   "pytest_counts": null,
+   "reason": null,
+   "reduced": false,
+   "status": "executed",
+   "v7r_cal_reps": null,
+   "verdict": null
+  },
+  "10-v6-unsized": {
+   "attestation": {
+    "manifest_path": null,
+    "manifest_sha256": null,
+    "manifest_source": null,
+    "partials": [],
+    "protected_host_records_verified_by_code": false,
+    "run_sha": "dd976c5a69850b9597ac4da938792d4273a71719",
+    "statement": "the code verifies each imported partial against the manifest entry (digest) and requires a host_run_id per entry, but any imported partial makes the summary non-conformant (imported_partials_unverified_by_code); it cannot verify the protected host-runner records that the manifest is built from. The orchestrator must have written the manifest only from the PARTIAL <name> <sha> stdout lines of those records and must list the host_run_ids in record_local_validation"
+   },
+   "deselected_tests": null,
+   "exit": 1,
+   "file": "10-v6-unsized.txt",
+   "frozen_histories": null,
+   "histories": null,
+   "pass": false,
+   "problems": [],
+   "pytest_command": "/home/wahln/.cache/ionmc-experiment/experiment-v3/host-runner/venv/bin/python /workspace/validation/scripts/transport/steps_v6.py v6-unsized --scale 1.0 --timeout 1620 --seed-base 20491004",
+   "pytest_counts": null,
+   "reason": "not sized under the pre-registered rule",
+   "reduced": false,
+   "status": "executed",
+   "v7r_cal_reps": null,
+   "verdict": "failed"
+  },
+  "11-v6-cuda-compare": {
+   "attestation": {
+    "manifest_path": null,
+    "manifest_sha256": null,
+    "manifest_source": null,
+    "partials": [],
+    "protected_host_records_verified_by_code": false,
+    "run_sha": "dd976c5a69850b9597ac4da938792d4273a71719",
+    "statement": "the code verifies each imported partial against the manifest entry (digest) and requires a host_run_id per entry, but any imported partial makes the summary non-conformant (imported_partials_unverified_by_code); it cannot verify the protected host-runner records that the manifest is built from. The orchestrator must have written the manifest only from the PARTIAL <name> <sha> stdout lines of those records and must list the host_run_ids in record_local_validation"
+   },
+   "deselected_tests": null,
+   "exit": 1,
+   "file": "11-v6-cuda-compare.txt",
+   "frozen_histories": null,
+   "histories": null,
+   "pass": false,
+   "problems": [],
+   "pytest_command": "/home/wahln/.cache/ionmc-experiment/experiment-v3/host-runner/venv/bin/python /workspace/validation/scripts/transport/steps_v6.py v6-cuda-compare --dirs /workspace/validation/generated/transport/hr5c-dd976c5-11 --scale 1.0 --timeout 1620 --seed-base 20491004",
+   "pytest_counts": null,
+   "reason": "not sized under the pre-registered rule",
+   "reduced": false,
+   "status": "executed",
+   "v7r_cal_reps": null,
+   "verdict": "failed (unsized)"
+  }
+ },
+ "suite": "hr5c"
+}

@@ -21,7 +21,8 @@ Single-process diagnostic archives (``execution_mode=single-process-diagnostic``
 executed steps, and the archive is never ``conformant`` (reasons: the execution mode and
 ``deferred multiprocessing checks``); ``--combine`` carries the deferred list through.
 
-``--combine``: every directory must verify, with the same suite, SHA, scale and
+``--combine``: every directory must verify (a failed step is a verified archive with a failed verdict: it is listed
+in ``failed_steps`` and makes ``pass`` false, it is not a verification problem and does not make ``complete`` false), with the same suite, SHA, scale and
 ``source_hashes`` (the *identity*); the union of the manifests must be exactly the complete step
 list of the suite, with no step duplicated and none missing. Only then is the combined summary
 ``conformant`` (if every part is clean or attested and none is reduced) and no step used a partial
@@ -256,7 +257,15 @@ def parse_step(
     )
     sel = re.search(r"(\d+) deselected", text) if tag is None else None
     counts = pytest_counts(text) if tag is None else None
+    v7r_facts: dict[str, Any] = {}
+    if tag == "v7r-combine" and doc is not None:  # the two facts of row V7-R, read from the document (C11)
+        cs = doc.get("calibration_status")
+        if isinstance(doc.get("gates_pass"), bool):
+            v7r_facts["v7r_gates_pass"] = doc["gates_pass"]
+        if isinstance(cs, dict) and isinstance(cs.get("pass"), bool):
+            v7r_facts["v7r_calibration_status_pass"] = cs["pass"]
     return {
+        **v7r_facts,
         "file": path.name,
         "exit": code,
         "pass": bool(verdict),
@@ -543,10 +552,16 @@ def slice_c_rows(suite: str | None, steps: dict[str, Any]) -> dict[str, Any]:
     comb = by.get("v7r-combine")
     cal = [(n.split("-", 1)[1], st) for n, st in steps.items() if "-" in n]
     cal = [(n, st) for n, st in cal if n.startswith("pytest-v7r-calibration")]
-    gates = bool(comb and comb.get("pass") and comb.get("status") != "deferred")
-    calibration = calibration_established(cal)
-    row = {"gates_pass": gates, "calibration_pass": calibration, "calibration_steps": sorted(n for n, _ in cal),
-           "pass": gates and calibration}  # fmt: skip
+    comb_ok = bool(comb and comb.get("pass") and comb.get("status") != "deferred")
+    # C11: the two facts come from the v7r-combine document (a failed calibration makes the step fail although the
+    # gates passed); a step without them (tests, older archives) falls back to the step verdict, never to a pass
+    gates = bool(comb and comb.get("status") != "deferred" and comb.get("v7r_gates_pass", comb_ok))
+    status_pass = bool(comb and comb.get("v7r_calibration_status_pass", comb_ok))
+    shards = calibration_established(cal)
+    calibration = bool(status_pass and shards)
+    row = {"gates_pass": gates, "calibration_pass": calibration, "calibration_status_pass": status_pass,
+           "calibration_shards_established": shards, "calibration_steps": sorted(n for n, _ in cal),
+           "pass": comb_ok and gates and calibration}  # fmt: skip
     if not row["pass"]:
         row["verdict"] = V7R_NOT_ESTABLISHED
     return {**step_rows(suite, steps), "V7-R": row}
@@ -642,8 +657,12 @@ def combine(dirs: list[Path], sha: str, attest_sha: str | None = None) -> dict[s
     parts = [verify(d, sha, attest_sha) for d in dirs]
     problems: list[str] = []
     for d, p in zip(dirs, parts, strict=True):
-        if not p["pass"]:
-            problems.append(f"{d}: archive does not verify ({p['problems']})")
+        step_problems = {n: s["problems"] for n, s in p["steps"].items() if s.get("problems")}
+        if p["problems"] or step_problems:  # an integrity problem; a failed step with none is a failed verdict
+            problems.append(f"{d}: archive does not verify ({[*p['problems'], *step_problems.items()]})")
+    failed_steps = sorted(
+        n for p in parts for n, s in p["steps"].items() if s.get("status") != "deferred" and not s["pass"]
+    )  # C11: reported, never a completeness problem (``pass`` below still requires every step to pass)
     if len({p["identity"] for p in parts}) != 1:
         problems.append("archives differ in suite, SHA, scale, python_parts or source hashes")
     seen: dict[str, str] = {}
@@ -677,6 +696,7 @@ def combine(dirs: list[Path], sha: str, attest_sha: str | None = None) -> dict[s
         "suite": suite,
         "pass": ok,
         "complete": not missing and not problems,
+        "failed_steps": failed_steps,
         "conformant": bool(
             ok
             and not reduced

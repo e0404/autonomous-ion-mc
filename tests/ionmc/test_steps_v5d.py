@@ -906,6 +906,28 @@ def test_e_shape_comparison_function(d: ModuleType) -> None:
     assert set(cmp["r80"]) == {"model_mm", "forced_isotropic_mm", "shift_mm", "se_mm"}
 
 
+def test_exploratory_cache_is_a_writable_copy_under_out_dir(
+    d: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """C11: the forced-isotropic table is built under the step out-dir, never into the (read-only) shared cache."""
+    shared = tmp_path / "shared"
+    for sub, name in (("manifests", "m.json"), ("objects", "abc"), ("derived", "t.npz")):
+        (shared / sub).mkdir(parents=True)
+        (shared / sub / name).write_bytes(b"x" + name.encode())
+    monkeypatch.setenv("IONMC_CACHE_DIR", str(shared))
+    out = tmp_path / "out"
+    dst = d.exploratory_cache(out)
+    assert dst == out / "exploratory-cache" and dst != shared
+    for sub, name in (("manifests", "m.json"), ("objects", "abc"), ("derived", "t.npz")):
+        assert (dst / sub / name).read_bytes() == b"x" + name.encode()
+    before = sorted(p.relative_to(shared) for p in shared.rglob("*"))
+    (dst / "derived" / "new.npz").write_bytes(b"built")  # a build writes here ...
+    assert (
+        sorted(p.relative_to(shared) for p in shared.rglob("*")) == before
+    )  # ... not into the shared cache
+    assert d.exploratory_cache(out) == dst  # idempotent
+
+
 def test_e_shape_step_runs_both_variants(d: ModuleType, tmp_path: Path) -> None:
     _data_or_skip()
     doc = _run_step(d, ["e-shape", "--scale", "0.05"], tmp_path)
@@ -921,4 +943,11 @@ def test_e_shape_step_runs_both_variants(d: ModuleType, tmp_path: Path) -> None:
         v["model"]["table_id"] != v["forced_isotropic"]["table_id"] == doc["exploratory_table_id"]
     )
     assert {"delta_idd", "delta_idd_se", "r80", "r90", "window_mm"} <= set(doc["comparison"])
+    built = (
+        tmp_path
+        / "exploratory-cache"
+        / "derived"
+        / f"elastic-proton-{doc['exploratory_table_id']}.npz"
+    )
+    assert built.is_file()  # C11: built under the out-dir (the shared cache is not written)
     assert "Amendment 15 (b)6" in doc["plan_row"] and doc["never_evidence"] is True

@@ -8,6 +8,7 @@ histories."""
 from __future__ import annotations
 
 import importlib.util
+import json
 import math
 import sys
 from pathlib import Path
@@ -590,6 +591,10 @@ def test_lv5c_suite_registration_names_seeds_timeouts_tags(
         # the seed of shard k derives from the base: 20481004 + 1000 * 16 + k
         assert 20481004 + 1000 * v7r.V7R_R_INDEX + k == 20497004 + k
     assert "--dirs" in by["v7r-combine"] and "--dirs" in by["v7r-diag"]
+    cc = by[
+        "v7r-calibration-combine"
+    ]  # C11: the status partial is written to the step out-dir, not 'samples'
+    assert cc[cc.index("--out-dir") + 1] == by["v7r-s0"][by["v7r-s0"].index("--out-dir") + 1]
     full = rs.full_step_names("lv5c", 2)
     for n in full:
         base_name = n.split("-", 1)[1]
@@ -680,6 +685,47 @@ def test_v7r_row_is_the_conjunction_of_calibration_and_gates() -> None:
         sm.slice_c_rows("lv5c", shards)["V7-R"]["pass"] is False
     )  # every calibration shard must pass
     assert sm.slice_c_rows("lv5b", full) == {}
+
+
+def test_v7r_row_facts_come_from_the_combine_document() -> None:
+    """C11: a failed calibration (status partial pass false) with passing gates makes the v7r-combine step fail; the
+    row reports gates_pass true and calibration_pass false, and is not established."""
+    sm = _load("summarize")
+    comb = {
+        "pass": False,
+        "status": "executed",
+        "v7r_gates_pass": True,
+        "v7r_calibration_status_pass": False,
+    }
+    steps = {**_sharded(), "19-v7r-combine": comb}
+    row = sm.slice_c_rows("lv5c", steps)["V7-R"]
+    assert row["gates_pass"] is True and row["calibration_pass"] is False and row["pass"] is False
+    assert row["calibration_status_pass"] is False and row["calibration_shards_established"] is True
+    assert row["verdict"] == "uncertainty-coverage evidence not established"
+    ok = {**comb, "pass": True, "v7r_calibration_status_pass": True}
+    assert sm.slice_c_rows("lv5c", {**steps, "19-v7r-combine": ok})["V7-R"]["pass"] is True
+    gates_fail = {**ok, "pass": False, "v7r_gates_pass": False}
+    row = sm.slice_c_rows("lv5c", {**steps, "19-v7r-combine": gates_fail})["V7-R"]
+    assert row["gates_pass"] is False and row["calibration_pass"] is True and row["pass"] is False
+
+
+def test_parse_step_extracts_the_v7r_combine_facts(tmp_path: Path) -> None:
+    sm = _load("summarize")
+    sha = "a" * 40
+    p = tmp_path / "19-v7r-combine.txt"
+    doc = {"step": "v7r-combine", "suite": "lv5c", "git_sha": sha, "seed_base": 20481004, "pass": False,
+           "gates_pass": True, "calibration_status": {"pass": False}}  # fmt: skip
+    head = ["# command: x", f"# git_sha: {sha}", "# started_utc: t", "# step_timeout_s: 1", ""]
+    p.write_text("\n".join([*head, "#JSON-BEGIN", json.dumps(doc), "#JSON-END", "", "# exit=1"]))
+    st = sm.parse_step(p, sha, "lv5c", "20481004")
+    assert (
+        st["pass"] is False
+        and st["v7r_gates_pass"] is True
+        and st["v7r_calibration_status_pass"] is False
+    )
+    other = tmp_path / "20-v7r-ref.txt"
+    other.write_text("\n".join([*head, "# exit=0"]))
+    assert "v7r_gates_pass" not in sm.parse_step(other, sha, "lv5c", "20481004")
 
 
 ONLY_V7R = CAL_CMD.replace(" tests/ionmc/test_v7_coverage.py", "")

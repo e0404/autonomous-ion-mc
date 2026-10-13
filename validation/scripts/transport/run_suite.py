@@ -727,7 +727,10 @@ def _suite_steps_v7r(add, sc, out_dir, dirs, s5c):  # type: ignore[no-untyped-de
             add(f"pytest-v7r-calibration-s{i}",
                 pytest_cmd(*targets, marker="calibration", k=k_expr), env)
     if V7R_CALIBRATION_SHARDS is not None:  # the consumer of the shard records (Amendment 14a)
-        add("v7r-calibration-combine", [*s5c, "v7r-calibration-combine", "--dirs", *dirs, *sc], env)
+        # the sealed v7r-calibration-status partial goes to the step out-dir (never the relative default 'samples',
+        # which is read-only on the host: RUN-20261013T033755Z-4d78d844)
+        add("v7r-calibration-combine",
+            [*s5c, "v7r-calibration-combine", "--dirs", *dirs, "--out-dir", str(out_dir), *sc], env)
     add("v7r-combine", [*s5c, "v7r-combine", "--dirs", *dirs, *sc], env)
     add("v7r-diag", [*s5c, "v7r-diag", "--dirs", *dirs, *sc], env)
 

@@ -24,6 +24,7 @@ import argparse
 import contextlib
 import json
 import math
+import os
 import sys
 import time
 from collections.abc import Iterator
@@ -1134,13 +1135,40 @@ E_SHAPE_PLAN = ("E-shape (plan Amendment 15 (b)6 and the addendum table; Amendme
 E_SHAPE_WINDOW_MM = 10.0
 
 
-def exploratory_table_id() -> str:
-    """Build (deterministically, from the pinned sources) the forced-isotropic E-shape table into the cache and
-    return its id (never committed; the loader refuses it unless a configuration names it explicitly)."""
+EXPLORATORY_CACHE_NAME = "exploratory-cache"
+
+
+def exploratory_cache(out_dir: str | Path) -> Path:
+    """Writable copy of the data cache under the step's ``--out-dir`` (C11): ``manifests/``, ``objects/`` and
+    ``derived/`` are copied (real copies, so that nothing written there can reach the shared cache) from the resolved cache. The
+    shared cache is read-only on the host runner and is never written."""
+    import shutil
+
     from ionmc.data import cache
+
+    src = cache.resolve_cache_dir(None)
+    dst = Path(out_dir) / EXPLORATORY_CACHE_NAME
+    if src.resolve() == dst.resolve():
+        return dst
+    for sub in ("manifests", "objects", "derived"):
+        if not (src / sub).is_dir():
+            continue
+
+        def cp(a: str, b: str) -> str:  # a real copy (no hard link: a rebuild must never touch a shared inode)
+            return b if Path(b).exists() else str(shutil.copy2(a, b))
+
+        shutil.copytree(src / sub, dst / sub, copy_function=cp, dirs_exist_ok=True)
+    return dst
+
+
+def exploratory_table_id(out_dir: str | Path) -> str:
+    """Build (deterministically, from the pinned sources) the forced-isotropic E-shape table into a writable cache
+    under ``out_dir`` (see ``exploratory_cache``) and return its id (never committed, never written into the
+    shared cache; the loader refuses it unless a configuration names it explicitly). The caller points
+    ``IONMC_CACHE_DIR`` at ``exploratory_cache(out_dir)`` so the simulations find the table."""
     from ionmc.nuclear import elastic_build as eb
 
-    return str(eb.build_elastic_proton(cache.resolve_cache_dir(None), exploratory_forced_isotropic=True).table_id)
+    return str(eb.build_elastic_proton(exploratory_cache(out_dir), exploratory_forced_isotropic=True).table_id)
 
 
 def e_shape_compare(idd_a: NDArray[np.float64], idd_b: NDArray[np.float64], depth: NDArray[np.float64],
@@ -1181,7 +1209,21 @@ def step_e_shape(a: argparse.Namespace) -> int:
     guard = seed_guard({"e-shape": [seed]}, allow_rehearsal=True)
     geo, grid, nz, _ = v5.depth_box(M.WATER, 150.0, dz=0.5, half_mm=40.0)
     cfg_a = c.nuc_config_c(energy=150.0, n=n, seed=seed, geometry=geo, grid=grid, n_batches=20, timeout=a.timeout)
-    tid_b = exploratory_table_id()
+    xcache = exploratory_cache(a.out_dir)
+    saved_cache = os.environ.get("IONMC_CACHE_DIR")
+    os.environ["IONMC_CACHE_DIR"] = str(xcache)  # the writable copy holds the exploratory table (C11)
+    try:
+        return _e_shape_run(a, n, seed, guard, geo, grid, nz, cfg_a)
+    finally:
+        if saved_cache is None:
+            os.environ.pop("IONMC_CACHE_DIR", None)
+        else:
+            os.environ["IONMC_CACHE_DIR"] = saved_cache
+
+
+def _e_shape_run(a: argparse.Namespace, n: int, seed: int, guard: Any, geo: Any, grid: Any, nz: int,
+                 cfg_a: Any) -> int:
+    tid_b = exploratory_table_id(a.out_dir)
     cfg_b = replace(cfg_a, physics=replace(cfg_a.physics, elastic_table_id=tid_b, allow_exploratory_table=True))
     out: dict[str, Any] = {}
     idd: dict[str, NDArray[np.float64]] = {}

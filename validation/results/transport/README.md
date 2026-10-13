@@ -463,3 +463,193 @@ deterministically from the registered sources; it is not stored in Git.
   7f8e80a); Codex REVIEW-54fe3b7b: changes_required (F1 unitarity bound, F3 plan-row accounting, F4 records; resolved
   in C2c by the row-table addendum, the data-based omitted-physics measure, decision 0041 and this record). A Codex
   approval is not scientific validation.
+
+# V3-005C results: archives `lv5c` and `hr5c` at head dd976c5a (elastic channel, V3-005B branch)
+
+Qualification SHA `dd976c5a69850b9597ac4da938792d4273a71719`. Bases: `lv5c` 20481004, `hr5c` 20491004 (rehearsals 2050xxxx, never evidence). Execution mode: single-process diagnostic (operator directive 2026-10-07), one host job at a time, one step per host call. Archives: `lv5c-dd976c5-single-process.json` (86 steps, 88 host runs including the two direct executions) and `hr5c-dd976c5-single-process.json` (11 steps), made by `summarize.py --combine <dirs> --expected-sha dd976c5a… --attest-sha dd976c5a…`. **Both archives are `pass: false` and `conformant: false` by code** (single-process mode, imported partials of the combine steps `11, 16, 21, 22, 25, 79, 80, 84` on lv5c and `08` on hr5c, deferred `86-v3-workers-partition` on lv5c, and the failed rows below). The summaries were regenerated at C11 with the corrected `summarize.py` (see "Summarizer corrections at C11"); the earlier C9/C10 versions listed failed steps as "archive does not verify ([])" and had the V7-R conjunction inverted.
+
+**No passing record is created and the task cannot merge.** Merge gates per plan Amendment 14 (a)6 (P6 replaced by P6-D, Amendment 15): scientific gates V5, V6 (status fixed by V6-sens), V7-R including its calibration step, V8-nuc, V10-A; implementation gates P6-D, P7, P5-ext, C1-ext, R1-D2, V8-LV, CI. Failed scientific gates at this head: **V5, V6 (failed, not sized; Amendment 14a (a)4 and 18 (c)), V7-R (calibration), V10-A**. V8-nuc, P7, R1-D2 and V8-LV pass. A row recorded as "failed, not sized under the pre-registered rule" is a failed scientific gate (Amendment 18 (c)). V11, V7-scan-el and the report-only rows do not change that.
+
+## Row verdicts
+
+| Row | Gate | Verdict | Numbers |
+|---|---|---|---|
+| V5 vs TOPAS (step 21) | merge gate | **FAIL** | peak/plateau −3.7 % (150 MeV) and −4.9 % (200 MeV) against the 2 % criterion (lv5b without the elastic channel: +12.5 % / +12.3 %: the elastic channel over-corrects); nuclear on-off plateau-integral ΔIDD +10.3 % at 150 MeV (tolerance 10 %, fail) and +6.7 % at 200 MeV (pass); plateau, R80 (−0.30 / −0.32 mm) and total deposit (−0.3 / −0.5 %) pass; against MCsquare peak/plateau −4.8 % / −5.3 % (fail) |
+| V5 attribution (step 22) | follows V5 | stop rule **triggered** | peak/plateau fails low (< −2 %) at both energies; attribution ladder stops at rung 1, "p+A angular shape (radius rule of D-1)"; pre-registered expectation 0.985 / 0.986 for the peak/plateau ratio, observed 0.963 / 0.951 |
+| V11 elastic factor (step 16) | report with tolerance | **FAIL** | F (peak/plateau, EM+elastic over EM-only) ionmc 0.857 / 0.844 against TOPAS 0.892 / 0.887 at 150 / 200 MeV (tolerance 0.02); plateau gain +0.006 / +0.008 above TOPAS (tolerance 0.005); rows 12/13 elastic factor F_el 0.889 / 0.891, report-only |
+| V7-R (steps 30–46, 47–77, 78–80) | merge gate | **FAIL (calibration)** | calibration FAIL: surrogate `archive_fitted`, paired_low margin, paired gate alone 150/3200 = 4.69 % > 4 % (the only failing requirement); `rehearsal_block_sums`: paired_low joint 55/3200 (CP95 upper 0.0215), paired gate 11.5 %, single_high joint 117/3200 (upper 0.0425), single gate 11.6 %; power 0.954 / 0.951. Gates PASS (`escaped_neutral` 0.685, `sec_p` 0.674, `nuclear_local` 0.673). Row verdict "uncertainty-coverage evidence not established" |
+| V10-A (step 03) | merge gate | **FAIL** | the frozen criteria fail; the neutral-shape fallback trigger (step 11) did not fire |
+| V6, V6-sens (steps 28, 29; hr5c 10, 11) | merge gate | **failed, not sized** | not sized under the pre-registered rule (Amendment 14a (a)4); no V6 shard was run. The follow-up row V6-F is pre-registered (Amendment 18, `validation/plans/v3-005c-v6f-followup.md`) and was not executed in V3-005C |
+| V7-scan-el (step 26) | report | **FAIL** | `sec_p_dose` relative-SE slope −0.5526 against [−0.55, −0.45]; `escaped_neutral` −0.510 and `nuclear_local` −0.502 pass; recorded, no repeat |
+| V8-nuc (hr5c 08) | merge gate | **PASS** | T12 conclusive, p 0.50, 160 groups |
+| V8 CPU/CUDA pairs (hr5c 08), V7 f32/f64 on CUDA (hr5c 09) | | pass | |
+| V8-LV (step 09), R1-D2 (08), V2b-el (25), V7-shift-el (27), E1-B (84), P7 (10), V10 (02), X-ENDF (05), D9-BGG (06) | | pass / executed | report-only rows pass when executed |
+| E-shape (85, 85b) | report | executed | R80 shift 0.0004 mm; the archive row reads `pass: false` because step 85 failed (read-only cache), the direct execution 85b is outside the archive (see Incidents) |
+| `v3-workers-partition` (86) | | deferred | single-process directive; not a pass |
+
+Row table of the regenerated lv5c archive `rows` (`pass`): V5 false, V11 false, V10-A false, V6 false (verdict failed), V6-sens false (failed), V7-R false (`gates_pass` true, `calibration_pass` false, `calibration_status_pass` false, `calibration_shards_established` true), V7-scan-el false, E-shape false (step 85); true: R1-D2, P7, V2b-el, V7-shift-el, E1-B, V8, V10, V10-A-trigger, X-ENDF, D9-BGG. hr5c `rows`: V8-nuc true, V8 true, V6 false, V6-sens false.
+
+The 31 calibration shards (`pytest-v7r-calibration-s0..s30`) all exited 0 (pytest passes with the exact expected counts); the calibration **verdict** is made by `v7r-calibration-combine` from the sealed shard records. The calibration verdict FAIL therefore appears in step 78b (direct execution) and in the `calibration_status` of the step 79 document, not in a pytest exit status.
+
+**Reading.** V5: the elastic channel removed the lv5b excess (+12.5 / +12.3 %) and overshot it (−3.7 / −4.9 %); V11 shows the same direction (ionmc's elastic effect on the peak/plateau ratio is stronger than the TOPAS g4h-elastic_HP effect, 0.857 / 0.844 against 0.892 / 0.887). These are measured outcomes against pre-registered criteria, not clinical claims.
+
+## Step table `lv5c` (86 steps; 74 / 74b, 78 / 78b, 85 / 85b attempts)
+
+Wall times are the `wall_s` of step documents that record one. Steps 03 and 21 are summarised under Row verdicts.
+
+| Step | Host run id | Exit | Wall [s] | Note |
+|---|---|---|---|---|
+| 01 v6-e0 | RUN-20261012T142331Z-6aceaf89 | exit 0 |  | deterministic E0 record |
+| 02 v10-pp-level | RUN-20261012T142338Z-732b8cb8 | exit 0 |  | report-only |
+| 03 v10-a | RUN-20261012T142343Z-081123c3 | exit 1 |  |  |
+| 04 v10-a-xcheck | RUN-20261012T142350Z-d48d519a | exit 0 |  |  |
+| 05 x-endf | RUN-20261012T142405Z-5b759e89 | exit 0 |  | report-only |
+| 06 d9-bgg | RUN-20261012T142414Z-ab9af4d3 | exit 0 |  | report-only |
+| 07 lv5c-throughput | RUN-20261012T142418Z-c445012f | exit 0 |  | shard table fits |
+| 08 r1-d2-regression | RUN-20261012T142450Z-5c6934c9 | exit 0 |  |  |
+| 09 v8-lv-python-vs-warp-cpu | RUN-20261012T142751Z-f0b78837 | exit 0 |  |  |
+| 10 p7-sampler | RUN-20261012T142803Z-9b29026d | exit 0 |  |  |
+| 11 v10-a-trigger | RUN-20261012T142818Z-56c07614 | exit 0 |  |  |
+| 12 v11-ionmc-150-emel | RUN-20261012T142823Z-8eeefeef | exit 0 | 16 |  |
+| 13 v11-ionmc-150-emonly | RUN-20261012T142844Z-fc789c1d | exit 0 | 10 |  |
+| 14 v11-ionmc-200-emel | RUN-20261012T142859Z-c92f4b20 | exit 0 | 21 |  |
+| 15 v11-ionmc-200-emonly | RUN-20261012T142925Z-e73d684e | exit 0 | 13 |  |
+| 16 v11-compare | RUN-20261012T142957Z-a8e41216 | exit 1 |  |  |
+| 17 v5-150-on | RUN-20261012T143018Z-e85b0931 | exit 0 | 19 |  |
+| 18 v5-150-off | RUN-20261012T143043Z-a0e16640 | exit 0 | 10 |  |
+| 19 v5-200-on | RUN-20261012T143057Z-29fba190 | exit 0 | 25 |  |
+| 20 v5-200-off | RUN-20261012T143127Z-872eaeb7 | exit 0 | 13 |  |
+| 21 v5-compare | RUN-20261012T143203Z-1b3b1ecf | exit 1 |  |  |
+| 22 v5-attribution | RUN-20261012T143235Z-2b818275 | exit 1 |  |  |
+| 23 v2b-el-s0 | RUN-20261012T143243Z-bc793fcd | exit 0 | 376 |  |
+| 24 v2b-el-s1 | RUN-20261012T143904Z-1b29c5b6 | exit 0 | 375 |  |
+| 25 v2b-el-combine | RUN-20261012T144532Z-da7cee10 | exit 0 |  |  |
+| 26 v7-scan-el | RUN-20261012T144538Z-92368680 | exit 1 |  |  |
+| 27 v7-shift-el | RUN-20261012T144933Z-135254db | exit 0 |  |  |
+| 28 v6-unsized | RUN-20261012T145034Z-5cfae18d | exit 1 |  |  |
+| 29 v6-compare | RUN-20261012T145039Z-dc059586 | exit 1 |  |  |
+| 30 v7r-s0 | RUN-20261012T145045Z-1c67b3aa | exit 0 | 757 |  |
+| 31 v7r-s1 | RUN-20261012T150327Z-05fce358 | exit 0 | 751 |  |
+| 32 v7r-s2 | RUN-20261012T151604Z-5a3360af | exit 0 | 755 |  |
+| 33 v7r-s3 | RUN-20261012T152850Z-f67b987b | exit 0 | 776 |  |
+| 34 v7r-s4 | RUN-20261012T154151Z-6d81cbd5 | exit 0 | 757 |  |
+| 35 v7r-s5 | RUN-20261012T155440Z-c1b94e58 | exit 0 | 753 |  |
+| 36 v7r-s6 | RUN-20261012T160719Z-ce4b8672 | exit 0 | 754 |  |
+| 37 v7r-s7 | RUN-20261012T161959Z-202b631a | exit 0 | 752 |  |
+| 38 v7r-s8 | RUN-20261012T163238Z-0364063e | exit 0 | 752 |  |
+| 39 v7r-s9 | RUN-20261012T164516Z-531dda1f | exit 0 | 755 |  |
+| 40 v7r-s10 | RUN-20261012T165757Z-71c1ccb8 | exit 0 | 754 |  |
+| 41 v7r-s11 | RUN-20261012T171049Z-12e0d24c | exit 0 | 758 |  |
+| 42 v7r-s12 | RUN-20261012T172333Z-07b1b89e | exit 0 | 754 |  |
+| 43 v7r-s13 | RUN-20261012T173614Z-6e01ba2c | exit 0 | 754 |  |
+| 44 v7r-s14 | RUN-20261012T174900Z-d77f6f70 | exit 0 | 755 |  |
+| 45 v7r-s15 | RUN-20261012T180142Z-753dbea2 | exit 0 | 755 |  |
+| 46 v7r-ref | RUN-20261012T181425Z-b85bf905 | exit 0 | 166 |  |
+| 47 pytest-v7r-calibration-s0 | RUN-20261012T181717Z-af783b9b | exit 0 |  |  |
+| 48 pytest-v7r-calibration-s1 | RUN-20261012T183550Z-ba1d0680 | exit 0 |  |  |
+| 49 pytest-v7r-calibration-s2 | RUN-20261012T185404Z-55dd60fd | exit 0 |  |  |
+| 50 pytest-v7r-calibration-s3 | RUN-20261012T191218Z-24ddc1d6 | exit 0 |  |  |
+| 51 pytest-v7r-calibration-s4 | RUN-20261012T193031Z-272be475 | exit 0 |  |  |
+| 52 pytest-v7r-calibration-s5 | RUN-20261012T194844Z-f60cb799 | exit 0 |  |  |
+| 53 pytest-v7r-calibration-s6 | RUN-20261012T200652Z-076dec84 | exit 0 |  |  |
+| 54 pytest-v7r-calibration-s7 | RUN-20261012T202500Z-2388e432 | exit 0 |  |  |
+| 55 pytest-v7r-calibration-s8 | RUN-20261012T204304Z-3b016f92 | exit 0 |  |  |
+| 56 pytest-v7r-calibration-s9 | RUN-20261012T210116Z-37646ca4 | exit 0 |  |  |
+| 57 pytest-v7r-calibration-s10 | RUN-20261012T211932Z-d05a5139 | exit 0 |  |  |
+| 58 pytest-v7r-calibration-s11 | RUN-20261012T213741Z-5dab4929 | exit 0 |  |  |
+| 59 pytest-v7r-calibration-s12 | RUN-20261012T215558Z-b01d7c89 | exit 0 |  |  |
+| 60 pytest-v7r-calibration-s13 | RUN-20261012T221403Z-0ba7b31e | exit 0 |  |  |
+| 61 pytest-v7r-calibration-s14 | RUN-20261012T223209Z-cf3f2b42 | exit 0 |  |  |
+| 62 pytest-v7r-calibration-s15 | RUN-20261012T225019Z-1df18541 | exit 0 |  |  |
+| 63 pytest-v7r-calibration-s16 | RUN-20261012T230832Z-3f173661 | exit 0 |  |  |
+| 64 pytest-v7r-calibration-s17 | RUN-20261012T232647Z-0e98502f | exit 0 |  |  |
+| 65 pytest-v7r-calibration-s18 | RUN-20261012T234456Z-90c53c13 | exit 0 |  |  |
+| 66 pytest-v7r-calibration-s19 | RUN-20261013T000303Z-fd28758c | exit 0 |  |  |
+| 67 pytest-v7r-calibration-s20 | RUN-20261013T002112Z-b443dfa6 | exit 0 |  |  |
+| 68 pytest-v7r-calibration-s21 | RUN-20261013T003917Z-1e8b021e | exit 0 |  |  |
+| 69 pytest-v7r-calibration-s22 | RUN-20261013T005711Z-c79662dd | exit 0 |  |  |
+| 70 pytest-v7r-calibration-s23 | RUN-20261013T011511Z-3bfe8cdf | exit 0 |  |  |
+| 71 pytest-v7r-calibration-s24 | RUN-20261013T013318Z-d12f5a15 | exit 0 |  |  |
+| 72 pytest-v7r-calibration-s25 | RUN-20261013T015119Z-d926154d | exit 0 |  |  |
+| 73 pytest-v7r-calibration-s26 | RUN-20261013T020920Z-069d132a | exit 0 |  |  |
+| 74b pytest-v7r-calibration-s27 | RUN-20261013T023833Z-6393b1e4 | exit 0 |  | first attempt RUN-20261013T022727Z-421ff195 failed with an interpreter anomaly (tuple_iterator TypeError) after 633 s; recorded, not used |
+| 75 pytest-v7r-calibration-s28 | RUN-20261013T025632Z-16f2284b | exit 0 |  |  |
+| 76 pytest-v7r-calibration-s29 | RUN-20261013T031433Z-f4d73140 | exit 0 |  |  |
+| 77 pytest-v7r-calibration-s30 | RUN-20261013T033237Z-f43e50d8 | exit 0 |  |  |
+| 78 v7r-calibration-combine | RUN-20261013T033755Z-4d78d844 | exit 1 |  | run_suite registration lacks --out-dir: OSError read-only 'samples'; executed directly as 78b |
+| 78b v7r-calibration-combine (direct) | RUN-20261013T033841Z-df5bc0de | direct (see Incidents) |  |  |
+| 79 v7r-combine | RUN-20261013T033920Z-a23b92fb | exit 1 |  |  |
+| 80 v7r-diag | RUN-20261013T033946Z-9f7b46dd | exit 0 |  |  |
+| 81 e1-b-s0 | RUN-20261013T033954Z-2e0b57d1 | exit 0 | 543 |  |
+| 82 e1-b-s1 | RUN-20261013T034903Z-4f6ab10a | exit 0 | 543 |  |
+| 83 e1-b-s2 | RUN-20261013T035812Z-d5231116 | exit 0 | 543 |  |
+| 84 e1-b-compare | RUN-20261013T040730Z-e872f2ad | exit 0 |  |  |
+| 85 e-shape-exploratory | RUN-20261013T040736Z-3f6dcd5b | exit 1 |  | FAILED: exploratory table build into read-only cache (OSError); see 85b |
+| 85b e-shape-exploratory (direct) | RUN-20261013T040917Z-c6a7d10e | direct, executed |  | writable cache copy; verdict executed; R80 shift 0.0004 mm |
+| 86 v3-workers-partition | RUN-20261013T040758Z-fbda7895 | exit 0 |  | deferred (single-process directive) |
+
+Steps 11, 16, 21, 22, 25, 79, 80 and 84 are consumers of imported partials (attestation manifests in `environment.txt` and the summary `attestation` block; digests in the ledger `partials-dd976c5.json`, one `PARTIAL` line per producer run, except the calibration records below).
+
+## Step table `hr5c` (11 steps, base 20491004, CUDA host, one controlling process)
+
+| Step | Host run id | Exit | Wall [s] | Result |
+|---|---|---|---|---|
+| 01–04 v8-stat-python-s0..s3 | RUN-20261013T042034Z-554308c4, RUN-20261013T042946Z-6bf1a3d8, RUN-20261013T043853Z-ce931090, RUN-20261013T044759Z-278eb9a9 | 0 | 546, 541, 540, 539 | 3e4 histories each (1.2e5 python total in the T12 comparison) |
+| 05 v8-stat-cpu64 | RUN-20261013T045704Z-adb3630a | 0 | 173 | 1e6 histories |
+| 06 v8-stat-cuda32 | RUN-20261013T050002Z-35c80ac8 | 0 | 22 | 1e6 histories |
+| 07 v8-stat-cuda64 | RUN-20261013T050030Z-f22739b4 | 0 | 26 | 1e6 histories |
+| 08 v8-stat-compare | RUN-20261013T050112Z-f82a2dc5 | 0 | | V8 pairs pass; V8-nuc pass (T12 conclusive, p 0.50, 160 groups) |
+| 09 v7-f32-f64-cuda | RUN-20261013T050123Z-9d30dcc9 | 0 | | pass |
+| 10 v6-unsized | RUN-20261013T050157Z-16c75ab8 | 1 | | failed by design (not sized) |
+| 11 v6-cuda-compare | RUN-20261013T050202Z-a824f328 | 1 | | failed by design (unsized) |
+
+## C8 rehearsal (base 20505000, never evidence)
+
+| Run | Head | Step | Wall | Outcome |
+|---|---|---|---|---|
+| RUN-20261011T013631Z-beffd5fa | 992b9ec | 07-lv5c-throughput | 35 s | rates (sized at 3300 s: defect, fixed in C6b) |
+| RUN-20261011T013718Z-1fc90c28 | 992b9ec | 29-v7r-s0 | 758 s | timing only (worktree edited during the run) |
+| RUN-20261011T030353Z-0b25db97 | c847cc75 | v6-shard s0 (direct) | 184 s | N_V6 sizing input |
+| RUN-20261011T030829Z-537a9857 | c847cc75 | v6-sens-shard nominal s0 (direct) | 185 s | V6-sens sizing input |
+| RUN-20261011T031141Z-88a536e0 | c847cc75 | v6-sens-shard st-hi s0 (direct) | 185 s | V6-sens sizing input |
+| RUN-20261011T031454Z-2c505136 | c847cc75 | hr5c 01-v8-stat-python-s0 | 545 s | V8-nuc layout confirmed |
+| RUN-20261011T032408Z-08dd0427 | c847cc75 | calibration archive_fitted, 200 reps (direct pytest) | 1018 s | misses at n = 200, so 3200 (Amendment 14a) |
+| RUN-20261011T034222Z-16d64100 | c847cc75 | calibration Gaussian / Amendment 13 cases (direct pytest) | 308 s | one shard |
+| RUN-20261011T034756Z-a78b4deb | c847cc75 | 07-lv5c-throughput | 27 s | shard_table_ok; E1-B undeclared (3 shards) |
+| RUN-20261011T051756Z-83ff4a06 | 22e6e88 | 30-v7r-s0 | 761 s | timing only (dirty after) |
+| RUN-20261011T054546Z-24509d70 | 41d7afd8 | v7r-shard s0 (direct) | 756 s | timing only (digest changed) |
+| RUN-20261011T060811Z-46c17054 | 52a2b54f | 30-v7r-s0 | 0 s | refused by the preflight (numeric --only; fixed in C8e) |
+| RUN-20261011T061056Z-04cca6e8 | 6df0e554 | 30-v7r-s0 | 763 s | fixture shard (superseded by the C8g re-run) |
+| RUN-20261011T062344Z-299a4a8d | 6df0e554 | 31-v7r-s1 | 755 s | fixture shard (superseded by the C8g re-run) |
+| RUN-20261011T064548Z-75e1120c | c6f16e31 | 47-pytest-v7r-calibration-s0 | 1094 s | timing (sizing holds); counts deterministic |
+
+The evidence-head V7-R rehearsal block-sum fixture (`tests/ionmc/fixtures/v7r/rehearsal`) was rebuilt at each hashed-source change; the one used here: shards RUN-20261011T211956Z-f557ad73 (v7r-s0, 753 s) and RUN-20261011T213235Z-f0c452bd (v7r-s1, 753 s) at clean head 0fdac52f, rehearsal digest `05761dc8…`, committed at dd976c5a. Earlier fixture chains (6df0e554, 1a86a08c, df596559, 79b33058, 8f7ddb4e) are superseded.
+
+## Records per Amendment 14a (d)
+
+- lv5b `r1-nuc` frozen digest no longer reproduces at HEAD (schema: `elastic_mev` field added in C3; all other fields identical field by field); lv5c R1-D2 (B) reproduces `3edfce9c…` with the field dropped.
+- `CONSUMED_R_INDICES` = range(0, 12) (lv5b r_index 12/13 never run).
+- R1-D2 (C) seeds: IDD k = 0, 1; lateral k = 2, 3 of r_index 3.
+- Rung-3 residual energy equivalent formula (Amendment 14a (d)).
+- Contrary-evidence note: measured and model V6 means were displayed side by side during the sizing inspection (rehearsal base; no residual, no verdict, nothing changed as a consequence; evidence base 20481004 unobserved).
+- Two concurrent sandbox pytest runs produced one segfault in `test_transport_t12` (C8b); the single run completed cleanly; recorded.
+- V6 / V6-sens: failed, not sized under the pre-registered rule (Amendment 14a (a)4); IR-20261011-031924-C205C8 is retained as provenance only (record in `reference_requests/interventions/`, status resolved with the operator's response).
+
+## Incidents and deviations (V3-005C)
+
+- **Superseded partial C9 at 37e87ecf.** C9 was started at 37e87ecf (v5.seed fingerprint defect not yet found): steps 01–06 ran. The defect surfaced at step 16 (`v11-compare`: replicates differ in `config_sha256`; the 12 C7 case files carry a per-seed `v5.seed` that `compare_batches.run_fingerprint` did not strip). C9a (df596559) strips it with a CI test over the committed groups; that run is superseded and no result of it is used. Both failed step-16 publications were kept.
+- **System restart zeroed published copies.** The operator's memory-issue restart zeroed the published copies of the 37e87ecf steps 03–06 (all files 0 bytes); the steps were re-run deterministically (03b RUN-20261011T180918Z-e5cdfbe1, same `v10-a` FAIL and PARTIAL `de6e2599…`). That chain is superseded by the dd976c5a run.
+- **WSL crashes (2026-10-11, 2026-10-12) and the operator's diagnostic rules.** WSL crashed during the full suite on the C9g tree; operator rules: one heavy job at a time, full external timestamped logs, `pytest -X faulthandler -u -v --capture=tee-sys --tb=long`, one instrumented re-run, narrow first if it crashes again. The instrumented re-run passed (1239 passed, 42 skipped, 41 deselected, 517.5 s); the interrupted attempt is recorded as incomplete.
+- **Shard-74 interpreter anomaly.** `pytest-v7r-calibration-s27` (`rehearsal_block_sums` part 12), RUN-20261013T022727Z-421ff195, failed after 633 s with `TypeError: unsupported operand type(s) for /: 'tuple_iterator' and 'float'` in `steps_v5b._betacf` (a float local became a tuple_iterator): a process-level fault, not a logic error (27 sibling shards passed; the computation is deterministic). One re-execution of the same deterministic shard, RUN-20261013T023833Z-6393b1e4, passed (1072 s). The failed attempt is kept on record, not used (host memory suspected).
+- **Wrapper defect 1: `v7r-calibration-combine` registration without `--out-dir`.** Step 78 (RUN-20261013T033755Z-4d78d844) wrote its status partial to the relative `samples` and failed with a read-only OSError. The step was executed directly at the same SHA with the same arguments and out dir (78b, RUN-20261013T033841Z-df5bc0de; sealed `v7r-calibration-status` partial `8451f463…`). Fixed in C11 (`run_suite.py` passes `--out-dir`; test).
+- **Wrapper defect 2: exploratory table built into the shared cache.** Step 85 (RUN-20261013T040736Z-3f6dcd5b) tried to build the forced-isotropic exploratory table in the read-only shared cache (OSError). The step was executed directly with a writable cache copy (85b, RUN-20261013T040917Z-c6a7d10e; verdict executed, R80 shift 0.0004 mm). Fixed in C11 (the table is built into `<out-dir>/exploratory-cache`; test). Both direct executions run the same code at dd976c5a; their documents are in the protected host records, not in the combined archive, so the archive rows E-shape (step 85) and the calibration status come from the failed wrapper runs and from the consumer, respectively; `complete: false` of the lv5c archive reflects exactly these two steps (no JSON document).
+- **Calibration records sealed inside the file; no PARTIAL line.** The calibration steps print no `PARTIAL` line (C8b omission): the manifest for `v7r-calibration-combine` was built from each record's internal `content_sha256` and the host run id (ledger `sealed_records`), a deviation from the PARTIAL-line rule recorded here.
+- **Hashed-plan digest finding (Amendment 18 (d)).** `validation/plans/*.md` and `decisions/*.md` were in the hashed source set, contradicting Amendment 17 (a)7, so the rehearsal fixture went stale on every documentation commit. The rehearsal digest now excludes `validation/plans/`, `decisions/`, docs and README files (suite source identity and attestation unchanged); C9b 79b33058.
+- **Concurrent-pytest segfault.** A second concurrent full pytest run segfaulted in `test_transport_t12` (C8b); not repeated concurrently since.
+- **V6-F design and review.** After the operator's response to IR-20261011-031924-C205C8, a computationally feasible follow-up row V6-F was designed and independently reviewed (Opus, 31-item checklist; blocking findings B1 aura share, B2 screen denominator, B3 execution scope were applied). It is pre-registered in Amendment 18 and `validation/plans/v3-005c-v6f-followup.md` (frozen with its artifacts), report-only, **not executed in V3-005C**, gating in a later task on a fresh base. The original V6 failure is preserved.
+- **Codex review chain.** Review rounds REVIEW-8f75d668 (37e87ecf), -43fba25e, -3ef85396 (changes required, fixes C9d/C9f) and -60f23708 (pass at dd976c5a).
+
+## Summarizer corrections at C11
+
+- **Failed step versus unverified archive.** `combine` listed every part with `pass: false` as "archive does not verify ([])" and set `complete: false`, including archives that verify but contain a step with a failed verdict (a defect, introduced with the lv5b archives, where the same sentence was documented as "the summarizer's notice that these subset archives carry `pass: false`"). Now a part is a verification problem only when the archive or a step records an integrity problem (for example a missing JSON document); failed steps are listed in the new `failed_steps` field, `pass` stays false, `complete` stays true when no steps are missing. The lv5b and hr5 archives in this directory were produced by the earlier code and are not regenerated.
+- **Row V7-R.** `gates_pass` now comes from the `v7r-combine` document's `gates_pass` and `calibration_pass` from the sealed `v7r-calibration-status` partial as consumed by `v7r-combine` (`calibration_status.pass`) conjoined with the exact shard establishment; the step records `v7r_gates_pass` and `v7r_calibration_status_pass`. The C9/C10 summary showed the inverse (calibration true, gates false) because the row used the step exit status for the gates.
