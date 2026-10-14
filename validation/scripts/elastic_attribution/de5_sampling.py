@@ -1,0 +1,400 @@
+"""D-E5, table side (exploratory, report-only; Amendment 19 (d)): the pinned elastic table sampled in the D-E4 frame.
+
+Cases 0-9 = rows 14-23 of the plan (section 3.2): water (p+O-16 and p+H-1) at 30 / 50 / 100 / 150 / 200 MeV (cases 0-4)
+and graphite (p+C-12, 2.0 g/cm3) at the same energies (cases 5-9). Per case ``N_EVENTS`` = 1e6 elastic events are sampled
+at the **fixed beam energy** (thin target: no slowing down, no multiple scattering, no EM), seed
+``SeedSequence(20991000 + case)`` (Amendment 19 (f)). The target of every event is chosen with probability proportional to
+``n_t sigma_t(E)`` of the case material; ``mu_CM`` comes from the P7 sampler (``ElasticTable.sample_mu``, the reference
+inverse-CDF sampler of the P7 row, ``steps_v5d.p7_case``); the lab frame is the exact two-body kinematics of
+``ionmc.nuclear.elastic_kin.two_body``. p-p: the table density already stops at ``theta_CM = 16.26 deg`` (``|mu| <= 0.96``,
+asserted); the Geant4 side applies the same cut; both protons are scored (the faster one is the primary, the slower the
+secondary). Kinetic-energy filter of the D-E4 scorer: records with ``E > E0 - 1e-4 MeV`` (undeflected primaries) are dropped
+(plan 3.2); the fraction removed from the p+A classes is reported.
+
+Signatures (plan section 2.2, H2 / H3 rows and the descriptive characterisation), per class (p+O, p-p, p+C):
+- rate per primary ``n sigma L`` (L = 1 cm at 100-200 MeV, 2 mm at 30 / 50 MeV; N = 4e6 / 2e7 primaries) and its expected
+  count; p-p rate = the rate above 16.26 deg CM;
+- ``P(theta_lab > theta_w)`` for w = 2, 3 mm with ``R(E)(1 - cos theta_w) = w``, R = the Bethe CSDA range of water at the
+  beam energy (the water-geometry thresholds, used for graphite too); ``theta_med`` (lab median of the primary); the tail moment
+  ``T = <(1 - cos theta_lab) 1[theta_lab > 3 theta_med]>`` (all of the primary);
+- p-p: ``<T_slow>`` and the exceedance of the fast proton (the same ``P`` entries);
+- descriptive (report-only): the first local minimum above 3 deg of the 1-deg CM binned density (the frozen estimator; it also
+  picks noise dips, so a variant needing a 3-sigma Poisson dip is reported next to it; the q range uses the frozen minimum), the large-q log-slope
+  d ln(d sigma/d q^2)/d ln q above that minimum (12 q bins to theta_CM = 90 deg, bins with >= 30 counts), and a least-squares
+  3-D Helm (R_eff, s) fit to the sampled density (free amplitude) - the Helm fit is a fit to the table, not to data;
+- classification of the D-E4 scheme (:func:`classify`, applied to the table events and later to the Geant4 phase space):
+  relative residual of the primary's energy to the elastic kinematic curves of p+H and p+A; the smaller residual wins; a
+  *conflict* track (both below 1e-3, i.e. theta_lab below the crossover of about 1.8 deg) is kept: p-p iff the event has a secondary
+  proton, else p+A. The raw conflict fraction is a diagnostic; the per-class rate after the rule is reported.
+- the first-minimum, q-slope and Helm descriptors are recorded, not interpreted.
+
+Geant4 ratios are made later by :func:`signature_ratios` from a Geant4 per-class summary of the same keys (D-E4); no Geant4
+number is used here. Run: ``python -m validation.scripts.elastic_attribution.de5_sampling`` (about 1 minute).
+"""
+
+from __future__ import annotations
+
+import math
+import time
+from typing import Any
+
+import numpy as np
+
+from . import common as c
+
+ENERGIES = (30, 50, 100, 150, 200)
+N_EVENTS = 1_000_000
+SEED_BASE = 20991000  # plus the case index 0-9 (Amendment 19 (f))
+KE_CUT_MEV = 1.0e-4
+PP_CUT_DEG = 16.26
+GRAPHITE_RHO = 2.0
+HBARC = 197.3269804
+SIGNATURES = (  # keys of a class summary that the Geant4 hook compares
+    "rate_per_primary", "P_theta_lab_gt_theta_2mm", "P_theta_lab_gt_theta_3mm", "theta_lab_median_deg", "T_tail_moment",
+    "mean_t_other_mev", "first_minimum_deg", "first_minimum_3sigma_deg", "qslope",
+)  # fmt: skip
+HIST_INTERIOR_DEG = [2.0, 5.0, 10.0, 15.0, 20.0, 30.0, 60.0]  # 8 lab-angle bins (7 interior edges)
+HIST_INTERIOR_T = [0.02, 0.05, 0.1, 0.2, 0.4, 0.6, 0.8]  # primary T1 / E0, 8 bins
+
+
+def case_table() -> list[dict[str, Any]]:
+    """Cases 0-9 = rows 14-23: material, energy, target length [cm], primaries."""
+    out = []
+    for i, (mat, e) in enumerate([(m, e) for m in ("water", "graphite") for e in ENERGIES]):
+        thin = e <= 50
+        out.append({"case": i, "row": 14 + i, "material": mat, "energy_mev": e, "length_cm": 0.2 if thin else 1.0,
+                    "primaries": 20_000_000 if thin else 4_000_000, "seed": SEED_BASE + i})  # fmt: skip
+    return out
+
+
+def kin_curve_t(e0: float, m_t: float, cos_theta: np.ndarray) -> np.ndarray:
+    """Kinetic energy of an elastically scattered proton at lab angle ``theta`` (forward root, exact relativistic):
+    ``(A^2 - B^2) E1^2 - 2 A C E1 + C^2 + B^2 m^2 = 0`` with A = E0 + M, B = p0 cos(theta), C = m^2 + E0 M (E0 total energy)."""
+    from ionmc.nuclear.bgg import M_PROTON_MEV as m
+
+    et = e0 + m
+    p0 = math.sqrt(et * et - m * m)
+    a, b, cc = et + m_t, p0 * cos_theta, m * m + et * m_t
+    disc = np.sqrt(np.maximum(cc * cc - m * m * (a * a - b * b), 0.0))
+    return (a * cc + b * disc) / (a * a - b * b) - m
+
+
+def classify(
+    cos_lab: np.ndarray,
+    t1: np.ndarray,
+    e0: float,
+    m_h: float,
+    m_a: float,
+    has_secondary_proton: Any,
+    tol: float = 1.0e-3,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """D-E4 per-track classification rule (table side now, Geant4 phase space later). Residuals of the primary's kinetic energy
+    ``t1`` at its lab angle to the elastic kinematic curves of p+H (mass ``m_h``) and p+A (``m_a``), relative to ``t1``. The class
+    with the smaller residual is assigned; a *conflict* track (both residuals < ``tol``; the curves lie within 1e-3 of each other up
+    to ``theta_lab`` of about 1.8 deg) is **not** excluded: it is p-p iff the event has a secondary proton (``has_secondary_proton``,
+    bool or array), otherwise p+A. Returns ``(is_pp, conflict, off_curve)``; ``off_curve`` = the smaller residual exceeds ``tol``
+    (such tracks are classified by the smaller residual and counted)."""
+    t1 = np.asarray(t1, dtype=float)
+    rh = np.abs(t1 - kin_curve_t(e0, m_h, cos_lab)) / np.maximum(t1, 1e-9)
+    ra = np.abs(t1 - kin_curve_t(e0, m_a, cos_lab)) / np.maximum(t1, 1e-9)
+    conflict = (rh < tol) & (ra < tol)
+    is_pp = np.where(conflict, np.asarray(has_secondary_proton, dtype=bool), rh < ra)
+    return is_pp, conflict, np.minimum(rh, ra) > tol
+
+
+def curve_crossover_deg(e0: float, m_h: float, m_a: float, tol: float = 1.0e-3) -> float:
+    """Lab angle below which the p+H and p+A curves lie within ``tol`` (relative) of each other."""
+    th = np.arange(0.0, 20.0, 0.01)
+    c = np.cos(np.radians(th))
+    d = np.abs(kin_curve_t(e0, m_h, c) - kin_curve_t(e0, m_a, c)) / kin_curve_t(e0, m_h, c)
+    bad = np.nonzero(d >= tol)[0]
+    return float(th[bad[0]]) if bad.size else float("nan")
+
+
+def first_local_min_deg(
+    th: np.ndarray, f: np.ndarray, above: float
+) -> tuple[float | None, float | None]:
+    for i in range(1, th.size - 1):
+        if th[i] > above and f[i] < f[i - 1] and f[i] < f[i + 1]:
+            return float(th[i]), float(f[i])
+    return None, None
+
+
+def _j1s(x: np.ndarray) -> np.ndarray:
+    """Spherical Bessel j1(x) = (sin x - x cos x) / x^2."""
+    x = np.asarray(x, dtype=float)
+    small = x < 1e-3
+    xs = np.where(small, 1.0, x)
+    return np.where(small, x / 3.0, (np.sin(xs) - xs * np.cos(xs)) / xs**2)
+
+
+def helm_fit(q: np.ndarray, dens: np.ndarray) -> dict[str, float]:
+    """Report-only least-squares fit of ``|3 j1(qR)/(qR) exp(-q^2 s^2 / 2)|^2`` (free amplitude) to ``ln dens(q)``."""
+    best = (math.inf, 0.0, 0.0)
+    for r in np.arange(2.0, 6.0001, 0.05):
+        for s in np.arange(0.0, 1.5001, 0.05):
+            m = np.log(
+                np.maximum((3.0 * _j1s(q * r) / (q * r) * np.exp(-0.5 * (q * s) ** 2)) ** 2, 1e-300)
+            )
+            d = np.log(dens) - m
+            chi = float(np.sum((d - d.mean()) ** 2))
+            if chi < best[0]:
+                best = (chi, float(r), float(s))
+    return {
+        "R_eff_fm": best[1],
+        "s_fm": best[2],
+        "rms_log_residual": math.sqrt(best[0] / q.size),
+        "n_bins": int(q.size),
+    }
+
+
+def shape_descriptors(mu: np.ndarray, pcm: float) -> dict[str, Any]:
+    """First minimum (1-deg CM bins above 3 deg), large-q log slope and Helm fit of a p+A CM sample."""
+    th = np.degrees(np.arccos(np.clip(mu, -1.0, 1.0)))
+    edges = np.arange(0.0, 181.0, 1.0)
+    cnt, _ = np.histogram(th, bins=edges)
+    dens = cnt / (np.cos(np.radians(edges[:-1])) - np.cos(np.radians(edges[1:])))
+    cen = 0.5 * (edges[1:] + edges[:-1])
+    tmin, _ = first_local_min_deg(cen, dens.astype(float), 3.0)
+    # the frozen estimator picks any noise dip; the 3-sigma variant needs a Poisson dip of >= 3 sigma against both neighbours
+    sig_min = None
+    for i in range(1, cen.size - 1):
+        if cen[i] > 3.0 and cnt[i] > 0 and dens[i] < dens[i - 1] and dens[i] < dens[i + 1]:
+            w = np.cos(np.radians(edges[i])) - np.cos(np.radians(edges[i + 1]))
+            err = math.sqrt(cnt[i]) / w
+            dips = [
+                (dens[j] - dens[i])
+                / math.hypot(
+                    err,
+                    math.sqrt(max(cnt[j], 1))
+                    / (np.cos(np.radians(edges[j])) - np.cos(np.radians(edges[j + 1]))),
+                )
+                for j in (i - 1, i + 1)
+            ]
+            if min(dips) >= 3.0:
+                sig_min = float(cen[i])
+                break
+    out: dict[str, Any] = {"first_minimum_deg": tmin, "first_minimum_3sigma_deg": sig_min,
+                           "counts_in_first_minimum_bin": None if tmin is None else int(cnt[int(tmin)]),
+                           "qslope": None, "qslope_bins": 0, "helm": None}  # fmt: skip
+    if tmin is None:
+        return out
+    k = pcm / HBARC
+    q_lo, q_hi = 2 * k * math.sin(math.radians(tmin) / 2), 2 * k * math.sin(math.radians(90.0) / 2)
+    qs = 2 * k * np.sin(np.radians(th) / 2)
+    qe = np.linspace(q_lo, q_hi, 13)
+    qc, _ = np.histogram(qs, bins=qe)
+    dq = qe[1:] ** 2 - qe[:-1] ** 2
+    qcen = 0.5 * (qe[1:] + qe[:-1])
+    ok = qc >= 30
+    if ok.sum() >= 3:
+        slope = np.polyfit(np.log(qcen[ok]), np.log(qc[ok] / dq[ok]), 1)[0]
+        out["qslope"], out["qslope_bins"] = float(slope), int(ok.sum())
+    qh = 2 * k * np.sin(np.radians(np.linspace(3.0, 90.0, 61)) / 2)
+    qe2 = np.linspace(qh[0], qh[-1], 25)
+    c2, _ = np.histogram(qs, bins=qe2)
+    d2 = c2 / (qe2[1:] ** 2 - qe2[:-1] ** 2)
+    ok2 = c2 >= 50
+    if ok2.sum() >= 6:
+        out["helm"] = helm_fit(0.5 * (qe2[1:] + qe2[:-1])[ok2], d2[ok2])
+    return out
+
+
+def sample_case(tab: Any, water: c.Water, case: dict[str, Any]) -> dict[str, Any]:
+    """The table sampled for one case; see the module docstring."""
+    from ionmc.nuclear.bgg import M_PROTON_MEV as MP
+    from ionmc.nuclear.elastic_kin import two_body
+
+    e = float(case["energy_mev"])
+    names = tuple(tab.target_names)
+    assert SEED_BASE <= case["seed"] < SEED_BASE + 10 and 20990000 <= case["seed"] < 21000000
+    if case["material"] == "water":
+        dens = {n: t["n_per_cm3"] * t["scale"] for n, t in water.targets.items()}
+    else:
+        el = tab.info["elements"]["C"]
+        dens = {
+            str(el["target"]): c.N_AVOGADRO
+            * GRAPHITE_RHO
+            / float(el["a_g_mol"])
+            * float(el["sigma_scale"])
+        }
+    cls = sorted(dens, key=names.index)
+    sig = {n: float(tab.sigma_barn(names.index(n), e)) * 1e-24 for n in cls}  # cm2
+    ns = {n: dens[n] * sig[n] for n in cls}  # 1/cm
+    tot = sum(ns.values())
+    rng = np.random.default_rng(np.random.SeedSequence(case["seed"]))
+    pick = rng.choice(len(cls), size=N_EVENTS, p=[ns[n] / tot for n in cls])
+    r_w = float(water.range_mm(e))
+    th_w = {w: math.degrees(math.acos(1.0 - w / r_w)) for w in (2.0, 3.0)}
+    out: dict[str, Any] = {"case": case["case"], "row": case["row"], "material": case["material"], "energy_mev": e,
+                           "length_cm": case["length_cm"], "primaries": case["primaries"], "seed": case["seed"],
+                           "events_sampled": N_EVENTS, "range_water_mm": r_w, "theta_2mm_deg": th_w[2.0], "theta_3mm_deg": th_w[3.0],
+                           "sigma_el_mb": {n: sig[n] * 1e27 for n in cls}, "classes": {}}  # fmt: skip
+    for k, name in enumerate(cls):
+        it = names.index(name)
+        n_k = int((pick == k).sum())
+        m_t = float(tab.arrays["target_mass_mev"][it])
+        mu = tab.sample_mu(it, e, rng.random(n_k))
+        pp = name == "H-1"
+        if pp:
+            assert np.abs(mu).max() <= 0.96 + 1e-12  # theta_CM >= 16.26 deg
+        tb = two_body(e, MP, m_t, mu)
+        if pp:
+            fast = tb.t1 >= tb.t2
+            cos2 = tb.pz2 / np.hypot(tb.px2, tb.pz2)
+            t1, cos1 = np.where(fast, tb.t1, tb.t2), np.where(fast, tb.cos_lab1, cos2)
+            t_other = np.where(fast, tb.t2, tb.t1)
+            cos_other = np.where(fast, cos2, tb.cos_lab1)
+        else:
+            t1, cos1, t_other = tb.t1, tb.cos_lab1, tb.t2
+        keep = t1 <= e - KE_CUT_MEV
+        removed = 1.0 - float(keep.mean())
+        th = np.degrees(np.arccos(np.clip(cos1, -1, 1)))[keep]
+        t1k, cos1k, tok = t1[keep], cos1[keep], t_other[keep]
+        th_med = float(np.median(th))
+        rate = dens[name] * sig[name] * case["length_cm"]
+        h_th, _ = np.histogram(th, bins=[0.0, *HIST_INTERIOR_DEG, 180.0])
+        h_t, _ = np.histogram(t1k / e, bins=[0.0, *HIST_INTERIOR_T, 1.0 + 1e-9])
+        cls_doc: dict[str, Any] = {
+            "events": n_k, "event_share": n_k / N_EVENTS, "ke_cut_fraction_removed": removed,
+            "rate_per_primary": rate, "rate_per_primary_after_ke_cut": rate * (1.0 - removed),
+            "expected_events_in_primaries": rate * case["primaries"],
+            "P_theta_lab_gt_theta_2mm": float(np.mean(th > th_w[2.0])), "P_theta_lab_gt_theta_3mm": float(np.mean(th > th_w[3.0])),
+            "theta_lab_median_deg": th_med, "theta_lab_mean_1_minus_cos": float(np.mean(1.0 - cos1k)),
+            "T_tail_moment": float(np.mean((1.0 - cos1k) * (th > 3.0 * th_med))), "mean_t_other_mev": float(tok.mean()),
+            "theta_cm_median_deg": float(np.median(np.degrees(np.arccos(np.clip(np.abs(mu) if pp else mu, -1, 1))))),
+            "hist_theta_lab_counts_8bins": h_th.tolist(), "hist_theta_lab_interior_edges_deg": HIST_INTERIOR_DEG,
+            "hist_t1_over_e0_counts_8bins": h_t.tolist(), "hist_t1_over_e0_interior_edges": HIST_INTERIOR_T,
+            "hist_theta_lab_1deg_full": np.histogram(th, bins=np.arange(0.0, 181.0))[0].tolist(),
+        }  # fmt: skip
+        if pp:
+            cls_doc["theta_cm_min_deg"] = float(np.degrees(np.arccos(np.abs(mu).max())))
+            cls_doc["theta_slow_lab_median_deg"] = float(
+                np.median(np.degrees(np.arccos(np.clip(cos_other, -1, 1))))
+            )
+            cls_doc["first_minimum_deg"] = cls_doc["first_minimum_3sigma_deg"] = cls_doc[
+                "qslope"
+            ] = None
+        else:
+            sd = shape_descriptors(
+                mu, float(np.interp(e, tab.arrays["grid_e_mev"], tab.arrays["p_cm_mev"][it]))
+            )
+            cls_doc.update(sd)
+        # D-E4 classification rule on table events (pure function ``classify``)
+        mh = float(tab.arrays["target_mass_mev"][names.index("H-1")])
+        m_a = (
+            m_t
+            if not pp
+            else float(
+                tab.arrays["target_mass_mev"][
+                    names.index(next((n for n in cls if n != "H-1"), "O-16"))
+                ]
+            )
+        )
+        is_pp, conflict, off = classify(cos1k, t1k, e, mh, m_a, has_secondary_proton=pp)
+        assigned_own = is_pp if pp else ~is_pp
+        cls_doc["classification"] = {
+            "conflict_fraction_raw": float(conflict.mean()), "assigned_to_own_class_fraction": float(assigned_own.mean()),
+            "misclassified_fraction": float(1.0 - assigned_own.mean()), "off_curve_fraction": float(off.mean()),
+            "rate_per_primary_after_rule": rate * (1.0 - removed) * float(assigned_own.mean()),
+            "curve_crossover_deg": curve_crossover_deg(e, mh, m_a),
+        }  # fmt: skip
+        out["classes"][name] = cls_doc
+    out["total_rate_per_primary"] = sum(v["rate_per_primary"] for v in out["classes"].values())
+    if "H-1" in out["classes"]:
+        out["pp_share_of_elastic_events"] = out["classes"]["H-1"]["event_share"]
+    return out
+
+
+def signature_ratios(
+    table_doc: dict[str, Any], geant4: dict[str, dict[str, dict[str, float]]]
+) -> dict[str, Any]:
+    """Hook for the Geant4 comparison (plan D-E5): ``geant4[str(case)][class][signature]`` (the keys of :data:`SIGNATURES` of a
+    D-E4 per-class summary) -> ``ionmc / Geant4`` per case, class and signature (``None`` if a value is absent or zero)."""
+    out: dict[str, Any] = {}
+    for key, case in table_doc["cases"].items():
+        g_case = geant4.get(key, {})
+        out[key] = {}
+        for name, cls in case["classes"].items():
+            g = g_case.get(name, {})
+            row = {}
+            for s in SIGNATURES:
+                a, b = cls.get(s), g.get(s)
+                row[s] = None if a is None or not b else float(a) / float(b)
+            out[key][name] = row
+    return out
+
+
+def run() -> None:
+    t0 = time.perf_counter()
+    tab = c.load_table()
+    water = c.Water(tab)
+    cases = {str(cs["case"]): sample_case(tab, water, cs) for cs in case_table()}
+    doc = {"banner": c.BANNER, "events_per_case": N_EVENTS, "seed_base": SEED_BASE, "ke_cut_mev": KE_CUT_MEV, "cases": cases,
+           "descriptor_note": "first-minimum, q-slope and Helm descriptors are recorded, not interpreted (frozen 1-deg estimator picks noise dips in a 256-bin piecewise-uniform table; the 3-sigma variant misses the J1 zero)",
+        "classification_rule": "conflict tracks (both residuals < 1e-3, theta_lab below the ~1.8 deg crossover) are p-p iff the event has a secondary proton, else p+A",
+        "thin_target": "fixed beam energy, no slowing down, no multiple scattering (as the D-E4 EM-free cases)",
+           "wall_s": time.perf_counter() - t0}  # fmt: skip
+    c.write_outputs(c.OUT / "de5", "de5.json", doc, "de5-report.md", _header(), render_report)
+
+
+def _header() -> str:
+    cmd = "python -m validation.scripts.elastic_attribution.de5_sampling"
+    return c.header(
+        "D-E5 (table side): the pinned elastic table sampled in the D-E4 frame",
+        cmd,
+        c.table_files(),
+        [
+            "1e6 events per case from the P7 sampler (`ElasticTable.sample_mu`), seeds SeedSequence(20991000 + case), thin target "
+            "at the beam energy, exact two-body kinematics, p-p cut at 16.26 deg CM, D-E4 kinetic-energy filter. Signature "
+            "definitions: module docstring (plan 2.2). Thresholds theta_w use the Bethe range of water."
+        ],
+    )
+
+
+def render_report(doc: dict[str, Any]) -> str:
+    out = ["", "## Per case and class", "",
+           "| case (row) | material | E | class | sigma_el (mb) | rate/primary | share | KE cut removed | theta_med,lab | P(th>th_2mm) | P(th>th_3mm) | T | <T_other> MeV | first min (deg; 3-sigma) | q-slope | Helm R_eff / s |",
+           "|" + "---|" * 16]  # fmt: skip
+    for k, cs in doc["cases"].items():
+        for name, v in cs["classes"].items():
+            h = v.get("helm")
+            out.append(
+                f"| {k} ({cs['row']}) | {cs['material']} | {cs['energy_mev']:g} | {name} | {cs['sigma_el_mb'][name]:.2f} | {v['rate_per_primary']:.4g} | "
+                f"{v['event_share']:.3f} | {v['ke_cut_fraction_removed']:.2e} | {v['theta_lab_median_deg']:.2f} | {v['P_theta_lab_gt_theta_2mm']:.4f} | "
+                f"{v['P_theta_lab_gt_theta_3mm']:.4f} | {v['T_tail_moment']:.4f} | {v['mean_t_other_mev']:.3f} | "
+                f"{'-' if v.get('first_minimum_deg') is None else format(v['first_minimum_deg'], '.1f')}; {'-' if v.get('first_minimum_3sigma_deg') is None else format(v['first_minimum_3sigma_deg'], '.1f')} | "
+                f"{'-' if v.get('qslope') is None else format(v['qslope'], '.2f')} | "
+                f"{'-' if not h else format(h['R_eff_fm'], '.2f') + ' / ' + format(h['s_fm'], '.2f')} |"
+            )
+    out += [
+        "",
+        "## Thresholds, p-p cut and the classification rule",
+        "",
+        "Conflict tracks (both kinematic residuals < 1e-3; the p+H and p+A curves agree to 1e-3 below the crossover angle listed) "
+        "are not excluded: p-p iff the event has a secondary proton, else p+A.",
+        "",
+        "| case | theta_2mm | theta_3mm | class | theta_CM min (p-p) | crossover (deg) | raw conflict | misclassified | off curve | rate/primary after rule |",
+        "|" + "---|" * 10,
+    ]
+    for k, cs in doc["cases"].items():
+        for name, v in cs["classes"].items():
+            cl = v["classification"]
+            out.append(
+                f"| {k} | {cs['theta_2mm_deg']:.2f} | {cs['theta_3mm_deg']:.2f} | {name} | "
+                f"{'-' if 'theta_cm_min_deg' not in v else format(v['theta_cm_min_deg'], '.2f')} | {cl['curve_crossover_deg']:.2f} | {cl['conflict_fraction_raw']:.2e} | "
+                f"{cl['misclassified_fraction']:.2e} | {cl['off_curve_fraction']:.2e} | {cl['rate_per_primary_after_rule']:.4g} |"
+            )
+    out += [
+        "",
+        "The first-minimum, q-slope and Helm descriptors are recorded, not interpreted: the frozen 1-degree estimator picks noise dips "
+        "in a 256-bin piecewise-uniform table, and the 3-sigma variant misses the J1 zero.",
+        "",
+        "Lab-angle histogram bins (counts in the 8-bin record): [0, 2, 5, 10, 15, 20, 30, 60, 180] deg; T1/E0 bins "
+        "[0, .02, .05, .1, .2, .4, .6, .8, 1]. Geant4 ratios (ionmc / Geant4) are produced later by `signature_ratios` from the D-E4 summary.",
+    ]
+    return "\n".join(out) + "\n"
+
+
+if __name__ == "__main__":
+    run()

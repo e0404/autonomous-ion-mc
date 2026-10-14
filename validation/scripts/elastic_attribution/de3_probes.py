@@ -1,0 +1,446 @@
+"""D-E3 probes (exploratory, report-only; Amendment 19 (b), (f)): the V11 harness on the D-E3 variant tables.
+
+One invocation = one transport run (warp-cpu float64, single process, V5 geometry r = 20 cm, 20 batches,
+0.5 mm depth bins) of one variant (``--variant``; ``emonly`` = EM only, ``pinned`` = the pinned table) at one energy,
+with the common seed of the energy: **20990100 (150 MeV) and 20990101 (200 MeV)**, shared by every variant and by
+EM-only (CRN). ``--summary`` combines the run files of an output directory into F, gain, recoil, R80, lateral rms and the K*
+prediction. ``--check-base`` is the pre-D-E3 check (plan 3.1): the base copy ``all`` must reproduce the pinned
+table bit for bit at the same seed.
+
+Reused definitions (existing harness, not re-derived):
+
+- configuration and run: ``steps_v5c.v11_config`` (l.567-577: warp-cpu float64, ``nuc_config_c_elastic_only`` for EM+elastic,
+  ``nuc_config_c(nuclear=False)`` for EM-only), ``steps_v5b.v5_geometry`` (l.587), ``steps_v5b.V5_BATCHES / V5_DZ_MM``;
+- depth-dose curves, R80, plateau: ``steps_v5c.step_v11_ionmc`` (l.580-607; ``idd_b = batch_energy / bin_g_cm2``, plateau 20-60 mm);
+- F = (peak/plateau)_EM+el / (peak/plateau)_EM and gain = plateau ratio - 1: ``compare_idd_v5.paired_ratio_jackknife``
+  (l.680-700) and ``v11_energy`` (l.708-716) with ``curve_metrics`` (l.167);
+- recoil channel: ``steps_v5d.REC`` (l.84) and ``steps_v5b.tally_batches`` (steps_v5d.step_v5_ionmc l.660-673);
+- lateral rms: ``steps_v5d.r1d2_measure`` (l.342-376) grid (+-50 mm, 1 mm, slab 0.45-0.55 R80) and ``lateral_rms_batches`` (l.317).
+
+Only the elastic table differs from the V11 producer: the variant is loaded through
+``PhysicsConfig(elastic_table_id=<variant id>, allow_exploratory_table=True)`` (the pinned id keeps the evidence flags).
+The tables come from the scratch cache selected by ``IONMC_CACHE_DIR`` (default: ``make_variant_tables.SCRATCH``).
+
+Run: ``python -m validation.scripts.elastic_attribution.de3_probes --variant pA-s0.5 --energy 150 [--histories 100000]``.
+"""
+
+from __future__ import annotations
+
+import os
+
+os.environ["IONMC_CACHE_DIR"] = os.environ.get("IONMC_DE3_CACHE") or (
+    "/home/wahln/.local/share/ionmc-experiment/experiment-v3/tmp/claude-1000/-home-wahln-aiprojects-ion-mc/"
+    "3057d970-cf12-4711-8c0a-ae0cbe21cb5d/scratchpad/v3-005d/de3-cache"
+)
+
+import argparse  # noqa: E402
+import hashlib  # noqa: E402
+import importlib.util  # noqa: E402
+import json  # noqa: E402
+import time  # noqa: E402
+from pathlib import Path  # noqa: E402
+from typing import Any  # noqa: E402
+
+import numpy as np  # noqa: E402
+
+from . import common as c  # noqa: E402
+
+SEEDS = {150: 20990100, 200: 20990101}  # Amendment 19 (f)
+PINNED = c.TABLE_ID
+OUT_DEFAULT = c.OUT / "de3"
+R1D2_HALF_MM, R1D2_BIN_MM, R1D2_SLAB = 50.0, 1.0, (0.45, 0.55)  # steps_v5d.py l.88
+
+
+def _t() -> Any:
+    """The transport step modules (read only)."""
+    v5c = c.import_transport_module("steps_v5c")
+    v5d = c.import_transport_module("steps_v5d")
+    return v5c, v5d, c.import_transport_module("steps_v5b"), c.import_transport_module("steps_v5")
+
+
+def _cmp() -> Any:
+    path = c.REPO / "validation" / "scripts" / "reference" / "compare_idd_v5.py"
+    spec = importlib.util.spec_from_file_location("compare_idd_v5", path)
+    assert spec and spec.loader
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def variant_table_id(variant: str) -> str:
+    if variant in ("pinned", "emonly"):
+        return PINNED
+    from .make_variant_tables import variant_ids
+
+    return variant_ids(Path(os.environ["IONMC_CACHE_DIR"]))[variant]
+
+
+def build_config(
+    energy: int,
+    mode: str,
+    n: int,
+    seed: int,
+    table_id: str,
+    batches: int = 20,
+    grid_geo: Any = None,
+    tallies: tuple[Any, ...] | None = None,
+) -> Any:
+    """V11 configuration (``steps_v5c.v11_config``) with the elastic table ``table_id``. ``mode``: ``emel`` or ``emonly``."""
+    from dataclasses import replace as rep
+
+    v5c, v5d, v5b, _ = _t()
+    geo, grid, _nz, _ = v5b.v5_geometry(float(energy))
+    if grid_geo is not None:
+        geo, grid = grid_geo
+    if mode == "emonly":
+        cfg = v5c.nuc_config_c(energy=float(energy), n=n, seed=seed, geometry=geo, grid=grid, nuclear=False,
+                               n_batches=batches, tallies=tallies or ())  # fmt: skip
+    else:
+        cfg = v5c.nuc_config_c_elastic_only(energy=float(energy), n=n, seed=seed, geometry=geo, grid=grid, nuclear=True,
+                                            n_batches=batches, tallies=tallies if tallies is not None else (v5d.REC,))  # fmt: skip
+        if table_id != PINNED:
+            cfg = rep(
+                cfg,
+                physics=rep(cfg.physics, elastic_table_id=table_id, allow_exploratory_table=True),
+            )
+    return rep(cfg, run=rep(cfg.run, backend="warp-cpu", precision="float64"))
+
+
+def run_one(
+    variant: str, energy: int, n: int, batches: int, lateral: bool, out: Path
+) -> dict[str, Any]:
+    """One run -> ``out/de3-<energy>-<variant>.json``."""
+    v5c, v5d, v5b, v5 = _t()
+    from ionmc import materials as M
+    from ionmc.reference import metrics as rm
+    from ionmc.scoring import ScoringGrid
+
+    mode = "emonly" if variant == "emonly" else "emel"
+    tid = variant_table_id(variant)
+    seed = SEEDS[energy]
+    geo, grid, nz, r_mm = v5b.v5_geometry(float(energy))
+    cfg = build_config(energy, mode, n, seed, tid, batches)
+    t0 = time.perf_counter()
+    res = v5b.Simulation(cfg).run()
+    wall = time.perf_counter() - t0
+    rho = M.WATER.density_g_cm3
+    bin_g = rho * v5b.V5_DZ_MM / 10.0
+    idd_b = res.grid("dose").batch_energy_mev.reshape(batches, nz) / bin_g
+    idd = idd_b.mean(axis=0)
+    depth = (np.arange(nz) + 0.5) * v5b.V5_DZ_MM
+    curve = rm.normalize_to_peak(idd)
+    plateau = (depth >= 20.0) & (depth <= 60.0)
+    doc: dict[str, Any] = {
+        "banner": c.BANNER, "variant": variant, "mode": mode, "energy": energy, "seed": seed, "n": n, "n_batches": batches,
+        "elastic_table_id": tid, "bin_mm": v5b.V5_DZ_MM, "idd_batches": idd_b.tolist(), "unit": "MeV/(g/cm^2)/primary",
+        "metrics": {"peak_depth_mm": rm.peak_depth(depth, curve), "r80_mm": rm.r80(depth, curve),
+                    "plateau_mean_20_60_mm": float(idd[plateau].mean()), "peak_over_plateau": float(idd.max() / idd[plateau].mean())},
+        "valid": bool(v5.clean(res) and res.energy_balance.relative_residual <= 1e-12),
+        "counters": res.counters.as_dict(), "wall_s": wall, "hist_per_s": n / wall,
+    }  # fmt: skip
+    if mode == "emel":
+        rec_b = v5b.tally_batches(res, "recoil") / bin_g
+        doc["recoil_idd_batches"] = rec_b.tolist()
+        doc["recoil_total_mev_per_primary"] = float((rec_b.sum(axis=1) * bin_g).mean())
+    if lateral:
+        r80_off = float(
+            c.idd_mean(energy, "emonly")[2]["r80_mm"]
+        )  # slab from the archived V11 EM-only R80
+        z0, dz = R1D2_SLAB[0] * r80_off, (R1D2_SLAB[1] - R1D2_SLAB[0]) * r80_off
+        nl = int(round(2 * R1D2_HALF_MM / R1D2_BIN_MM))
+        lgrid = ScoringGrid(
+            (-R1D2_HALF_MM, -R1D2_HALF_MM, z0),
+            (R1D2_BIN_MM, R1D2_BIN_MM, dz),
+            (nl, nl, 1),
+            name="dose",
+        )
+        lcfg = build_config(energy, mode, n, seed, tid, batches, grid_geo=(geo, lgrid), tallies=())
+        t1 = time.perf_counter()
+        lres = v5b.Simulation(lcfg).run()
+        doc["lateral"] = {"slab_mm": [z0, z0 + dz], "r80_ref_mm": r80_off, "wall_s": time.perf_counter() - t1,
+                          "rms_mm_batches": v5d.lateral_rms_batches(lres.grid("dose").batch_energy_mev, R1D2_HALF_MM, R1D2_BIN_MM).tolist(),
+                          "valid": bool(v5.clean(lres))}  # fmt: skip
+    out.mkdir(parents=True, exist_ok=True)
+    (out / f"de3-{energy}-{variant}.json").write_text(json.dumps(doc, sort_keys=True) + "\n")
+    return doc
+
+
+def _array_digest(x: Any) -> str:
+    return hashlib.sha256(np.ascontiguousarray(np.asarray(x, dtype=np.float64)).tobytes()).hexdigest()
+
+
+def check_base(energy: int, n: int, batches: int, out: Path, reuse_runs: bool = False) -> dict[str, Any]:
+    """Pre-D-E3 check (plan 3.1): the base copy ``all`` equals the pinned table bit for bit at the same seed.
+
+    ``reuse_runs`` compares the run files already in ``out`` (no transport) and records the array digests.
+    """
+    if reuse_runs:
+        a = json.loads((out / f"de3-{energy}-pinned.json").read_text())
+        b = json.loads((out / f"de3-{energy}-all.json").read_text())
+    else:
+        a = run_one("pinned", energy, n, batches, False, out)
+        b = run_one("all", energy, n, batches, False, out)
+    same = {
+        k: bool(np.array_equal(np.asarray(a[k]), np.asarray(b[k])))
+        for k in ("idd_batches", "recoil_idd_batches")
+    }
+    same["counters"] = a["counters"] == b["counters"]
+    res = {
+        "energy": energy,
+        "n": n,
+        "n_batches": a["n_batches"],
+        "seed": a["seed"],
+        "bit_for_bit": bool(all(same.values())),
+        "detail": same,
+        "pinned_id": a["elastic_table_id"],
+        "all_id": b["elastic_table_id"],
+        "sha256_idd_batches": {"pinned": _array_digest(a["idd_batches"]), "all": _array_digest(b["idd_batches"])},
+        "sha256_recoil_idd_batches": {"pinned": _array_digest(a["recoil_idd_batches"]),
+                                      "all": _array_digest(b["recoil_idd_batches"])},
+        "counters": a["counters"],
+        "provenance": provenance(),
+    }  # fmt: skip
+    out.mkdir(parents=True, exist_ok=True)
+    (out / f"check-base-{energy}.json").write_text(json.dumps(res, indent=1) + "\n")
+    return res
+
+
+# -- provenance ----------------------------------------------------------------------------------------
+SCRIPTS = ("make_variant_tables.py", "de3_probes.py", "de0_kernels.py", "common.py")
+
+
+def provenance() -> dict[str, Any]:
+    """Code state of the record: commit, dirty/untracked state, script and table hashes, backend."""
+    import subprocess
+
+    here = Path(__file__).resolve().parent
+    git = lambda *a: subprocess.run(["git", *a], cwd=c.REPO, capture_output=True, text=True).stdout.strip()  # noqa: E731
+    status = git("status", "--short", "--untracked-files=all", "--", "validation/scripts/elastic_attribution")
+    return {
+        "git_head": git("rev-parse", "HEAD"),
+        "git_status_elastic_attribution": status.splitlines(),
+        "scripts_sha256": {k: c.sha256_file(here / k) for k in SCRIPTS},
+        "table_files_sha256": {str(c.rel(f)): c.sha256_file(f) for f in c.table_files()},
+        "backend": "warp-cpu", "precision": "float64", "single_process": True,
+        "cache_dir": os.environ["IONMC_CACHE_DIR"], "seeds": SEEDS,
+        # the scripts as they were when the transport runs were made (a staged copy; set DE3_RUNTIME_SCRIPTS_DIR)
+        "runtime_scripts_sha256": {k: c.sha256_file(Path(os.environ["DE3_RUNTIME_SCRIPTS_DIR"]) / k)
+                                   for k in ("make_variant_tables.py", "de3_probes.py")
+                                   if os.environ.get("DE3_RUNTIME_SCRIPTS_DIR")
+                                   and (Path(os.environ["DE3_RUNTIME_SCRIPTS_DIR"]) / k).is_file()},
+    }  # fmt: skip
+
+
+def composition_and_gap(rows: dict[str, Any], out: Path) -> dict[str, Any]:
+    """Derived rows requested by the D-E3 review: multiplicative composition F_pA x F_pp vs F_all, and the
+    fraction of the archived V11 gap (F_ionmc / F_TOPAS - 1, from the H5 record) closed by each p+A shape variant.
+    F_TOPAS is reconstructed as F_all / (1 + Delta_pk) with this run's F_all (equal to the archived F within 0.6 sigma)."""
+    h5 = out.parent / "de0h5" / "h5.json"
+    delta = {}
+    if h5.is_file():
+        delta = {int(k): v["delta_pk_F_ionmc_over_F_topas_minus_1"] for k, v in json.loads(h5.read_text())["per_energy"].items()}
+    res: dict[str, Any] = {}
+    for e in (150, 200):
+        if f"{e}/all" not in rows:
+            continue
+        f_all, f_pa, f_pp = (rows.get(f"{e}/{v}", {}).get("F") for v in ("all", "pA-only", "pp-only"))
+        block: dict[str, Any] = {}
+        if f_pa is not None and f_pp is not None:
+            block["F_pA_times_F_pp"] = f_pa * f_pp
+            block["F_all"] = f_all
+            block["F_all_minus_product"] = f_all - f_pa * f_pp
+            block["removal_pA_plus_removal_pp_minus_removal_all"] = (
+                rows[f"{e}/pA-only"]["peak_removal"] + rows[f"{e}/pp-only"]["peak_removal"] - rows[f"{e}/all"]["peak_removal"]
+            )
+        if e in delta:
+            f_topas = f_all / (1.0 + delta[e])
+            block["F_topas_reconstructed"] = f_topas
+            block["delta_pk_archived"] = delta[e]
+            block["gap_closed_fraction"] = {
+                v: (rows[f"{e}/{v}"]["F"] - f_all) / (f_topas - f_all)
+                for v in ("pA-sigma0.8", "pA-Rx1.2", "pA-s0.5", "pA-s0.9", "pA-gauss")
+                if f"{e}/{v}" in rows
+            }
+            block["pp_only_gain_over_topas_total_gain"] = None  # filled by the reviewer from the archived V11 gain; not computed here
+        res[str(e)] = block
+    return res
+
+
+# -- K* prediction and summary --------------------------------------------------------------------------
+PRED_KIND = {"all": "table", "pp-only": "table", "pA-only": "table", "pA-sigma0.8": "table", "pA-Rx1.2": "Rx1.2",
+             "pA-s0.5": "s0.5", "pA-s0.9": "s0.9", "pA-gauss": "gauss", "pinned": "table"}  # fmt: skip
+PRED_WEIGHT = {
+    "pp-only": (0.0, 1.0),
+    "pA-only": (1.0, 0.0),
+    "pA-sigma0.8": (0.8, 1.0),
+}  # (O, H-1) cross-section factors
+
+
+def kstar_prediction(variant: str, energy: int) -> dict[str, float]:
+    """Peak removal predicted by D-E0 ``kernels``: ``K*`` shifted (physical) and as frozen (sign error; no conclusion),
+    O + p-p, with the variant's cross-section factors (K* is linear in sigma)."""
+    from . import de0_kernels as de0
+    from .de1_shapes import Shapes
+
+    tab = c.load_table()
+    wo, wh = PRED_WEIGHT.get(variant, (1.0, 1.0))
+    k = de0.kernels(Shapes(tab), c.Water(tab), energy, PRED_KIND[variant], ("O-16", "H-1"), True)
+    return {"K_star_shifted": wo * k["O-16"]["K_star_shifted"] + wh * k["H-1"]["K_star_shifted"],
+            "K_star_as_frozen_sign_error": wo * k["O-16"]["K_star_literal"] + wh * k["H-1"]["K_star_literal"]}  # fmt: skip
+
+
+def summarize(out: Path) -> dict[str, Any]:
+    cmp = _cmp()
+    rows: dict[str, Any] = {}
+    by_key: dict[str, dict[str, Any]] = {}
+    for e in (150, 200):
+        ref_p = out / f"de3-{e}-emonly.json"
+        if not ref_p.is_file():
+            continue
+        ref = json.loads(ref_p.read_text())
+        by_key[f"{e}/emonly"] = ref
+        den = np.asarray(ref["idd_batches"])
+        for p in sorted(out.glob(f"de3-{e}-*.json")):
+            d = json.loads(p.read_text())
+            if d["variant"] == "emonly":
+                continue
+            by_key[f"{e}/{d['variant']}"] = d
+            num = np.asarray(d["idd_batches"])
+            jk = cmp.paired_ratio_jackknife(num, den)
+            f, g = jk["pp_ratio"], jk["plateau_ratio"]
+            peak_removal = 1.0 - (num.mean(axis=0).max() / den.mean(axis=0).max())
+            row: dict[str, Any] = {
+                "F": f.value, "F_se": f.se, "gain": g.value - 1.0, "gain_se": g.se, "peak_removal": float(peak_removal),
+                "r80_mm": d["metrics"]["r80_mm"], "r80_emonly_mm": ref["metrics"]["r80_mm"],
+                "recoil_mev_per_primary": d.get("recoil_total_mev_per_primary"), "valid": d["valid"] and ref["valid"],
+                "n": d["n"], "wall_s": d["wall_s"],
+            }  # fmt: skip
+            if "lateral" in d and "lateral" in ref:
+                r_on, r_off = (
+                    np.asarray(d["lateral"]["rms_mm_batches"]),
+                    np.asarray(ref["lateral"]["rms_mm_batches"]),
+                )
+                row["lateral_rms_mm"], row["lateral_rms_emonly_mm"] = (
+                    float(r_on.mean()),
+                    float(r_off.mean()),
+                )
+                row["lateral_rms_diff_se"] = float((r_on - r_off).std(ddof=1) / np.sqrt(r_on.size))
+            if d["variant"] in PRED_KIND:
+                kp = kstar_prediction(d["variant"], e)
+                row.update(
+                    kp,
+                    F_pred_shifted_with_measured_gain=(1.0 - kp["K_star_shifted"]) / g.value,
+                    peak_removal_pred_over_measured=kp["K_star_shifted"] / peak_removal
+                    if peak_removal
+                    else None,
+                )
+            rows[f"{e}/{d['variant']}"] = row
+    runs_prov = {k: {"seed": d["seed"], "n": d["n"], "n_batches": d["n_batches"], "elastic_table_id": d["elastic_table_id"],
+                     "mode": d["mode"], "wall_s": d["wall_s"], "lateral_wall_s": (d.get("lateral") or {}).get("wall_s")}
+                 for k, d in sorted(by_key.items())}  # fmt: skip
+    derived = composition_and_gap(rows, out)
+    doc = {"banner": c.BANNER, "rows": rows, "runs": runs_prov, "derived": derived, "provenance": provenance(),
+           "note": "F = (peak/plateau)_EM+el/(peak/plateau)_EM by the paired jackknife of compare_idd_v5; K* shifted is the physical "
+                   "kernel, the as-frozen K* carries a sign error (D-E0 dated note); probes only, never used in the section 5 rule"}  # fmt: skip
+    (out / "de3-summary.json").write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
+    lines = [
+        c.BANNER,
+        "",
+        "# D-E3 probes: summary",
+        "",
+        "| E | variant | F | gain | peak removal | K* shifted (pred) | pred/meas removal | F pred (meas. gain) | recoil MeV | R80 mm | R80 EM-only | lateral rms mm (EM+el / EM) | valid |",
+        "|" + "---|" * 13,
+    ]
+    for k, r in rows.items():
+        e, v = k.split("/")
+        lat = (
+            f"{r['lateral_rms_mm']:.3f} / {r['lateral_rms_emonly_mm']:.3f}"
+            if "lateral_rms_mm" in r
+            else "-"
+        )
+        lines.append(
+            f"| {e} | {v} | {r['F']:.4f} +- {r['F_se']:.4f} | {r['gain']:.4f} +- {r['gain_se']:.4f} | {r['peak_removal']:.4f} | "
+            f"{r.get('K_star_shifted', float('nan')):.4f} | {r.get('peak_removal_pred_over_measured') or float('nan'):.3f} | "
+            f"{r.get('F_pred_shifted_with_measured_gain', float('nan')):.4f} | {r['recoil_mev_per_primary'] or 0:.4f} | {r['r80_mm']:.3f} | {r['r80_emonly_mm']:.3f} | {lat} | {r['valid']} |"
+        )
+    lines += ["", "## Derived (D-E3 review): composition and gap closure", "",
+              "| E | F_all | F_pA x F_pp | difference | removal additivity (pA + pp - all) | F_TOPAS (reconstructed) | gap closed: sigma0.8 / Rx1.2 / s0.5 / s0.9 / gauss |",
+              "|---|---|---|---|---|---|---|"]  # fmt: skip
+    for e, b in derived.items():
+        gc = b.get("gap_closed_fraction", {})
+        lines.append(
+            f"| {e} | {b.get('F_all', float('nan')):.4f} | {b.get('F_pA_times_F_pp', float('nan')):.4f} | {b.get('F_all_minus_product', float('nan')):+.4f} | "
+            f"{b.get('removal_pA_plus_removal_pp_minus_removal_all', float('nan')):+.4f} | {b.get('F_topas_reconstructed', float('nan')):.4f} | "
+            + " / ".join(f"{gc.get(v, float('nan')):.2f}" for v in ("pA-sigma0.8", "pA-Rx1.2", "pA-s0.5", "pA-s0.9", "pA-gauss")) + " |"
+        )
+    lines += ["", "## Findings recorded with the independent D-E3 review (exploratory; nothing enters the section 5 rule)", "",
+              "- **Composition is multiplicative:** F_all = F_pA x F_pp to about 1e-4 at both energies (table above). D-E6 effects are therefore to be read on -ln F; on F itself the product term would consume a large part of the 30 % interaction budget of section 5.",
+              "- **Gap closure toward TOPAS F** (F_TOPAS reconstructed from the archived V11 Delta_pk): pA-s0.9 closes most of the gap, pA-s0.5 and pA-Rx1.2 about half; the shape (core width) is the lever on F.",
+              "- **Contrary to a pure tail story:** pA-gauss removes the large-angle tail yet leaves F unchanged while lowering the gain; the peak deficit is driven by the core width, the plateau gain by the tail.",
+              "- **Contrary evidence on p-p (H3 stays live):** the pp-only plateau gain alone is of the order of TOPAS's total elastic gain (84 % / 108 % per the review, from the archived V11 gain); no p+A shape variant closes the gain excess, so the swap-pp arm of D-E6 is essential.",
+              "- **K* model:** the shifted K* overpredicts the measured peak removal by 8-14 % for every p+A variant and by 1-3 % for pp-only, the bias anticipated in the D-E0 dated note (adequate for ranking, not for a 0.010 closure).",
+              "", "## Provenance", "",
+              f"- git HEAD {doc['provenance']['git_head']}; status of validation/scripts/elastic_attribution at summary time: {doc['provenance']['git_status_elastic_attribution'] or 'clean'}",
+              "- scripts sha256 at summary time: " + ", ".join(f"{k} {v[:16]}" for k, v in doc["provenance"]["scripts_sha256"].items()),
+              "- scripts sha256 at run time (staged copies of the untracked scripts that made the runs): "
+              + (", ".join(f"{k} {v[:16]}" for k, v in doc["provenance"]["runtime_scripts_sha256"].items()) or "not recorded"),
+              "- table files sha256: " + ", ".join(f"{k} {v[:16]}" for k, v in doc["provenance"]["table_files_sha256"].items()),
+              f"- backend warp-cpu float64, single process; seeds {SEEDS}; runs (seed, n, batches, table id, wall s) in `runs` of de3-summary.json",
+              "- logged runs: telemetry/test-logs/<UTC>-de3-<variant>-<E>/ (command, commit, git status, start/end, full stdout/stderr)"]  # fmt: skip
+    (out / "de3-summary.md").write_text("\n".join(lines) + "\n")
+    return doc
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description=(__doc__ or "").split("\n")[0])
+    ap.add_argument(
+        "--variant",
+        default="all",
+        help="all, pp-only, pA-only, pA-sigma0.8, pA-Rx1.2, pA-s0.5, pA-s0.9, pA-gauss, emonly, pinned",
+    )
+    ap.add_argument("--energy", type=int, choices=(150, 200), default=150)
+    ap.add_argument("--histories", type=int, default=100_000)
+    ap.add_argument("--batches", type=int, default=20)
+    ap.add_argument(
+        "--no-lateral",
+        action="store_true",
+        help="skip the lateral-rms run (a second transport run of the same size)",
+    )
+    ap.add_argument("--out", type=Path, default=OUT_DEFAULT)
+    ap.add_argument(
+        "--check-base", action="store_true", help="pinned vs base copy 'all' bit for bit (two runs)"
+    )
+    ap.add_argument("--summary", action="store_true", help="combine the run files of --out")
+    ap.add_argument("--reuse-runs", action="store_true", help="--check-base from the existing run files (no transport)")
+    a = ap.parse_args(argv)
+    if a.histories % a.batches:
+        raise SystemExit("--histories must be a multiple of --batches")
+    if a.summary:
+        print(json.dumps(summarize(a.out)["rows"], indent=1))
+    elif a.check_base:
+        print(json.dumps(check_base(a.energy, a.histories, a.batches, a.out, reuse_runs=a.reuse_runs), indent=1))
+    else:
+        d = run_one(a.variant, a.energy, a.histories, a.batches, not a.no_lateral, a.out)
+        print(
+            json.dumps(
+                {
+                    k: d[k]
+                    for k in (
+                        "variant",
+                        "energy",
+                        "seed",
+                        "n",
+                        "metrics",
+                        "valid",
+                        "wall_s",
+                        "hist_per_s",
+                    )
+                },
+                indent=1,
+            )
+        )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

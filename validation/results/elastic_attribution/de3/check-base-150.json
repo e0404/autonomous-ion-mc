@@ -1,0 +1,69 @@
+{
+ "energy": 150,
+ "n": 100000,
+ "n_batches": 20,
+ "seed": 20990100,
+ "bit_for_bit": true,
+ "detail": {
+  "idd_batches": true,
+  "recoil_idd_batches": true,
+  "counters": true
+ },
+ "pinned_id": "1fd24cff23d3f7e72aabcda2af8bc70ad47b81755f94a2ca55890cb6ae52c591",
+ "all_id": "08a10dd42ec6c913e26673e3770e778e81330ac73f2756a4ea403ac629c2cb50",
+ "sha256_idd_batches": {
+  "pinned": "8df1969be0973e6f4b154a362845d232b46a0e5a99da00bf671e303d5b9e57da",
+  "all": "8df1969be0973e6f4b154a362845d232b46a0e5a99da00bf671e303d5b9e57da"
+ },
+ "sha256_recoil_idd_batches": {
+  "pinned": "f7585fb9c0da2fa3833efe8193bf81d02020da1effa1e980a6acac6b5ad50122",
+  "all": "f7585fb9c0da2fa3833efe8193bf81d02020da1effa1e980a6acac6b5ad50122"
+ },
+ "counters": {
+  "accumulator_overflow": 0,
+  "elastic_below_domain": 103634,
+  "energy_inversion": 0,
+  "genealogy_overflow": 0,
+  "majorant_violation": 0,
+  "nuclear_conservation": 0,
+  "nuclear_rejection_limit": 0,
+  "pp_below_domain": 103634,
+  "queue_overflow": 0,
+  "scoring_pieces_overflow": 0,
+  "source_energy_out_of_range": 0,
+  "stall": 0,
+  "step_truncation": 0,
+  "straggling_rejection": 0
+ },
+ "provenance": {
+  "git_head": "d5c8a80fe8829f7f58b09a5d03fb69a7438a6b1c",
+  "git_status_elastic_attribution": [
+   "?? validation/scripts/elastic_attribution/de0_h5.py",
+   "?? validation/scripts/elastic_attribution/de3_probes.py",
+   "?? validation/scripts/elastic_attribution/de5_sampling.py",
+   "?? validation/scripts/elastic_attribution/make_variant_tables.py"
+  ],
+  "scripts_sha256": {
+   "make_variant_tables.py": "1521495ebbe6d0f343bbeb84e409f3ea556c3cf4a48d8a17512c1dcefc4378d1",
+   "de3_probes.py": "5674417ca343f8d707148218730c46cea9626486eb3ab2ae45b93d97b15360d7",
+   "de0_kernels.py": "75f1c12fc95e96edf35b07f0b26392ceceb3a088094dbd4f38b7f0b8fb2fc39e",
+   "common.py": "a8e815b3eb5150b038fa4cc82085442f3411e6753d58bd72d03be3bdf63aba3b"
+  },
+  "table_files_sha256": {
+   "/home/wahln/.local/share/ionmc-experiment/experiment-v3/tmp/claude-1000/-home-wahln-aiprojects-ion-mc/3057d970-cf12-4711-8c0a-ae0cbe21cb5d/scratchpad/v3-005d/de3-cache/derived/elastic-proton-1fd24cff23d3f7e72aabcda2af8bc70ad47b81755f94a2ca55890cb6ae52c591.npz": "1028bb67f57bc96edafe6d3dbcce532013edbbd31b9b80861239b09d9ad4202a",
+   "/home/wahln/.local/share/ionmc-experiment/experiment-v3/tmp/claude-1000/-home-wahln-aiprojects-ion-mc/3057d970-cf12-4711-8c0a-ae0cbe21cb5d/scratchpad/v3-005d/de3-cache/derived/elastic-proton-1fd24cff23d3f7e72aabcda2af8bc70ad47b81755f94a2ca55890cb6ae52c591.json": "ab5e2a357ab53060a84182607d93fe4373e50ce60622450af74728fd4e495e77"
+  },
+  "backend": "warp-cpu",
+  "precision": "float64",
+  "single_process": true,
+  "cache_dir": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/tmp/claude-1000/-home-wahln-aiprojects-ion-mc/3057d970-cf12-4711-8c0a-ae0cbe21cb5d/scratchpad/v3-005d/de3-cache",
+  "seeds": {
+   "150": 20990100,
+   "200": 20990101
+  },
+  "runtime_scripts_sha256": {
+   "make_variant_tables.py": "1521495ebbe6d0f343bbeb84e409f3ea556c3cf4a48d8a17512c1dcefc4378d1",
+   "de3_probes.py": "bea49b8437b84c0d5b51d19e379f9100499a2a16eb25f2091f29774a88f6ed60"
+  }
+ }
+}

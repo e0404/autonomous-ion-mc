@@ -85,7 +85,13 @@ import json  # noqa: E402
 from validation.scripts.elastic_attribution import common as de_common  # noqa: E402
 
 RESULTS = Path(__file__).resolve().parents[2] / "validation" / "results" / "elastic_attribution"
-STEP_MODULES = {"de0": "de0_kernels", "de1": "de1_shapes", "de2": "de2_pp"}
+STEP_MODULES = {
+    "de0": "de0_kernels",
+    "de0h5": "de0_h5",
+    "de1": "de1_shapes",
+    "de2": "de2_pp",
+    "de5": "de5_sampling",
+}
 
 
 def test_git_projection_removes_values_and_per_point_arrays() -> None:
@@ -155,3 +161,40 @@ def test_committed_markdown_is_rendered_from_the_projection(step: str) -> None:
     assert md.count(de_common.BODY_MARKER) == 1
     body = md.split(de_common.BODY_MARKER + "\n", 1)[1]
     assert body == mod.render_report(json.loads(json_path.read_text()))
+
+
+def test_kin_curve_matches_two_body() -> None:
+    from ionmc.nuclear.elastic_kin import two_body
+    from validation.scripts.elastic_attribution import de5_sampling as de5
+
+    mu = np.linspace(-0.96, 0.99, 400)
+    for m_t in (938.272, 14903.0):
+        tb = two_body(150.0, 938.272, m_t, mu)
+        sel = tb.cos_lab1 > 0.3  # near 90 deg the root is ill-conditioned
+        curve = de5.kin_curve_t(150.0, m_t, tb.cos_lab1[sel])
+        assert np.max(np.abs(curve - tb.t1[sel]) / tb.t1[sel]) < 1e-5
+
+
+def test_classification_rule_on_synthetic_tracks() -> None:
+    from validation.scripts.elastic_attribution import de5_sampling as de5
+
+    e0, m_h, m_a = 150.0, 938.272, 14903.0
+    # conflict track (theta_lab 0.5 deg, on both curves within 1e-3): follows the secondary flag
+    cos = np.cos(np.radians(np.full(2, 0.5)))
+    t1 = de5.kin_curve_t(e0, m_a, cos)
+    is_pp, conflict, off = de5.classify(cos, t1, e0, m_h, m_a, np.array([True, False]))
+    assert conflict.all() and not off.any() and list(is_pp) == [True, False]
+    # on-curve p-p track at 30 deg (far from the p+A curve), with and without the flag
+    cos = np.cos(np.radians(np.array([30.0])))
+    t1 = de5.kin_curve_t(e0, m_h, cos)
+    is_pp, conflict, off = de5.classify(cos, t1, e0, m_h, m_a, True)
+    assert is_pp[0] and not conflict[0] and not off[0]
+    # on-curve p+A track at 30 deg
+    t1 = de5.kin_curve_t(e0, m_a, cos)
+    is_pp, conflict, off = de5.classify(cos, t1, e0, m_h, m_a, False)
+    assert not is_pp[0] and not conflict[0] and not off[0]
+    # off-curve track: counted as off-curve, classified by the smaller residual
+    is_pp, conflict, off = de5.classify(cos, t1 * 0.9, e0, m_h, m_a, False)
+    assert off[0] and not conflict[0]
+    # crossover of the curves is about 1.8 deg at 150 MeV (p+O)
+    assert 1.0 < de5.curve_crossover_deg(e0, m_h, m_a) < 3.0
