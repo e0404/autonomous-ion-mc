@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "git_sha": "087a70a19c0b896008c762643d03f8f7854ebf4e",
+  "request_id": "IR-20261013-164616-DEFAF4",
+  "created_at_utc": "2026-10-13T16:46:16.074130+00:00",
+  "task_id": "V3-005B",
+  "category": "experiment-boundary",
+  "summary": "V3-005C qualification is complete and recorded at the evidence SHA dd976c5a (PR #82, head bb8c198f, Codex REVIEW-e05c771b pass, CI green at the head): the pre-registered scientific gates V5, V6, V7-R and V10-A failed and are preserved; the implementation gates (P5-ext, P6-D, P7, C1-ext, R1-D2, V8-LV, CI) and V8-nuc pass. Merge gate Amendment 14 (a)6 is not met; no passing record exists; the default is that PR #82 stays unmerged. As for V3-005B (IR-20261009-032741-C590CF, interpretation B), the question is only how the recorded failures are carried forward; nothing here proposes a relaxation, re-labelling or replacement of any gate.",
+  "investigation": {
+    "blocked_claim": "V3-005C can be merged under Amendment 14 (a)6 (all scientific and implementation gates pass) — it cannot: V5, V6, V7-R and V10-A are recorded failures at the evidence SHA dd976c5a",
+    "budget": "No further host time is proposed; the follow-up tasks are sized in their own plans (V6-F ≈ 3.7 h CPU per Amendment 18; V5/V11 re-qualification ≈ 1 h; V7-R calibration ≈ 9.5 h at the current host rate).",
+    "alternatives": [
+      "(A) keep unmerged, open V3-005D/E/F follow-ups (recommended)",
+      "(B) non-qualified integration under a reviewed exception amendment (not recommended)",
+      "(C) another disposition"
+    ],
+    "attempts": [
+      {
+        "approach": "lv5c qualification at dd976c5a (86 steps, one host call per step, base 20481004)",
+        "outcome": "V5, V11, V7-R, V10-A, V6, V7-scan-el fail; R1-D2, V8-LV, P7, V2b-el, V7-shift-el, E1-B, V10, X-ENDF, D9-BGG pass; E-shape executed",
+        "artifact": "validation/results/transport/lv5c-dd976c5-single-process.json; VAL-20261013-163425-94C596; host runs RUN-20261012T142331Z-6aceaf89 … RUN-20261013T040917Z-c6a7d10e"
+      },
+      {
+        "approach": "hr5c qualification at dd976c5a (11 steps, base 20491004)",
+        "outcome": "V8 and V8-nuc pass, V7 f32/f64 CUDA pass, V6 failed-not-sized",
+        "artifact": "validation/results/transport/hr5c-dd976c5-single-process.json; VAL-20261013-163444-63C7B0; host runs RUN-20261013T042034Z-554308c4 … RUN-20261013T050202Z-a824f328"
+      },
+      {
+        "approach": "Independent review and Codex review of the closure",
+        "outcome": "Codex REVIEW-e05c771b pass at bb8c198f; CI run 38431680322 success",
+        "artifact": "validation/results/transport/README.md section V3-005C results; decisions/0041-proton-nuclear-interactions.md outcome section; validation/requirement-ledger.md"
+      }
+    ],
+    "evidence_sha": "dd976c5a69850b9597ac4da938792d4273a71719",
+    "pr_head": "bb8c198fe79790f3a09a9eb769e97fa597554526",
+    "pr": "https://github.com/e0404/autonomous-ion-mc/pull/82"
+  },
+  "reason_autonomous_resolution_not_possible": "Facts at dd976c5a (lv5c base 20481004, hr5c base 20491004, single-process diagnostic mode; archives validation/results/transport/{lv5c,hr5c}-dd976c5-single-process.json; records lv5c VAL-20261013-163425-94C596 and hr5c VAL-20261013-163444-63C7B0, both failed, re-stating VAL-20261013-061553-2FEEC7 / VAL-20261013-061607-1BA988):\n- V5: with the hadronic elastic channel the TOPAS peak/plateau discrepancy moved from +12.5/+12.3 % (lv5b at 7aae5bb1, no elastic) to −3.7/−4.9 % (150/200 MeV; tolerance 2 %); ΔIDD plateau-integral +10.3 % at 150 MeV fails (tolerance 10 %), +6.7 % at 200 MeV passes; plateau, R80 and total deposit pass; the attribution stop rule triggered (rung 1: p+A angular shape); the pre-registered expectation was a ratio of 0.985/0.986, observed 0.963/0.951.\n- V11: ionmc elastic factor F = 0.857/0.844 vs TOPAS 0.892/0.887 (tolerance 0.02) and plateau gain +0.006/+0.008 (tolerance 0.005): ionmc's elastic effect is about 30 % stronger than g4h-elastic_HP, consistent with the V5 over-correction.\n- V7-R: all three coverage gates pass (escaped_neutral 0.685, sec_p 0.674, nuclear_local 0.673 within [0.6527, 0.7127]), but the pre-registered calibration misses: paired gate 4.69 % at its margin on the archive-fitted surrogate (bound 4 %); on the real rehearsal block sums the paired and single gates accept 11–12 % at their margins and the joint rate exceeds 2 % at two margins; power 0.95 → \"uncertainty-coverage evidence not established\".\n- V10-A: deterministic failure of clauses (a) at 15°/20°, (b) and (c); the (e)9 fallback trigger did not fire.\n- V6/V6-sens: failed — not sized under the pre-registered rule (Amendment 14a (a)4; acknowledged by the operator in IR-20261011-031924-C205C8); the follow-up row V6-F is pre-registered and independently reviewed (Amendment 18, validation/plans/v3-005c-v6f-followup.md) for execution once in a later task.\n- V8-nuc: T12 conclusive pass (p = 0.50, 160 groups). V7-scan-el: sec_p slope −0.5526 vs [−0.55, −0.45] (fail, marginal). R1-D2, V2b-el, V7-shift-el, E1-B, P7, V10, X-ENDF, D9-BGG pass; E-shape executed.\n- Both archives are non-conformant by code (single-process directive, imported partials, deferred multiprocessing step). Incidents recorded in the README: a superseded partial run at 37e87ecf, a restart that zeroed four published copies, three hypervisor/WSL crashes (operator diagnostic rules applied; logs in telemetry/test-logs), one interpreter anomaly in a calibration shard (clean re-run), two wrapper defects executed directly at the same SHA and fixed in the closure, CI at 4ce33832 failing only for the missing data cache (fixed at bb8c198f).\n- The PR body cannot be updated through the available tooling (create_task_pull_request refuses an existing PR; no update tool; direct gh is forbidden); the description of record is the README section \"V3-005C results\" and decision 0041.\nDefault without an operator decision: PR #82 stays unmerged; no gate is changed; any answer is recorded verbatim and changes no row verdict.",
+  "requested_input": "Choose one (or state another): (A) keep PR #82 unmerged (default) and open follow-up tasks on v3/develop from the branch state: V3-005D (p+A elastic angular shape / σ_el scale attribution and re-qualification of V5/V11 at the declared fresh bases 20511004/20521004), V3-005E (V7-R gate redesign: margin discrimination of the bootstrap-t and paired gates at ±0.03 under heavy-tailed block sums), V3-005F (V6-F execution per Amendment 18), each carrying the recorded failures in the ledger; (B) merge the branch to v3/develop as an explicitly non-qualified integration (implementation gates and CI pass; scientific gates recorded failed; no claim of validation) under a new reviewed amendment that documents the exception — the orchestrator does not recommend this and will not create a passing record; (C) another disposition. Any answer is recorded verbatim and changes no row verdict.",
+  "decisions_or_tasks_blocked": null,
+  "status": "resolved",
+  "notification": {
+    "status": "sent",
+    "http_status": 200
+  },
+  "resolved_at_utc": "2026-10-13T18:37:00.866542+00:00",
+  "response_file": "response.json"
+}
