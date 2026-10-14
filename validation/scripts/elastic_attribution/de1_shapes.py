@@ -372,7 +372,7 @@ def _one_dataset(v10: Any, sh: Shapes, model: Any, rec: dict[str, Any]) -> dict[
                        "rms_log_residual_at_table_R": math.sqrt(float(np.sum((np.log(tot[m]) - np.log(y[m])) ** 2)) / m.sum()),
                        "label": "data-seen diagnostic; never a model parameter"}  # fmt: skip
     return {"dataset": rec["dataset"], "target": name, "energy_mev": e, "n_points": rec["n_points"],
-            "theta_cm_deg": th.tolist(), "data_mb_sr": y.tolist(), "rel_err": [None if not np.isfinite(x) else float(x) for x in rel_err],
+            "theta_range_deg": [float(th.min()), float(th.max())], "theta_cm_deg": th.tolist(), "data_mb_sr": y.tolist(), "rel_err": [None if not np.isfinite(x) else float(x) for x in rel_err],
             "model_total_mb_sr": tot.tolist(), "model_ratio_minus_1": (tot / y - 1.0).tolist(),
             "rutherford_mb_sr": ru.tolist(), "family_total_mb_sr": {kk: vv.tolist() for kk, vv in fam.items()},
             "minima": d_min, "partial": part, "R_fit": fits}  # fmt: skip
@@ -470,7 +470,7 @@ def _report(doc: dict[str, Any], inputs: list[Any]) -> str:
         "The `full` window is dominated by the model's high-angle diffraction lobes (model 100-600x above the data at 60-90 deg for the O sets), "
         "so the 10-30 / 10-40 deg windows are the like-for-like comparison. Datasets with `data partial sigma / table sigma_el` above 1 "
         "(the data integral alone exceeds the table sigma_el) are not credible against the table: **O0553008 @ 75 MeV (p+C, Rolland 1966)** "
-        "has 5800 mb/sr at 10 deg against a model 694 mb/sr; its EXFOR subentry gives MB/SR with a 5 % digital error and no other factor, "
+        "has a 10 deg data value about 8.4x the model; its EXFOR subentry gives MB/SR with a 5 % digital error and no other factor, "
         "so the cause is not an ingestion unit error that can be identified here (it is a source/transcription or frame issue of that subentry); "
         "it is reported but excluded from summaries and nothing was changed.",
         "",

@@ -884,6 +884,7 @@
    }
   }
  },
+ "note_git": "Git projection (decision 0041): experimental / compilation values and every per-point array are removed; only aggregate statistics (window integrals, ratios, minima diagnostics, fits) remain. The complete record is regenerated into validation/generated/ by the committed module.",
  "pointwise": {
   "100": {
    "C-12": {

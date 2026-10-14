@@ -76,3 +76,56 @@ def test_kstar_sign_pinned_on_asymmetric_idd() -> None:
     assert shifted == pytest.approx(1.0 - 0.5)  # IDD(105) = 0.5
     assert lit == pytest.approx(1.0 - 0.95)  # IDD(95) = 0.95
     assert shifted > lit
+
+
+# --- Git projection of the exploratory records (decision 0041: no nuclear data values in Git) ---
+from validation.scripts.elastic_attribution import common as de_common  # noqa: E402
+
+RESULTS = Path(__file__).resolve().parents[2] / "validation" / "results" / "elastic_attribution"
+
+
+def test_git_projection_removes_values_and_per_point_arrays() -> None:
+    doc = {
+        "banner": "x",
+        "datasets": [
+            {
+                "dataset": "A",
+                "n_points": 12,
+                "theta_cm_deg": list(range(12)),
+                "data_mb_sr": [1.0] * 12,
+                "rel_err": [0.05] * 12,
+                "model_total_mb_sr": [2.0] * 12,
+                "model_ratio_minus_1": [1.0] * 12,
+                "theta_range_deg": [0.0, 11.0],
+                "minima": {
+                    "measured": [
+                        {"theta_cm_deg": 3.0, "data_mb_sr": 1.0, "neighbour_ratio": [1.2, 1.1]}
+                    ]
+                },
+                "partial": {"10-30": {"model": {"sigma_ratio_to_data": 1.4}}},
+            }
+        ],
+        "pdg_lowest_points": [{"t_mev": 325.0, "sigma_mb": 23.2}],
+        "pdg_lowest_energies_mev": [325.0, 418.0],
+    }
+    proj = de_common.git_projection(doc)
+    assert de_common.git_safety_violations(proj) == []
+    ds = proj["datasets"][0]
+    assert set(ds) == {"dataset", "n_points", "theta_range_deg", "minima", "partial"}
+    assert ds["minima"]["measured"][0] == {"theta_cm_deg": 3.0, "neighbour_ratio": [1.2, 1.1]}
+    assert "pdg_lowest_points" not in proj and proj["pdg_lowest_energies_mev"] == [325.0, 418.0]
+    assert "note_git" not in proj  # the writer adds the note, the projection stays pure
+    # the original is flagged, and the projection is idempotent
+    assert len(de_common.git_safety_violations(doc)) == 7
+    assert de_common.git_projection(proj) == proj
+
+
+@pytest.mark.parametrize(
+    "path", sorted(RESULTS.glob("**/*.json")), ids=lambda p: str(p.relative_to(RESULTS))
+)
+def test_committed_records_are_git_safe(path: Path) -> None:
+    import json
+
+    doc = json.loads(path.read_text())
+    assert de_common.git_safety_violations(doc) == []
+    assert de_common.git_projection(doc) == doc

@@ -8,32 +8,13 @@
   200
  ],
  "note": "BGG formula = total elastic p-p; the table sigma is the NI part above 16.26 deg CM (not the same quantity)",
- "pdg_lowest_points": [
-  {
-   "p_lab_gev": 0.846,
-   "sigma_mb": 23.2,
-   "t_mev": 325.08475431172485
-  },
-  {
-   "p_lab_gev": 0.97935,
-   "sigma_mb": 24.0,
-   "t_mev": 418.00256467405154
-  },
-  {
-   "p_lab_gev": 1.0,
-   "sigma_mb": 25.8,
-   "t_mev": 432.98810283955174
-  },
-  {
-   "p_lab_gev": 1.00959,
-   "sigma_mb": 24.0,
-   "t_mev": 439.9972902708374
-  },
-  {
-   "p_lab_gev": 1.03673,
-   "sigma_mb": 22.0,
-   "t_mev": 459.99956081244716
-  }
+ "note_git": "Git projection (decision 0041): experimental / compilation values and every per-point array are removed; only aggregate statistics (window integrals, ratios, minima diagnostics, fits) remain. The complete record is regenerated into validation/generated/ by the committed module.",
+ "pdg_lowest_energies_mev": [
+  325.08475431172485,
+  418.00256467405154,
+  432.98810283955174,
+  439.9972902708374,
+  459.99956081244716
  ],
  "pdg_n_points": 154,
  "per_energy": {

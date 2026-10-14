@@ -92,6 +92,7 @@ def run() -> None:
     pdg_low = sorted(pdg_t, key=lambda r: r["t_mev"])[:5]
     doc = {"banner": c.BANNER, "energies_mev": list(ENERGIES), "per_energy": rows, "per_primary_water_path": path,
            "pdg_lowest_points": [{"t_mev": r["t_mev"], "p_lab_gev": r["p_lab_gev"], "sigma_mb": r["sigma_mb"]} for r in pdg_low],
+           "pdg_lowest_energies_mev": [float(r["t_mev"]) for r in pdg_low],
            "pdg_n_points": len(pdg_t),
            "note": "BGG formula = total elastic p-p; the table sigma is the NI part above 16.26 deg CM (not the same quantity)"}  # fmt: skip
     inputs = [*c.table_files(), pdg_path]
@@ -143,11 +144,8 @@ def _report(doc: dict[str, Any], inputs: list[Any]) -> str:
         )
     out += [
         "",
-        f"PDG file: {doc['pdg_n_points']} points; lowest: "
-        + "; ".join(
-            f"{p['t_mev']:.0f} MeV ({p['p_lab_gev']:.3f} GeV/c) {p['sigma_mb']:.1f} mb"
-            for p in doc["pdg_lowest_points"]
-        ),
+        f"PDG file: {doc['pdg_n_points']} points; lowest kinetic energies (values not reproduced here, decision 0041): "
+        + "; ".join(f"{p['t_mev']:.0f} MeV ({p['p_lab_gev']:.3f} GeV/c)" for p in doc["pdg_lowest_points"]),
     ]
     return "\n".join(out) + "\n"
 

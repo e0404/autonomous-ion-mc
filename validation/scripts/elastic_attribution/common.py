@@ -136,10 +136,66 @@ def header(title: str, command: str, inputs: list[Path], extra: list[str] | None
     return "\n".join(lines) + "\n"
 
 
+# Git projection (decision 0041: Git holds no raw or derived nuclear data, only aggregate statistics).
+# Keys that carry experimental or compilation values, or per-point arrays from which they are losslessly
+# recoverable (model value / (1 + ratio)), are removed from the copy committed under validation/results/.
+GIT_FORBIDDEN_KEYS: frozenset[str] = frozenset(
+    {"data_mb_sr", "rel_err", "model_total_mb_sr", "model_ratio_minus_1", "rutherford_mb_sr",
+     "family_total_mb_sr", "pdg_lowest_points"}
+)  # fmt: skip
+GIT_MAX_NUMERIC_LIST = 8  # longer numeric lists are per-point arrays, never aggregate statistics
+GIT_NOTE = (
+    "Git projection (decision 0041): experimental / compilation values and every per-point array are removed; "
+    "only aggregate statistics (window integrals, ratios, minima diagnostics, fits) remain. The complete record is "
+    "regenerated into validation/generated/ by the committed module."
+)
+
+
+def _is_numeric_list(x: Any) -> bool:
+    return isinstance(x, list) and len(x) > 0 and all(v is None or isinstance(v, (int, float)) for v in x)
+
+
+def git_projection(doc: Any) -> Any:
+    """Return a deep copy of ``doc`` without the forbidden keys and without per-point numeric arrays."""
+    if isinstance(doc, dict):
+        return {k: git_projection(v) for k, v in doc.items()
+                if k not in GIT_FORBIDDEN_KEYS and not (_is_numeric_list(v) and len(v) > GIT_MAX_NUMERIC_LIST)}  # fmt: skip
+    if isinstance(doc, list):
+        return [git_projection(v) for v in doc]
+    return doc
+
+
+def git_safety_violations(doc: Any, path: str = "") -> list[str]:
+    """Paths inside ``doc`` that a committed record must not contain (empty when the record is Git-safe)."""
+    bad: list[str] = []
+    if isinstance(doc, dict):
+        for k, v in doc.items():
+            here = f"{path}/{k}"
+            if k in GIT_FORBIDDEN_KEYS:
+                bad.append(here)
+            elif _is_numeric_list(v) and len(v) > GIT_MAX_NUMERIC_LIST:
+                bad.append(f"{here}[len={len(v)}]")
+            else:
+                bad += git_safety_violations(v, here)
+    elif isinstance(doc, list):
+        for i, v in enumerate(doc):
+            bad += git_safety_violations(v, f"{path}[{i}]")
+    return bad
+
+
 def write_outputs(outdir: Path, json_name: str, doc: dict[str, Any], md_name: str, md: str) -> None:
+    """Write the complete record to ``outdir`` and its Git projection to ``outdir / "git"``.
+
+    Only the ``git`` copy may be committed under ``validation/results/elastic_attribution/``.
+    """
     outdir.mkdir(parents=True, exist_ok=True)
     (outdir / json_name).write_text(json.dumps(doc, indent=1, sort_keys=True, default=float) + "\n")
     (outdir / md_name).write_text(md)
+    proj = git_projection(json.loads(json.dumps(doc, default=float)))
+    proj.setdefault("note_git", GIT_NOTE)
+    assert not git_safety_violations(proj), git_safety_violations(proj)
+    (outdir / "git").mkdir(exist_ok=True)
+    (outdir / "git" / json_name).write_text(json.dumps(proj, indent=1, sort_keys=True) + "\n")
 
 
 def import_transport_module(name: str) -> Any:

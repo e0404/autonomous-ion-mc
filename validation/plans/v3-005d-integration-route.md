@@ -505,9 +505,9 @@ The response is recorded verbatim and changes no row verdict.
 | V7-R2 at 7200/0.005 | ≈ 51.5 |
 | with (B) | ≈ 23.9 |
 | with (C) | ≈ 19.9 |
+| Option II | + ≈ 6.2 (+ CUDA) |
 
 Revision 6: the V7-R2 joint-power re-measurement on the rebuilt pool is sandbox time (≈ 2.2 h; ≈ 3 h more for 7200/0.005). It adds no host hours, so these totals are unchanged.
-| Option II | + ≈ 6.2 (+ CUDA) |
 
 If item 5 is refused, the V5 steps drop out: four short V5 shards of 10–25 s each at the dd976c5a rate, which is negligible.
 

@@ -29,4 +29,4 @@ Table sigma = Hale NI above 16.26 deg CM (above 150 MeV anchor x BGG ratio); BGG
 | 150 | 0.0362 | 0.0259 | 0.0379 | 0.767 |
 | 200 | 0.0519 | 0.0436 | 0.0517 | 1.558 |
 
-PDG file: 154 points; lowest: 325 MeV (0.846 GeV/c) 23.2 mb; 418 MeV (0.979 GeV/c) 24.0 mb; 433 MeV (1.000 GeV/c) 25.8 mb; 440 MeV (1.010 GeV/c) 24.0 mb; 460 MeV (1.037 GeV/c) 22.0 mb
+PDG file: 154 points; lowest kinetic energies (values not reproduced here, decision 0041): 325 MeV (0.846 GeV/c); 418 MeV (0.979 GeV/c); 433 MeV (1.000 GeV/c); 440 MeV (1.010 GeV/c); 460 MeV (1.037 GeV/c)
