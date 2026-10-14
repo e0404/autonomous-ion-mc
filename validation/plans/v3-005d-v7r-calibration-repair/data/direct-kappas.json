@@ -1,0 +1,34 @@
+{
+ "archive_fitted": {
+  "kappas_recorded": {
+   "nominal": 1.0,
+   "paired_high": 1.0663746335960607,
+   "paired_low": 0.9386061328053177,
+   "single_high": 1.054671450820349,
+   "single_low": 0.9291742406266579
+  },
+  "kappas_reproduced": {
+   "nominal": 1.0,
+   "paired_low": 0.9386061328053177,
+   "paired_high": 1.0663746335960607,
+   "single_low": 0.9291742406266579,
+   "single_high": 1.054671450820349
+  }
+ },
+ "rehearsal_block_sums": {
+  "kappas_recorded": {
+   "nominal": 1.0,
+   "paired_high": 1.0732314646939765,
+   "paired_low": 0.9493916971221448,
+   "single_high": 1.0550107962305066,
+   "single_low": 0.9275002724040955
+  },
+  "kappas_reproduced": {
+   "nominal": 1.0,
+   "paired_low": 0.9493916971221448,
+   "paired_high": 1.0732314646939765,
+   "single_low": 0.9275002724040955,
+   "single_high": 1.0550107962305066
+  }
+ }
+}

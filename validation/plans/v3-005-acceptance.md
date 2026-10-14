@@ -579,3 +579,44 @@ The frozen rows V5, V6, V8 and R1 are evaluated again with their tolerances unch
 *(d) Rehearsal-validity digest (Amendment 17 (a)7, Amendment 14a (b)2) — implementation finding.* The implementation of the "evidence code SHA" digest hashed the full suite source identity, which includes `validation/plans/*.md` and `decisions/*.md`, so every documentation commit after the C8 rehearsal made the committed V7-R rehearsal fixture stale and forced two 4.5e6-history host shards (rebuilt at 6df0e554, 1a86a08c and df596559 before this was found). Amendment 17 (a)7 states that a commit changing only plans, decisions, fixtures, README or tests outside the hashed set keeps the rehearsal valid; the rehearsal block sums depend on code and data only. The rehearsal digest is therefore computed over the hashed source set minus `validation/plans/`, `decisions/`, `docs/` and README files (C9b); the suite source identity recorded in `environment.txt` and checked by `summarize.attest()` is unchanged and still covers every file. Nothing else changes; the fixture is regenerated once at the head carrying this change.
 
 *(e) Addendum to (d) (2026-10-13, C12).* The CI job of the pull request has no data cache; thirty-six slice-C tests that open the nuclear or elastic table lacked the data-availability skip of the slice-B tests and failed in CI at the PR head 4ce33832 (run 38355773758) while passing locally. The skip guards are added (tests only; in required mode the tests still run). Because `tests/` is not part of the shard computation either, it is excluded from the rehearsal-validity digest together with the documentation set of (d); the suite source identity and `summarize.attest()` are unchanged. The fixture is regenerated once more at the head carrying this change.
+
+**Amendment 19 (2026-10-14, before any V3-005D D-E step is run; after the operator's disposition A of IR-20261013-164616-DEFAF4) — V3-005D elastic attribution (exploratory, report-only).** Rows D-E0 to D-E6 are exploratory and never evidence. They change no frozen row, tolerance, base or verdict; V5, V11 and V10-A at dd976c5a stay failed.
+
+(a) **Plan of record:** `validation/plans/v3-005d-elastic-attribution.md`, sha256 `fd9657df047d2e4ef00ad4c0a55c4d390e395abbd342ab200ff80b2964fc7854`, committed in the same commit as this amendment, before D-E0. Supporting already-seen scripts are in `validation/plans/v3-005d-elastic-attribution/`. **Kernels and signatures:** as §2.1–§2.2 of that file. Definitions K_w (w = 1, 2, 3, 5 mm), K*, G, θ_w (w = 2, 3 mm), T (3·θ_med). Thresholds as in the "identified" / "excluded" columns.
+
+(b) **D-E3 probes:** warp-cpu float64, single process, 1e5 histories, 20 batches, V5 geometry r = 20 cm, 150 and 200 MeV. Variants:
+- `all`;
+- `pp-only` (σ_el = 0 for every target ≠ H-1);
+- `pA-only` (σ_pp = 0);
+- `pA-sigma0.8` (σ_el × 0.8 for every target ≠ H-1);
+- `pA-Rx1.2` (black disk at 1.2·R(E));
+- `pA-s0.5` and `pA-s0.9` (sharp form × exp(−q²s²), s in fm);
+- `pA-gauss` (exp(−q²R²/4));
+- EM-only.
+
+256 equiprobable μ_CM bins per node as in the pinned table; normalisation exact; σ unchanged except where stated.
+
+(c) **D-E4:** rows 14–23 as in §3.2 of the plan of record. Water rows 14–18 and graphite rows 19–23 at 30 / 50 / 100 / 150 / 200 MeV. Primaries per case: **2e7 at 30 and 50 MeV with a 2 mm target, and 4e6 at 100, 150 and 200 MeV with a 1 cm target.** Module `g4h-elastic_HP` only (declared fallback in §3.2); KE filter E₀ − 1e-4 MeV; kinematic-curve classification; seed 20270000 + 1000·row + 1 (k = 2 only if a case is split in two equal halves).
+
+(d) **D-E5:** 1e6 table-sampled events per case.
+
+(e) **D-E6:** swaps `swap-pA` (O CDF from water rows 14–18; graphite rows 19–23 used for D-E5 signatures only), `swap-pp` (H-1 from rows 14–18 above 16.26° CM), `swap-both`; q-scaled interpolation; ionmc shape below 30 MeV; same sizes and seeds as (b).
+
+(f) **Seeds:** investigation family 2099xxxx, starting at **20990100**. D-E3 and D-E6 use one seed per energy: **20990100** (150 MeV) and **20990101** (200 MeV), shared by every variant and by EM-only (CRN). D-E5 uses **20991000 + case index** (0–9, ordered as rows 14–23). The family is disjoint from:
+- every consumed base;
+- the declared fresh bases 20511004 / 20521004 / 20531004 / 20541004 / 20551004 and their r_index blocks (envelope base + 0 … 20999, maximum 20572003); the re-qualification bases of record are lv 20531004 / hr 20541004 (route document §4.4; 20511004 / 20521004 are retired unused, declared before any observation);
+- the rehearsal seeds used (20505000–20525999);
+- E-shape 20509500 + k;
+- the TOPAS rows.
+
+Disjointness is asserted by a test under `tests/` only (outside the rehearsal digest). The `run_suite.py` seed-guard extension (hashed, l.1303–1313) is deferred to the re-qualification commit, which changes hashed code anyway. The D-E runs are executed by `validation/scripts/elastic_attribution/` and never through `run_suite.py` or an evidence step. Disclosure: numpy seed 20990001 was used once in a planner scratch calculation (analytic V7-R binomial study, no transport, `scripts/candidates2.py`); it lies below the family start and is not used.
+
+(g) **The §5 rule** (rules 1–5, thresholds 0.010, 2·SE, 70 %, 30 %, the signature thresholds, the conditional `swap-sigma` / `swap-all`) and **the §4 pre-commitment** (M2 with the §4.1 inputs, conventions and rules; M3 only on the §4.2 triggers) are frozen with this amendment. No §4 or §5 parameter changes after D-E0 is run.
+
+(h) **Already seen and declared:** the V10-A per-point ratios and first minima, the built-table moments, the shape-moment and removal-kernel estimates of rev 1 / the review (crude; recomputed in D-E0), the reviewer's exceedance and median ratios per shape, and P(pp).
+
+(i) **Timing:** D-E0 to D-E3 and D-E5 to D-E6 are sandbox-only, run one at a time and not concurrently with any host job. D-E4 consists of 10 reference-engine calls, each ≤ 1500 s, one at a time, preceded by a 1e5-primary smoke case.
+
+A later model change goes through a new decision and a pre-registered re-qualification at the declared fresh bases of the integration route (lv 20531004, hr 20541004; V6-F, if the operator selects it, at 20551004) with **unchanged** tolerances.
+
+Supporting plans (planning documents, not evidence): `validation/plans/v3-005d-v7r-calibration-repair.md` (V7-R2 design; its pre-registration is a separate later amendment and its host execution waits for the operator's budget decision) and the integration route (committed with this amendment). Seed disjointness is asserted by `tests/ionmc/test_v3_005d_seed_families.py`.

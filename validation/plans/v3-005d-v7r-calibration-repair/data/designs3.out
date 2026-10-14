@@ -1,0 +1,21 @@
+R 3200 gate kmax 109 joint kmax 50 power kmin 2909
+R 4800 gate kmax 169 joint kmax 79 power kmin 4355
+R 6400 gate kmax 229 joint kmax 109 power kmin 5800
+pairs 7200 alpha 0.02 R 3200: FA_p 0.0197 FA_s(bound) 0.0191 min joint power 0.9992 | P(all) r=.32 model 0.980 bound 0.918 | r=1 model 0.000 bound 0.000
+pairs 7200 alpha 0.02 R 4800: FA_p 0.0197 FA_s(bound) 0.0191 min joint power 0.9992 | P(all) r=.32 model 0.994 bound 0.957 | r=1 model 0.000 bound 0.000
+pairs 7200 alpha 0.015 R 3200: FA_p 0.0147 FA_s(bound) 0.0149 min joint power 0.9988 | P(all) r=.32 model 1.000 bound 0.998 | r=1 model 0.095 bound 0.005
+pairs 7200 alpha 0.015 R 4800: FA_p 0.0147 FA_s(bound) 0.0149 min joint power 0.9988 | P(all) r=.32 model 1.000 bound 1.000 | r=1 model 0.186 bound 0.020
+pairs 7200 alpha 0.0125 R 3200: FA_p 0.0120 FA_s(bound) 0.0121 min joint power 0.9984 | P(all) r=.32 model 1.000 bound 1.000 | r=1 model 0.504 bound 0.203
+pairs 7200 alpha 0.0125 R 4800: FA_p 0.0120 FA_s(bound) 0.0121 min joint power 0.9984 | P(all) r=.32 model 1.000 bound 1.000 | r=1 model 0.648 bound 0.344
+pairs 7200 alpha 0.01 R 3200: FA_p 0.0098 FA_s(bound) 0.0098 min joint power 0.9979 | P(all) r=.32 model 1.000 bound 1.000 | r=1 model 0.850 bound 0.659
+pairs 7200 alpha 0.01 R 4800: FA_p 0.0098 FA_s(bound) 0.0098 min joint power 0.9979 | P(all) r=.32 model 1.000 bound 1.000 | r=1 model 0.922 bound 0.786
+pairs 10800 alpha 0.02 R 3200: FA_p 0.0191 FA_s(bound) 0.0196 min joint power 1.0000 | P(all) r=.32 model 0.938 bound 0.777 | r=1 model 0.000 bound 0.000
+pairs 10800 alpha 0.02 R 4800: FA_p 0.0191 FA_s(bound) 0.0196 min joint power 1.0000 | P(all) r=.32 model 0.965 bound 0.839 | r=1 model 0.000 bound 0.000
+pairs 10800 alpha 0.015 R 3200: FA_p 0.0149 FA_s(bound) 0.0147 min joint power 1.0000 | P(all) r=.32 model 0.999 bound 0.985 | r=1 model 0.059 bound 0.003
+pairs 10800 alpha 0.015 R 4800: FA_p 0.0149 FA_s(bound) 0.0147 min joint power 1.0000 | P(all) r=.32 model 1.000 bound 0.993 | r=1 model 0.117 bound 0.012
+pairs 10800 alpha 0.0125 R 3200: FA_p 0.0121 FA_s(bound) 0.0124 min joint power 1.0000 | P(all) r=.32 model 1.000 bound 0.999 | r=1 model 0.412 bound 0.116
+pairs 10800 alpha 0.0125 R 4800: FA_p 0.0121 FA_s(bound) 0.0124 min joint power 1.0000 | P(all) r=.32 model 1.000 bound 1.000 | r=1 model 0.537 bound 0.206
+pairs 10800 alpha 0.01 R 3200: FA_p 0.0098 FA_s(bound) 0.0100 min joint power 1.0000 | P(all) r=.32 model 1.000 bound 1.000 | r=1 model 0.778 bound 0.501
+pairs 10800 alpha 0.01 R 4800: FA_p 0.0098 FA_s(bound) 0.0100 min joint power 1.0000 | P(all) r=.32 model 1.000 bound 1.000 | r=1 model 0.854 bound 0.620
+7200/0.01 n_kappa 200000 P(all) r=1 bound 0.14
+7200/0.01 n_kappa 1000000 P(all) r=1 bound 0.659
