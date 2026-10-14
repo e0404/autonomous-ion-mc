@@ -1,14 +1,25 @@
 # V3-005 route to integration (V3-005D planning document; planner output, not evidence)
 
-Status: revision 5 (2026-10-14), after two independent review rounds (`validation/plans/v3-005d-integration-route/review.md`); to be committed as `validation/plans/v3-005d-integration-route.md`, the "route to integration" that the operator requires. Branch state: V3-005B worktree `/home/wahln/aiprojects/ion-mc-worktrees/v3-005b`, HEAD 749f768c (PR #82, unmerged by operator decision). Evidence SHA of the last qualification: dd976c5a (bases lv5c 20481004, hr5c 20491004).
+Status: revision 6 (2026-10-14), after two independent review rounds and Codex REVIEW-bb2a8151 (`validation/plans/v3-005d-integration-route/review.md`); to be committed as `validation/plans/v3-005d-integration-route.md`, the "route to integration" that the operator requires. Branch state: V3-005B worktree `/home/wahln/aiprojects/ion-mc-worktrees/v3-005b`, HEAD 749f768c (PR #82, unmerged by operator decision). Evidence SHA of the last qualification: dd976c5a (bases lv5c 20481004, hr5c 20491004).
 
 This document changes no frozen row, tolerance, seed base or verdict. Every row result quoted here is preserved as archived. Proposals that change the required validation scope are collected in §4 (iv) for ONE operator intervention; nothing in them is applied before the operator answers.
+
+## Revision 6 (2026-10-14)
+
+Triggered by Codex **REVIEW-bb2a8151** on 9a7b142; synchronises the route with revision 4 of the V7-R calibration-repair plan. Nothing else changes: Options I/II/III, the intervention item list, the seed bases, and every other section are unchanged.
+
+- **Size-selection rule.** The V7-R2 rule is now the **directly measured complete two-gate joint pass rate at κ = 1**: the repository `run_calibration`, with both gates on the same replicates, α_tost = 0.005, 48 × 225 replicates, R_meas = 400 per surrogate, seed roots 20989920–20989923 (planner block). Freeze 5400/0.005 (48 × 2.25e6) iff both surrogates reach **≥ 378/400** joint passes, i.e. the CP95 lower bound p_low satisfies P(Bin(3200, p_low) ≥ 2909) ≥ 0.99. Otherwise measure 7200/0.005 (64 × 2.25e6; roots + 10) and freeze it iff both reach ≥ 378/400. Otherwise no V7-R2 design is frozen and the finding goes to the operator (repair plan revision 4, §3.8 item 2).
+  - It replaces the revision-3 independence product OC_paired × OC_single with a fitted box shrink, everywhere the route restated it: §2.2 Option I description, §2.4, §4.1 (i), §4.1 (vi) step 2.
+  - Measured on the current pool (repair plan revision 4, `validation/plans/v3-005d-v7r-calibration-repair/data/joint_power_5400.*`): archive-fitted 383/400 (CP95 lower 0.9369), rehearsal block sums 384/400 (0.9399), so **5400/0.005 is selected today**.
+  - The revision-3 powers 0.954 / 0.962 survive only as labelled model values.
+- **Rebuilt pool.** The rule is re-applied on the rebuilt pool before the sizes are frozen. That re-measurement is sandbox work: single process, one heavy job, never overlapping the D-E3 probes or any host run. It takes ≈ 2.2 h for 5400/0.005 and ≈ 3 h more if 7200/0.005 has to be measured. It is added to the critical path (§4.3).
+- **Budgets.** No host hours are added, so the host totals are unchanged: ≈ 41.3 / 51.5 / 23.9 / 19.9 h (§4.2). The V7-R2 block stays 33.9 h / 44 h, (B) 16.5 h, (C) 12.5 h.
 
 ## Revision 5 (2026-10-14)
 
 Answers review round 2 (REVISE, minor, no blocking).
 
-- **R2-1 (selection rule).** The revision-2 window rule is replaced in the revision-4 header, §2.4 and §4.1 (vi) step 2 by the computable rule of the repair plan revision 3: 5400/0.005 (48 × 2.25e6) iff P(Bin(3200, pw) ≥ 2909) ≥ 0.99 for both surrogates, where pw = OC_paired(c_p) × OC_single(c_s) is the exact binomial OC at the measured κ = 1 coverages of the rebuilt pool (the measured sandbox single-gate power replaces the modelled factor when lower); otherwise 7200/0.005 (64 × 2.25e6) iff the same computation gives ≥ 0.99 there; otherwise no V7-R2 design is frozen and the finding goes to the operator (repair plan revision 3, §3.8 item 2).
+- **R2-1 (selection rule).** The revision-2 window rule is replaced in the revision-4 header, §2.4 and §4.1 (vi) step 2 by the computable rule of the repair plan revision 3: 5400/0.005 (48 × 2.25e6) iff P(Bin(3200, pw) ≥ 2909) ≥ 0.99 for both surrogates, where pw = OC_paired(c_p) × OC_single(c_s) is the exact binomial OC at the measured κ = 1 coverages of the rebuilt pool (the measured sandbox single-gate power replaces the modelled factor when lower); otherwise 7200/0.005 (64 × 2.25e6) iff the same computation gives ≥ 0.99 there; otherwise no V7-R2 design is frozen and the finding goes to the operator (repair plan revision 3, §3.8 item 2). *(Superseded by revision 6: the measured joint-rate rule of repair plan revision 4.)*
 - **R2-2 (budgets).** Updated to the repair plan revision 3 (§6.2 there):
   - V7-R2 33.9 h (5400/0.005) or 44 h (7200/0.005); (B) 16.5 h; (C) 12.5 h.
   - Re-qualification 37.2 / 47.3 / 19.8 / 15.8 h.
@@ -210,7 +221,7 @@ None of the options relaxes a tolerance, re-labels a recorded verdict or reuses 
   - The new-model V10-A is computed with the frozen tolerances and **reported** with a "data seen" disclosure. This follows the pre-registered (e)9 precedent ("All V10-A results for (ii′) are exploratory").
   - The p+A shape is then gated by **V11 added to (a)6**. V11 is currently "report with tolerance"; adding it is a tightening, unchanged in tolerance.
   - The claim is narrowed to: "elastic angular effect agrees with Geant4 `g4h-elastic_HP` within the V11 tolerances; σ_el(p+A) level is the Barashenkov compilation shared with TOPAS; p+C σ_el at 100 MeV is +17 % above the post-1997 proxy (recorded deficiency, analogous to the pre-declared LA150 p+C deficiency of V1b)".
-- *V7-R.* Carried as recorded failed. The repaired, separately pre-registered **new row V7-R2** stands in its (a)6 slot. The repair plan has now answered the feasibility question offline (§2.4): 48 shards × 2.25e6 (5400 pairs), α_tost = 0.005 on both `escaped_neutral` gates, κ from 1e6 samples, R = 3200. Expected false acceptance 0.0050, power 0.954 / 0.962 and P(all clauses) ≈ 1.000 on the old surrogate pool; re-checked on the regenerated pool (§2.4); ≈ 33.9 host-hours (repair plan revision 3). Design, pre-registration, implementation and sandbox work are autonomous. Host execution happens only in (vi), with its budget in (iv) item 8. The slot substitution is the proposal (§2.4).
+- *V7-R.* Carried as recorded failed. The repaired, separately pre-registered **new row V7-R2** stands in its (a)6 slot. The repair plan has now answered the feasibility question offline (§2.4): 48 shards × 2.25e6 (5400 pairs), α_tost = 0.005 on both `escaped_neutral` gates, κ from 1e6 samples, R = 3200. Expected false acceptance 0.0050. The measured joint pass rate at κ = 1 on the current pool is 383/400 and 384/400 (CP95 lower 0.9369 / 0.9399), so the power clause holds with P ≈ 1.000. It is re-measured on the regenerated pool (§2.4); ≈ 33.9 host-hours (repair plan revision 3). Design, pre-registration, implementation and sandbox work are autonomous. Host execution happens only in (vi), with its budget in (iv) item 8. The slot substitution is the proposal (§2.4).
 - *Consequences.*
   - Integration becomes reachable with one re-qualification (§4.1 (vi): ≈ 37.2 h host with V7-R2 as written, ≈ 15.8 h with calibration variant (C)).
   - The ledger shows V6, V10-A and V7-R as failed next to the passes.
@@ -296,8 +307,8 @@ The margins [0.6527, 0.7127] and the clauses (joint ≤ 0.02, gate alone ≤ 0.0
 - **Surrogates** (M3, V7-R review F3):
   - The **definitions** are unchanged: the archive-fitted zero-inflated Gamma, re-fitted with seed 20505000 to k = 5.0703, π = 0.2167; and the rehearsal block-sum pool.
   - The pool **content** is regenerated at the evidence digest after the model change, so the pinned pool hashes 5d28a9b3… / d4f7d749… are dropped for evidence use.
-  - The expected figures were computed on the old pool: false acceptance 0.0050 (paired, exact) and ≤ 0.0050 + 0.01 rigorous for the single gate (V7-R review F7); power 0.954 / 0.962; P(all clauses) ≈ 1.000. They are **re-checked on the regenerated pool before the sizes are frozen** (§4.1 (vi) step 2).
-  - The binding risk is the power clause. The pre-declared selection rule: 5400/0.005 (48 × 2.25e6) iff P(Bin(3200, pw) ≥ 2909) ≥ 0.99 for both surrogates, where pw = OC_paired(c_p) × OC_single(c_s) is the exact binomial OC at the measured κ = 1 coverages of the rebuilt pool (the measured sandbox single-gate power replaces the modelled factor when lower); otherwise 7200/0.005 (64 × 2.25e6) iff the same computation gives ≥ 0.99 there; otherwise no V7-R2 design is frozen and the finding goes to the operator (repair plan revision 3, §3.8 item 2). The interval windows quoted in earlier revisions are illustrations, not the rule.
+  - The expected figures were computed on the old pool: false acceptance 0.0050 (paired, exact) and ≤ 0.0050 + 0.01 rigorous for the single gate (V7-R review F7); power 0.954 / 0.962 (repair plan revision 3 model values from the independence product; labelled, superseded by the measured joint rate below); P(all clauses) ≈ 1.000. They are **re-checked on the regenerated pool before the sizes are frozen** (§4.1 (vi) step 2).
+  - The binding risk is the power clause. The pre-declared size-selection rule uses the **directly measured complete two-gate joint pass rate at κ = 1**: the repository `run_calibration`, with both gates on the same replicates, α_tost = 0.005, 48 × 225 replicates, R_meas = 400 per surrogate, seed roots 20989920–20989923 (planner block). Freeze 5400/0.005 (48 × 2.25e6) iff both surrogates reach **≥ 378/400** joint passes, i.e. the CP95 lower bound p_low satisfies P(Bin(3200, p_low) ≥ 2909) ≥ 0.99. Otherwise measure 7200/0.005 (64 × 2.25e6; roots + 10) and freeze it iff both reach ≥ 378/400. Otherwise no V7-R2 design is frozen and the finding goes to the operator (repair plan revision 4, §3.8 item 2). Measured on the current pool (repair plan revision 4, `validation/plans/v3-005d-v7r-calibration-repair/data/joint_power_5400.*`): archive-fitted 383/400 (CP95 lower 0.9369), rehearsal block sums 384/400 (0.9399), so **5400/0.005 is selected today**. The rule and R_meas were fixed before that measurement. The Fréchet bound (CP lower 0.9272 / 0.9310) is a cross-check only. The rule is re-applied on the rebuilt pool before the sizes are frozen (§4.1 (vi) step 2).
 - **Host time:** ≈ 33.9 h (fixture 0.7, κ 1.1, calibration 23.2, A13 0.2, transport 8.7). 7200/0.005 (64 × 2.25e6): ≈ 44 h, with transport seeds 20547004–20547068 (k = 0..63, reference k = 64). (B): ≈ 16.5 h (22 h at R = 1600). (C): ≈ 12.5 h (+ a small end-to-end Monte Carlo).
 - **Estimator risk:** a correct estimator at true paired coverage 0.69–0.695 passes the stricter gate with only 0.86 / 0.61.
 
@@ -368,11 +379,11 @@ Compute jobs are serial:
 - **V7-R2: commit the dated design amendment** (content of repair plan §3.7, corrected per V7-R review F1–F8):
   - V7-R2 is a new row;
   - its design;
-  - the pre-declared power re-check rule of §2.4;
+  - the pre-declared size-selection rule of §2.4 (measured joint pass rate, repair plan revision 4);
   - seeds and transport layout.
 
   The sizes are frozen later, in a 14a-style addendum after the pool re-check of (vi), and never decrease.
-- **V7-R2: run the sandbox smoke of the single-gate box power at α = 0.005** on the current pool (R ≈ 200, ≈ 45 min) as an early warning. It is not the check of record.
+- **V7-R2: joint-power measurement on the current pool (done).** 383/400 and 384/400 select 5400/0.005 (repair plan revision 4, §3.8). It informs the design only; it is not the check of record, which is the re-measurement on the rebuilt pool in (vi) step 2.
 - Gate to (ii): D-E0–D-E3 reported (exploratory) and both amendments committed and reviewed.
 
 **(ii) Host reference calculations (host ≤ 4.2 h plus a smoke case).**
@@ -451,11 +462,11 @@ The response is recorded verbatim and changes no row verdict.
    - The rehearsal digest is the hashed set minus `validation/plans/`, `decisions/`, `docs/`, README files and `tests/`. Only `src/` and `validation/scripts/` changes invalidate it.
    - Freeze both, including the Option II V6-F code and the M2 plumbing, and rebuild once.
    - Halved shards: 4 × 2.25e6 at rehearsal seeds 20505000 + 16000 + k = **20521000–20521003** (≈ 0.70 h total; m5).
-2. **Pool re-check (sandbox, pre-declared; M3).** On the rebuilt pool, measure:
-   - the κ = 1 paired and single coverage;
-   - the joint power at the chosen design.
+2. **Pool re-check (sandbox, pre-declared; M3).** On the rebuilt pool, re-measure the complete two-gate joint pass rate at κ = 1 (R_meas = 400 per surrogate).
+   - Cost: ≈ 2.2 h, and ≈ 3 h more if 7200/0.005 has to be measured.
+   - Execution: single process, one heavy job at a time, never overlapping the D-E3 probes or any host run.
 
-   Apply the pre-declared selection rule of §2.4 (repair plan revision 3): 5400/0.005 (48 × 2.25e6) iff P(Bin(3200, pw) ≥ 2909) ≥ 0.99 for both surrogates, where pw = OC_paired(c_p) × OC_single(c_s) is the exact binomial OC at the measured κ = 1 coverages of the rebuilt pool (the measured sandbox single-gate power replaces the modelled factor when lower); otherwise 7200/0.005 (64 × 2.25e6) iff the same computation gives ≥ 0.99 there; otherwise no V7-R2 design is frozen and the finding goes to the operator (repair plan revision 3, §3.8 item 2). Then freeze the V7-R2 sizes addendum. Nothing decreases, and the rule is not changed after the check.
+   Apply the pre-declared size-selection rule of §2.4: the **directly measured complete two-gate joint pass rate at κ = 1**: the repository `run_calibration`, with both gates on the same replicates, α_tost = 0.005, 48 × 225 replicates, R_meas = 400 per surrogate, seed roots 20989920–20989923 (planner block). Freeze 5400/0.005 (48 × 2.25e6) iff both surrogates reach **≥ 378/400** joint passes, i.e. the CP95 lower bound p_low satisfies P(Bin(3200, p_low) ≥ 2909) ≥ 0.99. Otherwise measure 7200/0.005 (64 × 2.25e6; roots + 10) and freeze it iff both reach ≥ 378/400. Otherwise no V7-R2 design is frozen and the finding goes to the operator (repair plan revision 4, §3.8 item 2). Then freeze the V7-R2 sizes addendum. Nothing decreases, and the rule is not changed after the check.
 3. **Throughput step first** (review-route m2; 14a (c)5). `shard_table_ok` covers every history-based shard plan, and the rep-based rule of (iii) covers the κ and calibration parts. A non-fitting plan stops the run before the first evidence step.
 4. **Evidence order** (one step per call; PARTIAL lines into the ledger immediately):
    1. deterministic steps (v6-e0, V10, V10-A, X-ENDF, D9-BGG);
@@ -494,6 +505,8 @@ The response is recorded verbatim and changes no row verdict.
 | V7-R2 at 7200/0.005 | ≈ 51.5 |
 | with (B) | ≈ 23.9 |
 | with (C) | ≈ 19.9 |
+
+Revision 6: the V7-R2 joint-power re-measurement on the rebuilt pool is sandbox time (≈ 2.2 h; ≈ 3 h more for 7200/0.005). It adds no host hours, so these totals are unchanged.
 | Option II | + ≈ 6.2 (+ CUDA) |
 
 If item 5 is refused, the V5 steps drop out: four short V5 shards of 10–25 s each at the dd976c5a rate, which is negligible.
@@ -506,11 +519,11 @@ If item 5 is refused, the V5 steps drop out: four short V5 shards of 10–25 s e
 4. D-E5, D-E6 and the synthesis.
 5. M2 decision → implementation (elastic, V7-R2, suite plumbing, Option II code) → Codex / CI. This is the longest calendar item, with no host hours. Intervention (iv) runs in parallel and must be answered here.
 6. Re-qualification amendment (v) and its review.
-7. Fixture (0.7 h) and the sandbox pool re-check.
+7. Fixture (0.7 h host), then the sandbox joint-power re-measurement on the rebuilt pool (≈ 2.2 h sandbox; ≈ 3 h more if 7200/0.005 is needed). It runs single-process, as the only heavy job: no host run and no D-E3 probe at the same time.
 8. Throughput, then the re-qualification ≈ 37.2 h serial host time (≈ 47.3 h at 7200/0.005) (about 1.5 days of back-to-back calls). The V7-R2 calibration block (≈ 24.5 h) is its largest item and cannot start before the model and fixture are final.
 9. Closure.
 
-(C) would shorten the run to ≈ 15.8 h; that is the operator's lever.
+(C) would shorten the run to ≈ 15.8 h; that is the operator's lever. The revision-6 re-measurement adds only sandbox time, so the host totals of §4.2 are unchanged.
 
 ### 4.4 Fresh bases (revision 4: 20531004 / 20541004 adopted; seed-by-seed record kept)
 

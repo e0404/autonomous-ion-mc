@@ -1,0 +1,186 @@
+{
+ "banner": "Exploratory, report-only (Amendment 19); not evidence; changes no row.",
+ "energies_mev": [
+  20,
+  50,
+  100,
+  150,
+  200
+ ],
+ "note": "BGG formula = total elastic p-p; the table sigma is the NI part above 16.26 deg CM (not the same quantity)",
+ "pdg_lowest_points": [
+  {
+   "p_lab_gev": 0.846,
+   "sigma_mb": 23.2,
+   "t_mev": 325.08475431172485
+  },
+  {
+   "p_lab_gev": 0.97935,
+   "sigma_mb": 24.0,
+   "t_mev": 418.00256467405154
+  },
+  {
+   "p_lab_gev": 1.0,
+   "sigma_mb": 25.8,
+   "t_mev": 432.98810283955174
+  },
+  {
+   "p_lab_gev": 1.00959,
+   "sigma_mb": 24.0,
+   "t_mev": 439.9972902708374
+  },
+  {
+   "p_lab_gev": 1.03673,
+   "sigma_mb": 22.0,
+   "t_mev": 459.99956081244716
+  }
+ ],
+ "pdg_n_points": 154,
+ "per_energy": {
+  "100": {
+   "P_deficit_gt_2mm": 1.0,
+   "P_deficit_gt_3mm": 1.0,
+   "P_theta_fast_gt_theta_2mm": 0.9365234375,
+   "P_theta_fast_gt_theta_3mm": 0.8818359375,
+   "mean_1_minus_cos_fast_lab": 0.1382115510853773,
+   "mean_t_slow_mev": 26.011627939570257,
+   "mean_t_slow_over_T": 0.2601162793957026,
+   "pdg_points_within_15pct_in_T": [],
+   "ratio_table_over_bgg": 0.9889811826666484,
+   "sigma_ET_mb_mev": 710.2151558674292,
+   "sigma_pp_bgg_formula_mb": 27.607963624921556,
+   "sigma_pp_builder_formula_mb": 27.303756516792728,
+   "sigma_pp_table_mb": 27.303756516792728,
+   "theta_fast_cm_deg": {
+    "p10": 30.89259389932,
+    "p50": 61.117602702782754,
+    "p90": 84.46405430965703
+   },
+   "theta_fast_lab_deg": {
+    "p10": 15.068705774380716,
+    "p50": 29.911753476477095,
+    "p90": 41.49283226869991
+   }
+  },
+  "150": {
+   "P_deficit_gt_2mm": 1.0,
+   "P_deficit_gt_3mm": 1.0,
+   "P_theta_fast_gt_theta_2mm": 0.984375,
+   "P_theta_fast_gt_theta_3mm": 0.953125,
+   "mean_1_minus_cos_fast_lab": 0.13461889097790292,
+   "mean_t_slow_mev": 38.714883604955894,
+   "mean_t_slow_over_T": 0.2580992240330393,
+   "pdg_points_within_15pct_in_T": [],
+   "ratio_table_over_bgg": 1.1008004377726566,
+   "sigma_ET_mb_mev": 1016.7226883497106,
+   "sigma_pp_bgg_formula_mb": 23.8570073033944,
+   "sigma_pp_builder_formula_mb": 26.261804083522023,
+   "sigma_pp_table_mb": 26.261804083522023,
+   "theta_fast_cm_deg": {
+    "p10": 29.46944839753529,
+    "p50": 61.039681162615224,
+    "p90": 84.40611963770763
+   },
+   "theta_fast_lab_deg": {
+    "p10": 14.201825489399935,
+    "p50": 29.56516025215749,
+    "p90": 41.1091108812041
+   }
+  },
+  "20": {
+   "P_deficit_gt_2mm": 0.576171875,
+   "P_deficit_gt_3mm": 0.205078125,
+   "P_theta_fast_gt_theta_2mm": 0.0,
+   "P_theta_fast_gt_theta_3mm": 0.0,
+   "mean_1_minus_cos_fast_lab": 0.14925174250119705,
+   "mean_t_slow_mev": 5.440298502661326,
+   "mean_t_slow_over_T": 0.2720149251330663,
+   "pdg_points_within_15pct_in_T": [],
+   "ratio_table_over_bgg": 0.8904573363519065,
+   "sigma_ET_mb_mev": 762.3200411001683,
+   "sigma_pp_bgg_formula_mb": 157.36258872961506,
+   "sigma_pp_builder_formula_mb": 140.12467160161356,
+   "sigma_pp_table_mb": 140.12467160161356,
+   "theta_fast_cm_deg": {
+    "p10": 34.15261830189194,
+    "p50": 63.12757129681725,
+    "p90": 84.82320858780345
+   },
+   "theta_fast_lab_deg": {
+    "p10": 16.991244583547306,
+    "p50": 31.42849115869826,
+    "p90": 42.26040535000341
+   }
+  },
+  "200": {
+   "P_deficit_gt_2mm": 1.0,
+   "P_deficit_gt_3mm": 1.0,
+   "P_theta_fast_gt_theta_2mm": 1.0,
+   "P_theta_fast_gt_theta_3mm": 0.98828125,
+   "mean_1_minus_cos_fast_lab": 0.13217756337430925,
+   "mean_t_slow_mev": 51.61984480660772,
+   "mean_t_slow_over_T": 0.25809922403303864,
+   "pdg_points_within_15pct_in_T": [],
+   "ratio_table_over_bgg": 1.1008004377726566,
+   "sigma_ET_mb_mev": 1323.927532431172,
+   "sigma_pp_bgg_formula_mb": 23.299088216701307,
+   "sigma_pp_builder_formula_mb": 25.647646508648545,
+   "sigma_pp_table_mb": 25.647646508648542,
+   "theta_fast_cm_deg": {
+    "p10": 29.46944839753529,
+    "p50": 61.039681162615224,
+    "p90": 84.40611963770763
+   },
+   "theta_fast_lab_deg": {
+    "p10": 14.036644388803834,
+    "p50": 29.266439171038996,
+    "p90": 40.763500717418474
+   }
+  },
+  "50": {
+   "P_deficit_gt_2mm": 0.9755859375,
+   "P_deficit_gt_3mm": 0.9384765625,
+   "P_theta_fast_gt_theta_2mm": 0.701171875,
+   "P_theta_fast_gt_theta_3mm": 0.5263671875,
+   "mean_1_minus_cos_fast_lab": 0.14440369548207388,
+   "mean_t_slow_mev": 13.324974005459522,
+   "mean_t_slow_over_T": 0.26649948010919045,
+   "pdg_points_within_15pct_in_T": [],
+   "ratio_table_over_bgg": 0.9474331499617992,
+   "sigma_ET_mb_mev": 663.1486728491855,
+   "sigma_pp_bgg_formula_mb": 52.52861596272739,
+   "sigma_pp_builder_formula_mb": 49.76735208470046,
+   "sigma_pp_table_mb": 49.76735208470046,
+   "theta_fast_cm_deg": {
+    "p10": 32.93101747613712,
+    "p50": 62.19012376578854,
+    "p90": 84.58854105383276
+   },
+   "theta_fast_lab_deg": {
+    "p10": 16.261872055120296,
+    "p50": 30.762931765851015,
+    "p90": 41.91953081921044
+   }
+  }
+ },
+ "per_primary_water_path": {
+  "100": {
+   "P_pp_bgg_formula_E_ge_12.5": 0.026298171462892032,
+   "P_pp_table": 0.024938842464859858,
+   "P_pp_table_above_50MeV": 0.012873756317036644,
+   "transferred_energy_mev_per_primary": 0.3494185102792054
+  },
+  "150": {
+   "P_pp_bgg_formula_E_ge_12.5": 0.037857887175106096,
+   "P_pp_table": 0.036179128971245665,
+   "P_pp_table_above_50MeV": 0.025919002967047196,
+   "transferred_energy_mev_per_primary": 0.7667815997703018
+  },
+  "200": {
+   "P_pp_bgg_formula_E_ge_12.5": 0.05171050257816161,
+   "P_pp_table": 0.0518950678636401,
+   "P_pp_table_above_50MeV": 0.043627308394734075,
+   "transferred_energy_mev_per_primary": 1.5582437924378645
+  }
+ }
+}

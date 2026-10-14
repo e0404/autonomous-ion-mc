@@ -2,7 +2,7 @@
 
 **Task:** V3-005B
 **Category:** experiment-boundary
-**Status:** open
+**Status:** resolved (2026-10-13T18:37:00.866542+00:00; operator response in `response.json`, recorded through `resolve_human_intervention`; the README status line was reconciled in the task branch after the response, the request tooling does not rewrite it)
 
 ## Summary
 
@@ -28,3 +28,15 @@ Choose one (or state another): (A) keep PR #82 unmerged (default) and open follo
 ## Decision or task depending on this request
 
 Not specified.
+
+## Resolution (recorded 2026-10-13, reconciled in the task branch on 2026-10-14)
+
+Operator response (`response.json`, `resolved_at_utc` 2026-10-13T18:37:00.866542+00:00, verbatim):
+
+> Proceed with option A: keep PR #82 unmerged and continue dependent follow-up work from its unmerged branch state. Preserve all recorded failures and do not create an implementation-only passing record.
+Prioritize elastic-model attribution and V7-R calibration repair before another full qualification run. Before expensive qualification, document and independently review the route to integration, including remaining requirement coverage, V6/V6-F treatment, and execution conformity under the existing stability restrictions.
+V6-F passing does not authorize replacing V6 or merging. Bring back any concrete proposal that changes required validation scope; routine scientific investigation and implementation should continue autonomously.
+
+Disposition A applies: PR #82 stays unmerged; follow-up work continues on the V3-005B branch from its unmerged state (commit 749f768c records the response; the planning documents under `validation/plans/v3-005d-*` and Amendment 19 follow it). All recorded failures are preserved; no implementation-only passing record is created; the proposals that change the required validation scope are collected in `validation/plans/v3-005d-integration-route.md` §4.1 (iv) for one later intervention.
+
+Operator note stored with the response: Operator response received 2026-10-13 after CI went green at bb8c198f. Disposition A: PR #82 stays unmerged; follow-up work branches from its unmerged state; recorded failures preserved; no implementation-only passing record; priorities elastic-model attribution (V5/V11) and V7-R calibration repair; an independently reviewed integration-route document (requirement coverage, V6/V6-F treatment, execution conformity under the stability restrictions) precedes any expensive qualification; V6-F passing never replaces V6 or authorises merging; scope changes return as proposals; routine investigation continues autonomously.

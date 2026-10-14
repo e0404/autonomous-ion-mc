@@ -191,3 +191,42 @@ current margin (pw 0.954 vs the ≈ 0.915 needed). Optional: the §3.8 header st
 governance split (design autonomous; V7-R2's merge-gate role and budget are operator proposals sent before any host
 step), the seeds and the reproducibility have been checked independently. R3-1 can be folded into Amendment 19 when
 it is written.
+
+---
+
+# Round 4 (repo file validation/plans/v3-005d-v7r-calibration-repair.md, Revision 4, uncommitted; after Codex REVIEW-bb2a8151)
+
+Checks (reviewer script `validation/plans/v3-005d-v7r-calibration-repair/review-scripts/r4.py`):
+1. **Rule — answers the Codex finding.** §3.8 item 2 now selects on the directly measured joint pass count only.
+   There is no product, no fitted shrink, and the Fréchet bound is a cross-check only. The bound is pre-declared as the
+   one-sided CP95 lower bound with the requirement P(Bin(3200, p_low) ≥ 2909) ≥ 0.99. Independent arithmetic:
+   378/400 → p_low 0.9224 → 0.9974; 377 → 0.9195 → 0.9851 (fails); 376 → 0.9421. P(≥ 378/400 | 0.950 / 0.955 / 0.960)
+   = 0.725 / 0.860 / 0.946, matching the plan's 0.73 / 0.86 / 0.95.
+2. **Script — correct.** `joint_power.py` calls the repository's `run_calibration` (same replicates `x` and the same
+   `seed_base` for `pair_ingredients`, `single_ingredients`, `pair_gate` and `single_gate` with the 5000-resample box).
+   It changes only `steps_v5b.V7_ALPHA_TOST`, which is the same module object that `v7r` imports (`import steps_v5b as
+   v5b`) and is read at call time. `PooledBlocks` ravels the 2-D pool, as `_surrogate` does. Layout: 10 800
+   replicates, `reps_per_shard = 225`. Recount of the jsonl: 400 + 400 rows, r = 0..399 complete. Archive joint 383,
+   paired 385, single 398; rehearsal joint 384, paired 385, single 399; all rows have α = 0.005 and joint ==
+   paired ∧ single. Every data/boot seed re-derives from SeedSequence([20989920/21/22/23, r]); the roots are inside
+   20989900–20989999 and the 7200 roots (+10) are distinct from the earlier diagnostics (…01–03, 11–13, 90, 95). The
+   summary is consistent. Plausibility: paired 0.9625 matches the exact OC 0.968 at α = 0.005; at α = 0.04 it would be
+   0.997, so the override took effect.
+3. **Timing-trial disclosure — adequate.** Two r = 0 rows, deterministic and reproduced inside the 400, carry no
+   information about reaching 378/400. The threshold follows mechanically from R_meas and the frozen 0.9 / 0.99
+   clauses. No taint. Optional: state that the deleted trial's outcomes equal jsonl rows r = 0.
+4. **Stale statements not labelled superseded (minor):**
+   - (a) §6.6 first risk bullet still says the single-gate box power "is modelled …, not measured" with the R ≈ 200
+     mitigation. That is now false: it was measured (398/400, 399/400) and the joint power was measured too. Rewrite it
+     or mark it superseded.
+   - (b) §3.1 "Power = OC_paired(c_p0) × OC_single(c_s0)" and the §3.2 table entry "0.954 / 0.962" for the recommended
+     row are not labelled as the withdrawn independence model. Add "(model; superseded by the measured joint rate,
+     §3.8)", as §3.4 already does.
+   - (c) §3.5 (C) "at true 0.954" should cite the measured 0.9575 / 0.9600.
+   - The 24-shard / 4.5e6 mentions are all labelled (dd976c5a layout / Revision 1).
+
+**Round 4 verdict: REVISE (minor).** The rule, the script, the data and the arithmetic are correct, and the Codex
+finding is fully answered. Only the labelling edits 4(a)–(c) remain; they are documentation only and need no
+re-measurement or re-review.
+
+**Orchestrator note (2026-10-14):** the three labelling edits 4(a)–(c) were applied to Revision 4 before commit (header line "Round-4 independent review"); nothing else changed.

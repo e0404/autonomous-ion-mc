@@ -1,0 +1,1666 @@
+{
+ "banner": "Exploratory, report-only (Amendment 19); not evidence; changes no row.",
+ "crude_cited_review_150": {
+  "Rx1.2": [
+   0.025,
+   0.096,
+   0.069
+  ],
+  "gauss": [
+   0.0196,
+   0.125,
+   0.096
+  ],
+  "s0.5": [
+   0.0182,
+   0.107,
+   0.077
+  ],
+  "s0.9": [
+   0.0123,
+   0.091,
+   0.061
+  ],
+  "sharp": [
+   0.0305,
+   0.119,
+   0.091
+  ]
+ },
+ "crude_recomputed": {
+  "150": {
+   "Rx1.2": {
+    "P_el": 0.22418608971284312,
+    "removal_1mm": 0.1412581278092773,
+    "removal_2mm": 0.09557870975825164,
+    "removal_3mm": 0.06927578352171324,
+    "removal_5mm": 0.0419032556813497,
+    "sum_1_minus_cos": 0.02501053914507553
+   },
+   "gauss": {
+    "P_el": 0.22418608971284312,
+    "removal_1mm": 0.1650138837608358,
+    "removal_2mm": 0.12461930523367963,
+    "removal_3mm": 0.09617592291637297,
+    "removal_5mm": 0.05981349708608401,
+    "sum_1_minus_cos": 0.019631618457701217
+   },
+   "s0.5": {
+    "P_el": 0.22418608971284312,
+    "removal_1mm": 0.152242508323398,
+    "removal_2mm": 0.10652052546586813,
+    "removal_3mm": 0.07691441309441387,
+    "removal_5mm": 0.04295535866617717,
+    "sum_1_minus_cos": 0.018214592061856914
+   },
+   "s0.9": {
+    "P_el": 0.22418608971284312,
+    "removal_1mm": 0.1398894622972953,
+    "removal_2mm": 0.09060069934601922,
+    "removal_3mm": 0.060623758001334106,
+    "removal_5mm": 0.028663660280191433,
+    "sum_1_minus_cos": 0.012269502359338937
+   },
+   "sharp": {
+    "P_el": 0.22418608971284312,
+    "removal_1mm": 0.16049733932168614,
+    "removal_2mm": 0.11864125749784993,
+    "removal_3mm": 0.09088454847415844,
+    "removal_5mm": 0.05812893218928703,
+    "sum_1_minus_cos": 0.030466467164598148
+   }
+  },
+  "200": {
+   "Rx1.2": {
+    "P_el": 0.2579885753115997,
+    "removal_1mm": 0.1735314189152065,
+    "removal_2mm": 0.12304887829409857,
+    "removal_3mm": 0.09183370825264771,
+    "removal_5mm": 0.05770292265680861,
+    "sum_1_minus_cos": 0.026136427054160808
+   },
+   "gauss": {
+    "P_el": 0.2579885753115997,
+    "removal_1mm": 0.19820277969141042,
+    "removal_2mm": 0.15536481572028812,
+    "removal_3mm": 0.12379485284436506,
+    "removal_5mm": 0.08145289841593496,
+    "sum_1_minus_cos": 0.0189829622297273
+   },
+   "s0.5": {
+    "P_el": 0.2579885753115997,
+    "removal_1mm": 0.18495354586455817,
+    "removal_2mm": 0.13561752864872254,
+    "removal_3mm": 0.10170551820857533,
+    "removal_5mm": 0.060523218887587896,
+    "sum_1_minus_cos": 0.01781195182945472
+   },
+   "s0.9": {
+    "P_el": 0.2579885753115997,
+    "removal_1mm": 0.17164410959895546,
+    "removal_2mm": 0.11756394524191176,
+    "removal_3mm": 0.082553100096756,
+    "removal_5mm": 0.042789262954568086,
+    "sum_1_minus_cos": 0.011817370674617775
+   },
+   "sharp": {
+    "P_el": 0.2579885753115997,
+    "removal_1mm": 0.19398013486641835,
+    "removal_2mm": 0.1494048587624392,
+    "removal_3mm": 0.11803945177993924,
+    "removal_5mm": 0.07898447686631171,
+    "sum_1_minus_cos": 0.03192151355221244
+   }
+  }
+ },
+ "energies_mev": [
+  50,
+  100,
+  150,
+  200
+ ],
+ "h6": {
+  "all_input_txt_differ_only_in_header_seed_modules": true,
+  "files_hashed": {
+   "validation/reference_cases/topas/proton-water-150mev-idd-r20-emelastic-seed1/case.json": "e7d6d7174b6d8ba04170db366dd8e3ea0ecb5228439861d61427f357a002f005",
+   "validation/reference_cases/topas/proton-water-150mev-idd-r20-emelastic-seed1/input.txt": "1195d133a0743260840d59fd0b65627e3a0a88333b18b344383e016229cc847d",
+   "validation/reference_cases/topas/proton-water-150mev-idd-r20-emelastic-seed2/case.json": "af11728c5a575cd115e3a015a30f2d6df753d9837a8b64aa758d135e993c0932",
+   "validation/reference_cases/topas/proton-water-150mev-idd-r20-emelastic-seed2/input.txt": "c8b63cc6966f0725b4827aadc67fece1125e232a128689eeba3773a0c81797fa",
+   "validation/reference_cases/topas/proton-water-150mev-idd-r20-emelastic-seed3/case.json": "63eae4445d66daef9d03e3f44fb96c171e8dfbcda4d98f97b2b35359c8c0b370",
+   "validation/reference_cases/topas/proton-water-150mev-idd-r20-emelastic-seed3/input.txt": "ea0993fccaae8ba88584a17a18a7489c2f348a7b01b8f0f2969c02d939e240ce",
+   "validation/reference_cases/topas/proton-water-150mev-idd-r20-emonly-seed1/case.json": "4710de3ebf9d395e47c920bc76837818e75311f1850a6526b0dd77a8f067ccaa",
+   "validation/reference_cases/topas/proton-water-150mev-idd-r20-emonly-seed1/input.txt": "f82a6328e70f7049650201234c228265bafdc3d458f454ec68f13ce482a924de",
+   "validation/reference_cases/topas/proton-water-150mev-idd-r20-emonly-seed2/case.json": "54d0eb6511e8b4d302b22ef299e9eac001a5abcd68b7730dfca35e1bf1358c4e",
+   "validation/reference_cases/topas/proton-water-150mev-idd-r20-emonly-seed2/input.txt": "24bc2bec7722ffcc54c3c6a42c6ec7616ce6a0ae4474d9ae628e94e68bd28ed5",
+   "validation/reference_cases/topas/proton-water-150mev-idd-r20-emonly-seed3/case.json": "32ac048798eb1a0f3a0bba1748901b922ea2aa4ba97c370953809bb47abcae92",
+   "validation/reference_cases/topas/proton-water-150mev-idd-r20-emonly-seed3/input.txt": "cacf94431e94aaf1be0ce0961d5fbcd4b31e2bd86610cb04a4719b78eaf3a030",
+   "validation/reference_cases/topas/proton-water-200mev-idd-r20-emelastic-seed1/case.json": "7e8eebade4e18a0e50edcbc9cfa2e114fb80110e1caed45281273f8caf4672ea",
+   "validation/reference_cases/topas/proton-water-200mev-idd-r20-emelastic-seed1/input.txt": "841265268397cb83af9025f84ad1f95f9206c45eff8fb92f0b151f023c1d2c62",
+   "validation/reference_cases/topas/proton-water-200mev-idd-r20-emelastic-seed2/case.json": "44ebacad2b0c0673fc83574becf30cd044e80205ea0aefbf968311dc7fdd79a6",
+   "validation/reference_cases/topas/proton-water-200mev-idd-r20-emelastic-seed2/input.txt": "dff6141ed90c8f92dc556bf7f080c3be35c705186c54a556b534e9ad406cf168",
+   "validation/reference_cases/topas/proton-water-200mev-idd-r20-emelastic-seed3/case.json": "aa761d568a41e37716917b91bc920a0fc969fa0dbd39818fbc8bb3e0634f6c58",
+   "validation/reference_cases/topas/proton-water-200mev-idd-r20-emelastic-seed3/input.txt": "258714219c98105f033289dfdfcfef4fd5aff907729a989a87be734200c7140a",
+   "validation/reference_cases/topas/proton-water-200mev-idd-r20-emonly-seed1/case.json": "8fe4d5dd6bd11337e6d8b0fcf3a86974835d21d6b4503c2a6d26b8636acd5cdb",
+   "validation/reference_cases/topas/proton-water-200mev-idd-r20-emonly-seed1/input.txt": "bf07f7152859dcfaff455577818290ee910393d5c5ff21c9eb09a6efcf80d6e5",
+   "validation/reference_cases/topas/proton-water-200mev-idd-r20-emonly-seed2/case.json": "cfbc24016f6d7d4edba6da36cd03a08a83c6edad161efc6a4e3afe03b6f94bed",
+   "validation/reference_cases/topas/proton-water-200mev-idd-r20-emonly-seed2/input.txt": "d8830a0cdb85ef17f8846b7bbc66a283e9ee141fd7ca6f912963c4757881284d",
+   "validation/reference_cases/topas/proton-water-200mev-idd-r20-emonly-seed3/case.json": "a4285a57b427cc72fc2c4f4f60c6ca9e45492645e2fa9956338a5aa3fa0c087a",
+   "validation/reference_cases/topas/proton-water-200mev-idd-r20-emonly-seed3/input.txt": "b25768a8ea5b15db3e5fef3badb945f96a61e73b31fde11890d665fe1e691b22"
+  },
+  "pairs": [
+   {
+    "emelastic": "proton-water-150mev-idd-r20-emelastic-seed1",
+    "emonly": "proton-water-150mev-idd-r20-emonly-seed1",
+    "files": {
+     "case.json": [
+      "-    \"Geant4_Modular (OpenTOPAS 4.3 / Geant4 11.4.2): g4em-standard_opt4 only (no hadronic, ion or decay modules; as the lateral-emonly cases)\",",
+      "-    \"EM: g4em-standard_opt4; hadronic: none (EM-only)\"",
+      "+    \"Geant4_Modular (OpenTOPAS 4.3 / Geant4 11.4.2): g4em-standard_opt4, g4h-elastic_HP\",",
+      "+    \"EM: g4em-standard_opt4; hadronic: HP elastic only, no inelastic (as exploratory X2)\"",
+      "-    20273001",
+      "+    20280001",
+      "-  \"rationale\": \"V3-005B acceptance row V5 (absolute IDD at r = 20 cm, 150 and 200 MeV, nuclear on and off, TOPAS opt4 QGSP_BIC_HP I = 78 eV gating engine, Amendment 7 (b)): EM-only (nuclear off, reference for the on-minus-off difference) 150 MeV run, seed variant 1 of 3; evidence-grade candidate (1e5 primaries, 0.5 mm depth bins, 3 distinct seeds)\",",
+      "+  \"rationale\": \"V3-005C plan Amendment 14 (f) row 10: EM + hadronic elastic only (no inelastic), 150 MeV, seed variant 1 of 3; V11 elastic-model test and rung-2 non-elastic factor F_ne denominator; geometry, beam, scorer, cuts, I = 78 eV, 1e5 histories and 0.5 mm binning identical to the frozen V5 150 MeV case\",",
+      "-    \"row\": \"V5\",",
+      "+    \"row\": \"V11\",",
+      "+    \"plan_row\": 10,",
+      "+    \"amendment\": 14,",
+      "+    \"seed\": 20280001,",
+      "-    \"mode\": \"emonly\",",
+      "+    \"mode\": \"emelastic\",",
+      "+    \"modules\": [",
+      "+      \"g4em-standard_opt4\",",
+      "+      \"g4h-elastic_HP\"",
+      "+    ],"
+     ],
+     "input.txt": [
+      "-# Native OpenTOPAS 4.3 input. V3-005B row V5 absolute integral depth dose (r = 20 cm), EM-ONLY physics; no validation claim.",
+      "+# Native OpenTOPAS 4.3 input. V3-005C plan Amendment 14 (f) row 10 (emelastic, 150 MeV) for acceptance row V11: EM + hadronic elastic only (no inelastic); no validation claim.",
+      "-i:Ts/Seed = 20273001",
+      "+i:Ts/Seed = 20280001",
+      "-sv:Ph/Default/Modules = 1 \"g4em-standard_opt4\"",
+      "+sv:Ph/Default/Modules = 2 \"g4em-standard_opt4\" \"g4h-elastic_HP\""
+     ]
+    },
+    "input_txt_only_modules_seed_header": true,
+    "input_txt_unexpected_lines": []
+   },
+   {
+    "emelastic": "proton-water-150mev-idd-r20-emelastic-seed2",
+    "emonly": "proton-water-150mev-idd-r20-emonly-seed2",
+    "files": {
+     "case.json": [
+      "-    \"Geant4_Modular (OpenTOPAS 4.3 / Geant4 11.4.2): g4em-standard_opt4 only (no hadronic, ion or decay modules; as the lateral-emonly cases)\",",
+      "-    \"EM: g4em-standard_opt4; hadronic: none (EM-only)\"",
+      "+    \"Geant4_Modular (OpenTOPAS 4.3 / Geant4 11.4.2): g4em-standard_opt4, g4h-elastic_HP\",",
+      "+    \"EM: g4em-standard_opt4; hadronic: HP elastic only, no inelastic (as exploratory X2)\"",
+      "-    20273002",
+      "+    20280002",
+      "-  \"rationale\": \"V3-005B acceptance row V5 (absolute IDD at r = 20 cm, 150 and 200 MeV, nuclear on and off, TOPAS opt4 QGSP_BIC_HP I = 78 eV gating engine, Amendment 7 (b)): EM-only (nuclear off, reference for the on-minus-off difference) 150 MeV run, seed variant 2 of 3; evidence-grade candidate (1e5 primaries, 0.5 mm depth bins, 3 distinct seeds)\",",
+      "+  \"rationale\": \"V3-005C plan Amendment 14 (f) row 10: EM + hadronic elastic only (no inelastic), 150 MeV, seed variant 2 of 3; V11 elastic-model test and rung-2 non-elastic factor F_ne denominator; geometry, beam, scorer, cuts, I = 78 eV, 1e5 histories and 0.5 mm binning identical to the frozen V5 150 MeV case\",",
+      "-    \"row\": \"V5\",",
+      "+    \"row\": \"V11\",",
+      "+    \"plan_row\": 10,",
+      "+    \"amendment\": 14,",
+      "+    \"seed\": 20280002,",
+      "-    \"mode\": \"emonly\",",
+      "+    \"mode\": \"emelastic\",",
+      "+    \"modules\": [",
+      "+      \"g4em-standard_opt4\",",
+      "+      \"g4h-elastic_HP\"",
+      "+    ],"
+     ],
+     "input.txt": [
+      "-# Native OpenTOPAS 4.3 input. V3-005B row V5 absolute integral depth dose (r = 20 cm), EM-ONLY physics; no validation claim.",
+      "+# Native OpenTOPAS 4.3 input. V3-005C plan Amendment 14 (f) row 10 (emelastic, 150 MeV) for acceptance row V11: EM + hadronic elastic only (no inelastic); no validation claim.",
+      "-i:Ts/Seed = 20273002",
+      "+i:Ts/Seed = 20280002",
+      "-sv:Ph/Default/Modules = 1 \"g4em-standard_opt4\"",
+      "+sv:Ph/Default/Modules = 2 \"g4em-standard_opt4\" \"g4h-elastic_HP\""
+     ]
+    },
+    "input_txt_only_modules_seed_header": true,
+    "input_txt_unexpected_lines": []
+   },
+   {
+    "emelastic": "proton-water-150mev-idd-r20-emelastic-seed3",
+    "emonly": "proton-water-150mev-idd-r20-emonly-seed3",
+    "files": {
+     "case.json": [
+      "-    \"Geant4_Modular (OpenTOPAS 4.3 / Geant4 11.4.2): g4em-standard_opt4 only (no hadronic, ion or decay modules; as the lateral-emonly cases)\",",
+      "-    \"EM: g4em-standard_opt4; hadronic: none (EM-only)\"",
+      "+    \"Geant4_Modular (OpenTOPAS 4.3 / Geant4 11.4.2): g4em-standard_opt4, g4h-elastic_HP\",",
+      "+    \"EM: g4em-standard_opt4; hadronic: HP elastic only, no inelastic (as exploratory X2)\"",
+      "-    20273003",
+      "+    20280003",
+      "-  \"rationale\": \"V3-005B acceptance row V5 (absolute IDD at r = 20 cm, 150 and 200 MeV, nuclear on and off, TOPAS opt4 QGSP_BIC_HP I = 78 eV gating engine, Amendment 7 (b)): EM-only (nuclear off, reference for the on-minus-off difference) 150 MeV run, seed variant 3 of 3; evidence-grade candidate (1e5 primaries, 0.5 mm depth bins, 3 distinct seeds)\",",
+      "+  \"rationale\": \"V3-005C plan Amendment 14 (f) row 10: EM + hadronic elastic only (no inelastic), 150 MeV, seed variant 3 of 3; V11 elastic-model test and rung-2 non-elastic factor F_ne denominator; geometry, beam, scorer, cuts, I = 78 eV, 1e5 histories and 0.5 mm binning identical to the frozen V5 150 MeV case\",",
+      "-    \"row\": \"V5\",",
+      "+    \"row\": \"V11\",",
+      "+    \"plan_row\": 10,",
+      "+    \"amendment\": 14,",
+      "+    \"seed\": 20280003,",
+      "-    \"mode\": \"emonly\",",
+      "+    \"mode\": \"emelastic\",",
+      "+    \"modules\": [",
+      "+      \"g4em-standard_opt4\",",
+      "+      \"g4h-elastic_HP\"",
+      "+    ],"
+     ],
+     "input.txt": [
+      "-# Native OpenTOPAS 4.3 input. V3-005B row V5 absolute integral depth dose (r = 20 cm), EM-ONLY physics; no validation claim.",
+      "+# Native OpenTOPAS 4.3 input. V3-005C plan Amendment 14 (f) row 10 (emelastic, 150 MeV) for acceptance row V11: EM + hadronic elastic only (no inelastic); no validation claim.",
+      "-i:Ts/Seed = 20273003",
+      "+i:Ts/Seed = 20280003",
+      "-sv:Ph/Default/Modules = 1 \"g4em-standard_opt4\"",
+      "+sv:Ph/Default/Modules = 2 \"g4em-standard_opt4\" \"g4h-elastic_HP\""
+     ]
+    },
+    "input_txt_only_modules_seed_header": true,
+    "input_txt_unexpected_lines": []
+   },
+   {
+    "emelastic": "proton-water-200mev-idd-r20-emelastic-seed1",
+    "emonly": "proton-water-200mev-idd-r20-emonly-seed1",
+    "files": {
+     "case.json": [
+      "-    \"Geant4_Modular (OpenTOPAS 4.3 / Geant4 11.4.2): g4em-standard_opt4 only (no hadronic, ion or decay modules; as the lateral-emonly cases)\",",
+      "-    \"EM: g4em-standard_opt4; hadronic: none (EM-only)\"",
+      "+    \"Geant4_Modular (OpenTOPAS 4.3 / Geant4 11.4.2): g4em-standard_opt4, g4h-elastic_HP\",",
+      "+    \"EM: g4em-standard_opt4; hadronic: HP elastic only, no inelastic (as exploratory X2)\"",
+      "-    20274001",
+      "+    20281001",
+      "-  \"rationale\": \"V3-005B acceptance row V5 (absolute IDD at r = 20 cm, 150 and 200 MeV, nuclear on and off, TOPAS opt4 QGSP_BIC_HP I = 78 eV gating engine, Amendment 7 (b)): EM-only (nuclear off, reference for the on-minus-off difference) 200 MeV run, seed variant 1 of 3; evidence-grade candidate (1e5 primaries, 0.5 mm depth bins, 3 distinct seeds)\",",
+      "+  \"rationale\": \"V3-005C plan Amendment 14 (f) row 11: EM + hadronic elastic only (no inelastic), 200 MeV, seed variant 1 of 3; V11 elastic-model test and rung-2 non-elastic factor F_ne denominator; geometry, beam, scorer, cuts, I = 78 eV, 1e5 histories and 0.5 mm binning identical to the frozen V5 200 MeV case\",",
+      "-    \"row\": \"V5\",",
+      "+    \"row\": \"V11\",",
+      "+    \"plan_row\": 11,",
+      "+    \"amendment\": 14,",
+      "+    \"seed\": 20281001,",
+      "-    \"mode\": \"emonly\",",
+      "+    \"mode\": \"emelastic\",",
+      "+    \"modules\": [",
+      "+      \"g4em-standard_opt4\",",
+      "+      \"g4h-elastic_HP\"",
+      "+    ],"
+     ],
+     "input.txt": [
+      "-# Native OpenTOPAS 4.3 input. V3-005B row V5 absolute integral depth dose (r = 20 cm), EM-ONLY physics; no validation claim.",
+      "+# Native OpenTOPAS 4.3 input. V3-005C plan Amendment 14 (f) row 11 (emelastic, 200 MeV) for acceptance row V11: EM + hadronic elastic only (no inelastic); no validation claim.",
+      "-i:Ts/Seed = 20274001",
+      "+i:Ts/Seed = 20281001",
+      "-sv:Ph/Default/Modules = 1 \"g4em-standard_opt4\"",
+      "+sv:Ph/Default/Modules = 2 \"g4em-standard_opt4\" \"g4h-elastic_HP\""
+     ]
+    },
+    "input_txt_only_modules_seed_header": true,
+    "input_txt_unexpected_lines": []
+   },
+   {
+    "emelastic": "proton-water-200mev-idd-r20-emelastic-seed2",
+    "emonly": "proton-water-200mev-idd-r20-emonly-seed2",
+    "files": {
+     "case.json": [
+      "-    \"Geant4_Modular (OpenTOPAS 4.3 / Geant4 11.4.2): g4em-standard_opt4 only (no hadronic, ion or decay modules; as the lateral-emonly cases)\",",
+      "-    \"EM: g4em-standard_opt4; hadronic: none (EM-only)\"",
+      "+    \"Geant4_Modular (OpenTOPAS 4.3 / Geant4 11.4.2): g4em-standard_opt4, g4h-elastic_HP\",",
+      "+    \"EM: g4em-standard_opt4; hadronic: HP elastic only, no inelastic (as exploratory X2)\"",
+      "-    20274002",
+      "+    20281002",
+      "-  \"rationale\": \"V3-005B acceptance row V5 (absolute IDD at r = 20 cm, 150 and 200 MeV, nuclear on and off, TOPAS opt4 QGSP_BIC_HP I = 78 eV gating engine, Amendment 7 (b)): EM-only (nuclear off, reference for the on-minus-off difference) 200 MeV run, seed variant 2 of 3; evidence-grade candidate (1e5 primaries, 0.5 mm depth bins, 3 distinct seeds)\",",
+      "+  \"rationale\": \"V3-005C plan Amendment 14 (f) row 11: EM + hadronic elastic only (no inelastic), 200 MeV, seed variant 2 of 3; V11 elastic-model test and rung-2 non-elastic factor F_ne denominator; geometry, beam, scorer, cuts, I = 78 eV, 1e5 histories and 0.5 mm binning identical to the frozen V5 200 MeV case\",",
+      "-    \"row\": \"V5\",",
+      "+    \"row\": \"V11\",",
+      "+    \"plan_row\": 11,",
+      "+    \"amendment\": 14,",
+      "+    \"seed\": 20281002,",
+      "-    \"mode\": \"emonly\",",
+      "+    \"mode\": \"emelastic\",",
+      "+    \"modules\": [",
+      "+      \"g4em-standard_opt4\",",
+      "+      \"g4h-elastic_HP\"",
+      "+    ],"
+     ],
+     "input.txt": [
+      "-# Native OpenTOPAS 4.3 input. V3-005B row V5 absolute integral depth dose (r = 20 cm), EM-ONLY physics; no validation claim.",
+      "+# Native OpenTOPAS 4.3 input. V3-005C plan Amendment 14 (f) row 11 (emelastic, 200 MeV) for acceptance row V11: EM + hadronic elastic only (no inelastic); no validation claim.",
+      "-i:Ts/Seed = 20274002",
+      "+i:Ts/Seed = 20281002",
+      "-sv:Ph/Default/Modules = 1 \"g4em-standard_opt4\"",
+      "+sv:Ph/Default/Modules = 2 \"g4em-standard_opt4\" \"g4h-elastic_HP\""
+     ]
+    },
+    "input_txt_only_modules_seed_header": true,
+    "input_txt_unexpected_lines": []
+   },
+   {
+    "emelastic": "proton-water-200mev-idd-r20-emelastic-seed3",
+    "emonly": "proton-water-200mev-idd-r20-emonly-seed3",
+    "files": {
+     "case.json": [
+      "-    \"Geant4_Modular (OpenTOPAS 4.3 / Geant4 11.4.2): g4em-standard_opt4 only (no hadronic, ion or decay modules; as the lateral-emonly cases)\",",
+      "-    \"EM: g4em-standard_opt4; hadronic: none (EM-only)\"",
+      "+    \"Geant4_Modular (OpenTOPAS 4.3 / Geant4 11.4.2): g4em-standard_opt4, g4h-elastic_HP\",",
+      "+    \"EM: g4em-standard_opt4; hadronic: HP elastic only, no inelastic (as exploratory X2)\"",
+      "-    20274003",
+      "+    20281003",
+      "-  \"rationale\": \"V3-005B acceptance row V5 (absolute IDD at r = 20 cm, 150 and 200 MeV, nuclear on and off, TOPAS opt4 QGSP_BIC_HP I = 78 eV gating engine, Amendment 7 (b)): EM-only (nuclear off, reference for the on-minus-off difference) 200 MeV run, seed variant 3 of 3; evidence-grade candidate (1e5 primaries, 0.5 mm depth bins, 3 distinct seeds)\",",
+      "+  \"rationale\": \"V3-005C plan Amendment 14 (f) row 11: EM + hadronic elastic only (no inelastic), 200 MeV, seed variant 3 of 3; V11 elastic-model test and rung-2 non-elastic factor F_ne denominator; geometry, beam, scorer, cuts, I = 78 eV, 1e5 histories and 0.5 mm binning identical to the frozen V5 200 MeV case\",",
+      "-    \"row\": \"V5\",",
+      "+    \"row\": \"V11\",",
+      "+    \"plan_row\": 11,",
+      "+    \"amendment\": 14,",
+      "+    \"seed\": 20281003,",
+      "-    \"mode\": \"emonly\",",
+      "+    \"mode\": \"emelastic\",",
+      "+    \"modules\": [",
+      "+      \"g4em-standard_opt4\",",
+      "+      \"g4h-elastic_HP\"",
+      "+    ],"
+     ],
+     "input.txt": [
+      "-# Native OpenTOPAS 4.3 input. V3-005B row V5 absolute integral depth dose (r = 20 cm), EM-ONLY physics; no validation claim.",
+      "+# Native OpenTOPAS 4.3 input. V3-005C plan Amendment 14 (f) row 11 (emelastic, 200 MeV) for acceptance row V11: EM + hadronic elastic only (no inelastic); no validation claim.",
+      "-i:Ts/Seed = 20274003",
+      "+i:Ts/Seed = 20281003",
+      "-sv:Ph/Default/Modules = 1 \"g4em-standard_opt4\"",
+      "+sv:Ph/Default/Modules = 2 \"g4em-standard_opt4\" \"g4h-elastic_HP\""
+     ]
+    },
+    "input_txt_only_modules_seed_header": true,
+    "input_txt_unexpected_lines": []
+   }
+  ]
+ },
+ "kernels": {
+  "100": {
+   "disk": {
+    "G": {
+     "G_path": 0.0010028718344063476,
+     "G_path_plus_recoil": 0.003344212793363499,
+     "G_path_with_post_event_stopping": 0.013770110892407577,
+     "G_pp_slow_local_upper": 0.004408391464599636,
+     "G_recoil": 0.0023413409589571514,
+     "G_total": 0.007752604257963135,
+     "G_total_with_post_event_stopping": 0.02051984331596436,
+     "post_event_stopping_term": 0.012767239058001228
+    },
+    "H-1": {
+     "K_1mm": 0.02372700613920517,
+     "K_2mm": 0.02135849071236042,
+     "K_3mm": 0.019447475317570406,
+     "K_5mm": 0.01655938273972634,
+     "P_el": 0.024938842464859858
+    },
+    "O-16": {
+     "K_1mm": 0.11074879300517508,
+     "K_2mm": 0.0757831814594652,
+     "K_3mm": 0.054677601612078866,
+     "K_5mm": 0.03258428136019431,
+     "P_el": 0.16892193030679756
+    }
+   },
+   "table": {
+    "C-12 (hypothetical, n=1 per cm3 along the water path)": {
+     "K_1mm": 2.7985290262051082e-24,
+     "K_2mm": 2.047030680604314e-24,
+     "K_3mm": 1.5327248344902814e-24,
+     "K_5mm": 9.469094725464014e-25,
+     "P_el": 3.8698690602515235e-24
+    },
+    "G": {
+     "G_path": 0.0009738350979782284,
+     "G_path_plus_recoil": 0.003316624226686433,
+     "G_path_with_post_event_stopping": 0.013708361185061592,
+     "G_pp_slow_local_upper": 0.004408391464599636,
+     "G_recoil": 0.0023427891287082043,
+     "G_total": 0.007725015691286068,
+     "G_total_with_post_event_stopping": 0.02045954177836943,
+     "post_event_stopping_term": 0.012734526087083363
+    },
+    "H-1": {
+     "K_1mm": 0.02372700613920517,
+     "K_2mm": 0.02135849071236042,
+     "K_3mm": 0.019447475317570406,
+     "K_5mm": 0.01655938273972634,
+     "P_el": 0.024938842464859858
+    },
+    "O-16": {
+     "K_1mm": 0.11075612382711972,
+     "K_2mm": 0.07578887552843122,
+     "K_3mm": 0.054699415481349156,
+     "K_5mm": 0.032601098304323645,
+     "P_el": 0.16892193030679756
+    }
+   }
+  },
+  "150": {
+   "Rx1.2": {
+    "G": {
+     "G_path": 0.002173795149201393,
+     "G_path_plus_recoil": 0.0038066485204336685,
+     "G_path_with_post_event_stopping": 0.007150873481645087,
+     "G_pp_slow_local_upper": 0.008261334273536033,
+     "G_recoil": 0.0016328533712322753,
+     "G_total": 0.0120679827939697,
+     "G_total_with_post_event_stopping": 0.017045061126413394,
+     "post_event_stopping_term": 0.0049770783324436935
+    },
+    "H-1": {
+     "K_1mm": 0.03562057232419139,
+     "K_2mm": 0.03426318339624232,
+     "K_3mm": 0.032496416038883265,
+     "K_5mm": 0.029568049493504903,
+     "K_star_gauss": 0.033522265362046624,
+     "K_star_literal": 0.021892718544982752,
+     "K_star_shifted": 0.03274169358199306,
+     "P_el": 0.036179128971245665
+    },
+    "O-16": {
+     "K_1mm": 0.14373658037881584,
+     "K_2mm": 0.09776019638138474,
+     "K_3mm": 0.07103870823812138,
+     "K_5mm": 0.04318444272510622,
+     "K_star_gauss": 0.09691422363318056,
+     "K_star_literal": 0.051217178349630264,
+     "K_star_shifted": 0.08209135664820696,
+     "P_el": 0.2271191521264114
+    }
+   },
+   "disk": {
+    "G": {
+     "G_path": 0.003110039290216467,
+     "G_path_plus_recoil": 0.005124099143919839,
+     "G_path_with_post_event_stopping": 0.00912160793064547,
+     "G_pp_slow_local_upper": 0.008261334273536033,
+     "G_recoil": 0.002014059853703372,
+     "G_total": 0.01338543341745587,
+     "G_total_with_post_event_stopping": 0.019397002057884874,
+     "post_event_stopping_term": 0.006011568640429003
+    },
+    "H-1": {
+     "K_1mm": 0.03562057232419139,
+     "K_2mm": 0.03426318339624232,
+     "K_3mm": 0.032496416038883265,
+     "K_5mm": 0.029568049493504903,
+     "K_star_gauss": 0.033522265362046624,
+     "K_star_literal": 0.021892718544982752,
+     "K_star_shifted": 0.03274169358199306,
+     "P_el": 0.036179128971245665
+    },
+    "O-16": {
+     "K_1mm": 0.16310073254065713,
+     "K_2mm": 0.12104861990203272,
+     "K_3mm": 0.09300453653417934,
+     "K_5mm": 0.05990174556085932,
+     "K_star_gauss": 0.11754450752000951,
+     "K_star_literal": 0.06175709214616441,
+     "K_star_shifted": 0.10282764550415166,
+     "P_el": 0.2271191521264114
+    }
+   },
+   "gauss": {
+    "G": {
+     "G_path": 0.0018756447304738868,
+     "G_path_plus_recoil": 0.0028097493920335847,
+     "G_path_with_post_event_stopping": 0.0062605166933868825,
+     "G_pp_slow_local_upper": 0.008261334273536033,
+     "G_recoil": 0.0009341046615596977,
+     "G_total": 0.011071083665569617,
+     "G_total_with_post_event_stopping": 0.015455955628482614,
+     "post_event_stopping_term": 0.004384871962912996
+    },
+    "H-1": {
+     "K_1mm": 0.03562057232419139,
+     "K_2mm": 0.03426318339624232,
+     "K_3mm": 0.032496416038883265,
+     "K_5mm": 0.029568049493504903,
+     "K_star_gauss": 0.033522265362046624,
+     "K_star_literal": 0.021892718544982752,
+     "K_star_shifted": 0.03274169358199306,
+     "P_el": 0.036179128971245665
+    },
+    "O-16": {
+     "K_1mm": 0.167611947340476,
+     "K_2mm": 0.12701099214795838,
+     "K_3mm": 0.09828662377630475,
+     "K_5mm": 0.06153679220013973,
+     "K_star_gauss": 0.1222952972931881,
+     "K_star_literal": 0.060876617184312594,
+     "K_star_shifted": 0.10737753374076288,
+     "P_el": 0.2271191521264114
+    }
+   },
+   "s0.5": {
+    "G": {
+     "G_path": 0.001909217020407722,
+     "G_path_plus_recoil": 0.002766689134124539,
+     "G_path_with_post_event_stopping": 0.006429039600885146,
+     "G_pp_slow_local_upper": 0.008261334273536033,
+     "G_recoil": 0.0008574721137168169,
+     "G_total": 0.011028023407660572,
+     "G_total_with_post_event_stopping": 0.015547845988137996,
+     "post_event_stopping_term": 0.004519822580477424
+    },
+    "H-1": {
+     "K_1mm": 0.03562057232419139,
+     "K_2mm": 0.03426318339624232,
+     "K_3mm": 0.032496416038883265,
+     "K_5mm": 0.029568049493504903,
+     "K_star_gauss": 0.033522265362046624,
+     "K_star_literal": 0.021892718544982752,
+     "K_star_shifted": 0.03274169358199306,
+     "P_el": 0.036179128971245665
+    },
+    "O-16": {
+     "K_1mm": 0.15477720072956888,
+     "K_2mm": 0.10881399560254316,
+     "K_3mm": 0.07886650596588755,
+     "K_5mm": 0.04443552690924683,
+     "K_star_gauss": 0.10554661078731437,
+     "K_star_literal": 0.05227580313138995,
+     "K_star_shifted": 0.0897139407939918,
+     "P_el": 0.2271191521264114
+    }
+   },
+   "s0.9": {
+    "G": {
+     "G_path": 0.0014033900862681363,
+     "G_path_plus_recoil": 0.0019611263299333893,
+     "G_path_with_post_event_stopping": 0.005691041974595009,
+     "G_pp_slow_local_upper": 0.008261334273536033,
+     "G_recoil": 0.0005577362436652531,
+     "G_total": 0.010222460603469423,
+     "G_total_with_post_event_stopping": 0.014510112491796295,
+     "post_event_stopping_term": 0.004287651888326872
+    },
+    "H-1": {
+     "K_1mm": 0.03562057232419139,
+     "K_2mm": 0.03426318339624232,
+     "K_3mm": 0.032496416038883265,
+     "K_5mm": 0.029568049493504903,
+     "K_star_gauss": 0.033522265362046624,
+     "K_star_literal": 0.021892718544982752,
+     "K_star_shifted": 0.03274169358199306,
+     "P_el": 0.036179128971245665
+    },
+    "O-16": {
+     "K_1mm": 0.1423381414151287,
+     "K_2mm": 0.09273002079310239,
+     "K_3mm": 0.06233799571535179,
+     "K_5mm": 0.029792241732817398,
+     "K_star_gauss": 0.09072348082708573,
+     "K_star_literal": 0.04362916372106841,
+     "K_star_shifted": 0.0743067761953574,
+     "P_el": 0.2271191521264114
+    }
+   },
+   "table": {
+    "C-12 (hypothetical, n=1 per cm3 along the water path)": {
+     "K_1mm": 3.978069593991401e-24,
+     "K_2mm": 3.1388266991391243e-24,
+     "K_3mm": 2.5245958849811837e-24,
+     "K_5mm": 1.7347293497404668e-24,
+     "K_star_gauss": 3.026921020569444e-24,
+     "K_star_literal": 1.6031132224969768e-24,
+     "K_star_shifted": 2.713498751943608e-24,
+     "P_el": 5.120880210287363e-24
+    },
+    "G": {
+     "G_path": 0.003080980116513754,
+     "G_path_plus_recoil": 0.005095828756674304,
+     "G_path_with_post_event_stopping": 0.00908703398279187,
+     "G_pp_slow_local_upper": 0.008261334273536033,
+     "G_recoil": 0.00201484864016055,
+     "G_total": 0.013357163030210336,
+     "G_total_with_post_event_stopping": 0.019363216896488452,
+     "post_event_stopping_term": 0.006006053866278116
+    },
+    "H-1": {
+     "K_1mm": 0.03562057232419139,
+     "K_2mm": 0.03426318339624232,
+     "K_3mm": 0.032496416038883265,
+     "K_5mm": 0.029568049493504903,
+     "K_star_gauss": 0.033522265362046624,
+     "K_star_literal": 0.021892718544982752,
+     "K_star_shifted": 0.03274169358199306,
+     "P_el": 0.036179128971245665
+    },
+    "O-16": {
+     "K_1mm": 0.16310434460894277,
+     "K_2mm": 0.12105541455539066,
+     "K_3mm": 0.09302075860624219,
+     "K_5mm": 0.05991900715685289,
+     "K_star_gauss": 0.11755602494863071,
+     "K_star_literal": 0.06176386180682131,
+     "K_star_shifted": 0.10284091653228432,
+     "P_el": 0.2271191521264114
+    }
+   }
+  },
+  "200": {
+   "Rx1.2": {
+    "G": {
+     "G_path": 0.0019976311658609865,
+     "G_path_plus_recoil": 0.0032512052777763133,
+     "G_path_with_post_event_stopping": 0.0053909726337160735,
+     "G_pp_slow_local_upper": 0.016924072043856674,
+     "G_recoil": 0.001253574111915327,
+     "G_total": 0.020175277321632986,
+     "G_total_with_post_event_stopping": 0.023568618789488075,
+     "post_event_stopping_term": 0.003393341467855087
+    },
+    "H-1": {
+     "K_1mm": 0.05165122678911555,
+     "K_2mm": 0.05089323846179933,
+     "K_3mm": 0.04986504113040827,
+     "K_5mm": 0.047250654964543615,
+     "K_star_gauss": 0.04863933199121326,
+     "K_star_literal": 0.0323940737321397,
+     "K_star_shifted": 0.04809619576035459,
+     "P_el": 0.0518950678636401
+    },
+    "O-16": {
+     "K_1mm": 0.17623604542999988,
+     "K_2mm": 0.12533174666685915,
+     "K_3mm": 0.09368128752588702,
+     "K_5mm": 0.058883315277810835,
+     "K_star_gauss": 0.08958604688625488,
+     "K_star_literal": 0.04627049191103264,
+     "K_star_shifted": 0.0805390780023938,
+     "P_el": 0.2611487058344332
+    }
+   },
+   "disk": {
+    "G": {
+     "G_path": 0.00202305756194001,
+     "G_path_plus_recoil": 0.0035467626961007905,
+     "G_path_with_post_event_stopping": 0.005526700347055615,
+     "G_pp_slow_local_upper": 0.016924072043856674,
+     "G_recoil": 0.0015237051341607803,
+     "G_total": 0.020470834739957464,
+     "G_total_with_post_event_stopping": 0.02397447752507307,
+     "post_event_stopping_term": 0.003503642785115605
+    },
+    "H-1": {
+     "K_1mm": 0.05165122678911555,
+     "K_2mm": 0.05089323846179933,
+     "K_3mm": 0.04986504113040827,
+     "K_5mm": 0.047250654964543615,
+     "K_star_gauss": 0.04863933199121326,
+     "K_star_literal": 0.0323940737321397,
+     "K_star_shifted": 0.04809619576035459,
+     "P_el": 0.0518950678636401
+    },
+    "O-16": {
+     "K_1mm": 0.19680277526584064,
+     "K_2mm": 0.1519023478714576,
+     "K_3mm": 0.12021674838614275,
+     "K_5mm": 0.08061172631183484,
+     "K_star_gauss": 0.11219043703507116,
+     "K_star_literal": 0.057208346808349124,
+     "K_star_shifted": 0.10250000476876671,
+     "P_el": 0.2611487058344332
+    }
+   },
+   "gauss": {
+    "G": {
+     "G_path": 0.0015280833797245963,
+     "G_path_plus_recoil": 0.002108388692765801,
+     "G_path_with_post_event_stopping": 0.004652341104720292,
+     "G_pp_slow_local_upper": 0.016924072043856674,
+     "G_recoil": 0.0005803053130412048,
+     "G_total": 0.019032460736622476,
+     "G_total_with_post_event_stopping": 0.02215671846161817,
+     "post_event_stopping_term": 0.003124257724995696
+    },
+    "H-1": {
+     "K_1mm": 0.05165122678911555,
+     "K_2mm": 0.05089323846179933,
+     "K_3mm": 0.04986504113040827,
+     "K_5mm": 0.047250654964543615,
+     "K_star_gauss": 0.04863933199121326,
+     "K_star_literal": 0.0323940737321397,
+     "K_star_shifted": 0.04809619576035459,
+     "P_el": 0.0518950678636401
+    },
+    "O-16": {
+     "K_1mm": 0.20104997757912427,
+     "K_2mm": 0.15790797490815522,
+     "K_3mm": 0.12603669104398157,
+     "K_5mm": 0.08320349684141469,
+     "K_star_gauss": 0.11570686134896468,
+     "K_star_literal": 0.05459521170585561,
+     "K_star_shifted": 0.10545439145551064,
+     "P_el": 0.2611487058344332
+    }
+   },
+   "s0.5": {
+    "G": {
+     "G_path": 0.0015363456868042766,
+     "G_path_plus_recoil": 0.002075346334761449,
+     "G_path_with_post_event_stopping": 0.004667056920709279,
+     "G_pp_slow_local_upper": 0.016924072043856674,
+     "G_recoil": 0.0005390006479571725,
+     "G_total": 0.018999418378618124,
+     "G_total_with_post_event_stopping": 0.022130129612523124,
+     "post_event_stopping_term": 0.0031307112339050026
+    },
+    "H-1": {
+     "K_1mm": 0.05165122678911555,
+     "K_2mm": 0.05089323846179933,
+     "K_3mm": 0.04986504113040827,
+     "K_5mm": 0.047250654964543615,
+     "K_star_gauss": 0.04863933199121326,
+     "K_star_literal": 0.0323940737321397,
+     "K_star_shifted": 0.04809619576035459,
+     "P_el": 0.0518950678636401
+    },
+    "O-16": {
+     "K_1mm": 0.18772850676894226,
+     "K_2mm": 0.13802316746208465,
+     "K_3mm": 0.10373949344254152,
+     "K_5mm": 0.06194634219863823,
+     "K_star_gauss": 0.09595614174953258,
+     "K_star_literal": 0.04543179789064286,
+     "K_star_shifted": 0.08564866256475791,
+     "P_el": 0.2611487058344332
+    }
+   },
+   "s0.9": {
+    "G": {
+     "G_path": 0.0013561137222783026,
+     "G_path_plus_recoil": 0.0017062039222282058,
+     "G_path_with_post_event_stopping": 0.0044554931436460695,
+     "G_pp_slow_local_upper": 0.016924072043856674,
+     "G_recoil": 0.0003500901999499031,
+     "G_total": 0.01863027596608488,
+     "G_total_with_post_event_stopping": 0.021729655387452647,
+     "post_event_stopping_term": 0.003099379421367767
+    },
+    "H-1": {
+     "K_1mm": 0.05165122678911555,
+     "K_2mm": 0.05089323846179933,
+     "K_3mm": 0.04986504113040827,
+     "K_5mm": 0.047250654964543615,
+     "K_star_gauss": 0.04863933199121326,
+     "K_star_literal": 0.0323940737321397,
+     "K_star_shifted": 0.04809619576035459,
+     "P_el": 0.0518950678636401
+    },
+    "O-16": {
+     "K_1mm": 0.17433662202944133,
+     "K_2mm": 0.11980611347495927,
+     "K_3mm": 0.08435136185601404,
+     "K_5mm": 0.043917528113985714,
+     "K_star_gauss": 0.07858710722484878,
+     "K_star_literal": 0.0359815738907447,
+     "K_star_shifted": 0.06833668143985216,
+     "P_el": 0.2611487058344332
+    }
+   },
+   "table": {
+    "C-12 (hypothetical, n=1 per cm3 along the water path)": {
+     "K_1mm": 4.824707123004597e-24,
+     "K_2mm": 3.960789134735278e-24,
+     "K_3mm": 3.295806986613222e-24,
+     "K_5mm": 2.3808461703412727e-24,
+     "K_star_gauss": 3.061437035025415e-24,
+     "K_star_literal": 1.5699012800107906e-24,
+     "K_star_shifted": 2.8451494402442866e-24,
+     "P_el": 5.9470292094097525e-24
+    },
+    "G": {
+     "G_path": 0.002064280765237882,
+     "G_path_plus_recoil": 0.003586653253622835,
+     "G_path_with_post_event_stopping": 0.0055889336273869114,
+     "G_pp_slow_local_upper": 0.016924072043856674,
+     "G_recoil": 0.0015223724883849526,
+     "G_total": 0.020510725297479507,
+     "G_total_with_post_event_stopping": 0.024035378159628536,
+     "post_event_stopping_term": 0.0035246528621490293
+    },
+    "H-1": {
+     "K_1mm": 0.05165122678911555,
+     "K_2mm": 0.05089323846179933,
+     "K_3mm": 0.04986504113040827,
+     "K_5mm": 0.047250654964543615,
+     "K_star_gauss": 0.04863933199121326,
+     "K_star_literal": 0.0323940737321397,
+     "K_star_shifted": 0.04809619576035459,
+     "P_el": 0.0518950678636401
+    },
+    "O-16": {
+     "K_1mm": 0.19680810876783925,
+     "K_2mm": 0.15191218630050127,
+     "K_3mm": 0.12022923852815968,
+     "K_5mm": 0.08063866521150005,
+     "K_star_gauss": 0.11220826172152464,
+     "K_star_literal": 0.05722405910552513,
+     "K_star_shifted": 0.10251905071690069,
+     "P_el": 0.2611487058344332
+    }
+   }
+  },
+  "50": {
+   "disk": {
+    "H-1": {
+     "K_1mm": 0.010852461961238024,
+     "K_2mm": 0.008565562221646244,
+     "K_3mm": 0.006822764807115435,
+     "K_5mm": 0.004462562285709163,
+     "P_el": 0.012038382925266555
+    },
+    "O-16": {
+     "K_1mm": 0.03555395018047696,
+     "K_2mm": 0.01772228903336422,
+     "K_3mm": 0.010172788481886337,
+     "K_5mm": 0.005636993950052176,
+     "P_el": 0.0725649966125415
+    }
+   },
+   "table": {
+    "C-12 (hypothetical, n=1 per cm3 along the water path)": {
+     "K_1mm": 1.0629601496687404e-24,
+     "K_2mm": 6.094921428466259e-25,
+     "K_3mm": 3.59879635368484e-25,
+     "K_5mm": 1.6294793395214729e-25,
+     "P_el": 1.799376788647862e-24
+    },
+    "H-1": {
+     "K_1mm": 0.010852461961238024,
+     "K_2mm": 0.008565562221646244,
+     "K_3mm": 0.006822764807115435,
+     "K_5mm": 0.004462562285709163,
+     "P_el": 0.012038382925266555
+    },
+    "O-16": {
+     "K_1mm": 0.03555533684472479,
+     "K_2mm": 0.01772386139009015,
+     "K_3mm": 0.010188160456716852,
+     "K_5mm": 0.005648770940524903,
+     "P_el": 0.0725649966125415
+    }
+   }
+  }
+ },
+ "pointwise": {
+  "100": {
+   "C-12": {
+    "disk": {
+     "P_deficit_gt_1mm": 0.8779296875,
+     "P_deficit_gt_2mm": 0.76953125,
+     "P_deficit_gt_3mm": 0.673828125,
+     "P_deficit_gt_5mm": 0.515625,
+     "P_theta_lab_gt_theta_2mm": 0.7099609375,
+     "P_theta_lab_gt_theta_3mm": 0.59716796875,
+     "T_tail_moment": 0.08463260342429446,
+     "mean_1_minus_cos_lab": 0.14004272645111351,
+     "mean_1_minus_mu_cm": 0.15676468902863258,
+     "mean_t_other_mev": 2.3244409557697416,
+     "range_mm": 77.6361682446216,
+     "theta_2mm_deg": 13.033388626513915,
+     "theta_3mm_deg": 15.979924326507843,
+     "theta_med_lab_deg": 18.550652822879186,
+     "theta_rms_cm_deg": 35.743408842336024
+    },
+    "table": {
+     "P_deficit_gt_1mm": 0.8779296875,
+     "P_deficit_gt_2mm": 0.76953125,
+     "P_deficit_gt_3mm": 0.673828125,
+     "P_deficit_gt_5mm": 0.515625,
+     "P_theta_lab_gt_theta_2mm": 0.7099609375,
+     "P_theta_lab_gt_theta_3mm": 0.59716796875,
+     "T_tail_moment": 0.08463260342429446,
+     "first_minimum_bin_density_deg": 48.38800690055968,
+     "mean_1_minus_cos_lab": 0.14004272645111351,
+     "mean_1_minus_mu_cm": 0.15676468902863258,
+     "mean_t_other_mev": 2.3244409557697416,
+     "range_mm": 77.6361682446216,
+     "theta_2mm_deg": 13.033388626513915,
+     "theta_3mm_deg": 15.979924326507843,
+     "theta_med_lab_deg": 18.550652822879186,
+     "theta_rms_cm_deg": 35.743408842336024
+    }
+   },
+   "H-1": {
+    "table": {
+     "P_deficit_gt_1mm": 1.0,
+     "P_deficit_gt_2mm": 1.0,
+     "P_deficit_gt_3mm": 1.0,
+     "P_deficit_gt_5mm": 0.9853515625,
+     "P_theta_lab_gt_theta_2mm": 0.9365234375,
+     "P_theta_lab_gt_theta_3mm": 0.8818359375,
+     "T_tail_moment": 0.0,
+     "mean_1_minus_cos_lab": 0.1382115510853773,
+     "mean_1_minus_mu_cm": 0.9999999999999981,
+     "mean_t_other_mev": 26.011627939570257,
+     "range_mm": 77.6361682446216,
+     "theta_2mm_deg": 13.033388626513915,
+     "theta_3mm_deg": 15.979924326507843,
+     "theta_med_lab_deg": 29.911753476477095,
+     "theta_rms_cm_deg": 97.06969708292299
+    }
+   },
+   "O-16": {
+    "Rx1.2": {
+     "P_deficit_gt_1mm": 0.76171875,
+     "P_deficit_gt_2mm": 0.5791015625,
+     "P_deficit_gt_3mm": 0.44140625,
+     "P_deficit_gt_5mm": 0.26513671875,
+     "P_theta_lab_gt_theta_2mm": 0.51123046875,
+     "P_theta_lab_gt_theta_3mm": 0.369140625,
+     "T_tail_moment": 0.06574189156015017,
+     "mean_1_minus_cos_lab": 0.09398514211822143,
+     "mean_1_minus_mu_cm": 0.10280044617103615,
+     "mean_t_other_mev": 1.1930765195481374,
+     "range_mm": 77.6361682446216,
+     "theta_2mm_deg": 13.033388626513915,
+     "theta_3mm_deg": 15.979924326507843,
+     "theta_med_lab_deg": 13.24984401662428,
+     "theta_rms_cm_deg": 28.405804395562953
+    },
+    "disk": {
+     "P_deficit_gt_1mm": 0.82568359375,
+     "P_deficit_gt_2mm": 0.68017578125,
+     "P_deficit_gt_3mm": 0.5595703125,
+     "P_deficit_gt_5mm": 0.3798828125,
+     "P_theta_lab_gt_theta_2mm": 0.6220703125,
+     "P_theta_lab_gt_theta_3mm": 0.49072265625,
+     "T_tail_moment": 0.06672217302877947,
+     "mean_1_minus_cos_lab": 0.10699647501588944,
+     "mean_1_minus_mu_cm": 0.11763874218035184,
+     "mean_t_other_mev": 1.3652861083021124,
+     "range_mm": 77.6361682446216,
+     "theta_2mm_deg": 13.033388626513915,
+     "theta_3mm_deg": 15.979924326507843,
+     "theta_med_lab_deg": 15.761382248284802,
+     "theta_rms_cm_deg": 29.96805477260116
+    },
+    "gauss": {
+     "P_deficit_gt_1mm": 0.8359375,
+     "P_deficit_gt_2mm": 0.69873046875,
+     "P_deficit_gt_3mm": 0.58349609375,
+     "P_deficit_gt_5mm": 0.40625,
+     "P_theta_lab_gt_theta_2mm": 0.64306640625,
+     "P_theta_lab_gt_theta_3mm": 0.51611328125,
+     "T_tail_moment": 0.0011896578470520038,
+     "mean_1_minus_cos_lab": 0.058736771564484876,
+     "mean_1_minus_mu_cm": 0.06662422432188501,
+     "mean_t_other_mev": 0.7732242478719327,
+     "range_mm": 77.6361682446216,
+     "theta_2mm_deg": 13.033388626513915,
+     "theta_3mm_deg": 15.979924326507843,
+     "theta_med_lab_deg": 16.36366574481341,
+     "theta_rms_cm_deg": 21.158760452899745
+    },
+    "s0.5": {
+     "P_deficit_gt_1mm": 0.7939453125,
+     "P_deficit_gt_2mm": 0.62646484375,
+     "P_deficit_gt_3mm": 0.49169921875,
+     "P_deficit_gt_5mm": 0.2978515625,
+     "P_theta_lab_gt_theta_2mm": 0.56103515625,
+     "P_theta_lab_gt_theta_3mm": 0.416015625,
+     "T_tail_moment": 0.01595674494076335,
+     "mean_1_minus_cos_lab": 0.053411813449303555,
+     "mean_1_minus_mu_cm": 0.06021111043234472,
+     "mean_t_other_mev": 0.698795236288877,
+     "range_mm": 77.6361682446216,
+     "theta_2mm_deg": 13.033388626513915,
+     "theta_3mm_deg": 15.979924326507843,
+     "theta_med_lab_deg": 14.24762933657944,
+     "theta_rms_cm_deg": 20.34206510091731
+    },
+    "s0.9": {
+     "P_deficit_gt_1mm": 0.7470703125,
+     "P_deficit_gt_2mm": 0.5537109375,
+     "P_deficit_gt_3mm": 0.40673828125,
+     "P_deficit_gt_5mm": 0.212890625,
+     "P_theta_lab_gt_theta_2mm": 0.4814453125,
+     "P_theta_lab_gt_theta_3mm": 0.328125,
+     "T_tail_moment": 0.0017977988813406406,
+     "mean_1_minus_cos_lab": 0.034579678862677536,
+     "mean_1_minus_mu_cm": 0.03933336718591664,
+     "mean_t_other_mev": 0.4564933185806792,
+     "range_mm": 77.6361682446216,
+     "theta_2mm_deg": 13.033388626513915,
+     "theta_3mm_deg": 15.979924326507843,
+     "theta_med_lab_deg": 12.697085140235428,
+     "theta_rms_cm_deg": 16.19151030193884
+    },
+    "table": {
+     "P_deficit_gt_1mm": 0.82568359375,
+     "P_deficit_gt_2mm": 0.68017578125,
+     "P_deficit_gt_3mm": 0.5595703125,
+     "P_deficit_gt_5mm": 0.3798828125,
+     "P_theta_lab_gt_theta_2mm": 0.6220703125,
+     "P_theta_lab_gt_theta_3mm": 0.49072265625,
+     "T_tail_moment": 0.06674801042868189,
+     "first_minimum_bin_density_deg": 41.875551202711556,
+     "mean_1_minus_cos_lab": 0.10700128334857928,
+     "mean_1_minus_mu_cm": 0.11762872109684618,
+     "mean_t_other_mev": 1.3651698060887005,
+     "range_mm": 77.6361682446216,
+     "theta_2mm_deg": 13.033388626513915,
+     "theta_3mm_deg": 15.979924326507843,
+     "theta_med_lab_deg": 15.761403678041773,
+     "theta_rms_cm_deg": 29.964667635689437
+    }
+   }
+  },
+  "150": {
+   "C-12": {
+    "disk": {
+     "P_deficit_gt_1mm": 0.90283203125,
+     "P_deficit_gt_2mm": 0.814453125,
+     "P_deficit_gt_3mm": 0.734375,
+     "P_deficit_gt_5mm": 0.5966796875,
+     "P_theta_lab_gt_theta_2mm": 0.763671875,
+     "P_theta_lab_gt_theta_3mm": 0.6669921875,
+     "T_tail_moment": 0.06637837406772944,
+     "mean_1_minus_cos_lab": 0.10090442927949958,
+     "mean_1_minus_mu_cm": 0.11447583105999556,
+     "mean_t_other_mev": 2.591069545755568,
+     "range_mm": 158.62460316107007,
+     "theta_2mm_deg": 9.108035714119335,
+     "theta_3mm_deg": 11.160915960347698,
+     "theta_med_lab_deg": 14.619195074188255,
+     "theta_rms_cm_deg": 29.989204712968625
+    },
+    "table": {
+     "P_deficit_gt_1mm": 0.90283203125,
+     "P_deficit_gt_2mm": 0.814453125,
+     "P_deficit_gt_3mm": 0.734375,
+     "P_deficit_gt_5mm": 0.5966796875,
+     "P_theta_lab_gt_theta_2mm": 0.763671875,
+     "P_theta_lab_gt_theta_3mm": 0.6669921875,
+     "T_tail_moment": 0.06637837406772944,
+     "first_minimum_bin_density_deg": 39.96481941308089,
+     "mean_1_minus_cos_lab": 0.10090442927949958,
+     "mean_1_minus_mu_cm": 0.11447583105999556,
+     "mean_t_other_mev": 2.591069545755568,
+     "range_mm": 158.62460316107007,
+     "theta_2mm_deg": 9.108035714119335,
+     "theta_3mm_deg": 11.160915960347698,
+     "theta_med_lab_deg": 14.619195074188255,
+     "theta_rms_cm_deg": 29.989204712968625
+    }
+   },
+   "H-1": {
+    "table": {
+     "P_deficit_gt_1mm": 1.0,
+     "P_deficit_gt_2mm": 1.0,
+     "P_deficit_gt_3mm": 1.0,
+     "P_deficit_gt_5mm": 1.0,
+     "P_theta_lab_gt_theta_2mm": 0.984375,
+     "P_theta_lab_gt_theta_3mm": 0.953125,
+     "T_tail_moment": 0.0,
+     "mean_1_minus_cos_lab": 0.13461889097790292,
+     "mean_1_minus_mu_cm": 1.0000000000000009,
+     "mean_t_other_mev": 38.714883604955894,
+     "range_mm": 158.62460316107007,
+     "theta_2mm_deg": 9.108035714119335,
+     "theta_3mm_deg": 11.160915960347698,
+     "theta_med_lab_deg": 29.56516025215749,
+     "theta_rms_cm_deg": 97.27278637432788
+    }
+   },
+   "O-16": {
+    "Rx1.2": {
+     "P_deficit_gt_1mm": 0.806640625,
+     "P_deficit_gt_2mm": 0.650390625,
+     "P_deficit_gt_3mm": 0.52490234375,
+     "P_deficit_gt_5mm": 0.34716796875,
+     "P_theta_lab_gt_theta_2mm": 0.587890625,
+     "P_theta_lab_gt_theta_3mm": 0.453125,
+     "T_tail_moment": 0.05293037310097587,
+     "mean_1_minus_cos_lab": 0.07046310619420507,
+     "mean_1_minus_mu_cm": 0.0775978140290311,
+     "mean_t_other_mev": 1.376958935267921,
+     "range_mm": 158.62460316107007,
+     "theta_2mm_deg": 9.108035714119335,
+     "theta_3mm_deg": 11.160915960347698,
+     "theta_med_lab_deg": 10.423989740086157,
+     "theta_rms_cm_deg": 24.46563739862256
+    },
+    "disk": {
+     "P_deficit_gt_1mm": 0.8603515625,
+     "P_deficit_gt_2mm": 0.7392578125,
+     "P_deficit_gt_3mm": 0.63525390625,
+     "P_deficit_gt_5mm": 0.4697265625,
+     "P_theta_lab_gt_theta_2mm": 0.6884765625,
+     "P_theta_lab_gt_theta_3mm": 0.57177734375,
+     "T_tail_moment": 0.05859999439559795,
+     "mean_1_minus_cos_lab": 0.08356534957928793,
+     "mean_1_minus_mu_cm": 0.09217479087894986,
+     "mean_t_other_mev": 1.635624707929721,
+     "range_mm": 158.62460316107007,
+     "theta_2mm_deg": 9.108035714119335,
+     "theta_3mm_deg": 11.160915960347698,
+     "theta_med_lab_deg": 12.437574612600919,
+     "theta_rms_cm_deg": 26.56111890296135
+    },
+    "gauss": {
+     "P_deficit_gt_1mm": 0.86669921875,
+     "P_deficit_gt_2mm": 0.7509765625,
+     "P_deficit_gt_3mm": 0.65087890625,
+     "P_deficit_gt_5mm": 0.48828125,
+     "P_theta_lab_gt_theta_2mm": 0.7021484375,
+     "P_theta_lab_gt_theta_3mm": 0.5888671875,
+     "T_tail_moment": 0.0006158311265919761,
+     "mean_1_minus_cos_lab": 0.035831280965130496,
+     "mean_1_minus_mu_cm": 0.04099958947736199,
+     "mean_t_other_mev": 0.7275301731058272,
+     "range_mm": 158.62460316107007,
+     "theta_2mm_deg": 9.108035714119335,
+     "theta_3mm_deg": 11.160915960347698,
+     "theta_med_lab_deg": 12.775930416710539,
+     "theta_rms_cm_deg": 16.522343114483807
+    },
+    "s0.5": {
+     "P_deficit_gt_1mm": 0.83349609375,
+     "P_deficit_gt_2mm": 0.69189453125,
+     "P_deficit_gt_3mm": 0.57275390625,
+     "P_deficit_gt_5mm": 0.388671875,
+     "P_theta_lab_gt_theta_2mm": 0.6337890625,
+     "P_theta_lab_gt_theta_3mm": 0.5009765625,
+     "T_tail_moment": 0.010345562908598626,
+     "mean_1_minus_cos_lab": 0.033393481906200756,
+     "mean_1_minus_mu_cm": 0.03803896327460297,
+     "mean_t_other_mev": 0.6749944057664035,
+     "range_mm": 158.62460316107007,
+     "theta_2mm_deg": 9.108035714119335,
+     "theta_3mm_deg": 11.160915960347698,
+     "theta_med_lab_deg": 11.176275522514068,
+     "theta_rms_cm_deg": 16.0257839812353
+    },
+    "s0.9": {
+     "P_deficit_gt_1mm": 0.7958984375,
+     "P_deficit_gt_2mm": 0.63037109375,
+     "P_deficit_gt_3mm": 0.49658203125,
+     "P_deficit_gt_5mm": 0.30322265625,
+     "P_theta_lab_gt_theta_2mm": 0.564453125,
+     "P_theta_lab_gt_theta_3mm": 0.41943359375,
+     "T_tail_moment": 0.0013080764572588886,
+     "mean_1_minus_cos_lab": 0.02156533224711535,
+     "mean_1_minus_mu_cm": 0.024716446614966348,
+     "mean_t_other_mev": 0.4385887984141297,
+     "range_mm": 158.62460316107007,
+     "theta_2mm_deg": 9.108035714119335,
+     "theta_3mm_deg": 11.160915960347698,
+     "theta_med_lab_deg": 10.001259078557258,
+     "theta_rms_cm_deg": 12.799663660548793
+    },
+    "table": {
+     "P_deficit_gt_1mm": 0.8603515625,
+     "P_deficit_gt_2mm": 0.7392578125,
+     "P_deficit_gt_3mm": 0.63525390625,
+     "P_deficit_gt_5mm": 0.4697265625,
+     "P_theta_lab_gt_theta_2mm": 0.6884765625,
+     "P_theta_lab_gt_theta_3mm": 0.57177734375,
+     "T_tail_moment": 0.05933702633416,
+     "first_minimum_bin_density_deg": 33.374654837671635,
+     "mean_1_minus_cos_lab": 0.08426358915645325,
+     "mean_1_minus_mu_cm": 0.09282690251186275,
+     "mean_t_other_mev": 1.6471963088951345,
+     "range_mm": 158.62460316107007,
+     "theta_2mm_deg": 9.108035714119335,
+     "theta_3mm_deg": 11.160915960347698,
+     "theta_med_lab_deg": 12.437592280300025,
+     "theta_rms_cm_deg": 26.794910963883154
+    }
+   }
+  },
+  "200": {
+   "C-12": {
+    "disk": {
+     "P_deficit_gt_1mm": 0.9189453125,
+     "P_deficit_gt_2mm": 0.84423828125,
+     "P_deficit_gt_3mm": 0.775390625,
+     "P_deficit_gt_5mm": 0.6533203125,
+     "P_theta_lab_gt_theta_2mm": 0.7998046875,
+     "P_theta_lab_gt_theta_3mm": 0.71533203125,
+     "T_tail_moment": 0.06033123072682735,
+     "mean_1_minus_cos_lab": 0.08559417451533821,
+     "mean_1_minus_mu_cm": 0.09760564325756607,
+     "mean_t_other_mev": 2.996003315304712,
+     "range_mm": 260.97173956519333,
+     "theta_2mm_deg": 7.097961439193826,
+     "theta_3mm_deg": 8.695978010680763,
+     "theta_med_lab_deg": 12.530095530953254,
+     "theta_rms_cm_deg": 27.587169632134447
+    },
+    "table": {
+     "P_deficit_gt_1mm": 0.9189453125,
+     "P_deficit_gt_2mm": 0.84423828125,
+     "P_deficit_gt_3mm": 0.775390625,
+     "P_deficit_gt_5mm": 0.6533203125,
+     "P_theta_lab_gt_theta_2mm": 0.7998046875,
+     "P_theta_lab_gt_theta_3mm": 0.71533203125,
+     "T_tail_moment": 0.06033123072682735,
+     "first_minimum_bin_density_deg": 34.0948902645368,
+     "mean_1_minus_cos_lab": 0.08559417451533821,
+     "mean_1_minus_mu_cm": 0.09760564325756607,
+     "mean_t_other_mev": 2.996003315304712,
+     "range_mm": 260.97173956519333,
+     "theta_2mm_deg": 7.097961439193826,
+     "theta_3mm_deg": 8.695978010680763,
+     "theta_med_lab_deg": 12.530095530953254,
+     "theta_rms_cm_deg": 27.587169632134447
+    }
+   },
+   "H-1": {
+    "table": {
+     "P_deficit_gt_1mm": 1.0,
+     "P_deficit_gt_2mm": 1.0,
+     "P_deficit_gt_3mm": 1.0,
+     "P_deficit_gt_5mm": 1.0,
+     "P_theta_lab_gt_theta_2mm": 1.0,
+     "P_theta_lab_gt_theta_3mm": 0.98828125,
+     "T_tail_moment": 0.0,
+     "mean_1_minus_cos_lab": 0.13217756337430925,
+     "mean_1_minus_mu_cm": 1.0000000000000009,
+     "mean_t_other_mev": 51.61984480660772,
+     "range_mm": 260.97173956519333,
+     "theta_2mm_deg": 7.097961439193826,
+     "theta_3mm_deg": 8.695978010680763,
+     "theta_med_lab_deg": 29.266439171038996,
+     "theta_rms_cm_deg": 97.27278637432788
+    }
+   },
+   "O-16": {
+    "Rx1.2": {
+     "P_deficit_gt_1mm": 0.83740234375,
+     "P_deficit_gt_2mm": 0.70068359375,
+     "P_deficit_gt_3mm": 0.5869140625,
+     "P_deficit_gt_5mm": 0.41455078125,
+     "P_theta_lab_gt_theta_2mm": 0.64404296875,
+     "P_theta_lab_gt_theta_3mm": 0.51806640625,
+     "T_tail_moment": 0.04804747458692759,
+     "mean_1_minus_cos_lab": 0.06091410213975178,
+     "mean_1_minus_mu_cm": 0.06722377474692866,
+     "mean_t_other_mev": 1.6202813214314649,
+     "range_mm": 260.97173956519333,
+     "theta_2mm_deg": 7.097961439193826,
+     "theta_3mm_deg": 8.695978010680763,
+     "theta_med_lab_deg": 8.933382561917199,
+     "theta_rms_cm_deg": 22.921332343775358
+    },
+    "disk": {
+     "P_deficit_gt_1mm": 0.88330078125,
+     "P_deficit_gt_2mm": 0.77978515625,
+     "P_deficit_gt_3mm": 0.68798828125,
+     "P_deficit_gt_5mm": 0.53662109375,
+     "P_theta_lab_gt_theta_2mm": 0.73486328125,
+     "P_theta_lab_gt_theta_3mm": 0.6298828125,
+     "T_tail_moment": 0.05584720310532292,
+     "mean_1_minus_cos_lab": 0.0741622649006876,
+     "mean_1_minus_mu_cm": 0.0817825056324657,
+     "mean_t_other_mev": 1.971187526957535,
+     "range_mm": 260.97173956519333,
+     "theta_2mm_deg": 7.097961439193826,
+     "theta_3mm_deg": 8.695978010680763,
+     "theta_med_lab_deg": 10.676442232790095,
+     "theta_rms_cm_deg": 25.330503420379042
+    },
+    "gauss": {
+     "P_deficit_gt_1mm": 0.8876953125,
+     "P_deficit_gt_2mm": 0.7880859375,
+     "P_deficit_gt_3mm": 0.69921875,
+     "P_deficit_gt_5mm": 0.55078125,
+     "P_theta_lab_gt_theta_2mm": 0.74462890625,
+     "P_theta_lab_gt_theta_3mm": 0.642578125,
+     "T_tail_moment": 0.00044659036243442353,
+     "mean_1_minus_cos_lab": 0.02606602302776406,
+     "mean_1_minus_mu_cm": 0.030036481323452418,
+     "mean_t_other_mev": 0.7239633572070332,
+     "range_mm": 260.97173956519333,
+     "theta_2mm_deg": 7.097961439193826,
+     "theta_3mm_deg": 8.695978010680763,
+     "theta_med_lab_deg": 10.89499522502161,
+     "theta_rms_cm_deg": 14.114840813618333
+    },
+    "s0.5": {
+     "P_deficit_gt_1mm": 0.859375,
+     "P_deficit_gt_2mm": 0.73681640625,
+     "P_deficit_gt_3mm": 0.63037109375,
+     "P_deficit_gt_5mm": 0.4580078125,
+     "P_theta_lab_gt_theta_2mm": 0.6845703125,
+     "P_theta_lab_gt_theta_3mm": 0.5634765625,
+     "T_tail_moment": 0.007517575708582719,
+     "mean_1_minus_cos_lab": 0.02432077673048877,
+     "mean_1_minus_mu_cm": 0.0279298336921631,
+     "mean_t_other_mev": 0.6731872468105697,
+     "range_mm": 260.97173956519333,
+     "theta_2mm_deg": 7.097961439193826,
+     "theta_3mm_deg": 8.695978010680763,
+     "theta_med_lab_deg": 9.535787462836769,
+     "theta_rms_cm_deg": 13.677281910669722
+    },
+    "s0.9": {
+     "P_deficit_gt_1mm": 0.8271484375,
+     "P_deficit_gt_2mm": 0.68212890625,
+     "P_deficit_gt_3mm": 0.560546875,
+     "P_deficit_gt_5mm": 0.37451171875,
+     "P_theta_lab_gt_theta_2mm": 0.62158203125,
+     "P_theta_lab_gt_theta_3mm": 0.48681640625,
+     "T_tail_moment": 0.0009539393337728026,
+     "mean_1_minus_cos_lab": 0.015719408768700413,
+     "mean_1_minus_mu_cm": 0.018136329701802168,
+     "mean_t_other_mev": 0.43713636084524854,
+     "range_mm": 260.97173956519333,
+     "theta_2mm_deg": 7.097961439193826,
+     "theta_3mm_deg": 8.695978010680763,
+     "theta_med_lab_deg": 8.536852506828543,
+     "theta_rms_cm_deg": 10.950152003907942
+    },
+    "table": {
+     "P_deficit_gt_1mm": 0.88330078125,
+     "P_deficit_gt_2mm": 0.77978515625,
+     "P_deficit_gt_3mm": 0.68798828125,
+     "P_deficit_gt_5mm": 0.53662109375,
+     "P_theta_lab_gt_theta_2mm": 0.73486328125,
+     "P_theta_lab_gt_theta_3mm": 0.6298828125,
+     "T_tail_moment": 0.05621419917539484,
+     "first_minimum_bin_density_deg": 28.450074935511605,
+     "mean_1_minus_cos_lab": 0.0745752774759824,
+     "mean_1_minus_mu_cm": 0.08215920300899043,
+     "mean_t_other_mev": 1.9802669891762692,
+     "range_mm": 260.97173956519333,
+     "theta_2mm_deg": 7.097961439193826,
+     "theta_3mm_deg": 8.695978010680763,
+     "theta_med_lab_deg": 10.676457905653628,
+     "theta_rms_cm_deg": 25.52765628728135
+    }
+   }
+  },
+  "50": {
+   "C-12": {
+    "disk": {
+     "P_deficit_gt_1mm": 0.73291015625,
+     "P_deficit_gt_2mm": 0.53125,
+     "P_deficit_gt_3mm": 0.38232421875,
+     "P_deficit_gt_5mm": 0.19970703125,
+     "P_theta_lab_gt_theta_2mm": 0.4423828125,
+     "P_theta_lab_gt_theta_3mm": 0.29443359375,
+     "T_tail_moment": 0.07443073377548147,
+     "mean_1_minus_cos_lab": 0.1580500349752454,
+     "mean_1_minus_mu_cm": 0.17828973126066422,
+     "mean_t_other_mev": 1.2981034795345154,
+     "range_mm": 22.42539465300403,
+     "theta_2mm_deg": 24.381722838147816,
+     "theta_3mm_deg": 29.977339054651768,
+     "theta_med_lab_deg": 22.46657935163872,
+     "theta_rms_cm_deg": 36.76910974906662
+    },
+    "table": {
+     "P_deficit_gt_1mm": 0.73291015625,
+     "P_deficit_gt_2mm": 0.53125,
+     "P_deficit_gt_3mm": 0.38232421875,
+     "P_deficit_gt_5mm": 0.19970703125,
+     "P_theta_lab_gt_theta_2mm": 0.4423828125,
+     "P_theta_lab_gt_theta_3mm": 0.29443359375,
+     "T_tail_moment": 0.07443073377548147,
+     "first_minimum_bin_density_deg": 62.55526522416837,
+     "mean_1_minus_cos_lab": 0.1580500349752454,
+     "mean_1_minus_mu_cm": 0.17828973126066422,
+     "mean_t_other_mev": 1.2981034795345154,
+     "range_mm": 22.42539465300403,
+     "theta_2mm_deg": 24.381722838147816,
+     "theta_3mm_deg": 29.977339054651768,
+     "theta_med_lab_deg": 22.46657935163872,
+     "theta_rms_cm_deg": 36.76910974906662
+    }
+   },
+   "H-1": {
+    "table": {
+     "P_deficit_gt_1mm": 1.0,
+     "P_deficit_gt_2mm": 0.9755859375,
+     "P_deficit_gt_3mm": 0.9384765625,
+     "P_deficit_gt_5mm": 0.8505859375,
+     "P_theta_lab_gt_theta_2mm": 0.701171875,
+     "P_theta_lab_gt_theta_3mm": 0.5263671875,
+     "T_tail_moment": 0.0,
+     "mean_1_minus_cos_lab": 0.14440369548207388,
+     "mean_1_minus_mu_cm": 0.9999999999999994,
+     "mean_t_other_mev": 13.324974005459522,
+     "range_mm": 22.42539465300403,
+     "theta_2mm_deg": 24.381722838147816,
+     "theta_3mm_deg": 29.977339054651768,
+     "theta_med_lab_deg": 30.762931765851015,
+     "theta_rms_cm_deg": 96.63035797861289
+    }
+   },
+   "O-16": {
+    "Rx1.2": {
+     "P_deficit_gt_1mm": 0.556640625,
+     "P_deficit_gt_2mm": 0.31103515625,
+     "P_deficit_gt_3mm": 0.18603515625,
+     "P_deficit_gt_5mm": 0.11083984375,
+     "P_theta_lab_gt_theta_2mm": 0.24755859375,
+     "P_theta_lab_gt_theta_3mm": 0.1474609375,
+     "T_tail_moment": 0.07400834898078247,
+     "mean_1_minus_cos_lab": 0.12003655789099618,
+     "mean_1_minus_mu_cm": 0.1310364946359052,
+     "mean_t_other_mev": 0.7455308115497603,
+     "range_mm": 22.42539465300403,
+     "theta_2mm_deg": 24.381722838147816,
+     "theta_3mm_deg": 29.977339054651768,
+     "theta_med_lab_deg": 16.88836812437878,
+     "theta_rms_cm_deg": 31.80280212770897
+    },
+    "disk": {
+     "P_deficit_gt_1mm": 0.66162109375,
+     "P_deficit_gt_2mm": 0.43310546875,
+     "P_deficit_gt_3mm": 0.28515625,
+     "P_deficit_gt_5mm": 0.14013671875,
+     "P_theta_lab_gt_theta_2mm": 0.36279296875,
+     "P_theta_lab_gt_theta_3mm": 0.224609375,
+     "T_tail_moment": 0.08057156726329612,
+     "mean_1_minus_cos_lab": 0.1463375638210694,
+     "mean_1_minus_mu_cm": 0.15939739852777834,
+     "mean_t_other_mev": 0.9068898875354598,
+     "range_mm": 22.42539465300403,
+     "theta_2mm_deg": 24.381722838147816,
+     "theta_3mm_deg": 29.977339054651768,
+     "theta_med_lab_deg": 20.10138300268419,
+     "theta_rms_cm_deg": 35.70100809028007
+    },
+    "gauss": {
+     "P_deficit_gt_1mm": 0.68603515625,
+     "P_deficit_gt_2mm": 0.46875,
+     "P_deficit_gt_3mm": 0.31884765625,
+     "P_deficit_gt_5mm": 0.1455078125,
+     "P_theta_lab_gt_theta_2mm": 0.39892578125,
+     "P_theta_lab_gt_theta_3mm": 0.2529296875,
+     "T_tail_moment": 0.002557706015973601,
+     "mean_1_minus_cos_lab": 0.0976850334066398,
+     "mean_1_minus_mu_cm": 0.10963694271115224,
+     "mean_t_other_mev": 0.6237782772070526,
+     "range_mm": 22.42539465300403,
+     "theta_2mm_deg": 24.381722838147816,
+     "theta_3mm_deg": 29.977339054651768,
+     "theta_med_lab_deg": 21.117805970990965,
+     "theta_rms_cm_deg": 27.36402423754442
+    },
+    "s0.5": {
+     "P_deficit_gt_1mm": 0.61962890625,
+     "P_deficit_gt_2mm": 0.3740234375,
+     "P_deficit_gt_3mm": 0.2216796875,
+     "P_deficit_gt_5mm": 0.08203125,
+     "P_theta_lab_gt_theta_2mm": 0.30078125,
+     "P_theta_lab_gt_theta_3mm": 0.162109375,
+     "T_tail_moment": 0.030973241715246572,
+     "mean_1_minus_cos_lab": 0.09373030762596354,
+     "mean_1_minus_mu_cm": 0.10408762687826897,
+     "mean_t_other_mev": 0.5922055008752052,
+     "range_mm": 22.42539465300403,
+     "theta_2mm_deg": 24.381722838147816,
+     "theta_3mm_deg": 29.977339054651768,
+     "theta_med_lab_deg": 18.615731732849902,
+     "theta_rms_cm_deg": 27.368681985161608
+    },
+    "s0.9": {
+     "P_deficit_gt_1mm": 0.5556640625,
+     "P_deficit_gt_2mm": 0.29638671875,
+     "P_deficit_gt_3mm": 0.1513671875,
+     "P_deficit_gt_5mm": 0.03515625,
+     "P_theta_lab_gt_theta_2mm": 0.224609375,
+     "P_theta_lab_gt_theta_3mm": 0.09912109375,
+     "T_tail_moment": 0.00528152131934565,
+     "mean_1_minus_cos_lab": 0.06187230673860032,
+     "mean_1_minus_mu_cm": 0.06965130462632317,
+     "mean_t_other_mev": 0.396280393547773,
+     "range_mm": 22.42539465300403,
+     "theta_2mm_deg": 24.381722838147816,
+     "theta_3mm_deg": 29.977339054651768,
+     "theta_med_lab_deg": 16.821123741845692,
+     "theta_rms_cm_deg": 21.71574327746414
+    },
+    "table": {
+     "P_deficit_gt_1mm": 0.66162109375,
+     "P_deficit_gt_2mm": 0.43310546875,
+     "P_deficit_gt_3mm": 0.28515625,
+     "P_deficit_gt_5mm": 0.14013671875,
+     "P_theta_lab_gt_theta_2mm": 0.36279296875,
+     "P_theta_lab_gt_theta_3mm": 0.224609375,
+     "T_tail_moment": 0.08043438451853412,
+     "first_minimum_bin_density_deg": 56.62384446787294,
+     "mean_1_minus_cos_lab": 0.1461026848680788,
+     "mean_1_minus_mu_cm": 0.15917539757455967,
+     "mean_t_other_mev": 0.905626815356344,
+     "range_mm": 22.42539465300403,
+     "theta_2mm_deg": 24.381722838147816,
+     "theta_3mm_deg": 29.977339054651768,
+     "theta_med_lab_deg": 20.101409318196346,
+     "theta_rms_cm_deg": 35.645479340553415
+    }
+   }
+  }
+ },
+ "reconciliation": {
+  "150": {
+   "kernel_table": {
+    "F_pred_over_F_obs": 0.9956107764334441,
+    "F_pred_shifted": 0.8530234170357885,
+    "G_total": 0.013357163030210336,
+    "G_total_with_post_event_stopping": 0.019363216896488452,
+    "K_star_as_frozen_sign_error": 0.08365658035180407,
+    "K_star_shifted": 0.13558261011427739,
+    "peak_removal_pred_over_obs": 1.090926400033072
+   },
+   "miss_explained": {
+    "gap_to_kernel_table": 0.02518775095779846,
+    "radius_fraction_of_gap_to_observed": -0.16134464726753636,
+    "shape_fraction_of_gap_to_kernel_table": 0.49178710581463664,
+    "shape_fraction_of_gap_to_observed": 0.5780992913196537
+   },
+   "observed": {
+    "F_ionmc": 0.8567840337079885,
+    "F_topas": 0.891584942125469,
+    "gain_ionmc": 0.0220987766133649,
+    "gain_topas": 0.016252044281034106,
+    "peak_removal_ionmc_obs": 0.12428208732520096,
+    "peak_removal_topas_obs": 0.09392497991480464,
+    "ratio_F_ionmc_over_topas": 0.9609673663459167
+   },
+   "planning_expectation": {
+    "gap_to_observed_F_ionmc": 0.021427134285598504,
+    "implied_F_ionmc": 0.878211167993587,
+    "implied_peak_removal_with_planning_gain": 0.11125029799048991,
+    "planning_gain_used": 0.012,
+    "ratio": 0.985
+   },
+   "planning_radius_disk": {
+    "F_pred": 0.8495662636125245,
+    "G": 0.01333086073529819,
+    "K_star_shifted": 0.13910828684184925,
+    "R_O_fm": 2.6,
+    "R_table_fm": 2.6805123081788618,
+    "dF_vs_table": -0.0034571534232640255
+   },
+   "planning_theta_rms_shape": {
+    "F_pred": 0.8654104281813041,
+    "G": 0.011298680155229472,
+    "K_star_shifted": 0.12481157618767508,
+    "dF_vs_table": 0.012387011145515547,
+    "s_fm_matching": 0.43791849981062114,
+    "theta_rms_cm_deg_target": 17.0
+   }
+  },
+  "200": {
+   "kernel_table": {
+    "F_pred_over_F_obs": 0.9860761341171241,
+    "F_pred_shifted": 0.8323134019734566,
+    "G_total": 0.020510725297479507,
+    "G_total_with_post_event_stopping": 0.024035378159628536,
+    "K_star_as_frozen_sign_error": 0.08961813283766483,
+    "K_star_shifted": 0.15061524647725527,
+    "peak_removal_pred_over_obs": 1.1292305111488752
+   },
+   "miss_explained": {
+    "gap_to_kernel_table": 0.04263371602746968,
+    "radius_fraction_of_gap_to_observed": -0.06961963700750648,
+    "shape_fraction_of_gap_to_kernel_table": 0.38950368649417333,
+    "shape_fraction_of_gap_to_observed": 0.5377403864784366
+   },
+   "observed": {
+    "F_ionmc": 0.8440660646539855,
+    "F_topas": 0.8873703022321767,
+    "gain_ionmc": 0.02672217441583613,
+    "gain_topas": 0.018419142339446415,
+    "peak_removal_ionmc_obs": 0.13337865474784227,
+    "peak_removal_topas_obs": 0.09628509786321127,
+    "ratio_F_ionmc_over_topas": 0.9511993612257931
+   },
+   "planning_expectation": {
+    "gap_to_observed_F_ionmc": 0.0308810533469408,
+    "implied_F_ionmc": 0.8749471180009263,
+    "implied_peak_removal_with_planning_gain": 0.11280362234706076,
+    "planning_gain_used": 0.014,
+    "ratio": 0.986
+   },
+   "planning_radius_disk": {
+    "F_pred": 0.8301634742490331,
+    "G": 0.02045829950823303,
+    "K_star_shifted": 0.1528527927539849,
+    "R_O_fm": 2.64,
+    "R_table_fm": 2.687107399980021,
+    "dF_vs_table": -0.0021499277244234616
+   },
+   "planning_theta_rms_shape": {
+    "F_pred": 0.8489193915351018,
+    "G": 0.019067091081322762,
+    "K_star_shifted": 0.1348941851057974,
+    "dF_vs_table": 0.016605989561645162,
+    "s_fm_matching": 0.4748615005519241,
+    "theta_rms_cm_deg_target": 14.0
+   }
+  }
+ },
+ "table_id": "1fd24cff23d3f7e72aabcda2af8bc70ad47b81755f94a2ca55890cb6ae52c591",
+ "v11_reference": {
+  "150": {
+   "F_ionmc": 0.8567840337079885,
+   "F_ionmc_se": 0.0015196783488711665,
+   "F_topas": 0.891584942125469,
+   "F_topas_se": 0.0021600982500448217,
+   "gain_ionmc": 0.0220987766133649,
+   "gain_topas": 0.016252044281034106
+  },
+  "200": {
+   "F_ionmc": 0.8440660646539855,
+   "F_ionmc_se": 0.0025408116155115545,
+   "F_topas": 0.8873703022321767,
+   "F_topas_se": 0.0023837942663498973,
+   "gain_ionmc": 0.02672217441583613,
+   "gain_topas": 0.018419142339446415
+  }
+ },
+ "w_mm": [
+  1.0,
+  2.0,
+  3.0,
+  5.0
+ ]
+}

@@ -1,5 +1,10 @@
 # V3-005D — V7-R calibration repair: diagnosis, offline evidence, repaired gate design (planner output, NOT evidence)
 
+**Revision 4 (2026-10-14, after Codex REVIEW-bb2a8151)** — changes_required, two findings:
+- **(1, important):** the §3.8 size-selection rule no longer uses the independence product OC_paired × OC_single with a fitted box shrink. It is replaced by a pre-declared rule on the **directly measured complete two-gate joint pass rate at κ = 1** (repository `run_calibration`, both gates on the same replicates, α_tost = 0.005, 48 × 225 replicates): R_meas = 400 per surrogate, select 5400/0.005 iff ≥ 378/400 joint passes (CP95 lower bound p_low with P(Bin(3200, p_low) ≥ 2909) ≥ 0.99) for both surrogates, else 7200/0.005, else operator. Measured now (script `scripts/joint_power.py`, summary `scripts/joint_power_summary.py`, data `data/joint_power_5400.*`, seed roots 20989920–20989923, 2.15 h sandbox): archive 383/400 (CP95 lower 0.9369), rehearsal 384/400 (0.9399) → **5400/0.005 selected**; budgets unchanged (≈ 33.9 h; 7200 ≈ 44 h; (B) ≈ 16.5 h; (C) ≈ 12.5 h), all subject to the operator decision. The Revision 3 product-rule powers (0.954 / 0.962) are kept only as labelled model values.
+- **(2, minor):** "24-shard V7-R2 layout" in §6.4 corrected to 48 × 2.25·10⁶; the file was grepped for every other 24-shard / 4.5·10⁶ mention (the remaining ones refer to the dd976c5a layout or to Revision 1 and say so).
+- **Round-4 independent review (REVISE minor, no re-measurement):** the Codex finding is answered; three stale labels fixed afterwards — §3.1 product-power formula and the §3.2 table entry 0.954 / 0.962 labelled as model values superseded by §3.8, §3.5 (C) cites the measured rates, §6.6 risk entry rewritten (measured, residual risk on the rebuilt pool).
+
 **Revision 3 (2026-10-14)** — after the round-2 review (REVISE, minor, no blocking):
 - **R2-1:** the §3.8 window rule (which would have selected 7200/0.005 because the archive single coverage 0.68664 lies outside [0.680, 0.686]) is replaced by a computable rule: 5400/0.005 iff P(power clause) ≥ 0.99 from the exact binomial OC at the measured κ = 1 coverages of both surrogates, else 7200/0.005. The current coverages select **5400/0.005** (P = 1.0000 / 1.0000; `designs7.py`). Both budgets go to the operator: **5400: ≈ 33.9 h; 7200: ≈ 44 h; (B) ≈ 16.5 h; (C) ≈ 12.5 h.**
 - **R2-2:** §5: lv 20511004 r_index **0–14** (not 10–14) lie inside the used rehearsal range.
@@ -208,7 +213,8 @@ OC. Single gate: binomial OC on n_E with an effective box shrink of 0.0019·n_E 
 archived single-gate rates (shrink 0 = the rigorous upper bound on its false acceptance). κ error per kind
 ~ N(0, √(c(1−c)/n_κ)), same sign at both margins. Joint false acceptance = r × own-gate rate with r = 0.32 (largest
 observed conditional ratio, 117/370) or **r = 1 (worst case: joint ≤ min of the two gates — the only assumption-free
-bound)**. Power = OC_paired(c_p0) × OC_single(c_s0) at the measured κ = 1 coverages. Clauses exactly as frozen,
+bound)**. Power = OC_paired(c_p0) × OC_single(c_s0) at the measured κ = 1 coverages (**model value, independence
+product; superseded for size selection by the measured joint pass rate of §3.8, Revision 4**). Clauses exactly as frozen,
 at R repetitions: gate alone ≤ k_g, joint ≤ k_j, nominal ≥ k_p (R = 3200: 109 / 50 / 2909; R = 800: 22 / 9 / 735;
 R = 400: 9 / 3 / 371). "By construction" = P(all clauses, both surrogates) ≈ 1 under r = 1 and the planned κ error.
 
@@ -224,7 +230,7 @@ R = 400: 9 / 3 / 371). "By construction" = P(all clauses, both surrogates) ≈ 1
 | R4 | 3600 | 0.03 | 10⁶ | 3200 | 0.0296 / 0.0295 | 0.926 / 0.937 | 0.48 | 0.000 |
 | 5400 / 0.01 | 5400 | 0.01 | 10⁶ | 3200 | 0.0097 / 0.0099 | 0.975 / 0.980 | 1.000 | 0.75 |
 | 5400 / 0.0075 | 5400 | 0.0075 | 10⁶ | 3200 | 0.0075 / 0.0072 | 0.966 / 0.973 | 1.000 | 0.988 |
-| **5400 / 0.005 (recommended)** | 5400 | 0.005 | 10⁶ | 3200 | 0.0050 / 0.0050 | **0.954 / 0.962** | 1.000 | **1.000** |
+| **5400 / 0.005 (recommended)** | 5400 | 0.005 | 10⁶ | 3200 | 0.0050 / 0.0050 | **0.954 / 0.962** (model; measured joint rate 0.9575 / 0.9600, §3.8) | 1.000 | **1.000** |
 | 7200 / 0.02 | 7200 | 0.02 | 10⁶ | 3200 | 0.0197 / 0.0191 | 0.999 / 0.999 | 0.98 | 0.000 |
 | 7200 / 0.01 | 7200 | 0.01 | 10⁶ | 3200 | 0.0098 / 0.0098 | 0.998 / 0.998 | 1.000 | 0.66 |
 | 7200 / 0.005 (conservative variant) | 7200 | 0.005 | 10⁶ | 3200 | 0.0049 / 0.0050 | 0.995 / 0.996 | 1.000 | 1.000 |
@@ -276,7 +282,7 @@ independently reviewed integration route.
 * Calibration Monte Carlo: **R = 3200** per margin per surrogate (unchanged, not decreased), both surrogates
   unchanged (fit seed 20505000 reproducing k = 5.0703, π = 0.2167; pool sha 5d28a9b3…/d4f7d749…), new seeds 2098xxxx.
 * Expected OC: FA 0.0050 (paired, exact) / ≤ 0.0050 (single); joint ≤ 0.005 at every margin by construction;
-  power 0.954 / 0.962; P(all clauses) ≈ 1.000 even under r = 1; real-data pass probability of a correct estimator 0.97.
+  power 0.954 / 0.962 (modelled with the independence product; superseded by the measured joint rate of §3.8); P(all clauses) ≈ 1.000 even under r = 1; real-data pass probability of a correct estimator 0.97.
 * Cost ≈ **33.9 host-hours** (section 6; the per-repetition calibration rate is extrapolated, see §6.1). Conservative
   variant 7200/0.005 (64 × 2.25·10⁶): ≈ 44 h, power 0.995. Whether this budget is spent is an operator item (above).
 
@@ -299,7 +305,8 @@ clause is evaluated and therefore need the operator)
   bootstrap-checked. (C) keeps an end-to-end implementation check: pinned acceptance-set tests plus a small Monte
   Carlo of the full two-gate procedure at a fixed known coverage (e.g. R = 100 at each paired margin). Joint ≤ min(gates)
   ≤ 0.0050 / 0.0150 ≤ 0.02 at every margin, without any dependence model. Power: the only Monte Carlo, at κ = 1,
-  R = 400 per surrogate (P(CP95 lower ≥ 0.9) ≈ 0.993 per surrogate at true 0.954). No κ step. Thresholds
+  R = 400 per surrogate (P(CP95 lower ≥ 0.9) ≈ 0.993 per surrogate at the true 0.954 of the Revision 3 model; at the
+  measured joint rates 0.9575 / 0.9600 of §3.8 it is higher). No κ step. Thresholds
   0.02 / 0.04 / 0.9 preserved; the clause *text* ("CP95 bound of the calibration Monte Carlo") is replaced by exact
   bounds for the false-acceptance clauses. Cost ≈ **12 h**.
 * **(i) "Exact OC at the directly measured coverage at κ"** (coordinator's suggestion) is dominated by the κ-free
@@ -357,17 +364,31 @@ calibration or transport result:
 1. Order: elastic decision → rehearsal fixture regenerated at the evidence digest → sandbox measurement on the
    regenerated pool and on the archive-fitted surrogate: κ = 1 paired and single coverage from 2·10⁵ pairs / 1.5·10⁵
    singles (≈ 5 min each), and the single-gate power at α = 0.005 by a sandbox Monte Carlo of the full gate at κ = 1
-   (R ≈ 200, ≈ 45 min) → amendment frozen.
-2. **Selection rule (Revision 3, computable):** for each surrogate compute pw = OC_paired(c_p) × OC_single(c_s) with the
-   exact binomial OC of the 5400/0.005 acceptance sets at the measured κ = 1 coverages (single gate with the
-   conservative box shrink 0.0019·n_E counts per side; the measured sandbox single-gate power replaces the modelled
-   factor when it is lower), and P(power clause) = P(Bin(3200, pw) ≥ 2909). **Freeze 5400/0.005 (48 × 2.25·10⁶) iff
-   P(power clause) ≥ 0.99 for both surrogates; otherwise freeze 7200/0.005 (64 × 2.25·10⁶)** if the same computation
-   gives ≥ 0.99 there; if neither does, no V7-R2 design is frozen and the finding goes to the operator. (The interval
-   windows quoted above are illustrations, not the rule.)
-   *Applied to the coverages measured now* (`designs7.py`, `validation/plans/v3-005d-v7r-calibration-repair/data/designs7.out`; paired 0.6840 / 0.6830, single
-   0.6866 / 0.6808): 5400/0.005 power 0.954 (archive) / 0.962 (rehearsal), P(power clause) 1.0000 / 1.0000 →
-   **5400/0.005 is selected** (7200/0.005: 0.994 / 0.995). The rule is re-applied to the rebuilt pool.
+   → replaced in Revision 4 by the direct joint-power measurement of item 2 (R_meas = 400 per surrogate,
+   ≈ 10 s per repetition in the sandbox: ≈ 2.2 h for 5400, ≈ 3 h for 7200) → amendment frozen.
+2. **Selection rule (Revision 4, after Codex REVIEW-bb2a8151; replaces the Revision 3 product rule).** The Revision 3
+   rule multiplied OC_paired × OC_single, which assumes independence of the two gates (they are evaluated on the same
+   synthetic replicates and bootstrap seed base) and used a fitted box shrink for the single gate; it is withdrawn.
+   The rule now uses the **directly measured complete two-gate joint pass rate at κ = 1**:
+   - Measurement: `scripts/joint_power.py` — the repository's own `run_calibration` (`tests/ionmc/test_v7r_coverage.py`)
+     with `v7r.pair_gate`/`v7r.single_gate` unchanged, both gates on the same replicates, the only change being
+     `steps_v5b.V7_ALPHA_TOST = 0.005`; layout 48 × 225 replicates (5400 pairs; 64 × 225 for 7200); **R_meas = 400**
+     repetitions per surrogate; seeds of record in the script (roots 20989920–20989923, +10 for 7200).
+   - Bound: p_low = one-sided 95 % Clopper–Pearson lower bound of the joint passes. Requirement:
+     P(Bin(3200, p_low) ≥ 2909) ≥ 0.99, i.e. **≥ 378 of 400 joint passes** (p_low(378/400) = 0.9224 → 0.9974;
+     377 → < 0.99). P(select | true joint power 0.950 / 0.955 / 0.960) = 0.73 / 0.86 / 0.95.
+   - **Freeze 5400/0.005 iff both surrogates reach ≥ 378/400;** otherwise run the same measurement for 7200/0.005 and
+     freeze it iff both reach ≥ 378/400; otherwise no V7-R2 design is frozen and the finding goes to the operator.
+   - The Fréchet bound p_paired + p_single − 1 from the same run is reported as a cross-check only.
+   - This rule and R_meas were fixed before the measurement was started (Revision 4); it is re-applied to the rebuilt
+     rehearsal pool after the elastic fix.
+   *Result on the current pool* (`data/joint_power_5400.jsonl`, `.summary.txt`; 2026-10-14 10:01–12:10 UTC, one sandbox
+   process, 9.7 s per repetition, 2.15 h): archive-fitted joint **383/400 = 0.9575** (paired 385, single 398), CP95 lower
+   **0.9369**; rehearsal block sums joint **384/400 = 0.9600** (paired 385, single 399), CP95 lower **0.9399**; P(power
+   clause | p_low) = 1.0000 for both; Fréchet cross-check (CP lower bounds) 0.9272 / 0.9310. **Both ≥ 378/400 → the rule
+   selects 5400/0.005 (48 × 2.25·10⁶) today.** Disclosure: a 2-repetition timing trial (r = 0, both surrogates, both
+   joint passes) ran before the rule was written; it was deleted and r = 0 was regenerated identically (deterministic
+   seeds) inside the 400.
 3. The measurements are recorded in the amendment as design inputs (exploratory, never evidence) with their seeds
    (planner block 20989900–20989999).
 
@@ -441,7 +462,7 @@ SeedSequence roots are distinct entropy). A test asserts (a)–(e) and the hr r_
 
 ### 6.1 Rates used (slow host)
 
-V7-R transport shard 4.5·10⁶ histories: 1262 s (was 755 s; factor 1.67). Calibration Monte Carlo: 4.86 s per
+V7-R (dd976c5a layout) transport shard of 4.5·10⁶ histories: 1262 s (was 755 s; factor 1.67). Calibration Monte Carlo: 4.86 s per
 repetition at 7200 replicates on the fast host (14a (b)5) → 8.1 s slow; per-repetition cost scales with the replicate
 count (all bootstraps are per replicate/pair): 12.2 s at 10 800 replicates, 16.2 s at 14 400. These calibration rates
 are **extrapolated** with the transport factor 1.67; one short calibration part (e.g. 20 repetitions) is measured on
@@ -464,7 +485,13 @@ the slow host before the part sizes are frozen. Per-shard fixed cost
 | P(all calibration clauses) r = 1 / r = 0.32 | 1.000 / 1.000 | 1.000 / 1.000 | 0.86 / 1.000 | ≈ 0.99 (power MC only) |
 | operator items | merge-gate role + budget | merge-gate role + budget | + clause evaluation, R decrease | + clause evaluation |
 
-Sandbox cost of the preparatory work: minutes (OC tables, CI-scale smoke of the new steps at R = 20, n_κ = 2·10⁴).
+Revision 4: the 5400/0.005 column is the design selected by the measured §3.8 rule on the current pool (measured joint
+power at κ = 1: 0.9575 / 0.9600, CP95 lower 0.9369 / 0.9399 from 400 repetitions each; the power clause then holds with
+P ≈ 1.000); the 7200/0.005 column applies only if the re-measurement on the rebuilt pool misses 378/400.
+
+Sandbox cost of the preparatory work: minutes (OC tables, CI-scale smoke of the new steps at R = 20, n_κ = 2·10⁴), plus
+the §3.8 joint-power measurement (single process, ≈ 2.2 h per measurement of the 5400 design, ≈ 3 h for 7200; run
+once now on the current pool and once more on the rebuilt pool).
 
 ### 6.3 What can run in the sandbox and what must run on the host
 
@@ -482,7 +509,7 @@ Sandbox cost of the preparatory work: minutes (OC tables, CI-scale smoke of the 
 1. (sandbox, autonomous) Record the diagnosis next to the V7-R failure; write Amendment 19 with section 3.7 content;
    decide V7-R2 vs (B)/(C) — (B)/(C) only after an operator decision (send the proposal with the cost table first if
    the 33.9 h budget is not available; in any case V7-R2's merge-gate role and budget go to the operator before host execution).
-2. (sandbox) Implement: per-gate α parameter (default 0.04 keeps the dd976c5a/lv5b archives bit-identical), 24-shard
+2. (sandbox) Implement: per-gate α parameter (default 0.04 keeps the dd976c5a/lv5b archives bit-identical), 48 × 2.25·10⁶
    V7-R2 layout, `v7r-kappa` step + sealed record (`ionmc-v7r-kappa-record-1`: surrogate, kind, part, n, seeds, sha256 of
    the per-row arrays, κ per margin after combine), calibration parts consuming the κ record, new part sizes, seeds,
    tests; Codex review; CI.
@@ -504,10 +531,11 @@ Sandbox cost of the preparatory work: minutes (OC tables, CI-scale smoke of the 
 
 ### 6.6 Risks
 
-* **Single-gate box power at α = 0.005** is modelled (shrink fitted to α = 0.04 data), not measured: if the true
-  joint power at 5400/0.005 were < 0.93, the power clause would become marginal. Mitigation: measure it in the
-  sandbox smoke before the amendment is frozen (R ≈ 200 at κ = 1, ≈ 45 min sandbox) or choose α = 0.0075 (power
-  0.966–0.973, P(all) r = 1 0.988).
+* **Joint power at α = 0.005** was modelled in Revisions 1–3 (single-gate shrink fitted to α = 0.04 data); Revision 4
+  measured it directly on the current pool (§3.8: 0.9575 / 0.9600, CP95 lower 0.9369 / 0.9399, 400 repetitions per
+  surrogate), so the risk that the true joint power is < 0.93 is retired for the current pool. Residual risk: the
+  rebuilt pool after the elastic fix may differ; handled by the pre-declared re-measurement and rule of §3.8 (fallback
+  7200/0.005, then operator).
 * **Real estimator off-nominal:** a correct estimator whose true paired coverage is 0.69–0.695 passes the stricter
   gate with 0.86 / 0.61 (5400/0.005) — the price of the smaller α; the real dd976c5a value was 0.685.
 * **Host time:** 33.9 h at the slow rate; a further slowdown pushes calibration parts toward 1500 s — the 1100 s target

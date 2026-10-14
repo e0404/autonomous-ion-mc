@@ -1,6 +1,6 @@
 # Independent review: V3-005D elastic-attribution plan (elastic-attribution-plan.md)
 
-Reviewer: independent Claude reviewer. Repo: v3-005b worktree, HEAD 749f768c. Read-only. Scratch checks in validation/plans/v3-005d-elastic-attribution/review-scripts/ (mom.py, removal.py, walk.py).
+Reviewer: independent Claude reviewer. Repo: v3-005b worktree, HEAD 749f768c. Read-only. Scratch checks in scratchpad/v3-005d/rev/ (mom.py, removal.py, walk.py).
 
 ## A. Numerical spot-checks
 
@@ -135,7 +135,7 @@ Scope: rev 2 checked against findings F1–F10, with code claims verified at wor
 
 **Citing the reviewer's removal-kernel numbers without re-running them** is acceptable for a plan, because they are declared as already seen, are not used as thresholds, and D-E0 recomputes them in a committed script. Two conditions apply (minor, R2-8):
 - (a) Label them for what they are: crude estimates (Bragg–Kleeman range, straight line, p+O only, step-function threshold, no straggling, no p-p), not a reproduction target. D-E0 will differ, because it uses the project range table and K*. Replace "reproduced in D-E0" with "recomputed in D-E0; differences expected".
-- (b) If they stay cited, archive `validation/plans/v3-005d-elastic-attribution/review-scripts/removal.py` with the plan, or drop the numbers.
+- (b) If they stay cited, archive `rev/removal.py` with the plan, or drop the numbers.
 
 ## Remaining findings
 
@@ -252,3 +252,101 @@ Without these items the pre-commitment leaves free choices that could be made af
 ## Round-3 verdict
 
 **ACCEPT, conditional on the R3-1 text (naming the NN source with its < 100 MeV rule, the per-target density parametrisation with its unfolding, and the NN energy/frame convention) and R3-2 being inserted before Amendment 19 is committed.** No blocking issues remain. The attribution design (D-E0 to D-E6, §5) is sound and pre-registrable. Nothing relaxes a tolerance, reuses a seed or creates a passing record. The recorded V5, V11 and V10-A failures are preserved.
+
+---
+
+# D-E0–D-E2 review (worker implementation at 9a7b142 plus untracked files; read-only)
+
+Scope:
+- code: `validation/scripts/elastic_attribution/{common,de0_kernels,de1_shapes,de2_pp}.py`;
+- outputs: `validation/results/elastic_attribution/de{0,1,2}/`;
+- test: `tests/ionmc/test_elastic_attribution_de0.py`.
+
+## 1. Kernel implementation against plan §2.1; the K* sign
+
+- K_w, θ_w and T are implemented as defined (de0_kernels.py l.75–157): exact two-body kinematics through `ionmc.nuclear.elastic_kin`, the Bethe CSDA range, a 0.98·R₀ upper limit and 300 depth nodes. For p-p the faster proton continues.
+- **The K* sign: the "shifted" form (z_pk + Δ) is the physically correct one, so the plan's formula has a sign error.**
+  - A proton whose range is shortened by Δ has the depth-dose d(z) ≈ IDD_EM(z + Δ). Its contribution at the original peak depth is IDD_EM(z_pk + Δ), which lies on the distal fall-off.
+  - IDD_EM(z_pk − Δ) samples the proximal rise. That is the contribution of a proton whose range was *extended* by Δ, so it systematically under-predicts removal.
+  - The plan's own prose ("moves that proton's contribution from … z_pk to z_pk − Δ") describes the shifted physics correctly. Only the formula `IDD_EM(z_pk − Δ)` has the wrong sign.
+  - The worker's reading of the formula is accurate, and keeping it as the definition of record while reporting the correction is the right procedure (Amendment 19 (g) freezes it).
+  - **Required:**
+    - Record a dated note (decision 0041 or the D-E0 record, not an edit of the frozen plan) stating that the frozen K* formula has a sign error and that K*_shifted is the physically meaningful predictor.
+    - Base no conclusion on K*_literal. In particular, drop the D-E0 headline "literal K* over-predicts F 0.904/0.892", which is an artefact of the sign.
+    - In D-E3, report both forms, and validate against the shifted one.
+    - Add a unit test with a synthetic IDD asserting d(z_pk) = IDD(z_pk + Δ). Currently no test pins the sign.
+
+## 2. Minima analysis and its consequences
+
+- **The worker is right.** The V10-A rule's θ_min,1 = 17.17° (C0063 @ 135 MeV, O-16) is an artefact of duplicate angles: 17.17° gives 138.9 mb/sr and 17.24° gives 141.9 mb/sr, a 0.74σ "drop". The data fall monotonically from 570 mb/sr at 6.6° to 1.8 mb/sr at 38°. The same holds for 14.99° (C0141 @ 179.9: 143.1 vs 144.8 at the same angle; drop 0.48σ).
+- Under the plan's own frozen D-E1 criteria (≥ 2 adjacent points, > 2σ, Rutherford share < 20 %), neither is a diffraction minimum.
+- The worker's significance rule (≥ 10 % and ≥ 3σ below both neighbours, duplicates merged) differs from the frozen rule. **Minor:** report the frozen-rule result too; the verdict is the same.
+- **Consequences:**
+  - (a) **My round-2/round-3 statement "core about 2× too wide (R ≈ 4.9 fm)" is withdrawn.** It rested on a spurious minimum. The plan's §0 and §2.2 prior text ("first minima ≈ 2× too wide") needs a dated note recording that D-E1 refuted it.
+  - (b) Reviewer observation, report-only: C0063 flattens at 30–34° (4.56 → 3.83 → 3.26 mb/sr, then 1.82 at 38.5°). This is consistent with a filled-in minimum near the table's 34°. The core position may be roughly right, and the discrepancy may lie in the forward fall-off and the depth of the minimum. That fits the model being +45 % / +148 % above the data at 15° / 20°.
+  - (c) The §4.2 M3 trigger is unaffected, because it uses q_H from the de Vries density and not the data. The §5 signatures do not use the measured minima and are unaffected. The descriptive first-minimum estimator stays.
+  - (d) **Important, record-keeping.** The recorded V10-A evaluation at dd976c5a used the spurious θ_min,1 to set the (a) cut at 0.8·θ_min = 13.74° (`03-v10-a.txt`: "theta >= 0.8 theta_min,1 (measured: 13.74 deg)"), which excluded the 15°/20° (a) points of C0063 and C0141. This is an implementation/specification defect of the V10-A minimum rule (duplicate angles not merged). Record it as a finding against the V10-A row. The recorded V10-A failure stands unchanged; nothing is re-evaluated or relabelled.
+
+## 3. Reconciliation and kernel adequacy
+
+- With the correct (shifted) sign, the threshold kernel reproduces ionmc's own V11 F well:
+  - predicted F = (1 − K*_sh)/(1 + G) is 0.853 / 0.832, against observed 0.857 / 0.844;
+  - peak removal: K*_sh 0.136 / 0.151 against observed 0.124 / 0.133, an over-prediction of about 9 % / 13 %.
+  - The kernel is therefore adequate to roughly 10 % for ranking and sensitivity. It is not adequate for the 0.010 closure. That is why §5 rests on the transport swap test (D-E6) and not on the kernel, as designed.
+- **The "reconciliation not reproduced" conclusion is incomplete (major for the D-E0 deliverable).**
+  - The worker varied only the planning radius (+0.002), but the planning expectation used θ_rms = 17° / 14°, a different shape. The plan asks for "table moments versus planning moments".
+  - The s = 0.5 family reproduces those moments (θ_rms 16.0° / 13.7°). From the worker's own table, K*_sh(s0.5) = 0.1225 / 0.1337 and G = 0.0110 / 0.0190 give F ≈ 0.868 / 0.850. Corrected for the kernel's bias on the table shape (+0.004 / +0.012), that is ≈ 0.872 / 0.862, against the planning-implied 0.878 / 0.875.
+  - So the planning shape moments account for most of the miss: roughly 75 % at 150 MeV and 55 % at 200 MeV (reviewer estimate from D-E0 numbers).
+  - **Fix:** add the planning-moment-equivalent shape to the reconciliation and state the remainder.
+- **G under-predicts the gain** (0.0134 / 0.0205 against 0.0221 / 0.0267). The operational G omits at least the higher stopping power of the continuing proton after a p-p event (E_fast = E − T_slow). Given the plan's under-specified wording, report G as incomplete (minor). It affects only the descriptive peak-versus-gain ordering.
+- **Implication for H2:**
+  - The shift needed to reach TOPAS's removal (ratio 0.755 / 0.722) exceeds what even s = 0.9 (0.79 / 0.77) or R × 1.2 (0.85 / 0.85) gives.
+  - p-p carries only about 22 % of K. A +10 % p-p rate (D-E2) moves K by about 0.003, which is about 10 % of Δ_pk: not negligible for the 70 % rule.
+  - Independent data-side evidence for H2 remains strong: model/data +37…+193 % at 15–20° for all ≥ 135 MeV O datasets, and partial σ_tr above the data.
+  - The shape hypothesis is therefore **not weakened** by D-E0. The specific "core 2× too wide" argument is gone, and the 2×2 swap test is still the only decisive step: it separates shape (pA) from p-p and measures their interaction against Geant4 at fixed σ.
+
+## 4. Numerical spot checks
+
+All recomputed from the archived files.
+
+| Quantity | Result |
+|---|---|
+| C0063 model/data at 15.11° | 339.4/233.6 = +45 % ✓ |
+| C0063 model/data at 19.39° | 186.4/75.19 = +148 % ✓ |
+| C0141 model/data at 15.0° | 196.3/143.1 = +37 % ✓ |
+| C0141 model/data at 20.72° | 54.85/24.57 = +123 % ✓ |
+| Table first p+O minima | 35.2° / 29.2° (mine 35.3° / 29.2°) ✓ |
+| σ_pp table/BGG at 150 MeV | 26.26/23.86 = 1.101 ✓ |
+| P(pp) | 0.036 table vs 0.038 BGG (Bethe range; my Bragg–Kleeman estimate was 0.0374) ✓ |
+| Crude removal table | reproduced exactly, and the plan-definition K_w (O-only) is within 2 % of it ✓ |
+| SE of the duplicate-angle drops | 0.74σ and 0.48σ ✓ |
+
+**Not reproduced: the headline "partial σ_tr 1.9–6.8× data".** The D-E1 table gives model/data:
+- 1.48 (C0063), 2.0 (C0141), 2.77 (C0148), 4.0 (C0550), 2.2 (O0553 @ 150), 1.55 (C0055 @ 122), 3.5 (C0055 @ 160), 5.6 (C0057), 2.4 (C1420);
+- but **0.33 (O0274 @ 96) and 0.004 (O0553008 @ 75 MeV)**.
+
+The O0553008 data are ≈ 8× above both the model and plausibility at 10–16° (5800 mb/sr at 10°, against a model of 694). This looks like a unit or quantity mismatch inherited from the V10-A ingestion. Flag it and exclude it from summaries, and correct the headline to "1.5–5.6× for the ≥ 122 MeV datasets; the two low-energy C sets go the other way, one with a suspected unit error" (minor; record-keeping).
+
+## 5. Compliance
+
+- Every report and JSON carries the exploratory banner, and the input files are listed with sha256 (D-E2 includes the cached PDG object; no download was made).
+- The R fit is labelled data-seen.
+- H6: the case files differ only in the header, seed and modules (verified in the D-E0 listing).
+- No row, tolerance or seed changed. The script and output paths are outside the rehearsal digest. The test is under `tests/ionmc` and is marked `requires_tables`.
+- **Major (scope/compliance): the "TOPAS-equivalent surface s = 1.02 / 1.09 fm and radius factor 1.35 / 1.47" in D-E0.** These are shape parameters solved to match the V11 TOPAS peak removal. They are not in the pre-registered D-E0 definitions, and they are exactly the kind of V11-derived model numbers the operator directive keeps out of model choices. M2 is pre-committed and parameter-free, so no harm has been done yet. Remove them from the record, or move them into a clearly quarantined appendix labelled "not pre-registered; V11/Geant4-derived; must not appear in any decision or model input". Never cite them in decision 0041.
+
+## Verdict (D-E0–D-E2)
+
+**Accept as an exploratory record after revision of the reporting.** No blocking issue. The computations are correct, and the minima finding is right and important.
+
+Required before the record is committed:
+- (i) Record the K* sign error, lead with the shifted form, and drop conclusions drawn from the literal form.
+- (ii) Complete the reconciliation with the planning-moment shape (s ≈ 0.5).
+- (iii) Quarantine or remove the TOPAS-equivalent s / R × factors.
+- (iv) Record the V10-A spurious-minimum defect and the refuted "2× core" prior as dated notes, with the V10-A verdict unchanged.
+- (v) Correct the σ_tr headline and flag the O0553008 @ 75 dataset.
+
+Minor items:
+- report the frozen-rule minimum test;
+- G incompleteness (the post-p-p stopping-power term);
+- a sign unit test for K*.
