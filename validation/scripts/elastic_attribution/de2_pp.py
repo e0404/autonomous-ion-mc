@@ -21,6 +21,19 @@ from .de0_kernels import N_Z, R_FRACTION, U, deficit_mm, primary_event, theta_w_
 from .de1_shapes import Shapes
 
 ENERGIES = (20, 50, 100, 150, 200)
+_PE = "per_energy/*"
+GIT_ALLOW = (
+    "energies_mev", "pdg_covers_20_200_mev", "pdg_min_t_mev_exceeds_300", "pdg_n_points",
+    *(f"{_PE}/{k}" for k in (
+        "P_deficit_gt_2mm", "P_deficit_gt_3mm", "P_theta_fast_gt_theta_2mm", "P_theta_fast_gt_theta_3mm",
+        "mean_1_minus_cos_fast_lab", "mean_t_slow_mev", "mean_t_slow_over_T", "n_pdg_points_within_15pct_in_T",
+        "ratio_table_over_bgg")),
+    f"{_PE}/theta_fast_cm_deg/*", f"{_PE}/theta_fast_lab_deg/*", "per_primary_water_path/*/*",
+)  # fmt: skip
+GIT_ALLOW_LONG = ("energies_mev",)
+GIT_FILES = {"pp_audit.json": (GIT_ALLOW, GIT_ALLOW_LONG)}
+"""Git allowlist of ``pp_audit.json`` (syntax: :mod:`common`): the table / BGG ratio, mean slow-proton energy, angle statistics,
+per-primary p-p probabilities. Not kept: the absolute sigma_pp (table, builder formula, BGG), sigma_ET, the PDG points."""
 
 
 def run() -> None:
@@ -98,19 +111,28 @@ def run() -> None:
            "pdg_n_points": len(pdg_t),
            "note": "BGG formula = total elastic p-p; the table sigma is the NI part above 16.26 deg CM (not the same quantity)"}  # fmt: skip
     inputs = [*c.table_files(), pdg_path]
-    c.write_outputs(c.OUT / "de2", "pp_audit.json", doc, "de2-report.md", _header(inputs), render_report)
+    c.write_outputs(
+        c.OUT / "de2",
+        "pp_audit.json",
+        doc,
+        "de2-report.md",
+        _header(inputs),
+        render_report,
+        GIT_ALLOW,
+        GIT_ALLOW_LONG,
+    )
 
 
 def _header(inputs: list[Any]) -> str:
     cmd = "python -m validation.scripts.elastic_attribution.de2_pp"
     return c.header(
-            "D-E2: p-p audit",
-            cmd,
-            inputs,
-            [
-                "Table sigma = Hale NI above 16.26 deg CM (above 150 MeV anchor x BGG ratio); BGG formula = 1.0115 (23 + 50 sqrt(ln(0.73/p)^7)) mb "
-                "= total elastic, a different quantity. sigma_ET = sigma <T_slow>. Angles: the continuing (faster) proton. No download was made; PDG = the cached rpp2022 file."
-            ],
+        "D-E2: p-p audit",
+        cmd,
+        inputs,
+        [
+            "Table sigma = Hale NI above 16.26 deg CM (above 150 MeV anchor x BGG ratio); BGG formula = total elastic, a different quantity "
+            "(absolute values are not committed: decision 0041). Angles: the continuing (faster) proton. No download was made; PDG = the cached rpp2022 file."
+        ],
     )
 
 
@@ -119,15 +141,15 @@ def render_report(doc: dict[str, Any]) -> str:
     out: list[str] = []
     out += [
         "",
-        "| E | sigma table | builder formula | BGG | table/BGG | <T_slow> MeV | <T_slow>/E | sigma_ET (mb MeV) | th_fast lab p10/p50/p90 | th_fast CM p50 | P(th>th_2mm) | P(th>th_3mm) | PDG within 15 % |",
-        "|" + "---|" * 13,
+        "| E | table / BGG formula | <T_slow> MeV | <T_slow>/E | th_fast lab p10/p50/p90 | th_fast CM p50 | P(th>th_2mm) | P(th>th_3mm) | PDG within 15 % |",
+        "|" + "---|" * 9,
     ]
     for e, r in sorted(doc["per_energy"].items(), key=lambda kv: float(kv[0])):
         t = r["theta_fast_lab_deg"]
         pdg = str(r["n_pdg_points_within_15pct_in_T"])
         out.append(
-            f"| {e} | {r['sigma_pp_table_mb']:.2f} | {r['sigma_pp_builder_formula_mb']:.2f} | {r['sigma_pp_bgg_formula_mb']:.2f} | {r['ratio_table_over_bgg']:.3f} | "
-            f"{r['mean_t_slow_mev']:.2f} | {r['mean_t_slow_over_T']:.3f} | {r['sigma_ET_mb_mev']:.0f} | {t['p10']:.1f} / {t['p50']:.1f} / {t['p90']:.1f} | {r['theta_fast_cm_deg']['p50']:.1f} | "
+            f"| {e} | {r['ratio_table_over_bgg']:.3f} | "
+            f"{r['mean_t_slow_mev']:.2f} | {r['mean_t_slow_over_T']:.3f} | {t['p10']:.1f} / {t['p50']:.1f} / {t['p90']:.1f} | {r['theta_fast_cm_deg']['p50']:.1f} | "
             f"{r['P_theta_fast_gt_theta_2mm']:.3f} | {r['P_theta_fast_gt_theta_3mm']:.3f} | {pdg} |"
         )
     out += [

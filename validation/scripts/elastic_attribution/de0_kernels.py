@@ -51,6 +51,30 @@ REVIEW_CRUDE = {  # reviewer's removal.py table (review.md B.1), 150 MeV, p+O on
     "Rx1.2": (0.0250, 0.096, 0.069), "gauss": (0.0196, 0.125, 0.096)}  # fmt: skip
 
 
+C_HYPOTHETICAL = "C-12-hypothetical"  # p+C along the water path with n = 1 per cm3 (only conditional removal probabilities are kept)
+GIT_ALLOW = (
+    "table_id", "energies_mev", "w_mm", "crude_cited_review_150/*", "crude_recomputed/*/*/*", "h6/**",
+    "kernels/*/*/O-16/*", "kernels/*/*/H-1/*", "kernels/*/*/G/*",
+    *(f"kernels/*/*/{C_HYPOTHETICAL}/cond_removal_{w:g}mm" for w in W_MM),
+    "pointwise/*/*/*/*",
+    "reconciliation/*/observed/*", "reconciliation/*/kernel_table/*", "reconciliation/*/miss_explained/*",
+    "reconciliation/*/planning_expectation/*", "reconciliation/*/planning_theta_rms_shape/*",
+    "reconciliation/*/planning_radius_disk/F_pred", "reconciliation/*/planning_radius_disk/G",
+    "reconciliation/*/planning_radius_disk/K_star_shifted", "reconciliation/*/planning_radius_disk/R_O_fm",
+    "reconciliation/*/planning_radius_disk/dF_vs_table",
+    "v11_reference/*/*",
+)  # fmt: skip
+"""Git allowlist of ``kernels.json`` (syntax: :mod:`common`): kernel integrals per primary, shape statistics (angles, exceedance
+probabilities, tail moments), reconciliation ratios and archived V11 F / gain; the table radius and the absolute p+C kernel
+values (n = 1 per cm3) are not kept, only the conditional removal probabilities K_w / P_el of p+C."""
+GIT_ALLOW_LONG = ("crude_cited_review_150/*", "energies_mev", "w_mm")
+
+GIT_FILES = {
+    "kernels.json": (GIT_ALLOW, GIT_ALLOW_LONG),
+    "quarantine-data-seen.json": (("150/*", "200/*"), ()),  # data-seen values, banner forbids citing them
+}  # fmt: skip
+
+
 def rng_mm_factory(water: c.Water) -> Callable[[Any], Any]:
     return water.range_mm
 
@@ -382,9 +406,11 @@ def run() -> None:
                 continue
             kk = kernels(sh, water, e, k, ("O-16", "H-1"), have_idd)
             if k == "table":
-                kk["C-12 (hypothetical, n=1 per cm3 along the water path)"] = kernels(
-                    sh, water, e, "table", ("C-12",), have_idd
-                )["C-12"]
+                kc = kernels(sh, water, e, "table", ("C-12",), have_idd)["C-12"]
+                # n = 1 per cm3 along the water path: only the conditional removal probabilities K_w / P_el are kept
+                kk[C_HYPOTHETICAL] = {
+                    f"cond_removal_{w:g}mm": kc[f"K_{w:g}mm"] / kc["P_el"] for w in W_MM
+                }
             if e >= 100:
                 kk["G"] = plateau_gain(sh, water, e, k)
             kern[str(e)][k] = kk
@@ -409,7 +435,16 @@ def run() -> None:
         *(c.V11_PARTIALS[k] for k in sorted(c.V11_PARTIALS)),
     ]
     inputs += [c.REPO / r for r in sorted(h6["files_hashed"])]
-    c.write_outputs(c.OUT / "de0", "kernels.json", doc, "de0-report.md", _header(inputs), render_report)
+    c.write_outputs(
+        c.OUT / "de0",
+        "kernels.json",
+        doc,
+        "de0-report.md",
+        _header(inputs),
+        render_report,
+        GIT_ALLOW,
+        GIT_ALLOW_LONG,
+    )
 
 
 def _total(kern: dict[str, Any], key: str) -> float:
@@ -464,7 +499,7 @@ def _reconcile(
                              "G_total_with_post_event_stopping": g["G_total_with_post_event_stopping"],
                              "F_pred_shifted": f_tab, "F_pred_over_F_obs": f_tab / r["F_ionmc"],
                              "peak_removal_pred_over_obs": k_sh / obs_removal_ionmc},
-            "planning_radius_disk": {"R_O_fm": plan_r, "R_table_fm": r_tab, "K_star_shifted": radius[0], "G": radius[1], "F_pred": radius[2],
+            "planning_radius_disk": {"R_O_fm": plan_r, "K_star_shifted": radius[0], "G": radius[1], "F_pred": radius[2],
                                      "dF_vs_table": radius[2] - f_tab},
             "planning_theta_rms_shape": {"theta_rms_cm_deg_target": PLANNING_THETA_RMS_O[e], "s_fm_matching": s_plan,
                                          "K_star_shifted": shape[0], "G": shape[1], "F_pred": shape[2], "dF_vs_table": shape[2] - f_tab},
@@ -509,14 +544,14 @@ def _g(x: Any, f: str = ".4g") -> str:
 def _header(inputs: list[Any]) -> str:
     cmd = "python -m validation.scripts.elastic_attribution.de0_kernels"
     return c.header(
-            "D-E0: deterministic kernels of the elastic channel",
-            cmd,
-            inputs,
-            [
-                "Definitions: module docstring of `de0_kernels.py` (plan section 2.1). Water, Bethe CSDA range (the source of the V5/V11 runs), "
-                "straight-line path, exact two-body kinematics, no straggling, 2048 equiprobable quantile points per event, 300 depth nodes. "
-                "The plan's G wording is under-specified; the operational form is in the docstring."
-            ],
+        "D-E0: deterministic kernels of the elastic channel",
+        cmd,
+        inputs,
+        [
+            "Definitions: module docstring of `de0_kernels.py` (plan section 2.1). Water, Bethe CSDA range (the source of the V5/V11 runs), "
+            "straight-line path, exact two-body kinematics, no straggling, 2048 equiprobable quantile points per event, 300 depth nodes. "
+            "The plan's G wording is under-specified; the operational form is in the docstring."
+        ],
     )
 
 
@@ -568,14 +603,16 @@ def render_report(doc: dict[str, Any]) -> str:
     ]
     for e in ENERGIES:
         kt = k[str(e)]["table"]
-        for t in ("O-16", "H-1", "C-12 (hypothetical, n=1 per cm3 along the water path)"):
+        for t in ("O-16", "H-1", C_HYPOTHETICAL):
             d = kt[t]
-            cols = ["-"] * 4 if t.startswith("C-12") else [_g(d[f"K_{w:g}mm"]) for w in W_MM]
-            out.append(
-                f"| {e} | {t[:4]} | "
-                + " | ".join(cols)
-                + f" | {_g(d['K_2mm'] / d['P_el'])} | {_g(d['K_3mm'] / d['P_el'])} |"
+            hyp = t == C_HYPOTHETICAL
+            cols = ["-"] * 4 if hyp else [_g(d[f"K_{w:g}mm"]) for w in W_MM]
+            c2, c3 = (
+                (d["cond_removal_2mm"], d["cond_removal_3mm"])
+                if hyp
+                else (d["K_2mm"] / d["P_el"], d["K_3mm"] / d["P_el"])
             )
+            out.append(f"| {e} | {t[:4]} | " + " | ".join(cols) + f" | {_g(c2)} | {_g(c3)} |")
     out += [
         "",
         "## Pointwise shape moments at the entrance energy (table; per interaction)",
@@ -637,8 +674,8 @@ def render_report(doc: dict[str, Any]) -> str:
             lambda r: r["kernel_table"]["peak_removal_pred_over_obs"],
         ),
         (
-            "R_O table (fm) / planning R_O (fm)",
-            lambda r: f"{r['planning_radius_disk']['R_table_fm']:.3f} / {r['planning_radius_disk']['R_O_fm']}",
+            "planning R_O (fm, decision 0041)",
+            lambda r: f"{r['planning_radius_disk']['R_O_fm']}",
         ),
         (
             "RADIUS: F predicted at planning R_O (disk)",

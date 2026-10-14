@@ -53,6 +53,24 @@ SIGNATURES = (  # keys of a class summary that the Geant4 hook compares
     "rate_per_primary", "P_theta_lab_gt_theta_2mm", "P_theta_lab_gt_theta_3mm", "theta_lab_median_deg", "T_tail_moment",
     "mean_t_other_mev", "first_minimum_deg", "first_minimum_3sigma_deg", "qslope",
 )  # fmt: skip
+_CL = "cases/*/classes/*"
+GIT_ALLOW = (
+    "events_per_case", "seed_base", "ke_cut_mev", "classification_rule", "descriptor_note", "thin_target",
+    *(f"cases/*/{k}" for k in ("case", "row", "material", "energy_mev", "length_cm", "primaries", "seed", "events_sampled",
+                               "range_water_mm", "theta_2mm_deg", "theta_3mm_deg", "total_rate_per_primary",
+                               "pp_share_of_elastic_events")),
+    *(f"{_CL}/{k}" for k in (
+        "P_theta_lab_gt_theta_2mm", "P_theta_lab_gt_theta_3mm", "T_tail_moment", "counts_in_first_minimum_bin", "event_share",
+        "events", "expected_events_in_primaries", "first_minimum_3sigma_deg", "first_minimum_deg", "ke_cut_fraction_removed",
+        "mean_t_other_mev", "qslope", "qslope_bins", "rate_per_primary", "rate_per_primary_after_ke_cut", "theta_cm_median_deg",
+        "theta_cm_min_deg", "theta_lab_mean_1_minus_cos", "theta_lab_median_deg", "theta_slow_lab_median_deg")),
+    f"{_CL}/classification/*", f"{_CL}/helm/*",
+)  # fmt: skip
+"""Git allowlist of ``de5.json`` (syntax: :mod:`common`): per-primary rates, class shares, angle statistics, exceedance
+probabilities, tail moments, mean secondary energies, classification diagnostics and descriptors. Not kept: ``sigma_el_mb``
+(absolute table cross sections), every histogram (8-bin and full), wall time."""
+
+GIT_FILES = {"de5.json": (GIT_ALLOW, ())}
 HIST_INTERIOR_DEG = [2.0, 5.0, 10.0, 15.0, 20.0, 30.0, 60.0]  # 8 lab-angle bins (7 interior edges)
 HIST_INTERIOR_T = [0.02, 0.05, 0.1, 0.2, 0.4, 0.6, 0.8]  # primary T1 / E0, 8 bins
 
@@ -335,7 +353,9 @@ def run() -> None:
         "classification_rule": "conflict tracks (both residuals < 1e-3, theta_lab below the ~1.8 deg crossover) are p-p iff the event has a secondary proton, else p+A",
         "thin_target": "fixed beam energy, no slowing down, no multiple scattering (as the D-E4 EM-free cases)",
            "wall_s": time.perf_counter() - t0}  # fmt: skip
-    c.write_outputs(c.OUT / "de5", "de5.json", doc, "de5-report.md", _header(), render_report)
+    c.write_outputs(
+        c.OUT / "de5", "de5.json", doc, "de5-report.md", _header(), render_report, GIT_ALLOW
+    )
 
 
 def _header() -> str:
@@ -354,13 +374,13 @@ def _header() -> str:
 
 def render_report(doc: dict[str, Any]) -> str:
     out = ["", "## Per case and class", "",
-           "| case (row) | material | E | class | sigma_el (mb) | rate/primary | share | KE cut removed | theta_med,lab | P(th>th_2mm) | P(th>th_3mm) | T | <T_other> MeV | first min (deg; 3-sigma) | q-slope | Helm R_eff / s |",
-           "|" + "---|" * 16]  # fmt: skip
+           "| case (row) | material | E | class | rate/primary | share | KE cut removed | theta_med,lab | P(th>th_2mm) | P(th>th_3mm) | T | <T_other> MeV | first min (deg; 3-sigma) | q-slope | Helm R_eff / s |",
+           "|" + "---|" * 15]  # fmt: skip
     for k, cs in doc["cases"].items():
         for name, v in cs["classes"].items():
             h = v.get("helm")
             out.append(
-                f"| {k} ({cs['row']}) | {cs['material']} | {cs['energy_mev']:g} | {name} | {cs['sigma_el_mb'][name]:.2f} | {v['rate_per_primary']:.4g} | "
+                f"| {k} ({cs['row']}) | {cs['material']} | {cs['energy_mev']:g} | {name} | {v['rate_per_primary']:.4g} | "
                 f"{v['event_share']:.3f} | {v['ke_cut_fraction_removed']:.2e} | {v['theta_lab_median_deg']:.2f} | {v['P_theta_lab_gt_theta_2mm']:.4f} | "
                 f"{v['P_theta_lab_gt_theta_3mm']:.4f} | {v['T_tail_moment']:.4f} | {v['mean_t_other_mev']:.3f} | "
                 f"{'-' if v.get('first_minimum_deg') is None else format(v['first_minimum_deg'], '.1f')}; {'-' if v.get('first_minimum_3sigma_deg') is None else format(v['first_minimum_3sigma_deg'], '.1f')} | "
@@ -390,8 +410,8 @@ def render_report(doc: dict[str, Any]) -> str:
         "The first-minimum, q-slope and Helm descriptors are recorded, not interpreted: the frozen 1-degree estimator picks noise dips "
         "in a 256-bin piecewise-uniform table, and the 3-sigma variant misses the J1 zero.",
         "",
-        "Lab-angle histogram bins (counts in the 8-bin record): [0, 2, 5, 10, 15, 20, 30, 60, 180] deg; T1/E0 bins "
-        "[0, .02, .05, .1, .2, .4, .6, .8, 1]. Geant4 ratios (ionmc / Geant4) are produced later by `signature_ratios` from the D-E4 summary.",
+        "Absolute cross sections and angle / energy histograms are not committed (decision 0041); they are in the generated record. "
+        "Geant4 ratios (ionmc / Geant4) are produced later by `signature_ratios` from the D-E4 summary.",
     ]
     return "\n".join(out) + "\n"
 

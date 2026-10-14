@@ -1,0 +1,25 @@
+{
+  "input": "input.txt",
+  "physics": [
+    "Geant4_Modular (OpenTOPAS 4.3 / Geant4 11.4.2): g4h-elastic_HP only",
+    "no EM, no inelastic, no decay module; accepted by the D-E4 smoke (REF-f89509922788efe3d9cd-c64db9f5)"
+  ],
+  "source": "50 MeV proton kinetic energy, monoenergetic (BeamEnergySpread 0), zero-size zero-divergence pencil beam (BeamPositionDistribution None, BeamAngularDistribution None), starting at z=-0.001 mm on the axis x=y=0, direction +z, entering the centre of the target entrance face (z=0)",
+  "geometry": "G4_WATER cylinder r = 10 mm, length 2 mm (z 0..2 mm) inside a 500 mm radius G4_Galactic sphere in a G4_Galactic world (half length 600 mm)",
+  "materials": "G4_WATER (Geant4 NIST material, density 1.0 g/cm3); G4_Galactic vacuum",
+  "cuts": "CutForAllParticles = 0.05 mm (irrelevant without EM/production processes)",
+  "histories": 6666667,
+  "seeds": [
+    20285001
+  ],
+  "scorers": [
+    "PhaseSpace surface scorer on Sphere/OuterCurvedSurface (full sphere, RMax 500 mm), protons only, OnlyIncludeParticlesGoing Out, Binary, with EventID, TrackID and ParentID columns; no current-kinetic-energy filter exists in OpenTOPAS (only initial-KE filters), so undeflected primaries are recorded"
+  ],
+  "units": "TOPAS native phase space: .header (column order and byte layout) and .phsp; positions in cm, energy in MeV, U/V direction cosines (column order in ps.header; 46 B/record in the smoke)",
+  "rationale": "D-E4 row 15 (water, 50 MeV, 2mm, part 1 of 3); plan \u00a73.2, Amendment 19 (c) and addendum (b)2; exploratory, report-only. Split into 3 equal parts (6,666,667 / 6,666,667 / 6,666,666 primaries) so that each phase-space file stays below the size bound; seeds 20270000 + 1000*row + part. Same input as the D-E4 smoke except material, energy, length, primaries and seed.",
+  "expected_outputs": [
+    "ps.header",
+    "ps.phsp"
+  ],
+  "arguments": []
+}

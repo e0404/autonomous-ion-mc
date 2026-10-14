@@ -20,6 +20,29 @@ from numpy.typing import NDArray
 
 from . import common as c
 
+_MIN = "datasets/*/minima"
+GIT_ALLOW = (
+    "table_id", "families/*", "datasets/*/dataset", "datasets/*/target", "datasets/*/energy_mev", "datasets/*/n_points",
+    "datasets/*/theta_range_deg", "datasets/*/R_fit/*", "datasets/*/R_fit/*/n_points", "datasets/*/R_fit/*/label",
+    "datasets/*/R_fit/*/ratio", "datasets/*/R_fit/*/rms_log_residual", "datasets/*/R_fit/*/rms_log_residual_at_table_R",
+    *(f"{_MIN}/{k}" for k in (
+        "data_first_minimum_is_significant", "first_measured_minimum_v10a_rule", "frozen_criterion_met_at_v10a_minimum",
+        "measured_to_table_minimum_ratio", "q2_over_q1_measured_minima", "rutherford_share_at_measured_minimum",
+        "table_J1_first_zero_deg", "table_first_minimum_bin_density", "table_first_minimum_binned_1deg",
+        "table_first_minimum_nuclear_deg", "table_first_minimum_total_deg", "v10a_cut_deg_08_theta_min")),
+    *(f"{_MIN}/frozen_criterion_minima/*/{k}" for k in ("depth_sigma", "met", "rutherford_share", "theta_cm_deg")),
+    *(f"{_MIN}/{g}/*/{k}" for g in ("measured_minima", "significant_measured_minima")
+      for k in ("drop_in_sigma", "implied_disk_radius_fm", "theta_cm_deg")),
+    "datasets/*/partial/*/data_partial_sigma_over_table_sigma_el", "datasets/*/partial/*/n_nodes",
+    "datasets/*/partial/*/theta_range_deg", "datasets/*/partial/*/window_truncated_by_data",
+    "datasets/*/partial/*/*/sigma_ratio_to_data", "datasets/*/partial/*/*/sigma_tr_ratio_to_data",
+)  # fmt: skip
+"""Git allowlist of ``per_dataset.json`` (syntax: :mod:`common`): dimensionless model/data ratios of window integrals, minima
+angles and significances, fit ratios. Not kept: measured values, per-point arrays, absolute partial sigma / sigma_tr, the table
+radius and the fitted radius itself (only R_fit / R_table)."""
+
+GIT_FILES = {"per_dataset.json": (GIT_ALLOW, ())}
+
 FAMILIES = ("disk", "Rx1.2", "s0.5", "s0.9", "gauss")
 """Analytic p+A shapes (Amendment 19 (b)): ``disk`` = black disk at the table radius R(E) (the form of the
 pinned table before its 256-quantile tabulation), ``Rx1.2`` = disk at 1.2 R, ``s0.5`` / ``s0.9`` = disk times
@@ -271,7 +294,15 @@ def run() -> None:
     doc = {"banner": c.BANNER, "table_id": c.TABLE_ID, "datasets": datasets,
            "families": list(FAMILIES), "note": "R fit is data-seen and is never a model parameter"}  # fmt: skip
     inputs = [*c.table_files(), c.RUN_V10A]
-    c.write_outputs(c.OUT / "de1", "per_dataset.json", doc, "de1-report.md", _header(inputs), render_report)
+    c.write_outputs(
+        c.OUT / "de1",
+        "per_dataset.json",
+        doc,
+        "de1-report.md",
+        _header(inputs),
+        render_report,
+        GIT_ALLOW,
+    )
 
 
 def _one_dataset(v10: Any, sh: Shapes, model: Any, rec: dict[str, Any]) -> dict[str, Any]:
@@ -301,7 +332,7 @@ def _one_dataset(v10: Any, sh: Shapes, model: Any, rec: dict[str, Any]) -> dict[
                              "table_first_minimum_binned_1deg": table_binned_first_minimum_deg(sh, name, e),
                              "table_first_minimum_bin_density": table_bin_density_first_minimum_deg(sh, name, e), "first_measured_minimum_v10a_rule": tmin_data,
                              "table_first_minimum_nuclear_deg": tmin_nuc, "table_first_minimum_total_deg": tmin_tot,
-                             "table_J1_first_zero_deg": th_zero, "table_radius_fm": r_tab}  # fmt: skip
+                             "table_J1_first_zero_deg": th_zero}  # fmt: skip
     if tmin_data is not None:
         i = int(np.argmin(abs(fine - tmin_data)))
         d_min["rutherford_share_at_measured_minimum"] = float(ru_fine[i] / tot_fine[i])
@@ -332,7 +363,7 @@ def _one_dataset(v10: Any, sh: Shapes, model: Any, rec: dict[str, Any]) -> dict[
         blk["rutherford_only"] = partial_moments(nodes, ru_n)
         for kind in FAMILIES:
             blk[kind] = partial_moments(nodes, sh.density_mb_sr(kind, name, e, nodes) + ru_n)
-        for key in ("model", *FAMILIES):
+        for key in ("model", *FAMILIES, "model_fine_grid", "rutherford_only"):
             blk[key]["sigma_tr_ratio_to_data"] = (
                 blk[key]["sigma_tr_mb"] / blk["data"]["sigma_tr_mb"]
             )
@@ -385,15 +416,15 @@ def _fmt(x: Any, f: str = ".3g") -> str:
 def _header(inputs: list[Any]) -> str:
     cmd = "python -m validation.scripts.elastic_attribution.de1_shapes"
     return c.header(
-            "D-E1: pinned p+A shape and shape families against the V10-A data",
-            cmd,
-            inputs,
-            [
-                "Model = pinned table (analytic black disk of the table radius, plus unscreened Rutherford, incoherent; "
-                "the V10-A model value). Families: Amendment 19 (b) at their a-priori parameters (no fit). "
-                "Partial integrals: trapezoid over the data nodes from 10 deg to the window end (10-30, 10-40 deg, and the last data angle), nuclear + Rutherford. "
-                "The R fit is **data-seen**, a diagnostic, never a model parameter."
-            ],
+        "D-E1: pinned p+A shape and shape families against the V10-A data",
+        cmd,
+        inputs,
+        [
+            "Model = pinned table (analytic black disk of the table radius, plus unscreened Rutherford, incoherent; "
+            "the V10-A model value). Families: Amendment 19 (b) at their a-priori parameters (no fit). "
+            "Partial integrals: trapezoid over the data nodes from 10 deg to the window end (10-30, 10-40 deg, and the last data angle), nuclear + Rutherford. "
+            "The R fit is **data-seen**, a diagnostic, never a model parameter."
+        ],
     )
 
 
@@ -402,22 +433,25 @@ def render_report(doc: dict[str, Any]) -> str:
     ds = doc["datasets"]
     out: list[str] = []
     out += ["", "## Minima: measured against the table", "",
-            "| dataset | target | E | theta_min,1 (V10-A rule) | significant? | table first min: bin-density / 1-deg bins / analytic disk (total) / J1 zero | Ru share at data min | R_table | R implied by V10-A min (3.8317/q) | significant minima (deg, merged duplicates, >=10 % and >=3 sigma below both neighbours) |",
-            "|---|---|---|---|---|---|---|---|---|---|"]  # fmt: skip
+            "| dataset | target | E | theta_min,1 (V10-A rule) | significant? | table first min: bin-density / 1-deg bins / analytic disk (total) / J1 zero | Ru share at data min | R implied by V10-A min (3.8317/q) | significant minima (deg, merged duplicates, >=10 % and >=3 sigma below both neighbours) |",
+            "|---|---|---|---|---|---|---|---|---|"]  # fmt: skip
     for d in ds:
         m = d["minima"]
         sig_list = (
-            ", ".join(f"{x['theta_cm_deg']:.1f}" for x in m["significant_measured_minima"])
+            ", ".join(f"{x['theta_cm_deg']:.1f}" for x in m.get("significant_measured_minima", []))
             or "none"
         )
         rim = (
-            ", ".join(f"{x['implied_disk_radius_fm']:.2f}" for x in m["measured_minima"][:1]) or "-"
+            ", ".join(
+                f"{x['implied_disk_radius_fm']:.2f}" for x in m.get("measured_minima", [])[:1]
+            )
+            or "-"
         )
         out.append(
             f"| {d['dataset']} | {d['target']} | {d['energy_mev']:g} | {_fmt(m['first_measured_minimum_v10a_rule'], '.2f')} | "
             f"{m.get('data_first_minimum_is_significant', '-')} | "
             f"{_fmt(m['table_first_minimum_bin_density'], '.1f')} / {_fmt(m['table_first_minimum_binned_1deg'], '.1f')} / {_fmt(m['table_first_minimum_total_deg'], '.1f')} / {m['table_J1_first_zero_deg']:.1f} | "
-            f"{_fmt(m.get('rutherford_share_at_measured_minimum'), '.3f')} | {m['table_radius_fm']:.2f} | {rim} | {sig_list} |"
+            f"{_fmt(m.get('rutherford_share_at_measured_minimum'), '.3f')} | {rim} | {sig_list} |"
         )
     out += ["", "**Frozen criterion** (plan: dip in >= 2 adjacent distinct-angle points, deeper than 2 sigma_stat, model Rutherford share < 20 %), "
             "applied to every dataset; the `significant` column above is my stricter (>= 10 % and >= 3 sigma) cross-check.", "",
@@ -425,11 +459,11 @@ def render_report(doc: dict[str, Any]) -> str:
             "|---|---|---|---|---|---|"]  # fmt: skip
     for d in ds:
         m = d["minima"]
-        f0 = m["measured_minima"][0] if m["measured_minima"] else None
+        f0 = m.get("measured_minima", [])[0] if m.get("measured_minima") else None
         lst = (
             "; ".join(
                 f"{x['theta_cm_deg']:.1f} ({_fmt(x['depth_sigma'], '.1f')}; {x['rutherford_share']:.2f}; {'met' if x['met'] else 'not met'})"
-                for x in m["frozen_criterion_minima"]
+                for x in m.get("frozen_criterion_minima", [])
             )
             or "none"
         )
@@ -452,21 +486,21 @@ def render_report(doc: dict[str, Any]) -> str:
         ("full", "10 deg to the last data angle"),
     ):
         out += ["", f"## Partial sigma_tr, window {title} (model / data; families at a-priori parameters)", "",
-                "| dataset | range (deg) | data sigma_tr (mb) | model | " + " | ".join(FAMILIES) + " | model sigma/data sigma | data partial sigma / table sigma_el | Ru-only / data |",
-                "|---|---|---|---|" + "---|" * len(FAMILIES) + "---|---|---|"]  # fmt: skip
+                "| dataset | range (deg) | model | " + " | ".join(FAMILIES) + " | model sigma/data sigma | data partial sigma / table sigma_el | Ru-only / data |",
+                "|---|---|---|" + "---|" * len(FAMILIES) + "---|---|---|"]  # fmt: skip
         for d in ds:
             p = d["partial"].get(wname)
             if p is None:
                 out.append(
-                    f"| {d['dataset']} | not covered | - | - |" + " - |" * (len(FAMILIES) + 3)
+                    f"| {d['dataset']} | not covered | -" + " |" * 1 + " - |" * (len(FAMILIES) + 3)
                 )
                 continue
             flag = " (window cut by data)" if p["window_truncated_by_data"] else ""
             out.append(
-                f"| {d['dataset']} | {p['theta_range_deg'][0]:.0f}-{p['theta_range_deg'][1]:.0f}{flag} | {p['data']['sigma_tr_mb']:.3g} | "
+                f"| {d['dataset']} | {p['theta_range_deg'][0]:.0f}-{p['theta_range_deg'][1]:.0f}{flag} | "
                 f"{p['model']['sigma_tr_ratio_to_data']:.3f} | "
                 + " | ".join(f"{p[k]['sigma_tr_ratio_to_data']:.3f}" for k in FAMILIES)
-                + f" | {p['model']['sigma_ratio_to_data']:.3f} | {p['data_partial_sigma_over_table_sigma_el']:.2f} | {p['rutherford_only']['sigma_tr_mb'] / p['data']['sigma_tr_mb']:.3f} |"
+                + f" | {p['model']['sigma_ratio_to_data']:.3f} | {p['data_partial_sigma_over_table_sigma_el']:.2f} | {p['rutherford_only']['sigma_tr_ratio_to_data']:.3f} |"
             )
     out += [
         "",
@@ -485,14 +519,14 @@ def render_report(doc: dict[str, Any]) -> str:
             "Black-disk shape with sigma_el and the Rutherford term fixed; least squares in log(dsigma) on the stated CM window "
             "(R scanned 1-8 fm in 0.01 fm steps). The windows 10-30 and 10-40 deg are fixed a priori; `to_V10A_first_minimum` "
             "ends at the V10-A rule minimum and is only as meaningful as that minimum.", "",
-            "| dataset | window | R_fit (fm) | R_table (fm) | R_fit/R_table | rms log resid at R_fit | at R_table |", "|---|---|---|---|---|---|---|"]  # fmt: skip
+            "| dataset | window | R_fit/R_table | rms log resid at R_fit | at R_table |", "|---|---|---|---|---|"]  # fmt: skip
     for d in ds:
-        for w, f in d["R_fit"].items():
+        for w, f in d.get("R_fit", {}).items():
             if f is None:
-                out.append(f"| {d['dataset']} | {w} | - | - | - | - | - |")
+                out.append(f"| {d['dataset']} | {w} | - | - | - |")
             else:
                 out.append(
-                    f"| {d['dataset']} | {w} | {f['R_fit_fm']:.2f} | {f['R_table_fm']:.2f} | {f['ratio']:.2f} | "
+                    f"| {d['dataset']} | {w} | {f['ratio']:.2f} | "
                     f"{f['rms_log_residual']:.3f} | {f['rms_log_residual_at_table_R']:.3f} |"
                 )
     return "\n".join(out) + "\n"

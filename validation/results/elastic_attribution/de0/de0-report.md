@@ -153,7 +153,7 @@ Observed V5 ratio ionmc/TOPAS peak/plateau: 0.9634 / 0.9511 (step 22, -3.66 % / 
 | F predicted, table (shifted K*) | 0.853 | 0.8323 |
 | F predicted / F observed ionmc | 0.9956 | 0.9861 |
 | peak removal predicted / observed | 1.091 | 1.129 |
-| R_O table (fm) / planning R_O (fm) | 2.681 / 2.6 | 2.687 / 2.64 |
+| planning R_O (fm, decision 0041) | 2.6 | 2.64 |
 | RADIUS: F predicted at planning R_O (disk) | 0.8496 | 0.8302 |
 | RADIUS: dF vs table | -0.003457 | -0.00215 |
 | SHAPE: s (fm) giving the planning theta_rms,CM (17 / 14 deg) | 0.4379 | 0.4749 |

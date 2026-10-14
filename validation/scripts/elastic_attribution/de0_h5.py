@@ -25,6 +25,9 @@ from typing import Any
 
 from . import common as c
 
+GIT_ALLOW = ("tolerance", "verdict/*", "per_energy/*/*", "per_energy/*/*/*", "per_energy/*/*/*/*")
+"""Git allowlist of ``h5.json`` (syntax: :mod:`common`): EM-only ratios and metrics (no nuclear data), verdicts, flags."""
+GIT_FILES = {"h5.json": (GIT_ALLOW, ())}
 TOL = 0.02
 STEP_DIR = "de0h5"
 REF_DIR = c.REPO / ".ionmc-cache" / "reference-runs"
@@ -91,7 +94,9 @@ def run() -> None:
                    ["Plateau window 20-60 mm and all metric definitions are those of the V11 compare step (module docstring). "
                     "Peak/plateau and plateau: ionmc batch-jackknife, TOPAS mean of the 3 frozen seeds. 90 % intervals by the "
                     "compare step's Welch df. Only ratios and metrics are recorded."])  # fmt: skip
-    c.write_outputs(c.OUT / STEP_DIR, "h5.json", doc, f"{STEP_DIR}-report.md", hdr, render_report)
+    c.write_outputs(
+        c.OUT / STEP_DIR, "h5.json", doc, f"{STEP_DIR}-report.md", hdr, render_report, GIT_ALLOW
+    )
 
 
 def render_report(doc: dict[str, Any]) -> str:

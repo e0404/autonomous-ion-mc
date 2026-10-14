@@ -19,7 +19,13 @@ builder). Every variant carries an ``exploratory`` key, the recomputed npz sha25
 ``ionmc.nuclear.build.table_id``; the qualification flags are copied from the pinned table unearned (disclosed in the
 key). It is loaded only through ``PhysicsConfig(elastic_table_id=..., allow_exploratory_table=True)``.
 
-Run: ``python -m validation.scripts.elastic_attribution.make_variant_tables`` (writes the cache, prints ids,
+Scratch cache: ``--scratch-cache DIR``, else the environment variable ``IONMC_DE3_SCRATCH``, else the portable default
+``validation/generated/elastic_attribution/de3-cache/`` (git-ignored). The directory holds a marker file
+``.de3-scratch-cache``; the script refuses to rebuild or clear a directory that is not empty and has no marker, and a
+directory that is, contains or lies inside the pinned data cache. ``IONMC_CACHE_DIR`` is set only for the scope of the preflight
+(printed) and then restored; an already-set value is never overwritten silently.
+
+Run: ``python -m validation.scripts.elastic_attribution.make_variant_tables [--scratch-cache DIR]`` (writes the cache, prints ids,
 normalisation statistics and the preflight).
 """
 
@@ -37,11 +43,18 @@ import numpy as np
 from . import common as c
 from .de1_shapes import HBARC, family_weight
 
-SCRATCH = Path(
-    os.environ.get("IONMC_DE3_CACHE")
-    or "/home/wahln/.local/share/ionmc-experiment/experiment-v3/tmp/claude-1000/-home-wahln-aiprojects-ion-mc/"
-    "3057d970-cf12-4711-8c0a-ae0cbe21cb5d/scratchpad/v3-005d/de3-cache"
-)
+DEFAULT_SCRATCH = c.OUT / "de3-cache"  # inside the repository, git-ignored (validation/generated/)
+MARKER = ".de3-scratch-cache"
+SCRATCH_ENV = "IONMC_DE3_SCRATCH"
+
+
+def resolve_scratch(arg: str | Path | None = None) -> Path:
+    """The scratch cache directory: ``--scratch-cache`` argument, else the environment variable ``IONMC_DE3_SCRATCH``, else
+    ``validation/generated/elastic_attribution/de3-cache/``."""
+    return Path(arg or os.environ.get(SCRATCH_ENV) or DEFAULT_SCRATCH).expanduser()
+
+
+SCRATCH = resolve_scratch()
 REAL_CACHE = c.REPO / ".ionmc-cache" / "ionmc-data"  # the pinned cache (read only)
 NUCLEAR_TABLE_ID = "00e8031d5f67704f256e904ebab89b0c2a75845bcf1887c29e1518bffaafe5fb"
 SHAPE_KIND = {"pA-Rx1.2": "Rx1.2", "pA-s0.5": "s0.5", "pA-s0.9": "s0.9", "pA-gauss": "gauss"}
@@ -178,10 +191,27 @@ def _assert_table(a: dict[str, np.ndarray], names: tuple[str, ...]) -> None:
         assert np.all(a["sigma_barn"][it] >= 0.0), f"{name}: negative sigma"
 
 
+def check_scratch(scratch: Path) -> None:
+    """Refuse a scratch directory that could be (or hold) the real cache, or that is non-empty without the marker."""
+    sp, rp = scratch.resolve(), REAL_CACHE.resolve()
+    if sp == rp or rp in sp.parents or sp in rp.parents:
+        raise SystemExit(
+            f"refusing to use {scratch}: it is, contains or lies inside the pinned data cache {REAL_CACHE}"
+        )
+    if scratch.exists() and any(scratch.iterdir()) and not (scratch / MARKER).is_file():
+        raise SystemExit(
+            f"refusing to rebuild {scratch}: it is not empty and has no {MARKER} marker (not a D-E3 scratch cache)"
+        )
+
+
 def build(scratch: Path = SCRATCH) -> dict[str, Any]:
     """(Re)build the scratch cache: manifests and objects (copied), the pinned nuclear and elastic tables, the variants."""
     src = REAL_CACHE
+    check_scratch(scratch)
     scratch.mkdir(parents=True, exist_ok=True)
+    (scratch / MARKER).write_text(
+        "D-E3 scratch cache (variant elastic tables); safe to delete and rebuild\n"
+    )
     for sub in ("manifests", "objects"):
         if not (scratch / sub).is_dir():
             shutil.copytree(src / sub, scratch / sub)
@@ -218,7 +248,11 @@ def variant_ids(scratch: Path = SCRATCH) -> dict[str, str]:
 def preflight(scratch: Path = SCRATCH) -> dict[str, Any]:
     """With ``IONMC_CACHE_DIR`` = the scratch cache: the derived directory holds exactly the expected set, every table
     loads (variants with ``allow_exploratory``), and a Simulation of every variant loads exactly the expected ids."""
-    os.environ["IONMC_CACHE_DIR"] = str(scratch)
+    with c.scoped_cache_env(scratch):
+        return _preflight(scratch)
+
+
+def _preflight(scratch: Path) -> dict[str, Any]:
     from ionmc.nuclear import elastic_tables as et
     from ionmc.nuclear import tables as nt
 
@@ -270,11 +304,23 @@ def preflight(scratch: Path = SCRATCH) -> dict[str, Any]:
     return {"derived_files_expected_equals_present": True, "per_variant": res}
 
 
-def main() -> None:
-    doc = build()
+def main(argv: list[str] | None = None) -> None:
+    import argparse
+
+    ap = argparse.ArgumentParser(description=(__doc__ or "").split("\n")[0])
+    ap.add_argument(
+        "--scratch-cache",
+        type=Path,
+        default=None,
+        help=f"scratch cache directory (env {SCRATCH_ENV}; default {DEFAULT_SCRATCH})",
+    )
+    a = ap.parse_args(argv)
+    scratch = resolve_scratch(a.scratch_cache)
+    print(f"scratch cache: {scratch}", flush=True)
+    doc = build(scratch)
     for v, r in doc["variants"].items():
         print(f"{v:12s} {r['table_id']}  npz {r['npz_sha256'][:12]}  {r['normalisation'] or ''}")
-    print(json.dumps(preflight(), indent=1))
+    print(json.dumps(preflight(scratch), indent=1))
     sys.stdout.flush()
 
 

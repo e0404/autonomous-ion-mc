@@ -36,34 +36,35 @@
   "straggling_rejection": 0
  },
  "provenance": {
-  "git_head": "d5c8a80fe8829f7f58b09a5d03fb69a7438a6b1c",
+  "git_head": "a59271ccd913cb345e8c2a027ea664f4876fa75e",
   "git_status_elastic_attribution": [
-   "?? validation/scripts/elastic_attribution/de0_h5.py",
-   "?? validation/scripts/elastic_attribution/de3_probes.py",
-   "?? validation/scripts/elastic_attribution/de5_sampling.py",
-   "?? validation/scripts/elastic_attribution/make_variant_tables.py"
+   "M validation/scripts/elastic_attribution/common.py",
+   " M validation/scripts/elastic_attribution/de0_h5.py",
+   " M validation/scripts/elastic_attribution/de0_kernels.py",
+   " M validation/scripts/elastic_attribution/de1_shapes.py",
+   " M validation/scripts/elastic_attribution/de2_pp.py",
+   " M validation/scripts/elastic_attribution/de3_probes.py",
+   " M validation/scripts/elastic_attribution/de5_sampling.py",
+   " M validation/scripts/elastic_attribution/make_variant_tables.py",
+   "?? validation/scripts/elastic_attribution/de4_parse.py"
   ],
   "scripts_sha256": {
-   "make_variant_tables.py": "1521495ebbe6d0f343bbeb84e409f3ea556c3cf4a48d8a17512c1dcefc4378d1",
-   "de3_probes.py": "5674417ca343f8d707148218730c46cea9626486eb3ab2ae45b93d97b15360d7",
-   "de0_kernels.py": "75f1c12fc95e96edf35b07f0b26392ceceb3a088094dbd4f38b7f0b8fb2fc39e",
-   "common.py": "a8e815b3eb5150b038fa4cc82085442f3411e6753d58bd72d03be3bdf63aba3b"
+   "make_variant_tables.py": "ee27203562240d4b1722de2b7c7bbed4d8a239c530a16513c1949a81bd070fb1",
+   "de3_probes.py": "d1af89a43372c6a2f9aecb78d83bc02b4122f41afd8c974a945de7c6330bd89a",
+   "de0_kernels.py": "38e5ec2dbe285af1db5c6785851ae7b367ac6987f6733c3facb0f4a3858d2cd7",
+   "common.py": "29171edbda46e951cb3d36a04ff77954b370d4a6be325d5ccfe2a6b0b110b4ad"
   },
   "table_files_sha256": {
-   "/home/wahln/.local/share/ionmc-experiment/experiment-v3/tmp/claude-1000/-home-wahln-aiprojects-ion-mc/3057d970-cf12-4711-8c0a-ae0cbe21cb5d/scratchpad/v3-005d/de3-cache/derived/elastic-proton-1fd24cff23d3f7e72aabcda2af8bc70ad47b81755f94a2ca55890cb6ae52c591.npz": "1028bb67f57bc96edafe6d3dbcce532013edbbd31b9b80861239b09d9ad4202a",
-   "/home/wahln/.local/share/ionmc-experiment/experiment-v3/tmp/claude-1000/-home-wahln-aiprojects-ion-mc/3057d970-cf12-4711-8c0a-ae0cbe21cb5d/scratchpad/v3-005d/de3-cache/derived/elastic-proton-1fd24cff23d3f7e72aabcda2af8bc70ad47b81755f94a2ca55890cb6ae52c591.json": "ab5e2a357ab53060a84182607d93fe4373e50ce60622450af74728fd4e495e77"
+   "elastic-proton-1fd24cff23d3f7e72aabcda2af8bc70ad47b81755f94a2ca55890cb6ae52c591.npz": "1028bb67f57bc96edafe6d3dbcce532013edbbd31b9b80861239b09d9ad4202a",
+   "elastic-proton-1fd24cff23d3f7e72aabcda2af8bc70ad47b81755f94a2ca55890cb6ae52c591.json": "ab5e2a357ab53060a84182607d93fe4373e50ce60622450af74728fd4e495e77"
   },
   "backend": "warp-cpu",
   "precision": "float64",
   "single_process": true,
-  "cache_dir": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/tmp/claude-1000/-home-wahln-aiprojects-ion-mc/3057d970-cf12-4711-8c0a-ae0cbe21cb5d/scratchpad/v3-005d/de3-cache",
+  "cache_dir": "<scratch-cache>",
   "seeds": {
    "150": 20990100,
    "200": 20990101
-  },
-  "runtime_scripts_sha256": {
-   "make_variant_tables.py": "1521495ebbe6d0f343bbeb84e409f3ea556c3cf4a48d8a17512c1dcefc4378d1",
-   "de3_probes.py": "bea49b8437b84c0d5b51d19e379f9100499a2a16eb25f2091f29774a88f6ed60"
   }
  }
 }

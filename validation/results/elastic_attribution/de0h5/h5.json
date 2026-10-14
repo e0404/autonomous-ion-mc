@@ -1,6 +1,6 @@
 {
  "banner": "Exploratory, report-only (Amendment 19); not evidence; changes no row.",
- "note_git": "Git projection (decision 0041): experimental / compilation values and every per-point array are removed; only aggregate statistics (window integrals, ratios, minima diagnostics, fits) remain. The complete record is regenerated into validation/generated/ by the committed module.",
+ "note_git": "Git projection (decision 0041): explicit allowlist of dimensionless ratios, per-primary rates and probabilities, kinematic statistics, kernel integrals, counts and flags; no absolute cross sections, no distributions or per-point arrays. The complete record is regenerated into validation/generated/ by the committed module.",
  "per_energy": {
   "150": {
    "amplifies_delta_pk": true,

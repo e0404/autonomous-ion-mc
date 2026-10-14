@@ -8,7 +8,7 @@
   200
  ],
  "note": "BGG formula = total elastic p-p; the table sigma is the NI part above 16.26 deg CM (not the same quantity)",
- "note_git": "Git projection (decision 0041): experimental / compilation values and every per-point array are removed; only aggregate statistics (window integrals, ratios, minima diagnostics, fits) remain. The complete record is regenerated into validation/generated/ by the committed module.",
+ "note_git": "Git projection (decision 0041): explicit allowlist of dimensionless ratios, per-primary rates and probabilities, kinematic statistics, kernel integrals, counts and flags; no absolute cross sections, no distributions or per-point arrays. The complete record is regenerated into validation/generated/ by the committed module.",
  "pdg_covers_20_200_mev": false,
  "pdg_min_t_mev_exceeds_300": true,
  "pdg_n_points": 154,
@@ -23,10 +23,6 @@
    "mean_t_slow_over_T": 0.2601162793957026,
    "n_pdg_points_within_15pct_in_T": 0,
    "ratio_table_over_bgg": 0.9889811826666484,
-   "sigma_ET_mb_mev": 710.2151558674292,
-   "sigma_pp_bgg_formula_mb": 27.607963624921556,
-   "sigma_pp_builder_formula_mb": 27.303756516792728,
-   "sigma_pp_table_mb": 27.303756516792728,
    "theta_fast_cm_deg": {
     "p10": 30.89259389932,
     "p50": 61.117602702782754,
@@ -48,10 +44,6 @@
    "mean_t_slow_over_T": 0.2580992240330393,
    "n_pdg_points_within_15pct_in_T": 0,
    "ratio_table_over_bgg": 1.1008004377726566,
-   "sigma_ET_mb_mev": 1016.7226883497106,
-   "sigma_pp_bgg_formula_mb": 23.8570073033944,
-   "sigma_pp_builder_formula_mb": 26.261804083522023,
-   "sigma_pp_table_mb": 26.261804083522023,
    "theta_fast_cm_deg": {
     "p10": 29.46944839753529,
     "p50": 61.039681162615224,
@@ -73,10 +65,6 @@
    "mean_t_slow_over_T": 0.2720149251330663,
    "n_pdg_points_within_15pct_in_T": 0,
    "ratio_table_over_bgg": 0.8904573363519065,
-   "sigma_ET_mb_mev": 762.3200411001683,
-   "sigma_pp_bgg_formula_mb": 157.36258872961506,
-   "sigma_pp_builder_formula_mb": 140.12467160161356,
-   "sigma_pp_table_mb": 140.12467160161356,
    "theta_fast_cm_deg": {
     "p10": 34.15261830189194,
     "p50": 63.12757129681725,
@@ -98,10 +86,6 @@
    "mean_t_slow_over_T": 0.25809922403303864,
    "n_pdg_points_within_15pct_in_T": 0,
    "ratio_table_over_bgg": 1.1008004377726566,
-   "sigma_ET_mb_mev": 1323.927532431172,
-   "sigma_pp_bgg_formula_mb": 23.299088216701307,
-   "sigma_pp_builder_formula_mb": 25.647646508648545,
-   "sigma_pp_table_mb": 25.647646508648542,
    "theta_fast_cm_deg": {
     "p10": 29.46944839753529,
     "p50": 61.039681162615224,
@@ -123,10 +107,6 @@
    "mean_t_slow_over_T": 0.26649948010919045,
    "n_pdg_points_within_15pct_in_T": 0,
    "ratio_table_over_bgg": 0.9474331499617992,
-   "sigma_ET_mb_mev": 663.1486728491855,
-   "sigma_pp_bgg_formula_mb": 52.52861596272739,
-   "sigma_pp_builder_formula_mb": 49.76735208470046,
-   "sigma_pp_table_mb": 49.76735208470046,
    "theta_fast_cm_deg": {
     "p10": 32.93101747613712,
     "p50": 62.19012376578854,

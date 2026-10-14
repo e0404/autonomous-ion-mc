@@ -78,7 +78,8 @@ def test_kstar_sign_pinned_on_asymmetric_idd() -> None:
     assert shifted > lit
 
 
-# --- Git projection of the exploratory records (decision 0041: no nuclear data values in Git) ---
+# --- Git projection of the exploratory records (decision 0041: explicit allowlist) ---
+import fnmatch  # noqa: E402
 import importlib  # noqa: E402
 import json  # noqa: E402
 
@@ -91,63 +92,78 @@ STEP_MODULES = {
     "de1": "de1_shapes",
     "de2": "de2_pp",
     "de5": "de5_sampling",
-}
+}  # steps with a rendered ``<step>-report.md``
+OWNERS = {
+    **STEP_MODULES,
+    "de3": "de3_probes",
+}  # every committed JSON directory and the module that owns its allowlist
 
 
-def test_git_projection_removes_values_and_per_point_arrays() -> None:
+def test_allowlist_projection_semantics() -> None:
     doc = {
         "banner": "x",
-        "datasets": [
-            {
-                "dataset": "A",
-                "n_points": 12,
-                "theta_cm_deg_points": list(range(12)),
-                "data_mb_sr": [1.0] * 12,
-                "rel_err": [0.05] * 12,
-                "model_total_mb_sr": [2.0] * 12,
-                "model_ratio_minus_1": [1.0] * 12,
-                "some_model_curve": [0.5] * 9,
-                "theta_range_deg": [0.0, 11.0],
-                "minima": {
-                    "measured": [
-                        {
-                            "theta_cm_deg": 3.0,
-                            "data_mb_sr": 1.0,
-                            "neighbour_ratio": [1.2, 1.1],
-                            "drop_in_sigma": 0.7,
-                        }
-                    ]
-                },
-                "partial": {"10-30": {"model": {"sigma_ratio_to_data": 1.4}}},
-            }
-        ],
-        "pdg_lowest_points": [{"t_mev": 325.0, "sigma_mb": 23.2}],
-        "pdg_lowest_energies_mev": [325.0, 418.0],
+        "note": "n",
         "per_energy": {
-            "100": {"pdg_points_within_15pct_in_T": [{"t_mev": 100.0, "sigma_mb": 30.0}], "n": 1}
+            "100": {
+                "ratio": 1.1,
+                "sigma_el_mb": 99.0,
+                "ci": [1.0, 2.0],
+                "hist": [1, 2, 3],
+                "kernel": [1, 2, 3],
+            }
         },
+        "files": {"a/b/c.json": "h"},
+        "other": 3.0,
+        "xs_mb_sr": 1.0,
     }
-    bad = de_common.git_safety_violations(doc)
-    assert len(bad) == 11, bad
-    proj = de_common.git_projection(doc)
-    assert de_common.git_safety_violations(proj) == []
-    ds = proj["datasets"][0]
-    assert set(ds) == {"dataset", "n_points", "theta_range_deg", "minima", "partial"}
-    assert ds["minima"]["measured"][0] == {"theta_cm_deg": 3.0, "drop_in_sigma": 0.7}
-    assert set(proj) == {"banner", "datasets", "per_energy"} and proj["per_energy"] == {
-        "100": {"n": 1}
-    }
-    assert "note_git" not in proj  # the writer adds the note, the projection stays pure
-    assert de_common.git_projection(proj) == proj
+    allow = (
+        "per_energy/*/ratio",
+        "per_energy/*/ci",
+        "per_energy/*/hist",
+        "per_energy/*/kernel",
+        "files/**",
+        "xs_mb_sr",
+    )
+    proj = de_common.git_projection(doc, allow, allow_long=("per_energy/*/kernel",))
+    assert proj == {
+        "banner": "x",
+        "note": "n",
+        "per_energy": {"100": {"ratio": 1.1, "ci": [1.0, 2.0], "kernel": [1, 2, 3]}},
+        "files": {"a/b/c.json": "h"},
+    }  # absolute cross-section names, the long list "hist" and the unlisted "other" are dropped
+    assert de_common.git_projection(proj, allow, ("per_energy/*/kernel",)) == proj
+    assert de_common.git_safety_violations(proj, allow, ("per_energy/*/kernel",)) == []
+    bad = de_common.git_safety_violations(doc, allow)
+    assert (
+        any("sigma_el_mb" in b for b in bad)
+        and any("hist" in b for b in bad)
+        and any("other" in b for b in bad)
+    )
+    assert de_common.path_matches("a/b/c", ("a/*/c",)) and not de_common.path_matches(
+        "a/b", ("a/*/c", "a/b/**")
+    )
+    assert not de_common.path_matches("a/b/c", ("a/b",))
+
+
+def _allow_for(step: str, name: str) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    mod = importlib.import_module(f"validation.scripts.elastic_attribution.{OWNERS[step]}")
+    for pat, allow in mod.GIT_FILES.items():
+        if fnmatch.fnmatch(name, pat):
+            return allow  # type: ignore[no-any-return]
+    raise AssertionError(f"{OWNERS[step]} has no allowlist for {name}")
 
 
 @pytest.mark.parametrize(
-    "path", sorted(RESULTS.glob("**/*.json")), ids=lambda p: str(p.relative_to(RESULTS))
+    "path", sorted(RESULTS.glob("*/*.json")), ids=lambda p: str(p.relative_to(RESULTS))
 )
-def test_committed_records_are_git_safe(path: Path) -> None:
+def test_committed_records_match_the_module_allowlist(path: Path) -> None:
+    """Every committed leaf matches the module ``GIT_ALLOW``; no forbidden key, cross-section
+    name or long numeric list, and the projection leaves it unchanged."""
+    allow, allow_long = _allow_for(path.parent.name, path.name)
     doc = json.loads(path.read_text())
-    assert de_common.git_safety_violations(doc) == []
-    assert de_common.git_projection(doc) == doc
+    assert de_common.git_safety_violations(doc, allow, allow_long) == []
+    proj = de_common.git_projection(doc, allow, allow_long)
+    assert doc == proj
 
 
 @pytest.mark.parametrize("step", sorted(STEP_MODULES))
@@ -161,6 +177,81 @@ def test_committed_markdown_is_rendered_from_the_projection(step: str) -> None:
     assert md.count(de_common.BODY_MARKER) == 1
     body = md.split(de_common.BODY_MARKER + "\n", 1)[1]
     assert body == mod.render_report(json.loads(json_path.read_text()))
+
+
+def _run_file(
+    variant: str, energy: int, lateral_valid: bool | None, residual: float | None = 0.0
+) -> dict:
+    rng = np.random.default_rng(7 if variant == "emonly" else 8)
+    nz = 200
+    base = np.concatenate([np.full(120, 5.0), np.linspace(5, 30, 30), np.linspace(30, 0, 50)])[:nz]
+    idd = (
+        base[None, :]
+        * (1.0 + 0.01 * rng.standard_normal((20, nz)))
+        * (0.9 if variant != "emonly" else 1.0)
+    )
+    mode = "emonly" if variant == "emonly" else "emel"
+    doc = {"variant": variant, "mode": mode, "energy": energy,
+           "seed": 1, "n": 1000, "n_batches": 20, "elastic_table_id": "x",
+           "idd_batches": idd.tolist(), "valid": True, "wall_s": 1.0,
+           "metrics": {"r80_mm": 100.0}, "recoil_total_mev_per_primary": 0.1}  # fmt: skip
+    if residual is not None:
+        doc["relative_residual"] = residual
+    if lateral_valid is not None:
+        doc["lateral"] = {
+            "valid": lateral_valid,
+            "relative_residual": 0.0,
+            "rms_mm_batches": [1.0 + 0.01 * i for i in range(20)],
+            "wall_s": 1.0,
+        }
+    return doc
+
+
+def test_summary_validity_is_fail_closed(tmp_path: Path) -> None:
+    from validation.scripts.elastic_attribution import de3_probes
+
+    def rows(**kw: object) -> dict:
+        out = tmp_path / str(len(list(tmp_path.iterdir())))
+        out.mkdir()
+        (out / "de3-150-emonly.json").write_text(json.dumps(_run_file("emonly", 150, True)))
+        (out / "de3-150-synthetic.json").write_text(json.dumps(_run_file("synthetic", 150, **kw)))  # type: ignore[arg-type]
+        return de3_probes.summarize(out)["rows"]["150/synthetic"]
+
+    assert rows(lateral_valid=True)["valid"] is True
+    assert rows(lateral_valid=False)["valid"] is False  # lateral run invalid -> row invalid
+    assert (
+        rows(lateral_valid=True, residual=1e-6)["valid"] is False
+    )  # energy balance of the main run does not close
+    assert (
+        rows(lateral_valid=True, residual=None)["valid"] is False
+    )  # residual not recorded -> invalid
+    assert rows(lateral_valid=None)["valid"] is True  # a run without lateral part stays valid
+
+
+def test_contrast_jackknife_of_a_multiplicative_composition() -> None:
+    from validation.scripts.elastic_attribution import de3_probes
+
+    cmp = de3_probes._cmp()
+    rng = np.random.default_rng(3)
+    nz = 200
+    base = np.concatenate([np.full(120, 5.0), np.linspace(5, 30, 30), np.linspace(30, 0, 50)])[:nz]
+    noise = 1.0 + 0.01 * rng.standard_normal((20, nz))
+    den = base[None, :] * noise
+
+    # peak and plateau scaled independently: F is multiplicative, the removal is not additive
+    def var(peak: float, plat: float) -> np.ndarray:
+        out = den.copy()
+        out[:, :120] *= plat
+        out[:, 120:] *= peak
+        return out
+
+    c_all, c_pa, c_pp = contrasts_args = (var(0.8 * 0.9, 1.0), var(0.8, 1.0), var(0.9, 1.0))
+    res = de3_probes.contrasts(cmp, c_all, c_pa, c_pp, den)
+    assert abs(res["F_all_minus_product"]) < 1e-12 and res["consistent_with_multiplicative"] is True
+    assert res["removal_additivity"] == pytest.approx(
+        0.2 + 0.1 - (1 - 0.72), abs=1e-9
+    )  # 0.02: removal is not additive
+    assert contrasts_args[0].shape == den.shape
 
 
 def test_kin_curve_matches_two_body() -> None:

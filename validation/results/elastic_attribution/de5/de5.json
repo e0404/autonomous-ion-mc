@@ -21,44 +21,6 @@
      "expected_events_in_primaries": 23539.413104752664,
      "first_minimum_3sigma_deg": null,
      "first_minimum_deg": null,
-     "hist_t1_over_e0_counts_8bins": [
-      0,
-      0,
-      0,
-      0,
-      0,
-      31413,
-      62450,
-      48865
-     ],
-     "hist_t1_over_e0_interior_edges": [
-      0.02,
-      0.05,
-      0.1,
-      0.2,
-      0.4,
-      0.6,
-      0.8
-     ],
-     "hist_theta_lab_counts_8bins": [
-      0,
-      0,
-      1287,
-      8707,
-      14528,
-      40962,
-      77244,
-      0
-     ],
-     "hist_theta_lab_interior_edges_deg": [
-      2.0,
-      5.0,
-      10.0,
-      15.0,
-      20.0,
-      30.0,
-      60.0
-     ],
      "ke_cut_fraction_removed": 0.0,
      "mean_t_other_mev": 8.111085260926066,
      "qslope": null,
@@ -94,44 +56,6 @@
       "rms_log_residual": 0.5891685021491913,
       "s_fm": 0.0
      },
-     "hist_t1_over_e0_counts_8bins": [
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      1787,
-      855333
-     ],
-     "hist_t1_over_e0_interior_edges": [
-      0.02,
-      0.05,
-      0.1,
-      0.2,
-      0.4,
-      0.6,
-      0.8
-     ],
-     "hist_theta_lab_counts_8bins": [
-      3912,
-      20905,
-      71297,
-      105948,
-      123834,
-      237864,
-      224452,
-      68908
-     ],
-     "hist_theta_lab_interior_edges_deg": [
-      2.0,
-      5.0,
-      10.0,
-      15.0,
-      20.0,
-      30.0,
-      60.0
-     ],
      "ke_cut_fraction_removed": 0.00017730661913606394,
      "mean_t_other_mev": 0.6588585717156383,
      "qslope": -2.5140537045723086,
@@ -152,10 +76,6 @@
    "range_water_mm": 8.926133500940175,
    "row": 14,
    "seed": 20991000,
-   "sigma_el_mb": {
-    "H-1": 88.02291722706856,
-    "O-16": 1054.9999999999998
-   },
    "theta_2mm_deg": 39.10977301729241,
    "theta_3mm_deg": 48.40137773871259,
    "total_rate_per_primary": 0.008230270411666617
@@ -180,44 +100,6 @@
      "expected_events_in_primaries": 13308.96880899084,
      "first_minimum_3sigma_deg": null,
      "first_minimum_deg": null,
-     "hist_t1_over_e0_counts_8bins": [
-      0,
-      0,
-      0,
-      0,
-      0,
-      23022,
-      47251,
-      38645
-     ],
-     "hist_t1_over_e0_interior_edges": [
-      0.02,
-      0.05,
-      0.1,
-      0.2,
-      0.4,
-      0.6,
-      0.8
-     ],
-     "hist_theta_lab_counts_8bins": [
-      0,
-      0,
-      1244,
-      7084,
-      11492,
-      31787,
-      57311,
-      0
-     ],
-     "hist_theta_lab_interior_edges_deg": [
-      2.0,
-      5.0,
-      10.0,
-      15.0,
-      20.0,
-      30.0,
-      60.0
-     ],
      "ke_cut_fraction_removed": 0.0,
      "mean_t_other_mev": 13.320717341000917,
      "qslope": null,
@@ -253,44 +135,6 @@
       "rms_log_residual": 0.6335692036199729,
       "s_fm": 0.0
      },
-     "hist_t1_over_e0_counts_8bins": [
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      8264,
-      882669
-     ],
-     "hist_t1_over_e0_interior_edges": [
-      0.02,
-      0.05,
-      0.1,
-      0.2,
-      0.4,
-      0.6,
-      0.8
-     ],
-     "hist_theta_lab_counts_8bins": [
-      5923,
-      31549,
-      103457,
-      144674,
-      156556,
-      248703,
-      122309,
-      77762
-     ],
-     "hist_theta_lab_interior_edges_deg": [
-      2.0,
-      5.0,
-      10.0,
-      15.0,
-      20.0,
-      30.0,
-      60.0
-     ],
      "ke_cut_fraction_removed": 0.00016721244509487754,
      "mean_t_other_mev": 0.9045669612962918,
      "qslope": 3.646876958336938,
@@ -311,10 +155,6 @@
    "range_water_mm": 22.42539465300403,
    "row": 15,
    "seed": 20991001,
-   "sigma_el_mb": {
-    "H-1": 49.76735208470046,
-    "O-16": 817.0
-   },
    "theta_2mm_deg": 24.381722838147816,
    "theta_3mm_deg": 29.977339054651768,
    "total_rate_per_primary": 0.006127577256565639
@@ -339,44 +179,6 @@
      "expected_events_in_primaries": 7301.671248890635,
      "first_minimum_3sigma_deg": null,
      "first_minimum_deg": null,
-     "hist_t1_over_e0_counts_8bins": [
-      0,
-      0,
-      0,
-      0,
-      0,
-      27821,
-      56262,
-      50175
-     ],
-     "hist_t1_over_e0_interior_edges": [
-      0.02,
-      0.05,
-      0.1,
-      0.2,
-      0.4,
-      0.6,
-      0.8
-     ],
-     "hist_theta_lab_counts_8bins": [
-      0,
-      0,
-      2641,
-      10458,
-      14735,
-      39374,
-      67050,
-      0
-     ],
-     "hist_theta_lab_interior_edges_deg": [
-      2.0,
-      5.0,
-      10.0,
-      15.0,
-      20.0,
-      30.0,
-      60.0
-     ],
      "ke_cut_fraction_removed": 0.0,
      "mean_t_other_mev": 26.07313220810992,
      "qslope": null,
@@ -412,44 +214,6 @@
       "rms_log_residual": 0.8979080929822919,
       "s_fm": 0.0
      },
-     "hist_t1_over_e0_counts_8bins": [
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      1741,
-      863879
-     ],
-     "hist_t1_over_e0_interior_edges": [
-      0.02,
-      0.05,
-      0.1,
-      0.2,
-      0.4,
-      0.6,
-      0.8
-     ],
-     "hist_theta_lab_counts_8bins": [
-      9526,
-      48320,
-      152565,
-      193068,
-      174760,
-      176005,
-      69168,
-      42208
-     ],
-     "hist_theta_lab_interior_edges_deg": [
-      2.0,
-      5.0,
-      10.0,
-      15.0,
-      20.0,
-      30.0,
-      60.0
-     ],
      "ke_cut_fraction_removed": 0.00014091958112227854,
      "mean_t_other_mev": 1.365144998622876,
      "qslope": -3.029098317521191,
@@ -470,10 +234,6 @@
    "range_water_mm": 77.6361682446216,
    "row": 16,
    "seed": 20991002,
-   "sigma_el_mb": {
-    "H-1": 27.303756516792724,
-    "O-16": 352.0
-   },
    "theta_2mm_deg": 13.033388626513915,
    "theta_3mm_deg": 15.979924326507843,
    "total_rate_per_primary": 0.013592060059914614
@@ -498,44 +258,6 @@
      "expected_events_in_primaries": 7023.02848704044,
      "first_minimum_3sigma_deg": null,
      "first_minimum_deg": null,
-     "hist_t1_over_e0_counts_8bins": [
-      0,
-      0,
-      0,
-      0,
-      0,
-      51154,
-      103220,
-      94389
-     ],
-     "hist_t1_over_e0_interior_edges": [
-      0.02,
-      0.05,
-      0.1,
-      0.2,
-      0.4,
-      0.6,
-      0.8
-     ],
-     "hist_theta_lab_counts_8bins": [
-      0,
-      0,
-      7184,
-      21729,
-      27126,
-      71863,
-      120861,
-      0
-     ],
-     "hist_theta_lab_interior_edges_deg": [
-      2.0,
-      5.0,
-      10.0,
-      15.0,
-      20.0,
-      30.0,
-      60.0
-     ],
      "ke_cut_fraction_removed": 0.0,
      "mean_t_other_mev": 38.711840950473444,
      "qslope": null,
@@ -571,44 +293,6 @@
       "rms_log_residual": 1.0517775214576248,
       "s_fm": 0.0
      },
-     "hist_t1_over_e0_counts_8bins": [
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      1955,
-      749168
-     ],
-     "hist_t1_over_e0_interior_edges": [
-      0.02,
-      0.05,
-      0.1,
-      0.2,
-      0.4,
-      0.6,
-      0.8
-     ],
-     "hist_theta_lab_counts_8bins": [
-      13263,
-      66286,
-      192061,
-      202032,
-      131444,
-      55392,
-      57410,
-      33235
-     ],
-     "hist_theta_lab_interior_edges_deg": [
-      2.0,
-      5.0,
-      10.0,
-      15.0,
-      20.0,
-      30.0,
-      60.0
-     ],
      "ke_cut_fraction_removed": 0.00015174971413811633,
      "mean_t_other_mev": 1.6549123487055277,
      "qslope": -2.308488577831561,
@@ -629,10 +313,6 @@
    "range_water_mm": 158.62460316107007,
    "row": 17,
    "seed": 20991003,
-   "sigma_el_mb": {
-    "H-1": 26.26180408352202,
-    "O-16": 159.0
-   },
    "theta_2mm_deg": 9.108035714119335,
    "theta_3mm_deg": 11.160915960347698,
    "total_rate_per_primary": 0.007070802909780056
@@ -657,44 +337,6 @@
      "expected_events_in_primaries": 6858.788203693934,
      "first_minimum_3sigma_deg": null,
      "first_minimum_deg": null,
-     "hist_t1_over_e0_counts_8bins": [
-      0,
-      0,
-      0,
-      0,
-      0,
-      68951,
-      138744,
-      127390
-     ],
-     "hist_t1_over_e0_interior_edges": [
-      0.02,
-      0.05,
-      0.1,
-      0.2,
-      0.4,
-      0.6,
-      0.8
-     ],
-     "hist_theta_lab_counts_8bins": [
-      0,
-      0,
-      10244,
-      29477,
-      37316,
-      98767,
-      159281,
-      0
-     ],
-     "hist_theta_lab_interior_edges_deg": [
-      2.0,
-      5.0,
-      10.0,
-      15.0,
-      20.0,
-      30.0,
-      60.0
-     ],
      "ke_cut_fraction_removed": 0.0,
      "mean_t_other_mev": 51.6105803657599,
      "qslope": null,
@@ -730,44 +372,6 @@
       "rms_log_residual": 0.8809173642563419,
       "s_fm": 0.0
      },
-     "hist_t1_over_e0_counts_8bins": [
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      3026,
-      661785
-     ],
-     "hist_t1_over_e0_interior_edges": [
-      0.02,
-      0.05,
-      0.1,
-      0.2,
-      0.4,
-      0.6,
-      0.8
-     ],
-     "hist_theta_lab_counts_8bins": [
-      15943,
-      78440,
-      208508,
-      182954,
-      81787,
-      16656,
-      55782,
-      24741
-     ],
-     "hist_theta_lab_interior_edges_deg": [
-      2.0,
-      5.0,
-      10.0,
-      15.0,
-      20.0,
-      30.0,
-      60.0
-     ],
      "ke_cut_fraction_removed": 0.00015641096982321745,
      "mean_t_other_mev": 1.9775404773579872,
      "qslope": -3.264961993764111,
@@ -788,10 +392,6 @@
    "range_water_mm": 260.97173956519333,
    "row": 18,
    "seed": 20991004,
-   "sigma_el_mb": {
-    "H-1": 25.647646508648542,
-    "O-16": 102.0
-   },
    "theta_2mm_deg": 7.097961439193826,
    "theta_3mm_deg": 8.695978010680763,
    "total_rate_per_primary": 0.005124349065879675
@@ -823,44 +423,6 @@
       "rms_log_residual": 0.35274502712764627,
       "s_fm": 1.3
      },
-     "hist_t1_over_e0_counts_8bins": [
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      44627,
-      955260
-     ],
-     "hist_t1_over_e0_interior_edges": [
-      0.02,
-      0.05,
-      0.1,
-      0.2,
-      0.4,
-      0.6,
-      0.8
-     ],
-     "hist_theta_lab_counts_8bins": [
-      3385,
-      18544,
-      63212,
-      96439,
-      117866,
-      250660,
-      369920,
-      79861
-     ],
-     "hist_theta_lab_interior_edges_deg": [
-      2.0,
-      5.0,
-      10.0,
-      15.0,
-      20.0,
-      30.0,
-      60.0
-     ],
      "ke_cut_fraction_removed": 0.00011300000000002974,
      "mean_t_other_mev": 1.0926892239253885,
      "qslope": -2.40365149290544,
@@ -880,9 +442,6 @@
    "range_water_mm": 8.926133500940175,
    "row": 19,
    "seed": 20991005,
-   "sigma_el_mb": {
-    "C-12": 869.9999999999999
-   },
    "theta_2mm_deg": 39.10977301729241,
    "theta_3mm_deg": 48.40137773871259,
    "total_rate_per_primary": 0.017448649824573087
@@ -914,44 +473,6 @@
       "rms_log_residual": 0.5301455047513186,
       "s_fm": 0.0
      },
-     "hist_t1_over_e0_counts_8bins": [
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      6973,
-      992910
-     ],
-     "hist_t1_over_e0_interior_edges": [
-      0.02,
-      0.05,
-      0.1,
-      0.2,
-      0.4,
-      0.6,
-      0.8
-     ],
-     "hist_theta_lab_counts_8bins": [
-      5439,
-      28150,
-      94266,
-      137596,
-      157217,
-      283701,
-      214340,
-      79174
-     ],
-     "hist_theta_lab_interior_edges_deg": [
-      2.0,
-      5.0,
-      10.0,
-      15.0,
-      20.0,
-      30.0,
-      60.0
-     ],
      "ke_cut_fraction_removed": 0.00011700000000003374,
      "mean_t_other_mev": 1.2957870677973582,
      "qslope": -2.7278958768253507,
@@ -971,9 +492,6 @@
    "range_water_mm": 22.42539465300403,
    "row": 20,
    "seed": 20991006,
-   "sigma_el_mb": {
-    "C-12": 620.0
-   },
    "theta_2mm_deg": 24.381722838147816,
    "theta_3mm_deg": 29.977339054651768,
    "total_rate_per_primary": 0.01243466998992565
@@ -1005,44 +523,6 @@
       "rms_log_residual": 0.7375976244673161,
       "s_fm": 0.0
      },
-     "hist_t1_over_e0_counts_8bins": [
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      23542,
-      976381
-     ],
-     "hist_t1_over_e0_interior_edges": [
-      0.02,
-      0.05,
-      0.1,
-      0.2,
-      0.4,
-      0.6,
-      0.8
-     ],
-     "hist_theta_lab_counts_8bins": [
-      8013,
-      40775,
-      133256,
-      182258,
-      187851,
-      263654,
-      100958,
-      83158
-     ],
-     "hist_theta_lab_interior_edges_deg": [
-      2.0,
-      5.0,
-      10.0,
-      15.0,
-      20.0,
-      30.0,
-      60.0
-     ],
      "ke_cut_fraction_removed": 7.699999999999374e-05,
      "mean_t_other_mev": 2.322237014948149,
      "qslope": 1.921332833688986,
@@ -1062,9 +542,6 @@
    "range_water_mm": 77.6361682446216,
    "row": 21,
    "seed": 20991007,
-   "sigma_el_mb": {
-    "C-12": 252.99999999999997
-   },
    "theta_2mm_deg": 13.033388626513915,
    "theta_3mm_deg": 15.979924326507843,
    "total_rate_per_primary": 0.025370737963316042
@@ -1096,44 +573,6 @@
       "rms_log_residual": 0.8361383586164057,
       "s_fm": 0.0
      },
-     "hist_t1_over_e0_counts_8bins": [
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      8777,
-      991141
-     ],
-     "hist_t1_over_e0_interior_edges": [
-      0.02,
-      0.05,
-      0.1,
-      0.2,
-      0.4,
-      0.6,
-      0.8
-     ],
-     "hist_theta_lab_counts_8bins": [
-      12851,
-      64999,
-      200210,
-      240055,
-      199336,
-      162822,
-      77930,
-      41715
-     ],
-     "hist_theta_lab_interior_edges_deg": [
-      2.0,
-      5.0,
-      10.0,
-      15.0,
-      20.0,
-      30.0,
-      60.0
-     ],
      "ke_cut_fraction_removed": 8.20000000000265e-05,
      "mean_t_other_mev": 2.597625127158396,
      "qslope": -2.896632654919913,
@@ -1153,9 +592,6 @@
    "range_water_mm": 158.62460316107007,
    "row": 22,
    "seed": 20991008,
-   "sigma_el_mb": {
-    "C-12": 124.99999999999999
-   },
    "theta_2mm_deg": 9.108035714119335,
    "theta_3mm_deg": 11.160915960347698,
    "total_rate_per_primary": 0.012534949586618598
@@ -1187,44 +623,6 @@
       "rms_log_residual": 0.9161447495831929,
       "s_fm": 0.0
      },
-     "hist_t1_over_e0_counts_8bins": [
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      12604,
-      987318
-     ],
-     "hist_t1_over_e0_interior_edges": [
-      0.02,
-      0.05,
-      0.1,
-      0.2,
-      0.4,
-      0.6,
-      0.8
-     ],
-     "hist_theta_lab_counts_8bins": [
-      17339,
-      87442,
-      253426,
-      267367,
-      176956,
-      77488,
-      75751,
-      44153
-     ],
-     "hist_theta_lab_interior_edges_deg": [
-      2.0,
-      5.0,
-      10.0,
-      15.0,
-      20.0,
-      30.0,
-      60.0
-     ],
      "ke_cut_fraction_removed": 7.80000000000225e-05,
      "mean_t_other_mev": 2.995162208482311,
      "qslope": -1.8382680328770602,
@@ -1244,9 +642,6 @@
    "range_water_mm": 260.97173956519333,
    "row": 23,
    "seed": 20991009,
-   "sigma_el_mb": {
-    "C-12": 84.0
-   },
    "theta_2mm_deg": 7.097961439193826,
    "theta_3mm_deg": 8.695978010680763,
    "total_rate_per_primary": 0.008423486122207698
@@ -1256,8 +651,7 @@
  "descriptor_note": "first-minimum, q-slope and Helm descriptors are recorded, not interpreted (frozen 1-deg estimator picks noise dips in a 256-bin piecewise-uniform table; the 3-sigma variant misses the J1 zero)",
  "events_per_case": 1000000,
  "ke_cut_mev": 0.0001,
- "note_git": "Git projection (decision 0041): experimental / compilation values and every per-point array are removed; only aggregate statistics (window integrals, ratios, minima diagnostics, fits) remain. The complete record is regenerated into validation/generated/ by the committed module.",
+ "note_git": "Git projection (decision 0041): explicit allowlist of dimensionless ratios, per-primary rates and probabilities, kinematic statistics, kernel integrals, counts and flags; no absolute cross sections, no distributions or per-point arrays. The complete record is regenerated into validation/generated/ by the committed module.",
  "seed_base": 20991000,
- "thin_target": "fixed beam energy, no slowing down, no multiple scattering (as the D-E4 EM-free cases)",
- "wall_s": 2.685705871990649
+ "thin_target": "fixed beam energy, no slowing down, no multiple scattering (as the D-E4 EM-free cases)"
 }

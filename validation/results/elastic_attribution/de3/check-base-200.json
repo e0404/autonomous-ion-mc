@@ -1,0 +1,70 @@
+{
+ "energy": 200,
+ "n": 100000,
+ "n_batches": 20,
+ "seed": 20990101,
+ "bit_for_bit": true,
+ "detail": {
+  "idd_batches": true,
+  "recoil_idd_batches": true,
+  "counters": true
+ },
+ "pinned_id": "1fd24cff23d3f7e72aabcda2af8bc70ad47b81755f94a2ca55890cb6ae52c591",
+ "all_id": "08a10dd42ec6c913e26673e3770e778e81330ac73f2756a4ea403ac629c2cb50",
+ "sha256_idd_batches": {
+  "pinned": "1647c1bc7d9df59cd7509cf397139c89e1afff3b833bd38968adeabe5aaf6705",
+  "all": "1647c1bc7d9df59cd7509cf397139c89e1afff3b833bd38968adeabe5aaf6705"
+ },
+ "sha256_recoil_idd_batches": {
+  "pinned": "32224351a7a571e7078245ac908e9e169cc2ffe1c13328aee18526ad9cd36e2d",
+  "all": "32224351a7a571e7078245ac908e9e169cc2ffe1c13328aee18526ad9cd36e2d"
+ },
+ "counters": {
+  "accumulator_overflow": 0,
+  "elastic_below_domain": 105343,
+  "energy_inversion": 0,
+  "genealogy_overflow": 0,
+  "majorant_violation": 0,
+  "nuclear_conservation": 0,
+  "nuclear_rejection_limit": 0,
+  "pp_below_domain": 105343,
+  "queue_overflow": 0,
+  "scoring_pieces_overflow": 0,
+  "source_energy_out_of_range": 0,
+  "stall": 0,
+  "step_truncation": 0,
+  "straggling_rejection": 0
+ },
+ "provenance": {
+  "git_head": "a59271ccd913cb345e8c2a027ea664f4876fa75e",
+  "git_status_elastic_attribution": [
+   "M validation/scripts/elastic_attribution/common.py",
+   " M validation/scripts/elastic_attribution/de0_h5.py",
+   " M validation/scripts/elastic_attribution/de0_kernels.py",
+   " M validation/scripts/elastic_attribution/de1_shapes.py",
+   " M validation/scripts/elastic_attribution/de2_pp.py",
+   " M validation/scripts/elastic_attribution/de3_probes.py",
+   " M validation/scripts/elastic_attribution/de5_sampling.py",
+   " M validation/scripts/elastic_attribution/make_variant_tables.py",
+   "?? validation/scripts/elastic_attribution/de4_parse.py"
+  ],
+  "scripts_sha256": {
+   "make_variant_tables.py": "ee27203562240d4b1722de2b7c7bbed4d8a239c530a16513c1949a81bd070fb1",
+   "de3_probes.py": "d1af89a43372c6a2f9aecb78d83bc02b4122f41afd8c974a945de7c6330bd89a",
+   "de0_kernels.py": "38e5ec2dbe285af1db5c6785851ae7b367ac6987f6733c3facb0f4a3858d2cd7",
+   "common.py": "29171edbda46e951cb3d36a04ff77954b370d4a6be325d5ccfe2a6b0b110b4ad"
+  },
+  "table_files_sha256": {
+   "elastic-proton-1fd24cff23d3f7e72aabcda2af8bc70ad47b81755f94a2ca55890cb6ae52c591.npz": "1028bb67f57bc96edafe6d3dbcce532013edbbd31b9b80861239b09d9ad4202a",
+   "elastic-proton-1fd24cff23d3f7e72aabcda2af8bc70ad47b81755f94a2ca55890cb6ae52c591.json": "ab5e2a357ab53060a84182607d93fe4373e50ce60622450af74728fd4e495e77"
+  },
+  "backend": "warp-cpu",
+  "precision": "float64",
+  "single_process": true,
+  "cache_dir": "<scratch-cache>",
+  "seeds": {
+   "150": 20990100,
+   "200": 20990101
+  }
+ }
+}

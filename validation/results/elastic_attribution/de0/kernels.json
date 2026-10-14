@@ -182,8 +182,7 @@
       "+sv:Ph/Default/Modules = 2 \"g4em-standard_opt4\" \"g4h-elastic_HP\""
      ]
     },
-    "input_txt_only_modules_seed_header": true,
-    "input_txt_unexpected_lines": []
+    "input_txt_only_modules_seed_header": true
    },
    {
     "emelastic": "proton-water-150mev-idd-r20-emelastic-seed2",
@@ -219,8 +218,7 @@
       "+sv:Ph/Default/Modules = 2 \"g4em-standard_opt4\" \"g4h-elastic_HP\""
      ]
     },
-    "input_txt_only_modules_seed_header": true,
-    "input_txt_unexpected_lines": []
+    "input_txt_only_modules_seed_header": true
    },
    {
     "emelastic": "proton-water-150mev-idd-r20-emelastic-seed3",
@@ -256,8 +254,7 @@
       "+sv:Ph/Default/Modules = 2 \"g4em-standard_opt4\" \"g4h-elastic_HP\""
      ]
     },
-    "input_txt_only_modules_seed_header": true,
-    "input_txt_unexpected_lines": []
+    "input_txt_only_modules_seed_header": true
    },
    {
     "emelastic": "proton-water-200mev-idd-r20-emelastic-seed1",
@@ -293,8 +290,7 @@
       "+sv:Ph/Default/Modules = 2 \"g4em-standard_opt4\" \"g4h-elastic_HP\""
      ]
     },
-    "input_txt_only_modules_seed_header": true,
-    "input_txt_unexpected_lines": []
+    "input_txt_only_modules_seed_header": true
    },
    {
     "emelastic": "proton-water-200mev-idd-r20-emelastic-seed2",
@@ -330,8 +326,7 @@
       "+sv:Ph/Default/Modules = 2 \"g4em-standard_opt4\" \"g4h-elastic_HP\""
      ]
     },
-    "input_txt_only_modules_seed_header": true,
-    "input_txt_unexpected_lines": []
+    "input_txt_only_modules_seed_header": true
    },
    {
     "emelastic": "proton-water-200mev-idd-r20-emelastic-seed3",
@@ -367,8 +362,7 @@
       "+sv:Ph/Default/Modules = 2 \"g4em-standard_opt4\" \"g4h-elastic_HP\""
      ]
     },
-    "input_txt_only_modules_seed_header": true,
-    "input_txt_unexpected_lines": []
+    "input_txt_only_modules_seed_header": true
    }
   ]
  },
@@ -401,12 +395,11 @@
     }
    },
    "table": {
-    "C-12 (hypothetical, n=1 per cm3 along the water path)": {
-     "K_1mm": 2.7985290262051082e-24,
-     "K_2mm": 2.047030680604314e-24,
-     "K_3mm": 1.5327248344902814e-24,
-     "K_5mm": 9.469094725464014e-25,
-     "P_el": 3.8698690602515235e-24
+    "C-12-hypothetical": {
+     "cond_removal_1mm": 0.7231585830511839,
+     "cond_removal_2mm": 0.5289663936255421,
+     "cond_removal_3mm": 0.39606632953897963,
+     "cond_removal_5mm": 0.24468772917212261
     },
     "G": {
      "G_path": 0.0009738350979782284,
@@ -596,15 +589,11 @@
     }
    },
    "table": {
-    "C-12 (hypothetical, n=1 per cm3 along the water path)": {
-     "K_1mm": 3.978069593991401e-24,
-     "K_2mm": 3.1388266991391243e-24,
-     "K_3mm": 2.5245958849811837e-24,
-     "K_5mm": 1.7347293497404668e-24,
-     "K_star_gauss": 3.026921020569444e-24,
-     "K_star_literal": 1.6031132224969768e-24,
-     "K_star_shifted": 2.713498751943608e-24,
-     "P_el": 5.120880210287363e-24
+    "C-12-hypothetical": {
+     "cond_removal_1mm": 0.7768331674698884,
+     "cond_removal_2mm": 0.612946714284298,
+     "cond_removal_3mm": 0.4930003790968415,
+     "cond_removal_5mm": 0.33875608850516753
     },
     "G": {
      "G_path": 0.003080980116513754,
@@ -800,15 +789,11 @@
     }
    },
    "table": {
-    "C-12 (hypothetical, n=1 per cm3 along the water path)": {
-     "K_1mm": 4.824707123004597e-24,
-     "K_2mm": 3.960789134735278e-24,
-     "K_3mm": 3.295806986613222e-24,
-     "K_5mm": 2.3808461703412727e-24,
-     "K_star_gauss": 3.061437035025415e-24,
-     "K_star_literal": 1.5699012800107906e-24,
-     "K_star_shifted": 2.8451494402442866e-24,
-     "P_el": 5.9470292094097525e-24
+    "C-12-hypothetical": {
+     "cond_removal_1mm": 0.8112802128784993,
+     "cond_removal_2mm": 0.6660113806853808,
+     "cond_removal_3mm": 0.554193845457896,
+     "cond_removal_5mm": 0.4003421013258439
     },
     "G": {
      "G_path": 0.002064280765237882,
@@ -860,12 +845,11 @@
     }
    },
    "table": {
-    "C-12 (hypothetical, n=1 per cm3 along the water path)": {
-     "K_1mm": 1.0629601496687404e-24,
-     "K_2mm": 6.094921428466259e-25,
-     "K_3mm": 3.59879635368484e-25,
-     "K_5mm": 1.6294793395214729e-25,
-     "P_el": 1.799376788647862e-24
+    "C-12-hypothetical": {
+     "cond_removal_1mm": 0.5907379468129628,
+     "cond_removal_2mm": 0.33872402194574686,
+     "cond_removal_3mm": 0.20000237728914733,
+     "cond_removal_5mm": 0.0905579837309084
     },
     "H-1": {
      "K_1mm": 0.010852461961238024,
@@ -884,7 +868,7 @@
    }
   }
  },
- "note_git": "Git projection (decision 0041): experimental / compilation values and every per-point array are removed; only aggregate statistics (window integrals, ratios, minima diagnostics, fits) remain. The complete record is regenerated into validation/generated/ by the committed module.",
+ "note_git": "Git projection (decision 0041): explicit allowlist of dimensionless ratios, per-primary rates and probabilities, kinematic statistics, kernel integrals, counts and flags; no absolute cross sections, no distributions or per-point arrays. The complete record is regenerated into validation/generated/ by the committed module.",
  "pointwise": {
   "100": {
    "C-12": {
@@ -1577,7 +1561,6 @@
     "G": 0.01333086073529819,
     "K_star_shifted": 0.13910828684184925,
     "R_O_fm": 2.6,
-    "R_table_fm": 2.6805123081788618,
     "dF_vs_table": -0.0034571534232640255
    },
    "planning_theta_rms_shape": {
@@ -1626,7 +1609,6 @@
     "G": 0.02045829950823303,
     "K_star_shifted": 0.1528527927539849,
     "R_O_fm": 2.64,
-    "R_table_fm": 2.687107399980021,
     "dF_vs_table": -0.0021499277244234616
    },
    "planning_theta_rms_shape": {
