@@ -409,7 +409,7 @@ def run() -> None:
         *(c.V11_PARTIALS[k] for k in sorted(c.V11_PARTIALS)),
     ]
     inputs += [c.REPO / r for r in sorted(h6["files_hashed"])]
-    c.write_outputs(c.OUT / "de0", "kernels.json", doc, "de0-report.md", _report(doc, inputs))
+    c.write_outputs(c.OUT / "de0", "kernels.json", doc, "de0-report.md", _header(inputs), render_report)
 
 
 def _total(kern: dict[str, Any], key: str) -> float:
@@ -506,11 +506,9 @@ def _g(x: Any, f: str = ".4g") -> str:
     return "-" if x is None else format(x, f)
 
 
-def _report(doc: dict[str, Any], inputs: list[Any]) -> str:
+def _header(inputs: list[Any]) -> str:
     cmd = "python -m validation.scripts.elastic_attribution.de0_kernels"
-    k, p, rc = doc["kernels"], doc["pointwise"], doc["reconciliation"]
-    out = [
-        c.header(
+    return c.header(
             "D-E0: deterministic kernels of the elastic channel",
             cmd,
             inputs,
@@ -519,8 +517,13 @@ def _report(doc: dict[str, Any], inputs: list[Any]) -> str:
                 "straight-line path, exact two-body kinematics, no straggling, 2048 equiprobable quantile points per event, 300 depth nodes. "
                 "The plan's G wording is under-specified; the operational form is in the docstring."
             ],
-        )
-    ]
+    )
+
+
+def render_report(doc: dict[str, Any]) -> str:
+    """Markdown body, a pure function of the (projected) JSON record."""
+    k, p, rc = doc["kernels"], doc["pointwise"], doc["reconciliation"]
+    out: list[str] = []
     out += [
         "",
         "## Dated note (2026-10-14): sign of the frozen K* formula",

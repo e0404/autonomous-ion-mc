@@ -56,6 +56,7 @@ def run() -> None:
             "sigma_pp_bgg_formula_mb": float(bgg.pp_bgg_mb(float(e))),
             "ratio_table_over_bgg": sig / float(bgg.pp_bgg_mb(float(e))),
             "pdg_points_within_15pct_in_T": [{"t_mev": r["t_mev"], "sigma_mb": r["sigma_mb"]} for r in near],
+            "n_pdg_points_within_15pct_in_T": len(near),
             "mean_t_slow_mev": float(np.mean(t_slow)), "mean_t_slow_over_T": float(np.mean(t_slow)) / e,
             "sigma_ET_mb_mev": sig * float(np.mean(t_slow)),
             "theta_fast_lab_deg": {f"p{q}": float(np.percentile(th_lab, q)) for q in (10, 50, 90)},
@@ -92,17 +93,17 @@ def run() -> None:
     pdg_low = sorted(pdg_t, key=lambda r: r["t_mev"])[:5]
     doc = {"banner": c.BANNER, "energies_mev": list(ENERGIES), "per_energy": rows, "per_primary_water_path": path,
            "pdg_lowest_points": [{"t_mev": r["t_mev"], "p_lab_gev": r["p_lab_gev"], "sigma_mb": r["sigma_mb"]} for r in pdg_low],
-           "pdg_lowest_energies_mev": [float(r["t_mev"]) for r in pdg_low],
+           "pdg_covers_20_200_mev": bool(min(r["t_mev"] for r in pdg_t) <= 200.0),
+           "pdg_min_t_mev_exceeds_300": bool(min(r["t_mev"] for r in pdg_t) > 300.0),
            "pdg_n_points": len(pdg_t),
            "note": "BGG formula = total elastic p-p; the table sigma is the NI part above 16.26 deg CM (not the same quantity)"}  # fmt: skip
     inputs = [*c.table_files(), pdg_path]
-    c.write_outputs(c.OUT / "de2", "pp_audit.json", doc, "de2-report.md", _report(doc, inputs))
+    c.write_outputs(c.OUT / "de2", "pp_audit.json", doc, "de2-report.md", _header(inputs), render_report)
 
 
-def _report(doc: dict[str, Any], inputs: list[Any]) -> str:
+def _header(inputs: list[Any]) -> str:
     cmd = "python -m validation.scripts.elastic_attribution.de2_pp"
-    out = [
-        c.header(
+    return c.header(
             "D-E2: p-p audit",
             cmd,
             inputs,
@@ -110,22 +111,20 @@ def _report(doc: dict[str, Any], inputs: list[Any]) -> str:
                 "Table sigma = Hale NI above 16.26 deg CM (above 150 MeV anchor x BGG ratio); BGG formula = 1.0115 (23 + 50 sqrt(ln(0.73/p)^7)) mb "
                 "= total elastic, a different quantity. sigma_ET = sigma <T_slow>. Angles: the continuing (faster) proton. No download was made; PDG = the cached rpp2022 file."
             ],
-        )
-    ]
+    )
+
+
+def render_report(doc: dict[str, Any]) -> str:
+    """Markdown body, a pure function of the (projected) JSON record."""
+    out: list[str] = []
     out += [
         "",
         "| E | sigma table | builder formula | BGG | table/BGG | <T_slow> MeV | <T_slow>/E | sigma_ET (mb MeV) | th_fast lab p10/p50/p90 | th_fast CM p50 | P(th>th_2mm) | P(th>th_3mm) | PDG within 15 % |",
         "|" + "---|" * 13,
     ]
-    for e, r in doc["per_energy"].items():
+    for e, r in sorted(doc["per_energy"].items(), key=lambda kv: float(kv[0])):
         t = r["theta_fast_lab_deg"]
-        pdg = (
-            "; ".join(
-                f"{p['t_mev']:.0f} MeV {p['sigma_mb']:.1f} mb"
-                for p in r["pdg_points_within_15pct_in_T"]
-            )
-            or "none"
-        )
+        pdg = str(r["n_pdg_points_within_15pct_in_T"])
         out.append(
             f"| {e} | {r['sigma_pp_table_mb']:.2f} | {r['sigma_pp_builder_formula_mb']:.2f} | {r['sigma_pp_bgg_formula_mb']:.2f} | {r['ratio_table_over_bgg']:.3f} | "
             f"{r['mean_t_slow_mev']:.2f} | {r['mean_t_slow_over_T']:.3f} | {r['sigma_ET_mb_mev']:.0f} | {t['p10']:.1f} / {t['p50']:.1f} / {t['p90']:.1f} | {r['theta_fast_cm_deg']['p50']:.1f} | "
@@ -138,14 +137,14 @@ def _report(doc: dict[str, Any], inputs: list[Any]) -> str:
         "| E0 | P(pp) table | P(pp) table, E>50 MeV | P(pp) BGG formula (E >= 12.5) | transferred energy (MeV/primary) |",
         "|---|---|---|---|---|",
     ]
-    for e, r in doc["per_primary_water_path"].items():
+    for e, r in sorted(doc["per_primary_water_path"].items(), key=lambda kv: float(kv[0])):
         out.append(
             f"| {e} | {r['P_pp_table']:.4f} | {r['P_pp_table_above_50MeV']:.4f} | {r['P_pp_bgg_formula_E_ge_12.5']:.4f} | {r['transferred_energy_mev_per_primary']:.3f} |"
         )
     out += [
         "",
-        f"PDG file: {doc['pdg_n_points']} points; lowest kinetic energies (values not reproduced here, decision 0041): "
-        + "; ".join(f"{p['t_mev']:.0f} MeV ({p['p_lab_gev']:.3f} GeV/c)" for p in doc["pdg_lowest_points"]),
+        f"PDG file: {doc['pdg_n_points']} points; covers 20-200 MeV: {doc['pdg_covers_20_200_mev']}; "
+        f"lowest point above 300 MeV: {doc['pdg_min_t_mev_exceeds_300']} (values and energies not reproduced, decision 0041).",
     ]
     return "\n".join(out) + "\n"
 

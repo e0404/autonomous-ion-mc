@@ -79,9 +79,13 @@ def test_kstar_sign_pinned_on_asymmetric_idd() -> None:
 
 
 # --- Git projection of the exploratory records (decision 0041: no nuclear data values in Git) ---
+import importlib  # noqa: E402
+import json  # noqa: E402
+
 from validation.scripts.elastic_attribution import common as de_common  # noqa: E402
 
 RESULTS = Path(__file__).resolve().parents[2] / "validation" / "results" / "elastic_attribution"
+STEP_MODULES = {"de0": "de0_kernels", "de1": "de1_shapes", "de2": "de2_pp"}
 
 
 def test_git_projection_removes_values_and_per_point_arrays() -> None:
@@ -91,15 +95,21 @@ def test_git_projection_removes_values_and_per_point_arrays() -> None:
             {
                 "dataset": "A",
                 "n_points": 12,
-                "theta_cm_deg": list(range(12)),
+                "theta_cm_deg_points": list(range(12)),
                 "data_mb_sr": [1.0] * 12,
                 "rel_err": [0.05] * 12,
                 "model_total_mb_sr": [2.0] * 12,
                 "model_ratio_minus_1": [1.0] * 12,
+                "some_model_curve": [0.5] * 9,
                 "theta_range_deg": [0.0, 11.0],
                 "minima": {
                     "measured": [
-                        {"theta_cm_deg": 3.0, "data_mb_sr": 1.0, "neighbour_ratio": [1.2, 1.1]}
+                        {
+                            "theta_cm_deg": 3.0,
+                            "data_mb_sr": 1.0,
+                            "neighbour_ratio": [1.2, 1.1],
+                            "drop_in_sigma": 0.7,
+                        }
                     ]
                 },
                 "partial": {"10-30": {"model": {"sigma_ratio_to_data": 1.4}}},
@@ -107,16 +117,21 @@ def test_git_projection_removes_values_and_per_point_arrays() -> None:
         ],
         "pdg_lowest_points": [{"t_mev": 325.0, "sigma_mb": 23.2}],
         "pdg_lowest_energies_mev": [325.0, 418.0],
+        "per_energy": {
+            "100": {"pdg_points_within_15pct_in_T": [{"t_mev": 100.0, "sigma_mb": 30.0}], "n": 1}
+        },
     }
+    bad = de_common.git_safety_violations(doc)
+    assert len(bad) == 11, bad
     proj = de_common.git_projection(doc)
     assert de_common.git_safety_violations(proj) == []
     ds = proj["datasets"][0]
     assert set(ds) == {"dataset", "n_points", "theta_range_deg", "minima", "partial"}
-    assert ds["minima"]["measured"][0] == {"theta_cm_deg": 3.0, "neighbour_ratio": [1.2, 1.1]}
-    assert "pdg_lowest_points" not in proj and proj["pdg_lowest_energies_mev"] == [325.0, 418.0]
+    assert ds["minima"]["measured"][0] == {"theta_cm_deg": 3.0, "drop_in_sigma": 0.7}
+    assert set(proj) == {"banner", "datasets", "per_energy"} and proj["per_energy"] == {
+        "100": {"n": 1}
+    }
     assert "note_git" not in proj  # the writer adds the note, the projection stays pure
-    # the original is flagged, and the projection is idempotent
-    assert len(de_common.git_safety_violations(doc)) == 7
     assert de_common.git_projection(proj) == proj
 
 
@@ -124,8 +139,19 @@ def test_git_projection_removes_values_and_per_point_arrays() -> None:
     "path", sorted(RESULTS.glob("**/*.json")), ids=lambda p: str(p.relative_to(RESULTS))
 )
 def test_committed_records_are_git_safe(path: Path) -> None:
-    import json
-
     doc = json.loads(path.read_text())
     assert de_common.git_safety_violations(doc) == []
     assert de_common.git_projection(doc) == doc
+
+
+@pytest.mark.parametrize("step", sorted(STEP_MODULES))
+def test_committed_markdown_is_rendered_from_the_projection(step: str) -> None:
+    """The committed report body equals the module rendering of the committed (projected) JSON."""
+    mod = importlib.import_module(f"validation.scripts.elastic_attribution.{STEP_MODULES[step]}")
+    (json_path,) = [
+        p for p in sorted((RESULTS / step).glob("*.json")) if p.name != "quarantine-data-seen.json"
+    ]
+    md = (RESULTS / step / f"{step}-report.md").read_text()
+    assert md.count(de_common.BODY_MARKER) == 1
+    body = md.split(de_common.BODY_MARKER + "\n", 1)[1]
+    assert body == mod.render_report(json.loads(json_path.read_text()))

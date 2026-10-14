@@ -11,7 +11,7 @@ Input files (sha256):
 - `validation/generated/RUN-20261012T142343Z-081123c3/transport/lv5c-dd976c5-03/03-v10-a.txt`  05499b3a30a8695544f153dea9cb7367c744c2ea43e3e4e225a2417eb7397cf9
 
 Model = pinned table (analytic black disk of the table radius, plus unscreened Rutherford, incoherent; the V10-A model value). Families: Amendment 19 (b) at their a-priori parameters (no fit). Partial integrals: trapezoid over the data nodes from 10 deg to the window end (10-30, 10-40 deg, and the last data angle), nuclear + Rutherford. The R fit is **data-seen**, a diagnostic, never a model parameter.
-
+<!-- body below is rendered from the Git projection of the JSON record -->
 
 ## Minima: measured against the table
 
@@ -96,24 +96,13 @@ Model = pinned table (analytic black disk of the table radius, plus unscreened R
 | C0057002@200 | 10-157 | 1.21 | 6.774 | 6.774 | 5.644 | 2.454 | 1.571 | 3.043 | 1.903 | 0.38 | 0.161 |
 | C1420002@250 | 10-102 | 1.42 | 3.380 | 3.380 | 2.640 | 1.336 | 0.826 | 1.671 | 1.127 | 0.57 | 0.082 |
 
-The `full` window is dominated by the model's high-angle diffraction lobes (model 100-600x above the data at 60-90 deg for the O sets), so the 10-30 / 10-40 deg windows are the like-for-like comparison. Datasets with `data partial sigma / table sigma_el` above 1 (the data integral alone exceeds the table sigma_el) are not credible against the table: **O0553008 @ 75 MeV (p+C, Rolland 1966)** has a 10 deg data value about 8.4x the model; its EXFOR subentry gives MB/SR with a 5 % digital error and no other factor, so the cause is not an ingestion unit error that can be identified here (it is a source/transcription or frame issue of that subentry); it is reported but excluded from summaries and nothing was changed.
+The `full` window is dominated by the model's high-angle diffraction lobes (model 100-600x above the data at 60-90 deg for the O sets), so the 10-30 / 10-40 deg windows are the like-for-like comparison. Datasets with `data partial sigma / table sigma_el` above 1 (the data integral alone exceeds the table sigma_el) are not credible against the table: **O0553008 @ 75 MeV (p+C, Rolland 1966)** has a data partial integral above 3x the table sigma_el (column above); its EXFOR subentry gives MB/SR with a 5 % digital error and no other factor, so the cause is not an ingestion unit error that can be identified here (it is a source/transcription or frame issue of that subentry); it is reported but excluded from summaries and nothing was changed.
 
 
-## Model / data - 1 at the V10-A angles (nuclear + Rutherford)
+## Model / data at the V10-A angles
 
-| dataset | 10 deg | 15 deg | 20 deg | 30 deg |
-|---|---|---|---|---|
-| C0063002@135 | +0.12 @10.8 | +0.45 @15.1 | +1.48 @19.4 | +1.11 @30.0 |
-| C0141002@179.9 | +0.14 @10.4 | +0.37 @15.0 | +1.23 @20.7 | -0.59 @29.8 |
-| C0148002@201.4 | +0.41 @9.8 | +0.73 @14.7 | +1.93 @19.6 | +1.66 @30.3 |
-| C0550002@200 | +0.07 @10.8 | +0.50 @15.1 | +1.03 @19.3 | +0.92 @30.0 |
-| O0274009@96 | +0.05 @9.8 | -0.17 @14.8 | +0.19 @19.4 | +2.72 @30.5 |
-| O0553008@75 | -0.88 @10.2 | -0.84 @15.2 | -0.82 @19.1 | - |
-| O0553002@150 | +0.19 @10.8 | +0.81 @16.4 | +1.43 @19.2 | +4.42 @30.1 |
-| C0055002@122 | -0.03 @10.1 | +0.19 @15.5 | +0.81 @19.9 | +6.39 @30.7 |
-| C0055002@160 | +0.08 @11.0 | +0.32 @14.3 | +1.94 @20.8 | +2.99 @30.6 |
-| C0057002@200 | +0.09 @8.9 | +0.77 @15.5 | +1.76 @19.9 | +0.23 @30.8 |
-| C1420002@250 | -0.34 @9.9 | +0.02 @15.4 | +0.80 @20.0 | -0.58 @29.8 |
+Per-angle ratios are not reproduced here (decision 0041: Git holds aggregate statistics only); the V10-A row of the archive of record holds its own per-angle verdicts. The window integrals above are the aggregate comparison.
+
 
 ## One-parameter R diagnostic (DATA-SEEN; never a model parameter)
 

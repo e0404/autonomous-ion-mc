@@ -42,28 +42,16 @@
      {
       "drop_in_sigma": 0.7388264618086147,
       "implied_disk_radius_fm": 5.207359743286934,
-      "neighbour_ratio": [
-       1.6817854571634268,
-       1.0215982721382288
-      ],
       "theta_cm_deg": 17.17
      },
      {
       "drop_in_sigma": 0.0181560983661559,
       "implied_disk_radius_fm": 4.179011959368645,
-      "neighbour_ratio": [
-       1.9939008220631131,
-       1.0005303632988596
-      ],
       "theta_cm_deg": 21.44
      },
      {
       "drop_in_sigma": 0.13267619817689263,
       "implied_disk_radius_fm": 1.309153889016809,
-      "neighbour_ratio": [
-       1.8162057722497282,
-       1.0032604757879482
-      ],
       "theta_cm_deg": 72.85
      }
     ],
@@ -300,28 +288,16 @@
      {
       "drop_in_sigma": 0.48362727557383695,
       "implied_disk_radius_fm": 5.120193263184363,
-      "neighbour_ratio": [
-       1.2923604923065382,
-       1.0121654501216544
-      ],
       "theta_cm_deg": 14.98662970778569
      },
      {
       "drop_in_sigma": 2.2321051791077458,
       "implied_disk_radius_fm": 3.0499835229364503,
-      "neighbour_ratio": [
-       4.1200210969350515,
-       1.046042953809944
-      ],
       "theta_cm_deg": 25.292163063887006
      },
      {
       "drop_in_sigma": 0.16932563932024833,
       "implied_disk_radius_fm": 2.2586569311525233,
-      "neighbour_ratio": [
-       1.8070823625383403,
-       1.0040935672514621
-      ],
       "theta_cm_deg": 34.39065213568411
      }
     ],
@@ -791,10 +767,6 @@
      {
       "drop_in_sigma": 11.270539816294404,
       "implied_disk_radius_fm": 0.9903625633287788,
-      "neighbour_ratio": [
-       1.9769357495881386,
-       1.71334431630972
-      ],
       "theta_cm_deg": 79.15
      }
     ],
@@ -804,10 +776,6 @@
      {
       "drop_in_sigma": 11.270539816294404,
       "implied_disk_radius_fm": 0.9903625633287788,
-      "neighbour_ratio": [
-       1.9769357495881386,
-       1.71334431630972
-      ],
       "theta_cm_deg": 79.15
      }
     ],
@@ -1039,19 +1007,11 @@
      {
       "drop_in_sigma": null,
       "implied_disk_radius_fm": 10.024361680656844,
-      "neighbour_ratio": [
-       1.048728813559322,
-       1.0021186440677967
-      ],
       "theta_cm_deg": 10.86
      },
      {
       "drop_in_sigma": null,
       "implied_disk_radius_fm": 6.753087686146283,
-      "neighbour_ratio": [
-       1.1622418879056047,
-       1.0501474926253687
-      ],
       "theta_cm_deg": 16.15
      }
     ],
@@ -1280,10 +1240,6 @@
      {
       "drop_in_sigma": null,
       "implied_disk_radius_fm": 10.400641971591668,
-      "neighbour_ratio": [
-       1.5025906735751295,
-       1.0012953367875648
-      ],
       "theta_cm_deg": 11.89
      }
     ],
@@ -1752,10 +1708,6 @@
      {
       "drop_in_sigma": 3.4636541235744884,
       "implied_disk_radius_fm": 0.8948283482862095,
-      "neighbour_ratio": [
-       1.953757225433526,
-       1.3872832369942196
-      ],
       "theta_cm_deg": 138.8
      }
     ],
@@ -1765,10 +1717,6 @@
      {
       "drop_in_sigma": 3.4636541235744884,
       "implied_disk_radius_fm": 0.8948283482862095,
-      "neighbour_ratio": [
-       1.953757225433526,
-       1.3872832369942196
-      ],
       "theta_cm_deg": 138.8
      }
     ],
@@ -2014,19 +1962,11 @@
      {
       "drop_in_sigma": 0.21101096810962705,
       "implied_disk_radius_fm": 0.9133959741557158,
-      "neighbour_ratio": [
-       2.1999999999999997,
-       1.0979999999999999
-      ],
       "theta_cm_deg": 105.4
      },
      {
       "drop_in_sigma": 3.8851547305790515,
       "implied_disk_radius_fm": 0.775959512624149,
-      "neighbour_ratio": [
-       4.45631067961165,
-       3.2135922330097086
-      ],
       "theta_cm_deg": 138.9
      }
     ],
@@ -2037,10 +1977,6 @@
      {
       "drop_in_sigma": 3.8851547305790515,
       "implied_disk_radius_fm": 0.775959512624149,
-      "neighbour_ratio": [
-       4.45631067961165,
-       3.2135922330097086
-      ],
       "theta_cm_deg": 138.9
      }
     ],
@@ -2286,37 +2222,21 @@
      {
       "drop_in_sigma": 0.6118903596784708,
       "implied_disk_radius_fm": 0.8842618611548042,
-      "neighbour_ratio": [
-       4.823421294472889,
-       1.1815675462780622
-      ],
       "theta_cm_deg": 93.77
      },
      {
       "drop_in_sigma": 0.00408369151586954,
       "implied_disk_radius_fm": 0.8578996064168044,
-      "neighbour_ratio": [
-       1.00062893081761,
-       1.6289308176100628
-      ],
       "theta_cm_deg": 97.6
      },
      {
       "drop_in_sigma": 0.4364782040005816,
       "implied_disk_radius_fm": 0.7645091850065038,
-      "neighbour_ratio": [
-       1.6222222222222222,
-       1.0527777777777778
-      ],
       "theta_cm_deg": 115.2
      },
      {
       "drop_in_sigma": 2.7808776898636616,
       "implied_disk_radius_fm": 0.7133920813314973,
-      "neighbour_ratio": [
-       1.6382978723404258,
-       1.5957446808510638
-      ],
       "theta_cm_deg": 129.6
      }
     ],
@@ -2327,10 +2247,6 @@
      {
       "drop_in_sigma": 4.556743284439654,
       "implied_disk_radius_fm": 0.8841535085897099,
-      "neighbour_ratio": [
-       4.421977492928928,
-       1.9143046277908162
-      ],
       "theta_cm_deg": 93.785
      }
     ],
@@ -2588,91 +2504,51 @@
      {
       "drop_in_sigma": 0.34387728663478545,
       "implied_disk_radius_fm": 2.1056743158743103,
-      "neighbour_ratio": [
-       1.026359086006273,
-       1.0122040629675468
-      ],
       "theta_cm_deg": 31.56
      },
      {
       "drop_in_sigma": 0.397656697532703,
       "implied_disk_radius_fm": 1.9148766801168777,
-      "neighbour_ratio": [
-       1.013007407337909,
-       1.0282290410804675
-      ],
       "theta_cm_deg": 34.8
      },
      {
       "drop_in_sigma": 0.38194779806198903,
       "implied_disk_radius_fm": 1.8595512947448778,
-      "neighbour_ratio": [
-       1.0126740184994616,
-       1.0793805659510678
-      ],
       "theta_cm_deg": 35.87
      },
      {
       "drop_in_sigma": 1.4815894607787676,
       "implied_disk_radius_fm": 1.823213176330734,
-      "neighbour_ratio": [
-       1.1070007713098657,
-       1.0473921300467324
-      ],
       "theta_cm_deg": 36.61
      },
      {
       "drop_in_sigma": 0.05256526010152333,
       "implied_disk_radius_fm": 1.647029311392421,
-      "neighbour_ratio": [
-       1.1901777970511709,
-       1.0016825672159584
-      ],
       "theta_cm_deg": 40.69
      },
      {
       "drop_in_sigma": 10.760511453328903,
       "implied_disk_radius_fm": 1.20941584925053,
-      "neighbour_ratio": [
-       10.415853658536586,
-       7.5341463414634156
-      ],
       "theta_cm_deg": 56.52
      },
      {
       "drop_in_sigma": 10.409556000016313,
       "implied_disk_radius_fm": 1.1818806361794618,
-      "neighbour_ratio": [
-       6.722524483133841,
-       7.132752992383025
-      ],
       "theta_cm_deg": 57.96
      },
      {
       "drop_in_sigma": 16.587680436336754,
       "implied_disk_radius_fm": 1.1450794046587238,
-      "neighbour_ratio": [
-       11.705357142857144,
-       8.975000000000001
-      ],
       "theta_cm_deg": 60.01
      },
      {
       "drop_in_sigma": 1.5196447507700142,
       "implied_disk_radius_fm": 1.0276152393962381,
-      "neighbour_ratio": [
-       1.1650426309378805,
-       1.1906211936662607
-      ],
       "theta_cm_deg": 67.73
      },
      {
       "drop_in_sigma": 3.535533905932738,
       "implied_disk_radius_fm": 0.8412846558880771,
-      "neighbour_ratio": [
-       2.0,
-       2.0
-      ],
       "theta_cm_deg": 85.79
      }
     ],
@@ -2683,37 +2559,21 @@
      {
       "drop_in_sigma": 10.760511453328903,
       "implied_disk_radius_fm": 1.20941584925053,
-      "neighbour_ratio": [
-       10.415853658536586,
-       7.5341463414634156
-      ],
       "theta_cm_deg": 56.52
      },
      {
       "drop_in_sigma": 10.409556000016313,
       "implied_disk_radius_fm": 1.1818806361794618,
-      "neighbour_ratio": [
-       6.722524483133841,
-       7.132752992383025
-      ],
       "theta_cm_deg": 57.96
      },
      {
       "drop_in_sigma": 16.587680436336754,
       "implied_disk_radius_fm": 1.1450794046587238,
-      "neighbour_ratio": [
-       11.705357142857144,
-       8.975000000000001
-      ],
       "theta_cm_deg": 60.01
      },
      {
       "drop_in_sigma": 3.535533905932738,
       "implied_disk_radius_fm": 0.8412846558880771,
-      "neighbour_ratio": [
-       2.0,
-       2.0
-      ],
       "theta_cm_deg": 85.79
      }
     ],

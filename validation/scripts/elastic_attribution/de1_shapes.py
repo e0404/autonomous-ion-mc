@@ -271,7 +271,7 @@ def run() -> None:
     doc = {"banner": c.BANNER, "table_id": c.TABLE_ID, "datasets": datasets,
            "families": list(FAMILIES), "note": "R fit is data-seen and is never a model parameter"}  # fmt: skip
     inputs = [*c.table_files(), c.RUN_V10A]
-    c.write_outputs(c.OUT / "de1", "per_dataset.json", doc, "de1-report.md", _report(doc, inputs))
+    c.write_outputs(c.OUT / "de1", "per_dataset.json", doc, "de1-report.md", _header(inputs), render_report)
 
 
 def _one_dataset(v10: Any, sh: Shapes, model: Any, rec: dict[str, Any]) -> dict[str, Any]:
@@ -372,7 +372,7 @@ def _one_dataset(v10: Any, sh: Shapes, model: Any, rec: dict[str, Any]) -> dict[
                        "rms_log_residual_at_table_R": math.sqrt(float(np.sum((np.log(tot[m]) - np.log(y[m])) ** 2)) / m.sum()),
                        "label": "data-seen diagnostic; never a model parameter"}  # fmt: skip
     return {"dataset": rec["dataset"], "target": name, "energy_mev": e, "n_points": rec["n_points"],
-            "theta_range_deg": [float(th.min()), float(th.max())], "theta_cm_deg": th.tolist(), "data_mb_sr": y.tolist(), "rel_err": [None if not np.isfinite(x) else float(x) for x in rel_err],
+            "theta_range_deg": [float(th.min()), float(th.max())], "theta_cm_deg_points": th.tolist(), "data_mb_sr": y.tolist(), "rel_err": [None if not np.isfinite(x) else float(x) for x in rel_err],
             "model_total_mb_sr": tot.tolist(), "model_ratio_minus_1": (tot / y - 1.0).tolist(),
             "rutherford_mb_sr": ru.tolist(), "family_total_mb_sr": {kk: vv.tolist() for kk, vv in fam.items()},
             "minima": d_min, "partial": part, "R_fit": fits}  # fmt: skip
@@ -382,11 +382,9 @@ def _fmt(x: Any, f: str = ".3g") -> str:
     return "-" if x is None else format(x, f)
 
 
-def _report(doc: dict[str, Any], inputs: list[Any]) -> str:
-    ds = doc["datasets"]
+def _header(inputs: list[Any]) -> str:
     cmd = "python -m validation.scripts.elastic_attribution.de1_shapes"
-    out = [
-        c.header(
+    return c.header(
             "D-E1: pinned p+A shape and shape families against the V10-A data",
             cmd,
             inputs,
@@ -396,8 +394,13 @@ def _report(doc: dict[str, Any], inputs: list[Any]) -> str:
                 "Partial integrals: trapezoid over the data nodes from 10 deg to the window end (10-30, 10-40 deg, and the last data angle), nuclear + Rutherford. "
                 "The R fit is **data-seen**, a diagnostic, never a model parameter."
             ],
-        )
-    ]
+    )
+
+
+def render_report(doc: dict[str, Any]) -> str:
+    """Markdown body, a pure function of the (projected) JSON record."""
+    ds = doc["datasets"]
+    out: list[str] = []
     out += ["", "## Minima: measured against the table", "",
             "| dataset | target | E | theta_min,1 (V10-A rule) | significant? | table first min: bin-density / 1-deg bins / analytic disk (total) / J1 zero | Ru share at data min | R_table | R implied by V10-A min (3.8317/q) | significant minima (deg, merged duplicates, >=10 % and >=3 sigma below both neighbours) |",
             "|---|---|---|---|---|---|---|---|---|---|"]  # fmt: skip
@@ -470,21 +473,14 @@ def _report(doc: dict[str, Any], inputs: list[Any]) -> str:
         "The `full` window is dominated by the model's high-angle diffraction lobes (model 100-600x above the data at 60-90 deg for the O sets), "
         "so the 10-30 / 10-40 deg windows are the like-for-like comparison. Datasets with `data partial sigma / table sigma_el` above 1 "
         "(the data integral alone exceeds the table sigma_el) are not credible against the table: **O0553008 @ 75 MeV (p+C, Rolland 1966)** "
-        "has a 10 deg data value about 8.4x the model; its EXFOR subentry gives MB/SR with a 5 % digital error and no other factor, "
+        "has a data partial integral above 3x the table sigma_el (column above); its EXFOR subentry gives MB/SR with a 5 % digital error and no other factor, "
         "so the cause is not an ingestion unit error that can be identified here (it is a source/transcription or frame issue of that subentry); "
         "it is reported but excluded from summaries and nothing was changed.",
         "",
     ]
-    out += ["", "## Model / data - 1 at the V10-A angles (nuclear + Rutherford)", "",
-            "| dataset | 10 deg | 15 deg | 20 deg | 30 deg |", "|---|---|---|---|---|"]  # fmt: skip
-    for d in ds:
-        th = np.array(d["theta_cm_deg"])
-        r = np.array(d["model_ratio_minus_1"])
-        cells = []
-        for ang in (10.0, 15.0, 20.0, 30.0):
-            j = int(np.argmin(abs(th - ang)))
-            cells.append(f"{r[j]:+.2f} @{th[j]:.1f}" if abs(th[j] - ang) <= 1.5 else "-")
-        out.append(f"| {d['dataset']} | " + " | ".join(cells) + " |")
+    out += ["", "## Model / data at the V10-A angles", "",
+            "Per-angle ratios are not reproduced here (decision 0041: Git holds aggregate statistics only); the V10-A row of the "
+            "archive of record holds its own per-angle verdicts. The window integrals above are the aggregate comparison.", ""]  # fmt: skip
     out += ["", "## One-parameter R diagnostic (DATA-SEEN; never a model parameter)", "",
             "Black-disk shape with sigma_el and the Rutherford term fixed; least squares in log(dsigma) on the stated CM window "
             "(R scanned 1-8 fm in 0.01 fm steps). The windows 10-30 and 10-40 deg are fixed a priori; `to_V10A_first_minimum` "

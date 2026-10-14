@@ -12,6 +12,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from collections.abc import Callable
 from typing import Any
 
 import numpy as np
@@ -141,8 +142,10 @@ def header(title: str, command: str, inputs: list[Path], extra: list[str] | None
 # recoverable (model value / (1 + ratio)), are removed from the copy committed under validation/results/.
 GIT_FORBIDDEN_KEYS: frozenset[str] = frozenset(
     {"data_mb_sr", "rel_err", "model_total_mb_sr", "model_ratio_minus_1", "rutherford_mb_sr",
-     "family_total_mb_sr", "pdg_lowest_points"}
+     "family_total_mb_sr", "theta_cm_deg_points", "neighbour_ratio",
+     "pdg_lowest_points", "pdg_lowest_energies_mev", "pdg_points_within_15pct_in_T"}
 )  # fmt: skip
+BODY_MARKER = "<!-- body below is rendered from the Git projection of the JSON record -->"
 GIT_MAX_NUMERIC_LIST = 8  # longer numeric lists are per-point arrays, never aggregate statistics
 GIT_NOTE = (
     "Git projection (decision 0041): experimental / compilation values and every per-point array are removed; "
@@ -183,19 +186,31 @@ def git_safety_violations(doc: Any, path: str = "") -> list[str]:
     return bad
 
 
-def write_outputs(outdir: Path, json_name: str, doc: dict[str, Any], md_name: str, md: str) -> None:
-    """Write the complete record to ``outdir`` and its Git projection to ``outdir / "git"``.
+def write_outputs(
+    outdir: Path,
+    json_name: str,
+    doc: dict[str, Any],
+    md_name: str,
+    header_text: str,
+    render: Callable[[dict[str, Any]], str],
+) -> None:
+    """Write the complete JSON record to ``outdir`` and the Git-safe pair to ``outdir / "git"``.
 
-    Only the ``git`` copy may be committed under ``validation/results/elastic_attribution/``.
+    The Markdown report is ``header_text`` (command and input hashes) + ``BODY_MARKER`` + ``render(projection)``:
+    its body is a pure function of the Git projection, so it cannot carry anything the JSON projection removed.
+    Only the ``git`` copies may be committed under ``validation/results/elastic_attribution/``
+    (``tests/ionmc/test_elastic_attribution_de0.py`` re-renders the committed Markdown from the committed JSON).
     """
     outdir.mkdir(parents=True, exist_ok=True)
     (outdir / json_name).write_text(json.dumps(doc, indent=1, sort_keys=True, default=float) + "\n")
-    (outdir / md_name).write_text(md)
     proj = git_projection(json.loads(json.dumps(doc, default=float)))
     proj.setdefault("note_git", GIT_NOTE)
     assert not git_safety_violations(proj), git_safety_violations(proj)
     (outdir / "git").mkdir(exist_ok=True)
-    (outdir / "git" / json_name).write_text(json.dumps(proj, indent=1, sort_keys=True) + "\n")
+    text = json.dumps(proj, indent=1, sort_keys=True) + "\n"
+    (outdir / "git" / json_name).write_text(text)
+    # render from the committed form (sorted keys), so a re-render of the committed JSON reproduces the body
+    (outdir / "git" / md_name).write_text(header_text + BODY_MARKER + "\n" + render(json.loads(text)))
 
 
 def import_transport_module(name: str) -> Any:
