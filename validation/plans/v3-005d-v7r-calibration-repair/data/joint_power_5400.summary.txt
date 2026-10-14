@@ -1,0 +1,3 @@
+archive_fitted: n 400, joint 383 (0.9575), paired 385 (0.9625), single 398 (0.9950); joint CP95 lower 0.9369; P(power clause | p_low) 1.0000; Frechet lower (CP bounds) 0.9272; rule (>= 378/400) MET; wall 1.07 h (9.7 s/rep)
+rehearsal_block_sums: n 400, joint 384 (0.9600), paired 385 (0.9625), single 399 (0.9975); joint CP95 lower 0.9399; P(power clause | p_low) 1.0000; Frechet lower (CP bounds) 0.9310; rule (>= 378/400) MET; wall 1.07 h (9.6 s/rep)
+selection: 5400/0.005

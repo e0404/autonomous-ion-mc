@@ -1,6 +1,6 @@
 {
   "schema": "ionmc-exfor-manifest-1",
-  "note": "Identifiers, roles and hashes only; no cross-section values. Roles per decision 0041: published 1997 or later = evaluation (informative row V1b); before 1997 = exploratory, report-only (shared lineage with ENDF/B-VIII.0 LA150). 'sha256' of an entry is the hash of the raw EXFOR master entry (equal to the registry hash of its dataset); a subentry hash covers its SUBENT..ENDSUBENT lines joined by LF with a final LF. EXFOR entries: CC BY 4.0; Otuka et al., Nucl. Data Sheets 120 (2014) 272.",
+  "note": "Identifiers, roles and hashes only; no cross-section values. Roles per decision 0041: published 1997 or later = evaluation (informative row V1b); before 1997 = exploratory, report-only (shared lineage with ENDF/B-VIII.0 LA150). 'sha256' of an entry is the hash of the raw EXFOR master entry (equal to the registry hash of its dataset); a subentry hash covers its SUBENT..ENDSUBENT lines joined by LF with a final LF. EXFOR entries: CC BY 4.0; Otuka et al., Nucl. Data Sheets 120 (2014) 272. V3-005C (Amendment 14 (l)): the 'role' of the entries added in step C1b is the role recorded by the acquisition tool (construction, calibration, evaluation or exploratory); the finer label of Amendment 14 ((c), (l)) is in 'lineage', and where the two differ the label decides how a row is judged. Entries 13753, O0579 (post-1997) and the pre-1997 angular entries all carry tool role evaluation (angular entries: related-model evidence, shared/related lineage); 13569 and the p-p entries are exploratory (report-only). Roles of D0356 and C1862 follow the older year rule of decision 0041.",
   "entries": [
     {
       "entry": "D0356",
@@ -69,6 +69,524 @@
       "omitted_subentries": [
         "005"
       ]
+    },
+    {
+      "entry": "C0063",
+      "dataset_id": "exfor-c0063",
+      "sha256": "717c570c9fa3c75b64f1fcc67bea7a618001539de471296cbf4c81677d7cbea8",
+      "first_author": "J.J. Kelly",
+      "reference": "PR/C 39 (1989) 1222",
+      "year": 1989,
+      "role": "evaluation",
+      "lineage": "related-model evidence (shared/related lineage); pre-1997",
+      "quantity": "p+16O elastic dsigma/dOmega at 135 MeV",
+      "subentries": [
+        {
+          "subentry": "C0063002",
+          "reaction": [
+            "(8-O-16(P,EL)8-O-16,,DA)"
+          ],
+          "sha256": "698872a5b55551a8edef3541ef232c0a961a75f2f98c326c478dab2cf327627c"
+        }
+      ],
+      "omitted_subentries": [
+        "003",
+        "004",
+        "005"
+      ]
+    },
+    {
+      "entry": "C0141",
+      "dataset_id": "exfor-c0141",
+      "sha256": "1e4db380e24f124311b6969abcdd0a0b24e44442c7a29c2121b56cb96582c3f0",
+      "first_author": "J.J. Kelly",
+      "reference": "PR/C 41 (1990) 2504",
+      "year": 1990,
+      "role": "evaluation",
+      "lineage": "related-model evidence (shared/related lineage); pre-1997",
+      "quantity": "p+16O elastic dsigma/dOmega at 180 MeV",
+      "subentries": [
+        {
+          "subentry": "C0141002",
+          "reaction": [
+            "(8-O-16(P,EL)8-O-16,,DA)"
+          ],
+          "sha256": "499722db5032ae9d67f552b69050b77c276f792b96efcad42436d102dd7619a8"
+        }
+      ],
+      "omitted_subentries": [
+        "003",
+        "004",
+        "005"
+      ]
+    },
+    {
+      "entry": "C0148",
+      "dataset_id": "exfor-c0148",
+      "sha256": "5ae92bb492d77471163e08b7e223beb62a9b346b038ff929d72857074fde36fe",
+      "first_author": "H. Seifert",
+      "reference": "PR/C 47 (1993) 1615",
+      "year": 1993,
+      "role": "evaluation",
+      "lineage": "related-model evidence (shared/related lineage); pre-1997",
+      "quantity": "p+16O and p+40Ca elastic dsigma/dOmega at about 200 MeV",
+      "subentries": [
+        {
+          "subentry": "C0148002",
+          "reaction": [
+            "(8-O-16(P,EL)8-O-16,,DA)"
+          ],
+          "sha256": "d6de54c63cc1781982ebc32754939403bba31eccedad5a2d4fd8d6b38371d681"
+        },
+        {
+          "subentry": "C0148006",
+          "reaction": [
+            "(20-CA-40(P,EL)20-CA-40,,DA)"
+          ],
+          "sha256": "acca678cc95898b1cae9c3f650675d2fdf8a024e091756b85b155cd8e9a76a2f"
+        }
+      ],
+      "omitted_subentries": [
+        "003",
+        "004",
+        "005",
+        "007",
+        "008",
+        "009",
+        "010",
+        "011",
+        "012",
+        "013"
+      ]
+    },
+    {
+      "entry": "C0550",
+      "dataset_id": "exfor-c0550",
+      "sha256": "2c824fd44ec4e419b9846581f08d78c19bf020fc9794415d593768a8d5e57336",
+      "first_author": "C.W. Glover",
+      "reference": "PR/C 31 (1985) 1",
+      "year": 1985,
+      "role": "evaluation",
+      "lineage": "related-model evidence (shared/related lineage); pre-1997",
+      "quantity": "p+16O elastic dsigma/dOmega at 200 MeV",
+      "subentries": [
+        {
+          "subentry": "C0550002",
+          "reaction": [
+            "(8-O-16(P,EL)8-O-16,,DA)"
+          ],
+          "sha256": "26366b4bb0969468114d71aeeb2654d7bb842dbdc96531f5cda407e1d14d5783"
+        }
+      ],
+      "omitted_subentries": [
+        "003"
+      ]
+    },
+    {
+      "entry": "C0057",
+      "dataset_id": "exfor-c0057",
+      "sha256": "3d02ae236159ec44fc0185e9148a092d506ebfc83961fd6f4c39abc8999748f0",
+      "first_author": "H.O. Meyer",
+      "reference": "PR/C 23 (1981) 616",
+      "year": 1981,
+      "role": "evaluation",
+      "lineage": "related-model evidence (shared/related lineage); pre-1997",
+      "quantity": "p+12C elastic dsigma/dOmega at 200 MeV",
+      "subentries": [
+        {
+          "subentry": "C0057002",
+          "reaction": [
+            "(6-C-12(P,EL)6-C-12,,DA)"
+          ],
+          "sha256": "33519d84c74df98d77fa7c7e4322ae92c58279fe0dd4730cb6e540e61636d40c"
+        }
+      ],
+      "omitted_subentries": [
+        "003",
+        "004",
+        "005"
+      ]
+    },
+    {
+      "entry": "C0055",
+      "dataset_id": "exfor-c0055",
+      "sha256": "4512b9670f9ec0c6e0747e9b506c3604bc90e4ce0155c04455bb52bd30ae70d6",
+      "first_author": "H.O. Meyer",
+      "reference": "PR/C 27 (1983) 459",
+      "year": 1983,
+      "role": "evaluation",
+      "lineage": "related-model evidence (shared/related lineage); pre-1997",
+      "quantity": "p+12C elastic dsigma/dOmega at 120-200 MeV",
+      "subentries": [
+        {
+          "subentry": "C0055002",
+          "reaction": [
+            "(6-C-12(P,EL)6-C-12,,DA)"
+          ],
+          "sha256": "2517a2400459ec651c1094271fa1e35ec39cd5f7c73e64ad98bd4a742431a6ec"
+        }
+      ],
+      "omitted_subentries": [
+        "003"
+      ]
+    },
+    {
+      "entry": "C1420",
+      "dataset_id": "exfor-c1420",
+      "sha256": "13364995fbd8a97fabc530ff2fc8f7e8068fa0bc49c5fdf8e3f8a85d0527b6dd",
+      "first_author": "H.O. Meyer",
+      "reference": "PR/C 37 (1988) 544",
+      "year": 1988,
+      "role": "evaluation",
+      "lineage": "related-model evidence (shared/related lineage); pre-1997",
+      "quantity": "p+12C elastic dsigma/dOmega at 250 MeV",
+      "subentries": [
+        {
+          "subentry": "C1420002",
+          "reaction": [
+            "(6-C-12(P,EL)6-C-12,,DA)"
+          ],
+          "sha256": "d6967c06b27926aa1c3440739ac76646d630ae6857e479a6b9e92375072e977b"
+        }
+      ],
+      "omitted_subentries": [
+        "003",
+        "004",
+        "005",
+        "006"
+      ]
+    },
+    {
+      "entry": "O0553",
+      "dataset_id": "exfor-o0553",
+      "sha256": "01c1259f9e6b13f92e6d765a50e1ebe21a95fb438da15f45ee3e6bcdc9319336",
+      "first_author": "C. Rolland",
+      "reference": "NP 80 (1966) 625",
+      "year": 1966,
+      "role": "evaluation",
+      "lineage": "related-model evidence (shared/related lineage); pre-1997; no 16O subentry (12C, 40Ca, 209Bi, 140Ce)",
+      "quantity": "p+12C and p+40Ca elastic dsigma/dOmega at 75 and 150 MeV",
+      "subentries": [
+        {
+          "subentry": "O0553002",
+          "reaction": [
+            "(6-C-12(P,EL)6-C-12,,DA)"
+          ],
+          "sha256": "b8f5e7c81bac2110273838ea0624f84842711842fb413c5ca49da0248fda222d"
+        },
+        {
+          "subentry": "O0553004",
+          "reaction": [
+            "(20-CA-40(P,EL)20-CA-40,,DA)"
+          ],
+          "sha256": "a5c40b331b920c3422d2015b2637125d00fec86251b98805cc31dc16b721aa4d"
+        },
+        {
+          "subentry": "O0553008",
+          "reaction": [
+            "(6-C-12(P,EL)6-C-12,,DA)"
+          ],
+          "sha256": "651668f5627910bac8b4af74f29a4eb983aac116d0e71270a4c9d834a1a64db5"
+        },
+        {
+          "subentry": "O0553010",
+          "reaction": [
+            "(20-CA-40(P,EL)20-CA-40,,DA)"
+          ],
+          "sha256": "be8a58ab358a0541d552f39f8beda2b9bc09e36b730097df878b3b4b571d97b2"
+        }
+      ],
+      "omitted_subentries": [
+        "003",
+        "005",
+        "006",
+        "007",
+        "009",
+        "011",
+        "012",
+        "013",
+        "014",
+        "015"
+      ]
+    },
+    {
+      "entry": "O0274",
+      "dataset_id": "exfor-o0274",
+      "sha256": "3db34b417938f35219903cd12f07f7dd74aa22ed9dce67d142e7b826d3131cab",
+      "first_author": "K. Strauch",
+      "reference": "PR 103 (1956) 200",
+      "year": 1956,
+      "role": "evaluation",
+      "lineage": "related-model evidence (shared/related lineage); pre-1997",
+      "quantity": "p+12C elastic dsigma/dOmega at 96 MeV",
+      "subentries": [
+        {
+          "subentry": "O0274009",
+          "reaction": [
+            "(6-C-12(P,EL)6-C-12,,DA,,,EXP)"
+          ],
+          "sha256": "77c865d578051ff9438e18bc556f222209108adb74b214b215f9163af56461fa"
+        }
+      ],
+      "omitted_subentries": [
+        "002",
+        "003",
+        "004",
+        "005",
+        "006",
+        "007",
+        "008",
+        "010"
+      ]
+    },
+    {
+      "entry": "13753",
+      "dataset_id": "exfor-13753",
+      "sha256": "73e308154d37c5d9f7bdb98af216de197f8f3ef4ed63bfa7a2b850d6798c1c8f",
+      "first_author": "W.P. Abfalterer",
+      "reference": "PR/C 63 (2001) 044608",
+      "year": 2001,
+      "role": "evaluation",
+      "lineage": "evaluation (post-1997); gating C level proxy for V10-A (c) (sigma_tot(n+C) minus sigma_nonel(p+C))",
+      "quantity": "neutron total cross section on carbon, 5.3-559 MeV",
+      "subentries": [
+        {
+          "subentry": "13753007",
+          "reaction": [
+            "(6-C-0(N,TOT),,SIG)"
+          ],
+          "sha256": "646d85cb996e904a272acd165cc4402bfbef2e9fd45cb5e68cdaa93aeb9f3d5f"
+        }
+      ],
+      "omitted_subentries": [
+        "002",
+        "003",
+        "004",
+        "005",
+        "006",
+        "008",
+        "009",
+        "010",
+        "011",
+        "012",
+        "013",
+        "014",
+        "015",
+        "016",
+        "017",
+        "018",
+        "019",
+        "020",
+        "021",
+        "022",
+        "023",
+        "024",
+        "025",
+        "026",
+        "027",
+        "028",
+        "029",
+        "030",
+        "032",
+        "033"
+      ]
+    },
+    {
+      "entry": "13569",
+      "dataset_id": "exfor-13569",
+      "sha256": "82efd34a7f0c0fd3338ed626689ded512a7af45d638071a7dfdd0390593de558",
+      "first_author": "R.W. Finlay",
+      "reference": "PR/C 47 (1993) 237",
+      "year": 1993,
+      "role": "exploratory",
+      "lineage": "report-only (pre-1997); O level proxy with O0579-004",
+      "quantity": "neutron total cross sections on C and O",
+      "subentries": [
+        {
+          "subentry": "13569003",
+          "reaction": [
+            "(6-C-0(N,TOT),,SIG)"
+          ],
+          "sha256": "0aef94991edb1d754322224a9ff5b5069e2f52bec481eac64b51cee4d7d355e2"
+        },
+        {
+          "subentry": "13569005",
+          "reaction": [
+            "(8-O-0(N,TOT),,SIG)"
+          ],
+          "sha256": "e03dd0efcd0a033d6c3128e577a7c54f2fe8abd6f6f8cebd0d4e8acb6fc5decb"
+        }
+      ],
+      "omitted_subentries": [
+        "002",
+        "004",
+        "008",
+        "009",
+        "010",
+        "011",
+        "012",
+        "013",
+        "014",
+        "017",
+        "018",
+        "019"
+      ]
+    },
+    {
+      "entry": "O0579",
+      "dataset_id": "exfor-o0579",
+      "sha256": "815bf4f2a65cd68f01020b06ae1707220882238447609bcae6cead9621805562",
+      "first_author": "A. Ingemarsson",
+      "reference": "NP/A 653 (1999) 341",
+      "year": 1999,
+      "role": "evaluation",
+      "lineage": "evaluation (post-1997); C sigma_R gates the C level (V10-A (c)); O sigma_R is report-only",
+      "quantity": "proton reaction cross sections at 65.5 MeV on C-12 and O-16",
+      "subentries": [
+        {
+          "subentry": "O0579003",
+          "reaction": [
+            "(6-C-12(P,NON),,SIG)"
+          ],
+          "sha256": "9f2e3ceb2cc5764bd71ccb391982804e0eaa4325b23d70050d366d48d7eed9dd"
+        },
+        {
+          "subentry": "O0579004",
+          "reaction": [
+            "(8-O-16(P,NON),,SIG)"
+          ],
+          "sha256": "d78858eae2c8773fee0e936eabc4bce657556644abcfed3f0ee0d2a657900128"
+        }
+      ],
+      "omitted_subentries": [
+        "002",
+        "005",
+        "006",
+        "007",
+        "008",
+        "009",
+        "010",
+        "011",
+        "012",
+        "013",
+        "014"
+      ]
+    },
+    {
+      "entry": "O1226",
+      "dataset_id": "exfor-o1226",
+      "sha256": "55c760598165cf2a6d89783f40407b9fd0515b2811bdc4f47a2722c6f6383c95",
+      "first_author": "M. Mahjour-Shafiei",
+      "reference": "PR/C 70 (2004) 024004",
+      "year": 2004,
+      "role": "exploratory",
+      "lineage": "report-only (p-p dsigma/dOmega, V10-pp-c)",
+      "quantity": "p-p elastic dsigma/dOmega at 190 MeV",
+      "subentries": [
+        {
+          "subentry": "O1226002",
+          "reaction": [
+            "(1-H-1(P,EL)1-H-1,,DA)"
+          ],
+          "sha256": "4e80feaf5b9693bd3a7f8cd0679b071580bb1a469e838726e2aadfc399a2b90e"
+        }
+      ],
+      "omitted_subentries": [
+        "003"
+      ]
+    },
+    {
+      "entry": "O0145",
+      "dataset_id": "exfor-o0145",
+      "sha256": "b839286518f064febdb98131ef2922c9b4d54f5c444ee0857a6f26329f18ec8c",
+      "first_author": "M. Avan",
+      "reference": "PR/C 30 (1984) 521",
+      "year": 1984,
+      "role": "exploratory",
+      "lineage": "report-only (p-p dsigma/dOmega, V10-pp-c)",
+      "quantity": "p-p elastic dsigma/dOmega at about 200 MeV",
+      "subentries": [
+        {
+          "subentry": "O0145007",
+          "reaction": [
+            "(1-H-1(P,EL)1-H-1,,DA,,,EXP)"
+          ],
+          "sha256": "cb04f7d8ca702cb1708d0a85ded81c1a2257e26b9d8d5b4edae07d3ca07ffa50"
+        }
+      ],
+      "omitted_subentries": [
+        "002",
+        "003",
+        "004",
+        "005",
+        "006"
+      ]
+    },
+    {
+      "entry": "C2637",
+      "dataset_id": "exfor-c2637",
+      "sha256": "3c09bafee1b340ee69c740e798eebe9d5f60b1dd857b51941c86655975ee90fd",
+      "first_author": "O. Chamberlain",
+      "reference": "PR 93 (1954) 1424",
+      "year": 1954,
+      "role": "exploratory",
+      "lineage": "report-only (p-p dsigma/dOmega, V10-pp-c)",
+      "quantity": "p-p elastic dsigma/dOmega at 225 MeV",
+      "subentries": [
+        {
+          "subentry": "C2637002",
+          "reaction": [
+            "(1-H-1(P,EL)1-H-1,,DA)"
+          ],
+          "sha256": "45a57208c18f8dc320a7185f8cc5eb7b6f04799346945624454d67b3c7b2d0b5"
+        }
+      ],
+      "omitted_subentries": []
+    },
+    {
+      "entry": "C2606",
+      "dataset_id": "exfor-c2606",
+      "sha256": "c9a6d4991d375c33937a0629f33091375b78da30a16709fc7e074780200d3d6f",
+      "first_author": "O. Chamberlain",
+      "reference": "PR 83 (1951) 923",
+      "year": 1951,
+      "role": "exploratory",
+      "lineage": "report-only (p-p dsigma/dOmega, V10-pp-c)",
+      "quantity": "p-p elastic dsigma/dOmega at 163-250 MeV",
+      "subentries": [
+        {
+          "subentry": "C2606003",
+          "reaction": [
+            "(1-H-1(P,EL)1-H-1,,DA)"
+          ],
+          "sha256": "1195992d8e4c5013c884033a5ab22cd7ed62356d1fb8c97ccd9a9c872b201c9f"
+        }
+      ],
+      "omitted_subentries": [
+        "002",
+        "004"
+      ]
+    },
+    {
+      "entry": "O2057",
+      "dataset_id": "exfor-o2057",
+      "sha256": "5691502f3e9635abd1ebd44e43490bf03a7295de06d6ced43e86e0fa3c7c611a",
+      "first_author": "J.M. Cassels",
+      "reference": "PPS/A 69 (1956) 495",
+      "year": 1956,
+      "role": "exploratory",
+      "lineage": "report-only (p-p dsigma/dOmega, V10-pp-c)",
+      "quantity": "p-p elastic dsigma/dOmega at 147 MeV",
+      "subentries": [
+        {
+          "subentry": "O2057002",
+          "reaction": [
+            "(1-H-1(P,EL)1-H-1,,DA)"
+          ],
+          "sha256": "676a7af1bf751671d56571a2694a30cb5905985f5246f1101656ad204fa72ff9"
+        }
+      ],
+      "omitted_subentries": []
     }
   ]
 }

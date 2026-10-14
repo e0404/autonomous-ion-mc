@@ -4,7 +4,7 @@
 
 Usage (argv only, no shell; the host runner executes exactly this)::
 
-    python validation/scripts/transport/run_suite.py --suite {lv,hr,lv4,hr4} \
+    python validation/scripts/transport/run_suite.py --suite {lv,hr,lv4,hr4,lv5,lv5b,hr5,lv5c,hr5c} \
         --out validation/generated/transport/<new-dir> --expected-sha <40 hex> \
         [--workers N|auto] [--step-timeout SECONDS] [--scale F] [--python-parts N] \
         [--only STEP ...] [--import-dirs DIR ...] [--seed-base INT]
@@ -16,6 +16,10 @@ V3-003D, plan amendment 24)::
 
     python validation/scripts/transport/run_suite.py --suite hr --expected-sha <sha> --out <new-dir>
 
+The lv5c suite start refuses to run without a current V7-R rehearsal fixture (``rehearsal_preflight``); the
+only exemption is the rehearsal generation path: ``--only`` of ``v7r-s{k}`` steps alone AND ``--seed-base`` in
+20505000-20509499, whose partials ``v7r_rehearsal_fixture.py`` turns into the fixture.
+
 Rules (the style of ``validation/scripts/warp-architecture/run_all.sh``):
 
 * the output directory must not exist and must lie under ``validation/generated/`` or
@@ -26,8 +30,9 @@ Rules (the style of ``validation/scripts/warp-architecture/run_all.sh``):
   ``sha_source=declared`` and later attested with ``summarize.py --attest-sha``;
 * ``environment.txt`` records versions, hardware, the SHA, the dirty state and ``source_hashes``
   (sha256 of every file under ``src/ionmc``, ``tests/ionmc``, ``validation/scripts/transport`` and
-  ``benchmarks/transport`` and of ``pyproject.toml``, ``uv.lock`` and the acceptance plan), in both
-  the git and the snapshot case;
+  ``benchmarks/transport`` and of ``pyproject.toml``, ``uv.lock`` and the acceptance plan; the suites
+  ``lv5b`` and ``hr5`` add the 96 files of the 24 frozen V5 reference cases, ``V5_CASE_FILES``), in
+  both the git and the snapshot case;
 * every step archives stdout+stderr in ``NN-name.txt`` between a header (command, SHA, start
   time, timeout) and an ``# exit=`` trailer; a timed-out step is killed and archived with
   ``exit=124``; ``manifest.txt`` lists the step names of this run;
@@ -81,7 +86,11 @@ ALLOWED_PARENTS = (REPO / "validation" / "generated", REPO / "benchmarks" / "gen
 STEPS = HERE / "steps.py"
 STEPS_V4 = HERE / "steps_v4.py"
 STEPS_V5 = HERE / "steps_v5.py"
-SUITES = ("lv", "hr", "lv4", "hr4", "lv5")
+STEPS_V5B = HERE / "steps_v5b.py"
+STEPS_V5C = HERE / "steps_v5c.py"
+STEPS_V5D = HERE / "steps_v5d.py"
+STEPS_V6 = HERE / "steps_v6.py"
+SUITES = ("lv", "hr", "lv4", "hr4", "lv5", "lv5b", "hr5", "lv5c", "hr5c")
 PY = sys.executable
 SOURCE_PREFIXES = (
     "src/ionmc",
@@ -119,9 +128,76 @@ prefix ``validation/scripts/transport`` and the nuclear package ``src/ionmc/nucl
 every suite)."""
 
 
+V5_CASE_ROOT = "validation/reference_cases"
+V5_CASE_FILES = (
+    *(
+        f"{V5_CASE_ROOT}/topas/proton-water-{e}mev-idd-r20{tag}-seed{k}/{f}"
+        for e in (150, 200)
+        for tag in ("", "-emonly")
+        for k in (1, 2, 3)
+        for f in ("case.json", "input.txt")
+    ),
+    *(
+        f"{V5_CASE_ROOT}/mcsquare/proton-water-{e}mev-idd-r20-{nuc}-seed{k}/{f}"
+        for e in (150, 200)
+        for nuc in ("on", "off")
+        for k in (1, 2, 3)
+        for f in ("case.json", "config.txt", "Plan.txt", "BDL_mono.txt", "CT.mhd", "CT.raw")
+    ),
+)
+"""The 96 files of the 24 frozen V5 case directories (TOPAS ``proton-water-{150,200}mev-idd-r20
+[-emonly]-seed{1,2,3}``, MCsquare ``proton-water-{150,200}mev-idd-r20-{on,off}-seed{1,2,3}``) that
+``compare_idd_v5`` binds the V5 reference runs to byte for byte (C20). Enumerated, not a prefix: the
+V3-010B cases and the exploratory X1-X4 cases are not V5 evidence. Every file must exist
+(``source_files`` fails loudly otherwise)."""
+
+SOURCE_FILES_V5B = (
+    *SOURCE_FILES_V5,
+    "validation/scripts/transport/steps_v5b.py",
+    "validation/scripts/reference/compare_idd_v5.py",
+    "validation/scripts/reference/compare_batches.py",
+    *V5_CASE_FILES,
+)
+"""The hashed set of the suites ``lv5b`` and ``hr5`` (V3-005B): the lv5 set plus the slice-B steps
+and the 96 files of the 24 frozen V5 reference cases (``V5_CASE_FILES``, so that the gitless-snapshot
+attestation covers the inputs the V5 comparator binds to; the nuclear kernels, ``src/ionmc`` and the
+tests are hashed through the prefixes)."""
+
+
+V11_CASE_FILES = tuple(
+    f"{V5_CASE_ROOT}/topas/proton-water-{e}mev-idd-r20-{mode}-seed{k}/{f}"
+    for e in (150, 200)
+    for mode in ("emelastic", "noelastic")
+    for k in (1, 2, 3)
+    for f in ("case.json", "input.txt")
+)
+"""The 24 files of the 12 V3-005C TOPAS case directories ``proton-water-{150,200}mev-idd-r20-{emelastic,
+noelastic}-seed{1,2,3}`` (plan Amendment 14 (f) rows 10-13) that ``compare_idd_v5.build_v11_verdict`` binds
+the V11 reference runs to byte for byte; with ``V5_CASE_FILES`` the 120 case files of the lv5c set."""
+
+SOURCE_FILES_V5C = (
+    *SOURCE_FILES_V5B,
+    *V11_CASE_FILES,
+    "validation/scripts/transport/steps_v5c.py",
+    "validation/scripts/transport/steps_v5d.py",
+    "validation/scripts/transport/nuclear_v10.py",
+    "validation/scripts/transport/nuclear_d9.py",
+    "validation/scripts/transport/steps_v6.py",
+    "validation/scripts/reference/gottschalk_v6.py",
+    "validation/scripts/transport/v7r.py",
+)
+"""The hashed set of the suite ``lv5c`` (V3-005C): the lv5b set plus the slice-C step modules (the
+``src/ionmc`` package, the tests and ``validation/scripts/transport`` are hashed through the prefixes;
+"the evidence code SHA" of a rehearsal is the digest of this set, plan Amendment 17 (a)7)."""
+
+
 def source_file_list(suite: str | None = None) -> tuple[str, ...]:
     """Individually hashed files of ``suite`` (default: the suite named by ``IONMC_RUN_SUITE``)."""
     suite = suite or os.environ.get("IONMC_RUN_SUITE", "")
+    if suite in ("lv5c", "hr5c"):
+        return SOURCE_FILES_V5C
+    if suite in ("lv5b", "hr5"):
+        return SOURCE_FILES_V5B
     if suite == "lv5":
         return SOURCE_FILES_V5
     return SOURCE_FILES_V4 if suite in ("lv4", "hr4") else SOURCE_FILES
@@ -136,6 +212,13 @@ V4_QUALIFICATION_SEED_BASE = 20401004  # amendment 6 of the V3-004 plan
 V4_CONSUMED_SEED_BASES = (20361004, 20371004, 20381004)  # amendments 4 and 5, 20381004 by V3-003D
 V4_REHEARSAL_SEED_BASE = 20351004
 V5_QUALIFICATION_SEED_BASE = 20421004  # plan of V3-005, Seeds (rehearsal family 2043xxxx)
+V5B_QUALIFICATION_SEED_BASE = 20471004  # amendment 11 of the V3-005 plan (lv5b); rehearsals 2046xxxx
+V5B_CONSUMED_SEED_BASES = (20441004,)  # amendment 11: consumed by the failed V7 replicate step
+# (host run RUN-20261008T132316Z-11c02312 at b40d8121)
+HR5_QUALIFICATION_SEED_BASE = 20451004  # amendment 6 (hr5)
+V5C_CONSUMED_SEED_BASES = (20471004, 20451004, 20441004)  # lv5b, hr5, b40d8121 evidence bases
+V5C_QUALIFICATION_SEED_BASE = 20481004  # amendment 14 (j) (lv5c); rehearsals 20505000-20509499
+HR5C_QUALIFICATION_SEED_BASE = 20491004  # amendment 14 (j) (hr5c: V6 on CUDA, r_index 3)
 V3003D_REHEARSAL_FAMILY = "2041xxxx"  # rehearsals of V3-003D, never qualification evidence
 DEFAULT_SEED_BASES = {
     "lv": QUALIFICATION_SEED_BASE,
@@ -143,6 +226,10 @@ DEFAULT_SEED_BASES = {
     "lv4": V4_QUALIFICATION_SEED_BASE,
     "hr4": V4_QUALIFICATION_SEED_BASE,
     "lv5": V5_QUALIFICATION_SEED_BASE,
+    "lv5b": V5B_QUALIFICATION_SEED_BASE,
+    "hr5": HR5_QUALIFICATION_SEED_BASE,
+    "lv5c": V5C_QUALIFICATION_SEED_BASE,
+    "hr5c": HR5C_QUALIFICATION_SEED_BASE,
 }
 REHEARSAL_SEED_BASE = 20261004
 CONSUMED_SEED_BASE = 20271004  # used by the T9 investigation: not a qualification base
@@ -167,11 +254,64 @@ DEFERRED_STEPS = {
     "lv4": ("a15-workers",),
     "hr4": (),
     "lv5": ("v3-workers-partition",),
+    "lv5b": ("v3-workers-partition",),
+    "hr5": (),
+    "lv5c": ("v3-workers-partition",),
+    "hr5c": (),
 }
 """Steps whose purpose is the worker-partition invariance (1 versus N worker processes): they are
 not executed in the single-process diagnostic mode and recorded as ``deferred``. Steps that merely
 use workers for speed run with one worker, with unchanged histories, seeds and criteria."""
 
+
+V6_SENS_VARIANTS = ("nominal", "sx-lo", "sx-hi", "st-lo", "st-hi", "rho-lo", "rho-hi", "r0-lo", "r0-hi")
+"""The nine V6-sens runs (common random numbers); ``gottschalk_v6.SENS_NAMES`` must equal it (a test)."""
+V6_SHARDS: int | None = None
+"""N_V6, the number of 1e6-history shards of row V6 (plan Amendment 14 (g)): ``None`` until Amendment 14a fixes it
+after the C8 rehearsal; the V6 steps then fail closed (``v6-unsized``). ``steps_v6.V6_SHARDS`` must equal it (a test)."""
+
+E1B_SHARDS: int | None = 3
+"""Number of ``e1-b-s{k}`` shards of row E1-B (>= 2, total >= 1e5 histories; Amendment 17 (b)6, fixed to 3 by
+Amendment 14a); ``None`` registers the step ``e1-b-unsized``, which fails closed in place of the shards.
+``steps_v5d.E1B_SHARDS`` must equal it (a test)."""
+
+V8NUC_PYTHON_SHARDS = 4
+"""``v8-stat-python-s{k}`` shards of the hr5c V8-nuc sample (4 x 20 batches x 1500 histories, Amendment 14 (i));
+``steps_v5d.V8NUC_PYTHON_SHARDS`` must equal it (a test)."""
+
+V7R_CAL_REPS = 3200
+"""Monte Carlo replicates per surrogate and margin of the V7-R ``escaped_neutral`` calibration (Amendment 14a); exported
+to every calibration step as ``IONMC_V7R_CAL_REPS`` (``v7r.V7R_CAL_REPS`` must equal it; a test)."""
+V7R_CAL_OUT_ENV = "IONMC_V7R_CAL_OUT"
+V7R_CAL_REPS_ENV = "IONMC_V7R_CAL_REPS"
+V7R_CAL_SURROGATES = ("archive_fitted", "rehearsal_block_sums")
+V7R_CAL_MARGINS = ("nominal", "paired_low", "paired_high", "single_low", "single_high")
+V7R_CAL_PARTS = 15
+"""The calibration grid (``v7r.CAL_*`` must equal these; a test): each (surrogate, part) is one pytest shard
+evaluating all five margins on 214 / 213 replicates (one shared bootstrap per replicate, measured about 4.86 s per
+replicate plus about 42 s of fit and kappa) and writing one sealed record into ``IONMC_V7R_CAL_OUT`` (the suite
+output ``samples`` directory)."""
+
+V7R_SHARDS = 16
+"""Number of shard steps ``v7r-s{k}`` of V7-R (Amendment 14 (h): sixteen simulations of 4.5e6 histories); defined
+here for the same reason as ``V7_REP_SHARDS``; ``steps_v5c.V7R_SHARDS`` (``v7r.V7R_SHARDS``) must equal it (a test)."""
+
+V7_REP_SHARDS = 8
+"""Number of shard steps ``v7-rep-s{k}`` of the V7 replicate coverage (Amendment 13: eight simulations of 9e6
+histories, 7200 replicates); defined here for the same reason as ``V2B_SHARDS``; ``steps_v5b.V7_SHARDS`` is
+taken from it."""
+
+
+V2B_SHARDS = 2
+"""Number of shards of the V2b statistics of the V3-005B plan (Amendment 8). Defined here, not imported
+from ``steps_v5b.py``: the host interpreter running this script has no ``ionmc`` (the steps get it via
+``PYTHONPATH``), and ``steps_v5b`` imports it; ``steps_v5b.V2B_SHARDS`` is taken from this value."""
+
+
+HOST_STEP_WALL_LIMIT_S = 1500
+"""Plan Amendment 14 (k): every host step is SIZED for at most this wall time [s] (the MCP client aborts at 1800 s
+idle). The timeout floors of ``STEP_TIMEOUT_FLOOR_S`` (3300 / 3600) are kill guards only and stay unchanged; the
+throughput step sizes the shard plans against this limit (with its safety margin)."""
 
 STEP_TIMEOUT_FLOOR_S = {
     "lv4": {"a9-part-1of2": 3300, "a9-part-2of2": 3300, "a7-step-independence": 1800},
@@ -182,6 +322,38 @@ STEP_TIMEOUT_FLOOR_S = {
         **{f"v2-probe-fe-s{k}": 3300 for k in range(3)},
         "v3-lv": 3300, "x1": 3300, "e1": 3300, "v4-v4b": 3300, "r1-a16-t1-regression": 3300,
         "n1-v1-v1b-d6": 3300, "v3-workers-partition": 3300,
+    },
+    "lv5b": {
+        "lv5b-throughput": 3300, "v8-lv-python-vs-warp-cpu": 3300, "r1-nuc-regression": 3300,
+        **{f"v5-{e}-{t}": 3300 for e in (150, 200) for t in ("on", "off")},
+        "v5-compare": 1800,
+        **{f"v2b-s{k}": 3300 for k in range(8)}, "v7-scan": 3300, "v7-shift": 3300,
+        **{f"v7-rep-s{k}": 3300 for k in range(V7_REP_SHARDS)}, "v7-rep-ref": 3300,
+        "pytest-v7-rep-calibration": 3300, "v3-workers-partition": 3300,
+    },
+    "lv5c": {
+        "v6-e0": 1800, "v10-pp-level": 1800, "v10-a": 1800, "v10-a-trigger": 1800, "v10-a-xcheck": 3300, "x-endf": 3300, "d9-bgg": 1800,
+        "lv5c-throughput": 3300, "r1-d2-regression": 3300, "v8-lv-python-vs-warp-cpu": 3300, "p7-sampler": 3300,
+        **{f"v5-{e}-{t}": 3300 for e in (150, 200) for t in ("on", "off")}, "v5-compare": 1800,
+        "v5-attribution": 1800, **{f"v2b-el-s{k}": 3300 for k in range(V2B_SHARDS)}, "v2b-el-combine": 1800,
+        "v7-scan-el": 3300, "v7-shift-el": 3300, "e1-b-unsized": 1800, "e1-b-compare": 1800,
+        **{f"e1-b-s{k}": 3300 for k in range(64)}, "e-shape-exploratory": 3300, "v3-workers-partition": 3300,
+        **{f"v7r-s{k}": 3300 for k in range(V7R_SHARDS)}, "v7r-ref": 3300,
+        "pytest-v7r-calibration": 3300, "v7r-combine": 1800, "v7r-diag": 1800,
+        **{f"pytest-v7r-calibration-s{k}": 3300 for k in range(31)}, "v7r-calibration-combine": 1800,
+        **{f"v11-ionmc-{e}-{m}": 3300 for e in (150, 200) for m in ("emel", "emonly")},
+        "v11-compare": 1800,
+        **{f"v6-s{k}": 3300 for k in range(64)}, "v6-unsized": 1800, "v6-compare": 1800,
+        **{f"v6-sens-{v}-s{k}": 3300 for v in V6_SENS_VARIANTS for k in range(64)},
+    },
+    "hr5c": {
+        **{f"v8-stat-python-s{k}": 3600 for k in range(V8NUC_PYTHON_SHARDS)}, "v8-stat-cpu64": 3600,
+        "v8-stat-cuda32": 3600, "v8-stat-cuda64": 3600, "v8-stat-compare": 1800, "v7-f32-f64-cuda": 3600,
+        **{f"v6-cuda-s{k}": 3600 for k in range(64)}, "v6-unsized": 1800, "v6-cuda-compare": 1800,
+    },
+    "hr5": {
+        "v8-stat-python-s0": 3600, "v8-stat-python-s1": 3600, "v8-stat-cpu64": 3600,
+        "v8-stat-cuda32": 3600, "v8-stat-cuda64": 3600, "v7-f32-f64-cuda": 3600,
     },
 }
 """Minimum step timeout [s] of long steps (the ``--step-timeout`` default is 1500 s); the effective
@@ -202,10 +374,10 @@ def deferred_step_names(suite: str, python_parts: int = DEFAULT_PYTHON_PARTS) ->
     ]
 
 
-def pytest_cmd(*targets: str, marker: str | None = None) -> list[str]:
-    """``marker`` is a pytest ``-m`` expression."""
+def pytest_cmd(*targets: str, marker: str | None = None, k: str | None = None) -> list[str]:
+    """``marker`` is a pytest ``-m`` expression, ``k`` a ``-k`` expression."""
     cmd = [PY, "-m", "pytest", "-q", "-p", "no:cacheprovider", "--no-header", *targets]
-    return cmd + (["-m", marker] if marker else [])
+    return cmd + (["-m", marker] if marker else []) + (["-k", k] if k else [])
 
 
 def suite_steps(
@@ -235,24 +407,55 @@ def suite_steps(
     st = [PY, str(STEPS)]
     w = ["--workers", str(workers)]
     sc = ["--scale", str(scale)]
-    cuda = {"IONMC_REQUIRE_CUDA": "1"} if suite in ("hr", "hr4") else {}
+    cuda = {"IONMC_REQUIRE_CUDA": "1"} if suite in ("hr", "hr4", "hr5", "hr5c") else {}
     s4 = [PY, str(STEPS_V4)]
     s5 = [PY, str(STEPS_V5)]
+    s5b = [PY, str(STEPS_V5B)]
+    s5c = [PY, str(STEPS_V5C)]
+    s5d = [PY, str(STEPS_V5D)]
+    s6 = [PY, str(STEPS_V6)]
     steps: list[tuple[str, list[str], dict[str, str]]] = []
 
     def add(name: str, cmd: list[str], env: dict[str, str] | None = None) -> None:
         full = f"{len(steps) + 1:02d}-{name}"
-        if cmd[:2] in ([PY, str(STEPS)], [PY, str(STEPS_V4)], [PY, str(STEPS_V5)]):
+        if cmd[:2] in ([PY, str(STEPS)], [PY, str(STEPS_V4)], [PY, str(STEPS_V5)], [PY, str(STEPS_V5B)],
+                      [PY, str(STEPS_V5C)], [PY, str(STEPS_V5D)], [PY, str(STEPS_V6)]):
             eff = step_timeout_s(suite, full, step_timeout)
             inner = ["--timeout", str(max(30, int(0.9 * eff)))]  # the pool cleans up first
             cmd = [*cmd, *inner, "--seed-base", str(seed_base)]  # every seed derives from the base
-        steps.append((full, cmd, env or {}))
+        env = dict(env or {})
+        if name.startswith(V7R_CALIBRATION_STEP_PREFIX):  # a missing fixture fails, a skip is a failure
+            env["IONMC_V7R_FIXTURES"] = "required"
+            env[V7R_CAL_REPS_ENV] = str(V7R_CAL_REPS)
+            env[V7R_CAL_OUT_ENV] = str(out_dir)
+        steps.append((full, cmd, env))
 
     if suite == "lv5":
         if import_dirs and partials_manifest is None:
             raise SystemExit("lv5 --import-dirs requires --partials-manifest (name -> sha256)")
         pm = ["--partials-manifest", str(partials_manifest)] if import_dirs else []
         _suite_steps_v5(add, s5, sc, out_dir, [*dirs, *pm])
+        return steps
+    if suite in ("lv5b", "hr5"):
+        if import_dirs and partials_manifest is None:
+            raise SystemExit(f"{suite} --import-dirs requires --partials-manifest (name -> sha256)")
+        pm = ["--partials-manifest", str(partials_manifest)] if import_dirs else []
+        if suite == "lv5b":
+            _suite_steps_v5b(add, s5, s5b, sc, out_dir, [*dirs, *pm])
+        else:
+            _suite_steps_hr5(add, s5b, sc, out_dir, [*dirs, *pm], cuda)
+        return steps
+    if suite == "lv5c":
+        if import_dirs and partials_manifest is None:
+            raise SystemExit("lv5c --import-dirs requires --partials-manifest (name -> sha256)")
+        pm = ["--partials-manifest", str(partials_manifest)] if import_dirs else []
+        _suite_steps_lv5c(add, sc, out_dir, [*dirs, *pm], s5, s5c, s5d, s6)
+        return steps
+    if suite == "hr5c":
+        if import_dirs and partials_manifest is None:
+            raise SystemExit("hr5c --import-dirs requires --partials-manifest (name -> sha256)")
+        pm = ["--partials-manifest", str(partials_manifest)] if import_dirs else []
+        _suite_steps_hr5c(add, sc, out_dir, [*dirs, *pm], s5d, s6, cuda)
         return steps
     if suite in ("lv4", "hr4"):
         _suite_steps_v4(suite, add, s4, w, sc, cuda, out_dir, dirs, single_process)
@@ -413,9 +616,164 @@ def _suite_steps_v5(add, s5, sc, out_dir, dirs):  # type: ignore[no-untyped-def]
     add("v3-workers-partition", [*s5, "v3-workers"], env)  # deferred: runs only when the mode is lifted
 
 
+def _suite_steps_v5b(add, s5, s5b, sc, out_dir, dirs):  # type: ignore[no-untyped-def]
+    """Steps of the V3-005B slice-B suite ``lv5b`` (``steps_v5b.py``; rows V8-LV, R1 for the nuclear
+    branch, V5 (ionmc side), V2b, V7 of ``validation/plans/v3-005-acceptance.md``): the python and
+    warp-cpu float64 backends in one process, ``nuclear=True``. V6 and E1-B (r_index 12 and 13) belong
+    to V3-005C (steps 12/13 reserved). The deferred step is the 1-vs-N worker partition of nuclear
+    runs; any ``cpu_workers > 1`` is deferred with it."""
+    shards = V2B_SHARDS
+    env = NUCLEAR_ENV
+    add("lv5b-throughput", [*s5b, "lv5b-throughput", *sc], env)
+    add("v8-lv-python-vs-warp-cpu", [*s5b, "v8-lv", *sc], env)
+    add("r1-nuc-regression", [*s5b, "r1-nuc", *sc], env)
+    for e in (150, 200):
+        for t in ("on", "off"):
+            add(f"v5-{e}-{t}", [*s5b, "v5-ionmc", "--energy", str(e), "--nuclear", t,
+                                "--out-dir", str(out_dir), *sc], env)  # fmt: skip
+    # row V5 verdict: the four partials against the materialized TOPAS/MCsquare runs
+    # (``/workspace/.ionmc-cache/reference-runs/REF-*`` of the host snapshot); consumes partials only
+    add("v5-compare", [*s5b, "v5-compare", "--dirs", *dirs, *sc], env)
+    for k in range(shards):
+        add(f"v2b-s{k}", [*s5b, "v2b-shard", "--shard", str(k), "--out-dir", str(out_dir), *sc], env)
+    add("v2b-combine", [*s5b, "v2b-combine", "--dirs", *dirs, *sc], env)
+    add("v7-scan", [*s5b, "v7-scan", *sc], env)
+    add("v7-shift", [*s5b, "v7-shift", *sc], env)
+    for k in range(V7_REP_SHARDS):  # one simulation of 9e6 histories each (7200 replicates in total)
+        add(f"v7-rep-s{k}", [*s5b, "v7-rep-shard", "--shard", str(k), "--out-dir", str(out_dir), *sc], env)
+    add("v7-rep-ref", [*s5b, "v7-rep-ref", "--out-dir", str(out_dir), *sc], env)
+    add(  # Monte Carlo calibration of the V7 rule (minutes); its pass is the pytest exit status
+        "pytest-v7-rep-calibration",
+        pytest_cmd("tests/ionmc/test_v7_coverage.py", marker="calibration"),
+        env,
+    )
+    add("v7-rep-combine", [*s5b, "v7-rep-combine", "--dirs", *dirs, *sc], env)
+    add("v3-workers-partition", [*s5, "v3-workers"], env)  # deferred: runs only when the mode is lifted
+
+
+def _suite_steps_lv5c(add, sc, out_dir, dirs, s5, s5c, s5d, s6):  # type: ignore[no-untyped-def]
+    """Steps of the V3-005C suite ``lv5c`` in the order of plan Amendment 14 (m) C9: the deterministic rows first
+    (``v6-e0``, V10, V10-A with its r18 cross-check, X-ENDF, D9-BGG), then R1-D2, V8-LV, P7, V11, V5 (re-run,
+    comparator, attribution), V2b-el, V7-scan-el, V7-shift-el, V6 / V6-sens, V7-R, E1-B and E-shape; the deferred
+    worker-partition step is last. The producers are ``steps_v5c.py`` (V7-R, V11), ``steps_v5d.py`` (the rest) and
+    ``steps_v6.py``."""
+    env = NUCLEAR_ENV
+    add("v6-e0", [*s6, "v6-e0", "--out-dir", str(out_dir), *sc], env)  # deterministic E0 record, archived first
+    add("v10-pp-level", [*s5d, "v10-pp-level", *sc], env)
+    add("v10-a", [*s5d, "v10-a", "--out-dir", str(out_dir), *sc], env)
+    add("v10-a-xcheck", [*s5d, "v10-a-xcheck", *sc], env)
+    add("x-endf", [*s5d, "x-endf", *sc], env)
+    add("d9-bgg", [*s5d, "d9-bgg", *sc], env)
+    add("lv5c-throughput", [*s5d, "lv5c-throughput", *sc], env)
+    add("r1-d2-regression", [*s5d, "r1-d2", "--out-dir", str(out_dir), *sc], env)
+    add("v8-lv-python-vs-warp-cpu", [*s5d, "v8-lv", "--out-dir", str(out_dir), *sc], env)
+    add("p7-sampler", [*s5d, "p7-sampler", "--out-dir", str(out_dir), *sc], env)
+    add("v10-a-trigger", [*s5d, "v10-a-trigger", "--dirs", *dirs, *sc], env)  # (e)9 trigger, needs v10-a and p7
+    for e in (150, 200):  # row V11: EM+elastic and EM-only share the seed of the energy (r_index 14)
+        for m in ("emel", "emonly"):
+            add(f"v11-ionmc-{e}-{m}", [*s5c, "v11-ionmc", "--energy", str(e), "--mode", m,
+                                       "--out-dir", str(out_dir), *sc], env)  # fmt: skip
+    add("v11-compare", [*s5c, "v11-compare", "--dirs", *dirs, *sc], env)
+    for e in (150, 200):  # V5 re-run (r_index 4-7): "on" = nuclear + elastic with the recoil depth channel
+        for t in ("on", "off"):
+            add(f"v5-{e}-{t}", [*s5d, "v5-ionmc", "--energy", str(e), "--nuclear", t, "--out-dir", str(out_dir),
+                                *sc], env)  # fmt: skip
+    add("v5-compare", [*s5d, "v5-compare", "--dirs", *dirs, *sc], env)
+    add("v5-attribution", [*s5d, "v5-attribution", "--dirs", *dirs, *sc], env)
+    for k in range(V2B_SHARDS):
+        add(f"v2b-el-s{k}", [*s5d, "v2b-el-shard", "--shard", str(k), "--out-dir", str(out_dir), *sc], env)
+    add("v2b-el-combine", [*s5d, "v2b-el-combine", "--dirs", *dirs, *sc], env)
+    add("v7-scan-el", [*s5d, "v7-scan-el", *sc], env)
+    add("v7-shift-el", [*s5d, "v7-shift-el", *sc], env)
+    _suite_steps_v6(add, sc, out_dir, dirs, s6, cuda=False)
+    _suite_steps_v7r(add, sc, out_dir, dirs, s5c)
+    if E1B_SHARDS is None:
+        add("e1-b-unsized", [*s5d, "e1-b-unsized", *sc], env)
+    else:
+        for k in range(E1B_SHARDS):
+            add(f"e1-b-s{k}", [*s5d, "e1-b-shard", "--shard", str(k), "--out-dir", str(out_dir), *sc], env)
+    add("e1-b-compare", [*s5d, "e1-b-compare", "--dirs", *dirs, *sc], env)
+    add("e-shape-exploratory", [*s5d, "e-shape", "--shard", "0", *sc], env)
+    add("v3-workers-partition", [*s5, "v3-workers"], env)  # deferred: runs only when the mode is lifted
+
+
+def _suite_steps_hr5c(add, sc, out_dir, dirs, s5d, s6, cuda):  # type: ignore[no-untyped-def]
+    """Steps of the V3-005C suite ``hr5c`` (one controlling process, ``IONMC_REQUIRE_CUDA=1``): V8-stat with V8-nuc (the
+    python sample of 4 shards x 20 batches x 1500 histories, cpu64, cuda32, cuda64), the comparison, V7 f32 / f64 on
+    CUDA and the V6 CUDA block."""
+    env = {**NUCLEAR_ENV, **cuda}
+    for nm in (*(f"python-s{k}" for k in range(V8NUC_PYTHON_SHARDS)), "cpu64", "cuda32", "cuda64"):
+        add(f"v8-stat-{nm}", [*s5d, "v8-stat-sample", "--sample", nm, "--out-dir", str(out_dir), *sc], env)
+    add("v8-stat-compare", [*s5d, "v8-stat-compare", "--dirs", *dirs, *sc], env)
+    add("v7-f32-f64-cuda", [*s5d, "v7-f32", *sc], env)
+    _suite_steps_v6(add, sc, out_dir, dirs, s6, cuda=True)
+
+
+def _suite_steps_v7r(add, sc, out_dir, dirs, s5c):  # type: ignore[no-untyped-def]
+    """Row V7-R (``steps_v5c.py``; plan Amendment 14 (h), Amendment 17 (a)). ``pytest-v7r-calibration`` has no seed and
+    no document: its pass is the pytest exit status, and ``summarize.py`` makes the conjunction with ``v7r-combine``."""
+    env = NUCLEAR_ENV
+    for k in range(V7R_SHARDS):  # one simulation of 4.5e6 histories each (7200 replicates in total)
+        add(f"v7r-s{k}", [*s5c, "v7r-shard", "--shard", str(k), "--out-dir", str(out_dir), *sc], env)
+    add("v7r-ref", [*s5c, "v7r-ref", "--out-dir", str(out_dir), *sc], env)
+    if V7R_CALIBRATION_SHARDS is None:
+        targets, k_expr, _ = calibration_selection(None)
+        add("pytest-v7r-calibration", pytest_cmd(*targets, marker="calibration", k=k_expr), env)
+    else:
+        if V7R_CALIBRATION_SHARDS != len(V7R_CALIBRATION_PARTITION):
+            raise SystemExit("V7R_CALIBRATION_SHARDS must equal the number of shards of the partition")
+        for i in range(V7R_CALIBRATION_SHARDS):
+            targets, k_expr, _ = calibration_selection(i)
+            add(f"pytest-v7r-calibration-s{i}",
+                pytest_cmd(*targets, marker="calibration", k=k_expr), env)
+    if V7R_CALIBRATION_SHARDS is not None:  # the consumer of the shard records (Amendment 14a)
+        # the sealed v7r-calibration-status partial goes to the step out-dir (never the relative default 'samples',
+        # which is read-only on the host: RUN-20261013T033755Z-4d78d844)
+        add("v7r-calibration-combine",
+            [*s5c, "v7r-calibration-combine", "--dirs", *dirs, "--out-dir", str(out_dir), *sc], env)
+    add("v7r-combine", [*s5c, "v7r-combine", "--dirs", *dirs, *sc], env)
+    add("v7r-diag", [*s5c, "v7r-diag", "--dirs", *dirs, *sc], env)
+
+
+def _suite_steps_v6(add, sc, out_dir, dirs, s6, cuda):  # type: ignore[no-untyped-def]
+    """Steps of row V6 / V6-sens (``steps_v6.py``; plan Amendment 14 (g), Amendment 17 (c)). lv5c: ``v6-s{k}``
+    (r_index 12), the nine ``v6-sens-{variant}-s{k}`` (r_index 20, common random numbers) and ``v6-compare``;
+    hr5c: ``v6-cuda-s{k}`` (r_index 3, one controlling process) and ``v6-cuda-compare``. While
+    ``V6_SHARDS`` is ``None`` (until Amendment 14a) the single step ``v6-unsized`` fails closed in place of the
+    shards."""
+    env = {**NUCLEAR_ENV, **({"IONMC_REQUIRE_CUDA": "1"} if cuda else {})}
+    n = V6_SHARDS
+    if n is None:
+        add("v6-unsized", [*s6, "v6-unsized", *sc], env)
+    elif cuda:
+        for k in range(n):
+            add(f"v6-cuda-s{k}", [*s6, "v6-cuda-shard", "--shard", str(k), "--out-dir", str(out_dir), *sc], env)
+    else:
+        for k in range(n):
+            add(f"v6-s{k}", [*s6, "v6-shard", "--shard", str(k), "--out-dir", str(out_dir), *sc], env)
+        for v in V6_SENS_VARIANTS:
+            for k in range(n):
+                add(f"v6-sens-{v}-s{k}", [*s6, "v6-sens-shard", "--variant", v, "--shard", str(k),
+                                          "--out-dir", str(out_dir), *sc], env)  # fmt: skip
+    add("v6-cuda-compare" if cuda else "v6-compare",
+        [*s6, "v6-cuda-compare" if cuda else "v6-compare", "--dirs", *dirs, *sc], env)
+
+
+def _suite_steps_hr5(add, s5b, sc, out_dir, dirs, cuda):  # type: ignore[no-untyped-def]
+    """Steps of the V3-005B host-runner suite ``hr5`` (rows V8 statistical parity and V7 f32/f64 on
+    CUDA); every CUDA step runs in one controlling process with ``IONMC_REQUIRE_CUDA=1``. Step 03
+    (V6 on CUDA) is reserved for V3-005C."""
+    env = {**NUCLEAR_ENV, **cuda}
+    for nm in ("python-s0", "python-s1", "cpu64", "cuda32", "cuda64"):
+        add(f"v8-stat-{nm}", [*s5b, "v8-stat-sample", "--sample", nm, "--out-dir", str(out_dir), *sc], env)
+    add("v8-stat-compare", [*s5b, "v8-stat-compare", "--dirs", *dirs, *sc], env)
+    add("v7-f32-f64-cuda", [*s5b, "v7-f32", *sc], env)
+
+
 NUCLEAR_ENV = {
     "IONMC_REQUIRE_DATA": "1",
     "IONMC_CACHE_DIR": str(REPO / ".ionmc-cache" / "ionmc-data"),
+    "PYTHONFAULTHANDLER": "1",
 }
 """Environment of the ``lv5`` steps: the built nuclear table (decision 0041; ``steps_v5.TABLE_ID``)
 and the data it derives from are read from the hash-verified cache staged by the orchestrator."""
@@ -456,6 +814,11 @@ test is ``new_value``, and (iii) gates the comparison: only ``allowed_differing_
 differ, within ``bounds``; everything else must be bit-identical. It fails closed otherwise. Once
 that task is merged the baseline tree carries ``new_value``, so the next task's first commit sets
 this back to ``None`` and advances ``A16_BASELINE`` (the form above)."""
+
+STEP_BASE_ENV = {"PYTHONDONTWRITEBYTECODE": "1", "PYTHONFAULTHANDLER": "1"}
+"""Environment given to every step of every suite: no bytecode files and the Python fault handler, so
+that a native crash (SIGSEGV of a Warp kernel or allocation, V7 shard crash of the 2026-10-08 host runs)
+leaves a Python traceback in the step document."""
 
 KILL_GRACE_S = 10.0
 
@@ -564,13 +927,186 @@ def sha256(path: Path) -> str:
 def source_files(suite: str | None = None) -> list[Path]:
     """Every source file whose hash identifies the code under test (the set of ``suite``, default
     the suite of ``IONMC_RUN_SUITE``)."""
-    files: list[Path] = [REPO / f for f in source_file_list(suite) if (REPO / f).is_file()]
+    listed = source_file_list(suite)
+    missing = [f for f in V5_CASE_FILES if f in listed and not (REPO / f).is_file()]
+    if missing:
+        raise SystemExit(
+            f"{len(missing)} frozen V5 case file(s) missing from the source tree, first: "
+            f"{missing[0]}; the hashed set cannot be completed")
+    files: list[Path] = [REPO / f for f in listed if (REPO / f).is_file()]
     for prefix in SOURCE_PREFIXES:
         for p in sorted((REPO / prefix).rglob("*")):
             parts = set(p.relative_to(REPO).parts)
             if p.is_file() and not parts & {"__pycache__", "generated"} and p.suffix != ".pyc":
                 files.append(p)
     return files
+
+
+V7R_CALIBRATION_STEP_PREFIX = "pytest-v7r-calibration"
+REHEARSAL_DIR_ENV = "IONMC_V7R_REHEARSAL_DIR"
+REHEARSAL_FIXTURE_DIR = "tests/ionmc/fixtures/v7r/rehearsal"
+V7R_FILE = "tests/ionmc/test_v7r_coverage.py"
+A13_FILE = "tests/ionmc/test_v7_coverage.py"
+V7R_CAL_PART = "test_v7r_calibration_shard"
+CAL_SHARD_TESTS = len(V7R_CAL_SURROGATES) * V7R_CAL_PARTS  # 30
+EXPECTED_CALIBRATION_CASES = {V7R_FILE: CAL_SHARD_TESTS + 1, A13_FILE: 10}
+"""Collected ``-m calibration`` cases per file (30 parametrized ``escaped_neutral`` shard tests and the V7-R readings
+report; the 10 Amendment 13 parametrized cases). The single source of truth of the V7-R calibration steps:
+``summarize.calibration_step_established`` requires the passed count to equal it, and a CI test
+(``test_expected_calibration_cases_match_the_collection``) checks it against ``pytest --collect-only``, so a change of
+the parametrization cannot silently desynchronise the two."""
+V7R_CALIBRATION_SHARDS: int | None = 31
+"""``None``: the lv5c suite registers the single step ``pytest-v7r-calibration``. An integer (the length of
+``V7R_CALIBRATION_PARTITION``: 31, Amendment 14a) registers ``pytest-v7r-calibration-s{k}`` and the consumer
+``v7r-calibration-combine`` instead."""
+
+
+def cal_case_id(surrogate: str, part: int) -> str:
+    """Parametrization id of one shard test (``test_v7r_calibration_shard[<id>]``); the part is zero padded so that
+    the ``-k`` substring of one part never matches another (``part01`` versus ``part11``)."""
+    return f"{surrogate}-part{part:02d}"
+
+
+GAUSSIAN_SHARD = ((V7R_FILE, A13_FILE), f"not {V7R_CAL_PART}", 1 + 10)
+"""The readings report and the ten Amendment 13 Gaussian-profile cases (sec_p / nuclear_local) in one shard (308 s
+on the host, RUN-20261011T034222Z-16d64100). To split per test case, replace this entry by one entry per case."""
+V7R_CALIBRATION_PARTITION = (
+    *(
+        ((V7R_FILE,), f"{V7R_CAL_PART} and {cal_case_id(surrogate, part)}", 1)
+        for surrogate in V7R_CAL_SURROGATES
+        for part in range(V7R_CAL_PARTS)
+    ),
+    GAUSSIAN_SHARD,
+)
+"""Shard ``i``: (pytest targets, ``-k`` expression, expected passed count). s0..s14 the ``escaped_neutral`` shard tests of
+``archive_fitted``, s15..s29 of ``rehearsal_block_sums`` (parts 0..14, all five margins each); s30 the readings report and the Amendment 13 cases. The selections are disjoint and cover
+the 41 cases exactly once (CI test ``test_calibration_partition_is_disjoint_and_complete``)."""
+
+
+def calibration_selection(shard: int | None) -> tuple[tuple[str, ...], str | None, int]:
+    """(targets, ``-k`` expression, expected passed count) of the un-sharded step (``None``) or of
+    shard ``shard``."""
+    if shard is None:
+        return (V7R_FILE, A13_FILE), None, sum(EXPECTED_CALIBRATION_CASES.values())
+    return V7R_CALIBRATION_PARTITION[shard]
+
+
+def calibration_args(targets: tuple[str, ...], k_expr: str | None) -> list[str]:
+    """The exact arguments after ``python -m pytest`` of a calibration step."""
+    return pytest_cmd(*targets, marker="calibration", k=k_expr)[3:]
+
+
+def rehearsal_fixture_digest() -> str:
+    """sha256 over the sorted ``relative path sha256`` lines of the committed rehearsal fixture
+    directory (``absent`` if it does not exist)."""
+    d = REPO / REHEARSAL_FIXTURE_DIR
+    if not d.is_dir():
+        return "absent"
+    lines = [f"{p.relative_to(REPO)} {hashlib.sha256(p.read_bytes()).hexdigest()}"
+             for p in sorted(d.rglob("*")) if p.is_file()]  # fmt: skip
+    return hashlib.sha256("\n".join(lines).encode()).hexdigest()
+
+
+REHEARSAL_PREFLIGHT_STEP = "v7r-rehearsal-fixture-preflight"
+
+
+REHEARSAL_SEED_FAMILY = (20505000, 20509499)
+"""The seed bases of the C8 rehearsal family (plan Amendment 14 (j)); never evidence."""
+V7R_SHARD_STEP = re.compile(r"v7r-s\d+")
+
+
+def step_base_name(name: str) -> str:
+    """``v7r-s0`` for the registered step name ``30-v7r-s0`` (the ``NN-`` prefix stripped; a bare name is
+    returned unchanged)."""
+    return re.sub(r"^\d+-", "", name)
+
+
+def rehearsal_generation_run(only: list[str] | None, seed_base: int | None) -> bool:
+    """True for the controlled rehearsal-generation path: ``--only`` selects solely ``v7r-s{k}`` steps (k a shard
+    index) AND the seed base lies in the rehearsal family 20505000-20509499. Both conditions are required."""
+    if not only or seed_base is None:
+        return False
+    if not REHEARSAL_SEED_FAMILY[0] <= seed_base <= REHEARSAL_SEED_FAMILY[1]:
+        return False
+    names = [step_base_name(o) for o in only]
+    return all(V7R_SHARD_STEP.fullmatch(o) and int(o[5:]) < V7R_SHARDS for o in names)
+
+
+def rehearsal_preflight(suite: str, only: list[str] | None = None, seed_base: int | None = None) -> str | None:
+    """Refusal message of the lv5c suite start (``None``: proceed). The calibration shards s15-s29 of
+    ``rehearsal_block_sums`` need the committed rehearsal fixture, valid for the CURRENT hashed-source digest
+    (Amendment 14a (b)2); a missing or stale fixture would only fail those shards hours into the run, so the
+    suite refuses to start. The full verification (``load_rehearsal``) is the CI test
+    ``test_committed_rehearsal_fixture_is_current``; this preflight checks presence and the digest.
+    Exempt is only the controlled generation path (:func:`rehearsal_generation_run`: ``--only v7r-s{k}`` steps at
+    a seed base of the rehearsal family), which produces the fixture (``v7r_rehearsal_fixture.py``); the full
+    suite, any consumer and any evidence base are refused."""
+    if suite != "lv5c" or rehearsal_generation_run(only, seed_base):
+        return None
+    d = REPO / REHEARSAL_FIXTURE_DIR
+    prefix = (f"preflight step {REHEARSAL_PREFLIGHT_STEP} (the calibration shards "
+              f"{V7R_CALIBRATION_STEP_PREFIX}-s15..s29 need {REHEARSAL_FIXTURE_DIR}): ")  # fmt: skip
+    prov = d / "PROVENANCE.json"
+    if not d.is_dir() or not prov.is_file():
+        return prefix + "the rehearsal fixture is absent; run the rehearsal shards and commit the fixture first"
+    try:
+        recorded = json.loads(prov.read_text()).get("hashed_source_digest")
+    except ValueError as exc:
+        return prefix + f"PROVENANCE.json unreadable ({exc})"
+    now = hashed_source_digest(suite)
+    if recorded != now:
+        return prefix + (f"the rehearsal fixture is stale (recorded hashed-source digest {recorded!r}, "
+                         f"current {now}); re-run the rehearsal shards at the current hashed sources")  # fmt: skip
+    return None
+
+
+def step_environment(env_base: dict[str, str], name: str, extra: dict[str, str]) -> dict[str, str]:
+    """Environment of one step: ``env_base`` plus ``extra``; the V7-R calibration steps never inherit
+    ``IONMC_V7R_REHEARSAL_DIR`` (the committed fixture directory is the only one they may use)."""
+    env = {k: v for k, v in {**env_base, **extra}.items() if not k.startswith("IONMC_V6_")}  # no V6 override
+    if V7R_CALIBRATION_STEP_PREFIX in name:
+        env.pop(REHEARSAL_DIR_ENV, None)
+        env[V7R_CAL_REPS_ENV] = str(V7R_CAL_REPS)  # never overridden by the caller's environment
+    return env
+REHEARSAL_FIXTURE_PREFIX = "tests/ionmc/fixtures/v7r/rehearsal/"
+"""The V7-R rehearsal fixtures (partials, sidecars, ``PROVENANCE.json``) are committed under
+``tests/ionmc`` (a hashed prefix) but are outside the hashed set of the rehearsal digest, otherwise
+committing them would change the digest they record (plan Amendment 17 (a)7: a commit that changes only
+fixtures keeps the rehearsal valid)."""
+
+
+REHEARSAL_DIGEST_EXCLUDED = ("validation/plans/", "decisions/", "README.md", "docs/", "tests/")
+"""Files excluded from the REHEARSAL digest (:func:`hashed_source_digest`): path prefixes relative to
+the repository (``validation/plans/``, ``decisions/``, ``docs/``, ``tests/``) and every file whose
+path ends in ``README.md``. :data:`REHEARSAL_FIXTURE_PREFIX` lies under ``tests/`` and stays its own
+named exclusion. The rehearsal block sums depend on code and data only (the shard computation never
+imports a test); documentation and tests cannot alter them, so (plan Amendment 17 (a)7) a commit that
+changes only plans, decisions, README, docs, tests or fixtures keeps the rehearsal valid. Only the
+rehearsal digest is narrowed: the suite source identity (:func:`source_file_list`,
+``environment.txt``, ``summarize.attest()``) still hashes every file."""
+
+
+def rehearsal_digest_excluded(rel: str) -> bool:
+    """True if repository-relative path ``rel`` is outside the rehearsal digest."""
+    plans, decisions, readme, docs, tests = REHEARSAL_DIGEST_EXCLUDED
+    return (rel.startswith(REHEARSAL_FIXTURE_PREFIX) or rel.startswith((plans, decisions, docs, tests))
+            or rel.endswith(readme))
+
+
+def hashed_source_digest(suite: str = "lv5c") -> str:
+    """The REHEARSAL digest: sha256 over the sorted ``path sha256`` lines of the hashed source set of
+    ``suite`` in the working tree, without the rehearsal fixtures (:data:`REHEARSAL_FIXTURE_PREFIX`) and
+    without documentation and tests (:data:`REHEARSAL_DIGEST_EXCLUDED`: plans, decisions, README files, docs, tests).
+    Rationale: the rehearsal block sums depend on code and data only. The rehearsal document
+    (``tests/ionmc/fixtures/v7r/rehearsal/PROVENANCE.json``, field ``hashed_source_digest``) records it
+    and the calibration accepts the rehearsal only if it equals the current value (Amendment 17 (a)7).
+    ``--print-hashed-source-digest`` prints it (this rehearsal digest, not the suite source identity)."""
+    lines = []
+    for f in source_files(suite):
+        rel = str(f.relative_to(REPO))
+        if not rehearsal_digest_excluded(rel):
+            lines.append(f"{rel} {hashlib.sha256(f.read_bytes()).hexdigest()}")
+    return hashlib.sha256("\n".join(sorted(lines)).encode()).hexdigest()
 
 
 A16_PLAN_FILE = "validation/plans/v3-003d-acceptance.md"
@@ -700,6 +1236,9 @@ def resolve_workers(value: str) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    if "--print-hashed-source-digest" in (argv if argv is not None else sys.argv[1:]):
+        print(hashed_source_digest("lv5c"))
+        return 0
     if "--print-a16-source-digest" in (argv if argv is not None else sys.argv[1:]):
         print(a16_source_digest())
         return 0
@@ -761,7 +1300,22 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     if args.seed_base is None:
         args.seed_base = DEFAULT_SEED_BASES[args.suite]
-    workers = 1 if args.single_process or args.suite == "lv5" else resolve_workers(args.workers)
+    if args.suite == "lv5b" and args.seed_base in V5B_CONSUMED_SEED_BASES:
+        raise SystemExit(
+            f"seed base {args.seed_base} is consumed for lv5b (amendment 11 of the V3-005 plan); "
+            f"the qualification base is {V5B_QUALIFICATION_SEED_BASE}"
+        )
+    if args.suite == "hr5c" and args.seed_base in (*V5C_CONSUMED_SEED_BASES, V5C_QUALIFICATION_SEED_BASE):
+        raise SystemExit(
+            f"seed base {args.seed_base} is consumed or belongs to lv5c; the hr5c qualification base is "
+            f"{HR5C_QUALIFICATION_SEED_BASE}"
+        )
+    if args.suite == "lv5c" and args.seed_base in V5C_CONSUMED_SEED_BASES:
+        raise SystemExit(
+            f"seed base {args.seed_base} is a consumed evidence base (lv5b/hr5/b40d8121); the lv5c "
+            f"qualification base is {V5C_QUALIFICATION_SEED_BASE}"
+        )
+    workers = 1 if args.single_process or args.suite in ("lv5", "lv5b", "hr5", "lv5c", "hr5c") else resolve_workers(args.workers)
     if workers < 1 or args.step_timeout < 1 or not 0.0 < args.scale <= 1.0:
         raise SystemExit("need --workers >= 1, --step-timeout >= 1 and 0 < --scale <= 1")
     single = workers == 1
@@ -774,7 +1328,6 @@ def main(argv: list[str] | None = None) -> int:
         )
     if out.exists():
         raise SystemExit(f"refusing to reuse an existing results directory: {out}")
-    sha, source = resolve_sha(args.expected_sha)
     steps = suite_steps(
         args.suite,
         workers,
@@ -795,6 +1348,14 @@ def main(argv: list[str] | None = None) -> int:
                 f"--only {args.only} does not select exactly those steps of {args.suite}"
             )
         steps = keep
+    # The preflight sees the SELECTED step names (``--only`` takes step numbers such as ``30``; the names
+    # carry the ``NN-`` prefix), so the generation-path exemption can recognise ``v7r-s{k}`` selections.
+    refusal = rehearsal_preflight(
+        args.suite, [step_base_name(x[0]) for x in steps] if args.only else None, args.seed_base
+    )
+    if refusal:
+        raise SystemExit(refusal)
+    sha, source = resolve_sha(args.expected_sha)
     porcelain = git("status", "--porcelain")
     if porcelain:
         raise SystemExit(
@@ -808,7 +1369,7 @@ def main(argv: list[str] | None = None) -> int:
     (out / "manifest.txt").write_text("".join(f"{name}\n" for name, _, _ in steps))
     env_base = dict(os.environ)
     env_base.setdefault("WARP_CACHE_PATH", str(out / "warp-cache"))
-    env_base["PYTHONDONTWRITEBYTECODE"] = "1"
+    env_base.update(STEP_BASE_ENV)
     env_base["PYTHONPATH"] = str(REPO / "src") + os.pathsep + env_base.get("PYTHONPATH", "")
     env_base["IONMC_RUN_SHA"] = sha
     env_base["IONMC_RUN_SUITE"] = args.suite
@@ -824,6 +1385,10 @@ def main(argv: list[str] | None = None) -> int:
             fh.write(f"# command: {' '.join(cmd)}\n# git_sha: {sha}\n# started_utc: {started}\n")
             eff_timeout = step_timeout_s(args.suite, name, args.step_timeout)
             fh.write(f"# step_timeout_s: {eff_timeout}\n")
+            if V7R_CALIBRATION_STEP_PREFIX in name:
+                fh.write(f"# v7r_rehearsal_fixture: {REHEARSAL_FIXTURE_DIR} "
+                         f"sha256={rehearsal_fixture_digest()}\n")  # fmt: skip
+                fh.write(f"# v7r_cal_reps: {V7R_CAL_REPS}\n")
             if name in deferred:
                 fh.write(f"# status: deferred\n# reason: {DEFERRED_REASON}\n\n# exit=0\n")
                 print(f"== {name}: deferred", flush=True)
@@ -832,7 +1397,7 @@ def main(argv: list[str] | None = None) -> int:
             code = run_step(
                 cmd,
                 cwd=REPO,
-                env={**env_base, **extra},
+                env=step_environment(env_base, name, extra),
                 stdout=fh,
                 timeout=eff_timeout,
             )

@@ -51,12 +51,19 @@ GENERATION_CHOICES = ("all", "primary", "secondary")
 @dataclass(frozen=True)
 class ScoringGrid:
     """A regular scoring grid: ``origin_mm`` (corner of voxel (0,0,0)), ``spacing_mm`` (> 0),
-    ``shape`` ``(nx, ny, nz)``, C-ordered ``[ix, iy, iz]``; ``name`` labels the result."""
+    ``shape`` ``(nx, ny, nz)``, C-ordered ``[ix, iy, iz]``; ``name`` labels the result.
+
+    ``kind="annular"`` (V3-005C C8) is an axisymmetric (r, z) tally of the energy deposit alone:
+    the cell ``(ir, 0, iz)`` is the annulus ``ir dr <= r < (ir + 1) dr`` around the axis through
+    ``(origin_x, origin_y)`` and the slab ``z0 + iz dz <= z < z0 + (iz + 1) dz``, with shape
+    ``(n_r, 1, n_z)`` and spacing ``(dr, dr, dz)``; it has the same flat layout and int64
+    accumulators as a Cartesian grid. Tally requests (channels) on it are refused."""
 
     origin_mm: tuple[float, float, float]
     spacing_mm: tuple[float, float, float]
     shape: tuple[int, int, int]
     name: str = "dose"
+    kind: Literal["cartesian", "annular"] = "cartesian"
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "origin_mm", triple("origin_mm", self.origin_mm))
@@ -64,6 +71,15 @@ class ScoringGrid:
         object.__setattr__(self, "shape", int_triple("shape", self.shape))
         if not isinstance(self.name, str) or not self.name:
             raise fail("name must be a non-empty string")
+        if self.kind not in ("cartesian", "annular"):
+            raise fail(f"grid kind must be 'cartesian' or 'annular', got {self.kind!r}")
+        if self.kind == "annular" and (
+            self.shape[1] != 1 or self.spacing_mm[0] != self.spacing_mm[1]
+        ):
+            raise fail(
+                "an annular grid has shape (n_r, 1, n_z) and spacing (dr, dr, dz); its origin is "
+                "(axis x, axis y, z of the first plane)"
+            )
 
     @property
     def n_voxels(self) -> int:
@@ -175,7 +191,10 @@ def overlap_matrix(
 
 def voxel_mass_g(grid: ScoringGrid, geometry: VoxelGeometry) -> NDArray[np.float64]:
     """Mass [g] of every scoring voxel, shape ``grid.shape``: the exact overlap integral of the
-    geometry density [g/cm3] over the voxel (volumes converted from mm3 to cm3)."""
+    geometry density [g/cm3] over the voxel (volumes converted from mm3 to cm3). An annular grid
+    must lie entirely inside a geometry of one uniform density (fail closed otherwise)."""
+    if grid.kind == "annular":
+        return _annular_mass_g(grid, geometry)
     ox = overlap_matrix(grid.edges_mm(0), _geometry_edges(geometry, 0))
     oy = overlap_matrix(grid.edges_mm(1), _geometry_edges(geometry, 1))
     oz = overlap_matrix(grid.edges_mm(2), _geometry_edges(geometry, 2))
@@ -183,6 +202,32 @@ def voxel_mass_g(grid: ScoringGrid, geometry: VoxelGeometry) -> NDArray[np.float
     mass = np.einsum("ia,jb,kc,abc->ijk", ox, oy, oz, rho, optimize=True)
     out: NDArray[np.float64] = mass * 1.0e-3
     return out
+
+
+def annular_cell_volume_mm3(grid: ScoringGrid) -> NDArray[np.float64]:
+    """Volume [mm3] of every cell of an annular grid, shape ``(n_r, 1, n_z)``."""
+    ro = grid.spacing_mm[0] * np.arange(1, grid.shape[0] + 1, dtype=np.float64)
+    ri = grid.spacing_mm[0] * np.arange(0, grid.shape[0], dtype=np.float64)
+    ring = math.pi * (ro * ro - ri * ri) * grid.spacing_mm[2]
+    out: NDArray[np.float64] = np.repeat(ring[:, None, None], grid.shape[2], axis=2)
+    return out
+
+
+def _annular_mass_g(grid: ScoringGrid, geometry: VoxelGeometry) -> NDArray[np.float64]:
+    rmax = grid.spacing_mm[0] * grid.shape[0]
+    box = ScoringGrid(
+        (grid.origin_mm[0] - rmax, grid.origin_mm[1] - rmax, grid.origin_mm[2]),
+        (2.0 * rmax, 2.0 * rmax, grid.spacing_mm[2] * grid.shape[2]),
+        (1, 1, 1),
+    )
+    rho = geometry.densities_g_cm3()
+    if float(np.ptp(rho)) != 0.0:
+        raise fail("an annular scoring grid needs a geometry of one uniform density")
+    vol = 2.0 * rmax * 2.0 * rmax * box.spacing_mm[2] * 1.0e-3
+    m_box = float(voxel_mass_g(box, geometry)[0, 0, 0])
+    if abs(m_box - float(rho.flat[0]) * vol) > 1.0e-12 * abs(m_box):
+        raise fail("an annular scoring grid must lie entirely inside the geometry")
+    return annular_cell_volume_mm3(grid) * 1.0e-3 * float(rho.flat[0])
 
 
 def _geometry_edges(geometry: VoxelGeometry, axis: int) -> NDArray[np.float64]:

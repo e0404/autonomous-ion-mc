@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "git_sha": "087a70a19c0b896008c762643d03f8f7854ebf4e",
+  "request_id": "IR-20261011-031924-C205C8",
+  "created_at_utc": "2026-10-11T03:19:24.418741+00:00",
+  "task_id": "V3-005B",
+  "category": "experiment-boundary",
+  "summary": "V3-005C row V6 / V6-sens: the pre-registered history-count rule (Amendment 14 (g)) and the V6-sens point-set reading (Amendment 17 (c)6) are unsatisfiable at any feasible history count, found at the C8 rehearsal (base 20505000, never evidence). Decision requested before any V6 evidence shard is run: run as frozen (row mechanically report-only, ≈ 20 h host time), amend the two readings before evidence with the contrary reading reported, or defer V6.",
+  "investigation": {
+    "blocked_claim": "Row V6 (Gottschalk 2014 halo, Amendment 14 (g)) can be sized and its V6-sens status fixed by the pre-registered rules before the evidence run",
+    "budget": "Host time: 88 gating shards x 185 s (4.5 h) + 9 variants x 32 shards x 185 s (15 h) + hr5c CUDA shards under option A or B; 0 h under C. Decision needed before any V6 evidence shard at base 20481004/20491004.",
+    "alternatives": [
+      "(A) run as frozen, V6 report-only by construction",
+      "(B) amend the SE-sizing depth set and the V6-sens point set before evidence, contrary reading reported, tolerances unchanged",
+      "(C) defer V6, recorded"
+    ],
+    "attempts": [
+      {
+        "approach": "Apply the N_V6 rule to the 1e6-history rehearsal shard v6-s0 (relative SE per point, measured table read only for point selection)",
+        "outcome": "halo clause -> 88 shards; r = 0 clause needs 116/651/8910 shards at z = 22.0/22.2/22.4 cm and is impossible at 22.6 cm (zero model dose)",
+        "artifact": "RUN-20261011T030353Z-0b25db97 (validation/generated/.../reh-c847cc7-v6/samples/v6-s0.json, content 615fcf31...); scratchpad/c8/n_v6.py"
+      },
+      {
+        "approach": "Apply the V6-sens metric with common random numbers to nominal vs st-hi rehearsal shards (paired ratio SE per halo point)",
+        "outcome": "32 of 261 gating halo points have zero model dose at 1e6 histories (metric infinite at any k); worst finite point needs 345 shards per variant; on the 153-point sizing subset k = 32",
+        "artifact": "RUN-20261011T030829Z-537a9857 (v6-sens-nominal-s0.json b6b16abb...), RUN-20261011T031141Z-88a536e0 (v6-sens-st-hi-s0.json 48f0f9f4...); scratchpad/c8/sens_k.py"
+      }
+    ],
+    "head_sha": "c847cc7559a0daf3fefb89304a429802ca52c31e",
+    "seed_base": 20505000
+  },
+  "reason_autonomous_resolution_not_possible": "Rehearsal at the reviewed head c847cc7559a0daf3fefb89304a429802ca52c31e (Codex REVIEW-e1853ef7 pass), seed base 20505000, warp-cpu float64, 1e6 histories per shard, 20 batches, E0 = 177.84075737 MeV, the frozen Gottschalk 2014 beam.\n\n(1) N_V6 rule (Amendment 14 (g): \"smallest number of 1e6-history shards giving rehearsal-estimated relative SE <= 3 % at every r >= 1 cm point whose measured dose is >= 1e-4 of the r = 0 maximum, and <= 0.5 % at every gating r = 0 point\"; Amendment 17 (c)2 makes every non-missing r = 0 depth a gating point). Shard v6-s0 (RUN-20261011T030353Z-0b25db97, 184 s): halo clause (153 points) worst relative SE 28.1 % at (z 22.0 cm, r 3 cm) -> 88 shards. r = 0 clause (34 points): satisfied with <= 18 shards up to z = 21.8 cm; needs 116 shards at z = 22.0 cm, 651 at 22.2 cm, 8910 at 22.4 cm, and is impossible at 22.6 cm (model dose zero in 1e6 histories; measured 4.3e-4 MeV/g). The rule therefore defines no finite N_V6.\n\n(2) V6-sens condition (Amendment 14 (g) / Amendment 17 (c)4,6: |ratio - 1| + 2 sigma_delta < 0.15 at every non-missing r >= 1 cm point, common random numbers). Shards v6-sens-nominal-s0 (RUN-20261011T030829Z-537a9857) and v6-sens-st-hi-s0 (RUN-20261011T031141Z-88a536e0), 185 s each, same seed: of the 261 gating halo points, 32 have zero model dose at 1e6 histories (z >= 20 cm, measured 6e-6 to 4e-5 of the r = 0 maximum), so the ratio is undefined there and the condition fails at any shard count; the worst finite paired SE needs 345 shards per variant. On the sizing subset (measured >= 1e-4 of the maximum, 153 points) the worst paired SE 0.42 gives k = 32 shards per variant (9 variants, ~15 h host time); the median point needs 1 shard.\n\nConsequence under the frozen text: V6 cannot be sized by its rule, and V6-sens cannot hold, so V6 would be report-only (Amendment 17 (c)7) whatever the data show, after ~20 h of host time (88 shards gating + 288 V6-sens shards at ~185 s, plus the hr5c CUDA shards). The operator directive of 2026-10-10 forbids relaxing acceptance thresholds; the r = 0 2 % and halo 15 %/90 %/10 % tolerances are not in question here, only the SE sizing rule and the point set on which the sensitivity ratio is defined.\n\nContrary-evidence note (recorded in the progress log): while selecting the rule's points the orchestrator printed measured and model mean doses side by side for the rehearsal shard; no residual, interval or verdict was computed and nothing was changed as a consequence; the evidence base 20481004 is unobserved.\n\nNo V6 evidence shard has been run. All other lv5c/hr5c rows (V5, V7-R, V8-nuc, V10/V10-A, V11, R1-D2, E1-B, E-shape) are unaffected and their rehearsal continues; the V10-A deterministic preview failure will be raised separately after C9/C10 with the recorded outcomes.",
+  "requested_input": "Choose one (or state another):\n(A) Run V6 exactly as frozen: N_V6 = 88 (the halo clause; the four deepest r = 0 points recorded as \"SE criterion unmet at the frozen size\", their 2 % point criterion still evaluated), V6-sens with k = 32 shards per variant; the V6-sens condition then fails at the 32 zero-dose points by construction and V6 is report-only, recorded. ~20 h host time.\n(B) Amend before evidence (Amendment 14a, contrary reading reported next to every verdict): N_V6 = 88 from the halo clause with the r = 0 SE clause restricted to depths where it is finite (z <= 21.8 cm), the 2 % point criterion unchanged at every r = 0 depth including the four deepest; the V6-sens condition evaluated on the sizing subset (measured >= 1e-4 of the r = 0 maximum, 153 points) with k = 32, the 32 zero-dose points reported as undetermined. Same host time; the row can gate.\n(C) Defer V6 to a later task with the record \"pre-registered sizing rule unsatisfiable at the rehearsal\"; no V6 shards run; the merge gate (a)6 treats V6 as \"deferred, recorded\".\nAlso: if (A) or (B), confirm k = 32 for V6-sens (sized on the sizing subset) rather than k = N_V6 = 88 (which would be ~41 h).",
+  "decisions_or_tasks_blocked": null,
+  "status": "resolved",
+  "notification": {
+    "status": "sent",
+    "http_status": 200
+  },
+  "resolved_at_utc": "2026-10-11T18:08:29.806731+00:00",
+  "response_file": "response.json"
+}

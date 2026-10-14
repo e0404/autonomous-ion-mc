@@ -194,3 +194,470 @@ and any `cpu_workers > 1` row; conformance of V2 / V2-probe needs all shards and
 invocation (Amendment 5). Crash observations during this task: two intermittent sandbox pytest crashes
 (one segfault, one faulthandler trace) in worker sessions, each clean on an identical rerun; none of the
 22 host runs failed.
+
+## Slice B suites `lv5b` and `hr5` (V3-005B, `steps_v5b.py`)
+
+`lv5b` (qualification base 20471004, 20441004 consumed by Amendment 11; rehearsals 2046xxxx): throughput and shard table, V8-LV (python vs warp-cpu float64
+trajectory parity incl. the nuclear trace and a nuclear-dense set), R1-nuc (A16 `nuclear=False` plus a
+python nuclear-on digest equal to the one measured with the source tree of b84fdf38), V5 ionmc side
+(four steps; the partials hold the per-batch IDD in MeV/(g/cm^2)/primary for `compare_idd_v5.py`), V2b
+(shards plus combine) and V7 (N-scan with f32/f64, grid shift/refinement, coverage replicates; the V7 coverage rule (Amendment 13, Codex REVIEW-be30e621) uses 7200 replicates of 1e4 histories, taken as groups of 20 batches (of 500 histories) of eight sharded 9e6-history simulations (`v7-rep-s0..7`), against an independent 1e6-history reference simulation (`v7-rep-ref`) that fixes the bin set and serves as a cross-check; combine `v7-rep-combine` consumes the nine partials: eight shards and the reference). For each of the three estimators of the frozen row (12-bin profiles `sec_p` and `nuclear_local`, scalar `escaped_neutral`) a reference-free paired equivalence test is applied (Codex REVIEW-22711e6f). The 7200 replicates form 3600 fixed disjoint pairs, replicate j of shard s with replicate j of shard s + 4 (s = 0..3, j = 0..899); a pair is a hit in a bin iff `|mean_j - mean_k| <= sqrt(sem_j^2 + sem_k^2)` and `f_p` is the hit fraction over the bins used. The pairs are disjoint pairs of independent replicates and share nothing, so the `f_p` are independent and identically distributed by construction; there is no reference value, no box, no bootstrap and no shift. Under Gaussian batch means with correct standard errors the paired statistic is Student t with 38 degrees of freedom, so the nominal coverage is `c0 = P(|t_38| <= 1) = 0.6764` and the equivalence region is `[c0 - 0.03, c0 + 0.03] = [0.6464, 0.7064]`. The bins used of the profiles are fixed by the independent 1e6-history run `v7-rep-ref` alone, before any qualification data is seen: reference mean > 0, positive block spread there and the resolvability criterion `r_b = (SEM_ref,b / ref_mean_b) sqrt(n_ref / n_rep) < 0.5` (`n_ref` = 1e6 and `n_rep` = 1e4 histories, i.e. relative SE of the reference below 0.05; the actual `n_ref` of the partial is used in reduced rehearsals). The batch standard error of a replicate is a usable uncertainty only where its expected relative error is below 50 % (the cut lies well inside the gap between the resolvable bins, at most about 0.15 in the rehearsal, and the unresolvable distal bin at about 1.0, so that no bin's inclusion is decided by reference noise); in sparser bins most replicates record nothing and their standard error is undefined, which the miss rule counts as non-coverage, so such bins are excluded from the gate (reported per bin: `rel_se_per_replicate`, `bin_mask`, `excluded_bins` with the reason; at least 10 bins must remain for a profile); that run is now the bin set and a cross-check (`m_ref1e6`: coverage of the single replicates against it, diagnostic only). The bounds are exact finite-sample statements for bounded i.i.d. variables at `alpha_tost = 0.04` per side with no other assumption: for the scalar one-sided Clopper-Pearson on the hit count of the 3600 pairs; for the profiles the empirical Bernstein bound (Maurer and Pontil 2009) `m -/+ eps`, `eps = sqrt(2 V ln(2 / alpha_tost) / n) + 7 ln(2 / alpha_tost) / (3 (n - 1))`, with `V` the sample variance of the `f_p`. The estimator passes iff the lower bound is at least `c0 - 0.03` and the upper bound at most `c0 + 0.03` (and at least 300 pairs and, for profiles, at least 10 bins used); a true paired coverage outside the region is therefore accepted with probability at most 0.04. A pair-bin in which either replicate has a vanishing batch standard error (identical blocks, in practice all zero) is counted as a miss, never a hit, because an undefined standard error cannot certify coverage; such pair-bins are counted and reported (`degenerate_pair_bins`, `degenerate_pairs_total`, `degenerate_pair_fraction`). The gated quantity is the paired one-sigma agreement; it tests the same calibration of the batch standard error as the coverage of a single interval of a replicate against the true mean: for Gaussian batch means with error scale kappa the single-interval coverage is `P(|t_19| <= kappa)` and the paired one `P(|t_38| <= kappa)`, both increasing in kappa, so the paired region [0.6464, 0.7064] is the kappa band [0.939, 1.065] and the single-interval coverage band [0.6405, 0.6997] (centre 0.6701); single-interval coverage is reported as a diagnostic (`m_ref1e6`, the coverage of the single replicates against the independent 1e6 reference). A second gate, the single-interval gate (Codex REVIEW-25b77cf0, -0af7808c), must also pass for the estimator to pass: the coverage of each REPORTED interval `mean_j +- sem_j` of the 5400 replicates of shards 0-5 of the true mean, which is known only through the held-out reference of shards 6-7 (1800 replicates: `mu_H` and `SEM_H = sd / sqrt(1800)`), over the same reference-fixed bin set. At a candidate true mean `mu_H + delta SEM_H` a replicate is a hit iff `|mean_j - mu_H - delta SEM_H| <= sem_j` (half width `sem_j` alone, never widened by the reference; `sem_j = 0` or `SEM_H = 0` is a miss); the target is the one-sample coverage `c1 = P(|t_19| <= 1) = 0.6701` and the region `[0.6401, 0.7001]`. The reference error enters only through a box of half width `Z_box SEM_H` per bin, `Z_box = max(Z_t, Z_boot)` (Student-t quantile at `1 - 0.01 / (2 B)` with 1799 degrees of freedom and the 99 % quantile of the standardised maximum deviation over 5000 bootstrap resamples of the 7200 actual replicate means, seeded from the run seed base and reported); the exact per-bin minimum and maximum coverage over the box come from the interval-count sweep, `m_lo` / `m_hi` are their means over the used bins. Uniform validity follows from monotonicity: if the box contains the true shift, the minimum over the box of the hit count (scalar) is at most the count at the true shift, and `m_lo <= m <= m_hi` at the true shift, so one-sided bounds on `K_min` / `m_lo` (lower) and `K_max` / `m_hi` (upper) are at least as conservative as the same bounds at the unknown true shift, where the hits are i.i.d. given the held-out set. The bounds at `alpha_tost = 0.04` per side are exact Clopper-Pearson on `K_min` / `K_max` for the scalar and a fixed distribution-free Hoeffding radius `sqrt(ln(1 / alpha_tost) / (2 n)) = 0.01726` (`n = 5400`, no variance term) added to `m_hi` and subtracted from `m_lo` for the profiles. Exact: the bounds conditional on the held-out set, the sweep, the monotonicity step. Assumed: the 0.99 box level needs Gaussian marginals of the held-out mean (a mean of 1800 replicate means; t-exact under Gaussianity and checked on the actual replicate means by the bootstrap). The paired gate carries the finite-sample guarantee. The row passes iff all three estimators pass both gates. Reported diagnostics: the per-bin paired coverage and the per-bin skewness of the replicate means; the Monte Carlo calibration of this procedure (Gaussian profiles and scalar, Gamma-block tallies with independent, correlated and zero-inflated bins; 95 % Clopper-Pearson upper bound of the false-acceptance rate at the margins at most 0.05) is the pytest marker `calibration`, excluded from the CI selection and run as the lv5b step `pytest-v7-rep-calibration`; the row passes iff all three estimators pass) `hr5`
+(7 steps; base 20451004; `IONMC_REQUIRE_CUDA=1`, one controlling process): V8 statistical parity samples
+(python in two shards, warp-cpu float64, CUDA float32 and float64), their T12 comparison and V7 f32 vs
+f64 on CUDA. `lv5b` has 25 steps (01 throughput, 02 V8-LV, 03 R1-nuc, 04-07 V5, 08 `v5-compare`, 09-10 V2b shards, 11 V2b combine, 12 `v7-scan`, 13 `v7-shift`, 14-21 `v7-rep-s0..7`, 22 `v7-rep-ref` (bin set and cross-check), 23 `pytest-v7-rep-calibration` (pass = pytest exit status), 24 `v7-rep-combine`, 25 worker partition); step 25 (1-vs-N worker partition) is deferred in the single-process mode. Any
+combine that uses imported partials is `conformant: false` (Amendment 5).
+
+**V7 shard crash and its fix (C37, 2026-10-08).** Two of three full-size V7 replicate shards on the host died with SIGSEGV (exit -11; RUN-20261008T205127Z-ccc40171 after 691 s and RUN-20261008T213342Z-dbb8a88c after 318 s); a sandbox reproduction of the full shard at the rehearsal base with `PYTHONFAULTHANDLER=1` crashed after 23 min with the trace `events.py:201 build_event_model` <- `nuclear_device.py:81 pack_nuclear` <- `nuclear_device.py:200 NuclearDevice.from_table` <- `warp_driver.py:123 _nuclear_inputs` <- `warp_driver.py:268 run_warp_range` <- `run.py:28 run_range` <- `steps_v5b.py:302 batch_estimates`. Cause: the packed nuclear device, including the AME2020 cache verification and parse inside `pack_nuclear`, was rebuilt for every `run_range` call, 18000 times per shard, and the intermittent crash sat in that rebuild (allocation churn of Warp CPU arrays). Fix: `cached_nuclear_device` packs and uploads the device once per process and key (table id and npz sha256, material names, `f_e`, real dtype, device) and `cached_ame2020` parses AME2020 once; the kernels only read the device arrays and the per-run scratch arrays stay per call; the reported `nuclear_device_sha256` is unchanged. Every step now also runs with `PYTHONFAULTHANDLER=1` (`run_suite.STEP_BASE_ENV`), so a native crash leaves a Python trace in the step document. V6 and E1-B (r_index 12, 13,
+hr5 r_index 3) belong to V3-005C.
+
+The hashed source identity of `lv5b` and `hr5` (`environment.txt` `source_hashes`, attested by `summarize.py --attest-sha`) includes the 96 files of the 24 frozen V5 reference case directories under `validation/reference_cases` (`run_suite.V5_CASE_FILES`, enumerated, no tree prefix), so a changed frozen case is reported as `content differs`; the `v5-compare` document records `cases_in_source_identity` and the bound case paths.
+
+## Archive lv5b at head 7aae5bb1 (seed base 20471004, single-process diagnostic mode)
+
+`lv5b-7aae5bb-single-process.json` is the `summarize.py --combine … --attest-sha` summary of 25 host-runner
+subset runs (`run_suite.py --suite lv5b --single-process --step-timeout 3300 --only …`, one host job at a time) at
+the exact head `7aae5bb126924c27f0a61622384b23623c2877e3` (Codex review REVIEW-a9f890415d8b4fc0a9e9774b622a96b7
+passed at this head; it contains the per-process nuclear device cache of C37, commit 41e4bc36). Seed base 20471004
+(Amendment 11; 20441004 consumed). Validation records: the validation manager refuses records for a dirty tree, so the lv5b and hr5 records (status `failed`,
+citing this head, the run ids above and the archives) are keyed to the evidence commit that follows this write-up and are
+listed by `inspect_local_validation V3-005B`.
+
+**Verdict.** `pass: false`: two rows fail their pre-registered criteria, V5 (step 08, hypothesis below) and V7
+(step 24, below); every other executed step passes. `conformant: false` by code, for the reasons the summary lists:
+the single-process diagnostic execution mode (operator directive 2026-10-07), the imported partials of the combine
+steps 08, 11 and 24 (`imported_partials_unverified_by_code`, Amendment 5) and the deferred step
+`25-v3-workers-partition`. The two `problems` entries "`…-08` / `…-24`: archive does not verify ([])" are the
+summarizer's notice that these subset archives carry `pass: false`; the empty list means that no integrity problem
+(source hashes, SHA, manifest) was found. No history count was reduced (`reduced_history_counts: false`).
+
+| Step(s) | Host run id | Wall [s] | Result |
+|---|---|---|---|
+| 01 throughput | RUN-20261008T232659Z-36730982 | — | python 40.7 hist/s, warp-cpu f64 4794 hist/s, V5 5719 hist/s, V2b pair 1454 hist/s; every shard of the declared shard table fits the 3300 s step with the 25 % margin |
+| 02 V8-LV | RUN-20261008T232730Z-c2efd7cf | — | 256 histories at 150 MeV (48 nuclear events, 81 secondaries) and the nuclear-dense set of 96 histories at 100 MeV with σ × 40 (137 events, 198 secondaries): events, species and genealogy identical, maximum continuous difference 0.0 (tolerance 1e-10), all counters 0; pass |
+| 03 R1-nuc | RUN-20261008T232741Z-8765f7c7 | 7 | A16 regression against f3a1dd62 pass (intended-change set none, T1 K = 256 pass); python nuclear-on primary-only digest `3edfce9c…` equal to the b84fdf38 digest; secondary-proton intended-change record (C13) matches; pass |
+| 04–07 V5 ionmc (150 on, 150 off, 200 on, 200 off) | RUN-20261008T232830Z-7e5e1ac3, RUN-20261008T232849Z-b29208b5, RUN-20261008T232903Z-35383eb6, RUN-20261008T232927Z-834308cf | 13, 10, 19, 13 | 1e5 histories each, warp-cpu f64, 20 batches; partials only (producers) |
+| 08 `v5-compare` | RUN-20261008T233530Z-adb25744 | — | **FAIL** (row V5, gating engine TOPAS; table below) |
+| 09–10 V2b shards | RUN-20261008T232946Z-00f81088, RUN-20261008T233536Z-7a78cfad | 332, 332 | 2 × 5e5 per variant, common random numbers |
+| 11 V2b combine | RUN-20261008T234128Z-11611c3e | — | 1e6 per variant: max abs diff 8.7e-6 (tolerance 2e-3), σ_Δ at the deepest depth 1.4e-5 (σ_max 7e-4), conclusive; pass |
+| 12 `v7-scan` | RUN-20261008T234134Z-6adc122f | — | relative-SE slopes over N = 1e4, 1e5, 1e6 (100 batches each): `escaped_neutral` −0.495, `nuclear_local` −0.518, `sec_p_dose` −0.480, all inside [−0.55, −0.45]; f32 vs f64 on warp-cpu (1e5, 100 batches) z +0.44 / −0.51 / −0.68 (bound 3.0); 1.21e6 histories, counters 0; pass |
+| 13 `v7-shift` | RUN-20261008T234458Z-ddd1a717 | — | refined layout: relative mean difference 1.4e-13 (tolerance 1e-6); shifted layout 5.4e-4 (tolerance 1e-3); 1e5 histories; pass |
+| 14–21 `v7-rep-s0..s7` | RUN-20261008T234553Z-6fec0a3c, RUN-20261009T000749Z-f992d0af, RUN-20261009T002947Z-e19bdfcb, RUN-20261009T005146Z-d978ae92, RUN-20261009T011344Z-89f40563, RUN-20261009T013543Z-fbc7a13e, RUN-20261009T015743Z-f1ed7089, RUN-20261009T021938Z-b41c56ca | 1308, 1312, 1313, 1313, 1313, 1313, 1309, 1315 | 9e6 histories each, 900 replicates of 1e4 per shard, counters 0 |
+| 22 `v7-rep-ref` | RUN-20261009T024149Z-ba4ae1ad | 153 | 1e6 histories, fixes the profile bin set (r_b criterion) |
+| 23 `pytest-v7-rep-calibration` | RUN-20261009T024426Z-7715dc72 | 302 | `tests/ionmc/test_v7_coverage.py -m calibration`: 10 passed, 24 deselected; pass |
+| 24 `v7-rep-combine` | RUN-20261009T024938Z-e2a0bb17 | — | 7200 replicates (73e6 histories incl. the reference): **row V7 FAILS** (table below) |
+| 25 worker partition | RUN-20261009T025054Z-7290bda3 | — | deferred (single-process directive), not passed |
+
+Wall times are the `wall_s` of the step documents where the step records one ("—": not recorded by the step).
+
+**Attestation of the imported partials.** The orchestrator built the partials manifest only from the
+`PARTIAL <name> <sha256>` lines of the protected host-runner stdout of the producer runs and recorded each
+digest with its host run id; every staged partial was re-hashed against that digest. The manifest sha256 that
+each combine step read is in its `environment.txt` and in the combined summary's `attestation` block
+(`08-v5-compare` `ca767395…`, `11-v2b-combine` `b63f4ef7…`, `24-v7-rep-combine` `4cded534…`). The code cannot
+read the protected records, hence `conformant: false` (Amendment 5).
+
+| Partial | Host run id | content sha256 |
+|---|---|---|
+| `v5-150-on.json` | RUN-20261008T232830Z-7e5e1ac3 | `0804e5916932731a2d0490380bdc8ddf2dbaed78b38c375d40c67bc92039d00a` |
+| `v5-150-off.json` | RUN-20261008T232849Z-b29208b5 | `0d4c1ececcce87621b022ea628c08129c3eb868ebb3be135d291148a79d940bc` |
+| `v5-200-on.json` | RUN-20261008T232903Z-35383eb6 | `39cea3f05b8eb4e2cae5eace925e1a6e2a488f1bea580187ef2cd7452186bc79` |
+| `v5-200-off.json` | RUN-20261008T232927Z-834308cf | `3fc264f3ae0a5c22acd53ef3672f1c39abb40e35b7cbfb702a707f82d5009933` |
+| `v2b-s0.json` | RUN-20261008T232946Z-00f81088 | `1d329f2170ecd44e6a62318fef0e8153a3456e3fc38bdf88c22296ebdbcd80ce` |
+| `v2b-s1.json` | RUN-20261008T233536Z-7a78cfad | `570934d4c2108dca112d54f0b924e93431a2a3ceb5cc5d49992b4bceb4ba60d5` |
+| `v7-rep-s0.json` | RUN-20261008T234553Z-6fec0a3c | `4d5cc5d1679811b5ecd773aa56d434219231386546a454b66356024ceedaa1da` |
+| `v7-rep-s1.json` | RUN-20261009T000749Z-f992d0af | `791db478849eafe1a8ed1d97aeb2184a87f3563f1e944e8125f328460eb9a5d5` |
+| `v7-rep-s2.json` | RUN-20261009T002947Z-e19bdfcb | `9a8801f5f1a41521cd4d91c1824841be344685cd1a207982f3b0e8e451a92da9` |
+| `v7-rep-s3.json` | RUN-20261009T005146Z-d978ae92 | `cdf3d66435bb80ab3c39336cdff1103bc5594f2bfa7852da0324a06c39d6d65f` |
+| `v7-rep-s4.json` | RUN-20261009T011344Z-89f40563 | `62162b6c140411d30cdbdc324e2a7a6824f0a56b7750aa407adc3f9f4596ad49` |
+| `v7-rep-s5.json` | RUN-20261009T013543Z-fbc7a13e | `5621c846fe27bfcaec2135f49d7d2f7386375d88a5ef3917443387c264e389f3` |
+| `v7-rep-s6.json` | RUN-20261009T015743Z-f1ed7089 | `a450a477243981639a24e18b39677f2829f9fbbfe5d344e047529c3517fb8b25` |
+| `v7-rep-s7.json` | RUN-20261009T021938Z-b41c56ca | `7050381de862fd773778abb109c2aefcc25ece9712a23ea7901171eae307f504` |
+| `v7-rep-ref.json` | RUN-20261009T024149Z-ba4ae1ad | `d65c5c8bd7ea95f641b0bf9a828485ac05c1c9237db5316009164a42d131a6d2` |
+
+**Row V5 (step 08).** `compare_idd_v5.py` on the four ionmc partials (1e5 histories each, jackknife SE over 20
+batches) and the frozen reference runs (three seeds per configuration); relative differences ionmc − reference
+with the 90 % TOST interval; R80 in mm. TOPAS gates, MCsquare is report-only (Amendment 7). The `v5-compare`
+document records `cases_in_source_identity: true`, `analysis_code` `7aae5bb12692`, not dirty.
+
+| Metric (tolerance) | TOPAS 150 MeV | TOPAS 200 MeV | MCsquare 150 MeV (report-only) | MCsquare 200 MeV (report-only) |
+|---|---|---|---|---|
+| peak/plateau (2 %) | +12.5 % [+11.8, +13.2] **fail** (4.951 vs 4.402) | +12.3 % [+11.0, +13.5] **fail** (4.520 vs 4.026) | +11.2 % fail | +11.7 % fail |
+| ΔIDD plateau integral, on − off (10 %) | −18.5 % [−22.7, −14.3] **fail** (1.427 vs 1.752) | −14.7 % [−18.1, −11.3] **fail** (1.826 vs 2.141) | −23.3 % fail | −15.3 % fail |
+| plateau (2 %) | −0.97 % [−1.27, −0.68] pass | −1.56 % [−1.90, −1.21] pass | −1.81 % [−2.07, −1.56] fail | −1.69 % [−2.13, −1.25] fail |
+| R80 (0.5 mm) | −0.18 mm [−0.20, −0.16] pass | +0.01 mm [−0.08, +0.10] pass | +0.48 mm [+0.45, +0.51] fail | +0.64 mm [+0.59, +0.70] fail |
+| total deposit (1 %) | −0.30 % [−0.39, −0.22] pass | −0.54 % [−0.64, −0.43] pass | +0.11 % pass | +0.09 % pass |
+
+κ rule (Amendments 7(c), 9): total deposit passes at both energies (D = −0.30 % / −0.54 %), so κ is **not used**
+(`kappa-not-used`, no failing energy). Row V5 **fails** on peak/plateau and on the ΔIDD plateau integral at both
+energies. Hypothesis, not an attribution (pre-declared before this observation, Amendments 7(d) and 11; decision 0041 limitation 7; to be tested by V11/V5 in V3-005C):
+ionmc has no hadronic elastic scattering (p-p and p-nucleus), which the gating TOPAS physics list contains; the
+exploratory TOPAS cases X1–X4 (`validation/reference_cases/README.md`, C18b, single seed each, not evidence) were
+defined to test this. Outcomes at 150 MeV (peak relative to the seed-averaged TOPAS EM-only
+run; full-physics baseline 0.769, per-seed 0.766–0.771): X1 (full minus hadronic elastic) 0.854, X2 (EM-only plus
+hadronic elastic) 0.909, product X1×X2 0.776 against 0.769 for full; the controls X3 (no ion physics) 0.768 and X4
+(no HP) 0.770 reproduce full. Hadronic elastic scattering is therefore a large, not the only, contributor to the
+TOPAS peak deficit (table and run ids in `validation/reference_cases/README.md`, single seed, not evidence). The
+hypothesis is to be tested by V3-005C (D2 p-p and p-nucleus elastic, V5 re-run on a fresh base),
+not a pass. MCsquare, report-only, also disagrees with ionmc on plateau and R80 (and agrees on total deposit).
+The consumed run at base 20441004 (code b40d8121, independent samples) gave the same verdict pattern against
+TOPAS: peak/plateau +12.6 % / +11.9 %, ΔIDD −20.8 % / −13.4 %, plateau −1.1 % / −1.4 %, R80 −0.15 / −0.004 mm,
+total deposit −0.29 % / −0.58 % (150 / 200 MeV). The superseded chain at ba8751a0 (same base 20471004, same
+seeds) produced bitwise-identical V5 partials (`idd_batches`) and therefore identical numbers.
+
+**Row V7, replicate coverage (step 24; rule of Amendment 13, two gates per estimator, row passes iff all three
+estimators pass both).** 7200 replicates of 1e4 histories (eight 9e6 shards), 3600 disjoint pairs (shard s with
+s + 4), profile bins fixed by `v7-rep-ref`; paired region [0.6464, 0.7064] around c₀ = 0.6764, single-interval
+region [0.6401, 0.7001] around c₁ = 0.6701; bounds at α_tost = 0.04 per side.
+
+| Estimator | Bins used | Paired gate: m, bound interval | Single-interval gate: m (m_lo / m_hi), bound interval | Degenerate pair-bins | Legacy point gate (m_ref1e6) | Verdict |
+|---|---|---|---|---|---|---|
+| `sec_p` (12-bin profile) | 11 (bin 11 excluded, r_b 1.14 ≥ 0.5) | 0.6723, [0.6626, 0.6821] (empirical Bernstein) pass | 0.671 (0.6672 / 0.6737), [0.6499, 0.6909] (Hoeffding) pass | 0 | 0.6655, pass | pass |
+| `nuclear_local` (12-bin profile) | 11 (bin 11 excluded, r_b 1.19) | 0.6756, [0.6665, 0.6848] (empirical Bernstein) pass | 0.6664 (0.6608 / 0.6695), [0.6435, 0.6868] (Hoeffding, radius 0.0173) pass | 0 | 0.6618, pass | pass |
+| `escaped_neutral` (scalar) | 1 | 0.6586, [0.6445, 0.6725] (Clopper–Pearson) **fail**: lower bound 0.6445 < 0.6464 | 0.6557 (0.6535 / 0.6563), [0.6420, 0.6676] (Clopper–Pearson) pass | 0 | 0.6533, pass | **fail** |
+
+Row V7 therefore **fails** under the pre-registered rule; per Amendment 11 there is no further base, and the
+scientific failure is recorded: the V2-NUM uncertainty-coverage evidence of row V7 is not established. The two
+profile estimators passed both gates individually; that is reported, it is not a row pass. The box of the single gate was set by Z_t 2.579 and Z_boot 2.552 (escaped_neutral) and by 3.323 and 3.312
+(nuclear_local). Per-bin paired coverage: `sec_p` 0.664–0.681, `nuclear_local` 0.668–0.683; skewness of the
+replicate means: `sec_p` 0.03–0.15, `nuclear_local` 0.16–0.33, `escaped_neutral` 0.05. Both point estimates of the
+escaped neutral energy lie below their nominal values (paired 0.6586 vs 0.6764, single 0.6557 vs 0.6701).
+*Hypothesis, not a finding:* heavy-tailed 500-history block sums of the escaped neutral energy make the 20-block
+standard error under-cover by about 1.7 % for this scalar; the small skewness of the 1e4-history replicate means
+(0.05) neither confirms nor excludes it. It is handed to V3-005C as a pre-registered re-test. The consumed run at
+20441004 (232/360 = 0.644 under the earlier pooled rule, Amendment 11) is a separate, earlier observation of
+under-coverage for `sec_p` under a different rule; at this base `sec_p` passes both gates.
+
+## Archive hr5 at head 7aae5bb1 (seed base 20451004, CUDA host, one controlling process)
+
+`hr5-7aae5bb-single-process.json` is the combined summary of the seven `hr5` steps at the same head (seed base
+20451004, Amendment 6; `IONMC_REQUIRE_CUDA=1`). `pass: false` only because the python:cpu64 `nuc_local` profile
+comparison is *inconclusive* by rule (below); `conformant: false` by code (single-process diagnostic mode; step 06
+read imported partials, manifest sha256 `b5a0a686…`, from the protected stdout `PARTIAL` lines of steps 01–05).
+
+| Step | Host run id | Wall [s] | Result |
+|---|---|---|---|
+| 01 `v8-stat-python-s0` | RUN-20261009T025102Z-66a5b3d2 | 201 | 1.2e4 histories, PARTIAL `64e168f4892d0c668418fd0e7b2704a00b1b29e5014732ff2e1d1c45ee5e36f0` |
+| 02 `v8-stat-python-s1` | RUN-20261009T025442Z-6e40cbb5 | 199 | 1.2e4 histories, PARTIAL `1f5b03b5bb56d9450a4964041c74f7467adcc9634543627db6be9e1d4c8e3cfd` |
+| 03 `v8-stat-cpu64` | RUN-20261009T025806Z-402fb7d2 | 151 | 1e6, PARTIAL `ce1ea66755b959ddc396ae69d74a2cc130702ae40d91e628807fba0213c5b4b6` |
+| 04 `v8-stat-cuda32` | RUN-20261009T030042Z-3ed4f8f4 | 16 | 1e6, PARTIAL `a8a9af30251a6531c08e72a3f7b1f2581f139a7e2f2b2f4e40f42cbe723e56ae` |
+| 05 `v8-stat-cuda64` | RUN-20261009T030105Z-1de26c57 | 21 | 1e6, PARTIAL `076f840a6bbd5e435635d21f86439f56446025929a51267e93cc3ce7dc5c10c1` |
+| 06 `v8-stat-compare` | RUN-20261009T030206Z-e8743163 | — | every CPU/CUDA pair passes; python:cpu64 `idd` and `sec_p` pass, `nuc_local` **inconclusive** (table below) |
+| 07 `v7-f32-f64-cuda` | RUN-20261009T030132Z-ba3ccef0 | 11 / 15 | 1e6 histories per precision, 100 batches: z −1.66 (`escaped_neutral`), −2.16 (`nuclear_local`), −2.55 (`sec_p_dose`), bound 3.0; pass. Wall 10.7 s float32, 15.0 s float64 |
+
+**V8 statistical parity (T12 comparison, profiles `idd`, `nuc_local`, `sec_p`, scalars with |z| ≤ 3.5).**
+
+| Pair | `idd` p | `nuc_local` p | `sec_p` p | Scalars (z: total deposit, R80, nuclear_local, escaped neutral) | Verdict |
+|---|---|---|---|---|---|
+| cpu64 : cuda32 | 0.92 | 0.99 | 0.61 | −0.77, −0.43, +1.28, +0.35 | pass |
+| cpu64 : cuda64 | 0.20 | 0.14 | 0.27 | −2.26, −1.34, +1.21, −0.55 | pass |
+| cuda32 : cuda64 | 0.30 | 0.48 | 0.19 | −1.54, −0.95, +0.05, −0.91 | pass |
+| python : cpu64 | 0.54 (163/163 bins) | 0.75 on the supported bins; **inconclusive** | 0.51 (157/160 bins) | +1.08, −1.49, −1.06, −1.57 | inconclusive (`nuc_local`) |
+
+The python:cpu64 `nuc_local` profile is inconclusive by the frozen T12 sparse-profile rule
+(`v3-003-acceptance.md`; `ionmc.transport.parity`): at the pre-registered python sample of 2.4e4 histories
+(Amendment 8) only 60 of 161 bins are individually supported and they carry 0.259 of the selected hull's mean
+deposit (< 0.5), so the test cannot conclude even though the supported bins agree (p = 0.75) and the
+`nuclear_local` total agrees (z = −1.06). It is recorded as inconclusive, not as a pass. The binding python ↔
+warp evidence for the nuclear branch is the trajectory parity of lv5b step 02 (identical events and genealogy,
+continuous columns within 1e-10); a larger python sample is an option for V3-005C.
+
+*Observation (not a finding):* on CUDA all three V7 estimators are lower in float32 than in float64 (by 1.0 %,
+1.1 % and 1.2 %; z −1.66 / −2.16 / −2.55, inside the bound 3.0), whereas on warp-cpu (lv5b step 12) the
+float32 − float64 z are +0.44 / −0.51 / −0.68. The consistent sign on CUDA is recorded for V3-005C; it is not a
+failure under the frozen row.
+
+## Corrections recorded after the lv5b/hr5 archives (V3-005C)
+
+- **Welch degrees of freedom of ratio estimates (comparator defect, 2026-10-11, Codex REVIEW-ead8a4be at fe10311).** `compare_idd_v5.difference(..., relative=True)` propagated the denominator uncertainty as `r·b.se` in the standard error but used the unscaled `b.se` in the Welch–Satterthwaite degrees of freedom. Corrected in C7b (and in the new V11 ratio estimator) to use the components `(a.se, |r|·b.se)` consistently. The recorded lv5b V5 verdict at 7aae5bb1 was re-evaluated under the corrected df from the archived `08-v5-compare.txt` estimates (`validation/scripts/reference/v5_df_recheck.py`, recorded SEs and t table unchanged, only the df swapped): **0 of 20 TOST components change** (TOPAS and MCsquare, 150 and 200 MeV, peak/plateau, plateau, R80, total deposit, ΔIDD); the largest df change is 10.86 → 13.95 (MCsquare 200 MeV ΔIDD) and the 90 % intervals move at most in the fourth decimal. The archived record stays as written; the correction applies to every later evaluation (lv5c V5 re-run, V11).
+- **Research-tool record (2026-10-10).** `record_scientific_event` of the research server failed with a bare error for the f_dM provenance resolution (known-broken tool; see `v3-environment` notes of the orchestrator); the event is recorded in decision 0041 (commit 45a0d11) with the acquisition `beefd9b3238c43aa91d3fbb3281b6954` as its artifact.
+
+## Execution incidents and superseded chains (V3-005B)
+
+- **Native crashes of the long V7 shards (chain ba8751a0).** `v7-rep-s1` crashed with SIGSEGV (exit −11) in
+  RUN-20261008T205127Z-ccc40171 after 691 s; the re-run with the same seed, RUN-20261008T210343Z-dccacb06, passed
+  (1779 s). `v7-rep-s2` crashed in RUN-20261008T213342Z-dbb8a88c after 318 s (exit −11). A sandbox reproduction of
+  a full shard at the rehearsal base 20461004 with `PYTHONFAULTHANDLER=1` crashed after 23 min with the trace
+  into `build_event_model` through the per-block rebuild of the packed nuclear device (section "V7 shard crash and
+  its fix" above). Fix: the per-process device cache of C37, commit 41e4bc36. Its estimators are bitwise
+  identical to the pre-cache shards 0 and 1 at ba8751a0 (same seeds 20482004, 20482005; the `estimators` blocks
+  of the partials compare equal), and a shard takes about 29 % less wall time (1838 s at ba8751a0, 1308–1315 s at
+  7aae5bb1). No crash occurred in the qualification chain at 7aae5bb1.
+- **MCP client idle limit (chain ba8751a0).** The client side of the host-runner call aborts after 1800 s without
+  output; the first 1838 s shard call (`v7-rep-s0`, RUN-20261008T201947Z-6a3036f4) was aborted on the client
+  while the host run completed and was published by the runner (pass). Its partial digest was taken from the
+  published step document, not from the protected stdout; this applies to that superseded chain only. Every
+  partial of the qualification chain at 7aae5bb1 came from the protected stdout `PARTIAL` lines (all shards
+  there finished within about 1315 s).
+- **Superseded chains (cross-checks, not evidence).** Review rounds and code fixes superseded the lv5b chains at
+  1790dc99, 15a4c640, 2554be89, df641ded, 273180af, 2f0d2f47, e31e15d7, 2c53b4e7, c5807962, 49b8221f, 4243df1f
+  (steps 01–07 and 09 each), 9c37f115 (01–06), 353d14f5 (01–13 and a 0.8 s guard failure of step 14 before any
+  transport), 41e4bc36 (01–07, 09) and ba8751a0 (01–13 and the incidents above: shard 0 and the re-run of shard 1
+  passed, two crashes): steps 01–13 at most and no V7 replicate-coverage observation (no combine step ran). One
+  `hr5` step (`v8-stat-python-s0`, RUN-20261008T132716Z-49247654) ran at b40d8121 and was superseded with that
+  chain. The consumed lv5b run at b40d8121 (base 20441004) is preserved as
+  `lv5b-b40d812-single-process.json` (`pass: false`, step 14 V7 failed under the earlier pooled rule; Amendment 11).
+
+# V3-005C C2 (elastic data layer, no transport result)
+
+Archive record of steps C2, C2b and C2c of V3-005C (executed on the V3-005B branch; plan
+`validation/plans/v3-005-acceptance.md` Amendments 14 and 15 and the Amendment 15 row-table addendum; decision 0041,
+slice C, "Revised 2026-10-10 (C2b/C2c)"). These steps build and qualify the hadronic elastic table only. **No ionmc
+transport with elastic scattering has been run; nothing in this record is a transport, dose or V5/V11 result.** The
+table is a derived cache artefact (`.ionmc-cache/ionmc-data/derived/elastic-proton-<id>.json` / `.npz`), rebuilt
+deterministically from the registered sources; it is not stored in Git.
+
+- **Table of record (C2b build).** id `f932d6ae21dd24135a8f98f8dcb7c8357dbf292e3c7f6ce183e64fb194a8f584`, npz sha256
+  `68c765f5e10e6d35264b10ce138590c5665d03e4054fd2d6d6ea020639f6b480`, 400 energy nodes on 1–250 MeV (lin-lin in E),
+  schema `ionmc-elastic-proton-table-2`, builder `ionmc-elastic-proton-builder-2`, build time 14.8 s; qualification
+  flags `no_negative_density_in_domain`, `o16_mt5_not_c12_copy`, `shape_normalised`. **C2c build (table of record):**
+  id `25361f8125c9ae03ed4e2b1808ab5ba90a85b6738a57c5cc7c83ca0173a3cfcc`, builder `ionmc-elastic-proton-builder-3`,
+  identical npz arrays (sha256 `68c765f5e10e6d35264b10ce138590c5665d03e4054fd2d6d6ea020639f6b480`); only the JSON
+  diagnostics changed (omitted-correction measure, MF6 per-product gating record). **C2d build (table of record):** id
+  `045c31a2b5681b2d8b718c14645d562ecb787c5c81f0871b24bf092d4004d95c`, builder `ionmc-elastic-proton-builder-4`, identical npz arrays; only the JSON diagnostics changed (total-variation
+  relabelling and field names, MF6 `mf6_rule_as_frozen` and `mf6_rule_revised` records). **C2e build (table of record, Amendment 16):** id
+  `1fd24cff23d3f7e72aabcda2af8bc70ad47b81755f94a2ca55890cb6ae52c591`, builder `ionmc-elastic-proton-builder-5`, npz sha256
+  `1028bb67f57bc96edafe6d3dbcce532013edbbd31b9b80861239b09d9ad4202a` (the qualification array has four flags: `no_negative_density_in_domain`,
+  `o16_mt5_sigma_not_c12_copy`, `o16_mt5_spectra_independent`, `shape_normalised`; all numeric arrays unchanged).
+- **P6 (frozen row), item (4): FAIL, recorded.** The LA150 H-1 (Hale, LAW=5 LTP=1) reconstruction has a negative
+  nuclear-plus-interference density at the 16.26° CM cut below E_min,pp = 12.532 MeV: 542 negative nodes and node
+  midpoints (table JSON `p6.first_negative_nodes`, `negative_density_below_e_min_pp = true`), the last at 12.5 MeV
+  with −0.0219 mb/sr (−0.75 mb/sr at 12 MeV, −5.6 mb/sr at 10 MeV). P6 items (1)-(3) and (5)-(7) pass. The failure
+  stays in the record and is not converted into a pass.
+
+  | Row | Evidence | Head | Seeds | Result |
+  |---|---|---|---|---|
+  | P6 item (4), H-1 < E_min,pp | table JSON `elastic-proton-045c31a2….json` (C2b: `…f932d6ae….json`), field `negative_density_below_e_min_pp` | C2b head 7f8e80a | n/a (deterministic) | **fail**, recorded; revised-domain row P6-D below |
+  | P6-D (revised p-p domain [12.532, 250] MeV) | table JSON flag `no_negative_density_in_domain` (separate sign-test pass) | C2b head 7f8e80a | n/a (deterministic) | pass: 227 nodes and midpoints, minimum +0.0198 mb/sr (C2b build) |
+
+- **Model domains.** p-p [12.532, 250] MeV; p+A [e_min_shape, 250] MeV with C 6.0, N 3.252, O 6.585, Al 2.588,
+  Si 3.971, P 2.475, Ca 5.736 MeV (table JSON `elastic_domain`); σ = 0 below, asserted by the loader. σ_NI above the
+  cut: 191.56 mb at 15 MeV and 140.12 mb at 20 MeV. p+A events below the domain (declared limitation, C2b estimate,
+  p+O in water): 1.468e-3 per 150 MeV history, residual range 0.060 g/cm².
+- **Omitted p-p correction below E_min,pp (total-variation diagnostic; replaces the withdrawn S-wave unitarity "bound" of Amendment 15
+  (a)2(iii), whose value 1.095e-2 is in the C2b JSON field `pp_omitted_events_bound_per_history_150mev`).**
+  M(E) = 2π ∫ |ρ_NI| dμ_CM over 0 ≤ μ_CM ≤ 0.96 from the Hale reconstruction at the grid nodes in [1 MeV, E_min,pp],
+  integrated with n_H = 6.69e22 cm⁻³ over the residual path in water (project range table) down to 1 MeV:
+  4.775e-3 per 150 MeV history (`pp_omitted_ni_correction_total_variation_per_history_150mev`); 9.23e-3 MeV
+  (`pp_omitted_ni_correction_weighted_total_variation_mev`). Total variation of the signed correction: an event-equivalent
+  magnitude, not an expected number of physical events; the weighted form is not energy transferred; the signed
+  correction can cancel and the physical σ_pp below E_min,pp is not available from the evaluation. The residual range
+  below 1 MeV is reported separately and not extrapolated. The 15 MeV ceiling on E_min,pp is pre-registered, not derived from this measure.
+- **O-16 findings.** MF3/MT5 sigma not a C-12 copy: fraction of the 30 shared nodes (7-150 MeV) with relative difference
+  > 1e-3 is 1.0 (median 0.22, max 0.28), CV of σ_O/σ_C 0.058. MF6/MT5 yields as frozen (all compared energies in the
+  denominator, `mf6_rule_as_frozen`): FAIL (`passes: false`); two products are below 50 % because of both-zero nodes,
+  zap 3007 14/30 = 0.467 (16 both-zero nodes) and zap 5012 10/30 = 0.333 (20 both-zero nodes). Revised rule (plan
+  Amendment 15 addendum, `mf6_rule_revised`; informative-node denominator; every product differs at fraction 1.0) was written after the outcome
+  was observed and is **report-only (post-outcome analysis, Amendment 16 item 1)**; it influences no flag. The sigma half gives
+  `o16_mt5_sigma_not_c12_copy` = true. Amendment 16 spectra evidence (`o16_mt5_spectra_finding`, row X-MT5-SPEC): KS distance D between the
+  O-16 and C-12 MF6/MT5 product energy spectra, n@50 0.04226, n@100 0.06621, n@150 0.05736, p@50 0.06928, p@100 0.05830, p@150 0.05599, α@50 0.23019, α@100 0.18874, α@150 0.20834; D > 0.02 at 9 of 9, D > 0 at all 9: PASS, `o16_mt5_spectra_independent` = true.
+  MT2 remains a recorded C-12 copy (MF3 maximum relative difference
+  9.09e-5 over 34 nodes from 24 MeV; never a construction input).
+- **MCS no-hadronic-term check:** pass (`test_mcs_scattering_power_has_no_hadronic_term`), with the import-closure
+  caveat (EM-only `ionmc.data.cache`, `nist_star`, `registry` are in the closure) and f_dM provenance unverified
+  (open finding before C4); details in `docs/architecture/transport.md`.
+- **Construction-source correction.** S(E) above 150 MeV from the Geant4 BGG p-p formula only; PDG rpp2022 p-p
+  compilation reclassified as evaluation (report-only V10), removed from the table identity (role use id
+  770debc97dbd4d00b4cb2e6e44a6a8b0).
+- **Reserved diagnostics.** `elastic_below_domain`, `pp_below_domain` (land with C4/C5).
+- **Reviews.** Codex REVIEW-c856e576: changes_required (findings F1-F4, resolved by Amendment 15 and the C2b commit
+  7f8e80a); Codex REVIEW-54fe3b7b: changes_required (F1 unitarity bound, F3 plan-row accounting, F4 records; resolved
+  in C2c by the row-table addendum, the data-based omitted-physics measure, decision 0041 and this record). A Codex
+  approval is not scientific validation.
+
+# V3-005C results: archives `lv5c` and `hr5c` at head dd976c5a (elastic channel, V3-005B branch)
+
+Qualification SHA `dd976c5a69850b9597ac4da938792d4273a71719`. Bases: `lv5c` 20481004, `hr5c` 20491004 (rehearsals 2050xxxx, never evidence). Execution mode: single-process diagnostic (operator directive 2026-10-07), one host job at a time, one step per host call. Archives: `lv5c-dd976c5-single-process.json` (86 steps, 88 host runs including the two direct executions) and `hr5c-dd976c5-single-process.json` (11 steps), made by `summarize.py --combine <dirs> --expected-sha dd976c5a… --attest-sha dd976c5a…`. **Both archives are `pass: false` and `conformant: false` by code** (single-process mode, imported partials of the combine steps `11, 16, 21, 22, 25, 79, 80, 84` on lv5c and `08` on hr5c, deferred `86-v3-workers-partition` on lv5c, and the failed rows below). The summaries were regenerated at C11 with the corrected `summarize.py` (see "Summarizer corrections at C11"); the earlier C9/C10 versions listed failed steps as "archive does not verify ([])" and had the V7-R conjunction inverted.
+
+**No passing record is created and the task cannot merge.** Merge gates per plan Amendment 14 (a)6 (P6 replaced by P6-D, Amendment 15): scientific gates V5, V6 (status fixed by V6-sens), V7-R including its calibration step, V8-nuc, V10-A; implementation gates P6-D, P7, P5-ext, C1-ext, R1-D2, V8-LV, CI. Failed scientific gates at this head: **V5, V6 (failed, not sized; Amendment 14a (a)4 and 18 (c)), V7-R (calibration), V10-A**. V8-nuc, P7, R1-D2 and V8-LV pass. A row recorded as "failed, not sized under the pre-registered rule" is a failed scientific gate (Amendment 18 (c)). V11, V7-scan-el and the report-only rows do not change that.
+
+## Row verdicts
+
+| Row | Gate | Verdict | Numbers |
+|---|---|---|---|
+| V5 vs TOPAS (step 21) | merge gate | **FAIL** | peak/plateau −3.7 % (150 MeV) and −4.9 % (200 MeV) against the 2 % criterion (lv5b without the elastic channel: +12.5 % / +12.3 %: the elastic channel over-corrects); nuclear on-off plateau-integral ΔIDD +10.3 % at 150 MeV (tolerance 10 %, fail) and +6.7 % at 200 MeV (pass); plateau, R80 (−0.30 / −0.32 mm) and total deposit (−0.3 / −0.5 %) pass; against MCsquare peak/plateau −4.8 % / −5.3 % (fail) |
+| V5 attribution (step 22) | follows V5 | stop rule **triggered** | peak/plateau fails low (< −2 %) at both energies; attribution ladder stops at rung 1, "p+A angular shape (radius rule of D-1)"; pre-registered expectation 0.985 / 0.986 for the peak/plateau ratio, observed 0.963 / 0.951 |
+| V11 elastic factor (step 16) | report with tolerance | **FAIL** | F (peak/plateau, EM+elastic over EM-only) ionmc 0.857 / 0.844 against TOPAS 0.892 / 0.887 at 150 / 200 MeV (tolerance 0.02); plateau gain +0.006 / +0.008 above TOPAS (tolerance 0.005); rows 12/13 elastic factor F_el 0.889 / 0.891, report-only |
+| V7-R (steps 30–46, 47–77, 78–80) | merge gate | **FAIL (calibration)** | calibration FAIL: surrogate `archive_fitted`, paired_low margin, paired gate alone 150/3200 = 4.69 % > 4 % (the only failing requirement); `rehearsal_block_sums`: paired_low joint 55/3200 (CP95 upper 0.0215), paired gate 11.5 %, single_high joint 117/3200 (upper 0.0425), single gate 11.6 %; power 0.954 / 0.951. Gates PASS (`escaped_neutral` 0.685, `sec_p` 0.674, `nuclear_local` 0.673). Row verdict "uncertainty-coverage evidence not established" |
+| V10-A (step 03) | merge gate | **FAIL** | the frozen criteria fail; the neutral-shape fallback trigger (step 11) did not fire |
+| V6, V6-sens (steps 28, 29; hr5c 10, 11) | merge gate | **failed, not sized** | not sized under the pre-registered rule (Amendment 14a (a)4); no V6 shard was run. The follow-up row V6-F is pre-registered (Amendment 18, `validation/plans/v3-005c-v6f-followup.md`) and was not executed in V3-005C |
+| V7-scan-el (step 26) | report | **FAIL** | `sec_p_dose` relative-SE slope −0.5526 against [−0.55, −0.45]; `escaped_neutral` −0.510 and `nuclear_local` −0.502 pass; recorded, no repeat |
+| V8-nuc (hr5c 08) | merge gate | **PASS** | T12 conclusive, p 0.50, 160 groups |
+| V8 CPU/CUDA pairs (hr5c 08), V7 f32/f64 on CUDA (hr5c 09) | | pass | |
+| V8-LV (step 09), R1-D2 (08), V2b-el (25), V7-shift-el (27), E1-B (84), P7 (10), V10 (02), X-ENDF (05), D9-BGG (06) | | pass / executed | report-only rows pass when executed |
+| E-shape (85, 85b) | report | executed | R80 shift 0.0004 mm; the archive row reads `pass: false` because step 85 failed (read-only cache), the direct execution 85b is outside the archive (see Incidents) |
+| `v3-workers-partition` (86) | | deferred | single-process directive; not a pass |
+
+Row table of the regenerated lv5c archive `rows` (`pass`): V5 false, V11 false, V10-A false, V6 false (verdict failed), V6-sens false (failed), V7-R false (`gates_pass` true, `calibration_pass` false, `calibration_status_pass` false, `calibration_shards_established` true), V7-scan-el false, E-shape false (step 85); true: R1-D2, P7, V2b-el, V7-shift-el, E1-B, V8, V10, V10-A-trigger, X-ENDF, D9-BGG. hr5c `rows`: V8-nuc true, V8 true, V6 false, V6-sens false.
+
+The 31 calibration shards (`pytest-v7r-calibration-s0..s30`) all exited 0 (pytest passes with the exact expected counts); the calibration **verdict** is made by `v7r-calibration-combine` from the sealed shard records. The calibration verdict FAIL therefore appears in step 78b (direct execution) and in the `calibration_status` of the step 79 document, not in a pytest exit status.
+
+**Reading.** V5: the elastic channel removed the lv5b excess (+12.5 / +12.3 %) and overshot it (−3.7 / −4.9 %); V11 shows the same direction (ionmc's elastic effect on the peak/plateau ratio is stronger than the TOPAS g4h-elastic_HP effect, 0.857 / 0.844 against 0.892 / 0.887). These are measured outcomes against pre-registered criteria, not clinical claims.
+
+## Step table `lv5c` (86 steps; 74 / 74b, 78 / 78b, 85 / 85b attempts)
+
+Wall times are the `wall_s` of step documents that record one. Steps 03 and 21 are summarised under Row verdicts.
+
+| Step | Host run id | Exit | Wall [s] | Note |
+|---|---|---|---|---|
+| 01 v6-e0 | RUN-20261012T142331Z-6aceaf89 | exit 0 |  | deterministic E0 record |
+| 02 v10-pp-level | RUN-20261012T142338Z-732b8cb8 | exit 0 |  | report-only |
+| 03 v10-a | RUN-20261012T142343Z-081123c3 | exit 1 |  |  |
+| 04 v10-a-xcheck | RUN-20261012T142350Z-d48d519a | exit 0 |  |  |
+| 05 x-endf | RUN-20261012T142405Z-5b759e89 | exit 0 |  | report-only |
+| 06 d9-bgg | RUN-20261012T142414Z-ab9af4d3 | exit 0 |  | report-only |
+| 07 lv5c-throughput | RUN-20261012T142418Z-c445012f | exit 0 |  | shard table fits |
+| 08 r1-d2-regression | RUN-20261012T142450Z-5c6934c9 | exit 0 |  |  |
+| 09 v8-lv-python-vs-warp-cpu | RUN-20261012T142751Z-f0b78837 | exit 0 |  |  |
+| 10 p7-sampler | RUN-20261012T142803Z-9b29026d | exit 0 |  |  |
+| 11 v10-a-trigger | RUN-20261012T142818Z-56c07614 | exit 0 |  |  |
+| 12 v11-ionmc-150-emel | RUN-20261012T142823Z-8eeefeef | exit 0 | 16 |  |
+| 13 v11-ionmc-150-emonly | RUN-20261012T142844Z-fc789c1d | exit 0 | 10 |  |
+| 14 v11-ionmc-200-emel | RUN-20261012T142859Z-c92f4b20 | exit 0 | 21 |  |
+| 15 v11-ionmc-200-emonly | RUN-20261012T142925Z-e73d684e | exit 0 | 13 |  |
+| 16 v11-compare | RUN-20261012T142957Z-a8e41216 | exit 1 |  |  |
+| 17 v5-150-on | RUN-20261012T143018Z-e85b0931 | exit 0 | 19 |  |
+| 18 v5-150-off | RUN-20261012T143043Z-a0e16640 | exit 0 | 10 |  |
+| 19 v5-200-on | RUN-20261012T143057Z-29fba190 | exit 0 | 25 |  |
+| 20 v5-200-off | RUN-20261012T143127Z-872eaeb7 | exit 0 | 13 |  |
+| 21 v5-compare | RUN-20261012T143203Z-1b3b1ecf | exit 1 |  |  |
+| 22 v5-attribution | RUN-20261012T143235Z-2b818275 | exit 1 |  |  |
+| 23 v2b-el-s0 | RUN-20261012T143243Z-bc793fcd | exit 0 | 376 |  |
+| 24 v2b-el-s1 | RUN-20261012T143904Z-1b29c5b6 | exit 0 | 375 |  |
+| 25 v2b-el-combine | RUN-20261012T144532Z-da7cee10 | exit 0 |  |  |
+| 26 v7-scan-el | RUN-20261012T144538Z-92368680 | exit 1 |  |  |
+| 27 v7-shift-el | RUN-20261012T144933Z-135254db | exit 0 |  |  |
+| 28 v6-unsized | RUN-20261012T145034Z-5cfae18d | exit 1 |  |  |
+| 29 v6-compare | RUN-20261012T145039Z-dc059586 | exit 1 |  |  |
+| 30 v7r-s0 | RUN-20261012T145045Z-1c67b3aa | exit 0 | 757 |  |
+| 31 v7r-s1 | RUN-20261012T150327Z-05fce358 | exit 0 | 751 |  |
+| 32 v7r-s2 | RUN-20261012T151604Z-5a3360af | exit 0 | 755 |  |
+| 33 v7r-s3 | RUN-20261012T152850Z-f67b987b | exit 0 | 776 |  |
+| 34 v7r-s4 | RUN-20261012T154151Z-6d81cbd5 | exit 0 | 757 |  |
+| 35 v7r-s5 | RUN-20261012T155440Z-c1b94e58 | exit 0 | 753 |  |
+| 36 v7r-s6 | RUN-20261012T160719Z-ce4b8672 | exit 0 | 754 |  |
+| 37 v7r-s7 | RUN-20261012T161959Z-202b631a | exit 0 | 752 |  |
+| 38 v7r-s8 | RUN-20261012T163238Z-0364063e | exit 0 | 752 |  |
+| 39 v7r-s9 | RUN-20261012T164516Z-531dda1f | exit 0 | 755 |  |
+| 40 v7r-s10 | RUN-20261012T165757Z-71c1ccb8 | exit 0 | 754 |  |
+| 41 v7r-s11 | RUN-20261012T171049Z-12e0d24c | exit 0 | 758 |  |
+| 42 v7r-s12 | RUN-20261012T172333Z-07b1b89e | exit 0 | 754 |  |
+| 43 v7r-s13 | RUN-20261012T173614Z-6e01ba2c | exit 0 | 754 |  |
+| 44 v7r-s14 | RUN-20261012T174900Z-d77f6f70 | exit 0 | 755 |  |
+| 45 v7r-s15 | RUN-20261012T180142Z-753dbea2 | exit 0 | 755 |  |
+| 46 v7r-ref | RUN-20261012T181425Z-b85bf905 | exit 0 | 166 |  |
+| 47 pytest-v7r-calibration-s0 | RUN-20261012T181717Z-af783b9b | exit 0 |  |  |
+| 48 pytest-v7r-calibration-s1 | RUN-20261012T183550Z-ba1d0680 | exit 0 |  |  |
+| 49 pytest-v7r-calibration-s2 | RUN-20261012T185404Z-55dd60fd | exit 0 |  |  |
+| 50 pytest-v7r-calibration-s3 | RUN-20261012T191218Z-24ddc1d6 | exit 0 |  |  |
+| 51 pytest-v7r-calibration-s4 | RUN-20261012T193031Z-272be475 | exit 0 |  |  |
+| 52 pytest-v7r-calibration-s5 | RUN-20261012T194844Z-f60cb799 | exit 0 |  |  |
+| 53 pytest-v7r-calibration-s6 | RUN-20261012T200652Z-076dec84 | exit 0 |  |  |
+| 54 pytest-v7r-calibration-s7 | RUN-20261012T202500Z-2388e432 | exit 0 |  |  |
+| 55 pytest-v7r-calibration-s8 | RUN-20261012T204304Z-3b016f92 | exit 0 |  |  |
+| 56 pytest-v7r-calibration-s9 | RUN-20261012T210116Z-37646ca4 | exit 0 |  |  |
+| 57 pytest-v7r-calibration-s10 | RUN-20261012T211932Z-d05a5139 | exit 0 |  |  |
+| 58 pytest-v7r-calibration-s11 | RUN-20261012T213741Z-5dab4929 | exit 0 |  |  |
+| 59 pytest-v7r-calibration-s12 | RUN-20261012T215558Z-b01d7c89 | exit 0 |  |  |
+| 60 pytest-v7r-calibration-s13 | RUN-20261012T221403Z-0ba7b31e | exit 0 |  |  |
+| 61 pytest-v7r-calibration-s14 | RUN-20261012T223209Z-cf3f2b42 | exit 0 |  |  |
+| 62 pytest-v7r-calibration-s15 | RUN-20261012T225019Z-1df18541 | exit 0 |  |  |
+| 63 pytest-v7r-calibration-s16 | RUN-20261012T230832Z-3f173661 | exit 0 |  |  |
+| 64 pytest-v7r-calibration-s17 | RUN-20261012T232647Z-0e98502f | exit 0 |  |  |
+| 65 pytest-v7r-calibration-s18 | RUN-20261012T234456Z-90c53c13 | exit 0 |  |  |
+| 66 pytest-v7r-calibration-s19 | RUN-20261013T000303Z-fd28758c | exit 0 |  |  |
+| 67 pytest-v7r-calibration-s20 | RUN-20261013T002112Z-b443dfa6 | exit 0 |  |  |
+| 68 pytest-v7r-calibration-s21 | RUN-20261013T003917Z-1e8b021e | exit 0 |  |  |
+| 69 pytest-v7r-calibration-s22 | RUN-20261013T005711Z-c79662dd | exit 0 |  |  |
+| 70 pytest-v7r-calibration-s23 | RUN-20261013T011511Z-3bfe8cdf | exit 0 |  |  |
+| 71 pytest-v7r-calibration-s24 | RUN-20261013T013318Z-d12f5a15 | exit 0 |  |  |
+| 72 pytest-v7r-calibration-s25 | RUN-20261013T015119Z-d926154d | exit 0 |  |  |
+| 73 pytest-v7r-calibration-s26 | RUN-20261013T020920Z-069d132a | exit 0 |  |  |
+| 74b pytest-v7r-calibration-s27 | RUN-20261013T023833Z-6393b1e4 | exit 0 |  | first attempt RUN-20261013T022727Z-421ff195 failed with an interpreter anomaly (tuple_iterator TypeError) after 633 s; recorded, not used |
+| 75 pytest-v7r-calibration-s28 | RUN-20261013T025632Z-16f2284b | exit 0 |  |  |
+| 76 pytest-v7r-calibration-s29 | RUN-20261013T031433Z-f4d73140 | exit 0 |  |  |
+| 77 pytest-v7r-calibration-s30 | RUN-20261013T033237Z-f43e50d8 | exit 0 |  |  |
+| 78 v7r-calibration-combine | RUN-20261013T033755Z-4d78d844 | exit 1 |  | run_suite registration lacks --out-dir: OSError read-only 'samples'; executed directly as 78b |
+| 78b v7r-calibration-combine (direct) | RUN-20261013T033841Z-df5bc0de | direct (see Incidents) |  |  |
+| 79 v7r-combine | RUN-20261013T033920Z-a23b92fb | exit 1 |  |  |
+| 80 v7r-diag | RUN-20261013T033946Z-9f7b46dd | exit 0 |  |  |
+| 81 e1-b-s0 | RUN-20261013T033954Z-2e0b57d1 | exit 0 | 543 |  |
+| 82 e1-b-s1 | RUN-20261013T034903Z-4f6ab10a | exit 0 | 543 |  |
+| 83 e1-b-s2 | RUN-20261013T035812Z-d5231116 | exit 0 | 543 |  |
+| 84 e1-b-compare | RUN-20261013T040730Z-e872f2ad | exit 0 |  |  |
+| 85 e-shape-exploratory | RUN-20261013T040736Z-3f6dcd5b | exit 1 |  | FAILED: exploratory table build into read-only cache (OSError); see 85b |
+| 85b e-shape-exploratory (direct) | RUN-20261013T040917Z-c6a7d10e | direct, executed |  | writable cache copy; verdict executed; R80 shift 0.0004 mm |
+| 86 v3-workers-partition | RUN-20261013T040758Z-fbda7895 | exit 0 |  | deferred (single-process directive) |
+
+Steps 11, 16, 21, 22, 25, 79, 80 and 84 are consumers of imported partials (attestation manifests in `environment.txt` and the summary `attestation` block; digests in the ledger `partials-dd976c5.json`, one `PARTIAL` line per producer run, except the calibration records below).
+
+## Step table `hr5c` (11 steps, base 20491004, CUDA host, one controlling process)
+
+| Step | Host run id | Exit | Wall [s] | Result |
+|---|---|---|---|---|
+| 01–04 v8-stat-python-s0..s3 | RUN-20261013T042034Z-554308c4, RUN-20261013T042946Z-6bf1a3d8, RUN-20261013T043853Z-ce931090, RUN-20261013T044759Z-278eb9a9 | 0 | 546, 541, 540, 539 | 3e4 histories each (1.2e5 python total in the T12 comparison) |
+| 05 v8-stat-cpu64 | RUN-20261013T045704Z-adb3630a | 0 | 173 | 1e6 histories |
+| 06 v8-stat-cuda32 | RUN-20261013T050002Z-35c80ac8 | 0 | 22 | 1e6 histories |
+| 07 v8-stat-cuda64 | RUN-20261013T050030Z-f22739b4 | 0 | 26 | 1e6 histories |
+| 08 v8-stat-compare | RUN-20261013T050112Z-f82a2dc5 | 0 | | V8 pairs pass; V8-nuc pass (T12 conclusive, p 0.50, 160 groups) |
+| 09 v7-f32-f64-cuda | RUN-20261013T050123Z-9d30dcc9 | 0 | | pass |
+| 10 v6-unsized | RUN-20261013T050157Z-16c75ab8 | 1 | | failed by design (not sized) |
+| 11 v6-cuda-compare | RUN-20261013T050202Z-a824f328 | 1 | | failed by design (unsized) |
+
+## C8 rehearsal (base 20505000, never evidence)
+
+| Run | Head | Step | Wall | Outcome |
+|---|---|---|---|---|
+| RUN-20261011T013631Z-beffd5fa | 992b9ec | 07-lv5c-throughput | 35 s | rates (sized at 3300 s: defect, fixed in C6b) |
+| RUN-20261011T013718Z-1fc90c28 | 992b9ec | 29-v7r-s0 | 758 s | timing only (worktree edited during the run) |
+| RUN-20261011T030353Z-0b25db97 | c847cc75 | v6-shard s0 (direct) | 184 s | N_V6 sizing input |
+| RUN-20261011T030829Z-537a9857 | c847cc75 | v6-sens-shard nominal s0 (direct) | 185 s | V6-sens sizing input |
+| RUN-20261011T031141Z-88a536e0 | c847cc75 | v6-sens-shard st-hi s0 (direct) | 185 s | V6-sens sizing input |
+| RUN-20261011T031454Z-2c505136 | c847cc75 | hr5c 01-v8-stat-python-s0 | 545 s | V8-nuc layout confirmed |
+| RUN-20261011T032408Z-08dd0427 | c847cc75 | calibration archive_fitted, 200 reps (direct pytest) | 1018 s | misses at n = 200, so 3200 (Amendment 14a) |
+| RUN-20261011T034222Z-16d64100 | c847cc75 | calibration Gaussian / Amendment 13 cases (direct pytest) | 308 s | one shard |
+| RUN-20261011T034756Z-a78b4deb | c847cc75 | 07-lv5c-throughput | 27 s | shard_table_ok; E1-B undeclared (3 shards) |
+| RUN-20261011T051756Z-83ff4a06 | 22e6e88 | 30-v7r-s0 | 761 s | timing only (dirty after) |
+| RUN-20261011T054546Z-24509d70 | 41d7afd8 | v7r-shard s0 (direct) | 756 s | timing only (digest changed) |
+| RUN-20261011T060811Z-46c17054 | 52a2b54f | 30-v7r-s0 | 0 s | refused by the preflight (numeric --only; fixed in C8e) |
+| RUN-20261011T061056Z-04cca6e8 | 6df0e554 | 30-v7r-s0 | 763 s | fixture shard (superseded by the C8g re-run) |
+| RUN-20261011T062344Z-299a4a8d | 6df0e554 | 31-v7r-s1 | 755 s | fixture shard (superseded by the C8g re-run) |
+| RUN-20261011T064548Z-75e1120c | c6f16e31 | 47-pytest-v7r-calibration-s0 | 1094 s | timing (sizing holds); counts deterministic |
+
+The evidence-head V7-R rehearsal block-sum fixture (`tests/ionmc/fixtures/v7r/rehearsal`) was rebuilt at each hashed-source change; the one used here: shards RUN-20261011T211956Z-f557ad73 (v7r-s0, 753 s) and RUN-20261011T213235Z-f0c452bd (v7r-s1, 753 s) at clean head 0fdac52f, rehearsal digest `05761dc8…`, committed at dd976c5a. Earlier fixture chains (6df0e554, 1a86a08c, df596559, 79b33058, 8f7ddb4e) are superseded.
+
+## Records per Amendment 14a (d)
+
+- lv5b `r1-nuc` frozen digest no longer reproduces at HEAD (schema: `elastic_mev` field added in C3; all other fields identical field by field); lv5c R1-D2 (B) reproduces `3edfce9c…` with the field dropped.
+- `CONSUMED_R_INDICES` = range(0, 12) (lv5b r_index 12/13 never run).
+- R1-D2 (C) seeds: IDD k = 0, 1; lateral k = 2, 3 of r_index 3.
+- Rung-3 residual energy equivalent formula (Amendment 14a (d)).
+- Contrary-evidence note: measured and model V6 means were displayed side by side during the sizing inspection (rehearsal base; no residual, no verdict, nothing changed as a consequence; evidence base 20481004 unobserved).
+- Two concurrent sandbox pytest runs produced one segfault in `test_transport_t12` (C8b); the single run completed cleanly; recorded.
+- V6 / V6-sens: failed, not sized under the pre-registered rule (Amendment 14a (a)4); IR-20261011-031924-C205C8 is retained as provenance only (record in `reference_requests/interventions/`, status resolved with the operator's response).
+
+## Incidents and deviations (V3-005C)
+
+- **Superseded partial C9 at 37e87ecf.** C9 was started at 37e87ecf (v5.seed fingerprint defect not yet found): steps 01–06 ran. The defect surfaced at step 16 (`v11-compare`: replicates differ in `config_sha256`; the 12 C7 case files carry a per-seed `v5.seed` that `compare_batches.run_fingerprint` did not strip). C9a (df596559) strips it with a CI test over the committed groups; that run is superseded and no result of it is used. Both failed step-16 publications were kept.
+- **System restart zeroed published copies.** The operator's memory-issue restart zeroed the published copies of the 37e87ecf steps 03–06 (all files 0 bytes); the steps were re-run deterministically (03b RUN-20261011T180918Z-e5cdfbe1, same `v10-a` FAIL and PARTIAL `de6e2599…`). That chain is superseded by the dd976c5a run.
+- **WSL crashes (2026-10-11, 2026-10-12) and the operator's diagnostic rules.** WSL crashed during the full suite on the C9g tree; operator rules: one heavy job at a time, full external timestamped logs, `pytest -X faulthandler -u -v --capture=tee-sys --tb=long`, one instrumented re-run, narrow first if it crashes again. The instrumented re-run passed (1239 passed, 42 skipped, 41 deselected, 517.5 s); the interrupted attempt is recorded as incomplete.
+- **Shard-74 interpreter anomaly.** `pytest-v7r-calibration-s27` (`rehearsal_block_sums` part 12), RUN-20261013T022727Z-421ff195, failed after 633 s with `TypeError: unsupported operand type(s) for /: 'tuple_iterator' and 'float'` in `steps_v5b._betacf` (a float local became a tuple_iterator): a process-level fault, not a logic error (27 sibling shards passed; the computation is deterministic). One re-execution of the same deterministic shard, RUN-20261013T023833Z-6393b1e4, passed (1072 s). The failed attempt is kept on record, not used (host memory suspected).
+- **Wrapper defect 1: `v7r-calibration-combine` registration without `--out-dir`.** Step 78 (RUN-20261013T033755Z-4d78d844) wrote its status partial to the relative `samples` and failed with a read-only OSError. The step was executed directly at the same SHA with the same arguments and out dir (78b, RUN-20261013T033841Z-df5bc0de; sealed `v7r-calibration-status` partial `8451f463…`). Fixed in C11 (`run_suite.py` passes `--out-dir`; test).
+- **Wrapper defect 2: exploratory table built into the shared cache.** Step 85 (RUN-20261013T040736Z-3f6dcd5b) tried to build the forced-isotropic exploratory table in the read-only shared cache (OSError). The step was executed directly with a writable cache copy (85b, RUN-20261013T040917Z-c6a7d10e; verdict executed, R80 shift 0.0004 mm). Fixed in C11 (the table is built into `<out-dir>/exploratory-cache`; test). Both direct executions run the same code at dd976c5a; their documents are in the protected host records, not in the combined archive, so the archive rows E-shape (step 85) and the calibration status come from the failed wrapper runs and from the consumer, respectively; `complete: false` of the lv5c archive reflects exactly these two steps (no JSON document).
+- **Calibration records sealed inside the file; no PARTIAL line.** The calibration steps print no `PARTIAL` line (C8b omission): the manifest for `v7r-calibration-combine` was built from each record's internal `content_sha256` and the host run id (ledger `sealed_records`), a deviation from the PARTIAL-line rule recorded here.
+- **Hashed-plan digest finding (Amendment 18 (d)).** `validation/plans/*.md` and `decisions/*.md` were in the hashed source set, contradicting Amendment 17 (a)7, so the rehearsal fixture went stale on every documentation commit. The rehearsal digest now excludes `validation/plans/`, `decisions/`, docs and README files (suite source identity and attestation unchanged); C9b 79b33058.
+- **Concurrent-pytest segfault.** A second concurrent full pytest run segfaulted in `test_transport_t12` (C8b); not repeated concurrently since.
+- **V6-F design and review.** After the operator's response to IR-20261011-031924-C205C8, a computationally feasible follow-up row V6-F was designed and independently reviewed (Opus, 31-item checklist; blocking findings B1 aura share, B2 screen denominator, B3 execution scope were applied). It is pre-registered in Amendment 18 and `validation/plans/v3-005c-v6f-followup.md` (frozen with its artifacts), report-only, **not executed in V3-005C**, gating in a later task on a fresh base. The original V6 failure is preserved.
+- **Codex review chain.** Review rounds REVIEW-8f75d668 (37e87ecf), -43fba25e, -3ef85396 (changes required, fixes C9d/C9f) and -60f23708 (pass at dd976c5a).
+
+## Summarizer corrections at C11
+
+- **Failed step versus unverified archive.** `combine` listed every part with `pass: false` as "archive does not verify ([])" and set `complete: false`, including archives that verify but contain a step with a failed verdict (a defect, introduced with the lv5b archives, where the same sentence was documented as "the summarizer's notice that these subset archives carry `pass: false`"). Now a part is a verification problem only when the archive or a step records an integrity problem (for example a missing JSON document); failed steps are listed in the new `failed_steps` field, `pass` stays false, `complete` stays true when no steps are missing. The lv5b and hr5 archives in this directory were produced by the earlier code and are not regenerated.
+- **Row V7-R.** `gates_pass` now comes from the `v7r-combine` document's `gates_pass` and `calibration_pass` from the sealed `v7r-calibration-status` partial as consumed by `v7r-combine` (`calibration_status.pass`) conjoined with the exact shard establishment; the step records `v7r_gates_pass` and `v7r_calibration_status_pass`. The C9/C10 summary showed the inverse (calibration true, gates false) because the row used the step exit status for the gates.
+
+## V3-005D planning (2026-10-14; planning documents, not evidence)
+
+Operator disposition A of IR-20261013-164616-DEFAF4 (recorded at 749f768c) asked for elastic-model attribution and V7-R calibration repair before another qualification run and for an independently reviewed route to integration before any expensive qualification. The three planning documents are committed under `validation/plans/` with their independent review records (three review rounds for the elastic plan, three for the V7-R plan, two for the route) and the scripts behind every quoted number:
+
+- `v3-005d-elastic-attribution.md` — Amendment 19 pre-registers the exploratory rows D-E0 … D-E6 (seed family from 20990100; 10 EM-free thin-target reference cases, rows 14–23; a 2×2 swap test against Geant4 thin-target angular distributions; attribution only as "H2 (p+A shape)"; the Glauber model M2 pre-committed with named inputs). V5, V11 and V10-A at dd976c5a stay failed; no D-E step had been run when the amendment was committed.
+- `v3-005d-v7r-calibration-repair.md` — diagnosis of the V7-R calibration miss as a design defect (the α = 0.04 Clopper–Pearson TOST gate at 3600 pairs falsely accepts 0.0383 at the coverage margin, so the ≤ 109/3200 clause passes with probability ≈ 0.11–0.17 per margin even with an exact κ; the κ-solve at n = 20000 has coverage SE 0.0034–0.0039; all ten recorded κ reproduce bit-for-bit; the real-data gates pass but that is not a pass of V7-R). V7-R stays failed. The repaired design V7-R2 is a new row (48 shards × 2.25e6 histories, α = 0.005, κ from 1e6 samples); its pre-registration is a later amendment and its host execution (≈ 33.9 h at 5400 pairs) waits for the operator's budget decision.
+- `v3-005d-integration-route.md` — requirement coverage, V6/V6-F treatment, execution conformity under the single-process directive, the sequence to an integrable state and the host-hour budget; it finds that merge gate (a)6 cannot be met as written by any future run (V6 "failed — not sized", V10-A (c) on the shared σ_el level, V7-R's "without a further base") and lists the items that only the operator can decide, to be raised in one batched intervention. Re-qualification bases of record: lv 20531004 / hr 20541004 (20511004 / 20521004 retired unused); `tests/ionmc/test_v3_005d_seed_families.py` asserts the seed disjointness.

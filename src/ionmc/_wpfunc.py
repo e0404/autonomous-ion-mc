@@ -75,6 +75,7 @@ def python_twin(factory: Callable[..., SimpleNamespace]) -> SimpleNamespace:
     module = sys.modules[fn.__module__]
     ns: dict[str, Any] = dict(vars(module))
     ns.update(wp=shim, named_func=_py_named_func, check_real=lambda real: "float64")
+    ns.update(getattr(module, "PYTHON_TWIN_OVERRIDES", {}))  # python replacements of module names
     for key, val in vars(module).items():
         if key.startswith("make_") and hasattr(val, "__wrapped__") and val is not factory:
             ns[key] = functools.partial(lambda f, real: python_twin(f), val)

@@ -72,7 +72,7 @@ def tid() -> str:
 def _nuc(cfg: SimulationConfig, tid: str, **run: Any) -> SimulationConfig:
     return replace(
         cfg,
-        physics=replace(cfg.physics, nuclear=True, nuclear_table_id=tid),
+        physics=replace(cfg.physics, nuclear=True, nuclear_table_id=tid, elastic=False),
         run=replace(cfg.run, **run),
     )
 
@@ -126,6 +126,7 @@ def _config(
         tallies=tallies,
         physics=PhysicsOptions(
             nuclear=True,
+            elastic=False,  # pre-D2 (V3-005B) physics: these tests anchor the non-elastic path
             stopping=BetheStoppingSource(),
             straggling=straggling,
             multiple_scattering=mcs,
@@ -203,7 +204,8 @@ def test_secondaries_visible_in_generation_resolved_fluence(ci_run: tuple[Any, S
 # ---- stack, cutoffs and event geometry ---------------------------------------------------------
 def test_secondary_cutoffs_and_generation_labels(tid: str, monkeypatch: pytest.MonkeyPatch) -> None:
     """Many events (Sigma x 40): proton secondaries stop at E_cut = 2 MeV, deuterons at
-    E_cut,d = 4 MeV; the nuclear-local deposit has species 64 and generation 1."""
+    E_cut,d = 4 MeV; the nuclear-local deposit has species 64 and generation parent + 1
+    (1 for the primary's events, 2 for those of secondary protons, C13)."""
     _scaled_rows(monkeypatch, 40.0)
     seen: list[tuple[int, int, float]] = []
     local: list[tuple[int, int]] = []
@@ -224,11 +226,11 @@ def test_secondary_cutoffs_and_generation_labels(tid: str, monkeypatch: pytest.M
     assert res.valid and res.energy_balance.relative_residual <= 1e-12
     d = [x for x in seen if x[0] == 1]
     p_sec = [x for x in seen if x[0] == 0 and x[1] >= 1]
-    assert d and p_sec and all(g == 1 for _, g, _ in d)
+    assert d and p_sec and all(g >= 1 for _, g, _ in d)
     assert all(0.0 < e <= 4.0 for _, _, e in d)  # deuteron cutoff deposits (end of transport)
     bad = [e for _, _, e in p_sec if not 0.0 < e <= 2.0]
     assert not bad, f"secondary-proton point deposits above E_cut = 2 MeV: {bad[:8]}"
-    assert local and set(local) == {(64, 1)}
+    assert local and set(local) == {(64, 1), (64, 2)}
 
 
 def _fake_event(particles: tuple[tuple[float, ...], ...], local: float = 0.0) -> Any:
