@@ -47,7 +47,7 @@ GIT_ALLOW = (
     "bit_for_bit", "energy", "n", "n_batches", "seed", "pinned_id", "all_id", "detail/*", "counters/*",
     "sha256_idd_batches/*", "sha256_recoil_idd_batches/*",
     "rows/*/*/*", "runs/*/*/*", "derived/**",
-    "provenance/git_head", "provenance/git_status_elastic_attribution/*", "provenance/scripts_sha256/*",
+    "provenance/git_head", "provenance/git_status_clean", "provenance/git_status_elastic_attribution/*", "provenance/run_logs/*", "provenance/scripts_sha256/*",
     "provenance/table_files_sha256/*", "provenance/backend", "provenance/precision",
     "provenance/single_process", "provenance/cache_dir", "provenance/seeds/*",
 )  # fmt: skip
@@ -223,7 +223,7 @@ def check_base(
         "sha256_recoil_idd_batches": {"pinned": _array_digest(a["recoil_idd_batches"]),
                                       "all": _array_digest(b["recoil_idd_batches"])},
         "counters": a["counters"],
-        "provenance": provenance(),
+        "provenance": provenance(logs),
     }  # fmt: skip
     inputs = [out / f"de3-{energy}-pinned.json", out / f"de3-{energy}-all.json"]
     c.write_outputs(out, f"check-base-{energy}.json", res, f"check-base-{energy}-report.md",
@@ -237,7 +237,7 @@ def check_base(
 SCRIPTS = ("make_variant_tables.py", "de3_probes.py", "de0_kernels.py", "common.py")
 
 
-def provenance() -> dict[str, Any]:
+def provenance(logs: list[str] | None = None) -> dict[str, Any]:
     """Code state of the record: commit, dirty/untracked state, script and table hashes, backend."""
     import subprocess
 
@@ -251,10 +251,11 @@ def provenance() -> dict[str, Any]:
     return {
         "git_head": git("rev-parse", "HEAD"),
         "git_status_elastic_attribution": status.splitlines(),
+        "git_status_clean": not status.strip(),
         "scripts_sha256": {k: c.sha256_file(here / k) for k in SCRIPTS},
         "table_files_sha256": {f.name: c.sha256_file(f) for f in c.table_files()},
         "backend": "warp-cpu", "precision": "float64", "single_process": True,
-        "cache_dir": "<scratch-cache>", "seeds": SEEDS,
+        "cache_dir": "<scratch-cache>", "seeds": SEEDS, **({"run_logs": list(logs)} if logs else {}),
     }  # fmt: skip
 
 
@@ -413,7 +414,7 @@ def _composition_sentence(derived: dict[str, Any]) -> str:
 
 def render_summary(doc: dict[str, Any]) -> str:
     """Markdown body of ``de3-summary.json``, a pure function of the (projected) record."""
-    rows, derived = doc.get("rows", {}), doc.get("derived", {})
+    rows, derived, pv = doc.get("rows", {}), doc.get("derived", {}), doc.get("provenance", {})
     lines = [
         "",
         "| E | variant | F | gain | peak removal | K* shifted (pred) | pred/meas removal | F pred (meas. gain) | recoil MeV | R80 mm | R80 EM-only | lateral rms mm (EM+el / EM) | valid |",
@@ -463,17 +464,18 @@ def render_summary(doc: dict[str, Any]) -> str:
               "- **Contrary evidence on p-p (H3 stays live):** the pp-only plateau gain alone is of the order of TOPAS's total elastic gain (84 % / 108 % per the review, from the archived V11 gain); no p+A shape variant closes the gain excess, so the swap-pp arm of D-E6 is essential.",
               "- **K* model:** the shifted K* overpredicts the measured peak removal by 8-14 % for every p+A variant and by 1-3 % for pp-only, the bias anticipated in the D-E0 dated note (adequate for ranking, not for a 0.010 closure).",
               "", "## Provenance", "",
-              f"- git HEAD {doc['provenance']['git_head']}; status of validation/scripts/elastic_attribution at summary time: {doc['provenance'].get('git_status_elastic_attribution') or 'clean'}",
-              "- scripts sha256 at summary time: " + ", ".join(f"{k} {v[:16]}" for k, v in doc["provenance"].get("scripts_sha256", {}).items()),
-              "- the committed scripts are the ones that made the committed runs (second execution; the first execution with "
-              "untracked scripts is preserved in the experiment telemetry and was reproduced bit for bit)",
-              "- table files sha256: " + ", ".join(f"{k} {v[:16]}" for k, v in doc["provenance"].get("table_files_sha256", {}).items()),
-              f"- backend warp-cpu float64, single process; seeds {SEEDS}; runs (seed, n, batches, table id, wall s) in `runs` of de3-summary.json",
-              "- logged runs: telemetry/test-logs/<UTC>-de3-<variant>-<E>/ (command, commit, git status, start/end, full stdout/stderr)"]  # fmt: skip
+              f"- recorded git HEAD {pv.get('git_head')}; recorded status of validation/scripts/elastic_attribution: "
+              + ("clean" if pv.get("git_status_clean") else "dirty: " + "; ".join(pv.get("git_status_elastic_attribution") or ["(not recorded)"])),
+              "- script sha256 recorded at summary time: " + ", ".join(f"{k} {v[:16]}" for k, v in pv.get("scripts_sha256", {}).items()),
+              "- script sha256 recorded for the run (staged copies, if any): " + (", ".join(f"{k} {v[:16]}" for k, v in pv.get("runtime_scripts_sha256", {}).items()) or "none recorded"),
+              "- table files sha256: " + ", ".join(f"{k} {v[:16]}" for k, v in pv.get("table_files_sha256", {}).items()),
+              f"- backend {pv.get('backend')} {pv.get('precision')}, single process {pv.get('single_process')}; seeds {pv.get('seeds')}; runs (seed, n, batches, table id, wall s) in `runs` of de3-summary.json",
+              "- the run files were produced with the scripts whose hashes are recorded in the logged run metadata"
+              + (": " + ", ".join(pv["run_logs"]) if pv.get("run_logs") else " (log directory names not recorded in this record)")]  # fmt: skip
     return "\n".join(lines) + "\n"
 
 
-def summarize(out: Path) -> dict[str, Any]:
+def summarize(out: Path, logs: list[str] | None = None) -> dict[str, Any]:
     cmp = _cmp()
     rows: dict[str, Any] = {}
     by_key: dict[str, dict[str, Any]] = {}
@@ -524,7 +526,7 @@ def summarize(out: Path) -> dict[str, Any]:
                  for k, d in sorted(by_key.items())}  # fmt: skip
     curves = {k: np.asarray(d["idd_batches"]) for k, d in by_key.items()}
     derived = composition_and_gap(rows, out, curves, cmp)
-    doc = {"banner": c.BANNER, "rows": rows, "runs": runs_prov, "derived": derived, "provenance": provenance(),
+    doc = {"banner": c.BANNER, "rows": rows, "runs": runs_prov, "derived": derived, "provenance": provenance(logs),
            "note": "F = (peak/plateau)_EM+el/(peak/plateau)_EM by the paired jackknife of compare_idd_v5; K* shifted is the physical "
                    "kernel, the as-frozen K* carries a sign error (D-E0 dated note); probes only, never used in the section 5 rule"}  # fmt: skip
     run_files = sorted(p for e in (150, 200) for p in out.glob(f"de3-{e}-*.json"))
@@ -553,6 +555,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument(
         "--check-base", action="store_true", help="pinned vs base copy 'all' bit for bit (two runs)"
     )
+    ap.add_argument(
+        "--logs",
+        nargs="+",
+        default=None,
+        help="--summary: telemetry log directory names of the runs (recorded in the provenance)",
+    )
     ap.add_argument("--summary", action="store_true", help="combine the run files of --out")
     ap.add_argument(
         "--scratch-cache",
@@ -572,7 +580,7 @@ def main(argv: list[str] | None = None) -> int:
 
     scratch = resolve_scratch(a.scratch_cache)
     if a.summary:
-        print(json.dumps(summarize(a.out)["rows"], indent=1))
+        print(json.dumps(summarize(a.out, a.logs)["rows"], indent=1))
     elif a.check_base:
         with c.scoped_cache_env(scratch):
             print(

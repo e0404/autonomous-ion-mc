@@ -88,6 +88,11 @@ def _build_cases() -> tuple[dict[str, Any], ...]:
             "primaries": 20_000_000 if thin else 4_000_000, "seed": SEED_BASE + i,
             "target": "O-16" if mat == "water" else "C-12",  # the p+A class of the material (water also has H-1)
             "topas_material": "G4_WATER" if mat == "water" else "G4_C", "topas_seed_base": 20270000 + 1000 * row,
+            # frozen D-E4 design (plan 3.2): split into 3 equal parts at 30 / 50 MeV, one part otherwise; the TOPAS input is
+            # bound to these constants by de4_parse.identify_case
+            "part_histories": (6_666_667, 6_666_667, 6_666_666) if thin else (4_000_000,),
+            "target_hl_mm": (2.0 if thin else 10.0) / 2.0, "target_rmax_mm": 10.0, "sphere_rmax_mm": 500.0,
+            "topas_modules": ("g4h-elastic_HP",),
         })  # fmt: skip
     return tuple(out)
 
@@ -325,7 +330,12 @@ def sample_case(tab: Any, water: c.Water, case: dict[str, Any]) -> dict[str, Any
         surv = ~sel["ke_removed"]
         off_frac = float(sel["off"][surv].mean()) if surv.any() else 0.0
         th = np.degrees(np.arccos(np.clip(cos1, -1, 1)))[keep]
-        t1k, cos1k, tok = t1[keep], cos1[keep], t_other[keep]
+        t1k, cos1k, tok, mu_k = (
+            t1[keep],
+            cos1[keep],
+            t_other[keep],
+            mu[keep],
+        )  # the selected events (KE filter, exclusion)
         th_med = float(np.median(th))
         rate = dens[name] * sig[name] * case["length_cm"]
         h_th, _ = np.histogram(th, bins=[0.0, *HIST_INTERIOR_DEG, 180.0])
@@ -338,13 +348,13 @@ def sample_case(tab: Any, water: c.Water, case: dict[str, Any]) -> dict[str, Any
             "P_theta_lab_gt_theta_2mm": float(np.mean(th > th_w[2.0])), "P_theta_lab_gt_theta_3mm": float(np.mean(th > th_w[3.0])),
             "theta_lab_median_deg": th_med, "theta_lab_mean_1_minus_cos": float(np.mean(1.0 - cos1k)),
             "T_tail_moment": float(np.mean((1.0 - cos1k) * (th > 3.0 * th_med))), "mean_t_other_mev": float(tok.mean()),
-            "theta_cm_median_deg": float(np.median(np.degrees(np.arccos(np.clip(np.abs(mu) if pp else mu, -1, 1))))),
+            "theta_cm_median_deg": float(np.median(np.degrees(np.arccos(np.clip(np.abs(mu_k) if pp else mu_k, -1, 1))))),
             "hist_theta_lab_counts_8bins": h_th.tolist(), "hist_theta_lab_interior_edges_deg": HIST_INTERIOR_DEG,
             "hist_t1_over_e0_counts_8bins": h_t.tolist(), "hist_t1_over_e0_interior_edges": HIST_INTERIOR_T,
             "hist_theta_lab_1deg_full": np.histogram(th, bins=np.arange(0.0, 181.0))[0].tolist(),
         }  # fmt: skip
         if pp:
-            cls_doc["theta_cm_min_deg"] = float(np.degrees(np.arccos(np.abs(mu).max())))
+            cls_doc["theta_cm_min_deg"] = float(np.degrees(np.arccos(np.abs(mu_k).max())))
             cls_doc["theta_slow_lab_median_deg"] = float(
                 np.median(np.degrees(np.arccos(np.clip(cos_other, -1, 1))))
             )
@@ -353,7 +363,7 @@ def sample_case(tab: Any, water: c.Water, case: dict[str, Any]) -> dict[str, Any
             ] = None
         else:
             sd = shape_descriptors(
-                mu, float(np.interp(e, tab.arrays["grid_e_mev"], tab.arrays["p_cm_mev"][it]))
+                mu_k, float(np.interp(e, tab.arrays["grid_e_mev"], tab.arrays["p_cm_mev"][it]))
             )
             cls_doc.update(sd)
         # D-E4 classification rule on the kept table events
@@ -380,16 +390,26 @@ def signature_ratios(
     table_doc: dict[str, Any], geant4: dict[str, dict[str, dict[str, float]]]
 ) -> dict[str, Any]:
     """Hook for the Geant4 comparison (plan D-E5): ``geant4[str(case)][class][signature]`` (the keys of :data:`SIGNATURES` of a
-    D-E4 per-class summary) -> ``ionmc / Geant4`` per case, class and signature (``None`` if a value is absent or zero)."""
+    D-E4 per-class summary) -> ``ionmc / Geant4`` per case, class and signature. A missing case, class or signature key on either
+    side raises ``KeyError`` (nothing is silently dropped); a value that is ``None`` or a zero Geant4 value gives ``None``."""
     out: dict[str, Any] = {}
     for key, case in table_doc["cases"].items():
-        g_case = geant4.get(key, {})
+        if key not in geant4:
+            raise KeyError(f"Geant4 summary has no case {key}")
         out[key] = {}
         for name, cls in case["classes"].items():
-            g = g_case.get(name, {})
+            if name not in geant4[key]:
+                raise KeyError(f"Geant4 summary of case {key} has no class {name}")
+            g = geant4[key][name]
             row = {}
             for s in SIGNATURES:
-                a, b = cls.get(s), g.get(s)
+                if s not in cls:
+                    raise KeyError(f"table record of case {key}, class {name} has no signature {s}")
+                if s not in g:
+                    raise KeyError(
+                        f"Geant4 summary of case {key}, class {name} has no signature {s}"
+                    )
+                a, b = cls[s], g[s]
                 row[s] = None if a is None or not b else float(a) / float(b)
             out[key][name] = row
     return out

@@ -109,12 +109,9 @@ def read_phsp(directory: Path) -> tuple[np.ndarray, dict[str, Any]]:
     return np.frombuffer(raw, dtype=dt), h
 
 
-def beam_energy_mev(directory: Path) -> float:
-    return float(parse_input(directory)["energy_mev"])
-
-
 def parse_input(directory: Path) -> dict[str, Any]:
-    """Target material, thickness, beam energy and histories of a materialized TOPAS case (``input.txt``)."""
+    """Seed, histories, beam energy, target material and geometry, sphere radius and module list of a materialized TOPAS case
+    (``input.txt``)."""
     text = (Path(directory) / "input.txt").read_text()
 
     def grab(pat: str) -> str:
@@ -122,12 +119,21 @@ def parse_input(directory: Path) -> dict[str, Any]:
         assert m, f"{directory}: input.txt has no match for {pat!r}"
         return m.group(1)
 
-    hl = re.search(r"^d:Ge/Target/HL\s*=\s*([0-9.eE+-]+)\s*(mm|cm)", text, re.M)
-    assert hl, f"{directory}: no Ge/Target/HL"
-    length_cm = 2.0 * float(hl.group(1)) * (0.1 if hl.group(2) == "mm" else 1.0)
+    def length_mm(name: str) -> float:
+        m = re.search(rf"^d:{name}\s*=\s*([0-9.eE+-]+)\s*(mm|cm)", text, re.M)
+        assert m, f"{directory}: no {name}"
+        return float(m.group(1)) * (1.0 if m.group(2) == "mm" else 10.0)
+
+    mods = re.search(r"^sv:Ph/Default/Modules\s*=\s*(\d+)\s*(.*)$", text, re.M)
+    assert mods, f"{directory}: no Ph/Default/Modules"
+    names = re.findall(r'"([^"]+)"', mods.group(2))
+    hl = length_mm("Ge/Target/HL")
     return {"material": grab(r'^s:Ge/Target/Material\s*=\s*"([^"]+)"'),
-            "length_cm": length_cm, "energy_mev": float(grab(r"^d:So/Beam/BeamEnergy\s*=\s*([0-9.eE+-]+)\s*MeV")),
-            "histories": int(grab(r"^i:So/Beam/NumberOfHistoriesInRun\s*=\s*(\d+)"))}  # fmt: skip
+            "length_cm": 2.0 * hl / 10.0, "hl_mm": hl, "trans_z_mm": length_mm("Ge/Target/TransZ"),
+            "target_rmax_mm": length_mm("Ge/Target/RMax"), "sphere_rmax_mm": length_mm("Ge/Sphere/RMax"),
+            "energy_mev": float(grab(r"^d:So/Beam/BeamEnergy\s*=\s*([0-9.eE+-]+)\s*MeV")),
+            "histories": int(grab(r"^i:So/Beam/NumberOfHistoriesInRun\s*=\s*(\d+)")),
+            "seed": int(grab(r"^i:Ts/Seed\s*=\s*(\d+)")), "modules": names, "n_modules": int(mods.group(1))}  # fmt: skip
 
 
 def header_max_ke(directory: Path) -> float:
@@ -139,11 +145,25 @@ def header_max_ke(directory: Path) -> float:
     return float(m.group(1))
 
 
+def _bundle_case_json(directory: Path) -> dict[str, Any] | None:
+    """The case bundle ``case.json`` next to the input (the materialized run's ``inputs/case.json`` or the work copy), if present."""
+    import json
+
+    d = Path(directory)
+    for p in (d / "case.json", d.parent / "inputs" / "case.json"):
+        if p.is_file():
+            return json.loads(p.read_text())  # type: ignore[no-any-return]
+    return None
+
+
 def identify_case(
     dirs: list[Path], case: int | None = None
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Match the parts against :data:`de5_sampling.CASES`; all parts must agree, their primaries must add up to the case and the
-    phase-space header maximum energy must equal E0. Returns ``(case entry, identification record)``."""
+    """Bind the parts to the frozen case table :data:`de5_sampling.CASES` (fail closed, ``AssertionError``). Per part: the
+    header histories equal the ``input.txt`` histories and the frozen part size; ``Ts/Seed`` = 20270000 + 1000 row + j
+    (j = 1..parts, each part exactly once); ``Ph/Default/Modules`` is exactly ``1 "g4h-elastic_HP"``; target material, HL (= TransZ),
+    target RMax, sphere RMax and beam energy equal the frozen case; the ``case.json`` seeds / histories agree if present; the
+    header maximum proton energy equals E0. The parts' histories add up to the case primaries."""
     infos = [parse_input(d) for d in dirs]
     key = {(i["material"], i["energy_mev"], round(i["length_cm"], 6)) for i in infos}
     assert len(key) == 1, f"parts differ in material / energy / thickness: {sorted(key)}"
@@ -161,20 +181,50 @@ def identify_case(
         assert case == cs["case"], (
             f"--case {case} but the inputs are case {cs['case']} (row {cs['row']})"
         )
+    nparts = len(cs["part_histories"])
+    assert len(dirs) == nparts, f"case {cs['case']} has {nparts} part(s), {len(dirs)} given"
+    js = sorted(i["seed"] - cs["topas_seed_base"] for i in infos)
+    assert js == list(range(1, nparts + 1)), (
+        f"seeds do not match 20270000 + 1000 row + j (row {cs['row']}): part indices {js}"
+    )
+    for d, i in zip(dirs, infos, strict=True):
+        j = i["seed"] - cs["topas_seed_base"]
+        hdr = parse_header(Path(d) / "ps.header")["histories"]
+        want = cs["part_histories"][j - 1]
+        assert hdr == i["histories"] == want, (
+            f"{d}: histories header {hdr} / input {i['histories']} / frozen part {j} {want}"
+        )
+        assert i["n_modules"] == 1 and i["modules"] == list(cs["topas_modules"]), (
+            f"{d}: modules {i['modules']} (n={i['n_modules']})"
+        )
+        geo = (i["hl_mm"], i["trans_z_mm"], i["target_rmax_mm"], i["sphere_rmax_mm"])
+        assert geo == (
+            cs["target_hl_mm"],
+            cs["target_hl_mm"],
+            cs["target_rmax_mm"],
+            cs["sphere_rmax_mm"],
+        ), f"{d}: geometry {geo}"
+        assert abs(header_max_ke(d) - e0) <= 1e-4 * e0, (
+            f"{d}: ps.header maximum energy {header_max_ke(d)} != E0 {e0}"
+        )
+        bundle = _bundle_case_json(d)
+        if bundle is not None:
+            assert bundle.get("seeds") == [i["seed"]] and bundle.get("histories") == want, (
+                f"{d}: case.json seeds/histories differ"
+            )
     total = sum(i["histories"] for i in infos)
     assert total == cs["primaries"], (
         f"parts hold {total} primaries, case {cs['case']} needs {cs['primaries']}"
     )
-    for d in dirs:
-        assert abs(header_max_ke(d) - e0) <= 1e-4 * e0, (
-            f"{d}: ps.header maximum energy {header_max_ke(d)} != E0 {e0}"
-        )
     ident = {"material_topas": mat, "length_cm": length, "energy_mev": e0, "parts": len(dirs), "primaries_total": total,
-             "header_max_ke_equals_e0": True}  # fmt: skip
+             "seeds": sorted(i["seed"] for i in infos), "modules": list(cs["topas_modules"]), "geometry_bound": True,
+             "header_histories_equal_input_and_frozen": True, "header_max_ke_equals_e0": True}  # fmt: skip
     return cs, ident
 
 
-def analyse(dirs: list[Path], case: int | None = None) -> dict[str, Any]:
+def analyse(
+    dirs: list[Path], case: int | None = None, cdf: dict[str, Any] | None = None
+) -> dict[str, Any]:
     from ionmc.nuclear.bgg import M_PROTON_MEV as MP
 
     nv10 = c.import_transport_module("nuclear_v10")
@@ -251,7 +301,7 @@ def analyse(dirs: list[Path], case: int | None = None) -> dict[str, Any]:
     )
 
     def cls_doc(
-        t1: np.ndarray, cs_: np.ndarray, t_other: np.ndarray, cm_mass: float | None
+        t1: np.ndarray, cs_: np.ndarray, t_other: np.ndarray, mu_cm: np.ndarray | None
     ) -> dict[str, Any]:
         count = int(t1.size)
         th = np.degrees(np.arccos(np.clip(cs_, -1.0, 1.0)))
@@ -272,12 +322,25 @@ def analyse(dirs: list[Path], case: int | None = None) -> dict[str, Any]:
             "hist_theta_lab_1deg_full": np.histogram(th, bins=np.arange(0.0, 181.0))[0].tolist(),
             "first_minimum_deg": None, "first_minimum_3sigma_deg": None, "qslope": None,
         }  # fmt: skip
-        if cm_mass is not None and th.size > 50:
-            tcm, _ = nv10.lab_to_cm(th, e0, cm_mass)
-            doc.update(de5.shape_descriptors(np.cos(np.radians(tcm)), pcm))
+        if mu_cm is not None and th.size > 50:
+            doc.update(de5.shape_descriptors(mu_cm, pcm))
         return doc
 
-    classes = {target: cls_doc(pa_e, pa_cos, e0 - pa_e, ma)}
+    th_pa = np.degrees(np.arccos(np.clip(pa_cos, -1.0, 1.0)))
+    mu_pa = (
+        np.cos(np.radians(nv10.lab_to_cm(th_pa, e0, ma)[0])) if th_pa.size else np.empty(0)
+    )  # the table frame: CM cosine
+    classes = {target: cls_doc(pa_e, pa_cos, e0 - pa_e, mu_pa)}
+    if cdf is not None:
+        cdf[target] = {"mu": mu_pa, "p_cm_mev": pcm, "mu_range": (-1.0, 1.0), "symmetrised": False}
+        if has_h:
+            p_cm_pp = float(nv10.two_body_frame(e0, MP)["p_cm"])
+            mu_fast = np.cos(
+                np.radians(th_cm_fast[keep_cm])
+            )  # fast proton, theta_cm in [16.26, 90] deg
+            # identical particles: the table density of H-1 is symmetric in mu on [-0.96, 0.96]; both signs of every event
+            cdf["H-1"] = {"mu": np.concatenate([mu_fast, -mu_fast]), "p_cm_mev": p_cm_pp,
+                          "mu_range": (-0.96, 0.96), "symmetrised": True}  # fmt: skip
     if has_h:
         classes["H-1"] = cls_doc(fast_e, fast_cos, slow_e, None)
         classes["H-1"]["slow_proton_theta_lab_median_deg"] = (
@@ -361,8 +424,64 @@ def _cmd(args: str) -> str:
     return f"python -m validation.scripts.elastic_attribution.de4_parse {args}"
 
 
-def run(dirs: list[Path], outdir: Path, case: int | None = None) -> dict[str, Any]:
-    doc = analyse(dirs, case)
+N_Q = 256  # equiprobable mu bins per node, as the pinned elastic table
+
+
+def cdf_edges(mu: np.ndarray, lo: float, hi: float, n_q: int = N_Q) -> np.ndarray:
+    """``n_q + 1`` ascending mu edges of ``n_q`` equiprobable bins of the empirical sample (the table convention: edge j = quantile
+    j / n_q, the end edges are the range limits)."""
+    e = np.quantile(np.sort(np.asarray(mu, dtype=np.float64)), np.arange(n_q + 1) / n_q)
+    e[0], e[-1] = lo, hi
+    return e
+
+
+def write_cdf(cdf: dict[str, Any], doc: dict[str, Any], outdir: Path) -> Path:
+    """Empirical Geant4 mu_CM inverse CDFs of the selected events of one case for the D-E6 swaps (never committed): one npz
+    ``de4-case<N>-cdf.npz`` and a JSON sidecar. Per class ``<name>``: ``<name>_mu_sorted`` (float64), ``<name>_edges_mu`` (257 edges
+    of the 256 equiprobable bins), ``<name>_edges_q_mev`` (``q = 2 p_CM sin(theta_CM / 2)`` [MeV/c] at the edges). p-p: both signs of
+    mu of the fast proton (identical particles), edges on [-0.96, 0.96]."""
+    import hashlib
+    import json
+
+    outdir = Path(outdir)
+    outdir.mkdir(parents=True, exist_ok=True)
+    arrays: dict[str, np.ndarray] = {}
+    side: dict[str, Any] = {}
+    for name, v in cdf.items():
+        mu = np.sort(np.asarray(v["mu"], dtype=np.float64))
+        lo, hi = v["mu_range"]
+        if mu.size == 0:
+            side[name] = {"n": 0}
+            continue
+        edges = cdf_edges(mu, lo, hi)
+        th = np.arccos(np.clip(edges, -1.0, 1.0))
+        arrays[f"{name}_mu_sorted"], arrays[f"{name}_edges_mu"] = mu, edges
+        arrays[f"{name}_edges_q_mev"] = 2.0 * v["p_cm_mev"] * np.sin(th / 2.0)
+        side[name] = {"n": int(mu.size), "p_cm_mev": v["p_cm_mev"], "mu_range": [lo, hi], "symmetrised": v["symmetrised"],
+                      "n_quantiles": N_Q}  # fmt: skip
+    stem = f"de4-case{doc['case']}-cdf"
+    npz = outdir / f"{stem}.npz"
+    np.savez(npz, **arrays)
+    sidecar = {"banner": c.BANNER + " NEVER committed (derived distribution).", "case": doc["case"], "row": doc["row"],
+               "material": doc["material"], "energy_mev": doc["energy_mev"], "primaries": doc["primaries"], "classes": side,
+               "npz": npz.name, "npz_sha256": c.sha256_file(npz),
+               "frame": "mu_CM = cos(theta_CM) of the selected tracks (p+A: nuclear_v10.lab_to_cm of the lab angle and E0; "
+                        "p-p: theta_cm = 2 arctan(gamma_cm tan theta_lab) of the fast proton)"}  # fmt: skip
+    (outdir / f"{stem}.json").write_text(json.dumps(sidecar, indent=1, sort_keys=True) + "\n")
+    assert hashlib.sha256(npz.read_bytes()).hexdigest() == sidecar["npz_sha256"]
+    return npz
+
+
+CDF_OUT_DEFAULT = c.OUT / "de4" / "cdf"
+
+
+def run(
+    dirs: list[Path], outdir: Path, case: int | None = None, cdf_out: Path | None = CDF_OUT_DEFAULT
+) -> dict[str, Any]:
+    cdf: dict[str, Any] | None = {} if cdf_out is not None else None
+    doc = analyse(dirs, case, cdf)
+    if cdf_out is not None and cdf is not None:
+        write_cdf(cdf, doc, cdf_out)
     inputs = [
         p for d in dirs for p in (d / "ps.header", d / "ps.phsp", d / "input.txt") if p.is_file()
     ]
@@ -378,12 +497,59 @@ def rel_path(p: Path) -> str:
     return c.rel(Path(p))
 
 
-def combine(outdir: Path) -> dict[str, Any]:
-    """``de4.json`` / ``de4-report.md`` from every ``de4-case*.json`` (full records) of ``outdir``."""
+def validated_case_records(outdir: Path) -> dict[str, dict[str, Any]]:
+    """Exactly one valid ``de4-case<N>.json`` for each case 0-9 of :data:`de5_sampling.CASES` (``SystemExit`` with a clear message on a
+    missing, duplicate, unexpected or mismatched record)."""
     import json
 
-    files = sorted(p for p in Path(outdir).glob("de4-case*.json"))
-    cases = {str(json.loads(p.read_text())["case"]): json.loads(p.read_text()) for p in files}
+    found: dict[int, list[Path]] = {}
+    for p in sorted(Path(outdir).glob("de4-case*.json")):
+        m = re.fullmatch(r"de4-case(\d+)\.json", p.name)
+        if not m:
+            raise SystemExit(
+                f"unexpected file {p.name} among the case records (expected de4-case<N>.json)"
+            )
+        found.setdefault(int(m.group(1)), []).append(p)
+    problems = [
+        f"duplicate record for case {n}: {[p.name for p in ps]}"
+        for n, ps in found.items()
+        if len(ps) > 1
+    ]
+    problems += [
+        f"case {cs['case']} (row {cs['row']}) is missing"
+        for cs in de5.CASES
+        if cs["case"] not in found
+    ]
+    problems += [
+        f"record {ps[0].name} is not a case of the frozen matrix"
+        for n, ps in found.items()
+        if n >= len(de5.CASES)
+    ]
+    out: dict[str, dict[str, Any]] = {}
+    for cs in de5.CASES:
+        ps = found.get(cs["case"], [])
+        if len(ps) != 1:
+            continue
+        rec = json.loads(ps[0].read_text())
+        want = {"case": cs["case"], "row": cs["row"], "material": cs["material"], "target": cs["target"],
+                "energy_mev": float(cs["energy_mev"]), "length_cm": cs["length_cm"], "primaries": cs["primaries"]}  # fmt: skip
+        got = {k: rec.get(k) for k in want}
+        if got != want:
+            problems.append(f"{ps[0].name}: case fields {got} differ from the frozen case {want}")
+        elif not rec.get("identification", {}).get("geometry_bound"):
+            problems.append(
+                f"{ps[0].name}: the record does not carry a validated case identification"
+            )
+        out[str(cs["case"])] = rec
+    if problems:
+        raise SystemExit("cannot combine the D-E4 case records:\n  " + "\n  ".join(problems))
+    return out
+
+
+def combine(outdir: Path) -> dict[str, Any]:
+    """``de4.json`` / ``de4-report.md`` from the ten validated ``de4-case<N>.json`` (full records) of ``outdir``."""
+    cases = validated_case_records(outdir)
+    files = [Path(outdir) / f"de4-case{n}.json" for n in sorted(cases, key=int)]
     doc = {"banner": c.BANNER, "cases": cases,
            "geant4_summary": {k: v["geant4_summary"][k] for k, v in cases.items()}}  # fmt: skip
     allow = GIT_ALLOW + ("geant4_summary/*/*/*",)
@@ -412,11 +578,17 @@ def main(argv: list[str] | None = None) -> int:
         help="write de4.json / de4-report.md from the de4-case*.json in --out",
     )
     ap.add_argument("--out", type=Path, default=c.OUT / "de4")
+    ap.add_argument(
+        "--cdf-out",
+        type=Path,
+        default=CDF_OUT_DEFAULT,
+        help="empirical mu_CM CDFs for the D-E6 swaps (never committed)",
+    )
     a = ap.parse_args(argv)
     if a.combine:
         combine(a.out)
     elif a.parts:
-        run(a.parts, a.out, a.case)
+        run(a.parts, a.out, a.case, a.cdf_out)
     else:
         ap.error("give --parts DIR [DIR ...] or --combine")
     return 0

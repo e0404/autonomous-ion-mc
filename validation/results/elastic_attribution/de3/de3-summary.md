@@ -67,9 +67,9 @@ Input files (sha256):
 
 ## Provenance
 
-- git HEAD a72b6c4301d146da0a6d2cc9ecb089e3711f1837; status of validation/scripts/elastic_attribution at summary time: ['M validation/scripts/elastic_attribution/de3_probes.py', ' M validation/scripts/elastic_attribution/de4_parse.py', ' M validation/scripts/elastic_attribution/de5_sampling.py', ' M validation/scripts/elastic_attribution/make_variant_tables.py']
-- scripts sha256 at summary time: common.py 29171edbda46e951, de0_kernels.py 38e5ec2dbe285af1, de3_probes.py a6bfeb2ed8f9b1a0, make_variant_tables.py beafad7d90f4a4d6
-- the committed scripts are the ones that made the committed runs (second execution; the first execution with untracked scripts is preserved in the experiment telemetry and was reproduced bit for bit)
+- recorded git HEAD c7c8b662c268b2bcf8237a317a34369cd5905c52; recorded status of validation/scripts/elastic_attribution: dirty: M validation/scripts/elastic_attribution/de3_probes.py;  M validation/scripts/elastic_attribution/de4_parse.py;  M validation/scripts/elastic_attribution/de5_sampling.py
+- script sha256 recorded at summary time: common.py 29171edbda46e951, de0_kernels.py 38e5ec2dbe285af1, de3_probes.py 257ae085db885c5e, make_variant_tables.py beafad7d90f4a4d6
+- script sha256 recorded for the run (staged copies, if any): none recorded
 - table files sha256: elastic-proton-1fd24cff23d3f7e72aabcda2af8bc70ad47b81755f94a2ca55890cb6ae52c591.json ab5e2a357ab53060, elastic-proton-1fd24cff23d3f7e72aabcda2af8bc70ad47b81755f94a2ca55890cb6ae52c591.npz 1028bb67f57bc96e
-- backend warp-cpu float64, single process; seeds {150: 20990100, 200: 20990101}; runs (seed, n, batches, table id, wall s) in `runs` of de3-summary.json
-- logged runs: telemetry/test-logs/<UTC>-de3-<variant>-<E>/ (command, commit, git status, start/end, full stdout/stderr)
+- backend warp-cpu float64, single process True; seeds {'150': 20990100, '200': 20990101}; runs (seed, n, batches, table id, wall s) in `runs` of de3-summary.json
+- the run files were produced with the scripts whose hashes are recorded in the logged run metadata (log directory names not recorded in this record)

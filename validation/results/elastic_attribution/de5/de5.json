@@ -66,7 +66,7 @@
      "rate_per_primary": 0.007053299756428984,
      "rate_per_primary_after_ke_cut": 0.007052049159695419,
      "rate_per_primary_after_rule": 0.007052049159695419,
-     "theta_cm_median_deg": 25.58454830249338,
+     "theta_cm_median_deg": 25.587847164579518,
      "theta_lab_mean_1_minus_cos": 0.17853233193410684,
      "theta_lab_median_deg": 24.07158654069223
     }
@@ -149,7 +149,7 @@
      "rate_per_primary": 0.005462128816116097,
      "rate_per_primary_after_ke_cut": 0.005461215480201331,
      "rate_per_primary_after_rule": 0.005461215480201331,
-     "theta_cm_median_deg": 21.40742859905173,
+     "theta_cm_median_deg": 21.41050429999036,
      "theta_lab_mean_1_minus_cos": 0.1459181732042798,
      "theta_lab_median_deg": 20.107752729844073
     }
@@ -232,7 +232,7 @@
      "rate_per_primary": 0.011766642247691956,
      "rate_per_primary_after_ke_cut": 0.011764984097395195,
      "rate_per_primary_after_rule": 0.011764984097395195,
-     "theta_cm_median_deg": 16.83576675487177,
+     "theta_cm_median_deg": 16.83740177714885,
      "theta_lab_mean_1_minus_cos": 0.10699580711895074,
      "theta_lab_median_deg": 15.759360836897937
     }
@@ -315,7 +315,7 @@
      "rate_per_primary": 0.005315045788019946,
      "rate_per_primary_after_ke_cut": 0.005314239231340983,
      "rate_per_primary_after_rule": 0.005314239231340983,
-     "theta_cm_median_deg": 13.338624348714488,
+     "theta_cm_median_deg": 13.340099513690769,
      "theta_lab_mean_1_minus_cos": 0.0846745057136614,
      "theta_lab_median_deg": 12.445949386270138
     }
@@ -398,7 +398,7 @@
      "rate_per_primary": 0.003409652014956192,
      "rate_per_primary_after_ke_cut": 0.0034091187079777732,
      "rate_per_primary_after_rule": 0.0034091187079777732,
-     "theta_cm_median_deg": 11.488241084280704,
+     "theta_cm_median_deg": 11.48955674551674,
      "theta_lab_mean_1_minus_cos": 0.07447602308325092,
      "theta_lab_median_deg": 10.686980507480678
     }
@@ -451,7 +451,7 @@
      "rate_per_primary": 0.017448649824573087,
      "rate_per_primary_after_ke_cut": 0.01744667812714291,
      "rate_per_primary_after_rule": 0.01744667812714291,
-     "theta_cm_median_deg": 30.251073223992982,
+     "theta_cm_median_deg": 30.253813571143013,
      "theta_lab_mean_1_minus_cos": 0.22757330532989029,
      "theta_lab_median_deg": 27.93390053996662
     }
@@ -503,7 +503,7 @@
      "rate_per_primary": 0.01243466998992565,
      "rate_per_primary_after_ke_cut": 0.012433215133536828,
      "rate_per_primary_after_rule": 0.012433215133536828,
-     "theta_cm_median_deg": 24.388641162792894,
+     "theta_cm_median_deg": 24.390503165456387,
      "theta_lab_mean_1_minus_cos": 0.15775422264196245,
      "theta_lab_median_deg": 22.462513541445183
     }
@@ -555,7 +555,7 @@
      "rate_per_primary": 0.025370737963316042,
      "rate_per_primary_after_ke_cut": 0.025368784416492866,
      "rate_per_primary_after_rule": 0.025368784416492866,
-     "theta_cm_median_deg": 20.25340242569229,
+     "theta_cm_median_deg": 20.254356519321743,
      "theta_lab_mean_1_minus_cos": 0.13987685805663128,
      "theta_lab_median_deg": 18.5725424712844
     }
@@ -607,7 +607,7 @@
      "rate_per_primary": 0.012534949586618598,
      "rate_per_primary_after_ke_cut": 0.012533921720752494,
      "rate_per_primary_after_rule": 0.012533921720752494,
-     "theta_cm_median_deg": 15.998420767106161,
+     "theta_cm_median_deg": 15.999508099531795,
      "theta_lab_mean_1_minus_cos": 0.10117932556442384,
      "theta_lab_median_deg": 14.608663153036861
     }
@@ -659,7 +659,7 @@
      "rate_per_primary": 0.008423486122207698,
      "rate_per_primary_after_ke_cut": 0.008422829090290166,
      "rate_per_primary_after_rule": 0.008422829090290166,
-     "theta_cm_median_deg": 13.784291495981414,
+     "theta_cm_median_deg": 13.785020906647116,
      "theta_lab_mean_1_minus_cos": 0.0855626769121421,
      "theta_lab_median_deg": 12.537312307682079
     }

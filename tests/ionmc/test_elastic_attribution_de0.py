@@ -367,16 +367,32 @@ Minimum Kinetic Energy of proton: 0.5 MeV
 
 Maximum Kinetic Energy of proton: {emax} MeV
 """
-INPUT = """i:Ts/Seed = 1
+INPUT = """i:Ts/Seed = {seed}
+d:Ge/Sphere/RMax = {sphere} mm
 s:Ge/Target/Material = "{mat}"
+d:Ge/Target/RMax = {rmax} mm
 d:Ge/Target/HL = {hl} mm
+d:Ge/Target/TransZ = {hl} mm
 d:So/Beam/BeamEnergy = {e0} MeV
-i:So/Beam/NumberOfHistoriesInRun = {hist}
+i:So/Beam/NumberOfHistoriesInRun = {input_hist}
+sv:Ph/Default/Modules = {modules}
 """
 
 
-def _write_ps(d: Path, recs: list[tuple], hist: int, e0: float, mat: str, hl_mm: float) -> Path:
-    """Write a TOPAS binary phase space. ``recs``: (event, track, parent, E, cos, w_negative)."""
+def _write_ps(
+    d: Path,
+    recs: list[tuple],
+    hist: int,
+    e0: float,
+    mat: str,
+    hl_mm: float,
+    seed: int = 20287001,
+    input_hist: int | None = None,
+    modules: str = '1 "g4h-elastic_HP"',
+    rmax: float = 10.0,
+    sphere: float = 500.0,
+) -> Path:
+    """Write a TOPAS phase space and input.txt; ``recs``: (event, track, parent, E, cos, w_neg)."""
     d.mkdir(parents=True, exist_ok=True)
     f4, i4 = "<f4", "<i4"
     names = [(n, f4) for n in ("X", "Y", "Z", "U", "V", "E", "w")]
@@ -403,7 +419,10 @@ def _write_ps(d: Path, recs: list[tuple], hist: int, e0: float, mat: str, hl_mm:
     assert dt.itemsize == 46
     (d / "ps.phsp").write_bytes(arr.tobytes())
     (d / "ps.header").write_text(HEADER.format(hist=hist, n=len(recs), emax=e0))
-    (d / "input.txt").write_text(INPUT.format(mat=mat, hl=hl_mm, e0=e0, hist=hist))
+    ih = hist if input_hist is None else input_hist
+    (d / "input.txt").write_text(
+        INPUT.format(seed=seed, sphere=sphere, mat=mat, rmax=rmax, hl=hl_mm, e0=e0,
+                     input_hist=ih, modules=modules))  # fmt: skip
     return d
 
 
@@ -491,6 +510,7 @@ def test_de4_graphite_phase_space_has_only_the_carbon_class(tmp_path: Path) -> N
         150.0,
         "G4_C",
         5.0,
+        seed=20292001,
     )
     doc = de4.analyse([d])
     assert (doc["case"], doc["material"], doc["target"]) == (8, "graphite", "C-12")
@@ -510,6 +530,7 @@ def test_de4_split_case_parts_are_concatenated_and_validated(tmp_path: Path) -> 
             30.0,
             "G4_WATER",
             1.0,
+            seed=20284001 + k,
         )
         for k, h in enumerate(hist)
     ]  # identical event ids in every part
@@ -571,3 +592,157 @@ def test_table_side_applies_the_same_selection() -> None:
         assert v["off_curve_fraction_excluded"] == 0.0
         assert v["rate_per_primary_after_rule"] <= v["rate_per_primary_after_ke_cut"] * (1 + 1e-12)
     assert [cs["case"] for cs in de5.CASES] == list(range(10)) and de5.CASES[9]["row"] == 23
+
+
+def _water_part(tmp_path: Path, name: str = "w", **kw: object) -> Path:
+    return _write_ps(
+        tmp_path / name,
+        _tracks(150.0, _mass("O-16"), 1, bad=False),
+        4_000_000,
+        150.0,
+        "G4_WATER",
+        5.0,
+        **kw,
+    )  # type: ignore[arg-type]
+
+
+@pytest.mark.requires_tables("elastic")
+@pytest.mark.parametrize(
+    "kw",
+    [
+        {
+            "input_hist": 4_000_001
+        },  # input.txt histories differ from the header (and the frozen part)
+        {"seed": 20287002},  # not 20270000 + 1000 row + j
+        {"modules": '2 "g4h-elastic_HP" "g4em-standard_opt4"'},  # extra module
+        {"rmax": 12.0},  # wrong target radius
+        {"sphere": 400.0},  # wrong sphere radius
+    ],
+    ids=["histories", "seed", "modules", "target-radius", "sphere-radius"],
+)
+def test_de4_identification_binds_seed_modules_geometry_histories(tmp_path: Path, kw: dict) -> None:
+    from validation.scripts.elastic_attribution import de4_parse as de4
+
+    de4.analyse([_water_part(tmp_path)])  # the unmodified part is accepted
+    with pytest.raises(AssertionError):
+        de4.analyse([_water_part(tmp_path, "bad", **kw)])
+
+
+@pytest.mark.requires_tables("elastic")
+def test_de4_identification_rejects_wrong_header_and_wrong_thickness(tmp_path: Path) -> None:
+    from validation.scripts.elastic_attribution import de4_parse as de4
+
+    d = _water_part(tmp_path, "hdr")
+    hdr = (
+        (d / "ps.header")
+        .read_text()
+        .replace(
+            "Number of Original Histories: 4000000", "Number of Original Histories: 3999999", 1
+        )
+    )
+    (d / "ps.header").write_text(hdr)
+    with pytest.raises(AssertionError):
+        de4.analyse([d])  # header histories differ from input.txt
+    d2 = _write_ps(
+        tmp_path / "hl",
+        _tracks(150.0, _mass("O-16"), 1, bad=False),
+        4_000_000,
+        150.0,
+        "G4_WATER",
+        4.0,
+    )
+    with pytest.raises(AssertionError):
+        de4.analyse([d2])  # thickness 8 mm matches no frozen case
+
+
+@pytest.mark.requires_tables("elastic")
+def test_de4_cdf_output_layout_and_equiprobable_edges(tmp_path: Path) -> None:
+    from validation.scripts.elastic_attribution import de4_parse as de4
+    from validation.scripts.elastic_attribution import de5_sampling as de5
+
+    m_o = _mass("O-16")  # 300 on-curve p+A tracks at distinct angles
+    cos = np.cos(np.radians(3.0 + 0.05 * np.arange(300)))
+    recs = [
+        (i + 1, 1, 0, float(de5.kin_curve_t(150.0, m_o, cos[i : i + 1])[0]), float(cos[i]), 0)
+        for i in range(300)
+    ]
+    d = _write_ps(tmp_path / "w", recs, 4_000_000, 150.0, "G4_WATER", 5.0)
+    doc = de4.run([d], tmp_path / "out", cdf_out=tmp_path / "cdf")
+    z = np.load(tmp_path / "cdf" / "de4-case3-cdf.npz")
+    side = json.loads((tmp_path / "cdf" / "de4-case3-cdf.json").read_text())
+    assert side["npz_sha256"] == de4.c.sha256_file(tmp_path / "cdf" / "de4-case3-cdf.npz")
+    assert (
+        side["classes"]["O-16"]["n"] == doc["classes"]["O-16"]["events"] == z["O-16_mu_sorted"].size
+    )
+    mu, edges, q = z["O-16_mu_sorted"], z["O-16_edges_mu"], z["O-16_edges_q_mev"]
+    assert mu.dtype == np.float64 and np.all(np.diff(mu) >= 0) and edges.size == q.size == 257
+    assert edges[0] == -1.0 and edges[-1] == 1.0 and np.all(np.diff(edges) >= 0)
+    counts = np.histogram(mu, bins=edges)[
+        0
+    ]  # 256 equiprobable bins (the ends are the range limits)
+    assert counts.sum() == mu.size and counts.max() - counts.min() <= 2
+    assert q[0] == pytest.approx(2.0 * side["classes"]["O-16"]["p_cm_mev"]) and q[
+        -1
+    ] == pytest.approx(0.0, abs=1e-9)
+    assert (
+        "H-1_edges_mu" not in z.files or side["classes"]["H-1"]["symmetrised"] is True
+    )  # p-p: both signs of mu
+
+
+def _case_record(cs: dict, **over: object) -> dict:
+    rec = {"case": cs["case"], "row": cs["row"], "material": cs["material"], "target": cs["target"],
+           "energy_mev": float(cs["energy_mev"]),
+           "length_cm": cs["length_cm"], "primaries": cs["primaries"],
+           "identification": {"geometry_bound": True}}  # fmt: skip
+    rec.update(over)
+    return rec
+
+
+def test_de4_combine_requires_exactly_the_ten_validated_cases(tmp_path: Path) -> None:
+    from validation.scripts.elastic_attribution import de4_parse as de4
+    from validation.scripts.elastic_attribution import de5_sampling as de5
+
+    def write(n: int, rec: dict) -> None:
+        (tmp_path / f"de4-case{n}.json").write_text(json.dumps(rec))
+
+    for cs in de5.CASES:
+        write(cs["case"], _case_record(cs))
+    assert sorted(de4.validated_case_records(tmp_path), key=int) == [str(i) for i in range(10)]
+    (tmp_path / "de4-case7.json").unlink()
+    with pytest.raises(SystemExit, match="case 7 .* missing"):
+        de4.validated_case_records(tmp_path)  # missing
+    write(7, _case_record(de5.CASES[3]))  # a record of case 3 filed as case 7
+    with pytest.raises(SystemExit, match="differ from the frozen case"):
+        de4.validated_case_records(tmp_path)  # mismatched case fields
+    write(7, _case_record(de5.CASES[7], identification={}))
+    with pytest.raises(SystemExit, match="validated case identification"):
+        de4.validated_case_records(tmp_path)  # not identified against the frozen matrix
+    write(7, _case_record(de5.CASES[7]))
+    (tmp_path / "de4-case7-copy.json").write_text("{}")
+    with pytest.raises(SystemExit, match="unexpected file"):
+        de4.validated_case_records(tmp_path)  # duplicate / stray record
+    (tmp_path / "de4-case7-copy.json").unlink()
+    write(10, _case_record(de5.CASES[0]))
+    with pytest.raises(SystemExit, match="not a case of the frozen matrix"):
+        de4.validated_case_records(tmp_path)
+
+
+def test_signature_ratios_raise_on_missing_class_or_signature() -> None:
+    from validation.scripts.elastic_attribution import de5_sampling as de5
+
+    sigs = {s: 1.0 for s in de5.SIGNATURES}
+    table = {"cases": {"3": {"classes": {"O-16": dict(sigs), "H-1": dict(sigs)}}}}
+    g4 = {"3": {"O-16": {s: 2.0 for s in de5.SIGNATURES}, "H-1": {s: 2.0 for s in de5.SIGNATURES}}}
+    assert de5.signature_ratios(table, g4)["3"]["O-16"]["T_tail_moment"] == pytest.approx(0.5)
+    with pytest.raises(KeyError, match="no case 3"):
+        de5.signature_ratios(table, {})
+    with pytest.raises(KeyError, match="no class H-1"):
+        de5.signature_ratios(table, {"3": {"O-16": g4["3"]["O-16"]}})
+    bad = {
+        "3": {
+            "O-16": g4["3"]["O-16"],
+            "H-1": {k: v for k, v in g4["3"]["H-1"].items() if k != "qslope"},
+        }
+    }
+    with pytest.raises(KeyError, match="no signature qslope"):
+        de5.signature_ratios(table, bad)

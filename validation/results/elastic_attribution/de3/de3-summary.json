@@ -59,18 +59,18 @@
  "provenance": {
   "backend": "warp-cpu",
   "cache_dir": "<scratch-cache>",
-  "git_head": "a72b6c4301d146da0a6d2cc9ecb089e3711f1837",
+  "git_head": "c7c8b662c268b2bcf8237a317a34369cd5905c52",
+  "git_status_clean": false,
   "git_status_elastic_attribution": [
    "M validation/scripts/elastic_attribution/de3_probes.py",
    " M validation/scripts/elastic_attribution/de4_parse.py",
-   " M validation/scripts/elastic_attribution/de5_sampling.py",
-   " M validation/scripts/elastic_attribution/make_variant_tables.py"
+   " M validation/scripts/elastic_attribution/de5_sampling.py"
   ],
   "precision": "float64",
   "scripts_sha256": {
    "common.py": "29171edbda46e951cb3d36a04ff77954b370d4a6be325d5ccfe2a6b0b110b4ad",
    "de0_kernels.py": "38e5ec2dbe285af1db5c6785851ae7b367ac6987f6733c3facb0f4a3858d2cd7",
-   "de3_probes.py": "a6bfeb2ed8f9b1a021feee4a74d996e4770f1fe642db549c61cb92074fc25898",
+   "de3_probes.py": "257ae085db885c5eabe4f2c82f1689f37dfe5d6f006e464169f07140dd3396cd",
    "make_variant_tables.py": "beafad7d90f4a4d63fc4834de8e7d86515f5ed561d288ab6f5f7bb785ceef951"
   },
   "seeds": {
