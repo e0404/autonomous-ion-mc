@@ -55,27 +55,23 @@
   }
  },
  "note": "F = (peak/plateau)_EM+el/(peak/plateau)_EM by the paired jackknife of compare_idd_v5; K* shifted is the physical kernel, the as-frozen K* carries a sign error (D-E0 dated note); probes only, never used in the section 5 rule",
+ "note_git": "Git projection (decision 0041): explicit allowlist of dimensionless ratios, per-primary rates and probabilities, kinematic statistics, kernel integrals, counts and flags; no absolute cross sections, no distributions or per-point arrays. The complete record is regenerated into validation/generated/ by the committed module.",
  "provenance": {
   "backend": "warp-cpu",
   "cache_dir": "<scratch-cache>",
-  "git_head": "a59271ccd913cb345e8c2a027ea664f4876fa75e",
+  "git_head": "a72b6c4301d146da0a6d2cc9ecb089e3711f1837",
   "git_status_elastic_attribution": [
-   "M validation/scripts/elastic_attribution/common.py",
-   " M validation/scripts/elastic_attribution/de0_h5.py",
-   " M validation/scripts/elastic_attribution/de0_kernels.py",
-   " M validation/scripts/elastic_attribution/de1_shapes.py",
-   " M validation/scripts/elastic_attribution/de2_pp.py",
-   " M validation/scripts/elastic_attribution/de3_probes.py",
+   "M validation/scripts/elastic_attribution/de3_probes.py",
+   " M validation/scripts/elastic_attribution/de4_parse.py",
    " M validation/scripts/elastic_attribution/de5_sampling.py",
-   " M validation/scripts/elastic_attribution/make_variant_tables.py",
-   "?? validation/scripts/elastic_attribution/de4_parse.py"
+   " M validation/scripts/elastic_attribution/make_variant_tables.py"
   ],
   "precision": "float64",
   "scripts_sha256": {
    "common.py": "29171edbda46e951cb3d36a04ff77954b370d4a6be325d5ccfe2a6b0b110b4ad",
    "de0_kernels.py": "38e5ec2dbe285af1db5c6785851ae7b367ac6987f6733c3facb0f4a3858d2cd7",
-   "de3_probes.py": "d1af89a43372c6a2f9aecb78d83bc02b4122f41afd8c974a945de7c6330bd89a",
-   "make_variant_tables.py": "ee27203562240d4b1722de2b7c7bbed4d8a239c530a16513c1949a81bd070fb1"
+   "de3_probes.py": "a6bfeb2ed8f9b1a021feee4a74d996e4770f1fe642db549c61cb92074fc25898",
+   "make_variant_tables.py": "beafad7d90f4a4d63fc4834de8e7d86515f5ed561d288ab6f5f7bb785ceef951"
   },
   "seeds": {
    "150": 20990100,

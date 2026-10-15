@@ -182,6 +182,16 @@ def _array_digest(x: Any) -> str:
     ).hexdigest()
 
 
+def render_check_base(doc: dict[str, Any]) -> str:
+    d = doc["detail"]
+    lines = ["", f"Energy {doc['energy']} MeV, n = {doc['n']}, {doc['n_batches']} batches, seed {doc['seed']}; pinned table {doc['pinned_id'][:8]}, base copy {doc['all_id'][:8]}.", "",
+             f"**Bit for bit: {doc['bit_for_bit']}** (depth-dose batches {d['idd_batches']}, recoil channel {d['recoil_idd_batches']}, counters {d['counters']}).", "",
+             "| array | sha256 pinned | sha256 base copy |", "|---|---|---|"]  # fmt: skip
+    for k in ("sha256_idd_batches", "sha256_recoil_idd_batches"):
+        lines.append(f"| {k[7:]} | {doc[k]['pinned']} | {doc[k]['all']} |")
+    return "\n".join(lines) + "\n"
+
+
 def check_base(
     energy: int, n: int, batches: int, out: Path, reuse_runs: bool = False
 ) -> dict[str, Any]:
@@ -215,8 +225,11 @@ def check_base(
         "counters": a["counters"],
         "provenance": provenance(),
     }  # fmt: skip
-    out.mkdir(parents=True, exist_ok=True)
-    (out / f"check-base-{energy}.json").write_text(json.dumps(res, indent=1) + "\n")
+    inputs = [out / f"de3-{energy}-pinned.json", out / f"de3-{energy}-all.json"]
+    c.write_outputs(out, f"check-base-{energy}.json", res, f"check-base-{energy}-report.md",
+                    c.header(f"D-E3 base check at {energy} MeV: pinned table against the base copy",
+                             f"python -m validation.scripts.elastic_attribution.de3_probes --check-base --reuse-runs --energy {energy}",
+                             inputs), render_check_base, GIT_ALLOW)  # fmt: skip
     return res
 
 
@@ -398,6 +411,68 @@ def _composition_sentence(derived: dict[str, Any]) -> str:
     )
 
 
+def render_summary(doc: dict[str, Any]) -> str:
+    """Markdown body of ``de3-summary.json``, a pure function of the (projected) record."""
+    rows, derived = doc.get("rows", {}), doc.get("derived", {})
+    lines = [
+        "",
+        "| E | variant | F | gain | peak removal | K* shifted (pred) | pred/meas removal | F pred (meas. gain) | recoil MeV | R80 mm | R80 EM-only | lateral rms mm (EM+el / EM) | valid |",
+        "|" + "---|" * 13,
+    ]
+    for k, r in rows.items():
+        e, v = k.split("/")
+        lat = (
+            f"{r['lateral_rms_mm']:.3f} / {r['lateral_rms_emonly_mm']:.3f}"
+            if "lateral_rms_mm" in r
+            else "-"
+        )
+        lines.append(
+            f"| {e} | {v} | {r['F']:.4f} +- {r['F_se']:.4f} | {r['gain']:.4f} +- {r['gain_se']:.4f} | {r['peak_removal']:.4f} | "
+            f"{r.get('K_star_shifted', float('nan')):.4f} | {r.get('peak_removal_pred_over_measured') or float('nan'):.3f} | "
+            f"{r.get('F_pred_shifted_with_measured_gain', float('nan')):.4f} | {r['recoil_mev_per_primary'] or 0:.4f} | {r['r80_mm']:.3f} | {r['r80_emonly_mm']:.3f} | {lat} | {r['valid']} |"
+        )
+    lines += ["", "## Derived (D-E3 review): composition and gap closure", "",
+              "| E | F_all | F_pA x F_pp | F_all - F_pA F_pp (paired jackknife) | removal additivity pA + pp - all (paired jackknife) | F_TOPAS (reconstructed) | gap closed: sigma0.8 / Rx1.2 / s0.5 / s0.9 / gauss |",
+              "|---|---|---|---|---|---|---|"]  # fmt: skip
+    for e, b in derived.items():
+        gc = b.get("gap_closed_fraction", {})
+        pj = b.get("paired_jackknife")
+        dif = (
+            f"{pj['F_all_minus_product']:+.5f} +- {pj['F_all_minus_product_se']:.5f}"
+            if pj
+            else f"{b.get('F_all_minus_product', float('nan')):+.5f}"
+        )
+        add = (
+            f"{pj['removal_additivity']:+.5f} +- {pj['removal_additivity_se']:.5f}"
+            if pj
+            else f"{b.get('removal_pA_plus_removal_pp_minus_removal_all', float('nan')):+.5f}"
+        )
+        lines.append(
+            f"| {e} | {b.get('F_all', float('nan')):.4f} | {b.get('F_pA_times_F_pp', float('nan')):.4f} | {dif} | "
+            f"{add} | {b.get('F_topas_reconstructed', float('nan')):.4f} | "
+            + " / ".join(
+                f"{gc.get(v, float('nan')):.2f}"
+                for v in ("pA-sigma0.8", "pA-Rx1.2", "pA-s0.5", "pA-s0.9", "pA-gauss")
+            )
+            + " |"
+        )
+    lines += ["", "## Findings recorded with the independent D-E3 review (exploratory; nothing enters the section 5 rule)", "",
+              "- **Composition:** " + _composition_sentence(derived) + " Where it is consistent, D-E6 effects are to be read on -ln F; on F itself the product term would consume part of the 30 % interaction budget of section 5.",
+              "- **Gap closure toward TOPAS F** (F_TOPAS reconstructed from the archived V11 Delta_pk): pA-s0.9 closes most of the gap, pA-s0.5 and pA-Rx1.2 about half; the shape (core width) is the lever on F.",
+              "- **Contrary to a pure tail story:** pA-gauss removes the large-angle tail yet leaves F unchanged while lowering the gain; the peak deficit is driven by the core width, the plateau gain by the tail.",
+              "- **Contrary evidence on p-p (H3 stays live):** the pp-only plateau gain alone is of the order of TOPAS's total elastic gain (84 % / 108 % per the review, from the archived V11 gain); no p+A shape variant closes the gain excess, so the swap-pp arm of D-E6 is essential.",
+              "- **K* model:** the shifted K* overpredicts the measured peak removal by 8-14 % for every p+A variant and by 1-3 % for pp-only, the bias anticipated in the D-E0 dated note (adequate for ranking, not for a 0.010 closure).",
+              "", "## Provenance", "",
+              f"- git HEAD {doc['provenance']['git_head']}; status of validation/scripts/elastic_attribution at summary time: {doc['provenance'].get('git_status_elastic_attribution') or 'clean'}",
+              "- scripts sha256 at summary time: " + ", ".join(f"{k} {v[:16]}" for k, v in doc["provenance"].get("scripts_sha256", {}).items()),
+              "- the committed scripts are the ones that made the committed runs (second execution; the first execution with "
+              "untracked scripts is preserved in the experiment telemetry and was reproduced bit for bit)",
+              "- table files sha256: " + ", ".join(f"{k} {v[:16]}" for k, v in doc["provenance"].get("table_files_sha256", {}).items()),
+              f"- backend warp-cpu float64, single process; seeds {SEEDS}; runs (seed, n, batches, table id, wall s) in `runs` of de3-summary.json",
+              "- logged runs: telemetry/test-logs/<UTC>-de3-<variant>-<E>/ (command, commit, git status, start/end, full stdout/stderr)"]  # fmt: skip
+    return "\n".join(lines) + "\n"
+
+
 def summarize(out: Path) -> dict[str, Any]:
     cmp = _cmp()
     rows: dict[str, Any] = {}
@@ -452,67 +527,10 @@ def summarize(out: Path) -> dict[str, Any]:
     doc = {"banner": c.BANNER, "rows": rows, "runs": runs_prov, "derived": derived, "provenance": provenance(),
            "note": "F = (peak/plateau)_EM+el/(peak/plateau)_EM by the paired jackknife of compare_idd_v5; K* shifted is the physical "
                    "kernel, the as-frozen K* carries a sign error (D-E0 dated note); probes only, never used in the section 5 rule"}  # fmt: skip
-    (out / "de3-summary.json").write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
-    lines = [
-        c.BANNER,
-        "",
-        "# D-E3 probes: summary",
-        "",
-        "| E | variant | F | gain | peak removal | K* shifted (pred) | pred/meas removal | F pred (meas. gain) | recoil MeV | R80 mm | R80 EM-only | lateral rms mm (EM+el / EM) | valid |",
-        "|" + "---|" * 13,
-    ]
-    for k, r in rows.items():
-        e, v = k.split("/")
-        lat = (
-            f"{r['lateral_rms_mm']:.3f} / {r['lateral_rms_emonly_mm']:.3f}"
-            if "lateral_rms_mm" in r
-            else "-"
-        )
-        lines.append(
-            f"| {e} | {v} | {r['F']:.4f} +- {r['F_se']:.4f} | {r['gain']:.4f} +- {r['gain_se']:.4f} | {r['peak_removal']:.4f} | "
-            f"{r.get('K_star_shifted', float('nan')):.4f} | {r.get('peak_removal_pred_over_measured') or float('nan'):.3f} | "
-            f"{r.get('F_pred_shifted_with_measured_gain', float('nan')):.4f} | {r['recoil_mev_per_primary'] or 0:.4f} | {r['r80_mm']:.3f} | {r['r80_emonly_mm']:.3f} | {lat} | {r['valid']} |"
-        )
-    lines += ["", "## Derived (D-E3 review): composition and gap closure", "",
-              "| E | F_all | F_pA x F_pp | F_all - F_pA F_pp (paired jackknife) | removal additivity pA + pp - all (paired jackknife) | F_TOPAS (reconstructed) | gap closed: sigma0.8 / Rx1.2 / s0.5 / s0.9 / gauss |",
-              "|---|---|---|---|---|---|---|"]  # fmt: skip
-    for e, b in derived.items():
-        gc = b.get("gap_closed_fraction", {})
-        pj = b.get("paired_jackknife")
-        dif = (
-            f"{pj['F_all_minus_product']:+.5f} +- {pj['F_all_minus_product_se']:.5f}"
-            if pj
-            else f"{b.get('F_all_minus_product', float('nan')):+.5f}"
-        )
-        add = (
-            f"{pj['removal_additivity']:+.5f} +- {pj['removal_additivity_se']:.5f}"
-            if pj
-            else f"{b.get('removal_pA_plus_removal_pp_minus_removal_all', float('nan')):+.5f}"
-        )
-        lines.append(
-            f"| {e} | {b.get('F_all', float('nan')):.4f} | {b.get('F_pA_times_F_pp', float('nan')):.4f} | {dif} | "
-            f"{add} | {b.get('F_topas_reconstructed', float('nan')):.4f} | "
-            + " / ".join(
-                f"{gc.get(v, float('nan')):.2f}"
-                for v in ("pA-sigma0.8", "pA-Rx1.2", "pA-s0.5", "pA-s0.9", "pA-gauss")
-            )
-            + " |"
-        )
-    lines += ["", "## Findings recorded with the independent D-E3 review (exploratory; nothing enters the section 5 rule)", "",
-              "- **Composition:** " + _composition_sentence(derived) + " Where it is consistent, D-E6 effects are to be read on -ln F; on F itself the product term would consume part of the 30 % interaction budget of section 5.",
-              "- **Gap closure toward TOPAS F** (F_TOPAS reconstructed from the archived V11 Delta_pk): pA-s0.9 closes most of the gap, pA-s0.5 and pA-Rx1.2 about half; the shape (core width) is the lever on F.",
-              "- **Contrary to a pure tail story:** pA-gauss removes the large-angle tail yet leaves F unchanged while lowering the gain; the peak deficit is driven by the core width, the plateau gain by the tail.",
-              "- **Contrary evidence on p-p (H3 stays live):** the pp-only plateau gain alone is of the order of TOPAS's total elastic gain (84 % / 108 % per the review, from the archived V11 gain); no p+A shape variant closes the gain excess, so the swap-pp arm of D-E6 is essential.",
-              "- **K* model:** the shifted K* overpredicts the measured peak removal by 8-14 % for every p+A variant and by 1-3 % for pp-only, the bias anticipated in the D-E0 dated note (adequate for ranking, not for a 0.010 closure).",
-              "", "## Provenance", "",
-              f"- git HEAD {doc['provenance']['git_head']}; status of validation/scripts/elastic_attribution at summary time: {doc['provenance']['git_status_elastic_attribution'] or 'clean'}",
-              "- scripts sha256 at summary time: " + ", ".join(f"{k} {v[:16]}" for k, v in doc["provenance"]["scripts_sha256"].items()),
-              "- the committed scripts are the ones that made the committed runs (second execution; the first execution with "
-              "untracked scripts is preserved in the experiment telemetry and was reproduced bit for bit)",
-              "- table files sha256: " + ", ".join(f"{k} {v[:16]}" for k, v in doc["provenance"]["table_files_sha256"].items()),
-              f"- backend warp-cpu float64, single process; seeds {SEEDS}; runs (seed, n, batches, table id, wall s) in `runs` of de3-summary.json",
-              "- logged runs: telemetry/test-logs/<UTC>-de3-<variant>-<E>/ (command, commit, git status, start/end, full stdout/stderr)"]  # fmt: skip
-    (out / "de3-summary.md").write_text("\n".join(lines) + "\n")
+    run_files = sorted(p for e in (150, 200) for p in out.glob(f"de3-{e}-*.json"))
+    c.write_outputs(out, "de3-summary.json", doc, "de3-summary.md",
+                    c.header("D-E3 probes: summary", "python -m validation.scripts.elastic_attribution.de3_probes --summary",
+                             run_files), render_summary, GIT_ALLOW)  # fmt: skip
     return doc
 
 

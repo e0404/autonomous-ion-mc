@@ -55,7 +55,7 @@ def resolve_scratch(arg: str | Path | None = None) -> Path:
 
 
 SCRATCH = resolve_scratch()
-REAL_CACHE = c.REPO / ".ionmc-cache" / "ionmc-data"  # the pinned cache (read only)
+REAL_CACHE = c.CACHE_DIR  # the configured pinned-data cache (IONMC_CACHE_DIR at import, else the repository cache); read only
 NUCLEAR_TABLE_ID = "00e8031d5f67704f256e904ebab89b0c2a75845bcf1887c29e1518bffaafe5fb"
 SHAPE_KIND = {"pA-Rx1.2": "Rx1.2", "pA-s0.5": "s0.5", "pA-s0.9": "s0.9", "pA-gauss": "gauss"}
 VARIANTS = ("all", "pp-only", "pA-only", "pA-sigma0.8", *SHAPE_KIND)

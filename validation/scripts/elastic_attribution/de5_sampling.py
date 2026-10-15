@@ -25,7 +25,9 @@ Signatures (plan section 2.2, H2 / H3 rows and the descriptive characterisation)
 - classification of the D-E4 scheme (:func:`classify`, applied to the table events and later to the Geant4 phase space):
   relative residual of the primary's energy to the elastic kinematic curves of p+H and p+A; the smaller residual wins; a
   *conflict* track (both below 1e-3, i.e. theta_lab below the crossover of about 1.8 deg) is kept: p-p iff the event has a secondary
-  proton, else p+A. The raw conflict fraction is a diagnostic; the per-class rate after the rule is reported.
+  proton, else p+A. The raw conflict fraction is a diagnostic; the per-class rate after the rule is reported. Tracks off both curves
+  are counted and **excluded** before the signatures (:func:`select_tracks`, shared with the Geant4 parser); the Geant4 ratio hook
+  compares ``rate_per_primary_after_rule`` (KE filter, exclusion and classification applied on both sides).
 - the first-minimum, q-slope and Helm descriptors are recorded, not interpreted.
 
 Geant4 ratios are made later by :func:`signature_ratios` from a Geant4 per-class summary of the same keys (D-E4); no Geant4
@@ -50,7 +52,7 @@ PP_CUT_DEG = 16.26
 GRAPHITE_RHO = 2.0
 HBARC = 197.3269804
 SIGNATURES = (  # keys of a class summary that the Geant4 hook compares
-    "rate_per_primary", "P_theta_lab_gt_theta_2mm", "P_theta_lab_gt_theta_3mm", "theta_lab_median_deg", "T_tail_moment",
+    "rate_per_primary_after_rule", "P_theta_lab_gt_theta_2mm", "P_theta_lab_gt_theta_3mm", "theta_lab_median_deg", "T_tail_moment",
     "mean_t_other_mev", "first_minimum_deg", "first_minimum_3sigma_deg", "qslope",
 )  # fmt: skip
 _CL = "cases/*/classes/*"
@@ -62,7 +64,8 @@ GIT_ALLOW = (
     *(f"{_CL}/{k}" for k in (
         "P_theta_lab_gt_theta_2mm", "P_theta_lab_gt_theta_3mm", "T_tail_moment", "counts_in_first_minimum_bin", "event_share",
         "events", "expected_events_in_primaries", "first_minimum_3sigma_deg", "first_minimum_deg", "ke_cut_fraction_removed",
-        "mean_t_other_mev", "qslope", "qslope_bins", "rate_per_primary", "rate_per_primary_after_ke_cut", "theta_cm_median_deg",
+        "mean_t_other_mev", "qslope", "qslope_bins", "rate_per_primary", "rate_per_primary_after_ke_cut",
+        "rate_per_primary_after_rule", "off_curve_fraction_excluded", "theta_cm_median_deg",
         "theta_cm_min_deg", "theta_lab_mean_1_minus_cos", "theta_lab_median_deg", "theta_slow_lab_median_deg")),
     f"{_CL}/classification/*", f"{_CL}/helm/*",
 )  # fmt: skip
@@ -75,14 +78,53 @@ HIST_INTERIOR_DEG = [2.0, 5.0, 10.0, 15.0, 20.0, 30.0, 60.0]  # 8 lab-angle bins
 HIST_INTERIOR_T = [0.02, 0.05, 0.1, 0.2, 0.4, 0.6, 0.8]  # primary T1 / E0, 8 bins
 
 
-def case_table() -> list[dict[str, Any]]:
-    """Cases 0-9 = rows 14-23: material, energy, target length [cm], primaries."""
+def _build_cases() -> tuple[dict[str, Any], ...]:
     out = []
     for i, (mat, e) in enumerate([(m, e) for m in ("water", "graphite") for e in ENERGIES]):
         thin = e <= 50
-        out.append({"case": i, "row": 14 + i, "material": mat, "energy_mev": e, "length_cm": 0.2 if thin else 1.0,
-                    "primaries": 20_000_000 if thin else 4_000_000, "seed": SEED_BASE + i})  # fmt: skip
-    return out
+        row = 14 + i
+        out.append({
+            "case": i, "row": row, "material": mat, "energy_mev": e, "length_cm": 0.2 if thin else 1.0,
+            "primaries": 20_000_000 if thin else 4_000_000, "seed": SEED_BASE + i,
+            "target": "O-16" if mat == "water" else "C-12",  # the p+A class of the material (water also has H-1)
+            "topas_material": "G4_WATER" if mat == "water" else "G4_C", "topas_seed_base": 20270000 + 1000 * row,
+        })  # fmt: skip
+    return tuple(out)
+
+
+CASES = _build_cases()
+"""The frozen D-E4 / D-E5 case matrix (plan 3.2, Amendment 19 (c)): case index 0-9 = rows 14-23; water rows 14-18, graphite rows
+19-23, 30 / 50 / 100 / 150 / 200 MeV; thickness 2 mm at 30 / 50 MeV and 1 cm otherwise; primaries 2e7 / 4e6. The parser
+(:mod:`de4_parse`) identifies a materialized TOPAS case against this table."""
+
+
+def case_table() -> list[dict[str, Any]]:
+    """Cases 0-9 = rows 14-23 (a copy of :data:`CASES`)."""
+    return [dict(cs) for cs in CASES]
+
+
+def select_tracks(
+    cos_lab: np.ndarray,
+    t1: np.ndarray,
+    e0: float,
+    m_h: float,
+    m_a: float,
+    has_secondary_proton: Any,
+    ke_cut: float = KE_CUT_MEV,
+) -> dict[str, np.ndarray]:
+    """The frozen D-E4 track selection, shared by the table side and the Geant4 parser: the kinetic-energy filter removes tracks with
+    ``E > E0 - ke_cut`` (undeflected primaries); of the remaining tracks those off both two-body curves (:func:`classify`) are
+    counted and **excluded**. ``keep`` = neither removed nor off-curve; ``is_pp`` and ``conflict`` as :func:`classify`."""
+    is_pp, conflict, off = classify(cos_lab, t1, e0, m_h, m_a, has_secondary_proton)
+    ke_removed = np.asarray(t1, dtype=float) > e0 - ke_cut
+    off = off & ~ke_removed
+    return {
+        "is_pp": is_pp,
+        "conflict": conflict,
+        "off": off,
+        "ke_removed": ke_removed,
+        "keep": ~ke_removed & ~off,
+    }
 
 
 def kin_curve_t(e0: float, m_t: float, cos_theta: np.ndarray) -> np.ndarray:
@@ -265,8 +307,23 @@ def sample_case(tab: Any, water: c.Water, case: dict[str, Any]) -> dict[str, Any
             cos_other = np.where(fast, cos2, tb.cos_lab1)
         else:
             t1, cos1, t_other = tb.t1, tb.cos_lab1, tb.t2
-        keep = t1 <= e - KE_CUT_MEV
-        removed = 1.0 - float(keep.mean())
+        mh = float(tab.arrays["target_mass_mev"][names.index("H-1")])
+        m_a = (
+            m_t
+            if not pp
+            else float(
+                tab.arrays["target_mass_mev"][
+                    names.index(next((n for n in cls if n != "H-1"), "O-16"))
+                ]
+            )
+        )
+        sel = select_tracks(
+            cos1, t1, e, mh, m_a, has_secondary_proton=pp
+        )  # KE filter, classification, off-curve exclusion
+        keep = sel["keep"]
+        removed = float(sel["ke_removed"].mean())
+        surv = ~sel["ke_removed"]
+        off_frac = float(sel["off"][surv].mean()) if surv.any() else 0.0
         th = np.degrees(np.arccos(np.clip(cos1, -1, 1)))[keep]
         t1k, cos1k, tok = t1[keep], cos1[keep], t_other[keep]
         th_med = float(np.median(th))
@@ -276,6 +333,7 @@ def sample_case(tab: Any, water: c.Water, case: dict[str, Any]) -> dict[str, Any
         cls_doc: dict[str, Any] = {
             "events": n_k, "event_share": n_k / N_EVENTS, "ke_cut_fraction_removed": removed,
             "rate_per_primary": rate, "rate_per_primary_after_ke_cut": rate * (1.0 - removed),
+            "off_curve_fraction_excluded": off_frac,
             "expected_events_in_primaries": rate * case["primaries"],
             "P_theta_lab_gt_theta_2mm": float(np.mean(th > th_w[2.0])), "P_theta_lab_gt_theta_3mm": float(np.mean(th > th_w[3.0])),
             "theta_lab_median_deg": th_med, "theta_lab_mean_1_minus_cos": float(np.mean(1.0 - cos1k)),
@@ -298,23 +356,17 @@ def sample_case(tab: Any, water: c.Water, case: dict[str, Any]) -> dict[str, Any
                 mu, float(np.interp(e, tab.arrays["grid_e_mev"], tab.arrays["p_cm_mev"][it]))
             )
             cls_doc.update(sd)
-        # D-E4 classification rule on table events (pure function ``classify``)
-        mh = float(tab.arrays["target_mass_mev"][names.index("H-1")])
-        m_a = (
-            m_t
-            if not pp
-            else float(
-                tab.arrays["target_mass_mev"][
-                    names.index(next((n for n in cls if n != "H-1"), "O-16"))
-                ]
-            )
-        )
-        is_pp, conflict, off = classify(cos1k, t1k, e, mh, m_a, has_secondary_proton=pp)
+        # D-E4 classification rule on the kept table events
+        is_pp, conflict = sel["is_pp"][keep], sel["conflict"][surv]
         assigned_own = is_pp if pp else ~is_pp
+        own_frac = float(assigned_own.mean())
+        cls_doc["rate_per_primary_after_rule"] = (
+            rate * (1.0 - removed) * (1.0 - off_frac) * own_frac
+        )
         cls_doc["classification"] = {
-            "conflict_fraction_raw": float(conflict.mean()), "assigned_to_own_class_fraction": float(assigned_own.mean()),
-            "misclassified_fraction": float(1.0 - assigned_own.mean()), "off_curve_fraction": float(off.mean()),
-            "rate_per_primary_after_rule": rate * (1.0 - removed) * float(assigned_own.mean()),
+            "conflict_fraction_raw": float(conflict.mean()), "assigned_to_own_class_fraction": own_frac,
+            "misclassified_fraction": 1.0 - own_frac, "off_curve_fraction": off_frac,
+            "rate_per_primary_after_rule": cls_doc["rate_per_primary_after_rule"],
             "curve_crossover_deg": curve_crossover_deg(e, mh, m_a),
         }  # fmt: skip
         out["classes"][name] = cls_doc

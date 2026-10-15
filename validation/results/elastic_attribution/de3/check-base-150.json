@@ -1,24 +1,6 @@
 {
- "energy": 150,
- "n": 100000,
- "n_batches": 20,
- "seed": 20990100,
- "bit_for_bit": true,
- "detail": {
-  "idd_batches": true,
-  "recoil_idd_batches": true,
-  "counters": true
- },
- "pinned_id": "1fd24cff23d3f7e72aabcda2af8bc70ad47b81755f94a2ca55890cb6ae52c591",
  "all_id": "08a10dd42ec6c913e26673e3770e778e81330ac73f2756a4ea403ac629c2cb50",
- "sha256_idd_batches": {
-  "pinned": "8df1969be0973e6f4b154a362845d232b46a0e5a99da00bf671e303d5b9e57da",
-  "all": "8df1969be0973e6f4b154a362845d232b46a0e5a99da00bf671e303d5b9e57da"
- },
- "sha256_recoil_idd_batches": {
-  "pinned": "f7585fb9c0da2fa3833efe8193bf81d02020da1effa1e980a6acac6b5ad50122",
-  "all": "f7585fb9c0da2fa3833efe8193bf81d02020da1effa1e980a6acac6b5ad50122"
- },
+ "bit_for_bit": true,
  "counters": {
   "accumulator_overflow": 0,
   "elastic_below_domain": 103634,
@@ -35,36 +17,50 @@
   "step_truncation": 0,
   "straggling_rejection": 0
  },
+ "detail": {
+  "counters": true,
+  "idd_batches": true,
+  "recoil_idd_batches": true
+ },
+ "energy": 150,
+ "n": 100000,
+ "n_batches": 20,
+ "note_git": "Git projection (decision 0041): explicit allowlist of dimensionless ratios, per-primary rates and probabilities, kinematic statistics, kernel integrals, counts and flags; no absolute cross sections, no distributions or per-point arrays. The complete record is regenerated into validation/generated/ by the committed module.",
+ "pinned_id": "1fd24cff23d3f7e72aabcda2af8bc70ad47b81755f94a2ca55890cb6ae52c591",
  "provenance": {
-  "git_head": "a59271ccd913cb345e8c2a027ea664f4876fa75e",
-  "git_status_elastic_attribution": [
-   "M validation/scripts/elastic_attribution/common.py",
-   " M validation/scripts/elastic_attribution/de0_h5.py",
-   " M validation/scripts/elastic_attribution/de0_kernels.py",
-   " M validation/scripts/elastic_attribution/de1_shapes.py",
-   " M validation/scripts/elastic_attribution/de2_pp.py",
-   " M validation/scripts/elastic_attribution/de3_probes.py",
-   " M validation/scripts/elastic_attribution/de5_sampling.py",
-   " M validation/scripts/elastic_attribution/make_variant_tables.py",
-   "?? validation/scripts/elastic_attribution/de4_parse.py"
-  ],
-  "scripts_sha256": {
-   "make_variant_tables.py": "ee27203562240d4b1722de2b7c7bbed4d8a239c530a16513c1949a81bd070fb1",
-   "de3_probes.py": "d1af89a43372c6a2f9aecb78d83bc02b4122f41afd8c974a945de7c6330bd89a",
-   "de0_kernels.py": "38e5ec2dbe285af1db5c6785851ae7b367ac6987f6733c3facb0f4a3858d2cd7",
-   "common.py": "29171edbda46e951cb3d36a04ff77954b370d4a6be325d5ccfe2a6b0b110b4ad"
-  },
-  "table_files_sha256": {
-   "elastic-proton-1fd24cff23d3f7e72aabcda2af8bc70ad47b81755f94a2ca55890cb6ae52c591.npz": "1028bb67f57bc96edafe6d3dbcce532013edbbd31b9b80861239b09d9ad4202a",
-   "elastic-proton-1fd24cff23d3f7e72aabcda2af8bc70ad47b81755f94a2ca55890cb6ae52c591.json": "ab5e2a357ab53060a84182607d93fe4373e50ce60622450af74728fd4e495e77"
-  },
   "backend": "warp-cpu",
-  "precision": "float64",
-  "single_process": true,
   "cache_dir": "<scratch-cache>",
+  "git_head": "a72b6c4301d146da0a6d2cc9ecb089e3711f1837",
+  "git_status_elastic_attribution": [
+   "M validation/scripts/elastic_attribution/de3_probes.py",
+   " M validation/scripts/elastic_attribution/de4_parse.py",
+   " M validation/scripts/elastic_attribution/de5_sampling.py",
+   " M validation/scripts/elastic_attribution/make_variant_tables.py"
+  ],
+  "precision": "float64",
+  "scripts_sha256": {
+   "common.py": "29171edbda46e951cb3d36a04ff77954b370d4a6be325d5ccfe2a6b0b110b4ad",
+   "de0_kernels.py": "38e5ec2dbe285af1db5c6785851ae7b367ac6987f6733c3facb0f4a3858d2cd7",
+   "de3_probes.py": "a6bfeb2ed8f9b1a021feee4a74d996e4770f1fe642db549c61cb92074fc25898",
+   "make_variant_tables.py": "beafad7d90f4a4d63fc4834de8e7d86515f5ed561d288ab6f5f7bb785ceef951"
+  },
   "seeds": {
    "150": 20990100,
    "200": 20990101
+  },
+  "single_process": true,
+  "table_files_sha256": {
+   "elastic-proton-1fd24cff23d3f7e72aabcda2af8bc70ad47b81755f94a2ca55890cb6ae52c591.json": "ab5e2a357ab53060a84182607d93fe4373e50ce60622450af74728fd4e495e77",
+   "elastic-proton-1fd24cff23d3f7e72aabcda2af8bc70ad47b81755f94a2ca55890cb6ae52c591.npz": "1028bb67f57bc96edafe6d3dbcce532013edbbd31b9b80861239b09d9ad4202a"
   }
+ },
+ "seed": 20990100,
+ "sha256_idd_batches": {
+  "all": "8df1969be0973e6f4b154a362845d232b46a0e5a99da00bf671e303d5b9e57da",
+  "pinned": "8df1969be0973e6f4b154a362845d232b46a0e5a99da00bf671e303d5b9e57da"
+ },
+ "sha256_recoil_idd_batches": {
+  "all": "f7585fb9c0da2fa3833efe8193bf81d02020da1effa1e980a6acac6b5ad50122",
+  "pinned": "f7585fb9c0da2fa3833efe8193bf81d02020da1effa1e980a6acac6b5ad50122"
  }
 }

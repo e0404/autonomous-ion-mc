@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import sys
 from pathlib import Path
 
@@ -179,6 +180,52 @@ def test_committed_markdown_is_rendered_from_the_projection(step: str) -> None:
     assert body == mod.render_report(json.loads(json_path.read_text()))
 
 
+def _render_pairs() -> list[tuple[str, str, str, str]]:
+    """(step dir, json, md, "module:function") of every committed record with a report."""
+    out = []
+    for step, mod in sorted(STEP_MODULES.items()):
+        (jp,) = [
+            p for p in (RESULTS / step).glob("*.json") if p.name != "quarantine-data-seen.json"
+        ]
+        out.append((step, jp.name, f"{step}-report.md", f"{mod}:render_report"))
+    for p in sorted((RESULTS / "de3").glob("*.json")):
+        if p.name == "de3-summary.json":
+            out.append(("de3", p.name, "de3-summary.md", "de3_probes:render_summary"))
+        elif p.name.startswith("check-base-"):
+            out.append(
+                (
+                    "de3",
+                    p.name,
+                    p.name.replace(".json", "-report.md"),
+                    "de3_probes:render_check_base",
+                )
+            )
+    for p in sorted((RESULTS / "de4").glob("*.json")) if (RESULTS / "de4").is_dir() else []:
+        if p.name == "de4.json":
+            out.append(("de4", p.name, "de4-report.md", "de4_parse:render_report"))
+        else:
+            out.append(
+                ("de4", p.name, p.name.replace(".json", "-report.md"), "de4_parse:render_case")
+            )
+    return out
+
+
+@pytest.mark.parametrize("pair", _render_pairs(), ids=lambda t: f"{t[0]}/{t[1]}")
+def test_every_committed_report_is_rendered_from_its_projection(
+    pair: tuple[str, str, str, str],
+) -> None:
+    """The committed Markdown body equals the module rendering of the committed projected JSON;
+    the header lists input files with sha256."""
+    step, jname, mname, target = pair
+    modname, fn = target.split(":")
+    mod = importlib.import_module(f"validation.scripts.elastic_attribution.{modname}")
+    md = (RESULTS / step / mname).read_text()
+    assert md.count(de_common.BODY_MARKER) == 1
+    head, body = md.split(de_common.BODY_MARKER + "\n", 1)
+    assert body == getattr(mod, fn)(json.loads((RESULTS / step / jname).read_text()))
+    assert "Input files (sha256):" in head
+
+
 def _run_file(
     variant: str, energy: int, lateral_valid: bool | None, residual: float | None = 0.0
 ) -> dict:
@@ -289,3 +336,238 @@ def test_classification_rule_on_synthetic_tracks() -> None:
     assert off[0] and not conflict[0]
     # crossover of the curves is about 1.8 deg at 150 MeV (p+O)
     assert 1.0 < de5.curve_crossover_deg(e0, m_h, m_a) < 3.0
+
+
+# --- D-E4 parser and the frozen track selection (synthetic phase spaces) ---
+HEADER = """TOPAS Binary Phase Space
+
+Number of Original Histories: {hist}
+Number of Original Histories that Reached Phase Space: {hist}
+Number of Scored Particles: {n}
+Number of Bytes per Particle: 46
+
+Byte order of each record is as follows:
+f4: Position X [cm]
+f4: Position Y [cm]
+f4: Position Z [cm]
+f4: Direction Cosine X
+f4: Direction Cosine Y
+f4: Energy [MeV]
+f4: Weight
+i4: Particle Type (in PDG Format)
+b1: Flag to tell if Third Direction Cosine is Negative (1 means true)
+b1: Flag to tell if this is the First Scored Particle from this History (1 means true)
+i4: Event ID
+i4: Track ID
+i4: Parent ID
+
+Number of proton: {n}
+
+Minimum Kinetic Energy of proton: 0.5 MeV
+
+Maximum Kinetic Energy of proton: {emax} MeV
+"""
+INPUT = """i:Ts/Seed = 1
+s:Ge/Target/Material = "{mat}"
+d:Ge/Target/HL = {hl} mm
+d:So/Beam/BeamEnergy = {e0} MeV
+i:So/Beam/NumberOfHistoriesInRun = {hist}
+"""
+
+
+def _write_ps(d: Path, recs: list[tuple], hist: int, e0: float, mat: str, hl_mm: float) -> Path:
+    """Write a TOPAS binary phase space. ``recs``: (event, track, parent, E, cos, w_negative)."""
+    d.mkdir(parents=True, exist_ok=True)
+    f4, i4 = "<f4", "<i4"
+    names = [(n, f4) for n in ("X", "Y", "Z", "U", "V", "E", "w")]
+    dt = np.dtype(
+        [*names, ("pdg", i4), ("neg", "u1"), ("first", "u1"), ("ev", i4), ("tr", i4), ("pa", i4)]
+    )
+    arr = np.zeros(len(recs), dtype=dt)
+    for i, (ev, tr, pa, e, cos, neg) in enumerate(recs):
+        arr[i] = (
+            0,
+            0,
+            0,
+            math.sqrt(max(1 - cos * cos, 0.0)),
+            0,
+            e,
+            1,
+            2212,
+            neg,
+            int(pa == 0),
+            ev,
+            tr,
+            pa,
+        )
+    assert dt.itemsize == 46
+    (d / "ps.phsp").write_bytes(arr.tobytes())
+    (d / "ps.header").write_text(HEADER.format(hist=hist, n=len(recs), emax=e0))
+    (d / "input.txt").write_text(INPUT.format(mat=mat, hl=hl_mm, e0=e0, hist=hist))
+    return d
+
+
+def _tracks(
+    e0: float, m_a: float, ev0: int, n_pa: int = 6, n_pp: int = 4, bad: bool = True
+) -> list[tuple]:
+    """Synthetic events: undeflected primaries, on-curve p+A and p-p events, and (``bad``) one
+    off-curve p+A primary and one off-curve (plural) p-p event."""
+    import validation.scripts.elastic_attribution.de5_sampling as de5
+    from ionmc.nuclear.elastic_kin import two_body
+
+    recs, ev = [], ev0
+    for _ in range(5):
+        recs.append((ev, 1, 0, e0, 1.0, 0))
+        ev += 1
+    for k in range(n_pa):
+        cos = math.cos(math.radians(6.0 + 2.0 * k))
+        recs.append((ev, 1, 0, float(de5.kin_curve_t(e0, m_a, np.array([cos]))[0]), cos, 0))
+        ev += 1
+    for k in range(n_pp):  # equal masses: both protons from two_body
+        tb = two_body(e0, 938.272, 938.272, np.array([0.1 + 0.15 * k]))
+        cos2 = float(tb.pz2[0] / np.hypot(tb.px2[0], tb.pz2[0]))
+        recs += [
+            (ev, 1, 0, float(tb.t1[0]), float(tb.cos_lab1[0]), 0),
+            (ev, 2, 1, float(tb.t2[0]), cos2, 0),
+        ]
+        ev += 1
+    if bad:
+        cos = math.cos(math.radians(10.0))
+        recs.append(
+            (ev, 1, 0, 0.9 * float(de5.kin_curve_t(e0, m_a, np.array([cos]))[0]), cos, 0)
+        )  # off both curves
+        ev += 1
+        tb = two_body(e0, 938.272, 938.272, np.array([0.2]))
+        cos2 = float(tb.pz2[0] / np.hypot(tb.px2[0], tb.pz2[0]))
+        recs += [
+            (ev, 1, 0, 0.9 * float(tb.t1[0]), float(tb.cos_lab1[0]), 0),
+            (ev, 2, 1, float(tb.t2[0]), cos2, 0),
+        ]  # plural
+    return recs
+
+
+def _mass(name: str) -> float:
+    from validation.scripts.elastic_attribution import common as c
+
+    tab = c.load_table()
+    return float(tab.arrays["target_mass_mev"][list(tab.target_names).index(name)])
+
+
+@pytest.mark.requires_tables("elastic")
+def test_de4_water_phase_space_is_identified_and_off_curve_tracks_are_excluded(
+    tmp_path: Path,
+) -> None:
+    from validation.scripts.elastic_attribution import de4_parse as de4
+
+    d = _write_ps(
+        tmp_path / "w", _tracks(150.0, _mass("O-16"), 1), 4_000_000, 150.0, "G4_WATER", 5.0
+    )
+    doc = de4.analyse([d])
+    assert (doc["case"], doc["row"], doc["material"], doc["target"], doc["length_cm"]) == (
+        3,
+        17,
+        "water",
+        "O-16",
+        1.0,
+    )
+    assert doc["ke_filter"]["removed_primaries"] == 5
+    assert doc["classes"]["O-16"]["events"] == 6  # the off-curve primary is excluded, not counted
+    assert doc["off_curve"]["primaries_excluded"] == 1 and doc["pp_events_off_curve"] == 1
+    assert (
+        doc["classes"]["H-1"]["events"] + doc["pp_events_removed_by_cm_cut"] == 4
+    )  # the plural p-p event is excluded
+    assert doc["classes"]["O-16"]["rate_per_primary_after_rule"] == pytest.approx(6 / 4_000_000)
+    assert set(doc["geant4_summary"]["3"]) == {"O-16", "H-1"}
+
+
+@pytest.mark.requires_tables("elastic")
+def test_de4_graphite_phase_space_has_only_the_carbon_class(tmp_path: Path) -> None:
+    from validation.scripts.elastic_attribution import de4_parse as de4
+
+    d = _write_ps(
+        tmp_path / "g",
+        _tracks(150.0, _mass("C-12"), 1, n_pp=0, bad=False),
+        4_000_000,
+        150.0,
+        "G4_C",
+        5.0,
+    )
+    doc = de4.analyse([d])
+    assert (doc["case"], doc["material"], doc["target"]) == (8, "graphite", "C-12")
+    assert list(doc["classes"]) == ["C-12"] and doc["classes"]["C-12"]["events"] == 6
+
+
+@pytest.mark.requires_tables("elastic")
+def test_de4_split_case_parts_are_concatenated_and_validated(tmp_path: Path) -> None:
+    from validation.scripts.elastic_attribution import de4_parse as de4
+
+    hist = (6_666_667, 6_666_667, 6_666_666)
+    parts = [
+        _write_ps(
+            tmp_path / f"p{k}",
+            _tracks(30.0, _mass("O-16"), 1, n_pa=3, n_pp=2, bad=False),
+            h,
+            30.0,
+            "G4_WATER",
+            1.0,
+        )
+        for k, h in enumerate(hist)
+    ]  # identical event ids in every part
+    doc = de4.analyse(parts)
+    assert (
+        doc["case"] == 0 and doc["primaries"] == 20_000_000 and doc["identification"]["parts"] == 3
+    )
+    assert doc["ke_filter"]["removed_primaries"] == 15 and doc["classes"]["O-16"]["events"] == 9
+    assert doc["pp_events_all"] == 6  # event ids of different parts do not collide
+    with pytest.raises(AssertionError):
+        de4.analyse(parts[:2])  # the primaries of two parts do not add up to the case
+    with pytest.raises(AssertionError):
+        de4.analyse(parts, case=1)
+
+
+def test_de4_header_layout_is_parsed_not_hard_coded(tmp_path: Path) -> None:
+    from validation.scripts.elastic_attribution import de4_parse as de4
+
+    d = _write_ps(tmp_path / "h", [(1, 1, 0, 150.0, 1.0, 0)], 1, 150.0, "G4_WATER", 5.0)
+    rec, h = de4.read_phsp(d)
+    assert (
+        h["bytes"] == 46
+        and rec.dtype.names is not None
+        and "parent" in rec.dtype.names
+        and float(rec["E"][0]) == 150.0
+    )
+
+
+def test_track_selection_excludes_off_curve_tracks_on_both_sides() -> None:
+    """KE filter + off-curve exclusion of the shared selection (table side and Geant4 parser)."""
+    from validation.scripts.elastic_attribution import de5_sampling as de5
+
+    e0, m_h, m_a = 150.0, 938.272, 14903.0
+    cos = np.cos(np.radians(np.array([0.0, 10.0, 10.0, 30.0])))
+    curve_a, curve_h = de5.kin_curve_t(e0, m_a, cos), de5.kin_curve_t(e0, m_h, cos)
+    t1 = np.array([e0, curve_a[1], 0.9 * curve_a[2], curve_h[3]])
+    sel = de5.select_tracks(cos, t1, e0, m_h, m_a, np.array([False, False, False, True]))
+    assert list(sel["ke_removed"]) == [True, False, False, False]
+    assert list(sel["off"]) == [False, False, True, False]  # off both curves: counted and excluded
+    assert list(sel["keep"]) == [False, True, False, True]
+    assert list(sel["is_pp"][[1, 3]]) == [False, True]
+
+
+@pytest.mark.requires_tables("elastic")
+def test_table_side_applies_the_same_selection() -> None:
+    from validation.scripts.elastic_attribution import common as c
+    from validation.scripts.elastic_attribution import de5_sampling as de5
+
+    tab = c.load_table()
+    cs = de5.CASES[3]
+    de5.N_EVENTS = 20_000
+    try:
+        doc = de5.sample_case(tab, c.Water(tab), cs)
+    finally:
+        de5.N_EVENTS = 1_000_000
+    for v in doc[
+        "classes"
+    ].values():  # table events lie on a curve by construction: nothing is excluded
+        assert v["off_curve_fraction_excluded"] == 0.0
+        assert v["rate_per_primary_after_rule"] <= v["rate_per_primary_after_ke_cut"] * (1 + 1e-12)
+    assert [cs["case"] for cs in de5.CASES] == list(range(10)) and de5.CASES[9]["row"] == 23

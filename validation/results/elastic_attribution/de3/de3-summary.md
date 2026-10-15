@@ -2,6 +2,33 @@ Exploratory, report-only (Amendment 19); not evidence; changes no row.
 
 # D-E3 probes: summary
 
+Command (from the worktree root, `.venv` python, single thread): `python -m validation.scripts.elastic_attribution.de3_probes --summary`
+
+Input files (sha256):
+
+- `validation/generated/elastic_attribution/de3/de3-150-all.json`  81c883b94d67022108b2ff540cf53bf5ecdb8e8b8d937193946988ee273544ac
+- `validation/generated/elastic_attribution/de3/de3-150-emonly.json`  63c7af6022849a8981c54c3267ce6c11ed0db66525856c133181941f0a607762
+- `validation/generated/elastic_attribution/de3/de3-150-pA-Rx1.2.json`  4652a77fc9001f6cc91820a6995a748dbc7ca1410ea7848251f370ee2a098f5e
+- `validation/generated/elastic_attribution/de3/de3-150-pA-gauss.json`  23ddcde95d89cc722299dd7f2794bddbb1484a7ffef1d72230d3b30880240adb
+- `validation/generated/elastic_attribution/de3/de3-150-pA-only.json`  37d0e9becf78430a534fddfecd8ce3c036e35006486ce32880e201d4f4d6012e
+- `validation/generated/elastic_attribution/de3/de3-150-pA-s0.5.json`  9b8a168ea558dc974d24ba8fe4f845d2d313e01ff299306db555cd00b96e765c
+- `validation/generated/elastic_attribution/de3/de3-150-pA-s0.9.json`  d12783d51341c2449fb3a4ca6c11fdd50f4ce4ac2b5a50a010a12ac29dbcef80
+- `validation/generated/elastic_attribution/de3/de3-150-pA-sigma0.8.json`  e5380f9705ad1b4bafad85d56b5e11f1d59eb3eb6f064ae6f184266f3f9020b4
+- `validation/generated/elastic_attribution/de3/de3-150-pinned.json`  9d4aef601df5b5217c0d2b7872b8888c98d4ae5e54ecd6dd48401e402d176edb
+- `validation/generated/elastic_attribution/de3/de3-150-pp-only.json`  a321da0ee2372a7fed115fdd7569db0c9f477c9db010c667660e3fc3658db27c
+- `validation/generated/elastic_attribution/de3/de3-200-all.json`  a93432513cc74a1954fce65ccaab7ad6a8f613dd1212659b09ac506ed1b71579
+- `validation/generated/elastic_attribution/de3/de3-200-emonly.json`  a85cf343e6b3557d2a26e31ea47a46f1a0d28e648526100aa1c663e7fec724e9
+- `validation/generated/elastic_attribution/de3/de3-200-pA-Rx1.2.json`  93a75e752dabc90a97a4f14fb623d3d21cfbd2501d460af809d527b5b6c6805e
+- `validation/generated/elastic_attribution/de3/de3-200-pA-gauss.json`  09e3e40fdc3ca654a93a843df4d22d8e8ee4cb8f3d70797efba4767007a1f692
+- `validation/generated/elastic_attribution/de3/de3-200-pA-only.json`  af60be8492efa17d12afaa49cd71edfae919c5addc32df711f641284f80d1196
+- `validation/generated/elastic_attribution/de3/de3-200-pA-s0.5.json`  df418c707122746aebe0613cd1bccb3c04853b8b5b0001749fc8e6b5369a198c
+- `validation/generated/elastic_attribution/de3/de3-200-pA-s0.9.json`  e9e82a7c28ad19d8a501ed9e89e44045d217a6bfc3bccddef7aed0b4503947b6
+- `validation/generated/elastic_attribution/de3/de3-200-pA-sigma0.8.json`  0ef609b4ef8d63e618ae4a9752a4040638bd6d3d84658d149175a661b180234a
+- `validation/generated/elastic_attribution/de3/de3-200-pinned.json`  bee346f88e3b64cf05379110cb1f963ca8654693e15edf60c335a4861be23df8
+- `validation/generated/elastic_attribution/de3/de3-200-pp-only.json`  f807e208d195793a7f49ca48bdfcf151f667c0afbb1c7346e51b835589ca4524
+
+<!-- body below is rendered from the Git projection of the JSON record -->
+
 | E | variant | F | gain | peak removal | K* shifted (pred) | pred/meas removal | F pred (meas. gain) | recoil MeV | R80 mm | R80 EM-only | lateral rms mm (EM+el / EM) | valid |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | 150 | all | 0.8580 +- 0.0014 | 0.0221 +- 0.0008 | 0.1230 | 0.1356 | 1.102 | 0.8458 | 0.2678 | 158.323 | 158.456 | 5.515 / 1.540 | True |
@@ -40,9 +67,9 @@ Exploratory, report-only (Amendment 19); not evidence; changes no row.
 
 ## Provenance
 
-- git HEAD a59271ccd913cb345e8c2a027ea664f4876fa75e; status of validation/scripts/elastic_attribution at summary time: ['M validation/scripts/elastic_attribution/common.py', ' M validation/scripts/elastic_attribution/de0_h5.py', ' M validation/scripts/elastic_attribution/de0_kernels.py', ' M validation/scripts/elastic_attribution/de1_shapes.py', ' M validation/scripts/elastic_attribution/de2_pp.py', ' M validation/scripts/elastic_attribution/de3_probes.py', ' M validation/scripts/elastic_attribution/de5_sampling.py', ' M validation/scripts/elastic_attribution/make_variant_tables.py', '?? validation/scripts/elastic_attribution/de4_parse.py']
-- scripts sha256 at summary time: make_variant_tables.py ee27203562240d4b, de3_probes.py d1af89a43372c6a2, de0_kernels.py 38e5ec2dbe285af1, common.py 29171edbda46e951
+- git HEAD a72b6c4301d146da0a6d2cc9ecb089e3711f1837; status of validation/scripts/elastic_attribution at summary time: ['M validation/scripts/elastic_attribution/de3_probes.py', ' M validation/scripts/elastic_attribution/de4_parse.py', ' M validation/scripts/elastic_attribution/de5_sampling.py', ' M validation/scripts/elastic_attribution/make_variant_tables.py']
+- scripts sha256 at summary time: common.py 29171edbda46e951, de0_kernels.py 38e5ec2dbe285af1, de3_probes.py a6bfeb2ed8f9b1a0, make_variant_tables.py beafad7d90f4a4d6
 - the committed scripts are the ones that made the committed runs (second execution; the first execution with untracked scripts is preserved in the experiment telemetry and was reproduced bit for bit)
-- table files sha256: elastic-proton-1fd24cff23d3f7e72aabcda2af8bc70ad47b81755f94a2ca55890cb6ae52c591.npz 1028bb67f57bc96e, elastic-proton-1fd24cff23d3f7e72aabcda2af8bc70ad47b81755f94a2ca55890cb6ae52c591.json ab5e2a357ab53060
+- table files sha256: elastic-proton-1fd24cff23d3f7e72aabcda2af8bc70ad47b81755f94a2ca55890cb6ae52c591.json ab5e2a357ab53060, elastic-proton-1fd24cff23d3f7e72aabcda2af8bc70ad47b81755f94a2ca55890cb6ae52c591.npz 1028bb67f57bc96e
 - backend warp-cpu float64, single process; seeds {150: 20990100, 200: 20990101}; runs (seed, n, batches, table id, wall s) in `runs` of de3-summary.json
 - logged runs: telemetry/test-logs/<UTC>-de3-<variant>-<E>/ (command, commit, git status, start/end, full stdout/stderr)
