@@ -1,0 +1,133 @@
+{
+ "banner": "Exploratory, report-only (Amendment 19); not evidence; changes no row.",
+ "case": 3,
+ "classes": {
+  "H-1": {
+   "P_theta_lab_gt_theta_2mm": 0.9877239548772395,
+   "P_theta_lab_gt_theta_3mm": 0.958029197080292,
+   "T_tail_moment": 0.0,
+   "events": 6028,
+   "first_minimum_3sigma_deg": null,
+   "first_minimum_deg": null,
+   "mean_t_other_mev": 39.08299810167429,
+   "qslope": null,
+   "rate_per_primary": 0.001507,
+   "rate_per_primary_after_rule": 0.001507,
+   "rate_per_primary_se": 1.941004894378167e-05,
+   "slow_proton_theta_lab_median_deg": 58.041652136326164,
+   "theta_lab_mean_1_minus_cos": 0.136369335902377,
+   "theta_lab_median_deg": 29.95556296741373
+  },
+  "O-16": {
+   "P_theta_lab_gt_theta_2mm": 0.5132068275007152,
+   "P_theta_lab_gt_theta_3mm": 0.367550300371889,
+   "T_tail_moment": 0.0036380279455027016,
+   "counts_in_first_minimum_bin": 25,
+   "events": 20974,
+   "first_minimum_3sigma_deg": null,
+   "first_minimum_deg": 28.5,
+   "helm": {
+    "R_eff_fm": 2.0,
+    "n_bins": 11,
+    "rms_log_residual": 0.6905201145114045,
+    "s_fm": 1.1
+   },
+   "mean_t_other_mev": 0.4343809264397569,
+   "qslope": -5.444535462491816,
+   "qslope_bins": 3,
+   "rate_per_primary": 0.0052435,
+   "rate_per_primary_after_rule": 0.0052435,
+   "rate_per_primary_se": 3.6206007788763455e-05,
+   "theta_lab_mean_1_minus_cos": 0.021396769818113087,
+   "theta_lab_median_deg": 9.303299638928934
+  }
+ },
+ "classification": {
+  "assigned_pA": 21015,
+  "assigned_pp": 6371,
+  "conflict_assigned_pp_by_secondary": 6,
+  "conflict_fraction_raw": 0.020813554370846418,
+  "conflict_tracks_raw": 570,
+  "curve_crossover_deg": 1.81,
+  "deflected_primaries": 27386,
+  "off_curve_fraction": 0.0018557289684050246,
+  "off_curve_pa_pool_excluded": 39,
+  "off_curve_tracks_excluded": 179,
+  "pA_events_with_secondary_proton": 4,
+  "primary_records": 4000000
+ },
+ "energy_mev": 150.0,
+ "geant4_summary": {
+  "3": {
+   "H-1": {
+    "P_theta_lab_gt_theta_2mm": 0.9877239548772395,
+    "P_theta_lab_gt_theta_3mm": 0.958029197080292,
+    "T_tail_moment": 0.0,
+    "first_minimum_3sigma_deg": null,
+    "first_minimum_deg": null,
+    "mean_t_other_mev": 39.08299810167429,
+    "qslope": null,
+    "rate_per_primary_after_rule": 0.001507,
+    "theta_lab_median_deg": 29.95556296741373
+   },
+   "O-16": {
+    "P_theta_lab_gt_theta_2mm": 0.5132068275007152,
+    "P_theta_lab_gt_theta_3mm": 0.367550300371889,
+    "T_tail_moment": 0.0036380279455027016,
+    "first_minimum_3sigma_deg": null,
+    "first_minimum_deg": 28.5,
+    "mean_t_other_mev": 0.4343809264397569,
+    "qslope": -5.444535462491816,
+    "rate_per_primary_after_rule": 0.0052435,
+    "theta_lab_median_deg": 9.303299638928934
+   },
+   "_selection_rule": "fast-proton-on-curve-v2"
+  }
+ },
+ "identification": {
+  "energy_mev": 150.0,
+  "geometry_bound": true,
+  "header_histories_equal_input_and_frozen": true,
+  "header_max_ke_equals_e0": true,
+  "length_cm": 1.0,
+  "material_topas": "G4_WATER",
+  "native_input_bound": true,
+  "parts": 1,
+  "primaries_total": 4000000,
+  "seeds": [
+   20287001
+  ]
+ },
+ "ke_filter": {
+  "primary_records": 4000000,
+  "removed_fraction": 0.9931535,
+  "removed_primaries": 3972614,
+  "secondary_records_parent_ne_0": 6429,
+  "threshold_mev": 149.9999
+ },
+ "length_cm": 1.0,
+ "material": "water",
+ "note_git": "Git projection (decision 0041): explicit allowlist of dimensionless ratios, per-primary rates and probabilities, kinematic statistics, kernel integrals, counts and flags; no absolute cross sections, no distributions or per-point arrays. The complete record is regenerated into validation/generated/ by the committed module.",
+ "off_curve": {
+  "pp_events_excluded": 55,
+  "primaries_excluded": 39,
+  "primaries_fraction": 0.0018557289684050246
+ },
+ "pp_cm_cut_deg": 16.26,
+ "pp_events_after_cm_cut": 6028,
+ "pp_events_all": 6370,
+ "pp_events_off_curve": 55,
+ "pp_events_removed_by_cm_cut": 287,
+ "primaries": 4000000,
+ "records": 4006429,
+ "row": 17,
+ "secondary_definition": "event has a proton record with parent ID != 0 (cross-check: events with >1 proton record = 6370); a p-p event is accepted when its fast proton lies on the p+H curve",
+ "secondary_on_p+H_curve": {
+  "fraction_below_1e-3": 0.9631357909472702,
+  "max_rel_residual": 826.6714050885004
+ },
+ "selection_rule": "fast-proton-on-curve-v2",
+ "target": "O-16",
+ "theta_2mm_deg": 9.108035714119335,
+ "theta_3mm_deg": 11.160915960347698
+}
