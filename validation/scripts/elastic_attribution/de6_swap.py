@@ -56,6 +56,10 @@ SWAP_CLASSES = {
 }
 SIGMA_ARMS = ("swap-pp-sigma", "swap-all")  # sigma_pp scaled by the Geant4/table rate ratio
 RATIOS_PATH = c.OUT / "de4" / "de4-ratios.json"
+PINNED_ID = (
+    c.TABLE_ID
+)  # the pinned elastic table (module-level so that the tests can bind a toy pinned table)
+PIN_PATH = c.REPO / "src" / "ionmc" / "data" / "elastic_table_pin.json"
 SWAP_E_MIN = 30.0
 CDF_SEED = 20990200  # inside the investigation family 2099xxxx; distinct from 20990100/1 (D-E3/D-E6 runs) and 20991000+ (D-E5)
 N_Q = 256
@@ -547,7 +551,7 @@ def write_lineage(
                        "uses_cdf_sources": v in SWAP_VARIANTS and bool(SWAP_CLASSES.get(v) or v in SIGMA_ARMS),
                        "classes": list(SWAP_CLASSES.get(v, ()))}  # fmt: skip
     rpath = Path(ratios_path or RATIOS_PATH)
-    doc = {"banner": c.BANNER, "pinned_table_id": c.TABLE_ID, "variants": variants,
+    doc = {"banner": c.BANNER, "pinned_table_id": PINNED_ID, "variants": variants,
            "sigma_source": {"ratios_sha256": c.sha256_file(rpath), "sigma": load_sigma_factors(rpath)},
            "cdf_sources": [{k: q[k] for k in ("case", "row", "energy_mev", "primaries", "npz_sha256", "sidecar_sha256", "class_mu_sha256", "class_events")} for q in prov],
            "settings": {"interpolation": "linear in E at fixed CDF level of q = 2 p_CM sin(theta_CM/2)", "below_mev_ionmc_shape": SWAP_E_MIN,
@@ -615,9 +619,9 @@ def _verify_semantics(
     """Table SEMANTICS (not only recomputed ids): the sidecar of every variant names that variant, derives from the pinned table, carries the
     frozen parameters of the arm (classes, q-scaled interpolation, 30 MeV floor, sample-extreme end edges, sigma source = the committed ratios
     record) and cites exactly the CDF sources of the manifest; the manifest agrees with the pinned id, the source energies and the ratios record."""
-    if manifest.get("pinned_table_id") != c.TABLE_ID:
+    if manifest.get("pinned_table_id") != PINNED_ID:
         problems.append(
-            f"manifest pinned_table_id {manifest.get('pinned_table_id')} != {c.TABLE_ID}"
+            f"manifest pinned_table_id {manifest.get('pinned_table_id')} != {PINNED_ID}"
         )
     if manifest.get("settings", {}).get("source_energies_mev") != [30.0, 50.0, 100.0, 150.0, 200.0]:
         problems.append(
@@ -644,12 +648,12 @@ def _verify_semantics(
             continue  # reported by the recomputation
         ex = side.get("exploratory", {})
         if v == "all":
-            if ex.get("d_e3_variant") != "all" or ex.get("source_table_id") != c.TABLE_ID:
+            if ex.get("d_e3_variant") != "all" or ex.get("source_table_id") != PINNED_ID:
                 problems.append("all: the sidecar is not the base copy of the pinned table")
             continue
         if ex.get("d_e6_variant") != v:
             problems.append(f"{v}: the sidecar claims the variant {ex.get('d_e6_variant')!r}")
-        if ex.get("source_table_id") != c.TABLE_ID:
+        if ex.get("source_table_id") != PINNED_ID:
             problems.append(
                 f"{v}: the sidecar derives from {ex.get('source_table_id')}, not the pinned table"
             )
@@ -664,6 +668,39 @@ def _verify_semantics(
             problems.append(f"{v}: the sidecar cites CDF sources that differ from the manifest")
 
 
+def verify_pinned_table(
+    pinned_dir: Path, pin_path: Path, pinned_id: str, problems: list[str]
+) -> bool:
+    """Authenticate the pinned table used as the rebuild input against ``src/ionmc/data/elastic_table_pin.json``: the pin names the id, the npz
+    sha256 equals the pin and the sidecar's recorded value, and the table id recomputed from the npz bytes (``ionmc.nuclear.build.table_id`` of
+    the sidecar with that sha256) equals the pin. (The sidecar's own bytes are authenticated through that id; the pin has no separate json hash.)"""
+    from ionmc.nuclear.build import table_id
+
+    try:
+        pin = json.loads(Path(pin_path).read_text())
+        pj, pz = (
+            Path(pinned_dir) / f"elastic-proton-{pinned_id}.json",
+            Path(pinned_dir) / f"elastic-proton-{pinned_id}.npz",
+        )
+        side = json.loads(pj.read_text())
+        sha = c.sha256_file(pz)
+    except (OSError, ValueError) as exc:
+        problems.append(f"the pinned table or its pin cannot be read: {exc}")
+        return False
+    bad = []
+    if pin.get("table_id") != pinned_id:
+        bad.append(f"pin table_id {pin.get('table_id')} != {pinned_id}")
+    if sha != pin.get("npz_sha256"):
+        bad.append(f"npz sha256 {sha[:12]} != pin {str(pin.get('npz_sha256'))[:12]}")
+    if side.get("npz_sha256") != pin.get("npz_sha256"):
+        bad.append("sidecar npz_sha256 != pin")
+    if table_id({**side, "npz_sha256": sha}) != pin.get("table_id"):
+        bad.append("table id recomputed from the npz bytes != pin")
+    if bad:
+        problems.append("pinned table does not match the pin: " + "; ".join(bad))
+    return not bad
+
+
 def _verify_content(
     manifest: dict[str, Any],
     scratch: Path,
@@ -671,26 +708,46 @@ def _verify_content(
     ratios_path: Path,
     pinned_dir: Path,
     problems: list[str],
+    de4: dict[int, dict[str, Any]] | None = None,
 ) -> None:
     """Table CONTENTS are rebuilt, not asserted: every array of every variant is rebuilt from the pinned table, the CDF files and the committed
     ratios record with :func:`build_variant_arrays` (the builder of ``--build``) and compared with the npz on disk (``np.array_equal``)."""
     pj, pz = (
-        Path(pinned_dir) / f"elastic-proton-{c.TABLE_ID}.json",
-        Path(pinned_dir) / f"elastic-proton-{c.TABLE_ID}.npz",
+        Path(pinned_dir) / f"elastic-proton-{PINNED_ID}.json",
+        Path(pinned_dir) / f"elastic-proton-{PINNED_ID}.npz",
     )
     if not (pj.is_file() and pz.is_file()) or not Path(ratios_path).is_file():
         problems.append(
             "the pinned table or the ratios record needed to rebuild the arms is missing"
         )
         return
+    if not verify_pinned_table(Path(pinned_dir), PIN_PATH, PINNED_ID, problems):
+        return
     names = tuple(json.loads(pj.read_text())["target_names"])
     with np.load(pz, allow_pickle=False) as z:
         base = {k: z[k] for k in z.files}
     try:
-        sources, _ = load_sources(Path(cdf_dir))
+        sources, used = load_sources(Path(cdf_dir))
     except (AssertionError, OSError, KeyError) as exc:
         problems.append(f"the CDF sources needed to rebuild the arms cannot be loaded: {exc}")
         return
+    # the CDF npz AND sidecar actually used (the sidecars supply E0 and p_CM) are bound to the manifest and to the committed D-E4 records
+    man = {q["case"]: q for q in manifest.get("cdf_sources", [])}
+    for q in used:
+        m = man.get(q["case"], {})
+        if (q["npz_sha256"], q["sidecar_sha256"]) != (m.get("npz_sha256"), m.get("sidecar_sha256")):
+            problems.append(
+                f"case {q['case']}: the CDF npz / sidecar used for the rebuild differ from the manifest"
+            )
+        if de4 is not None:
+            cd = de4.get(q["case"], {}).get("cdf", {})
+            if (q["npz_sha256"], q["sidecar_sha256"]) != (
+                cd.get("npz_sha256"),
+                cd.get("sidecar_sha256"),
+            ):
+                problems.append(
+                    f"case {q['case']}: the CDF npz / sidecar used differ from the committed D-E4 record (cdf.npz_sha256 / cdf.sidecar_sha256)"
+                )
     sigma = load_sigma_factors(Path(ratios_path))
     for v, r in manifest.get("variants", {}).items():
         zp = mvt._derived(scratch) / f"elastic-proton-{r['table_id']}.npz"
@@ -721,7 +778,7 @@ def verify_lineage(
     problems: list[str] = []
     if set(manifest.get("variants", {})) != set(LINEAGE_VARIANTS):
         problems.append(f"manifest variants {sorted(manifest.get('variants', {}))}")
-    ids = {"emonly": c.TABLE_ID}
+    ids = {"emonly": PINNED_ID}
     for v, r in manifest.get("variants", {}).items():
         ids[v] = r["table_id"]
         try:
@@ -760,6 +817,7 @@ def verify_lineage(
         Path(ratios_path or default_ratios_path()),
         Path(pinned_dir or mvt.REAL_CACHE / "derived"),
         problems,
+        de4,
     )
     if problems:
         raise SystemExit("lineage not bound (fail closed):\n  " + "\n  ".join(problems))

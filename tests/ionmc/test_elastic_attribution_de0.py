@@ -964,6 +964,15 @@ def test_de6_h4_recoil_share() -> None:
     )
 
 
+@pytest.fixture(autouse=True)
+def _restore_de6_pinned_constants():  # type: ignore[no-untyped-def]
+    from validation.scripts.elastic_attribution import de6_swap as d6
+
+    old = (d6.PINNED_ID, d6.PIN_PATH)
+    yield
+    d6.PINNED_ID, d6.PIN_PATH = old
+
+
 def _fake_cdf_dir(d: Path) -> Path:
     """Five water CDF files of synthetic samples: O-16 plain, H-1 as the mirrored (+mu, -mu) pairs."""
     d.mkdir(parents=True, exist_ok=True)
@@ -1005,6 +1014,8 @@ def _de6_fixture(
     post: object = None,
     edit: object = None,
     tamper: object = None,
+    pinned_sub: object = None,
+    sidecar_tweak: object = None,
 ) -> dict:
     """Frozen D-E6 inputs on real files: CDF files, toy tables with recomputable ids, the lineage manifest written by ``write_lineage``,
     D-E4 case records, the CDF error record and run files with the real V5 geometry. ``mutate(ctx)`` edits the in-memory documents before they
@@ -1017,6 +1028,15 @@ def _de6_fixture(
     rng = np.random.default_rng(11)
     cdf_dir = _fake_cdf_dir(tmp_path / "cdf")
     sources, prov = d6.load_sources(cdf_dir)
+    prov_committed = prov  # the hashes the committed D-E4 records carry
+    if (
+        sidecar_tweak is not None
+    ):  # a changed sidecar (e.g. p_CM): tables and manifest are rebuilt consistently from it
+        sp = cdf_dir / "de4-case0-cdf.json"
+        side = json.loads(sp.read_text())
+        sidecar_tweak(side)
+        sp.write_text(json.dumps(side))
+        sources, prov = d6.load_sources(cdf_dir)
     scratch = tmp_path / "cache"
     (scratch / "derived").mkdir(parents=True)
     peak = {
@@ -1047,20 +1067,41 @@ def _de6_fixture(
     grid = np.array([10.0, 30.0, 60.0, 150.0, 250.0])
     base = {"grid_e_mev": grid, "valid": np.ones((2, 5), dtype=np.int8), "sigma_barn": np.arange(10, dtype=float).reshape(2, 5) + 1.0,
             "p_cm_mev": np.array([[200.0] * 5, [250.0, 300.0, 350.0, 450.0, 500.0]]), "edges_mu": np.tile(np.linspace(-1.0, 1.0, 257), (2, 5, 1))}  # fmt: skip
-    pinned = tmp_path / "pinned"  # the toy pinned table
+    from ionmc.nuclear.build import table_id
+
+    pinned = tmp_path / "pinned"  # the toy pinned table with its pin
     pinned.mkdir()
-    np.savez(pinned / f"elastic-proton-{c.TABLE_ID}.npz", **base)
-    (pinned / f"elastic-proton-{c.TABLE_ID}.json").write_text(
-        json.dumps({"target_names": list(names)})
-    )
+
+    def write_pinned(arrs: dict, pid: str | None) -> tuple[str, str]:
+        tmp = pinned / "tmp.npz"
+        np.savez(tmp, **arrs)
+        sha = c.sha256_file(tmp)
+        side = {"schema": "toy", "target_names": list(names), "npz_sha256": sha}
+        tid = pid or table_id(side)
+        side["table_id"] = tid
+        tmp.replace(pinned / f"elastic-proton-{tid}.npz")
+        (pinned / f"elastic-proton-{tid}.json").write_text(json.dumps(side))
+        return tid, sha
+
+    pid, sha0 = write_pinned(base, None)
+    pin_path = tmp_path / "pin.json"
+    pin_path.write_text(
+        json.dumps({"table_id": pid, "npz_sha256": sha0})
+    )  # the pin of the ORIGINAL pinned table
+    if (
+        pinned_sub is not None
+    ):  # the pinned files are substituted consistently (recomputable sidecar), the pin stays
+        base = pinned_sub(base)
+        write_pinned(base, pid)
+    d6.PINNED_ID, d6.PIN_PATH = pid, pin_path
     ids = {}
     for i, v in enumerate(d6.LINEAGE_VARIANTS):
         if v == "all":
-            ex = {"d_e3_variant": "all", "source_table_id": c.TABLE_ID, "parameters": {}}
+            ex = {"d_e3_variant": "all", "source_table_id": pid, "parameters": {}}
         else:
             ex = {
                 "d_e6_variant": v,
-                "source_table_id": c.TABLE_ID,
+                "source_table_id": pid,
                 "parameters": d6.expected_parameters(v, sigma),
                 "cdf_sources": [dict(q) for q in cites],
             }
@@ -1078,7 +1119,7 @@ def _de6_fixture(
     out = tmp_path / "out"
     d6.write_lineage(scratch, prov, cdf_dir, out, ratios_path=ratios)
     manifest = out / d6.LINEAGE_FILE
-    de4 = {n: {"case": n, "cdf": {"npz_sha256": prov[n]["npz_sha256"]},
+    de4 = {n: {"case": n, "cdf": {"npz_sha256": prov_committed[n]["npz_sha256"], "sidecar_sha256": prov_committed[n]["sidecar_sha256"]},
                "classes": {"O-16": {"events": prov[n]["class_events"]["O-16"]}, "H-1": {"events": prov[n]["class_events"]["H-1"] // 2}}}
            for n in range(5)}  # fmt: skip
     terms = {
@@ -1113,12 +1154,12 @@ def _de6_fixture(
             files[(e, v)] = {
                 "variant": v, "mode": "emonly" if v == "emonly" else "emel", "energy": e, "seed": 20990100 + (e == 200),
                 "n": 100000, "n_batches": 20, "backend": "warp-cpu", "precision": "float64",
-                "elastic_table_id": c.TABLE_ID if v == "emonly" else ids[v], "bin_mm": geo["bin_mm"], "unit": geo["unit"],
+                "elastic_table_id": pid if v == "emonly" else ids[v], "bin_mm": geo["bin_mm"], "unit": geo["unit"],
                 "scoring": geo["scoring"], "tallies": [] if v == "emonly" else ["recoil"], "valid": True,
                 "relative_residual": 0.0, "idd_batches": idd.tolist(), "recoil_idd_batches": rec.tolist(),
                 "recoil_total_mev_per_primary": 0.3,
             }  # fmt: skip
-    ctx = SimpleNamespace(files=files, err=err, de4=de4, scratch=scratch, cdf_dir=cdf_dir, ids=ids, out=out, manifest=manifest,
+    ctx = SimpleNamespace(pid=pid, files=files, err=err, de4=de4, scratch=scratch, cdf_dir=cdf_dir, ids=ids, out=out, manifest=manifest,
                           runs=tmp_path / "runs", de4_dir=tmp_path / "de4", pinned=pinned, cdf_error=tmp_path / "cdf-error.json", prov=prov, tmp=tmp_path,
                           ratios=ratios, err_true=copy.deepcopy(err))  # fmt: skip
     if mutate is not None:
@@ -1440,3 +1481,25 @@ def test_build_variant_arrays_is_pure_and_matches_the_arms() -> None:
     assert np.array_equal(a["swap-all"]["edges_mu"], a["swap-both"]["edges_mu"]) and np.array_equal(
         a["swap-all"]["sigma_barn"], a["swap-pp-sigma"]["sigma_barn"]
     )
+
+
+def test_de6_content_rebuild_authenticates_the_pinned_table_against_the_pin(tmp_path: Path) -> None:
+    """The pinned arrays are substituted consistently (tables and manifest rebuilt from the substitute, valid recomputable sidecar): only the pin catches it."""
+
+    def sub(base: dict) -> dict:
+        b = {k: v.copy() for k, v in base.items()}
+        b["sigma_barn"][1, 3] *= 1.01
+        return b
+
+    ctx = _de6_fixture(tmp_path, pinned_sub=sub)
+    with pytest.raises(SystemExit, match="pinned table does not match the pin"):
+        _summarize(ctx)
+
+
+def test_de6_content_rebuild_binds_the_cdf_sidecar_to_the_committed_hash(tmp_path: Path) -> None:
+    """A changed CDF sidecar field (p_CM supplies the transformation) with tables and manifest rebuilt consistently is rejected."""
+    ctx = _de6_fixture(
+        tmp_path, sidecar_tweak=lambda side: side["classes"]["O-16"].__setitem__("p_cm_mev", 777.0)
+    )
+    with pytest.raises(SystemExit, match="committed D-E4 record"):
+        _summarize(ctx)
