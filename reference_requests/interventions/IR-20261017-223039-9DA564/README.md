@@ -1,6 +1,6 @@
 # IR-20261017-223039-9DA564 — batched V3-005D operator intervention (category experiment-boundary)
 
-Status: open (raised 2026-10-17T22:30:39Z at commit 804729ee; notification sent). Request record: `request.json` in this directory. The full decision memo follows.
+Status: **resolved** (2026-10-17T23:53:12.275624+00:00; `response.json`). Raised 2026-10-17T22:30:39Z at commit 804729ee. Request record: `request.json` in this directory. The full decision memo follows.
 
 
 - **Category:** experiment-boundary (ambiguous experimental boundary, EXPERIMENT.md §5).
@@ -127,3 +127,16 @@ Codex REVIEW-787e49bb maintains that the model selection, the calibration design
 - **Item 4 is withdrawn as a question.** The V7-R2 calibration variant is a design choice: the orchestrator decides **as written** (revision 4 of the repair plan; 5400/0.005 by the measured rule) and only informs the operator. Variants (B)/(C) are not proposed unless the operator raises a budget constraint.
 - **Items 0, 1, 2, 3 and 5 remain operator items**, on these grounds, each a change of required validation scope or of a frozen pre-registration — exactly what the operator's resolution of IR-20261013-164616-DEFAF4 asked to be brought back ("Bring back any concrete proposal that changes required validation scope"): item 0 adopts a model although the frozen §5 clause authorises a model change only for "established" (a change of the pre-registered rule's consequence; the orchestrator may not relax a frozen rule); items 1–3 reduce the frozen (a)6 merge-gate set (Options I/II override the Amendment 18 (c) default) and re-assign gate slots; item 5 takes a fresh V5 base after the Amendment 17 (b)4 stop rule fired, which that amendment makes conditional on an intervention.
 - **Unresolved disagreement, recorded:** Codex holds that these are autonomous decisions; the orchestrator holds that the operator directive and the frozen amendments reserve them. The operator's response resolves the disagreement either way. Until it arrives the conservative default applies: no model change, no re-qualification, no host run, PR #82 open. Routine investigation and implementation that change no scope continue autonomously.
+
+## Resolution (operator response, verbatim; `response.json`, 2026-10-17T23:53:12.275624+00:00)
+
+> Scientific model selection, calibration design and fresh evaluation-base allocation remain autonomous responsibilities. You may revise internally authored plans prospectively, with independent review and preservation of original failures; my earlier instruction did not reserve those technical choices to me.
+> For the integration boundary, I select Option II, including V6-F as a binding additional gate, together with the proposed V10-A/V11 and V7-R2 treatment. This does not waive any final experiment requirement or establish full halo validation. Perform the inexpensive candidate-model diagnostics before expensive qualification, retain the stability restrictions, and merge only after the revised applicable gates and independent review pass.
+> Formally reconcile the intervention record with this response and resolve the outstanding review finding.
+
+## Reconciliation of the record with the response (2026-10-18)
+
+1. **The outstanding Codex finding (REVIEW-4996f6dd / 787e49bb / 94edb1da) is resolved in Codex's favour by the operator:** scientific model selection (item 0), calibration design (item 4) and fresh evaluation-base allocation (item 5) are the orchestrator's autonomous responsibilities; the 2026-10-13 instruction did not reserve them. The request's framing of items 0, 4 and 5 as reserved was wrong and is corrected here; the record is preserved.
+2. **Operator decisions (integration boundary):** item 1 → **Option II** (Option I plus **V6-F executed as a binding additional gate**); item 2 → **2B** (the dd976c5a V10-A failure carried; new-model V10-A report-only; V11 added to the gate set); item 3 → **3A** (V7-R2 takes V7-R's slot; V7-R stays failed). This waives no final experiment requirement and establishes no halo validation.
+3. **Orchestrator decisions, announced here and to be made effective only through prospective, independently reviewed plan amendments that preserve every original failure:** item 0 → **adopt M2** (optical-limit Glauber; plan §4.1 pre-committed inputs) with H3 and H4 carried as open findings and the **pre-registered report-only M2 diagnostic** run before any expensive qualification; item 4 → **V7-R2 as written** (repair plan revision 4; size by the measured rule); item 5 → **one fresh V5 base at lv 20531004**, tolerances unchanged, Amendment 17 (b)4 revised prospectively.
+4. **Order of work (operator):** inexpensive candidate-model diagnostics first; the single-process and stability restrictions stay; merge only after the revised applicable gates and independent review pass.

@@ -54,9 +54,11 @@
   "reason_autonomous_resolution_not_possible": "EXPERIMENT.md §5 experiment-boundary: the frozen plan (validation/plans/v3-005d-elastic-attribution.md §5) authorises a model-change decision only for an \"established\" attribution, while its §4 says M2 is adopted \"if §5 attributes H2\"; the result is \"partially attributed\" with H2 named, so the two texts conflict and the record is not read as an authorisation (decision 0041, section 2026-10-17; Amendment 19 addendum (d)). Adopting M2 on a partial attribution, changing the (a)6 merge-gate set (Options I/II), carrying V10-A/V7-R as recorded failures with V7-R2 in V7-R's slot, taking one fresh V5 base after Amendment 17 (b)4 fired, and spending ≈ 37 host hours are boundary decisions the orchestrator may not make. All failures (V5, V11, V10-A, V7-R, V6/V6-sens, lv5b V5/V7, P6 below 12.53 MeV, MF6 copy rule) stay recorded; no tolerance, verdict or seed is changed by this request. Default without an answer: no model change, no re-qualification, PR #82 stays open.",
   "requested_input": "Choose for item 0 (0A / 0B / 0C) and for items 1–5 (1: Option I / II / III; 2: 2A / 2B / 2C; 3: 3A / 3B / 3C; 4: V7-R2 as written / variant (B) / variant (C); 5: grant one fresh V5 base lv 20531004 yes / no), or state another disposition. Items 6–8 (bases, conformity statement, host budget) need no answer. The response is recorded verbatim with resolve_human_intervention and changes no row verdict. Recommended: 0A with the pre-registered report-only M2 diagnostic safeguard; Option I; 2B; 3A; V7-R2 as written (5400/0.005 selected by the measured rule); grant one fresh V5 base.",
   "decisions_or_tasks_blocked": "IR-20261013-164616-DEFAF4",
-  "status": "open",
+  "status": "resolved",
   "notification": {
     "status": "sent",
     "http_status": 200
-  }
+  },
+  "resolved_at_utc": "2026-10-17T23:53:12.275624+00:00",
+  "response_file": "response.json"
 }
