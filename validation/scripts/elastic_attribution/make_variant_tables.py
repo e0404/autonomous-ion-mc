@@ -173,14 +173,21 @@ def _parameters(variant: str) -> dict[str, Any]:
     }[variant]
 
 
-def _assert_table(a: dict[str, np.ndarray], names: tuple[str, ...]) -> None:
+def _assert_table(
+    a: dict[str, np.ndarray], names: tuple[str, ...], check_ends: bool = True
+) -> None:
     """Normalisation (n_q equiprobable bins, endpoints, ascending), non-negative density, sigma = 0 below the domain."""
     edges = a["edges_mu"]
     for it, name in enumerate(names):
         lo, hi = (-0.96, 0.96) if name == "H-1" else (-1.0, 1.0)
         v = a["valid"][it].astype(bool)
         e = edges[it][v]
-        assert np.allclose(e[:, 0], lo) and np.allclose(e[:, -1], hi), f"{name}: edge range"
+        if check_ends:
+            assert np.allclose(e[:, 0], lo) and np.allclose(e[:, -1], hi), f"{name}: edge range"
+        else:  # swapped nodes: the end edges are the sample extremes, inside the physical range
+            assert e[:, 0].min() >= lo - 1e-12 and e[:, -1].max() <= hi + 1e-12, (
+                f"{name}: edges outside the range"
+            )
         assert np.all(np.diff(e, axis=1) > 0.0), (
             f"{name}: density not positive (edges not ascending)"
         )
@@ -270,7 +277,8 @@ def _preflight(scratch: Path) -> dict[str, Any]:
     )
     for v, tid in ids.items():
         t = et.ElasticTable.load(scratch, tid, allow_exploratory=True)
-        assert t.exploratory and t.info["exploratory"]["d_e3_variant"] == v
+        ex = t.info["exploratory"]
+        assert t.exploratory and (ex.get("d_e3_variant") or ex.get("d_e6_variant")) == v
     loaded: list[str] = []
     orig_e, orig_n = et.ElasticTable.load.__func__, nt.NuclearTable.load.__func__  # type: ignore[attr-defined]
 

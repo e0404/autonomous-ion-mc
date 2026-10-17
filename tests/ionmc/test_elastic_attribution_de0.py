@@ -96,6 +96,7 @@ STEP_MODULES = {
 }  # steps with a rendered ``<step>-report.md``
 OWNERS = {
     **STEP_MODULES,
+    "de4": "de4_parse",
     "de3": "de3_probes",
 }  # every committed JSON directory and the module that owns its allowlist
 
@@ -201,7 +202,9 @@ def _render_pairs() -> list[tuple[str, str, str, str]]:
                 )
             )
     for p in sorted((RESULTS / "de4").glob("*.json")) if (RESULTS / "de4").is_dir() else []:
-        if p.name == "de4.json":
+        if p.name == "de4-ratios.json":
+            out.append(("de4", p.name, "de4-ratios-report.md", "de4_parse:render_ratios"))
+        elif p.name == "de4.json":
             out.append(("de4", p.name, "de4-report.md", "de4_parse:render_report"))
         else:
             out.append(
@@ -222,7 +225,9 @@ def test_every_committed_report_is_rendered_from_its_projection(
     md = (RESULTS / step / mname).read_text()
     assert md.count(de_common.BODY_MARKER) == 1
     head, body = md.split(de_common.BODY_MARKER + "\n", 1)
-    assert body == getattr(mod, fn)(json.loads((RESULTS / step / jname).read_text()))
+    assert md.endswith("\n") and not md.endswith("\n\n")  # exactly one final newline
+    rendered = getattr(mod, fn)(json.loads((RESULTS / step / jname).read_text()))
+    assert body.rstrip("\n") == rendered.rstrip("\n")
     assert "Input files (sha256):" in head
 
 
@@ -676,14 +681,21 @@ def test_de4_cdf_output_layout_and_equiprobable_edges(tmp_path: Path) -> None:
     )
     mu, edges, q = z["O-16_mu_sorted"], z["O-16_edges_mu"], z["O-16_edges_q_mev"]
     assert mu.dtype == np.float64 and np.all(np.diff(mu) >= 0) and edges.size == q.size == 257
-    assert edges[0] == -1.0 and edges[-1] == 1.0 and np.all(np.diff(edges) >= 0)
+    assert (
+        edges[0] == mu[0] and edges[-1] == mu[-1] and np.all(np.diff(edges) >= 0)
+    )  # end edges = sample min / max
+    assert (
+        side["classes"]["O-16"]["sample_min"] == mu[0]
+        and side["classes"]["O-16"]["tail_edge_gap_lo"] == edges[1] - edges[0]
+    )
     counts = np.histogram(mu, bins=edges)[
         0
     ]  # 256 equiprobable bins (the ends are the range limits)
     assert counts.sum() == mu.size and counts.max() - counts.min() <= 2
-    assert q[0] == pytest.approx(2.0 * side["classes"]["O-16"]["p_cm_mev"]) and q[
-        -1
-    ] == pytest.approx(0.0, abs=1e-9)
+    p_cm = side["classes"]["O-16"]["p_cm_mev"]
+    assert np.all(np.diff(q) <= 1e-9) and q[0] == pytest.approx(
+        2.0 * p_cm * np.sin(np.arccos(mu[0]) / 2.0)
+    )
     assert (
         "H-1_edges_mu" not in z.files or side["classes"]["H-1"]["symmetrised"] is True
     )  # p-p: both signs of mu
@@ -746,3 +758,202 @@ def test_signature_ratios_raise_on_missing_class_or_signature() -> None:
     }
     with pytest.raises(KeyError, match="no signature qslope"):
         de5.signature_ratios(table, bad)
+
+
+@pytest.mark.requires_tables("elastic")
+def test_de4_pp_event_with_a_second_interaction_is_accepted(tmp_path: Path) -> None:
+    from validation.scripts.elastic_attribution import de4_parse as de4
+
+    recs = _tracks(150.0, _mass("O-16"), 1, n_pa=6, n_pp=2, bad=False)
+    pp_event = recs[-1][
+        0
+    ]  # the second p-p event; a further secondary proton from a second interaction in the target
+    recs.append((pp_event, 3, 1, 20.0, 0.5, 0))
+    d = _write_ps(tmp_path / "w", recs, 4_000_000, 150.0, "G4_WATER", 5.0)
+    doc = de4.analyse([d])
+    assert (
+        doc["pp_events_all"] == 2 and doc["pp_events_off_curve"] == 0
+    )  # the fast proton of the first pair is on the p+H curve
+    assert doc["classes"]["H-1"]["events"] + doc["pp_events_removed_by_cm_cut"] == 2
+
+
+# --- D-E6 swap tables and summary arithmetic (toy sources, synthetic batches) ---
+def _toy_source(
+    energies: tuple[float, ...], p_cm: tuple[float, ...], lo: float = -1.0, hi: float = 1.0
+):
+    from validation.scripts.elastic_attribution import de6_swap as d6
+
+    rng = np.random.default_rng(5)
+    mus = [
+        np.sort(1.0 - 2.0 * rng.beta(1.0, 6.0 * (1.0 + 0.5 * i), 20000) ** 0.5)
+        for i in range(len(energies))
+    ]
+    mus = [np.clip(m, lo, hi) for m in mus]
+    q = np.array([d6._edges_q(m, pc) for m, pc in zip(mus, p_cm, strict=False)])
+    return d6.ClassSource(np.array(energies), mus, np.array(p_cm), lo, hi, q)
+
+
+def test_swap_edges_reproduce_the_source_cdf_and_interpolate_linearly_in_q() -> None:
+    from validation.scripts.elastic_attribution import de6_swap as d6
+
+    src = _toy_source((30.0, 50.0), (300.0, 400.0))
+    for i, (e, pc) in enumerate(((30.0, 300.0), (50.0, 400.0))):
+        edges = d6.swap_edges(
+            e, src, pc
+        )  # at a source energy with its own p_CM the sample edges come back
+        np.testing.assert_allclose(edges, np.quantile(src.mu[i], np.arange(257) / 256), atol=1e-9)
+        assert edges[0] == pytest.approx(src.mu[i].min()) and edges[-1] == pytest.approx(
+            src.mu[i].max()
+        )
+    mid = d6.swap_edges(
+        40.0, src, 350.0
+    )  # intermediate energy: q at fixed level is the average of the two sources
+    q_mid = 0.5 * (src.edges_q[0] + src.edges_q[1])
+    np.testing.assert_allclose(mid, 1.0 - 2.0 * np.clip(q_mid / 700.0, 0, 1) ** 2, atol=1e-12)
+    assert (
+        np.all(np.diff(mid) > 0.0) and mid.size == 257
+    )  # normalised: 256 equiprobable bins, strictly ascending
+
+
+def test_swap_arrays_touch_only_the_swapped_class_nodes_and_keep_sigma() -> None:
+    from validation.scripts.elastic_attribution import de6_swap as d6
+
+    grid = np.array([10.0, 30.0, 60.0, 150.0, 250.0])
+    names = ("H-1", "O-16")
+    p_cm = np.array([[200.0] * 5, [250.0, 300.0, 350.0, 450.0, 500.0]])
+    base = {"grid_e_mev": grid, "valid": np.ones((2, 5), dtype=np.int8), "p_cm_mev": p_cm,
+            "sigma_barn": np.arange(10, dtype=float).reshape(2, 5) + 1.0,
+            "edges_mu": np.tile(np.linspace(-1.0, 1.0, 257), (2, 5, 1))}  # fmt: skip
+    src = {"O-16": _toy_source((30.0, 200.0), (300.0, 480.0))}
+    arr, stats = d6.swap_arrays(base, names, src, ("O-16",))
+    assert np.array_equal(arr["edges_mu"][0], base["edges_mu"][0])  # H-1 untouched
+    assert np.array_equal(
+        arr["edges_mu"][1, 0], base["edges_mu"][1, 0]
+    )  # below 30 MeV: ionmc shape kept
+    assert (
+        not np.array_equal(arr["edges_mu"][1, 1:], base["edges_mu"][1, 1:])
+        and stats["O-16"]["e_last_mev"] == 250.0
+    )
+    assert np.array_equal(arr["sigma_barn"], base["sigma_barn"])  # sigma unchanged
+    sig = {"energies_mev": [30.0, 100.0], "factors": [0.8, 0.9]}
+    arr2, _ = d6.swap_arrays(base, names, src, (), sig)
+    assert arr2["sigma_barn"][0, 0] == base["sigma_barn"][0, 0]  # factor 1 below 30 MeV
+    assert arr2["sigma_barn"][0, 1] == pytest.approx(0.8 * base["sigma_barn"][0, 1])
+    assert arr2["sigma_barn"][0, 2] == pytest.approx(
+        (0.8 + (60 - 30) / 70 * 0.1) * base["sigma_barn"][0, 2]
+    )
+    assert arr2["sigma_barn"][0, 4] == pytest.approx(
+        0.9 * base["sigma_barn"][0, 4]
+    ) and np.array_equal(arr2["sigma_barn"][1], base["sigma_barn"][1])
+
+
+def test_de6_closure_interaction_and_extended_arithmetic() -> None:
+    from validation.scripts.elastic_attribution import de6_swap as d6
+
+    a = d6.arithmetic(
+        {"pA": 0.020, "pp": 0.008, "both": 0.029},
+        se_both=0.001,
+        se_i=0.001,
+        obs=0.035,
+        se_obs=0.0026,
+        se_cdf=0.001,
+    )
+    assert a["interaction"] == pytest.approx(0.001) and a["closure_residual"] == pytest.approx(
+        0.006
+    )
+    assert (
+        a["se_r"] == pytest.approx(math.sqrt(0.0026**2 + 0.001**2 + 0.001**2))
+        and a["closure_threshold"] == 0.010
+        and a["clause2_holds"]
+    )
+    assert a["clause3"]["named_component"] is None  # 0.020 / 0.029 = 0.69 < 70 %
+    e = d6.extended_arithmetic(
+        {"pA": 0.020, "pp": 0.008, "ppS": 0.006, "all": 0.036}, 0.001, 0.001, 0.035, 0.0026, 0.001
+    )
+    assert (
+        e["interaction_all"] == pytest.approx(0.002)
+        and e["closure_residual_all"] == pytest.approx(-0.001)
+        and e["clause2_holds_extended"]
+    )
+    assert d6.outcome_label(False, True).startswith(
+        "closure reached only with the post-hoc p-p sigma arm"
+    )
+    assert d6.outcome_label(True, True).startswith(
+        "closure holds on the frozen"
+    ) and d6.outcome_label(False, False).startswith("closure not reached")
+    assert (
+        d6.clause3_status(True, False) == "inconclusive (metric-dependent)"
+        and d6.clause3_status(True, True) == "holds under both metrics"
+    )
+
+
+def test_de6_h4_recoil_share() -> None:
+    from validation.scripts.elastic_attribution import de6_swap as d6
+
+    nz = 200
+    base = np.full((20, nz), 0.010)
+    arm = np.full((20, nz), 0.004)
+    h = d6.recoil_h4({"all": base, "swap_all": arm}, den_plateau=6.0, gain_excess=0.0058)
+    assert h["swap_all"]["reduction_vs_base"] == pytest.approx((0.010 - 0.004) / 6.0)
+    assert (
+        h["swap_all"]["share_of_gain_excess"] == pytest.approx(0.001 / 0.0058)
+        and not h["swap_all"]["ge_20pct_bound"]
+    )
+
+
+def test_de6_summary_end_to_end_on_synthetic_run_files(tmp_path: Path) -> None:
+    """Synthetic CRN run files (base, five swap arms, EM-only): summary, Git projection, report."""
+    from validation.scripts.elastic_attribution import de6_swap as d6
+
+    rng = np.random.default_rng(11)
+    nz = 200
+    shape = np.concatenate([np.full(120, 5.0), np.linspace(5, 30, 30), np.linspace(30, 0, 50)])[:nz]
+    noise = 1.0 + 0.003 * rng.standard_normal((20, nz))  # shared batch noise (CRN)
+    peak_factor = {
+        "emonly": 1.0,
+        "all": 0.86,
+        "swap-pA": 0.90,
+        "swap-pp": 0.93,
+        "swap-both": 0.97,
+        "swap-pp-sigma": 0.89,
+        "swap-all": 1.0,
+    }
+    runs = tmp_path / "runs"
+    runs.mkdir()
+    for e in (150, 200):
+        for v, pf in peak_factor.items():
+            idd = shape[None, :] * noise
+            idd[:, 120:] *= pf
+            idd[:, :120] *= (
+                1.0
+                if v == "emonly"
+                else 1.025 - 0.012 * (v == "swap-all") - 0.006 * (v == "swap-pA")
+            )
+            rec = 0.01 * noise * (0.3 if v == "swap-all" else 1.0)
+            doc = {"variant": v, "energy": e, "valid": True, "relative_residual": 0.0,
+                   "idd_batches": idd.tolist(), "recoil_idd_batches": rec.tolist(),
+                   "recoil_total_mev_per_primary": 0.3}  # fmt: skip
+            (runs / f"de3-{e}-{v}.json").write_text(json.dumps(doc))
+        (runs / f"check-base-{e}.json").write_text(json.dumps({"bit_for_bit": True}))
+    one = {"F_total_error": 0.0003, "bootstrap": {"F_sd": 0.0002}, "tail_edge": {"dF": 1e-4},
+           "leave_one_energy_out_at_150": {"dF": 1e-4}}  # fmt: skip
+    err = {str(e): one for e in (150, 200)}
+    (tmp_path / "cdf-error.json").write_text(json.dumps(err))
+    doc = d6.summarize(
+        runs, tmp_path / "out", tmp_path / "cdf-error.json", ratios_path=tmp_path / "none.json"
+    )
+    b = doc["energies"]["150"]
+    assert (
+        b["one_minus_F"]["delta"]["both"] > b["one_minus_F"]["delta"]["pA"] > 0
+        and "closure_residual_all" in b["one_minus_F_extended"]
+    )
+    assert b["outcome_label"] in {
+        d6.outcome_label(f, x) for f in (True, False) for x in (True, False)
+    }
+    assert (
+        set(b["h4"]) >= {"all", "swap_all", "ppS"} and b["h4"]["swap_all"]["reduction_vs_base"] > 0
+    )
+    proj = json.loads((tmp_path / "out" / "git" / "de6-summary.json").read_text())
+    assert de_common.git_safety_violations(proj, d6.GIT_ALLOW, d6.GIT_ALLOW_LONG) == []
+    md = (tmp_path / "out" / "git" / "de6-report.md").read_text()
+    assert "Extended set" in md and "H4" in md and md.endswith("\n") and not md.endswith("\n\n")

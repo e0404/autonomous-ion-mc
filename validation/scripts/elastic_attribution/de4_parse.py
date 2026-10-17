@@ -17,7 +17,8 @@ Analysis (plan 3.2):
 - :func:`de5_sampling.select_tracks` (the same function as the table side): KE filter, classification (smaller kinematic-curve
   residual to p+H / p+target wins; a conflict track, both residuals < 1e-3, is p-p iff the event has a secondary proton, else p+A)
   and the frozen **exclusion of tracks off both curves** (counted, fraction reported). p-p events enter the H-1 sample only if
-  the event has exactly two proton records and both lie on the p+H curve at E0 (others are counted as ``pp_events_off_curve``);
+  the fast proton of the event's (primary, first secondary) pair lies on the p+H curve at E0 (others are counted as
+  ``pp_events_off_curve``: p-p followed by a second interaction in the target; the recoil record only sets the secondary flag);
 - p-p events (event with a secondary proton): the faster of the two protons is the "fast proton" (the primary of the ionmc
   convention), the slower the "slow/secondary proton"; the class ``H-1`` signatures use the fast proton, ``mean_t_other_mev`` the
   slow proton's energy; p+A (``O-16``): ``mean_t_other_mev`` = ``E0 - T1`` (the recoil, energy conservation);
@@ -74,7 +75,14 @@ GIT_ALLOW_CASE = (
 GIT_ALLOW = tuple(f"cases/*/{p}" for p in GIT_ALLOW_CASE)  # the combined record de4.json
 """Git allowlists (syntax: :mod:`common`): counts, per-primary rates, angle statistics, exceedances, identification of the case.
 Not kept: histograms, the part directories (host paths)."""
+GIT_ALLOW_RATIOS = (
+    "cases/*/*/n_events_geant4",
+    "cases/*/*/signatures/*/ratio",
+    "cases/*/*/signatures/*/ratio_se",
+    "definition",
+)
 GIT_FILES = {
+    "de4-ratios.json": (GIT_ALLOW_RATIOS, ()),
     "de4-case*.json": (GIT_ALLOW_CASE, ()),
     "de4.json": (GIT_ALLOW + ("geant4_summary/*/*/*",), ()),
 }
@@ -261,28 +269,27 @@ def analyse(
     surv = ~ke_removed
     pa_keep = sel["keep"] & ~is_pp & ~ev_has_sec[pi]
     pa_e, pa_cos = e[pi][pa_keep], cos[pi][pa_keep]
-    # p-p events (water only): exactly two proton records, both on the p+H curve at E0, then the CM cut on the fast proton
+    # p-p events (water only): the pair (primary, first secondary proton); an event is accepted when its FAST proton lies on the
+    # p+H curve at E0 (the recoil record only sets the secondary flag; events with a further interaction keep their first pair)
     order = np.argsort(r["event"], kind="stable")
     ev_sorted = r["event"][order]
     fast_e, fast_cos, slow_e, slow_cos = [], [], [], []
-    n_multi = n_off_pp = 0
+    n_off_pp = 0
     for ev in ev_sec:
         lo, hi = np.searchsorted(ev_sorted, [ev, ev + 1])
         idx = order[lo:hi]
-        if idx.size != 2:
-            n_multi += 1
-            continue
-        idx = idx[np.argsort(-e[idx])]
-        res = np.abs(e[idx] - de5.kin_curve_t(e0, mh, cos[idx])) / np.maximum(e[idx], 1e-9)
-        if (res >= 1.0e-3).any():
+        p_i = idx[r["parent"][idx] == 0]
+        s_i = idx[r["parent"][idx] != 0]
+        pair = np.concatenate([p_i[:1], s_i[np.argsort(r["track"][s_i])][:1]])
+        pair = pair[np.argsort(-e[pair])]
+        f = pair[0]
+        if abs(e[f] - de5.kin_curve_t(e0, mh, np.array([cos[f]]))[0]) / max(e[f], 1e-9) >= 1.0e-3:
             n_off_pp += 1
             continue
-        (
-            fast_e.append(e[idx[0]]),
-            fast_cos.append(cos[idx[0]]),
-            slow_e.append(e[idx[1]]),
-            slow_cos.append(cos[idx[1]]),
-        )
+        fast_e.append(e[f])
+        fast_cos.append(cos[f])
+        slow_e.append(e[pair[-1]])
+        slow_cos.append(cos[pair[-1]])
     fast_e, fast_cos, slow_e, slow_cos = map(np.asarray, (fast_e, fast_cos, slow_e, slow_cos))
     gam = nv10.two_body_frame(e0, MP)["gamma_cm"]
     th_cm_fast = 2.0 * np.degrees(np.arctan(gam * np.tan(np.arccos(np.clip(fast_cos, -1.0, 1.0)))))
@@ -370,10 +377,10 @@ def analyse(
                       "removed_fraction": float(ke_removed.sum() / n_prim), "primary_records": int(prim.sum()),
                       "secondary_records_parent_ne_0": int(sec.sum())},  # fmt: skip
         "secondary_definition": "event has a proton record with parent ID != 0 (cross-check: events with >1 proton record = "
-                                f"{ev_multi_n}); a p-p event needs exactly two proton records",
+                                f"{ev_multi_n}); a p-p event is accepted when its fast proton lies on the p+H curve",
         "off_curve": {"primaries_excluded": n_off_pa, "primaries_fraction": cl["off_curve_fraction"],
-                      "pp_events_excluded": n_off_pp, "pp_events_not_two_records": n_multi},  # fmt: skip
-        "pp_events_all": int(ev_sec.size), "pp_events_off_curve": n_off_pp + n_multi, "pp_events_after_cm_cut": int(fast_e.size),
+                      "pp_events_excluded": n_off_pp},  # fmt: skip
+        "pp_events_all": int(ev_sec.size), "pp_events_off_curve": n_off_pp, "pp_events_after_cm_cut": int(fast_e.size),
         "pp_cm_cut_deg": de5.PP_CUT_DEG, "pp_events_removed_by_cm_cut": n_pp_ok - int(fast_e.size),
         "classification": cl, "classes": classes,
         "secondary_on_p+H_curve": {"max_rel_residual": float(sec_res.max()) if sec_res.size else float("nan"),
@@ -399,8 +406,14 @@ def render_case(doc: dict[str, Any]) -> str:
             f"| {name} | {v['events']} | {v['rate_per_primary']:.4g} +- {v['rate_per_primary_se']:.2g} | {v['theta_lab_median_deg']:.2f} | "
             f"{v['P_theta_lab_gt_theta_2mm']:.4f} | {v['P_theta_lab_gt_theta_3mm']:.4f} | {v['T_tail_moment']:.4f} | {v['mean_t_other_mev']:.3f} |"
         )
-    out += ["", f"p-p events: {doc['pp_events_all']} with a secondary proton; {oc['pp_events_excluded'] + oc['pp_events_not_two_records']} excluded "
-            f"(off the p+H curve or not exactly two proton records); {doc['pp_events_removed_by_cm_cut']} removed by the {doc['pp_cm_cut_deg']} deg CM cut; "
+    legacy = (
+        "pp_events_not_two_records" in oc
+    )  # records of the first parser (exactly-two-records rule) keep their wording
+    n_x = oc["pp_events_excluded"] + (oc["pp_events_not_two_records"] if legacy else 0)
+    why = ("off the p+H curve or not exactly two proton records" if legacy
+           else "fast proton off the p+H curve: p-p followed by a second interaction")  # fmt: skip
+    out += ["", f"p-p events: {doc['pp_events_all']} with a secondary proton; {n_x} excluded "
+            f"({why}); {doc['pp_events_removed_by_cm_cut']} removed by the {doc['pp_cm_cut_deg']} deg CM cut; "
             f"{doc['pp_events_after_cm_cut']} kept (class H-1).", "",
             f"Classification: {cl['deflected_primaries']} deflected primaries -> {cl['assigned_pA']} p+A, {cl['assigned_pp']} p-p; "
             f"off both kinematic curves: {cl['off_curve_pa_pool_excluded']} p+A-pool tracks excluded (fraction {cl['off_curve_fraction']:.3e}; "
@@ -427,19 +440,17 @@ def _cmd(args: str) -> str:
 N_Q = 256  # equiprobable mu bins per node, as the pinned elastic table
 
 
-def cdf_edges(mu: np.ndarray, lo: float, hi: float, n_q: int = N_Q) -> np.ndarray:
-    """``n_q + 1`` ascending mu edges of ``n_q`` equiprobable bins of the empirical sample (the table convention: edge j = quantile
-    j / n_q, the end edges are the range limits)."""
-    e = np.quantile(np.sort(np.asarray(mu, dtype=np.float64)), np.arange(n_q + 1) / n_q)
-    e[0], e[-1] = lo, hi
-    return e
+def cdf_edges(mu: np.ndarray, n_q: int = N_Q) -> np.ndarray:
+    """``n_q + 1`` ascending mu edges of ``n_q`` equiprobable bins of the empirical sample: edge j = quantile j / n_q; the end edges
+    are the sample minimum and maximum of mu_CM (addendum (c)4; not the range limits -1 / +1)."""
+    return np.quantile(np.sort(np.asarray(mu, dtype=np.float64)), np.arange(n_q + 1) / n_q)
 
 
 def write_cdf(cdf: dict[str, Any], doc: dict[str, Any], outdir: Path) -> Path:
     """Empirical Geant4 mu_CM inverse CDFs of the selected events of one case for the D-E6 swaps (never committed): one npz
     ``de4-case<N>-cdf.npz`` and a JSON sidecar. Per class ``<name>``: ``<name>_mu_sorted`` (float64), ``<name>_edges_mu`` (257 edges
-    of the 256 equiprobable bins), ``<name>_edges_q_mev`` (``q = 2 p_CM sin(theta_CM / 2)`` [MeV/c] at the edges). p-p: both signs of
-    mu of the fast proton (identical particles), edges on [-0.96, 0.96]."""
+    of the 256 equiprobable bins; the end edges are the sample minimum and maximum), ``<name>_edges_q_mev`` (``q = 2 p_CM sin(theta_CM / 2)`` [MeV/c] at the edges). p-p: both signs of
+    mu of the fast proton (identical particles)."""
     import hashlib
     import json
 
@@ -453,12 +464,13 @@ def write_cdf(cdf: dict[str, Any], doc: dict[str, Any], outdir: Path) -> Path:
         if mu.size == 0:
             side[name] = {"n": 0}
             continue
-        edges = cdf_edges(mu, lo, hi)
+        edges = cdf_edges(mu)
         th = np.arccos(np.clip(edges, -1.0, 1.0))
         arrays[f"{name}_mu_sorted"], arrays[f"{name}_edges_mu"] = mu, edges
         arrays[f"{name}_edges_q_mev"] = 2.0 * v["p_cm_mev"] * np.sin(th / 2.0)
         side[name] = {"n": int(mu.size), "p_cm_mev": v["p_cm_mev"], "mu_range": [lo, hi], "symmetrised": v["symmetrised"],
-                      "n_quantiles": N_Q}  # fmt: skip
+                      "n_quantiles": N_Q, "sample_min": float(mu[0]), "sample_max": float(mu[-1]),
+                      "tail_edge_gap_lo": float(edges[1] - edges[0]), "tail_edge_gap_hi": float(edges[-1] - edges[-2])}  # fmt: skip
     stem = f"de4-case{doc['case']}-cdf"
     npz = outdir / f"{stem}.npz"
     np.savez(npz, **arrays)
@@ -558,6 +570,68 @@ def combine(outdir: Path) -> dict[str, Any]:
     return doc
 
 
+def ratios(outdir: Path | None = None, table_json: Path | None = None) -> dict[str, Any]:
+    """Table / Geant4 signature ratios (``ionmc / Geant4``) of every case and class from the D-E5 record (``de5.json``) and the
+    combined D-E4 record (``de4.json``) through :func:`de5_sampling.signature_ratios` (raises on a missing case, class or signature).
+    Both sides' rates are the rates per primary after the rule. Geant4-side standard errors propagated to the ratio: Poisson
+    for the rate (``1 / sqrt(N)``), binomial for the exceedance probabilities; the other signatures carry no SE (``None``).
+    The table side (1e6 sampled events) is treated as exact. Only ratios, SEs and the Geant4 event counts are recorded."""
+    import json
+
+    out = Path(outdir or c.OUT / "de4")
+    table = json.loads(Path(table_json or c.OUT / "de5" / "de5.json").read_text())
+    g4 = json.loads((out / "de4.json").read_text())
+    rat = de5.signature_ratios(table, g4["geant4_summary"])
+    cases: dict[str, Any] = {}
+    for n, per_class in rat.items():
+        cases[n] = {}
+        for cls, row in per_class.items():
+            n_ev = int(g4["cases"][n]["classes"][cls]["events"])
+            g = g4["geant4_summary"][n][cls]
+            sig: dict[str, Any] = {}
+            for name, r in row.items():
+                se = None
+                if r is not None and n_ev > 0:
+                    if name == "rate_per_primary_after_rule":
+                        se = r / math.sqrt(n_ev)
+                    elif name.startswith("P_theta_lab_gt") and g[name]:
+                        p = g[name]
+                        se = r * math.sqrt(max(p * (1.0 - p), 0.0) / n_ev) / p
+                sig[name] = {"ratio": r, "ratio_se": se}
+            cases[n][cls] = {"n_events_geant4": n_ev, "signatures": sig}
+    doc = {"banner": c.BANNER, "cases": cases,
+           "definition": "ratio = ionmc table / Geant4; rates per primary after the frozen KE filter, off-curve exclusion and classification"}  # fmt: skip
+    c.write_outputs(out, "de4-ratios.json", doc, "de4-ratios-report.md",
+                    c.header("D-E4 / D-E5: table / Geant4 signature ratios", _cmd("--ratios"),
+                             [out / "de4.json", Path(table_json or c.OUT / "de5" / "de5.json")]),
+                    render_ratios, GIT_ALLOW_RATIOS)  # fmt: skip
+    return doc
+
+
+def render_ratios(doc: dict[str, Any]) -> str:
+    from . import de5_sampling as _d5
+
+    out = ["", doc.get("definition", ""), ""]
+    for n in sorted(doc["cases"], key=int):
+        out += [
+            f"## Case {n}",
+            "",
+            "| class | Geant4 events | " + " | ".join(_d5.SIGNATURES) + " |",
+            "|" + "---|" * (2 + len(_d5.SIGNATURES)),
+        ]
+        for cls, v in doc["cases"][n].items():
+            cells = []
+            for s_name in _d5.SIGNATURES:
+                x = v["signatures"][s_name]
+                r, se = x.get("ratio"), x.get("ratio_se")
+                cells.append(
+                    "-" if r is None else f"{r:.3f}" + ("" if se is None else f" +- {se:.3f}")
+                )
+            out.append(f"| {cls} | {v['n_events_geant4']} | " + " | ".join(cells) + " |")
+        out.append("")
+    return "\n".join(out) + "\n"
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=(__doc__ or "").split("\n")[0])
     ap.add_argument(
@@ -573,6 +647,11 @@ def main(argv: list[str] | None = None) -> int:
         help="optional: asserted against the case identified from the inputs",
     )
     ap.add_argument(
+        "--ratios",
+        action="store_true",
+        help="write de4-ratios.json / de4-ratios-report.md (table / Geant4) in --out",
+    )
+    ap.add_argument(
         "--combine",
         action="store_true",
         help="write de4.json / de4-report.md from the de4-case*.json in --out",
@@ -585,7 +664,9 @@ def main(argv: list[str] | None = None) -> int:
         help="empirical mu_CM CDFs for the D-E6 swaps (never committed)",
     )
     a = ap.parse_args(argv)
-    if a.combine:
+    if a.ratios:
+        ratios(a.out)
+    elif a.combine:
         combine(a.out)
     elif a.parts:
         run(a.parts, a.out, a.case, a.cdf_out)

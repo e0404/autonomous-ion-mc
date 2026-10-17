@@ -6,8 +6,8 @@ Command (from the worktree root, `.venv` python, single thread): `python -m vali
 
 Input files (sha256):
 
-- `validation/generated/elastic_attribution/de3/de3-200-pinned.json`  bee346f88e3b64cf05379110cb1f963ca8654693e15edf60c335a4861be23df8
-- `validation/generated/elastic_attribution/de3/de3-200-all.json`  a93432513cc74a1954fce65ccaab7ad6a8f613dd1212659b09ac506ed1b71579
+- `validation/generated/elastic_attribution/de3/de3-200-pinned.json`  23b897ff060fab214d388f64a62e8c2bd0c74a4e07295ea6af242ed2441bb1db
+- `validation/generated/elastic_attribution/de3/de3-200-all.json`  1358a0b1addeb161e0ed79a859e8cd10ac17584c034bd38ab59096408be0aae1
 
 <!-- body below is rendered from the Git projection of the JSON record -->
 

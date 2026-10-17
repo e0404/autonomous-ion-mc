@@ -26,7 +26,8 @@ Signatures (plan section 2.2, H2 / H3 rows and the descriptive characterisation)
   relative residual of the primary's energy to the elastic kinematic curves of p+H and p+A; the smaller residual wins; a
   *conflict* track (both below 1e-3, i.e. theta_lab below the crossover of about 1.8 deg) is kept: p-p iff the event has a secondary
   proton, else p+A. The raw conflict fraction is a diagnostic; the per-class rate after the rule is reported. Tracks off both curves
-  are counted and **excluded** before the signatures (:func:`select_tracks`, shared with the Geant4 parser); the Geant4 ratio hook
+  are counted and **excluded** before the signatures (:func:`select_tracks`, shared with the Geant4 parser); a p-p event is accepted when its
+  fast proton lies on the p+H curve (addendum (c)2; the table side is p-p single scattering, so every table p-p event qualifies); the Geant4 ratio hook
   compares ``rate_per_primary_after_rule`` (KE filter, exclusion and classification applied on both sides).
 - the first-minimum, q-slope and Helm descriptors are recorded, not interpreted.
 

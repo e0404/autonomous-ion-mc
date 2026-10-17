@@ -30,18 +30,38 @@
  "provenance": {
   "backend": "warp-cpu",
   "cache_dir": "<scratch-cache>",
-  "git_head": "a72b6c4301d146da0a6d2cc9ecb089e3711f1837",
+  "git_head": "d2bce93c1f521b89ef7fd1176a9fe7a5ac927a9e",
+  "git_status_clean": false,
   "git_status_elastic_attribution": [
-   "M validation/scripts/elastic_attribution/de3_probes.py",
-   " M validation/scripts/elastic_attribution/de4_parse.py",
-   " M validation/scripts/elastic_attribution/de5_sampling.py",
-   " M validation/scripts/elastic_attribution/make_variant_tables.py"
+   "M validation/scripts/elastic_attribution/de3_probes.py"
   ],
   "precision": "float64",
+  "run_logs": [
+   "20261015T113620Z-de3-emonly-150",
+   "20261015T113649Z-de3-pinned-150",
+   "20261015T113747Z-de3-all-150",
+   "20261015T113844Z-de3-pp-only-150",
+   "20261015T113941Z-de3-pA-only-150",
+   "20261015T114038Z-de3-pA-sigma0.8-150",
+   "20261015T114134Z-de3-pA-Rx1.2-150",
+   "20261015T114231Z-de3-pA-s0.5-150",
+   "20261015T114328Z-de3-pA-s0.9-150",
+   "20261015T114424Z-de3-pA-gauss-150",
+   "20261015T114521Z-de3-emonly-200",
+   "20261015T114600Z-de3-pinned-200",
+   "20261015T114716Z-de3-all-200",
+   "20261015T114832Z-de3-pp-only-200",
+   "20261015T114947Z-de3-pA-only-200",
+   "20261015T115101Z-de3-pA-sigma0.8-200",
+   "20261015T115216Z-de3-pA-Rx1.2-200",
+   "20261015T115331Z-de3-pA-s0.5-200",
+   "20261015T115446Z-de3-pA-s0.9-200",
+   "20261015T115601Z-de3-pA-gauss-200"
+  ],
   "scripts_sha256": {
    "common.py": "29171edbda46e951cb3d36a04ff77954b370d4a6be325d5ccfe2a6b0b110b4ad",
    "de0_kernels.py": "38e5ec2dbe285af1db5c6785851ae7b367ac6987f6733c3facb0f4a3858d2cd7",
-   "de3_probes.py": "a6bfeb2ed8f9b1a021feee4a74d996e4770f1fe642db549c61cb92074fc25898",
+   "de3_probes.py": "c4e01676fc3e284068d9994a402601f4b327b0f3d17d2fe210a86ca4cb41c317",
    "make_variant_tables.py": "beafad7d90f4a4d63fc4834de8e7d86515f5ed561d288ab6f5f7bb785ceef951"
   },
   "seeds": {

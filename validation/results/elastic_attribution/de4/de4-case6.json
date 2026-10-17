@@ -1,0 +1,101 @@
+{
+ "banner": "Exploratory, report-only (Amendment 19); not evidence; changes no row.",
+ "case": 6,
+ "classes": {
+  "C-12": {
+   "P_theta_lab_gt_theta_2mm": 0.19034272869317603,
+   "P_theta_lab_gt_theta_3mm": 0.08061324815091322,
+   "T_tail_moment": 0.009670436072419885,
+   "counts_in_first_minimum_bin": 7625,
+   "events": 245121,
+   "first_minimum_3sigma_deg": null,
+   "first_minimum_deg": 8.5,
+   "helm": {
+    "R_eff_fm": 3.649999999999994,
+    "n_bins": 24,
+    "rms_log_residual": 0.9819947924567338,
+    "s_fm": 0.55
+   },
+   "mean_t_other_mev": 0.5143374897249855,
+   "qslope": -4.359714245016478,
+   "qslope_bins": 12,
+   "rate_per_primary": 0.01225605,
+   "rate_per_primary_after_rule": 0.01225605,
+   "rate_per_primary_se": 2.4754848010036338e-05,
+   "theta_lab_mean_1_minus_cos": 0.060675392928679205,
+   "theta_lab_median_deg": 16.08727554130906
+  }
+ },
+ "classification": {
+  "assigned_pA": 247154,
+  "assigned_pp": 117,
+  "conflict_assigned_pp_by_secondary": 0,
+  "conflict_fraction_raw": 0.00859785417618726,
+  "conflict_tracks_raw": 2126,
+  "curve_crossover_deg": 1.87,
+  "deflected_primaries": 247271,
+  "off_curve_fraction": 0.008618074905670297,
+  "off_curve_pa_pool_excluded": 2131,
+  "off_curve_tracks_excluded": 2131,
+  "pA_events_with_secondary_proton": 0,
+  "primary_records": 20000000
+ },
+ "energy_mev": 50.0,
+ "geant4_summary": {
+  "6": {
+   "C-12": {
+    "P_theta_lab_gt_theta_2mm": 0.19034272869317603,
+    "P_theta_lab_gt_theta_3mm": 0.08061324815091322,
+    "T_tail_moment": 0.009670436072419885,
+    "first_minimum_3sigma_deg": null,
+    "first_minimum_deg": 8.5,
+    "mean_t_other_mev": 0.5143374897249855,
+    "qslope": -4.359714245016478,
+    "rate_per_primary_after_rule": 0.01225605,
+    "theta_lab_median_deg": 16.08727554130906
+   }
+  }
+ },
+ "identification": {
+  "energy_mev": 50.0,
+  "geometry_bound": true,
+  "header_histories_equal_input_and_frozen": true,
+  "header_max_ke_equals_e0": true,
+  "length_cm": 0.2,
+  "material_topas": "G4_C",
+  "parts": 3,
+  "primaries_total": 20000000
+ },
+ "ke_filter": {
+  "primary_records": 20000000,
+  "removed_fraction": 0.98763645,
+  "removed_primaries": 19752729,
+  "secondary_records_parent_ne_0": 0,
+  "threshold_mev": 49.9999
+ },
+ "length_cm": 0.2,
+ "material": "graphite",
+ "note_git": "Git projection (decision 0041): explicit allowlist of dimensionless ratios, per-primary rates and probabilities, kinematic statistics, kernel integrals, counts and flags; no absolute cross sections, no distributions or per-point arrays. The complete record is regenerated into validation/generated/ by the committed module.",
+ "off_curve": {
+  "pp_events_excluded": 0,
+  "pp_events_not_two_records": 0,
+  "primaries_excluded": 2131,
+  "primaries_fraction": 0.008618074905670297
+ },
+ "pp_cm_cut_deg": 16.26,
+ "pp_events_after_cm_cut": 0,
+ "pp_events_all": 0,
+ "pp_events_off_curve": 0,
+ "pp_events_removed_by_cm_cut": 0,
+ "primaries": 20000000,
+ "records": 20000000,
+ "row": 20,
+ "secondary_definition": "event has a proton record with parent ID != 0 (cross-check: events with >1 proton record = 0); a p-p event needs exactly two proton records",
+ "secondary_on_p+H_curve": {
+  "fraction_below_1e-3": NaN,
+  "max_rel_residual": NaN
+ },
+ "target": "C-12",
+ "theta_2mm_deg": 24.381722838147816,
+ "theta_3mm_deg": 29.977339054651768
+}

@@ -6,26 +6,26 @@ Command (from the worktree root, `.venv` python, single thread): `python -m vali
 
 Input files (sha256):
 
-- `validation/generated/elastic_attribution/de3/de3-150-all.json`  81c883b94d67022108b2ff540cf53bf5ecdb8e8b8d937193946988ee273544ac
-- `validation/generated/elastic_attribution/de3/de3-150-emonly.json`  63c7af6022849a8981c54c3267ce6c11ed0db66525856c133181941f0a607762
-- `validation/generated/elastic_attribution/de3/de3-150-pA-Rx1.2.json`  4652a77fc9001f6cc91820a6995a748dbc7ca1410ea7848251f370ee2a098f5e
-- `validation/generated/elastic_attribution/de3/de3-150-pA-gauss.json`  23ddcde95d89cc722299dd7f2794bddbb1484a7ffef1d72230d3b30880240adb
-- `validation/generated/elastic_attribution/de3/de3-150-pA-only.json`  37d0e9becf78430a534fddfecd8ce3c036e35006486ce32880e201d4f4d6012e
-- `validation/generated/elastic_attribution/de3/de3-150-pA-s0.5.json`  9b8a168ea558dc974d24ba8fe4f845d2d313e01ff299306db555cd00b96e765c
-- `validation/generated/elastic_attribution/de3/de3-150-pA-s0.9.json`  d12783d51341c2449fb3a4ca6c11fdd50f4ce4ac2b5a50a010a12ac29dbcef80
-- `validation/generated/elastic_attribution/de3/de3-150-pA-sigma0.8.json`  e5380f9705ad1b4bafad85d56b5e11f1d59eb3eb6f064ae6f184266f3f9020b4
-- `validation/generated/elastic_attribution/de3/de3-150-pinned.json`  9d4aef601df5b5217c0d2b7872b8888c98d4ae5e54ecd6dd48401e402d176edb
-- `validation/generated/elastic_attribution/de3/de3-150-pp-only.json`  a321da0ee2372a7fed115fdd7569db0c9f477c9db010c667660e3fc3658db27c
-- `validation/generated/elastic_attribution/de3/de3-200-all.json`  a93432513cc74a1954fce65ccaab7ad6a8f613dd1212659b09ac506ed1b71579
-- `validation/generated/elastic_attribution/de3/de3-200-emonly.json`  a85cf343e6b3557d2a26e31ea47a46f1a0d28e648526100aa1c663e7fec724e9
-- `validation/generated/elastic_attribution/de3/de3-200-pA-Rx1.2.json`  93a75e752dabc90a97a4f14fb623d3d21cfbd2501d460af809d527b5b6c6805e
-- `validation/generated/elastic_attribution/de3/de3-200-pA-gauss.json`  09e3e40fdc3ca654a93a843df4d22d8e8ee4cb8f3d70797efba4767007a1f692
-- `validation/generated/elastic_attribution/de3/de3-200-pA-only.json`  af60be8492efa17d12afaa49cd71edfae919c5addc32df711f641284f80d1196
-- `validation/generated/elastic_attribution/de3/de3-200-pA-s0.5.json`  df418c707122746aebe0613cd1bccb3c04853b8b5b0001749fc8e6b5369a198c
-- `validation/generated/elastic_attribution/de3/de3-200-pA-s0.9.json`  e9e82a7c28ad19d8a501ed9e89e44045d217a6bfc3bccddef7aed0b4503947b6
-- `validation/generated/elastic_attribution/de3/de3-200-pA-sigma0.8.json`  0ef609b4ef8d63e618ae4a9752a4040638bd6d3d84658d149175a661b180234a
-- `validation/generated/elastic_attribution/de3/de3-200-pinned.json`  bee346f88e3b64cf05379110cb1f963ca8654693e15edf60c335a4861be23df8
-- `validation/generated/elastic_attribution/de3/de3-200-pp-only.json`  f807e208d195793a7f49ca48bdfcf151f667c0afbb1c7346e51b835589ca4524
+- `validation/generated/elastic_attribution/de3/de3-150-all.json`  a3443dcaef1007198425460274cae4266ed61a0b35602306208368cfad274d53
+- `validation/generated/elastic_attribution/de3/de3-150-emonly.json`  284b081cdb1517c2647b33169ed5e1ae08457d4563de135b77aa7ec550832876
+- `validation/generated/elastic_attribution/de3/de3-150-pA-Rx1.2.json`  1beb630a733e4fd17f12564e7c6b66dc7caa33c9c231394ae3fb5c88b0528260
+- `validation/generated/elastic_attribution/de3/de3-150-pA-gauss.json`  6525184c6c3c687a7c5455375d8b33ef5f1e01aabb2104ec6b9d7589f4df2288
+- `validation/generated/elastic_attribution/de3/de3-150-pA-only.json`  e3a859b3e59aef608a3343d67e9b6bba9269efa7f7c84648eff218616406431a
+- `validation/generated/elastic_attribution/de3/de3-150-pA-s0.5.json`  be577ccc52c2e7efd9aea0f648c6187b5dba160825843591d15fa1a4320f41d2
+- `validation/generated/elastic_attribution/de3/de3-150-pA-s0.9.json`  0997bfeb5fbedad92dfc41134532f9215933b06025c9e92d9108b700ed3efdb1
+- `validation/generated/elastic_attribution/de3/de3-150-pA-sigma0.8.json`  c184b276ebee230573dd1cfb29694f562066b8daca3b95ebe524042bcb25df5a
+- `validation/generated/elastic_attribution/de3/de3-150-pinned.json`  3abc5c3978faa69232af72b0359d8b8378a6b4032738a7d975c19df32233bda1
+- `validation/generated/elastic_attribution/de3/de3-150-pp-only.json`  8ad70e1a67cee8d1d9361a4ccc7078c531d92850336e8bad349272ecbc9100f6
+- `validation/generated/elastic_attribution/de3/de3-200-all.json`  1358a0b1addeb161e0ed79a859e8cd10ac17584c034bd38ab59096408be0aae1
+- `validation/generated/elastic_attribution/de3/de3-200-emonly.json`  29fbcdceb47d0a839bb6c0753f8b9ed6c8292c428b6f899723b580ed04f9b3cc
+- `validation/generated/elastic_attribution/de3/de3-200-pA-Rx1.2.json`  a7801a7fed917121dd3b79c321f836a26140dd0564bc4a68e29317378634296d
+- `validation/generated/elastic_attribution/de3/de3-200-pA-gauss.json`  4f45f0faffc54f44a40067855064bf3f30913f3aa498e1daa02bb9d83ccbb1c5
+- `validation/generated/elastic_attribution/de3/de3-200-pA-only.json`  3bc5fbb8d1d4dad11c98d6c2673b7013e72e1c4d5a626dd3d9d04ae4b072943b
+- `validation/generated/elastic_attribution/de3/de3-200-pA-s0.5.json`  1fd760865a7d22c47cd1e4919e245a975bd6d97c68cb77a7f352caad926b40e1
+- `validation/generated/elastic_attribution/de3/de3-200-pA-s0.9.json`  21792b3c460174b335e2de1f8b2f139b61e2bb014c3bf6c8262073c0605a5e3d
+- `validation/generated/elastic_attribution/de3/de3-200-pA-sigma0.8.json`  9d3c5aff1eceed5806d8fb007730ed1a7b4f2d36ba8dee7fd01e52962f521d57
+- `validation/generated/elastic_attribution/de3/de3-200-pinned.json`  23b897ff060fab214d388f64a62e8c2bd0c74a4e07295ea6af242ed2441bb1db
+- `validation/generated/elastic_attribution/de3/de3-200-pp-only.json`  fb4f6fe3bdf088d780efbb4e05c9f2699468c5bced34ea4fa4569be795f7e50e
 
 <!-- body below is rendered from the Git projection of the JSON record -->
 
@@ -67,9 +67,9 @@ Input files (sha256):
 
 ## Provenance
 
-- recorded git HEAD c7c8b662c268b2bcf8237a317a34369cd5905c52; recorded status of validation/scripts/elastic_attribution: dirty: M validation/scripts/elastic_attribution/de3_probes.py;  M validation/scripts/elastic_attribution/de4_parse.py;  M validation/scripts/elastic_attribution/de5_sampling.py
-- script sha256 recorded at summary time: common.py 29171edbda46e951, de0_kernels.py 38e5ec2dbe285af1, de3_probes.py 257ae085db885c5e, make_variant_tables.py beafad7d90f4a4d6
+- recorded git HEAD d2bce93c1f521b89ef7fd1176a9fe7a5ac927a9e; recorded status of validation/scripts/elastic_attribution: dirty: M validation/scripts/elastic_attribution/de3_probes.py
+- script sha256 recorded at summary time: common.py 29171edbda46e951, de0_kernels.py 38e5ec2dbe285af1, de3_probes.py c4e01676fc3e2840, make_variant_tables.py beafad7d90f4a4d6
 - script sha256 recorded for the run (staged copies, if any): none recorded
 - table files sha256: elastic-proton-1fd24cff23d3f7e72aabcda2af8bc70ad47b81755f94a2ca55890cb6ae52c591.json ab5e2a357ab53060, elastic-proton-1fd24cff23d3f7e72aabcda2af8bc70ad47b81755f94a2ca55890cb6ae52c591.npz 1028bb67f57bc96e
 - backend warp-cpu float64, single process True; seeds {'150': 20990100, '200': 20990101}; runs (seed, n, batches, table id, wall s) in `runs` of de3-summary.json
-- the run files were produced with the scripts whose hashes are recorded in the logged run metadata (log directory names not recorded in this record)
+- the run files were produced with the scripts whose hashes are recorded in the logged run metadata: 20261015T113620Z-de3-emonly-150, 20261015T113649Z-de3-pinned-150, 20261015T113747Z-de3-all-150, 20261015T113844Z-de3-pp-only-150, 20261015T113941Z-de3-pA-only-150, 20261015T114038Z-de3-pA-sigma0.8-150, 20261015T114134Z-de3-pA-Rx1.2-150, 20261015T114231Z-de3-pA-s0.5-150, 20261015T114328Z-de3-pA-s0.9-150, 20261015T114424Z-de3-pA-gauss-150, 20261015T114521Z-de3-emonly-200, 20261015T114600Z-de3-pinned-200, 20261015T114716Z-de3-all-200, 20261015T114832Z-de3-pp-only-200, 20261015T114947Z-de3-pA-only-200, 20261015T115101Z-de3-pA-sigma0.8-200, 20261015T115216Z-de3-pA-Rx1.2-200, 20261015T115331Z-de3-pA-s0.5-200, 20261015T115446Z-de3-pA-s0.9-200, 20261015T115601Z-de3-pA-gauss-200

@@ -286,9 +286,10 @@ def write_outputs(
     text = json.dumps(proj, indent=1, sort_keys=True) + "\n"
     (outdir / "git" / json_name).write_text(text)
     # render from the committed form (sorted keys), so a re-render of the committed JSON reproduces the body
+    md = header_text + BODY_MARKER + "\n" + render(json.loads(text))
     (outdir / "git" / md_name).write_text(
-        header_text + BODY_MARKER + "\n" + render(json.loads(text))
-    )
+        md.rstrip("\n") + "\n"
+    )  # exactly one final newline (end-of-file-fixer)
 
 
 @contextlib.contextmanager

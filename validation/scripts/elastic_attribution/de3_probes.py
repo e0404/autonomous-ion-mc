@@ -193,7 +193,12 @@ def render_check_base(doc: dict[str, Any]) -> str:
 
 
 def check_base(
-    energy: int, n: int, batches: int, out: Path, reuse_runs: bool = False
+    energy: int,
+    n: int,
+    batches: int,
+    out: Path,
+    reuse_runs: bool = False,
+    logs: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     """Pre-D-E3 check (plan 3.1): the base copy ``all`` equals the pinned table bit for bit at the same seed.
 
@@ -585,7 +590,14 @@ def main(argv: list[str] | None = None) -> int:
         with c.scoped_cache_env(scratch):
             print(
                 json.dumps(
-                    check_base(a.energy, a.histories, a.batches, a.out, reuse_runs=a.reuse_runs),
+                    check_base(
+                        a.energy,
+                        a.histories,
+                        a.batches,
+                        a.out,
+                        reuse_runs=a.reuse_runs,
+                        logs=tuple(a.logs or ()),
+                    ),
                     indent=1,
                 )
             )
