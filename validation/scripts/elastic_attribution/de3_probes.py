@@ -249,8 +249,10 @@ SCRIPT_REL = "validation/scripts/elastic_attribution/de3_probes.py"
 
 def read_logs(names: list[str], root: Path | None = None) -> dict[str, Any]:
     """Provenance of logged runs from their ``meta.json`` (``<root>/test-logs/<name>/meta.json``): per run the label (variant and energy parsed
-    from ``de3-<variant>-<E>``), commit, git status (clean / dirty with the lines) and start / end times, and per commit the blob hash of
-    ``de3_probes.py`` (``git rev-parse <commit>:<path>``). Groups: runs sharing commit and status."""
+    from ``de3-`` / ``de6b-`` / ``de6c-<variant>-<E>``), commit, git status (clean / dirty with the lines), start / end times, the
+    ``scripts_sha256`` of the logged runner if present (the strongest binding of the executed bytes) and the binding of the executed
+    ``de3_probes.py``: **clean** commit -> the executed bytes ARE the blob at the recorded commit (``git rev-parse <commit>:<path>``, "bound: clean
+    commit"); **dirty** working tree -> "unbound (dirty working tree)", no blob is derived. Groups: runs sharing commit and status."""
     import re
     import subprocess
 
@@ -263,22 +265,33 @@ def read_logs(names: list[str], root: Path | None = None) -> dict[str, Any]:
     runs = []
     for n in names:
         meta = json.loads((base / n / "meta.json").read_text())
-        m = re.fullmatch(r"de3-(.+)-(\d+)", meta["label"])
+        m = re.fullmatch(r"(?:de3|de6b|de6c)-(.+)-(\d+)", meta["label"])
         status = [x for x in (meta.get("git_status") or "").splitlines() if x.strip()]
+        sha = meta.get("scripts_sha256")
+        blob = None
+        if not status:
+            out = subprocess.run(
+                ["git", "rev-parse", f"{meta['commit']}:{SCRIPT_REL}"],
+                cwd=c.REPO,
+                capture_output=True,
+                text=True,
+            )
+            blob = out.stdout.strip() if out.returncode == 0 else None
+        binding = ("bound: scripts_sha256 recorded by the runner" if sha else
+                   "bound: clean commit (executed bytes = blob at the recorded commit)" if (not status and blob) else
+                   "unbound (dirty working tree)" if status else "unbound (blob not found)")  # fmt: skip
         runs.append({"log": n, "label": meta["label"], "variant": m.group(1) if m else None, "energy": int(m.group(2)) if m else None,
-                     "commit": meta["commit"], "status_clean": not status, "status_lines": status,
-                     "start_utc": meta.get("start_utc"), "end_utc": meta.get("end_utc"), "exit_code": meta.get("exit_code")})  # fmt: skip
-    blobs = {}
-    for cm in sorted({r["commit"] for r in runs}):
-        out = subprocess.run(
-            ["git", "rev-parse", f"{cm}:{SCRIPT_REL}"], cwd=c.REPO, capture_output=True, text=True
-        )
-        blobs[cm] = out.stdout.strip() if out.returncode == 0 else None
-    groups: dict[tuple[str, bool, tuple[str, ...]], list[dict[str, Any]]] = {}
+                     "commit": meta["commit"], "status_clean": not status, "status_lines": status, "script_blob": blob,
+                     "scripts_sha256": sha, "binding": binding, "start_utc": meta.get("start_utc"), "end_utc": meta.get("end_utc"),
+                     "exit_code": meta.get("exit_code")})  # fmt: skip
+    groups: dict[tuple[str, bool, tuple[str, ...], str], list[dict[str, Any]]] = {}
     for r in runs:
-        groups.setdefault((r["commit"], r["status_clean"], tuple(r["status_lines"])), []).append(r)
-    grp = [{"commit": k[0], "status_clean": k[1], "status_lines": list(k[2]), "runs": len(v), "first_start_utc": min(x["start_utc"] for x in v),
-            "last_end_utc": max(x["end_utc"] for x in v), "script_blob": blobs[k[0]]} for k, v in sorted(groups.items())]  # fmt: skip
+        groups.setdefault(
+            (r["commit"], r["status_clean"], tuple(r["status_lines"]), r["binding"]), []
+        ).append(r)
+    grp = [{"commit": k[0], "status_clean": k[1], "status_lines": list(k[2]), "binding": k[3], "runs": len(v),
+            "first_start_utc": min(x["start_utc"] for x in v), "last_end_utc": max(x["end_utc"] for x in v),
+            "script_blob": v[0]["script_blob"]} for k, v in sorted(groups.items())]  # fmt: skip
     return {"run_logs": runs, "run_groups": grp}
 
 
@@ -458,7 +471,7 @@ def _composition_sentence(derived: dict[str, Any]) -> str:
 
 
 def _run_provenance_lines(pv: dict[str, Any]) -> list[str]:
-    """Derived from the recorded log metadata: which commit and git status produced which group of runs."""
+    """Derived from the recorded log metadata: which commit and git status produced which group of runs, and how the executed bytes are bound."""
     groups = pv.get("run_groups")
     if not groups:
         return [
@@ -469,9 +482,11 @@ def _run_provenance_lines(pv: dict[str, Any]) -> list[str]:
         status = (
             "clean" if g.get("status_clean") else "dirty: " + "; ".join(g.get("status_lines", []))
         )
+        blob = (f"; de3_probes.py blob {g['script_blob']} (`git rev-parse <commit>:validation/scripts/elastic_attribution/de3_probes.py`)"
+                if g.get("script_blob") else "")  # fmt: skip
         out.append(
-            f"- {g['runs']} logged run(s) at commit {g['commit']} with git status {status} (first start {g['first_start_utc']}, last end {g['last_end_utc']}); "
-            f"executable source de3_probes.py at that commit: blob {g.get('script_blob')} (`git rev-parse <commit>:validation/scripts/elastic_attribution/de3_probes.py`)"
+            f"- {g['runs']} logged run(s) at commit {g['commit']} with git status {status} (first start {g['first_start_utc']}, "
+            f"last end {g['last_end_utc']}); binding of the executed bytes: {g.get('binding')}{blob}"
         )
     out.append(
         "- runs: " + ", ".join(f"{r['variant']}/{r['energy']}" for r in pv.get("run_logs", []))

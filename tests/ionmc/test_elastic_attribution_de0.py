@@ -81,6 +81,7 @@ def test_kstar_sign_pinned_on_asymmetric_idd() -> None:
 
 
 # --- Git projection of the exploratory records (decision 0041: explicit allowlist) ---
+import copy  # noqa: E402
 import fnmatch  # noqa: E402
 import importlib  # noqa: E402
 import json  # noqa: E402
@@ -981,7 +982,7 @@ def _fake_cdf_dir(d: Path) -> Path:
     return d
 
 
-def _toy_table(der: Path, idx: int, parameters: dict) -> str:
+def _toy_table(der: Path, idx: int, exploratory: dict) -> str:
     """A real (tiny) table file pair whose id is the recomputable ``table_id`` of its sidecar."""
     from ionmc.nuclear.build import table_id
 
@@ -990,7 +991,7 @@ def _toy_table(der: Path, idx: int, parameters: dict) -> str:
     side = {
         "schema": "toy",
         "npz_sha256": de_common.sha256_file(tmp),
-        "exploratory": {"parameters": parameters, "cdf_sources": []},
+        "exploratory": exploratory,
     }
     side["table_id"] = table_id(side)
     tmp.rename(der / f"elastic-proton-{side['table_id']}.npz")
@@ -998,7 +999,9 @@ def _toy_table(der: Path, idx: int, parameters: dict) -> str:
     return side["table_id"]
 
 
-def _de6_fixture(tmp_path: Path, mutate: object = None, post: object = None) -> dict:
+def _de6_fixture(
+    tmp_path: Path, mutate: object = None, post: object = None, edit: object = None
+) -> dict:
     """Frozen D-E6 inputs on real files: CDF files, toy tables with recomputable ids, the lineage manifest written by ``write_lineage``,
     D-E4 case records, the CDF error record and run files with the real V5 geometry. ``mutate(ctx)`` edits the in-memory documents before they
     are written, ``post(ctx)`` tampers with the files afterwards."""
@@ -1021,15 +1024,40 @@ def _de6_fixture(tmp_path: Path, mutate: object = None, post: object = None) -> 
         "swap-pp-sigma": 0.89,
         "swap-all": 1.0,
     }
-    ids = {
-        v: _toy_table(scratch / "derived", i, {"variant": v})
-        for i, v in enumerate(d6.LINEAGE_VARIANTS)
-    }
+    ratios = (
+        tmp_path / "de4-ratios.json"
+    )  # the committed ratios record (sigma source of the p-p sigma arms)
+    from validation.scripts.elastic_attribution import de5_sampling as de5
+
+    ratios.write_text(json.dumps({"cases": {str(n): {cl: {"signatures": {sg: {"ratio": 1.0 + 0.01 * (n + 1), "ratio_se": 0.01} for sg in de5.SIGNATURES}}
+                                                     for cl in (("O-16", "H-1") if n < 5 else ("C-12",))} for n in range(10)}}))  # fmt: skip
+    sigma = d6.load_sigma_factors(ratios)
+    cites = [
+        {
+            k: q[k]
+            for k in ("case", "row", "energy_mev", "primaries", "npz_sha256", "sidecar_sha256")
+        }
+        for q in prov
+    ]
+    ids = {}
+    for i, v in enumerate(d6.LINEAGE_VARIANTS):
+        if v == "all":
+            ex = {"d_e3_variant": "all", "source_table_id": c.TABLE_ID, "parameters": {}}
+        else:
+            ex = {
+                "d_e6_variant": v,
+                "source_table_id": c.TABLE_ID,
+                "parameters": d6.expected_parameters(v, sigma),
+                "cdf_sources": [dict(q) for q in cites],
+            }
+        if edit is not None:
+            edit(v, ex)
+        ids[v] = _toy_table(scratch / "derived", i, ex)
     (scratch / "variants.json").write_text(
         json.dumps({"variants": {v: {"table_id": t} for v, t in ids.items()}})
     )
     out = tmp_path / "out"
-    d6.write_lineage(scratch, prov, cdf_dir, out)
+    d6.write_lineage(scratch, prov, cdf_dir, out, ratios_path=ratios)
     manifest = out / d6.LINEAGE_FILE
     de4 = {n: {"case": n, "cdf": {"npz_sha256": prov[n]["npz_sha256"]},
                "classes": {"O-16": {"events": prov[n]["class_events"]["O-16"]}, "H-1": {"events": prov[n]["class_events"]["H-1"] // 2}}}
@@ -1040,7 +1068,8 @@ def _de6_fixture(tmp_path: Path, mutate: object = None, post: object = None) -> 
         "leave_one_energy_out_at_150": {"dF": 1e-4},
     }
     one = {**terms, "F_total_error": math.sqrt(0.0002**2 + 1e-4**2 + 1e-4**2)}
-    err = {"150": one, "200": one, "n_boot": 200, "seed": d6.CDF_SEED, "n_z": 100, "gain_dz_mm": 2.0,
+    err = {"150": one, "200": one, "n_boot": 200, "seed_base": d6.CDF_SEED, "seeds": {"150": d6.CDF_SEED + 150, "200": d6.CDF_SEED + 200},
+           "n_z": 100, "gain_dz_mm": 2.0,
            "source_energies_mev": [30.0, 50.0, 100.0, 150.0, 200.0],
            "events_per_energy": {"O-16": [q["class_events"]["O-16"] for q in prov], "H-1": [q["class_events"]["H-1"] for q in prov]},
            "lineage": {"cdf_sources": [{"case": q["case"], "energy_mev": q["energy_mev"], "npz_sha256": q["npz_sha256"]} for q in prov]}}  # fmt: skip
@@ -1071,7 +1100,8 @@ def _de6_fixture(tmp_path: Path, mutate: object = None, post: object = None) -> 
                 "recoil_total_mev_per_primary": 0.3,
             }  # fmt: skip
     ctx = SimpleNamespace(files=files, err=err, de4=de4, scratch=scratch, cdf_dir=cdf_dir, ids=ids, out=out, manifest=manifest,
-                          runs=tmp_path / "runs", de4_dir=tmp_path / "de4", cdf_error=tmp_path / "cdf-error.json", prov=prov, tmp=tmp_path)  # fmt: skip
+                          runs=tmp_path / "runs", de4_dir=tmp_path / "de4", cdf_error=tmp_path / "cdf-error.json", prov=prov, tmp=tmp_path,
+                          ratios=ratios, err_true=copy.deepcopy(err))  # fmt: skip
     if mutate is not None:
         mutate(ctx)
     ctx.runs.mkdir()
@@ -1091,8 +1121,9 @@ def _de6_fixture(tmp_path: Path, mutate: object = None, post: object = None) -> 
 def _summarize(ctx):  # type: ignore[no-untyped-def]
     from validation.scripts.elastic_attribution import de6_swap as d6
 
-    return d6.summarize(ctx.runs, ctx.out, ctx.cdf_error, ratios_path=ctx.tmp / "none.json", scratch=ctx.scratch,
-                        manifest_path=ctx.manifest, cdf_dir=ctx.cdf_dir, de4_dir=ctx.de4_dir)  # fmt: skip
+    return d6.summarize(ctx.runs, ctx.out, ctx.cdf_error, ratios_path=ctx.ratios, scratch=ctx.scratch,
+                        manifest_path=ctx.manifest, cdf_dir=ctx.cdf_dir, de4_dir=ctx.de4_dir,
+                        recompute=lambda d: ctx.err_true)  # fmt: skip
 
 
 def test_de6_summary_end_to_end_on_real_files_of_the_frozen_geometry(tmp_path: Path) -> None:
@@ -1162,7 +1193,8 @@ def _err(fn):  # type: ignore[no-untyped-def]
     "mutation",
     [
         _err(lambda e: e.__setitem__("n_boot", 100)),
-        _err(lambda e: e.__setitem__("seed", 1)),
+        _err(lambda e: e.__setitem__("seed_base", 1)),
+        _err(lambda e: e["seeds"].__setitem__("150", 20990200)),  # the per-energy bootstrap seeds are bound
         _err(lambda e: e.__setitem__("source_energies_mev", [30.0, 50.0, 100.0, 150.0])),
         _err(lambda e: e.pop("lineage")),
         _err(lambda e: e["lineage"]["cdf_sources"][0].__setitem__("npz_sha256", "f" * 64)),
@@ -1172,7 +1204,7 @@ def _err(fn):  # type: ignore[no-untyped-def]
         _err(lambda e: e["events_per_energy"]["O-16"].__setitem__(2, 1)),  # wrong event count
         _err(lambda e: e["events_per_energy"]["H-1"].__setitem__(0, e["events_per_energy"]["H-1"][0] // 2)),
     ],
-    ids=["n-boot", "seed", "energies", "no-lineage", "sha-mismatch", "inflated", "quadrature", "nan", "counts-O", "counts-H"],
+    ids=["n-boot", "seed", "energy-seed", "energies", "no-lineage", "sha-mismatch", "inflated", "quadrature", "nan", "counts-O", "counts-H"],
 )  # fmt: skip
 def test_de6_cdf_error_gate_checks_numbers_not_labels(tmp_path: Path, mutation: object) -> None:
     ctx = _de6_fixture(tmp_path, mutation)
@@ -1228,7 +1260,7 @@ def test_load_sources_reads_the_symmetrised_flag_and_the_bootstrap_mirrors(tmp_p
         d6.load_sources(cdf_dir)
 
 
-def test_run_log_provenance_is_derived_from_the_meta_json(tmp_path: Path) -> None:
+def test_run_log_provenance_binds_executed_bytes_only_for_clean_runs(tmp_path: Path) -> None:
     import subprocess
 
     from validation.scripts.elastic_attribution import de3_probes as d3
@@ -1237,93 +1269,104 @@ def test_run_log_provenance_is_derived_from_the_meta_json(tmp_path: Path) -> Non
         ["git", "rev-parse", "HEAD"], capture_output=True, text=True, cwd=d3.c.REPO
     ).stdout.strip()
     root = tmp_path / "test-logs"
-    for name, label, st in (
-        ("2026T1-de3-swap-pA-150", "de3-swap-pA-150", ""),
-        ("2026T2-de3-swap-all-200", "de3-swap-all-200", " M x.py"),
-    ):
+    runs = (("T1-de3-swap-pA-150", "de3-swap-pA-150", "", None), ("T2-de6c-swap-all-200", "de6c-swap-all-200", " M x.py", None),
+            ("T3-de6b-swap-pp-150", "de6b-swap-pp-150", "", {"de3_probes.py": "ab" * 32}))  # fmt: skip
+    for name, label, st, sha in runs:
         (root / name).mkdir(parents=True)
-        (root / name / "meta.json").write_text(json.dumps({"label": label, "commit": head, "git_status": st,
-                                                           "start_utc": "2026-10-15T11:00:00Z", "end_utc": "2026-10-15T11:01:00Z", "exit_code": 0}))  # fmt: skip
-    info = d3.read_logs(["2026T1-de3-swap-pA-150", "2026T2-de3-swap-all-200"], tmp_path)
+        meta = {
+            "label": label,
+            "commit": head,
+            "git_status": st,
+            "start_utc": "2026-10-15T11:00:00Z",
+            "end_utc": "2026-10-15T11:01:00Z",
+            "exit_code": 0,
+        }
+        if sha:
+            meta["scripts_sha256"] = sha
+        (root / name / "meta.json").write_text(json.dumps(meta))
+    info = d3.read_logs([r[0] for r in runs], tmp_path)
     assert [(r["variant"], r["energy"], r["status_clean"]) for r in info["run_logs"]] == [
         ("swap-pA", 150, True),
         ("swap-all", 200, False),
+        ("swap-pp", 150, True),
     ]
-    assert len(info["run_groups"]) == 2 and all(g["commit"] == head for g in info["run_groups"])
+    clean, dirty, hashed = info["run_logs"]
+    assert clean["binding"].startswith("bound: clean commit") and clean["script_blob"]
+    assert (
+        dirty["binding"] == "unbound (dirty working tree)" and dirty["script_blob"] is None
+    )  # never a blob for a dirty run
+    assert hashed["binding"].startswith("bound: scripts_sha256")
     lines = "\n".join(d3._run_provenance_lines(info))
-    assert "clean" in lines and "M x.py" in lines and head in lines and "blob" in lines
+    assert (
+        "bound: clean commit" in lines
+        and "unbound (dirty working tree)" in lines
+        and "M x.py" in lines
+        and head in lines
+    )
 
 
-def test_pp_bootstrap_resamples_physical_events_and_mirrors() -> None:
+def _edit(fn):  # type: ignore[no-untyped-def]
+    return lambda v, ex: fn(ex) if v == "swap-pA" else None
+
+
+@pytest.mark.parametrize(
+    "edit",
+    [
+        lambda v, ex: ex.__setitem__("d_e6_variant", "swap-pp") if v == "swap-pA" else None,  # the table claims another variant (relabelled)
+        _edit(lambda ex: ex.__setitem__("source_table_id", "0" * 64)),  # not derived from the pinned table
+        _edit(lambda ex: ex["parameters"].__setitem__("classes", ["H-1"])),  # wrong classes
+        _edit(lambda ex: ex["parameters"].__setitem__("below_mev_ionmc_shape", 20.0)),  # wrong floor
+        _edit(lambda ex: ex["parameters"].__setitem__("end_edges", "-1 / +1")),  # wrong edge rule
+        _edit(lambda ex: ex["parameters"].__setitem__("interpolation", "linear in E at fixed mu")),
+        _edit(lambda ex: ex["cdf_sources"][0].__setitem__("npz_sha256", "e" * 64)),  # cites another CDF input
+        lambda v, ex: ex["parameters"]["sigma"]["factors"].__setitem__(0, 2.0) if v == "swap-all" else None,  # wrong sigma source numbers
+    ],
+    ids=["relabelled", "not-pinned", "classes", "floor", "edges", "interpolation", "cdf-sources", "sigma"],
+)  # fmt: skip
+def test_de6_lineage_checks_table_semantics_not_only_ids(tmp_path: Path, edit: object) -> None:
+    ctx = _de6_fixture(
+        tmp_path, None, None, edit
+    )  # real sidecars with a valid recomputable id but wrong semantics
+    with pytest.raises(SystemExit, match="lineage not bound"):
+        _summarize(ctx)
+
+
+def test_de6_lineage_rejects_a_changed_ratios_record(tmp_path: Path) -> None:
+    def post(ctx):  # type: ignore[no-untyped-def]
+        doc = json.loads(ctx.ratios.read_text())
+        doc["cases"]["3"]["H-1"]["signatures"]["rate_per_primary_after_rule"]["ratio"] = 1.5
+        ctx.ratios.write_text(json.dumps(doc))
+
+    ctx = _de6_fixture(tmp_path, None, post)
+    with pytest.raises(SystemExit, match="sigma source"):
+        _summarize(ctx)
+
+
+def test_de6_cdf_error_is_recomputed_and_must_equal_the_record(tmp_path: Path) -> None:
+    def both(ctx):  # type: ignore[no-untyped-def]
+        x = ctx.err[
+            "150"
+        ]  # a consistent forgery: F_sd and the total change together (the quadrature still holds)
+        x["bootstrap"]["F_sd"] = 0.0003
+        x["F_total_error"] = math.sqrt(
+            0.0003**2 + x["tail_edge"]["dF"] ** 2 + x["leave_one_energy_out_at_150"]["dF"] ** 2
+        )
+
+    ctx = _de6_fixture(tmp_path, both)
+    with pytest.raises(SystemExit, match="not reproduced"):
+        _summarize(ctx)  # the stub recomputation returns the true record
+
+
+def test_error_recomputation_comparison_is_exact_to_1e12() -> None:
     from validation.scripts.elastic_attribution import de6_swap as d6
 
-    rng = np.random.default_rng(1)
-    phys = np.sort(np.cos(np.radians(rng.uniform(16.26, 90.0, 500))))
-    stored = np.sort(
-        np.concatenate([phys, -phys])
-    )  # the stored p-p sample: the (+mu, -mu) pair of each event
-    rep = d6._resample(stored, True, np.random.default_rng(2))
-    assert rep.size == stored.size and np.allclose(rep, -rep[::-1])  # exact symmetry
-    assert (
-        np.unique(np.abs(rep)).size <= phys.size
-    )  # effective sample size: at most N distinct physical values, not 2N
-    plain = d6._resample(phys, False, np.random.default_rng(2))
-    assert plain.size == phys.size and not np.allclose(
-        plain, -plain[::-1]
-    )  # p+A: plain bootstrap, no mirroring
-
-
-@pytest.mark.requires_tables("elastic")
-@pytest.mark.parametrize(
-    "edits",
-    [
-        (("s:So/Beam/BeamPositionDistribution", '"Flat"'),),  # source
-        (("u:So/Beam/BeamEnergySpread", "0.5"),),  # source energy spread
-        (("d:Ge/Source/TransZ", "-1 mm"),),  # source placement
-        (("d:Ph/Default/CutForAllParticles", "0.5 mm"),),  # physics cut
-        (("s:Ph/Default/Type", '"Geant4_Modular_2"'),),  # physics-list type
-        (("s:Ge/Sphere/Material", '"G4_WATER"'),),  # geometry: sphere material
-        (("s:Ge/Target/Type", '"TsBox"'),),  # geometry: target type
-        (("s:Sc/PS/OnlyIncludeParticlesGoing", '"In"'),),  # scorer direction
-        (("sv:Sc/PS/OnlyIncludeParticlesNamed", '1 "neutron"'),),  # scorer particle filter
-        (("b:Sc/PS/IncludeParentID", '"False"'),),  # scorer ID column
-    ],
-    ids=[
-        "position",
-        "energy-spread",
-        "source-z",
-        "cut",
-        "physics-type",
-        "sphere-material",
-        "target-type",
-        "scorer-direction",
-        "scorer-particle",
-        "parent-id",
-    ],
-)
-def test_de4_identification_binds_the_complete_native_configuration(
-    tmp_path: Path, edits: tuple
-) -> None:
-    from validation.scripts.elastic_attribution import de4_parse as de4
-
-    de4.analyse([_water_part(tmp_path)])
-    with pytest.raises(AssertionError):
-        de4.analyse([_water_part(tmp_path, "bad", edits=edits)])
-
-
-@pytest.mark.requires_tables("elastic")
-def test_de4_native_comparison_ignores_comments_and_whitespace_but_not_extra_parameters(
-    tmp_path: Path,
-) -> None:
-    from validation.scripts.elastic_attribution import de4_parse as de4
-
-    d = _water_part(tmp_path)
-    txt = (d / "input.txt").read_text()
-    (d / "input.txt").write_text(
-        "# a new comment\n"
-        + txt.replace("i:Ts/NumberOfThreads = 1", "i:Ts/NumberOfThreads   =   1  # trailing")
-    )
-    de4.analyse([d])  # comment / whitespace changes are not differences
-    (d / "input.txt").write_text(txt + "d:Ge/Target/Extra = 1 mm\n")
-    with pytest.raises(AssertionError):
-        de4.analyse([d])  # an extra parameter is
+    rec = {"150": {"bootstrap": {"F_sd": 0.0002}, "F_total_error": 0.0003}, "n_boot": 200}
+    d6.verify_error_recomputed(rec, copy.deepcopy(rec))
+    off = copy.deepcopy(rec)
+    off["150"]["bootstrap"]["F_sd"] += 1e-9
+    with pytest.raises(SystemExit, match="not reproduced"):
+        d6.verify_error_recomputed(rec, off)
+    off2 = copy.deepcopy(rec)
+    off2["n_boot"] = 100
+    with pytest.raises(SystemExit, match="not reproduced"):
+        d6.verify_error_recomputed(rec, off2)

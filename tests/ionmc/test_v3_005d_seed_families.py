@@ -50,8 +50,10 @@ ELASTIC_USED = {
     20990100,
     20990101,
     20990200,
+    20990350,
+    20990400,
     *(20991000 + c for c in range(10)),
-}  # 20990200: D-E6 CDF bootstrap
+}  # 20990200: D-E6 CDF bootstrap base; 20990350 / 20990400: per-energy seeds (base + 150 / 200)
 VR_CAL = range(20980000, 20985000)
 VR_SANDBOX = range(20989900, 20990000)
 
@@ -78,7 +80,9 @@ def test_investigation_families_are_mutually_disjoint() -> None:
 
 def test_elastic_seeds_inside_family() -> None:
     assert ELASTIC_USED <= set(ELASTIC)
-    assert {20990100, 20990101, 20990200} | set(range(20991000, 20991010)) == ELASTIC_USED
+    assert {20990100, 20990101, 20990200, 20990350, 20990400} | set(
+        range(20991000, 20991010)
+    ) == ELASTIC_USED
     assert 20990001 not in ELASTIC_USED and 20990001 < 20990100  # scratch-only seed, unused
 
 

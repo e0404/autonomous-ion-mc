@@ -196,6 +196,13 @@ def swap_arrays(base: dict[str, np.ndarray], names: tuple[str, ...], sources: di
     return a, stats
 
 
+def expected_parameters(v: str, sigma: dict[str, Any] | None) -> dict[str, Any]:
+    """The frozen sidecar parameters of an arm (the single definition used by the builder and by the lineage check)."""
+    return {"classes": list(SWAP_CLASSES[v]), "interpolation": "linear in E at fixed CDF level of q = 2 p_CM sin(theta_CM/2)",
+            "below_mev_ionmc_shape": SWAP_E_MIN, "sigma": sigma if v in SIGMA_ARMS else "ionmc (unchanged)",
+            "end_edges": "sample min / max of mu_CM"}  # fmt: skip
+
+
 def build_swap_tables(
     scratch: Path = mvt.SCRATCH, cdf_dir: Path = CDF_DIR, ratios_path: Path = RATIOS_PATH
 ) -> dict[str, Any]:
@@ -231,9 +238,7 @@ def build_swap_tables(
         side["npz_sha256"] = sha
         side["exploratory"] = {
             "d_e6_variant": v, "source_table_id": c.TABLE_ID, "purpose": mvt.PURPOSE.replace("D-E3 sensitivity probe (Amendment 19 (b))", "D-E6 swap test (Amendment 19 (e))"),
-            "parameters": {"classes": list(SWAP_CLASSES[v]), "interpolation": "linear in E at fixed CDF level of q = 2 p_CM sin(theta_CM/2)",
-                           "below_mev_ionmc_shape": SWAP_E_MIN,
-                           "sigma": sigma if v in SIGMA_ARMS else "ionmc (unchanged)", "end_edges": "sample min / max of mu_CM"},
+            "parameters": expected_parameters(v, sigma),
             "normalisation": stats,
             "cdf_sources": [{k: q[k] for k in ("case", "row", "energy_mev", "primaries", "npz_sha256", "sidecar_sha256")} for q in prov],
         }  # fmt: skip
@@ -250,7 +255,7 @@ def build_swap_tables(
             "normalisation": stats,
         }
     vj.write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
-    write_lineage(scratch, prov, Path(cdf_dir))
+    write_lineage(scratch, prov, Path(cdf_dir), ratios_path=ratios_path)
     return {v: doc["variants"][v]["table_id"] for v in SWAP_VARIANTS}
 
 
@@ -349,13 +354,13 @@ def finite_sample_error(
     from . import common as _c
 
     water = _c.Water(tab)
-    res: dict[str, Any] = {"n_boot": n_boot, "seed": CDF_SEED, "n_z": n_z, "gain_dz_mm": dz_mm,
+    res: dict[str, Any] = {"n_boot": n_boot, "seed_base": CDF_SEED, "seeds": {"150": CDF_SEED + 150, "200": CDF_SEED + 200}, "n_z": n_z, "gain_dz_mm": dz_mm,
                            "events_per_energy": {cls: [int(m.size) for m in s.mu] for cls, s in sources.items()},
                            "source_energies_mev": [float(x) for x in sources["O-16"].energies],
                            "lineage": {"cdf_sources": [{"case": q["case"], "energy_mev": q["energy_mev"], "npz_sha256": q["npz_sha256"]} for q in (prov or [])],
                                        "kernels": "D-E0 kernels: K* shifted (O-16 + H-1) and G total, swapped shapes, 'table' kind",
                                        "bootstrap": "N physical events resampled with replacement per class and energy; p-p mirrored",
-                                       "n_boot": n_boot, "seed": CDF_SEED, "n_z": n_z, "gain_dz_mm": dz_mm}}  # fmt: skip
+                                       "n_boot": n_boot, "seed_base": CDF_SEED, "seeds": {"150": CDF_SEED + 150, "200": CDF_SEED + 200}, "n_z": n_z, "gain_dz_mm": dz_mm}}  # fmt: skip
     loo = None
     k0, g0, f0 = _kg(tab, water, sources, 150, n_z, dz_mm)
     k1, g1, f1 = _kg(tab, water, _drop_energy(sources, 150.0), 150, n_z, dz_mm)
@@ -477,7 +482,8 @@ GIT_ALLOW_LINEAGE = (
     "cdf_sources/**",
     "settings/**",
 )
-GIT_ALLOW_LONG_LINEAGE = ("variants/*/parameters/sigma/energies_mev", "variants/*/parameters/sigma/table_over_geant4_rate",
+GIT_ALLOW_LONG_LINEAGE = (
+    "sigma_source/sigma/energies_mev", "sigma_source/sigma/table_over_geant4_rate", "sigma_source/sigma/factors","variants/*/parameters/sigma/energies_mev", "variants/*/parameters/sigma/table_over_geant4_rate",
                           "variants/*/parameters/sigma/factors", "settings/source_energies_mev")  # fmt: skip
 
 
@@ -501,7 +507,11 @@ def recompute_table(scratch: Path, table_id_recorded: str) -> tuple[str, str]:
 
 
 def write_lineage(
-    scratch: Path, prov: list[dict[str, Any]], cdf_dir: Path, out: Path = OUT
+    scratch: Path,
+    prov: list[dict[str, Any]],
+    cdf_dir: Path,
+    out: Path = OUT,
+    ratios_path: Path | None = None,
 ) -> dict[str, Any]:
     """The lineage manifest ``de6-lineage.json`` of the built tables (through ``write_outputs``): per variant the table id and npz sha256 RECOMPUTED
     from the files, the sidecar parameters, the source CDF hashes per case and class."""
@@ -518,7 +528,9 @@ def write_lineage(
         variants[v] = {"table_id": tid, "npz_sha256": sha, "parameters": ex.get("parameters", {}),
                        "uses_cdf_sources": v in SWAP_VARIANTS and bool(SWAP_CLASSES.get(v) or v in SIGMA_ARMS),
                        "classes": list(SWAP_CLASSES.get(v, ()))}  # fmt: skip
+    rpath = Path(ratios_path or RATIOS_PATH)
     doc = {"banner": c.BANNER, "pinned_table_id": c.TABLE_ID, "variants": variants,
+           "sigma_source": {"ratios_sha256": c.sha256_file(rpath), "sigma": load_sigma_factors(rpath)},
            "cdf_sources": [{k: q[k] for k in ("case", "row", "energy_mev", "primaries", "npz_sha256", "sidecar_sha256", "class_mu_sha256", "class_events")} for q in prov],
            "settings": {"interpolation": "linear in E at fixed CDF level of q = 2 p_CM sin(theta_CM/2)", "below_mev_ionmc_shape": SWAP_E_MIN,
                         "end_edges": "sample min / max of mu_CM", "n_quantiles": N_Q, "source_energies_mev": [float(q["energy_mev"]) for q in prov]},
@@ -554,6 +566,14 @@ def render_lineage(doc: dict[str, Any]) -> str:
     return "\n".join(out) + "\n"
 
 
+def default_ratios_path() -> Path:
+    """The committed D-E4 ratios record if present, else the generated one."""
+    committed = (
+        c.REPO / "validation" / "results" / "elastic_attribution" / "de4" / "de4-ratios.json"
+    )
+    return committed if committed.is_file() else RATIOS_PATH
+
+
 def default_de4_dir() -> Path:
     """The committed D-E4 records if present, else the generated ones."""
     committed = c.REPO / "validation" / "results" / "elastic_attribution" / "de4"
@@ -571,8 +591,67 @@ def load_de4_records(de4_dir: Path) -> dict[int, dict[str, Any]]:
     return out
 
 
+def _verify_semantics(
+    manifest: dict[str, Any], scratch: Path, ratios_path: Path, problems: list[str]
+) -> None:
+    """Table SEMANTICS (not only recomputed ids): the sidecar of every variant names that variant, derives from the pinned table, carries the
+    frozen parameters of the arm (classes, q-scaled interpolation, 30 MeV floor, sample-extreme end edges, sigma source = the committed ratios
+    record) and cites exactly the CDF sources of the manifest; the manifest agrees with the pinned id, the source energies and the ratios record."""
+    if manifest.get("pinned_table_id") != c.TABLE_ID:
+        problems.append(
+            f"manifest pinned_table_id {manifest.get('pinned_table_id')} != {c.TABLE_ID}"
+        )
+    if manifest.get("settings", {}).get("source_energies_mev") != [30.0, 50.0, 100.0, 150.0, 200.0]:
+        problems.append(
+            "manifest source energies differ from the D-E4 energies (the 200 MeV hold needs the 200 MeV source)"
+        )
+    rp = Path(ratios_path)
+    sig_now = load_sigma_factors(rp) if rp.is_file() else None
+    if sig_now is None:
+        problems.append(f"ratios record {rp} not found (the sigma source of the p-p sigma arms)")
+    elif manifest.get("sigma_source", {}).get("sigma") != sig_now:
+        problems.append(
+            "the manifest's sigma source differs from the committed de4-ratios record (rate ratios of H-1)"
+        )
+    cites = sorted(
+        (q["case"], q["energy_mev"], q["npz_sha256"], q["sidecar_sha256"])
+        for q in manifest.get("cdf_sources", [])
+    )
+    for v, r in manifest.get("variants", {}).items():
+        try:
+            side = json.loads(
+                (mvt._derived(scratch) / f"elastic-proton-{r['table_id']}.json").read_text()
+            )
+        except OSError:
+            continue  # reported by the recomputation
+        ex = side.get("exploratory", {})
+        if v == "all":
+            if ex.get("d_e3_variant") != "all" or ex.get("source_table_id") != c.TABLE_ID:
+                problems.append("all: the sidecar is not the base copy of the pinned table")
+            continue
+        if ex.get("d_e6_variant") != v:
+            problems.append(f"{v}: the sidecar claims the variant {ex.get('d_e6_variant')!r}")
+        if ex.get("source_table_id") != c.TABLE_ID:
+            problems.append(
+                f"{v}: the sidecar derives from {ex.get('source_table_id')}, not the pinned table"
+            )
+        want = expected_parameters(v, sig_now)
+        if ex.get("parameters") != want:
+            problems.append(f"{v}: sidecar parameters differ from the frozen ones")
+        got = sorted(
+            (q["case"], q["energy_mev"], q["npz_sha256"], q["sidecar_sha256"])
+            for q in ex.get("cdf_sources", [])
+        )
+        if got != cites:
+            problems.append(f"{v}: the sidecar cites CDF sources that differ from the manifest")
+
+
 def verify_lineage(
-    manifest: dict[str, Any], scratch: Path, cdf_dir: Path, de4: dict[int, dict[str, Any]]
+    manifest: dict[str, Any],
+    scratch: Path,
+    cdf_dir: Path,
+    de4: dict[int, dict[str, Any]],
+    ratios_path: Path | None = None,
 ) -> dict[str, str]:
     """Bind the manifest to (b) the scratch cache tables recomputed from disk, (c) the CDF files on disk and (d) the committed D-E4 records
     (``cdf.npz_sha256`` and the class event counts). Fail closed; returns the expected table id per run variant."""
@@ -610,9 +689,37 @@ def verify_lineage(
             )
     if len(manifest.get("cdf_sources", [])) != len(WATER_CASES):
         problems.append("the manifest does not list the five water CDF sources")
+    _verify_semantics(manifest, scratch, Path(ratios_path or default_ratios_path()), problems)
     if problems:
         raise SystemExit("lineage not bound (fail closed):\n  " + "\n  ".join(problems))
     return ids
+
+
+def _leaves(x: Any, path: str = "") -> dict[str, Any]:
+    if isinstance(x, dict):
+        return {k: v for key, val in x.items() for k, v in _leaves(val, f"{path}/{key}").items()}
+    if isinstance(x, list):
+        return {k: v for i, val in enumerate(x) for k, v in _leaves(val, f"{path}/{i}").items()}
+    return {path: x}
+
+
+def recompute_error(cdf_dir: Path) -> dict[str, Any]:
+    """The finite-sample CDF error recomputed from the CDF files (deterministic: same seeds and settings as the record)."""
+    sources, prov = load_sources(Path(cdf_dir))
+    return finite_sample_error(sources, 200, prov=prov)
+
+
+def verify_error_recomputed(err: dict[str, Any], recomputed: dict[str, Any]) -> None:
+    """Every numeric term of the record (nominal, bootstrap, tail edge, leave-one-out, total) equals the recomputed one to 1e-12; every
+    non-numeric field (settings, lineage, counts) is equal. Fail closed."""
+    a, b = _leaves(err), _leaves(recomputed)
+    bad = [k for k in sorted(set(a) | set(b)) if k not in a or k not in b
+           or (a[k] != b[k] if not (isinstance(a[k], float) and isinstance(b[k], float)) else abs(a[k] - b[k]) > 1e-12)]  # fmt: skip
+    if bad:
+        raise SystemExit(
+            "CDF error record not reproduced from the CDF files (fail closed): "
+            + ", ".join(bad[:8])
+        )
 
 
 def verify_cdf_error(
@@ -622,14 +729,16 @@ def verify_cdf_error(
     the committed D-E4 class counts (H-1 doubled: the mirrored sample), every term finite, F_total_error = the quadrature of the three terms."""
     problems: list[str] = []
     lin = err.get("lineage", {})
-    if (err.get("n_boot"), err.get("seed"), err.get("n_z"), err.get("gain_dz_mm")) != (
-        200,
-        CDF_SEED,
-        100,
-        2.0,
-    ):
+    settings = (
+        err.get("n_boot"),
+        err.get("seed_base"),
+        err.get("n_z"),
+        err.get("gain_dz_mm"),
+        err.get("seeds"),
+    )
+    if settings != (200, CDF_SEED, 100, 2.0, {"150": CDF_SEED + 150, "200": CDF_SEED + 200}):
         problems.append(
-            f"settings {(err.get('n_boot'), err.get('seed'), err.get('n_z'), err.get('gain_dz_mm'))} != (200, {CDF_SEED}, 100, 2.0)"
+            f"settings {settings} != (200, {CDF_SEED}, 100, 2.0, per-energy seeds {CDF_SEED + 150} / {CDF_SEED + 200})"
         )
     if err.get("source_energies_mev") != [30.0, 50.0, 100.0, 150.0, 200.0]:
         problems.append(f"source energies {err.get('source_energies_mev')}")
@@ -777,6 +886,7 @@ def summarize(
     manifest_path: Path | None = None,
     cdf_dir: Path | None = None,
     de4_dir: Path | None = None,
+    recompute: Any = None,
 ) -> dict[str, Any]:
     from . import de3_probes as d3
 
@@ -786,8 +896,11 @@ def summarize(
     err = json.loads(Path(cdf_error).read_text())
     manifest = json.loads(Path(manifest_path or OUT / LINEAGE_FILE).read_text())
     de4 = load_de4_records(de4_dir or default_de4_dir())
-    ids = verify_lineage(manifest, mvt.resolve_scratch(scratch), Path(cdf_dir or CDF_DIR), de4)
+    ids = verify_lineage(
+        manifest, mvt.resolve_scratch(scratch), Path(cdf_dir or CDF_DIR), de4, ratios_path
+    )
     verify_cdf_error(err, manifest, de4)
+    verify_error_recomputed(err, (recompute or recompute_error)(Path(cdf_dir or CDF_DIR)))
     pop = lambda x: cmp.curve_metrics(x)["peak_over_plateau"]  # noqa: E731
     plat = lambda x: cmp.curve_metrics(x)["plateau"]  # noqa: E731
     f_of = lambda n, d: pop(n) / pop(d)  # noqa: E731
