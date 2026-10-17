@@ -47,7 +47,7 @@ GIT_ALLOW = (
     "bit_for_bit", "energy", "n", "n_batches", "seed", "pinned_id", "all_id", "detail/*", "counters/*",
     "sha256_idd_batches/*", "sha256_recoil_idd_batches/*",
     "rows/*/*/*", "runs/*/*/*", "derived/**",
-    "provenance/git_head", "provenance/git_status_clean", "provenance/git_status_elastic_attribution/*", "provenance/run_logs/*", "provenance/scripts_sha256/*",
+    "provenance/git_head", "provenance/git_status_clean", "provenance/git_status_elastic_attribution/*", "provenance/run_logs/**", "provenance/run_groups/**", "provenance/scripts_sha256/*",
     "provenance/table_files_sha256/*", "provenance/backend", "provenance/precision",
     "provenance/single_process", "provenance/cache_dir", "provenance/seeds/*",
 )  # fmt: skip
@@ -141,7 +141,8 @@ def run_one(
     plateau = (depth >= 20.0) & (depth <= 60.0)
     doc: dict[str, Any] = {
         "banner": c.BANNER, "variant": variant, "mode": mode, "energy": energy, "seed": seed, "n": n, "n_batches": batches,
-        "elastic_table_id": tid, "backend": cfg.run.backend, "precision": cfg.run.precision, "bin_mm": v5b.V5_DZ_MM, "idd_batches": idd_b.tolist(), "unit": "MeV/(g/cm^2)/primary",
+        "elastic_table_id": tid, "backend": cfg.run.backend, "precision": cfg.run.precision, "scoring": {"origin_mm": [float(x) for x in grid.origin_mm], "spacing_mm": [float(x) for x in grid.spacing_mm],
+                    "shape": [int(x) for x in grid.shape], "name": grid.name}, "tallies": [q.name for q in cfg.tallies], "bin_mm": v5b.V5_DZ_MM, "idd_batches": idd_b.tolist(), "unit": "MeV/(g/cm^2)/primary",
         "metrics": {"peak_depth_mm": rm.peak_depth(depth, curve), "r80_mm": rm.r80(depth, curve),
                     "plateau_mean_20_60_mm": float(idd[plateau].mean()), "peak_over_plateau": float(idd.max() / idd[plateau].mean())},
         "valid": bool(v5.clean(res) and res.energy_balance.relative_residual <= 1e-12),
@@ -242,7 +243,46 @@ def check_base(
 SCRIPTS = ("make_variant_tables.py", "de3_probes.py", "de0_kernels.py", "common.py")
 
 
-def provenance(logs: list[str] | None = None) -> dict[str, Any]:
+LOG_ROOT_DEFAULT = "~/.local/share/ionmc-experiment/experiment-v3/telemetry"
+SCRIPT_REL = "validation/scripts/elastic_attribution/de3_probes.py"
+
+
+def read_logs(names: list[str], root: Path | None = None) -> dict[str, Any]:
+    """Provenance of logged runs from their ``meta.json`` (``<root>/test-logs/<name>/meta.json``): per run the label (variant and energy parsed
+    from ``de3-<variant>-<E>``), commit, git status (clean / dirty with the lines) and start / end times, and per commit the blob hash of
+    ``de3_probes.py`` (``git rev-parse <commit>:<path>``). Groups: runs sharing commit and status."""
+    import re
+    import subprocess
+
+    base = (
+        Path(
+            root or os.path.expanduser(os.environ.get("IONMC_TELEMETRY_DIR", LOG_ROOT_DEFAULT))
+        ).expanduser()
+        / "test-logs"
+    )
+    runs = []
+    for n in names:
+        meta = json.loads((base / n / "meta.json").read_text())
+        m = re.fullmatch(r"de3-(.+)-(\d+)", meta["label"])
+        status = [x for x in (meta.get("git_status") or "").splitlines() if x.strip()]
+        runs.append({"log": n, "label": meta["label"], "variant": m.group(1) if m else None, "energy": int(m.group(2)) if m else None,
+                     "commit": meta["commit"], "status_clean": not status, "status_lines": status,
+                     "start_utc": meta.get("start_utc"), "end_utc": meta.get("end_utc"), "exit_code": meta.get("exit_code")})  # fmt: skip
+    blobs = {}
+    for cm in sorted({r["commit"] for r in runs}):
+        out = subprocess.run(
+            ["git", "rev-parse", f"{cm}:{SCRIPT_REL}"], cwd=c.REPO, capture_output=True, text=True
+        )
+        blobs[cm] = out.stdout.strip() if out.returncode == 0 else None
+    groups: dict[tuple[str, bool, tuple[str, ...]], list[dict[str, Any]]] = {}
+    for r in runs:
+        groups.setdefault((r["commit"], r["status_clean"], tuple(r["status_lines"])), []).append(r)
+    grp = [{"commit": k[0], "status_clean": k[1], "status_lines": list(k[2]), "runs": len(v), "first_start_utc": min(x["start_utc"] for x in v),
+            "last_end_utc": max(x["end_utc"] for x in v), "script_blob": blobs[k[0]]} for k, v in sorted(groups.items())]  # fmt: skip
+    return {"run_logs": runs, "run_groups": grp}
+
+
+def provenance(logs: list[str] | None = None, logs_root: Path | None = None) -> dict[str, Any]:
     """Code state of the record: commit, dirty/untracked state, script and table hashes, backend."""
     import subprocess
 
@@ -260,7 +300,7 @@ def provenance(logs: list[str] | None = None) -> dict[str, Any]:
         "scripts_sha256": {k: c.sha256_file(here / k) for k in SCRIPTS},
         "table_files_sha256": {f.name: c.sha256_file(f) for f in c.table_files()},
         "backend": "warp-cpu", "precision": "float64", "single_process": True,
-        "cache_dir": "<scratch-cache>", "seeds": SEEDS, **({"run_logs": list(logs)} if logs else {}),
+        "cache_dir": "<scratch-cache>", "seeds": SEEDS, **(read_logs(list(logs), logs_root) if logs else {}),
     }  # fmt: skip
 
 
@@ -417,6 +457,28 @@ def _composition_sentence(derived: dict[str, Any]) -> str:
     )
 
 
+def _run_provenance_lines(pv: dict[str, Any]) -> list[str]:
+    """Derived from the recorded log metadata: which commit and git status produced which group of runs."""
+    groups = pv.get("run_groups")
+    if not groups:
+        return [
+            "- the logged run metadata (commit, git status) of the runs is not recorded in this record"
+        ]
+    out = []
+    for g in groups:
+        status = (
+            "clean" if g.get("status_clean") else "dirty: " + "; ".join(g.get("status_lines", []))
+        )
+        out.append(
+            f"- {g['runs']} logged run(s) at commit {g['commit']} with git status {status} (first start {g['first_start_utc']}, last end {g['last_end_utc']}); "
+            f"executable source de3_probes.py at that commit: blob {g.get('script_blob')} (`git rev-parse <commit>:validation/scripts/elastic_attribution/de3_probes.py`)"
+        )
+    out.append(
+        "- runs: " + ", ".join(f"{r['variant']}/{r['energy']}" for r in pv.get("run_logs", []))
+    )
+    return out
+
+
 def render_summary(doc: dict[str, Any]) -> str:
     """Markdown body of ``de3-summary.json``, a pure function of the (projected) record."""
     rows, derived, pv = doc.get("rows", {}), doc.get("derived", {}), doc.get("provenance", {})
@@ -475,8 +537,7 @@ def render_summary(doc: dict[str, Any]) -> str:
               "- script sha256 recorded for the run (staged copies, if any): " + (", ".join(f"{k} {v[:16]}" for k, v in pv.get("runtime_scripts_sha256", {}).items()) or "none recorded"),
               "- table files sha256: " + ", ".join(f"{k} {v[:16]}" for k, v in pv.get("table_files_sha256", {}).items()),
               f"- backend {pv.get('backend')} {pv.get('precision')}, single process {pv.get('single_process')}; seeds {pv.get('seeds')}; runs (seed, n, batches, table id, wall s) in `runs` of de3-summary.json",
-              "- the run files were produced with the scripts whose hashes are recorded in the logged run metadata"
-              + (": " + ", ".join(pv["run_logs"]) if pv.get("run_logs") else " (log directory names not recorded in this record)")]  # fmt: skip
+              *_run_provenance_lines(pv)]  # fmt: skip
     return "\n".join(lines) + "\n"
 
 

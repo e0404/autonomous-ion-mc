@@ -1,4 +1,5 @@
 """Exploratory D-E0 kernels (Amendment 19, report-only): analytic cases."""
+# ruff: noqa: E501  (parametrised mutation tables and synthetic fixtures)
 
 from __future__ import annotations
 
@@ -745,7 +746,7 @@ def _case_record(cs: dict, **over: object) -> dict:
            "energy_mev": float(cs["energy_mev"]),
            "length_cm": cs["length_cm"], "primaries": cs["primaries"],
            "identification": {"geometry_bound": True, "native_input_bound": True},
-           "selection_rule": "fast-proton-on-curve-v2", "off_curve": {}}  # fmt: skip
+           "selection_rule": "fast-proton-on-curve-v2", "off_curve": {}, "cdf": {"npz_sha256": "ab" * 32}}  # fmt: skip
     rec.update(over)
     return rec
 
@@ -775,6 +776,9 @@ def test_de4_combine_requires_exactly_the_ten_validated_cases(tmp_path: Path) ->
     write(7, _case_record(de5.CASES[7], off_curve={"pp_events_not_two_records": 3}))
     with pytest.raises(SystemExit, match="legacy selection schema"):
         de4.validated_case_records(tmp_path)
+    write(7, _case_record(de5.CASES[7], cdf={}))
+    with pytest.raises(SystemExit, match="no CDF hash"):
+        de4.validated_case_records(tmp_path)  # a record from before the CDF lineage binding
     write(7, _case_record(de5.CASES[7]))
     (tmp_path / "de4-case7-copy.json").write_text("{}")
     with pytest.raises(SystemExit, match="unexpected file"):
@@ -959,16 +963,56 @@ def test_de6_h4_recoil_share() -> None:
     )
 
 
-def _de6_fixture(tmp_path: Path, mutate: object = None) -> tuple[Path, Path, Path, Path]:
-    """Synthetic frozen D-E6 inputs; ``mutate`` breaks one binding."""
+def _fake_cdf_dir(d: Path) -> Path:
+    """Five water CDF files of synthetic samples: O-16 plain, H-1 as the mirrored (+mu, -mu) pairs."""
+    d.mkdir(parents=True, exist_ok=True)
+    rng = np.random.default_rng(3)
+    for n, e in enumerate((30.0, 50.0, 100.0, 150.0, 200.0)):
+        o = np.sort(np.cos(np.radians(rng.exponential(10.0 + n, 300) + 0.5)))
+        phys = np.cos(np.radians(rng.uniform(16.26, 90.0, 120)))
+        z = {"O-16_mu_sorted": o, "H-1_mu_sorted": np.sort(np.concatenate([phys, -phys]))}
+        npz = d / f"de4-case{n}-cdf.npz"
+        np.savez(npz, **z)
+        side = {"case": n, "row": 14 + n, "material": "water", "energy_mev": e, "primaries": 4_000_000, "npz": npz.name,
+                "npz_sha256": de_common.sha256_file(npz),
+                "classes": {"O-16": {"p_cm_mev": 400.0 + 20 * n, "symmetrised": False},
+                            "H-1": {"p_cm_mev": 250.0 + 10 * n, "symmetrised": True}}}  # fmt: skip
+        (d / f"de4-case{n}-cdf.json").write_text(json.dumps(side))
+    return d
+
+
+def _toy_table(der: Path, idx: int, parameters: dict) -> str:
+    """A real (tiny) table file pair whose id is the recomputable ``table_id`` of its sidecar."""
+    from ionmc.nuclear.build import table_id
+
+    tmp = der / "tmp.npz"
+    np.savez(tmp, x=np.full(4, float(idx)))
+    side = {
+        "schema": "toy",
+        "npz_sha256": de_common.sha256_file(tmp),
+        "exploratory": {"parameters": parameters, "cdf_sources": []},
+    }
+    side["table_id"] = table_id(side)
+    tmp.rename(der / f"elastic-proton-{side['table_id']}.npz")
+    (der / f"elastic-proton-{side['table_id']}.json").write_text(json.dumps(side))
+    return side["table_id"]
+
+
+def _de6_fixture(tmp_path: Path, mutate: object = None, post: object = None) -> dict:
+    """Frozen D-E6 inputs on real files: CDF files, toy tables with recomputable ids, the lineage manifest written by ``write_lineage``,
+    D-E4 case records, the CDF error record and run files with the real V5 geometry. ``mutate(ctx)`` edits the in-memory documents before they
+    are written, ``post(ctx)`` tampers with the files afterwards."""
+    from types import SimpleNamespace
+
     from validation.scripts.elastic_attribution import common as c
     from validation.scripts.elastic_attribution import de6_swap as d6
 
     rng = np.random.default_rng(11)
-    nz = 200
-    shape = np.concatenate([np.full(120, 5.0), np.linspace(5, 30, 30), np.linspace(30, 0, 50)])[:nz]
-    noise = 1.0 + 0.003 * rng.standard_normal((20, nz))  # shared batch noise (CRN)
-    peak_factor = {
+    cdf_dir = _fake_cdf_dir(tmp_path / "cdf")
+    _, prov = d6.load_sources(cdf_dir)
+    scratch = tmp_path / "cache"
+    (scratch / "derived").mkdir(parents=True)
+    peak = {
         "emonly": 1.0,
         "all": 0.86,
         "swap-pA": 0.90,
@@ -977,15 +1021,39 @@ def _de6_fixture(tmp_path: Path, mutate: object = None) -> tuple[Path, Path, Pat
         "swap-pp-sigma": 0.89,
         "swap-all": 1.0,
     }
-    ids = {v: f"{i:064x}" for i, v in enumerate(peak_factor)}
-    ids["emonly"] = c.TABLE_ID
-    cdf_src = [
-        {"case": n, "energy_mev": e, "npz_sha256": f"{n + 1:064x}"}
-        for n, e in enumerate((30.0, 50.0, 100.0, 150.0, 200.0))
-    ]
+    ids = {
+        v: _toy_table(scratch / "derived", i, {"variant": v})
+        for i, v in enumerate(d6.LINEAGE_VARIANTS)
+    }
+    (scratch / "variants.json").write_text(
+        json.dumps({"variants": {v: {"table_id": t} for v, t in ids.items()}})
+    )
+    out = tmp_path / "out"
+    d6.write_lineage(scratch, prov, cdf_dir, out)
+    manifest = out / d6.LINEAGE_FILE
+    de4 = {n: {"case": n, "cdf": {"npz_sha256": prov[n]["npz_sha256"]},
+               "classes": {"O-16": {"events": prov[n]["class_events"]["O-16"]}, "H-1": {"events": prov[n]["class_events"]["H-1"] // 2}}}
+           for n in range(5)}  # fmt: skip
+    terms = {
+        "bootstrap": {"F_sd": 0.0002},
+        "tail_edge": {"dF": 1e-4},
+        "leave_one_energy_out_at_150": {"dF": 1e-4},
+    }
+    one = {**terms, "F_total_error": math.sqrt(0.0002**2 + 1e-4**2 + 1e-4**2)}
+    err = {"150": one, "200": one, "n_boot": 200, "seed": d6.CDF_SEED, "n_z": 100, "gain_dz_mm": 2.0,
+           "source_energies_mev": [30.0, 50.0, 100.0, 150.0, 200.0],
+           "events_per_energy": {"O-16": [q["class_events"]["O-16"] for q in prov], "H-1": [q["class_events"]["H-1"] for q in prov]},
+           "lineage": {"cdf_sources": [{"case": q["case"], "energy_mev": q["energy_mev"], "npz_sha256": q["npz_sha256"]} for q in prov]}}  # fmt: skip
     files: dict = {}
     for e in (150, 200):
-        for v, pf in peak_factor.items():
+        geo = d6.frozen_geometry(e)
+        nz = geo["nz"]
+        shape = np.full(nz, 5.0)
+        shape[120:150] = np.linspace(5, 30, 30)
+        shape[150:200] = np.linspace(30, 0.0, 50)
+        shape[200:] = 0.0
+        noise = 1.0 + 0.003 * rng.standard_normal((20, nz))  # shared batch noise (CRN)
+        for v, pf in peak.items():
             idd = shape[None, :] * noise
             idd[:, 120:] *= pf
             idd[:, :120] *= (
@@ -995,54 +1063,44 @@ def _de6_fixture(tmp_path: Path, mutate: object = None) -> tuple[Path, Path, Pat
             )
             rec = 0.01 * noise * (0.3 if v == "swap-all" else 1.0)
             files[(e, v)] = {
-                "variant": v, "mode": "emonly" if v == "emonly" else "emel", "energy": e,
-                "seed": 20990100 + (e == 200), "n": 100000, "n_batches": 20, "backend": "warp-cpu",
-                "precision": "float64", "elastic_table_id": ids[v], "valid": True,
-                "relative_residual": 0.0,
-                "idd_batches": idd.tolist(), "recoil_idd_batches": rec.tolist(),
+                "variant": v, "mode": "emonly" if v == "emonly" else "emel", "energy": e, "seed": 20990100 + (e == 200),
+                "n": 100000, "n_batches": 20, "backend": "warp-cpu", "precision": "float64",
+                "elastic_table_id": c.TABLE_ID if v == "emonly" else ids[v], "bin_mm": geo["bin_mm"], "unit": geo["unit"],
+                "scoring": geo["scoring"], "tallies": [] if v == "emonly" else ["recoil"], "valid": True,
+                "relative_residual": 0.0, "idd_batches": idd.tolist(), "recoil_idd_batches": rec.tolist(),
                 "recoil_total_mev_per_primary": 0.3,
             }  # fmt: skip
-    one = {
-        "F_total_error": 0.0003,
-        "bootstrap": {"F_sd": 0.0002},
-        "tail_edge": {"dF": 1e-4},
-        "leave_one_energy_out_at_150": {"dF": 1e-4},
-    }
-    err = {
-        "150": one, "200": one, "n_boot": 200, "seed": d6.CDF_SEED, "n_z": 100, "gain_dz_mm": 2.0,
-        "source_energies_mev": [30.0, 50.0, 100.0, 150.0, 200.0],
-        "events_per_energy": {"O-16": [1] * 5, "H-1": [1] * 5},
-        "lineage": {"cdf_sources": [dict(q) for q in cdf_src]},
-    }  # fmt: skip
-    scratch = {
-        "variants": {v: {"table_id": ids[v]} for v in ids if v != "emonly"},
-        "swap_sources": {v: cdf_src for v in d6.SWAP_VARIANTS},
-    }
+    ctx = SimpleNamespace(files=files, err=err, de4=de4, scratch=scratch, cdf_dir=cdf_dir, ids=ids, out=out, manifest=manifest,
+                          runs=tmp_path / "runs", de4_dir=tmp_path / "de4", cdf_error=tmp_path / "cdf-error.json", prov=prov, tmp=tmp_path)  # fmt: skip
     if mutate is not None:
-        mutate(files, err, scratch)
-    runs, cache = tmp_path / "runs", tmp_path / "cache"
-    (cache / "derived").mkdir(parents=True)
-    runs.mkdir()
-    for (e, v), d in files.items():
-        (runs / f"de3-{e}-{v}.json").write_text(json.dumps(d))
+        mutate(ctx)
+    ctx.runs.mkdir()
+    ctx.de4_dir.mkdir()
+    for (e, v), d in ctx.files.items():
+        (ctx.runs / f"de3-{e}-{v}.json").write_text(json.dumps(d))
     for e in (150, 200):
-        (runs / f"check-base-{e}.json").write_text(json.dumps({"bit_for_bit": True}))
-    (cache / "variants.json").write_text(json.dumps({"variants": scratch["variants"]}))
-    for v in d6.SWAP_VARIANTS:
-        tid = scratch["variants"][v]["table_id"]
-        (cache / "derived" / f"elastic-proton-{tid}.json").write_text(
-            json.dumps({"exploratory": {"cdf_sources": scratch["swap_sources"][v]}})
-        )
-    (tmp_path / "cdf-error.json").write_text(json.dumps(err))
-    return runs, tmp_path / "out", tmp_path / "cdf-error.json", cache
+        (ctx.runs / f"check-base-{e}.json").write_text(json.dumps({"bit_for_bit": True}))
+    for n, r in ctx.de4.items():
+        (ctx.de4_dir / f"de4-case{n}.json").write_text(json.dumps(r))
+    ctx.cdf_error.write_text(json.dumps(ctx.err))
+    if post is not None:
+        post(ctx)
+    return ctx
 
 
-def test_de6_summary_end_to_end_on_synthetic_run_files(tmp_path: Path) -> None:
-    """Bound synthetic CRN run files: the summary, its allowlisted Git projection and its report."""
+def _summarize(ctx):  # type: ignore[no-untyped-def]
     from validation.scripts.elastic_attribution import de6_swap as d6
 
-    runs, out, cdf, cache = _de6_fixture(tmp_path)
-    doc = d6.summarize(runs, out, cdf, ratios_path=tmp_path / "none.json", scratch=cache)
+    return d6.summarize(ctx.runs, ctx.out, ctx.cdf_error, ratios_path=ctx.tmp / "none.json", scratch=ctx.scratch,
+                        manifest_path=ctx.manifest, cdf_dir=ctx.cdf_dir, de4_dir=ctx.de4_dir)  # fmt: skip
+
+
+def test_de6_summary_end_to_end_on_real_files_of_the_frozen_geometry(tmp_path: Path) -> None:
+    """Toy tables with recomputable ids, a real lineage manifest and the real V5 geometry (identity is covered; the physics is synthetic)."""
+    from validation.scripts.elastic_attribution import de6_swap as d6
+
+    ctx = _de6_fixture(tmp_path)
+    doc = _summarize(ctx)
     b = doc["energies"]["150"]
     assert (
         b["one_minus_F"]["delta"]["both"] > b["one_minus_F"]["delta"]["pA"] > 0
@@ -1054,88 +1112,146 @@ def test_de6_summary_end_to_end_on_synthetic_run_files(tmp_path: Path) -> None:
     assert (
         set(b["h4"]) >= {"all", "swap_all", "ppS"} and b["h4"]["swap_all"]["reduction_vs_base"] > 0
     )
-    proj = json.loads((out / "git" / "de6-summary.json").read_text())
+    proj = json.loads((ctx.out / "git" / "de6-summary.json").read_text())
     assert de_common.git_safety_violations(proj, d6.GIT_ALLOW, d6.GIT_ALLOW_LONG) == []
-    md = (out / "git" / "de6-report.md").read_text()
+    md = (ctx.out / "git" / "de6-report.md").read_text()
     assert "Extended set" in md and "H4" in md and md.endswith("\n") and not md.endswith("\n\n")
+    lin = json.loads(
+        (ctx.out / "git" / "de6-lineage.json").read_text()
+    )  # the manifest through the projection
+    assert de_common.git_safety_violations(
+        lin, d6.GIT_ALLOW_LINEAGE, d6.GIT_ALLOW_LONG_LINEAGE
+    ) == [] and set(lin["variants"]) == set(d6.LINEAGE_VARIANTS)
 
 
-def _set(key: str, value: object, variant: str = "swap-pA"):
-    return lambda files, err, scratch: files[(150, variant)].__setitem__(key, value)
+def _set(key: str, value: object, variant: str = "swap-pA", energy: int = 150):
+    return lambda ctx: ctx.files[(energy, variant)].__setitem__(key, value)
+
+
+def _del(key: str, variant: str = "all"):
+    return lambda ctx: ctx.files[(150, variant)].pop(key)
 
 
 @pytest.mark.parametrize(
     ("mutation", "message"),
     [
-        (_set("seed", 20990101), "seed"),
-        (_set("n", 50000), "frozen"),
-        (_set("n_batches", 10), "frozen"),
-        (_set("elastic_table_id", "0" * 64), "frozen"),
-        (_set("backend", "python"), "frozen"),
-        (_set("precision", "float32"), "frozen"),
-        (_set("variant", "swap-pp"), "frozen"),
-        (_set("energy", 200), "frozen"),
-        (_set("valid", False), "not valid"),
-        (_set("relative_residual", 1e-6), "not valid"),
-        (_set("idd_batches", [[1.0] * 150] * 19), "shape"),
-        (
-            lambda files, err, scratch: files[(150, "all")].pop("backend"),
-            "frozen",
-        ),  # missing metadata
-        (lambda files, err, scratch: files[(150, "all")].pop("relative_residual"), "not valid"),
+        (_set("seed", 20990101), "frozen"), (_set("n", 50000), "frozen"), (_set("n_batches", 10), "frozen"),
+        (_set("elastic_table_id", "0" * 64), "frozen"), (_set("backend", "python"), "frozen"), (_set("precision", "float32"), "frozen"),
+        (_set("variant", "swap-pp"), "frozen"), (_set("energy", 200), "frozen"), (_set("valid", False), "not valid"),
+        (_set("relative_residual", 1e-6), "not valid"), (_set("idd_batches", [[1.0] * 150] * 19), "shape"),
+        (_set("bin_mm", 1.0), "frozen"), (_set("unit", "MeV"), "frozen"), (_set("tallies", []), "frozen"),
+        (_set("scoring", {"origin_mm": [0, 0, 0], "spacing_mm": [1, 1, 1], "shape": [1, 1, 5], "name": "dose"}), "frozen"),
+        (_del("backend"), "frozen"), (_del("relative_residual"), "not valid"), (_del("scoring"), "frozen"), (_del("tallies"), "frozen"),
     ],
-    ids=[
-        "seed",
-        "n",
-        "batches",
-        "table-id",
-        "backend",
-        "precision",
-        "variant",
-        "energy",
-        "valid",
-        "residual",
-        "shape",
-        "no-backend",
-        "no-residual",
-    ],
-)
+    ids=["seed", "n", "batches", "table-id", "backend", "precision", "variant", "energy", "valid", "residual", "shape", "bin", "unit", "tallies",
+         "scoring", "no-backend", "no-residual", "no-scoring", "no-tallies"],
+)  # fmt: skip
 def test_de6_summary_rejects_run_files_not_bound_to_the_frozen_configuration(
     tmp_path: Path, mutation: object, message: str
 ) -> None:
-    from validation.scripts.elastic_attribution import de6_swap as d6
-
-    runs, out, cdf, cache = _de6_fixture(tmp_path, mutation)
+    ctx = _de6_fixture(tmp_path, mutation)
     with pytest.raises(SystemExit, match=message):
-        d6.summarize(runs, out, cdf, ratios_path=tmp_path / "none.json", scratch=cache)
+        _summarize(ctx)
+
+
+def _err(fn):  # type: ignore[no-untyped-def]
+    return lambda ctx: fn(ctx.err)
 
 
 @pytest.mark.parametrize(
     "mutation",
     [
-        lambda files, err, scratch: err.__setitem__("n_boot", 100),
-        lambda files, err, scratch: err.__setitem__("seed", 1),
-        lambda files, err, scratch: err.__setitem__(
-            "source_energies_mev", [30.0, 50.0, 100.0, 150.0]
-        ),
-        lambda files, err, scratch: err.pop("lineage"),
-        lambda files, err, scratch: err["lineage"]["cdf_sources"][0].__setitem__(
-            "npz_sha256", "f" * 64
-        ),
-        lambda files, err, scratch: scratch["swap_sources"].__setitem__(
-            "swap-all", scratch["swap_sources"]["swap-all"][:4]
-        ),
+        _err(lambda e: e.__setitem__("n_boot", 100)),
+        _err(lambda e: e.__setitem__("seed", 1)),
+        _err(lambda e: e.__setitem__("source_energies_mev", [30.0, 50.0, 100.0, 150.0])),
+        _err(lambda e: e.pop("lineage")),
+        _err(lambda e: e["lineage"]["cdf_sources"][0].__setitem__("npz_sha256", "f" * 64)),
+        _err(lambda e: e["150"].__setitem__("F_total_error", 0.5)),  # inflated error
+        _err(lambda e: e["200"].__setitem__("F_total_error", 1e-9)),  # not the quadrature of its terms
+        _err(lambda e: e["150"]["bootstrap"].__setitem__("F_sd", float("nan"))),  # non-finite term
+        _err(lambda e: e["events_per_energy"]["O-16"].__setitem__(2, 1)),  # wrong event count
+        _err(lambda e: e["events_per_energy"]["H-1"].__setitem__(0, e["events_per_energy"]["H-1"][0] // 2)),
     ],
-    ids=["n-boot", "seed", "energies", "no-lineage", "sha-mismatch", "swap-table-sources"],
-)
-def test_de6_summary_rejects_a_cdf_error_record_with_the_wrong_lineage(
-    tmp_path: Path, mutation: object
+    ids=["n-boot", "seed", "energies", "no-lineage", "sha-mismatch", "inflated", "quadrature", "nan", "counts-O", "counts-H"],
+)  # fmt: skip
+def test_de6_cdf_error_gate_checks_numbers_not_labels(tmp_path: Path, mutation: object) -> None:
+    ctx = _de6_fixture(tmp_path, mutation)
+    with pytest.raises(SystemExit, match="CDF error record not bound"):
+        _summarize(ctx)
+
+
+def _tamper_file(path_of):  # type: ignore[no-untyped-def]
+    def post(ctx):  # type: ignore[no-untyped-def]
+        p = path_of(ctx)
+        p.write_bytes(p.read_bytes() + b"x")
+
+    return post
+
+
+@pytest.mark.parametrize(
+    ("post", "message"),
+    [
+        (_tamper_file(lambda c: c.scratch / "derived" / f"elastic-proton-{c.ids['swap-all']}.npz"), "differs from the manifest"),
+        (lambda c: (c.scratch / "derived" / f"elastic-proton-{c.ids['swap-pA']}.npz").unlink(), "missing"),
+        (_tamper_file(lambda c: c.cdf_dir / "de4-case3-cdf.npz"), "CDF file"),
+        (lambda c: (c.cdf_dir / "de4-case1-cdf.npz").unlink(), "CDF file"),
+        (lambda c: (c.de4_dir / "de4-case2.json").write_text(json.dumps({**c.de4[2], "cdf": {"npz_sha256": "0" * 64}})), "committed D-E4 record"),
+        (lambda c: (c.de4_dir / "de4-case0.json").write_text(json.dumps({**c.de4[0], "classes": {"O-16": {"events": 1}, "H-1": {"events": 1}}})), "event counts"),
+    ],
+    ids=["scratch-npz-bytes", "scratch-npz-missing", "cdf-bytes", "cdf-missing", "de4-record-hash", "de4-record-counts"],
+)  # fmt: skip
+def test_de6_identity_binds_scratch_tables_cdf_files_and_de4_records(
+    tmp_path: Path, post: object, message: str
 ) -> None:
+    ctx = _de6_fixture(tmp_path, None, post)
+    with pytest.raises(SystemExit, match=message):
+        _summarize(ctx)
+
+
+def test_load_sources_reads_the_symmetrised_flag_and_the_bootstrap_mirrors(tmp_path: Path) -> None:
     from validation.scripts.elastic_attribution import de6_swap as d6
 
-    runs, out, cdf, cache = _de6_fixture(tmp_path, mutation)
-    with pytest.raises(SystemExit, match="CDF error record not bound"):
-        d6.summarize(runs, out, cdf, ratios_path=tmp_path / "none.json", scratch=cache)
+    cdf_dir = _fake_cdf_dir(tmp_path / "cdf")
+    src, _ = d6.load_sources(cdf_dir)
+    assert src["H-1"].symmetrised is True and src["O-16"].symmetrised is False
+    boot = d6._bootstrap(src, np.random.default_rng(4), ("O-16", "H-1"))
+    for m, orig in zip(boot["H-1"].mu, src["H-1"].mu, strict=True):
+        assert np.allclose(m, -m[::-1]) and m.size == orig.size  # mirrored
+        assert (
+            np.unique(np.abs(m)).size <= orig.size // 2
+        )  # effective sample size: N physical events
+    assert not np.allclose(boot["O-16"].mu[0], -boot["O-16"].mu[0][::-1])
+    side = json.loads((cdf_dir / "de4-case0-cdf.json").read_text())
+    side["classes"]["H-1"]["symmetrised"] = False
+    (cdf_dir / "de4-case0-cdf.json").write_text(json.dumps(side))
+    with pytest.raises(AssertionError, match="symmetrised"):
+        d6.load_sources(cdf_dir)
+
+
+def test_run_log_provenance_is_derived_from_the_meta_json(tmp_path: Path) -> None:
+    import subprocess
+
+    from validation.scripts.elastic_attribution import de3_probes as d3
+
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"], capture_output=True, text=True, cwd=d3.c.REPO
+    ).stdout.strip()
+    root = tmp_path / "test-logs"
+    for name, label, st in (
+        ("2026T1-de3-swap-pA-150", "de3-swap-pA-150", ""),
+        ("2026T2-de3-swap-all-200", "de3-swap-all-200", " M x.py"),
+    ):
+        (root / name).mkdir(parents=True)
+        (root / name / "meta.json").write_text(json.dumps({"label": label, "commit": head, "git_status": st,
+                                                           "start_utc": "2026-10-15T11:00:00Z", "end_utc": "2026-10-15T11:01:00Z", "exit_code": 0}))  # fmt: skip
+    info = d3.read_logs(["2026T1-de3-swap-pA-150", "2026T2-de3-swap-all-200"], tmp_path)
+    assert [(r["variant"], r["energy"], r["status_clean"]) for r in info["run_logs"]] == [
+        ("swap-pA", 150, True),
+        ("swap-all", 200, False),
+    ]
+    assert len(info["run_groups"]) == 2 and all(g["commit"] == head for g in info["run_groups"])
+    lines = "\n".join(d3._run_provenance_lines(info))
+    assert "clean" in lines and "M x.py" in lines and head in lines and "blob" in lines
 
 
 def test_pp_bootstrap_resamples_physical_events_and_mirrors() -> None:

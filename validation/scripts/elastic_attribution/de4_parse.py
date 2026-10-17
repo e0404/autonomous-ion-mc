@@ -64,7 +64,7 @@ GIT_ALLOW_CASE = (
     "case", "row", "material", "target", "energy_mev", "length_cm", "primaries", "records", "secondary_definition",
     "pp_events_all", "pp_events_off_curve", "pp_events_after_cm_cut", "pp_cm_cut_deg", "pp_events_removed_by_cm_cut",
     "theta_2mm_deg", "theta_3mm_deg", "ke_filter/*", "classification/*", "secondary_on_p+H_curve/*", "off_curve/*", "selection_rule", "geant4_summary/*/_selection_rule",
-    "identification/*", "geant4_summary/*/*/*",
+    "identification/*", "cdf/*", "cdf/events/*", "geant4_summary/*/*/*",
     *(f"{_CL}/{k}" for k in (
         "events", "rate_per_primary", "rate_per_primary_se", "rate_per_primary_after_rule", "theta_lab_median_deg",
         "P_theta_lab_gt_theta_2mm", "P_theta_lab_gt_theta_3mm", "T_tail_moment", "theta_lab_mean_1_minus_cos",
@@ -569,7 +569,9 @@ def run(
     cdf: dict[str, Any] | None = {} if cdf_out is not None else None
     doc = analyse(dirs, case, cdf)
     if cdf_out is not None and cdf is not None:
-        write_cdf(cdf, doc, cdf_out)
+        npz = write_cdf(cdf, doc, cdf_out)
+        doc["cdf"] = {"npz_sha256": c.sha256_file(npz), "sidecar_sha256": c.sha256_file(npz.with_suffix(".json")),
+                      "events": {k: int(np.asarray(v["mu"]).size) for k, v in cdf.items()}}  # fmt: skip
     inputs = [
         p for d in dirs for p in (d / "ps.header", d / "ps.phsp", d / "input.txt") if p.is_file()
     ]
@@ -629,6 +631,10 @@ def validated_case_records(outdir: Path) -> dict[str, dict[str, Any]]:
         ) != de5.SELECTION_RULE or "pp_events_not_two_records" in rec.get("off_curve", {}):
             problems.append(
                 f"{ps[0].name}: legacy selection schema (selection_rule {rec.get('selection_rule')!r}, need {de5.SELECTION_RULE!r})"
+            )
+        elif not rec.get("cdf", {}).get("npz_sha256"):
+            problems.append(
+                f"{ps[0].name}: no CDF hash (cdf.npz_sha256); the record predates the lineage binding of D-E6"
             )
         elif not rec.get("identification", {}).get("native_input_bound"):
             problems.append(
