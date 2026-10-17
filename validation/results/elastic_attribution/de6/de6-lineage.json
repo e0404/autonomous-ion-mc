@@ -1,0 +1,261 @@
+{
+ "banner": "Exploratory, report-only (Amendment 19); not evidence; changes no row.",
+ "cdf_sources": [
+  {
+   "case": 0,
+   "class_events": {
+    "H-1": 48206,
+    "O-16": 140322
+   },
+   "class_mu_sha256": {
+    "H-1": "bf6d96cbd489eb8ea8aa646080f73c81c8b6e8963fe5de333614d9ea0e644e4e",
+    "O-16": "9c82334de5f760b6edb8b0045f7e079f7491fe1cc9d9905af610d6a6a36dbfb4"
+   },
+   "energy_mev": 30.0,
+   "npz_sha256": "a393aa37d1c96439e8a42c99ab7575941f1e8269c5bff9f3044b525004c7d23f",
+   "primaries": 20000000,
+   "row": 14,
+   "sidecar_sha256": "222f2a6e08bc6c5c0e72e9d99b46adebdc2c38c06c49b245335358fb6c106f26"
+  },
+  {
+   "case": 1,
+   "class_events": {
+    "H-1": 26702,
+    "O-16": 108606
+   },
+   "class_mu_sha256": {
+    "H-1": "5c4f958bd8d04bb2c89fb0984c1f672f90b2171f443ff92b0edf60cec38d6878",
+    "O-16": "4e5a2bf0b59d7cfabf902a12d6f2a84fc73524fc69365edbe8319280d4734558"
+   },
+   "energy_mev": 50.0,
+   "npz_sha256": "fb087211abd63b7c261a233ecd2f2b256e3c3dd070c73796ee39c152f705681f",
+   "primaries": 20000000,
+   "row": 15,
+   "sidecar_sha256": "e47eb418989ff4baf985e53e51ce6a28c101df0b7518975ad9abb1ee79ce1140"
+  },
+  {
+   "case": 2,
+   "class_events": {
+    "H-1": 14156,
+    "O-16": 46790
+   },
+   "class_mu_sha256": {
+    "H-1": "bbbf11676d4467918625ae707c4f35352121f8da80947d19f69a99995d1c89cb",
+    "O-16": "920f486d944782cecbd037893d71bc0275e9eb2d598ae14e902872d505b9365d"
+   },
+   "energy_mev": 100.0,
+   "npz_sha256": "f1e0387efd51625f9c336f1bab6b0784e13d7a04a5d2a7a780ea81ecfc2118a0",
+   "primaries": 4000000,
+   "row": 16,
+   "sidecar_sha256": "89b94a23427f966d938c9e8dce6c31ba475090cbf763e25572ef1643e710af07"
+  },
+  {
+   "case": 3,
+   "class_events": {
+    "H-1": 12056,
+    "O-16": 20974
+   },
+   "class_mu_sha256": {
+    "H-1": "e5f29af9d5448da85d79da5cbbac1cc60a42ee7af45563d135fbd19d7140a788",
+    "O-16": "d4c08139d765159bc30f6bf97a18ab69afe60dc2966bbf9b32d556fa730dd356"
+   },
+   "energy_mev": 150.0,
+   "npz_sha256": "0f1a0c3d76e4e2e2605b1c8315d42348497d4aca59419360a59541d1523dd4d7",
+   "primaries": 4000000,
+   "row": 17,
+   "sidecar_sha256": "e7aa9f2c7196e120231b0ab72e0e1c49bfd3ab615cfd655a19fd0441d8ac85a9"
+  },
+  {
+   "case": 4,
+   "class_events": {
+    "H-1": 11838,
+    "O-16": 13464
+   },
+   "class_mu_sha256": {
+    "H-1": "eaf04fc1a563946da0d7656c2e55fe0ac0eb5cc5cb866dbe81a4380a3dce0dba",
+    "O-16": "e8d573fe07ecad5b4132a808359be9add57dbadb9812e2b7cd8b50a098577779"
+   },
+   "energy_mev": 200.0,
+   "npz_sha256": "a2ac4acba11d8cef9c27cb5a49115cc9d47945754824f3d5acc0c31d731b45b2",
+   "primaries": 4000000,
+   "row": 18,
+   "sidecar_sha256": "6a6dd26e74f3e9b820646dbfdcb045f2fa30a85e8003dfa00e0d045bbf9d9f64"
+  }
+ ],
+ "definition": "table ids and npz hashes recomputed from the table files; CDF hashes from the D-E4 CDF files; bound by de6_swap --de6-summary",
+ "note_git": "Git projection (decision 0041): explicit allowlist of dimensionless ratios, per-primary rates and probabilities, kinematic statistics, kernel integrals, counts and flags; no absolute cross sections, no distributions or per-point arrays. The complete record is regenerated into validation/generated/ by the committed module.",
+ "pinned_table_id": "1fd24cff23d3f7e72aabcda2af8bc70ad47b81755f94a2ca55890cb6ae52c591",
+ "settings": {
+  "below_mev_ionmc_shape": 30.0,
+  "end_edges": "sample min / max of mu_CM",
+  "interpolation": "linear in E at fixed CDF level of q = 2 p_CM sin(theta_CM/2)",
+  "n_quantiles": 256,
+  "source_energies_mev": [
+   30.0,
+   50.0,
+   100.0,
+   150.0,
+   200.0
+  ]
+ },
+ "sigma_source": {
+  "ratios_sha256": "7807cb09ffb8dfba73a561979bd366f9e92c58a83363b254eaf71049b30b2365",
+  "sigma": {
+   "energies_mev": [
+    30.0,
+    50.0,
+    100.0,
+    150.0,
+    200.0
+   ],
+   "factors": [
+    1.023942266221308,
+    1.0031581102647689,
+    0.9693671159291625,
+    0.8583191725796697,
+    0.8629804309764525
+   ],
+   "table_over_geant4_rate": [
+    0.976617562326377,
+    0.996851831996917,
+    1.031600911117637,
+    1.1650677649370338,
+    1.158774827452937
+   ]
+  }
+ },
+ "variants": {
+  "all": {
+   "npz_sha256": "84c371e94faffd56cb7b494befdd258527ba4e6fdb2faac4d24a3ad82ac221fc",
+   "table_id": "08a10dd42ec6c913e26673e3770e778e81330ac73f2756a4ea403ac629c2cb50",
+   "uses_cdf_sources": false
+  },
+  "swap-all": {
+   "classes": [
+    "O-16",
+    "H-1"
+   ],
+   "npz_sha256": "177b6839af4397d0e657a148aee8507a5a8e1a9fb1cf9ac0e7c70c37e0bdf644",
+   "parameters": {
+    "below_mev_ionmc_shape": 30.0,
+    "classes": [
+     "O-16",
+     "H-1"
+    ],
+    "end_edges": "sample min / max of mu_CM",
+    "interpolation": "linear in E at fixed CDF level of q = 2 p_CM sin(theta_CM/2)",
+    "sigma": {
+     "energies_mev": [
+      30.0,
+      50.0,
+      100.0,
+      150.0,
+      200.0
+     ],
+     "factors": [
+      1.023942266221308,
+      1.0031581102647689,
+      0.9693671159291625,
+      0.8583191725796697,
+      0.8629804309764525
+     ],
+     "table_over_geant4_rate": [
+      0.976617562326377,
+      0.996851831996917,
+      1.031600911117637,
+      1.1650677649370338,
+      1.158774827452937
+     ]
+    }
+   },
+   "table_id": "69d3581511aa78d01bec5f09fe1538668e7d2369a11aec4253410e3ce4d03d2c",
+   "uses_cdf_sources": true
+  },
+  "swap-both": {
+   "classes": [
+    "O-16",
+    "H-1"
+   ],
+   "npz_sha256": "09e37ca2c934444ab816ddd189935ca9591e8a8d9ccdca9d437e991839fc34ad",
+   "parameters": {
+    "below_mev_ionmc_shape": 30.0,
+    "classes": [
+     "O-16",
+     "H-1"
+    ],
+    "end_edges": "sample min / max of mu_CM",
+    "interpolation": "linear in E at fixed CDF level of q = 2 p_CM sin(theta_CM/2)",
+    "sigma": "ionmc (unchanged)"
+   },
+   "table_id": "1082dfc68cf0f73ba523bae50c3cf8692c24e3dde726abb480ca15f98c2e97d6",
+   "uses_cdf_sources": true
+  },
+  "swap-pA": {
+   "classes": [
+    "O-16"
+   ],
+   "npz_sha256": "2cbe0feb6a533fd82920a844813a507efbb6e70c1dc223b8bab8703ba28ec0b5",
+   "parameters": {
+    "below_mev_ionmc_shape": 30.0,
+    "classes": [
+     "O-16"
+    ],
+    "end_edges": "sample min / max of mu_CM",
+    "interpolation": "linear in E at fixed CDF level of q = 2 p_CM sin(theta_CM/2)",
+    "sigma": "ionmc (unchanged)"
+   },
+   "table_id": "89090af08a53541c0fdb4294052237de6ca1739dafad2f41ba98ab9227d47cdc",
+   "uses_cdf_sources": true
+  },
+  "swap-pp": {
+   "classes": [
+    "H-1"
+   ],
+   "npz_sha256": "5f3981ec6576019e9abaade11a9b3859332f55811e7f51b6ab69125a533e9b41",
+   "parameters": {
+    "below_mev_ionmc_shape": 30.0,
+    "classes": [
+     "H-1"
+    ],
+    "end_edges": "sample min / max of mu_CM",
+    "interpolation": "linear in E at fixed CDF level of q = 2 p_CM sin(theta_CM/2)",
+    "sigma": "ionmc (unchanged)"
+   },
+   "table_id": "0366f9d116c0cc335bfe3e3157c72b4be04f59baf8eee86ac464e90eec09335f",
+   "uses_cdf_sources": true
+  },
+  "swap-pp-sigma": {
+   "npz_sha256": "9d31435af82cf44e583d759a6d205e15665be62e1f36a79f9384445ccdc2add3",
+   "parameters": {
+    "below_mev_ionmc_shape": 30.0,
+    "end_edges": "sample min / max of mu_CM",
+    "interpolation": "linear in E at fixed CDF level of q = 2 p_CM sin(theta_CM/2)",
+    "sigma": {
+     "energies_mev": [
+      30.0,
+      50.0,
+      100.0,
+      150.0,
+      200.0
+     ],
+     "factors": [
+      1.023942266221308,
+      1.0031581102647689,
+      0.9693671159291625,
+      0.8583191725796697,
+      0.8629804309764525
+     ],
+     "table_over_geant4_rate": [
+      0.976617562326377,
+      0.996851831996917,
+      1.031600911117637,
+      1.1650677649370338,
+      1.158774827452937
+     ]
+    }
+   },
+   "table_id": "cbb4495f9c88d24c200580966a535bc6b331da7ed806bdfe468f92697cf3be64",
+   "uses_cdf_sources": true
+  }
+ }
+}
