@@ -196,6 +196,25 @@ def swap_arrays(base: dict[str, np.ndarray], names: tuple[str, ...], sources: di
     return a, stats
 
 
+def build_variant(variant: str, base: dict[str, np.ndarray], names: tuple[str, ...], sources: dict[str, ClassSource],
+                  sigma: dict[str, list[float]] | None) -> tuple[dict[str, np.ndarray], dict[str, Any]]:  # fmt: skip
+    """The arrays (and the normalisation statistics) of one arm: ``all`` = the pinned arrays; a swap arm = :func:`swap_arrays` with the arm's classes
+    and, for the sigma arms, the sigma factors."""
+    if variant == "all":
+        return {k: v.copy() for k, v in base.items()}, {}
+    return swap_arrays(
+        base, names, sources, SWAP_CLASSES[variant], sigma if variant in SIGMA_ARMS else None
+    )
+
+
+def build_variant_arrays(variant: str, pinned_table: tuple[dict[str, np.ndarray], tuple[str, ...]], cdfs: dict[str, ClassSource],
+                         sigma_factors: dict[str, list[float]]) -> dict[str, np.ndarray]:  # fmt: skip
+    """Pure builder used by ``--build`` and by the content verification of ``--de6-summary``: ``pinned_table`` = (arrays, target names),
+    ``cdfs`` = the Geant4 CDF sources, ``sigma_factors`` = the sigma_pp scaling of the committed ratios record."""
+    base, names = pinned_table
+    return build_variant(variant, base, names, cdfs, sigma_factors)[0]
+
+
 def expected_parameters(v: str, sigma: dict[str, Any] | None) -> dict[str, Any]:
     """The frozen sidecar parameters of an arm (the single definition used by the builder and by the lineage check)."""
     return {"classes": list(SWAP_CLASSES[v]), "interpolation": "linear in E at fixed CDF level of q = 2 p_CM sin(theta_CM/2)",
@@ -227,9 +246,7 @@ def build_swap_tables(
     sources, prov = load_sources(cdf_dir)
     sigma = load_sigma_factors(ratios_path)
     for v in SWAP_VARIANTS:
-        arrays, stats = swap_arrays(
-            base, names, sources, SWAP_CLASSES[v], sigma if v in SIGMA_ARMS else None
-        )
+        arrays, stats = build_variant(v, base, names, sources, sigma)
         mvt._assert_table(arrays, names, check_ends=not SWAP_CLASSES[v])
         tmp = der / "tmp-swap.npz"
         np.savez(tmp, **arrays)
@@ -481,6 +498,7 @@ GIT_ALLOW_LINEAGE = (
     "variants/**",
     "cdf_sources/**",
     "settings/**",
+    "sigma_source/**",
 )
 GIT_ALLOW_LONG_LINEAGE = (
     "sigma_source/sigma/energies_mev", "sigma_source/sigma/table_over_geant4_rate", "sigma_source/sigma/factors","variants/*/parameters/sigma/energies_mev", "variants/*/parameters/sigma/table_over_geant4_rate",
@@ -646,12 +664,57 @@ def _verify_semantics(
             problems.append(f"{v}: the sidecar cites CDF sources that differ from the manifest")
 
 
+def _verify_content(
+    manifest: dict[str, Any],
+    scratch: Path,
+    cdf_dir: Path,
+    ratios_path: Path,
+    pinned_dir: Path,
+    problems: list[str],
+) -> None:
+    """Table CONTENTS are rebuilt, not asserted: every array of every variant is rebuilt from the pinned table, the CDF files and the committed
+    ratios record with :func:`build_variant_arrays` (the builder of ``--build``) and compared with the npz on disk (``np.array_equal``)."""
+    pj, pz = (
+        Path(pinned_dir) / f"elastic-proton-{c.TABLE_ID}.json",
+        Path(pinned_dir) / f"elastic-proton-{c.TABLE_ID}.npz",
+    )
+    if not (pj.is_file() and pz.is_file()) or not Path(ratios_path).is_file():
+        problems.append(
+            "the pinned table or the ratios record needed to rebuild the arms is missing"
+        )
+        return
+    names = tuple(json.loads(pj.read_text())["target_names"])
+    with np.load(pz, allow_pickle=False) as z:
+        base = {k: z[k] for k in z.files}
+    try:
+        sources, _ = load_sources(Path(cdf_dir))
+    except (AssertionError, OSError, KeyError) as exc:
+        problems.append(f"the CDF sources needed to rebuild the arms cannot be loaded: {exc}")
+        return
+    sigma = load_sigma_factors(Path(ratios_path))
+    for v, r in manifest.get("variants", {}).items():
+        zp = mvt._derived(scratch) / f"elastic-proton-{r['table_id']}.npz"
+        if not zp.is_file():
+            continue  # reported by the recomputation
+        want = build_variant_arrays(v, (base, names), sources, sigma)
+        with np.load(zp, allow_pickle=False) as z:
+            got = {k: z[k] for k in z.files}
+        bad = sorted(set(got) ^ set(want)) + [
+            k for k in want if k in got and not np.array_equal(got[k], want[k])
+        ]
+        if bad:
+            problems.append(
+                f"{v}: the table contents differ from the rebuild from the pinned table, the CDFs and the ratios record: {bad[:4]}"
+            )
+
+
 def verify_lineage(
     manifest: dict[str, Any],
     scratch: Path,
     cdf_dir: Path,
     de4: dict[int, dict[str, Any]],
     ratios_path: Path | None = None,
+    pinned_dir: Path | None = None,
 ) -> dict[str, str]:
     """Bind the manifest to (b) the scratch cache tables recomputed from disk, (c) the CDF files on disk and (d) the committed D-E4 records
     (``cdf.npz_sha256`` and the class event counts). Fail closed; returns the expected table id per run variant."""
@@ -690,6 +753,14 @@ def verify_lineage(
     if len(manifest.get("cdf_sources", [])) != len(WATER_CASES):
         problems.append("the manifest does not list the five water CDF sources")
     _verify_semantics(manifest, scratch, Path(ratios_path or default_ratios_path()), problems)
+    _verify_content(
+        manifest,
+        scratch,
+        Path(cdf_dir),
+        Path(ratios_path or default_ratios_path()),
+        Path(pinned_dir or mvt.REAL_CACHE / "derived"),
+        problems,
+    )
     if problems:
         raise SystemExit("lineage not bound (fail closed):\n  " + "\n  ".join(problems))
     return ids
@@ -887,6 +958,7 @@ def summarize(
     cdf_dir: Path | None = None,
     de4_dir: Path | None = None,
     recompute: Any = None,
+    pinned_dir: Path | None = None,
 ) -> dict[str, Any]:
     from . import de3_probes as d3
 
@@ -897,7 +969,12 @@ def summarize(
     manifest = json.loads(Path(manifest_path or OUT / LINEAGE_FILE).read_text())
     de4 = load_de4_records(de4_dir or default_de4_dir())
     ids = verify_lineage(
-        manifest, mvt.resolve_scratch(scratch), Path(cdf_dir or CDF_DIR), de4, ratios_path
+        manifest,
+        mvt.resolve_scratch(scratch),
+        Path(cdf_dir or CDF_DIR),
+        de4,
+        ratios_path,
+        pinned_dir,
     )
     verify_cdf_error(err, manifest, de4)
     verify_error_recomputed(err, (recompute or recompute_error)(Path(cdf_dir or CDF_DIR)))

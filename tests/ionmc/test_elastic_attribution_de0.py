@@ -982,12 +982,12 @@ def _fake_cdf_dir(d: Path) -> Path:
     return d
 
 
-def _toy_table(der: Path, idx: int, exploratory: dict) -> str:
+def _toy_table(der: Path, idx: int, exploratory: dict, arrays: dict | None = None) -> str:
     """A real (tiny) table file pair whose id is the recomputable ``table_id`` of its sidecar."""
     from ionmc.nuclear.build import table_id
 
     tmp = der / "tmp.npz"
-    np.savez(tmp, x=np.full(4, float(idx)))
+    np.savez(tmp, **(arrays if arrays is not None else {"x": np.full(4, float(idx))}))
     side = {
         "schema": "toy",
         "npz_sha256": de_common.sha256_file(tmp),
@@ -1000,7 +1000,11 @@ def _toy_table(der: Path, idx: int, exploratory: dict) -> str:
 
 
 def _de6_fixture(
-    tmp_path: Path, mutate: object = None, post: object = None, edit: object = None
+    tmp_path: Path,
+    mutate: object = None,
+    post: object = None,
+    edit: object = None,
+    tamper: object = None,
 ) -> dict:
     """Frozen D-E6 inputs on real files: CDF files, toy tables with recomputable ids, the lineage manifest written by ``write_lineage``,
     D-E4 case records, the CDF error record and run files with the real V5 geometry. ``mutate(ctx)`` edits the in-memory documents before they
@@ -1012,7 +1016,7 @@ def _de6_fixture(
 
     rng = np.random.default_rng(11)
     cdf_dir = _fake_cdf_dir(tmp_path / "cdf")
-    _, prov = d6.load_sources(cdf_dir)
+    sources, prov = d6.load_sources(cdf_dir)
     scratch = tmp_path / "cache"
     (scratch / "derived").mkdir(parents=True)
     peak = {
@@ -1039,6 +1043,16 @@ def _de6_fixture(
         }
         for q in prov
     ]
+    names = ("H-1", "O-16")
+    grid = np.array([10.0, 30.0, 60.0, 150.0, 250.0])
+    base = {"grid_e_mev": grid, "valid": np.ones((2, 5), dtype=np.int8), "sigma_barn": np.arange(10, dtype=float).reshape(2, 5) + 1.0,
+            "p_cm_mev": np.array([[200.0] * 5, [250.0, 300.0, 350.0, 450.0, 500.0]]), "edges_mu": np.tile(np.linspace(-1.0, 1.0, 257), (2, 5, 1))}  # fmt: skip
+    pinned = tmp_path / "pinned"  # the toy pinned table
+    pinned.mkdir()
+    np.savez(pinned / f"elastic-proton-{c.TABLE_ID}.npz", **base)
+    (pinned / f"elastic-proton-{c.TABLE_ID}.json").write_text(
+        json.dumps({"target_names": list(names)})
+    )
     ids = {}
     for i, v in enumerate(d6.LINEAGE_VARIANTS):
         if v == "all":
@@ -1052,7 +1066,12 @@ def _de6_fixture(
             }
         if edit is not None:
             edit(v, ex)
-        ids[v] = _toy_table(scratch / "derived", i, ex)
+        arrays = d6.build_variant_arrays(
+            v, (base, names), sources, sigma
+        )  # the builder of --build, from the toy pinned table
+        if tamper is not None:
+            tamper(v, arrays)
+        ids[v] = _toy_table(scratch / "derived", i, ex, arrays)
     (scratch / "variants.json").write_text(
         json.dumps({"variants": {v: {"table_id": t} for v, t in ids.items()}})
     )
@@ -1100,7 +1119,7 @@ def _de6_fixture(
                 "recoil_total_mev_per_primary": 0.3,
             }  # fmt: skip
     ctx = SimpleNamespace(files=files, err=err, de4=de4, scratch=scratch, cdf_dir=cdf_dir, ids=ids, out=out, manifest=manifest,
-                          runs=tmp_path / "runs", de4_dir=tmp_path / "de4", cdf_error=tmp_path / "cdf-error.json", prov=prov, tmp=tmp_path,
+                          runs=tmp_path / "runs", de4_dir=tmp_path / "de4", pinned=pinned, cdf_error=tmp_path / "cdf-error.json", prov=prov, tmp=tmp_path,
                           ratios=ratios, err_true=copy.deepcopy(err))  # fmt: skip
     if mutate is not None:
         mutate(ctx)
@@ -1123,7 +1142,7 @@ def _summarize(ctx):  # type: ignore[no-untyped-def]
 
     return d6.summarize(ctx.runs, ctx.out, ctx.cdf_error, ratios_path=ctx.ratios, scratch=ctx.scratch,
                         manifest_path=ctx.manifest, cdf_dir=ctx.cdf_dir, de4_dir=ctx.de4_dir,
-                        recompute=lambda d: ctx.err_true)  # fmt: skip
+                        recompute=lambda d: ctx.err_true, pinned_dir=ctx.pinned)  # fmt: skip
 
 
 def test_de6_summary_end_to_end_on_real_files_of_the_frozen_geometry(tmp_path: Path) -> None:
@@ -1153,6 +1172,10 @@ def test_de6_summary_end_to_end_on_real_files_of_the_frozen_geometry(tmp_path: P
     assert de_common.git_safety_violations(
         lin, d6.GIT_ALLOW_LINEAGE, d6.GIT_ALLOW_LONG_LINEAGE
     ) == [] and set(lin["variants"]) == set(d6.LINEAGE_VARIANTS)
+    assert (
+        len(lin["sigma_source"]["ratios_sha256"]) == 64
+        and len(lin["sigma_source"]["sigma"]["factors"]) == 5
+    )  # survives the projection
 
 
 def _set(key: str, value: object, variant: str = "swap-pA", energy: int = 150):
@@ -1370,3 +1393,50 @@ def test_error_recomputation_comparison_is_exact_to_1e12() -> None:
     off2["n_boot"] = 100
     with pytest.raises(SystemExit, match="not reproduced"):
         d6.verify_error_recomputed(rec, off2)
+
+
+@pytest.mark.parametrize(
+    "tamper",
+    [
+        lambda v, a: a["edges_mu"].__setitem__((1, 2, 100), a["edges_mu"][1, 2, 100] + 1e-6) if v == "swap-pA" else None,  # one edge
+        lambda v, a: a["sigma_barn"].__setitem__((0, 3), a["sigma_barn"][0, 3] * 1.01) if v == "swap-all" else None,  # sigma content
+        lambda v, a: a["sigma_barn"].__setitem__((1, 1), a["sigma_barn"][1, 1] * 1.5) if v == "all" else None,  # the base copy altered
+    ],
+    ids=["edge", "sigma", "base-copy"],
+)  # fmt: skip
+def test_de6_lineage_rebuilds_table_contents(tmp_path: Path, tamper: object) -> None:
+    """A table whose npz has different array content but consistent metadata (valid recomputable id, manifest written from it) is rejected."""
+    ctx = _de6_fixture(tmp_path, tamper=tamper)
+    with pytest.raises(SystemExit, match="table contents differ"):
+        _summarize(ctx)
+
+
+def test_build_variant_arrays_is_pure_and_matches_the_arms() -> None:
+    from validation.scripts.elastic_attribution import de6_swap as d6
+
+    src = {
+        "O-16": _toy_source((30.0, 200.0), (300.0, 480.0)),
+        "H-1": _toy_source((30.0, 200.0), (150.0, 250.0), -0.96, 0.96),
+    }
+    grid = np.array([10.0, 30.0, 60.0, 150.0, 250.0])
+    base = {"grid_e_mev": grid, "valid": np.ones((2, 5), dtype=np.int8), "sigma_barn": np.ones((2, 5)),
+            "p_cm_mev": np.array([[200.0] * 5, [250.0, 300.0, 350.0, 450.0, 500.0]]), "edges_mu": np.tile(np.linspace(-0.9, 0.9, 257), (2, 5, 1))}  # fmt: skip
+    before = {k: v.copy() for k, v in base.items()}
+    sig = {"energies_mev": [30.0, 200.0], "factors": [0.8, 0.9]}
+    a = {
+        v: d6.build_variant_arrays(v, (base, ("H-1", "O-16")), src, sig)
+        for v in d6.LINEAGE_VARIANTS
+    }
+    assert all(
+        np.array_equal(base[k], before[k]) for k in base
+    )  # the pinned arrays are not modified
+    assert all(np.array_equal(a["all"][k], base[k]) for k in base)
+    assert np.array_equal(a["swap-pp-sigma"]["edges_mu"], base["edges_mu"]) and not np.array_equal(
+        a["swap-pp-sigma"]["sigma_barn"], base["sigma_barn"]
+    )
+    assert not np.array_equal(a["swap-pA"]["edges_mu"][1], base["edges_mu"][1]) and np.array_equal(
+        a["swap-pA"]["edges_mu"][0], base["edges_mu"][0]
+    )
+    assert np.array_equal(a["swap-all"]["edges_mu"], a["swap-both"]["edges_mu"]) and np.array_equal(
+        a["swap-all"]["sigma_barn"], a["swap-pp-sigma"]["sigma_barn"]
+    )
