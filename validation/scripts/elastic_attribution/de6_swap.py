@@ -75,6 +75,9 @@ class ClassSource:
     lo: float  # physical range of mu (clip)
     hi: float
     edges_q: np.ndarray  # (nE, 257) q at the 257 equiprobable mu edges [MeV/c]
+    symmetrised: bool = (
+        False  # p-p: the stored sample holds the (+mu, -mu) pair of every physical event
+    )
 
 
 def _edges_q(mu: np.ndarray, p_cm: float, tail_variant: bool = False) -> np.ndarray:
@@ -255,21 +258,32 @@ class SwapShapes(Shapes):
         return super().mu_quantiles(kind, name, e_mev, u)
 
 
+def _resample(m: np.ndarray, symmetrised: bool, rng: np.random.Generator) -> np.ndarray:
+    """One bootstrap replicate of a stored sample. p-p: the sample holds the (+mu, -mu) pair of each physical event, so the N physical
+    events (the non-negative half) are resampled with replacement and each value is mirrored again (effective sample size N, not 2N)."""
+    srt = np.sort(m)
+    if symmetrised:
+        half = srt[srt.size // 2 :]
+        x = rng.choice(half, size=half.size, replace=True)
+        return np.sort(np.concatenate([x, -x]))
+    return np.sort(rng.choice(srt, size=srt.size, replace=True))
+
+
 def _bootstrap(
     sources: dict[str, ClassSource], rng: np.random.Generator, classes: tuple[str, ...]
 ) -> dict[str, ClassSource]:
     out = dict(sources)
     for cls in classes:
         s = sources[cls]
-        mus = [np.sort(rng.choice(m, size=m.size, replace=True)) for m in s.mu]
-        out[cls] = ClassSource(s.energies, mus, s.p_cm, s.lo, s.hi, np.array([_edges_q(m, pc) for m, pc in zip(mus, s.p_cm, strict=True)]))  # fmt: skip
+        mus = [_resample(m, s.symmetrised, rng) for m in s.mu]
+        out[cls] = ClassSource(s.energies, mus, s.p_cm, s.lo, s.hi, np.array([_edges_q(m, pc) for m, pc in zip(mus, s.p_cm, strict=True)]), s.symmetrised)  # fmt: skip
     return out
 
 
 def _tail_variant(sources: dict[str, ClassSource]) -> dict[str, ClassSource]:
     out = {}
     for cls, s in sources.items():
-        out[cls] = ClassSource(s.energies, s.mu, s.p_cm, s.lo, s.hi, np.array([_edges_q(m, pc, True) for m, pc in zip(s.mu, s.p_cm, strict=True)]))  # fmt: skip
+        out[cls] = ClassSource(s.energies, s.mu, s.p_cm, s.lo, s.hi, np.array([_edges_q(m, pc, True) for m, pc in zip(s.mu, s.p_cm, strict=True)]), s.symmetrised)  # fmt: skip
     return out
 
 
@@ -304,7 +318,11 @@ def _kg(
 
 
 def finite_sample_error(
-    sources: dict[str, ClassSource], n_boot: int = 200, n_z: int = 100, dz_mm: float = 2.0
+    sources: dict[str, ClassSource],
+    n_boot: int = 200,
+    n_z: int = 100,
+    dz_mm: float = 2.0,
+    prov: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """The finite-sample CDF error of plan 3.2 / addendum (c)4, on the predicted F = (1 - K*)/(1 + G) of the swapped shape at 150 and 200 MeV:
     (a) sd over ``n_boot`` bootstrap CDFs (both classes resampled), (b) the tail-edge systematic, (c) the leave-one-energy-out check at 150 MeV
@@ -315,7 +333,11 @@ def finite_sample_error(
     water = _c.Water(tab)
     res: dict[str, Any] = {"n_boot": n_boot, "seed": CDF_SEED, "n_z": n_z, "gain_dz_mm": dz_mm,
                            "events_per_energy": {cls: [int(m.size) for m in s.mu] for cls, s in sources.items()},
-                           "source_energies_mev": [float(x) for x in sources["O-16"].energies]}  # fmt: skip
+                           "source_energies_mev": [float(x) for x in sources["O-16"].energies],
+                           "lineage": {"cdf_sources": [{"case": q["case"], "energy_mev": q["energy_mev"], "npz_sha256": q["npz_sha256"]} for q in (prov or [])],
+                                       "kernels": "D-E0 kernels: K* shifted (O-16 + H-1) and G total, swapped shapes, 'table' kind",
+                                       "bootstrap": "N physical events resampled with replacement per class and energy; p-p mirrored",
+                                       "n_boot": n_boot, "seed": CDF_SEED, "n_z": n_z, "gain_dz_mm": dz_mm}}  # fmt: skip
     loo = None
     k0, g0, f0 = _kg(tab, water, sources, 150, n_z, dz_mm)
     k1, g1, f1 = _kg(tab, water, _drop_energy(sources, 150.0), 150, n_z, dz_mm)
@@ -425,6 +447,87 @@ def arithmetic(delta: dict[str, float], se_both: float, se_i: float, obs: float,
             "clause2_holds": bool(abs(r) <= thr), "clause3": _clause3(delta["pA"], delta["pp"], delta["both"], inter)}  # fmt: skip
 
 
+N_FROZEN, BATCHES_FROZEN = 100_000, 20
+
+
+def expected_table_ids(scratch: Path) -> dict[str, Any]:
+    """The expected elastic table id of every run variant (pinned for ``emonly``; otherwise the id recorded in the scratch cache's
+    ``variants.json``), and the CDF sources recorded in the swap tables (sha256 per case)."""
+    ids = mvt.variant_ids(scratch)
+    ids = {"emonly": c.TABLE_ID, **ids}
+    src: dict[str, list[tuple[int, str]]] = {}
+    for v in SWAP_VARIANTS:
+        j = json.loads((mvt._derived(scratch) / f"elastic-proton-{ids[v]}.json").read_text())
+        src[v] = sorted((q["case"], q["npz_sha256"]) for q in j["exploratory"]["cdf_sources"])
+    return {"ids": ids, "swap_cdf_sources": src}
+
+
+def bind_run_files(files: dict[str, dict[str, Any]], energy: int, ids: dict[str, str]) -> None:
+    """Fail closed (``SystemExit``) unless every run file is bound to the frozen D-E6 configuration: variant, energy, n = 1e5, 20 batches, the
+    common seed of the energy, warp-cpu float64, the expected table id, equal 20 x bins array dimensions, and valid (clean, closed balance)."""
+    from . import de3_probes as d3
+
+    problems: list[str] = []
+    dims = set()
+    for v, d in files.items():
+        want = {"variant": v, "energy": energy, "n": N_FROZEN, "n_batches": BATCHES_FROZEN, "seed": d3.SEEDS[energy],
+                "backend": "warp-cpu", "precision": "float64", "elastic_table_id": ids[v],
+                "mode": "emonly" if v == "emonly" else "emel"}  # fmt: skip
+        got = {k: d.get(k) for k in want}
+        if got != want:
+            problems.append(f"{v}: {{found: {got}}} != frozen {want}")
+        arr = np.asarray(d.get("idd_batches", []), dtype=float)
+        if arr.ndim != 2 or arr.shape[0] != BATCHES_FROZEN or arr.shape[1] < 121:
+            problems.append(f"{v}: idd_batches shape {arr.shape} (need {BATCHES_FROZEN} x >= 121)")
+        dims.add(arr.shape)
+        if v != "emonly" and np.asarray(d.get("recoil_idd_batches", [])).shape != arr.shape:
+            problems.append(f"{v}: recoil_idd_batches shape differs from idd_batches")
+        if not d3.run_valid(d):
+            problems.append(
+                f"{v}: run not valid (clean run, relative residual <= 1e-12, lateral part)"
+            )
+    if len(dims) > 1:
+        problems.append(f"array dimensions differ between the runs: {sorted(dims)}")
+    if problems:
+        raise SystemExit(
+            f"{energy} MeV: run files are not bound to the frozen D-E6 configuration (fail closed):\n  "
+            + "\n  ".join(problems)
+        )
+
+
+def verify_cdf_error_lineage(
+    err: dict[str, Any], swap_sources: dict[str, list[tuple[int, str]]]
+) -> None:
+    """Fail closed unless the CDF error record carries the frozen settings and the sha256 of exactly the CDF sources recorded in the swap tables."""
+    problems = []
+    lin = err.get("lineage", {})
+    if (err.get("n_boot"), err.get("seed"), err.get("n_z"), err.get("gain_dz_mm")) != (
+        200,
+        CDF_SEED,
+        100,
+        2.0,
+    ):
+        problems.append(
+            f"settings {(err.get('n_boot'), err.get('seed'), err.get('n_z'), err.get('gain_dz_mm'))} != (200, {CDF_SEED}, 100, 2.0)"
+        )
+    if err.get("source_energies_mev") != [30.0, 50.0, 100.0, 150.0, 200.0]:
+        problems.append(f"source energies {err.get('source_energies_mev')}")
+    if not all(len(v) == 5 for v in err.get("events_per_energy", {}).values()) or set(
+        err.get("events_per_energy", {})
+    ) != {"O-16", "H-1"}:
+        problems.append("events per energy missing or incomplete")
+    rec = sorted((q["case"], q["npz_sha256"]) for q in lin.get("cdf_sources", []))
+    if not rec:
+        problems.append("no CDF source lineage recorded")
+    for v, src in swap_sources.items():
+        if src != rec:
+            problems.append(
+                f"CDF sources of the swap table {v} differ from the lineage of the error record"
+            )
+    if problems:
+        raise SystemExit("CDF error record not bound (fail closed):\n  " + "\n  ".join(problems))
+
+
 def extended_arithmetic(delta: dict[str, float], se_all: float, se_i: float, obs: float, se_obs: float, se_cdf: float,
                         threshold_floor: float = 0.010) -> dict[str, Any]:  # fmt: skip
     """Addendum (c)3: ``delta`` has pA, pp, ppS (pp sigma arm) and all. I_all = Delta(all) - sum of the main effects; the closure residual
@@ -477,7 +580,11 @@ def recoil_h4(
 
 
 def summarize(
-    runs: Path, out: Path, cdf_error: Path, ratios_path: Path | None = None
+    runs: Path,
+    out: Path,
+    cdf_error: Path,
+    ratios_path: Path | None = None,
+    scratch: Path | None = None,
 ) -> dict[str, Any]:
     from . import de3_probes as d3
 
@@ -485,6 +592,8 @@ def summarize(
     ref = c.v11_reference()
     arch = c.json_payload(c.RUN_V11)["verdict"]["energies"]
     err = json.loads(Path(cdf_error).read_text())
+    expected = expected_table_ids(mvt.resolve_scratch(scratch))
+    verify_cdf_error_lineage(err, expected["swap_cdf_sources"])
     pop = lambda x: cmp.curve_metrics(x)["peak_over_plateau"]  # noqa: E731
     plat = lambda x: cmp.curve_metrics(x)["plateau"]  # noqa: E731
     f_of = lambda n, d: pop(n) / pop(d)  # noqa: E731
@@ -498,9 +607,7 @@ def summarize(
     for e in (150, 200):
         names = ("emonly", "all", *SWAP_VARIANTS)
         files = {v: json.loads((runs / f"de3-{e}-{v}.json").read_text()) for v in names}
-        bad = [v for v, d in files.items() if not d3.run_valid(d)]
-        if bad:
-            raise SystemExit(f"{e} MeV: run files not valid (fail closed): {bad}")
+        bind_run_files(files, e, expected["ids"])
         a = {v: np.asarray(d["idd_batches"]) for v, d in files.items()}
         den, base = a["emonly"], a["all"]
         x = {
@@ -796,20 +903,31 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", type=Path, default=OUT)
     ap.add_argument("--bootstrap", type=int, default=200)
     ap.add_argument("--skip-error", action="store_true", help="--build: tables only")
+    ap.add_argument(
+        "--cdf-error-only",
+        action="store_true",
+        help="recompute only the finite-sample CDF error record (no table build)",
+    )
     a = ap.parse_args(argv)
+    if a.cdf_error_only:
+        sources, prov = load_sources(a.cdf_dir)
+        err = finite_sample_error(sources, a.bootstrap, prov=prov)
+        a.out.mkdir(parents=True, exist_ok=True)
+        (a.out / "cdf-error.json").write_text(json.dumps(err, indent=1, sort_keys=True) + "\n")
+        print(json.dumps({e: err[e]["F_total_error"] for e in ("150", "200")}))
     if a.build:
         scratch = mvt.resolve_scratch(a.scratch_cache)
         ids = build_swap_tables(scratch, a.cdf_dir)
         print(json.dumps(ids, indent=1))
         print(json.dumps(mvt.preflight(scratch)["per_variant"].keys().__repr__()))
         if not a.skip_error:
-            sources, _ = load_sources(a.cdf_dir)
-            err = finite_sample_error(sources, a.bootstrap)
+            sources, prov = load_sources(a.cdf_dir)
+            err = finite_sample_error(sources, a.bootstrap, prov=prov)
             a.out.mkdir(parents=True, exist_ok=True)
             (a.out / "cdf-error.json").write_text(json.dumps(err, indent=1, sort_keys=True) + "\n")
             print(json.dumps(err, indent=1))
     if a.de6_summary:
-        summarize(a.runs, a.out, a.out / "cdf-error.json")
+        summarize(a.runs, a.out, a.out / "cdf-error.json", scratch=a.scratch_cache)
     return 0
 
 

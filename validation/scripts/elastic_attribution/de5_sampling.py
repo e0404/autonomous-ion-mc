@@ -50,6 +50,7 @@ N_EVENTS = 1_000_000
 SEED_BASE = 20991000  # plus the case index 0-9 (Amendment 19 (f))
 KE_CUT_MEV = 1.0e-4
 PP_CUT_DEG = 16.26
+SELECTION_RULE = "fast-proton-on-curve-v2"  # addendum (c)2: a p-p event is accepted when its fast proton lies on the p+H curve
 GRAPHITE_RHO = 2.0
 HBARC = 197.3269804
 SIGNATURES = (  # keys of a class summary that the Geant4 hook compares
@@ -58,7 +59,7 @@ SIGNATURES = (  # keys of a class summary that the Geant4 hook compares
 )  # fmt: skip
 _CL = "cases/*/classes/*"
 GIT_ALLOW = (
-    "events_per_case", "seed_base", "ke_cut_mev", "classification_rule", "descriptor_note", "thin_target",
+    "selection_rule", "events_per_case", "seed_base", "ke_cut_mev", "classification_rule", "descriptor_note", "thin_target",
     *(f"cases/*/{k}" for k in ("case", "row", "material", "energy_mev", "length_cm", "primaries", "seed", "events_sampled",
                                "range_water_mm", "theta_2mm_deg", "theta_3mm_deg", "total_rate_per_primary",
                                "pp_share_of_elastic_events")),
@@ -392,11 +393,16 @@ def signature_ratios(
 ) -> dict[str, Any]:
     """Hook for the Geant4 comparison (plan D-E5): ``geant4[str(case)][class][signature]`` (the keys of :data:`SIGNATURES` of a
     D-E4 per-class summary) -> ``ionmc / Geant4`` per case, class and signature. A missing case, class or signature key on either
-    side raises ``KeyError`` (nothing is silently dropped); a value that is ``None`` or a zero Geant4 value gives ``None``."""
+    side raises ``KeyError`` (nothing is silently dropped) and a Geant4 case summary whose ``_selection_rule`` is not :data:`SELECTION_RULE`
+    raises ``ValueError``; a value that is ``None`` or a zero Geant4 value gives ``None``."""
     out: dict[str, Any] = {}
     for key, case in table_doc["cases"].items():
         if key not in geant4:
             raise KeyError(f"Geant4 summary has no case {key}")
+        if geant4[key].get("_selection_rule") != SELECTION_RULE:
+            raise ValueError(
+                f"Geant4 summary of case {key} was not made under the selection rule {SELECTION_RULE!r}"
+            )
         out[key] = {}
         for name, cls in case["classes"].items():
             if name not in geant4[key]:
@@ -421,7 +427,7 @@ def run() -> None:
     tab = c.load_table()
     water = c.Water(tab)
     cases = {str(cs["case"]): sample_case(tab, water, cs) for cs in case_table()}
-    doc = {"banner": c.BANNER, "events_per_case": N_EVENTS, "seed_base": SEED_BASE, "ke_cut_mev": KE_CUT_MEV, "cases": cases,
+    doc = {"banner": c.BANNER, "selection_rule": SELECTION_RULE, "events_per_case": N_EVENTS, "seed_base": SEED_BASE, "ke_cut_mev": KE_CUT_MEV, "cases": cases,
            "descriptor_note": "first-minimum, q-slope and Helm descriptors are recorded, not interpreted (frozen 1-deg estimator picks noise dips in a 256-bin piecewise-uniform table; the 3-sigma variant misses the J1 zero)",
         "classification_rule": "conflict tracks (both residuals < 1e-3, theta_lab below the ~1.8 deg crossover) are p-p iff the event has a secondary proton, else p+A",
         "thin_target": "fixed beam energy, no slowing down, no multiple scattering (as the D-E4 EM-free cases)",

@@ -97,6 +97,7 @@ STEP_MODULES = {
 OWNERS = {
     **STEP_MODULES,
     "de4": "de4_parse",
+    "de6": "de6_swap",
     "de3": "de3_probes",
 }  # every committed JSON directory and the module that owns its allowlist
 
@@ -201,6 +202,10 @@ def _render_pairs() -> list[tuple[str, str, str, str]]:
                     "de3_probes:render_check_base",
                 )
             )
+    for p in (
+        sorted((RESULTS / "de6").glob("de6-summary.json")) if (RESULTS / "de6").is_dir() else []
+    ):
+        out.append(("de6", p.name, "de6-report.md", "de6_swap:render_report"))
     for p in sorted((RESULTS / "de4").glob("*.json")) if (RESULTS / "de4").is_dir() else []:
         if p.name == "de4-ratios.json":
             out.append(("de4", p.name, "de4-ratios-report.md", "de4_parse:render_ratios"))
@@ -372,16 +377,48 @@ Minimum Kinetic Energy of proton: 0.5 MeV
 
 Maximum Kinetic Energy of proton: {emax} MeV
 """
-INPUT = """i:Ts/Seed = {seed}
-d:Ge/Sphere/RMax = {sphere} mm
-s:Ge/Target/Material = "{mat}"
-d:Ge/Target/RMax = {rmax} mm
-d:Ge/Target/HL = {hl} mm
-d:Ge/Target/TransZ = {hl} mm
-d:So/Beam/BeamEnergy = {e0} MeV
-i:So/Beam/NumberOfHistoriesInRun = {input_hist}
-sv:Ph/Default/Modules = {modules}
-"""
+BUNDLES = Path(__file__).resolve().parents[2] / "validation" / "reference_cases" / "topas"
+
+
+def _native_text(
+    mat: str,
+    e0: float,
+    hl_mm: float,
+    seed: int,
+    input_hist: int,
+    modules: str,
+    rmax: float,
+    sphere: float,
+    edits: tuple[tuple[str, str], ...],
+) -> str:
+    """The committed bundle input with seed / histories substituted and the mutations."""
+    import re
+
+    from validation.scripts.elastic_attribution import de4_parse as de4
+    from validation.scripts.elastic_attribution import de5_sampling as de5
+
+    cands = [cs for cs in de5.CASES if cs["topas_material"] == mat and cs["energy_mev"] == e0]
+    cs = next((x for x in cands if abs(x["length_cm"] * 5.0 - hl_mm) < 1e-6), cands[0])
+    j = seed - cs["topas_seed_base"]
+    j = j if 1 <= j <= len(cs["part_histories"]) else 1
+    text = (BUNDLES / de4.bundle_dirname(cs, j) / "input.txt").read_text()
+
+    def sub(name: str, value: str) -> None:
+        nonlocal text
+        text, n = re.subn(
+            rf"^({re.escape(name)}\s*=\s*).*$", lambda m: m.group(1) + value, text, flags=re.M
+        )
+        assert n == 1, name
+
+    sub("i:Ts/Seed", str(seed))
+    sub("i:So/Beam/NumberOfHistoriesInRun", str(input_hist))
+    sub("sv:Ph/Default/Modules", modules)
+    sub("d:Ge/Target/RMax", f"{rmax:g} mm")
+    sub("d:Ge/Sphere/RMax", f"{sphere:g} mm")
+    sub("d:Ge/Target/HL", f"{hl_mm:g} mm")
+    for name, value in edits:
+        sub(name, value)
+    return text
 
 
 def _write_ps(
@@ -396,6 +433,7 @@ def _write_ps(
     modules: str = '1 "g4h-elastic_HP"',
     rmax: float = 10.0,
     sphere: float = 500.0,
+    edits: tuple[tuple[str, str], ...] = (),
 ) -> Path:
     """Write a TOPAS phase space and input.txt; ``recs``: (event, track, parent, E, cos, w_neg)."""
     d.mkdir(parents=True, exist_ok=True)
@@ -426,8 +464,8 @@ def _write_ps(
     (d / "ps.header").write_text(HEADER.format(hist=hist, n=len(recs), emax=e0))
     ih = hist if input_hist is None else input_hist
     (d / "input.txt").write_text(
-        INPUT.format(seed=seed, sphere=sphere, mat=mat, rmax=rmax, hl=hl_mm, e0=e0,
-                     input_hist=ih, modules=modules))  # fmt: skip
+        _native_text(mat, e0, hl_mm, seed, ih, modules, rmax, sphere, edits)
+    )
     return d
 
 
@@ -501,7 +539,8 @@ def test_de4_water_phase_space_is_identified_and_off_curve_tracks_are_excluded(
         doc["classes"]["H-1"]["events"] + doc["pp_events_removed_by_cm_cut"] == 4
     )  # the plural p-p event is excluded
     assert doc["classes"]["O-16"]["rate_per_primary_after_rule"] == pytest.approx(6 / 4_000_000)
-    assert set(doc["geant4_summary"]["3"]) == {"O-16", "H-1"}
+    assert set(doc["geant4_summary"]["3"]) == {"O-16", "H-1", "_selection_rule"}
+    assert doc["selection_rule"] == "fast-proton-on-curve-v2"
 
 
 @pytest.mark.requires_tables("elastic")
@@ -705,7 +744,8 @@ def _case_record(cs: dict, **over: object) -> dict:
     rec = {"case": cs["case"], "row": cs["row"], "material": cs["material"], "target": cs["target"],
            "energy_mev": float(cs["energy_mev"]),
            "length_cm": cs["length_cm"], "primaries": cs["primaries"],
-           "identification": {"geometry_bound": True}}  # fmt: skip
+           "identification": {"geometry_bound": True, "native_input_bound": True},
+           "selection_rule": "fast-proton-on-curve-v2", "off_curve": {}}  # fmt: skip
     rec.update(over)
     return rec
 
@@ -729,6 +769,12 @@ def test_de4_combine_requires_exactly_the_ten_validated_cases(tmp_path: Path) ->
     write(7, _case_record(de5.CASES[7], identification={}))
     with pytest.raises(SystemExit, match="validated case identification"):
         de4.validated_case_records(tmp_path)  # not identified against the frozen matrix
+    write(7, _case_record(de5.CASES[7], selection_rule="exactly-two-on-curve-v1"))
+    with pytest.raises(SystemExit, match="legacy selection schema"):
+        de4.validated_case_records(tmp_path)  # a record of the superseded p-p selection rule
+    write(7, _case_record(de5.CASES[7], off_curve={"pp_events_not_two_records": 3}))
+    with pytest.raises(SystemExit, match="legacy selection schema"):
+        de4.validated_case_records(tmp_path)
     write(7, _case_record(de5.CASES[7]))
     (tmp_path / "de4-case7-copy.json").write_text("{}")
     with pytest.raises(SystemExit, match="unexpected file"):
@@ -744,16 +790,28 @@ def test_signature_ratios_raise_on_missing_class_or_signature() -> None:
 
     sigs = {s: 1.0 for s in de5.SIGNATURES}
     table = {"cases": {"3": {"classes": {"O-16": dict(sigs), "H-1": dict(sigs)}}}}
-    g4 = {"3": {"O-16": {s: 2.0 for s in de5.SIGNATURES}, "H-1": {s: 2.0 for s in de5.SIGNATURES}}}
+    rule = {"_selection_rule": de5.SELECTION_RULE}
+    g4 = {
+        "3": {
+            "O-16": {s: 2.0 for s in de5.SIGNATURES},
+            "H-1": {s: 2.0 for s in de5.SIGNATURES},
+            **rule,
+        }
+    }
     assert de5.signature_ratios(table, g4)["3"]["O-16"]["T_tail_moment"] == pytest.approx(0.5)
     with pytest.raises(KeyError, match="no case 3"):
         de5.signature_ratios(table, {})
     with pytest.raises(KeyError, match="no class H-1"):
-        de5.signature_ratios(table, {"3": {"O-16": g4["3"]["O-16"]}})
+        de5.signature_ratios(table, {"3": {"O-16": g4["3"]["O-16"], **rule}})
+    with pytest.raises(ValueError, match="selection rule"):  # a legacy Geant4 summary is refused
+        de5.signature_ratios(
+            table, {"3": {k: v for k, v in g4["3"].items() if k != "_selection_rule"}}
+        )
     bad = {
         "3": {
             "O-16": g4["3"]["O-16"],
             "H-1": {k: v for k, v in g4["3"]["H-1"].items() if k != "qslope"},
+            **rule,
         }
     }
     with pytest.raises(KeyError, match="no signature qslope"):
@@ -901,8 +959,9 @@ def test_de6_h4_recoil_share() -> None:
     )
 
 
-def test_de6_summary_end_to_end_on_synthetic_run_files(tmp_path: Path) -> None:
-    """Synthetic CRN run files (base, five swap arms, EM-only): summary, Git projection, report."""
+def _de6_fixture(tmp_path: Path, mutate: object = None) -> tuple[Path, Path, Path, Path]:
+    """Synthetic frozen D-E6 inputs; ``mutate`` breaks one binding."""
+    from validation.scripts.elastic_attribution import common as c
     from validation.scripts.elastic_attribution import de6_swap as d6
 
     rng = np.random.default_rng(11)
@@ -918,8 +977,13 @@ def test_de6_summary_end_to_end_on_synthetic_run_files(tmp_path: Path) -> None:
         "swap-pp-sigma": 0.89,
         "swap-all": 1.0,
     }
-    runs = tmp_path / "runs"
-    runs.mkdir()
+    ids = {v: f"{i:064x}" for i, v in enumerate(peak_factor)}
+    ids["emonly"] = c.TABLE_ID
+    cdf_src = [
+        {"case": n, "energy_mev": e, "npz_sha256": f"{n + 1:064x}"}
+        for n, e in enumerate((30.0, 50.0, 100.0, 150.0, 200.0))
+    ]
+    files: dict = {}
     for e in (150, 200):
         for v, pf in peak_factor.items():
             idd = shape[None, :] * noise
@@ -930,18 +994,55 @@ def test_de6_summary_end_to_end_on_synthetic_run_files(tmp_path: Path) -> None:
                 else 1.025 - 0.012 * (v == "swap-all") - 0.006 * (v == "swap-pA")
             )
             rec = 0.01 * noise * (0.3 if v == "swap-all" else 1.0)
-            doc = {"variant": v, "energy": e, "valid": True, "relative_residual": 0.0,
-                   "idd_batches": idd.tolist(), "recoil_idd_batches": rec.tolist(),
-                   "recoil_total_mev_per_primary": 0.3}  # fmt: skip
-            (runs / f"de3-{e}-{v}.json").write_text(json.dumps(doc))
+            files[(e, v)] = {
+                "variant": v, "mode": "emonly" if v == "emonly" else "emel", "energy": e,
+                "seed": 20990100 + (e == 200), "n": 100000, "n_batches": 20, "backend": "warp-cpu",
+                "precision": "float64", "elastic_table_id": ids[v], "valid": True,
+                "relative_residual": 0.0,
+                "idd_batches": idd.tolist(), "recoil_idd_batches": rec.tolist(),
+                "recoil_total_mev_per_primary": 0.3,
+            }  # fmt: skip
+    one = {
+        "F_total_error": 0.0003,
+        "bootstrap": {"F_sd": 0.0002},
+        "tail_edge": {"dF": 1e-4},
+        "leave_one_energy_out_at_150": {"dF": 1e-4},
+    }
+    err = {
+        "150": one, "200": one, "n_boot": 200, "seed": d6.CDF_SEED, "n_z": 100, "gain_dz_mm": 2.0,
+        "source_energies_mev": [30.0, 50.0, 100.0, 150.0, 200.0],
+        "events_per_energy": {"O-16": [1] * 5, "H-1": [1] * 5},
+        "lineage": {"cdf_sources": [dict(q) for q in cdf_src]},
+    }  # fmt: skip
+    scratch = {
+        "variants": {v: {"table_id": ids[v]} for v in ids if v != "emonly"},
+        "swap_sources": {v: cdf_src for v in d6.SWAP_VARIANTS},
+    }
+    if mutate is not None:
+        mutate(files, err, scratch)
+    runs, cache = tmp_path / "runs", tmp_path / "cache"
+    (cache / "derived").mkdir(parents=True)
+    runs.mkdir()
+    for (e, v), d in files.items():
+        (runs / f"de3-{e}-{v}.json").write_text(json.dumps(d))
+    for e in (150, 200):
         (runs / f"check-base-{e}.json").write_text(json.dumps({"bit_for_bit": True}))
-    one = {"F_total_error": 0.0003, "bootstrap": {"F_sd": 0.0002}, "tail_edge": {"dF": 1e-4},
-           "leave_one_energy_out_at_150": {"dF": 1e-4}}  # fmt: skip
-    err = {str(e): one for e in (150, 200)}
+    (cache / "variants.json").write_text(json.dumps({"variants": scratch["variants"]}))
+    for v in d6.SWAP_VARIANTS:
+        tid = scratch["variants"][v]["table_id"]
+        (cache / "derived" / f"elastic-proton-{tid}.json").write_text(
+            json.dumps({"exploratory": {"cdf_sources": scratch["swap_sources"][v]}})
+        )
     (tmp_path / "cdf-error.json").write_text(json.dumps(err))
-    doc = d6.summarize(
-        runs, tmp_path / "out", tmp_path / "cdf-error.json", ratios_path=tmp_path / "none.json"
-    )
+    return runs, tmp_path / "out", tmp_path / "cdf-error.json", cache
+
+
+def test_de6_summary_end_to_end_on_synthetic_run_files(tmp_path: Path) -> None:
+    """Bound synthetic CRN run files: the summary, its allowlisted Git projection and its report."""
+    from validation.scripts.elastic_attribution import de6_swap as d6
+
+    runs, out, cdf, cache = _de6_fixture(tmp_path)
+    doc = d6.summarize(runs, out, cdf, ratios_path=tmp_path / "none.json", scratch=cache)
     b = doc["energies"]["150"]
     assert (
         b["one_minus_F"]["delta"]["both"] > b["one_minus_F"]["delta"]["pA"] > 0
@@ -953,7 +1054,160 @@ def test_de6_summary_end_to_end_on_synthetic_run_files(tmp_path: Path) -> None:
     assert (
         set(b["h4"]) >= {"all", "swap_all", "ppS"} and b["h4"]["swap_all"]["reduction_vs_base"] > 0
     )
-    proj = json.loads((tmp_path / "out" / "git" / "de6-summary.json").read_text())
+    proj = json.loads((out / "git" / "de6-summary.json").read_text())
     assert de_common.git_safety_violations(proj, d6.GIT_ALLOW, d6.GIT_ALLOW_LONG) == []
-    md = (tmp_path / "out" / "git" / "de6-report.md").read_text()
+    md = (out / "git" / "de6-report.md").read_text()
     assert "Extended set" in md and "H4" in md and md.endswith("\n") and not md.endswith("\n\n")
+
+
+def _set(key: str, value: object, variant: str = "swap-pA"):
+    return lambda files, err, scratch: files[(150, variant)].__setitem__(key, value)
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        (_set("seed", 20990101), "seed"),
+        (_set("n", 50000), "frozen"),
+        (_set("n_batches", 10), "frozen"),
+        (_set("elastic_table_id", "0" * 64), "frozen"),
+        (_set("backend", "python"), "frozen"),
+        (_set("precision", "float32"), "frozen"),
+        (_set("variant", "swap-pp"), "frozen"),
+        (_set("energy", 200), "frozen"),
+        (_set("valid", False), "not valid"),
+        (_set("relative_residual", 1e-6), "not valid"),
+        (_set("idd_batches", [[1.0] * 150] * 19), "shape"),
+        (
+            lambda files, err, scratch: files[(150, "all")].pop("backend"),
+            "frozen",
+        ),  # missing metadata
+        (lambda files, err, scratch: files[(150, "all")].pop("relative_residual"), "not valid"),
+    ],
+    ids=[
+        "seed",
+        "n",
+        "batches",
+        "table-id",
+        "backend",
+        "precision",
+        "variant",
+        "energy",
+        "valid",
+        "residual",
+        "shape",
+        "no-backend",
+        "no-residual",
+    ],
+)
+def test_de6_summary_rejects_run_files_not_bound_to_the_frozen_configuration(
+    tmp_path: Path, mutation: object, message: str
+) -> None:
+    from validation.scripts.elastic_attribution import de6_swap as d6
+
+    runs, out, cdf, cache = _de6_fixture(tmp_path, mutation)
+    with pytest.raises(SystemExit, match=message):
+        d6.summarize(runs, out, cdf, ratios_path=tmp_path / "none.json", scratch=cache)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        lambda files, err, scratch: err.__setitem__("n_boot", 100),
+        lambda files, err, scratch: err.__setitem__("seed", 1),
+        lambda files, err, scratch: err.__setitem__(
+            "source_energies_mev", [30.0, 50.0, 100.0, 150.0]
+        ),
+        lambda files, err, scratch: err.pop("lineage"),
+        lambda files, err, scratch: err["lineage"]["cdf_sources"][0].__setitem__(
+            "npz_sha256", "f" * 64
+        ),
+        lambda files, err, scratch: scratch["swap_sources"].__setitem__(
+            "swap-all", scratch["swap_sources"]["swap-all"][:4]
+        ),
+    ],
+    ids=["n-boot", "seed", "energies", "no-lineage", "sha-mismatch", "swap-table-sources"],
+)
+def test_de6_summary_rejects_a_cdf_error_record_with_the_wrong_lineage(
+    tmp_path: Path, mutation: object
+) -> None:
+    from validation.scripts.elastic_attribution import de6_swap as d6
+
+    runs, out, cdf, cache = _de6_fixture(tmp_path, mutation)
+    with pytest.raises(SystemExit, match="CDF error record not bound"):
+        d6.summarize(runs, out, cdf, ratios_path=tmp_path / "none.json", scratch=cache)
+
+
+def test_pp_bootstrap_resamples_physical_events_and_mirrors() -> None:
+    from validation.scripts.elastic_attribution import de6_swap as d6
+
+    rng = np.random.default_rng(1)
+    phys = np.sort(np.cos(np.radians(rng.uniform(16.26, 90.0, 500))))
+    stored = np.sort(
+        np.concatenate([phys, -phys])
+    )  # the stored p-p sample: the (+mu, -mu) pair of each event
+    rep = d6._resample(stored, True, np.random.default_rng(2))
+    assert rep.size == stored.size and np.allclose(rep, -rep[::-1])  # exact symmetry
+    assert (
+        np.unique(np.abs(rep)).size <= phys.size
+    )  # effective sample size: at most N distinct physical values, not 2N
+    plain = d6._resample(phys, False, np.random.default_rng(2))
+    assert plain.size == phys.size and not np.allclose(
+        plain, -plain[::-1]
+    )  # p+A: plain bootstrap, no mirroring
+
+
+@pytest.mark.requires_tables("elastic")
+@pytest.mark.parametrize(
+    "edits",
+    [
+        (("s:So/Beam/BeamPositionDistribution", '"Flat"'),),  # source
+        (("u:So/Beam/BeamEnergySpread", "0.5"),),  # source energy spread
+        (("d:Ge/Source/TransZ", "-1 mm"),),  # source placement
+        (("d:Ph/Default/CutForAllParticles", "0.5 mm"),),  # physics cut
+        (("s:Ph/Default/Type", '"Geant4_Modular_2"'),),  # physics-list type
+        (("s:Ge/Sphere/Material", '"G4_WATER"'),),  # geometry: sphere material
+        (("s:Ge/Target/Type", '"TsBox"'),),  # geometry: target type
+        (("s:Sc/PS/OnlyIncludeParticlesGoing", '"In"'),),  # scorer direction
+        (("sv:Sc/PS/OnlyIncludeParticlesNamed", '1 "neutron"'),),  # scorer particle filter
+        (("b:Sc/PS/IncludeParentID", '"False"'),),  # scorer ID column
+    ],
+    ids=[
+        "position",
+        "energy-spread",
+        "source-z",
+        "cut",
+        "physics-type",
+        "sphere-material",
+        "target-type",
+        "scorer-direction",
+        "scorer-particle",
+        "parent-id",
+    ],
+)
+def test_de4_identification_binds_the_complete_native_configuration(
+    tmp_path: Path, edits: tuple
+) -> None:
+    from validation.scripts.elastic_attribution import de4_parse as de4
+
+    de4.analyse([_water_part(tmp_path)])
+    with pytest.raises(AssertionError):
+        de4.analyse([_water_part(tmp_path, "bad", edits=edits)])
+
+
+@pytest.mark.requires_tables("elastic")
+def test_de4_native_comparison_ignores_comments_and_whitespace_but_not_extra_parameters(
+    tmp_path: Path,
+) -> None:
+    from validation.scripts.elastic_attribution import de4_parse as de4
+
+    d = _water_part(tmp_path)
+    txt = (d / "input.txt").read_text()
+    (d / "input.txt").write_text(
+        "# a new comment\n"
+        + txt.replace("i:Ts/NumberOfThreads = 1", "i:Ts/NumberOfThreads   =   1  # trailing")
+    )
+    de4.analyse([d])  # comment / whitespace changes are not differences
+    (d / "input.txt").write_text(txt + "d:Ge/Target/Extra = 1 mm\n")
+    with pytest.raises(AssertionError):
+        de4.analyse([d])  # an extra parameter is

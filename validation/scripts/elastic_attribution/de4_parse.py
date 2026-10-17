@@ -63,7 +63,7 @@ _CL = "classes/*"
 GIT_ALLOW_CASE = (
     "case", "row", "material", "target", "energy_mev", "length_cm", "primaries", "records", "secondary_definition",
     "pp_events_all", "pp_events_off_curve", "pp_events_after_cm_cut", "pp_cm_cut_deg", "pp_events_removed_by_cm_cut",
-    "theta_2mm_deg", "theta_3mm_deg", "ke_filter/*", "classification/*", "secondary_on_p+H_curve/*", "off_curve/*",
+    "theta_2mm_deg", "theta_3mm_deg", "ke_filter/*", "classification/*", "secondary_on_p+H_curve/*", "off_curve/*", "selection_rule", "geant4_summary/*/_selection_rule",
     "identification/*", "geant4_summary/*/*/*",
     *(f"{_CL}/{k}" for k in (
         "events", "rate_per_primary", "rate_per_primary_se", "rate_per_primary_after_rule", "theta_lab_median_deg",
@@ -84,7 +84,7 @@ GIT_ALLOW_RATIOS = (
 GIT_FILES = {
     "de4-ratios.json": (GIT_ALLOW_RATIOS, ()),
     "de4-case*.json": (GIT_ALLOW_CASE, ()),
-    "de4.json": (GIT_ALLOW + ("geant4_summary/*/*/*",), ()),
+    "de4.json": (GIT_ALLOW + ("geant4_summary/*/*/*", "geant4_summary/*/_selection_rule"), ()),
 }
 
 
@@ -164,6 +164,83 @@ def _bundle_case_json(directory: Path) -> dict[str, Any] | None:
     return None
 
 
+BUNDLE_DIR = c.REPO / "validation" / "reference_cases" / "topas"
+FROZEN_PARAMS: dict[str, str] = {
+    "i:Ts/NumberOfThreads": "1", "b:Ts/PauseBeforeQuit": '"False"', "i:Ts/ShowHistoryCountAtInterval": "1000000",
+    "s:Ge/World/Material": '"G4_Galactic"', "d:Ge/World/HLX": "60 cm", "d:Ge/World/HLY": "60 cm", "d:Ge/World/HLZ": "60 cm",
+    "s:Ge/Sphere/Parent": '"World"', "s:Ge/Sphere/Type": '"TsSphere"', "s:Ge/Sphere/Material": '"G4_Galactic"',
+    "s:Ge/Target/Parent": '"Sphere"', "s:Ge/Target/Type": '"TsCylinder"', "d:Ge/Target/RMax": "10 mm",
+    "s:Ge/Source/Parent": '"Sphere"', "s:Ge/Source/Type": '"Group"', "d:Ge/Source/TransZ": "-0.001 mm",
+    "s:So/Beam/Type": '"Beam"', "s:So/Beam/Component": '"Source"', "s:So/Beam/BeamParticle": '"proton"',
+    "u:So/Beam/BeamEnergySpread": "0", "s:So/Beam/BeamPositionDistribution": '"None"', "s:So/Beam/BeamAngularDistribution": '"None"',
+    "s:Ph/Default/Type": '"Geant4_Modular"', "d:Ph/Default/CutForAllParticles": "0.05 mm",
+    "s:Sc/PS/Quantity": '"PhaseSpace"', "s:Sc/PS/Surface": '"Sphere/OuterCurvedSurface"', "s:Sc/PS/OnlyIncludeParticlesGoing": '"Out"',
+    "sv:Sc/PS/OnlyIncludeParticlesNamed": '1 "proton"', "s:Sc/PS/OutputType": '"Binary"', "s:Sc/PS/OutputFile": '"ps"',
+    "s:Sc/PS/IfOutputFileAlreadyExists": '"Overwrite"', "b:Sc/PS/IncludeEventID": '"True"', "b:Sc/PS/IncludeTrackID": '"True"',
+    "b:Sc/PS/IncludeParentID": '"True"', "i:Sc/PS/OutputBufferSize": "100000",
+}  # fmt: skip
+"""Every consequential native parameter that is the same in all ten D-E4 cases (plan 3.2); the case-specific ones (seed, histories, energy,
+target material, HL, TransZ, sphere RMax, modules) come from :data:`de5_sampling.CASES`."""
+
+
+def normalised_input(text: str, seed: int | None = None, hist: int | None = None) -> list[str]:
+    """Comment- and whitespace-normalised parameter lines of a TOPAS input; with ``seed`` / ``hist`` given, the per-part seed and histories
+    values are replaced by placeholders (so a part can be compared with the committed bundle of its case)."""
+    out = []
+    for raw in text.splitlines():
+        line = raw.split("#", 1)[0].strip()
+        if not line:
+            continue
+        line = re.sub(r"\s*=\s*", " = ", re.sub(r"\s+", " ", line), count=1)
+        if line.startswith("i:Ts/Seed ="):
+            line = "i:Ts/Seed = <seed>"
+        elif line.startswith("i:So/Beam/NumberOfHistoriesInRun ="):
+            line = "i:So/Beam/NumberOfHistoriesInRun = <histories>"
+        out.append(line)
+    return out
+
+
+def bundle_dirname(cs: dict[str, Any], j: int) -> str:
+    thick = "2mm" if cs["length_cm"] < 0.5 else "1cm"
+    part = f"-part{j}" if len(cs["part_histories"]) > 1 else ""
+    return f"v3-005d-de4-row{cs['row']}-{cs['material']}-{int(cs['energy_mev'])}mev-{thick}{part}"
+
+
+def bind_native_input(
+    d: Path, cs: dict[str, Any], j: int, seed: int, hist: int, bundle_dir: Path = BUNDLE_DIR
+) -> None:
+    """Bind the COMPLETE native configuration of one part (``AssertionError`` on any difference): (1) every parameter equals the frozen value
+    of :data:`FROZEN_PARAMS` or of the case (:data:`de5_sampling.CASES`), and no parameter is missing or extra; (2) the normalised input
+    equals, line for line, the committed case bundle ``validation/reference_cases/topas/<case dir>/input.txt`` with seed and histories substituted."""
+    text = (Path(d) / "input.txt").read_text()
+    params = {}
+    for line in normalised_input(text):
+        k, _, v = line.partition(" = ")
+        assert k not in params, f"{d}: parameter {k} is set twice"
+        params[k] = v
+    expected = dict(FROZEN_PARAMS)
+    expected.update({
+        "i:Ts/Seed": "<seed>", "i:So/Beam/NumberOfHistoriesInRun": "<histories>",
+        "d:So/Beam/BeamEnergy": f"{cs['energy_mev']:g} MeV", "s:Ge/Target/Material": f'"{cs["topas_material"]}"',
+        "d:Ge/Target/HL": f"{cs['target_hl_mm']:g} mm", "d:Ge/Target/TransZ": f"{cs['target_hl_mm']:g} mm",
+        "d:Ge/Sphere/RMax": f"{cs['sphere_rmax_mm']:g} mm",
+        "sv:Ph/Default/Modules": f"{len(cs['topas_modules'])} " + " ".join(f'"{m}"' for m in cs["topas_modules"]),
+    })  # fmt: skip
+    diff = {
+        k: (params.get(k), expected.get(k))
+        for k in set(params) | set(expected)
+        if params.get(k) != expected.get(k)
+    }
+    assert not diff, (
+        f"{d}: native parameters differ from the frozen configuration (found, frozen): {sorted(diff.items())[:6]}"
+    )
+    bundle = Path(bundle_dir) / bundle_dirname(cs, j) / "input.txt"
+    assert bundle.is_file(), f"committed case bundle {bundle} not found"
+    assert normalised_input(text, seed, hist) == normalised_input(bundle.read_text(), seed, hist), (
+        f"{d}: input.txt differs from the committed bundle {bundle.parent.name}"
+    )
+
+
 def identify_case(
     dirs: list[Path], case: int | None = None
 ) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -215,6 +292,7 @@ def identify_case(
         assert abs(header_max_ke(d) - e0) <= 1e-4 * e0, (
             f"{d}: ps.header maximum energy {header_max_ke(d)} != E0 {e0}"
         )
+        bind_native_input(Path(d), cs, j, i["seed"], want)
         bundle = _bundle_case_json(d)
         if bundle is not None:
             assert bundle.get("seeds") == [i["seed"]] and bundle.get("histories") == want, (
@@ -225,7 +303,7 @@ def identify_case(
         f"parts hold {total} primaries, case {cs['case']} needs {cs['primaries']}"
     )
     ident = {"material_topas": mat, "length_cm": length, "energy_mev": e0, "parts": len(dirs), "primaries_total": total,
-             "seeds": sorted(i["seed"] for i in infos), "modules": list(cs["topas_modules"]), "geometry_bound": True,
+             "seeds": sorted(i["seed"] for i in infos), "modules": list(cs["topas_modules"]), "geometry_bound": True, "native_input_bound": True,
              "header_histories_equal_input_and_frozen": True, "header_max_ke_equals_e0": True}  # fmt: skip
     return cs, ident
 
@@ -387,9 +465,11 @@ def analyse(
                                    "fraction_below_1e-3": float(np.mean(sec_res < 1e-3)) if sec_res.size else float("nan")},
         "theta_2mm_deg": th_w[2.0], "theta_3mm_deg": th_w[3.0],
     }  # fmt: skip
+    doc["selection_rule"] = de5.SELECTION_RULE
     doc["geant4_summary"] = {
         str(case): {k: {s: v.get(s) for s in de5.SIGNATURES} for k, v in classes.items()}
     }
+    doc["geant4_summary"][str(case)]["_selection_rule"] = de5.SELECTION_RULE
     return doc
 
 
@@ -399,19 +479,15 @@ def render_case(doc: dict[str, Any]) -> str:
            f"{doc['primaries']} primaries, {doc['records']} proton records, target {doc['target']}).", "",
            f"KE filter (E > E0 - 1e-4 MeV): {k['removed_primaries']} primaries removed (fraction {k['removed_fraction']:.5f}); "
            f"{k['primary_records']} primary records, {k['secondary_records_parent_ne_0']} secondary proton records (parent != 0). "
-           f"Secondary definition: {doc['secondary_definition']}.", "",
+           f"Secondary definition: {doc['secondary_definition']}. Selection rule: {doc['selection_rule']}.", "",
            "| class | events | rate/primary +- SE | theta_lab median | P(th>th_2mm) | P(th>th_3mm) | T | <T_other> MeV |", "|---|---|---|---|---|---|---|---|"]  # fmt: skip
     for name, v in doc["classes"].items():
         out.append(
             f"| {name} | {v['events']} | {v['rate_per_primary']:.4g} +- {v['rate_per_primary_se']:.2g} | {v['theta_lab_median_deg']:.2f} | "
             f"{v['P_theta_lab_gt_theta_2mm']:.4f} | {v['P_theta_lab_gt_theta_3mm']:.4f} | {v['T_tail_moment']:.4f} | {v['mean_t_other_mev']:.3f} |"
         )
-    legacy = (
-        "pp_events_not_two_records" in oc
-    )  # records of the first parser (exactly-two-records rule) keep their wording
-    n_x = oc["pp_events_excluded"] + (oc["pp_events_not_two_records"] if legacy else 0)
-    why = ("off the p+H curve or not exactly two proton records" if legacy
-           else "fast proton off the p+H curve: p-p followed by a second interaction")  # fmt: skip
+    n_x = oc["pp_events_excluded"]
+    why = "fast proton off the p+H curve: p-p followed by a second interaction"
     out += ["", f"p-p events: {doc['pp_events_all']} with a secondary proton; {n_x} excluded "
             f"({why}); {doc['pp_events_removed_by_cm_cut']} removed by the {doc['pp_cm_cut_deg']} deg CM cut; "
             f"{doc['pp_events_after_cm_cut']} kept (class H-1).", "",
@@ -548,7 +624,13 @@ def validated_case_records(outdir: Path) -> dict[str, dict[str, Any]]:
         got = {k: rec.get(k) for k in want}
         if got != want:
             problems.append(f"{ps[0].name}: case fields {got} differ from the frozen case {want}")
-        elif not rec.get("identification", {}).get("geometry_bound"):
+        elif rec.get(
+            "selection_rule"
+        ) != de5.SELECTION_RULE or "pp_events_not_two_records" in rec.get("off_curve", {}):
+            problems.append(
+                f"{ps[0].name}: legacy selection schema (selection_rule {rec.get('selection_rule')!r}, need {de5.SELECTION_RULE!r})"
+            )
+        elif not rec.get("identification", {}).get("native_input_bound"):
             problems.append(
                 f"{ps[0].name}: the record does not carry a validated case identification"
             )
@@ -564,7 +646,7 @@ def combine(outdir: Path) -> dict[str, Any]:
     files = [Path(outdir) / f"de4-case{n}.json" for n in sorted(cases, key=int)]
     doc = {"banner": c.BANNER, "cases": cases,
            "geant4_summary": {k: v["geant4_summary"][k] for k, v in cases.items()}}  # fmt: skip
-    allow = GIT_ALLOW + ("geant4_summary/*/*/*",)
+    allow = GIT_ALLOW + ("geant4_summary/*/*/*", "geant4_summary/*/_selection_rule")
     c.write_outputs(outdir, "de4.json", doc, "de4-report.md",
                     c.header("D-E4 analysis: combined per-case summaries", _cmd("--combine"), files), render_report, allow)  # fmt: skip
     return doc

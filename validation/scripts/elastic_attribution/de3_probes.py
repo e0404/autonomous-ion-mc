@@ -141,7 +141,7 @@ def run_one(
     plateau = (depth >= 20.0) & (depth <= 60.0)
     doc: dict[str, Any] = {
         "banner": c.BANNER, "variant": variant, "mode": mode, "energy": energy, "seed": seed, "n": n, "n_batches": batches,
-        "elastic_table_id": tid, "bin_mm": v5b.V5_DZ_MM, "idd_batches": idd_b.tolist(), "unit": "MeV/(g/cm^2)/primary",
+        "elastic_table_id": tid, "backend": cfg.run.backend, "precision": cfg.run.precision, "bin_mm": v5b.V5_DZ_MM, "idd_batches": idd_b.tolist(), "unit": "MeV/(g/cm^2)/primary",
         "metrics": {"peak_depth_mm": rm.peak_depth(depth, curve), "r80_mm": rm.r80(depth, curve),
                     "plateau_mean_20_60_mm": float(idd[plateau].mean()), "peak_over_plateau": float(idd.max() / idd[plateau].mean())},
         "valid": bool(v5.clean(res) and res.energy_balance.relative_residual <= 1e-12),
