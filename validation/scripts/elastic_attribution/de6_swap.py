@@ -1006,6 +1006,27 @@ def recoil_h4(
     return out
 
 
+def archived_v11(h5_path: Path | None = None, archive_path: Path | None = None) -> tuple[dict[int, dict[str, float]], str]:
+    """The archived V11 quantities (F and SE of ionmc and TOPAS, the plateau gains, the SE of the relative F difference) from the COMMITTED H5
+    record (``de0h5/h5.json``, block ``archived_v11``). If the generated step-16 archive is present they are cross-checked to 1e-12 ("archive
+    cross-checked"; a difference fails closed), otherwise the committed record is used alone ("archive absent")."""
+    hp = Path(h5_path or c.REPO / "validation" / "results" / "elastic_attribution" / "de0h5" / "h5.json")
+    if not hp.is_file():
+        hp = c.OUT / "de0h5" / "h5.json"
+    block = json.loads(hp.read_text()).get("archived_v11")
+    if not block:
+        raise SystemExit(f"{hp} has no archived_v11 block: regenerate the H5 record (de0_h5)")
+    ap = Path(archive_path or c.RUN_V11)
+    status = "archive absent (committed H5 record used)"
+    if ap.is_file():
+        now = c.v11_archived_block(ap)
+        bad = [f"{e}/{k}" for e in now for k in now[e] if abs(now[e][k] - block.get(e, {}).get(k, float("nan"))) > 1e-12]
+        if bad:
+            raise SystemExit(f"the committed H5 archived_v11 block differs from the archive: {bad[:6]}")
+        status = "archive cross-checked (equal to 1e-12)"
+    return {int(e): v for e, v in block.items()}, status
+
+
 def summarize(
     runs: Path,
     out: Path,
@@ -1017,12 +1038,13 @@ def summarize(
     de4_dir: Path | None = None,
     recompute: Any = None,
     pinned_dir: Path | None = None,
+    h5_path: Path | None = None,
+    archive_path: Path | None = None,
 ) -> dict[str, Any]:
     from . import de3_probes as d3
 
     cmp = d3._cmp()
-    ref = c.v11_reference()
-    arch = c.json_payload(c.RUN_V11)["verdict"]["energies"]
+    ref, arch_status = archived_v11(h5_path, archive_path)
     err = json.loads(Path(cdf_error).read_text())
     manifest = json.loads(Path(manifest_path or OUT / LINEAGE_FILE).read_text())
     de4 = load_de4_records(de4_dir or default_de4_dir())
@@ -1062,7 +1084,7 @@ def summarize(
         fb, fb_se = d3._jackknife(lambda n, d: f_of(n[0], d), [base], den)
         gb, gb_se = d3._jackknife(lambda n, d: g_of(n[0], d), [base], den)
         r = ref[e]
-        se_rel = float(arch[str(e)]["F"]["se"])
+        se_rel = float(ref[e]["F_relative_diff_se"])
         se_obs = se_rel * r["F_topas"]
         chk_p = runs / f"check-base-{e}.json"
         chk = json.loads(chk_p.read_text()) if chk_p.is_file() else {}
@@ -1173,7 +1195,7 @@ def summarize(
         if Path(rpath).is_file()
         else {"decision": "ratios record not found"}
     )
-    doc = {"banner": c.BANNER, "energies": energies, "signature_inputs": sig_in, "cdf_finite_sample": err,
+    doc = {"banner": c.BANNER, "archived_v11_source": arch_status, "energies": energies, "signature_inputs": sig_in, "cdf_finite_sample": err,
            "clauses_1_to_3_hold_at_both_energies": {sc: bool(all(energies[e]["clause1"]["holds"] and energies[e][sc]["clause2_holds"] and energies[e][sc]["clause3"]["holds"] for e in energies)) for sc in ("one_minus_F", "minus_ln_F")},  # fmt: skip
            "outcome_labels": {e: energies[e]["outcome_label"] for e in energies},
            "note": "diagnostics only, never a model; clauses 4 and 5 of plan section 5 and the outcome are decided by the synthesis"}  # fmt: skip
@@ -1192,6 +1214,7 @@ def summarize(
 
 
 GIT_ALLOW = (
+    "archived_v11_source",
     "energies/**",
     "signature_inputs/**",
     "cdf_finite_sample/**",

@@ -90,6 +90,19 @@ def v11_reference() -> dict[str, Any]:
     }
 
 
+def v11_archived_block(path: Path | None = None) -> dict[str, dict[str, float]]:
+    """Archived V11 numbers of the step-16 record per energy (the block recorded in the committed H5 record as ``archived_v11``): F and its
+    SE for ionmc and TOPAS, the plateau gains and the SE of the relative F difference."""
+    p = Path(path or RUN_V11)
+    v = json_payload(p)["verdict"]["energies"]
+    return {
+        str(int(e)): {"F_ionmc": d["F"]["ionmc"]["value"], "F_ionmc_se": d["F"]["ionmc"]["se"], "F_topas": d["F"]["reference"]["value"],
+                      "F_topas_se": d["F"]["reference"]["se"], "gain_ionmc": d["plateau_gain"]["ionmc"]["value"],
+                      "gain_topas": d["plateau_gain"]["reference"]["value"], "F_relative_diff_se": d["F"]["se"]}
+        for e, d in v.items()
+    }  # fmt: skip
+
+
 def idd_mean(
     energy: int, mode: str
 ) -> tuple[NDArray[np.float64], NDArray[np.float64], dict[str, Any]]:

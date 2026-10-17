@@ -266,6 +266,7 @@ def _run_file(
     return doc
 
 
+@pytest.mark.requires_tables("elastic")
 def test_summary_validity_is_fail_closed(tmp_path: Path) -> None:
     from validation.scripts.elastic_attribution import de3_probes
 
@@ -964,6 +965,33 @@ def test_de6_h4_recoil_share() -> None:
     )
 
 
+def _point_generated_paths_at_an_empty_dir(monkeypatch: pytest.MonkeyPatch, empty: Path) -> None:
+    """Emulate a clean checkout: validation/generated and the transport-sample cache are git-ignored and absent."""
+    empty.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(de_common, "GEN", empty)
+    monkeypatch.setattr(de_common, "RUN_V11", empty / "16-v11-compare.txt")
+    monkeypatch.setattr(de_common, "RUN_V10A", empty / "03-v10-a.txt")
+    monkeypatch.setattr(de_common, "SAMPLES", empty / "samples")
+    monkeypatch.setattr(
+        de_common,
+        "V11_PARTIALS",
+        {k: empty / f"{k[0]}-{k[1]}.json" for k in de_common.V11_PARTIALS},
+    )
+
+
+@pytest.fixture(autouse=True)
+def _clean_checkout_emulation(
+    request: pytest.FixtureRequest,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path_factory: pytest.TempPathFactory,
+):  # type: ignore[no-untyped-def]
+    """``IONMC_TEST_NO_ARCHIVE=1`` runs the whole file with the generated/archive paths empty (CI proof)."""
+    import os
+
+    if os.environ.get("IONMC_TEST_NO_ARCHIVE") == "1":
+        _point_generated_paths_at_an_empty_dir(monkeypatch, tmp_path_factory.mktemp("noarchive"))
+
+
 @pytest.fixture(autouse=True)
 def _restore_de6_pinned_constants():  # type: ignore[no-untyped-def]
     from validation.scripts.elastic_attribution import de6_swap as d6
@@ -1006,6 +1034,16 @@ def _toy_table(der: Path, idx: int, exploratory: dict, arrays: dict | None = Non
     tmp.rename(der / f"elastic-proton-{side['table_id']}.npz")
     (der / f"elastic-proton-{side['table_id']}.json").write_text(json.dumps(side))
     return side["table_id"]
+
+
+# Archived V11 numbers as recorded in the committed H5 record (block ``archived_v11``); the fixture's toy h5.json carries them so that the
+# D-E6 summary needs no local archive (validation/generated is git-ignored).
+_ARCHIVED_V11 = {
+    "150": {"F_ionmc": 0.8567840337079885, "F_ionmc_se": 0.0015196783488711665, "F_topas": 0.891584942125469, "F_topas_se": 0.0021600982500448217,
+            "gain_ionmc": 0.0220987766133649, "gain_topas": 0.016252044281034106, "F_relative_diff_se": 0.002885429972284705},
+    "200": {"F_ionmc": 0.8440660646539855, "F_ionmc_se": 0.0025408116155115545, "F_topas": 0.8873703022321767, "F_topas_se": 0.0023837942663498973,
+            "gain_ionmc": 0.02672217441583613, "gain_topas": 0.018419142339446415, "F_relative_diff_se": 0.0038376917410936247},
+}  # fmt: skip
 
 
 def _de6_fixture(
@@ -1161,7 +1199,8 @@ def _de6_fixture(
             }  # fmt: skip
     ctx = SimpleNamespace(pid=pid, files=files, err=err, de4=de4, scratch=scratch, cdf_dir=cdf_dir, ids=ids, out=out, manifest=manifest,
                           runs=tmp_path / "runs", de4_dir=tmp_path / "de4", pinned=pinned, cdf_error=tmp_path / "cdf-error.json", prov=prov, tmp=tmp_path,
-                          ratios=ratios, err_true=copy.deepcopy(err))  # fmt: skip
+                          ratios=ratios, err_true=copy.deepcopy(err), h5=tmp_path / "h5.json", archive=tmp_path / "no-archive" / "16-v11-compare.txt",
+                          archived=copy.deepcopy(_ARCHIVED_V11))  # fmt: skip
     if mutate is not None:
         mutate(ctx)
     ctx.runs.mkdir()
@@ -1173,6 +1212,7 @@ def _de6_fixture(
     for n, r in ctx.de4.items():
         (ctx.de4_dir / f"de4-case{n}.json").write_text(json.dumps(r))
     ctx.cdf_error.write_text(json.dumps(ctx.err))
+    ctx.h5.write_text(json.dumps({"archived_v11": ctx.archived}))
     if post is not None:
         post(ctx)
     return ctx
@@ -1183,7 +1223,7 @@ def _summarize(ctx):  # type: ignore[no-untyped-def]
 
     return d6.summarize(ctx.runs, ctx.out, ctx.cdf_error, ratios_path=ctx.ratios, scratch=ctx.scratch,
                         manifest_path=ctx.manifest, cdf_dir=ctx.cdf_dir, de4_dir=ctx.de4_dir,
-                        recompute=lambda d: ctx.err_true, pinned_dir=ctx.pinned)  # fmt: skip
+                        recompute=lambda d: ctx.err_true, pinned_dir=ctx.pinned, h5_path=ctx.h5, archive_path=ctx.archive)  # fmt: skip
 
 
 def test_de6_summary_end_to_end_on_real_files_of_the_frozen_geometry(tmp_path: Path) -> None:
@@ -1503,3 +1543,40 @@ def test_de6_content_rebuild_binds_the_cdf_sidecar_to_the_committed_hash(tmp_pat
     )
     with pytest.raises(SystemExit, match="committed D-E4 record"):
         _summarize(ctx)
+
+
+def test_de6_summary_needs_only_the_committed_h5_record_when_the_archive_is_absent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Clean checkout: every generated/archive path points at an empty directory; the summary runs on the committed H5 block alone."""
+    _point_generated_paths_at_an_empty_dir(monkeypatch, tmp_path / "empty")
+    ctx = _de6_fixture(tmp_path / "fx")
+    ctx.archive = None  # the module default (c.RUN_V11) is now the missing path
+    doc = _summarize(ctx)
+    assert doc["archived_v11_source"].startswith("archive absent")
+    assert doc["energies"]["150"]["base"]["F_ionmc_archived"] == pytest.approx(
+        _ARCHIVED_V11["150"]["F_ionmc"], abs=1e-15
+    )
+
+
+def test_de6_archived_v11_cross_check_against_a_present_archive(tmp_path: Path) -> None:
+    from validation.scripts.elastic_attribution import de6_swap as d6
+
+    ctx = _de6_fixture(tmp_path)
+    arch = {e: {"F": {"ionmc": {"value": v["F_ionmc"], "se": v["F_ionmc_se"]}, "reference": {"value": v["F_topas"], "se": v["F_topas_se"]},
+                      "se": v["F_relative_diff_se"]},
+               "plateau_gain": {"ionmc": {"value": v["gain_ionmc"]}, "reference": {"value": v["gain_topas"]}}} for e, v in ctx.archived.items()}  # fmt: skip
+    p = tmp_path / "arch.txt"
+    p.write_text("#JSON-BEGIN\n" + json.dumps({"verdict": {"energies": arch}}) + "\n#JSON-END\n")
+    got, status = d6.archived_v11(ctx.h5, p)
+    assert (
+        status.startswith("archive cross-checked")
+        and got[150]["F_ionmc"] == ctx.archived["150"]["F_ionmc"]
+    )
+    arch["150"]["F"]["ionmc"]["value"] += 1e-9
+    p.write_text("#JSON-BEGIN\n" + json.dumps({"verdict": {"energies": arch}}) + "\n#JSON-END\n")
+    with pytest.raises(SystemExit, match="differs from the archive"):
+        d6.archived_v11(ctx.h5, p)
+    ctx.h5.write_text("{}")
+    with pytest.raises(SystemExit, match="regenerate"):
+        d6.archived_v11(ctx.h5, None)

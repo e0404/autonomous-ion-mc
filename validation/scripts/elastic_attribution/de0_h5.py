@@ -25,7 +25,7 @@ from typing import Any
 
 from . import common as c
 
-GIT_ALLOW = ("tolerance", "verdict/*", "per_energy/*/*", "per_energy/*/*/*", "per_energy/*/*/*/*")
+GIT_ALLOW = ("tolerance", "verdict/*", "per_energy/*/*", "per_energy/*/*/*", "per_energy/*/*/*/*", "archived_v11/*/*")
 """Git allowlist of ``h5.json`` (syntax: :mod:`common`): EM-only ratios and metrics (no nuclear data), verdicts, flags."""
 GIT_FILES = {"h5.json": (GIT_ALLOW, ())}
 TOL = 0.02
@@ -80,7 +80,7 @@ def compute() -> tuple[dict[str, Any], list[Path]]:
             for r in sorted(g["runs"])
             if (REF_DIR / r / "work" / "idd_dose.csv").is_file()
         ]
-    doc = {"banner": c.BANNER, "tolerance": TOL, "per_energy": out,
+    doc = {"banner": c.BANNER, "tolerance": TOL, "per_energy": out, "archived_v11": c.v11_archived_block(),
            "verdict": {e: ("H5 excluded (EM-only within +-2 %)" if o["h5_excluded"] else
                            "H5 counts (>2 % and amplifying)" if o["h5_counts"] else "outside +-2 % but not amplifying: H5 does not count")
                        for e, o in out.items()}}  # fmt: skip

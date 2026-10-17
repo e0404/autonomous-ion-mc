@@ -1,4 +1,24 @@
 {
+ "archived_v11": {
+  "150": {
+   "F_ionmc": 0.8567840337079885,
+   "F_ionmc_se": 0.0015196783488711665,
+   "F_relative_diff_se": 0.002885429972284705,
+   "F_topas": 0.891584942125469,
+   "F_topas_se": 0.0021600982500448217,
+   "gain_ionmc": 0.0220987766133649,
+   "gain_topas": 0.016252044281034106
+  },
+  "200": {
+   "F_ionmc": 0.8440660646539855,
+   "F_ionmc_se": 0.0025408116155115545,
+   "F_relative_diff_se": 0.0038376917410936247,
+   "F_topas": 0.8873703022321767,
+   "F_topas_se": 0.0023837942663498973,
+   "gain_ionmc": 0.02672217441583613,
+   "gain_topas": 0.018419142339446415
+  }
+ },
  "banner": "Exploratory, report-only (Amendment 19); not evidence; changes no row.",
  "note_git": "Git projection (decision 0041): explicit allowlist of dimensionless ratios, per-primary rates and probabilities, kinematic statistics, kernel integrals, counts and flags; no absolute cross sections, no distributions or per-point arrays. The complete record is regenerated into validation/generated/ by the committed module.",
  "per_energy": {
