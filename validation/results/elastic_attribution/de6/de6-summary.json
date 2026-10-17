@@ -1,5 +1,15 @@
 {
- "archived_v11_source": "archive cross-checked (equal to 1e-12)",
+ "archived_v11": {
+  "h5_sha256": "40421563c3c55383d413de82af8775b36cb0a28f569a62435703762730ea76a7",
+  "path": "validation/results/elastic_attribution/de0h5/h5.json",
+  "source": {
+   "compare_sha256": "1f81c774d5209761fce23f757e6f6c2d4f731c533be9b31d0e017a253175f6e2",
+   "evidence_sha": "dd976c5a69850b9597ac4da938792d4273a71719",
+   "run_id": "RUN-20261012T142957Z-a8e41216",
+   "step_path": "lv5c-dd976c5-16/16-v11-compare.txt"
+  },
+  "status": "archive cross-checked (values to 1e-12, source sha256 equal to the pin)"
+ },
  "banner": "Exploratory, report-only (Amendment 19); not evidence; changes no row.",
  "cdf_finite_sample": {
   "150": {

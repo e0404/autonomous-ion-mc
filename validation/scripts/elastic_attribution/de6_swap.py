@@ -1006,25 +1006,73 @@ def recoil_h4(
     return out
 
 
-def archived_v11(h5_path: Path | None = None, archive_path: Path | None = None) -> tuple[dict[int, dict[str, float]], str]:
+# Frozen identity of the archived step-16 compare file (V11, evidence dd976c5a): the committed H5 record's ``archived_v11`` block is
+# trusted only if its source equals this pin (a consistently edited H5 record cannot pass). Monkeypatchable for tests only.
+ARCHIVED_V11_PIN: dict[str, str] = {
+    "run_id": "RUN-20261012T142957Z-a8e41216",
+    "step_path": "lv5c-dd976c5-16/16-v11-compare.txt",
+    "evidence_sha": "dd976c5a69850b9597ac4da938792d4273a71719",
+    "compare_sha256": "1f81c774d5209761fce23f757e6f6c2d4f731c533be9b31d0e017a253175f6e2",
+}
+ARCHIVED_V11_ENERGIES = ("150", "200")
+ARCHIVED_V11_KEYS = ("F_ionmc", "F_ionmc_se", "F_topas", "F_topas_se", "gain_ionmc", "gain_topas", "F_relative_diff_se")
+ARCHIVED_V11_POSITIVE = ("F_ionmc", "F_ionmc_se", "F_topas", "F_topas_se", "F_relative_diff_se")
+
+
+def validate_archived_block(block: Any) -> None:
+    """Exact finite schema of the H5 ``archived_v11`` block and equality of its source to the frozen pin. Fail closed."""
+    if not isinstance(block, dict) or set(block) != {"source", "energies"}:
+        raise SystemExit("archived_v11 block: keys must be exactly source, energies")
+    src, en = block["source"], block["energies"]
+    if not isinstance(src, dict) or set(src) != {*ARCHIVED_V11_PIN, "input_sha256"} or not isinstance(src.get("input_sha256"), list):
+        raise SystemExit("archived_v11 source: keys must be exactly run_id, step_path, evidence_sha, compare_sha256, input_sha256")
+    for k, v in ARCHIVED_V11_PIN.items():
+        if src[k] != v:
+            raise SystemExit(f"archived_v11 source {k} {str(src[k])[:20]} differs from the frozen pin {v[:20]}")
+    if not isinstance(en, dict) or set(en) != set(ARCHIVED_V11_ENERGIES):
+        raise SystemExit(f"archived_v11 energies must be exactly {ARCHIVED_V11_ENERGIES}")
+    for e in ARCHIVED_V11_ENERGIES:
+        d = en[e]
+        if not isinstance(d, dict) or set(d) != set(ARCHIVED_V11_KEYS):
+            raise SystemExit(f"archived_v11 energy {e}: keys must be exactly {ARCHIVED_V11_KEYS}")
+        for k in ARCHIVED_V11_KEYS:
+            v = d[k]
+            if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v):
+                raise SystemExit(f"archived_v11 energy {e}: {k} is not a finite number")
+            if k in ARCHIVED_V11_POSITIVE and not v > 0:
+                raise SystemExit(f"archived_v11 energy {e}: {k} must be > 0")
+
+
+def archived_v11(h5_path: Path | None = None, archive_path: Path | None = None) -> tuple[dict[int, dict[str, float]], dict[str, Any]]:
     """The archived V11 quantities (F and SE of ionmc and TOPAS, the plateau gains, the SE of the relative F difference) from the COMMITTED H5
-    record (``de0h5/h5.json``, block ``archived_v11``). If the generated step-16 archive is present they are cross-checked to 1e-12 ("archive
-    cross-checked"; a difference fails closed), otherwise the committed record is used alone ("archive absent")."""
+    record (``de0h5/h5.json``, block ``archived_v11``), with the provenance ``{path, h5_sha256, status, source}``. The block is validated
+    (exact finite schema, source equal to ``ARCHIVED_V11_PIN``). If the generated step-16 archive is present, its sha256 must equal the
+    pin and every required value must agree to 1e-12 ("archive cross-checked"); otherwise the committed record alone is used
+    ("archive absent"). Any failure is fatal."""
     hp = Path(h5_path or c.REPO / "validation" / "results" / "elastic_attribution" / "de0h5" / "h5.json")
     if not hp.is_file():
         hp = c.OUT / "de0h5" / "h5.json"
     block = json.loads(hp.read_text()).get("archived_v11")
     if not block:
         raise SystemExit(f"{hp} has no archived_v11 block: regenerate the H5 record (de0_h5)")
+    validate_archived_block(block)
     ap = Path(archive_path or c.RUN_V11)
     status = "archive absent (committed H5 record used)"
     if ap.is_file():
+        if c.sha256_file(ap) != ARCHIVED_V11_PIN["compare_sha256"]:
+            raise SystemExit(f"{ap}: sha256 differs from the frozen pin of the step-16 compare file")
         now = c.v11_archived_block(ap)
-        bad = [f"{e}/{k}" for e in now for k in now[e] if abs(now[e][k] - block.get(e, {}).get(k, float("nan"))) > 1e-12]
+        bad = []
+        for e in ARCHIVED_V11_ENERGIES:
+            for k in ARCHIVED_V11_KEYS:
+                a, b = now.get(e, {}).get(k), block["energies"][e][k]
+                if a is None or not (math.isfinite(a) and math.isclose(a, b, rel_tol=0.0, abs_tol=1e-12)):
+                    bad.append(f"{e}/{k}")
         if bad:
             raise SystemExit(f"the committed H5 archived_v11 block differs from the archive: {bad[:6]}")
-        status = "archive cross-checked (equal to 1e-12)"
-    return {int(e): v for e, v in block.items()}, status
+        status = "archive cross-checked (values to 1e-12, source sha256 equal to the pin)"
+    prov = {"path": c.rel(hp), "h5_sha256": c.sha256_file(hp), "status": status, "source": {k: block["source"][k] for k in ARCHIVED_V11_PIN}}
+    return {int(e): v for e, v in block["energies"].items()}, prov
 
 
 def summarize(
@@ -1044,7 +1092,7 @@ def summarize(
     from . import de3_probes as d3
 
     cmp = d3._cmp()
-    ref, arch_status = archived_v11(h5_path, archive_path)
+    ref, arch_prov = archived_v11(h5_path, archive_path)
     err = json.loads(Path(cdf_error).read_text())
     manifest = json.loads(Path(manifest_path or OUT / LINEAGE_FILE).read_text())
     de4 = load_de4_records(de4_dir or default_de4_dir())
@@ -1195,7 +1243,7 @@ def summarize(
         if Path(rpath).is_file()
         else {"decision": "ratios record not found"}
     )
-    doc = {"banner": c.BANNER, "archived_v11_source": arch_status, "energies": energies, "signature_inputs": sig_in, "cdf_finite_sample": err,
+    doc = {"banner": c.BANNER, "archived_v11": arch_prov, "energies": energies, "signature_inputs": sig_in, "cdf_finite_sample": err,
            "clauses_1_to_3_hold_at_both_energies": {sc: bool(all(energies[e]["clause1"]["holds"] and energies[e][sc]["clause2_holds"] and energies[e][sc]["clause3"]["holds"] for e in energies)) for sc in ("one_minus_F", "minus_ln_F")},  # fmt: skip
            "outcome_labels": {e: energies[e]["outcome_label"] for e in energies},
            "note": "diagnostics only, never a model; clauses 4 and 5 of plan section 5 and the outcome are decided by the synthesis"}  # fmt: skip
@@ -1204,7 +1252,7 @@ def summarize(
         for p in Path(runs).glob("de3-*-*.json")
         if any(v in p.name for v in ("emonly", "-all", "swap-"))
     )
-    inputs += [Path(cdf_error), Path(manifest_path or OUT / LINEAGE_FILE)] + (
+    inputs += [Path(arch_prov["path"]) if Path(arch_prov["path"]).is_absolute() else c.REPO / arch_prov["path"], Path(cdf_error), Path(manifest_path or OUT / LINEAGE_FILE)] + (
         [Path(rpath)] if Path(rpath).is_file() else []
     )
     c.write_outputs(out, "de6-summary.json", doc, "de6-report.md",
@@ -1214,7 +1262,8 @@ def summarize(
 
 
 GIT_ALLOW = (
-    "archived_v11_source",
+    "archived_v11/*",
+    "archived_v11/source/*",
     "energies/**",
     "signature_inputs/**",
     "cdf_finite_sample/**",
@@ -1243,6 +1292,10 @@ def render_report(doc: dict[str, Any]) -> str:
         "",
         f"Clauses 1-3 of plan section 5 hold at both energies (rule of record, 1 - F): **{doc['clauses_1_to_3_hold_at_both_energies']['one_minus_F']}**; "
         f"(-ln F sensitivity): {doc['clauses_1_to_3_hold_at_both_energies']['minus_ln_F']}. Clauses 4 and 5 are not decided here.",
+        "",
+        f"Archived V11 quantities: committed H5 record `{doc['archived_v11']['path']}` (sha256 {doc['archived_v11']['h5_sha256']}), source "
+        f"{doc['archived_v11']['source']['run_id']} / {doc['archived_v11']['source']['step_path']} at {doc['archived_v11']['source']['evidence_sha'][:8]} "
+        f"(sha256 {doc['archived_v11']['source']['compare_sha256']}); {doc['archived_v11']['status']}.",
         "",
     ]
     for e, b in doc["energies"].items():

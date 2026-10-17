@@ -1,22 +1,68 @@
 {
  "archived_v11": {
-  "150": {
-   "F_ionmc": 0.8567840337079885,
-   "F_ionmc_se": 0.0015196783488711665,
-   "F_relative_diff_se": 0.002885429972284705,
-   "F_topas": 0.891584942125469,
-   "F_topas_se": 0.0021600982500448217,
-   "gain_ionmc": 0.0220987766133649,
-   "gain_topas": 0.016252044281034106
+  "energies": {
+   "150": {
+    "F_ionmc": 0.8567840337079885,
+    "F_ionmc_se": 0.0015196783488711665,
+    "F_relative_diff_se": 0.002885429972284705,
+    "F_topas": 0.891584942125469,
+    "F_topas_se": 0.0021600982500448217,
+    "gain_ionmc": 0.0220987766133649,
+    "gain_topas": 0.016252044281034106
+   },
+   "200": {
+    "F_ionmc": 0.8440660646539855,
+    "F_ionmc_se": 0.0025408116155115545,
+    "F_relative_diff_se": 0.0038376917410936247,
+    "F_topas": 0.8873703022321767,
+    "F_topas_se": 0.0023837942663498973,
+    "gain_ionmc": 0.02672217441583613,
+    "gain_topas": 0.018419142339446415
+   }
   },
-  "200": {
-   "F_ionmc": 0.8440660646539855,
-   "F_ionmc_se": 0.0025408116155115545,
-   "F_relative_diff_se": 0.0038376917410936247,
-   "F_topas": 0.8873703022321767,
-   "F_topas_se": 0.0023837942663498973,
-   "gain_ionmc": 0.02672217441583613,
-   "gain_topas": 0.018419142339446415
+  "source": {
+   "compare_sha256": "1f81c774d5209761fce23f757e6f6c2d4f731c533be9b31d0e017a253175f6e2",
+   "evidence_sha": "dd976c5a69850b9597ac4da938792d4273a71719",
+   "input_sha256": [
+    {
+     "path": "validation/generated/RUN-20261012T142957Z-a8e41216/transport/lv5c-dd976c5-16/16-v11-compare.txt",
+     "sha256": "1f81c774d5209761fce23f757e6f6c2d4f731c533be9b31d0e017a253175f6e2"
+    },
+    {
+     "path": ".ionmc-cache/transport-samples/dd976c5/13/samples/v11-150-emonly.json",
+     "sha256": "cb46ec341d0334740ea0e585f5ea9c0f084d60a883c4097c80a5b070837c0b6f"
+    },
+    {
+     "path": ".ionmc-cache/transport-samples/dd976c5/15/samples/v11-200-emonly.json",
+     "sha256": "1bb5e78e387cdd8528895d6c22b196fe1ba3f792db34d72a4bbcbbd81cc7866b"
+    },
+    {
+     "path": ".ionmc-cache/reference-runs/REF-278f82f0abda74861681-8a56e570/work/idd_dose.csv",
+     "sha256": "b6e7a374f62dae58dfe6c6b75e0841e6376704d0eaf2b6cb54f07c5931b9178e"
+    },
+    {
+     "path": ".ionmc-cache/reference-runs/REF-7072862d365da2cf275b-475cdb44/work/idd_dose.csv",
+     "sha256": "76acde29effcb10f067868a393257c1d89daa3448d83e7686205181ca40301cd"
+    },
+    {
+     "path": ".ionmc-cache/reference-runs/REF-b9387263d9a5d9db0593-7c20f8b2/work/idd_dose.csv",
+     "sha256": "81a9d8e18ae7384728da33403366f5231227b14704195f8813c532dcdcce1a54"
+    },
+    {
+     "path": ".ionmc-cache/reference-runs/REF-095c91aab5a7a6d92ebe-7e80de3c/work/idd_dose.csv",
+     "sha256": "cd23c00ed5eee4c39882830da83e08dcefd4701d220349ec323c79d7c70ed961"
+    },
+    {
+     "path": ".ionmc-cache/reference-runs/REF-c10bdf1824e76827a539-b1ded06c/work/idd_dose.csv",
+     "sha256": "37de1c34504970153951921b931383fcf488e7b9eaea855ba74b12c08b13fedb"
+    },
+    {
+     "path": ".ionmc-cache/reference-runs/REF-f3ed032bc11595bea382-3d206d0e/work/idd_dose.csv",
+     "sha256": "973cf76d0ec5477c90e37585501c0088b35ac7048ea6455340bf0b989115c0d5"
+    }
+   ],
+   "run_id": "RUN-20261012T142957Z-a8e41216",
+   "step_path": "lv5c-dd976c5-16/16-v11-compare.txt"
   }
  },
  "banner": "Exploratory, report-only (Amendment 19); not evidence; changes no row.",

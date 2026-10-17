@@ -996,9 +996,11 @@ def _clean_checkout_emulation(
 def _restore_de6_pinned_constants():  # type: ignore[no-untyped-def]
     from validation.scripts.elastic_attribution import de6_swap as d6
 
-    old = (d6.PINNED_ID, d6.PIN_PATH)
+    old = (d6.PINNED_ID, d6.PIN_PATH, dict(d6.ARCHIVED_V11_PIN))
     yield
-    d6.PINNED_ID, d6.PIN_PATH = old
+    d6.PINNED_ID, d6.PIN_PATH = old[:2]
+    d6.ARCHIVED_V11_PIN.clear()
+    d6.ARCHIVED_V11_PIN.update(old[2])
 
 
 def _fake_cdf_dir(d: Path) -> Path:
@@ -1038,12 +1040,19 @@ def _toy_table(der: Path, idx: int, exploratory: dict, arrays: dict | None = Non
 
 # Archived V11 numbers as recorded in the committed H5 record (block ``archived_v11``); the fixture's toy h5.json carries them so that the
 # D-E6 summary needs no local archive (validation/generated is git-ignored).
-_ARCHIVED_V11 = {
+_ARCHIVED_ENERGIES = {
     "150": {"F_ionmc": 0.8567840337079885, "F_ionmc_se": 0.0015196783488711665, "F_topas": 0.891584942125469, "F_topas_se": 0.0021600982500448217,
             "gain_ionmc": 0.0220987766133649, "gain_topas": 0.016252044281034106, "F_relative_diff_se": 0.002885429972284705},
     "200": {"F_ionmc": 0.8440660646539855, "F_ionmc_se": 0.0025408116155115545, "F_topas": 0.8873703022321767, "F_topas_se": 0.0023837942663498973,
             "gain_ionmc": 0.02672217441583613, "gain_topas": 0.018419142339446415, "F_relative_diff_se": 0.0038376917410936247},
 }  # fmt: skip
+
+
+_ARCHIVED_V11 = {"source": {**{"run_id": "RUN-20261012T142957Z-a8e41216", "step_path": "lv5c-dd976c5-16/16-v11-compare.txt",
+                              "evidence_sha": "dd976c5a69850b9597ac4da938792d4273a71719",
+                              "compare_sha256": "1f81c774d5209761fce23f757e6f6c2d4f731c533be9b31d0e017a253175f6e2"},
+                            "input_sha256": [{"path": "x", "sha256": "0" * 64}]},
+                 "energies": _ARCHIVED_ENERGIES}  # fmt: skip
 
 
 def _de6_fixture(
@@ -1553,30 +1562,100 @@ def test_de6_summary_needs_only_the_committed_h5_record_when_the_archive_is_abse
     ctx = _de6_fixture(tmp_path / "fx")
     ctx.archive = None  # the module default (c.RUN_V11) is now the missing path
     doc = _summarize(ctx)
-    assert doc["archived_v11_source"].startswith("archive absent")
-    assert doc["energies"]["150"]["base"]["F_ionmc_archived"] == pytest.approx(
-        _ARCHIVED_V11["150"]["F_ionmc"], abs=1e-15
+    assert (
+        doc["archived_v11"]["status"].startswith("archive absent")
+        and len(doc["archived_v11"]["h5_sha256"]) == 64
     )
+    assert doc["energies"]["150"]["base"]["F_ionmc_archived"] == pytest.approx(
+        _ARCHIVED_ENERGIES["150"]["F_ionmc"], abs=1e-15
+    )
+
+
+def _fake_archive(ctx, path: Path) -> dict:  # type: ignore[no-untyped-def]
+    arch = {e: {"F": {"ionmc": {"value": v["F_ionmc"], "se": v["F_ionmc_se"]}, "reference": {"value": v["F_topas"], "se": v["F_topas_se"]},
+                      "se": v["F_relative_diff_se"]},
+               "plateau_gain": {"ionmc": {"value": v["gain_ionmc"]}, "reference": {"value": v["gain_topas"]}}} for e, v in ctx.archived["energies"].items()}  # fmt: skip
+    path.write_text(
+        "#JSON-BEGIN\n"
+        + json.dumps({"git_sha": "x", "verdict": {"energies": arch}})
+        + "\n#JSON-END\n"
+    )
+    return arch
 
 
 def test_de6_archived_v11_cross_check_against_a_present_archive(tmp_path: Path) -> None:
+    import hashlib
+
     from validation.scripts.elastic_attribution import de6_swap as d6
 
     ctx = _de6_fixture(tmp_path)
-    arch = {e: {"F": {"ionmc": {"value": v["F_ionmc"], "se": v["F_ionmc_se"]}, "reference": {"value": v["F_topas"], "se": v["F_topas_se"]},
-                      "se": v["F_relative_diff_se"]},
-               "plateau_gain": {"ionmc": {"value": v["gain_ionmc"]}, "reference": {"value": v["gain_topas"]}}} for e, v in ctx.archived.items()}  # fmt: skip
     p = tmp_path / "arch.txt"
-    p.write_text("#JSON-BEGIN\n" + json.dumps({"verdict": {"energies": arch}}) + "\n#JSON-END\n")
-    got, status = d6.archived_v11(ctx.h5, p)
+    arch = _fake_archive(ctx, p)
+    with pytest.raises(
+        SystemExit, match="frozen pin"
+    ):  # a different archive file than the pinned one
+        d6.archived_v11(ctx.h5, p)
+    d6.ARCHIVED_V11_PIN["compare_sha256"] = hashlib.sha256(p.read_bytes()).hexdigest()
+    ctx.archived["source"]["compare_sha256"] = d6.ARCHIVED_V11_PIN["compare_sha256"]
+    ctx.h5.write_text(json.dumps({"archived_v11": ctx.archived}))
+    got, prov = d6.archived_v11(ctx.h5, p)
     assert (
-        status.startswith("archive cross-checked")
-        and got[150]["F_ionmc"] == ctx.archived["150"]["F_ionmc"]
+        prov["status"].startswith("archive cross-checked")
+        and got[150]["F_ionmc"] == ctx.archived["energies"]["150"]["F_ionmc"]
     )
     arch["150"]["F"]["ionmc"]["value"] += 1e-9
-    p.write_text("#JSON-BEGIN\n" + json.dumps({"verdict": {"energies": arch}}) + "\n#JSON-END\n")
+    _ = p.write_text(
+        "#JSON-BEGIN\n"
+        + json.dumps({"git_sha": "x", "verdict": {"energies": arch}})
+        + "\n#JSON-END\n"
+    )
+    d6.ARCHIVED_V11_PIN["compare_sha256"] = ctx.archived["source"]["compare_sha256"] = (
+        hashlib.sha256(p.read_bytes()).hexdigest()
+    )
+    ctx.h5.write_text(json.dumps({"archived_v11": ctx.archived}))
     with pytest.raises(SystemExit, match="differs from the archive"):
         d6.archived_v11(ctx.h5, p)
     ctx.h5.write_text("{}")
     with pytest.raises(SystemExit, match="regenerate"):
+        d6.archived_v11(ctx.h5, None)
+
+
+def _tamper_h5(ctx, fn) -> None:  # type: ignore[no-untyped-def]
+    blk = copy.deepcopy(ctx.archived)
+    fn(blk)
+    ctx.h5.write_text(json.dumps({"archived_v11": blk}))
+
+
+def test_de6_archived_v11_block_is_validated_and_pinned(tmp_path: Path) -> None:
+    from validation.scripts.elastic_attribution import de6_swap as d6
+
+    ctx = _de6_fixture(tmp_path)
+    nan = float("nan")
+    cases = {
+        "nan": lambda b: b["energies"]["150"].update(F_relative_diff_se=nan),
+        "inf": lambda b: b["energies"]["200"].update(gain_ionmc=float("inf")),
+        "nonpositive se": lambda b: b["energies"]["150"].update(F_topas_se=0.0),
+        "missing key": lambda b: b["energies"]["150"].pop("gain_topas"),
+        "extra key": lambda b: b["energies"]["150"].update(extra=1.0),
+        "missing energy": lambda b: b["energies"].pop("200"),
+        "extra energy": lambda b: b["energies"].update({"100": b["energies"]["150"]}),
+        "extra block key": lambda b: b.update(more=1),
+        "extra source key": lambda b: b["source"].update(more="x"),
+        "string number": lambda b: b["energies"]["150"].update(F_ionmc="0.85"),
+    }
+    for fn in cases.values():
+        _tamper_h5(ctx, fn)
+        with pytest.raises(SystemExit):
+            d6.archived_v11(ctx.h5, None)
+
+    # a consistent substitution of the values together with a recomputed summary is stopped by the source pin
+    def sub(b):  # type: ignore[no-untyped-def]
+        b["energies"]["150"]["F_ionmc"] += 0.01
+        b["source"]["compare_sha256"] = "f" * 64
+
+    _tamper_h5(ctx, sub)
+    with pytest.raises(SystemExit, match="frozen pin"):
+        _summarize(ctx)
+    _tamper_h5(ctx, lambda b: b["source"].update(run_id="RUN-other"))
+    with pytest.raises(SystemExit, match="frozen pin"):
         d6.archived_v11(ctx.h5, None)

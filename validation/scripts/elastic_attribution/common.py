@@ -103,6 +103,13 @@ def v11_archived_block(path: Path | None = None) -> dict[str, dict[str, float]]:
     }  # fmt: skip
 
 
+def v11_archive_source(path: Path | None = None) -> dict[str, str]:
+    """Identity of the archived step-16 compare file: run id, step path, evidence SHA (its recorded ``git_sha``) and its sha256."""
+    p = Path(path or RUN_V11)
+    return {"run_id": p.parents[2].name, "step_path": "/".join(p.parts[-2:]), "evidence_sha": json_payload(p)["git_sha"],
+            "compare_sha256": sha256_file(p)}  # fmt: skip
+
+
 def idd_mean(
     energy: int, mode: str
 ) -> tuple[NDArray[np.float64], NDArray[np.float64], dict[str, Any]]:

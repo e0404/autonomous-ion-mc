@@ -20,6 +20,7 @@ Input files (sha256):
 - `validation/generated/elastic_attribution/de3/de3-200-swap-pA.json`  3a9ed03773b5c940ce01cc4a158bb4eafc41e388eea6301497d56d5cf1bb1a63
 - `validation/generated/elastic_attribution/de3/de3-200-swap-pp-sigma.json`  f953bef0d4b795efe67d42e8de402b554ef29b45e79f3af55523dc6ecac28530
 - `validation/generated/elastic_attribution/de3/de3-200-swap-pp.json`  06768ea7de370e016f3ef6d577dc7769b0e30b79fcbe1a4d2b67ea49c046ace7
+- `validation/results/elastic_attribution/de0h5/h5.json`  40421563c3c55383d413de82af8775b36cb0a28f569a62435703762730ea76a7
 - `validation/generated/elastic_attribution/de6/cdf-error.json`  f2af13a2891ebbb6065c91bab6daa843d9f5c68e5771e06897f0d574c3b54698
 - `validation/generated/elastic_attribution/de6/de6-lineage.json`  e54dd5775a88dd911ca0a02eb9a921973e461d6deaafbe7a5cefb5672baf748d
 - `validation/generated/elastic_attribution/de4/de4-ratios.json`  7807cb09ffb8dfba73a561979bd366f9e92c58a83363b254eaf71049b30b2365
@@ -27,6 +28,8 @@ Input files (sha256):
 <!-- body below is rendered from the Git projection of the JSON record -->
 
 Clauses 1-3 of plan section 5 hold at both energies (rule of record, 1 - F): **True**; (-ln F sensitivity): True. Clauses 4 and 5 are not decided here.
+
+Archived V11 quantities: committed H5 record `validation/results/elastic_attribution/de0h5/h5.json` (sha256 40421563c3c55383d413de82af8775b36cb0a28f569a62435703762730ea76a7), source RUN-20261012T142957Z-a8e41216 / lv5c-dd976c5-16/16-v11-compare.txt at dd976c5a (sha256 1f81c774d5209761fce23f757e6f6c2d4f731c533be9b31d0e017a253175f6e2); archive cross-checked (values to 1e-12, source sha256 equal to the pin).
 
 ## 150 MeV
 
