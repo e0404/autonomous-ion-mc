@@ -1669,6 +1669,8 @@ def test_de6_archived_v11_numeric_only_edit_is_rejected_by_the_values_digest(
     ctx = _de6_fixture(tmp_path)
     got, prov = d6.archived_v11(ctx.h5, None)  # the pristine block carries the pinned digest
     assert prov["energies_sha256"] == d6.ARCHIVED_V11_PIN["energies_sha256"]
+    assert set(got) == {150, 200}
+    assert d6.energies_digest({str(e): v for e, v in got.items()}) == prov["energies_sha256"]
     _tamper_h5(
         ctx, lambda b: b["energies"]["150"].update(F_ionmc=b["energies"]["150"]["F_ionmc"] + 1e-6)
     )  # source fields unchanged
