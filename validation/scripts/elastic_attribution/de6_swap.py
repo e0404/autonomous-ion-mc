@@ -1013,7 +1013,17 @@ ARCHIVED_V11_PIN: dict[str, str] = {
     "step_path": "lv5c-dd976c5-16/16-v11-compare.txt",
     "evidence_sha": "dd976c5a69850b9597ac4da938792d4273a71719",
     "compare_sha256": "1f81c774d5209761fce23f757e6f6c2d4f731c533be9b31d0e017a253175f6e2",
+    # Digest of the ``energies`` block, computed ONCE from the committed de0h5/h5.json, whose values were cross-checked to 1e-12 against the
+    # archived compare file with the sha256 above. Canonical form: sha256 of json.dumps(energies, sort_keys=True, separators=(",", ":"))
+    # in UTF-8, floats exactly as stored (Python repr, shortest round-trip). It binds the numbers even when the archive is absent.
+    "energies_sha256": "f9bd66b4c3f572df4c3a4ae75e63dbeef3372485b9421c93d62874a254b0d1f7",
 }
+ARCHIVED_V11_SOURCE_KEYS = ("run_id", "step_path", "evidence_sha", "compare_sha256")
+
+
+def energies_digest(energies: Any) -> str:
+    """Canonical sha256 of the archived ``energies`` block (see ``ARCHIVED_V11_PIN``)."""
+    return hashlib.sha256(json.dumps(energies, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 ARCHIVED_V11_ENERGIES = ("150", "200")
 ARCHIVED_V11_KEYS = ("F_ionmc", "F_ionmc_se", "F_topas", "F_topas_se", "gain_ionmc", "gain_topas", "F_relative_diff_se")
 ARCHIVED_V11_POSITIVE = ("F_ionmc", "F_ionmc_se", "F_topas", "F_topas_se", "F_relative_diff_se")
@@ -1024,9 +1034,10 @@ def validate_archived_block(block: Any) -> None:
     if not isinstance(block, dict) or set(block) != {"source", "energies"}:
         raise SystemExit("archived_v11 block: keys must be exactly source, energies")
     src, en = block["source"], block["energies"]
-    if not isinstance(src, dict) or set(src) != {*ARCHIVED_V11_PIN, "input_sha256"} or not isinstance(src.get("input_sha256"), list):
+    if not isinstance(src, dict) or set(src) != {*ARCHIVED_V11_SOURCE_KEYS, "input_sha256"} or not isinstance(src.get("input_sha256"), list):
         raise SystemExit("archived_v11 source: keys must be exactly run_id, step_path, evidence_sha, compare_sha256, input_sha256")
-    for k, v in ARCHIVED_V11_PIN.items():
+    for k in ARCHIVED_V11_SOURCE_KEYS:
+        v = ARCHIVED_V11_PIN[k]
         if src[k] != v:
             raise SystemExit(f"archived_v11 source {k} {str(src[k])[:20]} differs from the frozen pin {v[:20]}")
     if not isinstance(en, dict) or set(en) != set(ARCHIVED_V11_ENERGIES):
@@ -1041,6 +1052,8 @@ def validate_archived_block(block: Any) -> None:
                 raise SystemExit(f"archived_v11 energy {e}: {k} is not a finite number")
             if k in ARCHIVED_V11_POSITIVE and not v > 0:
                 raise SystemExit(f"archived_v11 energy {e}: {k} must be > 0")
+    if energies_digest(en) != ARCHIVED_V11_PIN["energies_sha256"]:
+        raise SystemExit("archived_v11 energies: canonical sha256 differs from the frozen pin (values edited)")
 
 
 def archived_v11(h5_path: Path | None = None, archive_path: Path | None = None) -> tuple[dict[int, dict[str, float]], dict[str, Any]]:
@@ -1071,7 +1084,8 @@ def archived_v11(h5_path: Path | None = None, archive_path: Path | None = None) 
         if bad:
             raise SystemExit(f"the committed H5 archived_v11 block differs from the archive: {bad[:6]}")
         status = "archive cross-checked (values to 1e-12, source sha256 equal to the pin)"
-    prov = {"path": c.rel(hp), "h5_sha256": c.sha256_file(hp), "status": status, "source": {k: block["source"][k] for k in ARCHIVED_V11_PIN}}
+    prov = {"path": c.rel(hp), "h5_sha256": c.sha256_file(hp), "status": status, "energies_sha256": energies_digest(block["energies"]),
+            "source": {k: block["source"][k] for k in ARCHIVED_V11_SOURCE_KEYS}}
     return {int(e): v for e, v in block["energies"].items()}, prov
 
 
@@ -1295,7 +1309,7 @@ def render_report(doc: dict[str, Any]) -> str:
         "",
         f"Archived V11 quantities: committed H5 record `{doc['archived_v11']['path']}` (sha256 {doc['archived_v11']['h5_sha256']}), source "
         f"{doc['archived_v11']['source']['run_id']} / {doc['archived_v11']['source']['step_path']} at {doc['archived_v11']['source']['evidence_sha'][:8]} "
-        f"(sha256 {doc['archived_v11']['source']['compare_sha256']}); {doc['archived_v11']['status']}.",
+        f"(sha256 {doc['archived_v11']['source']['compare_sha256']}); values digest {doc['archived_v11']['energies_sha256']}; {doc['archived_v11']['status']}.",
         "",
     ]
     for e, b in doc["energies"].items():

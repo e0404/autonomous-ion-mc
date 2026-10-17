@@ -29,7 +29,7 @@ Input files (sha256):
 
 Clauses 1-3 of plan section 5 hold at both energies (rule of record, 1 - F): **True**; (-ln F sensitivity): True. Clauses 4 and 5 are not decided here.
 
-Archived V11 quantities: committed H5 record `validation/results/elastic_attribution/de0h5/h5.json` (sha256 40421563c3c55383d413de82af8775b36cb0a28f569a62435703762730ea76a7), source RUN-20261012T142957Z-a8e41216 / lv5c-dd976c5-16/16-v11-compare.txt at dd976c5a (sha256 1f81c774d5209761fce23f757e6f6c2d4f731c533be9b31d0e017a253175f6e2); archive cross-checked (values to 1e-12, source sha256 equal to the pin).
+Archived V11 quantities: committed H5 record `validation/results/elastic_attribution/de0h5/h5.json` (sha256 40421563c3c55383d413de82af8775b36cb0a28f569a62435703762730ea76a7), source RUN-20261012T142957Z-a8e41216 / lv5c-dd976c5-16/16-v11-compare.txt at dd976c5a (sha256 1f81c774d5209761fce23f757e6f6c2d4f731c533be9b31d0e017a253175f6e2); values digest f9bd66b4c3f572df4c3a4ae75e63dbeef3372485b9421c93d62874a254b0d1f7; archive cross-checked (values to 1e-12, source sha256 equal to the pin).
 
 ## 150 MeV
 

@@ -1659,3 +1659,20 @@ def test_de6_archived_v11_block_is_validated_and_pinned(tmp_path: Path) -> None:
     _tamper_h5(ctx, lambda b: b["source"].update(run_id="RUN-other"))
     with pytest.raises(SystemExit, match="frozen pin"):
         d6.archived_v11(ctx.h5, None)
+
+
+def test_de6_archived_v11_numeric_only_edit_is_rejected_by_the_values_digest(
+    tmp_path: Path,
+) -> None:
+    from validation.scripts.elastic_attribution import de6_swap as d6
+
+    ctx = _de6_fixture(tmp_path)
+    got, prov = d6.archived_v11(ctx.h5, None)  # the pristine block carries the pinned digest
+    assert prov["energies_sha256"] == d6.ARCHIVED_V11_PIN["energies_sha256"]
+    _tamper_h5(
+        ctx, lambda b: b["energies"]["150"].update(F_ionmc=b["energies"]["150"]["F_ionmc"] + 1e-6)
+    )  # source fields unchanged
+    with pytest.raises(SystemExit, match="energies: canonical sha256"):
+        d6.archived_v11(ctx.h5, None)
+    with pytest.raises(SystemExit, match="energies: canonical sha256"):
+        _summarize(ctx)

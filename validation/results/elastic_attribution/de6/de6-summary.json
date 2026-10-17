@@ -1,5 +1,6 @@
 {
  "archived_v11": {
+  "energies_sha256": "f9bd66b4c3f572df4c3a4ae75e63dbeef3372485b9421c93d62874a254b0d1f7",
   "h5_sha256": "40421563c3c55383d413de82af8775b36cb0a28f569a62435703762730ea76a7",
   "path": "validation/results/elastic_attribution/de0h5/h5.json",
   "source": {
