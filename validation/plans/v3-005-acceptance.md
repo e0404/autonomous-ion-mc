@@ -1540,3 +1540,56 @@ The researcher's assessment (all readings; the sections "Reading of ρ₁, ρ₂
   - `validation/plans/v3-005d-m2prime/scripts/cv_mc.py`
   - `validation/plans/v3-005d-m2prime/scripts/make_projection.py`
   - `validation/plans/v3-005d-m2prime/scripts/olg.py`
+
+*(a) Addendum to Amendment 21 (2026-10-18, before any D-E8 diagnostic run; after the official M2′ construction record de7 was seen; revision 3, independently reviewed in rounds A21-3 (REVISE) and A21-4 (ACCEPT with three provenance additions, applied verbatim) of `validation/plans/v3-005d-elastic-attribution/review.md`).*
+
+**Status.** No diagnostic number exists yet: no D-E8 harness run, no D4 sampler run, no evaluation. The official M2′ construction record (`validation/results/elastic_attribution/de7/`) has been seen. It is a trigger-level record: triggers 2–4 pass, and the builder matches the scratch construction within 0.16 %. Nothing below changes a tolerance, band, seed, base, gate or verdict.
+
+1. **Planning defect (author: the orchestrator).** Amendment 21 (c)7 keeps the pinned black-disk table at every node below 80 MeV. At the D4 energies of 30 and 50 MeV, the table under test is therefore **identical** to the pinned table. Condition (iv) of Amendment 20 (c)2 ("D4 moves toward 1 … at ≥ 4 of 5 energies") then cannot test the model:
+   - Read strictly, identical tables do not move toward 1 (the inequality is strict). At most 3 of 5 energies can qualify, so (iv) fails by construction and the outcome is a **guaranteed STOP**.
+   - Read through sampling, the 30 and 50 MeV comparisons pit two samples of one distribution against each other. The outcome is a **coin flip**: about 75 % chance that at least one of the two "moves toward 1".
+
+   (iv) was written for a full-range model.
+
+2. **Resolution: condition (iv) becomes report-only** (orchestrator decision; written before any diagnostic number exists).
+   - **(iv) is reported, not applied.** It is computed at 100, 150 and 200 MeV in the form "D4 moves toward 1", and reported. D4 is reported at all five energies. The 30 and 50 MeV cases (water cases 0 and 1; graphite cases 5 and 6) are listed as **"identical by construction"**.
+   - **Why it carries no screening weight.** The revised (iv) at 100 / 150 / 200 MeV has an outcome predictable from committed numbers. The disclosed construction-level O-16 P(θ_lab > θ_2mm) (Amendment 21 (a)3, (a)6 and the M2PRIME record), together with `de4-ratios.json`, give M2′/Geant4 ≈ 0.97 / 1.03 / 1.06 against table/Geant4 1.54 / 1.34 / 1.29 (review round A21-3). So (iv) carries no screening weight, like trigger 3.
+   - **The decisive, blind conditions are (i), (i-b), (ii) and (iii).** (v) is the trigger record (de7). CONTINUE requires (i), (i-b), (ii), (iii) and (v).
+   - **Nature of the repair.** It is a planning-defect fix. Under the literal reading, where the original (iv) fails by construction, it is a **relaxation**. Under the sampling reading it is stricter on the model-informative energies only.
+
+3. **Dated notes (interpretive; no rule change).**
+   - **A2.** D4 in (iv), reported, is computed on the **water cases (rows 14–18), p+A class (O-16), P(θ_lab > θ_2mm)**. That is the quantity behind the cited "table / Geant4: 1.29–1.67 at 5 of 5" (review round D-E6, item 2). The graphite cases are report-only.
+   - **A3.** The conditions are judged against the **exact frozen-rule values**, which the evaluator recomputes from the archived SE and floored Welch df with `compare_idd_v5.t95`. The printed bands of Amendment 20 (c)3 are roundings of these values. A point estimate that falls in the rounding gap is judged by the exact value.
+   - **A4** (supported by installed Amendment 21 (e), line 1485 of the acceptance plan). Amendment 20 (d)2 ("Conditions: only after CONTINUE, and only with M2") is read through Amendment 21 (e): on CONTINUE, (d) applies "with M2′ as the model". The fresh V5 base lv 20531004 (r_index 4–7) is therefore taken for M2′.
+   - **A5.** The record states two assumptions of the committed definitions next to the values they affect:
+     - D1b assumes that the V5 "on" peak/plateau scales multiplicatively with the elastic factor.
+     - D3 assumes that the elastic-only harness change δ_E adds to the full-nuclear V5 "on" plateau integral.
+
+4. **Pre-registered harness changes.** These are frozen before the first run: committed, Codex-reviewed and tested.
+   - **Variant loader.** `de3_probes.py` resolves `m2prime` (table `addd8179…`), `m2` and `rb` to the builder's table ids. Each is loaded with `allow_exploratory_table=True`, and the table id and npz sha256 are recorded in every run document.
+   - **R-B table (V-RB, report-only).** Built with `--model m2prime` and Pauli variant `bdc-pn`. Its construction-level quantities are recorded in de7 under the Git projection rule (ratios only).
+   - **de5 sampler.** The table id and seed base become parameters: 20991300 for V-M2′, 20991200 for V-M2. The guard becomes `base ≤ seed < base + 10`. Events per case, the classification rule and the KE cut are unchanged.
+   - **de0_kernels.py.** Gains a table-id argument (report-only D6).
+   - **`de8_diagnostic.py` evaluator.** It reads the archived values from the committed records:
+     - `de0h5/h5.json`;
+     - lv5c step 21 in `validation/results/transport/lv5c-dd976c5-single-process.json`;
+     - the de3 base documents, after a sha256 check against `de6-report.md`;
+     - `de4-ratios.json`;
+     - the D-E5 table-side record.
+
+     It recomputes every band with `compare_idd_v5.t95`, computes D1–D7 and conditions (i)–(v) with (iv) per item 2, and writes the verdict with every failing condition. A test checks that the recomputed bands round to the printed ones.
+   - **Operational definitions, in the evaluator and its tests:**
+     - F and gain use the 20–60 mm plateau of the 0.5 mm IDD;
+     - δ_E = Σ_{20 ≤ z ≤ 60 mm} (IDD_M2′ − IDD_base) × bin_g_cm2, in MeV per primary;
+     - D1–D3 use the elastic-only harness runs;
+     - the paired-jackknife SE over the 20 CRN batches is reported and not used in the rule.
+   - **Freeze provenance (rule text).** "Every D-E8 run document and the evaluator output record the git HEAD SHA, a clean-tree flag, and the sha256 of `de3_probes.py`, `de5_sampling.py`, `de0_kernels.py` and `de8_diagnostic.py`. The run manifest names the Codex review id that passed on the commit freezing these four files. The evaluator refuses to run if the working tree is dirty, if HEAD does not contain that reviewed commit, if any of the four sha256 values differs from the reviewed commit's, or if any run document's HEAD, clean-tree flag or sha256 values differ from the manifest. A Codex "pass" cannot be checked offline, only the review id and the commit SHA: the orchestrator verifies the pass at freeze time and records it in the manifest and in the commit message. The evaluator refuses if a run document's elastic table id or npz sha256 differs from the de7-recorded tables (`addd8179…` for V-M2′; the M2 and R-B records for the report-only variants). The evaluator refuses if any run seed is outside the registered set (harness 20990100 / 20990101; D4 20991300–20991309 for V-M2′ and 20991200–20991209 for V-M2), and its output records the sha256 of every generated run document it read."
+   - **Execution.** Once. Seeds: harness CRN 20990100 / 20990101; D4 20991300–20991309 (V-M2′) and 20991200–20991209 (V-M2). The block 20991100–20991109 stays unused.
+     - Nothing is changed after the first run.
+     - A crash without a published document is re-executed once at the same seeds, with both attempts recorded.
+     - **A run that publishes a document but is invalid** (the run's `valid` flag is false, or a failure counter is non-zero) **counts as executed**, and the screen verdict is **STOP ("not established")**. It is never re-run.
+     - The verdict comes from the frozen evaluator and is recorded whichever way it falls.
+
+5. **Disclosure header of the diagnostic record** (also carried into decision 0042, the lv5d V5 / V11 records and the results README):
+
+   > Go/no-go screen, Amendment 20 (c) as carried by Amendment 21 (e) and its addendum (a); report-only, never evidence. It uses the V11 reference (archived TOPAS F and gain), the V5 reference (TOPAS ΔIDD and peak/plateau) and the Geant4 thin-target ratios to decide whether the single pre-committed model M2′ is transported at all. It is not a selection among models: M2′ has no free parameter, plan §4.2 forbids switching to M3 on such outcomes, and STOP leads to "no model change". It is a stopping rule on gating quantities. The lv5d V11 and V5 runs are therefore not blind to these estimates; they replicate them on independent seeds with the frozen comparators. The M2′ construction outcomes were known before registration (Amendment 21 (a)3) and the de7 record before this addendum; the screen's transport quantities were not. Condition (iv) was revised after de7 to 100 / 150 / 200 MeV and made report-only: its outcome there is predictable from the disclosed construction-level P values. The decisive blind conditions are (i), (i-b), (ii) and (iii). Executed once; recorded whichever way it falls.

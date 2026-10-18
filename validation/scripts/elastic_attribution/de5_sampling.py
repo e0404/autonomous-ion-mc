@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import math
 import time
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -59,7 +60,7 @@ SIGNATURES = (  # keys of a class summary that the Geant4 hook compares
 )  # fmt: skip
 _CL = "cases/*/classes/*"
 GIT_ALLOW = (
-    "selection_rule", "events_per_case", "seed_base", "ke_cut_mev", "classification_rule", "descriptor_note", "thin_target",
+    "selection_rule", "events_per_case", "seed_base", "table_id", "code/*", "code/scripts_sha256/*", "ke_cut_mev", "classification_rule", "descriptor_note", "thin_target",
     *(f"cases/*/{k}" for k in ("case", "row", "material", "energy_mev", "length_cm", "primaries", "seed", "events_sampled",
                                "range_water_mm", "theta_2mm_deg", "theta_3mm_deg", "total_rate_per_primary",
                                "pp_share_of_elastic_events")),
@@ -80,14 +81,14 @@ HIST_INTERIOR_DEG = [2.0, 5.0, 10.0, 15.0, 20.0, 30.0, 60.0]  # 8 lab-angle bins
 HIST_INTERIOR_T = [0.02, 0.05, 0.1, 0.2, 0.4, 0.6, 0.8]  # primary T1 / E0, 8 bins
 
 
-def _build_cases() -> tuple[dict[str, Any], ...]:
+def _build_cases(seed_base: int = SEED_BASE) -> tuple[dict[str, Any], ...]:
     out = []
     for i, (mat, e) in enumerate([(m, e) for m in ("water", "graphite") for e in ENERGIES]):
         thin = e <= 50
         row = 14 + i
         out.append({
             "case": i, "row": row, "material": mat, "energy_mev": e, "length_cm": 0.2 if thin else 1.0,
-            "primaries": 20_000_000 if thin else 4_000_000, "seed": SEED_BASE + i,
+            "primaries": 20_000_000 if thin else 4_000_000, "seed": seed_base + i,
             "target": "O-16" if mat == "water" else "C-12",  # the p+A class of the material (water also has H-1)
             "topas_material": "G4_WATER" if mat == "water" else "G4_C", "topas_seed_base": 20270000 + 1000 * row,
             # frozen D-E4 design (plan 3.2): split into 3 equal parts at 30 / 50 MeV, one part otherwise; the TOPAS input is
@@ -105,9 +106,12 @@ CASES = _build_cases()
 (:mod:`de4_parse`) identifies a materialized TOPAS case against this table."""
 
 
-def case_table() -> list[dict[str, Any]]:
-    """Cases 0-9 = rows 14-23 (a copy of :data:`CASES`)."""
-    return [dict(cs) for cs in CASES]
+def case_table(seed_base: int = SEED_BASE) -> list[dict[str, Any]]:
+    """Cases 0-9 = rows 14-23 (a copy of :data:`CASES`; ``seed_base`` replaces the sampler seeds only: 20991300 for the M2' diagnostic D4,
+    20991200 for the report-only M2 arm; the case matrix and the TOPAS identity are unchanged)."""
+    if seed_base == SEED_BASE:
+        return [dict(cs) for cs in CASES]
+    return [dict(cs) for cs in _build_cases(seed_base)]
 
 
 def select_tracks(
@@ -267,14 +271,14 @@ def shape_descriptors(mu: np.ndarray, pcm: float) -> dict[str, Any]:
     return out
 
 
-def sample_case(tab: Any, water: c.Water, case: dict[str, Any]) -> dict[str, Any]:
+def sample_case(tab: Any, water: c.Water, case: dict[str, Any], seed_base: int = SEED_BASE) -> dict[str, Any]:
     """The table sampled for one case; see the module docstring."""
     from ionmc.nuclear.bgg import M_PROTON_MEV as MP
     from ionmc.nuclear.elastic_kin import two_body
 
     e = float(case["energy_mev"])
     names = tuple(tab.target_names)
-    assert SEED_BASE <= case["seed"] < SEED_BASE + 10 and 20990000 <= case["seed"] < 21000000
+    assert seed_base <= case["seed"] < seed_base + 10 and 20990000 <= case["seed"] < 21000000
     if case["material"] == "water":
         dens = {n: t["n_per_cm3"] * t["scale"] for n, t in water.targets.items()}
     else:
@@ -422,29 +426,38 @@ def signature_ratios(
     return out
 
 
-def run() -> None:
+D4_SEED_BASES = {"m2prime": 20991300, "m2": 20991200}
+"""Amendment 21 (e): D4 seeds of the model under test (M2', 20991300 + case) and of the report-only M2 arm (20991200 + case)."""
+
+
+def run(table_id: str | None = None, cache_dir: Path | None = None, seed_base: int = SEED_BASE, tag: str | None = None) -> None:
+    """The D-E5 table-side record. ``table_id`` (in the scratch ``cache_dir``) samples a variant / builder table with ``seed_base``; the record
+    then goes to ``de5-<tag>/`` (the committed pinned-table ``de5/`` record is never overwritten) and carries ``table_id``."""
     t0 = time.perf_counter()
-    tab = c.load_table()
+    tab = c.load_table(table_id, cache_dir)
     water = c.Water(tab)
-    cases = {str(cs["case"]): sample_case(tab, water, cs) for cs in case_table()}
-    doc = {"banner": c.BANNER, "selection_rule": SELECTION_RULE, "events_per_case": N_EVENTS, "seed_base": SEED_BASE, "ke_cut_mev": KE_CUT_MEV, "cases": cases,
+    cases = {str(cs["case"]): sample_case(tab, water, cs, seed_base) for cs in case_table(seed_base)}
+    doc = {"banner": c.BANNER, "selection_rule": SELECTION_RULE, "events_per_case": N_EVENTS, "seed_base": seed_base, "ke_cut_mev": KE_CUT_MEV, "cases": cases,
            "descriptor_note": "first-minimum, q-slope and Helm descriptors are recorded, not interpreted (frozen 1-deg estimator picks noise dips in a 256-bin piecewise-uniform table; the 3-sigma variant misses the J1 zero)",
         "classification_rule": "conflict tracks (both residuals < 1e-3, theta_lab below the ~1.8 deg crossover) are p-p iff the event has a secondary proton, else p+A",
         "thin_target": "fixed beam energy, no slowing down, no multiple scattering (as the D-E4 EM-free cases)",
            "wall_s": time.perf_counter() - t0}  # fmt: skip
+    if table_id is not None:
+        doc["table_id"] = table_id
+        doc["code"] = c.code_provenance()
     c.write_outputs(
-        c.OUT / "de5", "de5.json", doc, "de5-report.md", _header(), render_report, GIT_ALLOW
+        c.OUT / (f"de5-{tag}" if tag else "de5"), "de5.json", doc, "de5-report.md", _header(table_id, cache_dir, seed_base), render_report, GIT_ALLOW
     )
 
 
-def _header() -> str:
-    cmd = "python -m validation.scripts.elastic_attribution.de5_sampling"
+def _header(table_id: str | None = None, cache_dir: Path | None = None, seed_base: int = SEED_BASE) -> str:
+    cmd = "python -m validation.scripts.elastic_attribution.de5_sampling" + (f" --table-id {table_id}" if table_id else "")
     return c.header(
         "D-E5 (table side): the pinned elastic table sampled in the D-E4 frame",
         cmd,
-        c.table_files(),
+        c.table_files(table_id, cache_dir),
         [
-            "1e6 events per case from the P7 sampler (`ElasticTable.sample_mu`), seeds SeedSequence(20991000 + case), thin target "
+            f"1e6 events per case from the P7 sampler (`ElasticTable.sample_mu`), seeds SeedSequence({seed_base} + case), thin target "
             "at the beam energy, exact two-body kinematics, p-p cut at 16.26 deg CM, D-E4 kinetic-energy filter. Signature "
             "definitions: module docstring (plan 2.2). Thresholds theta_w use the Bethe range of water."
         ],
@@ -495,5 +508,21 @@ def render_report(doc: dict[str, Any]) -> str:
     return "\n".join(out) + "\n"
 
 
+def main(argv: list[str] | None = None) -> None:
+    import argparse
+
+    ap = argparse.ArgumentParser(description="D-E5 table side (default: the pinned table, seeds 20991000 + case)")
+    ap.add_argument("--table-id", default=None, help="a variant / builder table id installed in --scratch-cache")
+    ap.add_argument("--scratch-cache", type=Path, default=None)
+    ap.add_argument("--seed-base", type=int, default=SEED_BASE, help="m2prime D4: 20991300; m2 (report-only): 20991200")
+    ap.add_argument("--tag", default=None, help="output directory suffix (de5-<tag>); required with --table-id")
+    a = ap.parse_args(argv)
+    if a.table_id and not a.tag:
+        raise SystemExit("--table-id needs --tag (the committed de5/ record is never overwritten by a variant)")
+    if a.table_id and a.seed_base == SEED_BASE:
+        raise SystemExit(f"a variant table needs its own seed base, one of {sorted(D4_SEED_BASES.values())}")
+    run(a.table_id, a.scratch_cache, a.seed_base, a.tag)
+
+
 if __name__ == "__main__":
-    run()
+    main()

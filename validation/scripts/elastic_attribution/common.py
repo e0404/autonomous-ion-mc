@@ -54,16 +54,41 @@ def rel(path: Path) -> str:
         return str(path)
 
 
-def load_table() -> Any:
-    """The pinned elastic table through the repository loader (verified pins, no exploratory flag)."""
+def load_table(table_id: str | None = None, cache_dir: Path | None = None) -> Any:
+    """The pinned elastic table through the repository loader (verified pins, no exploratory flag). With ``table_id`` (a variant or builder
+    table installed in a scratch cache, ``make_variant_tables.install_builder_table``) that table is loaded through the exploratory route."""
     from ionmc.nuclear.elastic_tables import ElasticTable
 
-    return ElasticTable.load(CACHE_DIR, TABLE_ID)
+    if table_id is None or table_id == TABLE_ID:
+        return ElasticTable.load(Path(cache_dir) if cache_dir else CACHE_DIR, TABLE_ID)
+    return ElasticTable.load(Path(cache_dir or CACHE_DIR), table_id, allow_exploratory=True)
 
 
-def table_files() -> list[Path]:
-    d = CACHE_DIR / "derived"
-    return [d / f"elastic-proton-{TABLE_ID}.npz", d / f"elastic-proton-{TABLE_ID}.json"]
+def table_files(table_id: str | None = None, cache_dir: Path | None = None) -> list[Path]:
+    d = Path(cache_dir or CACHE_DIR) / "derived"
+    tid = table_id or TABLE_ID
+    return [d / f"elastic-proton-{tid}.npz", d / f"elastic-proton-{tid}.json"]
+
+
+CODE_FILES = ("de3_probes.py", "de5_sampling.py", "de0_kernels.py", "de8_diagnostic.py")  # the diagnostic's code (go/no-go screen)
+
+
+def repo_state(repo: Path | None = None) -> dict[str, Any]:
+    """HEAD and the clean-tree flag (``git status --porcelain --untracked-files=all`` empty); no network."""
+    import subprocess
+
+    r = Path(repo or REPO)
+
+    def git(*a: str) -> str:
+        return subprocess.run(["git", *a], cwd=r, capture_output=True, text=True, check=True).stdout
+
+    return {"git_head": git("rev-parse", "HEAD").strip(), "git_clean": git("status", "--porcelain", "--untracked-files=all") == ""}
+
+
+def code_provenance(repo: Path | None = None) -> dict[str, Any]:
+    """``repo_state`` plus the sha256 of the diagnostic's code files (recorded in every run document of the screen)."""
+    here = Path(__file__).resolve().parent
+    return {**repo_state(repo), "scripts_sha256": {n: sha256_file(here / n) for n in CODE_FILES if (here / n).is_file()}}
 
 
 def json_payload(path: Path) -> dict[str, Any]:

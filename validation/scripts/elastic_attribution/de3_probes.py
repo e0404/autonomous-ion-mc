@@ -127,6 +127,12 @@ def run_one(
     mode = "emonly" if variant == "emonly" else "emel"
     tid = variant_table_id(variant)
     seed = SEEDS[energy]
+    binding = None
+    if variant in ("m2prime", "m2", "rb"):  # builder tables: table id and npz sha256 bound into the run document
+        from .make_variant_tables import verify_variant
+
+        binding = verify_variant(Path(os.environ["IONMC_CACHE_DIR"]), variant)
+        assert binding["table_id"] == tid
     geo, grid, nz, r_mm = v5b.v5_geometry(float(energy))
     cfg = build_config(energy, mode, n, seed, tid, batches)
     t0 = time.perf_counter()
@@ -148,7 +154,10 @@ def run_one(
         "valid": bool(v5.clean(res) and res.energy_balance.relative_residual <= 1e-12),
         "relative_residual": float(res.energy_balance.relative_residual),
         "counters": res.counters.as_dict(), "wall_s": wall, "hist_per_s": n / wall,
+        "configuration": "elastic_only" if mode == "emel" else "em_only", "code": c.code_provenance(),
     }  # fmt: skip
+    if binding is not None:
+        doc["elastic_table_npz_sha256"] = binding["npz_sha256"]
     if mode == "emel":
         rec_b = v5b.tally_batches(res, "recoil") / bin_g
         doc["recoil_idd_batches"] = rec_b.tolist()

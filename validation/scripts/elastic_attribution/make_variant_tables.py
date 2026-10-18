@@ -223,9 +223,16 @@ def build(scratch: Path = SCRATCH) -> dict[str, Any]:
         if not (scratch / sub).is_dir():
             shutil.copytree(src / sub, scratch / sub)
     der = _derived(scratch)
+    kept: dict[str, Any] = {}
+    if (scratch / "variants.json").is_file() and der.is_dir():  # installed builder tables survive a rebuild
+        for v, e in _builder_entries(scratch).items():
+            kept[v] = (e, {n: (der / n).read_bytes() for n in (f"elastic-proton-{e['table_id']}.json", f"elastic-proton-{e['table_id']}.npz")})
     if der.is_dir():
         shutil.rmtree(der)
     der.mkdir()
+    for _e, files in kept.values():
+        for n, b in files.items():
+            (der / n).write_bytes(b)
     for stem in (f"nuclear-proton-{NUCLEAR_TABLE_ID}", f"elastic-proton-{c.TABLE_ID}"):
         for ext in (".json", ".npz"):
             shutil.copy2(src / "derived" / (stem + ext), der / (stem + ext))
@@ -242,14 +249,87 @@ def build(scratch: Path = SCRATCH) -> dict[str, Any]:
         "pinned_table_id": c.TABLE_ID,
         "nuclear_table_id": NUCLEAR_TABLE_ID,
         "variants": out,
+        **({"builders": {v: e for v, (e, _f) in kept.items()}} if kept else {}),
     }
     (scratch / "variants.json").write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
     return doc
 
 
+BUILDER_VARIANTS = {
+    "m2prime": {"model": "m2prime-pauli-blocked", "pauli_variant": "clementel-villi"},
+    "m2": {"model": "m2-optical-glauber", "pauli_variant": None},
+    "rb": {"model": "m2prime-pauli-blocked", "pauli_variant": "bdc-pn"},
+}
+"""Builder tables (``ionmc data build elastic-proton --model m2|m2prime``; V3-005D Amendments 20 (c), 21 (e)) installable as named variants:
+``m2prime`` (R-C Clementel-Villi, the model under test), ``m2`` (report-only) and ``rb`` (Bertulani & De Conti reading R-B, report-only)."""
+
+
+def _builder_entries(scratch: Path) -> dict[str, dict[str, Any]]:
+    doc = json.loads((scratch / "variants.json").read_text())
+    return dict(doc.get("builders", {}))
+
+
+def install_builder_table(scratch: Path, variant: str, source: Path) -> dict[str, Any]:
+    """Install the builder table pair (``source``: a directory holding exactly one ``elastic-proton-<id>.json/.npz`` pair, or the json) into
+    the scratch cache as the named variant. Fail closed: the npz sha256 equals the sidecar's, the table id RECOMPUTED from the sidecar (with
+    that sha256) equals the file name, and the exploratory block names the model and Pauli variant expected for ``variant``. The binding
+    ``{table_id, npz_sha256, json_sha256}`` is recorded in ``variants.json`` (``builders``); installing the same pair again is a no-op, a
+    different table for an installed variant is refused."""
+    from ionmc.nuclear.build import table_id
+
+    if variant not in BUILDER_VARIANTS:
+        raise SystemExit(f"unknown builder variant {variant!r}; expected one of {sorted(BUILDER_VARIANTS)}")
+    check_scratch(scratch)
+    if not (scratch / "variants.json").is_file() or not (scratch / MARKER).is_file():
+        raise SystemExit(f"{scratch}: not a built D-E3 scratch cache (run make_variant_tables first)")
+    src = Path(source)
+    jp = src if src.is_file() else _only(src, "elastic-proton-*.json")
+    side = json.loads(jp.read_text())
+    tid = side["table_id"]
+    npz_p = jp.with_suffix(".npz")
+    if jp.name != f"elastic-proton-{tid}.json" or not npz_p.is_file():
+        raise SystemExit(f"{jp}: file name does not carry the recorded table id or the npz is missing")
+    sha = c.sha256_file(npz_p)
+    if sha != side.get("npz_sha256") or table_id({**side, "npz_sha256": sha}) != tid:
+        raise SystemExit(f"{jp}: npz sha256 or the recomputed table id differs from the record")
+    want, ex = BUILDER_VARIANTS[variant], side.get("exploratory") or {}
+    if ex.get("model") != want["model"] or ex.get("pauli_variant") != want["pauli_variant"]:
+        raise SystemExit(f"{jp}: exploratory block {ex.get('model')!r}/{ex.get('pauli_variant')!r} is not the {variant!r} construction")
+    entries = _builder_entries(scratch)
+    if variant in entries and entries[variant]["table_id"] != tid:
+        raise SystemExit(f"variant {variant!r} is already installed with table {entries[variant]['table_id'][:12]}; use a fresh scratch cache")
+    der = _derived(scratch)
+    for p in (jp, npz_p):
+        shutil.copy2(p, der / p.name)
+    entry = {"table_id": tid, "npz_sha256": sha, "json_sha256": c.sha256_file(jp), "model": ex["model"], "pauli_variant": ex.get("pauli_variant")}
+    doc = json.loads((scratch / "variants.json").read_text())
+    doc.setdefault("builders", {})[variant] = entry
+    (scratch / "variants.json").write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
+    return entry
+
+
+def _only(d: Path, pattern: str) -> Path:
+    files = sorted(Path(d).glob(pattern))
+    if len(files) != 1:
+        raise SystemExit(f"{d}: expected exactly one {pattern}, found {len(files)}")
+    return files[0]
+
+
+def verify_variant(scratch: Path, variant: str) -> dict[str, str]:
+    """``{table_id, npz_sha256}`` of an installed builder variant, re-verified against the files in the scratch cache (the binding that
+    the run documents record)."""
+    e = _builder_entries(scratch).get(variant)
+    if e is None:
+        raise SystemExit(f"builder variant {variant!r} is not installed in {scratch}")
+    der = _derived(scratch)
+    if c.sha256_file(der / f"elastic-proton-{e['table_id']}.npz") != e["npz_sha256"] or c.sha256_file(der / f"elastic-proton-{e['table_id']}.json") != e["json_sha256"]:
+        raise SystemExit(f"builder variant {variant!r}: the installed files differ from the recorded binding")
+    return {"table_id": e["table_id"], "npz_sha256": e["npz_sha256"]}
+
+
 def variant_ids(scratch: Path = SCRATCH) -> dict[str, str]:
     doc = json.loads((scratch / "variants.json").read_text())
-    return {v: r["table_id"] for v, r in doc["variants"].items()}
+    return {**{v: r["table_id"] for v, r in doc["variants"].items()}, **{v: r["table_id"] for v, r in doc.get("builders", {}).items()}}
 
 
 def preflight(scratch: Path = SCRATCH) -> dict[str, Any]:
@@ -264,6 +344,7 @@ def _preflight(scratch: Path) -> dict[str, Any]:
     from ionmc.nuclear import tables as nt
 
     ids = variant_ids(scratch)
+    builders = _builder_entries(scratch)
     expected = {
         f"nuclear-proton-{NUCLEAR_TABLE_ID}",
         f"elastic-proton-{c.TABLE_ID}",
@@ -278,6 +359,10 @@ def _preflight(scratch: Path) -> dict[str, Any]:
     for v, tid in ids.items():
         t = et.ElasticTable.load(scratch, tid, allow_exploratory=True)
         ex = t.info["exploratory"]
+        if v in builders:
+            verify_variant(scratch, v)
+            assert t.exploratory and ex.get("model") == BUILDER_VARIANTS[v]["model"] and ex.get("pauli_variant") == BUILDER_VARIANTS[v]["pauli_variant"]
+            continue
         assert t.exploratory and (ex.get("d_e3_variant") or ex.get("d_e6_variant")) == v
     loaded: list[str] = []
     orig_e, orig_n = et.ElasticTable.load.__func__, nt.NuclearTable.load.__func__  # type: ignore[attr-defined]
@@ -322,9 +407,16 @@ def main(argv: list[str] | None = None) -> None:
         default=None,
         help=f"scratch cache directory (env {SCRATCH_ENV}; default {DEFAULT_SCRATCH})",
     )
+    ap.add_argument("--install", nargs=2, action="append", metavar=("VARIANT", "SOURCE"), default=[],
+                    help=f"install a builder table pair as a named variant ({', '.join(BUILDER_VARIANTS)}) into the existing scratch cache and run the preflight")  # fmt: skip
     a = ap.parse_args(argv)
     scratch = resolve_scratch(a.scratch_cache)
     print(f"scratch cache: {scratch}", flush=True)
+    if a.install:
+        for v, src in a.install:
+            print(v, json.dumps(install_builder_table(scratch, v, Path(src))))
+        print(json.dumps(preflight(scratch), indent=1))
+        return
     doc = build(scratch)
     for v, r in doc["variants"].items():
         print(f"{v:12s} {r['table_id']}  npz {r['npz_sha256'][:12]}  {r['normalisation'] or ''}")

@@ -25,6 +25,7 @@ from __future__ import annotations
 import difflib
 import json
 import math
+from pathlib import Path
 from collections.abc import Callable
 from typing import Any
 
@@ -53,7 +54,7 @@ REVIEW_CRUDE = {  # reviewer's removal.py table (review.md B.1), 150 MeV, p+O on
 
 C_HYPOTHETICAL = "C-12-hypothetical"  # p+C along the water path with n = 1 per cm3 (only conditional removal probabilities are kept)
 GIT_ALLOW = (
-    "table_id", "energies_mev", "w_mm", "crude_cited_review_150/*", "crude_recomputed/*/*/*", "h6/**",
+    "table_id", "code/*", "code/scripts_sha256/*", "energies_mev", "w_mm", "crude_cited_review_150/*", "crude_recomputed/*/*/*", "h6/**",
     "kernels/*/*/O-16/*", "kernels/*/*/H-1/*", "kernels/*/*/G/*",
     *(f"kernels/*/*/{C_HYPOTHETICAL}/cond_removal_{w:g}mm" for w in W_MM),
     "pointwise/*/*/*/*",
@@ -376,8 +377,10 @@ def equivalent_shape(
     return 0.5 * (lo + hi)
 
 
-def run() -> None:
-    tab = c.load_table()
+def run(table_id: str | None = None, cache_dir: Path | None = None, tag: str | None = None) -> None:
+    """Generate the D-E0 record. ``table_id`` (with the scratch ``cache_dir`` that holds it) runs the same kernels on a variant / builder table
+    (D6 of the go/no-go screen); the record then goes to ``de0-<tag>/`` and carries that table id. Default: the pinned table, ``de0/``."""
+    tab = c.load_table(table_id, cache_dir)
     sh, water = Shapes(tab), c.Water(tab)
     ref = c.v11_reference()
     kinds = ("table", *FAMILIES)
@@ -424,19 +427,19 @@ def run() -> None:
         for e in (150, 200)
     }
     h6 = h6_case_diff()
-    doc = {"banner": c.BANNER, "table_id": c.TABLE_ID, "energies_mev": list(ENERGIES), "w_mm": list(W_MM),
+    doc = {"banner": c.BANNER, "table_id": table_id or c.TABLE_ID, **({"code": c.code_provenance()} if table_id else {}), "energies_mev": list(ENERGIES), "w_mm": list(W_MM),
            "pointwise": point, "kernels": kern, "reconciliation": recon, "crude_recomputed": crude,
            "crude_cited_review_150": {k: list(v) for k, v in REVIEW_CRUDE.items()}, "h6": h6,
            "v11_reference": {str(k): v for k, v in ref.items()}}  # fmt: skip
     inputs = [
-        *c.table_files(),
+        *c.table_files(table_id, cache_dir),
         c.RUN_V11,
         c.RUN_V10A,
         *(c.V11_PARTIALS[k] for k in sorted(c.V11_PARTIALS)),
     ]
     inputs += [c.REPO / r for r in sorted(h6["files_hashed"])]
     c.write_outputs(
-        c.OUT / "de0",
+        c.OUT / (f"de0-{tag}" if tag else "de0"),
         "kernels.json",
         doc,
         "de0-report.md",
@@ -760,5 +763,18 @@ def render_report(doc: dict[str, Any]) -> str:
     return "\n".join(out) + "\n"
 
 
+def main(argv: list[str] | None = None) -> None:
+    import argparse
+
+    ap = argparse.ArgumentParser(description="D-E0 kernels (default: the pinned table)")
+    ap.add_argument("--table-id", default=None, help="a variant / builder table id installed in --scratch-cache")
+    ap.add_argument("--scratch-cache", type=Path, default=None, help="scratch cache holding --table-id (default: the pinned cache)")
+    ap.add_argument("--tag", default=None, help="output directory suffix (de0-<tag>); required with --table-id")
+    a = ap.parse_args(argv)
+    if a.table_id and not a.tag:
+        raise SystemExit("--table-id needs --tag (the pinned de0/ record is never overwritten by a variant)")
+    run(a.table_id, a.scratch_cache, a.tag)
+
+
 if __name__ == "__main__":
-    run()
+    main()

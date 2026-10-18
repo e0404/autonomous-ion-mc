@@ -975,3 +975,72 @@ The physics definition (R-C, flux-weighted, conventions pinned) and the disclosu
 - 5: restrict the mapping to the listed phrases, keeping l.1115/1136 "M3" literal, and add the D4 seed statement.
 
 Everything else from A21-1 is correctly applied. With these two edits applied verbatim, no further review round is needed.
+
+# Round A21-3 review (Amendment 21 addendum (a) draft, file mtime 09:22:25; context: d4-execution-brief.md and de7 at 42db373)
+
+The current file content is internally consistent. I found no sign of a partial edit; the status line matches de7 (triggers 2–4 pass, reproduction within 0.16 %).
+
+1. **Prospectivity and strictness: correct in substance, but the strictness claim is overstated, and the (iv) outcome is predictable (important).**
+   - True: no transport, D4-sampler or evaluator number exists, and de7 is a trigger-level record without D4/P values.
+   - **The revised (iv) is predictable from committed numbers.** Amendment 21 (a)3/(a)6 already discloses the construction-level O-16 P(θ_lab > θ_2mm): M2′ 0.528 / 0.604 at 150 / 200 MeV, table 0.688 / 0.735, CHIPS 0.513 / 0.571. M2PRIME adds R-C 0.391 at 100 MeV, against table 0.622 and P_G4 ≈ 0.404 from de4 (1.541). So M2′/G4 ≈ 0.97 / 1.03 / 1.06, against table/G4 1.54 / 1.34 / 1.29. The revised (iv) at 100/150/200 MeV is therefore **expected to pass with large margins**, before any run.
+   - **Strictness, per reading:**
+     - (a) Literal reading (identical tables do not "move"): the original (iv) is a guaranteed STOP, and the revision is a **relaxation** from impossible to expected-pass.
+     - (b) Sampling reading: neither rule dominates. The original passes with 2/3 high energies plus both low ones (≈ 25 %), which the revision forbids. The revision passes with 3/3 high energies and no low one, which the original forbids. The revision is stricter on the informative energies only.
+   - So "stricter in proportion (100 % against 80 %)" is not true in every reading.
+   - **Is the change justified?** Yes as a planning-defect repair: a clause evaluated where the model is identical to the reference by construction cannot test the model. It is not tuned to an unknown outcome. But its outcome is known in expectation, so the clause no longer screens anything.
+   - **Fix:** replace the strictness sentence with: "Relative to the literal reading this removes a clause that fails by construction; relative to the sampling reading it is stricter on the model-informative energies. The outcome of the revised (iv) is predictable from the construction-level P values disclosed in Amendment 21 (a)3 and M2PRIME, so (iv) carries no screening weight, like trigger 3. The decisive, blind conditions are (i), (i-b), (ii) and (iii)."
+   - Equally acceptable: declare (iv) report-only. The orchestrator chooses, but the disclosure is mandatory either way.
+2. **The 30/50 MeV "identical by construction" listing weakens nothing else.**
+   - (i), (i-b), (ii) and (iii) are evaluated at 150/200 MeV from transport, and (v) is the construction checks. None references the 30/50 MeV D4 cases.
+   - A2 (water O-16 class, P at 2 mm) is the reading that matches the cited 1.29–1.67 (`de4-ratios` H2 exceedance_ratio_2mm 1.568 / 1.670 / 1.541 / 1.343 / 1.287). It is interpretive and not tuned.
+   - A3 (exact frozen-rule values; the printed bands are roundings) is correct and makes the evaluator the authority.
+   - A5 (the D1b multiplicativity and D3 additivity assumptions stated) is good practice.
+3. **A4 is supported by the committed text, not a scope change.** Amendment 21 (e), installed at acceptance plan l.1485: "CONTINUE: Amendment 20 (d) (one fresh V5 base, lv 20531004), (e) …, (f) and (g) apply with M2′ as the model." Reading 20 (d)2's "only with M2" as M2′ follows directly from that clause.
+4. **Execution rules: sound** (one run; re-execute once only after a crash with no published document, at the same seeds, both recorded; the verdict comes from the frozen evaluator). **Add (minor):** a run that publishes a document but is invalid (the run's `valid` flag false, or a non-zero failure counter) counts as executed. The screen verdict is then STOP ("not established"), never a re-run.
+5. **Harness changes: complete against the brief.** The list covers:
+   - the variant loader with table id and npz sha;
+   - the R-B table;
+   - reuse of the de3 base with a sha256 check against de6, the brief's preferred path;
+   - the de5 seed-base and table-id parameters with the guard;
+   - the de0 table-id argument;
+   - the de8 evaluator reading only committed records, recomputing the bands with `t95`, with the rounding test.
+
+   **Enforceability of the freeze (important):** "committed + Codex-reviewed + tested before the first run" is enforceable only if the run proves it. **Add:**
+   - every D-E8 run document and the evaluator output record `git HEAD` and a clean-tree flag, plus the sha256 of `de3_probes.py`, `de5_sampling.py`, `de0_kernels.py` and `de8_diagnostic.py`;
+   - the evaluator refuses to run on a dirty tree, or when HEAD does not contain the Codex-reviewed commit named in the record;
+   - the operational definitions of the brief §1 (F and gain from the 20–60 mm plateau of 0.5 mm IDD; δ_E = Σ_{20–60 mm} ΔIDD × bin_g_cm2 from batch means; elastic-only runs; paired-jackknife SE reported, not used) are implemented in the evaluator and covered by its tests, so they are frozen with it.
+6. **Disclosure header: good** (go/no-go, not a selection, stopping rule, lv5d not blind, construction outcomes and de7 known, executed once). **Add one sentence:** "Condition (iv) was revised after the de7 record (addendum (a)2) to the 100/150/200 MeV energies; its outcome there is predictable from the construction-level P values disclosed in Amendment 21 (a)3 and carries no screening weight."
+
+**Verdict: REVISE (text and enforceability; no blocking issue).**
+- Item 1: correct the strictness claim and add the (iv) predictability disclosure, or make (iv) report-only.
+- Item 4: add the invalid-run rule.
+- Item 5: make the freeze provable (HEAD, clean tree, script sha256s, evaluator refusal; operational definitions in the evaluator tests).
+- Item 6: add the header sentence.
+
+Items 2 and 3 are confirmed.
+
+---
+
+# Round A21-4 review (addendum (a) rev 2 against rev 1; checked by diff)
+
+1. **Every A21-3 item is applied; the diff shows nothing else changed.** The changes:
+   - (iv) is report-only, with the predictability statement (≈ 0.97 / 1.03 / 1.06 against 1.54 / 1.34 / 1.29) and "no screening weight".
+   - The decisive blind conditions are (i), (i-b), (ii) and (iii); CONTINUE = (i), (i-b), (ii), (iii), (v).
+   - "Stricter in proportion" is dropped. The literal-reading relaxation and the sampling-reading statement are given.
+   - The A2 wording is adjusted ("reported").
+   - A4 cites l.1485.
+   - The operational definitions are now in the evaluator and its tests.
+   - The freeze-provenance rule text and the invalid-run rule are added.
+   - The header sentence is added.
+2. **Refusal conditions: checkable offline as written, but three gaps.**
+   - **Offline-checkable as written:**
+     - dirty tree (`git status`);
+     - HEAD containing the reviewed commit (`git merge-base --is-ancestor`);
+     - the four script sha256 values against that commit (`git show <c>:<path>`);
+     - run-document HEAD, clean-tree flag and sha256 against the manifest.
+   - **Gaps (minor):**
+     - **(a) Codex pass is not checkable offline.** Only the review *id* and the reviewed commit SHA are. State that the evaluator checks the id's presence and the commit SHA, and that the "passed" status is verified by the orchestrator at freeze time and recorded in the manifest and the commit message.
+     - **(b) Add a table-identity refusal.** Refuse if any run document's elastic table id or npz sha256 differs from the de7-recorded M2′ table (`addd8179…`) for V-M2′, or from the de7 M2 and R-B records for the report-only variants. This guarantees that the screened table is the one whose triggers passed.
+     - **(c) Add a seed refusal.** Refuse if any run seed differs from the registered set: harness 20990100 / 20990101; D4 20991300–20991309 (V-M2′) and 20991200–20991209 (V-M2). The evaluator output should also record the sha256 of every generated run document it consumed. The de3 base documents are already sha-checked against de6.
+
+**Verdict: ACCEPT.** The three one-line additions of item 2 are to be inserted verbatim into the freeze-provenance rule text, with no further review round. With them, addendum (a) rev 2 is ready to be committed as written.
