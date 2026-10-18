@@ -364,14 +364,15 @@ def leak_violations(proj: Any, absolutes: list[float]) -> list[str]:
 # ---------------------------------------------------------------------------------------------------------------------------------
 # document, report, run
 # ---------------------------------------------------------------------------------------------------------------------------------
-def build_document(m2_info: dict[str, Any], m2p_info: dict[str, Any], scratch_text: str | None) -> dict[str, Any]:
+def build_document(m2_info: dict[str, Any], m2p_info: dict[str, Any], scratch_text: str | None, rb_info: dict[str, Any] | None = None) -> dict[str, Any]:
     scratch = parse_scratch(scratch_text) if scratch_text else {}
     doc: dict[str, Any] = {
         "banner": c.BANNER,
-        "variants": {"M2": project_variant(m2_info, withhold_sigma_r=True), "M2prime": project_variant(m2p_info, withhold_sigma_r=False)},
+        "variants": {"M2": project_variant(m2_info, withhold_sigma_r=True), "M2prime": project_variant(m2p_info, withhold_sigma_r=False),
+                     **({"RB": project_variant(rb_info, withhold_sigma_r=False)} if rb_info is not None else {})},  # fmt: skip
         "reproduction": reproduction(m2p_info, scratch) if scratch else {"complete": False, "rule_2pct_verdict": "INCOMPLETE: no scratch output given"},
     }  # fmt: skip
-    absolutes = collect_absolutes([m2_info, m2p_info], scratch)
+    absolutes = collect_absolutes([m2_info, m2p_info, *([rb_info] if rb_info is not None else [])], scratch)
     proj = c.git_projection(json.loads(json.dumps(doc, default=float)), GIT_ALLOW)
     bad = leak_violations(proj, absolutes)
     if bad:
@@ -451,10 +452,10 @@ def render_report(doc: dict[str, Any]) -> str:
     return "\n".join(out) + "\n"
 
 
-def run(m2: Path, m2prime: Path, scratch_text: Path | None, out: Path | None = None, cache_dir: Path | None = None) -> dict[str, Any]:
+def run(m2: Path, m2prime: Path, scratch_text: Path | None, out: Path | None = None, cache_dir: Path | None = None, rb: Path | None = None) -> dict[str, Any]:
     text = Path(scratch_text).read_text() if scratch_text else run_scratch(Path(cache_dir or c.REPO / ".ionmc-cache"))
-    doc = build_document(load_builder_record(m2), load_builder_record(m2prime), text)
-    inputs = [p for d in (m2, m2prime) for p in ([Path(d)] if Path(d).is_file() else sorted(Path(d).glob("elastic-proton-*.json")))]
+    doc = build_document(load_builder_record(m2), load_builder_record(m2prime), text, load_builder_record(rb) if rb else None)
+    inputs = [p for d in (m2, m2prime, *([rb] if rb else [])) for p in ([Path(d)] if Path(d).is_file() else sorted(Path(d).glob("elastic-proton-*.json")))]
     inputs += [Path(scratch_text)] if scratch_text else []
     hdr = c.header("D-E7: official M2 / M2' builder records, Git-safe projection",
                    "python -m validation.scripts.elastic_attribution.de7_m2prime_record --m2 DIR --m2prime DIR --scratch-text FILE", inputs,
@@ -468,11 +469,12 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--m2", type=Path, required=True)
     ap.add_argument("--m2prime", type=Path, required=True)
+    ap.add_argument("--rb", type=Path, default=None, help="R-B (bdc-pn, report-only) builder record directory or json")
     ap.add_argument("--scratch-text", type=Path, default=None, help="captured stdout of m2prime2.py (default: run it)")
     ap.add_argument("--cache-dir", type=Path, default=None)
     ap.add_argument("--out", type=Path, default=None)
     a = ap.parse_args()
-    run(a.m2, a.m2prime, a.scratch_text, a.out, a.cache_dir)
+    run(a.m2, a.m2prime, a.scratch_text, a.out, a.cache_dir, a.rb)
 
 
 if __name__ == "__main__":

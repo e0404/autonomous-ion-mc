@@ -116,9 +116,26 @@ def build_config(
 
 
 def run_one(
+    variant: str, energy: int, n: int, batches: int, lateral: bool, out: Path, attempts: Path | None = None
+) -> dict[str, Any]:
+    """One run -> ``out/de3-<energy>-<variant>.json``. The diagnostic arms (``m2prime``, ``m2``, ``rb``) are executed once: an existing target is
+    refused and an attempt record is appended to ``de8-attempts.json`` before the run (``common.begin_attempt``)."""
+    if variant not in ("m2prime", "m2", "rb"):
+        return _run_one(variant, energy, n, batches, lateral, out)
+    att = c.begin_attempt(out / f"de3-{energy}-{variant}.json", "de3_probes.run_one",
+                          {"variant": variant, "energy": energy, "histories": n, "batches": batches, "lateral": lateral}, attempts)  # fmt: skip
+    try:
+        doc = _run_one(variant, energy, n, batches, lateral, out)
+    except BaseException:
+        c.end_attempt(att, "failed", attempts)
+        raise
+    c.end_attempt(att, "published-valid" if doc.get("valid") else "published-invalid", attempts)
+    return doc
+
+
+def _run_one(
     variant: str, energy: int, n: int, batches: int, lateral: bool, out: Path
 ) -> dict[str, Any]:
-    """One run -> ``out/de3-<energy>-<variant>.json``."""
     v5c, v5d, v5b, v5 = _t()
     from ionmc import materials as M
     from ionmc.reference import metrics as rm

@@ -54,7 +54,7 @@ REVIEW_CRUDE = {  # reviewer's removal.py table (review.md B.1), 150 MeV, p+O on
 
 C_HYPOTHETICAL = "C-12-hypothetical"  # p+C along the water path with n = 1 per cm3 (only conditional removal probabilities are kept)
 GIT_ALLOW = (
-    "table_id", "code/*", "code/scripts_sha256/*", "energies_mev", "w_mm", "crude_cited_review_150/*", "crude_recomputed/*/*/*", "h6/**",
+    "table_id", "elastic_table_npz_sha256", "code/*", "code/scripts_sha256/*", "energies_mev", "w_mm", "crude_cited_review_150/*", "crude_recomputed/*/*/*", "h6/**",
     "kernels/*/*/O-16/*", "kernels/*/*/H-1/*", "kernels/*/*/G/*",
     *(f"kernels/*/*/{C_HYPOTHETICAL}/cond_removal_{w:g}mm" for w in W_MM),
     "pointwise/*/*/*/*",
@@ -377,9 +377,22 @@ def equivalent_shape(
     return 0.5 * (lo + hi)
 
 
-def run(table_id: str | None = None, cache_dir: Path | None = None, tag: str | None = None) -> None:
+def run(table_id: str | None = None, cache_dir: Path | None = None, tag: str | None = None, attempts: Path | None = None) -> None:
     """Generate the D-E0 record. ``table_id`` (with the scratch ``cache_dir`` that holds it) runs the same kernels on a variant / builder table
     (D6 of the go/no-go screen); the record then goes to ``de0-<tag>/`` and carries that table id. Default: the pinned table, ``de0/``."""
+    if table_id is None:
+        _run(table_id, cache_dir, tag)
+        return
+    att = c.begin_attempt(c.OUT / f"de0-{tag}" / "kernels.json", "de0_kernels.run", {"table_id": table_id, "tag": tag}, attempts)  # executed once
+    try:
+        _run(table_id, cache_dir, tag)
+    except BaseException:
+        c.end_attempt(att, "failed", attempts)
+        raise
+    c.end_attempt(att, "published-valid", attempts)
+
+
+def _run(table_id: str | None, cache_dir: Path | None, tag: str | None) -> None:
     tab = c.load_table(table_id, cache_dir)
     sh, water = Shapes(tab), c.Water(tab)
     ref = c.v11_reference()
@@ -427,7 +440,7 @@ def run(table_id: str | None = None, cache_dir: Path | None = None, tag: str | N
         for e in (150, 200)
     }
     h6 = h6_case_diff()
-    doc = {"banner": c.BANNER, "table_id": table_id or c.TABLE_ID, **({"code": c.code_provenance()} if table_id else {}), "energies_mev": list(ENERGIES), "w_mm": list(W_MM),
+    doc = {"banner": c.BANNER, "table_id": table_id or c.TABLE_ID, **({"code": c.code_provenance(), "elastic_table_npz_sha256": c.sha256_file(c.table_files(table_id, cache_dir)[0])} if table_id else {}), "energies_mev": list(ENERGIES), "w_mm": list(W_MM),
            "pointwise": point, "kernels": kern, "reconciliation": recon, "crude_recomputed": crude,
            "crude_cited_review_150": {k: list(v) for k, v in REVIEW_CRUDE.items()}, "h6": h6,
            "v11_reference": {str(k): v for k, v in ref.items()}}  # fmt: skip

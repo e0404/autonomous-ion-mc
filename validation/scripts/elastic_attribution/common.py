@@ -91,6 +91,46 @@ def code_provenance(repo: Path | None = None) -> dict[str, Any]:
     return {**repo_state(repo), "scripts_sha256": {n: sha256_file(here / n) for n in CODE_FILES if (here / n).is_file()}}
 
 
+ATTEMPTS = OUT / "de8-attempts.json"
+MAX_ATTEMPTS_WITHOUT_DOCUMENT = 2  # a crash that published no document may be re-executed once (Amendment 21 addendum (a) item 4)
+
+
+def _read_attempts(path: Path) -> list[dict[str, Any]]:
+    return json.loads(Path(path).read_text()) if Path(path).is_file() else []  # type: ignore[no-any-return]
+
+
+def begin_attempt(target: Path, producer: str, args: dict[str, Any], attempts_path: Path | None = None) -> int:
+    """Once-only execution of a diagnostic run (Amendment 21 addendum (a)): refuse an existing target (a published document, valid or not, is never
+    overwritten) and a third attempt at a target; otherwise append an attempt record BEFORE the run starts. The attempt file is append-only."""
+    import datetime
+
+    ap = Path(attempts_path or ATTEMPTS)
+    t = Path(target)
+    if t.exists():
+        raise SystemExit(f"{t} exists: the diagnostic is executed once; a published run (valid or not) is never overwritten or re-run")
+    log = _read_attempts(ap)
+    if sum(1 for r in log if r.get("output") == str(t) and r.get("outcome") == "started") >= MAX_ATTEMPTS_WITHOUT_DOCUMENT:
+        raise SystemExit(f"{t}: two attempts without a published document are already recorded; no further attempt")
+    try:
+        st = repo_state()
+    except Exception:  # noqa: BLE001 - no git: recorded as unknown, never silently clean
+        st = {"git_head": None, "git_clean": None}
+    n = len(log)
+    log.append({"id": n, "timestamp": datetime.datetime.now(datetime.UTC).isoformat(), "git_head": st["git_head"], "git_clean": st["git_clean"],
+                "producer": producer, "args": args, "output": str(t), "outcome": "started"})  # fmt: skip
+    ap.parent.mkdir(parents=True, exist_ok=True)
+    ap.write_text(json.dumps(log, indent=1, sort_keys=True) + "\n")
+    return n
+
+
+def end_attempt(attempt: int, outcome: str, attempts_path: Path | None = None) -> None:
+    """Append the outcome of an attempt (``published-valid``, ``published-invalid``, ``failed``) as a new record."""
+    ap = Path(attempts_path or ATTEMPTS)
+    log = _read_attempts(ap)
+    log.append({"id": len(log), "attempt": attempt, "outcome": outcome})
+    ap.write_text(json.dumps(log, indent=1, sort_keys=True) + "\n")
+
+
 def json_payload(path: Path) -> dict[str, Any]:
     """The JSON document of a step ``.txt`` (between ``#JSON-BEGIN`` and ``#JSON-END`` if present)."""
     t = Path(path).read_text()

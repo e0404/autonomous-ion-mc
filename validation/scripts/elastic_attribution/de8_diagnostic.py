@@ -62,13 +62,15 @@ DE4_RATIOS = RES / "de4" / "de4-ratios.json"
 DE5_COMMITTED = RES / "de5" / "de5.json"
 REVIEW_ID = re.compile(r"^REVIEW-[0-9a-f]{8}$")
 DISCLOSURE = (
-    "Go/no-go screen, Amendment 20 (c) carried by Amendment 21 (e); report-only, never evidence. It uses the V11 reference (archived TOPAS F and "
-    "gain), the V5 reference (TOPAS ΔIDD and peak/plateau) and the Geant4 thin-target ratios to decide whether the single pre-committed model M2′ is "
-    "transported at all. It is not a selection among models (M2′ has no free parameter; plan §4.2 forbids switching to M3 on such outcomes; STOP leads "
-    "to \"no model change\"). It is a stopping rule on gating quantities: the lv5d V11 and V5 runs are not blind to these estimates and replicate them "
-    "on independent seeds with the frozen comparators. The M2′ construction outcomes were known before registration (Amendment 21 (a)3); this screen's "
-    "transport quantities were not. Executed once; recorded whichever way it falls."
-)  # the header text of the execution brief, verbatim
+    "Go/no-go screen, Amendment 20 (c) as carried by Amendment 21 (e) and its addendum (a); report-only, never evidence. It uses the V11 reference "
+    "(archived TOPAS F and gain), the V5 reference (TOPAS ΔIDD and peak/plateau) and the Geant4 thin-target ratios to decide whether the single "
+    "pre-committed model M2′ is transported at all. It is not a selection among models: M2′ has no free parameter, plan §4.2 forbids switching to M3 "
+    "on such outcomes, and STOP leads to \"no model change\". It is a stopping rule on gating quantities. The lv5d V11 and V5 runs are therefore not "
+    "blind to these estimates; they replicate them on independent seeds with the frozen comparators. The M2′ construction outcomes were known before "
+    "registration (Amendment 21 (a)3) and the de7 record before this addendum; the screen's transport quantities were not. Condition (iv) was revised "
+    "after de7 to 100 / 150 / 200 MeV and made report-only: its outcome there is predictable from the disclosed construction-level P values. The decisive "
+    "blind conditions are (i), (i-b), (ii) and (iii). Executed once; recorded whichever way it falls."
+)  # verbatim from the acceptance plan, Addendum (a) to Amendment 21, item 5 (a test compares it with the plan text)
 
 GIT_ALLOW = (
     "disclosure", "verdict", "established", "failing_conditions/*", "iv_report_only_note", "conditions/**",
@@ -184,7 +186,7 @@ def valid_document(doc: dict[str, Any], energy: int, mode: str, *, arm: bool) ->
 
 
 REGISTERED_HARNESS_SEEDS = frozenset(CRN_SEEDS.values())
-DE7_VARIANT = {"m2prime": "M2prime", "m2": "M2"}
+DE7_VARIANT = {"m2prime": "M2prime", "m2": "M2", "rb": "RB"}
 
 
 def check_seeds(doc: dict[str, Any], what: str, *, d4_arm: str | None = None) -> None:
@@ -216,15 +218,16 @@ def check_table(doc: dict[str, Any], expected: dict[str, str] | None, arm: str, 
     """The run document's elastic table id and npz sha256 must equal the expected (de7-checked) table of the arm."""
     if expected is None:
         raise SystemExit(f"no expected table for the {arm} arm (manifest input required)")
-    if doc.get("elastic_table_id") != expected["table_id"] or doc.get("elastic_table_npz_sha256") != expected["npz_sha256"]:
+    if (doc.get("elastic_table_id") or doc.get("table_id")) != expected["table_id"] or doc.get("elastic_table_npz_sha256") != expected["npz_sha256"]:
         raise SystemExit(f"{what}: elastic table id / npz sha256 differ from the expected {arm} table")
 
 
-def check_code(doc: dict[str, Any], state: dict[str, Any], scripts: dict[str, str], what: str) -> None:
-    """A run document must record the current HEAD, a clean tree and the current code hashes (protocol violation otherwise: SystemExit)."""
+def check_code(doc: dict[str, Any], reviewed_sha: str, scripts: dict[str, str], what: str, ancestor: Any = None) -> None:
+    """A run document must record a clean tree, a HEAD that contains the reviewed commit, and the code hashes of that commit (SystemExit otherwise)."""
     cd = doc.get("code") or {}
-    if cd.get("git_head") != state["git_head"] or cd.get("git_clean") is not True:
-        raise SystemExit(f"{what}: recorded HEAD / clean flag differ from the evaluated HEAD {state['git_head'][:12]} (clean tree required)")
+    anc = ancestor or is_ancestor
+    if cd.get("git_clean") is not True or not isinstance(cd.get("git_head"), str) or not anc(reviewed_sha, cd["git_head"]):
+        raise SystemExit(f"{what}: recorded HEAD does not contain the reviewed commit {reviewed_sha[:12]}, or the tree was not clean (clean tree required)")
     for n, s in scripts.items():
         if (cd.get("scripts_sha256") or {}).get(n) != s:
             raise SystemExit(f"{what}: sha256 of {n} recorded in the document differs from the current file")
@@ -330,20 +333,65 @@ def de7_condition(de7_path: Path = DE7_JSON) -> dict[str, Any]:
 # ---------------------------------------------------------------------------------------------------------------------------------
 # the evaluator
 # ---------------------------------------------------------------------------------------------------------------------------------
-def check_review(review_id: str | None, state: dict[str, Any], manifest: Path) -> dict[str, Any]:
-    """Refuse a dirty tree, a missing / malformed review id, and a review id that conflicts with the one bound to HEAD in the manifest."""
+SCRIPT_REL = "validation/scripts/elastic_attribution"
+SHA40 = re.compile(r"^[0-9a-f]{40}$")
+
+
+def _git(repo: Path | None, *args: str) -> Any:
+    import subprocess
+
+    return subprocess.run(["git", *args], cwd=Path(repo or c.REPO), capture_output=True, text=True)
+
+
+def is_ancestor(sha: str, head: str, repo: Path | None = None) -> bool:
+    """``git merge-base --is-ancestor sha head`` (true when equal); an unknown commit is a SystemExit."""
+    r = _git(repo, "merge-base", "--is-ancestor", sha, head)
+    if r.returncode not in (0, 1):
+        raise SystemExit(f"git merge-base --is-ancestor {sha[:12]} {head[:12]} failed: {r.stderr.strip()}")
+    return bool(r.returncode == 0)
+
+
+def hashes_at(sha: str, repo: Path | None = None) -> dict[str, str]:
+    """sha256 of the four code files as committed in ``sha`` (``git show <sha>:<path>``, not the working tree)."""
+    out = {}
+    for n in c.CODE_FILES:
+        r = _git(repo, "show", f"{sha}:{SCRIPT_REL}/{n}")
+        if r.returncode != 0:
+            raise SystemExit(f"{n} is not in the reviewed commit {sha[:12]}: {r.stderr.strip()}")
+        out[n] = hashlib.sha256(r.stdout.encode("utf-8")).hexdigest()
+    return out
+
+
+def working_hashes(repo: Path | None = None) -> dict[str, str]:
+    root = Path(repo or c.REPO) / SCRIPT_REL
+    for n in c.CODE_FILES:
+        if not (root / n).is_file():
+            raise SystemExit(f"{root / n} is missing")
+    return {n: hashlib.sha256((root / n).read_bytes()).hexdigest() for n in c.CODE_FILES}
+
+
+def check_review(review_id: str | None, reviewed_sha: str | None, state: dict[str, Any], manifest: Path, repo: Path | None = None) -> dict[str, Any]:
+    """Freeze enforcement: a clean tree; a well-formed review id and reviewed commit SHA (40 hex); the reviewed commit is an ancestor of HEAD; the
+    sha256 of the four code files at THAT commit (``git show``) equals the current files; no conflicting review id bound to that commit in the
+    manifest. A Codex pass cannot be checked offline: the id and the SHA are recorded for the audit."""
     if not state["git_clean"]:
         raise SystemExit("the working tree is not clean (git status --porcelain --untracked-files=all): the evaluator refuses to run")
     if not review_id or not REVIEW_ID.match(review_id):
-        raise SystemExit("--reviewed-head-review-id REVIEW-xxxxxxxx (the Codex review of HEAD) is required")
+        raise SystemExit("--reviewed-head-review-id REVIEW-xxxxxxxx (the Codex review that passed on the freezing commit) is required")
+    if not reviewed_sha or not SHA40.match(reviewed_sha):
+        raise SystemExit("--reviewed-sha (40 hex: the commit that froze the four code files) is required")
+    if not is_ancestor(reviewed_sha, state["git_head"], repo):
+        raise SystemExit(f"the reviewed commit {reviewed_sha[:12]} is not an ancestor of HEAD {state['git_head'][:12]}")
+    if hashes_at(reviewed_sha, repo) != working_hashes(repo):
+        raise SystemExit("the sha256 of the code files differ between the reviewed commit and the working tree")
     prev = json.loads(manifest.read_text()) if Path(manifest).is_file() else {}
-    bound = prev.get("reviews", {}).get(state["git_head"])
+    bound = prev.get("reviews", {}).get(reviewed_sha)
     if bound is not None and bound != review_id:
-        raise SystemExit(f"the manifest binds {bound} to HEAD {state['git_head'][:12]}, not {review_id}")
+        raise SystemExit(f"the manifest binds {bound} to the reviewed commit {reviewed_sha[:12]}, not {review_id}")
     return prev
 
 
-def evaluate(de3_dir: Path, de5_dir: Path, de0_dir: Path | None, state: dict[str, Any], scripts: dict[str, str], *, archive: Path = ARCHIVE_JSON,
+def evaluate(de3_dir: Path, de5_dir: Path, de0_dir: Path | None, state: dict[str, Any], scripts: dict[str, str], *, reviewed_sha: str, ancestor: Any = None, archive: Path = ARCHIVE_JSON,
              de7_path: Path = DE7_JSON, de4_path: Path = DE4_RATIOS, de5_table_path: Path = DE5_COMMITTED, de6_report: Path = DE6_REPORT,
              h5_path: Path | None = None, expected_tables: dict[str, dict[str, str]] | None = None) -> dict[str, Any]:
     """The screen. ``de5_dir`` holds ``de5-<arm>/de5.json`` records, ``de0_dir`` the optional ``de0-<arm>/kernels.json``."""
@@ -379,7 +427,7 @@ def evaluate(de3_dir: Path, de5_dir: Path, de0_dir: Path | None, state: dict[str
         for e, d in docs.items():
             check_seeds(d, f"de3-{e}-{arm}.json")
             check_table(d, expected.get(arm), arm, f"de3-{e}-{arm}.json")
-            check_code(d, state, scripts, f"de3-{e}-{arm}.json")
+            check_code(d, reviewed_sha, scripts, f"de3-{e}-{arm}.json", ancestor)
         ok = {e: valid_document(docs[e], e, "emel", arm=True) for e in ENERGIES}
         for e in ENERGIES:
             runs["arms"][arm][str(e)]["valid"] = bool(ok[e])
@@ -395,9 +443,8 @@ def evaluate(de3_dir: Path, de5_dir: Path, de0_dir: Path | None, state: dict[str
             if p5.is_file():
                 d5 = json.loads(p5.read_text())
                 check_seeds(d5, str(p5), d4_arm=arm)
-                check_code(d5, state, scripts, str(p5))
-                if d5.get("table_id") != expected[arm]["table_id"]:
-                    raise SystemExit(f"{p5}: table id differs from the expected {arm} table")
+                check_table(d5, expected.get(arm), arm, str(p5))
+                check_code(d5, reviewed_sha, scripts, str(p5), ancestor)
                 rec["D4"] = d4_report(arm, d5, de5_table, de4)
                 runs["arms"][arm]["de5_sha256"] = sha256_bytes_of(p5)
             elif arm == GATED_ARM:
@@ -405,9 +452,8 @@ def evaluate(de3_dir: Path, de5_dir: Path, de0_dir: Path | None, state: dict[str
         if de0_dir is not None and (Path(de0_dir) / f"de0-{arm}" / "kernels.json").is_file():
             k0 = Path(de0_dir) / f"de0-{arm}" / "kernels.json"
             kd = json.loads(k0.read_text())
-            if kd.get("table_id") != expected[arm]["table_id"]:
-                raise SystemExit(f"{k0}: table id differs from the expected {arm} table")
-            check_code(kd, state, scripts, str(k0))
+            check_table(kd, expected.get(arm), arm, str(k0))
+            check_code(kd, reviewed_sha, scripts, str(k0), ancestor)
             rec["D6"] = d6_kernels(kd, json.loads((RES / "de0" / "kernels.json").read_text()))
             runs["arms"][arm]["de0_sha256"] = sha256_bytes_of(k0)
         arms[arm] = rec
@@ -429,7 +475,7 @@ def evaluate(de3_dir: Path, de5_dir: Path, de0_dir: Path | None, state: dict[str
         "iv_report_only_note": "condition (iv) is recorded, never part of the verdict; the 30 / 50 MeV cases are identical to the pinned table by construction for M2' and R-B",
         "conditions": {"v": {"construction_record": v7}},
         "bands": {str(e): bands[e] for e in ENERGIES}, "archived_se_df": {str(e): {k: arch[e][k] for k in arch[e] if k.endswith(("_se", "_df"))} for e in ENERGIES},
-        "arms": arms, "runs": runs, "provenance": {**state, "scripts_sha256": scripts, "archive_sha256": sha256_bytes_of(archive), "de7_sha256": v7["de7_sha256"]},
+        "arms": arms, "runs": runs, "provenance": {**state, "reviewed_sha": reviewed_sha, "scripts_sha256": scripts, "archive_sha256": sha256_bytes_of(archive), "de7_sha256": v7["de7_sha256"]},
     }  # fmt: skip
 
 
@@ -447,7 +493,7 @@ def project_for_git(doc: dict[str, Any]) -> dict[str, Any]:
 
 def render_report(doc: dict[str, Any]) -> str:
     f = lambda x, n=4: "-" if x is None else f"{x:.{n}f}"  # noqa: E731
-    out = ["", DISCLOSURE, "", f"## Verdict: **{doc['verdict']}**" + ("" if doc.get("established") else " (not established: a run published an invalid document)"), ""]
+    out = ["", doc["disclosure"], "", f"## Verdict: **{doc['verdict']}**" + ("" if doc.get("established") else " (not established: a run published an invalid document)"), ""]
     out += ["Failing conditions: " + (", ".join(doc.get("failing_conditions", [])) or "none"), "", doc["iv_report_only_note"] + ".", ""]
     out += ["## Bands (recomputed from the frozen rule)", "", "| E | F closure window | allowed |q| (i-b) | allowed |d_g| (ii) | allowed |p| (iii) |", "|---|---|---|---|---|"]
     for e, b in doc["bands"].items():
@@ -485,16 +531,17 @@ def absolutes_of(de5_dir: Path) -> list[float]:
     return [x * f for x in vals for f in (1.0, 1e-3, 0.1)]
 
 
-def run(de3_dir: Path, de5_dir: Path, de0_dir: Path | None, out: Path, review_id: str | None, expected_tables: Path | None = None) -> dict[str, Any]:
+def run(de3_dir: Path, de5_dir: Path, de0_dir: Path | None, out: Path, review_id: str | None, expected_tables: Path | None = None, reviewed_sha: str | None = None) -> dict[str, Any]:
     from . import de7_m2prime_record as d7
 
     state = c.repo_state()
     manifest_p = Path(out) / "de8-manifest.json"
-    prev = check_review(review_id, state, manifest_p)
-    scripts = c.code_provenance()["scripts_sha256"]
+    prev = check_review(review_id, reviewed_sha, state, manifest_p)
+    assert reviewed_sha is not None
+    scripts = hashes_at(reviewed_sha)
     if expected_tables is None:
         raise SystemExit("--expected-tables FILE (the expected table id and npz sha256 per arm, checked against de7.json) is required")
-    doc = evaluate(de3_dir, de5_dir, de0_dir, state, scripts, archive=ARCHIVE_JSON, de7_path=DE7_JSON, de4_path=DE4_RATIOS, de5_table_path=DE5_COMMITTED,
+    doc = evaluate(de3_dir, de5_dir, de0_dir, state, scripts, reviewed_sha=reviewed_sha, archive=ARCHIVE_JSON, de7_path=DE7_JSON, de4_path=DE4_RATIOS, de5_table_path=DE5_COMMITTED,
                    de6_report=DE6_REPORT, h5_path=H5_JSON, expected_tables=json.loads(Path(expected_tables).read_text()))
     digest = hashlib.sha256(json.dumps({k: doc[k] for k in ("verdict", "failing_conditions", "arms", "bands")}, sort_keys=True, default=float).encode()).hexdigest()
     if prev.get("evaluation") and prev["evaluation"].get("digest") != digest:
@@ -506,9 +553,9 @@ def run(de3_dir: Path, de5_dir: Path, de0_dir: Path | None, out: Path, review_id
     doc["leak_check"] = {"passed": True}
     doc = project_for_git(doc)
     hdr = c.header("D-E8: go/no-go screen of the model under test M2' (Amendment 20 (c), Amendment 21 (e))",
-                   "python -m validation.scripts.elastic_attribution.de8_diagnostic --reviewed-head-review-id " + str(review_id), [ARCHIVE_JSON, DE7_JSON, DE6_REPORT, DE4_RATIOS, DE5_COMMITTED])  # fmt: skip
+                   "python -m validation.scripts.elastic_attribution.de8_diagnostic --reviewed-head-review-id " + str(review_id) + " --reviewed-sha " + str(reviewed_sha), [ARCHIVE_JSON, DE7_JSON, DE6_REPORT, DE4_RATIOS, DE5_COMMITTED])  # fmt: skip
     c.write_outputs(Path(out), "de8.json", doc, "de8-report.md", hdr, render_report, GIT_ALLOW)
-    manifest = {"reviews": {**prev.get("reviews", {}), state["git_head"]: review_id}, "head": state["git_head"], "clean": state["git_clean"],
+    manifest = {"reviews": {**prev.get("reviews", {}), reviewed_sha: review_id}, "reviewed_sha": reviewed_sha, "head": state["git_head"], "clean": state["git_clean"],
                 "scripts_sha256": scripts, "evaluation": {"digest": digest, "verdict": doc["verdict"], "established": doc["established"]},
                 "runs": doc["runs"]}  # fmt: skip
     manifest_p.write_text(json.dumps(manifest, indent=1, sort_keys=True) + "\n")
@@ -522,9 +569,10 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--de0-dir", type=Path, default=c.OUT)
     ap.add_argument("--out", type=Path, default=c.OUT / "de8")
     ap.add_argument("--reviewed-head-review-id", required=True)
+    ap.add_argument("--reviewed-sha", required=True, help="40-hex commit that froze the four code files (an ancestor of HEAD)")
     ap.add_argument("--expected-tables", type=Path, required=True, help='JSON {"m2prime": {"table_id": ..., "npz_sha256": ...}, "m2": {...}, "rb": {...}}')
     a = ap.parse_args(argv)
-    run(a.de3_dir, a.de5_dir, a.de0_dir, a.out, a.reviewed_head_review_id, a.expected_tables)
+    run(a.de3_dir, a.de5_dir, a.de0_dir, a.out, a.reviewed_head_review_id, a.expected_tables, a.reviewed_sha)
 
 
 if __name__ == "__main__":

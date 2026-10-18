@@ -60,7 +60,7 @@ SIGNATURES = (  # keys of a class summary that the Geant4 hook compares
 )  # fmt: skip
 _CL = "cases/*/classes/*"
 GIT_ALLOW = (
-    "selection_rule", "events_per_case", "seed_base", "table_id", "code/*", "code/scripts_sha256/*", "ke_cut_mev", "classification_rule", "descriptor_note", "thin_target",
+    "selection_rule", "events_per_case", "seed_base", "table_id", "elastic_table_npz_sha256", "code/*", "code/scripts_sha256/*", "ke_cut_mev", "classification_rule", "descriptor_note", "thin_target",
     *(f"cases/*/{k}" for k in ("case", "row", "material", "energy_mev", "length_cm", "primaries", "seed", "events_sampled",
                                "range_water_mm", "theta_2mm_deg", "theta_3mm_deg", "total_rate_per_primary",
                                "pp_share_of_elastic_events")),
@@ -430,9 +430,23 @@ D4_SEED_BASES = {"m2prime": 20991300, "m2": 20991200}
 """Amendment 21 (e): D4 seeds of the model under test (M2', 20991300 + case) and of the report-only M2 arm (20991200 + case)."""
 
 
-def run(table_id: str | None = None, cache_dir: Path | None = None, seed_base: int = SEED_BASE, tag: str | None = None) -> None:
+def run(table_id: str | None = None, cache_dir: Path | None = None, seed_base: int = SEED_BASE, tag: str | None = None, attempts: Path | None = None) -> None:
     """The D-E5 table-side record. ``table_id`` (in the scratch ``cache_dir``) samples a variant / builder table with ``seed_base``; the record
     then goes to ``de5-<tag>/`` (the committed pinned-table ``de5/`` record is never overwritten) and carries ``table_id``."""
+    if table_id is None:
+        _run(table_id, cache_dir, seed_base, tag)
+        return
+    target = c.OUT / f"de5-{tag}" / "de5.json"  # variant records are executed once (Amendment 21 addendum (a))
+    att = c.begin_attempt(target, "de5_sampling.run", {"table_id": table_id, "seed_base": seed_base, "tag": tag}, attempts)
+    try:
+        _run(table_id, cache_dir, seed_base, tag)
+    except BaseException:
+        c.end_attempt(att, "failed", attempts)
+        raise
+    c.end_attempt(att, "published-valid", attempts)
+
+
+def _run(table_id: str | None, cache_dir: Path | None, seed_base: int, tag: str | None) -> None:
     t0 = time.perf_counter()
     tab = c.load_table(table_id, cache_dir)
     water = c.Water(tab)
@@ -444,6 +458,7 @@ def run(table_id: str | None = None, cache_dir: Path | None = None, seed_base: i
            "wall_s": time.perf_counter() - t0}  # fmt: skip
     if table_id is not None:
         doc["table_id"] = table_id
+        doc["elastic_table_npz_sha256"] = c.sha256_file(c.table_files(table_id, cache_dir)[0])
         doc["code"] = c.code_provenance()
     c.write_outputs(
         c.OUT / (f"de5-{tag}" if tag else "de5"), "de5.json", doc, "de5-report.md", _header(table_id, cache_dir, seed_base), render_report, GIT_ALLOW

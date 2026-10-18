@@ -8,6 +8,7 @@ Input files (sha256):
 
 - `/home/wahln/.local/share/ionmc-experiment/experiment-v3/tmp/claude-1000/-home-wahln-aiprojects-ion-mc/3057d970-cf12-4711-8c0a-ae0cbe21cb5d/scratchpad/m2-official/m2/elastic-proton-ad0d77578f29cde5dd9c4747d847cfcc586ec8bfb0643544aaa8addcfeb82034.json`  10afbe559a65a85249b231997bf81e3e1ff31272565eed8854d9513d12df1b3e
 - `/home/wahln/.local/share/ionmc-experiment/experiment-v3/tmp/claude-1000/-home-wahln-aiprojects-ion-mc/3057d970-cf12-4711-8c0a-ae0cbe21cb5d/scratchpad/m2-official/m2prime/elastic-proton-addd817961ca24ebde185698ece4b38440a16cfdcf3b21dfad9416a089519b47.json`  18434dace7271bf9ba0e1c12842784107e173fe9905bb36ee0286611b7d50e72
+- `/home/wahln/.local/share/ionmc-experiment/experiment-v3/tmp/claude-1000/-home-wahln-aiprojects-ion-mc/3057d970-cf12-4711-8c0a-ae0cbe21cb5d/scratchpad/m2-official/rb/elastic-proton-2a14cdcb93db416f30db0b0fb3bf1607af414590fadd92ea0fe3c06f802ec221.json`  65ddb9f647c0af85d8673542219b9e989786f571076545401312d33e35aec6d7
 
 Relative differences against the researcher's scratch numbers only; no absolute cross section, no measured value, no % deviation. sigma_R / Barashenkov is withheld for M2 (Amendment 21 (f)).
 <!-- body below is rendered from the Git projection of the JSON record -->
@@ -150,6 +151,74 @@ Pins:
 - SAID PP_SGT: `508d47be0adcc78aa5546d50d60cec8410d6b85a6c94e8860368ca173a8b1b37`, `b72360a2c3813bd523a57e529ba964b1c30a806c02963b6a941efbd7e7a6bcb8`, `d93b3f4d0c7ae46b941c9ae82292238384624af416d1acccbf4e2146f478954c`
 - DSG files: none
 
+## RB
+
+Table id `2a14cdcb93db416f30db0b0fb3bf1607af414590fadd92ea0fe3c06f802ec221`; model `m2prime-pauli-blocked`, variant `M2prime`, Pauli variant `bdc-pn`, Pauli E_min 80.0 MeV, beta `unitarity`, pp level `none`, unfold `rms-matched`, inputs unpinned: False.
+
+| target | E (MeV) | sigma_el / Barashenkov | sigma_R / Barashenkov | sigma_tot in +-10 % band | q_min (1/fm) | q_min / q_H | Pauli factor (peak) |
+|---|---|---|---|---|---|---|---|
+| Al-27 | 100 | 0.676 | 1.164 | - | 1.136 | - | 0.562 |
+| Al-27 | 150 | 1.113 | 1.033 | - | 1.212 | - | 0.708 |
+| Al-27 | 200 | 1.475 | 0.966 | - | 1.227 | - | 0.781 |
+| C-12 | 100 | 0.717 | 1.162 | fail | 1.505 | 0.787 | 0.658 |
+| C-12 | 150 | 1.099 | 1.053 | pass | 1.566 | 0.819 | 0.772 |
+| C-12 | 200 | 1.235 | 0.983 | pass | 1.580 | 0.826 | 0.829 |
+| Ca-40 | 100 | 0.727 | 1.119 | - | 0.928 | - | 0.601 |
+| Ca-40 | 150 | 1.142 | 1.056 | - | 0.986 | - | 0.734 |
+| Ca-40 | 200 | 1.423 | 1.006 | - | 1.011 | - | 0.801 |
+| N-14 | 100 | 0.750 | 1.069 | - | 1.404 | - | 0.687 |
+| N-14 | 150 | 1.228 | 0.991 | - | 1.472 | - | 0.792 |
+| N-14 | 200 | 1.231 | 0.950 | - | 1.490 | - | 0.844 |
+| O-16 | 100 | 0.699 | 1.123 | fail | 1.307 | 0.787 | 0.723 |
+| O-16 | 150 | 1.182 | 1.022 | pass | 1.370 | 0.825 | 0.816 |
+| O-16 | 200 | 1.396 | 0.963 | pass | 1.389 | 0.836 | 0.862 |
+| P-31 | 100 | 0.697 | 1.129 | - | 1.057 | - | 0.579 |
+| P-31 | 150 | 1.170 | 1.021 | - | 1.126 | - | 0.719 |
+| P-31 | 200 | 1.491 | 0.966 | - | 1.148 | - | 0.789 |
+| Si-28 | 100 | 0.695 | 1.144 | - | 1.101 | - | 0.586 |
+| Si-28 | 150 | 1.183 | 1.019 | - | 1.171 | - | 0.724 |
+| Si-28 | 200 | 1.512 | 0.963 | - | 1.189 | - | 0.793 |
+
+sigma_tot against the measured values, pass/fail per cell (band +-10 %):
+
+- Al-27: at least 2 of 3: -; all 3: -
+- C-12: at least 2 of 3: pass; all 3: fail
+- Ca-40: at least 2 of 3: -; all 3: -
+- N-14: at least 2 of 3: -; all 3: -
+- O-16: at least 2 of 3: pass; all 3: fail
+- P-31: at least 2 of 3: -; all 3: -
+- Si-28: at least 2 of 3: -; all 3: -
+
+Trigger 2: max 0.000038 against 0.001, passed: True, nodes evaluated 33. Component maxima: b_step 0.000038, q_cutoff 0.000000, q_step 0.000036, radial_step 0.000000, s_grid 0.000002.
+
+Trigger 3 (>= 2 of 3 in [0.7, 1.4], C-12 and O-16): **passes**.
+
+| target | E (MeV) | ratio | in band | margin to nearest bound | excess over upper bound |
+|---|---|---|---|---|---|
+| C-12 | 100 | 0.7166 | pass | 0.0166 | -0.4881 |
+| C-12 | 150 | 1.0992 | pass | 0.3008 | -0.2149 |
+| C-12 | 200 | 1.2347 | pass | 0.1653 | -0.1181 |
+| C-12 | verdict | 3 of 3 in band | pass | | |
+| O-16 | 100 | 0.6987 | fail | -0.0013 | -0.5010 |
+| O-16 | 150 | 1.1817 | pass | 0.2183 | -0.1559 |
+| O-16 | 200 | 1.3960 | pass | 0.0040 | -0.0028 |
+| O-16 | verdict | 2 of 3 in band | pass | | |
+
+Trigger 4 (q_min / q_H in [0.6, 1.0]): **pass**.
+
+- C-12: q_H 1.912 1/fm; 150 MeV q_min 1.566, q_min/q_H 0.819, in band pass; 200 MeV q_min 1.580, q_min/q_H 0.826, in band pass; verdict cell 150_mev: pass
+- O-16: q_H 1.661 1/fm; 150 MeV q_min 1.370, q_min/q_H 0.825, in band pass; 200 MeV q_min 1.389, q_min/q_H 0.836, in band pass; verdict cell 150_mev: pass
+
+Pauli: variant `bdc-pn`, scale 1.0, E_min 80.0 MeV, rho_0 0.17 1/fm^3. Nodes with the factor applied per target: {'Al-27': 43, 'C-12': 43, 'Ca-40': 43, 'N-14': 43, 'O-16': 43, 'P-31': 43, 'Si-28': 43}; black-disk nodes below E_min: {'Al-27': 122, 'C-12': 116, 'Ca-40': 117, 'N-14': 122, 'O-16': 112, 'P-31': 122, 'Si-28': 122}; nodes below the SAID range (black disk kept): {'Al-27': 61, 'C-12': 0, 'Ca-40': 0, 'N-14': 24, 'O-16': 0, 'P-31': 67, 'Si-28': 12}.
+
+Pins:
+- inputs JSON sha256 `d4ac274f7b8aaea6df915a06e0735e1b73ea8075c072de22f6badd0235b52747`; Horiuchi JSON sha256 `None`; inputs unpinned: False
+- SAID NP_ALFA: `47404925af3cbcf8d98613ef06dc72ca254ef667fc75510bc5d4c427acf72685`, `db95e4dcdf76e12e4fdb480981ef4c353c232d84a23dc2de47b4453f17d13136`, `14399f8deb631857b389f3399b9d7df08b789ebf6fedc7014c6151dc09d960c4`
+- SAID NP_SGT: `eec6f944a1a9b85800fbeabd07b716f697a2db0edb5abf5852b7221614652290`, `d3f35fe2b873dc39f8c3c6f9de1efdb916aaec356221e23d0c5debe65a1f120d`, `d4d955c71d4a4a3a198d968e884ff62534b9f4381345ef514be32aa669cd410a`
+- SAID PP_ALFA: `b2ca5813878a1c7a9c7e1ce808e8971dbbafaa0e7375240b2d58f6c60e53e252`, `f7eeda20f311db64f38c6e6b09d7b97385bc2ae009cdea0ccceecb9a3d83c7fd`, `4bae553e8a06e82f02b8032ca648e50631b5cee6f8437c316061e577701d8c8a`
+- SAID PP_SGT: `508d47be0adcc78aa5546d50d60cec8410d6b85a6c94e8860368ca173a8b1b37`, `b72360a2c3813bd523a57e529ba964b1c30a806c02963b6a941efbd7e7a6bcb8`, `d93b3f4d0c7ae46b941c9ae82292238384624af416d1acccbf4e2146f478954c`
+- DSG files: none
+
 ## Builder-vs-scratch reproduction (M2', six trigger cells; relative differences, builder / scratch - 1)
 
 | target | E (MeV) | sigma_tot | sigma_R | sigma_el | sigma_el / Barashenkov | q_min | max (tot, R, el) | within 2 % |
@@ -163,4 +232,4 @@ Pins:
 
 2 % rule: **all six cells within 2 % in sigma_tot, sigma_R, sigma_el**.
 
-Leak check (no absolute cross section in the projection): passed True, 17274 absolute values compared.
+Leak check (no absolute cross section in the projection): passed True, 20886 absolute values compared.

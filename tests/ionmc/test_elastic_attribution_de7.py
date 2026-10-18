@@ -241,3 +241,22 @@ def test_report_renders_when_empty_blocks_are_dropped_by_the_projection() -> Non
     proj = c.git_projection(json.loads(json.dumps(doc, default=float)), d7.GIT_ALLOW)
     assert "dsg_files_sha256" not in proj["variants"]["M2"]["pins"]
     assert "DSG files: none" in d7.render_report(proj)
+
+
+def test_rb_variant_is_projected_with_both_ratios_and_checked_by_the_leak_check() -> None:
+    m2, m2p, rb = _info(False), _info(True), _info(True)
+    rb["table_id"], rb["exploratory"]["pauli_variant"] = "cd" * 32, "bdc-pn"
+    doc = d7.build_document(m2, m2p, _scratch(m2p), rb)
+    v = doc["variants"]["RB"]
+    assert v["identity"]["table_id"] == "cd" * 32 and v["exploratory"]["pauli_variant"] == "bdc-pn"
+    assert v["cells"]["O-16"]["150_mev"]["react_over_barashenkov"] is not None and not v.get(
+        "withheld"
+    )  # R-B keeps both ratios (Amendment 21 (f))
+    proj = c.git_projection(json.loads(json.dumps(doc, default=float)), d7.GIT_ALLOW)
+    assert (
+        d7.leak_violations(
+            proj, d7.collect_absolutes([m2, m2p, rb], d7.parse_scratch(_scratch(m2p)))
+        )
+        == []
+    )
+    assert "## RB" in d7.render_report(proj)

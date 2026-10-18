@@ -20,6 +20,7 @@ from validation.scripts.elastic_attribution import de8_diagnostic as d8
 
 NZ = 400
 STATE = {"git_head": "a" * 40, "git_clean": True}
+REVIEWED = "b" * 40
 SCRIPTS = {n: hashlib.sha256(n.encode()).hexdigest() for n in c.CODE_FILES}
 ARCH = {  # the archived values of Amendment 20 (c) (committed single-process record; synthetic file, same numbers)
     150: {
@@ -201,6 +202,9 @@ def _inputs(
         return {
             "seed_base": base,
             "table_id": tid,
+            "elastic_table_npz_sha256": TABLES["m2prime" if tid == TABLES["m2prime"][0] else "m2"][
+                1
+            ],
             "cases": cs,
             "code": {**STATE, "scripts_sha256": SCRIPTS},
         }
@@ -255,7 +259,16 @@ def _eval(inp: dict[str, Any], **over: Any) -> dict[str, Any]:
         "expected_tables": inp["expected"],
     }
     kw.update(over)
-    return d8.evaluate(inp["de3"], inp["de5"], None, STATE, SCRIPTS, **kw)
+    return d8.evaluate(
+        inp["de3"],
+        inp["de5"],
+        None,
+        STATE,
+        SCRIPTS,
+        reviewed_sha=REVIEWED,
+        ancestor=lambda a, b: True,
+        **kw,
+    )
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------
@@ -479,18 +492,84 @@ def test_code_provenance_of_documents_must_match(tmp_path: Path) -> None:
         _eval(inp)
 
 
-def test_review_and_clean_tree_refusals(tmp_path: Path) -> None:
+def _git_repo(tmp: Path) -> tuple[Path, str, str]:
+    """A temporary repository holding the four code files; returns (repo, first commit, second commit)."""
+    import subprocess
+
+    repo = tmp / "repo"
+    root = repo / d8.SCRIPT_REL
+    root.mkdir(parents=True)
+    for n in c.CODE_FILES:
+        (root / n).write_text(f"# {n}\n")
+
+    def git(*a: str) -> str:
+        return subprocess.run(
+            ["git", "-c", "user.email=t@t", "-c", "user.name=t", *a],
+            cwd=repo,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+
+    git("init", "-q")
+    git("add", "-A")
+    git("commit", "-q", "-m", "freeze")
+    first = git("rev-parse", "HEAD")
+    (repo / "other.txt").write_text("x\n")
+    git("add", "-A")
+    git("commit", "-q", "-m", "second")
+    return repo, first, git("rev-parse", "HEAD")
+
+
+def test_review_freeze_enforcement_in_a_temporary_git_repo(tmp_path: Path) -> None:
+    repo, first, head = _git_repo(tmp_path)
     man = tmp_path / "de8-manifest.json"
+    clean = {"git_head": head, "git_clean": True}
+    assert (
+        d8.is_ancestor(first, head, repo)
+        and d8.is_ancestor(head, head, repo)
+        and not d8.is_ancestor(head, first, repo)
+    )
+    assert d8.hashes_at(first, repo) == d8.working_hashes(repo)
+    assert d8.check_review("REVIEW-0123abcd", first, clean, man, repo) == {}
     with pytest.raises(SystemExit, match="not clean"):
-        d8.check_review("REVIEW-0123abcd", {**STATE, "git_clean": False}, man)
+        d8.check_review("REVIEW-0123abcd", first, {**clean, "git_clean": False}, man, repo)
     for bad in (None, "", "review-1", "REVIEW-xyz"):
         with pytest.raises(SystemExit, match="review-id"):
-            d8.check_review(bad, STATE, man)
-    assert d8.check_review("REVIEW-0123abcd", STATE, man) == {}
-    man.write_text(json.dumps({"reviews": {STATE["git_head"]: "REVIEW-0123abcd"}}))
+            d8.check_review(bad, first, clean, man, repo)
+    for bad_sha in (None, "", "abc", "g" * 40, first[:39]):
+        with pytest.raises(SystemExit, match="reviewed-sha"):
+            d8.check_review("REVIEW-0123abcd", bad_sha, clean, man, repo)
+    with pytest.raises(SystemExit, match="not an ancestor"):
+        d8.check_review(
+            "REVIEW-0123abcd", head, {**clean, "git_head": first}, man, repo
+        )  # reviewed commit is newer than HEAD
+    with pytest.raises(SystemExit):
+        d8.check_review("REVIEW-0123abcd", "0" * 40, clean, man, repo)  # unknown commit
+    # a script changed after the reviewed commit: the working tree differs from THAT commit
+    (repo / d8.SCRIPT_REL / "de8_diagnostic.py").write_text("# changed\n")
+    with pytest.raises(SystemExit, match="differ between the reviewed commit and the working tree"):
+        d8.check_review("REVIEW-0123abcd", first, clean, man, repo)
+    # manifest binding of the review id to the reviewed commit
+    (repo / d8.SCRIPT_REL / "de8_diagnostic.py").write_text("# de8_diagnostic.py\n")
+    man.write_text(json.dumps({"reviews": {first: "REVIEW-0123abcd"}}))
     with pytest.raises(SystemExit, match="binds REVIEW-0123abcd"):
-        d8.check_review("REVIEW-89abcdef", STATE, man)
-    assert d8.check_review("REVIEW-0123abcd", STATE, man)["reviews"]
+        d8.check_review("REVIEW-89abcdef", first, clean, man, repo)
+    assert d8.check_review("REVIEW-0123abcd", first, clean, man, repo)["reviews"]
+
+
+def test_disclosure_is_the_exact_frozen_header_of_the_acceptance_plan() -> None:
+    import re
+
+    plan = (c.REPO / "validation" / "plans" / "v3-005-acceptance.md").read_text()
+    after = plan.split("5. **Disclosure header of the diagnostic record**", 1)[1]
+    m = re.search(r"^\s*> (Go/no-go screen.*)$", after, re.M)
+    assert m is not None and m.group(1) == d8.DISCLOSURE
+    assert (
+        "Condition (iv) was revised after de7 to 100 / 150 / 200 MeV and made report-only"
+        in d8.DISCLOSURE
+    )
+    assert "The decisive blind conditions are (i), (i-b), (ii) and (iii)." in d8.DISCLOSURE
 
 
 def test_run_writes_projection_manifest_and_a_second_run_must_reproduce(
@@ -508,12 +587,21 @@ def test_run_writes_projection_manifest_and_a_second_run_must_reproduce(
         monkeypatch.setattr(d8, name, val)
     monkeypatch.setattr(c, "repo_state", lambda repo=None: dict(STATE))
     monkeypatch.setattr(
+        d8,
+        "check_review",
+        lambda rid, sha, state, manifest, repo=None: json.loads(manifest.read_text())
+        if manifest.is_file()
+        else {},
+    )
+    monkeypatch.setattr(d8, "hashes_at", lambda sha, repo=None: dict(SCRIPTS))
+    monkeypatch.setattr(d8, "is_ancestor", lambda sha, head, repo=None: True)
+    monkeypatch.setattr(
         c, "code_provenance", lambda repo=None: {**STATE, "scripts_sha256": dict(SCRIPTS)}
     )
     exp = tmp_path / "expected.json"
     exp.write_text(json.dumps(inp["expected"]))
     out = tmp_path / "out"
-    doc = d8.run(inp["de3"], inp["de5"], None, out, "REVIEW-0123abcd", exp)
+    doc = d8.run(inp["de3"], inp["de5"], None, out, "REVIEW-0123abcd", exp, REVIEWED)
     assert doc["verdict"] == "CONTINUE"
     proj = json.loads((out / "git" / "de8.json").read_text())
     assert (
@@ -526,18 +614,20 @@ def test_run_writes_projection_manifest_and_a_second_run_must_reproduce(
     assert body.rstrip("\n") == d8.render_report(proj).rstrip("\n") and d8.DISCLOSURE in body
     man = json.loads((out / "de8-manifest.json").read_text())
     assert (
-        man["reviews"][STATE["git_head"]] == "REVIEW-0123abcd"
+        man["reviews"][REVIEWED] == "REVIEW-0123abcd"
+        and man["reviewed_sha"] == REVIEWED
+        and doc["disclosure"] == d8.DISCLOSURE
         and man["evaluation"]["verdict"] == "CONTINUE"
     )
     d8.run(
-        inp["de3"], inp["de5"], None, out, "REVIEW-0123abcd", exp
+        inp["de3"], inp["de5"], None, out, "REVIEW-0123abcd", exp, REVIEWED
     )  # the same evaluation reproduces
     p = inp["de3"] / "de3-150-m2prime.json"
     d = json.loads(p.read_text())
     d["idd_batches"] = (np.asarray(d["idd_batches"]) * 1.01).tolist()
     p.write_text(json.dumps(d))
     with pytest.raises(SystemExit, match="executed once"):
-        d8.run(inp["de3"], inp["de5"], None, out, "REVIEW-0123abcd", exp)
+        d8.run(inp["de3"], inp["de5"], None, out, "REVIEW-0123abcd", exp, REVIEWED)
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------
@@ -630,3 +720,124 @@ def test_d4_seed_bases_and_table_id_arguments() -> None:
         de5.main(["--table-id", "x" * 64, "--tag", "m2prime"])
     with pytest.raises(SystemExit, match="needs --tag"):
         de0.main(["--table-id", "x" * 64])
+
+
+def test_d4_and_d6_documents_must_carry_and_match_the_npz_sha256(tmp_path: Path) -> None:
+    inp = _inputs(tmp_path)
+    p5 = inp["de5"] / "de5-m2prime" / "de5.json"
+    d5 = json.loads(p5.read_text())
+    d5["elastic_table_npz_sha256"] = "0" * 64
+    p5.write_text(json.dumps(d5))
+    with pytest.raises(SystemExit, match="table id / npz sha256 differ"):
+        _eval(inp)
+    del d5["elastic_table_npz_sha256"]
+    p5.write_text(json.dumps(d5))
+    with pytest.raises(SystemExit, match="table id / npz sha256 differ"):
+        _eval(inp)
+
+
+def test_rb_is_checked_against_the_de7_record(tmp_path: Path) -> None:
+    inp = _inputs(tmp_path, with_rb=True)
+    v = json.loads(inp["de7"].read_text())
+    v["variants"]["RB"] = {"identity": {"table_id": TABLES["rb"][0], "npz_sha256": TABLES["rb"][1]}}
+    inp["de7"].write_text(json.dumps(v))
+    assert _eval(inp)["arms"]["rb"]["valid"] is True
+    bad = copy.deepcopy(inp["expected"])
+    bad["rb"]["npz_sha256"] = "9" * 64
+    with pytest.raises(SystemExit, match="differs from the committed de7 record"):
+        _eval(inp, expected_tables=bad)
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# once-only execution of the actual producers
+# ---------------------------------------------------------------------------------------------------------------------------------
+def test_de3_producer_is_once_only_and_appends_attempts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from validation.scripts.elastic_attribution import de3_probes as d3
+
+    out, att = tmp_path / "de3", tmp_path / "attempts.json"
+    out.mkdir()
+
+    def boom() -> Any:
+        raise RuntimeError("crash before any document")
+
+    monkeypatch.setattr(d3, "_t", boom)
+    with pytest.raises(RuntimeError):
+        d3.run_one("m2prime", 150, 100000, 20, False, out, att)  # attempt 1: crash, no document
+    log = json.loads(att.read_text())
+    assert (
+        [r["outcome"] for r in log] == ["started", "failed"]
+        and log[0]["producer"] == "de3_probes.run_one"
+        and log[0]["args"]["variant"] == "m2prime"
+    )
+    assert (
+        log[0]["output"] == str(out / "de3-150-m2prime.json")
+        and "timestamp" in log[0]
+        and "git_head" in log[0]
+    )
+    with pytest.raises(RuntimeError):
+        d3.run_one("m2prime", 150, 100000, 20, False, out, att)  # the one permitted re-execution
+    with pytest.raises(SystemExit, match="two attempts without a published document"):
+        d3.run_one("m2prime", 150, 100000, 20, False, out, att)
+    n = len(json.loads(att.read_text()))
+    (out / "de3-200-m2.json").write_text(
+        "{}"
+    )  # a published document (valid or not) is never overwritten
+    with pytest.raises(SystemExit, match="exists: the diagnostic is executed once"):
+        d3.run_one("m2", 200, 100000, 20, False, out, att)
+    assert len(json.loads(att.read_text())) == n  # no attempt recorded for a refused target
+    # the append-only file keeps the earlier records unchanged
+    assert json.loads(att.read_text())[:2] == log
+
+
+def test_de3_producer_records_published_invalid_as_executed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from validation.scripts.elastic_attribution import de3_probes as d3
+
+    out, att = tmp_path / "de3", tmp_path / "attempts.json"
+    out.mkdir()
+
+    def fake(
+        variant: str, energy: int, n: int, batches: int, lateral: bool, out: Path
+    ) -> dict[str, Any]:
+        (out / f"de3-{energy}-{variant}.json").write_text("{}")
+        return {"valid": False}
+
+    monkeypatch.setattr(d3, "_run_one", fake)
+    d3.run_one("rb", 150, 100000, 20, False, out, att)
+    assert [r["outcome"] for r in json.loads(att.read_text())] == ["started", "published-invalid"]
+    with pytest.raises(SystemExit, match="exists"):
+        d3.run_one("rb", 150, 100000, 20, False, out, att)
+
+
+def test_de5_and_de0_producers_are_once_only(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from validation.scripts.elastic_attribution import de0_kernels as de0
+    from validation.scripts.elastic_attribution import de5_sampling as de5
+
+    monkeypatch.setattr(c, "OUT", tmp_path)
+    att = tmp_path / "attempts.json"
+
+    def crash(*a: Any, **k: Any) -> Any:
+        raise RuntimeError("no table")
+
+    monkeypatch.setattr(c, "load_table", crash)
+    with pytest.raises(RuntimeError):
+        de5.run("t" * 64, None, 20991300, "m2prime", att)
+    assert [r["outcome"] for r in json.loads(att.read_text())] == ["started", "failed"]
+    (tmp_path / "de5-m2").mkdir()
+    (tmp_path / "de5-m2" / "de5.json").write_text("{}")
+    with pytest.raises(SystemExit, match="exists"):
+        de5.run("t" * 64, None, 20991200, "m2", att)
+    with pytest.raises(RuntimeError):
+        de0.run("t" * 64, None, "m2prime", att)
+    (tmp_path / "de0-m2prime").mkdir()
+    (tmp_path / "de0-m2prime" / "kernels.json").write_text("{}")
+    with pytest.raises(SystemExit, match="exists"):
+        de0.run("t" * 64, None, "m2prime", att)
+    assert [
+        r.get("producer") for r in json.loads(att.read_text()) if r["outcome"] == "started"
+    ] == ["de5_sampling.run", "de0_kernels.run"]
