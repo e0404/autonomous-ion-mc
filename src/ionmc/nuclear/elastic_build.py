@@ -915,6 +915,24 @@ def _pauli_record(
         "pauli_factor_at_peak_density": peak}}  # fmt: skip
 
 
+def _trigger2_record(nodes: dict[str, list[dict[str, Any]]], conv: float) -> dict[str, Any]:
+    """Plan 4.2 trigger 2 / Amendment 21: step-halving convergence, every component separately
+    (b step, s grid, radial step, q step, q cutoff), the maximum per component over all evaluated
+    nodes, and the rows at the candidate energies (nodes nearest 100/150/200 MeV)."""
+    comps = ("b_step", "s_grid", "radial_step", "q_step", "q_cutoff")
+    recs = [(n, r["convergence"]) for n, v in nodes.items() for r in v if "convergence" in r]
+    cmax = {
+        c: max((cv["components"][c] for _, cv in recs if cv["components"][c] is not None),
+               default=None)
+        for c in comps
+    }  # fmt: skip
+    cand = [{"target": n, "e_mev": cv["e_mev"], "components": cv["components"], "max": cv["max"]}
+            for n, cv in recs if cv.get("candidate_energy")]  # fmt: skip
+    return {"tol": glauber.CONVERGENCE_TOL, "max": conv, "passed": conv <= glauber.CONVERGENCE_TOL,
+            "component_max": cmax, "n_evaluated": len(recs), "candidate_energies": cand,
+            "note": "radial/q components are None for analytic HO thickness"}  # fmt: skip
+
+
 def m2_record(
     m2: glauber.M2Config, model: glauber.M2Model, nodes: dict[str, list[dict[str, Any]]],
     conv: float, norm: float, pp_rec: dict[str, Any] | None,
@@ -971,6 +989,7 @@ def m2_record(
         "options": {"n_s": m2.n_s, "db_fm": m2.db_fm, "q_cut": m2.q_cut,
                     "shape_override": m2.shape_override},
         "provenance": model.provenance(),
+        "trigger_2_convergence": _trigger2_record(nodes, conv),
         "checks": {"normalisation_max_deviation": norm, "normalisation_tol": glauber.NORM_TOL,
                    "convergence_max": conv, "convergence_tol": glauber.CONVERGENCE_TOL,
                    "unitarity_max_residual": worst_unit, "optical_theorem_max_residual": worst_ot,
@@ -1052,6 +1071,7 @@ def build_elastic_proton(
     m3model = m3mod.M3Model(m3) if m3 is not None else None
     m3_nodes: dict[str, list[dict[str, Any]]] = {t.name: [] for t in TARGETS}
     m3_above = {t.name: 0 for t in TARGETS}
+    m3_mid = {t.name: 0 for t in TARGETS}
     m3_norm = 0.0
     m2_nodes: dict[str, list[dict[str, Any]]] = {t.name: [] for t in TARGETS}
     m2_conv = 0.0
@@ -1080,6 +1100,7 @@ def build_elastic_proton(
 
     grid, n_refined_pp = refine_grid(grid, sigma_pp_nb, H1_REFINE_FROM_MEV, E_ANCHOR_MEV)
     n_grid, n_t = grid.size, len(TARGET_NAMES)
+    cand_k = {int(np.argmin(np.abs(grid - e))) for e in (100.0, 150.0, 200.0)}
     i150 = int(np.searchsorted(grid, E_ANCHOR_MEV))
     log(f"grid {n_grid} nodes ({n_refined} below 14 MeV, {n_refined_pp} for H-1)")
 
@@ -1208,13 +1229,15 @@ def build_elastic_proton(
                 rec["m2_over_bgg"] = rec["sigma_el_m2_mb"] / rec["sigma_el_bgg_mb"]
                 m2_nodes[spec.name].append(rec)
                 m2_norm = max(m2_norm, rec["norm_deviation"])
-                if (k - k_min) % 25 == 0:
+                if (k - k_min) % 25 == 0 or k in cand_k:  # + the plan's candidate energies
                     rec["convergence"] = m2model.convergence(
                         spec.name, float(grid[k]), float(pcm_arr[it, k])
                     )
-                    m2_conv = max(m2_conv, rec["convergence"])
+                    rec["convergence"]["candidate_energy"] = k in cand_k
+                    m2_conv = max(m2_conv, rec["convergence"]["max"])
         if m3model is not None and m3 is not None and m3model.has(spec.name):
             emax = m3model.emax_mev(spec.name)
+            pcm_top = kinematics_cm(emax, model.m_t_mev)[0]
             for k in range(k_min, n_grid):
                 e = float(grid[k])
                 if e > emax * (1.0 + 1e-12):
@@ -1226,9 +1249,15 @@ def build_elastic_proton(
                         )
                     if m3.above_emax == "black-disk":
                         continue
-                edges[it, k], rec = m3model.node(spec.name, e, n_q)
+                edges[it, k], rec = m3model.node(spec.name, e, n_q, float(pcm_arr[it, k]), pcm_top)
                 m3_nodes[spec.name].append(rec)
                 m3_norm = max(m3_norm, rec["norm_deviation"])
+            # positivity at the energy midpoints of the domain as well (P6-D style, no clipping)
+            for k in range(k_min, n_grid - 1):
+                if m3.above_emax == "black-disk" and grid[k] > emax * (1.0 + 1e-12):
+                    continue
+                m3model.check_midpoint(spec.name, 0.5 * float(grid[k] + grid[k + 1]))
+                m3_mid[spec.name] += 1
         edges[it, :k_min] = edges[it, k_min]
         sigma_10[spec.name] = bgg.bgg_elastic_mb(10.0, spec.z, model.m_t_mev)
         info_t.append(
@@ -1282,6 +1311,17 @@ def build_elastic_proton(
         max_dev = m3_norm
     if m2model is not None:
         max_dev = max(m2_norm, 0.0) if m2_conv <= glauber.CONVERGENCE_TOL else float("inf")
+    alt_kind: str | None = None
+    if m2model is not None and m2 is not None:
+        alt_kind = f"m2prime-{m2.pauli_variant}" if m2.pauli else "m2-glauber"
+    for it, spec in enumerate(TARGETS, start=1):
+        if alt_kind is not None:
+            info_t[it]["kind"] = alt_kind
+        elif m3model is not None and m3model.has(spec.name):
+            info_t[it]["kind"] = "m3-endf-mirror"
+    alt_variant = m2model is not None or m3model is not None
+    if alt_variant:  # the cross-check array is the black-disk formula: omitted, with a reason
+        xe_model[:] = np.nan
     qual = np.array(
         [
             bool(k_pp <= i150 and in_domain_ok),
@@ -1428,6 +1468,11 @@ def build_elastic_proton(
             "black-disk shape is kept (e_min_shape of N-14, Al-27, Si-28, P-31 is < 5 MeV)",
         }
         info["m2"]["hale_ni_partial_pp_curve_before_reanchoring"] = hale_curve
+    if alt_variant:
+        info["xendf"]["model_omitted_reason"] = (
+            "xendf_model_mb_sr is the black-disk formula and does not describe the shape of this "
+            "alternative-model table (kind per target); the array is NaN"
+        )
     if m3model is not None and m3 is not None:
         info["exploratory"] = {
             "model": "m3-endf-mirror", "above_emax": m3.above_emax,
@@ -1444,11 +1489,20 @@ def build_elastic_proton(
                     {"shape": "endf-mf4-mt2", "n_nodes_endf": len(m3_nodes[t.name]),
                      "n_nodes_above_emax": m3_above[t.name],
                      "above_emax_policy": m3.above_emax,
-                     "max_negative_fraction": max(r["negative_fraction"] for r in m3_nodes[t.name])
-                     if m3_nodes[t.name] else None,
+                     "n_midpoints_checked_positive": m3_mid[t.name],
+                     "n_nodes_q_scaled": sum(bool(r["q_scaled"]) for r in m3_nodes[t.name]),
+                     "e_top_mev": m3model.emax_mev(t.name),
+                     "coverage_limitation": m3model.emax_mev(t.name) < 150.0,
+                     "min_density": min((r["min_f"] for r in m3_nodes[t.name]), default=None),
                      "max_norm_deviation_of_endf_density": max(
                          (abs(r["norm_int_f_dmu"] - 1.0) for r in m3_nodes[t.name]), default=None
-                     )}
+                     ),
+                     "max_first_moment_1_minus_mu": max(
+                         (r["first_moment_1_minus_mu"] for r in m3_nodes[t.name]), default=None
+                     ),
+                     "gates": "MF1 identity, copy check (181 pts), normalisation <= 1e-6, "
+                     "positivity at nodes and midpoints (no clipping), monotone CDF, finite first "
+                     "moment, E_top recorded; any failure raises (no table)"}
                     if m3model.has(t.name) else
                     {"shape": "black-disk (pinned; not named in the plan row (ii'))"}
                 )

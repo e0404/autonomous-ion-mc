@@ -196,13 +196,109 @@ def test_mf1_copy_check_and_unpinned_refusal(tmp_path: Path) -> None:
         M3.M3Model(M3.M3Config(nsub, inputs_json=inp, allow_unpinned_inputs=True))
 
 
-def test_o16_copy_of_c12_is_refused(tmp_path: Path) -> None:
-    d = tmp_path / "copy"
+LEGHI = [*LEG, (3.0e7, [0.55, 0.25, 0.06, 0.02]), (5.0e7, [0.6, 0.3, 0.08, 0.03])]
+
+
+def _dir2(tmp: Path, name: str, c_text: str, o_text: str) -> Path:
+    d = tmp / name
     d.mkdir()
-    _write(d, "c12.endf", material(6012, 11.896, 625, leg=LEG))
-    _write(d, "o16.endf", material(8016, 15.857, 825, leg=LEG))
+    _write(d, "c12.endf", c_text)
+    _write(d, "o16.endf", o_text)
+    return d
+
+
+def _model(d: Path, tmp: Path) -> M3.M3Model:
+    return M3.M3Model(M3.M3Config(d, inputs_json=_inputs(tmp), allow_unpinned_inputs=True))
+
+
+def test_copy_gate_distribution_level(tmp_path: Path) -> None:
+    c = material(6012, 11.896, 625, leg=LEGHI)
+    # identical Legendre data above 20 MeV: a copy
     with pytest.raises(M3.M3Error, match="copy"):
-        M3.M3Model(M3.M3Config(d, inputs_json=_inputs(tmp_path), allow_unpinned_inputs=True))
+        _model(_dir2(tmp_path, "cp", c, material(8016, 15.857, 825, leg=LEGHI)), tmp_path)
+    # a copy given in a different representation (tabulated 2001-point f of the C-12 record)
+    cm = parsed(c)
+    mu = np.linspace(-1.0, 1.0, 2001)
+    tab = [(e, [(float(m), float(v)) for m, v in zip(mu, cm.f_cm(mu, e), strict=True)])
+           for e in (3.0e7, 5.0e7)]  # fmt: skip
+    o_tab = material(8016, 15.857, 825, ltt=3, leg=LEG, tab=tab)
+    with pytest.raises(M3.M3Error, match="copy"):
+        _model(_dir2(tmp_path, "cp2", c, o_tab), tmp_path)
+    # a genuinely different O-16 passes and records the evidence
+    leg_o = [(e, [x * 1.1 for x in a]) for e, a in LEGHI]
+    ok = _model(_dir2(tmp_path, "ok", c, material(8016, 15.857, 825, leg=leg_o)), tmp_path)
+    cc = ok.copy_check
+    assert cc["evaluated"] and cc["n_mu_points"] == 181 and cc["shared_energies"] == 2
+    assert cc["energies_that_differ"] == 2
+    # differs at the points of only some energies -> still a copy when <= 50 % of the energies
+    mixed = [(e, a if i < 4 else [x * 1.1 for x in a]) for i, (e, a) in enumerate(LEGHI)]
+    with pytest.raises(M3.M3Error, match="copy"):
+        _model(_dir2(tmp_path, "mx", c, material(8016, 15.857, 825, leg=mixed)), tmp_path)
+    # no shared energy above 20 MeV: criterion vacuous, recorded as not evaluated
+    low = _model(_fixture_dir(tmp_path), tmp_path)
+    assert low.copy_check["evaluated"] is False and "above 20 MeV" in low.copy_check["reason"]
+
+
+def test_normalisation_gate(tmp_path: Path) -> None:
+    mu = [(-1.0, 0.2), (0.0, 0.5), (1.0, 0.8)]
+    ok = [(1.0e6, mu), (2.0e7, mu)]
+    bad = [(1.0e6, [(m, v * 1.0001) for m, v in mu]), (2.0e7, mu)]  # integral 1.0001
+    c = material(6012, 11.896, 625, ltt=2, tab=ok)
+    good = _model(_dir2(tmp_path, "n_ok", c, material(8016, 15.857, 825, ltt=2, tab=ok)), tmp_path)
+    good.node("C-12", 5.0, 256)
+    m = _model(_dir2(tmp_path, "n_bad", c, material(8016, 15.857, 825, ltt=2, tab=bad)), tmp_path)
+    with pytest.raises(M3.M3Error, match="normalisation"):
+        m.node("O-16", 1.0, 256)
+    m.node("O-16", 20.0, 256)  # the other record is normalised
+
+
+def test_positivity_gates_no_clipping(tmp_path: Path) -> None:
+    neg = [(1.0e6, [0.3, 0.1]), (3.0e6, [0.95, 0.9, 0.7]), (2.0e7, [0.5, 0.2, 0.05, 0.01])]
+    c = material(6012, 11.896, 625, leg=LEG)
+    m = _model(_dir2(tmp_path, "neg", c, material(8016, 15.857, 825, leg=neg)), tmp_path)
+    m.node("O-16", 1.0, 256)  # positive record
+    with pytest.raises(M3.M3Error, match="negative"):
+        m.node("O-16", 3.0, 256)  # negative record: refused, not clipped
+    with pytest.raises(M3.M3Error, match="negative"):
+        m.check_midpoint("O-16", 2.5)  # a midpoint between a positive and a negative record
+    m.check_midpoint("O-16", 1.1)  # positive midpoint passes
+    ok = _model(_fixture_dir(tmp_path), tmp_path)
+    for e in (1.5, 2.0, 7.5, 12.5):
+        ok.check_midpoint("C-12", e)
+
+
+def test_moment_and_cdf_gate_records(tmp_path: Path) -> None:
+    m = _model(_fixture_dir(tmp_path), tmp_path)
+    _, rec = m.node("C-12", 2.0, 256)
+    assert rec["cdf_monotone"] is True and 0.0 < rec["first_moment_1_minus_mu"] < 2.0
+    iso = parsed(material(6012, 11.896, 625, li=1, ltt=0))
+    m.mf4["C-12"] = iso
+    _, rec = m.node("C-12", 2.0, 256)
+    assert rec["first_moment_1_minus_mu"] == pytest.approx(1.0, abs=1e-6)  # isotropic <1 - mu>
+
+
+def test_hold_last_is_fixed_in_momentum_transfer(tmp_path: Path) -> None:
+    m = _model(_fixture_dir(tmp_path), tmp_path)
+    p_top, p_node = 400.0, 520.0  # CM momenta at E_top and at the node [MeV/c]
+    e_top, _ = m.node("C-12", 20.0, 256)
+    with pytest.raises(M3.M3Error):
+        m.node("C-12", 100.0, 256)  # needs the CM momenta
+    with pytest.raises(M3.M3Error):
+        m.node("C-12", 100.0, 256, 300.0, 400.0)  # node momentum below p_top
+    e_node, rec = m.node("C-12", 100.0, 256, p_node, p_top)
+    assert rec["q_scaled"] is True and rec["e_used_mev"] == pytest.approx(20.0)
+    ratio = p_top / p_node
+    assert rec["p_ratio_top_over_node"] == pytest.approx(ratio)
+    # identity: q = 2 p sin(theta/2) of every edge is unchanged
+    q_top = 2.0 * p_top * np.sqrt((1.0 - e_top) / 2.0)
+    q_node = 2.0 * p_node * np.sqrt(np.maximum((1.0 - e_node) / 2.0, 0.0))
+    np.testing.assert_allclose(q_node, q_top, rtol=1e-12, atol=1e-9)
+    # support ends at the E_top kinematic limit: zero density below mu_min, edges monotone
+    assert e_node[0] == pytest.approx(1.0 - 2.0 * ratio**2) and e_node[-1] == 1.0
+    assert e_node[0] > -1.0 and np.all(np.diff(e_node) >= 0.0)
+    # p_node == p_top reproduces the E_top edges exactly
+    same, _ = m.node("C-12", 100.0, 256, p_top, p_top)
+    np.testing.assert_allclose(same, e_top, atol=1e-12)
 
 
 def test_pinned_hash_must_match(tmp_path: Path) -> None:
@@ -240,7 +336,7 @@ def test_m3_build_into_tmp(tmp_path: Path) -> None:
     from ionmc.data import cache
 
     d = _fixture_dir(tmp_path)
-    cfg = M3.M3Config(d, above_emax="black-disk", inputs_json=_inputs(tmp_path),
+    cfg = M3.M3Config(d, above_emax="hold-last", inputs_json=_inputs(tmp_path),
                       allow_unpinned_inputs=True)  # fmt: skip
     out = tmp_path / "out"
     res = EB.build_elastic_proton(cache.resolve_cache_dir(None), m3=cfg, out_dir=out)
@@ -248,7 +344,14 @@ def test_m3_build_into_tmp(tmp_path: Path) -> None:
     assert ex["model"] == "m3-endf-mirror" and ex["inputs_unpinned"] is True
     t = res.info["m3"]["targets"]
     assert t["O-16"]["shape"] == "endf-mf4-mt2" and t["O-16"]["n_nodes_above_emax"] > 0
+    assert t["O-16"]["n_nodes_q_scaled"] == t["O-16"]["n_nodes_above_emax"]
+    assert t["O-16"]["n_midpoints_checked_positive"] > 0 and t["O-16"]["coverage_limitation"]
     assert t["Ca-40"]["shape"].startswith("black-disk")
+    kinds = {x["name"]: x["kind"] for x in res.info["targets"]}
+    assert kinds["C-12"] == kinds["O-16"] == "m3-endf-mirror" and kinds["Ca-40"] == "bgg-black-disk"
+    assert "model_omitted_reason" in res.info["xendf"]
+    with np.load(res.npz_path) as z:
+        assert np.all(np.isnan(z["xendf_model_mb_sr"]))
     with pytest.raises(EB.BuildError, match="above the ENDF evaluation range"):
         EB.build_elastic_proton(
             cache.resolve_cache_dir(None),

@@ -320,6 +320,20 @@ def test_m2_build_into_tmp(tmp_path: Path) -> None:
     assert res.info["exploratory"]["model"] == "m2-optical-glauber"
     assert res.info["m2"]["pp_reanchor"] is None
     assert res.info["shape_normalisation_max_deviation"] <= 1e-12
+    t2 = res.info["m2"]["trigger_2_convergence"]
+    assert t2["passed"] and set(t2["component_max"]) == {
+        "b_step",
+        "s_grid",
+        "radial_step",
+        "q_step",
+        "q_cutoff",
+    }
+    tg = {(c["target"]) for c in t2["candidate_energies"]}
+    assert {"C-12", "O-16"} <= tg  # evaluated at the nodes nearest 100/150/200 MeV
+    assert all(v is not None for v in t2["component_max"].values())  # Fermi targets present
+    kinds = {x["name"]: x["kind"] for x in res.info["targets"]}
+    assert kinds["C-12"] == "m2-glauber" and kinds["Ca-40"] == "m2-glauber"
+    assert "model_omitted_reason" in res.info["xendf"]
 
 
 def test_thickness_error_handling_and_model_pin_checks(tmp_path: Path) -> None:
@@ -569,3 +583,56 @@ def test_m2prime_build_emin_split_into_tmp(tmp_path: Path) -> None:
     assert nb > 0 and na > 0
     assert all(r["pauli_applied"] is False for r in pz["nodes_below_emin_black_disk"]["C-12"])
     assert min(r["e_mev"] for r in res.info["m2"]["targets"]["C-12"]["nodes"]) >= 80.0
+
+
+def _synthetic_said_and_pins(tmp: Path) -> tuple[Path, Path]:
+    d = tmp / "said_conv"
+    d.mkdir()
+    vals = {("PP", "SGT"): (31.0, 24.0), ("NP", "SGT"): (70.0, 40.0),
+            ("PP", "ALFA"): (1.8, 1.2), ("NP", "ALFA"): (0.95, 0.75)}  # fmt: skip
+    for i, ((ch, ob), (v0, v1)) in enumerate(vals.items()):
+        rows = "\n".join(
+            f"{t:10.3f}  {v0 + (v1 - v0) * (t - 5) / 295:.4E}  0.0" for t in (5.0, 100.0, 300.0)
+        )
+        (d / f"s{i}.txt").write_text(
+            f"HDR\n {ch}    {ob}  at ACM =    0.00\n TLAB Obs,Err\n{rows}\n\n"
+        )
+    inp = G.load_inputs()
+    inp["said"]["file_sha256"], inp["pp_dsg"]["file_sha256"] = {}, {}
+    pj = tmp / "pins_empty.json"
+    pj.write_text(json.dumps(inp))
+    return d, pj
+
+
+def test_convergence_components_reported_separately(tmp_path: Path) -> None:
+    d, pj = _synthetic_said_and_pins(tmp_path)
+    comps = ("b_step", "s_grid", "radial_step", "q_step", "q_cutoff")
+    cases = [
+        ("C-12", 6, 12, {}),  # HO: radial and q components do not exist (analytic fold)
+        ("Si-28", 14, 28, {}),  # 2pF: every component exists
+        (
+            "C-12",
+            6,
+            12,
+            {"pauli": True, "pauli_variant": "clementel-villi", "pauli_emin_mev": 80.0},
+        ),  # fmt: skip
+    ]
+    for name, z, a, extra in cases:
+        cfg = G.M2Config(d, inputs_json=pj, allow_unpinned_inputs=True, n_s=1025, **extra)
+        m = G.M2Model(cfg, [(name, z, a)])
+        mass, e = a * 931.494, 150.0
+        e1 = e + 938.272
+        p = math.sqrt(e1 * e1 - 938.272**2)
+        pcm = p * mass / math.sqrt(938.272**2 + mass**2 + 2 * e1 * mass)
+        cv = m.convergence(name, e, pcm)
+        assert set(cv["components"]) == set(comps) and cv["tol"] == 1e-3
+        analytic = name == "C-12" and not extra
+        for c in comps:
+            if analytic and c in ("radial_step", "q_step", "q_cutoff"):
+                assert cv["components"][c] is None
+            else:
+                v = cv["components"][c]
+                assert v is not None and v >= 0.0 and math.isfinite(v), (name, extra, c)
+        vals = [v for v in cv["components"].values() if v is not None]
+        assert cv["max"] == max(vals) and cv["passed"] == (cv["max"] <= 1e-3)
+        assert cv["max"] <= 1e-3, (name, extra, cv)

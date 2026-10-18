@@ -376,8 +376,8 @@ class FermiDensity:
         norm = float(np.trapezoid(4.0 * np.pi * rg**2 * self._rho(rg), rg))
         return np.asarray(self._rho(np.asarray(r, dtype=np.float64)) / norm)
 
-    def form_factor(self, q: F64) -> F64:
-        r = self._r()
+    def form_factor(self, q: F64, dr: float = 0.01) -> F64:
+        r = self._r(dr)
         w = self._rho(r) * r  # rho r
         q = np.asarray(q, dtype=np.float64)
         out = np.empty_like(q)
@@ -415,8 +415,8 @@ class Thickness:
     quadrature of ``F_pt(q) exp(-beta q^2/2)`` with ``q`` up to ``q_cut`` (trapezoid, ``dq``)."""
 
     def __init__(self, dens: HODensity | FermiDensity, b: F64, r_p: float = R_PROTON_FM,
-                 q_cut: float = 24.0, dq: float = 0.02,
-                 unfold: str = "formfactor") -> None:  # fmt: skip
+                 q_cut: float = 24.0, dq: float = 0.02, unfold: str = "formfactor",
+                 dr: float = 0.01) -> None:  # fmt: skip
         """``unfold`` (Fermi-type densities only): ``formfactor`` = the plan's
         ``F_pt = F_ch / exp(-q^2 r_p^2/6)`` (exact, but the integrand ``F_pt exp(-beta q^2/2)``
         diverges at large q whenever ``beta < r_p^2/3 = 0.236 fm^2``, i.e. above ~125 MeV; the
@@ -424,6 +424,7 @@ class Thickness:
         density of the same z and w whose size is solved so that ``rms_pt^2 = rms_ch^2 - r_p^2``
         (well posed; NOT the plan's rule, exploratory only)."""
         self.dens, self.b, self.r_p, self.unfold = dens, b, r_p, unfold
+        self.dq = dq
         self.tail = 0.0
         if isinstance(dens, HODensity):
             self.point: HODensity | None = dens.unfolded(r_p)
@@ -431,7 +432,7 @@ class Thickness:
             self.point = None
             self.q = np.arange(0.0, q_cut + 0.5 * dq, dq)
             if unfold == "formfactor":
-                f_pt = dens.form_factor(self.q) * np.exp(self.q**2 * r_p**2 / 6.0)
+                f_pt = dens.form_factor(self.q, dr) * np.exp(self.q**2 * r_p**2 / 6.0)
             elif unfold == "rms-matched":
                 target = math.sqrt(dens.rms2() - r_p**2)
                 c = solve_size(
@@ -441,7 +442,7 @@ class Thickness:
                     1.2 * dens.c_fm,
                 )
                 self.point_fermi = FermiDensity(c, dens.z_fm, dens.w)
-                f_pt = self.point_fermi.form_factor(self.q)
+                f_pt = self.point_fermi.form_factor(self.q, dr)
             else:
                 raise M2Error(f"unknown unfold mode {unfold!r}")
             self.f_pt = f_pt
@@ -454,7 +455,9 @@ class Thickness:
             return self.point.gauss_folded_thickness(self.b, beta)
         env = self.f_pt * np.exp(-beta * self.q**2 / 2.0)
         self.tail = max(self.tail, float(np.max(np.abs(env[-max(2, self.q.size // 20) :]))))
-        return np.asarray(self.kern @ env)
+        # Euler-Maclaurin end-point term of the q trapezoid: the integrand q env J0(q b) has the
+        # slope env(0) at q = 0, so the sum is low by dq^2 env(0) / (24 pi) for every b
+        return np.asarray(self.kern @ env + self.dq**2 * env[0] / (24.0 * math.pi))
 
 
 RHO0_FM3 = 0.17
@@ -540,15 +543,16 @@ class PauliThickness:
 
     def __init__(self, dens: HODensity | FermiDensity, b: F64, z: int, n: int, *, variant: str,
                  r_p: float = R_PROTON_FM, q_cut: float = 24.0, dq: float = 0.02,
-                 pauli_scale: float = 1.0) -> None:  # fmt: skip
+                 dr: float = 0.01, pauli_scale: float = 1.0) -> None:  # fmt: skip
         self.b, self.z, self.n, self.scale, self.variant = b, z, n, pauli_scale, variant
+        self.dr, self.dq = dr, dq
         self.tail = 0.0
         self.pauli_peak = 1.0
         self.point: HODensity | FermiDensity = (
             dens.unfolded(r_p) if isinstance(dens, HODensity) else rms_matched_point(dens, r_p)
         )
         self.r = np.arange(0.0, 16.0 * dens.a_fm if isinstance(dens, HODensity)
-                           else dens.c_fm + 40.0 * dens.z_fm, 0.01)  # fmt: skip
+                           else dens.c_fm + 40.0 * dens.z_fm, dr)  # fmt: skip
         self.rho_pt = self.point.density(self.r)
         self.q = np.arange(0.0, q_cut + 0.5 * dq, dq)
         w = np.full(self.q.size, dq)
@@ -569,14 +573,14 @@ class PauliThickness:
             qq = self.q[i0 : i0 + 128, None]
             safe = np.where(qq < 1e-12, 1.0, qq)
             kern = np.where(qq < 1e-12, self.r[None, :], np.sin(safe * self.r[None, :]) / safe)
-            f[i0 : i0 + 128] = 4.0 * math.pi * np.sum(w[None, :] * kern, axis=1) * 0.01
+            f[i0 : i0 + 128] = 4.0 * math.pi * np.sum(w[None, :] * kern, axis=1) * self.dr
         self.f_eff = f
         self._e = e_mev
 
     def conv(self, beta: float) -> F64:
         env = self.f_eff * np.exp(-beta * self.q**2 / 2.0)
         self.tail = max(self.tail, float(np.max(np.abs(env[-max(2, self.q.size // 20) :]))))
-        return np.asarray(self.kern @ env)
+        return np.asarray(self.kern @ env + self.dq**2 * env[0] / (24.0 * math.pi))  # see Thickness
 
 
 def b_grid(dens: HODensity | FermiDensity, db: float = 0.025) -> F64:
@@ -983,17 +987,21 @@ class M2Model:
             self.rms[name] = rec
             self.thick[name] = self._make_thickness(name, cfg.db_fm)
 
-    def _make_thickness(self, name: str, db_fm: float) -> Thickness | PauliThickness:
+    def _make_thickness(
+        self, name: str, db_fm: float, *, dq: float = 0.02, q_cut: float | None = None,
+        dr: float = 0.01,
+    ) -> Thickness | PauliThickness:  # fmt: skip
         d, cfg = self.dens[name], self.cfg
+        qc = cfg.q_cut if q_cut is None else q_cut
         if cfg.pauli:
             if cfg.unfold == "formfactor" and isinstance(d, FermiDensity):
                 raise M2Error("pauli (M2') needs a position-space point density: use rms-matched")
             z, a = self.targets[name]
             assert cfg.pauli_variant is not None
             return PauliThickness(d, b_grid(d, db_fm), z, a - z, variant=cfg.pauli_variant,
-                                  r_p=self.r_p, q_cut=cfg.q_cut,
+                                  r_p=self.r_p, q_cut=qc, dq=dq, dr=dr,
                                   pauli_scale=cfg.pauli_scale)  # fmt: skip
-        return Thickness(d, b_grid(d, db_fm), self.r_p, cfg.q_cut, unfold=cfg.unfold)
+        return Thickness(d, b_grid(d, db_fm), self.r_p, qc, dq, cfg.unfold, dr)
 
     def check_dsg_pinned(self, shas: list[str]) -> bool:
         """Fail closed on a DSG file whose hash is not pinned; returns True if the DSG hashes
@@ -1045,19 +1053,40 @@ class M2Model:
             rec["pauli_factor_peak"] = th.pauli_peak
         return edges, rec
 
-    def convergence(self, name: str, e_mev: float, pcm_mev: float) -> float:
-        """Step-halving (b step and s grid) relative change of sigma_el, sigma_tot and of the
-        density at the common s nodes (relative to its forward value)."""
+    def convergence(self, name: str, e_mev: float, pcm_mev: float) -> dict[str, Any]:
+        """Step-halving record of the integration steps (plan 4.2 trigger 2, tolerance 1e-3), each
+        component reported separately: ``b_step`` (impact-parameter step halved), ``s_grid`` (the
+        angular grid of the amplitude doubled), ``radial_step`` (radial step of the form-factor /
+        density transform halved), ``q_step`` (Hankel q step
+        halved) and ``q_cutoff`` (cutoff x 1.5).
+        The metric of each is the largest of the relative changes of sigma_el and sigma_tot and of
+        the density at the common angles relative to its forward value. The radial and q
+        components do not exist for the analytic HO thickness (``None``). ``max`` combines them."""
         k = pcm_mev / HBARC
         th1 = self.thick[name]
-        z, a = self.targets[name]
-        r1 = m2_shape(th1.b, self._chi(name, th1, e_mev), k, self.cfg.n_s)
-        th2 = self._make_thickness(name, self.cfg.db_fm / 2)
-        r2 = m2_shape(th2.b, self._chi(name, th2, e_mev), k, 2 * (self.cfg.n_s - 1) + 1)
-        d2 = r2.density[::2]
-        return max(abs(r2.sigma_el_fm2 / r1.sigma_el_fm2 - 1.0),
-                   abs(r2.sigma_tot_ot_fm2 / r1.sigma_tot_ot_fm2 - 1.0),
-                   float(np.max(np.abs(d2 - r1.density)) / r1.density[0]))  # fmt: skip
+        n_s = self.cfg.n_s
+        r1 = m2_shape(th1.b, self._chi(name, th1, e_mev), k, n_s)
+        analytic = isinstance(th1, Thickness) and th1.point is not None  # HO: analytic fold
+
+        def metric(th: Thickness | PauliThickness, n: int = n_s) -> float:
+            r2 = m2_shape(th.b, self._chi(name, th, e_mev), k, n)
+            d2 = r2.density[:: (n - 1) // (n_s - 1)]
+            return max(abs(r2.sigma_el_fm2 / r1.sigma_el_fm2 - 1.0),
+                       abs(r2.sigma_tot_ot_fm2 / r1.sigma_tot_ot_fm2 - 1.0),
+                       float(np.max(np.abs(d2 - r1.density)) / r1.density[0]))  # fmt: skip
+
+        db, qc = self.cfg.db_fm, self.cfg.q_cut
+        comp: dict[str, float | None] = {
+            "b_step": metric(self._make_thickness(name, db / 2)),
+            "s_grid": metric(th1, 2 * (n_s - 1) + 1),
+            "radial_step": None if analytic else metric(self._make_thickness(name, db, dr=0.005)),
+            "q_step": None if analytic else metric(self._make_thickness(name, db, dq=0.01)),
+            "q_cutoff": None if analytic
+            else metric(self._make_thickness(name, db, q_cut=1.5 * qc)),
+        }  # fmt: skip
+        mx = max(v for v in comp.values() if v is not None)
+        return {"components": comp, "max": mx, "tol": CONVERGENCE_TOL,
+                "passed": mx <= CONVERGENCE_TOL, "e_mev": e_mev}  # fmt: skip
 
     def provenance(self) -> dict[str, Any]:
         inp = self.inputs

@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -38,6 +39,10 @@ from ionmc.nuclear.elastic_glauber import DATA_DIR, quantiles_mu
 F64 = NDArray[np.float64]
 M3_INPUTS_JSON = DATA_DIR / "elastic_m3_inputs.json"
 ABOVE_EMAX_POLICIES = ("error", "hold-last", "black-disk")
+COPY_CHECK_E_MIN_EV = 20.0e6
+COPY_CHECK_N_MU = 181
+COPY_CHECK_REL = 1.0e-3
+GATE_N_MU = 40001
 
 
 class M3Error(RuntimeError):
@@ -61,13 +66,21 @@ class Mf4Angular:
 
     @property
     def emax_ev(self) -> float:
+        if self.li == 1:  # isotropic at all energies (no records)
+            return math.inf
         parts = [self.leg_e, self.tab_e]
         return float(max(p[-1] for p in parts if p.size))
 
     @property
     def emin_ev(self) -> float:
+        if self.li == 1:
+            return 0.0
         parts = [self.leg_e, self.tab_e]
         return float(min(p[0] for p in parts if p.size))
+
+    def record_energies_ev(self) -> F64:
+        """Sorted unique incident energies [eV] of all records (Legendre and tabulated)."""
+        return np.unique(np.concatenate([self.leg_e, self.tab_e]))
 
     def _legendre_f(self, mu: F64, a: F64) -> F64:
         p = law5.legendre(mu, a.size)
@@ -261,22 +274,39 @@ class M3Model:
         self.copy_check = self._cross_copy_check()
 
     def _cross_copy_check(self) -> dict[str, Any]:
-        """The O-16 MF4 data must not be a numerical copy of the C-12 data (the LA150 O-16 MT2
-        file is a C-12 copy above 24 MeV, decision 0041): fraction of the O-16 Legendre records
-        that coincide with a C-12 record at the same energy."""
+        """Pre-registered copy check (acceptance (b'')4 item 2, Amendment 15 (d)1 transposed):
+        the O-16 and C-12 MF4/MT2 angular distributions (Legendre or tabulated, converted to CM)
+        are compared at EVERY shared incident energy above 20 MeV on 181 equally spaced mu_CM
+        points. NOT a copy iff the relative difference ``|a - b| / max(|a|, |b|)`` exceeds 1e-3
+        at > 50 % of the points at > 50 % of the shared energies; otherwise ``M3Error``. If the
+        files share no incident energy above 20 MeV the criterion is vacuous: recorded as not
+        evaluated with the reason (the files' E_top is recorded in the provenance)."""
         o, c = self.mf4.get("O-16"), self.mf4.get("C-12")
         if o is None or c is None:
-            return {"evaluated": False}
-        same = tot = 0
-        for e, a in zip(o.leg_e, o.leg_a, strict=True):
-            idx = np.nonzero(np.isclose(c.leg_e, e, rtol=1e-12, atol=0.0))[0]
-            if idx.size:
-                tot += 1
-                b = c.leg_a[int(idx[0])]
-                same += int(a.size == b.size and np.allclose(a, b, rtol=1e-9, atol=1e-12))
-        if tot >= 3 and same / tot > 0.5:
-            raise M3Error(f"O-16 MF4 Legendre data are a copy of C-12 ({same}/{tot} records)")
-        return {"evaluated": True, "shared_energies": tot, "identical_records": same}
+            return {"evaluated": False, "reason": "O-16 and C-12 are not both present"}
+        shared = [
+            float(e) for e in o.record_energies_ev()
+            if e > COPY_CHECK_E_MIN_EV and np.any(np.isclose(c.record_energies_ev(), e, rtol=1e-12,
+                                                             atol=0.0))
+        ]  # fmt: skip
+        if not shared:
+            return {"evaluated": False, "reason": "no shared incident energies above 20 MeV",
+                    "n_mu_points": COPY_CHECK_N_MU}  # fmt: skip
+        mu = np.linspace(-1.0, 1.0, COPY_CHECK_N_MU)
+        n_diff = 0
+        for e in shared:
+            a, b = o.f_cm(mu, e), c.f_cm(mu, e)
+            rel = np.abs(a - b) / np.maximum(np.maximum(np.abs(a), np.abs(b)), 1e-300)
+            rel = np.where((a == 0.0) & (b == 0.0), 0.0, rel)
+            n_diff += int(np.mean(rel > COPY_CHECK_REL) > 0.5)
+        frac = n_diff / len(shared)
+        if frac <= 0.5:
+            raise M3Error(
+                f"O-16 MF4 distributions are a C-12 copy above 20 MeV: they differ by > 1e-3 at "
+                f"> 50 % of the points at only {n_diff}/{len(shared)} shared energies"
+            )
+        return {"evaluated": True, "n_mu_points": COPY_CHECK_N_MU, "shared_energies": len(shared),
+                "energies_that_differ": n_diff, "fraction": frac}  # fmt: skip
 
     def has(self, name: str) -> bool:
         return name in self.mf4
@@ -284,25 +314,68 @@ class M3Model:
     def emax_mev(self, name: str) -> float:
         return self.mf4[name].emax_ev * 1e-6
 
-    def density_s(self, name: str, e_mev: float, s: F64) -> F64:
-        """``f(mu_CM(s))`` per unit mu, ``mu = 1 - 2 s^2``; above the evaluation's ``emax`` the
-        value at ``emax`` is returned (the caller applies the ``above_emax`` policy first)."""
-        m = self.mf4[name]
-        e_ev = min(e_mev * 1e6, m.emax_ev)
-        return m.f_cm(1.0 - 2.0 * s * s, e_ev)
+    def _gates(self, name: str, e_ev: float) -> dict[str, Any]:
+        """Verification gates on the CM distribution at ``e_ev`` (fail closed, no clipping):
+        positivity (no value below -1e-12 of the maximum), normalisation ``|int f dmu - 1| <=
+        1e-6`` (Simpson on 40001 mu points), monotone CDF and a finite first moment <1 - mu>."""
+        mu = np.linspace(-1.0, 1.0, GATE_N_MU)
+        f = self.mf4[name].f_cm(mu, e_ev)
+        if not np.all(np.isfinite(f)):
+            raise M3Error(f"{name} at {e_ev * 1e-6:.6g} MeV: non-finite angular distribution")
+        fmax = float(np.max(np.abs(f)))
+        if float(f.min()) < -1e-12 * fmax:
+            raise M3Error(
+                f"{name} at {e_ev * 1e-6:.6g} MeV: negative angular density {f.min():.3g}"
+            )
+        h = mu[1] - mu[0]
+        simpson = h / 3.0 * (f[0] + f[-1] + 4.0 * f[1:-1:2].sum() + 2.0 * f[2:-1:2].sum())
+        if abs(simpson - 1.0) > 1e-6:
+            raise M3Error(f"{name} at {e_ev * 1e-6:.6g} MeV: normalisation {simpson!r} (> 1e-6)")
+        cdf = np.concatenate(([0.0], np.cumsum(0.5 * (f[1:] + f[:-1]) * h)))
+        if np.any(np.diff(cdf) < -1e-15):
+            raise M3Error(f"{name} at {e_ev * 1e-6:.6g} MeV: CDF is not monotone")
+        mom = float(np.sum(0.5 * ((1.0 - mu) * f)[1:] * h + 0.5 * ((1.0 - mu) * f)[:-1] * h))
+        if not math.isfinite(mom) or not 0.0 <= mom <= 2.0:
+            raise M3Error(f"{name} at {e_ev * 1e-6:.6g} MeV: first moment {mom!r}")
+        return {"norm_int_f_dmu": float(simpson), "min_f": float(f.min()),
+                "first_moment_1_minus_mu": mom, "cdf_monotone": True}  # fmt: skip
 
-    def node(self, name: str, e_mev: float, n_q: int) -> tuple[F64, dict[str, Any]]:
+    def check_midpoint(self, name: str, e_mev: float) -> None:
+        """Positivity (and finiteness) at an energy midpoint of the pinned grid; above E_top the
+        distribution is that of E_top. ``M3Error`` on a negative value (no clipping)."""
+        m = self.mf4[name]
+        self._gates(name, min(e_mev * 1e6, m.emax_ev))
+
+    def node(
+        self, name: str, e_mev: float, n_q: int, pcm_mev: float | None = None,
+        pcm_top_mev: float | None = None,
+    ) -> tuple[F64, dict[str, Any]]:  # fmt: skip
+        """256-bin edges of the p + A shape at ``e_mev`` after all gates. At or below E_top the
+        n + A distribution at ``e_mev`` itself. Above E_top (policy ``hold-last``; the caller
+        must pass the p + A CM momenta ``pcm_mev`` at the node and ``pcm_top_mev`` at E_top): the
+        E_top distribution is HELD FIXED IN MOMENTUM TRANSFER q = 2 p sin(theta/2) and rescaled to
+        the node's p_CM: its equiprobable edges in ``s' = sin(theta_top/2)`` map to
+        ``s = s' p_top / p`` (the distribution of q is unchanged, the CDF in q is identical). The
+        node's q range exceeds the E_top kinematic limit 2 p_top, so the density is zero for
+        ``s > p_top / p`` (q beyond the E_top limit); the normalisation is unchanged (1)."""
+        m = self.mf4[name]
+        above = e_mev * 1e6 > m.emax_ev * (1.0 + 1e-12)
+        e_use = m.emax_ev if above else e_mev * 1e6
+        gates = self._gates(name, e_use)
         s = np.linspace(0.0, 1.0, self.cfg.n_s)
-        d = self.density_s(name, e_mev, s)
-        g = 4.0 * s * d
-        gn = np.minimum(g, 0.0)
-        tot = float(np.sum(0.5 * (g[1:] + g[:-1]) * np.diff(s)))
-        neg = float(np.sum(0.5 * (gn[1:] + gn[:-1]) * np.diff(s)))
-        if tot <= 0.0 or -neg > 1e-3 * tot:
-            raise M3Error(f"{name} at {e_mev} MeV: unusable density (norm {tot}, negative {neg})")
-        edges, dev = quantiles_mu(s, np.maximum(d, 0.0), n_q)
-        return edges, {"e_mev": e_mev, "norm_int_f_dmu": tot, "min_f": float(d.min()),
-                       "negative_fraction": -neg / tot, "norm_deviation": dev}  # fmt: skip
+        d = m.f_cm(1.0 - 2.0 * s * s, e_use)
+        edges, dev = quantiles_mu(s, d, n_q)
+        rec: dict[str, Any] = {"e_mev": e_mev, "e_used_mev": e_use * 1e-6, "q_scaled": False,
+                               "norm_deviation": dev, **gates}  # fmt: skip
+        if above:
+            if pcm_mev is None or pcm_top_mev is None or pcm_mev < pcm_top_mev:
+                raise M3Error("hold-last needs p_CM at the node and at E_top (node >= E_top)")
+            ratio = pcm_top_mev / pcm_mev
+            s_edges = np.sqrt(np.maximum((1.0 - edges) / 2.0, 0.0)) * ratio
+            edges = np.maximum.accumulate(1.0 - 2.0 * s_edges * s_edges)
+            edges[-1] = 1.0  # edges[0] = 1 - 2 (p_top/p)^2 > -1: zero density below it
+            rec.update(q_scaled=True, p_ratio_top_over_node=ratio, s_max=ratio)
+        return edges, rec
 
     def provenance(self) -> dict[str, Any]:
         digest = hashlib.sha256(Path(self.cfg.inputs_json).read_bytes()).hexdigest()
