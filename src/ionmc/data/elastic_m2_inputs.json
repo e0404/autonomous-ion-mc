@@ -1,0 +1,255 @@
+{
+ "schema": "ionmc-elastic-m2-inputs-1",
+ "note": "Provenance and parameters of the M2 (optical-limit Glauber) exploratory elastic shape; V3-005D plan 4.1 and Amendment 20 (b'). Acquisition ids refer to the v3-research store (role construction). No EXFOR/ENDF values.",
+ "said": {
+  "solution": "GWU SAID SM16 (Workman et al., PRC 94 (2016) 065203)",
+  "retrieved": "2026-10-18",
+  "header_verbatim": "SM16 0-3.0 GEV PP=50276/25348 NP=22832/12938 RAA (147)  5/03/07",
+  "convention_uncertainty": "SAID does not state its Coulomb-removal and sign conventions; sign consistent with Ray 1979 and Abu-Ibrahim 2008",
+  "acquisition_ids": {
+   "5-300_step5": {
+    "pp_sgt": "28e78745bfc74da98de99c76035f87ea",
+    "np_sgt": "d4360764abe742c98e488b42c0c7b90a",
+    "pp_alfa": "c39d4c94600e455c98ed374dd0c17114",
+    "np_alfa": "dab63152cbf64d8c97d0048c20987777"
+   },
+   "5-30_step1": {
+    "pp_sgt": "932daa93b61b416a97455f92f44abbd7",
+    "np_sgt": "07803ab6aab2449ca940480325fa3655",
+    "pp_alfa": "b0206879d01941b2b0cb4d4d5a30fd34",
+    "np_alfa": "84a77e24e0444f47987b700899e684cb"
+   },
+   "10-300_step5_earlier": {
+    "pp_sgt": "efe6d363f28c423582df8d68d2efebd0",
+    "np_sgt": "6035179d45c046ad93445457ea48ee7d",
+    "pp_alfa": "23ca28089b974a32b3ccd40d68665ecc",
+    "np_alfa": "761b99787a674a69a3478768b1cb9385"
+   }
+  },
+  "file_sha256": {
+   "5-300_step5/pp_sgt": "b72360a2c3813bd523a57e529ba964b1c30a806c02963b6a941efbd7e7a6bcb8",
+   "5-300_step5/np_sgt": "d3f35fe2b873dc39f8c3c6f9de1efdb916aaec356221e23d0c5debe65a1f120d",
+   "5-300_step5/pp_alfa": "f7eeda20f311db64f38c6e6b09d7b97385bc2ae009cdea0ccceecb9a3d83c7fd",
+   "5-300_step5/np_alfa": "db95e4dcdf76e12e4fdb480981ef4c353c232d84a23dc2de47b4453f17d13136",
+   "5-30_step1/pp_sgt": "d93b3f4d0c7ae46b941c9ae82292238384624af416d1acccbf4e2146f478954c",
+   "5-30_step1/np_sgt": "d4d955c71d4a4a3a198d968e884ff62534b9f4381345ef514be32aa669cd410a",
+   "5-30_step1/pp_alfa": "4bae553e8a06e82f02b8032ca648e50631b5cee6f8437c316061e577701d8c8a",
+   "5-30_step1/np_alfa": "14399f8deb631857b389f3399b9d7df08b789ebf6fedc7014c6151dc09d960c4",
+   "10-300_step5_earlier/pp_sgt": "508d47be0adcc78aa5546d50d60cec8410d6b85a6c94e8860368ca173a8b1b37",
+   "10-300_step5_earlier/np_sgt": "eec6f944a1a9b85800fbeabd07b716f697a2db0edb5abf5852b7221614652290",
+   "10-300_step5_earlier/pp_alfa": "b2ca5813878a1c7a9c7e1ce808e8971dbbafaa0e7375240b2d58f6c60e53e252",
+   "10-300_step5_earlier/np_alfa": "47404925af3cbcf8d98613ef06dc72ca254ef667fc75510bc5d4c427acf72685"
+  }
+ },
+ "pp_dsg": {
+  "quantity": "pp DSG(cm), columns A(cm) DSG(cm) Err A(lab) DSG(lab); 179 rows per energy from segments 1-60/61-120/121-179; units not stated, assumed mb/sr and verified against SGT",
+  "acquisition_ids_by_t_lab_mev": {
+   "100": [
+    "e8973bddcd3e4c1d8142033cf99d883c",
+    "cb0dfcecb64e4aaaa5829a03ac349650",
+    "0ad01128a2404b37be349aba6a7ca269"
+   ],
+   "125": [
+    "7639d5dc7c2f4baf9491cee446e1574f",
+    "a6ea1a216a334db3a94edd7a45dc52ac",
+    "12797d52222349d997efffd0768eb96c"
+   ],
+   "150": [
+    "9b95bac9bc1247dab43156074583a5c1",
+    "3eadb73fcf07484eb392afd8d4ba19c2",
+    "f406ab8af2aa4c4abd11238219dcb4ee"
+   ],
+   "175": [
+    "a3ece8cd3cfc42d6bb0aaa01193afe2d",
+    "8909ef36e88f49578bfe5ca5f5c60968",
+    "14df69fa85c846a2999238d945ea7bca"
+   ],
+   "200": [
+    "c2c3d72963f24e518630bf33f870ae7b",
+    "e1b69d9c30a3490e9783a97c380c84c6",
+    "2ed37a4234d548099155ce9e9a4f8a48"
+   ],
+   "250": [
+    "0952913571f14abf84e492b4dbd724e2",
+    "f7de116fbc3543d481200aa2ced8de21",
+    "dbc89fb0adf248faa73c47790c82d83c"
+   ],
+   "300": [
+    "537907c89e034dc7a47804fa9d4710e1",
+    "e38519d84ca74a78ab317eac3afd74ba",
+    "411c5c0ae6544649aec4263669473d87"
+   ]
+  },
+  "file_sha256": {
+   "100/seg1": "f0ea451bacfee1446e7c6d959a5bbfa1e56648b61a9adf4d2c01f9f4902c8038",
+   "100/seg2": "ac68a8b830ca5bafa5e6ce55855da8281e03d6080f9fc552e45cfa139c39fc09",
+   "100/seg3": "0766641b4a7407347cd4c9f95e1d74f6a5a7392fbc35aa6278e047c8f16227f5",
+   "125/seg1": "52efac55f7c59eb9b9d18578d4534803c1bd50e7777c783d729d5cb50207c947",
+   "125/seg2": "0f6bd47477907c205effa8cfb7d2580ebe58fac9eae1d91cd5d31e7092d611f2",
+   "125/seg3": "b31c8cb99a0806033cfa9b254e523806b5c7b865b62cc3da41811c691191dda0",
+   "150/seg1": "6a5fff0cebc26f0c2b9f394e009cb4a859ff91c297c9751d2083f66b47c9bf3a",
+   "150/seg2": "4bd1b853ae0815c1008f363c3845d983c91e9d38f99673cf4745638ee961ebfc",
+   "150/seg3": "139644a4583f507237222811f1dd5a48582ee7a069440f9b6da51c26952da1bc",
+   "175/seg1": "790e255a1007cc2bba7aed192bfb6db7099967c0b527db672a3dc6bbc913fb16",
+   "175/seg2": "3ab57bac7177866124fc716d3e97500b9b7bcdd598e3ae79de3819f2d2011a5d",
+   "175/seg3": "7fd8c2eb88cfbf3e54064ff7be2256fb7e3252019d1a863d9890430ea62b9bc1",
+   "200/seg1": "7b82724763ca7843c04d075f5073fe9df1bb066f3c6c74debbfd8f509710ca58",
+   "200/seg2": "9bcff0ceac9c3b18c9c633fb9c97a3791e65bc32bd40ad429a86adbdeb5b5446",
+   "200/seg3": "eea05b98eafabcde404f7ce64811aae28840ae2099eb648e58529fc378a194ec",
+   "250/seg1": "41536067571ad5d260556ed220841ef8c5e9444cf7f12638b382c1d7a105e044",
+   "250/seg2": "5bd52b6dccee943c1ba72e399f50c2d650d405eeca3004586b6b020e013b6cee",
+   "250/seg3": "791475140ed8d723c7aaf0a963b42e75900a633fda43b7540538dfb6afea3d1d",
+   "300/seg1": "372bb0b394e2afbd6c8f2b3b635ea518f1339bd24c148a0597ae9e6f1a269e6a",
+   "300/seg2": "ea1726038de484189c6bdeefa61bb96e912839d5ce0366106d22955cd9126cc2",
+   "300/seg3": "46192d0b5cd1a4b0a6da793445b5ef61e03fb736d189e44a334f2f7093252993"
+  }
+ },
+ "r_proton_fm": {
+  "value": 0.8414,
+  "source": "CODATA 2018 recommended proton rms charge radius"
+ },
+ "iaea_rms_charge_radius_fm": {
+  "acquisition_id": "8dd779140e52459f81f506442382b4a8",
+  "source": "IAEA charge_radii.csv (Angeli & Marinova 2013 compilation)",
+  "tolerance_fm": 0.03,
+  "values": {
+   "C-12": 2.4702,
+   "N-14": 2.5582,
+   "O-16": 2.6991,
+   "Al-27": 3.061,
+   "Si-28": 3.1224,
+   "P-31": 3.1889,
+   "Ca-40": 3.4776
+  }
+ },
+ "densities": {
+  "C-12": {
+   "form": "HO",
+   "alpha": 1.082,
+   "a_fm": 1.692,
+   "a_mass": 12,
+   "surrogate": false,
+   "sources": [
+    {
+     "acquisition_id": "dcb08bbcc4aa446e8808e1abfa5600e5",
+     "ref": "Shukla nucl-th/0302030 Table I p.8, Eq.(19) p.7"
+    }
+   ],
+   "cross_check": [
+    {
+     "acquisition_id": "bf78ff8d0fc941f39cc79046a3dcab8a",
+     "ref": "Duda FB hep-ph/0608035 App. I Table III (rms only)"
+    }
+   ]
+  },
+  "N-14": {
+   "form": "HO",
+   "a_mass": 14,
+   "surrogate": true,
+   "alpha_from": [
+    "C-12",
+    "O-16"
+   ],
+   "solve": "a (rms = IAEA)",
+   "sensitivity_alpha": [
+    1.082,
+    1.544
+   ],
+   "sources": [
+    {
+     "acquisition_id": "8dd779140e52459f81f506442382b4a8",
+     "ref": "IAEA radius (constraint)"
+    }
+   ]
+  },
+  "O-16": {
+   "form": "HO",
+   "alpha": 1.544,
+   "a_fm": 1.833,
+   "a_mass": 16,
+   "surrogate": false,
+   "sources": [
+    {
+     "acquisition_id": "dcb08bbcc4aa446e8808e1abfa5600e5",
+     "ref": "Shukla Table I p.8"
+    },
+    {
+     "acquisition_id": "0d4d56435c234f5892e6a76bf5998393",
+     "ref": "TGlauberMC paper arXiv:1408.2549 Table I p.3"
+    },
+    {
+     "acquisition_id": "cdb9f72849a84e53a2b44e1e79f0b85f",
+     "ref": "runglauber_v3.3.C l.2078"
+    }
+   ]
+  },
+  "Al-27": {
+   "form": "2pF",
+   "a_mass": 27,
+   "surrogate": true,
+   "d_from": "Si-28",
+   "solve": "c (rms = IAEA)",
+   "sensitivity_z_fm": [
+    0.537,
+    0.586
+   ],
+   "sources": [
+    {
+     "acquisition_id": "8dd779140e52459f81f506442382b4a8",
+     "ref": "IAEA radius (constraint)"
+    }
+   ]
+  },
+  "Si-28": {
+   "form": "2pF",
+   "c_fm": 3.106,
+   "z_fm": 0.542,
+   "a_mass": 28,
+   "surrogate": false,
+   "sources": [
+    {
+     "acquisition_id": "a3d9b475e79948b8b4f2f5f2de7c9d82",
+     "ref": "Mehndiratta & Shukla arXiv:1702.07459 Table 1 p.7, Eq.(17)"
+    }
+   ]
+  },
+  "P-31": {
+   "form": "2pF",
+   "a_mass": 31,
+   "surrogate": true,
+   "d_from": "Si-28",
+   "solve": "c (rms = IAEA)",
+   "sensitivity_z_fm": [
+    0.537,
+    0.586
+   ],
+   "sources": [
+    {
+     "acquisition_id": "8dd779140e52459f81f506442382b4a8",
+     "ref": "IAEA radius (constraint)"
+    }
+   ]
+  },
+  "Ca-40": {
+   "form": "3pF",
+   "c_fm": 3.766,
+   "z_fm": 0.586,
+   "w": -0.161,
+   "a_mass": 40,
+   "surrogate": false,
+   "sources": [
+    {
+     "acquisition_id": "cdb9f72849a84e53a2b44e1e79f0b85f",
+     "ref": "TGlauberMC runglauber_v3.3.C l.2090"
+    }
+   ],
+   "cross_check": [
+    {
+     "acquisition_id": "a3d9b475e79948b8b4f2f5f2de7c9d82",
+     "ref": "Mehndiratta Table 1 p.7 20Ca 3pF"
+    }
+   ]
+  }
+ },
+ "note_pins": "file_sha256: {label: sha256}; every file read must hash to a listed value; empty = unpinned (build refuses unless --allow-unpinned-inputs)"
+}

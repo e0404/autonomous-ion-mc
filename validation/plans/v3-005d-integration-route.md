@@ -1,6 +1,6 @@
 # V3-005 route to integration (V3-005D planning document; planner output, not evidence)
 
-Status: revision 6 (2026-10-14), after two independent review rounds and Codex REVIEW-bb2a8151 (`validation/plans/v3-005d-integration-route/review.md`); to be committed as `validation/plans/v3-005d-integration-route.md`, the "route to integration" that the operator requires. Branch state: V3-005B worktree `/home/wahln/aiprojects/ion-mc-worktrees/v3-005b`, HEAD 749f768c (PR #82, unmerged by operator decision). Evidence SHA of the last qualification: dd976c5a (bases lv5c 20481004, hr5c 20491004).
+Status: revision 7 (2026-10-18; one-line correction: the V6-F r_index-7 seed range ends at 20558019, k = 0..15, not 20558015 — found by the Amendment 20 review); revision 6 (2026-10-14), after two independent review rounds and Codex REVIEW-bb2a8151 (`validation/plans/v3-005d-integration-route/review.md`); to be committed as `validation/plans/v3-005d-integration-route.md`, the "route to integration" that the operator requires. Branch state: V3-005B worktree `/home/wahln/aiprojects/ion-mc-worktrees/v3-005b`, HEAD 749f768c (PR #82, unmerged by operator decision). Evidence SHA of the last qualification: dd976c5a (bases lv5c 20481004, hr5c 20491004).
 
 This document changes no frozen row, tolerance, seed base or verdict. Every row result quoted here is preserved as archived. Proposals that change the required validation scope are collected in §4 (iv) for ONE operator intervention; nothing in them is applied before the operator answers.
 
@@ -563,7 +563,7 @@ If item 5 is refused, the V5 steps drop out: four short V5 shards of 10–25 s e
 | V7-R2 transport (lv r_index 16) | **20547004 … 20547051** (k = 0..47); reference k = 48 → **20547052**. 7200/0.005 fallback: k = 0..63, reference k = 64 → **20547004–20547068** | repair plan rev 3 §5 |
 | Reserved hr r_index 6 at 20541004 | numerically equal to the V7-R2 seeds (k ≤ 64); must stay unused | repair plan rev 3 §5 |
 | Other cross-base identities (lv 20531004 r ≡ hr 20541004 (r − 10) at equal k) | lv r_index 10 ≡ hr r_index 0, unused; lv 11–13 ≡ hr 1–3, as in Amendment 14 (j), lv 11 unused | – |
-| V6-F (Option II, B = 20551004) | r_index 7 / 8 / 9: 20558004 … 20558015, 20559004 … 20559011, 20560004 … 20560019. B + 7000 = 20558004 > 20525999. Above every lv 20531004 seed (≤ 20552003 for r_index ≤ 20). Numerically equal only to hr 20541004 r_index 17–19, which no hr row uses; reserved | v6f-followup §7 |
+| V6-F (Option II, B = 20551004) | r_index 7 / 8 / 9: 20558004 … 20558019, 20559004 … 20559011, 20560004 … 20560019. B + 7000 = 20558004 > 20525999. Above every lv 20531004 seed (≤ 20552003 for r_index ≤ 20). Numerically equal only to hr 20541004 r_index 17–19, which no hr row uses; reserved | v6f-followup §7 |
 | V7-R2 κ and calibration | roots 20980000 (κ) / 20982000 (calibration) / 20984000 (A13 shard), within **20980000–20984999**. Retry block 20985000–20988999 under the F6 conditions; planner diagnostics 20989900–20989999 | repair plan rev 3 §5 |
 | Elastic investigation (Amendment 19) | family **2099xxxx from 20990100**: D-E3 / D-E6 20990100 / 20990101; D-E5 20991000 + case | elastic plan rev 4 §6 (f) |
 | TOPAS | 20270000 + 1000·row + k, rows 14–23 | elastic plan rev 4 §6 (f) |
@@ -630,7 +630,7 @@ Revision 5: re-qualification 3.28 + 33.9 = 37.18 h; 3.28 + 44 = 47.28 h; 3.28 + 
   with D-E4 (4.17 h): 41.35 / 51.45 / 23.95 / 19.95 h; 7200 transport seeds 20547004 + k, k = 0..64 -> 20547068
 Revision 4: adopted lv 20531004 / hr 20541004: every seed >= 20531004 > 20525999; scan finds no shared seed at any k < 1000;
   V7-R2 transport 20531004 + 16000 + k = 20547004 .. 20547052 (k <= 48) = hr 20541004 r_index 6 numbers (reserved);
-  V6-F B = 20551004: r7 20558004..20558015, r8 20559004..20559011, r9 20560004..20560019; B + 7000 = 20558004 > 20525999;
+  V6-F B = 20551004: r7 20558004..20558019, r8 20559004..20559011, r9 20560004..20560019; B + 7000 = 20558004 > 20525999;
   lv 20531004 max seed for r_index <= 20, k <= 999: 20552003 < 20558004
   calibration parts 39 per surrogate * (82 or 83) = 3200; 78 parts
 Seed algebra: 20511004 + 1000 r + k = 20505000 + 1000 (r+6) + (k+4);

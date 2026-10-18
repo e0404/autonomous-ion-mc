@@ -1,0 +1,23 @@
+{
+  "schema": "ionmc-elastic-m3-inputs-1",
+  "note": "M3 = (ii') inputs: ENDF/B-VIII.0 incident-neutron evaluations, MF4/MT2. Acquisition ids and file_sha256 are filled when the acquisitions exist (empty = unpinned; the build refuses unless allowed). Catalogue MAT numbers VERIFIED against the NNDC list https://www.nndc.bnl.gov/endf-b8.0/lists/neutrons.list: C-12 = MAT 625 (LANL/ORNL EVAL-AUG15 Hale, Young, Fu), O-16 = MAT 825 (LANL EVAL-DEC16 Hale, Paris, Young, Chadwick). The other header fields (NLIB 0, NVER 8, LREL 0, NSUB 10) are the ENDF/B-VIII.0 neutron-sublibrary conventions and are checked against the acquired files only. The upper energy limit of the MF4 evaluations (20 vs 150 MeV) is UNVERIFIED: no open source confirms it. The files could not be acquired (size cap); M3 is construction impossible under the plan, this code and its synthetic tests are the record of the attempt.",
+  "file_sha256": {},
+  "acquisition_ids": {},
+  "catalogue_common": {
+    "nlib": 0,
+    "nver": 8,
+    "lrel": 0,
+    "nsub": 10
+  },
+  "targets": {
+    "C-12": {
+      "za": 6012,
+      "mat": 625
+    },
+    "O-16": {
+      "za": 8016,
+      "mat": 825
+    }
+  },
+  "plan_row": "M3 = (ii'): ENDF/B-VIII.0 neutron O-16 / C-12 MF4/MT2; only these two targets receive the n+A shape, all other targets keep the pinned black-disk shape"
+}

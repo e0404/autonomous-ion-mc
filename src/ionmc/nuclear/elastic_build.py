@@ -75,6 +75,8 @@ from ionmc.data.registry import DATASETS
 from ionmc.errors import UnsupportedCombinationError
 from ionmc.materials import ELEMENTS
 from ionmc.nuclear import bgg, law5
+from ionmc.nuclear import elastic_glauber as glauber
+from ionmc.nuclear import elastic_m3 as m3mod
 from ionmc.nuclear import events as ev
 from ionmc.nuclear.build import (
     TARGETS,
@@ -824,12 +826,184 @@ def verify_pp_domain(
     return {"n_points_checked": len(pts), "min_density_mb_sr": 1e3 * worst}
 
 
+def _nan_to_none(x: Any) -> Any:
+    if isinstance(x, float) and not math.isfinite(x):
+        return None
+    if isinstance(x, dict):
+        return {k: _nan_to_none(v) for k, v in x.items()}
+    if isinstance(x, list):
+        return [_nan_to_none(v) for v in x]
+    return x
+
+
+def _pp_reanchor(
+    m2: glauber.M2Config, model: glauber.M2Model, grid: NDArray[np.float64],
+    sigma: NDArray[np.float64], sig_h: NDArray[np.float64], i150: int, k_pp: int,
+    s_ref: float, awi: float,
+) -> dict[str, Any]:  # fmt: skip
+    """Amendment 20 (b')4 (revision 3): SAID DSG - Mott anchor of the H-1 level; modifies
+    ``sigma[0]`` in place when the blocking checks pass; returns the record (old/new level ratio at
+    every node >= 100 MeV, the scan-energy rows, the checks)."""
+    assert m2.dsg_files is not None
+    sgt = model.nn.series[("PP", "SGT")]
+    e_lo = grid[k_pp : i150 + 1]
+    rows = []
+    for t in sorted(m2.dsg_files):
+        a, d = glauber.merge_dsg_segments(
+            [Path(f).read_bytes().decode("ascii", "replace") for f in m2.dsg_files[t]]
+        )
+        row = glauber.dsg_anchor(t, a, d, sgt.at(t), awi)
+        row["files_sha256"] = [glauber._sha256(Path(f)) for f in m2.dsg_files[t]]
+        model.check_dsg_pinned(row["files_sha256"])
+        row["sigma_table_mb"] = (
+            1e3 * float(np.interp(t, e_lo, sigma[0, k_pp : i150 + 1]))
+            if t <= E_ANCHOR_MEV
+            else 1e3 * sig_h[i150] * bgg.pp_bgg_mb(t) / s_ref
+        )
+        row["ratio_to_table"] = row.get("sigma_anchor_mb", float("nan")) / row["sigma_table_mb"]
+        rows.append(row)
+    rea = glauber.PPReanchor.build(rows)
+    old = 1e3 * sigma[0].copy()
+    if rea.enabled:
+        for k in range(k_pp, grid.size):
+            if grid[k] > glauber.RAMP_FROM_MEV:
+                sigma[0, k] = 1e-3 * rea.sigma_mb(float(grid[k]), old[k])
+    nodes = [
+        {"e_mev": float(grid[k]), "sigma_old_mb": float(old[k]),
+         "sigma_new_mb": float(1e3 * sigma[0, k]), "ratio_new_over_old":
+         float(sigma[0, k] * 1e3 / old[k])}
+        for k in range(k_pp, grid.size) if grid[k] >= 100.0
+    ]  # fmt: skip
+    return {"enabled": rea.enabled, "reason": rea.reason,
+            "pp_level_reanchoring": (
+                "applied" if rea.enabled else f"not applied ({rea.reason})"
+            ),
+            "scan_rows": rows, "nodes": nodes,
+            "checks": {"continuity_tol": glauber.CONTINUITY_TOL,
+                       "sgt_ratio_band": list(glauber.SGT_RATIO_BAND)},
+            "mott": "ENDF-102 eq 6.10 (law5.sigma_c), identical spin-1/2, half sphere 2 pi "
+            "int_0^0.96 [DSG - Mott] dmu; ln(DSG - Mott) linear in theta_CM"}  # fmt: skip
+
+
+def _pauli_record(
+    m2: glauber.M2Config, nodes: dict[str, list[dict[str, Any]]],
+    pinned: dict[str, list[dict[str, Any]]],
+) -> dict[str, Any]:  # fmt: skip
+    """M2' block: the formula pinned in :func:`glauber.pauli_factor` and the Pauli factor at the
+    peak density per target at 100/150/200 MeV."""
+    peak = {
+        n: {f"{e:g}_mev": min(v, key=lambda r: abs(r["e_mev"] - e))["pauli_factor_peak"]
+            for e in (100.0, 150.0, 200.0)}
+        for n, v in nodes.items() if v
+    }  # fmt: skip
+    return {"pauli": {
+        "reference": "Clementel & Villi 1955 / Hussein, Rego & Bertulani 1991 (variant of record); "
+        "Bertulani & De Conti, PRC 81, 064603 (2010), arXiv:1004.2096 (bdc-pn)",
+        "rho0_fm3": glauber.RHO0_FM3, "pauli_scale": m2.pauli_scale,
+        "pauli_emin_mev": m2.pauli_emin_mev,
+        "nodes_applied_per_target": {n: len(v) for n, v in nodes.items()},
+        "nodes_below_emin_black_disk_per_target": {n: len(v) for n, v in pinned.items()},
+        "nodes_below_emin_black_disk": pinned,
+        "pauli_variant": m2.pauli_variant,
+        "reading": {"clementel-villi": "Fermi-gas LDA, E_F(rho_tot), variant of record",
+                    "bdc-pn": "Eq. 14 with rho1 = local rho_p, rho2 = local rho_n; "
+                    "report-only sensitivity"}.get(str(m2.pauli_variant)),
+        "formula": "see glauber.pauli_factor: clementel-villi 1 - 7E_F/(5E) (E >= 2E_F), "
+        "low branch 1 - 7E_F/(5E) + (2/5)(E_F/E)(2 - E/E_F)^(5/2), E_F = (hbar^2/2m)(3 pi^2 "
+        "rho_tot/2)^(2/3); bdc-pn: Bertulani & De Conti Eq. 14 (arXiv:1004.2096)",
+        "alpha": "free SAID", "beta": "unitarity rule of the free sigma",
+        "pauli_factor_at_peak_density": peak}}  # fmt: skip
+
+
+def m2_record(
+    m2: glauber.M2Config, model: glauber.M2Model, nodes: dict[str, list[dict[str, Any]]],
+    conv: float, norm: float, pp_rec: dict[str, Any] | None,
+    pinned: dict[str, list[dict[str, Any]]] | None = None,
+) -> dict[str, Any]:  # fmt: skip
+    """Provenance and construction checks of an M2 table (plan 4.2), recorded and asserted."""
+    if norm > glauber.NORM_TOL:
+        raise BuildError(f"M2 normalisation deviation {norm:.3g} exceeds {glauber.NORM_TOL}")
+    if conv > glauber.CONVERGENCE_TOL:
+        raise BuildError(f"M2 step-halving convergence {conv:.3g} exceeds 1e-3 (plan 4.2 trig. 2)")
+    bd = glauber.black_disk_limit_check()
+    if bd["max_rel_dev"] > bd["tolerance"]:
+        raise BuildError(f"M2 black-disk limit check failed: {bd}")
+    worst_unit = max(r["unitarity_residual"] for v in nodes.values() for r in v)
+    worst_ot = max(r["optical_theorem_residual"] for v in nodes.values() for r in v)
+    min_dens = min(r["min_density_fm2_sr"] for v in nodes.values() for r in v)
+    if min_dens < 0.0:
+        raise BuildError("M2 density is negative")
+    level = {}
+    for name, v in nodes.items():
+        level[name] = {
+            f"{e:g}_mev": float(
+                np.interp(e, [r["e_mev"] for r in v], [r["m2_over_bgg"] for r in v])
+            )
+            for e in (100.0, 150.0, 200.0)
+        }
+    t3 = {n: [{"e_mev": float(e.split("_")[0]), "ratio": ratio,
+               "out_of_band": not 0.7 <= ratio <= 1.4} for e, ratio in level[n].items()]
+          for n in ("C-12", "O-16")}  # fmt: skip
+    trigger3 = {"band": [0.7, 1.4], "targets": t3,
+                "fired": any(sum(r["out_of_band"] for r in v) >= 2 for v in t3.values()),
+                "note": "plan 4.2 trigger 3: >= 2 of 100/150/200 MeV outside the band for O or C; "
+                "recorded here, NOT acted upon by the builder (orchestrator decision)"}  # fmt: skip
+    trigger4: dict[str, Any] = {"band": [0.6, 1.0]}
+    for n in ("C-12", "O-16"):
+        dn = model.dens[n]
+        assert isinstance(dn, glauber.HODensity)  # C-12, O-16 are HO
+        qh = glauber.helm_q_h(dn)
+        rows = {}
+        for e in (150.0, 200.0):
+            q = min(nodes[n], key=lambda r: abs(r["e_mev"] - e))["q_first_min_fm_inv"]
+            ok = isinstance(q, float) and math.isfinite(q)
+            rows[f"{e:g}_mev"] = {
+                "q_min_m2_fm_inv": q if ok else "not evaluable (no true minimum)",
+                "ratio_to_q_h": q / qh["q_h_fm_inv"] if ok else None,
+                "in_band": (0.6 <= q / qh["q_h_fm_inv"] <= 1.0) if ok else None,
+            }
+        trigger4[n] = {"helm": qh, "rows": rows}  # fmt: skip
+    return {
+        "level_sanity_trigger_3": trigger3, "radius_sanity_trigger_4": trigger4,
+        "unfold_note": "rms-matched is the declared rule for 2pF/3pF; 'formfactor' diverges when "
+        "beta < r_p^2/3 = 0.236 fm^2 (E > ~125 MeV)",
+        "variant": m2.variant(), "beta": m2.beta, "pp_level": m2.pp_level, "unfold": m2.unfold,
+        "options": {"n_s": m2.n_s, "db_fm": m2.db_fm, "q_cut": m2.q_cut,
+                    "shape_override": m2.shape_override},
+        "provenance": model.provenance(),
+        "checks": {"normalisation_max_deviation": norm, "normalisation_tol": glauber.NORM_TOL,
+                   "convergence_max": conv, "convergence_tol": glauber.CONVERGENCE_TOL,
+                   "unitarity_max_residual": worst_unit, "optical_theorem_max_residual": worst_ot,
+                   "min_density_fm2_sr": min_dens, "black_disk_limit": bd,
+                   "rms_radius": {n: model.rms[n] for n in model.rms},
+                   "m2_over_bgg_sigma_el_at_100_150_200": level,
+                   "unfolding_tail_max": {n: model.thick[n].tail for n in model.thick}},
+        "first_minimum_q_150_mev": {
+            n: min(v, key=lambda r: abs(r["e_mev"] - 150.0))["q_first_min_fm_inv"]
+            for n, v in nodes.items()
+        },
+        "targets": {n: {"nodes": v} for n, v in nodes.items()},
+        "pp_reanchor": pp_rec,
+        "note": "Coulomb stays in the MCS model; nuclear-only amplitude; no Coulomb-nuclear "
+        "interference (plan 4.1 item 5); sigma_el = pinned BGG",
+        **(_pauli_record(m2, nodes, pinned or {}) if m2.pauli else {}),
+        **(
+            {"sigma_tot_comparison_report_only": glauber.sigma_tot_comparison(
+                glauber.load_measured_sigma_tot(m2.measured_sigma_tot), nodes)}
+            if m2.measured_sigma_tot is not None else {}
+        ),
+    }  # fmt: skip
+
+
 def build_elastic_proton(
     cache_dir: str | Path | None = None,
     options: ElasticBuildOptions | None = None,
     log: Callable[[str], None] = _noop,
     *,
     exploratory_forced_isotropic: bool = False,
+    m2: glauber.M2Config | None = None,
+    m3: m3mod.M3Config | None = None,
+    out_dir: Path | None = None,
 ) -> ElasticBuildResult:
     """Build the table (module docstring). ``BuildError`` on any fail-closed rule.
 
@@ -838,7 +1012,20 @@ def build_elastic_proton(
     ``sigma_el`` (valid) with an isotropic ``mu_CM`` distribution (edges uniform in [-1, 1]);
     every node inside the domain, every ``sigma_el`` there, the grid and H-1 are those of the
     model table. The table JSON carries ``exploratory`` (so its id differs and the loader
-    refuses it unless the configuration names it and sets ``allow_exploratory_table``)."""
+    refuses it unless the configuration names it and sets ``allow_exploratory_table``).
+
+    ``m2`` (V3-005D, exploratory, never evidence): the p + A angular shapes are the optical-limit
+    Glauber shapes of :mod:`ionmc.nuclear.elastic_glauber` (``sigma_el`` stays the pinned BGG
+    value; the domains ``e_min_shape``, the grid and the H-1 shape are those of the model table);
+    ``m2.pp_level = "said-anchored-ge150"`` additionally re-anchors the H-1 level at >= 125 MeV
+    (Amendment 20 (b')4). The table carries ``exploratory`` with the variant name and ``m2`` with
+    the complete input provenance and the construction checks. ``m3`` (V3-005D fallback model,
+    exploratory, never evidence): the C-12 and O-16 shapes are the ENDF/B-VIII.0 neutron MF4/MT2
+    angular distributions at the same lab energy (:mod:`ionmc.nuclear.elastic_m3`); all other
+    targets keep the black-disk shape (recorded); the evaluation ends at 20 MeV and
+    ``m3.above_emax`` ("error" | "hold-last" | "black-disk") decides the nodes above it.
+    ``m2`` and ``m3`` are mutually exclusive. ``out_dir`` overrides the output
+    directory (default ``<cache>/derived``); scratch builds go to a git-ignored directory."""
     t_start = time.perf_counter()
     opt = options or ElasticBuildOptions()
     cdir = cache.resolve_cache_dir(cache_dir)
@@ -859,6 +1046,18 @@ def build_elastic_proton(
     mats = {t.name: member(t.member) for t in TARGETS}
     models = {t.name: ev.build_event_model(ame_tab, t.z, t.a) for t in TARGETS}
     tts = {t.name: TargetTables(t, mats[t.name], models[t.name]) for t in TARGETS}
+    m2model = glauber.M2Model(m2, [(t.name, t.z, t.a) for t in TARGETS]) if m2 is not None else None
+    if m2 is not None and m3 is not None:
+        raise BuildError("m2 and m3 are mutually exclusive")
+    m3model = m3mod.M3Model(m3) if m3 is not None else None
+    m3_nodes: dict[str, list[dict[str, Any]]] = {t.name: [] for t in TARGETS}
+    m3_above = {t.name: 0 for t in TARGETS}
+    m3_norm = 0.0
+    m2_nodes: dict[str, list[dict[str, Any]]] = {t.name: [] for t in TARGETS}
+    m2_conv = 0.0
+    m2_below = {t.name: 0 for t in TARGETS}
+    m2_pinned: dict[str, list[dict[str, Any]]] = {t.name: [] for t in TARGETS}
+    m2_norm = 0.0
     o16 = o16_copy_finding(mats["C-12"], mats["O-16"])
     log(f"O-16 MT2 is a C-12 copy from {o16['from_mev']} MeV: recorded")
     o16_mt5 = o16_mt5_copy_check(mats["C-12"], mats["O-16"])
@@ -952,6 +1151,13 @@ def build_elastic_proton(
          "symmetric range [-0.96, 0.96] of the same density"}
     )  # fmt: skip
     log(f"H-1: E_min_pp = {grid[k_pp]:.4g} MeV, sigma(150) = {sigma[0, i150] * 1e3:.3f} mb")
+    pp_rec: dict[str, Any] | None = None
+    hale_curve = [  # diagnostic (report only): the table's own Hale-NI partial sigma_pp(E)
+        {"e_mev": float(grid[k]), "sigma_pp_partial_mb": 1e3 * float(sigma[0, k])}
+        for k in range(k_pp, n_grid)
+    ]  # fmt: skip
+    if m2 is not None and m2.pp_level != "none" and m2model is not None:
+        pp_rec = _pp_reanchor(m2, m2model, grid, sigma, sig_h, i150, k_pp, s_ref, awi)
 
     # ---- p + A -----------------------------------------------------------------------------
     sigma_10: dict[str, float] = {}
@@ -986,6 +1192,43 @@ def build_elastic_proton(
                     max_dev,
                     _shape_norm_deviation(float(r_fm[it, k]), float(pcm_arr[it, k]), opt.n_shape),
                 )
+        if m2model is not None:
+            for k in range(k_min, n_grid):
+                if grid[k] < m2model.nn.t_min_mev:  # below the SAID range: black disk kept
+                    m2_below[spec.name] += 1
+                    continue
+                if m2 is not None and m2.pauli and grid[k] < (m2.pauli_emin_mev or 0.0):
+                    # below pauli_emin: the pinned black-disk node exactly (edges untouched)
+                    m2_pinned[spec.name].append({"e_mev": float(grid[k]), "pauli_applied": False})
+                    continue
+                edges[it, k], rec = m2model.node(
+                    spec.name, float(grid[k]), float(pcm_arr[it, k]), n_q
+                )
+                rec["sigma_el_bgg_mb"] = 1e3 * float(sigma[it, k])
+                rec["m2_over_bgg"] = rec["sigma_el_m2_mb"] / rec["sigma_el_bgg_mb"]
+                m2_nodes[spec.name].append(rec)
+                m2_norm = max(m2_norm, rec["norm_deviation"])
+                if (k - k_min) % 25 == 0:
+                    rec["convergence"] = m2model.convergence(
+                        spec.name, float(grid[k]), float(pcm_arr[it, k])
+                    )
+                    m2_conv = max(m2_conv, rec["convergence"])
+        if m3model is not None and m3 is not None and m3model.has(spec.name):
+            emax = m3model.emax_mev(spec.name)
+            for k in range(k_min, n_grid):
+                e = float(grid[k])
+                if e > emax * (1.0 + 1e-12):
+                    m3_above[spec.name] += 1
+                    if m3.above_emax == "error":
+                        raise BuildError(
+                            f"{spec.name}: node {e:.4g} MeV is above the ENDF evaluation range "
+                            f"({emax:g} MeV); choose m3.above_emax = hold-last | black-disk"
+                        )
+                    if m3.above_emax == "black-disk":
+                        continue
+                edges[it, k], rec = m3model.node(spec.name, e, n_q)
+                m3_nodes[spec.name].append(rec)
+                m3_norm = max(m3_norm, rec["norm_deviation"])
         edges[it, :k_min] = edges[it, k_min]
         sigma_10[spec.name] = bgg.bgg_elastic_mb(10.0, spec.z, model.m_t_mev)
         info_t.append(
@@ -1035,12 +1278,16 @@ def build_elastic_proton(
                 float(np.interp(e, grid, pcm_arr[it])), th,
             )  # fmt: skip
 
+    if m3model is not None:
+        max_dev = m3_norm
+    if m2model is not None:
+        max_dev = max(m2_norm, 0.0) if m2_conv <= glauber.CONVERGENCE_TOL else float("inf")
     qual = np.array(
         [
             bool(k_pp <= i150 and in_domain_ok),
             bool(o16_mt5["o16_mt5_sigma_not_c12_copy"]),
             bool(o16_spec["o16_mt5_spectra_independent"]),
-            bool(max_dev <= 1e-6),
+            bool(max_dev <= (glauber.NORM_TOL if (m2model or m3model) else 1e-6)),
         ],
         dtype=np.int8,
     )
@@ -1104,7 +1351,7 @@ def build_elastic_proton(
         "target_a": np.array([1] + [t.a for t in TARGETS], dtype=np.int64),
         "target_mass_mev": np.array([MP] + [models[t.name].m_t_mev for t in TARGETS]),
     }  # fmt: skip
-    out_dir = cdir / "derived"
+    out_dir = Path(out_dir) if out_dir is not None else cdir / "derived"
     out_dir.mkdir(parents=True, exist_ok=True)
     tmp = out_dir / "elastic-proton-building.npz"
     npz_sha = write_npz_deterministic(tmp, arr)
@@ -1158,6 +1405,57 @@ def build_elastic_proton(
         "shape_normalisation_max_deviation": max_dev,
         "qualification_fields": list(QUALIFICATION_FIELDS),
     }  # fmt: skip
+    if m2model is not None and m2 is not None:
+        info["exploratory"] = {
+            "model": "m2prime-pauli-blocked" if m2.pauli else "m2-optical-glauber",
+            "variant": m2.variant(),
+            "pauli_variant": m2.pauli_variant if m2.pauli else None,
+            "pauli_emin_mev": m2.pauli_emin_mev if m2.pauli else None,
+            "beta": m2.beta,
+            "pp_level": m2.pp_level, "unfold": m2.unfold,
+            "inputs_unpinned": bool(m2model.unpinned),
+            "purpose": "V3-005D diagnostic (plan 4.1 / Amendment 20), report-only, never evidence",
+            "change": "p + A mu_CM shapes = optical-limit Glauber (sigma_el, domains, grid, H-1 "
+            "shape as the model table)" + ("; H-1 level re-anchored >= 125 MeV"
+                                           if m2.pp_level != "none" else ""),
+        }  # fmt: skip
+        rec_m2 = m2_record(m2, m2model, m2_nodes, m2_conv, m2_norm, pp_rec, m2_pinned)
+        info["m2"] = _nan_to_none(rec_m2)
+        info["m2"]["nodes_below_said_range_black_disk_kept"] = {
+            "t_min_mev": m2model.nn.t_min_mev,
+            "count_per_target": m2_below,
+            "note": "SAID tables start at 5 MeV and are not extrapolated; below it the pinned "
+            "black-disk shape is kept (e_min_shape of N-14, Al-27, Si-28, P-31 is < 5 MeV)",
+        }
+        info["m2"]["hale_ni_partial_pp_curve_before_reanchoring"] = hale_curve
+    if m3model is not None and m3 is not None:
+        info["exploratory"] = {
+            "model": "m3-endf-mirror", "above_emax": m3.above_emax,
+            "inputs_unpinned": bool(m3model.unpinned),
+            "endf": {n: {"sha256": f["sha256"], "mat": f["mat"]} for n, f in m3model.files.items()},
+            "purpose": "V3-005D fallback shape (plan row (ii'), isospin mirror), never evidence",
+            "change": "C-12 and O-16 mu_CM shapes = ENDF/B-VIII.0 neutron MF4/MT2 at the same lab "
+            "energy; sigma_el, domains, grid, H-1 and all other targets as the model table",
+        }  # fmt: skip
+        info["m3"] = {
+            "provenance": m3model.provenance(),
+            "targets": {
+                t.name: (
+                    {"shape": "endf-mf4-mt2", "n_nodes_endf": len(m3_nodes[t.name]),
+                     "n_nodes_above_emax": m3_above[t.name],
+                     "above_emax_policy": m3.above_emax,
+                     "max_negative_fraction": max(r["negative_fraction"] for r in m3_nodes[t.name])
+                     if m3_nodes[t.name] else None,
+                     "max_norm_deviation_of_endf_density": max(
+                         (abs(r["norm_int_f_dmu"] - 1.0) for r in m3_nodes[t.name]), default=None
+                     )}
+                    if m3model.has(t.name) else
+                    {"shape": "black-disk (pinned; not named in the plan row (ii'))"}
+                )
+                for t in TARGETS
+            },
+            "note": "ENDF/B-VIII.0 neutron evaluations end at 20 MeV; sigma_el stays BGG",
+        }  # fmt: skip
     if exploratory_forced_isotropic:
         info["exploratory"] = {
             "exploratory_forced_isotropic": True,

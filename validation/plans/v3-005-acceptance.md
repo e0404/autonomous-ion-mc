@@ -639,3 +639,904 @@ Supporting plans (planning documents, not evidence): `validation/plans/v3-005d-v
 5. Everything in this addendum is exploratory; no row, tolerance, base or verdict changes.
 
 *(d) Addendum to Amendment 19 (2026-10-17, after D-E6 was run and independently reviewed).* **§5 outcome: "partially attributed"** — clauses 1–4 hold at both energies (frozen 2 × 2: r = +0.0014 / +0.0051, SE_r 0.0027 / 0.0037, threshold 0.010; H2 (p+A shape) carries 100 % / 99 % of Δ(both); D-E5 signature holds); clause 5 fails (H3 not excluded: table/Geant4 p-p rate ratio 1.165 / 1.159; H4 not excluded at 150 MeV: recoil part 25 % vs the 20 % bound, arising only in the shape-swap arms — contrary reading recorded). The −ln F sensitivity ((b)4) agrees with the rule of record on every clause. The post-hoc arms ((c)3) change no label (closure already holds on the frozen 2 × 2). Full wording in decision 0041 (dated section 2026-10-17); the independent review rounds D-E3–D-E6 are in `validation/plans/v3-005d-elastic-attribution/review.md`. **No model change is authorised by this record** (§5 "established" clause; the §4 M2 wording conflicts and is not read as an authorisation); the question goes to the operator with the batched V3-005D intervention. V5, V11, V10-A at dd976c5a stay failed; nothing in Amendment 19 changes a row, tolerance, base or verdict.
+
+**Amendment 20 (2026-10-18; revision 7, independently reviewed in rounds A20 to A20-6 of `validation/plans/v3-005d-elastic-attribution/review.md`; committed together with decision 0042) — operator response to IR-20261017-223039-9DA564: model rule under partial attribution, M2 inputs and construction, pre-registered go/no-go diagnostic, Option II gate set, seeds and budget; outcome "no model change" (M2 failed §4.2 trigger 3; M3 not acquirable within the tool and the routes tried).** The revision tables below are the review history; earlier revisions are kept in the session scratchpad and are not of record.
+
+**Revision 2 (2026-10-18)** answers review round A20 in `validation/plans/v3-005d-elastic-attribution/review.md` (REVISE, nothing blocking). Revision 1 is kept as `amendment-20-draft.rev1.bak`.
+
+| Review item | Severity | Change in this revision |
+|---|---|---|
+| 2a | major | CONTINUE becomes three **necessary** point-estimate conditions computed with the exact frozen Welch-t rule (V11 F band 63.1–136.9 % / 73.6–126.4 %; V11 gain; V5 ΔIDD plateau integral). The arithmetic is shown. An honest prognosis is added: a Geant4-like shape fails the 200 MeV gain condition (item (c)) |
+| 2b | important | The diagnostic is declared a go/no-go on the single pre-committed model. The lv5d V11 is not blind to it; the disclosure goes into the amendment and the diagnostic record header |
+| 5 | important | hr5d uses r_index 1–3 only; every other hr r_index is reserved (lv r ↔ hr r − 10). The route's V6-F range misprint 20558015 → 20558019 becomes a required one-line correction of the route (revision 7) in the same commit |
+| 6 | important | A measured-first V6-F CUDA timing step is added. V6-F runs first in the evidence run, and the failure branch is pre-declared: lv5d/hr5d are deferred, not run |
+| minor | – | Rule (b) is worded as a post-outcome rule. The M2 table carries the Amendment 16 qualification flags, with P6-D and P7 re-evaluated on it. The σ_pp lineage is split: the level is independent of TOPAS, S(E) above 150 MeV is shared BGG |
+| new | – | Section (b′) "M2 inputs": SAID SM16 record with the header verbatim and the convention uncertainty; **β_NN declared refinement** (the Horiuchi unitarity rule applied to per-channel SAID at every node, pp and pn phases summed; supersedes the plan wording); density substitution rule (≤ 0.03 fm rms cross-check, chosen after a preliminary estimate, disclosed; if no substitute passes, plan §4.2 trigger 1 → M3 as the plan says) |
+| new (d) *(superseded by revision 3, item 1)* | – | **(b′)4: the p-p level is re-anchored to SAID SM16 σ_tot × f_cut.** The defect: the table's partial 26.3 mb exceeds SAID's total 25.72 mb at 150 MeV. Size ≈ −6 % / −9 % at 150 / 200 MeV. BGG is no longer used for p-p. The diagnostic tests M2 + (b′)4, with M2 alone as a report-only decomposition. V10 is re-evaluated; H3 stays open |
+| new (e) | – | **(b′)5: SAID SM16 re-acquired for 5–300 MeV** (8 acquisition ids; consistent with the 10–300 tables at all 59 common energies), linear interpolation in T_lab, no hold-constant rule |
+
+**Revision 7 (2026-10-18)** applies the text fixes of review round A20-5. Revision 6 is kept as `amendment-20-draft.rev6.bak`.
+
+| Item | Change in this revision |
+|---|---|
+| 1 | The O-16 value is printed as 1.407 at 150 MeV (0.851 / 1.407 / 1.622), with its 0.5 % margin above the bound. The plan's band rationale is recorded as wrong at 150–200 MeV. C-12 trigger 4 at 150 MeV is "not evaluable (no minimum)", moot |
+| 2 | "No model change" now cites plan §4 (M3 last fallback, M4 rejected) plus (b″)4, not (b)3. The same path is added to (c)6 |
+| 3 | M3 is "not acquirable within the tool and the routes tried"; the operator-assisted route (raising the 256 MiB cap, or manual placement of MAT 625 / 825) is named |
+| 4 | The closure proposal now carries the default-off V5 comparison (+12.5 / +12.3 % against −3.7 / −4.9 %) and states that V6-F certifies the elastic-on configuration only |
+
+**Revision 6 (2026-10-18)** records the outcome of the M2/M3 chapter. Revision 5 is kept as `amendment-20-draft.rev5.bak`.
+
+| Item | Change in this revision |
+|---|---|
+| M3 | Construction impossible: the ENDF/B-VIII.0 neutron files (C-12 MAT 625, O-16 MAT 825) could not be acquired. The 310 158 456-byte zip exceeds the 256 MiB tool cap, and every per-material route failed (verbatim attempt table in (b‴)1) |
+| Planning defect | Recorded, author the orchestrator: the frozen row (ii′) did not verify the energy coverage of the neutron files; coverage to 135–200 MeV is unverified (open sources state only library-wide "at least 20 MeV") |
+| Outcome | **"No model change"**: V5 / V11 / V10-A stay failed; the D-1 table remains the model; the M2 / M3 records and the `--model m2/m3` code are preserved; no production table is built; the diagnostic (c) is not run; (d) lapses |
+| Integration | Gates still executable without a model change: V6-F, V7-R2, V8-nuc and the implementation gates. V5 / V11 cannot pass, and the elastic depth-dose claim is withdrawn. Merge needs a closure amendment, defined in (b‴)4, which **requires operator approval** because it reduces the operator-selected gate set. Budget ≈ 43.5 h |
+| Successor | Amendment 21 (separate draft): candidate M2′ |
+
+**Revision 5 (2026-10-18)** follows from building and independently verifying the pre-committed M2 (scratch; no transport). Revision 4 is kept as `amendment-20-draft.rev4.bak`.
+
+| Item | Change in this revision |
+|---|---|
+| Trigger 3 | New (b″). σ_el^M2/σ_el^Barashenkov for O-16 is 0.851 / **1.407 / 1.622** at 100 / 150 / 200 MeV, so **trigger 3 fires**; C-12 is outside the band at 1 of 3. The trigger is applied as written. Verified cause: a free-NN optical-limit limitation (σ_tot +16–19 % against EXFOR 13569 / 13753; α_NN = 0 removes it), not wrong inputs. Disclosed: seen before commit |
+| Model under test | **M3** (ENDF/B-VIII.0 neutron O-16 / C-12 MF4/MT2, isospin mirror) for O and C; other targets keep the black disk. Defined: conversion to 256 μ_CM bins, q-scaled hold above E_top, MF1 identity, copy check, normalisation, positivity, CDF checks. If no open host serves the files, the outcome is "no model change" |
+| M2 | Kept as the report-only sensitivity V-M2 (D4 seeds 20991200 + case). No medium-corrected α_NN. Construction record kept: trigger-4 Helm definition (q_H C 1.912, O 1.661 fm⁻¹; O q_min 0.83 q_H; C not evaluable at 150 MeV); rms-matched Fermi unfolding; black-disk shape below the SAID range |
+| Diagnostic | V-M3 is the model under test, V-M2 is report-only, V-c is withdrawn. Seeds, bands, gates and budget are unchanged |
+
+**Revision 4 (2026-10-18)** answers review round A20-3 (REVISE). Revision 3 is kept as `amendment-20-draft.rev3.bak`.
+
+| Review item | Severity | Change in this revision |
+|---|---|---|
+| 1 | blocking | σ_anchor uses the half-sphere integral 2π∫₀^0.96 (Amendment 14 addendum (4)); transcription correction |
+| 2 | major | Mott exchange term: −cos(…); the builder reuses the P6-tested `coul` function |
+| 3 | major | **Outcome recorded:** σ_anchor 27.26 / 24.50 / 23.22 / 22.47 mb against the table's 27.30 / 22.94 / 26.26 / 25.65 mb at 100 / 125 / 150 / 200 MeV. Continuity is +6.8 % at 125 MeV, above 3 %, so (b′)4 is **not applied**. The values were seen by the reviewer before commit, after the rule was fixed in revision 3; the rule is not changed. V-a is withdrawn; **V-b (M2 alone) is the model under test**; V-c stays. r(E) is reported, report-only. Units/frame ratios 0.86–0.93 resolve the DSG unit uncertainty |
+| 4 | major | New H3 lead recorded: the table's Hale-NI partial is non-monotonic (22.3 mb at 130 MeV, 26.3 mb at 150 MeV); the S(E) step inherits it (table/SAID ≈ 1.13 at 150–200 MeV, matching D-E4). Separate pre-registered investigation named: "P6-D-type check of the Hale NI integration around 130–150 MeV" |
+
+**Revision 3 (2026-10-18)** answers review round A20-2 (REVISE). Revision 2 is kept as `amendment-20-draft.rev2.bak`.
+
+| Review item | Severity | Change in this revision |
+|---|---|---|
+| 1 | blocking | (b′)4 rewritten. The "partial > total" argument is withdrawn: the Hale partial includes interference, SAID SGT is nuclear-only. Re-anchoring is restricted to **E ≥ 150 MeV**, with a linear ramp of the factor from 125 MeV. The anchor is SAID pp DSG minus the analytic Mott term (formula stated), integrated over \|μ_CM\| ≤ 0.96 like the table. Pre-declared continuity check: more than 3 % at 100 or 125 MeV means no re-anchoring, and M2 alone becomes the model under test. Full disclosure: SAID shares data lineage with BGG and Hale, and the component was written after D-E2/D-E4/D-E6. Size not assumed. Pre-registered diagnostic variants V-a / V-b |
+| 2 | major | V5 peak/plateau screen added from the frozen rule (step 21): closure **61.1–126.5 %** at 150 MeV and **80.7–120.2 %** at 200 MeV. The effective F window becomes 63.1–126.5 % / 80.7–120.2 % |
+| 3 | major | β_NN and densities relabelled as **declared prospective revisions**, not trigger 1. The plan-literal β variant (Horiuchi Table I, constant below 30 MeV) is built and reported as a sensitivity (V-c). Densities: the plan-literal source is unavailable (paywall); a failed substitute means trigger 1 → M3 |
+| 4 | minor | (b)5(ii)/(iv) reconciled: no re-qualification result closes H3/H4; that needs a new pre-registered test. P6 item (3) stays a reconstruction check |
+| densities | – | (b′)3 rewritten with the per-target decisions. The 1974/1987 compilations are treated as one family. C-12 / O-16 HO; Si-28 2pF (Mehndiratta & Shukla), with the de-Vries-1987 Si-28 sets failing the check as a recorded anomaly; Ca-40 3pF by the fallback order. N-14 / Al-27 / P-31 use IAEA-radius-constrained surrogates (rms check void by construction; diffuseness sensitivity; not in V5/V11/V10-A). The density-parameter policy note is declared for review |
+
+---
+
+> **Amendment 20 (2026-10-18; written after the operator's response to IR-20261017-223039-9DA564 and after the §5 outcome of Amendment 19 (d); before any new transport, reference or calibration result; the M2 table was later built in scratch and failed §4.2 trigger 3, revision 5) — model decision for the recorded outcome "partially attributed", M2 inputs, the pre-registered M2 diagnostic (go/no-go), one fresh V5 base, the revised merge-gate set (Option II), the lv5d/hr5d suites and seeds, and the order of work.**
+>
+> **What this amendment does not change:**
+> - no frozen row, frozen tolerance, recorded verdict or consumed base;
+> - the text of Amendments 1–19 or their addenda;
+> - the plan of record `validation/plans/v3-005d-elastic-attribution.md` (sha256 fd9657df…, manifest `validation/plans/v3-005d-sha256.txt`).
+>
+> **[new scope]** marks an added or replaced rule. **[unchanged]** marks a restatement.
+
+## (a) Operator response (verbatim) and its reading
+
+The response to IR-20261017-223039-9DA564 is recorded in `reference_requests/interventions/IR-20261017-223039-9DA564/response.json`:
+
+"Scientific model selection, calibration design and fresh evaluation-base allocation remain autonomous responsibilities. You may revise internally authored plans prospectively, with independent review and preservation of original failures; my earlier instruction did not reserve those technical choices to me. For the integration boundary, I select Option II, including V6-F as a binding additional gate, together with the proposed V10-A/V11 and V7-R2 treatment. This does not waive any final experiment requirement or establish full halo validation. Perform the inexpensive candidate-model diagnostics before expensive qualification, retain the stability restrictions, and merge only after the revised applicable gates and independent review pass. Formally reconcile the intervention record with this response and resolve the outstanding review finding."
+
+Reading:
+1. **Autonomous.** Each of these is taken autonomously, through this independently reviewed amendment:
+   - the model decision (b);
+   - the diagnostic rule (c);
+   - V7-R2 "as written" (`validation/plans/v3-005d-v7r-calibration-repair.md`, revision 4);
+   - the bases (f);
+   - the revision of Amendment 17 (b)4 for one V5 base (d).
+2. **Operator-selected.** Option II of `validation/plans/v3-005d-integration-route.md` (§2.2), with 2B (V10-A report-only, V11 added) and 3A (V7-R2 in V7-R's slot).
+3. **Not waived or established.** No final experiment requirement is waived. No full halo validation is established: V6-F is reduced scope (`validation/plans/v3-005c-v6f-followup.md` §10).
+
+## (b) Model decision rule for the recorded outcome [new scope; post-outcome rule]
+
+1. **Status of this rule.** It was written **after** the §5 outcome was known (Amendment 19 (d)) and is adopted under the operator's response above.
+   - It authorises the M2 adoption **for this outcome**. It does not re-interpret §5 of the plan of record.
+   - §5 authorises a model change only for "established". §4 says "M2 adopted if §5 attributes H2". This conflict, recorded in decision 0041 (2026-10-17), is settled for this case only.
+   - The recorded outcome stays **"partially attributed"** and is never re-labelled.
+2. **Rule.** Clauses 1–4 of §5 hold at both energies and the named component is **H2 (p+A shape)**, so the orchestrator adopts the pre-committed **M2** (optical-limit Glauber, plan §4.1, inputs per (b′)1–3, 5). The p-p level is unchanged: the re-anchoring of (b′)4 is not applied, by its pre-declared check. The hypotheses that clause 5 did not exclude become **open findings**.
+   - *Revision 5:* M2 was built and failed §4.2 trigger 3 for O-16. By the plan's fallback rule, **M3 is the model under test** ((b″)). M2 is kept as a report-only sensitivity.
+   - Facts (records under `validation/results/elastic_attribution/`): r = +0.0014 / +0.0051 against 0.010; H2 carries 100 % / 99 % of Δ(both) (`de6/de6-report.md`).
+   - Open findings: H3 at both energies; H4 at 150 MeV.
+3. **M3 triggers of plan §4.2** [unchanged]: construction impossible; numerical verification fails; σ_el level outside [0.7, 1.4]; first minimum outside [0.6, 1.0] × q_H. They are evaluated once on the M2 construction, before any transport with M2.
+   - The β_NN rule (b′)2 and the density substitution (b′)3 are **declared prospective revisions** of plan §4.1, not trigger-1 cases. The plan-literal β construction could be built, and it is reported as a sensitivity.
+   - If the density substitution of (b′)3 fails its cross-check, no qualified density source exists, because the plan-literal source is unavailable. That is trigger 1 (construction impossible), and the fallback M3 follows with its own pre-committed definition, inputs and §4.2 conditions.
+   - Triggers 1–4 lead to M3 as written. M3 then passes the same pre-registered screen (c) before any host step.
+4. **The new table** (M3 for O-16 / C-12 since revision 5; (b″)) is a new pinned elastic table.
+   - It must carry the Amendment 16 qualification flags: `no_negative_density_in_domain`, `o16_mt5_sigma_not_c12_copy`, `o16_mt5_spectra_independent`, `shape_normalised`.
+   - **P6-D and P7 are re-evaluated on it** (P6-D in CI; P7 in lv5d, r_index 15).
+   - The pin change enters `src/` and the hashed source set **before the code freeze**. The rehearsal fixture of (f)5 therefore has to be regenerated after it.
+5. **What "open finding" obliges** [new scope]:
+   - **(i) Reporting.** Every lv5d V5 and V11 record, the V6-F record, the decision 0042 outcome and the results README carry an "Open findings H3 / H4" block next to the verdicts. Its contents:
+     - the p-p rate ratio, ionmc table / Geant4 = 1.165 / 1.159 at 150 / 200 MeV (`de4/de4-ratios-report.md`, "ratio = ionmc table / Geant4");
+     - the post-hoc σ_pp arm's share, 6 % / 13 % of Δ(all) (`de6/de6-report.md`);
+     - the recoil share of the plateau-gain change.
+   - **(ii) H3.** σ_pp is **not** corrected. The re-anchoring of (b′)4 is not applied (revision 4), so the p-p level is the table's own: Hale NI ≤ 150 MeV, S(E) rule above. The p-p rate ratio against Geant4 is reported. **New lead (revision 4), recorded under the open finding H3:**
+     - The table's Hale-NI partial σ_pp is **non-monotonic**: a minimum of **22.3 mb at 130 MeV** and **26.3 mb at 150 MeV**.
+     - The S(E) step above 150 MeV inherits that upturn, giving table/SAID ≈ 1.13 at 150–200 MeV (σ_anchor values above). That matches the D-E4 p-p excess of 1.165 / 1.159.
+     - So the lead for H3 is an **anomaly in the table's own p-p level between 130 and 150 MeV** (builder or Hale-NI evaluation), not a missing SAID re-anchoring.
+     - It stays an open finding, for a separate pre-registered investigation: **"P6-D-type check of the Hale NI integration around 130–150 MeV"**. It is reported in every re-qualification record.
+     - Any σ_pp change needs its own decision and amendment.
+   - **(iii) H4.** The `elastic_recoil` deposit (MeV per primary) and its share of the plateau gain are reported per V5/V11 run at both energies.
+   - **(iv)** No open finding is a gate. **No re-qualification result closes an open finding:** V5 / V11 / V6-F records report H3 and H4, they do not resolve them. Closing H3 or H4 needs a new pre-registered test, for example a D-E4/D-E5-type thin-target comparison of the transported table.
+6. **Decision 0042** records:
+   - the M2 choice and lineage (SAID NN shared with the Hale p-p lineage; densities per (b′)3), the β_NN refinement of (b′)2, the SAID convention uncertainty of (b′)1, the p-p re-anchoring rule of (b′)4 and its outcome (not applied by its pre-declared check), the H3 lead (non-monotonic Hale-NI level at 130–150 MeV) and the SAID range of (b′)5;
+   - the domain caveat below about 100 MeV (plan §4.3);
+   - the §5 contradiction verbatim from decision 0041 (2026-10-17);
+   - this rule;
+   - the go/no-go disclosure of (c)4.
+
+## (b′) M2 inputs (acquisitions of record; declared refinements) [new scope]
+
+**(b′)1. σ_NN and α_NN: GWU SAID solution SM16** (Workman et al., Phys. Rev. C 94 (2016) 065203; pp to 3 GeV, np to 1.3 GeV).
+- **Acquisitions:** ids **efe6d363f28c423582df8d68d2efebd0**, **6035179d45c046ad93445457ea48ee7d**, **23ca28089b974a32b3ccd40d68665ecc**, **761b99787a674a69a3478768b1cb9385** (pp and np; SGT and ALFA). Role `construction`, retrieved 2026-10-18. The SP07 fallback of plan §4.1 was not needed.
+- **Quantities:**
+  - SGT is the nuclear total cross section (mb).
+  - ALFA is Re/Im of the spin-averaged nuclear forward amplitude, Coulomb removed.
+- **Coverage.** All 59 rows, T_lab 10–300 MeV in 5 MeV steps, are present and physical:
+  - pp SGT 349.6 → 24.17 mb, minimum 23.98 mb at 255–280 MeV;
+  - np SGT 945.5 → 35.64 mb;
+  - pp ALFA maximum 1.846 at 95 MeV, 1.623 at 150 MeV;
+  - np ALFA changes sign between 10 and 15 MeV.
+- **Output header, recorded verbatim:** `SM16 0-3.0 GEV PP=50276/25348 NP=22832/12938 RAA (147)  5/03/07`. Its date field "5/03/07" is stale relative to SM16 (2016) and is **unresolved**. It is recorded as is, together with the retrieval date.
+- **Input uncertainty, declared.** SAID does not state its exact Coulomb-removal and sign conventions in its own words. The sign is consistent with Ray, Phys. Rev. C 20 (1979) 1857 and with Abu-Ibrahim et al., Phys. Rev. C 77 (2008) 034607. This is recorded in decision 0042 as an input uncertainty of M2.
+- **Below 10 MeV.** M2 runs from E_min,shape (C 6.0, O 6.58 MeV; Amendment 15 (b)1). The SAID tables were re-acquired for 5–300 MeV; see (b′)5.
+
+**(b′)2. β_NN: declared prospective revision of plan §4.1** (orchestrator decision, under review with this amendment; revision 3: not a trigger-1 case).
+- **Finding.** The acquired Horiuchi et al. 2007 preprint (arXiv:nucl-th/0612029, v1, id **f56c546a11ae4dacafa35f6a614892e3**) does not supply the input that plan §4.1 assumed:
+  - its Table I is isospin-averaged ("here we use the mean values"; no pp/pn columns);
+  - it covers E = 30–1000 MeV;
+  - for E < 300 MeV its β is **not an independent datum**: it is fixed by the paper's unitarity rule, Eq. (10), β = (1 + α²)·σ_tot/(16π), chosen so that σ_el = σ_tot.
+  - The erratum Phys. Rev. C 76 (2007) 039903 and the published Table I could not be verified (arXiv v1 only).
+- **Rule (supersedes plan-of-record §4.1 item 1 and item 2's β wording).** That wording was "Horiuchi 2007 β_NN … held constant below the lowest tabulated energy".
+  - M2 applies **the same unitarity rule** to the acquired SAID per-channel σ_NN and α_NN, **at every grid node**, separately for pp and pn.
+  - It **sums the separate pp and pn profile phases**: Abu-Ibrahim et al., Phys. Rev. C 77 (2008) 034607, Eqs. (4)–(5). This is exact in the optical limit with ρ_n ∝ ρ_p, the declared approximation of plan §4.1 item 4.
+  - No hold-constant rule is needed for β below 30 MeV.
+- **Check at 150 MeV**, from the SAID values above. With σ in fm² and 16π = 50.27:
+
+  | Channel | Arithmetic | β_NN | Abu-Ibrahim 2008 (interpolated) |
+  |---|---|---|---|
+  | pp | (1 + 1.623²) × 2.572 / 50.27 | **0.186 fm²** | ≈ 0.18 fm² |
+  | pn | (1 + 0.9435²) × 5.214 / 50.27 | **0.196 fm²** | ≈ 0.196 fm² |
+
+- **Cross-check, report only.** Horiuchi's averaged Table I is reported as a cross-check at its tabulated energies (for example β = 0.195 fm² at 150 MeV, mean). Differences are recorded, not used.
+- **Status (revision 3).** This is a **declared prospective revision**, not a §4.2 trigger-1 case: the plan-literal construction (Horiuchi's isospin-averaged Table I, held constant below its lowest energy of 30 MeV) **can be built**. Reason for the revision: the source itself fixes β for E < 300 MeV by the unitarity rule, so applying that rule to per-channel SAID inputs is the source's construction without isospin averaging, and without the constant extension below 30 MeV. **The plan-literal variant is built and reported alongside as a sensitivity** (diagnostic (c), report-only). It never enters CONTINUE/STOP.
+
+**(b′)3. Densities: declared prospective revision of plan §4.1 item 3 (substitution rule).** The plan-literal source, de Vries–De Jager–De Vries 1987 (At. Data Nucl. Data Tables 36, 495), is not acquirable (paywall).
+- **Lineage of the substitution (declared).** The de Jager–de Vries–de Vries 1974 compilation (At. Data Nucl. Data Tables 14, 479) and the 1987 compilation are **one electron-scattering compilation family**. Open, citable sources that reproduce parameters from either count as substitutes. Reason: the 1987 compilation updates and extends the 1974 one with the same functional forms. Lineage: electron scattering only, independent of the p+A elastic data and of TOPAS.
+- **Not a source.** The id 8e31f0ce1bf6466ebe2a128a10549571 is a DOI stub and is never used as one.
+- **Validation (tabulated targets).** The substitute's rms charge radius must agree with the independently acquired IAEA charge-radius compilation (CSV, id 8dd779140e52459f81f506442382b4a8) to **≤ 0.03 fm**.
+  - Disclosure: this tolerance was chosen after a preliminary, unverified estimate was seen (O-16 Δ ≈ 0.019 fm).
+  - Independent rationale: electron-scattering compilations scatter at the 0.01–0.03 fm level.
+  - The tolerance is not changed after comparison.
+- **Per-target decisions** (Δ = substitute rms − IAEA rms; values from the researcher's per-target results):
+
+  | Target | Form | Source (second source) | Δ [fm] | Notes |
+  |---|---|---|---|---|
+  | C-12 | HO | Shukla 2003, Table I (Fourier–Bessel confirmation, Duda) | −0.007 | – |
+  | O-16 | HO | Shukla 2003 (TGlauberMC) | +0.019 | – |
+  | Si-28 | 2pF, c = 3.106 fm, d = 0.542 fm | Mehndiratta & Shukla, arXiv:1702.07459, Table 1, de Jager 1974 lineage (Shukla 2003 row, Δ +0.028) | +0.016 | **Recorded provenance anomaly:** the de-Vries-1987-attributed Si-28 3pF set (TGlauberMC) and the Fourier–Bessel set (Duda) **fail** the cross-check at −0.047 and −0.038 fm. They are not used |
+  | Ca-40 | **3pF** | TGlauberMC (de Vries 1987 lineage; source line 2090) (Mehndiratta 3pF, Δ +0.003) | +0.004 | The plan's preferred 2pF is not tabulated, so the plan's fallback order (3pF next) applies |
+
+- **Targets with no open tabulated entry (N-14, Al-27, P-31): declared IAEA-radius-constrained surrogate.**
+  - **Construction:**
+    - N-14: the preferred HO form, with α = the mean of the C-12 and O-16 HO α.
+    - Al-27 and P-31: the preferred 2pF form, with the Si-28 2pF diffuseness d.
+    - The size parameter (a, or c) is fixed so that the charge rms radius equals the IAEA value exactly: N-14 2.5582 fm, Al-27 3.0610 fm, P-31 3.1889 fm.
+  - **The rms cross-check is void by construction** for these targets.
+  - **Declared check instead: diffuseness sensitivity.** The shape parameter is varied between the two neighbours' values (N-14: the C-12 and O-16 α; Al-27 and P-31: the Si-28 d and that of the next tabulated neighbour). The M2 shape change at 150 and 200 MeV (⟨1 − μ_CM⟩ and the first-minimum position) is reported.
+  - **Why the construction is needed.** Naive nearest-nucleus scaling, radius × (A/A_ref)^{1/3}, fails the 0.03 fm rule for N-14 (+0.035 / +0.042 from C-12 / O-16) and Al-27 (+0.055). It passes for P-31 (+0.013); the constrained construction is used there too, for uniformity.
+  - **Scope.** These targets do not enter V5 or V11 (water: H, O) or V10-A (carbon). They enter only the non-water `materials.py` tissues and bone.
+  - This supersedes, for densities, the surrogate radius scaling of decision 0041.
+- **Policy note, declared for review.** The density parameters (a, α, c, z, w) are **published model parameters of open sources, not nuclear-data values**. They are stored in a provenance JSON of the builder, together with the acquisition ids: Shukla dcb08bbcc4aa446e8808e1abfa5600e5; Mehndiratta & Shukla a3d9b475e79948b8b4f2f5f2de7c9d82 (sha256 d4187fe9…7e3e; arXiv licence); TGlauberMC 0d4d56435c234f5892e6a76bf5998393 / cdb9f72849a84e53a2b44e1e79f0b85f; Duda bf78ff8d0fc941f39cc79046a3dcab8a; IAEA 8dd779140e52459f81f506442382b4a8. Decision 0041's data rule ("absolute values are not committed") is read as not applying to such published model parameters. This reading is declared for review.
+- **Proton-size unfolding** as planned: F_pt(q) = F_ch(q)/exp(−q² r_p²/6), r_p = 0.8414 fm (CODATA 2018).
+- **If a tabulated target has no substitute passing the cross-check,** M2 is "construction impossible" (plan §4.2 trigger 1), and the fallback M3 follows exactly as the plan of record says, passing the same screen (c). The radius-constrained surrogates cannot fail the rms check, so the sensitivity report is their check.
+
+**(b′)4. p-p elastic level at E ≥ 150 MeV re-anchored to a SAID interference-inclusive equivalent (second model component; orchestrator decision; declared prospective revision, under review with this amendment)** [new scope; revision 3; **not applied** by its pre-declared check, revision 4]
+- **Withdrawn (revision 3).** The revision-2 argument "the table's partial (26.3 mb at 150 MeV) exceeds SAID's total (25.72 mb), which is unphysical" is **withdrawn**. The comparison is not like-for-like:
+  - the table's transported NI density includes the Coulomb–nuclear interference (Amendment 14 (b): NI = σ_e − σ_c);
+  - SAID SGT is the nuclear-only total.
+- **Reason for the component, stated within its domain.** Only at **E ≥ 150 MeV** is the table level set by the builder's S(E) rule ("Hale NI at 150 MeV × BGG ratio", Amendment 14 (b), Amendment 15 (c)1). There the records show:
+  - the level at 1.10 × the BGG formula (D-E2, `de2/de2-report.md`);
+  - a p-p rate excess over Geant4 of 1.165 / 1.159 at 150 / 200 MeV (D-E4, `de4/de4-ratios-report.md`).
+
+  At ≤ 100 MeV, table / Geant4 is 0.977 / 0.997 / 1.032 at 30 / 50 / 100 MeV, and **the table level is kept**.
+- **Anchor quantity.** At each grid node E ≥ 150 MeV:
+
+  σ_anchor(E) = 2π ∫_{0}^{0.96} [ DSG_SAID(E, μ) − σ_Mott(E, μ) ] dμ_CM
+
+  This is the half-sphere integral, each event counted once (Amendment 14 addendum (4)). *(Revision 4, transcription correction: revision 3 wrote a both-hemisphere integral, which doubles it.)*
+
+  - **DSG_SAID** is the SAID SM16 pp differential cross section as SAID outputs it: nuclear + Coulomb + interference, CM frame, mb/sr.
+  - **σ_Mott** is the pure Coulomb cross section of two identical spin-½ particles. It is the Coulomb term of ENDF-102 eq. 6.9, the same function the LAW=5 reconstruction uses (NJOY `coul` convention, P6 item (2)):
+
+    σ_Mott(μ) = (η/(2k))² [ 1/sin⁴(θ/2) + 1/cos⁴(θ/2) − cos(η ln tan²(θ/2)) / (sin²(θ/2) cos²(θ/2)) ]
+
+    *(Revision 4: the exchange term of spin-½ identical particles in ENDF-102 eq. 6.9 is −cos(…). Revision 3 printed +cos. The **builder reuses the P6-tested `coul` function** of the existing LAW=5 code; it does not re-implement the formula.)*
+
+    with η = α/β, where β is the relative velocity of the two protons (relativistic, as the reconstruction defines it), k = p_CM/ħ, θ = θ_CM, and the identical-particle spin-½ interference coefficient −1/2.
+  - The SAID form has no Coulomb-only or nuclear-only option, so the Mott term is computed analytically.
+  - The integration functional, the half sphere 0 ≤ μ_CM ≤ 0.96 with factor 2π and each identical-particle event counted once, is the one the builder applies to the Hale NI density (the P6 item (3) convention; Amendment 14 addendum (4)). σ_anchor and the table partial are therefore like-for-like interference-inclusive quantities.
+- **Inputs: SAID SM16 pp DSG angle scans** at 100, 125, 150, 175, 200, 250 and 300 MeV, role `construction`, acquired.
+  - URL template: `https://gwdac.phys.gwu.edu/cgi-bin/go3nn?sl=SM16&rt=1&ot=DSG&iv=A&il=<lo>&ii=1&iu=<hi>&fv=T&fn=<T>&jpeg=n&u=190&l=210`.
+  - The CGI caps 60 points per request, so each energy is three 1°-step segments (θ_CM 1–60, 61–120, 121–179), 179 rows in all.
+  - Header on all: `SM16 0-3.0 GEV PP=50276/25348 NP=22832/12938 RAA (147)  5/03/07`.
+  - The output is the full DSG, including Coulomb and interference.
+
+  | T_lab [MeV] | θ 1–60° | θ 61–120° | θ 121–179° |
+  |---|---|---|---|
+  | 100 | e8973bddcd3e4c1d8142033cf99d883c | cb0dfcecb64e4aaaa5829a03ac349650 | 0ad01128a2404b37be349aba6a7ca269 |
+  | 125 | 7639d5dc7c2f4baf9491cee446e1574f | a6ea1a216a334db3a94edd7a45dc52ac | 12797d52222349d997efffd0768eb96c |
+  | 150 | 9b95bac9bc1247dab43156074583a5c1 | 3eadb73fcf07484eb392afd8d4ba19c2 | f406ab8af2aa4c4abd11238219dcb4ee |
+  | 175 | a3ece8cd3cfc42d6bb0aaa01193afe2d | 8909ef36e88f49578bfe5ca5f5c60968 | 14df69fa85c846a2999238d945ea7bca |
+  | 200 | c2c3d72963f24e518630bf33f870ae7b | e1b69d9c30a3490e9783a97c380c84c6 | 2ed37a4234d548099155ce9e9a4f8a48 |
+  | 250 | 0952913571f14abf84e492b4dbd724e2 | f7de116fbc3543d481200aa2ced8de21 | dbc89fb0adf248faa73c47790c82d83c |
+  | 300 | 537907c89e034dc7a47804fa9d4710e1 | e38519d84ca74a78ab317eac3afd74ba | 411c5c0ae6544649aec4263669473d87 |
+
+  - **Input uncertainty: units.** The output does not state its units. They are assumed to be mb/sr in the CM frame. Verification rule, applied by the builder before σ_anchor is used, at every scan energy: the ratio σ_anchor(E)/SGT_SAID(E) must lie in **[0.80, 1.05]**. σ_anchor is the half-sphere interference-inclusive partial, so it is expected below the nuclear total. A unit error (μb, fm², b) would move the ratio by a factor of 10 or more, and a frame error (lab instead of CM) by a factor of order 2–4. The bound is a planner bound for the unit and frame check, not an accuracy claim, and it is fixed before any scan value is examined. A failure at any scan energy blocks (b′)4 entirely, and the diagnostic runs M2 alone (V-b).
+  - **Input uncertainty: interpolation in angle.** The 1° sampling must be interpolated onto the builder's μ grid. Rule: linear interpolation in θ_CM of ln(DSG − σ_Mott) where the difference is positive. If the difference is not positive, the scan cannot be used on that interval (σ_anchor is not formed at that energy), and this is recorded.
+- **Rule.**
+  - At nodes ≥ 150 MeV: σ_pp,table(θ_CM > 16.26°; E) = σ_anchor(E), interpolated linearly in T_lab between the scan energies. The Hale angular shape (the fixed 150 MeV shape, Amendment 14 (b)) is unchanged; only the level changes.
+  - Between 125 and 150 MeV the multiplicative factor r(E) = σ_anchor/σ_table is interpolated linearly from 1 at 125 MeV to r(150), so that no step appears. Below 125 MeV, r = 1.
+- **Continuity check, pre-declared; the scans at 100 and 125 MeV are report-only for the level.** σ_anchor is also computed at 100 and 125 MeV. **If |σ_anchor/σ_table − 1| > 3 % at 100 or at 125 MeV, the re-anchoring is not applied at all.** The model under test of (c) is then M2 alone, and this is recorded. The 3 % bound is fixed now, before any DSG scan is seen.
+- **Outcome of the check (revision 4; recorded, the rule is not changed).**
+  - **Who computed it, and when.** The independent reviewer computed σ_anchor (corrected half-sphere convention, corrected Mott sign) from the acquired SAID scans while verifying revision 3, i.e. **before this amendment is committed.** These values were therefore seen before commit.
+  - **Rule fixed first.** The rule, the 3 % bound and the ramp were fixed in revision 3, before that computation. They are **not** retuned. The outcome is recorded.
+
+  | T_lab | σ_anchor | table | continuity |
+  |---|---|---|---|
+  | 100 MeV | 27.26 mb | 27.30 mb | −0.1 % |
+  | 125 MeV | 24.50 mb | 22.94 mb | **+6.8 % > 3 %** |
+  | 150 MeV | 23.22 mb | 26.26 mb | – |
+  | 200 MeV | 22.47 mb | 25.65 mb | – |
+
+  - **By the pre-declared rule, (b′)4 is NOT applied.** The p-p level of the transported table stays as it is: Hale NI ≤ 150 MeV, S(E) rule above.
+  - The builder still computes r(E) = σ_anchor/σ_table at every scan energy and reports it, **report-only**.
+  - **The DSG unit uncertainty is resolved.** The half-sphere units/frame ratios σ_anchor/SGT_SAID lie at 0.86–0.93, inside [0.80, 1.05], which confirms the mb/sr CM assumption.
+- **Expected sign and size.** **Not assumed.** They are stated in the record from the acquired numbers once available. The revision-2 estimates (≈ −6 % / −9 %) are withdrawn.
+- **Disclosure.**
+  - SAID shares **experimental-data lineage** with the BGG formula (fitted to PDG-type NN data) and with Hale's fit (pre-1998 pp data). It does not share lineage with Geant4 models.
+  - This component was written **after** D-E2, D-E4 and D-E6 were seen.
+  - It is not a Geant4-scaled level: the D-E6 post-hoc arm stays rejected as a model.
+- **Lineage, had the change been applied** (it is not; revision 4):
+  - The p-p level at E ≥ 150 MeV comes from SAID; the BGG p-p formula is no longer used there.
+  - Below 125 MeV the level is Hale NI as before.
+  - The p+A σ_el level stays Barashenkov / BGG, shared with TOPAS.
+  - V10 is re-evaluated, report-only, with its stronger shared lineage stated.
+- **Consequences** (the rule as written; not applied, per revision 4).
+  - Part of decision 0042 and of the diagnostic (c).
+  - P6-D, P7 and the Amendment 16 flags are re-run on the new table. **P6 item (3) stays a reconstruction check** of the LA150 values, because the re-anchoring is applied after the reconstruction.
+  - H3 per (b)5(ii)/(iv).
+
+**(b′)5. SAID energy range: re-acquired 5–300 MeV** [new scope]
+- **Re-acquisition succeeded.** Role `construction`. The header on all tables is `SM16 0-3.0 GEV PP=50276/25348 NP=22832/12938 RAA (147)  5/03/07`. The tables are byte-reproducible.
+
+  | Range and step | pp SGT | np SGT | pp ALFA | np ALFA |
+  |---|---|---|---|---|
+  | T_lab 5–300 MeV, step 5 | **28e78745bfc74da98de99c76035f87ea** | **d4360764abe742c98e488b42c0c7b90a** | **c39d4c94600e455c98ed374dd0c17114** | **dab63152cbf64d8c97d0048c20987777** |
+  | T_lab 5–30 MeV, step 1 | **932daa93b61b416a97455f92f44abbd7** | **07803ab6aab2449ca940480325fa3655** | **b0206879d01941b2b0cb4d4d5a30fd34** | **84a77e24e0444f47987b700899e684cb** |
+
+- **Consistency.** The 5–300 tables equal the earlier 10–300 tables ((b′)1) at all 59 common energies. The step-1 tables equal the step-5 tables at 5, 10, …, 30 MeV.
+- **First rows at 5 MeV:** pp SGT 690.6 mb; np SGT 1635 mb; pp ALFA 0.7241; np ALFA −0.2913.
+- **Use.** M2 and (b′)4 use the 5–300 step-5 tables, with the step-1 tables for 5–30 MeV. Interpolation is linear in T_lab, with **no hold-constant rule**: every M2 node (≥ E_min,shape = 6.0 MeV for C) lies inside the acquired range. The earlier 10–300 ids of (b′)1 stay on record.
+- The ALFA sign and Coulomb convention remains the input uncertainty recorded in (b′)1.
+- Below E_min,pp, σ_pp = 0 as before. (b′)4 uses SAID only at and above 12.53 MeV.
+
+## (b″) M2 construction outcome: §4.2 trigger 3 fires; the fallback M3 is the model under test [new scope; revision 5]
+
+**(b″)1. Facts.** The M2 builder (`src/ionmc/nuclear/elastic_glauber.py`, scratch build) was reviewed line by line: no physics discrepancy was found. An independent implementation (numeric 3-D form factor, J₀ by its integral representation, Fourier-space folding) reproduces it.
+- **σ_el^M2 / σ_el^Barashenkov.** These are the committed P6 item (5) BGG values for C and O.
+
+  | Target | 100 MeV | 150 MeV | 200 MeV | Unfolding |
+  |---|---|---|---|---|
+  | C-12 | 0.906 | 1.336 | **1.454** | HO, exact |
+  | O-16 | 0.851 | **1.407** | **1.622** | HO, exact |
+  | Si-28 | 0.78 | 1.34 | 1.71 | rms-matched |
+  | Ca-40 | 0.79 | 1.26 | 1.58 | rms-matched |
+
+- **Trigger 3** (band [0.7, 1.4] at ≥ 2 of 100 / 150 / 200 MeV, for O or for C) **fires for O** (1.407 at 150 MeV and 1.622 at 200 MeV). C is outside the band at 1 of 3 energies (1.454 at 200 MeV), so it alone would not trigger.
+  - **Margin, stated:** the decisive 150 MeV value **1.407 is only 0.5 % above the bound 1.4**. The outcome hinges on this margin. The trigger stands as evaluated on M2 as defined, and no variant may be used to move it.
+  - **Planning defect, recorded:** plan §4.2's rationale for the band (optical-limit Glauber "is expected to reproduce p+A σ_el at this energy to well within it") was wrong at 150–200 MeV.
+- **Cause, verified.** The trigger text says a deviation of this size "indicates wrong inputs". That is **not** the cause here: the reaction cross sections agree with Abu-Ibrahim et al. 2008, Table III, within 1 %. The cause is a real limitation of free-NN optical-limit Glauber at 150–200 MeV:
+  - Glauber σ_tot overpredicts the measured n+natC and n+natO σ_tot by +18 / +19 % at 150 MeV and +16 / +18 % at 200 MeV (Finlay 1993, EXFOR 13569; Abfalterer 2001, EXFOR 13753; both acquired, Amendment 14 (l)).
+  - Barashenkov matches those data within 3 %.
+  - With α_NN = 0 the excess largely disappears. It comes from the real part of the free NN phase; medium effects are not modelled.
+- **Disclosure.** The trigger outcome was seen before this amendment is committed, from the scratch build and its verification. No transport with M2 or M3 has been run.
+
+**(b″)2. Decision: the frozen trigger is applied as written.** M2 fails §4.2 trigger 3, so the plan's fallback **M3** is the model under test.
+- The verified cause (a model limitation, not wrong inputs) is recorded next to the outcome. It does not change the outcome.
+- A medium-corrected α_NN is **not** introduced: it would be a new model choice after the outcome was seen.
+- **M2 is kept as a report-only sensitivity** (V-M2), never a gate, with the recorded limitation. Its σ_el level is Barashenkov, as for every table; the shape only is M2's.
+
+**(b″)3. M2 construction record, kept for the report-only sensitivity.**
+- **Trigger 4 for HO densities, definition recorded.**
+  - The Helm parameters come from a q⁴-cumulant match: R_H² = √350·c₁ (invariant under Gaussian unfolding) and s_pt² = s_ch² − r_p²/3. That gives q_H = 1.912 fm⁻¹ for C-12 and 1.661 fm⁻¹ for O-16.
+  - O-16 at 150 MeV: q_min = 1.380 fm⁻¹ = 0.83 q_H. Passes.
+  - C-12 has **no true minimum at 150 MeV**, because the real part fills it. Trigger 4 there is recorded as **"not evaluable (no minimum)"**: under the frozen wording ("must lie within") that is not a pass. It is **moot**, because trigger 3 already decided. At 200 MeV, q_min = 1.596 fm⁻¹ = 0.83 q_H.
+- **Proton-size unfolding for Fermi forms.** Where the plan-literal unfolding F_ch/exp(−q² r_p²/6) diverges (β < r_p²/3), the declared rule is the rms-matched point Fermi density (Shukla 2003, p. 7 prescription).
+  - Validated at 100 MeV against the exact unfolding: σ_el −1.6 % / −1.0 % and q_min +0.5 % / 0.0 % for Si / Ca.
+- **Nodes below the lowest SAID energy** keep the pinned black-disk shape. The counts are recorded.
+- **β of the plan-literal variant.** The independent review notes that `HoriuchiBeta` (builder lines 266–269) applies the isospin-mean β to both channels with the per-channel σ and α. This concerned only the plan-literal sensitivity V-c, which is withdrawn (see (c)1).
+
+**(b″)4. M3 construction** (plan of record §4, M3 = (ii′); Amendment 14 (e)9) [the plan's definition, made executable].
+- **Targets:** O-16 and C-12 only (plan §4 table; (e)9: "replaces the Bessel shape" for p+O and p+C).
+  - **Source:** the ENDF/B-VIII.0 **neutron** sublibrary, MAT for n-O16 and n-C12, MF4/MT2 elastic angular distributions, used as the isospin-mirror shape for p+O and p+C at the same T_lab.
+  - **Other targets** (N-14, Al-27, Si-28, P-31, Ca-40): the plan of record defines M3 for O and C only, so they **keep the pinned black-disk shape** (decision 0041, D-1). N, Al, Si, P and Ca do not enter V5/V11 (water) or V10-A (carbon).
+- **Conversion.**
+  - MF4 may be given as Legendre coefficients (LTT = 1), tabulated (LTT = 2) or mixed (LTT = 3), and is read as given. Frame: CM; a lab-frame representation (LCT = 1) is converted to CM.
+  - The shape is evaluated at the pinned table energy grid with the ENDF interpolation law. It is converted to **256 equiprobable μ_CM bins per node**: the same table schema and loader, and a new table id.
+  - The domains [E_min,shape, 250] MeV are unchanged (Amendment 15 (b)).
+  - **Above the highest MF4 energy E_top of a file**, the shape at E_top is held **fixed in momentum transfer q** (q-scaled to each node's p_CM), as D-E6 interpolated the Geant4 CDFs (Amendment 19 (c)). Declared now; E_top is recorded per file.
+  - **σ_el stays Barashenkov**: only the shape is M3's. Coulomb stays in the MCS.
+- **M3 verification** (§4.2-type, before any transport; each failure is a recorded construction failure):
+  1. **MF1 identity.** MAT, NLIB = ENDF/B, version VIII.0, neutron sublibrary, as recorded at acquisition.
+  2. **Copy check** ((e)9: "n-O16 above 20 MeV is not itself a C-12 copy"), the rule of Amendment 15 (d)1 transposed:
+     - Compare the MF4/MT2 angular distributions of O-16 and C-12 at every shared incident energy above 20 MeV, evaluated on 181 equally spaced μ_CM points.
+     - **Not a copy** iff the relative difference exceeds 1e-3 at > 50 % of the points at > 50 % of the shared energies.
+  3. **Normalisation** ≤ 1e-6 per node, after conversion.
+  4. **Positivity.** A non-negative angular distribution at every node and node midpoint (P6-D style). A negative value is a BuildError.
+  5. **Monotone CDF and finite first moment** at every node.
+  6. **Energy coverage.** E_top ≥ 150 MeV, or the q-scaling range is recorded as a limitation.
+- **Lineage.**
+  - ENDF/B-VIII.0 neutron evaluations of O-16 / C-12 are related to the proton channel by isospin symmetry (an isospin-mirror approximation, of the order of 5–10 %, plan §4).
+  - They are independent of TOPAS's proton elastic model (CHIPS). Geant4's neutron high-precision data (below 20 MeV) are not used by TOPAS for protons.
+  - **M3's V10-A results are exploratory**, because the data have been seen ((e)9).
+- **Acquisition.** In progress. Ids are filled in when they exist.
+  - **Pre-declared:** if no open host serves the ENDF/B-VIII.0 neutron O-16 and C-12 files, M3 is "construction impossible". The plan of record has no further fallback, so **the program closes as "no model change"**: V5 and V11 are not re-run, and the outcome is recorded.
+  - If M3 is built and passes its verification, it passes the screen (c) as the model under test.
+
+## (b‴) Outcome of the M2/M3 chapter: **no model change** [new scope; revision 6]
+
+**(b‴)1. M3 is construction-impossible (recorded; grounded on the acquisition failure alone).** The ENDF/B-VIII.0 neutron evaluations were identified on the NNDC list (https://www.nndc.bnl.gov/endf-b8.0/lists/neutrons.list):
+- **C-12: MAT 625** (LANL/ORNL, EVAL-AUG15, Hale, Young, Fu);
+- **O-16: MAT 825** (LANL, EVAL-DEC16, Hale, Paris, Young, Chadwick).
+
+They could not be acquired through the experiment's acquisition tool. Attempts, verbatim:
+
+| Route | Result |
+|---|---|
+| NNDC neutron sublibrary zip, 310 158 456 bytes (HEAD 200), tried twice | tool error: exceeds MAX_BYTES 256 MiB (`infrastructure/experiment_v3/data.py`) |
+| IAEA `n_0825_8-O-16.zip` | tool error; curl: 403 (bot challenge) |
+| LANL T2 `…/ENDFB-VIII.0-neutron/O/16` and `…/C/12` (guessed URLs) | tool error; curl: SSL handshake failure |
+| NNDC Sigma | offers libraries ≤ ENDF/B-VII.1 only |
+| NNDC endf-releases | whole-library zips only |
+| OECD-NEA JANIS | session-based (HTTP 500 / 404) |
+| NNDC per-file URL guesses | 404 |
+
+By plan §4.2 trigger 1 and (b″)4, M3 is **"construction impossible"**, in the precise sense of **not acquirable within the experiment's acquisition tool and the routes tried.** One route remains: **operator-assisted acquisition**, either raising the tool's 256 MiB cap or placing the MAT 625 / 825 files manually. Pursuing it would be an operator or infrastructure matter. It is named here so that the closure is not read as a physics judgment on M3.
+
+**(b‴)2. Planning defect of the frozen plan, recorded (author: the orchestrator).** The angular shape matters at 135–200 MeV, the V10-A data range and the V5/V11 energies. **Whether the ENDF/B-VIII.0 neutron C-12 / O-16 evaluations extend to 135–200 MeV is unverified.** Open sources state only library-wide coverage:
+- "at least 20 MeV" for most evaluations (IAEA-NDS-227, POINT2018 documentation);
+- "0 < E < 20 MeV (higher for some)" (Paris & Hale, CSEWG 2018 slides).
+
+**The frozen fallback row (ii′) did not verify energy coverage** (Amendment 14 (e)9; plan §4). Had the files covered only a lower range, (b″)4's q-scaled hold above E_top would have transported a low-energy shape at 150–200 MeV. This omission is recorded as an orchestrator planning defect. It changes no verdict, and it is not the ground for "construction impossible"; that ground is the acquisition failure.
+
+**(b‴)3. Outcome: "no model change".** This follows **plan-of-record §4** (M3 is the last fallback; M4 is rejected) and the rule pre-declared in **(b″)4** (revision 5, written before the M3 acquisition outcome was known). The A20-4 text of (b)3 did not address this case.
+- **V5, V11 and V10-A at dd976c5a stay failed.** The D-1 black-disk table of decision 0041 (`elastic-proton-1fd24cff…`) **remains the transport model.** The p-p level is unchanged as well ((b′)4 not applied).
+- **Records preserved:**
+  - the M2 construction record ((b″)1–3: trigger 3 fired on verified physics; the trigger-4 record; the rms-matched unfolding);
+  - the M3 definition and its failure ((b″)4, (b‴)1–2);
+  - the builder code paths `--model m2` and `--model m3`, kept as records of the attempt. **No production table is built** from either.
+- **The diagnostic of (c) is not run**, because there is no model under test. (d) lapses unused: no V5 base is taken, and lv 20531004 r_index 4–7 and 14 stay unobserved.
+- A second-generation candidate, if pursued, needs its own prospective amendment (draft: Amendment 21, M2′).
+
+**(b‴)4. Integration in the "no model change" state.**
+- **(a)6 gates that remain executable without a model change** (on the existing D-1 table, at a new evidence SHA):
+  - **V6-F**, binding, executed once at base 20551004. Its observable includes the elastic channel as transported by the D-1 table.
+  - **V7-R2** in V7-R's slot.
+  - **V8-nuc**, in the hr5d V8 statistical parity.
+  - **The implementation gates:** P6-D, P7, P5-ext, C1-ext, R1-D2, V8-LV, CI, on the pinned D-1 table.
+- **(a)6 gates that cannot pass:** **V5 and V11.** No model change means no fresh V5 base ((d) lapses), and V11 at the D-1 table is the recorded dd976c5a failure.
+- **Consequence.** Under the gate set of (e) as selected by the operator (Option II), **the task cannot merge in this state.** **The elastic depth-dose claim is withdrawn** (route §6 S1/S2): the elastic channel has no validated depth-dose claim.
+- **Closure amendment, defined here; it requires operator approval before it is committed.** It would remove V5 and V11 from the operator-selected gate set. That is a change of required validation scope, which disposition A of IR-20261013-164616-DEFAF4 reserves to the operator. Its content:
+  1. **V5 and V11** carried as recorded failures (dd976c5a; lv5b V5), with the attribution record (Amendment 19 (d)) and this chapter's outcome next to them.
+  2. **The elastic channel** ships as an explicitly flagged physics option with a declared limitation: "elastic depth-dose effect over-corrected against TOPAS by 3.7–4.9 % in peak/plateau; no validated depth-dose claim". The proposal must choose between **default off** and default on with the limitation reported in every result's capability block (V2-CAP). The planner recommends default off: the non-elastic V3-005A configuration then remains the default physics.
+     - **Both options carry a recorded V5 failure.** The comparison the operator needs:
+
+       | Configuration | Archive | V5 peak/plateau vs TOPAS (150 / 200 MeV) | ΔIDD (150 / 200 MeV) |
+       |---|---|---|---|
+       | Default off (non-elastic physics (slice B, lv5b 7aae5bb)) | lv5b 7aae5bb (plan archive table) | **+12.5 % / +12.3 %** | −18.5 % / −14.7 % |
+       | Elastic on (D-1 table) | lv5c dd976c5a | **−3.7 % / −4.9 %** | +10.3 % / +6.7 % |
+
+       Elastic-on is the closer configuration. The default-off recommendation rests on not shipping an unvalidated model by default, not on a better depth dose, and it must be presented with this comparison.
+     - **Configuration certified by V6-F.** The binding V6-F transports the elastic channel through the D-1 table (elastic **on**). Its reduced-scope halo claim therefore certifies **the elastic-on configuration only**. If elastic ships default-off, the default physics has no halo gate, and the V6-F claim refers to a non-default option with a known depth-dose deficiency.
+     - Claim wording: "V6-F (reduced scope) passed for the elastic-on configuration (D-1 table); not established for the default (elastic-off) configuration"
+  3. **The gates that remain** (list above) must pass at one evidence SHA, under the operational merge condition of (e).
+  4. **Claims:**
+     - no elastic depth-dose claim;
+     - no lateral-halo claim beyond V6-F's reduced scope;
+     - no measured-dose claim from V6;
+     - V10-A report-only.
+  5. **Ledger rows** (S-PHYS-PROTON-NUCLEAR, V1-MUST-005/013) state the withdrawn claim.
+  6. **Budget:**
+
+     | Item | Host hours |
+     |---|---|
+     | V6-F | ≈ 6.15 CPU + CUDA (≈ 0.16 planned) |
+     | V7-R2 block (includes the fixture) | ≈ 33.9 |
+     | lv5d / hr5d rows without V5 / V11 | ≤ 3.28 (route §4.2 remainder, an upper bound) |
+     | **Total** | **≈ 43.5** |
+
+     The V5 / V11 steps are not run.
+
+## (c) Pre-registered diagnostic of the model under test: a go/no-go screen [new scope; **not run** in the "no model change" state of (b‴); retained for any later candidate, see Amendment 21]
+
+It runs once, after the table of the model under test (M3, revision 5) is built and has passed its verification ((b″)4), and before any host step. It is report-only and never evidence. It decides only whether the model under test is used at all: **CONTINUE or STOP.**
+
+1. **Quantities.** Pre-registered variants:
+   - **(V-a) withdrawn** (revision 4).
+   - **(V-M3) M3 for O-16 and C-12** (pinned black disk for the other targets), p-p level unchanged: **the model under test** (revision 5). CONTINUE/STOP applies to it. D4 seeds 20991100 + case.
+   - **(V-M2) M2, p-p level unchanged: report-only sensitivity** (revision 5; formerly V-b). Never a gate. The trigger-3 limitation is recorded. D4 seeds **20991200 + case** (new, 2099xxxx family, asserted unused by the seed-family test).
+   - **(V-c) withdrawn** (revision 5): it was a sensitivity of M2, which is now itself report-only.
+
+   In D1–D7, "M2" reads as "the model under test" (V-M3); the same quantities are reported for V-M2. All runs use the D-E3 harness: warp-cpu f64, V5 geometry r = 20 cm, 1e5 histories, 20 batches, the table through the exploratory-table route.
+   - Common random numbers with the archived D-E3 base, seeds **20990100 / 20990101** (the declared D-E3 CRN seeds, reused deliberately for CRN).
+   - Paired-jackknife SE throughout.
+
+   | # | Quantity | Definition |
+   |---|---|---|
+   | D1 | F closure | c_E = (F_M2 − F_base) / Δ_obs,E, with Δ_obs = +0.0348 / +0.0433 (`de6/de6-report.md`; archived V11 values in `de0h5/h5.json`, bound to step 16) |
+   | D1b | predicted V5 peak/plateau relative difference | q_E = PP_ionmc,arch × (F_M2/F_base) / PP_TOPAS,arch − 1, with PP_ionmc,arch = 4.2406 / 3.8286 and PP_TOPAS,arch = 4.4019 / 4.0255 (step 21, lv5c archive) and F_base = 0.8580 / 0.8455 (`de6/de6-report.md`). Assumes the V5 "on" peak/plateau scales with the elastic factor, the multiplicative composition shown in D-E3 (Amendment 19 (b)1) |
+   | D2 | predicted V11 gain difference | d_g,E = (g_base,arch + (g_M2 − g_base)) − g_TOPAS,arch. Archived ionmc gain 0.02210 / 0.02672 and TOPAS gain 0.01625 / 0.01842 (`de0h5/h5.json`) |
+   | D3 | predicted V5 ΔIDD plateau-integral relative difference | p_E = (I_ionmc,arch + δ_E) / I_TOPAS,arch − 1. I_ionmc,arch = 1.9332 / 2.2848 and I_TOPAS,arch = 1.7520 / 2.1409 are the step-21 values in `validation/results/transport/lv5c-dd976c5-single-process.json`. δ_E is the change of the plateau-integrated IDD of the EM+elastic harness run, M2 minus base, at the CRN seeds, in the V5 ΔIDD units (same geometry and plateau window as V5) |
+   | D4 | exceedance ratio M2 / Geant4 at 2 mm, 30–200 MeV | (M2 / table) from the D-E5 sampler (1e6 events per case; seeds **20991100 + case**, new, in the 2099xxxx family) × (table / Geant4) from the committed `de4/de4-ratios.json` |
+   | D5–D7 | report-only | tail-moment and θ_lab median ratios; D-E0 kernels K* and G; the recoil share (H4) |
+
+2. **CONTINUE iff all of the following hold** (each is necessary; together they are **not sufficient** for any gate):
+   - **(i)** D1 lies inside the exact V11 F band at both energies.
+   - **(i-b)** |q_E| ≤ 0.02 − t·SE_PP,E at both energies, the exact V5 peak/plateau band; equivalently, D1 inside 61.1–126.5 % at 150 MeV and 80.7–120.2 % at 200 MeV. Combined with (i), the effective F-closure window is **63.1–126.5 %** at 150 MeV and **80.7–120.2 %** at 200 MeV.
+   - **(ii)** |d_g,E| ≤ 0.005 − t·SE_g,E at both energies.
+   - **(iii)** |p_E| ≤ 0.10 − t·SE_I,E at both energies.
+   - **(iv)** D4 moves toward 1, i.e. |ratio_M2/G4 − 1| < |ratio_table/G4 − 1|, at ≥ 4 of 5 energies. Current table / Geant4: 1.29–1.67 at 5 of 5 (review round D-E6, item 2).
+   - **(v)** the §4.2 construction checks passed.
+
+   Failing any one means **STOP**.
+3. **Bands, from the frozen rule.**
+   - The frozen rule (`validation/scripts/reference/compare_idd_v5.py`, `tost`, Amendment 9) passes iff the 90 % interval d ± t95·SE lies inside (−tol, tol). t95 is the one-sided 95 % Student-t quantile at the **floored** Welch–Satterthwaite df (`t95()`, table `_T95`).
+   - Each band below is the set of point estimates whose interval would lie inside the tolerance **if the new run had the archived SE**. Archived SE and df are from step 16 (V11) and step 21 (V5) of the lv5c archive.
+
+   | Clause | E | archived SE | df (floored) | t95 | allowed \|estimate\| | result |
+   |---|---|---|---|---|---|---|
+   | V11 F (tol 0.02, relative) | 150 | 0.002885 | 6.48 (6) | 1.9432 | 0.02 − 0.005607 = 0.01439 | closure band **63.1–136.9 %** |
+   | V11 F | 200 | 0.003838 | 8.92 (8) | 1.8595 | 0.02 − 0.007136 = 0.01286 | closure band **73.6–126.4 %** |
+   | V5 peak/plateau (tol 0.02, relative) | 150 | 0.004130 | 16.07 (16) | 1.7459 | 0.02 − 0.007211 = 0.01279 | closure band **61.1–126.5 %** (archived −3.66 %) |
+   | V5 peak/plateau | 200 | 0.005482 | 7.41 (7) | 1.8946 | 0.02 − 0.010386 = 0.00961 | closure band **80.7–120.2 %** (archived −4.89 %) |
+   | V11 gain (tol 0.005, absolute) | 150 | 0.000809 | 19.83 (19) | 1.7291 | 0.005 − 0.001399 = **0.00360** | – |
+   | V11 gain | 200 | 0.000783 | 20.08 (20) | 1.7247 | 0.005 − 0.001351 = **0.00365** | – |
+   | V5 ΔIDD plateau integral (tol 0.10, relative) | 150 | 0.03093 | 16.89 (16) | 1.7459 | 0.10 − 0.0540 = **0.0460** | archived +0.1035 (fail) |
+   | V5 ΔIDD | 200 | 0.01881 | 21.24 (21) | 1.7207 | 0.10 − 0.0324 = **0.0676** | archived +0.0672 (pass, marginal) |
+
+   For V11 F the closure band is c ∈ [(F_T(1 − a) − F_i)/(F_T − F_i), (F_T(1 + a) − F_i)/(F_T − F_i)], where a is the allowed |estimate| and F_i, F_T are the archived ionmc and TOPAS F (0.85678 / 0.89158 at 150 MeV, 0.84407 / 0.88737 at 200 MeV). For V5 peak/plateau, c ∈ [((1 − a)·PP_T/PP_i − 1)·F_base/Δ_obs, ((1 + a)·PP_T/PP_i − 1)·F_base/Δ_obs], with the D1b values.
+
+   A run outside any band is already predicted to fail its clause, so it does not proceed. A run inside every band is not predicted to pass: the new SE, the M2 table's own V5 terms and the fresh seeds decide at lv5d.
+4. **Disclosure: go/no-go, not blind** [new scope].
+   - The screen uses the V11 reference (the archived TOPAS F and gain), the V5 reference (TOPAS ΔIDD) and the Geant4 thin-target ratios to decide whether the single pre-committed model is transported at all.
+   - It is **not a selection among models**. M2 has no free parameter, plan §4.2 forbids switching to M3 on such outcomes, and STOP leads to "no model change".
+   - It is, however, a stopping rule on gating quantities. **The lv5d V11 and V5 runs are therefore not blind to the diagnostic's estimates.** They replicate D1–D3 on independent seeds with the frozen comparators.
+   - This disclosure is written into:
+     - the diagnostic record header;
+     - decision 0042;
+     - the lv5d V5 / V11 records;
+     - the results README.
+5. **Honest prognosis from the recorded arms** (D-E6, `de6/de6-report.md`; report-only, not a rule). Observed gain excess: 0.00585 / 0.00830.
+
+   | Shape arm | Δ_g at 150 MeV | residual at 150 MeV | Δ_g at 200 MeV | residual at 200 MeV |
+   |---|---|---|---|---|
+   | Geant4 CHIPS p+A shape (swap-pA) | +0.00694 | −0.00109 | +0.00393 | **+0.00437** |
+   | both shapes (swap-both) | +0.00674 | −0.00089 | +0.00417 | **+0.00413** |
+   | all, with the post-hoc σ_pp arm | +0.00813 | −0.00228 | +0.00694 | +0.00136 |
+
+   - **At 200 MeV a shape as narrow as Geant4's would fail condition (ii)** (0.0041–0.0044 > 0.00365). With the archived TOPAS reference, the V11 gain clause at 200 MeV would also fail. Closing it in the recorded arms required the σ_pp change as well, i.e. H3, which (b)5(ii) does not authorise.
+   - M2 passes (ii) at 200 MeV only if its shape lowers the 200 MeV gain by at least 0.00830 − 0.00365 = 0.00465, about 0.0005 more than the CHIPS shape did.
+   - **STOP is therefore a probable outcome.** It costs minutes, and it saves the host time of (g). If STOP is reached on (ii) at 200 MeV, the record says so. A σ_pp change would need its own reviewed decision and amendment, with the lineage consequence of (b)5(ii) (the level would move to Geant4/TOPAS lineage). It is not decided here.
+   - For (iii) at 150 MeV, a rough planner estimate (assumptions: a 20–60 mm plateau window and the archived plateau level 6.59) puts a CHIPS-like gain reduction at δ ≈ −0.17. The required shift is ≤ −0.1007. This is not a rule.
+6. **STOP-and-record.**
+   - The record (table id of the model under test, D1–D7, the failing condition) goes into decision 0042 and the results README.
+   - The adoption of the model under test is withdrawn. No M3 follows, because §4.2 does not allow it on screen outcomes. "No model change" closure applies **on STOP at the diagnostic** for the model under test, **and** when no model remains under plan-of-record §4 (M3 the last fallback, M4 rejected), as pre-declared in (b″)4 and recorded in (b‴)3.
+   - The outcome is **"no model change"**: V5 and V11 are not re-run; (d) lapses unused; lv 20531004 r_index 4–7 and 14 stay unused.
+   - Under the gate set of (e), integration fails on V5/V11. That is a recorded outcome.
+   - A different model, or a σ_pp change, needs a new reviewed physics reason and a new amendment.
+7. **Cost.** Sandbox, single process, with no host job and no other heavy job running: two harness runs at 15–43 s each (`wall_s` in `de3/de3-summary.json`), plus 10 sampler cases. Minutes.
+
+## (d) One fresh V5 base — revision of Amendment 17 (b)4 [new scope; **lapses unused** in the state of (b‴)]
+
+1. **Background.** Amendment 17 (b)4 applied after the stop rule fired at dd976c5a. The intervention it required was raised (IR-20261017-223039-9DA564) and answered (a).
+2. **Exactly one** fresh V5 base: **lv 20531004**, V5 at lv5d r_index 4–7.
+   - Conditions: only after CONTINUE, and only with M2.
+   - **Unchanged:** tolerances, reference runs, comparator, attribution ladder and stop rule (Amendment 14 (f); Amendments 9, 10).
+3. **Preserved:** the V5 failures at b40d812, 7aae5bb and dd976c5a, and the dd976c5a stop-rule record.
+4. **No second base** without a new amendment. If the stop rule fires again, 17 (b)4 applies as written and the remaining steps are archived.
+
+## (e) Merge gate (a)6 for V3-005B/C/D under Option II [new scope; in the state of (b‴), V5 and V11 cannot pass, so see (b‴)4 for the closure amendment, which requires operator approval]
+
+**Scientific gates, at one evidence SHA:**
+
+| Gate | Status and conditions |
+|---|---|
+| V5 | lv 20531004, M2 |
+| **V11** | **added**; frozen tolerances; lv5d r_index 14 |
+| **V7-R2** | **in V7-R's slot**; repair plan revision 4, measured joint-power rule. V7-R stays recorded as failed |
+| V8-nuc | hr5d |
+| **V6-F** | **binding**, executed once at base 20551004; v6f-followup revision 2 unchanged, including the coverage minimum |
+
+**Implementation gates:** P6-D (on the new M3 table; p-p level unchanged), P7 (on the new M3 table, lv5d r_index 15), the M3 verification of (b″)4, P5-ext, C1-ext, R1-D2, V8-LV, CI; the M3 table's Amendment 16 qualification flags.
+
+**Executed, not gates:** V2b-el, V7-scan-el, V7-shift-el, E1-B, V10 (report-only; p-p level unchanged), X-ENDF, D9-BGG, E-shape.
+
+**Carried as recorded failures** (shown next to every pass):
+- V6 / V6-sens: failed — not sized, re-recorded by `v6-unsized`;
+- V10-A at dd976c5a; the new-model V10-A is report-only (data seen);
+- V7-R;
+- the dd976c5a V5 / V11 / V7-scan-el; lv5b V5 and V7; P6 (H-1 below 12.53 MeV); the MF6 rule.
+
+**Claims.**
+- No lateral-halo claim beyond V6-F's reduced scope. No measured-dose claim from V6.
+- The p+A shape statement "agrees with Geant4 `g4h-elastic_HP` within the V11 tolerances" is made **only if** the lv5d V11 passes. It is a model-to-model statement, not a data statement.
+- σ_el is Barashenkov, shared with TOPAS; p+C at 100 MeV is +17 % above the post-1997 proxy (recorded deficiency).
+
+**Archive semantics.** lv5d `pass: false` (V6 rows); `conformant: false` on both (single-process directive; imported partials; deferred partition step). Neither flag is the merge criterion.
+
+**Merge condition: "revised applicable gates pass"**, operationally, at the PR head:
+1. every gate above passes at the evidence SHA;
+2. `record_local_validation` passes at that SHA, and a truthful head-check record passes at the PR head;
+3. the independent review of the closure and Codex pass;
+4. CI is green;
+5. the recorded failures are listed;
+6. no implementation-only passing record exists.
+
+## (f) Suites, bases and seeds [new scope]
+
+1. **Suites.**
+   - `lv5d` / `hr5d` are new. The lv5c / hr5c definitions are kept.
+   - **lv5d** is the lv5c row set with: V7-R → V7-R2 (`v7r-kappa`, 78 calibration parts, 48 transport shards, reference, combine, diagnostic); the V6-F CPU rows (gating and sensitivity) added; V6 / V6-sens re-recorded by `v6-unsized`.
+   - **hr5d**: V8-stat (python × 4, cpu64, cuda32, cuda64, compare), V7 f32/f64 CUDA, `v6-unsized` / `v6-cuda-compare`, and the V6-F CUDA replicate and timing step.
+2. **Bases.**
+
+   | Base | Use |
+   |---|---|
+   | lv **20531004** | lv5d rows |
+   | hr **20541004** | hr5d rows |
+   | **20551004** | V6-F rows (a row-specific base, like the absolute E-shape seeds of Amendment 17 (b)3) |
+
+   20511004 / 20521004 are **retired unused**: declared before observation, no seed drawn, no repetition. The sequence continues at 20561004 and skips 2098xxxx / 2099xxxx.
+3. **lv5d r_index** (as lv5c):
+
+   | r_index | Row | Seeds drawn |
+   |---|---|---|
+   | 1 | throughput | yes |
+   | 2 | V8-LV | yes |
+   | 3 | R1-D2 | yes |
+   | 4–7 | V5 | yes |
+   | 8 | V2b-el | yes |
+   | 9 | V7-scan-el | yes |
+   | 10 | V7-shift-el | yes |
+   | 11 | unused | – |
+   | 12 | V6 | no seed |
+   | 13 | E1-B | yes |
+   | 14 | V11 | yes |
+   | 15 | P7 | yes |
+   | 16 | V7-R2 transport | yes |
+   | 17 | V7-R2 diagnostic | no seed |
+   | 18 | V10-A cross-check | yes |
+   | 19 | X-ENDF sampled cross-check | yes |
+   | 20 | V6-sens | no seed |
+
+4. **hr5d uses r_index 1, 2 and 3 only:** 1 V8-stat; 2 V7-f32; 3 V6-CUDA, unsized, so no seed is drawn. Bases 10 000 apart make lv r ≡ hr r − 10 at equal k. Therefore **every other hr r_index at 20541004 is reserved and unused**, in particular:
+
+   | hr r_index | Coincides with | Treatment |
+   |---|---|---|
+   | 0 | lv 10 | reserved |
+   | 4 | lv 14 (V11) | reserved |
+   | 5 | lv 15 (P7) | reserved |
+   | 6 | lv 16 (V7-R2 transport, 20547004–20547052; 7200 fallback to 20547068) | reserved |
+   | 8 | lv 18 | reserved |
+   | 9 | lv 19 | reserved |
+   | 17–19 | V6-F r_index 7–9 at 20551004 | reserved |
+   | 1–3 | lv 11–13 | the existing pattern of Amendment 14 (j): lv 11 is unused; lv 12 and hr 3 draw no seed; lv 13 (E1-B) coincides with hr 3, which draws none |
+
+5. **Seeds of record:**
+
+   | Item | Seeds |
+   |---|---|
+   | V7-R2 transport | 20547004–20547051, reference 20547052 (7200 fallback: k = 0..63, reference k = 64 → 20547068); repair plan revision 4 §5 |
+   | V7-R2 κ / calibration roots | 20980000 / 20982000 / 20984000 |
+   | V6-F gating CPU (r_index 7, k = 0..15) | **20558004–20558019** |
+   | V6-F sensitivity (r_index 8, k = 0..7) | **20559004–20559011** |
+   | V6-F CUDA (r_index 9, k = 0..15) | **20560004–20560019** |
+   | Diagnostic D4 | 20991100–20991109 (V-M3); 20991200–20991209 (V-M2, report-only) |
+
+   **Required one-line correction in the same commit:** `validation/plans/v3-005d-integration-route.md` §4.4 (table row V6-F) and Appendix A print "20558004 … 20558015". This becomes "20558004–20558019" in route **revision 7**.
+6. **Rehearsal, timing and size re-check (before the evidence SHA):**
+   - **V7-R fixture** regenerated at the evidence digest as 4 × 2.25e6 histories at rehearsal seeds **20521000–20521003** (20505000 + 16000 + k; digest rule of Amendments 17 (a)7, 18 (d)–(e)). Never evidence.
+   - **V6-F CUDA timing step**, timing only, measured first: one 1e6-history CUDA float32 shard of the V6-F beam at rehearsal seed **20514000** (rehearsal base 20505000, r_index 9, k = 0; unused by the recorded rehearsals, route §4.4 scan). It fixes the CUDA shard sizes (≤ 1200 s planned) and the budget line.
+   - **Joint-power re-check** (repair plan revision 4, §3.8) on the rebuilt pool, sandbox: 5400/0.005 iff ≥ 378/400 for both surrogates; else 7200/0.005 iff ≥ 378/400; else operator.
+   - Then the sizes addendum (14a-style; nothing decreases) is committed.
+7. **Seed-family test** (`tests/ionmc/test_v3_005d_seed_families.py`), extended to assert:
+   - all seeds of item 5, the timing seed 20514000 and the fixture seeds;
+   - disjointness from `consumed_seed_set()`, the recorded rehearsal seeds and 2098xxxx / 2099xxxx;
+   - every reserved hr r_index of item 4;
+   - checks (a)–(e) of v6f-followup §7.
+8. **Implementation items:**
+   - lv5d / hr5d qualification-base constants, `summarize.seed_blockers`, `DEFAULT_SEED_BASES`, the V6-F row base;
+   - `run_suite.full_step_names`;
+   - `rehearsal_preflight` for lv5d;
+   - the single-process workers = 1 force list;
+   - row mapping and pending rows;
+   - a V7-R2 reference index distinct from every shard index (the constant `V7R_REF_INDEX = 16` collides with shard 16);
+   - `declared_plans()` entries, or a timing rule, for the rep-based κ / calibration parts, with one short calibration part measured on the slow host;
+   - calibration `PARTIAL` lines;
+   - the M3 table pin and its Amendment 16 flags and (b″)4 verification, with P6-D in CI and P7 in lv5d;
+   - V6-F code in the hashed source set;
+   - all of the above before the code freeze.
+
+## (g) Order of work, failure branch and budget (one heavy job at a time; stability restrictions retained) [new scope]
+
+| # | Step | Where | Cost (source) |
+|---|---|---|---|
+| 1 | Acquisitions, **all complete**: SAID SM16 (10–300 and 5–300 MeV tables, pp DSG scans 100–300 MeV); Horiuchi preprint; density sources (Shukla, Mehndiratta & Shukla, TGlauberMC paper and tarball, Duda) and the IAEA radii (ids in (b′)) | MCP | done |
+| 2 | Decision 0042 | repo | – |
+| 3 | M2 builder, §4.2 checks, Amendment 16 flags, tests, Codex | sandbox | – |
+| 4 | M2 diagnostic (c); **STOP/CONTINUE record** committed, with the disclosure header | sandbox | minutes |
+| 5 | On CONTINUE: implementation (f)8, Codex, CI, sandbox suite in two logged halves; then code freeze | sandbox | – |
+| 6 | Fixture rebuild (host), fixture commit | host | ≈ 0.7 h (4 × 2.25e6 at the slow rate; route §4.2) |
+| 7 | V6-F CUDA timing step | host | one shard; planning ≈ 37 s (hr5c step 06: 1e6 CUDA f32 histories in 22 s at 150 MeV × 1.672); measured, then recorded |
+| 8 | Joint-power re-check | sandbox | ≈ 2.2 h; ≈ 3 h more if 7200 |
+| 9 | Sizes addendum, independent review and Codex at the **evidence SHA** | – | – |
+| 10 | **V6-F first:** 72 CPU shards, then 16 CUDA shards; then `v6f-compare` | host | CPU ≈ 6.15 h (72 × 184 s × 1.672; v6f-followup §8.3). CUDA from step 7 (planning ≈ 16 × 37 s ≈ 0.16 h) |
+| 11 | Only if V6-F passes: lv5d (throughput first), then hr5d | host | ≈ 37.2 h (≈ 47.3 h at 7200; route §4.2) |
+| 12 | Closure | – | – |
+
+**Failure branch: V6-F fails, or its halo verdict is "not established (beam-sensitive)"** [new scope]. The coverage minimum (≥ 40 gating points, ≥ 3 radii, ≥ 12 sign-test depths after the screen; planning expectation ≈ 58 points and 16 depths, Amendment 18 (b)3) is the most likely failure mode.
+- **Merge is impossible under Option II.** V6-F is executed once; there is no fall-back (route §6 S7).
+- **lv5d / hr5d are deferred, not run.**
+  - Reason: no lv5d / hr5d outcome can make the merge possible.
+  - The operator directs "inexpensive diagnostics before expensive qualification", and the V6 lesson applies: do not spend host time that cannot change a gate.
+  - Their seeds stay unobserved.
+  - They may be executed later at the same evidence SHA without a new amendment, as archived science, if the orchestrator records a reason. They never count toward a merge on this route.
+- **Closure wording:** "V3-005 integration blocked: binding gate V6-F failed (or: not established) at <SHA>. V5 / V11 / V7-R2 not executed (deferred; seeds unobserved). Recorded failures preserved. PR #82 stays open. No passing record."
+- Any change of the gate set afterwards is a new, post-hoc operator decision.
+
+**Budget:**
+
+| Branch | Host hours | Sandbox |
+|---|---|---|
+| Full, 5400/0.005 | ≈ 0.7 + 0.01 (timing) + 6.15 + CUDA (≈ 0.16 planned) + 37.2 ≈ **44.2 h** | minutes (diagnostic) + ≈ 2.2 h (joint power) |
+| Full, 7200/0.005 | ≈ **54.3 h** | – |
+| V6-F fails | ≈ **7.0 h** (0.7 + 6.15 + CUDA) | – |
+| STOP at the diagnostic | **0 h** | – |
+
+D-E4 is done and is not re-budgeted.
+
+## (h) Unchanged, restated
+
+- The frozen tolerances of V5, V11, V6-F, V8, R1-D2 and P7.
+- The V7-R2 clauses (joint ≤ 0.02, gate alone ≤ 0.04, power ≥ 0.9, R = 3200, B = 1999).
+- The single-process directive and the operator diagnostic rules.
+- The crash rule (re-execute once at the same seeds a step that published no document; never re-run a step with a published verdict).
+- The Amendment 19 records stay exploratory.
+
+**Amendment 21 (2026-10-18; draft 8, independently reviewed in rounds A21-1 and A21-2 of `validation/plans/v3-005d-elastic-attribution/review.md`; registered before any builder table, transport or diagnostic of the candidate exists; record files in `validation/plans/v3-005d-m2prime/`) — second-generation elastic candidate M2′: optical-limit Glauber with the Clementel–Villi Pauli-blocking factor (reading R-C), applied at table nodes with E ≥ 80 MeV; trigger 3 of Amendment 20 unchanged as the sole input-sanity gate.** The change tables below are the review history. Earlier drafts are kept in the session scratchpad and are not part of the record.
+
+**Changes in draft 8 (review round A21-2, applied verbatim).** (f): σ_R/Barashenkov is withheld for M2 and for every variant with a printed % deviation in Git; the residual-inference disclosure is added. (e): the M3 → M2′ mapping is restricted to the listed phrases, with the D4 seed statement.
+
+**Changes in draft 7.** Git policy (f): no absolute σ_tot, σ_R or σ_el of any variant is projected. This follows the elastic-attribution projection rule; note σ_R + σ_el = σ_tot. The builder-vs-scratch record is projected as relative differences only.
+
+**Changes in draft 6 (review round A21-1).**
+- (1) The node count is 43 for both targets.
+- (2) Trigger 3 is framed as an implementation check. A builder-vs-scratch reproduction record is added, and the re-tuning clause is tightened.
+- (3) New limitations: the nonrelativistic convention; the black disk kept below 80 MeV; the 80–100 MeV shape; the 78.81–80.00 MeV blend region.
+- (4) Git policy: no measured EXFOR values anywhere. σ_tot is compared only as pass/fail per cell; the scripts read the cache at run time.
+- (5) An explicit Amendment 20 M3 → M2′ reference mapping on CONTINUE.
+
+**Changes in draft 5.**
+- The Clementel–Villi factor is pinned in full, with both branches and the flux-weighted definition. It is verified by an independent Monte Carlo derivation (`validation/plans/v3-005d-m2prime/M2PRIME-projected.md`, section "R-C verification", script `cv_mc.py`), because no open printed source was obtained.
+- The conventions are pinned.
+- **Energy domain:** M2′ applies at table nodes with E ≥ 80 MeV only. Below that the black disk is kept. The extension down to 5 MeV is a report-only sensitivity.
+- The disclosure records when the domain was chosen.
+
+**Changes in draft 4.**
+- **The model changes from Bertulani & De Conti Eq. (14) to the Clementel–Villi single-Fermi-sphere Pauli factor** (reading R-C). The reasons are the paper's own text and the physics, recorded in `validation/plans/v3-005d-m2prime/M2PRIME-projected.md`, section "Reading of ρ₁, ρ₂", with the script `m2prime2.py`.
+- Eq. (14) under reading R-B becomes a report-only sensitivity.
+- The disclosure quotes the R-C scratch numbers and gives, in order, the sequence of readings considered.
+- Trigger 3 of Amendment 20 is unchanged: the sole gate, both targets, ≥ 2 of 3 energies.
+- Everything else is as in draft 3.
+
+---
+
+**What this amendment does not change:**
+- Amendments 1–20 or any recorded verdict;
+- the plan of record `validation/plans/v3-005d-elastic-attribution.md` (sha256 fd9657df…);
+- the "no model change" outcome of Amendment 20 (b‴), which stands unless M2′ passes every step below;
+- V5, V11 and V10-A at dd976c5a, which stay failed.
+
+**[new scope]** throughout.
+
+## (a) Disclosure (mandatory)
+
+1. **Timing.** M2′ was defined:
+   - after M2 failed plan §4.2 trigger 3 (O-16 1.407 at 150 MeV, 0.5 % above the bound; Amendment 20 (b″));
+   - after D-E2–D-E6 were seen (Amendment 19 (a)–(d));
+   - after the cause of the M2 failure was verified: free-NN optical-limit Glauber overpredicts the measured n+C / n+O σ_tot by +16–19 % at 150–200 MeV (EXFOR 13569, 13753).
+2. **The sequence of readings considered, in order.** The form, the reading and the outcomes below were **all seen before registration**.
+   1. **R-B:** Bertulani & De Conti, Phys. Rev. C 81 (2010) 064603, Eq. (14), with ρ₁ and ρ₂ the local proton and neutron densities and ρ̃ = ρ_tot/ρ₀. This was draft 2's model. Scratch σ_el/Barashenkov: C 0.717 / 1.099 / 1.235; O 0.699 / 1.182 / 1.396. O-16 sat on a knife edge (margins −0.001 and +0.004).
+   2. **R-A objection** (independent reviewer): read ρ₁ = 0 for the free projectile. **Rejected.** It contradicts the paper's text, which defines ρ₁ and ρ₂ as the proton and neutron densities. It is also unphysical: it has no free limit, and it removes about 60 % of the free-NN Glauber σ_tot (M2PRIME, R-A against M2).
+   3. **Paper check** (acquired text, arXiv:1004.2096):
+      - Eq. (14) is a fit to the Pauli-blocking geometry for **two bound nucleons**: two Fermi spheres, with the bound-bound geometry of the paper's Eq. (7).
+      - The paper applies it with an "effective local density … where the two densities (one from the projectile and the other from the target) cross each other". That is a nucleus–nucleus application.
+      - It does **not** apply Eq. (14) to a free nucleon on nuclear matter.
+      - For nucleon–nucleus scattering it names Clementel & Villi as the standard: "an analytical expression for the scattering of a nucleon on a nucleon Fermi gas … widely used to describe Pauli-blocking in nucleon-nucleus scattering".
+   4. **R-C: the Clementel–Villi single-Fermi-sphere factor, adopted as M2′.** The knife edge of R-B is recorded as the **reason the reading was re-examined**. It was not a selection on the band: the switch is grounded in the paper's text (step 3), and R-C was adopted with its outcomes in view, as disclosed here.
+3. **R-C outcomes known before registration** (scratch implementation `validation/plans/v3-005d-m2prime/scripts/m2prime2.py`):
+
+   | Quantity | C-12 (100 / 150 / 200 MeV) | O-16 (100 / 150 / 200 MeV) | Reading |
+   |---|---|---|---|
+   | σ_el^M2′/σ_el^Barashenkov | **0.595** / 0.976 / 1.129 | **0.595** / 1.062 / 1.286 | trigger 3: 100 MeV fails for both, 150 and 200 MeV pass with robust margins. Each target is inside the band at 2 of 3, so trigger 3 would pass |
+   | σ_tot against measured n+natC / n+natO, ±10 % band (report-only; pass/fail per cell, (f)) | fail / pass / pass | fail / pass / pass | ±10 % at ≥ 2 of 3: passes; at all 3: fails |
+   | σ_R/σ_inel^Barashenkov (report-only) | 1.090 / 1.010 / 0.953 | 1.061 / 0.984 / 0.936 | – |
+   | Trigger 4: q_min/q_H | 0.805 at 150 MeV; 0.819 at 200 MeV | 0.815 at 150 MeV | passes ([0.6, 1.0]) |
+
+   **This amendment is therefore NOT a blind pre-registration at the trigger level.**
+4. **Expectation:** trigger 3 passes for both targets. Trigger 2 (numerics) is not yet evaluated on the builder.
+5. **What remains blind:**
+   - the transport go/no-go diagnostic of Amendment 20 (c): D1–D3 transport quantities at the CRN seeds, and D4 at the new seeds 20991300 + case;
+   - every gate.
+6. **The diagnostic is not naive either.**
+   - The medium correction barely changes the angular shape. O-16 P(θ_lab > θ_2mm) is 0.528 / 0.604 at 150 / 200 MeV under R-C, against M2's 0.540 / 0.612, the black disk's 0.688 / 0.735, and Geant4 CHIPS's 0.513 / 0.571 (CHIPS for information only).
+   - The diagnostic therefore effectively tests "Glauber shape + Pauli-blocked rate" against the black disk.
+   - D-E3's `pA-s0.9` probe (84 % / 76 % gap closure) is prior evidence in the same direction.
+6b. **The energy domain and the form of the factor.**
+   - The energy domain of (c)7 (M2′ only at nodes with E ≥ 80 MeV) was chosen **after** the branch analysis of the Clementel–Villi factor was seen (`M2PRIME-projected.md`, "R-C verification") and **before** any M2′ build or trigger evaluation.
+   - It is a physics choice: only the high-energy branch is exercised, inside the eikonal validity domain. **It is not tuned to the band:** the trigger nodes at 100, 150 and 200 MeV lie above 80 MeV and are unaffected by it.
+   - **No open printed source** for the full Clementel–Villi factor, including its low-energy branch, was obtained. Hussein–Rego–Bertulani 1991 and Kikuchi–Kawai 1968 were not acquirable; Kelly (nucl-th/9607001) and Chen–Sammarruca–Bertulani (arXiv:1304.6096) were checked and do not contain it.
+   - The form of (c)2 is therefore pinned from the researcher's **independent Monte Carlo derivation record**, not from a printed equation, and this amendment says so. The derivation used 4×10⁶ samples per point and agrees with the form within 4×10⁻⁴ on both branches; both branches give 0.3000 at E = 2E_F, and the factor is zero at E = E_F.
+7. **Alternatives that remain open, named.**
+   - **(i)** M3, the plan-of-record fallback: not excluded on physics grounds. It was "not acquirable within the experiment's tool and the routes tried" (Amendment 20 (b‴)1). An **operator-assisted acquisition** (raising the 256 MiB tool cap, or manual placement of ENDF/B-VIII.0 MAT 625 / 825) would make it constructible. Its coverage to 135–200 MeV is unverified.
+   - **(ii)** The closure route without a model change (Amendment 20 (b‴)4).
+   - M2′ is the autonomous candidate. The M3 route is an operator or infrastructure matter.
+8. **Selection on physics grounds.** The standard Pauli-blocking correction for nucleon–nucleus scattering, as the cited paper names it. **Never** selected on V5, V11, D-E5 or D-E6 outcomes.
+   - Rejected on physics grounds (M2PRIME):
+     - (b2), ρ̃ = 2ρ/ρ₀;
+     - R-A;
+     - α scaling (no published prescription);
+     - χ scaling (a fit without physics basis);
+     - α_NN = 0;
+     - the Horiuchi 2007 Table I set: it is the isospin-averaged free amplitude (at 150 MeV σ 3.845 against 3.893 fm², α 1.245 against 1.168), with M2's own β rule.
+   - **The E + |U| refinement is explicitly not adopted:** it would be tuning after the outcome is seen.
+
+## (b) Known limitations, recorded now
+
+1. **100 MeV over-correction.** With the bare lab energy E, the factor ignores the potential-energy gain of the projectile inside the nucleus. R-C over-corrects at 100 MeV: σ_el/Barashenkov is 0.595 for both targets, and σ_tot falls outside the ±10 % band below the measured value (pass/fail record, (f)). The E + |U| refinement is not adopted ((a)8).
+2. **Single Fermi sphere.** Clementel–Villi treats a free nucleon on a Fermi gas, with isotropic NN scattering and E_F from the local total density (N = Z assumed in E_F; the isospin asymmetry is not resolved).
+3. **Low-energy behaviour and domain.**
+   - At the interior peak point densities (C 0.179, O 0.165 fm⁻³), 2E_F is 79.5 / 75.2 MeV and E_F is 39.7 / 37.6 MeV.
+   - Below about 75–80 MeV the low branch is active in part of the nucleus. Below about 38–40 MeV the interior is fully blocked (f = 0), and the phase comes from the surface only.
+   - On the pinned grid (1–250 MeV, 400 nodes), C has 122 and O 120 nodes in [5 MeV, 2E_F), and C 95 and O 91 nodes in [5, E_F].
+   - These regimes are **outside the model's domain**: see (c)7.
+4. **Optical limit.** The optical-limit approximation weakens below about 100 MeV (plan §4.3). The real part of the free NN amplitude (α) is kept. The factor acts through σ in χ = ½σ(i + α)…, so it scales the real and the imaginary phase together.
+5. **Nonrelativistic derivation (declared convention ambiguity, not adopted).** The factor is derived nonrelativistically, with E the bare kinetic energy. Using k₀²/2m from the relativistic momentum instead changes x by 7–9 % at 150–200 MeV, i.e. Δf ≈ +0.026 (f 0.642 → 0.668 at 150 MeV, 0.731 → 0.757 at 200 MeV; review round A21-1). It does not affect trigger 3 at the known margins.
+6. **The black disk below 80 MeV keeps part of the over-correction.** D-E0 shows that p+O removal below 80 MeV is a non-negligible part of the kernel K. With the black disk kept there ((c)7), **the diagnostic closure is expected to fall short of what a full-range M2′ would give** (V-M2′ext is construction-level only). A later STOP is therefore not to be read as a failure of the in-medium physics alone.
+7. **The 80–100 MeV shape comes from the regime where R-C is worst.** At 100 MeV σ_el/Barashenkov is 0.595: the model over-blocks there. Only the normalised shape enters transport (the level is Barashenkov), but the shape at 80–100 MeV comes from that regime.
+8. **Blend region at the domain boundary.** The pinned nodes next to 80 MeV are 78.81 and 80.00 MeV. The transport interpolates the bin edges linearly in E between nodes, so **78.81–80.00 MeV is a blend of the black-disk and M2′ shapes**, not a point jump. The 80.00 MeV node is included and lies above 2E_F(C) = 79.5 MeV, so it uses the high branch.
+
+## (c) M2′ construction (pinned)
+
+1. **Amplitude and phase.** As M2 (Amendment 20 (b′)): pp and pn phases summed (Abu-Ibrahim et al. 2008, Eqs. (4)–(5)), with σ_c evaluated locally:
+
+   χ(b) = ½ Σ_{c ∈ {pp, pn}} (i + α_c) ∫ d²b′ f_c(b − b′) ∫ dz σ_c^free(E) · P_CV(E; ρ_tot(r)) · ρ_c(r),  with r = √(b′² + z²)
+
+2. **Clementel–Villi factor**, the flux-weighted definition. Lineage: Clementel & Villi 1955; Hussein, Rego & Bertulani, Phys. Rep. 201 (1991) 279. **Pinned from the independent derivation record** (`M2PRIME-projected.md`, "R-C verification"; `cv_mc.py`); no printed source was obtained ((a)6b).
+
+   With x = E_F/E:
+   - f = 1 − 7x/5 for E ≥ 2E_F;
+   - f = 1 − 7x/5 + (2x/5)(2 − E/E_F)^{5/2} for E_F < E < 2E_F;
+   - f = 0 for E ≤ E_F.
+
+   **Definition.** f is the flux-weighted, per-path-length suppression ⟨(|k₀ − k₂|/k₀)·Q⟩, the quantity that enters the Glauber attenuation ρσ per unit length. It is **not** the plain blocked fraction ⟨Q⟩, which differs: 0.2711 against 0.3000 at E = 2E_F.
+
+   **Conventions:**
+   - E_F = (ħc)² k_F²/(2 m_p c²), k_F = (3π² ρ_tot/2)^{1/3}, with ρ_tot = ρ_p + ρ_n the local point density in fm⁻³;
+   - ħc = 197.3269804 MeV fm and m_p c² = 938.27208816 MeV, giving E_F(0.17 fm⁻³) = 38.392 MeV;
+   - **E is the bare proton lab kinetic energy**;
+   - the same factor applies to pp and pn.
+3. **Inputs.**
+   - σ_c^free and α_c: SAID SM16 (Amendment 20 (b′)1, (b′)5), free α.
+   - β_c: the free unitarity rule (Horiuchi Eq. (10)) with the free σ_c and α_c.
+   - Densities: Amendment 20 (b′)3 with the unfolding rules of (b″)3.
+4. **Level and targets.** The shape |F|² is normalised and scaled to the **Barashenkov σ_el(p+A)**, unchanged. Coulomb stays in the MCS, and the p-p level is unchanged. All seven targets are built; only O and C enter V5, V11 and V10-A. Nodes outside the domain of (c)7 keep the pinned black-disk shape.
+5. **Report-only sensitivity variant V-RB:** Eq. (14) of Bertulani & De Conti under reading R-B (ρ₁, ρ₂ the local proton and neutron densities; ρ̃ = ρ_tot/ρ₀; ρ₀ = 0.17 fm⁻³).
+   - It is built and reported at construction level (trigger quantities, σ_tot, σ_R, q_min, P) and in the D-E3 harness at the CRN seeds.
+   - It is never a gate, and D4 is not run for it.
+6. **Sources and acquisition.**
+   - arXiv:1004.2096 (the paper check) is acquired through `acquire_reference_data`, role `construction`.
+   - The Clementel–Villi factor is pinned from the committed derivation record ((c)2; (f)), **not** from a printed source, and decision 0042 states this. No construction-impossible condition attaches to the printed source.
+   - If an open printed source is obtained later, it is compared with the pinned form and the comparison is recorded. A disagreement goes to independent review before any use.
+7. **Energy domain** (orchestrator decision; physics-based; declared before any M2′ build or trigger evaluation, (a)6b).
+   - **M2′ replaces the black-disk shape and rate only at table nodes with E ≥ 80 MeV.** That is about 2E_F at the peak density of C and O, so only the high branch is exercised, inside the eikonal validity domain. On the common pinned grid this is **43 nodes for every target**.
+   - **Nodes below 80 MeV keep the pinned black-disk table for all targets.** The low-energy transport is therefore unchanged from decision 0041's D-1 table.
+   - **Disclosed:** the shape changes at the domain boundary, with the 78.81–80.00 MeV node interval acting as a blend region ((b)8). The σ_el level is Barashenkov on both sides.
+   - **Report-only sensitivity V-M2′ext:** M2′ extended down to 5 MeV, built and reported at construction level only. It is never the model.
+   - **Other targets** (Al, Si, P, Ca): their 2E_F thresholds at peak density are expected near 77 MeV but are **unverified** (recorded). The common 80 MeV boundary applies to all targets.
+
+## (d) Triggers
+
+- **Trigger 3, unchanged from Amendment 20 / plan §4.2, the sole input-sanity gate.** σ_el^M2′/σ_el^Barashenkov within **[0.7, 1.4]** at ≥ 2 of 100 / 150 / 200 MeV, **for C-12 and for O-16**.
+  - **Framing (round A21-1).** With the outcome known ((a)3) and robust margins (in band at 150 and 200 MeV by ≥ 8 %, out at 100 MeV by 15 % for both targets), **trigger 3 carries no evidentiary weight for M2′.** Its remaining function is an **implementation check of the builder**.
+  - It is evaluated on the **builder's official construction only**. The scratch numbers of (a)3 are never used for it.
+  - **No re-tuning,** in particular no switch to E + |U|, no relativistic k₀²/2m and no change of reading after the builder's numbers are seen. The only exception is a defect fix that meets two conditions: it comes from an independent review with a reproducing test that does not depend on the trigger value, **and** it does not move the builder toward the scratch values except through the identified defect.
+  - **Builder-vs-scratch reproduction record** (pre-declared). At the six trigger cells (C and O at 100 / 150 / 200 MeV), σ_tot, σ_R, σ_el, σ_el/Barashenkov and q_min of the builder are compared with the scratch values of `m2prime2.py`, and the differences are reported. **A difference above 2 % in σ_tot, σ_R or σ_el goes to independent defect review** before the trigger outcome is recorded. The trigger outcome is the builder's, whatever the review finds, unless a defect satisfying the clause above is fixed.
+  - **The outcome is accepted whichever side it lands on.**
+- **Triggers 2 and 4, unchanged:**
+  - trigger 2: normalisation ≤ 1e-6; b-, z- and q-integration convergence ≤ 1e-3;
+  - trigger 4: q_min within [0.6, 1.0] × q_H (q_H from Amendment 20 (b″)3). C-12 at 150 MeV is "not evaluable" if it has no true minimum, and 200 MeV is used instead.
+- **No new σ_tot trigger** is introduced.
+- **Report-only sanity records** (never gates):
+  - σ_tot^M2′ against the EXFOR 13569 / 13753 average within a ±3 % energy window, recorded as **pass/fail per cell** against the ±10 % band, with both readings (≥ 2 of 3 and all 3). No % deviation is printed ((f));
+  - σ_R^M2′ against the Barashenkov σ_inel(p+A).
+- **If any trigger fails, M2′ is withdrawn.** There is no fallback. "No model change" stands, and the closure route of Amendment 20 (b‴)4 follows (operator approval required).
+
+## (e) Diagnostic, gates, seeds, budget, order (as in draft 3)
+
+- **Diagnostic.** Amendment 20 (c), with every band unchanged (V11 F, V5 peak/plateau, V11 gain, V5 ΔIDD, D4 direction; the go/no-go and non-blind disclosures). Variants:
+  - **V-M2′ (R-C), the model under test:** D-E3 CRN seeds 20990100 / 20990101; **D4 seeds 20991300 + case**.
+  - **V-M2, report-only:** D4 seeds 20991200 + case.
+  - **V-RB, report-only:** construction level and harness only.
+  - **V-M2′ext, report-only:** the 5 MeV extension of (c)7, construction level only.
+- **CONTINUE:** Amendment 20 (d) (one fresh V5 base, lv 20531004), (e) (the Option II gate set, with V5 and V11), (f) and (g) apply with M2′ as the model. Decision 0042 receives a dated section adopting M2′.
+- **Reference mapping on CONTINUE (explicit; restricted, round A21-2).** In Amendment 20 revision 7 ((c), (e), (f)8), **only** the following phrases read as **M2′**:
+  - "the model under test (M3)";
+  - "V-M3";
+  - "the new M3 table" / "the M3 table";
+  - "the M3 verification of (b″)4" and "(b″)4 verification".
+
+  Their meaning then becomes: the M2′ table; the trigger 2–4 records plus the builder-vs-scratch reproduction record of (d), in place of the M3 verification; and P6-D, P7 and the Amendment 16 flags evaluated on the M2′ table.
+  - **Every other "M3" stays literal.** In particular "plan §4.2 forbids switching to M3 on such outcomes" and "No M3 follows" keep M3 as the plan's fallback; M2′ has no fallback.
+  - **D4 seeds.** For M2′, D4 uses **20991300–20991309**. The block 20991100–20991109, given to V-M3 in the installed plan's (c) and (f) seed lines, **stays reserved and unused** (V-M3 was never run).
+- **Seed-family test:** D4 seeds 20991300–20991309 are registered.
+- **STOP:** "no model change" stands, and the closure route of Amendment 20 (b‴)4 follows.
+- **Seeds and bases:** unchanged (lv 20531004, hr 20541004, V6-F 20551004; V7-R2 20547004–20547052).
+- **Budget:** minutes of sandbox time (acquisition, build, triggers, diagnostic); host time on CONTINUE only, ≈ 44.2 h plus V6-F CUDA (Amendment 20 (g)).
+- **Order:**
+  1. this amendment, reviewed independently;
+  2. acquisitions;
+  3. builder `--model m2prime`, with the factor and the conventions pinned from the derivation record ((c)2) and the 80 MeV domain ((c)7);
+  4. tests and Codex review;
+  5. triggers;
+  6. diagnostic;
+  7. the STOP/CONTINUE record.
+
+  No host step happens before CONTINUE.
+
+## (f) Git policy for the M2PRIME record (revised in draft 6)
+
+The researcher's assessment (all readings; the sections "Reading of ρ₁, ρ₂" and "R-C verification") is committed as a projected table in a plan-record directory (path decided at commit, for example `validation/plans/v3-005d-m2prime/`).
+- **Projected (revised in drafts 7–8, following the projection rule already in force for the elastic-attribution records: the `common.py` allowlists):**
+  - σ_el/Barashenkov and σ_R/Barashenkov ratios, **with these exceptions (round A21-2):**
+    - **σ_R/Barashenkov is not projected for M2 (variant (a))**, nor for any variant that has a printed % deviation from measurement anywhere in Git. The Barashenkov arrays are committed in `src/ionmc/nuclear/bgg.py`, so σ_R and σ_el ratios together with Amendment 20's M2 percentages would recover the measured σ_tot to about 0.5 %.
+    - For the constructions fitted to the measured σ_tot ((c) α scaling, (d) χ scaling, (e) Pauli + α scaling), both ratios are withheld.
+    - R-C (M2′), R-B, R-A and (b2) carry pass/fail only and keep both ratios;
+  - the σ_tot comparison as **pass/fail per cell** against the ±10 % band;
+  - q_min and q_min/q_H;
+  - P(θ_lab > θ_2mm);
+  - the Pauli factors;
+  - the Monte Carlo derivation table of the Clementel–Villi factor;
+  - the defining sentences quoted from arXiv:1004.2096, with the arXiv licence recorded.
+- **Not projected:**
+  - **no absolute σ_tot, σ_R or σ_el for ANY variant** (M2, M2′, V-RB, V-M2′ext, or any other reading). Absolute values together with a % deviation, or σ_R + σ_el = σ_tot, would reveal the measured values;
+  - measured σ_tot values (M2PRIME's "measured sigma_tot … means" line is dropped);
+  - EXFOR points;
+  - any % deviation from measurement.
+
+  EXFOR is referenced by entry number only (13569, 13753).
+- **Residual inference, disclosed and accepted.** For the non-fitted rows, the projected ratios multiplied by the public Barashenkov values (Geant4 `G4BarashenkovData`, committed in `bgg.py`) rebuild the model cross sections. Together with the pass/fail flags this does not give the measured value. It is accepted as a disclosed residual: the rule forbids redistributing database values, not approximate inference from public tables.
+- **Builder-vs-scratch reproduction record ((d)).** The 2 % rule is evaluated on the absolute values at run time. The record is **projected as relative differences only**.
+- Amendment 20 revision 7 and decision 0042 keep their reviewed M2 percentages. They are derived quantities, and nothing absolute accompanies them in Git.
+- **Scripts.** `m2prime.py`, `m2prime2.py` and `cv_mc.py` are committed outside the rehearsal digest. **They must read the measured EXFOR σ_tot from the cache at run time.** The hard-coded `TOT = {...}` table of `m2prime.py` / `m2prime2.py` (line 52) is replaced by a cache reader before commit, and a test asserts that no EXFOR value is a literal in the committed scripts.
+- **Record files** (Git-safe projection; scripts outside the rehearsal digest):
+  - `validation/plans/v3-005d-m2prime/M2PRIME-projected.md`
+  - `validation/plans/v3-005d-m2prime/scripts/exfor_tot.py`
+  - `validation/plans/v3-005d-m2prime/scripts/m2prime.py`
+  - `validation/plans/v3-005d-m2prime/scripts/m2prime2.py`
+  - `validation/plans/v3-005d-m2prime/scripts/cv_mc.py`
+  - `validation/plans/v3-005d-m2prime/scripts/make_projection.py`
+  - `validation/plans/v3-005d-m2prime/scripts/olg.py`

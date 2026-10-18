@@ -6,6 +6,7 @@ import argparse
 import json
 import sys
 from collections.abc import Sequence
+from pathlib import Path
 
 from ionmc._version import __version__
 
@@ -42,6 +43,55 @@ def build_parser() -> argparse.ArgumentParser:
     bld.add_argument("--cache-dir", default=None, help="cache directory")
     bld.add_argument("--points-per-decade", type=int, default=50)
     bld.add_argument("--diagnostic-events", type=int, default=20000)
+    bld.add_argument(
+        "--model",
+        choices=["pinned", "m2", "m2prime", "m3"],
+        default="pinned",
+        help="elastic-proton only: m2 = exploratory optical-limit Glauber shapes, "
+        "m2prime = m2 with the Bertulani-De Conti Pauli-blocked in-medium sigma_NN, "
+        "m3 = ENDF/B-VIII.0 neutron MF4/MT2 mirror (C-12, O-16)",
+    )
+    bld.add_argument(
+        "--pauli-variant",
+        choices=["clementel-villi", "bdc-pn"],
+        default=None,
+        help="m2prime: reading of rho1, rho2 in the in-medium factor (required for m2prime)",
+    )
+    bld.add_argument(
+        "--pauli-emin-mev",
+        type=float,
+        default=None,
+        help="m2prime: nodes below this lab energy keep the black-disk node (required)",
+    )
+    bld.add_argument(
+        "--measured-sigma-tot",
+        default=None,
+        help="m2/m2prime: JSON table of measured sigma_tot for the report-only comparison",
+    )
+    bld.add_argument("--endf-dir", default=None, help="neutron ENDF files (--model m3)")
+    bld.add_argument(
+        "--above-emax",
+        choices=["error", "hold-last", "black-disk"],
+        default="error",
+        help="m3: nodes above the end of the ENDF evaluation (20 MeV)",
+    )
+    bld.add_argument("--beta", choices=["unitarity", "horiuchi-table"], default="unitarity")
+    bld.add_argument(
+        "--pp-level", choices=["unchanged", "said-anchored-ge150"], default="unchanged"
+    )
+    bld.add_argument("--unfold", choices=["formfactor", "rms-matched"], default="rms-matched")
+    bld.add_argument("--said-dir", default=None, help="SAID SGT/ALFA text outputs (--model m2)")
+    bld.add_argument(
+        "--dsg-dir",
+        default=None,
+        help="SAID DSG segments + dsg_manifest.json (--pp-level said-anchored-ge150)",
+    )
+    bld.add_argument("--out-dir", default=None, help="output directory (default cache/derived)")
+    bld.add_argument(
+        "--allow-unpinned-inputs",
+        action="store_true",
+        help="m2: allow empty file_sha256 pins (marks exploratory.inputs_unpinned)",
+    )
     bld.add_argument(
         "--strict", action="store_true", help="fail when a lambda node does not converge to 1e-3"
     )
@@ -91,13 +141,55 @@ def _build_nuclear(args: argparse.Namespace) -> int:
 
 def _build_elastic(args: argparse.Namespace) -> int:
     from ionmc.data import cache
+    from ionmc.nuclear import elastic_glauber as glauber
+    from ionmc.nuclear import elastic_m3
     from ionmc.nuclear.build import BuildError
     from ionmc.nuclear.elastic_build import ElasticBuildOptions, build_elastic_proton
 
     opts = ElasticBuildOptions(points_per_decade=args.points_per_decade)
+    m2 = None
     try:
-        res = build_elastic_proton(cache.resolve_cache_dir(args.cache_dir), opts, log=print)
-    except (BuildError, FileNotFoundError, cache.IntegrityError) as exc:
+        if args.model in ("m2", "m2prime"):
+            if not args.said_dir:
+                raise BuildError(f"--model {args.model} needs --said-dir")
+            m2 = glauber.M2Config(
+                Path(args.said_dir),
+                dsg_files=glauber.load_dsg_dir(Path(args.dsg_dir)) if args.dsg_dir else None,
+                beta=args.beta,
+                pp_level=args.pp_level,
+                unfold=args.unfold,
+                allow_unpinned_inputs=args.allow_unpinned_inputs,
+                pauli=args.model == "m2prime",
+                pauli_variant=args.pauli_variant,
+                pauli_emin_mev=args.pauli_emin_mev,
+                measured_sigma_tot=(
+                    Path(args.measured_sigma_tot) if args.measured_sigma_tot else None
+                ),
+            )
+        m3 = None
+        if args.model == "m3":
+            if not args.endf_dir:
+                raise BuildError("--model m3 needs --endf-dir")
+            m3 = elastic_m3.M3Config(
+                Path(args.endf_dir),
+                above_emax=args.above_emax,
+                allow_unpinned_inputs=args.allow_unpinned_inputs,
+            )
+        res = build_elastic_proton(
+            cache.resolve_cache_dir(args.cache_dir),
+            opts,
+            log=print,
+            m2=m2,
+            m3=m3,
+            out_dir=Path(args.out_dir) if args.out_dir else None,
+        )
+    except (
+        BuildError,
+        glauber.M2Error,
+        elastic_m3.M3Error,
+        FileNotFoundError,
+        cache.IntegrityError,
+    ) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     info = res.info

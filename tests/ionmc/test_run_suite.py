@@ -1465,7 +1465,32 @@ SLICE_C_CI_ROWS: dict[str, tuple[str, ...]] = {
 
 def _plan_rows() -> list[str]:
     rows = re.findall(r"^\| ([A-Z][A-Za-z0-9-]*) \|", PLAN5.read_text(), flags=re.M)
-    return [r for r in rows if r not in ("Tier", "Row(s)", "#", "CI", "LV", "HR")]
+    # excluded: table headers and the first-column labels of the amendment tables (review-history "Item",
+    # the Amendment 20/21 outcome, branch, route, diagnostic, gate, integration and successor tables, and the
+    # model labels M2 / M3 of the Amendment 20 model table); none of them is a plan row
+    return [
+        r
+        for r in rows
+        if r
+        not in (
+            "Tier",
+            "Row(s)",
+            "#",
+            "CI",
+            "LV",
+            "HR",
+            "Item",
+            "Outcome",
+            "Branch",
+            "Route",
+            "Diagnostic",
+            "Gate",
+            "Integration",
+            "Successor",
+            "M2",
+            "M3",
+        )
+    ]
 
 
 def test_lv5_manifest_seeds_hashed_files_and_deferred() -> None:
