@@ -53,6 +53,14 @@ def _canon(d: Any) -> str:
     return hashlib.sha256(json.dumps(d, sort_keys=True, default=float).encode()).hexdigest()
 
 
+def _canon_verdict(v: dict[str, Any]) -> str:
+    """Digest of an ``escaped_neutral_verdict`` WITHOUT its ``rng`` provenance field. ``rng`` records the numpy and
+    python versions of the machine (``v7r.rng_record``), so it differs between hosts and the CI runner; every other
+    field is a pure function of the inputs. The provenance field is checked separately."""
+    assert v["rng"]["bit_generator"] == "PCG64" and v["rng"]["numpy"] and v["rng"]["python"]
+    return _canon({k: x for k, x in v.items() if k != "rng"})
+
+
 def _binom_pmf(n: int, p: float) -> np.ndarray:
     k = np.arange(n + 1)
     logc = np.array([math.lgamma(n + 1) - math.lgamma(i + 1) - math.lgamma(n - i + 1) for i in k])
@@ -90,7 +98,7 @@ GOLDEN_SYNTHETIC = [  # sha256 of the canonical JSON of the gate documents, comp
     "d4054f9ce353d8f69380be0003315be28661d315182d75717f1108bff1f88680",
     "a54e73767bdcaa93b32464b6f67e067b0d99e889ecbdd1a3894af2911cfa39d2",
     "c70f6f7951277c08aff6016745d709bc9457c851d59ca73edd4d2241d3ea2d04",
-    "0021a3f5f908c1bbc8b37220fc5780ed79d162604eb5c39927990434e7df44e7",
+    "72e7e113b830f53a98a945a963de67347a1034dfe76d86827a6f68f9ba5184d6",  # verdict without rng
 ]
 
 
@@ -110,7 +118,7 @@ def test_default_alpha_reproduces_the_pre_parameter_gates_bit_for_bit(v7r: Modul
             _canon(v7r.single_gate(si, x.mean(axis=1), k, boot_seed=5, n_boot=50)),
         ]
     got.append(
-        _canon(
+        _canon_verdict(
             v7r.escaped_neutral_verdict(x, 777, boot_seed=5, reps_per_shard=15, b=199, n_boot=50)
         )
     )
@@ -161,10 +169,12 @@ def test_archived_dd976c5a_escaped_neutral_verdict_is_reproduced(v7r: ModuleType
     assert (v["covered"], v["n_pairs"]) == (2467, 3600)
     assert [round(c, 4) for c in v["ci"]] == [0.6715, 0.6988] and v["pass"] is True
     assert v["paired"]["alpha_tost"] == v["single"]["alpha_tost"] == 0.04
-    assert _canon(v) == ARCHIVED_DIGEST
+    assert _canon_verdict(v) == ARCHIVED_DIGEST
 
 
-ARCHIVED_DIGEST = "b22acab60944247d80292255c33d0d35e009daa082424b09178a0d1dd4b068a6"
+ARCHIVED_DIGEST = (
+    "f5e82b71df1a8c1ce284b6ee3a7af82539923929af7e09cd1ac43cc50c6650f6"  # verdict without rng
+)
 
 
 # -- 3. exact OC pins ---------------------------------------------------------------------------
