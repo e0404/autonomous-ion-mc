@@ -106,7 +106,12 @@ def test_a16_digest_nuclear_off_unchanged() -> None:
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     digests = {s: mod.digest(s, "none") for s in ("t1:python:float64", "t1:warp-cpu:float32")}
-    assert hashlib.sha256(json.dumps(digests, sort_keys=True).encode()).hexdigest() == A16_DIGEST
+    combined = hashlib.sha256(json.dumps(digests, sort_keys=True).encode()).hexdigest()
+    # per-spec digests in the failure message: they tell a platform drift of the float32 Warp CPU
+    # spec (JIT-compiled per host) from a change of the float64 python reference apart
+    per_spec = {s: hashlib.sha256(json.dumps(d, sort_keys=True).encode()).hexdigest()
+                for s, d in digests.items()}  # fmt: skip
+    assert combined == A16_DIGEST, f"combined {combined}; per spec {per_spec}"
 
 
 def test_sigma_el_zero_is_bit_identical_to_elastic_false(

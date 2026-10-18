@@ -101,6 +101,7 @@ OWNERS = {
     "de4": "de4_parse",
     "de6": "de6_swap",
     "de3": "de3_probes",
+    "de7": "de7_m2prime_record",
 }  # every committed JSON directory and the module that owns its allowlist
 
 
@@ -208,6 +209,8 @@ def _render_pairs() -> list[tuple[str, str, str, str]]:
         sorted((RESULTS / "de6").glob("de6-summary.json")) if (RESULTS / "de6").is_dir() else []
     ):
         out.append(("de6", p.name, "de6-report.md", "de6_swap:render_report"))
+    if (RESULTS / "de7" / "de7.json").is_file():
+        out.append(("de7", "de7.json", "de7-report.md", "de7_m2prime_record:render_report"))
     for p in sorted((RESULTS / "de4").glob("*.json")) if (RESULTS / "de4").is_dir() else []:
         if p.name == "de4-ratios.json":
             out.append(("de4", p.name, "de4-ratios-report.md", "de4_parse:render_ratios"))
