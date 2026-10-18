@@ -21,5 +21,23 @@ Decision 0041 rules that Git holds no raw or derived nuclear data, only registry
 - `de4/` — D-E4 thin-target reference runs (Amendment 19 (c), addenda (b)2 and (c)): 18 OpenTOPAS 4.3 / Geant4 11.4.2 runs (rows 14–23; module `g4h-elastic_HP` alone — proton model hElasticCHIPS, Barashenkov–Glauber–Gribov σ; binary phase space on a 50 cm sphere), parsed by `de4_parse.py` with every part bound to the frozen case (`CASES`), the KE filter E > E₀ − 1e-4 MeV, the shared selection rule (classification with the conflict rule, off-curve exclusion, p-p accepted when the fast proton lies on the p+H curve, 16.26° CM cut) and the §2.2 signatures; per-case records `de4-case<N>`, the combined `de4`, and the table/Geant4 ratio record `de4-ratios` (D-E5 vs D-E4, with SE). Run ids and raw-file hashes are in the records; the phase spaces themselves are not kept (reference store only; local copies deleted after parsing). Empirical μ_CM CDFs for D-E6 live only in `validation/generated/elastic_attribution/de4/cdf/`.
 - `de6/` — D-E6 swap test (plan §5; Amendment 19 (e), addenda (b)4 and (c)3): exploratory tables with the O-16 and/or H-1 μ_CM inverse CDF replaced by the Geant4 empirical CDFs (q-scaled interpolation between the D-E4 energies; σ unchanged) — `swap-pA`, `swap-pp`, `swap-both` (frozen 2 × 2) plus the post-hoc `swap-pp-sigma` and `swap-all`; runs with the D-E3 harness and CRN seeds; `de6-summary` evaluates the §5 clauses 1–3 on 1 − F (rule of record) and −ln F (sensitivity), the extended set, the gain ordering and the H4 recoil share; clauses 4–5 and the outcome are recorded with the independent review in `validation/plans/v3-005d-elastic-attribution/review.md` and in decision 0041. Git projection as above (no table values, no CDFs).
 - `de7/` — D-E7 official M2 / M2′ builder records (Amendments 20 (b″), 21 (a), (d), (f); `de7_m2prime_record.py`, run on the builder record JSONs of `ionmc data build elastic-proton --model m2|m2prime` and the captured output of the researcher's `m2prime2.py`): per target and at 100/150/200 MeV σ_el/Barashenkov, σ_R/Barashenkov (withheld for M2), σ_tot pass/fail against the ±10 % band only, q_min and q_min/q_H, the Pauli factor at peak density; trigger 2 component maxima, trigger 3 verdict and margins, trigger 4, the Pauli energy domain and node counts, the pins (SAID/DSG/inputs sha256), the table id; the builder-vs-scratch reproduction as relative differences with the 2 % rule. No absolute cross section, measured value or % deviation; a leak check asserts it. Git projection as above.
+**D-E8 (2026-10-18): go/no-go diagnostic of M2′, report-only.** Amendment 20 (c) carried by Amendment 21 (e) and addendum (a). Executed once at HEAD c509e351 (reviewed c509e351, Codex REVIEW-5949c5257eaf4c158cf7b8d9f0e12fe1, bound in the manifest by its 8-hex prefix REVIEW-5949c525). The first evaluator call, `20261018T082242Z-de8-evaluate`, failed argument validation and read, computed and wrote nothing. The single evaluation is `20261018T082335Z-de8-evaluate-2`. All 10 producer runs were published and valid.
+
+[Disclosure header verbatim, as in decision 0042.]
+
+**Verdict: STOP.**
+
+| Quantity (model under test M2′) | 150 MeV | 200 MeV | Exact band |
+|---|---|---|---|
+| D1 F closure | 0.635 | 0.604 | 0.631–1.369 / 0.736–1.264 |
+| D1b peak/plateau q | −0.0118 | −0.0195 | ±0.01279 / ±0.00961 |
+| D2 gain difference | −0.00088 | 0.00462 | ±0.00360 / ±0.00365 |
+| D3 ΔIDD p | 0.0097 | 0.0344 | ±0.0460 / ±0.0676 |
+
+- Decisive conditions: (i), (i-b) and (ii) fail at 200 MeV; (iii) passes. (v) passes. (iv), report-only, holds at 3 of 3 in domain.
+- Report-only arms: M2 (full range) closure 1.046 / 0.843, failing only (ii) at 200 MeV. R-B fails (i) at both energies.
+- The 200 MeV gain residual (0.0046) is the same for every shape arm, and the D-E6 Geant4-shape swap also left +0.00437. Identifiable contributors: p-p (H3; D-E6 σ_pp arm −0.00287) and the archived ionmc gain in the frozen D2 formula (0.02672 against 0.0249 at the D-E3 seeds, about 1.4σ). Neither re-opens the frozen verdict.
+- Record: `de8/`.
+- Consequence: "no model change" stands, and V5, V11 and V10-A at dd976c5a stay failed. The closure route of Amendment 20 (b‴)4 requires operator approval.
 
 Independent review of these records: `validation/plans/v3-005d-elastic-attribution/review.md` (section "D-E0–D-E2 review"). The K* sign transcription error of the plan and the refuted "core 2× too wide" prior are recorded in Amendment 19 addendum (a) of `validation/plans/v3-005-acceptance.md`.

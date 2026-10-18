@@ -1044,3 +1044,91 @@ Items 2 and 3 are confirmed.
      - **(c) Add a seed refusal.** Refuse if any run seed differs from the registered set: harness 20990100 / 20990101; D4 20991300–20991309 (V-M2′) and 20991200–20991209 (V-M2). The evaluator output should also record the sha256 of every generated run document it consumed. The de3 base documents are already sha-checked against de6.
 
 **Verdict: ACCEPT.** The three one-line additions of item 2 are to be inserted verbatim into the freeze-provenance rule text, with no further review round. With them, addendum (a) rev 2 is ready to be committed as written.
+
+# Round D-E8 review (the executed go/no-go screen; worktree HEAD c509e351; record de8, manifest, attempt log, run documents and telemetry; read-only)
+
+1. **Bands: they match the frozen rule and the plan.**
+   - Recomputed independently:
+     - a_F = 0.02 − 1.9432·0.002885 = 0.014394 and 0.02 − 1.8595·0.003838 = 0.012863. With F_i/F_T = 0.85678/0.89158 and 0.84407/0.88737, the closure windows are **0.6312–1.3688** and **0.7364–1.2636**.
+     - a_PP = 0.01279 / 0.00961; a_gain = 0.00360 / 0.00365; a_I = 0.0460 / 0.0676.
+   - These equal the record's band table and round to the printed plan bands. The t95 values are those of the frozen `t95` at the floored df (1.9432 / 1.8595 / 1.7459 / 1.8946 / 1.7291 / 1.7247 / 1.7207).
+2. **The conditions are evaluated as frozen.**
+   - Point estimates are compared against the exact bands (A3). CONTINUE = (i), (i-b), (ii), (iii), (v). (iv) is recorded and never part of the verdict. (v) comes from de7 by sha256 302d03a4….
+   - Spot checks:
+     - M2′ D1b at 150 / 200 MeV: (4.2406/4.4019)·(0.88009/0.8580) − 1 = −0.0118 and (3.8286/4.0255)·(0.87166/0.8455) − 1 = −0.0195. Matches.
+     - D2 at 200 MeV = 0.0083 + Δg, so Δg_M2′ = −0.00368. Consistent.
+   - The verdict is **STOP**: (i), (i-b) and (ii) fail at 200 MeV, and (iii) holds. The failing conditions are listed. The leak check passed.
+3. **Provenance and once-only: satisfied.**
+   - HEAD c509e351 with a clean tree, in the manifest and in every run document.
+   - The four script sha256 values are in the manifest and the telemetry. The reviewed SHA equals HEAD.
+   - Table ids and npz sha256 match de7: M2′ addd8179 / 9adbd8a0; M2 ad0d7757 / 3750727c; R-B 2a14cdcb / f9cc2438.
+   - Seeds: CRN 20990100 / 20990101; D4 20991300–09 (M2′) and 20991200–09 (M2).
+   - The append-only attempt log has 10 producers, each "started" then "published-valid" once, with no re-execution. Output mtimes show a single write of de8.
+   - **The refused first evaluator call is compatible with the once-only rule.** Telemetry `20261018T082242Z-de8-evaluate` shows a refusal at argument validation ("--reviewed-head-review-id REVIEW-xxxxxxxx … is required"). That happens before any input is read or any quantity is computed, and nothing was written. The single evaluation is `…082335Z-de8-evaluate-2`.
+   - **Minor (record hygiene):**
+     - The refusal is visible only in telemetry. Reference it in the de8 README/decision text.
+     - Record the full review id REVIEW-5949c5257eaf4c158cf7b8d9f0e12fe1 next to the 8-hex binding REVIEW-5949c525 the frozen evaluator accepts.
+4. **Arm configuration: correct.**
+   - All six arm documents: `elastic_only`, n = 1e5, 20 batches, CRN seeds by energy, valid, HEAD c509e351. Their sha256 match the manifest.
+   - The reused base and EM-only documents match the committed `de6-report.md` input list (b42751ca / 5346b0bb / 04ba3904 / e2d093a1). The evaluator refuses a mismatch.
+5. **D1 at 150 MeV, rounding gap: no issue.**
+   - 0.6348 against the exact lower bound 0.63124 (printed 63.1 %) passes by 0.0035, judged on the exact value per A3.
+   - Statistically the margin is far below the paired SE (0.023). The pass is fragile, but the rule is a point-estimate rule as frozen.
+   - The verdict is robust: STOP follows from 200 MeV, where (i) fails by 0.13 (0.604 against 0.736, about 4 SE), (i-b) by 0.010 and (ii) by 0.001.
+6. **What the record supports, and what it does not** (contrary evidence preserved).
+   - **Supported:**
+     - (a) The trigger-passing model M2′ does **not** close the 200 MeV V11 F gap within the screen (closure 0.60). The report-only M2 arm (free Glauber, failed trigger 3) **does** pass (i) and (i-b) at both energies (1.046 / 0.843). Within these candidates, the Pauli-blocked rate reduces the F closure, and the input-sanity trigger excluded the arm that closes F better. This is contrary evidence to record, but it is not a basis to revisit trigger 3 post hoc.
+     - (b) **(ii) at 200 MeV fails for every p+A shape tested:**
+
+       | Shape | d at 200 MeV | Δg |
+       |---|---|---|
+       | M2′ | 0.00462 | −0.00368 |
+       | M2 | 0.00463 | −0.00367 |
+       | R-B | 0.00463 | – |
+       | D-E6 Geant4 CHIPS swap-pA | +0.00437 | −0.00393 |
+
+       All exceed 0.00365, and the required Δg ≤ −0.00465 is not reached even by Geant4's own shape. So the 200 MeV gain condition is **not closable by the p+A shape alone** under the frozen D2 definition. This is model-independent with respect to the p+A shape.
+     - (c) Two contributors are identifiable:
+       - the p-p channel: the D-E6 post-hoc σ_pp arm gave a further Δg = −0.00287 at 200 MeV (H3, open);
+       - the archived ionmc gain used by D2: g_base,arch = 0.02672 ± 0.00077 against the D-E3 base at independent seeds, 0.0249 ± 0.0010, a 1.4σ difference. With the D-E3 base the same Δg would give d ≈ 0.0028, a pass.
+   - **Not supported:**
+     - that (ii)@200 is a defect of the harness or evaluator: D2 is computed exactly as frozen, with the archived reference by design;
+     - that M2′ specifically "fails the gain": every shape does;
+     - that a lv5d V11 gain at fresh seeds would fail: the archived ionmc gain is one realisation;
+     - that M2 would CONTINUE: it fails (ii) at 200 MeV too;
+     - any statement about the physics validity of M2 vs M2′ beyond these screen quantities.
+
+**Verdict: ACCEPT the D-E8 record** as a correctly executed, once-only, frozen-rule screen with verdict **STOP (established)**. The two record-hygiene notes of item 3 (telemetry reference for the refused call; the full review id) go into the README or decision text. Item 6's supported and unsupported statements should be carried into the decision text as written.
+
+---
+
+# Round D-E8-2 review (decision-0042 D-E8 section, README paragraph, Amendment 21 dated note, intervention-closure draft; both files mtime 10:28:07; checked against `de8/de8.json` and `de8-report.md`)
+
+**(a) Decision section, README and dated note.** Most numbers trace to de8.json:
+- D1 0.63485 / 0.60410 with SE 0.02335 / 0.02967; the exact lower bound 0.6312564 and margin 0.0036; (0.73640 − 0.60410)/0.02967 = 4.46;
+- D1b −0.01184 / −0.01949; δ_E −0.164 / −0.070; D7 0.248 / 0.132 (M2 0.237 / 0.131);
+- D5 ratios; D4 rows; gain_base 0.02491, so d ≈ 0.02123 − 0.01842 = 0.0028.
+
+The disclosure header is verbatim. Provenance, attempt log, refused-call disclosure and full review id are complete. The contrary evidence does not re-open the verdict. Fix these items:
+1. **D6 uses the as-frozen sign-error kernel (important).** The table reports K*_literal (M2′ 0.793 / 0.704; M2 0.639 / 0.588). Amendment 19 addendum (a)1 records K*_literal as a sign transcription error and K*_shifted as the meaningful form. Report K*_shifted from the record (M2′ **0.797 / 0.726**; M2 **0.623 / 0.606**), with K*_literal only as "as frozen". State that these are arm/table ratios.
+2. **Mis-sourced P values (minor).** "The de7 O-16 P values were 0.528 / 0.604" is wrong: de7 carries no P values. They are the scratch values of Amendment 21 (a)3 and M2PRIME. Correct the source.
+3. **Overstatement (important; my D-E8 item 6 rule).** "The 80 MeV domain of M2′ cost closure" is not supported. M2 differs from M2′ in **two** respects: no Pauli blocking, and full energy range. The record does not separate them: V-M2′ext is construction-level only, and D5 shows different in-domain shapes (tail ratio at 100 MeV 0.107 against 0.183). Replace with: "M2 differs from M2′ in Pauli blocking and in energy range; the record does not separate their contributions; a shortfall from the 80 MeV domain was anticipated (Amendment 21 (b)6)."
+4. **Consequences not "exactly as committed" (minor).** Amendment 20 (b‴)4 says the proposal **must choose** between default-off and default-on with the limitation, and that the planner recommends default-off. Write "elastic channel shipped as a flagged option; default-off recommended (the closure proposal chooses)". The budget items match the committed (b‴)4 (6.15 + CUDA 0.16; 33.9; ≤ 3.28; ≈ 43.5 h).
+5. **Derived values unlabelled (minor).** The V5 peak/plateau closure windows (0.6106–1.2653 / 0.8068–1.2015) are not record fields; they come from the frozen formula and the record's allowed |q|. They re-derive correctly. Label them "derived".
+
+**(b) Intervention-closure draft** (current content is internally consistent; no sign of a conflicting edit):
+- **Correct:** category experiment-boundary; the scientific state without a third-generation recommendation; options (A), (B) and (C) with (C) as default; the honest (B) prognosis (supported: the gain clause failed for every shape, including Geant4's).
+- **Correct:** the scope change is identified (V5 and V11 removed from the Option II gate set), with both directives cited (disposition A of IR-20261013; Option II of IR-20261017).
+- **Correct:** no autonomous scientific choice (model, calibration) is put to the operator. The default-off / on choice is legitimately a claims and scope matter. The item-6 statements, including the unsupported ones, are carried correctly.
+
+Fix these items:
+6. **Requirements status missing (important).** The operator's 2026-10-18 response says "This does not waive any final experiment requirement". (A) removes V5 and V11 and withdraws the elastic depth-dose claim. The request must state which requirement and ledger rows would then be recorded as **not met (not waived)**: S-PHYS-PROTON-NUCLEAR and V1-MUST-005 / 013 / 014, as Amendment 20 (b‴)4 item 5 names. It must also state that merging under (A) carries them as unmet. Otherwise the operator cannot see whether (A) conflicts with the earlier "no waiver" statement.
+7. **V11 history (minor).** Removing V11 reverses part of the operator-selected 2B treatment, which added V11 as a gate. Say so explicitly.
+8. **"All been tried" overstated (minor).** Write: "M2 failed its input check, M3 was not acquirable, and the declared second-generation M2′ failed the screen". M3 was not tried.
+9. **Budget precision (minor).** Quote the committed values: V6-F ≈ 6.15 h CPU + CUDA (≈ 0.16 planned); remaining rows ≤ 3.28 h; total ≈ 43.5 h (Amendment 20 (b‴)4 item 6), not 6.2 / 3.3.
+
+**Verdict: REVISE (text; no blocking issue).**
+- (a): items 1 and 3 are important; 2, 4 and 5 are minor.
+- (b): item 6 is important; 7–9 are minor.
+
+With these applied verbatim, no further review round is needed for either document.

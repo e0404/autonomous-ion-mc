@@ -925,3 +925,34 @@ def test_de5_and_de0_producers_are_once_only(
     assert [
         r.get("producer") for r in json.loads(att.read_text()) if r["outcome"] == "started"
     ] == ["de5_sampling.run", "de0_kernels.run"]
+
+
+def test_committed_de8_record_is_the_stop_at_the_frozen_commit() -> None:
+    """The committed D-E8 record (verdict STOP, established) was produced at the frozen commit; its code hashes equal that commit's files."""
+    import subprocess
+
+    rec = c.REPO / "validation" / "results" / "elastic_attribution" / "de8" / "de8.json"
+    if not rec.is_file():
+        pytest.skip("the committed D-E8 record is absent")
+    frozen = "c509e351a4c402cf99f2993e2416d3560347d5ff"
+    if (
+        subprocess.run(
+            ["git", "cat-file", "-e", f"{frozen}^{{commit}}"], cwd=c.REPO, capture_output=True
+        ).returncode
+        != 0
+    ):
+        pytest.skip("the frozen commit is not in this clone (shallow checkout)")
+    doc = json.loads(rec.read_text())
+    assert doc["verdict"] == "STOP" and doc["established"] is True
+    assert doc["failing_conditions"] == ["(i) at 200 MeV", "(i-b) at 200 MeV", "(ii) at 200 MeV"]
+    pv = doc["provenance"]
+    assert pv["git_head"] == pv["reviewed_sha"] == frozen and pv["git_clean"] is True
+    assert set(pv["scripts_sha256"]) == set(c.CODE_FILES)
+    for n, sha in pv["scripts_sha256"].items():
+        shown = subprocess.run(
+            ["git", "show", f"{frozen[:8]}:{d8.SCRIPT_REL}/{n}"],
+            cwd=c.REPO,
+            capture_output=True,
+            check=True,
+        ).stdout
+        assert hashlib.sha256(shown).hexdigest() == sha, n

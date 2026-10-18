@@ -228,3 +228,162 @@ All ids and hashes are complete. The ENDF/B-VIII.0 neutron files were not acquir
 ## Dated sections
 
 None. No diagnostic or re-qualification is run in this state.
+
+### 2026-10-18 — D-E8 go/no-go diagnostic of M2′ (Amendment 20 (c) carried by Amendment 21 (e) + addendum (a))
+
+> Go/no-go screen, Amendment 20 (c) as carried by Amendment 21 (e) and its addendum (a); report-only, never evidence. It uses the V11 reference (archived TOPAS F and gain), the V5 reference (TOPAS ΔIDD and peak/plateau) and the Geant4 thin-target ratios to decide whether the single pre-committed model M2′ is transported at all. It is not a selection among models: M2′ has no free parameter, plan §4.2 forbids switching to M3 on such outcomes, and STOP leads to "no model change". It is a stopping rule on gating quantities. The lv5d V11 and V5 runs are therefore not blind to these estimates; they replicate them on independent seeds with the frozen comparators. The M2′ construction outcomes were known before registration (Amendment 21 (a)3) and the de7 record before this addendum; the screen's transport quantities were not. Condition (iv) was revised after de7 to 100 / 150 / 200 MeV and made report-only: its outcome there is predictable from the disclosed construction-level P values. The decisive blind conditions are (i), (i-b), (ii) and (iii). Executed once; recorded whichever way it falls.
+
+#### Provenance
+
+- **Code state.** HEAD `c509e351a4c402cf99f2993e2416d3560347d5ff`, clean tree: true. Reviewed SHA `c509e351…`, Codex REVIEW-5949c5257eaf4c158cf7b8d9f0e12fe1. The pass was verified at freeze time.
+- **Review-id binding, disclosed.** The full review id is **REVIEW-5949c5257eaf4c158cf7b8d9f0e12fe1**. The frozen evaluator accepts a review id of exactly 8 hex digits, so the manifest binds the prefix **REVIEW-5949c525**.
+  - **First evaluator call** (telemetry `20261018T082242Z-de8-evaluate`): it passed the full id and failed argument validation only. It **read, computed and wrote nothing**.
+  - **Second call** (telemetry `20261018T082335Z-de8-evaluate-2`), with the 8-hex prefix: **the single evaluation**.
+  - The producer runs were executed once and were not repeated.
+- **Script sha256:**
+
+  | Script | sha256 |
+  |---|---|
+  | `de3_probes.py` | `43478d411145cf23f9a2dd19803a201968d0570bd7ce79a0f5a6a8210cf0670a` |
+  | `de5_sampling.py` | `c58da1708a04dabc2fcc829241513b28814cfdcf05d040b99f6aeda12800b7cb` |
+  | `de0_kernels.py` | `5f7241593dc131bd2c63eb758ca3a435480e4d66600b86fa486e4118a06b4c1a` |
+  | `de8_diagnostic.py` | `ece47dd73dab254a438c92bf7ef0052ac7672b221f6846b8d8ee6630c0e17aa4` |
+
+- **Inputs.**
+  - de7 record `302d03a4c77bbdaebb5db17b20fa632f4e306630305beb17745391f05b1a4d73`.
+  - lv5c archive `c35a62d4…1c708b`.
+  - `de6-report.md` `44496c43…`, `de4-ratios.json` `696c6dcd…`, `de5.json` `f170c1d3…`.
+- **Tables.**
+
+  | Arm | Table id | Role |
+  |---|---|---|
+  | V-M2′ | `addd817961ca24ebde185698ece4b38440a16cfdcf3b21dfad9416a089519b47` | model under test; matches de7 |
+  | V-M2 | `ad0d7757…eb82034` | report-only |
+  | V-RB | `2a14cdcb…802ec221` | report-only |
+
+  Base and EM-only documents were reused, bound by sha256 to `de6-report.md`:
+
+  | Document | sha256 |
+  |---|---|
+  | de3-150-all | `b42751ca…` |
+  | de3-150-emonly | `5346b0bb…` |
+  | de3-200-all | `04ba3904…` |
+  | de3-200-emonly | `e2d093a1…` |
+
+- **Seeds.** Harness 20990100 / 20990101. D4: 20991300+case for V-M2′ and 20991200+case for V-M2, within the registered set.
+- **Run documents read** (sha256):
+
+  | Run | 150 MeV | 200 MeV |
+  |---|---|---|
+  | m2prime | `ce941756…` | `6b395dc4…` |
+  | m2 | `588bbad3…` | `ae11bd95…` |
+  | rb | `313b4575…` | `1d5f5e03…` |
+
+  Further documents: m2prime de5 `4cc0dcde…` and de0 `b333192f…`; m2 de5 `60ad4fe1…` and de0 `41e54c9c…`.
+- **Attempt log.** 10 producer runs started 2026-10-18 between 08:14:27 and 08:22:27 UTC: 6 harness runs (lateral statistics included), 2 de5 sampler runs and 2 de0 kernel runs. **All 10 were published and valid.** There were no re-executions. Logs are in `telemetry/test-logs/20261018T08*-de8-*`.
+
+#### Bands (recomputed from the frozen rule, `compare_idd_v5.t95`, archived SE and floored df)
+
+| E | F closure window (i) | V5 peak/plateau closure window (i-b), derived | allowed \|q\| (i-b) | allowed \|d_g\| (ii) | allowed \|p\| (iii) |
+|---|---|---|---|---|---|
+| 150 MeV | 0.6313 – 1.3687 | 0.6106 – 1.2653 | 0.01279 | 0.00360 | 0.0460 |
+| 200 MeV | 0.7364 – 1.2636 | 0.8068 – 1.2015 | 0.00961 | 0.00365 | 0.0676 |
+
+The V5 peak/plateau closure windows are **derived**: they are not record fields, but follow from the frozen formula of Amendment 20 (c)3 and the record's allowed |q|.
+
+#### Model under test, V-M2′ (SE are paired-jackknife, reported and not used in the rule)
+
+| E | D1 closure c (SE) | D1b q (SE) | D2 d_g (SE) | D3 p (SE) | δ_E [MeV/primary] (SE) | (i) | (i-b) | (ii) | (iii) |
+|---|---|---|---|---|---|---|---|---|---|
+| 150 | 0.635 (0.023) | −0.0118 (0.0009) | −0.00088 (0.00036) | 0.0097 (0.0050) | −0.164 (0.009) | pass | pass | pass | pass |
+| 200 | **0.604** (0.030) | **−0.0195** (0.0015) | **0.00462** (0.00039) | 0.0344 (0.0035) | −0.070 (0.007) | **fail** | **fail** | **fail** | pass |
+
+- **(v): pass.** The de7 construction record shows triggers 2, 3 and 4 passing and the builder-vs-scratch reproduction within 2 %.
+- **Verdict: STOP (established: true).** Failing conditions: **(i) at 200 MeV**, **(i-b) at 200 MeV**, **(ii) at 200 MeV**.
+
+#### D4 (report-only; exceedance P(θ_lab > θ_2mm), p+A class, water)
+
+| Arm | 30 MeV | 50 MeV | 100 MeV | 150 MeV | 200 MeV | (iv) |
+|---|---|---|---|---|---|---|
+| table/Geant4 | 1.5676 | 1.6703 | 1.5405 | 1.3427 | 1.2867 | – |
+| M2′/Geant4 | 1.5679 (**identical by construction: true**) | 1.6751 (**identical by construction: true**) | 0.9659 | 1.0291 | 1.0579 | moves toward 1 at 3 of 5; in-domain 3 of 3 |
+| M2/Geant4 (report-only) | 0.5302 | 0.7453 | 1.0160 | 1.0528 | 1.0711 | 5 of 5 |
+
+- The record flags `identical_by_construction` as **false for every M2 row**. That is correct, because M2 is full-range.
+- For M2′ the flag is **true at 30 and 50 MeV**. The sampled arm/table ratios there are 1.0002 and 1.0028 (sampling noise), and they do not "move toward 1".
+
+#### D5–D7 (report-only)
+
+**D5, arm/table ratios:**
+
+| Arm | Quantity | 100 MeV | 150 MeV | 200 MeV |
+|---|---|---|---|---|
+| M2′ | tail-moment ratio | 0.107 | 0.095 | 0.087 |
+| M2′ | θ_lab-median ratio | 0.712 | 0.762 | 0.776 |
+| M2 | tail-moment ratio | 0.183 | 0.119 | 0.099 |
+| M2 | θ_lab-median ratio | 0.730 | 0.776 | 0.786 |
+
+**D6, D-E0 kernels for O-16, arm/table ratios:**
+
+| Arm | K*_shifted (150 / 200 MeV) | G_total (150 / 200 MeV) | K*_literal, as frozen (150 / 200 MeV) |
+|---|---|---|---|
+| M2′ | **0.797 / 0.726** | 0.760 / 0.911 | 0.793 / 0.704 |
+| M2 | **0.623 / 0.606** | 0.771 / 0.913 | 0.639 / 0.588 |
+
+K*_shifted is the meaningful form. K*_literal is reported only as frozen: it is the form Amendment 19 addendum (a)1 records as a sign transcription error.
+
+**D7, recoil share of the gain excess:**
+- M2′: 0.248 at 150 MeV (≥ 20 % bound: true) and 0.132 at 200 MeV (false).
+- M2: 0.237 and 0.131.
+
+**Report-only arms in the harness:**
+
+| Arm | Closure c (150 / 200 MeV) | Conditions failed |
+|---|---|---|
+| V-M2 | 1.046 / 0.843 | (ii) at 200 only (d_g = 0.00463) |
+| V-RB | 0.611 / 0.586 | (i) at both energies; (i-b) and (ii) at 200 |
+
+#### Contrary evidence and comparison with the prior evidence
+
+- **F closure.** M2′ closes **63.5 % / 60.4 %** of the archived V11 gap.
+  - That is less than D-E3's `pA-s0.9` probe (84 % / 76 %) and much less than the Geant4 CHIPS shape swap of D-E6 (96 % / 88 %).
+  - The construction-level shape change suggested more: the scratch O-16 P values of Amendment 21 (a)3 (M2PRIME) were 0.528 / 0.604, against the table's 0.688 / 0.735.
+  - **The full-range M2 arm (report-only) closed more, 104.6 % / 84.3 %, inside both F windows**, even though M2 failed trigger 3 at the construction level.
+  - M2 differs from M2′ in Pauli blocking and in energy range; the record does not separate their contributions; a shortfall from the 80 MeV domain was anticipated (Amendment 21 (b)6).
+  - **Where the verdict rests.** At 150 MeV, D1 passes by 0.0036 against the exact lower bound 0.63126. That is not a rounding-gap case, and the margin is far below the SE of 0.023. The verdict rests on 200 MeV, where (i) fails by about 4 SE: (0.7364 − 0.6041)/0.0297 = 4.5.
+  - **Recorded contrast:** the report-only M2 arm passes (i) and (i-b) at both energies, while the trigger-passing M2′ does not.
+- **Gain at 200 MeV.** d_g is **0.00462 (M2′), 0.00463 (M2) and 0.00463 (R-B)**, all above the allowed 0.00365.
+  - The gain residual is insensitive to the shape construction.
+  - It confirms the pre-registered prognosis of Amendment 20 (c)5: a Geant4-like shape still leaves a residual of +0.00437 at 200 MeV (D-E6 swap-pA), and closing it in D-E6 needed the σ_pp arm, i.e. H3.
+  - So the gain clause at 200 MeV fails for every candidate shape tried. The open finding H3, the non-monotonic Hale-NI p-p level at 130–150 MeV, is the recorded lead.
+- **Contributors to the 200 MeV gain gap, from the record.** Condition (ii) at 200 MeV fails for **every p+A shape tested**, including the D-E6 Geant4 CHIPS swap (+0.00437 residual). **The gain gap therefore cannot be closed by the p+A shape alone.** Two contributors can be identified:
+  - **(1) p-p (H3).** The D-E6 σ_pp arm gave a further −0.00287 at 200 MeV.
+  - **(2) The archived ionmc gain used by the frozen D2 formula.** It is 0.02672, against 0.0249 at the independent D-E3 seeds (the base gain_base 0.02491), a difference of about 1.4σ. With the D-E3 base value in place of the archived one, d would be 0.02123 − 0.01842 ≈ 0.0028, inside the allowed 0.00365.
+
+  **Not supported by the record:**
+  - a harness or evaluator defect;
+  - "M2′ specifically fails the gain" (all three arms give 0.0046);
+  - any prediction of a fresh-seed lv5d V11 gain run;
+  - that M2 would have CONTINUEd: it also fails (ii) at 200 MeV.
+
+  **None of this re-opens the frozen verdict.** D2 is evaluated as pre-registered, with the archived ionmc gain, and the STOP stands.
+- **D4.** M2′/Geant4 is 0.966 / 1.029 / 1.058 at 100–200 MeV, as predicted from the construction-level P values in addendum (a). (iv) carries no screening weight. M2's full-range shape overshoots below 1 at 30 / 50 MeV (0.530 / 0.745).
+- **A3 (rounding gap): not invoked.** No decisive value fell between a printed band and its exact value. The closest, D1 at 150 MeV, passes by 0.0036 against the exact bound and is not in the gap.
+- **A5 assumptions.** D1b (multiplicativity) and D3 (additivity) are stated. The recorded values give no internal sign that they mislead: D3 passes with margin at both energies, and D1b fails at 200 MeV consistently with D1.
+
+#### Verdict and consequences (as committed)
+
+**Verdict: STOP.** Failing conditions (i), (i-b) and (ii) at 200 MeV. The M2′ adoption is withdrawn. No M3 follows: plan §4.2 does not allow it on screen outcomes.
+
+**Outcome: "no model change" stands** (Amendment 21 (e); Amendment 20 (c)6, (b‴)3).
+- **V5, V11 and V10-A at dd976c5a stay failed.**
+- The D-1 black-disk table of decision 0041 remains the transport model, and the p-p level is unchanged.
+- **Amendment 20 (d) lapses unused.** lv 20531004 r_index 4–7 and 14 stay unobserved.
+
+**Integration follows the closure route of Amendment 20 (b‴)4, which requires operator approval before it is committed:**
+- V5 / V11 carried as recorded failures;
+- the elastic channel shipped as a flagged option; default-off recommended (the closure proposal chooses), with the V5 comparison presented (default-off +12.5 % / +12.3 %, elastic-on −3.7 % / −4.9 % peak/plateau);
+- the remaining gates V6-F (binding; it certifies the elastic-on configuration only), V7-R2, V8-nuc and the implementation gates, at one evidence SHA;
+- about 43.5 h host.
+
+A different model, or a σ_pp change, needs a new reviewed physics reason and a new amendment. The open findings H3 / H4 stay open.
