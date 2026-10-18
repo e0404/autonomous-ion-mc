@@ -836,8 +836,8 @@ def r2_calibration_layout(shards: int) -> dict[str, Any]:
     replicates, pairs and calibration parts. Only the 48-shard design (5400 pairs, 39 parts per surrogate) has a
     calibration producer; for any other shard count ``parts`` is ``None``. A fabricated status could carry that
     same dictionary, so the rejection of unsupported shard counts rests on ``require_r2_calibration_producer``
-    (``V7R2_CALIBRATED_SHARDS``), which the combine and both combine steps call before any status content is
-    considered. TODO (repair plan 6.2, 7200/0.005 column: 102 parts of 63 repetitions, 14 400 replicates):
+    (``V7R2_CALIBRATED_SHARDS``), which the combine and both combine steps call before accepting any calibration
+    layout (the combine inspects the status ``step`` and ``pass`` fields first, then runs the guard). TODO (repair plan 6.2, 7200/0.005 column: 102 parts of 63 repetitions, 14 400 replicates):
     the fallback calibration, to be implemented only if the selection rule of 3.8 picks 64 x 2.25e6."""
     reps = shards * V7R2_REPS_PER_SHARD
     return {"shards": shards, "replicates": reps, "pairs": reps // 2,
