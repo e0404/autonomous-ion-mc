@@ -619,15 +619,99 @@ def test_run_writes_projection_manifest_and_a_second_run_must_reproduce(
         and doc["disclosure"] == d8.DISCLOSURE
         and man["evaluation"]["verdict"] == "CONTINUE"
     )
-    d8.run(
-        inp["de3"], inp["de5"], None, out, "REVIEW-0123abcd", exp, REVIEWED
-    )  # the same evaluation reproduces
-    p = inp["de3"] / "de3-150-m2prime.json"
-    d = json.loads(p.read_text())
-    d["idd_batches"] = (np.asarray(d["idd_batches"]) * 1.01).tolist()
-    p.write_text(json.dumps(d))
-    with pytest.raises(SystemExit, match="executed once"):
+    # a published evaluation is never overwritten: a second call (same or changed inputs) raises and changes nothing on disk
+    files = [p for p in sorted(out.rglob("*")) if p.is_file()]
+    before = {str(p): p.read_bytes() for p in files}
+    for scale in (None, 1.01):
+        if scale:
+            p = inp["de3"] / "de3-150-m2prime.json"
+            d = json.loads(p.read_text())
+            d["idd_batches"] = (np.asarray(d["idd_batches"]) * scale).tolist()
+            p.write_text(json.dumps(d))
+        with pytest.raises(SystemExit, match="already published"):
+            d8.run(inp["de3"], inp["de5"], None, out, "REVIEW-0123abcd", exp, REVIEWED)
+        assert {str(q): q.read_bytes() for q in sorted(out.rglob("*")) if q.is_file()} == before
+    (
+        out / "git" / "de8.json"
+    ).unlink()  # even a manifest-only or output-only remainder blocks a rewrite
+    with pytest.raises(SystemExit, match="already published"):
         d8.run(inp["de3"], inp["de5"], None, out, "REVIEW-0123abcd", exp, REVIEWED)
+    assert not (out / "git" / "de8.json").exists()
+
+
+def test_a_manifest_without_an_evaluation_does_not_block_the_first_evaluation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    inp = _inputs(tmp_path / "in" if (tmp_path / "in").mkdir() is None else tmp_path)
+    for name, val in (
+        ("ARCHIVE_JSON", inp["archive"]),
+        ("DE7_JSON", inp["de7"]),
+        ("DE4_RATIOS", inp["de4"]),
+        ("DE5_COMMITTED", inp["de5_table"]),
+        ("DE6_REPORT", inp["report"]),
+        ("H5_JSON", inp["h5"]),
+    ):
+        monkeypatch.setattr(d8, name, val)
+    monkeypatch.setattr(c, "repo_state", lambda repo=None: dict(STATE))
+    monkeypatch.setattr(d8, "hashes_at", lambda sha, repo=None: dict(SCRIPTS))
+    monkeypatch.setattr(d8, "is_ancestor", lambda sha, head, repo=None: True)
+    monkeypatch.setattr(d8, "working_hashes", lambda repo=None: dict(SCRIPTS))
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "de8-manifest.json").write_text(json.dumps({"reviews": {REVIEWED: "REVIEW-0123abcd"}}))
+    exp = tmp_path / "expected.json"
+    exp.write_text(json.dumps(inp["expected"]))
+    assert (
+        d8.run(inp["de3"], inp["de5"], None, out, "REVIEW-0123abcd", exp, REVIEWED)["verdict"]
+        == "CONTINUE"
+    )
+
+
+def test_run_documents_must_come_from_the_evaluator_head(tmp_path: Path) -> None:
+    """Documents at two different descendant commits of the reviewed commit: refused (HEAD must equal the evaluator HEAD)."""
+    inp = _inputs(tmp_path)
+    assert _eval(inp)["verdict"] == "CONTINUE"
+    p = inp["de3"] / "de3-200-m2prime.json"
+    doc = json.loads(p.read_text())
+    doc["code"]["git_head"] = (
+        "c" * 40
+    )  # a different descendant of the reviewed commit (ancestry itself passes in this test)
+    p.write_text(json.dumps(doc))
+    with pytest.raises(SystemExit, match="differs from the evaluator HEAD"):
+        _eval(inp)
+    p5 = inp["de5"] / "de5-m2" / "de5.json"
+    d5 = json.loads(p5.read_text())
+    d5["code"]["git_head"] = "d" * 40
+    doc["code"]["git_head"] = STATE["git_head"]
+    p.write_text(json.dumps(doc))
+    p5.write_text(json.dumps(d5))
+    with pytest.raises(SystemExit, match="differs from the evaluator HEAD"):
+        _eval(inp)
+
+
+def test_d4_seed_block_must_be_exact_without_duplicates_or_omissions(tmp_path: Path) -> None:
+    inp = _inputs(tmp_path)
+    p5 = inp["de5"] / "de5-m2prime" / "de5.json"
+    good = json.loads(p5.read_text())
+    dup = copy.deepcopy(good)
+    dup["cases"]["9"]["seed"] = dup["cases"]["8"][
+        "seed"
+    ]  # nine distinct seeds, one duplicated: inside the range but not the exact block
+    p5.write_text(json.dumps(dup))
+    with pytest.raises(SystemExit, match="registered block 20991300-20991309"):
+        _eval(inp)
+    miss = copy.deepcopy(good)
+    del miss["cases"]["9"]
+    p5.write_text(json.dumps(miss))
+    with pytest.raises(SystemExit, match="registered block 20991300-20991309"):
+        _eval(inp)
+    ok = copy.deepcopy(good)
+    ok["cases"]["0"]["seed"], ok["cases"]["1"]["seed"] = (
+        ok["cases"]["1"]["seed"],
+        ok["cases"]["0"]["seed"],
+    )  # order is irrelevant
+    p5.write_text(json.dumps(ok))
+    assert _eval(inp)["verdict"] == "CONTINUE"
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------

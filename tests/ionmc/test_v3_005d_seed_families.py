@@ -54,6 +54,7 @@ ELASTIC_USED = {
     20990400,
     *(20991000 + c for c in range(10)),
     *(20991100 + c for c in range(10)),  # Amendment 20 (c): M2 diagnostic D4 seeds
+    *(20991200 + c for c in range(10)),  # Amendment 21 (e): V-M2 D4 arm (report-only)
     *(20991300 + c for c in range(10)),  # Amendment 21 (d): M2' diagnostic D4 seeds
 }  # 20990200: D-E6 CDF bootstrap base; 20990350 / 20990400: per-energy seeds (base + 150 / 200)
 VR_CAL = range(20980000, 20985000)
@@ -84,7 +85,9 @@ def test_elastic_seeds_inside_family() -> None:
     assert ELASTIC_USED <= set(ELASTIC)
     assert {20990100, 20990101, 20990200, 20990350, 20990400} | set(
         range(20991000, 20991010)
-    ) | set(range(20991100, 20991110)) | set(range(20991300, 20991310)) == ELASTIC_USED
+    ) | set(range(20991100, 20991110)) | set(range(20991200, 20991210)) | set(
+        range(20991300, 20991310)
+    ) == ELASTIC_USED
     assert 20990001 not in ELASTIC_USED and 20990001 < 20990100  # scratch-only seed, unused
 
 

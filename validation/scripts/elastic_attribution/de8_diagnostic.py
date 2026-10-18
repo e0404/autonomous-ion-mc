@@ -198,7 +198,7 @@ def check_seeds(doc: dict[str, Any], what: str, *, d4_arm: str | None = None) ->
         return
     base = D4_SEED_BASES[d4_arm]
     seeds = [cs.get("seed") for cs in doc.get("cases", {}).values()]
-    if doc.get("seed_base") != base or len(seeds) != 10 or not all(isinstance(x, int) and base <= x < base + 10 for x in seeds):
+    if doc.get("seed_base") != base or not all(isinstance(x, int) for x in seeds) or sorted(seeds) != list(range(base, base + 10)):
         raise SystemExit(f"{what}: D4 seeds are not the registered block {base}-{base + 9} of the {d4_arm} arm")
 
 
@@ -222,10 +222,13 @@ def check_table(doc: dict[str, Any], expected: dict[str, str] | None, arm: str, 
         raise SystemExit(f"{what}: elastic table id / npz sha256 differ from the expected {arm} table")
 
 
-def check_code(doc: dict[str, Any], reviewed_sha: str, scripts: dict[str, str], what: str, ancestor: Any = None) -> None:
-    """A run document must record a clean tree, a HEAD that contains the reviewed commit, and the code hashes of that commit (SystemExit otherwise)."""
+def check_code(doc: dict[str, Any], reviewed_sha: str, scripts: dict[str, str], what: str, ancestor: Any = None, head: str | None = None) -> None:
+    """A run document must record a clean tree, the evaluator's HEAD (every document of the screen was produced at one commit), a HEAD that contains
+    the reviewed commit, and the code hashes of that commit (SystemExit otherwise)."""
     cd = doc.get("code") or {}
     anc = ancestor or is_ancestor
+    if head is not None and cd.get("git_head") != head:
+        raise SystemExit(f"{what}: recorded HEAD {str(cd.get('git_head'))[:12]} differs from the evaluator HEAD {head[:12]} (all documents must come from one commit)")
     if cd.get("git_clean") is not True or not isinstance(cd.get("git_head"), str) or not anc(reviewed_sha, cd["git_head"]):
         raise SystemExit(f"{what}: recorded HEAD does not contain the reviewed commit {reviewed_sha[:12]}, or the tree was not clean (clean tree required)")
     for n, s in scripts.items():
@@ -427,7 +430,7 @@ def evaluate(de3_dir: Path, de5_dir: Path, de0_dir: Path | None, state: dict[str
         for e, d in docs.items():
             check_seeds(d, f"de3-{e}-{arm}.json")
             check_table(d, expected.get(arm), arm, f"de3-{e}-{arm}.json")
-            check_code(d, reviewed_sha, scripts, f"de3-{e}-{arm}.json", ancestor)
+            check_code(d, reviewed_sha, scripts, f"de3-{e}-{arm}.json", ancestor, state["git_head"])
         ok = {e: valid_document(docs[e], e, "emel", arm=True) for e in ENERGIES}
         for e in ENERGIES:
             runs["arms"][arm][str(e)]["valid"] = bool(ok[e])
@@ -444,7 +447,7 @@ def evaluate(de3_dir: Path, de5_dir: Path, de0_dir: Path | None, state: dict[str
                 d5 = json.loads(p5.read_text())
                 check_seeds(d5, str(p5), d4_arm=arm)
                 check_table(d5, expected.get(arm), arm, str(p5))
-                check_code(d5, reviewed_sha, scripts, str(p5), ancestor)
+                check_code(d5, reviewed_sha, scripts, str(p5), ancestor, state["git_head"])
                 rec["D4"] = d4_report(arm, d5, de5_table, de4)
                 runs["arms"][arm]["de5_sha256"] = sha256_bytes_of(p5)
             elif arm == GATED_ARM:
@@ -453,7 +456,7 @@ def evaluate(de3_dir: Path, de5_dir: Path, de0_dir: Path | None, state: dict[str
             k0 = Path(de0_dir) / f"de0-{arm}" / "kernels.json"
             kd = json.loads(k0.read_text())
             check_table(kd, expected.get(arm), arm, str(k0))
-            check_code(kd, reviewed_sha, scripts, str(k0), ancestor)
+            check_code(kd, reviewed_sha, scripts, str(k0), ancestor, state["git_head"])
             rec["D6"] = d6_kernels(kd, json.loads((RES / "de0" / "kernels.json").read_text()))
             runs["arms"][arm]["de0_sha256"] = sha256_bytes_of(k0)
         arms[arm] = rec
@@ -538,14 +541,15 @@ def run(de3_dir: Path, de5_dir: Path, de0_dir: Path | None, out: Path, review_id
     manifest_p = Path(out) / "de8-manifest.json"
     prev = check_review(review_id, reviewed_sha, state, manifest_p)
     assert reviewed_sha is not None
+    published = [p for p in (Path(out) / "de8.json", Path(out) / "de8-report.md", Path(out) / "git" / "de8.json", Path(out) / "git" / "de8-report.md") if p.exists()]
+    if prev.get("evaluation") or published:  # the screen is evaluated once; nothing already published is rewritten or re-derived
+        raise SystemExit(f"a D-E8 evaluation is already published ({'manifest' if prev.get('evaluation') else published[0].name}): it is never overwritten")
     scripts = hashes_at(reviewed_sha)
     if expected_tables is None:
         raise SystemExit("--expected-tables FILE (the expected table id and npz sha256 per arm, checked against de7.json) is required")
     doc = evaluate(de3_dir, de5_dir, de0_dir, state, scripts, reviewed_sha=reviewed_sha, archive=ARCHIVE_JSON, de7_path=DE7_JSON, de4_path=DE4_RATIOS, de5_table_path=DE5_COMMITTED,
                    de6_report=DE6_REPORT, h5_path=H5_JSON, expected_tables=json.loads(Path(expected_tables).read_text()))
     digest = hashlib.sha256(json.dumps({k: doc[k] for k in ("verdict", "failing_conditions", "arms", "bands")}, sort_keys=True, default=float).encode()).hexdigest()
-    if prev.get("evaluation") and prev["evaluation"].get("digest") != digest:
-        raise SystemExit("a different evaluation is already recorded in the manifest: the screen is executed once and recorded whichever way it falls")
     proj = c.git_projection(json.loads(json.dumps(project_for_git(doc), default=float)), GIT_ALLOW)
     bad = d7.leak_violations(proj, absolutes_of(de5_dir))
     if bad:
