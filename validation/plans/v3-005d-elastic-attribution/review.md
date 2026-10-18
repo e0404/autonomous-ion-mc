@@ -1132,3 +1132,24 @@ Fix these items:
 - (b): item 6 is important; 7–9 are minor.
 
 With these applied verbatim, no further review round is needed for either document.
+
+# Correction (2026-10-18, reviewer) to Rounds D-E6 and D-E8
+
+Codex REVIEW-b4584380 is correct. Two statements in my earlier rounds go beyond the record:
+- the D-E3/D-E6 review text: "the gain excess cannot be closed by any p+A shape";
+- Round D-E8 item 6(b): "the 200 MeV gain condition is not closable by the p+A shape alone … model-independent with respect to the p+A shape".
+
+The record supports only results for the **four p+A shapes actually tested**: M2′, M2, R-B, and the D-E6 Geant4 CHIPS swap. It contains no extremal bound and no search over admissible p+A angular distributions.
+
+**The historical text stays as written, for provenance. Both statements are withdrawn as model-independent conclusions and replaced by:**
+
+> "None of the four tested p+A shapes (M2′, M2, R-B, the D-E6 Geant4 CHIPS swap) closed the 200 MeV gain gap under the frozen D2 definition (d = 0.00462 / 0.00463 / 0.00463 / +0.00437 against 0.00365). The record does not establish that no p+A shape could close it. The p-p channel (H3) and the archived ionmc gain realisation used by D2 are candidate contributors; neither is shown to be necessary."
+
+**What depended on the withdrawn claim:**
+- **Verdicts and acceptances: nothing.**
+  - The D-E8 record acceptance and its STOP verdict rest on the frozen rule applied to M2′ alone.
+  - The D-E6 §5 outcome ("partially attributed") rests on clause 5 (the H3 and H4 exclusion columns), not on this claim.
+  - H3's status (not excluded) rests on its own §2.2 signature (the rate ratio 1.165 / 1.159).
+- **The contributor statements of D-E8 item 6(c) stand as written:** p-p, and the archived ionmc gain at 1.4σ. They were already phrased as identifiable, not necessary, contributors.
+- **One wording I accepted must be tempered.** In Round D-E8-2 (b) I called the intervention's option-(B) prognosis "supported (the gain clause failed for every shape, including Geant4's)". The sentence "a shape change alone is not expected to pass it" should read: "the four tested shapes, including Geant4's, all failed the 200 MeV gain clause, so M3 passing it is not expected but not excluded".
+- The D-E3-round recommendation that the swap-pp arm is essential is unaffected. It follows from the tested Geant4-shape residual and from H3's rate signature.
