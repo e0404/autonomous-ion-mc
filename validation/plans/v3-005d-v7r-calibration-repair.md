@@ -562,3 +562,67 @@ once now on the current pool and once more on the rebuilt pool).
    section 5; the transport seeds pass checks (a)–(e) of §5 and hr r_index 6 at 20541004 is asserted unused.
 6. Fail-closed: missing κ record, a part with a different κ hash, unequal part counts, or R ≠ 3200 → calibration fail.
 7. Step timing: every new step ≤ 1100 s in the CI-scale extrapolation at the slow-host rate.
+
+## Planning notes PN-V7R2-1..6 (2026-10-18, reviewed Round R2-impl-1)
+
+These are implementation notes for the V7-R2 code (Amendment 20 (f)). They add precision where this plan and Amendment 20 leave a detail open. **They change no rule, count, threshold, seed root or gate of this plan or of the acceptance plan.** Where they quote a governing sentence, that sentence decides.
+
+The working record is the planner note `v7r2-ambiguities.md` (scratchpad). Review: Round R2-impl-1 (V7-R reviewer) accepted PN-V7R2-1..5 and requested PN-V7R2-6 and the PN-V7R2-3 disclosure.
+
+**PN-V7R2-1 — κ part split.**
+- §6.2 prices "`v7r-kappa` … 6 shards ≈ 645 s"; §6.1 gives ≈ 1.29 ms per pair and 0.65 ms per single replicate.
+- The κ step therefore has 3 parts per surrogate:
+  - `single`: 1 part × 10⁶ replicates (full sample, no 3:1 split, §3.4);
+  - `pair`: 2 parts × 5·10⁵ pairs (part index 0, 1 in the SeedSequence entropy).
+- That is 6 parts of ≈ 645 s (+ ≤ 70 s fixed). The combine concatenates the per-row statistics of a kind's parts before the bisection.
+- Coverage SE at n = 10⁶: 0.00048 / 0.00045, within the §6.7(4) limit (≤ 0.0005).
+
+**PN-V7R2-2 — integer seeds.**
+- The integer seed of a κ or calibration stream is `int(SeedSequence([root, *index]).generate_state(1, dtype=uint32)[0])`.
+- Data roots are 20980000 (κ) and 20982000 (calibration); the bootstrap root is root + 1 (§5 table).
+- As in `v7r.cal_part_seeds`, replicate r of a calibration part uses data + r and boot + r.
+- Records store the roots and the derived words.
+- The §6.7(5) guard (20980000–20984999) and the Amendment 20 (f)7 seed-family test apply to the **roots** ("κ / calibration roots", Amendment 20 (f)5). The derived words are reported, not range-checked.
+
+**PN-V7R2-3 — rehearsal fixture (Amendment 20 (f)6).**
+- Amendment 20 (f)6 governs: "V7-R fixture regenerated at the evidence digest as 4 × 2.25e6 histories at rehearsal seeds 20521000–20521003".
+- Producer: the V7-R2 shard producer (2.25·10⁶ histories, 225 replicates), run at rehearsal base 20505000, r_index 16, k = 0..3.
+- The fixture holds 4 sidecars `escaped_neutral_block_sums[225, 20]` (18 000 blocks pooled; truth = pool mean), 4 partials and `PROVENANCE.json` (host run ids, partial digests, hashed-source digest, seed base, code SHA, clean tree). No reference shard.
+- The loader checks 4 × 225 × 20 blocks, `batch_histories` 500 and the digest rule (Amendments 17 (a)7, 18 (d)–(e)). The V7-R loader constants (2 × 450) stay unchanged for the archived lv5c records.
+- *Disclosure:* the per-history streams are keyed by seed and history index. If the physics is unchanged, shards k = 0 and 1 (seeds 20521000/20521001) reproduce the first halves of the recorded 4.5·10⁶ rehearsal shards at the same seeds. The rebuilt pool then shares about half its blocks (9000 of 18 000) with the pool on which Revision 4 measured 383/400 and 384/400, so the re-check of PN-V7R2-6 is not fully independent of those results. Rehearsal output is never evidence. Amendment 20 (f)6 fixes the seeds.
+
+**PN-V7R2-4 — V7-R2 transport, reference, combine and diagnostic steps.**
+- §6.4(4) ("V7-R2 transport shards + reference (48 × 2.25·10⁶) → `v7r-combine`") and Amendment 20 (f)1 ("48 transport shards, reference, combine, diagnostic") make these required code before the code freeze (Amendment 20 (f)8).
+- Steps:
+  - `v7r2-s{k}`: k = 0..47; fallback 0..63; seed 20547004 + k; sidecar 225 × 20.
+  - `v7r2-ref`: k = 48, seed 20547052; fallback k = 64, seed 20547068.
+  - `v7r2-combine`: pairs s ↔ s + 24, H = shards 36–47, E = shards 0–35, α_tost 0.005 on the two `escaped_neutral` gates. `sec_p` / `nuclear_local` keep the Amendment 13 rule. It requires the sealed V7-R2 calibration status.
+  - `v7r2-diag`: r_index 17, no seed, b ∈ {5, 10, 20}.
+- "`v7r-combine`" in §6.4 means `v7r2-combine`. The V7-R steps stay unchanged and bit-identical for the archived lv5c suite (§6.7(1)).
+- Host execution waits for the operator's decision (§3.4, §4).
+
+**PN-V7R2-5 — sealing of the κ part records.**
+- κ part records (`ionmc-v7r-kappa-record-1`) are sealed like the calibration records (precedent `steps_v5c.load_calibration_records`). Each carries:
+  - content_sha256, schema, run_sha, suite;
+  - the surrogate `fit` block. For the rehearsal surrogate this includes the fixture hashed-source digest, the host run ids and the sidecar sha256s;
+  - roots and seed words, n, and the sha256 of the per-row `.npz`.
+- Each record emits a `PARTIAL` line.
+- `v7r-kappa-combine` requires (fail closed, §6.7(6)):
+  - all 6 parts present exactly once;
+  - an identical fit block per surrogate;
+  - n summing to 10⁶ per kind and surrogate;
+  - the manifest digest for imported directories.
+- It writes `v7r-kappa.json`, whose content_sha256 every calibration part records (§6.5).
+- κ parts need no elastic-table binding of their own: the fixture digest carries the transport dependence.
+
+**PN-V7R2-6 — joint-power re-check on the rebuilt pool (Amendment 20 (f)6, §3.8).**
+- The re-check runs `scripts/joint_power.py` **unchanged**, with:
+  - seed roots 20989920–20989923 (7200 design: 20989930–20989933);
+  - R_meas = 400 per surrogate;
+  - the §3.8 rule: ≥ 378/400 joint passes for both surrogates selects 5400/0.005; else the same measurement for 7200/0.005; else operator.
+- It runs **once** per design. After a miss there is no re-run with other seeds or more repetitions; the §3.8 branch applies.
+- The archive-fitted surrogate is unchanged, so its re-check repeats the Revision 4 measurement exactly. The rehearsal re-check shares about half its blocks with the measured pool (PN-V7R2-3 disclosure).
+
+**Open items (not resolved by these notes; required before the part sizes and seeds are frozen):**
+- **R-4a:** wiring the repetition-based κ and calibration part plans (`rep_plan`) into `declared_plans()` and the rehearsal preflight. Amendment 20 (f)8 asks for "`declared_plans()` entries, or a timing rule, for the rep-based κ / calibration parts".
+- **R-4b:** measuring one short calibration part on the slow host before part sizes and seeds are frozen (§6.1, Amendment 20 (f)8). At the extrapolated 12.2 s per repetition + 70 s fixed, an 83-repetition part takes ≈ 1083 s. That leaves only **1.6 %** margin to the 1100 s planning target (≈ 10 % to the 1200 s effective limit). If the measured rate exceeds ≈ 12.4 s per repetition, the parts are re-split (more parts, the counts unchanged and nothing decreased) before the freeze.

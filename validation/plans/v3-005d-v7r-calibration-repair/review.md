@@ -230,3 +230,69 @@ finding is fully answered. Only the labelling edits 4(a)–(c) remain; they are 
 re-measurement or re-review.
 
 **Orchestrator note (2026-10-14):** the three labelling edits 4(a)–(c) were applied to Revision 4 before commit (header line "Round-4 independent review"); nothing else changed.
+
+# Round R2-impl-1 (2026-10-18) — V7-R2 implementation ambiguities PN-V7R2-1..5 (`v7r2-ambiguities.md`)
+
+Read-only. Inputs: the committed plan rev 4 (`validation/plans/v3-005d-v7r-calibration-repair.md`); Amendment 20 (f);
+the worker's uncommitted diffs to `v7r.py`, `steps_v5c.py`, `steps_v6.py` and `test_v7r_coverage.py`; the new
+`test_v7r2_infra.py`.
+
+## The five notes
+
+| PN | Fixed by the plan? | Note or amendment? | Outcome-sensitive? |
+|---|---|---|---|
+| 1 κ split (single 1 × 1e6; pair 2 × 5e5) | Totals fixed (§3.4: 1e6 per kind, full sample). "6 shards ≈ 645 s" (§6.2) at the §6.1 rates (1.29 / 0.65 ms) implies exactly this split; part index is in the §5 entropy. SE 0.00048 / 0.00045 ≤ 0.0005. | **Note suffices.** | No. It is seed-determined and fixed before any κ result. It touches neither the κ = 1 joint rule nor α. |
+| 2 seed words (one uint32 per SeedSequence; separate data/boot roots; guard on roots) | Roots and the +1 boot root are fixed (§5, A20 (f)5 "roots"). The integer derivation is not fixed; the HEAD precedent is `cal_part_seeds`. | **Note suffices.** | No. Reviewer check: the 6400 calibration data seeds (`data + r` over 78 parts) and the 6400 boot seeds are all unique; the 6 κ data/boot words are unique and disjoint from the calibration data seeds. |
+| 3 rehearsal fixture 4 × 2.25e6 at 20521000–03 | **Fixed by A20 (f)6** (layout, seeds, digest rule). Producer/loader parameters are implementation. | **Note suffices.** | See R-1 / R-2 below. |
+| 4 separate `v7r2-*` steps | Fixed in substance by A20 (f)1 (shards, reference, combine, diagnostic) and (f)8 (distinct reference index), and by §6.7(1) (V7-R bit-identity). Only the names are new. | **Note suffices.** | No. |
+| 5 κ part sealing | §6.4–6.5 "sealed record" with fields, §6.7(6) fail-closed. The mirroring of `load_calibration_records` is the accepted precedent. | **Note suffices.** | No. See R-3 for two gaps. |
+
+None of the five changes α_tost (0.005; the default 0.04 is kept and tested bit-identical for the archived gates),
+the 5400/7200 selection, the ≥ 378/400 rule, the clause thresholds, R = 3200, the seed roots or the transport seeds.
+**No amendment is needed; dated planning notes under review are the right instrument.**
+
+## Constants checked against the plan (worker `v7r.py`)
+
+All match:
+- 48 × 2.25e6; 225 per shard; 10 800 replicates; 5400 pairs s ↔ s + 24 (`v7_pair_indices`: rows i / i + R/2 =
+  shard s / s + 24 at 225 per shard). H = shards 36–47 coincides with `v7_heldout_split`'s last quarter; E = 0–35.
+- 39 parts per surrogate: 2 × 83 + 37 × 82 = 3200.
+- κ: n = 1e6 full sample (`single_ingredients_all`); legacy mode 2e4 with the 3:1 split and seeds 20508000/1,
+  20505999.
+- Reference index 48 (fallback 64), distinct from all shard indices; seeds 20547004 + k, reference 20547052, fallback
+  reference 20547068 (A20 (f)5).
+- Roots 20980000 / 20982000 / 20984000 with guard `range(20980000, 20985000)`; SE limit 0.0005.
+- Timing: `rep_plan` 1100 s target / 1500 s limit, 12.2 s/rep + 70 s. Largest part 83 → 1082.6 s; max 84 per part.
+  κ part ≈ 645 + 70 s; transport 631 s.
+
+## Remaining items (minor; none blocking)
+
+- **R-1 (minor, should be a note — PN-V7R2-6).** The §3.8 / A20 (f)6 joint-power re-check on the rebuilt pool is the
+  one outcome-relevant step whose execution details are not pinned: script, seed roots and once-only. Declare before
+  it runs that it uses `joint_power.py` unchanged with the 5400 roots 20989920–20989923 (7200: +10), R_meas = 400,
+  executed once. The archive-surrogate result (deterministic; surrogate unchanged) is reused or reproduced
+  identically. No re-run with other seeds after a miss.
+- **R-2 (minor, disclosure).** Transport histories are keyed per (seed, history), so the recorded regenerations were
+  identical. If the hashed sources leave the physics unchanged, rehearsal shards k = 0, 1 at 20521000/20521001 with
+  2.25e6 histories reproduce the first halves of the recorded 4.5e6 shards. The rebuilt pool then shares ≈ 9000 of
+  its 18 000 blocks with the measured pool, so the re-check is not independent of the 383/400 / 384/400 measurement.
+  This is harmless (rehearsal, never evidence; fixed by A20 (f)6), but state it in PN-V7R2-3.
+- **R-3 (minor, implementation).**
+  - (a) `calibration_combine` checks `kappa_record_sha256` but not that each calibration part's `fit` block equals the
+    κ record's `fit` for the same surrogate. Add this cross-check, so that κ and Monte Carlo are bound to the same
+    surrogate, including the fixture digest for the rehearsal surrogate.
+  - (b) The κ part producer step and its `PARTIAL` lines (PN-5) are not in the diff yet; only the loader and combine
+    are. The test docstring refers to `tests/ionmc/test_v7r2_calibration.py`, which does not exist yet.
+- **R-4 (open, as stated by the planner).**
+  - (i) `rep_plan` / `r2_rep_plans` exists but is not wired into `steps_v5d.declared_plans()` or the preflight timing
+    table (A20 (f)8).
+  - (ii) One short calibration part must be measured on the slow host before the part count is frozen. At 12.2 s/rep
+    the 39-part layout has only 1.6 % margin to the 1100 s target: a measured rate ≥ 12.41 s/rep forces more parts.
+    The re-sizing is deterministic (`parts_needed`), but it changes the per-part seed words, so it must be fixed in
+    the sizes addendum before any calibration part runs.
+
+## Verdict
+
+**ACCEPT** PN-V7R2-1..5 as dated planning notes. No amendment is required and no outcome-sensitive choice is
+touched. R-1 (pre-declare the re-check seeds, once-only) should be added as PN-V7R2-6 before the rebuilt-pool
+measurement runs. R-2 is a disclosure. R-3 and R-4 are implementation and sizing items to close before the code freeze.

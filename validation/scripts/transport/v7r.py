@@ -37,6 +37,7 @@ applied by ``interval_from_quantiles`` so that the expensive resampling is done 
 
 from __future__ import annotations
 
+import hashlib
 import math
 import platform
 from typing import Any
@@ -255,17 +256,30 @@ def single_ingredients(
     return {k: out[:, i] for i, k in enumerate(("m_hat", "se", "t_lo", "t_hi", "n_degenerate"))}
 
 
+def _alpha_tost(alpha_tost: float | None) -> float:
+    """Per-side TOST level of a bootstrap-t gate. ``None`` (every archived suite) is the frozen
+    ``steps_v5b.V7_ALPHA_TOST`` (0.04), read at call time exactly as before the parameter existed;
+    V7-R2 passes ``V7R2_ALPHA_TOST`` (0.005) explicitly (repair plan section 6.5)."""
+    a = v5b.V7_ALPHA_TOST if alpha_tost is None else float(alpha_tost)
+    if not 0.0 < a < 0.5:
+        raise ValueError(f"alpha_tost {a!r} outside (0, 0.5)")
+    return a
+
+
 def pair_gate(ing: dict[str, NDArray[np.float64]], kappa: float = 1.0, *,
-              region: tuple[float, float] = V7R_REGION) -> dict[str, Any]:  # fmt: skip
-    """Paired gate from ``pair_ingredients`` at interval scale ``kappa``."""
+              region: tuple[float, float] = V7R_REGION,
+              alpha_tost: float | None = None) -> dict[str, Any]:  # fmt: skip
+    """Paired gate from ``pair_ingredients`` at interval scale ``kappa`` (``alpha_tost``: per-side level,
+    default the frozen 0.04)."""
+    a_tost = _alpha_tost(alpha_tost)
     d, se, tl, th = ing["d_hat"], ing["se_d"], ing["t_lo"], ing["t_hi"]
     degenerate = ing["n_degenerate"] < 0
     with np.errstate(invalid="ignore"):
         lo, hi = d - kappa * th * se, d - kappa * tl * se
     hit = (lo <= 0.0) & (0.0 <= hi) & ~degenerate  # nan compares False: degenerate pairs are misses
     pairs, k = int(hit.size), int(hit.sum())
-    lower = v5b.cp_lower(k, pairs, v5b.V7_ALPHA_TOST)
-    upper = v5b.cp_upper(k, pairs, v5b.V7_ALPHA_TOST)
+    lower = v5b.cp_lower(k, pairs, a_tost)
+    upper = v5b.cp_upper(k, pairs, a_tost)
     reasons = []
     if lower < region[0]:
         reasons.append(f"CI lower bound {lower:.4f} below {region[0]:.4f}")
@@ -274,7 +288,7 @@ def pair_gate(ing: dict[str, NDArray[np.float64]], kappa: float = 1.0, *,
     if pairs < v5b.V7_MIN_INTERVALS:
         reasons.append(f"pairs {pairs} < {v5b.V7_MIN_INTERVALS}")
     return {"n_pairs": pairs, "covered": k, "m": k / pairs, "ci": [lower, upper], "low": region[0],
-            "high": region[1], "alpha_tost": v5b.V7_ALPHA_TOST, "bound_kind": "clopper-pearson",
+            "high": region[1], "alpha_tost": a_tost, "bound_kind": "clopper-pearson",
             "degenerate_pairs": int(degenerate.sum()),
             "n_resamples_degenerate": int(np.maximum(ing["n_degenerate"], 0).sum()),
             "per_pair_hit": [int(h) for h in hit], "pass": not reasons, "reasons": reasons}  # fmt: skip
@@ -282,12 +296,15 @@ def pair_gate(ing: dict[str, NDArray[np.float64]], kappa: float = 1.0, *,
 
 def single_gate(ing: dict[str, NDArray[np.float64]], means: NDArray[np.float64], kappa: float = 1.0, *,
                 boot_seed: int = 0, n_boot: int | None = None, z_boot_override: float | None = None,
-                region: tuple[float, float] = V7R_REGION) -> dict[str, Any]:  # fmt: skip
+                region: tuple[float, float] = V7R_REGION,
+                alpha_tost: float | None = None) -> dict[str, Any]:  # fmt: skip
     """Single-interval gate from ``single_ingredients`` and ALL replicate means ``means`` ``[R]`` (E
     first, then H; module docstring). ``z_boot_override`` is for the calibration only. ``n_boot=None``
     is the frozen qualification value ``steps_v5b.V7_BOOT_N``, read at call time (the calibration uses
-    the same default, so the two cannot differ)."""
+    the same default, so the two cannot differ). ``alpha_tost``: per-side level of the Clopper-Pearson
+    bounds on the count extrema, default the frozen 0.04 (the box level ``V7_ALPHA_BOX`` is unchanged)."""
     n_boot = v5b.V7_BOOT_N if n_boot is None else n_boot
+    a_tost = _alpha_tost(alpha_tost)
     r = means.size
     n_e = v5b.v7_heldout_split(r)
     n_h = r - n_e
@@ -313,8 +330,8 @@ def single_gate(ing: dict[str, NDArray[np.float64]], means: NDArray[np.float64],
         half = (hi - lo) / (2.0 * sem_h)
         c_min, c_max, _, _ = v5b.v7_coverage_extrema(x[ok], half[ok], z_box, n_e)
         k_min, k_max = int(round(c_min * n_e)), int(round(c_max * n_e))
-        lower = v5b.cp_lower(k_min, n_e, v5b.V7_ALPHA_TOST)
-        upper = v5b.cp_upper(k_max, n_e, v5b.V7_ALPHA_TOST)
+        lower = v5b.cp_lower(k_min, n_e, a_tost)
+        upper = v5b.cp_upper(k_max, n_e, a_tost)
     reasons = []
     if not lower >= region[0]:
         reasons.append(f"CI lower bound {lower:.4f} below {region[0]:.4f}")
@@ -325,7 +342,7 @@ def single_gate(ing: dict[str, NDArray[np.float64]], means: NDArray[np.float64],
     return {"replicates_eval": n_e, "replicates_heldout": n_h, "mu_heldout": mu_h, "sem_heldout": sem_h,
             "alpha_box": v5b.V7_ALPHA_BOX, "boot_seed": boot_seed, "boot_n": n_boot, "z_t": z_t,
             "z_boot": float(z_boot), "z_box": z_box, "cp_count_min": k_min, "cp_count_max": k_max,
-            "ci": [lower, upper], "low": region[0], "high": region[1], "alpha_tost": v5b.V7_ALPHA_TOST,
+            "ci": [lower, upper], "low": region[0], "high": region[1], "alpha_tost": a_tost,
             "bound_kind": "clopper-pearson", "degenerate_replicates": int(degenerate.sum()),
             "n_resamples_degenerate": int(np.maximum(ing["n_degenerate"], 0).sum()),
             "pass": not reasons, "reasons": reasons}  # fmt: skip
@@ -343,7 +360,7 @@ def interval_from_quantiles_array(ing: dict[str, NDArray[np.float64]], kappa: fl
 def escaped_neutral_verdict(
     sums: NDArray[np.float64], seed_base: int, *, boot_seed: int, ref_used: bool = True,
     reps_per_shard: int = V7R_REPS_PER_SHARD, b: int = V7R_B, alpha: float = V7R_ALPHA,
-    n_boot: int | None = None,
+    n_boot: int | None = None, alpha_tost: float | None = None,
 ) -> dict[str, Any]:  # fmt: skip
     """Both bootstrap-t gates of ``escaped_neutral`` on the block sums ``sums`` ``[R, 20]`` (rows in
     shard order); the document fields of ``step_v7r_combine``. ``ref_used`` is the bin mask of the
@@ -353,8 +370,9 @@ def escaped_neutral_verdict(
         raise SystemExit("v7r: block sums must be a finite [replicates, 20] array")
     pi = pair_ingredients(sums, seed_base, reps_per_shard, b, alpha)
     si = single_ingredients(sums, seed_base, reps_per_shard, b, alpha)
-    paired = pair_gate(pi)
-    single = single_gate(si, sums.mean(axis=1), boot_seed=boot_seed, n_boot=n_boot)
+    paired = pair_gate(pi, alpha_tost=alpha_tost)
+    single = single_gate(si, sums.mean(axis=1), boot_seed=boot_seed, n_boot=n_boot,
+                         alpha_tost=alpha_tost)  # fmt: skip
     if not ref_used:
         paired["pass"], single["pass"] = False, False
         paired["reasons"].append("reference bin unusable")
@@ -504,21 +522,32 @@ def calibration_evaluate(counts: dict[str, dict[str, int]]) -> dict[str, Any]:
     return {"margins": margins, "failures": failures, "pass": not failures}
 
 
-def calibration_combine(records: list[dict[str, Any]], reps: int = V7R_CAL_REPS) -> dict[str, Any]:
+def calibration_combine(
+    records: list[dict[str, Any]], reps: int = V7R_CAL_REPS, *, parts: int = CAL_PARTS,
+    seed_fn: Any = None, kappa_record_sha256: str | None = None, kappa_fits: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Pooled verdict of the calibration shards. ``records`` are the sealed shard records (one per
     (surrogate, part), exactly once; fail closed with ``SystemExit`` otherwise), each holding the counts and the
     kappa of the five margins (``margins[m] = {kappa, accepted_joint, accepted_paired, accepted_single}``):
     identical fit across the parts of a surrogate and identical kappa per margin, the derived seeds, ``n`` per
     part and ``reps_env`` equal to the expected ones, ``n`` summing to ``reps``. Counts are summed per
-    (surrogate, margin) and judged by :func:`calibration_evaluate`."""
-    sizes = cal_part_sizes(reps)
+    (surrogate, margin) and judged by :func:`calibration_evaluate`.
+
+    Defaults are the V7-R layout (``parts`` 15, :func:`cal_part_seeds`, no kappa record), unchanged. V7-R2 passes
+    ``parts=V7R2_CAL_PARTS``, ``seed_fn=r2_cal_part_seeds`` and the ``content_sha256`` of the sealed combined kappa
+    record: every part must carry exactly that ``kappa_record_sha256`` (a part without it, or with another, fails
+    the calibration closed; plan 6.7 item 6). ``kappa_fits`` ({surrogate: fit block} of the combined kappa record) makes
+    every part's surrogate ``fit`` block (family / parameters or fixture digest and sidecar hashes) equal the one the
+    kappa step used, fail closed."""
+    seed_fn = cal_part_seeds if seed_fn is None else seed_fn
+    sizes = cal_part_sizes(reps, parts)
     by: dict[tuple[Any, Any], dict[str, Any]] = {}
     for r in records:
         key = (r.get("surrogate"), r.get("part"))
         if key in by:
             raise SystemExit(f"calibration records: duplicate {key}")
         by[key] = r
-    want = {(s, p) for s in CAL_SURROGATES for p in range(CAL_PARTS)}
+    want = {(s, p) for s in CAL_SURROGATES for p in range(parts)}
     if set(by) != want:
         raise SystemExit(f"calibration records: missing {sorted(want - set(by))[:3]} / "
                          f"unexpected {sorted(map(str, set(by) - want))[:3]}")  # fmt: skip
@@ -527,7 +556,7 @@ def calibration_combine(records: list[dict[str, Any]], reps: int = V7R_CAL_REPS)
         fit0 = by[(s, 0)]["fit"]
         kappas = {m: by[(s, 0)]["margins"][m]["kappa"] for m in CAL_MARGINS}
         tot = {m: {"n": 0, "joint": 0, "paired": 0, "single": 0} for m in CAL_MARGINS}
-        for p in range(CAL_PARTS):
+        for p in range(parts):
             r = by[(s, p)]
             tag = f"{s}/part{p}"
             if r.get("reps_env") != reps:
@@ -538,8 +567,12 @@ def calibration_combine(records: list[dict[str, Any]], reps: int = V7R_CAL_REPS)
                 raise SystemExit(f"calibration record {tag}: fit differs within the surrogate")
             if r.get("n") != sizes[p]:
                 raise SystemExit(f"calibration record {tag}: n {r.get('n')!r} is not {sizes[p]}")
-            if r.get("seeds") != cal_part_seeds(si, p):
+            if r.get("seeds") != seed_fn(si, p):
                 raise SystemExit(f"calibration record {tag}: seeds differ from the derived ones")
+            if kappa_fits is not None and r.get("fit") != kappa_fits.get(s):
+                raise SystemExit(f"calibration record {tag}: fit block differs from the kappa record's")
+            if kappa_record_sha256 is not None and r.get("kappa_record_sha256") != kappa_record_sha256:
+                raise SystemExit(f"calibration record {tag}: kappa_record_sha256 differs from the kappa record")
             ms = r.get("margins")
             if not isinstance(ms, dict) or set(ms) != set(CAL_MARGINS):
                 raise SystemExit(f"calibration record {tag}: margins are not exactly {CAL_MARGINS}")
@@ -562,3 +595,271 @@ def calibration_combine(records: list[dict[str, Any]], reps: int = V7R_CAL_REPS)
         out[s] = {**calibration_evaluate(tot), "kappas": kappas, "fit": fit0}
     return {"surrogates": out, "reps": reps, "part_sizes": list(sizes),
             "pass": all(v["pass"] for v in out.values())}  # fmt: skip
+
+
+# -- V7-R2 (repair plan revision 4, validation/plans/v3-005d-v7r-calibration-repair.md) -------------
+# A NEW row for the same estimator claim; V7-R above stays as recorded (archived suites keep every constant
+# and code path above byte-identical). Everything below is additive. Nothing here is evidence by itself.
+V7R2_ALPHA_TOST = 0.005  # per side, the two escaped_neutral bootstrap-t gates only (plan 3.4)
+V7R2_SHARDS = 48
+V7R2_SHARD_N = 2_250_000
+V7R2_REPS_PER_SHARD = 225  # 225 replicates of 20 x 500 histories per shard
+V7R2_REPLICATES = V7R2_SHARDS * V7R2_REPS_PER_SHARD  # 10 800
+V7R2_PAIRS = V7R2_REPLICATES // 2  # 5400: replicate j of shard s with j of shard s + 24
+V7R2_PAIR_SHIFT = V7R2_SHARDS // 2
+V7R2_HELDOUT_SHARDS = tuple(range(36, 48))  # H = last quarter (2700 replicates); E = shards 0..35 (8100)
+V7R2_REF_N = V7R_REF_N
+V7R2_REF_INDEX = V7R2_SHARDS  # 48: distinct from every shard index 0..47 (V7R_REF_INDEX = 16 is shard 16 there)
+V7R2_FALLBACK_SHARDS = 64  # 7200/0.005 fallback of the 3.8 selection rule: 64 x 2.25e6, reference k = 64
+V7R2_FALLBACK_REF_INDEX = V7R2_FALLBACK_SHARDS
+V7R2_SEED_BASE = 20531004  # lv5d base (integration route 4.4); r_index 16 as V7-R
+V7R2_SEED_FIRST = V7R2_SEED_BASE + 1000 * V7R_R_INDEX  # 20547004: seed of shard k is this + k
+V7R2_KAPPA_N = 1_000_000  # per kind and surrogate (full sample, no 3:1 split)
+V7R2_KAPPA_SEED = 20980000  # data root; the bootstrap root is +1
+V7R2_CAL_SEED = 20982000  # data root; the bootstrap root is +1
+V7R2_A13_SEED = 20984000  # Amendment 13 Gaussian shard (sec_p, nuclear_local), if re-executed
+V7R2_SEED_FAMILY = range(20980000, 20985000)  # guard: calibration / kappa roots (plan 6.7 item 5)
+V7R2_CAL_PARTS = 39  # per surrogate: 78 parts of 83/82 repetitions (3200 = 2 * 83 + 37 * 82)
+V7R2_KAPPA_KINDS = ("single", "pair")  # kind index 0 / 1 in the SeedSequence entropy
+V7R2_KAPPA_PART_N = {"single": (1_000_000,), "pair": (500_000, 500_000)}
+"""Rows of each kappa step (single replicates / pairs; a pair is two replicates, so a pair part draws 1e6 replicates). The split gives six steps of
+about 645 s at the slow-host rates of plan 6.1 (1.29 ms per pair, 0.65 ms per single replicate); the plan states
+"6 shards ~ 645 s" and the totals, and this split is the one consistent with both (flagged in the report)."""
+CAL2_SCHEMA = "ionmc-v7r2-calibration-record-1"
+V7R2_KAPPA_SCHEMA = "ionmc-v7r-kappa-record-1"
+V7R2_KAPPA_COMBINED_SCHEMA = "ionmc-v7r-kappa-1"
+V7R2_KAPPA_SE_MAX = 0.0005  # plan 6.7 item 4: coverage SE of the solved kappa, every margin
+KAPPA_MARGINS = ("paired_low", "paired_high", "single_low", "single_high")
+KAPPA_KIND_OF = {"paired_low": "pair", "paired_high": "pair", "single_low": "single", "single_high": "single"}
+V7R_LEGACY_KAPPA_SEEDS = {"single": (20508000, 20505999), "pair": (20508001, 20505999)}
+"""Legacy mode of the kappa step: (data seed, bootstrap seed base) of ``margin_kappas`` in
+tests/ionmc/test_v7r_coverage.py (SEED_KAPPA, SEED_KAPPA + 1; SEED_BOOT0 - 1), n = 2e4 and the 3:1 split."""
+
+
+def r2_shard_seed(k: int, shards: int = V7R2_SHARDS) -> int:
+    """Seed of V7-R2 transport shard ``k`` (0 .. shards - 1) at the lv5d base: 20547004 + k."""
+    if not 0 <= k < shards:
+        raise ValueError(f"shard index outside 0..{shards - 1}")
+    return V7R2_SEED_FIRST + k
+
+
+def r2_ref_seed(shards: int = V7R2_SHARDS) -> int:
+    """Seed of the reference of a ``shards``-shard layout: reference index = ``shards`` (48 -> 20547052,
+    the 7200 fallback 64 -> 20547068); never equal to a shard seed."""
+    return V7R2_SEED_FIRST + shards
+
+
+def r2_seed_guard(root: int) -> int:
+    """A calibration / kappa seed root must lie in 20980000-20984999 (plan 6.7 item 5); returns it."""
+    if root not in V7R2_SEED_FAMILY:
+        raise ValueError(f"seed root {root} outside {V7R2_SEED_FAMILY.start}-{V7R2_SEED_FAMILY.stop - 1}")
+    return root
+
+
+def _seed_word(root: int, *index: int) -> int:
+    """One 32-bit word of ``SeedSequence([root, *index])`` (the integer seed of numpy streams below)."""
+    return int(np.random.SeedSequence([r2_seed_guard(root), *index]).generate_state(1, dtype=np.uint32)[0])
+
+
+def r2_kappa_part_seeds(surrogate_idx: int, kind: str, part: int) -> dict[str, int]:
+    """Seeds of one kappa part: data = word of ``SeedSequence([20980000, surrogate_idx, kind_idx, part])``,
+    bootstrap base = word of ``SeedSequence([20980001, ...])`` (kind_idx 0 single, 1 pair)."""
+    ki = V7R2_KAPPA_KINDS.index(kind)
+    return {"data": _seed_word(V7R2_KAPPA_SEED, surrogate_idx, ki, part),
+            "boot": _seed_word(V7R2_KAPPA_SEED + 1, surrogate_idx, ki, part)}  # fmt: skip
+
+
+def r2_cal_part_seeds(surrogate_idx: int, part: int) -> dict[str, int]:
+    """Seeds of one V7-R2 calibration part: words of ``SeedSequence([20982000, surrogate_idx, part])`` (data) and
+    ``SeedSequence([20982001, ...])`` (bootstrap base); replicate ``r`` of the part uses ``data + r`` and
+    ``boot + r`` as in :func:`cal_part_seeds`."""
+    return {"data": _seed_word(V7R2_CAL_SEED, surrogate_idx, part),
+            "boot": _seed_word(V7R2_CAL_SEED + 1, surrogate_idx, part)}  # fmt: skip
+
+
+def single_ingredients_all(
+    sums: NDArray[np.float64], seed_base: int, reps_per_shard: int, b: int = V7R_B,
+    alpha: float = V7R_ALPHA,
+) -> dict[str, NDArray[np.float64]]:
+    """Like :func:`single_ingredients` but over EVERY row of ``sums`` (no 3:1 evaluation split): the full-sample
+    kappa solve of V7-R2 (plan 3.4). Row ``r`` uses ``single_stream(seed_base, r // reps_per_shard, r %
+    reps_per_shard)``, so the first ``n_E`` rows equal ``single_ingredients`` row for row."""
+    n = sums.shape[0]
+    out = np.empty((n, 5))
+    for r in range(n):
+        rng = single_stream(seed_base, r // reps_per_shard, r % reps_per_shard)
+        out[r] = boot_t_quantiles(sums[r], rng, b, alpha)
+    return {k: out[:, i] for i, k in enumerate(("m_hat", "se", "t_lo", "t_hi", "n_degenerate"))}
+
+
+def kappa_rows(
+    sampler: Any, kind: str, n: int, seeds: dict[str, int], *, legacy: bool = False, b: int = V7R_B
+) -> dict[str, NDArray[np.float64]]:
+    """Per-row statistics ``a`` (studentised error of the truth), ``t_lo``, ``t_hi`` of ``n`` replicates
+    (``kind="single"``: of the mean ``sampler.mu``; ``"pair"``: ``n`` pairs, i.e. ``2 n`` replicates, of 0).
+    ``legacy=True`` is the code path of ``margin_kappas`` (single: the 3:1 evaluation split, rows 0..n_E-1,
+    ``reps_per_shard = n``); V7-R2 mode uses every replicate. ``sampler(rng, rows)`` draws ``[rows, 20]`` block
+    values and ``sampler.mu`` is the truth. Only the part's own data are read, so parts are independent."""
+    rng = np.random.default_rng(seeds["data"])
+    if kind == "single":
+        x = sampler(rng, n)
+        ing = (single_ingredients(x, seeds["boot"], reps_per_shard=n, b=b) if legacy
+               else single_ingredients_all(x, seeds["boot"], n, b))  # fmt: skip
+        a = (ing["m_hat"] - sampler.mu) / ing["se"]
+    elif kind == "pair":
+        x = sampler(rng, 2 * n)
+        ing = pair_ingredients(x, seeds["boot"], reps_per_shard=n, b=b)
+        a = ing["d_hat"] / ing["se_d"]
+    else:
+        raise ValueError(f"kind {kind!r} is not single/pair")
+    return {"a": a, "t_lo": ing["t_lo"], "t_hi": ing["t_hi"]}
+
+
+def kappa_coverage(rows: dict[str, NDArray[np.float64]], kappa: float) -> float:
+    """Empirical coverage at interval scale ``kappa`` (the bisection function of ``margin_kappas``)."""
+    a, lo, hi = rows["a"], rows["t_lo"], rows["t_hi"]
+    ok = np.isfinite(a) & np.isfinite(lo) & np.isfinite(hi)
+    return float(np.sum(ok & (kappa * hi >= a) & (kappa * lo <= a)) / a.size)
+
+
+def kappa_solve(rows: dict[str, NDArray[np.float64]], target: float) -> float:
+    """``kappa`` whose empirical coverage equals ``target``: the 60-step bisection on [0.05, 20] of
+    ``margin_kappas`` (coverage is monotone in kappa), on the pooled rows."""
+    lo_k, hi_k = 0.05, 20.0
+    for _ in range(60):
+        mid = 0.5 * (lo_k + hi_k)
+        lo_k, hi_k = (mid, hi_k) if kappa_coverage(rows, mid) < target else (lo_k, mid)
+    return 0.5 * (lo_k + hi_k)
+
+
+def kappa_part_names(surrogate: str, kind: str, part: int) -> tuple[str, str]:
+    """``(json, npz)`` partial file names of one kappa part (plan 6.5)."""
+    stem = f"v7r-kappa-{surrogate}-{kind}-p{part}"
+    return f"{stem}.json", f"{stem}.npz"
+
+
+def kappa_combine(
+    records: dict[tuple[str, str, int], dict[str, Any]],
+    rows: dict[tuple[str, str, int], dict[str, NDArray[np.float64]]],
+    *, part_n: dict[str, tuple[int, ...]] | None = None, legacy: bool = False,
+    region: tuple[float, float] = V7R_REGION,
+) -> dict[str, Any]:
+    """Combine the kappa parts into the kappa record (``v7r-kappa.json``). ``records[(surrogate, kind, part)]`` is
+    the part's sealed record (schema ``ionmc-v7r-kappa-record-1``: ``surrogate``, ``kind``, ``part``, ``n``,
+    ``seeds``, ``arrays`` = {name: sha256 of the C-order float64 bytes}, ``fit``, ``mode``) and ``rows[...]`` its
+    arrays. Fails closed (``SystemExit``) on a missing / extra part, a wrong ``n`` or mode, seeds that differ from
+    the derived ones, an array whose sha256 differs from the record, or a fit that differs within a surrogate.
+    The paired margins are solved on the pooled pair rows of a surrogate and the single margins on the pooled
+    single rows; for each margin the coverage at the solved kappa and its binomial SE are reported (the
+    requirement ``se <= 0.0005`` of the V7-R2 mode is reported per margin as ``se_ok``)."""
+    part_n = part_n or ({"single": (V7R_LEGACY_KAPPA_N,), "pair": (V7R_LEGACY_KAPPA_N,)} if legacy
+                        else V7R2_KAPPA_PART_N)  # fmt: skip
+    mode = "legacy" if legacy else "v7r2"
+    want = {(s, k, p) for s in CAL_SURROGATES for k in V7R2_KAPPA_KINDS for p in range(len(part_n[k]))}
+    if set(records) != want or set(rows) != want:
+        raise SystemExit(f"kappa records: missing {sorted(want - set(records))[:3]} / "
+                         f"unexpected {sorted(map(str, set(records) - want))[:3]}")  # fmt: skip
+    out: dict[str, Any] = {}
+    names: list[dict[str, Any]] = []
+    for si, s in enumerate(CAL_SURROGATES):
+        fit0 = records[(s, "single", 0)].get("fit")
+        pooled: dict[str, dict[str, NDArray[np.float64]]] = {}
+        for kind in V7R2_KAPPA_KINDS:
+            parts = []
+            for p, n in enumerate(part_n[kind]):
+                tag = f"{s}/{kind}/p{p}"
+                r = records[(s, kind, p)]
+                if r.get("schema") != V7R2_KAPPA_SCHEMA or r.get("mode") != mode:
+                    raise SystemExit(f"kappa record {tag}: wrong schema or mode")
+                if (r.get("surrogate"), r.get("kind"), r.get("part")) != (s, kind, p):
+                    raise SystemExit(f"kappa record {tag}: identity differs from its key")
+                if r.get("n") != n:
+                    raise SystemExit(f"kappa record {tag}: n {r.get('n')!r} is not {n}")
+                want_seeds = (r2_kappa_part_seeds(si, kind, p) if not legacy else
+                              dict(zip(("data", "boot"), V7R_LEGACY_KAPPA_SEEDS[kind], strict=True)))  # fmt: skip
+                if r.get("seeds") != want_seeds:
+                    raise SystemExit(f"kappa record {tag}: seeds differ from the derived ones")
+                if r.get("fit") != fit0:
+                    raise SystemExit(f"kappa record {tag}: fit differs within the surrogate")
+                arr = rows[(s, kind, p)]
+                if set(arr) != {"a", "t_lo", "t_hi"} or set(r.get("arrays", {})) != set(arr):
+                    raise SystemExit(f"kappa record {tag}: arrays are not exactly a / t_lo / t_hi")
+                for name, v in arr.items():
+                    digest = hashlib.sha256(np.ascontiguousarray(v, dtype="<f8").tobytes()).hexdigest()
+                    if r["arrays"][name] != digest:
+                        raise SystemExit(f"kappa record {tag}: array {name} does not match its sha256")
+                names.append({"surrogate": s, "kind": kind, "part": p,
+                              "content_sha256": r.get("content_sha256"), "arrays": r["arrays"]})  # fmt: skip
+                parts.append(arr)
+            pooled[kind] = {k: np.concatenate([q[k] for q in parts]) for k in ("a", "t_lo", "t_hi")}
+        kappas: dict[str, float] = {}
+        coverage: dict[str, Any] = {}
+        for m, target in zip(KAPPA_MARGINS, (region[0], region[1], region[0], region[1]), strict=True):
+            rr = pooled[KAPPA_KIND_OF[m]]
+            kappas[m] = kappa_solve(rr, target)
+            c = kappa_coverage(rr, kappas[m])
+            n_rows = int(rr["a"].size)
+            se = math.sqrt(c * (1.0 - c) / n_rows)
+            coverage[m] = {"target": target, "coverage": c, "n": n_rows, "se": se,
+                           "se_ok": bool(se <= V7R2_KAPPA_SE_MAX)}  # fmt: skip
+        out[s] = {"kappas": kappas, "coverage": coverage, "fit": fit0}
+    return {"schema": V7R2_KAPPA_COMBINED_SCHEMA, "mode": mode, "surrogates": out, "parts": names,
+            "se_max": V7R2_KAPPA_SE_MAX,
+            "se_ok": all(c["se_ok"] for v in out.values() for c in v["coverage"].values())}  # fmt: skip
+
+
+V7R_LEGACY_KAPPA_N = 20_000
+
+
+def r2_calibration_kappas(kappa_doc: dict[str, Any], surrogate: str) -> dict[str, float]:
+    """The five margin kappas of one surrogate from a combined kappa record (``nominal`` = 1)."""
+    if kappa_doc.get("schema") != V7R2_KAPPA_COMBINED_SCHEMA or kappa_doc.get("mode") != "v7r2":
+        raise SystemExit("kappa record: not a V7-R2 combined kappa record")
+    if not kappa_doc.get("se_ok"):
+        raise SystemExit(f"kappa record: coverage SE exceeds {V7R2_KAPPA_SE_MAX}")
+    k = kappa_doc["surrogates"][surrogate]["kappas"]
+    return {"nominal": 1.0, **{m: float(k[m]) for m in KAPPA_MARGINS}}
+
+
+# -- rep-based timing rule (route 4.1 (iii); plan 6.1, 6.7 item 7) ---------------------------------
+R2_STEP_TARGET_S = 1100.0  # planning target per step (27 % headroom under the 1500 s limit)
+R2_STEP_LIMIT_S = 1500.0  # hard limit (run_suite.HOST_STEP_WALL_LIMIT_S)
+R2_CAL_S_PER_REP = 12.2  # slow host, 10 800 replicates (plan 6.1; EXTRAPOLATED until one part is measured)
+R2_CAL_FIXED_S = 70.0  # per-part fixed cost (surrogate fit or pool load, record load)
+R2_KAPPA_S_PER_ROW = {"pair": 1.29e-3, "single": 0.65e-3}  # slow host, per pair / per single replicate
+
+
+def rep_plan(name: str, items: int, s_per_item: float, fixed_s: float, declared_parts: int, *,
+             target_s: float = R2_STEP_TARGET_S, limit_s: float = R2_STEP_LIMIT_S) -> dict[str, Any]:
+    """Shard-table row of a repetition-based step family (Monte Carlo repetitions or kappa rows; the history-based
+    ``steps_v5d.shard_plan_c`` does not cover them). ``items`` are split over ``declared_parts`` steps by
+    ``cal_part_sizes`` (the largest part has ``ceil(items / parts)``); a part takes ``largest * s_per_item +
+    fixed_s``. ``parts_needed`` is the smallest part count whose largest part fits the target, ``ceil(items /
+    floor((target_s - fixed_s) / s_per_item))`` (3200 repetitions at 12.2 s: at most 84 per part, so 39 parts of 83 /
+    82). ``ok`` iff ``declared_parts >= parts_needed`` and the planned time is <= ``target_s`` (< ``limit_s``)."""
+    if target_s > limit_s or target_s <= fixed_s or s_per_item <= 0.0 or declared_parts < 1:
+        raise ValueError("rep_plan: need fixed_s < target_s <= limit_s, s_per_item > 0 and parts >= 1")
+    per_part_max = math.floor((target_s - fixed_s) / s_per_item)
+    if per_part_max < 1:
+        raise ValueError("rep_plan: not even one item fits the target")
+    needed = max(1, math.ceil(items / per_part_max))
+    largest = max(cal_part_sizes(items, declared_parts))
+    planned = largest * s_per_item + fixed_s
+    return {"name": name, "items": items, "s_per_item": s_per_item, "fixed_s": fixed_s,
+            "declared_parts": declared_parts, "parts_needed": needed, "largest_part_items": largest,
+            "planned_s_per_part": planned, "target_s": target_s, "limit_s": limit_s,
+            "headroom_to_limit": 1.0 - planned / limit_s,
+            "ok": bool(declared_parts >= needed and planned <= target_s)}  # fmt: skip
+
+
+def r2_rep_plans(*, cal_s_per_rep: float = R2_CAL_S_PER_REP, fixed_s: float = R2_CAL_FIXED_S) -> dict[str, Any]:
+    """The V7-R2 rep-based shard table: the 78 calibration parts and the six kappa steps. ``cal_s_per_rep`` is the
+    slow-host rate (replace the extrapolated default by the measurement of one short calibration part, plan 6.1)."""
+    plans = {"v7r2 calibration (3200 reps x 39 parts per surrogate)":
+             rep_plan("v7r2-calibration", V7R_CAL_REPS, cal_s_per_rep, fixed_s, V7R2_CAL_PARTS)}  # fmt: skip
+    for kind in V7R2_KAPPA_KINDS:
+        for p, n in enumerate(V7R2_KAPPA_PART_N[kind]):
+            plans[f"v7r2 kappa {kind} p{p}"] = rep_plan(  # n pairs (kind pair) / single replicates
+                f"v7r2-kappa-{kind}-p{p}", n, R2_KAPPA_S_PER_ROW[kind], fixed_s, 1
+            )
+    return {"plans": plans, "ok": all(v["ok"] for v in plans.values())}

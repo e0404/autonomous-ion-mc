@@ -177,7 +177,7 @@ def check_base(seed_base: int) -> None:
 
 # -- producers ----------------------------------------------------------------------------------
 def _produce(a: argparse.Namespace, name: str, kind: str, variant: str, r_index: int, backend: str,
-             precision: str) -> int:
+             precision: str, *, row: str | None = None, step: str | None = None) -> int:
     g = gv6()
     k = a.shard
     seed = seed_of(r_index, k)
@@ -196,7 +196,7 @@ def _produce(a: argparse.Namespace, name: str, kind: str, variant: str, r_index:
     eb = res.energy_balance
     ok = bool(v5.clean(res) and eb.relative_residual <= 1e-12 and np.all(np.isfinite(avg)))
     part = v5c.write_partial_c(a, name, {
-        "row": "V6-sens" if kind == "sens" else "V6", "name": name, "kind": kind, "variant": variant,
+        "row": row or ("V6-sens" if kind == "sens" else "V6"), "name": name, "kind": kind, "variant": variant,
         "shard": k, "seed": seed, "r_index": r_index, "n": n, "n_batches": nb, "backend": backend,
         "precision": precision, "beam": bp, "grid": grid_record(v6_geometry()[1]),
         "weights_digest": digest, "sphere": {"diameter_mm": g.SPHERE_DIAMETER_MM, "subsamples": g.SPHERE_SUBSAMPLES},
@@ -207,8 +207,8 @@ def _produce(a: argparse.Namespace, name: str, kind: str, variant: str, r_index:
         "outside_over_initial": float(eb.outside_mev[0] / eb.initial_mev),
         "convention": "(tan thx, tan thy, 1) normalised; theta = sigma_theta (rho g1 + sqrt(1 - rho^2) g2)",
     })  # fmt: skip
-    doc = {"step": {"v6": "v6-shard", "sens": "v6-sens-shard", "cuda": "v6-cuda-shard"}[kind],
-           "name": name.removesuffix(".json"), "row": "V6", "kind": kind, "variant": variant, "seed": seed,
+    doc = {"step": step or {"v6": "v6-shard", "sens": "v6-sens-shard", "cuda": "v6-cuda-shard"}[kind],
+           "name": name.removesuffix(".json"), "row": row or "V6", "kind": kind, "variant": variant, "seed": seed,
            "r_index": r_index, "backend": backend, "precision": precision, "beam": bp, "wall_s": wall,
            "hist_per_s": n / wall, "weights_digest": digest, "counters": res.counters.as_dict(),
            "relative_residual": float(eb.relative_residual), "partial": part, "pass": ok,

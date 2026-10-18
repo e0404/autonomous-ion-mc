@@ -309,7 +309,7 @@ def margin_kappas(
 def run_calibration(  # type: ignore[no-untyped-def]
     v7r: ModuleType, v5b: ModuleType, sampler, kappas: dict[str, float], reps: int, *,
     replicates: int = 7200, reps_per_shard: int = 450, b: int = 1999, n_boot: int | None = None,
-    data_seed0: int = SEED_DATA0, boot_seed0: int = SEED_BOOT0,
+    data_seed0: int = SEED_DATA0, boot_seed0: int = SEED_BOOT0, alpha_tost: float | None = None,
 ) -> dict[str, np.ndarray]:  # fmt: skip
     """Monte Carlo of both gates at each named ``kappa``: ``{name: [reps, 2]}`` booleans (paired,
     single). One bootstrap per repetition serves every kappa (the resamples do not depend on it).
@@ -327,9 +327,9 @@ def run_calibration(  # type: ignore[no-untyped-def]
         z_boot = None
         for name, kap in kappas.items():
             g = v7r.single_gate(si, means, kap, boot_seed=seed_base, n_boot=n_boot,
-                                z_boot_override=z_boot)  # fmt: skip
+                                z_boot_override=z_boot, alpha_tost=alpha_tost)  # fmt: skip
             z_boot = g["z_boot"]
-            out[name][r] = (v7r.pair_gate(pi, kap)["pass"], g["pass"])
+            out[name][r] = (v7r.pair_gate(pi, kap, alpha_tost=alpha_tost)["pass"], g["pass"])
     return out
 
 

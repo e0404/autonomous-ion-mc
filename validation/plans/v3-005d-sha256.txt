@@ -22,7 +22,7 @@ d27e77902a86b442c6690f6da87f8cfa036e688b677ddef3117e84f6f920afba  v3-005d-m2prim
 fc8771d938a26f5ec444628f0da1ab5a23f076de478660eba7ea0200b4ba35d4  v3-005d-m2prime/scripts/m2prime2.py
 ab1b1f9a928c850ed9394c438fec7e86da6608594e23900a3e620cc5d6b4fb37  v3-005d-m2prime/scripts/make_projection.py
 944fd2392e1d57f6f734a67d2f1189b85a692ad64ea0eaba87d2bd055bffe08f  v3-005d-m2prime/scripts/olg.py
-50fef5a3bffed0d533fabce7f7fb8d358785d9849e5aeee817ec9d0333455fa1  v3-005d-v7r-calibration-repair.md
+d45a37f44c5dccd8565f8b549b46863d2107d872c9eb7a2073c32618b5c54307  v3-005d-v7r-calibration-repair.md
 a3886474c5517d9fe4af8e3bbcfc8f773b52f9ca76c73457edb9f1d241423dd4  v3-005d-v7r-calibration-repair/data/analyse_direct.out
 3f0e30387898c913002e9258bf55f26c45763be25de2b68b4edf7c90127a5ce1  v3-005d-v7r-calibration-repair/data/designs2.out
 7d60fec31c6f385227da91cfd6388d597dcadd8dce21920366247216a59ad8a3  v3-005d-v7r-calibration-repair/data/designs3.out
@@ -41,7 +41,7 @@ b0b8f93bdab7244dca859f798b727c39b159e0f40f3770c7213efb8a59117364  v3-005d-v7r-ca
 ff3f44c3030f9ad26e6dfecd7e18ce6b694b8b8f91c881a690c1e7d48701a53d  v3-005d-v7r-calibration-repair/review-scripts/r4.py
 65eac19b9cfaf141e305aae4d93ea3dc034d447365ccacdb410e983f4180575d  v3-005d-v7r-calibration-repair/review-scripts/seeds_r2.py
 49c7b8c2fe94ffd2ba2184afb2a7145733634de668643fd5722ca54b37fda005  v3-005d-v7r-calibration-repair/review-scripts/sens.py
-754c18305eb9d0b40175e0df9b9bdb19d74b4e973723f398d984f94a48b01c13  v3-005d-v7r-calibration-repair/review.md
+0310d4a3bd9b350b7e7836c3d28d3af572fa16135de73f32b622dd0725f7d3e0  v3-005d-v7r-calibration-repair/review.md
 2abda75971103b0ee0b647792d2c44d3b8b9988bc8de7804dd093b92d155ee2b  v3-005d-v7r-calibration-repair/scripts/analyse_direct.py
 17fcdbdd16fdf20c625bfd9b3be2ef3cd804f875cab304e89a8f2ce916faf199  v3-005d-v7r-calibration-repair/scripts/designs.py
 643ccf8241bc7395d8cc122289de4ea40ce58add29950a9e489cf7d60a6aa0e3  v3-005d-v7r-calibration-repair/scripts/designs2.py

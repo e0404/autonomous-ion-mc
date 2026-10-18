@@ -314,21 +314,32 @@ def consumed_seed_set() -> set[int]:
             for k in CONSUMED_SHARDS}  # fmt: skip
 
 
-def v7r_seed_list(seed_base: int, n_shards: int = V7R_SHARDS) -> dict[str, list[int]]:
+def v7r_seed_list(seed_base: int, n_shards: int = V7R_SHARDS, ref_index: int = v7r.V7R_REF_INDEX
+                  ) -> dict[str, list[int]]:  # fmt: skip
     return {"shards": [seed_base + 1000 * v7r.V7R_R_INDEX + k for k in range(n_shards)],
-            "reference": [seed_base + 1000 * v7r.V7R_R_INDEX + v7r.V7R_REF_INDEX]}  # fmt: skip
+            "reference": [seed_base + 1000 * v7r.V7R_R_INDEX + ref_index]}  # fmt: skip
 
 
 def v7r_combine(
     shards: list[tuple[dict[str, Any], Path]], ref: dict[str, Any], seed_base: int, *,
     calibration: dict[str, Any], n_shards: int = V7R_SHARDS, n_boot: int = v5b.V7_BOOT_N,
+    design: str = "v7r",
 ) -> dict[str, Any]:
     """Document of row V7-R from the 16 shard partials (with sidecars) and the reference partial.
     Pure given its inputs; ``n_shards`` and ``n_boot`` exist for the CI-scale dry run only (the step
     uses the defaults). Fails closed (``SystemExit``) on a missing/invalid item, unequal replicate
     counts, a seed mismatch or a seed set intersecting a consumed evidence seed set. ``calibration`` is the
-    loaded ``v7r-calibration-status`` partial (Amendment 14a): ``pass`` requires its ``pass``."""
-    if calibration.get("step") != "v7r-calibration-combine" or not isinstance(
+    loaded ``v7r-calibration-status`` partial (Amendment 14a): ``pass`` requires its ``pass``.
+    ``design="v7r2"`` is the V7-R2 layout (repair plan 3.4; ``steps_v7r2`` below): ``n_shards`` shards of 225
+    replicates (pairs s <-> s + n_shards / 2), the reference index = ``n_shards`` (distinct from every shard
+    index), alpha_tost 0.005 on the two ``escaped_neutral`` gates and the ``v7r2-calibration-combine`` status.
+    The default design is the unchanged V7-R one."""
+    r2 = design == "v7r2"
+    if design not in ("v7r", "v7r2"):
+        raise SystemExit(f"v7r: unknown design {design!r}")
+    ref_index = n_shards if r2 else v7r.V7R_REF_INDEX
+    alpha_tost = v7r.V7R2_ALPHA_TOST if r2 else None
+    if calibration.get("step") != ("v7r2-calibration-combine" if r2 else "v7r-calibration-combine") or not isinstance(
         calibration.get("pass"), bool
     ):
         raise SystemExit(
@@ -336,7 +347,7 @@ def v7r_combine(
         )
     if len(shards) != n_shards:
         raise SystemExit(f"v7r: need {n_shards} shard partials, got {len(shards)}")
-    seeds = v7r_seed_list(seed_base, n_shards)
+    seeds = v7r_seed_list(seed_base, n_shards, ref_index)
     for k, (p, _) in enumerate(shards):
         if p.get("seed") != seeds["shards"][k] or p.get("shard") != k or not p.get("valid"):
             raise SystemExit(f"v7r shard {k}: seed/shard mismatch or invalid result")
@@ -354,6 +365,8 @@ def v7r_combine(
     if len(reps) != 1:
         raise SystemExit("v7r: all shards must hold equal replicate counts (pairing shard s with s + 8)")
     rps = reps.pop()
+    if r2 and rps != v7r.V7R2_REPS_PER_SHARD:
+        raise SystemExit(f"v7r2: shards hold {rps} replicates, expected {v7r.V7R2_REPS_PER_SHARD}")
     docs = [p for p, _ in shards]
     sums = np.concatenate([load_v7r_sidecar(p, path) for p, path in shards])
     ref_mean_en = np.array(ref["estimators"][SIDECAR_ESTIMATOR]["mean"], float)
@@ -382,7 +395,8 @@ def v7r_combine(
         spread = ref_blocks_en.std(axis=0, ddof=1)
         ref_used = bool(ref_mean_en[0] > 0.0 and spread[0] > 0.0)
         gate = v7r.escaped_neutral_verdict(sums, seed_base, boot_seed=int(ref["seed"]),
-                                           ref_used=ref_used, reps_per_shard=rps, n_boot=n_boot)  # fmt: skip
+                                           ref_used=ref_used, reps_per_shard=rps, n_boot=n_boot,
+                                           alpha_tost=alpha_tost)  # fmt: skip
         gate["amendment13_rule_report_only"] = verdict  # never used in ``pass``
         gate["amendment13_rule_report_only_note"] = (
             "the 20-block Student-t rule of Amendment 13; it cannot turn the Amendment 13 failure "
@@ -390,7 +404,7 @@ def v7r_combine(
         gate["reference_bin_used"] = ref_used
         estimators[name] = gate
     gates = bool(all(e["pass"] for e in estimators.values()))
-    return {
+    out: dict[str, Any] = {
         "replicates": int(rps * n_shards), "estimators": estimators, "units": v7r.V7R_UNITS,
         "histories_per_replicate": v5b.V7_REP_N, "reference_histories": ref["n"],
         "shard_histories": [p["n"] for p in docs], "bins": v5b.V7_BINS, "seed_base": seed_base,
@@ -398,14 +412,16 @@ def v7r_combine(
         "consumed_seed_bases": list(CONSUMED_SEED_BASES_C), "rng": v7r.rng_record(),
         "rule": {"region": list(v7r.V7R_REGION), "B": v7r.V7R_B, "alpha": v7r.V7R_ALPHA,
                  "ranks": [v7r.V7R_RANK_LO, v7r.V7R_RANK_HI], "quantile_rule": v7r.V7R_QUANTILE_RULE,
-                 "seed_rule": v7r.SEED_RULE, "alpha_tost": v5b.V7_ALPHA_TOST,
+                 "seed_rule": v7r.SEED_RULE, "alpha_tost": v5b.V7_ALPHA_TOST if alpha_tost is None else alpha_tost,
+                 **({"alpha_tost_profiles": v5b.V7_ALPHA_TOST, "design": "v7r2"} if r2 else {}),
                  "pairs": int(rps * n_shards) // 2,
-                 "pairing": "(shard s, replicate j) with (shard s + 8, replicate j)",
-                 "heldout": "shards 12-15", "evaluation": "shards 0-11", "min_pairs": v5b.V7_MIN_INTERVALS,
+                 "pairing": f"(shard s, replicate j) with (shard s + {n_shards // 2}, replicate j)",
+                 "heldout": f"shards {n_shards - n_shards // 4}-{n_shards - 1}",
+                 "evaluation": f"shards 0-{n_shards - n_shards // 4 - 1}", "min_pairs": v5b.V7_MIN_INTERVALS,
                  "profile_estimators": "Amendment 13 two-gate rule, frozen functions",
                  "escaped_neutral": "bootstrap-t two-gate rule; Amendment 13 rule report-only"},
         "gates_pass": gates,
-        "calibration_status": {"partial": CAL_STATUS_NAME, "pass": calibration["pass"],
+        "calibration_status": {"partial": CAL2_STATUS_NAME if r2 else CAL_STATUS_NAME, "pass": calibration["pass"],
                                "content_sha256": calibration.get("content_sha256"),
                                "reps": calibration.get("reps")},
         "row_pass_condition": (
@@ -416,6 +432,13 @@ def v7r_combine(
             "pytest step status)"),
         "pass": bool(gates and calibration["pass"]),
     }  # fmt: skip
+    if r2:
+        out["row"] = "V7-R2"
+        out["row_pass_condition"] = (
+            "V7-R2 passes iff the sealed v7r2-calibration-status partial of v7r2-calibration-combine passed "
+            "(kappa step, all 78 parts, combine at the evidence SHA; the calibration verdict is known before any "
+            "transport is observed) AND gates_pass (all three estimators pass both gates; repair plan 3.7 item 5)")
+    return out
 
 
 def step_v7r_combine(a: argparse.Namespace) -> int:
@@ -432,6 +455,7 @@ def step_v7r_combine(a: argparse.Namespace) -> int:
 
 # -- calibration combine (plan Amendment 14a) ----------------------------------------------------
 CAL_STATUS_NAME = "v7r-calibration-status.json"
+CAL2_STATUS_NAME = "v7r2-calibration-status.json"
 CAL_RECORD_FIELDS = ("surrogate", "part", "n", "margins", "fit", "reps_env", "seeds")
 
 
@@ -440,11 +464,16 @@ def cal_record_name(surrogate: str, part: int) -> str:
     return f"v7r-calibration-{surrogate}-p{part:02d}.json"
 
 
-def load_calibration_records(a: argparse.Namespace) -> list[dict[str, Any]]:
+def load_calibration_records(
+    a: argparse.Namespace, *, parts: int = v7r.CAL_PARTS, name_fn: Any = None, schema: str = v7r.CAL_SCHEMA,
+) -> list[dict[str, Any]]:
     """The 30 sealed records (2 surrogates x 15 parts) of the calibration shards, each found exactly once in ``--dirs``, verified
     against their ``content_sha256``, the schema and the run (``run_sha``, ``suite``); a record found in an
     imported directory must be in the partials manifest with exactly its digest (as ``steps_v5.load_partials``).
-    Every record used is appended to ``a.attested_partials`` (the attestation is built after all loads)."""
+    Every record used is appended to ``a.attested_partials`` (the attestation is built after all loads).
+    ``parts`` / ``name_fn`` / ``schema`` select the V7-R2 layout (78 records, ``cal2_record_name``); the defaults are
+    the V7-R ones."""
+    name_fn = cal_record_name if name_fn is None else name_fn
     imported = len(a.dirs) > 1
     manifest: dict[str, dict[str, str]] = {}
     if imported:
@@ -455,8 +484,8 @@ def load_calibration_records(a: argparse.Namespace) -> list[dict[str, Any]]:
         a.attested_partials = []
     out = []
     for s in v7r.CAL_SURROGATES:
-        for p in range(v7r.CAL_PARTS):
-            nm = cal_record_name(s, p)
+        for p in range(parts):
+            nm = name_fn(s, p)
             hits = [(i, q) for i, d in enumerate(a.dirs)
                     for q in (Path(d) / nm, Path(d) / "samples" / nm) if q.is_file()]  # fmt: skip
             if len(hits) != 1:
@@ -470,7 +499,7 @@ def load_calibration_records(a: argparse.Namespace) -> list[dict[str, Any]]:
                 raise SystemExit(
                     f"calibration record {nm}: content_sha256 does not match the document"
                 )
-            if doc.get("schema") != v7r.CAL_SCHEMA or any(k not in doc for k in CAL_RECORD_FIELDS):
+            if doc.get("schema") != schema or any(k not in doc for k in CAL_RECORD_FIELDS):
                 raise SystemExit(f"calibration record {nm}: wrong schema or missing field")
             if (doc["surrogate"], doc["part"]) != (s, p):
                 raise SystemExit(f"calibration record {nm}: identity differs from the file name")
@@ -515,6 +544,237 @@ def step_v7r_calibration_combine(a: argparse.Namespace) -> int:
         "file": CAL_STATUS_NAME,
         "content_sha256": json.loads(Path(path).read_text())["content_sha256"],
     }
+    return v5b.finish5b(doc, None, None, False)
+
+
+# -- V7-R2 kappa combine (repair plan 3.4, 6.5) --------------------------------------------------
+KAPPA_NAME = "v7r-kappa.json"
+KAPPA_RECORD_FIELDS = ("schema", "mode", "surrogate", "kind", "part", "n", "seeds", "fit", "arrays", "sidecar")
+
+
+def kappa_part_keys() -> list[tuple[str, str, int]]:
+    return [(s, k, p) for s in v7r.CAL_SURROGATES for k in v7r.V7R2_KAPPA_KINDS
+            for p in range(len(v7r.V7R2_KAPPA_PART_N[k]))]  # fmt: skip
+
+
+def load_kappa_records(
+    a: argparse.Namespace,
+) -> tuple[dict[tuple[str, str, int], dict[str, Any]], dict[tuple[str, str, int], dict[str, NDArray[np.float64]]]]:
+    """The six sealed kappa part records and their arrays (sidecar ``.npz`` next to the record; file and array
+    sha256 verified), each found exactly once in ``--dirs``, verified against ``content_sha256``, the schema, the
+    identity in the file name and the run (``run_sha``, ``suite``); a record found in an imported directory must be
+    in the partials manifest with exactly its digest. Every record used is appended to ``a.attested_partials``."""
+    imported = len(a.dirs) > 1
+    manifest: dict[str, dict[str, str]] = {}
+    if imported:
+        manifest, msha = v5.read_manifest(getattr(a, "partials_manifest", None))
+        a.attested_manifest_path = str(a.partials_manifest)
+        a.attested_manifest_sha256 = msha
+    if not hasattr(a, "attested_partials"):
+        a.attested_partials = []
+    recs: dict[tuple[str, str, int], dict[str, Any]] = {}
+    rows: dict[tuple[str, str, int], dict[str, NDArray[np.float64]]] = {}
+    for key in kappa_part_keys():
+        nm, npz_name = v7r.kappa_part_names(*key)
+        hits = [(i, q) for i, d in enumerate(a.dirs)
+                for q in (Path(d) / nm, Path(d) / "samples" / nm) if q.is_file()]  # fmt: skip
+        if len(hits) != 1:
+            raise SystemExit(f"kappa record {nm}: found {len(hits)} copies in {a.dirs} (need exactly 1)")
+        idx, hit = hits[0]
+        doc = json.loads(hit.read_text())
+        digest = v5.content_digest(doc)
+        if doc.get("content_sha256") != digest:
+            raise SystemExit(f"kappa record {nm}: content_sha256 does not match the document")
+        if doc.get("schema") != v7r.V7R2_KAPPA_SCHEMA or any(k not in doc for k in KAPPA_RECORD_FIELDS):
+            raise SystemExit(f"kappa record {nm}: wrong schema or missing field")
+        if (doc["surrogate"], doc["kind"], doc["part"]) != key:
+            raise SystemExit(f"kappa record {nm}: identity differs from the file name")
+        for k2, want in (("run_sha", os.environ.get("IONMC_RUN_SHA", "unknown")),
+                         ("suite", os.environ.get("IONMC_RUN_SUITE", "unknown"))):  # fmt: skip
+            if doc.get(k2) != want:
+                raise SystemExit(f"kappa record {nm}: {k2} is {doc.get(k2)!r}, expected {want!r}")
+        side = doc["sidecar"]
+        if side.get("file") != npz_name:
+            raise SystemExit(f"kappa record {nm}: sidecar file is {side.get('file')!r}, expected {npz_name}")
+        npz = hit.parent / npz_name
+        if not npz.is_file():
+            raise SystemExit(f"kappa record {nm}: sidecar {npz_name} not found next to the record")
+        raw = npz.read_bytes()
+        if hashlib.sha256(raw).hexdigest() != side.get("sha256"):
+            raise SystemExit(f"{npz_name}: file sha256 differs from the record")
+        try:
+            import io
+
+            with np.load(io.BytesIO(raw), allow_pickle=False) as z:
+                rows[key] = {k: np.asarray(z[k], dtype=np.float64) for k in z.files}
+        except Exception as exc:  # corrupt npz, pickled object arrays, ...
+            raise SystemExit(f"{npz_name}: unreadable sidecar: {exc!r}") from exc
+        entry: dict[str, Any] = {"name": nm, "content_sha256": digest, "origin": "current-run",
+                                 "host_run_id": None}  # fmt: skip
+        if idx != 0:
+            if nm not in manifest or manifest[nm]["content_sha256"] != digest:
+                raise SystemExit(f"kappa record {nm}: imported but not in the manifest with this digest")
+            entry.update(origin="imported", host_run_id=manifest[nm]["host_run_id"])
+        a.attested_partials.append(entry)
+        recs[key] = doc
+    return recs, rows
+
+
+def step_v7r_kappa_combine(a: argparse.Namespace) -> int:
+    """Consumer of the six kappa part records (``tests/ionmc/test_v7r2_calibration.py``): pools the per-row
+    statistics per (surrogate, kind), solves the four margin kappas by bisection and writes the sealed combined
+    kappa record ``v7r-kappa.json`` (kappa per margin, coverage at kappa with its SE, part hashes) that every V7-R2
+    calibration part reads and whose ``content_sha256`` it records."""
+    recs, rows = load_kappa_records(a)
+    combined = v7r.kappa_combine(recs, rows)
+    doc = {"step": "v7r-kappa-combine", **combined, "records": len(recs), "rng": v7r.rng_record(),
+           "attestation": v5.attestation_block(a), "pass": bool(combined["se_ok"])}  # fmt: skip
+    path = write_partial_c(a, KAPPA_NAME[:-5], doc)
+    doc["partial"] = {"file": KAPPA_NAME, "content_sha256": json.loads(Path(path).read_text())["content_sha256"]}
+    return v5b.finish5b(doc, None, None, False)
+
+
+# -- V7-R2 steps (repair plan 3.4, 6.5; Amendment 20 (f)1, (f)8): SEPARATE from the V7-R steps above ------
+# Planning note PN-V7R2-4: v7r2-s{k} (k = 0..47; 0..63 in the 7200 fallback), v7r2-ref, v7r2-combine, v7r2-diag,
+# v7r2-calibration-combine. The V7-R steps stay bit-identical for the dd976c5a archive. The same shard producer
+# run at rehearsal base 20505000, r_index 16, k = 0..3 is the 4 x 2.25e6 rehearsal fixture of Amendment 20 (f)6
+# (PN-V7R2-3). Host execution waits for the operator's decision (repair plan 3.4).
+# TODO(Amendment 20 (f)8, open, not decided here): declared_plans() entries / the rep-based timing rule of
+# v7r.r2_rep_plans for the kappa and calibration parts, and the slow-host measurement of one short part.
+def r2_seed(k: int) -> int:
+    return base.SEED_BASE + 1000 * v7r.V7R_R_INDEX + k
+
+
+def r2_shard_name(k: int) -> str:
+    return f"v7r2-s{k}"
+
+
+def step_v7r2_shard(a: argparse.Namespace) -> int:
+    k = a.shard
+    n = v4.scaled(v7r.V7R2_SHARD_N, a.scale, 2 * v5b.V7_REP_N, v5b.V7_REP_N)
+    nb = n // v7r.V7R_BATCH_N
+    t0 = time.perf_counter()
+    est = v5b.batch_estimates(v7r_config(n, nb, r2_seed(k), timeout=a.timeout))
+    wall = time.perf_counter() - t0
+    ok = bool(invalid_counters(est) == 0 and est["batch_assignment_ok"])
+    stats = {nm: v5b.v7_replicate_stats(x) for nm, x in v5b.v7_batch_arrays(est).items()}
+    reps = nb // v7r.V7R_BLOCKS_PER_REP
+    sums = np.asarray(est["block_sums"], float).reshape(reps, v7r.V7R_BLOCKS_PER_REP)
+    side = write_v7r_sidecar(Path(a.out_dir) / f"{r2_shard_name(k)}-{SIDECAR_ESTIMATOR}.npz", sums)
+    path = write_partial_c(a, r2_shard_name(k), {
+        "row": "v7-r2", "kind": "shard", "shard": k, "seed": r2_seed(k), "n": n, "n_batches": nb,
+        "batch_histories": v7r.V7R_BATCH_N, "blocks_per_replicate": v7r.V7R_BLOCKS_PER_REP,
+        "replicates": reps, "bins": v5b.V7_BINS, "valid": ok, "counters_sum": est["counters_sum"],
+        "counters_invalid": invalid_counters(est), "counters_by_name": counters_by_name(est),
+        "wall_s": wall, "estimators": {nm: {"mean": m.tolist(), "sem": s.tolist()} for nm, (m, s) in stats.items()},
+        "sidecar": side, "reduced": n < v7r.V7R2_SHARD_N})  # fmt: skip
+    load_ok = load_v7r_sidecar(json.loads(Path(path).read_text()), Path(path)).shape == sums.shape
+    doc = {"step": "v7r2-shard", "shard": k, "seed": r2_seed(k), "table": v5.table_record(),
+           **elastic_table_record(), "histories": n, "batches": nb, "replicates": reps,
+           "wall_s": wall, "hist_per_s": n / wall, "counters_sum": est["counters_sum"],
+           "counters_invalid": invalid_counters(est), "counters_by_name": counters_by_name(est),
+           "partial": path, "sidecar": side, "pass": bool(ok and load_ok)}  # fmt: skip
+    return v5b.finish5b(doc, v7r.V7R2_SHARD_N, n, n < v7r.V7R2_SHARD_N)
+
+
+def step_v7r2_ref(a: argparse.Namespace) -> int:
+    """Reference of the V7-R2 layout: index = the shard count (48 -> seed base + 16048; 7200 fallback: --r2-shards 64)."""
+    n = v4.scaled(v7r.V7R2_REF_N, a.scale, 20_000, v7r.V7R_REF_BLOCKS)
+    seed = r2_seed(getattr(a, "r2_shards", v7r.V7R2_SHARDS))
+    t0 = time.perf_counter()
+    est = v5b.batch_estimates(v7r_config(n, v7r.V7R_REF_BLOCKS, seed, timeout=a.timeout))
+    wall = time.perf_counter() - t0
+    ok = bool(invalid_counters(est) == 0 and est["batch_assignment_ok"])
+    ref = {}
+    for nm, x in v5b.v7_batch_arrays(est).items():
+        x = np.asarray(x, float).reshape(v7r.V7R_REF_BLOCKS, -1)
+        ref[nm] = {"mean": x.mean(axis=0).tolist(),
+                   "sem": (x.std(axis=0, ddof=1) / math.sqrt(v7r.V7R_REF_BLOCKS)).tolist(),
+                   "blocks": x.tolist()}  # fmt: skip
+    path = write_partial_c(a, "v7r2-ref", {
+        "row": "v7-r2", "kind": "reference", "seed": seed, "n": n, "n_batches": v7r.V7R_REF_BLOCKS,
+        "bins": v5b.V7_BINS, "valid": ok, "counters_sum": est["counters_sum"],
+        "counters_invalid": invalid_counters(est), "counters_by_name": counters_by_name(est), "wall_s": wall,
+        "estimators": ref, "reduced": n < v7r.V7R2_REF_N})  # fmt: skip
+    doc = {"step": "v7r2-ref", "seed": seed, "table": v5.table_record(), **elastic_table_record(),
+           "histories": n, "batches": v7r.V7R_REF_BLOCKS, "wall_s": wall, "hist_per_s": n / wall,
+           "counters_sum": est["counters_sum"], "counters_invalid": invalid_counters(est),
+           "counters_by_name": counters_by_name(est), "partial": path, "pass": ok}  # fmt: skip
+    return v5b.finish5b(doc, v7r.V7R2_REF_N, n, n < v7r.V7R2_REF_N)
+
+
+def step_v7r2_combine(a: argparse.Namespace) -> int:
+    ns = getattr(a, "r2_shards", v7r.V7R2_SHARDS)
+    names = [f"{r2_shard_name(k)}.json" for k in range(ns)] + ["v7r2-ref.json", CAL2_STATUS_NAME]
+    parts = load_partials_c(a, names)
+    status = parts.pop()[0]
+    doc = {"step": "v7r2-combine", "table": v5.table_record(), **elastic_table_record(),
+           **v7r_combine(parts[:-1], parts[-1][0], base.SEED_BASE, calibration=status, n_shards=ns, design="v7r2"),
+           "attestation": v5.attestation_block(a)}  # fmt: skip
+    n = sum(p["n"] for p, _ in parts)
+    return v5b.finish5b(doc, ns * v7r.V7R2_SHARD_N + v7r.V7R2_REF_N, n, any(p["reduced"] for p, _ in parts))
+
+
+def step_v7r2_diag(a: argparse.Namespace) -> int:
+    ns = getattr(a, "r2_shards", v7r.V7R2_SHARDS)
+    parts = load_partials_c(a, [f"{r2_shard_name(k)}.json" for k in range(ns)])
+    doc = {"step": "v7r2-diag", **v7r_diag(parts), "pass": True, "attestation": v5.attestation_block(a)}
+    n = sum(p["n"] for p, _ in parts)
+    return v5b.finish5b(doc, ns * v7r.V7R2_SHARD_N, n, any(p["reduced"] for p, _ in parts))
+
+
+def cal2_record_name(surrogate: str, part: int) -> str:
+    """File name of the sealed record of one V7-R2 calibration part (``tests/ionmc/test_v7r2_calibration.py``)."""
+    return f"v7r2-calibration-{surrogate}-p{part:02d}.json"
+
+
+def load_kappa_record(a: argparse.Namespace) -> dict[str, Any]:
+    """The sealed combined kappa record ``v7r-kappa.json`` (exactly one copy in ``--dirs``; digest, step, pass and,
+    for an imported copy, the manifest entry verified); appended to ``a.attested_partials``."""
+    hits = [(i, q) for i, d in enumerate(a.dirs) for q in (Path(d) / KAPPA_NAME, Path(d) / "samples" / KAPPA_NAME)
+            if q.is_file()]  # fmt: skip
+    if len(hits) != 1:
+        raise SystemExit(f"{KAPPA_NAME}: found {len(hits)} copies in {a.dirs} (need exactly 1)")
+    idx, hit = hits[0]
+    doc = json.loads(hit.read_text())
+    digest = v5.content_digest(doc)
+    if doc.get("content_sha256") != digest:
+        raise SystemExit(f"{KAPPA_NAME}: content_sha256 does not match the document")
+    if doc.get("step") != "v7r-kappa-combine" or doc.get("schema") != v7r.V7R2_KAPPA_COMBINED_SCHEMA or not doc.get("pass"):
+        raise SystemExit(f"{KAPPA_NAME}: not a passing combined kappa record")
+    rec: dict[str, Any] = {"name": KAPPA_NAME, "content_sha256": digest, "origin": "current-run", "host_run_id": None}
+    if idx != 0:
+        manifest, msha = v5.read_manifest(getattr(a, "partials_manifest", None))
+        if KAPPA_NAME not in manifest or manifest[KAPPA_NAME]["content_sha256"] != digest:
+            raise SystemExit(f"{KAPPA_NAME}: imported but not in the manifest with this digest")
+        rec.update(origin="imported", host_run_id=manifest[KAPPA_NAME]["host_run_id"])
+        a.attested_manifest_path = str(a.partials_manifest)
+        a.attested_manifest_sha256 = msha
+    if not hasattr(a, "attested_partials"):
+        a.attested_partials = []
+    a.attested_partials.append(rec)
+    return doc
+
+
+def step_v7r2_calibration_combine(a: argparse.Namespace) -> int:
+    """Consumer of the 78 V7-R2 calibration records: every record must carry the ``content_sha256`` of the sealed
+    kappa record (``v7r.calibration_combine`` fails closed otherwise); writes ``v7r2-calibration-status``."""
+    kdoc = load_kappa_record(a)
+    records = load_calibration_records(a, parts=v7r.V7R2_CAL_PARTS, name_fn=cal2_record_name,
+                                       schema=v7r.CAL2_SCHEMA)  # fmt: skip
+    verdict = v7r.calibration_combine(records, reps=v7r.V7R_CAL_REPS, parts=v7r.V7R2_CAL_PARTS,
+                                      seed_fn=v7r.r2_cal_part_seeds,
+                                      kappa_record_sha256=kdoc["content_sha256"],
+                                      kappa_fits={k: v["fit"] for k, v in kdoc["surrogates"].items()})  # fmt: skip
+    doc = {"step": "v7r2-calibration-combine", **verdict, "records": len(records),
+           "kappa_record": {"file": KAPPA_NAME, "content_sha256": kdoc["content_sha256"]},
+           "alpha_tost": v7r.V7R2_ALPHA_TOST,
+           "requirements": "as v7r-calibration-combine (joint CP95 upper <= 0.02 at each non-nominal margin; power CP95 "
+                           "lower >= 0.9 at the nominal; each gate alone CP95 upper <= 0.04 at its own margins), "
+                           "evaluated unchanged at R = 3200 over 39 parts per surrogate",
+           "rng": v7r.rng_record(), "attestation": v5.attestation_block(a)}  # fmt: skip
+    path = write_partial_c(a, CAL2_STATUS_NAME[:-5], doc)
+    doc["partial"] = {"file": CAL2_STATUS_NAME, "content_sha256": json.loads(Path(path).read_text())["content_sha256"]}
     return v5b.finish5b(doc, None, None, False)
 
 
@@ -728,6 +988,12 @@ STEPS = {
     "v7r-shard": step_v7r_shard,
     "v7r-ref": step_v7r_ref,
     "v7r-calibration-combine": step_v7r_calibration_combine,
+    "v7r-kappa-combine": step_v7r_kappa_combine,
+    "v7r2-shard": step_v7r2_shard,
+    "v7r2-ref": step_v7r2_ref,
+    "v7r2-combine": step_v7r2_combine,
+    "v7r2-diag": step_v7r2_diag,
+    "v7r2-calibration-combine": step_v7r2_calibration_combine,
     "v7r-combine": step_v7r_combine,
     "v7r-diag": step_v7r_diag,
     "v11-ionmc": step_v11_ionmc,
@@ -740,7 +1006,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("step", choices=sorted(STEPS))
     ap.add_argument("--scale", type=float, default=1.0, help="history-count factor (reduced run)")
     ap.add_argument("--workers", default="1", help="accepted for uniformity; one process")
-    ap.add_argument("--shard", type=int, default=0, help="v7r-shard: shard index 0..15")
+    ap.add_argument("--shard", type=int, default=0, help="v7r-shard: shard index 0..15; v7r2-shard: 0..47 (0..63)")
+    ap.add_argument("--r2-shards", type=int, choices=(v7r.V7R2_SHARDS, v7r.V7R2_FALLBACK_SHARDS),
+                    default=v7r.V7R2_SHARDS, help="v7r2 steps: shard count 48 (default) or the 7200 fallback 64")
     ap.add_argument("--energy", type=float, default=150.0, help="v11-ionmc: 150 or 200")
     ap.add_argument("--mode", choices=V11_MODES, default="emel", help="v11-ionmc: emel or emonly")
     ap.add_argument("--reference-dir", default=None, help="v11-compare: dir of REF-* runs")
@@ -755,6 +1023,8 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("need 0 < --scale <= 1")
     if args.step == "v7r-shard" and not 0 <= args.shard < V7R_SHARDS:
         raise SystemExit("v7r-shard: --shard outside 0..15")
+    if args.step == "v7r2-shard" and not 0 <= args.shard < args.r2_shards:
+        raise SystemExit(f"v7r2-shard: --shard outside 0..{args.r2_shards - 1}")
     if args.step == "v11-ionmc" and int(args.energy) not in V11_K:
         raise SystemExit("v11-ionmc: --energy 150 or 200")
     base.SEED_BASE = args.seed

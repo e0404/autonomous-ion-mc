@@ -23,6 +23,13 @@ EXPECTED_SHARD = {
     "batch_histories": 500,
     "blocks_per_replicate": 20,
 }
+EXPECTED_SHARD_R2 = {
+    "n": 2_250_000,
+    "replicates": 225,
+    "batch_histories": 500,
+    "blocks_per_replicate": 20,
+}
+R2_SHARDS = 4  # Amendment 20 (f)6: 4 x 2.25e6 at rehearsal seeds 20521000-20521003 (base 20505000 + 16000 + k)
 SEED_BASE_RANGE = (20505000, 20509499)
 
 
@@ -31,7 +38,8 @@ class RehearsalError(Exception):
 
 
 def load_rehearsal(
-    directory: Path, steps: ModuleType, run_suite: ModuleType, digest: str | None = None
+    directory: Path, steps: ModuleType, run_suite: ModuleType, digest: str | None = None,
+    layout: str = "v7r",
 ) -> tuple[np.ndarray, dict]:  # type: ignore[type-arg]
     """Verified pooled block sums ``[replicates, 20]`` of the rehearsal in ``directory`` and a
     record of what was verified, or ``RehearsalError`` listing every violation (module docstring).
@@ -39,7 +47,18 @@ def load_rehearsal(
     are ``base + 16000 + k`` (20521000+ for base 20505000). These coincide with the declared future
     hr5c base 20521004 only as a number, never as a used seed (hr5c seeds are
     ``base + 1000 r + k``, r >= 1).
-    ``digest`` overrides the current hashed-source digest (tests only)."""
+    ``digest`` overrides the current hashed-source digest (tests only).
+
+    ``layout="v7r2"`` (planning note PN-V7R2-3, Amendment 20 (f)6): exactly 4 shards ``v7r2-s{k}.json`` of 2.25e6
+    histories and 225 replicates (18 000 pooled blocks, no reference shard), the same seed rule and the same digest
+    rule, with the digest of the ``lv5d`` suite (TODO: registered with the lv5d suite; until then pass ``digest``);
+    the info record then also binds the partial digests and the sidecar sha256 of every shard. The default layout
+    is the unchanged V7-R one (2 or more shards of 4.5e6 / 450)."""
+    if layout not in ("v7r", "v7r2"):
+        raise ValueError(f"unknown rehearsal layout {layout!r}")
+    r2 = layout == "v7r2"
+    expected = EXPECTED_SHARD_R2 if r2 else EXPECTED_SHARD
+    pattern = "v7r2-s*.json" if r2 else "v7r-s*.json"
     bad: list[str] = []
     v7r = steps.v7r
     prov_path = directory / "PROVENANCE.json"
@@ -75,14 +94,27 @@ def load_rehearsal(
             bad.append(
                 f"PROVENANCE.json head_sha {prov['head_sha']!r} differs from code_sha {prov.get('code_sha')!r}"
             )
-        have = digest if digest is not None else run_suite.hashed_source_digest("lv5c")
+        if digest is not None:
+            have = digest
+        elif r2:
+            try:
+                have = run_suite.hashed_source_digest("lv5d")
+            except Exception as exc:  # the lv5d suite is not registered yet (open item, Amendment 20 (f)8)
+                raise RehearsalError(f"no lv5d hashed-source digest available: {exc!r}") from exc
+        else:
+            have = run_suite.hashed_source_digest("lv5c")
         if prov.get("hashed_source_digest") != have:
             bad.append(
                 "hashed_source_digest differs from the current hashed source set of lv5c "
                 "(the rehearsal is not at the evidence code, Amendment 17 (a)7)"
             )
-    parts = sorted(directory.glob("v7r-s*.json"))
-    if len(parts) < 2:
+    parts = sorted(directory.glob(pattern))
+    if r2:
+        if len(parts) != R2_SHARDS:
+            bad.append(f"{len(parts)} rehearsal partial(s) in {directory}, need exactly {R2_SHARDS} shards")
+        if (directory / "v7r2-ref.json").exists():
+            bad.append("a reference partial is present: the V7-R2 rehearsal has shards only")
+    elif len(parts) < 2:
         bad.append(f"{len(parts)} rehearsal partial(s) in {directory}, need >= 2 shards")
     recorded = prov.get("partial_digests") if isinstance(prov.get("partial_digests"), dict) else {}
     if prov and {p.name for p in parts} != set(recorded):
@@ -104,7 +136,7 @@ def load_rehearsal(
             bad.append(f"{nm}: valid is not true")
         if doc.get("reduced") is not False:
             bad.append(f"{nm}: reduced is not false")
-        for key, want in EXPECTED_SHARD.items():
+        for key, want in expected.items():
             if doc.get(key) != want:
                 bad.append(f"{nm}: {key} is {doc.get(key)!r}, expected {want}")
         shards.append(doc.get("shard"))
@@ -126,6 +158,8 @@ def load_rehearsal(
             blocks.append(steps.load_v7r_sidecar(doc, path))
         except SystemExit as exc:
             bad.append(f"{nm}: sidecar rejected: {exc}")
+    if r2 and sorted(shards, key=str) != [0, 1, 2, 3]:
+        bad.append(f"V7-R2 rehearsal shard indices are {shards}, expected 0..3")
     if len(set(shards)) != len(shards):
         bad.append(f"shard indices not unique: {shards}")
     if len(set(seeds)) != len(seeds):
@@ -134,4 +168,10 @@ def load_rehearsal(
         raise RehearsalError("; ".join(bad))
     info = {"shards": len(parts), **{k: prov[k] for k in
             ("seed_base", "code_sha", "host_run_ids", "hashed_source_digest")}}  # fmt: skip
+    if r2:
+        info["layout"] = "v7r2"
+        info["partial_digests"] = {nm: recorded[nm] for nm in sorted(recorded)}
+        info["sidecar_sha256"] = {
+            p.name: json.loads(p.read_text())["sidecar"]["sha256"] for p in parts
+        }
     return np.concatenate(blocks), info
