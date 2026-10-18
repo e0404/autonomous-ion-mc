@@ -11,7 +11,7 @@ import json
 import math
 import sys
 from pathlib import Path
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 from typing import Any
 
 import numpy as np
@@ -398,3 +398,84 @@ def test_producers_refuse_consumed_rehearsal_and_original_v6_seeds(
         with pytest.raises(SystemExit, match="consumed"):  # refused before any transport runs
             f6.main([step, "--shard", "0", *extra, *common, "--seed-base", "20481004"])
     assert not list(tmp_path.glob("*"))
+
+
+# -- reduced inputs can never pass (Codex REVIEW-84a466d5 finding 1) ----------------------------------
+def _docs(n: int, count: int, reduced: bool = False) -> list[dict[str, Any]]:
+    return [{"n": n, "reduced": reduced} for _ in range(count)]
+
+
+def test_input_counts_flag_reduced_and_short_inputs(f6: ModuleType) -> None:
+    full = {"cpu": _docs(1_000_000, 16), "cuda": _docs(1_000_000, 16), "sens": _docs(1_000_000, 56)}
+    c = f6.input_counts(full)
+    assert (
+        c["full"] is True
+        and c["histories_total"] == 88_000_000
+        and c["cpu"]["n_per_shard"] == [1_000_000]
+    )
+    red = {**full, "cuda": _docs(2000, 16, True)}
+    c = f6.input_counts(red)
+    assert (
+        c["full"] is False
+        and c["cuda"]["reduced_shards"] == 16
+        and c["cuda"]["histories"] == 32_000
+    )
+    short = {**full, "cpu": [*_docs(1_000_000, 15), {"n": 500_000, "reduced": False}]}
+    assert (
+        f6.input_counts(short)["cpu"]["reduced_shards"] == 1
+        and f6.input_counts(short)["full"] is False
+    )
+    flag_only = {**full, "sens": [*_docs(1_000_000, 55), {"n": 1_000_000, "reduced": True}]}
+    assert f6.input_counts(flag_only)["full"] is False
+    missing_flag = {
+        **full,
+        "cpu": [{"n": 1_000_000} for _ in range(16)],
+    }  # no `reduced` field: not trusted
+    assert f6.input_counts(missing_flag)["full"] is False
+
+
+def test_compare_with_reduced_partials_fails_and_records_the_counts(
+    f6: ModuleType, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    s6 = f6.s6
+    seen: dict[str, Any] = {}
+
+    def fake_load(
+        a: Any,
+        names: Any,
+        r_index: int,
+        kind: str,
+        variant: str,
+        backend: str,
+        precision: str,
+        n: int,
+    ) -> Any:
+        return [
+            {"name": nm, "n": 2000, "reduced": True, "seed": 1, "shard": k}
+            for k, nm in enumerate(names)
+        ]
+
+    def fake_finish(doc: dict[str, Any], frozen: Any, used: Any, reduced: bool) -> int:
+        seen.update(doc=doc, frozen=frozen, used=used, reduced=reduced)
+        return 0 if doc.get("pass") else 1
+
+    monkeypatch.setattr(s6, "_load_group", fake_load)
+    monkeypatch.setattr(f6.v5b, "finish5b", fake_finish)
+    monkeypatch.setattr(f6.v5, "attestation_block", lambda a: {})
+    a = SimpleNamespace(dirs=[str(tmp_path)], out_dir=str(tmp_path), seed=20551004, scale=0.002)
+    assert f6.step_v6f_compare(a) == 1
+    doc = seen["doc"]
+    assert (
+        doc["pass"] is False
+        and doc["reduced"] is True
+        and doc["verdict"] == "fail (reduced inputs)"
+    )
+    assert (
+        seen["reduced"] is True
+        and seen["used"] == (16 + 16 + 56) * 2000
+        and seen["frozen"] == 88_000_000
+    )
+    assert (
+        doc["input_counts"]["full"] is False and doc["input_counts"]["cpu"]["reduced_shards"] == 16
+    )
+    assert "reduced" in doc["reasons"][0]

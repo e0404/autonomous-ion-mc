@@ -347,6 +347,11 @@ def v7r_combine(
         )
     if len(shards) != n_shards:
         raise SystemExit(f"v7r: need {n_shards} shard partials, got {len(shards)}")
+    if r2 and calibration.get("layout") != v7r.r2_calibration_layout(n_shards):
+        raise SystemExit(
+            f"v7r2: the calibration status is bound to layout {calibration.get('layout')!r}, the {n_shards}-shard "
+            f"transport needs {v7r.r2_calibration_layout(n_shards)!r} (a matching calibration record is required; the "
+            "64-shard fallback calibration is not implemented, repair plan 6.2; fail closed)")
     seeds = v7r_seed_list(seed_base, n_shards, ref_index)
     for k, (p, _) in enumerate(shards):
         if p.get("seed") != seeds["shards"][k] or p.get("shard") != k or not p.get("valid"):
@@ -742,6 +747,10 @@ def load_kappa_record(a: argparse.Namespace) -> dict[str, Any]:
         raise SystemExit(f"{KAPPA_NAME}: content_sha256 does not match the document")
     if doc.get("step") != "v7r-kappa-combine" or doc.get("schema") != v7r.V7R2_KAPPA_COMBINED_SCHEMA or not doc.get("pass"):
         raise SystemExit(f"{KAPPA_NAME}: not a passing combined kappa record")
+    for key, want in (("run_sha", os.environ.get("IONMC_RUN_SHA", "unknown")),
+                      ("suite", os.environ.get("IONMC_RUN_SUITE", "unknown"))):  # fmt: skip
+        if doc.get(key) != want:  # exact-SHA evidence rule
+            raise SystemExit(f"{KAPPA_NAME}: {key} is {doc.get(key)!r}, expected {want!r}")
     rec: dict[str, Any] = {"name": KAPPA_NAME, "content_sha256": digest, "origin": "current-run", "host_run_id": None}
     if idx != 0:
         manifest, msha = v5.read_manifest(getattr(a, "partials_manifest", None))
@@ -763,11 +772,12 @@ def step_v7r2_calibration_combine(a: argparse.Namespace) -> int:
     records = load_calibration_records(a, parts=v7r.V7R2_CAL_PARTS, name_fn=cal2_record_name,
                                        schema=v7r.CAL2_SCHEMA)  # fmt: skip
     verdict = v7r.calibration_combine(records, reps=v7r.V7R_CAL_REPS, parts=v7r.V7R2_CAL_PARTS,
-                                      seed_fn=v7r.r2_cal_part_seeds,
+                                      seed_fn=v7r.r2_cal_part_seeds, layout=v7r.r2_part_layout(),
                                       kappa_record_sha256=kdoc["content_sha256"],
                                       kappa_fits={k: v["fit"] for k, v in kdoc["surrogates"].items()})  # fmt: skip
     doc = {"step": "v7r2-calibration-combine", **verdict, "records": len(records),
            "kappa_record": {"file": KAPPA_NAME, "content_sha256": kdoc["content_sha256"]},
+           "layout": v7r.r2_calibration_layout(v7r.V7R2_SHARDS),
            "alpha_tost": v7r.V7R2_ALPHA_TOST,
            "requirements": "as v7r-calibration-combine (joint CP95 upper <= 0.02 at each non-nominal margin; power CP95 "
                            "lower >= 0.9 at the nominal; each gate alone CP95 upper <= 0.04 at its own margins), "

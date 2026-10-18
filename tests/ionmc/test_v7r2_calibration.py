@@ -152,6 +152,8 @@ def load_kappa_doc(cov: ModuleType, directory: Path | None) -> dict[str, Any]:
         pytest.fail(
             "the kappa record is not a sealed passing combined record: the part refuses to run"
         )
+    if any(doc.get(k) != v for k, v in _env_run().items()):  # exact-SHA evidence rule
+        pytest.fail("the kappa record belongs to another run_sha / suite: the part refuses to run")
     return doc
 
 
@@ -283,7 +285,7 @@ def _make_kappa_dir(cov: ModuleType, v7r: ModuleType, s5c: ModuleType, tiny: Any
     sealed: dict[str, Any] = {}
 
     def fake_write(a: Any, name: str, doc: dict[str, Any]) -> str:
-        sealed.update(cov._seal(doc))
+        sealed.update(cov._seal({**_env_run(), **doc}))  # write_partial_c binds run_sha / suite
         path = Path(a.out_dir) / f"{name}.json"
         path.write_text(json.dumps(sealed, sort_keys=True))
         print(f"PARTIAL {path.name} {sealed['content_sha256']}")
@@ -371,6 +373,9 @@ def test_calibration_parts_consume_the_kappa_record_and_refuse_otherwise(
         )
     # the consumer: 78 records + kappa record -> status partial; fit mismatch against the kappa record is fail closed
     monkeypatch.setattr(v7r, "V7R_CAL_REPS", 78)
+    monkeypatch.setattr(
+        v7r, "r2_part_layout", lambda: {"replicates": 40, "reps_per_shard": 5, "parts": 39}
+    )  # tiny test layout
     a = SimpleNamespace(dirs=[str(tmp_path)], out_dir=str(tmp_path))
     assert s5c.step_v7r2_calibration_combine(a) in (0, 1)
     status = json.loads((tmp_path / "v7r2-calibration-status.json").read_text())
@@ -441,3 +446,70 @@ def test_v7r2_rehearsal_loader_layout(cov: ModuleType, v7r: ModuleType, tmp_path
     (tmp_path / "v7r2-ref.json").write_text("{}")
     with pytest.raises(cov.RehearsalError, match="shards only"):
         cov.load_rehearsal(tmp_path, s5c, rs, digest=digest, layout="v7r2")
+
+
+def test_foreign_sha_kappa_record_is_rejected_by_parts_and_consumers(
+    cov: ModuleType,
+    v7r: ModuleType,
+    s5c: ModuleType,
+    tiny: Any,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _make_kappa_dir(cov, v7r, s5c, tiny, tmp_path, monkeypatch)
+    assert load_kappa_doc(cov, tmp_path)["run_sha"] == "unknown"
+    a = SimpleNamespace(dirs=[str(tmp_path)], out_dir=str(tmp_path))
+    assert s5c.load_kappa_record(a)["suite"] == "unknown"
+    monkeypatch.setenv(
+        "IONMC_RUN_SHA", "f" * 40
+    )  # the current run is another SHA than the record's
+    with pytest.raises(pytest.fail.Exception, match="another run_sha"):
+        load_kappa_doc(cov, tmp_path)
+    with pytest.raises(SystemExit, match="run_sha"):
+        s5c.load_kappa_record(a)
+    with pytest.raises(SystemExit, match="run_sha"):
+        s5c.step_v7r2_calibration_combine(a)
+    monkeypatch.delenv("IONMC_RUN_SHA")
+    monkeypatch.setenv("IONMC_RUN_SUITE", "lv5x")
+    with pytest.raises(SystemExit, match="suite"):
+        s5c.load_kappa_record(a)
+
+
+def test_calibration_layout_is_bound_to_the_design(v7r: ModuleType) -> None:
+    assert v7r.r2_calibration_layout(48) == {
+        "shards": 48,
+        "replicates": 10800,
+        "pairs": 5400,
+        "parts": 39,
+    }
+    fb = v7r.r2_calibration_layout(
+        64
+    )  # the 7200-pair fallback has no calibration producer: parts is None
+    assert fb["replicates"] == 14400 and fb["pairs"] == 7200 and fb["parts"] is None
+    assert v7r.r2_part_layout() == {"replicates": 10800, "reps_per_shard": 225, "parts": 39}
+
+
+def test_calibration_combine_rejects_parts_of_another_layout(v7r: ModuleType) -> None:
+    kw: dict[str, Any] = {
+        "parts": 39,
+        "seed_fn": v7r.r2_cal_part_seeds,
+        "layout": v7r.r2_part_layout(),
+    }
+    recs = []
+    for si, s in enumerate(v7r.CAL_SURROGATES):
+        for p in range(39):
+            n = v7r.cal_part_sizes(3200, 39)[p]
+            m = {
+                k: {"kappa": 1.0, "accepted_joint": 0, "accepted_paired": 0, "accepted_single": 0}
+                for k in v7r.CAL_MARGINS
+            }
+            m["nominal"].update(accepted_joint=n, accepted_paired=n, accepted_single=n)
+            recs.append({"surrogate": s, "part": p, "n": n, "margins": m, "fit": {}, "reps_env": 3200,
+                         "seeds": v7r.r2_cal_part_seeds(si, p), "layout": v7r.r2_part_layout()})  # fmt: skip
+    assert v7r.calibration_combine(recs, **kw)["pass"] is True
+    recs[4]["layout"] = {**v7r.r2_part_layout(), "replicates": 14400}
+    with pytest.raises(SystemExit, match="layout"):
+        v7r.calibration_combine(recs, **kw)
+    recs[4].pop("layout")
+    with pytest.raises(SystemExit, match="layout"):
+        v7r.calibration_combine(recs, **kw)

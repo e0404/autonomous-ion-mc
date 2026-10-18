@@ -525,6 +525,7 @@ def calibration_evaluate(counts: dict[str, dict[str, int]]) -> dict[str, Any]:
 def calibration_combine(
     records: list[dict[str, Any]], reps: int = V7R_CAL_REPS, *, parts: int = CAL_PARTS,
     seed_fn: Any = None, kappa_record_sha256: str | None = None, kappa_fits: dict[str, Any] | None = None,
+    layout: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Pooled verdict of the calibration shards. ``records`` are the sealed shard records (one per
     (surrogate, part), exactly once; fail closed with ``SystemExit`` otherwise), each holding the counts and the
@@ -538,7 +539,8 @@ def calibration_combine(
     record: every part must carry exactly that ``kappa_record_sha256`` (a part without it, or with another, fails
     the calibration closed; plan 6.7 item 6). ``kappa_fits`` ({surrogate: fit block} of the combined kappa record) makes
     every part's surrogate ``fit`` block (family / parameters or fixture digest and sidecar hashes) equal the one the
-    kappa step used, fail closed."""
+    kappa step used, fail closed. ``layout`` (V7-R2: ``r2_part_layout()``) must equal every part's recorded ``layout``
+    (replicates, replicates per shard, parts), so a part produced for another design is rejected."""
     seed_fn = cal_part_seeds if seed_fn is None else seed_fn
     sizes = cal_part_sizes(reps, parts)
     by: dict[tuple[Any, Any], dict[str, Any]] = {}
@@ -569,6 +571,8 @@ def calibration_combine(
                 raise SystemExit(f"calibration record {tag}: n {r.get('n')!r} is not {sizes[p]}")
             if r.get("seeds") != seed_fn(si, p):
                 raise SystemExit(f"calibration record {tag}: seeds differ from the derived ones")
+            if layout is not None and r.get("layout") != layout:
+                raise SystemExit(f"calibration record {tag}: layout {r.get('layout')!r} is not {layout!r}")
             if kappa_fits is not None and r.get("fit") != kappa_fits.get(s):
                 raise SystemExit(f"calibration record {tag}: fit block differs from the kappa record's")
             if kappa_record_sha256 is not None and r.get("kappa_record_sha256") != kappa_record_sha256:
@@ -822,6 +826,22 @@ def r2_calibration_kappas(kappa_doc: dict[str, Any], surrogate: str) -> dict[str
 
 
 # -- rep-based timing rule (route 4.1 (iii); plan 6.1, 6.7 item 7) ---------------------------------
+def r2_part_layout() -> dict[str, Any]:
+    """Layout every V7-R2 calibration part records (the 5400-pair design: 10 800 replicates of 225, 39 parts)."""
+    return {"replicates": V7R2_REPLICATES, "reps_per_shard": V7R2_REPS_PER_SHARD, "parts": V7R2_CAL_PARTS}
+
+
+def r2_calibration_layout(shards: int) -> dict[str, Any]:
+    """Design a V7-R2 calibration status must be bound to for a ``shards``-shard transport layout: shards,
+    replicates, pairs and calibration parts. Only the 48-shard design (5400 pairs, 39 parts per surrogate) has a
+    calibration producer; for any other shard count ``parts`` is ``None``, which no status record can equal, so a
+    combine refuses it. TODO (repair plan 6.2, 7200/0.005 column: 102 parts of 63 repetitions, 14 400 replicates):
+    the fallback calibration, to be implemented only if the selection rule of 3.8 picks 64 x 2.25e6."""
+    reps = shards * V7R2_REPS_PER_SHARD
+    return {"shards": shards, "replicates": reps, "pairs": reps // 2,
+            "parts": V7R2_CAL_PARTS if shards == V7R2_SHARDS else None}  # fmt: skip
+
+
 R2_STEP_TARGET_S = 1100.0  # planning target per step (27 % headroom under the 1500 s limit)
 R2_STEP_LIMIT_S = 1500.0  # hard limit (run_suite.HOST_STEP_WALL_LIMIT_S)
 R2_CAL_S_PER_REP = 12.2  # slow host, 10 800 replicates (plan 6.1; EXTRAPOLATED until one part is measured)

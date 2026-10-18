@@ -476,6 +476,21 @@ def _contrary(z: NDArray[np.float64], r: NDArray[np.float64], d_meas: NDArray[np
 
 
 # -- compare step -------------------------------------------------------------------------------
+def input_counts(groups: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
+    """Actual history counts and reduced flags of the loaded partials per group (``cpu``, ``cuda``, ``sens``).
+    ``full`` is true only if every shard holds exactly the frozen ``V6_SHARD_N`` histories and is not ``reduced``;
+    a reduced or short input can never support a pass (the verdict is forced to fail, never "full scale")."""
+    out: dict[str, Any] = {}
+    for name, docs in groups.items():
+        ns = [int(d.get("n", -1)) for d in docs]
+        red = [d.get("reduced") is not False or n != s6.V6_SHARD_N for d, n in zip(docs, ns, strict=True)]
+        out[name] = {"shards": len(docs), "histories": sum(max(n, 0) for n in ns), "n_per_shard": sorted(set(ns)),
+                     "reduced_shards": int(sum(red)), "full": not any(red)}  # fmt: skip
+    out["full"] = all(v["full"] for v in out.values())
+    out["histories_total"] = sum(v["histories"] for k, v in out.items() if k in groups)
+    return out
+
+
 def step_v6f_compare(a: argparse.Namespace) -> int:
     g = s6.gv6()
     check_v6f_seeds_base = a.seed
@@ -489,6 +504,16 @@ def step_v6f_compare(a: argparse.Namespace) -> int:
         sens_docs = {v: s6._load_group(a, tuple(f"v6f-sens-{v}-s{k}.json" for k in range(V6F_SENS_SHARDS)),
                                        V6F_R_SENS, "v6f-sens", v, "warp-cpu", "float64", V6F_SENS_SHARDS)
                      for v in V6F_SENS_RUNS}  # fmt: skip
+        counts = input_counts({"cpu": cpu_docs, "cuda": cuda_docs,
+                               "sens": [d for ds in sens_docs.values() for d in ds]})  # fmt: skip
+        doc["input_counts"] = counts
+        if not counts["full"]:  # reduced inputs: recorded, never a pass, never labelled full scale
+            doc.update(verdict="fail (reduced inputs)", reduced=True)
+            doc["pass"] = False
+            doc["reasons"] = ["reduced or short inputs (--scale < 1 or n != 1e6 per shard): V6-F cannot pass"]
+            doc["attestation"] = v5.attestation_block(a)
+            frozen = (V6F_CPU_SHARDS + V6F_CUDA_SHARDS + len(V6F_SENS_RUNS) * V6F_SENS_SHARDS) * s6.V6_SHARD_N
+            return v5b.finish5b(doc, frozen, counts["histories_total"], True)
         common = s6._consistent(cpu_docs)
         _, wdigest = s6.weights()
         if common["weights_digest"] != wdigest or common["beam"] != s6.beam_table()["nominal"]:
@@ -524,8 +549,9 @@ def step_v6f_compare(a: argparse.Namespace) -> int:
     doc["pass"] = bool(doc.get("pass", False))
     doc["reasons"] = reasons
     doc["attestation"] = v5.attestation_block(a)
-    n_cpu = V6F_CPU_SHARDS * s6.V6_SHARD_N
-    return v5b.finish5b(doc, n_cpu, n_cpu, False)
+    frozen = (V6F_CPU_SHARDS + V6F_CUDA_SHARDS + len(V6F_SENS_RUNS) * V6F_SENS_SHARDS) * s6.V6_SHARD_N
+    used = doc.get("input_counts", {}).get("histories_total", 0)
+    return v5b.finish5b(doc, frozen, used, False)
 
 
 STEPS = {

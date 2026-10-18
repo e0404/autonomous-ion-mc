@@ -539,6 +539,12 @@ def test_v7r2_combine_layout_alpha_and_fail_closed(tmp_path: Path) -> None:
         "pass": True,
         "reps": 3200,
         "content_sha256": "0" * 64,
+        "layout": {
+            "shards": 4,
+            "replicates": 900,
+            "pairs": 450,
+            "parts": None,
+        },  # test-only 4-shard design
     }
     doc = v5c.v7r_combine(
         shards, ref, 20531004, n_shards=4, n_boot=100, calibration=cal, design="v7r2"
@@ -582,3 +588,37 @@ def test_v7r2_combine_layout_alpha_and_fail_closed(tmp_path: Path) -> None:
         )
     with pytest.raises(SystemExit, match="design"):
         v5c.v7r_combine(shards, ref, 20531004, n_shards=4, calibration=cal, design="v7r3")
+
+
+def test_v7r2_combine_refuses_a_calibration_of_another_design(tmp_path: Path) -> None:
+    from tests.ionmc.test_v7r_infra import _load as load_infra
+    from tests.ionmc.test_v7r_infra import _synthetic_v7r
+
+    v5c = load_infra("steps_v5c")
+    v7r = v5c.v7r
+    shards, ref, _ = _synthetic_v7r(v5c, v7r, tmp_path, n_shards=4, rps=225, seed_base=20531004)
+    ref = {**ref, "seed": 20531004 + 16000 + 4}
+    cal = {
+        "step": "v7r2-calibration-combine",
+        "pass": True,
+        "reps": 3200,
+        "content_sha256": "0" * 64,
+    }
+    wrong = (
+        None,
+        v7r.r2_calibration_layout(48),  # the 5400-pair calibration cannot serve another shard count
+        {"shards": 4, "replicates": 900, "pairs": 450, "parts": 39},
+    )
+    for layout in wrong:
+        with pytest.raises(SystemExit, match="calibration status is bound to layout"):
+            v5c.v7r_combine(
+                shards,
+                ref,
+                20531004,
+                n_shards=4,
+                calibration={**cal, "layout": layout},
+                design="v7r2",
+            )
+    # 64 shards: the only calibration producer is the 48-shard one, so a 64-shard combine always refuses
+    assert v7r.r2_calibration_layout(64)["parts"] is None
+    assert v7r.r2_calibration_layout(64) != v7r.r2_calibration_layout(48)
