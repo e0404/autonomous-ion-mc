@@ -227,7 +227,7 @@ All ids and hashes are complete. The ENDF/B-VIII.0 neutron files were not acquir
 
 ## Dated sections
 
-None. No diagnostic or re-qualification is run in this state.
+The D-E8 go/no-go diagnostic below (2026-10-18) is the only dated section; no re-qualification run exists in this state (the statement "none" of the accepted revision 6 was superseded by the D-E8 execution the same day).
 
 ### 2026-10-18 — D-E8 go/no-go diagnostic of M2′ (Amendment 20 (c) carried by Amendment 21 (e) + addendum (a))
 
@@ -356,7 +356,7 @@ K*_shifted is the meaningful form. K*_literal is reported only as frozen: it is 
   - The gain residual is insensitive to the shape construction.
   - It confirms the pre-registered prognosis of Amendment 20 (c)5: a Geant4-like shape still leaves a residual of +0.00437 at 200 MeV (D-E6 swap-pA), and closing it in D-E6 needed the σ_pp arm, i.e. H3.
   - So the gain clause at 200 MeV fails for every candidate shape tried. The open finding H3, the non-monotonic Hale-NI p-p level at 130–150 MeV, is the recorded lead.
-- **Contributors to the 200 MeV gain gap, from the record.** Condition (ii) at 200 MeV fails for **every p+A shape tested**, including the D-E6 Geant4 CHIPS swap (+0.00437 residual). **The gain gap therefore cannot be closed by the p+A shape alone.** Two contributors can be identified:
+- **The 200 MeV gain gap, from the record.** Condition (ii) at 200 MeV fails for each of the four p+A shapes tested (M2′, M2, R-B and the D-E6 Geant4 CHIPS swap, +0.00437 residual). **None of the tested shapes closed the gap**; the record contains no extremal bound or search over admissible p+A angular distributions, so it does not establish that no p+A shape could. Two candidate contributors are identifiable from other records; neither is shown to be necessary:
   - **(1) p-p (H3).** The D-E6 σ_pp arm gave a further −0.00287 at 200 MeV.
   - **(2) The archived ionmc gain used by the frozen D2 formula.** It is 0.02672, against 0.0249 at the independent D-E3 seeds (the base gain_base 0.02491), a difference of about 1.4σ. With the D-E3 base value in place of the archived one, d would be 0.02123 − 0.01842 ≈ 0.0028, inside the allowed 0.00365.
 

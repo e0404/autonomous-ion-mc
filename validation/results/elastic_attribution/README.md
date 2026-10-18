@@ -39,7 +39,7 @@ Decision 0041 rules that Git holds no raw or derived nuclear data, only registry
 
 - Decisive conditions: (i), (i-b) and (ii) fail at 200 MeV; (iii) passes. (v) passes. (iv), report-only, holds at 3 of 3 in domain.
 - Report-only arms: M2 (full range) closure 1.046 / 0.843, failing only (ii) at 200 MeV. R-B fails (i) at both energies.
-- The 200 MeV gain residual (0.0046) is the same for every shape arm, and the D-E6 Geant4-shape swap also left +0.00437. Identifiable contributors: p-p (H3; D-E6 σ_pp arm −0.00287) and the archived ionmc gain in the frozen D2 formula (0.02672 against 0.0249 at the D-E3 seeds, about 1.4σ). Neither re-opens the frozen verdict.
+- The 200 MeV gain residual (0.0046) is the same for every shape arm, and the D-E6 Geant4-shape swap also left +0.00437: none of the four tested shapes closed the gap (the record does not establish that no p+A shape could). Candidate contributors identifiable from other records, neither shown to be necessary: p-p (H3; D-E6 σ_pp arm −0.00287) and the archived ionmc gain in the frozen D2 formula (0.02672 against 0.0249 at the D-E3 seeds, about 1.4σ). Neither re-opens the frozen verdict.
 - Record: `de8/`.
 - Consequence: "no model change" stands, and V5, V11 and V10-A at dd976c5a stay failed. The closure route of Amendment 20 (b‴)4 requires operator approval.
 
