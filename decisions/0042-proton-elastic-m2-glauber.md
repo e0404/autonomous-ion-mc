@@ -387,3 +387,5 @@ K*_shifted is the meaningful form. K*_literal is reported only as frozen: it is 
 - about 43.5 h host.
 
 A different model, or a σ_pp change, needs a new reviewed physics reason and a new amendment. The open findings H3 / H4 stay open.
+
+*Dated note (2026-10-18, after Codex REVIEW-5c0f8e0c, minor finding).* The frozen evaluator (`de8_diagnostic.py` at c509e351, `d4_report()`) projects the D4 rows of the water cases 0–4 only; the graphite cases 5–9, which Amendment 21 addendum (a) lists as report-only, are absent from `de8/de8.json` and `de8-report.md`. Their producer documents exist (`validation/generated/elastic_attribution/de5-m2prime/`, seeds 20991305–20991309, attempt log entries published-valid) but were not projected. The evaluator is frozen and the published evaluation cannot be re-run (once-only rule), so the omission is recorded here and is not corrected in the record; it does not touch the verdict (condition (iv) is defined on the water cases and is report-only). Any later graphite projection would be a separate report-only record from the existing producer documents, never a re-evaluation.
