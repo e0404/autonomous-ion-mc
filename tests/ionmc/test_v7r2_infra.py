@@ -526,12 +526,15 @@ def test_rep_plan_rejects_a_part_that_is_too_slow_or_too_few(v7r: ModuleType) ->
 
 
 # -- the V7-R2 combine (design="v7r2") ------------------------------------------------------------
-def test_v7r2_combine_layout_alpha_and_fail_closed(tmp_path: Path) -> None:
+def test_v7r2_combine_layout_alpha_and_fail_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from tests.ionmc.test_v7r_infra import _load as load_infra
     from tests.ionmc.test_v7r_infra import _synthetic_v7r
 
     v5c = load_infra("steps_v5c")
     v7r = v5c.v7r
+    monkeypatch.setattr(v7r, "V7R2_CALIBRATED_SHARDS", (4, 48))  # CI-scale layout only
     shards, ref, _ = _synthetic_v7r(v5c, v7r, tmp_path, n_shards=4, rps=225, seed_base=20531004)
     ref = {**ref, "seed": 20531004 + 16000 + 4}  # reference index = the shard count
     cal = {
@@ -590,12 +593,15 @@ def test_v7r2_combine_layout_alpha_and_fail_closed(tmp_path: Path) -> None:
         v5c.v7r_combine(shards, ref, 20531004, n_shards=4, calibration=cal, design="v7r3")
 
 
-def test_v7r2_combine_refuses_a_calibration_of_another_design(tmp_path: Path) -> None:
+def test_v7r2_combine_refuses_a_calibration_of_another_design(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from tests.ionmc.test_v7r_infra import _load as load_infra
     from tests.ionmc.test_v7r_infra import _synthetic_v7r
 
     v5c = load_infra("steps_v5c")
     v7r = v5c.v7r
+    monkeypatch.setattr(v7r, "V7R2_CALIBRATED_SHARDS", (4, 48))  # CI-scale layout only
     shards, ref, _ = _synthetic_v7r(v5c, v7r, tmp_path, n_shards=4, rps=225, seed_base=20531004)
     ref = {**ref, "seed": 20531004 + 16000 + 4}
     cal = {
@@ -622,3 +628,37 @@ def test_v7r2_combine_refuses_a_calibration_of_another_design(tmp_path: Path) ->
     # 64 shards: the only calibration producer is the 48-shard one, so a 64-shard combine always refuses
     assert v7r.r2_calibration_layout(64)["parts"] is None
     assert v7r.r2_calibration_layout(64) != v7r.r2_calibration_layout(48)
+
+
+def test_64_shard_combine_is_refused_even_with_a_fabricated_matching_status(tmp_path: Path) -> None:
+    from types import SimpleNamespace
+
+    from tests.ionmc.test_v7r_infra import _load as load_infra
+    from tests.ionmc.test_v7r_infra import _synthetic_v7r
+
+    v5c = load_infra("steps_v5c")
+    v7r = v5c.v7r
+    with pytest.raises(SystemExit, match="no calibration producer exists for 64 shards"):
+        v7r.require_r2_calibration_producer(64)
+    v7r.require_r2_calibration_producer(48)
+    fabricated = {
+        "step": "v7r2-calibration-combine",
+        "pass": True,
+        "reps": 3200,
+        "content_sha256": "0" * 64,
+        "layout": v7r.r2_calibration_layout(
+            64
+        ),  # exactly what the combine would otherwise compare against
+    }
+    shards, ref, _ = _synthetic_v7r(v5c, v7r, tmp_path, n_shards=4, rps=225, seed_base=20531004)
+    with pytest.raises(SystemExit, match="102 parts x 63 repetitions"):
+        v5c.v7r_combine(shards, ref, 20531004, n_shards=64, calibration=fabricated, design="v7r2")
+    with pytest.raises(
+        SystemExit, match="no calibration producer"
+    ):  # any count but 48, also before loading partials
+        v5c.v7r_combine(shards, ref, 20531004, n_shards=4, calibration=fabricated, design="v7r2")
+    a = SimpleNamespace(r2_shards=64, dirs=[str(tmp_path)], out_dir=str(tmp_path))
+    with pytest.raises(SystemExit, match="no calibration producer exists for 64 shards"):
+        v5c.step_v7r2_combine(a)
+    with pytest.raises(SystemExit, match="no calibration producer exists for 64 shards"):
+        v5c.step_v7r2_calibration_combine(a)

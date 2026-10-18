@@ -345,6 +345,8 @@ def v7r_combine(
         raise SystemExit(
             "v7r: the calibration status partial is missing or malformed (fail closed)"
         )
+    if r2:
+        v7r.require_r2_calibration_producer(n_shards)
     if len(shards) != n_shards:
         raise SystemExit(f"v7r: need {n_shards} shard partials, got {len(shards)}")
     if r2 and calibration.get("layout") != v7r.r2_calibration_layout(n_shards):
@@ -710,6 +712,7 @@ def step_v7r2_ref(a: argparse.Namespace) -> int:
 
 def step_v7r2_combine(a: argparse.Namespace) -> int:
     ns = getattr(a, "r2_shards", v7r.V7R2_SHARDS)
+    v7r.require_r2_calibration_producer(ns)  # before any partial is loaded
     names = [f"{r2_shard_name(k)}.json" for k in range(ns)] + ["v7r2-ref.json", CAL2_STATUS_NAME]
     parts = load_partials_c(a, names)
     status = parts.pop()[0]
@@ -768,6 +771,7 @@ def load_kappa_record(a: argparse.Namespace) -> dict[str, Any]:
 def step_v7r2_calibration_combine(a: argparse.Namespace) -> int:
     """Consumer of the 78 V7-R2 calibration records: every record must carry the ``content_sha256`` of the sealed
     kappa record (``v7r.calibration_combine`` fails closed otherwise); writes ``v7r2-calibration-status``."""
+    v7r.require_r2_calibration_producer(getattr(a, "r2_shards", v7r.V7R2_SHARDS))
     kdoc = load_kappa_record(a)
     records = load_calibration_records(a, parts=v7r.V7R2_CAL_PARTS, name_fn=cal2_record_name,
                                        schema=v7r.CAL2_SCHEMA)  # fmt: skip

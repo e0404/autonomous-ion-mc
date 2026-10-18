@@ -842,6 +842,24 @@ def r2_calibration_layout(shards: int) -> dict[str, Any]:
             "parts": V7R2_CAL_PARTS if shards == V7R2_SHARDS else None}  # fmt: skip
 
 
+V7R2_CALIBRATED_SHARDS = (V7R2_SHARDS,)
+"""Shard counts with a calibration producer. Only a test process may widen it (monkeypatch) to run the combine at CI
+scale; production code never does."""
+
+
+def require_r2_calibration_producer(shards: int) -> None:
+    """Fail closed for a shard count without a calibration producer (everything except 48): the combine and the
+    calibration-combine step call this FIRST, so that no status record, genuine or fabricated, can serve it. The
+    7200-pair fallback (64 x 2.25e6) needs its own calibration (repair plan 6.2, 7200/0.005 column: 102 parts of 63
+    repetitions, 14 400 replicates), which is not implemented."""
+    if shards not in V7R2_CALIBRATED_SHARDS:
+        raise SystemExit(
+            f"v7r2: no calibration producer exists for {shards} shards (only {V7R2_CALIBRATED_SHARDS}); the fallback "
+            "calibration (repair plan 6.2: 102 parts x 63 repetitions, 14 400 replicates) is not implemented "
+            "(fail closed)"
+        )
+
+
 R2_STEP_TARGET_S = 1100.0  # planning target per step (27 % headroom under the 1500 s limit)
 R2_STEP_LIMIT_S = 1500.0  # hard limit (run_suite.HOST_STEP_WALL_LIMIT_S)
 R2_CAL_S_PER_REP = 12.2  # slow host, 10 800 replicates (plan 6.1; EXTRAPOLATED until one part is measured)
