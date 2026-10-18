@@ -164,7 +164,8 @@ def _inputs(tmp: Path, pins: dict[str, str] | None = None) -> Path:
 
 
 def _fixture_dir(tmp: Path, name: str = "endf", leg: list | None = None) -> Path:  # type: ignore[type-arg]
-    """C-12 and a genuinely different O-16 (x1.1 coefficients) with shared records above 20 MeV
+    """C-12 and a genuinely different O-16 (x0.9 coefficients, mixed toward isotropic; x1.1 gave a
+    negative density at 45 MeV that the positivity gate rejects) with shared records above 20 MeV
     (default LEGHI); pass ``leg=LEG`` for the <= 20 MeV files that must fail the copy check."""
     leg = LEGHI if leg is None else leg
     d = tmp / name
