@@ -163,11 +163,14 @@ def _inputs(tmp: Path, pins: dict[str, str] | None = None) -> Path:
     return p
 
 
-def _fixture_dir(tmp: Path) -> Path:
-    d = tmp / "endf"
+def _fixture_dir(tmp: Path, name: str = "endf", leg: list | None = None) -> Path:  # type: ignore[type-arg]
+    """C-12 and a genuinely different O-16 (x1.1 coefficients) with shared records above 20 MeV
+    (default LEGHI); pass ``leg=LEG`` for the <= 20 MeV files that must fail the copy check."""
+    leg = LEGHI if leg is None else leg
+    d = tmp / name
     d.mkdir()
-    _write(d, "c12.endf", material(6012, 11.896, 625, leg=LEG))
-    leg_o = [(e, [x * 1.1 for x in a]) for e, a in LEG]
+    _write(d, "c12.endf", material(6012, 11.896, 625, leg=leg))
+    leg_o = [(e, [x * 0.9 for x in a]) for e, a in leg]  # 0.9 f + 0.05: positive if f is
     _write(d, "o16.endf", material(8016, 15.857, 825, leg=leg_o))
     return d
 
@@ -225,7 +228,7 @@ def test_copy_gate_distribution_level(tmp_path: Path) -> None:
     with pytest.raises(M3.M3Error, match="copy"):
         _model(_dir2(tmp_path, "cp2", c, o_tab), tmp_path)
     # a genuinely different O-16 passes and records the evidence
-    leg_o = [(e, [x * 1.1 for x in a]) for e, a in LEGHI]
+    leg_o = [(e, [x * 0.9 for x in a]) for e, a in LEGHI]
     ok = _model(_dir2(tmp_path, "ok", c, material(8016, 15.857, 825, leg=leg_o)), tmp_path)
     cc = ok.copy_check
     assert cc["evaluated"] and cc["n_mu_points"] == 181 and cc["shared_energies"] == 2
@@ -234,16 +237,24 @@ def test_copy_gate_distribution_level(tmp_path: Path) -> None:
     mixed = [(e, a if i < 4 else [x * 1.1 for x in a]) for i, (e, a) in enumerate(LEGHI)]
     with pytest.raises(M3.M3Error, match="copy"):
         _model(_dir2(tmp_path, "mx", c, material(8016, 15.857, 825, leg=mixed)), tmp_path)
-    # no shared energy above 20 MeV: criterion vacuous, recorded as not evaluated
-    low = _model(_fixture_dir(tmp_path), tmp_path)
-    assert low.copy_check["evaluated"] is False and "above 20 MeV" in low.copy_check["reason"]
+    # no shared energy above 20 MeV: the criterion cannot be established -> fail closed
+    with pytest.raises(M3.M3Error, match="share no record energy above 20 MeV"):
+        _model(_fixture_dir(tmp_path, "low", LEG), tmp_path)
+    # O-16 file missing: also fail closed
+    only_c = tmp_path / "only_c"
+    only_c.mkdir()
+    _write(only_c, "c12.endf", c)
+    with pytest.raises(M3.M3Error):
+        _model(only_c, tmp_path)
 
 
 def test_normalisation_gate(tmp_path: Path) -> None:
-    mu = [(-1.0, 0.2), (0.0, 0.5), (1.0, 0.8)]
-    ok = [(1.0e6, mu), (2.0e7, mu)]
-    bad = [(1.0e6, [(m, v * 1.0001) for m, v in mu]), (2.0e7, mu)]  # integral 1.0001
-    c = material(6012, 11.896, 625, ltt=2, tab=ok)
+    mu_c = [(-1.0, 0.2), (0.0, 0.5), (1.0, 0.8)]  # integral 1
+    mu_o = [(-1.0, 0.3), (0.0, 0.5), (1.0, 0.7)]  # integral 1, differs from C-12
+    energies = (1.0e6, 2.0e7, 3.0e7, 5.0e7)  # records above 20 MeV are shared with C-12
+    ok = [(e, mu_o) for e in energies]
+    bad = [(1.0e6, [(m, v * 1.0001) for m, v in mu_o]), *[(e, mu_o) for e in energies[1:]]]
+    c = material(6012, 11.896, 625, ltt=2, tab=[(e, mu_c) for e in energies])
     good = _model(_dir2(tmp_path, "n_ok", c, material(8016, 15.857, 825, ltt=2, tab=ok)), tmp_path)
     good.node("C-12", 5.0, 256)
     m = _model(_dir2(tmp_path, "n_bad", c, material(8016, 15.857, 825, ltt=2, tab=bad)), tmp_path)
@@ -253,8 +264,9 @@ def test_normalisation_gate(tmp_path: Path) -> None:
 
 
 def test_positivity_gates_no_clipping(tmp_path: Path) -> None:
-    neg = [(1.0e6, [0.3, 0.1]), (3.0e6, [0.95, 0.9, 0.7]), (2.0e7, [0.5, 0.2, 0.05, 0.01])]
-    c = material(6012, 11.896, 625, leg=LEG)
+    neg = [(1.0e6, [0.3, 0.1]), (3.0e6, [0.95, 0.9, 0.7]), *[(e, [x * 1.1 for x in a])
+                                                            for e, a in LEGHI[2:]]]  # fmt: skip
+    c = material(6012, 11.896, 625, leg=LEGHI)
     m = _model(_dir2(tmp_path, "neg", c, material(8016, 15.857, 825, leg=neg)), tmp_path)
     m.node("O-16", 1.0, 256)  # positive record
     with pytest.raises(M3.M3Error, match="negative"):
@@ -280,13 +292,13 @@ def test_moment_and_cdf_gate_records(tmp_path: Path) -> None:
 def test_hold_last_is_fixed_in_momentum_transfer(tmp_path: Path) -> None:
     m = _model(_fixture_dir(tmp_path), tmp_path)
     p_top, p_node = 400.0, 520.0  # CM momenta at E_top and at the node [MeV/c]
-    e_top, _ = m.node("C-12", 20.0, 256)
+    e_top, _ = m.node("C-12", 50.0, 256)
     with pytest.raises(M3.M3Error):
         m.node("C-12", 100.0, 256)  # needs the CM momenta
     with pytest.raises(M3.M3Error):
         m.node("C-12", 100.0, 256, 300.0, 400.0)  # node momentum below p_top
     e_node, rec = m.node("C-12", 100.0, 256, p_node, p_top)
-    assert rec["q_scaled"] is True and rec["e_used_mev"] == pytest.approx(20.0)
+    assert rec["q_scaled"] is True and rec["e_used_mev"] == pytest.approx(50.0)
     ratio = p_top / p_node
     assert rec["p_ratio_top_over_node"] == pytest.approx(ratio)
     # identity: q = 2 p sin(theta/2) of every edge is unchanged

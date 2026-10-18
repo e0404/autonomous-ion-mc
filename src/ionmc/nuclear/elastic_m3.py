@@ -278,20 +278,22 @@ class M3Model:
         the O-16 and C-12 MF4/MT2 angular distributions (Legendre or tabulated, converted to CM)
         are compared at EVERY shared incident energy above 20 MeV on 181 equally spaced mu_CM
         points. NOT a copy iff the relative difference ``|a - b| / max(|a|, |b|)`` exceeds 1e-3
-        at > 50 % of the points at > 50 % of the shared energies; otherwise ``M3Error``. If the
-        files share no incident energy above 20 MeV the criterion is vacuous: recorded as not
-        evaluated with the reason (the files' E_top is recorded in the provenance)."""
+        at > 50 % of the points at > 50 % of the shared energies; otherwise ``M3Error``. Fail
+        closed: if O-16 and C-12 are not both present, or share no incident energy above 20 MeV,
+        the criterion cannot be established and ``M3Error`` is raised (no table)."""
         o, c = self.mf4.get("O-16"), self.mf4.get("C-12")
         if o is None or c is None:
-            return {"evaluated": False, "reason": "O-16 and C-12 are not both present"}
+            raise M3Error("copy check cannot be established: O-16 and C-12 are not both present")
         shared = [
             float(e) for e in o.record_energies_ev()
             if e > COPY_CHECK_E_MIN_EV and np.any(np.isclose(c.record_energies_ev(), e, rtol=1e-12,
                                                              atol=0.0))
         ]  # fmt: skip
         if not shared:
-            return {"evaluated": False, "reason": "no shared incident energies above 20 MeV",
-                    "n_mu_points": COPY_CHECK_N_MU}  # fmt: skip
+            raise M3Error(
+                "copy check cannot be established: O-16 and C-12 share no record energy above "
+                "20 MeV"
+            )
         mu = np.linspace(-1.0, 1.0, COPY_CHECK_N_MU)
         n_diff = 0
         for e in shared:
