@@ -37,10 +37,21 @@
   },
   "reason_autonomous_resolution_not_possible": "The acquisition tool (infrastructure/experiment_v3/data.py) accepts public HTTPS only, has no local-file import path, and refuses downloads above MAX_BYTES; the only authoritative distribution of the two evaluations reachable by the tool is the NNDC sublibrary archive of 310 MB. Raising the cap by one constant preserves the full content-addressed provenance chain (NNDC → tool → acquisition record) and avoids any manually placed, provenance-less file. The alternative (below) keeps the chain only through an operator-controlled mirror. Nothing in this request changes validation scope, gates, requirements or verdicts; it is the narrow external action needed for the acquisition-first Option B you selected.",
   "requested_input": "Choose one: (1) RECOMMENDED — apply the one-constant change (MAX_BYTES 256 → 512 MiB in infrastructure/experiment_v3/data.py of /home/wahln/aiprojects/ion-mc), restart the MCP servers, and reply \"cap raised\"; I do the rest with the tool. (2) ALTERNATIVE without infrastructure change — download the two per-material files yourself from the IAEA mirror in a browser (https://www-nds.iaea.org/public/download-endf/ENDF-B-VIII.0/n/n_0625_6-C-12.zip and https://www-nds.iaea.org/public/download-endf/ENDF-B-VIII.0/n/n_0825_8-O-16.zip) or extract n-006_C_012.endf and n-008_O_016.endf from the NNDC archive, place the two files unchanged at a public HTTPS location you control (e.g. a release asset of a repository you own), and reply with the two URLs and the sha256 of each file; I acquire them with the tool using your sha256 as expected_sha256 and record the provenance as \"operator-provided mirror of NNDC/IAEA ENDF/B-VIII.0\" (identity verified from the MF1 header and the NNDC list, not from the source chain). (3) Neither — state another route. Nothing else is requested; the investigation of the p-p contribution and the archived-baseline sensitivity proceeds autonomously in parallel under independent review.",
-  "decisions_or_tasks_blocked": null,
+  "decisions_or_tasks_blocked": "M3 acquisition (ENDF/B-VIII.0 neutron C-12 MAT 625 / O-16 MAT 825) and the subsequent identity/provenance/coverage/suitability verification; the prospective M3 construction/evaluation plan and its independent review; any M3 construction or qualification evidence. Not blocked: the D-E9 investigation (archived-baseline sensitivity, p-p contribution), which proceeds in parallel.",
   "status": "open",
   "notification": {
     "status": "sent",
     "http_status": 200
-  }
+  },
+  "record_edits": [
+    {
+      "at_utc": "2026-10-19T00:10:20Z",
+      "by": "orchestrator",
+      "after_notification": true,
+      "reason": "Codex REVIEW-3c1ac74a findings: (1) decisions_or_tasks_blocked was null — filled; (2) the recommended action named an uncommitted in-place edit of the live MCP checkout, which the protocol does not allow as the operative infrastructure state — the version-controlled route is recorded here: the identical cap change is carried in a reviewed infrastructure task (V3-INFRA-001) and merged, the main checkout then pulls v3/develop and the MCP servers are restarted, and the acquisition records the infrastructure SHA used. Observed 2026-10-19 00:07 UTC: the operator raised the cap in place in the main checkout (MAX_BYTES = 1 GiB; note in experiment/v3/SETUP.md), uncommitted; whether the MCP server was restarted is unknown to the orchestrator. Substance of the request unchanged; the notification carried the original wording.",
+      "changed_fields": [
+        "decisions_or_tasks_blocked"
+      ]
+    }
+  ]
 }

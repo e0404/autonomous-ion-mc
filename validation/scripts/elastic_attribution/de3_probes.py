@@ -115,17 +115,45 @@ def build_config(
     return rep(cfg, run=rep(cfg.run, backend="warp-cpu", precision="float64"))
 
 
+REGISTERED_20992 = {  # D-E9 plan section 4: the registered block 20992000-20992199 (A1: 20992000-07 at 200 MeV, 20992010-13 at 150 MeV; B2: 20992100 / 20992101)
+    200: frozenset({*range(20992000, 20992008), 20992101}),
+    150: frozenset({*range(20992010, 20992014), 20992100}),
+}
+
+
+def check_seed_override(energy: int, seed: int) -> None:
+    """``--seed-override`` is guarded to the seeds the D-E9 plan registers for this energy (SystemExit otherwise)."""
+    if seed not in REGISTERED_20992.get(energy, frozenset()):
+        raise SystemExit(f"seed {seed} is not registered for {energy} MeV in the D-E9 block 20992000-20992199")
+
+
+def run_name(energy: int, variant: str, realisation: int | None = None) -> str:
+    return f"de3-{energy}-{variant}" + (f"-r{realisation}" if realisation is not None else "") + ".json"
+
+
 def run_one(
-    variant: str, energy: int, n: int, batches: int, lateral: bool, out: Path, attempts: Path | None = None
-) -> dict[str, Any]:
-    """One run -> ``out/de3-<energy>-<variant>.json``. The diagnostic arms (``m2prime``, ``m2``, ``rb``) are executed once: an existing target is
-    refused and an attempt record is appended to ``de8-attempts.json`` before the run (``common.begin_attempt``)."""
-    if variant not in ("m2prime", "m2", "rb"):
-        return _run_one(variant, energy, n, batches, lateral, out)
-    att = c.begin_attempt(out / f"de3-{energy}-{variant}.json", "de3_probes.run_one",
-                          {"variant": variant, "energy": energy, "histories": n, "batches": batches, "lateral": lateral}, attempts)  # fmt: skip
+    variant: str, energy: int, n: int, batches: int, lateral: bool, out: Path, attempts: Path | None = None,
+    *, seed_override: int | None = None, realisation: int | None = None, genealogy_split: bool = False,
+) -> dict[str, Any]:  # fmt: skip
+    """One run -> ``out/de3-<energy>-<variant>.json`` (``-r<k>`` with ``realisation``). The diagnostic arms (``m2prime``, ``m2``, ``rb``) and every
+    ``seed_override`` run (D-E9 realisations; seeds guarded to the registered 20992xxx block) are executed once: an existing target is refused
+    and an attempt record is appended to ``de8-attempts.json`` before the run (``common.begin_attempt``). ``genealogy_split`` adds the
+    secondary- and primary-proton dose channels (B2; existing scoring channels only)."""
+    if seed_override is not None:
+        check_seed_override(energy, seed_override)
+    kw: dict[str, Any] = {}
+    if seed_override is not None:
+        kw["seed_override"] = seed_override
+    if realisation is not None:
+        kw["realisation"] = realisation
+    if genealogy_split:
+        kw["genealogy_split"] = True
+    if variant not in ("m2prime", "m2", "rb") and seed_override is None:
+        return _run_one(variant, energy, n, batches, lateral, out, **kw)
+    att = c.begin_attempt(out / run_name(energy, variant, realisation), "de3_probes.run_one",
+                          {"variant": variant, "energy": energy, "histories": n, "batches": batches, "lateral": lateral, **kw}, attempts)  # fmt: skip
     try:
-        doc = _run_one(variant, energy, n, batches, lateral, out)
+        doc = _run_one(variant, energy, n, batches, lateral, out, **kw)
     except BaseException:
         c.end_attempt(att, "failed", attempts)
         raise
@@ -134,8 +162,9 @@ def run_one(
 
 
 def _run_one(
-    variant: str, energy: int, n: int, batches: int, lateral: bool, out: Path
-) -> dict[str, Any]:
+    variant: str, energy: int, n: int, batches: int, lateral: bool, out: Path,
+    *, seed_override: int | None = None, realisation: int | None = None, genealogy_split: bool = False,
+) -> dict[str, Any]:  # fmt: skip
     v5c, v5d, v5b, v5 = _t()
     from ionmc import materials as M
     from ionmc.reference import metrics as rm
@@ -143,7 +172,9 @@ def _run_one(
 
     mode = "emonly" if variant == "emonly" else "emel"
     tid = variant_table_id(variant)
-    seed = SEEDS[energy]
+    seed = SEEDS[energy] if seed_override is None else seed_override
+    if seed_override is not None:
+        check_seed_override(energy, seed_override)
     binding = None
     if variant in ("m2prime", "m2", "rb"):  # builder tables: table id and npz sha256 bound into the run document
         from .make_variant_tables import verify_variant
@@ -151,7 +182,13 @@ def _run_one(
         binding = verify_variant(Path(os.environ["IONMC_CACHE_DIR"]), variant)
         assert binding["table_id"] == tid
     geo, grid, nz, r_mm = v5b.v5_geometry(float(energy))
-    cfg = build_config(energy, mode, n, seed, tid, batches)
+    split_tallies: tuple[Any, ...] = ()
+    if genealogy_split and mode == "emel":  # B2: existing species / generation channels of ``ionmc.scoring.TallyRequest`` only
+        from ionmc.scoring import TallyRequest
+
+        split_tallies = (TallyRequest("pp_secondary_proton", "dose", "edep", species=("proton",), generation="secondary"),
+                         TallyRequest("primary_proton", "dose", "edep", species=("proton",), generation="primary"))  # fmt: skip
+    cfg = build_config(energy, mode, n, seed, tid, batches, tallies=(v5d.REC, *split_tallies) if split_tallies else None)
     t0 = time.perf_counter()
     res = v5b.Simulation(cfg).run()
     wall = time.perf_counter() - t0
@@ -175,6 +212,10 @@ def _run_one(
     }  # fmt: skip
     if binding is not None:
         doc["elastic_table_npz_sha256"] = binding["npz_sha256"]
+    if realisation is not None:
+        doc["realisation"] = realisation
+    if split_tallies:
+        doc["genealogy_split"] = {q.name: (v5b.tally_batches(res, q.name) / bin_g).tolist() for q in split_tallies}
     if mode == "emel":
         rec_b = v5b.tally_batches(res, "recoil") / bin_g
         doc["recoil_idd_batches"] = rec_b.tolist()
@@ -199,7 +240,7 @@ def _run_one(
                           "relative_residual": float(lres.energy_balance.relative_residual),
                           "valid": bool(v5.clean(lres) and lres.energy_balance.relative_residual <= 1e-12)}  # fmt: skip
     out.mkdir(parents=True, exist_ok=True)
-    (out / f"de3-{energy}-{variant}.json").write_text(json.dumps(doc, sort_keys=True) + "\n")
+    (out / run_name(energy, variant, realisation)).write_text(json.dumps(doc, sort_keys=True) + "\n")
     return doc
 
 
@@ -675,6 +716,9 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="scratch cache of make_variant_tables (env IONMC_DE3_SCRATCH; default validation/generated/elastic_attribution/de3-cache)",
     )
+    ap.add_argument("--seed-override", type=int, default=None, help="D-E9: a seed of the registered block 20992000-20992199 (guarded; once only)")
+    ap.add_argument("--realisation", type=int, default=None, help="D-E9: realisation index k, tagged in the file name (-r<k>) and the document")
+    ap.add_argument("--genealogy-split", action="store_true", help="D-E9 B2: also tally the secondary- and primary-proton dose (existing channels)")
     ap.add_argument(
         "--reuse-runs",
         action="store_true",
@@ -705,7 +749,9 @@ def main(argv: list[str] | None = None) -> int:
             )
     else:
         with c.scoped_cache_env(scratch):
-            d = run_one(a.variant, a.energy, a.histories, a.batches, not a.no_lateral, a.out)
+            out = c.OUT / "de9" if a.seed_override is not None and a.out == OUT_DEFAULT else a.out  # D-E9 runs never enter the D-E3 directory
+            d = run_one(a.variant, a.energy, a.histories, a.batches, not a.no_lateral, out, None, seed_override=a.seed_override, realisation=a.realisation,
+                        genealogy_split=a.genealogy_split)  # fmt: skip
         print(
             json.dumps(
                 {

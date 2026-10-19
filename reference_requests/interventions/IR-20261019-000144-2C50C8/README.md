@@ -18,4 +18,8 @@ Choose one: (1) RECOMMENDED — apply the one-constant change (MAX_BYTES 256 →
 
 ## Decision or task depending on this request
 
-Not specified.
+M3 acquisition (ENDF/B-VIII.0 neutron C-12 MAT 625 / O-16 MAT 825) and the subsequent identity/provenance/coverage/suitability verification; the prospective M3 construction/evaluation plan and its independent review; any M3 construction or qualification evidence. Not blocked: the D-E9 investigation (archived-baseline sensitivity, p-p contribution), which proceeds in parallel.
+
+## Record edits
+
+- 2026-10-19T00:10:20Z (orchestrator, after notification): Codex REVIEW-3c1ac74a — `decisions_or_tasks_blocked` filled (was null); the version-controlled route for the cap change is recorded in request.json (`record_edits`): the identical change is carried in the reviewed infrastructure task V3-INFRA-001, merged, pulled into the main checkout and the MCP servers restarted; the acquisition will record the infrastructure SHA used. Observed at 00:07 UTC: the operator raised the cap in place (uncommitted, MAX_BYTES = 1 GiB, note in experiment/v3/SETUP.md); the restart state is unknown. Substance unchanged; the notification carried the original wording.

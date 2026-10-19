@@ -1153,3 +1153,102 @@ The record supports only results for the **four p+A shapes actually tested**: M2
 - **The contributor statements of D-E8 item 6(c) stand as written:** p-p, and the archived ionmc gain at 1.4σ. They were already phrased as identifiable, not necessary, contributors.
 - **One wording I accepted must be tempered.** In Round D-E8-2 (b) I called the intervention's option-(B) prognosis "supported (the gain clause failed for every shape, including Geant4's)". The sentence "a shape change alone is not expected to pass it" should read: "the four tested shapes, including Geant4's, all failed the 200 MeV gain clause, so M3 passing it is not expected but not excluded".
 - The D-E3-round recommendation that the swap-pp arm is essential is unaffected. It follows from the tested Geant4-shape residual and from H3's rate signature.
+
+# Round D-E9-1 review (2026-10-19; investigation-de9-plan.md; read-only)
+
+1. **No re-opening of D-E8, and no baseline substitution: satisfied in intent, with three wording and rule fixes.**
+   - D-E8 is never re-run or re-evaluated, the verdicts stand, and the closure stays deferred. The "cannot justify" list (§3) is complete.
+   - **(a) The A1 SE-calibration range is wrong (important).** The plan states [0.53, 1.47] as the "√(χ²₇/7), 90 % range". The correct values are:
+     - **[0.556, 1.418]** for the 90 % range (95 % would be [0.491, 1.513]);
+     - for the 150 MeV control, K = 4 (df 3), a different range: **[0.342, 1.614]** for 90 %.
+
+     Fix both numbers now, before any run. Otherwise the range becomes a post-hoc degree of freedom.
+   - **(b) The report-only d(μ̂) is a substituted baseline in all but name.** Keep it only as a sensitivity number with its SE, and **without any comparison flag against the 0.00365 band**. State: "d(μ̂) is never compared with the band, never a re-evaluation, and K is not extended."
+   - The "|z| ≤ 2 consistent" labels are fixed and cannot produce a pass, because they are labels only. OK.
+   - **(c) The Lead A sensitivity table** (D-E3 baseline 0.00281; pooled 0.00393) carries the same risk. Label each row "sensitivity; the frozen d = 0.00462 stands".
+   - **The design finding is correct.** The (ii) band's t·SE (archived combined SE 0.000783) stands in for the future run's noise. The realisation error of g_arch inside D2's point estimate (SE 0.00077) is not in the rule.
+2. **g_arch provenance: verified.** V11 compare step 16 gives the ionmc plateau gain at 200 MeV as 0.026722, SE 0.000772. The seed is 20481004 + 14000 + 1 = **20495005** (V11 r_index 14, k = 1). D2 reads it through `de0h5/h5.json`. All my sensitivity arithmetic reproduces: d ± 2SE gives 0.00307–0.00616; the pooled baseline is 0.026038 ± 0.000608, giving d = 0.00393; the prediction SE is 0.00086, a 1.1-SE excess.
+3. **Decomposition: reproduced exactly from the generated D-E3 documents**, whose sha256 values are listed in the committed `de3/de3-summary.md`:
+
+   | Quantity | 150 MeV (gain, SE) | 200 MeV (gain, SE) |
+   |---|---|---|
+   | all | 0.02207 (0.00079) | 0.02491 (0.00099) |
+   | pp-only | 0.01368 (0.00057) | 0.01982 (0.00052) |
+   | pA-only | 0.00809 (0.00035) | 0.00475 (0.00046) |
+
+   - At 200 MeV p-p is 79.6 % of the elastic gain. Additivity residual: 0.00034 at 200 MeV and 0.00030 at 150 MeV.
+   - The plan discloses it as planner-recomputed. OK.
+   - Note: "pp-only" is the gain with σ_pA = 0, so it includes p-p primaries' path effects and secondaries. B2 is the right step to split these.
+4. **Lead B.**
+   - **(a) B0: well-posed after two clarifications (important).**
+     - **Independence must be specified:** "an implementation that does not import `ionmc.nuclear.elastic_build`, `endf6` or the LAW=5 reconstruction functions; it reads the raw LA150 H-1 file". Otherwise it only re-tests interpolation.
+     - **"Dip persists" must be defined before computing:** "an interior minimum of the half-sphere partial between 100 and 150 MeV, lower than both endpoint values by > 1 %".
+     - The 1e-3 tolerance should be stated as relative, at nodes and at node midpoints.
+     - The researcher's PP-LEVEL comparison (SAID/BGG) is a separate, report-only lineage check, and does not substitute for B0.
+   - **(b) B2: possible src change (important).** A generation-resolved dose tally may need a change in `src/ionmc`, which is inside the rehearsal digest. That would invalidate the V7-R fixture (a host rebuild, about 0.7 h) and need a tally-neutrality (A16-type) proof. **Fix:** B2 uses only existing species/genealogy channels (V3-004 scoring). If a src change is unavoidable, state the digest consequence and the neutrality test, and do it through a dated note before the run.
+   - **(c) B3 cannot become a tuned table, provided one more rule is added.** s ∈ {0.90, 0.95} is fixed, the monotone variant uses only the table's own data, nothing is adopted, and the variant tables are loader-refused. **Add:** "no inversion: the record never reports the s, or the level, that would close the residual; the slope is reported, the closing value is not computed". The monotone variant was designed after the dip was seen; it stays a sensitivity and is never a candidate model.
+5. **The "physics reason" list is not fully outcome-free (important).**
+   - Criterion 3 ("B2/B3 show the p-p level is quantitatively sufficient for the residual …") makes closing the TOPAS-defined residual a reason. That is outcome-based selection. **Remove it as a reason.** Sufficiency may be reported, never as a ground.
+   - **Rephrase criterion 2** as: "B0 confirms the dip is in the evaluation, and an independent-lineage level (SAID-type, deterministic comparison) disagrees with the evaluation's level beyond the combined stated uncertainties". Monotonicity alone is a shape statement, not a level discrepancy.
+   - Criterion 1 (builder or interpolation defect leads to the defect route) is correct.
+   - Keep the closing sentence: any σ_pp change is a new model change with its own decision, pre-registration and re-qualification.
+6. **Seeds, budget, records, disclosure.**
+   - **Seeds:** the block 20992000–20992199 is disjoint from every used or reserved 2099xxxx seed (20990100/01, 20990200, 20991000–09, 20991100–09, 20991200–09, 20991300–09) and from the rehearsal and base families. It must be registered in the test before any run.
+   - **Budget:** under 40 min, sandbox, one job. OK.
+   - **Projection:** gains, ratios, z values and flags; B0 as ratios to the 125 MeV node with monotonicity flags; no absolute σ. OK.
+   - **Disclosure:** complete for the numbers seen, including the planner-computed decomposition. **Add:** my A20-3 computation of σ_anchor (SAID) and the Hale-NI node values (27.30 / 22.94 / 26.26 / 25.65 mb), which bear directly on Lead B.
+   - **Amendment rather than exploratory record:**
+     - any src change for B2;
+     - any B0 defect (the defect route, with an intended-change record);
+     - any change of the screen design learned from Lead A (archived SE in D2's band);
+     - any σ_pp change.
+
+     Everything else can stay an exploratory record.
+
+**Verdict: REVISE (no blocking issue). Fix before any run:**
+- the ρ ranges ([0.556, 1.418] for K = 8; [0.342, 1.614] for K = 4);
+- d(μ̂) and the Lead A sensitivity rows carry no band flag, and K is not extended;
+- B0 independence and the dip definition;
+- B2 restricted to existing channels, or a declared src and digest route;
+- B3 no-inversion rule;
+- physics-reason criterion 3 removed and criterion 2 rephrased;
+- disclosure addition.
+
+---
+
+# Round D-E9-2 review (2026-10-19; investigation-de9-plan.md rev 2 against rev 1, checked by diff; PP-LEVEL.md)
+
+**Every D-E9-1 item is applied:**
+- the ρ ranges [0.556, 1.418] and [0.342, 1.614];
+- no band comparison for any sensitivity row, each labelled "frozen d = 0.00462 stands", and K fixed;
+- B0 independence (no import of elastic_build, endf6 or LAW=5; raw LA150 H-1; eqs 6.9 / 6.10 / 6.14 anew), "match" ≤ 1e-3 relative at nodes and midpoints, and the dip definition;
+- B2 on existing channels only, otherwise dropped and recorded;
+- the B3 no-inversion rule, with the monotone variant never a candidate;
+- the physics-reason list without the outcome criterion and with the level discrepancy beyond combined uncertainties;
+- the §3 amendment list;
+- ratios in place of absolute values.
+
+My table/σ_anchor ratios are reproduced correctly: 27.30/27.26 = 1.001, 22.94/24.50 = 0.936, 26.26/23.22 = 1.131, 25.65/22.47 = 1.142.
+
+**(a) PP-LEVEL is reported as the researcher's: OK.** The plan presents it as "the researcher's verdict … undetermined whether data or reconstruction". **Add one sentence (minor):** "This verdict is not adopted as a plan conclusion; B0 decides between evaluation feature and builder defect." PP-LEVEL itself writes "DEFECT" in capitals, while the plan correctly leaves the evaluation-feature branch open.
+
+**(b) B0 cannot authorise a table change: OK.**
+- An evaluation feature leads to "S(E) carry-up recorded as a construction choice; any change needs its own amendment (§3)".
+- A builder defect leads to the defect route and an amendment.
+- Neither branch changes a table by itself, and §3/§3b forbid it.
+
+**(c) Ratio-only presentation: OK for the Git rule as far as de9 adds anything (minor note).**
+- table/BGG together with the committed BGG formula (P6 item (5); `bgg.py`) recovers absolute table levels. Those are already in committed Amendment 21 (b′)4 rev 4 text, so de9 adds no new leak.
+- table/SGT together with those committed table values recovers SAID SGT points. If the projection rule treats SAID solution values as restricted, project table/SGT only at the minimum and the step (0.821 and 1.021, as the plan does) and not the full row. As drafted, the plan prints only those two. OK.
+
+**(d) Like-for-like construction: the right comparison, and convention cannot produce the step.**
+- SAID DSG minus the ENDF-102 Mott term, over the event-counting half sphere |μ_CM| ≤ 0.96, is the correct like-for-like quantity for Hale's NI = σ_e − σ_c partial: nuclear plus interference, pure Coulomb removed, same cut.
+- A residual mismatch between SAID's Coulomb amplitude (relativistic phases, small electromagnetic corrections) and the ENDF Mott is of order 1 % of Mott at θ ≥ 16°. Mott is about 0.3 mb/sr against a DSG of about 3.7 mb/sr at 150 MeV, so the effect is ≲ 0.3 % of the integral. It cannot produce a 20 % step.
+- **The step is also convention-free in the table's own energy dependence:** table/SGT goes from 0.859 at 140 MeV to 1.021 at 150 MeV, while SGT falls.
+- **Two notes to record (minor):**
+  - **(i) Two like-for-like computations differ by 1–2 %.** The researcher's table/anchor values (0.979 / 0.922 / 1.119 / 1.131 at 100 / 125 / 150 / 200 MeV) are systematically 1.2–2.2 % below mine (1.001 / 0.936 / 1.131 / 1.142). The likely cause is the Mott η and k definitions, or the angle interpolation (my simple trapezoid on the 1° grid against the ln-rule). Record both, cause unresolved. This does not affect the step and does not enter B0, which tests the table reconstruction, not SAID.
+  - **(ii) The deviation pattern spans 125–150 MeV, not only the 150 MeV node.** table/SAID is about 0.92 at 125–130 MeV and about 0.95 at 140 MeV, then 1.12 at 150 MeV. So "entering at the 150 MeV node" is one description; the data also show a dip below SAID at 125–140 MeV. B0's dip test covers this; the plan's text should say so.
+
+**(e) Length:** about 2140 words is acceptable for a plan record of this scope.
+
+**Verdict: ACCEPT.** Insert the minor sentences of (a) and (d)(i)–(ii) verbatim before commit; no further review round is needed. The plan may be committed, the seed block registered, and B0 run first.

@@ -58,7 +58,14 @@ SCRATCH = resolve_scratch()
 REAL_CACHE = c.CACHE_DIR  # the configured pinned-data cache (IONMC_CACHE_DIR at import, else the repository cache); read only
 NUCLEAR_TABLE_ID = "00e8031d5f67704f256e904ebab89b0c2a75845bcf1887c29e1518bffaafe5fb"
 SHAPE_KIND = {"pA-Rx1.2": "Rx1.2", "pA-s0.5": "s0.5", "pA-s0.9": "s0.9", "pA-gauss": "gauss"}
-VARIANTS = ("all", "pp-only", "pA-only", "pA-sigma0.8", *SHAPE_KIND)
+PP_LEVEL_SCALES = {"pp-level-0.90-ge150": 0.90, "pp-level-0.95-ge150": 0.95}
+PP_LEVEL_MONOTONE = "pp-level-monotone"
+PP_LEVEL_VARIANTS = (*PP_LEVEL_SCALES, PP_LEVEL_MONOTONE)
+"""D-E9 B3 (report-only sensitivities, never candidates; no variant is selected or inverted): the p-p level of H-1 scaled by a LITERAL factor at the nodes
+>= 150 MeV only (shape unchanged), and ``pp-level-monotone``: for the nodes > 125 MeV the level is the table's own 125 MeV node value carried by the
+table's own S(E) ratio (``bgg.pp_bgg_mb(E) / bgg.pp_bgg_mb(125)``, the rule the builder applies above 150 MeV), the Hale shape unchanged. No external data,
+no Geant4 input, and no level or factor is ever computed from a residual."""
+VARIANTS = ("all", "pp-only", "pA-only", "pA-sigma0.8", *SHAPE_KIND, *PP_LEVEL_VARIANTS)
 PURPOSE = (
     "V3-005D D-E3 sensitivity probe (Amendment 19 (b)), report-only, never evidence; qualification flags copied from the "
     "pinned table unearned"
@@ -84,6 +91,17 @@ def _build_arrays(
         a["sigma_barn"][h] = 0.0
     elif variant == "pA-sigma0.8":
         a["sigma_barn"][pa] *= 0.8
+    elif variant in PP_LEVEL_SCALES:
+        ks = np.nonzero(a["grid_e_mev"] >= 150.0 - 1e-9)[0]
+        a["sigma_barn"][h, ks] *= PP_LEVEL_SCALES[variant]
+    elif variant == PP_LEVEL_MONOTONE:
+        from ionmc.nuclear import bgg
+
+        i125 = int(np.argmin(np.abs(a["grid_e_mev"] - 125.0)))
+        if abs(a["grid_e_mev"][i125] - 125.0) > 1e-9:
+            raise AssertionError("the table has no 125 MeV node")
+        for k in np.nonzero(a["grid_e_mev"] > 125.0 + 1e-9)[0]:
+            a["sigma_barn"][h, k] = base["sigma_barn"][h, i125] * bgg.pp_bgg_mb(float(a["grid_e_mev"][k])) / bgg.pp_bgg_mb(125.0)
     elif variant in SHAPE_KIND:
         kind = SHAPE_KIND[variant]
         sh = _ShapeBuilder(base, names)
@@ -170,6 +188,8 @@ def _parameters(variant: str) -> dict[str, Any]:
         "pA-s0.5": {"s_fm": 0.5},
         "pA-s0.9": {"s_fm": 0.9},
         "pA-gauss": {"form": "exp(-q^2 R^2/4)"},
+        **{v: {"sigma_pp_scale_at_nodes_ge_150_mev": s, "shape": "unchanged"} for v, s in PP_LEVEL_SCALES.items()},
+        PP_LEVEL_MONOTONE: {"rule": "nodes > 125 MeV: sigma_pp(125) x S(E)/S(125), S = the table's own bgg.pp_bgg_mb; shape unchanged", "anchor_node_mev": 125.0},
     }[variant]
 
 

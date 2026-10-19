@@ -212,3 +212,27 @@ def test_v7r2_calibration_roots_inside_the_calibration_family() -> None:
     roots = {20980000, 20980001, 20982000, 20982001, 20984000}
     assert roots <= set(VR_CAL) and not roots & (set(VR_SANDBOX) | ELASTIC_USED)
     assert not roots & _evidence_seeds()
+
+
+# D-E9 investigation block (validation/plans/v3-005d-investigation-de9.md, revision 2). The block is
+# kept separate from ELASTIC_USED, so the existing equality test of that set stays unchanged.
+DE9_BLOCK = range(20992000, 20992200)
+DE9_A1_200 = {20992000 + k for k in range(8)}  # A1, 200 MeV, k = 0..7 (K = 8 CRN pairs)
+DE9_A1_150 = {20992010 + k for k in range(4)}  # A1, 150 MeV control, k = 0..3 (K = 4)
+DE9_B2 = {20992100, 20992101}  # B2, 150 / 200 MeV (existing scoring channels only)
+DE9_USED = DE9_A1_200 | DE9_A1_150 | DE9_B2
+DE9_RESERVED = set(DE9_BLOCK) - DE9_USED  # the remainder of the block: reserved, never used
+
+
+def test_de9_block_registered_and_disjoint() -> None:
+    assert DE9_USED <= set(DE9_BLOCK) <= set(ELASTIC)
+    assert DE9_USED == set(range(20992000, 20992008)) | set(range(20992010, 20992014)) | {
+        20992100,
+        20992101,
+    }
+    assert len(DE9_RESERVED) == 200 - 14
+    assert not set(DE9_BLOCK) & ELASTIC_USED  # disjoint from D-E3..D-E8 and the D4 blocks
+    assert not set(DE9_BLOCK) & _evidence_seeds()
+    assert not set(DE9_BLOCK) & set(VR_DIAG)
+    # B3 reuses the declared D-E3 CRN seeds (common random numbers with the archived base), not new seeds.
+    assert {20990100, 20990101} <= ELASTIC_USED
