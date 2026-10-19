@@ -127,6 +127,11 @@ def check_seed_override(energy: int, seed: int) -> None:
         raise SystemExit(f"seed {seed} is not registered for {energy} MeV in the D-E9 block 20992000-20992199")
 
 
+UNGUARDED_VARIANTS = ("pinned", "all", "emonly")
+"""Every other variant run (the builder arms m2prime / m2 / rb, the D-E9 B3 variants pp-level-*, every probe variant) and every ``seed_override`` run
+is a record of an investigation and goes through ``begin_attempt``: an existing target is refused, an attempt record precedes the run."""
+
+
 def run_name(energy: int, variant: str, realisation: int | None = None) -> str:
     return f"de3-{energy}-{variant}" + (f"-r{realisation}" if realisation is not None else "") + ".json"
 
@@ -148,7 +153,7 @@ def run_one(
         kw["realisation"] = realisation
     if genealogy_split:
         kw["genealogy_split"] = True
-    if variant not in ("m2prime", "m2", "rb") and seed_override is None:
+    if variant in UNGUARDED_VARIANTS and seed_override is None:  # the pinned table, its base copy and the EM-only run keep the plain path
         return _run_one(variant, energy, n, batches, lateral, out, **kw)
     att = c.begin_attempt(out / run_name(energy, variant, realisation), "de3_probes.run_one",
                           {"variant": variant, "energy": energy, "histories": n, "batches": batches, "lateral": lateral, **kw}, attempts)  # fmt: skip
@@ -176,6 +181,9 @@ def _run_one(
     if seed_override is not None:
         check_seed_override(energy, seed_override)
     binding = None
+    scratch_npz = Path(os.environ.get("IONMC_CACHE_DIR", "")) / "derived" / f"elastic-proton-{tid}.npz"
+    if variant != "emonly" and scratch_npz.is_file():
+        binding = {"table_id": tid, "npz_sha256": c.sha256_file(scratch_npz)}  # table identity (id + npz sha256) recorded in every elastic run document
     if variant in ("m2prime", "m2", "rb"):  # builder tables: table id and npz sha256 bound into the run document
         from .make_variant_tables import verify_variant
 

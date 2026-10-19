@@ -18,6 +18,11 @@ json (node energies and the table's own node values) and the cache objects. The 
 Numerics differ from the builder on purpose: Gauss-Legendre quadrature with 1024 nodes on [0, 0.96] (the builder: Simpson on 20001 points),
 Legendre sums by ``numpy.polynomial.legendre.legval``, an own fixed-field ENDF reader.
 
+Planning note (plan, B0): the plan names a 1 MeV grid over 100-200 MeV, but the raw LA150 H-1 evaluation ends at 150 MeV, so the match and the dip test stay on
+the raw-data domain 100-150 MeV. Above 150 MeV the builder carries the 150 MeV level by the table's own S(E) ratio; ``carry_up_check`` reconstructs the table level
+above 150 MeV independently from the reconstructed 150 MeV level x ``bgg.pp_bgg_mb(E) / bgg.pp_bgg_mb(150)`` (``ionmc.nuclear.bgg`` only: the Geant4 p-p formula,
+not LAW=5 code) and compares with the pinned nodes (ratios; match within 1e-3), with the 1 MeV grid 150-200 MeV recorded as ratios to the 150 MeV level.
+
 Definitions fixed before computing (plan section 2, B0):
 * "match": relative difference reconstruction / table - 1 within 1e-3 at every table node and every node midpoint (linear interpolation of the
   table node values, the builder's own midpoint convention) in [100, 150] MeV;
@@ -56,7 +61,7 @@ STEP_DIR = "de9"
 
 GIT_ALLOW = (
     "banner", "disclosure", "named_nodes/*/*", "nodes/*/*", "midpoints/*/*", "match/*", "dip/*", "levels_over_125mev/*/*", "reading",
-    "provenance/*",
+    "carry_up_check/**", "provenance/*",
 )  # fmt: skip
 GIT_FILES = {"de9-b0.json": (GIT_ALLOW, ())}
 PRE_RUN_LOOKS = (
@@ -248,6 +253,29 @@ def compare(sec: dict[str, Any], grid_e: np.ndarray, table_sigma_barn: np.ndarra
             "dip": dip, "levels_over_125mev": levels, "reading": reading, "_absolutes": absolutes}  # fmt: skip
 
 
+def carry_up_check(sec: dict[str, Any], grid_e: np.ndarray, table_sigma_barn: np.ndarray, level_150_barn: float | None = None) -> dict[str, Any]:
+    """Carry-up rule above 150 MeV: sigma(E) = sigma_rec(150) S(E)/S(150) with S = ``bgg.pp_bgg_mb`` (the table's own rule), against the pinned nodes in
+    (150, 250] MeV; the 175 / 200 / 250 MeV nodes are named. Ratios only; also the carried level on the 1 MeV grid 150-200 MeV relative to 150 MeV."""
+    from ionmc.nuclear import bgg  # Geant4 p-p formula (S(E)); not LAW=5 / ENDF code
+
+    rec150 = level_150_barn if level_150_barn is not None else sigma_ni_barn(sec, 150.0)
+    s150 = bgg.pp_bgg_mb(150.0)
+    nodes: dict[str, Any] = {}
+    worst = 0.0
+    absolutes = [rec150]
+    for k, e in enumerate(grid_e):
+        if 150.0 + 1e-9 < e <= 250.0 + 1e-9:
+            carried = rec150 * bgg.pp_bgg_mb(float(e)) / s150
+            r = carried / float(table_sigma_barn[k])
+            absolutes += [carried, float(table_sigma_barn[k])]
+            nodes[f"{float(e):g}"] = {"carried_over_table": r, "within": bool(abs(r - 1.0) <= TOL_MATCH)}
+            worst = max(worst, abs(r - 1.0))
+    named = {f"{e:g}": nodes[f"{e:g}"] for e in (175.0, 200.0, 250.0) if f"{e:g}" in nodes}
+    grid = {f"{e:g}": bgg.pp_bgg_mb(float(e)) / s150 for e in np.arange(150.0, 200.5, 1.0)}
+    return {"named_nodes": named, "nodes": nodes, "match": {"max_abs_rel_diff": worst, "tolerance": TOL_MATCH, "all_within": bool(nodes) and worst <= TOL_MATCH},
+            "grid_150_200_over_150": grid, "rule": "sigma(E) = sigma_rec(150 MeV) x S(E)/S(150 MeV), S = the table's own bgg.pp_bgg_mb", "_absolutes": absolutes}  # fmt: skip
+
+
 def leak_violations(proj: Any, absolutes: list[float]) -> list[str]:
     """Projected numbers equal (1e-9 relative) to an absolute cross section (barn or mb), and cross-section key names."""
     from .de7_m2prime_record import _numbers
@@ -277,6 +305,9 @@ def run(cache_dir: Path | None = None, out: Path | None = None) -> dict[str, Any
     npz = np.load(cd / "derived" / f"elastic-proton-{c.TABLE_ID}.npz", allow_pickle=False)
     res = compare(sec, npz["grid_e_mev"], npz["sigma_barn"][0])
     absolutes = res.pop("_absolutes")
+    carry = carry_up_check(sec, npz["grid_e_mev"], npz["sigma_barn"][0])
+    absolutes += carry.pop("_absolutes")
+    res["carry_up_check"] = carry
     doc = {"banner": c.BANNER, "disclosure": DISCLOSURE, **res, "provenance": {**ident, "member": MEMBER, "member_sha256": __import__("hashlib").sha256(text.encode()).hexdigest(),
                                                                                  "code_sha256": c.sha256_file(Path(__file__)),
                                                                                  "quadrature": f"Gauss-Legendre {N_GAUSS}", **c.repo_state(), "pre_run_looks": PRE_RUN_LOOKS}}  # fmt: skip
@@ -296,6 +327,11 @@ def render_report(doc: dict[str, Any]) -> str:
            f"Reading (pre-declared): **{doc['reading']}**.", "", "| node (MeV) | reconstruction / table | within 1e-3 |", "|---|---|---|"]  # fmt: skip
     for e, r in doc["named_nodes"].items():
         out.append(f"| {e} | {r['rec_over_table']:.6f} | {r['within']} |")
+    cu = doc.get("carry_up_check")
+    if cu:
+        out += ["", f"Carry-up check above 150 MeV (rule: {cu['rule']}): all nodes within {cu['match']['tolerance']:g}: **{cu['match']['all_within']}** (max |carried/table - 1| = {cu['match']['max_abs_rel_diff']:.2e}).", "",
+                "| node (MeV) | carried / table | within |", "|---|---|---|"]
+        out += [f"| {e} | {r['carried_over_table']:.6f} | {r['within']} |" for e, r in cu["named_nodes"].items()]
     out += ["", "Level relative to the 125 MeV node:", "", "| node (MeV) | reconstruction | table |", "|---|---|---|"]
     for e, r in doc["levels_over_125mev"].items():
         out.append(f"| {e} | {r['rec']:.4f} | {'-' if r.get('table') is None else format(r['table'], '.4f')} |")

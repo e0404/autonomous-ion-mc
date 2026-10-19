@@ -51,7 +51,7 @@ DISCLOSURE = "D-E9: exploratory, report-only; leads identified after the D-E8 ST
 
 GIT_ALLOW = (
     "banner", "disclosure", "b0/*", "b0/*/*", "b0/*/*/*", "b1/*/*", "b3/*/*/*", "b3/slope/*/*", "a1/*/*", "a1/*/*/*", "a1_sensitivity/**", "b2/*/*", "b2/*/*/*",
-    "provenance/*", "provenance/*/*", "leak_check/*",
+    "complete", "incomplete_reasons/*", "invalid_documents/*", "provenance/*", "provenance/*/*", "leak_check/*",
 )  # fmt: skip
 GIT_FILES = {"de9.json": (GIT_ALLOW, ())}
 
@@ -261,63 +261,128 @@ def check_document_code(doc: dict[str, Any], what: str, freeze: dict[str, Any]) 
             raise SystemExit(f"{what}: sha256 of {n} recorded in the document differs from the reviewed commit")
 
 
+REUSED = ("all", "pp-only", "pA-only", "emonly")
+CRN = {150: 20990100, 200: 20990101}
+N_HIST, N_BATCH = 100_000, 20
+HASH_SOURCES = (RES / "de6" / "de6-report.md", RES / "de3" / "de3-summary.md")  # committed input lists that bind the reused D-E3 documents by sha256
+
+
+def committed_hashes(sources: tuple[Path, ...] | None = None) -> dict[str, str]:
+    """``{file name: sha256}`` of the committed input lists (de6-report.md, de3-summary.md); a name listed with two different hashes is a SystemExit."""
+    out: dict[str, str] = {}
+    for p in sources or HASH_SOURCES:
+        for m in re.finditer(r"^- `([^`]+)`\s+([0-9a-f]{64})\s*$", Path(p).read_text(), re.M):
+            n = Path(m.group(1)).name
+            if out.setdefault(n, m.group(2)) != m.group(2):
+                raise SystemExit(f"{n} is listed with different sha256 values in the committed input lists")
+    return out
+
+
+def validate_document(doc: dict[str, Any], what: str, *, energy: int, variant: str, seed: int, expected: dict[str, dict[str, str]], reused: dict[str, str] | None = None,
+                      path: Path | None = None, freeze: dict[str, Any] | None = None) -> bool:
+    """Fail-closed validation of one harness document: frozen configuration (energy, variant, 100000 histories, 20 batches, mode, warp-cpu, float64, seed),
+    elastic table identity against the expected map (id and npz sha256), the committed sha256 for the reused D-E3 documents, the code provenance for new
+    documents. Returns the document's own validity (``valid`` and the energy balance): an invalid published run is returned as False and is never treated as valid."""
+    mode = "emonly" if variant == "emonly" else "emel"
+    want = {"energy": energy, "variant": variant, "n": N_HIST, "n_batches": N_BATCH, "mode": mode, "backend": "warp-cpu", "precision": "float64", "seed": seed}
+    for k, v in want.items():
+        if doc.get(k) != v:
+            raise SystemExit(f"{what}: {k} {doc.get(k)!r} differs from the frozen configuration {v!r}")
+    exp = expected.get(variant)
+    if exp is None or not exp.get("table_id"):
+        raise SystemExit(f"{what}: no expected table for variant {variant!r} (manifest input required)")
+    if doc.get("elastic_table_id") != exp["table_id"]:
+        raise SystemExit(f"{what}: elastic table id differs from the expected {variant} table")
+    is_reused = reused is not None and variant in REUSED and path is not None and path.name in reused
+    if "elastic_table_npz_sha256" in doc or not is_reused:
+        if doc.get("elastic_table_npz_sha256") != exp.get("npz_sha256") or not exp.get("npz_sha256"):
+            raise SystemExit(f"{what}: elastic table npz sha256 differs from (or is missing against) the expected {variant} table")
+    if reused is not None and variant in REUSED and path is not None:
+        if reused.get(path.name) != _sha(path):
+            raise SystemExit(f"{what}: sha256 differs from (or is not listed in) the committed input lists")
+    elif freeze is not None:
+        check_document_code(doc, what, freeze)
+    return bool(doc.get("valid")) and doc.get("relative_residual", float("inf")) <= 1e-12
+
+
 def build_document(de3_dir: Path, de9_dir: Path, b0_path: Path | None, archive: Path = ARCHIVE_JSON, absolutes: list[float] | None = None,
-                   freeze: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Assemble the record from the harness documents (missing documents are a SystemExit; nothing is run here)."""
+                   freeze: dict[str, Any] | None = None, expected_tables: dict[str, dict[str, str]] | None = None, hash_sources: tuple[Path, ...] | None = None,
+                   allow_incomplete: bool = False) -> dict[str, Any]:
+    """Assemble the record from the harness documents. Every input is validated fail-closed (``validate_document``). A missing required input (the
+    ``m2prime`` document of the Lead A table, the B0 result) is a SystemExit naming it, unless ``allow_incomplete``: then the section is omitted and the
+    record is labelled INCOMPLETE (``complete`` false) and cannot be read as the D-E9 synthesis. A published-invalid document is recorded and no section
+    is computed from invalid data. Nothing is run here."""
     cmp = _cmp()
     arch = load_archived_ionmc_gain(archive)
-
-    def load(p: Path, run_document: bool = False) -> dict[str, Any]:
-        if not p.is_file():
-            raise SystemExit(f"{p} is missing: the evaluator never runs anything")
-        d = json.loads(p.read_text())
-        if run_document and freeze is not None:
-            check_document_code(d, p.name, freeze)
-        return d  # type: ignore[no-any-return]
-
+    expected = expected_tables or {}
+    reused = committed_hashes(hash_sources)
+    reasons: list[str] = []
+    invalid: dict[str, str] = {}
     shas: dict[str, str] = {}
+
+    def load(p: Path, *, energy: int, variant: str, seed: int, required: bool = True, bound: bool = False) -> dict[str, Any] | None:
+        if not p.is_file():
+            if required:
+                raise SystemExit(f"{p} is missing: a required input of the D-E9 record (the evaluator never runs anything)")
+            return None
+        d = json.loads(p.read_text())
+        if not validate_document(d, p.name, energy=energy, variant=variant, seed=seed, expected=expected, reused=reused if bound else None, path=p, freeze=freeze):
+            invalid[p.name] = "published-invalid"
+        shas[p.name] = _sha(p)
+        return d
+
     d3: dict[tuple[int, str], dict[str, Any]] = {}
     for e in ENERGIES:
-        for v in ("all", "pp-only", "pA-only", "emonly", "m2prime", *SCALES, MONOTONE):
-            p = Path(de3_dir) / f"de3-{e}-{v}.json"
-            if v == "m2prime" and not p.is_file():
-                continue
-            d3[(e, v)] = load(p, run_document=v in ("m2prime",))
-            shas[p.name] = _sha(p)
+        for v in (*REUSED, *SCALES, MONOTONE):
+            dd = load(Path(de3_dir) / f"de3-{e}-{v}.json", energy=e, variant=v, seed=CRN[e], bound=v in REUSED)
+            assert dd is not None
+            d3[(e, v)] = dd
+    m2p = load(Path(de3_dir) / "de3-200-m2prime.json", energy=200, variant="m2prime", seed=CRN[200], required=not allow_incomplete)
+    if m2p is None:
+        reasons.append("missing input de3-200-m2prime.json: the Lead A sensitivity table is not computed")
     a1d: dict[tuple[int, str, int], dict[str, Any]] = {}
     for e in ENERGIES:
         for r in range(A1_K[e]):
             for v in ("pinned", "emonly"):
                 p = Path(de9_dir) / f"de3-{e}-{v}-r{r}.json"
-                doc = load(p, run_document=True)
-                if doc.get("seed") != A1_SEED_BASE[e] + r or doc.get("realisation") != r:
-                    raise SystemExit(f"{p.name}: seed / realisation differ from the registered A1 block")
-                a1d[(e, v, r)] = doc
-                shas[p.name] = _sha(p)
+                dd = load(p, energy=e, variant=v, seed=A1_SEED_BASE[e] + r)
+                assert dd is not None
+                if dd.get("realisation") != r:
+                    raise SystemExit(f"{p.name}: realisation differs from the registered A1 block")
+                a1d[(e, v, r)] = dd
     b2docs: dict[tuple[int, str], dict[str, Any]] = {}
     for e in ENERGIES:
-        p = Path(de9_dir) / f"de3-{e}-pinned-r{B2_REALISATION}.json"
-        if p.is_file():
-            doc = load(p, run_document=True)
-            if doc.get("seed") != B2_SEEDS[e]:
-                raise SystemExit(f"{p.name}: seed differs from the registered B2 seed")
-            b2docs[(e, "pinned")] = doc
-            shas[p.name] = _sha(p)
-    base_gain = {e: gain(cmp, _idd(d3[(e, "all")]), _idd(d3[(e, "emonly")])) for e in ENERGIES}
-    a1r = a1(cmp, a1d, arch, base_gain)
-    delta200 = (gain_difference(cmp, _idd(d3[(200, "m2prime")]), _idd(d3[(200, "all")]), _idd(d3[(200, "emonly")])) if (200, "m2prime") in d3 else None)
-    doc: dict[str, Any] = {
-        "banner": c.BANNER, "disclosure": DISCLOSURE, "b1": b1(cmp, d3), "b3": b3(cmp, d3), "a1": a1r,
-        "b2": b2(cmp, b2docs, {e: d3[(e, "emonly")] for e in ENERGIES}),
-    }  # fmt: skip
-    if delta200 is not None:
-        doc["a1_sensitivity"] = a1_sensitivity(arch[200], delta200, base_gain[200], a1r["200"])
+        dd = load(Path(de9_dir) / f"de3-{e}-pinned-r{B2_REALISATION}.json", energy=e, variant="pinned", seed=B2_SEEDS[e], required=False)
+        if dd is not None:
+            b2docs[(e, "pinned")] = dd
+    b0 = None
     if b0_path is not None and Path(b0_path).is_file():
         b0 = json.loads(Path(b0_path).read_text())
         if freeze is not None:
             check_document_code(b0, Path(b0_path).name, freeze)
-        doc["b0"] = {"match": b0["match"], "dip": b0["dip"], "reading": b0["reading"], "named_nodes": b0["named_nodes"]}
         shas[Path(b0_path).name] = _sha(b0_path)
+    elif not allow_incomplete:
+        raise SystemExit(f"{b0_path} is missing: the B0 result is a required input of the D-E9 record")
+    else:
+        reasons.append("missing input: the B0 result is not in the record")
+    doc: dict[str, Any] = {"banner": c.BANNER, "disclosure": DISCLOSURE}
+    if invalid:
+        reasons.append("published-invalid run documents: no section is computed from invalid data")
+    else:
+        base_gain = {e: gain(cmp, _idd(d3[(e, "all")]), _idd(d3[(e, "emonly")])) for e in ENERGIES}
+        a1r = a1(cmp, a1d, arch, base_gain)
+        doc.update({"b1": b1(cmp, d3), "b3": b3(cmp, d3), "a1": a1r, "b2": b2(cmp, b2docs, {e: d3[(e, "emonly")] for e in ENERGIES})})
+        if m2p is not None:
+            delta200 = gain_difference(cmp, _idd(m2p), _idd(d3[(200, "all")]), _idd(d3[(200, "emonly")]))
+            doc["a1_sensitivity"] = a1_sensitivity(arch[200], delta200, base_gain[200], a1r["200"])
+        if b0 is not None:
+            doc["b0"] = {"match": b0["match"], "dip": b0["dip"], "reading": b0["reading"], "named_nodes": b0["named_nodes"]}
+            if "carry_up_check" in b0:
+                doc["b0"]["carry_up_match"] = b0["carry_up_check"]["match"]
+    doc["complete"] = not reasons
+    doc["incomplete_reasons"] = reasons
+    if invalid:
+        doc["invalid_documents"] = invalid
     here = Path(__file__).resolve().parent
     st = c.repo_state()
     doc["provenance"] = {**st, "scripts_sha256": {n: _sha(here / n) for n in DE9_CODE_FILES if (here / n).is_file()}, "documents_sha256": shas,
@@ -333,6 +398,13 @@ def build_document(de3_dir: Path, de9_dir: Path, b0_path: Path | None, archive: 
 def render_report(doc: dict[str, Any]) -> str:
     f = lambda x, n=5: "-" if x is None else f"{x:.{n}f}"  # noqa: E731
     out = ["", doc["disclosure"], ""]
+    if not doc.get("complete", False):
+        out += ["**INCOMPLETE — not the D-E9 synthesis.** " + "; ".join(doc.get("incomplete_reasons", [])), ""]
+    for n in doc.get("invalid_documents", {}):
+        out.append(f"- {n}: published-invalid (recorded as executed; nothing is computed from it)")
+    if "b1" not in doc:
+        out += ["", f"Leak check (no absolute cross section): passed {doc['leak_check']['passed']}."]
+        return "\n".join(out) + "\n"
     if "b0" in doc:
         out += [f"## B0: independent p-p level reconstruction: match {doc['b0']['match']['all_within']}, dip persists {doc['b0']['dip']['persists']}; reading: {doc['b0']['reading']}.", ""]
     out += ["## B1: decomposition of the elastic plateau gain", "", "| E | gain all | pp-only | pA-only | pp share of sum | additivity gap / all |", "|---|---|---|---|---|---|"]
@@ -360,7 +432,7 @@ def render_report(doc: dict[str, Any]) -> str:
 
 
 def run(de3_dir: Path, de9_dir: Path, out: Path, b0_path: Path | None = None, review_id: str | None = None, reviewed_sha: str | None = None,
-        review_id_full: str | None = None) -> dict[str, Any]:
+        review_id_full: str | None = None, expected_tables: Path | None = None, allow_incomplete: bool = False) -> dict[str, Any]:
     out = Path(out)
     state = c.repo_state()
     manifest_p = out / "de9-manifest.json"
@@ -369,13 +441,15 @@ def run(de3_dir: Path, de9_dir: Path, out: Path, b0_path: Path | None = None, re
     if any((out / n).exists() for n in ("de9.json", "git/de9.json", "git/de9-report.md")) or prev.get("record"):
         raise SystemExit("a D-E9 record is already published: it is never overwritten")
     freeze = {"sha": reviewed_sha, "head": state["git_head"], "scripts": hashes_at(reviewed_sha), "ancestor": is_ancestor}
-    doc = build_document(de3_dir, de9_dir, b0_path, freeze=freeze)
+    if expected_tables is None:
+        raise SystemExit("--expected-tables FILE (variant -> table_id / npz_sha256 of the scratch cache) is required")
+    doc = build_document(de3_dir, de9_dir, b0_path, freeze=freeze, expected_tables=json.loads(Path(expected_tables).read_text()), allow_incomplete=allow_incomplete)
     doc["provenance"]["reviewed_sha"] = reviewed_sha
     doc["provenance"]["review_id"] = review_id
-    hdr = c.header("D-E9 record: B0 / B1 / B2 / B3 / A1 and the Lead A sensitivity table", "python -m validation.scripts.elastic_attribution.de9_record", [ARCHIVE_JSON])
+    hdr = c.header("D-E9 record: B0 / B1 / B2 / B3 / A1 and the Lead A sensitivity table" if doc["complete"] else "INCOMPLETE — not the D-E9 synthesis", "python -m validation.scripts.elastic_attribution.de9_record", [ARCHIVE_JSON])
     c.write_outputs(out, "de9.json", doc, "de9-report.md", hdr, render_report, GIT_ALLOW)
     manifest = {"reviews": {**prev.get("reviews", {}), reviewed_sha: review_id}, "review_id_full_text": review_id_full, "reviewed_sha": reviewed_sha, "head": state["git_head"],
-                "scripts_sha256": freeze["scripts"], "record": {"documents_sha256": doc["provenance"]["documents_sha256"]}}  # fmt: skip
+                "scripts_sha256": freeze["scripts"], "complete": doc["complete"], "record": {"documents_sha256": doc["provenance"]["documents_sha256"]}}  # fmt: skip
     manifest_p.write_text(json.dumps(manifest, indent=1, sort_keys=True) + "\n")
     return doc
 
@@ -389,8 +463,10 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--reviewed-head-review-id", required=True, help="REVIEW-xxxxxxxx (8 hex)")
     ap.add_argument("--reviewed-sha", required=True, help="40-hex commit that froze the four code files (an ancestor of HEAD)")
     ap.add_argument("--review-id-full", default=None, help="free text: the full Codex review id")
+    ap.add_argument("--expected-tables", type=Path, required=True, help='JSON {"all": {"table_id": ..., "npz_sha256": ...}, "pinned": ..., "emonly": ..., "pp-only": ..., "pA-only": ..., "pp-level-...": ..., "m2prime": ...}')
+    ap.add_argument("--allow-incomplete", action="store_true", help="omit a missing m2prime document / B0 result and label the record INCOMPLETE (not the D-E9 synthesis)")
     a = ap.parse_args(argv)
-    run(a.de3_dir, a.de9_dir, a.out, a.b0, a.reviewed_head_review_id, a.reviewed_sha, a.review_id_full)
+    run(a.de3_dir, a.de9_dir, a.out, a.b0, a.reviewed_head_review_id, a.reviewed_sha, a.review_id_full, a.expected_tables, a.allow_incomplete)
 
 
 if __name__ == "__main__":

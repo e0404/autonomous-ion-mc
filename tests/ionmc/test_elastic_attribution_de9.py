@@ -5,6 +5,7 @@ the de9 record and the seed-override guard, on synthetic inputs."""
 from __future__ import annotations
 
 import ast
+import hashlib
 import json
 import math
 from pathlib import Path
@@ -238,12 +239,17 @@ def test_projection_has_no_absolute_cross_section_and_the_leak_check_fires(
 
 def test_b0_is_independent_of_the_builder_endf6_and_law5_code() -> None:
     tree = ast.parse(Path(b0.__file__).read_text())
-    mods = [n.module for n in ast.walk(tree) if isinstance(n, ast.ImportFrom) and n.module] + [
-        a.name for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names
-    ]
-    assert not [
-        m for m in mods if any(w in m for w in ("elastic_build", "endf6", "law5", "ionmc"))
-    ], mods
+    imported: list[str] = []
+    for n in ast.walk(tree):
+        if isinstance(n, ast.ImportFrom) and n.module:
+            imported += [f"{n.module}.{a.name}" for a in n.names]
+        elif isinstance(n, ast.Import):
+            imported += [a.name for a in n.names]
+    ionmc = [m for m in imported if "ionmc" in m]
+    assert ionmc == ["ionmc.nuclear.bgg"], (
+        ionmc
+    )  # only the Geant4 p-p S(E) formula (carry-up check); no builder, endf6 or LAW=5 code
+    assert not [m for m in imported if any(w in m for w in ("elastic_build", "endf6", "law5"))]
 
 
 def test_real_data_parses_and_reproduces_the_100_mev_node() -> None:
@@ -443,15 +449,36 @@ def _curves(
     return rows
 
 
-def _doc(energy: int, variant: str, plateau: float, seed: int, **extra: Any) -> dict[str, Any]:
+REUSED_V = ("all", "pp-only", "pA-only", "emonly")
+
+
+def _expected() -> dict[str, dict[str, str]]:
     return {
-        "energy": energy,
-        "variant": variant,
-        "seed": seed,
-        "idd_batches": _curves(plateau, 5.0, jitter=seed % 7),
-        "valid": True,
-        **extra,
+        v: {"table_id": f"T-{v}", "npz_sha256": f"S-{v}"}
+        for v in (
+            "all",
+            "pp-only",
+            "pA-only",
+            "emonly",
+            "pinned",
+            "m2prime",
+            "pp-level-0.90-ge150",
+            "pp-level-0.95-ge150",
+            "pp-level-monotone",
+        )
     }
+
+
+def _doc(energy: int, variant: str, plateau: float, seed: int, **extra: Any) -> dict[str, Any]:
+    d: dict[str, Any] = {
+        "energy": energy, "variant": variant, "seed": seed, "idd_batches": _curves(plateau, 5.0, jitter=seed % 7), "valid": True, "relative_residual": 1e-16,
+        "n": 100000, "n_batches": 20, "mode": "emonly" if variant == "emonly" else "emel", "backend": "warp-cpu", "precision": "float64", "elastic_table_id": f"T-{variant}",
+    }  # fmt: skip
+    if (
+        "realisation" in extra or variant not in REUSED_V
+    ):  # reused D-E3 documents predate the npz field
+        d["elastic_table_npz_sha256"] = f"S-{variant}"
+    return {**d, **extra}
 
 
 GAINS = {
@@ -512,7 +539,28 @@ def _write_inputs(
         }
     }
     (tmp / "archive.json").write_text(json.dumps({"steps": steps}))
-    return {"de3": de3, "de9": de9, "archive": tmp / "archive.json"}
+    hashes = tmp / "hashes.md"
+    hashes.write_text(
+        "Input files (sha256):\n\n"
+        + "".join(
+            f"- `x/{p.name}`  {hashlib.sha256(p.read_bytes()).hexdigest()}\n"
+            for v in REUSED_V
+            for p in sorted(de3.glob(f"de3-*-{v}.json"))
+        )
+    )
+    b0 = tmp / "de9-b0.json"
+    b0.write_text(
+        json.dumps(
+            {
+                "match": {"all_within": True},
+                "dip": {"persists": True},
+                "reading": "r",
+                "named_nodes": {},
+                "provenance": {"git_head": "a" * 40, "git_clean": True},
+            }
+        )
+    )
+    return {"de3": de3, "de9": de9, "archive": tmp / "archive.json", "hashes": hashes, "b0": b0}
 
 
 def _build(inp: dict[str, Path], monkeypatch: pytest.MonkeyPatch, **kw: Any) -> dict[str, Any]:
@@ -522,7 +570,15 @@ def _build(inp: dict[str, Path], monkeypatch: pytest.MonkeyPatch, **kw: Any) -> 
         c, "repo_state", lambda repo=None: {"git_head": "a" * 40, "git_clean": True}
     )
     return rec.build_document(
-        inp["de3"], inp["de9"], kw.get("b0"), archive=inp["archive"], absolutes=kw.get("absolutes")
+        inp["de3"],
+        inp["de9"],
+        kw["b0"] if "b0" in kw else inp["b0"],
+        archive=inp["archive"],
+        absolutes=kw.get("absolutes"),
+        expected_tables=kw.get("expected", _expected()),
+        hash_sources=(inp["hashes"],),
+        allow_incomplete=kw.get("allow_incomplete", False),
+        freeze=kw.get("freeze"),
     )
 
 
@@ -642,7 +698,7 @@ def test_record_refuses_wrong_seeds_missing_documents_and_overwrites(
     d = json.loads(p.read_text())
     d["seed"] = 20990101
     p.write_text(json.dumps(d))
-    with pytest.raises(SystemExit, match="registered A1 block"):
+    with pytest.raises(SystemExit, match="differs from the frozen configuration"):
         _build(inp, monkeypatch)
     p.unlink()
     with pytest.raises(SystemExit, match="is missing"):
@@ -653,11 +709,21 @@ def test_record_refuses_wrong_seeds_missing_documents_and_overwrites(
     )
     monkeypatch.setattr(rec, "check_freeze", lambda *a, **k: {})
     monkeypatch.setattr(rec, "hashes_at", lambda sha, repo=None: {})
+    (tmp_path / "exp.json").write_text(json.dumps(_expected()))
     out = tmp_path / "out"
     (out / "git").mkdir(parents=True)
     (out / "git" / "de9.json").write_text("{}")
     with pytest.raises(SystemExit, match="already published"):
-        rec.run(inp2["de3"], inp2["de9"], out, None, "REVIEW-0123abcd", "b" * 40)
+        rec.run(
+            inp2["de3"],
+            inp2["de9"],
+            out,
+            inp2["b0"],
+            "REVIEW-0123abcd",
+            "b" * 40,
+            None,
+            tmp_path / "exp.json",
+        )
 
 
 def test_projection_leak_check_and_report(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -793,7 +859,11 @@ def test_record_run_binds_the_review_writes_the_manifest_and_never_overwrites(
     inp = _write_inputs(tmp_path / "in" if (tmp_path / "in").mkdir() is None else tmp_path)
     for p in [
         *inp["de9"].glob("de3-*.json"),
-        *inp["de3"].glob("de3-*-m2prime.json"),
+        *[
+            q
+            for q in inp["de3"].glob("de3-*.json")
+            if not any(q.name.endswith(f"-{v}.json") for v in REUSED_V)
+        ],
     ]:  # the harness documents record the evaluator HEAD and the reviewed code
         d = json.loads(p.read_text())
         d["code"] = {
@@ -810,15 +880,19 @@ def test_record_run_binds_the_review_writes_the_manifest_and_never_overwrites(
     monkeypatch.setattr(rec, "working_hashes", lambda repo=None: {"de3_probes.py": "1" * 64})
     monkeypatch.setattr(rec, "is_ancestor", lambda s, h, repo=None: True)
     monkeypatch.setattr(rec, "DE9_CODE_FILES", ("de3_probes.py",))
+    monkeypatch.setattr(rec, "HASH_SOURCES", (inp["hashes"],))
+    exp = tmp_path / "expected.json"
+    exp.write_text(json.dumps(_expected()))
     out = tmp_path / "out"
     doc = rec.run(
         inp["de3"],
         inp["de9"],
         out,
-        None,
+        inp["b0"],
         "REVIEW-0123abcd",
         "b" * 40,
         "REVIEW-0123abcd0123456789abcdef01234567",
+        exp,
     )
     man = json.loads((out / "de9-manifest.json").read_text())
     assert (
@@ -829,7 +903,7 @@ def test_record_run_binds_the_review_writes_the_manifest_and_never_overwrites(
     assert doc["provenance"]["reviewed_sha"] == "b" * 40 and (out / "git" / "de9.json").is_file()
     before = {str(p): p.read_bytes() for p in sorted(out.rglob("*")) if p.is_file()}
     with pytest.raises(SystemExit, match="already published"):
-        rec.run(inp["de3"], inp["de9"], out, None, "REVIEW-0123abcd", "b" * 40)
+        rec.run(inp["de3"], inp["de9"], out, inp["b0"], "REVIEW-0123abcd", "b" * 40, None, exp)
     assert {str(p): p.read_bytes() for p in sorted(out.rglob("*")) if p.is_file()} == before
     out2 = tmp_path / "out2"
     p = inp["de9"] / "de3-200-pinned-r0.json"
@@ -837,7 +911,7 @@ def test_record_run_binds_the_review_writes_the_manifest_and_never_overwrites(
     d["code"]["git_head"] = "e" * 40  # a document from another commit
     p.write_text(json.dumps(d))
     with pytest.raises(SystemExit, match="differ from the evaluator HEAD"):
-        rec.run(inp["de3"], inp["de9"], out2, None, "REVIEW-0123abcd", "b" * 40)
+        rec.run(inp["de3"], inp["de9"], out2, inp["b0"], "REVIEW-0123abcd", "b" * 40, None, exp)
 
 
 def test_seed_override_guard_mirrors_the_registered_de9_seeds() -> None:
@@ -877,3 +951,298 @@ def test_b0_provenance_discloses_the_single_pre_run_look() -> None:
     assert (
         '"pre_run_looks": PRE_RUN_LOOKS' in src and "**c.repo_state()" in src
     )  # fixed provenance fields of the B0 record
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# review round REVIEW-a701b2c8: once-only variants, fail-closed inputs, incomplete records, carry-up check
+# ---------------------------------------------------------------------------------------------------------------------------------
+def test_every_investigation_variant_is_once_only(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from validation.scripts.elastic_attribution import de3_probes as d3
+
+    out, att = tmp_path / "de3", tmp_path / "attempts.json"
+    out.mkdir()
+    ran: list[str] = []
+
+    def fake(
+        variant: str, energy: int, n: int, batches: int, lateral: bool, out: Path, **kw: Any
+    ) -> dict[str, Any]:
+        ran.append(variant)
+        (out / d3.run_name(energy, variant)).write_text("{}")
+        return {"valid": True}
+
+    monkeypatch.setattr(d3, "_run_one", fake)
+    for v in (
+        "pp-level-0.90-ge150",
+        "pp-level-0.95-ge150",
+        "pp-level-monotone",
+        "pA-s0.5",
+        "m2prime",
+        "pp-only",
+    ):
+        d3.run_one(v, 150, 100000, 20, False, out, att)
+        with pytest.raises(SystemExit, match="exists"):
+            d3.run_one(
+                v, 150, 100000, 20, False, out, att
+            )  # the existing target is never overwritten
+    assert len(ran) == 6
+    log = json.loads(att.read_text())
+    assert [r["outcome"] for r in log if "attempt" in r] == ["published-valid"] * 6 and sum(
+        r["outcome"] == "started" for r in log
+    ) == 6
+    n = len(log)
+    for v in d3.UNGUARDED_VARIANTS:  # the pinned table, its base copy and the EM-only run keep the plain path (no attempt record)
+        d3.run_one(v, 200, 100000, 20, False, out, att)
+    assert len(json.loads(att.read_text())) == n and set(d3.UNGUARDED_VARIANTS) == {
+        "pinned",
+        "all",
+        "emonly",
+    }
+
+
+def _freeze() -> dict[str, Any]:
+    return {
+        "sha": "b" * 40,
+        "head": "a" * 40,
+        "scripts": {"de3_probes.py": "1" * 64},
+        "ancestor": lambda s, h: True,
+    }
+
+
+def _code_everywhere(inp: dict[str, Path]) -> None:
+    for p in [
+        *inp["de9"].glob("de3-*.json"),
+        *[
+            q
+            for q in inp["de3"].glob("de3-*.json")
+            if not any(q.name.endswith(f"-{v}.json") for v in REUSED_V)
+        ],
+    ]:
+        d = json.loads(p.read_text())
+        d["code"] = {
+            "git_head": "a" * 40,
+            "git_clean": True,
+            "scripts_sha256": {"de3_probes.py": "1" * 64},
+        }
+        p.write_text(json.dumps(d))
+    b = json.loads(inp["b0"].read_text())
+    inp["b0"].write_text(json.dumps(b))
+
+
+def _patch(path: Path, **kv: Any) -> None:
+    d = json.loads(path.read_text())
+    d.update(kv)
+    path.write_text(json.dumps(d))
+
+
+def test_every_document_is_validated_fail_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from validation.scripts.elastic_attribution import de9_record as rec
+
+    inp = _write_inputs(tmp_path)
+    _code_everywhere(inp)
+    assert (
+        _build(inp, monkeypatch, freeze=_freeze())["complete"] is True
+    )  # the pristine set passes with the code binding as well
+    b3 = inp["de3"] / "de3-200-pp-level-monotone.json"
+    orig = b3.read_text()
+    cases = [({"energy": 150}, "energy"), ({"variant": "all"}, "variant"), ({"n": 50000}, "n"), ({"n_batches": 10}, "n_batches"), ({"mode": "emonly"}, "mode"),
+             ({"backend": "warp-cuda"}, "backend"), ({"precision": "float32"}, "precision"), ({"seed": 20990100}, "seed"), ({"elastic_table_id": "x"}, "elastic table id"),
+             ({"elastic_table_npz_sha256": "x"}, "npz sha256"), ({"elastic_table_npz_sha256": None}, "npz sha256")]  # fmt: skip
+    for patch, msg in cases:
+        b3.write_text(orig)
+        _patch(b3, **patch)
+        with pytest.raises(SystemExit, match=msg):
+            _build(inp, monkeypatch)
+    b3.write_text(orig)
+    d = json.loads(orig)
+    del d["elastic_table_npz_sha256"]  # a new document must carry the npz hash
+    b3.write_text(json.dumps(d))
+    with pytest.raises(SystemExit, match="npz sha256"):
+        _build(inp, monkeypatch)
+    b3.write_text(orig)
+    d = json.loads(orig)
+    d["code"]["git_head"] = "e" * 40  # B3 documents go through the code binding
+    b3.write_text(json.dumps(d))
+    with pytest.raises(SystemExit, match="differ from the evaluator HEAD"):
+        _build(inp, monkeypatch, freeze=_freeze())
+    b3.write_text(orig)
+    with pytest.raises(SystemExit, match="no expected table"):
+        _build(
+            inp,
+            monkeypatch,
+            expected={k: v for k, v in _expected().items() if k != "pp-level-monotone"},
+        )
+    # reused D-E3 documents: bound to the committed hashes and checked for identity
+    base = inp["de3"] / "de3-150-all.json"
+    keep = base.read_text()
+    _patch(base, note="edited")  # different bytes -> hash differs from the committed list
+    with pytest.raises(SystemExit, match="sha256 differs"):
+        _build(inp, monkeypatch)
+    base.write_text(keep)
+    _patch(base, elastic_table_npz_sha256="wrong")
+    inp["hashes"].write_text(
+        inp["hashes"]
+        .read_text()
+        .replace(
+            hashlib.sha256(keep.encode()).hexdigest(), hashlib.sha256(base.read_bytes()).hexdigest()
+        )
+    )
+    with pytest.raises(SystemExit, match="npz sha256"):
+        _build(inp, monkeypatch)
+    assert rec.committed_hashes((inp["hashes"],))["de3-150-all.json"]
+    two = tmp_path / "two.md"
+    two.write_text("- `a/de3-150-all.json`  " + "0" * 64 + "\n")
+    with pytest.raises(SystemExit, match="different sha256"):
+        rec.committed_hashes((inp["hashes"], two))
+
+
+def test_a_published_invalid_run_is_recorded_and_never_synthesised_as_valid(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from validation.scripts.elastic_attribution import de9_record as rec
+
+    inp = _write_inputs(tmp_path)
+    _patch(inp["de9"] / "de3-200-pinned-r2.json", valid=False)
+    doc = _build(inp, monkeypatch)
+    assert (
+        doc["complete"] is False
+        and doc["invalid_documents"] == {"de3-200-pinned-r2.json": "published-invalid"}
+        and "b1" not in doc
+        and "a1" not in doc
+        and "a1_sensitivity" not in doc
+    )
+    md = rec.render_report(
+        c.git_projection(json.loads(json.dumps(doc, default=float)), rec.GIT_ALLOW)
+    )
+    assert "INCOMPLETE — not the D-E9 synthesis" in md and "published-invalid" in md
+    inp2 = _write_inputs(tmp_path / "r" if (tmp_path / "r").mkdir() is None else tmp_path)
+    _patch(
+        inp2["de9"] / "de3-150-emonly-r0.json", relative_residual=1e-3
+    )  # the energy balance does not close
+    assert _build(inp2, monkeypatch)["invalid_documents"]
+
+
+def test_missing_m2prime_or_b0_is_required_unless_incomplete_is_allowed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from validation.scripts.elastic_attribution import de9_record as rec
+
+    inp = _write_inputs(tmp_path)
+    (inp["de3"] / "de3-200-m2prime.json").unlink()
+    with pytest.raises(SystemExit, match="de3-200-m2prime.json is missing"):
+        _build(inp, monkeypatch)
+    doc = _build(inp, monkeypatch, allow_incomplete=True)
+    assert (
+        doc["complete"] is False
+        and "a1_sensitivity" not in doc
+        and "b1" in doc
+        and any("m2prime" in r for r in doc["incomplete_reasons"])
+    )
+    proj = c.git_projection(json.loads(json.dumps(doc, default=float)), rec.GIT_ALLOW)
+    assert "INCOMPLETE — not the D-E9 synthesis" in rec.render_report(
+        proj
+    ) and "D-E9: exploratory" in rec.render_report(proj)
+    inp2 = _write_inputs(tmp_path / "b" if (tmp_path / "b").mkdir() is None else tmp_path)
+    with pytest.raises(SystemExit, match="B0 result is a required input"):
+        _build(inp2, monkeypatch, b0=None)
+    with pytest.raises(SystemExit, match="B0 result is a required input"):
+        _build(inp2, monkeypatch, b0=tmp_path / "absent.json")
+    d2 = _build(inp2, monkeypatch, b0=None, allow_incomplete=True)
+    assert d2["complete"] is False and "b0" not in d2 and "a1_sensitivity" in d2
+
+
+def test_incomplete_run_is_labelled_in_the_header_and_the_manifest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from validation.scripts.elastic_attribution import de9_record as rec
+
+    inp = _write_inputs(tmp_path / "in" if (tmp_path / "in").mkdir() is None else tmp_path)
+    (inp["de3"] / "de3-200-m2prime.json").unlink()
+    _code_everywhere(inp)
+    monkeypatch.setattr(
+        c, "repo_state", lambda repo=None: {"git_head": "a" * 40, "git_clean": True}
+    )
+    monkeypatch.setattr(rec, "ARCHIVE_JSON", inp["archive"])
+    monkeypatch.setattr(rec, "hashes_at", lambda sha, repo=None: {"de3_probes.py": "1" * 64})
+    monkeypatch.setattr(rec, "working_hashes", lambda repo=None: {"de3_probes.py": "1" * 64})
+    monkeypatch.setattr(rec, "is_ancestor", lambda s, h, repo=None: True)
+    monkeypatch.setattr(rec, "DE9_CODE_FILES", ("de3_probes.py",))
+    monkeypatch.setattr(rec, "HASH_SOURCES", (inp["hashes"],))
+    exp = tmp_path / "expected.json"
+    exp.write_text(json.dumps(_expected()))
+    with pytest.raises(SystemExit, match="is missing"):
+        rec.run(
+            inp["de3"],
+            inp["de9"],
+            tmp_path / "o1",
+            inp["b0"],
+            "REVIEW-0123abcd",
+            "b" * 40,
+            None,
+            exp,
+        )
+    rec.run(
+        inp["de3"],
+        inp["de9"],
+        tmp_path / "o2",
+        inp["b0"],
+        "REVIEW-0123abcd",
+        "b" * 40,
+        None,
+        exp,
+        allow_incomplete=True,
+    )
+    assert json.loads((tmp_path / "o2" / "de9-manifest.json").read_text())["complete"] is False
+    md = (tmp_path / "o2" / "git" / "de9-report.md").read_text()
+    assert "INCOMPLETE — not the D-E9 synthesis" in md.split(c.BODY_MARKER)[0]
+
+
+def test_b0_carry_up_check_reconstructs_the_level_above_150_mev(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from ionmc.nuclear import bgg
+
+    monkeypatch.setattr(b0, "N_GAUSS", 64)
+    sec = _sec([4.0e-3, 4.0e-3, 4.0e-3], energies=[1.0e7, 1.0e8, 1.5e8])
+    grid = np.array([100.0, 150.0, 175.0, 200.0, 225.0, 250.0])
+    rec150 = b0.sigma_ni_barn(sec, 150.0)
+    table = np.array(
+        [
+            b0.sigma_ni_barn(sec, 100.0),
+            rec150,
+            *[rec150 * bgg.pp_bgg_mb(float(e)) / bgg.pp_bgg_mb(150.0) for e in grid[2:]],
+        ]
+    )
+    res = b0.carry_up_check(sec, grid, table)
+    absolutes = res.pop("_absolutes")
+    assert (
+        set(res["named_nodes"]) == {"175", "200", "250"}
+        and res["match"]["all_within"]
+        and "100" not in res["nodes"]
+        and "150" not in res["nodes"]
+    )
+    g = res["grid_150_200_over_150"]
+    assert (
+        len(g) == 51
+        and g["150"] == 1.0
+        and all(g[f"{e}"] >= g[f"{e + 1}"] for e in range(150, 200))
+    )
+    bad = table.copy()
+    bad[3] *= 1.01
+    cu = b0.carry_up_check(sec, grid, bad)
+    assert (
+        not cu["match"]["all_within"]
+        and not cu["named_nodes"]["200"]["within"]
+        and cu["named_nodes"]["175"]["within"]
+    )
+    proj = c.git_projection(
+        json.loads(json.dumps({"banner": c.BANNER, "carry_up_check": res}, default=float)),
+        b0.GIT_ALLOW,
+    )
+    assert b0.leak_violations(proj, absolutes) == [] and "carried_over_table" in json.dumps(proj)
+    assert "Carry-up check above 150 MeV" in b0.render_report({"disclosure": "d", "match": {"tolerance": 1e-3, "all_within": True, "max_abs_rel_diff": 0.0},
+                                                               "dip": {"margin": 0.01, "persists": True, "min_energy_mev": 130.0, "min_over_lower_endpoint_minus_1": -0.1, "min_over_upper_endpoint_minus_1": -0.1},
+                                                               "reading": "r", "named_nodes": {}, "levels_over_125mev": {}, "carry_up_check": {**res}})  # fmt: skip

@@ -192,3 +192,19 @@ The header states "exploratory; leads identified after the D-E8 STOP; not a re-e
 8. The Git projection contains no absolute cross sections.
 9. The disclosure of seen numbers is complete.
 10. Single process, one heavy job, no host use.
+
+*Dated note (2026-10-19, after Codex REVIEW-a701b2c8 and before any B0 number exists): domain of B0.*
+
+The raw LA150 H-1 LAW=5 data end at 150 MeV. Above 150 MeV, the table's level is the builder's S(E)/S(150) carry-up of the 150 MeV node. B0 is therefore evaluated in two blocks.
+
+1. **Raw-data domain, 100–150 MeV.**
+   - The ≤ 1e-3 relative match is checked at table nodes and node midpoints.
+   - The dip test ("an interior minimum between 100 and 150 MeV more than 1 % below both endpoints") uses a 1 MeV grid.
+2. **Carry-up check, 150–200 MeV (separate block).**
+   - The level above 150 MeV is reconstructed independently as level(150, reconstructed) × S(E)/S(150), with S = `bgg.pp_bgg_mb`. The block imports only `ionmc.nuclear.bgg`, nothing else from the package.
+   - It is compared, as ratios, with the pinned nodes at 175, 200 and 250 MeV, and with the table's interpolated level on a 1 MeV grid over 150–200 MeV.
+   - Ratios within 1e-3 mean "the carry-up rule reproduces". Any other result is reported as found.
+
+The carry-up is a construction choice that is already disclosed (PP-LEVEL: table/BGG = 1.1008 by construction above 150 MeV). It is **not part of the "dip persists" rule**.
+
+All other reading rules are unchanged.
