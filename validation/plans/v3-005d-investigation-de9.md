@@ -239,3 +239,13 @@ The 1e-6 acceptance is therefore data-informed for that node.
 **(a) B3 monotone variant.** The table has no 125 MeV node (the cache rebuild failed before any B3 run). "The table's own 125 MeV level" therefore means the table's p-p level at 125 MeV, interpolated between bracketing nodes by the table's convention. It is carried upward by S(E)/S(125), with S = `bgg.pp_bgg_mb`. This makes a report-only sensitivity precise; B0's result does not bear on it.
 
 **(b) B0 binding.** B0 ran once, at clean, reviewed HEAD 0dfca566, before the B3 defect was found. It stands and is not re-run. The harness fix changes the frozen `make_variant_tables.py`. The evaluator therefore binds B0 by ancestry of its HEAD to the reviewed SHA, the `de9_pp_level.py` hash, a clean tree and the attempt-log digest. A1, B2 and B3 stay bound by HEAD equality.
+
+*Dated note (2026-10-19; before any synthesis number: no A1, B2 or B3 statistic computed or seen).*
+
+The single production sequence ran at HEAD db7d84e2 (reviewed REVIEW-50f285f6). All 32 run documents were published once and are published-valid in the attempt log: A1 24 (8 + 4 pairs), B2 2, B3 6.
+
+The synthesis refused before writing anything, on an evaluator defect: the monotone variant's upper bracket is exactly 130 MeV, against a "< 5 MeV" check.
+
+The fix is confined to `de9_record.py`. The producers (`de3_probes.py`, `make_variant_tables.py`, `de9_pp_level.py`) are unchanged, and their hashes are bound in every document.
+
+Once-only forbids re-producing the documents, and the evaluator runs at a later reviewed HEAD. The documents are therefore bound like B0: HEAD an ancestor of the reviewed SHA, a clean tree, producer hashes equal to the reviewed commit's, and the attempt-log digest. No document, seed, setting or reading rule changes.

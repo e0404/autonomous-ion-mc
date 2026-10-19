@@ -521,13 +521,14 @@ def test_record_freeze_binding_in_a_temporary_git_repo(tmp_path: Path) -> None:
         rec.check_freeze("REVIEW-89abcdef", first, clean, man, repo)
 
 
-def test_documents_must_come_from_the_evaluator_head_and_the_reviewed_code() -> None:
+def test_documents_are_bound_to_the_reviewed_code_not_to_the_evaluator_head() -> None:
     from validation.scripts.elastic_attribution import de9_record as rec
 
     freeze = {
         "sha": "b" * 40,
         "head": "a" * 40,
         "scripts": {"de3_probes.py": "1" * 64},
+        "recorded": {"de3_probes.py": "1" * 64, "de5_sampling.py": "9" * 64},
         "ancestor": lambda s, h: True,
     }
     ok = {
@@ -538,14 +539,28 @@ def test_documents_must_come_from_the_evaluator_head_and_the_reviewed_code() -> 
         }
     }
     rec.check_document_code(ok, "doc", freeze)
+    # produced at another (older) commit with matching producer hashes: accepted -- HEAD equality adds nothing once the hashes match
+    rec.check_document_code({"code": {**ok["code"], "git_head": "c" * 40}}, "doc", freeze)
     for patch, msg in (
-        ({"git_head": "c" * 40}, "differ from the evaluator HEAD"),
-        ({"git_clean": False}, "clean flag"),
+        ({"git_clean": False}, "clean-tree flag"),
+        ({"git_head": None}, "not an ancestor"),
         ({"scripts_sha256": {"de3_probes.py": "2" * 64}}, "differs from the reviewed commit"),
+        (
+            {"scripts_sha256": {"de3_probes.py": "1" * 64, "de5_sampling.py": "8" * 64}},
+            "differs from the reviewed commit",
+        ),
+        (
+            {"scripts_sha256": {"de3_probes.py": "1" * 64, "unknown.py": "8" * 64}},
+            "missing from or differs",
+        ),
+        ({"scripts_sha256": {"de5_sampling.py": "9" * 64}}, "no scripts_sha256"),
+        ({"scripts_sha256": {}}, "no scripts_sha256"),
     ):
         with pytest.raises(SystemExit, match=msg):
             rec.check_document_code({"code": {**ok["code"], **patch}}, "doc", freeze)
-    with pytest.raises(SystemExit, match="does not contain the reviewed commit"):
+    with pytest.raises(SystemExit, match="no scripts_sha256"):
+        rec.check_document_code({"code": {"git_head": "a" * 40, "git_clean": True}}, "doc", freeze)
+    with pytest.raises(SystemExit, match="is not an ancestor of"):  # reversed ancestry
         rec.check_document_code(ok, "doc", {**freeze, "ancestor": lambda s, h: False})
     # the B0 record (published once at an EARLIER commit): its HEAD must be an ancestor of the reviewed commit, the tree must be clean and the code hash must be
     # the reviewed de9_pp_level.py; the equal-HEAD rule does not apply to it
@@ -563,7 +578,7 @@ def test_documents_must_come_from_the_evaluator_head_and_the_reviewed_code() -> 
         )
     with pytest.raises(SystemExit, match="is not an ancestor of"):
         rec.check_document_code(good, "de9-b0.json", {**f2, "ancestor": lambda s, h: False})
-    with pytest.raises(SystemExit, match="clean flag"):
+    with pytest.raises(SystemExit, match="clean-tree flag"):
         rec.check_document_code(
             {"provenance": {**good["provenance"], "git_clean": False}}, "de9-b0.json", f2
         )
@@ -774,7 +789,7 @@ def _sidecar_for(v: str, pin_tid: str, sha: str) -> dict[str, Any]:
         side["exploratory"] = {
             "d_e3_variant": v,
             "parameters": mv._parameters(v)
-            | ({"bracketing_nodes_mev": [124.8, 126.1]} if v == "pp-level-monotone" else {}),
+            | ({"bracketing_nodes_mev": [124.8058, 130.0]} if v == "pp-level-monotone" else {}),
             "source_table_id": pin_tid,
         }
     return side
@@ -791,12 +806,21 @@ def _install_table(scratch: Path, v: str, side: dict[str, Any], payload: bytes) 
     return {"table_id": tid, "npz_sha256": side["npz_sha256"]}
 
 
+def _pinned_npz() -> bytes:
+    """A real npz with the pinned grid nodes around the 125 MeV anchor (the real spacing: 124.8058 and 130.0 are adjacent nodes)."""
+    import io
+
+    buf = io.BytesIO()
+    np.savez(buf, grid_e_mev=np.array([100.0, 120.0, 124.8058, 130.0, 150.0, 175.0, 250.0]))
+    return buf.getvalue()
+
+
 def _scratch_cache(tmp: Path) -> tuple[Path, dict[str, dict[str, str]]]:
     """A synthetic scratch cache (variants.json, builders, derived files with consistent ids) and the matching expected-tables map."""
     scratch = tmp / "scratch"
     (scratch / "derived").mkdir(parents=True)
     exp: dict[str, dict[str, str]] = {
-        "pinned": _install_table(scratch, "pinned", _sidecar_for("pinned", "", ""), b"npz-pinned")
+        "pinned": _install_table(scratch, "pinned", _sidecar_for("pinned", "", ""), _pinned_npz())
     }
     pin = dict(exp["pinned"])
     MP.setattr(c, "TABLE_ID", pin["table_id"])
@@ -1168,7 +1192,7 @@ def test_every_document_is_validated_fail_closed(tmp_path: Path) -> None:
     with pytest.raises(SystemExit, match="npz sha256"):
         _build(inp)
     for bad_code in (
-        {"git_head": "e" * 40, "git_clean": True, "scripts_sha256": {"de3_probes.py": "1" * 64}},
+        {"git_head": "a" * 40, "git_clean": False, "scripts_sha256": {"de3_probes.py": "1" * 64}},
         {"git_head": "a" * 40, "git_clean": True},
         {"git_head": "a" * 40, "git_clean": True, "scripts_sha256": {}},
         {"git_head": "a" * 40, "git_clean": True, "scripts_sha256": {"de5_sampling.py": "2" * 64}},
@@ -1176,7 +1200,7 @@ def test_every_document_is_validated_fail_closed(tmp_path: Path) -> None:
     ):  # B3 documents go through the code binding; hashes are REQUIRED
         b3.write_text(json.dumps({**orig, "code": bad_code}))
         _relog(inp)
-        with pytest.raises(SystemExit, match="evaluator HEAD|scripts_sha256|sha256 of de3_probes"):
+        with pytest.raises(SystemExit, match="clean-tree flag|scripts_sha256|sha256 of de3_probes"):
             _build(inp, freeze=_freeze())
     b3.write_text(json.dumps(orig))
     _relog(inp)
@@ -1402,6 +1426,7 @@ def _run_patched(inp: dict[str, Any]) -> None:
     MP.setattr(rec, "DE8_RECORD", inp["de8"])
     MP.setattr(rec, "DE7_RECORD", inp["de7"])
     MP.setattr(rec, "hashes_at", lambda sha, repo=None: {"de3_probes.py": "1" * 64})
+    MP.setattr(rec, "recorded_hashes", lambda sha, repo=None: {"de3_probes.py": "1" * 64})
     MP.setattr(rec, "working_hashes", lambda repo=None: {"de3_probes.py": "1" * 64})
     MP.setattr(rec, "is_ancestor", lambda s, h, repo=None: True)
     MP.setattr(rec, "DE9_CODE_FILES", ("de3_probes.py",))
@@ -1454,9 +1479,12 @@ def test_record_run_binds_the_review_writes_the_manifest_and_never_overwrites(
     assert {str(p): p.read_bytes() for p in sorted(out.rglob("*")) if p.is_file()} == before
     p = inp["de9"] / "de3-200-pinned-r0.json"
     d = json.loads(p.read_text())
-    d["code"]["git_head"] = "e" * 40  # a document from another commit
+    d["code"]["git_head"] = (
+        "e" * 40
+    )  # a document from a commit that is not an ancestor of the reviewed commit
     _put(p, code=d["code"])
-    with pytest.raises(SystemExit, match="differ from the evaluator HEAD"):
+    MP.setattr(rec, "is_ancestor", lambda a, b, repo=None: a != "e" * 40)
+    with pytest.raises(SystemExit, match="is not an ancestor of"):
         rec.run(
             inp["de3"],
             inp["de9"],
@@ -1528,11 +1556,15 @@ def test_validator_accepts_documents_generated_by_the_real_producer(
     out.mkdir()
     pin = json.loads((c.REPO / "src" / "ionmc" / "data" / "elastic_table_pin.json").read_text())
     expected = {"pinned": {"table_id": pin["table_id"], "npz_sha256": pin["npz_sha256"]}}
+    monkeypatch.setattr(
+        d3, "PINNED", pin["table_id"]
+    )  # de3_probes.PINNED is bound at its first import, which may happen inside a test that patched c.TABLE_ID
     scripts = c.code_provenance()["scripts_sha256"]
     freeze = {
         "sha": "b" * 40,
         "head": "a" * 40,
         "scripts": {"de3_probes.py": scripts["de3_probes.py"]},
+        "recorded": dict(scripts),
         "ancestor": lambda s, h: True,
     }
     for e, seed_a1, seed_b2 in ((150, 20992010, 20992100), (200, 20992000, 20992101)):
@@ -1628,7 +1660,9 @@ def _retable(inp: dict[str, Any], v: str, mutate: Any) -> dict[str, dict[str, st
         (inp["scratch"] / "derived" / f"elastic-proton-{old['table_id']}.json").read_text()
     )
     mutate(side)
-    new = _install_table(inp["scratch"], v, side, f"npz-{v}".encode())
+    new = _install_table(
+        inp["scratch"], v, side, _pinned_npz() if v == "pinned" else f"npz-{v}".encode()
+    )
     vj = json.loads((inp["scratch"] / "variants.json").read_text())
     for blk in ("variants", "builders"):
         if v in vj[blk]:
@@ -1674,7 +1708,11 @@ def test_variant_identity_is_authenticated_from_the_sidecar_not_from_variants_js
              ("pp-level-monotone", lambda s: s["exploratory"]["parameters"].pop("bracketing_nodes_mev"), "does not define this variant"),
              ("pp-level-monotone", lambda s: s["exploratory"]["parameters"].update(bracketing_nodes_mev=[126.0, 127.0]), "does not define this variant"),
              ("pp-level-monotone", lambda s: s["exploratory"]["parameters"].update(bracketing_nodes_mev=[100.0, 150.0]), "does not define this variant"),
-             ("pp-level-0.90-ge150", lambda s: s["exploratory"]["parameters"].update(bracketing_nodes_mev=[124.8, 126.1]), "does not define this variant"),
+             ("pp-level-0.90-ge150", lambda s: s["exploratory"]["parameters"].update(bracketing_nodes_mev=[124.8058, 130.0]), "does not define this variant"),
+             ("pp-level-monotone", lambda s: s["exploratory"]["parameters"].update(bracketing_nodes_mev=[124.8058, 150.0]), "does not define this variant"),
+             ("pp-level-monotone", lambda s: s["exploratory"]["parameters"].update(bracketing_nodes_mev=[124.8, 130.0]), "does not define this variant"),
+             ("pp-level-monotone", lambda s: s["exploratory"]["parameters"].update(bracketing_nodes_mev=[130.0, 130.0]), "does not define this variant"),
+             ("pp-level-monotone", lambda s: s["exploratory"]["parameters"].update(bracketing_nodes_mev=[120.0, 124.8058]), "does not define this variant"),
              ("m2prime", lambda s: s["exploratory"].update(pauli_variant="bdc-pn"), "does not define the m2prime construction"),
              ("m2prime", lambda s: s["exploratory"].update(pauli_emin_mev=5.0), "does not define the m2prime construction"),
              ("m2prime", lambda s: s["exploratory"].update(model="m2-optical-glauber"), "does not define the m2prime construction"),
@@ -1998,3 +2036,74 @@ def test_b0_ancestry_direction_in_a_temporary_git_repo(tmp_path: Path) -> None:
             "de9-b0.json",
             {"sha": newer, "head": newer, "scripts": scripts, "ancestor": anc},
         )  # an unknown commit is refused too
+
+
+def test_monotone_bracket_rule_uses_the_pinned_grid_without_an_mev_tolerance(
+    tmp_path: Path,
+) -> None:
+    """Valid iff lower <= 125 <= upper, both are nodes of the pinned grid and adjacent; the real spacing (124.8058, 130.0) is accepted."""
+    scratch, exp = _scratch_cache(tmp_path)
+    der = scratch / "derived"
+    ok = lambda br: rec._bracket_valid(br, exp, der)  # noqa: E731
+    assert ok([124.8058, 130.0]) is True  # the real spacing: exactly 5.0 MeV apart is fine
+    assert (
+        ok([124.8058, 130.0000000001]) is True
+    )  # float noise of 1e-10 is not a tolerance in MeV, only the node match tolerance (1e-9)
+    for bad in (
+        [124.8058, 150.0],
+        [120.0, 130.0],
+        [100.0, 150.0],
+        [124.8, 130.0],
+        [126.0, 127.0],
+        [130.0, 150.0],
+        [120.0, 124.8058],
+        [130.0, 124.8058],
+        [124.8058],
+        [124.8058, "130"],
+        None,
+        [True, 130.0],
+    ):
+        assert ok(bad) is False, bad
+    assert ok([150.0, 150.0]) is False  # a single node is its own bracket only at 125 MeV
+    with pytest.raises(SystemExit, match="pinned table is needed"):
+        rec._bracket_valid([124.8058, 130.0], {}, der)
+    (der / f"elastic-proton-{exp['pinned']['table_id']}.npz").write_bytes(b"not an npz")
+    with pytest.raises(SystemExit, match="grid cannot be read"):
+        rec._bracket_valid([124.8058, 130.0], exp, der)
+
+
+def test_run_documents_at_an_older_commit_with_matching_producer_hashes_in_a_temporary_git_repo(
+    tmp_path: Path,
+) -> None:
+    repo, older, newer = _repo9(tmp_path)
+    anc = lambda a, b: rec.is_ancestor(a, b, repo)  # noqa: E731
+    doc = {
+        "code": {
+            "git_head": older,
+            "git_clean": True,
+            "scripts_sha256": {"de3_probes.py": "1" * 64},
+        }
+    }
+    freeze = {
+        "sha": newer,
+        "head": newer,
+        "scripts": {"de3_probes.py": "1" * 64},
+        "recorded": {"de3_probes.py": "1" * 64},
+        "ancestor": anc,
+    }
+    rec.check_document_code(
+        doc, "de3-200-pp-level-monotone.json", freeze
+    )  # produced at the older commit, reviewed SHA newer: accepted
+    rec.check_document_code(
+        {"code": {**doc["code"], "git_head": newer}}, "doc", freeze
+    )  # equal is accepted
+    with pytest.raises(SystemExit, match="is not an ancestor of"):  # reversed ancestry
+        rec.check_document_code(
+            {"code": {**doc["code"], "git_head": newer}}, "doc", {**freeze, "sha": older}
+        )
+    with pytest.raises(
+        SystemExit, match="differs from the reviewed commit"
+    ):  # a recorded producer hash that differs from the reviewed commit
+        rec.check_document_code(
+            {"code": {**doc["code"], "scripts_sha256": {"de3_probes.py": "2" * 64}}}, "doc", freeze
+        )

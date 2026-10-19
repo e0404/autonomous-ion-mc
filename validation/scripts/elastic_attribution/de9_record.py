@@ -215,6 +215,18 @@ def hashes_at(sha: str, repo: Path | None = None) -> dict[str, str]:
     return out
 
 
+def recorded_hashes(sha: str, repo: Path | None = None) -> dict[str, str]:
+    """Hashes at the reviewed commit of every file a produced document may record (the four D-E9 files and the harness ``CODE_FILES``)."""
+    from .de8_diagnostic import _git
+
+    out = {}
+    for n in dict.fromkeys((*DE9_CODE_FILES, *c.CODE_FILES)):
+        r = _git(repo, "show", f"{sha}:{SCRIPT_REL}/{n}")
+        if r.returncode == 0:
+            out[n] = hashlib.sha256(r.stdout.encode("utf-8")).hexdigest()
+    return out
+
+
 def working_hashes(repo: Path | None = None) -> dict[str, str]:
     root = Path(repo or c.REPO) / SCRIPT_REL
     for n in DE9_CODE_FILES:
@@ -250,25 +262,23 @@ def check_freeze(review_id: str | None, reviewed_sha: str | None, state: dict[st
 
 
 def check_document_code(doc: dict[str, Any], what: str, freeze: dict[str, Any]) -> None:
-    """A run document must record the evaluator's HEAD, a clean tree, and (for the files it hashes) the code of the reviewed commit."""
+    """Binding of a produced document to the reviewed code. A harness document (``code`` block: A1 / B2 / B3 / D-E8 arm) must record a clean tree, a HEAD that is an
+    ancestor of (or equal to) the reviewed commit, and producer-code hashes (``scripts_sha256``, REQUIRED, including ``de3_probes.py``) that equal those of the reviewed
+    commit: the documents bind the producer code by hash, so HEAD equality adds nothing once the hashes match (and the once-only rule forbids re-producing them after
+    an evaluator-only change). The B0 record (``provenance``, no ``code`` block) is bound the same way by its clean flag, HEAD ancestry and ``code_sha256``."""
     cd = doc.get("code") or doc.get("provenance") or {}
-    if "code" in doc and cd.get("git_head") != freeze["head"] or cd.get("git_clean") is not True:
-        raise SystemExit(f"{what}: recorded HEAD / clean flag differ from the evaluator HEAD {freeze['head'][:12]} (all documents must come from one commit)")
-    # the B0 record (provenance, no ``code`` block) was published once at an EARLIER commit than the one that froze the current code: its recorded HEAD must be an
-    # ancestor of (or equal to) the reviewed commit, its tree clean and its de9_pp_level.py hash the reviewed one (below); the equal-HEAD rule stays for the A1 / B2 / B3
-    # run documents
-    if "code" in doc:
-        if not isinstance(cd.get("git_head"), str) or not freeze["ancestor"](freeze["sha"], cd["git_head"]):
-            raise SystemExit(f"{what}: recorded HEAD does not contain the reviewed commit {freeze['sha'][:12]}")
-    elif not isinstance(cd.get("git_head"), str) or not freeze["ancestor"](cd["git_head"], freeze["sha"]):
+    if cd.get("git_clean") is not True:
+        raise SystemExit(f"{what}: the recorded clean-tree flag is not true (clean tree required)")
+    if not isinstance(cd.get("git_head"), str) or not freeze["ancestor"](cd["git_head"], freeze["sha"]):
         raise SystemExit(f"{what}: the recorded HEAD {str(cd.get('git_head'))[:12]} is not an ancestor of (or equal to) the reviewed commit {freeze['sha'][:12]}")
-    if "code" in doc:  # a harness document: the code hashes are REQUIRED and must equal those of the reviewed commit
+    if "code" in doc:
         sh = cd.get("scripts_sha256")
-        if not isinstance(sh, dict) or not sh:
-            raise SystemExit(f"{what}: no scripts_sha256 recorded (the code binding cannot be verified)")
-        for n, want in freeze["scripts"].items():
-            if n in c.CODE_FILES and sh.get(n) != want:
-                raise SystemExit(f"{what}: sha256 of {n} recorded in the document is missing or differs from the reviewed commit")
+        if not isinstance(sh, dict) or not sh or "de3_probes.py" not in sh:
+            raise SystemExit(f"{what}: no scripts_sha256 (with the producer de3_probes.py) recorded: the code binding cannot be verified")
+        reviewed = freeze.get("recorded", freeze["scripts"])
+        for n, s in sh.items():
+            if reviewed.get(n) != s:
+                raise SystemExit(f"{what}: sha256 of {n} recorded in the document is missing from or differs from the reviewed commit")
     elif "de9_pp_level.py" in freeze["scripts"] and cd.get("code_sha256") != freeze["scripts"]["de9_pp_level.py"]:  # the B0 record
         raise SystemExit(f"{what}: code_sha256 is missing or differs from the reviewed de9_pp_level.py")
 
@@ -351,6 +361,23 @@ LA150_ZIP_SHA256 = "27bcafb89cf0444c53c6b9f3dd17618c62e2e6b3694f70d31c4f502399f1
 LA150_H1_MEMBER_SHA256 = "a1c3bc637ba242f263d88a3b3848b5a0a717728d6ec19395d24225e1b96a4fb5"  # ``p-001_H_001.endf`` inside it (frozen pin)
 
 
+def _bracket_valid(br: Any, expected: dict[str, dict[str, str]], der: Path) -> bool:
+    """The recorded bracket of the 125 MeV anchor is valid iff lower <= 125 <= upper, both are grid nodes of the PINNED table (its npz grid) and they are adjacent
+    nodes (no grid node strictly between them); a single node equal to 125 MeV is its own bracket. No tolerance in MeV."""
+    if not (isinstance(br, list) and len(br) == 2 and all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in br)):
+        return False
+    pinned = expected.get("pinned")
+    if pinned is None:
+        raise SystemExit("the expected pinned table is needed to check the bracketing nodes against the grid")
+    try:
+        grid = np.load(der / f"elastic-proton-{pinned['table_id']}.npz", allow_pickle=False)["grid_e_mev"]
+    except (OSError, KeyError, ValueError) as exc:
+        raise SystemExit(f"the pinned table grid cannot be read: {exc}") from exc
+    lo, hi = float(br[0]), float(br[1])
+    on_grid = lambda x: bool(np.any(np.isclose(grid, x, rtol=0.0, atol=1e-9)))  # noqa: E731
+    return bool(lo <= 125.0 <= hi and on_grid(lo) and on_grid(hi) and not np.any((grid > lo + 1e-9) & (grid < hi - 1e-9)))
+
+
 def verify_expected_tables(expected: dict[str, dict[str, str]], scratch: Path, de7_record: Path | None = None) -> None:
     """The expected-tables map is verified against the scratch cache SEMANTICALLY: for every variant the installed npz sha256, the sidecar's recorded hash and the
     table id recomputed from the sidecar must agree, and the sidecar itself must define the variant: ``exploratory.d_e3_variant`` equal to the name and its
@@ -394,9 +421,7 @@ def verify_expected_tables(expected: dict[str, dict[str, str]], scratch: Path, d
         else:
             params = dict(ex.get("parameters") or {}) if isinstance(ex, dict) else {}
             br = params.pop("bracketing_nodes_mev", None)  # recorded by the monotone variant: the table nodes that bracket 125 MeV
-            br_ok = v != "pp-level-monotone" or (isinstance(br, list) and len(br) == 2 and all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in br) and br[0] <= 125.0 + 1e-9 <= br[1] + 2e-9 and br[0] <= br[1] and br[1] - br[0] < 5.0)
-            if v != "pp-level-monotone" and br is not None:
-                br_ok = False
+            br_ok = (br is None) if v != "pp-level-monotone" else _bracket_valid(br, expected, der)
             if not isinstance(ex, dict) or ex.get("d_e3_variant") != v or params != _parameters(v) or not br_ok or ex.get("source_table_id") != c.TABLE_ID:
                 raise SystemExit(f"expected table of {v!r}: the sidecar does not define this variant (d_e3_variant / frozen parameters / source table)")
 
@@ -657,7 +682,7 @@ def run(de3_dir: Path, de9_dir: Path, out: Path, b0_path: Path | None = None, re
     assert reviewed_sha is not None
     if any((out / n).exists() for n in ("de9.json", "git/de9.json", "git/de9-report.md")) or prev.get("record"):
         raise SystemExit("a D-E9 record is already published: it is never overwritten")
-    freeze = {"sha": reviewed_sha, "head": state["git_head"], "scripts": hashes_at(reviewed_sha), "ancestor": is_ancestor}
+    freeze = {"sha": reviewed_sha, "head": state["git_head"], "scripts": hashes_at(reviewed_sha), "recorded": recorded_hashes(reviewed_sha), "ancestor": is_ancestor}
     if expected_tables is None:
         raise SystemExit("--expected-tables FILE (variant -> table_id / npz_sha256 of the scratch cache) is required")
     doc = build_document(de3_dir, de9_dir, b0_path, freeze=freeze, expected_tables=json.loads(Path(expected_tables).read_text()), allow_incomplete=allow_incomplete,
