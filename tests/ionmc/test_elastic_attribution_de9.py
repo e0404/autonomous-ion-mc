@@ -2045,7 +2045,9 @@ def test_monotone_bracket_rule_uses_the_pinned_grid_without_an_mev_tolerance(
     scratch, exp = _scratch_cache(tmp_path)
     der = scratch / "derived"
     ok = lambda br: rec._bracket_valid(br, exp, der)  # noqa: E731
-    assert ok([124.8058, 130.0]) is True  # the real spacing: exactly 5.0 MeV apart is fine
+    assert (
+        ok([124.8058, 130.0]) is True
+    )  # the real spacing 124.8058 -> 130.0 is 5.1942 MeV; 130.0 - 125 = 5.0 is what the old "< 5 MeV" check compared
     assert (
         ok([124.8058, 130.0000000001]) is True
     )  # float noise of 1e-10 is not a tolerance in MeV, only the node match tolerance (1e-9)
@@ -2107,3 +2109,90 @@ def test_run_documents_at_an_older_commit_with_matching_producer_hashes_in_a_tem
         rec.check_document_code(
             {"code": {**doc["code"], "scripts_sha256": {"de3_probes.py": "2" * 64}}}, "doc", freeze
         )
+
+
+def test_legacy_reused_documents_are_checked_only_on_the_fields_they_record(tmp_path: Path) -> None:
+    inp = _write_inputs(tmp_path)
+    legacy = (
+        "backend",
+        "precision",
+        "scoring",
+        "tallies",
+    )  # what the older producer did not record (the real D-E3 documents)
+    for p in sorted(inp["de3"].glob("de3-*.json")):
+        if any(p.name.endswith(f"-{v}.json") for v in REUSED_V):
+            d = json.loads(p.read_text())
+            p.write_text(json.dumps({k: v for k, v in d.items() if k not in legacy}))
+    _relog(inp)  # the committed hash list matches the stripped (legacy) files
+    doc = _build(inp)
+    assert doc["complete"] is True
+    absent = doc["provenance"]["legacy_fields_absent"]
+    assert set(absent) == {f"de3-{e}-{v}.json" for e in (150, 200) for v in REUSED_V}
+    for name, fields in absent.items():
+        assert {"backend", "precision", "scoring", "tallies"} <= set(
+            fields
+        ) and "energy" not in fields
+        assert (
+            ("elastic_table_npz_sha256" in fields) == ("emonly" not in name)
+            and "code" in fields
+            and "elastic" in fields
+        )
+    proj = c.git_projection(json.loads(json.dumps(doc, default=float)), rec.GIT_ALLOW)
+    assert (
+        "legacy_fields_absent" in proj["provenance"]
+    )  # allowlisted, so the synthesis record shows it
+    # the fields a legacy document does record are still checked
+    p = inp["de3"] / "de3-150-pp-only.json"
+    keep = p.read_text()
+    for patch, msg in (
+        ({"energy": 200}, "energy"),
+        ({"n": 5}, "n "),
+        ({"backend": "warp-cuda"}, "backend"),
+        ({"mode": "emonly"}, "mode"),
+        ({"seed": 1}, "seed"),
+        (
+            {
+                "scoring": {
+                    "origin_mm": [0.0, 0.0, 0.0],
+                    "spacing_mm": [1.0, 1.0, 1.0],
+                    "shape": [1, 1, 3],
+                    "name": "dose",
+                }
+            },
+            "scoring origin_mm",
+        ),
+        ({"tallies": []}, "tally names"),
+    ):
+        p.write_text(keep)
+        _put(p, **patch)
+        with pytest.raises(SystemExit, match=msg):
+            _build(inp)
+    p.write_text(keep)
+    _relog(inp)
+    d = json.loads(keep)
+    del d["n_batches"]  # the configuration fields that every producer recorded stay required
+    p.write_text(json.dumps(d))
+    _relog(inp)
+    with pytest.raises(SystemExit, match="n_batches"):
+        _build(inp)
+
+
+def test_new_documents_keep_the_full_check_without_backend_or_precision(tmp_path: Path) -> None:
+    inp = _write_inputs(tmp_path)
+    for target in (
+        inp["de3"] / "de3-200-pp-level-monotone.json",
+        inp["de9"] / "de3-150-pinned-r0.json",
+        inp["de9"] / "de3-200-pinned-r100.json",
+    ):
+        keep = json.loads(target.read_text())
+        for field in ("backend", "precision", "scoring", "tallies"):
+            target.write_text(json.dumps({k: v for k, v in keep.items() if k != field}))
+            _relog(inp)
+            with pytest.raises(SystemExit, match=f"{field}|scoring|tally"):
+                _build(inp)
+        target.write_text(json.dumps(keep))
+        _relog(inp)
+    assert _build(inp)["complete"] is True
+    assert _build(inp)["provenance"].get("legacy_fields_absent", {}) == {} or all(
+        isinstance(v, list) for v in _build(inp)["provenance"]["legacy_fields_absent"].values()
+    )

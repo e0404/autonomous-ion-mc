@@ -249,3 +249,11 @@ The synthesis refused before writing anything, on an evaluator defect: the monot
 The fix is confined to `de9_record.py`. The producers (`de3_probes.py`, `make_variant_tables.py`, `de9_pp_level.py`) are unchanged, and their hashes are bound in every document.
 
 Once-only forbids re-producing the documents, and the evaluator runs at a later reviewed HEAD. The documents are therefore bound like B0: HEAD an ancestor of the reviewed SHA, a clean tree, producer hashes equal to the reviewed commit's, and the attempt-log digest. No document, seed, setting or reading rule changes.
+
+*Dated note (2026-10-19; after Codex review; no synthesis statistic seen).*
+
+The synthesis at ef164d09 (REVIEW-be34b5ee) refused before writing anything. The cause is the reused, hash-bound D-E3 documents (all, pp-only, pA-only and emonly at 150 and 200 MeV), whose hashes are committed in `de6-report.md` and `de3-summary.md`. The earlier `de3_probes` produced them, so they lack the later fields: backend, precision, elastic marker, npz sha256, code block, attempt-log entry.
+
+The correction is in the evaluator only. For reused documents, the frozen-configuration check verifies the fields they do record and relies on the committed hash binding for the rest. The absent fields are recorded per document as `legacy_fields_absent`. New A1, B2 and B3 documents keep the full check.
+
+No document, seed, setting or reading rule changes.

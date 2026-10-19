@@ -51,7 +51,7 @@ DISCLOSURE = "D-E9: exploratory, report-only; leads identified after the D-E8 ST
 
 GIT_ALLOW = (
     "banner", "disclosure", "b0/*", "b0/*/*", "b0/*/*/*", "b1/*/*", "b3/*/*/*", "b3/slope/*/*", "a1/*/*", "a1/*/*/*", "a1_sensitivity/**", "b2/*/*", "b2/*/*/*",
-    "complete", "incomplete_reasons/*", "invalid_documents/*", "provenance/*", "provenance/*/*", "leak_check/*",
+    "complete", "incomplete_reasons/*", "invalid_documents/*", "provenance/*", "provenance/*/*", "provenance/*/*/*", "leak_check/*",
 )  # fmt: skip
 GIT_FILES = {"de9.json": (GIT_ALLOW, ())}
 
@@ -284,6 +284,8 @@ def check_document_code(doc: dict[str, Any], what: str, freeze: dict[str, Any]) 
 
 
 REUSED = ("all", "pp-only", "pA-only", "emonly")
+LEGACY_OPTIONAL = ("backend", "precision")  # not recorded by the older producer of the hash-bound D-E3 documents
+LEGACY_FIELDS = ("backend", "precision", "scoring", "tallies", "elastic", "elastic_table_npz_sha256", "code")  # fields of the current format that a legacy document may lack
 CRN = {150: 20990100, 200: 20990101}
 N_HIST, N_BATCH = 100_000, 20
 HASH_SOURCES = (RES / "de6" / "de6-report.md", RES / "de3" / "de3-summary.md")  # committed input lists that bind the reused D-E3 documents by sha256
@@ -315,19 +317,20 @@ def expected_geometry(energy: int) -> dict[str, Any]:
             "nz": int(nz), "bin_mm": float(v5b.V5_DZ_MM)}  # fmt: skip
 
 
-def check_arrays(doc: dict[str, Any], what: str, energy: int) -> None:
+def check_arrays(doc: dict[str, Any], what: str, energy: int, legacy: bool = False) -> None:
     """Frozen configuration of the arrays: the scoring geometry, 0.5 mm bins and the bin count, the units, the tally names, the array shapes (batches x bins)
     and finiteness (SystemExit otherwise)."""
     g = expected_geometry(energy)
     sc = doc.get("scoring") or {}
     for k in ("origin_mm", "spacing_mm", "shape", "name"):
-        if sc.get(k) != g[k]:
+        if (not legacy or "scoring" in doc) and sc.get(k) != g[k]:
             raise SystemExit(f"{what}: scoring {k} {sc.get(k)!r} differs from the frozen V5 geometry {g[k]!r}")
-    if doc.get("bin_mm") != g["bin_mm"] or doc.get("unit") != UNIT:
-        raise SystemExit(f"{what}: bin size / unit differ from the frozen configuration ({g['bin_mm']} mm, {UNIT})")
+    for k, want in (("bin_mm", g["bin_mm"]), ("unit", UNIT)):
+        if (not legacy or k in doc) and doc.get(k) != want:
+            raise SystemExit(f"{what}: bin size / unit differ from the frozen configuration ({g['bin_mm']} mm, {UNIT})")
     split = doc.get("genealogy_split")
     names = [] if doc.get("mode") == "emonly" else ["recoil", *(["pp_secondary_proton", "primary_proton"] if split else [])]
-    if doc.get("tallies") != names:
+    if (not legacy or "tallies" in doc) and doc.get("tallies") != names:
         raise SystemExit(f"{what}: tally names {doc.get('tallies')!r} differ from the expected {names!r}")
     arrays = {"idd_batches": doc.get("idd_batches")}
     if doc.get("mode") != "emonly":
@@ -487,17 +490,21 @@ def validate_b0(b0: dict[str, Any], what: str, expected: dict[str, dict[str, str
 
 
 def validate_document(doc: dict[str, Any], what: str, *, energy: int, variant: str, seed: int, expected: dict[str, dict[str, str]], reused: dict[str, str] | None = None,
-                      path: Path | None = None, freeze: dict[str, Any] | None = None) -> bool:
+                      path: Path | None = None, freeze: dict[str, Any] | None = None, legacy_absent: dict[str, list[str]] | None = None) -> bool:
     """Fail-closed validation of one harness document: frozen configuration (energy, variant, 100000 histories, 20 batches, mode, warp-cpu, float64, seed),
     elastic table identity against the expected map (id and npz sha256), the committed sha256 for the reused D-E3 documents, the code provenance for new
     documents. Returns the document's own validity (``valid`` and the energy balance): an invalid published run is returned as False and is never treated as valid."""
     mode = "emonly" if variant == "emonly" else "emel"
     want = {"energy": energy, "variant": variant, "n": N_HIST, "n_batches": N_BATCH, "mode": mode, "backend": "warp-cpu", "precision": "float64", "seed": seed}
+    is_reused = reused is not None and variant in REUSED and path is not None and path.name in reused
     for k, v in want.items():
+        if is_reused and k in LEGACY_OPTIONAL and k not in doc:
+            continue  # a legacy (hash-bound) document of an older producer: only the fields it records are checked (the absent ones are recorded)
         if doc.get(k) != v:
             raise SystemExit(f"{what}: {k} {doc.get(k)!r} differs from the frozen configuration {v!r}")
-    is_reused = reused is not None and variant in REUSED and path is not None and path.name in reused
-    check_arrays(doc, what, energy)
+    if is_reused and legacy_absent is not None:
+        legacy_absent[what] = [k for k in LEGACY_FIELDS if k not in doc and not (k == "elastic_table_npz_sha256" and variant == "emonly")]
+    check_arrays(doc, what, energy, legacy=is_reused)
     if variant == "emonly":  # no elastic table: exempt from the table identity, but a new document must say so explicitly
         if not is_reused and doc.get("elastic") is not False:
             raise SystemExit(f"{what}: an EM-only document must carry the explicit marker elastic = false")
@@ -539,6 +546,7 @@ def build_document(de3_dir: Path, de9_dir: Path, b0_path: Path | None, archive: 
     de8_sha: dict[str, str] | None = None
     reasons: list[str] = []
     invalid: dict[str, str] = {}
+    legacy: dict[str, list[str]] = {}
     shas: dict[str, str] = {}
 
     def load(p: Path, *, energy: int, variant: str, seed: int, required: bool = True, bound: bool = False) -> dict[str, Any] | None:
@@ -560,7 +568,7 @@ def build_document(de3_dir: Path, de9_dir: Path, b0_path: Path | None, archive: 
                     raise SystemExit("the attempt log is missing: generated documents cannot be authenticated")
                 if attempt_log_sha(log, p.name) != _sha(p):
                     raise SystemExit(f"{p.name}: sha256 differs from the attempt-log entry of its published run")
-        if not validate_document(d, p.name, energy=energy, variant=variant, seed=seed, expected=expected, reused=reused if bound else None, path=p, freeze=freeze):
+        if not validate_document(d, p.name, energy=energy, variant=variant, seed=seed, expected=expected, reused=reused if bound else None, path=p, freeze=freeze, legacy_absent=legacy):
             invalid[p.name] = "published-invalid"
         shas[p.name] = _sha(p)
         return d
@@ -628,7 +636,7 @@ def build_document(de3_dir: Path, de9_dir: Path, b0_path: Path | None, archive: 
     st = c.repo_state()
     doc["provenance"] = {**st, "scripts_sha256": {n: _sha(here / n) for n in DE9_CODE_FILES if (here / n).is_file()}, "documents_sha256": shas,
                          "archive_sha256": _sha(archive), "attempts_sha256": _sha(Path(attempts_path or ATTEMPTS_DEFAULT)) if Path(attempts_path or ATTEMPTS_DEFAULT).is_file() else None,
-                         "expected_tables_sha256": expected_sha256}  # fmt: skip
+                         "expected_tables_sha256": expected_sha256, "legacy_fields_absent": legacy}  # fmt: skip
     proj = c.git_projection(json.loads(json.dumps(doc, default=float)), GIT_ALLOW)
     bad = leak_violations(proj, absolutes or [])
     if bad:
