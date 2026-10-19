@@ -1,0 +1,21 @@
+# Human Intervention Request IR-20261019-000144-2C50C8
+
+**Task:** V3-005B
+**Category:** external-data
+**Status:** open
+
+## Summary
+
+Concrete operator action for the bounded, acquisition-first Option B (your response to IR-20261018-091819-903058): the ENDF/B-VIII.0 neutron evaluations C-12 (MAT 625) and O-16 (MAT 825) are only distributed by NNDC inside the full neutron sublibrary archive https://www.nndc.bnl.gov/endf-b8.0/zips/ENDF-B-VIII.0_neutrons.zip (310,158,456 bytes; HTTP 200, Content-Type application/zip, Last-Modified 2024-03-15; linked from https://www.nndc.bnl.gov/endf-b8.0/download.html), which exceeds the acquisition tool's hard cap MAX_BYTES = 256 MiB. The IAEA per-material mirror (https://www-nds.iaea.org/public/download-endf/ENDF-B-VIII.0/n/n_0625_6-C-12.zip and n_0825_8-O-16.zip) answers HTTP 403 to non-browser clients. RECOMMENDED ACTION (one constant, no other code): in the checkout that serves the v3-research MCP server — /home/wahln/aiprojects/ion-mc (`.mcp.json`: `uv --project infrastructure/mcp/env run python infrastructure/mcp/research_mcp.py`) — edit `infrastructure/experiment_v3/data.py` line 15 from `MAX_BYTES = 256 * 1024**2` to `MAX_BYTES = 512 * 1024**2` (and, for consistency, the error text "Download exceeds 256 MiB limit" near line 130 to "512 MiB"), then restart the MCP servers (restart the Claude Code session) and tell me. I will then acquire the archive with the tool (full provenance record: URL, final URL, sha256, bytes, retrieval time, license basis, citation, role "construction"), extract only the two members `n-006_C_012.endf` and `n-008_O_016.endf` into an isolated staging directory, record their sha256, verify identity (MF1: MAT 625 / ZA 6012 and MAT 825 / ZA 8016, NLIB 0, NVER 8, LREL 0, NSUB 10; evaluation labels per the NNDC list), check the MF4/MT2 energy coverage (the plan's 135–200 MeV need) and scientific suitability, and only then write the prospective M3 construction/evaluation plan for independent review — no construction or qualification before that.
+
+## Why autonomous resolution is not possible
+
+The acquisition tool (infrastructure/experiment_v3/data.py) accepts public HTTPS only, has no local-file import path, and refuses downloads above MAX_BYTES; the only authoritative distribution of the two evaluations reachable by the tool is the NNDC sublibrary archive of 310 MB. Raising the cap by one constant preserves the full content-addressed provenance chain (NNDC → tool → acquisition record) and avoids any manually placed, provenance-less file. The alternative (below) keeps the chain only through an operator-controlled mirror. Nothing in this request changes validation scope, gates, requirements or verdicts; it is the narrow external action needed for the acquisition-first Option B you selected.
+
+## Exact requested input or action
+
+Choose one: (1) RECOMMENDED — apply the one-constant change (MAX_BYTES 256 → 512 MiB in infrastructure/experiment_v3/data.py of /home/wahln/aiprojects/ion-mc), restart the MCP servers, and reply "cap raised"; I do the rest with the tool. (2) ALTERNATIVE without infrastructure change — download the two per-material files yourself from the IAEA mirror in a browser (https://www-nds.iaea.org/public/download-endf/ENDF-B-VIII.0/n/n_0625_6-C-12.zip and https://www-nds.iaea.org/public/download-endf/ENDF-B-VIII.0/n/n_0825_8-O-16.zip) or extract n-006_C_012.endf and n-008_O_016.endf from the NNDC archive, place the two files unchanged at a public HTTPS location you control (e.g. a release asset of a repository you own), and reply with the two URLs and the sha256 of each file; I acquire them with the tool using your sha256 as expected_sha256 and record the provenance as "operator-provided mirror of NNDC/IAEA ENDF/B-VIII.0" (identity verified from the MF1 header and the NNDC list, not from the source chain). (3) Neither — state another route. Nothing else is requested; the investigation of the p-p contribution and the archived-baseline sensitivity proceeds autonomously in parallel under independent review.
+
+## Decision or task depending on this request
+
+Not specified.
