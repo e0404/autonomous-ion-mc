@@ -389,3 +389,113 @@ K*_shifted is the meaningful form. K*_literal is reported only as frozen: it is 
 A different model, or a σ_pp change, needs a new reviewed physics reason and a new amendment. The open findings H3 / H4 stay open.
 
 *Dated note (2026-10-18, after Codex REVIEW-5c0f8e0c, minor finding).* The frozen evaluator (`de8_diagnostic.py` at c509e351, `d4_report()`) projects the D4 rows of the water cases 0–4 only; the graphite cases 5–9, which Amendment 21 addendum (a) lists as report-only, are absent from `de8/de8.json` and `de8-report.md`. Their producer documents exist (`validation/generated/elastic_attribution/de5-m2prime/`, seeds 20991305–20991309, attempt log entries published-valid) but were not projected. The evaluator is frozen and the published evaluation cannot be re-run (once-only rule), so the omission is recorded here and is not corrected in the record; it does not touch the verdict (condition (iv) is defined on the water cases and is report-only). Any later graphite projection would be a separate report-only record from the existing producer documents, never a re-evaluation.
+
+### 2026-10-19 — D-E9 investigation of the 200 MeV gain residual (report-only; operator-authorised 2026-10-19)
+
+> D-E9 is exploratory and report-only (Amendment 19 class), never evidence. It was authorised by the operator's response to IR-20261018-091819-903058 (2026-10-19), which framed the work as "investigative leads, not instructions to tune to TOPAS, substitute a favorable baseline, or repeat seeds until a test passes". Both leads were identified after the D-E8 STOP. Nothing here re-evaluates D-E8. The D-E8 STOP and every recorded failure (V5, V11, V10-A, V6 / V6-sens, V7-R, V7-scan-el) stand. No band, seed or table of record changes. The findings below are **new exploratory records of 2026-10-19**. They are distinct from the historical qualification archives (lv5c / hr5c dd976c5a) and from the D-E8 screen, which are unchanged.
+
+#### Provenance
+
+- **Record:** `validation/results/elastic_attribution/de9/` (`de9.json` `c0c52851…`, `de9-report.md` `0f7d9d4a…` (Lead A rows re-rendered with their SE after review round D-E9-3; body a pure function of the unchanged JSON), `de9-manifest.json` `338aff3a…`, `de9-b0.json` `cf7eae03…`, `de9-b0-report.md` `e946e0fc…`). These are byte copies of `validation/generated/elastic_attribution/de9/` (git projection and manifest).
+- **Synthesis:** HEAD **7f688e2319cb434b786a31195bcf623759288d9b** (clean). Reviewed SHA identical. Codex **REVIEW-622394ed62e64cb39b6eacf7cc65ac9b**, bound in the manifest by its 8-hex prefix REVIEW-622394ed. Evaluator log `telemetry/test-logs/20261019T051117Z-de9-record`.
+- **Production:** the 32 documents (A1 24, B2 2, B3 6) were produced **once** at db7d84e2 (REVIEW-50f285f6). The B0 record was produced at 0dfca566 (REVIEW-d4f13e17…).
+  - The record binds 42 documents by sha256 (manifest `documents_sha256`): the 32 production documents, B0, and nine reused D-E3 / D-E8 documents.
+  - Attempt-log digest `e49303fc…94f9ab`; all production entries are published-valid.
+- **Script sha256** (manifest): `de3_probes.py` b5739a51…; `de9_pp_level.py` 79a2e0cc…; `de9_record.py` cb6cdd29…; `make_variant_tables.py` 73087718….
+- **Three evaluator-only fixes after the production run** (dated notes 5 and 6 and the addendum to note 6 in `validation/plans/v3-005d-investigation-de9.md`). Each was made with no synthesis statistic seen and changed no document, seed, setting or reading rule:
+  1. the monotone variant's bracketing-node tolerance (upper bracket exactly 130 MeV);
+  2. reused D-E3 documents lacking later fields;
+  3. reused D-E8 `m2prime` documents lacking the elastic marker.
+
+  The run documents are bound by ancestry of their HEAD to the reviewed SHA, a clean tree, the producer hashes and the attempt-log digest, not by HEAD equality.
+- **`legacy_fields_absent` (disclosed per document).** For these documents the frozen-configuration check verifies only the fields they record and relies on the committed hash binding (`de6-report.md`, `de3-summary.md`, the D-E8 record) for the rest:
+
+  | Document(s) | Absent fields |
+  |---|---|
+  | `de3-150/200-all` | elastic, elastic_table_npz_sha256, code |
+  | `de3-150/200-emonly` | elastic, code |
+  | `de3-150/200-pp-only`, `-pA-only` | backend, precision, scoring, tallies, elastic, elastic_table_npz_sha256, code |
+  | `de3-200-m2prime` | elastic |
+
+- **Leak check** (no absolute cross section): passed. Review round D-E9-3 (REVISE, minor, record hygiene; applied): `de9-b0.json` keeps as keyed dicts the 51 carry-up ratios of the committed BGG formula and the 20 node / 19 midpoint reconstruction-over-table agreement ratios — formula and agreement ratios of the once-only B0 record, not nuclear data — although the common projection note inside the record says "no per-point arrays"; disclosed here and in the results README rather than altered.
+
+#### Results (from `de9.json`)
+
+**B0 — independent p-p level reconstruction** (deterministic; HEAD 0dfca566).
+- Match within 1e-3: nodes about 2e-12; midpoints at most 3.6e-4.
+- **Dip persists:** minimum at 130 MeV, −18.3 % against the 100 MeV endpoint and −15.1 % against 150 MeV.
+- **Reading: "evaluation feature at the LA150 top nodes (the independent reconstruction reproduces the step)".**
+- The carry-up above 150 MeV is reproduced (8e-13); it is a disclosed construction choice.
+- Quadrature accepted (2e-12).
+
+**B1 — decomposition of the elastic plateau gain** (recorded D-E3 documents):
+
+| E | all (SE) | pp-only | pA-only | pp share | additivity gap / all |
+|---|---|---|---|---|---|
+| 150 MeV | 0.02207 (0.00079) | 0.01368 | 0.00809 | 0.628 | 0.013 |
+| 200 MeV | 0.02491 (0.00099) | 0.01982 | 0.00475 | **0.807** | 0.013 |
+
+**B2 — share of the elastic plateau gain** (existing scoring channels):
+
+| E | secondary protons | recoil | remainder |
+|---|---|---|---|
+| 150 MeV | 0.407 | 0.094 | 0.499 |
+| 200 MeV | **0.651** | 0.054 | 0.295 |
+
+**B3 — report-only p-p level variants.** Gain change against the base, common random numbers. The variants are never candidates, and the record computes no closing level or s.
+
+| Variant | 150 MeV | 200 MeV |
+|---|---|---|
+| s = 0.90 (E ≥ 150 MeV) | −0.00002 (0.00001) | −0.00193 (0.00019) |
+| s = 0.95 (E ≥ 150 MeV) | −0.00001 (0.00001) | −0.00081 (0.00009) |
+| monotone level (designed after the dip was seen; sensitivity only) | −0.00028 (0.00007) | −0.00327 (0.00027) |
+
+Slopes dg/d ln s: at 150 MeV, 0.00023 (0.90–0.95) and 0.00012 (0.95–1.00); at 200 MeV, 0.0207 (0.90–0.95) and 0.0158 (0.95–1.00).
+
+**A1 — realisations of the pinned-table gain** (K fixed):
+
+| E | K | mean (SE) | SD | ρ (range) | z archived | z D-E3 |
+|---|---|---|---|---|---|---|
+| 150 MeV | 4 | 0.02222 (0.00021) | 0.00041 | 0.513 ([0.342, 1.614]) | −0.16 | −0.19 |
+| 200 MeV | 8 | 0.02573 (0.00041) | 0.00116 | **1.156** ([0.556, 1.418]) | **1.13** | −0.76 |
+
+All four readings are "consistent with the realisation distribution", and both ρ values read "per-run SE consistent".
+
+**Lead A sensitivity table at 200 MeV** (report-only; **never compared with the band**):
+
+| Reading | d | Label |
+|---|---|---|
+| The prediction as frozen | 0.00462 (prediction SE 0.00087) | the frozen value; the STOP stands |
+| A1 realisation mean | 0.00363 (SE 0.00057) | sensitivity; frozen d = 0.00462 stands |
+| Inverse-variance pooled baseline | 0.00393 (SE 0.00061) | sensitivity; frozen d = 0.00462 stands |
+| D-E3 baseline | 0.00281 | sensitivity; frozen d = 0.00462 stands |
+| Archived baseline − 2 SE | 0.00307 | sensitivity; frozen d = 0.00462 stands |
+| Archived baseline + 2 SE | 0.00616 | sensitivity; frozen d = 0.00462 stands |
+
+#### Contrary evidence and readings preserved
+
+- **The archived baseline sits above the realisation mean at 200 MeV:** z = 1.13 (0.02672 against 0.02573). It is within the pre-declared "consistent" reading, but it is not centred.
+- **The realisation SD exceeds the per-run SE at 200 MeV:** ρ = 1.156. That is inside the calibration range, but the per-run SE does not overstate the scatter there.
+- At 150 MeV the opposite holds: ρ = 0.513, also inside its range.
+- **The A1-mean and inverse-variance-pooled readings of d sit below the frozen d** (0.00363 and 0.00393 against 0.00462). These are sensitivities only. **The frozen d and the D-E8 STOP stand.** No row is compared with the band.
+- **p-p dominates the 200 MeV elastic gain** in this model: 0.807 of the gain sum (B1), and 0.651 of the plateau gain carried by secondary protons (B2). At 150 MeV both are smaller (0.628; 0.407). Changes to the p-p level at E ≥ 150 MeV move the 200 MeV gain (slope 0.016–0.021 per ln s) and leave 150 MeV nearly unchanged.
+- **B0 narrows the researcher's PP-LEVEL "construction defect" verdict.** The 130–150 MeV step is in the LA150 evaluation at its top nodes, not in the builder. The only construction choice is the carry-up of the top-node value above 150 MeV.
+- The table sits **below** the like-for-like SAID level at 100–125 MeV and above it at 150–250 MeV. The deviation changes sign across the dip.
+
+#### Physics-reason criteria (investigation plan §2, as corrected in D-E9-1)
+
+- **Criterion 1 (builder or interpolation defect): excluded by B0.**
+- **Criterion 2 (level discrepancy against an independent-lineage level beyond combined uncertainties): not established.**
+  - The evaluation-feature half is met.
+  - The discrepancy (table/SAID like-for-like 1.12–1.14 at 150–250 MeV) cannot be judged against combined uncertainties: the SAID SM16 uncertainty and the LA150 top-node uncertainty are not stated in any record in hand, and the two comparison computations differ by 1.2–2.2 %.
+
+#### Consequences (as committed)
+
+- **No verdict changes.** The D-E8 STOP stands. V5, V11 and V10-A stay failed. The ≈ 43.5 h closure stays deferred. The acquisition-first Option B track is unaffected.
+- **No amendment is proposed.**
+  - Any σ_pp change, including a change of the S(E) carry-up rule, would need a physics reason under criterion 2, its own pre-registered amendment and independent review. It must not tune to TOPAS or Geant4, select a level or s by the residual, substitute a baseline, or re-run D-E8.
+  - Any screen-design change learned from Lead A (the archived baseline's SE inside a prediction) would need an amendment for a future screen.
+- **Lead A supports:** that the archived baseline is consistent with the realisation distribution (z = 1.13), and that the frozen D2 prediction carries a baseline SE comparable to its margin.
+  - **It does not support:** changing D-E8, substituting a baseline, predicting an lv5d V11 result, or re-running D-E8.
+- **Lead B supports:** the attribution statement that p-p carries most of the 200 MeV elastic gain in this model, with the level step identified as an evaluation feature carried upward by the builder's S(E) rule.
+  - **It does not support:** adopting any variant or level, tuning, or any claim about V5 or V11.

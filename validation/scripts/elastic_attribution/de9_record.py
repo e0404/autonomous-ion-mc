@@ -53,7 +53,8 @@ GIT_ALLOW = (
     "banner", "disclosure", "b0/*", "b0/*/*", "b0/*/*/*", "b1/*/*", "b3/*/*/*", "b3/slope/*/*", "a1/*/*", "a1/*/*/*", "a1_sensitivity/**", "b2/*/*", "b2/*/*/*",
     "complete", "incomplete_reasons/*", "invalid_documents/*", "provenance/*", "provenance/*/*", "provenance/*/*/*", "leak_check/*",
 )  # fmt: skip
-GIT_FILES = {"de9.json": (GIT_ALLOW, ())}
+MANIFEST_ALLOW = ("complete", "head", "record/documents_sha256/*", "review_id_full_text", "reviewed_sha", "reviews/*", "scripts_sha256/*")  # the evaluator manifest: hashes and ids only
+GIT_FILES = {"de9.json": (GIT_ALLOW, ()), "de9-manifest.json": (MANIFEST_ALLOW, ())}
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------
@@ -707,9 +708,9 @@ def render_report(doc: dict[str, Any]) -> str:
     for e, r in doc["a1"].items():
         out.append(f"| {e} | {r['k']} | {f(r['mean_gain'])} | {f(r['sd'])} | {f(r['se_mean'])} | {f(r['rho'], 3)} | {r['per_run_se_calibration']} | {f(r['z_archived'], 2)} ({r['archived_reading']}) | {f(r['z_de3_base'], 2)} ({r['de3_reading']}) |")
     if "a1_sensitivity" in doc:
-        out += ["", "## Lead A sensitivity table at 200 MeV (report-only; never compared with the band)", "", "| reading | d | label |", "|---|---|---|"]
-        for r in doc["a1_sensitivity"].values():
-            out.append(f"| {r['reading']} | {f(r['d'])} | {r['label']} |")
+        out += ["", "## Lead A sensitivity table at 200 MeV (report-only; never compared with the band)", "", "| reading | d | SE | label |", "|---|---|---|---|"]
+        for r in doc["a1_sensitivity"].values():  # the SE is the statistical uncertainty of the reading itself; the fixed-offset rows carry none
+            out.append(f"| {r['reading']} | {f(r['d'])} | {f(r['se']) if r.get('se') is not None else '–'} | {r['label']} |")
     out += ["", "## B2: share of the elastic plateau gain", ""]
     for e, r in doc["b2"].items():
         out.append(f"- {e} MeV: " + (f"secondary-proton share {f(r['secondary_proton_share'], 3)}, recoil share {f(r['recoil_share'], 3)}, remainder {f(r['remainder_share'], 3)}" if r["status"] == "recorded" else r["status"]))

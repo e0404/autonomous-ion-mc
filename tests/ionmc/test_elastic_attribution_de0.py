@@ -103,7 +103,11 @@ OWNERS = {
     "de3": "de3_probes",
     "de7": "de7_m2prime_record",
     "de8": "de8_diagnostic",
-}  # every committed JSON directory and the module that owns its allowlist
+    "de9": (
+        "de9_record",
+        "de9_pp_level",
+    ),  # the synthesis record and the B0 record live in one directory
+}  # every committed JSON directory and the module(s) that own its allowlist
 
 
 def test_allowlist_projection_semantics() -> None:
@@ -153,11 +157,13 @@ def test_allowlist_projection_semantics() -> None:
 
 
 def _allow_for(step: str, name: str) -> tuple[tuple[str, ...], tuple[str, ...]]:
-    mod = importlib.import_module(f"validation.scripts.elastic_attribution.{OWNERS[step]}")
-    for pat, allow in mod.GIT_FILES.items():
-        if fnmatch.fnmatch(name, pat):
-            return allow  # type: ignore[no-any-return]
-    raise AssertionError(f"{OWNERS[step]} has no allowlist for {name}")
+    owners = OWNERS[step] if isinstance(OWNERS[step], tuple) else (OWNERS[step],)
+    for owner in owners:
+        mod = importlib.import_module(f"validation.scripts.elastic_attribution.{owner}")
+        for pat, allow in mod.GIT_FILES.items():
+            if fnmatch.fnmatch(name, pat):
+                return allow  # type: ignore[no-any-return]
+    raise AssertionError(f"{owners} has no allowlist for {name}")
 
 
 @pytest.mark.parametrize(
@@ -214,6 +220,10 @@ def _render_pairs() -> list[tuple[str, str, str, str]]:
         out.append(("de8", "de8.json", "de8-report.md", "de8_diagnostic:render_report"))
     if (RESULTS / "de7" / "de7.json").is_file():
         out.append(("de7", "de7.json", "de7-report.md", "de7_m2prime_record:render_report"))
+    if (RESULTS / "de9" / "de9.json").is_file():
+        out.append(("de9", "de9.json", "de9-report.md", "de9_record:render_report"))
+    if (RESULTS / "de9" / "de9-b0.json").is_file():
+        out.append(("de9", "de9-b0.json", "de9-b0-report.md", "de9_pp_level:render_report"))
     for p in sorted((RESULTS / "de4").glob("*.json")) if (RESULTS / "de4").is_dir() else []:
         if p.name == "de4-ratios.json":
             out.append(("de4", p.name, "de4-ratios-report.md", "de4_parse:render_ratios"))

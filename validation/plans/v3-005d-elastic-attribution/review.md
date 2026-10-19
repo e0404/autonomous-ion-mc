@@ -1252,3 +1252,72 @@ My table/σ_anchor ratios are reproduced correctly: 27.30/27.26 = 1.001, 22.94/2
 **(e) Length:** about 2140 words is acceptable for a plan record of this scope.
 
 **Verdict: ACCEPT.** Insert the minor sentences of (a) and (d)(i)–(ii) verbatim before commit; no further review round is needed. The plan may be committed, the seed block registered, and B0 run first.
+
+# Round D-E9-3 review (2026-10-19; D-E9 synthesis record at reviewed HEAD 7f688e23, REVIEW-622394ed; read-only)
+
+1. **The reading rules are implemented as frozen.**
+   - **A1.** K is 8 at 200 MeV and 4 at 150 MeV, as fixed. The calibration ranges are recorded per energy ([0.556, 1.418] and [0.342, 1.614]). ρ is 1.156 at 200 MeV and 0.513 at 150 MeV, both "per-run SE consistent".
+   - **z values.** z_archived is 1.13 at 200 MeV and −0.16 at 150 MeV. z for the D-E3 baseline is −0.76 and −0.19. All are labelled "consistent with the realisation distribution", and no pass/fail is attached.
+   - **Lead A table.** Every row carries `compared_with_band: false` and the label "sensitivity; frozen d = 0.00462 stands". The frozen row says "the frozen value; the STOP stands".
+   - **d(μ̂) at 200 MeV.** The record gives 0.003627, with SE 0.000566 in the JSON. Neither the record nor the report states the D-E8 band value 0.00365, and neither compares d(μ̂) with it. This is compliant.
+     - **Wording risk (minor).** The rendered report lists d(μ̂) without its SE, although the plan requires "with its SE" and the JSON has it. Add the SE column to the report table: 0.00057 for the A1 row, 0.00087 frozen, 0.00061 pooled, "–" for the fixed-offset rows. Then no reader can treat 0.00363 as distinguishable from the frozen 0.00462 or from any band. Decision and README text must not place 0.00363 next to 0.00365.
+   - **B1, B2 and B3** are report-only. B3 reports deltas and slopes only, with no inversion and no relation to the residual. The monotone variant is labelled "never candidates".
+   - **B0.** The pre-declared definitions are applied: match ≤ 1e-3 relative at every node and midpoint (max 3.6e-4), and dip > 1 % below both endpoints (minimum at 130 MeV, −18.3 % and −15.1 %). The pre-declared reading follows: "evaluation feature at the LA150 top nodes".
+     - The pre-run look (the parser validated at the 100 MeV node only) is disclosed in the provenance.
+     - The carry-up check confirms that the S(E)/S(150) propagation is exact.
+
+2. **The numbers are internally consistent. I recomputed these from de9.json and the D-E3 documents:**
+   - **B1 shares:**
+     - 200 MeV: 0.01982 / (0.01982 + 0.00475) = 0.807; additivity gap (0.02491 − 0.02457)/0.02491 = 0.0137.
+     - 150 MeV: 0.01368 / 0.02177 = 0.628; gap 0.0136.
+     - These are the same gains I reproduced in round D-E9-1 from the hash-bound documents.
+   - **B3 slopes at 200 MeV:**
+     - 0.90–0.95: (−0.00081 + 0.00193)/ln(0.95/0.90) = 0.0207.
+     - 0.95–1.00: 0.00081/ln(1/0.95) = 0.0158.
+   - **A1:**
+     - SE_μ = 0.0011577/√8 = 0.000409.
+     - z_arch = (0.026722 − 0.025732)/√(0.00077² + 0.000409²) = 1.13.
+     - z_DE3 uses the D-E3 baseline's own SE: (0.02491 − 0.02573)/√(0.00099² + 0.00041²) = −0.76. That is the sensible reading of "the same way".
+     - d(μ̂) = 0.025732 − 0.00369 − 0.01842 = 0.00363.
+   - **B2:** the shares sum to 1. The 200 MeV secondary-proton share of 0.651 is consistent with the p-p share of 0.807 in B1.
+
+3. **Freeze and provenance: satisfied, with two minor gaps.**
+   - **Code state.** reviewed_sha equals HEAD (7f688e23), the tree is clean, and review_id is REVIEW-622394ed. Script sha256 is recorded for de3_probes, de9_pp_level, de9_record and make_variant_tables.
+   - **`documents_sha256` lists 42 documents:**
+
+     | Group | Documents |
+     |---|---|
+     | Production runs | 32 (A1 24, B2 2, B3 6) |
+     | Reused D-E3 documents (all, emonly, pp-only, pA-only at 150 and 200 MeV) | 8 |
+     | D-E8 m2prime document at 200 MeV | 1 |
+     | B0 | 1 |
+
+     The reused hashes match the committed de6 and de3 lists.
+   - **`legacy_fields_absent`** is plausible. The older D-E3 documents lack code, elastic and npz fields (and pp-only and pA-only also lack backend, precision, scoring and tallies). The D-E8 m2prime document lacks only `elastic`.
+   - **The three refused synthesis attempts** before the single evaluation each wrote nothing, and each was fixed in the evaluator only (dated notes 5, 6 and the addendum). This is compatible with the once-only rule, because producers were never re-run.
+   - **Gap (a): the manifest is missing from the results copy (minor).** `de9-manifest.json` was listed among the record files, but during this review it is present only in `validation/generated/elastic_attribution/de9/`, not in `validation/results/elastic_attribution/de9/`. Commit it with the record, or state where it lives.
+   - **Gap (b): per-point series in de9-b0.json (minor).** The Git note says "no distributions or per-point arrays", but de9-b0.json carries per-point series as keyed dicts:
+     - `carry_up_check/grid_150_200_over_150`, 51 values (S(E)/S(150) from the committed BGG formula);
+     - `nodes`, 20 values, and `midpoints`, 19 values (reconstruction/table ratios ≈ 1).
+
+     The content is harmless: formula ratios and agreement ratios, with no nuclear data and no absolute cross section. But it contradicts the stated projection. Trim to the summary, the named nodes and the levels relative to 125 MeV, or reword the note.
+   - **Absolute values.** The leak check passes. No absolute cross section or nuclear-data value appears in the committed copies. `levels_over_125mev` are relative levels, as the plan specified.
+
+4. **The physics-reason assessment is the right reading of the record.**
+   - **Criterion 1 (builder or interpolation defect): excluded.** B0 reproduces the table within 3.6e-4 from the raw data, and the step is present in the evaluation.
+   - **Criterion 2 (level discrepancy against an independent lineage beyond the combined uncertainties): not established.** The SAID outputs carry no uncertainties (Err = 0 in the scans), and the LA150 H-1 evaluation has no covariance in hand. A combined uncertainty cannot be formed.
+   - **A decision section may legitimately state, as recorded facts and without going beyond "investigative lead":**
+     - (i) The 130–150 MeV step of the p-p level is a feature of the LA150 H-1 evaluation as independently reconstructed, not a builder defect. The table's S(E) carry-up propagates the 150 MeV top-node level upward, which is a recorded construction choice; any change needs its own amendment.
+     - (ii) At 200 MeV the p-p channel carries about 80 % of the ionmc elastic plateau gain (B1), and p-p secondary protons carry about 65 % (B2).
+     - (iii) The report-only scaled-level and monotone-level variants show that the 200 MeV gain is sensitive to the p-p level above 150 MeV: slopes 0.016–0.021, monotone variant −0.0033. No variant is a candidate, and no inversion is made.
+     - (iv) A1 finds the archived baseline consistent with the realisation distribution (z = 1.13), so it is not an outlier. The design finding stands: the frozen D2 prediction carries the baseline's own SE (prediction SE 0.00087 against a 0.00097 margin), which the screen's band did not include.
+   - **It must not state:**
+     - that the p-p level is wrong (criterion 2 is not established);
+     - that a corrected level, or the A1 mean, would pass condition (ii) or V11;
+     - anything about a fresh-seed lv5d result;
+     - anything implying that the STOP or a failed row is affected.
+   - "STOP stands; no amendment proposed" remains correct. Any σ_pp change or screen-design change requires its own reviewed amendment.
+
+**Verdict: REVISE (minor; record hygiene only; no blocking issue).** The three items: the SE column for the Lead A rows in the report; `de9-manifest.json` in the committed copies; the per-point dicts in de9-b0.json trimmed, or the projection note reworded. With these applied verbatim, no further review round is needed, and the record may be committed and cited in decision 0042 within the bounds of item 4.
+
+**Disposition (orchestrator, 2026-10-19, after the round).** (1) The Lead A table of the rendered report now carries the SE column (renderer only; the Markdown body was re-rendered from the unchanged `de9.json`, whose sha256 is unchanged; the D-E9 record was not re-evaluated). (2) `de9-manifest.json` is committed with the record (allowlisted in `de9_record.GIT_FILES`). (3) The per-point dicts of `de9-b0.json` (51 carry-up ratios of the committed BGG formula; 20 node and 19 midpoint reconstruction-over-table agreement ratios) are kept as produced: the B0 record is hash-bound in the D-E9 record (once-only), and the "no per-point arrays" sentence is the common projection note written into every record, so it cannot be reworded inside the record; the discrepancy is disclosed instead in the results README and in decision 0042 (formula and agreement ratios only; no nuclear data; no absolute cross section). No synthesis statistic, seed, document or reading rule changed.
