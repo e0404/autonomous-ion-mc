@@ -220,3 +220,16 @@ The B0 record carries a **convergence block** at the 100, 125 and 150 MeV nodes,
 - Simpson 20001.
 
 **Pre-declared acceptance:** the quadrature error is below 1e-6 relative, negligible against the 1e-3 match tolerance.
+
+*Dated note (2026-10-19, after Codex REVIEW-1b6174d3): chronology of the quadrature note.*
+
+Correction: before the previous note, the implementer had observed the 100 MeV convergence check and the 100 MeV level match, both at about 2e-12 (disclosed in `PRE_RUN_LOOKS`).
+
+The 1e-6 acceptance is therefore data-informed for that node.
+
+**Independent rationale.**
+- 1024-node Gauss–Legendre quadrature integrates polynomials up to degree 2047 exactly.
+- The LAW=5 LTP=1 integrand is a Legendre sum of degree NL ≤ 64, times Mott and interference factors analytic on |μ| ≤ 0.96, for which convergence is geometric.
+- The expected error is near machine precision, far below 1e-3.
+
+**Reading rules unaffected.** The 100 MeV node is an endpoint, not interior to the dip test. Its table value was already known.

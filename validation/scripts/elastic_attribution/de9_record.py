@@ -333,11 +333,24 @@ def attempt_log_sha(log: list[dict[str, Any]], name: str) -> str:
     return str(pub[0]["document_sha256"])
 
 
+BUILDER_IDENTITY = {  # exploratory model / Pauli variant / Pauli E_min of the official builder tables (Amendments 20, 21; the D-E7 record)
+    "m2prime": ("m2prime-pauli-blocked", "clementel-villi", 80.0),
+    "m2": ("m2-optical-glauber", None, None),
+    "rb": ("m2prime-pauli-blocked", "bdc-pn", 80.0),
+}
+LA150_ZIP_SHA256 = "27bcafb89cf0444c53c6b9f3dd17618c62e2e6b3694f70d31c4f502399f103f7"  # the registered ENDF/B-VIII.0 proton sublibrary (``ionmc.data.registry``)
+LA150_H1_MEMBER_SHA256 = "a1c3bc637ba242f263d88a3b3848b5a0a717728d6ec19395d24225e1b96a4fb5"  # ``p-001_H_001.endf`` inside it (frozen pin)
+
+
 def verify_expected_tables(expected: dict[str, dict[str, str]], scratch: Path) -> None:
-    """The expected-tables map is verified semantically against the scratch cache: variant name -> table id (``variants.json``, builders included) ->
-    npz sha256 of the installed file, the sidecar's recorded hash and the table id recomputed from the sidecar. ``pinned`` against the committed pin.
-    ``emonly`` runs no elastic table and is exempt."""
+    """The expected-tables map is verified against the scratch cache SEMANTICALLY: for every variant the installed npz sha256, the sidecar's recorded hash and the
+    table id recomputed from the sidecar must agree, and the sidecar itself must define the variant: ``exploratory.d_e3_variant`` equal to the name and its
+    parameters equal to the frozen definition of ``make_variant_tables`` (and the pinned source id) for the D-E3 variants; the exploratory model, Pauli variant and
+    Pauli E_min of the builder tables (``BUILDER_IDENTITY``); ``pinned`` against the committed pin and no exploratory block. ``variants.json`` is only a consistency
+    hint, never the authority. ``emonly`` runs no elastic table and is exempt."""
     from ionmc.nuclear.build import table_id as tid_fn
+
+    from .make_variant_tables import _parameters
 
     vj = json.loads((Path(scratch) / "variants.json").read_text())
     ids = {**{v: r["table_id"] for v, r in vj["variants"].items()}, **{v: r["table_id"] for v, r in vj.get("builders", {}).items()}}
@@ -346,16 +359,57 @@ def verify_expected_tables(expected: dict[str, dict[str, str]], scratch: Path) -
     for v, e in expected.items():
         if v == "emonly":
             continue
-        tid = c.TABLE_ID if v == "pinned" else ids.get(v)
-        if tid is None:
-            raise SystemExit(f"expected table of {v!r}: the variant is not in the scratch cache variants.json")
-        npz = der / f"elastic-proton-{tid}.npz"
-        side = json.loads((der / f"elastic-proton-{tid}.json").read_text())
+        tid = e.get("table_id")
+        if v != "pinned" and ids.get(v) != tid:
+            raise SystemExit(f"expected table of {v!r}: the variant is not in the scratch cache variants.json with this table id")
+        npz, sidecar = der / f"elastic-proton-{tid}.npz", der / f"elastic-proton-{tid}.json"
+        if not npz.is_file() or not sidecar.is_file():
+            raise SystemExit(f"expected table of {v!r}: the table files are not installed in the scratch cache")
+        side = json.loads(sidecar.read_text())
         sha = _sha(npz)
-        if e.get("table_id") != tid or e.get("npz_sha256") != sha or side.get("npz_sha256") != sha or tid_fn({**side, "npz_sha256": sha}) != tid:
-            raise SystemExit(f"expected table of {v!r}: table id / npz sha256 are not consistent with the scratch cache (variant name, id, npz and sidecar)")
-        if v == "pinned" and (tid != pin["table_id"] or sha != pin["npz_sha256"]):
-            raise SystemExit("expected pinned table differs from the committed pin")
+        if e.get("npz_sha256") != sha or side.get("npz_sha256") != sha or tid_fn({**side, "npz_sha256": sha}) != tid:
+            raise SystemExit(f"expected table of {v!r}: table id / npz sha256 are not consistent with the scratch cache (npz and sidecar)")
+        ex = side.get("exploratory")
+        if v == "pinned":
+            if tid != c.TABLE_ID or tid != pin["table_id"] or sha != pin["npz_sha256"] or ex is not None:
+                raise SystemExit("expected pinned table differs from the committed pin (or carries an exploratory block)")
+        elif v in BUILDER_IDENTITY:
+            model, pauli, emin = BUILDER_IDENTITY[v]
+            if not isinstance(ex, dict) or (ex.get("model"), ex.get("pauli_variant"), ex.get("pauli_emin_mev")) != (model, pauli, emin):
+                raise SystemExit(f"expected table of {v!r}: the sidecar does not define the {v} construction (model / Pauli variant / Pauli E_min)")
+        else:
+            if not isinstance(ex, dict) or ex.get("d_e3_variant") != v or ex.get("parameters") != _parameters(v) or ex.get("source_table_id") != c.TABLE_ID:
+                raise SystemExit(f"expected table of {v!r}: the sidecar does not define this variant (d_e3_variant / frozen parameters / source table)")
+
+
+B0_KEYS = ("match", "dip", "reading", "carry_up_check", "quadrature_convergence", "provenance", "named_nodes")
+
+
+def validate_b0(b0: dict[str, Any], what: str, expected: dict[str, dict[str, str]]) -> None:
+    """Schema and provenance of the (projected) B0 record: the required blocks, ``quadrature_convergence.accepted`` as a boolean, the code hash, the pinned table (id and
+    npz sha256 against the expected / pinned map), the raw LA150 zip and H-1 member hashes against the frozen pins, and the single-look disclosure."""
+    from .de9_pp_level import PRE_RUN_LOOKS
+
+    missing = [k for k in B0_KEYS if k not in b0]
+    if missing:
+        raise SystemExit(f"{what}: the B0 record lacks {missing}")
+    if not isinstance(b0["match"].get("all_within"), bool) or not isinstance(b0["dip"].get("persists"), bool) or not isinstance(b0["reading"], str) or "match" not in b0["carry_up_check"]:
+        raise SystemExit(f"{what}: the match / dip / reading / carry-up blocks are malformed")
+    if not isinstance(b0["quadrature_convergence"].get("accepted"), bool):
+        raise SystemExit(f"{what}: quadrature_convergence.accepted is missing or not a boolean")
+    pv = b0["provenance"]
+    pinned = expected.get("pinned")
+    if pinned is None:
+        raise SystemExit(f"{what}: no expected pinned table to bind the B0 record to")
+    for k in ("code_sha256", "table_id", "npz_sha256", "source_sha256", "member_sha256", "pre_run_looks"):
+        if not pv.get(k):
+            raise SystemExit(f"{what}: provenance lacks {k}")
+    if (pv["table_id"], pv["npz_sha256"]) != (pinned["table_id"], pinned["npz_sha256"]):
+        raise SystemExit(f"{what}: the pinned table of the B0 record differs from the expected pinned table")
+    if pv["source_sha256"] != LA150_ZIP_SHA256 or pv["member_sha256"] != LA150_H1_MEMBER_SHA256:
+        raise SystemExit(f"{what}: the raw LA150 sublibrary / H-1 member hashes differ from the frozen pins")
+    if pv["pre_run_looks"] != PRE_RUN_LOOKS:
+        raise SystemExit(f"{what}: the pre-run disclosure differs from the frozen text")
 
 
 def validate_document(doc: dict[str, Any], what: str, *, energy: int, variant: str, seed: int, expected: dict[str, dict[str, str]], reused: dict[str, str] | None = None,
@@ -464,9 +518,16 @@ def build_document(de3_dir: Path, de9_dir: Path, b0_path: Path | None, archive: 
     b0 = None
     if b0_path is not None and Path(b0_path).is_file():
         b0 = json.loads(Path(b0_path).read_text())
+        if log is None:
+            raise SystemExit("the attempt log is missing: the B0 result cannot be authenticated")
+        if attempt_log_sha(log, Path(b0_path).name) != _sha(Path(b0_path)):
+            raise SystemExit(f"{Path(b0_path).name}: sha256 differs from the attempt-log entry of its published run")
+        validate_b0(b0, Path(b0_path).name, expected)
         if freeze is not None:
             check_document_code(b0, Path(b0_path).name, freeze)
         shas[Path(b0_path).name] = _sha(b0_path)
+        if b0["quadrature_convergence"]["accepted"] is not True:
+            reasons.append("B0 quadrature convergence not accepted (pre-declared acceptance: relative difference < 1e-6)")
     elif not allow_incomplete:
         raise SystemExit(f"{b0_path} is missing: the B0 result is a required input of the D-E9 record")
     else:
@@ -483,8 +544,8 @@ def build_document(de3_dir: Path, de9_dir: Path, b0_path: Path | None, archive: 
             doc["a1_sensitivity"] = a1_sensitivity(arch[200], delta200, base_gain[200], a1r["200"])
         if b0 is not None:
             doc["b0"] = {"match": b0["match"], "dip": b0["dip"], "reading": b0["reading"], "named_nodes": b0["named_nodes"]}
-            if "carry_up_check" in b0:
-                doc["b0"]["carry_up_match"] = b0["carry_up_check"]["match"]
+            doc["b0"]["carry_up_match"] = b0["carry_up_check"]["match"]
+            doc["b0"]["quadrature_accepted"] = b0["quadrature_convergence"]["accepted"]
     doc["complete"] = not reasons
     doc["incomplete_reasons"] = reasons
     if invalid:

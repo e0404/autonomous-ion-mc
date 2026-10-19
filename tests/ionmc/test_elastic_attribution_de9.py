@@ -678,7 +678,7 @@ NZ = 400
 PL_EM = 6.0
 REUSED_V = ("all", "pp-only", "pA-only", "emonly")
 B3_V = ("pp-level-0.90-ge150", "pp-level-0.95-ge150", "pp-level-monotone")
-TABLE_V = ("all", "pp-only", "pA-only", "pinned", "m2prime", *B3_V)
+TABLE_V = ("all", "pp-only", "pA-only", "pinned", "m2prime", "rb", *B3_V)
 GAINS = {
     "all": 0.025,
     "pp-only": 0.020,
@@ -719,35 +719,54 @@ def _curves(plateau: float, peak_over_plateau: float, jitter: float = 0.0) -> li
     return rows
 
 
-def _scratch_cache(tmp: Path) -> tuple[Path, dict[str, dict[str, str]]]:
-    """A synthetic scratch cache (variants.json, builders, derived files with consistent ids) and the matching expected-tables map."""
+def _sidecar_for(v: str, pin_tid: str, sha: str) -> dict[str, Any]:
+    """A synthetic table sidecar that DEFINES its variant the way the real builders do (``exploratory`` block)."""
+    from validation.scripts.elastic_attribution import make_variant_tables as mv
+
+    side: dict[str, Any] = {"label": v, "npz_sha256": sha}
+    if v in rec.BUILDER_IDENTITY:
+        model, pauli, emin = rec.BUILDER_IDENTITY[v]
+        side["exploratory"] = {"model": model, "pauli_variant": pauli, "pauli_emin_mev": emin}
+    elif v != "pinned":
+        side["exploratory"] = {
+            "d_e3_variant": v,
+            "parameters": mv._parameters(v),
+            "source_table_id": pin_tid,
+        }
+    return side
+
+
+def _install_table(scratch: Path, v: str, side: dict[str, Any], payload: bytes) -> dict[str, str]:
     from ionmc.nuclear.build import table_id
 
+    side = {**side, "npz_sha256": hashlib.sha256(payload).hexdigest()}
+    tid = table_id(side)
+    side["table_id"] = tid
+    (scratch / "derived" / f"elastic-proton-{tid}.npz").write_bytes(payload)
+    (scratch / "derived" / f"elastic-proton-{tid}.json").write_text(json.dumps(side))
+    return {"table_id": tid, "npz_sha256": side["npz_sha256"]}
+
+
+def _scratch_cache(tmp: Path) -> tuple[Path, dict[str, dict[str, str]]]:
+    """A synthetic scratch cache (variants.json, builders, derived files with consistent ids) and the matching expected-tables map."""
     scratch = tmp / "scratch"
-    der = scratch / "derived"
-    der.mkdir(parents=True)
-    exp: dict[str, dict[str, str]] = {}
+    (scratch / "derived").mkdir(parents=True)
+    exp: dict[str, dict[str, str]] = {
+        "pinned": _install_table(scratch, "pinned", _sidecar_for("pinned", "", ""), b"npz-pinned")
+    }
+    pin = dict(exp["pinned"])
+    MP.setattr(c, "TABLE_ID", pin["table_id"])
     variants: dict[str, Any] = {}
     builders: dict[str, Any] = {}
-    pin: dict[str, str] = {}
     for v in TABLE_V:
-        payload = f"npz-{v}".encode()
-        sha = hashlib.sha256(payload).hexdigest()
-        side: dict[str, Any] = {"variant": v, "npz_sha256": sha}
-        tid = table_id(side)
-        side["table_id"] = tid
-        (der / f"elastic-proton-{tid}.npz").write_bytes(payload)
-        (der / f"elastic-proton-{tid}.json").write_text(json.dumps(side))
-        exp[v] = {"table_id": tid, "npz_sha256": sha}
         if v == "pinned":
-            pin = {"table_id": tid, "npz_sha256": sha}
-        elif v == "m2prime":
-            builders[v] = {"table_id": tid}
-        else:
-            variants[v] = {"table_id": tid}
+            continue
+        exp[v] = _install_table(
+            scratch, v, _sidecar_for(v, pin["table_id"], ""), f"npz-{v}".encode()
+        )
+        (builders if v in rec.BUILDER_IDENTITY else variants)[v] = {"table_id": exp[v]["table_id"]}
     (scratch / "variants.json").write_text(json.dumps({"variants": variants, "builders": builders}))
     (tmp / "pin.json").write_text(json.dumps(pin))
-    MP.setattr(c, "TABLE_ID", pin["table_id"])
     MP.setattr(rec, "PIN_JSON", tmp / "pin.json")
     MP.setattr(rec, "expected_geometry", _geometry)
     return scratch, exp
@@ -790,14 +809,18 @@ def _doc(
 
 
 def _is_new(p: Path) -> bool:
-    return p.parent.name == "de9" or any(p.name.endswith(f"-{v}.json") for v in (*B3_V, "m2prime"))
+    return (
+        p.name == "de9-b0.json"
+        or p.parent.name == "de9"
+        or any(p.name.endswith(f"-{v}.json") for v in (*B3_V, "m2prime"))
+    )
 
 
 def _relog(inp: dict[str, Path]) -> None:
     """Rebuild the attempt log, the committed hash list and the D-E8 record from the documents on disk (the state a correct producer run leaves)."""
     log: list[dict[str, Any]] = []
     m2p: dict[str, Any] = {}
-    for p in sorted([*inp["de9"].glob("de3-*.json"), *inp["de3"].glob("de3-*.json")]):
+    for p in sorted([*inp["de9"].glob("de3-*.json"), *inp["de3"].glob("de3-*.json"), inp["b0"]]):
         if not _is_new(p):
             continue
         sha = hashlib.sha256(p.read_bytes()).hexdigest()
@@ -827,6 +850,37 @@ def _put(path: Path, **kv: Any) -> None:
     d.update(kv)
     path.write_text(json.dumps(d))
     _relog(CTX["inp"])
+
+
+_B0_CACHE: dict[str, Any] = {}
+
+
+def _synthetic_b0(tmp: Path, exp: dict[str, dict[str, str]], **override: Any) -> Path:
+    """The projected B0 record as ``de9_pp_level.assemble`` produces it (synthetic LA150-like section and table values; built once per process)."""
+    MP.setattr(c, "repo_state", lambda repo=None: {"git_head": "a" * 40, "git_clean": True})
+    if "proj" not in _B0_CACHE:
+        MP.setattr(b0, "N_GAUSS", 64)
+        sec = _sec([4.0e-3, 1.0e-3, 4.0e-3], energies=[1.0e7, 1.25e8, 1.5e8])
+        grid = np.arange(90.0, 251.0, 10.0)
+        table = np.array([b0.sigma_ni_barn(sec, float(e)) if e <= 150.0 else 1.0 for e in grid])
+        ident = {"source_sha256": rec.LA150_ZIP_SHA256, "table_id": "x", "npz_sha256": "y"}
+        doc, _ = b0.assemble(sec, grid, table, ident, rec.LA150_H1_MEMBER_SHA256)
+        _B0_CACHE["proj"] = c.git_projection(
+            json.loads(json.dumps(doc, default=float)), b0.GIT_ALLOW
+        )
+    proj = json.loads(json.dumps(_B0_CACHE["proj"]))
+    proj["provenance"].update(
+        {
+            "table_id": exp["pinned"]["table_id"],
+            "npz_sha256": exp["pinned"]["npz_sha256"],
+            "code_sha256": c.sha256_file(Path(b0.__file__)),
+        }
+    )
+    proj["provenance"].update(override.pop("provenance", {}))
+    proj.update(override)
+    p = tmp / "de9-b0.json"
+    p.write_text(json.dumps(proj))
+    return p
 
 
 def _write_inputs(
@@ -874,18 +928,7 @@ def _write_inputs(
         }
     }
     (tmp / "archive.json").write_text(json.dumps({"steps": steps}))
-    b0doc = tmp / "de9-b0.json"
-    b0doc.write_text(
-        json.dumps(
-            {
-                "match": {"all_within": True},
-                "dip": {"persists": True},
-                "reading": "r",
-                "named_nodes": {},
-                "provenance": {"git_head": "a" * 40, "git_clean": True},
-            }
-        )
-    )
+    b0doc = _synthetic_b0(tmp, exp)
     inp: dict[str, Any] = {"de3": de3, "de9": de9, "archive": tmp / "archive.json", "hashes": tmp / "hashes.md", "b0": b0doc, "expected": exp, "scratch": scratch,
                            "attempts": tmp / "attempts.json", "de8": tmp / "de8.json", "tmp": tmp}  # fmt: skip
     CTX["inp"] = inp
@@ -1199,7 +1242,7 @@ def test_expected_tables_are_verified_against_the_scratch_cache(tmp_path: Path) 
     bad["pp-level-0.90-ge150"] = exp[
         "pp-level-0.95-ge150"
     ]  # id and npz of another variant: variant name <-> id mismatch
-    with pytest.raises(SystemExit, match="not consistent with the scratch cache"):
+    with pytest.raises(SystemExit, match="variants.json with this table id"):
         _build(inp, expected=bad)
     bad = {**exp, "unknown-variant": exp["all"]}
     with pytest.raises(SystemExit, match="not in the scratch cache variants.json"):
@@ -1525,3 +1568,199 @@ def test_b0_quadrature_convergence_block_and_the_corrected_docstring() -> None:
         b0.GIT_ALLOW,
     )
     assert "gl1024_vs_gl2048" in json.dumps(proj) and b0.leak_violations(proj, absolutes) == []
+
+
+def _retable(inp: dict[str, Any], v: str, mutate: Any) -> dict[str, dict[str, str]]:
+    """Rewrite variant ``v``'s sidecar consistently (new id, npz hash, variants.json, expected map): only the SEMANTIC check can refuse."""
+    old = inp["expected"][v]
+    side = json.loads(
+        (inp["scratch"] / "derived" / f"elastic-proton-{old['table_id']}.json").read_text()
+    )
+    mutate(side)
+    new = _install_table(inp["scratch"], v, side, f"npz-{v}".encode())
+    vj = json.loads((inp["scratch"] / "variants.json").read_text())
+    for blk in ("variants", "builders"):
+        if v in vj[blk]:
+            vj[blk][v] = {"table_id": new["table_id"]}
+    (inp["scratch"] / "variants.json").write_text(json.dumps(vj))
+    return {**inp["expected"], v: new}
+
+
+def test_variant_identity_is_authenticated_from_the_sidecar_not_from_variants_json(
+    tmp_path: Path,
+) -> None:
+    inp = _write_inputs(tmp_path)
+    exp = inp["expected"]
+    # relabel: the pp-only table presented as `all`, with a consistent variants.json (the hint) -- the sidecar says pp-only
+    vj = json.loads((inp["scratch"] / "variants.json").read_text())
+    vj["variants"]["all"] = {"table_id": exp["pp-only"]["table_id"]}
+    (inp["scratch"] / "variants.json").write_text(json.dumps(vj))
+    with pytest.raises(SystemExit, match="does not define this variant"):
+        _build(inp, expected={**exp, "all": exp["pp-only"]})
+    # relabel: an rb table presented as m2prime
+    inp2 = _write_inputs(tmp_path / "b" if (tmp_path / "b").mkdir() is None else tmp_path)
+    vj = json.loads((inp2["scratch"] / "variants.json").read_text())
+    vj["builders"]["m2prime"] = {"table_id": inp2["expected"]["rb"]["table_id"]}
+    (inp2["scratch"] / "variants.json").write_text(json.dumps(vj))
+    with pytest.raises(SystemExit, match="does not define the m2prime construction"):
+        _build(inp2, expected={**inp2["expected"], "m2prime": inp2["expected"]["rb"]})
+    # each defining field, with everything else consistent
+    cases = [("pp-level-0.90-ge150", lambda s: s["exploratory"].update(d_e3_variant="pp-level-0.95-ge150"), "does not define this variant"),
+             ("pp-level-0.90-ge150", lambda s: s["exploratory"].update(parameters={"sigma_pp_scale_at_nodes_ge_150_mev": 0.95, "shape": "unchanged"}), "does not define this variant"),
+             ("pp-level-monotone", lambda s: s["exploratory"].update(source_table_id="0" * 64), "does not define this variant"),
+             ("pp-only", lambda s: s.pop("exploratory"), "does not define this variant"),
+             ("m2prime", lambda s: s["exploratory"].update(pauli_variant="bdc-pn"), "does not define the m2prime construction"),
+             ("m2prime", lambda s: s["exploratory"].update(pauli_emin_mev=5.0), "does not define the m2prime construction"),
+             ("m2prime", lambda s: s["exploratory"].update(model="m2-optical-glauber"), "does not define the m2prime construction"),
+             ("rb", lambda s: s["exploratory"].update(pauli_variant="clementel-villi"), "does not define the rb construction"),
+             ("pinned", lambda s: s.update(exploratory={"d_e3_variant": "all"}), "pinned table differs")]  # fmt: skip
+    for i, (v, mutate, msg) in enumerate(cases):
+        inp3 = _write_inputs(
+            tmp_path / f"case{i}" if (tmp_path / f"case{i}").mkdir() is None else tmp_path
+        )
+        MP.setattr(c, "TABLE_ID", inp3["expected"]["pinned"]["table_id"])
+        new_exp = _retable(inp3, v, mutate)
+        if v == "pinned":
+            (inp3["tmp"] / "pin.json").write_text(json.dumps(new_exp["pinned"]))
+            MP.setattr(c, "TABLE_ID", new_exp["pinned"]["table_id"])
+        with pytest.raises(SystemExit, match=msg):
+            rec.verify_expected_tables(new_exp, inp3["scratch"])
+
+
+def test_b0_record_is_bound_authenticated_and_schema_checked(tmp_path: Path) -> None:
+    inp = _write_inputs(tmp_path)
+    assert _build(inp)["complete"] is True
+    good = json.loads(inp["b0"].read_text())
+
+    def put(**kv: Any) -> None:
+        inp["b0"].write_text(json.dumps({**good, **kv}))
+        _relog(inp)
+
+    for key in (
+        "match",
+        "dip",
+        "reading",
+        "carry_up_check",
+        "quadrature_convergence",
+        "provenance",
+        "named_nodes",
+    ):
+        inp["b0"].write_text(json.dumps({k: v for k, v in good.items() if k != key}))
+        _relog(inp)
+        with pytest.raises(SystemExit, match="lacks"):
+            _build(inp)
+    put(quadrature_convergence={**good["quadrature_convergence"], "accepted": "yes"})
+    with pytest.raises(SystemExit, match="accepted is missing or not a boolean"):
+        _build(inp)
+    put(match={"all_within": "maybe"})
+    with pytest.raises(SystemExit, match="malformed"):
+        _build(inp)
+    for k, v, msg in (
+        ("code_sha256", "", "lacks code_sha256"),
+        ("table_id", "0" * 64, "differs from the expected pinned table"),
+        ("npz_sha256", "0" * 64, "differs from the expected pinned table"),
+        ("source_sha256", "0" * 64, "frozen pins"),
+        ("member_sha256", "0" * 64, "frozen pins"),
+        ("pre_run_looks", "edited", "frozen text"),
+        ("member_sha256", "", "lacks member_sha256"),
+    ):
+        put(provenance={**good["provenance"], k: v})
+        with pytest.raises(SystemExit, match=msg):
+            _build(inp)
+    put()  # restore
+    assert _build(inp)["complete"] is True
+    # authentication against the attempt log
+    inp["b0"].write_text(json.dumps({**good, "reading": "edited after publication"}))
+    with pytest.raises(SystemExit, match="attempt-log entry"):
+        _build(inp)
+    inp["attempts"].write_text(
+        json.dumps(
+            [
+                r
+                for r in json.loads(inp["attempts"].read_text())
+                if "de9-b0.json" not in str(r.get("output"))
+            ]
+        )
+    )
+    with pytest.raises(SystemExit, match="no \\(unique\\) published entry"):
+        _build(inp)
+    # the code binding: the B0 record must carry the reviewed de9_pp_level.py hash
+    _relog(inp)
+    inp["b0"].write_text(json.dumps(good))
+    _relog(inp)
+    fz = {**_freeze(), "scripts": {"de3_probes.py": "1" * 64, "de9_pp_level.py": "2" * 64}}
+    with pytest.raises(SystemExit, match="code_sha256 is missing or differs"):
+        _build(inp, freeze=fz)
+
+
+def test_unaccepted_quadrature_convergence_makes_the_record_incomplete(tmp_path: Path) -> None:
+    inp = _write_inputs(tmp_path)
+    good = json.loads(inp["b0"].read_text())
+    inp["b0"].write_text(
+        json.dumps(
+            {
+                **good,
+                "quadrature_convergence": {**good["quadrature_convergence"], "accepted": False},
+            }
+        )
+    )
+    _relog(inp)
+    doc = _build(inp)
+    assert (
+        doc["complete"] is False
+        and any("quadrature convergence not accepted" in r for r in doc["incomplete_reasons"])
+        and doc["b0"]["quadrature_accepted"] is False
+    )
+    md = rec.render_report(
+        c.git_projection(json.loads(json.dumps(doc, default=float)), rec.GIT_ALLOW)
+    )
+    assert (
+        "INCOMPLETE — not the D-E9 synthesis" in md and "quadrature convergence not accepted" in md
+    )
+
+
+def test_b0_producer_is_once_only_and_logs_the_published_projection(tmp_path: Path) -> None:
+    exp = {"pinned": {"table_id": "a" * 64, "npz_sha256": "b" * 64}}
+    b0doc = _synthetic_b0(tmp_path, exp)
+    proj = json.loads(b0doc.read_text())
+    MP.setattr(b0, "N_GAUSS", 64)
+    sec = _sec([4.0e-3, 1.0e-3, 4.0e-3], energies=[1.0e7, 1.25e8, 1.5e8])
+    grid = np.arange(100.0, 151.0, 10.0)
+    table = np.array([b0.sigma_ni_barn(sec, float(e)) for e in grid])
+    doc, absolutes = b0.assemble(
+        sec,
+        grid,
+        table,
+        {"source_sha256": rec.LA150_ZIP_SHA256, "table_id": "a" * 64, "npz_sha256": "b" * 64},
+        rec.LA150_H1_MEMBER_SHA256,
+    )
+    assert (
+        proj["provenance"]["pre_run_looks"] == b0.PRE_RUN_LOOKS
+        and doc["quadrature_convergence"]["accepted"] is True
+    )
+    out, att = tmp_path / "out", tmp_path / "att.json"
+    b0.publish(doc, absolutes, [], out, att)
+    log = json.loads(att.read_text())
+    assert [r["outcome"] for r in log] == ["started", "published-valid"] and log[0][
+        "producer"
+    ] == "de9_pp_level.run"
+    assert (
+        rec.attempt_log_sha(log, "de9-b0.json")
+        == hashlib.sha256((out / "git" / "de9-b0.json").read_bytes()).hexdigest()
+    )
+    with pytest.raises(SystemExit, match="exists"):
+        b0.publish(doc, absolutes, [], out, att)  # never overwritten, never re-run
+    assert len(json.loads(att.read_text())) == 2
+    leaky = json.loads(json.dumps(doc, default=float))
+    with pytest.raises(SystemExit, match="leak check failed"):
+        b0.publish(
+            {**leaky, "nodes": {"100": {"rec_over_table": absolutes[0], "within": True}}},
+            absolutes,
+            [],
+            tmp_path / "out2",
+            tmp_path / "att2.json",
+        )
+    assert [r["outcome"] for r in json.loads((tmp_path / "att2.json").read_text())] == [
+        "started",
+        "failed",
+    ]

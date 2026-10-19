@@ -37,6 +37,7 @@ Run: ``python -m validation.scripts.elastic_attribution.de9_pp_level``.
 
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import math
@@ -330,32 +331,56 @@ def locate_raw(cache_dir: Path) -> tuple[Path, dict[str, Any]]:
     p = Path(cache_dir) / "objects" / sha
     if c.sha256_file(p) != sha:
         raise SystemExit(f"{p}: sha256 differs from the pinned source {sha}")
-    return p, {"source_sha256": sha, "table_id": side["table_id"], "npz_sha256": side["npz_sha256"]}
+    npz_sha = c.sha256_file(Path(cache_dir) / "derived" / f"elastic-proton-{c.TABLE_ID}.npz")
+    if npz_sha != side["npz_sha256"]:
+        raise SystemExit("the pinned npz sha256 differs from its sidecar")
+    return p, {"source_sha256": sha, "table_id": side["table_id"], "npz_sha256": npz_sha}
 
 
-def run(cache_dir: Path | None = None, out: Path | None = None) -> dict[str, Any]:
-    cd = Path(cache_dir or c.CACHE_DIR)
-    zp, ident = locate_raw(cd)
-    text = zipfile.ZipFile(zp).read(MEMBER).decode("ascii")
-    sec = parse_h1_mt2(text)
-    npz = np.load(cd / "derived" / f"elastic-proton-{c.TABLE_ID}.npz", allow_pickle=False)
-    res = compare(sec, npz["grid_e_mev"], npz["sigma_barn"][0])
+def assemble(sec: dict[str, Any], grid_e: np.ndarray, table_sigma_barn: np.ndarray, ident: dict[str, Any], member_sha256: str) -> tuple[dict[str, Any], list[float]]:
+    """The B0 record (full document) and the list of absolute values computed (for the leak check) from the parsed section, the pinned node values and
+    the identity of the inputs (``source_sha256`` of the LA150 zip, ``table_id`` and ``npz_sha256`` of the pinned table)."""
+    res = compare(sec, grid_e, table_sigma_barn)
     absolutes = res.pop("_absolutes")
-    carry = carry_up_check(sec, npz["grid_e_mev"], npz["sigma_barn"][0])
+    carry = carry_up_check(sec, grid_e, table_sigma_barn)
     absolutes += carry.pop("_absolutes")
     res["carry_up_check"] = carry
     conv = quadrature_convergence(sec)
     absolutes += conv.pop("_absolutes")
     res["quadrature_convergence"] = conv
-    doc = {"banner": c.BANNER, "disclosure": DISCLOSURE, **res, "provenance": {**ident, "member": MEMBER, "member_sha256": __import__("hashlib").sha256(text.encode()).hexdigest(),
-                                                                                 "code_sha256": c.sha256_file(Path(__file__)),
-                                                                                 "quadrature": f"Gauss-Legendre {N_GAUSS}", **c.repo_state(), "pre_run_looks": PRE_RUN_LOOKS}}  # fmt: skip
-    proj = c.git_projection(json.loads(json.dumps(doc, default=float)), GIT_ALLOW)
-    bad = leak_violations(proj, absolutes)
-    if bad:
-        raise SystemExit(f"leak check failed: {bad[:6]}")
-    hdr = c.header("D-E9 B0: independent reconstruction of the pinned p-p level, 100-150 MeV", "python -m validation.scripts.elastic_attribution.de9_pp_level", [zp])
-    c.write_outputs(Path(out or c.OUT / STEP_DIR), "de9-b0.json", doc, "de9-b0-report.md", hdr, render_report, GIT_ALLOW)
+    doc = {"banner": c.BANNER, "disclosure": DISCLOSURE, **res,
+           "provenance": {**ident, "member": MEMBER, "member_sha256": member_sha256, "code_sha256": c.sha256_file(Path(__file__)), "quadrature": f"Gauss-Legendre {N_GAUSS}",
+                          **c.repo_state(), "pre_run_looks": PRE_RUN_LOOKS}}  # fmt: skip
+    return doc, absolutes
+
+
+def publish(doc: dict[str, Any], absolutes: list[float], inputs: list[Path], out: Path | None = None, attempts: Path | None = None) -> None:
+    """Write the record once: the projected record ``<out>/git/de9-b0.json`` is the once-only target; an attempt record precedes the work and the
+    sha256 of the published projection is recorded in the attempt log (``de8-attempts.json``) for the consumer to authenticate it."""
+    out = Path(out or c.OUT / STEP_DIR)
+    target = out / "git" / "de9-b0.json"
+    att = c.begin_attempt(target, "de9_pp_level.run", {"quadrature": N_GAUSS}, attempts)
+    try:
+        proj = c.git_projection(json.loads(json.dumps(doc, default=float)), GIT_ALLOW)
+        bad = leak_violations(proj, absolutes)
+        if bad:
+            raise SystemExit(f"leak check failed: {bad[:6]}")
+        hdr = c.header("D-E9 B0: independent reconstruction of the pinned p-p level, 100-150 MeV", "python -m validation.scripts.elastic_attribution.de9_pp_level", inputs)
+        c.write_outputs(out, "de9-b0.json", doc, "de9-b0-report.md", hdr, render_report, GIT_ALLOW)
+    except BaseException:
+        c.end_attempt(att, "failed", attempts)
+        raise
+    c.end_attempt(att, "published-valid", attempts, target)
+
+
+def run(cache_dir: Path | None = None, out: Path | None = None, attempts: Path | None = None) -> dict[str, Any]:
+    cd = Path(cache_dir or c.CACHE_DIR)
+    zp, ident = locate_raw(cd)
+    raw = zipfile.ZipFile(zp).read(MEMBER)
+    sec = parse_h1_mt2(raw.decode("ascii"))
+    npz = np.load(cd / "derived" / f"elastic-proton-{c.TABLE_ID}.npz", allow_pickle=False)
+    doc, absolutes = assemble(sec, npz["grid_e_mev"], npz["sigma_barn"][0], ident, hashlib.sha256(raw).hexdigest())
+    publish(doc, absolutes, [zp], out, attempts)
     return doc
 
 
@@ -373,7 +398,7 @@ def render_report(doc: dict[str, Any]) -> str:
     if cu:
         out += ["", f"Carry-up check above 150 MeV (rule: {cu['rule']}): all nodes within {cu['match']['tolerance']:g}: **{cu['match']['all_within']}** (max |carried/table - 1| = {cu['match']['max_abs_rel_diff']:.2e}).", "",
                 "| node (MeV) | carried / table | within |", "|---|---|---|"]
-        out += [f"| {e} | {r['carried_over_table']:.6f} | {r['within']} |" for e, r in cu["named_nodes"].items()]
+        out += [f"| {e} | {r['carried_over_table']:.6f} | {r['within']} |" for e, r in cu.get("named_nodes", {}).items()]
     out += ["", "Level relative to the 125 MeV node:", "", "| node (MeV) | reconstruction | table |", "|---|---|---|"]
     for e, r in doc["levels_over_125mev"].items():
         out.append(f"| {e} | {r['rec']:.4f} | {'-' if r.get('table') is None else format(r['table'], '.4f')} |")
