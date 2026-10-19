@@ -389,7 +389,7 @@ def run(table_id: str | None = None, cache_dir: Path | None = None, tag: str | N
     except BaseException:
         c.end_attempt(att, "failed", attempts)
         raise
-    c.end_attempt(att, "published-valid", attempts)
+    c.end_attempt(att, "published-valid", attempts, c.OUT / f"de0-{tag}" / "kernels.json")
 
 
 def _run(table_id: str | None, cache_dir: Path | None, tag: str | None) -> None:

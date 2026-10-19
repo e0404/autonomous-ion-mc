@@ -162,7 +162,7 @@ def run_one(
     except BaseException:
         c.end_attempt(att, "failed", attempts)
         raise
-    c.end_attempt(att, "published-valid" if doc.get("valid") else "published-invalid", attempts)
+    c.end_attempt(att, "published-valid" if doc.get("valid") else "published-invalid", attempts, out / run_name(energy, variant, realisation))
     return doc
 
 
@@ -216,7 +216,7 @@ def _run_one(
         "valid": bool(v5.clean(res) and res.energy_balance.relative_residual <= 1e-12),
         "relative_residual": float(res.energy_balance.relative_residual),
         "counters": res.counters.as_dict(), "wall_s": wall, "hist_per_s": n / wall,
-        "configuration": "elastic_only" if mode == "emel" else "em_only", "code": c.code_provenance(),
+        "configuration": "elastic_only" if mode == "emel" else "em_only", "elastic": mode == "emel", "code": c.code_provenance(),
     }  # fmt: skip
     if binding is not None:
         doc["elastic_table_npz_sha256"] = binding["npz_sha256"]

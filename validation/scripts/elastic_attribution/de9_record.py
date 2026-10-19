@@ -256,9 +256,15 @@ def check_document_code(doc: dict[str, Any], what: str, freeze: dict[str, Any]) 
         raise SystemExit(f"{what}: recorded HEAD / clean flag differ from the evaluator HEAD {freeze['head'][:12]} (all documents must come from one commit)")
     if not freeze["ancestor"](freeze["sha"], cd["git_head"]):
         raise SystemExit(f"{what}: recorded HEAD does not contain the reviewed commit {freeze['sha'][:12]}")
-    for n, s in (cd.get("scripts_sha256") or {}).items():
-        if n in freeze["scripts"] and freeze["scripts"][n] != s:
-            raise SystemExit(f"{what}: sha256 of {n} recorded in the document differs from the reviewed commit")
+    if "code" in doc:  # a harness document: the code hashes are REQUIRED and must equal those of the reviewed commit
+        sh = cd.get("scripts_sha256")
+        if not isinstance(sh, dict) or not sh:
+            raise SystemExit(f"{what}: no scripts_sha256 recorded (the code binding cannot be verified)")
+        for n, want in freeze["scripts"].items():
+            if n in c.CODE_FILES and sh.get(n) != want:
+                raise SystemExit(f"{what}: sha256 of {n} recorded in the document is missing or differs from the reviewed commit")
+    elif "de9_pp_level.py" in freeze["scripts"] and cd.get("code_sha256") != freeze["scripts"]["de9_pp_level.py"]:  # the B0 record
+        raise SystemExit(f"{what}: code_sha256 is missing or differs from the reviewed de9_pp_level.py")
 
 
 REUSED = ("all", "pp-only", "pA-only", "emonly")
@@ -278,6 +284,80 @@ def committed_hashes(sources: tuple[Path, ...] | None = None) -> dict[str, str]:
     return out
 
 
+ATTEMPTS = c.ATTEMPTS
+ATTEMPTS_DEFAULT = c.ATTEMPTS
+DE8_RECORD = RES / "de8" / "de8.json"
+PIN_JSON = c.REPO / "src" / "ionmc" / "data" / "elastic_table_pin.json"
+UNIT = "MeV/(g/cm^2)/primary"
+
+
+def expected_geometry(energy: int) -> dict[str, Any]:
+    """The frozen V5 scoring geometry of the harness (r = 20 cm, 0.5 mm depth bins) at ``energy``, from the transport step module (read only)."""
+    v5b = c.import_transport_module("steps_v5b")
+    _geo, grid, nz, _r80 = v5b.v5_geometry(float(energy))  # the scoring grid: lateral half-width 200 mm (r = 20 cm), 0.5 mm depth bins
+    return {"origin_mm": [float(x) for x in grid.origin_mm], "spacing_mm": [float(x) for x in grid.spacing_mm], "shape": [int(x) for x in grid.shape], "name": grid.name,
+            "nz": int(nz), "bin_mm": float(v5b.V5_DZ_MM)}  # fmt: skip
+
+
+def check_arrays(doc: dict[str, Any], what: str, energy: int) -> None:
+    """Frozen configuration of the arrays: the scoring geometry, 0.5 mm bins and the bin count, the units, the tally names, the array shapes (batches x bins)
+    and finiteness (SystemExit otherwise)."""
+    g = expected_geometry(energy)
+    sc = doc.get("scoring") or {}
+    for k in ("origin_mm", "spacing_mm", "shape", "name"):
+        if sc.get(k) != g[k]:
+            raise SystemExit(f"{what}: scoring {k} {sc.get(k)!r} differs from the frozen V5 geometry {g[k]!r}")
+    if doc.get("bin_mm") != g["bin_mm"] or doc.get("unit") != UNIT:
+        raise SystemExit(f"{what}: bin size / unit differ from the frozen configuration ({g['bin_mm']} mm, {UNIT})")
+    split = doc.get("genealogy_split")
+    names = [] if doc.get("mode") == "emonly" else ["recoil", *(["pp_secondary_proton", "primary_proton"] if split else [])]
+    if doc.get("tallies") != names:
+        raise SystemExit(f"{what}: tally names {doc.get('tallies')!r} differ from the expected {names!r}")
+    arrays = {"idd_batches": doc.get("idd_batches")}
+    if doc.get("mode") != "emonly":
+        arrays["recoil_idd_batches"] = doc.get("recoil_idd_batches")
+    for k, v in (split or {}).items():
+        arrays[f"genealogy_split/{k}"] = v
+    for k, v in arrays.items():
+        a = np.asarray(v, dtype=float) if v is not None else None
+        if a is None or a.shape != (N_BATCH, g["nz"]) or not np.all(np.isfinite(a)):
+            raise SystemExit(f"{what}: array {k} is missing, not shaped (batches x bins) = ({N_BATCH}, {g['nz']}), or not finite")
+
+
+def attempt_log_sha(log: list[dict[str, Any]], name: str) -> str:
+    """The sha256 recorded in the attempt log for the published document ``name`` (exactly one published attempt; SystemExit otherwise)."""
+    ids = {r["id"] for r in log if r.get("outcome") == "started" and Path(str(r.get("output"))).name == name}
+    pub = [r for r in log if r.get("attempt") in ids and str(r.get("outcome", "")).startswith("published")]
+    if len(pub) != 1 or not pub[0].get("document_sha256"):
+        raise SystemExit(f"{name}: the attempt log has no (unique) published entry with a document sha256")
+    return str(pub[0]["document_sha256"])
+
+
+def verify_expected_tables(expected: dict[str, dict[str, str]], scratch: Path) -> None:
+    """The expected-tables map is verified semantically against the scratch cache: variant name -> table id (``variants.json``, builders included) ->
+    npz sha256 of the installed file, the sidecar's recorded hash and the table id recomputed from the sidecar. ``pinned`` against the committed pin.
+    ``emonly`` runs no elastic table and is exempt."""
+    from ionmc.nuclear.build import table_id as tid_fn
+
+    vj = json.loads((Path(scratch) / "variants.json").read_text())
+    ids = {**{v: r["table_id"] for v, r in vj["variants"].items()}, **{v: r["table_id"] for v, r in vj.get("builders", {}).items()}}
+    pin = json.loads(PIN_JSON.read_text())
+    der = Path(scratch) / "derived"
+    for v, e in expected.items():
+        if v == "emonly":
+            continue
+        tid = c.TABLE_ID if v == "pinned" else ids.get(v)
+        if tid is None:
+            raise SystemExit(f"expected table of {v!r}: the variant is not in the scratch cache variants.json")
+        npz = der / f"elastic-proton-{tid}.npz"
+        side = json.loads((der / f"elastic-proton-{tid}.json").read_text())
+        sha = _sha(npz)
+        if e.get("table_id") != tid or e.get("npz_sha256") != sha or side.get("npz_sha256") != sha or tid_fn({**side, "npz_sha256": sha}) != tid:
+            raise SystemExit(f"expected table of {v!r}: table id / npz sha256 are not consistent with the scratch cache (variant name, id, npz and sidecar)")
+        if v == "pinned" and (tid != pin["table_id"] or sha != pin["npz_sha256"]):
+            raise SystemExit("expected pinned table differs from the committed pin")
+
+
 def validate_document(doc: dict[str, Any], what: str, *, energy: int, variant: str, seed: int, expected: dict[str, dict[str, str]], reused: dict[str, str] | None = None,
                       path: Path | None = None, freeze: dict[str, Any] | None = None) -> bool:
     """Fail-closed validation of one harness document: frozen configuration (energy, variant, 100000 histories, 20 batches, mode, warp-cpu, float64, seed),
@@ -288,15 +368,22 @@ def validate_document(doc: dict[str, Any], what: str, *, energy: int, variant: s
     for k, v in want.items():
         if doc.get(k) != v:
             raise SystemExit(f"{what}: {k} {doc.get(k)!r} differs from the frozen configuration {v!r}")
-    exp = expected.get(variant)
-    if exp is None or not exp.get("table_id"):
-        raise SystemExit(f"{what}: no expected table for variant {variant!r} (manifest input required)")
-    if doc.get("elastic_table_id") != exp["table_id"]:
-        raise SystemExit(f"{what}: elastic table id differs from the expected {variant} table")
     is_reused = reused is not None and variant in REUSED and path is not None and path.name in reused
-    if "elastic_table_npz_sha256" in doc or not is_reused:
-        if doc.get("elastic_table_npz_sha256") != exp.get("npz_sha256") or not exp.get("npz_sha256"):
-            raise SystemExit(f"{what}: elastic table npz sha256 differs from (or is missing against) the expected {variant} table")
+    check_arrays(doc, what, energy)
+    if variant == "emonly":  # no elastic table: exempt from the table identity, but a new document must say so explicitly
+        if not is_reused and doc.get("elastic") is not False:
+            raise SystemExit(f"{what}: an EM-only document must carry the explicit marker elastic = false")
+    else:
+        exp = expected.get(variant)
+        if exp is None or not exp.get("table_id"):
+            raise SystemExit(f"{what}: no expected table for variant {variant!r} (manifest input required)")
+        if not is_reused and doc.get("elastic") is not True:
+            raise SystemExit(f"{what}: an elastic document must carry the explicit marker elastic = true")
+        if doc.get("elastic_table_id") != exp["table_id"]:
+            raise SystemExit(f"{what}: elastic table id differs from the expected {variant} table")
+        if "elastic_table_npz_sha256" in doc or not is_reused:
+            if doc.get("elastic_table_npz_sha256") != exp.get("npz_sha256") or not exp.get("npz_sha256"):
+                raise SystemExit(f"{what}: elastic table npz sha256 differs from (or is missing against) the expected {variant} table")
     if reused is not None and variant in REUSED and path is not None:
         if reused.get(path.name) != _sha(path):
             raise SystemExit(f"{what}: sha256 differs from (or is not listed in) the committed input lists")
@@ -307,7 +394,8 @@ def validate_document(doc: dict[str, Any], what: str, *, energy: int, variant: s
 
 def build_document(de3_dir: Path, de9_dir: Path, b0_path: Path | None, archive: Path = ARCHIVE_JSON, absolutes: list[float] | None = None,
                    freeze: dict[str, Any] | None = None, expected_tables: dict[str, dict[str, str]] | None = None, hash_sources: tuple[Path, ...] | None = None,
-                   allow_incomplete: bool = False) -> dict[str, Any]:
+                   allow_incomplete: bool = False, scratch_cache: Path | None = None, attempts_path: Path | None = None, de8_record: Path | None = None,
+                   expected_sha256: str | None = None) -> dict[str, Any]:
     """Assemble the record from the harness documents. Every input is validated fail-closed (``validate_document``). A missing required input (the
     ``m2prime`` document of the Lead A table, the B0 result) is a SystemExit naming it, unless ``allow_incomplete``: then the section is omitted and the
     record is labelled INCOMPLETE (``complete`` false) and cannot be read as the D-E9 synthesis. A published-invalid document is recorded and no section
@@ -315,7 +403,12 @@ def build_document(de3_dir: Path, de9_dir: Path, b0_path: Path | None, archive: 
     cmp = _cmp()
     arch = load_archived_ionmc_gain(archive)
     expected = expected_tables or {}
+    if scratch_cache is None:
+        raise SystemExit("the scratch cache (--scratch-cache) is required: the expected-tables map is verified against it")
+    verify_expected_tables(expected, scratch_cache)
     reused = committed_hashes(hash_sources)
+    log = json.loads(Path(attempts_path or ATTEMPTS_DEFAULT).read_text()) if Path(attempts_path or ATTEMPTS_DEFAULT).is_file() else None
+    de8_sha: dict[str, str] | None = None
     reasons: list[str] = []
     invalid: dict[str, str] = {}
     shas: dict[str, str] = {}
@@ -326,6 +419,19 @@ def build_document(de3_dir: Path, de9_dir: Path, b0_path: Path | None, archive: 
                 raise SystemExit(f"{p} is missing: a required input of the D-E9 record (the evaluator never runs anything)")
             return None
         d = json.loads(p.read_text())
+        if not bound:  # authenticate the generated document: D-E8 arm documents against the committed D-E8 record, new runs against the attempt log
+            nonlocal de8_sha
+            if variant == "m2prime":
+                if de8_sha is None:
+                    rec8 = json.loads(Path(de8_record or DE8_RECORD).read_text())["runs"]["arms"]["m2prime"]
+                    de8_sha = {str(k): v["sha256"] for k, v in rec8.items() if isinstance(v, dict) and "sha256" in v}
+                if de8_sha.get(str(energy)) != _sha(p):
+                    raise SystemExit(f"{p.name}: sha256 differs from the committed D-E8 record")
+            else:
+                if log is None:
+                    raise SystemExit("the attempt log is missing: generated documents cannot be authenticated")
+                if attempt_log_sha(log, p.name) != _sha(p):
+                    raise SystemExit(f"{p.name}: sha256 differs from the attempt-log entry of its published run")
         if not validate_document(d, p.name, energy=energy, variant=variant, seed=seed, expected=expected, reused=reused if bound else None, path=p, freeze=freeze):
             invalid[p.name] = "published-invalid"
         shas[p.name] = _sha(p)
@@ -386,7 +492,8 @@ def build_document(de3_dir: Path, de9_dir: Path, b0_path: Path | None, archive: 
     here = Path(__file__).resolve().parent
     st = c.repo_state()
     doc["provenance"] = {**st, "scripts_sha256": {n: _sha(here / n) for n in DE9_CODE_FILES if (here / n).is_file()}, "documents_sha256": shas,
-                         "archive_sha256": _sha(archive), "attempts_sha256": _sha(c.ATTEMPTS) if c.ATTEMPTS.is_file() else None}  # fmt: skip
+                         "archive_sha256": _sha(archive), "attempts_sha256": _sha(Path(attempts_path or ATTEMPTS_DEFAULT)) if Path(attempts_path or ATTEMPTS_DEFAULT).is_file() else None,
+                         "expected_tables_sha256": expected_sha256}  # fmt: skip
     proj = c.git_projection(json.loads(json.dumps(doc, default=float)), GIT_ALLOW)
     bad = leak_violations(proj, absolutes or [])
     if bad:
@@ -432,7 +539,7 @@ def render_report(doc: dict[str, Any]) -> str:
 
 
 def run(de3_dir: Path, de9_dir: Path, out: Path, b0_path: Path | None = None, review_id: str | None = None, reviewed_sha: str | None = None,
-        review_id_full: str | None = None, expected_tables: Path | None = None, allow_incomplete: bool = False) -> dict[str, Any]:
+        review_id_full: str | None = None, expected_tables: Path | None = None, allow_incomplete: bool = False, scratch_cache: Path | None = None) -> dict[str, Any]:
     out = Path(out)
     state = c.repo_state()
     manifest_p = out / "de9-manifest.json"
@@ -443,7 +550,8 @@ def run(de3_dir: Path, de9_dir: Path, out: Path, b0_path: Path | None = None, re
     freeze = {"sha": reviewed_sha, "head": state["git_head"], "scripts": hashes_at(reviewed_sha), "ancestor": is_ancestor}
     if expected_tables is None:
         raise SystemExit("--expected-tables FILE (variant -> table_id / npz_sha256 of the scratch cache) is required")
-    doc = build_document(de3_dir, de9_dir, b0_path, freeze=freeze, expected_tables=json.loads(Path(expected_tables).read_text()), allow_incomplete=allow_incomplete)
+    doc = build_document(de3_dir, de9_dir, b0_path, freeze=freeze, expected_tables=json.loads(Path(expected_tables).read_text()), allow_incomplete=allow_incomplete,
+                         scratch_cache=scratch_cache, attempts_path=ATTEMPTS_DEFAULT, de8_record=DE8_RECORD, expected_sha256=_sha(Path(expected_tables)))
     doc["provenance"]["reviewed_sha"] = reviewed_sha
     doc["provenance"]["review_id"] = review_id
     hdr = c.header("D-E9 record: B0 / B1 / B2 / B3 / A1 and the Lead A sensitivity table" if doc["complete"] else "INCOMPLETE — not the D-E9 synthesis", "python -m validation.scripts.elastic_attribution.de9_record", [ARCHIVE_JSON])
@@ -455,6 +563,8 @@ def run(de3_dir: Path, de9_dir: Path, out: Path, b0_path: Path | None = None, re
 
 
 def main(argv: list[str] | None = None) -> None:
+    from .make_variant_tables import resolve_scratch
+
     ap = argparse.ArgumentParser(description=(__doc__ or "").split("\n")[0])
     ap.add_argument("--de3-dir", type=Path, default=c.OUT / "de3")
     ap.add_argument("--de9-dir", type=Path, default=c.OUT / "de9")
@@ -464,9 +574,10 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--reviewed-sha", required=True, help="40-hex commit that froze the four code files (an ancestor of HEAD)")
     ap.add_argument("--review-id-full", default=None, help="free text: the full Codex review id")
     ap.add_argument("--expected-tables", type=Path, required=True, help='JSON {"all": {"table_id": ..., "npz_sha256": ...}, "pinned": ..., "emonly": ..., "pp-only": ..., "pA-only": ..., "pp-level-...": ..., "m2prime": ...}')
+    ap.add_argument("--scratch-cache", type=Path, default=None, help="scratch cache of make_variant_tables (default: IONMC_DE3_SCRATCH or the repository default)")
     ap.add_argument("--allow-incomplete", action="store_true", help="omit a missing m2prime document / B0 result and label the record INCOMPLETE (not the D-E9 synthesis)")
     a = ap.parse_args(argv)
-    run(a.de3_dir, a.de9_dir, a.out, a.b0, a.reviewed_head_review_id, a.reviewed_sha, a.review_id_full, a.expected_tables, a.allow_incomplete)
+    run(a.de3_dir, a.de9_dir, a.out, a.b0, a.reviewed_head_review_id, a.reviewed_sha, a.review_id_full, a.expected_tables, a.allow_incomplete, resolve_scratch(a.scratch_cache))
 
 
 if __name__ == "__main__":

@@ -443,7 +443,7 @@ def run(table_id: str | None = None, cache_dir: Path | None = None, seed_base: i
     except BaseException:
         c.end_attempt(att, "failed", attempts)
         raise
-    c.end_attempt(att, "published-valid", attempts)
+    c.end_attempt(att, "published-valid", attempts, target)
 
 
 def _run(table_id: str | None, cache_dir: Path | None, seed_base: int, tag: str | None) -> None:

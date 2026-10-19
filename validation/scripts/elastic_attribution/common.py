@@ -123,11 +123,15 @@ def begin_attempt(target: Path, producer: str, args: dict[str, Any], attempts_pa
     return n
 
 
-def end_attempt(attempt: int, outcome: str, attempts_path: Path | None = None) -> None:
-    """Append the outcome of an attempt (``published-valid``, ``published-invalid``, ``failed``) as a new record."""
+def end_attempt(attempt: int, outcome: str, attempts_path: Path | None = None, document: Path | None = None) -> None:
+    """Append the outcome of an attempt (``published-valid``, ``published-invalid``, ``failed``) as a new record; for a published run the sha256 of the
+    published document is recorded, so that a consumer can authenticate the document against the log."""
     ap = Path(attempts_path or ATTEMPTS)
     log = _read_attempts(ap)
-    log.append({"id": len(log), "attempt": attempt, "outcome": outcome})
+    rec: dict[str, Any] = {"id": len(log), "attempt": attempt, "outcome": outcome}
+    if document is not None and Path(document).is_file():
+        rec["document_sha256"] = sha256_file(Path(document))
+    log.append(rec)
     ap.write_text(json.dumps(log, indent=1, sort_keys=True) + "\n")
 
 

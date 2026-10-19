@@ -15,7 +15,7 @@ json (node energies and the table's own node values) and the cache objects. The 
   nodes linearly in E (TAB2 INT = 2) and multiplies with the Coulomb density at E. The cross section is ``2 pi int_0^0.96 NI dmu`` (barn;
   half sphere, each identical-particle event counted once; ``|mu_CM| <= 0.96`` = theta_CM >= 16.26 deg).
 
-Numerics differ from the builder on purpose: Gauss-Legendre quadrature with 1024 nodes on [0, 0.96] (the builder: Simpson on 20001 points),
+Numerics differ from the builder on purpose: Gauss-Legendre quadrature with 1024 nodes on [0, 0.96] (the builder: a 4001-point uniform Simpson grid, ``n_mu_check``; its P6-D re-evaluation uses 8001; a planner note fixes the plan text, which spoke of a "four times finer" grid). The quadrature error is not assumed: ``quadrature_convergence`` records GL 1024 against GL 2048, Simpson 4001 and Simpson 20001 at the 100 / 125 / 150 MeV nodes (acceptance, pre-declared: relative difference < 1e-6, negligible against the 1e-3 match tolerance),
 Legendre sums by ``numpy.polynomial.legendre.legval``, an own fixed-field ENDF reader.
 
 Planning note (plan, B0): the plan names a 1 MeV grid over 100-200 MeV, but the raw LA150 H-1 evaluation ends at 150 MeV, so the match and the dip test stay on
@@ -61,12 +61,12 @@ STEP_DIR = "de9"
 
 GIT_ALLOW = (
     "banner", "disclosure", "named_nodes/*/*", "nodes/*/*", "midpoints/*/*", "match/*", "dip/*", "levels_over_125mev/*/*", "reading",
-    "carry_up_check/**", "provenance/*",
+    "carry_up_check/**", "quadrature_convergence/**", "provenance/*",
 )  # fmt: skip
 GIT_FILES = {"de9-b0.json": (GIT_ALLOW, ())}
 PRE_RUN_LOOKS = (
     "Before the frozen run the independent parser was validated on the real LA150 H-1 file at the 100 MeV node only (reconstruction / table - 1 = 2e-12 relative); "
-    "no other node, no midpoint, no dip test and no verdict was computed before it. The reading rules were declared in the plan before that look."
+    "no other node, no midpoint, no dip test and no verdict was computed before it. The reading rules were declared in the plan before that look. The quadrature convergence was also looked at that one node (not a level comparison)."
 )
 DISCLOSURE = "D-E9 B0: exploratory; leads identified after the D-E8 STOP; not a re-evaluation. Independent reconstruction of the pinned p-p level; ratios only."
 
@@ -253,6 +253,42 @@ def compare(sec: dict[str, Any], grid_e: np.ndarray, table_sigma_barn: np.ndarra
             "dip": dip, "levels_over_125mev": levels, "reading": reading, "_absolutes": absolutes}  # fmt: skip
 
 
+def simpson_uniform(y: np.ndarray, x: np.ndarray) -> float:
+    """Composite Simpson rule on a uniform grid with an odd number of points (own implementation)."""
+    h = (x[-1] - x[0]) / (x.size - 1)
+    return float(h / 3.0 * (y[0] + y[-1] + 4.0 * y[1:-1:2].sum() + 2.0 * y[2:-1:2].sum()))
+
+
+def _ni(sec: dict[str, Any], e_mev: float, mu: np.ndarray) -> np.ndarray:
+    k, eta = coulomb_k_eta(e_mev * 1e6, sec["awr"], sec["awi"])
+    return np.asarray(sigma_coulomb(mu, k, eta) * (ratio_at(sec, e_mev * 1e6, mu) - 1.0))
+
+
+def quadrature_convergence(sec: dict[str, Any], nodes: tuple[float, ...] = (100.0, 125.0, 150.0)) -> dict[str, Any]:
+    """The quadrature error of the reconstruction: GL 1024 (the production rule), GL 2048, Simpson 4001 (the builder's grid) and Simpson 20001, as relative
+    differences to GL 2048 at the named nodes; acceptance (pre-declared): every difference below 1e-6. Ratios only."""
+    out: dict[str, Any] = {}
+    worst = 0.0
+    absolutes: list[float] = []
+    for e in nodes:
+        def gl(n: int) -> float:
+            x, w = np.polynomial.legendre.leggauss(n)
+            mu, wt = 0.5 * MU_CUT * (x + 1.0), 0.5 * MU_CUT * w
+            return float(2.0 * math.pi * np.sum(wt * _ni(sec, e, mu)))
+
+        def sp(n: int) -> float:
+            mu = np.linspace(0.0, MU_CUT, n)
+            return float(2.0 * math.pi * simpson_uniform(_ni(sec, e, mu), mu))
+
+        ref = gl(2048)
+        vals = {"gl1024": gl(N_GAUSS), "simpson4001": sp(4001), "simpson20001": sp(20001)}
+        absolutes += [ref, *vals.values()]
+        rel = {f"{k}_vs_gl2048": v / ref - 1.0 for k, v in vals.items()}
+        worst = max(worst, *(abs(v) for v in rel.values()))
+        out[f"{e:g}"] = rel
+    return {"nodes": out, "max_abs_rel_diff": worst, "acceptance": 1e-6, "accepted": bool(worst < 1e-6), "_absolutes": absolutes}
+
+
 def carry_up_check(sec: dict[str, Any], grid_e: np.ndarray, table_sigma_barn: np.ndarray, level_150_barn: float | None = None) -> dict[str, Any]:
     """Carry-up rule above 150 MeV: sigma(E) = sigma_rec(150) S(E)/S(150) with S = ``bgg.pp_bgg_mb`` (the table's own rule), against the pinned nodes in
     (150, 250] MeV; the 175 / 200 / 250 MeV nodes are named. Ratios only; also the carried level on the 1 MeV grid 150-200 MeV relative to 150 MeV."""
@@ -308,6 +344,9 @@ def run(cache_dir: Path | None = None, out: Path | None = None) -> dict[str, Any
     carry = carry_up_check(sec, npz["grid_e_mev"], npz["sigma_barn"][0])
     absolutes += carry.pop("_absolutes")
     res["carry_up_check"] = carry
+    conv = quadrature_convergence(sec)
+    absolutes += conv.pop("_absolutes")
+    res["quadrature_convergence"] = conv
     doc = {"banner": c.BANNER, "disclosure": DISCLOSURE, **res, "provenance": {**ident, "member": MEMBER, "member_sha256": __import__("hashlib").sha256(text.encode()).hexdigest(),
                                                                                  "code_sha256": c.sha256_file(Path(__file__)),
                                                                                  "quadrature": f"Gauss-Legendre {N_GAUSS}", **c.repo_state(), "pre_run_looks": PRE_RUN_LOOKS}}  # fmt: skip
@@ -327,6 +366,9 @@ def render_report(doc: dict[str, Any]) -> str:
            f"Reading (pre-declared): **{doc['reading']}**.", "", "| node (MeV) | reconstruction / table | within 1e-3 |", "|---|---|---|"]  # fmt: skip
     for e, r in doc["named_nodes"].items():
         out.append(f"| {e} | {r['rec_over_table']:.6f} | {r['within']} |")
+    qc = doc.get("quadrature_convergence")
+    if qc:
+        out += ["", f"Quadrature convergence (GL 1024 / Simpson 4001 / Simpson 20001 against GL 2048 at 100 / 125 / 150 MeV): max |relative difference| {qc['max_abs_rel_diff']:.2e}; accepted (< {qc['acceptance']:g}): **{qc['accepted']}**."]
     cu = doc.get("carry_up_check")
     if cu:
         out += ["", f"Carry-up check above 150 MeV (rule: {cu['rule']}): all nodes within {cu['match']['tolerance']:g}: **{cu['match']['all_within']}** (max |carried/table - 1| = {cu['match']['max_abs_rel_diff']:.2e}).", "",

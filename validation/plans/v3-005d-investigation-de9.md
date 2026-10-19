@@ -208,3 +208,15 @@ The raw LA150 H-1 LAW=5 data end at 150 MeV. Above 150 MeV, the table's level is
 The carry-up is a construction choice that is already disclosed (PP-LEVEL: table/BGG = 1.1008 by construction above 150 MeV). It is **not part of the "dip persists" rule**.
 
 All other reading rules are unchanged.
+
+*Dated note (2026-10-19, after Codex REVIEW-6b2120c4 and before any B0 number exists): B0 angular quadrature.*
+
+The pre-registered phrase "a μ grid four times finer than the builder" is corrected to: **Gauss–Legendre quadrature (1024 nodes) on |μ| ≤ 0.96.** This is a different rule from the builder's 4001-point uniform Simpson grid.
+
+The B0 record carries a **convergence block** at the 100, 125 and 150 MeV nodes, comparing four rules:
+- GL 1024;
+- GL 2048;
+- Simpson 4001;
+- Simpson 20001.
+
+**Pre-declared acceptance:** the quadrature error is below 1e-6 relative, negligible against the 1e-3 match tolerance.
