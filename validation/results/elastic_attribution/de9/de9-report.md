@@ -52,6 +52,8 @@ Slopes dg / d ln s of the scaled family: 150 MeV 0.00023 (0.90-0.95), 0.00012 (0
 | the prediction as frozen | 0.00462 | 0.00087 | the frozen value; the STOP stands |
 | inverse-variance pooled baseline | 0.00393 | 0.00061 | sensitivity; frozen d = 0.00462 stands |
 
+SE: the frozen and A1 rows carry the SE of the reading d (baseline SE and the SE of the frozen delta combined in quadrature); the pooled row carries the SE of the inverse-variance pooled baseline ALONE (the delta term, which shares the D-E3 baseline with the pooled estimate, is not propagated and its covariance is not formed); the fixed-offset rows carry none.
+
 ## B2: share of the elastic plateau gain
 
 - 150 MeV: secondary-proton share 0.407, recoil share 0.094, remainder 0.499

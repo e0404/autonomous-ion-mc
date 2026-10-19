@@ -396,7 +396,7 @@ A different model, or a σ_pp change, needs a new reviewed physics reason and a 
 
 #### Provenance
 
-- **Record:** `validation/results/elastic_attribution/de9/` (`de9.json` `c0c52851…`, `de9-report.md` `0f7d9d4a…` (Lead A rows re-rendered with their SE after review round D-E9-3; body a pure function of the unchanged JSON), `de9-manifest.json` `338aff3a…`, `de9-b0.json` `cf7eae03…`, `de9-b0-report.md` `e946e0fc…`). These are byte copies of `validation/generated/elastic_attribution/de9/` (git projection and manifest).
+- **Record:** `validation/results/elastic_attribution/de9/` (`de9.json` `c0c52851…`, `de9-report.md` `d707b6a1…` (Lead A rows re-rendered with their SE after review round D-E9-3 and the SE footnote after Codex REVIEW-80ec0344; body a pure function of the unchanged JSON), `de9-manifest.json` `338aff3a…`, `de9-b0.json` `cf7eae03…`, `de9-b0-report.md` `e946e0fc…`). These are byte copies of `validation/generated/elastic_attribution/de9/` (git projection and manifest).
 - **Synthesis:** HEAD **7f688e2319cb434b786a31195bcf623759288d9b** (clean). Reviewed SHA identical. Codex **REVIEW-622394ed62e64cb39b6eacf7cc65ac9b**, bound in the manifest by its 8-hex prefix REVIEW-622394ed. Evaluator log `telemetry/test-logs/20261019T051117Z-de9-record`.
 - **Production:** the 32 documents (A1 24, B2 2, B3 6) were produced **once** at db7d84e2 (REVIEW-50f285f6). The B0 record was produced at 0dfca566 (REVIEW-d4f13e17…).
   - The record binds 42 documents by sha256 (manifest `documents_sha256`): the 32 production documents, B0, and nine reused D-E3 / D-E8 documents.
@@ -417,7 +417,7 @@ A different model, or a σ_pp change, needs a new reviewed physics reason and a 
   | `de3-150/200-pp-only`, `-pA-only` | backend, precision, scoring, tallies, elastic, elastic_table_npz_sha256, code |
   | `de3-200-m2prime` | elastic |
 
-- **Leak check** (no absolute cross section): passed. Review round D-E9-3 (REVISE, minor, record hygiene; applied): `de9-b0.json` keeps as keyed dicts the 51 carry-up ratios of the committed BGG formula and the 20 node / 19 midpoint reconstruction-over-table agreement ratios — formula and agreement ratios of the once-only B0 record, not nuclear data — although the common projection note inside the record says "no per-point arrays"; disclosed here and in the results README rather than altered.
+- **Leak check** (no absolute cross section): passed. Review round D-E9-3 (REVISE, minor, record hygiene; applied): `de9-b0.json` keeps as keyed dicts the 51 carry-up ratios of the committed BGG formula and the 20 node / 19 midpoint reconstruction-over-table agreement ratios — formula and agreement ratios of the once-only B0 record, not nuclear data — although the common projection note inside the record says "no per-point arrays"; disclosed here and in the results README rather than altered. Codex REVIEW-80ec0344 (minor) asked for a trim or a formal policy amendment: the Git projection `de9-b0.json` is itself the hash-bound once-only B0 document (attempt log; the D-E9 record's `documents_sha256`), so it is not trimmed; the Git policy section of the results README carries a dated reconciliation for keyed agreement-ratio and formula-ratio series instead.
 
 #### Results (from `de9.json`)
 
@@ -467,7 +467,7 @@ All four readings are "consistent with the realisation distribution", and both �
 |---|---|---|
 | The prediction as frozen | 0.00462 (prediction SE 0.00087) | the frozen value; the STOP stands |
 | A1 realisation mean | 0.00363 (SE 0.00057) | sensitivity; frozen d = 0.00462 stands |
-| Inverse-variance pooled baseline | 0.00393 (SE 0.00061) | sensitivity; frozen d = 0.00462 stands |
+| Inverse-variance pooled baseline | 0.00393 (SE of the pooled baseline alone 0.00061; the δ term, which shares the D-E3 baseline, is not propagated: Codex REVIEW-80ec0344) | sensitivity; frozen d = 0.00462 stands |
 | D-E3 baseline | 0.00281 | sensitivity; frozen d = 0.00462 stands |
 | Archived baseline − 2 SE | 0.00307 | sensitivity; frozen d = 0.00462 stands |
 | Archived baseline + 2 SE | 0.00616 | sensitivity; frozen d = 0.00462 stands |

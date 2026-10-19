@@ -147,7 +147,10 @@ def a1(cmp: Any, docs: dict[tuple[int, str, int], dict[str, Any]], arch: dict[in
 
 def a1_sensitivity(arch200: dict[str, float], delta: tuple[float, float], de3_base: tuple[float, float], a1_200: dict[str, Any] | None) -> dict[str, Any]:
     """The Lead A table at 200 MeV (report-only). Only the first row is the frozen prediction; every other row carries the label
-    ``sensitivity; frozen d = <value> stands`` and is never compared with the band (``compared_with_band`` is false by construction)."""
+    ``sensitivity; frozen d = <value> stands`` and is never compared with the band (``compared_with_band`` is false by construction). ``se``: for the
+    frozen and A1 rows the SE of the reading (baseline SE and delta SE in quadrature); for the pooled row the SE of the pooled baseline ALONE (the delta
+    term shares the D-E3 baseline with the pooled estimate; that covariance is not formed, so no reading SE is claimed for that row); None for the
+    fixed-offset rows."""
     g_arch, se_arch, g_top = arch200["g_ion"], arch200["g_ion_se"], arch200["g_top"]
     d_frozen = g_arch + delta[0] - g_top
     lab = SENS_LABEL.format(d=d_frozen)
@@ -711,6 +714,10 @@ def render_report(doc: dict[str, Any]) -> str:
         out += ["", "## Lead A sensitivity table at 200 MeV (report-only; never compared with the band)", "", "| reading | d | SE | label |", "|---|---|---|---|"]
         for r in doc["a1_sensitivity"].values():  # the SE is the statistical uncertainty of the reading itself; the fixed-offset rows carry none
             out.append(f"| {r['reading']} | {f(r['d'])} | {f(r['se']) if r.get('se') is not None else '–'} | {r['label']} |")
+        out.append("")
+        out.append("SE: the frozen and A1 rows carry the SE of the reading d (baseline SE and the SE of the frozen delta combined in quadrature); the pooled row carries the SE of the "
+                   "inverse-variance pooled baseline ALONE (the delta term, which shares the D-E3 baseline with the pooled estimate, is not propagated and its covariance is not formed); "
+                   "the fixed-offset rows carry none.")
     out += ["", "## B2: share of the elastic plateau gain", ""]
     for e, r in doc["b2"].items():
         out.append(f"- {e} MeV: " + (f"secondary-proton share {f(r['secondary_proton_share'], 3)}, recoil share {f(r['recoil_share'], 3)}, remainder {f(r['remainder_share'], 3)}" if r["status"] == "recorded" else r["status"]))
