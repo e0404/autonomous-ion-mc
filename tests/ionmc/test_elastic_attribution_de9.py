@@ -547,7 +547,7 @@ def test_documents_must_come_from_the_evaluator_head_and_the_reviewed_code() -> 
             rec.check_document_code({"code": {**ok["code"], **patch}}, "doc", freeze)
     with pytest.raises(SystemExit, match="does not contain the reviewed commit"):
         rec.check_document_code(ok, "doc", {**freeze, "ancestor": lambda s, h: False})
-    # the B0 record (published once at the reviewed commit or a descendant): HEAD must contain the reviewed commit, the tree must be clean and the code hash must be
+    # the B0 record (published once at an EARLIER commit): its HEAD must be an ancestor of the reviewed commit, the tree must be clean and the code hash must be
     # the reviewed de9_pp_level.py; the equal-HEAD rule does not apply to it
     f2 = {**freeze, "scripts": {**freeze["scripts"], "de9_pp_level.py": "3" * 64}}
     good = {
@@ -561,13 +561,13 @@ def test_documents_must_come_from_the_evaluator_head_and_the_reviewed_code() -> 
         rec.check_document_code(
             {"provenance": {**good["provenance"], "code_sha256": "4" * 64}}, "de9-b0.json", f2
         )
-    with pytest.raises(SystemExit, match="does not contain the reviewed commit"):
+    with pytest.raises(SystemExit, match="is not an ancestor of"):
         rec.check_document_code(good, "de9-b0.json", {**f2, "ancestor": lambda s, h: False})
     with pytest.raises(SystemExit, match="clean flag"):
         rec.check_document_code(
             {"provenance": {**good["provenance"], "git_clean": False}}, "de9-b0.json", f2
         )
-    with pytest.raises(SystemExit, match="does not contain the reviewed commit"):
+    with pytest.raises(SystemExit, match="is not an ancestor of"):
         rec.check_document_code(
             {"provenance": {"git_clean": True, "code_sha256": "3" * 64}}, "de9-b0.json", f2
         )
@@ -1963,3 +1963,38 @@ def test_monotone_variant_records_its_bracketing_nodes_in_the_sidecar_parameters
             (tmp_path / "out" / f"elastic-proton-{res2['table_id']}.json").read_text()
         )["exploratory"]["parameters"]
     )
+
+
+def test_b0_ancestry_direction_in_a_temporary_git_repo(tmp_path: Path) -> None:
+    """The B0 document's recorded HEAD must be an ancestor of (or equal to) the reviewed commit: older B0 / newer reviewed commit is accepted, the reverse refused."""
+    repo, older, newer = _repo9(tmp_path)
+    anc = lambda a, b: rec.is_ancestor(a, b, repo)  # noqa: E731
+    scripts = {"de3_probes.py": "1" * 64, "de9_pp_level.py": "3" * 64}
+
+    def b0doc(head: str) -> dict[str, Any]:
+        return {"provenance": {"git_head": head, "git_clean": True, "code_sha256": "3" * 64}}
+
+    rec.check_document_code(
+        b0doc(older),
+        "de9-b0.json",
+        {"sha": newer, "head": newer, "scripts": scripts, "ancestor": anc},
+    )  # B0 at the older commit, reviewed SHA newer
+    rec.check_document_code(
+        b0doc(newer),
+        "de9-b0.json",
+        {"sha": newer, "head": newer, "scripts": scripts, "ancestor": anc},
+    )  # equal is accepted
+    with pytest.raises(
+        SystemExit, match="is not an ancestor of"
+    ):  # the reverse: B0 recorded at a NEWER commit than the reviewed one
+        rec.check_document_code(
+            b0doc(newer),
+            "de9-b0.json",
+            {"sha": older, "head": newer, "scripts": scripts, "ancestor": anc},
+        )
+    with pytest.raises(SystemExit, match="Not a valid commit name"):
+        rec.check_document_code(
+            b0doc("f" * 40),
+            "de9-b0.json",
+            {"sha": newer, "head": newer, "scripts": scripts, "ancestor": anc},
+        )  # an unknown commit is refused too

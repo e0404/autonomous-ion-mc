@@ -254,10 +254,14 @@ def check_document_code(doc: dict[str, Any], what: str, freeze: dict[str, Any]) 
     cd = doc.get("code") or doc.get("provenance") or {}
     if "code" in doc and cd.get("git_head") != freeze["head"] or cd.get("git_clean") is not True:
         raise SystemExit(f"{what}: recorded HEAD / clean flag differ from the evaluator HEAD {freeze['head'][:12]} (all documents must come from one commit)")
-    # the B0 record (provenance, no ``code`` block) was published once at the reviewed commit or a descendant: it needs a clean tree, a HEAD that contains the
-    # reviewed commit, and the reviewed de9_pp_level.py hash (below); the equal-HEAD rule stays for the A1 / B2 / B3 run documents
-    if not isinstance(cd.get("git_head"), str) or not freeze["ancestor"](freeze["sha"], cd["git_head"]):
-        raise SystemExit(f"{what}: recorded HEAD does not contain the reviewed commit {freeze['sha'][:12]}")
+    # the B0 record (provenance, no ``code`` block) was published once at an EARLIER commit than the one that froze the current code: its recorded HEAD must be an
+    # ancestor of (or equal to) the reviewed commit, its tree clean and its de9_pp_level.py hash the reviewed one (below); the equal-HEAD rule stays for the A1 / B2 / B3
+    # run documents
+    if "code" in doc:
+        if not isinstance(cd.get("git_head"), str) or not freeze["ancestor"](freeze["sha"], cd["git_head"]):
+            raise SystemExit(f"{what}: recorded HEAD does not contain the reviewed commit {freeze['sha'][:12]}")
+    elif not isinstance(cd.get("git_head"), str) or not freeze["ancestor"](cd["git_head"], freeze["sha"]):
+        raise SystemExit(f"{what}: the recorded HEAD {str(cd.get('git_head'))[:12]} is not an ancestor of (or equal to) the reviewed commit {freeze['sha'][:12]}")
     if "code" in doc:  # a harness document: the code hashes are REQUIRED and must equal those of the reviewed commit
         sh = cd.get("scripts_sha256")
         if not isinstance(sh, dict) or not sh:
