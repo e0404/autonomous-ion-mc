@@ -252,9 +252,11 @@ def check_freeze(review_id: str | None, reviewed_sha: str | None, state: dict[st
 def check_document_code(doc: dict[str, Any], what: str, freeze: dict[str, Any]) -> None:
     """A run document must record the evaluator's HEAD, a clean tree, and (for the files it hashes) the code of the reviewed commit."""
     cd = doc.get("code") or doc.get("provenance") or {}
-    if cd.get("git_head") != freeze["head"] or cd.get("git_clean") is not True:
+    if "code" in doc and cd.get("git_head") != freeze["head"] or cd.get("git_clean") is not True:
         raise SystemExit(f"{what}: recorded HEAD / clean flag differ from the evaluator HEAD {freeze['head'][:12]} (all documents must come from one commit)")
-    if not freeze["ancestor"](freeze["sha"], cd["git_head"]):
+    # the B0 record (provenance, no ``code`` block) was published once at the reviewed commit or a descendant: it needs a clean tree, a HEAD that contains the
+    # reviewed commit, and the reviewed de9_pp_level.py hash (below); the equal-HEAD rule stays for the A1 / B2 / B3 run documents
+    if not isinstance(cd.get("git_head"), str) or not freeze["ancestor"](freeze["sha"], cd["git_head"]):
         raise SystemExit(f"{what}: recorded HEAD does not contain the reviewed commit {freeze['sha'][:12]}")
     if "code" in doc:  # a harness document: the code hashes are REQUIRED and must equal those of the reviewed commit
         sh = cd.get("scripts_sha256")
@@ -386,7 +388,12 @@ def verify_expected_tables(expected: dict[str, dict[str, str]], scratch: Path, d
             if not isinstance(ex, dict) or any(k not in ex or ex[k] != val or type(ex[k]) is not type(val) for k, val in BUILDER_CONFIG[v].items()):
                 raise SystemExit(f"expected table of {v!r}: the sidecar does not define the {v} construction (frozen configuration: model, variant, Pauli fields, beta, pp level, unfolding, pinned inputs)")
         else:
-            if not isinstance(ex, dict) or ex.get("d_e3_variant") != v or ex.get("parameters") != _parameters(v) or ex.get("source_table_id") != c.TABLE_ID:
+            params = dict(ex.get("parameters") or {}) if isinstance(ex, dict) else {}
+            br = params.pop("bracketing_nodes_mev", None)  # recorded by the monotone variant: the table nodes that bracket 125 MeV
+            br_ok = v != "pp-level-monotone" or (isinstance(br, list) and len(br) == 2 and all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in br) and br[0] <= 125.0 + 1e-9 <= br[1] + 2e-9 and br[0] <= br[1] and br[1] - br[0] < 5.0)
+            if v != "pp-level-monotone" and br is not None:
+                br_ok = False
+            if not isinstance(ex, dict) or ex.get("d_e3_variant") != v or params != _parameters(v) or not br_ok or ex.get("source_table_id") != c.TABLE_ID:
                 raise SystemExit(f"expected table of {v!r}: the sidecar does not define this variant (d_e3_variant / frozen parameters / source table)")
 
 

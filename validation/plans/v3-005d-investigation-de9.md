@@ -233,3 +233,9 @@ The 1e-6 acceptance is therefore data-informed for that node.
 - The expected error is near machine precision, far below 1e-3.
 
 **Reading rules unaffected.** The 100 MeV node is an endpoint, not interior to the dip test. Its table value was already known.
+
+*Dated note (2026-10-19; after Codex review and B0's result; before any B3 number).*
+
+**(a) B3 monotone variant.** The table has no 125 MeV node (the cache rebuild failed before any B3 run). "The table's own 125 MeV level" therefore means the table's p-p level at 125 MeV, interpolated between bracketing nodes by the table's convention. It is carried upward by S(E)/S(125), with S = `bgg.pp_bgg_mb`. This makes a report-only sensitivity precise; B0's result does not bear on it.
+
+**(b) B0 binding.** B0 ran once, at clean, reviewed HEAD 0dfca566, before the B3 defect was found. It stands and is not re-run. The harness fix changes the frozen `make_variant_tables.py`. The evaluator therefore binds B0 by ancestry of its HEAD to the reviewed SHA, the `de9_pp_level.py` hash, a clean tree and the attempt-log digest. A1, B2 and B3 stay bound by HEAD equality.

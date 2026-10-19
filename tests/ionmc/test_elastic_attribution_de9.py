@@ -309,26 +309,50 @@ def test_monotone_variant_carries_the_125_mev_level_by_the_tables_own_s_of_e() -
     from ionmc.nuclear import bgg
     from validation.scripts.elastic_attribution import make_variant_tables as mv
 
-    base = _base_arrays()
-    a, _ = mv._build_arrays(mv.PP_LEVEL_MONOTONE, base, ("H-1", "C-12"))
+    # a grid WITHOUT a 125 MeV node (like the 400-node table): the level at 125 MeV is linear in E between the bracketing nodes (ElasticTable.sigma_barn)
+    grid = np.array([100.0, 120.0, 124.8, 126.1, 130.0, 150.0, 175.0, 250.0])
+    sig = np.array([[5.0, 4.8, 4.6, 4.5, 3.8, 4.5, 4.1, 3.4], [1.0] * 8])
+    base = {
+        "grid_e_mev": grid,
+        "sigma_barn": sig,
+        "edges_mu": np.zeros((2, 8, 5)),
+        "valid": np.ones((2, 8), dtype=np.int8),
+    }
+    a, stats = mv._build_arrays(mv.PP_LEVEL_MONOTONE, base, ("H-1", "C-12"))
     s = a["sigma_barn"][0]
-    assert np.array_equal(s[:2], base["sigma_barn"][0][:2])  # nodes <= 125 MeV unchanged
-    for k in range(2, 8):
+    s125 = 4.6 + (4.5 - 4.6) * (125.0 - 124.8) / (126.1 - 124.8)
+    assert stats == {"bracketing_nodes_mev": [124.8, 126.1]}
+    assert np.array_equal(
+        s[:3], sig[0][:3]
+    )  # nodes <= 125 MeV unchanged (the node below the anchor included)
+    for k in range(3, 8):  # every node above 125 MeV, the upper bracketing node included
         assert s[k] == pytest.approx(
-            base["sigma_barn"][0][1]
-            * bgg.pp_bgg_mb(float(base["grid_e_mev"][k]))
-            / bgg.pp_bgg_mb(125.0),
-            rel=1e-14,
+            s125 * bgg.pp_bgg_mb(float(grid[k])) / bgg.pp_bgg_mb(125.0), rel=1e-14
         )
     assert (
-        np.all(np.diff(s[1:]) <= 0.0) and base["sigma_barn"][0][4] > base["sigma_barn"][0][2]
+        np.all(np.diff(s[2:]) <= 0.0) and sig[0][5] > sig[0][4]
     )  # the input has the upturn, the variant does not
-    assert np.array_equal(a["edges_mu"], base["edges_mu"]) and np.array_equal(
-        a["sigma_barn"][1], base["sigma_barn"][1]
+    assert (
+        np.array_equal(a["edges_mu"], base["edges_mu"])
+        and np.array_equal(a["sigma_barn"][1], sig[1])
+        and np.array_equal(base["sigma_barn"], sig)
     )
-    bad = {**base, "grid_e_mev": base["grid_e_mev"] + 0.5}
-    with pytest.raises(AssertionError, match="no 125 MeV node"):
-        mv._build_arrays(mv.PP_LEVEL_MONOTONE, bad, ("H-1", "C-12"))
+    # a grid with an exact 125 MeV node: the node value itself
+    g2 = np.array([100.0, 125.0, 130.0, 150.0])
+    b2 = {
+        **base,
+        "grid_e_mev": g2,
+        "sigma_barn": np.array([[5.0, 4.6, 3.8, 4.5], [1.0] * 4]),
+        "edges_mu": np.zeros((2, 4, 5)),
+        "valid": np.ones((2, 4), dtype=np.int8),
+    }
+    a2, st2 = mv._build_arrays(mv.PP_LEVEL_MONOTONE, b2, ("H-1", "C-12"))
+    assert (
+        st2 == {"bracketing_nodes_mev": [125.0, 125.0]}
+        and a2["sigma_barn"][0][1] == 4.6
+        and a2["sigma_barn"][0][2]
+        == pytest.approx(4.6 * bgg.pp_bgg_mb(130.0) / bgg.pp_bgg_mb(125.0), rel=1e-14)
+    )
 
 
 def test_variants_are_registered_with_parameters_and_the_no_inversion_rule() -> None:
@@ -523,13 +547,29 @@ def test_documents_must_come_from_the_evaluator_head_and_the_reviewed_code() -> 
             rec.check_document_code({"code": {**ok["code"], **patch}}, "doc", freeze)
     with pytest.raises(SystemExit, match="does not contain the reviewed commit"):
         rec.check_document_code(ok, "doc", {**freeze, "ancestor": lambda s, h: False})
-    b0doc = {
-        "provenance": {"git_head": "a" * 40, "git_clean": True}
-    }  # the projected B0 record carries its HEAD in provenance
-    rec.check_document_code(b0doc, "de9-b0.json", freeze)
-    with pytest.raises(SystemExit, match="differ from the evaluator HEAD"):
+    # the B0 record (published once at the reviewed commit or a descendant): HEAD must contain the reviewed commit, the tree must be clean and the code hash must be
+    # the reviewed de9_pp_level.py; the equal-HEAD rule does not apply to it
+    f2 = {**freeze, "scripts": {**freeze["scripts"], "de9_pp_level.py": "3" * 64}}
+    good = {
+        "provenance": {"git_head": "d" * 40, "git_clean": True, "code_sha256": "3" * 64}
+    }  # an ancestor-or-descendant commit, not the evaluator HEAD
+    rec.check_document_code(good, "de9-b0.json", f2)
+    rec.check_document_code(
+        {"provenance": {**good["provenance"], "git_head": "a" * 40}}, "de9-b0.json", f2
+    )
+    with pytest.raises(SystemExit, match="code_sha256 is missing or differs"):
         rec.check_document_code(
-            {"provenance": {"git_head": "d" * 40, "git_clean": True}}, "de9-b0.json", freeze
+            {"provenance": {**good["provenance"], "code_sha256": "4" * 64}}, "de9-b0.json", f2
+        )
+    with pytest.raises(SystemExit, match="does not contain the reviewed commit"):
+        rec.check_document_code(good, "de9-b0.json", {**f2, "ancestor": lambda s, h: False})
+    with pytest.raises(SystemExit, match="clean flag"):
+        rec.check_document_code(
+            {"provenance": {**good["provenance"], "git_clean": False}}, "de9-b0.json", f2
+        )
+    with pytest.raises(SystemExit, match="does not contain the reviewed commit"):
+        rec.check_document_code(
+            {"provenance": {"git_clean": True, "code_sha256": "3" * 64}}, "de9-b0.json", f2
         )
 
 
@@ -733,7 +773,8 @@ def _sidecar_for(v: str, pin_tid: str, sha: str) -> dict[str, Any]:
     elif v != "pinned":
         side["exploratory"] = {
             "d_e3_variant": v,
-            "parameters": mv._parameters(v),
+            "parameters": mv._parameters(v)
+            | ({"bracketing_nodes_mev": [124.8, 126.1]} if v == "pp-level-monotone" else {}),
             "source_table_id": pin_tid,
         }
     return side
@@ -1630,6 +1671,10 @@ def test_variant_identity_is_authenticated_from_the_sidecar_not_from_variants_js
              ("pp-level-0.90-ge150", lambda s: s["exploratory"].update(parameters={"sigma_pp_scale_at_nodes_ge_150_mev": 0.95, "shape": "unchanged"}), "does not define this variant"),
              ("pp-level-monotone", lambda s: s["exploratory"].update(source_table_id="0" * 64), "does not define this variant"),
              ("pp-only", lambda s: s.pop("exploratory"), "does not define this variant"),
+             ("pp-level-monotone", lambda s: s["exploratory"]["parameters"].pop("bracketing_nodes_mev"), "does not define this variant"),
+             ("pp-level-monotone", lambda s: s["exploratory"]["parameters"].update(bracketing_nodes_mev=[126.0, 127.0]), "does not define this variant"),
+             ("pp-level-monotone", lambda s: s["exploratory"]["parameters"].update(bracketing_nodes_mev=[100.0, 150.0]), "does not define this variant"),
+             ("pp-level-0.90-ge150", lambda s: s["exploratory"]["parameters"].update(bracketing_nodes_mev=[124.8, 126.1]), "does not define this variant"),
              ("m2prime", lambda s: s["exploratory"].update(pauli_variant="bdc-pn"), "does not define the m2prime construction"),
              ("m2prime", lambda s: s["exploratory"].update(pauli_emin_mev=5.0), "does not define the m2prime construction"),
              ("m2prime", lambda s: s["exploratory"].update(model="m2-optical-glauber"), "does not define the m2prime construction"),
@@ -1883,3 +1928,38 @@ def test_b0_run_failures_are_recorded_and_bounded_by_two_attempts(tmp_path: Path
         "started",
         "failed",
     ] and not (tmp_path / "out2" / "git" / "de9-b0.json").exists()
+
+
+def test_monotone_variant_records_its_bracketing_nodes_in_the_sidecar_parameters(
+    tmp_path: Path,
+) -> None:
+    """``_write_variant`` writes the bracketing node energies into ``exploratory.parameters`` (not into the normalisation block), the validator accepts them."""
+    from validation.scripts.elastic_attribution import make_variant_tables as mv
+
+    grid = np.array([100.0, 120.0, 124.8, 126.1, 130.0, 150.0, 175.0, 250.0])
+    base = {
+        "grid_e_mev": grid,
+        "sigma_barn": np.array([[5.0, 4.8, 4.6, 4.5, 3.8, 4.5, 4.1, 3.4], [1.0] * 8]),
+        "edges_mu": np.zeros((2, 8, 5)),
+        "valid": np.ones((2, 8), dtype=np.int8),
+    }
+    MP.setattr(mv, "_assert_table", lambda *a, **k: None)
+    (tmp_path / "out").mkdir()
+    pinned = {"target_names": ["H-1", "C-12"]}
+    res = mv._write_variant(mv.PP_LEVEL_MONOTONE, pinned, base, tmp_path / "out")
+    side = json.loads((tmp_path / "out" / f"elastic-proton-{res['table_id']}.json").read_text())
+    assert (
+        side["exploratory"]["parameters"]["bracketing_nodes_mev"] == [124.8, 126.1]
+        and "bracketing_nodes_mev" not in side["exploratory"]["normalisation"]
+    )
+    assert (
+        side["exploratory"]["parameters"]["anchor_energy_mev"] == 125.0
+        and "linear in E" in side["exploratory"]["parameters"]["anchor_level"]
+    )
+    res2 = mv._write_variant("pp-level-0.90-ge150", pinned, base, tmp_path / "out")
+    assert (
+        "bracketing_nodes_mev"
+        not in json.loads(
+            (tmp_path / "out" / f"elastic-proton-{res2['table_id']}.json").read_text()
+        )["exploratory"]["parameters"]
+    )
