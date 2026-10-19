@@ -678,7 +678,7 @@ NZ = 400
 PL_EM = 6.0
 REUSED_V = ("all", "pp-only", "pA-only", "emonly")
 B3_V = ("pp-level-0.90-ge150", "pp-level-0.95-ge150", "pp-level-monotone")
-TABLE_V = ("all", "pp-only", "pA-only", "pinned", "m2prime", "rb", *B3_V)
+TABLE_V = ("all", "pp-only", "pA-only", "pinned", "m2prime", "m2", "rb", *B3_V)
 GAINS = {
     "all": 0.025,
     "pp-only": 0.020,
@@ -725,8 +725,11 @@ def _sidecar_for(v: str, pin_tid: str, sha: str) -> dict[str, Any]:
 
     side: dict[str, Any] = {"label": v, "npz_sha256": sha}
     if v in rec.BUILDER_IDENTITY:
-        model, pauli, emin = rec.BUILDER_IDENTITY[v]
-        side["exploratory"] = {"model": model, "pauli_variant": pauli, "pauli_emin_mev": emin}
+        side["exploratory"] = {
+            **rec.BUILDER_CONFIG[v],
+            "change": "p + A shapes",
+            "purpose": "diagnostic",
+        }
     elif v != "pinned":
         side["exploratory"] = {
             "d_e3_variant": v,
@@ -929,7 +932,13 @@ def _write_inputs(
     }
     (tmp / "archive.json").write_text(json.dumps({"steps": steps}))
     b0doc = _synthetic_b0(tmp, exp)
-    inp: dict[str, Any] = {"de3": de3, "de9": de9, "archive": tmp / "archive.json", "hashes": tmp / "hashes.md", "b0": b0doc, "expected": exp, "scratch": scratch,
+    de7 = tmp / "de7.json"
+    de7.write_text(
+        json.dumps(
+            {"variants": {rec.DE7_NAME[v]: {"identity": dict(exp[v])} for v in rec.DE7_NAME}}
+        )
+    )
+    inp: dict[str, Any] = {"de7": de7, "de3": de3, "de9": de9, "archive": tmp / "archive.json", "hashes": tmp / "hashes.md", "b0": b0doc, "expected": exp, "scratch": scratch,
                            "attempts": tmp / "attempts.json", "de8": tmp / "de8.json", "tmp": tmp}  # fmt: skip
     CTX["inp"] = inp
     _relog(inp)
@@ -941,7 +950,7 @@ def _build(inp: dict[str, Any], **kw: Any) -> dict[str, Any]:
     return rec.build_document(
         inp["de3"], inp["de9"], kw["b0"] if "b0" in kw else inp["b0"], archive=inp["archive"], absolutes=kw.get("absolutes"), expected_tables=kw.get("expected", inp["expected"]),
         hash_sources=(inp["hashes"],), allow_incomplete=kw.get("allow_incomplete", False), freeze=kw.get("freeze"), scratch_cache=kw.get("scratch", inp["scratch"]),
-        attempts_path=kw.get("attempts", inp["attempts"]), de8_record=inp["de8"],
+        attempts_path=kw.get("attempts", inp["attempts"]), de8_record=inp["de8"], de7_record=inp["de7"],
     )  # fmt: skip
 
 
@@ -1350,6 +1359,7 @@ def _run_patched(inp: dict[str, Any]) -> None:
     MP.setattr(rec, "ARCHIVE_JSON", inp["archive"])
     MP.setattr(rec, "ATTEMPTS_DEFAULT", inp["attempts"])
     MP.setattr(rec, "DE8_RECORD", inp["de8"])
+    MP.setattr(rec, "DE7_RECORD", inp["de7"])
     MP.setattr(rec, "hashes_at", lambda sha, repo=None: {"de3_probes.py": "1" * 64})
     MP.setattr(rec, "working_hashes", lambda repo=None: {"de3_probes.py": "1" * 64})
     MP.setattr(rec, "is_ancestor", lambda s, h, repo=None: True)
@@ -1583,6 +1593,12 @@ def _retable(inp: dict[str, Any], v: str, mutate: Any) -> dict[str, dict[str, st
         if v in vj[blk]:
             vj[blk][v] = {"table_id": new["table_id"]}
     (inp["scratch"] / "variants.json").write_text(json.dumps(vj))
+    if (
+        v in rec.DE7_NAME
+    ):  # keep the committed D-E7 record consistent: only the semantic check can refuse
+        d7 = json.loads(inp["de7"].read_text())
+        d7["variants"][rec.DE7_NAME[v]]["identity"] = dict(new)
+        inp["de7"].write_text(json.dumps(d7))
     return {**inp["expected"], v: new}
 
 
@@ -1602,6 +1618,11 @@ def test_variant_identity_is_authenticated_from_the_sidecar_not_from_variants_js
     vj = json.loads((inp2["scratch"] / "variants.json").read_text())
     vj["builders"]["m2prime"] = {"table_id": inp2["expected"]["rb"]["table_id"]}
     (inp2["scratch"] / "variants.json").write_text(json.dumps(vj))
+    d7 = json.loads(inp2["de7"].read_text())
+    d7["variants"]["M2prime"]["identity"] = dict(
+        inp2["expected"]["rb"]
+    )  # even a D-E7 record relabelled the same way cannot make the sidecar define m2prime
+    inp2["de7"].write_text(json.dumps(d7))
     with pytest.raises(SystemExit, match="does not define the m2prime construction"):
         _build(inp2, expected={**inp2["expected"], "m2prime": inp2["expected"]["rb"]})
     # each defining field, with everything else consistent
@@ -1613,6 +1634,15 @@ def test_variant_identity_is_authenticated_from_the_sidecar_not_from_variants_js
              ("m2prime", lambda s: s["exploratory"].update(pauli_emin_mev=5.0), "does not define the m2prime construction"),
              ("m2prime", lambda s: s["exploratory"].update(model="m2-optical-glauber"), "does not define the m2prime construction"),
              ("rb", lambda s: s["exploratory"].update(pauli_variant="clementel-villi"), "does not define the rb construction"),
+             ("m2prime", lambda s: s["exploratory"].update(beta="horiuchi-table"), "does not define the m2prime construction"),
+             ("m2prime", lambda s: s["exploratory"].update(pp_level="said-anchored-ge150"), "does not define the m2prime construction"),
+             ("m2prime", lambda s: s["exploratory"].update(unfold="formfactor"), "does not define the m2prime construction"),
+             ("m2prime", lambda s: s["exploratory"].update(inputs_unpinned=True), "does not define the m2prime construction"),
+             ("m2prime", lambda s: s["exploratory"].update(variant="V-b"), "does not define the m2prime construction"),
+             ("m2prime", lambda s: s["exploratory"].update(pauli_emin_mev=80), "does not define the m2prime construction"),
+             ("m2prime", lambda s: s["exploratory"].pop("beta"), "does not define the m2prime construction"),
+             ("m2", lambda s: s["exploratory"].update(pauli_variant="clementel-villi", pauli_emin_mev=80.0), "does not define the m2 construction"),
+             ("rb", lambda s: s["exploratory"].update(pp_level="said-anchored-ge150"), "does not define the rb construction"),
              ("pinned", lambda s: s.update(exploratory={"d_e3_variant": "all"}), "pinned table differs")]  # fmt: skip
     for i, (v, mutate, msg) in enumerate(cases):
         inp3 = _write_inputs(
@@ -1624,7 +1654,7 @@ def test_variant_identity_is_authenticated_from_the_sidecar_not_from_variants_js
             (inp3["tmp"] / "pin.json").write_text(json.dumps(new_exp["pinned"]))
             MP.setattr(c, "TABLE_ID", new_exp["pinned"]["table_id"])
         with pytest.raises(SystemExit, match=msg):
-            rec.verify_expected_tables(new_exp, inp3["scratch"])
+            rec.verify_expected_tables(new_exp, inp3["scratch"], inp3["de7"])
 
 
 def test_b0_record_is_bound_authenticated_and_schema_checked(tmp_path: Path) -> None:
@@ -1649,9 +1679,34 @@ def test_b0_record_is_bound_authenticated_and_schema_checked(tmp_path: Path) -> 
         _relog(inp)
         with pytest.raises(SystemExit, match="lacks"):
             _build(inp)
-    put(quadrature_convergence={**good["quadrature_convergence"], "accepted": "yes"})
-    with pytest.raises(SystemExit, match="accepted is missing or not a boolean"):
-        _build(inp)
+    qc = good["quadrature_convergence"]
+    nan_nodes = json.loads(json.dumps(qc["nodes"]))
+    nan_nodes["125"]["gl1024_vs_gl2048"] = float("nan")
+    big_nodes = json.loads(json.dumps(qc["nodes"]))
+    big_nodes["150"]["simpson4001_vs_gl2048"] = 1e-5
+    small = json.loads(json.dumps(qc["nodes"]))
+    small["100"]["simpson20001_vs_gl2048"] = 4e-7
+    for qbad, msg in (
+        ({"accepted": True}, "lacks the acceptance threshold"),
+        ({**qc, "accepted": "yes"}, "disagrees with the acceptance"),
+        ({**qc, "acceptance": 1e-3}, "lacks the acceptance threshold"),
+        ({**qc, "nodes": nan_nodes}, "not a finite number"),
+        (
+            {**qc, "nodes": big_nodes, "max_abs_rel_diff": 1e-5, "accepted": True},
+            "disagrees with the acceptance",
+        ),
+        ({**qc, "nodes": small}, "not the maximum"),
+        (
+            {**qc, "nodes": {k: v for k, v in qc["nodes"].items() if k != "125"}},
+            "lacks the acceptance threshold",
+        ),
+        ({**qc, "nodes": {**qc["nodes"], "100": {"gl1024_vs_gl2048": 0.0}}}, "lacks the GL 1024"),
+        ({**qc, "accepted": not qc["accepted"]}, "disagrees with the acceptance"),
+        ({k: v for k, v in qc.items() if k != "acceptance"}, "lacks the acceptance threshold"),
+    ):
+        put(quadrature_convergence=qbad)
+        with pytest.raises(SystemExit, match=msg):
+            _build(inp)
     put(match={"all_within": "maybe"})
     with pytest.raises(SystemExit, match="malformed"):
         _build(inp)
@@ -1696,14 +1751,12 @@ def test_b0_record_is_bound_authenticated_and_schema_checked(tmp_path: Path) -> 
 def test_unaccepted_quadrature_convergence_makes_the_record_incomplete(tmp_path: Path) -> None:
     inp = _write_inputs(tmp_path)
     good = json.loads(inp["b0"].read_text())
-    inp["b0"].write_text(
-        json.dumps(
-            {
-                **good,
-                "quadrature_convergence": {**good["quadrature_convergence"], "accepted": False},
-            }
-        )
+    qc = json.loads(json.dumps(good["quadrature_convergence"]))
+    qc["nodes"]["125"]["simpson4001_vs_gl2048"] = (
+        2.0e-6  # a consistent, genuinely failing record: above the pre-declared 1e-6
     )
+    qc["max_abs_rel_diff"], qc["accepted"] = 2.0e-6, False
+    inp["b0"].write_text(json.dumps({**good, "quadrature_convergence": qc}))
     _relog(inp)
     doc = _build(inp)
     assert (
@@ -1719,27 +1772,62 @@ def test_unaccepted_quadrature_convergence_makes_the_record_incomplete(tmp_path:
     )
 
 
-def test_b0_producer_is_once_only_and_logs_the_published_projection(tmp_path: Path) -> None:
-    exp = {"pinned": {"table_id": "a" * 64, "npz_sha256": "b" * 64}}
-    b0doc = _synthetic_b0(tmp_path, exp)
-    proj = json.loads(b0doc.read_text())
+def _b0_cache(tmp: Path, member: str | None = None) -> Path:
+    """A synthetic data cache that ``de9_pp_level.run`` can read: the LA150-like zip object, the pinned sidecar and the pinned node values."""
+    import zipfile
+
     MP.setattr(b0, "N_GAUSS", 64)
+    MP.setattr(c, "TABLE_ID", "t" * 64)
+    cd = tmp / "cache"
+    (cd / "derived").mkdir(parents=True)
+    (cd / "objects").mkdir()
     sec = _sec([4.0e-3, 1.0e-3, 4.0e-3], energies=[1.0e7, 1.25e8, 1.5e8])
-    grid = np.arange(100.0, 151.0, 10.0)
-    table = np.array([b0.sigma_ni_barn(sec, float(e)) for e in grid])
-    doc, absolutes = b0.assemble(
-        sec,
-        grid,
-        table,
-        {"source_sha256": rec.LA150_ZIP_SHA256, "table_id": "a" * 64, "npz_sha256": "b" * 64},
-        rec.LA150_H1_MEMBER_SHA256,
-    )
-    assert (
-        proj["provenance"]["pre_run_looks"] == b0.PRE_RUN_LOOKS
-        and doc["quadrature_convergence"]["accepted"] is True
-    )
+    zp = tmp / "la150.zip"
+    with zipfile.ZipFile(zp, "w") as z:
+        z.writestr(
+            b0.MEMBER,
+            member
+            if member is not None
+            else _synthetic_endf([1.0e7, 1.25e8, 1.5e8], [4.0e-3, 1.0e-3, 4.0e-3]),
+        )
+    zsha = hashlib.sha256(zp.read_bytes()).hexdigest()
+    (cd / "objects" / zsha).write_bytes(zp.read_bytes())
+    grid = np.arange(100.0, 251.0, 10.0)
+    sig = np.zeros((2, grid.size))
+    from ionmc.nuclear import bgg
+
+    rec150 = b0.sigma_ni_barn(sec, 150.0)
+    sig[0] = [
+        b0.sigma_ni_barn(sec, float(e))
+        if e <= 150.0
+        else rec150 * bgg.pp_bgg_mb(float(e)) / bgg.pp_bgg_mb(150.0)
+        for e in grid
+    ]
+    np.savez(cd / "derived" / f"elastic-proton-{'t' * 64}.npz", grid_e_mev=grid, sigma_barn=sig)
+    side = {
+        "table_id": "t" * 64,
+        "npz_sha256": c.sha256_file(cd / "derived" / f"elastic-proton-{'t' * 64}.npz"),
+        "sources": {b0.SOURCE_KEY: {"sha256": zsha}},
+    }
+    (cd / "derived" / f"elastic-proton-{'t' * 64}.json").write_text(json.dumps(side))
+    return cd
+
+
+def test_b0_run_is_once_only_and_the_attempt_precedes_any_work(tmp_path: Path) -> None:
+    cd = _b0_cache(tmp_path)
     out, att = tmp_path / "out", tmp_path / "att.json"
-    b0.publish(doc, absolutes, [], out, att)
+    seen: list[bool] = []
+    real_locate = b0.locate_raw
+
+    def spy(cache_dir: Path) -> Any:
+        seen.append(
+            att.is_file() and json.loads(att.read_text())[-1]["outcome"] == "started"
+        )  # the attempt record exists BEFORE the inputs are located
+        return real_locate(cache_dir)
+
+    MP.setattr(b0, "locate_raw", spy)
+    doc = b0.run(cd, out, att)
+    assert seen == [True] and doc["quadrature_convergence"]["accepted"] is True
     log = json.loads(att.read_text())
     assert [r["outcome"] for r in log] == ["started", "published-valid"] and log[0][
         "producer"
@@ -1748,19 +1836,50 @@ def test_b0_producer_is_once_only_and_logs_the_published_projection(tmp_path: Pa
         rec.attempt_log_sha(log, "de9-b0.json")
         == hashlib.sha256((out / "git" / "de9-b0.json").read_bytes()).hexdigest()
     )
+    MP.setattr(
+        b0,
+        "locate_raw",
+        lambda cache_dir: (_ for _ in ()).throw(
+            AssertionError("no work may precede the published-target refusal")
+        ),
+    )
     with pytest.raises(SystemExit, match="exists"):
-        b0.publish(doc, absolutes, [], out, att)  # never overwritten, never re-run
+        b0.run(
+            cd, out, att
+        )  # a published record is refused before any work, never overwritten, never re-run
     assert len(json.loads(att.read_text())) == 2
-    leaky = json.loads(json.dumps(doc, default=float))
-    with pytest.raises(SystemExit, match="leak check failed"):
-        b0.publish(
-            {**leaky, "nodes": {"100": {"rec_over_table": absolutes[0], "within": True}}},
-            absolutes,
-            [],
-            tmp_path / "out2",
-            tmp_path / "att2.json",
-        )
-    assert [r["outcome"] for r in json.loads((tmp_path / "att2.json").read_text())] == [
+
+
+def test_b0_run_failures_are_recorded_and_bounded_by_two_attempts(tmp_path: Path) -> None:
+    cd = _b0_cache(tmp_path, member="not an ENDF section\n")
+    cd2 = _b0_cache(
+        tmp_path / "second" if (tmp_path / "second").mkdir() is None else tmp_path
+    )  # built before parse_h1_mt2 is patched
+    out, att = tmp_path / "out", tmp_path / "att.json"
+    for _ in range(2):
+        with pytest.raises(Exception) as exc:
+            b0.run(cd, out, att)
+        assert not isinstance(exc.value, SystemExit)  # a parse failure, not a refusal
+        assert not (out / "git" / "de9-b0.json").exists()
+    assert [r["outcome"] for r in json.loads(att.read_text())] == [
+        "started",
+        "failed",
         "started",
         "failed",
     ]
+    parsed: list[str] = []
+    with (
+        pytest.MonkeyPatch.context() as m,
+        pytest.raises(SystemExit, match="two attempts without a published document"),
+    ):
+        m.setattr(b0, "parse_h1_mt2", lambda text: parsed.append(text) or {})
+        b0.run(cd, out, att)
+    assert not parsed and len(json.loads(att.read_text())) == 4  # no further attempt, no work
+    # a leak-check failure after the calculation is a failed attempt as well (no document)
+    MP.setattr(b0, "leak_violations", lambda proj, absolutes: ["forced"])
+    with pytest.raises(SystemExit, match="leak check failed"):
+        b0.run(cd2, tmp_path / "out2", tmp_path / "att2.json")
+    assert [r["outcome"] for r in json.loads((tmp_path / "att2.json").read_text())] == [
+        "started",
+        "failed",
+    ] and not (tmp_path / "out2" / "git" / "de9-b0.json").exists()

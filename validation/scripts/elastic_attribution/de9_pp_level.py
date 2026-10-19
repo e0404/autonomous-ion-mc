@@ -354,33 +354,34 @@ def assemble(sec: dict[str, Any], grid_e: np.ndarray, table_sigma_barn: np.ndarr
     return doc, absolutes
 
 
-def publish(doc: dict[str, Any], absolutes: list[float], inputs: list[Path], out: Path | None = None, attempts: Path | None = None) -> None:
-    """Write the record once: the projected record ``<out>/git/de9-b0.json`` is the once-only target; an attempt record precedes the work and the
-    sha256 of the published projection is recorded in the attempt log (``de8-attempts.json``) for the consumer to authenticate it."""
+def _write(doc: dict[str, Any], absolutes: list[float], inputs: list[Path], out: Path) -> None:
+    proj = c.git_projection(json.loads(json.dumps(doc, default=float)), GIT_ALLOW)
+    bad = leak_violations(proj, absolutes)
+    if bad:
+        raise SystemExit(f"leak check failed: {bad[:6]}")
+    hdr = c.header("D-E9 B0: independent reconstruction of the pinned p-p level, 100-150 MeV", "python -m validation.scripts.elastic_attribution.de9_pp_level", inputs)
+    c.write_outputs(out, "de9-b0.json", doc, "de9-b0-report.md", hdr, render_report, GIT_ALLOW)
+
+
+def run(cache_dir: Path | None = None, out: Path | None = None, attempts: Path | None = None) -> dict[str, Any]:
+    """The whole B0 run, once only. The projected record ``<out>/git/de9-b0.json`` is the target: an existing target is refused before any work, the attempt
+    record (``de8-attempts.json``) is written BEFORE the inputs are located and parsed, a failure anywhere (parsing, calculation, leak check, writing) is recorded as
+    ``failed`` (two attempts without a document are the bound), and the sha256 of the published projection is recorded for the consumer to authenticate it."""
     out = Path(out or c.OUT / STEP_DIR)
     target = out / "git" / "de9-b0.json"
     att = c.begin_attempt(target, "de9_pp_level.run", {"quadrature": N_GAUSS}, attempts)
     try:
-        proj = c.git_projection(json.loads(json.dumps(doc, default=float)), GIT_ALLOW)
-        bad = leak_violations(proj, absolutes)
-        if bad:
-            raise SystemExit(f"leak check failed: {bad[:6]}")
-        hdr = c.header("D-E9 B0: independent reconstruction of the pinned p-p level, 100-150 MeV", "python -m validation.scripts.elastic_attribution.de9_pp_level", inputs)
-        c.write_outputs(out, "de9-b0.json", doc, "de9-b0-report.md", hdr, render_report, GIT_ALLOW)
+        cd = Path(cache_dir or c.CACHE_DIR)
+        zp, ident = locate_raw(cd)
+        raw = zipfile.ZipFile(zp).read(MEMBER)
+        sec = parse_h1_mt2(raw.decode("ascii"))
+        npz = np.load(cd / "derived" / f"elastic-proton-{c.TABLE_ID}.npz", allow_pickle=False)
+        doc, absolutes = assemble(sec, npz["grid_e_mev"], npz["sigma_barn"][0], ident, hashlib.sha256(raw).hexdigest())
+        _write(doc, absolutes, [zp], out)
     except BaseException:
         c.end_attempt(att, "failed", attempts)
         raise
     c.end_attempt(att, "published-valid", attempts, target)
-
-
-def run(cache_dir: Path | None = None, out: Path | None = None, attempts: Path | None = None) -> dict[str, Any]:
-    cd = Path(cache_dir or c.CACHE_DIR)
-    zp, ident = locate_raw(cd)
-    raw = zipfile.ZipFile(zp).read(MEMBER)
-    sec = parse_h1_mt2(raw.decode("ascii"))
-    npz = np.load(cd / "derived" / f"elastic-proton-{c.TABLE_ID}.npz", allow_pickle=False)
-    doc, absolutes = assemble(sec, npz["grid_e_mev"], npz["sigma_barn"][0], ident, hashlib.sha256(raw).hexdigest())
-    publish(doc, absolutes, [zp], out, attempts)
     return doc
 
 
