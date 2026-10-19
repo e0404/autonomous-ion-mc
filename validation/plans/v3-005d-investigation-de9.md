@@ -252,8 +252,10 @@ Once-only forbids re-producing the documents, and the evaluator runs at a later 
 
 *Dated note (2026-10-19; after Codex review; no synthesis statistic seen).*
 
-The synthesis at ef164d09 (REVIEW-be34b5ee) refused before writing anything. The cause is the reused, hash-bound D-E3 documents (all, pp-only, pA-only and emonly at 150 and 200 MeV), whose hashes are committed in `de6-report.md` and `de3-summary.md`. The earlier `de3_probes` produced them, so they lack the later fields: backend, precision, elastic marker, npz sha256, code block, attempt-log entry.
+The synthesis at ef164d09 (REVIEW-be34b5ee) refused before writing anything. The cause is the reused, hash-bound D-E3 documents (all, pp-only, pA-only and emonly at 150 and 200 MeV), whose hashes are committed in `de6-report.md` and `de3-summary.md`. The earlier `de3_probes` produced them, so they lack the later fields: backend, precision, scoring, tallies, elastic marker, npz sha256, code block, attempt-log entry (list corrected on 2026-10-19 03:35 UTC after Codex REVIEW-91ebc60c: scoring and tallies were omitted).
 
 The correction is in the evaluator only. For reused documents, the frozen-configuration check verifies the fields they do record and relies on the committed hash binding for the rest. The absent fields are recorded per document as `legacy_fields_absent`. New A1, B2 and B3 documents keep the full check.
 
 No document, seed, setting or reading rule changes.
+
+*Addendum to the sixth note (2026-10-19 03:35 UTC, evaluator-only; no synthesis statistic seen).* The synthesis at 4e92cc49 (REVIEW-91ebc60c) refused before writing anything on `de3-200-m2prime.json` ("an elastic document must carry the explicit marker elastic = true"): the D-E8 m2prime documents at 150 and 200 MeV, produced at c509e351 and authenticated against the committed D-E8 record hashes, predate the elastic marker and the other later fields and are reused documents under the same rule (fields they record are checked; absent ones recorded in `legacy_fields_absent`; their recorded npz sha256 must still match the expected table; their code block is bound to the frozen D-E8 commit and producer hashes recorded in the committed D-E8 record, which must be an ancestor of the D-E9 reviewed commit, instead of to the later reviewed commit's producer hashes). No document, seed, setting or reading rule changes.

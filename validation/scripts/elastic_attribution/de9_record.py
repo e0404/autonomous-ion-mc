@@ -262,7 +262,7 @@ def check_freeze(review_id: str | None, reviewed_sha: str | None, state: dict[st
 
 
 def check_document_code(doc: dict[str, Any], what: str, freeze: dict[str, Any]) -> None:
-    """Binding of a produced document to the reviewed code. A harness document (``code`` block: A1 / B2 / B3 / D-E8 arm) must record a clean tree, a HEAD that is an
+    """Binding of a produced document to the reviewed code. A harness document (``code`` block: A1 / B2 / B3; the D-E8 arm goes through ``check_de8_arm_code``) must record a clean tree, a HEAD that is an
     ancestor of (or equal to) the reviewed commit, and producer-code hashes (``scripts_sha256``, REQUIRED, including ``de3_probes.py``) that equal those of the reviewed
     commit: the documents bind the producer code by hash, so HEAD equality adds nothing once the hashes match (and the once-only rule forbids re-producing them after
     an evaluator-only change). The B0 record (``provenance``, no ``code`` block) is bound the same way by its clean flag, HEAD ancestry and ``code_sha256``."""
@@ -283,7 +283,31 @@ def check_document_code(doc: dict[str, Any], what: str, freeze: dict[str, Any]) 
         raise SystemExit(f"{what}: code_sha256 is missing or differs from the reviewed de9_pp_level.py")
 
 
+def check_de8_arm_code(doc: dict[str, Any], what: str, de8_prov: dict[str, Any], freeze: dict[str, Any] | None) -> None:
+    """Binding of a D-E8 arm document (``m2prime``, produced once at the frozen D-E8 commit) to the committed D-E8 record: a clean tree, a HEAD equal to the
+    D-E8 record's frozen commit (``provenance.reviewed_sha`` = ``git_head``) which must be an ancestor of (or equal to) the D-E9 reviewed commit, and producer-code
+    hashes (``scripts_sha256``, REQUIRED, including ``de3_probes.py``) equal to those the D-E8 record froze. The document bytes are already authenticated by the
+    sha256 committed in that record; this binds its code block to the D-E8 freeze, not to the (later) D-E9 reviewed commit."""
+    cd = doc.get("code") or {}
+    if cd.get("git_clean") is not True:
+        raise SystemExit(f"{what}: the recorded clean-tree flag is not true (clean tree required)")
+    head = cd.get("git_head")
+    frozen = de8_prov.get("reviewed_sha")
+    if not isinstance(head, str) or not frozen or head != frozen or de8_prov.get("git_head") != frozen:
+        raise SystemExit(f"{what}: the recorded HEAD {str(head)[:12]} is not the frozen D-E8 commit {str(frozen)[:12]} of the committed D-E8 record")
+    if freeze is not None and not freeze["ancestor"](head, freeze["sha"]):
+        raise SystemExit(f"{what}: the frozen D-E8 commit {head[:12]} is not an ancestor of (or equal to) the reviewed commit {freeze['sha'][:12]}")
+    sh = cd.get("scripts_sha256")
+    if not isinstance(sh, dict) or not sh or "de3_probes.py" not in sh:
+        raise SystemExit(f"{what}: no scripts_sha256 (with the producer de3_probes.py) recorded: the code binding cannot be verified")
+    frozen_sh = de8_prov.get("scripts_sha256") or {}
+    for n, s in sh.items():
+        if frozen_sh.get(n) != s:
+            raise SystemExit(f"{what}: sha256 of {n} recorded in the document is missing from or differs from the committed D-E8 record")
+
+
 REUSED = ("all", "pp-only", "pA-only", "emonly")
+DE8_ARM = "m2prime"  # the D-E8 arm documents (150 / 200 MeV) are reused, authenticated by the committed D-E8 record: legacy rule (fields they record are checked)
 LEGACY_OPTIONAL = ("backend", "precision")  # not recorded by the older producer of the hash-bound D-E3 documents
 LEGACY_FIELDS = ("backend", "precision", "scoring", "tallies", "elastic", "elastic_table_npz_sha256", "code")  # fields of the current format that a legacy document may lack
 CRN = {150: 20990100, 200: 20990101}
@@ -490,38 +514,44 @@ def validate_b0(b0: dict[str, Any], what: str, expected: dict[str, dict[str, str
 
 
 def validate_document(doc: dict[str, Any], what: str, *, energy: int, variant: str, seed: int, expected: dict[str, dict[str, str]], reused: dict[str, str] | None = None,
-                      path: Path | None = None, freeze: dict[str, Any] | None = None, legacy_absent: dict[str, list[str]] | None = None) -> bool:
+                      path: Path | None = None, freeze: dict[str, Any] | None = None, legacy_absent: dict[str, list[str]] | None = None,
+                      de8_arm: dict[str, Any] | None = None) -> bool:
     """Fail-closed validation of one harness document: frozen configuration (energy, variant, 100000 histories, 20 batches, mode, warp-cpu, float64, seed),
     elastic table identity against the expected map (id and npz sha256), the committed sha256 for the reused D-E3 documents, the code provenance for new
-    documents. Returns the document's own validity (``valid`` and the energy balance): an invalid published run is returned as False and is never treated as valid."""
+    documents. A reused document (hash-bound D-E3 document, or a D-E8 arm document authenticated by the committed D-E8 record, ``de8_arm`` = that record's
+    provenance) is a legacy document: the fields it records are checked, the absent ones are recorded in ``legacy_absent``. Returns the document's own
+    validity (``valid`` and the energy balance): an invalid published run is returned as False and is never treated as valid."""
     mode = "emonly" if variant == "emonly" else "emel"
     want = {"energy": energy, "variant": variant, "n": N_HIST, "n_batches": N_BATCH, "mode": mode, "backend": "warp-cpu", "precision": "float64", "seed": seed}
     is_reused = reused is not None and variant in REUSED and path is not None and path.name in reused
+    is_legacy = is_reused or (de8_arm is not None and variant == DE8_ARM)
     for k, v in want.items():
-        if is_reused and k in LEGACY_OPTIONAL and k not in doc:
+        if is_legacy and k in LEGACY_OPTIONAL and k not in doc:
             continue  # a legacy (hash-bound) document of an older producer: only the fields it records are checked (the absent ones are recorded)
         if doc.get(k) != v:
             raise SystemExit(f"{what}: {k} {doc.get(k)!r} differs from the frozen configuration {v!r}")
-    if is_reused and legacy_absent is not None:
+    if is_legacy and legacy_absent is not None:
         legacy_absent[what] = [k for k in LEGACY_FIELDS if k not in doc and not (k == "elastic_table_npz_sha256" and variant == "emonly")]
-    check_arrays(doc, what, energy, legacy=is_reused)
+    check_arrays(doc, what, energy, legacy=is_legacy)
     if variant == "emonly":  # no elastic table: exempt from the table identity, but a new document must say so explicitly
-        if not is_reused and doc.get("elastic") is not False:
+        if not is_legacy and doc.get("elastic") is not False:
             raise SystemExit(f"{what}: an EM-only document must carry the explicit marker elastic = false")
     else:
         exp = expected.get(variant)
         if exp is None or not exp.get("table_id"):
             raise SystemExit(f"{what}: no expected table for variant {variant!r} (manifest input required)")
-        if not is_reused and doc.get("elastic") is not True:
+        if not is_legacy and doc.get("elastic") is not True:
             raise SystemExit(f"{what}: an elastic document must carry the explicit marker elastic = true")
         if doc.get("elastic_table_id") != exp["table_id"]:
             raise SystemExit(f"{what}: elastic table id differs from the expected {variant} table")
-        if "elastic_table_npz_sha256" in doc or not is_reused:
+        if "elastic_table_npz_sha256" in doc or not is_legacy:
             if doc.get("elastic_table_npz_sha256") != exp.get("npz_sha256") or not exp.get("npz_sha256"):
                 raise SystemExit(f"{what}: elastic table npz sha256 differs from (or is missing against) the expected {variant} table")
     if reused is not None and variant in REUSED and path is not None:
         if reused.get(path.name) != _sha(path):
             raise SystemExit(f"{what}: sha256 differs from (or is not listed in) the committed input lists")
+    elif de8_arm is not None and variant == DE8_ARM:
+        check_de8_arm_code(doc, what, de8_arm, freeze)
     elif freeze is not None:
         check_document_code(doc, what, freeze)
     return bool(doc.get("valid")) and doc.get("relative_residual", float("inf")) <= 1e-12
@@ -544,6 +574,7 @@ def build_document(de3_dir: Path, de9_dir: Path, b0_path: Path | None, archive: 
     reused = committed_hashes(hash_sources)
     log = json.loads(Path(attempts_path or ATTEMPTS_DEFAULT).read_text()) if Path(attempts_path or ATTEMPTS_DEFAULT).is_file() else None
     de8_sha: dict[str, str] | None = None
+    de8_prov: dict[str, Any] | None = None
     reasons: list[str] = []
     invalid: dict[str, str] = {}
     legacy: dict[str, list[str]] = {}
@@ -556,11 +587,15 @@ def build_document(de3_dir: Path, de9_dir: Path, b0_path: Path | None, archive: 
             return None
         d = json.loads(p.read_text())
         if not bound:  # authenticate the generated document: D-E8 arm documents against the committed D-E8 record, new runs against the attempt log
-            nonlocal de8_sha
-            if variant == "m2prime":
+            nonlocal de8_sha, de8_prov
+            if variant == DE8_ARM:
                 if de8_sha is None:
-                    rec8 = json.loads(Path(de8_record or DE8_RECORD).read_text())["runs"]["arms"]["m2prime"]
+                    rec8_full = json.loads(Path(de8_record or DE8_RECORD).read_text())
+                    rec8 = rec8_full["runs"]["arms"][DE8_ARM]
                     de8_sha = {str(k): v["sha256"] for k, v in rec8.items() if isinstance(v, dict) and "sha256" in v}
+                    de8_prov = rec8_full.get("provenance") or {}
+                    if not de8_prov.get("reviewed_sha") or not de8_prov.get("scripts_sha256"):
+                        raise SystemExit("the committed D-E8 record carries no provenance (reviewed_sha / scripts_sha256): its arm documents cannot be bound")
                 if de8_sha.get(str(energy)) != _sha(p):
                     raise SystemExit(f"{p.name}: sha256 differs from the committed D-E8 record")
             else:
@@ -568,7 +603,8 @@ def build_document(de3_dir: Path, de9_dir: Path, b0_path: Path | None, archive: 
                     raise SystemExit("the attempt log is missing: generated documents cannot be authenticated")
                 if attempt_log_sha(log, p.name) != _sha(p):
                     raise SystemExit(f"{p.name}: sha256 differs from the attempt-log entry of its published run")
-        if not validate_document(d, p.name, energy=energy, variant=variant, seed=seed, expected=expected, reused=reused if bound else None, path=p, freeze=freeze, legacy_absent=legacy):
+        if not validate_document(d, p.name, energy=energy, variant=variant, seed=seed, expected=expected, reused=reused if bound else None, path=p, freeze=freeze, legacy_absent=legacy,
+                                 de8_arm=de8_prov if variant == DE8_ARM else None):
             invalid[p.name] = "published-invalid"
         shas[p.name] = _sha(p)
         return d

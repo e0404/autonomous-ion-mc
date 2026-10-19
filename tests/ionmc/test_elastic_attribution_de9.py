@@ -901,7 +901,19 @@ def _relog(inp: dict[str, Path]) -> None:
             {"id": n + 1, "attempt": n, "outcome": "published-valid", "document_sha256": sha},
         ]
     inp["attempts"].write_text(json.dumps(log))
-    inp["de8"].write_text(json.dumps({"runs": {"arms": {"m2prime": m2p}}}))
+    inp["de8"].write_text(
+        json.dumps(
+            {
+                "provenance": {
+                    "git_head": "a" * 40,
+                    "reviewed_sha": "a" * 40,
+                    "git_clean": True,
+                    "scripts_sha256": {"de3_probes.py": "1" * 64},
+                },
+                "runs": {"arms": {"m2prime": m2p}},
+            }
+        )
+    )  # the D-E8 record binds its arm documents: file sha256 and the frozen D-E8 commit / producer hashes
     inp["hashes"].write_text(
         "Input files (sha256):\n\n"
         + "".join(
@@ -2127,7 +2139,10 @@ def test_legacy_reused_documents_are_checked_only_on_the_fields_they_record(tmp_
     doc = _build(inp)
     assert doc["complete"] is True
     absent = doc["provenance"]["legacy_fields_absent"]
-    assert set(absent) == {f"de3-{e}-{v}.json" for e in (150, 200) for v in REUSED_V}
+    assert set(absent) == {f"de3-{e}-{v}.json" for e in (150, 200) for v in REUSED_V} | {
+        "de3-200-m2prime.json"
+    }  # the D-E8 arm document is a legacy document too (its own test below)
+    assert absent.pop("de3-200-m2prime.json") == []
     for name, fields in absent.items():
         assert {"backend", "precision", "scoring", "tallies"} <= set(
             fields
@@ -2195,4 +2210,70 @@ def test_new_documents_keep_the_full_check_without_backend_or_precision(tmp_path
     assert _build(inp)["complete"] is True
     assert _build(inp)["provenance"].get("legacy_fields_absent", {}) == {} or all(
         isinstance(v, list) for v in _build(inp)["provenance"]["legacy_fields_absent"].values()
+    )
+
+
+def test_de8_arm_document_is_a_legacy_document_bound_to_the_de8_record(tmp_path: Path) -> None:
+    """The D-E8 m2prime documents predate the elastic marker: the fields they record are checked, the absent ones recorded; their code block is
+    bound to the frozen D-E8 commit and producer hashes of the committed D-E8 record (not to the later D-E9 reviewed commit)."""
+    inp = _write_inputs(tmp_path)
+    p = inp["de3"] / "de3-200-m2prime.json"
+    orig = json.loads(p.read_text())
+    p.write_text(json.dumps({k: v for k, v in orig.items() if k != "elastic"}))
+    _relog(inp)
+    doc = _build(inp, freeze=_freeze())
+    assert doc["complete"] is True
+    assert doc["provenance"]["legacy_fields_absent"]["de3-200-m2prime.json"] == ["elastic"]
+    # the fields it records are still checked (configuration, table identity, npz sha256)
+    for patch, msg in (
+        ({"backend": "warp-cuda"}, "backend"),
+        ({"seed": 1}, "seed"),
+        ({"elastic_table_id": "other"}, "elastic table id"),
+        ({"elastic_table_npz_sha256": "0" * 64}, "npz sha256"),
+    ):
+        p.write_text(json.dumps({k: v for k, v in orig.items() if k != "elastic"}))
+        _put(p, **patch)
+        with pytest.raises(SystemExit, match=msg):
+            _build(inp, freeze=_freeze())
+    # the code block is bound to the D-E8 record, with and without the D-E9 freeze
+    for bad_code, msg in (
+        ({**orig["code"], "git_clean": False}, "clean-tree flag"),
+        ({**orig["code"], "git_head": "c" * 40}, "frozen D-E8 commit"),
+        ({"git_head": "a" * 40, "git_clean": True}, "scripts_sha256"),
+        ({"git_head": "a" * 40, "git_clean": True, "scripts_sha256": {"de5_sampling.py": "1" * 64}}, "scripts_sha256"),
+        ({"git_head": "a" * 40, "git_clean": True, "scripts_sha256": {"de3_probes.py": "2" * 64}}, "differs from the committed D-E8 record"),
+    ):  # fmt: skip
+        p.write_text(json.dumps({**orig, "code": bad_code}))
+        _relog(inp)
+        for fz in (None, _freeze()):
+            with pytest.raises(SystemExit, match=msg):
+                _build(inp, freeze=fz)
+    p.write_text(json.dumps(orig))
+    _relog(inp)
+    # the frozen D-E8 commit must be an ancestor of (or equal to) the D-E9 reviewed commit
+    with pytest.raises(SystemExit, match="not an ancestor of"):
+        _build(inp, freeze={**_freeze(), "ancestor": lambda s, h: s != "a" * 40})
+    # a D-E8 record whose provenance disagrees with the document, or carries none, refuses
+    rec8 = json.loads(inp["de8"].read_text())
+    for prov, msg in (
+        (
+            {**rec8["provenance"], "reviewed_sha": "d" * 40, "git_head": "d" * 40},
+            "frozen D-E8 commit",
+        ),
+        ({**rec8["provenance"], "git_head": "d" * 40}, "frozen D-E8 commit"),
+        (
+            {**rec8["provenance"], "scripts_sha256": {"de3_probes.py": "9" * 64}},
+            "committed D-E8 record",
+        ),
+        (None, "carries no provenance"),
+    ):
+        inp["de8"].write_text(
+            json.dumps({**rec8, "provenance": prov} if prov is not None else {"runs": rec8["runs"]})
+        )
+        with pytest.raises(SystemExit, match=msg):
+            _build(inp, freeze=_freeze())
+    inp["de8"].write_text(json.dumps(rec8))
+    assert (
+        _build(inp, freeze=_freeze())["provenance"]["legacy_fields_absent"]["de3-200-m2prime.json"]
+        == []
     )
