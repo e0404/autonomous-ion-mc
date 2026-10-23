@@ -1,3 +1,4 @@
+import io
 import json
 from pathlib import Path
 
@@ -140,6 +141,53 @@ def test_data_use_retains_calibration_history(tmp_path):
 def test_data_rejects_nonpublic_or_authenticated_urls(url):
     with pytest.raises(ValueError):
         data.public_url(url)
+
+
+@pytest.mark.parametrize("size", [8, 9])
+def test_data_download_limit_and_partial_cleanup(tmp_path, monkeypatch, size):
+    url = "https://example.org/fixture"
+    payload = b"x" * size
+
+    class Response(io.BytesIO):
+        def read(self, size=-1):
+            # Cross the limit only after writing earlier chunks to disk.
+            return super().read(min(size, 3))
+
+    response = Response(payload)
+    response.url = url
+
+    class Opener:
+        def open(self, request, timeout):
+            assert request.full_url == url
+            return response
+
+    monkeypatch.setattr(data, "MAX_BYTES", 8)
+    monkeypatch.setattr(data, "public_url", lambda value: value)
+    monkeypatch.setattr(data.urllib.request, "getproxies", lambda: {})
+    monkeypatch.setattr(data.urllib.request, "build_opener", lambda *args: Opener())
+    monkeypatch.setattr(data, "event", lambda *args, **kwargs: None)
+
+    def acquire():
+        return data.acquire(
+            url,
+            "synthetic test data",
+            "fixture",
+            "construction",
+            "test streaming size enforcement",
+            sha="a" * 40,
+            state=tmp_path,
+        )
+
+    if size == 8:
+        record = acquire()
+        obj = tmp_path / "data" / "objects" / record["sha256"]
+        assert obj.read_bytes() == payload
+    else:
+        with pytest.raises(ValueError, match="Download exceeds"):
+            acquire()
+        assert not list((tmp_path / "data" / "objects").glob("*"))
+    assert not list((tmp_path / "data" / "incoming").iterdir())
+    assert response.closed
 
 
 def test_bounded_artifact_and_traversal(tmp_path):

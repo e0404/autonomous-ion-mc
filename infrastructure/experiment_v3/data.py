@@ -12,7 +12,7 @@ from pathlib import Path
 from infrastructure.experiment_v3.common import STATE, event, file_hash, now, write_json
 
 ROLES = {"construction", "calibration", "evaluation", "exploratory"}
-MAX_BYTES = 256 * 1024**2
+MAX_BYTES = 1024**3
 
 
 def public_url(url):
@@ -128,7 +128,7 @@ def acquire(
             while block := response.read(65536):
                 total += len(block)
                 if total > MAX_BYTES:
-                    raise ValueError("Download exceeds 256 MiB limit")
+                    raise ValueError("Download exceeds 1 GiB limit")
                 out.write(block)
         content_hash = file_hash(temp)
         if expected_sha256 is not None and content_hash != expected_sha256:
