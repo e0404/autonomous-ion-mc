@@ -1,93 +1,429 @@
 {
- "record": "ENDF/B-VIII.0 neutron sublibrary: acquisition, identity and coverage verification of n+C-12 (MAT 625) and n+O-16 (MAT 825) for the V3-005D M3 candidate (exploratory role; NO construction, calibration or evaluation use)",
- "date_utc": "2026-10-23",
- "operator_authorisation": [
-  "response of 2026-10-19 to IR-20261018-091819-903058 (bounded, acquisition-first Option B)",
-  "IR-20261019-000144-2C50C8 resolved 2026-10-23T18:38:00Z (V3-INFRA-001 integrated via PR #83 at c790df369c03d1d775c843d4f1e13ab9337137e5)"
- ],
  "acquisition": {
-  "url": "https://www.nndc.bnl.gov/endf-b8.0/zips/ENDF-B-VIII.0_neutrons.zip",
-  "bytes": 310158456,
-  "sha256": "a1cced11710eb36690c5ad7b64d414465c5849f5428904049c864e9beca28894",
-  "retrieved_at_utc": "2026-10-23T18:37:16Z",
-  "upstream_last_modified_header_seen_2026_10_19": "2024-03-15",
-  "acquisition_id": "7490952096b342c98f533fab81d1b1aa",
-  "role": "exploratory",
   "acquisition_code_sha": "c790df369c03d1d775c843d4f1e13ab9337137e5",
-  "zip_entries": 561,
+  "acquisition_id": "7490952096b342c98f533fab81d1b1aa",
+  "bytes": 310158456,
   "citation": "D. A. Brown et al., Nucl. Data Sheets 148 (2018) 1-142, doi:10.1016/j.nds.2018.02.001",
-  "license_basis": "public NNDC distribution of the US evaluated nuclear data library"
+  "license_basis": "public NNDC distribution of the US evaluated nuclear data library",
+  "retrieved_at_utc": "2026-10-23T18:37:16Z",
+  "role": "exploratory",
+  "sha256": "a1cced11710eb36690c5ad7b64d414465c5849f5428904049c864e9beca28894",
+  "upstream_last_modified_header_seen_2026_10_19": "2024-03-15",
+  "url": "https://www.nndc.bnl.gov/endf-b8.0/zips/ENDF-B-VIII.0_neutrons.zip",
+  "zip_entries": 561
  },
- "verification": {
-  "method": "structural ENDF-6 parse of MF1/MT451, MF2/MT151, MF3/MT1-2, MF4/MT2 (no cross-section value is recorded here); members extracted with python -I zipfile into an isolated staging directory; script endf_verify.py (sha256 ec58b1281e28409b6b7260abdf00f5ef7c31cf751f36c199bc2b5cf5b6986ecc), kept outside the repository",
-  "members": {
-   "n-006_C_012.endf": {
-    "zip_member": "ENDF-B-VIII.0_neutrons/n-006_C_012.endf",
-    "bytes": 3805168,
-    "sha256": "daa7901e0067f9ac6d9b2392514ba00e71e37d00c8a8ecbbde0620237815f981",
-    "lines": 50068,
-    "tape_label": " $Rev:: 4468     $  $Date:: 2015-08-29#$",
-    "MAT": 625,
-    "mf1_mt451": {
-     "ZA": 6012.0,
-     "AWR": 11.89365,
-     "NLIB": 0,
-     "NVER": 8,
-     "LREL": 0,
-     "NMOD": 0,
-     "NFOR": 6,
-     "NSUB": 10,
-     "EMAX_eV": 20000000.0,
-     "LRP": 0,
-     "LFI": 0,
-     "NWD": 79,
-     "NXC": 57
-    },
-    "identification_lines": [
+ "changelog": {
+  "bytes": 99474,
+  "lines": 1969,
+  "lines_mentioning_members": [
+   {
+    "line": 14,
+    "member": "n-008_O_016.endf",
+    "text": "    * n-008_O_016.endf: Make 1/v portion of capture cross section log-log"
+   },
+   {
+    "line": 32,
+    "member": "n-006_C_012.endf",
+    "text": "    * n-006_C_013.endf, n-006_C_012.endf: Ensure total cross section is"
+   },
+   {
+    "line": 143,
+    "member": "n-008_O_016.endf",
+    "text": "    * n-008_O_016.endf: Add covariance for many channels.  We suspect format problems"
+   },
+   {
+    "line": 202,
+    "member": "n-006_C_012.endf",
+    "text": "    * n-006_C_012.endf: Revised from Hale & Paris: natC evaluation restored from 20-150 MeV."
+   },
+   {
+    "line": 262,
+    "member": "n-008_O_016.endf",
+    "text": "    * n-008_O_016.endf: Covariances added"
+   },
+   {
+    "line": 323,
+    "member": "n-006_C_012.endf",
+    "text": "    * n-006_C_012.endf: Added covariances"
+   },
+   {
+    "line": 434,
+    "member": "n-008_O_016.endf",
+    "text": "    * n-008_O_016.endf:"
+   },
+   {
+    "line": 886,
+    "member": "n-008_O_016.endf",
+    "text": "    * n-008_O_016.endf: new evaluation of capture cross section based on the R-matrix (up to"
+   },
+   {
+    "line": 1272,
+    "member": "n-006_C_012.endf",
+    "text": "    * n-006_C_012.endf: 2 fixes:"
+   },
+   {
+    "line": 1352,
+    "member": "n-008_O_016.endf",
+    "text": "* Bug fixes in several files (n-008_O_016.endf, n-006_C_013.endf, n-092_U_235.endf,"
+   },
+   {
+    "line": 1368,
+    "member": "n-008_O_016.endf",
+    "text": "    * n-008_O_016.endf: CIELO 16O file from G. Hale, et al. (LANL)"
+   }
+  ],
+  "sha256": "45933f47ceb3c02c402df25382515beebfdf65c2f0a6510a6bd37927ba1ae47f",
+  "zip_member": "ENDF-B-VIII.0_neutrons/CHANGELOG.txt"
+ },
+ "date_utc": "2026-10-23",
+ "evaluation_comment_quotes": {
+  "n-006_C_012.endf": "MF1/MT451: 'ENDF/B-VII MOD 1 Evaluation, August 2015, G. M. Hale and P. G. Young (LANL)'; R-matrix analysis up to 6.45 MeV; 'At neutron energies above 6.45 MeV, the evaluation was joined to the existing ENDF/B-VII.0 evaluation for natural carbon, which is essentially version VI.1 (Fu, Axton, and Perey)'; 'All cross sections were kept the same as the VII.0 file in the energy range 6.47 <= E <= 20 MeV'; 'The version VI.3 extension to 150 MeV (Chadwick and Young) was not retained in this file.' This last sentence is stale text from the August 2015 revision (see finding O1 and the CHANGELOG quote).",
+  "n-008_O_016.endf": "MF1/MT451: 'EVAL-DEC16 Hale,Paris,Young,Chadwick'; R-matrix below 6.25 MeV, GNASH/optical-model evaluation 6.25-30 MeV; the previous MOD 2 (LA150-type, Chadwick et al.) evaluation retained from 30 to 150 MeV ('the previous evaluation, which extends to 150 MeV'); above 30 MeV MF6/MT5 carries the non-elastic emission and 'MF=4 MT=2 Elastic Angular Distributions' are listed among the non-zero data above 30 MeV; covariances 'continuing to 150 MeV'"
+ },
+ "findings": [
+  "Both files: MF3/MT2 (elastic cross section) from 1e-5 eV to 150 MeV; MF4/MT2 with LTT = 3 (Legendre below, tabulated above a switch energy), LCT = 2 (centre-of-mass). Tabulated f(mu) uses INT 4 (log-y, lin-mu) throughout; the statistics below honour it, with the exceedance probabilities interpolated exactly to the threshold angle.",
+  "C-12: Legendre part to 20 MeV (NL <= 8; its only incident energy >= 20 MeV is 20 MeV); tabulated f(mu) at 17 incident energies from 20 to 150 MeV (NP <= 91). O-16: Legendre part to 30 MeV (NL <= 10; the incident energies 20-30 MeV listed under it are Legendre entries); tabulated at 14 incident energies from 30 to 150 MeV (NP <= 73).",
+  "The project's energies of interest are 100, 150 and 200 MeV and the elastic table grid runs to 250 MeV: 100 and 150 MeV are inside the evaluated domain (150 MeV is the LAST node), 200 MeV and the grid above 150 MeV are OUTSIDE it. No extrapolation is authorised without scientific justification (operator, 2026-10-19).",
+  "O1 RESOLVED BY RECORD: CHANGELOG line 202 reads 'n-006_C_012.endf: Revised from Hale & Paris: natC evaluation restored from 20-150 MeV.' The C-12 20-150 MeV content is therefore the natural-carbon evaluation restored in the VIII.0 cycle; the MF1 comment 'was not retained in this file' is stale text from the August 2015 revision (the tape label is dated 2015-08-29).",
+  "Header anomaly: MF1/MT451 EMAX is 2.0e7 eV (C-12) and 3.0e7 eV (O-16) while the data extend to 1.5e8 eV. Recorded as is; not corrected.",
+  "No MF6/MT2 in either file. No MF4/MT2 shape covariance above 20 MeV in C-12 (MF33 only; no MF34 section). O-16: MF34/MT2 parsed (one block, MT1 = 2, NL = 1, NL1 = 1, i.e. Legendre order L = 1 only) and its energy grid ends at 7.005 MeV, below the 30 MeV switch to the tabulated part, so no MF4/MT2 shape covariance is carried above 7.005 MeV in O-16 (stricter than the 30 MeV previously assumed).",
+  "These are NEUTRON evaluations. Their use as a mirror for p+A elastic angular distributions (M3) is a scientific hypothesis to be assessed (isospin mirror validity, Coulomb-nuclear interference, isovector terms) before any plan; this record establishes identity, provenance and coverage only."
+ ],
+ "git_policy": "decision 0041: no cross-section value, no angular distribution point and no Legendre coefficient is recorded here; the files stay in the reference store (content-addressed object a1cced11...) and the git-ignored task cache; the staging copies are deleted after the suitability assessment.",
+ "members": {
+  "n-006_C_012.endf": {
+   "MAT": 625,
+   "Z": 6,
+   "bytes": 3805168,
+   "covariance_mf": [
+    33
+   ],
+   "lines": 50068,
+   "mf1_mt451": {
+    "AWI": 1.0,
+    "AWR": 11.89365,
+    "ELIS": 0.0,
+    "EMAX_eV": 20000000.0,
+    "LDRV": 0,
+    "LFI": 0,
+    "LIS": 0,
+    "LISO": 0,
+    "LREL": 0,
+    "LRP": 0,
+    "NFOR": 6,
+    "NLIB": 0,
+    "NMOD": 0,
+    "NSUB": 10,
+    "NVER": 8,
+    "NWD": 79,
+    "NXC": 57,
+    "STA": 0.0,
+    "TEMP": 0.0,
+    "ZA": 6012.0,
+    "comment_lines_1_to_8": [
      "  6-C - 12 LANL,ORNL  EVAL-AUG15 G.M. Hale, P.G. Young, C.Y. Fu",
      " NDS 148, 1 (2018)    DIST-FEB18",
      "----ENDF/B-VIII.0     MATERIAL  625",
      "-----INCIDENT NEUTRON DATA",
-     "------ENDF-6 FORMAT"
+     "------ENDF-6 FORMAT",
+     "",
+     " *****************************************************************",
+     ""
     ],
-    "mf2_mt151_range_eV": [
-     1e-05,
-     100000.0
+    "comment_lines_mentioning_retained": [
+     {
+      "comment_line": 33,
+      "text": " to 150 MeV (Chadwick and Young) was not retained in this file."
+     }
     ],
-    "mf2_LRU_LRF": [
-     0,
-     0
+    "directory_has_mf4_mt2": true,
+    "directory_has_mf6_mt2": false,
+    "directory_mf_mt": [
+     [
+      1,
+      451
+     ],
+     [
+      2,
+      151
+     ],
+     [
+      3,
+      1
+     ],
+     [
+      3,
+      2
+     ],
+     [
+      3,
+      3
+     ],
+     [
+      3,
+      4
+     ],
+     [
+      3,
+      5
+     ],
+     [
+      3,
+      28
+     ],
+     [
+      3,
+      51
+     ],
+     [
+      3,
+      52
+     ],
+     [
+      3,
+      53
+     ],
+     [
+      3,
+      54
+     ],
+     [
+      3,
+      55
+     ],
+     [
+      3,
+      56
+     ],
+     [
+      3,
+      57
+     ],
+     [
+      3,
+      58
+     ],
+     [
+      3,
+      59
+     ],
+     [
+      3,
+      60
+     ],
+     [
+      3,
+      61
+     ],
+     [
+      3,
+      62
+     ],
+     [
+      3,
+      91
+     ],
+     [
+      3,
+      102
+     ],
+     [
+      3,
+      103
+     ],
+     [
+      3,
+      104
+     ],
+     [
+      3,
+      107
+     ],
+     [
+      4,
+      2
+     ],
+     [
+      4,
+      28
+     ],
+     [
+      4,
+      51
+     ],
+     [
+      4,
+      52
+     ],
+     [
+      4,
+      53
+     ],
+     [
+      4,
+      54
+     ],
+     [
+      4,
+      55
+     ],
+     [
+      4,
+      56
+     ],
+     [
+      4,
+      57
+     ],
+     [
+      4,
+      58
+     ],
+     [
+      4,
+      59
+     ],
+     [
+      4,
+      60
+     ],
+     [
+      4,
+      61
+     ],
+     [
+      4,
+      62
+     ],
+     [
+      4,
+      91
+     ],
+     [
+      5,
+      28
+     ],
+     [
+      5,
+      91
+     ],
+     [
+      6,
+      5
+     ],
+     [
+      12,
+      51
+     ],
+     [
+      12,
+      102
+     ],
+     [
+      14,
+      51
+     ],
+     [
+      14,
+      102
+     ],
+     [
+      33,
+      1
+     ],
+     [
+      33,
+      2
+     ],
+     [
+      33,
+      4
+     ],
+     [
+      33,
+      5
+     ],
+     [
+      33,
+      28
+     ],
+     [
+      33,
+      51
+     ],
+     [
+      33,
+      102
+     ],
+     [
+      33,
+      103
+     ],
+     [
+      33,
+      104
+     ],
+     [
+      33,
+      107
+     ]
+    ]
+   },
+   "mf2_mt151": {
+    "EH_eV": 100000.0,
+    "EL_eV": 1e-05,
+    "LRF": 0,
+    "LRU": 0,
+    "NAPS": 0,
+    "NRO": 0
+   },
+   "mf34_mt2": null,
+   "mf3_mt1": {
+    "E_max_eV": 150000000.0,
+    "E_min_eV": 1e-05,
+    "NP": 1338,
+    "NR": 1,
+    "interp": [
+     [
+      1338,
+      2
+     ]
     ],
-    "mf3_mt1": {
-     "NP": 1338,
+    "n_points_ge_20MeV": 119
+   },
+   "mf3_mt2": {
+    "E_max_eV": 150000000.0,
+    "E_min_eV": 1e-05,
+    "NP": 1077,
+    "NR": 1,
+    "interp": [
+     [
+      1077,
+      2
+     ]
+    ],
+    "n_points_ge_20MeV": 119
+   },
+   "mf4_mt2": {
+    "LCT": 2,
+    "LI": 0,
+    "LTT": 3,
+    "legendre": {
+     "E_max_eV": 20000000.0,
      "E_min_eV": 1e-05,
-     "E_max_eV": 150000000.0,
-     "n_points_ge_20MeV": 119
-    },
-    "mf3_mt2": {
-     "NP": 1077,
-     "E_min_eV": 1e-05,
-     "E_max_eV": 150000000.0,
-     "n_points_ge_20MeV": 119
-    },
-    "mf4_mt2": {
-     "LTT": 3,
-     "LI": 0,
-     "LCT": 2,
-     "legendre": {
-      "NE": 702,
-      "E_min_eV": 1e-05,
-      "E_max_eV": 20000000.0,
-      "NL_max": 8
-     },
-     "tabulated": {
-      "NE": 17,
-      "E_min_eV": 20000000.0,
-      "E_max_eV": 150000000.0,
-      "NP_max": 91
-     },
+     "NE": 702,
+     "NL_max": 8,
      "incident_energies_ge_20MeV_eV": [
-      20000000.0,
+      20000000.0
+     ]
+    },
+    "lines": 2564,
+    "tabulated": {
+     "E_max_eV": 150000000.0,
+     "E_min_eV": 20000000.0,
+     "NE": 17,
+     "NP_max": 91,
+     "incident_energies_eV": [
       20000000.0,
       23000000.0,
       27000000.0,
@@ -105,115 +441,1227 @@
       130000000.0,
       140000000.0,
       150000000.0
+     ],
+     "interp_laws_present": [
+      4
      ]
     },
-    "mf6_mt2_present": false,
-    "mf_present": [
-     1,
-     2,
-     3,
-     4,
-     5,
-     6,
-     12,
-     14,
-     33
-    ],
-    "mt_in_mf3": [
-     1,
-     2,
-     3,
-     4,
-     5,
-     28,
-     51,
-     52,
-     53,
-     54,
-     55,
-     56,
-     57,
-     58,
-     59,
-     60,
-     61,
-     62,
-     91,
-     102,
-     103,
-     104,
-     107
-    ],
-    "covariance_mf": [
-     33
-    ],
-    "evaluation_comment_quote": "MF1/MT451: 'ENDF/B-VII MOD 1 Evaluation, August 2015, G. M. Hale and P. G. Young (LANL)'; R-matrix analysis up to 6.45 MeV; 'At neutron energies above 6.45 MeV, the evaluation was joined to the existing ENDF/B-VII.0 evaluation for natural carbon, which is essentially version VI.1 (Fu, Axton, and Perey)'; 'All cross sections were kept the same as the VII.0 file in the energy range 6.47 <= E <= 20 MeV'; 'The version VI.3 extension to 150 MeV (Chadwick and Young) was not retained in this file.' (sic: the file nevertheless carries MF3/MT1-2 and tabulated MF4/MT2 data to 150 MeV; provenance of the 20-150 MeV part is NOT established by the comment block and is an open item of the suitability assessment)"
+    "tabulated_statistics": [
+     {
+      "E_eV": 20000000.0,
+      "NP": 91,
+      "interp_laws": [
+       4
+      ],
+      "mean_one_minus_mu": 0.21915399,
+      "minima_deg_forward_of_130": [
+       64.0
+      ],
+      "mu_max": 1.0,
+      "mu_min": -1.0,
+      "norm_integral": 0.99999996,
+      "p_theta_gt_10deg": 0.89549696,
+      "p_theta_gt_20deg": 0.6496997
+     },
+     {
+      "E_eV": 23000000.0,
+      "NP": 91,
+      "interp_laws": [
+       4
+      ],
+      "mean_one_minus_mu": 0.18066149,
+      "minima_deg_forward_of_130": [
+       64.0,
+       126.0
+      ],
+      "mu_max": 1.0,
+      "mu_min": -1.0,
+      "norm_integral": 1.0,
+      "p_theta_gt_10deg": 0.88176453,
+      "p_theta_gt_20deg": 0.61102432
+     },
+     {
+      "E_eV": 27000000.0,
+      "NP": 91,
+      "interp_laws": [
+       4
+      ],
+      "mean_one_minus_mu": 0.14889629,
+      "minima_deg_forward_of_130": [
+       118.0
+      ],
+      "mu_max": 1.0,
+      "mu_min": -1.0,
+      "norm_integral": 1.0,
+      "p_theta_gt_10deg": 0.86478535,
+      "p_theta_gt_20deg": 0.56617704
+     },
+     {
+      "E_eV": 30000000.0,
+      "NP": 91,
+      "interp_laws": [
+       4
+      ],
+      "mean_one_minus_mu": 0.13104988,
+      "minima_deg_forward_of_130": [
+       114.0
+      ],
+      "mu_max": 1.0,
+      "mu_min": -1.0,
+      "norm_integral": 0.99999998,
+      "p_theta_gt_10deg": 0.85191672,
+      "p_theta_gt_20deg": 0.53402203
+     },
+     {
+      "E_eV": 35000000.0,
+      "NP": 91,
+      "interp_laws": [
+       4
+      ],
+      "mean_one_minus_mu": 0.10884985,
+      "minima_deg_forward_of_130": [
+       108.0
+      ],
+      "mu_max": 1.0,
+      "mu_min": -1.0,
+      "norm_integral": 0.99999999,
+      "p_theta_gt_10deg": 0.83020379,
+      "p_theta_gt_20deg": 0.48330352
+     },
+     {
+      "E_eV": 40000000.0,
+      "NP": 91,
+      "interp_laws": [
+       4
+      ],
+      "mean_one_minus_mu": 0.092721695,
+      "minima_deg_forward_of_130": [
+       104.0
+      ],
+      "mu_max": 1.0,
+      "mu_min": -1.0,
+      "norm_integral": 0.99999996,
+      "p_theta_gt_10deg": 0.80803536,
+      "p_theta_gt_20deg": 0.43596083
+     },
+     {
+      "E_eV": 50000000.0,
+      "NP": 91,
+      "interp_laws": [
+       4
+      ],
+      "mean_one_minus_mu": 0.071524806,
+      "minima_deg_forward_of_130": [],
+      "mu_max": 1.0,
+      "mu_min": -1.0,
+      "norm_integral": 1.0,
+      "p_theta_gt_10deg": 0.76426881,
+      "p_theta_gt_20deg": 0.35467287
+     },
+     {
+      "E_eV": 60000000.0,
+      "NP": 91,
+      "interp_laws": [
+       4
+      ],
+      "mean_one_minus_mu": 0.058704481,
+      "minima_deg_forward_of_130": [
+       128.0
+      ],
+      "mu_max": 1.0,
+      "mu_min": -1.0,
+      "norm_integral": 1.0,
+      "p_theta_gt_10deg": 0.72266306,
+      "p_theta_gt_20deg": 0.29168976
+     },
+     {
+      "E_eV": 70000000.0,
+      "NP": 91,
+      "interp_laws": [
+       4
+      ],
+      "mean_one_minus_mu": 0.050561237,
+      "minima_deg_forward_of_130": [
+       84.0,
+       122.0
+      ],
+      "mu_max": 1.0,
+      "mu_min": -1.0,
+      "norm_integral": 0.99999999,
+      "p_theta_gt_10deg": 0.68523054,
+      "p_theta_gt_20deg": 0.246223
+     },
+     {
+      "E_eV": 80000000.0,
+      "NP": 91,
+      "interp_laws": [
+       4
+      ],
+      "mean_one_minus_mu": 0.045469536,
+      "minima_deg_forward_of_130": [
+       46.0,
+       78.0,
+       116.0
+      ],
+      "mu_max": 1.0,
+      "mu_min": -1.0,
+      "norm_integral": 0.99999997,
+      "p_theta_gt_10deg": 0.65442676,
+      "p_theta_gt_20deg": 0.21680402
+     },
+     {
+      "E_eV": 90000000.0,
+      "NP": 91,
+      "interp_laws": [
+       4
+      ],
+      "mean_one_minus_mu": 0.042712922,
+      "minima_deg_forward_of_130": [
+       42.0,
+       76.0,
+       110.0
+      ],
+      "mu_max": 1.0,
+      "mu_min": -1.0,
+      "norm_integral": 1.0,
+      "p_theta_gt_10deg": 0.63354233,
+      "p_theta_gt_20deg": 0.20211506
+     },
+     {
+      "E_eV": 100000000.0,
+      "NP": 91,
+      "interp_laws": [
+       4
+      ],
+      "mean_one_minus_mu": 0.042063538,
+      "minima_deg_forward_of_130": [
+       40.0,
+       72.0,
+       106.0
+      ],
+      "mu_max": 1.0,
+      "mu_min": -1.0,
+      "norm_integral": 0.99999994,
+      "p_theta_gt_10deg": 0.62721826,
+      "p_theta_gt_20deg": 0.20147962
+     },
+     {
+      "E_eV": 110000000.0,
+      "NP": 73,
+      "interp_laws": [
+       4
+      ],
+      "mean_one_minus_mu": 0.02951763,
+      "minima_deg_forward_of_130": [],
+      "mu_max": 1.0,
+      "mu_min": -1.0,
+      "norm_integral": 0.99999992,
+      "p_theta_gt_10deg": 0.57730468,
+      "p_theta_gt_20deg": 0.11657092
+     },
+     {
+      "E_eV": 120000000.0,
+      "NP": 73,
+      "interp_laws": [
+       4
+      ],
+      "mean_one_minus_mu": 0.026803755,
+      "minima_deg_forward_of_130": [],
+      "mu_max": 1.0,
+      "mu_min": -1.0,
+      "norm_integral": 1.0000001,
+      "p_theta_gt_10deg": 0.54691673,
+      "p_theta_gt_20deg": 0.095375542
+     },
+     {
+      "E_eV": 130000000.0,
+      "NP": 73,
+      "interp_laws": [
+       4
+      ],
+      "mean_one_minus_mu": 0.024502683,
+      "minima_deg_forward_of_130": [],
+      "mu_max": 1.0,
+      "mu_min": -1.0,
+      "norm_integral": 1.0,
+      "p_theta_gt_10deg": 0.51715863,
+      "p_theta_gt_20deg": 0.07794487
+     },
+     {
+      "E_eV": 140000000.0,
+      "NP": 73,
+      "interp_laws": [
+       4
+      ],
+      "mean_one_minus_mu": 0.022509078,
+      "minima_deg_forward_of_130": [],
+      "mu_max": 1.0,
+      "mu_min": -1.0,
+      "norm_integral": 0.99999993,
+      "p_theta_gt_10deg": 0.48788722,
+      "p_theta_gt_20deg": 0.0636091
+     },
+     {
+      "E_eV": 150000000.0,
+      "NP": 73,
+      "interp_laws": [
+       4
+      ],
+      "mean_one_minus_mu": 0.020747651,
+      "minima_deg_forward_of_130": [],
+      "mu_max": 1.0,
+      "mu_min": -1.0,
+      "norm_integral": 0.99999997,
+      "p_theta_gt_10deg": 0.45895685,
+      "p_theta_gt_20deg": 0.051809113
+     }
+    ]
    },
-   "n-008_O_016.endf": {
-    "zip_member": "ENDF-B-VIII.0_neutrons/n-008_O_016.endf",
-    "bytes": 41873568,
-    "sha256": "aabef9c710c132b4e4d8028e58eff2e542d61d34b93823b5f1199649bff7f781",
-    "lines": 550968,
-    "tape_label": " $Rev:: 1523     $  $Date:: 2018-02-02#$",
-    "MAT": 825,
-    "mf1_mt451": {
-     "ZA": 8016.0,
-     "AWR": 15.85751,
-     "NLIB": 0,
-     "NVER": 8,
-     "LREL": 0,
-     "NMOD": 3,
-     "NFOR": 6,
-     "NSUB": 10,
-     "EMAX_eV": 30000000.0,
-     "LRP": 0,
-     "LFI": 0,
-     "NWD": 963,
-     "NXC": 192
-    },
-    "identification_lines": [
+   "mf6_mt2_present": false,
+   "mf_present": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    12,
+    14,
+    33
+   ],
+   "mt_in_mf3": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    28,
+    51,
+    52,
+    53,
+    54,
+    55,
+    56,
+    57,
+    58,
+    59,
+    60,
+    61,
+    62,
+    91,
+    102,
+    103,
+    104,
+    107
+   ],
+   "mt_in_mf33": [
+    1,
+    2,
+    4,
+    5,
+    28,
+    51,
+    102,
+    103,
+    104,
+    107
+   ],
+   "mt_in_mf34": [],
+   "sha256": "daa7901e0067f9ac6d9b2392514ba00e71e37d00c8a8ecbbde0620237815f981",
+   "sigma_el_over_barashenkov": {
+    "100MeV": 1.0355731,
+    "150MeV": 0.904
+   },
+   "tape_label": " $Rev:: 4468     $  $Date:: 2015-08-29#$",
+   "zip_member": "ENDF-B-VIII.0_neutrons/n-006_C_012.endf"
+  },
+  "n-008_O_016.endf": {
+   "MAT": 825,
+   "Z": 8,
+   "bytes": 41873568,
+   "covariance_mf": [
+    33,
+    34
+   ],
+   "lines": 550968,
+   "mf1_mt451": {
+    "AWI": 1.0,
+    "AWR": 15.85751,
+    "ELIS": 0.0,
+    "EMAX_eV": 30000000.0,
+    "LDRV": 0,
+    "LFI": 0,
+    "LIS": 0,
+    "LISO": 0,
+    "LREL": 0,
+    "LRP": 0,
+    "NFOR": 6,
+    "NLIB": 0,
+    "NMOD": 3,
+    "NSUB": 10,
+    "NVER": 8,
+    "NWD": 963,
+    "NXC": 192,
+    "STA": 0.0,
+    "TEMP": 0.0,
+    "ZA": 8016.0,
+    "comment_lines_1_to_8": [
      "  8-O - 16 LANL       EVAL-DEC16 Hale,Paris,Young,Chadwick",
      "CH96AB,CA98,Ch99,Yo01 DIST-FEB18",
      "----ENDF/B-VIII.0     MATERIAL  825",
      "-----INCIDENT NEUTRON DATA",
-     "------ENDF-6 FORMAT"
+     "------ENDF-6 FORMAT",
+     "******************************************************************",
+     "",
+     ""
     ],
-    "mf2_mt151_range_eV": [
-     1e-05,
-     150000000.0
+    "comment_lines_mentioning_retained": [
+     {
+      "comment_line": 126,
+      "text": "it used to be before. To retain continuity, I introduced a region"
+     }
     ],
-    "mf2_LRU_LRF": [
-     0,
-     0
+    "directory_has_mf4_mt2": true,
+    "directory_has_mf6_mt2": false,
+    "directory_mf_mt": [
+     [
+      1,
+      451
+     ],
+     [
+      2,
+      151
+     ],
+     [
+      3,
+      1
+     ],
+     [
+      3,
+      2
+     ],
+     [
+      3,
+      4
+     ],
+     [
+      3,
+      5
+     ],
+     [
+      3,
+      16
+     ],
+     [
+      3,
+      22
+     ],
+     [
+      3,
+      23
+     ],
+     [
+      3,
+      28
+     ],
+     [
+      3,
+      32
+     ],
+     [
+      3,
+      41
+     ],
+     [
+      3,
+      44
+     ],
+     [
+      3,
+      45
+     ],
+     [
+      3,
+      51
+     ],
+     [
+      3,
+      52
+     ],
+     [
+      3,
+      53
+     ],
+     [
+      3,
+      54
+     ],
+     [
+      3,
+      55
+     ],
+     [
+      3,
+      56
+     ],
+     [
+      3,
+      57
+     ],
+     [
+      3,
+      91
+     ],
+     [
+      3,
+      102
+     ],
+     [
+      3,
+      103
+     ],
+     [
+      3,
+      104
+     ],
+     [
+      3,
+      105
+     ],
+     [
+      3,
+      107
+     ],
+     [
+      3,
+      108
+     ],
+     [
+      3,
+      112
+     ],
+     [
+      3,
+      600
+     ],
+     [
+      3,
+      601
+     ],
+     [
+      3,
+      602
+     ],
+     [
+      3,
+      603
+     ],
+     [
+      3,
+      650
+     ],
+     [
+      3,
+      651
+     ],
+     [
+      3,
+      652
+     ],
+     [
+      3,
+      653
+     ],
+     [
+      3,
+      654
+     ],
+     [
+      3,
+      655
+     ],
+     [
+      3,
+      656
+     ],
+     [
+      3,
+      657
+     ],
+     [
+      3,
+      658
+     ],
+     [
+      3,
+      659
+     ],
+     [
+      3,
+      660
+     ],
+     [
+      3,
+      661
+     ],
+     [
+      3,
+      662
+     ],
+     [
+      3,
+      663
+     ],
+     [
+      3,
+      664
+     ],
+     [
+      3,
+      665
+     ],
+     [
+      3,
+      666
+     ],
+     [
+      3,
+      667
+     ],
+     [
+      3,
+      668
+     ],
+     [
+      3,
+      669
+     ],
+     [
+      3,
+      700
+     ],
+     [
+      3,
+      701
+     ],
+     [
+      3,
+      702
+     ],
+     [
+      3,
+      703
+     ],
+     [
+      3,
+      704
+     ],
+     [
+      3,
+      705
+     ],
+     [
+      3,
+      706
+     ],
+     [
+      3,
+      707
+     ],
+     [
+      3,
+      708
+     ],
+     [
+      3,
+      709
+     ],
+     [
+      3,
+      749
+     ],
+     [
+      3,
+      800
+     ],
+     [
+      3,
+      801
+     ],
+     [
+      3,
+      802
+     ],
+     [
+      3,
+      803
+     ],
+     [
+      4,
+      2
+     ],
+     [
+      4,
+      51
+     ],
+     [
+      4,
+      52
+     ],
+     [
+      4,
+      53
+     ],
+     [
+      4,
+      54
+     ],
+     [
+      4,
+      55
+     ],
+     [
+      4,
+      56
+     ],
+     [
+      4,
+      57
+     ],
+     [
+      4,
+      600
+     ],
+     [
+      4,
+      601
+     ],
+     [
+      4,
+      602
+     ],
+     [
+      4,
+      603
+     ],
+     [
+      4,
+      650
+     ],
+     [
+      4,
+      651
+     ],
+     [
+      4,
+      652
+     ],
+     [
+      4,
+      653
+     ],
+     [
+      4,
+      654
+     ],
+     [
+      4,
+      655
+     ],
+     [
+      4,
+      656
+     ],
+     [
+      4,
+      657
+     ],
+     [
+      4,
+      658
+     ],
+     [
+      4,
+      659
+     ],
+     [
+      4,
+      660
+     ],
+     [
+      4,
+      661
+     ],
+     [
+      4,
+      662
+     ],
+     [
+      4,
+      663
+     ],
+     [
+      4,
+      664
+     ],
+     [
+      4,
+      665
+     ],
+     [
+      4,
+      666
+     ],
+     [
+      4,
+      667
+     ],
+     [
+      4,
+      668
+     ],
+     [
+      4,
+      669
+     ],
+     [
+      4,
+      700
+     ],
+     [
+      4,
+      701
+     ],
+     [
+      4,
+      702
+     ],
+     [
+      4,
+      703
+     ],
+     [
+      4,
+      704
+     ],
+     [
+      4,
+      705
+     ],
+     [
+      4,
+      706
+     ],
+     [
+      4,
+      707
+     ],
+     [
+      4,
+      708
+     ],
+     [
+      4,
+      709
+     ],
+     [
+      4,
+      800
+     ],
+     [
+      4,
+      801
+     ],
+     [
+      4,
+      802
+     ],
+     [
+      4,
+      803
+     ],
+     [
+      6,
+      5
+     ],
+     [
+      6,
+      16
+     ],
+     [
+      6,
+      22
+     ],
+     [
+      6,
+      23
+     ],
+     [
+      6,
+      28
+     ],
+     [
+      6,
+      32
+     ],
+     [
+      6,
+      41
+     ],
+     [
+      6,
+      44
+     ],
+     [
+      6,
+      45
+     ],
+     [
+      6,
+      91
+     ],
+     [
+      6,
+      108
+     ],
+     [
+      6,
+      112
+     ],
+     [
+      6,
+      749
+     ],
+     [
+      12,
+      102
+     ],
+     [
+      13,
+      4
+     ],
+     [
+      13,
+      16
+     ],
+     [
+      13,
+      22
+     ],
+     [
+      13,
+      103
+     ],
+     [
+      13,
+      104
+     ],
+     [
+      13,
+      105
+     ],
+     [
+      13,
+      107
+     ],
+     [
+      14,
+      4
+     ],
+     [
+      14,
+      16
+     ],
+     [
+      14,
+      22
+     ],
+     [
+      14,
+      102
+     ],
+     [
+      14,
+      103
+     ],
+     [
+      14,
+      104
+     ],
+     [
+      14,
+      105
+     ],
+     [
+      14,
+      107
+     ],
+     [
+      33,
+      1
+     ],
+     [
+      33,
+      2
+     ],
+     [
+      33,
+      4
+     ],
+     [
+      33,
+      5
+     ],
+     [
+      33,
+      16
+     ],
+     [
+      33,
+      22
+     ],
+     [
+      33,
+      23
+     ],
+     [
+      33,
+      28
+     ],
+     [
+      33,
+      32
+     ],
+     [
+      33,
+      41
+     ],
+     [
+      33,
+      44
+     ],
+     [
+      33,
+      45
+     ],
+     [
+      33,
+      102
+     ],
+     [
+      33,
+      103
+     ],
+     [
+      33,
+      104
+     ],
+     [
+      33,
+      105
+     ],
+     [
+      33,
+      107
+     ],
+     [
+      33,
+      108
+     ],
+     [
+      33,
+      112
+     ],
+     [
+      33,
+      600
+     ],
+     [
+      33,
+      601
+     ],
+     [
+      33,
+      602
+     ],
+     [
+      33,
+      603
+     ],
+     [
+      33,
+      650
+     ],
+     [
+      33,
+      651
+     ],
+     [
+      33,
+      652
+     ],
+     [
+      33,
+      653
+     ],
+     [
+      33,
+      654
+     ],
+     [
+      33,
+      655
+     ],
+     [
+      33,
+      656
+     ],
+     [
+      33,
+      657
+     ],
+     [
+      33,
+      658
+     ],
+     [
+      33,
+      659
+     ],
+     [
+      33,
+      700
+     ],
+     [
+      33,
+      701
+     ],
+     [
+      33,
+      702
+     ],
+     [
+      33,
+      703
+     ],
+     [
+      33,
+      704
+     ],
+     [
+      33,
+      705
+     ],
+     [
+      33,
+      706
+     ],
+     [
+      33,
+      707
+     ],
+     [
+      33,
+      708
+     ],
+     [
+      33,
+      709
+     ],
+     [
+      33,
+      749
+     ],
+     [
+      33,
+      800
+     ],
+     [
+      33,
+      801
+     ],
+     [
+      33,
+      802
+     ],
+     [
+      33,
+      803
+     ],
+     [
+      34,
+      2
+     ]
+    ]
+   },
+   "mf2_mt151": {
+    "EH_eV": 150000000.0,
+    "EL_eV": 1e-05,
+    "LRF": 0,
+    "LRU": 0,
+    "NAPS": 0,
+    "NRO": 0
+   },
+   "mf34_mt2": {
+    "LTT": 1,
+    "NMT1": 1,
+    "blocks": [
+     {
+      "MAT1": 0,
+      "MT1": 2,
+      "NL": 1,
+      "NL1": 1,
+      "sub": [
+       {
+        "E_max_eV": 7005000.0,
+        "E_min_eV": 1e-05,
+        "L": 1,
+        "L1": 1,
+        "LB": [
+         5
+        ],
+        "LCT": 0,
+        "NI": 1
+       }
+      ]
+     }
+    ]
+   },
+   "mf3_mt1": {
+    "E_max_eV": 150000000.0,
+    "E_min_eV": 1e-05,
+    "NP": 2796,
+    "NR": 1,
+    "interp": [
+     [
+      2796,
+      2
+     ]
     ],
-    "mf3_mt1": {
-     "NP": 2796,
+    "n_points_ge_20MeV": 183
+   },
+   "mf3_mt2": {
+    "E_max_eV": 150000000.0,
+    "E_min_eV": 1e-05,
+    "NP": 2323,
+    "NR": 1,
+    "interp": [
+     [
+      2323,
+      2
+     ]
+    ],
+    "n_points_ge_20MeV": 183
+   },
+   "mf4_mt2": {
+    "LCT": 2,
+    "LI": 0,
+    "LTT": 3,
+    "legendre": {
+     "E_max_eV": 30000000.0,
      "E_min_eV": 1e-05,
-     "E_max_eV": 150000000.0,
-     "n_points_ge_20MeV": 183
-    },
-    "mf3_mt2": {
-     "NP": 2323,
-     "E_min_eV": 1e-05,
-     "E_max_eV": 150000000.0,
-     "n_points_ge_20MeV": 183
-    },
-    "mf4_mt2": {
-     "LTT": 3,
-     "LI": 0,
-     "LCT": 2,
-     "legendre": {
-      "NE": 1622,
-      "E_min_eV": 1e-05,
-      "E_max_eV": 30000000.0,
-      "NL_max": 10
-     },
-     "tabulated": {
-      "NE": 14,
-      "E_min_eV": 30000000.0,
-      "E_max_eV": 150000000.0,
-      "NP_max": 73
-     },
+     "NE": 1622,
+     "NL_max": 10,
      "incident_energies_ge_20MeV_eV": [
       20000000.0,
       21000000.0,
@@ -225,7 +1673,16 @@
       27000000.0,
       28000000.0,
       29000000.0,
-      30000000.0,
+      30000000.0
+     ]
+    },
+    "lines": 5243,
+    "tabulated": {
+     "E_max_eV": 150000000.0,
+     "E_min_eV": 30000000.0,
+     "NE": 14,
+     "NP_max": 73,
+     "incident_energies_eV": [
       30000000.0,
       35000000.0,
       40000000.0,
@@ -240,105 +1697,389 @@
       130000000.0,
       140000000.0,
       150000000.0
+     ],
+     "interp_laws_present": [
+      4
      ]
     },
-    "mf6_mt2_present": false,
-    "mf_present": [
-     1,
-     2,
-     3,
-     4,
-     6,
-     12,
-     13,
-     14,
-     33,
-     34
-    ],
-    "mt_in_mf3": [
-     1,
-     2,
-     4,
-     5,
-     16,
-     22,
-     23,
-     28,
-     32,
-     41,
-     44,
-     45,
-     51,
-     52,
-     53,
-     54,
-     55,
-     56,
-     57,
-     91,
-     102,
-     103,
-     104,
-     105,
-     107,
-     108,
-     112,
-     600,
-     601,
-     602,
-     603,
-     650,
-     651,
-     652,
-     653,
-     654,
-     655,
-     656,
-     657,
-     658,
-     659,
-     660,
-     661,
-     662,
-     663,
-     664,
-     665,
-     666,
-     667,
-     668,
-     669,
-     700,
-     701,
-     702,
-     703,
-     704,
-     705,
-     706,
-     707,
-     708,
-     709,
-     749,
-     800,
-     801,
-     802,
-     803
-    ],
-    "covariance_mf": [
-     33,
-     34
-    ],
-    "evaluation_comment_quote": "MF1/MT451: 'EVAL-DEC16 Hale,Paris,Young,Chadwick'; R-matrix below 6.25 MeV, GNASH/optical-model evaluation 6.25-30 MeV; the previous MOD 2 (LA150-type, Chadwick et al.) evaluation retained from 30 to 150 MeV ('the previous evaluation, which extends to 150 MeV'); above 30 MeV MF6/MT5 carries the non-elastic emission and 'MF=4 MT=2 Elastic Angular Distributions' are listed among the non-zero data above 30 MeV; covariances 'continuing to 150 MeV'"
-   }
-  },
-  "coverage_findings": [
-   "Both files: MF3/MT2 (elastic cross section) from 1e-5 eV to 150 MeV; MF4/MT2 with LTT = 3 (Legendre below, tabulated above a switch energy), LCT = 2 (centre-of-mass).",
-   "C-12: Legendre to 20 MeV (NL <= 8); tabulated f(mu) at 17 incident energies from 20 to 150 MeV (NP <= 91). O-16: Legendre to 30 MeV (NL <= 10); tabulated at 14 incident energies from 30 to 150 MeV (NP <= 73).",
-   "The project's energies of interest are 100, 150 and 200 MeV and the elastic table grid runs to 250 MeV: 100 and 150 MeV are inside the evaluated domain (150 MeV is the LAST node), 200 MeV and the grid above 150 MeV are OUTSIDE it. No extrapolation is authorised without scientific justification (operator, 2026-10-19).",
-   "Header anomaly: MF1/MT451 EMAX is 2.0e7 eV (C-12) and 3.0e7 eV (O-16) while the data extend to 1.5e8 eV. Recorded as is; not corrected.",
-   "No MF6/MT2 in either file. Covariance files present: C-12 MF33; O-16 MF33 and MF34 (the suitability assessment states whether MF4/MT2 above 20/30 MeV carries any covariance).",
-   "These are NEUTRON evaluations. Their use as a mirror for p+A elastic angular distributions (M3) is a scientific hypothesis to be assessed (isospin mirror validity, Coulomb-nuclear interference, isovector terms) before any plan; this record establishes identity, provenance and coverage only."
-  ],
-  "git_policy": "decision 0041: no cross-section value, no angular distribution point and no Legendre coefficient is recorded here; the files stay in the reference store (content-addressed object a1cced11...) and the git-ignored task cache; the staging copies are deleted after the suitability assessment."
+    "tabulated_statistics": [
+     {
+      "E_eV": 30000000.0,
+      "NP": 73,
+      "interp_laws": [
+       4
+      ],
+      "mean_one_minus_mu": 0.11992518,
+      "minima_deg_forward_of_130": [
+       52.5
+      ],
+      "mu_max": 1.0,
+      "mu_min": -1.0,
+      "norm_integral": 1.0,
+      "p_theta_gt_10deg": 0.82909174,
+      "p_theta_gt_20deg": 0.48204128
+     },
+     {
+      "E_eV": 35000000.0,
+      "NP": 73,
+      "interp_laws": [
+       4
+      ],
+      "mean_one_minus_mu": 0.10030382,
+      "minima_deg_forward_of_130": [],
+      "mu_max": 1.0,
+      "mu_min": -1.0,
+      "norm_integral": 1.0,
+      "p_theta_gt_10deg": 0.80974838,
+      "p_theta_gt_20deg": 0.43877877
+     },
+     {
+      "E_eV": 40000000.0,
+      "NP": 73,
+      "interp_laws": [
+       4
+      ],
+      "mean_one_minus_mu": 0.086757172,
+      "minima_deg_forward_of_130": [],
+      "mu_max": 1.0,
+      "mu_min": -1.0,
+      "norm_integral": 0.99999998,
+      "p_theta_gt_10deg": 0.79151807,
+      "p_theta_gt_20deg": 0.40085107
+     },
+     {
+      "E_eV": 50000000.0,
+      "NP": 73,
+      "interp_laws": [
+       4
+      ],
+      "mean_one_minus_mu": 0.067616276,
+      "minima_deg_forward_of_130": [],
+      "mu_max": 1.0,
+      "mu_min": -1.0,
+      "norm_integral": 0.99999992,
+      "p_theta_gt_10deg": 0.74968192,
+      "p_theta_gt_20deg": 0.32824523
+     },
+     {
+      "E_eV": 60000000.0,
+      "NP": 73,
+      "interp_laws": [
+       4
+      ],
+      "mean_one_minus_mu": 0.052791347,
+      "minima_deg_forward_of_130": [],
+      "mu_max": 1.0,
+      "mu_min": -1.0,
+      "norm_integral": 0.99999993,
+      "p_theta_gt_10deg": 0.70810459,
+      "p_theta_gt_20deg": 0.26092294
+     },
+     {
+      "E_eV": 70000000.0,
+      "NP": 73,
+      "interp_laws": [
+       4
+      ],
+      "mean_one_minus_mu": 0.04340931,
+      "minima_deg_forward_of_130": [],
+      "mu_max": 1.0,
+      "mu_min": -1.0,
+      "norm_integral": 0.99999998,
+      "p_theta_gt_10deg": 0.6685299,
+      "p_theta_gt_20deg": 0.20719268
+     },
+     {
+      "E_eV": 80000000.0,
+      "NP": 73,
+      "interp_laws": [
+       4
+      ],
+      "mean_one_minus_mu": 0.036941819,
+      "minima_deg_forward_of_130": [],
+      "mu_max": 1.0,
+      "mu_min": -1.0,
+      "norm_integral": 0.99999998,
+      "p_theta_gt_10deg": 0.6307688,
+      "p_theta_gt_20deg": 0.1644214
+     },
+     {
+      "E_eV": 90000000.0,
+      "NP": 73,
+      "interp_laws": [
+       4
+      ],
+      "mean_one_minus_mu": 0.0321978,
+      "minima_deg_forward_of_130": [],
+      "mu_max": 1.0,
+      "mu_min": -1.0,
+      "norm_integral": 1.0000001,
+      "p_theta_gt_10deg": 0.59464297,
+      "p_theta_gt_20deg": 0.13046222
+     },
+     {
+      "E_eV": 100000000.0,
+      "NP": 73,
+      "interp_laws": [
+       4
+      ],
+      "mean_one_minus_mu": 0.028550305,
+      "minima_deg_forward_of_130": [],
+      "mu_max": 1.0,
+      "mu_min": -1.0,
+      "norm_integral": 1.0,
+      "p_theta_gt_10deg": 0.55997854,
+      "p_theta_gt_20deg": 0.10357088
+     },
+     {
+      "E_eV": 110000000.0,
+      "NP": 73,
+      "interp_laws": [
+       4
+      ],
+      "mean_one_minus_mu": 0.025640242,
+      "minima_deg_forward_of_130": [],
+      "mu_max": 1.0,
+      "mu_min": -1.0,
+      "norm_integral": 1.0,
+      "p_theta_gt_10deg": 0.52661323,
+      "p_theta_gt_20deg": 0.082332815
+     },
+     {
+      "E_eV": 120000000.0,
+      "NP": 73,
+      "interp_laws": [
+       4
+      ],
+      "mean_one_minus_mu": 0.023247726,
+      "minima_deg_forward_of_130": [],
+      "mu_max": 1.0,
+      "mu_min": -1.0,
+      "norm_integral": 0.99999998,
+      "p_theta_gt_10deg": 0.49439219,
+      "p_theta_gt_20deg": 0.065605667
+     },
+     {
+      "E_eV": 130000000.0,
+      "NP": 73,
+      "interp_laws": [
+       4
+      ],
+      "mean_one_minus_mu": 0.021230295,
+      "minima_deg_forward_of_130": [],
+      "mu_max": 1.0,
+      "mu_min": -1.0,
+      "norm_integral": 1.0000001,
+      "p_theta_gt_10deg": 0.46316947,
+      "p_theta_gt_20deg": 0.052464027
+     },
+     {
+      "E_eV": 140000000.0,
+      "NP": 73,
+      "interp_laws": [
+       4
+      ],
+      "mean_one_minus_mu": 0.019491397,
+      "minima_deg_forward_of_130": [
+       122.5
+      ],
+      "mu_max": 1.0,
+      "mu_min": -1.0,
+      "norm_integral": 0.99999993,
+      "p_theta_gt_10deg": 0.43281089,
+      "p_theta_gt_20deg": 0.042157163
+     },
+     {
+      "E_eV": 150000000.0,
+      "NP": 73,
+      "interp_laws": [
+       4
+      ],
+      "mean_one_minus_mu": 0.017962719,
+      "minima_deg_forward_of_130": [
+       115.0,
+       122.5
+      ],
+      "mu_max": 1.0,
+      "mu_min": -1.0,
+      "norm_integral": 1.0,
+      "p_theta_gt_10deg": 0.40319108,
+      "p_theta_gt_20deg": 0.034071129
+     }
+    ]
+   },
+   "mf6_mt2_present": false,
+   "mf_present": [
+    1,
+    2,
+    3,
+    4,
+    6,
+    12,
+    13,
+    14,
+    33,
+    34
+   ],
+   "mt_in_mf3": [
+    1,
+    2,
+    4,
+    5,
+    16,
+    22,
+    23,
+    28,
+    32,
+    41,
+    44,
+    45,
+    51,
+    52,
+    53,
+    54,
+    55,
+    56,
+    57,
+    91,
+    102,
+    103,
+    104,
+    105,
+    107,
+    108,
+    112,
+    600,
+    601,
+    602,
+    603,
+    650,
+    651,
+    652,
+    653,
+    654,
+    655,
+    656,
+    657,
+    658,
+    659,
+    660,
+    661,
+    662,
+    663,
+    664,
+    665,
+    666,
+    667,
+    668,
+    669,
+    700,
+    701,
+    702,
+    703,
+    704,
+    705,
+    706,
+    707,
+    708,
+    709,
+    749,
+    800,
+    801,
+    802,
+    803
+   ],
+   "mt_in_mf33": [
+    1,
+    2,
+    4,
+    5,
+    16,
+    22,
+    23,
+    28,
+    32,
+    41,
+    44,
+    45,
+    102,
+    103,
+    104,
+    105,
+    107,
+    108,
+    112,
+    600,
+    601,
+    602,
+    603,
+    650,
+    651,
+    652,
+    653,
+    654,
+    655,
+    656,
+    657,
+    658,
+    659,
+    700,
+    701,
+    702,
+    703,
+    704,
+    705,
+    706,
+    707,
+    708,
+    709,
+    749,
+    800,
+    801,
+    802,
+    803
+   ],
+   "mt_in_mf34": [
+    2
+   ],
+   "sha256": "aabef9c710c132b4e4d8028e58eff2e542d61d34b93823b5f1199649bff7f781",
+   "sigma_el_over_barashenkov": {
+    "100MeV": 0.96590909,
+    "150MeV": 0.93081761
+   },
+   "tape_label": " $Rev:: 1523     $  $Date:: 2018-02-02#$",
+   "zip_member": "ENDF-B-VIII.0_neutrons/n-008_O_016.endf"
+  }
  },
- "status": "identity and provenance VERIFIED; energy coverage VERIFIED (<= 150 MeV); scientific suitability NOT YET ASSESSED; no construction use"
+ "operator_authorisation": [
+  "response of 2026-10-19 to IR-20261018-091819-903058 (bounded, acquisition-first Option B)",
+  "IR-20261019-000144-2C50C8 resolved 2026-10-23T18:38:00Z (V3-INFRA-001 integrated via PR #83 at c790df369c03d1d775c843d4f1e13ab9337137e5)"
+ ],
+ "provenance": {
+  "argv": [
+   "python",
+   "-m",
+   "validation.scripts.reference_data.endf_verify",
+   "--zip",
+   ".ionmc-cache/reference/a1cced11710eb36690c5ad7b64d414465c5849f5428904049c864e9beca28894",
+   "--member",
+   "ENDF-B-VIII.0_neutrons/n-006_C_012.endf",
+   "--member",
+   "ENDF-B-VIII.0_neutrons/n-008_O_016.endf",
+   "--changelog",
+   "ENDF-B-VIII.0_neutrons/CHANGELOG.txt",
+   "--acquisition-meta",
+   "validation/results/reference_data/endf-b-viii0-neutrons-c12-o16/acquisition-meta.json",
+   "--out",
+   "validation/results/reference_data/endf-b-viii0-neutrons-c12-o16"
+  ],
+  "git_clean": false,
+  "git_head": "76c17e4a1fdd2116e6ff6e4c1837aa1c58cb770c",
+  "verifier": "validation/scripts/reference_data/endf_verify.py",
+  "verifier_sha256": "09795c35d0b126371c30cb2704da63a52a4db4f94ab01909bf7bfec448ca70b3",
+  "zip_sha256": "a1cced11710eb36690c5ad7b64d414465c5849f5428904049c864e9beca28894"
+ },
+ "record": "ENDF/B-VIII.0 neutron sublibrary: acquisition, identity and coverage verification of n+C-12 (MAT 625) and n+O-16 (MAT 825) for the V3-005D M3 candidate (exploratory role; NO construction, calibration or evaluation use)",
+ "status": "identity, provenance and energy coverage VERIFIED by the committed verifier; scientific suitability recorded in decision 0042",
+ "verification_method": "structural ENDF-6 parse of MF1/MT451, MF2/MT151, MF3/MT1-2, MF4/MT2 and the MF34/MT2 header by the committed verifier validation/scripts/reference_data/endf_verify.py (members read in memory with zipfile from the cached source archive; nothing extracted or executed); only hashes, headers, grid metadata, ratios and aggregate statistics are recorded (decision 0041)"
 }

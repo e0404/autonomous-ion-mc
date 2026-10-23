@@ -1323,3 +1323,70 @@ My table/σ_anchor ratios are reproduced correctly: 27.30/27.26 = 1.001, 22.94/2
 **Disposition (orchestrator, 2026-10-19, after the round).** (1) The Lead A table of the rendered report now carries the SE column (renderer only; the Markdown body was re-rendered from the unchanged `de9.json`, whose sha256 is unchanged; the D-E9 record was not re-evaluated). (2) `de9-manifest.json` is committed with the record (allowlisted in `de9_record.GIT_FILES`). (3) The per-point dicts of `de9-b0.json` (51 carry-up ratios of the committed BGG formula; 20 node and 19 midpoint reconstruction-over-table agreement ratios) are kept as produced: the B0 record is hash-bound in the D-E9 record (once-only), and the "no per-point arrays" sentence is the common projection note written into every record, so it cannot be reworded inside the record; the discrepancy is disclosed instead in the results README and in decision 0042 (formula and agreement ratios only; no nuclear data; no absolute cross section). No synthesis statistic, seed, document or reading rule changed.
 
 *Addendum to the disposition (2026-10-19, Codex REVIEW-80ec0344 on cd028e3f, pass with two minor findings).* (i) The pooled-baseline row's `se` is the SE of the pooled baseline alone (the delta term is not propagated; its covariance with the D-E3 baseline is not formed): the rendered table now says so, as does decision 0042; the hash-bound `de9.json` keeps its field. (ii) The B0 per-point dicts: the Git projection `de9-b0.json` is the hash-bound once-only B0 document and is not trimmed; the Git policy of the results README carries a dated reconciliation (keyed agreement-ratio and formula-ratio series). No statistic, document, seed, setting or reading rule changes.
+
+# Round M3-1 review (2026-10-23; M3 suitability assessment of ENDF/B-VIII.0 n+C-12 MAT 625 and n+O-16 MAT 825; read-only)
+
+**Verdict: REVISE.** The researcher's overall conclusion holds, but four things must change before anything goes into decision 0042: the P(θ_CM > x) values are biased low, the "NOT SUITABLE" verdict is stated more strongly than the record supports, it has to be reconciled with the committed Amendment 20 (b″)4 hold rule, and the [LIT] items must be struck or re-sourced. I modified no file; all computations ran in $TMPDIR with python3 -I, reading the staged files with my own code (it imports the researcher's plain-text `endfmini.py` reader, which I read first; no pickle was loaded).
+
+**1. Reproducibility (spot-checks against the staged members; sha256 daa7901e…f981 and aabef9c7…7f781 match the assessment)**
+- **(a) σ_el ratios reproduce exactly.** σ_el(n)/Barashenkov σ_el(p) from MF3/MT2: C 262.0/253 = 1.036 and 113.0/125 = 0.904; O 340/352 = 0.966 and 148/159 = 0.931, at 100/150 MeV. Representation is LTT = 3, LCT = 2 (CM). The C-12 tabulated energies run 20–150 MeV (17 energies), O-16 30–150 MeV (14). The files contain no data above 150 MeV.
+- **(b) ⟨1−μ_CM⟩ reproduces within interpolation.** Mine: C 0.0455/0.0421/0.0295/0.0207 and O 0.0369/0.0286/0.0256/0.0180 at 80/100/110/150 MeV, with ENDF INT = 4 (log-y, lin-μ) and normalised. The assessment's values are within 0.0004. The norm defects of 1.005–1.018 under lin-lin trapz are confirmed as interpolation-law artefacts.
+- **(c) The P(θ_CM > 10°) and P(θ_CM > 20°) values do NOT reproduce. They are biased low (important).** `a2.py` integrates only over tabulated points with μ ≤ cos θ and drops the segment between the last point and the threshold, which lies in the high-density forward region. Corrected values (INT = 4 interpolation to the threshold, normalised), at 80/100/110/150 MeV:
+
+  | Target | P(θ_CM > 20°) | P(θ_CM > 10°) |
+  |---|---|---|
+  | C | 0.215 / 0.200 / 0.115 / 0.051 (assessment: 0.167 / 0.153 / 0.070 / 0.028) | 0.651 / 0.624 / 0.573 / 0.454 |
+  | O | 0.163 / 0.102 / 0.081 / 0.033 | 0.627 / 0.555 / 0.522 / 0.398 |
+
+  The copy-check argument (O differs from C) survives, and so does the C-12 100 → 110 MeV discontinuity. Its size changes, though: P(>20°) falls by a factor of 1.7, not 2.2. ⟨1−μ⟩ falls by 30 % between 100 and 110 MeV, against 7 % between 80 and 100 MeV. The local minimum at 40° CM present at 100 MeV is absent at 110 MeV (local minima forward of 130°: 100 MeV at 40/72/106°; 110 MeV none). O-16 has no local minimum forward of 115° at any of the four energies; at 150 MeV the first is at 115°.
+  - Fix: recompute every P value with the INT = 4 law interpolated to the threshold before any number enters a record.
+
+**2. Verdict logic: sound in substance, but it must be reworded and reconciled with the committed rules.**
+- **(a) "NOT SUITABLE" overstates the record (important).** The committed M3 definition (Amendment 20 (b″)4) pre-declared a hold above E_top, with the shape held fixed in q. Its coverage gate ("E_top ≥ 150 MeV, or the q-scaling range is recorded as a limitation") is met by E_top = 150 MeV. In the frozen text, therefore, M3 would be constructible. What the record supports is the following.
+  - Under the operator's 2026-10-19 framing ("obtaining the files does not … authorize extrapolation without scientific justification"), the (b″)4 hold has no scientific justification in the record.
+  - The proposed self-consistency test O4 (100 → 150 MeV q-hold) has not been run.
+  - So the right statement is that **suitability for the 200 MeV screen is not established**, not that M3 is shown unsuitable.
+  - The record should also say that any future M3 attempt needs a new prospective amendment that replaces the (b″)4 hold with either a justified rule or the fail-closed `above_emax = "error"`, which is the skeleton's default.
+- **(b) Context the decision text may cite, in tested-shapes wording only.** At 200 MeV, condition (ii) failed for all four tested p+A shapes, including the Geant4 CHIPS swap (D-E8). D-E9 shows the 200 MeV elastic gain is about 80 % p-p. An M3 shape at 200 MeV could therefore not be expected to pass the screen's gain condition. This is supported for the tested shapes only; it is not a proof for all shapes.
+- **(c) Fail-closed domain, Coulomb handling and quarantine are handled correctly.** The skeleton defaults to `above_emax = "error"`. Coulomb stays in the MCS, and dropping the interference matches D-1 and M2 (open item O3). No V10-A or V11 number is used.
+
+**3. What may enter the record as fact, as an open item, or must be struck or re-sourced**
+- **Established facts (from the files and the changelog):**
+  - identity (MAT, headers);
+  - MF3 and MF4 coverage ending at 150 MeV;
+  - no MF4/MT2 shape covariance above 20 MeV (C) or 30 MeV (O): C-12 has MF33 only; O-16 MF34 is L = 1 only, from the R-matrix analysis extrapolated with smooth functions;
+  - the four σ_el ratios (report-only; M3 keeps the Barashenkov level);
+  - the C-12 100 → 110 MeV shape discontinuity (corrected numbers, item 1c);
+  - absence of local minima forward of 115° (O, every tabulated energy) and of 130° (C, at and above 110 MeV) in the tabulated shapes;
+  - the stale-EMAX header anomaly.
+- **O1: resolved by record,** taking your addendum into account. The sublibrary CHANGELOG states "n-006_C_012.endf: Revised from Hale & Paris: natC evaluation restored from 20-150 MeV". The MF1 comment "was not retained" is stale text from the August 2015 revision.
+  - Two conditions: (i) bind the CHANGELOG by its zip member path and sha256 in the committed acquisition record, which currently still calls the provenance "NOT established"; (ii) record that the 20–150 MeV C-12 content is a **natural-carbon** evaluation.
+  - Its identification with the LA150-era Chadwick–Young calculation is an inference from structure and history; the changelog does not state it.
+  - The 100 → 110 MeV discontinuity remains a separate open item about the content.
+- **Open items:** the content discontinuity (formerly part of O1); O2; O3; O4; O5; O6; O-JENDL; O-81.
+  - **O2 must be reworded:** "no local minimum forward of 115°/130° in the tabulated shapes; whether a minimum is expected at these energies is not established in this record". The phrase "the expected diffraction minimum" rests on [LIT] memory and on the M2 model.
+  - The project's own D-E1 found no significant minimum in the forward O-16 V10-A datasets. In any case V10-A is quarantined and must not be used to frame O2.
+- **Struck or re-sourced: every [LIT] item.** These are Lane 1962; Koning–Delaroche 2003 and its A ≥ 24 domain; Carlson 1996; Auce 2005; Abfalterer 2001; Klug 2003; Mermod 2006; Osborne 2004; Chadwick–Young NSE 123 and LA-UR-99-1222 (beyond the file's own citation text); the "measured minimum at q ≈ 1.3–1.6 fm⁻¹" claim; and the JENDL-5 and TENDL coverage statements. None may enter the record until it is acquired and verified.
+  - "Mirror error ≤ 5–10 %" may be cited **only as the plan-of-record's own figure** (plan §4, M3 row), not as an assessed fact.
+  - The [SPEC] items (the splice cause, VIII.1 content) stay out.
+
+**4. Wording for decision 0042, and plan impact**
+- **The proposed wording should be adjusted.** "NOT SUITABLE for the 200 MeV closure; SUITABLE-IN-DOMAIN (≤ 150 MeV) only as report-only sensitivity, conditional on O1/O2" overstates the 200 MeV part (item 2a), and O1 is now resolved by record.
+- **No change to the registered plan is implied.** M3 is the plan-of-record fallback. Amendment 20 (b‴) recorded it as not acquirable, and the "no model change" outcome of decision 0042 stands.
+- Acquisition is now possible (the reference-data cap was raised by V3-INFRA-001, merged at 76c17e4a). Per the operator, any M3 construction or evaluation needs a new, independently reviewed prospective plan first. That plan must also supersede the (b″)4 hold rule. No qualification evidence may be collected before then.
+
+**Wording I would allow in the record:**
+
+> *M3 suitability (2026-10-23, exploratory; no table built, no qualification evidence).* The ENDF/B-VIII.0 neutron evaluations n+C-12 (MAT 625) and n+O-16 (MAT 825) were acquired and their identity verified. Their elastic angular distributions (MF4/MT2, CM, tabulated) and elastic cross sections (MF3/MT2) end at 150 MeV, and neither file carries an MF4/MT2 shape uncertainty above 20 MeV (C-12) or 30 MeV (O-16). The C-12 content from 20 to 150 MeV is the natural-carbon evaluation restored during the VIII.0 cycle (sublibrary CHANGELOG, member sha256 <…>), and the MF1 statement that the extension "was not retained" is stale. The C-12 tabulated shape changes discontinuously between 100 and 110 MeV (⟨1−μ_CM⟩ 0.042 → 0.029, against 0.046 → 0.042 from 80 to 100 MeV); the cause is not established. σ_el(n, ENDF)/σ_el(p, Barashenkov) is 1.036/0.904 (C) and 0.966/0.931 (O) at 100/150 MeV, report-only; M3 would keep the Barashenkov level. **Suitability of M3 for the 200 MeV screen is not established:** the evaluations contain no data above 150 MeV, and the record contains no scientific justification for holding the 150 MeV shape at fixed momentum transfer (the hold rule of Amendment 20 (b″)4), as the operator required on 2026-10-19. At 200 MeV the screen's gain condition failed for all four tested p+A shapes, including the Geant4 shape (D-E8), and the elastic plateau gain there is about 80 % p-p (D-E9). Within ≤ 150 MeV, M3 could at most serve as a report-only sensitivity, after the open items are resolved (the C-12 100–110 MeV discontinuity; no local minimum forward of 115°/130° in the tabulated shapes; the omitted Coulomb–nuclear interference; the q-hold self-consistency test) and after a prospective plan is independently reviewed. "No model change" stands; the registered plan is unchanged; any M3 construction requires a new amendment that also replaces the (b″)4 hold rule.
+
+**Fixes before the outcome is recorded:**
+1. Correct the P values (item 1c).
+2. Reword the verdict to "not established" and reconcile it with the (b″)4 hold rule (item 2a).
+3. Record O1 as resolved, with the CHANGELOG sha256 bound in the committed acquisition record and the natC wording.
+4. Reframe O2.
+5. Strike or re-source every [LIT] item.
+6. Make the decision-0042 wording conditional as quoted above.
+
+None of this blocks the "no model change" state or requires a change to the registered plan.
+
+**Disposition (orchestrator, 2026-10-23, after round M3-1 and Codex REVIEW-d97d4c97).** (1) The researcher's exceedance probabilities are not cited anywhere; the committed verifier recomputes every per-energy statistic with the files' own interpolation law interpolated to the threshold, and the record carries those values. (2) The verdict is recorded as "suitability of M3 for the 200 MeV screen is not established" with the (b″)4 reconciliation, in the reviewer's wording (decision 0042, dated section of 2026-10-23). (3) O1 is recorded as resolved by record: the CHANGELOG member is bound by path and sha256 in the acquisition record and the C-12 20–150 MeV content is named a natural-carbon evaluation. (4) O2 is reframed as the reviewer asked. (5) Every [LIT] item is struck: the researcher's note is not committed; the record cites only file facts, the changelog and project records. (6) The decision wording is the reviewer's, conditional as quoted. The verifier is committed with tests (Codex important finding) and the record regenerated from the cached archive by the committed code.
