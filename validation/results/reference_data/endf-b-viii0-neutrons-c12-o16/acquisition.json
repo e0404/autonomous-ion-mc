@@ -1,0 +1,344 @@
+{
+ "record": "ENDF/B-VIII.0 neutron sublibrary: acquisition, identity and coverage verification of n+C-12 (MAT 625) and n+O-16 (MAT 825) for the V3-005D M3 candidate (exploratory role; NO construction, calibration or evaluation use)",
+ "date_utc": "2026-10-23",
+ "operator_authorisation": [
+  "response of 2026-10-19 to IR-20261018-091819-903058 (bounded, acquisition-first Option B)",
+  "IR-20261019-000144-2C50C8 resolved 2026-10-23T18:38:00Z (V3-INFRA-001 integrated via PR #83 at c790df369c03d1d775c843d4f1e13ab9337137e5)"
+ ],
+ "acquisition": {
+  "url": "https://www.nndc.bnl.gov/endf-b8.0/zips/ENDF-B-VIII.0_neutrons.zip",
+  "bytes": 310158456,
+  "sha256": "a1cced11710eb36690c5ad7b64d414465c5849f5428904049c864e9beca28894",
+  "retrieved_at_utc": "2026-10-23T18:37:16Z",
+  "upstream_last_modified_header_seen_2026_10_19": "2024-03-15",
+  "acquisition_id": "7490952096b342c98f533fab81d1b1aa",
+  "role": "exploratory",
+  "acquisition_code_sha": "c790df369c03d1d775c843d4f1e13ab9337137e5",
+  "zip_entries": 561,
+  "citation": "D. A. Brown et al., Nucl. Data Sheets 148 (2018) 1-142, doi:10.1016/j.nds.2018.02.001",
+  "license_basis": "public NNDC distribution of the US evaluated nuclear data library"
+ },
+ "verification": {
+  "method": "structural ENDF-6 parse of MF1/MT451, MF2/MT151, MF3/MT1-2, MF4/MT2 (no cross-section value is recorded here); members extracted with python -I zipfile into an isolated staging directory; script endf_verify.py (sha256 ec58b1281e28409b6b7260abdf00f5ef7c31cf751f36c199bc2b5cf5b6986ecc), kept outside the repository",
+  "members": {
+   "n-006_C_012.endf": {
+    "zip_member": "ENDF-B-VIII.0_neutrons/n-006_C_012.endf",
+    "bytes": 3805168,
+    "sha256": "daa7901e0067f9ac6d9b2392514ba00e71e37d00c8a8ecbbde0620237815f981",
+    "lines": 50068,
+    "tape_label": " $Rev:: 4468     $  $Date:: 2015-08-29#$",
+    "MAT": 625,
+    "mf1_mt451": {
+     "ZA": 6012.0,
+     "AWR": 11.89365,
+     "NLIB": 0,
+     "NVER": 8,
+     "LREL": 0,
+     "NMOD": 0,
+     "NFOR": 6,
+     "NSUB": 10,
+     "EMAX_eV": 20000000.0,
+     "LRP": 0,
+     "LFI": 0,
+     "NWD": 79,
+     "NXC": 57
+    },
+    "identification_lines": [
+     "  6-C - 12 LANL,ORNL  EVAL-AUG15 G.M. Hale, P.G. Young, C.Y. Fu",
+     " NDS 148, 1 (2018)    DIST-FEB18",
+     "----ENDF/B-VIII.0     MATERIAL  625",
+     "-----INCIDENT NEUTRON DATA",
+     "------ENDF-6 FORMAT"
+    ],
+    "mf2_mt151_range_eV": [
+     1e-05,
+     100000.0
+    ],
+    "mf2_LRU_LRF": [
+     0,
+     0
+    ],
+    "mf3_mt1": {
+     "NP": 1338,
+     "E_min_eV": 1e-05,
+     "E_max_eV": 150000000.0,
+     "n_points_ge_20MeV": 119
+    },
+    "mf3_mt2": {
+     "NP": 1077,
+     "E_min_eV": 1e-05,
+     "E_max_eV": 150000000.0,
+     "n_points_ge_20MeV": 119
+    },
+    "mf4_mt2": {
+     "LTT": 3,
+     "LI": 0,
+     "LCT": 2,
+     "legendre": {
+      "NE": 702,
+      "E_min_eV": 1e-05,
+      "E_max_eV": 20000000.0,
+      "NL_max": 8
+     },
+     "tabulated": {
+      "NE": 17,
+      "E_min_eV": 20000000.0,
+      "E_max_eV": 150000000.0,
+      "NP_max": 91
+     },
+     "incident_energies_ge_20MeV_eV": [
+      20000000.0,
+      20000000.0,
+      23000000.0,
+      27000000.0,
+      30000000.0,
+      35000000.0,
+      40000000.0,
+      50000000.0,
+      60000000.0,
+      70000000.0,
+      80000000.0,
+      90000000.0,
+      100000000.0,
+      110000000.0,
+      120000000.0,
+      130000000.0,
+      140000000.0,
+      150000000.0
+     ]
+    },
+    "mf6_mt2_present": false,
+    "mf_present": [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     12,
+     14,
+     33
+    ],
+    "mt_in_mf3": [
+     1,
+     2,
+     3,
+     4,
+     5,
+     28,
+     51,
+     52,
+     53,
+     54,
+     55,
+     56,
+     57,
+     58,
+     59,
+     60,
+     61,
+     62,
+     91,
+     102,
+     103,
+     104,
+     107
+    ],
+    "covariance_mf": [
+     33
+    ],
+    "evaluation_comment_quote": "MF1/MT451: 'ENDF/B-VII MOD 1 Evaluation, August 2015, G. M. Hale and P. G. Young (LANL)'; R-matrix analysis up to 6.45 MeV; 'At neutron energies above 6.45 MeV, the evaluation was joined to the existing ENDF/B-VII.0 evaluation for natural carbon, which is essentially version VI.1 (Fu, Axton, and Perey)'; 'All cross sections were kept the same as the VII.0 file in the energy range 6.47 <= E <= 20 MeV'; 'The version VI.3 extension to 150 MeV (Chadwick and Young) was not retained in this file.' (sic: the file nevertheless carries MF3/MT1-2 and tabulated MF4/MT2 data to 150 MeV; provenance of the 20-150 MeV part is NOT established by the comment block and is an open item of the suitability assessment)"
+   },
+   "n-008_O_016.endf": {
+    "zip_member": "ENDF-B-VIII.0_neutrons/n-008_O_016.endf",
+    "bytes": 41873568,
+    "sha256": "aabef9c710c132b4e4d8028e58eff2e542d61d34b93823b5f1199649bff7f781",
+    "lines": 550968,
+    "tape_label": " $Rev:: 1523     $  $Date:: 2018-02-02#$",
+    "MAT": 825,
+    "mf1_mt451": {
+     "ZA": 8016.0,
+     "AWR": 15.85751,
+     "NLIB": 0,
+     "NVER": 8,
+     "LREL": 0,
+     "NMOD": 3,
+     "NFOR": 6,
+     "NSUB": 10,
+     "EMAX_eV": 30000000.0,
+     "LRP": 0,
+     "LFI": 0,
+     "NWD": 963,
+     "NXC": 192
+    },
+    "identification_lines": [
+     "  8-O - 16 LANL       EVAL-DEC16 Hale,Paris,Young,Chadwick",
+     "CH96AB,CA98,Ch99,Yo01 DIST-FEB18",
+     "----ENDF/B-VIII.0     MATERIAL  825",
+     "-----INCIDENT NEUTRON DATA",
+     "------ENDF-6 FORMAT"
+    ],
+    "mf2_mt151_range_eV": [
+     1e-05,
+     150000000.0
+    ],
+    "mf2_LRU_LRF": [
+     0,
+     0
+    ],
+    "mf3_mt1": {
+     "NP": 2796,
+     "E_min_eV": 1e-05,
+     "E_max_eV": 150000000.0,
+     "n_points_ge_20MeV": 183
+    },
+    "mf3_mt2": {
+     "NP": 2323,
+     "E_min_eV": 1e-05,
+     "E_max_eV": 150000000.0,
+     "n_points_ge_20MeV": 183
+    },
+    "mf4_mt2": {
+     "LTT": 3,
+     "LI": 0,
+     "LCT": 2,
+     "legendre": {
+      "NE": 1622,
+      "E_min_eV": 1e-05,
+      "E_max_eV": 30000000.0,
+      "NL_max": 10
+     },
+     "tabulated": {
+      "NE": 14,
+      "E_min_eV": 30000000.0,
+      "E_max_eV": 150000000.0,
+      "NP_max": 73
+     },
+     "incident_energies_ge_20MeV_eV": [
+      20000000.0,
+      21000000.0,
+      22000000.0,
+      23000000.0,
+      24000000.0,
+      25000000.0,
+      26000000.0,
+      27000000.0,
+      28000000.0,
+      29000000.0,
+      30000000.0,
+      30000000.0,
+      35000000.0,
+      40000000.0,
+      50000000.0,
+      60000000.0,
+      70000000.0,
+      80000000.0,
+      90000000.0,
+      100000000.0,
+      110000000.0,
+      120000000.0,
+      130000000.0,
+      140000000.0,
+      150000000.0
+     ]
+    },
+    "mf6_mt2_present": false,
+    "mf_present": [
+     1,
+     2,
+     3,
+     4,
+     6,
+     12,
+     13,
+     14,
+     33,
+     34
+    ],
+    "mt_in_mf3": [
+     1,
+     2,
+     4,
+     5,
+     16,
+     22,
+     23,
+     28,
+     32,
+     41,
+     44,
+     45,
+     51,
+     52,
+     53,
+     54,
+     55,
+     56,
+     57,
+     91,
+     102,
+     103,
+     104,
+     105,
+     107,
+     108,
+     112,
+     600,
+     601,
+     602,
+     603,
+     650,
+     651,
+     652,
+     653,
+     654,
+     655,
+     656,
+     657,
+     658,
+     659,
+     660,
+     661,
+     662,
+     663,
+     664,
+     665,
+     666,
+     667,
+     668,
+     669,
+     700,
+     701,
+     702,
+     703,
+     704,
+     705,
+     706,
+     707,
+     708,
+     709,
+     749,
+     800,
+     801,
+     802,
+     803
+    ],
+    "covariance_mf": [
+     33,
+     34
+    ],
+    "evaluation_comment_quote": "MF1/MT451: 'EVAL-DEC16 Hale,Paris,Young,Chadwick'; R-matrix below 6.25 MeV, GNASH/optical-model evaluation 6.25-30 MeV; the previous MOD 2 (LA150-type, Chadwick et al.) evaluation retained from 30 to 150 MeV ('the previous evaluation, which extends to 150 MeV'); above 30 MeV MF6/MT5 carries the non-elastic emission and 'MF=4 MT=2 Elastic Angular Distributions' are listed among the non-zero data above 30 MeV; covariances 'continuing to 150 MeV'"
+   }
+  },
+  "coverage_findings": [
+   "Both files: MF3/MT2 (elastic cross section) from 1e-5 eV to 150 MeV; MF4/MT2 with LTT = 3 (Legendre below, tabulated above a switch energy), LCT = 2 (centre-of-mass).",
+   "C-12: Legendre to 20 MeV (NL <= 8); tabulated f(mu) at 17 incident energies from 20 to 150 MeV (NP <= 91). O-16: Legendre to 30 MeV (NL <= 10); tabulated at 14 incident energies from 30 to 150 MeV (NP <= 73).",
+   "The project's energies of interest are 100, 150 and 200 MeV and the elastic table grid runs to 250 MeV: 100 and 150 MeV are inside the evaluated domain (150 MeV is the LAST node), 200 MeV and the grid above 150 MeV are OUTSIDE it. No extrapolation is authorised without scientific justification (operator, 2026-10-19).",
+   "Header anomaly: MF1/MT451 EMAX is 2.0e7 eV (C-12) and 3.0e7 eV (O-16) while the data extend to 1.5e8 eV. Recorded as is; not corrected.",
+   "No MF6/MT2 in either file. Covariance files present: C-12 MF33; O-16 MF33 and MF34 (the suitability assessment states whether MF4/MT2 above 20/30 MeV carries any covariance).",
+   "These are NEUTRON evaluations. Their use as a mirror for p+A elastic angular distributions (M3) is a scientific hypothesis to be assessed (isospin mirror validity, Coulomb-nuclear interference, isovector terms) before any plan; this record establishes identity, provenance and coverage only."
+  ],
+  "git_policy": "decision 0041: no cross-section value, no angular distribution point and no Legendre coefficient is recorded here; the files stay in the reference store (content-addressed object a1cced11...) and the git-ignored task cache; the staging copies are deleted after the suitability assessment."
+ },
+ "status": "identity and provenance VERIFIED; energy coverage VERIFIED (<= 150 MeV); scientific suitability NOT YET ASSESSED; no construction use"
+}
