@@ -2073,8 +2073,8 @@
    "--out",
    "validation/results/reference_data/endf-b-viii0-neutrons-c12-o16"
   ],
-  "git_clean": false,
-  "git_head": "76c17e4a1fdd2116e6ff6e4c1837aa1c58cb770c",
+  "git_clean": true,
+  "git_head": "ac407c05486f428cdf77393febcf47fe5921de81",
   "verifier": "validation/scripts/reference_data/endf_verify.py",
   "verifier_sha256": "09795c35d0b126371c30cb2704da63a52a4db4f94ab01909bf7bfec448ca70b3",
   "zip_sha256": "a1cced11710eb36690c5ad7b64d414465c5849f5428904049c864e9beca28894"

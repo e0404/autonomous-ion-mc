@@ -11,7 +11,7 @@ Exploratory acquisition for the V3-005D M3 candidate. **No construction, calibra
 
 ## Provenance of this record
 
-- Verifier `validation/scripts/reference_data/endf_verify.py` sha256 `09795c35d0b126371c30cb2704da63a52a4db4f94ab01909bf7bfec448ca70b3`; git HEAD `76c17e4a1fdd2116e6ff6e4c1837aa1c58cb770c`; working tree clean: False.
+- Verifier `validation/scripts/reference_data/endf_verify.py` sha256 `09795c35d0b126371c30cb2704da63a52a4db4f94ab01909bf7bfec448ca70b3`; git HEAD `ac407c05486f428cdf77393febcf47fe5921de81`; working tree clean: True.
 - Command: `python -m validation.scripts.reference_data.endf_verify --zip .ionmc-cache/reference/a1cced11710eb36690c5ad7b64d414465c5849f5428904049c864e9beca28894 --member ENDF-B-VIII.0_neutrons/n-006_C_012.endf --member ENDF-B-VIII.0_neutrons/n-008_O_016.endf --changelog ENDF-B-VIII.0_neutrons/CHANGELOG.txt --acquisition-meta validation/results/reference_data/endf-b-viii0-neutrons-c12-o16/acquisition-meta.json --out validation/results/reference_data/endf-b-viii0-neutrons-c12-o16`
 - Source archive sha256 `a1cced11710eb36690c5ad7b64d414465c5849f5428904049c864e9beca28894`.
 
