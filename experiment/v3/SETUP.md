@@ -50,6 +50,11 @@ See [Codex non-interactive execution](https://developers.openai.com/codex/nonint
 
 ## Reference outputs
 
+Reference-data acquisition accepts downloads up to 1 GiB (1,073,741,824 bytes)
+per file. The operator raised this cap for IR-20261019-000144-2C50C8 to allow
+the ENDF/B-VIII.0 neutron archive. Restart the v3-research MCP server after
+updating its source so the running process loads the new cap.
+
 Use list_reference_artifacts for a paginated manifest, then
 materialize_reference_artifacts(run_id, task_id) to transfer all archived inputs,
 outputs and logs to .ionmc-cache/reference-runs/<run-id>. Optional paths select
