@@ -1,0 +1,34 @@
+== archive_fitted
+  paired: N=200000, non-finite quantile rows 0, degenerate rows 0
+    nominal      kappa 1.00000 target 0.6827 true 0.68396 (gate-def 0.68396) +- 0.00104  shift +0.00126  binomial OC 0.9628  observed paired 0.9675 (3096/3200)  <- own margin
+    paired_high  kappa 1.06637 target 0.7127 true 0.71464 (gate-def 0.71464) +- 0.00101  shift +0.00194  binomial OC 0.0212  observed paired 0.0209 (67/3200)  <- own margin
+    paired_low   kappa 0.93861 target 0.6527 true 0.65329 (gate-def 0.65329) +- 0.00106  shift +0.00059  binomial OC 0.0439  observed paired 0.0469 (150/3200)  <- own margin
+    single_high  kappa 1.05467 target 0.7127 true 0.70937 (gate-def 0.70937) +- 0.00102  shift -0.00333  binomial OC 0.0921  observed paired 0.0966 (309/3200)
+    single_low   kappa 0.92917 target 0.6527 true 0.64831 (gate-def 0.64831) +- 0.00107  shift -0.00438  binomial OC 0.0099  observed paired 0.0109 (35/3200)
+    big-sample kappa for 0.6527: 0.93735
+    big-sample kappa for 0.7127: 1.06244
+  single: N=150000, non-finite quantile rows 0, degenerate rows 0
+    nominal      kappa 1.00000 target 0.6827 true 0.68664 (gate-def 0.68664) +- 0.00120  shift +0.00394  binomial OC 0.9917  observed single 0.9853 (3153/3200)  <- own margin
+    paired_high  kappa 1.06637 target 0.7127 true 0.71740 (gate-def 0.71740) +- 0.00116  shift +0.00470  binomial OC 0.0055  observed single 0.0016 (5/3200)
+    paired_low   kappa 0.93861 target 0.6527 true 0.65533 (gate-def 0.65533) +- 0.00123  shift +0.00263  binomial OC 0.0856  observed single 0.0384 (123/3200)
+    single_high  kappa 1.05467 target 0.7127 true 0.71220 (gate-def 0.71220) +- 0.00117  shift -0.00050  binomial OC 0.0454  observed single 0.0241 (77/3200)  <- own margin
+    single_low   kappa 0.92917 target 0.6527 true 0.65047 (gate-def 0.65047) +- 0.00123  shift -0.00223  binomial OC 0.0172  observed single 0.0066 (21/3200)  <- own margin
+    big-sample kappa for 0.6527: 0.93377
+    big-sample kappa for 0.7127: 1.05565
+== rehearsal_block_sums
+  paired: N=200000, non-finite quantile rows 0, degenerate rows 0
+    nominal      kappa 1.00000 target 0.6827 true 0.68305 (gate-def 0.68305) +- 0.00104  shift +0.00035  binomial OC 0.9639  observed paired 0.9603 (3073/3200)  <- own margin
+    paired_high  kappa 1.07323 target 0.7127 true 0.71700 (gate-def 0.71700) +- 0.00101  shift +0.00430  binomial OC 0.0095  observed paired 0.0216 (69/3200)  <- own margin
+    paired_low   kappa 0.94939 target 0.6527 true 0.65814 (gate-def 0.65814) +- 0.00106  shift +0.00545  binomial OC 0.1366  observed paired 0.1153 (369/3200)  <- own margin
+    single_high  kappa 1.05501 target 0.7127 true 0.70871 (gate-def 0.70871) +- 0.00102  shift -0.00399  binomial OC 0.1074  observed paired 0.1350 (432/3200)
+    single_low   kappa 0.92750 target 0.6527 true 0.64729 (gate-def 0.64729) +- 0.00107  shift -0.00540  binomial OC 0.0070  observed paired 0.0047 (15/3200)
+    big-sample kappa for 0.6527: 0.93815
+    big-sample kappa for 0.7127: 1.06368
+  single: N=150000, non-finite quantile rows 0, degenerate rows 0
+    nominal      kappa 1.00000 target 0.6827 true 0.68083 (gate-def 0.68083) +- 0.00120  shift -0.00187  binomial OC 0.9951  observed single 0.9888 (3164/3200)  <- own margin
+    paired_high  kappa 1.07323 target 0.7127 true 0.71349 (gate-def 0.71349) +- 0.00117  shift +0.00079  binomial OC 0.0286  observed single 0.0063 (20/3200)
+    paired_low   kappa 0.94939 target 0.6527 true 0.65667 (gate-def 0.65667) +- 0.00123  shift +0.00397  binomial OC 0.1228  observed single 0.0597 (191/3200)
+    single_high  kappa 1.05501 target 0.7127 true 0.70576 (gate-def 0.70576) +- 0.00118  shift -0.00694  binomial OC 0.2590  observed single 0.1156 (370/3200)  <- own margin
+    single_low   kappa 0.92750 target 0.6527 true 0.64607 (gate-def 0.64607) +- 0.00123  shift -0.00663  binomial OC 0.0026  observed single 0.0013 (4/3200)  <- own margin
+    big-sample kappa for 0.6527: 0.94041
+    big-sample kappa for 0.7127: 1.07123

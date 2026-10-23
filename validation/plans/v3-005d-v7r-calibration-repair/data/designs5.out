@@ -1,0 +1,23 @@
+== (A) MC clauses as written, R=3200, n_kappa 1e6: 5400 pairs
+5400 pairs alpha 0.02: FA_p 0.0197 FA_s(bound) 0.0194 joint power(model) arch 0.9883 rehe 0.9909 | P(all) r=1 bound 0.000 r=.32 0.993
+5400 pairs alpha 0.015: FA_p 0.0148 FA_s(bound) 0.0143 joint power(model) arch 0.9835 rehe 0.9871 | P(all) r=1 bound 0.012 r=.32 1.000
+5400 pairs alpha 0.01: FA_p 0.0097 FA_s(bound) 0.0099 joint power(model) arch 0.9749 rehe 0.9798 | P(all) r=1 bound 0.751 r=.32 1.000
+5400 pairs alpha 0.0075: FA_p 0.0075 FA_s(bound) 0.0072 joint power(model) arch 0.9663 rehe 0.9731 | P(all) r=1 bound 0.988 r=.32 1.000
+5400 pairs alpha 0.005: FA_p 0.0050 FA_s(bound) 0.0050 joint power(model) arch 0.9537 rehe 0.9618 | P(all) r=1 bound 1.000 r=.32 1.000
+== (B) reduced R with 7200/alpha .005
+R 400: kmax gate 9 joint 3 power kmin 371 | P(all) r=1 bound 0.234 r=.32 0.978
+R 800: kmax gate 22 joint 9 power kmin 735 | P(all) r=1 bound 0.832 r=.32 1.000
+R 1600: kmax gate 50 joint 22 power kmin 1461 | P(all) r=1 bound 0.989 r=.32 1.000
+== (C) deterministic paired certification
+pairs 3600 alpha 0.04: paired FA exact 0.0383; single FA rigorous bound 0.0482; paired power 0.9636/0.9628/0.9639; single power model 0.9819/0.9888; joint ~ 0.9454
+pairs 3600 alpha 0.02: paired FA exact 0.0196; single FA rigorous bound 0.0297; paired power 0.9292/0.9279/0.9296; single power model 0.9635/0.9760; joint ~ 0.8940
+pairs 3600 alpha 0.01: paired FA exact 0.0095; single FA rigorous bound 0.0197; paired power 0.8716/0.8697/0.8721; single power model 0.9353/0.9528; joint ~ 0.8134
+pairs 3600 alpha 0.005: paired FA exact 0.0048; single FA rigorous bound 0.0150; paired power 0.7960/0.7936/0.7965; single power model 0.8977/0.9221; joint ~ 0.7124
+pairs 5400 alpha 0.04: paired FA exact 0.0382; single FA rigorous bound 0.0486; paired power 0.9970/0.9967/0.9970; single power model 0.9985/0.9994; joint ~ 0.9953
+pairs 5400 alpha 0.02: paired FA exact 0.0197; single FA rigorous bound 0.0294; paired power 0.9925/0.9919/0.9926; single power model 0.9964/0.9983; joint ~ 0.9883
+pairs 5400 alpha 0.01: paired FA exact 0.0097; single FA rigorous bound 0.0199; paired power 0.9833/0.9826/0.9835; single power model 0.9922/0.9962; joint ~ 0.9749
+pairs 5400 alpha 0.005: paired FA exact 0.0050; single FA rigorous bound 0.0150; paired power 0.9692/0.9681/0.9696; single power model 0.9851/0.9920; joint ~ 0.9537
+pairs 7200 alpha 0.04: paired FA exact 0.0391; single FA rigorous bound 0.0497; paired power 0.9998/0.9997/0.9998; single power model 0.9999/1.0000; joint ~ 0.9996
+pairs 7200 alpha 0.02: paired FA exact 0.0197; single FA rigorous bound 0.0291; paired power 0.9993/0.9992/0.9993; single power model 0.9997/0.9999; joint ~ 0.9989
+pairs 7200 alpha 0.01: paired FA exact 0.0098; single FA rigorous bound 0.0198; paired power 0.9983/0.9981/0.9983; single power model 0.9991/0.9997; joint ~ 0.9972
+pairs 7200 alpha 0.005: paired FA exact 0.0049; single FA rigorous bound 0.0150; paired power 0.9960/0.9956/0.9961; single power model 0.9981/0.9993; joint ~ 0.9937

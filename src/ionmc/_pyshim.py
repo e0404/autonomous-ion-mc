@@ -122,6 +122,7 @@ wp = SimpleNamespace(
     pow=_pow,
     cos=math.cos,
     sin=math.sin,
+    tan=math.tan,
     sinh=_sinh,
     cosh=_cosh,
     floor=_floor,
@@ -131,6 +132,9 @@ wp = SimpleNamespace(
     normalize=_normalize,
     constant=lambda x: x,
     float64=float,
+    float32=float,
+    uint32=int,
+    vec2ui=tuple,
     array=lambda dtype=None, **_: object,
     types=SimpleNamespace(vector=_vector),
 )

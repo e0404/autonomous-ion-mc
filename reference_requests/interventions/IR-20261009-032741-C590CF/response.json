@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "request_id": "IR-20261009-032741-C590CF",
+  "resolved_at_utc": "2026-10-10T13:48:52.889044+00:00",
+  "task_id": "V3-005B",
+  "response": "Regarding IR-20261009-032741-C590CF: Keep PR #82 unmerged under interpretation B. Continue V3-005C on top of the V3-005B task branch. Address the dose discrepancies, investigate the escaped-neutral uncertainty calibration, and obtain sufficient statistics for the inconclusive Python/Warp comparison.\nPreserve all existing failed and inconclusive records. Pre-register follow-up validation before generating new results; do not relax acceptance thresholds or repeat seeds merely to obtain a pass. Missing elastic scattering is a hypothesis to test, not an assumed complete explanation.\nMerge only after the applicable scientific and implementation gates pass. Do not create an implementation-only passing record to bypass the failed scientific gate.",
+  "operator_note": "Received 2026-10-10 from the experiment operator through the Claude Code session; recorded verbatim by the orchestrator."
+}

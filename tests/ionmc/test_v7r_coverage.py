@@ -1,0 +1,1110 @@
+"""Calibration of the V7-R bootstrap-t gates of ``escaped_neutral`` (V3-005C C5; plan Amendment 14
+(h), Amendment 17 (a)5-7, Amendment 14a). Marker ``calibration`` (host, exact SHA; excluded from CI).
+The steps ``pytest-v7r-calibration-s{k}`` run this file and the unchanged Amendment 13 calibration
+``tests/ionmc/test_v7_coverage.py``: 30 shards of ``test_v7r_calibration_shard`` (surrogate x 15 parts, all margins; each writes a sealed record into ``IONMC_V7R_CAL_OUT`` and asserts execution integrity only) and
+one shard of the Gaussian cases. The consumer step ``v7r-calibration-combine`` makes the verdict
+(``v7r.calibration_combine``) and ``v7r-combine`` requires it; ``summarize.py`` makes the conjunction
+with the pytest steps for row V7-R.
+
+Requirements (per surrogate, for the two bootstrap-t gates of ``escaped_neutral``)
+-----------------------------------------------------------------------------------
+* joint false acceptance of the two gates <= 0.02 at each margin (95 % Clopper-Pearson upper bound
+  of
+  the Monte Carlo rate); the four margins are the true single-interval coverage and the true pair
+  coverage equal to the low and the high edge of [0.6527, 0.7127], reached by a scale ``kappa`` on
+  the
+  offsets of the intervals from the point estimate (as Amendment 13);
+* each gate alone: the 95 % CP UPPER bound of its Monte Carlo false-acceptance rate <= 0.04 at that gate's
+  OWN margins (paired gate at the paired_low/high kappas, single gate at the single_low/high kappas; the
+  other gate's values are reported, not gated; Amendment 14a (b)4, as implemented before the rehearsal).
+  The "construction reading" (the gate is refuted iff the CP95 LOWER bound exceeds 0.04) is reported per
+  margin as ``gate_alone_construction_reading`` and never gates;
+* power >= 0.9: the 95 % CP LOWER bound of the joint pass rate at kappa = 1 (the unscaled gates) is
+  >= 0.9.
+
+The joint requirement uses the one-sided 95 % Clopper-Pearson UPPER bound (``cp_upper(k, n, 0.05)``),
+the power requirement the LOWER bound. Maximum number of accepted repetitions ``k`` of ``n`` for
+which the upper bound is still <= the limit, and the minimum number of accepted repetitions at the
+nominal for a lower bound >= 0.9 (exact values, ``steps_v5b.cp_upper/cp_lower``):
+
+====  =================  =================  ==================
+n     joint <= 0.02      each gate <= 0.04  power >= 0.9
+      (max accepted k)   (max accepted k)   (min accepted k)
+====  =================  =================  ==================
+200   0 (0.0149)         3 (0.0383)         188 (0.9046)
+400   3 (0.0193)         9 (0.0389)         371 (0.9025)
+800   9 (0.0195)         22 (0.0390)        735 (0.9011)
+1600  22 (0.0196)        50 (0.0394)        1461 (0.9007)
+3200  50 (0.0197)        109 (0.0398)       2909 (0.9003)
+====  =================  =================  ==================
+
+One more acceptance than the maximum gives the bound 0.0235 / 0.0227 / 0.0211 / 0.0203 (joint) and
+0.0452 / 0.0420 / 0.0405 / 0.0401 / 0.0402 (each gate); one fewer than the minimum gives the lower
+bound 0.8986 / 0.8996 / 0.8997 / 0.9000 / 0.8999 (power). At n = 3200 the joint maximum 50 is the observed rate
+0.0156 with CP95 upper 0.0197 (51 gives 0.0201).
+
+(The tests ``test_requirement_bounds_*`` pin these numbers.) The repetition count is
+``IONMC_V7R_CAL_REPS`` (default 200 for sandbox smoke; the calibration steps export 3200). A true false-acceptance rate at the limit (0.02) needs several
+hundred repetitions to be certified; 200 repetitions can only certify a rate near 0 for the joint
+requirement, which is why more repetitions may be chosen before the evidence run (Amendment 14 (h)
+4).
+
+Surrogates (Amendment 14 (h))
+-----------------------------
+1. ``archive``: a zero-inflated Gamma block distribution (``x = B * Gamma(k)``, ``B ~ Bernoulli(1 -
+   pi)``) fitted (grid, then local refinement, fixed fit seed) so that the studentised statistic
+   ``(mean - mu) / sem`` of its simulated 20-block replicates reproduces the four empirical
+   quantiles
+   2.5 / 15.87 / 84.13 / 97.5 % of the archived 7200 lv5b replicates (7aae5bb; -2.228 / +2.005 at
+   the
+   outer pair, the inner pair computed deterministically from the archive). The fit record (family,
+   parameters, achieved quantiles, seed) is printed and reported.
+2. ``rehearsal``: 20 blocks drawn with replacement from the pooled rehearsal block sums (>= 2 shards
+   of 4.5e6 histories, from the sidecars); truth = the pooled mean.
+
+Fixtures (committed derived files; see ``FIXTURE_DIR``). A missing or rejected fixture SKIPs the
+test
+with a reason, and FAILs when the environment variable ``IONMC_V7R_FIXTURES`` is ``required``. In
+required mode NO calibration test skips for any reason (every skip path is ``_skip_or_fail``;
+``test_no_skip_path_outside_skip_or_fail`` scans both calibration files); ``run_suite.py`` sets the
+variable for every ``pytest-v7r-calibration*`` step and ``summarize.py`` rejects a step whose
+archived pytest summary shows a skipped test. ``IONMC_V7R_REHEARSAL_DIR`` points the rehearsal
+loader at another directory (tests and smoke runs only; it is REJECTED, a failure, in required
+mode, and ``run_suite`` removes it from the environment of every calibration step and records the
+digest of the committed fixture directory in the step header):
+
+* ``lv5b-7aae5bb-escaped-neutral-replicates.json`` (``v7r_fixture.py``): schema
+  ``ionmc-v7r-lv5b-escaped-neutral-replicates-1``; keys ``mean``, ``sem`` (7200 floats each, shard
+  order 0..7), ``sources`` (host run dir, file sha256, content_sha256, seed, git_sha, n of the 8
+  shard
+  documents and the reference), ``git_sha_prefix`` ``7aae5bb1``.
+* ``rehearsal/v7r-s{k}.json`` and ``rehearsal/v7r-s{k}-escaped_neutral.npz``, k = 0, 1, ...: the
+  hash-sealed ``v7r-shard`` partials of a rehearsal run (seed base in 20505000-20509499) and their
+  sidecars (schema of ``steps_v5c``: ``escaped_neutral_block_sums`` ``[450, 20]`` float64, MeV per
+  500-history block), and ``PROVENANCE.json`` (required) with ``host_run_ids`` (non-empty list),
+  ``partial_digests`` ({partial file name: content_sha256}, exactly the partials present),
+  ``hashed_source_digest``, ``seed_base`` and ``code_sha``. ``load_rehearsal`` (``v7r_rehearsal.py``, shared with the builder ``v7r_rehearsal_fixture.py``) enforces (every
+  violation
+  is reported): each partial's ``content_sha256`` reproduces (``steps_v5.content_digest``),
+  ``valid``
+  true and ``reduced`` false, ``n`` 4.5e6, ``replicates`` 450, ``batch_histories`` 500,
+  ``blocks_per_replicate`` 20, at least two shards with unique shard indices and unique seeds, the
+  seed of shard k equal to ``seed_base + 1000 * 16 + k`` (the shard seeds themselves lie above the
+  2050xxxx family; the seed BASE is the 20505000-20509499 quantity), ``seed_base`` equal to the
+  provenance, ``git_sha`` equal to ``code_sha``, the sidecar file and array sha256 as bound in the
+  partial (``steps_v5c.load_v7r_sidecar``), the digests of ``partial_digests``, and
+  ``hashed_source_digest`` equal to the CURRENT ``run_suite.hashed_source_digest("lv5c")`` (the
+  sha256
+  over the sorted ``path sha256`` lines of ``source_file_list("lv5c")`` plus its prefixes, without
+  the
+  rehearsal fixtures themselves, so that committing them does not change the digest; Amendment 17
+  (a)7: the rehearsal is valid only for identical hashed source). ``python
+  validation/scripts/transport/run_suite.py --suite lv5c --out x --print-hashed-source-digest``
+  prints
+  it for the orchestrator.
+
+Reproducibility. Monte Carlo seeds are in the rehearsal family 20505000-20509499 (never 20509500 and
+above, the E-shape family): repetition ``r`` uses data seed ``20507000 + r`` and bootstrap seed base
+``20506000 + r``; the margin pre-simulations use 20508000-20508001 and the surrogate fit 20505000.
+The number of bootstrap resamples of the held-out box inside the gate is the frozen qualification
+value ``steps_v5b.V7_BOOT_N`` (5000), the same constant ``v7r.single_gate`` uses for the evidence
+(no
+local override; ``test_calibration_uses_the_qualification_boot_count``).
+
+Recorded limitation (reported, not gated, under the chosen reading of Amendment 17 (a)5). For
+``sec_p`` and ``nuclear_local`` the rule is the unchanged Amendment 13 rule and its calibration is
+``tests/ionmc/test_v7_coverage.py``: the Gaussian 12-bin profile surrogates (the sampling
+distribution
+of those profile means) have power 0.95-1.00 at the nominal; the skewed Gamma surrogates give a
+single-gate power of 0.14, a recorded limitation of the distribution-free radius, not a gate. The
+test ``test_v7r_readings_report_amendment13_skewed_power`` prints that number under the literal
+reading ("each estimator and each surrogate", which cannot pass for these estimators irrespective of
+the data) as the ``V7R-READINGS`` line and writes it to ``IONMC_V7R_REPORT_DIR/v7r-readings.json``
+if
+that variable is set. Under the literal reading the row cannot pass for sec_p/nuclear_local; the row
+verdict uses the reading of Amendment 17 (a)5.
+"""
+
+# ruff: noqa: E501
+
+from __future__ import annotations
+
+import importlib.util
+import json
+import math
+import os
+import platform
+import shutil
+import subprocess
+import sys
+import time
+from pathlib import Path
+from types import ModuleType
+
+import numpy as np
+import pytest
+
+REPO = Path(__file__).resolve().parents[2]
+SCRIPTS = REPO / "validation" / "scripts" / "transport"
+FIXTURE_DIR = REPO / "tests" / "ionmc" / "fixtures" / "v7r"
+ARCHIVE_FIXTURE = FIXTURE_DIR / "lv5b-7aae5bb-escaped-neutral-replicates.json"
+REHEARSAL_DIR = FIXTURE_DIR / "rehearsal"
+SEED_FIT, SEED_KAPPA, SEED_BOOT0, SEED_DATA0 = 20505000, 20508000, 20506000, 20507000
+QUANTILE_PROBS = (0.025, 0.1587, 0.8413, 0.975)
+DEFAULT_REPS = 200
+
+
+CAL_SURROGATES = ("archive_fitted", "rehearsal_block_sums")
+CAL_MARGINS = ("nominal", "paired_low", "paired_high", "single_low", "single_high")
+CAL_PARTS = 15
+
+
+def _load(name: str, path: Path | None = None) -> ModuleType:
+    sys.path.insert(0, str(SCRIPTS))
+    spec = importlib.util.spec_from_file_location(name, path or SCRIPTS / f"{name}.py")
+    assert spec and spec.loader
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+_REHEARSAL = _load(
+    "v7r_rehearsal"
+)  # the loader is shared with the builder v7r_rehearsal_fixture.py
+RehearsalError = _REHEARSAL.RehearsalError
+load_rehearsal = _REHEARSAL.load_rehearsal
+
+
+@pytest.fixture(scope="module")
+def v5b() -> ModuleType:
+    return _load("steps_v5b")
+
+
+@pytest.fixture(scope="module")
+def v7r(v5b: ModuleType) -> ModuleType:
+    return _load("v7r")
+
+
+def _fixtures_required() -> bool:
+    return os.environ.get("IONMC_V7R_FIXTURES", "") == "required"
+
+
+def _skip_or_fail(msg: str) -> None:
+    """The only skip path of the calibration tests: a failure in required mode."""
+    if _fixtures_required():
+        pytest.fail(msg)
+    pytest.skip(msg)
+
+
+def _need(path: Path, what: str) -> None:
+    """Skip (or fail under ``IONMC_V7R_FIXTURES=required``) if a committed fixture is absent."""
+    if not path.exists():
+        _skip_or_fail(f"fixture missing: {what} ({path}); see the module docstring")
+
+
+def rehearsal_dir() -> Path:
+    """The rehearsal fixture directory (``IONMC_V7R_REHEARSAL_DIR`` overrides the committed one)."""
+    env = os.environ.get("IONMC_V7R_REHEARSAL_DIR")
+    if env and _fixtures_required():
+        pytest.fail(
+            "IONMC_V7R_REHEARSAL_DIR is set in required mode: the qualification step must use the "
+            "committed rehearsal fixture directory (the override is for tests and smoke runs only)"
+        )
+    return Path(env) if env else REHEARSAL_DIR
+
+
+def cal_reps() -> int:
+    return int(os.environ.get("IONMC_V7R_CAL_REPS", str(DEFAULT_REPS)))
+
+
+# -- samplers ------------------------------------------------------------------------------------
+class ZeroInflatedGamma:
+    """Block values ``B * Gamma(k)``, ``B ~ Bernoulli(1 - pi)``; mean ``k (1 - pi)``."""
+
+    def __init__(self, k: float, pi: float) -> None:
+        self.k, self.pi = k, pi
+        self.mu = k * (1.0 - pi)
+
+    def __call__(self, rng: np.random.Generator, rows: int) -> np.ndarray:
+        x = rng.standard_gamma(self.k, (rows, 20))
+        return x * (rng.random((rows, 20)) >= self.pi)
+
+
+class PooledBlocks:
+    """20 blocks drawn with replacement from a pool; truth = pool mean."""
+
+    def __init__(self, pool: np.ndarray) -> None:
+        self.pool = np.asarray(pool, dtype=float).ravel()
+        self.mu = float(self.pool.mean())
+
+    def __call__(self, rng: np.random.Generator, rows: int) -> np.ndarray:
+        return self.pool[rng.integers(0, self.pool.size, (rows, 20))]
+
+
+def studentised_quantiles(x: np.ndarray, mu: float) -> np.ndarray:
+    mean, se = x.mean(axis=1), x.std(axis=1, ddof=1) / math.sqrt(x.shape[1])
+    ok = se > 0
+    return np.quantile((mean[ok] - mu) / se[ok], QUANTILE_PROBS)
+
+
+def fit_zero_inflated_gamma(targets: np.ndarray, seed: int = SEED_FIT, n: int = 40_000) -> dict:  # type: ignore[type-arg]
+    """Least-squares fit of (k, pi) to the four studentised quantiles (common random numbers per
+    candidate: the same seed; a coarse log grid and then two local refinements)."""
+
+    def err(k: float, pi: float) -> tuple[float, np.ndarray]:
+        s = ZeroInflatedGamma(k, pi)
+        q = studentised_quantiles(s(np.random.default_rng(seed), n), s.mu)
+        return float(np.sum((q - targets) ** 2)), q
+
+    best = None
+    for k in np.exp(np.linspace(math.log(0.1), math.log(8.0), 24)):
+        for pi in (0.0, 0.05, 0.1, 0.2, 0.3, 0.5, 0.7):
+            e, q = err(float(k), pi)
+            if best is None or e < best[0]:
+                best = (e, float(k), pi, q)
+    assert best is not None
+    for width in (0.15, 0.05):
+        _, k0, p0, _ = best
+        for k in k0 * np.exp(np.linspace(-width * 3, width * 3, 9)):
+            for pi in np.clip(p0 + np.linspace(-width, width, 7), 0.0, 0.9):
+                e, q = err(float(k), float(pi))
+                if e < best[0]:
+                    best = (e, float(k), float(pi), q)
+    e, k, pi, q = best
+    return {"family": "zero-inflated-gamma", "k": k, "pi": pi, "seed": seed, "n": n,
+            "targets": targets.tolist(), "achieved": q.tolist(),
+            "max_abs_error": float(np.max(np.abs(q - targets)))}  # fmt: skip
+
+
+# -- calibration machinery ---------------------------------------------------------------------
+def margin_kappas(
+    v7r: ModuleType, sampler, kind: str, target: float, seed: int, n: int = 20_000
+) -> float:  # type: ignore[no-untyped-def]
+    """``kappa`` such that the true coverage of the bootstrap-t interval (``kind="single"``: of the
+    mean ``sampler.mu``; ``"pair"``: of 0 for two independent replicates) equals ``target``, by
+    bisection on the large-sample coverage (the coverage is monotone in kappa)."""
+    rng = np.random.default_rng(seed)
+    if kind == "single":
+        x = sampler(rng, n)
+        ing = v7r.single_ingredients(x, SEED_BOOT0 - 1, reps_per_shard=n, b=v7r.V7R_B)
+        a = (ing["m_hat"] - sampler.mu) / ing["se"]
+        lo, hi = ing["t_lo"], ing["t_hi"]
+    else:
+        x = sampler(rng, 2 * n)
+        ing = v7r.pair_ingredients(x, SEED_BOOT0 - 1, reps_per_shard=n, b=v7r.V7R_B)
+        a = ing["d_hat"] / ing["se_d"]
+        lo, hi = ing["t_lo"], ing["t_hi"]
+    ok = np.isfinite(a) & np.isfinite(lo) & np.isfinite(hi)
+
+    def cov(k: float) -> float:
+        return float(np.sum(ok & (k * hi >= a) & (k * lo <= a)) / a.size)
+
+    lo_k, hi_k = 0.05, 20.0
+    for _ in range(60):
+        mid = 0.5 * (lo_k + hi_k)
+        lo_k, hi_k = (mid, hi_k) if cov(mid) < target else (lo_k, mid)
+    return 0.5 * (lo_k + hi_k)
+
+
+def run_calibration(  # type: ignore[no-untyped-def]
+    v7r: ModuleType, v5b: ModuleType, sampler, kappas: dict[str, float], reps: int, *,
+    replicates: int = 7200, reps_per_shard: int = 450, b: int = 1999, n_boot: int | None = None,
+    data_seed0: int = SEED_DATA0, boot_seed0: int = SEED_BOOT0, alpha_tost: float | None = None,
+) -> dict[str, np.ndarray]:  # fmt: skip
+    """Monte Carlo of both gates at each named ``kappa``: ``{name: [reps, 2]}`` booleans (paired,
+    single). One bootstrap per repetition serves every kappa (the resamples do not depend on it).
+    ``n_boot=None`` is the qualification value of the single gate (``steps_v5b.V7_BOOT_N``, read by
+    ``v7r.single_gate``); only the CI-scale test passes a number. Replicate ``r`` draws its data from
+    ``default_rng(data_seed0 + r)`` and bootstraps with ``boot_seed0 + r`` (the calibration shards pass the
+    seeds of ``v7r.cal_part_seeds``)."""
+    out = {k: np.zeros((reps, 2), dtype=bool) for k in kappas}
+    for r in range(reps):
+        x = sampler(np.random.default_rng(data_seed0 + r), replicates)
+        seed_base = boot_seed0 + r
+        pi = v7r.pair_ingredients(x, seed_base, reps_per_shard, b)
+        si = v7r.single_ingredients(x, seed_base, reps_per_shard, b)
+        means = x.mean(axis=1)
+        z_boot = None
+        for name, kap in kappas.items():
+            g = v7r.single_gate(si, means, kap, boot_seed=seed_base, n_boot=n_boot,
+                                z_boot_override=z_boot, alpha_tost=alpha_tost)  # fmt: skip
+            z_boot = g["z_boot"]
+            out[name][r] = (v7r.pair_gate(pi, kap, alpha_tost=alpha_tost)["pass"], g["pass"])
+    return out
+
+
+def _seal(doc: dict) -> dict:  # type: ignore[type-arg]
+    """``doc`` with ``content_sha256`` (``steps_v5.content_digest``: sha256 of the canonical JSON of the
+    document without that field, after one JSON round trip)."""
+    import hashlib
+
+    norm = json.loads(json.dumps(doc))
+    norm.pop("content_sha256", None)
+    text = json.dumps(norm, sort_keys=True, separators=(",", ":"))
+    return {**doc, "content_sha256": hashlib.sha256(text.encode()).hexdigest()}
+
+
+def _surrogate(v7r: ModuleType, name: str):  # type: ignore[no-untyped-def]
+    """``(sampler, fit record)`` of a calibration surrogate (deterministic: identical in every part)."""
+    if name == "archive_fitted":
+        _need(ARCHIVE_FIXTURE, "archived lv5b replicates (mean, sem)")
+        doc = json.loads(ARCHIVE_FIXTURE.read_text())
+        assert doc["schema"] == "ionmc-v7r-lv5b-escaped-neutral-replicates-1"
+        assert doc["git_sha_prefix"] == "7aae5bb1" and len(doc["mean"]) == len(doc["sem"]) == 7200
+        m, s = np.array(doc["mean"]), np.array(doc["sem"])
+        targets = np.quantile((m - m.mean()) / s, QUANTILE_PROBS)
+        assert abs(targets[0] + 2.228) < 0.01 and abs(targets[3] - 2.005) < 0.01, (
+            targets
+        )  # plan values
+        fit = fit_zero_inflated_gamma(targets)
+        print("V7R-FIT", json.dumps(fit, sort_keys=True))
+        assert fit["max_abs_error"] < 0.1, fit  # the surrogate reproduces the four quantiles
+        return ZeroInflatedGamma(fit["k"], fit["pi"]), {
+            "surrogate": "archive-fitted zero-inflated Gamma",
+            **fit,
+        }
+    try:
+        pool_blocks, info = load_rehearsal(rehearsal_dir(), _load("steps_v5c"), _load("run_suite"))
+    except RehearsalError as exc:
+        _skip_or_fail(f"rehearsal fixture rejected: {exc}")
+        raise
+    pool = pool_blocks.ravel()
+    return PooledBlocks(pool), {
+        "surrogate": "pooled rehearsal block sums",
+        "blocks": int(pool.size),
+        **info,
+    }
+
+
+def _margin_kappas(v7r: ModuleType, sampler) -> dict[str, float]:  # type: ignore[no-untyped-def]
+    """kappa of each margin (``nominal`` is 1; single and paired margins by bisection on the large-sample
+    coverage at the edges of the region)."""
+    lo, hi = v7r.V7R_REGION
+    return {
+        "nominal": 1.0,
+        "paired_low": margin_kappas(v7r, sampler, "pair", lo, SEED_KAPPA + 1),
+        "paired_high": margin_kappas(v7r, sampler, "pair", hi, SEED_KAPPA + 1),
+        "single_low": margin_kappas(v7r, sampler, "single", lo, SEED_KAPPA),
+        "single_high": margin_kappas(v7r, sampler, "single", hi, SEED_KAPPA),
+    }
+
+
+def _report(label: str, doc: dict) -> None:  # type: ignore[type-arg]
+    print("V7R-CALIBRATION", json.dumps({label: doc}, sort_keys=True))
+    d = os.environ.get("IONMC_V7R_REPORT_DIR")
+    if d:
+        Path(d).mkdir(parents=True, exist_ok=True)
+        (Path(d) / f"v7r-calibration-{label}.json").write_text(
+            json.dumps(doc, sort_keys=True, indent=1)
+        )
+
+
+CAL_CASES = [(s, p) for s in CAL_SURROGATES for p in range(CAL_PARTS)]
+CAL_IDS = [f"{s}-part{p:02d}" for s, p in CAL_CASES]
+
+
+# -- calibration tests (host) --------------------------------------------------------------------
+@pytest.mark.calibration
+@pytest.mark.parametrize(("surrogate", "part"), CAL_CASES, ids=CAL_IDS)
+def test_v7r_calibration_shard(v7r: ModuleType, v5b: ModuleType, surrogate: str, part: int) -> None:
+    """One part (214 or 213 of the 3200 replicates, Amendment 14a) of one surrogate, all five margins: fit and
+    kappas (deterministic, identical in the parts), the slice of the Monte Carlo (one bootstrap per replicate
+    serves every kappa) with the seeds of ``v7r.cal_part_seeds(surrogate_idx, part)``
+    (``SeedSequence([20507000, surrogate_idx, part])``) and one sealed record written to ``IONMC_V7R_CAL_OUT``
+    (required in required mode). The verdict is made by the consumer step ``v7r-calibration-combine``; this test
+    asserts execution integrity only. Measured cost: about 4.86 s per replicate for all margins together plus
+    about 42 s for the fit and the kappas (recorded as ``wall_per_replicate_s`` / ``wall_fit_kappa_s``)."""
+    out_dir = os.environ.get("IONMC_V7R_CAL_OUT")
+    if _fixtures_required() and not out_dir:
+        pytest.fail("IONMC_V7R_CAL_OUT is not set in required mode: the record has nowhere to go")
+    reps = cal_reps()
+    n = v7r.cal_part_sizes(reps)[part]
+    seeds = v7r.cal_part_seeds(CAL_SURROGATES.index(surrogate), part)
+    t0 = time.perf_counter()
+    sampler, fit = _surrogate(v7r, surrogate)
+    kappas = _margin_kappas(v7r, sampler)
+    t1 = time.perf_counter()
+    rates = run_calibration(
+        v7r, v5b, sampler, kappas, n, data_seed0=seeds["data"], boot_seed0=seeds["boot"]
+    )
+    wall_mc = time.perf_counter() - t1
+    margins = {}
+    for m, kap in kappas.items():
+        p = rates[m]
+        assert p.shape == (n, 2) and np.isfinite(kap) and kap > 0.0
+        margins[m] = {"kappa": kap, "accepted_joint": int(p.all(axis=1).sum()),
+                      "accepted_paired": int(p[:, 0].sum()), "accepted_single": int(p[:, 1].sum())}  # fmt: skip
+        assert margins[m]["accepted_joint"] <= min(
+            margins[m]["accepted_paired"], margins[m]["accepted_single"]
+        )
+    rec = {"schema": v7r.CAL_SCHEMA, "surrogate": surrogate, "part": part, "n": n, "margins": margins,
+           "fit": fit, "reps_env": reps, "seeds": seeds,
+           "run_sha": os.environ.get("IONMC_RUN_SHA", "unknown"),
+           "suite": os.environ.get("IONMC_RUN_SUITE", "unknown"), "wall_fit_kappa_s": t1 - t0,
+           "wall_mc_s": wall_mc, "wall_per_replicate_s": wall_mc / n, "rng": v7r.rng_record(),
+           "B": v7r.V7R_B, "boot_n": v5b.V7_BOOT_N, "python": platform.python_version()}  # fmt: skip
+    _report(f"{surrogate}-part{part:02d}", rec)
+    if out_dir:
+        d = Path(out_dir)
+        d.mkdir(parents=True, exist_ok=True)
+        path = d / f"v7r-calibration-{surrogate}-p{part:02d}.json"
+        path.write_text(json.dumps(_seal(rec), sort_keys=True))
+        print(f"RECORD {path.name}")
+        assert path.is_file()
+
+
+@pytest.mark.calibration
+def test_v7r_readings_report_amendment13_skewed_power(v5b: ModuleType) -> None:
+    """Contrary reading (Amendment 17 (a)5): single-gate power of the Amendment 13 rule (sec_p /
+    nuclear_local) on the skewed Gamma surrogate (shape 0.5, correlated bins), reported not
+    gated."""
+    cov = _load("test_v7_coverage_module", REPO / "tests" / "ionmc" / "test_v7_coverage.py")
+    trials = int(os.environ.get("IONMC_V7R_READINGS_TRIALS", "40"))
+    rng = np.random.default_rng(SEED_FIT + 1)
+    passes, _ = cov._skew_passes(v5b, 0.5, True, False, (1.0,), trials, rng)
+    power = {"row": float(passes[0, 0].mean()), "paired": float(passes[1, 0].mean()),
+             "single": float(passes[2, 0].mean()), "trials": trials}  # fmt: skip
+    chosen = (
+        "sec_p/nuclear_local power on the Amendment 13 Gaussian 12-bin profile surrogates "
+        "(test_v7_coverage.py, gated there)"
+    )
+    literal = (
+        "each estimator and each surrogate: the skewed Gamma(0.5, correlated) power at "
+        "kappa = 1 below; cannot reach 0.9 irrespective of the data"
+    )
+    doc = {"chosen_reading": chosen, "literal_reading": literal,
+           "amendment13_skewed_gamma_power_kappa1": power, "gated": False}  # fmt: skip
+    print("V7R-READINGS", json.dumps(doc, sort_keys=True))
+    d = os.environ.get("IONMC_V7R_REPORT_DIR")
+    if d:
+        Path(d).mkdir(parents=True, exist_ok=True)
+        (Path(d) / "v7r-readings.json").write_text(json.dumps(doc, sort_keys=True, indent=1))
+    assert 0.0 <= power["single"] <= 1.0
+
+
+# -- CI-scale tests of the calibration machinery (not marked: they run in CI) --------------------
+def test_calibration_machinery_at_ci_scale(v7r: ModuleType, v5b: ModuleType) -> None:
+    """The Monte Carlo, the margin solver and the evaluation run end to end on a tiny case."""
+    sampler = ZeroInflatedGamma(6.0, 0.05)
+    k = margin_kappas(v7r, sampler, "single", 0.6827, SEED_KAPPA, n=400)
+    assert 0.5 < k < 2.0  # the nominal level is reached near kappa = 1
+    k_lo = margin_kappas(v7r, sampler, "single", 0.55, SEED_KAPPA, n=400)
+    k_hi = margin_kappas(v7r, sampler, "single", 0.80, SEED_KAPPA, n=400)
+    assert k_lo < k < k_hi  # monotone in the target coverage
+    rates = run_calibration(v7r, v5b, sampler, {"low": k_lo, "nominal": 1.0}, 3, replicates=120,
+                            reps_per_shard=15, b=199, n_boot=50)  # fmt: skip
+    assert all(v.shape == (3, 2) for v in rates.values())
+    rep = evaluate(v7r, rates, 3)
+    assert set(rep["margins"]) == {"low", "nominal"} and isinstance(rep["failures"], list)
+    again = run_calibration(v7r, v5b, sampler, {"low": k_lo, "nominal": 1.0}, 3, replicates=120,
+                            reps_per_shard=15, b=199, n_boot=50)  # fmt: skip
+    assert all(np.array_equal(rates[n], again[n]) for n in rates)  # deterministic
+
+
+def test_fit_recovers_a_known_surrogate_and_samplers_are_unbiased() -> None:
+    truth = ZeroInflatedGamma(4.0, 0.1)
+    targets = studentised_quantiles(truth(np.random.default_rng(5), 40_000), truth.mu)
+    fit = fit_zero_inflated_gamma(targets, n=10_000)
+    assert fit["max_abs_error"] < 0.08
+    x = truth(np.random.default_rng(6), 5000)
+    assert abs(x.mean() - truth.mu) < 0.05
+    pool = PooledBlocks(x[:50])
+    assert abs(pool(np.random.default_rng(7), 4000).mean() - pool.mu) < 0.2 * max(pool.mu, 1.0)
+
+
+def test_fixture_absent_skips_and_required_fails(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    missing = tmp_path / "nope.json"
+    monkeypatch.delenv("IONMC_V7R_FIXTURES", raising=False)
+    with pytest.raises(pytest.skip.Exception):
+        _need(missing, "x")
+    monkeypatch.setenv("IONMC_V7R_FIXTURES", "required")
+    with pytest.raises(pytest.fail.Exception):
+        _need(missing, "x")
+    present = tmp_path / "here.json"
+    present.write_text("{}")
+    _need(present, "x")  # no exception
+
+
+def test_committed_archive_fixture_is_consistent_when_present() -> None:
+    _need(ARCHIVE_FIXTURE, "archived lv5b replicates (mean, sem)")
+    doc = json.loads(ARCHIVE_FIXTURE.read_text())
+    assert len(doc["sources"]) == 9 and [s["seed"] for s in doc["sources"]] == list(
+        range(20482004, 20482013)
+    )
+    assert all(s["git_sha"].startswith("7aae5bb1") for s in doc["sources"])
+    assert len({s["content_sha256"] for s in doc["sources"]}) == 9
+    assert all(math.isfinite(x) for x in doc["mean"] + doc["sem"]) and min(doc["sem"]) > 0
+
+
+# -- requirement bounds (Clopper-Pearson upper for "<=", lower for the power) ---------------------
+def _rates(joint: int, paired: int, single: int, n: int) -> np.ndarray:
+    """``[n, 2]`` booleans: the paired gate accepts ``paired`` rows, the single gate ``single``
+    rows, and ``joint`` rows are accepted by both."""
+    assert joint <= min(paired, single) and paired - joint + single <= n
+    p = np.zeros((n, 2), dtype=bool)
+    p[:paired, 0] = True
+    p[paired - joint : paired - joint + single, 1] = True
+    assert int(p.all(axis=1).sum()) == joint and int(p[:, 1].sum()) == single
+    return p
+
+
+def evaluate(v7r: ModuleType, rates: dict[str, np.ndarray], reps: int) -> dict:  # type: ignore[type-arg]
+    """``v7r.calibration_evaluate`` of ``run_calibration`` output (the counts of each margin)."""
+    counts = {name: {"n": reps, "joint": int(p.all(axis=1).sum()), "paired": int(p[:, 0].sum()),
+                     "single": int(p[:, 1].sum())} for name, p in rates.items()}  # fmt: skip
+    return v7r.calibration_evaluate(counts)
+
+
+def _verdict(v7r: ModuleType, margin: tuple[int, int, int], nominal: int, n: int) -> list[str]:
+    rates = {"m": _rates(*margin, n), "nominal": _rates(nominal, nominal, nominal, n)}
+    return evaluate(v7r, rates, n)["failures"]
+
+
+def _gate_max(v5b: ModuleType, n: int) -> int:
+    """Largest acceptance count whose CP95 UPPER bound is <= 0.04 (the gate-alone requirement)."""
+    return next(k for k in range(n + 1) if v5b.cp_upper(k, n, 0.05) > 0.04) - 1
+
+
+@pytest.mark.parametrize(
+    ("n", "joint_max", "gate_max", "power_min"),
+    [
+        (200, 0, 3, 188),
+        (400, 3, 9, 371),
+        (800, 9, 22, 735),
+        (1600, 22, 50, 1461),
+        (3200, 50, 109, 2909),
+    ],
+)
+def test_requirement_bounds_boundaries_match_the_docstring_table(
+    v5b: ModuleType, v7r: ModuleType, n: int, joint_max: int, gate_max: int, power_min: int
+) -> None:
+    assert _gate_max(v5b, n) == gate_max
+    ok = (joint_max, gate_max, gate_max)
+    assert _verdict(v7r, ok, power_min, n) == []
+    assert _verdict(v7r, (joint_max + 1, gate_max, gate_max), power_min, n)  # joint: one more
+    assert _verdict(v7r, (0, gate_max + 1, gate_max), power_min, n)  # paired gate alone fails
+    assert _verdict(v7r, (0, gate_max, gate_max + 1), power_min, n)  # single gate alone fails
+    assert _verdict(v7r, ok, power_min - 1, n)  # power one short
+    assert v5b.cp_upper(joint_max, n, 0.05) <= 0.02 < v5b.cp_upper(joint_max + 1, n, 0.05)
+    assert v5b.cp_upper(gate_max, n, 0.05) <= 0.04 < v5b.cp_upper(gate_max + 1, n, 0.05)
+    assert v5b.cp_lower(power_min, n, 0.05) >= 0.9 > v5b.cp_lower(power_min - 1, n, 0.05)
+
+
+def test_n3200_bounds_row_numbers(v5b: ModuleType) -> None:
+    assert round(50 / 3200, 4) == 0.0156
+    assert round(v5b.cp_upper(50, 3200, 0.05), 4) == 0.0197
+    assert round(v5b.cp_upper(51, 3200, 0.05), 4) == 0.0201
+    assert round(v5b.cp_upper(109, 3200, 0.05), 4) == 0.0398
+    assert round(v5b.cp_upper(110, 3200, 0.05), 4) == 0.0402
+    assert round(v5b.cp_lower(2909, 3200, 0.05), 4) == 0.9003
+
+
+def test_gate_alone_uses_the_upper_bound_and_the_construction_reading_is_report_only(
+    v5b: ModuleType, v7r: ModuleType
+) -> None:
+    """10/200: the CP95 upper bound (0.083) exceeds 0.04, so the gate-alone clause FAILS, while the CP95 lower
+    bound (0.027) does not exceed 0.04, so the report-only construction reading is "not refuted"."""
+    assert v5b.cp_lower(10, 200, 0.05) < 0.04 < v5b.cp_upper(10, 200, 0.05)
+    out = evaluate(
+        v7r, {"paired_low": _rates(0, 10, 0, 200), "nominal": _rates(190, 190, 190, 200)}, 200
+    )
+    assert out["pass"] is False and len(out["failures"]) == 1
+    assert "paired gate alone" in out["failures"][0] and "CP95 upper" in out["failures"][0]
+    m = out["margins"]["paired_low"]
+    assert set(m["gate_alone"]) == {"paired"} and m["gate_alone"]["paired"]["rate"] == 0.05
+    assert m["gate_alone"]["paired"]["cp95_upper_le_0.04"] is False
+    assert m["gate_alone_construction_reading"]["paired"]["construction_refuted"] is False
+    assert "joint" in _verdict(v7r, (1, 1, 1), 200, 200)[0]
+    assert _verdict(v7r, (0, 0, 0), 200, 200) == []
+    assert "power" in _verdict(v7r, (0, 0, 0), 180, 200)[0]  # 180/200: lower bound 0.85
+    assert _verdict(v7r, (0, 0, 0), 190, 200) == []
+
+
+def test_gate_alone_requirement_applies_at_each_gates_own_margins_only(
+    v5b: ModuleType, v7r: ModuleType
+) -> None:
+    n = 3200
+    bad = _gate_max(v5b, n) + 1
+    nominal = _rates(2950, 2950, 2950, n)
+    # the paired gate accepts above the limit at a SINGLE margin: reported, not gated
+    out = evaluate(v7r, {"single_low": _rates(0, bad, 0, n), "nominal": nominal}, n)
+    assert out["failures"] == [] and out["margins"]["single_low"]["paired_cp95_upper"] > 0.04
+    assert set(out["margins"]["single_low"]["gate_alone"]) == {"single"}
+    # the same acceptances at the PAIRED margin refute the construction
+    out = evaluate(v7r, {"paired_high": _rates(0, bad, 0, n), "nominal": nominal}, n)
+    assert (
+        len(out["failures"]) == 1
+        and "paired gate" in out["failures"][0]
+        and "CP95 upper" in out["failures"][0]
+    )
+    out = evaluate(v7r, {"single_high": _rates(0, 0, bad, n), "nominal": nominal}, n)
+    assert len(out["failures"]) == 1 and "single gate" in out["failures"][0]
+    assert (
+        evaluate(v7r, {"paired_low": _rates(0, 0, bad, n), "nominal": nominal}, n)["failures"] == []
+    )
+    # the joint requirement is gated at every margin
+    out = evaluate(v7r, {"paired_low": _rates(100, 100, 100, n), "nominal": nominal}, n)
+    assert "joint" in out["failures"][0]
+
+
+def test_rehearsal_override_is_rejected_in_required_mode(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("IONMC_V7R_REHEARSAL_DIR", str(tmp_path))
+    monkeypatch.setenv("IONMC_V7R_FIXTURES", "required")
+    with pytest.raises(pytest.fail.Exception, match="IONMC_V7R_REHEARSAL_DIR is set in required"):
+        rehearsal_dir()
+    monkeypatch.setenv("IONMC_V7R_FIXTURES", "")
+    assert rehearsal_dir() == tmp_path  # tests and smoke runs only
+    monkeypatch.delenv("IONMC_V7R_REHEARSAL_DIR")
+    monkeypatch.setenv("IONMC_V7R_FIXTURES", "required")
+    assert rehearsal_dir() == REHEARSAL_DIR  # the committed directory
+
+
+def test_cal_reps_default_and_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("IONMC_V7R_CAL_REPS", raising=False)
+    assert cal_reps() == DEFAULT_REPS == 200
+    monkeypatch.setenv("IONMC_V7R_CAL_REPS", "400")
+    assert cal_reps() == 400
+
+
+# -- bootstrap count -----------------------------------------------------------------------------
+def test_calibration_uses_the_qualification_boot_count(
+    monkeypatch: pytest.MonkeyPatch, v7r: ModuleType
+) -> None:
+    """The calibration passes no resample count of its own: it and the evidence ``single_gate`` both
+    read ``steps_v5b.V7_BOOT_N`` (5000), also when that constant is patched."""
+    assert v7r.v5b.V7_BOOT_N == 5000
+    assert not hasattr(sys.modules[__name__], "N_BOOT_Z")
+    seen: list[int] = []
+    real = v7r.v5b.v7_boot_z
+
+    def spy(means, n_h, mu, sem, seed, n_boot):  # type: ignore[no-untyped-def]
+        seen.append(int(n_boot))
+        return real(means, n_h, mu, sem, seed, 7)  # small and fast; the requested count is recorded
+
+    monkeypatch.setattr(v7r.v5b, "v7_boot_z", spy)
+    sampler = ZeroInflatedGamma(6.0, 0.05)
+
+    def counts() -> tuple[int, int, int]:
+        seen.clear()
+        x = sampler(np.random.default_rng(3), 120)
+        si = v7r.single_ingredients(x, 5, reps_per_shard=15, b=99)
+        gate = v7r.single_gate(si, x.mean(axis=1), 1.0, boot_seed=5)
+        direct = seen[-1]
+        run_calibration(v7r, v7r.v5b, sampler, {"nominal": 1.0}, 1, replicates=120,
+                        reps_per_shard=15, b=99)  # fmt: skip
+        return direct, seen[-1], gate["boot_n"]
+
+    assert counts() == (5000, 5000, 5000)
+    monkeypatch.setattr(v7r.v5b, "V7_BOOT_N", 37)
+    assert counts() == (37, 37, 37)
+
+
+# -- rehearsal fixture loader --------------------------------------------------------------------
+def _build_rehearsal(  # type: ignore[no-untyped-def]
+    d: Path,
+    steps: ModuleType,
+    digest: str,
+    *,
+    n_shards: int = 2,
+    doc_hook=None,
+    prov_hook=None,
+    post=None,
+    code_sha: str = "c0de" * 10,
+):
+    """Write a synthetic, valid rehearsal into ``d`` (450 x 20 block sums per shard) and return the
+    provenance; ``doc_hook(k, doc)`` mutates a partial before it is sealed, ``prov_hook(prov)`` the
+    provenance before it is written, ``post(d)`` tampers with the files afterwards."""
+    d.mkdir(parents=True, exist_ok=True)
+    base_seed, rng = 20505004, np.random.default_rng(11)
+    prov = {"host_run_ids": ["RUN-SYNTH-1"], "partial_digests": {}, "hashed_source_digest": digest,
+            "seed_base": base_seed, "code_sha": code_sha}  # fmt: skip
+    for k in range(n_shards):
+        sums = rng.gamma(2.0, 100.0, (450, 20))
+        side = steps.write_v7r_sidecar(d / f"v7r-s{k}-escaped_neutral.npz", sums)
+        per = sums / 500.0
+        sem = (per.std(axis=1, ddof=1) / 20**0.5).tolist()
+        doc = {"shard": k, "seed": base_seed + 16000 + k, "seed_base": base_seed,
+               "git_sha": prov["code_sha"], "n": 4_500_000, "replicates": 450,
+               "batch_histories": 500, "blocks_per_replicate": 20, "valid": True, "reduced": False,
+               "estimators": {"escaped_neutral": {"mean": per.mean(axis=1).tolist(), "sem": sem}},
+               "sidecar": side}  # fmt: skip
+        if doc_hook:
+            doc_hook(k, doc)
+        doc["content_sha256"] = steps.v5.content_digest(doc)
+        (d / f"v7r-s{k}.json").write_text(json.dumps(doc))
+        prov["partial_digests"][f"v7r-s{k}.json"] = doc["content_sha256"]
+    if prov_hook:
+        prov_hook(prov)
+    (d / "PROVENANCE.json").write_text(json.dumps(prov))
+    if post:
+        post(d)
+    return prov
+
+
+def _tamper_json(name: str, fn):  # type: ignore[no-untyped-def]
+    def post(d: Path) -> None:
+        p = d / name
+        doc = json.loads(p.read_text())
+        fn(doc)
+        p.write_text(json.dumps(doc))
+
+    return post
+
+
+def _set(key: str, value: object):  # type: ignore[no-untyped-def]
+    return lambda k, doc: doc.__setitem__(key, value) if k == 0 else None
+
+
+def _drop_prov(key: str):  # type: ignore[no-untyped-def]
+    return lambda prov: prov.pop(key)
+
+
+def _sidecar_tamper(d: Path) -> None:
+    f = d / "v7r-s1-escaped_neutral.npz"
+    f.write_bytes(f.read_bytes() + b"x")
+
+
+def _rm_prov(d: Path) -> None:
+    (d / "PROVENANCE.json").unlink()
+
+
+def _doc0(**kw: object):  # type: ignore[no-untyped-def]
+    """Hook: update the fields of the partial of shard 0 before sealing."""
+    return lambda k, doc: doc.update(kw) if k == 0 else None
+
+
+def _prov(**kw: object):  # type: ignore[no-untyped-def]
+    return lambda prov: prov.update(kw)
+
+
+def _bad_digest(prov: dict) -> None:  # type: ignore[type-arg]
+    prov["partial_digests"]["v7r-s0.json"] = "0" * 64
+
+
+def _lose_partial(prov: dict) -> None:  # type: ignore[type-arg]
+    prov["partial_digests"].pop("v7r-s1.json")
+
+
+def _bad_sidecar_hash(k: int, doc: dict) -> None:  # type: ignore[type-arg]
+    if k == 1:
+        doc["sidecar"]["array_sha256"] = "2" * 64
+
+
+def _wall(doc: dict) -> None:  # type: ignore[type-arg]
+    doc["wall_s"] = 1.0
+
+
+SEED0 = 20505004 + 16000
+VIOLATIONS = {
+    "partial tampered after sealing": (
+        {"post": _tamper_json("v7r-s0.json", _wall)}, "content_sha256 does not reproduce"),
+    "valid false": ({"doc_hook": _doc0(valid=False)}, "valid is not true"),
+    "reduced true": ({"doc_hook": _doc0(reduced=True)}, "reduced is not false"),
+    "n": ({"doc_hook": _doc0(n=4_000_000)}, "n is 4000000"),
+    "replicates": ({"doc_hook": _doc0(replicates=449)}, "replicates is 449"),
+    "batch_histories": ({"doc_hook": _doc0(batch_histories=250)}, "batch_histories is 250"),
+    "blocks_per_replicate": (
+        {"doc_hook": _doc0(blocks_per_replicate=10)}, "blocks_per_replicate is 10"),
+    "one shard only": ({"n_shards": 1}, "need >= 2 shards"),
+    "duplicate shard index": (
+        {"doc_hook": lambda k, d: d.update(shard=0, seed=SEED0)}, "shard indices not unique"),
+    "duplicate seed": ({"doc_hook": lambda k, d: d.update(seed=SEED0)}, "seeds not unique"),
+    "seed base out of range": (
+        {"doc_hook": lambda k, d: d.update(seed_base=20509500, seed=20509500 + 16000 + k),
+         "prov_hook": _prov(seed_base=20509500)}, "outside (20505000, 20509499)"),
+    "seed base differs from provenance": (
+        {"prov_hook": _prov(seed_base=20505005)}, "seed_base differs from PROVENANCE"),
+    "provenance missing": ({"post": _rm_prov}, "PROVENANCE.json missing"),
+    "provenance lacks field": ({"prov_hook": _drop_prov("host_run_ids")}, "lacks host_run_ids"),
+    "provenance empty run ids": ({"prov_hook": _prov(host_run_ids=[])}, "non-empty list"),
+    "provenance lacks code_sha": ({"prov_hook": _drop_prov("code_sha")}, "lacks code_sha"),
+    "head_sha differs from code_sha": (
+        {"prov_hook": _prov(head_sha="a" * 40, clean_tree=True)}, "head_sha"),
+    "code_sha differs": ({"prov_hook": _prov(code_sha="deadbeef")}, "differs from code_sha"),
+    "provenance partial digest wrong": (
+        {"prov_hook": _bad_digest}, "differs from the digest recorded"),
+    "provenance misses a partial": ({"prov_hook": _lose_partial}, "partial_digests names"),
+    "hashed source digest differs": (
+        {"prov_hook": _prov(hashed_source_digest="1" * 64)}, "hashed_source_digest differs"),
+    "sidecar file tampered": ({"post": _sidecar_tamper}, "sidecar rejected"),
+    "sidecar array hash in the partial": ({"doc_hook": _bad_sidecar_hash}, "sidecar rejected"),
+}  # fmt: skip
+
+
+@pytest.fixture(scope="module")
+def steps_c(v7r: ModuleType) -> ModuleType:
+    return _load("steps_v5c")
+
+
+@pytest.fixture(scope="module")
+def run_suite_mod() -> ModuleType:
+    return _load("run_suite")
+
+
+def test_rehearsal_loader_accepts_a_valid_fixture(
+    tmp_path: Path, steps_c: ModuleType, run_suite_mod: ModuleType
+) -> None:
+    digest = run_suite_mod.hashed_source_digest("lv5c")
+    _build_rehearsal(tmp_path, steps_c, digest)
+    blocks, info = load_rehearsal(tmp_path, steps_c, run_suite_mod)
+    assert blocks.shape == (900, 20) and info["shards"] == 2 and info["seed_base"] == 20505004
+    assert info["host_run_ids"] == ["RUN-SYNTH-1"] and info["hashed_source_digest"] == digest
+
+
+@pytest.mark.parametrize("case", sorted(VIOLATIONS))
+def test_rehearsal_loader_rejects_each_violation(
+    case: str, tmp_path: Path, steps_c: ModuleType, run_suite_mod: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:  # fmt: skip
+    kwargs, expect = VIOLATIONS[case]
+    _build_rehearsal(tmp_path, steps_c, run_suite_mod.hashed_source_digest("lv5c"), **kwargs)
+    with pytest.raises(RehearsalError) as err:
+        load_rehearsal(tmp_path, steps_c, run_suite_mod)
+    assert expect in str(err.value), (case, str(err.value))
+    # the calibration test turns it into a skip, or a failure in required mode
+    monkeypatch.setenv("IONMC_V7R_REHEARSAL_DIR", str(tmp_path))
+    monkeypatch.delenv("IONMC_V7R_FIXTURES", raising=False)
+    with pytest.raises(pytest.skip.Exception, match="rehearsal fixture rejected"):
+        _skip_or_fail(f"rehearsal fixture rejected: {err.value}")
+    monkeypatch.setenv("IONMC_V7R_FIXTURES", "required")
+    with pytest.raises(pytest.fail.Exception, match="rehearsal fixture rejected"):
+        _skip_or_fail(f"rehearsal fixture rejected: {err.value}")
+
+
+# -- builder v7r_rehearsal_fixture.py ----------------------------------------------------------------
+def _synthetic_archive(
+    tmp_path: Path,
+    steps: ModuleType,
+    digest: str,
+    *,
+    doc_hook=None,  # type: ignore[no-untyped-def]
+    code_sha: str = "c0de" * 10,
+) -> Path:
+    """A host archive with shard 0 in ``RUN-A`` (samples dir, sidecar one level up) and shard 1 in ``RUN-B``."""
+    src = tmp_path / "src"
+    _build_rehearsal(src, steps, digest, doc_hook=doc_hook, code_sha=code_sha)
+    arch = tmp_path / "archive"
+    for k, rid in enumerate(("RUN-A", "RUN-B")):
+        suite = arch / rid / "transport" / "lv5c-x"
+        (suite / "samples").mkdir(parents=True)
+        shutil.copyfile(src / f"v7r-s{k}.json", suite / "samples" / f"v7r-s{k}.json")
+        shutil.copyfile(
+            src / f"v7r-s{k}-escaped_neutral.npz", suite / f"v7r-s{k}-escaped_neutral.npz"
+        )
+    return arch
+
+
+@pytest.fixture(scope="module")
+def builder() -> ModuleType:
+    return _load("v7r_rehearsal_fixture")
+
+
+@pytest.fixture
+def git_repo(
+    tmp_path: Path, builder: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> tuple[Path, str]:
+    """A temporary git repository with one commit, installed as the builder's ``REPO``; returns it and HEAD."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "a.txt").write_text("x\n")
+    env = ["-c", "user.name=t", "-c", "user.email=t@example.org", "-c", "commit.gpgsign=false"]
+    for cmd in (["init", "-q"], ["add", "a.txt"], [*env, "commit", "-q", "-m", "init"]):
+        subprocess.run(["git", *cmd], cwd=repo, check=True, capture_output=True)
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=repo, check=True, capture_output=True, text=True
+    ).stdout.strip()
+    monkeypatch.setattr(builder, "REPO", repo)
+    return repo, head
+
+
+def _argv(arch: Path, out: Path, sha: str) -> list[str]:
+    return ["--archive", str(arch), "--run-ids", "RUN-A", "RUN-B", "--code-sha", sha,
+            "--seed-base", "20505004", "--out", str(out)]  # fmt: skip
+
+
+def test_builder_produces_a_verifying_fixture(
+    tmp_path: Path, steps_c: ModuleType, run_suite_mod: ModuleType, builder: ModuleType,
+    git_repo: tuple[Path, str],
+) -> None:  # fmt: skip
+    _, head = git_repo
+    arch = _synthetic_archive(tmp_path, steps_c, "0" * 64, code_sha=head)
+    out = tmp_path / "fixture"
+    argv = _argv(arch, out, head)
+    assert builder.main(argv) == 0
+    prov = json.loads((out / "PROVENANCE.json").read_text())
+    assert prov["hashed_source_digest"] == run_suite_mod.hashed_source_digest("lv5c")
+    assert prov["host_run_ids"] == ["RUN-A", "RUN-B"] and prov["seed_base"] == 20505004
+    assert prov["code_sha"] == head and prov["head_sha"] == head and prov["clean_tree"] is True
+    assert prov["numpy_version"] and prov["python_version"]
+    assert sorted(prov["partial_digests"]) == ["v7r-s0.json", "v7r-s1.json"]
+    assert len(prov["created_from"]) == 4
+    assert list(prov) == sorted(prov)  # sorted keys
+    for f in ("v7r-s0.json", "v7r-s1-escaped_neutral.npz"):  # byte-identical copies
+        assert (out / f).read_bytes() == next(arch.rglob(f)).read_bytes()
+    blocks, _ = load_rehearsal(out, steps_c, run_suite_mod)
+    assert blocks.shape == (900, 20)
+    with pytest.raises(SystemExit, match="exists"):  # no silent overwrite
+        builder.main(argv)
+    assert builder.main([*argv, "--force"]) == 0
+
+
+def test_builder_refuses_when_head_differs_from_code_sha(
+    tmp_path: Path, steps_c: ModuleType, builder: ModuleType, git_repo: tuple[Path, str]
+) -> None:
+    _, head = git_repo
+    other = "c0de" * 10
+    arch = _synthetic_archive(tmp_path, steps_c, "0" * 64, code_sha=other)
+    out = tmp_path / "fixture"
+    with pytest.raises(SystemExit, match="HEAD .* differs from --code-sha"):
+        builder.main(_argv(arch, out, other))
+    assert head != other and not out.exists()
+
+
+@pytest.mark.parametrize("how", ["modified", "untracked"])
+def test_builder_refuses_a_dirty_tree(
+    how: str, tmp_path: Path, steps_c: ModuleType, builder: ModuleType, git_repo: tuple[Path, str]
+) -> None:
+    repo, head = git_repo
+    (repo / ("a.txt" if how == "modified" else "new.txt")).write_text("changed\n")
+    arch = _synthetic_archive(tmp_path, steps_c, "0" * 64, code_sha=head)
+    out = tmp_path / "fixture"
+    with pytest.raises(SystemExit, match="not clean"):
+        builder.main(_argv(arch, out, head))
+    assert not out.exists()
+
+
+def test_builder_refuses_a_shard_with_the_wrong_git_sha(
+    tmp_path: Path, steps_c: ModuleType, builder: ModuleType, git_repo: tuple[Path, str]
+) -> None:
+    _, head = git_repo
+    arch = _synthetic_archive(
+        tmp_path, steps_c, "0" * 64, doc_hook=_doc0(git_sha="b" * 40), code_sha=head
+    )
+    out = tmp_path / "fixture"
+    with pytest.raises(SystemExit, match="differs from --code-sha"):
+        builder.main(_argv(arch, out, head))
+    assert not out.exists()
+
+
+def test_builder_run_ids_restrict_the_scan_and_a_missing_shard_set_fails(
+    tmp_path: Path, steps_c: ModuleType, builder: ModuleType, git_repo: tuple[Path, str]
+) -> None:
+    _, head = git_repo
+    arch = _synthetic_archive(tmp_path, steps_c, "0" * 64, code_sha=head)
+    out = tmp_path / "fixture"
+    with pytest.raises(SystemExit, match="verification failed.*need >= 2 shards"):
+        builder.main(["--archive", str(arch), "--run-ids", "RUN-A", "--code-sha", head,
+                      "--seed-base", "20505004", "--out", str(out)])  # fmt: skip
+    with pytest.raises(SystemExit, match="not found"):
+        builder.main(["--archive", str(arch), "--run-ids", "RUN-Z", "--code-sha", head,
+                      "--out", str(out)])  # fmt: skip
+    assert not out.exists()
+
+
+def test_loader_refuses_a_stale_digest_of_a_built_fixture(
+    tmp_path: Path, steps_c: ModuleType, run_suite_mod: ModuleType
+) -> None:
+    _build_rehearsal(tmp_path, steps_c, run_suite_mod.hashed_source_digest("lv5c"))
+    load_rehearsal(tmp_path, steps_c, run_suite_mod)
+    with pytest.raises(RehearsalError, match="hashed_source_digest differs"):
+        load_rehearsal(tmp_path, steps_c, run_suite_mod, digest="f" * 64)
+
+
+def test_hashed_source_digest_is_deterministic_and_excludes_the_rehearsal_fixtures(
+    run_suite_mod: ModuleType, tmp_path: Path
+) -> None:
+    d = run_suite_mod.hashed_source_digest("lv5c")
+    assert d == run_suite_mod.hashed_source_digest("lv5c") and len(d) == 64
+    assert d != run_suite_mod.hashed_source_digest("lv5b")
+    probe = REHEARSAL_DIR / "PROVENANCE-probe.json"
+    assert not probe.exists()
+    try:
+        REHEARSAL_DIR.mkdir(parents=True, exist_ok=True)
+        probe.write_text("{}")
+        assert run_suite_mod.hashed_source_digest("lv5c") == d  # fixtures do not enter the digest
+    finally:
+        probe.unlink(missing_ok=True)
+        if REHEARSAL_DIR.exists() and not any(REHEARSAL_DIR.iterdir()):
+            REHEARSAL_DIR.rmdir()
+
+
+def test_rehearsal_digest_excludes_documentation_but_the_attestation_set_keeps_it(
+    run_suite_mod: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Amendment 17 (a)7: documentation and test changes keep the rehearsal valid, code changes
+    (src/, validation/scripts/transport/) do not."""
+    doc = (
+        "validation/plans/p.md",
+        "decisions/d.md",
+        "README.md",
+        "validation/results/README.md",
+        "docs/a/b.md",
+    )
+    tests = ("tests/ionmc/test_x.py", "tests/ionmc/conftest.py", "tests/conftest.py")
+    code = ("src/ionmc/x.py", "validation/scripts/transport/s.py")
+    fixture = "tests/ionmc/fixtures/v7r/rehearsal/PROVENANCE.json"
+    paths = [tmp_path / r for r in (*doc, *tests, *code, fixture)]
+    for p in paths:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text("v0")
+    monkeypatch.setattr(run_suite_mod, "REPO", tmp_path)
+    monkeypatch.setattr(run_suite_mod, "source_files", lambda suite=None: list(paths))
+    d0 = run_suite_mod.hashed_source_digest("lv5c")
+    for r in (*doc, *tests, fixture):  # tests/ outside the fixture directory too
+        (tmp_path / r).write_text("changed")
+        assert run_suite_mod.hashed_source_digest("lv5c") == d0, r
+    for r in code:
+        (tmp_path / r).write_text("changed")
+        d1 = run_suite_mod.hashed_source_digest("lv5c")
+        assert d1 != d0, r
+        (tmp_path / r).write_text("v0")
+    # the attestation set is unchanged: plans and decisions are still source files of lv5c
+    monkeypatch.undo()
+    listed = {str(f.relative_to(REPO)) for f in run_suite_mod.source_files("lv5c")}
+    assert "validation/plans/v3-005-acceptance.md" in listed
+    assert any(x.startswith("decisions/") for x in listed)
+
+
+def test_rehearsal_loader_missing_directory_is_a_violation(
+    tmp_path: Path, steps_c: ModuleType, run_suite_mod: ModuleType
+) -> None:
+    with pytest.raises(RehearsalError, match="PROVENANCE.json missing"):
+        load_rehearsal(tmp_path / "absent", steps_c, run_suite_mod)
+
+
+def test_committed_rehearsal_fixture_is_current(
+    steps_c: ModuleType, run_suite_mod: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Amendment 14a (b)2: the committed rehearsal fixture must exist (no environment condition) and load in
+    required mode against the CURRENT hashed-source digest, so a hashed-source change without a re-run fails CI.
+    Produce it with ``v7r_rehearsal_fixture.py`` at the current hashed-source digest."""
+    assert REHEARSAL_DIR.is_dir(), (
+        "rehearsal fixture absent — produce it with v7r_rehearsal_fixture.py at the current hashed-source "
+        "digest (Amendment 14a (b)2)"
+    )
+    monkeypatch.setenv("IONMC_V7R_FIXTURES", "required")
+    monkeypatch.delenv("IONMC_V7R_REHEARSAL_DIR", raising=False)
+    blocks, info = load_rehearsal(rehearsal_dir(), steps_c, run_suite_mod)
+    assert info["hashed_source_digest"] == run_suite_mod.hashed_source_digest("lv5c")
+    assert blocks.shape[1] == 20
+
+
+def test_no_skip_path_outside_skip_or_fail() -> None:
+    """Both calibration files can skip only through ``_skip_or_fail`` (a failure when required)."""
+    import re
+
+    pat = re.compile(r"pytest\.skip\(|importorskip|skipif|mark\.skip\b|xfail")
+    for f in ("test_v7r_coverage.py", "test_v7_coverage.py"):
+        lines = (REPO / "tests" / "ionmc" / f).read_text().splitlines()
+        hits = [
+            i for i, ln in enumerate(lines, 1) if pat.search(ln) and "pat = re.compile" not in ln
+        ]
+        if f == "test_v7r_coverage.py":
+            hits = [i for i in hits if "pytest.skip(msg)" not in lines[i - 1]]
+        else:  # the one guarded skip re-raises in required mode (IONMC_V7R_FIXTURES above it)
+            hits = [i for i in hits if "IONMC_V7R_FIXTURES" not in "\n".join(lines[i - 8 : i])]
+        assert hits == [], (f, hits)

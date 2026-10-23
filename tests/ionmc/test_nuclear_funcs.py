@@ -492,6 +492,7 @@ COVERED = {
     "multiplicity_round", "grid_locate", "inv_cdf_sample", "kalbach_a", "kalbach_cdf",
     "kalbach_pdf", "kalbach_mu",
     "residual_invariant_mass", "residual_mass_ok", "cm_boost", "boost_z", "cm_to_lab",
+    "choose_target", "sample_event",  # event level: tests/ionmc/test_nuclear_device.py (P5 ext.)
 }  # fmt: skip
 
 NXC = 31  # real argument columns

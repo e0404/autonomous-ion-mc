@@ -1,0 +1,21 @@
+design | FA paired, FA single(model) | per surrogate: joint power, P(power clause), P(all clauses) | P(all, both surrogates)  [r=0.32 | r=1]
+D0 frozen                              | 0.0383, 0.0197 | arch pw 0.9454 Ppow 1.000 Pall 0.019; rehe pw 0.9531 Ppow 1.000 Pall 0.019 | 0.000 | r=1: 0.000
+D0b frozen alpha, n_kappa 1e6          | 0.0383, 0.0197 | arch pw 0.9454 Ppow 1.000 Pall 0.015; rehe pw 0.9531 Ppow 1.000 Pall 0.015 | 0.000 | r=1: 0.000
+D0c alpha .04, n_kappa 2e7, R 40000    | 0.0383, 0.0197 | arch pw 0.9454 Ppow 1.000 Pall 0.322; rehe pw 0.9531 Ppow 1.000 Pall 0.322 | 0.104 | r=1: 0.000
+R1 alpha .025, n_kappa 1e6             | 0.0233, 0.0119 | arch pw 0.9105 Ppow 0.629 Pall 0.610; rehe pw 0.9219 Ppow 0.996 Pall 0.967 | 0.590 | r=1: 0.000
+R1' alpha .025, n_kappa 2e5            | 0.0233, 0.0119 | arch pw 0.9105 Ppow 0.629 Pall 0.461; rehe pw 0.9219 Ppow 0.996 Pall 0.730 | 0.336 | r=1: 0.000
+R2 alpha .02, n_kappa 1e6              | 0.0196, 0.0094 | arch pw 0.8940 Ppow 0.003 Pall 0.003; rehe pw 0.9073 Ppow 0.376 Pall 0.376 | 0.001 | r=1: 0.000
+R3 alpha .015, n_kappa 1e6             | 0.0149, 0.0069 | arch pw 0.8635 Ppow -0.000 Pall -0.000; rehe pw 0.8788 Ppow 0.000 Pall 0.000 | -0.000 | r=1: -0.000
+R4 alpha .03, n_kappa 1e6              | 0.0296, 0.0148 | arch pw 0.9264 Ppow 1.000 Pall 0.691; rehe pw 0.9366 Ppow 1.000 Pall 0.691 | 0.478 | r=1: 0.000
+R5 2x transport, alpha .02             | 0.0197, 0.0062 | arch pw 0.9989 Ppow 1.000 Pall 0.987; rehe pw 0.9992 Ppow 1.000 Pall 0.987 | 0.974 | r=1: 0.000
+R6 2x transport, alpha .01             | 0.0098, 0.0029 | arch pw 0.9972 Ppow 1.000 Pall 1.000; rehe pw 0.9980 Ppow 1.000 Pall 1.000 | 1.000 | r=1: 0.834
+paired pass prob n=3600 alpha=0.04: c=0.6764:0.889 c=0.6827:0.964 c=0.6853:0.957 c=0.69:0.885
+paired pass prob n=3600 alpha=0.03: c=0.6764:0.867 c=0.6827:0.951 c=0.6853:0.941 c=0.69:0.854
+paired pass prob n=3600 alpha=0.025: c=0.6764:0.842 c=0.6827:0.940 c=0.6853:0.930 c=0.69:0.836
+paired pass prob n=3600 alpha=0.02: c=0.6764:0.824 c=0.6827:0.929 c=0.6853:0.918 c=0.69:0.817
+paired pass prob n=3600 alpha=0.01: c=0.6764:0.737 c=0.6827:0.872 c=0.6853:0.857 c=0.69:0.728
+paired pass prob n=7200 alpha=0.04: c=0.6764:0.994 c=0.6827:1.000 c=0.6853:0.999 c=0.69:0.993
+paired pass prob n=7200 alpha=0.03: c=0.6764:0.991 c=0.6827:1.000 c=0.6853:0.999 c=0.69:0.990
+paired pass prob n=7200 alpha=0.025: c=0.6764:0.989 c=0.6827:1.000 c=0.6853:0.999 c=0.69:0.987
+paired pass prob n=7200 alpha=0.02: c=0.6764:0.986 c=0.6827:0.999 c=0.6853:0.999 c=0.69:0.984
+paired pass prob n=7200 alpha=0.01: c=0.6764:0.973 c=0.6827:0.998 c=0.6853:0.997 c=0.69:0.970

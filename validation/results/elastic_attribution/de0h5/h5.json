@@ -1,0 +1,231 @@
+{
+ "archived_v11": {
+  "energies": {
+   "150": {
+    "F_ionmc": 0.8567840337079885,
+    "F_ionmc_se": 0.0015196783488711665,
+    "F_relative_diff_se": 0.002885429972284705,
+    "F_topas": 0.891584942125469,
+    "F_topas_se": 0.0021600982500448217,
+    "gain_ionmc": 0.0220987766133649,
+    "gain_topas": 0.016252044281034106
+   },
+   "200": {
+    "F_ionmc": 0.8440660646539855,
+    "F_ionmc_se": 0.0025408116155115545,
+    "F_relative_diff_se": 0.0038376917410936247,
+    "F_topas": 0.8873703022321767,
+    "F_topas_se": 0.0023837942663498973,
+    "gain_ionmc": 0.02672217441583613,
+    "gain_topas": 0.018419142339446415
+   }
+  },
+  "source": {
+   "compare_sha256": "1f81c774d5209761fce23f757e6f6c2d4f731c533be9b31d0e017a253175f6e2",
+   "evidence_sha": "dd976c5a69850b9597ac4da938792d4273a71719",
+   "input_sha256": [
+    {
+     "path": "validation/generated/RUN-20261012T142957Z-a8e41216/transport/lv5c-dd976c5-16/16-v11-compare.txt",
+     "sha256": "1f81c774d5209761fce23f757e6f6c2d4f731c533be9b31d0e017a253175f6e2"
+    },
+    {
+     "path": ".ionmc-cache/transport-samples/dd976c5/13/samples/v11-150-emonly.json",
+     "sha256": "cb46ec341d0334740ea0e585f5ea9c0f084d60a883c4097c80a5b070837c0b6f"
+    },
+    {
+     "path": ".ionmc-cache/transport-samples/dd976c5/15/samples/v11-200-emonly.json",
+     "sha256": "1bb5e78e387cdd8528895d6c22b196fe1ba3f792db34d72a4bbcbbd81cc7866b"
+    },
+    {
+     "path": ".ionmc-cache/reference-runs/REF-278f82f0abda74861681-8a56e570/work/idd_dose.csv",
+     "sha256": "b6e7a374f62dae58dfe6c6b75e0841e6376704d0eaf2b6cb54f07c5931b9178e"
+    },
+    {
+     "path": ".ionmc-cache/reference-runs/REF-7072862d365da2cf275b-475cdb44/work/idd_dose.csv",
+     "sha256": "76acde29effcb10f067868a393257c1d89daa3448d83e7686205181ca40301cd"
+    },
+    {
+     "path": ".ionmc-cache/reference-runs/REF-b9387263d9a5d9db0593-7c20f8b2/work/idd_dose.csv",
+     "sha256": "81a9d8e18ae7384728da33403366f5231227b14704195f8813c532dcdcce1a54"
+    },
+    {
+     "path": ".ionmc-cache/reference-runs/REF-095c91aab5a7a6d92ebe-7e80de3c/work/idd_dose.csv",
+     "sha256": "cd23c00ed5eee4c39882830da83e08dcefd4701d220349ec323c79d7c70ed961"
+    },
+    {
+     "path": ".ionmc-cache/reference-runs/REF-c10bdf1824e76827a539-b1ded06c/work/idd_dose.csv",
+     "sha256": "37de1c34504970153951921b931383fcf488e7b9eaea855ba74b12c08b13fedb"
+    },
+    {
+     "path": ".ionmc-cache/reference-runs/REF-f3ed032bc11595bea382-3d206d0e/work/idd_dose.csv",
+     "sha256": "973cf76d0ec5477c90e37585501c0088b35ac7048ea6455340bf0b989115c0d5"
+    }
+   ],
+   "run_id": "RUN-20261012T142957Z-a8e41216",
+   "step_path": "lv5c-dd976c5-16/16-v11-compare.txt"
+  }
+ },
+ "banner": "Exploratory, report-only (Amendment 19); not evidence; changes no row.",
+ "note_git": "Git projection (decision 0041): explicit allowlist of dimensionless ratios, per-primary rates and probabilities, kinematic statistics, kernel integrals, counts and flags; no absolute cross sections, no distributions or per-point arrays. The complete record is regenerated into validation/generated/ by the committed module.",
+ "per_energy": {
+  "150": {
+   "amplifies_delta_pk": true,
+   "ci90_inside_2pct": true,
+   "delta_pk_F_ionmc_over_F_topas_minus_1": -0.03903263365408327,
+   "direction": "amplifies Delta_pk (ionmc EM-only peak/plateau above TOPAS)",
+   "h5_counts": false,
+   "h5_excluded": true,
+   "implied_shift_of_F_ratio": -0.0085274876015079,
+   "ionmc": {
+    "peak_over_plateau": {
+     "se": 0.011672303850350653,
+     "value": 6.190233767888263
+    },
+    "plateau": {
+     "se": 0.0005223128314232019,
+     "value": 6.107497148495102
+    },
+    "r80_mm": {
+     "se": 0.012174478905570475,
+     "value": 158.4832371864574
+    }
+   },
+   "ionmc_over_topas_peak_over_plateau": {
+    "ci90": [
+     1.0048189188621404,
+     1.012382743301703
+    ],
+    "df": 17.131372833165642,
+    "se": 0.002174012542987671,
+    "t95": 1.7396,
+    "value": 1.0086008310819217
+   },
+   "ionmc_over_topas_peak_value_ratio_no_se": 1.0116527462726008,
+   "ionmc_over_topas_plateau": {
+    "ci90": [
+     1.0027087409233337,
+     1.0033430391201261
+    ],
+    "df": 4.373896255572644,
+    "se": 0.0001487705687194516,
+    "t95": 2.1318,
+    "value": 1.00302589002173
+   },
+   "r80_difference_mm_ionmc_minus_topas": {
+    "ci90": [
+     -0.36101056662072045,
+     -0.30763363441811004
+    ],
+    "df": 12.429968249421206,
+    "se": 0.014974171632893017,
+    "t95": 1.7823,
+    "value": -0.33432210051941524
+   },
+   "topas": {
+    "peak_over_plateau": {
+     "se": 0.00640938693779017,
+     "seeds": 3,
+     "value": 6.13744662618216
+    },
+    "plateau": {
+     "se": 0.0007379012091204756,
+     "seeds": 3,
+     "value": 6.0890722854250425
+    },
+    "r80_mm": {
+     "se": 0.008718249793918356,
+     "seeds": 3,
+     "value": 158.8175592869768
+    }
+   },
+   "topas_runs": [
+    "REF-278f82f0abda74861681-8a56e570",
+    "REF-7072862d365da2cf275b-475cdb44",
+    "REF-b9387263d9a5d9db0593-7c20f8b2"
+   ],
+   "within_2pct_point": true
+  },
+  "200": {
+   "amplifies_delta_pk": true,
+   "ci90_inside_2pct": true,
+   "delta_pk_F_ionmc_over_F_topas_minus_1": -0.04880063877420693,
+   "direction": "amplifies Delta_pk (ionmc EM-only peak/plateau above TOPAS)",
+   "h5_counts": false,
+   "h5_excluded": true,
+   "implied_shift_of_F_ratio": -0.011002858148069228,
+   "ionmc": {
+    "peak_over_plateau": {
+     "se": 0.01196316310373895,
+     "value": 6.461117144201717
+    },
+    "plateau": {
+     "se": 0.0004881944265558664,
+     "value": 4.765909319041572
+    },
+    "r80_mm": {
+     "se": 0.023405046625279306,
+     "value": 260.734697097503
+    }
+   },
+   "ionmc_over_topas_peak_over_plateau": {
+    "ci90": [
+     1.0041225193387178,
+     1.0181280164463826
+    ],
+    "df": 4.282890932999649,
+    "se": 0.0032848994060570625,
+    "t95": 2.1318,
+    "value": 1.0111252678925502
+   },
+   "ionmc_over_topas_peak_value_ratio_no_se": 1.0105785840125427,
+   "ionmc_over_topas_plateau": {
+    "ci90": [
+     0.9992456792574529,
+     0.9996729831528997
+    ],
+    "df": 14.687654507348737,
+    "se": 0.00012130355290035708,
+    "t95": 1.7613,
+    "value": 0.9994593312051763
+   },
+   "r80_difference_mm_ionmc_minus_topas": {
+    "ci90": [
+     -0.39024827302074633,
+     -0.29043011454547135
+    ],
+    "df": 13.664230483856855,
+    "se": 0.028182889625409394,
+    "t95": 1.7709,
+    "value": -0.34033919378310884
+   },
+   "topas": {
+    "peak_over_plateau": {
+     "se": 0.01705805803267252,
+     "seeds": 3,
+     "value": 6.390026388786008
+    },
+    "plateau": {
+     "se": 0.0003104139324199993,
+     "seeds": 3,
+     "value": 4.7684874914266935
+    },
+    "r80_mm": {
+     "se": 0.015699651591882864,
+     "seeds": 3,
+     "value": 261.0750362912861
+    }
+   },
+   "topas_runs": [
+    "REF-095c91aab5a7a6d92ebe-7e80de3c",
+    "REF-c10bdf1824e76827a539-b1ded06c",
+    "REF-f3ed032bc11595bea382-3d206d0e"
+   ],
+   "within_2pct_point": true
+  }
+ },
+ "tolerance": 0.02,
+ "verdict": {
+  "150": "H5 excluded (EM-only within +-2 %)",
+  "200": "H5 excluded (EM-only within +-2 %)"
+ }
+}

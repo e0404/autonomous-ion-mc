@@ -110,6 +110,19 @@ tally columns appended AFTER every other column (``TALLY_NAMES`` is never extend
 NUCLEAR_COUNTER_NAMES = ("majorant_violation", "nuclear_rejection_limit", "nuclear_conservation")
 """Conditional counter block of a ``nuclear=True`` run, appended after ``COUNTER_NAMES``."""
 
+ELASTIC_TALLY_NAMES = ("elastic_recoil_local", "elastic_pp_events", "elastic_pa_events")
+"""Conditional tally block of a run with the hadronic elastic channel on (decision 0041 slice C,
+V3-005C): extra per-history columns appended after the nuclear block. ``elastic_recoil_local`` is
+the energy [MeV] of the p + A recoil nuclei, deposited locally (a destination of the energy
+balance); ``elastic_pp_events`` and ``elastic_pa_events`` are the numbers of accepted p-p and p + A
+elastic events (exact small integers in float64; diagnostics, no energy)."""
+ELASTIC_COUNTER_NAMES = ("elastic_below_domain", "pp_below_domain")
+"""Conditional counter block of a run with the elastic channel on, appended after the nuclear block:
+diagnostics of the declared model domain (Amendment 15 (b)2). ``elastic_below_domain`` is
+incremented once per proton at the first step whose post-step energy is below the p + A
+``e_min_shape`` of some target of the material, ``pp_below_domain`` once per proton at the first
+step below ``E_min,pp`` in a material that contains hydrogen. They never invalidate a result."""
+
 QUANTUM_MEV = 2.0**-30
 """Fixed-point quantum of the deposit grids [MeV]: every deposit piece is rounded to the nearest
 multiple (``floor(x / q + 1/2)``, a deterministic function of the piece) and accumulated in int64,
@@ -290,12 +303,26 @@ def concat_partials(partials: list[PartialTransport]) -> PartialTransport:
     return PartialTransport(parts[0].h0, parts[-1].h1, comps, counters, edep, None, {}, chan)
 
 
+def tally_column_index(n_cols: int, elastic: bool, name: str) -> int:
+    """Column index of the conditional tally ``name`` in a partial result with ``n_cols`` tally
+    columns of a ``nuclear=True`` run (``elastic`` says whether the ``ELASTIC_TALLY_NAMES`` block
+    follows the nuclear block). The conditional blocks are the LAST columns, the nuclear block
+    ending where the elastic block begins, as in ``merge_partials``."""
+    n_el_t = len(ELASTIC_TALLY_NAMES) if elastic else 0
+    if name in NUCLEAR_TALLY_NAMES:
+        return n_cols - n_el_t - len(NUCLEAR_TALLY_NAMES) + NUCLEAR_TALLY_NAMES.index(name)
+    if elastic and name in ELASTIC_TALLY_NAMES:
+        return n_cols - n_el_t + ELASTIC_TALLY_NAMES.index(name)
+    raise ValueError(f"tally column {name!r} is not a conditional column of this configuration")
+
+
 def merge_partials(
     partials: list[PartialTransport],
     n_histories: int,
     n_grids: int,
     n_channel_columns: int = 0,
     nuclear: bool = False,
+    elastic: bool = False,
 ) -> RawTransport:
     """Reduce the partial results of a complete, contiguous partition of ``[0, n_histories)``.
 
@@ -305,7 +332,9 @@ def merge_partials(
 
     ``nuclear`` (a ``nuclear=True`` run) adds the conditional blocks: the ``NUCLEAR_TALLY_NAMES``
     columns after all others and the ``NUCLEAR_COUNTER_NAMES`` counters after ``COUNTER_NAMES``;
-    they appear in ``tallies`` / ``counters`` only then.
+    they appear in ``tallies`` / ``counters`` only then. ``elastic`` (the elastic channel is on,
+    implies ``nuclear``) appends the ``ELASTIC_TALLY_NAMES`` columns and the
+    ``ELASTIC_COUNTER_NAMES`` counters after the nuclear blocks.
 
     Fails closed (``ValueError``) for gaps, overlaps, a different number of columns or grids.
     """
@@ -320,8 +349,13 @@ def merge_partials(
     if pos != n_histories:
         raise ValueError(f"partial results cover [0, {pos}), expected [0, {n_histories})")
     n_nuc_t = len(NUCLEAR_TALLY_NAMES) if nuclear else 0
-    counter_names = COUNTER_NAMES + (NUCLEAR_COUNTER_NAMES if nuclear else ())
-    n_cols = N_FIXED_TALLIES + 2 * n_grids + n_channel_columns + n_nuc_t
+    n_el_t = len(ELASTIC_TALLY_NAMES) if elastic else 0
+    counter_names = (
+        COUNTER_NAMES
+        + (NUCLEAR_COUNTER_NAMES if nuclear else ())
+        + (ELASTIC_COUNTER_NAMES if elastic else ())
+    )
+    n_cols = N_FIXED_TALLIES + 2 * n_grids + n_channel_columns + n_nuc_t + n_el_t
     for p in parts:
         if (p.channel_acc is not None) != (n_channel_columns > 0):
             raise ValueError("partial result and configuration disagree about scoring channels")
@@ -344,7 +378,15 @@ def merge_partials(
         edep.append(acc.astype(np.float64) * QUANTUM_MEV)
     tallies = dict(zip(TALLY_NAMES, totals[:N_FIXED_TALLIES], strict=True))
     if nuclear:
-        tallies.update(zip(NUCLEAR_TALLY_NAMES, totals[n_cols - n_nuc_t :], strict=True))
+        tallies.update(
+            zip(
+                NUCLEAR_TALLY_NAMES,
+                totals[n_cols - n_el_t - n_nuc_t : n_cols - n_el_t],
+                strict=True,
+            )
+        )
+    if elastic:
+        tallies.update(zip(ELASTIC_TALLY_NAMES, totals[n_cols - n_el_t :], strict=True))
     base = N_FIXED_TALLIES + 2 * n_grids
     channels = None
     if n_channel_columns > 0:
