@@ -1041,8 +1041,9 @@ def build_elastic_proton(
     the complete input provenance and the construction checks. ``m3`` (V3-005D fallback model,
     exploratory, never evidence): the C-12 and O-16 shapes are the ENDF/B-VIII.0 neutron MF4/MT2
     angular distributions at the same lab energy (:mod:`ionmc.nuclear.elastic_m3`); all other
-    targets keep the black-disk shape (recorded); the evaluation ends at 20 MeV and
-    ``m3.above_emax`` ("error" | "hold-last" | "black-disk") decides the nodes above it.
+    targets keep the black-disk shape (recorded); the evaluations end at 150 MeV (verified
+    2026-10-23) and ``m3.above_emax`` ("error" | "hold-last" | "black-disk") decides the nodes
+    above it.
     ``m2`` and ``m3`` are mutually exclusive. ``out_dir`` overrides the output
     directory (default ``<cache>/derived``); scratch builds go to a git-ignored directory."""
     t_start = time.perf_counter()
@@ -1508,7 +1509,10 @@ def build_elastic_proton(
                 )
                 for t in TARGETS
             },
-            "note": "ENDF/B-VIII.0 neutron evaluations end at 20 MeV; sigma_el stays BGG",
+            "note": "ENDF/B-VIII.0 neutron MF4/MT2 evaluations verified to extend to 150 MeV "
+            "(C-12 tabulated 20-150 MeV, O-16 30-150 MeV; record validation/results/"
+            "reference_data/endf-b-viii0-neutrons-c12-o16, 2026-10-23); no data above "
+            "150 MeV; sigma_el stays BGG",
         }  # fmt: skip
     if exploratory_forced_isotropic:
         info["exploratory"] = {
