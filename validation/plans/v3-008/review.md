@@ -165,3 +165,43 @@
 2. Accepted. The operative "Freezing" block of decision 0043 §3 is replaced by the actual chronology: the mapping, its b formulas, the evaluation choice, the I11-map/I11-rel tests and the first I11-rel/I11-abs evaluation were produced together at 070b07f0 (regenerated at 00af9a6c; P11b at b3eef90b); all P11 values are SEEN. The P9 hashes record what was evaluated and do not establish pre-registration. The freeze revision may claim pre-registration only for the rows whose values are unseen, listed there (I0, I1, I3, I3b (i), I3c, I4, I4b, I5, I6, I7, I8, I8b, I9, I10, I12–I16, C-res, T1-ion, T12-ion, T13-ion, V1, V1-held, V2, V4 and the V5-SS statistic); I11-rel/-abs/-ext/-map, I2, I3b (ii) and the P1/P1b tables are carried as disclosed SEEN. The r5 sentence is quoted there as superseded. Parallel dated notes: plan §P paragraph, P9 row, P11 row.
 3. Accepted. P11b (c) item 5 and its "OPEN after P11b" line are marked withdrawn; new section P11c states the final branch-B conclusion (differential coverage only, ≤ 1.5 pp; shared lineage; the gap routed to the intervention filed at the freeze per the orchestrator decision in plan STOP 4 (a)–(c); declared limitation ≤ 1.5 %, I11-ext, `fdm_extrapolated`). The P11 status paragraph gets a dated note. Decision 0043: item 5 of the §3 P11b note, the r6 "End cases" bullet and the P10-outcome paragraph are marked superseded; §6 lineage rows (f_dM; Geant4 single scattering, ion path now FACT, branch B) and the limitations MCS bullet get dated notes. Grep over the records for "independent coverage", "end cases", "cases 28", "proton cases": the remaining hits are history lines or already state the withdrawal.
 4. Accepted. The four scratch scripts (hashes re-checked, unchanged) are replaced as the record by `validation/scripts/ion_em/ss_budget.py` (sha256 b893c0420bb492368d89943a8bd8820752ae903375921f9005c7dd2bc8f00156) and `tests/ionmc/test_ion_em_ss_budget.py` (551c75838dbedbf2be0a7b643beb1cd4b5ce48d2d15e15f0f4883bf00be1cfcc): pure numpy functions with docstrings citing the equations and the Geant4 source lines, a `main()` printing the aggregates, no computation or I/O at import; 14 CI-fast tests (known limits of the transform, vanishing bias terms, SCRIPT-GENERATED golden aggregates, the budget and the 3 % rule). Every recorded aggregate is reproduced unchanged (bias −0.17 to −0.69 %, electron share −3.3 to −4.1 %, radius −2.3 to −3.0 %, He-pair signal −5.6 to −7.2 %, discrimination, cost 3991 s at 2 µs/event, quadrature 2.41 %, conservative 3.02–3.14 %). Bound in plan P9 and P10 §7.8 (files, sha256, command); the V5-SS budget sentence cites the module. The conservative total reaching the 3 % gate is unchanged and stays disclosed: the 3 % is justified by the quadrature rule used since r5, and the conservative variant reaches it only at the inconclusive limit σ = 1 %. The 1 mm SS smoke cost (≈ 23 ms per C 290 primary, as relayed) gives ≈ 1.0 h REF for the 8 cases (P10 §7.8, plan P10 row and §E).
+
+# Round V3-008-5 review (2026-11-01; Codex REVIEW-6a14f4ec at head ea220a88; two findings, verbatim as relayed by the orchestrator)
+
+1. (decisions/0043-ion-em-transport.md:163) "The P3 disposition is still contradictory. This decision says the triggered LS option is added, while `p3-lindhard-sorensen.md:93` says whether the trigger requires an option remains undecided, and the acceptance row labels the option pending. The complete diff contains no `BetheOptions` implementation or default-selection amendment. Make the canonical records consistently describe a pending prescription, or implement the option and complete the reviewed default amendment before freeze."
+
+2. (validation/scripts/ion_em/ss_budget.py:677) "The newly codified V5-SS gate ignores statistical uncertainty whenever sigma is at most 1%: for example, its test explicitly passes a 2.99% deviation with 0.9% sigma. This contradicts the plan's scalar-comparison TOST rule (`|x-r| + 1.645 sigma <= tol`) and can pass a result whose confidence bound is far outside 3%. It is especially material because the committed conservative budget is already 3.02–3.14%. Apply the declared confidence-bound rule or explicitly revise and scientifically justify the acceptance method and tolerance before freezing V5-SS."
+
+**Dispositions (planner, 2026-11-01; at head ea220a88, uncommitted at the time of writing; the LS implementation is by a separate worker in the same commit).**
+
+1. Accepted. The second option was taken: the option is implemented and the default amendment completed, as the orchestrator decided.
+   - Implementation: `BetheOptions.ls ∈ {"off", "eff", "bare_mixed"}`, z ≥ 2 only, in `src/ionmc/physics/lindhard_sorensen.py` and `src/ionmc/physics/stopping.py`, with tests `tests/ionmc/test_ion_em_ls_option.py`.
+   - Default: `"off"`, by the dated decision 0043 §1 "Amendment (2026-11-01) — LS option". It states:
+     - the reasons. The trigger came from Bloch(z) − Bloch(q) (−1.29 / −2.64 % of S at 2 MeV/u for C/O), not from the LS-beyond part (+0.05 / +0.06 %). No theory fixes the charge. Geant4 is internally inconsistent: the LS path uses nominal Z with the q² weight, while the Bethe–Bloch path evaluates Bloch and Mott at q_eff. The plausible band lies inside the declared low-energy model uncertainty;
+     - the two alternatives and why they were not chosen: `"eff"` is defensible but changes the result by ≤ 0.1 %; `"bare_mixed"` is a hybrid that would remove a TOPAS difference by construction;
+     - what could decide it later: a screened-ion PASS/DPASS or partial-wave calculation, or IAEA low-Z stopping data; never the I3 rows;
+     - an updated uncertainty statement.
+   - The physics record is `validation/plans/v3-008/p3b-ls-default.md`. It carries the sources, the decomposition table, the Geant4 line references, the "not verified" list, and the v11.4.2 `G4LindhardSorensenData.cc` hash 70ae7c6b…, identical to v11.2.0, which closes the P3 §7 item.
+   - Consistency edits, all dated notes:
+     - `p3-lindhard-sorensen.md`, at the "decision for the lead orchestrator" bullet and at §7;
+     - the plan P3 row: "CLOSED (re-opened and closed 2026-11-01): option implemented, default off by amendment", with hashes bound at commit;
+     - the plan rows I3b(ii) (three variants, report-only), I3c (`bare_mixed` allowed for the exploratory TOPAS-attribution diagnostic) and P9 (iii) (the new src module, stopping.py, the test and the record).
+
+2. Accepted. The declared confidence-bound rule is applied, and the design is re-evaluated before any run.
+   - **Rule.** `ss_budget.gate` now passes iff |dev| + 1.645 σ ≤ 3 %. σ > 1 % remains a separate INCONCLUSIVE (= FAIL) precondition. The test requires 2.99 % / 0.9 % to FAIL and −0.69 % / 0.30 % to PASS, plus boundary cases.
+   - **Statistics.** The module now computes the statistics from the reference density itself: window moments to x⁴, x/y joint moments by the 2-D transform, and the delta method.
+     - Per case at 2e4 primaries, x and y pooled: 0.34 % (window kurtosis 2.76–2.78, x/y correlation 0.04–0.05).
+     - σ of the ratio statistic at 2e4 / 1e5: 0.53 %.
+   - **Power (P(all five pass), Monte Carlo with correlated cases).**
+     - At 2e4 / 1e5: 0.994 for a correct model (true deviation = the computed bias), but 0.254 if ionmc's ratio is off Molière–Hanson by the SEEN I11-rel spread.
+   - **Design decision, pre-registered before any V5-SS run:**
+     - TOPAS 6e4 primaries per case: 2.94 h REF, scaled from the measured smoke, ≤ 4 h, ≤ 2 parts per case;
+     - ionmc ≥ 4e5 histories per case;
+     - σ = 0.30 %. P(all pass) ≥ 0.9999 for a correct model, 0.918 at the SEEN spread, 0.006 at the I11-rel bound (a finding, not a false fail);
+     - fallback 4e4 before any case is dropped.
+   - **Tolerance and gated ratios.** 3 % and the five gated ratios are kept. Under TOST the tolerance covers only the systematic items, 2.90 % linear at the item bounds. The room left for ionmc's model term is ≈ 1.6–1.8 pp, above the SEEN 1.13 pp. 3.5 % was not adopted.
+   - **Where recorded:**
+     - P10 §7.5.2 (tables) and a §7.8 dated note;
+     - plan V5-SS row and §E (dated notes), P9 (iv) (new module and test hashes bound at commit);
+     - decision 0043 §3 (dated note).
+   - The module's new golden values are SCRIPT-GENERATED regression values. The round V3-008-4 `budget()` and all earlier goldens are unchanged.

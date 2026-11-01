@@ -60,6 +60,28 @@ Tags and sha256 prefixes: [CS] ``G4CoulombScattering.cc`` db354d80, [ICS]
   decomposition: ``TF_nocorr`` (ion path with the Thomas-Fermi radius and corr = 1, no
   electrons), ``TF_corr`` (with corr), ``U_corr`` (the ion path itself).
 
+Statistics and acceptance rule (added 2026-11-01, round V3-008-5, Codex REVIEW-6a14f4ec finding 2)
+---------------------------------------------------------------------------------------------------
+* The V5-SS rule per gated ratio is the plan's scalar-comparison TOST form: PASS iff
+  |x - r| + 1.645 sigma <= tol (tol = 3 %), with x - r = ratio_model/ratio_ref - 1 and sigma its
+  bootstrap standard error; sigma > 1 % stays a separate precondition (INCONCLUSIVE, counted as
+  FAIL). The round V3-008-4 form (PASS iff |x - r| <= 3 % whenever sigma <= 1 %) is withdrawn.
+* Expected sigma, from the projected density itself: the windowed moments P, M2, M4 of
+  f(x) in |x| <= W follow from the same transform with
+  g4(eta) = int_-W^W x^4 cos(eta x) dx; the joint moments of the two projections of one primary
+  (x and y are pooled) from the 2-D transform exp(-Omega(|k|)) (the small-angle 2-D
+  characteristic function has the same Omega). With m = M2/P the delta method gives for N
+  primaries, one projection: var(m_hat)/m^2 = (M4 P/M2^2 - 1)/(N P); x and y pooled:
+  var(m_hat) = [2 (M4 - M2^2/P) + 2 C]/(4 N P^2), C = Q22 - 2 m Q20 + m^2 Q00 with
+  Q_jk = E[x^j y^k 1(|x|<=W) 1(|y|<=W)]; the relative standard error of the rms is half that of
+  m_hat. The reference side uses the Geant4 ion-path density (U_corr), the ionmc side the
+  Gaussian of theta_H (independent projections, C = 0). sigma of the ratio statistic is the
+  quadrature of the four relative errors (first order; the cases are independent runs).
+* Pass probability of all five gated ratios: Monte Carlo over the eight reference cases and the
+  eight ionmc cases (shared cases correlate the ratios), fixed numpy seed, for a stated true
+  deviation per ratio; sigma is taken as known (the bootstrap estimate of 2e4-6e4 primaries is
+  precise to about 0.5 % of itself).
+
 Units: MeV, g/cm^2, rad; percentages as stated.
 """
 
@@ -156,6 +178,19 @@ SIGMA_MAX_PCT = 1.0
 BIAS_BOUND_PCT = 0.9  # computed |bias| <= 0.69 plus <= 0.2 pp for the approximations
 MODEL_BOUND_PCT = 2.0  # I11-rel gate
 STAT_SIGMA_PCT = (0.7, 1.0)
+# TOST rule and design statistics (round V3-008-5, 2026-11-01; plan "Statistics": pass iff
+# |x - r| + 1.645 sigma_comb <= tol)
+Z_TOST = 1.645
+N_REF_PRIMARIES_R6 = 2.0e4  # TOPAS primaries per case, design of round V3-008-4 (superseded)
+N_MODEL_HISTORIES_R6 = 1.0e5  # ionmc histories per case, design of round V3-008-4 (superseded)
+N_REF_PRIMARIES = 6.0e4  # pre-registered 2026-11-01 (round V3-008-5), before any V5-SS run
+N_MODEL_HISTORIES = 4.0e5  # pre-registered 2026-11-01 (round V3-008-5), before any V5-SS run
+APPROX_PCT = 0.2  # allowance for the bias estimate's approximations (budget item 1)
+MODEL_TERM_SEEN_PCT = 1.13  # SEEN spread of (1 + r_1)/(1 + r_2) - 1 from I11-rel (budget item 2)
+MC_SEED = 20261101
+MC_DRAWS = 400_000
+REF_PART_LIMIT_S = 1200.0
+REF_BUDGET_S = 4.0 * 3600.0
 # Scorer-free 1 mm G4_WATER g4em-standard_SS smoke, GenericIon(6,12) at 290 MeV/u, 100 histories,
 # Ts/MaxStepNumber 1e8, no killed track: wall time per primary as relayed by the orchestrator
 # (REF-35df82fc..., case carbon-water-290mevu-ss-slab1mm-smoke at ce4d3d6a). Execution only.
@@ -668,17 +703,238 @@ def budget(
     }
 
 
+def budget_systematic(
+    bias: float = BIAS_BOUND_PCT, model: float = MODEL_BOUND_PCT
+) -> dict[str, float]:
+    """Systematic part of the budget [percent] under the TOST rule (round V3-008-5).
+
+    Under TOST the statistics enter through 1.645 sigma, not through the tolerance, so the
+    tolerance has to cover only items (1) and (2): linear = bias + model, quadrature =
+    sqrt(bias^2 + model^2). ``budget`` (round V3-008-4, statistics inside the tolerance) is kept
+    unchanged for the record.
+    """
+    return {"linear": bias + model, "quadrature": math.hypot(bias, model)}
+
+
 def gate(
     deviation_pct: float,
     sigma_pct: float,
     tol: float = TOLERANCE_PCT,
     sigma_max: float = SIGMA_MAX_PCT,
+    z_tost: float = Z_TOST,
 ) -> str:
-    """V5-SS rule per gated pair: INCONCLUSIVE (counts as FAIL) if sigma > 1 %, else PASS iff
-    |ratio_model/ratio_ref - 1| <= 3 %."""
+    """V5-SS rule per gated pair (plan "Statistics", scalar TOST; round V3-008-5).
+
+    INCONCLUSIVE (counted as FAIL) if sigma > sigma_max (1 %); else PASS iff
+    |ratio_model/ratio_ref - 1| + 1.645 sigma <= tol (3 %), FAIL otherwise. Percent in and out.
+    """
     if sigma_pct > sigma_max:
         return "INCONCLUSIVE"
-    return "PASS" if abs(deviation_pct) <= tol else "FAIL"
+    return "PASS" if abs(deviation_pct) + z_tost * sigma_pct <= tol else "FAIL"
+
+
+# --- statistics of the windowed rms and power of the TOST rule ------------------------------------
+
+
+def _g_window(eta: FloatArray, w: float, order: int) -> FloatArray:
+    """int_-w^w x^order cos(eta x) dx for order 0, 2, 4 (closed form; series at small eta w)."""
+    u = eta * w
+    s, c = np.sin(u), np.cos(u)
+    with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
+        if order == 0:
+            return np.where(u > 1e-6, 2.0 * s / eta, 2.0 * w)
+        if order == 2:
+            return np.where(
+                u > 0.05,
+                2.0 * (w * w * s / eta + 2.0 * w * c / eta**2 - 2.0 * s / eta**3),
+                2.0 * w**3 * (1.0 / 3.0 - u * u / 10.0 + u**4 / 168.0 - u**6 / 6480.0),
+            )
+        if order == 4:
+            closed = 2.0 * (
+                w**4 * s / eta
+                + 4.0 * w**3 * c / eta**2
+                - 12.0 * w * w * s / eta**3
+                - 24.0 * w * c / eta**4
+                + 24.0 * s / eta**5
+            )
+            series = (
+                2.0
+                * w**5
+                * (0.2 - u**2 / 14.0 + u**4 / 216.0 - u**6 / 7920.0 + u**8 / 524160.0)
+            )
+            return np.where(u > 0.5, closed, series)
+    raise ValueError("order must be 0, 2 or 4")
+
+
+def windowed_moments_char(
+    char: Callable[[FloatArray], FloatArray],
+    window: float,
+    th_scale: float,
+    eta_max_units: float = ETA_MAX_UNITS,
+    n: int = N_ETA,
+) -> tuple[float, float, float]:
+    """(P, M2, M4): int over |x| <= window of x^0, x^2, x^4 times the projected density."""
+    eta = np.linspace(1e-9, eta_max_units / th_scale, n)
+    e = char(eta)
+    return tuple(  # type: ignore[return-value]
+        float(np.trapezoid(e * _g_window(eta, window, k), eta)) / math.pi for k in (0, 2, 4)
+    )
+
+
+def windowed_joint_char(
+    char: Callable[[FloatArray], FloatArray],
+    window: float,
+    th_scale: float,
+    k_max_units: float = 12.0,
+    n: int = 1201,
+) -> tuple[float, float, float]:
+    """(Q00, Q20, Q22) = E[x^j y^k 1(|x|<=W) 1(|y|<=W)] for (j, k) = (0,0), (2,0), (2,2).
+
+    2-D transform: (1/pi^2) int_0^K int_0^K char(|k|) g_j(k1) g_k(k2) dk1 dk2 (char even, real),
+    char interpolated from a radial grid of 40 001 nodes to 1.5 K.
+    """
+    k = np.linspace(0.0, k_max_units / th_scale, n)
+    kk = np.hypot(k[:, None], k[None, :])
+    r = np.linspace(0.0, 1.5 * k_max_units / th_scale, 40001)
+    e = np.interp(kk, r, char(np.maximum(r, 1e-12)))
+    k1 = np.maximum(k, 1e-12)
+    g0, g2 = _g_window(k1, window, 0), _g_window(k1, window, 2)
+
+    def integ(ga: FloatArray, gb: FloatArray) -> float:
+        inner = np.trapezoid(e * ga[:, None] * gb[None, :], k, axis=1)
+        return float(np.trapezoid(inner, k)) / math.pi**2
+
+    return integ(g0, g0), integ(g2, g0), integ(g2, g2)
+
+
+def rms_rel_se(
+    p0: float,
+    m2: float,
+    m4: float,
+    n: float,
+    joint: tuple[float, float, float] | None = None,
+) -> float:
+    """Relative standard error of the windowed rms over n primaries (delta method).
+
+    joint None: one projection per primary; joint (Q00, Q20, Q22): x and y pooled.
+    """
+    m = m2 / p0
+    v1 = m4 - m2 * m2 / p0
+    if joint is None:
+        var_m = v1 / (n * p0 * p0)
+    else:
+        q00, q20, q22 = joint
+        cov = q22 - 2.0 * m * q20 + m * m * q00
+        var_m = (2.0 * v1 + 2.0 * cov) / (4.0 * n * p0 * p0)
+    return math.sqrt(var_m) / (2.0 * m)
+
+
+def gauss_window_moments(sigma: float, window: float) -> tuple[float, float, float]:
+    """(P, M2, M4) of a Gaussian of width sigma in |x| <= window (closed form)."""
+    k = window / sigma
+    phi = math.exp(-k * k / 2.0) / math.sqrt(2.0 * math.pi)
+    p0 = math.erf(k / math.sqrt(2.0))
+    m2 = p0 - 2.0 * k * phi
+    m4 = 3.0 * m2 - 2.0 * k**3 * phi
+    return p0, m2 * sigma**2, m4 * sigma**4
+
+
+@functools.cache
+def case_statistics(z: int, t_per_u: float) -> dict[str, float]:
+    """Per-primary statistics of the windowed rms of one case (window 2.5 theta_H).
+
+    Keys: P_ref, kurt_ref (M4 P/M2^2 in the window), rho_ref (correlation of the x and y window
+    terms of one primary), se1_ref / se1pool_ref (relative SE times sqrt(N): one projection /
+    x and y pooled), and the same for the ionmc Gaussian (rho 0).
+    """
+    m, p, b2, pv = kinematics(z, t_per_u)
+    mf = moliere_fano(z, p, b2, pv)
+    th = mf["th"]
+    w = WINDOW_K * th
+    sp = species_ion_path(z, p, b2, "universal", True)
+
+    def char(eta: FloatArray) -> FloatArray:
+        return np.exp(-omega(eta, sp))
+
+    p0, m2, m4 = windowed_moments_char(char, w, th)
+    q = windowed_joint_char(char, w, th)
+    mm = m2 / p0
+    v1 = m4 - m2 * m2 / p0
+    cov = q[2] - 2.0 * mm * q[1] + mm * mm * q[0]
+    gp, gm2, gm4 = gauss_window_moments(th, w)
+    return {
+        "P_ref": p0,
+        "kurt_ref": m4 * p0 / m2**2,
+        "rho_ref": cov / v1,
+        "se1_ref": rms_rel_se(p0, m2, m4, 1.0),
+        "se1pool_ref": rms_rel_se(p0, m2, m4, 1.0, q),
+        "P_model": gp,
+        "kurt_model": gm4 * gp / gm2**2,
+        "se1_model": rms_rel_se(gp, gm2, gm4, 1.0),
+        "se1pool_model": rms_rel_se(gp, gm2, gm4, 1.0, (gp * gp, gp * gm2, gm2 * gm2)),
+    }
+
+
+def pair_sigma(
+    a: Case,
+    b: Case,
+    n_ref: float = N_REF_PRIMARIES,
+    n_model: float = N_MODEL_HISTORIES,
+    pooled: bool = True,
+) -> float:
+    """sigma [fraction] of ratio_model/ratio_ref - 1 for the pair A/B (four independent widths)."""
+    key = "se1pool" if pooled else "se1"
+    sa, sb = case_statistics(*a), case_statistics(*b)
+    ref2 = (sa[f"{key}_ref"] ** 2 + sb[f"{key}_ref"] ** 2) / n_ref
+    mod2 = (sa[f"{key}_model"] ** 2 + sb[f"{key}_model"] ** 2) / n_model
+    return math.sqrt(ref2 + mod2)
+
+
+def tost_pass_probability(
+    mu_pct: Sequence[float],
+    n_ref: float = N_REF_PRIMARIES,
+    n_model: float = N_MODEL_HISTORIES,
+    pairs: Sequence[tuple[Case, Case]] = GATED_PAIRS,
+    tol: float = TOLERANCE_PCT,
+    pooled: bool = True,
+    draws: int = MC_DRAWS,
+    seed: int = MC_SEED,
+) -> dict[str, object]:
+    """Probability that every pair passes the TOST gate, given true deviations mu_pct [%].
+
+    Monte Carlo: one Gaussian relative error per case and side (the eight reference and eight
+    ionmc cases are independent runs; a case shared by two pairs correlates them); deviation
+    of a pair = mu + e_model,A - e_model,B - e_ref,A + e_ref,B (first order); sigma known.
+    Returns all-pass probability, per-pair pass probabilities and the sigmas [%].
+    """
+    key = "se1pool" if pooled else "se1"
+    cases = sorted({c for pr in pairs for c in pr})
+    idx = {c: i for i, c in enumerate(cases)}
+    sref = np.array([case_statistics(*c)[f"{key}_ref"] for c in cases]) / math.sqrt(n_ref)
+    smod = np.array([case_statistics(*c)[f"{key}_model"] for c in cases]) / math.sqrt(n_model)
+    rng = np.random.default_rng(seed)
+    er = rng.standard_normal((draws, len(cases))) * sref
+    em = rng.standard_normal((draws, len(cases))) * smod
+    ok = np.ones(draws, dtype=bool)
+    per = []
+    sig = []
+    for (a, b), mu in zip(pairs, mu_pct, strict=True):
+        ia, ib = idx[a], idx[b]
+        d = 100.0 * (em[:, ia] - em[:, ib] - er[:, ia] + er[:, ib]) + mu
+        s = 100.0 * pair_sigma(a, b, n_ref, n_model, pooled)
+        passed = (np.abs(d) + Z_TOST * s <= tol) & (s <= SIGMA_MAX_PCT)
+        per.append(float(passed.mean()))
+        sig.append(s)
+        ok &= passed
+    return {"all": float(ok.mean()), "per_pair": per, "sigma_pct": sig}
+
+
+def ref_cost_parts(
+    primaries: float = N_REF_PRIMARIES, s_per_primary: float = MEASURED_C290_S_PER_PRIMARY
+) -> tuple[float, int]:
+    """(total REF seconds, largest number of <= 1200 s parts of one case) scaled from the smoke."""
+    rows, tot, _ = cost_from_measured(s_per_primary, primaries=primaries)
+    return tot, max(math.ceil(s / REF_PART_LIMIT_S) for _, s in rows)
 
 
 # --- report ---------------------------------------------------------------------------------------
@@ -770,10 +1026,57 @@ def main() -> None:
 
     bud = budget()
     print(
-        f"\n(g) budget: quadrature {bud['quadrature']:.2f} %, conservative "
+        f"\n(g) budget (round V3-008-4 form): quadrature {bud['quadrature']:.2f} %, conservative "
         f"{bud['conservative_min']:.2f}-{bud['conservative_max']:.2f} %; tolerance "
         f"{TOLERANCE_PCT} %, sigma <= {SIGMA_MAX_PCT} %"
     )
+    sysb = budget_systematic()
+    print(
+        f" systematic part under TOST (items 1 + 2): linear {sysb['linear']:.2f} %, quadrature "
+        f"{sysb['quadrature']:.2f} %"
+    )
+
+    print("\n(h) statistics of the windowed rms and the TOST rule (round V3-008-5)")
+    for c in DESIGN_CASES:
+        st = case_statistics(*c)
+        print(
+            f" z={c[0]} {c[1]:g}: P {st['P_ref']:.4f}, kurtosis in window {st['kurt_ref']:.3f}, "
+            f"rho(x,y) {st['rho_ref']:.3f}; rel SE of rms at 2e4: one projection "
+            f"{100 * st['se1_ref'] / math.sqrt(2e4):.3f} %, x+y pooled "
+            f"{100 * st['se1pool_ref'] / math.sqrt(2e4):.3f} %; ionmc Gaussian at 1e5 pooled "
+            f"{100 * st['se1pool_model'] / math.sqrt(1e5):.3f} %"
+        )
+    bias = [100.0 * t["bias"] for _, _, t in branch_b_table(GATED_PAIRS)]
+    designs = (
+        ("r6 design 2e4 / 1e5", N_REF_PRIMARIES_R6, N_MODEL_HISTORIES_R6),
+        ("2e4 / 4e5", N_REF_PRIMARIES_R6, N_MODEL_HISTORIES),
+        ("4e4 / 4e5", 4.0e4, N_MODEL_HISTORIES),
+        ("pre-registered 6e4 / 4e5", N_REF_PRIMARIES, N_MODEL_HISTORIES),
+    )
+    scen = (
+        ("S0 correct model (mu = computed bias)", 0.0),
+        ("S1 bias - 0.2 pp", -APPROX_PCT),
+        ("S2 bias - 0.2 - 1.13 pp (SEEN model spread, adverse)", -APPROX_PCT - MODEL_TERM_SEEN_PCT),
+        ("S3 bias - 0.2 - 2.0 pp (I11-rel gate edge, adverse)", -APPROX_PCT - MODEL_BOUND_PCT),
+    )
+    for name, n_ref, n_mod in designs:
+        tot, parts = ref_cost_parts(n_ref)
+        sig = [100.0 * pair_sigma(a, b, n_ref, n_mod) for a, b in GATED_PAIRS]
+        sig1 = [100.0 * pair_sigma(a, b, n_ref, n_mod, pooled=False) for a, b in GATED_PAIRS]
+        print(
+            f" design {name}: REF {tot:.0f} s = {tot / 3600:.2f} h (max {parts} part(s)/case); "
+            f"sigma pooled {min(sig):.3f}-{max(sig):.3f} %, one projection "
+            f"{min(sig1):.3f}-{max(sig1):.3f} %"
+        )
+        for sname, shift in scen:
+            mu = [m + shift for m in bias]
+            pr = tost_pass_probability(mu, n_ref, n_mod)
+            pr1 = tost_pass_probability(mu, n_ref, n_mod, pooled=False)
+            per = ", ".join(f"{x:.4f}" for x in pr["per_pair"])  # type: ignore[union-attr]
+            print(
+                f"   {sname}: P(all 5 pass) {pr['all']:.4f} [per pair {per}]; one projection "
+                f"{pr1['all']:.4f}"
+            )
 
 
 if __name__ == "__main__":

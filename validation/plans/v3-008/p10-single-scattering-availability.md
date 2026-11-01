@@ -473,6 +473,66 @@ Molière–Hanson ratio changes for a model without the z-dependence of b, or wi
   - The "independent coverage by the end cases" is therefore withdrawn. The extrapolation stays declared,
     theory-bounded (I11-ext) and carried in the ±5 %. The absolute V5-SS values are report-only context.
 
+#### 7.5.2 Addendum 2026-11-01 (round V3-008-5, Codex REVIEW-6a14f4ec finding 2): TOST rule, statistics and power; design decision before any run
+
+**Finding.** The round V3-008-4 module rule ("PASS iff |dev| ≤ 3 % whenever σ ≤ 1 %") ignored σ: it passed a 2.99 %
+deviation at σ = 0.9 % (upper confidence bound 4.47 %). That contradicts the plan's scalar-comparison rule (§ Statistics:
+pass iff |x − r| + 1.645 σ_comb ≤ tol). The tolerance text of 7.5.1 ("≤ 3 % … with the bootstrap σ of the ratio ≤ 1 %")
+is superseded for the rule; the 7.5.1 numbers are unchanged.
+
+**Rule (V5-SS, per gated ratio).** PASS iff |ratio_model/ratio_ref − 1| + 1.645 σ ≤ 3 %; σ = bootstrap SE of the ratio
+statistic over primaries and parts; σ > 1 % stays a separate precondition (INCONCLUSIVE, counted as FAIL), kept because it
+labels a statistically weak run as such instead of as a model failure. All five gated ratios must pass. `ss_budget.gate`
+implements it; the test now requires the 2.99 % / 0.9 % example to FAIL and the expected −0.69 % at σ 0.30 % to PASS.
+
+**Statistics (module §(h); SCRIPT-GENERATED, SEEN planning values).** The windowed moments P, M2, M4 of the reference
+density (Geant4 ion path) in ±2.5 θ_H follow from the same transform (x⁴ kernel); the x/y joint moments of one primary from
+the 2-D transform exp(−Ω(|k|)); the delta method gives the relative SE of the windowed rms (module docstring). Checks: the
+moments of a Gaussian characteristic function reproduce the truncated-Gaussian closed form (1e-9) and the joint moments
+factorise (1e-6); the untruncated limits 1/√(2N) (one projection) and 1/√(4N) (pooled) are reproduced.
+
+| Quantity (8 design cases) | Value |
+|---|---|
+| P(window), reference | 0.972–0.976 |
+| Kurtosis in the window (Gaussian truncated at 2.5 σ: 2.62) | 2.76–2.78 |
+| Correlation of the x and y window terms of one primary | 0.04–0.05 |
+| Relative SE of the rms at 2e4 primaries: one projection / x and y pooled | 0.48 % / 0.34 % |
+| ionmc Gaussian, relative SE at 1e5 histories, pooled | 0.14 % |
+| σ of the ratio statistic: 2e4 / 1e5 (round V3-008-4 design), pooled / one projection | 0.53 % / 0.73 % |
+| σ: 6e4 / 4e5 (pre-registered below), pooled / one projection | 0.30 % / 0.41 % |
+
+The planner's estimate "√2/√(2N) ≈ 0.5 % at 2e4" is reproduced (0.53 %, incl. the ionmc side). The budget item (3)
+"0.7–1.0 %" of 7.5.1 corresponds to one projection per primary; the design pools x and y.
+
+**Power: P(all five ratios pass) under the TOST rule at tol 3 %** (true deviation per ratio = the computed bias of
+7.5.1, −0.49 / −0.69 / −0.38 / −0.57 / −0.17 %, plus the stated shift; Monte Carlo over the eight reference and eight ionmc
+cases, which correlates ratios sharing a case; 4e5 draws, seed 20261101; σ taken as known):
+
+| Scenario (shift of every ratio) | 2e4 / 1e5 | 2e4 / 4e5 | 4e4 / 4e5 | **6e4 / 4e5** |
+|---|---|---|---|---|
+| S0 correct model (0) | 0.994 | 0.998 | 1.000 | **1.000** |
+| S1 −0.2 pp (approximation allowance of the bias) | 0.982 | 0.991 | 1.000 | **1.000** |
+| S2 −1.33 pp (S1 + SEEN I11-rel spread 1.13 pp, adverse) | 0.254 | 0.319 | 0.751 | **0.918** |
+| S3 −2.2 pp (S1 + I11-rel bound 2 pp, adverse) | 0.0006 | 0.0007 | 0.003 | **0.006** |
+| REF cost (scaled from the 23 ms/primary C 290 smoke) | 0.98 h | 0.98 h | 1.96 h | **2.94 h** |
+
+(One projection instead of pooling, S0: 0.83 at 2e4 / 1e5, 0.9999 at 6e4 / 4e5.) False-fail probability for a correct
+model: 0.6 % at 2e4 / 1e5, < 0.01 % at 6e4 / 4e5. Per-ratio values are printed by the module.
+
+**Decision (pre-registered 2026-11-01, before any V5-SS run or scored smoke): raise N.**
+- TOPAS 6e4 primaries per case: 378 s (He 250) to 2022 s (O 150) per case, ≤ 2 parts of ≤ 1200 s (parts 0–1 of the seed
+  formula), total 10 596 s ≈ 2.94 h ≤ 4 h (upper estimate; same scaling as 7.8). ionmc ≥ 4e5 histories per case (cost not
+  measured; a 1 mm slab, expected minutes).
+- If the measured cost of this design exceeds 4 h, N falls back to 4e4 (1.96 h) before the case drop order of 7.5.1.
+- **Tolerance 3 % kept; five gated ratios kept.** Under TOST the statistics enter through 1.645 σ (0.49 % at the design),
+  so the tolerance covers only the systematic items: `ss_budget.budget_systematic` gives bias + model = 2.90 % linear
+  (2.19 % quadrature) at the item bounds. The room left for ionmc's own model term is 3 − 0.9 − 0.49 ≈ 1.6 pp at the bias
+  bound (≈ 1.8 pp at the computed bias), above the SEEN I11-rel spread (1.13 pp) but below the I11-rel bound (2 pp).
+  V5-SS is therefore deliberately tighter than the I11-rel band: a FAIL caused by a model term near 2 pp (S3) is a
+  finding, not a false fail.
+- Not chosen: 3.5 % (a revision the budget does not need at this N; it would let a model without the Born term pass
+  He/C 250, −2.66 % + 0.49 = 3.15 %); fewer gated ratios (C/O 430 has the smallest bias and does not limit the power).
+
 ### 7.6 The 3 % tolerance (r6)
 
 At equal velocity, for the ion/proton ratio:
@@ -604,3 +664,12 @@ events per primary of each design case: 126 s (He 250) to 674 s (O 150) per case
 ≤ 1200 s per case, and **≈ 3.5e3 s ≈ 1.0 h for the 8 cases** (an upper estimate if part of the 23 ms is fixed
 per-run overhead). Under the 4 h condition with a factor ≈ 4 margin; the drop order is not triggered. Minutes per case,
 about an hour in total, not several hours.
+
+**Dated note 2026-11-01 (round V3-008-5, Codex REVIEW-6a14f4ec finding 2).** The module and test of the table above are
+superseded by the round V3-008-5 versions (sha256 bound at commit, plan P9 (iv)). Changes: `gate` implements the TOST rule
+(7.5.2); new functions `budget_systematic`, `windowed_moments_char`, `windowed_joint_char`, `rms_rel_se`,
+`gauss_window_moments`, `case_statistics`, `pair_sigma`, `tost_pass_probability`, `ref_cost_parts`; constants `Z_TOST`,
+`N_REF_PRIMARIES` = 6e4, `N_MODEL_HISTORIES` = 4e5 (the round V3-008-4 values kept as `*_R6`); `main` prints §(h). Every
+earlier function, constant and golden value is unchanged (the round V3-008-4 `budget` is kept for the record). Tests: 20
+(the rule test replaced; window kernels, Gaussian moments and factorisation, SE limits, window statistics and TOST power/
+cost goldens added; SCRIPT-GENERATED regression values, not evidence).

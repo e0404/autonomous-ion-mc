@@ -13,6 +13,7 @@
     exact-Ω specification, gating I11-rel, the V2 branches, the lateral-gap intervention, and the
     §6 Molière–Hanson row.
   - Round V3-008-4 (Codex REVIEW-e0b586fd, 2026-11-01; dated notes, earlier text kept): the operative §3 "Freezing" text replaced by the actual chronology (finding 2); the withdrawn independent-coverage claim for the f_dM extrapolation propagated through §3, §6 and the limitations (finding 3); the V5-SS budget committed as `validation/scripts/ion_em/ss_budget.py` with tests (finding 4, P10 §7.8); finding 1 in `p3-lindhard-sorensen.md`.
+  - Round V3-008-5 (Codex REVIEW-6a14f4ec, 2026-11-01; dated notes, earlier text kept): finding 1 — the LS option implemented with default "off" by the dated §1 amendment (record `validation/plans/v3-008/p3b-ls-default.md`), the uncertainty statement extended; finding 2 — V5-SS uses the plan's TOST rule, and the statistics are raised to 6e4 TOPAS primaries / 4e5 ionmc histories per case (§3 dated note).
   - r6 applies the dispositions of Codex REVIEW-b469dff8 (round V3-008-3): the draft commit history (above); the P6 lateral EVIDENCE GAP propagated; the V5-SS model lineage and class (P10 §7; registration blocked until the Geant4 ion single-scattering model is read); the f_dM domain extrapolation (§3, note of 2026-11-01; P11b). Not accepted. To be reviewed
   independently and committed together with `validation/plans/v3-008-acceptance.md` before any
   V3-008 transport or qualification result exists; the pre-freeze construction/calibration
@@ -163,6 +164,44 @@ sources pinned by sha256. FACT unless marked.
     close-collision Bloch term sees the bare nucleus. The pre-declared trigger is met, so the LS
     option is added to `BetheOptions`; its default (off = all-at-q, ls-eff, ls-bare, or a
     documented mixture) is decided in a reviewed amendment after a bounded physics assessment.
+  - **Amendment (2026-11-01) — LS option** (Codex REVIEW-6a14f4ec finding 1, round V3-008-5;
+    record `validation/plans/v3-008/p3b-ls-default.md`; SEEN pre-freeze, no I3, V1 or other
+    reference value seen or used). The option is implemented: `BetheOptions.ls ∈ {"off", "eff",
+    "bare_mixed"}` (`src/ionmc/physics/lindhard_sorensen.py`, `src/ionmc/physics/stopping.py`;
+    tests `tests/ionmc/test_ion_em_ls_option.py`). It acts for z ≥ 2 only (z = 1 is a no-op, so the
+    qualified proton model is unchanged). `"eff"` replaces Bloch(q) + Mott₁(q) by ΔL_LS(q);
+    `"bare_mixed"` replaces them by ΔL_LS(z), the Geant4/catima-lineage indexing. **Default: `"off"`**
+    (the existing model, all corrections at q; within 0.1 % of S of `"eff"` everywhere).
+    - Reasons. The trigger was met only through the charge argument of the Bloch term:
+      Bloch(z) − Bloch(q) is −1.29 % (C) / −2.64 % (O) of S at 2 MeV/u, while the genuine
+      LS-beyond-Bloch + Mott₁ part is +0.05 / +0.06 %. No theory fixes that charge for a partially
+      stripped ion (PASS treats screening through a screened-Coulomb potential; empirical effective
+      charges such as Barkas, ZBL and HBG were fitted with everything scaled by q², absorbing
+      higher-order effects), and Geant4 is itself inconsistent: `G4LindhardSorensenIonModel` indexes
+      LS by the nominal Z with the q² prefactor (L157–158, L296–300), while `G4EmCorrections` on the
+      `G4BetheBlochModel` path (L323) evaluates Bloch and Mott at the effective charge (L158–160,
+      L695, L718); catima uses the mixed form only above 10 MeV/u; no published rationale was found.
+      The plausible band at 2 MeV/u (+0.05 to −3.2 % of S for C, +0.06 to −7.5 % for O, the lower end
+      a z²-weighted bare close-collision term) lies inside the declared low-energy model uncertainty
+      and acts on the last ≈ 1–1.5 mm of range with ≤ 1 µm absolute effect.
+    - Alternatives not chosen. `"eff"` is equally defensible (more complete at high energy) but
+      changes S and range by ≤ 0.1 % and would put a production LS generator on the default path
+      before freeze for that change; it remains selectable. `"bare_mixed"` must not be the default:
+      it is a hybrid (z in the correction, q² weight), not a derived result, and it would remove a
+      difference from the TOPAS reference by construction, reducing V1 independence without a
+      physics reason.
+    - What could decide it later: a screened-ion calculation (PASS/DPASS, or a project-side
+      partial-wave transport cross section for a screened C/O ion), or measured C/O stopping in
+      low-Z targets at 2–10 MeV/u from the IAEA database. **Never** the libdEdx ICRU73_NEW I3 rows
+      (that would turn the I3 evaluation into calibration).
+    - Consequences. Standard points: LS on/off shortens the range by 0.046 % (C) / 0.080 % (O),
+      13 % / 23 % of the V1 R80 tolerance of 0.35 % (the convention itself changes it by
+      ≤ 0.0003 %); stated in the V1 attribution budget. I3 2–10 MeV/u: the convention moves S by up
+      to 1.2 % (C) / 2.6 % (O) at 2 MeV/u (20 % / 43 % of the 6 % tolerance), a declared model
+      uncertainty, not a used-up tolerance; ≥ 10 MeV/u ≤ 0.1 %. I3b(ii) reports the three variants
+      (report-only); I3c may use `"bare_mixed"` for the TOPAS-attribution diagnostic (exploratory).
+    - Geant4 data-file identity: `G4LindhardSorensenData.cc` at tag v11.4.2 has sha256 70ae7c6b…,
+      identical to the v11.2.0 file used in P3 §7 (closes that item; GitHub-tag fidelity assumed).
 - **Effective charge:** the Barkas form with coefficient 125, in the stopping power only.
   - Below 1 MeV/u no stopping power is evaluated, and transport deposits locally below
     E_cut = 2 MeV/u (section 4).
@@ -175,6 +214,11 @@ sources pinned by sha256. FACT unless marked.
 
 - I_water 78 ± 2 eV (ICRU 90) gives about ±0.3 % of range.
 - Omitted LS term: ≤ 0.1 % of S (P3 computed: 16O 0.097 %, 12C 0.060 %; range ≤ 0.095 %).
+- **Dated 2026-11-01 (LS-option amendment, §1):** the charge convention of the close-collision
+  (Bloch/LS) correction for C/O is a declared model uncertainty at 2–10 MeV/u (and below
+  16 / 24 MeV/u): +0.05 to −3.2 % (12C) and +0.06 to −7.5 % (16O) of S at 2 MeV/u, below 0.1 % of S
+  above about 10 MeV/u, ≤ 1 µm in absolute range. Not resolvable from theory; the default `"off"`
+  sits at the upper end of the band.
 - Shell correction held at η = 0.13 and the Barkas parameterisation: alpha experience is ≤ 0.2 %
   above 10 MeV/u (SEEN). For C/O the provisional budget is 0.5 % in S above 10 MeV/u, to be replaced
   by the I3 result once it exists, and recorded as an outcome.
@@ -495,6 +539,32 @@ check against a Geant4 single-scattering configuration is available, and at what
   ledger statement on the V5-SS class and on the f_dM extrapolation (P10 §7.6.2, arguments for and against).
   - The verbatim wording's clause "or an accessible single-scattering MC reference" is literally met by V5-SS, so
     whether it needs a reviewed amendment is an orchestrator decision before freeze.
+
+**Dated note 2026-11-01 (round V3-008-5, Codex REVIEW-6a14f4ec finding 2; before any V5-SS run; SCRIPT-GENERATED numbers from `validation/scripts/ion_em/ss_budget.py` §(h), SEEN planning values).**
+- **Rule.** The round V3-008-4 rule (PASS iff |dev| ≤ 3 % whenever σ ≤ 1 %) ignored σ and is withdrawn. V5-SS uses the
+  plan's scalar TOST form per gated ratio: **PASS iff |ratio_model/ratio_ref − 1| + 1.645 σ ≤ 3 %**, σ the bootstrap
+  standard error of the ratio statistic; σ > 1 % stays a separate precondition (INCONCLUSIVE, counted as FAIL).
+- **Statistics (module).** Relative SE of the windowed rms from the window moments of the reference density: kurtosis in
+  the ±2.5 θ_H window 2.76–2.78, x/y correlation 0.04–0.05; at 2e4 primaries 0.34 % per case (x and y pooled; 0.48 % with
+  one projection); ionmc Gaussian at 1e5 histories 0.14 %. σ of the ratio statistic at the round V3-008-4 design
+  (2e4 / 1e5): 0.53 %.
+- **Power (true deviation per ratio = the computed bias −0.17 to −0.69 %, five correlated ratios, Monte Carlo 4e5
+  draws).** At 2e4 / 1e5: P(all five pass) = 0.994 for a correct model, 0.982 with the bias shifted by the 0.2 pp
+  approximation allowance, but 0.254 if ionmc's ion/ion ratio deviates from Molière–Hanson by the SEEN I11-rel spread
+  (1.13 pp, adverse sign) — poor robustness.
+- **Design decision (pre-registered now, before any V5-SS run): raise the statistics.** TOPAS 6e4 primaries per case
+  (≤ 2 parts of ≤ 1200 s per case, parts 0–1 of the existing seed formula), ionmc ≥ 4e5 histories per case. σ of the
+  ratio 0.30 %. P(all five pass) ≥ 0.9999 (correct model), 1.000 (+0.2 pp), 0.918 (SEEN model spread, adverse); a model
+  term at the I11-rel edge (2 pp) fails (P = 0.006). REF cost scaled from the measured 1 mm C 290 smoke (23 ms per
+  primary): 10 596 s ≈ 2.94 h ≤ 4 h (upper estimate). If the measured cost of this design exceeds 4 h, N falls back to
+  4e4 (1.96 h; σ 0.36 %; 1.000 / 0.751) before the r6 drop order applies. The ionmc cost of 8 × 4e5 thin-slab histories is
+  not measured (expected minutes).
+- **Tolerance 3 % kept; five gated ratios kept.** Under TOST the statistics enter through 1.645 σ (0.49 % at the
+  design), so the tolerance has to cover only the systematic items (bias ≤ 0.9 %, linear, plus ionmc's model term):
+  the room left for ionmc's model term is ≈ 1.6 pp (worst-case bias) to 1.8 pp (computed bias), above the SEEN spread
+  1.13 pp but below the I11-rel bound 2 pp. V5-SS is therefore deliberately tighter than the I11-rel band; a FAIL from a
+  model term near 2 pp is a finding, not a false fail. 3.5 % was not adopted: it is not required by the budget at the
+  pre-registered N and would let a model without the Born term pass He/C 250 (−2.66 % + 0.49 = 3.15 %).
 
 **Lateral evidence gap.** It is used only after P6 (the measured lateral-data search) fails and V5-SS is withdrawn (its run condition fails). **r6:** the P6 lateral-data search is recorded as EVIDENCE GAP (`validation/plans/v3-008/p6-lateral-data-search.md`, committed at b3eef90). Because V5-SS shares the screened-Coulomb physics (above), no independent *physical* evidence of the charge dependence of screening can come from it. The planner recommends filing the intervention below before integration whatever the V5-SS outcome, with the V5-SS result and class stated in the ledger. This is an orchestrator decision before freeze; the intervention wording stays verbatim. **Orchestrator decision 2026-11-01 (before freeze):** (a) the lateral-gap intervention is filed at the freeze whatever V5-SS shows, naming as the unavailable input the independent evidence of the charge dependence of lateral spreading AND the absence of independent coverage of the f_dM extrapolation beyond the 300 MeV proton domain (declared and bounded only within the same Molière theory); V5-SS stays in the plan as shared-lineage single-scattering evidence (branch B) and its result and class go into the ledger; (b) the verbatim clause "or an accessible single-scattering MC reference" is amended in the reviewed freeze revision so that a reference sharing the screened-Coulomb cross-section lineage does not satisfy it; (c) the f_dM extrapolation is kept as a declared limitation (uncertainty component ≤ 1.5 %, I11-ext report row, `fdm_extrapolated` flag); no further coverage is claimed.
 Intervention wording, verbatim:

@@ -108,6 +108,9 @@ class PhysicsOptions:
                 raise fail(f"{name} must be a string")
         if not (hasattr(self.stopping, "table") and hasattr(self.stopping, "name")):
             raise fail("stopping must be a StoppingSource (with .name and .table())")
+        ls_mode = getattr(getattr(self.stopping, "options", None), "ls", "off")
+        if ls_mode not in ("off", "eff", "bare_mixed"):
+            raise fail(f"stopping options ls must be 'off', 'eff' or 'bare_mixed', got {ls_mode!r}")
         real("e_cut_mev", self.e_cut_mev, positive=True)
         real("e_cut_deuteron_mev", self.e_cut_deuteron_mev, positive=True)
         if self.nuclear_table_id is not None and not isinstance(self.nuclear_table_id, str):
