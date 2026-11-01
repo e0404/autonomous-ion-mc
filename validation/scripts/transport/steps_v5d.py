@@ -41,6 +41,7 @@ import steps_v4 as v4
 import steps_v5 as v5
 import steps_v5b as v5b
 import steps_v5c as c
+import v7r2_cal_rate
 from ionmc import materials as M
 from ionmc.config import DiagnosticsOptions, SimulationConfig
 from ionmc.scoring import ScoringGrid, TallyRequest
@@ -209,7 +210,8 @@ closed for any other name (Amendment 20 (f)8; review round W-1): ``hr5d`` has no
 THROUGHPUT_STEP_SUITE = {"lv5c-throughput": "lv5c", "lv5d-throughput": "lv5d"}
 
 
-def declared_plans(suite: str = "lv5c") -> dict[str, tuple[int, str, int | None]]:
+def declared_plans(suite: str = "lv5c", *, cal_rate: dict[str, Any] | None = None
+                   ) -> dict[str, tuple[int, str, int | None]]:
     """``name -> (histories, rate key, declared shards)`` of every step of ``suite`` that must fit
     ``STEP_LIMIT_S / MARGIN`` (``None`` shards: not yet declared, reported as needed).
 
@@ -217,7 +219,18 @@ def declared_plans(suite: str = "lv5c") -> dict[str, tuple[int, str, int | None]
     V7-R line replaced by the V7-R2 transport shards and reference (48 shards x 2.25e6 and 1e6 reference histories,
     block rate) and with the V6-F CPU families (``steps_v6f.v6f_plans``, rate ``v5``) added; the rep-based kappa and
     calibration parts are reported by :func:`rep_plan_table` (``v7r.r2_rep_plans``). Any other suite raises
-    ``SystemExit`` (fail closed)."""
+    ``SystemExit`` (fail closed). The ``lv5d`` table is only returned together with a validated measured calibration
+    rate record (``cal_rate``: the result of ``v7r2_cal_rate.load_record``, Amendment 20 (f)8, Codex REVIEW-fe47f290):
+    the 39-part layout is not frozen before the slow-host rate is measured, so without it ``declared_plans("lv5d")``
+    raises ``SystemExit`` (``not ok: calibration rate not measured``)."""
+    if suite == "lv5d" and cal_rate is None:
+        raise SystemExit(f"declared_plans: {v7r2_cal_rate.NOT_MEASURED} (lv5d needs the measured rate record "
+                         f"{v7r2_cal_rate.CAL_RATE_ENV}; the default 12.2 s/repetition is extrapolated)")  # fmt: skip
+    return _declared_plans(suite)
+
+
+def _declared_plans(suite: str) -> dict[str, tuple[int, str, int | None]]:
+    """The ungated table of :func:`declared_plans` (history-based rows only; the rate gate is the caller's)."""
     if suite not in DECLARED_PLAN_SUITES:
         raise SystemExit(f"declared_plans: no shard table is registered for suite {suite!r} "
                          f"(registered: {DECLARED_PLAN_SUITES}; fail closed)")  # fmt: skip
@@ -248,12 +261,38 @@ def declared_plans(suite: str = "lv5c") -> dict[str, tuple[int, str, int | None]
     return out
 
 
-def rep_plan_table(suite: str) -> dict[str, Any]:
-    """Rep-based shard table (``v7r.r2_rep_plans``: the 78 calibration parts and the six kappa steps, extrapolated
-    slow-host rates until one part is measured) for the suites that run them (``lv5d``); fail closed otherwise."""
+def rep_plan_table(suite: str, rate_path: str | None = None) -> dict[str, Any]:
+    """Rep-based shard table (``v7r.r2_rep_plans``: the 78 calibration parts and the six kappa steps) of ``lv5d``,
+    recomputed from the MEASURED slow-host rate record (``rate_path`` or ``IONMC_V7R2_CAL_RATE_RECORD``; Amendment 20
+    (f)8, Codex REVIEW-fe47f290: the 12.2 s/repetition default is extrapolated and never accepted here). Fail closed:
+    an absent record gives ``ok = False`` with ``reason`` ``not ok: calibration rate not measured``; a malformed one
+    ``ok = False`` with the reason. With a record, ``ok`` is the ``r2_rep_plans`` verdict at the measured rate; the
+    registered layout has 39 parts per surrogate, so if the 1100 s target would be exceeded the plan is not ok and
+    ``calibration_parts_needed`` states the re-split (a code change before the freeze, never a runtime change). Other
+    suites raise ``SystemExit``."""
     if suite != "lv5d":
         raise SystemExit(f"rep_plan_table: the rep-based V7-R2 plans belong to lv5d, not {suite!r} (fail closed)")
-    return c.v7r.r2_rep_plans()
+    try:
+        got = v7r2_cal_rate.load_record(rate_path) if rate_path else v7r2_cal_rate.record_from_env()
+    except ValueError as exc:
+        return {"ok": False, "plans": {}, "rate_record": None, "reason": f"not ok: {exc}"}
+    if got is None:
+        return {"ok": False, "plans": {}, "rate_record": None, "reason": v7r2_cal_rate.NOT_MEASURED}
+    rec = got["record"]
+    try:
+        table = c.v7r.r2_rep_plans(cal_s_per_rep=rec["s_per_rep"], fixed_s=rec["fixed_s"])
+    except ValueError as exc:
+        return {"ok": False, "plans": {}, "rate_record": got, "reason": f"not ok: the measured rate admits no plan ({exc})"}
+    cal = table["plans"]["v7r2 calibration (3200 reps x 39 parts per surrogate)"]
+    table["rate_record"] = {"path": got["path"], "sha256": got["sha256"], "s_per_rep": rec["s_per_rep"],
+                            "fixed_s": rec["fixed_s"], "host": rec["host"], "git_sha": rec["git_sha"],
+                            "log_dir": rec["log_dir"]}  # fmt: skip
+    table["rate_source"] = "measured"
+    table["calibration_parts_needed"] = cal["parts_needed"]
+    table["reason"] = None if table["ok"] else (
+        f"not ok: at the measured {rec['s_per_rep']:.4f} s/repetition the calibration needs {cal['parts_needed']} parts "
+        f"per surrogate (registered: {cal['declared_parts']}); re-split before the freeze")  # fmt: skip
+    return table
 
 
 def shard_plan_c(items: dict[str, tuple[int, str, int | None]], rates: dict[str, float],
@@ -313,14 +352,21 @@ def step_throughput(a: argparse.Namespace) -> int:
     suite = THROUGHPUT_STEP_SUITE.get(step_name)
     if suite is None:
         raise SystemExit(f"throughput step {step_name!r} has no registered suite (fail closed)")
-    table = plan_table(rates, declared_plans(suite))
-    ok = all(v["counters_clean"] for v in out.values())
-    fits = all(v["ok"] for v in table.values() if v["ok"] is not None)
     extra: dict[str, Any] = {}
-    if suite == "lv5d":  # the rep-based kappa / calibration parts (Amendment 20 (f)8): ok is required
+    rep_ok = True
+    if suite == "lv5d":  # the rep-based kappa / calibration parts (Amendment 20 (f)8): a MEASURED rate is required
         rep = rep_plan_table(suite)
-        fits = bool(fits and rep["ok"])
-        extra = {"rep_plans": rep, "rep_plans_ok": bool(rep["ok"])}
+        rep_ok = bool(rep["ok"])
+        table = plan_table(rates, _declared_plans(suite))  # the rate gate is rep_ok below, not declared_plans' raise
+        extra = {"rep_plans": rep, "rep_plans_ok": rep_ok,
+                 "cal_rate_record": rep.get("rate_record"),  # None: not measured / malformed (see rep_plans.reason)
+                 "cal_rate_status": "ok" if rep_ok else rep["reason"]}  # fmt: skip
+        if rep["reason"]:
+            print(rep["reason"], flush=True)
+    else:
+        table = plan_table(rates, declared_plans(suite))
+    ok = all(v["counters_clean"] for v in out.values())
+    fits = bool(all(v["ok"] for v in table.values() if v["ok"] is not None) and rep_ok)
     doc = {"step": step_name, "table": v5.table_record(), **c.elastic_table_record(),
            "seed": seed_c("throughput"), "throughput": out, "rates_hist_per_s": rates,
            "step_limit_s": run_suite.HOST_STEP_WALL_LIMIT_S, "margin": v5.MARGIN,
@@ -332,7 +378,7 @@ def step_throughput(a: argparse.Namespace) -> int:
            "row": ("none (throughput yields no verdict; lv5c r_index 1 seeds equal the consumed lv5b "
                    "V7-replicate seeds, plan Amendment 14 (j))" if suite == "lv5c" else
                    "none (throughput yields no verdict; lv5d r_index 1, plan Amendment 20 (f)3)"),
-           "pass": bool(ok and (a.scale < 1.0 or fits))}  # fmt: skip
+           "pass": bool(ok and rep_ok and (a.scale < 1.0 or fits))}  # fmt: skip
     return finish(doc, v5b.THROUGHPUT_WARP_N, nw, nw < v5b.THROUGHPUT_WARP_N)
 
 

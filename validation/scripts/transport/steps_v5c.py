@@ -646,8 +646,8 @@ def step_v7r_kappa_combine(a: argparse.Namespace) -> int:
 # v7r2-calibration-combine. The V7-R steps stay bit-identical for the dd976c5a archive. The same shard producer
 # run at rehearsal base 20505000, r_index 16, k = 0..3 is the 4 x 2.25e6 rehearsal fixture of Amendment 20 (f)6
 # (PN-V7R2-3). Host execution waits for the operator's decision (repair plan 3.4).
-# TODO(Amendment 20 (f)8, open, not decided here): declared_plans() entries / the rep-based timing rule of
-# v7r.r2_rep_plans for the kappa and calibration parts, and the slow-host measurement of one short part.
+# The rep-based timing rule (v7r.r2_rep_plans) is gated by the measured slow-host rate record of one calibration
+# part (v7r2_cal_rate, steps_v5d.rep_plan_table; Amendment 20 (f)8).
 def r2_seed(k: int) -> int:
     return base.SEED_BASE + 1000 * v7r.V7R_R_INDEX + k
 

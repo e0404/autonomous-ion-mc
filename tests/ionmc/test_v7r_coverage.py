@@ -1078,6 +1078,15 @@ def test_rehearsal_loader_missing_directory_is_a_violation(
         load_rehearsal(tmp_path / "absent", steps_c, run_suite_mod)
 
 
+def _committed_layout() -> tuple[str, str]:
+    """``(layout, suite)`` of the COMMITTED fixture: ``("v7r2", "lv5d")`` if it holds ``v7r2-s{k}`` shards, else the
+    V7-R layout of lv5c. The consumer switch to v7r2 / lv5d takes effect with the fixture commit of T4 (review W-1
+    item 4), not before; until then these tests validate the committed old-layout fixture as it stands."""
+    if REHEARSAL_DIR.is_dir() and any(REHEARSAL_DIR.glob("v7r2-s*.json")):
+        return "v7r2", "lv5d"
+    return "v7r", "lv5c"
+
+
 def _recorded_fixture_digest() -> str:
     assert REHEARSAL_DIR.is_dir(), (
         "rehearsal fixture absent — produce it with v7r_rehearsal_fixture.py (Amendment 14a (b)2)"
@@ -1095,7 +1104,10 @@ def test_committed_rehearsal_fixture_is_internally_consistent(
     recorded = _recorded_fixture_digest()
     monkeypatch.setenv("IONMC_V7R_FIXTURES", "required")
     monkeypatch.delenv("IONMC_V7R_REHEARSAL_DIR", raising=False)
-    blocks, info = load_rehearsal(rehearsal_dir(), steps_c, run_suite_mod, digest=recorded)
+    layout, _ = _committed_layout()
+    blocks, info = load_rehearsal(
+        rehearsal_dir(), steps_c, run_suite_mod, digest=recorded, layout=layout
+    )
     assert info["hashed_source_digest"] == recorded
     assert blocks.shape[1] == 20
 
@@ -1107,7 +1119,7 @@ def test_committed_rehearsal_fixture_currency_diagnostic(
     hashed-source digest equals that of the current tree; never fails and never skips (the code_sha fetch of
     condition (d) is not implemented; that equality belongs to the host test)."""
     recorded = _recorded_fixture_digest()
-    current = run_suite_mod.hashed_source_digest("lv5c")
+    current = run_suite_mod.hashed_source_digest(_committed_layout()[1])
     if recorded == current:
         status = f"current: {recorded}"
     else:
@@ -1130,8 +1142,9 @@ def test_committed_rehearsal_fixture_is_current_host(
     )
     monkeypatch.setenv("IONMC_V7R_FIXTURES", "required")
     monkeypatch.delenv("IONMC_V7R_REHEARSAL_DIR", raising=False)
-    blocks, info = load_rehearsal(rehearsal_dir(), steps_c, run_suite_mod)
-    assert info["hashed_source_digest"] == run_suite_mod.hashed_source_digest("lv5c")
+    layout, suite = _committed_layout()
+    blocks, info = load_rehearsal(rehearsal_dir(), steps_c, run_suite_mod, layout=layout)
+    assert info["hashed_source_digest"] == run_suite_mod.hashed_source_digest(suite)
     assert blocks.shape[1] == 20
 
 

@@ -3164,7 +3164,8 @@ def test_lv5d_hr5d_import_dirs_need_a_manifest_and_unknown_suites_still_raise() 
         mod.suite_steps("lv5e", 1, 1.0)
 
 
-def test_declared_plans_are_gated_by_suite_and_fail_closed() -> None:
+def test_declared_plans_are_gated_by_suite_and_fail_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("IONMC_V7R2_CAL_RATE_RECORD", raising=False)
     d = _load("steps_v5d")
     lv5c_keys = [
         "v7r (16 shards x 4.5e6, block rate)", "v2b-el (both variants, 1e6 each)",
@@ -3177,7 +3178,9 @@ def test_declared_plans_are_gated_by_suite_and_fail_closed() -> None:
     )  # the default and the archived lv5c table: unchanged (golden)
     assert d.declared_plans("lv5c") == d.declared_plans("hr5c") == d.declared_plans()
     assert d.declared_plans()["v7r (16 shards x 4.5e6, block rate)"] == (72_000_000, "blocks", 16)
-    plans = d.declared_plans("lv5d")
+    with pytest.raises(SystemExit, match="calibration rate not measured"):
+        d.declared_plans("lv5d")  # fail closed without the measured rate record (Amendment 20 (f)8)
+    plans = d.declared_plans("lv5d", cal_rate={"record": "validated by v7r2_cal_rate.load_record"})
     assert "v7r (16 shards x 4.5e6, block rate)" not in plans  # V7-R is not an lv5d row
     assert plans["v7r2 transport (48 shards x 2.25e6, block rate)"] == (
         48 * 2_250_000,
@@ -3202,9 +3205,12 @@ def test_declared_plans_are_gated_by_suite_and_fail_closed() -> None:
             d.declared_plans(bad)
     with pytest.raises(SystemExit, match="belong to lv5d"):
         d.rep_plan_table("lv5c")
-    rep = d.rep_plan_table(
-        "lv5d"
-    )  # rep-based kappa / calibration parts (Amendment 20 (f)8), default slow-host rates
+    assert not d.rep_plan_table("lv5d")[
+        "ok"
+    ]  # no measured rate: not ok (the default rate is extrapolated)
+    rep = (
+        _load("v7r").r2_rep_plans()
+    )  # rep-based kappa / calibration parts, the extrapolated default rates (library)
     assert (
         rep["ok"] and len(rep["plans"]) == 4
     )  # calibration + three kappa parts families (single p0, pair p0, pair p1)

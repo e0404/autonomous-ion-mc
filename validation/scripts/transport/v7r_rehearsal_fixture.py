@@ -3,11 +3,16 @@
 
     uv run --extra dev python validation/scripts/transport/v7r_rehearsal_fixture.py \
         --archive validation/generated --run-ids RUN-A RUN-B ... --code-sha <40 hex> \
-        [--seed-base 20505000] [--out tests/ionmc/fixtures/v7r/rehearsal] [--force]
+        [--layout v7r|v7r2] [--seed-base 20505000] [--out tests/ionmc/fixtures/v7r/rehearsal] [--force]
+
+``--layout v7r`` (the default, unchanged): the V7-R fixture of the suite ``lv5c`` (``v7r-s{k}``, >= 2 shards of 4.5e6
+histories, 450 replicates, the lv5c digest). ``--layout v7r2`` (Amendment 20 (f)6, PN-V7R2-3): the V7-R2 fixture of the
+suite ``lv5d``: exactly the four shards ``v7r2-s0..s3`` of 2.25e6 histories and 225 replicates, the lv5d hashed-source
+digest, verified with ``load_rehearsal(layout="v7r2")``; the seed rule (base + 16000 + k) is that of both layouts.
 
 The rehearsal shards are produced by the controlled generation path of ``run_suite.py``: a run of the suite
-``lv5c`` whose ``--only`` selection consists solely of ``v7r-s{k}`` steps and whose ``--seed-base`` lies in
-the rehearsal family 20505000-20509499 is exempt from the fixture preflight. This script scans the host run
+``lv5c`` (``lv5d`` for v7r2) whose ``--only`` selection consists solely of ``v7r-s{k}`` (``v7r2-s{k}``, k < 4) steps
+and whose ``--seed-base`` lies in the rehearsal family 20505000-20509499 is exempt from the fixture preflight. This script scans the host run
 directories named by ``--run-ids`` (``<archive>/RUN-*/transport/*/samples/`` and ``<archive>/RUN-*/transport/*/``)
 for ``v7r-s{k}.json`` and the npz sidecar bound in each partial, copies them byte-identically, requires every
 partial's ``git_sha`` to equal ``--code-sha``, writes ``PROVENANCE.json`` (sorted keys: ``host_run_ids``,
@@ -60,30 +65,40 @@ def require_clean_head(code_sha: str) -> str:
     return head
 
 
-def scan_partials(archive: Path, run_ids: list[str]) -> list[Path]:
-    """The ``v7r-s{k}.json`` partials of the named host runs (samples directory or suite directory)."""
+LAYOUTS = {"v7r": ("v7r-s", "lv5c"), "v7r2": ("v7r2-s", "lv5d")}
+"""Per layout: the shard file prefix and the suite whose hashed-source digest the fixture records."""
+
+
+def scan_partials(archive: Path, run_ids: list[str], layout: str = "v7r") -> list[Path]:
+    """The ``v7r-s{k}.json`` (``v7r2-s{k}.json``) partials of the named host runs (samples directory or suite
+    directory)."""
+    pre = LAYOUTS[layout][0]
     hits: list[Path] = []
     for rid in run_ids:
         run = archive / rid
         if not run.is_dir():
             _fail(f"host run directory {run} not found")
-        found = sorted({*run.glob("transport/*/samples/v7r-s*.json"), *run.glob("transport/*/v7r-s*.json")})
-        found = [p for p in found if p.name.removeprefix("v7r-s").removesuffix(".json").isdigit()]
+        found = sorted({*run.glob(f"transport/*/samples/{pre}*.json"), *run.glob(f"transport/*/{pre}*.json")})
+        found = [p for p in found if p.name.removeprefix(pre).removesuffix(".json").isdigit()]
         if not found:
-            _fail(f"no v7r-s{{k}}.json partial under {run}")
+            _fail(f"no {pre}{{k}}.json partial under {run}")
         hits += found
     return hits
 
 
-def build(archive: Path, run_ids: list[str], code_sha: str, seed_base: int, out: Path, force: bool) -> dict:  # type: ignore[type-arg]
+def build(archive: Path, run_ids: list[str], code_sha: str, seed_base: int, out: Path, force: bool,
+          layout: str = "v7r") -> dict:  # type: ignore[type-arg]
     import numpy as np
 
+    if layout not in LAYOUTS:
+        _fail(f"unknown --layout {layout!r} (known: {sorted(LAYOUTS)})")
+    suite = LAYOUTS[layout][1]
     if out.exists() and not force:
         _fail(f"{out} exists (use --force to replace it)")
     if len(code_sha) != 40 or any(c not in "0123456789abcdef" for c in code_sha):
         _fail("--code-sha must be the full 40-hex-digit lowercase SHA")
     head = require_clean_head(code_sha)
-    hits = scan_partials(archive, run_ids)
+    hits = scan_partials(archive, run_ids, layout)
     names = [p.name for p in hits]
     dup = sorted({n for n in names if names.count(n) > 1})
     if dup:
@@ -115,13 +130,13 @@ def build(archive: Path, run_ids: list[str], code_sha: str, seed_base: int, out:
             created_from.append(str(src.relative_to(archive)))
         prov = {
             "host_run_ids": sorted(run_ids), "partial_digests": digests,
-            "hashed_source_digest": run_suite.hashed_source_digest("lv5c"), "seed_base": seed_base,
+            "hashed_source_digest": run_suite.hashed_source_digest(suite), "seed_base": seed_base,
             "code_sha": code_sha, "head_sha": head, "clean_tree": True, "numpy_version": np.__version__,
             "python_version": platform.python_version(), "created_from": sorted(created_from),
         }  # fmt: skip
         (stage / "PROVENANCE.json").write_text(json.dumps(prov, sort_keys=True, indent=1) + "\n")
         try:
-            _, info = v7r_rehearsal.load_rehearsal(stage, steps_v5c, run_suite)
+            _, info = v7r_rehearsal.load_rehearsal(stage, steps_v5c, run_suite, layout=layout)
         except v7r_rehearsal.RehearsalError as exc:
             _fail(f"verification failed: {exc}")
         if force and out.exists():
@@ -138,12 +153,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--archive", required=True, help="host archive root, e.g. validation/generated")
     ap.add_argument("--run-ids", nargs="+", required=True, help="host run directories (RUN-...) to scan")
     ap.add_argument("--code-sha", required=True, help="full git sha every partial must carry")
+    ap.add_argument("--layout", choices=sorted(LAYOUTS), default="v7r",
+                    help="v7r: 2+ shards of 4.5e6 (lv5c digest); v7r2: 4 shards of 2.25e6 (lv5d digest)")
     ap.add_argument("--seed-base", type=int, default=DEFAULT_SEED_BASE)
     ap.add_argument("--out", default=str(DEFAULT_OUT))
     ap.add_argument("--force", action="store_true", help="replace an existing fixture directory")
     a = ap.parse_args(argv)
-    info = build(Path(a.archive), a.run_ids, a.code_sha, a.seed_base, Path(a.out), a.force)
-    print(f"{a.out}: verified, {info['shards']} shards, hashed_source_digest {info['hashed_source_digest']}")
+    info = build(Path(a.archive), a.run_ids, a.code_sha, a.seed_base, Path(a.out), a.force, a.layout)
+    print(f"{a.out}: verified ({a.layout}), {info['shards']} shards, hashed_source_digest {info['hashed_source_digest']}")
     return 0
 
 

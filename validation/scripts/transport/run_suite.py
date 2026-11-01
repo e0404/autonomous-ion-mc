@@ -1227,6 +1227,11 @@ REHEARSAL_PREFLIGHT_STEP = "v7r-rehearsal-fixture-preflight"
 REHEARSAL_SEED_FAMILY = (20505000, 20509499)
 """The seed bases of the C8 rehearsal family (plan Amendment 14 (j)); never evidence."""
 V7R_SHARD_STEP = re.compile(r"v7r-s\d+")
+V7R2_SHARD_STEP = re.compile(r"v7r2-s\d+")
+V7R2_REHEARSAL_SHARDS = 4
+"""The V7-R2 rehearsal fixture has the shards ``v7r2-s0..s3`` (4 x 2.25e6, ``v7r_rehearsal.R2_SHARDS``; a test)."""
+REHEARSAL_GENERATION_STEP = {"lv5c": (V7R_SHARD_STEP, V7R_SHARDS), "lv5d": (V7R2_SHARD_STEP, V7R2_REHEARSAL_SHARDS)}
+"""Per suite: the shard step pattern of the controlled generation path and the number of rehearsal shards."""
 
 
 def step_base_name(name: str) -> str:
@@ -1235,34 +1240,53 @@ def step_base_name(name: str) -> str:
     return re.sub(r"^\d+-", "", name)
 
 
-def rehearsal_generation_run(only: list[str] | None, seed_base: int | None) -> bool:
-    """True for the controlled rehearsal-generation path: ``--only`` selects solely ``v7r-s{k}`` steps (k a shard
-    index) AND the seed base lies in the rehearsal family 20505000-20509499. Both conditions are required."""
-    if not only or seed_base is None:
+def rehearsal_generation_run(only: list[str] | None, seed_base: int | None, suite: str = "lv5c") -> bool:
+    """True for the controlled rehearsal-generation path: ``--only`` selects solely the shard steps of ``suite``
+    (``lv5c``: ``v7r-s{k}``, k < 16; ``lv5d``: ``v7r2-s{k}``, k < 4, the V7-R2 rehearsal shards) AND the seed base lies
+    in the rehearsal family 20505000-20509499. Both conditions are required; another suite is never a generation run."""
+    if not only or seed_base is None or suite not in REHEARSAL_GENERATION_STEP:
         return False
     if not REHEARSAL_SEED_FAMILY[0] <= seed_base <= REHEARSAL_SEED_FAMILY[1]:
         return False
+    pattern, count = REHEARSAL_GENERATION_STEP[suite]
+    prefix = "v7r2-s" if suite == "lv5d" else "v7r-s"
     names = [step_base_name(o) for o in only]
-    return all(V7R_SHARD_STEP.fullmatch(o) and int(o[5:]) < V7R_SHARDS for o in names)
+    return all(pattern.fullmatch(o) and int(o.removeprefix(prefix)) < count for o in names)
+
+
+def _v7r2_needs_rate(only: list[str] | None) -> bool:
+    """True if the selection contains the throughput step or a V7-R2 pytest step (``None``: the full suite)."""
+    return only is None or any(o == "lv5d-throughput" or o.startswith(V7R2_PYTEST_PREFIX) for o in only)
 
 
 def rehearsal_preflight(suite: str, only: list[str] | None = None, seed_base: int | None = None) -> str | None:
-    """Refusal message of the lv5c suite start (``None``: proceed). The calibration shards s15-s29 of
-    ``rehearsal_block_sums`` need the committed rehearsal fixture, valid for the CURRENT hashed-source digest
-    (Amendment 14a (b)2); a missing or stale fixture would only fail those shards hours into the run, so the
-    suite refuses to start. The full verification (``load_rehearsal``) is the CI test
-    ``test_committed_rehearsal_fixture_is_current``; this preflight checks presence and the digest.
-    Exempt is only the controlled generation path (:func:`rehearsal_generation_run`: ``--only v7r-s{k}`` steps at
-    a seed base of the rehearsal family), which produces the fixture (``v7r_rehearsal_fixture.py``); the full
-    suite, any consumer and any evidence base are refused."""
-    if suite != "lv5c" or rehearsal_generation_run(only, seed_base):
+    """Refusal message of the suite start (``None``: proceed).
+
+    ``lv5c``: the calibration shards s15-s29 of ``rehearsal_block_sums`` need the committed rehearsal fixture, valid
+    for the CURRENT hashed-source digest (Amendment 14a (b)2); this preflight checks presence and the digest only (the
+    archived behaviour); the full verification is the CI test ``test_committed_rehearsal_fixture_is_current``.
+
+    ``lv5d`` (Amendment 22 rule 2, Codex REVIEW-fe47f290): the FULL ``v7r_rehearsal.load_rehearsal(layout="v7r2")``
+    verification (required mode: PROVENANCE, four shards ``v7r2-s{k}``, content and sidecar digests, the seed rule,
+    the layout) against the CURRENT hashed-source digest of lv5d; absence, inconsistency and staleness refuse the
+    suite before any step runs. Then, if the selection contains the throughput step or a V7-R2 pytest step (or is the
+    full suite), the measured calibration-rate record ``IONMC_V7R2_CAL_RATE_RECORD`` must exist and validate
+    (``v7r2_cal_rate``; Amendment 20 (f)8): the V7-R2 calibration is never started on the extrapolated rate.
+    ``hr5d`` has no V7-R2 calibration step and consumes no rehearsal fixture: no preflight.
+
+    Exempt is only the controlled generation path (:func:`rehearsal_generation_run`: the shard steps of the suite at
+    a seed base of the rehearsal family), which produces the fixture (``v7r_rehearsal_fixture.py``); the full suite,
+    any consumer and any evidence base are refused. Other suites are not preflighted."""
+    if suite not in ("lv5c", "lv5d") or rehearsal_generation_run(only, seed_base, suite):
         return None
     d = REPO / REHEARSAL_FIXTURE_DIR
-    prefix = (f"preflight step {REHEARSAL_PREFLIGHT_STEP} (the calibration shards "
-              f"{V7R_CALIBRATION_STEP_PREFIX}-s15..s29 need {REHEARSAL_FIXTURE_DIR}): ")  # fmt: skip
+    prefix = (f"preflight step {REHEARSAL_PREFLIGHT_STEP} (the calibration steps "
+              f"{V7R_CALIBRATION_STEP_PREFIX if suite == 'lv5c' else V7R2_PYTEST_PREFIX}* need {REHEARSAL_FIXTURE_DIR}): ")  # fmt: skip
     prov = d / "PROVENANCE.json"
     if not d.is_dir() or not prov.is_file():
         return prefix + "the rehearsal fixture is absent; run the rehearsal shards and commit the fixture first"
+    if suite == "lv5d":
+        return _lv5d_preflight(prefix, d, only)
     try:
         recorded = json.loads(prov.read_text()).get("hashed_source_digest")
     except ValueError as exc:
@@ -1271,6 +1295,36 @@ def rehearsal_preflight(suite: str, only: list[str] | None = None, seed_base: in
     if recorded != now:
         return prefix + (f"the rehearsal fixture is stale (recorded hashed-source digest {recorded!r}, "
                          f"current {now}); re-run the rehearsal shards at the current hashed sources")  # fmt: skip
+    return None
+
+
+def _lv5d_preflight(prefix: str, d: Path, only: list[str] | None) -> str | None:
+    """The lv5d part of :func:`rehearsal_preflight`: full v7r2 fixture verification, then the rate record."""
+    sys.path.insert(0, str(HERE))
+    try:
+        import steps_v5c
+        import v7r2_cal_rate
+        import v7r_rehearsal
+
+        current = hashed_source_digest("lv5d")
+        try:
+            v7r_rehearsal.load_rehearsal(d, steps_v5c, None, digest=current, layout="v7r2")  # type: ignore[arg-type]
+        except v7r_rehearsal.RehearsalError as exc:
+            stale = "hashed_source_digest differs" in str(exc)
+            return prefix + (f"the rehearsal fixture is {'stale' if stale else 'inconsistent'} (current lv5d "
+                             f"hashed-source digest {current}): {exc}")  # fmt: skip
+        except Exception as exc:  # fail closed: whatever prevents the verification refuses the suite
+            return prefix + f"the rehearsal fixture could not be verified ({exc!r})"
+        if _v7r2_needs_rate(only):
+            try:
+                got = v7r2_cal_rate.record_from_env()
+            except ValueError as exc:
+                return f"preflight step lv5d-calibration-rate: not ok: {exc}"
+            if got is None:
+                return (f"preflight step lv5d-calibration-rate: {v7r2_cal_rate.NOT_MEASURED} (the V7-R2 calibration "
+                        f"parts need the measured rate record {v7r2_cal_rate.CAL_RATE_ENV}, plan R-4b)")  # fmt: skip
+    finally:
+        sys.path.remove(str(HERE))
     return None
 
 
@@ -1449,9 +1503,21 @@ def resolve_workers(value: str) -> int:
     return (os.cpu_count() or 1) if value == "auto" else int(value)
 
 
+def digest_suite(av: list[str]) -> str:
+    """Suite of ``--print-hashed-source-digest``: the word after the flag or the value of ``--suite`` (any of
+    :data:`SUITES`, ``lv5d`` and ``hr5d`` included); the flag alone prints the historical ``lv5c`` digest. An unknown
+    name is refused."""
+    flag = av.index("--print-hashed-source-digest")
+    nxt = av[flag + 1] if flag + 1 < len(av) and not av[flag + 1].startswith("-") else None
+    suite = nxt or (av[av.index("--suite") + 1] if "--suite" in av[:-1] else "lv5c")
+    if suite not in SUITES:
+        raise SystemExit(f"--print-hashed-source-digest: unknown suite {suite!r} (known: {SUITES})")
+    return suite
+
+
 def main(argv: list[str] | None = None) -> int:
     if "--print-hashed-source-digest" in (argv if argv is not None else sys.argv[1:]):
-        print(hashed_source_digest("lv5c"))
+        print(hashed_source_digest(digest_suite(argv if argv is not None else sys.argv[1:])))
         return 0
     if "--print-a16-source-digest" in (argv if argv is not None else sys.argv[1:]):
         print(a16_source_digest())

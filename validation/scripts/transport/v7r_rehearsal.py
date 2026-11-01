@@ -51,7 +51,7 @@ def load_rehearsal(
 
     ``layout="v7r2"`` (planning note PN-V7R2-3, Amendment 20 (f)6): exactly 4 shards ``v7r2-s{k}.json`` of 2.25e6
     histories and 225 replicates (18 000 pooled blocks, no reference shard), the same seed rule and the same digest
-    rule, with the digest of the ``lv5d`` suite (TODO: registered with the lv5d suite; until then pass ``digest``);
+    rule, with the digest of the ``lv5d`` suite (``run_suite.hashed_source_digest("lv5d")``; ``digest`` overrides it in tests);
     the info record then also binds the partial digests and the sidecar sha256 of every shard. The default layout
     is the unchanged V7-R one (2 or more shards of 4.5e6 / 450)."""
     if layout not in ("v7r", "v7r2"):
@@ -99,13 +99,14 @@ def load_rehearsal(
         elif r2:
             try:
                 have = run_suite.hashed_source_digest("lv5d")
-            except Exception as exc:  # the lv5d suite is not registered yet (open item, Amendment 20 (f)8)
+            except Exception as exc:
                 raise RehearsalError(f"no lv5d hashed-source digest available: {exc!r}") from exc
         else:
             have = run_suite.hashed_source_digest("lv5c")
         if prov.get("hashed_source_digest") != have:
+            suite_name = "lv5d" if r2 else "lv5c"
             bad.append(
-                "hashed_source_digest differs from the current hashed source set of lv5c "
+                f"hashed_source_digest differs from the current hashed source set of {suite_name} "
                 "(the rehearsal is not at the evidence code, Amendment 17 (a)7)"
             )
     parts = sorted(directory.glob(pattern))
