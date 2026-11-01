@@ -2,8 +2,8 @@
 
 Decision 0043 section 3. Rows I11-map (deterministic self-consistency: z = 1 identity, root
 residual <= 1e-10, Omega identity, tabulation bound <= 0.1 %) are asserted. Rows I11-rel (gating
-2 %, evaluated once under freeze) and I11-abs (informative) are only COMPUTED here: the test
-checks that the evaluation runs and is finite and prints the maximum |ratio - 1|; the gate is a
+2 %, evaluated pre-freeze, SEEN, not blind) and I11-abs (informative) are only COMPUTED here: the
+test checks that the evaluation runs and is finite and prints the maximum |ratio - 1|; the gate is a
 plan row, never a unit-test assertion.
 """
 
@@ -197,9 +197,22 @@ def test_tabulation_theta_error_bound(proton: Any, ions: dict[str, Any], table_c
     assert worst <= 1e-3
 
 
+def test_i11_rel_proton_is_at_equal_velocity() -> None:
+    """I11-rel regression: beta_p(E_p) == beta_ion(E_u) to 1e-12 at every I11 grid point (the proton
+    energy is E_u A m_p / M, not the ion's numeric MeV/u)."""
+    for name, energies in MH.I11_GRID_MEV_U.items():
+        ion = X.bethe_path(name)
+        for e_u in energies:
+            e_p = X.equal_velocity_proton_energy(ion, e_u)
+            b_ion = X.beta_of_kinetic(e_u * ion.a, ion.mass_mev)
+            b_p = X.beta_of_kinetic(e_p, MH.M_P_MEV)
+            assert abs(b_p - b_ion) <= 1e-12, (name, e_u)
+            assert abs(e_p / e_u - 1.0) > 1e-4  # genuinely not the numeric MeV/u
+
+
 def test_i11_rel_and_abs_are_computed_and_finite() -> None:
     """The I11-rel / I11-abs evaluation runs on a sub-grid and is finite. NOT a gate: the 2 % row is
-    evaluated once under freeze (plan row I11-rel). Prints max |rel| and |abs| per ion."""
+    not blind; a disclosed gate (plan row I11-rel). Prints max |rel| and |abs| per ion."""
     sub = {name: (MH.I11_GRID_MEV_U[name][1],) for name in IONS}
     rows = X.i11_tables(fractions=(0.1, 0.9), grid=sub, n=60)
     assert len(rows) == 6

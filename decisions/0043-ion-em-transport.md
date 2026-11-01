@@ -350,6 +350,8 @@ recorded in result metadata and docs. Components, combined in quadrature (≈ 4�
 | z-independent Fano D (no Bloch-type electron terms) | ≤ 1 % |
 | Nuclear size | ≤ 1–2 % |
 
+**Chronology (exact; Codex REVIEW-42ab68dd).** The mapping, the tests and the first I11-rel/I11-abs evaluation were produced together at 070b07f0, in one commit while the plan is unfrozen. Decision 0043 §3 and plan row P11 required the mapping and tests to be committed BEFORE the evaluation; that order was not kept. The values are SEEN construction/calibration results, not qualification evidence; a later rerun cannot make these points independent. I11-rel remains the gate as pre-registered (2 %, STOP on failure, tolerance never changed): evaluated pre-freeze; not blind; the freeze carries it as a disclosed gate. The first evaluation also took the proton at the ion's numeric MeV/u instead of at equal velocity; corrected (E_p = E_u A m_p / M) and regenerated, below.
+
 **Freezing.**
 - The exact-Ω mapping, its b formulas, its evaluation choice (root solve or a bounded tabulation)
   and the I11-map and I11-rel tests are committed **before the mapping is evaluated against the

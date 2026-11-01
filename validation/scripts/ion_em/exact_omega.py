@@ -472,6 +472,20 @@ def moliere_hanson_theta0(
 
 
 # --- I11 report driver ----------------------------------------
+def equal_velocity_proton_energy(ion: Path_, e_u: float) -> float:
+    """Proton kinetic energy [MeV] with the velocity of the ion at ``e_u`` MeV/u.
+
+    beta equal  <=>  T/M equal:  E_p = E_u A m_p / M  (A mass number, M the ion mass as used in
+    ``ion``). With the proton path's per-nucleon axis (a = 1) this number is also its ``e_per_u``.
+    """
+    return e_u * ion.a * MH.M_P_MEV / ion.mass_mev
+
+
+def beta_of_kinetic(t_mev: float, m_mev: float) -> float:
+    """beta = sqrt(1 - (M/(T+M))^2) of kinetic energy T [MeV] and mass M [MeV]."""
+    return math.sqrt(1.0 - (m_mev / (t_mev + m_mev)) ** 2)
+
+
 def i11_tables(
     fractions: Sequence[float] = MH.I11_FRACTIONS,
     grid: dict[str, tuple[float, ...]] | None = None,
@@ -485,8 +499,8 @@ def i11_tables(
     ``map_residual``: |b_p(pv_eq) - b_ion| at the grid point's (pv, p1v1) = (the ion's pv at the
     depth, p1v1) of the slab end;
     ``pv_eq_over_pv``: pv_eq/pv at that state;
-    ``rel``: (theta_ion,model/theta_p,model) / (theta_MH,ion/theta_MH,p) - 1 at equal velocity (same
-    E per u) and equal x/R;
+    ``rel``: (theta_ion,model/theta_p,model) / (theta_MH,ion/theta_MH,p) - 1 at EQUAL VELOCITY (the
+    proton at E_p = E_u A m_p / M, see :func:`equal_velocity_proton_energy`) and equal x/R;
     ``abs``: theta_ion,model/theta_MH,ion - 1 (informative).
     """
     grid = MH.I11_GRID_MEV_U if grid is None else grid
@@ -497,9 +511,10 @@ def i11_tables(
         for e_u in energies:
             for frac in fractions:
                 th_ion = theta0_ion(ion, proton, e_u, frac, MH.WATER, electrons, n, n_slab)
-                th_p = theta0_proton_model(proton, e_u, frac, MH.WATER, n)
+                e_p = equal_velocity_proton_energy(ion, e_u)
+                th_p = theta0_proton_model(proton, e_p, frac, MH.WATER, n)
                 mh_ion = moliere_hanson_theta0(ion, e_u, frac, MH.WATER, electrons)
-                mh_p = moliere_hanson_theta0(proton, e_u, frac, MH.WATER, electrons)
+                mh_p = moliere_hanson_theta0(proton, e_p, frac, MH.WATER, electrons)
                 # I11-map state: end of the slab (x/R of the grid point)
                 r1 = float(ion.range_of(np.float64(e_u)))
                 e_end = float(ion.energy_of(np.float64((1.0 - frac) * r1)))
