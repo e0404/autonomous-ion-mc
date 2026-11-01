@@ -236,3 +236,35 @@ def test_de9_block_registered_and_disjoint() -> None:
     assert not set(DE9_BLOCK) & set(VR_DIAG)
     # B3 reuses the declared D-E3 CRN seeds (common random numbers with the archived base), not new seeds.
     assert {20990100, 20990101} <= ELASTIC_USED
+
+
+# Shared seed-base ledger (2026-11-01 note to Amendment 20 (f)2): the range 20572004-20632003 (first value above the existing envelopes) is
+# reserved for task V3-008; the V3-005 fresh-base sequence continues at 20641004.
+V3_008_RESERVED = range(20572004, 20632004)
+V3_005_NEXT_BASE = 20641004
+
+
+def test_v3_008_reservation_and_v3_005_continuation() -> None:
+    reserved = set(V3_008_RESERVED)
+    # (a) disjoint from every consumed/fresh envelope and from the investigation families
+    assert not reserved & _evidence_seeds()
+    for family in (ELASTIC, VR_DIAG, DE9_BLOCK, REHEARSAL_USED):
+        assert not reserved & set(family)
+    assert not reserved & TOPAS
+    assert not reserved & E_SHAPE
+    # (b) the declared V3-008 values lie inside the reservation
+    lv8 = {20581004 + 100 * r + k for r in range(61) for k in range(100)}
+    hr8 = {20591004 + 100 * r + k for r in range(61) for k in range(100)}
+    rehearsals = set(range(20600000, 20610000))
+    topas8 = set(range(20619001, 20619041))
+    reruns = {b + 100 * r + k for b in (20621004, 20631004) for r in range(10) for k in range(100)}
+    for declared in (lv8, hr8, rehearsals, topas8, reruns):
+        assert declared <= reserved
+    assert max(reruns) <= V3_008_RESERVED[-1]
+    # (c) the V3-005 continuation is disjoint from, and above, the reservation
+    nxt = set(range(V3_005_NEXT_BASE, V3_005_NEXT_BASE + 21000))
+    assert not nxt & reserved
+    assert min(nxt) > V3_008_RESERVED[-1]
+    # (d) V3-005 TOPAS formula rows 1-23 vs the V3-008 TOPAS seeds. 20619001-040 coincide numerically
+    # with the formula 20270000 + 1000 * row + k at row 349, which V3-005 never uses.
+    assert not TOPAS & topas8
