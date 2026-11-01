@@ -1,6 +1,6 @@
 # 0043 — Helium, carbon and oxygen electromagnetic transport (DRAFT r5 for independent review)
 
-> **Status: DRAFT r5 (2026-11-01), not yet frozen.** r3 was committed at 2632a465 and reviewed in round V3-008-1; r4/r5 fold in the pre-freeze records P8, P7, P2, P1/P1b (committed at 6e155b56) and the review rounds V3-008-1 and V3-008-2 (`validation/plans/v3-008/review.md`; the six V3-008-2 wording changes applied). The decision is frozen by a reviewed commit only after the pre-freeze checks of the acceptance plan (§P, steps 1–7) close. No transport or qualification result has been produced; the pre-freeze computations P1/P1b (reference module, candidate tables) and the P2 source reading exist and are disclosed.
+> **Status: DRAFT r5 (2026-11-01), not yet frozen.** r3 was committed at 2632a465 and reviewed in round V3-008-1; r4/r5 fold in the pre-freeze records P8, P7, P2, P1/P1b (committed at 6e155b56) and the review rounds V3-008-1 and V3-008-2 (`validation/plans/v3-008/review.md`; the six V3-008-2 wording changes applied). The decision is frozen by a reviewed commit only after the pre-freeze checks of the acceptance plan (§P, steps 1–7) close. The decision and plan are frozen before any TRANSPORT or QUALIFICATION result; the pre-freeze construction/calibration computations P1/P1b (Molière–Hanson reference, candidate tables) and P11 (I11-rel/I11-abs values, evaluated at 070b07f0 and regenerated at 00af9a6c) exist, are disclosed and are not qualification evidence; the P2/P10 source readings and the P5/P5b/P6 data inspections also exist and are disclosed (amended for Codex REVIEW-12614ced).
 
 
 - Status: DRAFT r5 (planner, 2026-11-01), not frozen. History:
@@ -13,7 +13,8 @@
     exact-Ω specification, gating I11-rel, the V2 branches, the lateral-gap intervention, and the
     §6 Molière–Hanson row. Not accepted. To be reviewed
   independently and committed together with `validation/plans/v3-008-acceptance.md` before any
-  V3-008 result exists. The pre-freeze checks of the plan (section P) must be closed and their
+  V3-008 transport or qualification result exists; the pre-freeze construction/calibration
+  computations P1/P1b and P11 exist, are disclosed and are not qualification evidence. The pre-freeze checks of the plan (section P) must be closed and their
   outcomes written into this decision first.
 - Task: V3-008 (main line, `validation/plans/v3-next/selection-2026-11-01.md`, rank 1).
 - Base: `v3/develop` at `c790df36`. The unmerged V3-005B/C/D elastic work (PR #82) is neither an
@@ -167,9 +168,9 @@ sources pinned by sha256. FACT unless marked.
 |---|---|---|---|
 | 4He | NIST ASTAR water, I = 75 eV (compared with Bethe at 75 eV) | cached, pinned, SEEN | ICRU 49 / Bethe theory |
 | 4He | ICRU 90 alpha water array (Geant4 11.4.2 source), compared at 78 eV | cached, pinned, SEEN | **the same array TOPAS uses for alpha** → helium TOPAS range (V1) is not independent of this row |
-| 12C, 16O | ICRU 73 water tables, if they carry the 2009 erratum (I = 78 eV): G4EMLOW 8.8 `ion_stopping_data/icru73/z6_G4_WATER.dat`, `z8_G4_WATER.dat` | OPEN, pre-freeze checks P5: file span must cover ≥ 2–430 MeV/u; erratum vs original-ICRU-73 provenance (the original water tables used I = 67.2 eV; the difference is a few %); licence = Geant4 Software Licence | ICRU 73 (PASS/BEST theory). In TOPAS these files are consulted only at ≤ 2.0 MeV scaled energy (≈ 1.98 MeV/u) and only for 2 < Z ≤ 80 (P2 FACT), so above that the row is **largely independent of TOPAS's stopping** (shared: Bethe theory, I-value) |
-| 12C (16O?) | ICRU 90 carbon water table: G4EMLOW `icru90/z6_G4_WATER.dat` | OPEN P5: whether it holds ICRU 90 published carbon values or a Geant4 recomputation. **No ICRU 90 oxygen table exists** (ICRU 90 covers p, α, C), so `z8` is of unclear origin and not used | ICRU 90 |
-| 12C, 16O | libdEdx data files (ICRU 73 with erratum, per memory) | OPEN P5b: location, licence (GPL), file provenance | cross-check of the G4EMLOW files |
+| 12C, 16O | ICRU 73 water tables (Sigmund-revised per the README): G4EMLOW 8.8 `ion_stopping_data/icru73/z6_G4_WATER.dat`, `z8_G4_WATER.dat` (P5: spans 0.025–1000 MeV/u, 53 points) | **lineage only — use restricted to Geant4 by the data set's README; not an evaluation source** | ICRU 73 (PASS/BEST theory). In TOPAS these files are consulted only at ≤ 2.0 MeV scaled energy (≈ 1.98 MeV/u) and only for 2 < Z ≤ 80 (P2 FACT) |
+| 12C (16O?) | ICRU 90 carbon water table: G4EMLOW `icru90/z6_G4_WATER.dat` | **lineage only — use restricted to Geant4 by the data set's README; not an evaluation source**; origin OPEN (P5). **No ICRU 90 oxygen table exists** (ICRU 90 covers p, α, C) | ICRU 90 |
+| 12C, 16O | **libdEdx ICRU73_NEW** (archive b941a0c3…, GPL-3; `data/raw/ICRU73_NEW.dat` 749768c1…, grid 53 energies 0.025–1000 MeV/u; target 276 liquid water) — the **I3 evaluation source** (P5b, `validation/plans/v3-008/p5b-libdedx-icru73.md`) | exploratory until I3 is frozen. TO-VERIFY: equality with the 2009 Sigmund water revision; the I-value of the water values (libdEdx metadata lists 75.0 eV for target 276; the model is compared at 78 eV and the difference is stated as a bounded contribution) | ICRU 73 (revised, as distributed by libdEdx); independent of TOPAS above ≈ 2 MeV/u |
 | 12C, 16O | IAEA stopping database (v2026-09) | **Limitation (FACT, Montanari et al. arXiv:2402.03080):** water has measured data only for H, He, Li and C, and the carbon data lie near the stopping maximum (≲ 1 MeV/u). **No oxygen in water. No measured C/O water stopping at therapy energies exists publicly.** Not curable by intervention; declared | measured, outside the domain |
 
 All reference values stay in the provenance cache. Git holds pins, hashes, aggregate ratios and
@@ -395,9 +396,9 @@ L1115–1125).
 **Single-scattering reference (P10).** Before freeze, P10 checks whether a thin-slab angular-width
 check against a Geant4 single-scattering configuration is available, and at what cost. Candidates:
 `G4CoulombScattering`, or a g4em-standard_SS-type module if OpenTOPAS 4.3 offers it for GenericIon.
-If it is available within the REF budget, row V5-SS is pre-registered before any run.
+**P10 outcome (closed for coverage):** FACT, `G4EmStandardPhysicsSS.cc` v11.4.2 (cache 8aeaf91c…): L213–219 `particle = G4GenericIon::GenericIon(); G4ionIonisation* ionIoni = new G4ionIonisation(); … ionIoni->SetEmModel(new G4LindhardSorensenIonModel()); ph->RegisterProcess(ionIoni, particle); ph->RegisterProcess(new G4CoulombScattering(false), particle);` (no msc process for GenericIon); L222 `G4EmBuilder::ConstructChargedSS(hmsc);` → alpha `G4ionIonisation` + `G4CoulombScattering(false)` ([EMB] L158–160) and protons `G4hIonisation` + `G4CoulombScattering(false)` ([EMB] L212, L221–222); L107 `param->SetMscThetaLimit(0.0);`. The r5 thick-slab design was infeasible (P10 §3: ≈ 10²–10³ h). **V5-SS is the held-out lateral qualification row** on the P10 design: 1 mm water slab, 2e4 primaries per case, He 150, C 290, O 350 MeV/u and protons at matched velocity; statistic = the ion/proton ratio of the rms projected angular width compared with the model's ratio; pre-registered tolerance |ratio_model/ratio_ref − 1| ≤ 3 %; run ONCE after freeze, only if a scorer-free smoke confirms the OpenTOPAS 4.3 alias, the process list and a cost ≤ 4 h REF. V1-held and V3 provide no lateral evidence.
 
-**Lateral evidence gap.** It is used only after P6 (the measured lateral-data search) and P10 fail.
+**Lateral evidence gap.** It is used only after P6 (the measured lateral-data search) fails and V5-SS is withdrawn (its run condition fails).
 Intervention wording, verbatim:
 
 > Unavailable input: independent evidence of the charge dependence of lateral spreading for He/C/O
@@ -408,7 +409,7 @@ Intervention wording, verbatim:
 > and implementation checks (no independent evidence), recorded as a gap in the ledger.
 
 **Gating MCS rows:** I9, I10, I11-map, I11-rel, I12 and I15 (self-consistency, theory consistency
-and falsification), and V5-SS if registered.
+and falsification), and V5-SS (held-out, single scattering) if its run condition holds.
 
 ## 4. Kinematics, charge state, end of range, secondaries
 
@@ -454,27 +455,28 @@ and falsification), and V5-SS if registered.
 | I_water 78 eV (ICRU 90) | construction | shared (G4_WATER). ICRU 90's value was informed by measured Bragg-peak positions (GSI, Kumazaki 2007, Bichsel & Hiraoka 1992; TO VERIFY), so measured water ranges are calibration lineage |
 | ASTAR (He) | evaluation | not used by TOPAS |
 | ICRU 90 alpha array (He) | evaluation (I2: a regression guard on seen values, not evidence) | **identical to TOPAS alpha stopping**: FACT (research note); P2 OPEN pending `G4EmBuilder.cc`/`G4BetheBlochModel.cc`. For helium, V1 tests transport mechanics and straggling only |
-| ICRU 73 (rev.) / ICRU 90 C/O files (if P5 passes) | evaluation | consulted by TOPAS only at ≤ 2.0 MeV scaled (≈ 1.98 MeV/u), 2 < Z ≤ 80, never alpha (P2 FACT) → largely independent above |
+| ICRU 73 (rev.) C/O: libdEdx ICRU73_NEW (I3 evaluation source); G4EMLOW icru73/icru90 files lineage only (Geant4-restricted use) | evaluation (libdEdx; exploratory until I3 frozen) / lineage (G4EMLOW) | the G4EMLOW files are consulted by TOPAS only at ≤ 2.0 MeV scaled (≈ 1.98 MeV/u), 2 < Z ≤ 80, never alpha (P2 FACT) → the libdEdx comparison is largely independent of TOPAS above |
 | TOPAS C/O stopping: `G4BetheBlochModel` table (ICRU 90 proton array at equal velocity: research note, partly confirmed) + q_eff²(ΔL_LS + 2·Barkas·(z−1)/z), no separate Bloch/Mott, switch at 2.0 MeV scaled (P2 FACT) | the reference's construction; I3c attribution diagnostic | — (the r3 trigger "ion tables above 2.5 MeV/u" is not met; no amendment) |
 | Molière–Hanson ion theory (numpy, P1) | theory for the relative ion/proton b mapping (construction); I11-rel gating (relative), I11-abs informative | Urban MSC differs structurally: no charge/β term in its log, truncated core + tail, step-length dependent (θ0 form P2 FACT; Urban as the ion msc model P2 INFERRED, settled by P2 follow-up/P4) |
 | Gottschalk f_dM | construction | no |
 | TOPAS EM-only ion runs | evaluation, independent MC (V1 gating; V2 informative by default) | stopping lineage partly shared (I-value, ICRU 90 proton/alpha arrays, Barkas); straggling independent; MSC model structurally different (Urban) |
-| Sihver, Schardt, Kanai 1998 measured C/O depth-dose (if acquirable) | evaluation, measured | I-value calibration lineage; pre-ICRU 90 |
+| Sihver, Schardt, Kanai 1998 measured C/O depth-dose | **FAILED as a reference (P6):** curves normalised horizontally to the calculated peaks, figures only, oxygen = 18O | → V3 is an EVIDENCE GAP (intervention path, bundled with the lateral gap if V5-SS is withdrawn) |
 
 ## Expected tradeoffs and declared limitations
 
 - **Helium** range evidence is tabulated (SEEN) plus TOPAS, which shares the ICRU 90 alpha array.
   **No measured He range evidence was found.**
-- **Carbon and oxygen:** a tabulated check depends on P5. Measured stopping at therapy energies does
-  not exist publicly. Measured range depends on one candidate (Sihver 1998); oxygen has no other.
+- **Carbon and oxygen:** the tabulated check uses libdEdx ICRU73_NEW (P5b); the Geant4 G4EMLOW files are
+  lineage only. Measured stopping at therapy energies does not exist publicly. The only measured-range
+  candidate (Sihver 1998) FAILED P6, so measured range is an EVIDENCE GAP (intervention path).
 - **MCS:** the ion model is the exact-Ω (b-matching) mapping of the proton model, with ±5 %
   theory-derived uncertainty. I11-rel (relative) gates. I11-abs is informative, because the water
   reference fails its Pb validation, is unvalidated for water and rests on a derived compound rule.
   V2 follows the pre-declared branches (Case C if Urban). Independent evidence for the z-dependence
-  of lateral spreading is a declared gap, unless P6 or P10 provide it; the intervention wording is in
+  of lateral spreading rests on V5-SS (held-out, single scattering, run condition per P10) or measured data; otherwise it is a declared gap; the intervention wording is in
   §3.
 - **Gaps** go to the intervention route. Nothing is relabelled, and no model is tuned to TOPAS.
 
 ## Validation strategy
 
-Frozen in `validation/plans/v3-008-acceptance.md` (draft r4 alongside).
+Frozen in `validation/plans/v3-008-acceptance.md` (draft r5 alongside).
