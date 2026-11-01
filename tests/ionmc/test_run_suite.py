@@ -3180,7 +3180,7 @@ def test_declared_plans_are_gated_by_suite_and_fail_closed(monkeypatch: pytest.M
     assert d.declared_plans()["v7r (16 shards x 4.5e6, block rate)"] == (72_000_000, "blocks", 16)
     with pytest.raises(SystemExit, match="calibration rate not measured"):
         d.declared_plans("lv5d")  # fail closed without the measured rate record (Amendment 20 (f)8)
-    plans = d.declared_plans("lv5d", cal_rate={"record": "validated by v7r2_cal_rate.load_record"})
+    plans = d._declared_plans("lv5d")  # the ungated table (the gate itself: test_v7r2_wiring_t3.py)
     assert "v7r (16 shards x 4.5e6, block rate)" not in plans  # V7-R is not an lv5d row
     assert plans["v7r2 transport (48 shards x 2.25e6, block rate)"] == (
         48 * 2_250_000,

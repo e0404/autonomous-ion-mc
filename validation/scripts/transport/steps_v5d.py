@@ -220,12 +220,19 @@ def declared_plans(suite: str = "lv5c", *, cal_rate: dict[str, Any] | None = Non
     block rate) and with the V6-F CPU families (``steps_v6f.v6f_plans``, rate ``v5``) added; the rep-based kappa and
     calibration parts are reported by :func:`rep_plan_table` (``v7r.r2_rep_plans``). Any other suite raises
     ``SystemExit`` (fail closed). The ``lv5d`` table is only returned together with a validated measured calibration
-    rate record (``cal_rate``: the result of ``v7r2_cal_rate.load_record``, Amendment 20 (f)8, Codex REVIEW-fe47f290):
+    rate record (``cal_rate``: exactly the result of ``v7r2_cal_rate.load_record``, which verifies the sealed part record
+    and the passing pytest log it names; any other object is refused by ``require_validated``; Amendment 20 (f)8,
+    Codex REVIEW-fe47f290 and REVIEW-6519d4ff):
     the 39-part layout is not frozen before the slow-host rate is measured, so without it ``declared_plans("lv5d")``
     raises ``SystemExit`` (``not ok: calibration rate not measured``)."""
-    if suite == "lv5d" and cal_rate is None:
-        raise SystemExit(f"declared_plans: {v7r2_cal_rate.NOT_MEASURED} (lv5d needs the measured rate record "
-                         f"{v7r2_cal_rate.CAL_RATE_ENV}; the default 12.2 s/repetition is extrapolated)")  # fmt: skip
+    if suite == "lv5d":
+        if cal_rate is None:
+            raise SystemExit(f"declared_plans: {v7r2_cal_rate.NOT_MEASURED} (lv5d needs the measured rate record "
+                             f"{v7r2_cal_rate.CAL_RATE_ENV}; the default 12.2 s/repetition is extrapolated)")  # fmt: skip
+        try:
+            v7r2_cal_rate.require_validated(cal_rate)  # a plain dict is refused (Codex REVIEW-6519d4ff)
+        except ValueError as exc:
+            raise SystemExit(f"declared_plans: not ok: {exc}") from exc
     return _declared_plans(suite)
 
 

@@ -209,10 +209,17 @@ CAL2_CASES = [(s, p) for s in ("archive_fitted", "rehearsal_block_sums") for p i
 
 
 def _out_dir(cov: ModuleType) -> Path:
+    """The host part output directory. Fail closed (never a skip, never the working directory): a kappa or
+    calibration part without ``IONMC_V7R_CAL_OUT`` is an unregistered run (2026-11-01: an unfiltered pytest
+    invocation executed three full-scale kappa parts into the worktree root with suite ``unknown``; the
+    outputs were deleted unread and are not evidence; plan dated note of 2026-11-01)."""
     d = os.environ.get("IONMC_V7R_CAL_OUT")
-    if cov._fixtures_required() and not d:
-        pytest.fail("IONMC_V7R_CAL_OUT is not set in required mode: the record has nowhere to go")
-    return Path(d or ".")
+    if not d:
+        pytest.fail(
+            "IONMC_V7R_CAL_OUT is not set: a kappa / calibration part refuses to run outside the registered "
+            "suite step (the record has nowhere to go; the working directory is never used)"
+        )
+    return Path(d)
 
 
 @pytest.mark.calibration

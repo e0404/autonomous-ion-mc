@@ -19,7 +19,30 @@ MEASURED rate record, a JSON file named by the environment variable ``IONMC_V7R2
 ``python v7r2_cal_rate.py --part-record ... --part-log ... --log-dir ... --git-sha ... --out ...`` builds the record
 from the sealed part record (``wall_mc_s``, ``n``) and the pytest log (``1 passed in X s``); the rate is the Monte
 Carlo wall time per repetition and the fixed cost is ``max(70 s, wall_total - wall_mc)`` (conservative). No
-measurement is made here."""
+measurement is made here.
+
+Verification (fail closed; Codex REVIEW-6519d4ff). A record is only accepted, by :func:`load_record` and before
+:func:`build_record` writes one, after the underlying controlled-run artifacts have been re-opened and checked
+(:func:`verify_artifacts`); every value of a built record is taken from them:
+
+* ``log_dir`` (a relative path is resolved against the repository root) holds ``part_record`` and ``part_log``, and
+  their sha256 equal ``part_record_sha256`` / ``part_log_sha256``;
+* the part record is a SEALED V7-R2 calibration part record: ``content_sha256`` equals the sha256 of its canonical JSON
+  (sorted keys, compact separators) without that field (``steps_v5.content_digest``, re-implemented here); schema
+  ``ionmc-v7r2-calibration-record-1``; the file name ``v7r2-calibration-<surrogate>-p<NN>.json`` agrees with its
+  ``surrogate`` / ``part`` (39 parts per surrogate); layout ``{replicates 10800, reps_per_shard 225, parts 39}`` and
+  ``reps_env`` 3200 (``v7r.r2_part_layout``); ``suite`` is ``lv5d``; ``run_sha`` and ``git_sha`` both equal the rate
+  record's ``git_sha``; ``n`` is the planned size of that part (83 for parts 0-1, 82 otherwise, 3200 = 2 x 83 + 37 x
+  82) and equals ``reps``; ``wall_mc_s`` equals the record's ``wall_mc_s``;
+* the pytest log has exactly ONE pytest summary line, which reports exactly one passed test and no other outcome
+  except deselected / warnings (no failed, error, skipped, xfailed, xpassed, rerun), no ``FAILED`` / ``ERROR`` line,
+  and exactly one ``PARTIAL <part_record name> <content_sha256>`` line, which matches the part record (run the part
+  with ``-s`` so the line is not captured); ``wall_total_s`` equals the "in X s" time of the summary (relative
+  tolerance 1e-9: both are the same decimal text).
+
+A record that fails any of these raises ``ValueError``. Consumers (``steps_v5d.declared_plans``, ``rep_plan_table``,
+``run_suite.rehearsal_preflight``) accept only the result of :func:`load_record`: :func:`require_validated` re-loads
+the named file and demands an identical result, so a hand-made dictionary is refused."""
 
 from __future__ import annotations
 
@@ -40,6 +63,17 @@ MIN_FIXED_S = 70.0  # v7r.R2_CAL_FIXED_S (the planning value; the record may onl
 NOT_MEASURED = "not ok: calibration rate not measured"
 _HEX40 = re.compile(r"[0-9a-f]{40}")
 _HEX64 = re.compile(r"[0-9a-f]{64}")
+HERE = Path(__file__).resolve().parent
+REPO = HERE.parents[2]
+PART_SCHEMA = "ionmc-v7r2-calibration-record-1"  # v7r.CAL2_SCHEMA
+PART_SUITE = "lv5d"
+PART_LAYOUT = {"replicates": 10800, "reps_per_shard": 225, "parts": 39}  # v7r.r2_part_layout()
+PART_REPS_ENV = 3200  # v7r.V7R_CAL_REPS
+PART_SURROGATES = ("archive_fitted", "rehearsal_block_sums")
+_PART_NAME = re.compile(r"v7r2-calibration-(archive_fitted|rehearsal_block_sums)-p(\d\d)\.json")
+_SUMMARY = re.compile(r"^(?:=+ )?((?:\d+ [a-z]+(?:, )?)+) in ([0-9]+(?:\.[0-9]+)?)s(?: \(\d+:\d\d:\d\d\))?(?: =+)?$")
+_COUNT = re.compile(r"(\d+) ([a-z]+)")
+_PARTIAL = re.compile(r"^PARTIAL (\S+) ([0-9a-f]{64})$")
 
 
 def _number(rec: dict[str, Any], key: str, *, positive: bool) -> float:
@@ -83,14 +117,117 @@ def validate_record(rec: Any) -> dict[str, Any]:
     return rec
 
 
+def _sha256(p: Path) -> str:
+    return hashlib.sha256(p.read_bytes()).hexdigest()
+
+
+def _resolve_dir(log_dir: str) -> Path:
+    p = Path(log_dir)
+    return p if p.is_absolute() else REPO / p
+
+
+def part_size(part: int) -> int:
+    """Planned repetitions of calibration part ``part`` (``v7r.cal_part_sizes(3200, 39)``)."""
+    q, r = divmod(PART_REPS_ENV, PART_LAYOUT["parts"])
+    return q + (1 if part < r else 0)
+
+
+def seal_digest(doc: dict[str, Any]) -> str:
+    """sha256 of the canonical JSON (sorted keys, compact separators) of ``doc`` without ``content_sha256``, after one
+    JSON round trip (``steps_v5.content_digest``)."""
+    norm = json.loads(json.dumps(doc))
+    norm.pop("content_sha256", None)
+    return hashlib.sha256(json.dumps(norm, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def verify_part_record(path: Path, git_sha: str) -> dict[str, Any]:
+    """The sealed V7-R2 calibration part record at ``path`` (rules of the module docstring) or ``ValueError``."""
+    try:
+        doc = json.loads(path.read_text())
+    except (OSError, ValueError) as exc:
+        raise ValueError(f"part record {path.name} unreadable: {exc}") from exc
+    if not isinstance(doc, dict):
+        raise ValueError(f"part record {path.name} is not a JSON object")
+    if doc.get("content_sha256") != seal_digest(doc):
+        raise ValueError(f"part record {path.name} is not sealed: content_sha256 does not match the document")
+    if doc.get("schema") != PART_SCHEMA:
+        raise ValueError(f"part record {path.name}: schema {doc.get('schema')!r}, expected {PART_SCHEMA!r}")
+    m = _PART_NAME.fullmatch(path.name)
+    part = doc.get("part")
+    if not m or isinstance(part, bool) or doc.get("surrogate") != m.group(1) or part != int(m.group(2)):
+        raise ValueError(f"part record {path.name}: file name and surrogate / part of the record disagree")
+    if not 0 <= part < PART_LAYOUT["parts"]:
+        raise ValueError(f"part record {path.name}: part {part} outside 0..{PART_LAYOUT['parts'] - 1}")
+    if doc.get("layout") != PART_LAYOUT or doc.get("reps_env") != PART_REPS_ENV:
+        raise ValueError(f"part record {path.name}: layout / reps_env are not the lv5d V7-R2 calibration layout")
+    if doc.get("suite") != PART_SUITE:
+        raise ValueError(f"part record {path.name}: suite {doc.get('suite')!r}, expected {PART_SUITE!r}")
+    if doc.get("run_sha") != git_sha or doc.get("git_sha", git_sha) != git_sha:
+        raise ValueError(f"part record {path.name}: run_sha / git_sha differ from the record's git_sha {git_sha}")
+    n, wall = doc.get("n"), doc.get("wall_mc_s")
+    if isinstance(n, bool) or n != part_size(part):
+        raise ValueError(f"part record {path.name}: n {n!r} is not the planned size {part_size(part)} of part {part}")
+    if isinstance(wall, bool) or not isinstance(wall, (int, float)) or not math.isfinite(wall) or wall <= 0.0:
+        raise ValueError(f"part record {path.name}: wall_mc_s is not a positive finite number")
+    return doc
+
+
+def verify_log(text: str, part_name: str, part_digest: str) -> float:
+    """The pytest wall time ("in X s") of a log of exactly one passing calibration part, or ``ValueError``."""
+    lines = [ln.strip() for ln in text.splitlines()]
+    if any(ln.startswith(("FAILED ", "ERROR ")) for ln in lines):
+        raise ValueError("the pytest log contains a FAILED / ERROR line")
+    summaries = [m for ln in lines if (m := _SUMMARY.match(ln))]
+    if len(summaries) != 1:
+        raise ValueError(f"the pytest log has {len(summaries)} summary lines (need exactly 1)")
+    counts: dict[str, int] = {}
+    for num, word in _COUNT.findall(summaries[0].group(1)):
+        counts[word] = counts.get(word, 0) + int(num)
+    extra = set(counts) - {"passed", "deselected", "warning", "warnings"}
+    if counts.get("passed") != 1 or extra:
+        raise ValueError(f"the pytest summary is not exactly one passed test ({summaries[0].group(1)!r})")
+    partials = [m.groups() for ln in lines if (m := _PARTIAL.match(ln))]
+    if partials != [(part_name, part_digest)]:
+        raise ValueError(f"the pytest log needs exactly one 'PARTIAL {part_name} {part_digest}' line, found {partials}")
+    return float(summaries[0].group(2))
+
+
+def verify_artifacts(rec: dict[str, Any]) -> None:
+    """Re-open the part record and the pytest log named by the (shape-validated) ``rec`` and check them against it
+    (module docstring); ``ValueError`` on the first mismatch."""
+    d = _resolve_dir(rec["log_dir"])
+    files = {}
+    for key in ("part_record", "part_log"):
+        name = rec[key]
+        if Path(name).name != name:
+            raise ValueError(f"{key} {name!r} is not a plain file name")
+        p = d / name
+        if not p.is_file():
+            raise ValueError(f"{key} {p} is not a file")
+        if _sha256(p) != rec[f"{key}_sha256"]:
+            raise ValueError(f"{key} {p.name}: sha256 differs from the record")
+        files[key] = p
+    doc = verify_part_record(files["part_record"], rec["git_sha"])
+    if doc["n"] != rec["reps"]:
+        raise ValueError(f"reps {rec['reps']} differs from n {doc['n']} of the part record")
+    if doc["wall_mc_s"] != rec["wall_mc_s"]:
+        raise ValueError(f"wall_mc_s {rec['wall_mc_s']} differs from the part record's {doc['wall_mc_s']}")
+    total = verify_log(files["part_log"].read_text(errors="replace"), files["part_record"].name,
+                       doc["content_sha256"])  # fmt: skip
+    if not math.isclose(total, rec["wall_total_s"], rel_tol=1e-9):
+        raise ValueError(f"wall_total_s {rec['wall_total_s']} differs from the pytest summary time {total}")
+
+
 def load_record(path: str | os.PathLike[str]) -> dict[str, Any]:
-    """``{"record", "sha256", "path"}`` of the rate record file, or ``ValueError`` (absent, unreadable, malformed)."""
+    """``{"record", "sha256", "path"}`` of the rate record file, or ``ValueError`` (absent, unreadable, malformed, or
+    whose controlled-run artifacts fail :func:`verify_artifacts`)."""
     p = Path(path)
     if not p.is_file():
         raise ValueError(f"{p} is not a file")
     raw = p.read_bytes()
     try:
         rec = validate_record(json.loads(raw))
+        verify_artifacts(rec)
     except ValueError as exc:  # JSON errors are ValueErrors as well
         raise ValueError(f"calibration rate record {p} invalid: {exc}") from exc
     return {"record": rec, "sha256": hashlib.sha256(raw).hexdigest(), "path": str(p)}
@@ -103,26 +240,47 @@ def record_from_env() -> dict[str, Any] | None:
 
 
 def build_record(part_record: Path, part_log: Path, log_dir: Path, git_sha: str) -> dict[str, Any]:
-    """The record of one measured calibration part (see the module docstring)."""
-    doc = json.loads(part_record.read_text())
-    n, wall = doc.get("n"), doc.get("wall_mc_s")
-    if not (isinstance(n, int) and isinstance(wall, (int, float)) and n >= 1 and wall > 0):
-        raise SystemExit(f"{part_record}: no n / wall_mc_s of a calibration part")
-    text = part_log.read_text()
-    m = re.search(r"\b1 passed\b.* in ([0-9.]+)s", text)
-    if not m:
-        raise SystemExit(f"{part_log}: no '1 passed ... in X s' line (the part must pass exactly once)")
-    total = float(m.group(1))
+    """The record of one measured calibration part (see the module docstring). Every value comes from the verified
+    sealed part record and pytest log (which must lie in ``log_dir``); the result passes :func:`verify_artifacts`
+    or ``ValueError`` is raised."""
+    if not (isinstance(git_sha, str) and _HEX40.fullmatch(git_sha)):
+        raise ValueError("git_sha must be 40 lowercase hex digits")
+    if not (part_record.is_file() and part_log.is_file()):
+        raise ValueError("the part record and the pytest log must be files")
+    ld = log_dir if log_dir.is_absolute() else Path.cwd() / log_dir
+    if part_record.resolve().parent != ld.resolve() or part_log.resolve().parent != ld.resolve():
+        raise ValueError("the part record and the pytest log must lie in log_dir")
+    doc = verify_part_record(part_record, git_sha)
+    total = verify_log(part_log.read_text(errors="replace"), part_record.name, doc["content_sha256"])
+    n, wall = doc["n"], float(doc["wall_mc_s"])
+    try:
+        stored = str(ld.resolve().relative_to(REPO))
+    except ValueError:
+        stored = str(ld.resolve())
     rec = {
-        "schema": CAL_RATE_SCHEMA, "s_per_rep": float(wall) / n, "fixed_s": max(MIN_FIXED_S, total - float(wall)),
-        "reps": n, "wall_mc_s": float(wall), "wall_total_s": total,
+        "schema": CAL_RATE_SCHEMA, "s_per_rep": wall / n, "fixed_s": max(MIN_FIXED_S, total - wall),
+        "reps": n, "wall_mc_s": wall, "wall_total_s": total,
         "host": {"node": platform.node(), "cpu_count": os.cpu_count(), "platform": platform.platform(),
                  "python": platform.python_version()},
-        "git_sha": git_sha, "log_dir": str(log_dir),
-        "part_record": part_record.name, "part_record_sha256": hashlib.sha256(part_record.read_bytes()).hexdigest(),
-        "part_log": part_log.name, "part_log_sha256": hashlib.sha256(part_log.read_bytes()).hexdigest(),
+        "git_sha": git_sha, "log_dir": stored,
+        "part_record": part_record.name, "part_record_sha256": _sha256(part_record),
+        "part_log": part_log.name, "part_log_sha256": _sha256(part_log),
     }  # fmt: skip
-    return validate_record(rec)
+    validate_record(rec)
+    verify_artifacts(rec)
+    return rec
+
+
+def require_validated(got: Any) -> dict[str, Any]:
+    """``got`` if it is exactly the result of :func:`load_record` of the file it names, else ``ValueError``: the file
+    is re-loaded (all artifact checks again) and the result must be identical; a hand-made dictionary, a record whose
+    file changed, or ``None`` is refused."""
+    if not (isinstance(got, dict) and isinstance(got.get("path"), str) and isinstance(got.get("sha256"), str)):
+        raise ValueError("not a calibration rate record loaded by v7r2_cal_rate.load_record")
+    fresh = load_record(got["path"])
+    if fresh != got:
+        raise ValueError("the calibration rate record differs from the file it names (not the result of load_record)")
+    return fresh
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -136,7 +294,10 @@ def main(argv: list[str] | None = None) -> int:
     out = Path(a.out)
     if out.exists():
         raise SystemExit(f"{out} exists")
-    rec = build_record(Path(a.part_record), Path(a.part_log), Path(a.log_dir), a.git_sha)
+    try:
+        rec = build_record(Path(a.part_record), Path(a.part_log), Path(a.log_dir), a.git_sha)
+    except ValueError as exc:
+        raise SystemExit(f"not ok: {exc}") from exc
     out.write_text(json.dumps(rec, sort_keys=True, indent=1) + "\n")
     print(f"{out}: s_per_rep {rec['s_per_rep']:.4f}, fixed_s {rec['fixed_s']:.1f}, "
           f"sha256 {load_record(out)['sha256']}")  # fmt: skip

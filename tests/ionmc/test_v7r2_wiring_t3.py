@@ -85,16 +85,60 @@ def build_v7r2_fixture(d: Path, s5c: ModuleType, digest: str, *, seed_offset: in
     return prov
 
 
-def write_rate(path: Path, cal: ModuleType, *, s_per_rep: float = 12.0, **over: Any) -> Path:
-    """A syntactically valid measured-rate record (the measurement itself is a host job)."""
-    reps = 83
+SHA = "a" * 40
+
+
+@pytest.fixture(scope="module")
+def cov() -> ModuleType:
+    """The real seal function of the calibration records (``test_v7r_coverage._seal``, used by the host parts)."""
+    sys.path.insert(0, str(SCRIPTS))
+    spec = importlib.util.spec_from_file_location(
+        "test_v7r_coverage_module_t3", REPO / "tests" / "ionmc" / "test_v7r_coverage.py"
+    )
+    assert spec and spec.loader
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def make_artifacts(d: Path, cov: ModuleType, *, wall: float = 996.6, part: int = 0, surrogate: str = "archive_fitted",
+                   sha: str = SHA, total: float | None = None, over: dict[str, Any] | None = None,
+                   unseal: bool = False, log: str | None = None) -> tuple[Path, Path]:  # fmt: skip
+    """A genuine sealed V7-R2 calibration part record (sealed by the real ``_seal``) and a synthetic but well-formed
+    passing pytest log of that one part (a controlled host run is not needed to test the verification)."""
+    d.mkdir(parents=True, exist_ok=True)
+    n = 83 if part < 2 else 82
     rec: dict[str, Any] = {
-        "schema": cal.CAL_RATE_SCHEMA, "s_per_rep": s_per_rep, "fixed_s": 70.0, "reps": reps,
-        "wall_mc_s": s_per_rep * reps, "wall_total_s": s_per_rep * reps + 70.0,
-        "host": {"node": "slowhost", "cpu_count": 8, "platform": "linux", "python": "3.12"},
-        "git_sha": "a" * 40, "log_dir": "validation/generated/r4b", "part_record": "part.json",
-        "part_record_sha256": "b" * 64, "part_log": "part.log", "part_log_sha256": "c" * 64,
+        "schema": "ionmc-v7r2-calibration-record-1", "surrogate": surrogate, "part": part, "n": n,
+        "reps_env": 3200, "layout": {"replicates": 10800, "reps_per_shard": 225, "parts": 39},
+        "run_sha": sha, "suite": "lv5d", "wall_mc_s": wall, "wall_per_replicate_s": wall / n,
     }  # fmt: skip
+    rec.update(over or {})
+    sealed = cov._seal(rec)
+    if unseal:
+        sealed["wall_mc_s"] = sealed["wall_mc_s"] + 1.0  # tampered after sealing
+    path = d / f"v7r2-calibration-{surrogate}-p{part:02d}.json"
+    path.write_text(json.dumps(sealed, sort_keys=True))
+    total = wall + 70.0 if total is None else total
+    lg = d / "part.log"
+    lg.write_text(
+        log
+        if log is not None
+        else (
+            f"collected 78 items / 77 deselected / 1 selected\nPARTIAL {path.name} {cov._seal(rec)['content_sha256']}\n"
+            f".\n====== 1 passed, 77 deselected in {total:.2f}s ({int(total) // 3600}:{int(total) // 60 % 60:02d}:{int(total) % 60:02d}) ======\n"
+        )
+    )
+    return path, lg
+
+
+def write_rate(
+    path: Path, cal: ModuleType, cov: ModuleType, *, s_per_rep: float = 12.0, **over: Any
+) -> Path:
+    """A measured-rate record built by ``build_record`` from genuine artifacts (``over``: fields replaced afterwards)."""
+    part, lg = make_artifacts(path.parent / f"{path.stem}-art", cov, wall=s_per_rep * 83)
+    rec = cal.build_record(part, lg, part.parent, SHA)
+    rec["host"] = {"node": "slowhost", "cpu_count": 8, "platform": "linux", "python": "3.12"}
     rec.update(over)
     path.write_text(json.dumps(rec))
     return path
@@ -118,6 +162,7 @@ def test_lv5d_preflight_valid_fixture_needs_the_rate_record(
     rs: ModuleType,
     s5c: ModuleType,
     cal: ModuleType,
+    cov: ModuleType,
     lv5d_tree: Path,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -127,7 +172,7 @@ def test_lv5d_preflight_valid_fixture_needs_the_rate_record(
     assert refusal and "calibration rate not measured" in refusal  # fixture ok, rate not measured
     monkeypatch.setenv(RATE_ENV, str(tmp_path / "missing.json"))
     assert "not ok" in (rs.rehearsal_preflight("lv5d") or "")  # a path that is no file
-    monkeypatch.setenv(RATE_ENV, str(write_rate(tmp_path / "rate.json", cal)))
+    monkeypatch.setenv(RATE_ENV, str(write_rate(tmp_path / "rate.json", cal, cov)))
     assert (
         rs.rehearsal_preflight("lv5d") is None
     )  # a valid synthetic v7r2-layout fixture and a valid record pass
@@ -263,9 +308,13 @@ def test_rep_plan_table_fails_closed_without_a_measured_rate(s5d: ModuleType) ->
 
 
 def test_rep_plan_table_is_recomputed_from_the_measured_rate(
-    s5d: ModuleType, cal: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    s5d: ModuleType,
+    cal: ModuleType,
+    cov: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    rec = write_rate(tmp_path / "rate.json", cal, s_per_rep=12.0)
+    rec = write_rate(tmp_path / "rate.json", cal, cov, s_per_rep=12.0)
     monkeypatch.setenv(RATE_ENV, str(rec))
     rep = s5d.rep_plan_table("lv5d")
     assert rep["ok"] and rep["rate_source"] == "measured" and rep["reason"] is None
@@ -282,7 +331,7 @@ def test_rep_plan_table_is_recomputed_from_the_measured_rate(
         "lv5d", cal_rate=cal.load_record(rec)
     )  # the gated table is returned with a record
     # a slower measured rate exceeds the 1100 s target of 39 parts: not ok, the re-split is stated
-    slow = write_rate(tmp_path / "slow.json", cal, s_per_rep=13.0)
+    slow = write_rate(tmp_path / "slow.json", cal, cov, s_per_rep=13.0)
     bad = s5d.rep_plan_table("lv5d", str(slow))
     assert bad["ok"] is False and bad["calibration_parts_needed"] > 39
     assert "re-split" in bad["reason"] and str(bad["calibration_parts_needed"]) in bad["reason"]
@@ -306,9 +355,9 @@ def test_rep_plan_table_is_recomputed_from_the_measured_rate(
     ],
 )
 def test_rep_plan_table_malformed_record_is_not_ok(
-    case: str, s5d: ModuleType, cal: ModuleType, tmp_path: Path
+    case: str, s5d: ModuleType, cal: ModuleType, cov: ModuleType, tmp_path: Path
 ) -> None:
-    p = write_rate(tmp_path / "r.json", cal)
+    p = write_rate(tmp_path / "r.json", cal, cov)
     doc = json.loads(p.read_text())
     mutate = {
         "schema": lambda d: d.update(schema="x"), "negative rate": lambda d: d.update(s_per_rep=-1.0),
@@ -341,26 +390,192 @@ def test_throughput_step_gate_is_pass_false_without_the_record(
 
 
 def test_cal_rate_builder_derives_the_record_from_a_part_record_and_log(
-    cal: ModuleType, tmp_path: Path
+    cal: ModuleType, cov: ModuleType, tmp_path: Path
 ) -> None:
-    part = tmp_path / "v7r2-calibration-archive_fitted-p00.json"
-    part.write_text(json.dumps({"n": 83, "wall_mc_s": 996.6}))
-    log = tmp_path / "part.log"
-    log.write_text(
-        "collected 1 item\n.\n====== 1 passed, 3 deselected in 1100.60s (0:18:20) ======\n"
-    )
+    part, log = make_artifacts(tmp_path / "art", cov, wall=996.6, total=1100.6)
     out = tmp_path / "rate.json"
-    assert cal.main(["--part-record", str(part), "--part-log", str(log), "--log-dir", str(tmp_path),
-                     "--git-sha", "a" * 40, "--out", str(out)]) == 0  # fmt: skip
+    args = ["--part-record", str(part), "--part-log", str(log), "--log-dir", str(part.parent),
+            "--git-sha", SHA, "--out", str(out)]  # fmt: skip
+    assert cal.main(args) == 0
     got = cal.load_record(out)["record"]
     assert abs(got["s_per_rep"] - 996.6 / 83) < 1e-12 and abs(got["fixed_s"] - 104.0) < 1e-6
     assert got["part_record_sha256"] == hashlib.sha256(part.read_bytes()).hexdigest()
     with pytest.raises(SystemExit, match="exists"):
-        cal.main(["--part-record", str(part), "--part-log", str(log), "--log-dir", str(tmp_path),
-                  "--git-sha", "a" * 40, "--out", str(out)])  # fmt: skip
+        cal.main(args)
     log.write_text("2 failed in 3s\n")
-    with pytest.raises(SystemExit, match="passed"):
-        cal.build_record(part, log, tmp_path, "a" * 40)
+    with pytest.raises(ValueError, match="summary"):
+        cal.build_record(part, log, part.parent, SHA)
+    out.unlink()
+    with pytest.raises(SystemExit, match="not ok"):
+        cal.main(args)
+    assert not out.exists()
+
+
+# -- Codex REVIEW-6519d4ff: the measured-rate record is only accepted with verified controlled-run artifacts ------------
+def _rate_from(tmp_path: Path, cal: ModuleType, cov: ModuleType, **kw: Any) -> Path:
+    """Build a record from artifacts made with ``kw`` through the unchecked path (artifacts are valid only if ``kw`` is
+    empty): the record is assembled by hand from the files so that ``load_record`` is what refuses."""
+    part, lg = make_artifacts(tmp_path / "art", cov, **kw)
+    doc = json.loads(part.read_text())
+    wall, n = doc["wall_mc_s"], doc["n"]
+    total = wall + 70.0
+    rec = {"schema": cal.CAL_RATE_SCHEMA, "s_per_rep": wall / n, "fixed_s": 70.0, "reps": n, "wall_mc_s": wall,
+           "wall_total_s": total, "host": {"node": "h"}, "git_sha": SHA, "log_dir": str(part.parent),
+           "part_record": part.name, "part_record_sha256": hashlib.sha256(part.read_bytes()).hexdigest(),
+           "part_log": lg.name, "part_log_sha256": hashlib.sha256(lg.read_bytes()).hexdigest()}  # fmt: skip
+    out = tmp_path / "rate.json"
+    out.write_text(json.dumps(rec))
+    return out
+
+
+def test_genuine_artifacts_load_and_authorise_the_39_part_plan(
+    s5d: ModuleType, cal: ModuleType, cov: ModuleType, tmp_path: Path
+) -> None:
+    got = cal.load_record(_rate_from(tmp_path, cal, cov))
+    assert cal.require_validated(got) == got
+    assert s5d.declared_plans("lv5d", cal_rate=got)["v7r2 reference (1e6, block rate)"]
+    assert s5d.rep_plan_table("lv5d", got["path"])["ok"]
+
+
+@pytest.mark.parametrize(
+    ("kw", "match"),
+    [
+        ({"unseal": True}, "not sealed"),
+        ({"sha": "b" * 40}, "run_sha"),
+        ({"over": {"suite": "lv5c"}}, "suite"),
+        ({"over": {"layout": {"replicates": 14400, "reps_per_shard": 225, "parts": 39}}}, "layout"),
+        ({"over": {"schema": "ionmc-v7r-calibration-record-1"}}, "schema"),
+        ({"over": {"n": 40}}, "planned size"),
+        ({"over": {"surrogate": "rehearsal_block_sums"}}, "disagree"),
+        ({"over": {"reps_env": 100}}, "layout / reps_env"),
+        ({"over": {"run_sha": "unknown"}}, "run_sha"),
+        ({"log": "====== 1 passed in 1100.60s (0:18:20) ======\n"}, "PARTIAL"),
+        (
+            {
+                "log": "PARTIAL v7r2-calibration-archive_fitted-p00.json "
+                + "0" * 64
+                + "\n====== 1 passed in 1100.60s ======\n"
+            },
+            "PARTIAL",
+        ),
+        ({"log": "PARTIAL x.json " + "0" * 64 + "\n====== 1 failed in 3.00s ======\n"}, "passed"),
+    ],
+)
+def test_load_record_refuses_bad_artifacts(
+    kw: dict[str, Any], match: str, cal: ModuleType, cov: ModuleType, tmp_path: Path
+) -> None:
+    with pytest.raises(ValueError, match=match):
+        cal.load_record(_rate_from(tmp_path, cal, cov, **kw))
+
+
+@pytest.mark.parametrize(
+    "summary",
+    [
+        "====== 1 failed, 1 passed in 1100.60s ======",
+        "====== 2 passed in 1100.60s ======",
+        "====== 1 passed, 1 skipped in 1100.60s ======",
+        "====== 1 passed, 1 xfailed in 1100.60s ======",
+        "====== 1 passed, 1 error in 1100.60s ======",
+        "====== 1 passed in 1100.60s ======\n====== 1 passed in 1100.60s ======",
+        "no summary at all",
+    ],
+)
+def test_load_record_refuses_non_passing_logs(
+    summary: str, cal: ModuleType, cov: ModuleType, tmp_path: Path
+) -> None:
+    part, _ = make_artifacts(tmp_path / "ref", cov)
+    digest = json.loads(part.read_text())["content_sha256"]
+    log = f"PARTIAL {part.name} {digest}\n{summary}\n"
+    with pytest.raises(ValueError, match="summary|passed"):
+        cal.load_record(_rate_from(tmp_path, cal, cov, log=log))
+    log = (
+        f"PARTIAL {part.name} {digest}\nFAILED tests/x.py::t\n====== 1 passed in 1100.60s ======\n"
+    )
+    with pytest.raises(ValueError, match="FAILED"):
+        cal.load_record(_rate_from(tmp_path, cal, cov, log=log))
+
+
+@pytest.mark.parametrize(
+    ("mutate", "match"),
+    [
+        ("missing part", "part_record .* is not a file"),
+        ("missing log", "part_log .* is not a file"),
+        ("part hash", "part_record .*sha256 differs"),
+        ("log hash", "part_log .*sha256 differs"),
+        ("reps", "reps"),
+        ("wall", "wall_mc_s"),
+        ("total", "wall_total_s"),
+        ("git sha", "run_sha"),
+        ("dir", "is not a file"),
+        ("path name", "plain file name"),
+    ],
+)
+def test_load_record_refuses_inconsistent_record_vs_artifacts(
+    mutate: str, match: str, cal: ModuleType, cov: ModuleType, tmp_path: Path
+) -> None:
+    path = _rate_from(tmp_path, cal, cov)
+    rec = json.loads(path.read_text())
+    art = Path(rec["log_dir"])
+    if mutate == "missing part":
+        (art / rec["part_record"]).unlink()
+    elif mutate == "missing log":
+        (art / rec["part_log"]).unlink()
+    elif mutate == "part hash":
+        rec["part_record_sha256"] = "0" * 64
+    elif mutate == "log hash":
+        rec["part_log_sha256"] = "0" * 64
+    elif mutate == "reps":
+        rec["reps"] = 82
+        rec["s_per_rep"] = rec["wall_mc_s"] / 82
+    elif mutate == "wall":
+        rec["wall_mc_s"] += 100.0
+        rec["s_per_rep"] = rec["wall_mc_s"] / rec["reps"]
+    elif mutate == "total":
+        rec["wall_total_s"] += 1.0
+    elif mutate == "git sha":
+        rec["git_sha"] = "b" * 40
+    elif mutate == "dir":
+        rec["log_dir"] = str(tmp_path / "nowhere")
+    elif mutate == "path name":
+        rec["part_log"] = "../art/part.log"
+    path.write_text(json.dumps(rec))
+    with pytest.raises(ValueError, match=match):
+        cal.load_record(path)
+
+
+def test_build_record_refuses_unverifiable_inputs(
+    cal: ModuleType, cov: ModuleType, tmp_path: Path
+) -> None:
+    part, lg = make_artifacts(tmp_path / "ok", cov)
+    for kw, match in (({"unseal": True}, "not sealed"), ({"sha": "b" * 40}, "run_sha"),
+                      ({"over": {"suite": "lv5c"}}, "suite")):  # fmt: skip
+        bad, bad_log = make_artifacts(tmp_path / f"bad{len(match)}{match[:2]}", cov, **kw)
+        with pytest.raises(ValueError, match=match):
+            cal.build_record(bad, bad_log, bad.parent, SHA)
+    with pytest.raises(ValueError, match="lie in log_dir"):
+        cal.build_record(part, lg, tmp_path, SHA)
+    with pytest.raises(ValueError, match="git_sha"):
+        cal.build_record(part, lg, part.parent, "abc")
+    plain = lg.parent / "plain.json"  # any JSON with n and wall_mc_s is no longer accepted
+    plain.write_text(json.dumps({"n": 83, "wall_mc_s": 996.6}))
+    with pytest.raises(ValueError, match="not sealed"):
+        cal.build_record(plain, lg, lg.parent, SHA)
+
+
+def test_declared_plans_refuses_a_plain_dict_and_a_changed_file(
+    s5d: ModuleType, cal: ModuleType, cov: ModuleType, tmp_path: Path
+) -> None:
+    for fake in ({"record": "validated by v7r2_cal_rate.load_record"},
+                 {"record": {}, "sha256": "0" * 64, "path": str(tmp_path / "none.json")}, 3):  # fmt: skip
+        with pytest.raises(SystemExit, match="not ok"):
+            s5d.declared_plans("lv5d", cal_rate=fake)  # type: ignore[arg-type]
+    path = _rate_from(tmp_path, cal, cov)
+    got = cal.load_record(path)
+    forged = {**got, "record": {**got["record"], "s_per_rep": 1.0}}
+    with pytest.raises(SystemExit, match="differs"):
+        s5d.declared_plans("lv5d", cal_rate=forged)
+    assert s5d.declared_plans("lv5d", cal_rate=got)
+    s5d.declared_plans("lv5c", cal_rate=None)  # the frozen suites are untouched by the gate
 
 
 # -- --print-hashed-source-digest, generation names, builder ----------------------------------------------------

@@ -1271,7 +1271,9 @@ def rehearsal_preflight(suite: str, only: list[str] | None = None, seed_base: in
     the layout) against the CURRENT hashed-source digest of lv5d; absence, inconsistency and staleness refuse the
     suite before any step runs. Then, if the selection contains the throughput step or a V7-R2 pytest step (or is the
     full suite), the measured calibration-rate record ``IONMC_V7R2_CAL_RATE_RECORD`` must exist and validate
-    (``v7r2_cal_rate``; Amendment 20 (f)8): the V7-R2 calibration is never started on the extrapolated rate.
+    (``v7r2_cal_rate``; Amendment 20 (f)8): the V7-R2 calibration is never started on the extrapolated rate. The
+    record is accepted only after ``load_record`` re-opened and verified the sealed lv5d calibration part record and
+    the passing single-part pytest log it names, their hashes, run SHA, ``n`` and wall times (Codex REVIEW-6519d4ff).
     ``hr5d`` has no V7-R2 calibration step and consumes no rehearsal fixture: no preflight.
 
     Exempt is only the controlled generation path (:func:`rehearsal_generation_run`: the shard steps of the suite at
