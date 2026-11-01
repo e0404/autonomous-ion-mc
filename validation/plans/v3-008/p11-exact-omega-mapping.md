@@ -165,3 +165,14 @@ Planner, at head `ce4d3d6a`. No new computation; this propagates the completed b
   `fdm_extrapolated` flag with the p1v1_eq energy in the metadata (I0). No further coverage is claimed.
 - **State after P11c:** the extrapolation is declared, theory-bounded (I11-ext, SEEN), carried in the uncertainty and
   routed to the intervention. Nothing in the mapping, its scripts or its tests changes, so the hashes above stand.
+
+## P11d. Implementation in src (addendum 2026-11-01)
+
+OPEN items 1 (proton b-tables beyond 300 MeV) and 3 (Warp twin of the root) are closed by the src implementation
+(`src/ionmc/physics/exact_omega.py`; plan rows I0 and I11-map, dated notes 2026-11-01): a dedicated mapping proton
+path to 4000 MeV (not 3 GeV: C/O at 430 MeV/u in beryllium reach 3.15/3.40 GeV), a bracketed Illinois root solve per
+step with status codes and fail-closed handling, the twin generated from the same source text, Warp CPU float64
+bit-identical to the twin on the compared states and float32 within analytic budgets, the z = 1 identity by a host-set
+flag. The source's proton-equivalent energy is defined as the maximum over a depth scan (I0 note). The
+`fdm_extrapolated` flag is True at all six standard/end cases (within 2 % of the P11b energies). The extrapolation
+itself remains the declared limitation of P11c.

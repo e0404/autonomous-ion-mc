@@ -513,9 +513,11 @@ class BetheStoppingSource:
                 "bloch": o.bloch,
                 "mott": o.mott,
                 "effective_charge": o.effective_charge,
-                # carried only when set, so the default metadata (and the transport-table
-                # identity/hash that includes it) is unchanged
-                **({"ls": o.ls} if o.ls != "off" else {}),
+                # carried only for z >= 2 with a non-default mode: the default metadata (and the
+                # transport-table identity/hash that includes it) is unchanged, and a proton
+                # table is bit-identical whatever the (ignored) request; the requested and the
+                # effective mode are recorded in the effective configuration instead
+                **({"ls": o.ls} if o.ls != "off" and projectile.z >= 2 else {}),
             },
             "start_range": "constant-S approximation a*E_min/S(E_min)",
         }

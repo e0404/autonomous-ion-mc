@@ -615,6 +615,13 @@ and falsification), and V5-SS (held-out, single scattering) if its run condition
 - Fail closed for: energies outside the domain (including E0 + 6σ_E); He-3 and other ions;
   `nist-star` for C/O; nuclear on.
 
+**Dated note 2026-11-01 (§3 implementation).** The exact-Ω mapping is implemented in `src/ionmc/physics/exact_omega.py`
+as the declared per-step root solve (bracketed Illinois on ln pv_eq, ≤ 19 iterations observed, float64 b residual
+≤ 2e-12), with a dedicated proton path to 4000 MeV, fail-closed status codes, the `fdm_extrapolated` flag and the
+source proton-equivalent energy defined as the maximum over a depth scan (plan I0/I11-map notes; P11d). The requested
+and effective LS modes are recorded in the effective configuration outside the table hash (Codex REVIEW-68f985dd minor).
+The per-step cost at transport scale is not yet measured.
+
 ## 6. Data roles and lineage (r4)
 
 | Item | Role | Shared with Geant4/TOPAS? |

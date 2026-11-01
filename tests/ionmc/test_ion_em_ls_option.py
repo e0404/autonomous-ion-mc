@@ -128,14 +128,19 @@ def test_config_validation_rejects_corrupted_option(make_config) -> None:
 
 
 def test_option_is_persisted_in_the_effective_configuration(make_config) -> None:
+    """A proton run is bit-identical whatever the (ignored) LS request: same table hash, no LS in
+    the table metadata; the configuration states requested and effective mode (new tests in
+    ``test_ion_em_mapping_src.py``)."""
     cfg = make_config()
-    default = validate(cfg).summary()
-    assert "ls" not in default["tables"]["materials"][0]["metadata"]["options"]
+    default = validate(cfg)
+    assert "ls" not in default.summary()["tables"]["materials"][0]["metadata"]["options"]
     src = BetheStoppingSource(options=BetheOptions(ls="eff"))
     eff = validate(replace(cfg, physics=replace(cfg.physics, stopping=src)))
     meta = eff.summary()["tables"]["materials"][0]["metadata"]
-    assert meta["options"]["ls"] == "eff"
-    assert eff.tables.sha256 != validate(cfg).tables.sha256  # the request is part of the identity
+    assert "ls" not in meta["options"]
+    assert eff.tables.sha256 == default.tables.sha256  # protons: the request is not an identity
+    phys = eff.summary()["physics"]
+    assert (phys["ls_requested"], phys["ls_effective"]) == ("eff", "off")
 
 
 def test_ion_table_build_uses_ls_in_table() -> None:
