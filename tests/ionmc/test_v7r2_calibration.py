@@ -69,6 +69,14 @@ def _env_run() -> dict[str, str]:
     }
 
 
+def _host_identity() -> dict[str, Any]:
+    """The executing process's host block and controlled host-runner run id, sealed into every calibration part
+    record (``v7r2_cal_rate`` binds the measured-rate record to them; Codex REVIEW-ffe77aac)."""
+    return {"host": {"node": platform.node(), "platform": platform.platform(), "machine": platform.machine(),
+                     "cpu_count": os.cpu_count(), "python": platform.python_version()},
+            "host_run_id": os.environ.get("IONMC_HOST_RUN_ID", "unknown")}  # fmt: skip
+
+
 def _write_sealed(cov: ModuleType, out_dir: Path, name: str, rec: dict[str, Any]) -> dict[str, Any]:
     sealed = cov._seal(rec)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -193,7 +201,8 @@ def run_cal_part(cov: ModuleType, v7r: ModuleType, v5b: ModuleType, sampler: Any
            "kappa_record_sha256": kappa_doc["content_sha256"], "alpha_tost": v7r.V7R2_ALPHA_TOST,
            "layout": {"replicates": v7r.V7R2_REPLICATES if replicates is None else replicates,
                       "reps_per_shard": v7r.V7R2_REPS_PER_SHARD if reps_per_shard is None else reps_per_shard, "parts": parts},
-           **_env_run(), "wall_mc_s": wall, "wall_per_replicate_s": wall / n, "rng": v7r.rng_record(), "B": b,
+           **_env_run(), **_host_identity(), "wall_mc_s": wall, "wall_per_replicate_s": wall / n,
+           "rng": v7r.rng_record(), "B": b,
            "boot_n": v5b.V7_BOOT_N if n_boot is None else n_boot, "python": platform.python_version()}  # fmt: skip
     return _write_sealed(cov, out_dir, f"v7r2-calibration-{surrogate}-p{part:02d}.json", rec)
 

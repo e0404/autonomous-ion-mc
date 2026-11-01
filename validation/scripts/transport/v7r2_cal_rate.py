@@ -11,15 +11,29 @@ MEASURED rate record, a JSON file named by the environment variable ``IONMC_V7R2
      "s_per_rep": <wall_mc_s / n of the measured part>,   "fixed_s": <per-part fixed cost, >= the 70 s default>,
      "reps": <repetitions of the measured part (n)>,       "wall_mc_s": <its Monte Carlo wall time>,
      "wall_total_s": <pytest wall time of the part>,
-     "host": {"node": ..., "cpu_count": ..., "platform": ..., "python": ...},
+     "host": {"node": ..., "platform": ..., "machine": ..., "cpu_count": ..., "python": ...},  # = the sealed part record's
+     "host_run_id": <controlled host-runner run id of the measurement>,
+     "validation_id": <exact-SHA local validation record id, VAL-YYYYMMDD-HHMMSS-XXXXXX>,
      "git_sha": <40 hex of the measured tree>,             "log_dir": <directory with the pytest log and part record>,
      "part_record": <file name of the sealed calibration part record>, "part_record_sha256": <64 hex>,
      "part_log": <file name of the pytest log>,            "part_log_sha256": <64 hex>}
 
-``python v7r2_cal_rate.py --part-record ... --part-log ... --log-dir ... --git-sha ... --out ...`` builds the record
-from the sealed part record (``wall_mc_s``, ``n``) and the pytest log (``1 passed in X s``); the rate is the Monte
-Carlo wall time per repetition and the fixed cost is ``max(70 s, wall_total - wall_mc)`` (conservative). No
-measurement is made here.
+``python v7r2_cal_rate.py --part-record ... --part-log ... --log-dir ... --git-sha ... --host-run-id ...
+--validation-id ... --out ...`` builds the record from the sealed part record (``wall_mc_s``, ``n``, ``host``,
+``host_run_id``) and the pytest log (``1 passed in X s``); the rate is the Monte Carlo wall time per repetition and the
+fixed cost is ``max(70 s, wall_total - wall_mc)`` (conservative). No measurement is made here.
+
+Binding (Codex REVIEW-ffe77aac). The record carries exactly the fields above and no other: every planning field is
+DERIVED and recomputed by the loader from the verified artifacts, ``s_per_rep = wall_mc_s / reps`` and
+``fixed_s = max(MIN_FIXED_S, wall_total_s - wall_mc_s)`` (stored values must agree, relative 1e-12); an undeclared
+field is refused. ``host`` is bound to the SEALED part record: the part writer
+(``tests/ionmc/test_v7r2_calibration.py``) seals a ``host`` block {node, platform, machine, cpu_count, python} of the
+executing process and the ``host_run_id`` read from ``IONMC_HOST_RUN_ID`` ("unknown" when unset, which is refused);
+the loader compares the rate record's ``host`` and ``host_run_id`` with the sealed block, never trusting the rate
+record's own copy. LIMIT of repository code: the attestation that the measurement ran to a clean exit on the slow host
+lives in the protected validation-manager record named by ``validation_id`` (orchestrator-recorded at the exact SHA)
+and the host-runner run ``host_run_id``. Both stores are outside the repository and cannot be read here; the loader
+binds them by id (format, presence, agreement of ``host_run_id`` with the sealed record) but cannot verify them.
 
 Verification (fail closed; Codex REVIEW-6519d4ff). A record is only accepted, by :func:`load_record` and before
 :func:`build_record` writes one, after the underlying controlled-run artifacts have been re-opened and checked
@@ -51,7 +65,6 @@ import hashlib
 import json
 import math
 import os
-import platform
 import re
 import sys
 from pathlib import Path
@@ -63,6 +76,12 @@ MIN_FIXED_S = 70.0  # v7r.R2_CAL_FIXED_S (the planning value; the record may onl
 NOT_MEASURED = "not ok: calibration rate not measured"
 _HEX40 = re.compile(r"[0-9a-f]{40}")
 _HEX64 = re.compile(r"[0-9a-f]{64}")
+_RUN_ID = re.compile(r"[A-Za-z0-9_.:-]{8,}")
+_VALIDATION_ID = re.compile(r"VAL-\d{8}-\d{6}-[0-9A-F]{6}")
+HOST_FIELDS = ("node", "platform", "machine", "cpu_count", "python")
+RECORD_FIELDS = frozenset((
+    "schema", "s_per_rep", "fixed_s", "reps", "wall_mc_s", "wall_total_s", "host", "host_run_id", "validation_id",
+    "git_sha", "log_dir", "part_record", "part_record_sha256", "part_log", "part_log_sha256"))  # fmt: skip
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
 PART_SCHEMA = "ionmc-v7r2-calibration-record-1"  # v7r.CAL2_SCHEMA
@@ -85,6 +104,28 @@ def _number(rec: dict[str, Any], key: str, *, positive: bool) -> float:
     return float(v)
 
 
+def validate_host(host: Any) -> dict[str, Any]:
+    """The host block {node, platform, machine, cpu_count, python} (exactly these fields) or ``ValueError``."""
+    if not (isinstance(host, dict) and set(host) == set(HOST_FIELDS)):
+        raise ValueError(f"host must be an object with exactly the fields {list(HOST_FIELDS)}")
+    for k in ("node", "platform", "machine", "python"):
+        if not (isinstance(host[k], str) and host[k]):
+            raise ValueError(f"host.{k} must be a non-empty string")
+    cpu = host["cpu_count"]
+    if isinstance(cpu, bool) or not isinstance(cpu, int) or cpu < 1:
+        raise ValueError("host.cpu_count must be a positive integer")
+    return host
+
+
+def validate_ids(host_run_id: Any, validation_id: Any) -> None:
+    """Format of the two protected-store ids (presence and format only: the stores are not readable here)."""
+    if not (isinstance(host_run_id, str) and host_run_id != "unknown" and _RUN_ID.fullmatch(host_run_id)):
+        raise ValueError("host_run_id must be a controlled host-runner run id (>= 8 chars of [A-Za-z0-9_.:-], "
+                         "not 'unknown')")  # fmt: skip
+    if not (isinstance(validation_id, str) and _VALIDATION_ID.fullmatch(validation_id)):
+        raise ValueError("validation_id must be a validation record id VAL-YYYYMMDD-HHMMSS-XXXXXX")
+
+
 def validate_record(rec: Any) -> dict[str, Any]:
     """The record itself or ``ValueError`` (every field of the module docstring is required and checked)."""
     if not isinstance(rec, dict):
@@ -98,13 +139,14 @@ def validate_record(rec: Any) -> dict[str, Any]:
     reps = rec.get("reps")
     if isinstance(reps, bool) or not isinstance(reps, int) or reps < 1:
         raise ValueError("reps must be a positive integer")
-    if abs(s - wall / reps) > 1e-9 * max(1.0, s):
-        raise ValueError("s_per_rep is not wall_mc_s / reps")
+    extra = set(rec) - RECORD_FIELDS
+    if extra or RECORD_FIELDS - set(rec):
+        raise ValueError(f"record fields differ from the declared set (undeclared {sorted(extra)}, "
+                         f"missing {sorted(RECORD_FIELDS - set(rec))})")  # fmt: skip
     if fixed < MIN_FIXED_S:
         raise ValueError(f"fixed_s {fixed} is below the planning value {MIN_FIXED_S}")
-    host = rec.get("host")
-    if not (isinstance(host, dict) and isinstance(host.get("node"), str) and host["node"]):
-        raise ValueError("host must be an object with a non-empty node")
+    validate_host(rec.get("host"))
+    validate_ids(rec.get("host_run_id"), rec.get("validation_id"))
     if not (isinstance(rec.get("git_sha"), str) and _HEX40.fullmatch(rec["git_sha"])):
         raise ValueError("git_sha must be 40 lowercase hex digits")
     if not (isinstance(rec.get("log_dir"), str) and rec["log_dir"]):
@@ -169,6 +211,11 @@ def verify_part_record(path: Path, git_sha: str) -> dict[str, Any]:
         raise ValueError(f"part record {path.name}: n {n!r} is not the planned size {part_size(part)} of part {part}")
     if isinstance(wall, bool) or not isinstance(wall, (int, float)) or not math.isfinite(wall) or wall <= 0.0:
         raise ValueError(f"part record {path.name}: wall_mc_s is not a positive finite number")
+    try:
+        validate_host(doc.get("host"))
+        validate_ids(doc.get("host_run_id"), "VAL-00000000-000000-000000")  # the validation id is not in the part
+    except ValueError as exc:
+        raise ValueError(f"part record {path.name}: sealed host identity unusable: {exc}") from exc
     return doc
 
 
@@ -212,10 +259,23 @@ def verify_artifacts(rec: dict[str, Any]) -> None:
         raise ValueError(f"reps {rec['reps']} differs from n {doc['n']} of the part record")
     if doc["wall_mc_s"] != rec["wall_mc_s"]:
         raise ValueError(f"wall_mc_s {rec['wall_mc_s']} differs from the part record's {doc['wall_mc_s']}")
+    if rec["host"] != doc["host"]:
+        raise ValueError(f"host {rec['host']} differs from the sealed part record's {doc['host']}")
+    if rec["host_run_id"] != doc["host_run_id"]:
+        raise ValueError(f"host_run_id {rec['host_run_id']!r} differs from the sealed part record's "
+                         f"{doc['host_run_id']!r}")  # fmt: skip
     total = verify_log(files["part_log"].read_text(errors="replace"), files["part_record"].name,
                        doc["content_sha256"])  # fmt: skip
     if not math.isclose(total, rec["wall_total_s"], rel_tol=1e-9):
         raise ValueError(f"wall_total_s {rec['wall_total_s']} differs from the pytest summary time {total}")
+    # derived planning fields, recomputed from the verified artifacts (Codex REVIEW-ffe77aac)
+    want_s = doc["wall_mc_s"] / doc["n"]
+    if not math.isclose(rec["s_per_rep"], want_s, rel_tol=1e-12):
+        raise ValueError(f"s_per_rep {rec['s_per_rep']} differs from wall_mc_s / reps = {want_s}")
+    want_fixed = max(MIN_FIXED_S, total - doc["wall_mc_s"])
+    if not math.isclose(rec["fixed_s"], want_fixed, rel_tol=1e-12):
+        raise ValueError(f"fixed_s {rec['fixed_s']} differs from max({MIN_FIXED_S}, wall_total_s - wall_mc_s) = "
+                         f"{want_fixed}")  # fmt: skip
 
 
 def load_record(path: str | os.PathLike[str]) -> dict[str, Any]:
@@ -239,10 +299,13 @@ def record_from_env() -> dict[str, Any] | None:
     return load_record(path) if path else None
 
 
-def build_record(part_record: Path, part_log: Path, log_dir: Path, git_sha: str) -> dict[str, Any]:
+def build_record(part_record: Path, part_log: Path, log_dir: Path, git_sha: str, host_run_id: str,
+                 validation_id: str) -> dict[str, Any]:  # fmt: skip
     """The record of one measured calibration part (see the module docstring). Every value comes from the verified
-    sealed part record and pytest log (which must lie in ``log_dir``); the result passes :func:`verify_artifacts`
-    or ``ValueError`` is raised."""
+    sealed part record and pytest log (which must lie in ``log_dir``); ``host`` is copied from the sealed record; the
+    two ids are required (``"unknown"`` refused); the result passes :func:`verify_artifacts` or ``ValueError`` is
+    raised."""
+    validate_ids(host_run_id, validation_id)
     if not (isinstance(git_sha, str) and _HEX40.fullmatch(git_sha)):
         raise ValueError("git_sha must be 40 lowercase hex digits")
     if not (part_record.is_file() and part_log.is_file()):
@@ -260,8 +323,7 @@ def build_record(part_record: Path, part_log: Path, log_dir: Path, git_sha: str)
     rec = {
         "schema": CAL_RATE_SCHEMA, "s_per_rep": wall / n, "fixed_s": max(MIN_FIXED_S, total - wall),
         "reps": n, "wall_mc_s": wall, "wall_total_s": total,
-        "host": {"node": platform.node(), "cpu_count": os.cpu_count(), "platform": platform.platform(),
-                 "python": platform.python_version()},
+        "host": {k: doc["host"][k] for k in HOST_FIELDS}, "host_run_id": host_run_id, "validation_id": validation_id,
         "git_sha": git_sha, "log_dir": stored,
         "part_record": part_record.name, "part_record_sha256": _sha256(part_record),
         "part_log": part_log.name, "part_log_sha256": _sha256(part_log),
@@ -285,17 +347,34 @@ def require_validated(got: Any) -> dict[str, Any]:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=(__doc__ or "").split("\n")[0])
-    ap.add_argument("--part-record", required=True, help="sealed v7r2-calibration-<surrogate>-p<NN>.json of the part")
+    ap.add_argument(
+        "--part-record",
+        required=True,
+        help="sealed v7r2-calibration-<surrogate>-p<NN>.json of the part",
+    )
     ap.add_argument("--part-log", required=True, help="the logged pytest output of that single part")
     ap.add_argument("--log-dir", required=True, help="directory holding both files (recorded)")
     ap.add_argument("--git-sha", required=True, help="full SHA of the tree the part was measured at")
+    ap.add_argument("--host-run-id", required=True, help="controlled host-runner run id of the measurement")
+    ap.add_argument(
+        "--validation-id",
+        required=True,
+        help="exact-SHA validation record id (VAL-YYYYMMDD-HHMMSS-XXXXXX)",
+    )
     ap.add_argument("--out", required=True, help="rate record to write (refuses to overwrite)")
     a = ap.parse_args(argv)
     out = Path(a.out)
     if out.exists():
         raise SystemExit(f"{out} exists")
     try:
-        rec = build_record(Path(a.part_record), Path(a.part_log), Path(a.log_dir), a.git_sha)
+        rec = build_record(
+            Path(a.part_record),
+            Path(a.part_log),
+            Path(a.log_dir),
+            a.git_sha,
+            a.host_run_id,
+            a.validation_id,
+        )
     except ValueError as exc:
         raise SystemExit(f"not ok: {exc}") from exc
     out.write_text(json.dumps(rec, sort_keys=True, indent=1) + "\n")
