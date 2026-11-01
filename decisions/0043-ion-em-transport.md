@@ -1,4 +1,6 @@
-# 0043 — Helium, carbon and oxygen electromagnetic transport (DRAFT r6 for independent review)
+# 0043 — Helium, carbon and oxygen electromagnetic transport (revision 1 — frozen with the plan revision 1)
+
+> **Status: frozen with the plan revision 1** (`validation/plans/v3-008-acceptance.md`; prepared 2026-11-01 by the planner at f694b747, round FREEZE-1 in `validation/plans/v3-008/review.md`). The decision is frozen by the same reviewed freeze commit as the plan, named by `validation/plans/v3-008/p9-freeze-record.md`. That commit is made only after the freeze conditions FC-1 (P1 completion) and FC-2 (P2 follow-up residuals and the P4 material printout) of the plan's §P freeze audit are disposed; until then this revision is a freeze candidate. No V3-008 transport or qualification result exists at f694b747. The DRAFT r6 status text below is kept as history.
 
 > **Status: DRAFT r6 (2026-11-01, amended for Codex REVIEW-b469dff8, round V3-008-3), not yet frozen.** Commit history (exact): r3 was committed with the plan at 2632a46 (the task's first scientific commit, a draft); r5 at 4927958, amended at 3d2547a, 070b07f, 00af9a6 and b3eef90 while pre-freeze checks were open; r4 was not committed separately. The frozen revision is a separate reviewed commit after §P closes. r5 status text follows: r3 was committed at 2632a465 and reviewed in round V3-008-1; r4/r5 fold in the pre-freeze records P8, P7, P2, P1/P1b (committed at 6e155b56) and the review rounds V3-008-1 and V3-008-2 (`validation/plans/v3-008/review.md`; the six V3-008-2 wording changes applied). The decision is frozen by a reviewed commit only after the pre-freeze checks of the acceptance plan (§P, steps 1–7) close. The decision and plan are frozen before any TRANSPORT or QUALIFICATION result; the pre-freeze construction/calibration computations P1/P1b (Molière–Hanson reference, candidate tables) and P11 (I11-rel/I11-abs values, evaluated at 070b07f0 and regenerated at 00af9a6c) exist, are disclosed and are not qualification evidence; the P2/P10 source readings and the P5/P5b/P6 data inspections also exist and are disclosed (amended for Codex REVIEW-12614ced).
 
@@ -14,6 +16,7 @@
     §6 Molière–Hanson row.
   - Round V3-008-4 (Codex REVIEW-e0b586fd, 2026-11-01; dated notes, earlier text kept): the operative §3 "Freezing" text replaced by the actual chronology (finding 2); the withdrawn independent-coverage claim for the f_dM extrapolation propagated through §3, §6 and the limitations (finding 3); the V5-SS budget committed as `validation/scripts/ion_em/ss_budget.py` with tests (finding 4, P10 §7.8); finding 1 in `p3-lindhard-sorensen.md`.
   - Round V3-008-5 (Codex REVIEW-6a14f4ec, 2026-11-01; dated notes, earlier text kept): finding 1 — the LS option implemented with default "off" by the dated §1 amendment (record `validation/plans/v3-008/p3b-ls-default.md`), the uncertainty statement extended; finding 2 — V5-SS uses the plan's TOST rule, and the statistics are raised to 6e4 TOPAS primaries / 4e5 ionmc histories per case (§3 dated note).
+  - **Revision 1 (freeze revision; planner, 2026-11-01, at f694b747; dated notes, earlier text kept):** status "frozen with the plan revision 1"; the single-scattering clause of the lateral-gap wording amended and the second gap (f_dM extrapolation) added, both by orchestrator decision (§3 "Lateral evidence gap", revision 1 amendment); the pre-registration list of §3 "Freezing" updated to f694b747; the P2 follow-up and P4 outcomes for the Geant4 ion models recorded (Context, dated note); the open P1 completion pointed to the freeze condition FC-1 (§3 P1/P1b findings). No model choice, tolerance or row definition changed.
   - r6 applies the dispositions of Codex REVIEW-b469dff8 (round V3-008-3): the draft commit history (above); the P6 lateral EVIDENCE GAP propagated; the V5-SS model lineage and class (P10 §7; registration blocked until the Geant4 ion single-scattering model is read); the f_dM domain extrapolation (§3, note of 2026-11-01; P11b). Not accepted. To be reviewed
   independently and committed together with `validation/plans/v3-008-acceptance.md` before any
   V3-008 transport or qualification result exists; the pre-freeze construction/calibration
@@ -111,6 +114,17 @@ sources pinned by sha256. FACT unless marked.
 - **Ion and alpha multiple scattering** = `G4hMultipleScattering("ionmsc")` with no model set. Urban
   is INFERRED strong as the default; the follow-up reads `G4hMultipleScattering.cc` (acquired).
 - **Protons:** opt4 protons use WentzelVI (INFERRED strong; same follow-up).
+- **Dated note 2026-11-01 (revision 1; P2 follow-up F1–F5 at 070b07f, P4 smokes at 41a1f8a/a66867d/ce4d3d6):**
+  - GenericIon ("ionmsc") and alpha ("msc") get `G4hMultipleScattering` with no model set, hence `G4UrbanMscModel`
+    (FACT [HMSC] L76); no `G4CoulombScattering` for them in opt4. The P4 printouts show UrbanMsc for both and
+    WentzelVIUni + CoulombScat for the proton. So V2 is Case C (plan V2 row, revision 1 note).
+  - Alpha: ionIoni BraggIon below 7.9452 MeV, `G4BetheBlochModel` above (P4 printout). `GenericIon(2,4)` is mapped to
+    `alpha` (P4 verbose smokes), so He never uses LindhardSorensen. The He REF/V1 cases use `alpha`, and the He
+    lineage is the BetheBloch lineage (orchestrator decision; plan §B).
+  - Still not settled: whether the `G4BetheBlochModel` table is the ICRU 90 proton/alpha array (the file was hashed
+    from a scratch download in `p3b-ls-default.md` §2, not acquired, and its ICRU 90 branch was "not settled", §5).
+    The claim stays "research note, partly confirmed"; it is part of the freeze condition FC-2. The lineage rows
+    (§6) already assume the shared lineage.
 
 **Reference engines.**
 - TOPAS transports ions. The only existing ion TOPAS case is a full-physics QMD smoke run
@@ -315,6 +329,9 @@ The ion/proton relation at equal velocity and equal x/R is exact, and is tested 
   - **For Pb, P1's pre-declared ≤ 1.0 % proton validation FAILED**: +1.10 % and +1.32 % at
     x/R1 ≥ 0.9. The failure is recorded as FAILED and preserved. Attribution on ICRU 49 ranges is
     still to do (P1 completion); clearing it later does not erase the failed record.
+    **Revision 1 (2026-11-01):** at f694b747 P1 completion (plan §P order step 5) has no record. It is the freeze
+    condition FC-1 of the plan's §P freeze audit (`p9-freeze-record.md` §0): executed before the freeze commit, or
+    recorded "not done" by a dated orchestrator amendment. Pb stays FAILED unless cleared.
   - **Water is not validated directly**: Gottschalk's table has no compound block.
   - **The compound Fano rule** (electron term weighted by Z, nucleus by Z²; 1/(pv)² slab average of D)
     **is derived, not sourced.**
@@ -450,6 +467,15 @@ With the r6 component, the quadrature of the upper values is ≈ 4.9 %, so the �
 - **Rows carried as disclosed SEEN, not pre-registered:** I11-rel (the gate, tolerance unchanged), I11-abs and I11-ext (report-only), I11-map (its deterministic identities ran at 070b07f0), I2 (regression on seen table values), I3b (ii) (the P3 curve), and the P1/P1b reference tables.
 - Nothing is fitted to the reference, TOPAS or transport output. (Unchanged.)
 - Superseded r5 text, quoted: "The exact-Ω mapping, its b formulas, its evaluation choice (root solve or a bounded tabulation) and the I11-map and I11-rel tests are committed **before the mapping is evaluated against the Molière–Hanson reference**. Their hashes go into P9."
+- **Dated note 2026-11-01 (revision 1; lists updated from the records at ce4d3d6a to f694b747).** The src mapping
+  implementation and its tests (683480b, rebound at f694b747) ran before the freeze. The following sub-items are
+  therefore SEEN implementation checks, not pre-registered: in I0, the `fdm_domain_status` fields, the
+  `fdm_extrapolated` flag at the standard and end cases, the fail-closed mapping-edge rule (4000 MeV) and the
+  `ls_requested`/`ls_effective` persistence; in I1, the twin-vs-Warp CPU f64/f32 parity and the completeness check of
+  the exact-Ω mapping callables; and the I11-map residuals of the src implementation. The remaining I0 and I1
+  sub-items (species, the other fail-closed rules, the charge-argument functions) are unseen. The LS-option tests
+  compare the three variants with each other, not with the I3 reference, so I3 and I3b (i) stay unseen. R2 is not yet
+  evaluated against an ion-enabled build. The full per-row list is `p9-freeze-record.md` §6.
 
 **Rows.** I11-map (CI, gating): implementation of the root. **I11-rel (LV, gating)**: the relative
 check, failure STOP. **I11-abs** (informative): the absolute comparison, reported with the
@@ -576,6 +602,32 @@ Intervention wording, verbatim:
 > accept that V3-008 integrates with ion lateral spreading supported only by theory-derived mapping
 > and implementation checks (no independent evidence), recorded as a gap in the ledger.
 
+**Revision 1 amendment (2026-11-01; orchestrator decisions (a) and (b) above; recorded before any V3-008 transport or
+qualification result).** The wording above stays as the r5 record. Its clause, quoted verbatim:
+"or an accessible single-scattering MC reference". Amended wording: "or an accessible single-scattering MC reference whose screened-Coulomb cross-section physics is independent of the model used by the exact-Ω mapping; a reference that shares the screened Rutherford law and Molière's Born screening form (including the Geant4 single-scattering configuration of V5-SS, `G4IonCoulombScatteringModel`, branch B) does not satisfy this input". The orchestrator files the intervention at
+the freeze, whatever V5-SS shows, category inaccessible-information, with this wording (plan section "Intervention at
+the freeze (to be filed by the orchestrator)"):
+
+> Unavailable input: (1) independent evidence of the charge dependence of lateral spreading for He/C/O
+> in water at 50–430 MeV/u, i.e. measured lateral dose widths or angular spreads with stated
+> uncertainties (candidates Parodi 2013, Schwaab 2011, Tessonnier 2017: no open numeric tables
+> found), or an accessible single-scattering MC reference whose screened-Coulomb cross-section
+> physics is independent of the model used by the exact-Ω mapping; a reference that shares the
+> screened Rutherford law and Molière's Born screening form (including the Geant4 single-scattering
+> configuration of V5-SS, `G4IonCoulombScatteringModel`, branch B) does not satisfy this input;
+> (2) independent coverage of the f_dM evaluation beyond its 300 MeV proton-qualified domain
+> (proton-equivalent states up to about 2.5 GeV at the standard points and upper ends), which is
+> declared and bounded only within the same Molière theory (row I11-ext). Request: provide access to
+> such data or such a reference, or accept that V3-008 integrates with ion lateral spreading
+> supported only by theory-derived mapping and implementation checks and by shared-lineage
+> single-scattering MC evidence (V5-SS; no independent evidence), and with the f_dM extrapolation as
+> a declared limitation (a ≤ 1.5 % component of the ±5 % model uncertainty), recorded as gaps in the
+> ledger.
+
+The sentence "It is used only after P6 … fails and V5-SS is withdrawn" at the head of this block is superseded by
+decision (a). V5-SS stays a gating row (shared-lineage single-scattering evidence, branch B); its result and class go
+into the ledger when it runs.
+
 **Gating MCS rows:** I9, I10, I11-map, I11-rel, I12 and I15 (self-consistency, theory consistency
 and falsification), and V5-SS (held-out, single scattering) if its run condition holds.
 
@@ -657,3 +709,6 @@ The per-step cost at transport scale is not yet measured.
 ## Validation strategy
 
 Frozen in `validation/plans/v3-008-acceptance.md` (draft r6 alongside).
+
+**Revision 1 (2026-11-01):** frozen in `validation/plans/v3-008-acceptance.md` revision 1, by the reviewed freeze
+commit named in `validation/plans/v3-008/p9-freeze-record.md`, once FC-1 and FC-2 are disposed.

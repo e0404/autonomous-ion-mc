@@ -205,3 +205,21 @@
      - plan V5-SS row and §E (dated notes), P9 (iv) (new module and test hashes bound at commit);
      - decision 0043 §3 (dated note).
    - The module's new golden values are SCRIPT-GENERATED regression values. The round V3-008-4 `budget()` and all earlier goldens are unchanged.
+
+# Round FREEZE-1 (2026-11-01; planner; freeze revision prepared at f694b747; not a review verdict — the independent Codex and scientific reviews of the freeze commit follow)
+
+**What revision 1 binds** (`validation/plans/v3-008/p9-freeze-record.md`):
+- 53 repository files by sha256 at f694b747: the Molière–Hanson reference, the P11 mapping script, the P3 and V5-SS calculations (6); their tests and the seed guard (7); the src LS option, exact-Ω mapping, stopping and config, plus `pyproject.toml` (5); the pre-freeze records and research notes (14); the ten scorer-free smoke cases and the reference-case README (21).
+- 34 external sources by sha256: 29 acquired (Geant4 v11.4.2 sources of §G 1/1b/1c, G4EMLOW 8.8 and four members, libdEdx and three members, Sihver 1998) and 5 scratch-referenced lineage files.
+- 15 required ancestor commits (2632a46 … f694b74, with 6e155b5 added by the planner); the clean-tree and diff rule; the seed reservation; the smoke run ids (nine as recorded prefixes, full ids to be copied by the orchestrator).
+- The pre-registration status per row, updated to f694b747: the I0 mapping sub-items and the I1 mapping-callable parity exercised by the 683480b tests are carried as SEEN, besides the I11 rows, I2, I3b (ii) and the P1/P1b tables.
+- The statement that no transport or qualification row result exists at f694b747.
+- Orchestrator decisions recorded as amendments: the single-scattering clause of the lateral-gap wording amended; the intervention filed at the freeze naming both gaps (charge dependence of lateral spreading; f_dM extrapolation); the f_dM extrapolation a declared limitation; He `alpha` naming with the BetheBloch lineage; the LS default off and the V5-SS branch B / TOST / 6e4 design (earlier rounds) bound. V2 = Case C recorded as the consequence of its pre-declared branch.
+
+**Audit outcome** (plan §P "Freeze audit (revision 1)"):
+- CLOSED: P8, P7, P2b, P3, P4 (with one record gap carried in FC-2), P10.
+- CLOSED-with-gap: P11 (SEEN; f_dM extrapolation declared), P5/P5b (TO-VERIFY items declared under row I3's pre-declared rule; icru90 origin OPEN, lineage only).
+- DECLARED: P6 (V3 measured-range EVIDENCE GAP; lateral-data EVIDENCE GAP).
+- **OPEN, freeze conditions:** FC-1 = P1 completion (order step 5: Pb attribution on ICRU 49 ranges; water/compound θ_Hanson check) not executed; FC-2 = P2 follow-up residuals (`G4BetheBlochModel.cc/.hh` pin and ICRU 90 branch, X0/RadL, λ charge scaling, `G4VMscModel.hh` initialisers, icru90 silent-fallback check) and the G4_WATER material table (I-value, RadL) required by the P4 row but not recorded.
+- Row-evaluability finding, reported and not changed: I3 pre-declares only the 75 eV case of the libdEdx water I-value; if ICRU73_NEW were not the revised water table, no attribution is pre-declared.
+- No tolerance and no row definition changed. Freeze commit only after FC-1 and FC-2 are disposed (executed record, or dated orchestrator amendment) and `p9-freeze-record.md` §7 passes.
