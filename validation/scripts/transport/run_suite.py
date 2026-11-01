@@ -4,7 +4,7 @@
 
 Usage (argv only, no shell; the host runner executes exactly this)::
 
-    python validation/scripts/transport/run_suite.py --suite {lv,hr,lv4,hr4,lv5,lv5b,hr5,lv5c,hr5c} \
+    python validation/scripts/transport/run_suite.py --suite {lv,hr,lv4,hr4,lv5,lv5b,hr5,lv5c,hr5c,lv5d,hr5d} \
         --out validation/generated/transport/<new-dir> --expected-sha <40 hex> \
         [--workers N|auto] [--step-timeout SECONDS] [--scale F] [--python-parts N] \
         [--only STEP ...] [--import-dirs DIR ...] [--seed-base INT]
@@ -90,7 +90,7 @@ STEPS_V5B = HERE / "steps_v5b.py"
 STEPS_V5C = HERE / "steps_v5c.py"
 STEPS_V5D = HERE / "steps_v5d.py"
 STEPS_V6 = HERE / "steps_v6.py"
-SUITES = ("lv", "hr", "lv4", "hr4", "lv5", "lv5b", "hr5", "lv5c", "hr5c")
+SUITES = ("lv", "hr", "lv4", "hr4", "lv5", "lv5b", "hr5", "lv5c", "hr5c", "lv5d", "hr5d")
 PY = sys.executable
 SOURCE_PREFIXES = (
     "src/ionmc",
@@ -191,9 +191,25 @@ SOURCE_FILES_V5C = (
 "the evidence code SHA" of a rehearsal is the digest of this set, plan Amendment 17 (a)7)."""
 
 
+SOURCE_FILES_V5D = (
+    *SOURCE_FILES_V5C,
+    "validation/scripts/transport/steps_v6f.py",
+)
+"""The hashed set of the suites ``lv5d`` and ``hr5d`` (V3-005D, plan Amendment 20 (f)7-(f)8): the lv5c set plus the
+V6-F step module (``validation/scripts/transport`` is hashed through its prefix in every suite; listing the module
+individually states that it is part of the evidence code). ``SOURCE_FILES_V5C`` itself is unchanged: the recorded
+lv5c / hr5c archives re-verify under their own definition."""
+
+
 def source_file_list(suite: str | None = None) -> tuple[str, ...]:
-    """Individually hashed files of ``suite`` (default: the suite named by ``IONMC_RUN_SUITE``)."""
+    """Individually hashed files of ``suite`` (default: the suite named by ``IONMC_RUN_SUITE``). An empty suite
+    name (no suite selected) gives the base set; a name that is not a registered suite is an error (it used to
+    fall through to the base set, which would silently hash the wrong set for a new suite)."""
     suite = suite or os.environ.get("IONMC_RUN_SUITE", "")
+    if suite and suite not in SUITES:
+        raise ValueError(f"unknown suite {suite!r} (registered: {', '.join(SUITES)})")
+    if suite in ("lv5d", "hr5d"):
+        return SOURCE_FILES_V5D
     if suite in ("lv5c", "hr5c"):
         return SOURCE_FILES_V5C
     if suite in ("lv5b", "hr5"):
@@ -219,6 +235,18 @@ HR5_QUALIFICATION_SEED_BASE = 20451004  # amendment 6 (hr5)
 V5C_CONSUMED_SEED_BASES = (20471004, 20451004, 20441004)  # lv5b, hr5, b40d8121 evidence bases
 V5C_QUALIFICATION_SEED_BASE = 20481004  # amendment 14 (j) (lv5c); rehearsals 20505000-20509499
 HR5C_QUALIFICATION_SEED_BASE = 20491004  # amendment 14 (j) (hr5c: V6 on CUDA, r_index 3)
+V5D_LV_QUALIFICATION_SEED_BASE = 20531004  # amendment 20 (f)3 (lv5d rows, re-qualification at M2')
+V5D_HR_QUALIFICATION_SEED_BASE = 20541004  # amendment 20 (f)4 (hr5d rows; r_index 1, 2, 3 only)
+V6F_ROW_BASE = 20551004  # amendment 20 (f)2: the row-specific base of the V6-F rows (steps_v6f.V6F_BASE)
+V5D_RETIRED_SEED_BASES = (20511004, 20521004)  # amendment 20 (f)2: retired unused, no seed drawn
+V5D_REFUSED_SEED_BASES = (
+    *V5C_CONSUMED_SEED_BASES, V5C_QUALIFICATION_SEED_BASE, HR5C_QUALIFICATION_SEED_BASE,
+    *V5D_RETIRED_SEED_BASES,
+)  # fmt: skip
+"""Bases refused for lv5d / hr5d: every earlier evidence base (lv5b, hr5, b40d8121, lv5c, hr5c) and the two retired
+unused bases. The V6-F row base is not a suite base (the V6-F steps take it per step)."""
+HR5D_USED_R_INDEX = (1, 2, 3)  # amendment 20 (f)4: V8-stat, V7-f32, V6-CUDA (unsized)
+HR5D_RESERVED_R_INDEX = (0, 4, 5, 6, 8, 9, 17, 18, 19)  # amendment 20 (f)4: reserved and unused
 V3003D_REHEARSAL_FAMILY = "2041xxxx"  # rehearsals of V3-003D, never qualification evidence
 DEFAULT_SEED_BASES = {
     "lv": QUALIFICATION_SEED_BASE,
@@ -230,6 +258,8 @@ DEFAULT_SEED_BASES = {
     "hr5": HR5_QUALIFICATION_SEED_BASE,
     "lv5c": V5C_QUALIFICATION_SEED_BASE,
     "hr5c": HR5C_QUALIFICATION_SEED_BASE,
+    "lv5d": V5D_LV_QUALIFICATION_SEED_BASE,
+    "hr5d": V5D_HR_QUALIFICATION_SEED_BASE,
 }
 REHEARSAL_SEED_BASE = 20261004
 CONSUMED_SEED_BASE = 20271004  # used by the T9 investigation: not a qualification base
@@ -258,6 +288,8 @@ DEFERRED_STEPS = {
     "hr5": (),
     "lv5c": ("v3-workers-partition",),
     "hr5c": (),
+    "lv5d": ("v3-workers-partition",),
+    "hr5d": (),
 }
 """Steps whose purpose is the worker-partition invariance (1 versus N worker processes): they are
 not executed in the single-process diagnostic mode and recorded as ``deferred``. Steps that merely
@@ -407,7 +439,7 @@ def suite_steps(
     st = [PY, str(STEPS)]
     w = ["--workers", str(workers)]
     sc = ["--scale", str(scale)]
-    cuda = {"IONMC_REQUIRE_CUDA": "1"} if suite in ("hr", "hr4", "hr5", "hr5c") else {}
+    cuda = {"IONMC_REQUIRE_CUDA": "1"} if suite in ("hr", "hr4", "hr5", "hr5c", "hr5d") else {}
     s4 = [PY, str(STEPS_V4)]
     s5 = [PY, str(STEPS_V5)]
     s5b = [PY, str(STEPS_V5B)]
@@ -1315,7 +1347,16 @@ def main(argv: list[str] | None = None) -> int:
             f"seed base {args.seed_base} is a consumed evidence base (lv5b/hr5/b40d8121); the lv5c "
             f"qualification base is {V5C_QUALIFICATION_SEED_BASE}"
         )
-    workers = 1 if args.single_process or args.suite in ("lv5", "lv5b", "hr5", "lv5c", "hr5c") else resolve_workers(args.workers)
+    if args.suite in ("lv5d", "hr5d") and args.seed_base in V5D_REFUSED_SEED_BASES:
+        raise SystemExit(
+            f"seed base {args.seed_base} is an earlier evidence base or retired unused (amendment 20 (f)2); the "
+            f"{args.suite} qualification base is {DEFAULT_SEED_BASES[args.suite]}"
+        )
+    workers = (
+        1
+        if args.single_process or args.suite in ("lv5", "lv5b", "hr5", "lv5c", "hr5c", "lv5d", "hr5d")
+        else resolve_workers(args.workers)
+    )
     if workers < 1 or args.step_timeout < 1 or not 0.0 < args.scale <= 1.0:
         raise SystemExit("need --workers >= 1, --step-timeout >= 1 and 0 < --scale <= 1")
     single = workers == 1

@@ -68,6 +68,19 @@ HR5C_QUALIFICATION_SEED_BASE = 20491004
 """Qualification base of the suite ``hr5c`` (V6 on CUDA, Amendment 14 (j))."""
 V5C_CONSUMED_SEED_BASES = (20471004, 20451004, 20441004)
 """Evidence bases consumed by lv5b, hr5 and the failed b40d8121 V7 step: refused for lv5c."""
+V5D_LV_QUALIFICATION_SEED_BASE = 20531004
+"""Qualification base of the suite ``lv5d`` (V3-005D, Amendment 20 (f)3)."""
+V5D_HR_QUALIFICATION_SEED_BASE = 20541004
+"""Qualification base of the suite ``hr5d`` (V3-005D, Amendment 20 (f)4)."""
+V5D_RETIRED_SEED_BASES = (20511004, 20521004)
+"""Bases retired unused (Amendment 20 (f)2): refused for lv5d / hr5d."""
+V6F_ROW_BASE = 20551004
+"""Row-specific seed base of the V6-F steps inside lv5d / hr5d (Amendment 20 (f)2); ``steps_v6f.V6F_BASE`` must equal it
+(a test)."""
+V6F_STEP_TAGS = ("v6f-shard", "v6f-sens-shard", "v6f-cuda-shard", "v6f-compare", "v6f-timing")
+"""The document tags of the V6-F steps (``steps_v6f.STEPS``): the only tags whose seed base is the row base
+``V6F_ROW_BASE`` and not the archive's seed base, and only inside lv5d / hr5d (:func:`expected_seed_base`)."""
+V6F_SEED_BASE_SUITES = ("lv5d", "hr5d")
 IDENTITY_KEYS = ("git_sha", "suite", "scale", "python_parts", "seed_base")
 
 
@@ -197,6 +210,14 @@ def expected_tag(name: str) -> str | None | bool:
     return False
 
 
+def expected_seed_base(tag: str | None | bool, suite: str | None, seed_base: str | None) -> int | None:
+    """Seed base a statistical step document must record: the archive's seed base, except the V6-F tags inside
+    lv5d / hr5d (the row base 20551004, Amendment 20 (f)2); ``None`` if the archive records no seed base."""
+    if tag in V6F_STEP_TAGS and suite in V6F_SEED_BASE_SUITES:
+        return V6F_ROW_BASE
+    return None if seed_base is None else int(seed_base)
+
+
 def parse_step(
     path: Path, sha: str, suite: str | None = None, seed_base: str | None = None
 ) -> dict[str, Any]:
@@ -245,8 +266,9 @@ def parse_step(
             problems.append("missing JSON result document")
         else:
             checks = [("step", tag), ("suite", suite), ("git_sha", sha)]
-            if seed_base is not None:  # every statistical step used the archive's seed base
-                checks.append(("seed_base", int(seed_base)))
+            want_base = expected_seed_base(tag, suite, seed_base)
+            if want_base is not None:  # every statistical step used the archive's seed base (V6-F: the row base)
+                checks.append(("seed_base", want_base))
             for key, want in checks:
                 if doc.get(key) != want:
                     problems.append(f"document {key} is {doc.get(key)!r}, expected {want!r}")
@@ -342,7 +364,10 @@ def attest(env: dict[str, Any], sha: str) -> dict[str, Any]:
     import run_suite
 
     prefixes = run_suite.SOURCE_PREFIXES
-    suite_files = run_suite.source_file_list(env.get("suite"))
+    try:
+        suite_files = run_suite.source_file_list(env.get("suite"))
+    except ValueError as exc:  # an unregistered suite has no hashed-set definition
+        return {"attested_sha": sha, "valid": False, "mismatches": [str(exc)]}
     listing = _git("ls-tree", "-r", "--name-only", sha)
     result: dict[str, Any] = {"attested_sha": sha, "valid": False, "mismatches": []}
     if listing is None:
@@ -374,6 +399,20 @@ def seed_blockers(seed_base: Any, suite: str | None = None) -> list[str]:
     """Reasons why an archive's seed base cannot qualify (empty for the qualification base)."""
     if seed_base is None:
         return ["seed_base not recorded in environment.txt"]
+    if suite in ("lv5d", "hr5d"):
+        want = V5D_LV_QUALIFICATION_SEED_BASE if suite == "lv5d" else V5D_HR_QUALIFICATION_SEED_BASE
+        refused = (
+            *V5C_CONSUMED_SEED_BASES, V5C_QUALIFICATION_SEED_BASE, HR5C_QUALIFICATION_SEED_BASE,
+            *V5D_RETIRED_SEED_BASES, V5D_LV_QUALIFICATION_SEED_BASE, V5D_HR_QUALIFICATION_SEED_BASE,
+        )  # fmt: skip
+        if int(seed_base) != want and int(seed_base) in refused:
+            return [f"seed_base {int(seed_base)} is consumed, retired unused or belongs to another suite"]
+        if int(seed_base) != want:
+            return [
+                f"seed_base {int(seed_base)} is not the qualification base {want} of {suite} (any other base "
+                "is non-qualification evidence; the V6-F steps carry the row base 20551004 in their documents)"
+            ]
+        return []
     if suite == "hr5c":
         if int(seed_base) in (*V5C_CONSUMED_SEED_BASES, V5C_QUALIFICATION_SEED_BASE):
             return [f"seed_base {int(seed_base)} is consumed or belongs to lv5c"]

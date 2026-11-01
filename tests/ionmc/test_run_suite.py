@@ -2176,6 +2176,9 @@ def test_suite_definition_and_hashing_need_no_ionmc() -> None:
         f"sys.path.insert(0, {str(SCRIPTS)!r})\n"
         "import run_suite\n"
         "for s in run_suite.SUITES:\n"
+        "    assert run_suite.source_file_list(s), s\n"
+        "    if s in ('lv5d', 'hr5d'):  # T1 registers the suite constants only; the step lists are T2\n"
+        "        continue\n"
         "    assert run_suite.suite_steps(s, 1, 1.0, single_process=True), s\n"
         "assert run_suite.source_files('lv5b')\n"
         "assert run_suite.V2B_SHARDS == 2\n"
@@ -2370,3 +2373,441 @@ def test_v6_tags_hashed_set_and_seed_refusals() -> None:
         )
     assert summ.seed_blockers(20491004, "hr5c") == [] and summ.seed_blockers(20481004, "hr5c")
     assert summ.seed_blockers(20471004, "hr5c") and summ.seed_blockers(20491004, "lv5c")
+
+
+# -- V3-005D wiring T1: suites lv5d / hr5d, protection of the archived lv5c / hr5c definitions -----------------------
+# Golden values copied from the code at 5bb9ab64 (before the lv5d / hr5d registration); they must equal HEAD's behaviour.
+
+GOLDEN_LV5C_STEP_NAMES = (
+    "01-v6-e0",
+    "02-v10-pp-level",
+    "03-v10-a",
+    "04-v10-a-xcheck",
+    "05-x-endf",
+    "06-d9-bgg",
+    "07-lv5c-throughput",
+    "08-r1-d2-regression",
+    "09-v8-lv-python-vs-warp-cpu",
+    "10-p7-sampler",
+    "11-v10-a-trigger",
+    "12-v11-ionmc-150-emel",
+    "13-v11-ionmc-150-emonly",
+    "14-v11-ionmc-200-emel",
+    "15-v11-ionmc-200-emonly",
+    "16-v11-compare",
+    "17-v5-150-on",
+    "18-v5-150-off",
+    "19-v5-200-on",
+    "20-v5-200-off",
+    "21-v5-compare",
+    "22-v5-attribution",
+    "23-v2b-el-s0",
+    "24-v2b-el-s1",
+    "25-v2b-el-combine",
+    "26-v7-scan-el",
+    "27-v7-shift-el",
+    "28-v6-unsized",
+    "29-v6-compare",
+    "30-v7r-s0",
+    "31-v7r-s1",
+    "32-v7r-s2",
+    "33-v7r-s3",
+    "34-v7r-s4",
+    "35-v7r-s5",
+    "36-v7r-s6",
+    "37-v7r-s7",
+    "38-v7r-s8",
+    "39-v7r-s9",
+    "40-v7r-s10",
+    "41-v7r-s11",
+    "42-v7r-s12",
+    "43-v7r-s13",
+    "44-v7r-s14",
+    "45-v7r-s15",
+    "46-v7r-ref",
+    "47-pytest-v7r-calibration-s0",
+    "48-pytest-v7r-calibration-s1",
+    "49-pytest-v7r-calibration-s2",
+    "50-pytest-v7r-calibration-s3",
+    "51-pytest-v7r-calibration-s4",
+    "52-pytest-v7r-calibration-s5",
+    "53-pytest-v7r-calibration-s6",
+    "54-pytest-v7r-calibration-s7",
+    "55-pytest-v7r-calibration-s8",
+    "56-pytest-v7r-calibration-s9",
+    "57-pytest-v7r-calibration-s10",
+    "58-pytest-v7r-calibration-s11",
+    "59-pytest-v7r-calibration-s12",
+    "60-pytest-v7r-calibration-s13",
+    "61-pytest-v7r-calibration-s14",
+    "62-pytest-v7r-calibration-s15",
+    "63-pytest-v7r-calibration-s16",
+    "64-pytest-v7r-calibration-s17",
+    "65-pytest-v7r-calibration-s18",
+    "66-pytest-v7r-calibration-s19",
+    "67-pytest-v7r-calibration-s20",
+    "68-pytest-v7r-calibration-s21",
+    "69-pytest-v7r-calibration-s22",
+    "70-pytest-v7r-calibration-s23",
+    "71-pytest-v7r-calibration-s24",
+    "72-pytest-v7r-calibration-s25",
+    "73-pytest-v7r-calibration-s26",
+    "74-pytest-v7r-calibration-s27",
+    "75-pytest-v7r-calibration-s28",
+    "76-pytest-v7r-calibration-s29",
+    "77-pytest-v7r-calibration-s30",
+    "78-v7r-calibration-combine",
+    "79-v7r-combine",
+    "80-v7r-diag",
+    "81-e1-b-s0",
+    "82-e1-b-s1",
+    "83-e1-b-s2",
+    "84-e1-b-compare",
+    "85-e-shape-exploratory",
+    "86-v3-workers-partition",
+)
+GOLDEN_LV5C_ARGV_SHA256 = "b0839ee6d7143f3bba85d8bfbbd35c0928780a47bcc7048ad4f34af9df9c6fd1"
+GOLDEN_LV5C_SPOT = [
+    "04-v10-a-xcheck",
+    [
+        "<REPO>/.venv/bin/python3",
+        "<REPO>/validation/scripts/transport/steps_v5d.py",
+        "v10-a-xcheck",
+        "--scale",
+        "1.0",
+        "--timeout",
+        "2970",
+        "--seed-base",
+        "20481004",
+    ],
+    {
+        "IONMC_CACHE_DIR": "<REPO>/.ionmc-cache/ionmc-data",
+        "IONMC_REQUIRE_DATA": "1",
+        "PYTHONFAULTHANDLER": "1",
+    },
+]
+GOLDEN_HR5C_STEP_NAMES = (
+    "01-v8-stat-python-s0",
+    "02-v8-stat-python-s1",
+    "03-v8-stat-python-s2",
+    "04-v8-stat-python-s3",
+    "05-v8-stat-cpu64",
+    "06-v8-stat-cuda32",
+    "07-v8-stat-cuda64",
+    "08-v8-stat-compare",
+    "09-v7-f32-f64-cuda",
+    "10-v6-unsized",
+    "11-v6-cuda-compare",
+)
+GOLDEN_HR5C_ARGV_SHA256 = "e26b7f7acbbfa60793a302e11c7e705a37dc69b7a5afd59aefe5b4f5e52fc4dc"
+GOLDEN_HR5C_SPOT = [
+    "08-v8-stat-compare",
+    [
+        "<REPO>/.venv/bin/python3",
+        "<REPO>/validation/scripts/transport/steps_v5d.py",
+        "v8-stat-compare",
+        "--dirs",
+        "OUT",
+        "--scale",
+        "1.0",
+        "--timeout",
+        "1620",
+        "--seed-base",
+        "20491004",
+    ],
+    {
+        "IONMC_CACHE_DIR": "<REPO>/.ionmc-cache/ionmc-data",
+        "IONMC_REQUIRE_CUDA": "1",
+        "IONMC_REQUIRE_DATA": "1",
+        "PYTHONFAULTHANDLER": "1",
+    },
+]
+GOLDEN_SOURCE_FILES_V5C_LEN = 140
+GOLDEN_SOURCE_FILES_V5C_SHA256 = "9414aef7b46306177f1353ecfd8cc09a50553d2d349e28e7f51f9376d5873ba0"
+GOLDEN_DEFAULT_SEED_BASES = {
+    "lv": 20391004, "hr": 20391004, "lv4": 20401004, "hr4": 20401004, "lv5": 20421004, "lv5b": 20471004,
+    "hr5": 20451004, "lv5c": 20481004, "hr5c": 20491004,
+}  # fmt: skip
+ARCHIVE_SHA_LV5C_HR5C = (
+    "dd976c5a69850b9597ac4da938792d4273a71719"  # the committed lv5c / hr5c archives (README)
+)
+
+
+def _normalised_steps(mod: ModuleType, suite: str) -> list[list[object]]:
+    rep = lambda s: s.replace(str(mod.REPO), "<REPO>").replace(mod.PY, "<PY>")  # noqa: E731
+    steps = mod.suite_steps(suite, 1, 1.0, single_process=True)
+    return [
+        [n, [rep(str(x)) for x in a], {k: rep(v) for k, v in sorted(e.items())}]
+        for n, a, e in steps
+    ]
+
+
+@pytest.mark.parametrize("suite", ["lv5c", "hr5c"])
+def test_golden_archived_suite_steps_and_argv(suite: str) -> None:
+    """The step names, every step's argv and extra environment of the archived suites are unchanged."""
+    mod = _load("run_suite")
+    names = globals()[f"GOLDEN_{suite.upper()}_STEP_NAMES"]
+    assert tuple(mod.full_step_names(suite, 2)) == names
+    norm = _normalised_steps(mod, suite)
+    assert tuple(x[0] for x in norm) == names
+    digest = hashlib.sha256(json.dumps(norm, sort_keys=True).encode()).hexdigest()
+    assert digest == globals()[f"GOLDEN_{suite.upper()}_ARGV_SHA256"]
+    spot = globals()[f"GOLDEN_{suite.upper()}_SPOT"]
+    assert (
+        next(x for x in norm if x[0] == spot[0]) == spot
+    )  # one readable argv (suite base, timeout, env)
+
+
+def test_golden_archived_hashed_sets_seed_bases_and_ref_index() -> None:
+    mod = _load("run_suite")
+    files = mod.SOURCE_FILES_V5C
+    assert len(files) == GOLDEN_SOURCE_FILES_V5C_LEN
+    assert hashlib.sha256("\n".join(files).encode()).hexdigest() == GOLDEN_SOURCE_FILES_V5C_SHA256
+    assert files[0] == "pyproject.toml" and files[-1] == "validation/scripts/transport/v7r.py"
+    assert "validation/scripts/transport/steps_v6f.py" not in files  # the archived set is untouched
+    for suite in ("lv5c", "hr5c"):
+        assert mod.source_file_list(suite) == files
+    assert {
+        k: v for k, v in mod.DEFAULT_SEED_BASES.items() if k in GOLDEN_DEFAULT_SEED_BASES
+    } == GOLDEN_DEFAULT_SEED_BASES
+    assert mod.SUITES[:9] == tuple(GOLDEN_DEFAULT_SEED_BASES)
+    assert _load("v7r").V7R_REF_INDEX == 16  # archived V7-R; V7-R2 uses V7R2_REF_INDEX == 48
+    assert _load("v7r").V7R2_REF_INDEX == 48
+
+
+def _git_available(sha: str) -> bool:
+    return (
+        subprocess.run(
+            ["git", "cat-file", "-e", f"{sha}^{{commit}}"], cwd=REPO, capture_output=True
+        ).returncode
+        == 0
+    )
+
+
+@pytest.mark.parametrize("suite", ["lv5c", "hr5c"])
+def test_attest_of_the_archived_suites_still_passes_at_head(suite: str) -> None:
+    """``summarize.attest`` of an environment hashed under the archived (dd976c5a) definition of the suite verifies
+    at HEAD: the hashed set of lv5c / hr5c has not moved. The environment is rebuilt from that commit's own
+    ``run_suite.py`` (its prefixes and ``source_file_list``) and its blobs; the committed summaries
+    (``validation/results/transport/{lv5c,hr5c}-dd976c5-single-process.json``) record the same SHA and suite."""
+    sha = ARCHIVE_SHA_LV5C_HR5C
+    rec = json.loads(
+        (
+            REPO / "validation" / "results" / "transport" / f"{suite}-dd976c5-single-process.json"
+        ).read_text()
+    )
+    assert rec["git_sha"] == sha and rec["suite"] == suite
+    if not _git_available(sha):
+        pytest.skip("the archived commit dd976c5a is not in this clone (shallow checkout)")
+
+    def git(*args: str) -> bytes:
+        return subprocess.run(["git", *args], cwd=REPO, capture_output=True, check=True).stdout
+
+    old_src = git("show", f"{sha}:validation/scripts/transport/run_suite.py").decode()
+    ns: dict[str, object] = {
+        "__name__": "run_suite_dd976c5a",
+        "__file__": str(SCRIPTS / "run_suite.py"),
+    }
+    exec(compile(old_src, "run_suite_dd976c5a.py", "exec"), ns)  # noqa: S102 (the repository's own archived code)
+    old_files = ns["source_file_list"](suite)  # type: ignore[operator]
+    prefixes = tuple(ns["SOURCE_PREFIXES"])  # type: ignore[call-overload]
+    assert tuple(old_files) == _load("run_suite").source_file_list(
+        suite
+    )  # same individually hashed set at HEAD
+    assert prefixes == _load("run_suite").SOURCE_PREFIXES
+    tracked = [
+        p for p in git("ls-tree", "-r", "--name-only", sha).decode().splitlines()
+        if (p.startswith(prefixes) or p in old_files) and not p.endswith(".pyc") and "__pycache__" not in p
+    ]  # fmt: skip
+    hashes = {p: hashlib.sha256(git("cat-file", "blob", f"{sha}:{p}")).hexdigest() for p in tracked}
+    env = {"suite": suite, "git_sha": sha, "source_hashes": hashes}
+    att = _load("summarize").attest(env, sha)
+    assert att["valid"], att["mismatches"]
+
+
+def test_unknown_suite_is_an_error_not_a_fall_through(monkeypatch: pytest.MonkeyPatch) -> None:
+    mod, summ = _load("run_suite"), _load("summarize")
+    with pytest.raises(ValueError, match="unknown suite"):
+        mod.source_file_list("lv5e")
+    with pytest.raises(ValueError, match="unknown suite"):
+        mod.source_file_list("lv6")
+    monkeypatch.setenv("IONMC_RUN_SUITE", "nonsense")
+    with pytest.raises(ValueError, match="unknown suite"):
+        mod.source_file_list()
+    monkeypatch.delenv("IONMC_RUN_SUITE")
+    assert mod.source_file_list() == mod.SOURCE_FILES  # no suite selected: the base set
+    for suite in mod.SUITES:
+        assert mod.source_file_list(suite)
+    att = summ.attest(
+        {"suite": "lv5e", "git_sha": SHA, "source_hashes": {}}, SHA
+    )  # archive of an unknown suite
+    assert att["valid"] is False and "unknown suite" in att["mismatches"][0]
+
+
+def test_lv5d_hr5d_registration_constants() -> None:
+    mod, summ, v6f, v7r = _load("run_suite"), _load("summarize"), _load("steps_v6f"), _load("v7r")
+    assert mod.SUITES[-2:] == ("lv5d", "hr5d")
+    assert mod.DEFAULT_SEED_BASES["lv5d"] == 20531004 and mod.DEFAULT_SEED_BASES["hr5d"] == 20541004
+    assert (
+        summ.V5D_LV_QUALIFICATION_SEED_BASE == 20531004
+        and summ.V5D_HR_QUALIFICATION_SEED_BASE == 20541004
+    )
+    assert mod.V6F_ROW_BASE == summ.V6F_ROW_BASE == v6f.V6F_BASE == 20551004
+    assert (
+        v7r.V7R2_SEED_BASE == mod.V5D_LV_QUALIFICATION_SEED_BASE == 20531004
+    )  # V7-R2 draws at the lv5d base
+    assert mod.V5D_RETIRED_SEED_BASES == summ.V5D_RETIRED_SEED_BASES == (20511004, 20521004)
+    assert set(summ.V6F_STEP_TAGS) == set(v6f.STEPS)  # the exemption covers exactly the V6-F steps
+    # the source set: the lv5c chain plus the V6-F module, for both suites; the archived set is a prefix of it
+    for suite in ("lv5d", "hr5d"):
+        listed = mod.source_file_list(suite)
+        assert listed == mod.SOURCE_FILES_V5D != mod.SOURCE_FILES
+        assert "validation/scripts/transport/steps_v6f.py" in listed
+        assert listed[: len(mod.SOURCE_FILES_V5C)] == mod.SOURCE_FILES_V5C
+        assert all(f in listed for f in mod.SOURCE_FILES_V5C)
+        assert (mod.REPO / "validation/scripts/transport/steps_v6f.py").is_file()
+        assert mod.source_files(suite)  # hashes without a missing file
+    assert (
+        mod.DEFERRED_STEPS["lv5d"] == ("v3-workers-partition",) and mod.DEFERRED_STEPS["hr5d"] == ()
+    )
+    assert "hr5d" in mod.SUITES
+
+
+def test_lv5d_hr5d_force_single_process_and_refuse_earlier_bases(tmp_path: Path) -> None:
+    """The workers = 1 force list names lv5d / hr5d; an earlier or retired base is refused at the suite start."""
+    mod = _load("run_suite")
+    text = (SCRIPTS / "run_suite.py").read_text()
+    assert '"lv5c", "hr5c", "lv5d", "hr5d")' in text  # the force list
+    for suite in ("lv5d", "hr5d"):
+        for base in (*mod.V5C_CONSUMED_SEED_BASES, 20481004, 20491004, 20511004, 20521004):
+            r = _run("--suite", suite, "--seed-base", str(base), "--expected-sha", "0" * 40,
+                     "--out", str(REPO / "validation" / "generated" / "transport" / "t1-never-created"))  # fmt: skip
+            assert r.returncode != 0 and "earlier evidence base or retired" in r.stderr, (
+                suite,
+                base,
+                r.stderr,
+            )
+    assert not (REPO / "validation" / "generated" / "transport" / "t1-never-created").exists()
+
+
+def test_lv5d_hr5d_seed_blockers() -> None:
+    summ = _load("summarize")
+    assert summ.seed_blockers(20531004, "lv5d") == [] and summ.seed_blockers(20541004, "hr5d") == []
+    for suite, other in (("lv5d", 20541004), ("hr5d", 20531004)):
+        assert summ.seed_blockers(other, suite)  # the other suite's base
+    for suite in ("lv5d", "hr5d"):
+        for base in (
+            20511004,
+            20521004,
+            20481004,
+            20491004,
+            20471004,
+            20451004,
+            20441004,
+            20551004,
+            20505000,
+            20391004,
+        ):
+            assert summ.seed_blockers(base, suite), (suite, base)
+        assert summ.seed_blockers(None, suite)
+    assert "retired" in summ.seed_blockers(20511004, "lv5d")[0]
+    # the existing suites are unchanged (no loosening)
+    assert summ.seed_blockers(20531004, "lv5c") and summ.seed_blockers(20481004, "lv5c") == []
+    assert summ.seed_blockers(20541004, "hr5c") and summ.seed_blockers(20491004, "hr5c") == []
+    assert summ.seed_blockers(20531004, "lv") and summ.seed_blockers(20391004, "hr") == []
+
+
+def test_seed_blocker_envelopes_are_disjoint_from_v6f_and_the_v3_008_reservation() -> None:
+    mod, v6f = _load("run_suite"), _load("steps_v6f")
+    env = lambda base, rs: {base + 1000 * r + k for r in rs for k in range(1000)}  # noqa: E731 (conservative envelope)
+    v6f_seeds = {s for g in v6f.seeds_of(mod.V6F_ROW_BASE).values() for s in g}
+    reserved = set(
+        range(20572004, 20632004)
+    )  # V3-008 (shared seed-base ledger, Amendment 20 (f)2 note)
+    lv = env(mod.DEFAULT_SEED_BASES["lv5d"], range(21))
+    hr_used = env(mod.DEFAULT_SEED_BASES["hr5d"], mod.HR5D_USED_R_INDEX)
+    hr_reserved = env(mod.DEFAULT_SEED_BASES["hr5d"], mod.HR5D_RESERVED_R_INDEX)
+    v6f_env = env(mod.V6F_ROW_BASE, range(21))
+    assert mod.HR5D_USED_R_INDEX == (1, 2, 3)
+    assert not set(mod.HR5D_USED_R_INDEX) & set(mod.HR5D_RESERVED_R_INDEX)
+    assert set(mod.HR5D_RESERVED_R_INDEX) | set(mod.HR5D_USED_R_INDEX) | {
+        7,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+    } == set(range(20))
+    assert (
+        max(v6f_env) == 20572003 and max(hr_reserved) < 20572004
+    )  # the whole envelope ends below the reservation
+    for fam in (lv, hr_used, hr_reserved, v6f_env):
+        assert not fam & reserved
+    # the V6-F seeds lie outside the lv5d envelope and the used hr5d blocks; the reserved hr blocks 17-19 ARE the V6-F seeds
+    assert not v6f_seeds & lv and not v6f_seeds & hr_used and not v6f_seeds & reserved
+    for r_hr, key in ((17, "cpu"), (18, "sens"), (19, "cuda")):
+        block = env(mod.DEFAULT_SEED_BASES["hr5d"], [r_hr])
+        assert set(v6f.seeds_of(mod.V6F_ROW_BASE)[key]) <= block  # reserved for exactly these seeds
+    # the archived (lv5c / hr5c) bases' envelopes do not meet the lv5d / hr5d used blocks or the V6-F envelope (the
+    # retired unused bases drew no seed; their nominal envelope reaches 20532003 and is not an observed seed set)
+    for base in (20481004, 20491004):
+        assert not env(base, range(21)) & (lv | hr_used | v6f_env)
+
+
+def test_per_tag_seed_base_exemption_applies_only_to_the_v6f_tags(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    summ = _load("summarize")
+    v6f_tags = ("v6f-shard", "v6f-sens-shard", "v6f-cuda-shard", "v6f-compare", "v6f-timing")
+    assert tuple(summ.V6F_STEP_TAGS) == v6f_tags
+    for suite, base in (("lv5d", "20531004"), ("hr5d", "20541004")):
+        for tag in v6f_tags:
+            assert summ.expected_seed_base(tag, suite, base) == 20551004
+        for tag in ("v5-compare", "v8-stat-sample", "v6-shard", "v7r2-shard", "v11-compare"):
+            assert summ.expected_seed_base(tag, suite, base) == int(base)
+    for suite, base in (
+        ("lv5c", "20481004"),
+        ("hr5c", "20491004"),
+        ("lv", "20391004"),
+        (None, "20481004"),
+    ):
+        for tag in v6f_tags:  # outside lv5d / hr5d the archive's base is required for every tag
+            assert summ.expected_seed_base(tag, suite, base) == int(base)
+    assert (
+        summ.expected_seed_base("v6f-shard", "lv5d", None) == 20551004
+    )  # the row base is fixed, not recorded
+    assert (
+        summ.expected_seed_base("v5-compare", "lv5d", None) is None
+    )  # no recorded base: not checked (unchanged)
+
+    def step_file(name: str, suite: str, base: int) -> Path:
+        doc = {"step": "TAG", "suite": suite, "git_sha": SHA, "seed_base": base, "pass": True}
+        text = f"# command: x\n# git_sha: {SHA}\n# a\n# b\n#JSON-BEGIN\n{json.dumps(doc)}\n#JSON-END\n# exit=0"
+        p = tmp_path / f"{name}.txt"
+        p.write_text(text)
+        return p
+
+    def parse(
+        tag: str, doc_base: int, suite: str = "lv5d", archive_base: str = "20531004"
+    ) -> dict[str, object]:
+        monkeypatch.setattr(
+            summ, "expected_tag", lambda _n: tag
+        )  # the step tags of lv5d / hr5d are registered with the step lists
+        p = step_file("07-x", suite, doc_base)
+        p.write_text(p.read_text().replace('"TAG"', json.dumps(tag)))
+        return summ.parse_step(p, SHA, suite, archive_base)
+
+    assert parse("v6f-shard", 20551004)["pass"] is True  # V6-F step at the row base inside lv5d
+    assert (
+        parse("v6f-shard", 20531004)["pass"] is False
+    )  # at the suite base: the exemption is a fixed base, not "any"
+    assert parse("v6f-shard", 20551004, "hr5d", "20541004")["pass"] is True
+    assert parse("v5-compare", 20531004)["pass"] is True  # every other tag: the archive base
+    r = parse("v5-compare", 20551004)  # a non-V6-F step at the V6-F base is flagged
+    assert r["pass"] is False and any("seed_base" in p for p in r["problems"])  # type: ignore[attr-defined]
+    r = parse(
+        "v6f-shard", 20551004, "lv5c", "20481004"
+    )  # the exemption does not exist outside lv5d / hr5d
+    assert r["pass"] is False and any("seed_base" in p for p in r["problems"])  # type: ignore[attr-defined]
