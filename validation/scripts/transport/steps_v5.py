@@ -10,7 +10,9 @@ V2-probe (common-random-number step-size probes, pooled by ``v2-probe-combine``)
 energy balance), V4 and V4b (offline event sampler), X1 (paired nuclear on/off), E1 (exploratory IDD),
 R1 (``nuclear=False`` regression: the A16 digest at baseline f3a1dd62 with the intended-change set
 ``None`` and the T1 trace) and the throughput measurement. All statistical steps run the python
-backend with ``nuclear=True`` (decision 0041) in one process; the 1-vs-N worker partition check
+backend with ``nuclear=True`` (decision 0041) in one process, pinned to ``elastic=False`` (frozen V3-005A/B physics,
+non-elastic only; the elastic channel is enabled explicitly by the V3-005C suites lv5c/hr5c, plan Amendment 14,
+intended change R1-D2); the 1-vs-N worker partition check
 ``v3-workers-partition`` exists but is deferred by ``run_suite.py`` (plan, "Deferred multiprocess
 checks"). Every step prints one JSON document between ``#JSON-BEGIN`` and ``#JSON-END`` (the
 conventions of ``steps.py`` and ``steps_v4.py``): ``format``, ``frozen_histories``, ``histories``,
@@ -135,7 +137,11 @@ def nuc_config(
     n_batches: int = 20, tallies: tuple[TallyRequest, ...] = (), workers: int = 1,
     timeout: float | None = None,
 ) -> SimulationConfig:  # fmt: skip
-    """Python backend, float64, all EM physics as given; ``nuclear`` selects decision 0041."""
+    """Python backend, float64, all EM physics as given; ``nuclear`` selects decision 0041.
+
+    Every nuclear-on configuration of the frozen suites lv5, lv5b and hr5 is built here (``wcfg`` of
+    steps_v5b re-targets it), so the elastic pin below is the single place that keeps them
+    non-elastic-only on every backend."""
     return SimulationConfig(
         source=PencilBeamSource(PROTON, (0.0, 0.0, 0.0), (0.0, 0.0, 1.0), energy),
         geometry=geometry,
@@ -143,6 +149,9 @@ def nuc_config(
         tallies=tallies,
         physics=PhysicsOptions(
             nuclear=nuclear, nuclear_table_id=TABLE_ID if nuclear else None,
+            # frozen V3-005A/B physics (non-elastic only); the elastic channel is enabled explicitly
+            # by the V3-005C suites lv5c/hr5c (plan Amendment 14, intended change R1-D2)
+            elastic=False,
             stopping=BetheStoppingSource(), straggling=straggling, multiple_scattering=mcs,
             max_step_mm=max_step, max_energy_loss_fraction=frac,
         ),

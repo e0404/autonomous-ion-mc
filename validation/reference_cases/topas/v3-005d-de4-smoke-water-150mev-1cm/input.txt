@@ -1,0 +1,54 @@
+# Native OpenTOPAS 4.3 input. V3-005D D-E4 smoke (plan section 3.2, Amendment 19 (c)): 1e5 protons, 150 MeV, 1 cm G4_WATER cylinder, hadronic elastic only; exploratory, no validation claim.
+i:Ts/NumberOfThreads = 1
+# Smoke seed: no D-E4 case (20270000 + 1000*row + 1, rows 14-23) and no other committed case uses 20299001.
+i:Ts/Seed = 20299001
+b:Ts/PauseBeforeQuit = "False"
+# Unverified parameter: limits the per-history stdout line (5.2 MB per 1e5 histories otherwise); the smoke verifies it.
+i:Ts/ShowHistoryCountAtInterval = 100000
+
+# Geometry: cylinder r = 10 mm, length 10 mm (z 0..10 mm) in a 500 mm vacuum sphere in a Galactic world.
+s:Ge/World/Material = "G4_Galactic"
+d:Ge/World/HLX = 60 cm
+d:Ge/World/HLY = 60 cm
+d:Ge/World/HLZ = 60 cm
+s:Ge/Sphere/Parent = "World"
+s:Ge/Sphere/Type = "TsSphere"
+s:Ge/Sphere/Material = "G4_Galactic"
+d:Ge/Sphere/RMax = 500 mm
+s:Ge/Target/Parent = "Sphere"
+s:Ge/Target/Type = "TsCylinder"
+s:Ge/Target/Material = "G4_WATER"
+d:Ge/Target/RMax = 10 mm
+d:Ge/Target/HL = 5 mm
+d:Ge/Target/TransZ = 5 mm
+s:Ge/Source/Parent = "Sphere"
+s:Ge/Source/Type = "Group"
+d:Ge/Source/TransZ = -0.001 mm
+
+# Source: monoenergetic, zero-size, zero-divergence pencil beam along +z.
+s:So/Beam/Type = "Beam"
+s:So/Beam/Component = "Source"
+s:So/Beam/BeamParticle = "proton"
+d:So/Beam/BeamEnergy = 150 MeV
+u:So/Beam/BeamEnergySpread = 0
+s:So/Beam/BeamPositionDistribution = "None"
+s:So/Beam/BeamAngularDistribution = "None"
+i:So/Beam/NumberOfHistoriesInRun = 100000
+
+# Physics: hadronic elastic only. No EM module on purpose; the smoke decides whether this is accepted.
+s:Ph/Default/Type = "Geant4_Modular"
+sv:Ph/Default/Modules = 1 "g4h-elastic_HP"
+d:Ph/Default/CutForAllParticles = 0.05 mm
+
+# Phase space of protons leaving the sphere (Out through the outer curved surface); no current-KE filter exists, undeflected primaries are recorded.
+s:Sc/PS/Quantity = "PhaseSpace"
+s:Sc/PS/Surface = "Sphere/OuterCurvedSurface"
+s:Sc/PS/OnlyIncludeParticlesGoing = "Out"
+sv:Sc/PS/OnlyIncludeParticlesNamed = 1 "proton"
+s:Sc/PS/OutputType = "Binary"
+s:Sc/PS/OutputFile = "ps"
+s:Sc/PS/IfOutputFileAlreadyExists = "Overwrite"
+b:Sc/PS/IncludeEventID = "True"
+b:Sc/PS/IncludeTrackID = "True"
+b:Sc/PS/IncludeParentID = "True"
+i:Sc/PS/OutputBufferSize = 100000

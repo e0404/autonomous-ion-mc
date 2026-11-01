@@ -1,0 +1,12 @@
+recorded used seeds: [20506000, 20517000, 20521000, 20521001, 20525000]
+lv 20511004 r 0..20 k<100: shared with used/fixture seeds: []
+lv 20511004 r 0..20 k<1000: shared with used/fixture seeds: [(20517000, (5, 996)), (20521000, (9, 996)), (20521001, (9, 997)), (20521002, (9, 998)), (20521003, (9, 999)), (20525000, (13, 996))]
+hr 20521004 r 0..20 k<100: shared with used/fixture seeds: []
+hr 20521004 r 0..20 k<1000: shared with used/fixture seeds: [(20525000, (3, 996))]
+lv 20531004 r 0..20 k<100: shared with used/fixture seeds: []
+lv 20531004 r 0..20 k<1000: shared with used/fixture seeds: []
+hr 20541004 r 0..20 k<100: shared with used/fixture seeds: []
+hr 20541004 r 0..20 k<1000: shared with used/fixture seeds: []
+lv20511004 ∩ hr20521004 (cross-base identities, r_lv = r_hr + 10): [((10, 0), (0, 0)), ((10, 1), (0, 1)), ((10, 2), (0, 2))] ... 1100
+V7-R2 transport (r16, k 0..48): 20527004 20527052 ∩ used: [] = hr r_index 6 seeds: True
+V6-F B=20531004 r7-9: 20538004 20540019 ∩ lv/hr 2051/2052 (k<100): 48 ∩ used: 0

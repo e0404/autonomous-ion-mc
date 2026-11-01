@@ -1,0 +1,377 @@
+{
+ "banner": "Exploratory, report-only (Amendment 19); not evidence; changes no row.",
+ "carry_up_check": {
+  "grid_150_200_over_150": {
+   "150": 1.0,
+   "151": 0.9989121865155751,
+   "152": 0.9978652433617556,
+   "153": 0.9968578092787884,
+   "154": 0.9958885670325224,
+   "155": 0.9949562418618751,
+   "156": 0.9940595999886792,
+   "157": 0.9931974471870751,
+   "158": 0.9923686274097658,
+   "159": 0.9915720214685764,
+   "160": 0.9908065457669021,
+   "161": 0.9900711510817376,
+   "162": 0.9893648213931043,
+   "163": 0.9886865727587936,
+   "164": 0.9880354522324509,
+   "165": 0.9874105368231229,
+   "166": 0.9868109324944743,
+   "167": 0.9862357732019785,
+   "168": 0.9856842199664578,
+   "169": 0.9851554599824328,
+   "170": 0.9846487057598122,
+   "171": 0.9841631942975249,
+   "172": 0.9836981862877576,
+   "173": 0.9832529653495335,
+   "174": 0.9828268372904136,
+   "175": 0.982419129395171,
+   "176": 0.9820291897403337,
+   "177": 0.9816563865335477,
+   "178": 0.9813001074767533,
+   "179": 0.9809597591522194,
+   "180": 0.9806347664305256,
+   "181": 0.9803245718996114,
+   "182": 0.9800286353140677,
+   "183": 0.9797464330638678,
+   "184": 0.9794774576617817,
+   "185": 0.979221217248745,
+   "186": 0.9789772351164853,
+   "187": 0.9787450492467488,
+   "188": 0.9785242118664835,
+   "189": 0.9783142890183771,
+   "190": 0.9781148601461688,
+   "191": 0.9779255176941755,
+   "192": 0.9777458667205057,
+   "193": 0.9775755245234492,
+   "194": 0.9774141202805566,
+   "195": 0.9772612946999438,
+   "196": 0.977116699683376,
+   "197": 0.9769799980007029,
+   "198": 0.9768508629752385,
+   "199": 0.9767289781796957,
+   "200": 0.9766140371422986
+  },
+  "match": {
+   "all_within": true,
+   "max_abs_rel_diff": 8.317790900491673e-13,
+   "tolerance": 0.001
+  },
+  "named_nodes": {
+   "200": {
+    "carried_over_table": 1.0000000000008318,
+    "within": true
+   },
+   "250": {
+    "carried_over_table": 1.0000000000008318,
+    "within": true
+   }
+  },
+  "nodes": {
+   "157.056": {
+    "carried_over_table": 1.0000000000008316,
+    "within": true
+   },
+   "160": {
+    "carried_over_table": 1.0000000000008316,
+    "within": true
+   },
+   "164.445": {
+    "carried_over_table": 1.0000000000008316,
+    "within": true
+   },
+   "172.18": {
+    "carried_over_table": 1.0000000000008316,
+    "within": true
+   },
+   "180": {
+    "carried_over_table": 1.0000000000008316,
+    "within": true
+   },
+   "180.28": {
+    "carried_over_table": 1.0000000000008316,
+    "within": true
+   },
+   "188.761": {
+    "carried_over_table": 1.0000000000008316,
+    "within": true
+   },
+   "197.641": {
+    "carried_over_table": 1.0000000000008316,
+    "within": true
+   },
+   "200": {
+    "carried_over_table": 1.0000000000008318,
+    "within": true
+   },
+   "206.938": {
+    "carried_over_table": 1.0000000000008316,
+    "within": true
+   },
+   "216.673": {
+    "carried_over_table": 1.0000000000008316,
+    "within": true
+   },
+   "226.866": {
+    "carried_over_table": 1.0000000000008318,
+    "within": true
+   },
+   "237.538": {
+    "carried_over_table": 1.0000000000008318,
+    "within": true
+   },
+   "248.712": {
+    "carried_over_table": 1.0000000000008318,
+    "within": true
+   },
+   "250": {
+    "carried_over_table": 1.0000000000008318,
+    "within": true
+   }
+  },
+  "rule": "sigma(E) = sigma_rec(150 MeV) x S(E)/S(150 MeV), S = the table's own bgg.pp_bgg_mb"
+ },
+ "dip": {
+  "margin": 0.01,
+  "min_energy_mev": 130.0,
+  "min_over_lower_endpoint_minus_1": -0.1829658617583253,
+  "min_over_upper_endpoint_minus_1": -0.15054955457220165,
+  "persists": true
+ },
+ "disclosure": "D-E9 B0: exploratory; leads identified after the D-E8 STOP; not a re-evaluation. Independent reconstruction of the pinned p-p level; ratios only.",
+ "levels_over_125mev": {
+  "100": {
+   "rec": 1.190470441743049,
+   "table": null
+  },
+  "125": {
+   "rec": 1.0,
+   "table": null
+  },
+  "130": {
+   "rec": 0.9726549914717177,
+   "table": null
+  },
+  "140": {
+   "rec": 0.9871634484987286,
+   "table": null
+  },
+  "150": {
+   "rec": 1.1450402983565113,
+   "table": null
+  }
+ },
+ "match": {
+  "all_within": true,
+  "max_abs_rel_diff": 0.0003613144481352526,
+  "tolerance": 0.001
+ },
+ "midpoints": {
+  "101.922": {
+   "rec_over_table": 0.9998161736161093,
+   "within": true
+  },
+  "106.286": {
+   "rec_over_table": 0.99971404031474,
+   "within": true
+  },
+  "109.364": {
+   "rec_over_table": 0.9999811573887468,
+   "within": true
+  },
+  "111.922": {
+   "rec_over_table": 0.9998027898921732,
+   "within": true
+  },
+  "116.521": {
+   "rec_over_table": 0.9996386855518647,
+   "within": true
+  },
+  "119.599": {
+   "rec_over_table": 0.999992211260255,
+   "within": true
+  },
+  "122.403": {
+   "rec_over_table": 0.9998528015555149,
+   "within": true
+  },
+  "127.403": {
+   "rec_over_table": 0.9998282419825,
+   "within": true
+  },
+  "130.338": {
+   "rec_over_table": 1.0000107092838901,
+   "within": true
+  },
+  "132.214": {
+   "rec_over_table": 1.0002035240067726,
+   "within": true
+  },
+  "135.287": {
+   "rec_over_table": 1.0001782759643745,
+   "within": true
+  },
+  "138.412": {
+   "rec_over_table": 1.0001667266526644,
+   "within": true
+  },
+  "140.815": {
+   "rec_over_table": 1.000204211919312,
+   "within": true
+  },
+  "142.446": {
+   "rec_over_table": 1.0001879442320136,
+   "within": true
+  },
+  "144.103": {
+   "rec_over_table": 1.0001849783254693,
+   "within": true
+  },
+  "145.788": {
+   "rec_over_table": 1.0001706893421056,
+   "within": true
+  },
+  "147.473": {
+   "rec_over_table": 1.0001578799980546,
+   "within": true
+  },
+  "149.158": {
+   "rec_over_table": 1.000146351064954,
+   "within": true
+  }
+ },
+ "named_nodes": {
+  "100": {
+   "rec_over_table": 1.0000000000020464,
+   "within": true
+  },
+  "130": {
+   "rec_over_table": 1.0000000000015712,
+   "within": true
+  },
+  "140": {
+   "rec_over_table": 1.000000000001203,
+   "within": true
+  },
+  "150": {
+   "rec_over_table": 1.0000000000008316,
+   "within": true
+  }
+ },
+ "nodes": {
+  "100": {
+   "rec_over_table": 1.0000000000020464,
+   "within": true
+  },
+  "103.843": {
+   "rec_over_table": 1.0000000000020237,
+   "within": true
+  },
+  "108.728": {
+   "rec_over_table": 1.0000000000019984,
+   "within": true
+  },
+  "110": {
+   "rec_over_table": 1.000000000001992,
+   "within": true
+  },
+  "113.843": {
+   "rec_over_table": 1.0000000000019282,
+   "within": true
+  },
+  "119.198": {
+   "rec_over_table": 1.0000000000018472,
+   "within": true
+  },
+  "120": {
+   "rec_over_table": 1.0000000000018356,
+   "within": true
+  },
+  "124.806": {
+   "rec_over_table": 1.0000000000017017,
+   "within": true
+  },
+  "130": {
+   "rec_over_table": 1.0000000000015712,
+   "within": true
+  },
+  "130.677": {
+   "rec_over_table": 1.0000000000015423,
+   "within": true
+  },
+  "133.751": {
+   "rec_over_table": 1.000000000001419,
+   "within": true
+  },
+  "136.824": {
+   "rec_over_table": 1.0000000000013076,
+   "within": true
+  },
+  "140": {
+   "rec_over_table": 1.000000000001203,
+   "within": true
+  },
+  "141.63": {
+   "rec_over_table": 1.0000000000011269,
+   "within": true
+  },
+  "143.261": {
+   "rec_over_table": 1.000000000001058,
+   "within": true
+  },
+  "144.946": {
+   "rec_over_table": 1.000000000000993,
+   "within": true
+  },
+  "146.63": {
+   "rec_over_table": 1.0000000000009344,
+   "within": true
+  },
+  "148.315": {
+   "rec_over_table": 1.0000000000008809,
+   "within": true
+  },
+  "150": {
+   "rec_over_table": 1.0000000000008316,
+   "within": true
+  }
+ },
+ "note_git": "Git projection (decision 0041): explicit allowlist of dimensionless ratios, per-primary rates and probabilities, kinematic statistics, kernel integrals, counts and flags; no absolute cross sections, no distributions or per-point arrays. The complete record is regenerated into validation/generated/ by the committed module.",
+ "provenance": {
+  "code_sha256": "79a2e0cc0492e91896df261cbd2d9249c7a9bd0093cfd241e3b1e2ad942618dc",
+  "git_clean": true,
+  "git_head": "0dfca566ba11e48e73ab45561542bfee16cbc993",
+  "member": "ENDF-B-VIII.0_protons/p-001_H_001.endf",
+  "member_sha256": "a1c3bc637ba242f263d88a3b3848b5a0a717728d6ec19395d24225e1b96a4fb5",
+  "npz_sha256": "1028bb67f57bc96edafe6d3dbcce532013edbbd31b9b80861239b09d9ad4202a",
+  "pre_run_looks": "Before the frozen run the independent parser was validated on the real LA150 H-1 file at the 100 MeV node only (reconstruction / table - 1 = 2e-12 relative); no other node, no midpoint, no dip test and no verdict was computed before it. The reading rules were declared in the plan before that look. The quadrature convergence was also looked at that one node (not a level comparison).",
+  "quadrature": "Gauss-Legendre 1024",
+  "source_sha256": "27bcafb89cf0444c53c6b9f3dd17618c62e2e6b3694f70d31c4f502399f103f7",
+  "table_id": "1fd24cff23d3f7e72aabcda2af8bc70ad47b81755f94a2ca55890cb6ae52c591"
+ },
+ "quadrature_convergence": {
+  "acceptance": 1e-06,
+  "accepted": true,
+  "max_abs_rel_diff": 2.0758950114441177e-12,
+  "nodes": {
+   "100": {
+    "gl1024_vs_gl2048": -2.9531932455029164e-14,
+    "simpson20001_vs_gl2048": -3.086420008457935e-14,
+    "simpson4001_vs_gl2048": -2.0758950114441177e-12
+   },
+   "125": {
+    "gl1024_vs_gl2048": -3.930189507173054e-14,
+    "simpson20001_vs_gl2048": -3.930189507173054e-14,
+    "simpson4001_vs_gl2048": -1.7359447213038948e-12
+   },
+   "150": {
+    "gl1024_vs_gl2048": 5.995204332975845e-15,
+    "simpson20001_vs_gl2048": 3.9968028886505635e-15,
+    "simpson4001_vs_gl2048": -8.256728634137289e-13
+   }
+  }
+ },
+ "reading": "evaluation feature at the LA150 top nodes (the independent reconstruction reproduces the step)"
+}

@@ -1,0 +1,54 @@
+# Native OpenTOPAS 4.3 input. V3-005D D-E4 row 23 (graphite, 200 MeV, 10 mm G4_C), plan section 3.2 / Amendment 19 (c); hadronic elastic only; exploratory, no validation claim.
+i:Ts/NumberOfThreads = 1
+# Seed = 20270000 + 1000*row + part index (row 23); distinct from every other committed case.
+i:Ts/Seed = 20293001
+b:Ts/PauseBeforeQuit = "False"
+# Limits the per-history stdout line (verified by the D-E4 smoke).
+i:Ts/ShowHistoryCountAtInterval = 1000000
+
+# Geometry: cylinder r = 10 mm, length 10 mm (z 0..10 mm) in a 500 mm vacuum sphere in a Galactic world.
+s:Ge/World/Material = "G4_Galactic"
+d:Ge/World/HLX = 60 cm
+d:Ge/World/HLY = 60 cm
+d:Ge/World/HLZ = 60 cm
+s:Ge/Sphere/Parent = "World"
+s:Ge/Sphere/Type = "TsSphere"
+s:Ge/Sphere/Material = "G4_Galactic"
+d:Ge/Sphere/RMax = 500 mm
+s:Ge/Target/Parent = "Sphere"
+s:Ge/Target/Type = "TsCylinder"
+s:Ge/Target/Material = "G4_C"
+d:Ge/Target/RMax = 10 mm
+d:Ge/Target/HL = 5 mm
+d:Ge/Target/TransZ = 5 mm
+s:Ge/Source/Parent = "Sphere"
+s:Ge/Source/Type = "Group"
+d:Ge/Source/TransZ = -0.001 mm
+
+# Source: monoenergetic, zero-size, zero-divergence pencil beam along +z.
+s:So/Beam/Type = "Beam"
+s:So/Beam/Component = "Source"
+s:So/Beam/BeamParticle = "proton"
+d:So/Beam/BeamEnergy = 200 MeV
+u:So/Beam/BeamEnergySpread = 0
+s:So/Beam/BeamPositionDistribution = "None"
+s:So/Beam/BeamAngularDistribution = "None"
+i:So/Beam/NumberOfHistoriesInRun = 4000000
+
+# Physics: hadronic elastic only. No EM module on purpose; the smoke decides whether this is accepted.
+s:Ph/Default/Type = "Geant4_Modular"
+sv:Ph/Default/Modules = 1 "g4h-elastic_HP"
+d:Ph/Default/CutForAllParticles = 0.05 mm
+
+# Phase space of protons leaving the sphere (Out through the outer curved surface); no current-KE filter exists, undeflected primaries are recorded.
+s:Sc/PS/Quantity = "PhaseSpace"
+s:Sc/PS/Surface = "Sphere/OuterCurvedSurface"
+s:Sc/PS/OnlyIncludeParticlesGoing = "Out"
+sv:Sc/PS/OnlyIncludeParticlesNamed = 1 "proton"
+s:Sc/PS/OutputType = "Binary"
+s:Sc/PS/OutputFile = "ps"
+s:Sc/PS/IfOutputFileAlreadyExists = "Overwrite"
+b:Sc/PS/IncludeEventID = "True"
+b:Sc/PS/IncludeTrackID = "True"
+b:Sc/PS/IncludeParentID = "True"
+i:Sc/PS/OutputBufferSize = 100000

@@ -1,0 +1,22 @@
+(B) 5400/0.005 R 800: P(all) r=1 bound 0.859 r=.32 1.000
+(B) 5400/0.005 R 1600: P(all) r=1 bound 0.995 r=.32 1.000
+P(<=109/3200 | 0.0374) = 0.172
+P(<=109/3200 | 0.0383) = 0.113
+5400/0.005 kappa=1 coverage c=0.674 (paired=single): paired OC 0.767 joint power 0.665 P(power clause) -0.000
+5400/0.005 kappa=1 coverage c=0.676 (paired=single): paired OC 0.851 joint power 0.794 P(power clause) -0.000
+5400/0.005 kappa=1 coverage c=0.678 (paired=single): paired OC 0.911 joint power 0.884 P(power clause) 0.000
+5400/0.005 kappa=1 coverage c=0.679 (paired=single): paired OC 0.933 joint power 0.915 P(power clause) 0.890
+5400/0.005 kappa=1 coverage c=0.6827 (paired=single): paired OC 0.969 joint power 0.965 P(power clause) 1.000
+5400/0.005 kappa=1 coverage c=0.687 (paired=single): paired OC 0.937 joint power 0.920 P(power clause) 0.990
+5400/0.005 kappa=1 coverage c=0.689 (paired=single): paired OC 0.890 joint power 0.852 P(power clause) -0.000
+5400/0.005 kappa=1 coverage c=0.69 (paired=single): paired OC 0.858 joint power 0.804 P(power clause) -0.000
+5400/0.005 kappa=1 coverage c=0.692 (paired=single): paired OC 0.775 joint power 0.676 P(power clause) -0.000
+7200/0.005 kappa=1 coverage c=0.674 (paired=single): paired OC 0.892 joint power 0.850 P(power clause) -0.000
+7200/0.005 kappa=1 coverage c=0.676 (paired=single): paired OC 0.945 joint power 0.929 P(power clause) 1.000
+7200/0.005 kappa=1 coverage c=0.678 (paired=single): paired OC 0.975 joint power 0.970 P(power clause) 1.000
+7200/0.005 kappa=1 coverage c=0.679 (paired=single): paired OC 0.984 joint power 0.981 P(power clause) 1.000
+7200/0.005 kappa=1 coverage c=0.6827 (paired=single): paired OC 0.996 joint power 0.996 P(power clause) 1.000
+7200/0.005 kappa=1 coverage c=0.687 (paired=single): paired OC 0.985 joint power 0.982 P(power clause) 1.000
+7200/0.005 kappa=1 coverage c=0.689 (paired=single): paired OC 0.964 joint power 0.956 P(power clause) 1.000
+7200/0.005 kappa=1 coverage c=0.69 (paired=single): paired OC 0.947 joint power 0.932 P(power clause) 1.000
+7200/0.005 kappa=1 coverage c=0.692 (paired=single): paired OC 0.895 joint power 0.854 P(power clause) -0.000

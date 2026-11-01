@@ -1,0 +1,316 @@
+{
+ "a1": {
+  "150": {
+   "archived_reading": "consistent with the realisation distribution",
+   "de3_reading": "consistent with the realisation distribution",
+   "k": 4,
+   "mean_gain": 0.022220080183655844,
+   "per_run_se_calibration": "per-run SE consistent",
+   "rho": 0.5131982635164718,
+   "rho_range_hi": 1.614,
+   "rho_range_lo": 0.342,
+   "sd": 0.0004105444847950942,
+   "se_mean": 0.0002052722423975471,
+   "z_archived": -0.16208900280522903,
+   "z_de3_base": -0.1891186780592784
+  },
+  "200": {
+   "archived_reading": "consistent with the realisation distribution",
+   "de3_reading": "consistent with the realisation distribution",
+   "k": 8,
+   "mean_gain": 0.025731654489579064,
+   "per_run_se_calibration": "per-run SE consistent",
+   "rho": 1.1562968589011906,
+   "rho_range_hi": 1.418,
+   "rho_range_lo": 0.556,
+   "sd": 0.0011576632637199907,
+   "se_mean": 0.00040929577205347796,
+   "z_archived": 1.1341242432557588,
+   "z_de3_base": -0.764484510452888
+  }
+ },
+ "a1_sensitivity": {
+  "a1_mean": {
+   "compared_with_band": false,
+   "d": 0.0036268168059029604,
+   "label": "sensitivity; frozen d = 0.00462 stands",
+   "reading": "A1 realisation mean (K fixed)",
+   "se": 0.0005663919732203254
+  },
+  "archived_minus_2se": {
+   "compared_with_band": false,
+   "d": 0.0030742654092267424,
+   "label": "sensitivity; frozen d = 0.00462 stands",
+   "reading": "archived baseline - 2 SE",
+   "se": null
+  },
+  "archived_plus_2se": {
+   "compared_with_band": false,
+   "d": 0.006160408055093311,
+   "label": "sensitivity; frozen d = 0.00462 stands",
+   "reading": "archived baseline + 2 SE",
+   "se": null
+  },
+  "de3_baseline": {
+   "compared_with_band": false,
+   "d": 0.0028063059090754905,
+   "label": "sensitivity; frozen d = 0.00462 stands",
+   "reading": "D-E3 baseline",
+   "se": null
+  },
+  "frozen": {
+   "compared_with_band": false,
+   "d": 0.004617336732160027,
+   "label": "the frozen value; the STOP stands",
+   "reading": "the prediction as frozen",
+   "se": 0.0008651844400024374
+  },
+  "pooled_baseline": {
+   "compared_with_band": false,
+   "d": 0.0039348935581090365,
+   "label": "sensitivity; frozen d = 0.00462 stands",
+   "reading": "inverse-variance pooled baseline",
+   "se": 0.0006090609144158235
+  }
+ },
+ "b0": {
+  "carry_up_match": {
+   "all_within": true,
+   "max_abs_rel_diff": 8.317790900491673e-13,
+   "tolerance": 0.001
+  },
+  "dip": {
+   "margin": 0.01,
+   "min_energy_mev": 130.0,
+   "min_over_lower_endpoint_minus_1": -0.1829658617583253,
+   "min_over_upper_endpoint_minus_1": -0.15054955457220165,
+   "persists": true
+  },
+  "match": {
+   "all_within": true,
+   "max_abs_rel_diff": 0.0003613144481352526,
+   "tolerance": 0.001
+  },
+  "named_nodes": {
+   "100": {
+    "rec_over_table": 1.0000000000020464,
+    "within": true
+   },
+   "130": {
+    "rec_over_table": 1.0000000000015712,
+    "within": true
+   },
+   "140": {
+    "rec_over_table": 1.000000000001203,
+    "within": true
+   },
+   "150": {
+    "rec_over_table": 1.0000000000008316,
+    "within": true
+   }
+  },
+  "quadrature_accepted": true,
+  "reading": "evaluation feature at the LA150 top nodes (the independent reconstruction reproduces the step)"
+ },
+ "b1": {
+  "150": {
+   "additivity_gap": 0.00028868476487642347,
+   "additivity_gap_over_all": 0.013083045723285043,
+   "gain_all": 0.02206556263597137,
+   "gain_all_se": 0.0007908336528703274,
+   "gain_pA_only": 0.008092890458339719,
+   "gain_pp_only": 0.013683987412755227,
+   "pp_share_of_sum": 0.6283723265454119
+  },
+  "200": {
+   "additivity_gap": 0.00033483457840555175,
+   "additivity_gap_over_all": 0.013441156451082346,
+   "gain_all": 0.024911143592751595,
+   "gain_all_se": 0.0009921798528688072,
+   "gain_pA_only": 0.004754065710622424,
+   "gain_pp_only": 0.01982224330372362,
+   "pp_share_of_sum": 0.8065590033130153
+  }
+ },
+ "b2": {
+  "150": {
+   "recoil_share": 0.09398066983971375,
+   "remainder_share": 0.49934339283254237,
+   "secondary_proton_share": 0.40667593732774393,
+   "status": "recorded"
+  },
+  "200": {
+   "recoil_share": 0.05357748583628236,
+   "remainder_share": 0.29519796301994794,
+   "secondary_proton_share": 0.6512245511437698,
+   "status": "recorded"
+  }
+ },
+ "b3": {
+  "pp-level-0.90-ge150": {
+   "150": {
+    "delta_gain": -1.8870507540347248e-05,
+    "delta_gain_se": 1.0044146201853042e-05
+   },
+   "200": {
+    "delta_gain": -0.0019332571813235333,
+    "delta_gain_se": 0.00018900010175820273
+   }
+  },
+  "pp-level-0.95-ge150": {
+   "150": {
+    "delta_gain": -6.3984192446575605e-06,
+    "delta_gain_se": 5.897729443491032e-06
+   },
+   "200": {
+    "delta_gain": -0.0008120413766072865,
+    "delta_gain_se": 9.460946417896301e-05
+   }
+  },
+  "pp-level-monotone": {
+   "150": {
+    "delta_gain": -0.00027595796831825226,
+    "delta_gain_se": 6.78177604284544e-05
+   },
+   "200": {
+    "delta_gain": -0.003271209856628099,
+    "delta_gain_se": 0.0002724674556295397
+   }
+  },
+  "slope": {
+   "150": {
+    "dg_dln_s_0.90_to_0.95": 0.00023067744194478127,
+    "dg_dln_s_0.95_to_1.00": 0.00012474182680320366
+   },
+   "200": {
+    "dg_dln_s_0.90_to_0.95": 0.020737440881443095,
+    "dg_dln_s_0.95_to_1.00": 0.015831335972921617
+   }
+  }
+ },
+ "banner": "Exploratory, report-only (Amendment 19); not evidence; changes no row.",
+ "complete": true,
+ "disclosure": "D-E9: exploratory, report-only; leads identified after the D-E8 STOP; not a re-evaluation. The D-E8 STOP stands; no band, seed or table of record changes.",
+ "leak_check": {
+  "passed": true
+ },
+ "note_git": "Git projection (decision 0041): explicit allowlist of dimensionless ratios, per-primary rates and probabilities, kinematic statistics, kernel integrals, counts and flags; no absolute cross sections, no distributions or per-point arrays. The complete record is regenerated into validation/generated/ by the committed module.",
+ "provenance": {
+  "archive_sha256": "c35a62d45b8ea98b67031e072aa424a9355b5db3a94b04ccd182047e8e1c708b",
+  "attempts_sha256": "e49303fc1fce4d2d5c6e93ecf8d679efa2984bbab49bb53015aee208b894f9ab",
+  "documents_sha256": {
+   "de3-150-all.json": "b42751ca39f13efe566bfe29ff85ca2f0940910ee98e7619f16b9f57bae11478",
+   "de3-150-emonly-r0.json": "1d61d5e3a8cd7abc2919d264931fea778a43950cfd3ca7781a0846b5f4cdc7c2",
+   "de3-150-emonly-r1.json": "817232fe4ada51377cdcae509af9b770d58ca1b94a0fb866438d89ef530406d0",
+   "de3-150-emonly-r2.json": "52f46c5c0f96779daa3156afad80b220e7498a857c2be748993e353e5d852a76",
+   "de3-150-emonly-r3.json": "71e1f86ffa5bbd76749d6f7370b9f8ba7db2dc674c6507e5966d154029e087b9",
+   "de3-150-emonly.json": "5346b0bb447a33e38d7462f1c9c52974f0af87c077f2bf7264990fd940cd536a",
+   "de3-150-pA-only.json": "e3a859b3e59aef608a3343d67e9b6bba9269efa7f7c84648eff218616406431a",
+   "de3-150-pinned-r0.json": "41da0e36e666042c9a0c78974ea3ad663c52842eb3144b76ba96c078516d102b",
+   "de3-150-pinned-r1.json": "61252f3ab81bb506074c188c54c40b846f6b0b728023ecf89a4c3b38a46b92e7",
+   "de3-150-pinned-r100.json": "c8460b51ae5862c8f40649acf68ce60c6ea9e44750835da04ec508aae7ecc081",
+   "de3-150-pinned-r2.json": "db7e5635736d6fc64b048f32aa2c6804985189b2a17b066b32e7cbca663e0f72",
+   "de3-150-pinned-r3.json": "f2d51d900d3a7fefa6ccd8d737126efcf77be2f1ee39b6bbc5562708895ad718",
+   "de3-150-pp-level-0.90-ge150.json": "6813e7365b13a58c2768fa7f7f30b53cd706596947b9cccacf90a7cb4c684047",
+   "de3-150-pp-level-0.95-ge150.json": "4db877b727836aedb34569dcc25ce5904fab3ae11afaa0a02c512430f6307b49",
+   "de3-150-pp-level-monotone.json": "8faef6e224dc531676b1ecd6aee566477243ee17a0ca77c115d273b4bfb81e4e",
+   "de3-150-pp-only.json": "8ad70e1a67cee8d1d9361a4ccc7078c531d92850336e8bad349272ecbc9100f6",
+   "de3-200-all.json": "04ba39046251948c0edce8e3554dfa76fbcd61542d56a3985cafd4b5ed4a183f",
+   "de3-200-emonly-r0.json": "4f80e3bb20c0961cb23b10483213a1197662809df6cf958a46ab46fa9772ce08",
+   "de3-200-emonly-r1.json": "6a69e73637a897e6f6a8706b416f13e57c24fc9761a8550f146287baf49b7989",
+   "de3-200-emonly-r2.json": "ab2201d42c80759915e76c7a38ac7feeb18ad69a17a7f91bd6dd32cc5fcc99fb",
+   "de3-200-emonly-r3.json": "3905d05687615e8e077404904eafee32652a199dd123e5b7294520c139c8540e",
+   "de3-200-emonly-r4.json": "e15be3d15eecd8c53899b2f780f671338c1588dfb56af511b4c5459a28eee006",
+   "de3-200-emonly-r5.json": "1e30c3fca2dc8f56754d2f244daabb197a194f614d65ffac2fbc36baf9226b10",
+   "de3-200-emonly-r6.json": "7470f0fbc77c5407b0065b322d46fac6325a0400082f55c47450d85cff635eda",
+   "de3-200-emonly-r7.json": "2276dee0095e2f54c9cd05d6f8d20837908a86c138ba04ccf7b4593e78d3aa85",
+   "de3-200-emonly.json": "e2d093a1a724c303a47c5e7e55a7afca9375087b2bfd3df1c909fce996a47a91",
+   "de3-200-m2prime.json": "6b395dc4310f9c06d9c095d4a06bfd1eca44834b76f9b63b387affa5c1033c09",
+   "de3-200-pA-only.json": "3bc5fbb8d1d4dad11c98d6c2673b7013e72e1c4d5a626dd3d9d04ae4b072943b",
+   "de3-200-pinned-r0.json": "600cbdc1e6efb1602a67b11387a6ab4f4aa6ab5bc456a113598a9764d59f2f68",
+   "de3-200-pinned-r1.json": "418a20b6525b8abda4539276d91e3c43f737492c1955d8752490c4328b7e0ae5",
+   "de3-200-pinned-r100.json": "74499fcdde599544451542edc28df77aa97c93b0d2569f4275d06a3493ca3e3d",
+   "de3-200-pinned-r2.json": "354d3d7567fd6b9b378a47b75a979f44a6c22659042fca4c63bc7bc954f77596",
+   "de3-200-pinned-r3.json": "0ae4b6616028cf90aa2e804f9b914258bf5549af9dcb6e72cd8bffc49ac74493",
+   "de3-200-pinned-r4.json": "d0ef4d3d3330cea9e5331bfc20ae82337f6a03fc5290d5b9eba2a769394d1a30",
+   "de3-200-pinned-r5.json": "de605c4dbadd328d93b51be9f5b531823d3df1f779a979231dc1ae5fdf2f24f7",
+   "de3-200-pinned-r6.json": "a1baf48c135644bd218a1a1d971994e8af314ce756785411b191c4c746cd8a36",
+   "de3-200-pinned-r7.json": "a611f63a261b82362154232b0b8ed2af1bb7a025a5771ce7e7b65024ff3ef9fa",
+   "de3-200-pp-level-0.90-ge150.json": "62de028c8d96465222266a007dc9c795ddaec47460870187644a0da9971a8600",
+   "de3-200-pp-level-0.95-ge150.json": "d5a35e3565e1b112ac379e43457aeb803802010012b236b457dbe586bf8519e4",
+   "de3-200-pp-level-monotone.json": "2fd4f140e86e16d1a21350b759c8e0cdb99981b8aadd63f5138a6669b4b29f40",
+   "de3-200-pp-only.json": "fb4f6fe3bdf088d780efbb4e05c9f2699468c5bced34ea4fa4569be795f7e50e",
+   "de9-b0.json": "cf7eae035fa734f976272893899244177a2f07c8be8b2f91154ea2774dea075c"
+  },
+  "expected_tables_sha256": "d29e3caeef03b34b7f1225fbd08040b22cb0f58b81c2ee7c4ca466dfe6e66bba",
+  "git_clean": true,
+  "git_head": "7f688e2319cb434b786a31195bcf623759288d9b",
+  "legacy_fields_absent": {
+   "de3-150-all.json": [
+    "elastic",
+    "elastic_table_npz_sha256",
+    "code"
+   ],
+   "de3-150-emonly.json": [
+    "elastic",
+    "code"
+   ],
+   "de3-150-pA-only.json": [
+    "backend",
+    "precision",
+    "scoring",
+    "tallies",
+    "elastic",
+    "elastic_table_npz_sha256",
+    "code"
+   ],
+   "de3-150-pp-only.json": [
+    "backend",
+    "precision",
+    "scoring",
+    "tallies",
+    "elastic",
+    "elastic_table_npz_sha256",
+    "code"
+   ],
+   "de3-200-all.json": [
+    "elastic",
+    "elastic_table_npz_sha256",
+    "code"
+   ],
+   "de3-200-emonly.json": [
+    "elastic",
+    "code"
+   ],
+   "de3-200-m2prime.json": [
+    "elastic"
+   ],
+   "de3-200-pA-only.json": [
+    "backend",
+    "precision",
+    "scoring",
+    "tallies",
+    "elastic",
+    "elastic_table_npz_sha256",
+    "code"
+   ],
+   "de3-200-pp-only.json": [
+    "backend",
+    "precision",
+    "scoring",
+    "tallies",
+    "elastic",
+    "elastic_table_npz_sha256",
+    "code"
+   ]
+  },
+  "review_id": "REVIEW-622394ed",
+  "reviewed_sha": "7f688e2319cb434b786a31195bcf623759288d9b",
+  "scripts_sha256": {
+   "de3_probes.py": "b5739a51ceb4f35a201f3bff16e6d651ccfa5cd477ed66f2fbd053c9e0bea105",
+   "de9_pp_level.py": "79a2e0cc0492e91896df261cbd2d9249c7a9bd0093cfd241e3b1e2ad942618dc",
+   "de9_record.py": "cb6cdd293c25ae322275062b113737d57dca355926aa5c23b6dae8aec5b04c33",
+   "make_variant_tables.py": "73087718a24b096db736610701a506c06df4cc8839e6604b58aeddb1d9cb2464"
+  }
+ }
+}

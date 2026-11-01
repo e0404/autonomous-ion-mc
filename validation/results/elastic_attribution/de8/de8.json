@@ -1,0 +1,638 @@
+{
+ "archived_se_df": {
+  "150": {
+   "F_df": 6.484105642092071,
+   "F_se": 0.002885429972284705,
+   "I_df": 16.89349223281443,
+   "I_se": 0.030929491234561082,
+   "PP_df": 16.07329835966843,
+   "PP_se": 0.004130309269421311,
+   "g_df": 19.82534536304928,
+   "g_se": 0.0008090603470251417
+  },
+  "200": {
+   "F_df": 8.916565293395866,
+   "F_se": 0.0038376917410936247,
+   "I_df": 21.236523327510504,
+   "I_se": 0.018813288632313716,
+   "PP_df": 7.409044782374323,
+   "PP_se": 0.00548188540134576,
+   "g_df": 20.079167286706795,
+   "g_se": 0.0007833993802192396
+  }
+ },
+ "arms": {
+  "m2": {
+   "per_energy": {
+    "150": {
+     "D1_closure": 1.045985175123219,
+     "D1_se": 0.03254802756989037,
+     "D1b_q": 0.004221731358890368,
+     "D1b_se": 0.00130216306073132,
+     "D2_dg": -0.0007630481055289629,
+     "D2_se": 0.00036314110283105507,
+     "D3_p": 0.011315149356293741,
+     "D3_se": 0.005062285423772227,
+     "D7_recoil": {
+      "ge_20pct_bound": true,
+      "recoil_plateau_gain_contribution": 0.0006156150674211261,
+      "reduction_vs_base": 0.0013846384975569582,
+      "share_of_gain_excess": 0.2368226248190454
+     },
+     "F_arm": 0.8944503701050551,
+     "F_base": 0.8580491358195497,
+     "conditions": {
+      "i": {
+       "hi": 1.3687435648183741,
+       "holds": true,
+       "lo": 0.6312564351816227,
+       "value": 1.045985175123219
+      },
+      "i_b": {
+       "allowed": 0.012788893046517334,
+       "holds": true,
+       "value": 0.004221731358890368
+      },
+      "ii": {
+       "allowed": 0.0036010537539588276,
+       "holds": true,
+       "value": -0.0007630481055289629
+      },
+      "iii": {
+       "allowed": 0.046000201253579814,
+       "holds": true,
+       "value": 0.011315149356293741
+      }
+     },
+     "delta_plateau_integral": -0.16146290267532848,
+     "delta_se": 0.008868873592539576,
+     "gain_arm": 0.015455782198111612,
+     "gain_base": 0.02206556263597137
+    },
+    "200": {
+     "D1_closure": 0.8425672186796931,
+     "D1_se": 0.03354471506766239,
+     "D1b_q": -0.007870896057939447,
+     "D1b_se": 0.0016672861344655258,
+     "D2_dg": 0.0046307379661811865,
+     "D2_se": 0.0004004352820809476,
+     "D3_p": 0.0345073744647344,
+     "D3_se": 0.0035653914555565593,
+     "D7_recoil": {
+      "ge_20pct_bound": false,
+      "recoil_plateau_gain_contribution": 0.0004603039735528989,
+      "reduction_vs_base": 0.001089611711656803,
+      "share_of_gain_excess": 0.13123057958010234
+     },
+     "F_arm": 0.882026050669893,
+     "F_base": 0.8455393196565918,
+     "conditions": {
+      "i": {
+       "hi": 1.2635992587505942,
+       "holds": true,
+       "lo": 0.7364007412494082,
+       "value": 0.8425672186796931
+      },
+      "i_b": {
+       "allowed": 0.009614019918610323,
+       "holds": true,
+       "value": -0.007870896057939447
+      },
+      "ii": {
+       "allowed": 0.0036488710889358775,
+       "holds": false,
+       "value": 0.0046307379661811865
+      },
+      "iii": {
+       "allowed": 0.0676279742503778,
+       "holds": true,
+       "value": 0.0345073744647344
+      }
+     },
+     "delta_plateau_integral": -0.06999988079762787,
+     "delta_se": 0.007633170486912605,
+     "gain_arm": 0.021238849482543065,
+     "gain_base": 0.024911143592751595
+    }
+   },
+   "table_id": "ad0d77578f29cde5dd9c4747d847cfcc586ec8bfb0643544aaa8addcfeb82034",
+   "valid": true
+  },
+  "m2prime": {
+   "per_energy": {
+    "150": {
+     "D1_closure": 0.6348497391715406,
+     "D1_se": 0.023349915032527993,
+     "D1b_q": -0.011842089717971627,
+     "D1b_se": 0.0009291202716705179,
+     "D2_dg": -0.0008754216212063515,
+     "D2_se": 0.00035770939122455617,
+     "D3_p": 0.009748297798901406,
+     "D3_se": 0.0049864770801636895,
+     "D7_recoil": {
+      "ge_20pct_bound": true,
+      "recoil_plateau_gain_contribution": 0.0005530284462897034,
+      "reduction_vs_base": 0.0014472251186883809,
+      "share_of_gain_excess": 0.24752717183333853
+     },
+     "F_arm": 0.8801424834513198,
+     "F_base": 0.8580491358195497,
+     "conditions": {
+      "i": {
+       "hi": 1.3687435648183741,
+       "holds": true,
+       "lo": 0.6312564351816227,
+       "value": 0.6348497391715406
+      },
+      "i_b": {
+       "allowed": 0.012788893046517334,
+       "holds": true,
+       "value": -0.011842089717971627
+      },
+      "ii": {
+       "allowed": 0.0036010537539588276,
+       "holds": true,
+       "value": -0.0008754216212063515
+      },
+      "iii": {
+       "allowed": 0.046000201253579814,
+       "holds": true,
+       "value": 0.009748297798901406
+      }
+     },
+     "delta_plateau_integral": -0.16420794907977054,
+     "delta_se": 0.008736061125354957,
+     "gain_arm": 0.015343408682434223,
+     "gain_base": 0.02206556263597137
+    },
+    "200": {
+     "D1_closure": 0.6040951346796558,
+     "D1_se": 0.02966780365724373,
+     "D1b_q": -0.019486845719002388,
+     "D1b_se": 0.001452122475864808,
+     "D2_dg": 0.004617336732160027,
+     "D2_se": 0.00039150585986363114,
+     "D3_p": 0.03438805620996788,
+     "D3_se": 0.0034859276376066504,
+     "D7_recoil": {
+      "ge_20pct_bound": false,
+      "recoil_plateau_gain_contribution": 0.00045588818949776145,
+      "reduction_vs_base": 0.0010940274957119405,
+      "share_of_gain_excess": 0.1317624074731553
+     },
+     "F_arm": 0.871699198888589,
+     "F_base": 0.8455393196565918,
+     "conditions": {
+      "i": {
+       "hi": 1.2635992587505942,
+       "holds": false,
+       "lo": 0.7364007412494082,
+       "value": 0.6040951346796558
+      },
+      "i_b": {
+       "allowed": 0.009614019918610323,
+       "holds": false,
+       "value": -0.019486845719002388
+      },
+      "ii": {
+       "allowed": 0.0036488710889358775,
+       "holds": false,
+       "value": 0.004617336732160027
+      },
+      "iii": {
+       "allowed": 0.0676279742503778,
+       "holds": true,
+       "value": 0.03438805620996788
+      }
+     },
+     "delta_plateau_integral": -0.07025533004974704,
+     "delta_se": 0.007463045865952028,
+     "gain_arm": 0.021225448248521905,
+     "gain_base": 0.024911143592751595
+    }
+   },
+   "table_id": "addd817961ca24ebde185698ece4b38440a16cfdcf3b21dfad9416a089519b47",
+   "valid": true
+  },
+  "rb": {
+   "per_energy": {
+    "150": {
+     "D1_closure": 0.6112331797864727,
+     "D1_se": 0.022188022269021824,
+     "D1b_q": -0.012764832325975584,
+     "D1b_se": 0.0008832502073221106,
+     "D2_dg": -0.0008609068545732956,
+     "D2_se": 0.00036143838094603893,
+     "D3_p": 0.009950680758684438,
+     "D3_se": 0.005038737506570072,
+     "D7_recoil": {
+      "ge_20pct_bound": true,
+      "recoil_plateau_gain_contribution": 0.0005741688754802008,
+      "reduction_vs_base": 0.0014260846894978835,
+      "share_of_gain_excess": 0.24391140357358826
+     },
+     "F_arm": 0.8793206057310241,
+     "F_base": 0.8580491358195497,
+     "conditions": {
+      "i": {
+       "hi": 1.3687435648183741,
+       "holds": false,
+       "lo": 0.6312564351816227,
+       "value": 0.6112331797864727
+      },
+      "i_b": {
+       "allowed": 0.012788893046517334,
+       "holds": true,
+       "value": -0.012764832325975584
+      },
+      "ii": {
+       "allowed": 0.0036010537539588276,
+       "holds": true,
+       "value": -0.0008609068545732956
+      },
+      "iii": {
+       "allowed": 0.046000201253579814,
+       "holds": true,
+       "value": 0.009950680758684438
+      }
+     },
+     "delta_plateau_integral": -0.16385338414766082,
+     "delta_se": 0.008827618806696648,
+     "gain_arm": 0.015357923449067279,
+     "gain_base": 0.02206556263597137
+    },
+    "200": {
+     "D1_closure": 0.5857384071618535,
+     "D1_se": 0.030784520261672596,
+     "D1b_q": -0.020380999949602407,
+     "D1b_se": 0.0015071804309886455,
+     "D2_dg": 0.00463016403681471,
+     "D2_se": 0.0003910928261449805,
+     "D3_p": 0.03450226446887528,
+     "D3_se": 0.0034822536791062455,
+     "D7_recoil": {
+      "ge_20pct_bound": false,
+      "recoil_plateau_gain_contribution": 0.0004635897512845787,
+      "reduction_vs_base": 0.0010863259339251232,
+      "share_of_gain_excess": 0.13083484731007738
+     },
+     "F_arm": 0.870904274799,
+     "F_base": 0.8455393196565918,
+     "conditions": {
+      "i": {
+       "hi": 1.2635992587505942,
+       "holds": false,
+       "lo": 0.7364007412494082,
+       "value": 0.5857384071618535
+      },
+      "i_b": {
+       "allowed": 0.009614019918610323,
+       "holds": false,
+       "value": -0.020380999949602407
+      },
+      "ii": {
+       "allowed": 0.0036488710889358775,
+       "holds": false,
+       "value": 0.00463016403681471
+      },
+      "iii": {
+       "allowed": 0.0676279742503778,
+       "holds": true,
+       "value": 0.03450226446887528
+      }
+     },
+     "delta_plateau_integral": -0.0700108208220449,
+     "delta_se": 0.007455180263550438,
+     "gain_arm": 0.02123827555317659,
+     "gain_base": 0.024911143592751595
+    }
+   },
+   "table_id": "2a14cdcb93db416f30db0b0fb3bf1607af414590fadd92ea0fe3c06f802ec221",
+   "valid": true
+  }
+ },
+ "bands": {
+  "150": {
+   "F_closure_hi": 1.3687435648183741,
+   "F_closure_lo": 0.6312564351816227,
+   "PP_closure_hi": 1.2652520443480224,
+   "PP_closure_lo": 0.6106173727015969,
+   "a_F": 0.014393032477856362,
+   "a_I": 0.046000201253579814,
+   "a_PP": 0.012788893046517334,
+   "a_gain": 0.0036010537539588276,
+   "delta_obs": 0.034800908417480514,
+   "t95_F": 1.9432,
+   "t95_I": 1.7459,
+   "t95_PP": 1.7459,
+   "t95_gain": 1.7291
+  },
+  "200": {
+   "F_closure_hi": 1.2635992587505942,
+   "F_closure_lo": 0.7364007412494082,
+   "PP_closure_hi": 1.201527482210297,
+   "PP_closure_lo": 0.8067813904130864,
+   "a_F": 0.012863812207436405,
+   "a_I": 0.0676279742503778,
+   "a_PP": 0.009614019918610323,
+   "a_gain": 0.0036488710889358775,
+   "delta_obs": 0.04330423757819124,
+   "t95_F": 1.8595,
+   "t95_I": 1.7207,
+   "t95_PP": 1.8946,
+   "t95_gain": 1.7247
+  }
+ },
+ "banner": "Exploratory, report-only (Amendment 19); not evidence; changes no row.",
+ "conditions": {
+  "v": {
+   "construction_record": {
+    "de7_sha256": "302d03a4c77bbdaebb5db17b20fa632f4e306630305beb17745391f05b1a4d73",
+    "holds": true,
+    "reproduction_2pct": true,
+    "table_id": "addd817961ca24ebde185698ece4b38440a16cfdcf3b21dfad9416a089519b47",
+    "trigger2": true,
+    "trigger3": true,
+    "trigger4": true
+   }
+  }
+ },
+ "d4": {
+  "ad0d77578f29cde5dd9c4747d847cfcc586ec8bfb0643544aaa8addcfeb82034": {
+   "iv_5_of_5_form_ge_4": true,
+   "iv_in_domain_3_of_3": true,
+   "iv_toward_count_5": 5,
+   "report_only": true,
+   "rows": {
+    "100": {
+     "D5_tail_moment_ratio": 0.18270804457170456,
+     "D5_theta_lab_median_ratio": 0.7299077916867851,
+     "arm_over_geant4": 1.0159908321286812,
+     "arm_over_table": 0.659516415049123,
+     "identical_by_construction": false,
+     "moves_toward_1": true,
+     "table_over_geant4": 1.5405087863552371
+    },
+    "150": {
+     "D5_tail_moment_ratio": 0.11942379788114439,
+     "D5_theta_lab_median_ratio": 0.775989192344076,
+     "arm_over_geant4": 1.0528128215769161,
+     "arm_over_table": 0.7840951622574736,
+     "identical_by_construction": false,
+     "moves_toward_1": true,
+     "table_over_geant4": 1.3427105181286703
+    },
+    "200": {
+     "D5_tail_moment_ratio": 0.0988936546416503,
+     "D5_theta_lab_median_ratio": 0.785834354719863,
+     "arm_over_geant4": 1.0711447467997,
+     "arm_over_table": 0.8325059158599507,
+     "identical_by_construction": false,
+     "moves_toward_1": true,
+     "table_over_geant4": 1.2866512133949743
+    },
+    "30": {
+     "D5_tail_moment_ratio": 0.4091008731881515,
+     "D5_theta_lab_median_ratio": 0.7191876837828768,
+     "arm_over_geant4": 0.5302307489386536,
+     "arm_over_table": 0.3382329727599794,
+     "identical_by_construction": false,
+     "moves_toward_1": true,
+     "table_over_geant4": 1.5676494949974078
+    },
+    "50": {
+     "D5_tail_moment_ratio": 0.33207649868903016,
+     "D5_theta_lab_median_ratio": 0.7343852517166098,
+     "arm_over_geant4": 0.7452522216694663,
+     "arm_over_table": 0.4461685115574451,
+     "identical_by_construction": false,
+     "moves_toward_1": true,
+     "table_over_geant4": 1.6703380054051922
+    }
+   }
+  },
+  "addd817961ca24ebde185698ece4b38440a16cfdcf3b21dfad9416a089519b47": {
+   "iv_5_of_5_form_ge_4": false,
+   "iv_in_domain_3_of_3": true,
+   "iv_toward_count_5": 3,
+   "report_only": true,
+   "rows": {
+    "100": {
+     "D5_tail_moment_ratio": 0.10727839240217384,
+     "D5_theta_lab_median_ratio": 0.7116255686762605,
+     "arm_over_geant4": 0.965935138020044,
+     "arm_over_table": 0.6270234526252823,
+     "identical_by_construction": false,
+     "moves_toward_1": true,
+     "table_over_geant4": 1.5405087863552371
+    },
+    "150": {
+     "D5_tail_moment_ratio": 0.09481980842853407,
+     "D5_theta_lab_median_ratio": 0.762059459418962,
+     "arm_over_geant4": 1.029146612216466,
+     "arm_over_table": 0.7664694648037637,
+     "identical_by_construction": false,
+     "moves_toward_1": true,
+     "table_over_geant4": 1.3427105181286703
+    },
+    "200": {
+     "D5_tail_moment_ratio": 0.0865755565385176,
+     "D5_theta_lab_median_ratio": 0.7764140974923901,
+     "arm_over_geant4": 1.0578639147887352,
+     "arm_over_table": 0.8221839017253495,
+     "identical_by_construction": false,
+     "moves_toward_1": true,
+     "table_over_geant4": 1.2866512133949743
+    },
+    "30": {
+     "D5_tail_moment_ratio": 1.0035709051989923,
+     "D5_theta_lab_median_ratio": 0.9986812214242002,
+     "arm_over_geant4": 1.5679452126320381,
+     "arm_over_table": 1.0001886375976097,
+     "identical_by_construction": true,
+     "moves_toward_1": false,
+     "table_over_geant4": 1.5676494949974078
+    },
+    "50": {
+     "D5_tail_moment_ratio": 1.0072766048162982,
+     "D5_theta_lab_median_ratio": 1.0010388323703505,
+     "arm_over_geant4": 1.6750564541016537,
+     "arm_over_table": 1.0028248466365446,
+     "identical_by_construction": true,
+     "moves_toward_1": false,
+     "table_over_geant4": 1.6703380054051922
+    }
+   }
+  }
+ },
+ "d6": {
+  "ad0d77578f29cde5dd9c4747d847cfcc586ec8bfb0643544aaa8addcfeb82034": {
+   "150": {
+    "G": {
+     "G_path": 0.45481349451038655,
+     "G_path_plus_recoil": 0.40062210190694614,
+     "G_path_with_post_event_stopping": 0.6308294411395494,
+     "G_pp_slow_local_upper": 1.0,
+     "G_recoil": 0.3177560246396798,
+     "G_total": 0.7713341431627726,
+     "G_total_with_post_event_stopping": 0.7557593975678023,
+     "post_event_stopping_term": 0.7211219433095067
+    },
+    "O-16": {
+     "K_1mm": 0.7713566672849109,
+     "K_2mm": 0.6480232686191719,
+     "K_3mm": 0.5652172623068977,
+     "K_5mm": 0.4549074992826888,
+     "K_star_gauss": 0.6718006027111785,
+     "K_star_literal": 0.638703227956331,
+     "K_star_shifted": 0.6230973285742911,
+     "P_el": 1.0
+    }
+   },
+   "200": {
+    "G": {
+     "G_path": 0.6693318854480772,
+     "G_path_plus_recoil": 0.5037707989046978,
+     "G_path_with_post_event_stopping": 0.8092089364845271,
+     "G_pp_slow_local_upper": 1.0,
+     "G_recoil": 0.2792760914458472,
+     "G_total": 0.9132257853958077,
+     "G_total_with_post_event_stopping": 0.9099856542126447,
+     "post_event_stopping_term": 0.8911306227457632
+    },
+    "O-16": {
+     "K_1mm": 0.8057400023169341,
+     "K_2mm": 0.6903452239848177,
+     "K_3mm": 0.6131184043841478,
+     "K_5mm": 0.5052421083479652,
+     "K_star_gauss": 0.6323656241981586,
+     "K_star_literal": 0.5877699289530335,
+     "K_star_shifted": 0.6055535729163422,
+     "P_el": 1.0
+    }
+   }
+  },
+  "addd817961ca24ebde185698ece4b38440a16cfdcf3b21dfad9416a089519b47": {
+   "150": {
+    "G": {
+     "G_path": 0.4272188489327477,
+     "G_path_plus_recoil": 0.37021026026728177,
+     "G_path_with_post_event_stopping": 0.6192969000255504,
+     "G_pp_slow_local_upper": 1.0,
+     "G_recoil": 0.2830363035502073,
+     "G_total": 0.7597318637850097,
+     "G_total_with_post_event_stopping": 0.7467344727958021,
+     "post_event_stopping_term": 0.7178289261131491
+    },
+    "O-16": {
+     "K_1mm": 0.9213653542581945,
+     "K_2mm": 0.8358581429108616,
+     "K_3mm": 0.7518495081060119,
+     "K_5mm": 0.6135346696905501,
+     "K_star_gauss": 0.8372855509928094,
+     "K_star_literal": 0.792704470109587,
+     "K_star_shifted": 0.7973715767787879,
+     "P_el": 1.0
+    }
+   },
+   "200": {
+    "G": {
+     "G_path": 0.6607280279017428,
+     "G_path_plus_recoil": 0.49234916968931014,
+     "G_path_with_post_event_stopping": 0.8051898616882427,
+     "G_pp_slow_local_upper": 1.0,
+     "G_recoil": 0.2640336681070518,
+     "G_total": 0.9112285169914535,
+     "G_total_with_post_event_stopping": 0.9080856637933576,
+     "post_event_stopping_term": 0.8897967141811265
+    },
+    "O-16": {
+     "K_1mm": 0.9189948268415183,
+     "K_2mm": 0.8343984695197215,
+     "K_3mm": 0.7520474959806696,
+     "K_5mm": 0.6127294398958514,
+     "K_star_gauss": 0.7546635031379519,
+     "K_star_literal": 0.7042053734282455,
+     "K_star_shifted": 0.7257812700386409,
+     "P_el": 1.0
+    }
+   }
+  }
+ },
+ "disclosure": "Go/no-go screen, Amendment 20 (c) as carried by Amendment 21 (e) and its addendum (a); report-only, never evidence. It uses the V11 reference (archived TOPAS F and gain), the V5 reference (TOPAS \u0394IDD and peak/plateau) and the Geant4 thin-target ratios to decide whether the single pre-committed model M2\u2032 is transported at all. It is not a selection among models: M2\u2032 has no free parameter, plan \u00a74.2 forbids switching to M3 on such outcomes, and STOP leads to \"no model change\". It is a stopping rule on gating quantities. The lv5d V11 and V5 runs are therefore not blind to these estimates; they replicate them on independent seeds with the frozen comparators. The M2\u2032 construction outcomes were known before registration (Amendment 21 (a)3) and the de7 record before this addendum; the screen's transport quantities were not. Condition (iv) was revised after de7 to 100 / 150 / 200 MeV and made report-only: its outcome there is predictable from the disclosed construction-level P values. The decisive blind conditions are (i), (i-b), (ii) and (iii). Executed once; recorded whichever way it falls.",
+ "established": true,
+ "failing_conditions": [
+  "(i) at 200 MeV",
+  "(i-b) at 200 MeV",
+  "(ii) at 200 MeV"
+ ],
+ "iv_report_only_note": "condition (iv) is recorded, never part of the verdict; the 30 / 50 MeV cases are identical to the pinned table by construction for M2' and R-B",
+ "leak_check": {
+  "passed": true
+ },
+ "note_git": "Git projection (decision 0041): explicit allowlist of dimensionless ratios, per-primary rates and probabilities, kinematic statistics, kernel integrals, counts and flags; no absolute cross sections, no distributions or per-point arrays. The complete record is regenerated into validation/generated/ by the committed module.",
+ "provenance": {
+  "archive_sha256": "c35a62d45b8ea98b67031e072aa424a9355b5db3a94b04ccd182047e8e1c708b",
+  "de7_sha256": "302d03a4c77bbdaebb5db17b20fa632f4e306630305beb17745391f05b1a4d73",
+  "git_clean": true,
+  "git_head": "c509e351a4c402cf99f2993e2416d3560347d5ff",
+  "reviewed_sha": "c509e351a4c402cf99f2993e2416d3560347d5ff",
+  "scripts_sha256": {
+   "de0_kernels.py": "5f7241593dc131bd2c63eb758ca3a435480e4d66600b86fa486e4118a06b4c1a",
+   "de3_probes.py": "43478d411145cf23f9a2dd19803a201968d0570bd7ce79a0f5a6a8210cf0670a",
+   "de5_sampling.py": "c58da1708a04dabc2fcc829241513b28814cfdcf05d040b99f6aeda12800b7cb",
+   "de8_diagnostic.py": "ece47dd73dab254a438c92bf7ef0052ac7672b221f6846b8d8ee6630c0e17aa4"
+  }
+ },
+ "runs": {
+  "arms": {
+   "m2": {
+    "150": {
+     "executed": true,
+     "sha256": "588bbad30f3814672330af7dda557b00e72f725e6c70e7db3c9ffc620e81a791",
+     "valid": true
+    },
+    "200": {
+     "executed": true,
+     "sha256": "ae11bd9552ac7ac851e28833e2eb25db695f8f5207aa7b6d0dae4bdb3fde4a0f",
+     "valid": true
+    },
+    "de0_sha256": "41e54c9c5369b1baa099501d320e6d719a0f0aba52541089a61239abb5acf08d",
+    "de5_sha256": "60ad4fe143fb0c40733ae573646ff3c904f8c561f7b1901852d9f6e2824ac39c"
+   },
+   "m2prime": {
+    "150": {
+     "executed": true,
+     "sha256": "ce941756cea378d5a1c6c85e559c1ab1b35bc3bbe25a005cdfee95cf6a421502",
+     "valid": true
+    },
+    "200": {
+     "executed": true,
+     "sha256": "6b395dc4310f9c06d9c095d4a06bfd1eca44834b76f9b63b387affa5c1033c09",
+     "valid": true
+    },
+    "de0_sha256": "b333192f8bd19263599f6c9c93f3832139500697ddc39754d97aa4f2cabd827a",
+    "de5_sha256": "4cc0dcdee98209fc2cbd640b7e2b3a233e51d603c9fd718c913ba3dbdd1ac0bd"
+   },
+   "rb": {
+    "150": {
+     "executed": true,
+     "sha256": "313b457523d7a05f16558587824cfbd6d5ea97146c7ea612b9f1e707a91cb61d",
+     "valid": true
+    },
+    "200": {
+     "executed": true,
+     "sha256": "1d5f5e03dd2da8684117af940391192fb2fa6c849a6818b493fa3c14a48e66ac",
+     "valid": true
+    }
+   }
+  },
+  "reused": {
+   "de3-150-all.json": "b42751ca39f13efe566bfe29ff85ca2f0940910ee98e7619f16b9f57bae11478",
+   "de3-150-emonly.json": "5346b0bb447a33e38d7462f1c9c52974f0af87c077f2bf7264990fd940cd536a",
+   "de3-200-all.json": "04ba39046251948c0edce8e3554dfa76fbcd61542d56a3985cafd4b5ed4a183f",
+   "de3-200-emonly.json": "e2d093a1a724c303a47c5e7e55a7afca9375087b2bfd3df1c909fce996a47a91"
+  }
+ },
+ "verdict": "STOP"
+}
