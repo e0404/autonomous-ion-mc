@@ -44,9 +44,12 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
-        # full history: the differential A16 test archives the baseline commit f3a1dd62
-        with:
-          fetch-depth: 0
+
+      - name: Fetch the A16 baseline commit (v3 history only, no tags)
+        # The differential A16 test (R1-D2 (A)) archives `src` of A16_BASELINE, the V3-003D merge
+        # f3a1dd62 on v3/develop. Only that exact commit is fetched: no tags, no other refs, no
+        # broadened refspec (experiment/v3/HISTORY-ISOLATION.md).
+        run: git fetch --no-tags --depth 1 origin f3a1dd62ea2f57a3f4c07999935f317b3c044871
 
       - name: Install uv
         uses: astral-sh/setup-uv@v10.0.1

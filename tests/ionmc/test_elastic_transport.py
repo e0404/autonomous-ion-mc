@@ -117,7 +117,8 @@ def test_a16_digest_nuclear_off_unchanged(tmp_path: Path, monkeypatch: pytest.Mo
     full = st._git("rev-parse", "--verify", f"{st.A16_BASELINE}^{{commit}}")
     assert full is not None, (
         f"baseline commit {st.A16_BASELINE} is not in the git repository (shallow clone?); the "
-        "differential A16 test needs it (CI: actions/checkout with fetch-depth: 0)"
+        "differential A16 test needs it (CI: the workflow step fetches exactly this commit, "
+        "no tags, no other refs; experiment/v3/HISTORY-ISOLATION.md)"
     )
     tar = subprocess.run(
         ["git", "-C", str(ROOT), "archive", "--format=tar", full, "src"],
