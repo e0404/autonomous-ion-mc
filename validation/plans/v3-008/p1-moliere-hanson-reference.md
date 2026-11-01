@@ -13,6 +13,8 @@
 | `validation/scripts/ion_em/moliere_hanson.py` | `9806f0cb47d00c24f89e52bea3768bddfbb6ae332c703180db012aa4ea42b5f4` |
 | `tests/ionmc/test_ion_em_moliere_hanson.py` | `61403e3f3ac2f67e7e4ad8880253e99d7bacadc4d6e796bac42ead6441241133` |
 
+(The table above records the files as committed at 6e155b56. It is SUPERSEDED by the table in the section "Codex REVIEW-98315d4e fixes" at the end of this note; P9 binds the latest table.)
+
 ## Definition implemented (θ0 convention)
 
 θ0 is the **projected** Gaussian width of the whole slab (the Hanson width). This is the convention of
@@ -228,7 +230,7 @@ the reference or plan text was changed.
 |---|---|
 | `validation/scripts/ion_em/__init__.py` | `7962c4af19580a10f51a4bfc703ce45b67a0f96f010aaaf878aef6919b2ed4ea` |
 | `validation/scripts/ion_em/moliere_hanson.py` | `5a99b3b8748a6865584fcbe1337206222ddd7fe197e95f25656eac2324acf164` |
-| `tests/ionmc/test_ion_em_moliere_hanson.py` | `b9dab1411e694adea406ceb82b239a0ea6661656c3eae3378b6637b465f56b41` |
+| `tests/ionmc/test_ion_em_moliere_hanson.py` | `789fd4b1714f18a53fdb3db840228209c5b09a910c1651b1d67b646d93b87e0c` (the test file changed once more after the Codex fixes: the plan-row regex accepts the r5 name `I11-abs`; the earlier value b9dab141… is superseded) |
 
 ### 1. n_Ω from the complete proton Ω
 
