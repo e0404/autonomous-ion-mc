@@ -1,6 +1,6 @@
 # 0043 — Helium, carbon and oxygen electromagnetic transport (DRAFT r5 for independent review)
 
-> **Status: DRAFT r5 (2026-11-01), not yet frozen.** r3 was committed at 2632a465 and reviewed in round V3-008-1; r4/r5 fold in the pre-freeze records P8, P7, P2, P1/P1b (committed at 6e155b56) and the review rounds V3-008-1 and V3-008-2 (`validation/plans/v3-008/review.md`; the six V3-008-2 wording changes applied). The decision is frozen by a reviewed commit only after the pre-freeze checks of the acceptance plan (§P, steps 1–7) close. No result has been produced; nothing has run.
+> **Status: DRAFT r5 (2026-11-01), not yet frozen.** r3 was committed at 2632a465 and reviewed in round V3-008-1; r4/r5 fold in the pre-freeze records P8, P7, P2, P1/P1b (committed at 6e155b56) and the review rounds V3-008-1 and V3-008-2 (`validation/plans/v3-008/review.md`; the six V3-008-2 wording changes applied). The decision is frozen by a reviewed commit only after the pre-freeze checks of the acceptance plan (§P, steps 1–7) close. No transport or qualification result has been produced; the pre-freeze computations P1/P1b (reference module, candidate tables) and the P2 source reading exist and are disclosed.
 
 
 - Status: DRAFT r5 (planner, 2026-11-01), not frozen. History:

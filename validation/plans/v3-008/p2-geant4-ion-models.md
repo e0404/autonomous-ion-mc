@@ -490,3 +490,306 @@ Run-time evidence at P4 (execution only) can replace several of these:
 - the msc block per particle (model name, RangeFactor, stepLimType, latDisp);
 - the ionisation model names;
 - the G4_WATER material table (RadL).
+
+## P2 follow-up (2026-11-01)
+
+Written 2026-11-01 by the research specialist at worktree head `3d2547ad`. Source reading only: no
+transport output, no TOPAS output, no tabulated reference values. Markers as in section 0 (FACT
+(quoted), INFERRED, OPEN). Each OPEN item names the file or run-time line that settles it.
+
+### F0. Provenance (sha256 re-computed here; all match)
+
+| Short name | File (upstream path under `source/`, tag v11.4.2) | sha256 | Bytes | Lines | Acquisition id |
+|---|---|---|---|---|---|
+| [EMB] | `physics_lists/constructors/electromagnetic/src/G4EmBuilder.cc` | `40782f5c5bc0e66f9b4b635a08d8b0c236b8576ad5b885afca04b679bb18d3d1` | 15 843 | 466 | `3e362c8b…` |
+| [HMSC] | `processes/electromagnetic/standard/src/G4hMultipleScattering.cc` | `a664386984f22898ca8bcaf0f38326479e1e463de88446d41fd465dac83f50ea` | 4 288 | 106 | `78bd2972…` |
+| [VMSC] | `processes/electromagnetic/utils/src/G4VMscModel.cc` | `87b9f203542f2412b3bf327b2cc41eb0c5295a92fabf703009b66f7d37b97a69` | 8 224 | 221 | `514d42e3…` |
+| [IPM] | `materials/src/G4IonisParamMat.cc` | `990c6f315a3b6951253eb251024ba439f8edf4e151994c33991510645807849d` | 21 112 | 622 | `4199285b…` |
+| [ICRU73] | `processes/electromagnetic/standard/src/G4IonICRU73Data.cc` | `cf771a5a44ea936c56593b7dd2d67bb4157345eb316815f60880986404fe08d2` | 13 701 | 445 | `33881db2…` |
+
+The upstream paths are the coordinator's acquisition paths; the files do not state their own
+paths. Geant4 Software Licence; short excerpts are quoted with attribution; nothing is
+redistributed as data.
+
+### F1. The msc model for GenericIon and alpha in option 4, and their parameters
+
+**Default model of `G4hMultipleScattering`: Urban. FACT [HMSC] L54–58, L73–79:**
+```
+G4hMultipleScattering::G4hMultipleScattering(const G4String& processName)
+  : G4VMultipleScattering(processName)
+{
+  isInitialized = false;
+}
+...
+void G4hMultipleScattering::InitialiseProcess(const G4ParticleDefinition*)
+{
+  if(isInitialized) { return; }
+  if(nullptr == EmModel(0)) { SetEmModel( new G4UrbanMscModel() ); }
+  AddEmModel(1, EmModel(0));
+  isInitialized = true;
+}
+```
+- FACT: the constructor and `InitialiseProcess` set **no** step-limit type, RangeFactor, skin or
+  lateral-displacement value. These come from the model (F2) or from base-class code (OPEN, F2).
+- FACT [HMSC] L85–87: the process prints its parameters at initialisation:
+  `"      RangeFactor= " … ", stepLimType: " … ", latDisp: "`. **P4 should archive these lines** for
+  "ionmsc" (GenericIon) and for the alpha msc process.
+
+**GenericIon: Urban. FACT.**
+- [OPT4] L161 creates `new G4hMultipleScattering("ionmsc")`. [OPT4] never calls `SetEmModel` on it.
+  [OPT4] L323 registers it for GenericIon. By [HMSC] L76 the model is `G4UrbanMscModel`.
+- [OPT4] registers no `G4CoulombScattering` for GenericIon (L316–325: only `hmsc`, `ionIoni`,
+  `pnuc`).
+- The same "ionmsc" object goes to `ConstructCharged` (L328). There it is registered for deuteron
+  and triton ([EMB] L123–129) and, if `isHEP`, for heavy hadrons and hyper-nuclei ([EMB] L287–297).
+
+**Alpha: Urban, through its own msc process (not "ionmsc"). FACT [EMB] L131–136:**
+```
+  part = G4Alpha::Alpha();
+  ph->RegisterProcess(new G4hMultipleScattering(), part);
+  ph->RegisterProcess(new G4ionIonisation(), part);
+  if( nucStopping != nullptr ) {
+    ph->RegisterProcess(nucStopping, part);
+  }
+```
+- No `SetEmModel` call, so the model is Urban ([HMSC] L76). No `G4CoulombScattering` for alpha.
+- He3 is identical (L138–143).
+- INFERRED: the default process name is "msc" (`G4hMultipleScattering.hh`). P4 should therefore
+  search the printout for the alpha block under "msc", not "ionmsc".
+- Alpha ionisation is `G4ionIonisation` with **no model set** ([EMB] L133). The default models
+  (Bragg-ion type below the switch, `G4BetheBlochModel` above) are INFERRED. They are settled by
+  `processes/electromagnetic/standard/src/G4ionIonisation.cc` and the P4 printout. The claim
+  "alpha = ICRU 90 alpha array" stays OPEN until `G4BetheBlochModel.cc` and
+  `G4BraggIonModel.cc` are pinned.
+
+**Path from option 4 into `G4EmBuilder` (FACT).**
+- [OPT4] L328: `G4EmBuilder::ConstructCharged(hmsc, pnuc);` is called with two arguments.
+- [EMB] L232–234: `ConstructCharged(G4hMultipleScattering* hmsc, G4NuclearStopping* nucStopping, G4bool isWVI)`.
+- [EMB] L284: `ConstructIonEmPhysics(hmsc, nucStopping);`
+- The default value of `isWVI` is in `include/G4EmBuilder.hh`: OPEN (INFERRED `true`).
+- **`isWVI` does not affect alpha or GenericIon** (FACT): it is used only for muons (L243–244),
+  pi/K (L272–275) and p/pbar (L278).
+- Protons get `G4WentzelVIModel` + `G4CoulombScattering` if `isWVI` (FACT [EMB] L190–195, L203);
+  otherwise Urban. The proton model therefore stays INFERRED (WentzelVI) until
+  `G4EmBuilder.hh` or the P4 proton printout settles it. This does not change P2b's status
+  ("very probably inapplicable").
+
+**Nuclear stopping (FACT).**
+- [OPT4] L134 sets `SetMaxNIELEnergy(1*CLHEP::MeV)`, and L164–169 then create `G4NuclearStopping`.
+- It is registered for GenericIon (L325) and alpha ([EMB] L134–136).
+- INFERRED: it acts only below 1 MeV kinetic energy. ionmc deposits locally below 2 MeV/u, so this
+  is irrelevant to V1/V2.
+
+**Step-limit type, RangeFactor and lateral displacement for GenericIon and alpha: partly FACT,
+final value OPEN.**
+- FACT [VMSC] L96–113, called from [URB] L139:
+  ```
+  void G4VMscModel::InitialiseParameters(const G4ParticleDefinition* part)
+  {
+    if(IsLocked()) { return; }
+    G4EmParameters* param = G4EmParameters::Instance();
+    if(std::abs(part->GetPDGEncoding()) == 11) {
+      steppingAlgorithm = param->MscStepLimitType();
+      facrange = param->MscRangeFactor();
+      latDisplasment = param->LateralDisplacement();
+    } else {
+      steppingAlgorithm = param->MscMuHadStepLimitType();
+      facrange = param->MscMuHadRangeFactor();
+      latDisplasment = param->MuHadLateralDisplacement();
+    }
+    skin = param->MscSkin();
+    facgeom = param->MscGeomFactor();
+    facsafety = param->MscSafetyFactor();
+    lambdalimit = param->MscLambdaLimit();
+  }
+  ```
+- Consequences for the model path (FACT):
+  - [OPT4] L126 (`fUseSafetyPlus`) and L128 (`SetMscRangeFactor(0.08)`) apply to e± only.
+  - Ions and alpha take the MuHad values.
+  - [OPT4] L129 `SetMuHadLateralDisplacement(true)` gives `latDisplasment = true` for them on
+    this path.
+  - `skin = 3` ([OPT4] L127) is copied for every particle. [URB] uses it only in the
+    `fUseDistanceToBoundary` branch.
+- The default values of `MscMuHadStepLimitType()` and `MscMuHadRangeFactor()` are OPEN
+  (`processes/electromagnetic/utils/src/G4EmParameters.cc`, `SetDefaults`). INFERRED: `fMinimal`
+  and 0.2.
+- OPEN, competing path: a process-level override for particle type "nucleus" (INFERRED: `fMinimal`,
+  `latDisp = false`, factor 0.2), in `processes/electromagnetic/utils/src/G4EmTableUtil.cc`
+  (`PrepareMscProcess`) or `.../utils/src/G4VMultipleScattering.cc`. Whether it reaches the model
+  after `InitialiseParameters` is not visible in the pinned set.
+- FACT [URB] L485–491: even with `latDisplasment = true`, Urban switches displacement off for a step
+  when `currentRange*doverrb < presafety`, i.e. far from boundaries.
+- **Run-time settlement (P4):**
+  - the [HMSC] L85–87 process line;
+  - the per-model `G4VMscModel::DumpParameters` line, FACT [VMSC] L124–126:
+    `"StepLim=" … " Rfact=" … " Gfact=" … " Sfact=" … " DispFlag:" … " Skin=" … " Llim=" … " mm"`.
+- None of this changes the model identity, and none of it affects the V2 branch.
+
+### F2. `G4VMscModel` defaults and the charge-square question ("λ gets z²")
+
+- FACT [VMSC] L59–68, constructor: `lambdalimit(1.*CLHEP::mm)`, `geomMin(1.e-6*CLHEP::mm)`,
+  `geomMax(1.e50*CLHEP::mm)`, `steppingAlgorithm(fUseSafety)`,
+  `dedx = 2.0*CLHEP::MeV*CLHEP::cm2/CLHEP::g`. Unless the model is locked, `InitialiseParameters`
+  (F1) overwrites the step limit, facrange, latDisplasment, skin, facgeom, facsafety and
+  lambdalimit.
+- OPEN: the in-class initialisers of `facrange`, `latDisplasment`, `skin` and `dtrl` (P2 §2.1
+  INFERRED `dtrl` = 0.05). Settled by `processes/electromagnetic/utils/include/G4VMscModel.hh`.
+- **Charge square in [VMSC] (FACT, whole file read).**
+  - q² appears only in the fallbacks used when no ionisation process is attached:
+    - `x = dedx*q*q` (L146–147, L161–162);
+    - `localrange = kinEnergy/(dedx*q*q*…)` (L177–178, L195–196);
+    - `e -= (localrange - range)*dedx*q*q*…` (L214–215).
+  - **No charge scaling of the transport cross section λ is applied in `G4VMscModel.cc`.**
+- FACT [URB] L399–409 (P2 §2.3): the Urban high-energy branch has no `chargeSquare`.
+  - INFERRED arithmetic: the electron with the same pβ is above 10 MeV for He/C/O at all energies
+    ≥ 2 MeV/u (C at 2 MeV/u: pβc ≈ 48 MeV). So this branch is the one used.
+- **Still OPEN:** whether a z² enters outside these files, through:
+  - the inline `GetTransportMeanFreePath` ([URB] L448, L726, L842 call it), in `G4VMscModel.hh`;
+  - the λ table built for GenericIon and reused for C/O, in `G4EmTableUtil.cc` and
+    `G4VMultipleScattering.cc`.
+- Impact:
+  - λ does not enter θ0;
+  - it shifts the in-window rms by ≈ 1 % (P2 §6.3 scratch);
+  - it is irrelevant to the V2 branch.
+
+### F3. `G4IonICRU73Data`: directories, naming, span, the water special case, erratum
+
+**Data directory (FACT L158–161):** `G4EmParameters::GetDirLEDATA() + "/ion_stopping_data/"`.
+INFERRED: this is `$G4LEDATA`.
+
+**Directory choice for G4_WATER under option 4 (FACT).**
+- [OPT4] L131 sets `SetUseICRU90Data(true)`.
+- [ICRU73] L88: `namesICRU90[3] = {"G4_AIR","G4_GRAPHITE","G4_WATER"}`.
+- [ICRU73] L195–198: a match calls `ReadMaterialData(mat, densityCoef[j], true)`.
+- [ICRU73] L261–264 and L283:
+  ```
+  if(useICRU90 && Z <= 18) {
+    ost << "90";
+  } else {
+    ost << "73";
+  ...
+  ost << "/z" << Z1 << "_" << name << ".dat";
+  ```
+- Hence for C and O in G4_WATER, Geant4 11.4.2 + option 4 reads
+  **`ion_stopping_data/icru90/z6_G4_WATER.dat` and `icru90/z8_G4_WATER.dat`**. It never reads
+  `icru73/z{6,8}_G4_WATER.dat`. For Z ≤ 18, Z1 = Z and there is no Z² rescaling (L259–262).
+- **If `icru90/z8_G4_WATER.dat` is absent from G4EMLOW 8.8:**
+  - `RetrieveVector(ost, false)` returns nullptr without a warning (L404–416);
+  - `GetDEDX` returns 0 (L147);
+  - LS falls back to Bragg × q² (P2 §3, [LS] L289–290).
+  - **P5 should add `icru90/z8_G4_WATER.dat` to the member list** and record whether it exists.
+
+**The ICRU 73 named-material list is inoperative (FACT by C++ semantics).**
+- [ICRU73] L56–87: the 31 initialisers of `namesICRU73[31]` contain no commas (checked: 0 commas in
+  L57–87). Adjacent string literals concatenate, so `namesICRU73[0]` is one concatenated string and
+  `namesICRU73[1..30]` are empty.
+- The name match at L208–219 therefore never succeeds.
+- Consequence: without the ICRU 90 flag, G4_WATER would be built from element files
+  `icru73/z{Z}_{1,8}.dat` by mass-fraction additivity (L222–238, L310–336, L385–389), not from
+  `icru73/z{Z}_G4_WATER.dat`.
+- For V3-008 this means the `icru73/z{6,8}_G4_WATER.dat` files, if used as the I3 reference, are
+  not read by TOPAS at any energy.
+- INFERRED: this is an upstream code defect. It does not affect option 4 + G4_WATER.
+
+**Energy span (FACT).**
+- L100–102: `fEmin = 0.025*CLHEP::MeV; fEmax = 2.5*CLHEP::MeV;`, with
+  `fNbins = fNbinsPerDecade*G4lrint(std::log10(fEmax/fEmin))` (2 decades). The value of
+  `fNbinsPerDecade` is OPEN (`include/G4IonICRU73Data.hh`).
+- Each file is resampled onto this log grid (L432–437).
+- Below fEmin: `(*v)[0]*std::sqrt(e/fEmin)` (L148–149).
+- It is queried only at escaled ≤ 2.0 MeV (P2 §3, [LS] L271–274). The loader window therefore says
+  nothing about the files' own span; that is the P5 (i) data question.
+
+**Units and the water scale factor (FACT L89, L198, L286–288).**
+```
+const G4double densityCoef[3] = {0.996, 1.025, 0.998};
+...
+const G4double fact = coeff *
+  mat->GetDensity() * CLHEP::MeV * 1000 * CLHEP::cm2 / CLHEP::g;
+v->ScaleVector(CLHEP::MeV, fact);
+```
+- G4_WATER file values are multiplied by **0.998** × density × 1000 MeV cm²/g.
+- INFERRED: the file values are in MeV cm²/mg on a MeV (proton-scaled) energy axis; P5 (ii)
+  confirms this.
+- The meaning of 0.998 is not documented in the file (OPEN). It is not a plain density ratio
+  (graphite takes 1.025).
+- It acts only at ≤ 2.0 MeV scaled, i.e. on ≲ 0.03 mm of residual C/O range: negligible for V1.
+
+**Erratum (FACT negative).**
+- The file has no comment on an erratum, a revision or an I-value (grep for "errat", "revis",
+  "67.2", "78": none).
+- The only provenance comment is "data from ICRU73 or ICRU90" ([LS] L272).
+- The erratum question stays with P5 (iii) (data and documentation).
+
+**Effective-charge scaling (FACT).**
+- For ICRU 90 files with Z ≤ 18 there is none.
+- For ICRU 73 projectiles missing from `zdat`, the nearest tabulated Z1 is rescaled by
+  (Z/Z1)² (L265–278, L297–303). C and O are in `zdat` (L91).
+
+### F4. `G4IonisParamMat`: Zeff for Urban, X0, and the I value of G4_WATER
+
+**Zeff used by Urban (`GetZeffective()`, [URB] L1115): FACT [IPM] L412–448:**
+```
+      const G4double weight = theAtomicNumDensityVector[iel];
+      norm += weight;
+      z += element->GetZ() * weight;
+...
+    z *= norm;
+...
+  fZeff = z;
+```
+- This is the **atom-number-density-weighted mean Z**.
+- For H2O (atom ratio 2:1, any H2O definition): **Zeff = (2·1 + 1·8)/3 = 10/3 = 3.3333**.
+- Hence c1 = 0.8996113 and c2 = 0.0382116 in P2 §6.1 (the 10/3 column; the 6.6 alternative is
+  rejected).
+- INFERRED: `GetZeffective()` is the inline accessor returning `fZeff` (`materials/include/G4IonisParamMat.hh`).
+- FACT L382–385: a different, mass-fraction-weighted Zeff (≈ 7.22 for water) is used only in
+  `ComputeFluctModel` (energy-loss fluctuations), not by Urban msc.
+
+**X0 (radiation length) is not in this file. FACT.**
+- The `fX0density` symbol in [IPM] (L99, L104, L372, L473) is the Sternheimer density-effect
+  parameter, not the radiation length. The two must not be confused.
+- `currentRadLength = couple->GetMaterial()->GetRadlen()` ([URB] L850) comes from
+  `materials/src/G4Material.cc` (`ComputeRadiationLength`) with
+  `materials/src/G4Element.cc` (Tsai factors). **OPEN** until these are pinned or the P4 material
+  printout ("RadL") is archived.
+- INFERRED cross-check: Tsai's formula with Geant4's light-element constants gives
+  X0(H2O) ≈ 36.08 g/cm², i.e. 36.08 cm at the G4_WATER density 1.0. This is consistent with P2's
+  36.083 cm.
+
+**I value (new finding; for the lineage wording).**
+- FACT [IPM] L556–619: a chemical formula `"H_2O"` maps to 75.0 eV. The name is at L581, index 38;
+  the value at L606, index 38. This overrides the density-effect data.
+- INFERRED: G4_WATER carries the formula "H_2O" and is then set to 78 eV by
+  `G4NistMaterialBuilder` via `SetMeanExcitationEnergy` (FACT L456–474 corrects the density
+  effect when this happens).
+- The plan's "G4_WATER (I = 78 eV)" stays INFERRED until the P4 material printout (or
+  `materials/src/G4NistMaterialBuilder.cc`) shows 78 eV.
+
+### F5. V2 branch
+
+**Applies: "If Urban: V2 informative (Case C), the raw ratio and expected direction reported." —
+FACT at the Geant4-source level.**
+- In Geant4 11.4.2 `G4EmStandardPhysics_option4`, GenericIon and alpha each get a
+  `G4hMultipleScattering` with no model set, hence `G4UrbanMscModel`.
+- Neither gets a `G4CoulombScattering` process (F1: [OPT4] L161, L316–325; [EMB] L131–136;
+  [HMSC] L76).
+- The second branch (WentzelVI/single scattering) is excluded for ions by source.
+- Residual confirmation is at the TOPAS level only. The P4 scorer-free printout must show the Urban
+  msc model for GenericIon ("ionmsc") and alpha, and no CoulombScat process for them, which
+  confirms that OpenTOPAS's `g4em-standard_opt4` alias instantiates the unmodified constructor and
+  that no region model activator applies.
+- A contradicting P4 printout is a STOP for this branch assignment (amendment before any ion TOPAS
+  run). It is not a re-interpretation.
+- The remaining OPEN items (step-limit type, RangeFactor, latDisp, λ z², `dtrl`, X0) affect only
+  an Urban emulator, which r5 withdrew. They do not affect Case C.
+
+### F6. Note for P4 (outside P2 scope; flagged, not investigated further)
+
+- The OpenTOPAS documentation shows `d:Ph/Default/EMRangeMax = 600. MeV # maximum for EM tables`
+  and states that Geant4 ≥ 11.3 requires at least 600 MeV.
+- If OpenTOPAS applies such a default, the alpha tables (in alpha kinetic energy; INFERRED from
+  `G4ionIonisation`) would end below He 150–250 MeV/u = 600–1000 MeV total.
+- P4 should archive the `printParameters` maximum kinetic energy. The He bundles should set
+  `d:Ph/Default/EMRangeMax` ≥ 1.1 GeV explicitly, unless the printout shows a larger value.
+- GenericIon tables (scaled energy ≤ 433 MeV for O 430 MeV/u) are inside 600 MeV.

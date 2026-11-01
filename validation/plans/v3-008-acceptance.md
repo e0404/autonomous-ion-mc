@@ -198,7 +198,6 @@ full-scale statistical results were observed is consumed, pass or fail.
      graded form is introduced by the amendment of its second branch. No reference prediction is
      recomputed after a TOPAS output has been seen, and no parameter is fitted to TOPAS.
   4. Evidence gap (I3 data, V3 measured, ion MCS z-dependence): an intervention per protocol. For the lateral gap it is used only after P6 and P10 fail, with the wording of decision 0043 §3 verbatim ("Unavailable input: independent evidence of the charge dependence of lateral spreading for He/C/O in water at 50–430 MeV/u, … recorded as a gap in the ledger."). Integration is allowed with the gap stated in the ledger; V2-ION stays "in progress".
-     allowed with the gap stated in the ledger; V2-ION stays "in progress".
 - **T1-ion and T12-ion failures are STOP (implementation defect) before any V-row is run.**
 - Schedule checkpoint: if implementation exceeds 10 working days, record the cause and re-plan; no gate changes.
 - Every failure, inconclusive result and consumed base is preserved.
