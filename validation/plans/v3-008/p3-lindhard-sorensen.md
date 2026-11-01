@@ -60,11 +60,38 @@ Standard points (effective-charge variant; r/S % at 50, 150, 290, 430 MeV/u; dR/
 
 Protons (context only): ionmc applies no Mott term for z = 1, so the proton model omits LS - Bloch, at most 0.093 % of S and 0.082 % of R from 2 MeV/u (0.76 mm at 430 MeV), inside the proton budget qualified separately.
 
-## 6. Verdict
+## 6. Verdict (effective-charge and bare-z variants; the mixed convention is treated in the section after section 6)
 
 - The expectation r <= 0.1 % of S is met (12C 0.060 %, 16O 0.097 %); 16O uses most of it (small margin, at about 17 MeV/u).
 - The 0.2 % range trigger is NOT met (max 0.095 % for 16O, 0.060 % for 12C).
 - No LS option is added. r is a one-signed residual of ~0.1 % in S and R at most; it can be cited as a bound in attribution of ion-stopping residuals.
+
+## Mixed charge convention (Codex REVIEW-e0b586fd finding 1)
+
+Chronology: this variant was added on 2026-11-01 after Codex REVIEW-e0b586fd (pre-freeze check), SEEN. The numbers below are not blind evidence. The sections above are unchanged and refer to the variants defined there (effective charge q in LS, Bloch and Mott1; bare z in all three).
+
+Definition. r_mixed = dL_LS(z_nominal) - Bloch(q_eff) - Mott1(q_eff): the LS correction at the bare nuclear charge z, with the ionmc Bloch and first-order Mott terms at the Barkas-form effective charge q exactly as ionmc applies them. r_mixed/S is r_mixed/L in the same normalisation as the other variants (S = K q^2 (Z/A) beta^-2 L, q^2 prefactor as in ionmc and in Geant4). The driver evaluates it on the same 941-point grid, 2-430 MeV/u (range shift by the same exact log-log quadrature; the "from 10 MeV/u" range is integrated on a separate 400-per-decade grid starting at 10 MeV/u). All aggregates are in `p3-output.json`, `summary.<ion>.mixed_charge_convention` and `verdict.<ion>.mixed_convention` (new keys; existing keys unchanged).
+
+Numbers (percent of S; dR/R positive means ionmc range longer):
+
+| Ion | max abs r_mixed/S, at E | r_mixed/S at 2 / 5 / 10 MeV/u | abs r/S at 5 / 10 MeV/u | max abs dR/R from 2 MeV/u | dR/R at 430 from 2 | max abs dR/R from 10 MeV/u | q/z > 0.999 above | last E with abs r_mixed/S > 0.1 % |
+|---|---|---|---|---|---|---|---|---|
+| 4He | 0.0084 % at 5.05 | -0.0058 / +0.0084 / +0.0078 | 0.0084 / 0.0078 | 0.0077 % | 0.0052 % | 0.0078 % | 3.6 MeV/u | none |
+| 12C | 1.224 % at 2.0 | -1.2236 / -0.0740 / +0.0471 | 0.0740 / 0.0471 | 1.216 % (at 2.01 MeV/u) | 0.0456 % | 0.0563 % | 16.0 MeV/u | 4.69 MeV/u |
+| 16O | 2.558 % at 2.0 | -2.5582 / -0.3104 / +0.0402 | 0.3104 / 0.0402 | 2.545 % (at 2.01 MeV/u) | 0.0800 % | 0.0917 % | 23.6 MeV/u | 6.58 MeV/u |
+
+The r_mixed sign is negative at low energy and positive above (12C and 16O change sign between 5 and 10 MeV/u). Above the q/z > 0.999 energy (16.0 and 23.6 MeV/u) the three variants coincide by construction; between 10 MeV/u and that energy the mixed variant differs only slightly from the others (its positive maximum over the grid is 0.057 % of S for 12C and 0.095 % for 16O). The 0.2 % range threshold is crossed (from 2 MeV/u) only for the mixed variant, only for last energies E <= 6.86 MeV/u (12C) and E <= 11.9 MeV/u (16O), where the accumulated range from 2 MeV/u is 0.20 mm (12C) and 0.44 mm (16O) in water; the corresponding absolute shift is about 0.4 and 0.9 micrometre at those energies (0.2 % of the range) and the largest absolute shift over 2-430 MeV/u is 0.141 mm (12C) and 0.185 mm (16O), at the high-energy end, from the 0.05-0.08 % relative shifts there.
+
+Comparison with the reviewer's estimate. At 2 MeV/u the driver gives dL_mixed = -0.04649 (12C) and -0.09469 (16O), against the reviewer's approximately -0.0465 and -0.0947: they agree. The effective-charge variant gives +0.00180 (12C) and +0.00218 (16O) at 2 MeV/u, the bare variant +0.00195 and +0.00232; the large negative value of the mixed convention arises because the LS term is evaluated at z (nominal) while the Bloch term (about -q^2 alpha^2/beta^2 times a sum) and Mott1 are subtracted at the smaller q: LS(z) - Bloch(q) - Mott1(q) = [LS(z) - Bloch(z) - Mott1(z)] + [Bloch(z) - Bloch(q)] + [Mott1(z) - Mott1(q)], the last two brackets being what is missing from the cancellation. The finding is therefore correct in the numbers; the pre-review variants did not compute this combination.
+
+Physics statement (no advocacy). The Lindhard-Sorensen theory is the exact treatment of an electron scattering by a point nucleus of charge z; the Bloch and Mott corrections evaluated at an effective charge q describe a point charge q. For a partially stripped ion below about 10 MeV/u (q < z), the LS theory at the bare charge z and the Bloch/Mott corrections at q are not parts of one consistent theory: the first assumes the full nuclear charge acts at all impact parameters, the second assumes the screened charge does. The mixed convention is the documented indexing of Geant4 (section 7: `Zin = lrint(|charge|)` for the LS table with the q^2 prefactor), that is a lineage convention, not a theorem. The ionmc convention (every correction at q) is the other self-consistent choice, and it is the one implemented in ionmc's Bethe model (primary variant in section 5). The difference between the two conventions is bounded by the numbers above and is confined to the interval where q/z < 0.999 (below 16.0 MeV/u for 12C and 23.6 MeV/u for 16O); in practice it is below 0.1 % of S above 4.69 MeV/u (12C) and 6.58 MeV/u (16O). No claim is made about which convention is closer to the true stopping of a partially stripped ion: that needs a screened-ion LS calculation or experimental data, neither of which is in this check.
+
+Verdict by variant (pre-declared P3 rule; nothing re-graded and no threshold loosened):
+
+- Effective-charge (ionmc) variant and bare-z variant (sections 5 and 6, unchanged): (a) the 0.2 % range trigger is not met (max 0.095 % of R); (b) the expectation of at most 0.1 % of S holds at every energy 2-430 MeV/u (max 0.097 % for 16O).
+- Mixed convention: (a) the 0.2 % CSDA-range trigger, stated as a shift of the range at any domain energy and evaluated with the range counted from E_cut = 2 MeV/u as for the other variants, IS MET (exceeded) for 12C and 16O: max 1.216 % (12C) and 2.545 % (16O), at 2.01 MeV/u, dropping below 0.2 % for end energies above 6.86 MeV/u (12C) and 11.9 MeV/u (16O); it is not met for 4He (max 0.008 %). With the range counted from 10 MeV/u the maximum is 0.056 % (12C) and 0.092 % (16O): not met. The relative range shift at low energy is large because the range accumulated from 2 MeV/u is small there (0.20 and 0.44 mm at the crossing energies, shift about 0.4 and 0.9 micrometre) and the shift is accumulated mostly in the 2-10 MeV/u interval (the from-10 MeV/u maxima above are 20-30 times smaller). The rule as pre-declared (any domain energy) is therefore met for the mixed convention, not met for the ionmc convention. (b) The expectation r <= 0.1 % of S: FAILED for the mixed convention below 4.69 MeV/u for 12C (max 1.224 % at 2.0 MeV/u) and below 6.58 MeV/u for 16O (max 2.558 % at 2.0 MeV/u); met above those energies (to 430 MeV/u, max 0.057 % for 12C and 0.095 % for 16O above them); met at every energy for 4He (max 0.0084 %); and met at every energy for the ionmc convention.
+- Whether the mixed-convention exceedance of the range trigger requires an LS option (amendment) is a decision for the lead orchestrator and is not taken here: the P3 rule is stated for the quantity "omitted by ionmc's Bethe model", and ionmc's own convention is the effective-charge variant; which convention is the reference for the rule is the scientific decision point.
+- I3 tolerances are unaffected by a term of this size where I3 applies: the 2-10 MeV/u tolerance (6 %) against a mixed-convention term of at most 1.224 % (12C) and 2.558 % (16O) of S at 2 MeV/u (0.31 % of S at 5 MeV/u for 16O), and the at-least-10 MeV/u tolerance (1.5 %) against at most 0.057 % (12C) and 0.095 % (16O) of S above 10 MeV/u (0.047 % and 0.040 % at 10 MeV/u).
 
 ## 7. Exploratory cross-check against the Geant4 LS table (SEEN, not construction, not a test)
 
@@ -98,16 +125,19 @@ c(beta) = (LS - Bloch - Mott1)/(alpha z)^2 extrapolated to small z is 2.0-2.1 (b
 Committed files (sha256, computed after the final edits):
 
 - `validation/scripts/ion_em/lindhard_sorensen.py` 3bfeb288df6b586756e9420b32af809e744cc783eae498547cace47625114684
-- `validation/scripts/ion_em/p3_driver.py` 6cabafcbea3bd10fddfd95929e9fa89fccb2eb31b14a9653aec7515f8a66b391
-- `tests/ionmc/test_ion_em_lindhard_sorensen.py` 4f99a9e7e8ba700905fdac6ed35d10ae0bbef808b9807c91b50266e85c595fd8
-- `validation/plans/v3-008/p3-output.json` (aggregates only: derived from the ionmc model and the LS theory; no NIST/ICRU values) 787a2ad783adb433849684ee4e085297bdc1de36de88e4df6084c1bb4dc83ea4
+- `validation/scripts/ion_em/p3_driver.py` 50db856a5341826e8c915eb11a6df82db38108e2dfbb4b6ab738764c20b17129
+- `tests/ionmc/test_ion_em_lindhard_sorensen.py` d35ca4e34610e153a6aa31f672a180cab4092572c8c839dc4087e606024dc6ef
+- `validation/plans/v3-008/p3-output.json` (aggregates only: derived from the ionmc model and the LS theory; no NIST/ICRU values) 491355f267b55fb742b5963f31ebe1ad6e43e0f65256c212136e0947caa8609c
 
-Reproduce: `OMP_NUM_THREADS=1 UV_LINK_MODE=copy uv run --extra dev python -I -B validation/scripts/ion_em/p3_driver.py [--out PATH] [--report PATH] [--g4-ls-data PATH]` (about 12 s, single process).
+Reproduce: `OMP_NUM_THREADS=1 UV_LINK_MODE=copy uv run --extra dev python -I -B validation/scripts/ion_em/p3_driver.py [--out PATH] [--report PATH] [--g4-ls-data PATH]` (about 20 s, single process).
 
-Logged runs (telemetry/test-logs under /home/wahln/.local/share/ionmc-experiment/experiment-v3/):
+Logged runs (telemetry/test-logs under /home/wahln/.local/share/ionmc-experiment/experiment-v3/), after the mixed-convention addition (2026-11-01):
 
-- driver without Geant4 data (output = committed JSON): test-logs/20261101T163422Z-p3-driver-nog4
-- driver with the Geant4 data file (output and report to the scratchpad only; aggregates identical to the committed JSON, Geant4 table identical to the exploratory one): test-logs/20261101T163446Z-p3-driver-g4
-- tests (lindhard_sorensen, moliere_hanson, exact_omega, seed_families): test-logs/20261101T163539Z-p3-tests (93 passed, 2 xfailed)
+- driver without Geant4 data (output = committed JSON): telemetry/test-logs/20261101T173939Z-p3-driver-nog4-final
+- driver with the Geant4 data file (output and report to the scratchpad only; summary and verdict identical to the committed JSON): telemetry/test-logs/20261101T174009Z-p3-driver-g4-final
+- tests (lindhard_sorensen, moliere_hanson, exact_omega, seed_families): telemetry/test-logs/20261101T174039Z-p3-tests-final (100 passed, 2 xfailed)
+- pre-commit run --all-files: all hooks passed
+
+Earlier logged runs (before the mixed variant; superseded): test-logs/20261101T163422Z-p3-driver-nog4, 20261101T163446Z-p3-driver-g4, 20261101T163539Z-p3-tests (93 passed, 2 xfailed).
 
 Tolerance used in the module/test discipline: no tolerance was loosened to obtain the result; the K-convergence criterion (1e-11) and the Table 1 criterion (rounding + Mott1/5000) are as stated above.

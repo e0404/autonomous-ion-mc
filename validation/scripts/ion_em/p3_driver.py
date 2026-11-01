@@ -84,7 +84,7 @@ def evaluate_ion(st, proj, mat, z: int, e: np.ndarray) -> dict:
     bloch_m = np.array([lsm.bloch_ionmc(float(b2), float(qq)) for b2, qq in zip(beta2, q, strict=True)])
     out = {"beta_rel_dev_max": float(np.max(np.abs(beta_m / beta - 1))),
            "bloch_abs_dev_max": float(np.max(np.abs(bloch_m - bloch_rep)))}
-    r_eff, r_bare, ls_minus_bloch, kmax_used, conv_max = [], [], [], 0, 0.0
+    r_eff, r_bare, r_mixed, ls_minus_bloch, kmax_used, conv_max = [], [], [], [], 0, 0.0
     for b, qq in zip(beta, q, strict=True):
         b = float(b)
         qq = float(qq)
@@ -95,7 +95,10 @@ def evaluate_ion(st, proj, mat, z: int, e: np.ndarray) -> dict:
         ls_minus_bloch.append(res.delta_l - lsm.bloch_ionmc(b * b, qq))
         res_b = lsm.delta_l_ls(lsm.ALPHA_FS * z, b)
         r_bare.append(res_b.delta_l - lsm.bloch_ionmc(b * b, float(z)) - lsm.mott1_ionmc(b, float(z)))
+        # mixed (Geant4-lineage) convention: LS at the bare nuclear charge z, Bloch/Mott1 at q
+        r_mixed.append(res_b.delta_l - lsm.bloch_ionmc(b * b, qq) - lsm.mott1_ionmc(b, qq))
     out.update(e=e, s=s, L=big_l, q=q, beta=beta, r_eff=np.array(r_eff), r_bare=np.array(r_bare),
+               r_mixed=np.array(r_mixed),
                ls_minus_bloch=np.array(ls_minus_bloch), k_max_used=kmax_used,
                convergence_change_max=conv_max)
     return out
@@ -169,12 +172,20 @@ def main() -> None:
         frac_eff = d["r_eff"] / d["L"]
         frac_bare = d["r_bare"] / d["L"]
         frac_lsb = d["ls_minus_bloch"] / d["L"]
+        frac_mixed = d["r_mixed"] / d["L"]
+        rel_mixed, dmm_mixed, _ = range_shift(st, a, e, d["s"], frac_mixed)
+        # same shift with the integration started at 10 MeV/u (separate grid, mixed variant)
+        e10 = np.geomspace(10.0, E_MAX, int(math.ceil(args.points_per_decade * math.log10(E_MAX / 10.0))) + 1)
+        d10 = evaluate_ion(st, proj, mat, z, e10)
+        rel_mixed10, _, _ = range_shift(st, a, e10, d10["s"], d10["r_mixed"] / d10["L"])
+        d5 = evaluate_ion(st, proj, mat, z, np.array([2.0, 5.0, 10.0]))
         rel_eff, dmm_eff, rmm = range_shift(st, a, e, d["s"], frac_eff)
         rel_bare, _, _ = range_shift(st, a, e, d["s"], frac_bare)
         rel_lsb, dmm_lsb, _ = range_shift(st, a, e, d["s"], frac_lsb)
         sel = e > E_CUT * (1 + 1e-9)
         d.update(frac_eff=frac_eff, frac_bare=frac_bare, frac_lsb=frac_lsb, rel_eff=rel_eff,
-                 rel_bare=rel_bare, rel_lsb=rel_lsb, dmm_eff=dmm_eff, dmm_lsb=dmm_lsb, rmm=rmm, sel=sel)
+                 rel_bare=rel_bare, rel_lsb=rel_lsb, frac_mixed=frac_mixed, rel_mixed=rel_mixed,
+                 dmm_mixed=dmm_mixed, e10=e10, rel_mixed10=rel_mixed10, pt=d5, dmm_eff=dmm_eff, dmm_lsb=dmm_lsb, rmm=rmm, sel=sel)
         ions[z] = d
     runtime = time.time() - t0
 
@@ -203,6 +214,47 @@ def main() -> None:
             "check_beta_rel_dev_vs_ionmc": d["beta_rel_dev_max"],
             "check_bloch_abs_dev_vs_ionmc": d["bloch_abs_dev_max"],
         }
+        fm = d["frac_mixed"]
+        q_over_z = d["q"] / z
+        e_q999 = float(e[np.argmax(q_over_z > 0.999)]) if np.any(q_over_z > 0.999) else None
+        above = np.nonzero(np.abs(fm) > EXPECT_S_PCT / 100)[0]
+        pt_f = d["pt"]["r_mixed"] / d["pt"]["L"]
+        ent["mixed_charge_convention"] = {
+            "definition": "r_mixed = dL_LS(z_nominal) - Bloch(q_eff) - Mott1(q_eff); r/S = r/L",
+            "max_abs_r_over_S_pct": 100 * float(np.max(np.abs(fm))),
+            "E_at_max_abs_r_over_S": float(e[np.argmax(np.abs(fm))]),
+            "min_r_over_S_pct": 100 * float(np.min(fm)),
+            "max_r_over_S_pct": 100 * float(np.max(fm)),
+            "r_over_S_pct_at_2": 100 * float(fm[0]),
+            "r_over_S_pct_at_5": 100 * float(pt_f[1]),
+            "r_over_S_pct_at_10": 100 * float(pt_f[2]),
+            "abs_r_over_S_pct_at_5": 100 * abs(float(pt_f[1])),
+            "abs_r_over_S_pct_at_10": 100 * abs(float(pt_f[2])),
+            "delta_L_mixed_at_2": float(d["r_mixed"][0]),
+            "delta_L_eff_at_2": float(d["r_eff"][0]),
+            "delta_L_bare_at_2": float(d["r_bare"][0]),
+            "max_abs_dR_over_R_pct_from_2": 100 * float(np.max(np.abs(d["rel_mixed"][d["sel"]]))),
+            "E_at_max_dR_over_R_from_2": float(e[d["sel"]][np.argmax(np.abs(d["rel_mixed"][d["sel"]]))]),
+            "dR_over_R_pct_at_430_from_2": 100 * float(d["rel_mixed"][-1]),
+            "max_abs_dR_mm_from_2": float(np.max(np.abs(d["dmm_mixed"]))),
+            "E_last_abs_dR_over_R_above_0.2pct_from_2": (
+                float(e[d["sel"]][np.nonzero(np.abs(d["rel_mixed"][d["sel"]]) > TRIGGER_RANGE_PCT / 100)[0][-1]])
+                if np.any(np.abs(d["rel_mixed"][d["sel"]]) > TRIGGER_RANGE_PCT / 100) else None),
+            "R_ionmc_mm_from_2_at_E_last_dR_above_0.2pct": (
+                float(d["rmm"][d["sel"]][np.nonzero(np.abs(d["rel_mixed"][d["sel"]]) > TRIGGER_RANGE_PCT / 100)[0][-1]])
+                if np.any(np.abs(d["rel_mixed"][d["sel"]]) > TRIGGER_RANGE_PCT / 100) else None),
+            "max_abs_dR_over_R_pct_from_10_exceeds_0.2pct": bool(
+                np.max(np.abs(d["rel_mixed10"][1:])) > TRIGGER_RANGE_PCT / 100),
+            "max_abs_dR_over_R_pct_from_10": 100 * float(np.max(np.abs(d["rel_mixed10"][1:]))),
+            "dR_over_R_pct_at_430_from_10": 100 * float(d["rel_mixed10"][-1]),
+            "E_q_over_z_exceeds_0.999": e_q999,
+            "E_last_abs_r_over_S_above_0.1pct": float(e[above[-1]]) if above.size else None,
+            "n_grid_points_abs_r_over_S_above_0.1pct": int(above.size),
+            "standard_points": {f"{p:g}": {
+                "r_over_S_pct": 100 * float(fm[np.searchsorted(e, p)]),
+                "dR_over_R_pct_from_2": 100 * float(d["rel_mixed"][np.searchsorted(e, p)])}
+                for p in STANDARD_POINTS},
+        }
         if z == 1:
             ent["proton_LS_minus_Bloch"] = {
                 "note": "ionmc applies no Mott term for z = 1; this is what the proton model omits",
@@ -221,6 +273,18 @@ def main() -> None:
             "max_abs_r_over_S_pct": mx_s, "max_abs_dR_over_R_pct": mx_r,
             "range_trigger_0p2pct_exceeded": bool(mx_r > TRIGGER_RANGE_PCT),
             "within_expected_0p1pct_of_S": bool(mx_s <= EXPECT_S_PCT),
+        }
+
+    for z in (6, 8):
+        m = summary[names[z]]["mixed_charge_convention"]
+        verdict[names[z]]["mixed_convention"] = {
+            "max_abs_r_over_S_pct": m["max_abs_r_over_S_pct"],
+            "max_abs_dR_over_R_pct_from_2": m["max_abs_dR_over_R_pct_from_2"],
+            "range_trigger_0p2pct_exceeded": bool(m["max_abs_dR_over_R_pct_from_2"] > TRIGGER_RANGE_PCT),
+            "range_trigger_0p2pct_exceeded_from_10": m["max_abs_dR_over_R_pct_from_10_exceeds_0.2pct"],
+            "E_last_abs_dR_over_R_above_0.2pct_from_2": m["E_last_abs_dR_over_R_above_0.2pct_from_2"],
+            "within_expected_0p1pct_of_S": bool(m["max_abs_r_over_S_pct"] <= EXPECT_S_PCT),
+            "E_last_abs_r_over_S_above_0.1pct": m["E_last_abs_r_over_S_above_0.1pct"],
         }
 
     conv = {f"z{z}_E{eu:g}": convergence_demo(z, eu) for z, eu in ((8, 2.0), (8, 430.0), (6, 290.0), (1, 2.0))}
@@ -310,6 +374,23 @@ def render(out, ions, e, idx, conv, g4) -> str:
       "The 16O maximum (just under 0.1 % of S, at about 17 MeV/u) uses most of the 0.1 % estimate; "
       "the estimate in `research-models.md` RQ-S1 is confirmed but not conservative by a large "
       "factor.\n")
+    w("## Mixed charge convention (Codex REVIEW-e0b586fd finding 1)\n")
+    w("r_mixed = dL_LS(z nominal) - Bloch(q) - Mott1(q); r/S = r/L. Added 2026-11-01 after the review (SEEN).\n")
+    w("Range trigger (0.2 %), mixed variant: see `p3-output.json` keys `E_last_abs_dR_over_R_above_0.2pct_from_2`, "
+      "`max_abs_dR_mm_from_2`, `max_abs_dR_over_R_pct_from_10`.\n")
+    w("| Ion | max abs r/S % | at E | r/S % at 2 / 5 / 10 MeV/u | max abs dR/R % (from 2) | "
+      "max abs dR/R % (from 10) | E(q/z > 0.999) | last E with abs r/S > 0.1 % |")
+    w("|---|---|---|---|---|---|---|---|")
+    for k, x in sm.items():
+        if k == "proton":
+            continue
+        m = x["mixed_charge_convention"]
+        lastx = m["E_last_abs_r_over_S_above_0.1pct"]
+        w(f"| {k} | {_f(m['max_abs_r_over_S_pct'])} | {m['E_at_max_abs_r_over_S']:.2f} | "
+          f"{_f(m['r_over_S_pct_at_2'])} / {_f(m['r_over_S_pct_at_5'])} / {_f(m['r_over_S_pct_at_10'])} | "
+          f"{_f(m['max_abs_dR_over_R_pct_from_2'])} | {_f(m['max_abs_dR_over_R_pct_from_10'])} | "
+          f"{m['E_q_over_z_exceeds_0.999']:.1f} | {'none' if lastx is None else f'{lastx:.2f}'} |")
+    w("")
     w("## Method\n")
     w("Point-nucleus LS ([KHV] arXiv:2008.04819v2 eq. 10, read from the rendered PDF page 5; the same "
       "sum term by term in [MARS] arXiv:physics/0505043 eq. LS, LaTeX source):\n")

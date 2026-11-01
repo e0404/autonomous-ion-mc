@@ -12,6 +12,7 @@
   - r5 applies the six wording changes of review round V3-008-2: the §3 selection statement, the
     exact-Ω specification, gating I11-rel, the V2 branches, the lateral-gap intervention, and the
     §6 Molière–Hanson row.
+  - Round V3-008-4 (Codex REVIEW-e0b586fd, 2026-11-01; dated notes, earlier text kept): the operative §3 "Freezing" text replaced by the actual chronology (finding 2); the withdrawn independent-coverage claim for the f_dM extrapolation propagated through §3, §6 and the limitations (finding 3); the V5-SS budget committed as `validation/scripts/ion_em/ss_budget.py` with tests (finding 4, P10 §7.8); finding 1 in `p3-lindhard-sorensen.md`.
   - r6 applies the dispositions of Codex REVIEW-b469dff8 (round V3-008-3): the draft commit history (above); the P6 lateral EVIDENCE GAP propagated; the V5-SS model lineage and class (P10 §7; registration blocked until the Geant4 ion single-scattering model is read); the f_dM domain extrapolation (§3, note of 2026-11-01; P11b). Not accepted. To be reviewed
   independently and committed together with `validation/plans/v3-008-acceptance.md` before any
   V3-008 transport or qualification result exists; the pre-freeze construction/calibration
@@ -153,6 +154,15 @@ sources pinned by sha256. FACT unless marked.
     second-order coefficient comes out at 2.0–2.1 (Morgan–Eby closed form ≈ 1.70; informative). An
     exploratory, source-unsettled observation that Geant4 may apply the LS table at half the
     ionmc-convention magnitude is recorded there for the I3c/V1 attribution only.
+  - **P3 re-opened (2026-11-01, Codex REVIEW-e0b586fd finding 1; SEEN):** with the mixed charge
+    convention (LS at the bare nuclear charge z, Bloch and Mott₁ at the effective charge q — the
+    Geant4 indexing) the omitted term is −1.22 % (C) / −2.56 % (O) of S at 2 MeV/u and shifts the
+    CSDA range from 2 MeV/u by more than 0.2 % for end energies up to ≈ 7 (C) / 12 (O) MeV/u
+    (≈ 0.4 / 0.9 µm), by 0.046 / 0.080 % at 430 MeV/u; the variants coincide where q/z > 0.999
+    (above 16 / 24 MeV/u). r_mixed ≈ Bloch(z) − Bloch(q): the convention decides whether the
+    close-collision Bloch term sees the bare nucleus. The pre-declared trigger is met, so the LS
+    option is added to `BetheOptions`; its default (off = all-at-q, ls-eff, ls-bare, or a
+    documented mixture) is decided in a reviewed amendment after a bounded physics assessment.
 - **Effective charge:** the Barkas form with coefficient 125, in the stopping power only.
   - Below 1 MeV/u no stopping power is evaluated, and transport deposits locally below
     E_cut = 2 MeV/u (section 4).
@@ -381,13 +391,21 @@ With the r6 component, the quadrature of the upper values is ≈ 4.9 %, so the �
   3. carried as a separate ≤ 1.5 % component of the declared ±5 %;
   4. persisted in result metadata (I0: the p1v1_eq energy of the source and `fdm_extrapolated`), with fail-closed proton b-tables to ≥ 3 GeV;
   5. covered, for the independent part, only through V5-SS. Its standard cases already map to extrapolated states (0.46–1.9 GeV); the r6 end cases He 250, C 430 and O 430 reach 0.8–2.5 GeV. This coverage is subject to the V5-SS STOP (P10 §7.4) and to its class (shared screened-Coulomb lineage, independent of f_dM).
+     **[Superseded 2026-11-01 (round V3-008-4, Codex REVIEW-e0b586fd finding 3): item 5 is withdrawn.** Under V5-SS branch B the common-velocity ion/ion ratio covers the extrapolation only differentially (≤ 1.5 pp, below its 3 % tolerance), and V5-SS shares the screened-Coulomb lineage. There is no independent coverage. The gap is named in the lateral-gap intervention filed at the freeze (orchestrator decision 2026-11-01 (a), below), and the extrapolation stays a declared limitation (decision (c)).**]**
 - I11-rel does not test the extrapolation: its C/O equal-velocity proton is itself above 300 MeV.
 
-**Freezing.**
-- The exact-Ω mapping, its b formulas, its evaluation choice (root solve or a bounded tabulation)
-  and the I11-map and I11-rel tests are committed **before the mapping is evaluated against the
-  Molière–Hanson reference**. Their hashes go into P9.
-- Nothing is fitted to the reference, TOPAS or transport output.
+**Freezing (operative text corrected 2026-11-01, round V3-008-4, Codex REVIEW-e0b586fd finding 2; the superseded r5 bullet is quoted at the end of this block and is no longer operative).**
+- **Actual chronology (disclosed; see "Chronology (exact)" above).** The exact-Ω mapping (`validation/scripts/ion_em/exact_omega.py`), its b formulas, its evaluation choice (the per-step root solve), the I11-map and I11-rel tests and the first I11-rel/I11-abs evaluation were produced together, in one commit at 070b07f0, while the plan was unfrozen. The equal-velocity correction was regenerated at 00af9a6c. P11b (I11-ext and the extrapolated θ² fractions) was computed at b3eef90b, after those values had been seen. The required order (mapping and tests committed before any evaluation) was not kept.
+- **What is SEEN.** All P11 values (I11-rel, I11-abs, I11-ext, the P11b fractions) are SEEN construction/calibration results, not qualification evidence. The P9 hashes of the mapping, its script and its tests record what was evaluated; they do not establish pre-registration of these rows.
+- **What the freeze revision may claim as pre-registered.** Only rows whose values have not been seen at the freeze commit (per the records at ce4d3d6a; no ionmc transport run, no scored reference-engine run, no LV/HR qualification step):
+  - capability and implementation rows: I0, I1, I5, I7, I16, C-res, T1-ion, T12-ion, T13-ion (deterministic or statistical checks not yet run);
+  - theory identities not yet evaluated on the implementation: I4, I4b;
+  - stopping comparisons not yet made: I3 (libdEdx ICRU73_NEW against ionmc; P5/P5b inspected the data only), I3b (i), I3c;
+  - transport rows: I6, I8, I8b, I9, I10, I12, I13, I14, I15;
+  - reference rows: V1, V1-held, V2, V4, and the V5-SS statistic (its planning budget, expected bias and discrimination values are SEEN planning values, P10 §7.5.1 and §7.8; the V5-SS outcome is not).
+- **Rows carried as disclosed SEEN, not pre-registered:** I11-rel (the gate, tolerance unchanged), I11-abs and I11-ext (report-only), I11-map (its deterministic identities ran at 070b07f0), I2 (regression on seen table values), I3b (ii) (the P3 curve), and the P1/P1b reference tables.
+- Nothing is fitted to the reference, TOPAS or transport output. (Unchanged.)
+- Superseded r5 text, quoted: "The exact-Ω mapping, its b formulas, its evaluation choice (root solve or a bounded tabulation) and the I11-map and I11-rel tests are committed **before the mapping is evaluated against the Molière–Hanson reference**. Their hashes go into P9."
 
 **Rows.** I11-map (CI, gating): implementation of the root. **I11-rel (LV, gating)**: the relative
 check, failure STOP. **I11-abs** (informative): the absolute comparison, reported with the
@@ -426,7 +444,7 @@ L1115–1125).
 **Single-scattering reference (P10).** Before freeze, P10 checks whether a thin-slab angular-width
 check against a Geant4 single-scattering configuration is available, and at what cost. Candidates:
 `G4CoulombScattering`, or a g4em-standard_SS-type module if OpenTOPAS 4.3 offers it for GenericIon.
-**P10 outcome (closed for coverage):** FACT, `G4EmStandardPhysicsSS.cc` v11.4.2 (cache 8aeaf91c…): L213–219 `particle = G4GenericIon::GenericIon(); G4ionIonisation* ionIoni = new G4ionIonisation(); … ionIoni->SetEmModel(new G4LindhardSorensenIonModel()); ph->RegisterProcess(ionIoni, particle); ph->RegisterProcess(new G4CoulombScattering(false), particle);` (no msc process for GenericIon); L222 `G4EmBuilder::ConstructChargedSS(hmsc);` → alpha `G4ionIonisation` + `G4CoulombScattering(false)` ([EMB] L158–160) and protons `G4hIonisation` + `G4CoulombScattering(false)` ([EMB] L212, L221–222); L107 `param->SetMscThetaLimit(0.0);`. The r5 thick-slab design was infeasible (P10 §3: ≈ 10²–10³ h). **V5-SS is the held-out lateral qualification row** on the P10 design: 1 mm water slab, 2e4 primaries per case, He 150, C 290, O 350 MeV/u and protons at matched velocity; statistic = the ion/proton ratio of the rms projected angular width compared with the model's ratio; pre-registered tolerance |ratio_model/ratio_ref − 1| ≤ 3 %; run ONCE after freeze, only if a scorer-free smoke confirms the OpenTOPAS 4.3 alias, the process list and a cost ≤ 4 h REF. V1-held and V3 provide no lateral evidence.
+**P10 outcome (closed for coverage):** FACT, `G4EmStandardPhysicsSS.cc` v11.4.2 (cache 8aeaf91c…): L213–219 `particle = G4GenericIon::GenericIon(); G4ionIonisation* ionIoni = new G4ionIonisation(); … ionIoni->SetEmModel(new G4LindhardSorensenIonModel()); ph->RegisterProcess(ionIoni, particle); ph->RegisterProcess(new G4CoulombScattering(false), particle);` (no msc process for GenericIon); L222 `G4EmBuilder::ConstructChargedSS(hmsc);` → alpha `G4ionIonisation` + `G4CoulombScattering(false)` ([EMB] L158–160) and protons `G4hIonisation` + `G4CoulombScattering(false)` ([EMB] L212, L221–222); L107 `param->SetMscThetaLimit(0.0);`. The r5 thick-slab design was infeasible (P10 §3: ≈ 10²–10³ h). **V5-SS is the held-out lateral qualification row** on the P10 design: 1 mm water slab, 2e4 primaries per case, He 150, C 290, O 350 MeV/u and protons at matched velocity; statistic = the ion/proton ratio of the rms projected angular width compared with the model's ratio; pre-registered tolerance |ratio_model/ratio_ref − 1| ≤ 3 %; run ONCE after freeze, only if a scorer-free smoke confirms the OpenTOPAS 4.3 alias, the process list and a cost ≤ 4 h REF. V1-held and V3 provide no lateral evidence. **[Superseded 2026-11-01 (round V3-008-4): the cases and the ion/proton statistic of this paragraph are replaced by branch B (ion/ion ratios at a common velocity, 8 ion cases, no protons; the dated note below and the V5-SS row). V5-SS is shared-lineage single-scattering evidence, not independent physical evidence (orchestrator decision 2026-11-01 (a)–(b), below).]**
 
 **r6 (2026-11-01; Codex REVIEW-b469dff8 finding 3; P10 §7): Coulomb-model lineage and evidence class.**
 - **Model per particle.** With no model set by the constructor, `G4CoulombScattering` selects `G4eCoulombScatteringModel` + `G4WentzelOKandVIxSection` for the proton, and `G4IonCoulombScatteringModel` for alpha and GenericIon (FACT, [CS] L120–148).
@@ -440,7 +458,7 @@ check against a Geant4 single-scattering configuration is available, and at what
   - Independent of the multiple-scattering approximation: f_dM, Highland, the Molière angular integration and the b-matching.
   - Not independent of the screened-Coulomb cross-section physics: the same Born screening form on the proton path.
   - It is evidence that the mapping realises the shared cross-section model, not independent physical evidence of the charge dependence of screening.
-- **End cases** He 250, C 430 and O 430 (TOPAS cases 28–33) are added for the f_dM extrapolation coverage.
+- **End cases** He 250, C 430 and O 430 (TOPAS cases 28–33) are added for the f_dM extrapolation coverage. **[Superseded 2026-11-01 (round V3-008-4, finding 3): under branch B He 250, C 430 and O 430 are cases 28–30 of the ion/ion design and give differential coverage only; cases 31–33 are re-assigned or retired (plan §C). No independent coverage of the extrapolation is claimed.]**
 
 **Dated note 2026-11-01 (continuation of round V3-008-3 finding 3; P10 §7.4.1–7.7.1): the ion path is read; V5-SS branch B.**
 - **Ion path (FACT).** `G4IonCoulombScatteringModel` + `G4IonCoulombCrossSection` (ef9b31d4…, 87989b93…; headers a1a9a4f5…, cd5d0b5c…):
@@ -463,6 +481,7 @@ check against a Geant4 single-scattering configuration is available, and at what
     ratio ≤ 2 % (I11-rel gate, SEEN spread ≤ 1.13 pp); statistics 0.7–1.0 %.
   - Combined: quadrature ≈ 2.4 %, conservative 3.0–3.1 %.
   - The He pairs exclude a b without z-dependence (+6.4 to +8.4 %), and the He/O pairs exclude a missing Born term.
+  - **2026-11-01 (round V3-008-4, finding 4):** these figures are reproduced by the committed module `validation/scripts/ion_em/ss_budget.py` with `tests/ionmc/test_ion_em_ss_budget.py` (sha256 in P10 §7.8 and plan P9); every recorded aggregate was reproduced unchanged (quadrature 2.41 %, conservative 3.02–3.14 %).
 - **Class:** held-out single-scattering MC on the ion path.
   - Independent of the MCS approximation.
   - Shares the screened Rutherford law and the Born form; differs in the radius and the electrons, both pre-computed
@@ -537,8 +556,8 @@ and falsification), and V5-SS (held-out, single scattering) if its run condition
 | ICRU 73 (rev.) C/O: libdEdx ICRU73_NEW (I3 evaluation source); G4EMLOW icru73/icru90 files lineage only (Geant4-restricted use) | evaluation (libdEdx; exploratory until I3 frozen) / lineage (G4EMLOW) | the G4EMLOW files are consulted by TOPAS only at ≤ 2.0 MeV scaled (≈ 1.98 MeV/u), 2 < Z ≤ 80, never alpha (P2 FACT) → the libdEdx comparison is largely independent of TOPAS above |
 | TOPAS C/O stopping: `G4BetheBlochModel` table (ICRU 90 proton array at equal velocity: research note, partly confirmed) + q_eff²(ΔL_LS + 2·Barkas·(z−1)/z), no separate Bloch/Mott, switch at 2.0 MeV scaled (P2 FACT) | the reference's construction; I3c attribution diagnostic | — (the r3 trigger "ion tables above 2.5 MeV/u" is not met; no amendment) |
 | Molière–Hanson ion theory (numpy, P1) | theory for the relative ion/proton b mapping (construction); I11-rel gating (relative), I11-abs informative | Urban MSC differs structurally: no charge/β term in its log, truncated core + tail, step-length dependent (θ0 form P2 FACT; Urban as the ion msc model P2 INFERRED, settled by P2 follow-up/P4) |
-| Gottschalk f_dM | construction (qualified for protons ≤ 300 MeV; evaluated at proton-equivalent states up to ≈ 2.5 GeV, extrapolation declared and bounded, §3 r6 note) | no |
-| Geant4 11.4.2 single scattering (`g4em-standard_SS`; V5-SS) | evaluation (held-out, conditional) | shares the screened-Coulomb cross-section physics (Born screening form; proton path FACT, ion path OPEN, P10 §7); independent of f_dM and of the multiple-scattering approximation |
+| Gottschalk f_dM | construction (qualified for protons ≤ 300 MeV; evaluated at proton-equivalent states up to ≈ 2.5 GeV, extrapolation declared and bounded, §3 r6 note). **2026-11-01 (round V3-008-4, finding 3):** the extrapolation has no independent coverage. It is bounded only within the same Molière theory (I11-ext, ≤ 1.5 % component of the ±5 %), V5-SS covers it differentially only, and the gap is named in the lateral-gap intervention filed at the freeze (orchestrator decision 2026-11-01 (a), (c)) | no |
+| Geant4 11.4.2 single scattering (`g4em-standard_SS`; V5-SS) | evaluation (held-out, conditional) | shares the screened-Coulomb cross-section physics (Born screening form; proton path FACT, ion path OPEN, P10 §7); independent of f_dM and of the multiple-scattering approximation. **2026-11-01 (round V3-008-4, finding 3):** ion path FACT (P10 §7.4.1), branch B: ion/ion ratios at a common velocity on `G4IonCoulombScatteringModel` (alpha and GenericIon); shares the screened Rutherford law and the Born form (with corr^0.04), differs in the universal z-dependent radius and the absent electrons (pre-computed bias, `validation/scripts/ion_em/ss_budget.py`, P10 §7.8). Shared-lineage evidence: it does not satisfy the lateral-gap input (orchestrator decision (b)) and covers the f_dM extrapolation only differentially |
 | TOPAS EM-only ion runs | evaluation, independent MC (V1 gating; V2 informative by default) | stopping lineage partly shared (I-value, ICRU 90 proton/alpha arrays, Barkas); straggling independent; MSC model structurally different (Urban) |
 | Sihver, Schardt, Kanai 1998 measured C/O depth-dose | **FAILED as a reference (P6):** curves normalised horizontally to the calculated peaks, figures only, oxygen = 18O | → V3 is an EVIDENCE GAP (intervention path, bundled with the lateral gap if V5-SS is withdrawn) |
 
@@ -555,6 +574,7 @@ and falsification), and V5-SS (held-out, single scattering) if its run condition
   V2 follows the pre-declared branches (Case C if Urban). Independent evidence for the z-dependence
   of lateral spreading rests on V5-SS (held-out, single scattering, run condition per P10) or measured data; otherwise it is a declared gap; the intervention wording is in
   §3. r6: measured data are an EVIDENCE GAP (P6). V5-SS shares the screened-Coulomb cross-section physics (P10 §7), and its registration waits for the ion-side Geant4 model. f_dM is evaluated beyond its proton-qualified domain at most ion energies: the extrapolation is declared and bounded, ≤ 1.5 % against Molière theory (§3 note of 2026-11-01).
+  **Dated note 2026-11-01 (round V3-008-4, Codex REVIEW-e0b586fd finding 3; supersedes the V5-SS clauses of this bullet).** The ion-side model is read and V5-SS is branch B (ion/ion ratios at a common velocity, shared screened-Coulomb lineage). V5-SS is therefore not independent evidence for the z-dependence of lateral spreading, and it covers the f_dM extrapolation only differentially. Per the orchestrator decision of 2026-11-01 (§3), the lateral-gap intervention is filed at the freeze whatever V5-SS shows, naming both the missing independent evidence of the charge dependence of lateral spreading and the absence of independent coverage of the f_dM extrapolation above the 300 MeV proton domain. The extrapolation stays a declared limitation (≤ 1.5 % component, I11-ext, `fdm_extrapolated`); no further coverage is claimed.
 - **Gaps** go to the intervention route. Nothing is relabelled, and no model is tuned to TOPAS.
 
 ## Validation strategy

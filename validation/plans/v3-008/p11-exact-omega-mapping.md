@@ -2,7 +2,7 @@
 
 Nothing is frozen by this note. The I11-rel / I11-abs numbers below are SEEN construction/calibration results, report only, not qualification evidence.
 
-**Status and chronology.** Mapping, tests and the first I11-rel/I11-abs evaluation were produced together at 070b07f0; the values are SEEN construction/calibration results, not qualification evidence; a later rerun cannot make these points independent. The pre-registered order (mapping and tests committed before any evaluation) was not kept. I11-rel stays the gate as pre-registered (2 %, STOP on failure, tolerance never changed) but is evaluated pre-freeze, not blind; the freeze carries it as a disclosed gate. It is not asserted in any unit test. Genuinely held-out evidence for the charge dependence of lateral spreading is V5-SS (if its run condition holds) or measured data only, never I11-rel. (Corrected 2026-11-01 for Codex REVIEW-b469dff8. The 00af9a6c text read "V1-held/V5-SS/measured data", but V1-held has no lateral statistic and provides no lateral evidence. Measured data: EVIDENCE GAP (`p6-lateral-data-search.md`). V5-SS class: P10 §7.5.)
+**Status and chronology.** Mapping, tests and the first I11-rel/I11-abs evaluation were produced together at 070b07f0; the values are SEEN construction/calibration results, not qualification evidence; a later rerun cannot make these points independent. The pre-registered order (mapping and tests committed before any evaluation) was not kept. I11-rel stays the gate as pre-registered (2 %, STOP on failure, tolerance never changed) but is evaluated pre-freeze, not blind; the freeze carries it as a disclosed gate. It is not asserted in any unit test. Genuinely held-out evidence for the charge dependence of lateral spreading is V5-SS (if its run condition holds) or measured data only, never I11-rel. (Corrected 2026-11-01 for Codex REVIEW-b469dff8. The 00af9a6c text read "V1-held/V5-SS/measured data", but V1-held has no lateral statistic and provides no lateral evidence. Measured data: EVIDENCE GAP (`p6-lateral-data-search.md`). V5-SS class: P10 §7.5.) (Dated note 2026-11-01, round V3-008-4: under branch B, V5-SS is shared-lineage single-scattering evidence, not independent physical evidence of the charge dependence of lateral spreading, and it covers the f_dM extrapolation only differentially; with measured data an EVIDENCE GAP, both gaps go into the lateral-gap intervention filed at the freeze (P11c; plan STOP 4).)
 
 **Correction (Codex REVIEW-42ab68dd).** I11-rel is at EQUAL VELOCITY. The 070b07f0 driver evaluated the proton at the ion's numeric MeV/u; the corrected driver uses E_p = E_u A m_p / M (`equal_velocity_proton_energy`), for both the proton model and the proton Moliere-Hanson reference. Regression test `test_i11_rel_proton_is_at_equal_velocity`: beta_p(E_p) = beta_ion(E_u) to 1e-12 at every grid point. The tables below are regenerated.
 
@@ -135,9 +135,33 @@ the hashes above stand.
   2. bound it as in (iii) and carry it in the declared ±5 % model uncertainty as a separate component (≤ 1.5 %; the quadrature becomes ≈ 4.9 %, decision 0043 §3);
   3. add the report-only row I11-ext (the proton drift table, SEEN) and report the extrapolated θ² fraction per I11 point;
   4. persist the domain status in metadata (I0: the p1v1_eq kinetic energy of the source and the flag `fdm_extrapolated`); the proton b-slab tables must reach ≥ 3 GeV or the run fails closed;
-  5. add independent coverage through V5-SS. The 1 mm V5-SS states already map to extrapolated proton states (p1v1_eq 458 MeV for He 150, 1486 for C 290, 1875 for O 350; b_ion 10.3–11.9). The end cases He 250, C 430 and O 430 (786, 2470 and 2482 MeV; cases 28–33, ≈ +1 h REF) reach the largest extrapolation. This coverage holds only subject to the V5-SS STOP (P10 §7.4) and its class: shared screened-Coulomb lineage, independent of f_dM.
+  5. add independent coverage through V5-SS. The 1 mm V5-SS states already map to extrapolated proton states (p1v1_eq 458 MeV for He 150, 1486 for C 290, 1875 for O 350; b_ion 10.3–11.9). The end cases He 250, C 430 and O 430 (786, 2470 and 2482 MeV; cases 28–33, ≈ +1 h REF) reach the largest extrapolation. This coverage holds only subject to the V5-SS STOP (P10 §7.4) and its class: shared screened-Coulomb lineage, independent of f_dM. **[Withdrawn 2026-11-01, round V3-008-4 (Codex REVIEW-e0b586fd finding 3); see P11c. V5-SS adds no independent coverage.]**
 - I11-rel cannot test the extrapolation: at C/O the equal-velocity proton (up to ≈ 430 MeV) is itself extrapolated.
 
 **OPEN after P11b.**
 - Item 1 of the OPEN list above (proton b-tables to ~3 GeV) is now a fail-closed I0 requirement.
-- Whether V5-SS can provide this coverage depends on P10 §7.4.
+- Whether V5-SS can provide this coverage depends on P10 §7.4. **[Answered 2026-11-01: it cannot; P11c.]**
+
+## P11c. Final state of the f_dM-extrapolation coverage (addendum 2026-11-01, round V3-008-4, Codex REVIEW-e0b586fd finding 3)
+
+Planner, at head `ce4d3d6a`. No new computation; this propagates the completed branch-B analysis (P10 §7.4.1,
+§7.5.1, §7.8) and the orchestrator decision of 2026-11-01 (plan STOP 4; decision 0043 §3). P11b (c) item 5 and the
+"OPEN after P11b" line are kept above as written and marked withdrawn.
+
+- **Withdrawn:** "add independent coverage through V5-SS" (P11b (c) 5). V5-SS gives **no independent coverage** of the
+  f_dM extrapolation, for two reasons:
+  1. **Branch B (P10 §7.5.1).** The proton is not a valid z = 1 reference, so V5-SS compares ion/ion ratios at a common
+     velocity. The equal-velocity-proton factor, in which the f_dM extrapolation enters, is common to both ions and
+     cancels. What remains is the difference of the f_dM/Molière–Hanson drift between the two ions' proton-equivalent
+     states: ≤ 1.5 pp over 300 MeV to 3 GeV (I11-ext), below the 3 % tolerance. The coverage is **differential only**.
+  2. **Class.** V5-SS shares the screened Rutherford law and Molière's Born form with the mapping. It is shared-lineage
+     single-scattering evidence, not independent physical evidence.
+- **Absolute θ_ionmc/θ_SS** per ion is report-only (expected reference-model factor +3.1 to +4.4 %, pre-registered in
+  P10 §7.5.1). It is not a coverage of the extrapolation.
+- **Where the gap goes (orchestrator decision 2026-11-01, plan STOP 4 (a)–(c)):** the lateral-gap intervention filed at
+  the freeze names, as unavailable input, the independent evidence of the charge dependence of lateral spreading **and**
+  the absence of independent coverage of the f_dM extrapolation beyond the 300 MeV proton domain. The extrapolation stays
+  a declared limitation: the ≤ 1.5 % component of the ±5 % model uncertainty, the report-only row I11-ext, and the
+  `fdm_extrapolated` flag with the p1v1_eq energy in the metadata (I0). No further coverage is claimed.
+- **State after P11c:** the extrapolation is declared, theory-bounded (I11-ext, SEEN), carried in the uncertainty and
+  routed to the intervention. Nothing in the mapping, its scripts or its tests changes, so the hashes above stand.
