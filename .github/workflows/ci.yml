@@ -44,6 +44,9 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
+        # full history: the differential A16 test archives the baseline commit f3a1dd62
+        with:
+          fetch-depth: 0
 
       - name: Install uv
         uses: astral-sh/setup-uv@v10.0.1

@@ -13,6 +13,7 @@ import hashlib
 import importlib.util
 import json
 import math
+import subprocess
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -97,15 +98,64 @@ def _digest(part: Any) -> str:
 
 
 # ---- bit-identity of the pre-D2 paths ---------------------------------------------------------
-def test_a16_digest_nuclear_off_unchanged() -> None:
-    """R1-D2 (A): the A16 digest of the nuclear=False qualified outputs equals the 96d4d03 one."""
+A16_SPEC_NAMES = ("t1:python:float64", "t1:warp-cpu:float32")
+
+
+def test_a16_digest_nuclear_off_unchanged(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """R1-D2 (A), CI realisation (same machine, differential): the A16 digests of the nuclear=False
+    qualified outputs of the tree under test equal those of the baseline commit ``A16_BASELINE``
+    (the V3-003D merge f3a1dd62), both computed here, in subprocesses with identical environments,
+    by the same ``a16_digest.py``. The comparison is platform independent: numpy SIMD dispatch and
+    Warp CPU code generation differ between hosts, so an absolute hash is not (see the host test).
+    Fails (never skips) if the baseline commit is absent from the repository."""
+    scripts = ROOT / "validation" / "scripts" / "transport"
+    monkeypatch.syspath_prepend(str(scripts))  # steps_v4 imports its sibling module ``steps``
+    spec = importlib.util.spec_from_file_location("steps_v4_a16_diff", scripts / "steps_v4.py")
+    assert spec is not None and spec.loader is not None
+    st = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(st)
+    full = st._git("rev-parse", "--verify", f"{st.A16_BASELINE}^{{commit}}")
+    assert full is not None, (
+        f"baseline commit {st.A16_BASELINE} is not in the git repository (shallow clone?); the "
+        "differential A16 test needs it (CI: actions/checkout with fetch-depth: 0)"
+    )
+    tar = subprocess.run(
+        ["git", "-C", str(ROOT), "archive", "--format=tar", full, "src"],
+        capture_output=True,
+        timeout=300,
+    )
+    assert tar.returncode == 0, f"git archive of {full} failed: {tar.stderr.decode()[-500:]}"
+    subprocess.run(["tar", "-x", "-C", str(tmp_path)], input=tar.stdout, check=True, timeout=300)
+    env = {
+        "OMP_NUM_THREADS": "1",
+        "MKL_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1",
+        "PYTHONHASHSEED": "0",
+    }
+    specs = ",".join(A16_SPEC_NAMES)
+    base = st._digests(tmp_path / "src", "none", specs, env)["digests"]
+    cur = st._digests(ROOT / "src", "none", specs, env)["digests"]
+    diff = {
+        s: sorted(f for f in set(base[s]) | set(cur[s]) if base[s].get(f) != cur[s].get(f))
+        for s in A16_SPEC_NAMES
+    }
+    diff = {s: f for s, f in diff.items() if f}
+    assert set(base) == set(cur) == set(A16_SPEC_NAMES)
+    assert not diff, f"A16 digests differ from baseline {full} in (spec: fields) {diff}"
+
+
+@pytest.mark.host
+def test_a16_digest_nuclear_off_matches_host_golden() -> None:
+    """R1-D2 (A), host realisation: the combined A16 digest of the nuclear=False outputs equals the
+    golden hash computed on the host (numpy dispatch X86_V3, no AVX512). Platform dependent (see
+    the differential CI test), hence host-only."""
     spec = importlib.util.spec_from_file_location(
         "a16_digest_c3", ROOT / "validation" / "scripts" / "transport" / "a16_digest.py"
     )
     assert spec is not None and spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    digests = {s: mod.digest(s, "none") for s in ("t1:python:float64", "t1:warp-cpu:float32")}
+    digests = {s: mod.digest(s, "none") for s in A16_SPEC_NAMES}
     combined = hashlib.sha256(json.dumps(digests, sort_keys=True).encode()).hexdigest()
     # per-spec digests in the failure message: they tell a platform drift of the float32 Warp CPU
     # spec (JIT-compiled per host) from a change of the float64 python reference apart
