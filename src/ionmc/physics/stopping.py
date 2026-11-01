@@ -28,6 +28,8 @@ charge and
   and 19 <= Z <= 25), atom-number weighted over the elements;
 * ``q^2 L2'``: Bloch term ``-y^2 sum_{n>=1} 1/(n (n^2 + y^2))``, ``y = q alpha / beta``;
 * ``M``: Mott term ``0.5 pi alpha beta q`` for projectiles with z >= 2 (as in Geant4);
+* ``ls`` option (default ``"off"``, see :class:`BetheOptions`): for z >= 2 the point-nucleus
+  Lindhard-Sorensen correction replaces ``Bloch + Mott``;
 * ``q``: Pierce-Blann effective charge ``z (1 - exp(-125 beta z^(-2/3)))`` for z >= 2
   (Barkas/Pierce-Blann form, ICRU 49 and G4/Ziegler-type effective charge); q = z for z = 1.
 
@@ -46,6 +48,7 @@ from numpy.typing import ArrayLike, NDArray
 
 from ionmc.data.nist_star import StarTable
 from ionmc.materials import Material
+from ionmc.physics.lindhard_sorensen import delta_l_ls
 from ionmc.physics.projectiles import ELECTRON_MASS_MEV, Projectile
 
 K_MEV_CM2_MOL = 0.307075
@@ -91,15 +94,41 @@ def _barkas_b(z_el: int) -> float:
     return 1.3
 
 
+LS_MODES = ("off", "eff", "bare_mixed")
+
+
 @dataclass(frozen=True)
 class BetheOptions:
-    """Switches of the analytic model (all on by default); recorded in table metadata."""
+    """Switches of the analytic model (all on by default); recorded in table metadata.
+
+    ``ls`` selects the Lindhard-Sorensen (LS) treatment of the higher-order stopping-number terms
+    for projectiles with z >= 2 (ignored for protons, whose qualified model never changes):
+
+    * ``"off"`` (default): Bloch(q) + first-order Mott(q); the model of record, results unchanged;
+    * ``"eff"``: the point-nucleus ``dL_LS(q, beta)`` replaces Bloch(q) + Mott(q), every correction
+      at the effective charge q (the self-consistent ionmc convention);
+    * ``"bare_mixed"``: ``dL_LS(z, beta)`` at the bare nuclear charge z replaces Bloch(q) + Mott(q)
+      (the Geant4/ATIMA-type indexing; for sensitivity and attribution only).
+
+    Convention question, stated plainly: the option exists because the mixed convention met the
+    pre-declared P3 trigger (0.2 % CSDA-range shift) of decision 0043 sec. 1 while the ionmc
+    convention did not; the default ``"off"`` is the orchestrator's amendment decision. Which
+    convention is closer to the true stopping of a partially stripped ion is unsettled (it needs a
+    screened-ion LS calculation or data). See decision 0043 sec. 1 and
+    ``validation/plans/v3-008/p3-lindhard-sorensen.md``. For z >= 2 an LS mode other than ``"off"``
+    needs ``bloch`` and ``mott`` enabled (LS replaces both; no partial ablation).
+    """
 
     shell: bool = True
     barkas: bool = True
     bloch: bool = True
     mott: bool = True
     effective_charge: bool = True
+    ls: str = "off"
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.ls, str) or self.ls not in LS_MODES:
+            raise ValueError(f"BetheOptions.ls must be one of {LS_MODES}, got {self.ls!r}")
 
 
 def kinematics(
@@ -206,13 +235,21 @@ def bethe_mass_stopping(
     bloch: bool = True,
     mott: bool = True,
     effective_charge: bool = True,
+    ls: str = "off",
 ) -> NDArray[np.float64]:
     """Mass electronic stopping power [MeV cm2/g] at kinetic energy per nucleon [MeV/u].
 
     Implements the model in the module docstring. Raises ``ValueError`` for energies
     below 1 MeV/u. The flags switch the shell, Barkas, Bloch and Mott terms and the
-    Pierce-Blann effective charge (the latter only acts for z >= 2).
+    Pierce-Blann effective charge (the latter only acts for z >= 2). ``ls`` ("off", "eff",
+    "bare_mixed"; see :class:`BetheOptions`) replaces Bloch + Mott by the Lindhard-Sorensen term
+    for z >= 2 and is ignored for protons.
     """
+    if ls not in LS_MODES:
+        raise ValueError(f"ls must be one of {LS_MODES}, got {ls!r}")
+    use_ls = ls != "off" and projectile.z >= 2
+    if use_ls and not (bloch and mott):
+        raise ValueError("ls != 'off' replaces Bloch and Mott: both must be enabled for z >= 2")
     e = np.atleast_1d(np.asarray(energy_per_u_mev, dtype=np.float64))
     if not np.all(np.isfinite(e)):
         raise ValueError("energies must be finite")
@@ -235,10 +272,14 @@ def bethe_mass_stopping(
         bracket = bracket - shell_correction_over_z(bg2, material)
     if barkas:
         bracket = bracket + barkas_term(beta2, q, material)
-    if bloch:
-        bracket = bracket + bloch_term(beta2, q)
-    if mott and projectile.z >= 2:
-        bracket = bracket + 0.5 * math.pi * ALPHA_FS * beta * q
+    if use_ls:
+        q_ls = q if ls == "eff" else np.full_like(e, float(projectile.z))
+        bracket = bracket + delta_l_ls(q_ls, beta)
+    else:
+        if bloch:
+            bracket = bracket + bloch_term(beta2, q)
+        if mott and projectile.z >= 2:
+            bracket = bracket + 0.5 * math.pi * ALPHA_FS * beta * q
     out: NDArray[np.float64] = K_MEV_CM2_MOL * q**2 * material.z_over_a / beta2 * bracket
     return out
 
@@ -455,6 +496,7 @@ class BetheStoppingSource:
             bloch=o.bloch,
             mott=o.mott,
             effective_charge=o.effective_charge,
+            ls=o.ls,
         )
         r0 = projectile.a * e[0] / s[0]
         meta = {
@@ -471,6 +513,11 @@ class BetheStoppingSource:
                 "bloch": o.bloch,
                 "mott": o.mott,
                 "effective_charge": o.effective_charge,
+                # carried only for z >= 2 with a non-default mode: the default metadata (and the
+                # transport-table identity/hash that includes it) is unchanged, and a proton
+                # table is bit-identical whatever the (ignored) request; the requested and the
+                # effective mode are recorded in the effective configuration instead
+                **({"ls": o.ls} if o.ls != "off" and projectile.z >= 2 else {}),
             },
             "start_range": "constant-S approximation a*E_min/S(E_min)",
         }

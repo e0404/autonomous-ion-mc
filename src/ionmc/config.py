@@ -21,6 +21,7 @@ from ionmc.geometry import BoxPhantom, VoxelGeometry
 from ionmc.lookup import LookupTable
 from ionmc.materials import WATER, Material
 from ionmc.physics.em import E_S_MEV
+from ionmc.physics.exact_omega import PROTON_FDM_STATUS, FdmDomainStatus
 from ionmc.physics.projectiles import DEUTERON, PROTON, Projectile
 from ionmc.physics.scattering import scattering_length_g_cm2
 from ionmc.physics.stopping import StoppingSource, StoppingTable
@@ -108,6 +109,9 @@ class PhysicsOptions:
                 raise fail(f"{name} must be a string")
         if not (hasattr(self.stopping, "table") and hasattr(self.stopping, "name")):
             raise fail("stopping must be a StoppingSource (with .name and .table())")
+        ls_mode = getattr(getattr(self.stopping, "options", None), "ls", "off")
+        if ls_mode not in ("off", "eff", "bare_mixed"):
+            raise fail(f"stopping options ls must be 'off', 'eff' or 'bare_mixed', got {ls_mode!r}")
         real("e_cut_mev", self.e_cut_mev, positive=True)
         real("e_cut_deuteron_mev", self.e_cut_deuteron_mev, positive=True)
         if self.nuclear_table_id is not None and not isinstance(self.nuclear_table_id, str):
@@ -252,6 +256,19 @@ class EffectiveConfig:
     rng: dict[str, Any]
     channels: ChannelPlan | None = None
     nuclear: NuclearSetup | None = None
+    fdm_domain: FdmDomainStatus = PROTON_FDM_STATUS
+
+    @property
+    def ls_requested(self) -> str:
+        """The requested Lindhard-Sorensen mode of the stopping source (``"off"`` for a source
+        without the option)."""
+        return str(getattr(getattr(self.requested.physics.stopping, "options", None), "ls", "off"))
+
+    @property
+    def ls_effective(self) -> str:
+        """The LS mode in effect: ``"off"`` for z = 1 whatever was requested (the proton model
+        never changes, its tables are bit-identical), the requested mode for z >= 2."""
+        return self.ls_requested if self.requested.source.projectile.z >= 2 else "off"
 
     def summary(self) -> dict[str, Any]:
         """JSON-serialisable summary of the effective configuration."""
@@ -294,7 +311,12 @@ class EffectiveConfig:
                 "truncated_hinge_diagnostic": p.truncated_hinge_diagnostic,
                 "scattering_E_s_mev": E_S_MEV,
                 "max_rejection_attempts": MAX_REJECTION_ATTEMPTS,
+                # outside the table hash (compatibility-sensitive): a proton run with
+                # ls="eff" has the hash of ls="off" and states requested=eff, effective=off
+                "ls_requested": self.ls_requested,
+                "ls_effective": self.ls_effective,
             },
+            "mcs_mapping": self.fdm_domain.to_dict(),
             "geometry": {
                 "origin_mm": list(self.geometry.origin_mm),
                 "spacing_mm": list(self.geometry.spacing_mm),
