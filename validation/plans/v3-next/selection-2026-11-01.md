@@ -66,7 +66,7 @@ No binding-rule violation as drafted, if the conditions below are kept. I modifi
 **4. Binding rules (question (d)). No violation as drafted, with these conditions:**
 - **No large data in Git:** SAID scans at 12.53–250 MeV go to the reference-data cache through acquisition records. `ppsrc.json` holds dimensionless ratios only, which matches the elastic projection rule.
 - **Quarantine:** V10 (PDG) and V10-A stay report-only. If PDG pp points are used in criterion 2, declare them as seen.
-- **Planner arithmetic:** the F2/F3 estimates, including [an outcome-informed two-component prediction, redacted here; the exact statement exists only in the quarantined verbatim copy `quarantine/review-next-1-verbatim-SEEN.md`, sha256 `f4b52e671f1551a0f961cebb92dac6d395119a6f1de7e7e0a96749da3c39965a`], must never be committed or cited in a record. That sentence is a tuning roadmap. Keep it out of the dated note and the amendment, and keep only the qualitative F3 hazard statement.
+- **Planner arithmetic:** the F2/F3 estimates, including [an outcome-informed two-component prediction, redacted here; the exact statement exists only in the quarantined verbatim copy `quarantine/review-next-1-verbatim-SEEN.md`, sha256 `85dc003099035b64e5e499cc4c908bb15d3ff32b8dcb62587c7cc0ef1847f043`], must never be committed or cited in a record. That sentence is a tuning roadmap. Keep it out of the dated note and the amendment, and keep only the qualitative F3 hazard statement.
 - **Seeds:** T1 draws none. V3-008 bases from 20561004 are clear of V6-F (maximum 20560019) and of the reserved hr r_index blocks. Register them in the seed-family test or the V3-008 guard before any run, and skip 2098xxxx and 2099xxxx.
 - **History isolation:** the V3-008 worktree branches from v3/develop, and nothing is read from the v1/v2 trees.
 - **Single process and one heavy job** are kept. The A16 CI fix stays separate.
@@ -84,9 +84,9 @@ No binding-rule violation as drafted, if the conditions below are kept. I modifi
 2. Pre-registration clauses for A′, items 1(b)1–4 and 1(c).
 3. Criterion 2 with sourced, fail-closed components, per-energy definition and treatment below 150 MeV; measured pp data with stated errors preferred, and any seen V10 points declared.
 4. T1 step order and the three added tests.
-5. Keep the F2/F3 arithmetic, especially "M2 + SAID predicted pass", out of every committed text.
+5. Keep the F2/F3 arithmetic [specific prediction redacted here; verbatim only in the quarantined copy] out of every committed text.
 
-**Disposition (orchestrator, 2026-11-01).** All five fixes are applied in the ranked selection above; the planner's note is committed verbatim only as the hash-bound quarantined record (sha256 c97cce63…); it is never cited as a basis. Execution starts with the V3-008 planning (decision 0043 draft and the v3-008 acceptance plan, both for independent review before any result) and the V3-005D-PP0 step (1)–(3) preparation in parallel; nothing runs on the host.
+**Disposition (orchestrator, 2026-11-01).** All five fixes are applied in the ranked selection above; the planner's note is committed verbatim only as the hash-bound quarantined record (sha256 c97cce63…); it is never cited as a basis. Execution starts with the V3-008 planning (decision 0043 draft and the v3-008 acceptance plan, both for independent review before any result); nothing runs on the host. [Superseded on the same day: the PP0 step (1)–(3) preparation named here was carried out as source research only and PP0 was then closed as not formable (dated note above); no further PP0 preparation is authorised.]
 
 ## Review status
 

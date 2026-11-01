@@ -70,4 +70,3 @@ No binding-rule violation as drafted, if the conditions below are kept. I modifi
 3. Criterion 2 with sourced, fail-closed components, per-energy definition and treatment below 150 MeV; measured pp data with stated errors preferred, and any seen V10 points declared.
 4. T1 step order and the three added tests.
 5. Keep the F2/F3 arithmetic, especially "M2 + SAID predicted pass", out of every committed text.
-
