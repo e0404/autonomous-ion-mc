@@ -264,6 +264,75 @@ factor uses z; whether target electrons are scattered at all; the form factor; t
 
 URL pattern: `https://gitlab.cern.ch/geant4/geant4/-/raw/v11.4.2/<path above>`.
 
+#### 7.4.1 Addendum 2026-11-01 (continuation of round V3-008-3 finding 3): the ion path read; the STOP on this sub-item is lifted
+
+Planner, at worktree head `41a1f8ac` (DRAFT r6). Source reading only (cat/grep/sed of the cached files; role
+exploratory / lineage; Geant4 Software License). Section 7.4 above is the record of the STOP and is not changed.
+**File-name correction:** the class and file are `G4IonCoulombCrossSection` (capital I), not
+`G4ionCoulombCrossSection` as written in 7.4 and in the plan.
+
+| Tag | File (Geant4 v11.4.2) | sha256 | Bytes |
+|---|---|---|---|
+| [ICS] | `processes/electromagnetic/standard/src/G4IonCoulombScatteringModel.cc` | `ef9b31d40e99d72545dd06d329e13d7453bc20dea0a7681ce6ecc929e28d9296` | 8 471 |
+| [ICS-h] | `processes/electromagnetic/standard/include/G4IonCoulombScatteringModel.hh` | `a1a9a4f5eb1dd0f323e5eac08873f435e87b739ff705c5b441caf4bb2262e4c0` | 5 956 |
+| [IXS] | `processes/electromagnetic/standard/src/G4IonCoulombCrossSection.cc` | `87989b93748a8026c7b7031098166fa24c2f6d9c00979671bd0d9649e321e2f4` | 7 432 |
+| [IXS-h] | `processes/electromagnetic/standard/include/G4IonCoulombCrossSection.hh` | `cd5d0b5cbb4dbc2963ededc5519d110ac1dd9042d38a9a8a0742051c46928b84` | 5 536 |
+| [EMP] | `processes/electromagnetic/utils/src/G4EmParameters.cc` | `aaa143c1cb34b544f0d67fa6a7242d2b3fbd86ebfeb1bf4bc5c9fcca2973909e` | 43 246 |
+| [eCS-h] | `processes/electromagnetic/standard/include/G4eCoulombScatteringModel.hh` | `68ce763e099bc31a8dfc67609ad39dcb7c070719a3a446f3971ed044255f109e` | 6 844 |
+
+**Ion path, `G4IonCoulombScatteringModel` + `G4IonCoulombCrossSection` (FACT unless marked).**
+- Origin: Consolandi 2010, "from G4eCoulombScatteringModel & G4CoulombScatteringModel"; reference Boschini et al.,
+  arXiv:1011.4822 ([ICS] L33–48, [ICS-h] L43–52). The paper is LIT, not read.
+- **Nuclear scattering only. Target electrons are not scattered.** [ICS] L125–148: the cross section per atom is
+  `ioncross->NuclearCrossSection()`; the cut and emax arguments are unnamed (L129). [IXS] has no electron term
+  (L186–219). The production cut enters only as the threshold for creating a recoil nucleus ([ICS] L220–236; below it
+  the recoil energy is deposited locally as non-ionising).
+- **Rutherford factor:** [IXS] L80–81, L190: 2π (m_e r_e)² Z² z²/(β² p_CM²), weight Z² per atom. z² is the squared
+  PDG charge of the ion definition, i.e. the bare charge, no effective charge ([IXS-h] L146–156).
+- **Kinematics:** [IXS] L107–135, relativistic reduced mass (Martynenko–Faustov): p_CM = p·M_t/E_cm,
+  invbeta2 = 1 + μ²/p_CM². Because μ/p_CM = m/p, β_rel equals the lab β identically. The angle is sampled in the CM and
+  boosted to the lab with exact two-body kinematics ([ICS] L184–211); the recoil energy is removed from the primary
+  (L215–248). Target mass: m_p for Z = 1, the NIST atomic mass for Z > 1 in the cross section (L137–143), the isotope's
+  nuclear mass in the sampling (L166–171). In momentum transfer this is the lab screened Rutherford law. At the V5-SS
+  angles the CM treatment changes nothing: the lab deflection limit on hydrogen (≈ m_p/M ≥ 0.06 rad) is far outside
+  the window (≤ 3 mrad).
+- **Screening radius:** [IXS] L68, L167–182: x = a0 (z^0.23 + Z^0.23) with a0 = m_e c²/0.88534, ScreenRSquare = α² x².
+  This is the universal (Ziegler–Biersack–Littmark-type) screening length 0.88534 a_B/(z^0.23 + Z^0.23). It
+  **depends on the projectile charge**. The Thomas–Fermi Z^(1/3) is used only for the `G4Proton` definition (L177–179).
+  There is no ScreeningFactor and no 1 + exp(−0.001 Z²) factor.
+- **Born factor:** [IXS] L153–155: screenZ = ½ ScreenRSquare/p_CM² · (1.13 + corr · 3.76 Z² z² α²/β²), with
+  corr = (10π Z z α)^0.04 (0.97–1.11 for He, C, O on H and O). There is no min(1.13 Z, …) cap, and the Born term also
+  applies to hydrogen. The `heavycorr` argument is unused (L139–140).
+- **Angular limits:** [IXS] L70–72, L132–133: cosθ_min = 1 and cosθ_max = −1, fixed; [ICS] L77 cosThetaMin = 1.0 has
+  no setter ([ICS-h] L71–136). The PolarAngleLimit set by [CS] L152 and FactorForAngleLimit (q2Max) are not read. The
+  law is integrated from 0 to θ_CM = π.
+- **No nuclear form factor** (NuclearFormfactorType is not read) and **no spin term** (spin is stored, [IXS-h]
+  L151–152, but unused in [IXS]).
+- **Tables and limits:** [CS] L124–127: no lambda table for ions; the cross section is recomputed on the fly (cost:
+  smoke). The energy limits come from [CS] L150–154 and [EMP] L146–147 (0.1 keV to 100 TeV); the G4VEmModel defaults
+  are not read. There is no charge limit.
+
+**Defaults ([EMP], `G4EmParameters::Initialise`, L118 ff.):** L157 FactorForAngleLimit = 1.0; L158 MscThetaLimit = π
+(the SS constructor sets 0, [SS] L107); L166 ScreeningFactor = 1.0; L177 NuclearFormfactorType = fExponentialNF.
+This closes the OPEN form-factor default of the proton path (7.3): it is exponential. [eCS-h] L147–151:
+cosThetaMin 1, cosThetaMax −1, recoilThreshold 0, fixedCut −1, so the couple's electron production cut is used
+([eCS] L186, L228); the L82 default `combined = true` is overridden by [CS] (`isCombined = false`).
+
+**Term-by-term comparison** (mapping = `validation/scripts/ion_em/moliere_hanson.py`, decision 0043 §3):
+
+| Term | Proton path ([eCS] + [WOKVI]) | Ion path ([ICS] + [IXS]) | ionmc mapping (Molière–Fano) |
+|---|---|---|---|
+| Screening radius | Thomas–Fermi a0 Z^(1/3), a0 = m_e/0.88534; × (1 + exp(−0.001 Z²)) for Z ≥ 2 (≈ 1.94 for O); ScreeningFactor 1 | universal a0 (z^0.23 + Z^0.23): projectile-dependent; no extra factor | Thomas–Fermi α m_e Z^(1/3)/0.885 |
+| Born factor | min(1.13 Z, 1.13 + 3.76 α′²) for Z ≥ 2; none for H | 1.13 + corr · 3.76 α′², corr = (10π Z z α)^0.04; also for H; no cap | 1.13 + 3.76 α′² for every element |
+| Electrons | weight Z per atom, same screenZ, up to 1 − cos θ = min(cut, T_max) m_e/p² | **none** | Z² in χ_c plus Fano Δb (z-independent at fixed β) |
+| Form factor | exponential (default, FACT) | none | none (nuclear size is in the ±5 % statement) |
+| Spin | spin-½ factor | none | none |
+| Kinematics | lab, first-order recoil | CM, exact two-body | lab |
+
+**Result:** the ion path differs from the proton path in every item that branch A required to be equal: screening
+radius and constant, electron treatment and form factor. It also differs from the mapping in the radius (z^0.23
+dependence), in corr and in the electrons.
+
 ### 7.5 What "independent" means for V5-SS (classification, r6)
 
 - **Independent of** the multiple-scattering approximation used by ionmc:
@@ -276,6 +345,134 @@ URL pattern: `https://gitlab.cern.ch/geant4/geant4/-/raw/v11.4.2/<path above>`.
 - **Not independent of** the screened-Rutherford cross-section physics. The proton path uses Molière's Born screening form (1.13 + 3.76 α′²) with a Thomas–Fermi-type radius, which is exactly the ingredient through which the exact-Ω mapping gets its charge dependence (beyond z²). The ion path is OPEN.
 - **Classification:** held-out single-scattering MC evidence for how the mapping realises the shared screened-Coulomb model, including the angular integration and the thin-slab b. It is **not** independent physical evidence of the charge dependence of screening. That would need measurement, and P6 found none (EVIDENCE GAP).
 
+#### 7.5.1 Addendum 2026-11-01 (continuation): branch B decided; quantification, design, tolerance and class
+
+**Decision: branch B** of run condition (iii). The rule pre-registered in r6 ("Branch B: any of these differs")
+applies on the source facts of 7.4.1 alone: the proton cannot serve as the z = 1 reference. The numbers below show
+it is also quantitatively necessary: with branch A's design, an ionmc that equalled Molière–Hanson exactly would
+miss the 3 % tolerance.
+
+**Method** (SEEN pre-freeze; planner scratch, not committed; aggregates only; no ionmc and no TOPAS output used):
+- The exact small-angle transform of the screened-Rutherford single-scattering law:
+  Ω(η) = Σ_i 2 χ_c,i² ∫ θ (1 − J0(ηθ))/(θ² + a_i²)² dθ, in closed form through K1, with cut-off electron terms by
+  quadrature.
+- The projected distribution by Fourier inversion, and its rms in ±2.5 θ_H. θ_H is the Molière–Hanson width with
+  Molière Z² plus the Fano Δb, as in `moliere_hanson.py`; it stands in for ionmc's Gaussian.
+- 1 mm water at constant energy.
+- Scripts in the session scratchpad, `v3-008/p10b/`: `ss_budget.py` (e50e3450…), `ss_check.py` (ff8be412…),
+  `ss_cost.py` (2e378188…), `ss_signal.py` (1dc8b5eb…).
+- Checks:
+  - 1 − x K1(x): the series and the integral agree at the switch, and the small-x asymptote holds to 1e-7 relative;
+  - η-grid refinement changes the pair biases by < 0.001 pp;
+  - a ±5 % shift of the window anchor changes them by ≤ 0.07 pp;
+  - P(|x| < 50 θ_H) = 0.99997.
+
+**(a) Absolute windowed width, ion path relative to the mapping's Molière–Fano physics** (ions at the r6 cases):
+
+| Case | b | no electrons | corr^0.04 | universal radius | ion path total | Molière_w / Gaussian_w |
+|---|---|---|---|---|---|---|
+| He 150 | 10.31 | −3.7 % | −0.03 % | −2.3 % | −6.0 % | +3.1 % |
+| C 290 | 11.62 | −3.6 % | −0.14 % | −2.8 % | −6.5 % | +2.8 % |
+| O 350 | 11.86 | −3.6 % | −0.19 % | −3.0 % | −6.7 % | +2.8 % |
+| He 250 / C 430 / O 430 | 10.05–11.84 | −3.7 to −4.0 % | −0.02 to −0.18 % | −2.4 to −3.0 % | −6.4 to −6.8 % | +2.8 to +3.2 % |
+
+Proton path at the matched velocities, relative to Molière–Fano: −2.7 to −2.8 %. Without its electron term it would be
+−6.5 to −7.5 %; the electron limit 2 m_e/M ≈ 1.09 mrad is comparable to θ_H(p) = 0.72–1.93 mrad.
+**Branch-A design** (ion/proton at equal velocity): the expected ratio_model/ratio_ref − 1 for an exact Molière–Hanson
+ionmc is +3.9 % (He 150), +4.8 % (C 290), +5.1 % (O 350), +4.3 % (He 250), +5.0 % (C 430) and +5.1 % (O 430).
+That is above 3 % before any ionmc error. **Correction to 7.6:** the r6 estimate "electron omission alone ≈ 6 %"
+overstated the electron term. Removing the Fano electrons gives −3.3 to −4.1 %; the total of −6.0 to −6.8 % arises
+only together with the universal radius.
+
+**(b) Branch-B design (ion/ion at a common velocity, all on the ion path).**
+- At equal velocity z/A = ½ for 4He, 12C and 16O, so χ_c is common and the ratio measures only the b-dependence:
+  z² in the collision number, and the Born term.
+- The universal radius and corr enter only through the difference of their logarithms. The missing electrons and the
+  window estimator enter only through the different B of the two ions.
+
+| Pair (MeV/u) | Signal ratio_ref − 1 | Expected bias ratio_model/ratio_ref − 1 | radius / corr / electrons / estimator | Alternative "b without z" | Alternative "no Born term" |
+|---|---|---|---|---|---|
+| He/C 150 | −5.6 % | −0.49 % | −0.45 / −0.14 / +0.42 / −0.32 | +6.4 % | −2.8 % |
+| He/O 150 | −6.1 % | −0.69 % | −0.62 / −0.19 / +0.47 / −0.35 | +7.3 % | −4.1 % |
+| He/C 250 | −6.5 % | −0.38 % | −0.41 / −0.13 / +0.52 / −0.36 | +7.3 % | −2.3 % |
+| He/O 250 | −7.2 % | −0.57 % | −0.57 / −0.18 / +0.59 / −0.41 | +8.4 % | −3.4 % |
+| C/O 430 | −1.0 % | −0.17 % | −0.15 / −0.06 / +0.09 / −0.06 | +1.2 % | −1.0 % |
+
+(C/O at 290 and 350: bias −0.19 and −0.18 %, signal ≈ −1 %; not in the design.) The alternative columns are
+Molière–Hanson ratio changes for a model without the z-dependence of b, or without the Born term.
+
+**Design (branch B).**
+- **Cases.** TOPAS `g4em-standard_SS`, 1 mm G4_WATER, pencil beam, 2e4 primaries per case in parts ≤ 1200 s:
+  - He 150 (case 22), C 150 (25), O 150 (26);
+  - He 250 (28), C 250 (27), O 250 (31);
+  - C 430 (29), O 430 (30).
+  - Cases 23 (C 290), 24 (O 350), 32 and 33 are retired unused; nothing has run. The seed formula is unchanged.
+  - The proton cases are dropped.
+- **Gated ratios (5):** He/C and He/O at 150 and at 250 MeV/u, and C/O at 430 MeV/u.
+- **Estimator (unchanged):** projected rms in ±2.5 θ, the window anchored on the ionmc prediction per particle, x and
+  y pooled. ionmc: the same slab, warp-cpu f64, ≥ 1e5 histories. Bootstrap σ over primaries and parts.
+- **Electron production cut:** an energy cut ≥ T_max of the fastest case (430 MeV/u: 2 m_e c² β²γ²/(1 + 2γ m_e/M + …)
+  ≈ 1.16 MeV, kinematics), the same for every case and checked in the smoke's production-cut printout. Then no δ ray
+  is produced, and the reference contains no electron scattering of any kind. The Coulomb part has none (FACT); the
+  ionisation part has no secondaries. Whether G4BetheBlochModel deflects the primary at δ production stays unread, and
+  this choice makes the question irrelevant.
+- **Smoke archive:** for GenericIon and alpha, the process `CoulombScat` with model `IonCoulombScattering`
+  ([ICS-h] L75–76) and no msc. Proton smokes are no longer needed for V5-SS.
+- **Cost (INFERRED):**
+  - ion-path elastic events per primary per mm: He 3.6e3–5.0e3, C 1.1e4–1.6e4, O 1.4e4–1.9e4. That is 0.43–0.59 of
+    the Molière Ω of §3, because the universal radius screens more strongly;
+  - 8 cases × 2e4 ≈ 4.0e3 s at 2 µs/event (≈ 1.1 h), ≈ 3.3 h at 6 µs/event;
+  - the on-the-fly cross section ([CS] L124–127) may raise the per-event cost, which the smoke measures.
+- **Drop order** if the smoke-measured full design exceeds 4 h:
+  1. C/O 430;
+  2. the 250 MeV/u triplet.
+  - The minimum design is the 150 MeV/u triplet: He/C and He/O at 150. If it exceeds 4 h, the row is withdrawn
+    (§5 item 8, with the minimum redefined).
+- **Absolute θ_ionmc/θ_SS per ion: report-only.** The expected reference-model factor θ_Gauss,w(θ_H)/θ_SS,w is
+  +3.1 to +4.4 % over the eight cases (scratch, above). It is recorded now so that the report is not interpreted
+  post hoc. It comes before ionmc's own offset from Molière–Hanson (I11-abs: +1.85 to +5.32 % on the I11 grid).
+
+**Tolerance (set now from the source analysis, before any V5-SS run or smoke).**
+
+| Component | Size |
+|---|---|
+| (1) Reference-model bias. Computed: −0.17 to −0.69 %. Added: ≤ 0.2 pp for the estimate's approximations (window anchor, small angle, one effective Fano species, constant energy) | ≤ 0.9 % |
+| (2) ionmc against Molière–Hanson in a common-velocity ion/ion ratio. This equals (1 + r₁)/(1 + r₂), with r the I11-rel deviation of each ion against the same equal-velocity proton. The I11-rel gate (≤ 2 %) and the SEEN sign (all r > 0; spread 0.69–1.82 %) bound it. Assumption, declared: the thin-slab state (not on the I11 grid, which has x/R ≥ 0.1) behaves like the grid | ≤ 2 % (SEEN spread ≤ 1.13 pp) |
+| (3) Statistics: σ of the ratio of two windowed widths at 2e4 each (bootstrap); inconclusive, counted as FAIL, if > 1 % | 0.7–1.0 % |
+
+- Quadrature, the rule used since r5: √(0.9² + 2² + 1²) ≈ 2.4 %.
+- Conservative variant, with the bias added linearly to the quadrature of (2) and (3): 3.0–3.1 %.
+- **|ratio_model/ratio_ref − 1| ≤ 3 % at each of the five gated ratios (all must pass), with the bootstrap σ of the
+  ratio ≤ 1 %. The 3 % is kept.** It is justified by the quadrature budget; the conservative variant reaches it only
+  at the inconclusive limit σ = 1 %.
+- The expected bias is negative (−0.2 to −0.7 %) and is recorded as the expected value.
+- **Discrimination at 3 %:**
+  - a model without the z-dependence of b fails every He pair (6.4–8.4 % plus the bias);
+  - a model without the Born term fails the He/O pairs (−4.0 to −4.8 % including the bias) and sits at the tolerance
+    for He/C (−2.7 to −3.3 %);
+  - C/O 430 discriminates neither (≈ 1 %). It is a consistency check of the z 6 → 8 scaling at the most extrapolated
+    f_dM states, and is sensitive only to errors > 3 %.
+- Risk: five correlated ratios (He is shared) raise the chance of a false FAIL. The planning estimate is ≈ 5 % per
+  ratio if the realised model term is at its SEEN spread.
+
+**Class (branch B).** Held-out single-scattering MC on a Geant4 model different from the proton path.
+- **Independent of** the multiple-scattering approximation: f_dM, Highland, the Molière angular integration, the
+  b-matching and the per-step Gaussian.
+- **Shares with the mapping** the screened Rutherford law (Z² z²/(β² p²)) and Molière's Born form 1.13 + 3.76 α′²,
+  modified by corr.
+- **Differs from it** in the screening radius (universal, z-dependent) and in the electrons (none). These are
+  pre-computed above as bias.
+- **What it is evidence for:** the mapping realises the b(z)-dependence of the Molière collision number (z² at fixed
+  velocity; the Born term at the He/O level) in the thin-slab state.
+- **What it is not:** independent physical evidence of the charge dependence of screening. The reference's own
+  screening z-dependence (the universal radius) is another model, not data.
+- **Consequence for P11b** (decision 0043 §3, note on the f_dM extrapolation, item 5):
+  - Under branch B, V5-SS covers the extrapolation only differentially. The common-velocity ratio cancels the shared
+    equal-velocity-proton factor. What remains is the difference in f_dM/Molière–Hanson drift between the two ions'
+    equivalent states, ≤ 1.5 pp over 300 MeV to 3 GeV (I11-ext), below the tolerance.
+  - The "independent coverage by the end cases" is therefore withdrawn. The extrapolation stays declared,
+    theory-bounded (I11-ext) and carried in the ±5 %. The absolute V5-SS values are report-only context.
+
 ### 7.6 The 3 % tolerance (r6)
 
 At equal velocity, for the ion/proton ratio:
@@ -287,6 +484,44 @@ At equal velocity, for the ion/proton ratio:
   - Sum ≲ 1 %: the pre-registered 3 % stands under branch A.
 - **Branch B:** with different models on the two sides, nothing cancels by construction. For example, if the ion model omits electron scattering, θ_ion,SS falls by ≈ 6 % in water (the electron share of χ_c² is ≈ 13 %), and a 3 % test of the ratio would fail for a reason unrelated to ionmc. Under branch B, the proton cannot serve as the z = 1 reference. The freezing revision either uses ion/ion ratios at a common velocity, all on the ion model, or withdraws the row.
 
+#### 7.6.1 Addendum 2026-11-01 (continuation): the tolerance under branch B
+
+- The branch-A argument of 7.6 does not apply: branch B is decided (7.5.1).
+- The 3 % is re-justified for the ion/ion design from the source analysis (7.5.1, budget table) and is kept. It is
+  set now, before any V5-SS run or SS smoke, and recorded as such.
+- The electron figure of 7.6 is corrected in 7.5.1: −3.3 to −4.1 %, not ≈ 6 %.
+
+#### 7.6.2 Addendum 2026-11-01 (continuation): whether to file the lateral-gap intervention regardless of V5-SS (recommendation only; nothing filed)
+
+**For filing at the freeze, whatever V5-SS shows:**
+- Under branch B, V5-SS is shared-lineage evidence. It uses the same screened Rutherford law and the same Born form
+  as the mapping. Its own screening z-dependence (the universal radius) is a different model, not data.
+- P6 found no measured He/C/O lateral data (EVIDENCE GAP). So the charge dependence of lateral spreading has no
+  independent physical support, whether V5-SS passes or fails.
+- Branch B also removes V5-SS's absolute coverage of the f_dM extrapolation (7.5.1). That was part of the
+  finding-4 disposition, so a second, related gap now exists regardless of the outcome.
+- The protocol requires an authentic intervention for missing essential external evidence after a bounded
+  investigation, and P6 has completed that investigation.
+- Filing early avoids a serial block late in integration, and the operator's answer (data access or gap acceptance)
+  does not depend on the V5-SS result.
+
+**Against:**
+- The r5 sequence uses the intervention only after P6 and V5-SS fail. Filing earlier changes a pre-registered order.
+  That is harmless before freeze, but it needs a dated amendment.
+- The verbatim wording offers "or an accessible single-scattering MC reference" as an acceptable input. V5-SS
+  literally is one, so the request may read as already partly met unless the ledger states its shared-lineage class.
+- If V5-SS passes, an early request may look like over-claiming the gap.
+- It costs operator attention.
+
+**Recommendation:**
+- File at the freeze, regardless of V5-SS, with the verbatim wording.
+- Add a ledger statement that:
+  - V5-SS is shared-lineage, implementation-level evidence on the ion path;
+  - the f_dM extrapolation above 300 MeV proton-equivalent has no independent coverage.
+- Because the verbatim text cannot be edited here, the orchestrator also decides whether its clause "or an accessible
+  single-scattering MC reference" needs a reviewed amendment, e.g. "an accessible single-scattering MC reference
+  independent of the screened-Coulomb model used by the mapping".
+
 ### 7.7 Status (r6)
 
 | Item | Status |
@@ -296,3 +531,15 @@ At equal velocity, for the ion/proton ratio:
 | Proton-path physics | FACT (table above); form-factor default type OPEN (`G4EmParameters.cc`) |
 | Ion-path physics | **OPEN: STOP on this sub-item** (files in 7.4) |
 | V5-SS registration | blocked until 7.4 is read and the branch is decided in the freezing plan revision |
+
+#### 7.7.1 Status addendum 2026-11-01 (continuation)
+
+| Item | Status |
+|---|---|
+| Ion-path physics | FACT (7.4.1): nuclear only, no electrons, universal z-dependent screening radius, Born factor with corr^0.04, no form factor, no spin term, exact CM kinematics |
+| Proton-path form-factor default | FACT ([EMP] L177): exponential. ScreeningFactor 1.0 (L166), FactorForAngleLimit 1.0 (L157) |
+| Branch of run condition (iii) | **B** (7.5.1): the proton is not a valid z = 1 reference; ion/ion ratios at a common velocity on the ion path |
+| Tolerance | 3 % kept, re-justified for branch B (quadrature 2.4 %, conservative 3.0–3.1 %); set before any run |
+| f_dM extrapolation coverage by V5-SS | differential only; the absolute coverage is withdrawn (7.5.1) |
+| V5-SS registration | unblocked on lineage. It still needs the SS smoke (alias, process and model list, production-cut printout, cost) and the reviewed freezing revision |
+| Lateral-gap intervention | recommendation in 7.6.2; an orchestrator decision before freeze |

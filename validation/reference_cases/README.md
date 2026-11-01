@@ -212,7 +212,7 @@ the lateral mean of the 3-D dose equals the IDD dose of the same slab (agreement
 
 ## V3-008 P4/P10 scorer-free smokes
 
-Execution-only OpenTOPAS 4.3 cases (EM-only module list, electron cut 1 km, EMRangeMax 10 GeV, one thread, rehearsal seeds 20600401-20600407). Only the run log, EM printouts and wall time are recorded; the single placeholder scorer output `smoke_unread.csv` is deleted unread (validate_case rejects scorer-free cases). No evidence.
+Execution-only OpenTOPAS 4.3 cases (EM-only module list, electron cut 1 km, EMRangeMax 10 GeV, one thread, rehearsal seeds 20600401-20600409). Only the run log, EM printouts and wall time are recorded; the single placeholder scorer output `smoke_unread.csv` is deleted unread (validate_case rejects scorer-free cases). No evidence.
 
 ```
 topas/he-water-150mevu-em-smoke-alpha/       alpha, 600 MeV, 1e4, g4em-standard_opt4
@@ -222,4 +222,6 @@ topas/oxygen-water-350mevu-em-smoke/         GenericIon(8,16), 5600 MeV, 1e4, g4
 topas/proton-water-150mev-em-smoke-p4/       proton, 150 MeV, 1e4, g4em-standard_opt4
 topas/carbon-water-290mevu-ss-smoke/         GenericIon(6,12), 3480 MeV, 1e3, g4em-standard_SS
 topas/proton-water-150mev-ss-smoke/          proton, 150 MeV, 1e3, g4em-standard_SS
+topas/he-water-150mevu-em-smoke-alpha-verbose/       alpha, 600 MeV, 5 histories, TrackingVerbosity 1 + RunVerbosity 2 (process set, couple table)
+topas/he-water-150mevu-em-smoke-genericion-verbose/  GenericIon(2,4), 600 MeV, 5 histories, TrackingVerbosity 1 + RunVerbosity 2
 ```

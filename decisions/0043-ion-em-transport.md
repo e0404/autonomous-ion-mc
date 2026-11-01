@@ -145,6 +145,14 @@ sources pinned by sha256. FACT unless marked.
     tested against the Bloch limit) reproduces the bound. If the CSDA-range effect exceeds 0.2 % at
     any domain energy, an LS option is added to `BetheOptions` and its default is decided in an
     amendment before freeze. The I3 tolerance (1.5 % in S) does not depend on this term.
+  - **P3 result (2026-11-01, SEEN pre-freeze; `validation/plans/v3-008/p3-lindhard-sorensen.md`):**
+    the point-nucleus LS sum (Dirac–Coulomb phases, tail-corrected to 1e-11) minus the exact ionmc
+    Bloch + Mott₁ forms gives max r/S = 0.060 % (12C), 0.097 % (16O), 0.010 % (4He) and a CSDA-range
+    shift of at most 0.060 % (12C) and 0.095 % (16O) over 2–430 MeV/u, positive everywhere. The
+    estimate held (16O with a small margin); the 0.2 % trigger is not met; no LS option is added. The
+    second-order coefficient comes out at 2.0–2.1 (Morgan–Eby closed form ≈ 1.70; informative). An
+    exploratory, source-unsettled observation that Geant4 may apply the LS table at half the
+    ionmc-convention magnitude is recorded there for the I3c/V1 attribution only.
 - **Effective charge:** the Barkas form with coefficient 125, in the stopping power only.
   - Below 1 MeV/u no stopping power is evaluated, and transport deposits locally below
     E_cut = 2 MeV/u (section 4).
@@ -156,7 +164,7 @@ sources pinned by sha256. FACT unless marked.
 ### Uncertainty statement (metadata and docs; not acceptance tolerances)
 
 - I_water 78 ± 2 eV (ICRU 90) gives about ±0.3 % of range.
-- Omitted LS term: ≤ 0.1 % of S (estimate; P3).
+- Omitted LS term: ≤ 0.1 % of S (P3 computed: 16O 0.097 %, 12C 0.060 %; range ≤ 0.095 %).
 - Shell correction held at η = 0.13 and the Barkas parameterisation: alpha experience is ≤ 0.2 %
   above 10 MeV/u (SEEN). For C/O the provisional budget is 0.5 % in S above 10 MeV/u, to be replaced
   by the I3 result once it exists, and recorded as an outcome.
@@ -434,7 +442,42 @@ check against a Geant4 single-scattering configuration is available, and at what
   - It is evidence that the mapping realises the shared cross-section model, not independent physical evidence of the charge dependence of screening.
 - **End cases** He 250, C 430 and O 430 (TOPAS cases 28–33) are added for the f_dM extrapolation coverage.
 
-**Lateral evidence gap.** It is used only after P6 (the measured lateral-data search) fails and V5-SS is withdrawn (its run condition fails). **r6:** the P6 lateral-data search is recorded as EVIDENCE GAP (`validation/plans/v3-008/p6-lateral-data-search.md`, committed at b3eef90). Because V5-SS shares the screened-Coulomb physics (above), no independent *physical* evidence of the charge dependence of screening can come from it. The planner recommends filing the intervention below before integration whatever the V5-SS outcome, with the V5-SS result and class stated in the ledger. This is an orchestrator decision before freeze; the intervention wording stays verbatim.
+**Dated note 2026-11-01 (continuation of round V3-008-3 finding 3; P10 §7.4.1–7.7.1): the ion path is read; V5-SS branch B.**
+- **Ion path (FACT).** `G4IonCoulombScatteringModel` + `G4IonCoulombCrossSection` (ef9b31d4…, 87989b93…; headers a1a9a4f5…, cd5d0b5c…):
+  - nuclear scattering only; target electrons are not scattered;
+  - the universal screening radius a0 (z^0.23 + Z^0.23), which depends on the projectile charge; no 1 + exp(−0.001 Z²);
+  - the Born factor 1.13 + corr · 3.76 α′², with corr = (10π Z z α)^0.04, also for hydrogen and with no cap;
+  - no nuclear form factor, no spin term;
+  - exact CM kinematics, with β_rel = β_lab identically; the bare charge.
+  - `G4EmParameters.cc` (aaa143c1…) defaults: NuclearFormfactorType exponential, ScreeningFactor 1, FactorForAngleLimit 1.
+- **Branch B.** These differ from the proton path in screening, electrons and form factor, so the proton is not a valid
+  z = 1 reference. With the r6 design, an exact Molière–Hanson ionmc would deviate by +3.9 to +5.1 % (planner
+  scratch, SEEN pre-freeze, aggregates).
+- **V5-SS is redesigned:**
+  - ion/ion ratios at a common velocity, all on the ion path: He/C and He/O at 150 and 250 MeV/u, C/O at 430 MeV/u;
+  - 8 cases × 2e4 primaries, 1 mm water;
+  - an electron energy cut ≥ T_max, so no electron scattering of any kind;
+  - the proton cases are dropped.
+- **Tolerance** (set now from the source analysis, before any V5-SS run): 3 % per pair, kept, with σ ≤ 1 %.
+  - Budget: reference-model bias ≤ 0.9 % (computed −0.17 to −0.69 %); ionmc against Molière–Hanson in the ion/ion
+    ratio ≤ 2 % (I11-rel gate, SEEN spread ≤ 1.13 pp); statistics 0.7–1.0 %.
+  - Combined: quadrature ≈ 2.4 %, conservative 3.0–3.1 %.
+  - The He pairs exclude a b without z-dependence (+6.4 to +8.4 %), and the He/O pairs exclude a missing Born term.
+- **Class:** held-out single-scattering MC on the ion path.
+  - Independent of the MCS approximation.
+  - Shares the screened Rutherford law and the Born form; differs in the radius and the electrons, both pre-computed
+    as bias.
+  - Not independent physical evidence of the charge dependence of screening.
+- **Consequence for the f_dM-extrapolation note above (item 5).** The common-velocity ratio covers the extrapolation
+  only differentially (≤ 1.5 pp, below the tolerance). Its independent coverage is withdrawn. The extrapolation stays
+  declared, theory-bounded (I11-ext) and carried in the ±5 %; the absolute θ_ionmc/θ_SS (expected reference factor
+  +3.1 to +4.4 %) is report-only.
+- **Lateral gap.** The planner recommends filing the intervention at the freeze whatever the V5-SS outcome, with a
+  ledger statement on the V5-SS class and on the f_dM extrapolation (P10 §7.6.2, arguments for and against).
+  - The verbatim wording's clause "or an accessible single-scattering MC reference" is literally met by V5-SS, so
+    whether it needs a reviewed amendment is an orchestrator decision before freeze.
+
+**Lateral evidence gap.** It is used only after P6 (the measured lateral-data search) fails and V5-SS is withdrawn (its run condition fails). **r6:** the P6 lateral-data search is recorded as EVIDENCE GAP (`validation/plans/v3-008/p6-lateral-data-search.md`, committed at b3eef90). Because V5-SS shares the screened-Coulomb physics (above), no independent *physical* evidence of the charge dependence of screening can come from it. The planner recommends filing the intervention below before integration whatever the V5-SS outcome, with the V5-SS result and class stated in the ledger. This is an orchestrator decision before freeze; the intervention wording stays verbatim. **Orchestrator decision 2026-11-01 (before freeze):** (a) the lateral-gap intervention is filed at the freeze whatever V5-SS shows, naming as the unavailable input the independent evidence of the charge dependence of lateral spreading AND the absence of independent coverage of the f_dM extrapolation beyond the 300 MeV proton domain (declared and bounded only within the same Molière theory); V5-SS stays in the plan as shared-lineage single-scattering evidence (branch B) and its result and class go into the ledger; (b) the verbatim clause "or an accessible single-scattering MC reference" is amended in the reviewed freeze revision so that a reference sharing the screened-Coulomb cross-section lineage does not satisfy it; (c) the f_dM extrapolation is kept as a declared limitation (uncertainty component ≤ 1.5 %, I11-ext report row, `fdm_extrapolated` flag); no further coverage is claimed.
 Intervention wording, verbatim:
 
 > Unavailable input: independent evidence of the charge dependence of lateral spreading for He/C/O

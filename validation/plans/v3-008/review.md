@@ -124,3 +124,25 @@
    - The extrapolation is bounded against Molière–Hanson proton theory: drift +1.2 to +1.5 pp from 300 MeV to 3 GeV. This is theory-anchored, not independent. It is added as a ≤ 1.5 % uncertainty component (±5 % kept, quadrature ≈ 4.9 %).
    - New report-only row I11-ext. I0 persists `fdm_extrapolated` and the p1v1_eq energy. I11-abs and I11-rel report the extrapolated fraction.
    - Independent coverage: V5-SS end cases He 250, C 430 and O 430 (cases 28–33, ≈ +1 h REF), subject to the finding-3 STOP.
+
+**Disposition continuation (planner, 2026-11-01; finding 3, ion side; after the orchestrator acquired the ion-path sources; uncommitted at the time of writing).**
+- **3 (continued). The STOP on the ion sub-item is lifted. Branch B is decided.**
+  - **Sources read (P10 §7.4.1):** `G4IonCoulombScatteringModel.cc/.hh` (ef9b31d4…/a1a9a4f5…), `G4IonCoulombCrossSection.cc/.hh` (87989b93…/cd5d0b5c…), `G4EmParameters.cc` (aaa143c1…) and `G4eCoulombScatteringModel.hh` (68ce763e…).
+  - **FACT, ion path:**
+    - nuclear scattering only, no target electrons;
+    - the universal screening radius a0 (z^0.23 + Z^0.23), which depends on the projectile charge;
+    - the Born factor 1.13 + (10π Z z α)^0.04 · 3.76 α′², also for H;
+    - no form factor, no spin term, exact CM kinematics.
+  - **Defaults:** exponential form factor, ScreeningFactor 1, FactorForAngleLimit 1.
+  - **Why branch B:** the ion path differs from the proton path in every item branch A required. A scratch transform (SEEN pre-freeze, aggregates) shows that the r6 ion/proton design would deviate by +3.9 to +5.1 % for an exact Molière–Hanson ionmc, so the proton is not a valid z = 1 reference.
+  - **Redesign (V5-SS row, P10 §7.5.1):**
+    - ion/ion ratios at a common velocity on the ion path: He/C and He/O at 150 and 250 MeV/u, C/O at 430 MeV/u;
+    - 8 cases (seed cases reassigned before any run, §C);
+    - an electron energy cut ≥ T_max.
+  - **Tolerance:** 3 % per pair, kept and re-justified before any run.
+    - Budget: bias ≤ 0.9 % (computed −0.17 to −0.69 %); ionmc against Molière–Hanson ≤ 2 % (I11-rel gate); statistics 0.7–1.0 %.
+    - Combined: quadrature 2.4 %, conservative 3.0–3.1 %.
+  - **Class:** shared-lineage, held-out single-scattering MC; not independent physical evidence of the charge dependence of screening.
+  - **Consequence for finding 4:** the V5-SS end-case coverage of the f_dM extrapolation becomes differential only. The independent-coverage claim is withdrawn in decision 0043 §3 and in the plan rows P11/V5-SS (dated notes).
+  - **Correction:** the r6 "electrons alone ≈ 6 %" is corrected to −3.3 to −4.1 %.
+  - **Lateral-gap intervention:** recommendation with arguments for and against in P10 §7.6.2 (file at the freeze regardless). The orchestrator decides, including whether the verbatim clause "or an accessible single-scattering MC reference" needs an amendment.
