@@ -1,9 +1,9 @@
-# 0043 — Helium, carbon and oxygen electromagnetic transport (DRAFT r5 for independent review)
+# 0043 — Helium, carbon and oxygen electromagnetic transport (DRAFT r6 for independent review)
 
-> **Status: DRAFT r5 (2026-11-01), not yet frozen.** r3 was committed at 2632a465 and reviewed in round V3-008-1; r4/r5 fold in the pre-freeze records P8, P7, P2, P1/P1b (committed at 6e155b56) and the review rounds V3-008-1 and V3-008-2 (`validation/plans/v3-008/review.md`; the six V3-008-2 wording changes applied). The decision is frozen by a reviewed commit only after the pre-freeze checks of the acceptance plan (§P, steps 1–7) close. The decision and plan are frozen before any TRANSPORT or QUALIFICATION result; the pre-freeze construction/calibration computations P1/P1b (Molière–Hanson reference, candidate tables) and P11 (I11-rel/I11-abs values, evaluated at 070b07f0 and regenerated at 00af9a6c) exist, are disclosed and are not qualification evidence; the P2/P10 source readings and the P5/P5b/P6 data inspections also exist and are disclosed (amended for Codex REVIEW-12614ced).
+> **Status: DRAFT r6 (2026-11-01, amended for Codex REVIEW-b469dff8, round V3-008-3), not yet frozen.** Commit history (exact): r3 was committed with the plan at 2632a46 (the task's first scientific commit, a draft); r5 at 4927958, amended at 3d2547a, 070b07f, 00af9a6 and b3eef90 while pre-freeze checks were open; r4 was not committed separately. The frozen revision is a separate reviewed commit after §P closes. r5 status text follows: r3 was committed at 2632a465 and reviewed in round V3-008-1; r4/r5 fold in the pre-freeze records P8, P7, P2, P1/P1b (committed at 6e155b56) and the review rounds V3-008-1 and V3-008-2 (`validation/plans/v3-008/review.md`; the six V3-008-2 wording changes applied). The decision is frozen by a reviewed commit only after the pre-freeze checks of the acceptance plan (§P, steps 1–7) close. The decision and plan are frozen before any TRANSPORT or QUALIFICATION result; the pre-freeze construction/calibration computations P1/P1b (Molière–Hanson reference, candidate tables) and P11 (I11-rel/I11-abs values, evaluated at 070b07f0 and regenerated at 00af9a6c) exist, are disclosed and are not qualification evidence; the P2/P10 source readings and the P5/P5b/P6 data inspections also exist and are disclosed (amended for Codex REVIEW-12614ced).
 
 
-- Status: DRAFT r5 (planner, 2026-11-01), not frozen. History:
+- Status: DRAFT r6 (planner, 2026-11-01), not frozen. History:
   - r2 was revised against the two research notes;
   - r3 applied the wording changes of review round V3-008-1;
   - r4 folds in the committed pre-freeze records at 6e155b56: `validation/plans/v3-008/`
@@ -11,7 +11,8 @@
   - Main r4 changes: §3 (MCS model and the status of I11/V2) and the Geant4 lineage wording.
   - r5 applies the six wording changes of review round V3-008-2: the §3 selection statement, the
     exact-Ω specification, gating I11-rel, the V2 branches, the lateral-gap intervention, and the
-    §6 Molière–Hanson row. Not accepted. To be reviewed
+    §6 Molière–Hanson row.
+  - r6 applies the dispositions of Codex REVIEW-b469dff8 (round V3-008-3): the draft commit history (above); the P6 lateral EVIDENCE GAP propagated; the V5-SS model lineage and class (P10 §7; registration blocked until the Geant4 ion single-scattering model is read); the f_dM domain extrapolation (§3, note of 2026-11-01; P11b). Not accepted. To be reviewed
   independently and committed together with `validation/plans/v3-008-acceptance.md` before any
   V3-008 transport or qualification result exists; the pre-freeze construction/calibration
   computations P1/P1b and P11 exist, are disclosed and are not qualification evidence. The pre-freeze checks of the plan (section P) must be closed and their
@@ -350,8 +351,29 @@ recorded in result metadata and docs. Components, combined in quadrature (≈ 4�
 | Born-screening form at α′ ≈ 0.5–0.7 | 1–2 % |
 | z-independent Fano D (no Bloch-type electron terms) | ≤ 1 % |
 | Nuclear size | ≤ 1–2 % |
+| (r6) Extrapolation of f_dM beyond its proton-qualified pv (P11b: drift against Molière–Hanson ≤ 1.5 pp, protons 300 MeV → 3 GeV) | ≤ 1.5 % |
+
+With the r6 component, the quadrature of the upper values is ≈ 4.9 %, so the ±5 % statement stands.
 
 **Chronology (exact; Codex REVIEW-42ab68dd).** The mapping, the tests and the first I11-rel/I11-abs evaluation were produced together at 070b07f0, in one commit while the plan is unfrozen. Decision 0043 §3 and plan row P11 required the mapping and tests to be committed BEFORE the evaluation; that order was not kept. The values are SEEN construction/calibration results, not qualification evidence; a later rerun cannot make these points independent. I11-rel remains the gate as pre-registered (2 %, STOP on failure, tolerance never changed): evaluated pre-freeze; not blind; the freeze carries it as a disclosed gate. The first evaluation also took the proton at the ion's numeric MeV/u instead of at equal velocity; corrected (E_p = E_u A m_p / M) and regenerated, below.
+
+**Dated note 2026-11-01 (r6; Codex REVIEW-b469dff8 finding 4): f_dM domain extrapolation (P11b).**
+- f_dM is an explicit function of (pv, p1v1) and is qualified for protons ≤ 300 MeV, i.e. p1v1 ≤ 527 MeV.
+- At fixed memory ratio, b_p is monotone in pv. Matched b is therefore in the qualified domain exactly when p1v1_eq ≤ 527 MeV. b-matching does not make the evaluation in-domain.
+- SEEN pre-freeze, aggregates in `p11-exact-omega-mapping.md` §P11b:
+  - Only He 50, C 80 and most of O 100 are in domain (11/36 I11 end states).
+  - At every standard point and upper end, all of θ² comes from proton-equivalent states above 300 MeV: up to 0.8 GeV (He) and 2.5 GeV (C/O), i.e. up to 0.78 decades in lg pv.
+- Extending the Bethe proton table to 8 GeV only made the root computable. It does not validate f_dM there.
+- **Choice:** the model is kept unchanged. It is not modified after the seen numbers.
+  - No in-domain formulation exists for this domain: a b-only form extrapolates in b (b_ion ≤ 17.06 against ≤ 14.95 for qualified protons).
+  - A fail-closed clamp would remove most of the declared domain (§5). That is a scope decision outside this revision.
+- **The extrapolation is:**
+  1. declared;
+  2. bounded against Molière–Hanson proton theory: θ_fdM/θ_MH drifts by +1.2 to +1.5 pp from 300 MeV to 3 GeV, smooth and logarithmic, as it does in-domain (row I11-ext, report-only, SEEN); this is theory-anchored, not independent;
+  3. carried as a separate ≤ 1.5 % component of the declared ±5 %;
+  4. persisted in result metadata (I0: the p1v1_eq energy of the source and `fdm_extrapolated`), with fail-closed proton b-tables to ≥ 3 GeV;
+  5. covered, for the independent part, only through V5-SS. Its standard cases already map to extrapolated states (0.46–1.9 GeV); the r6 end cases He 250, C 430 and O 430 reach 0.8–2.5 GeV. This coverage is subject to the V5-SS STOP (P10 §7.4) and to its class (shared screened-Coulomb lineage, independent of f_dM).
+- I11-rel does not test the extrapolation: its C/O equal-velocity proton is itself above 300 MeV.
 
 **Freezing.**
 - The exact-Ω mapping, its b formulas, its evaluation choice (root solve or a bounded tabulation)
@@ -398,7 +420,21 @@ check against a Geant4 single-scattering configuration is available, and at what
 `G4CoulombScattering`, or a g4em-standard_SS-type module if OpenTOPAS 4.3 offers it for GenericIon.
 **P10 outcome (closed for coverage):** FACT, `G4EmStandardPhysicsSS.cc` v11.4.2 (cache 8aeaf91c…): L213–219 `particle = G4GenericIon::GenericIon(); G4ionIonisation* ionIoni = new G4ionIonisation(); … ionIoni->SetEmModel(new G4LindhardSorensenIonModel()); ph->RegisterProcess(ionIoni, particle); ph->RegisterProcess(new G4CoulombScattering(false), particle);` (no msc process for GenericIon); L222 `G4EmBuilder::ConstructChargedSS(hmsc);` → alpha `G4ionIonisation` + `G4CoulombScattering(false)` ([EMB] L158–160) and protons `G4hIonisation` + `G4CoulombScattering(false)` ([EMB] L212, L221–222); L107 `param->SetMscThetaLimit(0.0);`. The r5 thick-slab design was infeasible (P10 §3: ≈ 10²–10³ h). **V5-SS is the held-out lateral qualification row** on the P10 design: 1 mm water slab, 2e4 primaries per case, He 150, C 290, O 350 MeV/u and protons at matched velocity; statistic = the ion/proton ratio of the rms projected angular width compared with the model's ratio; pre-registered tolerance |ratio_model/ratio_ref − 1| ≤ 3 %; run ONCE after freeze, only if a scorer-free smoke confirms the OpenTOPAS 4.3 alias, the process list and a cost ≤ 4 h REF. V1-held and V3 provide no lateral evidence.
 
-**Lateral evidence gap.** It is used only after P6 (the measured lateral-data search) fails and V5-SS is withdrawn (its run condition fails).
+**r6 (2026-11-01; Codex REVIEW-b469dff8 finding 3; P10 §7): Coulomb-model lineage and evidence class.**
+- **Model per particle.** With no model set by the constructor, `G4CoulombScattering` selects `G4eCoulombScatteringModel` + `G4WentzelOKandVIxSection` for the proton, and `G4IonCoulombScatteringModel` for alpha and GenericIon (FACT, [CS] L120–148).
+- **Proton path** (FACT, P10 §7.3):
+  - Wentzel screened Rutherford with Molière's Born screening, min(1.13 Z, 1.13 + 3.76 (zZα/β)²), times a Thomas–Fermi-type radius;
+  - electron scattering up to min(cut, T_max);
+  - an exponential-type nuclear form factor (default OPEN);
+  - a spin-½ factor.
+- **Ion path:** OPEN. The files are listed in P10 §7.4. **STOP on this sub-item:** the V5-SS registration, its branch (A: same physics on both sides, ratio design kept; B: proton invalid as the z = 1 reference, so ion/ion ratios at a common velocity or withdrawal) and the freezing of its 3 % tolerance wait for them. Under branch A the 3 % is re-justified from the source: the non-cancelling terms sum to ≲ 1 % (P10 §7.6).
+- **Class:** held-out single-scattering MC.
+  - Independent of the multiple-scattering approximation: f_dM, Highland, the Molière angular integration and the b-matching.
+  - Not independent of the screened-Coulomb cross-section physics: the same Born screening form on the proton path.
+  - It is evidence that the mapping realises the shared cross-section model, not independent physical evidence of the charge dependence of screening.
+- **End cases** He 250, C 430 and O 430 (TOPAS cases 28–33) are added for the f_dM extrapolation coverage.
+
+**Lateral evidence gap.** It is used only after P6 (the measured lateral-data search) fails and V5-SS is withdrawn (its run condition fails). **r6:** the P6 lateral-data search is recorded as EVIDENCE GAP (`validation/plans/v3-008/p6-lateral-data-search.md`, committed at b3eef90). Because V5-SS shares the screened-Coulomb physics (above), no independent *physical* evidence of the charge dependence of screening can come from it. The planner recommends filing the intervention below before integration whatever the V5-SS outcome, with the V5-SS result and class stated in the ledger. This is an orchestrator decision before freeze; the intervention wording stays verbatim.
 Intervention wording, verbatim:
 
 > Unavailable input: independent evidence of the charge dependence of lateral spreading for He/C/O
@@ -458,7 +494,8 @@ and falsification), and V5-SS (held-out, single scattering) if its run condition
 | ICRU 73 (rev.) C/O: libdEdx ICRU73_NEW (I3 evaluation source); G4EMLOW icru73/icru90 files lineage only (Geant4-restricted use) | evaluation (libdEdx; exploratory until I3 frozen) / lineage (G4EMLOW) | the G4EMLOW files are consulted by TOPAS only at ≤ 2.0 MeV scaled (≈ 1.98 MeV/u), 2 < Z ≤ 80, never alpha (P2 FACT) → the libdEdx comparison is largely independent of TOPAS above |
 | TOPAS C/O stopping: `G4BetheBlochModel` table (ICRU 90 proton array at equal velocity: research note, partly confirmed) + q_eff²(ΔL_LS + 2·Barkas·(z−1)/z), no separate Bloch/Mott, switch at 2.0 MeV scaled (P2 FACT) | the reference's construction; I3c attribution diagnostic | — (the r3 trigger "ion tables above 2.5 MeV/u" is not met; no amendment) |
 | Molière–Hanson ion theory (numpy, P1) | theory for the relative ion/proton b mapping (construction); I11-rel gating (relative), I11-abs informative | Urban MSC differs structurally: no charge/β term in its log, truncated core + tail, step-length dependent (θ0 form P2 FACT; Urban as the ion msc model P2 INFERRED, settled by P2 follow-up/P4) |
-| Gottschalk f_dM | construction | no |
+| Gottschalk f_dM | construction (qualified for protons ≤ 300 MeV; evaluated at proton-equivalent states up to ≈ 2.5 GeV, extrapolation declared and bounded, §3 r6 note) | no |
+| Geant4 11.4.2 single scattering (`g4em-standard_SS`; V5-SS) | evaluation (held-out, conditional) | shares the screened-Coulomb cross-section physics (Born screening form; proton path FACT, ion path OPEN, P10 §7); independent of f_dM and of the multiple-scattering approximation |
 | TOPAS EM-only ion runs | evaluation, independent MC (V1 gating; V2 informative by default) | stopping lineage partly shared (I-value, ICRU 90 proton/alpha arrays, Barkas); straggling independent; MSC model structurally different (Urban) |
 | Sihver, Schardt, Kanai 1998 measured C/O depth-dose | **FAILED as a reference (P6):** curves normalised horizontally to the calculated peaks, figures only, oxygen = 18O | → V3 is an EVIDENCE GAP (intervention path, bundled with the lateral gap if V5-SS is withdrawn) |
 
@@ -474,9 +511,9 @@ and falsification), and V5-SS (held-out, single scattering) if its run condition
   reference fails its Pb validation, is unvalidated for water and rests on a derived compound rule.
   V2 follows the pre-declared branches (Case C if Urban). Independent evidence for the z-dependence
   of lateral spreading rests on V5-SS (held-out, single scattering, run condition per P10) or measured data; otherwise it is a declared gap; the intervention wording is in
-  §3.
+  §3. r6: measured data are an EVIDENCE GAP (P6). V5-SS shares the screened-Coulomb cross-section physics (P10 §7), and its registration waits for the ion-side Geant4 model. f_dM is evaluated beyond its proton-qualified domain at most ion energies: the extrapolation is declared and bounded, ≤ 1.5 % against Molière theory (§3 note of 2026-11-01).
 - **Gaps** go to the intervention route. Nothing is relabelled, and no model is tuned to TOPAS.
 
 ## Validation strategy
 
-Frozen in `validation/plans/v3-008-acceptance.md` (draft r5 alongside).
+Frozen in `validation/plans/v3-008-acceptance.md` (draft r6 alongside).

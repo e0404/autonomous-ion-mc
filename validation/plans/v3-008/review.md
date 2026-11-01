@@ -89,3 +89,38 @@
 **Exact wording changes required:** 1. Decision §3: the labelling text of item 1, and P1 recorded as FAILED for Pb. 2. Decision §3 and plan: specify Ω vs b and the 2-D or bounded-1-D form (item 2). 3. Plan: I11-rel gating at 2 %, STOP on failure, with the predictability disclosure; I11-abs informative with the reference uncertainty; I11-map unchanged. 4. Plan V2, and §P: close the P2 follow-ups and P4 printouts before freeze, with both branches pre-declared; add the single-scattering availability check; the intervention text of item 4. 5. Decision §6: the Urban FACT/INFERRED split. 6. Plan §P: the order of item 6.
 
 **Disposition (orchestrator, 2026-11-01).** All six wording changes applied in draft r5 (planner): the selection statement and P1 FAILED-for-Pb record; the exact-Ω mapping matches b = ln Ω + Δb at each projectile's own velocities and is 2-D (pv, p1v1), solved per step (tabulation only with a ≤ 0.1 % test, new check P11); I11-map gating, I11-rel gating at 2 % with STOP, I11-abs informative with the reference uncertainty; V2 with both pre-declared branches, the P2 follow-ups and P4 printouts closing before freeze, the single-scattering availability check P10 (conditional row V5-SS), the lateral-gap intervention wording; the Urban FACT/INFERRED split; §P order 1–7. The Codex REVIEW-98315d4e code findings on the committed reference module are fixed separately.
+
+# Round V3-008-3 review (2026-11-01; Codex REVIEW-b469dff8 on head b3eef90b, decision-0043 r5 and v3-008-acceptance r5; verdict changes_required; four important findings, verbatim; bracketed locations as relayed by the orchestrator)
+
+1. "The canonical chronology remains false. This draft was first committed at 2632a46 and repeatedly revised while checks remained open, yet lines 24–25 [validation/plans/v3-008-acceptance.md] say it is committed as the task's first scientific commit only after every pre-freeze check closes. At this head P1/P3/P4/P9 remain open. Describe the draft commits accurately and reserve this statement for the eventual frozen revision."
+
+2. "The prior lateral-evidence misclassification was not propagated through all canonical records. P11 [validation/plans/v3-008/p11-exact-omega-mapping.md:5] still lists V1-held as evidence for lateral charge dependence even though V1-held contains no lateral statistic, directly contradicting the corrected acceptance-plan statement. The plan's P6 row also still calls the lateral search OPEN and does not reference the new p6-lateral-data-search.md evidence-gap result. Reconcile all records before freeze."
+
+3. "V5-SS can qualify while the actual Coulomb-model physics and lineage remain OPEN. Its run condition [acceptance plan ~line 150] checks only the alias, process list and cost, while the P10 record says screening charge dependence, electron treatment, form factor and even registration are unresolved. Nevertheless the 3% tolerance assumes reference-model differences are ≤1% and the row is classified as independent MC. Record the newly cited constructor source in P10, inspect the selected scattering model, justify the tolerance, and determine whether this is independent physical evidence or only shared-model implementation evidence before freeze."
+
+4. "The exact-Ω construction extrapolates the empirical proton f_dM fit far outside its documented domain. Decision 0043 describes f_dM as based on proton results at E ≤ 300 MeV, but P11 [p11-exact-omega-mapping.md:66] reports artificial proton-equivalent states reaching 2.5 GeV and merely extends the Bethe table to 8 GeV. Extending the range table does not validate f_dM at those states; current checks are self-consistency or comparisons with the same Molière construction. Bound this extrapolation, replace it with an in-domain formulation, or add independent coverage across the claimed ion-energy endpoints."
+
+**Disposition (planner, 2026-11-01; DRAFT r6, uncommitted at the time of writing).**
+1. Accepted. The plan's revision history now gives the exact draft commit history: r3 at 2632a46, the task's first scientific commit but a draft; r5 at 4927958; r5 amendments at 3d2547a, 070b07f, 00af9a6 and b3eef90; r4 never committed separately. The false sentence is withdrawn and quoted. The "first scientific commit … after every pre-freeze check is closed" wording is replaced by a statement reserved for the frozen revision 1, a separate reviewed commit after §P closes. Decision 0043's status line carries the same history.
+2. Accepted.
+   - P11 status paragraph: corrected to "V5-SS (if its run condition holds) or measured data only", with a dated correction note quoting the superseded text.
+   - Plan P6 row and §P order step 6: the lateral search is recorded as EVIDENCE GAP, citing `p6-lateral-data-search.md`; the r5 status is kept as history.
+   - STOP 4 and decision 0043 §3 (lateral gap): the same.
+   - `p6-measured-data-access.md`: dated addendum.
+   - The remaining "V1-held" mentions in the records concern range only, or already state that V1-held has no lateral evidence.
+3. Accepted, partly blocked (STOP on one sub-item).
+   - P10 §7 records the constructor ([SS] 8aeaf91c…) and the Coulomb sources, read from cache: [CS] db354d80…, [eCS] fa5ddeb9…, [WOKVI] a64c94b1…/3a3f1db0….
+   - New FACT, [CS] L120–148: `G4CoulombScattering` gives the proton `G4eCoulombScatteringModel` + `G4WentzelOKandVIxSection`, but alpha and GenericIon `G4IonCoulombScatteringModel`. The two sides of the V5-SS ratio use different models.
+   - The proton path is documented: Born screening form, electron scattering, form factor, spin term.
+   - The ion path (`G4IonCoulombScatteringModel`, `G4ionCoulombCrossSection`) and the `G4EmParameters.cc` defaults are not in the cache. They are listed for acquisition, and V5-SS registration is blocked until they are read.
+   - The run condition gains (iii), the recorded model lineage of both sides, with pre-declared branches A/B.
+   - The 3 % is re-justified for branch A (non-cancelling terms ≲ 1 %), is provisional until then, and is invalid under branch B.
+   - The class becomes "held-out single-scattering MC: independent of the multiple-scattering approximation, not of the screened-Coulomb cross-section physics". It is not independent physical evidence of the charge dependence of screening.
+   - Recommendation to the orchestrator: file the lateral-gap intervention whatever the V5-SS outcome.
+4. Accepted: bounded and declared, with conditional independent coverage; model unchanged.
+   - P11b (SEEN pre-freeze): f_dM is a function of (pv, p1v1). Matched b is in-domain only where p1v1_eq ≤ 527 MeV: 11/36 I11 end states, and 100 % of θ² extrapolated at every standard point and upper end (≤ 0.78 decades in lg pv).
+   - No in-domain b-only formulation exists: b_ion reaches 17.06, against 14.95 for qualified protons.
+   - A fail-closed clamp would remove most of the domain, which is a scope decision and not taken.
+   - The extrapolation is bounded against Molière–Hanson proton theory: drift +1.2 to +1.5 pp from 300 MeV to 3 GeV. This is theory-anchored, not independent. It is added as a ≤ 1.5 % uncertainty component (±5 % kept, quadrature ≈ 4.9 %).
+   - New report-only row I11-ext. I0 persists `fdm_extrapolated` and the p1v1_eq energy. I11-abs and I11-rel report the extrapolated fraction.
+   - Independent coverage: V5-SS end cases He 250, C 430 and O 430 (cases 28–33, ≈ +1 h REF), subject to the finding-3 STOP.

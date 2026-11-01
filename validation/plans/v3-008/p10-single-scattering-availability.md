@@ -197,3 +197,102 @@ Markers:
 | Coulomb model physics (screening z-dependence, electrons, form factor) | OPEN: `G4CoulombScattering.cc`, `G4eCoulombScatteringModel.cc`, `G4WentzelOKandVIxSection.cc` |
 | Cost | INFERRED: r5 design (10/50 mm, 1e5) infeasible; 1 mm × 2e4 ≈ 1 h REF; smoke measurement OPEN |
 | V5-SS registration | not yet possible; requires the smoke and the SS constructor reading, then a reviewed plan revision |
+
+## 7. Addendum 2026-11-01 (r6, Codex REVIEW-b469dff8 finding 3): constructor and Coulomb-model lineage
+
+Planner, at worktree head `b3eef90b`. Source reading only (cat/grep/sed of the pinned files); no run. Sections 1–6 above
+are the record as written at `3d2547ad` and are not changed. The "OPEN (11.4.2)" items of section 1 and the first two
+lines of the section 6 table are superseded as follows.
+
+### 7.1 Pinned sources (Geant4 v11.4.2; Geant4 Software License; role exploratory / lineage)
+
+| Tag | File | sha256 | Bytes |
+|---|---|---|---|
+| [SS] | `physics_lists/constructors/electromagnetic/src/G4EmStandardPhysicsSS.cc` | `8aeaf91ce73c520e09e482d64a2e6a3b6c090124a9c14451d07b0b6eed9d9767` | 8 018 |
+| [CS] | `processes/electromagnetic/standard/src/G4CoulombScattering.cc` | `db354d80c0a6efd278abf7793144bac1e5f3939a8d842ccd123014ea9ca0b754` | 7 415 |
+| [eCS] | `processes/electromagnetic/standard/src/G4eCoulombScatteringModel.cc` | `fa5ddeb923b221c6c086593d0a006fd1f21502b5d460692117ba7e52e2f8c9af` | 10 716 |
+| [WOKVI] | `processes/electromagnetic/standard/src/G4WentzelOKandVIxSection.cc` | `a64c94b1adf953beba1289575134514ca1261587e06b15b3286461418339a24c` | 14 478 |
+| [WOKVI-h] | `processes/electromagnetic/standard/include/G4WentzelOKandVIxSection.hh` | `3a3f1db069d55ae06bd1c2e84c84c15a64dac2362371ed4a7dc783362184090d` | 7 445 |
+
+[EMB] is `G4EmBuilder.cc` (40782f5c…, P2 record). The files are cached as `.ionmc-cache/reference/<sha256>`.
+
+### 7.2 Constructor (FACT)
+
+- [SS] L104–110: `param->SetDefaults()`, `SetMscThetaLimit(0.0)`, `SetUseMottCorrection(true)` (for e±), Auger and PIXE on.
+- [SS] L213–219: GenericIon gets `G4ionIonisation` with `G4LindhardSorensenIonModel`, and `new G4CoulombScattering(false)`.
+  No msc process is registered and no scattering model is set.
+- [SS] L222 → [EMB] `ConstructChargedSS` (L301–343):
+  - protons: `G4hIonisation` + `G4CoulombScattering(false)`, via `ConstructLightHadronsSS`, [EMB] L205–229;
+  - alpha: `G4ionIonisation` + `G4CoulombScattering(false)`, via `ConstructIonEmPhysicsSS`, [EMB] L146–165.
+  - In neither case is a model set.
+- This settles the first two items of section 6: GenericIon and alpha single scattering are FACT. The OpenTOPAS alias stays LIT until the smoke.
+
+### 7.3 Which single-scattering model each particle gets (FACT, [CS])
+
+- [CS] L58–81: `G4CoulombScattering(false)`, process name `CoulombScat`, `isCombined = false`.
+- [CS] L103–118: q2Max = 0.5 (FactorForAngleLimit · ħc/fm)². With `isCombined = false` the cross section is of type `fEmDecreasing`, splined. `MscThetaLimit = 0` gives no lower angular limit ([CS] L160–176: MinPrimaryEnergy = 0).
+- **[CS] L120–148: the default model depends on the particle.**
+  - `if (mass > CLHEP::GeV || p->GetParticleType() == "nucleus")`: no lambda table is built, `ion = true`, and the model is `G4IonCoulombScatteringModel`.
+  - Otherwise the model is `G4eCoulombScatteringModel(isCombined)`.
+  - Consequence: the **proton** (938 MeV, type "baryon") gets `G4eCoulombScatteringModel`; **alpha** (3.73 GeV, type "nucleus") and **GenericIon** (type "nucleus") get `G4IonCoulombScatteringModel`.
+  - **The ions and the z = 1 reference of V5-SS use different single-scattering models.** The ratio design of the plan assumed one model on both sides.
+
+**Proton path: `G4eCoulombScatteringModel` + `G4WentzelOKandVIxSection` (FACT).**
+
+| Aspect | Source | Content |
+|---|---|---|
+| Cross section | [eCS] ComputeCrossSectionPerAtom; [WOKVI] SetupTarget | Wentzel (screened Rutherford). kinFactor = 2π (m_e r_e)² Z q² /(β² p²): the projectile charge q² and the target Z. The nuclear part is weighted by Z (×Z in the transport form), the electron part by 1 |
+| Screening | [WOKVI] InitialiseA, SetupTarget | Thomas–Fermi radius a0 = m_e/0.88534 (× α), ScreenRSquare[Z] = ½ ScreeningFactor α² a0² (1 + exp(−0.001 Z²)) Z^(2/3). For Z > 1 and mass > 1 MeV: screenZ = min(1.13 Z, 1.13 + 3.76 Z² α² q²/β²) · ScreenRSquare[Z]/p². This is Molière's Born form with α′ = zZα/β, the form of the mapping's χ_a. For Z = 1 there is no Born term (screenZ = ScreenRSquare[1]/p²). The factor 1 + exp(−0.001 Z²) (≈ 1.94 for O) is a Geant4-specific constant |
+| Electrons | [WOKVI] ComputeMaxElectronScattering; [eCS] SampleSecondaries | Scattering off atomic electrons is included, with the same screenZ, up to 1 − cos θ = min(cut, T_max) m_e/p². Above the cut, deflection by delta production belongs to the ionisation model (unread). With the matched large cut, all electron scattering stays in the Coulomb model, up to the kinematic limit. A sampled event is either electron or nuclear by the cross-section ratio |
+| Form factor | [WOKVI] Initialise, SampleSingleScattering | `fNucFormfactor = G4EmParameters::NuclearFormfactorType()`: exponential 1/(1 + A_ff z1)², Gaussian or flat by rejection; FormFactor[Z] = 6.937e-6 MeV⁻² · A^0.54 (Butkevich et al., NIM A 488 (2002) 282). The default type is OPEN (`G4EmParameters.cc`, not pinned) |
+| Spin / relativistic | [WOKVI] SampleSingleScattering | For spin ½ (the proton): rejection (1 − z1 β²/2 + (π/2) α Z β √(z1 β²/2)(2 − z1))·fm/(1 + z1 factD). At these angles (z1 ≈ θ²/4 ≲ 1e-4) the term is < 0.1 %. Spin-0 projectiles have factB = 0 |
+| Recoil | [eCS] SampleSecondaries | First-order recoil kinetics; the recoil is deposited locally below the cut. Angles are in the lab via the momentum transfer |
+| Limits | [CS] L150–154 | emin/emax from EmParameters and the model's own limits; no projectile-charge limit is visible in the read files |
+
+### 7.4 Ion path: OPEN, STOP on this sub-item (files needed)
+
+These were not in the cache and were not guessed. They decide whether branch A or B of the V5-SS row applies: the
+screening radius (target-only Thomas–Fermi, or a projectile-dependent radius such as Lindhard or ZBL); whether the Born
+factor uses z; whether target electrons are scattered at all; the form factor; the charge state.
+
+- `source/processes/electromagnetic/standard/src/G4IonCoulombScatteringModel.cc`
+- `source/processes/electromagnetic/standard/include/G4IonCoulombScatteringModel.hh`
+- `source/processes/electromagnetic/standard/src/G4ionCoulombCrossSection.cc`
+- `source/processes/electromagnetic/standard/include/G4ionCoulombCrossSection.hh`
+- `source/processes/electromagnetic/utils/src/G4EmParameters.cc`: the defaults of `NuclearFormfactorType`, `ScreeningFactor` and `FactorForAngleLimit`, for both paths.
+- `source/processes/electromagnetic/standard/include/G4eCoulombScatteringModel.hh`: defaults of `fixedCut`, `recoilThreshold`, `cosThetaMax` (proton path; low priority).
+
+URL pattern: `https://gitlab.cern.ch/geant4/geant4/-/raw/v11.4.2/<path above>`.
+
+### 7.5 What "independent" means for V5-SS (classification, r6)
+
+- **Independent of** the multiple-scattering approximation used by ionmc:
+  - Gottschalk's f_dM fit;
+  - the Highland/Rossi prefactor and X_S;
+  - the Molière angular expansion and Hanson width;
+  - the b-matching root;
+  - the per-step Gaussian sampling.
+  The angular distribution is built from individual elastic events.
+- **Not independent of** the screened-Rutherford cross-section physics. The proton path uses Molière's Born screening form (1.13 + 3.76 α′²) with a Thomas–Fermi-type radius, which is exactly the ingredient through which the exact-Ω mapping gets its charge dependence (beyond z²). The ion path is OPEN.
+- **Classification:** held-out single-scattering MC evidence for how the mapping realises the shared screened-Coulomb model, including the angular integration and the thin-slab b. It is **not** independent physical evidence of the charge dependence of screening. That would need measurement, and P6 found none (EVIDENCE GAP).
+
+### 7.6 The 3 % tolerance (r6)
+
+At equal velocity, for the ion/proton ratio:
+- **Cancels**, if both sides use the same model (branch A): the Thomas–Fermi constant and the Geant4 factor 1 + exp(−0.001 Z²); the electron share; the position of the nuclear-size cutoff and of the electron kinematic limit relative to χ_a. Both scale as 1/p, so in units of the screening angle they are velocity-only quantities.
+- **Does not cancel:**
+  - the Born-factor (z-dependent) shift of the form-factor and electron-limit logarithms (≲ 0.3 % and ≲ 0.5 % in θ, estimates);
+  - the proton's spin-½ term (< 0.1 %);
+  - the hydrogen branch without a Born term (< 0.1 %).
+  - Sum ≲ 1 %: the pre-registered 3 % stands under branch A.
+- **Branch B:** with different models on the two sides, nothing cancels by construction. For example, if the ion model omits electron scattering, θ_ion,SS falls by ≈ 6 % in water (the electron share of χ_c² is ≈ 13 %), and a 3 % test of the ratio would fail for a reason unrelated to ionmc. Under branch B, the proton cannot serve as the z = 1 reference. The freezing revision either uses ion/ion ratios at a common velocity, all on the ion model, or withdraws the row.
+
+### 7.7 Status (r6)
+
+| Item | Status |
+|---|---|
+| GenericIon / alpha / proton single scattering in 11.4.2 SS | FACT ([SS], [EMB]) |
+| Model per particle | FACT ([CS] L120–148): proton `G4eCoulombScatteringModel`; alpha and GenericIon `G4IonCoulombScatteringModel` |
+| Proton-path physics | FACT (table above); form-factor default type OPEN (`G4EmParameters.cc`) |
+| Ion-path physics | **OPEN: STOP on this sub-item** (files in 7.4) |
+| V5-SS registration | blocked until 7.4 is read and the branch is decided in the freezing plan revision |

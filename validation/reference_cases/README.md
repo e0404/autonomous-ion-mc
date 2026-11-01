@@ -209,3 +209,17 @@ Smoke finding (REF-95ef7515c835ec8c348f-e1a37fc0, 200 histories, 2.6 s): the fil
 `OnlyIncludeParticlesOfGeneration = "Primary"` is accepted (recorded in the binheader as
 "Filtered by"); binary files are float64, x fastest ("F" order), dose = energy / voxel mass, so
 the lateral mean of the 3-D dose equals the IDD dose of the same slab (agreement 2e-8).
+
+## V3-008 P4/P10 scorer-free smokes
+
+Execution-only OpenTOPAS 4.3 cases (EM-only module list, electron cut 1 km, EMRangeMax 10 GeV, one thread, rehearsal seeds 20600401-20600407). Only the run log, EM printouts and wall time are recorded; the single placeholder scorer output `smoke_unread.csv` is deleted unread (validate_case rejects scorer-free cases). No evidence.
+
+```
+topas/he-water-150mevu-em-smoke-alpha/       alpha, 600 MeV, 1e4, g4em-standard_opt4
+topas/he-water-150mevu-em-smoke-genericion/  GenericIon(2,4), 600 MeV, 1e4, g4em-standard_opt4
+topas/carbon-water-290mevu-em-smoke/         GenericIon(6,12), 3480 MeV, 1e4, g4em-standard_opt4
+topas/oxygen-water-350mevu-em-smoke/         GenericIon(8,16), 5600 MeV, 1e4, g4em-standard_opt4
+topas/proton-water-150mev-em-smoke-p4/       proton, 150 MeV, 1e4, g4em-standard_opt4
+topas/carbon-water-290mevu-ss-smoke/         GenericIon(6,12), 3480 MeV, 1e3, g4em-standard_SS
+topas/proton-water-150mev-ss-smoke/          proton, 150 MeV, 1e3, g4em-standard_SS
+```
