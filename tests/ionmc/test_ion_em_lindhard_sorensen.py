@@ -7,11 +7,10 @@ The module ``validation/scripts/ion_em/lindhard_sorensen.py`` is loaded by file 
 
 from __future__ import annotations
 
+import importlib.util
 import math
 import sys
 from pathlib import Path
-
-import importlib.util
 
 import numpy as np
 import pytest
