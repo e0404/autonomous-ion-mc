@@ -607,7 +607,7 @@ At equal velocity, for the ion/proton ratio:
 ### 7.8 Addendum 2026-11-01 (round V3-008-4, Codex REVIEW-e0b586fd finding 4): reproducible calculation
 
 Planner, at head `ce4d3d6a` (files uncommitted at the time of writing; bound at the commit that adds them). The
-session-scratch scripts of 7.5.1 (`ss_budget.py` 13158795…, `ss_check.py` ff8be412…, `ss_cost.py` 2e378188…,
+session-scratch scripts of 7.5.1 (`ss_budget.py` e50e3450…, `ss_check.py` ff8be412…, `ss_cost.py` 2e378188…,
 `ss_signal.py` 1dc8b5eb…; hashes re-checked, unchanged) are replaced as the record by one committed module with tests.
 Same constants, same numerics (η grid 200 001 nodes to 40/θ_H, window 2.5 θ_H, J0 and K1 quadratures). Changes: pure
 functions with docstrings citing the equations and the Geant4 source lines ([CS] L120–148; [ICS] L125–148; [IXS] L68,
