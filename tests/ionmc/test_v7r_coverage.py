@@ -138,6 +138,8 @@ import shutil
 import subprocess
 import sys
 import time
+import warnings
+from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
 
@@ -1076,12 +1078,52 @@ def test_rehearsal_loader_missing_directory_is_a_violation(
         load_rehearsal(tmp_path / "absent", steps_c, run_suite_mod)
 
 
-def test_committed_rehearsal_fixture_is_current(
+def _recorded_fixture_digest() -> str:
+    assert REHEARSAL_DIR.is_dir(), (
+        "rehearsal fixture absent — produce it with v7r_rehearsal_fixture.py (Amendment 14a (b)2)"
+    )
+    return str(json.loads((REHEARSAL_DIR / "PROVENANCE.json").read_text())["hashed_source_digest"])
+
+
+def test_committed_rehearsal_fixture_is_internally_consistent(
     steps_c: ModuleType, run_suite_mod: ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Amendment 14a (b)2: the committed rehearsal fixture must exist (no environment condition) and load in
-    required mode against the CURRENT hashed-source digest, so a hashed-source change without a re-run fails CI.
-    Produce it with ``v7r_rehearsal_fixture.py`` at the current hashed-source digest."""
+    """Amendment 22 rule 1 (reviewer condition (c)): CI FAILS on any internal inconsistency of the committed
+    fixture (PROVENANCE <-> shard content digests, the seed rule, shard count/layout, block shape). The currency
+    comparison is neutralised by passing the fixture's own recorded digest; currency is the diagnostic below
+    (CI) and the host test (evidence SHA). Amendments 14a (b)2 and 17 (a)7 are unchanged."""
+    recorded = _recorded_fixture_digest()
+    monkeypatch.setenv("IONMC_V7R_FIXTURES", "required")
+    monkeypatch.delenv("IONMC_V7R_REHEARSAL_DIR", raising=False)
+    blocks, info = load_rehearsal(rehearsal_dir(), steps_c, run_suite_mod, digest=recorded)
+    assert info["hashed_source_digest"] == recorded
+    assert blocks.shape[1] == 20
+
+
+def test_committed_rehearsal_fixture_currency_diagnostic(
+    run_suite_mod: ModuleType, record_property: Callable[[str, object], None]
+) -> None:
+    """Amendment 22 rule 1 (reviewer conditions (c), (d)): NAMED NON-FAILING diagnostic. Reports whether the recorded
+    hashed-source digest equals that of the current tree; never fails and never skips (the code_sha fetch of
+    condition (d) is not implemented; that equality belongs to the host test)."""
+    recorded = _recorded_fixture_digest()
+    current = run_suite_mod.hashed_source_digest("lv5c")
+    if recorded == current:
+        status = f"current: {recorded}"
+    else:
+        status = f"stale: recorded {recorded} vs current {current}"
+        warnings.warn(f"rehearsal_fixture_currency {status}", stacklevel=1)
+    record_property("rehearsal_fixture_currency", status)
+    print(f"rehearsal_fixture_currency: {status}")
+
+
+@pytest.mark.host
+def test_committed_rehearsal_fixture_is_current_host(
+    steps_c: ModuleType, run_suite_mod: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Amendment 22 rule 3 (reviewer condition (b)): part of the exact-SHA host validation record. The committed
+    fixture must load in required mode against the CURRENT hashed-source digest (the Amendment 14a (b)2 assertion);
+    rebuild it once at the code freeze / evidence SHA (rule 4)."""
     assert REHEARSAL_DIR.is_dir(), (
         "rehearsal fixture absent — produce it with v7r_rehearsal_fixture.py at the current hashed-source "
         "digest (Amendment 14a (b)2)"
