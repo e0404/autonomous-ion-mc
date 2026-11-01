@@ -210,8 +210,8 @@ closed for any other name (Amendment 20 (f)8; review round W-1): ``hr5d`` has no
 THROUGHPUT_STEP_SUITE = {"lv5c-throughput": "lv5c", "lv5d-throughput": "lv5d"}
 
 
-def declared_plans(suite: str = "lv5c", *, cal_rate: dict[str, Any] | None = None
-                   ) -> dict[str, tuple[int, str, int | None]]:
+def declared_plans(suite: str = "lv5c", *, cal_rate: dict[str, Any] | None = None,
+                   plan_path: str | None = None) -> dict[str, tuple[int, str, int | None]]:
     """``name -> (histories, rate key, declared shards)`` of every step of ``suite`` that must fit
     ``STEP_LIMIT_S / MARGIN`` (``None`` shards: not yet declared, reported as needed).
 
@@ -224,13 +224,15 @@ def declared_plans(suite: str = "lv5c", *, cal_rate: dict[str, Any] | None = Non
     and the passing pytest log it names; any other object is refused by ``require_validated``; Amendment 20 (f)8,
     Codex REVIEW-fe47f290 and REVIEW-6519d4ff):
     the 39-part layout is not frozen before the slow-host rate is measured, so without it ``declared_plans("lv5d")``
-    raises ``SystemExit`` (``not ok: calibration rate not measured``)."""
+    raises ``SystemExit`` (``not ok: calibration rate not measured``). The measured rate is conformant only when its
+    record is pinned in the acceptance plan (``v7r2_cal_rate`` plan pin, Codex REVIEW-323f4c12; ``plan_path`` replaces
+    the repository plan for tests): ``require_validated`` re-checks the pin."""
     if suite == "lv5d":
         if cal_rate is None:
             raise SystemExit(f"declared_plans: {v7r2_cal_rate.NOT_MEASURED} (lv5d needs the measured rate record "
                              f"{v7r2_cal_rate.CAL_RATE_ENV}; the default 12.2 s/repetition is extrapolated)")  # fmt: skip
         try:
-            v7r2_cal_rate.require_validated(cal_rate)  # a plain dict is refused (Codex REVIEW-6519d4ff)
+            v7r2_cal_rate.require_validated(cal_rate, plan_path)  # a plain dict is refused (Codex REVIEW-6519d4ff)
         except ValueError as exc:
             raise SystemExit(f"declared_plans: not ok: {exc}") from exc
     return _declared_plans(suite)
@@ -268,19 +270,21 @@ def _declared_plans(suite: str) -> dict[str, tuple[int, str, int | None]]:
     return out
 
 
-def rep_plan_table(suite: str, rate_path: str | None = None) -> dict[str, Any]:
+def rep_plan_table(suite: str, rate_path: str | None = None, plan_path: str | None = None) -> dict[str, Any]:
     """Rep-based shard table (``v7r.r2_rep_plans``: the 78 calibration parts and the six kappa steps) of ``lv5d``,
     recomputed from the MEASURED slow-host rate record (``rate_path`` or ``IONMC_V7R2_CAL_RATE_RECORD``; Amendment 20
     (f)8, Codex REVIEW-fe47f290: the 12.2 s/repetition default is extrapolated and never accepted here). Fail closed:
     an absent record gives ``ok = False`` with ``reason`` ``not ok: calibration rate not measured``; a malformed one
     ``ok = False`` with the reason. With a record, ``ok`` is the ``r2_rep_plans`` verdict at the measured rate; the
     registered layout has 39 parts per surrogate, so if the 1100 s target would be exceeded the plan is not ok and
-    ``calibration_parts_needed`` states the re-split (a code change before the freeze, never a runtime change). Other
-    suites raise ``SystemExit``."""
+    ``calibration_parts_needed`` states the re-split (a code change before the freeze, never a runtime change). The
+    measured rate is conformant only when pinned in the acceptance plan (an unpinned record gives ``ok = False``; the
+    environment path always uses the repository plan, ``plan_path`` is a test argument). Other suites raise
+    ``SystemExit``."""
     if suite != "lv5d":
         raise SystemExit(f"rep_plan_table: the rep-based V7-R2 plans belong to lv5d, not {suite!r} (fail closed)")
     try:
-        got = v7r2_cal_rate.load_record(rate_path) if rate_path else v7r2_cal_rate.record_from_env()
+        got = v7r2_cal_rate.load_record(rate_path, plan_path) if rate_path else v7r2_cal_rate.record_from_env()
     except ValueError as exc:
         return {"ok": False, "plans": {}, "rate_record": None, "reason": f"not ok: {exc}"}
     if got is None:

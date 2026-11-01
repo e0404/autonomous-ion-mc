@@ -154,6 +154,46 @@ def write_rate(
     return path
 
 
+def _plan_for(cal: ModuleType, rate: Path | str, *, name: str = "plan.md", **pin_over: str) -> Path:
+    """A temporary acceptance plan (next to the record) pinning the record as it is NOW on disk (the genuine pin the
+    orchestrator would write after verifying the protected records); ``pin_over`` replaces pin fields. Unparseable or
+    incomplete records give a plan without a pin."""
+    rate = Path(rate)
+    plan = rate.parent / name
+    lines = ["# temporary acceptance plan", ""]
+    try:
+        rec = json.loads(rate.read_text())
+        pin = {"sha256": cal.record_digest(rec), "git_sha": rec["git_sha"], "host_run_id": rec["host_run_id"],
+               "validation_id": rec["validation_id"], "host_node": rec["host"]["node"], **pin_over}  # fmt: skip
+        lines.append("RATE-RECORD-OF-RECORD: " + " ".join(f"{k}={v}" for k, v in pin.items()))
+    except (ValueError, KeyError, TypeError, AttributeError, OSError):
+        pass
+    plan.write_text("\n".join(lines) + "\n")
+    return plan
+
+
+def _pinned_load(cal: ModuleType, rate: Path | str) -> dict[str, Any]:
+    """``load_record`` of the record against a temporary plan holding its genuine pin (``plan_path`` argument)."""
+    return cal.load_record(rate, plan_path=_plan_for(cal, rate))
+
+
+@pytest.fixture
+def pin_default(cal: ModuleType, monkeypatch: pytest.MonkeyPatch) -> Any:
+    """Make the REPOSITORY-plan path of the consumers (environment record) resolve to a temporary plan pinning the given
+    record: the module constant is patched in the test only (production code takes no plan from the environment)."""
+    import importlib
+
+    real = importlib.import_module("v7r2_cal_rate")  # the module the consumers imported by name
+
+    def go(rate: Path) -> Path:
+        plan = _plan_for(cal, rate)
+        for m in (real, cal):
+            monkeypatch.setattr(m, "ACCEPTANCE_PLAN", plan)
+        return plan
+
+    return go
+
+
 @pytest.fixture
 def lv5d_tree(rs: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """``rs.REPO`` is an empty temporary tree and the lv5d hashed-source digest is a constant; returns the fixture dir."""
@@ -176,13 +216,19 @@ def test_lv5d_preflight_valid_fixture_needs_the_rate_record(
     lv5d_tree: Path,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    pin_default: Any,
 ) -> None:
     build_v7r2_fixture(lv5d_tree, s5c, DIGEST)
     refusal = rs.rehearsal_preflight("lv5d")
     assert refusal and "calibration rate not measured" in refusal  # fixture ok, rate not measured
     monkeypatch.setenv(RATE_ENV, str(tmp_path / "missing.json"))
     assert "not ok" in (rs.rehearsal_preflight("lv5d") or "")  # a path that is no file
-    monkeypatch.setenv(RATE_ENV, str(write_rate(tmp_path / "rate.json", cal, cov)))
+    rate = write_rate(tmp_path / "rate.json", cal, cov)
+    monkeypatch.setenv(RATE_ENV, str(rate))
+    assert "not pinned" in (
+        rs.rehearsal_preflight("lv5d") or ""
+    )  # genuine record, repository plan has no pin
+    pin_default(rate)
     assert (
         rs.rehearsal_preflight("lv5d") is None
     )  # a valid synthetic v7r2-layout fixture and a valid record pass
@@ -323,9 +369,14 @@ def test_rep_plan_table_is_recomputed_from_the_measured_rate(
     cov: ModuleType,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    pin_default: Any,
 ) -> None:
     rec = write_rate(tmp_path / "rate.json", cal, cov, s_per_rep=12.0)
     monkeypatch.setenv(RATE_ENV, str(rec))
+    assert (
+        "not pinned" in s5d.rep_plan_table("lv5d")["reason"]
+    )  # the repository plan carries no pin
+    pin_default(rec)
     rep = s5d.rep_plan_table("lv5d")
     assert rep["ok"] and rep["rate_source"] == "measured" and rep["reason"] is None
     assert rep["rate_record"]["sha256"] == hashlib.sha256(rec.read_bytes()).hexdigest()
@@ -338,11 +389,11 @@ def test_rep_plan_table_is_recomputed_from_the_measured_rate(
         cal_plan["s_per_item"] == 12.0 and cal_plan["fixed_s"] == 70.0
     )  # the measured rate, not the 12.2 default
     assert s5d.declared_plans(
-        "lv5d", cal_rate=cal.load_record(rec)
+        "lv5d", cal_rate=_pinned_load(cal, rec), plan_path=str(_plan_for(cal, rec))
     )  # the gated table is returned with a record
     # a slower measured rate exceeds the 1100 s target of 39 parts: not ok, the re-split is stated
     slow = write_rate(tmp_path / "slow.json", cal, cov, s_per_rep=13.0)
-    bad = s5d.rep_plan_table("lv5d", str(slow))
+    bad = s5d.rep_plan_table("lv5d", str(slow), str(_plan_for(cal, slow)))
     assert bad["ok"] is False and bad["calibration_parts_needed"] > 39
     assert "re-split" in bad["reason"] and str(bad["calibration_parts_needed"]) in bad["reason"]
 
@@ -383,7 +434,7 @@ def test_rep_plan_table_malformed_record_is_not_ok(
     else:
         mutate[case](doc)
         p.write_text(json.dumps(doc))
-    rep = s5d.rep_plan_table("lv5d", str(p))
+    rep = s5d.rep_plan_table("lv5d", str(p), str(_plan_for(cal, p)))
     assert rep["ok"] is False and rep["reason"].startswith("not ok:") and rep["plans"] == {}
 
 
@@ -407,7 +458,7 @@ def test_cal_rate_builder_derives_the_record_from_a_part_record_and_log(
     args = ["--part-record", str(part), "--part-log", str(log), "--log-dir", str(part.parent),
             "--git-sha", SHA, "--host-run-id", RUN_ID, "--validation-id", VAL_ID, "--out", str(out)]  # fmt: skip
     assert cal.main(args) == 0
-    got = cal.load_record(out)["record"]
+    got = _pinned_load(cal, out)["record"]
     assert abs(got["s_per_rep"] - 996.6 / 83) < 1e-12 and abs(got["fixed_s"] - 104.0) < 1e-6
     assert got["part_record_sha256"] == hashlib.sha256(part.read_bytes()).hexdigest()
     with pytest.raises(SystemExit, match="exists"):
@@ -442,10 +493,13 @@ def _rate_from(tmp_path: Path, cal: ModuleType, cov: ModuleType, **kw: Any) -> P
 def test_genuine_artifacts_load_and_authorise_the_39_part_plan(
     s5d: ModuleType, cal: ModuleType, cov: ModuleType, tmp_path: Path
 ) -> None:
-    got = cal.load_record(_rate_from(tmp_path, cal, cov))
-    assert cal.require_validated(got) == got
-    assert s5d.declared_plans("lv5d", cal_rate=got)["v7r2 reference (1e6, block rate)"]
-    assert s5d.rep_plan_table("lv5d", got["path"])["ok"]
+    got = _pinned_load(cal, _rate_from(tmp_path, cal, cov))
+    plan = str(_plan_for(cal, got["path"]))
+    assert cal.require_validated(got, plan) == got
+    assert s5d.declared_plans("lv5d", cal_rate=got, plan_path=plan)[
+        "v7r2 reference (1e6, block rate)"
+    ]
+    assert s5d.rep_plan_table("lv5d", got["path"], plan)["ok"]
 
 
 @pytest.mark.parametrize(
@@ -476,7 +530,7 @@ def test_load_record_refuses_bad_artifacts(
     kw: dict[str, Any], match: str, cal: ModuleType, cov: ModuleType, tmp_path: Path
 ) -> None:
     with pytest.raises(ValueError, match=match):
-        cal.load_record(_rate_from(tmp_path, cal, cov, **kw))
+        _pinned_load(cal, _rate_from(tmp_path, cal, cov, **kw))
 
 
 @pytest.mark.parametrize(
@@ -498,12 +552,12 @@ def test_load_record_refuses_non_passing_logs(
     digest = json.loads(part.read_text())["content_sha256"]
     log = f"PARTIAL {part.name} {digest}\n{summary}\n"
     with pytest.raises(ValueError, match="summary|passed"):
-        cal.load_record(_rate_from(tmp_path, cal, cov, log=log))
+        _pinned_load(cal, _rate_from(tmp_path, cal, cov, log=log))
     log = (
         f"PARTIAL {part.name} {digest}\nFAILED tests/x.py::t\n====== 1 passed in 1100.60s ======\n"
     )
     with pytest.raises(ValueError, match="FAILED"):
-        cal.load_record(_rate_from(tmp_path, cal, cov, log=log))
+        _pinned_load(cal, _rate_from(tmp_path, cal, cov, log=log))
 
 
 @pytest.mark.parametrize(
@@ -551,7 +605,7 @@ def test_load_record_refuses_inconsistent_record_vs_artifacts(
         rec["part_log"] = "../art/part.log"
     path.write_text(json.dumps(rec))
     with pytest.raises(ValueError, match=match):
-        cal.load_record(path)
+        _pinned_load(cal, path)
 
 
 def test_build_record_refuses_unverifiable_inputs(
@@ -576,17 +630,181 @@ def test_build_record_refuses_unverifiable_inputs(
 def test_declared_plans_refuses_a_plain_dict_and_a_changed_file(
     s5d: ModuleType, cal: ModuleType, cov: ModuleType, tmp_path: Path
 ) -> None:
+    path = _rate_from(tmp_path, cal, cov)
+    plan = _plan_for(cal, path)
     for fake in ({"record": "validated by v7r2_cal_rate.load_record"},
                  {"record": {}, "sha256": "0" * 64, "path": str(tmp_path / "none.json")}, 3):  # fmt: skip
         with pytest.raises(SystemExit, match="not ok"):
-            s5d.declared_plans("lv5d", cal_rate=fake)  # type: ignore[arg-type]
-    path = _rate_from(tmp_path, cal, cov)
-    got = cal.load_record(path)
+            s5d.declared_plans("lv5d", cal_rate=fake, plan_path=str(plan))  # type: ignore[arg-type]
+    got = _pinned_load(cal, path)
     forged = {**got, "record": {**got["record"], "s_per_rep": 1.0}}
     with pytest.raises(SystemExit, match="differs"):
-        s5d.declared_plans("lv5d", cal_rate=forged)
-    assert s5d.declared_plans("lv5d", cal_rate=got)
+        s5d.declared_plans("lv5d", cal_rate=forged, plan_path=str(plan))
+    assert s5d.declared_plans("lv5d", cal_rate=got, plan_path=str(plan))
     s5d.declared_plans("lv5c", cal_rate=None)  # the frozen suites are untouched by the gate
+
+
+# -- Codex REVIEW-323f4c12: the measured-rate record is conformant only when pinned in the acceptance plan --------
+PIN_FIELDS = ("sha256", "git_sha", "host_run_id", "validation_id", "host_node")
+
+
+def _pin_text(**f: str) -> str:
+    return "RATE-RECORD-OF-RECORD: " + " ".join(f"{k}={f[k]}" for k in PIN_FIELDS)
+
+
+def _genuine_pin(cal: ModuleType, rate: Path) -> dict[str, str]:
+    rec = json.loads(rate.read_text())
+    return {"sha256": cal.record_digest(rec), "git_sha": rec["git_sha"], "host_run_id": rec["host_run_id"],
+            "validation_id": rec["validation_id"], "host_node": rec["host"]["node"]}  # fmt: skip
+
+
+def test_pinned_record_is_conformant_and_unpinned_is_not(
+    s5d: ModuleType, cal: ModuleType, cov: ModuleType, tmp_path: Path
+) -> None:
+    rate = _rate_from(tmp_path, cal, cov)
+    plan = tmp_path / "plan.md"
+    plan.write_text("# plan\nno pin here\n")
+    with pytest.raises(
+        ValueError, match="not pinned in the acceptance plan .*nonconformant until the orchestrator"
+    ):
+        cal.load_record(rate, plan_path=plan)
+    plan.write_text("# plan\n" + _pin_text(**_genuine_pin(cal, rate)) + "\n")
+    got = cal.load_record(rate, plan_path=plan)
+    assert cal.require_validated(got, plan) == got
+    assert cal.pin_line(got["record"]) == _pin_text(**_genuine_pin(cal, rate))
+    assert cal.record_digest(got["record"]) == hashlib.sha256(
+        json.dumps(got["record"], sort_keys=True, separators=(",", ":")).encode()).hexdigest()  # fmt: skip
+    assert s5d.rep_plan_table("lv5d", str(rate), str(plan))["ok"]
+    # the pin of a record that has been tampered with (any field) no longer matches
+    rec = json.loads(rate.read_text())
+    rec["log_dir"] = str(Path(rec["log_dir"]))  # same value: still pinned
+    rate.write_text(json.dumps(rec))
+    assert cal.load_record(rate, plan_path=plan)
+    plan.write_text("# plan\n")  # the pin is removed
+    with pytest.raises(ValueError, match="not pinned"):
+        cal.require_validated(got, plan)
+    with pytest.raises(SystemExit, match="not pinned"):
+        s5d.declared_plans("lv5d", cal_rate=got, plan_path=str(plan))
+    refused = s5d.rep_plan_table("lv5d", str(rate), str(plan))
+    assert refused["ok"] is False and "not pinned" in refused["reason"] and refused["plans"] == {}
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("sha256", "0" * 64),
+        ("git_sha", "b" * 40),
+        ("host_run_id", "RUN-20261101-r4b-9999"),
+        ("validation_id", "VAL-20261101-120000-FFFFFF"),
+        ("host_node", "othernode"),
+    ],
+)
+def test_pin_with_a_wrong_field_is_refused(
+    field: str, value: str, cal: ModuleType, cov: ModuleType, tmp_path: Path
+) -> None:
+    rate = _rate_from(tmp_path, cal, cov)
+    pin = {**_genuine_pin(cal, rate), field: value}
+    plan = tmp_path / "plan.md"
+    plan.write_text(_pin_text(**pin) + "\n")
+    with pytest.raises(ValueError, match=f"does not match the record .*{field}"):
+        cal.load_record(rate, plan_path=plan)
+
+
+def test_last_pin_wins_and_a_second_pin_supersedes_the_first(
+    cal: ModuleType, cov: ModuleType, tmp_path: Path
+) -> None:
+    rate = _rate_from(tmp_path, cal, cov)
+    good = _pin_text(**_genuine_pin(cal, rate))
+    other = _pin_text(**{**_genuine_pin(cal, rate), "sha256": "1" * 64})
+    plan = tmp_path / "plan.md"
+    plan.write_text(f"{other}\ntext\n{good}\n")
+    assert cal.load_record(rate, plan_path=plan)  # the newest (last) pin names the record
+    plan.write_text(f"{good}\ntext\n{other}\n")
+    with pytest.raises(ValueError, match="does not match the record .*sha256"):
+        cal.load_record(rate, plan_path=plan)  # an older pin does not keep the record conformant
+
+
+def test_pin_grammar_is_strict_and_the_angle_bracket_form_is_no_pin(
+    cal: ModuleType, tmp_path: Path
+) -> None:
+    sha, git, val = "a" * 64, "b" * 40, "VAL-20261101-120000-ABCDEF"
+    good = f"RATE-RECORD-OF-RECORD: sha256={sha} git_sha={git} host_run_id=RUN-1234 validation_id={val} host_node=n1"
+    plan = tmp_path / "p.md"
+    plan.write_text(good + "\n")
+    assert cal.plan_pin(plan) == {"sha256": sha, "git_sha": git, "host_run_id": "RUN-1234", "validation_id": val,
+                                  "host_node": "n1"}  # fmt: skip
+    for bad in (
+        "RATE-RECORD-OF-RECORD: sha256=<64 hex> git_sha=<40 hex> host_run_id=<id> validation_id=<VAL-...> host_node=<node>",
+        " " + good,  # not a whole line from the first column
+        "see `" + good + "`",
+        good.replace(sha, "A" * 64),
+        good.replace(git, "b" * 39),
+        good.replace(val, "VAL-1"),
+        good + " extra=1",
+        good.replace("RATE-RECORD-OF-RECORD:", "RATE-RECORD:"),
+    ):
+        plan.write_text(bad + "\n")
+        assert cal.plan_pin(plan) is None, bad
+    with pytest.raises(ValueError, match="unreadable"):
+        cal.plan_pin(tmp_path / "missing.md")
+
+
+def test_the_repository_plan_is_the_default_and_refuses_a_synthetic_record(
+    s5d: ModuleType,
+    cal: ModuleType,
+    cov: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert cal.ACCEPTANCE_PLAN == REPO / "validation" / "plans" / "v3-005-acceptance.md"
+    assert cal.ACCEPTANCE_PLAN.is_file()
+    assert (
+        cal.plan_pin() is None
+    )  # no measurement exists: the committed plan must carry no pin (yet)
+    rate = _rate_from(
+        tmp_path, cal, cov
+    )  # fully self-consistent synthetic artifacts, well-formed ids
+    with pytest.raises(ValueError, match="not pinned"):
+        cal.load_record(rate)
+    monkeypatch.setenv(RATE_ENV, str(rate))
+    with pytest.raises(ValueError, match="not pinned"):
+        cal.record_from_env()
+    assert "not pinned" in s5d.rep_plan_table("lv5d")["reason"]
+    # a plan is never taken from the environment
+    monkeypatch.setenv("IONMC_V7R2_ACCEPTANCE_PLAN", str(_plan_for(cal, rate)))
+    with pytest.raises(ValueError, match="not pinned"):
+        cal.load_record(rate)
+
+
+def test_the_committed_plan_note_shows_the_grammar_without_being_a_pin(cal: ModuleType) -> None:
+    text = cal.ACCEPTANCE_PLAN.read_text()
+    assert "REVIEW-323f4c12" in text and "rate-record pin" in text
+    assert "RATE-RECORD-OF-RECORD: sha256=<64 hex>" in text  # the grammar is shown ...
+    assert cal.plan_pin() is None  # ... and is no pin
+
+
+def test_cli_print_pin_line_prints_the_exact_line_and_never_writes_the_plan(
+    cal: ModuleType, cov: ModuleType, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    part, lg = make_artifacts(tmp_path / "art", cov)
+    out = tmp_path / "rate.json"
+    plan_before = cal.ACCEPTANCE_PLAN.read_bytes()
+    assert cal.main(["--part-record", str(part), "--part-log", str(lg), "--log-dir", str(part.parent),
+                     "--git-sha", SHA, "--host-run-id", RUN_ID, "--validation-id", VAL_ID, "--out", str(out),
+                     "--print-pin-line"]) == 0  # fmt: skip
+    lines = capsys.readouterr().out.strip().splitlines()
+    assert lines[-1] == _pin_text(**_genuine_pin(cal, out)) and lines[-1] == cal.pin_line(
+        json.loads(out.read_text())
+    )
+    assert cal.ACCEPTANCE_PLAN.read_bytes() == plan_before
+    plan = tmp_path / "plan.md"
+    plan.write_text("note\n" + lines[-1] + "\n")  # copying the printed line opens the gate
+    assert cal.load_record(out, plan_path=plan)
+    out.unlink()
+    assert cal.main(["--part-record", str(part), "--part-log", str(lg), "--log-dir", str(part.parent),
+                     "--git-sha", SHA, "--host-run-id", RUN_ID, "--validation-id", VAL_ID,
+                     "--out", str(out)]) == 0  # fmt: skip
+    assert "RATE-RECORD-OF-RECORD" not in capsys.readouterr().out  # only on request
 
 
 # -- --print-hashed-source-digest, generation names, builder ----------------------------------------------------
@@ -711,20 +929,20 @@ def test_altered_fixed_s_is_refused_and_the_genuine_example_says_re_split(
     out = _reviewer_example(tmp_path, cal, cov)
     rec = json.loads(out.read_text())
     assert abs(rec["fixed_s"] - 104.0) < 1e-6
-    genuine = s5d.rep_plan_table("lv5d", str(out))
+    genuine = s5d.rep_plan_table("lv5d", str(out), str(_plan_for(cal, out)))
     assert genuine["ok"] is False and "re-split" in genuine["reason"]
     rec["fixed_s"] = 70.0  # every artifact hash is preserved
     out.write_text(json.dumps(rec))
     with pytest.raises(ValueError, match="fixed_s .* differs"):
-        cal.load_record(out)
-    refused = s5d.rep_plan_table("lv5d", str(out))
+        _pinned_load(cal, out)
+    refused = s5d.rep_plan_table("lv5d", str(out), str(_plan_for(cal, out)))
     assert refused["ok"] is False and refused["plans"] == {} and "fixed_s" in refused["reason"]
     rec["fixed_s"] = (
         1.0e6  # a pessimistic edit is refused as well: the value is derived, not chosen
     )
     out.write_text(json.dumps(rec))
     with pytest.raises(ValueError, match="fixed_s .* differs"):
-        cal.load_record(out)
+        _pinned_load(cal, out)
 
 
 def test_altered_s_per_rep_is_refused(cal: ModuleType, cov: ModuleType, tmp_path: Path) -> None:
@@ -733,7 +951,7 @@ def test_altered_s_per_rep_is_refused(cal: ModuleType, cov: ModuleType, tmp_path
     rec["s_per_rep"] *= 0.9
     out.write_text(json.dumps(rec))
     with pytest.raises(ValueError, match="s_per_rep .* differs"):
-        cal.load_record(out)
+        _pinned_load(cal, out)
 
 
 @pytest.mark.parametrize("field", ["node", "platform", "machine", "cpu_count", "python"])
@@ -745,11 +963,11 @@ def test_altered_host_field_is_refused(
     rec["host"][field] = rec["host"][field] + 1 if field == "cpu_count" else "slowhost"
     out.write_text(json.dumps(rec))
     with pytest.raises(ValueError, match="host .* differs from the sealed part record"):
-        cal.load_record(out)
+        _pinned_load(cal, out)
     rec["host"].pop(field)
     out.write_text(json.dumps(rec))
     with pytest.raises(ValueError, match="host must be an object with exactly"):
-        cal.load_record(out)
+        _pinned_load(cal, out)
 
 
 def test_host_is_taken_from_the_sealed_record_by_the_builder(
@@ -794,7 +1012,7 @@ def test_sealed_part_record_without_usable_host_identity_is_refused(
     kw: dict[str, Any], match: str, cal: ModuleType, cov: ModuleType, tmp_path: Path
 ) -> None:
     with pytest.raises(ValueError, match=match):
-        cal.load_record(_rate_from(tmp_path, cal, cov, **kw))
+        _pinned_load(cal, _rate_from(tmp_path, cal, cov, **kw))
     part, lg = make_artifacts(tmp_path / "b", cov, **kw)
     with pytest.raises(ValueError, match=match):
         cal.build_record(part, lg, part.parent, SHA, RUN_ID, VAL_ID)
@@ -823,12 +1041,12 @@ def test_rate_record_ids_and_undeclared_fields(
     edit: Any, match: str, cal: ModuleType, cov: ModuleType, tmp_path: Path
 ) -> None:
     out = _rate_from(tmp_path, cal, cov)
-    assert cal.load_record(out)
+    assert _pinned_load(cal, out)
     rec = json.loads(out.read_text())
     edit(rec)
     out.write_text(json.dumps(rec))
     with pytest.raises(ValueError, match=match):
-        cal.load_record(out)
+        _pinned_load(cal, out)
 
 
 def test_build_record_and_cli_refuse_missing_or_unknown_ids(

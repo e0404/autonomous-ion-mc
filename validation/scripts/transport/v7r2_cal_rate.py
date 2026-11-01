@@ -33,7 +33,8 @@ the loader compares the rate record's ``host`` and ``host_run_id`` with the seal
 record's own copy. LIMIT of repository code: the attestation that the measurement ran to a clean exit on the slow host
 lives in the protected validation-manager record named by ``validation_id`` (orchestrator-recorded at the exact SHA)
 and the host-runner run ``host_run_id``. Both stores are outside the repository and cannot be read here; the loader
-binds them by id (format, presence, agreement of ``host_run_id`` with the sealed record) but cannot verify them.
+binds them by id (format, presence, agreement of ``host_run_id`` with the sealed record) but cannot verify them;
+the plan pin below is the controlled attestation that the orchestrator verified them.
 
 Verification (fail closed; Codex REVIEW-6519d4ff). A record is only accepted, by :func:`load_record` and before
 :func:`build_record` writes one, after the underlying controlled-run artifacts have been re-opened and checked
@@ -54,7 +55,24 @@ Verification (fail closed; Codex REVIEW-6519d4ff). A record is only accepted, by
   with ``-s`` so the line is not captured); ``wall_total_s`` equals the "in X s" time of the summary (relative
   tolerance 1e-9: both are the same decimal text).
 
-A record that fails any of these raises ``ValueError``. Consumers (``steps_v5d.declared_plans``, ``rep_plan_table``,
+A record that fails any of these raises ``ValueError``.
+
+Plan pin (Codex REVIEW-323f4c12). The checks above are recomputable by anyone holding synthetic artifacts (the part
+seal is an unkeyed hash and the two ids are format-checked only), so they do not establish that the measurement ran on
+the slow host to a clean exit. The controlled attestation is therefore a PIN in the committed acceptance plan
+``validation/plans/v3-005-acceptance.md`` (a member of the hashed-source set of the suite, changed only by reviewed
+commits). A measured rate record is CONFORMANT only if the plan carries a pin line (a whole line, fixed grammar)::
+
+    RATE-RECORD-OF-RECORD: sha256=<64 hex> git_sha=<40 hex> host_run_id=<id> validation_id=<VAL-...> host_node=<node>
+
+written by the orchestrator AFTER verifying the protected host-runner and validation-manager records (exit 0, same
+SHA, same argv, same host). :func:`load_record` refuses the record unless the LAST pin line of the plan (a later pin
+supersedes every earlier one; a re-measurement appends a new pin) has ``sha256`` = :func:`record_digest` of the record
+(sha256 of its canonical JSON: sorted keys, compact separators) and ``git_sha``, ``host_run_id``, ``validation_id`` and
+``host_node`` (= ``host.node``) equal to the record's fields. The plan path is the repository plan, resolved from this
+module's location; another plan may be given ONLY as the ``plan_path`` function argument, never through the
+environment. The builder never writes the plan: ``--print-pin-line`` prints the line to copy once the records are
+verified. Without a pin the record is nonconformant. Consumers (``steps_v5d.declared_plans``, ``rep_plan_table``,
 ``run_suite.rehearsal_preflight``) accept only the result of :func:`load_record`: :func:`require_validated` re-loads
 the named file and demands an identical result, so a hand-made dictionary is refused."""
 
@@ -84,6 +102,12 @@ RECORD_FIELDS = frozenset((
     "git_sha", "log_dir", "part_record", "part_record_sha256", "part_log", "part_log_sha256"))  # fmt: skip
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
+ACCEPTANCE_PLAN = REPO / "validation" / "plans" / "v3-005-acceptance.md"
+PIN_PREFIX = "RATE-RECORD-OF-RECORD:"
+_PIN = re.compile(
+    r"^RATE-RECORD-OF-RECORD: sha256=([0-9a-f]{64}) git_sha=([0-9a-f]{40}) host_run_id=(\S+) "
+    r"validation_id=(VAL-\d{8}-\d{6}-[0-9A-F]{6}) host_node=(\S+)[ \t]*$", re.MULTILINE)
+NOT_PINNED = "not pinned in the acceptance plan (nonconformant until the orchestrator pins it)"
 PART_SCHEMA = "ionmc-v7r2-calibration-record-1"  # v7r.CAL2_SCHEMA
 PART_SUITE = "lv5d"
 PART_LAYOUT = {"replicates": 10800, "reps_per_shard": 225, "parts": 39}  # v7r.r2_part_layout()
@@ -278,9 +302,48 @@ def verify_artifacts(rec: dict[str, Any]) -> None:
                          f"{want_fixed}")  # fmt: skip
 
 
-def load_record(path: str | os.PathLike[str]) -> dict[str, Any]:
-    """``{"record", "sha256", "path"}`` of the rate record file, or ``ValueError`` (absent, unreadable, malformed, or
-    whose controlled-run artifacts fail :func:`verify_artifacts`)."""
+def record_digest(rec: dict[str, Any]) -> str:
+    """sha256 of the canonical JSON (sorted keys, compact separators) of the rate record: the digest a pin names."""
+    return hashlib.sha256(json.dumps(rec, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def pin_line(rec: dict[str, Any]) -> str:
+    """The exact pin line of the (validated) record, as the orchestrator writes it into the acceptance plan."""
+    return (f"{PIN_PREFIX} sha256={record_digest(rec)} git_sha={rec['git_sha']} host_run_id={rec['host_run_id']} "
+            f"validation_id={rec['validation_id']} host_node={rec['host']['node']}")  # fmt: skip
+
+
+def plan_pin(plan_path: str | os.PathLike[str] | None = None) -> dict[str, str] | None:
+    """The LAST pin line of the plan (default: the repository acceptance plan) as a dict, or ``None`` if there is none.
+    A pin is a whole line of the exact grammar of the module docstring; a placeholder with angle brackets is no pin."""
+    p = Path(plan_path) if plan_path is not None else ACCEPTANCE_PLAN
+    try:
+        text = p.read_text(encoding="utf-8")
+    except (OSError, ValueError) as exc:
+        raise ValueError(f"acceptance plan {p} unreadable: {exc}") from exc
+    pins = _PIN.findall(text)
+    if not pins:
+        return None
+    sha, git, run, val, node = pins[-1]
+    return {"sha256": sha, "git_sha": git, "host_run_id": run, "validation_id": val, "host_node": node}
+
+
+def verify_pin(rec: dict[str, Any], plan_path: str | os.PathLike[str] | None = None) -> None:
+    """``ValueError`` unless the last pin of the plan names exactly this record (digest and the four identity
+    fields)."""
+    pin = plan_pin(plan_path)
+    if pin is None:
+        raise ValueError(f"the record is {NOT_PINNED}")
+    want = {"sha256": record_digest(rec), "git_sha": rec["git_sha"], "host_run_id": rec["host_run_id"],
+            "validation_id": rec["validation_id"], "host_node": rec["host"]["node"]}  # fmt: skip
+    bad = [k for k, v in want.items() if pin[k] != v]
+    if bad:
+        raise ValueError(f"the last pin of the acceptance plan does not match the record ({', '.join(bad)} differ); "
+                         f"the record is {NOT_PINNED}")  # fmt: skip
+
+
+def _load_verified(path: str | os.PathLike[str]) -> dict[str, Any]:
+    """Shape and artifact verification only (no pin): ``{"record", "sha256", "path"}`` or ``ValueError``."""
     p = Path(path)
     if not p.is_file():
         raise ValueError(f"{p} is not a file")
@@ -293,8 +356,21 @@ def load_record(path: str | os.PathLike[str]) -> dict[str, Any]:
     return {"record": rec, "sha256": hashlib.sha256(raw).hexdigest(), "path": str(p)}
 
 
+def load_record(path: str | os.PathLike[str], plan_path: str | os.PathLike[str] | None = None) -> dict[str, Any]:
+    """``{"record", "sha256", "path"}`` of the rate record file, or ``ValueError`` (absent, unreadable, malformed,
+    whose controlled-run artifacts fail :func:`verify_artifacts`, or which is not pinned in the acceptance plan: the
+    measured rate is conformant only when pinned). ``plan_path`` (a function argument only) replaces the repository
+    plan."""
+    got = _load_verified(path)
+    try:
+        verify_pin(got["record"], plan_path)
+    except ValueError as exc:
+        raise ValueError(f"calibration rate record {got['path']} invalid: {exc}") from exc
+    return got
+
+
 def record_from_env() -> dict[str, Any] | None:
-    """:func:`load_record` of ``IONMC_V7R2_CAL_RATE_RECORD`` (``None`` if the variable is unset or empty)."""
+    """:func:`load_record` (repository plan) of ``IONMC_V7R2_CAL_RATE_RECORD`` (``None`` if unset or empty)."""
     path = os.environ.get(CAL_RATE_ENV, "")
     return load_record(path) if path else None
 
@@ -333,13 +409,14 @@ def build_record(part_record: Path, part_log: Path, log_dir: Path, git_sha: str,
     return rec
 
 
-def require_validated(got: Any) -> dict[str, Any]:
+def require_validated(got: Any, plan_path: str | os.PathLike[str] | None = None) -> dict[str, Any]:
     """``got`` if it is exactly the result of :func:`load_record` of the file it names, else ``ValueError``: the file
-    is re-loaded (all artifact checks again) and the result must be identical; a hand-made dictionary, a record whose
-    file changed, or ``None`` is refused."""
+    is re-loaded (all artifact checks and the plan pin again, against ``plan_path`` or the repository plan) and the
+    result must be identical; a hand-made dictionary, a record whose file changed or whose pin was removed, or
+    ``None`` is refused."""
     if not (isinstance(got, dict) and isinstance(got.get("path"), str) and isinstance(got.get("sha256"), str)):
         raise ValueError("not a calibration rate record loaded by v7r2_cal_rate.load_record")
-    fresh = load_record(got["path"])
+    fresh = load_record(got["path"], plan_path)
     if fresh != got:
         raise ValueError("the calibration rate record differs from the file it names (not the result of load_record)")
     return fresh
@@ -362,6 +439,9 @@ def main(argv: list[str] | None = None) -> int:
         help="exact-SHA validation record id (VAL-YYYYMMDD-HHMMSS-XXXXXX)",
     )
     ap.add_argument("--out", required=True, help="rate record to write (refuses to overwrite)")
+    ap.add_argument("--print-pin-line", action="store_true",
+                    help="also print the pin line of the record for the acceptance plan (the orchestrator writes it "
+                         "after verifying the protected records; this tool never writes the plan)")  # fmt: skip
     a = ap.parse_args(argv)
     out = Path(a.out)
     if out.exists():
@@ -379,7 +459,9 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit(f"not ok: {exc}") from exc
     out.write_text(json.dumps(rec, sort_keys=True, indent=1) + "\n")
     print(f"{out}: s_per_rep {rec['s_per_rep']:.4f}, fixed_s {rec['fixed_s']:.1f}, "
-          f"sha256 {load_record(out)['sha256']}")  # fmt: skip
+          f"sha256 {_load_verified(out)['sha256']}")  # fmt: skip
+    if a.print_pin_line:
+        print(pin_line(rec))
     return 0
 
 
