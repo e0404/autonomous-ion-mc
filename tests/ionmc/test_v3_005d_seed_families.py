@@ -256,7 +256,8 @@ def test_v3_008_reservation_and_v3_005_continuation() -> None:
     lv8 = {20581004 + 100 * r + k for r in range(61) for k in range(100)}
     hr8 = {20591004 + 100 * r + k for r in range(61) for k in range(100)}
     rehearsals = set(range(20600000, 20610000))
-    topas8 = set(range(20619001, 20619041))
+    topas8 = {20619000 + 100 * part + case for part in range(20) for case in range(1, 41)}
+    assert min(topas8) == 20619001 and max(topas8) == 20620940 < 20621004  # below the re-run family
     reruns = {b + 100 * r + k for b in (20621004, 20631004) for r in range(10) for k in range(100)}
     for declared in (lv8, hr8, rehearsals, topas8, reruns):
         assert declared <= reserved
@@ -265,6 +266,7 @@ def test_v3_008_reservation_and_v3_005_continuation() -> None:
     nxt = set(range(V3_005_NEXT_BASE, V3_005_NEXT_BASE + 21000))
     assert not nxt & reserved
     assert min(nxt) > V3_008_RESERVED[-1]
-    # (d) V3-005 TOPAS formula rows 1-23 vs the V3-008 TOPAS seeds. 20619001-040 coincide numerically
+    # (d) V3-005 TOPAS formula rows 1-23 vs the V3-008 TOPAS seeds (20619000 + 100*part + case, part 0-19,
+    # case 1-40 = 20619001-20620940). 20619001-040 coincide numerically
     # with the formula 20270000 + 1000 * row + k at row 349, which V3-005 never uses.
     assert not TOPAS & topas8
