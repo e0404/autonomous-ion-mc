@@ -16,9 +16,21 @@ that have no closing record at `f694b747`:
 | FC-1 | **P1 completion (order step 5):** Pb attribution on ICRU 49 ranges; a water/compound θ_Hanson check if a source exists | P1 row ("P1 completion (order step 5)"); §P order step 5; §F gate 1 | not executed; no record (`p1-moliere-hanson-reference.md` "OPEN (after P1b)" items 2 and 7 unchanged) | (a) execute it and add a dated P1 addendum, or (b) a dated orchestrator amendment making it optional, recorded "not done"; either way P1 stays FAILED for Pb unless cleared |
 | FC-2 | **P2 follow-up residuals and the P4 material printout:** pin `G4BetheBlochModel.cc/.hh` and settle its ICRU 90 branch; X0 (RadL) of G4_WATER; λ charge scaling and lateral displacement for ions; the `G4VMscModel.hh` initialisers; the icru90 z6/z8 silent-fallback check; the G4_WATER I-value and RadL from the archived smoke printout | P2 row ("Follow-ups, required before freeze"); P4 row (r5 sentence: the smokes archive "the G4_WATER material table (RadL)"); P5 row ("Oxygen/carbon lineage checks (P2 follow-up)") | partly done (F0–F5 of `p2-geant4-ion-models.md`; `G4BetheBlochModel.cc` hashed but not acquired and its ICRU 90 branch "not settled", `p3b-ls-default.md` §2 and §5); the rest has no record | (a) bounded source reads / a read of the archived smoke logs (no new run), recorded in a dated P2/P4 addendum, or (b) a dated orchestrator amendment declaring the residuals as lineage items (no row depends on them; see plan §P audit) |
 
+**Dated note (2026-11-01, orchestrator) — FC-1 DISPOSED.** Record `validation/plans/v3-008/p1c-completion.md` (sha256 e3cd32585140fc36a45c7059ec21fa3e782144f7ad5557bc953856c1f1356e53; computed in the scratchpad from the committed reference `moliere_hanson.py` 5a99b3b8… unchanged, variants as runtime monkeypatches only). Outcome: **Pb CLEARED by attribution** — the P1b Pb failure (+1.10/+1.32 % at x/R1 ≥ 0.9) is reproduced by the range-table input (the ionmc Bethe Pb table is +0.85 % longer than Gottschalk's ICRU 49 R1 and +2.6–3.1 % in residual range at 20–41 MeV, amplified by d ln θ/d ln x = 2.3–5.7 near the end of range); on an ICRU 49 node path the committed reference reproduces Gottschalk's Pb θ_Hanson to ≤ 0.044 % (≤ 0.024 % on a PSTAR path), controls Be/Al/Cu ≤ 0.105 %; the Fano form (Δb 0.05–0.06 for Pb), the compound rule (n/a) and the quadrature (≤ 1.2e-6) do not explain the failure. The committed test (ionmc Bethe ranges) still fails at x/R1 ≥ 0.9, so its xfail(strict=True) stays as committed (no bound file changes before the freeze); P1 is CLOSED with the attribution and the proton validation statement reads 'passes Be/Al/Cu; Pb cleared by attribution to the range-table input'. Water/compound check: Gottschalk 1993 (NIM B 74, 467) is paywalled and lists no water target; arXiv:1610.01279 tabulates measured θ0 and θ_Hanson for polystyrene, Lexan, Lucite, Nylon, Teflon and C (no uncertainties) — the committed reference agrees with Gottschalk's θ_Hanson (LOOKUP) within −0.57 to −0.04 % (polystyrene −0.16/−0.20 %, Lexan C16H14O3 −0.15/−0.10 %), which closes OPEN item 7 for H/C/N/O/F compounds and discriminates against the electron- and mass-weighted Fano averages (+4.1 % / +1.8 %); **water remains not validated directly** (the only water θ_Hanson value available has two digits; used as a check on b: ours low by 0.040 ± 0.002, which moves θ by ≤ 0.16 % at I11-like B). Side finding (outside the V3-008 domain, recorded for high-Z use): ionmc Bethe Pb ranges are 0.8–3 % longer than ICRU 49 at 20–160 MeV. TO-VERIFY: Gottschalk 1993's measurement uncertainties; the exact LOOKUP compositions. The P1 proton tests skip unless IONMC_CACHE_DIR names the objects store (test default cache path; recorded, not changed).
+
 **Rule.** The freeze commit is made only after FC-1 and FC-2 are disposed. Any record or amendment that disposes them
 is committed before or in the freeze commit; its sha256 is added to §2 below by a dated note, and §5 is re-checked.
 Until then revision 1 is a freeze *candidate*, and nothing below establishes a frozen state.
+
+**Dated note 2026-11-01 (planner, at 6bdf3897): FC-2 DISPOSED** by the executed record
+`validation/plans/v3-008/p2b-follow-ups.md` (sha256 `9c70eb1b9d49f0375af7976232817dbda925576eeb4b64e31aee61b33dfb5457`, computed after pre-commit), option (a)
+of the FC-2 row: bounded source reads (`G4BetheBlochModel.cc/.hh`, `G4NistMaterialBuilder.cc`, the pinned P2/P10
+sources) and a read of the archived smoke logs, no new run. Its sha256 is added to §2.4 and the new sources to §3
+by dated notes; the plan carries "Amendment (2026-11-01) — FC-2 disposition" (Amendments item 6) with pointer notes
+in rows P2, P4, P5 and the freeze audit, and decision 0043 §6 the matching lineage amendment. Residuals declared as
+lineage items, none a freeze condition: the `G4ICRU90StoppingData` index/span (INFERRED), the possible z = 1 double
+count of ΔL_LS, the Urban λ charge scaling and `dtrl` for ions (inline headers not pinned), and the absent read
+evidence for `icru90/z{6,8}_G4_WATER.dat`. This note concerns FC-2 only.
 
 ## 1. Commit lineage
 
@@ -48,7 +60,7 @@ Until then revision 1 is a freeze *candidate*, and nothing below establishes a f
 - The freeze commit's tree is clean (`git status --porcelain` empty at commit and during review).
 - `git diff --name-only f694b747 <freeze>` lists only: `validation/plans/v3-008-acceptance.md`,
   `decisions/0043-ion-em-transport.md`, `validation/plans/v3-008/review.md`, this file, and the records or amendments
-  that dispose FC-1/FC-2 (each added to §2 by a dated note). Any other path is a STOP for the freeze.
+  that dispose FC-1/FC-2 (each added to §2 by a dated note; FC-1: `validation/plans/v3-008/p1c-completion.md`). Any other path is a STOP for the freeze.
 - Every sha256 in §2 recomputed at the freeze commit (`sha256sum <path>`) equals the value below.
 
 ## 2. Bound repository files (sha256 at `f694b747`; `sha256sum`, git-independent)
@@ -105,8 +117,16 @@ Until then revision 1 is a freeze *candidate*, and nothing below establishes a f
 | `validation/plans/v3-008/research/research-models.md` | `d194a516967f290e9aa65f693c3c414282c7d45cde5c1226ab08464a46b396cd` |
 | `validation/plans/v3-008/research/research-data-sources.md` | `2bf40c44d73dd1d5ce6afe6d05d7891128cb3b4468af2afbf196f4b99afa0732` |
 
+**Dated note 2026-11-01 (FC-2 record, bound by the §0 rule):**
+
+| File | sha256 |
+|---|---|
+| `validation/plans/v3-008/p2b-follow-ups.md` | `9c70eb1b9d49f0375af7976232817dbda925576eeb4b64e31aee61b33dfb5457` |
+
 Not bound by hash, because the freeze commit itself changes them: the plan, decision 0043, `review.md` and this
 file. They are bound by the freeze commit SHA.
+
+**Dated note (2026-11-01, FC-1):** `validation/plans/v3-008/p1c-completion.md` `e3cd32585140fc36a45c7059ec21fa3e782144f7ad5557bc953856c1f1356e53` (added by the freeze commit; §7 counts: +1 repository file).
 
 ### 2.5 P4/P10 scorer-free smoke cases (execution only; seeds from the rehearsal family 2060xxxx)
 
@@ -132,6 +152,22 @@ oxygen `REF-8031592a…`; alpha verbose `REF-c98e198f…`; GenericIon(2,4) verbo
 first nine are to be copied from `list_reference_artifacts` into this table by a dated note before the freeze
 commit (not established by the planner). All are execution-only: no dose, IDD or phase-space output was read; the
 placeholder scorer output was deleted unread.
+
+
+**Dated note (2026-11-01, orchestrator) — full run ids of the ten smokes** (controlled engine tool, OpenTOPAS 4.3 / Geant4 11.4.2; nine at 41a1f8ac/a66867de, the slab smoke at ce4d3d6a):
+
+| case | run id |
+|---|---|
+| `proton-water-150mev-em-smoke-p4` | `REF-188fa1d8600f598345fd-bb3772ee` |
+| `he-water-150mevu-em-smoke-alpha` | `REF-ed13a2383682b780a086-7c1daae9` |
+| `he-water-150mevu-em-smoke-genericion` | `REF-c764466cfe377d8eaf69-f82cd01a` |
+| `carbon-water-290mevu-em-smoke` | `REF-5910656de47adfc817ef-e043426a` |
+| `oxygen-water-350mevu-em-smoke` | `REF-8031592a201b7ddf5a48-7a2c2ae5` |
+| `carbon-water-290mevu-ss-smoke` | `REF-61e64b1b80f37f99f9e5-02b74b6c` |
+| `proton-water-150mev-ss-smoke` | `REF-285075c563439dac3279-432c3126` |
+| `he-water-150mevu-em-smoke-alpha-verbose` | `REF-c98e198face1e783fde0-4f13dcfb` |
+| `he-water-150mevu-em-smoke-genericion-verbose` | `REF-7537d7e4c5d8e4065d3e-cac2340a` |
+| `carbon-water-290mevu-ss-slab1mm-smoke` | `REF-35df82fcd7723f6a9a0c-db361e98` |
 
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
@@ -169,6 +205,14 @@ Roles: exploratory / lineage unless stated. Nothing below is redistributed in Gi
 | 3 | member `src/data/embedded/dedx_icru73new.h` | `f6d088b233e6584363ee09db6b6d828dde0a3c2fe62850e2a35285e83ff78459` | P5b |
 | 4 | Sihver, Schardt, Kanai 1998 PDF (FAILED as a V3 reference) | `68567feb58bf3c2a669193e87d1f0ce41f86c21dcd36959f5ffd7c390bfcda55` | P6 |
 
+**Dated note 2026-11-01 (FC-2; `p2b-follow-ups.md` §0):** acquired sources added.
+
+| §G | Item | sha256 | Record |
+|---|---|---|---|
+| 1d | [BB] `G4BetheBlochModel.cc` v11.4.2 (acquired, exploratory, 2026-11-01; same hash as the earlier scratch download listed below) | `5dc2a9002bff25f239a6402d3976a1f285f071abf4b41585b76f275e4539e01a` | `p2b-follow-ups.md` §1 |
+| 1d | [BB-h] `G4BetheBlochModel.hh` v11.4.2 (acquired, exploratory, 2026-11-01) | `cf05e98c6b56aa07e227800ccff169b74e2c724d56ce5753fcab886be8fac58e` | `p2b-follow-ups.md` §1 |
+| 1d | [NMB] `G4NistMaterialBuilder.cc` v11.4.2 (acquired by the orchestrator, 2026-11-01; lineage) | `a1f8944dd63f4c9915c2205ee2ca5ec0ffade15ac0ca8afe38d53597c2671abc` | `p2b-follow-ups.md` §2 |
+
 Also referenced, not acquired through `acquire_reference_data` (scratch downloads, lineage only; recorded so the
 freeze names every source a record relies on): `G4BetheBlochModel.cc`
 `5dc2a9002bff25f239a6402d3976a1f285f071abf4b41585b76f275e4539e01a`, `G4EmCorrections.cc`
@@ -177,7 +221,8 @@ freeze names every source a record relies on): `G4BetheBlochModel.cc`
 `70ae7c6ba3ef990b7005240bd2b60e4040a3fb60bb1c9e4dbf829c109180eda9` (all `p3b-ls-default.md` §2); the Tessonnier 2017
 thesis `70df35938f57acbf6d88922593e8cb9612a0e0f83701499f181244fc9850428a` (P6-lateral). The Gottschalk arXiv:0908.1413
 object used by the P1 proton validation is recorded only by its prefix `67fb1478…` in the V3-008 records (full hash
-not established by the planner; the P1 tests resolve it from the cache).
+not established by the planner; the P1 tests resolve it from the cache). **Dated note 2026-11-01:** `G4BetheBlochModel.cc`
+is now acquired (row [BB] above) and is counted there, no longer among the scratch-referenced files.
 
 ## 4. Seed reservation (plan §C; P7)
 
@@ -237,3 +282,8 @@ not established by the planner; the P1 tests resolve it from the cache).
 **Count.** Repository files bound by sha256 in §2: 6 (2.1) + 7 (2.2) + 5 (2.3) + 14 (2.4) + 21 (2.5: 20 case files and
 the README) = **53**. External sources with full sha256 in §3: 29 acquired + 5 scratch-referenced = **34**. Total
 full sha256 values in this record: **87**.
+
+**Dated note 2026-11-01 (FC-2):** repository files bound in §2: 53 + 1 (`p2b-follow-ups.md`) = **54**; external
+sources with full sha256 in §3: 32 acquired (29 + [BB], [BB-h], [NMB]) + 4 scratch-referenced = **36**; total full
+sha256 values in this record: **90**. Test 3 above checks the 54 repository paths. Any record or amendment that
+disposes FC-1 adds to these counts by its own dated note.

@@ -223,3 +223,17 @@
 - **OPEN, freeze conditions:** FC-1 = P1 completion (order step 5: Pb attribution on ICRU 49 ranges; water/compound θ_Hanson check) not executed; FC-2 = P2 follow-up residuals (`G4BetheBlochModel.cc/.hh` pin and ICRU 90 branch, X0/RadL, λ charge scaling, `G4VMscModel.hh` initialisers, icru90 silent-fallback check) and the G4_WATER material table (I-value, RadL) required by the P4 row but not recorded.
 - Row-evaluability finding, reported and not changed: I3 pre-declares only the 75 eV case of the libdEdx water I-value; if ICRU73_NEW were not the revised water table, no attribution is pre-declared.
 - No tolerance and no row definition changed. Freeze commit only after FC-1 and FC-2 are disposed (executed record, or dated orchestrator amendment) and `p9-freeze-record.md` §7 passes.
+
+**FC-2 disposition (2026-11-01; planner, at 6bdf3897; record `validation/plans/v3-008/p2b-follow-ups.md`, sha256 `9c70eb1b9d49f0375af7976232817dbda925576eeb4b64e31aee61b33dfb5457`; not a review verdict):**
+- Disposed by an executed record (option (a)): bounded source reads and a read of the archived smoke logs; no new run, no transport or scored output.
+- `G4BetheBlochModel.cc/.hh` (5dc2a900…/cf05e98c…) and `G4NistMaterialBuilder.cc` (a1f8944d…) are pinned and added to `p9-freeze-record.md` §3. The record is added to §2 (counts 54 repository / 36 external / 90 total).
+- ICRU 90 branch settled for G4_WATER + opt4: alpha uses the ICRU 90 alpha array (≤ 1 GeV, the whole He domain); C/O use the ICRU 90 proton array × q², plus the LS terms. The L323 `G4EmCorrections` path (Bloch/Mott at the effective charge, confirming the P3b reading) is reached only outside the ICRU 90 branch, e.g. in the SS constructor (`Use ICRU90 data 0`). The `p3b-ls-default.md` §5 item is resolved, and a possible z = 1 double count of ΔL_LS is a lineage item. The alpha switch at 7.9452 MeV equals 2 MeV × M_α/M_p.
+- G4_WATER: I = 78 eV is FACT (compiled constant, which overrides the formula value). X0 = 36.083 g/cm² is derived from the source composition; ratio to ionmc's cross-check X0 = 1.0000000. P4 "material table archived" is corrected (no material table in any log). The optional `Ma/Verbosity` smoke is not required.
+- msc for GenericIon/alpha: Minimal / 0.2 / DispFlag 1 / Skin 3 is FACT (printout + `G4EmParameters` defaults + opt4). The `G4VMscModel.hh` initialisers are moot, except `dtrl` (OPEN). The λ charge scaling is OPEN at the inline level. Both are declared lineage residuals (V2 Case C attribution only).
+- icru90 z6/z8 read evidence is ABSENT (silent fallback confirmed in the source); declared limitation of the lineage record. No frozen row depends on it.
+- Orchestrator decisions recorded with it:
+  - (d) I3: the result stands with the attribution "reference-table version unresolved (P5b)" if ICRU73_NEW is the pre-revision table, and is never re-graded. This resolves the row-evaluability finding above.
+  - (e) the V3 measured-range gap is bundled into the intervention filed at the freeze (one request, two unavailable inputs).
+- No tolerance, row definition or seed changed. FC-1 is not addressed by this note.
+
+**FC-1 disposition (orchestrator, 2026-11-01).** `p1c-completion.md` (e3cd3258…): Pb cleared by attribution to the range-table input; compound check passes; water not validated directly; no bound file changed; P1 CLOSED. With FC-2 (above) both freeze conditions are disposed; this commit is the freeze commit of revision 1 subject to its independent review.
