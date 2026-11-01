@@ -122,6 +122,7 @@ STEP_TAGS = (
     ("lv5-throughput", "lv5-throughput"),
     ("lv5b-throughput", "lv5b-throughput"),
     ("lv5c-throughput", "lv5c-throughput"),
+    ("lv5d-throughput", "lv5d-throughput"),
     ("v8-lv", "v8-lv"),
     ("v8-stat-compare", "v8-stat-compare"),
     ("v8-stat-", "v8-stat-sample"),
@@ -154,12 +155,23 @@ STEP_TAGS = (
     ("v7-rep-ref", "v7-rep-ref"),
     ("v7-rep-s", "v7-rep-shard"),
     ("v7-f32-", "v7-f32"),
+    ("v7r-kappa-combine", "v7r-kappa-combine"),  # V7-R2 (lv5d); the V7-R2 pytest steps are tag None ("pytest")
+    ("v7r2-calibration-combine", "v7r2-calibration-combine"),
+    ("v7r2-combine", "v7r2-combine"),
+    ("v7r2-ref", "v7r2-ref"),
+    ("v7r2-diag", "v7r2-diag"),
+    ("v7r2-s", "v7r2-shard"),
     ("v7r-calibration-combine", "v7r-calibration-combine"),
     ("v7r-combine", "v7r-combine"),
     ("v7r-ref", "v7r-ref"),
     ("v7r-s", "v7r-shard"),
     ("v7r-diag", "v7r-diag"),
     ("v11-compare", "v11-compare"),
+    ("v6f-timing", "v6f-timing"),  # V6-F (steps_v6f; lv5d / hr5d): longest prefix first, "v6f-sens-" before "v6f-s"
+    ("v6f-compare", "v6f-compare"),
+    ("v6f-cuda-s", "v6f-cuda-shard"),
+    ("v6f-sens-", "v6f-sens-shard"),
+    ("v6f-s", "v6f-shard"),
     ("v6-cuda-compare", "v6-cuda-compare"),
     ("v6-compare", "v6-compare"),
     ("v6-unsized", "v6-unsized"),
@@ -280,7 +292,7 @@ def parse_step(
     sel = re.search(r"(\d+) deselected", text) if tag is None else None
     counts = pytest_counts(text) if tag is None else None
     v7r_facts: dict[str, Any] = {}
-    if tag == "v7r-combine" and doc is not None:  # the two facts of row V7-R, read from the document (C11)
+    if tag in ("v7r-combine", "v7r2-combine") and doc is not None:  # the two facts of row V7-R, read from the document (C11)
         cs = doc.get("calibration_status")
         if isinstance(doc.get("gates_pass"), bool):
             v7r_facts["v7r_gates_pass"] = doc["gates_pass"]
@@ -532,6 +544,59 @@ def calibration_established(cal: list[tuple[str, dict[str, Any]]]) -> bool:
     return all(calibration_step_established(st, i) for i, (_, st) in zip(idx, cal, strict=True))
 
 
+_V7R2_PYTEST_NAME = re.compile(r"^pytest-v7r2-(kappa|calibration)-s(\d+)$")
+
+
+def v7r2_pytest_step_established(step: dict[str, Any], kind: str, i: int) -> bool:
+    """A V7-R2 pytest step (``pytest-v7r2-kappa-s{i}`` / ``pytest-v7r2-calibration-s{i}``) establishes its part only if
+    it passed, its archived command is EXACTLY ``run_suite.v7r2_pytest_args(kind, i)`` (the test file, ``-m calibration``
+    and the fixed ``-k`` of one parametrized case), its header declares ``# v7r_cal_reps:`` equal to
+    ``run_suite.V7R_CAL_REPS`` and its pytest summary is readable with exactly one passed test and no skipped, failed,
+    errored, xfailed or xpassed test. Unreadable output is not established."""
+    sys.path.insert(0, str(HERE))
+    import run_suite
+
+    if not step.get("pass") or step.get("status") == "deferred":
+        return False
+    try:
+        want_args = run_suite.v7r2_pytest_args(kind, i)
+    except ValueError:
+        return False
+    toks = str(step.get("pytest_command", "")).split()
+    cmd = toks[toks.index("pytest") + 1 :] if "pytest" in toks else None
+    counts = step.get("pytest_counts")
+    if cmd is None or " ".join(cmd) != " ".join(want_args) or step.get("v7r_cal_reps") != run_suite.V7R_CAL_REPS:
+        return False
+    if not isinstance(counts, dict) or counts.get("passed") != 1:
+        return False
+    return not any(v for k, v in counts.items() if k not in ("passed", "deselected", "warning", "warnings"))
+
+
+def v7r2_pytest_established(pairs: list[tuple[str, dict[str, Any]]]) -> dict[str, Any]:
+    """Kappa and calibration conditions of row V7-R2 from the ``(base name, step)`` pairs of the archive: each kind
+    needs the complete set ``s0..s{n-1}`` (6 kappa parts, 78 calibration parts), each part exactly once and each
+    established with its own fixed selection; a missing, repeated, stray or malformed part fails the kind."""
+    sys.path.insert(0, str(HERE))
+    import run_suite
+
+    want = {"kappa": len(run_suite.V7R2_KAPPA_CASES), "calibration": len(run_suite.V7R2_CAL_CASES)}
+    found: dict[str, list[tuple[int, dict[str, Any]]]] = {"kappa": [], "calibration": []}
+    stray = False
+    for n, st in pairs:
+        m = _V7R2_PYTEST_NAME.match(n)
+        if m:
+            found[m.group(1)].append((int(m.group(2)), st))
+        elif n.startswith(run_suite.V7R2_PYTEST_PREFIX):
+            stray = True  # a pytest-v7r2-* step that is none of the registered parts
+    out: dict[str, Any] = {}
+    for kind, n_want in want.items():
+        idx = sorted(i for i, _ in found[kind])
+        out[kind] = bool(not stray and idx == list(range(n_want))
+                         and all(v7r2_pytest_step_established(st, kind, i) for i, st in found[kind]))  # fmt: skip
+        out[f"{kind}_steps"] = len(idx)
+    return out
+
+
 SLICE_C_STEP_ROWS = {
     "lv5c": {
         "R1-D2": "r1-d2-regression", "P7": "p7-sampler", "V2b-el": "v2b-el-combine", "V7-scan-el": "v7-scan-el",
@@ -540,6 +605,15 @@ SLICE_C_STEP_ROWS = {
         "V10": "v10-pp-level", "V10-A": "v10-a", "V10-A-trigger": "v10-a-trigger", "X-ENDF": "x-endf", "D9-BGG": "d9-bgg",
     },
     "hr5c": {"V8-nuc": "v8-stat-compare", "V8": "v8-stat-compare", "V6": "v6-cuda-compare"},
+    # lv5d (Amendment 20 (f)1, (f)8): the lv5c one-step rows except V7-R (V7-R2 is the conjunction of slice_c_rows).
+    # The V6-F verdict is not an lv5d row: v6f-compare needs the CUDA partials and lives in hr5d (review round W-1).
+    "lv5d": {
+        "R1-D2": "r1-d2-regression", "P7": "p7-sampler", "V2b-el": "v2b-el-combine", "V7-scan-el": "v7-scan-el",
+        "V7-shift-el": "v7-shift-el", "E1-B": "e1-b-compare", "E-shape": "e-shape-exploratory",
+        "V5": "v5-compare", "V8": "v8-lv-python-vs-warp-cpu", "V11": "v11-compare", "V6": "v6-compare",
+        "V10": "v10-pp-level", "V10-A": "v10-a", "V10-A-trigger": "v10-a-trigger", "X-ENDF": "x-endf", "D9-BGG": "d9-bgg",
+    },
+    "hr5d": {"V8-nuc": "v8-stat-compare", "V8": "v8-stat-compare", "V6": "v6-cuda-compare", "V6-F": "v6f-compare"},
 }
 """Rows whose verdict is the pass of one step (plan Amendment 17 (d); row V6 is the verdict of ``v6-compare`` on lv5c and
 of ``v6-cuda-compare`` on hr5c, the backend combination lives in the latter). Report-only rows (V10, X-ENDF, D9-BGG,
@@ -564,7 +638,7 @@ def step_rows(suite: str | None, steps: dict[str, Any]) -> dict[str, Any]:
 def v6_unsized_rows(suite: str | None, steps: dict[str, Any]) -> dict[str, Any]:
     """Rows V6 and V6-sens are "failed" (never "pending") when a V6 step recorded the unsized fail-closed document
     (plan Amendment 14a (a)4): the ``v6-unsized`` step (verdict ``failed``) or the compare step (``failed (unsized)``)."""
-    if suite not in ("lv5c", "hr5c"):
+    if suite not in ("lv5c", "hr5c", "lv5d", "hr5d"):
         return {}
     for n, st in steps.items():
         base = n.split("-", 1)[1] if "-" in n else n
@@ -575,6 +649,36 @@ def v6_unsized_rows(suite: str | None, steps: dict[str, Any]) -> dict[str, Any]:
     return {}
 
 
+def v7r2_row(steps: dict[str, Any]) -> dict[str, Any]:
+    """Row V7-R2 of ``lv5d`` (repair plan revision 4; Amendment 20 (f)1): passes iff ``v7r2-combine`` passed with
+    ``gates_pass`` and a passing ``calibration_status`` (both read from its document), the combined kappa record step
+    ``v7r-kappa-combine`` and the status step ``v7r2-calibration-combine`` passed, AND the six kappa and 78 calibration
+    pytest steps are each established exactly once with their exact command and count
+    (:func:`v7r2_pytest_established`). A pytest step has no document, so the conjunction cannot be made by a step.
+    Otherwise the verdict is "uncertainty-coverage evidence not established"; a missing step is never a pass."""
+    pairs = [(n.split("-", 1)[1], st) for n, st in steps.items() if "-" in n]
+    by = dict(pairs)
+
+    def ok(name: str) -> bool:
+        st = by.get(name)
+        return bool(st and st.get("pass") and st.get("status") != "deferred")
+
+    comb = by.get("v7r2-combine")
+    comb_ok = ok("v7r2-combine")
+    gates = bool(comb_ok and comb.get("v7r_gates_pass", comb_ok))  # type: ignore[union-attr]
+    status_pass = bool(comb_ok and comb.get("v7r_calibration_status_pass", comb_ok))  # type: ignore[union-attr]
+    py = v7r2_pytest_established(pairs)
+    row = {"gates_pass": gates, "calibration_status_pass": status_pass, "kappa_combine_pass": ok("v7r-kappa-combine"),
+           "calibration_combine_pass": ok("v7r2-calibration-combine"), "kappa_parts_established": py["kappa"],
+           "calibration_parts_established": py["calibration"], "kappa_steps": py["kappa_steps"],
+           "calibration_steps": py["calibration_steps"]}  # fmt: skip
+    row["pass"] = bool(comb_ok and gates and status_pass and row["kappa_combine_pass"]
+                       and row["calibration_combine_pass"] and py["kappa"] and py["calibration"])  # fmt: skip
+    if not row["pass"]:
+        row["verdict"] = V7R_NOT_ESTABLISHED
+    return row
+
+
 def slice_c_rows(suite: str | None, steps: dict[str, Any]) -> dict[str, Any]:
     """Row verdicts that are a conjunction of steps (suite ``lv5c``). Row V7-R (plan Amendment 14 (h)
     and Amendment 17 (a)6) passes iff ``v7r-combine`` passed (the three estimators, both gates each)
@@ -583,8 +687,10 @@ def slice_c_rows(suite: str | None, steps: dict[str, Any]) -> dict[str, Any]:
     its complete expected passed count and no skip (``calibration_established``). A pytest step has no
     document, so the conjunction cannot be made by a step. Otherwise the row verdict is
     "uncertainty-coverage evidence not established"."""
-    if suite == "hr5c":
+    if suite in ("hr5c", "hr5d"):
         return step_rows(suite, steps)
+    if suite == "lv5d":
+        return {**step_rows(suite, steps), "V7-R2": v7r2_row(steps)}
     if suite != "lv5c":
         return {}
     by = {n.split("-", 1)[1]: s for n, s in steps.items() if "-" in n}
@@ -618,7 +724,7 @@ def verify(d: Path, sha: str, attest_sha: str | None = None) -> dict[str, Any]:
         problems.append("manifest.txt missing or empty")
     if len(set(names)) != len(names):
         problems.append("manifest lists a step twice")
-    present = sorted(p.stem for p in d.glob("[0-9][0-9]-*.txt"))
+    present = sorted(p.stem for p in d.glob("[0-9][0-9]*-*.txt"))
     if sorted(names) != present:
         problems.append(f"manifest {sorted(names)} differs from step files {present}")
     steps: dict[str, Any] = {}

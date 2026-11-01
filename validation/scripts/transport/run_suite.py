@@ -90,6 +90,7 @@ STEPS_V5B = HERE / "steps_v5b.py"
 STEPS_V5C = HERE / "steps_v5c.py"
 STEPS_V5D = HERE / "steps_v5d.py"
 STEPS_V6 = HERE / "steps_v6.py"
+STEPS_V6F = HERE / "steps_v6f.py"
 SUITES = ("lv", "hr", "lv4", "hr4", "lv5", "lv5b", "hr5", "lv5c", "hr5c", "lv5d", "hr5d")
 PY = sys.executable
 SOURCE_PREFIXES = (
@@ -328,6 +329,31 @@ V7R_SHARDS = 16
 """Number of shard steps ``v7r-s{k}`` of V7-R (Amendment 14 (h): sixteen simulations of 4.5e6 histories); defined
 here for the same reason as ``V7_REP_SHARDS``; ``steps_v5c.V7R_SHARDS`` (``v7r.V7R_SHARDS``) must equal it (a test)."""
 
+V7R2_SHARDS = 48
+"""Number of shard steps ``v7r2-s{k}`` of V7-R2 (repair plan revision 4: 48 x 2.25e6 histories, reference index 48;
+Amendment 20 (f)3, r_index 16); ``v7r.V7R2_SHARDS`` and ``steps_v5c`` must equal it (a test). The 7200 fallback
+(64 shards, 102 calibration parts) is deliberately NOT registered: ``v7r.require_r2_calibration_producer`` fails closed."""
+V7R2_PYTEST_FILE = "tests/ionmc/test_v7r2_calibration.py"
+V7R2_PYTEST_PREFIX = "pytest-v7r2"
+"""Prefix of the V7-R2 pytest steps (kappa parts ``pytest-v7r2-kappa-s{i}``, calibration parts
+``pytest-v7r2-calibration-s{i}``); like ``V7R_CALIBRATION_STEP_PREFIX`` it selects the required-fixture environment,
+the fixture header lines and the rehearsal-directory scrub. It does not start with ``pytest-v7r-calibration``."""
+V7R2_KAPPA_CASES = tuple(
+    f"{s}-{k}-p{p}" for s in V7R_CAL_SURROGATES for k, parts in (("single", 1), ("pair", 2)) for p in range(parts)
+)
+"""Parametrization ids of ``test_v7r2_kappa_part`` (6 cases: per surrogate one single part of 1e6 replicates, two pair
+parts of 5e5); step ``pytest-v7r2-kappa-s{i}`` selects case ``i`` (the test module's ``KAPPA_CASES``; a test)."""
+V7R2_CAL_PARTS = 39
+V7R2_CAL_CASES = tuple(f"{s}-part{p:02d}" for s in V7R_CAL_SURROGATES for p in range(V7R2_CAL_PARTS))
+"""Parametrization ids of ``test_v7r2_calibration_part`` (78 cases: 39 parts per surrogate of 83 / 82 repetitions of
+R = 3200); step ``pytest-v7r2-calibration-s{i}`` selects case ``i``; the parts are zero padded so that the ``-k``
+substring of one part never matches another. ``v7r.V7R2_CAL_PARTS`` must equal it (a test)."""
+V7R2_KAPPA_DIR_ENV = "IONMC_V7R_KAPPA_DIR"
+V6F_CPU_SHARDS, V6F_SENS_SHARDS, V6F_CUDA_SHARDS = 16, 8, 16
+V6F_SENS_RUNS = ("nominal", "sx-lo", "sx-hi", "st-lo", "st-hi", "rho-lo", "rho-hi")
+"""The V6-F shard families (``steps_v6f``: 16 gating CPU shards, 7 sensitivity runs x 8 shards = 56 CPU shards (72 CPU
+shards in all), 16 CUDA shards); ``steps_v6f.V6F_*`` must equal them (a test)."""
+
 V7_REP_SHARDS = 8
 """Number of shard steps ``v7-rep-s{k}`` of the V7 replicate coverage (Amendment 13: eight simulations of 9e6
 histories, 7200 replicates); defined here for the same reason as ``V2B_SHARDS``; ``steps_v5b.V7_SHARDS`` is
@@ -383,6 +409,29 @@ STEP_TIMEOUT_FLOOR_S = {
         "v8-stat-cuda32": 3600, "v8-stat-cuda64": 3600, "v8-stat-compare": 1800, "v7-f32-f64-cuda": 3600,
         **{f"v6-cuda-s{k}": 3600 for k in range(64)}, "v6-unsized": 1800, "v6-cuda-compare": 1800,
     },
+    "lv5d": {
+        "lv5d-throughput": 3300, "v6-e0": 1800, "v10-pp-level": 1800, "v10-a": 1800, "v10-a-trigger": 1800,
+        "v10-a-xcheck": 3300, "x-endf": 3300, "d9-bgg": 1800, "r1-d2-regression": 3300,
+        "v8-lv-python-vs-warp-cpu": 3300, "p7-sampler": 3300,
+        **{f"v11-ionmc-{e}-{m}": 3300 for e in (150, 200) for m in ("emel", "emonly")}, "v11-compare": 1800,
+        **{f"v5-{e}-{t}": 3300 for e in (150, 200) for t in ("on", "off")}, "v5-compare": 1800,
+        "v5-attribution": 1800, **{f"v2b-el-s{k}": 3300 for k in range(V2B_SHARDS)}, "v2b-el-combine": 1800,
+        "v7-scan-el": 3300, "v7-shift-el": 3300, "v6-unsized": 1800, "v6-compare": 1800,
+        **{f"v6f-s{k}": 3300 for k in range(V6F_CPU_SHARDS)},
+        **{f"v6f-sens-{v}-s{k}": 3300 for v in V6F_SENS_RUNS for k in range(V6F_SENS_SHARDS)},
+        **{f"pytest-v7r2-kappa-s{i}": 3300 for i in range(len(V7R2_KAPPA_CASES))}, "v7r-kappa-combine": 1800,
+        **{f"pytest-v7r2-calibration-s{i}": 3300 for i in range(len(V7R2_CAL_CASES))},
+        "v7r2-calibration-combine": 1800,
+        **{f"v7r2-s{k}": 3300 for k in range(V7R2_SHARDS)}, "v7r2-ref": 3300, "v7r2-combine": 1800, "v7r2-diag": 1800,
+        **{f"e1-b-s{k}": 3300 for k in range(E1B_SHARDS or 0)}, "e1-b-compare": 1800,
+        "e-shape-exploratory": 3300, "v3-workers-partition": 3300,
+    },
+    "hr5d": {
+        **{f"v8-stat-python-s{k}": 3600 for k in range(V8NUC_PYTHON_SHARDS)}, "v8-stat-cpu64": 3600,
+        "v8-stat-cuda32": 3600, "v8-stat-cuda64": 3600, "v8-stat-compare": 1800, "v7-f32-f64-cuda": 3600,
+        "v6-unsized": 1800, "v6-cuda-compare": 1800, "v6f-timing": 3600,
+        **{f"v6f-cuda-s{k}": 3600 for k in range(V6F_CUDA_SHARDS)}, "v6f-compare": 1800,
+    },
     "hr5": {
         "v8-stat-python-s0": 3600, "v8-stat-python-s1": 3600, "v8-stat-cpu64": 3600,
         "v8-stat-cuda32": 3600, "v8-stat-cuda64": 3600, "v7-f32-f64-cuda": 3600,
@@ -395,6 +444,25 @@ timeout is the larger of the two and is recorded in the step header."""
 def step_timeout_s(suite: str, name: str, default: int) -> int:
     floor = STEP_TIMEOUT_FLOOR_S.get(suite, {}).get(name.split("-", 1)[1], 0)
     return max(default, floor)
+
+
+def v7r2_pytest_args(kind: str, i: int) -> list[str]:
+    """The exact arguments after ``python -m pytest`` of the V7-R2 pytest step ``i`` of ``kind`` (``"kappa"``: the six
+    kappa parts, ``"calibration"``: the 78 calibration parts): the test file, ``-m calibration`` and the fixed ``-k``
+    selecting exactly one parametrized case. The single source of the step command and of
+    ``summarize.v7r2_pytest_step_established``."""
+    cases = {"kappa": V7R2_KAPPA_CASES, "calibration": V7R2_CAL_CASES}.get(kind)
+    if cases is None or not 0 <= i < len(cases):
+        raise ValueError(f"no V7-R2 pytest step {kind!r} #{i}")
+    test = "test_v7r2_kappa_part" if kind == "kappa" else "test_v7r2_calibration_part"
+    return pytest_cmd(V7R2_PYTEST_FILE, marker="calibration", k=f"{test} and {cases[i]}")[3:]
+
+
+def is_v7r_calibration_step(name: str) -> bool:
+    """True for the V7-R calibration pytest steps (``pytest-v7r-calibration*``) and the V7-R2 kappa / calibration pytest
+    steps (``pytest-v7r2-*``): they need the committed rehearsal fixture (required mode) and declare the replicate
+    count in the step header."""
+    return V7R_CALIBRATION_STEP_PREFIX in name or V7R2_PYTEST_PREFIX in name
 
 
 def deferred_step_names(suite: str, python_parts: int = DEFAULT_PYTHON_PARTS) -> list[str]:
@@ -446,20 +514,26 @@ def suite_steps(
     s5c = [PY, str(STEPS_V5C)]
     s5d = [PY, str(STEPS_V5D)]
     s6 = [PY, str(STEPS_V6)]
+    s6f = [PY, str(STEPS_V6F)]
     steps: list[tuple[str, list[str], dict[str, str]]] = []
 
-    def add(name: str, cmd: list[str], env: dict[str, str] | None = None) -> None:
+    def add(name: str, cmd: list[str], env: dict[str, str] | None = None, base: int | None = None) -> None:
+        """``base`` overrides the suite seed base of this step (the V6-F rows run at their own row base)."""
         full = f"{len(steps) + 1:02d}-{name}"
         if cmd[:2] in ([PY, str(STEPS)], [PY, str(STEPS_V4)], [PY, str(STEPS_V5)], [PY, str(STEPS_V5B)],
-                      [PY, str(STEPS_V5C)], [PY, str(STEPS_V5D)], [PY, str(STEPS_V6)]):
+                      [PY, str(STEPS_V5C)], [PY, str(STEPS_V5D)], [PY, str(STEPS_V6)], [PY, str(STEPS_V6F)]):
             eff = step_timeout_s(suite, full, step_timeout)
             inner = ["--timeout", str(max(30, int(0.9 * eff)))]  # the pool cleans up first
-            cmd = [*cmd, *inner, "--seed-base", str(seed_base)]  # every seed derives from the base
+            cmd = [*cmd, *inner, "--seed-base", str(seed_base if base is None else base)]  # seeds derive from it
+        elif base is not None:
+            raise SystemExit(f"step {name}: a seed-base override needs a step script that takes --seed-base")
         env = dict(env or {})
-        if name.startswith(V7R_CALIBRATION_STEP_PREFIX):  # a missing fixture fails, a skip is a failure
-            env["IONMC_V7R_FIXTURES"] = "required"
+        if name.startswith(V7R_CALIBRATION_STEP_PREFIX) or name.startswith(V7R2_PYTEST_PREFIX):
+            env["IONMC_V7R_FIXTURES"] = "required"  # a missing fixture fails, a skip is a failure
             env[V7R_CAL_REPS_ENV] = str(V7R_CAL_REPS)
             env[V7R_CAL_OUT_ENV] = str(out_dir)
+        if name.startswith(f"{V7R2_PYTEST_PREFIX}-calibration"):  # the parts refuse to run without the kappa record
+            env[V7R2_KAPPA_DIR_ENV] = str(import_dirs[0] if import_dirs else out_dir)
         steps.append((full, cmd, env))
 
     if suite == "lv5":
@@ -488,6 +562,15 @@ def suite_steps(
             raise SystemExit("hr5c --import-dirs requires --partials-manifest (name -> sha256)")
         pm = ["--partials-manifest", str(partials_manifest)] if import_dirs else []
         _suite_steps_hr5c(add, sc, out_dir, [*dirs, *pm], s5d, s6, cuda)
+        return steps
+    if suite in ("lv5d", "hr5d"):
+        if import_dirs and partials_manifest is None:
+            raise SystemExit(f"{suite} --import-dirs requires --partials-manifest (name -> sha256)")
+        pm = ["--partials-manifest", str(partials_manifest)] if import_dirs else []
+        if suite == "lv5d":
+            _suite_steps_lv5d(add, sc, out_dir, [*dirs, *pm], s5, s5c, s5d, s6, s6f)
+        else:
+            _suite_steps_hr5d(add, sc, out_dir, [*dirs, *pm], s5d, s6, s6f, cuda)
         return steps
     if suite in ("lv4", "hr4"):
         _suite_steps_v4(suite, add, s4, w, sc, cuda, out_dir, dirs, single_process)
@@ -739,6 +822,105 @@ def _suite_steps_hr5c(add, sc, out_dir, dirs, s5d, s6, cuda):  # type: ignore[no
     add("v8-stat-compare", [*s5d, "v8-stat-compare", "--dirs", *dirs, *sc], env)
     add("v7-f32-f64-cuda", [*s5d, "v7-f32", *sc], env)
     _suite_steps_v6(add, sc, out_dir, dirs, s6, cuda=True)
+
+
+def _suite_steps_lv5d(add, sc, out_dir, dirs, s5, s5c, s5d, s6, s6f):  # type: ignore[no-untyped-def]
+    """Steps of the re-qualification suite ``lv5d`` (Amendment 20 (f)1, (f)3, (f)8; base 20531004, r_index as lv5c).
+
+    The lv5c rows carry over in the order of the route (vi) 4: the throughput step first (review-route m2: the
+    shard table, the rep-based kappa / calibration plans included, stops the run before the first evidence step),
+    the deterministic rows, R1-D2, V8-LV, P7, ``v10-a-trigger``, V11, V5 with its attribution, V2b-el, V7-scan-el,
+    V7-shift-el and ``v6-unsized`` / ``v6-compare`` (V6 / V6-sens re-recorded). Then the V6-F CPU block (16 gating
+    shards, 7 sensitivity runs x 8 shards; row base 20551004, a per-step base) and the V7-R2 block: six kappa pytest
+    parts, ``v7r-kappa-combine``, 78 calibration pytest parts, ``v7r2-calibration-combine`` (the calibration verdict
+    precedes any transport), 48 transport shards (r_index 16), the reference (index 48), ``v7r2-combine`` and
+    ``v7r2-diag`` (r_index 17, no seed). E1-B, E-shape and the deferred worker-partition step close the list.
+    ``v6f-compare`` is an hr5d step (it needs the CUDA partials)."""
+    env = NUCLEAR_ENV
+    add("lv5d-throughput", [*s5d, "lv5d-throughput", *sc], env)
+    add("v6-e0", [*s6, "v6-e0", "--out-dir", str(out_dir), *sc], env)  # deterministic E0 record
+    add("v10-pp-level", [*s5d, "v10-pp-level", *sc], env)
+    add("v10-a", [*s5d, "v10-a", "--out-dir", str(out_dir), *sc], env)
+    add("v10-a-xcheck", [*s5d, "v10-a-xcheck", *sc], env)
+    add("x-endf", [*s5d, "x-endf", *sc], env)
+    add("d9-bgg", [*s5d, "d9-bgg", *sc], env)
+    add("r1-d2-regression", [*s5d, "r1-d2", "--out-dir", str(out_dir), *sc], env)
+    add("v8-lv-python-vs-warp-cpu", [*s5d, "v8-lv", "--out-dir", str(out_dir), *sc], env)
+    add("p7-sampler", [*s5d, "p7-sampler", "--out-dir", str(out_dir), *sc], env)
+    add("v10-a-trigger", [*s5d, "v10-a-trigger", "--dirs", *dirs, *sc], env)  # (e)9 trigger, needs v10-a and p7
+    for e in (150, 200):  # row V11 (r_index 14)
+        for m in ("emel", "emonly"):
+            add(f"v11-ionmc-{e}-{m}", [*s5c, "v11-ionmc", "--energy", str(e), "--mode", m,
+                                       "--out-dir", str(out_dir), *sc], env)  # fmt: skip
+    add("v11-compare", [*s5c, "v11-compare", "--dirs", *dirs, *sc], env)
+    for e in (150, 200):  # V5 re-run (r_index 4-7)
+        for t in ("on", "off"):
+            add(f"v5-{e}-{t}", [*s5d, "v5-ionmc", "--energy", str(e), "--nuclear", t, "--out-dir", str(out_dir),
+                                *sc], env)  # fmt: skip
+    add("v5-compare", [*s5d, "v5-compare", "--dirs", *dirs, *sc], env)
+    add("v5-attribution", [*s5d, "v5-attribution", "--dirs", *dirs, *sc], env)
+    for k in range(V2B_SHARDS):
+        add(f"v2b-el-s{k}", [*s5d, "v2b-el-shard", "--shard", str(k), "--out-dir", str(out_dir), *sc], env)
+    add("v2b-el-combine", [*s5d, "v2b-el-combine", "--dirs", *dirs, *sc], env)
+    add("v7-scan-el", [*s5d, "v7-scan-el", *sc], env)
+    add("v7-shift-el", [*s5d, "v7-shift-el", *sc], env)
+    _suite_steps_v6(add, sc, out_dir, dirs, s6, cuda=False)
+    for k in range(V6F_CPU_SHARDS):  # V6-F gating CPU (r_index 7, seeds 20558004 + k)
+        add(f"v6f-s{k}", [*s6f, "v6f-shard", "--shard", str(k), "--out-dir", str(out_dir), *sc], env,
+            base=V6F_ROW_BASE)  # fmt: skip
+    for v in V6F_SENS_RUNS:  # V6-F sensitivity (r_index 8, seeds 20559004 + k, shared by the seven runs: CRN)
+        for k in range(V6F_SENS_SHARDS):
+            add(f"v6f-sens-{v}-s{k}", [*s6f, "v6f-sens-shard", "--variant", v, "--shard", str(k),
+                                       "--out-dir", str(out_dir), *sc], env, base=V6F_ROW_BASE)  # fmt: skip
+    _suite_steps_v7r2(add, sc, out_dir, dirs, s5c, env)
+    if E1B_SHARDS is None:
+        add("e1-b-unsized", [*s5d, "e1-b-unsized", *sc], env)
+    else:
+        for k in range(E1B_SHARDS):
+            add(f"e1-b-s{k}", [*s5d, "e1-b-shard", "--shard", str(k), "--out-dir", str(out_dir), *sc], env)
+    add("e1-b-compare", [*s5d, "e1-b-compare", "--dirs", *dirs, *sc], env)
+    add("e-shape-exploratory", [*s5d, "e-shape", "--shard", "0", *sc], env)
+    add("v3-workers-partition", [*s5, "v3-workers"], env)  # deferred: runs only when the mode is lifted
+
+
+def _suite_steps_v7r2(add, sc, out_dir, dirs, s5c, env):  # type: ignore[no-untyped-def]
+    """Row V7-R2 (repair plan revision 4, planning notes PN-V7R2-1..5; Amendment 20 (f)1, (f)3, (f)8): the order is
+    kappa parts -> ``v7r-kappa-combine`` -> calibration parts -> ``v7r2-calibration-combine`` -> transport shards ->
+    reference -> ``v7r2-combine`` -> ``v7r2-diag``. The pytest steps have no document (their pass is the exit status;
+    ``summarize.py`` makes the conjunction); each selects exactly one parametrized case of
+    ``tests/ionmc/test_v7r2_calibration.py``."""
+    for i in range(len(V7R2_KAPPA_CASES)):
+        add(f"{V7R2_PYTEST_PREFIX}-kappa-s{i}", [PY, "-m", "pytest", *v7r2_pytest_args("kappa", i)], env)
+    add("v7r-kappa-combine", [*s5c, "v7r-kappa-combine", "--dirs", *dirs, "--out-dir", str(out_dir), *sc], env)
+    for i in range(len(V7R2_CAL_CASES)):
+        add(f"{V7R2_PYTEST_PREFIX}-calibration-s{i}", [PY, "-m", "pytest", *v7r2_pytest_args("calibration", i)], env)
+    add("v7r2-calibration-combine",
+        [*s5c, "v7r2-calibration-combine", "--dirs", *dirs, "--out-dir", str(out_dir), *sc], env)
+    for k in range(V7R2_SHARDS):  # r_index 16, one simulation of 2.25e6 histories each
+        add(f"v7r2-s{k}", [*s5c, "v7r2-shard", "--shard", str(k), "--out-dir", str(out_dir), *sc], env)
+    add("v7r2-ref", [*s5c, "v7r2-ref", "--out-dir", str(out_dir), *sc], env)  # index 48 (distinct from every shard)
+    add("v7r2-combine", [*s5c, "v7r2-combine", "--dirs", *dirs, *sc], env)
+    add("v7r2-diag", [*s5c, "v7r2-diag", "--dirs", *dirs, *sc], env)
+
+
+def _suite_steps_hr5d(add, sc, out_dir, dirs, s5d, s6, s6f, cuda):  # type: ignore[no-untyped-def]
+    """Steps of the re-qualification suite ``hr5d`` (Amendment 20 (f)1, (f)4, (f)8; base 20541004, r_index 1, 2, 3
+    only; one controlling process, ``IONMC_REQUIRE_CUDA=1``): V8-stat (python x 4, cpu64, cuda32, cuda64, comparison),
+    V7 f32 / f64 on CUDA, ``v6-unsized`` / ``v6-cuda-compare`` and the V6-F CUDA block: the timing step first
+    (``v6f-timing``, fixed seed 20514000, never evidence), the 16 CUDA shards (r_index 9, seeds 20560004 + k, row base
+    20551004) and ``v6f-compare`` (review round W-1: hosted here; it imports the CPU / sensitivity partials of lv5d
+    through ``--import-dirs`` / ``--partials-manifest``, so the archive is non-conformant by code as hr5c's)."""
+    env = {**NUCLEAR_ENV, **cuda}
+    for nm in (*(f"python-s{k}" for k in range(V8NUC_PYTHON_SHARDS)), "cpu64", "cuda32", "cuda64"):
+        add(f"v8-stat-{nm}", [*s5d, "v8-stat-sample", "--sample", nm, "--out-dir", str(out_dir), *sc], env)
+    add("v8-stat-compare", [*s5d, "v8-stat-compare", "--dirs", *dirs, *sc], env)
+    add("v7-f32-f64-cuda", [*s5d, "v7-f32", *sc], env)
+    _suite_steps_v6(add, sc, out_dir, dirs, s6, cuda=True)
+    add("v6f-timing", [*s6f, "v6f-timing", "--out-dir", str(out_dir), *sc], env, base=V6F_ROW_BASE)
+    for k in range(V6F_CUDA_SHARDS):
+        add(f"v6f-cuda-s{k}", [*s6f, "v6f-cuda-shard", "--shard", str(k), "--out-dir", str(out_dir), *sc], env,
+            base=V6F_ROW_BASE)  # fmt: skip
+    add("v6f-compare", [*s6f, "v6f-compare", "--dirs", *dirs, *sc], env, base=V6F_ROW_BASE)
 
 
 def _suite_steps_v7r(add, sc, out_dir, dirs, s5c):  # type: ignore[no-untyped-def]
@@ -1096,7 +1278,7 @@ def step_environment(env_base: dict[str, str], name: str, extra: dict[str, str])
     """Environment of one step: ``env_base`` plus ``extra``; the V7-R calibration steps never inherit
     ``IONMC_V7R_REHEARSAL_DIR`` (the committed fixture directory is the only one they may use)."""
     env = {k: v for k, v in {**env_base, **extra}.items() if not k.startswith("IONMC_V6_")}  # no V6 override
-    if V7R_CALIBRATION_STEP_PREFIX in name:
+    if is_v7r_calibration_step(name):
         env.pop(REHEARSAL_DIR_ENV, None)
         env[V7R_CAL_REPS_ENV] = str(V7R_CAL_REPS)  # never overridden by the caller's environment
     return env
@@ -1426,7 +1608,7 @@ def main(argv: list[str] | None = None) -> int:
             fh.write(f"# command: {' '.join(cmd)}\n# git_sha: {sha}\n# started_utc: {started}\n")
             eff_timeout = step_timeout_s(args.suite, name, args.step_timeout)
             fh.write(f"# step_timeout_s: {eff_timeout}\n")
-            if V7R_CALIBRATION_STEP_PREFIX in name:
+            if is_v7r_calibration_step(name):
                 fh.write(f"# v7r_rehearsal_fixture: {REHEARSAL_FIXTURE_DIR} "
                          f"sha256={rehearsal_fixture_digest()}\n")  # fmt: skip
                 fh.write(f"# v7r_cal_reps: {V7R_CAL_REPS}\n")

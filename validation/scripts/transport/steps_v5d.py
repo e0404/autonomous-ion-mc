@@ -203,9 +203,24 @@ def block_rate(n: int) -> float:
     return float(nb * v5b.V7_BATCH_N / (time.perf_counter() - t0)) if c_est else 0.0
 
 
-def declared_plans() -> dict[str, tuple[int, str, int | None]]:
-    """``name -> (histories, rate key, declared shards)`` of every lv5c / hr5c step that must fit
-    ``STEP_LIMIT_S / MARGIN`` (``None`` shards: not yet declared, reported as needed)."""
+DECLARED_PLAN_SUITES = ("lv5c", "hr5c", "lv5d")
+"""Suites whose throughput step has a registered shard table. ``declared_plans`` is gated by the suite and fails
+closed for any other name (Amendment 20 (f)8; review round W-1): ``hr5d`` has no throughput step."""
+THROUGHPUT_STEP_SUITE = {"lv5c-throughput": "lv5c", "lv5d-throughput": "lv5d"}
+
+
+def declared_plans(suite: str = "lv5c") -> dict[str, tuple[int, str, int | None]]:
+    """``name -> (histories, rate key, declared shards)`` of every step of ``suite`` that must fit
+    ``STEP_LIMIT_S / MARGIN`` (``None`` shards: not yet declared, reported as needed).
+
+    ``lv5c`` / ``hr5c`` (the default): the archived table, unchanged (golden test). ``lv5d``: the lv5c table with the
+    V7-R line replaced by the V7-R2 transport shards and reference (48 shards x 2.25e6 and 1e6 reference histories,
+    block rate) and with the V6-F CPU families (``steps_v6f.v6f_plans``, rate ``v5``) added; the rep-based kappa and
+    calibration parts are reported by :func:`rep_plan_table` (``v7r.r2_rep_plans``). Any other suite raises
+    ``SystemExit`` (fail closed)."""
+    if suite not in DECLARED_PLAN_SUITES:
+        raise SystemExit(f"declared_plans: no shard table is registered for suite {suite!r} "
+                         f"(registered: {DECLARED_PLAN_SUITES}; fail closed)")  # fmt: skip
     v6 = run_suite.V6_SHARDS
     out: dict[str, tuple[int, str, int | None]] = {
         "v7r (16 shards x 4.5e6, block rate)": (16 * 4_500_000, "blocks", 16),
@@ -220,7 +235,25 @@ def declared_plans() -> dict[str, tuple[int, str, int | None]]:
     }  # fmt: skip
     if v6 is not None:
         out[f"v6 ({v6} shards x 1e6)"] = (v6 * 1_000_000, "v5", v6)
+    if suite != "lv5d":
+        return out
+    import steps_v6f  # lazy: steps_v6f imports steps_v5c / steps_v6, not this module
+
+    r2 = c.v7r
+    del out["v7r (16 shards x 4.5e6, block rate)"]  # V7-R is not an lv5d row (V7-R2 replaces it)
+    out[f"v7r2 transport ({r2.V7R2_SHARDS} shards x 2.25e6, block rate)"] = (
+        r2.V7R2_SHARDS * r2.V7R2_SHARD_N, "blocks", r2.V7R2_SHARDS)
+    out["v7r2 reference (1e6, block rate)"] = (r2.V7R2_REF_N, "blocks", 1)
+    out.update(steps_v6f.v6f_plans())
     return out
+
+
+def rep_plan_table(suite: str) -> dict[str, Any]:
+    """Rep-based shard table (``v7r.r2_rep_plans``: the 78 calibration parts and the six kappa steps, extrapolated
+    slow-host rates until one part is measured) for the suites that run them (``lv5d``); fail closed otherwise."""
+    if suite != "lv5d":
+        raise SystemExit(f"rep_plan_table: the rep-based V7-R2 plans belong to lv5d, not {suite!r} (fail closed)")
+    return c.v7r.r2_rep_plans()
 
 
 def shard_plan_c(items: dict[str, tuple[int, str, int | None]], rates: dict[str, float],
@@ -276,18 +309,29 @@ def step_throughput(a: argparse.Namespace) -> int:
              "blocks": block_rate(v5b.scaled(20 * v5b.V7_BATCH_N, a.scale, 2 * v5b.V7_BATCH_N,
                                              v5b.V7_BATCH_N))}  # fmt: skip
     rates["v2b"] = 1.0 / (1.0 / out["v2b-a"]["hist_per_s"] + 1.0 / out["v2b-b"]["hist_per_s"])
-    table = plan_table(rates, declared_plans())
+    step_name = getattr(a, "step", None) or "lv5c-throughput"
+    suite = THROUGHPUT_STEP_SUITE.get(step_name)
+    if suite is None:
+        raise SystemExit(f"throughput step {step_name!r} has no registered suite (fail closed)")
+    table = plan_table(rates, declared_plans(suite))
     ok = all(v["counters_clean"] for v in out.values())
     fits = all(v["ok"] for v in table.values() if v["ok"] is not None)
-    doc = {"step": "lv5c-throughput", "table": v5.table_record(), **c.elastic_table_record(),
+    extra: dict[str, Any] = {}
+    if suite == "lv5d":  # the rep-based kappa / calibration parts (Amendment 20 (f)8): ok is required
+        rep = rep_plan_table(suite)
+        fits = bool(fits and rep["ok"])
+        extra = {"rep_plans": rep, "rep_plans_ok": bool(rep["ok"])}
+    doc = {"step": step_name, "table": v5.table_record(), **c.elastic_table_record(),
            "seed": seed_c("throughput"), "throughput": out, "rates_hist_per_s": rates,
            "step_limit_s": run_suite.HOST_STEP_WALL_LIMIT_S, "margin": v5.MARGIN,
            "effective_s_per_step": run_suite.HOST_STEP_WALL_LIMIT_S / v5.MARGIN,
-           "timeout_floors_are_kill_guards": {"lv5c": 3300, "hr5c": 3600}, "shard_table": table,
-           "shard_table_ok": bool(fits),
+           "timeout_floors_are_kill_guards": ({"lv5c": 3300, "hr5c": 3600} if suite == "lv5c"
+                                              else {"lv5d": 3300, "hr5d": 3600}),
+           "shard_table": table, "shard_table_ok": bool(fits), **extra,
            "undeclared": sorted(k for k, v in table.items() if v["ok"] is None),
-           "row": "none (throughput yields no verdict; lv5c r_index 1 seeds equal the consumed lv5b "
-           "V7-replicate seeds, plan Amendment 14 (j))",
+           "row": ("none (throughput yields no verdict; lv5c r_index 1 seeds equal the consumed lv5b "
+                   "V7-replicate seeds, plan Amendment 14 (j))" if suite == "lv5c" else
+                   "none (throughput yields no verdict; lv5d r_index 1, plan Amendment 20 (f)3)"),
            "pass": bool(ok and (a.scale < 1.0 or fits))}  # fmt: skip
     return finish(doc, v5b.THROUGHPUT_WARP_N, nw, nw < v5b.THROUGHPUT_WARP_N)
 
@@ -1490,6 +1534,7 @@ def step_d9_bgg(a: argparse.Namespace) -> int:
 
 STEPS = {
     "lv5c-throughput": step_throughput,
+    "lv5d-throughput": step_throughput,
     "r1-d2": step_r1_d2,
     "v8-lv": step_v8_lv,
     "p7-sampler": step_p7,
