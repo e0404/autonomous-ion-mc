@@ -216,3 +216,89 @@ Grid: 50/100/150/200/300/430 MeV/u × x/R {0.1, 0.25, 0.5, 0.9}. Values are the 
    reference and every candidate verdict depend on it. The f_dM proton offset of +2.5–3.5 % against it
    is a warning sign. A discriminating check is Gottschalk's polystyrene/Lexan/water θ_Hanson (Go93
    Table / LOOKUP), or Molière/Fano values for a compound from an independent source.
+
+## Codex REVIEW-98315d4e fixes (2026-11-01)
+
+Three findings fixed in the module, its tests and this note. No tolerance, candidate, formula of
+the reference or plan text was changed.
+
+**Updated file hashes** (supersede the table at the top; `__init__.py` is unchanged):
+
+| File | sha256 |
+|---|---|
+| `validation/scripts/ion_em/__init__.py` | `7962c4af19580a10f51a4bfc703ce45b67a0f96f010aaaf878aef6919b2ed4ea` |
+| `validation/scripts/ion_em/moliere_hanson.py` | `5a99b3b8748a6865584fcbe1337206222ddd7fe197e95f25656eac2324acf164` |
+| `tests/ionmc/test_ion_em_moliere_hanson.py` | `b9dab1411e694adea406ceb82b239a0ea6661656c3eae3378b6637b465f56b41` |
+
+### 1. n_Ω from the complete proton Ω
+
+`n_omega` previously returned d ln(R_p/β²)/d ln(pv) and so omitted the β-dependence of the screening
+factor and of Fano's Δb, both of which are in the implemented Ω (b = ln Ω + Δb). It now returns
+d ln Ω_p/d ln(pv) at fixed x/R for the local form
+ln Ω_p = ln R − ln β² − Σ W_i ln(1.13 + 3.76 (Z_i α)²/β²) + Δb(β), analytically:
+
+```
+n_Ω = [ E/(S R) + g (Σ_i W_i u_i/(1.13 + u_i) + k [1 + β²/(1−β²) − β²/2] − 1) ] / (d ln pv/d ln E)
+u_i = 3.76 (Z_i α)²/β²,  g = d ln β²/d ln E,  k = Σ w_i Z_i/A_i / Σ w_i Z_i²/A_i  (k term only for "fano")
+```
+
+The signature gained `elements` and `electrons` (defaults water, "fano"); `theta0_candidate` passes
+them. New test `test_n_omega_matches_numerical_derivative_of_full_omega` compares the analytic value
+with an independent central difference in ln E (h = 1e-3) of the full ln Ω, at 30–400 MeV and at the
+velocity-scaled energies of He 150, C 290, O 350 MeV/u at x/R 0.1/0.25/0.5/0.9, for "fano" and
+"bethe": agreement ≤ 1e-3 relative. It also asserts that the omitted terms change n_Ω by more than
+10 %.
+
+Before/after (water, Bethe 78 eV proton tables); c_Ω = (c_2 + c_3 L_1)/(ln 10 n_Ω):
+
+| E_p (MeV) | n_Ω before | n_Ω after | c_Ω before (L_1=0) | c_Ω after (L_1=0) | c_Ω before (L_1=lg 0.5) | c_Ω after (L_1=lg 0.5) |
+|---|---|---|---|---|---|---|
+| 50 | 0.899 | 1.146 | 0.1121 | 0.0879 | 0.1135 | 0.0890 |
+| 80 | 0.940 | 1.155 | 0.1072 | 0.0872 | 0.1086 | 0.0883 |
+| 100 | 0.963 | 1.168 | 0.1047 | 0.0863 | 0.1060 | 0.0874 |
+| 150 | 1.012 | 1.204 | 0.0996 | 0.0837 | 0.1009 | 0.0847 |
+| 200 | 1.053 | 1.241 | 0.0957 | 0.0812 | 0.0969 | 0.0822 |
+| 250 | 1.089 | 1.275 | 0.0926 | 0.0790 | 0.0937 | 0.0800 |
+| 300 | 1.119 | 1.307 | 0.0900 | 0.0771 | 0.0912 | 0.0781 |
+| 430 | 1.182 | 1.375 | 0.0853 | 0.0733 | 0.0863 | 0.0742 |
+
+So n_Ω = 1.15–1.38 (was 0.90–1.18) and c_Ω ≈ 0.073–0.089 (was 0.085–0.113); the earlier
+"n_Ω 0.90–1.12, c_Ω 0.09–0.11" statements above are superseded. The decision's estimate (0.77 / 0.13)
+is further away, so its xfail stays (its reason text was updated).
+
+### 2. Exact P1/I11 grid in the driver
+
+`I11_GRID_MEV_U` (He 50/150/250, C 80/290/430, O 100/350/430 MeV/u: the standard points and ends of
+the plan's Notation section; the plan lists no extra common energies) and `I11_FRACTIONS`
+(0.1, 0.25, 0.5, 0.9) are module constants; `ion_table`/`main` evaluate exactly this grid (3 energies × 4 fractions = 12
+points per ion). The old driver grid
+(50/100/150/200/300/430 for every ion, no 0.25) is retired; the tables above in this note that quote
+it are superseded by the table below. Test `test_driver_grid_equals_plan_i11_definition` parses the
+plan's Notation line and row I11 and fails on any divergence.
+
+Candidate tables regenerated from the committed driver (ratios only; water, Bethe 78 eV tables,
+Fano reference): signed range and the max |θ_cand/θ_MH − 1| per ion over the exact grid.
+
+| Cand. | He max abs (where) | C max abs (where) | O max abs (where) | He range | C range | O range |
+|---|---|---|---|---|---|---|
+| (d) after fix | 4.80 % (250, 0.1) | 5.16 % (290, 0.1) | 5.13 % (350, 0.1) | +1.46…+4.80 | +1.99…+5.16 | +2.20…+5.13 |
+| (d) before fix (old n_Ω, exact grid) | 5.77 % (250, 0.1) | 6.41 % (290, 0.1) | 6.33 % (350, 0.1) | +3.09…+5.77 | +3.13…+6.41 | +3.17…+6.33 |
+| (c) | 10.43 % (50, 0.9) | 14.87 % (80, 0.9) | 16.05 % (100, 0.9) | +8.38…+10.43 | +10.35…+14.87 | +11.47…+16.05 |
+| (b) | 6.78 % (250, 0.1) | 12.20 % (80, 0.1) | 13.98 % (100, 0.1) | +4.44…+6.78 | +8.61…+12.20 | +9.98…+13.98 |
+| (a) | −3.44 % (50, 0.1) | −2.95 % (80, 0.1) | −2.45 % (100, 0.1) | −3.44…−0.57 | −2.95…−1.74 | −2.45…−1.40 |
+| (e) informative | −3.64 % (50, 0.1) | −7.04 % (80, 0.1) | −7.47 % (100, 0.1) | −3.64…−0.71 | −7.04…−4.69 | −7.47…−5.40 |
+
+Verdict unchanged in kind: no candidate is within 3 % at every point of the exact grid ((a) misses
+only for He, −3.44 % at 50 MeV/u, x/R 0.1; (d) still overshoots by up to +5.2 % at x/R 0.1, about
+1 percentage point less than before the n_Ω fix; the proton baseline of f_dM against the Fano
+reference, +2.5–3.5 % at x/R 0.1, is part of it). The "Candidate predictions vs the Fano-corrected
+reference" table and its quoted grid above are superseded by this one.
+
+### 3. Proton-reference gate under IONMC_REQUIRE_DATA=1
+
+`_tex()` now follows the repository convention (cf. `test_nuclear_data_parsers.py`): without the
+object (sha256 `67fb1478…`, arXiv:0908.1413 e-print, repository reference cache or
+`$IONMC_CACHE_DIR/objects`) it skips as before, but under `IONMC_REQUIRE_DATA=1` it fails with a
+message naming the sha256, the searched directories and the materialization step. Note: the Pb test
+is `xfail(strict=True)`, so under the flag without the object it reports XFAIL (the other four
+proton tests FAIL, so the suite fails regardless).

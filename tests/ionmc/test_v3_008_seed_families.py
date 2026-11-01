@@ -57,9 +57,7 @@ V3_005_FAMILIES = {
     "consumed": [range(b, b + ENVELOPE) for b in CONSUMED_BASES],
     "fresh": [range(b, b + ENVELOPE) for b in FRESH_BASES],
     "rehearsal": [range(20505000, 20526000)],
-    "topas": [
-        range(20270000 + 1000 * row + 1, 20270000 + 1000 * row + 4) for row in range(1, 24)
-    ],
+    "topas": [range(20270000 + 1000 * row + 1, 20270000 + 1000 * row + 4) for row in range(1, 24)],
     "e_shape": [range(20509500, 20509510)],
     "elastic": [range(20990000, 21000000)],
     "vr_diag": [range(20980000, 20990000)],

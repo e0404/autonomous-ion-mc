@@ -45,8 +45,8 @@ Candidate (d) correction (frozen formulas, see ``f_scr``, ``n_omega``, ``c_omega
       ln F_scr = sum_i W_i [ ln(1.13 + 3.76 (z Z_i alpha/beta)^2)
                              - ln(1.13 + 3.76 (Z_i alpha/beta)^2) ]
       c_Omega  = (c_2 + c_3 L_1) / (ln 10 * n_Omega),   L_1 = lg(1 - (pv/p1v1)^2)
-      n_Omega  = d ln R_p / d ln(pv_p) - d ln beta^2 / d ln(pv_p)
-                 (proton, at the velocity-scaled energy E* = E m_p / M)
+      n_Omega  = d ln Omega_p / d ln(pv_p) at fixed x/R, complete proton Omega (ln R, ln beta^2,
+                 screening factor and Fano delta_b; see ``n_omega``), at E* = E m_p / M
 
 Units: MeV, g/cm^2, rad.
 """
@@ -300,16 +300,42 @@ def n_omega(
     e_p_mev: NDArray[np.float64],
     range_p: Callable[[NDArray[np.float64]], NDArray[np.float64]],
     stopping_p: Callable[[NDArray[np.float64]], NDArray[np.float64]],
+    elements: Sequence[Element] = WATER,
+    electrons: str = "fano",
 ) -> NDArray[np.float64]:
-    """n_Omega = d ln(R_p / beta^2) / d ln(pv) of a proton at kinetic energy ``e_p_mev``
-    (analytic: d ln R/d ln E = E / (S R); kinematic derivatives exact). ``range_p`` [g/cm^2] and
-    ``stopping_p`` [MeV cm^2/g] are the proton tables of the same material."""
+    """n_Omega = d ln Omega_p / d ln(pv) of a proton at kinetic energy ``e_p_mev`` at fixed x/R,
+    from the COMPLETE proton Omega as implemented in :func:`moliere_slab` (local form, z = 1)::
+
+        ln Omega_p = ln R - ln beta^2 - sum_i W_i ln(1.13 + 3.76 (Z_i alpha)^2/beta^2)
+                     + delta_b(beta)
+
+    (t = x/R * R at fixed x/R; chi_c^2/chi_a^2 ~ t/beta^2 up to the screening factor; ``delta_b``
+    is Fano's term, zero for ``electrons="bethe"``). Exact derivative with respect to ln E, divided by
+    d ln(pv)/d ln E, where with u_i = 3.76 (Z_i alpha)^2/beta^2 and g = d ln beta^2/d ln E::
+
+        d ln R/d ln E = E/(S R)                       (``range_p``, ``stopping_p``: proton tables)
+        d/d ln E [-sum_i W_i ln(1.13 + u_i)] = + g sum_i W_i u_i/(1.13 + u_i)
+        d delta_b/d ln E = g k [1 + beta^2/(1 - beta^2) - beta^2/2],
+                           k = sum_i w_i Z_i/A_i / sum_i w_i Z_i^2/A_i
+
+    (D_i of Fano depends on beta only through ln[beta^2/(1 - beta^2)] - beta^2/2). The derivative
+    of the screening and Fano terms was omitted before the Codex review REVIEW-98315d4e.
+    """
     e = np.asarray(e_p_mev, dtype=np.float64)
     m = M_P_MEV
+    b2 = beta2(e, m)
     dlnr = e / (stopping_p(e) * range_p(e))
     dlnpv = 1.0 + e / (e + 2.0 * m) - e / (e + m)
     dlnb2 = 1.0 + e / (e + 2.0 * m) - 2.0 * e / (e + m)
-    return (dlnr - dlnb2) / dlnpv
+    scr = np.zeros_like(b2)
+    for wgt, (zt, _a, _w) in zip(screening_weights(elements, electrons), elements, strict=True):
+        u = SCREEN_B * (zt * ALPHA) ** 2 / b2
+        scr += wgt * u / (SCREEN_A + u)
+    fano = np.zeros_like(b2)
+    if electrons == "fano":
+        k = math.fsum(w * zt / a for zt, a, w in elements) / z2_sum(elements)
+        fano = k * (1.0 + b2 / (1.0 - b2) - 0.5 * b2)
+    return (dlnr + dlnb2 * (scr + fano - 1.0)) / dlnpv
 
 
 def c_omega(
@@ -363,7 +389,7 @@ def theta0_candidate(
         if proton_range is None or proton_stopping is None:
             raise ValueError("candidate d needs the proton range and stopping functions")
         e_star = e * ratio
-        n_om = n_omega(e_star, proton_range, proton_stopping)
+        n_om = n_omega(e_star, proton_range, proton_stopping, elements, electrons)
         corr = c_omega(pv * ratio, p1v1 * ratio, n_om) * np.log(
             (m_mev / M_P_MEV) / f_scr(z, beta2(e, m_mev), elements, electrons)
         )
@@ -432,10 +458,22 @@ def _ionmc_path(
     return proj, r1, energy_at
 
 
+I11_GRID_MEV_U: dict[str, tuple[float, ...]] = {
+    "alpha": (50.0, 150.0, 250.0),
+    "carbon12": (80.0, 290.0, 430.0),
+    "oxygen16": (100.0, 350.0, 430.0),
+}
+"""Energies [MeV/u] of P1 / I11 (acceptance plan, Notation: standard points He 150, C 290, O 350;
+ends He 50/250, C 80/430, O 100/430); there are no common extra energies. A test parses the plan."""
+I11_FRACTIONS: tuple[float, ...] = (0.1, 0.25, 0.5, 0.9)
+"""Depth fractions x/R of row I11 of the acceptance plan."""
+
+
 def ion_table(
-    fractions: Sequence[float] = (0.1, 0.5, 0.9), electrons: str = "fano"
+    fractions: Sequence[float] = I11_FRACTIONS, electrons: str = "fano"
 ) -> list[dict[str, float | str]]:
-    """Report-only: theta_candidate / theta_MH for He, C, O in water (I11 planning grid)."""
+    """Report-only: theta_candidate / theta_MH for He, C, O in water on the exact I11 grid
+    (``I11_GRID_MEV_U`` x ``I11_FRACTIONS``)."""
     from ionmc.materials import WATER as W  # noqa: PLC0415
     from ionmc.physics.projectiles import PROTON  # noqa: PLC0415
     from ionmc.physics.stopping import BetheStoppingSource  # noqa: PLC0415
@@ -449,8 +487,8 @@ def ion_table(
         return np.asarray(ptab.stopping_at(np.clip(e, ptab.energy_per_u[0], ptab.energy_per_u[-1])))
 
     rows: list[dict[str, float | str]] = []
-    for name in ("alpha", "carbon12", "oxygen16"):
-        for e_u in (50.0, 100.0, 150.0, 200.0, 300.0, 430.0):
+    for name, energies in I11_GRID_MEV_U.items():
+        for e_u in energies:
             proj, r1, energy_at = _ionmc_path(name, e_u)
             for frac in fractions:
                 t = frac * r1

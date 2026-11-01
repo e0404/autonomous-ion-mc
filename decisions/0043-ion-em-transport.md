@@ -1,11 +1,17 @@
-# 0043 — Helium, carbon and oxygen electromagnetic transport (DRAFT r3 for independent review)
+# 0043 — Helium, carbon and oxygen electromagnetic transport (DRAFT r5 for independent review)
 
-> **Status: DRAFT r3 (2026-11-01), not yet frozen.** Written by the scientific planner, revised against the two research notes in `validation/plans/v3-008/research/`, independently reviewed in round V3-008-1 (REVISE; the nine required wording changes applied; `validation/plans/v3-008/review.md`). The decision is frozen by a reviewed commit only after the pre-freeze checks P1–P9 of the acceptance plan resolve the items marked OPEN / TO-VERIFY / "confirmed by P2". No result has been produced; nothing has run. Operator directive of 2026-11-01 and the reviewed selection `validation/plans/v3-next/selection-2026-11-01.md` (on the V3-005B branch) are the basis.
+> **Status: DRAFT r5 (2026-11-01), not yet frozen.** r3 was committed at 2632a465 and reviewed in round V3-008-1; r4/r5 fold in the pre-freeze records P8, P7, P2, P1/P1b (committed at 6e155b56) and the review rounds V3-008-1 and V3-008-2 (`validation/plans/v3-008/review.md`; the six V3-008-2 wording changes applied). The decision is frozen by a reviewed commit only after the pre-freeze checks of the acceptance plan (§P, steps 1–7) close. No result has been produced; nothing has run.
 
 
-- Status: DRAFT r3 (planner, 2026-11-01). r2 was revised against `research-models.md` and
-  `research-data-sources.md` in the same scratch directory; r3 applies the wording changes of review
-  round V3-008-1. Not accepted. To be reviewed
+- Status: DRAFT r5 (planner, 2026-11-01), not frozen. History:
+  - r2 was revised against the two research notes;
+  - r3 applied the wording changes of review round V3-008-1;
+  - r4 folds in the committed pre-freeze records at 6e155b56: `validation/plans/v3-008/`
+    `p1-moliere-hanson-reference.md`, `p2-geant4-ion-models.md` and `p8-repository-facts.md`.
+  - Main r4 changes: §3 (MCS model and the status of I11/V2) and the Geant4 lineage wording.
+  - r5 applies the six wording changes of review round V3-008-2: the §3 selection statement, the
+    exact-Ω specification, gating I11-rel, the V2 branches, the lateral-gap intervention, and the
+    §6 Molière–Hanson row. Not accepted. To be reviewed
   independently and committed together with `validation/plans/v3-008-acceptance.md` before any
   V3-008 result exists. The pre-freeze checks of the plan (section P) must be closed and their
   outcomes written into this decision first.
@@ -78,20 +84,29 @@ dependent".
 - `geant4-icru90-stopping-11.4.2`: proton and alpha water arrays only.
 - No C/O table is registered.
 
-**What Geant4 11.4.2 `g4em-standard_opt4` (TOPAS) does for ions** (FACT (research note), confirmed by P2):
-- **GenericIon (C, O):**
-  - The model is `G4LindhardSorensenIonModel`.
-  - Above about 2 MeV/u (scaled energy E·m_p/M > 2 MeV), dE/dx is the ICRU 90 **proton** water
-    array at equal velocity × Geant4 effective charge squared. This is `G4BetheBlochModel` with
-    `UseICRU90Data`.
-  - Along-step it adds the Lindhard–Sørensen ΔL (`G4LindhardSorensenData`) and a Barkas term
-    `2·BarkasCorrection·(q−1)/q`.
-  - ICRU 73/90 ion tables (`G4IonICRU73Data`, G4EMLOW `ion_stopping_data`) are read only for scaled
-    energies ≤ 2.5 MeV, i.e. the last tens of µm of range. P2 must confirm the energy limit at which
-    `G4LindhardSorensenIonModel` consults `G4IonICRU73Data`. Pre-declared: if the ion tables are used
-    above 2.5 MeV/u, I3's class becomes "shared with TOPAS" and V1's C/O lineage changes (amendment
-    before freeze).
-- **Alpha:** the ICRU 90 alpha water array up to 1 GeV total.
+**What Geant4 11.4.2 `g4em-standard_opt4` (TOPAS) does for ions.** Source: P2 record, from v11.4.2
+sources pinned by sha256. FACT unless marked.
+- **GenericIon (C, O) ionisation** = `G4ionIonisation` + `G4LindhardSorensenIonModel` (FACT [OPT4]
+  L316–324, default constructor). TOPAS's instantiation is confirmed at P4 from the EM printout.
+- **The LS model switches at 2.0 MeV scaled energy** (`fElimit`, escaled = E·m_p/M), i.e.
+  ≈ 1.985 MeV/u for 12C and ≈ 1.984 MeV/u for 16O. It does not switch at 2.5 MeV/u.
+- **Above the switch:**
+  - dE/dx is the `G4BetheBlochModel` table;
+  - along each step it adds q_eff²·(ΔL_LS + 2·BarkasCorrection·(z−1)/z), with q_eff² from
+    `G4EmCorrections::EffectiveChargeSquareRatio`;
+  - there is **no separate Bloch or Mott term**: the LS ΔL stands in for the higher orders.
+  - The claim that `G4BetheBlochModel` returns the **ICRU 90 proton array at equal velocity** for
+    GenericIon in G4_WATER is only **partly confirmed**. It is FACT (research note, scratch read); it
+    is not in the pinned P2 set. Pinning `G4BetheBlochModel.cc/.hh` is a follow-up.
+- **ICRU 73/90 ion data** (`G4IonICRU73Data`) are consulted only for escaled ≤ 2.0 MeV and only for
+  2 < Z ≤ 80. They are **never used for alpha.** The pre-declared r3 trigger, "ion tables used above
+  2.5 MeV/u", is **not met**, so no lineage amendment is triggered.
+- **Alpha** is configured in `G4EmBuilder::ConstructCharged`, not in [OPT4]. That alpha uses the ICRU
+  90 alpha array up to 1 GeV total is FACT (research note) and OPEN in the pinned set; the follow-up
+  reads `G4EmBuilder.cc` (acquired), `G4ionIonisation.cc` and `G4BetheBlochModel.cc`.
+- **Ion and alpha multiple scattering** = `G4hMultipleScattering("ionmsc")` with no model set. Urban
+  is INFERRED strong as the default; the follow-up reads `G4hMultipleScattering.cc` (acquired).
+- **Protons:** opt4 protons use WentzelVI (INFERRED strong; same follow-up).
 
 **Reference engines.**
 - TOPAS transports ions. The only existing ion TOPAS case is a full-physics QMD smoke run
@@ -152,7 +167,7 @@ dependent".
 |---|---|---|---|
 | 4He | NIST ASTAR water, I = 75 eV (compared with Bethe at 75 eV) | cached, pinned, SEEN | ICRU 49 / Bethe theory |
 | 4He | ICRU 90 alpha water array (Geant4 11.4.2 source), compared at 78 eV | cached, pinned, SEEN | **the same array TOPAS uses for alpha** → helium TOPAS range (V1) is not independent of this row |
-| 12C, 16O | ICRU 73 water tables, if they carry the 2009 erratum (I = 78 eV): G4EMLOW 8.8 `ion_stopping_data/icru73/z6_G4_WATER.dat`, `z8_G4_WATER.dat` | OPEN, pre-freeze checks P5: file span must cover ≥ 2–430 MeV/u; erratum vs original-ICRU-73 provenance (the original water tables used I = 67.2 eV; the difference is a few %); licence = Geant4 Software Licence | ICRU 73 (PASS/BEST theory). In TOPAS these files act only ≤ 2.5 MeV/u, so above that the row is **largely independent of TOPAS's stopping** (shared: Bethe theory, I-value) |
+| 12C, 16O | ICRU 73 water tables, if they carry the 2009 erratum (I = 78 eV): G4EMLOW 8.8 `ion_stopping_data/icru73/z6_G4_WATER.dat`, `z8_G4_WATER.dat` | OPEN, pre-freeze checks P5: file span must cover ≥ 2–430 MeV/u; erratum vs original-ICRU-73 provenance (the original water tables used I = 67.2 eV; the difference is a few %); licence = Geant4 Software Licence | ICRU 73 (PASS/BEST theory). In TOPAS these files are consulted only at ≤ 2.0 MeV scaled energy (≈ 1.98 MeV/u) and only for 2 < Z ≤ 80 (P2 FACT), so above that the row is **largely independent of TOPAS's stopping** (shared: Bethe theory, I-value) |
 | 12C (16O?) | ICRU 90 carbon water table: G4EMLOW `icru90/z6_G4_WATER.dat` | OPEN P5: whether it holds ICRU 90 published carbon values or a Geant4 recomputation. **No ICRU 90 oxygen table exists** (ICRU 90 covers p, α, C), so `z8` is of unclear origin and not used | ICRU 90 |
 | 12C, 16O | libdEdx data files (ICRU 73 with erratum, per memory) | OPEN P5b: location, licence (GPL), file provenance | cross-check of the G4EMLOW files |
 | 12C, 16O | IAEA stopping database (v2026-09) | **Limitation (FACT, Montanari et al. arXiv:2402.03080):** water has measured data only for H, He, Li and C, and the carbon data lie near the stopping maximum (≲ 1 MeV/u). **No oxygen in water. No measured C/O water stopping at therapy energies exists publicly.** Not curable by intervention; declared | measured, outside the domain |
@@ -170,11 +185,12 @@ verdicts only (decision 0038 policy).
   - (ii) The files' span and erratum provenance are not yet established.
   - (iii) No ICRU 90 oxygen table exists.
   - (iv) Kept as an evaluation source, these tables are also the C/O check that is **most
-    independent of TOPAS**, because Geant4 uses them only below about 2.5 MeV/u. Making them the
-    default would turn that independent check into a shared-construction comparison.
+    independent of TOPAS**, because Geant4 consults them only at ≤ 2.0 MeV scaled energy
+    (≈ 1.98 MeV/u) and only for 2 < Z ≤ 80 (P2, FACT). Making them the default would turn that
+    independent check into a shared-construction comparison.
   - The r1 reason ("TOPAS uses these data") was wrong above about 2 MeV/u and is withdrawn.
-- **The Geant4 construction as default** (ICRU 90 proton array at equal velocity × Geant4 q_eff² +
-  LS ΔL + Barkas). It would make ionmc's C/O stopping identical in construction to TOPAS's, so V1
+- **The Geant4 construction as default** (`G4BetheBlochModel` table, the ICRU 90 proton array at equal
+  velocity per the research note, plus q_eff²·(ΔL_LS + 2·Barkas·(z−1)/z)). It would make ionmc's C/O stopping identical in construction to TOPAS's, so V1
   would test only transport mechanics. It is kept only as an **exploratory attribution diagnostic**
   ("TOPAS-like rebuild", row I3c), buildable from the already registered ICRU 90 proton array plus
   an LS ΔL computation. It has no evidence role.
@@ -213,100 +229,184 @@ verdicts only (decision 0038 policy).
 
 ### Theory used for the choice
 
-All Molière–Bethe relations as cited by Gottschalk and Lynch & Dahl (constants TO VERIFY against
-Lynch & Dahl, NIM B 58 (1991) 6):
-- χ_c² ∝ z² Σ w_i Z_i(Z_i+1)/A_i · t/(pv)².
-- χ_a² = χ_0² (1.13 + 3.76 α'²), with χ_0 ∝ Z^(1/3)/p and the Born parameter α' = z Z α/β.
-- Collision number Ω = χ_c²/(1.167 χ_a²) ∝ z² t/[β² (1.13 + 3.76 α'²)].
-- Hanson width θ_0 = χ_c √(B − 1.2)/√2, with B − ln B = ln Ω.
+These are the Molière–Bethe relations as written by Gottschalk (arXiv:1804.00022, 0908.1413) and
+implemented in the committed P1 reference, `validation/scripts/ion_em/moliere_hanson.py`:
+- χ_c² ∝ z² Σ w_i Z_i²/A_i · ∫dt/(pv)². This is Molière's Z² form, with the Fano correction to b for
+  the atomic electrons.
+- χ_a,i² = χ_0,i² (1.13 + 3.76 α_i′²), with χ_0 ∝ Z^(1/3)/p and α′ = z Z α/β.
+- Ω = χ_c²/(1.167 χ_a²), with B − ln B = ln Ω + Δb_Fano.
+- θ_0 = χ_c √(B − 1.2)/√2.
 
-Consequence at equal velocity and equal x/R:
-- The ion thickness is t_ion = (A/z²) t_p.
-- Hence Ω_ion/Ω_p = A/F_scr. F_scr is the Z(Z+1)-weighted ratio of the Born screening factors of
-  ion and proton over the target elements (oxygen dominates water: 72 of 76).
-- Estimated F_scr in water: about 1.15 (He, 150 MeV/u), 1.9 (C, 290), 2.5 (O, 350).
-- The ion Molière width therefore exceeds pure z/(pv) proton scaling by about **+5 % (He) and +8 %
-  (C, O)** (estimate).
+The ion/proton relation at equal velocity and equal x/R is exact, and is tested in P1:
+- the ion slab is t_ion = (A*/z²) t_p;
+- hence Ω_ion/Ω_p = A*/F_scr, where A* = M/m_p and F_scr is the Z_i²-weighted ratio of the Born
+  screening factors;
+- Δb_Fano depends on β only, so it cancels in this ratio.
 
-### Selected: candidate (d), velocity-scaled differential Molière with a Molière collision-number correction
+### P1/P1b findings (recorded at 6e155b56; disclosed here before any model choice is frozen)
 
-```
-T_ion = f_dM,ion · (z E_s / pv)² / X_S
-f_dM,ion = f_dM(pv*, p1v1*) + c_Ω · ln( A / F_scr(β, z; material) )
-pv* = pv · m_p / M_ion,   p1v1* = p1v1 · m_p / M_ion
-```
+- **Reference validity.**
+  - The Molière/Fano/Hanson reference reproduces Gottschalk's proton θ_Hanson for Be, Al and Cu to
+    ≤ 0.21 %.
+  - **For Pb, P1's pre-declared ≤ 1.0 % proton validation FAILED**: +1.10 % and +1.32 % at
+    x/R1 ≥ 0.9. The failure is recorded as FAILED and preserved. Attribution on ICRU 49 ranges is
+    still to do (P1 completion); clearing it later does not erase the failed record.
+  - **Water is not validated directly**: Gottschalk's table has no compound block.
+  - **The compound Fano rule** (electron term weighted by Z, nucleus by Z²; 1/(pv)² slab average of D)
+    **is derived, not sourced.**
+  - The proton f_dM sits **+2.5 to +3.5 %** (x/R 0.1–0.5) and +1.3 to +2.1 % (x/R 0.9) above this
+    water reference. That is more than Gottschalk's stated ±2 % for f_dM. Either the derived compound
+    rule or f_dM's water accuracy is off, and the available sources cannot decide which.
+  - **Consequence:** the absolute water reference has its own uncertainty of order 3 %. It cannot
+    arbitrate between models at a 3 % tolerance.
+- **The r3 constant was wrong.** The r3 estimate c_Ω ≈ 0.13 was non-relativistic; P1 found
+  n_Ω ≈ 0.90–1.12 and c_Ω ≈ 0.09–0.11. Codex REVIEW-98315d4e on 6e155b56 (being fixed in code) adds
+  that **n_Ω must be the full derivative of the proton Ω (or b), including the β-dependence of the
+  screening factor and of the Fano term**. This affects only the record of the superseded linearised
+  (d); the exact root below needs no n_Ω.
+- **The P1 driver evaluates the exact I11 grid**: ion-specific energies (standard points and ends) ×
+  x/R ∈ {0.1, 0.25, 0.5, 0.9}.
+- **Seen candidate predictions** (P1b, water, report only): max deviation from the Fano reference.
 
-- `pv` is the ion's own momentum × velocity in the Rutherford prefactor (exact χ_c² ∝ z²/(pv)²).
-- The memory term `1 − (pv/p1v1)²` is invariant under the velocity scaling. So the random hinge,
-  the clamp, the birth-step average and U5-type step independence carry over by construction: the
-  correction is a local function of (β, material).
-- `c_Ω` is the sensitivity of f_dM to ln Ω at fixed x/R, derived **analytically from the f_dM proton
-  fit and Molière theory**: the lg pv coefficient 0.232 together with Ω ∝ (pv)^≈0.77 at fixed x/R,
-  so c_Ω ≈ 0.13 (estimate).
-- F_scr comes from the Born factors above.
-- Both are committed as a formula with its derivation (pre-freeze check P1). **c_Ω and F_scr are
-  frozen as committed formulas before I11 is evaluated; no adjustment after.** Their hashes enter the
-  P9 freeze record. **Nothing is fitted to TOPAS or to any transport output.**
-- Implementation: the per-material correction is precomputed on the transport energy grid (a table
-  row in `TransportTables`, inside the hash) and read like S(E).
-- **Pre-declared selection order** after the I11 reference exists: (d), (c), (b), (a). The first
-  candidate with max |θ/θ_MH − 1| ≤ 3 % at the I11 grid points for all three ions is the default.
-  If none passes, STOP and amend.
-- Expected outcomes, declared now (estimates):
-
-  | Candidate | Expected θ vs Molière–Hanson |
+  | Candidate | Max deviation |
   |---|---|
-  | (d) | ≤ 1–2 % |
-  | (c) Highland/Lynch–Dahl with z² in the logarithm, differential form (Kanematsu 2008, NIM B 266, 5056; ion form TO VERIFY) | +1 to +3 % |
-  | (b) naive T_dM with the ion pv | +2 to +4 % |
-  | (a) velocity scaling only (the r1 choice) | −5 % (He), −7 to −8 % (C/O): expected to FAIL |
+  | (d), linearised c_Ω | about +6 % |
+  | (c) slab proxy | +10 to +19 % |
+  | (b) | +7 to +16 % |
+  | (a), velocity scaling only | −3.4 % He (50 MeV/u), −2.9 % C, −2.5 % O |
+  | (e) Gottschalk's ion f_I | −4 to −8 % |
 
-- **Why the tolerance is 3 % on θ** (projected rms):
-  - f_dM reproduces θ_Hanson for protons within about ±2 % (Gottschalk; exact band TO VERIFY).
-  - Ion-specific theory uncertainty is about 1–2 %, from the Born-screening form at α' ≈ 0.5–0.7,
-    the Fano electron term and the nuclear form factor (core-width effect ≤ 1–2 %, estimate).
-  - In quadrature that is ≈ 2.5–3 %; tightening below 3 % is not defensible.
-- **Role:** the Molière–Hanson ion reference is **calibration/construction** for this choice. Row
-  I11 is declared calibration: for candidate (d), whose correction is derived from the same Molière
-  theory, it is close to a tautology. It checks the implementation and the derivation, not the physics,
-  and it is not independent evidence.
-- **Pre-declared Molière–Hanson reference definition** (P1):
-  - χ_c with Z(Z+1) and the Fano electron term with its β-dependence (as Gottschalk 1993);
-  - χ_a per element with 1.13 + 3.76 α'²;
-  - ln χ_a averaged along the slab with weight 1/(pv)²;
-  - point nucleus, with the nuclear-size effect reported separately.
-  - The code is validated first against Gottschalk's proton θ_Hanson tables (Be/Al/Cu/Pb, already
-    acquired).
-- **Rejected:**
-  - per-step Highland: step-size dependent;
-  - full Molière angular sampling with single-scattering tails: a large kernel change, and the
-    Gaussian-core width is the target; the tail deficit stays a documented limitation as for protons
-    (T15 window rule ¹⁰);
-  - (a) as default: it misses the collision-number change, which is physics, not a fit artefact.
+- The r3 rule (first candidate within 3 %) selects nothing. That is STOP 2.
 
-### Independent evidence for MCS and the TOPAS reference model
+### Selected (r5): the exact-Ω mapping of the proton model
 
-- TOPAS opt4 multiple scattering for GenericIon/alpha is believed to be `G4UrbanMscModel`. Its
-  `ComputeTheta0` is believed to be a Highland-like `13.6·|q|·√y/(βcp)·(c1 + c2 ln y)` **without
-  z² in the logarithm** (TO VERIFY: pre-freeze check P2 reads the v11.4.2 source and the opt4 msc
-  assignment).
-- If confirmed, TOPAS ion widths are expected to be about 5–8 % (C/O) and about 5 % (He) narrower
-  than a Molière-consistent ionmc (estimate). V2 could then fail on the reference model's account.
-- The method is checked on protons first (P2b): the same δ_pred computation for z = 1 is compared
-  with the archived V3-003 proton TOPAS lateral result (T15, already seen), and the discrepancy e_δ is
-  recorded. Case B is available only if e_δ ≤ 2 %. P2 freezes the exact Urban formula, version and
-  parameters with the source hashes.
-- The plan therefore **pre-declares δ_pred**, the expected TOPAS/ionmc lateral-σ offset per ion and
-  depth. It is computed before any TOPAS run, from the Urban formula as read in the source and from
-  the I11 reference, by a theory-to-theory numpy Fermi–Eyges integration. V2 grades ionmc against
-  TOPAS corrected by δ_pred and reports the raw ratio alongside.
-- V2 then asserts that the transport implements the selected MCS model consistently with an
-  independent MC code once the known, source-derived model difference is removed. **It does not
-  independently test the z-dependence**, which rests on Molière theory (calibration role). V2 has no
-  held-out analogue: a model change after V2 leaves lateral MC evidence as a declared gap.
-- Measured lateral data for ions in water (Parodi et al. 2013 J. Radiat. Res.; Tessonnier 2017;
-  Schwaab 2011) are the only independent arbiter. No public numeric set is confirmed, so this is a
-  declared evidence gap and intervention candidate. Wong et al. 1990 (U on Cu) is not applicable.
+**Selection statement (review round V3-008-2, verbatim).** The model form is the exact version of
+r3's first-ranked candidate (d); the exact root was named in P1 OPEN 5 after the first (no-Fano)
+candidate table had shown the linearisation error, and before the P1b tables. The selection rule was
+revised after the r3 rule reached STOP 2 on seen P1/P1b numbers: the Molière–Hanson water reference
+failed its own pre-declared proton validation for Pb (recorded as FAILED, preserved), is not
+validated for water, and rests on a derived compound rule, so it is demoted from selector and gate to
+an informative report. The seen tables were not used to choose among forms; the predictability of the
+exact-Ω result against the reference from the seen decomposition is disclosed.
+
+**Model.**
+
+```
+T_ion(pv, p1v1; material) = f_dM(pv_eq, p1v1_eq) · (z E_s / pv)² / X_S
+p1v1_eq / pv_eq = p1v1 / pv          (the memory term 1 − (pv/p1v1)² is unchanged)
+pv_eq is the root of   b_p(pv_eq, p1v1_eq; material) = b_ion(pv, p1v1; z, M, material)
+b = ln Ω + Δb_Fano   (Molière collision number of the slab traversed from p1v1 down to pv along the
+                      CSDA path, with the Fano term evaluated at each projectile's own velocities)
+```
+
+**Matching quantity.**
+- The root matches b, i.e. ln Ω plus the Fano correction, each evaluated at the respective
+  projectile's velocities along its own slab.
+- It does not match ln Ω alone: at the proton-equivalent state the velocities differ from the ion's,
+  so Δb_Fano does not cancel.
+- b_ion and b_p are computed with the same formulas as the committed P1 reference (Molière χ_c, χ_a
+  with the Born factor, the Fano Δb, the 1/(pv)² slab average), from the project range tables.
+
+**Two-dimensional dependence and step independence.**
+- The mapping depends on (pv, p1v1): the ion's current pv and its initial p1v1.
+- It is evaluated per step from the particle state. The current pv is the step's midpoint value, as
+  in decision 0039. p1v1 is carried with the particle.
+- So the per-step scattering power is a function of the particle state only. Step independence, the
+  random hinge, the clamp and the birth-step average carry over.
+
+**Evaluation.** Default: a per-step root solve.
+- The 1-D monotone root in pv_eq uses tabulated b-slab integrals per material and projectile:
+  cumulative ∫dt/(pv)² and ∫ ln χ_a² dt/(pv)² on the range grid, so the slab integral from p1v1 to pv
+  is a difference of two table reads.
+- **Allowed alternative:** a tabulation of pv_eq/pv on a (pv, p1v1) grid per material and ion, read
+  by bilinear interpolation in (ln pv, ln p1v1). It is allowed only if a committed test bounds the
+  interpolation error of the resulting θ (or T) by ≤ 0.1 % over the domain.
+- Both the choice and its bound go into the formula, the script and the tests before P9.
+
+**Physical content.**
+- The Rutherford prefactor carries the ion's own z/(pv).
+- The proton model f_dM carries the remaining dependence. Its absolute water calibration is
+  evidenced for protons (decision 0039: U4/U4b source reproduction; T15 TOPAS lateral, status per
+  the develop records, TO VERIFY).
+- Theory supplies only the **relative** ion/proton change, through b. That relative quantity is the
+  one Molière theory fixes most reliably: the compound-rule uncertainty and f_dM's absolute offset
+  largely drop out of a ratio at equal velocity and x/R.
+
+**Rejected.**
+- (a): rejected **on structure**. It omits the z- and A-dependence of the collision number.
+  - Interpretation (not the basis of the rejection): its seen near-pass is plausibly an artefact of
+    a reference with about 3 % uncertainty combined with f_dM's opposite offset.
+- (b), (c), (e): also rejected on structure. They lack the Born-screening term or are mis-scaled.
+- Option (ii), an independent arbiter as selector: none is confirmed (P6, P10), and the TOPAS
+  reference model is unsettled (P2 follow-ups / P4).
+
+**Declared model uncertainty** (theory-derived, not validated): ±5 % on the ion θ at the I11 points,
+recorded in result metadata and docs. Components, combined in quadrature (≈ 4–5 %):
+
+| Component | Size |
+|---|---|
+| f_dM's water accuracy | ≤ 3.5 % |
+| Born-screening form at α′ ≈ 0.5–0.7 | 1–2 % |
+| z-independent Fano D (no Bloch-type electron terms) | ≤ 1 % |
+| Nuclear size | ≤ 1–2 % |
+
+**Freezing.**
+- The exact-Ω mapping, its b formulas, its evaluation choice (root solve or a bounded tabulation)
+  and the I11-map and I11-rel tests are committed **before the mapping is evaluated against the
+  Molière–Hanson reference**. Their hashes go into P9.
+- Nothing is fitted to the reference, TOPAS or transport output.
+
+**Rows.** I11-map (CI, gating): implementation of the root. **I11-rel (LV, gating)**: the relative
+check, failure STOP. **I11-abs** (informative): the absolute comparison, reported with the
+reference's own uncertainty.
+
+### Independent evidence for ion MCS and the TOPAS reference model (P2 findings; follow-ups close BEFORE freeze)
+
+**Opt4 ion multiple scattering.**
+- GenericIon gets `G4hMultipleScattering("ionmsc")` with no model set (FACT [OPT4] L161, L323).
+- That this model is Urban is INFERRED, not yet confirmed.
+- It is settled before freeze by:
+  - reading `G4EmBuilder.cc` (40782f5c…) and `G4hMultipleScattering.cc` (a6643869…), both now
+    materialized in the v3-008 cache;
+  - the `G4VMscModel` defaults;
+  - `G4IonisParamMat.cc` (990c6f31…) and `G4IonICRU73Data.cc` (cf771a5a…);
+  - the P4 scorer-free smokes, with the EM-table / printParameters printouts archived: msc model,
+    step-limit type, RangeFactor and lateral displacement for GenericIon, alpha and proton.
+
+**Urban θ0** = 13.6 MeV·|charge|·√y·invbetacp·(c1 + c2 ln y), y = t/X0 (FACT [URB] L1023–1027,
+L1115–1125).
+- There is no charge, β or Born term in the logarithm.
+- The θ0 core is truncated, and a power-law tail is added.
+- The per-length width depends on the step length.
+- TOPAS ion steps depend on the bundle design.
+- The r3 Fermi–Eyges δ_pred is withdrawn, and P2b as defined is very probably inapplicable.
+- **Scratch estimate** (not frozen): TOPAS C/O lateral widths are plausibly 10–20 % narrower than
+  ionmc, if Urban.
+
+**V2 branches (pre-declared, verbatim).**
+- "If Urban: V2 informative (Case C), the raw ratio and expected direction reported."
+- "If WentzelVI/single scattering: V2 is decided by an amendment before any ion TOPAS run."
+- The r4 Urban-emulator extension is withdrawn from this plan. It can return only by a reviewed
+  amendment before any ion TOPAS run.
+- V2 has no held-out analogue: a model change after V2 leaves lateral MC evidence as a declared gap.
+
+**Single-scattering reference (P10).** Before freeze, P10 checks whether a thin-slab angular-width
+check against a Geant4 single-scattering configuration is available, and at what cost. Candidates:
+`G4CoulombScattering`, or a g4em-standard_SS-type module if OpenTOPAS 4.3 offers it for GenericIon.
+If it is available within the REF budget, row V5-SS is pre-registered before any run.
+
+**Lateral evidence gap.** It is used only after P6 (the measured lateral-data search) and P10 fail.
+Intervention wording, verbatim:
+
+> Unavailable input: independent evidence of the charge dependence of lateral spreading for He/C/O
+> in water at 50–430 MeV/u, i.e. measured lateral dose widths or angular spreads with stated
+> uncertainties (candidates Parodi 2013, Schwaab 2011, Tessonnier 2017: no open numeric tables
+> found), or an accessible single-scattering MC reference. Request: provide access to such data, or
+> accept that V3-008 integrates with ion lateral spreading supported only by theory-derived mapping
+> and implementation checks (no independent evidence), recorded as a gap in the ledger.
+
+**Gating MCS rows:** I9, I10, I11-map, I11-rel, I12 and I15 (self-consistency, theory consistency
+and falsification), and V5-SS if registered.
 
 ## 4. Kinematics, charge state, end of range, secondaries
 
@@ -344,19 +444,19 @@ pv* = pv · m_p / M_ion,   p1v1* = p1v1 · m_p / M_ion
 - Fail closed for: energies outside the domain (including E0 + 6σ_E); He-3 and other ions;
   `nist-star` for C/O; nuclear on.
 
-## 6. Data roles and lineage (r3)
+## 6. Data roles and lineage (r4)
 
 | Item | Role | Shared with Geant4/TOPAS? |
 |---|---|---|
 | Bethe model and corrections (ionmc) | construction | Bethe theory shared; the Barkas F table is transcribed from `G4EmCorrections` (shared code lineage; TOPAS adds its own Barkas term for ions) |
 | I_water 78 eV (ICRU 90) | construction | shared (G4_WATER). ICRU 90's value was informed by measured Bragg-peak positions (GSI, Kumazaki 2007, Bichsel & Hiraoka 1992; TO VERIFY), so measured water ranges are calibration lineage |
 | ASTAR (He) | evaluation | not used by TOPAS |
-| ICRU 90 alpha array (He) | evaluation (I2: a regression guard on seen values, not evidence) | **identical to TOPAS alpha stopping** — FACT (research note), confirmed by P2; for helium, V1 tests transport mechanics and straggling only |
-| ICRU 73 (rev.) / ICRU 90 C/O files (if P5 passes) | evaluation | used by TOPAS only ≤ 2.5 MeV/u → largely independent above |
-| TOPAS C/O stopping (ICRU 90 proton × q_eff,G4² + LS ΔL + G4 Barkas) — FACT (research note), confirmed by P2 | the reference's construction; I3c attribution diagnostic | — (if P2 finds ion tables used above 2.5 MeV/u: I3 becomes shared, V1 C/O lineage amended) |
-| Molière–Hanson ion theory (numpy) | calibration of the MCS choice (d) | Urban MSC differs (independent implementation, possibly different z-dependence; P2) |
+| ICRU 90 alpha array (He) | evaluation (I2: a regression guard on seen values, not evidence) | **identical to TOPAS alpha stopping**: FACT (research note); P2 OPEN pending `G4EmBuilder.cc`/`G4BetheBlochModel.cc`. For helium, V1 tests transport mechanics and straggling only |
+| ICRU 73 (rev.) / ICRU 90 C/O files (if P5 passes) | evaluation | consulted by TOPAS only at ≤ 2.0 MeV scaled (≈ 1.98 MeV/u), 2 < Z ≤ 80, never alpha (P2 FACT) → largely independent above |
+| TOPAS C/O stopping: `G4BetheBlochModel` table (ICRU 90 proton array at equal velocity: research note, partly confirmed) + q_eff²(ΔL_LS + 2·Barkas·(z−1)/z), no separate Bloch/Mott, switch at 2.0 MeV scaled (P2 FACT) | the reference's construction; I3c attribution diagnostic | — (the r3 trigger "ion tables above 2.5 MeV/u" is not met; no amendment) |
+| Molière–Hanson ion theory (numpy, P1) | theory for the relative ion/proton b mapping (construction); I11-rel gating (relative), I11-abs informative | Urban MSC differs structurally: no charge/β term in its log, truncated core + tail, step-length dependent (θ0 form P2 FACT; Urban as the ion msc model P2 INFERRED, settled by P2 follow-up/P4) |
 | Gottschalk f_dM | construction | no |
-| TOPAS EM-only ion runs | evaluation, independent MC | stopping lineage partly shared (I-value, ICRU 90 proton/alpha arrays, Barkas); straggling and MSC independent |
+| TOPAS EM-only ion runs | evaluation, independent MC (V1 gating; V2 informative by default) | stopping lineage partly shared (I-value, ICRU 90 proton/alpha arrays, Barkas); straggling independent; MSC model structurally different (Urban) |
 | Sihver, Schardt, Kanai 1998 measured C/O depth-dose (if acquirable) | evaluation, measured | I-value calibration lineage; pre-ICRU 90 |
 
 ## Expected tradeoffs and declared limitations
@@ -365,10 +465,14 @@ pv* = pv · m_p / M_ion,   p1v1* = p1v1 · m_p / M_ion
   **No measured He range evidence was found.**
 - **Carbon and oxygen:** a tabulated check depends on P5. Measured stopping at therapy energies does
   not exist publicly. Measured range depends on one candidate (Sihver 1998); oxygen has no other.
-- **MCS:** the z-dependence is theory-calibrated (d). The independent MC check corrects for a
-  source-derived reference offset, and measured lateral data are an evidence gap.
+- **MCS:** the ion model is the exact-Ω (b-matching) mapping of the proton model, with ±5 %
+  theory-derived uncertainty. I11-rel (relative) gates. I11-abs is informative, because the water
+  reference fails its Pb validation, is unvalidated for water and rests on a derived compound rule.
+  V2 follows the pre-declared branches (Case C if Urban). Independent evidence for the z-dependence
+  of lateral spreading is a declared gap, unless P6 or P10 provide it; the intervention wording is in
+  §3.
 - **Gaps** go to the intervention route. Nothing is relabelled, and no model is tuned to TOPAS.
 
 ## Validation strategy
 
-Frozen in `validation/plans/v3-008-acceptance.md` (draft r3 alongside).
+Frozen in `validation/plans/v3-008-acceptance.md` (draft r4 alongside).

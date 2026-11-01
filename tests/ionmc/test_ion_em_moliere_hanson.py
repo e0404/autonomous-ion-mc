@@ -3,12 +3,14 @@
 Pure-function identities run in CI. The proton validation against theta_Hanson of Gottschalk,
 Med. Phys. 37 (2010) 352 (arXiv:0908.1413, ``tbl:theta0Single``, Be/Al/Cu/Pb at 158.6 MeV) needs
 the hash-pinned arXiv source; it is looked up in the repository cache and in
-``$IONMC_CACHE_DIR/objects`` and the test is skipped when absent.
+``$IONMC_CACHE_DIR/objects``. When absent the test is skipped, and FAILS under
+``IONMC_REQUIRE_DATA=1`` (repository cached-data convention).
 """
 
 import importlib.util
 import math
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -16,7 +18,7 @@ import numpy as np
 import pytest
 
 from ionmc.materials import ALUMINIUM, BERYLLIUM, COPPER, LEAD, WATER, Material
-from ionmc.physics.projectiles import ALPHA, CARBON12, PROTON
+from ionmc.physics.projectiles import ALPHA, CARBON12, OXYGEN16, PROTON
 from ionmc.physics.scattering import inverse_scattering_length_cm2_per_g
 from ionmc.physics.stopping import BetheStoppingSource
 from ionmc.transport.mcs_checks import (
@@ -173,8 +175,9 @@ def test_candidate_a_is_velocity_scaling_and_protons_agree() -> None:
 @pytest.mark.xfail(
     strict=True,
     reason="P1 finding (validation/plans/v3-008/p1-moliere-hanson-reference.md): the decision's "
-    "estimate n_Omega ~ 0.77 / c_Omega ~ 0.13 was non-relativistic; the frozen formula gives "
-    "n_Omega = 0.90-1.12 and c_Omega ~ 0.09-0.11. Band kept as declared, not loosened.",
+    "estimate n_Omega ~ 0.77 / c_Omega ~ 0.13 was non-relativistic; the complete-Omega formula "
+    "(screening and Fano terms included) gives n_Omega = 1.15-1.38 and c_Omega ~ 0.07-0.09. "
+    "Band kept as declared, not loosened.",
 )
 def test_c_omega_close_to_planning_estimate(bethe: BetheStoppingSource) -> None:
     """c_Omega at the proton level (water, 50-300 MeV, L_1 = lg 0.5) lies near the decision's
@@ -186,6 +189,84 @@ def test_c_omega_close_to_planning_estimate(bethe: BetheStoppingSource) -> None:
     c = MH.c_omega(pv, 1e9, n_om)  # L_1 -> 0
     assert np.all((n_om > 0.6) & (n_om < 0.9)), n_om
     assert np.all((c > 0.11) & (c < 0.17)), c
+
+
+def _ln_omega_proton(
+    bethe: BetheStoppingSource, e: np.ndarray, electrons: str = "fano"
+) -> np.ndarray:
+    """Complete local proton ln Omega at fixed x/R (t ~ R): ln R - ln beta^2 - sum_i W_i ln(1.13 +
+    3.76 (Z_i alpha)^2/beta^2) + delta_b, built from the module's own screening/Fano functions."""
+    tab = bethe.table(WATER, PROTON)
+    m = PROTON.mass_mev
+    b2 = MH.beta2(e, m)
+    out = np.log(tab.range_at(e)) - np.log(b2)
+    for wgt, (zt, _a, _w) in zip(MH.screening_weights(MH.WATER, electrons), MH.WATER, strict=True):
+        out = out - wgt * MH.ln_screening_factor(1.0, zt, b2)
+    if electrons == "fano":
+        out = out + MH.fano_delta_b(MH.WATER, b2)
+    return np.asarray(out)
+
+
+@pytest.mark.parametrize("electrons", ["fano", "bethe"])
+def test_n_omega_matches_numerical_derivative_of_full_omega(
+    bethe: BetheStoppingSource, electrons: str
+) -> None:
+    """n_Omega = d ln Omega_p / d ln(pv) of the COMPLETE proton Omega (Codex REVIEW-98315d4e):
+    analytic result vs an independent central difference in ln E of the full ln Omega, at several
+    proton energies and at the velocity-scaled energies of He/C/O at x/R 0.1-0.9, rel 1e-3."""
+    tab = bethe.table(WATER, PROTON)
+    m = PROTON.mass_mev
+    energies = [30.0, 60.0, 100.0, 150.0, 250.0, 400.0]
+    for name, e0_u in (("alpha", 150.0), ("carbon12", 290.0), ("oxygen16", 350.0)):
+        proj = {"alpha": ALPHA, "carbon12": CARBON12, "oxygen16": OXYGEN16}[name]
+        table = bethe.table(WATER, proj)
+        r1 = float(table.range_at(e0_u))
+        for frac in MH.I11_FRACTIONS:
+            e_u = float(table.energy_from_range((1.0 - frac) * r1))  # MeV/u at depth x/R
+            energies.append(e_u * m / (proj.mass_mev / proj.a))  # velocity-scaled proton E*
+    e = np.array(energies)
+    analytic = MH.n_omega(e, tab.range_at, tab.stopping_at, electrons=electrons)
+    h = 1e-3
+    lo, hi = e * (1.0 - h), e * (1.0 + h)
+    num = (_ln_omega_proton(bethe, hi, electrons) - _ln_omega_proton(bethe, lo, electrons)) / (
+        np.log(MH.pv_mev(hi, m)) - np.log(MH.pv_mev(lo, m))
+    )
+    assert analytic == pytest.approx(num, rel=1e-3), (e, analytic, num)
+    # the omitted terms are not small: the range/kinematics-only value differs by > 10 %
+    old = (e / (tab.stopping_at(e) * tab.range_at(e)) - (1 + e / (e + 2 * m) - 2 * e / (e + m))) / (
+        1 + e / (e + 2 * m) - e / (e + m)
+    )
+    if electrons == "fano":
+        assert np.max(np.abs(analytic / old - 1.0)) > 0.1
+
+
+# --------------------------------------------------------------------------- I11 grid
+_PLAN = Path(__file__).resolve().parents[2] / "validation/plans/v3-008-acceptance.md"
+
+
+def _plan_i11_grid() -> tuple[dict[str, tuple[float, ...]], tuple[float, ...]]:
+    """Energies and depth fractions parsed from the acceptance plan (Notation + row I11-abs)."""
+    text = _PLAN.read_text(encoding="utf-8")
+    std = re.search(r"\*\*Standard points\*\*: He (\d+), C (\d+), O (\d+) MeV/u", text)
+    ends = re.search(r"\*\*Ends\*\*: He (\d+)/(\d+), C (\d+)/(\d+), O (\d+)/(\d+) MeV/u", text)
+    row = re.search(
+        r"^\| I11(?:-abs)? \|.*?x/R ∈ \{([^}]*)\}.*?standard points and ends", text, re.M
+    )
+    assert std and ends and row, "plan wording for the I11 grid changed; update the P1 driver grid"
+    s, e = [float(g) for g in std.groups()], [float(g) for g in ends.groups()]
+    grid = {
+        "alpha": tuple(sorted({e[0], s[0], e[1]})),
+        "carbon12": tuple(sorted({e[2], s[1], e[3]})),
+        "oxygen16": tuple(sorted({e[4], s[2], e[5]})),
+    }
+    return grid, tuple(float(x) for x in row.group(1).split(","))
+
+
+def test_driver_grid_equals_plan_i11_definition() -> None:
+    """The P1 report driver evaluates exactly the I11 grid of the acceptance plan."""
+    grid, fractions = _plan_i11_grid()
+    assert {k: tuple(sorted(v)) for k, v in MH.I11_GRID_MEV_U.items()} == grid
+    assert MH.I11_FRACTIONS == fractions == (0.1, 0.25, 0.5, 0.9)
 
 
 # --------------------------------------------------------------------------- proton validation (LV)
@@ -200,7 +281,16 @@ def _tex() -> str:
     for d in dirs:
         if (d / GOTTSCHALK_SHA256).is_file():
             return gottschalk_tex(d)
-    pytest.skip("Gottschalk arXiv:0908.1413 source not cached; P1 proton validation runs locally")
+    msg = (
+        f"Gottschalk arXiv:0908.1413 source object sha256 {GOTTSCHALK_SHA256[:8]}... (registry "
+        "reference data, arXiv e-print of 0908.1413) is not in the repository reference cache "
+        f"({GOTTSCHALK_CACHE}) or $IONMC_CACHE_DIR/objects; materialize it (acquire/materialize "
+        "the reference-data object with that sha256 into the cache, or set IONMC_CACHE_DIR to a "
+        "cache holding it) before the P1 proton validation can run"
+    )
+    if os.environ.get("IONMC_REQUIRE_DATA") == "1":
+        pytest.fail("IONMC_REQUIRE_DATA=1 but " + msg)
+    pytest.skip(msg)
 
 
 def proton_deviations(
