@@ -973,7 +973,7 @@
     "theta_ours_over_G_minus_1": 0.011468877021752588,
     "theta_rounding_half_interval_rel": 0.02,
     "thickness_rounding_half_interval_rel": 0.007692307692307691,
-    "bethe_b_minus_b_G": NaN,
+    "bethe_b_minus_b_G": null,
     "delta_b": 2.2610170779642838
    },
    "water": {
@@ -1068,5 +1068,6 @@
     "theta_rel_change": -0.0013430744856992582
    }
   }
- }
+ },
+ "_null_means": "undefined value (NaN or infinity in the computation, e.g. bethe_b_minus_b_G where the configuration has no Bethe-path b); serialised as null so the file is standard JSON"
 }

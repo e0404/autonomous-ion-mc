@@ -105,9 +105,8 @@ def test_slab_theta_equals_committed_reference_at_defaults(tbl: dict[str, Any]) 
         mine = P1C.slab_theta(el, f * r1, path)
         for k, v in ref.items():
             assert mine[k] == pytest.approx(v, rel=1e-13, abs=0.0)
-    assert (
-        P1C.theta(el, 1.0, path, neg_u_in_default=P1C.MH.U_IN_NEG_DEFAULT)
-        == P1C.theta(el, 1.0, path)
+    assert P1C.theta(el, 1.0, path, neg_u_in_default=P1C.MH.U_IN_NEG_DEFAULT) == P1C.theta(
+        el, 1.0, path
     )
 
 
@@ -158,9 +157,7 @@ def test_pb_fano_and_quadrature_controls(pb: dict[str, Any]) -> None:
 @pytest.mark.parametrize("name", sorted(MATS))
 def test_controls_be_al_cu(tbl: dict[str, Any], name: str) -> None:
     out = P1C.pb_attribution(name, MATS[name], tbl, quad_ns=(400,), dense_table=False)
-    assert max(
-        _mx(v) for k, v in out["icru49_path"].items() if not k.endswith("_max")
-    ) <= 1.1e-3
+    assert max(_mx(v) for k, v in out["icru49_path"].items() if not k.endswith("_max")) <= 1.1e-3
     ps = P1C.pstar_element_check(name, MATS[name], tbl)
     assert _mx(ps["theta_on_pstar_path_over_thetaH_minus_1"]) <= 1.1e-3
 

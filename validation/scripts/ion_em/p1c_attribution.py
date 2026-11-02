@@ -887,6 +887,22 @@ def print_summary(agg: dict[str, Any]) -> None:
     )
 
 
+
+def _json_safe(obj: Any) -> Any:
+    """Recursively convert numpy scalars/arrays to Python values and NaN/inf to ``None`` (standard JSON)."""
+    if isinstance(obj, dict):
+        return {str(k): _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_safe(v) for v in obj]
+    if isinstance(obj, np.ndarray):
+        return [_json_safe(v) for v in obj.tolist()]
+    if isinstance(obj, (np.floating, float)):
+        f = float(obj)
+        return None if (f != f or f in (float("inf"), float("-inf"))) else f
+    if isinstance(obj, (np.integer, int)) and not isinstance(obj, bool):
+        return int(obj)
+    return obj
+
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument(
@@ -897,7 +913,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     agg = compute_aggregates()
     print_summary(agg)
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(agg, indent=1, default=float) + "\n", encoding="utf-8")
+    agg["_null_means"] = (
+        "undefined value (NaN or infinity in the computation, e.g. bethe_b_minus_b_G where the "
+        "configuration has no Bethe-path b); serialised as null so the file is standard JSON"
+    )
+    args.out.write_text(json.dumps(_json_safe(agg), indent=1, allow_nan=False) + "\n", encoding="utf-8")
     print("wrote", args.out)
     return 0
 
