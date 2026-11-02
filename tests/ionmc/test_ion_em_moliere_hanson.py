@@ -274,7 +274,8 @@ _MATERIALS = {"Be": BERYLLIUM, "Al": ALUMINIUM, "Cu": COPPER, "Pb": LEAD}
 
 
 def _tex() -> str:
-    dirs = [GOTTSCHALK_CACHE]
+    # the object lives in the reference cache or in the data-layer cache (objects/<sha256>)
+    dirs = [GOTTSCHALK_CACHE, GOTTSCHALK_CACHE.parent / "ionmc-data" / "objects"]
     env = os.environ.get("IONMC_CACHE_DIR")
     if env:
         dirs.append(Path(env) / "objects")
@@ -284,7 +285,8 @@ def _tex() -> str:
     msg = (
         f"Gottschalk arXiv:0908.1413 source object sha256 {GOTTSCHALK_SHA256[:8]}... (registry "
         "reference data, arXiv e-print of 0908.1413) is not in the repository reference cache "
-        f"({GOTTSCHALK_CACHE}) or $IONMC_CACHE_DIR/objects; materialize it (acquire/materialize "
+        f"({GOTTSCHALK_CACHE}), .ionmc-cache/ionmc-data/objects or $IONMC_CACHE_DIR/objects; "
+        "materialize it (acquire/materialize "
         "the reference-data object with that sha256 into the cache, or set IONMC_CACHE_DIR to a "
         "cache holding it) before the P1 proton validation can run"
     )

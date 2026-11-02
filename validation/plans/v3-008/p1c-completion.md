@@ -13,7 +13,7 @@ is reproduced. The 1.0 % tolerance is not changed.
   - `tbl:theta0Single`: x/R1, ρx, E and θ_Hanson for Be/Al/Cu/Pb at 158.6 MeV, with ρR1 in each header.
   - `tbl:B`: the B = 4.5 targets, which include water and air.
   - `tbl:modStack` rows 1 (Pb only) and 12 (Lexan only), at 230 MeV.
-  
+
   The text states that ICRU 49 (MIXED.RET) is used throughout, with a cubic spline in ln R(ln T) (l. 411, 417).
 - Makarova, Gottschalk, Sauerwein, arXiv:1610.01279, e-print sha256 `f8aedc66…0804175`, `main.tex`:
   - `tab:results`: the Go93 measured θ0 and the LOOKUP θ0(Hanson), Molière/Fano/Hanson with MIXED = ICRU 49 ranges (Janni 82 for Nylon).
@@ -138,7 +138,7 @@ The table gives ours/LOOKUP − 1 with our Bethe path (ICRU 49 I-values).
 - The comparison discriminates between compound rules. Against the committed rule (Δb = Σ w Z/A D / Σ w Z²/A):
   - an electron-weighted Δb average would shift θ by +4.1 % (polystyrene) and +4.6 % (Lucite);
   - a mass-weighted average would shift it by +1.8 % and +2.2 %.
-  
+
   The derived compound Fano rule is therefore consistent with Gottschalk's implementation to about 0.2 %. This closes OPEN 7 for H/C/N/O/F compounds.
 - Informative only (no uncertainty available): ours/measured − 1 tracks LOOKUP/measured − 1 within 0.6 %. Examples:
   - polystyrene 15.751: −0.34 % vs −0.14 %;
@@ -164,3 +164,47 @@ supported indirectly by the H-containing compounds (≤ 0.25 %) and the `tbl:B` 
 
 **Note on the test cache path.** The test's default `GOTTSCHALK_CACHE` is `.ionmc-cache/reference`, but the object is
 in `.ionmc-cache/ionmc-data/objects`. The Pb/P1 tests therefore skip unless `IONMC_CACHE_DIR=.ionmc-cache/ionmc-data`.
+
+## Committed provenance (2026-11-02)
+
+Codex REVIEW-100e7fb6 finding 2: the scratch calculation is now committed and reproducible.
+The Pb clearing remains an ATTRIBUTION (input difference in the range table), not a pass of the
+committed Pb test, which keeps its strict xfail on ionmc Bethe ranges.
+
+- Module `validation/scripts/ion_em/p1c_attribution.py` (sha256 `5b61e333ecf8d68780f07ae829e2e0a19d60d5b9a0e70b5f95600d7da2f45b76`). Run
+  `python validation/scripts/ion_em/p1c_attribution.py [--out FILE]`: it reproduces the aggregates
+  of this record and writes `validation/plans/v3-008/p1c-aggregates.json` (ratios only, no PSTAR
+  values). The committed `moliere_hanson.py` is used read-only (variants are explicit arguments of
+  `slab_theta`, equal to `MH.moliere_slab` at the defaults; tested). The JSON equals the scratch
+  `p1c-aggregates.json` of the researcher exactly (701 numbers, identical).
+- Tests `tests/ionmc/test_ion_em_p1c.py` (sha256 `031d45f965d7e9175c3362b3f2e207093670a0f99abfde19ac031e0769bbdaad`): parsers on the cached inputs, Pb baseline
+  (+1.10 / +1.32 %), Pb on the Gottschalk-node spline path (<= 0.05 %), on PSTAR (<= 0.03 %), the
+  Be/Al/Cu controls (<= 0.11 %), R1 ratios, Fano/quadrature controls (<= 1.2e-6), the compound
+  LOOKUP ratios (+-0.03 pp), the excluded compound Fano rules (+4.1 % / +1.8 %) and the water b check.
+- Hash-pinned inputs (cache; looked up by sha256 in `$IONMC_CACHE_DIR[/objects]`,
+  `.ionmc-cache/reference`, `.ionmc-cache/ionmc-data/objects`; hash verified at read):
+  - `67fb1478e51534064f0e5363b1ee4160da2a37a600f51897b56dd74ea22ba5ed`: arXiv:0908.1413 e-print
+    (ScatPowerV2.tex; `tbl:theta0Single`, `tbl:B`, `tbl:modStack`).
+  - `934fd31644eb97734a0f4c9a756a40d49012d3c126ef2b4391e088be7a092aa4`: arXiv:1610.01279 PDF
+    (Table 1; text via `mutool draw -F txt` or `pdftotext`; the researcher used the LaTeX e-print,
+    the PDF has the same table and the parsed values agree).
+  - NIST PSTAR POST responses (public domain; plain text, material name printed in the response;
+    CSDA range column parsed at run time; same hashes as the researcher's scratch files), POST to
+    `https://physics.nist.gov/cgi-bin/Star/apdata.pl` in the form of the registry `_STAR_BODY`
+    (`prog=PSTAR&matno=NNN&ShowDefault=on&NumofEnergies=0&character=space&electronic=on&nuclear=on&total=on&csda=on&project=on&detour=on`;
+    body inferred from the registry template, the acquisition record is authoritative):
+    - Be (004) `0fcbb24d9b7f07af7898ac3954802d08010d22339e195ee7cd18fe2638380757`
+    - Al (013) `3fe6459ec4abde6052bcb63f427ea856bbc35dd8506014191145b4eb9253db5e`
+    - Cu (029) `986e8577db37120c405f6686394c1250c3e7f1d6af7e88547b964de2e99e0063`
+    - Pb (082) `11dbcd1b014d926ef3e5b8bdd2bf9e539c153b5a4c8d51a62d81c34f5b0a05a7`
+    - polycarbonate (219) `8974efe7242af76f1df4fb696a7b957c696f6ca7de711e01c3c68a2f40c04040` (parser test only)
+    - PMMA (223) `1e13828ffc3dee1e5748d2d922e5ecf2c583380903bb787f84fbe2886dc549e9` (parser test only)
+    - polystyrene (226) `dc65ded99e0cb9b455482404642054c628f0639fd75ed8ec5ebc0e5e68f981c1`
+- LOGDIRs (`~/.local/share/ionmc-experiment/experiment-v3/telemetry/test-logs/`):
+  `20261102T011850Z-p1c-final` (module run writing the aggregates JSON, exit 0),
+  `20261102T012449Z-p1c-tests2` (p1c, moliere_hanson, ls_option, seed_families: 68 passed, 2 xfailed),
+  `20261102T012723Z-p1c-stopping` (`test_stopping.py -k "not real_"`: 49 passed).
+- The test cache-path default of `test_ion_em_moliere_hanson.py` now also searches
+  `.ionmc-cache/ionmc-data/objects` (required-mode behaviour unchanged), so the P1 proton tests run
+  without `IONMC_CACHE_DIR`. This resolves the "PSTAR downloads are not in the hash-pinned cache"
+  item of "Not verified" above.

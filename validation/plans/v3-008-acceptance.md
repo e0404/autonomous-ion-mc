@@ -265,6 +265,9 @@ full-scale statistical results were observed is consumed, pass or fail.
 
 ## Intervention at the freeze (to be filed by the orchestrator)
 
+**Dated note (2026-11-02, orchestrator) — FILED.** The intervention was filed through `request_human_intervention` on 2026-11-02 01:04 UTC as **IR-20261102-010435-B59B2D** (category inaccessible-information; notification sent, HTTP 200) at the freeze candidate 655d16a0; the record is committed verbatim on this branch at `reference_requests/interventions/IR-20261102-010435-B59B2D/` (README.md 86eba08d…, request.json 068cafd7…; commit cc2e4e26). Options offered: A measured lateral data, B independent-physics single-scattering reference, C accept the lateral and f_dM gaps, D measured C/O ranges with beam-line offsets, E accept the V3 EVIDENCE GAP. Integration is not blocked (STOP 4); the ledger wording of V2-ION and V3 follows the operator's answer, recorded as a dated resolution when it arrives.
+
+
 Revision 1, 2026-11-01; orchestrator decisions (a)–(c) of STOP 4. The orchestrator files this request through the structured intervention route at the freeze commit, whatever V5-SS later shows. The filed record is copied verbatim onto the task branch.
 
 **Category: inaccessible-information** (EXPERIMENT.md permitted intervention 1). The measured data exist: the Tessonnier et al. 2017 PMB and Schwaab et al. 2011 PMB lateral profiles in water, the HIT/GSI campaign data behind them, and the data "available from the authors" of Besuglow et al. 2022. They are paywalled or unpublished as numeric tables, so the agent system cannot access them (P6). "external-data" (permitted intervention 3) would mean a new measurement on operator-held equipment, which is not what is asked. The alternative of an independent-physics single-scattering reference is offered inside the same request.

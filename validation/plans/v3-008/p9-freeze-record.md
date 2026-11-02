@@ -18,6 +18,8 @@ that have no closing record at `f694b747`:
 
 **Dated note (2026-11-01, orchestrator) — FC-1 DISPOSED.** Record `validation/plans/v3-008/p1c-completion.md` (sha256 e3cd32585140fc36a45c7059ec21fa3e782144f7ad5557bc953856c1f1356e53; computed in the scratchpad from the committed reference `moliere_hanson.py` 5a99b3b8… unchanged, variants as runtime monkeypatches only). Outcome: **Pb CLEARED by attribution** — the P1b Pb failure (+1.10/+1.32 % at x/R1 ≥ 0.9) is reproduced by the range-table input (the ionmc Bethe Pb table is +0.85 % longer than Gottschalk's ICRU 49 R1 and +2.6–3.1 % in residual range at 20–41 MeV, amplified by d ln θ/d ln x = 2.3–5.7 near the end of range); on an ICRU 49 node path the committed reference reproduces Gottschalk's Pb θ_Hanson to ≤ 0.044 % (≤ 0.024 % on a PSTAR path), controls Be/Al/Cu ≤ 0.105 %; the Fano form (Δb 0.05–0.06 for Pb), the compound rule (n/a) and the quadrature (≤ 1.2e-6) do not explain the failure. The committed test (ionmc Bethe ranges) still fails at x/R1 ≥ 0.9, so its xfail(strict=True) stays as committed (no bound file changes before the freeze); P1 is CLOSED with the attribution and the proton validation statement reads 'passes Be/Al/Cu; Pb cleared by attribution to the range-table input'. Water/compound check: Gottschalk 1993 (NIM B 74, 467) is paywalled and lists no water target; arXiv:1610.01279 tabulates measured θ0 and θ_Hanson for polystyrene, Lexan, Lucite, Nylon, Teflon and C (no uncertainties) — the committed reference agrees with Gottschalk's θ_Hanson (LOOKUP) within −0.57 to −0.04 % (polystyrene −0.16/−0.20 %, Lexan C16H14O3 −0.15/−0.10 %), which closes OPEN item 7 for H/C/N/O/F compounds and discriminates against the electron- and mass-weighted Fano averages (+4.1 % / +1.8 %); **water remains not validated directly** (the only water θ_Hanson value available has two digits; used as a check on b: ours low by 0.040 ± 0.002, which moves θ by ≤ 0.16 % at I11-like B). Side finding (outside the V3-008 domain, recorded for high-Z use): ionmc Bethe Pb ranges are 0.8–3 % longer than ICRU 49 at 20–160 MeV. TO-VERIFY: Gottschalk 1993's measurement uncertainties; the exact LOOKUP compositions. The P1 proton tests skip unless IONMC_CACHE_DIR names the objects store (test default cache path; recorded, not changed).
 
+**Dated note (2026-11-02, orchestrator) — intervention filed.** IR-20261102-010435-B59B2D (inaccessible-information) filed at 655d16a0 and committed verbatim at cc2e4e26 (`reference_requests/interventions/IR-20261102-010435-B59B2D/`, README.md 86eba08d…, request.json 068cafd7…), as the plan section "Intervention at the freeze" requires (Codex REVIEW-100e7fb6 finding 1). FC-1's calculation is committed with provenance in the same freeze commit (finding 2; `validation/scripts/ion_em/p1c_attribution.py`, `tests/ionmc/test_ion_em_p1c.py`, inputs pinned: arXiv:1610.01279 PDF 934fd316…, NIST PSTAR Be 0fcbb24d…, Al 3fe6459e…, Cu 986e8577…, Pb 11dbcd1b…, matno 219 8974efe7…, 223 1e13828f…, 226 dc65ded9…; evaluation role). The §1 diff rule is amended: the freeze commit may add the FC-1 calculation module and test and the intervention record, and may change `src/ionmc/physics/stopping.py` docstrings only (Barkas-form attribution, Codex finding 3); the §2 hashes are regenerated at the freeze commit's parent by the orchestrator's script and listed in a dated §2 note.
+
 **Rule.** The freeze commit is made only after FC-1 and FC-2 are disposed. Any record or amendment that disposes them
 is committed before or in the freeze commit; its sha256 is added to §2 below by a dated note, and §5 is re-checked.
 Until then revision 1 is a freeze *candidate*, and nothing below establishes a frozen state.
@@ -80,7 +82,7 @@ evidence for `icru90/z{6,8}_G4_WATER.dat`. This note concerns FC-2 only.
 
 | File | sha256 | Bound by |
 |---|---|---|
-| `tests/ionmc/test_ion_em_moliere_hanson.py` | `789fd4b1714f18a53fdb3db840228209c5b09a910c1651b1d67b646d93b87e0c` | P1 |
+| `tests/ionmc/test_ion_em_moliere_hanson.py` | `64a408298bff0a66f6d43dbebb63dadf971c32378f36c16f43aab9548146f748` | P1 |
 | `tests/ionmc/test_ion_em_exact_omega.py` | `12cbdba28530db9561ac469acba5d45f7533690f5587dd74d44b2143b542baee` | P11 (I11-map/I11-rel, reference script) |
 | `tests/ionmc/test_ion_em_lindhard_sorensen.py` | `d35ca4e34610e153a6aa31f672a180cab4092572c8c839dc4087e606024dc6ef` | P3 |
 | `tests/ionmc/test_ion_em_ss_budget.py` | `ca49735b5b00831aeaabd59d63faecfc23b98fe0d4247024ca963d7e9a77f097` | P9 (iv) |
@@ -94,7 +96,7 @@ evidence for `icru90/z{6,8}_G4_WATER.dat`. This note concerns FC-2 only.
 |---|---|---|
 | `src/ionmc/physics/lindhard_sorensen.py` | `800d1f0a13524af5bad3946032f894479f606ba9b1482bf3ea190eeb9b4d3a6a` | P9 (iii) |
 | `src/ionmc/physics/exact_omega.py` | `e8427d23f71e7b524b434237d3343a7783ff375822da71ff38a67fac1c9d541e` | I0/I11-map notes |
-| `src/ionmc/physics/stopping.py` | `951f29acaae262255e1f0b6bc831d11118fe55025bf0a8cfb93c4cefad8db828` | P9 (iii) |
+| `src/ionmc/physics/stopping.py` | `89db1de28e5cd1f03efc1622669b58dd766fc88d5d0a91405af190e96094753e` | P9 (iii) |
 | `src/ionmc/config.py` | `2ead8d09a31dd3eb16ed97dba12f90d8a4e937efc56eabc0a8d718f2f5ee3f90` | I0 note |
 | `pyproject.toml` | `99ff83af258ccead7d0e81516abdf020730720aa3596a64d5292493b250dfc9f` | lint exceptions for the two mapping files (added by the planner; the only other changed file outside the plan set) |
 
@@ -169,6 +171,20 @@ placeholder scorer output was deleted unread.
 | `he-water-150mevu-em-smoke-genericion-verbose` | `REF-7537d7e4c5d8e4065d3e-cac2340a` |
 | `carbon-water-290mevu-ss-slab1mm-smoke` | `REF-35df82fcd7723f6a9a0c-db361e98` |
 
+
+**Dated note (2026-11-02, orchestrator) — files added by the freeze commit (sha256 as committed):**
+
+| File | sha256 |
+|---|---|
+| `validation/scripts/ion_em/p1c_attribution.py` | `5b61e333ecf8d68780f07ae829e2e0a19d60d5b9a0e70b5f95600d7da2f45b76` |
+| `tests/ionmc/test_ion_em_p1c.py` | `031d45f965d7e9175c3362b3f2e207093670a0f99abfde19ac031e0769bbdaad` |
+| `validation/plans/v3-008/p1c-aggregates.json` | `dd2a2d0f6e91ebe4d132d01d777c75b4b599c63f45cd41aafe05395c0311acd3` |
+| `validation/plans/v3-008/p2b-follow-ups.md` | `9c70eb1b9d49f0375af7976232817dbda925576eeb4b64e31aee61b33dfb5457` |
+| `reference_requests/interventions/IR-20261102-010435-B59B2D/request.json` | `068cafd75daa789b9840250dba13d00d1be0f24c3c4630306742868512bb1c21` |
+| `reference_requests/interventions/IR-20261102-010435-B59B2D/README.md` | `86eba08d66d23abc0b8d5f07cc831b48faaf7cdcc089b6546b04cd4b9cb976f8` |
+
+
+**Dated note (2026-11-02, orchestrator) — hashes regenerated at the freeze commit's parent; entries that changed since f694b747:** `tests/ionmc/test_ion_em_moliere_hanson.py` 789fd4b1… → 64a40829…; `src/ionmc/physics/stopping.py` 951f29ac… → 89db1de2…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.

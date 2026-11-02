@@ -30,8 +30,9 @@ charge and
 * ``M``: Mott term ``0.5 pi alpha beta q`` for projectiles with z >= 2 (as in Geant4);
 * ``ls`` option (default ``"off"``, see :class:`BetheOptions`): for z >= 2 the point-nucleus
   Lindhard-Sorensen correction replaces ``Bloch + Mott``;
-* ``q``: Pierce-Blann effective charge ``z (1 - exp(-125 beta z^(-2/3)))`` for z >= 2
-  (Barkas/Pierce-Blann form, ICRU 49 and G4/Ziegler-type effective charge); q = z for z = 1.
+* ``q``: effective charge ``z (1 - exp(-125 beta z^(-2/3)))`` for z >= 2
+  (Barkas (1963) form, coefficient 125 (previously mislabelled Pierce–Blann; decision 0043 §1);
+  ICRU 49 and G4/Ziegler-type effective charge); q = z for z = 1.
 
 Domain: energy per nucleon >= 1 MeV/u; no value is returned below (ValueError).
 All arithmetic is float64.
@@ -219,7 +220,11 @@ def bloch_term(beta2: NDArray[np.float64], q: NDArray[np.float64]) -> NDArray[np
 
 
 def pierce_blann_charge(beta: NDArray[np.float64], projectile: Projectile) -> NDArray[np.float64]:
-    """Pierce-Blann effective charge ``z (1 - exp(-125 beta z^(-2/3)))`` in units of e (z >= 2)."""
+    """Effective charge ``z (1 - exp(-125 beta z^(-2/3)))`` in units of e (z >= 2).
+
+    Barkas (1963) form, coefficient 125 (previously mislabelled Pierce–Blann; decision 0043 §1).
+    The callable keeps its historical name.
+    """
     z = float(projectile.z)
     q: NDArray[np.float64] = z * (1.0 - np.exp(-125.0 * beta * z ** (-2.0 / 3.0)))
     return q
@@ -241,7 +246,8 @@ def bethe_mass_stopping(
 
     Implements the model in the module docstring. Raises ``ValueError`` for energies
     below 1 MeV/u. The flags switch the shell, Barkas, Bloch and Mott terms and the
-    Pierce-Blann effective charge (the latter only acts for z >= 2). ``ls`` ("off", "eff",
+    effective charge (Barkas (1963) form, coefficient 125 (previously mislabelled
+    Pierce–Blann; decision 0043 §1); the latter only acts for z >= 2). ``ls`` ("off", "eff",
     "bare_mixed"; see :class:`BetheOptions`) replaces Bloch + Mott by the Lindhard-Sorensen term
     for z >= 2 and is ignored for protons.
     """
