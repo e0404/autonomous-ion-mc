@@ -237,3 +237,46 @@
 - No tolerance, row definition or seed changed. FC-1 is not addressed by this note.
 
 **FC-1 disposition (orchestrator, 2026-11-01).** `p1c-completion.md` (e3cd3258…): Pb cleared by attribution to the range-table input; compound check passes; water not validated directly; no bound file changed; P1 CLOSED. With FC-2 (above) both freeze conditions are disposed; this commit is the freeze commit of revision 1 subject to its independent review.
+
+# Round R2-TOPAS (2026-11-07; planner; plan revision 2 prepared at d0829601; not a review verdict — the independent Codex and scientific reviews of the revision 2 commit follow)
+
+**Trigger.** The operator's answer to IR-20261102-010435-B59B2D (resolved 2026-11-07 20:37 UTC), recorded verbatim in
+`reference_requests/operator-directives/2026-11-07-topas-validation-target.md` (sha256 ca079e9f…): agreement with the
+specified TOPAS configuration (OpenTOPAS 4.3 / Geant4 11.4.2, seven modules) is the acceptance reference for depth-dose
+distributions and lateral profiles; EM-only TOPAS may be intermediate; experimental validation deferred; the f_dM
+extrapolation is a model-design decision assessed through the ion predictions; cases, observables, precision and
+criteria chosen autonomously; history preserved.
+
+**What revision 2 does** (design record `validation/plans/v3-008/r2-topas-target.md`; plan §B revision 2 block, §C,
+§D STOP 4 resolution and STOP 5, §E, §F, Amendments 9–15; decision 0043 revision 2):
+- Rows: TD-EM (R80 min(0.35 %, 1.0 mm), distal width 10 % where W ≥ 1 mm, peak 0.5 mm, peak/entrance 3 %, plateau
+  groups 2 %), TD-FULL (R80 of the total IDD with A_frag 0.15 % He / 0.10 % C, O; peak 0.5 mm; the rest report-only),
+  TL-EM and TL-FULL (core σ band −5 %/+40 %; f_dM trend D_ext ≤ 12 %; FULL on the generation-0 profiles), held-out
+  TD-H/TL-H (He 100, C 150, O 200; once, after grading and any amendment), TF-DIAG report-only.
+- Cases: He 50/150/250, C 80/290/430, O 100/350/430 MeV/u (the I11/P11b grid: low ends in the f_dM domain, the rest
+  extrapolated), water; IDD and lateral in separate TOPAS runs; IDD bins 0.02–0.1 mm, projected lateral bins
+  0.01–0.02 mm (deviations from the 0.5 mm sketch, justified in r2 §3).
+- Statistics: four TOPAS parts per case and configuration (1e5 EM, 2e4 FULL), t-inflated part SE; ionmc 1e6 per case.
+- Seeds: formula unchanged; cases 1–12 re-assigned; part blocks 0–3/4–7/8–11/12–15; 205 bundles (192 evidence parts,
+  13 execution-only smokes at 20600411–20600423), each passing `validate_case`.
+- Cost: REF ≈ 8.7 h planning (≈ 14.3 h pessimistic) with V5-SS kept (2.94 h); sizing by timing smokes before any
+  scored run, fallback order pre-registered.
+- Superseded (never run): V1, V1-held, V2, V4. V3 stays an EVIDENCE GAP under revision 1 (history). V5-SS, I3 and all
+  A-rows unchanged.
+- The lineage is stated: depth-dose rows are shared-lineage for stopping; the lateral reference (Urban for ions) is
+  independent but structurally deficient, so the lateral rows are a coarse band and V5-SS stays the 3 %-level check of
+  b(z).
+
+**Bookkeeping (Codex REVIEW-ad85dff1 on d0829601):**
+- (a) P9 counts: 53 + `p2b-follow-ups.md` + `p1c-completion.md` + `p1c_attribution.py` + `test_ion_em_p1c.py` +
+  `p1c-aggregates.json` + 2 intervention files = **60** repository paths (the orchestrator's 2026-11-02 note omitted
+  `p1c-completion.md` and read 59); external 44; total 104. Corrected by a dated note in `p9-freeze-record.md` §7.
+- (b) The plan's P1 row cited the FC-1 record as e3cd3258… (its first committed content at 655d16a). Rebound by a dated
+  note to the current hash a1a24cd34c664a5dbb74b732bebff9244a55b4c12bfa30f0bff9c0cb8ebed0a5; e3cd3258… (655d16a) and
+  f0dc6ce9… (fa59c64) are superseded history. The FC-1 disposition paragraph of round FREEZE-1 above also cites
+  e3cd3258…; it is history of that round and refers to the same superseded content.
+
+**Not established (reported, not resolved):** whether TOPAS scoring bins limit steps (step-length smoke); the Urban
+deficit and its energy trend (scratch estimates; the band and the D_ext budget rest on them); acceptance of the
+`g4radioactivedecay` alias by OpenTOPAS 4.3 (timing smoke; rejection = STOP 5); the FULL cost; the cost of ionmc's fine
+projected lateral tallies.

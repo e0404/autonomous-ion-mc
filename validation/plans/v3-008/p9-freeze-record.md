@@ -114,8 +114,8 @@ evidence for `icru90/z{6,8}_G4_WATER.dat`. This note concerns FC-2 only.
 | `validation/plans/v3-008/p6-measured-data-access.md` | `60ad27f264f50dd9bd4ff75e59a4fd479268b48f64ad09367828ef9922e6f83a` |
 | `validation/plans/v3-008/p6-lateral-data-search.md` | `d149550b8dc5684ec4cd7530a88e50b75bcf083dbc385934aa73e33a708212ef` |
 | `validation/plans/v3-008/p8-repository-facts.md` | `18639c6bc5ff8152c39adc971652e14fb35f318499b9821d45de03bf9b374478` |
-| `validation/plans/v3-008/p10-single-scattering-availability.md` | `bea86277604b20c2d396c12d0c562d5f9e21acd0fa94ba0c560cf5ee0ce02881` |
-| `validation/plans/v3-008/p11-exact-omega-mapping.md` | `6116648ae7ef2de61aca353616213e7709f9eeb012af3ab8aaf3d3ae55d81a07` |
+| `validation/plans/v3-008/p10-single-scattering-availability.md` | `a7f539a0b71a39939aed2644a9d7c2969133251ceb1676a3e48572a9292f7fda` |
+| `validation/plans/v3-008/p11-exact-omega-mapping.md` | `f78e95f578fcb1fbb0c4db8ec12ce8b9dbfd5ae5e2d98a34d4d13b2bb8a6c069` |
 | `validation/plans/v3-008/research/research-models.md` | `d194a516967f290e9aa65f693c3c414282c7d45cde5c1226ab08464a46b396cd` |
 | `validation/plans/v3-008/research/research-data-sources.md` | `2bf40c44d73dd1d5ce6afe6d05d7891128cb3b4468af2afbf196f4b99afa0732` |
 
@@ -180,7 +180,7 @@ placeholder scorer output was deleted unread.
 | `tests/ionmc/test_ion_em_p1c.py` | `d95597c79d74e17e1cf5ef20e2436f719716a359527239435afc9f8f6b07f13e` |
 | `validation/plans/v3-008/p1c-aggregates.json` | `b603c3714c5d701c5560d6e348bab43526aaecb962a4e6dc016229fdd46306d4` |
 | `validation/plans/v3-008/p2b-follow-ups.md` | `9c70eb1b9d49f0375af7976232817dbda925576eeb4b64e31aee61b33dfb5457` |
-| `reference_requests/interventions/IR-20261102-010435-B59B2D/request.json` | `068cafd75daa789b9840250dba13d00d1be0f24c3c4630306742868512bb1c21` |
+| `reference_requests/interventions/IR-20261102-010435-B59B2D/request.json` | `e81a7efa104614e87188c3ef083ef3fb061eb018d2731c46be2cb4a88e1ea7f3` |
 | `reference_requests/interventions/IR-20261102-010435-B59B2D/README.md` | `86eba08d66d23abc0b8d5f07cc831b48faaf7cdcc089b6546b04cd4b9cb976f8` |
 
 
@@ -189,6 +189,19 @@ placeholder scorer output was deleted unread.
 **Dated note (2026-11-02, orchestrator) — hashes regenerated at the freeze commit's parent; entries that changed since f694b747:** `validation/scripts/ion_em/p1c_attribution.py` 5b61e333… → 5ec7482a…; `validation/plans/v3-008/p1c-aggregates.json` dd2a2d0f… → b603c371…. All other entries unchanged (recomputed).
 
 **Dated note (2026-11-02, orchestrator) — hashes regenerated at the freeze commit's parent; entries that changed since f694b747:** `tests/ionmc/test_ion_em_p1c.py` 031d45f9… → d95597c7…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-07, orchestrator) — files added by the freeze commit (sha256 as committed):**
+
+| File | sha256 |
+|---|---|
+| `validation/scripts/ion_em/gen_r2_bundles.py` | `90732599ad56878103869fa48f8fff2aa9f098054fe423bb12acd3d1885755d3` |
+| `tests/ionmc/test_r2_bundles.py` | `dd1a7af00ed2aef7c09883e23e6741e5da1f80240bfb2a168f578f4514b964de` |
+| `reference_requests/operator-directives/2026-11-07-topas-validation-target.md` | `ca079e9f0af990cdff9d8efde60d38ac55e2d0fc0fb9ef22355a81f4a2ab0b26` |
+| `reference_requests/interventions/IR-20261102-010435-B59B2D/response.json` | `dc6a610cb67dee50fa0bb96327026eea0b81bb9506e7b898c2e9e44322f69bd0` |
+| `validation/plans/v3-008/r2-topas-target.md` | `f3995f57cfaa4724a8e7acf2d7790615a9c36cdab0e1965decc132d9f3e62dc2` |
+
+
+**Dated note (2026-11-07, orchestrator) — hashes regenerated at the freeze commit's parent; entries that changed since f694b747:** `validation/plans/v3-008/p10-single-scattering-availability.md` bea86277… → a7f539a0…; `validation/plans/v3-008/p11-exact-omega-mapping.md` 6116648a… → f78e95f5…; `reference_requests/interventions/IR-20261102-010435-B59B2D/request.json` 068cafd7… → e81a7efa…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.
@@ -311,3 +324,66 @@ sha256 values in this record: **90**. Test 3 above checks the 54 repository path
 disposes FC-1 adds to these counts by its own dated note.
 
 **Dated note (2026-11-02, orchestrator) — counts at the freeze commit:** repository files bound by sha256: 54 (FC-2 note) + `p1c_attribution.py` + `test_ion_em_p1c.py` + `p1c-aggregates.json` + the two intervention record files = **59** (every path recomputed by the orchestrator's script at this tree; `p1c-completion.md` and `p1c-aggregates.json` carry their final hashes after the JSON regeneration). External sources with full sha256: 36 + 8 (FC-1 inputs, §3 dated note) = **44**. Total full sha256 values: **103**. Item 3 of §7 reads "59 repository paths" accordingly.
+
+**Dated note (2026-11-07, planner; Codex REVIEW-ad85dff1 bookkeeping finding (a)) — count correction.** The orchestrator's
+note of 2026-11-02 above omitted `validation/plans/v3-008/p1c-completion.md` (added to §2.4 by the FC-1 dated note).
+Repository files bound by sha256 at the revision-1 freeze commit: 53 + `p2b-follow-ups.md` + `p1c-completion.md` +
+`p1c_attribution.py` + `test_ion_em_p1c.py` + `p1c-aggregates.json` + the two intervention record files = **60**.
+External sources with full sha256: **44** (unchanged). Total full sha256 values: **104**. **Item 3 of §7 reads "60
+repository paths"** for the revision-1 freeze commit (superseding "53" and the 2026-11-02 "59"). Nothing else changes.
+
+## Revision 2 additions (2026-11-07, planner, at `d082960169b00960f7a192ce6e6e3a44edf65581`; dated note, earlier text kept)
+
+**Rule.** Plan revision 2 (`validation/plans/v3-008-acceptance.md`, status block and Amendments 9–15) and decision 0043
+revision 2 are **the frozen revision** once committed by a reviewed commit (the "revision-2 freeze commit"). Revision
+1's freeze (the reviewed freeze commit d0829601 and its predecessors) is superseded **before any result**: at
+d0829601 no V3-008 ionmc ion-transport run, LV/HR qualification step or scored ion TOPAS run exists. Everything
+bound in §1–§4 above stays bound (hashes unchanged except the two records rebound below); the revision-1 history is
+kept.
+
+**R2.1 Commit lineage.** Required ancestor of the revision-2 freeze commit, in addition to §1:
+`d082960169b00960f7a192ce6e6e3a44edf65581` (revision-1 freeze commit). Clean tree at commit and review. `git diff
+--name-only d0829601 <revision-2 freeze>` lists only: the plan, decision 0043, `review.md`, this file,
+`validation/plans/v3-008/r2-topas-target.md`, `validation/plans/v3-008/p10-single-scattering-availability.md`,
+`validation/plans/v3-008/p11-exact-omega-mapping.md`, `reference_requests/operator-directives/2026-11-07-topas-validation-target.md`,
+the intervention resolution files under `reference_requests/interventions/IR-20261102-010435-B59B2D/` (orchestrator;
+not bound by this planner note), and the `case.json`/`input.txt` files of the 205 directories
+`validation/reference_cases/topas/*-r2-*`. Any other path is a STOP for the revision-2 freeze.
+
+**R2.2 Files added or rebound (sha256 after pre-commit, 2026-11-07).**
+
+| File | sha256 | Note |
+|---|---|---|
+| `reference_requests/operator-directives/2026-11-07-topas-validation-target.md` | `ca079e9f0af990cdff9d8efde60d38ac55e2d0fc0fb9ef22355a81f4a2ab0b26` | the operator's directive, verbatim (new) |
+| `validation/plans/v3-008/r2-topas-target.md` | `f3995f57cfaa4724a8e7acf2d7790615a9c36cdab0e1965decc132d9f3e62dc2` | revision-2 design record with appendix A (new) |
+| `validation/plans/v3-008/p10-single-scattering-availability.md` | `a7f539a0b71a39939aed2644a9d7c2969133251ceb1676a3e48572a9292f7fda` | rebound (was bea86277…; dated note appended) |
+| `validation/plans/v3-008/p11-exact-omega-mapping.md` | `f78e95f578fcb1fbb0c4db8ec12ce8b9dbfd5ae5e2d98a34d4d13b2bb8a6c069` | rebound (was 6116648a…; dated note appended) |
+| 205 bundles `validation/reference_cases/topas/*-r2-*` (`case.json` + `input.txt`, 410 files) | bundle-set digest `9bd6f8023b4aa4b0bebbb21c5e237ea5a71c136dbc5243dbef5ef772c54a212f` | per-file sha256 in `r2-topas-target.md` appendix A; digest = sha256 of the appendix listing block |
+
+Each of the 205 `case.json` files passes `infrastructure/experiment_v3/reference.py::validate_case`; the seed equals
+the native `i:Ts/Seed` line; `histories` equals `NumberOfHistoriesInRun` (checked 2026-11-07). 192 evidence parts
+(seeds 20619001–20620512 by `20619000 + 100·part + case`, cases 1–12, parts 0–15) and 13 execution-only smokes
+(rehearsal seeds 20600411–20600423).
+
+**R2.3 Seeds.** Unchanged formulas and guard test. TOPAS cases 1–12 re-assigned (none ever ran); part blocks 0–3 /
+4–7 / 8–11 / 12–15; parts 16–19 reserved for the FULL sizing fallback; V5-SS cases 22, 25–31 unchanged; 23, 24, 32,
+33 retired; 13–21 and 34–40 unassigned. ionmc TD/TL samples: lv8 r_index 30–41. **No V3-008 qualification seed has
+been consumed at d0829601.**
+
+**R2.4 Pre-registration status (revision 2).** May claim pre-registration (values unseen): TD-EM, TD-FULL, TL-EM,
+TL-FULL, TD-H, TL-H, TF-DIAG, in addition to the §6 list (V1, V1-held, V2 and V4 are superseded, never run). Disclosed
+SEEN inputs to the revision-2 tolerances: decision 0038 stopping comparisons (0.18 % / 0.10 %), the V3-003 proton
+EM-vs-full R80 shift (−0.2 mm, `validation/results/reference/README.md`), the P2 §6.3 Urban scratch estimate, the P11b
+domain status. The planning CSDA ranges of `r2-topas-target.md` §3 are project-table construction values (box and bin
+sizing), not reference values.
+
+**R2.5 Counts.** Repository paths bound by sha256 for the revision-2 freeze: 60 (revision 1) + the directive +
+`r2-topas-target.md` + 410 bundle files = **472** (p10 and p11 are rebound, not added). External sources with full
+sha256: **44** (no new acquisition). Total full sha256 values: **516**, plus the bundle-set digest.
+
+**R2.6 Acceptance tests of the revision-2 freeze commit** (orchestrator, recorded in its review): (1) d0829601 and
+every §1 commit are ancestors; (2) clean tree; the R2.1 diff rule holds; (3) `sha256sum` of every path of §2 (with
+p10/p11 at their R2.2 values and `p1c-completion.md` at a1a24cd3…) and of R2.2, and of every appendix-A file, equals
+the recorded value — **472 repository paths**; the appendix-A block hashes to the bundle-set digest; (4) the logged
+seed-family test passes; (5) `validate_case` passes on all 205 bundles; (6) no file under `validation/generated/`, no
+LV/HR record and no scored V3-008 ion REF run exists.

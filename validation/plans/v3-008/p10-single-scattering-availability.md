@@ -673,3 +673,11 @@ superseded by the round V3-008-5 versions (sha256 bound at commit, plan P9 (iv))
 earlier function, constant and golden value is unchanged (the round V3-008-4 `budget` is kept for the record). Tests: 20
 (the rule test replaced; window kernels, Gaussian moments and factorisation, SE limits, window statistics and TOST power/
 cost goldens added; SCRIPT-GENERATED regression values, not evidence).
+
+**Dated note 2026-11-07 (plan revision 2, operator directive of 2026-11-07).** The validation target becomes agreement with
+the specified TOPAS configuration (`validation/plans/v3-008/r2-topas-target.md`). V5-SS is kept unchanged as a gating
+complementary row: its design, TOST rule, 6e4/4e5 statistics, cases 22 and 25–31 (parts 0–1), 2.94 h cost and
+shared-lineage class are as recorded above. Reason: the TOPAS opt4/FULL lateral rows use Urban for ions (no charge or
+β in its logarithm) and can only bound σ_ionmc/σ_TOPAS within a coarse band; V5-SS is the only row that resolves the
+b(z) charge dependence at the 3 % level. The single-scattering clause of the lateral-gap wording is history (the
+intervention was answered by a change of target).

@@ -176,3 +176,10 @@ bit-identical to the twin on the compared states and float32 within analytic bud
 flag. The source's proton-equivalent energy is defined as the maximum over a depth scan (I0 note). The
 `fdm_extrapolated` flag is True at all six standard/end cases (within 2 % of the P11b energies). The extrapolation
 itself remains the declared limitation of P11c.
+
+**Dated note 2026-11-07 (plan revision 2, operator directive of 2026-11-07).** The f_dM extrapolation is a model-design
+decision; the model is unchanged and P11b/P11c stand as recorded (SEEN). Its adequacy is now judged through the ion
+predictions against the specified TOPAS configuration: plan rows **TL-EM (b) and TL-FULL (b)** (D_ext = ratio of
+σ_ionmc/σ_TOPAS between the upper end, whose proton-equivalent states are 100 % extrapolated, and the low end, whose
+states are in the proton-qualified domain; |D_ext| + 1.645σ ≤ 12 %; `validation/plans/v3-008/r2-topas-target.md`
+§5.3). I11-ext stays report-only and theory-anchored; the ≤ 1.5 % component stays declared within the ±5 %.
