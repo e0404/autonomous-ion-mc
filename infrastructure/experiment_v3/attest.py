@@ -23,7 +23,7 @@ import json
 import os
 import sys
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 SCHEMA = "ionmc-attestation-1"
@@ -88,7 +88,9 @@ def _mul(s, p):
 
 
 def _equal(p, q):
-    return (p[0] * q[2] - q[0] * p[2]) % _P == 0 and (p[1] * q[2] - q[1] * p[2]) % _P == 0
+    return (p[0] * q[2] - q[0] * p[2]) % _P == 0 and (
+        p[1] * q[2] - q[1] * p[2]
+    ) % _P == 0
 
 
 def _compress(p):
@@ -147,7 +149,10 @@ def verify(message, signature, public_key):
         s = int.from_bytes(signature[32:], "little")
         if s >= _L:
             return False
-        k = int.from_bytes(_sha512(signature[:32] + public_key + message), "little") % _L
+        k = (
+            int.from_bytes(_sha512(signature[:32] + public_key + message), "little")
+            % _L
+        )
         return _equal(_mul(s, _G), _add(point_r, _mul(k, point_a)))
     except Exception:
         return False
@@ -214,9 +219,14 @@ def signed_message(record, signer, signed_at_utc, key_id):
 
 def load_trusted(path=None):
     """Return {signer: {key_id: public_key_hex}} from the trust file."""
-    default = Path(__file__).resolve().parents[1] / "keys" / "trusted_attestation_keys.json"
+    default = (
+        Path(__file__).resolve().parents[1] / "keys" / "trusted_attestation_keys.json"
+    )
     data = json.loads(Path(path or default).read_text(encoding="utf-8"))
-    return {s: {e["key_id"]: e["public_key"] for e in entries} for s, entries in data.items()}
+    return {
+        s: {e["key_id"]: e["public_key"] for e in entries}
+        for s, entries in data.items()
+    }
 
 
 def sign_record(record, key, signer):
@@ -224,7 +234,7 @@ def sign_record(record, key, signer):
         raise AttestationError(f"unknown signer: {signer!r}")
     payload = canonical_payload(record)
     signed = {k: v for k, v in record.items() if k != "attestation"}
-    signed_at = datetime.now(timezone.utc).isoformat()
+    signed_at = datetime.now(UTC).isoformat()
     message = signed_message(record, signer, signed_at, key.key_id)
     signed["attestation"] = {
         "schema": SCHEMA,
@@ -240,7 +250,10 @@ def sign_record(record, key, signer):
 
 
 def verify_record(record, trusted, expected_signer=None):
-    """Verify record; trusted is {signer: {key_id: public_key_hex}}. Raises AttestationError."""
+    """Verify ``record``; ``trusted`` is ``{signer: {key_id: public_key_hex}}``.
+
+    Raises ``AttestationError`` on any failure.
+    """
     block = record.get("attestation")
     if not isinstance(block, dict):
         raise AttestationError("record has no attestation")
@@ -261,7 +274,9 @@ def verify_record(record, trusted, expected_signer=None):
     payload = canonical_payload(record)
     if hashlib.sha256(payload).hexdigest() != claimed_hash:
         raise AttestationError("payload hash mismatch")
-    if not verify(signed_message(record, signer, signed_at, key_id), signature, public_key):
+    if not verify(
+        signed_message(record, signer, signed_at, key_id), signature, public_key
+    ):
         raise AttestationError("invalid signature")
     if trusted.get(signer, {}).get(key_id) != block["public_key"]:
         raise AttestationError("signing key is not trusted")
@@ -314,8 +329,15 @@ def main(argv=None):
     parser.add_argument("--print-public-key", choices=SIGNERS, required=True)
     args = parser.parse_args(argv)
     key = load_or_create_key(args.print_public_key)
-    print(json.dumps({"signer": args.print_public_key, "key_id": key.key_id,
-                      "public_key": key.public_key.hex()}))
+    print(
+        json.dumps(
+            {
+                "signer": args.print_public_key,
+                "key_id": key.key_id,
+                "public_key": key.public_key.hex(),
+            }
+        )
+    )
     return 0
 
 
