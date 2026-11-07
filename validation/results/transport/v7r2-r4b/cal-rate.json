@@ -8,7 +8,8 @@
   "platform": "Linux-6.18.40.1-microsoft-standard-WSL2-x86_64-with-glibc2.39",
   "python": "3.12.0"
  },
- "host_run_id": "R4B-20261102T010633Z-b7c44f51",
+ "host_run_id": "RUN-20261102T010631Z-15c7a6ad",
+ "host_run_token": "R4B-20261102T010633Z-b7c44f51",
  "log_dir": "validation/results/transport/v7r2-r4b",
  "part_log": "part.log",
  "part_log_sha256": "f6646d2a0df3545e481328025b0d565f06a438cc5c3858a1dcfffb728c34d182",
@@ -18,6 +19,8 @@
  "s_per_rep": 9.718907778807747,
  "schema": "ionmc-v7r2-cal-rate-1",
  "validation_id": "VAL-20261107-203551-E8A93E",
+ "validation_record": "VAL-20261107-203551-E8A93E.json",
+ "validation_record_sha256": "ce0ae9421cf06ab4877a4556548294988136437c3d08b80d7c1ae332dc35aea5",
  "wall_mc_s": 806.669345641043,
  "wall_total_s": 814.32
 }

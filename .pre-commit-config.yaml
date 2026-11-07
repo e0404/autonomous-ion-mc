@@ -3,9 +3,10 @@ repos:
     rev: v6.0.0
     hooks:
       - id: trailing-whitespace
-        exclude: ^experiment/prompts/prepare-v2\.md$
+        # sealed host-run artifacts (byte-exact; their sha256 is bound by seals and the acceptance plan)
+        exclude: ^(?:experiment/prompts/prepare-v2\.md$|validation/results/transport/v7r2-r4b/)
       - id: end-of-file-fixer
-        exclude: ^(?:\.claude/(?:agents|hooks)/|\.claude/settings\.json$|\.mcp\.json$)
+        exclude: ^(?:\.claude/(?:agents|hooks)/|\.claude/settings\.json$|\.mcp\.json$|validation/results/transport/v7r2-r4b/)
       - id: check-yaml
       - id: check-json
       - id: check-toml

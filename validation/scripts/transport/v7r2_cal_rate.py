@@ -1,6 +1,6 @@
 """Provenance-bound measured calibration-part rate of the V7-R2 rep-based plans (plan R-4b, Amendment 20 (f)8;
-Codex REVIEW-fe47f290 finding 2). Standard library only: ``run_suite.py`` (preflight) and ``steps_v5d.py``
-(throughput gate) import it without ``ionmc``.
+Codex REVIEW-fe47f290 finding 2, REVIEW-61f4b0e3). Standard library only: ``run_suite.py`` (preflight) and
+``steps_v5d.py`` (throughput gate) import it without ``ionmc``.
 
 The rep-based V7-R2 plans (``v7r.r2_rep_plans``: 3200 repetitions over 39 parts per surrogate, the kappa parts) rest on
 a slow-host seconds-per-repetition rate whose default (``v7r.R2_CAL_S_PER_REP`` = 12.2 s) is EXTRAPOLATED, and the 39-part
@@ -12,69 +12,89 @@ MEASURED rate record, a JSON file named by the environment variable ``IONMC_V7R2
      "reps": <repetitions of the measured part (n)>,       "wall_mc_s": <its Monte Carlo wall time>,
      "wall_total_s": <pytest wall time of the part>,
      "host": {"node": ..., "platform": ..., "machine": ..., "cpu_count": ..., "python": ...},  # = the sealed part record's
-     "host_run_id": <controlled host-runner run id of the measurement>,
+     "host_run_id": <controlled host-runner run id, RUN-YYYYMMDDTHHMMSSZ-xxxxxxxx>,
+     "host_run_token": <the token the wrapper set as IONMC_HOST_RUN_ID inside the run; = the sealed part record's>,
      "validation_id": <exact-SHA local validation record id, VAL-YYYYMMDD-HHMMSS-XXXXXX>,
+     "validation_record": <file name (in log_dir) of the verbatim copy of that validation-manager record>,
+     "validation_record_sha256": <64 hex>,
      "git_sha": <40 hex of the measured tree>,             "log_dir": <directory with the pytest log and part record>,
      "part_record": <file name of the sealed calibration part record>, "part_record_sha256": <64 hex>,
      "part_log": <file name of the pytest log>,            "part_log_sha256": <64 hex>}
 
-``python v7r2_cal_rate.py --part-record ... --part-log ... --log-dir ... --git-sha ... --host-run-id ...
---validation-id ... --out ...`` builds the record from the sealed part record (``wall_mc_s``, ``n``, ``host``,
-``host_run_id``) and the pytest log (``1 passed in X s``); the rate is the Monte Carlo wall time per repetition and the
-fixed cost is ``max(70 s, wall_total - wall_mc)`` (conservative). No measurement is made here.
+``python v7r2_cal_rate.py --part-record ... --part-log ... --log-dir ... --git-sha ... --host-run-id RUN-...
+--host-run-token ... --validation-id ... --validation-record ... --out ...`` builds the record from the sealed part
+record (``wall_mc_s``, ``n``, ``host``, the sealed token), the pytest log (``1 passed in X s``) and the validation-record
+copy; the rate is the Monte Carlo wall time per repetition and the fixed cost is ``max(70 s, wall_total - wall_mc)``
+(conservative). No measurement is made here.
 
 Binding (Codex REVIEW-ffe77aac). The record carries exactly the fields above and no other: every planning field is
 DERIVED and recomputed by the loader from the verified artifacts, ``s_per_rep = wall_mc_s / reps`` and
 ``fixed_s = max(MIN_FIXED_S, wall_total_s - wall_mc_s)`` (stored values must agree, relative 1e-12); an undeclared
 field is refused. ``host`` is bound to the SEALED part record: the part writer
 (``tests/ionmc/test_v7r2_calibration.py``) seals a ``host`` block {node, platform, machine, cpu_count, python} of the
-executing process and the ``host_run_id`` read from ``IONMC_HOST_RUN_ID`` ("unknown" when unset, which is refused);
-the loader compares the rate record's ``host`` and ``host_run_id`` with the sealed block, never trusting the rate
-record's own copy. LIMIT of repository code: the attestation that the measurement ran to a clean exit on the slow host
-lives in the protected validation-manager record named by ``validation_id`` (orchestrator-recorded at the exact SHA)
-and the host-runner run ``host_run_id``. Both stores are outside the repository and cannot be read here; the loader
-binds them by id (format, presence, agreement of ``host_run_id`` with the sealed record) but cannot verify them;
-the plan pin below is the controlled attestation that the orchestrator verified them.
+executing process and the token read from ``IONMC_HOST_RUN_ID`` (its sealed field is named ``host_run_id``; "unknown"
+when unset, which is refused). The host-runner exposes no run id inside the process, so the wrapper sets that variable
+to a token (``R4B-<timestamp>-<sha8>``); the controlled runner id (``RUN-...``) is a different string, and the
+validation-manager record is what binds the two.
 
-Verification (fail closed; Codex REVIEW-6519d4ff). A record is only accepted, by :func:`load_record` and before
-:func:`build_record` writes one, after the underlying controlled-run artifacts have been re-opened and checked
-(:func:`verify_artifacts`); every value of a built record is taken from them:
+What is verified (fail closed; Codex REVIEW-6519d4ff, REVIEW-61f4b0e3). A record is only accepted, by
+:func:`load_record` and before :func:`build_record` writes one, after the controlled-run artifacts have been re-opened
+and checked (:func:`verify_artifacts`); every value of a built record is taken from them:
 
-* ``log_dir`` (a relative path is resolved against the repository root) holds ``part_record`` and ``part_log``, and
-  their sha256 equal ``part_record_sha256`` / ``part_log_sha256``;
+* ``log_dir`` (a relative path is resolved against the repository root) holds ``part_record``, ``part_log`` and
+  ``validation_record``, and their sha256 equal ``part_record_sha256`` / ``part_log_sha256`` /
+  ``validation_record_sha256``;
 * the part record is a SEALED V7-R2 calibration part record: ``content_sha256`` equals the sha256 of its canonical JSON
   (sorted keys, compact separators) without that field (``steps_v5.content_digest``, re-implemented here); schema
   ``ionmc-v7r2-calibration-record-1``; the file name ``v7r2-calibration-<surrogate>-p<NN>.json`` agrees with its
   ``surrogate`` / ``part`` (39 parts per surrogate); layout ``{replicates 10800, reps_per_shard 225, parts 39}`` and
   ``reps_env`` 3200 (``v7r.r2_part_layout``); ``suite`` is ``lv5d``; ``run_sha`` and ``git_sha`` both equal the rate
   record's ``git_sha``; ``n`` is the planned size of that part (83 for parts 0-1, 82 otherwise, 3200 = 2 x 83 + 37 x
-  82) and equals ``reps``; ``wall_mc_s`` equals the record's ``wall_mc_s``;
+  82) and equals ``reps``; ``wall_mc_s`` equals the record's ``wall_mc_s``; its sealed token equals ``host_run_token``;
 * the pytest log has exactly ONE pytest summary line, which reports exactly one passed test and no other outcome
   except deselected / warnings (no failed, error, skipped, xfailed, xpassed, rerun), no ``FAILED`` / ``ERROR`` line,
   and exactly one ``PARTIAL <part_record name> <content_sha256>`` line, which matches the part record (run the part
   with ``-s`` so the line is not captured); ``wall_total_s`` equals the "in X s" time of the summary (relative
-  tolerance 1e-9: both are the same decimal text).
+  tolerance 1e-9: both are the same decimal text);
+* the validation-record copy (the JSON the validation manager returned, copied verbatim) has ``schema_version``,
+  ``validation_id`` = the record's, ``task_id`` "V3-005B", ``status`` "passed", ``git_sha`` (and ``details.head_sha``
+  if present) = the record's ``git_sha``, a parseable ISO-8601 ``recorded_at_utc``, and ``details``: ``host_run_id`` =
+  the record's runner id, ``host_run_token`` = the record's token (= the sealed one), ``part_record`` /
+  ``part_record_sha256`` = the part record's name / SEAL digest (``content_sha256``, the digest of the ``PARTIAL`` line;
+  the validation record names the seal, not the file bytes, whose sha256 is the rate record's ``part_record_sha256``), ``n`` = ``reps``, ``wall_mc_s`` (relative 1e-9),
+  ``wall_total_s`` and ``fixed_s`` equal the record's, ``s_per_rep`` equal to the record's within the rounding of the
+  copy (relative 1e-4). Time ordering against the part log is not checked (the log carries no wall-clock time).
 
-A record that fails any of these raises ``ValueError``.
+A record that fails any of these raises ``ValueError`` naming the field.
 
-Plan pin (Codex REVIEW-323f4c12). The checks above are recomputable by anyone holding synthetic artifacts (the part
-seal is an unkeyed hash and the two ids are format-checked only), so they do not establish that the measurement ran on
-the slow host to a clean exit. The controlled attestation is therefore a PIN in the committed acceptance plan
-``validation/plans/v3-005-acceptance.md`` (a member of the hashed-source set of the suite, changed only by reviewed
-commits). A measured rate record is CONFORMANT only if the plan carries a pin line (a whole line, fixed grammar)::
+What is NOT verifiable by repository code. The protected originals (the host-runner run record with its argv, exit
+status and timestamps; the validation-manager store) cannot be read by repository code, and the unkeyed part seal
+and the copy's JSON can be recomputed by anyone. The loader therefore cannot show that the copy is a faithful copy of
+the protected record, nor that the run exited 0 on the slow host. That fidelity is attested by the reviewed commit
+that adds the copy and by the validation id (the orchestrator copied the record verbatim and a reviewer can compare it
+with ``inspect_local_validation``); the loader binds everything it CAN check (the copy's content, its digest, and its
+agreement with the sealed artifacts) to that attestation through the plan pin.
 
-    RATE-RECORD-OF-RECORD: sha256=<64 hex> git_sha=<40 hex> host_run_id=<id> validation_id=<VAL-...> host_node=<node>
+Plan pin (Codex REVIEW-323f4c12, REVIEW-61f4b0e3). The checks above are recomputable by anyone holding synthetic
+artifacts, so they do not by themselves establish the measurement. The controlled attestation is a PIN in the
+committed acceptance plan ``validation/plans/v3-005-acceptance.md`` (a member of the hashed-source set of the suite,
+changed only by reviewed commits). A measured rate record is CONFORMANT only if the plan carries a pin line (a whole
+line, fixed grammar)::
 
-written by the orchestrator AFTER verifying the protected host-runner and validation-manager records (exit 0, same
-SHA, same argv, same host). :func:`load_record` refuses the record unless the LAST pin line of the plan (a later pin
-supersedes every earlier one; a re-measurement appends a new pin) has ``sha256`` = :func:`record_digest` of the record
-(sha256 of its canonical JSON: sorted keys, compact separators) and ``git_sha``, ``host_run_id``, ``validation_id`` and
-``host_node`` (= ``host.node``) equal to the record's fields. The plan path is the repository plan, resolved from this
-module's location; another plan may be given ONLY as the ``plan_path`` function argument, never through the
-environment. The builder never writes the plan: ``--print-pin-line`` prints the line to copy once the records are
-verified. Without a pin the record is nonconformant. Consumers (``steps_v5d.declared_plans``, ``rep_plan_table``,
-``run_suite.rehearsal_preflight``) accept only the result of :func:`load_record`: :func:`require_validated` re-loads
-the named file and demands an identical result, so a hand-made dictionary is refused."""
+    RATE-RECORD-OF-RECORD: sha256=<64 hex> git_sha=<40 hex> host_run_id=<RUN-...> validation_id=<VAL-...>
+    host_run_token=<token> validation_record_sha256=<64 hex> host_node=<node>        (ONE line, single spaces)
+
+The pin names the record (``sha256`` = :func:`record_digest`, canonical JSON), the controlled runner id, the validation
+id, the in-run token and the sha256 of the validation-record copy, so a self-generated record with synthetic artifacts
+is conformant only if a reviewed commit pins it together with a validation-record copy that binds it. :func:`load_record`
+refuses the record unless the LAST pin line of the plan (a later pin supersedes every earlier one; a pin of an older
+grammar is no pin) equals the record on every field, and the copy hashes to ``validation_record_sha256``. The plan
+path is the repository plan, resolved from this module's location; another plan may be given ONLY as the ``plan_path``
+function argument, never through the environment. The builder never writes the plan: ``--print-pin-line`` prints the
+line to copy. Without a pin the record is nonconformant. Consumers (``steps_v5d.declared_plans``,
+``rep_plan_table``, ``run_suite.rehearsal_preflight``) accept only the result of :func:`load_record`:
+:func:`require_validated` re-loads the named file and demands an identical result, so a hand-made dictionary is
+refused."""
 
 from __future__ import annotations
 
@@ -85,6 +105,7 @@ import math
 import os
 import re
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -94,19 +115,25 @@ MIN_FIXED_S = 70.0  # v7r.R2_CAL_FIXED_S (the planning value; the record may onl
 NOT_MEASURED = "not ok: calibration rate not measured"
 _HEX40 = re.compile(r"[0-9a-f]{40}")
 _HEX64 = re.compile(r"[0-9a-f]{64}")
-_RUN_ID = re.compile(r"[A-Za-z0-9_.:-]{8,}")
+_RUN_ID = re.compile(r"RUN-\d{8}T\d{6}Z-[0-9a-f]{8}")
+_TOKEN = re.compile(r"[A-Za-z0-9_.:-]{8,}")
 _VALIDATION_ID = re.compile(r"VAL-\d{8}-\d{6}-[0-9A-F]{6}")
 HOST_FIELDS = ("node", "platform", "machine", "cpu_count", "python")
 RECORD_FIELDS = frozenset((
-    "schema", "s_per_rep", "fixed_s", "reps", "wall_mc_s", "wall_total_s", "host", "host_run_id", "validation_id",
-    "git_sha", "log_dir", "part_record", "part_record_sha256", "part_log", "part_log_sha256"))  # fmt: skip
+    "schema", "s_per_rep", "fixed_s", "reps", "wall_mc_s", "wall_total_s", "host", "host_run_id", "host_run_token",
+    "validation_id", "validation_record", "validation_record_sha256", "git_sha", "log_dir", "part_record",
+    "part_record_sha256", "part_log", "part_log_sha256"))  # fmt: skip
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
 ACCEPTANCE_PLAN = REPO / "validation" / "plans" / "v3-005-acceptance.md"
 PIN_PREFIX = "RATE-RECORD-OF-RECORD:"
 _PIN = re.compile(
-    r"^RATE-RECORD-OF-RECORD: sha256=([0-9a-f]{64}) git_sha=([0-9a-f]{40}) host_run_id=(\S+) "
-    r"validation_id=(VAL-\d{8}-\d{6}-[0-9A-F]{6}) host_node=(\S+)[ \t]*$", re.MULTILINE)
+    r"^RATE-RECORD-OF-RECORD: sha256=([0-9a-f]{64}) git_sha=([0-9a-f]{40}) "
+    r"host_run_id=(RUN-\d{8}T\d{6}Z-[0-9a-f]{8}) validation_id=(VAL-\d{8}-\d{6}-[0-9A-F]{6}) "
+    r"host_run_token=([A-Za-z0-9_.:-]{8,}) validation_record_sha256=([0-9a-f]{64}) host_node=(\S+)[ \t]*$",
+    re.MULTILINE)
+PIN_KEYS = ("sha256", "git_sha", "host_run_id", "validation_id", "host_run_token", "validation_record_sha256",
+            "host_node")  # the order of the pin line
 NOT_PINNED = "not pinned in the acceptance plan (nonconformant until the orchestrator pins it)"
 PART_SCHEMA = "ionmc-v7r2-calibration-record-1"  # v7r.CAL2_SCHEMA
 PART_SUITE = "lv5d"
@@ -141,11 +168,17 @@ def validate_host(host: Any) -> dict[str, Any]:
     return host
 
 
+def validate_token(token: Any) -> None:
+    """Format of the in-run token (``IONMC_HOST_RUN_ID`` of the wrapper; "unknown" = unset is refused)."""
+    if not (isinstance(token, str) and token != "unknown" and _TOKEN.fullmatch(token)):
+        raise ValueError("host_run_token must be the in-run host run token (>= 8 chars of [A-Za-z0-9_.:-], "
+                         "not 'unknown')")  # fmt: skip
+
+
 def validate_ids(host_run_id: Any, validation_id: Any) -> None:
     """Format of the two protected-store ids (presence and format only: the stores are not readable here)."""
-    if not (isinstance(host_run_id, str) and host_run_id != "unknown" and _RUN_ID.fullmatch(host_run_id)):
-        raise ValueError("host_run_id must be a controlled host-runner run id (>= 8 chars of [A-Za-z0-9_.:-], "
-                         "not 'unknown')")  # fmt: skip
+    if not (isinstance(host_run_id, str) and _RUN_ID.fullmatch(host_run_id)):
+        raise ValueError("host_run_id must be a controlled host-runner run id RUN-YYYYMMDDTHHMMSSZ-xxxxxxxx")
     if not (isinstance(validation_id, str) and _VALIDATION_ID.fullmatch(validation_id)):
         raise ValueError("validation_id must be a validation record id VAL-YYYYMMDD-HHMMSS-XXXXXX")
 
@@ -171,11 +204,12 @@ def validate_record(rec: Any) -> dict[str, Any]:
         raise ValueError(f"fixed_s {fixed} is below the planning value {MIN_FIXED_S}")
     validate_host(rec.get("host"))
     validate_ids(rec.get("host_run_id"), rec.get("validation_id"))
+    validate_token(rec.get("host_run_token"))
     if not (isinstance(rec.get("git_sha"), str) and _HEX40.fullmatch(rec["git_sha"])):
         raise ValueError("git_sha must be 40 lowercase hex digits")
     if not (isinstance(rec.get("log_dir"), str) and rec["log_dir"]):
         raise ValueError("log_dir must be a non-empty string")
-    for key in ("part_record", "part_log"):
+    for key in ("part_record", "part_log", "validation_record"):
         if not (isinstance(rec.get(key), str) and rec[key]):
             raise ValueError(f"{key} must be a non-empty file name")
         if not (isinstance(rec.get(f"{key}_sha256"), str) and _HEX64.fullmatch(rec[f"{key}_sha256"])):
@@ -237,7 +271,7 @@ def verify_part_record(path: Path, git_sha: str) -> dict[str, Any]:
         raise ValueError(f"part record {path.name}: wall_mc_s is not a positive finite number")
     try:
         validate_host(doc.get("host"))
-        validate_ids(doc.get("host_run_id"), "VAL-00000000-000000-000000")  # the validation id is not in the part
+        validate_token(doc.get("host_run_id"))  # the sealed field of the part record holds the in-run token
     except ValueError as exc:
         raise ValueError(f"part record {path.name}: sealed host identity unusable: {exc}") from exc
     return doc
@@ -263,12 +297,57 @@ def verify_log(text: str, part_name: str, part_digest: str) -> float:
     return float(summaries[0].group(2))
 
 
+def _close(a: Any, b: Any, rel: float) -> bool:
+    return (isinstance(a, (int, float)) and not isinstance(a, bool) and isinstance(b, (int, float))
+            and math.isfinite(a) and math.isfinite(b) and math.isclose(a, b, rel_tol=rel))  # fmt: skip
+
+
+def verify_validation_record(path: Path, rec: dict[str, Any], part_seal: str) -> None:
+    """The verbatim validation-manager record copy at ``path`` against the (shape-validated) rate record ``rec`` and
+    the seal ``part_seal`` (``content_sha256``) of the part record (module docstring); ``ValueError`` naming the first field that disagrees."""
+    try:
+        doc = json.loads(path.read_text())
+    except (OSError, ValueError) as exc:
+        raise ValueError(f"validation record {path.name} unreadable: {exc}") from exc
+    if not isinstance(doc, dict):
+        raise ValueError(f"validation record {path.name} is not a JSON object")
+    if "schema_version" not in doc:
+        raise ValueError(f"validation record {path.name}: schema_version missing")
+    for key, want in (("validation_id", rec["validation_id"]), ("task_id", "V3-005B"), ("status", "passed"),
+                      ("git_sha", rec["git_sha"])):  # fmt: skip
+        if doc.get(key) != want:
+            raise ValueError(f"validation record {path.name}: {key} {doc.get(key)!r} differs from the expected "
+                             f"{want!r}")  # fmt: skip
+    at = doc.get("recorded_at_utc")
+    try:
+        if not isinstance(at, str):
+            raise ValueError("not a string")
+        datetime.fromisoformat(at)
+    except ValueError as exc:
+        raise ValueError(f"validation record {path.name}: recorded_at_utc {at!r} is not ISO-8601") from exc
+    det = doc.get("details")
+    if not isinstance(det, dict):
+        raise ValueError(f"validation record {path.name}: details is not an object")
+    for key, want in (("host_run_id", rec["host_run_id"]), ("host_run_token", rec["host_run_token"]),
+                      ("part_record", rec["part_record"]), ("part_record_sha256", part_seal),
+                      ("n", rec["reps"]), ("fixed_s", rec["fixed_s"])):  # fmt: skip
+        if det.get(key) != want or isinstance(det.get(key), bool):
+            raise ValueError(f"validation record {path.name}: details.{key} {det.get(key)!r} differs from {want!r}")
+    if "head_sha" in det and det["head_sha"] != rec["git_sha"]:
+        raise ValueError(f"validation record {path.name}: details.head_sha {det['head_sha']!r} differs from the "
+                         f"record's git_sha")  # fmt: skip
+    for key, rel in (("wall_mc_s", 1e-9), ("wall_total_s", 1e-9), ("s_per_rep", 1e-4)):
+        if not _close(det.get(key), rec[key], rel):
+            raise ValueError(f"validation record {path.name}: details.{key} {det.get(key)!r} differs from "
+                             f"{rec[key]!r}")  # fmt: skip
+
+
 def verify_artifacts(rec: dict[str, Any]) -> None:
-    """Re-open the part record and the pytest log named by the (shape-validated) ``rec`` and check them against it
-    (module docstring); ``ValueError`` on the first mismatch."""
+    """Re-open the part record, the pytest log and the validation-record copy named by the (shape-validated) ``rec``
+    and check them against it (module docstring); ``ValueError`` on the first mismatch."""
     d = _resolve_dir(rec["log_dir"])
     files = {}
-    for key in ("part_record", "part_log"):
+    for key in ("part_record", "part_log", "validation_record"):
         name = rec[key]
         if Path(name).name != name:
             raise ValueError(f"{key} {name!r} is not a plain file name")
@@ -285,8 +364,8 @@ def verify_artifacts(rec: dict[str, Any]) -> None:
         raise ValueError(f"wall_mc_s {rec['wall_mc_s']} differs from the part record's {doc['wall_mc_s']}")
     if rec["host"] != doc["host"]:
         raise ValueError(f"host {rec['host']} differs from the sealed part record's {doc['host']}")
-    if rec["host_run_id"] != doc["host_run_id"]:
-        raise ValueError(f"host_run_id {rec['host_run_id']!r} differs from the sealed part record's "
+    if rec["host_run_token"] != doc["host_run_id"]:
+        raise ValueError(f"host_run_token {rec['host_run_token']!r} differs from the sealed part record's "
                          f"{doc['host_run_id']!r}")  # fmt: skip
     total = verify_log(files["part_log"].read_text(errors="replace"), files["part_record"].name,
                        doc["content_sha256"])  # fmt: skip
@@ -300,6 +379,7 @@ def verify_artifacts(rec: dict[str, Any]) -> None:
     if not math.isclose(rec["fixed_s"], want_fixed, rel_tol=1e-12):
         raise ValueError(f"fixed_s {rec['fixed_s']} differs from max({MIN_FIXED_S}, wall_total_s - wall_mc_s) = "
                          f"{want_fixed}")  # fmt: skip
+    verify_validation_record(files["validation_record"], rec, doc["content_sha256"])  # Codex REVIEW-61f4b0e3
 
 
 def record_digest(rec: dict[str, Any]) -> str:
@@ -307,15 +387,22 @@ def record_digest(rec: dict[str, Any]) -> str:
     return hashlib.sha256(json.dumps(rec, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
+def _pin_fields(rec: dict[str, Any]) -> dict[str, str]:
+    """The pin fields of the (validated) record, in the order of the pin line."""
+    return {"sha256": record_digest(rec), "git_sha": rec["git_sha"], "host_run_id": rec["host_run_id"],
+            "validation_id": rec["validation_id"], "host_run_token": rec["host_run_token"],
+            "validation_record_sha256": rec["validation_record_sha256"], "host_node": rec["host"]["node"]}  # fmt: skip
+
+
 def pin_line(rec: dict[str, Any]) -> str:
     """The exact pin line of the (validated) record, as the orchestrator writes it into the acceptance plan."""
-    return (f"{PIN_PREFIX} sha256={record_digest(rec)} git_sha={rec['git_sha']} host_run_id={rec['host_run_id']} "
-            f"validation_id={rec['validation_id']} host_node={rec['host']['node']}")  # fmt: skip
+    return PIN_PREFIX + "".join(f" {k}={v}" for k, v in _pin_fields(rec).items())
 
 
 def plan_pin(plan_path: str | os.PathLike[str] | None = None) -> dict[str, str] | None:
     """The LAST pin line of the plan (default: the repository acceptance plan) as a dict, or ``None`` if there is none.
-    A pin is a whole line of the exact grammar of the module docstring; a placeholder with angle brackets is no pin."""
+    A pin is a whole line of the exact grammar of the module docstring; a placeholder with angle brackets, and a pin of
+    the older grammar (without the runner id / token / validation-record digest), is no pin."""
     p = Path(plan_path) if plan_path is not None else ACCEPTANCE_PLAN
     try:
         text = p.read_text(encoding="utf-8")
@@ -324,19 +411,16 @@ def plan_pin(plan_path: str | os.PathLike[str] | None = None) -> dict[str, str] 
     pins = _PIN.findall(text)
     if not pins:
         return None
-    sha, git, run, val, node = pins[-1]
-    return {"sha256": sha, "git_sha": git, "host_run_id": run, "validation_id": val, "host_node": node}
+    return dict(zip(PIN_KEYS, pins[-1], strict=True))
 
 
 def verify_pin(rec: dict[str, Any], plan_path: str | os.PathLike[str] | None = None) -> None:
-    """``ValueError`` unless the last pin of the plan names exactly this record (digest and the four identity
-    fields)."""
+    """``ValueError`` unless the last pin of the plan names exactly this record (digest, runner id, validation id,
+    token, validation-record digest, git sha and host node)."""
     pin = plan_pin(plan_path)
     if pin is None:
         raise ValueError(f"the record is {NOT_PINNED}")
-    want = {"sha256": record_digest(rec), "git_sha": rec["git_sha"], "host_run_id": rec["host_run_id"],
-            "validation_id": rec["validation_id"], "host_node": rec["host"]["node"]}  # fmt: skip
-    bad = [k for k, v in want.items() if pin[k] != v]
+    bad = [k for k, v in _pin_fields(rec).items() if pin[k] != v]
     if bad:
         raise ValueError(f"the last pin of the acceptance plan does not match the record ({', '.join(bad)} differ); "
                          f"the record is {NOT_PINNED}")  # fmt: skip
@@ -376,20 +460,25 @@ def record_from_env() -> dict[str, Any] | None:
 
 
 def build_record(part_record: Path, part_log: Path, log_dir: Path, git_sha: str, host_run_id: str,
-                 validation_id: str) -> dict[str, Any]:  # fmt: skip
+                 host_run_token: str, validation_id: str, validation_record: Path) -> dict[str, Any]:  # fmt: skip
     """The record of one measured calibration part (see the module docstring). Every value comes from the verified
-    sealed part record and pytest log (which must lie in ``log_dir``); ``host`` is copied from the sealed record; the
-    two ids are required (``"unknown"`` refused); the result passes :func:`verify_artifacts` or ``ValueError`` is
+    sealed part record, pytest log and validation-record copy (all in ``log_dir``); ``host`` and the token are copied
+    from the sealed record (a differing ``host_run_token`` argument is refused); the ids are required; the result
+    passes :func:`verify_artifacts` (so the copy's bindings must agree with the artifacts) or ``ValueError`` is
     raised."""
     validate_ids(host_run_id, validation_id)
+    validate_token(host_run_token)
     if not (isinstance(git_sha, str) and _HEX40.fullmatch(git_sha)):
         raise ValueError("git_sha must be 40 lowercase hex digits")
-    if not (part_record.is_file() and part_log.is_file()):
-        raise ValueError("the part record and the pytest log must be files")
+    if not (part_record.is_file() and part_log.is_file() and validation_record.is_file()):
+        raise ValueError("the part record, the pytest log and the validation record must be files")
     ld = log_dir if log_dir.is_absolute() else Path.cwd() / log_dir
-    if part_record.resolve().parent != ld.resolve() or part_log.resolve().parent != ld.resolve():
-        raise ValueError("the part record and the pytest log must lie in log_dir")
+    if any(f.resolve().parent != ld.resolve() for f in (part_record, part_log, validation_record)):
+        raise ValueError("the part record, the pytest log and the validation record must lie in log_dir")
     doc = verify_part_record(part_record, git_sha)
+    if doc["host_run_id"] != host_run_token:
+        raise ValueError(f"host_run_token {host_run_token!r} differs from the sealed part record's "
+                         f"{doc['host_run_id']!r}")  # fmt: skip
     total = verify_log(part_log.read_text(errors="replace"), part_record.name, doc["content_sha256"])
     n, wall = doc["n"], float(doc["wall_mc_s"])
     try:
@@ -399,7 +488,9 @@ def build_record(part_record: Path, part_log: Path, log_dir: Path, git_sha: str,
     rec = {
         "schema": CAL_RATE_SCHEMA, "s_per_rep": wall / n, "fixed_s": max(MIN_FIXED_S, total - wall),
         "reps": n, "wall_mc_s": wall, "wall_total_s": total,
-        "host": {k: doc["host"][k] for k in HOST_FIELDS}, "host_run_id": host_run_id, "validation_id": validation_id,
+        "host": {k: doc["host"][k] for k in HOST_FIELDS}, "host_run_id": host_run_id,
+        "host_run_token": doc["host_run_id"], "validation_id": validation_id,
+        "validation_record": validation_record.name, "validation_record_sha256": _sha256(validation_record),
         "git_sha": git_sha, "log_dir": stored,
         "part_record": part_record.name, "part_record_sha256": _sha256(part_record),
         "part_log": part_log.name, "part_log_sha256": _sha256(part_log),
@@ -432,12 +523,16 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--part-log", required=True, help="the logged pytest output of that single part")
     ap.add_argument("--log-dir", required=True, help="directory holding both files (recorded)")
     ap.add_argument("--git-sha", required=True, help="full SHA of the tree the part was measured at")
-    ap.add_argument("--host-run-id", required=True, help="controlled host-runner run id of the measurement")
+    ap.add_argument("--host-run-id", required=True, help="controlled host-runner run id RUN-... of the measurement")
+    ap.add_argument("--host-run-token", required=True,
+                    help="the in-run token (IONMC_HOST_RUN_ID of the wrapper); must equal the sealed part record's")  # fmt: skip
     ap.add_argument(
         "--validation-id",
         required=True,
         help="exact-SHA validation record id (VAL-YYYYMMDD-HHMMSS-XXXXXX)",
     )
+    ap.add_argument("--validation-record", required=True,
+                    help="verbatim copy of the validation-manager record (inside --log-dir)")  # fmt: skip
     ap.add_argument("--out", required=True, help="rate record to write (refuses to overwrite)")
     ap.add_argument("--print-pin-line", action="store_true",
                     help="also print the pin line of the record for the acceptance plan (the orchestrator writes it "
@@ -453,7 +548,9 @@ def main(argv: list[str] | None = None) -> int:
             Path(a.log_dir),
             a.git_sha,
             a.host_run_id,
+            a.host_run_token,
             a.validation_id,
+            Path(a.validation_record),
         )
     except ValueError as exc:
         raise SystemExit(f"not ok: {exc}") from exc
