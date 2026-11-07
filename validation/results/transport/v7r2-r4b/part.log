@@ -1,0 +1,11 @@
+Warp 1.17.0 initialized:
+   CUDA Toolkit 12.9, Driver 13.4
+   Devices:
+     "cpu"      : "x86_64"
+     "cuda:0"   : "NVIDIA RTX A6000" (48 GiB, sm_86, mempool enabled)
+   Kernel cache:
+     /cache/warp/1.17.0
+V7R-FIT {"achieved": [-2.2092233190535384, -1.0676983609216497, 0.9983432225617608, 2.0113404158193013], "family": "zero-inflated-gamma", "k": 5.070278501518333, "max_abs_error": 0.0376882652585766, "n": 40000, "pi": 0.21666666666666667, "seed": 20505000, "targets": [-2.228164407604028, -1.1016407422495875, 1.0360314878203374, 2.004652488973096]}
+PARTIAL v7r2-calibration-archive_fitted-p00.json f54ce7dc0512b80f7dc68f8789cb700c95a3191191bb6bfafe14268ac0f20539
+.
+1 passed, 90 deselected in 814.32s (0:13:34)

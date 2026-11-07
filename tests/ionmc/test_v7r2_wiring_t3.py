@@ -15,6 +15,7 @@ import platform
 import shutil
 import subprocess
 import sys
+import types
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -26,6 +27,13 @@ REPO = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO / "validation" / "scripts" / "transport"
 DIGEST = "d" * 64
 RATE_ENV = "IONMC_V7R2_CAL_RATE_RECORD"
+REPO_PIN = {  # the pin of record of the repository acceptance plan (R-4b measurement, 2026-11-07)
+    "sha256": "87ed4dbfe3e87e01d7791d2225036450e759393df290bdf8be6c17c89295b6e6",
+    "git_sha": "b7c44f5157519c7b4a39c9fd44fe4b687304ae32",
+    "host_run_id": "R4B-20261102T010633Z-b7c44f51",
+    "validation_id": "VAL-20261107-203551-E8A93E",
+    "host_node": "E040-PC011",
+}
 
 
 def _load(name: str) -> ModuleType:
@@ -225,9 +233,9 @@ def test_lv5d_preflight_valid_fixture_needs_the_rate_record(
     assert "not ok" in (rs.rehearsal_preflight("lv5d") or "")  # a path that is no file
     rate = write_rate(tmp_path / "rate.json", cal, cov)
     monkeypatch.setenv(RATE_ENV, str(rate))
-    assert "not pinned" in (
+    assert "does not match the record" in (
         rs.rehearsal_preflight("lv5d") or ""
-    )  # genuine record, repository plan has no pin
+    )  # genuine synthetic record, not the pin of record of the repository plan
     pin_default(rate)
     assert (
         rs.rehearsal_preflight("lv5d") is None
@@ -374,8 +382,8 @@ def test_rep_plan_table_is_recomputed_from_the_measured_rate(
     rec = write_rate(tmp_path / "rate.json", cal, cov, s_per_rep=12.0)
     monkeypatch.setenv(RATE_ENV, str(rec))
     assert (
-        "not pinned" in s5d.rep_plan_table("lv5d")["reason"]
-    )  # the repository plan carries no pin
+        "does not match the record" in s5d.rep_plan_table("lv5d")["reason"]
+    )  # the repository plan pins another (the committed R-4b) record
     pin_default(rec)
     rep = s5d.rep_plan_table("lv5d")
     assert rep["ok"] and rep["rate_source"] == "measured" and rep["reason"] is None
@@ -758,21 +766,26 @@ def test_the_repository_plan_is_the_default_and_refuses_a_synthetic_record(
 ) -> None:
     assert cal.ACCEPTANCE_PLAN == REPO / "validation" / "plans" / "v3-005-acceptance.md"
     assert cal.ACCEPTANCE_PLAN.is_file()
-    assert (
-        cal.plan_pin() is None
-    )  # no measurement exists: the committed plan must carry no pin (yet)
+    assert cal.plan_pin() == REPO_PIN  # the R-4b measurement is pinned in the committed plan
+    committed = REPO / "validation" / "results" / "transport" / "v7r2-r4b" / "cal-rate.json"
+    got = cal.load_record(committed)  # conformant through the repository plan
+    assert got["sha256"] == hashlib.sha256(committed.read_bytes()).hexdigest()
+    assert cal.require_validated(got)["record"] == got["record"]
+    assert cal.pin_line(got["record"]) == "RATE-RECORD-OF-RECORD: " + " ".join(
+        f"{k}={v}" for k, v in REPO_PIN.items()
+    )
     rate = _rate_from(
         tmp_path, cal, cov
     )  # fully self-consistent synthetic artifacts, well-formed ids
-    with pytest.raises(ValueError, match="not pinned"):
-        cal.load_record(rate)
+    with pytest.raises(ValueError, match="does not match the record"):
+        cal.load_record(rate)  # its digest differs from the pin
     monkeypatch.setenv(RATE_ENV, str(rate))
-    with pytest.raises(ValueError, match="not pinned"):
+    with pytest.raises(ValueError, match="does not match the record"):
         cal.record_from_env()
-    assert "not pinned" in s5d.rep_plan_table("lv5d")["reason"]
+    assert "does not match the record" in s5d.rep_plan_table("lv5d")["reason"]
     # a plan is never taken from the environment
     monkeypatch.setenv("IONMC_V7R2_ACCEPTANCE_PLAN", str(_plan_for(cal, rate)))
-    with pytest.raises(ValueError, match="not pinned"):
+    with pytest.raises(ValueError, match="does not match the record"):
         cal.load_record(rate)
 
 
@@ -780,7 +793,8 @@ def test_the_committed_plan_note_shows_the_grammar_without_being_a_pin(cal: Modu
     text = cal.ACCEPTANCE_PLAN.read_text()
     assert "REVIEW-323f4c12" in text and "rate-record pin" in text
     assert "RATE-RECORD-OF-RECORD: sha256=<64 hex>" in text  # the grammar is shown ...
-    assert cal.plan_pin() is None  # ... and is no pin
+    # ... and is no pin: the last pin is the R-4b pin of record, not the placeholder line
+    assert cal.plan_pin() == REPO_PIN
 
 
 def test_cli_print_pin_line_prints_the_exact_line_and_never_writes_the_plan(
@@ -1086,3 +1100,92 @@ def test_calibration_part_writer_seals_the_host_identity() -> None:
     assert set(got["host"]) == set(cal.HOST_FIELDS) and got["host"]["node"] == platform.node()
     cal.validate_host(got["host"])
     assert got["host_run_id"] == os.environ.get("IONMC_HOST_RUN_ID", "unknown")
+
+
+# -- --cal-rate-record: the host runner passes argv only, so the option carries the rate record -----------------
+def _main_harness(
+    rs: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> dict[str, Any]:
+    """Run ``rs.main`` with one fake step; returns what the preflight and the step subprocess saw."""
+    seen: dict[str, Any] = {"preflight_env": [], "step_envs": []}
+    monkeypatch.setenv(
+        RATE_ENV, ""
+    )  # registers the restore of the in-process variable the option sets
+    monkeypatch.delenv(RATE_ENV)
+    monkeypatch.setattr(rs, "ALLOWED_PARENTS", (tmp_path,))
+    monkeypatch.setattr(rs, "suite_steps", lambda *a, **k: [("10-fake", ["true"], {})])
+    monkeypatch.setattr(rs, "rehearsal_preflight",
+                        lambda *a, **k: seen["preflight_env"].append(os.environ.get(RATE_ENV)))  # fmt: skip
+    monkeypatch.setattr(rs, "resolve_sha", lambda e: ("a" * 40, "test"))
+    monkeypatch.setattr(rs, "git", lambda *a: "")
+    monkeypatch.setattr(rs, "source_files", lambda suite: [])
+    monkeypatch.setattr(rs, "echo_partial_lines", lambda p: None)
+
+    def fake_run_step(cmd: Any, **kw: Any) -> int:
+        seen["step_envs"].append(kw["env"])
+        return 0
+
+    monkeypatch.setattr(rs, "run_step", fake_run_step)
+    # the archive of the fake step is no archive: only the environment is under test
+    monkeypatch.setitem(sys.modules, "summarize", types.SimpleNamespace(main=lambda argv: 0))
+    return seen
+
+
+def _suite_argv(out: Path, *extra: str) -> list[str]:
+    return ["--suite", "lv5d", "--out", str(out), "--expected-sha", "a" * 40, "--single-process", "--workers", "1",
+            *extra]  # fmt: skip
+
+
+def test_cal_rate_record_option_sets_the_environment_of_preflight_and_steps(
+    rs: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen = _main_harness(rs, tmp_path, monkeypatch)
+    rec = tmp_path / "rate.json"
+    rec.write_text('{"x": 1}')
+    out = tmp_path / "run"
+    assert rs.main(_suite_argv(out, "--cal-rate-record", str(rec))) == 0
+    assert seen["preflight_env"] == [str(rec)]  # the in-process preflight sees it
+    assert [e[RATE_ENV] for e in seen["step_envs"]] == [str(rec)]  # and every step subprocess
+    env_txt = (out / "environment.txt").read_text()
+    assert f"cal_rate_record={rec}\n" in env_txt
+    assert f"cal_rate_record_sha256={hashlib.sha256(rec.read_bytes()).hexdigest()}\n" in env_txt
+    # a repo-relative path is resolved against the repository
+    seen2 = _main_harness(rs, tmp_path, monkeypatch)
+    rel = "validation/results/transport/v7r2-r4b/cal-rate.json"
+    assert rs.main(_suite_argv(tmp_path / "run2", "--cal-rate-record", rel)) == 0
+    assert seen2["preflight_env"] == [str(REPO / rel)] and seen2["step_envs"][0][RATE_ENV] == str(
+        REPO / rel
+    )
+
+
+def test_cal_rate_record_option_missing_file_fails_closed(
+    rs: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen = _main_harness(rs, tmp_path, monkeypatch)
+    out = tmp_path / "run"
+    with pytest.raises(SystemExit, match="not ok: no such file"):
+        rs.main(_suite_argv(out, "--cal-rate-record", str(tmp_path / "missing.json")))
+    assert not out.exists() and seen["step_envs"] == []
+    with pytest.raises(SystemExit, match="lv5d suite only"):
+        rs.main(
+            [
+                "--suite",
+                "lv5c",
+                "--out",
+                str(out),
+                "--expected-sha",
+                "a" * 40,
+                "--cal-rate-record",
+                "x",
+            ]
+        )
+
+
+def test_without_the_option_the_environment_and_environment_txt_are_unchanged(
+    rs: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen = _main_harness(rs, tmp_path, monkeypatch)
+    out = tmp_path / "run"
+    assert rs.main(_suite_argv(out)) == 0
+    assert seen["preflight_env"] == [None] and RATE_ENV not in seen["step_envs"][0]
+    assert "cal_rate_record" not in (out / "environment.txt").read_text()

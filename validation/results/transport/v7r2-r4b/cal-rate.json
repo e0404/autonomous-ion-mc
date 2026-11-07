@@ -1,0 +1,23 @@
+{
+ "fixed_s": 70.0,
+ "git_sha": "b7c44f5157519c7b4a39c9fd44fe4b687304ae32",
+ "host": {
+  "cpu_count": 32,
+  "machine": "x86_64",
+  "node": "E040-PC011",
+  "platform": "Linux-6.18.40.1-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+  "python": "3.12.0"
+ },
+ "host_run_id": "R4B-20261102T010633Z-b7c44f51",
+ "log_dir": "validation/results/transport/v7r2-r4b",
+ "part_log": "part.log",
+ "part_log_sha256": "f6646d2a0df3545e481328025b0d565f06a438cc5c3858a1dcfffb728c34d182",
+ "part_record": "v7r2-calibration-archive_fitted-p00.json",
+ "part_record_sha256": "eec286eac3432f119ca23df213608e4838cb176441ff8f706b4c845a30713ac1",
+ "reps": 83,
+ "s_per_rep": 9.718907778807747,
+ "schema": "ionmc-v7r2-cal-rate-1",
+ "validation_id": "VAL-20261107-203551-E8A93E",
+ "wall_mc_s": 806.669345641043,
+ "wall_total_s": 814.32
+}

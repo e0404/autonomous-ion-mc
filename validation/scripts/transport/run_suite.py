@@ -1498,6 +1498,9 @@ def environment_text(
         f"partials_manifest_sha256={manifest_sha}",
         "source_hashes:",
     ]
+    cal_rate = getattr(args, "cal_rate_record", None)
+    if cal_rate:  # only when the option is given: the other environment texts stay byte-identical
+        lines[-1:-1] = [f"cal_rate_record={cal_rate}", f"cal_rate_record_sha256={sha256(Path(cal_rate))}"]
     lines += [f"  {sha256(f)}  {f.relative_to(REPO)}" for f in source_files(args.suite)]
     return "\n".join(lines) + "\n"
 
@@ -1581,9 +1584,26 @@ def main(argv: list[str] | None = None) -> int:
         default=1.0,
         help="factor on all history counts (< 1 gives a non-conformant, labelled run)",
     )
+    ap.add_argument(
+        "--cal-rate-record",
+        default=None,
+        metavar="PATH",
+        help="lv5d only: the measured calibration-rate record (repo-relative or absolute); sets "
+        "IONMC_V7R2_CAL_RATE_RECORD for the preflight and for every step (the host runner passes argv only), "
+        "recorded with its sha256 in environment.txt; a missing file refuses the run",
+    )
     args = ap.parse_args(argv)
     if args.seed_base is None:
         args.seed_base = DEFAULT_SEED_BASES[args.suite]
+    if args.cal_rate_record is not None:
+        if args.suite != "lv5d":
+            raise SystemExit("--cal-rate-record applies to the lv5d suite only")
+        rec_path = Path(args.cal_rate_record)
+        rec_path = (rec_path if rec_path.is_absolute() else REPO / rec_path).resolve()
+        if not rec_path.is_file():
+            raise SystemExit(f"--cal-rate-record: not ok: no such file {rec_path} (calibration rate not measured)")
+        args.cal_rate_record = str(rec_path)
+        os.environ["IONMC_V7R2_CAL_RATE_RECORD"] = args.cal_rate_record  # the in-process preflight reads it
     if args.suite == "lv5b" and args.seed_base in V5B_CONSUMED_SEED_BASES:
         raise SystemExit(
             f"seed base {args.seed_base} is consumed for lv5b (amendment 11 of the V3-005 plan); "
@@ -1666,6 +1686,8 @@ def main(argv: list[str] | None = None) -> int:
     env_base["PYTHONPATH"] = str(REPO / "src") + os.pathsep + env_base.get("PYTHONPATH", "")
     env_base["IONMC_RUN_SHA"] = sha
     env_base["IONMC_RUN_SUITE"] = args.suite
+    if args.cal_rate_record is not None:
+        env_base["IONMC_V7R2_CAL_RATE_RECORD"] = args.cal_rate_record
     if single:
         env_base.update(SINGLE_PROCESS_ENV)
     else:
