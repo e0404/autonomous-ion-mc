@@ -96,6 +96,84 @@ def enforcing(trusted: dict) -> bool:
     return bool(trusted.get(SIGNER))
 
 
+# Key-publication mode (resolves the trust bootstrap after the migration merges).
+# The gate runs from the integration checkout, whose trust file is empty until
+# a key-publication commit merges; that commit could never pass an empty-trust
+# gate. Therefore, while the integration trust map has no validation-manager
+# key, a task branch whose ONLY change against the integration base is the
+# trust file itself, and whose trust file lists at least one well-formed key
+# for every signer, is evaluated against ITS OWN trust file, with no bootstrap
+# tolerance (every record must verify). Any other change on the branch, or a
+# malformed trust file, disables the mode and the task stays blocked.
+KEY_FILE_REL = "infrastructure/keys/trusted_attestation_keys.json"
+CONDITION_PATH = Path(__file__).resolve().parents[2] / ".ionmc-condition.json"
+
+
+def base_ref() -> str:
+    """Remote-tracking ref of the integration branch (monkeypatched in tests)."""
+    branch = "develop"
+    if CONDITION_PATH.exists():
+        branch = json.loads(CONDITION_PATH.read_text(encoding="utf-8")).get(
+            "integration_branch", branch
+        )
+    return f"origin/{branch}"
+
+
+def parse_trust_map(data) -> dict:
+    """Strict parse of a trust file: {signer: {key_id: public_key_hex}}.
+
+    Every signer in SIGNERS must be present with at least one entry; each entry
+    must carry a key_id equal to the public key's derived id. Raises ValueError.
+    """
+    attest = _attest()
+    if not isinstance(data, dict):
+        raise ValueError("trust file is not an object")
+    out: dict = {}
+    for signer in attest.SIGNERS:
+        entries = data.get(signer)
+        if not isinstance(entries, list) or not entries:
+            raise ValueError(f"trust file has no {signer} key")
+        out[signer] = {}
+        for e in entries:
+            if not isinstance(e, dict) or not isinstance(e.get("public_key"), str):
+                raise ValueError(f"malformed {signer} entry")
+            try:
+                pub = bytes.fromhex(e["public_key"])
+            except ValueError as exc:
+                raise ValueError(f"malformed {signer} public key") from exc
+            if len(pub) != 32 or e.get("key_id") != attest.key_id_of(pub):
+                raise ValueError(f"{signer} entry key_id does not match public key")
+            out[signer][e["key_id"]] = e["public_key"]
+    return out
+
+
+def key_publication_trust(state: dict) -> tuple[dict | None, str]:
+    """Trust map of a pure key-publication branch, else (None, reason)."""
+    path, sha = state["path"], state["sha"]
+    try:
+        base = git_text("merge-base", base_ref(), sha, cwd=path)
+        changed = git_text("diff", "--name-only", base, sha, cwd=path).splitlines()
+        changed = sorted(c for c in changed if c)
+        if changed != [KEY_FILE_REL]:
+            return None, f"branch changes {changed!r}, not exactly [{KEY_FILE_REL!r}]"
+        text = git_text("show", f"{sha}:{KEY_FILE_REL}", cwd=path)
+        trusted = parse_trust_map(json.loads(text))
+    except (subprocess.CalledProcessError, ValueError, OSError) as exc:
+        return None, f"key-publication check failed: {exc}"
+    return trusted, "key-publication branch: trust map taken from the task SHA"
+
+
+def effective_trust(state: dict) -> tuple[dict, str]:
+    """(trust map, trust_source): integration file, or the branch's in key-publication mode."""
+    trusted = load_trust()
+    if enforcing(trusted):
+        return trusted, "integration"
+    branch_trust, _reason = key_publication_trust(state)
+    if branch_trust is not None:
+        return branch_trust, "key-publication"
+    return trusted, "integration"
+
+
 def classify(rec: dict, task_id: str, sha: str, trusted: dict) -> tuple[str, str]:
     """Return (attestation_status, reason): verified | unverified | invalid.
 
@@ -114,19 +192,20 @@ def classify(rec: dict, task_id: str, sha: str, trusted: dict) -> tuple[str, str
     return status, reason
 
 
-def records_for(task_id: str, sha: str) -> list[dict]:
+def records_for(task_id: str, sha: str, trusted: dict | None = None) -> list[dict]:
     """Load records, each annotated with derived attestation_status/_reason.
 
     The derived fields are added after verification and are not part of the
     signed payload; they are never read from disk (any such field in a file is
-    overwritten).
+    overwritten). ``trusted`` defaults to the integration trust file.
     """
     directory = VALIDATION_ROOT / normalize_task_id(task_id) / sha
 
     if not directory.exists():
         return []
 
-    trusted = load_trust()
+    if trusted is None:
+        trusted = load_trust()
     records = []
 
     for path in sorted(directory.glob("*.json")):
@@ -334,7 +413,13 @@ def check_host_runs(rec: dict, task_id: str, sha: str, trusted: dict) -> list[di
     return out
 
 
-def evaluate(records: list[dict], dirty: bool, task_id: str) -> dict:
+def evaluate(
+    records: list[dict],
+    dirty: bool,
+    task_id: str,
+    trusted: dict | None = None,
+    trust_source: str = "integration",
+) -> dict:
     """Gate decision over annotated records for ``task_id``.
 
     Enforcement rule (fail closed):
@@ -358,8 +443,12 @@ def evaluate(records: list[dict], dirty: bool, task_id: str) -> dict:
       manifest binding and are rejected outside bootstrap.
     - Every record with status "failed" counts as failing regardless of its
       attestation (a forged failure can only block, never release, the gate).
+    - Key-publication mode (trust_source "key-publication", see
+      key_publication_trust): the trust map is the task branch's own file;
+      enforcement is then "enforcing" with no bootstrap tolerance.
     """
-    trusted = load_trust()
+    if trusted is None:
+        trusted = load_trust()
     enforce = enforcing(trusted)
     tolerate = bootstrap_allowed(task_id, trusted)
     passing, rejected = [], []
@@ -395,6 +484,7 @@ def evaluate(records: list[dict], dirty: bool, task_id: str) -> dict:
 
     summary = {
         "enforcement": "enforcing" if enforce else ("bootstrap" if tolerate else "blocked"),
+        "trust_source": trust_source,
         "verified_records": sum(
             1 for r in records if r.get("attestation_status") == "verified"
         ),
@@ -516,8 +606,9 @@ def record(
 
 def inspect(task_id: str):
     state = worktree_state(task_id)
-    records = records_for(task_id, state["sha"])
-    verdict = evaluate(records, state["dirty"], task_id)
+    trusted, source = effective_trust(state)
+    records = records_for(task_id, state["sha"], trusted)
+    verdict = evaluate(records, state["dirty"], task_id, trusted, source)
 
     result = {
         "status": "present" if records else "missing",
@@ -534,8 +625,9 @@ def inspect(task_id: str):
 
 def check(task_id: str):
     state = worktree_state(task_id)
-    records = records_for(task_id, state["sha"])
-    verdict = evaluate(records, state["dirty"], task_id)
+    trusted, source = effective_trust(state)
+    records = records_for(task_id, state["sha"], trusted)
+    verdict = evaluate(records, state["dirty"], task_id, trusted, source)
 
     result = {
         "status": "passed" if verdict["gate_passed"] else "failed",

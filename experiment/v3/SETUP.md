@@ -193,10 +193,32 @@ block so that a repository-authored copy can be told apart from a real record.
   given expected identity value, and tolerates unverified records only with an
   explicit `bootstrap=True` while the signer has no trusted key. The gate above
   is the production consumer of `RUN-` records.
-- **Operator runbook:** merge the PR; restart the MCP servers; run
-  `python infrastructure/experiment_v3/attest.py --print-public-key validation-manager`
-  and `... host-runner`; add each `key_id`/`public_key` to the trust file in a
-  reviewed commit. Records created before the restart carry no attestation and
-  stay `unverified`; once the `validation-manager` key is published they no
-  longer count toward the gate, so re-record validation after publishing the
-  key. Until both keys are published every non-migration task's gate is blocked.
+- **Key-publication mode (trust bootstrap):** the gate runs from the
+  integration checkout, whose trust file is empty until a key-publication
+  commit merges, and that commit could never pass an empty-trust gate. So,
+  while the integration trust map has no `validation-manager` key, a task
+  branch whose ONLY change against the integration base (`git diff
+  --name-only $(git merge-base origin/<integration> <sha>) <sha>`) is
+  `infrastructure/keys/trusted_attestation_keys.json`, and whose file lists at
+  least one well-formed entry (32-byte key, `key_id` = sha256(key)[:16]) for
+  BOTH signers, is evaluated against its own trust file (`trust_source:
+  "key-publication"`, enforcement `enforcing`, no bootstrap tolerance, every
+  validation record and host run must verify). Any other change on the branch,
+  a malformed or incomplete trust file, or an integration trust map that
+  already has a key disables the mode (`trust_source: "integration"`). The
+  protected validation and host-run stores are outside the repository write
+  boundary, so a branch cannot supply forged records to match a key it
+  publishes; the Codex review of the key-publication commit confirms that the
+  published keys equal the service-printed ones.
+- **Operator runbook:** merge the PR; restart the MCP servers (they create
+  their keys on first use). Then the orchestrator (or operator) creates a
+  key-publication task whose only change is the trust file: take each
+  signer's `key_id`/`public_key` from `python
+  infrastructure/experiment_v3/attest.py --print-public-key <signer>` (or
+  from the `attestation.public_key` of the first signed `VAL-`/`RUN-` record,
+  which must agree), record validation for it after the restart (signed),
+  review, push, CI, merge. Records created before the restart carry no
+  attestation and stay `unverified`; once the `validation-manager` key is
+  published they no longer count toward the gate, so re-record validation
+  after publishing the key. Until the key-publication commit merges every
+  non-migration task's gate is blocked.
