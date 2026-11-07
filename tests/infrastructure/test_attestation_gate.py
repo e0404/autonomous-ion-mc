@@ -25,11 +25,14 @@ def _load(name, relative):
     return module
 
 
-def _rec(status="passed", **over):
+BOOT = "V3-INFRA-002"
+
+
+def _rec(status="passed", task=TASK, **over):
     rec = {
         "schema_version": 1,
         "validation_id": "VAL-1",
-        "task_id": TASK,
+        "task_id": task,
         "suite": "s",
         "status": status,
         "summary": "ok",
@@ -57,8 +60,8 @@ def env(tmp_path, monkeypatch):
             json.dumps({"validation-manager": entries, "host-runner": []})
         )
 
-    def put(rec, name="r1"):
-        d = lv.VALIDATION_ROOT / TASK / SHA
+    def put(rec, name="r1", task=TASK):
+        d = lv.VALIDATION_ROOT / task / SHA
         d.mkdir(parents=True, exist_ok=True)
         (d / f"{name}.json").write_text(json.dumps(rec))
 
@@ -66,9 +69,9 @@ def env(tmp_path, monkeypatch):
     return key, set_trust, put
 
 
-def _check(capsys):
+def _check(capsys, task=TASK):
     try:
-        lv.check(TASK)
+        lv.check(task)
         code = 0
     except SystemExit as exc:
         code = exc.code
@@ -157,28 +160,68 @@ def test_forged_derived_fields_on_disk_ignored(env, capsys):
     assert code == 1
 
 
-def test_bootstrap_tolerates_unsigned_with_explicit_wording(env, capsys):
+def test_bootstrap_tasks_constant():
+    assert lv.BOOTSTRAP_TASKS == frozenset({"V3-INFRA-002"})
+
+
+def test_bootstrap_tolerates_unsigned_for_migration_task(env, capsys):
     key, set_trust, put = env
-    put(_rec())
-    code, out = _check(capsys)
+    put(_rec(task=BOOT), task=BOOT)
+    code, out = _check(capsys, BOOT)
     assert code == 0 and out["enforcement"] == "bootstrap"
     assert out["unverified_records"] == 1
     assert "unverified (no trusted key published yet)" in out["attestation_note"]
 
 
-def test_bootstrap_signed_but_untrusted_tolerated(env, capsys):
+def test_bootstrap_signed_but_untrusted_tolerated_for_migration_task(env, capsys):
     key, set_trust, put = env
-    put(_sign(key))
-    code, out = _check(capsys)
+    put(_sign(key, _rec(task=BOOT)), task=BOOT)
+    code, out = _check(capsys, BOOT)
     assert code == 0 and "attestation_note" in out
 
 
-def test_bootstrap_still_rejects_invalid(env, capsys):
+@pytest.mark.parametrize("task", [TASK, "V3-005B"])
+def test_other_tasks_unverified_rejected_with_empty_trust(env, capsys, task):
     key, set_trust, put = env
-    signed = _sign(key)
-    signed["summary"] = "tampered"
-    put(signed)
+    put(_rec(task=task), task=task)
+    code, out = _check(capsys, task)
+    assert code == 1 and out["enforcement"] == "blocked"
+    assert out["passing_records"] == 0
+    assert out["rejected_records"][0]["reason"] == lv.ATTESTATION_REQUIRED
+    assert out["attestation_required"] == lv.ATTESTATION_REQUIRED
+    assert "attestation_note" not in out
+
+
+def test_other_task_signed_untrusted_rejected_with_empty_trust(env, capsys):
+    key, set_trust, put = env
+    put(_sign(key))
     code, out = _check(capsys)
+    assert code == 1 and out["passing_records"] == 0
+
+
+def test_other_task_verified_passes_once_key_published(env, capsys):
+    key, set_trust, put = env
+    set_trust(key)
+    put(_sign(key))
+    code, out = _check(capsys)
+    assert code == 0 and out["enforcement"] == "enforcing"
+
+
+def test_migration_task_enforcing_once_key_published(env, capsys):
+    key, set_trust, put = env
+    set_trust(key)
+    put(_rec(task=BOOT), task=BOOT)
+    code, out = _check(capsys, BOOT)
+    assert code == 1 and out["enforcement"] == "enforcing"
+
+
+@pytest.mark.parametrize("task", [BOOT, TASK])
+def test_bootstrap_still_rejects_invalid(env, capsys, task):
+    key, set_trust, put = env
+    signed = _sign(key, _rec(task=task))
+    signed["summary"] = "tampered"
+    put(signed, task=task)
+    code, out = _check(capsys, task)
     assert code == 1
     assert out["rejected_records"][0]["attestation_status"] == "invalid"
 
@@ -212,9 +255,39 @@ def test_require_verified_helper():
     with pytest.raises(av.AttestationRequired):
         av.require_verified(signed, "host-runner", other)
     empty = {"host-runner": {}}
-    assert av.require_verified(_rec(), "host-runner", empty)["status"] == "unverified"
+    # strict by default: unverified rejected even with an empty trust map
     with pytest.raises(av.AttestationRequired):
-        av.require_verified({**signed, "summary": "x"}, "host-runner", empty)
+        av.require_verified(_rec(), "host-runner", empty)
+    # explicit bootstrap flag tolerates unverified only while no key is trusted
+    assert (
+        av.require_verified(_rec(), "host-runner", empty, bootstrap=True)["status"]
+        == "unverified"
+    )
+    with pytest.raises(av.AttestationRequired):
+        av.require_verified(_rec(), "host-runner", other, bootstrap=True)
+    with pytest.raises(av.AttestationRequired):
+        av.require_verified({**signed, "summary": "x"}, "host-runner", empty, bootstrap=True)
+
+
+def test_require_verified_identity_binding():
+    av = _load("attest_verify_bind", "validation/scripts/transport/attest_verify.py")
+    key = attest.generate_keypair()
+    run = {"run_id": "RUN-1", "task_id": TASK, "sha": SHA, "output_manifest_sha256": "m" * 64}
+    signed = attest.sign_record(run, key, "host-runner")
+    trusted = {"host-runner": {key.key_id: key.public_key.hex()}}
+    ok = av.require_verified(
+        signed, "host-runner", trusted, expected_task_id=TASK, expected_git_sha=SHA,
+        expected_run_id="RUN-1", expected_output_manifest_sha256="m" * 64,
+    )
+    assert ok["status"] == "verified"
+    for kw in (
+        {"expected_task_id": "V3-OTHER"},
+        {"expected_git_sha": "b" * 40},
+        {"expected_run_id": "RUN-2"},
+        {"expected_output_manifest_sha256": "n" * 64},
+    ):
+        with pytest.raises(av.AttestationRequired, match="identity mismatch"):
+            av.require_verified(signed, "host-runner", trusted, **kw)
 
 
 def test_manifest_hash_streams_large_sparse_file(tmp_path):

@@ -147,25 +147,39 @@ block so that a repository-authored copy can be told apart from a real record.
   against the trust map with expected signer `validation-manager` and requires
   the signed `task_id` and `git_sha` to equal the requested task and SHA (else
   `invalid`). Each record gets a derived `attestation_status`
-  (`verified`/`unverified`/`invalid`, plus `attestation_reason`). If the trust
-  map lists at least one `validation-manager` key, `check` counts only
-  `verified` records as passing and rejects unverified and invalid ones with an
-  explicit reason (unsigned records fail the gate). `invalid` records are
-  rejected always. **Bootstrap exception:** while the trust map has no
-  `validation-manager` key, records are reported as "unverified (no trusted key
-  published yet)" and the previous pass/fail logic applies (invalid still
-  rejected); the exception ends the moment a key is published. Records with
-  status `failed` always count as failing.
+  (`verified`/`unverified`/`invalid`, plus `attestation_reason`). Only
+  `verified` records count as passing; unverified and invalid ones are rejected
+  with an explicit reason. `invalid` records are rejected always. **Bootstrap
+  exception, migration task only:** `BOOTSTRAP_TASKS = {"V3-INFRA-002"}`; only
+  for such a task, while the trust map has no `validation-manager` key, are
+  unverified records tolerated ("unverified (no trusted key published yet)").
+  For every other task unverified records are rejected whatever the trust map
+  state ("attestation required: no trusted validation-manager key published
+  (operator runbook) or record not verified"). **After this change merges,
+  every other task's merge gate is blocked until the operator publishes the
+  keys** (the runbook does both keys in one sitting). Records with status
+  `failed` always count as failing.
+- **Host-run evidence:** a validation record whose `details` carry
+  `host_run_id` (or `host_run_ids`) is only accepted if the signed run record
+  `<share root>/host-runs/<task>/<RUN-id>/record.json` exists
+  (`infrastructure/validation/host_run_records.py`), is `verified` by a trusted
+  `host-runner` key (unverified tolerated only in bootstrap, migration task
+  only; missing or invalid never), has signed `task_id`, `sha` and `run_id`
+  equal to the validation record's task, SHA and the referenced id (replay
+  protection), and shows `exit_code` 0 and `timed_out` false. `inspect` reports
+  each record's `host_run_attestation`.
 - **Transport consumers:** `validation/scripts/transport/attest_verify.py`
-  provides `require_verified(record, expected_signer, trust=None)` (same rule:
-  invalid always raises; with trusted keys for the signer anything but
-  `verified` raises). Consumers of `RUN-` records (for example
-  `validation/scripts/transport/v7r2_cal_rate.py` on the V3-005B branch) must
-  call it with `"host-runner"`. No consumer exists on this branch.
+  provides `require_verified(record, expected_signer, trust=None, *,
+  expected_task_id, expected_git_sha, expected_run_id,
+  expected_output_manifest_sha256, bootstrap=False)`. It is strict by default
+  (only `verified` passes; invalid always raises), raises on any mismatch of a
+  given expected identity value, and tolerates unverified records only with an
+  explicit `bootstrap=True` while the signer has no trusted key. The gate above
+  is the production consumer of `RUN-` records.
 - **Operator runbook:** merge the PR; restart the MCP servers; run
   `python infrastructure/experiment_v3/attest.py --print-public-key validation-manager`
   and `... host-runner`; add each `key_id`/`public_key` to the trust file in a
   reviewed commit. Records created before the restart carry no attestation and
   stay `unverified`; once the `validation-manager` key is published they no
   longer count toward the gate, so re-record validation after publishing the
-  key (this is the moment the bootstrap exception ends).
+  key. Until both keys are published every non-migration task's gate is blocked.

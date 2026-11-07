@@ -177,27 +177,57 @@ class AttestationRequired(Exception):
     """A record was rejected by require_verified."""
 
 
-def require_verified(record, expected_signer, trust=None):
+def require_verified(
+    record,
+    expected_signer,
+    trust=None,
+    *,
+    expected_task_id=None,
+    expected_git_sha=None,
+    expected_run_id=None,
+    expected_output_manifest_sha256=None,
+    bootstrap=False,
+):
     """Raise AttestationRequired unless ``record`` may be consumed as evidence.
 
-    Rule (same as infrastructure/validation/local_validation.py): an ``invalid``
-    attestation (present but wrong) always raises. If the trust map lists at
-    least one key for ``expected_signer``, any status other than ``verified``
-    raises. If the trust map has no key for that signer (bootstrap state before
-    the operator publishes the key) an ``unverified`` record is tolerated; the
-    returned status then says so. Returns the verify_record result dict.
+    Strict by default: only a ``verified`` record passes; ``invalid`` and
+    ``unverified`` raise. ``bootstrap=True`` (explicit; for the migration task
+    only) additionally tolerates ``unverified`` while the trust map lists no
+    key for ``expected_signer``; invalid always raises.
 
-    Transport consumers (for example validation/scripts/transport/
-    v7r2_cal_rate.py on the V3-005B branch) call this on every RUN-/VAL-
-    record they read, with expected_signer "host-runner" / "validation-manager".
+    Identity binding (replay protection): each ``expected_*`` that is not None
+    must equal the signed record's field, else AttestationRequired. The git
+    SHA is read from ``git_sha`` (VAL- records) or ``sha`` (RUN- records).
+    Returns the verify_record result dict.
+
+    Production consumer: infrastructure/validation/local_validation.py (via
+    infrastructure/validation/host_run_records.py) for RUN- records.
     """
     trusted = load_trusted() if trust is None else trust
     result = verify_record(record, expected_signer, trusted)
     if result["status"] == "invalid":
         raise AttestationRequired(f"invalid attestation: {result['reason']}")
-    if trusted.get(expected_signer) and result["status"] != "verified":
+    git_sha = record.get("git_sha", record.get("sha"))
+    expected = (
+        ("task_id", expected_task_id, record.get("task_id")),
+        ("git_sha", expected_git_sha, git_sha),
+        ("run_id", expected_run_id, record.get("run_id")),
+        (
+            "output_manifest_sha256",
+            expected_output_manifest_sha256,
+            record.get("output_manifest_sha256"),
+        ),
+    )
+    for name, want, got in expected:
+        if want is not None and got != want:
+            raise AttestationRequired(
+                f"signed identity mismatch: {name} is {got!r}, expected {want!r}"
+            )
+    if result["status"] != "verified":
+        if bootstrap and not trusted.get(expected_signer):
+            return result
         raise AttestationRequired(
-            f"{result['status']} record rejected (trusted keys exist for "
+            f"{result['status']} record rejected (attestation required for "
             f"{expected_signer!r}): {result['reason']}"
         )
     return result

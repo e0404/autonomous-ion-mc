@@ -68,6 +68,17 @@ TRUSTED_KEYS_PATH = Path(__file__).resolve().parents[1] / "keys" / "trusted_atte
 
 BOOTSTRAP_NOTE = "unverified (no trusted key published yet)"
 
+# Tasks for which bootstrap tolerance (unverified records counted while the
+# signer has no trusted key) applies: only the migration task that introduces
+# attestations. Every other task fails closed whatever the trust map state.
+BOOTSTRAP_TASKS = frozenset({"V3-INFRA-002"})
+
+ATTESTATION_REQUIRED = (
+    "attestation required: no trusted validation-manager key published "
+    "(operator runbook) or record not verified"
+)
+HOST_RUN_SIGNER = "host-runner"
+
 
 def _attest():
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -127,41 +138,126 @@ def records_for(task_id: str, sha: str) -> list[dict]:
             continue
         rec.pop("attestation_status", None)
         rec.pop("attestation_reason", None)
+        rec.pop("host_run_attestation", None)
         status, reason = classify(rec, task_id, sha, trusted)
         rec["attestation_status"] = status
         rec["attestation_reason"] = reason
+        rec["host_run_attestation"] = check_host_runs(rec, task_id, sha, trusted)
         records.append(rec)
 
     return records
 
 
-def evaluate(records: list[dict], dirty: bool) -> dict:
-    """Gate decision over annotated records.
+def bootstrap_allowed(task_id: str, trusted: dict, signer: str = SIGNER) -> bool:
+    """Bootstrap tolerance: signer has no trusted key AND task is a migration task."""
+    return not trusted.get(signer) and normalize_task_id(task_id) in BOOTSTRAP_TASKS
 
-    Enforcement rule (fail closed once trust exists):
-    - If the trust map lists at least one key for "validation-manager", only
-      records with attestation_status "verified" count as passing; unverified
-      and invalid records are rejected with an explicit reason.
-    - "invalid" records (attestation present but wrong, or signed identity not
-      matching the requested task/SHA) are always rejected, even in bootstrap.
-    - Bootstrap exception: while the trust map has no key for the signer
-      (before the operator publishes it) unverified records are tolerated and
-      the summary reports them as "unverified (no trusted key published yet)".
-      The exception ends as soon as a key is published.
+
+def host_run_ids(rec: dict) -> list[str]:
+    """Host run ids referenced by a validation record's details."""
+    details = rec.get("details")
+    if not isinstance(details, dict):
+        return []
+    ids = []
+    value = details.get("host_run_id")
+    if isinstance(value, str) and value.strip():
+        ids.append(value.strip())
+    many = details.get("host_run_ids")
+    if isinstance(many, list):
+        ids.extend(v.strip() for v in many if isinstance(v, str) and v.strip())
+    return ids
+
+
+def check_host_runs(rec: dict, task_id: str, sha: str, trusted: dict) -> list[dict]:
+    """Verify every signed run record a validation record references.
+
+    Each entry: {run_id, status, reason, ok}. ``ok`` is False for a missing,
+    invalid or (when not tolerated) unverified run record, a task/SHA that
+    differs from the validation record's, a non-zero exit code or a timeout.
+    """
+    from infrastructure.validation import host_run_records as hrr
+
+    tolerated = bootstrap_allowed(task_id, trusted, HOST_RUN_SIGNER)
+    out = []
+    for run_id in host_run_ids(rec):
+        entry = {"run_id": run_id, "status": "missing", "reason": "", "ok": False}
+        out.append(entry)
+        try:
+            run = hrr.load_signed_run_record(run_id, normalize_task_id(task_id))
+        except hrr.RunRecordMissing as exc:
+            entry["reason"] = f"host run record missing: {exc}"
+            continue
+        status, reason = hrr.verify_run_record(
+            run,
+            rec.get("task_id", ""),
+            rec.get("git_sha", ""),
+            run_id,
+            trusted,
+        )
+        entry["status"], entry["reason"] = status, reason
+        if status == "invalid":
+            continue
+        if status != "verified" and not tolerated:
+            entry["reason"] = f"host run record {status} (attestation required): {reason}"
+            continue
+        if run.get("exit_code") != 0 or run.get("timed_out") is not False:
+            entry["reason"] = (
+                f"host run did not succeed: exit_code={run.get('exit_code')!r} "
+                f"timed_out={run.get('timed_out')!r}"
+            )
+            continue
+        entry["ok"] = True
+    return out
+
+
+def evaluate(records: list[dict], dirty: bool, task_id: str) -> dict:
+    """Gate decision over annotated records for ``task_id``.
+
+    Enforcement rule (fail closed):
+    - Only records with attestation_status "verified" count as passing, except
+      in bootstrap. Unverified and invalid records are rejected with a reason.
+    - Bootstrap (unverified records counted, noted as "unverified (no trusted
+      key published yet)") applies ONLY when task_id is in BOOTSTRAP_TASKS
+      (the migration task V3-INFRA-002) AND the trust map has no key for
+      "validation-manager". For every other task unverified records are
+      rejected whatever the trust map state, with ATTESTATION_REQUIRED; all
+      other tasks' gates are therefore blocked until the operator publishes the
+      keys.
+    - "invalid" records (present but wrong, or signed identity not matching the
+      requested task/SHA) are always rejected, even in bootstrap.
+    - A passed record that references host runs (details.host_run_id) is
+      rejected unless every referenced signed run record is present, bound to
+      the same task/SHA, verified (or bootstrap-tolerated, see check_host_runs)
+      and succeeded (exit_code 0, not timed out).
     - Every record with status "failed" counts as failing regardless of its
       attestation (a forged failure can only block, never release, the gate).
     """
-    enforce = enforcing(load_trust())
+    trusted = load_trust()
+    enforce = enforcing(trusted)
+    tolerate = bootstrap_allowed(task_id, trusted)
     passing, rejected = [], []
 
     for r in records:
         att = r.get("attestation_status", "unverified")
-        if att == "invalid" or (enforce and att != "verified"):
+        runs = r.get("host_run_attestation") or []
+        bad_run = next((x for x in runs if not x.get("ok")), None)
+        if att == "invalid" or (att != "verified" and not tolerate):
+            reason = r.get("attestation_reason")
+            if att == "unverified" and not enforce:
+                reason = ATTESTATION_REQUIRED
             rejected.append(
                 {
                     "validation_id": r.get("validation_id"),
                     "attestation_status": att,
-                    "reason": r.get("attestation_reason"),
+                    "reason": reason,
+                }
+            )
+        elif r.get("status") == "passed" and bad_run is not None:
+            rejected.append(
+                {
+                    "validation_id": r.get("validation_id"),
+                    "attestation_status": att,
+                    "reason": f"host run {bad_run['run_id']}: {bad_run['reason']}",
                 }
             )
         elif r.get("status") == "passed":
@@ -171,7 +267,7 @@ def evaluate(records: list[dict], dirty: bool) -> dict:
     unverified = [r for r in records if r.get("attestation_status") == "unverified"]
 
     summary = {
-        "enforcement": "enforcing" if enforce else "bootstrap",
+        "enforcement": "enforcing" if enforce else ("bootstrap" if tolerate else "blocked"),
         "verified_records": sum(
             1 for r in records if r.get("attestation_status") == "verified"
         ),
@@ -184,11 +280,14 @@ def evaluate(records: list[dict], dirty: bool) -> dict:
         "failing_records": len(failing),
         "gate_passed": not dirty and len(passing) > 0 and len(failing) == 0,
     }
-    if not enforce and unverified:
+    if tolerate and unverified:
         summary["attestation_note"] = (
-            f"{len(unverified)} record(s) {BOOTSTRAP_NOTE}; tolerated only "
-            "until the operator publishes the validation-manager key"
+            f"{len(unverified)} record(s) {BOOTSTRAP_NOTE}; tolerated only for "
+            f"bootstrap task(s) {sorted(BOOTSTRAP_TASKS)} until the operator "
+            "publishes the validation-manager key"
         )
+    if not enforce and not tolerate:
+        summary["attestation_required"] = ATTESTATION_REQUIRED
     return summary
 
 
@@ -261,7 +360,7 @@ def record(
 def inspect(task_id: str):
     state = worktree_state(task_id)
     records = records_for(task_id, state["sha"])
-    verdict = evaluate(records, state["dirty"])
+    verdict = evaluate(records, state["dirty"], task_id)
 
     result = {
         "status": "present" if records else "missing",
@@ -279,7 +378,7 @@ def inspect(task_id: str):
 def check(task_id: str):
     state = worktree_state(task_id)
     records = records_for(task_id, state["sha"])
-    verdict = evaluate(records, state["dirty"])
+    verdict = evaluate(records, state["dirty"], task_id)
 
     result = {
         "status": "passed" if verdict["gate_passed"] else "failed",

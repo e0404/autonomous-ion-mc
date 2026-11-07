@@ -181,6 +181,7 @@ def test_local_validation_signs_record(tmp_path, monkeypatch, capsys):
     loaded = lv.records_for("V3-X1", "a" * 40)[0]
     assert loaded.pop("attestation_status") == "unverified"
     loaded.pop("attestation_reason")
+    assert loaded.pop("host_run_attestation") == []
     assert loaded == on_disk
 
 
