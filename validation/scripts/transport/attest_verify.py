@@ -171,3 +171,33 @@ def verify_record(record, expected_signer, trusted=None):
         return {"status": "unverified", "reason": "signing key is not trusted",
                 "signer": signer, "key_id": key_id}
     return {"status": "verified", "reason": "ok", "signer": signer, "key_id": key_id}
+
+
+class AttestationRequired(Exception):
+    """A record was rejected by require_verified."""
+
+
+def require_verified(record, expected_signer, trust=None):
+    """Raise AttestationRequired unless ``record`` may be consumed as evidence.
+
+    Rule (same as infrastructure/validation/local_validation.py): an ``invalid``
+    attestation (present but wrong) always raises. If the trust map lists at
+    least one key for ``expected_signer``, any status other than ``verified``
+    raises. If the trust map has no key for that signer (bootstrap state before
+    the operator publishes the key) an ``unverified`` record is tolerated; the
+    returned status then says so. Returns the verify_record result dict.
+
+    Transport consumers (for example validation/scripts/transport/
+    v7r2_cal_rate.py on the V3-005B branch) call this on every RUN-/VAL-
+    record they read, with expected_signer "host-runner" / "validation-manager".
+    """
+    trusted = load_trusted() if trust is None else trust
+    result = verify_record(record, expected_signer, trusted)
+    if result["status"] == "invalid":
+        raise AttestationRequired(f"invalid attestation: {result['reason']}")
+    if trusted.get(expected_signer) and result["status"] != "verified":
+        raise AttestationRequired(
+            f"{result['status']} record rejected (trusted keys exist for "
+            f"{expected_signer!r}): {result['reason']}"
+        )
+    return result

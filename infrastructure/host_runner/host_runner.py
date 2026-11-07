@@ -272,6 +272,17 @@ def write_json(path: Path, value: dict) -> None:
     )
 
 
+def file_sha256(path: Path) -> str:
+    """Streaming sha256 of a file (bounded memory; sparse files are fine)."""
+    with open(path, "rb") as stream:
+        if hasattr(hashlib, "file_digest"):
+            return hashlib.file_digest(stream, "sha256").hexdigest()
+        digest = hashlib.sha256()
+        while chunk := stream.read(1 << 20):
+            digest.update(chunk)
+        return digest.hexdigest()
+
+
 def output_manifest_sha256(outputs: Path) -> str | None:
     """sha256 over sorted "<relative path>\\0<file sha256>\\n" lines of produced
     output files; None if the run produced none."""
@@ -279,7 +290,7 @@ def output_manifest_sha256(outputs: Path) -> str | None:
         return None
     lines = []
     for path in sorted(p for p in outputs.rglob("*") if p.is_file() and not p.is_symlink()):
-        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        digest = file_sha256(path)
         lines.append(f"{path.relative_to(outputs).as_posix()}\0{digest}\n")
     if not lines:
         return None

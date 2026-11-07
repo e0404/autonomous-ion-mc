@@ -139,11 +139,33 @@ block so that a repository-authored copy can be told apart from a real record.
   it. Implementation is pure stdlib (`infrastructure/experiment_v3/attest.py`,
   RFC 8032, not constant time; acceptable for this single-user host).
 - **Trust file:** `infrastructure/keys/trusted_attestation_keys.json`, empty on
-  merge (trust on first use). Consumers use
-  `validation/scripts/transport/attest_verify.py`; a record whose key is not
-  listed is `unverified`, never `verified`.
+  merge (trust on first use). A record whose key is not listed is `unverified`,
+  never `verified`; a present-but-wrong attestation (altered payload, bad
+  signature, wrong signer) is `invalid`.
+- **Enforcement rule (local-validation gate):** `infrastructure/validation/
+  local_validation.py` (`records_for`, `inspect`, `check`) verifies every record
+  against the trust map with expected signer `validation-manager` and requires
+  the signed `task_id` and `git_sha` to equal the requested task and SHA (else
+  `invalid`). Each record gets a derived `attestation_status`
+  (`verified`/`unverified`/`invalid`, plus `attestation_reason`). If the trust
+  map lists at least one `validation-manager` key, `check` counts only
+  `verified` records as passing and rejects unverified and invalid ones with an
+  explicit reason (unsigned records fail the gate). `invalid` records are
+  rejected always. **Bootstrap exception:** while the trust map has no
+  `validation-manager` key, records are reported as "unverified (no trusted key
+  published yet)" and the previous pass/fail logic applies (invalid still
+  rejected); the exception ends the moment a key is published. Records with
+  status `failed` always count as failing.
+- **Transport consumers:** `validation/scripts/transport/attest_verify.py`
+  provides `require_verified(record, expected_signer, trust=None)` (same rule:
+  invalid always raises; with trusted keys for the signer anything but
+  `verified` raises). Consumers of `RUN-` records (for example
+  `validation/scripts/transport/v7r2_cal_rate.py` on the V3-005B branch) must
+  call it with `"host-runner"`. No consumer exists on this branch.
 - **Operator runbook:** merge the PR; restart the MCP servers; run
   `python infrastructure/experiment_v3/attest.py --print-public-key validation-manager`
   and `... host-runner`; add each `key_id`/`public_key` to the trust file in a
   reviewed commit. Records created before the restart carry no attestation and
-  stay `unverified`.
+  stay `unverified`; once the `validation-manager` key is published they no
+  longer count toward the gate, so re-record validation after publishing the
+  key (this is the moment the bootstrap exception ends).

@@ -176,7 +176,12 @@ def test_local_validation_signs_record(tmp_path, monkeypatch, capsys):
     pub = (keys / "validation-manager.pub").read_text().strip()
     trusted = {returned["attestation"]["key_id"]: pub}
     attest.verify_record(on_disk, {"validation-manager": trusted}, expected_signer="validation-manager")
-    assert lv.records_for("V3-X1", "a" * 40)[0] == on_disk
+    monkeypatch.setattr(lv, "TRUSTED_KEYS_PATH", tmp_path / "none.json")
+    (tmp_path / "none.json").write_text('{"validation-manager": [], "host-runner": []}')
+    loaded = lv.records_for("V3-X1", "a" * 40)[0]
+    assert loaded.pop("attestation_status") == "unverified"
+    loaded.pop("attestation_reason")
+    assert loaded == on_disk
 
 
 def test_host_runner_signs_record(tmp_path, monkeypatch):

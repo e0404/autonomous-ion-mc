@@ -60,21 +60,136 @@ def worktree_state(task_id: str) -> dict:
     }
 
 
+SIGNER = "validation-manager"
+
+# Trust map consulted by the gate. Deliberately not overridable by environment
+# variable (tests monkeypatch this attribute).
+TRUSTED_KEYS_PATH = Path(__file__).resolve().parents[1] / "keys" / "trusted_attestation_keys.json"
+
+BOOTSTRAP_NOTE = "unverified (no trusted key published yet)"
+
+
+def _attest():
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+    from infrastructure.experiment_v3 import attest
+
+    return attest
+
+
+def load_trust() -> dict:
+    return _attest().load_trusted(TRUSTED_KEYS_PATH)
+
+
+def enforcing(trusted: dict) -> bool:
+    """True once the trust map lists at least one key for the signer."""
+    return bool(trusted.get(SIGNER))
+
+
+def classify(rec: dict, task_id: str, sha: str, trusted: dict) -> tuple[str, str]:
+    """Return (attestation_status, reason): verified | unverified | invalid.
+
+    Besides the signature, the signed identity must match the requested task
+    and SHA, so a genuine record copied into another task/SHA directory is
+    invalid.
+    """
+    status, reason = _attest().classify_record(rec, trusted, SIGNER)
+    if status == "invalid":
+        return status, reason
+    if rec.get("task_id") != normalize_task_id(task_id) or rec.get("git_sha") != sha:
+        return "invalid", (
+            f"signed identity mismatch: record is for task {rec.get('task_id')!r} "
+            f"sha {rec.get('git_sha')!r}, requested {normalize_task_id(task_id)!r} {sha!r}"
+        )
+    return status, reason
+
+
 def records_for(task_id: str, sha: str) -> list[dict]:
+    """Load records, each annotated with derived attestation_status/_reason.
+
+    The derived fields are added after verification and are not part of the
+    signed payload; they are never read from disk (any such field in a file is
+    overwritten).
+    """
     directory = VALIDATION_ROOT / normalize_task_id(task_id) / sha
 
     if not directory.exists():
         return []
 
+    trusted = load_trust()
     records = []
 
     for path in sorted(directory.glob("*.json")):
         try:
-            records.append(json.loads(path.read_text(encoding="utf-8")))
+            rec = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(rec, dict):
+                continue
         except Exception:
             continue
+        rec.pop("attestation_status", None)
+        rec.pop("attestation_reason", None)
+        status, reason = classify(rec, task_id, sha, trusted)
+        rec["attestation_status"] = status
+        rec["attestation_reason"] = reason
+        records.append(rec)
 
     return records
+
+
+def evaluate(records: list[dict], dirty: bool) -> dict:
+    """Gate decision over annotated records.
+
+    Enforcement rule (fail closed once trust exists):
+    - If the trust map lists at least one key for "validation-manager", only
+      records with attestation_status "verified" count as passing; unverified
+      and invalid records are rejected with an explicit reason.
+    - "invalid" records (attestation present but wrong, or signed identity not
+      matching the requested task/SHA) are always rejected, even in bootstrap.
+    - Bootstrap exception: while the trust map has no key for the signer
+      (before the operator publishes it) unverified records are tolerated and
+      the summary reports them as "unverified (no trusted key published yet)".
+      The exception ends as soon as a key is published.
+    - Every record with status "failed" counts as failing regardless of its
+      attestation (a forged failure can only block, never release, the gate).
+    """
+    enforce = enforcing(load_trust())
+    passing, rejected = [], []
+
+    for r in records:
+        att = r.get("attestation_status", "unverified")
+        if att == "invalid" or (enforce and att != "verified"):
+            rejected.append(
+                {
+                    "validation_id": r.get("validation_id"),
+                    "attestation_status": att,
+                    "reason": r.get("attestation_reason"),
+                }
+            )
+        elif r.get("status") == "passed":
+            passing.append(r)
+
+    failing = [r for r in records if r.get("status") == "failed"]
+    unverified = [r for r in records if r.get("attestation_status") == "unverified"]
+
+    summary = {
+        "enforcement": "enforcing" if enforce else "bootstrap",
+        "verified_records": sum(
+            1 for r in records if r.get("attestation_status") == "verified"
+        ),
+        "unverified_records": len(unverified),
+        "invalid_records": sum(
+            1 for r in records if r.get("attestation_status") == "invalid"
+        ),
+        "rejected_records": rejected,
+        "passing_records": len(passing),
+        "failing_records": len(failing),
+        "gate_passed": not dirty and len(passing) > 0 and len(failing) == 0,
+    }
+    if not enforce and unverified:
+        summary["attestation_note"] = (
+            f"{len(unverified)} record(s) {BOOTSTRAP_NOTE}; tolerated only "
+            "until the operator publishes the validation-manager key"
+        )
+    return summary
 
 
 def record(
@@ -119,10 +234,7 @@ def record(
     }
 
     # V3-INFRA-002: Ed25519 attestation by the service-held key (additive field).
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-    from infrastructure.experiment_v3.attest import sign_with_service_key
-
-    record = sign_with_service_key(record, "validation-manager")
+    record = _attest().sign_with_service_key(record, SIGNER)
 
     directory = VALIDATION_ROOT / normalize_task_id(task_id) / state["sha"]
     directory.mkdir(parents=True, exist_ok=True)
@@ -149,9 +261,7 @@ def record(
 def inspect(task_id: str):
     state = worktree_state(task_id)
     records = records_for(task_id, state["sha"])
-
-    passing = [r for r in records if r.get("status") == "passed"]
-    failing = [r for r in records if r.get("status") == "failed"]
+    verdict = evaluate(records, state["dirty"])
 
     result = {
         "status": "present" if records else "missing",
@@ -160,13 +270,7 @@ def inspect(task_id: str):
         "git_sha": state["sha"],
         "worktree_dirty": state["dirty"],
         "records": records,
-        "passing_records": len(passing),
-        "failing_records": len(failing),
-        "gate_passed": (
-            not state["dirty"]
-            and len(passing) > 0
-            and len(failing) == 0
-        ),
+        **verdict,
     }
 
     print(json.dumps(result, indent=2))
@@ -175,28 +279,19 @@ def inspect(task_id: str):
 def check(task_id: str):
     state = worktree_state(task_id)
     records = records_for(task_id, state["sha"])
-
-    passing = [r for r in records if r.get("status") == "passed"]
-    failing = [r for r in records if r.get("status") == "failed"]
-
-    gate_passed = (
-        not state["dirty"]
-        and len(passing) > 0
-        and len(failing) == 0
-    )
+    verdict = evaluate(records, state["dirty"])
 
     result = {
-        "status": "passed" if gate_passed else "failed",
+        "status": "passed" if verdict["gate_passed"] else "failed",
         "task_id": normalize_task_id(task_id),
         "git_sha": state["sha"],
         "worktree_dirty": state["dirty"],
-        "passing_records": len(passing),
-        "failing_records": len(failing),
+        **{k: v for k, v in verdict.items() if k != "gate_passed"},
     }
 
     print(json.dumps(result, indent=2))
 
-    if not gate_passed:
+    if not verdict["gate_passed"]:
         raise SystemExit(1)
 
 

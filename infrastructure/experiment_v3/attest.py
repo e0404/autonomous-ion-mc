@@ -165,6 +165,14 @@ class AttestationError(Exception):
     pass
 
 
+class UnsignedRecordError(AttestationError):
+    """The record carries no attestation block (status "unverified")."""
+
+
+class UntrustedKeyError(AttestationError):
+    """Signature is valid but the key is not in the trust map ("unverified")."""
+
+
 @dataclass(frozen=True)
 class KeyPair:
     seed: bytes
@@ -256,7 +264,7 @@ def verify_record(record, trusted, expected_signer=None):
     """
     block = record.get("attestation")
     if not isinstance(block, dict):
-        raise AttestationError("record has no attestation")
+        raise UnsignedRecordError("record has no attestation")
     if block.get("schema") != SCHEMA or block.get("alg") != ALG:
         raise AttestationError("unsupported attestation schema or algorithm")
     try:
@@ -279,10 +287,26 @@ def verify_record(record, trusted, expected_signer=None):
     ):
         raise AttestationError("invalid signature")
     if trusted.get(signer, {}).get(key_id) != block["public_key"]:
-        raise AttestationError("signing key is not trusted")
+        raise UntrustedKeyError("signing key is not trusted")
     return VerifiedAttestation(
         signer, key_id, block["public_key"], str(signed_at), claimed_hash
     )
+
+
+def classify_record(record, trusted, expected_signer):
+    """Return ``(status, reason)`` with status verified | unverified | invalid.
+
+    unverified: no attestation, or a cryptographically valid signature by a key
+    that is not trusted. invalid: a present attestation that fails any check
+    (wrong signer, altered payload, bad signature, malformed block).
+    """
+    try:
+        verify_record(record, trusted, expected_signer)
+    except (UnsignedRecordError, UntrustedKeyError) as exc:
+        return "unverified", str(exc)
+    except AttestationError as exc:
+        return "invalid", str(exc)
+    return "verified", "ok"
 
 
 def key_dir():
