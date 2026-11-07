@@ -15,7 +15,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 TOPAS = ROOT / "validation" / "reference_cases" / "topas"
-RECORDED_DIGEST = "9bd6f8023b4aa4b0bebbb21c5e237ea5a71c136dbc5243dbef5ef772c54a212f"
+RECORDED_DIGEST = "a8a1c27d0177d38e763344248753f0cb9792bbf2277158622b41bcbf9d8f423a"
 FULL_MODULES = [
     "g4em-standard_opt4",
     "g4h-phy_QGSP_BIC_HP",
@@ -151,3 +151,15 @@ def test_smokes_carry_the_scorer_block_of_their_evidence_configuration(d):
 def _scorer_names(d):
     text = (d / "input.txt").read_text()
     return set(re.findall(r"^s:Sc/(\w+)/Quantity", text, re.M))
+
+
+@pytest.mark.parametrize("d", BUNDLES, ids=lambda d: d.name)
+def test_no_obsolete_deletion_or_blinding_claims(d):
+    """The runner archives outputs permanently (blinding is by ordering, R2-TOPAS-3/4).
+
+    No bundle may claim deletion, non-disclosure or an unread output,
+    nor carry the withdrawn placeholder.
+    """
+    text = (d / "case.json").read_text() + (d / "input.txt").read_text()
+    for forbidden in ("deleted unread", "unread", "non-disclosing", "SmokeEdep"):
+        assert forbidden not in text, (d.name, forbidden)

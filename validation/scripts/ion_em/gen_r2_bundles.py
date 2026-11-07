@@ -20,7 +20,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_OUT = REPO_ROOT / "validation" / "reference_cases" / "topas"
 REL_PREFIX = "validation/reference_cases/topas"
-BUNDLE_SET_DIGEST = "9bd6f8023b4aa4b0bebbb21c5e237ea5a71c136dbc5243dbef5ef772c54a212f"
+BUNDLE_SET_DIGEST = "a8a1c27d0177d38e763344248753f0cb9792bbf2277158622b41bcbf9d8f423a"
 
 TOPAS_BASE = 20619000
 # case number, ion tag, MeV/u, A, z, particle, planning CSDA range (project Bethe table, mm), L, h_z, h_x, set
@@ -106,8 +106,8 @@ def build(c, cfg, seed, histories, kind, part=None):
     hdr_kind = {
         "evidence": f"V3-008 plan revision 2, row {'TL' if lat else 'TD'}-{'FULL' if full else 'EM'}"
         f"{' (held-out set)' if cset == 'held-out' else ''}, case {num}, part {part} (seed = 20619000 + 100*part + case).",
-        "timing": "V3-008 plan revision 2 TIMING SMOKE (execution only): wall time and printouts only; every scorer output is deleted unread; no evidence.",
-        "verbose": "V3-008 plan revision 2 STEP-LENGTH SMOKE (execution only): TrackingVerbosity 1 on 3 histories, to record whether the scorer bins limit the primary step length; every scorer output is deleted unread; no evidence.",
+        "timing": "V3-008 plan revision 2 TIMING SMOKE (execution only): timing/step smoke; run only after the sample seal commit; outputs archived by the controlled runner; read for sizing/step diagnostics only; no evidence.",
+        "verbose": "V3-008 plan revision 2 STEP-LENGTH SMOKE (execution only): TrackingVerbosity 1 on 3 histories, to record whether the scorer bins limit the primary step length; run only after the sample seal commit; outputs archived by the controlled runner; read for sizing/step diagnostics only; no evidence.",
     }[kind]
     inp = [
         f"# Native OpenTOPAS 4.3 input. {hdr_kind} No validation claim.",
@@ -226,9 +226,9 @@ def build(c, cfg, seed, histories, kind, part=None):
             "not run before the reviewed freeze of revision 2; outputs not materialized before the ionmc samples of the row are recorded"
         )
     elif kind == "timing":
-        rationale = "V3-008 plan revision 2 timing smoke (execution only): wall time and printouts (process list, module acceptance, killed tracks) size the parts; every scorer output is deleted unread by the runner; no evidence"
+        rationale = "V3-008 plan revision 2 timing smoke (execution only): wall time and printouts (process list, module acceptance, killed tracks) size the parts; run only after the sample seal commit; outputs archived by the controlled runner; read for sizing/step diagnostics only; no evidence"
     else:
-        rationale = "V3-008 plan revision 2 step-length smoke (execution only): TrackingVerbosity 1 records whether scorer-bin boundaries limit the primary step length (relevant to the Urban step dependence); every scorer output is deleted unread; no evidence"
+        rationale = "V3-008 plan revision 2 step-length smoke (execution only): TrackingVerbosity 1 records whether scorer-bin boundaries limit the primary step length (relevant to the Urban step dependence); run only after the sample seal commit; outputs archived by the controlled runner; read for sizing/step diagnostics only; no evidence"
     units = (
         "IDD: TOPAS CSV with '#' header, dose in Gy (run total; divide by histories); converted to laterally integrated energy per depth (MeV/mm per primary) with the slab mass 120 x 120 mm x bin depth at 1.0 g/cm3. Fluence 1/mm2 run total. Bins 0-based, z from the entrance face"
         if not lat

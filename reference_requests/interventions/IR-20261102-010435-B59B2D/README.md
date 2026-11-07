@@ -19,3 +19,7 @@ Unavailable input (1): independent evidence of the charge dependence of lateral 
 ## Decision or task depending on this request
 
 V3-008 freeze commit (plan revision 1; candidate 655d16a0f633140c958172d2ac1fdfaeb0faf7a0, reviewed successor to follow); ledger wording of V2-ION and V3 at integration
+
+## Status update (2026-11-07, orchestrator)
+
+This intervention was **resolved on 2026-11-07 at 20:37 UTC**, as recorded in `request.json` and `response.json` of this directory (the intervention tool updates only the JSON files). The operator's answer is recorded verbatim in `response.json` and in `reference_requests/operator-directives/2026-11-07-topas-validation-target.md`. The original lines of this README above are kept verbatim as the record of the request as filed; the `Status: open` line above is the status at filing and is superseded by this update and by `request.json` / `response.json`.

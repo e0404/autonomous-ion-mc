@@ -181,7 +181,7 @@ placeholder scorer output was deleted unread.
 | `validation/plans/v3-008/p1c-aggregates.json` | `b603c3714c5d701c5560d6e348bab43526aaecb962a4e6dc016229fdd46306d4` |
 | `validation/plans/v3-008/p2b-follow-ups.md` | `9c70eb1b9d49f0375af7976232817dbda925576eeb4b64e31aee61b33dfb5457` |
 | `reference_requests/interventions/IR-20261102-010435-B59B2D/request.json` | `e81a7efa104614e87188c3ef083ef3fb061eb018d2731c46be2cb4a88e1ea7f3` |
-| `reference_requests/interventions/IR-20261102-010435-B59B2D/README.md` | `86eba08d66d23abc0b8d5f07cc831b48faaf7cdcc089b6546b04cd4b9cb976f8` |
+| `reference_requests/interventions/IR-20261102-010435-B59B2D/README.md` | `22712340fcd38179571ac4f7f056b8364b99136e9586040b234cce0040ca451b` |
 
 
 **Dated note (2026-11-02, orchestrator) — hashes regenerated at the freeze commit's parent; entries that changed since f694b747:** `tests/ionmc/test_ion_em_moliere_hanson.py` 789fd4b1… → 64a40829…; `src/ionmc/physics/stopping.py` 951f29ac… → 89db1de2…. All other entries unchanged (recomputed).
@@ -194,11 +194,11 @@ placeholder scorer output was deleted unread.
 
 | File | sha256 |
 |---|---|
-| `validation/scripts/ion_em/gen_r2_bundles.py` | `0ebdf1b3e1364754798686f725616113c8442871353353bac1fe28ee440f34af` |
-| `tests/ionmc/test_r2_bundles.py` | `76d445bf97a2097cc4119530fb900797822f5f6fb88a9e05a046a8a258eba919` |
+| `validation/scripts/ion_em/gen_r2_bundles.py` | `fe122218804cbe74f2f6966fbcc67a2d66b1a9e85ec7d2aab57cee7350c8f60e` |
+| `tests/ionmc/test_r2_bundles.py` | `54af24fa0baf13d43f4ed25c96989344e09c01354efdda0dc34ba83a5ab60fdb` |
 | `reference_requests/operator-directives/2026-11-07-topas-validation-target.md` | `ca079e9f0af990cdff9d8efde60d38ac55e2d0fc0fb9ef22355a81f4a2ab0b26` |
 | `reference_requests/interventions/IR-20261102-010435-B59B2D/response.json` | `dc6a610cb67dee50fa0bb96327026eea0b81bb9506e7b898c2e9e44322f69bd0` |
-| `validation/plans/v3-008/r2-topas-target.md` | `edac3266027a18ad48f5c8866c7f2c00bf087788819ebe6b1b7a13457c4b8d04` |
+| `validation/plans/v3-008/r2-topas-target.md` | `5336266bee35e1bfcd5df104e34b69cb8cca783ef9e3363e3b6312afbb9cc5d1` |
 
 
 **Dated note (2026-11-07, orchestrator) — hashes regenerated at the freeze commit's parent; entries that changed since f694b747:** `validation/plans/v3-008/p10-single-scattering-availability.md` bea86277… → a7f539a0…; `validation/plans/v3-008/p11-exact-omega-mapping.md` 6116648a… → f78e95f5…; `reference_requests/interventions/IR-20261102-010435-B59B2D/request.json` 068cafd7… → e81a7efa…. All other entries unchanged (recomputed).
@@ -209,6 +209,13 @@ placeholder scorer output was deleted unread.
 
 
 **Dated note (2026-11-07, orchestrator) — hashes regenerated at the freeze commit's parent; entries that changed since f694b747:** `validation/scripts/ion_em/gen_r2_bundles.py` bfd1e333… → 0ebdf1b3…; `tests/ionmc/test_r2_bundles.py` d95f23f7… → 76d445bf…; `validation/plans/v3-008/r2-topas-target.md` 9b253154… → edac3266…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-07, Codex REVIEW-e637178c, R2-TOPAS-4: ancestry-based run validity; accurate smoke wording; intervention status) — supersedes the bundle digest of the R2-TOPAS-3 note.** (1) The run-validity rule against the seal is restated in `r2-topas-target.md` §6 and the plan by git ancestry and controlled records (`code_sha` has the seal commit as ancestor; the seal commit's review finished before `reference_started`; evaluator `validation/scripts/ion_em/r2_evaluate.py` fails closed). (2) The 13 smoke bundles (26 files; the 192 evidence bundles are byte-identical to 274de574) carry accurate post-seal archival wording instead of "deleted unread"; the bundle-set digest is now `a8a1c27d0177d38e763344248753f0cb9792bbf2277158622b41bcbf9d8f423a` (`9bd6f802…` of the R2-TOPAS-3 note is superseded, kept as history); `test_r2_bundles.py` additionally rejects "deleted unread", "unread", "non-disclosing" and "SmokeEdep" in every bundle. (3) The intervention `README.md` has a status-update section appended (original lines verbatim): resolved 2026-11-07 20:37 UTC per `request.json`/`response.json`; the revision-1 entry (`86eba08d…`) is superseded history and the table row carries the current value. Rebound in the rows above: `gen_r2_bundles.py`, `test_r2_bundles.py`, `r2-topas-target.md`, the intervention `README.md`.
+
+
+**Dated note (2026-11-07, orchestrator) — hashes regenerated at the freeze commit's parent; entries that changed since f694b747:** `reference_requests/interventions/IR-20261102-010435-B59B2D/README.md` 86eba08d… → 22712340…; `validation/scripts/ion_em/gen_r2_bundles.py` 0ebdf1b3… → fe122218…; `tests/ionmc/test_r2_bundles.py` 76d445bf… → 1cc41128…; `validation/plans/v3-008/r2-topas-target.md` edac3266… → 5336266b…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-07, orchestrator) — hashes regenerated at the freeze commit's parent; entries that changed since f694b747:** `tests/ionmc/test_r2_bundles.py` 1cc41128… → 54af24fa…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.
@@ -345,7 +352,7 @@ repository paths"** for the revision-1 freeze commit (superseding "53" and the 2
 revision 2 are **the frozen revision** once committed by a reviewed commit (the "revision-2 freeze commit"). Revision
 1's freeze (the reviewed freeze commit d0829601 and its predecessors) is superseded **before any result**: at
 d0829601 no V3-008 ionmc ion-transport run, LV/HR qualification step or scored ion TOPAS run exists. Everything
-bound in §1–§4 above stays bound (hashes unchanged except the paths rebound in R2.2 below: `validation/plans/v3-008/p10-single-scattering-availability.md`, `validation/plans/v3-008/p11-exact-omega-mapping.md` and `validation/reference_cases/README.md`; the intervention `request.json` additionally carries its own current entry in the §2 dated note of 2026-11-07); the revision-1 history is
+bound in §1–§4 above stays bound (hashes unchanged except the paths rebound in R2.2 below: `validation/plans/v3-008/p10-single-scattering-availability.md`, `validation/plans/v3-008/p11-exact-omega-mapping.md` and `validation/reference_cases/README.md`, and, from round R2-TOPAS-4, the intervention `README.md` (status-update section appended; its revision-1 entry below is superseded history, current entry in the §2 dated note of R2-TOPAS-4); the intervention `request.json` additionally carries its own current entry in the §2 dated note of 2026-11-07); the revision-1 history is
 kept.
 
 **R2.1 Commit lineage.** Required ancestor of the revision-2 freeze commit, in addition to §1:
@@ -360,7 +367,7 @@ the intervention resolution files under `reference_requests/interventions/IR-202
 revision 2 round R2-TOPAS-2 and restored to their b8c9836f content in round R2-TOPAS-3). Any other path is a STOP for the revision-2 freeze. **Dated note (2026-11-07, Codex
 REVIEW-7a7186a2 finding 1):** this whitelist is exactly the set of paths changed relative to d0829601 that are not
 the intervention README/request files already bound at revision 1; the three paths added here
-(`gen_r2_bundles.py`, `test_r2_bundles.py`, `reference_cases/README.md`) were missing from the earlier text.
+(`gen_r2_bundles.py`, `test_r2_bundles.py`, `reference_cases/README.md`) were missing from the earlier text. **Dated note (R2-TOPAS-4, Codex REVIEW-e637178c):** the intervention `README.md` is now also changed relative to d0829601 (status-update section appended, original lines verbatim) and is bound at its current hash; the 26 smoke-bundle files changed again in round R2-TOPAS-4 (accurate post-seal archival wording; the 192 evidence bundles stay byte-identical).
 
 **R2.2 Files added or rebound (sha256 after pre-commit, 2026-11-07).**
 
@@ -371,7 +378,7 @@ the intervention README/request files already bound at revision 1; the three pat
 | `validation/plans/v3-008/p10-single-scattering-availability.md` | `a7f539a0b71a39939aed2644a9d7c2969133251ceb1676a3e48572a9292f7fda` | rebound (was bea86277…; dated note appended) |
 | `validation/plans/v3-008/p11-exact-omega-mapping.md` | `f78e95f578fcb1fbb0c4db8ec12ce8b9dbfd5ae5e2d98a34d4d13b2bb8a6c069` | rebound (was 6116648a…; dated note appended) |
 | `validation/reference_cases/README.md` | `e16cc9d3a2eecf2717e405ae2c4fc53c83b884f37af64c758d6ac6bddb4a482e` | rebound (was `2c160fb5…`, kept in §2.5 as superseded revision-1 history; r2 layout entry added) |
-| 205 bundles `validation/reference_cases/topas/*-r2-*` (`case.json` + `input.txt`, 410 files) | bundle-set digest `9bd6f8023b4aa4b0bebbb21c5e237ea5a71c136dbc5243dbef5ef772c54a212f` | per-file sha256 in `r2-topas-target.md` appendix A; digest = sha256 of the appendix listing block |
+| 205 bundles `validation/reference_cases/topas/*-r2-*` (`case.json` + `input.txt`, 410 files) | bundle-set digest `a8a1c27d0177d38e763344248753f0cb9792bbf2277158622b41bcbf9d8f423a` | per-file sha256 in `r2-topas-target.md` appendix A; digest = sha256 of the appendix listing block |
 
 Each of the 205 `case.json` files passes `infrastructure/experiment_v3/reference.py::validate_case`; the seed equals
 the native `i:Ts/Seed` line; `histories` equals `NumberOfHistoriesInRun` (checked 2026-11-07). 192 evidence parts
@@ -395,10 +402,10 @@ record; a rebound path counts once, at its current entry; superseded hashes kept
 bundle-set digest is not counted).** Repository paths bound at revision 1: 60 (README, p10 and p11 included).
 Added by revision 2: the directive (1), `r2-topas-target.md` (1), `validation/scripts/ion_em/gen_r2_bundles.py` (1),
 `tests/ionmc/test_r2_bundles.py` (1), the intervention `response.json` (1), and the 410 bundle files (410) = 415.
-Rebound, not added: p10, p11 and `validation/reference_cases/README.md`. Total repository paths: 60 + 415 =
+Rebound, not added: p10, p11, `validation/reference_cases/README.md` and (R2-TOPAS-4) the intervention `README.md` (its revision-1 entry in §2 is superseded history and counts once, at its current entry). Total repository paths: 60 + 415 =
 **475**. External sources with full sha256: **44** (no new acquisition). Total full sha256 values: **519**, plus the
-bundle-set digest. The 26 smoke-bundle files changed in round R2-TOPAS-2 were restored to their b8c9836f content in round R2-TOPAS-3 (the count of paths is
-unchanged; their hashes and the digest are the values of `r2-topas-target.md` appendix A, equal to those of b8c9836f). Each of gen_r2_bundles.py,
+bundle-set digest. The 26 smoke-bundle files changed in round R2-TOPAS-2 were restored to their b8c9836f content in round R2-TOPAS-3, and changed again in round R2-TOPAS-4 (accurate post-seal archival wording; the count of paths is
+unchanged; their hashes and the digest are the values of `r2-topas-target.md` appendix A, bundle-set digest `a8a1c27d…`). Each of gen_r2_bundles.py,
 test_r2_bundles.py, `response.json` and the directive has exactly one current hash entry, in the 2026-11-07 dated
 note of §2 (the R2.2 table rows of the directive and `r2-topas-target.md` carry no hash of their own).
 
@@ -406,8 +413,8 @@ note of §2 (the R2.2 table rows of the directive and `r2-topas-target.md` carry
 every §1 commit are ancestors; (2) clean tree; the R2.1 diff rule holds; (3) `sha256sum` of every one of the **475** repository paths that has a current entry in this record (§2 including its
 dated notes, with p10/p11 at their current values and `p1c-completion.md` at a1a24cd3…, `validation/reference_cases/README.md`
 at its R2.2 rebound value, and the 410 bundle files at their appendix-A values) equals the recorded value at the
-freeze commit; the appendix-A block hashes to the bundle-set digest `9bd6f802…` (also printed by
+freeze commit; the appendix-A block hashes to the bundle-set digest `a8a1c27d…` (also printed by
 `gen_r2_bundles.py --check`); every path changed relative to d0829601 is in the R2.1 whitelist and every
-whitelisted path is bound by a current hash entry in this record, with exactly these exceptions: the plan, decision 0043, `review.md` and this record itself (bound by the freeze commit SHA; a file cannot contain its own hash), and the intervention `README.md`, unchanged since revision 1 (bound by its revision-1 entry, §2). `response.json` is bound and counted (R2.5), not excepted; (4) the logged
+whitelisted path is bound by a current hash entry in this record, with exactly these exceptions: the plan, decision 0043, `review.md` and this record itself (bound by the freeze commit SHA; a file cannot contain its own hash), `response.json` and the intervention `README.md` (rebound in R2-TOPAS-4 to its current hash after the appended status update) are bound and counted (R2.5), not excepted; (4) the logged
 seed-family test passes; (5) `validate_case` passes on all 205 bundles; (6) no file under `validation/generated/`, no
 LV/HR record and no scored V3-008 ion REF run exists.

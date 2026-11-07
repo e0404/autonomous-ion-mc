@@ -1,4 +1,4 @@
-# Native OpenTOPAS 4.3 input. V3-008 plan revision 2 TIMING SMOKE (execution only): wall time and printouts only; every scorer output is deleted unread; no evidence. No validation claim.
+# Native OpenTOPAS 4.3 input. V3-008 plan revision 2 TIMING SMOKE (execution only): timing/step smoke; run only after the sample seal commit; outputs archived by the controlled runner; read for sizing/step diagnostics only; no evidence. No validation claim.
 i:Ts/NumberOfThreads = 1
 i:Ts/Seed = 20600413
 b:Ts/PauseBeforeQuit = "False"

@@ -15,7 +15,7 @@
     "IDD: DoseToMedium, 1x1x4500 bins (full 120x120 mm lateral extent, 0.1 mm depth bins); Report Sum, Standard_Deviation"
   ],
   "units": "IDD: TOPAS CSV with '#' header, dose in Gy (run total; divide by histories); converted to laterally integrated energy per depth (MeV/mm per primary) with the slab mass 120 x 120 mm x bin depth at 1.0 g/cm3. Fluence 1/mm2 run total. Bins 0-based, z from the entrance face",
-  "rationale": "V3-008 plan revision 2 timing smoke (execution only): wall time and printouts (process list, module acceptance, killed tracks) size the parts; every scorer output is deleted unread by the runner; no evidence",
+  "rationale": "V3-008 plan revision 2 timing smoke (execution only): wall time and printouts (process list, module acceptance, killed tracks) size the parts; run only after the sample seal commit; outputs archived by the controlled runner; read for sizing/step diagnostics only; no evidence",
   "expected_outputs": [
     "idd_dose.csv"
   ],
