@@ -284,6 +284,50 @@ def test_gate_malformed_claim_rejected(env, capsys):
     assert code == 1 and "64 hex" in out["rejected_records"][0]["reason"]
 
 
+MALFORMED_DETAILS = [
+    {"host_runs": "RUN-x"},
+    {"host_runs": ["RUN-x"]},
+    {"host_runs": [{"output_manifest_sha256": MANIFEST}]},
+    {"host_runs": [{"run_id": "  ", "output_manifest_sha256": MANIFEST}]},
+    {"host_runs": [{"run_id": 7}]},
+    {"host_runs": [{"run_id": RUN, "output_manifest_sha256": "xyz"}]},
+    {"host_run_id": ""},
+    {"host_run_id": ["RUN-x"]},
+    {"host_run_ids": "RUN-x"},
+    {"host_run_ids": [RUN, None]},
+]
+
+
+@pytest.mark.parametrize("details", MALFORMED_DETAILS)
+def test_gate_malformed_declaration_rejected_when_enforcing(env, capsys, details):
+    vm, hr, put_val, put_run = _enforcing_setup(env)
+    put_run(attest.sign_record(_run(), hr, "host-runner"))
+    rec = _val()
+    rec["details"] = details
+    put_val(attest.sign_record(rec, vm, "validation-manager"))
+    code, out = _check(capsys, OTHER)
+    assert code == 1 and out["passing_records"] == 0
+    assert "host run <malformed>: details.host_run" in out["rejected_records"][0]["reason"]
+
+
+@pytest.mark.parametrize("details", MALFORMED_DETAILS)
+def test_gate_malformed_declaration_rejected_in_bootstrap(env, capsys, details):
+    vm, hr, trust, put_val, put_run = env  # empty trust map (bootstrap)
+    put_run(_run(task=BOOT), task=BOOT)
+    rec = _val(task=BOOT)
+    rec["details"] = details
+    put_val(rec, task=BOOT)
+    code, out = _check(capsys, BOOT)
+    assert code == 1 and out["passing_records"] == 0
+    assert "<malformed>" in out["rejected_records"][0]["reason"]
+
+
+@pytest.mark.parametrize("details", MALFORMED_DETAILS)
+def test_record_refuses_malformed_declaration(env, details):
+    with pytest.raises(ValueError, match="malformed host-run declaration"):
+        lv.record(OTHER, "s", "passed", "ok", json.dumps(details))
+
+
 def _record(capsys, details):
     lv.record(OTHER, "s", "passed", "ok", json.dumps(details))
     return json.loads(capsys.readouterr().out)["validation"]

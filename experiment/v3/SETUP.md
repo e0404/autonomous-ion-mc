@@ -178,8 +178,13 @@ block so that a repository-authored copy can be told apart from a real record.
   `dirty_after` false (when present), and no `output_publication_error`. The
   legacy `host_run_id` / `host_run_ids` forms carry no manifest claim and are
   rejected with "host run referenced without output_manifest_sha256 binding"
-  except for the bootstrap task. `inspect` reports each record's
-  `host_run_attestation`.
+  except for the bootstrap task. A malformed reserved field (`host_runs` not a
+  list, an entry without a non-blank string `run_id` or with a claim that is
+  neither 64 hex nor null, `host_run_id` not a non-blank string, `host_run_ids`
+  not a list of such strings) is refused by `record_local_validation`
+  (ValueError) and, if it reaches the store anyway, rejected by the gate in
+  every mode with one `<malformed>` entry per problem; it is never ignored.
+  `inspect` reports each record's `host_run_attestation`.
 - **Transport consumers:** `validation/scripts/transport/attest_verify.py`
   provides `require_verified(record, expected_signer, trust=None, *,
   expected_task_id, expected_git_sha, expected_run_id,

@@ -158,6 +158,53 @@ MANIFEST_PATTERN = re.compile(r"[0-9a-f]{64}")
 _NO_CLAIM = object()
 
 
+def host_run_declaration_problems(details) -> list[str]:
+    """Reasons the reserved host-run fields of a details dict are malformed.
+
+    Reserved fields: ``host_runs`` (list of ``{"run_id": non-blank str,
+    "output_manifest_sha256": 64 hex or null (optional)}``), ``host_run_id``
+    (non-blank str) and ``host_run_ids`` (list of non-blank str). Any present
+    field with another shape is a problem; a malformed declaration must never
+    be silently ignored (fail closed).
+    """
+    problems: list[str] = []
+    if not isinstance(details, dict):
+        return problems
+    if "host_runs" in details:
+        runs = details["host_runs"]
+        if not isinstance(runs, list):
+            problems.append("details.host_runs is not a list")
+        else:
+            for i, item in enumerate(runs):
+                if not isinstance(item, dict):
+                    problems.append(f"details.host_runs[{i}] is not an object")
+                    continue
+                run_id = item.get("run_id")
+                if not isinstance(run_id, str) or not run_id.strip():
+                    problems.append(f"details.host_runs[{i}].run_id is not a non-blank string")
+                if "output_manifest_sha256" in item:
+                    claim = item["output_manifest_sha256"]
+                    if not (
+                        claim is None
+                        or (isinstance(claim, str) and MANIFEST_PATTERN.fullmatch(claim))
+                    ):
+                        problems.append(
+                            f"details.host_runs[{i}].output_manifest_sha256 "
+                            "is not 64 hex digits or null"
+                        )
+    if "host_run_id" in details:
+        value = details["host_run_id"]
+        if not isinstance(value, str) or not value.strip():
+            problems.append("details.host_run_id is not a non-blank string")
+    if "host_run_ids" in details:
+        many = details["host_run_ids"]
+        if not isinstance(many, list) or not all(
+            isinstance(v, str) and v.strip() for v in many
+        ):
+            problems.append("details.host_run_ids is not a list of non-blank strings")
+    return problems
+
+
 def host_run_refs(rec: dict) -> list[tuple[str, object]]:
     """Host runs referenced by a validation record as (run_id, claim).
 
@@ -165,7 +212,8 @@ def host_run_refs(rec: dict) -> list[tuple[str, object]]:
     "output_manifest_sha256": "<64 hex or null>"}]``. ``claim`` is the stated
     digest (str or None) when the key is present, else the ``_NO_CLAIM``
     sentinel. The legacy ``host_run_id`` / ``host_run_ids`` forms never carry a
-    claim.
+    claim. Malformed entries are skipped here; callers must consult
+    host_run_declaration_problems so that they are rejected, not ignored.
     """
     details = rec.get("details")
     if not isinstance(details, dict):
@@ -218,7 +266,8 @@ def check_host_runs(rec: dict, task_id: str, sha: str, trusted: dict) -> list[di
     invalid or (when not tolerated) unverified run record, a task/SHA that
     differs from the validation record's, an output manifest digest that
     differs from the validation record's claim (null included; a signed record
-    without the field is invalid), a legacy
+    without the field is invalid), a malformed reserved host-run field (one
+    "<malformed>" entry per problem, never ignored), a legacy
     reference without a manifest claim (when not tolerated), or a run that did
     not succeed (see run_success_problem).
     """
@@ -227,7 +276,10 @@ def check_host_runs(rec: dict, task_id: str, sha: str, trusted: dict) -> list[di
     tolerated = bootstrap_allowed(task_id, trusted, HOST_RUN_SIGNER)
     details = rec.get("details") if isinstance(rec.get("details"), dict) else {}
     lookup_missing = details.get("host_run_manifest_lookup") == "missing"
-    out = []
+    out = [
+        {"run_id": "<malformed>", "status": "malformed", "reason": problem, "ok": False}
+        for problem in host_run_declaration_problems(details)
+    ]
     for run_id, claim in host_run_refs(rec):
         entry = {"run_id": run_id, "status": "missing", "reason": "", "ok": False}
         out.append(entry)
@@ -411,6 +463,9 @@ def record(
     except json.JSONDecodeError as exc:
         raise ValueError("--details-json must contain valid JSON") from exc
 
+    problems = host_run_declaration_problems(details)
+    if problems:
+        raise ValueError("malformed host-run declaration: " + "; ".join(problems))
     details = fill_host_run_manifests(details, normalize_task_id(task_id))
 
     now = datetime.now(timezone.utc)
