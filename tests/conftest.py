@@ -18,3 +18,11 @@ DIAGNOSTICS_DIR = REPO_ROOT / "infrastructure" / "diagnostics"
 
 if str(DIAGNOSTICS_DIR) not in sys.path:
     sys.path.insert(0, str(DIAGNOSTICS_DIR))
+
+# The repository root itself, so that the namespace packages
+# `infrastructure.experiment_v3`, `infrastructure.validation` and
+# `infrastructure.host_runner` import under `uv run pytest` (the console
+# script does not put the working directory on sys.path; `python -m pytest`
+# does, which is why the import worked locally but not in CI).
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
