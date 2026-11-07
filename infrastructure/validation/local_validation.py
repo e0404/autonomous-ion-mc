@@ -217,7 +217,8 @@ def check_host_runs(rec: dict, task_id: str, sha: str, trusted: dict) -> list[di
     Each entry: {run_id, status, reason, ok}. ``ok`` is False for a missing,
     invalid or (when not tolerated) unverified run record, a task/SHA that
     differs from the validation record's, an output manifest digest that
-    differs from the validation record's claim (null included), a legacy
+    differs from the validation record's claim (null included; a signed record
+    without the field is invalid), a legacy
     reference without a manifest claim (when not tolerated), or a run that did
     not succeed (see run_success_problem).
     """
@@ -254,11 +255,18 @@ def check_host_runs(rec: dict, task_id: str, sha: str, trusted: dict) -> list[di
         if status != "verified" and not tolerated:
             entry["reason"] = f"host run record {status} (attestation required): {reason}"
             continue
-        if claim is None and run.get("output_manifest_sha256") is not None:
+        if "output_manifest_sha256" not in run:
+            entry["status"] = "invalid"
+            entry["reason"] = (
+                "signed run record has no output_manifest_sha256 field "
+                "(absence is not a null manifest)"
+            )
+            continue
+        if claim is None and run["output_manifest_sha256"] is not None:
             entry["status"] = "invalid"
             entry["reason"] = (
                 "output_manifest_sha256 mismatch: claimed null, signed run record has "
-                f"{run.get('output_manifest_sha256')!r}"
+                f"{run['output_manifest_sha256']!r}"
             )
             continue
         if claim is _NO_CLAIM and (not tolerated or lookup_missing):

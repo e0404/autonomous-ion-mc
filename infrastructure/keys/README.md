@@ -27,13 +27,22 @@ the keys**; the runbook (SETUP.md) publishes both keys in one sitting and then
 re-records validation. Invalid (tampered, wrong-signer, wrong-identity) records
 are rejected in all modes.
 
-Validation records that name a host run (`details.host_run_id` or
-`details.host_run_ids`) additionally require the signed host-runner record
+Validation records that name host runs do so with
+`details.host_runs = [{"run_id": "RUN-...", "output_manifest_sha256": "<64 hex
+or null>"}]`; `record_local_validation` fills a missing digest from the signed
+run record itself (a missing run record marks the validation record
+`host_run_manifest_lookup: "missing"`, which the gate rejects). Each entry
+additionally requires the signed host-runner record
 `<host-runs root>/<task>/<RUN-id>/record.json` (via
 `infrastructure/validation/host_run_records.py`): present, verified by a trusted
 `host-runner` key (bootstrap-tolerated only for the migration task while the
 list is empty), bound to the validation record's task id and SHA and to its own
-run id, with `exit_code` 0 and `timed_out` false. A missing, unverified or
-invalid run record rejects the validation record. Transport consumers use
+run id, carrying a signed `output_manifest_sha256` equal to the claimed one
+(null must match null; a record without the field is invalid), and succeeded:
+`succeeded` true, `exit_code` 0, `timed_out` false,
+`committed_state_unchanged` true and `dirty_after` false (when present), no
+`output_publication_error`. The legacy `details.host_run_id` / `host_run_ids`
+forms carry no manifest claim and are rejected outside the bootstrap task. A
+missing, unverified or invalid run record rejects the validation record. Transport consumers use
 `require_verified` from `validation/scripts/transport/attest_verify.py`, which
 is strict by default and takes expected task/SHA/run id/manifest values.

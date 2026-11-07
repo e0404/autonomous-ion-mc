@@ -260,6 +260,20 @@ def test_gate_null_manifest_matches_null(env, capsys):
     assert code == 0 and out["status"] == "passed"
 
 
+@pytest.mark.parametrize("claim", [MANIFEST, None])
+def test_gate_run_record_without_manifest_field_rejected(env, capsys, claim):
+    vm, hr, put_val, put_run = _enforcing_setup(env)
+    run = _run()
+    del run["output_manifest_sha256"]
+    put_run(attest.sign_record(run, hr, "host-runner"))
+    rec = _val()
+    rec["details"]["host_runs"][0]["output_manifest_sha256"] = claim
+    put_val(attest.sign_record(rec, vm, "validation-manager"))
+    code, out = _check(capsys, OTHER)
+    reason = out["rejected_records"][0]["reason"]
+    assert code == 1 and ("no output_manifest_sha256 field" in reason or "mismatch" in reason)
+
+
 def test_gate_malformed_claim_rejected(env, capsys):
     vm, hr, put_val, put_run = _enforcing_setup(env)
     put_run(attest.sign_record(_run(), hr, "host-runner"))
