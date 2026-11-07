@@ -39,7 +39,7 @@ from ionmc.scoring import MAX_SCORING_GRIDS, ScoringGrid, TallyRequest
 from ionmc.sources import PencilBeamSource
 from ionmc.species import producible
 from ionmc.transport.channels import ChannelPlan, NuclearCapacity, compile_channels
-from ionmc.transport.tables import TransportTables, thaw
+from ionmc.transport.tables import TransportTables, material_fingerprint, thaw
 from ionmc.transport.tally import (
     MAX_QUANTA,
     QUANTUM_MEV,
@@ -885,7 +885,7 @@ def validate(config: SimulationConfig) -> EffectiveConfig:
             geometry.materials,
             e0,
             src.energy_sigma_mev,
-            ion_tables={t.material.name: t for t in stopping_tables},
+            ion_tables={material_fingerprint(t.material): t for t in stopping_tables},
         )
         ion_mapping = _ion_mapping_data(tables, geometry)
 

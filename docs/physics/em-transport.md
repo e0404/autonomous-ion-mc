@@ -1,8 +1,11 @@
-# Electromagnetic transport of protons
+# Electromagnetic transport of protons and light ions
 
 Implemented in `ionmc.physics.em`, `ionmc.physics.kinematics`, `ionmc.physics.scattering` and
-`ionmc.transport` for protons from the table floor to 500 MeV with local deposition of delta
-electrons and no nuclear interactions. Decision:
+`ionmc.transport` for protons from the table floor to 500 MeV and, for the ions 4He, 12C and 16O,
+over the source domains listed in [transport engine](../architecture/transport.md) (alpha 50 to 250,
+carbon12 80 to 430, oxygen16 100 to 430 MeV/u), with local deposition of delta electrons and no
+nuclear interactions (ions: decision 0043; no fragments or secondary ions). Sections below are
+written for protons; the ion differences are summarised in "Ions" at the end. Decision:
 [0039](../generated/decisions/0039-proton-transport-engine.md). The step algorithm and the API are in
 [transport engine](../architecture/transport.md). Units: energy MeV, length mm, mass thickness and
 range g/cm2, density g/cm3, scattering power rad2/mm.
@@ -189,6 +192,21 @@ functions as the tests, `ionmc.transport.mcs_checks`) and archived in
 source); see `validation/results/transport/README.md`. The negative control gives a relative
 spread of 1.6 (160 %) of the per-step Highland sum over the step lengths, against 2e-5 for the
 engine's stepped `T_dM` up to 1 mm; the worst U5 deviation is 1.5e-3.
+
+## Ions (4He, 12C, 16O; decision 0043)
+
+* **Stopping and straggling.** The same CSDA step algorithm and Bohr straggling with the ion's
+  Bethe table (effective charge, shell, Barkas and Bloch terms); the Lindhard-Sorensen option
+  `BetheOptions.ls` defaults to `"off"` and never changes proton tables.
+* **Cutoff.** `e_cut_ion_mev_per_u * A` (default 2 MeV/u), total kinetic energy.
+* **Multiple scattering.** The Moliere-Hanson `differential_moliere` model with the projectile's
+  charge and mass; its scattering function `f_dM` for z >= 2 uses the exact-Omega mapping: the ion
+  state (`pv`, `p1v1`) is matched to the proton-equivalent state with the same Omega, evaluated on
+  a Bethe proton path up to 4000 MeV. The domain status is recorded per run (`fdm_extrapolated`
+  is True when the proton-equivalent energy exceeds 300 MeV; above 4000 MeV the run fails closed).
+* **Not included.** Nuclear interactions, fragmentation and secondary ions (`nuclear=True` fails
+  closed for z >= 2). No validation statement is made here beyond the CI rows of the test suite
+  (`tests/ionmc/test_v3_008_rows_ci.py`).
 
 ## Sources and units
 

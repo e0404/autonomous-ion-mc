@@ -62,8 +62,16 @@ def test_ancestry(repo: dict[str, Any]) -> None:
         R2.check_ancestry(p, "0" * 40, repo["after"])
 
 
-PLAN = {"seal_sha": "x", "seal_review_id": "REVIEW-1"}
-REVIEW = {"review_id": "REVIEW-1", "finished_at": "2026-11-08T10:00:00Z"}
+SEAL = "a" * 40
+T_OK = {"reference_started": "2026-11-08T11:00:00Z"}
+PLAN = {"seal_sha": SEAL, "seal_review_id": "REVIEW-1"}
+REVIEW = {
+    "review_id": "REVIEW-1",
+    "head_sha": SEAL,
+    "status": "passed",
+    "finished_at": "2026-11-08T10:00:00Z",
+    "report": {"verdict": "pass"},
+}
 
 
 def test_review_before_start() -> None:
@@ -83,15 +91,28 @@ def test_review_before_start() -> None:
 @pytest.mark.parametrize(
     ("review", "plan", "run"),
     [
-        (None, PLAN, {"reference_started": "2026-11-08T11:00:00Z"}),
-        ({"review_id": "REVIEW-1"}, PLAN, {"reference_started": "2026-11-08T11:00:00Z"}),
-        (REVIEW, {"seal_sha": "x"}, {"reference_started": "2026-11-08T11:00:00Z"}),
+        (None, PLAN, T_OK),
+        ({"review_id": "REVIEW-1"}, PLAN, T_OK),
+        (REVIEW, {"seal_sha": SEAL}, {"reference_started": "2026-11-08T11:00:00Z"}),
         (REVIEW, None, {"reference_started": "2026-11-08T11:00:00Z"}),
         (REVIEW, PLAN, {}),
         (REVIEW, PLAN, None),
         (REVIEW, PLAN, {"reference_started": "yesterday"}),
         (REVIEW, PLAN, {"reference_started": "2026-11-08T11:00:00"}),  # no UTC offset
-        ({"review_id": "OTHER", "finished_at": "2026-11-08T10:00:00Z"}, PLAN,
+        ({**REVIEW, "review_id": "OTHER"}, PLAN, T_OK),
+        ({**REVIEW, "head_sha": "b" * 40}, PLAN, T_OK),
+        ({**REVIEW, "head_sha": SEAL[:12]}, PLAN, T_OK),
+        ({**REVIEW, "status": "changes_required"}, PLAN, T_OK),
+        ({**REVIEW, "status": "running"}, PLAN, T_OK),
+        ({**REVIEW, "report": {"verdict": "fail"}}, PLAN, T_OK),
+        ({**REVIEW, "report": "pass"}, PLAN, T_OK),
+        ({**REVIEW, "finished_at": None}, PLAN, T_OK),
+        ({**REVIEW, "finished_at": "soon"}, PLAN, T_OK),
+        ({**REVIEW, "finished_at": "2026-11-08T10:00:00"}, PLAN,
+         {"reference_started": "2026-11-08T11:00:00Z"}),
+        ({k: v for k, v in REVIEW.items() if k != "head_sha"}, PLAN,
+         {"reference_started": "2026-11-08T11:00:00Z"}),
+        ({k: v for k, v in REVIEW.items() if k != "status"}, PLAN,
          {"reference_started": "2026-11-08T11:00:00Z"}),
     ],
 )  # fmt: skip
@@ -100,8 +121,38 @@ def test_review_check_fails_closed(review: Any, plan: Any, run: Any) -> None:
         R2.check_review_before_start(review, plan, run)
 
 
+def test_review_without_report_and_finished_after_start() -> None:
+    no_report = {k: v for k, v in REVIEW.items() if k != "report"}
+    assert R2.check_review_before_start(
+        no_report, PLAN, {"reference_started": "2026-11-08T11:00:00Z"}
+    )
+    # finished_at after reference_started: not before start (False, the run is invalid)
+    late = {**REVIEW, "finished_at": "2026-11-08T12:00:00Z"}
+    assert not R2.check_review_before_start(
+        late, PLAN, {"reference_started": "2026-11-08T11:00:00Z"}
+    )
+
+
+def test_run_record_binding(repo: dict[str, Any]) -> None:
+    plan = {"seal_sha": repo["seal"], "seal_review_id": "REVIEW-1"}
+    review = {**REVIEW, "head_sha": repo["seal"]}
+    run = {"run_id": "r1", "code_sha": repo["after"], "reference_started": "2026-11-08T11:00:00Z"}
+    assert R2.check_run_validity(repo["path"], plan, review, run, expected_run_id="r1")["valid"]
+    with pytest.raises(R2.ChronologyError):
+        R2.check_run_validity(repo["path"], plan, review, run, expected_run_id="r2")
+    with pytest.raises(R2.ChronologyError):
+        R2.check_run_validity(
+            repo["path"],
+            plan,
+            review,
+            {k: v for k, v in run.items() if k != "run_id"},
+            expected_run_id="r1",
+        )
+
+
 def test_run_validity_combined(repo: dict[str, Any]) -> None:
     plan = {"seal_sha": repo["seal"], "seal_review_id": "REVIEW-1"}
+    REVIEW = {**globals()["REVIEW"], "head_sha": repo["seal"]}  # noqa: N806 - review of the seal
     good = {"code_sha": repo["after"], "reference_started": "2026-11-08T11:00:00Z"}
     assert R2.check_run_validity(repo["path"], plan, REVIEW, good)["valid"] is True
     early = {"code_sha": repo["after"], "reference_started": "2026-11-08T09:00:00Z"}

@@ -766,17 +766,21 @@ def fdm_domain_status(
     kinetic energy ``e0_mev`` and from ``e0_mev + 6 sigma_E``, at the depth fractions
     ``fractions``, takes the largest proton-equivalent ``p1v1_eq`` kinetic energy and raises
     ``UnsupportedCombinationError`` if the ``E0 + 6 sigma_E`` value exceeds ``proton_edge_mev``
-    (or the mapping of any scanned state fails). ``ion_tables`` maps a material name to the ion's
+    (or the mapping of any scanned state fails). ``ion_tables`` maps the full material identity
+    (``ionmc.transport.tables.material_fingerprint``: name, density, composition, I, density-effect
+    parameters; not the name alone, since distinct materials may share a name) to the ion's
     stopping table (default: Bethe tables, see :meth:`ExactOmegaMapping.build`)."""
     if projectile == PROTON:
         return PROTON_FDM_STATUS
     if not materials:
         raise fail("at least one material is required")
+    from ionmc.transport.tables import material_fingerprint  # noqa: PLC0415
+
     e_hi = e0_mev + 6.0 * energy_sigma_mev
     nominal = 0.0
     upper = 0.0
     for mat in materials:
-        tab = None if ion_tables is None else ion_tables.get(mat.name)
+        tab = None if ion_tables is None else ion_tables.get(material_fingerprint(mat))
         mp = ExactOmegaMapping.build(projectile, mat, tab, proton_path(mat, proton_edge_mev))
         nominal = max(nominal, _max_p1v1_eq_energy(mp, e0_mev, fractions))
         upper = max(upper, _max_p1v1_eq_energy(mp, e_hi, fractions) if e_hi > e0_mev else nominal)

@@ -27,6 +27,9 @@ from ionmc.config import (
     CHANNEL_BACKENDS,
     DEFAULT_CHUNK_HISTORIES,
     DELTA_ELECTRON_MODELS,
+    E_CUT_ION_DEFAULT_MEV_PER_U,
+    ION_DOMAIN_MEV_PER_U,
+    ION_PROJECTILES,
     MAX_CPU_WORKERS,
     MCS_MODELS,
     MIN_CHUNK_HISTORIES,
@@ -52,7 +55,7 @@ from ionmc.scoring import (
     reduce_ratio,
     voxel_mass_g,
 )
-from ionmc.species import producible
+from ionmc.species import REGISTRY, producible
 from ionmc.transport.channels import (
     CLASS_LOCAL,
     CLASS_STEP,
@@ -415,20 +418,113 @@ def _nuclear_capabilities() -> dict[str, Any]:
     }
 
 
+_PROTON_DOMAIN_NOTE = (
+    "source energy E0 in [2 e_cut_mev, stopping-table maximum] total MeV (default e_cut_mev 2.0 "
+    "MeV; the default Bethe table reaches 500 MeV); with nuclear=True E0 + 6 sigma_E <= 250 MeV"
+)
+
+
+def _species_capabilities(nuclear: bool = False) -> dict[str, Any]:
+    """Per-species capability matrix, derived from the objects that enforce it
+    (``ION_PROJECTILES``, ``ION_DOMAIN_MEV_PER_U``, ``producible``, ``validate``)."""
+    out: dict[str, Any] = {}
+    channel_quantities = list(TALLY_QUANTITIES)
+    for proj in (PROTON, *ION_PROJECTILES):
+        ion = proj.z >= 2
+        pairs = sorted(producible(proj, nuclear=nuclear and not ion))
+        entry: dict[str, Any] = {
+            "symbol": proj.symbol,
+            "z": proj.z,
+            "a": proj.a,
+            "kind": "ion (z >= 2)" if ion else "proton",
+            "energy_domain": (
+                {
+                    "unit": "MeV/u",
+                    "min": ION_DOMAIN_MEV_PER_U[proj.name][0],
+                    "max": ION_DOMAIN_MEV_PER_U[proj.name][1],
+                    "rule": "min <= E0/A and (E0 + 6 sigma_E)/A <= max (decision 0043 section 5)",
+                }
+                if ion
+                else {"unit": "MeV (total kinetic energy)", "rule": _PROTON_DOMAIN_NOTE}
+            ),
+            "cutoff": (
+                {
+                    "rule": "e_cut_ion_mev_per_u x A (total MeV); e_cut_mev stays at its default",
+                    "e_cut_ion_mev_per_u_default": E_CUT_ION_DEFAULT_MEV_PER_U,
+                    "e_cut_effective_mev_default": E_CUT_ION_DEFAULT_MEV_PER_U * proj.a,
+                }
+                if ion
+                else {"rule": "e_cut_mev (total MeV)", "e_cut_mev_default": 2.0}
+            ),
+            "nuclear": (
+                "not supported (z >= 2: nuclear=True fails closed; nuclear interactions, "
+                "fragments and secondary ions are V3-009)"
+                if ion
+                else "supported on the python backend with nuclear=True (proton source only)"
+            ),
+            "mcs": (
+                {
+                    "model": "differential_moliere with the exact-Omega mapping of f_dM",
+                    "fdm_domain_status": (
+                        "recorded per run (mcs_mapping: fdm_extrapolated, proton-equivalent "
+                        "energies, domain edge); fails closed above the proton table edge"
+                    ),
+                }
+                if ion
+                else {
+                    "model": "differential_moliere (proton f_dM)",
+                    "fdm_domain_status": "not applicable (no mapping; fdm_extrapolated False)",
+                }
+            ),
+            "ls_default": "off" if ion else "not applicable (the proton model never changes)",
+            "stopping": (
+                "Bethe tables (Lindhard-Sorensen option 'ls' default 'off'); NIST ASTAR for "
+                "alpha in water only, none for carbon12 and oxygen16"
+                if ion
+                else "tabulated (Bethe, NIST PSTAR) or analytic"
+            ),
+            "tallies": {
+                "producible": [{"species": n, "generation": g} for n, g in pairs],
+                "quantities": channel_quantities,
+                "note": (
+                    "primary generation of the source species only; other species and "
+                    "generation 'secondary' fail closed"
+                    if not nuclear or ion
+                    else "primary and nuclear secondaries (protons, deuterons, nuclear_local)"
+                ),
+            },
+        }
+        out[proj.name] = entry
+    return out
+
+
+def _unsupported_species() -> list[dict[str, str]]:
+    """Registry species with a transport path in the registry but not supported as a source."""
+    supported = {PROTON.name, *(p.name for p in ION_PROJECTILES)}
+    return [
+        {"species": s.name, "status": "not supported as a source or a producible species"}
+        for s in REGISTRY
+        if s.transported and s.name not in supported
+    ]
+
+
 def capabilities(nuclear: bool = False) -> dict[str, Any]:
     """What the engine supports (reported, not negotiated: unsupported requests raise).
-    ``nuclear=True`` adds the ``nuclear`` section; the default report is unchanged."""
+    ``nuclear=True`` adds the ``nuclear`` section and the nuclear proton channels."""
     report = _capabilities_base()
     if nuclear:
         report["nuclear"] = _nuclear_capabilities()
         report["physics"]["nuclear"] = True
         report["tallies"] = _tally_capabilities(nuclear=True)
+        report["species_details"] = _species_capabilities(nuclear=True)
     return report
 
 
 def _capabilities_base() -> dict[str, Any]:
     return {
-        "species": ["proton"],
+        "species": [PROTON.name, *(p.name for p in ION_PROJECTILES)],
+        "species_details": _species_capabilities(),
+        "unsupported_species": _unsupported_species(),
         "backends": {
             "python": "available (float64 reference; cpu_workers > 1 splits over processes)",
             "warp-cpu": "available (float32 production, float64 validation; cpu_workers > 1)",

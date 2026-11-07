@@ -1,6 +1,7 @@
 # Transport engine
 
-Packages and modules of the proton electromagnetic transport engine: the reference (Python)
+Packages and modules of the electromagnetic transport engine for protons and the ions 4He, 12C and
+16O (see "Ion sources" below): the reference (Python)
 backend of task V3-003A and the Warp CPU and CUDA backends, process pool and validation runner of
 V3-003B. A requested backend that is unavailable (for example `warp-cuda` without a usable CUDA
 device) raises `BackendUnavailableError`; nothing falls back to another backend. Design decisions:
@@ -19,7 +20,7 @@ lookup scoring). The models are described in [EM transport](../physics/em-transp
 | `ionmc.geometry` | `VoxelGeometry` (materials per voxel, optional density override), `BoxPhantom` (one-voxel box) |
 | `ionmc.sources` | `PencilBeamSource` |
 | `ionmc.scoring` | `ScoringGrid`, exact voxel-mass overlap `voxel_mass_g`, batch estimator `reduce_batches` |
-| `ionmc.species` | append-only species registry (ids 0 p, 1 d, 2 t, 3 He-3, 4 alpha; pseudo-species `nuclear_local`), `producible()` engine capability |
+| `ionmc.species` | append-only species registry (ids 0 p, 1 d, 2 t, 3 He-3, 4 alpha, 5 carbon12, 6 oxygen16; pseudo-species `nuclear_local`; only p, alpha, carbon12 and oxygen16 are producible), `producible()` engine capability |
 | `ionmc.lookup` | `LookupTable` (uniform grid, sha256, provenance), `resample_uniform` |
 | `ionmc.transport.channels` | channel compiler: `compile_channels`, `ChannelPlan`, quantum rule, shared lookup/spectrum axis parameters |
 | `ionmc.transport.scoring_funcs`, `ionmc.transport.scoring_ref` | shared scoring functions (Warp + Python twin) and the Python channel hook |
@@ -205,10 +206,13 @@ track-length scoring walks each leg over as many scoring voxels as it crosses, u
 Each rule raises before any transport and nothing is clamped or substituted (test C1,
 `tests/ionmc/test_config_validation.py`):
 
-* the projectile is not exactly the canonical proton (all fields; projectile fields are validated
-  when a `Projectile` is built); a stopping source that returns a table for another projectile or
+* the projectile is neither exactly the canonical proton nor one of the ions alpha, carbon12,
+  oxygen16 (all fields; projectile fields are validated when a `Projectile` is built; deuteron,
+  triton and He-3 fail closed); an ion source with `nuclear=True`, with `e_cut_mev` other than its
+  default, or with an energy outside its domain (see "Ion sources"); a stopping source that returns a table for another projectile or
   material than requested (the complete `Material` definition must be identical: composition,
-  density, I and density-effect parameters); `nuclear=True`; unknown model names;
+  density, I and density-effect parameters); `nuclear=True` on a non-proton source or on a Warp
+  backend; unknown model names;
 * `backend="python"` with `float32`; `warp-cuda` without a usable CUDA device (`BackendUnavailableError`, no
   fallback); `cpu_workers > 1` on `warp-cuda`, more workers than histories or more than 256;
   accumulators (one private copy per worker process) above `memory_budget_bytes`;
@@ -378,6 +382,40 @@ position, direction and energy of every escaping particle; `trace_histories = K`
 the first K histories (`ionmc.transport.reference.TRACE_COLUMNS`: voxel index, step reason, blocks drawn,
 straggling attempts, position, direction, energy, deposit, step length). The trace is the reference
 for trajectory-level parity with the Warp backends.
+
+## Ion sources (decision 0043)
+
+`PencilBeamSource` accepts the projectiles `PROTON`, `ALPHA` (4He), `CARBON12` and `OXYGEN16`;
+`ionmc.capabilities()["species_details"]` reports the matrix below (derived from the objects that
+enforce it). The ion models are electromagnetic only.
+
+| Species | Source energy domain [MeV/u] | Cutoff (default) |
+|---|---|---|
+| proton | `E0` in [2 `e_cut_mev`, stopping-table maximum] total MeV | `e_cut_mev` = 2 MeV |
+| alpha | 50 to 250 | `e_cut_ion_mev_per_u` x 4 = 8 MeV |
+| carbon12 | 80 to 430 | `e_cut_ion_mev_per_u` x 12 = 24 MeV |
+| oxygen16 | 100 to 430 | `e_cut_ion_mev_per_u` x 16 = 32 MeV |
+
+* **Domain.** For an ion, `E0 / A` and `(E0 + 6 sigma_E) / A` must lie in the domain; otherwise
+  `validate()` raises `UnsupportedCombinationError`.
+* **Cutoff.** The ion cutoff is `e_cut_ion_mev_per_u * A` (default 2 MeV/u) in total kinetic energy,
+  at least twice the table floor; `e_cut_mev` must stay at its default for an ion. Below the cutoff
+  the remaining energy is deposited locally.
+* **Nuclear interactions.** Protons only: an ion source with `nuclear=True` fails closed (nuclear
+  interactions, fragments and secondary ions are V3-009).
+* **Multiple scattering.** The model is `differential_moliere`; for z >= 2 the ion's `f_dM` is
+  obtained through the exact-Omega mapping of the ion state to a proton-equivalent state
+  ([EM transport](../physics/em-transport.md)). The effective configuration records the status
+  (`mcs_mapping`: the proton-equivalent energies, `fdm_extrapolated` when above the `f_dM` domain
+  edge of 300 MeV); a proton-equivalent energy above the proton table edge (4000 MeV) fails closed.
+  Ion stopping tables are keyed by the full material identity (name, density, composition, I,
+  density-effect parameters), not by the material name.
+* **Stopping.** Bethe tables with the Lindhard-Sorensen option `ls` (default `"off"`; `"eff"` and
+  `"bare_mixed"` are opt-in and recorded as requested and effective modes outside the table hash);
+  NIST ASTAR serves alpha in water only; there is no NIST table for carbon12 and oxygen16.
+* **Tallies.** The scoring channels of decision 0040 are available for ions on the backends that implement them
+  (`CHANNEL_BACKENDS`); the producible species is the source species at generation `primary` only (another
+  species or generation `secondary` fails closed).
 
 ## Nuclear interactions (decision 0041, python reference backend)
 

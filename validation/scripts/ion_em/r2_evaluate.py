@@ -4,7 +4,9 @@ Implemented now (design record ``validation/plans/v3-008/r2-topas-target.md`` se
 against the seal"): the two chronology checks, failing closed on any missing record.
 
 1. Ancestry: ``git merge-base --is-ancestor <seal> <code_sha>`` succeeds (the seal itself counts).
-2. Review before start: the seal review's ``finished_at`` is strictly earlier than the run's
+2. Review before start: the controlled review record proves that the seal commit itself passed its
+   independent review (``head_sha`` equals the plan's ``seal_sha``, ``status`` is ``passed``, report
+   verdict ``pass`` when present) and its ``finished_at`` is strictly earlier than the run's
    ``reference_started`` (records of the controlled services, never Git timestamps; the run's own
    ``finished_at`` is not used).
 
@@ -15,8 +17,15 @@ are implemented with the rows, after the sample seal.
 Record shapes (dicts; ISO-8601 timestamps with an explicit UTC offset or ``Z``):
 
 * ``plan``: ``{"seal_sha": str, "seal_review_id": str}``;
-* ``review``: ``{"review_id": str, "finished_at": str}``;
-* ``run``: ``{"code_sha": str, "reference_started": str}``.
+* ``review``: the controlled review record of the codex-worker service, fields used:
+  ``{"review_id", "head_sha", "status", "finished_at"}`` and ``report.verdict`` when a report is present;
+* ``run``: ``{"code_sha": str, "reference_started": str}`` plus ``run_id`` when the caller binds it.
+
+Reference-run loader contract (the loader is still a stub and not part of this module): the ``run``
+record handed to :func:`check_run_validity` must be the run's own signed/controlled record (the
+reference-runner record bound to the run id and the executed code SHA); ``reference_started`` and
+``code_sha`` are taken from that one record, never from an unlinked timestamp or a separately supplied
+SHA. Pass ``expected_run_id`` to bind the record to the run being graded.
 """
 
 from __future__ import annotations
@@ -79,10 +88,27 @@ def check_ancestry(repo: Path | str, seal_sha: Any, code_sha: Any) -> bool:
 def check_review_before_start(
     review: dict[str, Any] | None, plan: dict[str, Any] | None, run: dict[str, Any] | None
 ) -> bool:
-    """True iff the seal review recorded in ``plan`` finished strictly before the run started."""
+    """True iff the seal review recorded in ``plan`` passed for the seal commit and finished strictly
+    before the run started. Any missing, malformed, mismatched or non-passing field raises
+    :class:`ChronologyError`."""
     review_id = _require(plan, "seal_review_id", "plan seal note")
+    seal = _sha(_require(plan, "seal_sha", "plan seal note"), "plan seal_sha")
     if _require(review, "review_id", "seal review record") != review_id:
         raise ChronologyError("the review record is not the review named by the plan's seal note")
+    head = _sha(_require(review, "head_sha", "seal review head_sha"), "review head_sha")
+    if head != seal:
+        raise ChronologyError(
+            f"the review covers commit {head}, not the plan's seal commit {seal}"
+        )
+    status = _require(review, "status", "seal review status")
+    if status != "passed":
+        raise ChronologyError(f"the seal review did not pass (status={status!r})")
+    report = review.get("report") if isinstance(review, dict) else None
+    if report is not None:
+        if not isinstance(report, dict):
+            raise ChronologyError(f"the review report is malformed: {report!r}")
+        if "verdict" in report and report["verdict"] != "pass":
+            raise ChronologyError(f"the seal review verdict is not pass: {report['verdict']!r}")
     finished = _time(_require(review, "finished_at", "seal review finished_at"), "finished_at")
     started = _time(_require(run, "reference_started", "run reference_started"), "reference_started")
     return finished < started
@@ -93,9 +119,13 @@ def check_run_validity(
     plan: dict[str, Any] | None,
     review: dict[str, Any] | None,
     run: dict[str, Any] | None,
+    expected_run_id: str | None = None,
 ) -> dict[str, Any]:
     """Both chronology checks of one TOPAS run. ``valid`` is True only if both hold; any missing
-    record raises :class:`ChronologyError` (fail closed)."""
+    record raises :class:`ChronologyError` (fail closed). ``run`` must be the run's own controlled
+    record (see the module docstring); with ``expected_run_id`` its ``run_id`` must match."""
+    if expected_run_id is not None and _require(run, "run_id", "run record") != expected_run_id:
+        raise ChronologyError("the run record is not bound to the run being evaluated")
     seal = _require(plan, "seal_sha", "plan seal note")
     ancestry = check_ancestry(repo, seal, _require(run, "code_sha", "run record"))
     reviewed = check_review_before_start(review, plan, run)

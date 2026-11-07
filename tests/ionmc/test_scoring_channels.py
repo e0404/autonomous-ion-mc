@@ -639,8 +639,50 @@ def test_capability_report_matches_the_enforced_scoring_contract() -> None:
         PIECE_COUNT_NAME, LOCAL_PIECE_COUNT_NAME, EXCLUDED_CHANNEL_NAME
     }  # fmt: skip
     assert t["fail_closed"] and any("secondary" in r for r in t["fail_closed"])
-    assert cap["species"] == ["proton"]
+    assert cap["species"] == ["proton", "alpha", "carbon12", "oxygen16"]
     # the report is JSON-serialisable
+    json.dumps(cap)
+
+
+def test_capability_report_is_species_aware() -> None:
+    """Every registry species with a transport path is either supported (full matrix entry derived
+    from the enforcing objects) or listed as unsupported; ions fail closed for nuclear."""
+    import ionmc
+    from ionmc.config import E_CUT_ION_DEFAULT_MEV_PER_U, ION_DOMAIN_MEV_PER_U, ION_PROJECTILES
+    from ionmc.physics.projectiles import PROTON
+    from ionmc.species import REGISTRY, producible
+
+    cap = ionmc.capabilities()
+    det = cap["species_details"]
+    assert set(det) == set(cap["species"])
+    unsupported = {u["species"] for u in cap["unsupported_species"]}
+    for s in REGISTRY:
+        if s.transported:
+            assert (s.name in det) != (s.name in unsupported), s.name
+    assert unsupported == {"deuteron", "triton", "helium3"}
+    assert det["proton"]["energy_domain"]["unit"].startswith("MeV")
+    assert "supported" in det["proton"]["nuclear"]
+    for proj in ION_PROJECTILES:
+        d = det[proj.name]
+        lo, hi = ION_DOMAIN_MEV_PER_U[proj.name]
+        dom = d["energy_domain"]
+        assert (dom["unit"], dom["min"], dom["max"]) == ("MeV/u", lo, hi)
+        assert d["cutoff"]["e_cut_effective_mev_default"] == E_CUT_ION_DEFAULT_MEV_PER_U * proj.a
+        assert d["nuclear"].startswith("not supported")
+        assert (
+            "exact-Omega" in d["mcs"]["model"]
+            and "fdm_extrapolated" in d["mcs"]["fdm_domain_status"]
+        )
+        assert d["ls_default"] == "off"
+        assert (
+            {(t["species"], t["generation"]) for t in d["tallies"]["producible"]}
+            == set(producible(proj))
+            == {(proj.name, "primary")}
+        )
+        assert d["tallies"]["quantities"] == cap["tallies"]["quantities"]
+    assert {(t["species"], t["generation"]) for t in det["proton"]["tallies"]["producible"]} == set(
+        producible(PROTON)
+    )
     json.dumps(cap)
 
 

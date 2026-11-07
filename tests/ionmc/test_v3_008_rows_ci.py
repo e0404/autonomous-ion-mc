@@ -949,3 +949,38 @@ def test_i11_map_residual_at_transport_states(proj: Projectile) -> None:
     out = path._run(pv, pv, np.ones_like(pv), 0)
     assert np.all(path.last_status == 0)
     assert float(np.max(np.abs(out[:, 1]))) <= 1e-10
+
+
+def test_i0_same_name_materials_are_evaluated_separately() -> None:
+    """Distinct materials sharing a name keep separate ion tables in the f_dM domain scan (the
+    tables are keyed by the full material identity, not by ``Material.name``) and the persisted
+    mapping metadata is the maximum over both."""
+    a = Material("dup", 1.0, {"H": 0.111894, "O": 0.888106})
+    b = Material("dup", 1.19, {"H": 0.080538, "C": 0.599848, "O": 0.319614})
+    stop = BetheStoppingSource(options=BetheOptions(ls="eff"))  # table differs from the default
+    e_u = 290.0
+
+    def status(mats: tuple[Material, ...]) -> Any:
+        idx = np.arange(len(mats), dtype=np.int32).reshape(1, 1, len(mats))
+        geo = VoxelGeometry(
+            origin_mm=(-SIDE / 2, -SIDE / 2, 0.0),
+            spacing_mm=(SIDE, SIDE, 50.0),
+            shape=(1, 1, len(mats)),
+            materials=mats,
+            material_index=idx,
+        )
+        eff = validate(_cfg(CARBON12, e_u, geometry=geo, stopping=stop))
+        return eff, eff.summary()["mcs_mapping"]
+
+    _, sa = status((a,))
+    _, sb = status((b,))
+    eff, sab = status((a, b))
+    assert sa["p1v1_eq_kinetic_energy_mev"] != sb["p1v1_eq_kinetic_energy_mev"]
+    for key in ("p1v1_eq_kinetic_energy_mev", "p1v1_eq_kinetic_energy_hi_mev"):
+        assert sab[key] == max(sa[key], sb[key])
+    assert sab["fdm_extrapolated"] is True
+    assert eff.ion_mapping is not None and eff.ion_mapping.ion.shape[0] == 2
+    # the identity key separates what the name does not
+    from ionmc.transport.tables import material_fingerprint  # noqa: PLC0415
+
+    assert a.name == b.name and material_fingerprint(a) != material_fingerprint(b)

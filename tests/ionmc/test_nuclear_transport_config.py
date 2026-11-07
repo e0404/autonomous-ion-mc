@@ -120,9 +120,11 @@ def test_proton_tables_are_bit_identical_to_the_pre_v3_005a_build(
 
 
 def test_transport_tables_reject_other_projectiles(bethe_src: BetheStoppingSource) -> None:
-    for proj in (HELIUM3, ALPHA):  # z >= 2: effective charge (decision 0038), not implemented here
-        with pytest.raises(ValueError, match="z = 1"):
-            TransportTables.from_stopping_tables([bethe_src.table(WATER, proj)], projectile=proj)
+    # z >= 2 tables are constructible since V3-008 (ion transport); the species allow-list
+    # (4He, 12C, 16O; HELIUM3 rejected) is enforced by SimulationConfig.validate, see
+    # tests/ionmc/test_v3_008_rows_ci.py (I0 fail-closed cases).
+    for proj in (HELIUM3, ALPHA):
+        TransportTables.from_stopping_tables([bethe_src.table(WATER, proj)], projectile=proj)
     with pytest.raises(ValueError, match="energy_axis"):
         TransportTables.from_stopping_tables(
             [bethe_src.table(WATER, DEUTERON)], projectile=DEUTERON, energy_axis="per_nucleon"
@@ -376,7 +378,7 @@ def test_nuclear_effective_config_and_capabilities(make_config: MakeConfig, tid:
     base = ionmc.capabilities()
     base["backends"].pop("warp-cuda")  # host dependent
     digest = hashlib.sha256(json.dumps(base, sort_keys=True).encode()).hexdigest()
-    assert digest == CAPABILITIES_SHA256  # the report of 9913ddc6 (nuclear=False)
+    assert digest == CAPABILITIES_SHA256  # the species-aware report of V3-008 (nuclear=False)
     # the tally section is consistent with the nuclear one (secondaries transported and accepted)
     assert {(p["species"], p["generation"]) for p in cap["tallies"]["producible"]} == producible(
         PROTON, True
@@ -403,10 +405,17 @@ def test_nuclear_effective_config_and_capabilities(make_config: MakeConfig, tid:
     assert cap["tallies"] != base["tallies"]
     cap["tallies"] = base["tallies"]
     cap["physics"] = base["physics"]
+    assert (
+        cap["species_details"]["proton"]["tallies"] != base["species_details"]["proton"]["tallies"]
+    )
+    assert (
+        cap["species_details"]["carbon12"] == base["species_details"]["carbon12"]
+    )  # ions: no nuclear
+    cap["species_details"] = base["species_details"]
     assert cap == base
 
 
-CAPABILITIES_SHA256 = "a3d3052e5a894302a5fcd90b63d710d49fe8b8191dbf7055e517004ad279472e"
+CAPABILITIES_SHA256 = "6f56d69cb7937921fb3eb858fcf25d1a93ad67cfdced102cdd2b94f62e77007a"
 
 
 def test_capacity_bounds_follow_decision_0041_section_5(
