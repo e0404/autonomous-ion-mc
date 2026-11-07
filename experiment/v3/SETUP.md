@@ -219,8 +219,10 @@ block so that a repository-authored copy can be told apart from a real record.
   against the integration file (`trust_source: "integration"`). The
   protected validation and host-run stores are outside the repository write
   boundary, so a branch cannot supply forged records to match a key it
-  publishes; the Codex review of the key-publication commit confirms that the
-  published keys equal the service-printed ones.
+  publishes; that the published keys are the service-held ones is established
+  by this evidence rule of the gate (only the services can produce records
+  that verify under the published keys), not by the Codex review, which sees
+  the repository snapshot only.
 - **Verifier hardening:** both Ed25519 verifiers (`attest.py` and the
   repository copy `attest_verify.py`) reject a public key or a signature point
   R of small order (identity and the other points of order dividing 8), which
