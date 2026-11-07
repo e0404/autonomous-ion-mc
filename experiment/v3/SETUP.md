@@ -159,15 +159,27 @@ block so that a repository-authored copy can be told apart from a real record.
   every other task's merge gate is blocked until the operator publishes the
   keys** (the runbook does both keys in one sitting). Records with status
   `failed` always count as failing.
-- **Host-run evidence:** a validation record whose `details` carry
-  `host_run_id` (or `host_run_ids`) is only accepted if the signed run record
+- **Host-run evidence:** a validation record references host runs with
+  `details.host_runs = [{"run_id": "RUN-...", "output_manifest_sha256":
+  "<64 hex or null>"}]`. When `record_local_validation` receives entries with a
+  `run_id` but no `output_manifest_sha256`, the service looks up the signed run
+  record under the protected host-runs root and fills the digest in itself (the
+  orchestrator cannot mis-state it); if the run record is missing, the record
+  is still written but with `details.host_run_manifest_lookup: "missing"` and
+  the gate rejects it. The gate accepts the record only if the signed run record
   `<share root>/host-runs/<task>/<RUN-id>/record.json` exists
   (`infrastructure/validation/host_run_records.py`), is `verified` by a trusted
   `host-runner` key (unverified tolerated only in bootstrap, migration task
   only; missing or invalid never), has signed `task_id`, `sha` and `run_id`
   equal to the validation record's task, SHA and the referenced id (replay
-  protection), and shows `exit_code` 0 and `timed_out` false. `inspect` reports
-  each record's `host_run_attestation`.
+  protection), has a signed `output_manifest_sha256` equal to the claimed one
+  (null must match null; mismatch rejects), and succeeded: `succeeded` true,
+  `exit_code` 0, `timed_out` false, `committed_state_unchanged` true and
+  `dirty_after` false (when present), and no `output_publication_error`. The
+  legacy `host_run_id` / `host_run_ids` forms carry no manifest claim and are
+  rejected with "host run referenced without output_manifest_sha256 binding"
+  except for the bootstrap task. `inspect` reports each record's
+  `host_run_attestation`.
 - **Transport consumers:** `validation/scripts/transport/attest_verify.py`
   provides `require_verified(record, expected_signer, trust=None, *,
   expected_task_id, expected_git_sha, expected_run_id,

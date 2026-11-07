@@ -12,13 +12,15 @@ BOOT = "V3-INFRA-002"
 OTHER = "V3-X1"
 SHA = "a" * 40
 RUN = "RUN-20260101-000000-ABC123"
-MANIFEST = "m" * 64
+MANIFEST = "ab" * 32
 
 
 def _run(task=OTHER, sha=SHA, run_id=RUN, exit_code=0, timed_out=False, **over):
     rec = {
         "schema_version": 1, "run_id": run_id, "task_id": task, "sha": sha,
-        "exit_code": exit_code, "timed_out": timed_out,
+        "exit_code": exit_code, "timed_out": timed_out, "succeeded": True,
+        "committed_state_unchanged": True, "dirty_after": False,
+        "output_publication_error": None,
         "output_manifest_sha256": MANIFEST,
     }
     rec.update(over)
@@ -29,7 +31,9 @@ def _val(task=OTHER, run_ids=(RUN,), **over):
     rec = {
         "schema_version": 1, "validation_id": "VAL-1", "task_id": task, "suite": "s",
         "status": "passed", "summary": "ok", "git_sha": SHA,
-        "details": {"host_run_id": run_ids[0]} if len(run_ids) == 1 else {"host_run_ids": list(run_ids)},
+        "details": {"host_runs": [
+            {"run_id": r, "output_manifest_sha256": MANIFEST} for r in run_ids
+        ]},
     }
     rec.update(over)
     return rec
@@ -177,7 +181,11 @@ def test_gate_missing_run_record_rejected(env, capsys):
     assert code == 1 and "missing" in out["rejected_records"][0]["reason"]
 
 
-@pytest.mark.parametrize("over", [{"exit_code": 1}, {"exit_code": None, "timed_out": True}])
+@pytest.mark.parametrize("over", [{"exit_code": 1}, {"exit_code": None, "timed_out": True},
+    {"succeeded": False}, {"succeeded": None}, {"dirty_after": True},
+    {"committed_state_unchanged": False}, {"committed_state_unchanged": None},
+    {"output_publication_error": "disk full"},
+])
 def test_gate_failed_run_rejected(env, capsys, over):
     vm, hr, put_val, put_run = _enforcing_setup(env)
     put_run(attest.sign_record(_run(**over), hr, "host-runner"))
@@ -203,3 +211,91 @@ def test_gate_bootstrap_missing_run_still_rejected(env, capsys):
     put_val(_val(task=BOOT), task=BOOT)
     code, out = _check(capsys, BOOT)
     assert code == 1 and "missing" in out["rejected_records"][0]["reason"]
+
+
+def _legacy(form):
+    rec = _val()
+    rec["details"] = {"host_run_id": RUN} if form == "one" else {"host_run_ids": [RUN]}
+    return rec
+
+
+@pytest.mark.parametrize("form", ["one", "many"])
+def test_gate_legacy_reference_rejected_when_enforcing(env, capsys, form):
+    vm, hr, put_val, put_run = _enforcing_setup(env)
+    put_run(attest.sign_record(_run(), hr, "host-runner"))
+    put_val(attest.sign_record(_legacy(form), vm, "validation-manager"))
+    code, out = _check(capsys, OTHER)
+    assert code == 1
+    assert "without output_manifest_sha256 binding" in out["rejected_records"][0]["reason"]
+
+
+def test_gate_legacy_reference_tolerated_in_bootstrap_only(env, capsys):
+    vm, hr, trust, put_val, put_run = env
+    put_run(_run(task=BOOT), task=BOOT)
+    rec = _legacy("one")
+    rec["task_id"] = BOOT
+    put_val(rec, task=BOOT)
+    code, _ = _check(capsys, BOOT)
+    assert code == 0
+
+
+@pytest.mark.parametrize("claim", ["0" * 64, None])
+def test_gate_manifest_mismatch_rejected(env, capsys, claim):
+    vm, hr, put_val, put_run = _enforcing_setup(env)
+    put_run(attest.sign_record(_run(), hr, "host-runner"))
+    rec = _val()
+    rec["details"]["host_runs"][0]["output_manifest_sha256"] = claim
+    put_val(attest.sign_record(rec, vm, "validation-manager"))
+    code, out = _check(capsys, OTHER)
+    assert code == 1 and "output_manifest_sha256" in out["rejected_records"][0]["reason"]
+
+
+def test_gate_null_manifest_matches_null(env, capsys):
+    vm, hr, put_val, put_run = _enforcing_setup(env)
+    put_run(attest.sign_record(_run(output_manifest_sha256=None), hr, "host-runner"))
+    rec = _val()
+    rec["details"]["host_runs"][0]["output_manifest_sha256"] = None
+    put_val(attest.sign_record(rec, vm, "validation-manager"))
+    code, out = _check(capsys, OTHER)
+    assert code == 0 and out["status"] == "passed"
+
+
+def test_gate_malformed_claim_rejected(env, capsys):
+    vm, hr, put_val, put_run = _enforcing_setup(env)
+    put_run(attest.sign_record(_run(), hr, "host-runner"))
+    rec = _val()
+    rec["details"]["host_runs"][0]["output_manifest_sha256"] = "xyz"
+    put_val(attest.sign_record(rec, vm, "validation-manager"))
+    code, out = _check(capsys, OTHER)
+    assert code == 1 and "64 hex" in out["rejected_records"][0]["reason"]
+
+
+def _record(capsys, details):
+    lv.record(OTHER, "s", "passed", "ok", json.dumps(details))
+    return json.loads(capsys.readouterr().out)["validation"]
+
+
+def test_record_fills_manifest_from_signed_run_record(env, capsys):
+    vm, hr, put_val, put_run = _enforcing_setup(env)
+    put_run(attest.sign_record(_run(), hr, "host-runner"))
+    val = _record(capsys, {"host_runs": [{"run_id": RUN}]})
+    assert val["details"]["host_runs"] == [
+        {"run_id": RUN, "output_manifest_sha256": MANIFEST}
+    ]
+    assert "host_run_manifest_lookup" not in val["details"]
+
+
+def test_record_stated_manifest_kept_and_rejected_by_gate(env, capsys):
+    vm, hr, put_val, put_run = _enforcing_setup(env)
+    put_run(attest.sign_record(_run(), hr, "host-runner"))
+    val = _record(capsys, {"host_runs": [{"run_id": RUN, "output_manifest_sha256": "0" * 64}]})
+    assert val["details"]["host_runs"][0]["output_manifest_sha256"] == "0" * 64
+
+
+def test_record_missing_run_marks_lookup_and_gate_rejects(env, capsys):
+    vm, hr, trust, put_val, put_run = env
+    val = _record(capsys, {"host_runs": [{"run_id": RUN}]})
+    assert val["details"]["host_run_manifest_lookup"] == "missing"
+    assert "output_manifest_sha256" not in val["details"]["host_runs"][0]
+    code, out = _check(capsys, OTHER)
+    assert code == 1

@@ -153,19 +153,62 @@ def bootstrap_allowed(task_id: str, trusted: dict, signer: str = SIGNER) -> bool
     return not trusted.get(signer) and normalize_task_id(task_id) in BOOTSTRAP_TASKS
 
 
-def host_run_ids(rec: dict) -> list[str]:
-    """Host run ids referenced by a validation record's details."""
+LEGACY_NO_BINDING = "host run referenced without output_manifest_sha256 binding"
+MANIFEST_PATTERN = re.compile(r"[0-9a-f]{64}")
+_NO_CLAIM = object()
+
+
+def host_run_refs(rec: dict) -> list[tuple[str, object]]:
+    """Host runs referenced by a validation record as (run_id, claim).
+
+    Convention: ``details.host_runs = [{"run_id": "RUN-...",
+    "output_manifest_sha256": "<64 hex or null>"}]``. ``claim`` is the stated
+    digest (str or None) when the key is present, else the ``_NO_CLAIM``
+    sentinel. The legacy ``host_run_id`` / ``host_run_ids`` forms never carry a
+    claim.
+    """
     details = rec.get("details")
     if not isinstance(details, dict):
         return []
-    ids = []
+    refs: list[tuple[str, object]] = []
+    runs = details.get("host_runs")
+    if isinstance(runs, list):
+        for item in runs:
+            if isinstance(item, dict) and isinstance(item.get("run_id"), str):
+                run_id = item["run_id"].strip()
+                if run_id:
+                    refs.append((run_id, item.get("output_manifest_sha256", _NO_CLAIM)))
     value = details.get("host_run_id")
     if isinstance(value, str) and value.strip():
-        ids.append(value.strip())
+        refs.append((value.strip(), _NO_CLAIM))
     many = details.get("host_run_ids")
     if isinstance(many, list):
-        ids.extend(v.strip() for v in many if isinstance(v, str) and v.strip())
-    return ids
+        refs.extend((v.strip(), _NO_CLAIM) for v in many if isinstance(v, str) and v.strip())
+    return refs
+
+
+def host_run_ids(rec: dict) -> list[str]:
+    """Host run ids referenced by a validation record's details."""
+    return [run_id for run_id, _ in host_run_refs(rec)]
+
+
+def run_success_problem(run: dict) -> str | None:
+    """Reason a signed run record cannot support validation, else None."""
+    checks = [
+        ("succeeded", run.get("succeeded") is True),
+        ("exit_code", run.get("exit_code") == 0),
+        ("timed_out", run.get("timed_out") is False),
+        (
+            "committed_state_unchanged",
+            "committed_state_unchanged" not in run or run["committed_state_unchanged"] is True,
+        ),
+        ("dirty_after", "dirty_after" not in run or run["dirty_after"] is False),
+        ("output_publication_error", run.get("output_publication_error") is None),
+    ]
+    bad = [f"{name}={run.get(name)!r}" for name, ok in checks if not ok]
+    if bad:
+        return "host run did not succeed: " + ", ".join(bad)
+    return None
 
 
 def check_host_runs(rec: dict, task_id: str, sha: str, trusted: dict) -> list[dict]:
@@ -173,15 +216,25 @@ def check_host_runs(rec: dict, task_id: str, sha: str, trusted: dict) -> list[di
 
     Each entry: {run_id, status, reason, ok}. ``ok`` is False for a missing,
     invalid or (when not tolerated) unverified run record, a task/SHA that
-    differs from the validation record's, a non-zero exit code or a timeout.
+    differs from the validation record's, an output manifest digest that
+    differs from the validation record's claim (null included), a legacy
+    reference without a manifest claim (when not tolerated), or a run that did
+    not succeed (see run_success_problem).
     """
     from infrastructure.validation import host_run_records as hrr
 
     tolerated = bootstrap_allowed(task_id, trusted, HOST_RUN_SIGNER)
+    details = rec.get("details") if isinstance(rec.get("details"), dict) else {}
+    lookup_missing = details.get("host_run_manifest_lookup") == "missing"
     out = []
-    for run_id in host_run_ids(rec):
+    for run_id, claim in host_run_refs(rec):
         entry = {"run_id": run_id, "status": "missing", "reason": "", "ok": False}
         out.append(entry)
+        if claim is not _NO_CLAIM and not (
+            claim is None or (isinstance(claim, str) and MANIFEST_PATTERN.fullmatch(claim))
+        ):
+            entry["reason"] = "output_manifest_sha256 claim is not 64 hex digits or null"
+            continue
         try:
             run = hrr.load_signed_run_record(run_id, normalize_task_id(task_id))
         except hrr.RunRecordMissing as exc:
@@ -193,6 +246,7 @@ def check_host_runs(rec: dict, task_id: str, sha: str, trusted: dict) -> list[di
             rec.get("git_sha", ""),
             run_id,
             trusted,
+            expected_output_manifest_sha256=claim if isinstance(claim, str) else None,
         )
         entry["status"], entry["reason"] = status, reason
         if status == "invalid":
@@ -200,11 +254,21 @@ def check_host_runs(rec: dict, task_id: str, sha: str, trusted: dict) -> list[di
         if status != "verified" and not tolerated:
             entry["reason"] = f"host run record {status} (attestation required): {reason}"
             continue
-        if run.get("exit_code") != 0 or run.get("timed_out") is not False:
+        if claim is None and run.get("output_manifest_sha256") is not None:
+            entry["status"] = "invalid"
             entry["reason"] = (
-                f"host run did not succeed: exit_code={run.get('exit_code')!r} "
-                f"timed_out={run.get('timed_out')!r}"
+                "output_manifest_sha256 mismatch: claimed null, signed run record has "
+                f"{run.get('output_manifest_sha256')!r}"
             )
+            continue
+        if claim is _NO_CLAIM and (not tolerated or lookup_missing):
+            entry["reason"] = LEGACY_NO_BINDING + (
+                " (run record was missing at record time)" if lookup_missing else ""
+            )
+            continue
+        problem = run_success_problem(run)
+        if problem:
+            entry["reason"] = problem
             continue
         entry["ok"] = True
     return out
@@ -225,10 +289,13 @@ def evaluate(records: list[dict], dirty: bool, task_id: str) -> dict:
       keys.
     - "invalid" records (present but wrong, or signed identity not matching the
       requested task/SHA) are always rejected, even in bootstrap.
-    - A passed record that references host runs (details.host_run_id) is
-      rejected unless every referenced signed run record is present, bound to
-      the same task/SHA, verified (or bootstrap-tolerated, see check_host_runs)
-      and succeeded (exit_code 0, not timed out).
+    - A passed record that references host runs (details.host_runs, each with
+      run_id and output_manifest_sha256) is rejected unless every referenced
+      signed run record is present, bound to the same task/SHA and manifest
+      digest, verified (or bootstrap-tolerated, see check_host_runs) and
+      succeeded (succeeded true, exit_code 0, not timed out, state unchanged,
+      no publication error). Legacy host_run_id(s) references carry no
+      manifest binding and are rejected outside bootstrap.
     - Every record with status "failed" counts as failing regardless of its
       attestation (a forged failure can only block, never release, the gate).
     """
@@ -291,6 +358,31 @@ def evaluate(records: list[dict], dirty: bool, task_id: str) -> dict:
     return summary
 
 
+def fill_host_run_manifests(details, task_id: str):
+    """Fill output_manifest_sha256 of details.host_runs entries at record time.
+
+    The digest comes from the signed run record under the protected host-runs
+    root, so the caller cannot mis-state it. If a run record is missing the
+    entry is left unbound and details.host_run_manifest_lookup = "missing" is
+    set; the gate rejects such a record later.
+    """
+    if not isinstance(details, dict) or not isinstance(details.get("host_runs"), list):
+        return details
+    from infrastructure.validation import host_run_records as hrr
+
+    for item in details["host_runs"]:
+        if not isinstance(item, dict) or "output_manifest_sha256" in item:
+            continue
+        run_id = item.get("run_id")
+        try:
+            run = hrr.load_signed_run_record(run_id, task_id)
+        except hrr.RunRecordMissing:
+            details["host_run_manifest_lookup"] = "missing"
+            continue
+        item["output_manifest_sha256"] = run.get("output_manifest_sha256")
+    return details
+
+
 def record(
     task_id: str,
     suite: str,
@@ -310,6 +402,8 @@ def record(
         details = json.loads(details_json)
     except json.JSONDecodeError as exc:
         raise ValueError("--details-json must contain valid JSON") from exc
+
+    details = fill_host_run_manifests(details, normalize_task_id(task_id))
 
     now = datetime.now(timezone.utc)
 
