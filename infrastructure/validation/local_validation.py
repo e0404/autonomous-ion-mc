@@ -10,8 +10,16 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
+# This file runs as a script (record_local_validation executes it in a
+# subprocess), so Python puts infrastructure/validation, not the repository
+# root, on sys.path. The repository root is inserted here, at import time, so
+# that the sibling namespace packages (infrastructure.experiment_v3,
+# infrastructure.validation.host_run_records) import on every code path.
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
-WORKTREE_ROOT = Path(__file__).resolve().parents[2].parent / (Path(__file__).resolve().parents[2].name + "-worktrees")
+WORKTREE_ROOT = REPO_ROOT.parent / (REPO_ROOT.name + "-worktrees")
 
 VALIDATION_ROOT = Path(
     os.environ.get(
@@ -81,7 +89,6 @@ HOST_RUN_SIGNER = "host-runner"
 
 
 def _attest():
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
     from infrastructure.experiment_v3 import attest
 
     return attest

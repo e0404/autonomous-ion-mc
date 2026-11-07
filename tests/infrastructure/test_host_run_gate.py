@@ -360,3 +360,30 @@ def test_record_missing_run_marks_lookup_and_gate_rejects(env, capsys):
     assert "output_manifest_sha256" not in val["details"]["host_runs"][0]
     code, out = _check(capsys, OTHER)
     assert code == 1
+
+
+def test_script_execution_imports_host_run_records(tmp_path):
+    """record_local_validation runs local_validation.py as a script: sys.path then holds
+    infrastructure/validation, not the repository root. The host-run code paths must import
+    nevertheless (regression: ModuleNotFoundError before signing, which blocked key publication)."""
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    script = Path(lv.__file__).resolve()
+    code = (
+        "import json, runpy, sys\n"
+        f"m = runpy.run_path({str(script)!r})\n"
+        "assert not any(p.endswith('ion-mc') or p.endswith('ion-mc-worktrees') for p in sys.path[:0])\n"
+        "d = m['fill_host_run_manifests']({'host_runs': [{'run_id': 'RUN-NONE'}]}, 'V3-X1')\n"
+        "rec = {'details': d, 'git_sha': 'a' * 40, 'task_id': 'V3-X1'}\n"
+        "out = m['check_host_runs'](rec, 'V3-X1', 'a' * 40, {})\n"
+        "print(json.dumps({'lookup': d.get('host_run_manifest_lookup'), 'status': out[0]['status']}))\n"
+    )
+    proc = subprocess.run(
+        [sys.executable, "-I", "-c", code],
+        cwd=tmp_path, text=True, capture_output=True, timeout=120,
+    )
+    assert proc.returncode == 0, proc.stderr
+    result = json.loads(proc.stdout.strip().splitlines()[-1])
+    assert result == {"lookup": "missing", "status": "missing"}
