@@ -12,12 +12,12 @@
     20600423
   ],
   "scorers": [
-    "IDD: DoseToMedium, 1x1x2500 bins (full 120x120 mm lateral extent, 0.1 mm depth bins); Report Sum, Standard_Deviation"
+    "none: timing/step smoke; the placeholder output is not an observable and is not read (P4 convention)"
   ],
-  "units": "IDD: TOPAS CSV with '#' header, dose in Gy (run total; divide by histories); converted to laterally integrated energy per depth (MeV/mm per primary) with the slab mass 120 x 120 mm x bin depth at 1.0 g/cm3. Fluence 1/mm2 run total. Bins 0-based, z from the entrance face",
-  "rationale": "V3-008 plan revision 2 step-length smoke (execution only): TrackingVerbosity 1 records whether scorer-bin boundaries limit the primary step length (relevant to the Urban step dependence); every scorer output is deleted unread; no evidence",
+  "units": "none: no quantity is graded; the placeholder scorer output (MeV, run total) is not read",
+  "rationale": "V3-008 plan revision 2 step-length smoke (execution only): TrackingVerbosity 1 records the primary step lengths in the unbinned geometry (relevant to the Urban step dependence; the effect of the fine evidence scorer bins is not measured), read from the tracking printout only; the only scorer is a 1-bin placeholder (P4 convention), not read; no evidence",
   "expected_outputs": [
-    "idd_dose.csv"
+    "smoke_unread.csv"
   ],
   "arguments": []
 }

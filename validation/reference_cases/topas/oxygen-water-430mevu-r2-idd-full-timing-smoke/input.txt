@@ -1,4 +1,4 @@
-# Native OpenTOPAS 4.3 input. V3-008 plan revision 2 TIMING SMOKE (execution only): wall time and printouts only; every scorer output is deleted unread; no evidence. No validation claim.
+# Native OpenTOPAS 4.3 input. V3-008 plan revision 2 TIMING SMOKE (execution only): wall time and printouts only; no IDD or lateral scorer (P4 convention: one 1-bin placeholder, not read); no evidence. No validation claim.
 i:Ts/NumberOfThreads = 1
 i:Ts/Seed = 20600421
 b:Ts/PauseBeforeQuit = "False"
@@ -40,36 +40,13 @@ d:Ph/Default/CutForAllParticles = 0.05 mm
 # EM table upper edge above the highest total kinetic energy (default 600 MeV is below He 150-250 MeV/u totals).
 d:Ph/Default/EMRangeMax = 10 GeV
 
-# Laterally integrated depth dose: 3500 depth bins of 0.1 mm over the full 120 x 120 mm field.
-s:Sc/IDD/Quantity = "DoseToMedium"
-s:Sc/IDD/Component = "Water"
-i:Sc/IDD/XBins = 1
-i:Sc/IDD/YBins = 1
-i:Sc/IDD/ZBins = 3500
-s:Sc/IDD/OutputType = "csv"
-s:Sc/IDD/OutputFile = "idd_dose"
-s:Sc/IDD/IfOutputFileAlreadyExists = "Overwrite"
-sv:Sc/IDD/Report = 2 "Sum" "Standard_Deviation"
-
-s:Sc/IDDPrimary/Quantity = "DoseToMedium"
-s:Sc/IDDPrimary/Component = "Water"
-i:Sc/IDDPrimary/XBins = 1
-i:Sc/IDDPrimary/YBins = 1
-i:Sc/IDDPrimary/ZBins = 3500
-s:Sc/IDDPrimary/OnlyIncludeParticlesOfGeneration = "Primary"
-s:Sc/IDDPrimary/OutputType = "csv"
-s:Sc/IDDPrimary/OutputFile = "idd_primary_dose"
-s:Sc/IDDPrimary/IfOutputFileAlreadyExists = "Overwrite"
-sv:Sc/IDDPrimary/Report = 1 "Sum"
-
-s:Sc/PrimaryFluence/Quantity = "Fluence"
-s:Sc/PrimaryFluence/Component = "Water"
-i:Sc/PrimaryFluence/XBins = 1
-i:Sc/PrimaryFluence/YBins = 1
-i:Sc/PrimaryFluence/ZBins = 350
-s:Sc/PrimaryFluence/OnlyIncludeParticlesOfGeneration = "Primary"
-i:Sc/PrimaryFluence/OnlyIncludeParticlesOfAtomicNumber = 8
-s:Sc/PrimaryFluence/OutputType = "csv"
-s:Sc/PrimaryFluence/OutputFile = "primary_fluence"
-s:Sc/PrimaryFluence/IfOutputFileAlreadyExists = "Overwrite"
-sv:Sc/PrimaryFluence/Report = 1 "Sum"
+# Minimal placeholder scorer (P4 convention): validate_case requires non-empty scorers/expected_outputs. Not an observable; not read.
+s:Sc/SmokeEdep/Quantity = "EnergyDeposit"
+s:Sc/SmokeEdep/Component = "Water"
+i:Sc/SmokeEdep/XBins = 1
+i:Sc/SmokeEdep/YBins = 1
+i:Sc/SmokeEdep/ZBins = 1
+s:Sc/SmokeEdep/OutputType = "csv"
+s:Sc/SmokeEdep/OutputFile = "smoke_unread"
+s:Sc/SmokeEdep/IfOutputFileAlreadyExists = "Overwrite"
+sv:Sc/SmokeEdep/Report = 1 "Sum"

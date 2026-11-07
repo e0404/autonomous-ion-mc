@@ -236,8 +236,7 @@ and the ionmc batches; inconclusive = FAIL. Observables, estimators and resolvab
 | TD-H / TL-H | **Held-out set** He 100, C 150, O 200 MeV/u (cases 10–12), all four configurations; run ONCE, only after the main TD/TL rows are graded and after any model amendment | TD-EM (a)–(e), TD-FULL (a), (c), TL-EM (a), TL-FULL (a) (no D_ext) | held-out shared-lineage MC agreement | REF + LV |
 | TF-DIAG | Report-only TOPAS-internal diagnostics (no ionmc output): Δ_frag = R80_FULL − R80_EM, primary survival, FULL/EM plateau and peak ratios, σ_FULL,primary/σ_EM, halo fractions | report only; attribution rule in r2-topas-target.md §5.5 and STOP 5 | reference-internal | LV |
 
-**Order and blindness (revision 2).** Timing smokes and the step-length smoke (execution only, outputs deleted
-unread) → dated sizing note → implementation and the A-rows (T1/T12 failures STOP first) → ionmc TD/TL samples
+**Order and blindness (revision 2).** Timing smokes and the step-length smoke (execution only; **dated note 2026-11-07, Codex REVIEW-7a7186a2:** the 13 smoke bundles carry no IDD or lateral scorer, only the 1-bin placeholder `SmokeEdep` of the P4 convention, so no reference observable exists before the ionmc samples are locked and the blinding control does not rely on deletion of scorer outputs; sizing uses wall time and the run log, the step-length smoke is read from the tracking printout only; `r2-topas-target.md` §6 order step 2) → dated sizing note → implementation and the A-rows (T1/T12 failures STOP first) → ionmc TD/TL samples
 recorded with hashes **before any scored TOPAS output of these rows is materialized or read** → TD-EM/TL-EM graded →
 TD-FULL/TL-FULL graded → held-out set once. No ionmc parameter is fitted to TOPAS; no ionmc prediction is recomputed
 after a TOPAS output of the same row has been seen. **Run validity** per TOPAS part: zero killed/stuck tracks; the

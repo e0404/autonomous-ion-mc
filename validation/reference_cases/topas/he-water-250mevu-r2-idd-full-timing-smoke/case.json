@@ -12,16 +12,12 @@
     20600413
   ],
   "scorers": [
-    "IDD: DoseToMedium, 1x1x5000 bins (full 120x120 mm lateral extent, 0.1 mm depth bins); Report Sum, Standard_Deviation",
-    "IDDPrimary: as IDD with OnlyIncludeParticlesOfGeneration = Primary (report-only attribution diagnostic; excludes delta-electron and all secondary dose); Report Sum",
-    "PrimaryFluence: Fluence (1/mm2), 1x1x500 bins (1 mm), generation Primary and atomic number 2 (primary-ion survival, report-only); Report Sum"
+    "none: timing/step smoke; the placeholder output is not an observable and is not read (P4 convention)"
   ],
-  "units": "IDD: TOPAS CSV with '#' header, dose in Gy (run total; divide by histories); converted to laterally integrated energy per depth (MeV/mm per primary) with the slab mass 120 x 120 mm x bin depth at 1.0 g/cm3. Fluence 1/mm2 run total. Bins 0-based, z from the entrance face",
-  "rationale": "V3-008 plan revision 2 timing smoke (execution only): wall time and printouts (process list, module acceptance, killed tracks) size the parts; every scorer output is deleted unread by the runner; no evidence",
+  "units": "none: no quantity is graded; the placeholder scorer output (MeV, run total) is not read",
+  "rationale": "V3-008 plan revision 2 timing smoke (execution only): wall time and printouts (process list, module acceptance, killed tracks) size the parts; the only scorer is a 1-bin placeholder (P4 convention) whose output is not an observable and is not read; no evidence",
   "expected_outputs": [
-    "idd_dose.csv",
-    "idd_primary_dose.csv",
-    "primary_fluence.csv"
+    "smoke_unread.csv"
   ],
   "arguments": []
 }

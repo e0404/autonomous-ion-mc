@@ -15,7 +15,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 TOPAS = ROOT / "validation" / "reference_cases" / "topas"
-RECORDED_DIGEST = "9bd6f8023b4aa4b0bebbb21c5e237ea5a71c136dbc5243dbef5ef772c54a212f"
+RECORDED_DIGEST = "4a091ff6dafb250ac0c77431264d8f0c09594a8159d3a6f6d0d0b1e30c0fd373"
 FULL_MODULES = [
     "g4em-standard_opt4",
     "g4h-phy_QGSP_BIC_HP",
@@ -110,3 +110,27 @@ def test_module_lists(d):
     else:
         assert "-em-" in d.name
         assert mods == ["g4em-standard_opt4"]
+
+
+def _scorer_names(d):
+    text = (d / "input.txt").read_text()
+    return set(re.findall(r"^s:Sc/(\w+)/Quantity", text, re.M))
+
+
+@pytest.mark.parametrize("d", BUNDLES, ids=lambda d: d.name)
+def test_smokes_are_non_disclosing_and_evidence_has_observables(d):
+    case = json.loads((d / "case.json").read_text())
+    names = _scorer_names(d)
+    if d.name.endswith(("-timing-smoke", "-steps-verbose-smoke")):
+        # P4 convention: 1-bin placeholder only; no IDD/lateral scorer
+        assert names == {"SmokeEdep"}, d.name
+        assert case["expected_outputs"] == ["smoke_unread.csv"]
+        assert case["scorers"] == [
+            "none: timing/step smoke; the placeholder output is not an observable "
+            "and is not read (P4 convention)"
+        ]
+        assert not any(o.startswith(("idd", "lat", "primary")) for o in case["expected_outputs"])
+    else:
+        observable = {"IDD"} if "-idd-" in d.name else {"LatX", "LatY"}
+        assert observable <= names, d.name
+        assert "SmokeEdep" not in names
