@@ -45,6 +45,7 @@ from ionmc._wpfunc import python_twin
 from ionmc.config import MAX_REJECTION_ATTEMPTS, NUCLEAR_MAX_ENERGY_MEV, EffectiveConfig
 from ionmc.errors import CounterOverflowError
 from ionmc.physics.em import make_em
+from ionmc.physics.ion_mcs import make_ion_mcs
 from ionmc.physics.kinematics import make_kinematics
 from ionmc.physics.nuclear import make_nuclear
 from ionmc.rng.philox import (
@@ -68,6 +69,7 @@ from ionmc.transport.tally import (
     END_MISSED_WORLD,
     END_SOURCE_REJECTED,
     END_TRUNCATED,
+    ION_COUNTER_NAMES,
     N_FIXED_TALLIES,
     NUCLEAR_COUNTER_NAMES,
     NUCLEAR_TALLY_NAMES,
@@ -125,7 +127,12 @@ def run_reference(eff: EffectiveConfig) -> RawTransport:
     part = run_reference_range(eff, 0, n)
     diag = eff.requested.diagnostics
     raw = merge_partials(
-        [part], n, len(eff.requested.scoring), channel_columns(eff), eff.nuclear is not None
+        [part],
+        n,
+        len(eff.requested.scoring),
+        channel_columns(eff),
+        eff.nuclear is not None,
+        eff.is_ion,
     )
     raw.diagnostics = build_diagnostics(
         [part], diag.track_end_positions, diag.escape_records, diag.trace_histories
@@ -161,7 +168,7 @@ class _Reference:
         self.n_batches = cfg.run.n_batches
         ph = cfg.physics
         r = self.R
-        self.e_cut = ph.e_cut_mev
+        self.e_cut = eff.e_cut_mev
         self.c_alpha = r(ph.range_alpha)
         self.c_rho_f = r(ph.range_rho_f_mm)
         self.c_frac = r(ph.max_energy_loss_fraction)
@@ -170,6 +177,16 @@ class _Reference:
         self.path_exceeded = 0
         self.c_fshort = r(ph.short_step_fraction)
         self.mass = r(cfg.source.projectile.mass_mev)
+        self.charge = r(float(cfg.source.projectile.z))
+        self.is_ion = eff.is_ion
+        if self.is_ion:  # z >= 2: f_dM through the exact-Omega mapping (decision 0043 section 3)
+            assert eff.ion_mapping is not None
+            im = eff.ion_mapping
+            self.IM = python_twin(make_ion_mcs)
+            self.map_ion = im.ion.tolist()
+            self.map_pro = im.proton.tolist()
+            self.map_comp = im.comp.tolist()
+            self.map_quad = im.quad.tolist()
         self.trunc_diag = ph.truncated_hinge_diagnostic
         self.straggle_attempt = (
             self.EM.straggle_attempt_gamma
@@ -201,7 +218,9 @@ class _Reference:
         self.species_id = 0
         self.generation = 0
         self.nuc = eff.nuclear
-        self.counter_names: tuple[str, ...] = COUNTER_NAMES
+        self.counter_names: tuple[str, ...] = COUNTER_NAMES + (
+            ION_COUNTER_NAMES if self.is_ion else ()
+        )
         self.ntallies: dict[str, float] = {}
         self.nuc_diag: dict[str, dict[str, Any]] = {}  # nuclear event diagnostics (nuclear runs)
         if self.nuc is not None:  # conditional nuclear blocks (decision 0041 sections 2-5)
@@ -826,7 +845,21 @@ class _Reference:
                 e_mid = self._energy_from_range(m, r0 - rho * s / 20.0)
                 inv_xs = r(self.tab.inv_rho_xs_cm2_g[m])
                 pv_mid = K.pv_mev(r(e_mid), self.mass)
-                if birth:
+                if self.is_ion:
+                    e_end = (
+                        min(self._energy_from_range(m, r0 - rho * s / 10.0), energy)
+                        if birth
+                        else energy
+                    )
+                    var, st_map = self.IM.mcs_variance(
+                        self.map_ion, self.map_pro, self.map_comp, self.map_quad, m,
+                        self.charge, self.mass, pv_mid, K.pv_mev(r(e_end), self.mass), r(p1v1),
+                        1 if birth else 0, inv_xs, r(rho), r(s),
+                    )  # fmt: skip
+                    var = float(var)
+                    if st_map != 0:  # fail closed: the step scatters with zero variance
+                        self.counters["mcs_mapping_failure"] += 1
+                elif birth:
                     e_end = min(self._energy_from_range(m, r0 - rho * s / 10.0), energy)
                     var = float(
                         EM.scattering_variance_birth(
@@ -916,7 +949,7 @@ class _Reference:
                 var_e = EM.bohr_variance(
                     r(energy - 0.5 * mean_f),
                     self.mass,
-                    self.one,
+                    self.charge,
                     r(self.tab.z_over_a[m]),
                     r(rho),
                     r(s_act),

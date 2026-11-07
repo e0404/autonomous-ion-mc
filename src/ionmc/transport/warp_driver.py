@@ -27,6 +27,7 @@ from ionmc.transport.kernels import make_kernel_support, make_transport_kernel
 from ionmc.transport.run import channel_columns
 from ionmc.transport.tally import (
     COUNTER_NAMES,
+    ION_COUNTER_NAMES,
     N_FIXED_TALLIES,
     TRACE_N_CONTINUOUS,
     TRACE_N_DISCRETE,
@@ -73,7 +74,7 @@ def _register_count(kernel: Any, device: Any) -> int | None:
 def load_kernel(eff: EffectiveConfig, device: str) -> tuple[Any, float, int | None]:
     """Compile and load the kernel for ``eff`` on ``device``: ``(kernel, seconds, registers)``."""
     real = wp.float32 if eff.precision == "float32" else wp.float64
-    kernel = make_transport_kernel(real, wants_diagnostics(eff))
+    kernel = make_transport_kernel(real, wants_diagnostics(eff), eff.is_ion)
     dev = wp.get_device(device)
     t0 = time.perf_counter()
     wp.load_module(kernel.module, device=dev)
@@ -114,7 +115,7 @@ def run_warp_range(eff: EffectiveConfig, h0: int, h1: int, device: str) -> Parti
     ctl.n_grids = len(cfg.scoring)
     ctl.n_e = tab.n_e
     ctl.n_r = tab.n_r
-    ctl.e_cut = wp.float64(ph.e_cut_mev)
+    ctl.e_cut = wp.float64(eff.e_cut_mev)
     ctl.e_table_max = wp.float64(float(tab.e_max_mev.min()))
     ctl.e0 = wp.float64(src.kinetic_energy_mev)
     ctl.sigma_e = wp.float64(src.energy_sigma_mev)
@@ -125,6 +126,8 @@ def run_warp_range(eff: EffectiveConfig, h0: int, h1: int, device: str) -> Parti
     ctl.c_smax = wp.float64(ph.max_step_mm)
     ctl.c_fshort = wp.float64(ph.short_step_fraction)
     ctl.mass = wp.float64(src.projectile.mass_mev)
+    ctl.z = wp.float64(float(src.projectile.z))
+    ctl.ion = 1 if eff.is_ion else 0
     ctl.pos0 = vec(src.position_mm)
     ctl.dir = vec(eff.unit_direction)
     ctl.origin = vec(geo.origin_mm)
@@ -143,6 +146,16 @@ def run_warp_range(eff: EffectiveConfig, h0: int, h1: int, device: str) -> Parti
     g_shape = np.array([list(g.shape) for g in cfg.scoring], dtype=np.int32)
 
     t = tab.to_warp(device, wp.float64)  # energy and range tables in double in every variant
+    if eff.ion_mapping is not None:  # exact-Omega mapping data (double precision)
+        im = eff.ion_mapping
+        map_arrays = [
+            wp.array(a, dtype=wp.float64, device=device) for a in (im.ion, im.proton, im.comp)
+        ] + [wp.array(im.quad, dtype=wp.float64, device=device)]
+    else:  # dummy arrays: the proton kernel never reads them
+        dummy = np.zeros((1, 1))
+        map_arrays = [wp.array(dummy, dtype=wp.float64, device=device) for _ in range(3)] + [
+            wp.array(dummy[0], dtype=wp.float64, device=device)
+        ]
     arr_mat: Any = wp.array(np.ascontiguousarray(geo.material_index), dtype=wp.int32, device=device)
     arr_dens: Any = wp.array(
         np.ascontiguousarray(geo.densities_g_cm3(), dtype=np.float64),
@@ -170,7 +183,8 @@ def run_warp_range(eff: EffectiveConfig, h0: int, h1: int, device: str) -> Parti
     n_local = h1 - h0
     chunk = min(run.chunk_histories, max(n_local, 1))
     tally_rows = wp.zeros((chunk, n_cols), dtype=wp.float64, device=device)
-    counter_rows = wp.zeros((chunk, len(COUNTER_NAMES)), dtype=wp.int32, device=device)
+    counter_names = COUNTER_NAMES + (ION_COUNTER_NAMES if eff.is_ion else ())
+    counter_rows = wp.zeros((chunk, len(counter_names)), dtype=wp.int32, device=device)
     if use_diag:
         end_state = wp.zeros((chunk, 11), dtype=real, device=device)
         end_code = wp.zeros(chunk, dtype=wp.int32, device=device)
@@ -197,7 +211,7 @@ def run_warp_range(eff: EffectiveConfig, h0: int, h1: int, device: str) -> Parti
         ctl.trace_h0 = wp.uint32(0)
 
     comps: list[list[float]] = [[] for _ in range(n_cols)]
-    counter_sums = [0] * len(COUNTER_NAMES)
+    counter_sums = [0] * len(counter_names)
     chunk_seconds: list[float] = []
     t_loop = time.perf_counter()
     for c0 in range(h0, h1, chunk):
@@ -212,7 +226,7 @@ def run_warp_range(eff: EffectiveConfig, h0: int, h1: int, device: str) -> Parti
             inputs=[
                 ctl, arr_mat, arr_dens, t.ln_s_mass, t.r_mass, t.f_mass, t.d_f, t.ln_e_of_r,
                 t.ln_e0,
-                t.inv_dln_e, t.ln_r0, t.inv_dln_r, t.z_over_a, t.inv_rho_xs,
+                t.inv_dln_e, t.ln_r0, t.inv_dln_r, t.z_over_a, t.inv_rho_xs, *map_arrays,
                 arr_gorigin, arr_gspacing, arr_ginv, arr_gshape, arr_goff,
                 edep, tally_rows, counter_rows, end_state, end_code, trace_i, trace_f, trace_n,
                 chan,

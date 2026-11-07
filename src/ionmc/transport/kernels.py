@@ -45,6 +45,7 @@ import warp as wp
 from ionmc._wpfunc import check_real, named_func
 from ionmc.config import MAX_REJECTION_ATTEMPTS
 from ionmc.physics.em import make_em
+from ionmc.physics.ion_mcs import make_ion_mcs
 from ionmc.physics.kinematics import make_kinematics
 from ionmc.rng.philox import PURPOSE_SOURCE, PURPOSE_TRANSPORT, make_philox
 from ionmc.transport.funcs import make_transport_funcs
@@ -111,6 +112,8 @@ def make_kernel_support(real: type) -> SimpleNamespace:
         "c_smax": D,
         "c_fshort": D,
         "mass": D,
+        "z": D,  # charge number of the transported projectile (1 for a proton)
+        "ion": int,  # 1 for z >= 2: f_dM through the exact-Omega mapping
         "pos0": v3,
         "dir": v3,
         "origin": v3,
@@ -529,8 +532,12 @@ def make_kernel_support(real: type) -> SimpleNamespace:
 
 
 @functools.cache
-def make_transport_kernel(real: type, diag: bool):
+def make_transport_kernel(real: type, diag: bool, ion: bool = False):
     """Return the cached transport kernel for precision ``real`` and diagnostics flag ``diag``.
+
+    ``ion=True`` (z >= 2 sources) adds the exact-Omega mapping of f_dM to the multiple-scattering
+    step (``ionmc.physics.ion_mcs``, always in double precision like every energy quantity); with
+    ``ion=False`` a stub replaces it, so the proton kernel is the one of the qualified path.
 
     ``enable_backward`` is off and ``module="unique"`` gives every variant its own Warp module
     (its own compile unit and cache entry).
@@ -552,6 +559,30 @@ def make_transport_kernel(real: type, diag: bool):
     step_state = S.step_state
     chan_t = S.chan
     energy_from_range = S.energy_from_range
+    if ion:
+        ion_var = make_ion_mcs(D).mcs_variance
+    else:
+
+        @named_func(name)
+        def ion_var_stub(
+            ion_pk: wp.array2d(dtype=D),
+            pro_pk: wp.array2d(dtype=D),
+            comp_pk: wp.array2d(dtype=D),
+            quad: wp.array(dtype=D),
+            m: int,
+            z: D,
+            mass_mev: D,
+            pv_mid: D,
+            pv_end: D,
+            p1v1: D,
+            birth: int,
+            inv_x: D,
+            rho: D,
+            s_mm: D,
+        ) -> tuple[D, int]:
+            return D(0.0), 0
+
+        ion_var = ion_var_stub
 
     u_zero = wp.constant(wp.uint32(0))
     p_transport = wp.constant(wp.uint32(PURPOSE_TRANSPORT))
@@ -580,6 +611,10 @@ def make_transport_kernel(real: type, diag: bool):
         inv_dln_r: wp.array(dtype=D),
         z_over_a: wp.array(dtype=D),
         inv_xs: wp.array(dtype=D),
+        map_ion: wp.array2d(dtype=D),
+        map_pro: wp.array2d(dtype=D),
+        map_comp: wp.array2d(dtype=D),
+        map_quad: wp.array(dtype=D),
         g_origin: wp.array2d(dtype=R),
         g_spacing: wp.array2d(dtype=R),
         g_inv: wp.array2d(dtype=R),
@@ -617,6 +652,7 @@ def make_transport_kernel(real: type, diag: bool):
         c_strag = int(0)
         c_src = int(0)
         c_inv = int(0)
+        c_map = int(0)
         c_pieces = int(0)
         c_res = R(0.0)
         c_sx = R(0.0)
@@ -734,7 +770,22 @@ def make_transport_kernel(real: type, diag: bool):
                     inv_x = inv_xs[m]
                     pv_mid = K.pv_mev(e_mid, ctl.mass)
                     var = D(0.0)
-                    if birth == 1:
+                    if ctl.ion == 1:
+                        e_end_i = energy
+                        if birth == 1:
+                            e_end_i = wp.min(
+                                energy_from_range(
+                                    ln_er, ln_r0, inv_dln_r, ctl.n_r, m, r0 - rho * s_d / D(10.0)
+                                ),
+                                energy,
+                            )
+                        var, st_map = ion_var(
+                            map_ion, map_pro, map_comp, map_quad, m, ctl.z, ctl.mass, pv_mid,
+                            K.pv_mev(e_end_i, ctl.mass), p1v1, birth, inv_x, rho, s_d,
+                        )  # fmt: skip
+                        if st_map != 0:
+                            c_map = c_map + 1
+                    elif birth == 1:
                         e_end = wp.min(
                             energy_from_range(
                                 ln_er, ln_r0, inv_dln_r, ctl.n_r, m, r0 - rho * s_d / D(10.0)
@@ -843,7 +894,7 @@ def make_transport_kernel(real: type, diag: bool):
                 loss = D(mean)
                 if ctl.straggling == 1:
                     var_e = EMD.bohr_variance(
-                        energy - D(0.5) * mean, ctl.mass, one_d, z_over_a[m], rho, s_act_d
+                        energy - D(0.5) * mean, ctl.mass, ctl.z, z_over_a[m], rho, s_act_d
                     )
                     accepted = int(0)
                     k = int(0)
@@ -974,6 +1025,8 @@ def make_transport_kernel(real: type, diag: bool):
         counter_rows[tid, 5] = c_src
         counter_rows[tid, 6] = c_inv
         counter_rows[tid, 8] = c_pieces
+        if ctl.ion == 1:
+            counter_rows[tid, 9] = c_map
         if with_diag:
             end_state[tid, 0] = px
             end_state[tid, 1] = py

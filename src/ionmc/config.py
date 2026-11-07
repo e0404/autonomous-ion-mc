@@ -15,14 +15,24 @@ import math
 from dataclasses import dataclass, replace
 from typing import Any, Literal
 
+import numpy as np
+
 from ionmc._validate import choice, fail, integer, real
 from ionmc.errors import BackendUnavailableError
 from ionmc.geometry import BoxPhantom, VoxelGeometry
 from ionmc.lookup import LookupTable
 from ionmc.materials import WATER, Material
 from ionmc.physics.em import E_S_MEV
-from ionmc.physics.exact_omega import PROTON_FDM_STATUS, FdmDomainStatus
-from ionmc.physics.projectiles import DEUTERON, PROTON, Projectile
+from ionmc.physics.exact_omega import (
+    PROTON_FDM_STATUS,
+    FdmDomainStatus,
+    fdm_domain_status,
+    pack_composition,
+    pack_quadrature,
+    pack_transport_row,
+    proton_path,
+)
+from ionmc.physics.projectiles import ALPHA, CARBON12, DEUTERON, OXYGEN16, PROTON, Projectile
 from ionmc.physics.scattering import scattering_length_g_cm2
 from ionmc.physics.stopping import StoppingSource, StoppingTable
 from ionmc.scoring import MAX_SCORING_GRIDS, ScoringGrid, TallyRequest
@@ -55,6 +65,17 @@ CHANNEL_BACKENDS: tuple[str, ...] = ("python", "warp-cpu", "warp-cuda")
 rejected on every other backend, so a requested tally is never silently ignored."""
 NUCLEAR_MAX_ENERGY_MEV = 250.0
 
+ION_PROJECTILES = (ALPHA, CARBON12, OXYGEN16)
+"""The ions of the electromagnetic ion engine (decision 0043); He-3 and others fail closed."""
+ION_DOMAIN_MEV_PER_U = {
+    "alpha": (50.0, 250.0),
+    "carbon12": (80.0, 430.0),
+    "oxygen16": (100.0, 430.0),
+}
+"""Supported source energy per nucleon [MeV/u] of each ion (decision 0043 section 5): the source
+energy must lie inside and ``E0 + 6 sigma_E`` must not exceed the upper end."""
+E_CUT_ION_DEFAULT_MEV_PER_U = 2.0
+
 U01_MAPPING = {
     "float64": "((w >> 8) + 0.5) * 2**-24",
     "float32": "((w >> 9) + 0.5) * 2**-23",
@@ -69,6 +90,9 @@ class PhysicsOptions:
     backend, proton source only) additionally needs ``nuclear_table_id`` (the derived nuclear
     table, loaded and verified by ``validate()``) and uses ``e_cut_deuteron_mev`` (the deuteron
     cutoff, an engineering default of 4 MeV = twice the 2 MeV total-energy Bethe table floor).
+    For an ion source (z >= 2) the cutoff is ``e_cut_ion_mev_per_u`` x A (default 2 MeV/u,
+    decision 0043
+    section 4; ``e_cut_mev`` must then stay at its default 2.0 and is not used).
     ``stopping`` supplies the electronic stopping tables (for example an
     analytic :class:`~ionmc.physics.stopping.BetheStoppingSource`). Below ``e_cut_mev`` the
     remaining kinetic energy is deposited locally; ``max_step_mm`` bounds the step length;
@@ -99,6 +123,7 @@ class PhysicsOptions:
     truncated_hinge_diagnostic: bool = False
     e_cut_deuteron_mev: float = 4.0
     nuclear_table_id: str | None = None
+    e_cut_ion_mev_per_u: float = E_CUT_ION_DEFAULT_MEV_PER_U
 
     def __post_init__(self) -> None:
         for name in ("nuclear", "straggling", "multiple_scattering", "truncated_hinge_diagnostic"):
@@ -114,6 +139,7 @@ class PhysicsOptions:
             raise fail(f"stopping options ls must be 'off', 'eff' or 'bare_mixed', got {ls_mode!r}")
         real("e_cut_mev", self.e_cut_mev, positive=True)
         real("e_cut_deuteron_mev", self.e_cut_deuteron_mev, positive=True)
+        real("e_cut_ion_mev_per_u", self.e_cut_ion_mev_per_u, positive=True)
         if self.nuclear_table_id is not None and not isinstance(self.nuclear_table_id, str):
             raise fail("nuclear_table_id must be a string or None")
         real("max_step_mm", self.max_step_mm, positive=True)
@@ -231,6 +257,46 @@ class SimulationConfig:
 
 
 @dataclass(frozen=True, eq=False)
+class IonMappingData:
+    """Packed inputs of the exact-Omega mapping of an ion run (float64, one row per geometry
+    material, rows zero-padded to a common length; the headers carry the true sizes): ``ion`` the
+    transport-table rows of the ion, ``proton`` the mapping proton paths, ``comp`` the packed
+    compositions and ``quad`` the Gauss-Legendre rule (``ionmc.physics.exact_omega``)."""
+
+    ion: np.ndarray
+    proton: np.ndarray
+    comp: np.ndarray
+    quad: np.ndarray
+
+
+def _pad_rows(rows: list[np.ndarray]) -> np.ndarray:
+    width = max(len(r) for r in rows)
+    out = np.zeros((len(rows), width), dtype=np.float64)
+    for i, r in enumerate(rows):
+        out[i, : len(r)] = r
+    return out
+
+
+def _ion_mapping_data(tables: TransportTables, geometry: VoxelGeometry) -> IonMappingData:
+    mats = geometry.materials
+    return IonMappingData(
+        ion=_pad_rows([pack_transport_row(tables, i) for i in range(len(mats))]),
+        proton=_pad_rows([proton_path(m).pack for m in mats]),
+        comp=_pad_rows([pack_composition(m) for m in mats]),
+        quad=pack_quadrature(),
+    )
+
+
+def effective_e_cut_mev(config: SimulationConfig) -> float:
+    """The cutoff energy [MeV, total kinetic energy] of the run: ``e_cut_mev`` for a proton,
+    ``e_cut_ion_mev_per_u`` x A for an ion (z >= 2)."""
+    proj = config.source.projectile
+    if proj.z >= 2:
+        return config.physics.e_cut_ion_mev_per_u * proj.a
+    return config.physics.e_cut_mev
+
+
+@dataclass(frozen=True, eq=False)
 class EffectiveConfig:
     """What will actually run (recorded in every result).
 
@@ -257,6 +323,17 @@ class EffectiveConfig:
     channels: ChannelPlan | None = None
     nuclear: NuclearSetup | None = None
     fdm_domain: FdmDomainStatus = PROTON_FDM_STATUS
+    ion_mapping: IonMappingData | None = None
+
+    @property
+    def is_ion(self) -> bool:
+        """True for an ion source (z >= 2): MCS through the exact-Omega mapping."""
+        return self.requested.source.projectile.z >= 2
+
+    @property
+    def e_cut_mev(self) -> float:
+        """The effective cutoff energy [MeV] (see :func:`effective_e_cut_mev`)."""
+        return effective_e_cut_mev(self.requested)
 
     @property
     def ls_requested(self) -> str:
@@ -290,6 +367,9 @@ class EffectiveConfig:
             "unit_direction": list(self.unit_direction),
             "source": {
                 "projectile": s.projectile.name,
+                "z": s.projectile.z,
+                "a": s.projectile.a,
+                "mass_mev": s.projectile.mass_mev,
                 "position_mm": list(s.position_mm),
                 "kinetic_energy_mev": s.kinetic_energy_mev,
                 "energy_sigma_mev": s.energy_sigma_mev,
@@ -303,6 +383,8 @@ class EffectiveConfig:
                 "mcs_model": p.mcs_model,
                 "delta_electrons": p.delta_electrons,
                 "e_cut_mev": p.e_cut_mev,
+                "e_cut_ion_mev_per_u": p.e_cut_ion_mev_per_u,
+                "e_cut_effective_mev": self.e_cut_mev,
                 "max_step_mm": p.max_step_mm,
                 "max_energy_loss_fraction": p.max_energy_loss_fraction,
                 "range_alpha": p.range_alpha,
@@ -420,7 +502,9 @@ def _computed_max_steps(
     sp = geometry.spacing_mm
     n_len = math.ceil(path_mm / ph.max_step_mm)
     n_cross = math.ceil(path_mm * (1.0 / sp[0] + 1.0 / sp[1] + 1.0 / sp[2])) + 3
-    n_eloss = math.ceil(1.5 * math.log(max(e_hi / ph.e_cut_mev, 1.0)) / ph.max_energy_loss_fraction)
+    n_eloss = math.ceil(
+        1.5 * math.log(max(e_hi / effective_e_cut_mev(config), 1.0)) / ph.max_energy_loss_fraction
+    )
     n_range = math.ceil(math.log(max(path_mm / ph.range_rho_f_mm, 1.0)) / ph.range_alpha) + 10
     return int(4 * (n_len + n_cross + n_eloss + n_range) + 100)
 
@@ -466,7 +550,7 @@ def _compile_tallies(
         tables=tables,
         water=water,
         projectile=src.projectile,
-        e_cut_mev=ph.e_cut_mev,
+        e_cut_mev=effective_e_cut_mev(config),
         e_hi_mev=e_hi_mev,
         n_histories=run.n_histories,
         n_batches=run.n_batches,
@@ -672,11 +756,34 @@ def validate(config: SimulationConfig) -> EffectiveConfig:
     src, ph, run = config.source, config.physics, config.run
     geometry = _resolve_geometry(config.geometry)
 
-    if src.projectile != PROTON:
+    if src.projectile != PROTON and src.projectile not in ION_PROJECTILES:
         raise fail(
             f"projectile {src.projectile!r} is not supported: the transport engine implements "
-            f"exactly the canonical proton {PROTON!r} (ions arrive with V3-008)"
+            f"exactly the canonical proton {PROTON!r} and the ions "
+            f"{[p.name for p in ION_PROJECTILES]} (He-3 and every other ion fail closed)"
         )
+    is_ion = src.projectile.z >= 2
+    if is_ion:
+        if ph.nuclear:
+            raise fail(
+                f"nuclear=True is not available for the ion source {src.projectile.name!r} "
+                "(z >= 2): nuclear interactions, fragments and secondary ions are V3-009"
+            )
+        if ph.e_cut_mev != PhysicsOptions.__dataclass_fields__["e_cut_mev"].default:
+            raise fail(
+                "e_cut_mev applies to protons only; an ion source uses e_cut_ion_mev_per_u "
+                f"(got e_cut_mev = {ph.e_cut_mev}, the default is 2.0)"
+            )
+        lo_u, hi_u = ION_DOMAIN_MEV_PER_U[src.projectile.name]
+        e0_u = src.kinetic_energy_mev / src.projectile.a
+        e_hi_u = (src.kinetic_energy_mev + 6.0 * src.energy_sigma_mev) / src.projectile.a
+        if not lo_u <= e0_u <= hi_u or e_hi_u > hi_u:
+            raise fail(
+                f"{src.projectile.name} source energy {e0_u:g} MeV/u (E0 + 6 sigma_E = {e_hi_u:g} "
+                f"MeV/u) is outside the supported domain [{lo_u:g}, {hi_u:g}] MeV/u "
+                "(decision 0043 section 5)"
+            )
+    e_cut = effective_e_cut_mev(config)
     nuc_table = None
     nuc_rows: tuple[Any, ...] = ()
     if ph.nuclear:
@@ -729,24 +836,26 @@ def validate(config: SimulationConfig) -> EffectiveConfig:
             f"limit of {MAX_SCORING_PIECES}; increase the scoring spacing or reduce max_step_mm"
         )
 
-    stopping_tables = _stopping_tables(ph.stopping, geometry.materials)
+    stopping_tables = _stopping_tables(ph.stopping, geometry.materials, src.projectile)
     water_table = _water_table(config)
-    tables = TransportTables.from_stopping_tables(stopping_tables, water=water_table)
+    tables = TransportTables.from_stopping_tables(
+        stopping_tables, water=water_table, projectile=src.projectile
+    )
     nuclear: NuclearSetup | None = None
     if nuc_table is not None:
         tables, nuclear = _nuclear_tables(config, geometry, tables, nuc_table, nuc_rows)
     e_lo = float(tables.e_min_mev.max())
     e_hi_table = float(tables.e_max_mev.min())
-    if e_lo > 0.5 * ph.e_cut_mev:
+    if e_lo > 0.5 * e_cut:
         raise fail(
-            f"the stopping tables start at {e_lo} MeV, above half of e_cut_mev "
-            f"({ph.e_cut_mev}); the cutoff energy must be at least twice the table floor"
+            f"the stopping tables start at {e_lo} MeV, above half of the cutoff energy "
+            f"({e_cut} MeV); the cutoff energy must be at least twice the table floor"
         )
     e0 = src.kinetic_energy_mev
-    if not 2.0 * ph.e_cut_mev <= e0 <= e_hi_table:
+    if not 2.0 * e_cut <= e0 <= e_hi_table:
         raise fail(
             f"source energy {e0} MeV outside [2 e_cut, table maximum] = "
-            f"[{2.0 * ph.e_cut_mev}, {e_hi_table}] MeV"
+            f"[{2.0 * e_cut}, {e_hi_table}] MeV"
         )
     if src.energy_sigma_mev > MAX_ENERGY_SIGMA_FRACTION * e0:
         raise fail(
@@ -765,6 +874,20 @@ def validate(config: SimulationConfig) -> EffectiveConfig:
             f"{MAX_QUANTA * QUANTUM_MEV:g} MeV of a fixed-point voxel accumulator (quantum "
             f"{QUANTUM_MEV:g} MeV); increase n_batches or reduce n_histories"
         )
+
+    fdm_domain = PROTON_FDM_STATUS
+    ion_mapping: IonMappingData | None = None
+    if (
+        is_ion
+    ):  # row I0: f_dM domain status of the source; fails closed (UnsupportedCombinationError)
+        fdm_domain = fdm_domain_status(
+            src.projectile,
+            geometry.materials,
+            e0,
+            src.energy_sigma_mev,
+            ion_tables={t.material.name: t for t in stopping_tables},
+        )
+        ion_mapping = _ion_mapping_data(tables, geometry)
 
     max_steps_origin = "user" if run.max_steps is not None else "computed"
     max_steps = (
@@ -825,6 +948,8 @@ def validate(config: SimulationConfig) -> EffectiveConfig:
         scattering_length_g_cm2=tuple(scattering_length_g_cm2(m) for m in geometry.materials),
         channels=channels,
         nuclear=nuclear,
+        fdm_domain=fdm_domain,
+        ion_mapping=ion_mapping,
         rng={
             "generator": "philox4x32-10",
             "key": "seed low/high 32 bits",

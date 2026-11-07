@@ -115,6 +115,20 @@ class TransportCounters:
 
 
 @dataclass(frozen=True)
+class IonTransportCounters(TransportCounters):
+    """The counters of an ion run (z >= 2): the transport-limit counters plus
+    ``mcs_mapping_failure``, the number of steps whose exact-Omega mapping of f_dM returned a
+    nonzero status (decision 0043 section 3; the step scatters with zero variance and the result
+    is invalid)."""
+
+    mcs_mapping_failure: int = 0
+
+    def as_dict(self) -> dict[str, int]:
+        """The counters as a dictionary (with the ion block)."""
+        return {**super().as_dict(), "mcs_mapping_failure": self.mcs_mapping_failure}
+
+
+@dataclass(frozen=True)
 class NuclearTransportCounters(TransportCounters):
     """The counters of a ``nuclear=True`` run (decision 0041 section 5): the transport-limit
     counters plus the conditional block. ``majorant_violation``: candidates with
@@ -716,11 +730,13 @@ def _grid_result(
 
 def _assemble(eff: EffectiveConfig, raw: RawTransport) -> Result:
     cfg = eff.requested
-    counters = (
-        NuclearTransportCounters(**raw.counters)
-        if eff.nuclear is not None
-        else TransportCounters(**raw.counters)
-    )
+    counters: TransportCounters
+    if eff.nuclear is not None:
+        counters = NuclearTransportCounters(**raw.counters)
+    elif eff.is_ion:
+        counters = IonTransportCounters(**raw.counters)
+    else:
+        counters = TransportCounters(**raw.counters)
     ood = 0 if raw.channels is None else raw.channels.lookup_out_of_domain
     pbe = 0 if raw.channels is None else raw.channels.path_bound_exceeded
     valid = not counters.any_nonzero and ood == 0 and pbe == 0

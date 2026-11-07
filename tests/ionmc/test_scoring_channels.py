@@ -82,13 +82,15 @@ def test_registry_ids_are_frozen_and_append_only() -> None:
         (2, "triton"),
         (3, "helium3"),
         (4, "alpha"),
+        (5, "carbon12"),
+        (6, "oxygen16"),
     ]
     assert species_by_name("nuclear_local").transported is False
     assert species_by_name("nuclear_local").id == 64 < N_SPECIES_SLOTS
     assert species_by_id(0).name == "proton"
-    assert transported_ids() == (0, 1, 2, 3, 4)
+    assert transported_ids() == (0, 1, 2, 3, 4, 5, 6)
     with pytest.raises(ValueError):
-        species_by_name("carbon12")  # not appended yet (V3-009)
+        species_by_name("nitrogen14")  # not appended (V3-009)
     assert species_of_projectile(PROTON).id == 0
 
 

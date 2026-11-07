@@ -18,8 +18,10 @@ from dataclasses import dataclass
 
 from ionmc.physics.projectiles import (
     ALPHA,
+    CARBON12,
     DEUTERON,
     HELIUM3,
+    OXYGEN16,
     PROTON,
     TRITON,
     Projectile,
@@ -53,6 +55,8 @@ _ION_ENTRIES: tuple[Species, ...] = (
     _ion(2, TRITON),
     _ion(3, HELIUM3),
     _ion(4, ALPHA),
+    _ion(5, CARBON12),
+    _ion(6, OXYGEN16),
 )
 _PSEUDO_ENTRIES: tuple[Species, ...] = (Species(PSEUDO_BASE, "nuclear_local", False),)
 

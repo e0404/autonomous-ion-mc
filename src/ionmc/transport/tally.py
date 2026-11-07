@@ -109,6 +109,10 @@ NUCLEAR_TALLY_NAMES = (
 tally columns appended AFTER every other column (``TALLY_NAMES`` is never extended)."""
 NUCLEAR_COUNTER_NAMES = ("majorant_violation", "nuclear_rejection_limit", "nuclear_conservation")
 """Conditional counter block of a ``nuclear=True`` run, appended after ``COUNTER_NAMES``."""
+ION_COUNTER_NAMES = ("mcs_mapping_failure",)
+"""Conditional counter block of an ion run (z >= 2, decision 0043): steps whose exact-Omega mapping
+of f_dM did not converge (status != 0); appended after ``COUNTER_NAMES`` (ion and nuclear runs
+exclude each other). Any nonzero value invalidates the result."""
 
 QUANTUM_MEV = 2.0**-30
 """Fixed-point quantum of the deposit grids [MeV]: every deposit piece is rounded to the nearest
@@ -296,6 +300,7 @@ def merge_partials(
     n_grids: int,
     n_channel_columns: int = 0,
     nuclear: bool = False,
+    ion: bool = False,
 ) -> RawTransport:
     """Reduce the partial results of a complete, contiguous partition of ``[0, n_histories)``.
 
@@ -305,7 +310,8 @@ def merge_partials(
 
     ``nuclear`` (a ``nuclear=True`` run) adds the conditional blocks: the ``NUCLEAR_TALLY_NAMES``
     columns after all others and the ``NUCLEAR_COUNTER_NAMES`` counters after ``COUNTER_NAMES``;
-    they appear in ``tallies`` / ``counters`` only then.
+    they appear in ``tallies`` / ``counters`` only then. ``ion`` (a z >= 2 run) appends
+    ``ION_COUNTER_NAMES`` after ``COUNTER_NAMES``.
 
     Fails closed (``ValueError``) for gaps, overlaps, a different number of columns or grids.
     """
@@ -320,7 +326,11 @@ def merge_partials(
     if pos != n_histories:
         raise ValueError(f"partial results cover [0, {pos}), expected [0, {n_histories})")
     n_nuc_t = len(NUCLEAR_TALLY_NAMES) if nuclear else 0
-    counter_names = COUNTER_NAMES + (NUCLEAR_COUNTER_NAMES if nuclear else ())
+    counter_names = (
+        COUNTER_NAMES
+        + (NUCLEAR_COUNTER_NAMES if nuclear else ())
+        + (ION_COUNTER_NAMES if ion else ())
+    )
     n_cols = N_FIXED_TALLIES + 2 * n_grids + n_channel_columns + n_nuc_t
     for p in parts:
         if (p.channel_acc is not None) != (n_channel_columns > 0):
