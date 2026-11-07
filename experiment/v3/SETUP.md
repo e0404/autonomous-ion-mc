@@ -199,25 +199,39 @@ block so that a repository-authored copy can be told apart from a real record.
   while the integration trust map has no `validation-manager` key, a task
   branch whose ONLY change against the integration base (`git diff
   --name-only $(git merge-base origin/<integration> <sha>) <sha>`) is
-  `infrastructure/keys/trusted_attestation_keys.json`, and whose file lists at
-  least one well-formed entry (32-byte key, `key_id` = sha256(key)[:16]) for
-  BOTH signers, is evaluated against its own trust file (`trust_source:
-  "key-publication"`, enforcement `enforcing`, no bootstrap tolerance, every
-  validation record and host run must verify). Any other change on the branch,
-  a malformed or incomplete trust file, or an integration trust map that
+  `infrastructure/keys/trusted_attestation_keys.json`, and whose file lists
+  EXACTLY one well-formed entry (32-byte key that is a valid non-small-order
+  curve point, `key_id` = sha256(key)[:16]) for BOTH signers, is evaluated
+  against its own trust file (`trust_source: "key-publication"`, enforcement
+  `enforcing`, no bootstrap tolerance, every validation record and host run
+  must verify). Every published key must be evidenced by a protected signed
+  record for that task and SHA: the gate passes only with a verified passing
+  validation record (proves the validation-manager key) that references a
+  verified, successful host run (proves the host-runner key); the output
+  carries `key_publication_evidence` and, when incomplete,
+  `key_publication_problem`. Any other change on the branch, a malformed,
+  incomplete or multi-key trust file, or an integration trust map that
   already has a key disables the mode (`trust_source: "integration"`). The
   protected validation and host-run stores are outside the repository write
   boundary, so a branch cannot supply forged records to match a key it
   publishes; the Codex review of the key-publication commit confirms that the
   published keys equal the service-printed ones.
+- **Verifier hardening:** both Ed25519 verifiers (`attest.py` and the
+  repository copy `attest_verify.py`) reject a public key or a signature point
+  R of small order (identity and the other points of order dividing 8), which
+  would otherwise satisfy the verification equation for any message; the
+  trust-map parser rejects such keys too. Adversarial vectors are in
+  `tests/infrastructure/test_attest.py`.
 - **Operator runbook:** merge the PR; restart the MCP servers (they create
   their keys on first use). Then the orchestrator (or operator) creates a
   key-publication task whose only change is the trust file: take each
   signer's `key_id`/`public_key` from `python
   infrastructure/experiment_v3/attest.py --print-public-key <signer>` (or
   from the `attestation.public_key` of the first signed `VAL-`/`RUN-` record,
-  which must agree), record validation for it after the restart (signed),
-  review, push, CI, merge. Records created before the restart carry no
+  which must agree), run one host-runner job for the task (its signed run
+  record is the host-runner key's evidence), record validation for it after
+  the restart (signed, referencing that run in `details.host_runs`), review,
+  push, CI, merge. Records created before the restart carry no
   attestation and stay `unverified`; once the `validation-manager` key is
   published they no longer count toward the gate, so re-record validation
   after publishing the key. Until the key-publication commit merges every

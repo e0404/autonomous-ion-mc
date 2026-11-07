@@ -101,9 +101,10 @@ def enforcing(trusted: dict) -> bool:
 # a key-publication commit merges; that commit could never pass an empty-trust
 # gate. Therefore, while the integration trust map has no validation-manager
 # key, a task branch whose ONLY change against the integration base is the
-# trust file itself, and whose trust file lists at least one well-formed key
+# trust file itself, and whose trust file lists exactly one well-formed key
 # for every signer, is evaluated against ITS OWN trust file, with no bootstrap
-# tolerance (every record must verify). Any other change on the branch, or a
+# tolerance (every record must verify) and with signed evidence required for
+# every published key (evaluate). Any other change on the branch, or a
 # malformed trust file, disables the mode and the task stays blocked.
 KEY_FILE_REL = "infrastructure/keys/trusted_attestation_keys.json"
 CONDITION_PATH = Path(__file__).resolve().parents[2] / ".ionmc-condition.json"
@@ -119,11 +120,14 @@ def base_ref() -> str:
     return f"origin/{branch}"
 
 
-def parse_trust_map(data) -> dict:
+def parse_trust_map(data, *, exactly_one: bool = False) -> dict:
     """Strict parse of a trust file: {signer: {key_id: public_key_hex}}.
 
-    Every signer in SIGNERS must be present with at least one entry; each entry
-    must carry a key_id equal to the public key's derived id. Raises ValueError.
+    Every signer in SIGNERS must be present with at least one entry (exactly
+    one with ``exactly_one``, the key-publication rule: a published key that
+    is not evidenced cannot hide behind an evidenced one); each entry must
+    carry a key_id equal to the public key's derived id, and the key must be a
+    valid curve point that is not of small order. Raises ValueError.
     """
     attest = _attest()
     if not isinstance(data, dict):
@@ -133,6 +137,8 @@ def parse_trust_map(data) -> dict:
         entries = data.get(signer)
         if not isinstance(entries, list) or not entries:
             raise ValueError(f"trust file has no {signer} key")
+        if exactly_one and len(entries) != 1:
+            raise ValueError(f"trust file must publish exactly one {signer} key")
         out[signer] = {}
         for e in entries:
             if not isinstance(e, dict) or not isinstance(e.get("public_key"), str):
@@ -143,6 +149,9 @@ def parse_trust_map(data) -> dict:
                 raise ValueError(f"malformed {signer} public key") from exc
             if len(pub) != 32 or e.get("key_id") != attest.key_id_of(pub):
                 raise ValueError(f"{signer} entry key_id does not match public key")
+            point = attest._decompress(pub)
+            if point is None or attest._small_order(point):
+                raise ValueError(f"{signer} public key is not a valid non-small-order point")
             out[signer][e["key_id"]] = e["public_key"]
     return out
 
@@ -157,7 +166,7 @@ def key_publication_trust(state: dict) -> tuple[dict | None, str]:
         if changed != [KEY_FILE_REL]:
             return None, f"branch changes {changed!r}, not exactly [{KEY_FILE_REL!r}]"
         text = git_text("show", f"{sha}:{KEY_FILE_REL}", cwd=path)
-        trusted = parse_trust_map(json.loads(text))
+        trusted = parse_trust_map(json.loads(text), exactly_one=True)
     except (subprocess.CalledProcessError, ValueError, OSError) as exc:
         return None, f"key-publication check failed: {exc}"
     return trusted, "key-publication branch: trust map taken from the task SHA"
@@ -444,8 +453,12 @@ def evaluate(
     - Every record with status "failed" counts as failing regardless of its
       attestation (a forged failure can only block, never release, the gate).
     - Key-publication mode (trust_source "key-publication", see
-      key_publication_trust): the trust map is the task branch's own file;
-      enforcement is then "enforcing" with no bootstrap tolerance.
+      key_publication_trust): the trust map is the task branch's own file
+      (exactly one key per signer); enforcement is then "enforcing" with no
+      bootstrap tolerance, and the gate additionally requires signed evidence
+      for every published key: a verified passing validation record
+      (validation-manager) referencing a verified successful host run
+      (host-runner), both bound to this task and SHA.
     """
     if trusted is None:
         trusted = load_trust()
@@ -497,6 +510,27 @@ def evaluate(
         "failing_records": len(failing),
         "gate_passed": not dirty and len(passing) > 0 and len(failing) == 0,
     }
+    if trust_source == "key-publication":
+        # Every published key must be evidenced by a protected signed record for
+        # THIS task and SHA: the validation-manager key by a verified passing
+        # validation record (already required above), the host-runner key by a
+        # verified, successful host run referenced from a passing record.
+        evidence = {
+            SIGNER: bool(passing),
+            HOST_RUN_SIGNER: any(
+                x.get("status") == "verified" and x.get("ok")
+                for r in passing
+                for x in (r.get("host_run_attestation") or [])
+            ),
+        }
+        summary["key_publication_evidence"] = evidence
+        if not all(evidence.values()):
+            missing = [k for k, v in evidence.items() if not v]
+            summary["key_publication_problem"] = (
+                "key-publication requires signed evidence for every published "
+                f"key; none verified for {missing}"
+            )
+            summary["gate_passed"] = False
     if tolerate and unverified:
         summary["attestation_note"] = (
             f"{len(unverified)} record(s) {BOOTSTRAP_NOTE}; tolerated only for "

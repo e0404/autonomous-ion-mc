@@ -229,3 +229,51 @@ def test_mcp_modules_import():
     pytest.importorskip("mcp")
     import infrastructure.mcp.host_runner_mcp  # noqa: F401
     import infrastructure.mcp.validation_mcp  # noqa: F401
+
+
+IDENTITY_ENC = (1).to_bytes(32, "little")  # encoding of the identity point (0, 1)
+# The other small-order points: y = 0 (order 4), y = -1 (order 2), and the order-8 points.
+_SMALL_Y = [0, attest._P - 1, (1 + attest._I) * attest._inv(1 - attest._I) % attest._P]
+
+
+def _small_order_encodings():
+    out = [IDENTITY_ENC]
+    for y in _SMALL_Y:
+        for sign in (0, 1):
+            enc = (y | (sign << 255)).to_bytes(32, "little")
+            if attest._decompress(enc) is not None:
+                out.append(enc)
+    return out
+
+
+@pytest.mark.parametrize("verifier", [attest, attest_verify])
+def test_small_order_public_key_cannot_forge(verifier):
+    """Identity (and every small-order point) as public key + R with S = 0 satisfies the
+    bare equation for any message; both verifiers must reject it."""
+    forged = IDENTITY_ENC + (0).to_bytes(32, "little")
+    assert not verifier.verify(b"any message", forged, IDENTITY_ENC)
+    for enc in _small_order_encodings():
+        assert verifier._small_order(verifier._decompress(enc))
+        assert not verifier.verify(b"m", enc + (0).to_bytes(32, "little"), enc)
+        # small-order public key with an otherwise well-formed signature
+        key = attest.generate_keypair()
+        sig = attest.sign(b"m", key.seed)
+        assert not verifier.verify(b"m", sig, enc)
+        # small-order R with an honest public key
+        assert not verifier.verify(b"m", enc + sig[32:], key.public_key)
+    key = attest.generate_keypair()
+    assert verifier.verify(b"m", attest.sign(b"m", key.seed), key.public_key)
+    assert not verifier._small_order(verifier._decompress(key.public_key))
+
+
+def test_trust_map_rejects_small_order_key():
+    from infrastructure.validation import local_validation as lv
+
+    hr = attest.generate_keypair()
+    for enc in _small_order_encodings():
+        data = {
+            "validation-manager": [{"key_id": attest.key_id_of(enc), "public_key": enc.hex()}],
+            "host-runner": [{"key_id": hr.key_id, "public_key": hr.public_key.hex()}],
+        }
+        with pytest.raises(ValueError, match="small-order"):
+            lv.parse_trust_map(data)

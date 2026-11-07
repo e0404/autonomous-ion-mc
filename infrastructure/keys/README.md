@@ -11,12 +11,15 @@ A record whose key is not listed is "unverified", never "verified".
 **Publishing the first keys (key-publication mode).** The merge gate reads
 this file from the integration checkout, so the first key-publication commit
 cannot be verified by the integration copy. The gate therefore evaluates a task
-branch whose only change against the integration base is this file, listing at
-least one well-formed key for both signers, against the branch's own copy
-(`trust_source: "key-publication"`), with full enforcement and no bootstrap
-tolerance. Any other change on that branch, a malformed file, or an integration
-copy that already lists a `validation-manager` key disables the mode. See
-`experiment/v3/SETUP.md` (Signed attestations) for the exact rules.
+branch whose only change against the integration base is this file, listing
+exactly one well-formed (non-small-order) key for both signers, against the
+branch's own copy (`trust_source: "key-publication"`), with full enforcement,
+no bootstrap tolerance, and signed evidence required for every published key
+(a verified passing validation record that references a verified successful
+host run of that task and SHA). Any other change on that branch, a malformed or
+multi-key file, or an integration copy that already lists a
+`validation-manager` key disables the mode. See `experiment/v3/SETUP.md`
+(Signed attestations) for the exact rules.
 
 ## Enforcement
 

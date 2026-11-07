@@ -79,6 +79,16 @@ def _equal(p, q):
     return (p[0] * q[2] - q[0] * p[2]) % _P == 0 and (p[1] * q[2] - q[1] * p[2]) % _P == 0
 
 
+def _small_order(p):
+    """True for the identity and every other point of order dividing 8.
+
+    Such points (e.g. the encoded identity used as public key and as R with
+    S = 0) satisfy the verification equation for any message; they are never
+    honest keys or nonces and are rejected.
+    """
+    return _equal(_mul(8, p), _IDENTITY)
+
+
 def _compress(p):
     zi = _inv(p[2])
     x, y = p[0] * zi % _P, p[1] * zi % _P
@@ -105,6 +115,8 @@ def verify(message, signature, public_key):
         point_a = _decompress(public_key)
         point_r = _decompress(signature[:32])
         if point_a is None or point_r is None:
+            return False
+        if _small_order(point_a) or _small_order(point_r):
             return False
         s = int.from_bytes(signature[32:], "little")
         if s >= _L:

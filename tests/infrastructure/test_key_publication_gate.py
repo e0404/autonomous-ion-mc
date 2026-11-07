@@ -77,7 +77,7 @@ def commit_branch(r, text, extra_file=None):
     return git("rev-parse", "HEAD", cwd=r)
 
 
-def put_records(tmp_path, sha, vm, hr, sign_val=True, sign_run=True):
+def put_records(tmp_path, sha, vm, hr, sign_val=True, sign_run=True, with_run=True):
     run = {
         "schema_version": 1, "run_id": RUN, "task_id": TASK, "sha": sha,
         "exit_code": 0, "timed_out": False, "succeeded": True,
@@ -94,6 +94,8 @@ def put_records(tmp_path, sha, vm, hr, sign_val=True, sign_run=True):
         "status": "passed", "summary": "ok", "git_sha": sha,
         "details": {"host_runs": [{"run_id": RUN, "output_manifest_sha256": MANIFEST}]},
     }
+    if not with_run:
+        val["details"] = {}
     if sign_val:
         val = attest.sign_record(val, vm, "validation-manager")
     d = tmp_path / "val" / TASK / sha
@@ -118,6 +120,31 @@ def test_pure_key_publication_branch_verifies_against_its_own_trust_file(repo, t
     assert code == 0 and out["status"] == "passed"
     assert out["trust_source"] == "key-publication"
     assert out["enforcement"] == "enforcing" and out["verified_records"] == 1
+    assert out["key_publication_evidence"] == {"validation-manager": True, "host-runner": True}
+
+
+def test_key_publication_requires_host_run_evidence_for_the_host_runner_key(
+    repo, tmp_path, capsys
+):
+    """A verified validation record alone would let an arbitrary host-runner key through."""
+    vm, hr = attest.generate_keypair(), attest.generate_keypair()
+    sha = commit_branch(repo, trust_file([vm], [hr]))
+    put_records(tmp_path, sha, vm, hr, with_run=False)
+    code, out = check(capsys)
+    assert code == 1 and out["status"] == "failed"
+    assert out["trust_source"] == "key-publication" and out["passing_records"] == 1
+    assert out["key_publication_evidence"] == {"validation-manager": True, "host-runner": False}
+    assert "host-runner" in out["key_publication_problem"]
+
+
+@pytest.mark.parametrize("extra", ["validation-manager", "host-runner"])
+def test_key_publication_rejects_more_than_one_key_per_signer(repo, tmp_path, capsys, extra):
+    vm, hr, spare = (attest.generate_keypair() for _ in range(3))
+    vms, hrs = ([vm, spare], [hr]) if extra == "validation-manager" else ([vm], [hr, spare])
+    sha = commit_branch(repo, trust_file(vms, hrs))
+    put_records(tmp_path, sha, vm, hr)
+    code, out = check(capsys)
+    assert code == 1 and out["trust_source"] == "integration" and out["passing_records"] == 0
 
 
 def test_key_publication_mode_requires_every_record_verified(repo, tmp_path, capsys):
