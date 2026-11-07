@@ -118,3 +118,32 @@ These operational interruptions are logged separately from scientific interventi
 Start a fresh Claude session to load the updated hook configuration. Preflight tests
 notification delivery and runtime readiness; it does not check remaining Claude
 subscription quota or start the scientific experiment.
+
+## Signed attestations (V3-INFRA-002)
+
+Records written by the protected MCP services carry an Ed25519 `attestation`
+block so that a repository-authored copy can be told apart from a real record.
+
+- **What is signed:** the Ed25519 message is the canonical JSON (sorted keys,
+  compact separators, ASCII) of `{"payload": <record without its attestation
+  field>, "signer", "signed_at_utc", "key_id"}`; `payload_sha256` hashes the
+  canonical payload alone. `validation-manager` signs each `VAL-...` record
+  before it is written and returned; `host-runner` signs each `RUN-...` record
+  (including `stdout_sha256`, `stderr_sha256` and `output_manifest_sha256`) and
+  stores it as `record.json` (and `result.json`) in the run directory.
+- **Block shape:** `{"schema": "ionmc-attestation-1", "alg": "ed25519", "signer",
+  "key_id" (sha256(public key)[:16]), "public_key" (hex), "signed_at_utc",
+  "payload_sha256", "signature" (hex)}`.
+- **Keys:** created on first use under `<share root>/attestation/<signer>.key`
+  (32-byte seed, hex, mode 0600) with `<signer>.pub` (public key, hex) next to
+  it. Implementation is pure stdlib (`infrastructure/experiment_v3/attest.py`,
+  RFC 8032, not constant time; acceptable for this single-user host).
+- **Trust file:** `infrastructure/keys/trusted_attestation_keys.json`, empty on
+  merge (trust on first use). Consumers use
+  `validation/scripts/transport/attest_verify.py`; a record whose key is not
+  listed is `unverified`, never `verified`.
+- **Operator runbook:** merge the PR; restart the MCP servers; run
+  `python infrastructure/experiment_v3/attest.py --print-public-key validation-manager`
+  and `... host-runner`; add each `key_id`/`public_key` to the trust file in a
+  reviewed commit. Records created before the restart carry no attestation and
+  stay `unverified`.

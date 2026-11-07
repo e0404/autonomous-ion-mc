@@ -5,6 +5,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -116,6 +117,12 @@ def record(
         "git_sha": state["sha"],
         "worktree": str(state["path"]),
     }
+
+    # V3-INFRA-002: Ed25519 attestation by the service-held key (additive field).
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+    from infrastructure.experiment_v3.attest import sign_with_service_key
+
+    record = sign_with_service_key(record, "validation-manager")
 
     directory = VALIDATION_ROOT / normalize_task_id(task_id) / state["sha"]
     directory.mkdir(parents=True, exist_ok=True)
