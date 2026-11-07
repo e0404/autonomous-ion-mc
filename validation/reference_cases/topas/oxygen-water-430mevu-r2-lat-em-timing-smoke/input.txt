@@ -1,4 +1,4 @@
-# Native OpenTOPAS 4.3 input. V3-008 plan revision 2 TIMING SMOKE (execution only): wall time and printouts only; no IDD or lateral scorer (P4 convention: one 1-bin placeholder, not read); no evidence. No validation claim.
+# Native OpenTOPAS 4.3 input. V3-008 plan revision 2 TIMING SMOKE (execution only): wall time and printouts only; every scorer output is deleted unread; no evidence. No validation claim.
 i:Ts/NumberOfThreads = 1
 i:Ts/Seed = 20600420
 b:Ts/PauseBeforeQuit = "False"
@@ -41,13 +41,23 @@ d:Ph/Default/CutForElectron = 1 km
 # EM table upper edge above the highest total kinetic energy (default 600 MeV is below He 150-250 MeV/u totals).
 d:Ph/Default/EMRangeMax = 10 GeV
 
-# Minimal placeholder scorer (P4 convention): validate_case requires non-empty scorers/expected_outputs. Not an observable; not read.
-s:Sc/SmokeEdep/Quantity = "EnergyDeposit"
-s:Sc/SmokeEdep/Component = "Water"
-i:Sc/SmokeEdep/XBins = 1
-i:Sc/SmokeEdep/YBins = 1
-i:Sc/SmokeEdep/ZBins = 1
-s:Sc/SmokeEdep/OutputType = "csv"
-s:Sc/SmokeEdep/OutputFile = "smoke_unread"
-s:Sc/SmokeEdep/IfOutputFileAlreadyExists = "Overwrite"
-sv:Sc/SmokeEdep/Report = 1 "Sum"
+# Projected lateral dose profiles: x profile (6000 x 1 x 350) and y profile (1 x 6000 x 350), 0.02 mm lateral bins over the full 120 mm field, 1 mm depth bins. Binary, Sum only.
+s:Sc/LatX/Quantity = "DoseToMedium"
+s:Sc/LatX/Component = "Water"
+i:Sc/LatX/XBins = 6000
+i:Sc/LatX/YBins = 1
+i:Sc/LatX/ZBins = 350
+s:Sc/LatX/OutputType = "Binary"
+s:Sc/LatX/OutputFile = "lat_x"
+s:Sc/LatX/IfOutputFileAlreadyExists = "Overwrite"
+sv:Sc/LatX/Report = 1 "Sum"
+
+s:Sc/LatY/Quantity = "DoseToMedium"
+s:Sc/LatY/Component = "Water"
+i:Sc/LatY/XBins = 1
+i:Sc/LatY/YBins = 6000
+i:Sc/LatY/ZBins = 350
+s:Sc/LatY/OutputType = "Binary"
+s:Sc/LatY/OutputFile = "lat_y"
+s:Sc/LatY/IfOutputFileAlreadyExists = "Overwrite"
+sv:Sc/LatY/Report = 1 "Sum"

@@ -12,12 +12,16 @@
     20600412
   ],
   "scorers": [
-    "none: timing/step smoke; the placeholder output is not an observable and is not read (P4 convention)"
+    "LatX: DoseToMedium, 6000x1x500 bins (0.02 mm in x over 120 mm, full y, 1 mm depth); OutputType Binary; Report Sum",
+    "LatY: DoseToMedium, 1x6000x500 bins (full x, 0.02 mm in y over 120 mm, 1 mm depth); OutputType Binary; Report Sum"
   ],
-  "units": "none: no quantity is graded; the placeholder scorer output (MeV, run total) is not read",
-  "rationale": "V3-008 plan revision 2 timing smoke (execution only): wall time and printouts (process list, module acceptance, killed tracks) size the parts; the only scorer is a 1-bin placeholder (P4 convention) whose output is not an observable and is not read; no evidence",
+  "units": "Lat*: TOPAS binary (dose per bin, run total Gy; float64 and x-fastest order as established for the proton lateral cases, to be confirmed against the .binheader); bins 0-based, x,y centred on the beam axis, z from the entrance face in 1 mm bins",
+  "rationale": "V3-008 plan revision 2 timing smoke (execution only): wall time and printouts (process list, module acceptance, killed tracks) size the parts; every scorer output is deleted unread by the runner; no evidence",
   "expected_outputs": [
-    "smoke_unread.csv"
+    "lat_x.bin",
+    "lat_x.binheader",
+    "lat_y.bin",
+    "lat_y.binheader"
   ],
   "arguments": []
 }

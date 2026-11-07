@@ -20,7 +20,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_OUT = REPO_ROOT / "validation" / "reference_cases" / "topas"
 REL_PREFIX = "validation/reference_cases/topas"
-BUNDLE_SET_DIGEST = "4a091ff6dafb250ac0c77431264d8f0c09594a8159d3a6f6d0d0b1e30c0fd373"
+BUNDLE_SET_DIGEST = "9bd6f8023b4aa4b0bebbb21c5e237ea5a71c136dbc5243dbef5ef772c54a212f"
 
 TOPAS_BASE = 20619000
 # case number, ion tag, MeV/u, A, z, particle, planning CSDA range (project Bethe table, mm), L, h_z, h_x, set
@@ -106,8 +106,8 @@ def build(c, cfg, seed, histories, kind, part=None):
     hdr_kind = {
         "evidence": f"V3-008 plan revision 2, row {'TL' if lat else 'TD'}-{'FULL' if full else 'EM'}"
         f"{' (held-out set)' if cset == 'held-out' else ''}, case {num}, part {part} (seed = 20619000 + 100*part + case).",
-        "timing": "V3-008 plan revision 2 TIMING SMOKE (execution only): wall time and printouts only; no IDD or lateral scorer (P4 convention: one 1-bin placeholder, not read); no evidence.",
-        "verbose": "V3-008 plan revision 2 STEP-LENGTH SMOKE (execution only): TrackingVerbosity 1 on 3 histories, to record whether the scorer bins limit the primary step length; no IDD or lateral scorer (P4 convention: one 1-bin placeholder, not read); no evidence.",
+        "timing": "V3-008 plan revision 2 TIMING SMOKE (execution only): wall time and printouts only; every scorer output is deleted unread; no evidence.",
+        "verbose": "V3-008 plan revision 2 STEP-LENGTH SMOKE (execution only): TrackingVerbosity 1 on 3 histories, to record whether the scorer bins limit the primary step length; every scorer output is deleted unread; no evidence.",
     }[kind]
     inp = [
         f"# Native OpenTOPAS 4.3 input. {hdr_kind} No validation claim.",
@@ -168,24 +168,7 @@ def build(c, cfg, seed, histories, kind, part=None):
     ]
     outputs = []
     scorers = []
-    if kind != "evidence":
-        # P4 convention: validate_case rejects scorer-free bundles, so one 1-bin EnergyDeposit placeholder. No IDD or
-        # lateral scorer exists in any smoke bundle: no reference observable exists before the ionmc samples are locked.
-        inp.append("# Minimal placeholder scorer (P4 convention): validate_case requires non-empty scorers/expected_outputs. Not an observable; not read.")
-        inp += [
-            's:Sc/SmokeEdep/Quantity = "EnergyDeposit"',
-            's:Sc/SmokeEdep/Component = "Water"',
-            "i:Sc/SmokeEdep/XBins = 1",
-            "i:Sc/SmokeEdep/YBins = 1",
-            "i:Sc/SmokeEdep/ZBins = 1",
-            's:Sc/SmokeEdep/OutputType = "csv"',
-            's:Sc/SmokeEdep/OutputFile = "smoke_unread"',
-            's:Sc/SmokeEdep/IfOutputFileAlreadyExists = "Overwrite"',
-            'sv:Sc/SmokeEdep/Report = 1 "Sum"',
-        ]
-        outputs.append("smoke_unread.csv")
-        scorers.append("none: timing/step smoke; the placeholder output is not an observable and is not read (P4 convention)")
-    elif not lat:
+    if not lat:
         inp.append(f"# Laterally integrated depth dose: {nz_idd} depth bins of {fmt(hz)} mm over the full 120 x 120 mm field.")
         inp += scorer_block("IDD", "DoseToMedium", 1, 1, nz_idd, "idd_dose", "csv", ["Sum", "Standard_Deviation"])
         outputs.append("idd_dose.csv")
@@ -243,13 +226,11 @@ def build(c, cfg, seed, histories, kind, part=None):
             "not run before the reviewed freeze of revision 2; outputs not materialized before the ionmc samples of the row are recorded"
         )
     elif kind == "timing":
-        rationale = "V3-008 plan revision 2 timing smoke (execution only): wall time and printouts (process list, module acceptance, killed tracks) size the parts; the only scorer is a 1-bin placeholder (P4 convention) whose output is not an observable and is not read; no evidence"
+        rationale = "V3-008 plan revision 2 timing smoke (execution only): wall time and printouts (process list, module acceptance, killed tracks) size the parts; every scorer output is deleted unread by the runner; no evidence"
     else:
-        rationale = "V3-008 plan revision 2 step-length smoke (execution only): TrackingVerbosity 1 records the primary step lengths in the unbinned geometry (relevant to the Urban step dependence; the effect of the fine evidence scorer bins is not measured), read from the tracking printout only; the only scorer is a 1-bin placeholder (P4 convention), not read; no evidence"
+        rationale = "V3-008 plan revision 2 step-length smoke (execution only): TrackingVerbosity 1 records whether scorer-bin boundaries limit the primary step length (relevant to the Urban step dependence); every scorer output is deleted unread; no evidence"
     units = (
-        "none: no quantity is graded; the placeholder scorer output (MeV, run total) is not read"
-        if kind != "evidence"
-        else "IDD: TOPAS CSV with '#' header, dose in Gy (run total; divide by histories); converted to laterally integrated energy per depth (MeV/mm per primary) with the slab mass 120 x 120 mm x bin depth at 1.0 g/cm3. Fluence 1/mm2 run total. Bins 0-based, z from the entrance face"
+        "IDD: TOPAS CSV with '#' header, dose in Gy (run total; divide by histories); converted to laterally integrated energy per depth (MeV/mm per primary) with the slab mass 120 x 120 mm x bin depth at 1.0 g/cm3. Fluence 1/mm2 run total. Bins 0-based, z from the entrance face"
         if not lat
         else "Lat*: TOPAS binary (dose per bin, run total Gy; float64 and x-fastest order as established for the proton lateral cases, to be confirmed against the .binheader); bins 0-based, x,y centred on the beam axis, z from the entrance face in 1 mm bins"
     )

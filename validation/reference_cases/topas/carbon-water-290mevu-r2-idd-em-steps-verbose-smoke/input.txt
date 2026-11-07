@@ -1,4 +1,4 @@
-# Native OpenTOPAS 4.3 input. V3-008 plan revision 2 STEP-LENGTH SMOKE (execution only): TrackingVerbosity 1 on 3 histories, to record whether the scorer bins limit the primary step length; no IDD or lateral scorer (P4 convention: one 1-bin placeholder, not read); no evidence. No validation claim.
+# Native OpenTOPAS 4.3 input. V3-008 plan revision 2 STEP-LENGTH SMOKE (execution only): TrackingVerbosity 1 on 3 histories, to record whether the scorer bins limit the primary step length; every scorer output is deleted unread; no evidence. No validation claim.
 i:Ts/NumberOfThreads = 1
 i:Ts/Seed = 20600423
 b:Ts/PauseBeforeQuit = "False"
@@ -41,13 +41,13 @@ d:Ph/Default/CutForElectron = 1 km
 # EM table upper edge above the highest total kinetic energy (default 600 MeV is below He 150-250 MeV/u totals).
 d:Ph/Default/EMRangeMax = 10 GeV
 
-# Minimal placeholder scorer (P4 convention): validate_case requires non-empty scorers/expected_outputs. Not an observable; not read.
-s:Sc/SmokeEdep/Quantity = "EnergyDeposit"
-s:Sc/SmokeEdep/Component = "Water"
-i:Sc/SmokeEdep/XBins = 1
-i:Sc/SmokeEdep/YBins = 1
-i:Sc/SmokeEdep/ZBins = 1
-s:Sc/SmokeEdep/OutputType = "csv"
-s:Sc/SmokeEdep/OutputFile = "smoke_unread"
-s:Sc/SmokeEdep/IfOutputFileAlreadyExists = "Overwrite"
-sv:Sc/SmokeEdep/Report = 1 "Sum"
+# Laterally integrated depth dose: 2500 depth bins of 0.1 mm over the full 120 x 120 mm field.
+s:Sc/IDD/Quantity = "DoseToMedium"
+s:Sc/IDD/Component = "Water"
+i:Sc/IDD/XBins = 1
+i:Sc/IDD/YBins = 1
+i:Sc/IDD/ZBins = 2500
+s:Sc/IDD/OutputType = "csv"
+s:Sc/IDD/OutputFile = "idd_dose"
+s:Sc/IDD/IfOutputFileAlreadyExists = "Overwrite"
+sv:Sc/IDD/Report = 2 "Sum" "Standard_Deviation"
