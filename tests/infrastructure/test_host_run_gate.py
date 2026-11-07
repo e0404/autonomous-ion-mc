@@ -44,6 +44,9 @@ def env(tmp_path, monkeypatch):
     vm, hr = attest.generate_keypair(), attest.generate_keypair()
     monkeypatch.setattr(lv, "VALIDATION_ROOT", tmp_path / "val")
     monkeypatch.setattr(lv, "TRUSTED_KEYS_PATH", tmp_path / "trust.json")
+    # Not a git worktree here: the branch does not touch the trust file (the real
+    # diff check is covered end-to-end in test_key_publication_gate.py).
+    monkeypatch.setattr(lv, "trust_file_change", lambda state: ([], None))
     monkeypatch.setattr(hrr, "HOST_RUNS_ROOT", tmp_path / "runs")
     monkeypatch.setattr(
         lv, "worktree_state",

@@ -148,10 +148,19 @@ def test_repo_verifier_agrees():
     assert not attest_verify.verify(b"m", sig, key.public_key)
 
 
-def test_committed_trust_file_is_empty_and_loadable():
+def test_committed_trust_file_is_empty_or_strictly_published():
+    """Two permitted states: empty (trust on first use, before the key-publication
+    commit) or exactly one valid, non-small-order key per signer (after it)."""
+    from infrastructure.validation import local_validation as lv
+
     trusted = attest_verify.load_trusted()
-    assert trusted == {"validation-manager": {}, "host-runner": {}}
     assert attest.load_trusted() == trusted
+    assert set(trusted) == set(attest.SIGNERS)
+    data = json.loads(lv.TRUSTED_KEYS_PATH.read_text())
+    if all(not v for v in trusted.values()):
+        assert data == {"validation-manager": [], "host-runner": []}
+    else:
+        assert lv.parse_trust_map(data, exactly_one=True) == trusted
 
 
 def test_cli_print_public_key(tmp_path, monkeypatch):

@@ -16,10 +16,13 @@ exactly one well-formed (non-small-order) key for both signers, against the
 branch's own copy (`trust_source: "key-publication"`), with full enforcement,
 no bootstrap tolerance, and signed evidence required for every published key
 (a verified passing validation record that references a verified successful
-host run of that task and SHA). Any other change on that branch, a malformed or
-multi-key file, or an integration copy that already lists a
-`validation-manager` key disables the mode. See `experiment/v3/SETUP.md`
-(Signed attestations) for the exact rules.
+host run of that task and SHA). The same rule governs every later change of
+this file (rotation = replace, evidenced by the new keys): a branch that changes
+it together with anything else, or lists more than one key per signer, fails
+the gate (`trust_problem`) even when the integration copy already trusts a key.
+The CI test `test_committed_trust_file_is_empty_or_strictly_published` accepts
+both committed states (empty, or exactly one valid key per signer). See
+`experiment/v3/SETUP.md` (Signed attestations) for the exact rules.
 
 ## Enforcement
 

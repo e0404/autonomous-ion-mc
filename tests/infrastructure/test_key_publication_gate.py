@@ -180,6 +180,7 @@ def test_branch_with_any_other_change_is_not_key_publication(repo, tmp_path, cap
     assert code == 1 and out["trust_source"] == "integration"
     assert out["enforcement"] == "blocked"
     assert lv.ATTESTATION_REQUIRED in out["rejected_records"][0]["reason"]
+    assert lv.TRUST_CHANGE_RULE in out["trust_problem"]
 
 
 def test_branch_with_new_file_is_not_key_publication(repo, tmp_path, capsys):
@@ -217,14 +218,61 @@ def test_malformed_or_incomplete_branch_trust_file_disables_mode(repo, tmp_path,
     assert out["passing_records"] == 0
 
 
-def test_integration_trust_map_wins_once_a_key_is_published(repo, tmp_path, capsys):
-    vm, hr, published = (attest.generate_keypair() for _ in range(3))
-    lv.TRUSTED_KEYS_PATH.write_text(trust_file([published], [published]))
+def test_rotation_pure_branch_is_evaluated_against_its_own_keys(repo, tmp_path, capsys):
+    """Integration already trusts keys; a pure branch replacing them (rotation) must
+    evidence the NEW keys."""
+    vm, hr, old_vm, old_hr = (attest.generate_keypair() for _ in range(4))
+    lv.TRUSTED_KEYS_PATH.write_text(trust_file([old_vm], [old_hr]))
     sha = commit_branch(repo, trust_file([vm], [hr]))
-    put_records(tmp_path, sha, vm, hr)  # signed by keys only the BRANCH trusts
+    put_records(tmp_path, sha, vm, hr)
+    code, out = check(capsys)
+    assert code == 0 and out["trust_source"] == "key-publication"
+    assert out["key_publication_evidence"] == {"validation-manager": True, "host-runner": True}
+
+
+def test_rotation_signed_by_the_old_keys_is_rejected(repo, tmp_path, capsys):
+    vm, hr, old_vm, old_hr = (attest.generate_keypair() for _ in range(4))
+    lv.TRUSTED_KEYS_PATH.write_text(trust_file([old_vm], [old_hr]))
+    sha = commit_branch(repo, trust_file([vm], [hr]))
+    put_records(tmp_path, sha, old_vm, old_hr)  # the branch publishes keys it cannot evidence
+    code, out = check(capsys)
+    assert code == 1 and out["trust_source"] == "key-publication"
+    assert out["passing_records"] == 0
+
+
+def test_trust_file_change_with_other_changes_fails_even_when_enforcing(repo, tmp_path, capsys):
+    vm, hr = attest.generate_keypair(), attest.generate_keypair()
+    lv.TRUSTED_KEYS_PATH.write_text(trust_file([vm], [hr]))
+    rogue = attest.generate_keypair()
+    sha = commit_branch(repo, trust_file([vm], [rogue]), extra_file="other.txt")
+    put_records(tmp_path, sha, vm, hr)  # valid under the integration keys
+    code, out = check(capsys)
+    assert code == 1 and out["status"] == "failed"
+    assert out["trust_source"] == "integration" and out["passing_records"] == 1
+    assert lv.TRUST_CHANGE_RULE in out["trust_problem"]
+
+
+def test_appending_a_second_key_fails_even_when_enforcing(repo, tmp_path, capsys):
+    vm, hr, extra = (attest.generate_keypair() for _ in range(3))
+    lv.TRUSTED_KEYS_PATH.write_text(trust_file([vm], [hr]))
+    sha = commit_branch(repo, trust_file([vm], [hr, extra]))
+    put_records(tmp_path, sha, vm, hr)
     code, out = check(capsys)
     assert code == 1 and out["trust_source"] == "integration"
-    assert out["enforcement"] == "enforcing" and out["passing_records"] == 0
+    assert lv.TRUST_CHANGE_RULE in out["trust_problem"]
+
+
+def test_branch_not_touching_trust_file_uses_integration_keys(repo, tmp_path, capsys):
+    vm, hr = attest.generate_keypair(), attest.generate_keypair()
+    lv.TRUSTED_KEYS_PATH.write_text(trust_file([vm], [hr]))
+    (repo / "other.txt").write_text("work\n")
+    git("add", "-A", cwd=repo)
+    git("commit", "-q", "-m", "work", cwd=repo)
+    sha = git("rev-parse", "HEAD", cwd=repo)
+    put_records(tmp_path, sha, vm, hr)
+    code, out = check(capsys)
+    assert code == 0 and out["trust_source"] == "integration"
+    assert "trust_problem" not in out
 
 
 def test_no_bootstrap_tolerance_for_migration_task_in_key_publication_mode(
@@ -258,3 +306,13 @@ def test_parse_trust_map_round_trip():
         "validation-manager": {vm.key_id: vm.public_key.hex()},
         "host-runner": {hr.key_id: hr.public_key.hex()},
     }
+
+
+def test_undeterminable_branch_diff_fails_closed(repo, tmp_path, capsys, monkeypatch):
+    vm, hr = attest.generate_keypair(), attest.generate_keypair()
+    lv.TRUSTED_KEYS_PATH.write_text(trust_file([vm], [hr]))
+    sha = commit_branch(repo, trust_file([vm], [hr]))
+    put_records(tmp_path, sha, vm, hr)
+    monkeypatch.setattr(lv, "base_ref", lambda: "refs/heads/does-not-exist")
+    code, out = check(capsys)
+    assert code == 1 and "cannot determine the branch changes" in out["trust_problem"]

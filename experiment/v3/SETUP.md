@@ -209,9 +209,14 @@ block so that a repository-authored copy can be told apart from a real record.
   validation record (proves the validation-manager key) that references a
   verified, successful host run (proves the host-runner key); the output
   carries `key_publication_evidence` and, when incomplete,
-  `key_publication_problem`. Any other change on the branch, a malformed,
-  incomplete or multi-key trust file, or an integration trust map that
-  already has a key disables the mode (`trust_source: "integration"`). The
+  `key_publication_problem`. The same rule governs EVERY later change of the
+  trust file (key rotation = a pure branch replacing the keys, evidenced by
+  records signed with the new keys): a branch that changes the trust file
+  together with anything else, or publishes more than one key per signer, or
+  whose diff cannot be determined, fails with `trust_problem` even when the
+  integration file already trusts a key (the records may verify, the gate
+  still fails). A branch that does not touch the trust file is evaluated
+  against the integration file (`trust_source: "integration"`). The
   protected validation and host-run stores are outside the repository write
   boundary, so a branch cannot supply forged records to match a key it
   publishes; the Codex review of the key-publication commit confirms that the

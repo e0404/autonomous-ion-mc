@@ -96,7 +96,8 @@ def enforcing(trusted: dict) -> bool:
     return bool(trusted.get(SIGNER))
 
 
-# Key-publication mode (resolves the trust bootstrap after the migration merges).
+# Key-publication mode (resolves the trust bootstrap after the migration merges
+# and governs every later change of the trust file, e.g. key rotation).
 # The gate runs from the integration checkout, whose trust file is empty until
 # a key-publication commit merges; that commit could never pass an empty-trust
 # gate. Therefore, while the integration trust map has no validation-manager
@@ -156,31 +157,61 @@ def parse_trust_map(data, *, exactly_one: bool = False) -> dict:
     return out
 
 
-def key_publication_trust(state: dict) -> tuple[dict | None, str]:
-    """Trust map of a pure key-publication branch, else (None, reason)."""
+TRUST_CHANGE_RULE = (
+    "trust-file changes are allowed only in a pure key-publication branch "
+    "(the only change against the integration base is "
+    f"{KEY_FILE_REL}, exactly one evidenced key per signer)"
+)
+
+
+def trust_file_change(state: dict) -> tuple[list[str], str | None]:
+    """(changed paths of the branch vs its integration merge base, error)."""
     path, sha = state["path"], state["sha"]
     try:
         base = git_text("merge-base", base_ref(), sha, cwd=path)
         changed = git_text("diff", "--name-only", base, sha, cwd=path).splitlines()
-        changed = sorted(c for c in changed if c)
-        if changed != [KEY_FILE_REL]:
-            return None, f"branch changes {changed!r}, not exactly [{KEY_FILE_REL!r}]"
-        text = git_text("show", f"{sha}:{KEY_FILE_REL}", cwd=path)
+    except (subprocess.CalledProcessError, OSError) as exc:
+        return [], f"cannot determine the branch changes: {exc}"
+    return sorted(c for c in changed if c), None
+
+
+def key_publication_trust(state: dict) -> tuple[dict | None, str]:
+    """Trust map of a pure key-publication branch, else (None, reason)."""
+    changed, err = trust_file_change(state)
+    if err:
+        return None, f"key-publication check failed: {err}"
+    if changed != [KEY_FILE_REL]:
+        return None, f"branch changes {changed!r}, not exactly [{KEY_FILE_REL!r}]"
+    try:
+        text = git_text("show", f"{state['sha']}:{KEY_FILE_REL}", cwd=state["path"])
         trusted = parse_trust_map(json.loads(text), exactly_one=True)
     except (subprocess.CalledProcessError, ValueError, OSError) as exc:
         return None, f"key-publication check failed: {exc}"
     return trusted, "key-publication branch: trust map taken from the task SHA"
 
 
-def effective_trust(state: dict) -> tuple[dict, str]:
-    """(trust map, trust_source): integration file, or the branch's in key-publication mode."""
+def effective_trust(state: dict) -> tuple[dict, str, str | None]:
+    """(trust map, trust_source, problem).
+
+    A branch that does not touch the trust file is evaluated against the
+    integration trust file ("integration"). A branch that touches it is
+    evaluated against ITS OWN trust file ("key-publication") only if it is a
+    pure key-publication branch (first publication or rotation alike: the only
+    change is the trust file, exactly one valid key per signer); evaluate()
+    then demands signed evidence for every published key. Any other change to
+    the trust file yields a ``problem`` (TRUST_CHANGE_RULE) and the gate fails,
+    whatever keys the integration file already trusts.
+    """
     trusted = load_trust()
-    if enforcing(trusted):
-        return trusted, "integration"
-    branch_trust, _reason = key_publication_trust(state)
+    changed, err = trust_file_change(state)
+    if err:
+        return trusted, "integration", err
+    if KEY_FILE_REL not in changed:
+        return trusted, "integration", None
+    branch_trust, reason = key_publication_trust(state)
     if branch_trust is not None:
-        return branch_trust, "key-publication"
-    return trusted, "integration"
+        return branch_trust, "key-publication", None
+    return trusted, "integration", f"{TRUST_CHANGE_RULE}; {reason}"
 
 
 def classify(rec: dict, task_id: str, sha: str, trusted: dict) -> tuple[str, str]:
@@ -428,6 +459,7 @@ def evaluate(
     task_id: str,
     trusted: dict | None = None,
     trust_source: str = "integration",
+    trust_problem: str | None = None,
 ) -> dict:
     """Gate decision over annotated records for ``task_id``.
 
@@ -452,6 +484,9 @@ def evaluate(
       manifest binding and are rejected outside bootstrap.
     - Every record with status "failed" counts as failing regardless of its
       attestation (a forged failure can only block, never release, the gate).
+    - A branch that changes the trust file in any way other than a pure
+      key-publication branch fails (trust_problem, TRUST_CHANGE_RULE), also
+      when the integration file already trusts a key.
     - Key-publication mode (trust_source "key-publication", see
       key_publication_trust): the trust map is the task branch's own file
       (exactly one key per signer); enforcement is then "enforcing" with no
@@ -510,6 +545,9 @@ def evaluate(
         "failing_records": len(failing),
         "gate_passed": not dirty and len(passing) > 0 and len(failing) == 0,
     }
+    if trust_problem:
+        summary["trust_problem"] = trust_problem
+        summary["gate_passed"] = False
     if trust_source == "key-publication":
         # Every published key must be evidenced by a protected signed record for
         # THIS task and SHA: the validation-manager key by a verified passing
@@ -640,9 +678,9 @@ def record(
 
 def inspect(task_id: str):
     state = worktree_state(task_id)
-    trusted, source = effective_trust(state)
+    trusted, source, problem = effective_trust(state)
     records = records_for(task_id, state["sha"], trusted)
-    verdict = evaluate(records, state["dirty"], task_id, trusted, source)
+    verdict = evaluate(records, state["dirty"], task_id, trusted, source, problem)
 
     result = {
         "status": "present" if records else "missing",
@@ -659,9 +697,9 @@ def inspect(task_id: str):
 
 def check(task_id: str):
     state = worktree_state(task_id)
-    trusted, source = effective_trust(state)
+    trusted, source, problem = effective_trust(state)
     records = records_for(task_id, state["sha"], trusted)
-    verdict = evaluate(records, state["dirty"], task_id, trusted, source)
+    verdict = evaluate(records, state["dirty"], task_id, trusted, source, problem)
 
     result = {
         "status": "passed" if verdict["gate_passed"] else "failed",
