@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "run_id": "RUN-20261108T042138Z-386fdfc2",
+  "task_id": "V3-005B",
+  "worktree": "/home/wahln/aiprojects/ion-mc-worktrees/v3-005b",
+  "branch": "task/v3-005b-proton-nuclear-interactions-slice-b-warp-cpu-cuda-nuclear-ke",
+  "sha": "bf694e965552e5e5b7336215f43cf894ca46e21a",
+  "dirty_before": false,
+  "execution_snapshot": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-005B/RUN-20261108T042138Z-386fdfc2/snapshot",
+  "dirty_after": false,
+  "sha_after": "bf694e965552e5e5b7336215f43cf894ca46e21a",
+  "committed_state_unchanged": true,
+  "argv": [
+    "python",
+    "-c",
+    "import os, subprocess, sys, time, datetime, pathlib\nsys.path.insert(0, '/workspace/validation/scripts/transport')\nimport v7r2_cal_rate as vcr\nsha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()\nts = datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%SZ')\ntoken = f'R4B-{ts}-{sha[:8]}'\nroot = pathlib.Path('/workspace/validation/generated/r4b'); part = root / 'part'; part.mkdir(parents=True, exist_ok=True)\nkdir = '/workspace/.ionmc-cache/transport-samples/bf694e96/r4b-samples'\nenv = dict(os.environ, PYTHONPATH='/workspace/src', IONMC_CACHE_DIR='/workspace/.ionmc-cache/ionmc-data', IONMC_REQUIRE_DATA='1', IONMC_SINGLE_PROCESS='1', OMP_NUM_THREADS='1', OPENBLAS_NUM_THREADS='1', MKL_NUM_THREADS='1', NUMEXPR_NUM_THREADS='1', PYTHONUNBUFFERED='1', PYTHONFAULTHANDLER='1', IONMC_RUN_SHA=sha, IONMC_RUN_SUITE='lv5d', IONMC_HOST_RUN_ID=token, IONMC_V7R_CAL_OUT=str(part), IONMC_V7R_KAPPA_DIR=kdir)\nlog = open(root / 'chain.log', 'a')\ndef say(msg):\n    line = f'[{datetime.datetime.now(datetime.timezone.utc).isoformat()}] {msg}'\n    print(line, flush=True); log.write(line + '\\n'); log.flush()\nsay(f'token {token} sha {sha}')\nsay(f'kappa record imported from the chain run RUN-20261108T031543Z-b7a850c2 (same sha, suite lv5d): {kdir}')\ncmd = [sys.executable, '-m', 'pytest', '-q', '-p', 'no:cacheprovider', '--no-header', '-s', 'tests/ionmc/test_v7r2_calibration.py', '-m', 'calibration', '-k', 'test_v7r2_calibration_part and archive_fitted-part00']\nsay('RUN ' + ' '.join(cmd)); t0 = time.time()\np = subprocess.run(cmd, env=env, text=True, capture_output=True)\nlog.write(p.stdout); log.write(p.stderr); log.flush()\n(part / 'part.log').write_text(p.stdout + p.stderr)\nsay(f'EXIT {p.returncode} after {time.time() - t0:.1f} s')\nif p.returncode != 0:\n    print(p.stdout[-4000:]); print(p.stderr[-4000:]); sys.exit(p.returncode)\nrec = part / 'v7r2-calibration-archive_fitted-p00.json'\nif not rec.exists():\n    print('part record missing'); sys.exit(4)\nsay('PART DONE')\nprint(vcr.token_line(token), flush=True)\nfor line in vcr.artifact_lines(rec, part / 'part.log'):\n    print(line, flush=True)\n"
+  ],
+  "started_at": "2026-11-08T04:21:39.915223+00:00",
+  "finished_at": "2026-11-08T04:35:20.712394+00:00",
+  "duration_seconds": 820.7971477848478,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout_file": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-005B/RUN-20261108T042138Z-386fdfc2/stdout.txt",
+  "stderr_file": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-005B/RUN-20261108T042138Z-386fdfc2/stderr.txt",
+  "stdout": "[2026-11-08T04:21:39.959004+00:00] token R4B-20261108T042139Z-bf694e96 sha bf694e965552e5e5b7336215f43cf894ca46e21a\n[2026-11-08T04:21:39.959049+00:00] kappa record imported from the chain run RUN-20261108T031543Z-b7a850c2 (same sha, suite lv5d): /workspace/.ionmc-cache/transport-samples/bf694e96/r4b-samples\n[2026-11-08T04:21:39.959062+00:00] RUN /home/wahln/.cache/ionmc-experiment/experiment-v3/host-runner/venv/bin/python -m pytest -q -p no:cacheprovider --no-header -s tests/ionmc/test_v7r2_calibration.py -m calibration -k test_v7r2_calibration_part and archive_fitted-part00\n[2026-11-08T04:35:20.699473+00:00] EXIT 0 after 820.7 s\n[2026-11-08T04:35:20.699550+00:00] PART DONE\ntoken R4B-20261108T042139Z-bf694e96\nCAL-RATE-ARTIFACT part_record v7r2-calibration-archive_fitted-p00.json ff8d375f3c61f4d249b28a346e17b61df2691b39163942bf33bc78dba07c120c\nCAL-RATE-ARTIFACT part_log part.log 61e4a1130ae7def9d9f109874bba157885447f176a71c22c94362a2b32cada9f\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "stdout_total_chars": 956,
+  "stderr_total_chars": 0,
+  "run_directory": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-005B/RUN-20261108T042138Z-386fdfc2",
+  "output_paths": [
+    "/home/wahln/aiprojects/ion-mc-worktrees/v3-005b/validation/generated/RUN-20261108T042138Z-386fdfc2",
+    "/home/wahln/aiprojects/ion-mc-worktrees/v3-005b/benchmarks/generated/RUN-20261108T042138Z-386fdfc2"
+  ],
+  "output_publication_error": null,
+  "succeeded": true,
+  "stdout_sha256": "7a4d82533c8fe583add3686a2c46d401ce2fe0a4d70d64d7d1a5c7fdaccb1791",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "output_manifest_sha256": "9bb941e6e9799eca8378b3506cade5d1078e3e9cb0d94dc245591e8b4a0c5ead",
+  "attestation": {
+    "schema": "ionmc-attestation-1",
+    "alg": "ed25519",
+    "signer": "host-runner",
+    "key_id": "4d02f521f3fb9344",
+    "public_key": "fbd70c036026c9dc84362645df51dd86bc689713b590a5d4b858dc87cdee263e",
+    "signed_at_utc": "2026-11-08T04:35:20.725632+00:00",
+    "payload_sha256": "e80a0d6c0dfedccb64622bbd7fdfa2bb2e13d885efe2e0c28816da2697fe722d",
+    "signature": "8fa400904163c5fdb67bd43e2bf91e2c4df125907876ad875e1bc0d945ff2280299091525a170ead9add4cbd18938feb2b32dced20a499633d7f8e48be641b02"
+  }
+}
