@@ -70,8 +70,9 @@ def _env_run() -> dict[str, str]:
 
 
 def _host_identity() -> dict[str, Any]:
-    """The executing process's host block and controlled host-runner run id, sealed into every calibration part
-    record (``v7r2_cal_rate`` binds the measured-rate record to them; Codex REVIEW-ffe77aac)."""
+    """The executing process's host block and the in-run token (``IONMC_HOST_RUN_ID`` of the chain wrapper, sealed as
+    ``host_run_id``), sealed into every calibration part record (``v7r2_cal_rate`` binds the measured-rate record to
+    them and the token to the signed host-runner record; Codex REVIEW-ffe77aac, REVIEW-cf3f019e)."""
     return {"host": {"node": platform.node(), "platform": platform.platform(), "machine": platform.machine(),
                      "cpu_count": os.cpu_count(), "python": platform.python_version()},
             "host_run_id": os.environ.get("IONMC_HOST_RUN_ID", "unknown")}  # fmt: skip

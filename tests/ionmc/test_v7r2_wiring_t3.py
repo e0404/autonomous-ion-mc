@@ -1,7 +1,10 @@
 """Wiring task T3 of the lv5d/hr5d suites (plan Amendment 22 rule 2, Amendment 20 (f)6 / (f)8; Codex REVIEW-fe47f290):
 the full lv5d fixture preflight (absent / inconsistent / stale / generation-exempt / valid), the measured calibration
-rate gate (absent / valid / malformed record, re-split), ``--print-hashed-source-digest`` for lv5d / hr5d, the
-``v7r2-s{k}`` generation path and the builder's ``--layout v7r2``. Unit tests only: no host run, no seed drawn."""
+rate gate (absent / valid / malformed record, re-split; the signed RUN- / VAL- attestation chain of V3-INFRA-002,
+Codex REVIEW-61f4b0e3 / REVIEW-cf3f019e), ``--print-hashed-source-digest`` for lv5d / hr5d, the ``v7r2-s{k}``
+generation path and the builder's ``--layout v7r2``. Unit tests only: no host run, no seed drawn. The signed record
+copies are synthetic: they are signed in the test with throw-away Ed25519 keys (``infrastructure/experiment_v3/attest.py``)
+listed in a temporary trust file, never with the service keys."""
 
 # ruff: noqa: E501
 
@@ -25,17 +28,10 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO / "validation" / "scripts" / "transport"
+COMMITTED_TRUST = REPO / "infrastructure" / "keys" / "trusted_attestation_keys.json"
+R4B_DIR = REPO / "validation" / "results" / "transport" / "v7r2-r4b"
 DIGEST = "d" * 64
 RATE_ENV = "IONMC_V7R2_CAL_RATE_RECORD"
-REPO_PIN = {  # the pin of record of the repository acceptance plan (R-4b measurement, 2026-11-07)
-    "sha256": "e2f58df8a77bb5e8eb8ec7d77d202a51ddab662e6cc988abb2f201bc714873f6",
-    "git_sha": "b7c44f5157519c7b4a39c9fd44fe4b687304ae32",
-    "host_run_id": "RUN-20261102T010631Z-15c7a6ad",
-    "validation_id": "VAL-20261107-203551-E8A93E",
-    "host_run_token": "R4B-20261102T010633Z-b7c44f51",
-    "validation_record_sha256": "ce0ae9421cf06ab4877a4556548294988136437c3d08b80d7c1ae332dc35aea5",
-    "host_node": "E040-PC011",
-}
 
 
 def _load(name: str) -> ModuleType:
@@ -72,6 +68,53 @@ def _no_rate_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv(RATE_ENV, raising=False)
 
 
+# -- throw-away attestation keys and the temporary trust file (V3-INFRA-002 record format) ------------------------
+def _attest_module() -> ModuleType:
+    """``infrastructure/experiment_v3/attest.py`` (the signing half; tests may import it, the script may not)."""
+    spec = importlib.util.spec_from_file_location(
+        "ionmc_attest_t3", REPO / "infrastructure" / "experiment_v3" / "attest.py"
+    )
+    assert spec and spec.loader
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = mod  # dataclasses resolve the module by name
+    spec.loader.exec_module(mod)
+    return mod
+
+
+ATTEST = _attest_module()
+KEYS = {
+    "validation-manager": ATTEST.keypair_from_seed(
+        hashlib.sha256(b"t3 validation-manager").digest()
+    ),
+    "host-runner": ATTEST.keypair_from_seed(hashlib.sha256(b"t3 host-runner").digest()),
+    "rogue": ATTEST.keypair_from_seed(hashlib.sha256(b"t3 untrusted").digest()),  # listed nowhere
+}
+
+
+@pytest.fixture(scope="module")
+def trust_file(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """A trust file listing the test keys of both signers (the rogue key is not listed)."""
+    p = tmp_path_factory.mktemp("trust") / "trusted_attestation_keys.json"
+    p.write_text(json.dumps({s: [{"key_id": KEYS[s].key_id, "public_key": KEYS[s].public_key.hex(),
+                                  "added": "2026-11-08", "note": "test key"}]
+                             for s in ("validation-manager", "host-runner")}, indent=2))  # fmt: skip
+    return p
+
+
+@pytest.fixture(autouse=True)
+def _test_trust(cal: ModuleType, trust_file: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The default trust file of the module instances under test (``cal`` and the one the consumers import by name) is
+    the temporary one; tests of the committed state pass ``trust_path`` explicitly."""
+    import importlib
+
+    for m in (cal, importlib.import_module("v7r2_cal_rate")):
+        monkeypatch.setattr(m, "TRUST_FILE", trust_file)
+
+
+def _sign(doc: dict[str, Any], signer: str, key: str | None = None) -> dict[str, Any]:
+    return ATTEST.sign_record(doc, KEYS[key or signer], signer)
+
+
 # -- synthetic v7r2-layout fixture (the helpers of test_v7r2_calibration.test_v7r2_rehearsal_loader_layout) ----
 def build_v7r2_fixture(d: Path, s5c: ModuleType, digest: str, *, seed_offset: int = 0, layout_shards: int = 4,
                        code_sha: str = "c0de" * 10, seed_base: int = 20505000) -> dict[str, Any]:  # fmt: skip
@@ -102,6 +145,10 @@ RUN_ID = "RUN-20261101T120000Z-0123abcd"  # the controlled host-runner run id
 TOKEN = "R4B-20261101T120000Z-aaaaaaaa"  # the in-run token (IONMC_HOST_RUN_ID of the wrapper), sealed in the part record
 VAL_ID = "VAL-20261101-120000-ABCDEF"
 VAL_FILE = f"{VAL_ID}.json"
+RUN_FILE = f"{RUN_ID}.json"
+MANIFEST = (
+    "e" * 64
+)  # the signed output manifest digest of the run (claimed by the validation record)
 
 
 @pytest.fixture(scope="module")
@@ -117,15 +164,24 @@ def cov() -> ModuleType:
     return mod
 
 
+def _artifact_lines(part: Path, lg: Path) -> list[str]:
+    return [f"CAL-RATE-ARTIFACT part_record {part.name} {hashlib.sha256(part.read_bytes()).hexdigest()}",
+            f"CAL-RATE-ARTIFACT part_log {lg.name} {hashlib.sha256(lg.read_bytes()).hexdigest()}"]  # fmt: skip
+
+
 def make_artifacts(d: Path, cov: ModuleType, *, wall: float = 996.6, part: int = 0, surrogate: str = "archive_fitted",
                    sha: str = SHA, total: float | None = None, over: dict[str, Any] | None = None,
                    unseal: bool = False, log: str | None = None, drop: tuple[str, ...] = (), val: bool = True,
                    val_over: dict[str, Any] | None = None, val_det: dict[str, Any] | None = None,
-                   val_drop: tuple[str, ...] = ()) -> tuple[Path, Path]:  # fmt: skip
+                   val_drop: tuple[str, ...] = (), val_key: str | None = None, val_tamper: dict[str, Any] | None = None,
+                   run_over: dict[str, Any] | None = None, run_drop: tuple[str, ...] = (), run_key: str | None = None,
+                   run_tamper: dict[str, Any] | None = None, stdout: str | None = None,
+                   argv: list[str] | None = None) -> tuple[Path, Path]:  # fmt: skip
     """A genuine sealed V7-R2 calibration part record (sealed by the real ``_seal``) and a synthetic but well-formed
-    passing pytest log of that one part (a controlled host run is not needed to test the verification), and (``val``)
-    a well-formed copy of the validation-manager record binding them (``val_over`` / ``val_det`` replace top-level /
-    ``details`` fields, ``val_drop`` removes top-level fields)."""
+    passing pytest log of that one part, and (``val``) signed copies of the host-runner record (``RUN_FILE``: token line
+    and artifact lines in its stdout) and of the validation-manager record (``VAL_FILE``: passed, ``details.host_runs``
+    naming the run and its manifest). ``*_over`` / ``val_det`` replace fields before signing, ``*_drop`` remove them,
+    ``*_key`` signs with another key ("rogue": untrusted), ``*_tamper`` replaces fields AFTER signing."""
     d.mkdir(parents=True, exist_ok=True)
     n = 83 if part < 2 else 82
     rec: dict[str, Any] = {
@@ -155,36 +211,49 @@ def make_artifacts(d: Path, cov: ModuleType, *, wall: float = 996.6, part: int =
         )
     )
     if val:
-        tot = float(f"{total:.2f}")  # the time as the pytest summary prints it
+        out = stdout if stdout is not None else "\n".join(
+            [f"token {TOKEN}", "kappa parts: 6 passed", *_artifact_lines(path, lg)]) + "\n"  # fmt: skip
+        run: dict[str, Any] = {
+            "schema_version": 1, "run_id": RUN_ID, "task_id": "V3-005B", "branch": "task/v3-005b", "sha": sha,
+            "dirty_before": False, "dirty_after": False, "sha_after": sha, "committed_state_unchanged": True,
+            "argv": argv if argv is not None else ["python", "-c", "chain wrapper"], "exit_code": 0,
+            "timed_out": False, "stdout": out, "stderr": "", "stdout_truncated": False, "stderr_truncated": False,
+            "stdout_total_chars": len(out), "output_paths": [], "output_publication_error": None, "succeeded": True,
+            "stdout_sha256": hashlib.sha256(out.encode()).hexdigest(), "stderr_sha256": hashlib.sha256(b"").hexdigest(),
+            "output_manifest_sha256": MANIFEST, **(run_over or {}),
+        }  # fmt: skip
+        for k in run_drop:
+            run.pop(k)
+        signed_run = {**_sign(run, "host-runner", run_key), **(run_tamper or {})}
+        (d / RUN_FILE).write_text(json.dumps(signed_run, indent=2) + "\n")
         doc: dict[str, Any] = {
             "schema_version": 1, "validation_id": VAL_ID, "task_id": "V3-005B",
             "recorded_at_utc": "2026-11-01T12:00:00.000000+00:00", "suite": "host-r4b-calibration-rate-measurement",
-            "status": "passed", "summary": "synthetic copy", "git_sha": sha,
-            "details": {"head_sha": sha, "host_run_id": RUN_ID, "host_run_token": TOKEN, "part_record": path.name,
-                        "part_record_sha256": cov._seal(rec)["content_sha256"], "n": n, "wall_mc_s": wall,
-                        "wall_total_s": tot, "s_per_rep": round(wall / n, 4), "fixed_s": max(70.0, tot - wall),
+            "status": "passed", "summary": "synthetic signed record", "git_sha": sha,
+            "details": {"head_sha": sha, "host_runs": [{"run_id": RUN_ID, "output_manifest_sha256": MANIFEST}],
                         **(val_det or {})},
             **(val_over or {}),
         }  # fmt: skip
         for k in val_drop:
             doc.pop(k)
-        (d / VAL_FILE).write_text(json.dumps(doc, indent=2) + "\n")
+        signed_val = {**_sign(doc, "validation-manager", val_key), **(val_tamper or {})}
+        (d / VAL_FILE).write_text(json.dumps(signed_val, indent=2) + "\n")
     return path, lg
 
 
 def _build(
     cal: ModuleType, part: Path, lg: Path, log_dir: Path | None = None, **kw: Any
 ) -> dict[str, Any]:
-    """``build_record`` with the synthetic ids and the validation-record copy next to the part record."""
-    args: dict[str, Any] = {"git_sha": SHA, "host_run_id": RUN_ID, "host_run_token": TOKEN, "validation_id": VAL_ID,
+    """``build_record`` with the signed record copies next to the part record."""
+    args: dict[str, Any] = {"git_sha": SHA, "host_run_record": part.parent / RUN_FILE,
                             "validation_record": part.parent / VAL_FILE, **kw}  # fmt: skip
     return cal.build_record(part, lg, log_dir or part.parent, **args)
 
 
 def _cli(part: Path, lg: Path, out: Path, *extra: str) -> list[str]:
     return ["--part-record", str(part), "--part-log", str(lg), "--log-dir", str(part.parent), "--git-sha", SHA,
-            "--host-run-id", RUN_ID, "--host-run-token", TOKEN, "--validation-id", VAL_ID,
-            "--validation-record", str(part.parent / VAL_FILE), "--out", str(out), *extra]  # fmt: skip
+            "--host-run-record", str(part.parent / RUN_FILE), "--validation-record", str(part.parent / VAL_FILE),
+            "--out", str(out), *extra]  # fmt: skip
 
 
 def write_rate(
@@ -192,17 +261,21 @@ def write_rate(
 ) -> Path:
     """A measured-rate record built by ``build_record`` from genuine artifacts (``over``: fields replaced afterwards)."""
     part, lg = make_artifacts(path.parent / f"{path.stem}-art", cov, wall=s_per_rep * 83)
-    rec = _build(cal, part, lg)  # host and token copied from the sealed record
+    rec = _build(
+        cal, part, lg
+    )  # host copied from the sealed record, attestation from the signed copies
     rec.update(over)
     path.write_text(json.dumps(rec))
     return path
 
 
+PIN_FIELDS = ("sha256", "git_sha", "host_run_id", "validation_id", "host_run_record_sha256", "validation_record_sha256",
+              "trust_file_sha256")  # fmt: skip
+
+
 def _pin_of(cal: ModuleType, rec: dict[str, Any]) -> dict[str, str]:
     """The genuine pin fields of a record (the order of the pin line)."""
-    return {"sha256": cal.record_digest(rec), "git_sha": rec["git_sha"], "host_run_id": rec["host_run_id"],
-            "validation_id": rec["validation_id"], "host_run_token": rec["host_run_token"],
-            "validation_record_sha256": rec["validation_record_sha256"], "host_node": rec["host"]["node"]}  # fmt: skip
+    return {"sha256": cal.record_digest(rec), **{k: rec[k] for k in PIN_FIELDS[1:]}}
 
 
 def _plan_for(cal: ModuleType, rate: Path | str, *, name: str = "plan.md", **pin_over: str) -> Path:
@@ -215,7 +288,7 @@ def _plan_for(cal: ModuleType, rate: Path | str, *, name: str = "plan.md", **pin
     try:
         rec = json.loads(rate.read_text())
         pin = {**_pin_of(cal, rec), **pin_over}
-        lines.append("RATE-RECORD-OF-RECORD: " + " ".join(f"{k}={v}" for k, v in pin.items()))
+        lines.append("RATE-RECORD-OF-RECORD: " + " ".join(f"{k}={pin[k]}" for k in PIN_FIELDS))
     except (ValueError, KeyError, TypeError, AttributeError, OSError):
         pass
     plan.write_text("\n".join(lines) + "\n")
@@ -275,9 +348,10 @@ def test_lv5d_preflight_valid_fixture_needs_the_rate_record(
     assert "not ok" in (rs.rehearsal_preflight("lv5d") or "")  # a path that is no file
     rate = write_rate(tmp_path / "rate.json", cal, cov)
     monkeypatch.setenv(RATE_ENV, str(rate))
-    assert "does not match the record" in (
-        rs.rehearsal_preflight("lv5d") or ""
-    )  # genuine synthetic record, not the pin of record of the repository plan
+    msg = rs.rehearsal_preflight("lv5d") or ""
+    assert (
+        "not pinned" in msg or "does not match the record" in msg
+    )  # genuine synthetic record, not pinned in the repository plan
     pin_default(rate)
     assert (
         rs.rehearsal_preflight("lv5d") is None
@@ -423,9 +497,10 @@ def test_rep_plan_table_is_recomputed_from_the_measured_rate(
 ) -> None:
     rec = write_rate(tmp_path / "rate.json", cal, cov, s_per_rep=12.0)
     monkeypatch.setenv(RATE_ENV, str(rec))
+    reason = s5d.rep_plan_table("lv5d")["reason"]
     assert (
-        "does not match the record" in s5d.rep_plan_table("lv5d")["reason"]
-    )  # the repository plan pins another (the committed R-4b) record
+        "not pinned" in reason or "does not match the record" in reason
+    )  # the repository plan does not pin it
     pin_default(rec)
     rep = s5d.rep_plan_table("lv5d")
     assert rep["ok"] and rep["rate_source"] == "measured" and rep["reason"] is None
@@ -522,19 +597,32 @@ def test_cal_rate_builder_derives_the_record_from_a_part_record_and_log(
 
 
 # -- Codex REVIEW-6519d4ff: the measured-rate record is only accepted with verified controlled-run artifacts ------------
+def _sig(path: Path) -> dict[str, Any]:
+    block = json.loads(path.read_text()).get("attestation") or {}
+    return {k: block.get(k) for k in ("key_id", "payload_sha256", "signature")}
+
+
 def _rate_from(tmp_path: Path, cal: ModuleType, cov: ModuleType, **kw: Any) -> Path:
     """Build a record from artifacts made with ``kw`` through the unchecked path (artifacts are valid only if ``kw`` is
     empty): the record is assembled by hand from the files so that ``load_record`` is what refuses."""
     part, lg = make_artifacts(tmp_path / "art", cov, **kw)
+    d = part.parent
     doc = json.loads(part.read_text())
     wall, n = doc["wall_mc_s"], doc["n"]
     total = wall + 70.0
+
+    def sha(p: Path) -> str:
+        return hashlib.sha256(p.read_bytes()).hexdigest() if p.exists() else "0" * 64
+
     rec = {"schema": cal.CAL_RATE_SCHEMA, "s_per_rep": wall / n, "fixed_s": 70.0, "reps": n, "wall_mc_s": wall,
-           "wall_total_s": total, "host": dict(doc.get("host") or {"node": "x", "platform": "p", "machine": "m", "cpu_count": 1, "python": "3"}), "host_run_id": RUN_ID, "host_run_token": TOKEN, "validation_id": VAL_ID,
-           "validation_record": VAL_FILE, "validation_record_sha256": hashlib.sha256((part.parent / VAL_FILE).read_bytes()).hexdigest() if (part.parent / VAL_FILE).exists() else "0" * 64,
-           "git_sha": SHA, "log_dir": str(part.parent),
-           "part_record": part.name, "part_record_sha256": hashlib.sha256(part.read_bytes()).hexdigest(),
-           "part_log": lg.name, "part_log_sha256": hashlib.sha256(lg.read_bytes()).hexdigest()}  # fmt: skip
+           "wall_total_s": total, "host": dict(doc.get("host") or {"node": "x", "platform": "p", "machine": "m", "cpu_count": 1, "python": "3"}),
+           "git_sha": SHA, "log_dir": str(d),
+           "part_record": part.name, "part_record_sha256": sha(part), "part_log": lg.name, "part_log_sha256": sha(lg),
+           "host_run_id": RUN_ID, "host_run_record": RUN_FILE, "host_run_record_sha256": sha(d / RUN_FILE),
+           "host_run_signature": _sig(d / RUN_FILE) if (d / RUN_FILE).exists() else {},
+           "validation_id": VAL_ID, "validation_record": VAL_FILE, "validation_record_sha256": sha(d / VAL_FILE),
+           "validation_signature": _sig(d / VAL_FILE) if (d / VAL_FILE).exists() else {},
+           "trust_file_sha256": sha(cal.TRUST_FILE)}  # fmt: skip
     out = tmp_path / "rate.json"
     out.write_text(json.dumps(rec))
     return out
@@ -695,10 +783,6 @@ def test_declared_plans_refuses_a_plain_dict_and_a_changed_file(
 
 
 # -- Codex REVIEW-323f4c12: the measured-rate record is conformant only when pinned in the acceptance plan --------
-PIN_FIELDS = ("sha256", "git_sha", "host_run_id", "validation_id", "host_run_token", "validation_record_sha256",
-              "host_node")  # fmt: skip
-
-
 def _pin_text(**f: str) -> str:
     return "RATE-RECORD-OF-RECORD: " + " ".join(f"{k}={f[k]}" for k in PIN_FIELDS)
 
@@ -745,9 +829,9 @@ def test_pinned_record_is_conformant_and_unpinned_is_not(
         ("git_sha", "b" * 40),
         ("host_run_id", "RUN-20261101T120000Z-ffffffff"),
         ("validation_id", "VAL-20261101-120000-FFFFFF"),
-        ("host_run_token", "R4B-20261101T120000Z-ffffffff"),
+        ("host_run_record_sha256", "0" * 64),
         ("validation_record_sha256", "0" * 64),
-        ("host_node", "othernode"),
+        ("trust_file_sha256", "0" * 64),
     ],
 )
 def test_pin_with_a_wrong_field_is_refused(
@@ -779,21 +863,33 @@ def test_pin_grammar_is_strict_and_the_angle_bracket_form_is_no_pin(
     cal: ModuleType, tmp_path: Path
 ) -> None:
     sha, git, val = "a" * 64, "b" * 40, "VAL-20261101-120000-ABCDEF"
-    run, tok, vsha = "RUN-20261101T120000Z-0123abcd", "R4B-20261101T120000Z-aaaaaaaa", "c" * 64
+    run, tok, rsha, vsha, tsha = (
+        "RUN-20261101T120000Z-0123abcd",
+        "R4B-20261101T120000Z-aaaaaaaa",
+        "f" * 64,
+        "c" * 64,
+        "d" * 64,
+    )
     good = (f"RATE-RECORD-OF-RECORD: sha256={sha} git_sha={git} host_run_id={run} validation_id={val} "
-            f"host_run_token={tok} validation_record_sha256={vsha} host_node=n1")  # fmt: skip
+            f"host_run_record_sha256={rsha} validation_record_sha256={vsha} trust_file_sha256={tsha}")  # fmt: skip
     plan = tmp_path / "p.md"
     plan.write_text(good + "\n")
     assert cal.plan_pin(plan) == {"sha256": sha, "git_sha": git, "host_run_id": run, "validation_id": val,
-                                  "host_run_token": tok, "validation_record_sha256": vsha, "host_node": "n1"}  # fmt: skip
+                                  "host_run_record_sha256": rsha, "validation_record_sha256": vsha,
+                                  "trust_file_sha256": tsha}  # fmt: skip
     for bad in (
-        "RATE-RECORD-OF-RECORD: sha256=<64 hex> git_sha=<40 hex> host_run_id=<id> validation_id=<VAL-...> host_node=<node>",
-        # the previous grammar (token as host_run_id, no validation-record digest) is no pin
+        "RATE-RECORD-OF-RECORD: sha256=<64 hex> git_sha=<40 hex> host_run_id=<RUN-...> validation_id=<VAL-...> "
+        "host_run_record_sha256=<64 hex> validation_record_sha256=<64 hex> trust_file_sha256=<64 hex>",
+        # the grammars of 2026-11-01 and 2026-11-07 (token / host node, no signed-copy digests) are no pins
         f"RATE-RECORD-OF-RECORD: sha256={sha} git_sha={git} host_run_id={tok} validation_id={val} host_node=n1",
+        f"RATE-RECORD-OF-RECORD: sha256={sha} git_sha={git} host_run_id={run} validation_id={val} "
+        f"host_run_token={tok} validation_record_sha256={vsha} host_node=n1",
         good.replace(run, tok),  # an in-run token is not a runner id
-        good.replace(f" host_run_token={tok}", ""),
+        good.replace(f" host_run_record_sha256={rsha}", ""),
         good.replace(f" validation_record_sha256={vsha}", ""),
+        good.replace(f" trust_file_sha256={tsha}", ""),
         good.replace(vsha, "c" * 63),
+        good + " host_node=n1",
         " " + good,  # not a whole line from the first column
         "see `" + good + "`",
         good.replace(sha, "A" * 64),
@@ -817,46 +913,75 @@ def test_the_repository_plan_is_the_default_and_refuses_a_synthetic_record(
 ) -> None:
     assert cal.ACCEPTANCE_PLAN == REPO / "validation" / "plans" / "v3-005-acceptance.md"
     assert cal.ACCEPTANCE_PLAN.is_file()
-    assert cal.plan_pin() == REPO_PIN  # the R-4b measurement is pinned in the committed plan
-    committed = REPO / "validation" / "results" / "transport" / "v7r2-r4b" / "cal-rate.json"
-    got = cal.load_record(committed)  # conformant through the repository plan
-    assert got["sha256"] == hashlib.sha256(committed.read_bytes()).hexdigest()
-    assert cal.require_validated(got)["record"] == got["record"]
-    assert cal.pin_line(got["record"]) == "RATE-RECORD-OF-RECORD: " + " ".join(
-        f"{k}={v}" for k, v in REPO_PIN.items()
-    )
-    rec = got[
-        "record"
-    ]  # the committed record names the controlled runner id and the verbatim validation record
-    assert rec["host_run_id"].startswith("RUN-") and rec["host_run_token"].startswith("R4B-")
-    val = committed.parent / rec["validation_record"]
-    assert (
-        hashlib.sha256(val.read_bytes()).hexdigest()
-        == rec["validation_record_sha256"]
-        == REPO_PIN["validation_record_sha256"]
-    )
-    assert json.loads(val.read_text())["details"]["host_run_id"] == rec["host_run_id"]
     rate = _rate_from(
         tmp_path, cal, cov
-    )  # fully self-consistent synthetic artifacts, well-formed ids
-    with pytest.raises(ValueError, match="does not match the record"):
-        cal.load_record(rate)  # its digest differs from the pin
+    )  # fully self-consistent synthetic artifacts, signed by the test keys
+    refused = "not pinned|does not match the record"
+    with pytest.raises(ValueError, match=refused):
+        cal.load_record(rate)  # the repository plan does not pin it
     monkeypatch.setenv(RATE_ENV, str(rate))
-    with pytest.raises(ValueError, match="does not match the record"):
+    with pytest.raises(ValueError, match=refused):
         cal.record_from_env()
-    assert "does not match the record" in s5d.rep_plan_table("lv5d")["reason"]
+    reason = s5d.rep_plan_table("lv5d")["reason"]
+    assert "not pinned" in reason or "does not match the record" in reason
     # a plan is never taken from the environment
     monkeypatch.setenv("IONMC_V7R2_ACCEPTANCE_PLAN", str(_plan_for(cal, rate)))
-    with pytest.raises(ValueError, match="does not match the record"):
+    with pytest.raises(ValueError, match=refused):
         cal.load_record(rate)
+
+
+def test_the_committed_rate_record_state_is_consistent(cal: ModuleType) -> None:
+    """The committed plan and ``v7r2-r4b/cal-rate.json`` agree under the COMMITTED trust file. Until the re-measurement
+    of 2026-11-08 is pinned, the plan holds only the superseded pins of the old grammars (history, no pin) and the
+    token-attested record of 2026-11-07 is refused as legacy; once a pin of the signed grammar exists, the committed
+    record must load against it with the committed keys."""
+    text = cal.ACCEPTANCE_PLAN.read_text()
+    assert (
+        "host_run_token=R4B-20261102T010633Z-b7c44f51" in text
+    )  # the superseded pin lines stay as history
+    pin = cal.plan_pin()
+    committed = R4B_DIR / "cal-rate.json"
+    if pin is None:
+        rec = json.loads(committed.read_text())
+        assert rec.get("schema") == "ionmc-v7r2-cal-rate-1"
+        with pytest.raises(ValueError, match="legacy token-attested"):
+            cal.load_record(committed, trust_path=COMMITTED_TRUST)
+        return
+    got = cal.load_record(committed, trust_path=COMMITTED_TRUST)
+    assert cal.record_digest(got["record"]) == pin["sha256"]
+    assert (
+        got["record"]["trust_file_sha256"]
+        == hashlib.sha256(COMMITTED_TRUST.read_bytes()).hexdigest()
+    )
+
+
+def test_the_default_trust_file_is_the_committed_one(
+    cal: ModuleType, cov: ModuleType, tmp_path: Path
+) -> None:
+    """Unpatched, the module verifies against ``infrastructure/keys/trusted_attestation_keys.json``, which does not list
+    the test keys: a record signed by them is unverified there and refused (no service key is used in tests)."""
+    fresh = _load("v7r2_cal_rate")
+    assert fresh.TRUST_FILE == COMMITTED_TRUST
+    rate = _rate_from(tmp_path, cal, cov)
+    plan = _plan_for(cal, rate)
+    assert cal.load_record(rate, plan_path=plan)  # the test trust file
+    with pytest.raises(ValueError, match="trust_file_sha256|unverified"):
+        cal.load_record(rate, plan_path=plan, trust_path=COMMITTED_TRUST)
+    part, lg = make_artifacts(tmp_path / "b", cov)
+    with pytest.raises(ValueError, match="unverified record rejected"):
+        _build(cal, part, lg, trust_path=COMMITTED_TRUST)
 
 
 def test_the_committed_plan_note_shows_the_grammar_without_being_a_pin(cal: ModuleType) -> None:
     text = cal.ACCEPTANCE_PLAN.read_text()
     assert "REVIEW-323f4c12" in text and "rate-record pin" in text
     assert "RATE-RECORD-OF-RECORD: sha256=<64 hex>" in text  # the grammar is shown ...
-    # ... and is no pin: the last pin is the R-4b pin of record, not the placeholder line
-    assert cal.plan_pin() == REPO_PIN
+    assert (
+        "trust_file_sha256=<64 hex>" in text
+    )  # ... including the signed grammar of 2026-11-08 ...
+    # ... and the placeholder lines are no pins (the parser only accepts hex digests)
+    pin = cal.plan_pin()
+    assert pin is None or all("<" not in v for v in pin.values())
 
 
 def test_cli_print_pin_line_prints_the_exact_line_and_never_writes_the_plan(
@@ -1099,17 +1224,33 @@ def test_sealed_part_record_without_usable_host_identity_is_refused(
             lambda r: r.update(host_run_id=TOKEN),
             "host_run_id must be",
         ),  # an in-run token is no runner id
-        (
-            lambda r: r.update(host_run_id="RUN-20261101-r4b-0001"),
-            "host_run_id must be",
-        ),  # malformed runner id
+        (lambda r: r.update(host_run_id="RUN-20261101-r4b-0001"), "host_run_id must be"),
         (lambda r: r.update(host_run_id="RUN-20261101T120000Z-0123ABCD"), "host_run_id must be"),
-        (lambda r: r.pop("host_run_token"), "record fields differ"),
-        (lambda r: r.update(host_run_token="unknown"), "host_run_token must be"),
-        (lambda r: r.update(host_run_token="short"), "host_run_token must be"),
         (
-            lambda r: r.update(host_run_token="R4B-OTHER-00000002"),
-            "host_run_token .* differs from the sealed",
+            lambda r: r.update(host_run_id="RUN-20261101T120000Z-ffffffff"),
+            "host_run_id of the record differs",
+        ),
+        (lambda r: r.pop("host_run_record"), "record fields differ"),
+        (lambda r: r.pop("host_run_record_sha256"), "record fields differ"),
+        (lambda r: r.update(host_run_record=""), "host_run_record must be"),
+        (lambda r: r.update(host_run_record_sha256="0" * 64), "host_run_record .*sha256 differs"),
+        (lambda r: r.pop("host_run_signature"), "record fields differ"),
+        (lambda r: r.update(host_run_signature={}), "host_run_signature must be"),
+        (
+            lambda r: r["host_run_signature"].update(signature="0" * 128),
+            "host_run_signature of the record differs",
+        ),
+        (
+            lambda r: r["host_run_signature"].update(key_id="0" * 16),
+            "host_run_signature of the record differs",
+        ),
+        (
+            lambda r: r["validation_signature"].update(payload_sha256="0" * 64),
+            "validation_signature of the record differs",
+        ),
+        (
+            lambda r: r["validation_signature"].update(signature="x"),
+            "validation_signature.signature is malformed",
         ),
         (lambda r: r.pop("validation_record"), "record fields differ"),
         (lambda r: r.pop("validation_record_sha256"), "record fields differ"),
@@ -1119,7 +1260,17 @@ def test_sealed_part_record_without_usable_host_identity_is_refused(
         (lambda r: r.update(validation_id=""), "validation_id must be"),
         (lambda r: r.update(validation_id="VAL-2026-1101-abcdef"), "validation_id must be"),
         (lambda r: r.update(validation_id="VAL-20261101-120000-abcdef"), "validation_id must be"),
+        (
+            lambda r: r.update(validation_id="VAL-20261101-120000-FFFFFF"),
+            "validation_id of the record differs",
+        ),
         (lambda r: r.update(validation_id=None), "validation_id must be"),
+        (lambda r: r.pop("trust_file_sha256"), "record fields differ"),
+        (
+            lambda r: r.update(trust_file_sha256="0" * 64),
+            "trust_file_sha256 of the record differs from the trust file",
+        ),
+        (lambda r: r.update(host_run_token=TOKEN), "legacy token-attested"),
         (lambda r: r.update(planning_note="x"), "undeclared"),
         (lambda r: r.update(parts_authorised=39), "undeclared"),
     ],
@@ -1136,195 +1287,322 @@ def test_rate_record_ids_and_undeclared_fields(
         _pinned_load(cal, out)
 
 
-def test_build_record_and_cli_refuse_missing_or_unknown_ids(
+def test_build_record_and_cli_refuse_missing_inputs(
     cal: ModuleType, cov: ModuleType, tmp_path: Path
 ) -> None:
     part, lg = make_artifacts(tmp_path / "art", cov)
-    for ids in (
-        ("unknown", VAL_ID),
-        ("", VAL_ID),
-        (TOKEN, VAL_ID),  # an in-run token is no runner id
-        ("RUN-1234", VAL_ID),
-        (RUN_ID, ""),
-        (RUN_ID, "VAL-bad"),
-        (RUN_ID, "unknown"),
+    with pytest.raises(ValueError, match="must be files"):
+        _build(cal, part, lg, host_run_record=part.parent / "absent.json")
+    with pytest.raises(ValueError, match="must be files"):
+        _build(cal, part, lg, validation_record=part.parent / "absent.json")
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    for name, key in ((RUN_FILE, "host_run_record"), (VAL_FILE, "validation_record")):
+        shutil.copy(part.parent / name, elsewhere / name)
+        with pytest.raises(ValueError, match="lie in log_dir"):
+            _build(cal, part, lg, **{key: elsewhere / name})
+    with pytest.raises(
+        ValueError, match="validation record .*unreadable|host run record .*unreadable"
     ):
-        with pytest.raises(ValueError, match="host_run_id|validation_id"):
-            _build(cal, part, lg, host_run_id=ids[0], validation_id=ids[1])
-    for tok in ("unknown", "", "short"):
-        with pytest.raises(ValueError, match="host_run_token"):
-            _build(cal, part, lg, host_run_token=tok)
+        _build(cal, part, lg, validation_record=lg)  # the pytest log is no signed JSON record
     out = tmp_path / "r.json"
     full = _cli(part, lg, out)
-    for opt in ("--host-run-id", "--host-run-token", "--validation-id", "--validation-record"):
+    for opt in ("--host-run-record", "--validation-record", "--git-sha", "--part-record"):
         i = full.index(opt)
-        with pytest.raises(SystemExit):  # argparse: every id and the validation record are required
+        with pytest.raises(SystemExit):  # argparse: every input is required
             cal.main(full[:i] + full[i + 2 :])
-    with pytest.raises(SystemExit, match="not ok"):
-        cal.main([a if a != RUN_ID else "unknown" for a in full])
+    for removed in (
+        "--host-run-id",
+        "--host-run-token",
+        "--validation-id",
+    ):  # the token-era options are gone
+        with pytest.raises(SystemExit):
+            cal.main([*full, removed, "x"])
+    with pytest.raises(
+        SystemExit, match="not ok: .*unverified"
+    ):  # --trust-file: the test keys are not listed there
+        cal.main([*full, "--trust-file", str(COMMITTED_TRUST)])
     assert not out.exists()
 
 
-# -- Codex REVIEW-61f4b0e3: the controlled attestation (runner id, token, verbatim validation-record copy) ----------
-def test_committed_validation_record_copy_is_the_verbatim_manager_record(cal: ModuleType) -> None:
-    d = REPO / "validation" / "results" / "transport" / "v7r2-r4b"
-    val = json.loads((d / "VAL-20261107-203551-E8A93E.json").read_text())
-    rec = json.loads((d / "cal-rate.json").read_text())
-    assert (
-        val["validation_id"] == rec["validation_id"]
-        and val["task_id"] == "V3-005B"
-        and val["status"] == "passed"
-    )
-    assert val["details"]["host_run_id"] == rec["host_run_id"] == "RUN-20261102T010631Z-15c7a6ad"
-    assert (
-        val["details"]["host_run_token"] == rec["host_run_token"] == "R4B-20261102T010633Z-b7c44f51"
-    )
-    assert cal.load_record(d / "cal-rate.json")["record"] == rec
+# -- Codex REVIEW-61f4b0e3 / REVIEW-cf3f019e: the signed attestation chain (V3-INFRA-002) ------------------------------
+def test_a_valid_signed_chain_builds_and_loads(
+    cal: ModuleType, cov: ModuleType, tmp_path: Path, trust_file: Path
+) -> None:
+    part, lg = make_artifacts(tmp_path / "art", cov)
+    rec = _build(cal, part, lg)
+    d = part.parent
+    assert rec["schema"] == "ionmc-v7r2-cal-rate-2" and "host_run_token" not in rec
+    assert rec["host_run_id"] == RUN_ID and rec["validation_id"] == VAL_ID
+    assert rec["host_run_record"] == RUN_FILE and rec["validation_record"] == VAL_FILE
+    for key, name in (("host_run", RUN_FILE), ("validation", VAL_FILE)):
+        block = json.loads((d / name).read_text())["attestation"]
+        assert rec[f"{key}_signature"] == {
+            k: block[k] for k in ("key_id", "payload_sha256", "signature")
+        }
+        assert rec[f"{key}_record_sha256"] == hashlib.sha256((d / name).read_bytes()).hexdigest()
+    assert rec["trust_file_sha256"] == hashlib.sha256(trust_file.read_bytes()).hexdigest()
+    out = tmp_path / "rate.json"
+    out.write_text(json.dumps(rec))
+    assert _pinned_load(cal, out)["record"] == rec
+    assert _pinned_load(
+        cal, _rate_from(tmp_path / "hand", cal, cov)
+    )  # the hand-assembled record agrees
 
 
 @pytest.mark.parametrize(
     ("kw", "match"),
     [
-        ({"val_over": {"validation_id": "VAL-20261101-120000-FFFFFF"}}, "validation_id"),
-        ({"val_over": {"git_sha": "b" * 40}}, "git_sha"),
-        ({"val_det": {"head_sha": "b" * 40}}, "head_sha"),
-        ({"val_det": {"host_run_id": "RUN-20261101T120000Z-ffffffff"}}, "details.host_run_id"),
+        # the validation-manager record copy
         (
-            {"val_det": {"host_run_token": "R4B-20261101T120000Z-ffffffff"}},
-            "details.host_run_token",
+            {"val_tamper": {"status": "passed", "summary": "edited after signing"}},
+            "validation record .*invalid attestation: payload hash mismatch",
         ),
-        ({"val_det": {"part_record_sha256": "0" * 64}}, "details.part_record_sha256"),
         (
-            {"val_det": {"part_record": "v7r2-calibration-archive_fitted-p01.json"}},
-            "details.part_record",
+            {
+                "val_tamper": {
+                    "details": {
+                        "head_sha": SHA,
+                        "host_runs": [{"run_id": RUN_ID, "output_manifest_sha256": "f" * 64}],
+                    }
+                }
+            },
+            "validation record .*invalid attestation",
         ),
-        ({"val_det": {"n": 82}}, "details.n"),
-        ({"val_det": {"wall_mc_s": 997.0}}, "details.wall_mc_s"),
-        ({"val_det": {"wall_total_s": 1100.0}}, "details.wall_total_s"),
-        ({"val_det": {"s_per_rep": 12.1}}, "details.s_per_rep"),  # beyond the rounding of the copy
-        ({"val_det": {"fixed_s": 90.0}}, "details.fixed_s"),
-        ({"val_over": {"status": "failed"}}, "status"),
-        ({"val_over": {"status": "recorded"}}, "status"),
-        ({"val_over": {"task_id": "V3-005D"}}, "task_id"),
-        ({"val_drop": ("schema_version",)}, "schema_version"),
-        ({"val_drop": ("details",)}, "details is not an object"),
-        ({"val_drop": ("status",)}, "status"),
-        ({"val_over": {"recorded_at_utc": "yesterday"}}, "recorded_at_utc"),
-        ({"val_over": {"recorded_at_utc": None}}, "recorded_at_utc"),
+        ({"val_key": "rogue"}, "validation record .*unverified record rejected"),
+        (
+            {"val_key": "host-runner"},
+            "validation record .*unverified record rejected",
+        ),  # a key of the other signer
+        (
+            {"val_tamper": {"attestation": None}},
+            "host_run_signature|validation_signature|unverified",
+        ),
+        ({"val_over": {"status": "failed"}}, "status 'failed' is not 'passed'"),
+        ({"val_over": {"status": "recorded"}}, "is not 'passed'"),
+        ({"val_over": {"task_id": "V3-005D"}}, "validation record .*task_id"),
+        ({"val_over": {"git_sha": "b" * 40}}, "validation record .*git_sha"),
+        (
+            {
+                "val_det": {
+                    "host_runs": [
+                        {
+                            "run_id": "RUN-20261101T120000Z-ffffffff",
+                            "output_manifest_sha256": MANIFEST,
+                        }
+                    ]
+                }
+            },
+            "run_id .*is not the run 'RUN-20261101T120000Z-ffffffff'",
+        ),
+        (
+            {
+                "val_det": {
+                    "host_runs": [
+                        {"run_id": RUN_ID, "output_manifest_sha256": MANIFEST},
+                        {
+                            "run_id": "RUN-20261101T120000Z-ffffffff",
+                            "output_manifest_sha256": MANIFEST,
+                        },
+                    ]
+                }
+            },
+            "exactly one host run",
+        ),
+        ({"val_det": {"host_runs": []}}, "exactly one host run"),
+        (
+            {"val_det": {"host_runs": [{"run_id": RUN_ID, "output_manifest_sha256": None}]}},
+            "is not 64 hex",
+        ),
+        ({"val_det": {"host_runs": [{"run_id": RUN_ID}]}}, "is not 64 hex"),
+        (
+            {"val_det": {"host_runs": [{"run_id": RUN_ID, "output_manifest_sha256": "f" * 64}]}},
+            "output_manifest_sha256 is 'e+', expected 'f+'",
+        ),
+        ({"val_det": {"host_run_id": RUN_ID}}, "legacy details.host_run_id"),
+        ({"val_det": {"host_run_manifest_lookup": "missing"}}, "host_run_manifest_lookup"),
         ({"val_over": {"details": "none"}}, "details is not an object"),
+        # the host-runner record copy
+        (
+            {"run_tamper": {"exit_code": 0, "stdout": "token x\n"}},
+            "host run record .*invalid attestation: payload hash mismatch",
+        ),
+        ({"run_key": "rogue"}, "host run record .*unverified record rejected"),
+        ({"run_key": "validation-manager"}, "host run record .*unverified record rejected"),
+        (
+            {"run_over": {"output_manifest_sha256": "f" * 64}},
+            "output_manifest_sha256 is 'f+', expected 'e+'",
+        ),
+        ({"run_over": {"output_manifest_sha256": None}}, "output_manifest_sha256 is None"),
+        ({"run_over": {"task_id": "V3-005D"}}, "host run record .*task_id"),
+        ({"run_over": {"sha": "b" * 40}}, "host run record .*git_sha"),
+        ({"run_over": {"succeeded": False}}, "succeeded is False"),
+        ({"run_over": {"exit_code": 1, "succeeded": True}}, "exit_code is 1"),
+        ({"run_over": {"exit_code": None}}, "exit_code is None"),
+        ({"run_over": {"timed_out": True}}, "timed_out is True"),
+        ({"run_over": {"committed_state_unchanged": False}}, "committed_state_unchanged is False"),
+        ({"run_over": {"dirty_after": True}}, "dirty_after is True"),
+        ({"run_drop": ("dirty_after",)}, "dirty_after is None"),
+        ({"run_over": {"output_publication_error": "disk full"}}, "output_publication_error"),
+        ({"run_drop": ("output_publication_error",)}, "output_publication_error is '<absent>'"),
+        ({"run_over": {"stdout_sha256": "0" * 64}}, "does not hash to the signed stdout_sha256"),
+        # the binding of the part record, the part log and the sealed token to the signed run
+        (
+            {"stdout": "kappa parts: 6 passed\n"},
+            "token .* appears neither in the signed argv nor as a stdout line",
+        ),
+        (
+            {"stdout": f"token R4B-OTHER-00000002\nCAL-RATE-ARTIFACT part_record x {'0' * 64}\n"},
+            "appears neither",
+        ),
+        ({"stdout": f"token {TOKEN}\n"}, "needs exactly one line 'CAL-RATE-ARTIFACT part_record"),
+        (
+            {
+                "stdout": f"token {TOKEN}\nCAL-RATE-ARTIFACT part_record v7r2-calibration-archive_fitted-p00.json {'0' * 64}\n"
+            },
+            "CAL-RATE-ARTIFACT part_record",
+        ),
+        (
+            {"over": {"host_run_id": "R4B-OTHER-00000002"}},
+            "appears neither",
+        ),  # the part ran under another token
     ],
 )
-def test_validation_record_copy_must_bind_the_artifacts(
+def test_the_signed_chain_is_verified_on_build_and_on_every_load(
     kw: dict[str, Any], match: str, cal: ModuleType, cov: ModuleType, tmp_path: Path
 ) -> None:
     with pytest.raises(ValueError, match=match):
         _pinned_load(cal, _rate_from(tmp_path, cal, cov, **kw))
-    part, lg = make_artifacts(tmp_path / "b", cov, **kw)  # the builder refuses the same copy
+    part, lg = make_artifacts(tmp_path / "b", cov, **kw)  # the builder refuses the same chain
     with pytest.raises(ValueError, match=match):
         _build(cal, part, lg)
 
 
-def test_validation_record_copy_rounded_values_within_tolerance_are_accepted(
+def test_the_token_may_be_bound_by_the_signed_argv_and_the_artifact_lines_by_a_truncated_tail(
     cal: ModuleType, cov: ModuleType, tmp_path: Path
 ) -> None:
-    """The committed copy carries s_per_rep rounded to 4 digits (9.7189 for 9.718907...): accepted (relative 1e-4)."""
-    out = _rate_from(tmp_path, cal, cov)
-    rec = json.loads(out.read_text())
-    val = json.loads((Path(rec["log_dir"]) / rec["validation_record"]).read_text())
-    assert val["details"]["s_per_rep"] != rec["s_per_rep"] and _pinned_load(cal, out)
+    part, lg = make_artifacts(
+        tmp_path / "a", cov, stdout="", argv=["python", "-c", f"TOKEN = '{TOKEN}'"]
+    )
+    out = "\n".join(["...tail of a long stream", *_artifact_lines(part, lg)]) + "\n"
+    make_artifacts(tmp_path / "a", cov, stdout=out, argv=["python", "-c", f"TOKEN = '{TOKEN}'"],
+                   run_over={"stdout_truncated": True, "stdout_total_chars": 10**6, "stdout_sha256": "0" * 64})  # fmt: skip
+    rec = _build(
+        cal, part, lg
+    )  # token in the argv; a truncated inline stdout is not compared with stdout_sha256
+    assert rec["host_run_id"] == RUN_ID
+    assert cal.token_line(TOKEN) == f"token {TOKEN}"
+    assert cal.artifact_lines(part, lg) == _artifact_lines(part, lg)
 
 
-@pytest.mark.parametrize("mutate", ["missing", "hash", "swapped"])
-def test_validation_record_copy_file_is_authenticated_by_its_digest(
-    mutate: str, cal: ModuleType, cov: ModuleType, tmp_path: Path
+def test_a_duplicated_artifact_line_is_refused(
+    cal: ModuleType, cov: ModuleType, tmp_path: Path
+) -> None:
+    part, lg = make_artifacts(tmp_path / "a", cov, stdout="")
+    lines = _artifact_lines(part, lg)
+    make_artifacts(
+        tmp_path / "a", cov, stdout="\n".join([f"token {TOKEN}", *lines, lines[1]]) + "\n"
+    )
+    with pytest.raises(ValueError, match="exactly one line 'CAL-RATE-ARTIFACT part_log"):
+        _build(cal, part, lg)
+
+
+@pytest.mark.parametrize("which", [RUN_FILE, VAL_FILE])
+@pytest.mark.parametrize("mutate", ["missing", "reformatted", "swapped"])
+def test_the_record_copies_are_authenticated_by_their_digests(
+    which: str, mutate: str, cal: ModuleType, cov: ModuleType, tmp_path: Path
 ) -> None:
     out = _rate_from(tmp_path, cal, cov)
     rec = json.loads(out.read_text())
-    f = Path(rec["log_dir"]) / rec["validation_record"]
+    key = "host_run_record" if which == RUN_FILE else "validation_record"
+    f = Path(rec["log_dir"]) / which
     if mutate == "missing":
         f.unlink()
-        match = "validation_record .* is not a file"
-    elif mutate == "hash":
-        f.write_text(f.read_text() + "\n")  # content-preserving edit still changes the digest
-        match = "validation_record .*sha256 differs"
-    else:  # another well-formed copy with every binding intact is not the pinned one
+        match = f"{key} .* is not a file"
+    elif mutate == "reformatted":
+        f.write_text(json.dumps(json.loads(f.read_text())))  # the same signed content, other bytes
+        match = f"{key} .*sha256 differs"
+    else:  # another validly signed record of the same chain is not the pinned copy
+        signer = "host-runner" if which == RUN_FILE else "validation-manager"
         doc = json.loads(f.read_text())
-        doc["summary"] = "a different but well-formed copy"
-        f.write_text(json.dumps(doc))
-        match = "validation_record .*sha256 differs"
+        doc.pop("attestation")
+        f.write_text(json.dumps(_sign(doc, signer), indent=2) + "\n")
+        match = f"{key} .*sha256 differs"
     with pytest.raises(ValueError, match=match):
         _pinned_load(cal, out)
 
 
-def test_builder_refuses_a_token_that_differs_from_the_sealed_one_and_takes_it_from_the_seal(
+def test_a_re_signed_copy_with_a_fresh_digest_still_needs_the_recorded_signature(
     cal: ModuleType, cov: ModuleType, tmp_path: Path
 ) -> None:
-    part, lg = make_artifacts(tmp_path / "art", cov)
-    with pytest.raises(ValueError, match="host_run_token .* differs from the sealed"):
-        _build(cal, part, lg, host_run_token="R4B-20261101T120000Z-ffffffff")
-    assert _build(cal, part, lg)["host_run_token"] == TOKEN
-    with pytest.raises(ValueError, match="validation record .*must be files|must be files"):
-        _build(cal, part, lg, validation_record=part.parent / "absent.json")
-    elsewhere = tmp_path / "elsewhere"
-    elsewhere.mkdir()
-    shutil.copy(part.parent / VAL_FILE, elsewhere / VAL_FILE)
-    with pytest.raises(ValueError, match="lie in log_dir"):
-        _build(cal, part, lg, validation_record=elsewhere / VAL_FILE)
-    # the sealed token differs from the record's (the part was executed with another IONMC_HOST_RUN_ID)
-    other, other_lg = make_artifacts(
-        tmp_path / "other", cov, over={"host_run_id": "R4B-OTHER-00000002"}
-    )
-    with pytest.raises(ValueError, match="host_run_token .* differs from the sealed"):
-        _pinned_load(
-            cal, _rate_from(tmp_path, cal, cov, over={"host_run_id": "R4B-OTHER-00000002"})
-        )
-    with pytest.raises(ValueError, match="differs from the sealed"):
-        _build(cal, other, other_lg)
+    """Re-signing a copy (same payload, a new signature) and updating its file digest in the record leaves the recorded
+    signature stale: refused."""
+    out = _rate_from(tmp_path, cal, cov)
+    rec = json.loads(out.read_text())
+    f = Path(rec["log_dir"]) / VAL_FILE
+    doc = json.loads(f.read_text())
+    doc.pop("attestation")
+    doc = {**doc, "summary": "re-signed"}
+    f.write_text(json.dumps(_sign(doc, "validation-manager"), indent=2) + "\n")
+    rec["validation_record_sha256"] = hashlib.sha256(f.read_bytes()).hexdigest()
+    out.write_text(json.dumps(rec))
+    with pytest.raises(ValueError, match="validation_signature of the record differs"):
+        _pinned_load(cal, out)
 
 
-def test_old_grammar_pin_is_refused_and_the_self_generated_pin_needs_the_validation_record_digest(
-    cal: ModuleType, cov: ModuleType, tmp_path: Path
+def test_a_changed_trust_file_invalidates_the_record(
+    cal: ModuleType, cov: ModuleType, tmp_path: Path, trust_file: Path
 ) -> None:
-    rate = _rate_from(tmp_path, cal, cov)
-    rec = json.loads(rate.read_text())
-    plan = tmp_path / "plan.md"
-    old = (f"RATE-RECORD-OF-RECORD: sha256={cal.record_digest(rec)} git_sha={rec['git_sha']} "
-           f"host_run_id={rec['host_run_token']} validation_id={rec['validation_id']} host_node={rec['host']['node']}")  # fmt: skip
-    plan.write_text(old + "\n")
-    assert cal.plan_pin(plan) is None
-    with pytest.raises(ValueError, match="not pinned in the acceptance plan"):
-        cal.load_record(rate, plan_path=plan)
-    plan.write_text(
-        old + "\n" + _pin_text(**_genuine_pin(cal, rate)) + "\n" + old + "\n"
-    )  # old line is ignored
-    assert cal.load_record(rate, plan_path=plan)
-    # Self-generated artifacts: a second, equally well-formed set that differs only in the validation-record copy
-    # (any byte) has another validation_record_sha256, hence another record digest: the pin of the first set (every
-    # other field equal) refuses it, so it is the digest of the copy in the pin that ties record, copy and plan.
-    pin_a = _genuine_pin(cal, rate)
-    (tmp_path / "b2").mkdir()
-    rate_b2 = _rate_from(
-        tmp_path / "b2", cal, cov, val_over={"summary": "forged but internally consistent"}
-    )
-    pin_b = _genuine_pin(cal, rate_b2)
-    assert (
-        pin_a["validation_record_sha256"] != pin_b["validation_record_sha256"]
-        and pin_a["sha256"] != pin_b["sha256"]
-    )
-    plan.write_text(_pin_text(**pin_a) + "\n")
+    out = _rate_from(tmp_path, cal, cov)
+    plan = _plan_for(cal, out)
+    other = tmp_path / "trust.json"
+    other.write_text(trust_file.read_text() + "\n")  # same keys, other bytes
     with pytest.raises(
-        ValueError, match=r"does not match the record .*sha256.*validation_record_sha256"
+        ValueError, match="trust_file_sha256 of the record differs from the trust file"
     ):
-        cal.load_record(rate_b2, plan_path=plan)
-    # the committed pin of record refuses any synthetic record, whatever its own pin says
-    plan.write_text(
-        "# plan\n"
-        + "RATE-RECORD-OF-RECORD: "
-        + " ".join(f"{k}={v}" for k, v in REPO_PIN.items())
-        + "\n"
+        cal.load_record(out, plan_path=plan, trust_path=other)
+    doc = json.loads(trust_file.read_text())
+    doc["host-runner"] = []  # the host-runner key is no longer trusted
+    other.write_text(json.dumps(doc))
+    with pytest.raises(ValueError, match="host run record .*unverified record rejected"):
+        cal.load_record(out, plan_path=plan, trust_path=other)
+    with pytest.raises(ValueError, match="trust file .* unreadable"):
+        cal.load_record(out, plan_path=plan, trust_path=tmp_path / "absent.json")
+
+
+def test_a_legacy_token_attested_record_is_refused(
+    cal: ModuleType, cov: ModuleType, tmp_path: Path
+) -> None:
+    """The schema-1 record of 2026-11-07 (``host_run_token``, repository-authored validation copy) is refused with an
+    explicit message, by the loader and by every consumer path."""
+    legacy = {"schema": "ionmc-v7r2-cal-rate-1", "s_per_rep": 9.7, "fixed_s": 70.0, "reps": 83, "wall_mc_s": 805.1,
+              "wall_total_s": 814.32, "host": {"node": "n", "platform": "p", "machine": "m", "cpu_count": 1, "python": "3"},
+              "host_run_id": RUN_ID, "host_run_token": TOKEN, "validation_id": VAL_ID, "validation_record": VAL_FILE,
+              "validation_record_sha256": "0" * 64, "git_sha": SHA, "log_dir": str(tmp_path), "part_record": "p.json",
+              "part_record_sha256": "0" * 64, "part_log": "part.log", "part_log_sha256": "0" * 64}  # fmt: skip
+    p = tmp_path / "legacy.json"
+    p.write_text(json.dumps(legacy))
+    with pytest.raises(ValueError, match="legacy token-attested calibration rate record .*refused"):
+        _pinned_load(cal, p)
+    legacy["schema"] = (
+        "ionmc-v7r2-cal-rate-2"  # a token field under the new schema is refused the same way
     )
-    with pytest.raises(ValueError, match="does not match the record"):
-        cal.load_record(rate, plan_path=plan)
+    p.write_text(json.dumps(legacy))
+    with pytest.raises(ValueError, match="legacy token-attested"):
+        _pinned_load(cal, p)
+
+
+def test_a_record_with_the_untrusted_key_on_both_copies_is_refused_even_when_pinned(
+    s5d: ModuleType, cal: ModuleType, cov: ModuleType, tmp_path: Path
+) -> None:
+    """A self-consistent chain signed by a key outside the trust file: the pin (which a forger could write) does not
+    rescue it, and no consumer accepts it."""
+    out = _rate_from(tmp_path, cal, cov, run_key="rogue", val_key="rogue")
+    plan = _plan_for(cal, out)
+    with pytest.raises(ValueError, match="unverified record rejected"):
+        cal.load_record(out, plan_path=plan)
+    rep = s5d.rep_plan_table("lv5d", str(out), str(plan))
+    assert rep["ok"] is False and "unverified" in rep["reason"] and rep["plans"] == {}
 
 
 def test_calibration_part_writer_seals_the_host_identity() -> None:

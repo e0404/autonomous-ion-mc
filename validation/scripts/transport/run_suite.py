@@ -1274,6 +1274,8 @@ def rehearsal_preflight(suite: str, only: list[str] | None = None, seed_base: in
     (``v7r2_cal_rate``; Amendment 20 (f)8): the V7-R2 calibration is never started on the extrapolated rate. The
     record is accepted only after ``load_record`` re-opened and verified the sealed lv5d calibration part record and
     the passing single-part pytest log it names, their hashes, run SHA, ``n`` and wall times (Codex REVIEW-6519d4ff),
+    re-verified the Ed25519 signatures of the host-runner and validation-manager record copies it names against the
+    committed trust file and their binding to the part files (V3-INFRA-002; Codex REVIEW-61f4b0e3, REVIEW-cf3f019e),
     and only if its digest is pinned in the acceptance plan (the measured rate is conformant only when pinned; Codex
     REVIEW-323f4c12).
     ``hr5d`` has no V7-R2 calibration step and consumes no rehearsal fixture: no preflight.
