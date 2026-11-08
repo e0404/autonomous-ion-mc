@@ -215,6 +215,8 @@ EXERCISED = {
     "kinetic_from_pv", "path_range", "path_energy", "ln_chi_a2", "fano_delta_b", "b_slab",
     "b_residual", "pv_equivalent", "fdm_equivalent",
     "pv_equivalent_table",  # the table evaluation: tests/ionmc/test_ion_mcs_table.py
+    "illinois",  # the shared iteration of pv_equivalent and pv_equivalent_seeded
+    "pv_equivalent_seeded",  # the table-accelerated root: tests/ionmc/test_ion_mcs_table.py
 }  # fmt: skip
 NO = 20
 

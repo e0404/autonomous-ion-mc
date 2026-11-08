@@ -537,8 +537,10 @@ def make_transport_kernel(real: type, diag: bool, ion: bool = False, ion_eval: s
 
     ``ion=True`` (z >= 2 sources) adds the exact-Omega mapping of f_dM to the multiple-scattering
     step (``ionmc.physics.ion_mcs``, always in double precision like every energy quantity);
-    ``ion_eval`` selects its evaluation (``"table"``: the ``pv_eq/pv`` table ``map_tab``;
-    ``"root"``: the per-step root solve on ``map_ion``, ``map_pro``, ``map_comp``, ``map_quad``).
+    ``ion_eval`` selects its evaluation, both the exact root on every step (``"root"``: from the
+    full bracket on ``map_ion``, ``map_pro``, ``map_comp``, ``map_quad``; ``"table"``: the same
+    root from a tight bracket around the ``pv_eq/pv`` table ``map_tab``, counting bracket misses
+    in ``mcs_table_bracket_miss``).
     With ``ion=False`` a stub replaces it, so the proton kernel is the one of the qualified path.
 
     ``enable_backward`` is off and ``module="unique"`` gives every variant its own Warp module
@@ -583,11 +585,12 @@ def make_transport_kernel(real: type, diag: bool, ion: bool = False, ion_eval: s
             inv_x: D,
             rho: D,
             s_mm: D,
-        ) -> tuple[D, int]:
-            return IMD.mcs_variance(
+        ) -> tuple[D, int, int]:
+            var, st = IMD.mcs_variance(
                 ion_pk, pro_pk, comp_pk, quad, m, z, mass_mev, pv_mid, pv_end, p1v1, birth,
                 inv_x, rho, s_mm,
             )  # fmt: skip
+            return var, st, 0
 
         ion_var = ion_var_root
     elif ion:
@@ -609,8 +612,11 @@ def make_transport_kernel(real: type, diag: bool, ion: bool = False, ion_eval: s
             inv_x: D,
             rho: D,
             s_mm: D,
-        ) -> tuple[D, int]:
-            return IMD.mcs_variance_table(tab, m, z, pv_mid, pv_end, p1v1, birth, inv_x, rho, s_mm)
+        ) -> tuple[D, int, int]:
+            return IMD.mcs_variance_table(
+                ion_pk, pro_pk, comp_pk, quad, tab, m, z, mass_mev, pv_mid, pv_end, p1v1, birth,
+                inv_x, rho, s_mm,
+            )  # fmt: skip
 
         ion_var = ion_var_table
     else:
@@ -632,8 +638,8 @@ def make_transport_kernel(real: type, diag: bool, ion: bool = False, ion_eval: s
             inv_x: D,
             rho: D,
             s_mm: D,
-        ) -> tuple[D, int]:
-            return D(0.0), 0
+        ) -> tuple[D, int, int]:
+            return D(0.0), 0, 0
 
         ion_var = ion_var_stub
 
@@ -707,6 +713,7 @@ def make_transport_kernel(real: type, diag: bool, ion: bool = False, ion_eval: s
         c_src = int(0)
         c_inv = int(0)
         c_map = int(0)
+        c_miss = int(0)
         c_pieces = int(0)
         c_res = R(0.0)
         c_sx = R(0.0)
@@ -833,12 +840,13 @@ def make_transport_kernel(real: type, diag: bool, ion: bool = False, ion_eval: s
                                 ),
                                 energy,
                             )
-                        var, st_map = ion_var(
+                        var, st_map, miss_map = ion_var(
                             map_ion, map_pro, map_comp, map_quad, map_tab, m, ctl.z, ctl.mass,
                             pv_mid, K.pv_mev(e_end_i, ctl.mass), p1v1, birth, inv_x, rho, s_d,
                         )  # fmt: skip
                         if st_map != 0:
                             c_map = c_map + 1
+                        c_miss = c_miss + miss_map
                     elif birth == 1:
                         e_end = wp.min(
                             energy_from_range(
@@ -1081,6 +1089,7 @@ def make_transport_kernel(real: type, diag: bool, ion: bool = False, ion_eval: s
         counter_rows[tid, 8] = c_pieces
         if ctl.ion == 1:
             counter_rows[tid, 9] = c_map
+            counter_rows[tid, 10] = c_miss
         if with_diag:
             end_state[tid, 0] = px
             end_state[tid, 1] = py

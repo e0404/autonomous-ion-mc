@@ -278,29 +278,35 @@ def test_i0_mapping_failure_is_a_named_counter_and_invalidates(
     backend: str, evaluation: str
 ) -> None:
     """A failed mapping fails closed: ``valid=False`` with the named counter
-    ``mcs_mapping_failure``; the step scatters with zero variance. Root solve: an impossible
-    proton path (status 3); table: every node invalid (status 5)."""
+    ``mcs_mapping_failure``; the step scatters with zero variance (an impossible proton path,
+    status 3, for both evaluations: the table-accelerated root solves the same equation). A table
+    without any valid node is not a failure: every step falls back to the full bracket, counted
+    in the diagnostic ``mcs_table_bracket_miss``, and the result stays valid."""
     kw = {"mcs_mapping_eval": evaluation}
     sim = Simulation(
         _cfg(CARBON12, backend=backend, n=2, nb=2, allow_invalid=True, physics_kwargs=kw)
     )
     im = sim.effective.ion_mapping
     assert im is not None and im.evaluation == evaluation
-    if evaluation == "root":
-        pro = im.proton.copy()
-        pro[:, 7] = 1.5  # the proton path ends below its own start: status 3 (path too short)
-        bad = replace(im, proton=pro)
-    else:
-        assert im.table is not None
-        tab = im.table.copy()
-        tab[:, XO.TABLE_HEADER :] = XO.TABLE_INVALID_NODE
-        bad = replace(im, table=tab)
-    sim.effective = replace(sim.effective, ion_mapping=bad)
+    pro = im.proton.copy()
+    pro[:, 7] = 1.5  # the proton path ends below its own start: status 3 (path too short)
+    sim.effective = replace(sim.effective, ion_mapping=replace(im, proton=pro))
     res = sim.run()
     assert not res.valid
     assert res.counters.mcs_mapping_failure > 0  # type: ignore[attr-defined]
     good = Simulation(_cfg(CARBON12, backend=backend, n=2, nb=2, physics_kwargs=kw)).run()
     assert good.valid and good.counters.as_dict()["mcs_mapping_failure"] == 0
+    assert good.counters.as_dict()["mcs_table_bracket_miss"] == 0
+    if evaluation == "table":
+        assert im.table is not None
+        tab = im.table.copy()
+        tab[:, XO.TABLE_HEADER :] = XO.TABLE_INVALID_NODE  # no starting guess anywhere
+        sim2 = Simulation(_cfg(CARBON12, backend=backend, n=2, nb=2, physics_kwargs=kw))
+        sim2.effective = replace(sim2.effective, ion_mapping=replace(im, table=tab))
+        miss = sim2.run()
+        assert miss.valid  # a diagnostic, never a failure
+        assert miss.counters.as_dict()["mcs_table_bracket_miss"] > 0
+        assert miss.counters.as_dict()["mcs_mapping_failure"] == 0
 
 
 def test_i0_proton_summary_and_counters_unchanged() -> None:
@@ -438,7 +444,7 @@ def test_i1_new_callables_are_completely_covered() -> None:
     path; ``variance_of_state`` through both) or in ``test_ion_mcs_table.py`` (table path)."""
     exercised = {  # the table path in tests/ionmc/test_ion_mcs_table.py
         "mapped_state", "mcs_variance", "mapped_state_table", "mcs_variance_table",
-        "variance_of_state",
+        "variance_of_state", "interpolated_state",
     }  # fmt: skip
 
     def names(ns: Any) -> set[str]:
@@ -968,10 +974,11 @@ def test_i11_map_residual_at_transport_states(proj: Projectile) -> None:
 
 @pytest.mark.parametrize("proj", [ALPHA, CARBON12], ids=lambda p: p.name)
 def test_i11_map_table_against_root_at_transport_states(proj: Projectile) -> None:
-    """I11-map, table counterpart: at the states of a traced transported history (python backend,
-    the default ``"table"`` evaluation), the interpolated ``pv_eq`` of the effective
-    configuration's table agrees with the root solve (whose residual the test above bounds) and
-    the step variance within the decision-0043 bound 1e-3; status 0 at every step."""
+    """I11-map, table counterpart (Codex REVIEW-ee53867c: the table only seeds the root): at the
+    states of a traced transported history (python backend, the default ``"table"`` evaluation)
+    the table-accelerated root of the effective configuration satisfies the same residual bound
+    as the root path, |b_p(pv_eq, r pv_eq) - b_ion(pv, p1v1)| <= 1e-10, with status 0, agrees
+    with the root path's pv_eq within 1e-8 and its step variance within 1e-8."""
     cfg = _cfg(proj, n=2, nb=2, diagnostics=DiagnosticsOptions(trace_histories=2))
     sim = Simulation(cfg)
     res = sim.run()
@@ -987,19 +994,34 @@ def test_i11_map_table_against_root_at_transport_states(proj: Projectile) -> Non
     root = path._run(pv, pv, np.ones_like(pv), 0)
     assert np.all(path.last_status == 0)
     tw = python_twin(make_ion_mcs)
+    xo = python_twin(XO.make_exact_omega)
+    ion, pro, comp = ([a[0].tolist()] for a in (im.ion, im.proton, im.comp))
+    quad = im.quad.tolist()
     tab = [im.table[0].tolist()]
-    worst = 0.0
+    z, mass, p1 = float(proj.z), proj.mass_mev, float(path.p1v1)
+    worst = worst_g = 0.0
     for k in range(pv.size):
-        peq, _p1eq, st = tw.mapped_state_table(tab, 0, float(pv[k]), float(path.p1v1))
-        var, st_v = tw.mcs_variance_table(
-            tab, 0, float(proj.z), float(pv[k]), float(pv[k]), float(path.p1v1), 0, 0.0123, 1.0,
-            1.0,
+        peq, _p1eq, st, _miss = tw.mapped_state_table(
+            ion, pro, comp, quad, tab, 0, z, mass, float(pv[k]), p1
+        )
+        var, st_v, _m = tw.mcs_variance_table(
+            ion, pro, comp, quad, tab, 0, z, mass, float(pv[k]), float(pv[k]), p1, 0, 0.0123,
+            1.0, 1.0,
         )  # fmt: skip
         assert st == st_v == 0
-        assert abs(peq / root[k, 2] - 1.0) <= 1e-3
+        pv_map = min(float(pv[k]), p1 / (1.0 + THIN_SLAB_R))
+        target, s_t = xo.b_slab(ion[0], comp[0], quad, z, mass, pv_map, p1)
+        g, s_g = xo.b_residual(pro[0], comp[0], quad, math.log(peq), p1 / pv_map, target)
+        assert s_t == s_g == 0
+        worst_g = max(worst_g, abs(g))
+        assert abs(peq / root[k, 2] - 1.0) <= 1e-8
         worst = max(worst, abs(var / root[k, 0] - 1.0))
-    print(f"I11-map table {proj.name}: max |var_table/var_root - 1| = {worst:.2e}")
-    assert worst <= 1e-3
+    print(
+        f"I11-map table {proj.name}: max residual {worst_g:.2e}, "
+        f"max |var_table/var_root - 1| = {worst:.2e}"
+    )
+    assert worst_g <= 1e-10
+    assert worst <= 1e-8
 
 
 def test_i0_same_name_materials_are_evaluated_separately() -> None:

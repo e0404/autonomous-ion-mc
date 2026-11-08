@@ -854,11 +854,13 @@ class _Reference:
                         else energy
                     )
                     if self.map_eval == "table":
-                        var, st_map = self.IM.mcs_variance_table(
-                            self.map_tab, m, self.charge, pv_mid,
+                        var, st_map, miss = self.IM.mcs_variance_table(
+                            self.map_ion, self.map_pro, self.map_comp, self.map_quad,
+                            self.map_tab, m, self.charge, self.mass, pv_mid,
                             K.pv_mev(r(e_end), self.mass), r(p1v1), 1 if birth else 0, inv_xs,
                             r(rho), r(s),
                         )  # fmt: skip
+                        self.counters["mcs_table_bracket_miss"] += int(miss)
                     else:
                         var, st_map = self.IM.mcs_variance(
                             self.map_ion, self.map_pro, self.map_comp, self.map_quad, m,

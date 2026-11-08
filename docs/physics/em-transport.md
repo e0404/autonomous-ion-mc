@@ -204,32 +204,26 @@ engine's stepped `T_dM` up to 1 mm; the worst U5 deviation is 1.5e-3.
   state (`pv`, `p1v1`) is matched to the proton-equivalent state with the same Omega, evaluated on
   a Bethe proton path up to 4000 MeV. The domain status is recorded per run (`fdm_extrapolated`
   is True when the proton-equivalent energy exceeds 300 MeV; above 4000 MeV the run fails closed).
-* **Mapping evaluation.** `PhysicsOptions.mcs_mapping_eval` (ignored for protons): `"table"`, the
-  default, reads `pv_eq/pv` by bilinear interpolation from a per-material table on a uniform
-  128 x 128 grid in (`ln pv`, `ln(p1v1/pv)`); the table is built by `validate()` with the root
-  solve at the nodes that the run's initial states can reach (`pv(E0 ± 6 sigma_E)`). `"root"`
-  solves the matching equation at every step. This is the tabulation that decision 0043 allows
-  under a committed error bound: the per-step variance from the table must be within 1e-3 of the
-  root solve. The bound is certified at build for every produced table by a domain-wide analytic
-  bound (`exact_omega.certify_pv_eq_table`): the bilinear error bound
-  `hx^2/8 sup|q_xx| + hy^2/8 sup|q_yy|` of `q = pv_eq/pv`, with the second derivatives estimated
-  from second differences of the root solve on a 2x-refined grid (3 x 3 stencil per solved cell,
-  maximum over the cell and its neighbours) times a safety factor 2, is converted exactly into the relative variance error. Only `pv_eq`
-  differs between the two paths and f_dM is linear in `log10 pv_eq` at a fixed memory term, so
-  `var_table/var_root - 1 = (c2 + c3 l1) dl2 / f`; its maximum over a cell is taken at the corners
-  of the cell's `(l1, l2)` rectangle, for later steps and for the first step over every physical
-  end point `pv_end` in `(0, min(pv_mid, (1 - 1e-4) p1v1)]` (the first-step ratio depends on
-  `pv_end` through `l1`). A cross-check at 5 x 5 interior samples per cell must stay below each
-  cell's analytic bound (else the smoothness assumption is falsified). A table whose bound exceeds
-  1e-3, or whose samples exceed it, fails closed (`mcs_mapping_eval="root"` remains). Scope:
-  states of a particle that has lost less than 1e-4 of its initial `pv` (`TABLE_MIN_LOSS`; the
-  memory term drives the f_dM fit to its zero there) are outside the relative contract. The bound
-  is also tested on random states (`tests/ionmc/test_ion_mcs_table.py`). A state outside the
-  table fails closed: it is counted as `mcs_mapping_failure` and the result is invalid. The
-  summary (`mcs_mapping`) records the evaluation, the table sizes, the axes, the domain, the
-  sha256 of the table and its certificate (`certified_bound_analytic` and
-  `observed_max_sampled`, overall and per material, cells, stencil and sample points, safety
-  factor, threshold, contract).
+* **Mapping evaluation.** `PhysicsOptions.mcs_mapping_eval` (ignored for protons). Both modes
+  solve the matching equation `b_p(pv_eq, r pv_eq) = b_ion(pv, p1v1)` exactly on every step, with
+  the same Illinois iteration, tolerance (|residual| <= 1e-13 or a step/bracket <= 1e-14 in
+  `ln pv_eq`, float64) and status codes. `"root"` starts from the full proton-path bracket.
+  `"table"`, the default, starts from a tight bracket around the bilinear value of a per-material
+  `pv_eq/pv` table (uniform 128 x 128 grid in (`ln pv`, `ln(p1v1/pv)`), built by `validate()` with
+  the root solve at the nodes the run's initial states can reach, `pv(E0 ± 6 sigma_E)`): one end
+  at the table value, the other `w` away on the side of the sign change, with
+  `w = max(10 x the table's build-time interpolation estimate, 1e-5)` (relative); without a sign
+  change the bracket is widened once (x10), then the full bracket is used and the step is counted
+  in the diagnostic `mcs_table_bracket_miss` (it never invalidates a result). The table is an
+  accelerator only: its interpolation error (estimated at build from second differences on a
+  2x-refined root-solve grid, safety factor 2) is a performance diagnostic, not a correctness
+  claim (Codex REVIEW-ee53867c). A step whose solve fails (nonzero status) is counted as
+  `mcs_mapping_failure` and the result is invalid. Tests: `tests/ionmc/test_ion_mcs_table.py`
+  (the accelerated root equals the root path within the solver tolerance on >= 2000 random states
+  per ion, material and domain end). Cost (warp-cpu float64, single thread): about 21 us per step
+  for `"table"` against 40 us for `"root"`. The summary (`mcs_mapping`) records the evaluation,
+  the table sizes, axes, domain, sha256, the contract, the solver tolerances, the bracket
+  constants and widths and the interpolation estimate (overall and per material).
 * **Not included.** Nuclear interactions, fragmentation and secondary ions (`nuclear=True` fails
   closed for z >= 2). No validation statement is made here beyond the CI rows of the test suite
   (`tests/ionmc/test_v3_008_rows_ci.py`).

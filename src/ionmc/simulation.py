@@ -46,10 +46,11 @@ from ionmc.errors import TransportLimitError
 from ionmc.lookup import AXES as LOOKUP_AXES
 from ionmc.lookup import AXIS_SPACINGS as LOOKUP_AXIS_SPACINGS
 from ionmc.physics.exact_omega import (
-    TABLE_CERT_CONTRACT,
-    TABLE_SAFETY_FACTOR,
-    TABLE_SAMPLE_N,
-    TABLE_VARIANCE_BOUND,
+    RESIDUAL_TOL,
+    STEP_TOL,
+    TABLE_BRACKET_FACTOR,
+    TABLE_BRACKET_MIN,
+    TABLE_EVAL_CONTRACT,
 )
 from ionmc.physics.projectiles import PROTON
 from ionmc.scoring import (
@@ -129,13 +130,29 @@ class IonTransportCounters(TransportCounters):
     """The counters of an ion run (z >= 2): the transport-limit counters plus
     ``mcs_mapping_failure``, the number of steps whose exact-Omega mapping of f_dM returned a
     nonzero status (decision 0043 section 3; the step scatters with zero variance and the result
-    is invalid)."""
+    is invalid), and the diagnostic ``mcs_table_bracket_miss``, the number of steps of the
+    table-accelerated root (``mcs_mapping_eval = "table"``) whose tight starting bracket had no
+    sign change, so that the full bracket was used (performance only: the step still returns the
+    exact root; it never invalidates a result)."""
 
     mcs_mapping_failure: int = 0
+    mcs_table_bracket_miss: int = 0
+
+    @property
+    def any_nonzero(self) -> bool:
+        """True if any counter that invalidates a result is nonzero (not the diagnostic
+        ``mcs_table_bracket_miss``)."""
+        d = self.as_dict()
+        d.pop("mcs_table_bracket_miss")
+        return any(d.values())
 
     def as_dict(self) -> dict[str, int]:
         """The counters as a dictionary (with the ion block)."""
-        return {**super().as_dict(), "mcs_mapping_failure": self.mcs_mapping_failure}
+        return {
+            **super().as_dict(),
+            "mcs_mapping_failure": self.mcs_mapping_failure,
+            "mcs_table_bracket_miss": self.mcs_table_bracket_miss,
+        }
 
 
 @dataclass(frozen=True)
@@ -485,23 +502,21 @@ def _species_capabilities(nuclear: bool = False) -> dict[str, Any]:
                 {
                     "model": "differential_moliere with the exact-Omega mapping of f_dM",
                     "evaluation": (
-                        "mcs_mapping_eval 'table' (default: bilinear pv_eq/pv table built by the "
-                        "root solve; per-step variance error <= 1e-3 certified at build for every "
-                        "produced table by an analytic bilinear error bound; a table above the "
-                        "bound or a state outside the table fails closed) or 'root' (per-step "
-                        "root solve)"
+                        "exact root solve on every step in both modes: mcs_mapping_eval 'table' "
+                        "(default: the root started from a tight bracket around a bilinear "
+                        "pv_eq/pv table built by the root solve; the table is an accelerator "
+                        "only) or 'root' (the root from the full proton-path bracket)"
                     ),
-                    "table_certification": {
-                        "scope": "certified at build for every produced table",
-                        "contract": TABLE_CERT_CONTRACT,
-                        "variance_bound": TABLE_VARIANCE_BOUND,
-                        "safety_factor": TABLE_SAFETY_FACTOR,
-                        "refinement": "2x (3 x 3 root-solved stencil per solved cell)",
-                        "samples_per_cell": TABLE_SAMPLE_N**2,
+                    "table_evaluation": {
+                        "contract": TABLE_EVAL_CONTRACT,
+                        "root_residual_tol": RESIDUAL_TOL["float64"],
+                        "root_step_tol": STEP_TOL["float64"],
+                        "bracket_factor": TABLE_BRACKET_FACTOR,
+                        "bracket_min": TABLE_BRACKET_MIN,
+                        "diagnostic_counter": "mcs_table_bracket_miss (never invalidates)",
                         "recorded": (
-                            "summary mcs_mapping.table: certified_bound_analytic and "
-                            "observed_max_sampled (overall and per material), certified_cells, "
-                            "refined_points, sampled_points, safety_factor, variance_bound"
+                            "summary mcs_mapping.table: interp_estimate (overall and per "
+                            "material, a performance diagnostic), bracket half-widths"
                         ),
                     },
                     "fdm_domain_status": (
@@ -661,7 +676,11 @@ class Simulation:
         }
         result = _with_timings(result, timings)
         if not result.valid and not self.config.run.allow_invalid_result:
-            nonzero = {k: v for k, v in result.counters.as_dict().items() if v}
+            nonzero = {
+                k: v
+                for k, v in result.counters.as_dict().items()
+                if v and k != "mcs_table_bracket_miss"
+            }
             if result.channel_raw is not None and result.channel_raw.lookup_out_of_domain:
                 nonzero["lookup_out_of_domain"] = result.channel_raw.lookup_out_of_domain
             if result.channel_raw is not None and result.channel_raw.path_bound_exceeded:

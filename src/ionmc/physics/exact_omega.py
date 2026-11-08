@@ -30,11 +30,12 @@ Evaluation. Two forms, selected by ``PhysicsOptions.mcs_mapping_eval`` (decision
 "Evaluation"): ``"root"``, the per-step root solve below, and ``"table"`` (the default for z >= 2),
 the decision's allowed alternative: a per-(material, ion) tabulation of ``pv_eq/pv`` on a uniform
 grid in ``(ln pv, ln(p1v1/pv))`` (a shear of the decision's ``(ln pv, ln p1v1)`` plane), whose
-nodes are computed by this same root solve (:func:`build_pv_eq_table`) and which is read by
-bilinear interpolation (:func:`pv_equivalent_table`). The error of the resulting per-step variance
-is certified at build for every produced table by a domain-wide analytic bound
-(:func:`certify_pv_eq_table`, threshold :data:`TABLE_VARIANCE_BOUND` = 1e-3;
-``tests/ionmc/test_ion_mcs_table.py``). The root solve:
+nodes are computed by this same root solve (:func:`build_pv_eq_table`). The table is an
+accelerator only (Codex REVIEW-ee53867c): its bilinear value (:func:`pv_equivalent_table`) is the
+starting guess of the same root solve, started from a tight bracket around it
+(:func:`pv_equivalent_seeded`; the full bracket when the tight one shows no sign change), so every
+step returns the exact root to the root path's tolerance (:data:`TABLE_EVAL_CONTRACT`). The table's
+interpolation error is a performance diagnostic (:func:`estimate_pv_eq_table`). The root solve:
 :func:`pv_equivalent` solves ``g(u) = b_p(e^u, r e^u) - b_ion(pv, p1v1) = 0`` for
 ``u = ln pv_eq``, ``r = p1v1 / pv``, by a bracketed Illinois (modified regula falsi) iteration
 with a bisection safeguard. The bracket is the proton path itself: from its lowest energy to the
@@ -44,7 +45,8 @@ at :data:`MAX_ITERATIONS`; there is no failure mode other than the returned stat
 Status codes (:data:`STATUS_NAMES`): 0 converged, 1 invalid ion state (outside the ion path or
 ``pv >= p1v1``), 2 no sign change in the bracket (``b_ion`` outside the proton ``b`` range at this
 ``r``), 3 the proton path is too short for this ``r``, 4 not converged within the iteration cap,
-5 (table form only) the state lies outside the table or in a cell with an invalid node.
+5 (:func:`pv_equivalent_table` only) the state lies outside the table or in a cell with an
+invalid node (no starting guess; the seeded solve then uses the full bracket).
 A caller must treat any nonzero status as an invalid state (fail closed); ``f_dM`` is then 0.
 
 The proton path of the mapping is the Bethe proton table of the same material to
@@ -79,7 +81,7 @@ import warp as wp
 from ionmc._validate import fail
 from ionmc._wpfunc import check_real, named_func
 from ionmc.materials import ELEMENTS, N_A, Material
-from ionmc.physics.em import FDM_COEFFICIENTS, make_em
+from ionmc.physics.em import make_em
 from ionmc.physics.kinematics import make_kinematics
 from ionmc.physics.projectiles import PROTON, Projectile
 from ionmc.physics.stopping import (
@@ -143,8 +145,7 @@ STATUS_NAMES = {
 }
 
 TABLE_N_PV = 128
-"""Default nodes of the ``ln pv`` axis of the ``pv_eq/pv`` table (the variance error is certified
-at build, :data:`TABLE_VARIANCE_BOUND`)."""
+"""Default nodes of the ``ln pv`` axis of the ``pv_eq/pv`` table."""
 TABLE_N_R = 128
 """Default nodes of the ``ln(p1v1/pv)`` axis of the table."""
 TABLE_INVALID_NODE = -1.0
@@ -154,44 +155,30 @@ TABLE_EDGE_TOL = {"float64": 1.0e-9, "float32": 1.0e-4}
 """Tolerance (in grid-index units) of the table edges."""
 TABLE_PV_MARGIN = 1.0e-3
 """Relative margin of the table's largest ``p1v1`` above ``pv(E0 + 6 sigma_E)``."""
-TABLE_HEADER = 8
-TABLE_VARIANCE_BOUND = 1.0e-3
-"""Decision 0043 bound of the table (0.1 %): the per-step MCS variance (proportional to T and
-theta^2) from the interpolated ``pv_eq`` against the root solve, relative. Certified at build for
-every produced table (:func:`certify_pv_eq_table`); a table above it fails closed."""
+TABLE_HEADER = 9
+"""Header length of a packed table row (:func:`build_pv_eq_table`); entry 8 is the row's starting
+bracket half-width."""
+TABLE_BRACKET_FACTOR = 10.0
+"""Starting bracket half-width of the table-accelerated root, in units of the table's build-time
+interpolation estimate (:func:`estimate_pv_eq_table`)."""
+TABLE_BRACKET_MIN = 1.0e-5
+"""Smallest starting bracket half-width (relative in ``pv_eq``, i.e. in ``ln pv_eq``)."""
 TABLE_SAFETY_FACTOR = 2.0
-"""Safety factor on the second-difference estimate of the bilinear error bound
-(:func:`certify_pv_eq_table`); checked empirically by the sampled cross-check (2026-11-08: with
-factor 1 the cross-check passes in all 70 tables of He, C, O at both domain ends in the eleven
-built-in materials and a user material, with 0.75 it fails in every one; 2 doubles that margin)."""
-TABLE_SAMPLE_N = 5
-"""Interior sample points per cell and axis of the cross-check (``N x N`` per cell)."""
+"""Safety factor of the build-time interpolation estimate (:func:`estimate_pv_eq_table`; it
+only sets the starting bracket, a performance quantity)."""
 TABLE_ROOT_TOL_REL = 1.0e-10
-"""Relative allowance for the root solve's convergence at the nodes and the stencil (float64)."""
-TABLE_MIN_LOSS = 1.0e-4
-"""Scope of the relative contract (:func:`certify_pv_eq_table`): steps of a particle that has lost
-at least this fraction of its initial ``pv`` at the state that enters the memory term, i.e.
-``pv_mid <= (1 - L) p1v1`` for a later step and ``pv_end <= (1 - L) p1v1`` for the first step
-(a few micrometres of path for 50 MeV/u helium). Before that the memory term
-``1 - (pv/p1v1)^2 < 2e-4`` drives the f_dM fit towards its zero (clamped to 0 for both paths;
-e.g. near ``1 - (pv/p1v1)^2 ~ 1e-5`` at the lowest helium energies in high-Z materials), where a
-relative error is not defined; the absolute error there is still bounded by
-``|c2 + c3 l1| |dl2|`` times the common prefactor."""
-TABLE_CERT_CONTRACT = (
-    "certified at build for every produced table: analytic bilinear error bound of pv_eq/pv from "
-    "second differences on a 2x-refined root-solve grid (3 x 3 stencil per solved cell, maximum "
-    "over the cell and its neighbours) with safety factor 2, converted exactly into the relative "
-    "per-step MCS variance error (T, theta^2) for later steps and for the first step over all "
-    "physical end points pv_end in "
-    "(0, min(pv_mid, (1 - 1e-4) p1v1)]; cross-checked by 5 x 5 interior samples per cell (later "
-    "steps; first step at the upper end point and at the table's lowest pv); fails closed when "
-    "the analytic bound exceeds the threshold or a sample exceeds its cell's bound; states of a "
-    "particle that has lost less than 1e-4 of its initial pv (TABLE_MIN_LOSS: the f_dM memory "
-    "term near the fit's zero) are outside the relative contract"
+"""Relative allowance for the root solve's convergence in the interpolation estimate."""
+TABLE_EVAL_CONTRACT = (
+    "mapping evaluation = exact root solve on every step (Illinois iteration of b_p(pv_eq, "
+    "pv_eq r) = b_ion(pv, p1v1) to |residual| <= 1e-13 or a step/bracket <= 1e-14 in ln pv_eq, "
+    "float64, the root path's tolerance and status codes); the pv_eq/pv table only supplies the "
+    "starting bracket (half-width max(10 x the table's interpolation estimate, 1e-5) around the "
+    "bilinear guess, widened once x10, else the full proton-path bracket, counted as "
+    "mcs_table_bracket_miss); the interpolation error of the table is a performance diagnostic "
+    "(build-time estimate recorded), not a correctness claim"
 )
-"""The certification contract, as recorded in the summary and the capability report."""
-LOG10_E = 0.4342944819032518
-"""log10(e): the shift of the first step's analytic memory average (``ionmc.physics.ion_mcs``)."""
+"""The evaluation contract of ``mcs_mapping_eval = "table"``, as recorded in the summary and the
+capability report."""
 
 _HEADER = 8
 
@@ -477,6 +464,70 @@ def make_exact_omega(real: type) -> SimpleNamespace:
         return bp - target, st
 
     @named_func(name)
+    def illinois(
+        pro_pth: wp.array(dtype=real),
+        comp: wp.array(dtype=real),
+        quad: wp.array(dtype=real),
+        r: real,
+        target: real,
+        ua_in: real,
+        ub_in: real,
+        ga_in: real,
+        gb_in: real,
+    ) -> tuple[real, int, int]:
+        """``(u, status, iterations)``: the Illinois iteration (modified regula falsi, bisection
+        step whenever the secant point leaves the bracket) for ``g(u) = 0`` on the valid bracket
+        ``[ua_in, ub_in]`` with ``g(ua_in) = ga_in <= 0 <= g(ub_in) = gb_in``. Converged (status
+        0) when ``|g| <= RESIDUAL_TOL``, the bracket or the last step is below ``STEP_TOL``;
+        status 3 when a slab fails, 4 when not converged within ``MAX_ITERATIONS``."""
+        ua = ua_in
+        ub = ub_in
+        ga = ga_in
+        gb = gb_in
+        status = int(0)
+        iters = int(0)
+        done = int(0)
+        side = int(0)
+        uc = ub
+        up = ua
+        if wp.abs(ga) <= res_tol:
+            uc = ua
+            done = 1
+        elif wp.abs(gb) <= res_tol:
+            done = 1
+        for it in range(MAX_ITERATIONS):
+            if done == 0:
+                iters = it + 1
+                uc = real(0.5) * (ua + ub)
+                if gb - ga > real(0.0):
+                    us = (gb * ua - ga * ub) / (gb - ga)
+                    if us > ua and us < ub:
+                        uc = us
+                gc, stc = b_residual(pro_pth, comp, quad, uc, r, target)
+                step = wp.abs(uc - up)
+                up = uc
+                if stc != 0:
+                    status = 3
+                    done = 1
+                elif wp.abs(gc) <= res_tol or ub - ua <= step_tol or step <= step_tol:
+                    done = 1
+                elif gc > real(0.0):
+                    ub = uc
+                    gb = gc
+                    if side == 1:
+                        ga = real(0.5) * ga
+                    side = 1
+                else:
+                    ua = uc
+                    ga = gc
+                    if side == -1:
+                        gb = real(0.5) * gb
+                    side = -1
+        if done == 0:
+            status = 4
+        return uc, status, iters
+
+    @named_func(name)
     def pv_equivalent(
         ion_pth: wp.array(dtype=real),
         pro_pth: wp.array(dtype=real),
@@ -494,7 +545,7 @@ def make_exact_omega(real: type) -> SimpleNamespace:
         ``ion_is_proton = 1`` (z = 1, M = m_p, ``ion_pth`` the proton path) returns ``pv``
         exactly. Otherwise ``target = b_ion(pv, p1v1)`` is solved against the proton slab
         ``b_p(pv_eq, r pv_eq)``, ``r = p1v1/pv``, in ``u = ln pv_eq`` by the Illinois iteration
-        on a valid bracket (bisection step whenever the secant point leaves the bracket)."""
+        (:func:`illinois`) on the full bracket of the proton path."""
         out = pv
         status = int(0)
         iters = int(0)
@@ -518,49 +569,98 @@ def make_exact_omega(real: type) -> SimpleNamespace:
                     elif ga > real(0.0) or gb < real(0.0):
                         status = 2
                     else:
-                        done = int(0)
-                        side = int(0)
-                        uc = ub
-                        up = ua
-                        if wp.abs(ga) <= res_tol:
-                            uc = ua
-                            done = 1
-                        elif wp.abs(gb) <= res_tol:
-                            done = 1
-                        for it in range(MAX_ITERATIONS):
-                            if done == 0:
-                                iters = it + 1
-                                uc = real(0.5) * (ua + ub)
-                                if gb - ga > real(0.0):
-                                    us = (gb * ua - ga * ub) / (gb - ga)
-                                    if us > ua and us < ub:
-                                        uc = us
-                                gc, stc = b_residual(pro_pth, comp, quad, uc, r, target)
-                                step = wp.abs(uc - up)
-                                up = uc
-                                if stc != 0:
-                                    status = 3
-                                    done = 1
-                                elif (
-                                    wp.abs(gc) <= res_tol or ub - ua <= step_tol or step <= step_tol
-                                ):
-                                    done = 1
-                                elif gc > real(0.0):
-                                    ub = uc
-                                    gb = gc
-                                    if side == 1:
-                                        ga = real(0.5) * ga
-                                    side = 1
-                                else:
-                                    ua = uc
-                                    ga = gc
-                                    if side == -1:
-                                        gb = real(0.5) * gb
-                                    side = -1
-                        if done == 0:
-                            status = 4
+                        uc, status, iters = illinois(pro_pth, comp, quad, r, target, ua, ub, ga, gb)
                         out = wp.exp(uc)
         return out, status, iters
+
+    @named_func(name)
+    def pv_equivalent_seeded(
+        ion_pth: wp.array(dtype=real),
+        pro_pth: wp.array(dtype=real),
+        comp: wp.array(dtype=real),
+        quad: wp.array(dtype=real),
+        z: real,
+        m_ion_mev: real,
+        pv: real,
+        p1v1: real,
+        q0: real,
+        w: real,
+    ) -> tuple[real, int, int, int]:
+        """``(pv_eq, status, iterations, bracket_miss)``: the same root as :func:`pv_equivalent`
+        (the same equation, iteration, tolerances and status codes) started from a tight bracket
+        around a starting guess ``pv_eq ~ q0 pv`` (the table). One end is the guess
+        ``u0 = ln(q0 pv)``, the other ``u0 + w`` or ``u0 - w`` on the side where the residual
+        changes sign (``w`` a relative half-width), clipped to the proton path's full bracket.
+        Without a sign change the other end is moved once to ``u0 -+ 10 w``; failing that (or for
+        ``q0 <= 0``, no guess) the full bracket of :func:`pv_equivalent` is used and
+        ``bracket_miss`` = 1 (a performance diagnostic, not a failure). Ion states only (z >= 2)."""
+        out = pv
+        status = int(0)
+        iters = int(0)
+        miss = int(1)
+        target, st_ion = b_slab(ion_pth, comp, quad, z, m_ion_mev, pv, p1v1)
+        if st_ion != 0:
+            status = 1
+            miss = 0
+        else:
+            r = p1v1 / pv
+            pv_lo = kin.pv_mev(pro_pth[6] * (real(1.0) + lo_margin), m_p)
+            pv_hi = kin.pv_mev(pro_pth[7] * (real(1.0) - hi_margin), m_p) / r
+            if not pv_hi > pv_lo:
+                status = 3
+                miss = 0
+            else:
+                u_lo = wp.log(pv_lo)
+                u_hi = wp.log(pv_hi)
+                ua = u_lo
+                ub = u_hi
+                ga = real(0.0)
+                gb = real(0.0)
+                found = int(0)
+                if q0 > real(0.0):
+                    # one end at the guess u0, the other on the side of the sign change
+                    u0 = wp.min(wp.max(wp.log(q0 * pv), u_lo), u_hi)
+                    g0, s0 = b_residual(pro_pth, comp, quad, u0, r, target)
+                    if s0 == 0:
+                        hw = w
+                        for k in range(2):
+                            if found == 0:
+                                if g0 <= real(0.0):
+                                    b = wp.min(u0 + hw, u_hi)
+                                    if b > u0:
+                                        g2, s2 = b_residual(pro_pth, comp, quad, b, r, target)
+                                        if s2 == 0 and g2 >= real(0.0):
+                                            found = 1
+                                            miss = k
+                                            ua = u0
+                                            ub = b
+                                            ga = g0
+                                            gb = g2
+                                else:
+                                    a = wp.max(u0 - hw, u_lo)
+                                    if a < u0:
+                                        g1, s1 = b_residual(pro_pth, comp, quad, a, r, target)
+                                        if s1 == 0 and g1 <= real(0.0):
+                                            found = 1
+                                            miss = k
+                                            ua = a
+                                            ub = u0
+                                            ga = g1
+                                            gb = g0
+                                hw = real(10.0) * hw
+                if found == 0:
+                    ga, sta = b_residual(pro_pth, comp, quad, ua, r, target)
+                    gb, stb = b_residual(pro_pth, comp, quad, ub, r, target)
+                    if sta != 0 or stb != 0:
+                        status = 3
+                    elif ga > real(0.0) or gb < real(0.0):
+                        status = 2
+                    else:
+                        found = 1
+                if found == 1:
+                    uc, status, iters = illinois(pro_pth, comp, quad, r, target, ua, ub, ga, gb)
+                    out = wp.exp(uc)
+        return out, status, iters, miss
 
     @named_func(name)
     def fdm_equivalent(
@@ -590,6 +690,7 @@ def make_exact_omega(real: type) -> SimpleNamespace:
         return f, peq, p1eq, status
 
     tab_tol = wp.constant(real(TABLE_EDGE_TOL[name]))
+    table_header = wp.constant(TABLE_HEADER)
 
     @named_func(name)
     def pv_equivalent_table(tab: wp.array(dtype=real), pv: real, p1v1: real) -> tuple[real, int]:
@@ -617,7 +718,7 @@ def make_exact_omega(real: type) -> SimpleNamespace:
             j = wp.min(int(wp.floor(fy)), n_y - 2)
             tx = fx - real(i)
             ty = fy - real(j)
-            base = 8 + i * n_y + j
+            base = table_header + i * n_y + j
             q00 = tab[base]
             q01 = tab[base + 1]
             q10 = tab[base + n_y]
@@ -639,7 +740,9 @@ def make_exact_omega(real: type) -> SimpleNamespace:
         fano_delta_b=fano_delta_b,
         b_slab=b_slab,
         b_residual=b_residual,
+        illinois=illinois,
         pv_equivalent=pv_equivalent,
+        pv_equivalent_seeded=pv_equivalent_seeded,
         fdm_equivalent=fdm_equivalent,
         real=name,
     )
@@ -985,80 +1088,21 @@ def table_domain(
 
 
 @dataclass(frozen=True)
-class TableCertificate:
-    """Certificate of one ``pv_eq/pv`` table (:func:`certify_pv_eq_table`).
+class TableEstimate:
+    """Build-time interpolation estimate of one ``pv_eq/pv`` table (:func:`estimate_pv_eq_table`):
+    ``interp_estimate`` the largest per-cell estimate of ``|ln pv_eq(table) - ln pv_eq(root)|``
+    over the ``n_cells`` solved cells (``n_refined_points`` stencil root solves, safety factor
+    ``safety_factor``) and ``bracket_half_width`` the starting bracket half-width it sets. A
+    performance diagnostic: every step is solved exactly (module docstring)."""
 
-    ``certified_bound_analytic`` is the certified value: the largest per-cell analytic bound of
-    ``|var_table / var_root - 1|`` (``bound_later_steps`` and ``bound_birth_step`` per step kind)
-    over the ``n_cells`` solved cells, from ``n_refined_points`` root solves of the 2x-refined
-    grid and the safety factor ``safety_factor``. ``observed_max_sampled`` is the largest error
-    observed at the ``n_sampled_points`` interior samples (the empirical cross-check; never above
-    the analytic bound of its cell). ``bound`` is the threshold it was checked against."""
-
-    certified_bound_analytic: float
-    bound_later_steps: float
-    bound_birth_step: float
-    observed_max_sampled: float
+    interp_estimate: float
+    bracket_half_width: float
     n_cells: int
     n_refined_points: int
-    n_sampled_points: int
     safety_factor: float
-    bound: float
 
     def to_dict(self) -> dict[str, Any]:
         return dict(self.__dict__)
-
-
-@functools.cache
-def _table_sample_kernel() -> Any:
-    """Warp CPU kernel (float64): the per-step variance of a state from the root solve
-    (``mapped_state``) and from the table (``mapped_state_table``), for a later step and for a
-    first step with ``pv_end = min(pv_mid, keep p1v1)`` (``keep = 1 - TABLE_MIN_LOSS``) and
-    with ``pv_end = min(pv_end_lo, that)``; the transport functions of
-    ``ionmc.physics.ion_mcs``."""
-    from ionmc.physics.ion_mcs import make_ion_mcs  # noqa: PLC0415 (ion_mcs imports this module)
-
-    im = make_ion_mcs(wp.float64)
-    d = wp.float64
-
-    @wp.kernel(module="unique")
-    def sample(
-        ion: wp.array2d(dtype=d),
-        pro: wp.array2d(dtype=d),
-        comp: wp.array2d(dtype=d),
-        quad: wp.array(dtype=d),
-        tab: wp.array2d(dtype=d),
-        z: d,
-        mass: d,
-        pv_end_lo: d,
-        keep: d,
-        pv: wp.array(dtype=d),
-        p1v1: wp.array(dtype=d),
-        out: wp.array2d(dtype=d),
-        status: wp.array2d(dtype=int),
-    ):  # type: ignore[no-untyped-def]
-        k = wp.tid()
-        one = d(1.0)
-        pr, p1r, sr = im.mapped_state(ion, pro, comp, quad, 0, z, mass, pv[k], p1v1[k])
-        pt, p1t, st = im.mapped_state_table(tab, 0, pv[k], p1v1[k])
-        for c in range(3):
-            birth = int(0)
-            pv_end = pv[k]
-            if c > 0:
-                birth = 1
-                pv_end = wp.min(pv[k], keep * p1v1[k])
-            if c == 2:
-                pv_end = wp.min(pv_end_lo, pv_end)
-            out[k, 2 * c] = im.variance_of_state(
-                pr, p1r, sr, z, pv[k], pv_end, p1v1[k], birth, one, one, one
-            )
-            out[k, 2 * c + 1] = im.variance_of_state(
-                pt, p1t, st, z, pv[k], pv_end, p1v1[k], birth, one, one, one
-            )
-        status[k, 0] = sr
-        status[k, 1] = st
-
-    return sample
 
 
 def _band_cells(xs: np.ndarray, ys: np.ndarray, p1v1_min: float, p1v1_max: float) -> np.ndarray:
@@ -1086,29 +1130,7 @@ def _neighbour_max(v: np.ndarray, cells: np.ndarray) -> np.ndarray:
     return out
 
 
-def fdm_sensitivity_max(
-    l1_lo: np.ndarray, l1_hi: np.ndarray, l2_lo: np.ndarray, l2_hi: np.ndarray
-) -> np.ndarray:
-    """Exact maximum of ``S = |c2 + c3 l1| / f(l1, l2)``, ``f = c0 + c1 l1 + c2 l2 + c3 l1 l2``
-    (``FDM_COEFFICIENTS``), over the rectangles ``[l1_lo, l1_hi] x [l2_lo, l2_hi]`` (elementwise);
-    ``inf`` where ``f <= 0`` at a corner or ``c2 + c3 l1`` changes sign. At fixed ``l2``, ``S`` is a
-    ratio of two linear functions of ``l1`` (monotone where ``f > 0``); at fixed ``l1`` it is a
-    constant over a linear function of ``l2`` (monotone); ``f`` is bilinear, so ``f > 0`` at the
-    four corners implies ``f > 0`` on the rectangle, and the maximum is at a corner."""
-    c0, c1, c2, c3 = FDM_COEFFICIENTS
-    out = np.zeros(np.broadcast(l1_lo, l2_lo).shape)
-    ok = np.ones(out.shape, dtype=bool)
-    n_lo, n_hi = c2 + c3 * l1_lo, c2 + c3 * l1_hi
-    ok &= np.sign(n_lo) == np.sign(n_hi)
-    for l1, n in ((l1_lo, n_lo), (l1_hi, n_hi)):
-        for l2 in (l2_lo, l2_hi):
-            f = c0 + c1 * l1 + c2 * l2 + c3 * l1 * l2
-            ok &= f > 0.0
-            out = np.maximum(out, np.abs(n) / np.where(f > 0.0, f, 1.0))
-    return np.where(ok, out, np.inf)
-
-
-def certify_pv_eq_table(
+def estimate_pv_eq_table(
     row: np.ndarray,
     ion_pack: np.ndarray,
     proton_pack: np.ndarray,
@@ -1118,65 +1140,30 @@ def certify_pv_eq_table(
     mass_mev: float,
     p1v1_min: float,
     p1v1_max: float,
-) -> TableCertificate:
-    """Certificate of the table ``row`` (:func:`build_pv_eq_table`): a domain-wide analytic bound
-    of the table's per-step variance error, per solved cell (the cells meeting the band of the
-    initial states), with a sampled cross-check. Deterministic (float64). Checked against
-    :data:`TABLE_VARIANCE_BOUND` by :func:`check_table_certificate`.
+) -> TableEstimate:
+    """Build-time interpolation estimate of the table ``row`` (a performance diagnostic that sets
+    the starting bracket of the table-accelerated root; not a correctness claim).
 
-    **Interpolation error of q = pv_eq/pv** (the interpolated quantity). On a cell with spacings
-    ``hx`` (``ln pv``) and ``hy`` (``ln r``, ``r = p1v1/pv``) the tensor-product bilinear
-    interpolant satisfies ``|q - Pi q| <= hx^2/8 sup|q_xx| + hy^2/8 sup|q_yy|``. The suprema are
-    estimated from second differences of the exact root solve on the 2x-refined grid of the cell
-    (its 3 x 3 stencil: corners, edge midpoints and centre, all root-solved): ``hx^2/8 |q_xx|``
-    ~ ``|q(0) - 2 q(1/2) + q(1)| / 2`` along each of the three x-lines (likewise in y), the maximum
-    over the lines and over the stencils of the cell and its (up to 8) solved neighbours (a cell
-    where a second derivative changes sign has a vanishing own difference), times the safety
-    factor :data:`TABLE_SAFETY_FACTOR` = 2 (``q`` is a smooth, slowly varying function of
-    ``ln pv`` and ``ln r``, P11; the factor covers the variation of the second derivative within
-    a cell, and the sampled cross-check below falsifies it if it does not), plus
-    :data:`TABLE_ROOT_TOL_REL` relative for the root solve's own convergence. This is ``dq``;
-    ``q`` lies in ``[q_lo, q_hi]`` = stencil range widened by ``dq``, and
-    ``|ln q_table - ln q_root| <= dq / q_lo``.
-
-    **Variance error.** The table changes only ``pv_eq``; the prefactor ``(z E_s / pv_mid)^2 rho
-    / X_S s`` is the same for both paths, so ``var_table / var_root = f_t / f_r`` with ``f`` the
-    f_dM fit ``c0 + c1 l1 + c2 l2 + c3 l1 l2``, ``l2 = log10 pv_eq``:
-    later steps ``l1 = log10(1 - (pv_eq / p1v1_eq)^2) = log10(1 - 1/r^2)`` (``p1v1_eq = r pv_eq``,
-    independent of ``pv_eq``); the first step (birth, analytic memory average)
-    ``l1 = log10(1 - (pv_end / p1v1)^2) - log10(e)``, independent of ``pv_eq``. ``f`` is linear in
-    ``l2`` at fixed ``l1``, hence exactly ``f_t / f_r - 1 = (c2 + c3 l1) (l2_t - l2_r) / f_r`` and
-    ``|var_t / var_r - 1| <= S_max |l2_t - l2_r|`` with ``S_max`` the maximum of
-    ``|c2 + c3 l1| / f`` over the cell's ``(l1, l2)`` rectangle (:func:`fdm_sensitivity_max`,
-    exact at its corners). The ratio depends on the birth step's end point through ``l1``
-    (``c3 != 0``), so it is not endpoint-independent; the rectangle covers every physical end
-    point: ``pv_end`` in ``(0, min(pv_mid, (1 - L) p1v1)]`` with ``L`` =
-    :data:`TABLE_MIN_LOSS`, i.e. ``1 - (pv_end/p1v1)^2`` in
-    ``[max(1 - 1/r^2, 1 - (1 - L)^2), 1)``, which includes ``pv_end`` at the cutoff and below it
-    (straggling); later steps cover ``1 - 1/r^2`` in ``[max(1 - 1/r_lo^2, 1 - (1 - L)^2),
-    max(1 - 1/r_hi^2, 1 - (1 - L)^2)]``. ``l2`` covers ``[q_lo pv_cell_min, q_hi pv_cell_max]``.
-    Contract scope: states of the table (``r >= 1 + THIN_SLAB_R``) of a particle that has lost at
-    least ``L`` of its initial ``pv`` (:data:`TABLE_MIN_LOSS`: before that the memory term drives
-    the f_dM fit to its zero, where a relative error is not defined).
-
-    **Sampled cross-check.** At :data:`TABLE_SAMPLE_N` x :data:`TABLE_SAMPLE_N` interior points
-    per cell the variance from the table is compared with the root solve for a later step and a
-    first step with ``pv_end = min(pv_mid, (1 - L) p1v1)`` and ``pv_end`` = the table's lowest
-    ``pv`` (the cutoff side); later-step samples with ``pv > (1 - L) p1v1`` are outside the
-    contract and skipped. Fails closed (``UnsupportedCombinationError``) when an observed error
-    exceeds the analytic bound of its cell (the smoothness assumption is falsified), or when a
-    root solve or a table lookup is invalid at a stencil or sample point."""
+    On a cell with spacings ``hx`` (``ln pv``) and ``hy`` (``ln r``) the bilinear interpolant of
+    ``q = pv_eq/pv`` deviates by ``<= hx^2/8 sup|q_xx| + hy^2/8 sup|q_yy|``. The second
+    derivatives are estimated from second differences of the root solve on the 2x-refined grid of
+    the cell (its 3 x 3 stencil, all root-solved): ``|q(0) - 2 q(1/2) + q(1)| / 2`` along each of
+    the three lines per axis, the maximum over the lines and over the cell and its solved
+    neighbours, times :data:`TABLE_SAFETY_FACTOR`, plus :data:`TABLE_ROOT_TOL_REL` relative:
+    ``dq``. The estimate of ``|ln q_table - ln q_root|`` is ``dq / q_lo`` (``q_lo`` the stencil
+    minimum less ``dq``), its maximum over the solved cells is ``interp_estimate``, and the
+    starting bracket half-width ``max(TABLE_BRACKET_FACTOR x interp_estimate,
+    TABLE_BRACKET_MIN)``. Fails closed (``UnsupportedCombinationError``) when a root solve fails
+    at a stencil point."""
     row = np.ascontiguousarray(row, dtype=np.float64)
     xs, ys = _table_axes(row)
     n_y = len(ys)
     cells = np.argwhere(_band_cells(xs, ys, p1v1_min, p1v1_max))
     n_c = len(cells)
     if n_c == 0:
-        raise fail("the pv_eq/pv table has no solved cell to certify")
+        raise fail("the pv_eq/pv table has no solved cell")
     hx, hy = xs[1] - xs[0], ys[1] - ys[0]
     ci, cj = cells[:, 0], cells[:, 1]
-
-    # (1) 3 x 3 stencil of every cell on the 2x-refined grid, all root-solved (shared points once)
     a = np.arange(3)
     ri, rj = np.broadcast_arrays(
         2 * ci[:, None, None] + a[None, :, None], 2 * cj[:, None, None] + a[None, None, :]
@@ -1189,7 +1176,7 @@ def certify_pv_eq_table(
     if np.any(st != 0):
         k = int(np.argwhere(st != 0)[0, 0])
         raise fail(
-            "the pv_eq/pv table cannot be certified: the root solve fails at the stencil point "
+            "the pv_eq/pv table cannot be built: the root solve fails at the stencil point "
             f"pv = {pv_s[k]:.6g} MeV, p1v1 = {p1_s[k]:.6g} MeV (status {st[k]}); use "
             "mcs_mapping_eval='root'"
         )
@@ -1199,106 +1186,19 @@ def certify_pv_eq_table(
     q_max = q.max(axis=(1, 2))
     dq = TABLE_SAFETY_FACTOR * 0.5 * (d_xx + d_yy) + TABLE_ROOT_TOL_REL * q_max
     q_lo = q.min(axis=(1, 2)) - dq
-    q_hi = q_max + dq
     if np.any(q_lo <= 0.0):
-        raise fail("the pv_eq/pv table cannot be certified: pv_eq/pv not bounded away from 0")
-    dl2 = dq / (q_lo * math.log(10.0))
-
-    # (2) sensitivity of the variance to log10 pv_eq over the cell (both step kinds)
-    l2_lo = np.log10(q_lo) + xs[ci] / math.log(10.0)
-    l2_hi = np.log10(q_hi) + xs[ci + 1] / math.log(10.0)
-    om_min = -math.expm1(2.0 * math.log1p(-TABLE_MIN_LOSS))  # 1 - (1 - L)^2
-    om_lo = np.maximum(-np.expm1(-2.0 * ys[cj]), om_min)
-    om_hi = np.maximum(-np.expm1(-2.0 * ys[cj + 1]), om_min)
-    s_later = fdm_sensitivity_max(np.log10(om_lo), np.log10(om_hi), l2_lo, l2_hi)
-    s_birth = fdm_sensitivity_max(np.log10(om_lo) - LOG10_E, np.full(n_c, -LOG10_E), l2_lo, l2_hi)
-    b_later = s_later * dl2
-    b_birth = s_birth * dl2
-
-    # (3) sampled cross-check: N x N interior points per cell
-    off = (np.arange(TABLE_SAMPLE_N) + 0.5) / TABLE_SAMPLE_N
-    ox, oy = (g.reshape(-1) for g in np.meshgrid(off, off, indexing="ij"))
-    x = (xs[ci][:, None] + ox[None, :] * hx).reshape(-1)
-    y = (ys[cj][:, None] + oy[None, :] * hy).reshape(-1)
-    pv = np.exp(x)
-    p1 = pv * np.exp(y)
-    n = pv.size
-    dev = "cpu"
-
-    def a1(v: np.ndarray) -> Any:
-        return wp.array(np.ascontiguousarray(v, dtype=np.float64), dtype=wp.float64, device=dev)
-
-    def a2(v: np.ndarray) -> Any:
-        return wp.array(
-            np.ascontiguousarray(v, dtype=np.float64).reshape(1, -1), dtype=wp.float64, device=dev
-        )
-
-    out = wp.zeros((n, 6), dtype=wp.float64, device=dev)
-    sst = wp.zeros((n, 2), dtype=int, device=dev)
-    wp.launch(
-        _table_sample_kernel(),
-        dim=n,
-        inputs=[
-            a2(ion_pack), a2(proton_pack), a2(comp), a1(quad), a2(row), wp.float64(z),
-            wp.float64(mass_mev), wp.float64(math.exp(xs[0])),
-            wp.float64(1.0 - TABLE_MIN_LOSS), a1(pv), a1(p1), out, sst,
-        ],
-        device=dev,
-    )  # fmt: skip
-    v = out.numpy()
-    s = sst.numpy()
-    exact = v[:, 0::2]
-    tab = v[:, 1::2]
-    incl = np.ones(exact.shape, dtype=bool)
-    # later steps: states that lost less than L of pv are outside the relative contract
-    incl[:, 0] = p1 * (1.0 - TABLE_MIN_LOSS) >= pv
-    bad = np.any(s != 0, axis=1) | np.any(incl & ~((exact > 0.0) & (tab > 0.0)), axis=1)
-    if np.any(bad):
-        k = int(np.argwhere(bad)[0, 0])
-        raise fail(
-            "the pv_eq/pv table cannot be certified: invalid mapping at the sample point "
-            f"pv = {pv[k]:.6g} MeV, p1v1 = {p1[k]:.6g} MeV (root status {s[k, 0]}, table status "
-            f"{s[k, 1]}); use mcs_mapping_eval='root'"
-        )
-    rel = np.where(incl, np.abs(tab / np.where(incl, exact, 1.0) - 1.0), 0.0)
-    rel = rel.reshape(n_c, TABLE_SAMPLE_N**2, 3)
-    o_later = rel[:, :, 0].max(axis=1)
-    o_birth = rel[:, :, 1:].max(axis=(1, 2))
-    over = (o_later > b_later) | (o_birth > b_birth)
-    if np.any(over):
-        k = int(np.argwhere(over)[0, 0])
-        raise fail(
-            "the pv_eq/pv table cannot be certified: the sampled error exceeds the analytic "
-            f"bound in the cell at pv = {math.exp(xs[ci[k]]):.6g} MeV, p1v1/pv = "
-            f"{math.exp(ys[cj[k]]):.6g} (observed {o_later[k]:.3e} / {o_birth[k]:.3e}, bound "
-            f"{b_later[k]:.3e} / {b_birth[k]:.3e} for later / first steps): the smoothness "
-            "assumption of the bound is falsified (a corrupted node?); use mcs_mapping_eval='root'"
-        )
-    return TableCertificate(
-        certified_bound_analytic=float(max(b_later.max(), b_birth.max())),
-        bound_later_steps=float(b_later.max()),
-        bound_birth_step=float(b_birth.max()),
-        observed_max_sampled=float(rel.max()),
+        raise fail("the pv_eq/pv table cannot be built: pv_eq/pv not bounded away from 0")
+    est = float(np.max(dq / q_lo))
+    return TableEstimate(
+        interp_estimate=est,
+        bracket_half_width=max(TABLE_BRACKET_FACTOR * est, TABLE_BRACKET_MIN),
         n_cells=n_c,
         n_refined_points=int(uniq.size),
-        n_sampled_points=n,
         safety_factor=TABLE_SAFETY_FACTOR,
-        bound=TABLE_VARIANCE_BOUND,
     )
 
 
-def check_table_certificate(cert: TableCertificate) -> None:
-    """Fail closed (``UnsupportedCombinationError``) when the certified analytic bound exceeds
-    :data:`TABLE_VARIANCE_BOUND` (read at call time)."""
-    if not cert.certified_bound_analytic <= TABLE_VARIANCE_BOUND:
-        raise fail(
-            "the pv_eq/pv table exceeds the decision 0043 interpolation bound: certified analytic "
-            f"bound of |var_table / var_root - 1| = {cert.certified_bound_analytic:.3e} > "
-            f"{TABLE_VARIANCE_BOUND:.1e} over {cert.n_cells} cells; use mcs_mapping_eval='root'"
-        )
-
-
-_TABLES: dict[str, tuple[np.ndarray, TableCertificate]] = {}
+_TABLES: dict[str, tuple[np.ndarray, TableEstimate]] = {}
 
 
 def build_pv_eq_table(
@@ -1314,14 +1214,13 @@ def build_pv_eq_table(
     n_pv: int = TABLE_N_PV,
     n_r: int = TABLE_N_R,
 ) -> np.ndarray:
-    """The packed table row of :func:`build_certified_pv_eq_table` (certified, fails closed above
-    the bound)."""
-    return build_certified_pv_eq_table(
+    """The packed table row of :func:`build_pv_eq_table_and_estimate`."""
+    return build_pv_eq_table_and_estimate(
         ion_pack, proton_pack, comp, quad, z, mass_mev, pv_lo, p1v1_min, p1v1_max, n_pv, n_r
     )[0]
 
 
-def build_certified_pv_eq_table(
+def build_pv_eq_table_and_estimate(
     ion_pack: np.ndarray,
     proton_pack: np.ndarray,
     comp: np.ndarray,
@@ -1333,24 +1232,21 @@ def build_certified_pv_eq_table(
     p1v1_max: float,
     n_pv: int = TABLE_N_PV,
     n_r: int = TABLE_N_R,
-) -> tuple[np.ndarray, TableCertificate]:
-    """``(row, certificate)``: the packed ``pv_eq/pv`` table row of one ion in one material
+) -> tuple[np.ndarray, TableEstimate]:
+    """``(row, estimate)``: the packed ``pv_eq/pv`` table row of one ion in one material
     (float64)::
 
-        [x0, inv_dx, n_x, y0, inv_dy, n_y, x_last, y_last, q[0, 0], q[0, 1], ..., q[n_x-1, n_y-1]]
+        [x0, inv_dx, n_x, y0, inv_dy, n_y, x_last, y_last, w, q[0, 0], ..., q[n_x-1, n_y-1]]
 
     ``x = ln pv`` from ``ln pv_lo`` to ``ln(p1v1_max / (1 + THIN_SLAB_R))`` (``n_pv`` nodes) and
     ``y = ln(p1v1/pv)`` from ``ln(1 + THIN_SLAB_R)`` (the thin-slab guard of ``ion_mcs``) to
-    ``ln(p1v1_max / pv_lo)`` (``n_r`` nodes), ``q = pv_eq/pv`` of the root solve at the node. Only
-    the nodes of cells that meet the band of the run's initial states, ``p1v1_min <= p1v1 <=
-    p1v1_max`` (:func:`table_domain`), are solved; every other node, and a node whose solve fails,
-    holds :data:`TABLE_INVALID_NODE` (a state there returns status 5, fail closed). Fails closed
+    ``ln(p1v1_max / pv_lo)`` (``n_r`` nodes), ``q = pv_eq/pv`` of the root solve at the node and
+    ``w`` the starting bracket half-width (:func:`estimate_pv_eq_table`). Only the nodes of cells
+    that meet the band of the run's initial states, ``p1v1_min <= p1v1 <= p1v1_max``
+    (:func:`table_domain`), are solved; every other node, and a node whose solve fails, holds
+    :data:`TABLE_INVALID_NODE` (no starting guess there: the full bracket is used). Fails closed
     (``UnsupportedCombinationError``) unless every cell meeting the band has four valid nodes.
-    Every produced table is certified (:func:`certify_pv_eq_table`: analytic bilinear error
-    bound from second differences on a 2x-refined root-solve grid with safety factor 2,
-    cross-checked by 5 x 5 interior samples per cell) and fails closed when the certified bound
-    exceeds :data:`TABLE_VARIANCE_BOUND` (checked on every call, also for a cached table).
-    Cached per input."""
+    The table only accelerates the root (:data:`TABLE_EVAL_CONTRACT`). Cached per input."""
     from ionmc.physics.ion_mcs import THIN_SLAB_R  # noqa: PLC0415
 
     if not (0.0 < pv_lo < p1v1_min <= p1v1_max) or n_pv < 2 or n_r < 2:
@@ -1368,7 +1264,6 @@ def build_certified_pv_eq_table(
     )
     key = h.hexdigest()
     if key in _TABLES:
-        check_table_certificate(_TABLES[key][1])
         return _TABLES[key]
     y0 = math.log1p(THIN_SLAB_R)
     x0 = math.log(pv_lo)
@@ -1416,12 +1311,13 @@ def build_certified_pv_eq_table(
         float(n_r),
         x1,
         y1,
+        0.0,
     ]
     row = np.concatenate((header, q)).astype(np.float64)
-    row.setflags(write=False)
-    cert = certify_pv_eq_table(
+    est = estimate_pv_eq_table(
         row, ion_pack, proton_pack, comp, quad, z, mass_mev, p1v1_min, p1v1_max
     )
-    check_table_certificate(cert)
-    _TABLES[key] = (row, cert)
-    return row, cert
+    row[8] = est.bracket_half_width
+    row.setflags(write=False)
+    _TABLES[key] = (row, est)
+    return row, est

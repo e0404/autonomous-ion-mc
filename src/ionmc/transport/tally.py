@@ -109,10 +109,12 @@ NUCLEAR_TALLY_NAMES = (
 tally columns appended AFTER every other column (``TALLY_NAMES`` is never extended)."""
 NUCLEAR_COUNTER_NAMES = ("majorant_violation", "nuclear_rejection_limit", "nuclear_conservation")
 """Conditional counter block of a ``nuclear=True`` run, appended after ``COUNTER_NAMES``."""
-ION_COUNTER_NAMES = ("mcs_mapping_failure",)
-"""Conditional counter block of an ion run (z >= 2, decision 0043): steps whose exact-Omega mapping
-of f_dM did not converge (status != 0); appended after ``COUNTER_NAMES`` (ion and nuclear runs
-exclude each other). Any nonzero value invalidates the result."""
+ION_COUNTER_NAMES = ("mcs_mapping_failure", "mcs_table_bracket_miss")
+"""Conditional counter block of an ion run (z >= 2, decision 0043): ``mcs_mapping_failure``,
+steps whose exact-Omega mapping of f_dM did not converge (status != 0; any nonzero value
+invalidates the result), and ``mcs_table_bracket_miss``, steps of the table-accelerated root that
+needed the full bracket (a performance diagnostic; it never invalidates a result). Appended after
+``COUNTER_NAMES`` (ion and nuclear runs exclude each other)."""
 
 QUANTUM_MEV = 2.0**-30
 """Fixed-point quantum of the deposit grids [MeV]: every deposit piece is rounded to the nearest

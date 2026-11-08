@@ -26,15 +26,17 @@ from ionmc.materials import WATER, Material
 from ionmc.physics.em import E_S_MEV
 from ionmc.physics.exact_omega import (
     PROTON_FDM_STATUS,
-    TABLE_CERT_CONTRACT,
+    RESIDUAL_TOL,
+    STEP_TOL,
+    TABLE_BRACKET_FACTOR,
+    TABLE_BRACKET_MIN,
+    TABLE_EVAL_CONTRACT,
     TABLE_N_PV,
     TABLE_N_R,
     TABLE_SAFETY_FACTOR,
-    TABLE_SAMPLE_N,
-    TABLE_VARIANCE_BOUND,
     FdmDomainStatus,
-    TableCertificate,
-    build_certified_pv_eq_table,
+    TableEstimate,
+    build_pv_eq_table_and_estimate,
     fdm_domain_status,
     pack_composition,
     pack_quadrature,
@@ -119,11 +121,11 @@ class PhysicsOptions:
     and the end point is snapped onto the plane (the displacements are recorded per history; the
     direction is never changed).
     ``mcs_mapping_eval`` selects how the exact-Omega mapping of an ion (z >= 2) is evaluated
-    (``MCS_MAPPING_EVALS``): ``"table"`` (default; the ``pv_eq/pv`` table built at validation by the
-    root solve and read by bilinear interpolation; its variance error is certified at build for
-    every produced table by an analytic bound, threshold ``TABLE_VARIANCE_BOUND`` = 1e-3, fails
-    closed above it) or
-    ``"root"`` (the per-step root solve). It is ignored for protons (no mapping).
+    (``MCS_MAPPING_EVALS``), both the exact root on every step: ``"table"`` (default; the root
+    started from a tight bracket around the bilinear value of a ``pv_eq/pv`` table built at
+    validation by the root solve, the table being an accelerator only, ``TABLE_EVAL_CONTRACT``) or
+    ``"root"`` (the root from the full proton-path bracket). It is ignored for protons (no
+    mapping).
     """
 
     nuclear: bool
@@ -287,8 +289,8 @@ class IonMappingData:
     ``evaluation`` is ``"table"`` or ``"root"`` (``PhysicsOptions.mcs_mapping_eval``); ``table``
     holds the ``pv_eq/pv`` table rows (:func:`ionmc.physics.exact_omega.build_pv_eq_table`) for
     ``"table"`` and is None for ``"root"``; ``table_domain`` the ``(pv_lo, p1v1_min, p1v1_max)``
-    [MeV] they were built for; ``certificates`` the build certificate of each row
-    (:func:`ionmc.physics.exact_omega.certify_pv_eq_table`)."""
+    [MeV] they were built for; ``estimates`` the build-time interpolation estimate of each row
+    (:func:`ionmc.physics.exact_omega.estimate_pv_eq_table`, a performance diagnostic)."""
 
     ion: np.ndarray
     proton: np.ndarray
@@ -297,7 +299,7 @@ class IonMappingData:
     evaluation: str = "root"
     table: np.ndarray | None = None
     table_domain: tuple[float, float, float] | None = None
-    certificates: tuple[TableCertificate, ...] | None = None
+    estimates: tuple[TableEstimate, ...] | None = None
 
     def table_summary(self) -> dict[str, Any]:
         """JSON-serialisable record of the evaluation (sizes, axes bounds and the sha256 of the
@@ -318,24 +320,26 @@ class IonMappingData:
                 "n_materials": int(rows.shape[0]),
                 "sha256": hashlib.sha256(rows.tobytes()).hexdigest(),
             }
-            if self.certificates is not None:
-                cs = self.certificates
+            if self.estimates is not None:
+                es = self.estimates
                 out["table"].update(
                     {
-                        "certification": TABLE_CERT_CONTRACT,
-                        "variance_bound": TABLE_VARIANCE_BOUND,
+                        "contract": TABLE_EVAL_CONTRACT,
+                        "root_residual_tol": RESIDUAL_TOL["float64"],
+                        "root_step_tol": STEP_TOL["float64"],
+                        "bracket_factor": TABLE_BRACKET_FACTOR,
+                        "bracket_min": TABLE_BRACKET_MIN,
+                        "bracket_half_width_per_material": [e.bracket_half_width for e in es],
+                        "interp_estimate": max(e.interp_estimate for e in es),
+                        "interp_estimate_per_material": [e.interp_estimate for e in es],
+                        "interp_estimate_note": (
+                            "build-time estimate of |ln pv_eq(table) - ln pv_eq(root)| (bilinear "
+                            "bound from second differences on a 2x-refined root-solve grid, "
+                            "safety factor 2): a performance diagnostic, not a correctness claim"
+                        ),
                         "safety_factor": TABLE_SAFETY_FACTOR,
-                        "refinement": "2x (3 x 3 root-solved stencil per solved cell)",
-                        "samples_per_cell": TABLE_SAMPLE_N**2,
-                        "certified_bound_analytic": max(c.certified_bound_analytic for c in cs),
-                        "certified_bound_analytic_per_material": [
-                            c.certified_bound_analytic for c in cs
-                        ],
-                        "observed_max_sampled": max(c.observed_max_sampled for c in cs),
-                        "observed_max_sampled_per_material": [c.observed_max_sampled for c in cs],
-                        "certified_cells": sum(c.n_cells for c in cs),
-                        "refined_points": sum(c.n_refined_points for c in cs),
-                        "sampled_points": sum(c.n_sampled_points for c in cs),
+                        "estimated_cells": sum(e.n_cells for e in es),
+                        "refined_points": sum(e.n_refined_points for e in es),
                     }
                 )
         return out
@@ -370,7 +374,7 @@ def _ion_mapping_data(
         proj, (1.0 - ph.max_energy_loss_fraction) * effective_e_cut_mev(config), e_lo_mev, e_hi_mev
     )
     built = [
-        build_certified_pv_eq_table(
+        build_pv_eq_table_and_estimate(
             ion[i], pro[i], comp[i], quad, float(proj.z), proj.mass_mev, *dom, TABLE_N_PV, TABLE_N_R
         )
         for i in range(len(mats))

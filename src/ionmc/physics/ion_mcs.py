@@ -23,10 +23,14 @@ mapping runs in the precision passed to the factory (the kernel passes float64, 
 energy quantity).
 
 Two evaluations of ``pv_eq`` (``PhysicsOptions.mcs_mapping_eval``, decision 0043 section 3,
-"Evaluation"): :func:`mapped_state` / ``mcs_variance`` solve the root per step (``"root"``);
-``mapped_state_table`` / ``mcs_variance_table`` read the precomputed ``pv_eq/pv`` table by bilinear
-interpolation (``"table"``, the default; :func:`ionmc.physics.exact_omega.pv_equivalent_table`).
-Both apply the same thin-slab guard and the same variance formula (``variance_of_state``).
+"Evaluation"), both the exact root on every step: :func:`mapped_state` / ``mcs_variance`` solve
+it from the full proton-path bracket (``"root"``); ``mapped_state_table`` /
+``mcs_variance_table`` (``"table"``, the default) solve the same equation to the same tolerance
+from a tight bracket around the bilinear ``pv_eq/pv`` table value
+(:func:`ionmc.physics.exact_omega.pv_equivalent_seeded`; the table is an accelerator only) and
+return a bracket-miss flag (the full bracket was needed; a diagnostic, not a failure).
+``interpolated_state`` is the bare table value (diagnostics and tests). All apply the same
+thin-slab guard and the same variance formula (``variance_of_state``).
 
 A nonzero status (see ``exact_omega.STATUS_NAMES``) returns variance 0; the caller counts it
 (``mcs_mapping_failure``) and the result is invalid (fail closed).
@@ -81,14 +85,42 @@ def make_ion_mcs(real: type) -> SimpleNamespace:
         return peq, peq * (p1v1 / pv_map), status
 
     @named_func(name)
-    def mapped_state_table(
+    def interpolated_state(
         tab: wp.array2d(dtype=real), m: int, pv_mid: real, p1v1: real
     ) -> tuple[real, real, int]:
-        """``(pv_eq, p1v1_eq, status)`` from the ``pv_eq/pv`` table row ``m`` (status 5 outside the
-        table); the same thin-slab guard as :func:`mapped_state`."""
+        """``(pv_eq, p1v1_eq, status)`` interpolated from the ``pv_eq/pv`` table row ``m`` (status
+        5 outside the table); the same thin-slab guard as :func:`mapped_state`. The starting
+        guess of :func:`mapped_state_table`, not a transport quantity."""
         pv_map = wp.min(pv_mid, p1v1 / (real(1.0) + thin))
         peq, status = xo.pv_equivalent_table(tab[m], pv_map, p1v1)
         return peq, peq * (p1v1 / pv_map), status
+
+    @named_func(name)
+    def mapped_state_table(
+        ion_pk: wp.array2d(dtype=real),
+        pro_pk: wp.array2d(dtype=real),
+        comp_pk: wp.array2d(dtype=real),
+        quad: wp.array(dtype=real),
+        tab: wp.array2d(dtype=real),
+        m: int,
+        z: real,
+        mass_mev: real,
+        pv_mid: real,
+        p1v1: real,
+    ) -> tuple[real, real, int, int]:
+        """``(pv_eq, p1v1_eq, status, bracket_miss)``: the exact root of :func:`mapped_state`
+        (same equation, tolerance and status codes) started from a tight bracket around the
+        table value of row ``m`` (half-width ``tab[m, 8]``); the same thin-slab guard."""
+        pv_map = wp.min(pv_mid, p1v1 / (real(1.0) + thin))
+        row = tab[m]
+        q0 = real(0.0)
+        g, st_t = xo.pv_equivalent_table(row, pv_map, p1v1)
+        if st_t == 0:
+            q0 = g / pv_map
+        peq, status, iters, miss = xo.pv_equivalent_seeded(
+            ion_pk[m], pro_pk[m], comp_pk[m], quad, z, mass_mev, pv_map, p1v1, q0, row[8]
+        )
+        return peq, peq * (p1v1 / pv_map), status, miss
 
     @named_func(name)
     def variance_of_state(
@@ -152,9 +184,14 @@ def make_ion_mcs(real: type) -> SimpleNamespace:
 
     @named_func(name)
     def mcs_variance_table(
+        ion_pk: wp.array2d(dtype=real),
+        pro_pk: wp.array2d(dtype=real),
+        comp_pk: wp.array2d(dtype=real),
+        quad: wp.array(dtype=real),
         tab: wp.array2d(dtype=real),
         m: int,
         z: real,
+        mass_mev: real,
         pv_mid: real,
         pv_end: real,
         p1v1: real,
@@ -162,17 +199,20 @@ def make_ion_mcs(real: type) -> SimpleNamespace:
         inv_rho_xs_cm2_g: real,
         rho_g_cm3: real,
         s_mm: real,
-    ) -> tuple[real, int]:
-        """As :func:`mcs_variance` with ``pv_eq`` read from the table (``mcs_mapping_eval =
-        "table"``)."""
-        peq, p1eq, status = mapped_state_table(tab, m, pv_mid, p1v1)
+    ) -> tuple[real, int, int]:
+        """``(variance, status, bracket_miss)``: as :func:`mcs_variance` with the table-accelerated
+        exact root (:func:`mapped_state_table`, ``mcs_mapping_eval = "table"``)."""
+        peq, p1eq, status, miss = mapped_state_table(
+            ion_pk, pro_pk, comp_pk, quad, tab, m, z, mass_mev, pv_mid, p1v1
+        )
         var = variance_of_state(
             peq, p1eq, status, z, pv_mid, pv_end, p1v1, birth, inv_rho_xs_cm2_g, rho_g_cm3, s_mm
         )
-        return var, status
+        return var, status, miss
 
     return SimpleNamespace(
         mapped_state=mapped_state,
+        interpolated_state=interpolated_state,
         mapped_state_table=mapped_state_table,
         variance_of_state=variance_of_state,
         mcs_variance=mcs_variance,
