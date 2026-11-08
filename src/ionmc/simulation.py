@@ -45,7 +45,12 @@ from ionmc.environment import describe_environment
 from ionmc.errors import TransportLimitError
 from ionmc.lookup import AXES as LOOKUP_AXES
 from ionmc.lookup import AXIS_SPACINGS as LOOKUP_AXIS_SPACINGS
-from ionmc.physics.exact_omega import TABLE_CERT_OFFSETS, TABLE_VARIANCE_BOUND
+from ionmc.physics.exact_omega import (
+    TABLE_CERT_CONTRACT,
+    TABLE_SAFETY_FACTOR,
+    TABLE_SAMPLE_N,
+    TABLE_VARIANCE_BOUND,
+)
 from ionmc.physics.projectiles import PROTON
 from ionmc.scoring import (
     GENERATION_CHOICES,
@@ -482,17 +487,21 @@ def _species_capabilities(nuclear: bool = False) -> dict[str, Any]:
                     "evaluation": (
                         "mcs_mapping_eval 'table' (default: bilinear pv_eq/pv table built by the "
                         "root solve; per-step variance error <= 1e-3 certified at build for every "
-                        "produced table (5 interior points per solved cell; a table above the "
+                        "produced table by an analytic bilinear error bound; a table above the "
                         "bound or a state outside the table fails closed) or 'root' (per-step "
                         "root solve)"
                     ),
                     "table_certification": {
                         "scope": "certified at build for every produced table",
+                        "contract": TABLE_CERT_CONTRACT,
                         "variance_bound": TABLE_VARIANCE_BOUND,
-                        "points_per_solved_cell": len(TABLE_CERT_OFFSETS),
+                        "safety_factor": TABLE_SAFETY_FACTOR,
+                        "refinement": "2x (3 x 3 root-solved stencil per solved cell)",
+                        "samples_per_cell": TABLE_SAMPLE_N**2,
                         "recorded": (
-                            "summary mcs_mapping.table: certified_max_rel_error (overall and per "
-                            "material), certified_cells, certified_points, variance_bound"
+                            "summary mcs_mapping.table: certified_bound_analytic and "
+                            "observed_max_sampled (overall and per material), certified_cells, "
+                            "refined_points, sampled_points, safety_factor, variance_bound"
                         ),
                     },
                     "fdm_domain_status": (

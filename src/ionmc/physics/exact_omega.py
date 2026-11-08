@@ -32,8 +32,9 @@ the decision's allowed alternative: a per-(material, ion) tabulation of ``pv_eq/
 grid in ``(ln pv, ln(p1v1/pv))`` (a shear of the decision's ``(ln pv, ln p1v1)`` plane), whose
 nodes are computed by this same root solve (:func:`build_pv_eq_table`) and which is read by
 bilinear interpolation (:func:`pv_equivalent_table`). The error of the resulting per-step variance
-is certified at build for every produced table (:func:`certify_pv_eq_table`, bound
-:data:`TABLE_VARIANCE_BOUND` = 1e-3; ``tests/ionmc/test_ion_mcs_table.py``). The root solve:
+is certified at build for every produced table by a domain-wide analytic bound
+(:func:`certify_pv_eq_table`, threshold :data:`TABLE_VARIANCE_BOUND` = 1e-3;
+``tests/ionmc/test_ion_mcs_table.py``). The root solve:
 :func:`pv_equivalent` solves ``g(u) = b_p(e^u, r e^u) - b_ion(pv, p1v1) = 0`` for
 ``u = ln pv_eq``, ``r = p1v1 / pv``, by a bracketed Illinois (modified regula falsi) iteration
 with a bisection safeguard. The bracket is the proton path itself: from its lowest energy to the
@@ -78,7 +79,7 @@ import warp as wp
 from ionmc._validate import fail
 from ionmc._wpfunc import check_real, named_func
 from ionmc.materials import ELEMENTS, N_A, Material
-from ionmc.physics.em import make_em
+from ionmc.physics.em import FDM_COEFFICIENTS, make_em
 from ionmc.physics.kinematics import make_kinematics
 from ionmc.physics.projectiles import PROTON, Projectile
 from ionmc.physics.stopping import (
@@ -158,10 +159,39 @@ TABLE_VARIANCE_BOUND = 1.0e-3
 """Decision 0043 bound of the table (0.1 %): the per-step MCS variance (proportional to T and
 theta^2) from the interpolated ``pv_eq`` against the root solve, relative. Certified at build for
 every produced table (:func:`certify_pv_eq_table`); a table above it fails closed."""
-TABLE_CERT_OFFSETS = ((0.5, 0.5), (0.25, 0.25), (0.25, 0.75), (0.75, 0.25), (0.75, 0.75))
-"""Certification points of a solved cell, in cell units ``(x, y)``: the centre and the four points
-at +-1/4 of the cell in both axes (the bilinear error of a smooth function peaks in the
-interior)."""
+TABLE_SAFETY_FACTOR = 2.0
+"""Safety factor on the second-difference estimate of the bilinear error bound
+(:func:`certify_pv_eq_table`); checked empirically by the sampled cross-check (2026-11-08: with
+factor 1 the cross-check passes in all 70 tables of He, C, O at both domain ends in the eleven
+built-in materials and a user material, with 0.75 it fails in every one; 2 doubles that margin)."""
+TABLE_SAMPLE_N = 5
+"""Interior sample points per cell and axis of the cross-check (``N x N`` per cell)."""
+TABLE_ROOT_TOL_REL = 1.0e-10
+"""Relative allowance for the root solve's convergence at the nodes and the stencil (float64)."""
+TABLE_MIN_LOSS = 1.0e-4
+"""Scope of the relative contract (:func:`certify_pv_eq_table`): steps of a particle that has lost
+at least this fraction of its initial ``pv`` at the state that enters the memory term, i.e.
+``pv_mid <= (1 - L) p1v1`` for a later step and ``pv_end <= (1 - L) p1v1`` for the first step
+(a few micrometres of path for 50 MeV/u helium). Before that the memory term
+``1 - (pv/p1v1)^2 < 2e-4`` drives the f_dM fit towards its zero (clamped to 0 for both paths;
+e.g. near ``1 - (pv/p1v1)^2 ~ 1e-5`` at the lowest helium energies in high-Z materials), where a
+relative error is not defined; the absolute error there is still bounded by
+``|c2 + c3 l1| |dl2|`` times the common prefactor."""
+TABLE_CERT_CONTRACT = (
+    "certified at build for every produced table: analytic bilinear error bound of pv_eq/pv from "
+    "second differences on a 2x-refined root-solve grid (3 x 3 stencil per solved cell, maximum "
+    "over the cell and its neighbours) with safety factor 2, converted exactly into the relative "
+    "per-step MCS variance error (T, theta^2) for later steps and for the first step over all "
+    "physical end points pv_end in "
+    "(0, min(pv_mid, (1 - 1e-4) p1v1)]; cross-checked by 5 x 5 interior samples per cell (later "
+    "steps; first step at the upper end point and at the table's lowest pv); fails closed when "
+    "the analytic bound exceeds the threshold or a sample exceeds its cell's bound; states of a "
+    "particle that has lost less than 1e-4 of its initial pv (TABLE_MIN_LOSS: the f_dM memory "
+    "term near the fit's zero) are outside the relative contract"
+)
+"""The certification contract, as recorded in the summary and the capability report."""
+LOG10_E = 0.4342944819032518
+"""log10(e): the shift of the first step's analytic memory average (``ionmc.physics.ion_mcs``)."""
 
 _HEADER = 8
 
@@ -956,37 +986,43 @@ def table_domain(
 
 @dataclass(frozen=True)
 class TableCertificate:
-    """Deterministic certificate of one ``pv_eq/pv`` table (:func:`certify_pv_eq_table`):
-    ``max_rel_error`` the largest ``|var_table / var_root - 1|`` of the per-step MCS variance
-    (first step and later steps) over ``n_points`` points (``len(TABLE_CERT_OFFSETS)`` per cell)
-    of the ``n_cells`` solved cells; ``bound`` the bound it was checked against."""
+    """Certificate of one ``pv_eq/pv`` table (:func:`certify_pv_eq_table`).
 
-    max_rel_error: float
+    ``certified_bound_analytic`` is the certified value: the largest per-cell analytic bound of
+    ``|var_table / var_root - 1|`` (``bound_later_steps`` and ``bound_birth_step`` per step kind)
+    over the ``n_cells`` solved cells, from ``n_refined_points`` root solves of the 2x-refined
+    grid and the safety factor ``safety_factor``. ``observed_max_sampled`` is the largest error
+    observed at the ``n_sampled_points`` interior samples (the empirical cross-check; never above
+    the analytic bound of its cell). ``bound`` is the threshold it was checked against."""
+
+    certified_bound_analytic: float
+    bound_later_steps: float
+    bound_birth_step: float
+    observed_max_sampled: float
     n_cells: int
-    n_points: int
+    n_refined_points: int
+    n_sampled_points: int
+    safety_factor: float
     bound: float
 
     def to_dict(self) -> dict[str, Any]:
-        return {
-            "certified_max_rel_error": self.max_rel_error,
-            "certified_cells": self.n_cells,
-            "certified_points": self.n_points,
-            "variance_bound": self.bound,
-        }
+        return dict(self.__dict__)
 
 
 @functools.cache
-def _table_cert_kernel() -> Any:
+def _table_sample_kernel() -> Any:
     """Warp CPU kernel (float64): the per-step variance of a state from the root solve
-    (``mapped_state``) and from the table (``mapped_state_table``), for a later step and for the
-    first step (``pv_end = pv``); the transport functions of ``ionmc.physics.ion_mcs``."""
+    (``mapped_state``) and from the table (``mapped_state_table``), for a later step and for a
+    first step with ``pv_end = min(pv_mid, keep p1v1)`` (``keep = 1 - TABLE_MIN_LOSS``) and
+    with ``pv_end = min(pv_end_lo, that)``; the transport functions of
+    ``ionmc.physics.ion_mcs``."""
     from ionmc.physics.ion_mcs import make_ion_mcs  # noqa: PLC0415 (ion_mcs imports this module)
 
     im = make_ion_mcs(wp.float64)
     d = wp.float64
 
     @wp.kernel(module="unique")
-    def cert(
+    def sample(
         ion: wp.array2d(dtype=d),
         pro: wp.array2d(dtype=d),
         comp: wp.array2d(dtype=d),
@@ -994,6 +1030,8 @@ def _table_cert_kernel() -> Any:
         tab: wp.array2d(dtype=d),
         z: d,
         mass: d,
+        pv_end_lo: d,
+        keep: d,
         pv: wp.array(dtype=d),
         p1v1: wp.array(dtype=d),
         out: wp.array2d(dtype=d),
@@ -1003,17 +1041,24 @@ def _table_cert_kernel() -> Any:
         one = d(1.0)
         pr, p1r, sr = im.mapped_state(ion, pro, comp, quad, 0, z, mass, pv[k], p1v1[k])
         pt, p1t, st = im.mapped_state_table(tab, 0, pv[k], p1v1[k])
-        for birth in range(2):
-            out[k, 2 * birth] = im.variance_of_state(
-                pr, p1r, sr, z, pv[k], pv[k], p1v1[k], birth, one, one, one
+        for c in range(3):
+            birth = int(0)
+            pv_end = pv[k]
+            if c > 0:
+                birth = 1
+                pv_end = wp.min(pv[k], keep * p1v1[k])
+            if c == 2:
+                pv_end = wp.min(pv_end_lo, pv_end)
+            out[k, 2 * c] = im.variance_of_state(
+                pr, p1r, sr, z, pv[k], pv_end, p1v1[k], birth, one, one, one
             )
-            out[k, 2 * birth + 1] = im.variance_of_state(
-                pt, p1t, st, z, pv[k], pv[k], p1v1[k], birth, one, one, one
+            out[k, 2 * c + 1] = im.variance_of_state(
+                pt, p1t, st, z, pv[k], pv_end, p1v1[k], birth, one, one, one
             )
         status[k, 0] = sr
         status[k, 1] = st
 
-    return cert
+    return sample
 
 
 def _band_cells(xs: np.ndarray, ys: np.ndarray, p1v1_min: float, p1v1_max: float) -> np.ndarray:
@@ -1029,6 +1074,40 @@ def _table_axes(row: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return np.linspace(h[0], h[6], int(h[2])), np.linspace(h[3], h[7], int(h[5]))
 
 
+def _neighbour_max(v: np.ndarray, cells: np.ndarray) -> np.ndarray:
+    """Per cell, the maximum of ``v`` over the cell and its (up to 8) solved neighbours."""
+    ci, cj = cells[:, 0], cells[:, 1]
+    g = np.zeros((ci.max() + 3, cj.max() + 3))
+    g[ci + 1, cj + 1] = v
+    out = np.zeros_like(v)
+    for di in (-1, 0, 1):
+        for dj in (-1, 0, 1):
+            out = np.maximum(out, g[ci + 1 + di, cj + 1 + dj])
+    return out
+
+
+def fdm_sensitivity_max(
+    l1_lo: np.ndarray, l1_hi: np.ndarray, l2_lo: np.ndarray, l2_hi: np.ndarray
+) -> np.ndarray:
+    """Exact maximum of ``S = |c2 + c3 l1| / f(l1, l2)``, ``f = c0 + c1 l1 + c2 l2 + c3 l1 l2``
+    (``FDM_COEFFICIENTS``), over the rectangles ``[l1_lo, l1_hi] x [l2_lo, l2_hi]`` (elementwise);
+    ``inf`` where ``f <= 0`` at a corner or ``c2 + c3 l1`` changes sign. At fixed ``l2``, ``S`` is a
+    ratio of two linear functions of ``l1`` (monotone where ``f > 0``); at fixed ``l1`` it is a
+    constant over a linear function of ``l2`` (monotone); ``f`` is bilinear, so ``f > 0`` at the
+    four corners implies ``f > 0`` on the rectangle, and the maximum is at a corner."""
+    c0, c1, c2, c3 = FDM_COEFFICIENTS
+    out = np.zeros(np.broadcast(l1_lo, l2_lo).shape)
+    ok = np.ones(out.shape, dtype=bool)
+    n_lo, n_hi = c2 + c3 * l1_lo, c2 + c3 * l1_hi
+    ok &= np.sign(n_lo) == np.sign(n_hi)
+    for l1, n in ((l1_lo, n_lo), (l1_hi, n_hi)):
+        for l2 in (l2_lo, l2_hi):
+            f = c0 + c1 * l1 + c2 * l2 + c3 * l1 * l2
+            ok &= f > 0.0
+            out = np.maximum(out, np.abs(n) / np.where(f > 0.0, f, 1.0))
+    return np.where(ok, out, np.inf)
+
+
 def certify_pv_eq_table(
     row: np.ndarray,
     ion_pack: np.ndarray,
@@ -1040,75 +1119,182 @@ def certify_pv_eq_table(
     p1v1_min: float,
     p1v1_max: float,
 ) -> TableCertificate:
-    """Certificate of the table ``row`` (:func:`build_pv_eq_table`; decision 0043 bound, checked
-    by :func:`check_table_certificate`). For every solved cell (the cells meeting the band of the
-    initial states) the root solve is evaluated at the :data:`TABLE_CERT_OFFSETS` points and the
-    per-step MCS variance from the interpolated ``pv_eq`` is compared with the exact one (first
-    step and later steps; the variance is proportional to T and theta^2, the common factors
-    cancel). Deterministic (fixed points, float64). Fails closed when the root solve or the table
-    lookup is invalid at a certification point (``max_rel_error`` would be undefined)."""
+    """Certificate of the table ``row`` (:func:`build_pv_eq_table`): a domain-wide analytic bound
+    of the table's per-step variance error, per solved cell (the cells meeting the band of the
+    initial states), with a sampled cross-check. Deterministic (float64). Checked against
+    :data:`TABLE_VARIANCE_BOUND` by :func:`check_table_certificate`.
+
+    **Interpolation error of q = pv_eq/pv** (the interpolated quantity). On a cell with spacings
+    ``hx`` (``ln pv``) and ``hy`` (``ln r``, ``r = p1v1/pv``) the tensor-product bilinear
+    interpolant satisfies ``|q - Pi q| <= hx^2/8 sup|q_xx| + hy^2/8 sup|q_yy|``. The suprema are
+    estimated from second differences of the exact root solve on the 2x-refined grid of the cell
+    (its 3 x 3 stencil: corners, edge midpoints and centre, all root-solved): ``hx^2/8 |q_xx|``
+    ~ ``|q(0) - 2 q(1/2) + q(1)| / 2`` along each of the three x-lines (likewise in y), the maximum
+    over the lines and over the stencils of the cell and its (up to 8) solved neighbours (a cell
+    where a second derivative changes sign has a vanishing own difference), times the safety
+    factor :data:`TABLE_SAFETY_FACTOR` = 2 (``q`` is a smooth, slowly varying function of
+    ``ln pv`` and ``ln r``, P11; the factor covers the variation of the second derivative within
+    a cell, and the sampled cross-check below falsifies it if it does not), plus
+    :data:`TABLE_ROOT_TOL_REL` relative for the root solve's own convergence. This is ``dq``;
+    ``q`` lies in ``[q_lo, q_hi]`` = stencil range widened by ``dq``, and
+    ``|ln q_table - ln q_root| <= dq / q_lo``.
+
+    **Variance error.** The table changes only ``pv_eq``; the prefactor ``(z E_s / pv_mid)^2 rho
+    / X_S s`` is the same for both paths, so ``var_table / var_root = f_t / f_r`` with ``f`` the
+    f_dM fit ``c0 + c1 l1 + c2 l2 + c3 l1 l2``, ``l2 = log10 pv_eq``:
+    later steps ``l1 = log10(1 - (pv_eq / p1v1_eq)^2) = log10(1 - 1/r^2)`` (``p1v1_eq = r pv_eq``,
+    independent of ``pv_eq``); the first step (birth, analytic memory average)
+    ``l1 = log10(1 - (pv_end / p1v1)^2) - log10(e)``, independent of ``pv_eq``. ``f`` is linear in
+    ``l2`` at fixed ``l1``, hence exactly ``f_t / f_r - 1 = (c2 + c3 l1) (l2_t - l2_r) / f_r`` and
+    ``|var_t / var_r - 1| <= S_max |l2_t - l2_r|`` with ``S_max`` the maximum of
+    ``|c2 + c3 l1| / f`` over the cell's ``(l1, l2)`` rectangle (:func:`fdm_sensitivity_max`,
+    exact at its corners). The ratio depends on the birth step's end point through ``l1``
+    (``c3 != 0``), so it is not endpoint-independent; the rectangle covers every physical end
+    point: ``pv_end`` in ``(0, min(pv_mid, (1 - L) p1v1)]`` with ``L`` =
+    :data:`TABLE_MIN_LOSS`, i.e. ``1 - (pv_end/p1v1)^2`` in
+    ``[max(1 - 1/r^2, 1 - (1 - L)^2), 1)``, which includes ``pv_end`` at the cutoff and below it
+    (straggling); later steps cover ``1 - 1/r^2`` in ``[max(1 - 1/r_lo^2, 1 - (1 - L)^2),
+    max(1 - 1/r_hi^2, 1 - (1 - L)^2)]``. ``l2`` covers ``[q_lo pv_cell_min, q_hi pv_cell_max]``.
+    Contract scope: states of the table (``r >= 1 + THIN_SLAB_R``) of a particle that has lost at
+    least ``L`` of its initial ``pv`` (:data:`TABLE_MIN_LOSS`: before that the memory term drives
+    the f_dM fit to its zero, where a relative error is not defined).
+
+    **Sampled cross-check.** At :data:`TABLE_SAMPLE_N` x :data:`TABLE_SAMPLE_N` interior points
+    per cell the variance from the table is compared with the root solve for a later step and a
+    first step with ``pv_end = min(pv_mid, (1 - L) p1v1)`` and ``pv_end`` = the table's lowest
+    ``pv`` (the cutoff side); later-step samples with ``pv > (1 - L) p1v1`` are outside the
+    contract and skipped. Fails closed (``UnsupportedCombinationError``) when an observed error
+    exceeds the analytic bound of its cell (the smoothness assumption is falsified), or when a
+    root solve or a table lookup is invalid at a stencil or sample point."""
     row = np.ascontiguousarray(row, dtype=np.float64)
     xs, ys = _table_axes(row)
+    n_y = len(ys)
     cells = np.argwhere(_band_cells(xs, ys, p1v1_min, p1v1_max))
-    if len(cells) == 0:
+    n_c = len(cells)
+    if n_c == 0:
         raise fail("the pv_eq/pv table has no solved cell to certify")
-    dx, dy = xs[1] - xs[0], ys[1] - ys[0]
-    off = np.array(TABLE_CERT_OFFSETS, dtype=np.float64)
-    x = (xs[cells[:, 0]][:, None] + off[None, :, 0] * dx).reshape(-1)
-    y = (ys[cells[:, 1]][:, None] + off[None, :, 1] * dy).reshape(-1)
+    hx, hy = xs[1] - xs[0], ys[1] - ys[0]
+    ci, cj = cells[:, 0], cells[:, 1]
+
+    # (1) 3 x 3 stencil of every cell on the 2x-refined grid, all root-solved (shared points once)
+    a = np.arange(3)
+    ri, rj = np.broadcast_arrays(
+        2 * ci[:, None, None] + a[None, :, None], 2 * cj[:, None, None] + a[None, None, :]
+    )
+    n_ry = 2 * n_y - 1
+    uniq, inv = np.unique((ri * n_ry + rj).reshape(-1), return_inverse=True)
+    pv_s = np.exp(xs[0] + (uniq // n_ry) * (0.5 * hx))
+    p1_s = pv_s * np.exp(ys[0] + (uniq % n_ry) * (0.5 * hy))
+    peq, st = root_pv_equivalent_batch(ion_pack, proton_pack, comp, quad, z, mass_mev, pv_s, p1_s)
+    if np.any(st != 0):
+        k = int(np.argwhere(st != 0)[0, 0])
+        raise fail(
+            "the pv_eq/pv table cannot be certified: the root solve fails at the stencil point "
+            f"pv = {pv_s[k]:.6g} MeV, p1v1 = {p1_s[k]:.6g} MeV (status {st[k]}); use "
+            "mcs_mapping_eval='root'"
+        )
+    q = (peq / pv_s)[inv].reshape(n_c, 3, 3)
+    d_xx = _neighbour_max(np.abs(q[:, 0, :] - 2.0 * q[:, 1, :] + q[:, 2, :]).max(axis=1), cells)
+    d_yy = _neighbour_max(np.abs(q[:, :, 0] - 2.0 * q[:, :, 1] + q[:, :, 2]).max(axis=1), cells)
+    q_max = q.max(axis=(1, 2))
+    dq = TABLE_SAFETY_FACTOR * 0.5 * (d_xx + d_yy) + TABLE_ROOT_TOL_REL * q_max
+    q_lo = q.min(axis=(1, 2)) - dq
+    q_hi = q_max + dq
+    if np.any(q_lo <= 0.0):
+        raise fail("the pv_eq/pv table cannot be certified: pv_eq/pv not bounded away from 0")
+    dl2 = dq / (q_lo * math.log(10.0))
+
+    # (2) sensitivity of the variance to log10 pv_eq over the cell (both step kinds)
+    l2_lo = np.log10(q_lo) + xs[ci] / math.log(10.0)
+    l2_hi = np.log10(q_hi) + xs[ci + 1] / math.log(10.0)
+    om_min = -math.expm1(2.0 * math.log1p(-TABLE_MIN_LOSS))  # 1 - (1 - L)^2
+    om_lo = np.maximum(-np.expm1(-2.0 * ys[cj]), om_min)
+    om_hi = np.maximum(-np.expm1(-2.0 * ys[cj + 1]), om_min)
+    s_later = fdm_sensitivity_max(np.log10(om_lo), np.log10(om_hi), l2_lo, l2_hi)
+    s_birth = fdm_sensitivity_max(np.log10(om_lo) - LOG10_E, np.full(n_c, -LOG10_E), l2_lo, l2_hi)
+    b_later = s_later * dl2
+    b_birth = s_birth * dl2
+
+    # (3) sampled cross-check: N x N interior points per cell
+    off = (np.arange(TABLE_SAMPLE_N) + 0.5) / TABLE_SAMPLE_N
+    ox, oy = (g.reshape(-1) for g in np.meshgrid(off, off, indexing="ij"))
+    x = (xs[ci][:, None] + ox[None, :] * hx).reshape(-1)
+    y = (ys[cj][:, None] + oy[None, :] * hy).reshape(-1)
     pv = np.exp(x)
     p1 = pv * np.exp(y)
     n = pv.size
     dev = "cpu"
 
-    def a1(a: np.ndarray) -> Any:
-        return wp.array(np.ascontiguousarray(a, dtype=np.float64), dtype=wp.float64, device=dev)
+    def a1(v: np.ndarray) -> Any:
+        return wp.array(np.ascontiguousarray(v, dtype=np.float64), dtype=wp.float64, device=dev)
 
-    def a2(a: np.ndarray) -> Any:
+    def a2(v: np.ndarray) -> Any:
         return wp.array(
-            np.ascontiguousarray(a, dtype=np.float64).reshape(1, -1), dtype=wp.float64, device=dev
+            np.ascontiguousarray(v, dtype=np.float64).reshape(1, -1), dtype=wp.float64, device=dev
         )
 
-    out = wp.zeros((n, 4), dtype=wp.float64, device=dev)
-    st = wp.zeros((n, 2), dtype=int, device=dev)
+    out = wp.zeros((n, 6), dtype=wp.float64, device=dev)
+    sst = wp.zeros((n, 2), dtype=int, device=dev)
     wp.launch(
-        _table_cert_kernel(),
+        _table_sample_kernel(),
         dim=n,
         inputs=[
             a2(ion_pack), a2(proton_pack), a2(comp), a1(quad), a2(row), wp.float64(z),
-            wp.float64(mass_mev), a1(pv), a1(p1), out, st,
+            wp.float64(mass_mev), wp.float64(math.exp(xs[0])),
+            wp.float64(1.0 - TABLE_MIN_LOSS), a1(pv), a1(p1), out, sst,
         ],
         device=dev,
     )  # fmt: skip
     v = out.numpy()
-    s = st.numpy()
+    s = sst.numpy()
     exact = v[:, 0::2]
     tab = v[:, 1::2]
-    bad = np.any(s != 0, axis=1) | np.any(~(exact > 0.0), axis=1) | np.any(~(tab > 0.0), axis=1)
+    incl = np.ones(exact.shape, dtype=bool)
+    # later steps: states that lost less than L of pv are outside the relative contract
+    incl[:, 0] = p1 * (1.0 - TABLE_MIN_LOSS) >= pv
+    bad = np.any(s != 0, axis=1) | np.any(incl & ~((exact > 0.0) & (tab > 0.0)), axis=1)
     if np.any(bad):
         k = int(np.argwhere(bad)[0, 0])
         raise fail(
-            "the pv_eq/pv table cannot be certified: invalid mapping at the certification point "
+            "the pv_eq/pv table cannot be certified: invalid mapping at the sample point "
             f"pv = {pv[k]:.6g} MeV, p1v1 = {p1[k]:.6g} MeV (root status {s[k, 0]}, table status "
             f"{s[k, 1]}); use mcs_mapping_eval='root'"
         )
-    rel = np.abs(tab / exact - 1.0)
+    rel = np.where(incl, np.abs(tab / np.where(incl, exact, 1.0) - 1.0), 0.0)
+    rel = rel.reshape(n_c, TABLE_SAMPLE_N**2, 3)
+    o_later = rel[:, :, 0].max(axis=1)
+    o_birth = rel[:, :, 1:].max(axis=(1, 2))
+    over = (o_later > b_later) | (o_birth > b_birth)
+    if np.any(over):
+        k = int(np.argwhere(over)[0, 0])
+        raise fail(
+            "the pv_eq/pv table cannot be certified: the sampled error exceeds the analytic "
+            f"bound in the cell at pv = {math.exp(xs[ci[k]]):.6g} MeV, p1v1/pv = "
+            f"{math.exp(ys[cj[k]]):.6g} (observed {o_later[k]:.3e} / {o_birth[k]:.3e}, bound "
+            f"{b_later[k]:.3e} / {b_birth[k]:.3e} for later / first steps): the smoothness "
+            "assumption of the bound is falsified (a corrupted node?); use mcs_mapping_eval='root'"
+        )
     return TableCertificate(
-        max_rel_error=float(rel.max()),
-        n_cells=len(cells),
-        n_points=n,
+        certified_bound_analytic=float(max(b_later.max(), b_birth.max())),
+        bound_later_steps=float(b_later.max()),
+        bound_birth_step=float(b_birth.max()),
+        observed_max_sampled=float(rel.max()),
+        n_cells=n_c,
+        n_refined_points=int(uniq.size),
+        n_sampled_points=n,
+        safety_factor=TABLE_SAFETY_FACTOR,
         bound=TABLE_VARIANCE_BOUND,
     )
 
 
 def check_table_certificate(cert: TableCertificate) -> None:
-    """Fail closed (``UnsupportedCombinationError``) when the certified error exceeds the bound
+    """Fail closed (``UnsupportedCombinationError``) when the certified analytic bound exceeds
     :data:`TABLE_VARIANCE_BOUND` (read at call time)."""
-    if not cert.max_rel_error <= TABLE_VARIANCE_BOUND:
+    if not cert.certified_bound_analytic <= TABLE_VARIANCE_BOUND:
         raise fail(
-            "the pv_eq/pv table exceeds the decision 0043 interpolation bound: certified max "
-            f"|var_table / var_root - 1| = {cert.max_rel_error:.3e} > {TABLE_VARIANCE_BOUND:.1e} "
-            f"over {cert.n_points} points of {cert.n_cells} cells; use mcs_mapping_eval='root'"
+            "the pv_eq/pv table exceeds the decision 0043 interpolation bound: certified analytic "
+            f"bound of |var_table / var_root - 1| = {cert.certified_bound_analytic:.3e} > "
+            f"{TABLE_VARIANCE_BOUND:.1e} over {cert.n_cells} cells; use mcs_mapping_eval='root'"
         )
 
 
@@ -1160,8 +1346,9 @@ def build_certified_pv_eq_table(
     p1v1_max`` (:func:`table_domain`), are solved; every other node, and a node whose solve fails,
     holds :data:`TABLE_INVALID_NODE` (a state there returns status 5, fail closed). Fails closed
     (``UnsupportedCombinationError``) unless every cell meeting the band has four valid nodes.
-    Every produced table is certified (:func:`certify_pv_eq_table`: the root solve at five
-    interior points of every solved cell) and fails closed when its certified variance error
+    Every produced table is certified (:func:`certify_pv_eq_table`: analytic bilinear error
+    bound from second differences on a 2x-refined root-solve grid with safety factor 2,
+    cross-checked by 5 x 5 interior samples per cell) and fails closed when the certified bound
     exceeds :data:`TABLE_VARIANCE_BOUND` (checked on every call, also for a cached table).
     Cached per input."""
     from ionmc.physics.ion_mcs import THIN_SLAB_R  # noqa: PLC0415

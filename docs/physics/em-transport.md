@@ -210,13 +210,26 @@ engine's stepped `T_dM` up to 1 mm; the worst U5 deviation is 1.5e-3.
   solve at the nodes that the run's initial states can reach (`pv(E0 ± 6 sigma_E)`). `"root"`
   solves the matching equation at every step. This is the tabulation that decision 0043 allows
   under a committed error bound: the per-step variance from the table must be within 1e-3 of the
-  root solve. The bound is certified at build for every produced table
-  (`exact_omega.certify_pv_eq_table`: the root solve at 5 interior points of every solved cell; a
-  table above the bound fails closed, `mcs_mapping_eval="root"` remains) and is also tested on
-  random states (`tests/ionmc/test_ion_mcs_table.py`). A state outside the table fails closed: it is
-  counted as `mcs_mapping_failure` and the result is invalid. The summary (`mcs_mapping`) records
-  the evaluation, the table sizes, the axes, the domain, the sha256 of the table and its
-  certificate (`certified_max_rel_error` overall and per material, cells, points, bound).
+  root solve. The bound is certified at build for every produced table by a domain-wide analytic
+  bound (`exact_omega.certify_pv_eq_table`): the bilinear error bound
+  `hx^2/8 sup|q_xx| + hy^2/8 sup|q_yy|` of `q = pv_eq/pv`, with the second derivatives estimated
+  from second differences of the root solve on a 2x-refined grid (3 x 3 stencil per solved cell,
+  maximum over the cell and its neighbours) times a safety factor 2, is converted exactly into the relative variance error. Only `pv_eq`
+  differs between the two paths and f_dM is linear in `log10 pv_eq` at a fixed memory term, so
+  `var_table/var_root - 1 = (c2 + c3 l1) dl2 / f`; its maximum over a cell is taken at the corners
+  of the cell's `(l1, l2)` rectangle, for later steps and for the first step over every physical
+  end point `pv_end` in `(0, min(pv_mid, (1 - 1e-4) p1v1)]` (the first-step ratio depends on
+  `pv_end` through `l1`). A cross-check at 5 x 5 interior samples per cell must stay below each
+  cell's analytic bound (else the smoothness assumption is falsified). A table whose bound exceeds
+  1e-3, or whose samples exceed it, fails closed (`mcs_mapping_eval="root"` remains). Scope:
+  states of a particle that has lost less than 1e-4 of its initial `pv` (`TABLE_MIN_LOSS`; the
+  memory term drives the f_dM fit to its zero there) are outside the relative contract. The bound
+  is also tested on random states (`tests/ionmc/test_ion_mcs_table.py`). A state outside the
+  table fails closed: it is counted as `mcs_mapping_failure` and the result is invalid. The
+  summary (`mcs_mapping`) records the evaluation, the table sizes, the axes, the domain, the
+  sha256 of the table and its certificate (`certified_bound_analytic` and
+  `observed_max_sampled`, overall and per material, cells, stencil and sample points, safety
+  factor, threshold, contract).
 * **Not included.** Nuclear interactions, fragmentation and secondary ions (`nuclear=True` fails
   closed for z >= 2). No validation statement is made here beyond the CI rows of the test suite
   (`tests/ionmc/test_v3_008_rows_ci.py`).

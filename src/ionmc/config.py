@@ -26,8 +26,11 @@ from ionmc.materials import WATER, Material
 from ionmc.physics.em import E_S_MEV
 from ionmc.physics.exact_omega import (
     PROTON_FDM_STATUS,
+    TABLE_CERT_CONTRACT,
     TABLE_N_PV,
     TABLE_N_R,
+    TABLE_SAFETY_FACTOR,
+    TABLE_SAMPLE_N,
     TABLE_VARIANCE_BOUND,
     FdmDomainStatus,
     TableCertificate,
@@ -118,7 +121,8 @@ class PhysicsOptions:
     ``mcs_mapping_eval`` selects how the exact-Omega mapping of an ion (z >= 2) is evaluated
     (``MCS_MAPPING_EVALS``): ``"table"`` (default; the ``pv_eq/pv`` table built at validation by the
     root solve and read by bilinear interpolation; its variance error is certified at build for
-    every produced table, bound ``TABLE_VARIANCE_BOUND`` = 1e-3, fails closed above it) or
+    every produced table by an analytic bound, threshold ``TABLE_VARIANCE_BOUND`` = 1e-3, fails
+    closed above it) or
     ``"root"`` (the per-step root solve). It is ignored for protons (no mapping).
     """
 
@@ -318,18 +322,20 @@ class IonMappingData:
                 cs = self.certificates
                 out["table"].update(
                     {
-                        "certification": (
-                            "deterministic, at build, for every produced table: the root solve "
-                            "at 5 interior points of every solved cell (centre and +-1/4 of the "
-                            "cell in both axes); per-step MCS variance (T, theta^2; first and "
-                            "later steps) from the table against the root solve; fails closed "
-                            "above the bound"
-                        ),
+                        "certification": TABLE_CERT_CONTRACT,
                         "variance_bound": TABLE_VARIANCE_BOUND,
-                        "certified_max_rel_error": max(c.max_rel_error for c in cs),
-                        "certified_max_rel_error_per_material": [c.max_rel_error for c in cs],
+                        "safety_factor": TABLE_SAFETY_FACTOR,
+                        "refinement": "2x (3 x 3 root-solved stencil per solved cell)",
+                        "samples_per_cell": TABLE_SAMPLE_N**2,
+                        "certified_bound_analytic": max(c.certified_bound_analytic for c in cs),
+                        "certified_bound_analytic_per_material": [
+                            c.certified_bound_analytic for c in cs
+                        ],
+                        "observed_max_sampled": max(c.observed_max_sampled for c in cs),
+                        "observed_max_sampled_per_material": [c.observed_max_sampled for c in cs],
                         "certified_cells": sum(c.n_cells for c in cs),
-                        "certified_points": sum(c.n_points for c in cs),
+                        "refined_points": sum(c.n_refined_points for c in cs),
+                        "sampled_points": sum(c.n_sampled_points for c in cs),
                     }
                 )
         return out

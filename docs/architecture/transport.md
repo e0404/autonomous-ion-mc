@@ -414,8 +414,10 @@ enforce it). The ion models are electromagnetic only.
   edge of 300 MeV); a proton-equivalent energy above the proton table edge (4000 MeV) fails closed.
   The mapping is evaluated from a `pv_eq/pv` table (`mcs_mapping_eval="table"`, default) or by the per-step
   root solve (`"root"`); the kernel variant is selected by `make_transport_kernel(real, diag, ion, ion_eval)`.
-  `validate()` certifies every table it builds (variance error <= 1e-3 at 5 interior points of every
-  solved cell, `exact_omega.certify_pv_eq_table`) and fails closed above the bound.
+  `validate()` certifies every table it builds (`exact_omega.certify_pv_eq_table`: analytic
+  bilinear error bound from second differences on a 2x-refined root-solve grid, safety factor 2,
+  later and first steps over all physical end points, cross-checked by 5 x 5 samples per cell)
+  and fails closed when the bound exceeds 1e-3.
   Ion stopping tables are keyed by the full material identity (name, density, composition, I,
   density-effect parameters), not by the material name.
 * **Stopping.** Bethe tables with the Lindhard-Sorensen option `ls` (default `"off"`; `"eff"` and
