@@ -198,7 +198,7 @@ placeholder scorer output was deleted unread.
 | `tests/ionmc/test_r2_bundles.py` | `54af24fa0baf13d43f4ed25c96989344e09c01354efdda0dc34ba83a5ab60fdb` |
 | `reference_requests/operator-directives/2026-11-07-topas-validation-target.md` | `ca079e9f0af990cdff9d8efde60d38ac55e2d0fc0fb9ef22355a81f4a2ab0b26` |
 | `reference_requests/interventions/IR-20261102-010435-B59B2D/response.json` | `dc6a610cb67dee50fa0bb96327026eea0b81bb9506e7b898c2e9e44322f69bd0` |
-| `validation/plans/v3-008/r2-topas-target.md` | `4722d837d2194e686dc1b356c3ac653e32f75df899c501a3a7ec1e49df15dbf9` |
+| `validation/plans/v3-008/r2-topas-target.md` | `346ad9518cf14e7090fa5c14548fb8a0a0197489442341629708bc68b048ae11` |
 
 
 **Dated note (2026-11-07, orchestrator) — hashes regenerated at the freeze commit's parent; entries that changed since f694b747:** `validation/plans/v3-008/p10-single-scattering-availability.md` bea86277… → a7f539a0…; `validation/plans/v3-008/p11-exact-omega-mapping.md` 6116648a… → f78e95f5…; `reference_requests/interventions/IR-20261102-010435-B59B2D/request.json` 068cafd7… → e81a7efa…. All other entries unchanged (recomputed).
@@ -246,6 +246,8 @@ placeholder scorer output was deleted unread.
 **Dated note (2026-11-08, post-freeze implementation commit R2-TOPAS-9, Codex REVIEW-ee53867c: the table demoted to an accelerator of the exact root solve on every step; no interpolation-bound claim) — rebound entries (old → new): `tests/ionmc/test_ion_em_mapping_src.py` d81e0915… → 865d3143…; `src/ionmc/physics/exact_omega.py` 53bbc7f9… → 5f4aa165…; `src/ionmc/config.py` 39bddffb… → 34be1169…; `validation/plans/v3-008/r2-topas-target.md` a90dc6df… → 4722d837…; `src/ionmc/physics/ion_mcs.py` 709c61b1… → 36f4f3a7…; `src/ionmc/simulation.py` 1d4d701b… → b855273a…; `src/ionmc/transport/kernels.py` 73bcaf87… → db4ea1f0…; `src/ionmc/transport/reference.py` 103672f5… → f3e3dec9…; `src/ionmc/transport/tally.py` debbe3ed… → 7a746c99…; `tests/ionmc/test_ion_mcs_table.py` 03e1925f… → 62d495bc…; `tests/ionmc/test_v3_008_rows_ci.py` f40b7006… → efce4972…. All other entries unchanged (recomputed against the tree). Freeze commit 0245158b, the R2.1 rule and the counts (490 paths / 534 values) are unchanged.**
 
 **Dated note (2026-11-08, post-freeze implementation commit R2-TOPAS-9b, Codex REVIEW-4bf4f5bc minor: the `mcs_table_bracket_miss` descriptions now state that the counter counts every miss of the initial tight bracket, widened or full; documentation only) — rebound entries (old → new): `src/ionmc/physics/exact_omega.py` 5f4aa165… → e43eecc3…; `src/ionmc/simulation.py` b855273a… → 2958dbd3…; `src/ionmc/transport/tally.py` 7a746c99… → b941a46b…. All other entries unchanged (recomputed against the tree). Counts unchanged (490 paths / 534 values).**
+
+**Dated note (2026-11-08, ionmc sample chunk plan appended to r2-topas-target.md section 8; records only) — rebound entries (old → new): `validation/plans/v3-008/r2-topas-target.md` 4722d837… → 346ad951…. Counts unchanged (490 paths / 534 values).**
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.

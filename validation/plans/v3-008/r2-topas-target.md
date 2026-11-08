@@ -780,3 +780,29 @@ e1e7902363c3c5735fec1ebe6adfe75a7e982a158c7791a3fb5e8f5c96769b39  validation/ref
 2a9a10221447d70c4a0f2dd0298421c1bc1a181300cd99005319ca1d7fb8e232  validation/reference_cases/topas/oxygen-water-430mevu-r2-lat-full-timing-smoke/case.json
 1793e74862e37bb6d89b8cd2733cb61e5d4fd8a8621a5e62e40c4e6a7283b610  validation/reference_cases/topas/oxygen-water-430mevu-r2-lat-full-timing-smoke/input.txt
 ```
+
+**Dated note (2026-11-08, ionmc sample chunk plan; orchestrator, before any sealed sample).** Timing smoke of the
+table-accelerated exact root (RUN-20261108T043826Z-968614a1 at c5838411, 1e4 histories per case, counters all 0,
+`mcs_table_bracket_miss` 0 in every case): per-case ms/history and the resulting plan for the twelve 1e6-history
+samples, split into chunks so that every host call stays below 1500 s (plan section 7: chunks are independent runs
+with `k = 1 .. n`, seed `20581004 + 100 r_index + k`, histories `1e6 / n`, combined per batch by the evaluator):
+
+| case | ms/history | hours at 1e6 | chunks n | --scale | histories per chunk | s per chunk |
+|---|---|---|---|---|---|---|
+| 1 | 4.52 | 1.26 | 4 | 1/4 | 250000 | 1130 |
+| 2 | 7.03 | 1.95 | 5 | 1/5 | 200000 | 1406 |
+| 3 | 12.35 | 3.43 | 10 | 1/10 | 100000 | 1235 |
+| 4 | 4.54 | 1.26 | 4 | 1/4 | 250000 | 1135 |
+| 5 | 9.15 | 2.54 | 8 | 1/8 | 125000 | 1144 |
+| 6 | 15.18 | 4.22 | 20 | 1/20 | 50000 | 759 |
+| 7 | 4.98 | 1.38 | 4 | 1/4 | 250000 | 1245 |
+| 8 | 10.46 | 2.91 | 8 | 1/8 | 125000 | 1308 |
+| 9 | 12.83 | 3.56 | 10 | 1/10 | 100000 | 1283 |
+| 10 | 5.04 | 1.40 | 4 | 1/4 | 250000 | 1260 |
+| 11 | 5.26 | 1.46 | 4 | 1/4 | 250000 | 1315 |
+| 12 | 5.96 | 1.66 | 5 | 1/5 | 200000 | 1192 |
+
+86 host calls, 27.0 h of single-process compute (root solve: 42.2 h). Every chunk's `npz_sha256`, its JSON step document
+and the signed host-runner record (run id, output manifest) are the sealed sample artefacts; the npz arrays themselves
+stay in the published run directories and the host-run store (not in Git). The chunk runs start at this commit's SHA or
+a descendant; the sample seal commit (plan section "Order") follows the last chunk.
