@@ -421,7 +421,7 @@ def test_nuclear_effective_config_and_capabilities(make_config: MakeConfig, tid:
     assert cap == base
 
 
-CAPABILITIES_SHA256 = "2f6fdc0227354ca86000b50d2f29c4650966e3cfb48f4f13eea20808eb9e98cb"
+CAPABILITIES_SHA256 = "95c7aec145aa7f672cdfbe64b82e39df894742218d2fcdef0c78389d98a0df2d"
 
 
 def test_capacity_bounds_follow_decision_0041_section_5(

@@ -31,15 +31,15 @@ Evaluation. Two forms, selected by ``PhysicsOptions.mcs_mapping_eval`` (decision
 the decision's allowed alternative: a per-(material, ion) tabulation of ``pv_eq/pv`` on a uniform
 grid in ``(ln pv, ln(p1v1/pv))`` (a shear of the decision's ``(ln pv, ln p1v1)`` plane), whose
 nodes are computed by this same root solve (:func:`build_pv_eq_table`) and which is read by
-bilinear interpolation (:func:`pv_equivalent_table`). The committed bound test
-(``tests/ionmc/test_ion_mcs_table.py``) limits the resulting error of the per-step variance to
-1e-3. The root solve: :func:`pv_equivalent` solves
-``g(u) = b_p(e^u, r e^u) - b_ion(pv, p1v1) = 0`` for ``u = ln pv_eq``, ``r = p1v1 / pv``, by a
-bracketed Illinois (modified regula falsi) iteration with a bisection safeguard. The bracket is
-the proton path itself: from its lowest energy to the largest ``pv_eq`` whose
-``p1v1_eq = r pv_eq`` is still on the proton path. ``g`` is monotone increasing in ``pv_eq`` at
-fixed ``r`` (P11), the bracket stays valid, and the iteration is capped at
-:data:`MAX_ITERATIONS`; there is no failure mode other than the returned status.
+bilinear interpolation (:func:`pv_equivalent_table`). The error of the resulting per-step variance
+is certified at build for every produced table (:func:`certify_pv_eq_table`, bound
+:data:`TABLE_VARIANCE_BOUND` = 1e-3; ``tests/ionmc/test_ion_mcs_table.py``). The root solve:
+:func:`pv_equivalent` solves ``g(u) = b_p(e^u, r e^u) - b_ion(pv, p1v1) = 0`` for
+``u = ln pv_eq``, ``r = p1v1 / pv``, by a bracketed Illinois (modified regula falsi) iteration
+with a bisection safeguard. The bracket is the proton path itself: from its lowest energy to the
+largest ``pv_eq`` whose ``p1v1_eq = r pv_eq`` is still on the proton path. ``g`` is monotone
+increasing in ``pv_eq`` at fixed ``r`` (P11), the bracket stays valid, and the iteration is capped
+at :data:`MAX_ITERATIONS`; there is no failure mode other than the returned status.
 Status codes (:data:`STATUS_NAMES`): 0 converged, 1 invalid ion state (outside the ion path or
 ``pv >= p1v1``), 2 no sign change in the bracket (``b_ion`` outside the proton ``b`` range at this
 ``r``), 3 the proton path is too short for this ``r``, 4 not converged within the iteration cap,
@@ -142,8 +142,8 @@ STATUS_NAMES = {
 }
 
 TABLE_N_PV = 128
-"""Default nodes of the ``ln pv`` axis of the ``pv_eq/pv`` table (bound test: max relative variance
-error <= 1e-3, ``tests/ionmc/test_ion_mcs_table.py``)."""
+"""Default nodes of the ``ln pv`` axis of the ``pv_eq/pv`` table (the variance error is certified
+at build, :data:`TABLE_VARIANCE_BOUND`)."""
 TABLE_N_R = 128
 """Default nodes of the ``ln(p1v1/pv)`` axis of the table."""
 TABLE_INVALID_NODE = -1.0
@@ -154,6 +154,14 @@ TABLE_EDGE_TOL = {"float64": 1.0e-9, "float32": 1.0e-4}
 TABLE_PV_MARGIN = 1.0e-3
 """Relative margin of the table's largest ``p1v1`` above ``pv(E0 + 6 sigma_E)``."""
 TABLE_HEADER = 8
+TABLE_VARIANCE_BOUND = 1.0e-3
+"""Decision 0043 bound of the table (0.1 %): the per-step MCS variance (proportional to T and
+theta^2) from the interpolated ``pv_eq`` against the root solve, relative. Certified at build for
+every produced table (:func:`certify_pv_eq_table`); a table above it fails closed."""
+TABLE_CERT_OFFSETS = ((0.5, 0.5), (0.25, 0.25), (0.25, 0.75), (0.75, 0.25), (0.75, 0.75))
+"""Certification points of a solved cell, in cell units ``(x, y)``: the centre and the four points
+at +-1/4 of the cell in both axes (the bilinear error of a smooth function peaks in the
+interior)."""
 
 _HEADER = 8
 
@@ -946,7 +954,165 @@ def table_domain(
     )
 
 
-_TABLES: dict[str, np.ndarray] = {}
+@dataclass(frozen=True)
+class TableCertificate:
+    """Deterministic certificate of one ``pv_eq/pv`` table (:func:`certify_pv_eq_table`):
+    ``max_rel_error`` the largest ``|var_table / var_root - 1|`` of the per-step MCS variance
+    (first step and later steps) over ``n_points`` points (``len(TABLE_CERT_OFFSETS)`` per cell)
+    of the ``n_cells`` solved cells; ``bound`` the bound it was checked against."""
+
+    max_rel_error: float
+    n_cells: int
+    n_points: int
+    bound: float
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "certified_max_rel_error": self.max_rel_error,
+            "certified_cells": self.n_cells,
+            "certified_points": self.n_points,
+            "variance_bound": self.bound,
+        }
+
+
+@functools.cache
+def _table_cert_kernel() -> Any:
+    """Warp CPU kernel (float64): the per-step variance of a state from the root solve
+    (``mapped_state``) and from the table (``mapped_state_table``), for a later step and for the
+    first step (``pv_end = pv``); the transport functions of ``ionmc.physics.ion_mcs``."""
+    from ionmc.physics.ion_mcs import make_ion_mcs  # noqa: PLC0415 (ion_mcs imports this module)
+
+    im = make_ion_mcs(wp.float64)
+    d = wp.float64
+
+    @wp.kernel(module="unique")
+    def cert(
+        ion: wp.array2d(dtype=d),
+        pro: wp.array2d(dtype=d),
+        comp: wp.array2d(dtype=d),
+        quad: wp.array(dtype=d),
+        tab: wp.array2d(dtype=d),
+        z: d,
+        mass: d,
+        pv: wp.array(dtype=d),
+        p1v1: wp.array(dtype=d),
+        out: wp.array2d(dtype=d),
+        status: wp.array2d(dtype=int),
+    ):  # type: ignore[no-untyped-def]
+        k = wp.tid()
+        one = d(1.0)
+        pr, p1r, sr = im.mapped_state(ion, pro, comp, quad, 0, z, mass, pv[k], p1v1[k])
+        pt, p1t, st = im.mapped_state_table(tab, 0, pv[k], p1v1[k])
+        for birth in range(2):
+            out[k, 2 * birth] = im.variance_of_state(
+                pr, p1r, sr, z, pv[k], pv[k], p1v1[k], birth, one, one, one
+            )
+            out[k, 2 * birth + 1] = im.variance_of_state(
+                pt, p1t, st, z, pv[k], pv[k], p1v1[k], birth, one, one, one
+            )
+        status[k, 0] = sr
+        status[k, 1] = st
+
+    return cert
+
+
+def _band_cells(xs: np.ndarray, ys: np.ndarray, p1v1_min: float, p1v1_max: float) -> np.ndarray:
+    """Mask ``[n_x - 1, n_y - 1]`` of the cells meeting the band
+    ``ln p1v1_min <= x + y <= ln p1v1_max`` (``x + y`` is extreme at the corners)."""
+    s_lo = xs[:-1, None] + ys[None, :-1]
+    s_hi = xs[1:, None] + ys[None, 1:]
+    return (s_hi >= math.log(p1v1_min) - 1e-12) & (s_lo <= math.log(p1v1_max) + 1e-12)
+
+
+def _table_axes(row: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    h = row[:TABLE_HEADER]
+    return np.linspace(h[0], h[6], int(h[2])), np.linspace(h[3], h[7], int(h[5]))
+
+
+def certify_pv_eq_table(
+    row: np.ndarray,
+    ion_pack: np.ndarray,
+    proton_pack: np.ndarray,
+    comp: np.ndarray,
+    quad: np.ndarray,
+    z: float,
+    mass_mev: float,
+    p1v1_min: float,
+    p1v1_max: float,
+) -> TableCertificate:
+    """Certificate of the table ``row`` (:func:`build_pv_eq_table`; decision 0043 bound, checked
+    by :func:`check_table_certificate`). For every solved cell (the cells meeting the band of the
+    initial states) the root solve is evaluated at the :data:`TABLE_CERT_OFFSETS` points and the
+    per-step MCS variance from the interpolated ``pv_eq`` is compared with the exact one (first
+    step and later steps; the variance is proportional to T and theta^2, the common factors
+    cancel). Deterministic (fixed points, float64). Fails closed when the root solve or the table
+    lookup is invalid at a certification point (``max_rel_error`` would be undefined)."""
+    row = np.ascontiguousarray(row, dtype=np.float64)
+    xs, ys = _table_axes(row)
+    cells = np.argwhere(_band_cells(xs, ys, p1v1_min, p1v1_max))
+    if len(cells) == 0:
+        raise fail("the pv_eq/pv table has no solved cell to certify")
+    dx, dy = xs[1] - xs[0], ys[1] - ys[0]
+    off = np.array(TABLE_CERT_OFFSETS, dtype=np.float64)
+    x = (xs[cells[:, 0]][:, None] + off[None, :, 0] * dx).reshape(-1)
+    y = (ys[cells[:, 1]][:, None] + off[None, :, 1] * dy).reshape(-1)
+    pv = np.exp(x)
+    p1 = pv * np.exp(y)
+    n = pv.size
+    dev = "cpu"
+
+    def a1(a: np.ndarray) -> Any:
+        return wp.array(np.ascontiguousarray(a, dtype=np.float64), dtype=wp.float64, device=dev)
+
+    def a2(a: np.ndarray) -> Any:
+        return wp.array(
+            np.ascontiguousarray(a, dtype=np.float64).reshape(1, -1), dtype=wp.float64, device=dev
+        )
+
+    out = wp.zeros((n, 4), dtype=wp.float64, device=dev)
+    st = wp.zeros((n, 2), dtype=int, device=dev)
+    wp.launch(
+        _table_cert_kernel(),
+        dim=n,
+        inputs=[
+            a2(ion_pack), a2(proton_pack), a2(comp), a1(quad), a2(row), wp.float64(z),
+            wp.float64(mass_mev), a1(pv), a1(p1), out, st,
+        ],
+        device=dev,
+    )  # fmt: skip
+    v = out.numpy()
+    s = st.numpy()
+    exact = v[:, 0::2]
+    tab = v[:, 1::2]
+    bad = np.any(s != 0, axis=1) | np.any(~(exact > 0.0), axis=1) | np.any(~(tab > 0.0), axis=1)
+    if np.any(bad):
+        k = int(np.argwhere(bad)[0, 0])
+        raise fail(
+            "the pv_eq/pv table cannot be certified: invalid mapping at the certification point "
+            f"pv = {pv[k]:.6g} MeV, p1v1 = {p1[k]:.6g} MeV (root status {s[k, 0]}, table status "
+            f"{s[k, 1]}); use mcs_mapping_eval='root'"
+        )
+    rel = np.abs(tab / exact - 1.0)
+    return TableCertificate(
+        max_rel_error=float(rel.max()),
+        n_cells=len(cells),
+        n_points=n,
+        bound=TABLE_VARIANCE_BOUND,
+    )
+
+
+def check_table_certificate(cert: TableCertificate) -> None:
+    """Fail closed (``UnsupportedCombinationError``) when the certified error exceeds the bound
+    :data:`TABLE_VARIANCE_BOUND` (read at call time)."""
+    if not cert.max_rel_error <= TABLE_VARIANCE_BOUND:
+        raise fail(
+            "the pv_eq/pv table exceeds the decision 0043 interpolation bound: certified max "
+            f"|var_table / var_root - 1| = {cert.max_rel_error:.3e} > {TABLE_VARIANCE_BOUND:.1e} "
+            f"over {cert.n_points} points of {cert.n_cells} cells; use mcs_mapping_eval='root'"
+        )
+
+
+_TABLES: dict[str, tuple[np.ndarray, TableCertificate]] = {}
 
 
 def build_pv_eq_table(
@@ -962,7 +1128,28 @@ def build_pv_eq_table(
     n_pv: int = TABLE_N_PV,
     n_r: int = TABLE_N_R,
 ) -> np.ndarray:
-    """Packed ``pv_eq/pv`` table row of one ion in one material (float64)::
+    """The packed table row of :func:`build_certified_pv_eq_table` (certified, fails closed above
+    the bound)."""
+    return build_certified_pv_eq_table(
+        ion_pack, proton_pack, comp, quad, z, mass_mev, pv_lo, p1v1_min, p1v1_max, n_pv, n_r
+    )[0]
+
+
+def build_certified_pv_eq_table(
+    ion_pack: np.ndarray,
+    proton_pack: np.ndarray,
+    comp: np.ndarray,
+    quad: np.ndarray,
+    z: float,
+    mass_mev: float,
+    pv_lo: float,
+    p1v1_min: float,
+    p1v1_max: float,
+    n_pv: int = TABLE_N_PV,
+    n_r: int = TABLE_N_R,
+) -> tuple[np.ndarray, TableCertificate]:
+    """``(row, certificate)``: the packed ``pv_eq/pv`` table row of one ion in one material
+    (float64)::
 
         [x0, inv_dx, n_x, y0, inv_dy, n_y, x_last, y_last, q[0, 0], q[0, 1], ..., q[n_x-1, n_y-1]]
 
@@ -973,6 +1160,9 @@ def build_pv_eq_table(
     p1v1_max`` (:func:`table_domain`), are solved; every other node, and a node whose solve fails,
     holds :data:`TABLE_INVALID_NODE` (a state there returns status 5, fail closed). Fails closed
     (``UnsupportedCombinationError``) unless every cell meeting the band has four valid nodes.
+    Every produced table is certified (:func:`certify_pv_eq_table`: the root solve at five
+    interior points of every solved cell) and fails closed when its certified variance error
+    exceeds :data:`TABLE_VARIANCE_BOUND` (checked on every call, also for a cached table).
     Cached per input."""
     from ionmc.physics.ion_mcs import THIN_SLAB_R  # noqa: PLC0415
 
@@ -991,6 +1181,7 @@ def build_pv_eq_table(
     )
     key = h.hexdigest()
     if key in _TABLES:
+        check_table_certificate(_TABLES[key][1])
         return _TABLES[key]
     y0 = math.log1p(THIN_SLAB_R)
     x0 = math.log(pv_lo)
@@ -1002,11 +1193,7 @@ def build_pv_eq_table(
     pv = np.exp(gx).reshape(-1)
     p1 = pv * np.exp(gy).reshape(-1)
     q = np.full(pv.size, TABLE_INVALID_NODE)
-    # cells meeting the band ln p1v1_min <= x + y <= ln p1v1_max (x + y is extreme at the corners)
-    s_node = gx + gy
-    s_lo = s_node[:-1, :-1]
-    s_hi = s_node[1:, 1:]
-    band = (s_hi >= math.log(p1v1_min) - 1e-12) & (s_lo <= math.log(p1v1_max) + 1e-12)
+    band = _band_cells(xs, ys, p1v1_min, p1v1_max)
     need = np.zeros((n_pv, n_r), dtype=bool)
     need[:-1, :-1] |= band
     need[1:, :-1] |= band
@@ -1045,5 +1232,9 @@ def build_pv_eq_table(
     ]
     row = np.concatenate((header, q)).astype(np.float64)
     row.setflags(write=False)
-    _TABLES[key] = row
-    return row
+    cert = certify_pv_eq_table(
+        row, ion_pack, proton_pack, comp, quad, z, mass_mev, p1v1_min, p1v1_max
+    )
+    check_table_certificate(cert)
+    _TABLES[key] = (row, cert)
+    return row, cert

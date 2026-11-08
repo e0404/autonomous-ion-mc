@@ -45,6 +45,7 @@ from ionmc.environment import describe_environment
 from ionmc.errors import TransportLimitError
 from ionmc.lookup import AXES as LOOKUP_AXES
 from ionmc.lookup import AXIS_SPACINGS as LOOKUP_AXIS_SPACINGS
+from ionmc.physics.exact_omega import TABLE_CERT_OFFSETS, TABLE_VARIANCE_BOUND
 from ionmc.physics.projectiles import PROTON
 from ionmc.scoring import (
     GENERATION_CHOICES,
@@ -480,9 +481,20 @@ def _species_capabilities(nuclear: bool = False) -> dict[str, Any]:
                     "model": "differential_moliere with the exact-Omega mapping of f_dM",
                     "evaluation": (
                         "mcs_mapping_eval 'table' (default: bilinear pv_eq/pv table built by the "
-                        "root solve, variance error <= 1e-3 tested; a state outside the table "
-                        "fails closed) or 'root' (per-step root solve)"
+                        "root solve; per-step variance error <= 1e-3 certified at build for every "
+                        "produced table (5 interior points per solved cell; a table above the "
+                        "bound or a state outside the table fails closed) or 'root' (per-step "
+                        "root solve)"
                     ),
+                    "table_certification": {
+                        "scope": "certified at build for every produced table",
+                        "variance_bound": TABLE_VARIANCE_BOUND,
+                        "points_per_solved_cell": len(TABLE_CERT_OFFSETS),
+                        "recorded": (
+                            "summary mcs_mapping.table: certified_max_rel_error (overall and per "
+                            "material), certified_cells, certified_points, variance_bound"
+                        ),
+                    },
                     "fdm_domain_status": (
                         "recorded per run (mcs_mapping: fdm_extrapolated, proton-equivalent "
                         "energies, domain edge); fails closed above the proton table edge"

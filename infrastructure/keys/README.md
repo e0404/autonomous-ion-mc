@@ -61,4 +61,6 @@ run id, carrying a signed `output_manifest_sha256` equal to the claimed one
 forms carry no manifest claim and are rejected outside the bootstrap task. A
 missing, unverified or invalid run record rejects the validation record. Transport consumers use
 `require_verified` from `validation/scripts/transport/attest_verify.py`, which
-is strict by default and takes expected task/SHA/run id/manifest values.
+is strict by default and takes expected task/SHA/run id/manifest values (manifest default
+`OMIT` = no expectation, explicit `None` = signed null); its `bootstrap=True` is accepted only for
+an `expected_task_id` in the mirrored `BOOTSTRAP_TASKS` while the signer has no trusted key.

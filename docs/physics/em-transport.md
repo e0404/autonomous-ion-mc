@@ -209,10 +209,14 @@ engine's stepped `T_dM` up to 1 mm; the worst U5 deviation is 1.5e-3.
   128 x 128 grid in (`ln pv`, `ln(p1v1/pv)`); the table is built by `validate()` with the root
   solve at the nodes that the run's initial states can reach (`pv(E0 ± 6 sigma_E)`). `"root"`
   solves the matching equation at every step. This is the tabulation that decision 0043 allows
-  under a committed error bound: `tests/ionmc/test_ion_mcs_table.py` requires the per-step variance
-  from the table to be within 1e-3 of the root solve. A state outside the table fails closed: it is
+  under a committed error bound: the per-step variance from the table must be within 1e-3 of the
+  root solve. The bound is certified at build for every produced table
+  (`exact_omega.certify_pv_eq_table`: the root solve at 5 interior points of every solved cell; a
+  table above the bound fails closed, `mcs_mapping_eval="root"` remains) and is also tested on
+  random states (`tests/ionmc/test_ion_mcs_table.py`). A state outside the table fails closed: it is
   counted as `mcs_mapping_failure` and the result is invalid. The summary (`mcs_mapping`) records
-  the evaluation, the table sizes, the axes, the domain and the sha256 of the table.
+  the evaluation, the table sizes, the axes, the domain, the sha256 of the table and its
+  certificate (`certified_max_rel_error` overall and per material, cells, points, bound).
 * **Not included.** Nuclear interactions, fragmentation and secondary ions (`nuclear=True` fails
   closed for z >= 2). No validation statement is made here beyond the CI rows of the test suite
   (`tests/ionmc/test_v3_008_rows_ci.py`).

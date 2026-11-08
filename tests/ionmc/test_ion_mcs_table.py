@@ -7,6 +7,10 @@ domain. :func:`test_table_variance_error_bound` is that test: the per-step varia
 to T and theta^2) from the table against the root solve, relative error <= 1e-3, on random states
 over the table domain of each ion (He, C, O) in water and in a tissue (skeletal muscle), including
 the thin-slab edge, the lowest midpoint state and the band edges of the initial state.
+In addition, every produced table is certified deterministically at build
+(:func:`ionmc.physics.exact_omega.certify_pv_eq_table`: the root solve at 5 interior points of every
+solved cell); :func:`test_certification_every_builtin_and_user_material` runs it for every built-in
+material and a user-defined one, and the forced-failure tests show it fails closed.
 """
 
 from __future__ import annotations
@@ -19,6 +23,7 @@ import numpy as np
 import pytest
 import warp as wp
 
+import ionmc
 from ionmc._wpfunc import python_twin
 from ionmc.config import (
     MCS_MAPPING_EVALS,
@@ -29,7 +34,7 @@ from ionmc.config import (
 )
 from ionmc.errors import UnsupportedCombinationError
 from ionmc.geometry import BoxPhantom
-from ionmc.materials import MUSCLE_SKELETAL_ICRP, WATER, Material
+from ionmc.materials import MATERIALS, MUSCLE_SKELETAL_ICRP, WATER, Material
 from ionmc.physics import exact_omega as XO
 from ionmc.physics.ion_mcs import THIN_SLAB_R, make_ion_mcs
 from ionmc.physics.projectiles import ALPHA, CARBON12, OXYGEN16, PROTON, Projectile
@@ -43,6 +48,12 @@ IONS = (ALPHA, CARBON12, OXYGEN16)
 DOMAIN_U = {"alpha": (50.0, 250.0), "carbon12": (80.0, 430.0), "oxygen16": (100.0, 430.0)}
 BOUND = 1.0e-3
 """Decision 0043: the table's error of T (theta^2) is at most 0.1 %."""
+USER_MATERIAL = Material(
+    "user_mix_test",
+    1.37,
+    {"H": 0.08, "C": 0.40, "N": 0.05, "O": 0.40, "Ca": 0.07},
+)
+"""An arbitrary user-defined material (composition, density; I from Bragg additivity)."""
 INV_XS = 0.0123
 RHO = 1.0
 S_MM = 0.7
@@ -379,3 +390,111 @@ def test_table_build_fails_closed_beyond_the_paths() -> None:
             mp.ion_path.pack, mp.proton.pack, mp.comp, mp.quad, 6.0, CARBON12.mass_mev,
             100.0, 50.0, 200.0,
         )  # fmt: skip
+
+
+def test_certificate_bound_constant() -> None:
+    """The certified bound is decision 0043's 0.1 % on the variance (T, theta^2); 5 points/cell."""
+    assert XO.TABLE_VARIANCE_BOUND == BOUND
+    assert len(XO.TABLE_CERT_OFFSETS) == 5
+    assert (0.5, 0.5) in XO.TABLE_CERT_OFFSETS
+
+
+@pytest.mark.parametrize("material", [*MATERIALS.values(), USER_MATERIAL], ids=lambda m: m.name)
+def test_certification_every_builtin_and_user_material(material: Material) -> None:
+    """Every built-in material (the ``ionmc.materials.MATERIALS`` registry) and a user-defined one:
+    the table of He, C and O over the upper domain end is certified at build with
+    ``certified_max_rel_error <= TABLE_VARIANCE_BOUND``; the certificate covers every solved cell
+    with 5 points. The maxima are printed."""
+    for proj in IONS:
+        eff = validate(_upper_case(proj, material))
+        im = eff.ion_mapping
+        assert im is not None and im.certificates is not None and len(im.certificates) == 1
+        c = im.certificates[0]
+        h = im.table[0]
+        xs = np.linspace(h[0], h[6], int(h[2]))
+        ys = np.linspace(h[3], h[7], int(h[5]))
+        assert im.table_domain is not None
+        n_band = int(XO._band_cells(xs, ys, *im.table_domain[1:]).sum())
+        assert c.n_cells == n_band > 100
+        assert c.n_points == 5 * c.n_cells
+        assert c.bound == XO.TABLE_VARIANCE_BOUND
+        assert 0.0 <= c.max_rel_error <= XO.TABLE_VARIANCE_BOUND
+        print(
+            f"certified {proj.name} in {material.name}: max |var_table/var_root - 1| = "
+            f"{c.max_rel_error:.3e} over {c.n_points} points of {c.n_cells} cells"
+        )
+
+
+def test_certification_fails_closed_above_the_bound(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A bound below the certified error fails closed (``UnsupportedCombinationError``, suggesting
+    the root option), for a fresh build and for a cached table; the root option still validates."""
+    cfg = _lower_case(ALPHA, WATER)
+    validate(cfg)  # cached and certified
+    monkeypatch.setattr(XO, "TABLE_VARIANCE_BOUND", 1.0e-15)
+    with pytest.raises(UnsupportedCombinationError, match="mcs_mapping_eval='root'"):
+        validate(cfg)  # cached table, re-checked
+    monkeypatch.setattr(XO, "_TABLES", {})
+    with pytest.raises(UnsupportedCombinationError, match="interpolation bound"):
+        validate(cfg)  # fresh build
+    root = validate(_config(ALPHA, WATER, 50.0 * 4, 0.0, evaluation="root"))
+    assert root.ion_mapping is not None and root.ion_mapping.table is None
+
+
+def test_certification_detects_a_corrupted_node() -> None:
+    """A table with one corrupted node in a solved cell (+5 %) is certified above the bound and
+    rejected; an invalid node there makes the certification itself fail closed."""
+    im = validate(_lower_case(CARBON12, WATER)).ion_mapping
+    assert im is not None and im.table_domain is not None
+    args = (im.ion[0], im.proton[0], im.comp[0], im.quad, 6.0, CARBON12.mass_mev)
+    row = im.table[0].copy()
+    good = XO.certify_pv_eq_table(row, *args, *im.table_domain[1:])
+    assert good.max_rel_error <= XO.TABLE_VARIANCE_BOUND
+    XO.check_table_certificate(good)
+    h = row[: XO.TABLE_HEADER]
+    n_y = int(h[5])
+    xs = np.linspace(h[0], h[6], int(h[2]))
+    ys = np.linspace(h[3], h[7], n_y)
+    i, j = np.argwhere(XO._band_cells(xs, ys, *im.table_domain[1:]))[len(xs) // 2]
+    node = XO.TABLE_HEADER + int(i) * n_y + int(j)
+    bad = row.copy()
+    bad[node] *= 1.05
+    cert = XO.certify_pv_eq_table(bad, *args, *im.table_domain[1:])
+    assert cert.max_rel_error > XO.TABLE_VARIANCE_BOUND
+    with pytest.raises(UnsupportedCombinationError, match="mcs_mapping_eval='root'"):
+        XO.check_table_certificate(cert)
+    bad[node] = XO.TABLE_INVALID_NODE
+    with pytest.raises(UnsupportedCombinationError, match="cannot be certified"):
+        XO.certify_pv_eq_table(bad, *args, *im.table_domain[1:])
+
+
+def test_summary_and_capabilities_carry_the_certificate() -> None:
+    """The summary's ``mcs_mapping.table`` block records the certificate (overall and per-material
+    maximum, cells, points, bound) for a two-material geometry; the capability report advertises
+    the bound as certified at build for every produced table."""
+    from ionmc.geometry import VoxelGeometry
+
+    geo = VoxelGeometry(
+        origin_mm=(-30.0, -30.0, 0.0),
+        spacing_mm=(60.0, 60.0, 50.0),
+        shape=(1, 1, 2),
+        materials=(WATER, MUSCLE_SKELETAL_ICRP),
+        material_index=np.array([0, 1], dtype=np.int32).reshape(1, 1, 2),
+    )
+    cfg = replace(_lower_case(OXYGEN16, WATER), geometry=geo)
+    eff = validate(cfg)
+    im = eff.ion_mapping
+    assert im is not None and im.certificates is not None and len(im.certificates) == 2
+    t = eff.summary()["mcs_mapping"]["table"]
+    per = t["certified_max_rel_error_per_material"]
+    assert per == [c.max_rel_error for c in im.certificates]
+    assert t["certified_max_rel_error"] == max(per) <= t["variance_bound"] == BOUND
+    assert t["certified_cells"] == sum(c.n_cells for c in im.certificates)
+    assert t["certified_points"] == 5 * t["certified_cells"]
+    assert "every produced table" in t["certification"]
+    cap = ionmc.capabilities()["species_details"]
+    for proj in IONS:
+        tc = cap[proj.name]["mcs"]["table_certification"]
+        assert tc["scope"] == "certified at build for every produced table"
+        assert tc["variance_bound"] == BOUND
+        assert tc["points_per_solved_cell"] == 5
+        assert "certified at build for every produced table" in cap[proj.name]["mcs"]["evaluation"]

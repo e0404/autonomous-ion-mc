@@ -28,8 +28,10 @@ from ionmc.physics.exact_omega import (
     PROTON_FDM_STATUS,
     TABLE_N_PV,
     TABLE_N_R,
+    TABLE_VARIANCE_BOUND,
     FdmDomainStatus,
-    build_pv_eq_table,
+    TableCertificate,
+    build_certified_pv_eq_table,
     fdm_domain_status,
     pack_composition,
     pack_quadrature,
@@ -115,7 +117,8 @@ class PhysicsOptions:
     direction is never changed).
     ``mcs_mapping_eval`` selects how the exact-Omega mapping of an ion (z >= 2) is evaluated
     (``MCS_MAPPING_EVALS``): ``"table"`` (default; the ``pv_eq/pv`` table built at validation by the
-    root solve and read by bilinear interpolation, error bound test ``test_ion_mcs_table.py``) or
+    root solve and read by bilinear interpolation; its variance error is certified at build for
+    every produced table, bound ``TABLE_VARIANCE_BOUND`` = 1e-3, fails closed above it) or
     ``"root"`` (the per-step root solve). It is ignored for protons (no mapping).
     """
 
@@ -280,7 +283,8 @@ class IonMappingData:
     ``evaluation`` is ``"table"`` or ``"root"`` (``PhysicsOptions.mcs_mapping_eval``); ``table``
     holds the ``pv_eq/pv`` table rows (:func:`ionmc.physics.exact_omega.build_pv_eq_table`) for
     ``"table"`` and is None for ``"root"``; ``table_domain`` the ``(pv_lo, p1v1_min, p1v1_max)``
-    [MeV] they were built for."""
+    [MeV] they were built for; ``certificates`` the build certificate of each row
+    (:func:`ionmc.physics.exact_omega.certify_pv_eq_table`)."""
 
     ion: np.ndarray
     proton: np.ndarray
@@ -289,6 +293,7 @@ class IonMappingData:
     evaluation: str = "root"
     table: np.ndarray | None = None
     table_domain: tuple[float, float, float] | None = None
+    certificates: tuple[TableCertificate, ...] | None = None
 
     def table_summary(self) -> dict[str, Any]:
         """JSON-serialisable record of the evaluation (sizes, axes bounds and the sha256 of the
@@ -309,6 +314,24 @@ class IonMappingData:
                 "n_materials": int(rows.shape[0]),
                 "sha256": hashlib.sha256(rows.tobytes()).hexdigest(),
             }
+            if self.certificates is not None:
+                cs = self.certificates
+                out["table"].update(
+                    {
+                        "certification": (
+                            "deterministic, at build, for every produced table: the root solve "
+                            "at 5 interior points of every solved cell (centre and +-1/4 of the "
+                            "cell in both axes); per-step MCS variance (T, theta^2; first and "
+                            "later steps) from the table against the root solve; fails closed "
+                            "above the bound"
+                        ),
+                        "variance_bound": TABLE_VARIANCE_BOUND,
+                        "certified_max_rel_error": max(c.max_rel_error for c in cs),
+                        "certified_max_rel_error_per_material": [c.max_rel_error for c in cs],
+                        "certified_cells": sum(c.n_cells for c in cs),
+                        "certified_points": sum(c.n_points for c in cs),
+                    }
+                )
         return out
 
 
@@ -340,14 +363,21 @@ def _ion_mapping_data(
     dom = table_domain(
         proj, (1.0 - ph.max_energy_loss_fraction) * effective_e_cut_mev(config), e_lo_mev, e_hi_mev
     )
-    rows = [
-        build_pv_eq_table(
+    built = [
+        build_certified_pv_eq_table(
             ion[i], pro[i], comp[i], quad, float(proj.z), proj.mass_mev, *dom, TABLE_N_PV, TABLE_N_R
         )
         for i in range(len(mats))
     ]
     return IonMappingData(
-        _pad_rows(ion), _pad_rows(pro), _pad_rows(comp), quad, "table", _pad_rows(rows), dom
+        _pad_rows(ion),
+        _pad_rows(pro),
+        _pad_rows(comp),
+        quad,
+        "table",
+        _pad_rows([r for r, _c in built]),
+        dom,
+        tuple(c for _r, c in built),
     )
 
 

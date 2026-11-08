@@ -95,9 +95,9 @@ evidence for `icru90/z{6,8}_G4_WATER.dat`. This note concerns FC-2 only.
 | File | sha256 | Bound by |
 |---|---|---|
 | `src/ionmc/physics/lindhard_sorensen.py` | `800d1f0a13524af5bad3946032f894479f606ba9b1482bf3ea190eeb9b4d3a6a` | P9 (iii) |
-| `src/ionmc/physics/exact_omega.py` | `1b67ae5f45ec39d1081bf088ce5f2440fe73bee15c9dd4aa9257ced919590837` | I0/I11-map notes |
+| `src/ionmc/physics/exact_omega.py` | `fbeaaf180e6913e22fd6d1c5068e7f6674ed2f615e601e4a08a16084e19c1b85` | I0/I11-map notes |
 | `src/ionmc/physics/stopping.py` | `89db1de28e5cd1f03efc1622669b58dd766fc88d5d0a91405af190e96094753e` | P9 (iii) |
-| `src/ionmc/config.py` | `f8b1c447a7e5de6529120a1bee0019d69bbe077f5892bcc23007b7e04bde189b` | I0 note |
+| `src/ionmc/config.py` | `0b9b34a3e6b3c7c9e513a17a114ad7a42464b7c651ca880c094cb6ce4ab34612` | I0 note |
 | `pyproject.toml` | `0e73bd64aea5ef153e198c00a67c20efbc8ef1a5061f1f77d2bdab555dda9352` | lint exceptions for the two mapping files (added by the planner; the only other changed file outside the plan set) |
 
 ### 2.4 Pre-freeze records
@@ -198,7 +198,7 @@ placeholder scorer output was deleted unread.
 | `tests/ionmc/test_r2_bundles.py` | `54af24fa0baf13d43f4ed25c96989344e09c01354efdda0dc34ba83a5ab60fdb` |
 | `reference_requests/operator-directives/2026-11-07-topas-validation-target.md` | `ca079e9f0af990cdff9d8efde60d38ac55e2d0fc0fb9ef22355a81f4a2ab0b26` |
 | `reference_requests/interventions/IR-20261102-010435-B59B2D/response.json` | `dc6a610cb67dee50fa0bb96327026eea0b81bb9506e7b898c2e9e44322f69bd0` |
-| `validation/plans/v3-008/r2-topas-target.md` | `474480e790b71b3c8ea19a9fed27c83a890da17668c2cc5ea9f4330c4facdbb6` |
+| `validation/plans/v3-008/r2-topas-target.md` | `7aa4d9ee3a928f5b87327221a8601d65ee150912ff30f1ff63491ebf6fe10299` |
 
 
 **Dated note (2026-11-07, orchestrator) — hashes regenerated at the freeze commit's parent; entries that changed since f694b747:** `validation/plans/v3-008/p10-single-scattering-availability.md` bea86277… → a7f539a0…; `validation/plans/v3-008/p11-exact-omega-mapping.md` 6116648a… → f78e95f5…; `reference_requests/interventions/IR-20261102-010435-B59B2D/request.json` 068cafd7… → e81a7efa…. All other entries unchanged (recomputed).
@@ -222,7 +222,7 @@ placeholder scorer output was deleted unread.
 | File | sha256 |
 |---|---|
 | `src/ionmc/physics/ion_mcs.py` | `709c61b19dec46d72a700667909927dae83c607f009c77fcad8cbe1ed0875dab` |
-| `src/ionmc/simulation.py` | `783fa5615e5c2d7289bb765a81e77acf4dcdfb0f62f31ecbdd3b6d0c3984b7d9` |
+| `src/ionmc/simulation.py` | `cfb8f52d21452f425afde337ba69088baaaea70290a1f1f1f3bedab289f28f9f` |
 | `src/ionmc/species.py` | `19df88c722ad93ca65e636b870a4b56b1a80df2e215bee39a7623f441daa2322` |
 | `src/ionmc/transport/kernels.py` | `73bcaf87a2d7d339e6d255b1a4419897d11061ea4d4708832bb696e325ef07bb` |
 | `src/ionmc/transport/reference.py` | `103672f5b01123d16efdd79e714fd6184d2525fc4276eb41282f0b063c7619c6` |
@@ -232,12 +232,14 @@ placeholder scorer output was deleted unread.
 | `src/ionmc/transport/warp_driver.py` | `cb32245e48d6bffd03092d09fb7421d8b11a8191158a311fd0b9a92e568aeb86` |
 | `validation/scripts/ion_em/r2_evaluate.py` | `be1eadcc504968d75fce09b0f7555b80ccb23c2ece18477b08159091f226ec14` |
 | `validation/scripts/transport/steps_v8.py` | `8d2617cd671d5d96411d336ae2df1417951e50abd6813bfa844230cac3650078` |
-| `tests/ionmc/test_ion_mcs_table.py` | `ce87db6f46ae524fa07636ef967b60b497d1af6ee16adbae2cc8b740d0056fe8` |
+| `tests/ionmc/test_ion_mcs_table.py` | `95b02229e2a5587dbddb878ef6bdd4df32693c2eb951830a7a685557cc3cdb8d` |
 | `tests/ionmc/test_v3_008_rows_ci.py` | `f40b70069844a55d4dfc610dfade697aedb5563a313d22c1e853d3635adbd2fc` |
 | `tests/ionmc/test_r2_evaluate.py` | `5b996ebb62304e4720bc631ec4bae4b41c7a4bf13ddabdfd1ccc7ea9cf18f222` |
 | `tests/ionmc/test_v3_008_steps_v8.py` | `ab4922ea8842751e22c9d1882e9e1dec0ae88a25b55174c99586c4802868b731` |
 
 (c) R2.5 counts, superseded by this note (the R2.5 text is kept as written): repository paths 475 + 15 = **490**; total full sha256 values 519 + 15 = **534**, plus the bundle-set digest (unchanged, `a8a1c27d…`). The count in R2.6 item (3) (475) is superseded accordingly by 490 for the acceptance tests of the seal.
+
+**Dated note (2026-11-08, post-freeze implementation commit R2-TOPAS-7, Codex REVIEW-d3a17ebf: per-table certification of the tabulation bound; attest_verify bootstrap migration-only; manifest sentinel) — rebound entries (old → new): `src/ionmc/physics/exact_omega.py` 1b67ae5f… → fbeaaf18…; `src/ionmc/config.py` f8b1c447… → 0b9b34a3…; `validation/plans/v3-008/r2-topas-target.md` 474480e7… → 7aa4d9ee…; `src/ionmc/simulation.py` 783fa561… → cfb8f52d…; `tests/ionmc/test_ion_mcs_table.py` ce87db6f… → 95b02229…. All other entries unchanged (recomputed against the tree). Freeze commit 0245158b, the R2.1 rule and the counts of the 2026-11-08 post-freeze note (490 paths / 534 values) are unchanged: no path added or removed.**
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.
@@ -441,4 +443,4 @@ whitelisted path is bound by a current hash entry in this record, with exactly t
 seed-family test passes; (5) `validate_case` passes on all 205 bundles; (6) no file under `validation/generated/`, no
 LV/HR record and no scored V3-008 ion REF run exists.
 
-**Dated note (2026-11-08, Amendment):** mapping evaluation = tabulation (decision 0043 section 3, "Evaluation", the allowed alternative), chosen before any revision-2 ionmc sample or TOPAS evidence run; reason: measured cost. Table: `pv_eq/pv` per (material, ion) on a uniform 128 x 128 grid in (ln pv, ln(p1v1/pv)) (a shear of the decision's (ln pv, ln p1v1) plane), nodes computed by the unchanged root solve `pv_equivalent` at validation (only the nodes of cells meeting the band of the run's initial states pv(E0 - 6 sigma_E) ... pv(E0 + 6 sigma_E); every other node invalid, a state there fails closed as `mcs_mapping_failure`), bilinear interpolation (`exact_omega.pv_equivalent_table`, shared by the python twin and the Warp kernel); option `PhysicsOptions.mcs_mapping_eval` = "table" (default for z >= 2) or "root" (the per-step root solve, retained); the summary records the evaluation, table sizes, axes, domain and the sha256 of the table rows. Bound test `tests/ionmc/test_ion_mcs_table.py::test_table_variance_error_bound` (He, C, O in water and skeletal muscle; >= 2000 random states plus edge states per ion and material, upper and lower domain end, thin-slab edge included; bound |var_table/var_root - 1| <= 1e-3): measured maximum 2.05e-5 (C in skeletal muscle; He 4.4e-6 / 5.5e-6, C 1.83e-5 / 2.05e-5, O 1.84e-5 / 2.04e-5 in water / muscle); transport-level counterpart `test_v3_008_rows_ci.py::test_i11_map_table_against_root_at_transport_states` max 6.8e-6. Measured MCS cost per step (warp-cpu float64, single thread, MCS-on minus MCS-off, 2000 histories, CI configuration): He 100 MeV/u 0.16 us (root 39.85 us), C 150 MeV/u 0.17 us (root 39.57 us). The model (decision 0043 section 3) is unchanged; the root solve remains available as an option. The rebinding of the changed bound files and the binding of the new implementation paths are recorded in the §2 dated note "2026-11-08, post-freeze implementation commits".
+**Dated note (2026-11-08, Amendment):** mapping evaluation = tabulation (decision 0043 section 3, "Evaluation", the allowed alternative), chosen before any revision-2 ionmc sample or TOPAS evidence run; reason: measured cost. Table: `pv_eq/pv` per (material, ion) on a uniform 128 x 128 grid in (ln pv, ln(p1v1/pv)) (a shear of the decision's (ln pv, ln p1v1) plane), nodes computed by the unchanged root solve `pv_equivalent` at validation (only the nodes of cells meeting the band of the run's initial states pv(E0 - 6 sigma_E) ... pv(E0 + 6 sigma_E); every other node invalid, a state there fails closed as `mcs_mapping_failure`), bilinear interpolation (`exact_omega.pv_equivalent_table`, shared by the python twin and the Warp kernel); option `PhysicsOptions.mcs_mapping_eval` = "table" (default for z >= 2) or "root" (the per-step root solve, retained); the summary records the evaluation, table sizes, axes, domain and the sha256 of the table rows. Bound test `tests/ionmc/test_ion_mcs_table.py::test_table_variance_error_bound` (He, C, O in water and skeletal muscle; >= 2000 random states plus edge states per ion and material, upper and lower domain end, thin-slab edge included; bound |var_table/var_root - 1| <= 1e-3): measured maximum 2.05e-5 (C in skeletal muscle; He 4.4e-6 / 5.5e-6, C 1.83e-5 / 2.05e-5, O 1.84e-5 / 2.04e-5 in water / muscle); transport-level counterpart `test_v3_008_rows_ci.py::test_i11_map_table_against_root_at_transport_states` max 6.8e-6. Measured MCS cost per step (warp-cpu float64, single thread, MCS-on minus MCS-off, 2000 histories, CI configuration): He 100 MeV/u 0.16 us (root 39.85 us), C 150 MeV/u 0.17 us (root 39.57 us). The model (decision 0043 section 3) is unchanged; the root solve remains available as an option. The rebinding of the changed bound files and the binding of the new implementation paths are recorded in the §2 dated note "2026-11-08, post-freeze implementation commits". (2026-11-08, Codex REVIEW-d3a17ebf) The bound is in addition certified deterministically at build for every produced table (`exact_omega.certify_pv_eq_table`: the root solve at 5 interior points per solved cell, the centre and +-1/4 of the cell in both axes; per-step variance of the first and later steps; a table above TABLE_VARIANCE_BOUND = 1e-3 fails closed; the maximum, cells and points are recorded in the summary), measured maxima at the upper domain end (128 x 128, 628 cells, 3140 points per table) He / C / O: water 4.11e-6 / 1.97e-5 / 1.98e-5, skeletal muscle 4.02e-6 / 2.20e-5 / 2.20e-5, over all eleven built-in materials and a user-defined material at most 4.44e-6 / 2.87e-5 / 3.21e-5 (`test_ion_mcs_table.py::test_certification_every_builtin_and_user_material`).

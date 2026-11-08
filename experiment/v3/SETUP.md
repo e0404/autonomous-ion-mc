@@ -188,11 +188,16 @@ block so that a repository-authored copy can be told apart from a real record.
 - **Transport consumers:** `validation/scripts/transport/attest_verify.py`
   provides `require_verified(record, expected_signer, trust=None, *,
   expected_task_id, expected_git_sha, expected_run_id,
-  expected_output_manifest_sha256, bootstrap=False)`. It is strict by default
-  (only `verified` passes; invalid always raises), raises on any mismatch of a
-  given expected identity value, and tolerates unverified records only with an
-  explicit `bootstrap=True` while the signer has no trusted key. The gate above
-  is the production consumer of `RUN-` records.
+  expected_output_manifest_sha256=OMIT, bootstrap=False)`. It is strict by
+  default (only `verified` passes; invalid always raises) and raises on any
+  mismatch of a given expected identity value. `expected_output_manifest_sha256`
+  defaults to the sentinel `OMIT` (no expectation); an explicit `None` requires a
+  signed null manifest, and a record without the field is rejected whenever an
+  expectation is given. `bootstrap=True` is migration-only: it is accepted only
+  with an `expected_task_id` in `BOOTSTRAP_TASKS` (mirrored from the gate, a test
+  asserts equality) and then tolerates unverified records only while the signer
+  has no trusted key; otherwise it raises. The gate above is the production
+  consumer of `RUN-` records.
 - **Key-publication mode (trust bootstrap):** the gate runs from the
   integration checkout, whose trust file is empty until a key-publication
   commit merges, and that commit could never pass an empty-trust gate. So,
