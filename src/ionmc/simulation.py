@@ -131,9 +131,9 @@ class IonTransportCounters(TransportCounters):
     ``mcs_mapping_failure``, the number of steps whose exact-Omega mapping of f_dM returned a
     nonzero status (decision 0043 section 3; the step scatters with zero variance and the result
     is invalid), and the diagnostic ``mcs_table_bracket_miss``, the number of steps of the
-    table-accelerated root (``mcs_mapping_eval = "table"``) whose tight starting bracket had no
-    sign change, so that the full bracket was used (performance only: the step still returns the
-    exact root; it never invalidates a result)."""
+    table-accelerated root (``mcs_mapping_eval = "table"``) whose initial tight starting bracket
+    had no sign change, so that the widened or the full bracket was used (performance only: the
+    step still returns the exact root; it never invalidates a result)."""
 
     mcs_mapping_failure: int = 0
     mcs_table_bracket_miss: int = 0

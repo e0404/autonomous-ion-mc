@@ -592,8 +592,10 @@ def make_exact_omega(real: type) -> SimpleNamespace:
         ``u0 = ln(q0 pv)``, the other ``u0 + w`` or ``u0 - w`` on the side where the residual
         changes sign (``w`` a relative half-width), clipped to the proton path's full bracket.
         Without a sign change the other end is moved once to ``u0 -+ 10 w``; failing that (or for
-        ``q0 <= 0``, no guess) the full bracket of :func:`pv_equivalent` is used and
-        ``bracket_miss`` = 1 (a performance diagnostic, not a failure). Ion states only (z >= 2)."""
+        ``q0 <= 0``, no guess) the full bracket of :func:`pv_equivalent` is used.
+        ``bracket_miss`` = 1 whenever the INITIAL tight bracket had no sign change (the widened
+        bracket or the full bracket was needed); it is a performance diagnostic, not a failure.
+        Ion states only (z >= 2)."""
         out = pv
         status = int(0)
         iters = int(0)

@@ -95,7 +95,7 @@ evidence for `icru90/z{6,8}_G4_WATER.dat`. This note concerns FC-2 only.
 | File | sha256 | Bound by |
 |---|---|---|
 | `src/ionmc/physics/lindhard_sorensen.py` | `800d1f0a13524af5bad3946032f894479f606ba9b1482bf3ea190eeb9b4d3a6a` | P9 (iii) |
-| `src/ionmc/physics/exact_omega.py` | `5f4aa165af1c3be017e437c612a112aad37f742c451734a8eccad181e04439cb` | I0/I11-map notes |
+| `src/ionmc/physics/exact_omega.py` | `e43eecc309d19d3b0374ed9217a40480e072e284c39794505639a035f321d104` | I0/I11-map notes |
 | `src/ionmc/physics/stopping.py` | `89db1de28e5cd1f03efc1622669b58dd766fc88d5d0a91405af190e96094753e` | P9 (iii) |
 | `src/ionmc/config.py` | `34be11694b94dc0df3a5c47dba58fe5e8bbe26e13b03e5cc8374beacbef82d77` | I0 note |
 | `pyproject.toml` | `0e73bd64aea5ef153e198c00a67c20efbc8ef1a5061f1f77d2bdab555dda9352` | lint exceptions for the two mapping files (added by the planner; the only other changed file outside the plan set) |
@@ -222,13 +222,13 @@ placeholder scorer output was deleted unread.
 | File | sha256 |
 |---|---|
 | `src/ionmc/physics/ion_mcs.py` | `36f4f3a7246d8e917a1ad74a80d706568c14516b2cd3999d7280b4dc6202ccf0` |
-| `src/ionmc/simulation.py` | `b855273a5bbf6b75c7c06bebd3ee09f5d7c6e59529fce3a4585943c2108dc60d` |
+| `src/ionmc/simulation.py` | `2958dbd3069604a25147aafe22a02a988b3ac923156d9e3c5c43ab3fc7b7d814` |
 | `src/ionmc/species.py` | `19df88c722ad93ca65e636b870a4b56b1a80df2e215bee39a7623f441daa2322` |
 | `src/ionmc/transport/kernels.py` | `db4ea1f096e4919303b5e1d1413f25d78dd7ced149c331983016172b0b099266` |
 | `src/ionmc/transport/reference.py` | `f3e3dec9ed5c7bffed827213783af19eee2bbe833f47120550c2c88a0a6b9bb3` |
 | `src/ionmc/transport/run.py` | `bbfae2a4c1c2168397ab898204ede3bc2d7c92e1968a08b8156a03326217436b` |
 | `src/ionmc/transport/tables.py` | `45542d46fb208ba1ca9ccdcb9e8baea41e47f86a7429b46f8566ad12b1b2619d` |
-| `src/ionmc/transport/tally.py` | `7a746c994bf4a4bca1faca111cc713f2f2d48cea7bd1c8dd65e3682c96af5bb6` |
+| `src/ionmc/transport/tally.py` | `b941a46bda49c12e2cda1e27978528b85c08120fc56a7d4c7e172f32953c87d0` |
 | `src/ionmc/transport/warp_driver.py` | `cb32245e48d6bffd03092d09fb7421d8b11a8191158a311fd0b9a92e568aeb86` |
 | `validation/scripts/ion_em/r2_evaluate.py` | `be1eadcc504968d75fce09b0f7555b80ccb23c2ece18477b08159091f226ec14` |
 | `validation/scripts/transport/steps_v8.py` | `8d2617cd671d5d96411d336ae2df1417951e50abd6813bfa844230cac3650078` |
@@ -244,6 +244,8 @@ placeholder scorer output was deleted unread.
 **Dated note (2026-11-08, post-freeze implementation commit R2-TOPAS-8, Codex REVIEW-9529fd35: analytic domain-wide certification of the tabulation bound with the relative-contract scope TABLE_MIN_LOSS = 1e-4) — rebound entries (old → new): `src/ionmc/physics/exact_omega.py` fbeaaf18… → 53bbc7f9…; `src/ionmc/config.py` 0b9b34a3… → 39bddffb…; `validation/plans/v3-008/r2-topas-target.md` 7aa4d9ee… → a90dc6df…; `src/ionmc/simulation.py` cfb8f52d… → 1d4d701b…; `tests/ionmc/test_ion_mcs_table.py` 95b02229… → 03e1925f…. All other entries unchanged (recomputed against the tree). Freeze commit 0245158b, the R2.1 rule and the counts (490 paths / 534 values) are unchanged.**
 
 **Dated note (2026-11-08, post-freeze implementation commit R2-TOPAS-9, Codex REVIEW-ee53867c: the table demoted to an accelerator of the exact root solve on every step; no interpolation-bound claim) — rebound entries (old → new): `tests/ionmc/test_ion_em_mapping_src.py` d81e0915… → 865d3143…; `src/ionmc/physics/exact_omega.py` 53bbc7f9… → 5f4aa165…; `src/ionmc/config.py` 39bddffb… → 34be1169…; `validation/plans/v3-008/r2-topas-target.md` a90dc6df… → 4722d837…; `src/ionmc/physics/ion_mcs.py` 709c61b1… → 36f4f3a7…; `src/ionmc/simulation.py` 1d4d701b… → b855273a…; `src/ionmc/transport/kernels.py` 73bcaf87… → db4ea1f0…; `src/ionmc/transport/reference.py` 103672f5… → f3e3dec9…; `src/ionmc/transport/tally.py` debbe3ed… → 7a746c99…; `tests/ionmc/test_ion_mcs_table.py` 03e1925f… → 62d495bc…; `tests/ionmc/test_v3_008_rows_ci.py` f40b7006… → efce4972…. All other entries unchanged (recomputed against the tree). Freeze commit 0245158b, the R2.1 rule and the counts (490 paths / 534 values) are unchanged.**
+
+**Dated note (2026-11-08, post-freeze implementation commit R2-TOPAS-9b, Codex REVIEW-4bf4f5bc minor: the `mcs_table_bracket_miss` descriptions now state that the counter counts every miss of the initial tight bracket, widened or full; documentation only) — rebound entries (old → new): `src/ionmc/physics/exact_omega.py` 5f4aa165… → e43eecc3…; `src/ionmc/simulation.py` b855273a… → 2958dbd3…; `src/ionmc/transport/tally.py` 7a746c99… → b941a46b…. All other entries unchanged (recomputed against the tree). Counts unchanged (490 paths / 534 values).**
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.

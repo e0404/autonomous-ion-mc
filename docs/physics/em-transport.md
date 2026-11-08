@@ -213,8 +213,9 @@ engine's stepped `T_dM` up to 1 mm; the worst U5 deviation is 1.5e-3.
   the root solve at the nodes the run's initial states can reach, `pv(E0 ± 6 sigma_E)`): one end
   at the table value, the other `w` away on the side of the sign change, with
   `w = max(10 x the table's build-time interpolation estimate, 1e-5)` (relative); without a sign
-  change the bracket is widened once (x10), then the full bracket is used and the step is counted
-  in the diagnostic `mcs_table_bracket_miss` (it never invalidates a result). The table is an
+  change the bracket is widened once (x10), then the full bracket is used; every step whose
+  initial tight bracket had no sign change (widened or full bracket needed) is counted in the
+  diagnostic `mcs_table_bracket_miss` (it never invalidates a result). The table is an
   accelerator only: its interpolation error (estimated at build from second differences on a
   2x-refined root-solve grid, safety factor 2) is a performance diagnostic, not a correctness
   claim (Codex REVIEW-ee53867c). A step whose solve fails (nonzero status) is counted as

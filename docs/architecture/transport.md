@@ -415,8 +415,9 @@ enforce it). The ion models are electromagnetic only.
   The mapping is evaluated from a `pv_eq/pv` table (`mcs_mapping_eval="table"`, default) or by the per-step
   root solve (`"root"`); the kernel variant is selected by `make_transport_kernel(real, diag, ion, ion_eval)`.
   Both evaluate the exact root on every step: the table only supplies the starting bracket of
-  the same Illinois iteration (`exact_omega.pv_equivalent_seeded`; full bracket on a miss, counted
-  in the diagnostic `mcs_table_bracket_miss`), and its build-time interpolation estimate
+  the same Illinois iteration (`exact_omega.pv_equivalent_seeded`; a miss of the initial tight
+  bracket, resolved by the widened or the full bracket, is counted in the diagnostic
+  `mcs_table_bracket_miss`), and its build-time interpolation estimate
   (`exact_omega.estimate_pv_eq_table`) only sets the bracket width.
   Ion stopping tables are keyed by the full material identity (name, density, composition, I,
   density-effect parameters), not by the material name.
