@@ -19,7 +19,6 @@ import warp as wp
 from ionmc._wpfunc import python_twin
 from ionmc.config import (
     DiagnosticsOptions,
-    IonMappingData,
     PhysicsOptions,
     RunOptions,
     SimulationConfig,
@@ -273,22 +272,34 @@ def test_i0_e_cut_rules() -> None:
     assert eff.e_cut_mev == 36.0 and eff.summary()["physics"]["e_cut_ion_mev_per_u"] == 3.0
 
 
+@pytest.mark.parametrize("evaluation", ["table", "root"])
 @pytest.mark.parametrize("backend", ["python", "warp-cpu"])
-def test_i0_mapping_failure_is_a_named_counter_and_invalidates(backend: str) -> None:
-    """A non-converged (here: impossible) mapping fails closed: ``valid=False`` with the named
-    counter ``mcs_mapping_failure``; the step scatters with zero variance."""
-    sim = Simulation(_cfg(CARBON12, backend=backend, n=2, nb=2, allow_invalid=True))
-    im = sim.effective.ion_mapping
-    assert im is not None
-    pro = im.proton.copy()
-    pro[:, 7] = 1.5  # the proton path ends below its own start: status 3 (path too short)
-    sim.effective = replace(
-        sim.effective, ion_mapping=IonMappingData(im.ion, pro, im.comp, im.quad)
+def test_i0_mapping_failure_is_a_named_counter_and_invalidates(
+    backend: str, evaluation: str
+) -> None:
+    """A failed mapping fails closed: ``valid=False`` with the named counter
+    ``mcs_mapping_failure``; the step scatters with zero variance. Root solve: an impossible
+    proton path (status 3); table: every node invalid (status 5)."""
+    kw = {"mcs_mapping_eval": evaluation}
+    sim = Simulation(
+        _cfg(CARBON12, backend=backend, n=2, nb=2, allow_invalid=True, physics_kwargs=kw)
     )
+    im = sim.effective.ion_mapping
+    assert im is not None and im.evaluation == evaluation
+    if evaluation == "root":
+        pro = im.proton.copy()
+        pro[:, 7] = 1.5  # the proton path ends below its own start: status 3 (path too short)
+        bad = replace(im, proton=pro)
+    else:
+        assert im.table is not None
+        tab = im.table.copy()
+        tab[:, XO.TABLE_HEADER :] = XO.TABLE_INVALID_NODE
+        bad = replace(im, table=tab)
+    sim.effective = replace(sim.effective, ion_mapping=bad)
     res = sim.run()
     assert not res.valid
     assert res.counters.mcs_mapping_failure > 0  # type: ignore[attr-defined]
-    good = Simulation(_cfg(CARBON12, backend=backend, n=2, nb=2)).run()
+    good = Simulation(_cfg(CARBON12, backend=backend, n=2, nb=2, physics_kwargs=kw)).run()
     assert good.valid and good.counters.as_dict()["mcs_mapping_failure"] == 0
 
 
@@ -423,8 +434,12 @@ def _ion_states(mp: XO.ExactOmegaMapping) -> list[tuple[float, float, float, int
 
 
 def test_i1_new_callables_are_completely_covered() -> None:
-    """Completeness: every callable of the new factory ``make_ion_mcs`` is exercised below."""
-    exercised = {"mapped_state", "mcs_variance"}
+    """Completeness: every callable of the new factory ``make_ion_mcs`` is exercised below (root
+    path; ``variance_of_state`` through both) or in ``test_ion_mcs_table.py`` (table path)."""
+    exercised = {  # the table path in tests/ionmc/test_ion_mcs_table.py
+        "mapped_state", "mcs_variance", "mapped_state_table", "mcs_variance_table",
+        "variance_of_state",
+    }  # fmt: skip
 
     def names(ns: Any) -> set[str]:
         return {k for k, v in vars(ns).items() if callable(v)}
@@ -949,6 +964,42 @@ def test_i11_map_residual_at_transport_states(proj: Projectile) -> None:
     out = path._run(pv, pv, np.ones_like(pv), 0)
     assert np.all(path.last_status == 0)
     assert float(np.max(np.abs(out[:, 1]))) <= 1e-10
+
+
+@pytest.mark.parametrize("proj", [ALPHA, CARBON12], ids=lambda p: p.name)
+def test_i11_map_table_against_root_at_transport_states(proj: Projectile) -> None:
+    """I11-map, table counterpart: at the states of a traced transported history (python backend,
+    the default ``"table"`` evaluation), the interpolated ``pv_eq`` of the effective
+    configuration's table agrees with the root solve (whose residual the test above bounds) and
+    the step variance within the decision-0043 bound 1e-3; status 0 at every step."""
+    cfg = _cfg(proj, n=2, nb=2, diagnostics=DiagnosticsOptions(trace_histories=2))
+    sim = Simulation(cfg)
+    res = sim.run()
+    im = sim.effective.ion_mapping
+    assert im is not None and im.evaluation == "table" and im.table is not None
+    tr = res.diagnostics["trace"]
+    e = tr["energy_mev"][(tr["history"] == 0)]
+    e = e[e > 2.0 * proj.a * 1.5]
+    assert e.size >= 20
+    path = _IonPath(proj, CI_E_U[proj.name])
+    path.arrs = (im.ion[:1], im.proton[:1], im.comp[:1], im.quad)
+    pv = path._pv(e)
+    root = path._run(pv, pv, np.ones_like(pv), 0)
+    assert np.all(path.last_status == 0)
+    tw = python_twin(make_ion_mcs)
+    tab = [im.table[0].tolist()]
+    worst = 0.0
+    for k in range(pv.size):
+        peq, _p1eq, st = tw.mapped_state_table(tab, 0, float(pv[k]), float(path.p1v1))
+        var, st_v = tw.mcs_variance_table(
+            tab, 0, float(proj.z), float(pv[k]), float(pv[k]), float(path.p1v1), 0, 0.0123, 1.0,
+            1.0,
+        )  # fmt: skip
+        assert st == st_v == 0
+        assert abs(peq / root[k, 2] - 1.0) <= 1e-3
+        worst = max(worst, abs(var / root[k, 0] - 1.0))
+    print(f"I11-map table {proj.name}: max |var_table/var_root - 1| = {worst:.2e}")
+    assert worst <= 1e-3
 
 
 def test_i0_same_name_materials_are_evaluated_separately() -> None:

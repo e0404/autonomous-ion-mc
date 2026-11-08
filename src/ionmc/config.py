@@ -11,6 +11,7 @@ Units follow decision 0037 (MeV, mm, g/cm3, rad); names carry the unit.
 
 from __future__ import annotations
 
+import hashlib
 import math
 from dataclasses import dataclass, replace
 from typing import Any, Literal
@@ -25,12 +26,16 @@ from ionmc.materials import WATER, Material
 from ionmc.physics.em import E_S_MEV
 from ionmc.physics.exact_omega import (
     PROTON_FDM_STATUS,
+    TABLE_N_PV,
+    TABLE_N_R,
     FdmDomainStatus,
+    build_pv_eq_table,
     fdm_domain_status,
     pack_composition,
     pack_quadrature,
     pack_transport_row,
     proton_path,
+    table_domain,
 )
 from ionmc.physics.projectiles import ALPHA, CARBON12, DEUTERON, OXYGEN16, PROTON, Projectile
 from ionmc.physics.scattering import scattering_length_g_cm2
@@ -49,6 +54,9 @@ from ionmc.transport.tally import (
 
 STRAGGLING_MODELS = ("bohr_gamma_v1", "bohr_gauss_clamped_gamma_v1")
 MCS_MODELS = ("differential_moliere",)
+MCS_MAPPING_EVALS = ("table", "root")
+"""Evaluations of the exact-Omega mapping for z >= 2 (decision 0043 section 3, "Evaluation"):
+``"table"`` the bilinear ``pv_eq/pv`` tabulation (default), ``"root"`` the per-step root solve."""
 DELTA_ELECTRON_MODELS = ("local",)
 BACKENDS = ("python", "warp-cpu", "warp-cuda")
 PRECISIONS = ("float32", "float64")
@@ -105,6 +113,10 @@ class PhysicsOptions:
     plane the straight line reaches, the angle is sampled for that length, leg 2 is not cut again
     and the end point is snapped onto the plane (the displacements are recorded per history; the
     direction is never changed).
+    ``mcs_mapping_eval`` selects how the exact-Omega mapping of an ion (z >= 2) is evaluated
+    (``MCS_MAPPING_EVALS``): ``"table"`` (default; the ``pv_eq/pv`` table built at validation by the
+    root solve and read by bilinear interpolation, error bound test ``test_ion_mcs_table.py``) or
+    ``"root"`` (the per-step root solve). It is ignored for protons (no mapping).
     """
 
     nuclear: bool
@@ -124,14 +136,16 @@ class PhysicsOptions:
     e_cut_deuteron_mev: float = 4.0
     nuclear_table_id: str | None = None
     e_cut_ion_mev_per_u: float = E_CUT_ION_DEFAULT_MEV_PER_U
+    mcs_mapping_eval: str = "table"
 
     def __post_init__(self) -> None:
         for name in ("nuclear", "straggling", "multiple_scattering", "truncated_hinge_diagnostic"):
             if not isinstance(getattr(self, name), bool):
                 raise fail(f"{name} must be a bool, got {getattr(self, name)!r}")
-        for name in ("straggling_model", "mcs_model", "delta_electrons"):
+        for name in ("straggling_model", "mcs_model", "delta_electrons", "mcs_mapping_eval"):
             if not isinstance(getattr(self, name), str):
                 raise fail(f"{name} must be a string")
+        choice("mcs_mapping_eval", self.mcs_mapping_eval, MCS_MAPPING_EVALS)
         if not (hasattr(self.stopping, "table") and hasattr(self.stopping, "name")):
             raise fail("stopping must be a StoppingSource (with .name and .table())")
         ls_mode = getattr(getattr(self.stopping, "options", None), "ls", "off")
@@ -261,12 +275,41 @@ class IonMappingData:
     """Packed inputs of the exact-Omega mapping of an ion run (float64, one row per geometry
     material, rows zero-padded to a common length; the headers carry the true sizes): ``ion`` the
     transport-table rows of the ion, ``proton`` the mapping proton paths, ``comp`` the packed
-    compositions and ``quad`` the Gauss-Legendre rule (``ionmc.physics.exact_omega``)."""
+    compositions and ``quad`` the Gauss-Legendre rule (``ionmc.physics.exact_omega``).
+
+    ``evaluation`` is ``"table"`` or ``"root"`` (``PhysicsOptions.mcs_mapping_eval``); ``table``
+    holds the ``pv_eq/pv`` table rows (:func:`ionmc.physics.exact_omega.build_pv_eq_table`) for
+    ``"table"`` and is None for ``"root"``; ``table_domain`` the ``(pv_lo, p1v1_min, p1v1_max)``
+    [MeV] they were built for."""
 
     ion: np.ndarray
     proton: np.ndarray
     comp: np.ndarray
     quad: np.ndarray
+    evaluation: str = "root"
+    table: np.ndarray | None = None
+    table_domain: tuple[float, float, float] | None = None
+
+    def table_summary(self) -> dict[str, Any]:
+        """JSON-serialisable record of the evaluation (sizes, axes bounds and the sha256 of the
+        packed table rows)."""
+        out: dict[str, Any] = {"evaluation": self.evaluation}
+        if self.table is not None and self.table_domain is not None:
+            rows = np.ascontiguousarray(self.table, dtype=np.float64)
+            h = rows[0]
+            out["table"] = {
+                "kind": "pv_eq/pv, bilinear in (ln pv, ln(p1v1/pv)) (decision 0043 section 3)",
+                "n_pv": int(h[2]),
+                "n_r": int(h[5]),
+                "ln_pv_range": [float(h[0]), float(h[6])],
+                "ln_r_range": [float(h[3]), float(h[7])],
+                "pv_lo_mev": self.table_domain[0],
+                "p1v1_min_mev": self.table_domain[1],
+                "p1v1_max_mev": self.table_domain[2],
+                "n_materials": int(rows.shape[0]),
+                "sha256": hashlib.sha256(rows.tobytes()).hexdigest(),
+            }
+        return out
 
 
 def _pad_rows(rows: list[np.ndarray]) -> np.ndarray:
@@ -277,13 +320,34 @@ def _pad_rows(rows: list[np.ndarray]) -> np.ndarray:
     return out
 
 
-def _ion_mapping_data(tables: TransportTables, geometry: VoxelGeometry) -> IonMappingData:
+def _ion_mapping_data(
+    tables: TransportTables,
+    geometry: VoxelGeometry,
+    config: SimulationConfig,
+    e_lo_mev: float,
+    e_hi_mev: float,
+) -> IonMappingData:
     mats = geometry.materials
+    ion = [pack_transport_row(tables, i) for i in range(len(mats))]
+    pro = [proton_path(m).pack for m in mats]
+    comp = [pack_composition(m) for m in mats]
+    quad = pack_quadrature()
+    ph = config.physics
+    if ph.mcs_mapping_eval == "root":
+        return IonMappingData(_pad_rows(ion), _pad_rows(pro), _pad_rows(comp), quad, "root")
+    proj = config.source.projectile
+    # the step midpoint stays above (1 - f) E_cut (f: the step's energy-loss fraction limit)
+    dom = table_domain(
+        proj, (1.0 - ph.max_energy_loss_fraction) * effective_e_cut_mev(config), e_lo_mev, e_hi_mev
+    )
+    rows = [
+        build_pv_eq_table(
+            ion[i], pro[i], comp[i], quad, float(proj.z), proj.mass_mev, *dom, TABLE_N_PV, TABLE_N_R
+        )
+        for i in range(len(mats))
+    ]
     return IonMappingData(
-        ion=_pad_rows([pack_transport_row(tables, i) for i in range(len(mats))]),
-        proton=_pad_rows([proton_path(m).pack for m in mats]),
-        comp=_pad_rows([pack_composition(m) for m in mats]),
-        quad=pack_quadrature(),
+        _pad_rows(ion), _pad_rows(pro), _pad_rows(comp), quad, "table", _pad_rows(rows), dom
     )
 
 
@@ -398,7 +462,10 @@ class EffectiveConfig:
                 "ls_requested": self.ls_requested,
                 "ls_effective": self.ls_effective,
             },
-            "mcs_mapping": self.fdm_domain.to_dict(),
+            "mcs_mapping": {
+                **self.fdm_domain.to_dict(),
+                **({} if self.ion_mapping is None else self.ion_mapping.table_summary()),
+            },
             "geometry": {
                 "origin_mm": list(self.geometry.origin_mm),
                 "spacing_mm": list(self.geometry.spacing_mm),
@@ -887,7 +954,9 @@ def validate(config: SimulationConfig) -> EffectiveConfig:
             src.energy_sigma_mev,
             ion_tables={material_fingerprint(t.material): t for t in stopping_tables},
         )
-        ion_mapping = _ion_mapping_data(tables, geometry)
+        ion_mapping = _ion_mapping_data(
+            tables, geometry, config, max(e0 - 6.0 * src.energy_sigma_mev, e_cut), e_hi
+        )
 
     max_steps_origin = "user" if run.max_steps is not None else "computed"
     max_steps = (

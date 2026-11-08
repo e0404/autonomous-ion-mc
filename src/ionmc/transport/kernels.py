@@ -532,16 +532,20 @@ def make_kernel_support(real: type) -> SimpleNamespace:
 
 
 @functools.cache
-def make_transport_kernel(real: type, diag: bool, ion: bool = False):
+def make_transport_kernel(real: type, diag: bool, ion: bool = False, ion_eval: str = "table"):
     """Return the cached transport kernel for precision ``real`` and diagnostics flag ``diag``.
 
     ``ion=True`` (z >= 2 sources) adds the exact-Omega mapping of f_dM to the multiple-scattering
-    step (``ionmc.physics.ion_mcs``, always in double precision like every energy quantity); with
-    ``ion=False`` a stub replaces it, so the proton kernel is the one of the qualified path.
+    step (``ionmc.physics.ion_mcs``, always in double precision like every energy quantity);
+    ``ion_eval`` selects its evaluation (``"table"``: the ``pv_eq/pv`` table ``map_tab``;
+    ``"root"``: the per-step root solve on ``map_ion``, ``map_pro``, ``map_comp``, ``map_quad``).
+    With ``ion=False`` a stub replaces it, so the proton kernel is the one of the qualified path.
 
     ``enable_backward`` is off and ``module="unique"`` gives every variant its own Warp module
     (its own compile unit and cache entry).
     """
+    if ion_eval not in ("table", "root"):
+        raise ValueError(f"ion_eval must be 'table' or 'root', got {ion_eval!r}")
     name = check_real(real)
     R = real
     D = wp.float64  # energy / range bookkeeping in double precision (positions and angles in R)
@@ -559,8 +563,56 @@ def make_transport_kernel(real: type, diag: bool, ion: bool = False):
     step_state = S.step_state
     chan_t = S.chan
     energy_from_range = S.energy_from_range
-    if ion:
-        ion_var = make_ion_mcs(D).mcs_variance
+    IMD = make_ion_mcs(D)
+    if ion and ion_eval == "root":
+
+        @named_func(name)
+        def ion_var_root(
+            ion_pk: wp.array2d(dtype=D),
+            pro_pk: wp.array2d(dtype=D),
+            comp_pk: wp.array2d(dtype=D),
+            quad: wp.array(dtype=D),
+            tab: wp.array2d(dtype=D),
+            m: int,
+            z: D,
+            mass_mev: D,
+            pv_mid: D,
+            pv_end: D,
+            p1v1: D,
+            birth: int,
+            inv_x: D,
+            rho: D,
+            s_mm: D,
+        ) -> tuple[D, int]:
+            return IMD.mcs_variance(
+                ion_pk, pro_pk, comp_pk, quad, m, z, mass_mev, pv_mid, pv_end, p1v1, birth,
+                inv_x, rho, s_mm,
+            )  # fmt: skip
+
+        ion_var = ion_var_root
+    elif ion:
+
+        @named_func(name)
+        def ion_var_table(
+            ion_pk: wp.array2d(dtype=D),
+            pro_pk: wp.array2d(dtype=D),
+            comp_pk: wp.array2d(dtype=D),
+            quad: wp.array(dtype=D),
+            tab: wp.array2d(dtype=D),
+            m: int,
+            z: D,
+            mass_mev: D,
+            pv_mid: D,
+            pv_end: D,
+            p1v1: D,
+            birth: int,
+            inv_x: D,
+            rho: D,
+            s_mm: D,
+        ) -> tuple[D, int]:
+            return IMD.mcs_variance_table(tab, m, z, pv_mid, pv_end, p1v1, birth, inv_x, rho, s_mm)
+
+        ion_var = ion_var_table
     else:
 
         @named_func(name)
@@ -569,6 +621,7 @@ def make_transport_kernel(real: type, diag: bool, ion: bool = False):
             pro_pk: wp.array2d(dtype=D),
             comp_pk: wp.array2d(dtype=D),
             quad: wp.array(dtype=D),
+            tab: wp.array2d(dtype=D),
             m: int,
             z: D,
             mass_mev: D,
@@ -615,6 +668,7 @@ def make_transport_kernel(real: type, diag: bool, ion: bool = False):
         map_pro: wp.array2d(dtype=D),
         map_comp: wp.array2d(dtype=D),
         map_quad: wp.array(dtype=D),
+        map_tab: wp.array2d(dtype=D),
         g_origin: wp.array2d(dtype=R),
         g_spacing: wp.array2d(dtype=R),
         g_inv: wp.array2d(dtype=R),
@@ -780,8 +834,8 @@ def make_transport_kernel(real: type, diag: bool, ion: bool = False):
                                 energy,
                             )
                         var, st_map = ion_var(
-                            map_ion, map_pro, map_comp, map_quad, m, ctl.z, ctl.mass, pv_mid,
-                            K.pv_mev(e_end_i, ctl.mass), p1v1, birth, inv_x, rho, s_d,
+                            map_ion, map_pro, map_comp, map_quad, map_tab, m, ctl.z, ctl.mass,
+                            pv_mid, K.pv_mev(e_end_i, ctl.mass), p1v1, birth, inv_x, rho, s_d,
                         )  # fmt: skip
                         if st_map != 0:
                             c_map = c_map + 1

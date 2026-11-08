@@ -106,6 +106,12 @@ def test_review_before_start() -> None:
         ({**REVIEW, "status": "running"}, PLAN, T_OK),
         ({**REVIEW, "report": {"verdict": "fail"}}, PLAN, T_OK),
         ({**REVIEW, "report": "pass"}, PLAN, T_OK),
+        ({k: v for k, v in REVIEW.items() if k != "report"}, PLAN, T_OK),  # no report
+        ({**REVIEW, "report": None}, PLAN, T_OK),
+        ({**REVIEW, "report": {}}, PLAN, T_OK),  # report without verdict
+        ({**REVIEW, "report": {"summary": "ok"}}, PLAN, T_OK),
+        ({**REVIEW, "report": {"verdict": None}}, PLAN, T_OK),
+        ({**REVIEW, "report": {"verdict": "PASS"}}, PLAN, T_OK),
         ({**REVIEW, "finished_at": None}, PLAN, T_OK),
         ({**REVIEW, "finished_at": "soon"}, PLAN, T_OK),
         ({**REVIEW, "finished_at": "2026-11-08T10:00:00"}, PLAN,
@@ -121,11 +127,7 @@ def test_review_check_fails_closed(review: Any, plan: Any, run: Any) -> None:
         R2.check_review_before_start(review, plan, run)
 
 
-def test_review_without_report_and_finished_after_start() -> None:
-    no_report = {k: v for k, v in REVIEW.items() if k != "report"}
-    assert R2.check_review_before_start(
-        no_report, PLAN, {"reference_started": "2026-11-08T11:00:00Z"}
-    )
+def test_review_finished_after_start() -> None:
     # finished_at after reference_started: not before start (False, the run is invalid)
     late = {**REVIEW, "finished_at": "2026-11-08T12:00:00Z"}
     assert not R2.check_review_before_start(
@@ -133,39 +135,48 @@ def test_review_without_report_and_finished_after_start() -> None:
     )
 
 
+def _good_run(repo: dict[str, Any], **kw: Any) -> dict[str, Any]:
+    run = {"run_id": "r1", "code_sha": repo["after"], "reference_started": "2026-11-08T11:00:00Z"}
+    run.update(kw)
+    return run
+
+
 def test_run_record_binding(repo: dict[str, Any]) -> None:
     plan = {"seal_sha": repo["seal"], "seal_review_id": "REVIEW-1"}
     review = {**REVIEW, "head_sha": repo["seal"]}
-    run = {"run_id": "r1", "code_sha": repo["after"], "reference_started": "2026-11-08T11:00:00Z"}
+    run = _good_run(repo)
     assert R2.check_run_validity(repo["path"], plan, review, run, expected_run_id="r1")["valid"]
-    with pytest.raises(R2.ChronologyError):
+    with pytest.raises(R2.ChronologyError):  # mismatched run id
         R2.check_run_validity(repo["path"], plan, review, run, expected_run_id="r2")
+    for key in ("run_id", "code_sha", "reference_started"):  # every field is mandatory
+        partial = {k: v for k, v in run.items() if k != key}
+        with pytest.raises(R2.ChronologyError):
+            R2.check_run_validity(repo["path"], plan, review, partial, expected_run_id="r1")
+    for bad in (None, ""):  # the binding is mandatory: no unlinked default
+        with pytest.raises(R2.ChronologyError):
+            R2.check_run_validity(repo["path"], plan, review, run, expected_run_id=bad)
+    with pytest.raises(TypeError):  # no default value for expected_run_id
+        R2.check_run_validity(repo["path"], plan, review, run)  # type: ignore[call-arg]
     with pytest.raises(R2.ChronologyError):
-        R2.check_run_validity(
-            repo["path"],
-            plan,
-            review,
-            {k: v for k, v in run.items() if k != "run_id"},
-            expected_run_id="r1",
-        )
+        R2.check_run_validity(repo["path"], plan, review, None, expected_run_id="r1")
 
 
 def test_run_validity_combined(repo: dict[str, Any]) -> None:
     plan = {"seal_sha": repo["seal"], "seal_review_id": "REVIEW-1"}
-    REVIEW = {**globals()["REVIEW"], "head_sha": repo["seal"]}  # noqa: N806 - review of the seal
-    good = {"code_sha": repo["after"], "reference_started": "2026-11-08T11:00:00Z"}
-    assert R2.check_run_validity(repo["path"], plan, REVIEW, good)["valid"] is True
-    early = {"code_sha": repo["after"], "reference_started": "2026-11-08T09:00:00Z"}
-    v = R2.check_run_validity(repo["path"], plan, REVIEW, early)
+    review = {**REVIEW, "head_sha": repo["seal"]}
+    good = _good_run(repo)
+    assert R2.check_run_validity(repo["path"], plan, review, good, "r1")["valid"] is True
+    early = _good_run(repo, reference_started="2026-11-08T09:00:00Z")
+    v = R2.check_run_validity(repo["path"], plan, review, early, "r1")
     assert v == {"ancestry": True, "review_before_start": False, "valid": False}
-    old = {"code_sha": repo["a"], "reference_started": "2026-11-08T11:00:00Z"}
-    assert R2.check_run_validity(repo["path"], plan, REVIEW, old)["valid"] is False
+    old = _good_run(repo, code_sha=repo["a"])
+    assert R2.check_run_validity(repo["path"], plan, review, old, "r1")["valid"] is False
     with pytest.raises(R2.ChronologyError):
-        R2.check_run_validity(
-            repo["path"], plan, REVIEW, {"reference_started": "2026-11-08T11:00:00Z"}
-        )
-    with pytest.raises(R2.ChronologyError):
-        R2.check_run_validity(repo["path"], {"seal_review_id": "REVIEW-1"}, REVIEW, good)
+        R2.check_run_validity(repo["path"], {"seal_review_id": "REVIEW-1"}, review, good, "r1")
+    for rep in (None, {}, {"verdict": "fail"}):  # the seal review must carry verdict pass
+        bad = {**review, "report": rep}
+        with pytest.raises(R2.ChronologyError):
+            R2.check_run_validity(repo["path"], plan, bad, good, "r1")
 
 
 def test_statistics_stubs_fail_closed() -> None:

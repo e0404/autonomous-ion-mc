@@ -214,6 +214,7 @@ def test_ls_metadata_hash_rules(make_config: Any) -> None:
 EXERCISED = {
     "kinetic_from_pv", "path_range", "path_energy", "ln_chi_a2", "fano_delta_b", "b_slab",
     "b_residual", "pv_equivalent", "fdm_equivalent",
+    "pv_equivalent_table",  # the table evaluation: tests/ionmc/test_ion_mcs_table.py
 }  # fmt: skip
 NO = 20
 

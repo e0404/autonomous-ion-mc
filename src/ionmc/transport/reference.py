@@ -187,6 +187,8 @@ class _Reference:
             self.map_pro = im.proton.tolist()
             self.map_comp = im.comp.tolist()
             self.map_quad = im.quad.tolist()
+            self.map_eval = im.evaluation
+            self.map_tab = None if im.table is None else im.table.tolist()
         self.trunc_diag = ph.truncated_hinge_diagnostic
         self.straggle_attempt = (
             self.EM.straggle_attempt_gamma
@@ -851,11 +853,18 @@ class _Reference:
                         if birth
                         else energy
                     )
-                    var, st_map = self.IM.mcs_variance(
-                        self.map_ion, self.map_pro, self.map_comp, self.map_quad, m,
-                        self.charge, self.mass, pv_mid, K.pv_mev(r(e_end), self.mass), r(p1v1),
-                        1 if birth else 0, inv_xs, r(rho), r(s),
-                    )  # fmt: skip
+                    if self.map_eval == "table":
+                        var, st_map = self.IM.mcs_variance_table(
+                            self.map_tab, m, self.charge, pv_mid,
+                            K.pv_mev(r(e_end), self.mass), r(p1v1), 1 if birth else 0, inv_xs,
+                            r(rho), r(s),
+                        )  # fmt: skip
+                    else:
+                        var, st_map = self.IM.mcs_variance(
+                            self.map_ion, self.map_pro, self.map_comp, self.map_quad, m,
+                            self.charge, self.mass, pv_mid, K.pv_mev(r(e_end), self.mass),
+                            r(p1v1), 1 if birth else 0, inv_xs, r(rho), r(s),
+                        )  # fmt: skip
                     var = float(var)
                     if st_map != 0:  # fail closed: the step scatters with zero variance
                         self.counters["mcs_mapping_failure"] += 1

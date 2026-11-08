@@ -183,3 +183,17 @@ predictions against the specified TOPAS configuration: plan rows **TL-EM (b) and
 σ_ionmc/σ_TOPAS between the upper end, whose proton-equivalent states are 100 % extrapolated, and the low end, whose
 states are in the proton-qualified domain; |D_ext| + 1.645σ ≤ 12 %; `validation/plans/v3-008/r2-topas-target.md`
 §5.3). I11-ext stays report-only and theory-anchored; the ≤ 1.5 % component stays declared within the ±5 %.
+
+**Dated note (2026-11-08, mapping evaluation).** The tabulation is now chosen explicitly for the src implementation
+(decision 0043 §3 "Evaluation", allowed alternative; `p9-freeze-record.md`, dated note "2026-11-08, Amendment"):
+`PhysicsOptions.mcs_mapping_eval = "table"` is the default for z ≥ 2 and the per-step root solve stays available as
+`"root"`. The reference-side `PvEqTable` of `validation/scripts/ion_em/exact_omega.py` is unchanged (its hash above
+stands) and remains the reference implementation of the same grid construction: identical axes (ln pv and
+ln(p1v1/pv), a shear of the decision's (ln pv, ln p1v1) plane), `pv_eq/pv` at the nodes from the root solve, bilinear
+interpolation. The src table (`src/ionmc/physics/exact_omega.py`, `build_pv_eq_table` / `pv_equivalent_table`)
+differs in two respects only: (1) it solves only the nodes of cells that meet the band of the run's initial states
+`pv(E0 ± 6 sigma_E)` (ions have no secondaries; the other nodes are marked invalid), on a 128 × 128 grid from
+`pv((1 - f) E_cut)` and `ln(1 + 1e-6)` (the thin-slab guard); (2) a state outside the table or in a cell with an
+invalid node returns the fail-closed status 5, counted as `mcs_mapping_failure` (result invalid). Bound test:
+`tests/ionmc/test_ion_mcs_table.py::test_table_variance_error_bound`, measured maximum 2.05e-5 of the per-step
+variance against the root solve (bound 1e-3).

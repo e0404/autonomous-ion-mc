@@ -87,7 +87,7 @@ evidence for `icru90/z{6,8}_G4_WATER.dat`. This note concerns FC-2 only.
 | `tests/ionmc/test_ion_em_lindhard_sorensen.py` | `d35ca4e34610e153a6aa31f672a180cab4092572c8c839dc4087e606024dc6ef` | P3 |
 | `tests/ionmc/test_ion_em_ss_budget.py` | `ca49735b5b00831aeaabd59d63faecfc23b98fe0d4247024ca963d7e9a77f097` | P9 (iv) |
 | `tests/ionmc/test_ion_em_ls_option.py` | `c67966c8d2c3d9564032e33e666321dd11bd8d2386780afa0cb74850455ca84d` | P9 (iii) |
-| `tests/ionmc/test_ion_em_mapping_src.py` | `e11b7b655044469efadb1d42d3d7a94d5b51c26059aff3da7bdf6f735294c93b` | I11-map (src), I0, I1 |
+| `tests/ionmc/test_ion_em_mapping_src.py` | `d81e0915b18a0b929ff591771cd1fb74828a03d09fc4461dfcb78456e8c5c9f6` | I11-map (src), I0, I1 |
 | `tests/ionmc/test_v3_008_seed_families.py` | `5a11ca5128709fe23618a8179dab0288c2d01fbe0431f5b328ca45d5107e9114` | P7, §C |
 
 ### 2.3 Implementation already on the branch (src)
@@ -95,10 +95,10 @@ evidence for `icru90/z{6,8}_G4_WATER.dat`. This note concerns FC-2 only.
 | File | sha256 | Bound by |
 |---|---|---|
 | `src/ionmc/physics/lindhard_sorensen.py` | `800d1f0a13524af5bad3946032f894479f606ba9b1482bf3ea190eeb9b4d3a6a` | P9 (iii) |
-| `src/ionmc/physics/exact_omega.py` | `e8427d23f71e7b524b434237d3343a7783ff375822da71ff38a67fac1c9d541e` | I0/I11-map notes |
+| `src/ionmc/physics/exact_omega.py` | `1b67ae5f45ec39d1081bf088ce5f2440fe73bee15c9dd4aa9257ced919590837` | I0/I11-map notes |
 | `src/ionmc/physics/stopping.py` | `89db1de28e5cd1f03efc1622669b58dd766fc88d5d0a91405af190e96094753e` | P9 (iii) |
-| `src/ionmc/config.py` | `2ead8d09a31dd3eb16ed97dba12f90d8a4e937efc56eabc0a8d718f2f5ee3f90` | I0 note |
-| `pyproject.toml` | `99ff83af258ccead7d0e81516abdf020730720aa3596a64d5292493b250dfc9f` | lint exceptions for the two mapping files (added by the planner; the only other changed file outside the plan set) |
+| `src/ionmc/config.py` | `f8b1c447a7e5de6529120a1bee0019d69bbe077f5892bcc23007b7e04bde189b` | I0 note |
+| `pyproject.toml` | `0e73bd64aea5ef153e198c00a67c20efbc8ef1a5061f1f77d2bdab555dda9352` | lint exceptions for the two mapping files (added by the planner; the only other changed file outside the plan set) |
 
 ### 2.4 Pre-freeze records
 
@@ -115,7 +115,7 @@ evidence for `icru90/z{6,8}_G4_WATER.dat`. This note concerns FC-2 only.
 | `validation/plans/v3-008/p6-lateral-data-search.md` | `d149550b8dc5684ec4cd7530a88e50b75bcf083dbc385934aa73e33a708212ef` |
 | `validation/plans/v3-008/p8-repository-facts.md` | `18639c6bc5ff8152c39adc971652e14fb35f318499b9821d45de03bf9b374478` |
 | `validation/plans/v3-008/p10-single-scattering-availability.md` | `a7f539a0b71a39939aed2644a9d7c2969133251ceb1676a3e48572a9292f7fda` |
-| `validation/plans/v3-008/p11-exact-omega-mapping.md` | `f78e95f578fcb1fbb0c4db8ec12ce8b9dbfd5ae5e2d98a34d4d13b2bb8a6c069` |
+| `validation/plans/v3-008/p11-exact-omega-mapping.md` | `b40530f48391d6eca98656d5bdb06a5e4272bf22ee0a469e08357ebcd457e330` |
 | `validation/plans/v3-008/research/research-models.md` | `d194a516967f290e9aa65f693c3c414282c7d45cde5c1226ab08464a46b396cd` |
 | `validation/plans/v3-008/research/research-data-sources.md` | `2bf40c44d73dd1d5ce6afe6d05d7891128cb3b4468af2afbf196f4b99afa0732` |
 
@@ -198,7 +198,7 @@ placeholder scorer output was deleted unread.
 | `tests/ionmc/test_r2_bundles.py` | `54af24fa0baf13d43f4ed25c96989344e09c01354efdda0dc34ba83a5ab60fdb` |
 | `reference_requests/operator-directives/2026-11-07-topas-validation-target.md` | `ca079e9f0af990cdff9d8efde60d38ac55e2d0fc0fb9ef22355a81f4a2ab0b26` |
 | `reference_requests/interventions/IR-20261102-010435-B59B2D/response.json` | `dc6a610cb67dee50fa0bb96327026eea0b81bb9506e7b898c2e9e44322f69bd0` |
-| `validation/plans/v3-008/r2-topas-target.md` | `5336266bee35e1bfcd5df104e34b69cb8cca783ef9e3363e3b6312afbb9cc5d1` |
+| `validation/plans/v3-008/r2-topas-target.md` | `474480e790b71b3c8ea19a9fed27c83a890da17668c2cc5ea9f4330c4facdbb6` |
 
 
 **Dated note (2026-11-07, orchestrator) — hashes regenerated at the freeze commit's parent; entries that changed since f694b747:** `validation/plans/v3-008/p10-single-scattering-availability.md` bea86277… → a7f539a0…; `validation/plans/v3-008/p11-exact-omega-mapping.md` 6116648a… → f78e95f5…; `reference_requests/interventions/IR-20261102-010435-B59B2D/request.json` 068cafd7… → e81a7efa…. All other entries unchanged (recomputed).
@@ -216,6 +216,28 @@ placeholder scorer output was deleted unread.
 **Dated note (2026-11-07, orchestrator) — hashes regenerated at the freeze commit's parent; entries that changed since f694b747:** `reference_requests/interventions/IR-20261102-010435-B59B2D/README.md` 86eba08d… → 22712340…; `validation/scripts/ion_em/gen_r2_bundles.py` 0ebdf1b3… → fe122218…; `tests/ionmc/test_r2_bundles.py` 76d445bf… → 1cc41128…; `validation/plans/v3-008/r2-topas-target.md` edac3266… → 5336266b…. All other entries unchanged (recomputed).
 
 **Dated note (2026-11-07, orchestrator) — hashes regenerated at the freeze commit's parent; entries that changed since f694b747:** `tests/ionmc/test_r2_bundles.py` 1cc41128… → 54af24fa…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-08, implementer for the orchestrator) — post-freeze implementation commits.** (a) The implementation commits after the revision-2 freeze commit are `53424cfa` (light-ion species transport, CI rows, r2_evaluate chronology checks, revision-2 step definitions), `d235e2d3` (Codex REVIEW-5f5ac50d fixes) and the forthcoming commit of the 2026-11-08 working tree (Codex REVIEW-d0f41eff fixes and the mapping tabulation; dated note "2026-11-08, Amendment" at the end of this record). The freeze commit `0245158b` and the R2.1 rule are unchanged: the R2.1 whitelist governs the freeze commit's diff against `d0829601`; these commits are the post-freeze phase foreseen by the plan (A-rows → seal). (b) Rebound in the rows of this record (current values in place; old → new, short hashes; computed from the working tree by `sha256sum`): `pyproject.toml` 99ff83af… → 0e73bd64…; `src/ionmc/config.py` 2ead8d09… → f8b1c447…; `src/ionmc/physics/exact_omega.py` e8427d23… → 1b67ae5f…; `tests/ionmc/test_ion_em_mapping_src.py` e11b7b65… → d81e0915…; `validation/plans/v3-008/p11-exact-omega-mapping.md` f78e95f5… → b40530f4… (dated note 2026-11-08 appended; both its §2 row and its R2.2 row carry the new value); `validation/plans/v3-008/r2-topas-target.md` 5336266b… → 474480e7… (dated §8 note 2026-11-08). Newly bound implementation paths (15):
+
+| File | sha256 |
+|---|---|
+| `src/ionmc/physics/ion_mcs.py` | `709c61b19dec46d72a700667909927dae83c607f009c77fcad8cbe1ed0875dab` |
+| `src/ionmc/simulation.py` | `783fa5615e5c2d7289bb765a81e77acf4dcdfb0f62f31ecbdd3b6d0c3984b7d9` |
+| `src/ionmc/species.py` | `19df88c722ad93ca65e636b870a4b56b1a80df2e215bee39a7623f441daa2322` |
+| `src/ionmc/transport/kernels.py` | `73bcaf87a2d7d339e6d255b1a4419897d11061ea4d4708832bb696e325ef07bb` |
+| `src/ionmc/transport/reference.py` | `103672f5b01123d16efdd79e714fd6184d2525fc4276eb41282f0b063c7619c6` |
+| `src/ionmc/transport/run.py` | `bbfae2a4c1c2168397ab898204ede3bc2d7c92e1968a08b8156a03326217436b` |
+| `src/ionmc/transport/tables.py` | `45542d46fb208ba1ca9ccdcb9e8baea41e47f86a7429b46f8566ad12b1b2619d` |
+| `src/ionmc/transport/tally.py` | `debbe3ed55bc9c0245abe7937c4bdd474b5e1dac996decefab2333bb9dd914cd` |
+| `src/ionmc/transport/warp_driver.py` | `cb32245e48d6bffd03092d09fb7421d8b11a8191158a311fd0b9a92e568aeb86` |
+| `validation/scripts/ion_em/r2_evaluate.py` | `be1eadcc504968d75fce09b0f7555b80ccb23c2ece18477b08159091f226ec14` |
+| `validation/scripts/transport/steps_v8.py` | `8d2617cd671d5d96411d336ae2df1417951e50abd6813bfa844230cac3650078` |
+| `tests/ionmc/test_ion_mcs_table.py` | `ce87db6f46ae524fa07636ef967b60b497d1af6ee16adbae2cc8b740d0056fe8` |
+| `tests/ionmc/test_v3_008_rows_ci.py` | `f40b70069844a55d4dfc610dfade697aedb5563a313d22c1e853d3635adbd2fc` |
+| `tests/ionmc/test_r2_evaluate.py` | `5b996ebb62304e4720bc631ec4bae4b41c7a4bf13ddabdfd1ccc7ea9cf18f222` |
+| `tests/ionmc/test_v3_008_steps_v8.py` | `ab4922ea8842751e22c9d1882e9e1dec0ae88a25b55174c99586c4802868b731` |
+
+(c) R2.5 counts, superseded by this note (the R2.5 text is kept as written): repository paths 475 + 15 = **490**; total full sha256 values 519 + 15 = **534**, plus the bundle-set digest (unchanged, `a8a1c27d…`). The count in R2.6 item (3) (475) is superseded accordingly by 490 for the acceptance tests of the seal.
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.
@@ -376,7 +398,7 @@ the intervention README/request files already bound at revision 1; the three pat
 | `reference_requests/operator-directives/2026-11-07-topas-validation-target.md` | (single entry: §2 dated note of 2026-11-07) | the operator's directive, verbatim (new) |
 | `validation/plans/v3-008/r2-topas-target.md` | (single entry: §2 dated note of 2026-11-07) | revision-2 design record with appendix A (new) |
 | `validation/plans/v3-008/p10-single-scattering-availability.md` | `a7f539a0b71a39939aed2644a9d7c2969133251ceb1676a3e48572a9292f7fda` | rebound (was bea86277…; dated note appended) |
-| `validation/plans/v3-008/p11-exact-omega-mapping.md` | `f78e95f578fcb1fbb0c4db8ec12ce8b9dbfd5ae5e2d98a34d4d13b2bb8a6c069` | rebound (was 6116648a…; dated note appended) |
+| `validation/plans/v3-008/p11-exact-omega-mapping.md` | `b40530f48391d6eca98656d5bdb06a5e4272bf22ee0a469e08357ebcd457e330` | rebound (was 6116648a…; dated note appended) |
 | `validation/reference_cases/README.md` | `e16cc9d3a2eecf2717e405ae2c4fc53c83b884f37af64c758d6ac6bddb4a482e` | rebound (was `2c160fb5…`, kept in §2.5 as superseded revision-1 history; r2 layout entry added) |
 | 205 bundles `validation/reference_cases/topas/*-r2-*` (`case.json` + `input.txt`, 410 files) | bundle-set digest `a8a1c27d0177d38e763344248753f0cb9792bbf2277158622b41bcbf9d8f423a` | per-file sha256 in `r2-topas-target.md` appendix A; digest = sha256 of the appendix listing block |
 
@@ -418,3 +440,5 @@ freeze commit; the appendix-A block hashes to the bundle-set digest `a8a1c27d…
 whitelisted path is bound by a current hash entry in this record, with exactly these exceptions: the plan, decision 0043, `review.md` and this record itself (bound by the freeze commit SHA; a file cannot contain its own hash), `response.json` and the intervention `README.md` (rebound in R2-TOPAS-4 to its current hash after the appended status update) are bound and counted (R2.5), not excepted; (4) the logged
 seed-family test passes; (5) `validate_case` passes on all 205 bundles; (6) no file under `validation/generated/`, no
 LV/HR record and no scored V3-008 ion REF run exists.
+
+**Dated note (2026-11-08, Amendment):** mapping evaluation = tabulation (decision 0043 section 3, "Evaluation", the allowed alternative), chosen before any revision-2 ionmc sample or TOPAS evidence run; reason: measured cost. Table: `pv_eq/pv` per (material, ion) on a uniform 128 x 128 grid in (ln pv, ln(p1v1/pv)) (a shear of the decision's (ln pv, ln p1v1) plane), nodes computed by the unchanged root solve `pv_equivalent` at validation (only the nodes of cells meeting the band of the run's initial states pv(E0 - 6 sigma_E) ... pv(E0 + 6 sigma_E); every other node invalid, a state there fails closed as `mcs_mapping_failure`), bilinear interpolation (`exact_omega.pv_equivalent_table`, shared by the python twin and the Warp kernel); option `PhysicsOptions.mcs_mapping_eval` = "table" (default for z >= 2) or "root" (the per-step root solve, retained); the summary records the evaluation, table sizes, axes, domain and the sha256 of the table rows. Bound test `tests/ionmc/test_ion_mcs_table.py::test_table_variance_error_bound` (He, C, O in water and skeletal muscle; >= 2000 random states plus edge states per ion and material, upper and lower domain end, thin-slab edge included; bound |var_table/var_root - 1| <= 1e-3): measured maximum 2.05e-5 (C in skeletal muscle; He 4.4e-6 / 5.5e-6, C 1.83e-5 / 2.05e-5, O 1.84e-5 / 2.04e-5 in water / muscle); transport-level counterpart `test_v3_008_rows_ci.py::test_i11_map_table_against_root_at_transport_states` max 6.8e-6. Measured MCS cost per step (warp-cpu float64, single thread, MCS-on minus MCS-off, 2000 histories, CI configuration): He 100 MeV/u 0.16 us (root 39.85 us), C 150 MeV/u 0.17 us (root 39.57 us). The model (decision 0043 section 3) is unchanged; the root solve remains available as an option. The rebinding of the changed bound files and the binding of the new implementation paths are recorded in the §2 dated note "2026-11-08, post-freeze implementation commits".

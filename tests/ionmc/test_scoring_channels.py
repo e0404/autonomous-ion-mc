@@ -686,6 +686,64 @@ def test_capability_report_is_species_aware() -> None:
     json.dumps(cap)
 
 
+@pytest.mark.parametrize("nuclear", [False, True])
+def test_capability_report_sections_agree(nuclear: bool) -> None:
+    """Every section of the capability report agrees on the species, for nuclear False and True:
+    the species list, species_roles, species_details, the top-level tallies (proton scope and the
+    per-source matrix), unsupported_species and the nuclear section (Codex REVIEW-d0f41eff)."""
+    import ionmc
+    from ionmc.config import ION_PROJECTILES
+    from ionmc.physics.projectiles import PROTON
+    from ionmc.species import REGISTRY, producible
+
+    cap = ionmc.capabilities(nuclear=nuclear)
+    sources = [PROTON, *ION_PROJECTILES]
+    names = [p.name for p in sources]
+    assert cap["species"] == names == cap["species_roles"]["source"] == list(cap["species_details"])
+    t = cap["tallies"]
+    assert list(t["producible_by_source"]) == names
+
+    def pairs(entries: list[dict[str, str]]) -> set[tuple[str, str]]:
+        return {(e["species"], e["generation"]) for e in entries}
+
+    for proj in sources:
+        expected = set(producible(proj, nuclear=nuclear and proj.z == 1))
+        assert pairs(t["producible_by_source"][proj.name]) == expected, proj.name
+        assert pairs(cap["species_details"][proj.name]["tallies"]["producible"]) == expected
+    # the top-level list is the proton scope, stated and cross-checked
+    assert "proton source" in t["producible_scope"]
+    assert t["producible"] == t["producible_by_source"]["proton"]
+    # secondaries: exactly the generation-'secondary' species of the per-source matrix
+    secondary = {
+        n for proj in sources for n, g in pairs(t["producible_by_source"][proj.name])
+        if g == "secondary"
+    }  # fmt: skip
+    transported = {sp.name for sp in REGISTRY if sp.transported}
+    roles = cap["species_roles"]
+    assert set(roles["producible_secondary"]) == secondary & transported
+    assert set(roles["producible_pseudo"]) == secondary - transported
+    if nuclear:
+        assert set(roles["producible_secondary"]) == {"proton", "deuteron"}
+        assert roles["producible_pseudo"] == ["nuclear_local"]
+        assert pairs(cap["nuclear"]["producible"]) == pairs(t["producible"])
+        assert "secondary" in t["generations"]["accepted"]
+    else:
+        assert roles["producible_secondary"] == roles["producible_pseudo"] == []
+        assert "nuclear" not in cap and t["generations"]["rejected"] == ["secondary"]
+    # unsupported species: every transported non-source species, and its secondary status is
+    # the one of species_roles (deuteron is producible with nuclear=True, never unproducible)
+    unsupported = {u["species"]: u for u in cap["unsupported_species"]}
+    assert set(unsupported) == transported - set(names) == {"deuteron", "triton", "helium3"}
+    for name, u in unsupported.items():
+        assert u["as_source"].startswith("not supported")
+        producible_here = name in roles["producible_secondary"]
+        assert u["as_secondary"].startswith("producible" if producible_here else "not producible")
+    assert unsupported["deuteron"]["as_secondary"].startswith(
+        "producible" if nuclear else "not producible"
+    )
+    json.dumps(cap)
+
+
 def _fe_plan_with_scale(make_config: MakeConfig, scale: float) -> ChannelPlan:
     x = np.linspace(0.0, 100.0, 11)
     lk = LookupTable("lk", "q", "1", "let_water_kev_um", "linear", x,

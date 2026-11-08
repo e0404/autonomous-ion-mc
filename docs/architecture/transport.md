@@ -20,7 +20,7 @@ lookup scoring). The models are described in [EM transport](../physics/em-transp
 | `ionmc.geometry` | `VoxelGeometry` (materials per voxel, optional density override), `BoxPhantom` (one-voxel box) |
 | `ionmc.sources` | `PencilBeamSource` |
 | `ionmc.scoring` | `ScoringGrid`, exact voxel-mass overlap `voxel_mass_g`, batch estimator `reduce_batches` |
-| `ionmc.species` | append-only species registry (ids 0 p, 1 d, 2 t, 3 He-3, 4 alpha, 5 carbon12, 6 oxygen16; pseudo-species `nuclear_local`; only p, alpha, carbon12 and oxygen16 are producible), `producible()` engine capability |
+| `ionmc.species` | append-only species registry (ids 0 p, 1 d, 2 t, 3 He-3, 4 alpha, 5 carbon12, 6 oxygen16; pseudo-species `nuclear_local`; source species p, alpha, carbon12 and oxygen16, each producible as a primary; with `nuclear=True` a proton source also produces secondary protons and deuterons and `nuclear_local`), `producible()` engine capability |
 | `ionmc.lookup` | `LookupTable` (uniform grid, sha256, provenance), `resample_uniform` |
 | `ionmc.transport.channels` | channel compiler: `compile_channels`, `ChannelPlan`, quantum rule, shared lookup/spectrum axis parameters |
 | `ionmc.transport.scoring_funcs`, `ionmc.transport.scoring_ref` | shared scoring functions (Warp + Python twin) and the Python channel hook |
@@ -272,8 +272,10 @@ charged particles contribute; neutrals, cutoff and nuclear-local deposits are ex
 lookup averages and reported in the automatic channel `edep_excluded_from_let`.
 
 **Species.** `ionmc.species` holds the append-only registry; the set of species the engine can
-produce is an engine capability (`producible(projectile)`, V3-004: the source projectile as a
-primary). A request for any other species, or generation `"secondary"`, fails closed.
+produce is an engine capability (`producible(projectile, nuclear)`): the source projectile as a
+primary (V3-004) and, with `nuclear=True` and a proton source (decision 0041), secondary protons,
+secondary deuterons and `nuclear_local`. A request for any other species or generation fails closed
+(generation `"secondary"` whenever the run produces no secondaries).
 
 **Channels.** `compile_channels` turns the requests into deduplicated linear channels of the kinds
 E, L, LS, LS2, ES, FE, FL and N (module docstring of `ionmc.transport.channels`), ordered by grid,
@@ -328,7 +330,7 @@ Lookup magnitudes: the largest value of a table for the species a request select
 `[2^-60, 2^60]` (representable FE quantum, scale and bound); `validate()` rejects others.
 
 Fail-closed rules added by V3-004 (test A12, `tests/ionmc/test_scoring_channels.py`): unknown or
-unproducible species, generation `"secondary"` (no secondary transport until V3-005A),
+unproducible species, generation `"secondary"` without nuclear interactions (`nuclear=False`),
 `let_medium` other than water, dose-to-water, unknown grid or lookup, duplicate request names,
 lookup species gaps, axis coverage gaps (energy axis `[table floor, E_hi]/A`, LET axis the water-S
 interval of that energy range), a sha256 mismatch, non-uniform tables or spectrum edges, negative or
@@ -339,7 +341,9 @@ above the budget and a backend without channels.
 objects that enforce it (a test compares it with `CHANNEL_BACKENDS`, `TALLY_QUANTITIES`, the `TallyRequest`
 literals, the lookup axes and `producible`): per backend the supported quantities (`edep`, `dose`,
 `fluence`, `let_t`, `let_d`, `let_d_eps`, `lookup_sum`, `lookup_dose_avg`, `fluence_spectrum`) and its
-availability, the producible `(species, generation)` pairs (proton, primary; no secondaries before V3-005A),
+availability, the producible `(species, generation)` pairs of a proton source (`producible`, scope stated in
+`producible_scope`: proton primary, plus the nuclear secondaries with `nuclear=True`) and of every source species
+(`producible_by_source`, equal to `species_details[...]["tallies"]["producible"]`),
 the accepted and rejected generation choices, `let_medium` water and `dose_reference` medium only, the lookup
 axes with the uniform-axis rule, the spectrum edge rule, the automatic channels and the fail-closed rules.
 The single-process mode of the test suite is a diagnostic and not an engine capability.
@@ -408,14 +412,21 @@ enforce it). The ion models are electromagnetic only.
   ([EM transport](../physics/em-transport.md)). The effective configuration records the status
   (`mcs_mapping`: the proton-equivalent energies, `fdm_extrapolated` when above the `f_dM` domain
   edge of 300 MeV); a proton-equivalent energy above the proton table edge (4000 MeV) fails closed.
+  The mapping is evaluated from a `pv_eq/pv` table (`mcs_mapping_eval="table"`, default) or by the per-step
+  root solve (`"root"`); the kernel variant is selected by `make_transport_kernel(real, diag, ion, ion_eval)`.
   Ion stopping tables are keyed by the full material identity (name, density, composition, I,
   density-effect parameters), not by the material name.
 * **Stopping.** Bethe tables with the Lindhard-Sorensen option `ls` (default `"off"`; `"eff"` and
   `"bare_mixed"` are opt-in and recorded as requested and effective modes outside the table hash);
   NIST ASTAR serves alpha in water only; there is no NIST table for carbon12 and oxygen16.
 * **Tallies.** The scoring channels of decision 0040 are available for ions on the backends that implement them
-  (`CHANNEL_BACKENDS`); the producible species is the source species at generation `primary` only (another
-  species or generation `secondary` fails closed).
+  (`CHANNEL_BACKENDS`); the producible species of an ion source is the source species at generation `primary`
+  only (another species or generation `secondary` fails closed).
+* **Species roles.** `capabilities()["species_roles"]` lists the primary source species and, per report mode,
+  the producible secondary species (`nuclear=True`: proton and deuteron from a proton source) and pseudo-species;
+  `unsupported_species` lists the transported registry species that are not a source (deuteron, triton,
+  helium3) with their status as a secondary in that mode (deuteron producible with `nuclear=True`). A test
+  checks that all sections agree for `nuclear` False and True.
 
 ## Nuclear interactions (decision 0041, python reference backend)
 

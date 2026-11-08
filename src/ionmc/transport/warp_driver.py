@@ -74,7 +74,8 @@ def _register_count(kernel: Any, device: Any) -> int | None:
 def load_kernel(eff: EffectiveConfig, device: str) -> tuple[Any, float, int | None]:
     """Compile and load the kernel for ``eff`` on ``device``: ``(kernel, seconds, registers)``."""
     real = wp.float32 if eff.precision == "float32" else wp.float64
-    kernel = make_transport_kernel(real, wants_diagnostics(eff), eff.is_ion)
+    ion_eval = eff.ion_mapping.evaluation if eff.ion_mapping is not None else "table"
+    kernel = make_transport_kernel(real, wants_diagnostics(eff), eff.is_ion, ion_eval)
     dev = wp.get_device(device)
     t0 = time.perf_counter()
     wp.load_module(kernel.module, device=dev)
@@ -146,15 +147,20 @@ def run_warp_range(eff: EffectiveConfig, h0: int, h1: int, device: str) -> Parti
     g_shape = np.array([list(g.shape) for g in cfg.scoring], dtype=np.int32)
 
     t = tab.to_warp(device, wp.float64)  # energy and range tables in double in every variant
+    dummy = np.zeros((1, 1))
     if eff.ion_mapping is not None:  # exact-Omega mapping data (double precision)
         im = eff.ion_mapping
         map_arrays = [
             wp.array(a, dtype=wp.float64, device=device) for a in (im.ion, im.proton, im.comp)
         ] + [wp.array(im.quad, dtype=wp.float64, device=device)]
+        # the pv_eq/pv table rows (evaluation "table"); a dummy row for "root" (never read)
+        map_arrays.append(
+            wp.array(dummy if im.table is None else im.table, dtype=wp.float64, device=device)
+        )
     else:  # dummy arrays: the proton kernel never reads them
-        dummy = np.zeros((1, 1))
         map_arrays = [wp.array(dummy, dtype=wp.float64, device=device) for _ in range(3)] + [
-            wp.array(dummy[0], dtype=wp.float64, device=device)
+            wp.array(dummy[0], dtype=wp.float64, device=device),
+            wp.array(dummy, dtype=wp.float64, device=device),
         ]
     arr_mat: Any = wp.array(np.ascontiguousarray(geo.material_index), dtype=wp.int32, device=device)
     arr_dens: Any = wp.array(

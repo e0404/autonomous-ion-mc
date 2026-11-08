@@ -31,6 +31,7 @@ from ionmc.config import (
     ION_DOMAIN_MEV_PER_U,
     ION_PROJECTILES,
     MAX_CPU_WORKERS,
+    MCS_MAPPING_EVALS,
     MCS_MODELS,
     MIN_CHUNK_HISTORIES,
     PRECISIONS,
@@ -347,6 +348,17 @@ def _tally_capabilities(nuclear: bool = False) -> dict[str, Any]:
         },
         **(deferred if nuclear else {}),
         "producible": [{"species": n, "generation": g} for n, g in pairs],
+        "producible_scope": (
+            "proton source; the matrix of every source species is 'producible_by_source' "
+            "(equal to species_details[<species>]['tallies']['producible'])"
+        ),
+        "producible_by_source": {
+            proj.name: [
+                {"species": n, "generation": g}
+                for n, g in sorted(producible(proj, nuclear=nuclear and proj.z == 1))
+            ]
+            for proj in (PROTON, *ION_PROJECTILES)
+        },
         "generations": {
             "accepted": [
                 g for g in GENERATION_CHOICES if g == "all" or g in producible_generations
@@ -358,7 +370,8 @@ def _tally_capabilities(nuclear: bool = False) -> dict[str, Any]:
                 "secondary protons and deuterons (generation >= 1) are transported and accepted "
                 "(nuclear=True, decision 0041)"
                 if nuclear
-                else "secondary particles are not transported yet (V3-005A); no secondary species"
+                else "no secondary particles without nuclear interactions (nuclear=False); "
+                "secondaries need nuclear=True (proton source, decision 0041)"
             ),
         },
         "let_medium": ["water"],
@@ -465,6 +478,11 @@ def _species_capabilities(nuclear: bool = False) -> dict[str, Any]:
             "mcs": (
                 {
                     "model": "differential_moliere with the exact-Omega mapping of f_dM",
+                    "evaluation": (
+                        "mcs_mapping_eval 'table' (default: bilinear pv_eq/pv table built by the "
+                        "root solve, variance error <= 1e-3 tested; a state outside the table "
+                        "fails closed) or 'root' (per-step root solve)"
+                    ),
                     "fdm_domain_status": (
                         "recorded per run (mcs_mapping: fdm_extrapolated, proton-equivalent "
                         "energies, domain edge); fails closed above the proton table edge"
@@ -498,11 +516,44 @@ def _species_capabilities(nuclear: bool = False) -> dict[str, Any]:
     return out
 
 
-def _unsupported_species() -> list[dict[str, str]]:
-    """Registry species with a transport path in the registry but not supported as a source."""
+def _species_roles(nuclear: bool = False) -> dict[str, list[str]]:
+    """The species by role (derived from ``ION_PROJECTILES``, ``producible`` and the registry):
+    ``source`` the primary source species; ``producible_secondary`` the transported species that
+    a source of the report's mode can produce as secondaries (generation >= 1; with
+    ``nuclear=True`` the nuclear secondaries of a proton source); ``producible_pseudo`` the
+    pseudo-species (local deposits, not transported) that can be produced."""
+    sources = [PROTON, *ION_PROJECTILES]
+    secondary: set[str] = set()
+    for proj in sources:
+        secondary |= {
+            n for n, g in producible(proj, nuclear=nuclear and proj.z == 1) if g == "secondary"
+        }
+    transported = {sp.name for sp in REGISTRY if sp.transported}
+    return {
+        "source": [p.name for p in sources],
+        "producible_secondary": [sp.name for sp in REGISTRY if sp.name in secondary & transported],
+        "producible_pseudo": [
+            sp.name for sp in REGISTRY if sp.name in secondary and sp.name not in transported
+        ],
+    }
+
+
+def _unsupported_species(nuclear: bool = False) -> list[dict[str, str]]:
+    """Registry species with a transport path that are not supported as a primary source, with
+    their status as a producible secondary in the report's mode (``nuclear``): a species that a
+    proton source produces with ``nuclear=True`` (deuteron) is reported as producible there."""
     supported = {PROTON.name, *(p.name for p in ION_PROJECTILES)}
+    secondary = set(_species_roles(nuclear)["producible_secondary"])
     return [
-        {"species": s.name, "status": "not supported as a source or a producible species"}
+        {
+            "species": s.name,
+            "as_source": "not supported (fails closed)",
+            "as_secondary": (
+                "producible (nuclear secondary of a proton source, nuclear=True, decision 0041)"
+                if s.name in secondary
+                else "not producible (a request fails closed)"
+            ),
+        }
         for s in REGISTRY
         if s.transported and s.name not in supported
     ]
@@ -517,6 +568,8 @@ def capabilities(nuclear: bool = False) -> dict[str, Any]:
         report["physics"]["nuclear"] = True
         report["tallies"] = _tally_capabilities(nuclear=True)
         report["species_details"] = _species_capabilities(nuclear=True)
+        report["species_roles"] = _species_roles(nuclear=True)
+        report["unsupported_species"] = _unsupported_species(nuclear=True)
     return report
 
 
@@ -524,6 +577,7 @@ def _capabilities_base() -> dict[str, Any]:
     return {
         "species": [PROTON.name, *(p.name for p in ION_PROJECTILES)],
         "species_details": _species_capabilities(),
+        "species_roles": _species_roles(),
         "unsupported_species": _unsupported_species(),
         "backends": {
             "python": "available (float64 reference; cpu_workers > 1 splits over processes)",
@@ -544,6 +598,7 @@ def _capabilities_base() -> dict[str, Any]:
             "stopping": "tabulated or analytic electronic stopping (CSDA, inverse range)",
             "straggling_models": list(STRAGGLING_MODELS),
             "mcs_models": list(MCS_MODELS),
+            "mcs_mapping_evals": list(MCS_MAPPING_EVALS),
             "delta_electrons": list(DELTA_ELECTRON_MODELS),
         },
         "geometry": ["VoxelGeometry", "BoxPhantom"],

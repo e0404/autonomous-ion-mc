@@ -412,10 +412,16 @@ def test_nuclear_effective_config_and_capabilities(make_config: MakeConfig, tid:
         cap["species_details"]["carbon12"] == base["species_details"]["carbon12"]
     )  # ions: no nuclear
     cap["species_details"] = base["species_details"]
+    # mode-aware species sections: deuteron is a producible secondary only with nuclear=True
+    assert cap["species_roles"]["producible_secondary"] == ["proton", "deuteron"]
+    assert base["species_roles"]["producible_secondary"] == []
+    cap["species_roles"] = base["species_roles"]
+    assert cap["unsupported_species"] != base["unsupported_species"]
+    cap["unsupported_species"] = base["unsupported_species"]
     assert cap == base
 
 
-CAPABILITIES_SHA256 = "6f56d69cb7937921fb3eb858fcf25d1a93ad67cfdced102cdd2b94f62e77007a"
+CAPABILITIES_SHA256 = "2f6fdc0227354ca86000b50d2f29c4650966e3cfb48f4f13eea20808eb9e98cb"
 
 
 def test_capacity_bounds_follow_decision_0041_section_5(

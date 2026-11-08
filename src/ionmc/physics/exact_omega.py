@@ -26,16 +26,24 @@ of ``beta^2 / (1 - beta^2)`` is evaluated as ``(pc / M)^2``, and the CSDA path i
 project transport-table layout (exact closed-form range in the log-log bin, the inverse-range
 table; ``ionmc.transport.tables``) instead of the interpolating ``StoppingTable.range_at``.
 
-Evaluation (the P11 record declares the per-step root solve; it is the choice implemented, no
-tabulation): :func:`pv_equivalent` solves ``g(u) = b_p(e^u, r e^u) - b_ion(pv, p1v1) = 0`` for
-``u = ln pv_eq``, ``r = p1v1 / pv``, by a bracketed Illinois (modified regula falsi) iteration
-with a bisection safeguard. The bracket is the proton path itself: from its lowest energy to the
-largest ``pv_eq`` whose ``p1v1_eq = r pv_eq`` is still on the proton path. ``g`` is monotone
-increasing in ``pv_eq`` at fixed ``r`` (P11), the bracket stays valid, and the iteration is
-capped at :data:`MAX_ITERATIONS`; there is no failure mode other than the returned status.
+Evaluation. Two forms, selected by ``PhysicsOptions.mcs_mapping_eval`` (decision 0043 section 3,
+"Evaluation"): ``"root"``, the per-step root solve below, and ``"table"`` (the default for z >= 2),
+the decision's allowed alternative: a per-(material, ion) tabulation of ``pv_eq/pv`` on a uniform
+grid in ``(ln pv, ln(p1v1/pv))`` (a shear of the decision's ``(ln pv, ln p1v1)`` plane), whose
+nodes are computed by this same root solve (:func:`build_pv_eq_table`) and which is read by
+bilinear interpolation (:func:`pv_equivalent_table`). The committed bound test
+(``tests/ionmc/test_ion_mcs_table.py``) limits the resulting error of the per-step variance to
+1e-3. The root solve: :func:`pv_equivalent` solves
+``g(u) = b_p(e^u, r e^u) - b_ion(pv, p1v1) = 0`` for ``u = ln pv_eq``, ``r = p1v1 / pv``, by a
+bracketed Illinois (modified regula falsi) iteration with a bisection safeguard. The bracket is
+the proton path itself: from its lowest energy to the largest ``pv_eq`` whose
+``p1v1_eq = r pv_eq`` is still on the proton path. ``g`` is monotone increasing in ``pv_eq`` at
+fixed ``r`` (P11), the bracket stays valid, and the iteration is capped at
+:data:`MAX_ITERATIONS`; there is no failure mode other than the returned status.
 Status codes (:data:`STATUS_NAMES`): 0 converged, 1 invalid ion state (outside the ion path or
 ``pv >= p1v1``), 2 no sign change in the bracket (``b_ion`` outside the proton ``b`` range at this
-``r``), 3 the proton path is too short for this ``r``, 4 not converged within the iteration cap.
+``r``), 3 the proton path is too short for this ``r``, 4 not converged within the iteration cap,
+5 (table form only) the state lies outside the table or in a cell with an invalid node.
 A caller must treat any nonzero status as an invalid state (fail closed); ``f_dM`` is then 0.
 
 The proton path of the mapping is the Bethe proton table of the same material to
@@ -130,7 +138,22 @@ STATUS_NAMES = {
     2: "no sign change (b_ion outside the proton b range)",
     3: "proton path too short",
     4: "not converged",
+    5: "state outside the pv_eq/pv table",
 }
+
+TABLE_N_PV = 128
+"""Default nodes of the ``ln pv`` axis of the ``pv_eq/pv`` table (bound test: max relative variance
+error <= 1e-3, ``tests/ionmc/test_ion_mcs_table.py``)."""
+TABLE_N_R = 128
+"""Default nodes of the ``ln(p1v1/pv)`` axis of the table."""
+TABLE_INVALID_NODE = -1.0
+"""Value stored at a node whose root solve failed (outside the paths); a cell touching it returns
+status 5."""
+TABLE_EDGE_TOL = {"float64": 1.0e-9, "float32": 1.0e-4}
+"""Tolerance (in grid-index units) of the table edges."""
+TABLE_PV_MARGIN = 1.0e-3
+"""Relative margin of the table's largest ``p1v1`` above ``pv(E0 + 6 sigma_E)``."""
+TABLE_HEADER = 8
 
 _HEADER = 8
 
@@ -528,7 +551,49 @@ def make_exact_omega(real: type) -> SimpleNamespace:
             f = em.fdm(peq, p1eq)
         return f, peq, p1eq, status
 
+    tab_tol = wp.constant(real(TABLE_EDGE_TOL[name]))
+
+    @named_func(name)
+    def pv_equivalent_table(tab: wp.array(dtype=real), pv: real, p1v1: real) -> tuple[real, int]:
+        """Tabulated ``(pv_eq, status)`` of the ion state ``(pv, p1v1)``: bilinear interpolation of
+        ``pv_eq/pv`` in ``(x, y) = (ln pv, ln(p1v1/pv))`` on the packed table row ``tab``
+        (:func:`build_pv_eq_table`). Status 5 (``pv_eq`` = ``pv``) when the state lies outside the
+        grid (tolerance :data:`TABLE_EDGE_TOL` in index units) or a corner node of its cell is
+        invalid; 0 otherwise. The caller applies the thin-slab guard (``p1v1/pv >= 1 + 1e-6``,
+        the first node of the ``y`` axis)."""
+        out = pv
+        status = int(5)
+        n_x = int(tab[2])
+        n_y = int(tab[5])
+        fx = (wp.log(pv) - tab[0]) * tab[1]
+        fy = wp.log(p1v1 / pv) * tab[4] - tab[3] * tab[4]
+        if (
+            fx >= -tab_tol
+            and fx <= real(n_x - 1) + tab_tol
+            and fy >= -tab_tol
+            and fy <= real(n_y - 1) + tab_tol
+        ):
+            fx = wp.min(wp.max(fx, real(0.0)), real(n_x - 1))
+            fy = wp.min(wp.max(fy, real(0.0)), real(n_y - 1))
+            i = wp.min(int(wp.floor(fx)), n_x - 2)
+            j = wp.min(int(wp.floor(fy)), n_y - 2)
+            tx = fx - real(i)
+            ty = fy - real(j)
+            base = 8 + i * n_y + j
+            q00 = tab[base]
+            q01 = tab[base + 1]
+            q10 = tab[base + n_y]
+            q11 = tab[base + n_y + 1]
+            if q00 > real(0.0) and q01 > real(0.0) and q10 > real(0.0) and q11 > real(0.0):
+                q = (real(1.0) - tx) * ((real(1.0) - ty) * q00 + ty * q01) + tx * (
+                    (real(1.0) - ty) * q10 + ty * q11
+                )
+                out = q * pv
+                status = 0
+        return out, status
+
     return SimpleNamespace(
+        pv_equivalent_table=pv_equivalent_table,
         kinetic_from_pv=kinetic_from_pv,
         path_range=path_range,
         path_energy=path_energy,
@@ -794,3 +859,191 @@ def fdm_domain_status(
         proton_table_edge_mev=proton_edge_mev,
         depth_fractions=tuple(float(f) for f in fractions),
     )
+
+
+# --- tabulated evaluation (decision 0043 section 3, "Evaluation", the allowed alternative) -------
+@functools.cache
+def _table_node_kernel() -> Any:
+    """Warp CPU kernel (float64): :func:`pv_equivalent` (the root solve) at the table nodes."""
+    xo = make_exact_omega(wp.float64)
+    d = wp.float64
+
+    @wp.kernel(module="unique")
+    def nodes(
+        ion: wp.array(dtype=d),
+        pro: wp.array(dtype=d),
+        comp: wp.array(dtype=d),
+        quad: wp.array(dtype=d),
+        z: d,
+        mass: d,
+        pv: wp.array(dtype=d),
+        p1v1: wp.array(dtype=d),
+        out: wp.array(dtype=d),
+        status: wp.array(dtype=int),
+    ):  # type: ignore[no-untyped-def]
+        k = wp.tid()
+        peq, st, _it = xo.pv_equivalent(ion, pro, comp, quad, z, mass, pv[k], p1v1[k], 0)
+        out[k] = peq
+        status[k] = st
+
+    return nodes
+
+
+def root_pv_equivalent_batch(
+    ion_pack: np.ndarray,
+    proton_pack: np.ndarray,
+    comp: np.ndarray,
+    quad: np.ndarray,
+    z: float,
+    mass_mev: float,
+    pv: np.ndarray,
+    p1v1: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    """``(pv_eq, status)`` of many states by the root solve :func:`pv_equivalent` (float64, run as a
+    Warp CPU kernel; the same function source as the python twin and the transport kernels)."""
+    pv = np.ascontiguousarray(pv, dtype=np.float64)
+    p1v1 = np.ascontiguousarray(p1v1, dtype=np.float64)
+    n = pv.size
+    dev = "cpu"
+
+    def arr(a: np.ndarray) -> Any:
+        return wp.array(np.ascontiguousarray(a, dtype=np.float64), dtype=wp.float64, device=dev)
+
+    out = wp.zeros(n, dtype=wp.float64, device=dev)
+    st = wp.zeros(n, dtype=int, device=dev)
+    wp.launch(
+        _table_node_kernel(),
+        dim=n,
+        inputs=[
+            arr(ion_pack), arr(proton_pack), arr(comp), arr(quad), wp.float64(z),
+            wp.float64(mass_mev), arr(pv), arr(p1v1), out, st,
+        ],
+        device=dev,
+    )  # fmt: skip
+    return out.numpy().copy(), st.numpy().copy()
+
+
+def table_domain(
+    projectile: Projectile, e_mid_min_mev: float, e_lo_mev: float, e_hi_mev: float
+) -> tuple[float, float, float]:
+    """``(pv_lo, p1v1_min, p1v1_max)`` [MeV] of the table of a run. ``pv_lo = pv(e_mid_min_mev)``
+    bounds the step midpoint states from below (the caller passes ``(1 - f) E_cut`` with ``f`` the
+    step's energy-loss fraction limit: a step starts above ``E_cut`` and its midpoint loses less
+    than ``f E``). The initial states ``p1v1`` of the run's particles (the source: no secondaries
+    for z >= 2) lie in ``[pv(e_lo_mev) / (1 + m), pv(e_hi_mev) (1 + m)]`` with
+    ``m = TABLE_PV_MARGIN``, ``e_lo_mev = max(E0 - 6 sigma_E, E_cut)`` and
+    ``e_hi_mev = min(E0 + 6 sigma_E, table maximum)`` (the source sampler's largest Gaussian
+    deviate is below 6: ``sqrt(-2 ln u)`` with ``u >= 2^-25``)."""
+    m = projectile.mass_mev
+
+    def pv(e: float) -> float:
+        return e * (e + 2.0 * m) / (e + m)
+
+    return (
+        pv(e_mid_min_mev),
+        pv(e_lo_mev) / (1.0 + TABLE_PV_MARGIN),
+        pv(e_hi_mev) * (1.0 + TABLE_PV_MARGIN),
+    )
+
+
+_TABLES: dict[str, np.ndarray] = {}
+
+
+def build_pv_eq_table(
+    ion_pack: np.ndarray,
+    proton_pack: np.ndarray,
+    comp: np.ndarray,
+    quad: np.ndarray,
+    z: float,
+    mass_mev: float,
+    pv_lo: float,
+    p1v1_min: float,
+    p1v1_max: float,
+    n_pv: int = TABLE_N_PV,
+    n_r: int = TABLE_N_R,
+) -> np.ndarray:
+    """Packed ``pv_eq/pv`` table row of one ion in one material (float64)::
+
+        [x0, inv_dx, n_x, y0, inv_dy, n_y, x_last, y_last, q[0, 0], q[0, 1], ..., q[n_x-1, n_y-1]]
+
+    ``x = ln pv`` from ``ln pv_lo`` to ``ln(p1v1_max / (1 + THIN_SLAB_R))`` (``n_pv`` nodes) and
+    ``y = ln(p1v1/pv)`` from ``ln(1 + THIN_SLAB_R)`` (the thin-slab guard of ``ion_mcs``) to
+    ``ln(p1v1_max / pv_lo)`` (``n_r`` nodes), ``q = pv_eq/pv`` of the root solve at the node. Only
+    the nodes of cells that meet the band of the run's initial states, ``p1v1_min <= p1v1 <=
+    p1v1_max`` (:func:`table_domain`), are solved; every other node, and a node whose solve fails,
+    holds :data:`TABLE_INVALID_NODE` (a state there returns status 5, fail closed). Fails closed
+    (``UnsupportedCombinationError``) unless every cell meeting the band has four valid nodes.
+    Cached per input."""
+    from ionmc.physics.ion_mcs import THIN_SLAB_R  # noqa: PLC0415
+
+    if not (0.0 < pv_lo < p1v1_min <= p1v1_max) or n_pv < 2 or n_r < 2:
+        raise fail(
+            f"invalid pv_eq table domain: pv_lo={pv_lo}, p1v1 in [{p1v1_min}, {p1v1_max}], "
+            f"n_pv={n_pv}, n_r={n_r}"
+        )
+    import hashlib  # noqa: PLC0415
+
+    h = hashlib.sha256()
+    for a in (ion_pack, proton_pack, comp, quad):
+        h.update(np.ascontiguousarray(a, dtype=np.float64).tobytes())
+    h.update(
+        np.array([z, mass_mev, pv_lo, p1v1_min, p1v1_max, n_pv, n_r], dtype=np.float64).tobytes()
+    )
+    key = h.hexdigest()
+    if key in _TABLES:
+        return _TABLES[key]
+    y0 = math.log1p(THIN_SLAB_R)
+    x0 = math.log(pv_lo)
+    x1 = math.log(p1v1_max) - y0
+    y1 = math.log(p1v1_max / pv_lo)
+    xs = np.linspace(x0, x1, n_pv)
+    ys = np.linspace(y0, y1, n_r)
+    gx, gy = np.meshgrid(xs, ys, indexing="ij")
+    pv = np.exp(gx).reshape(-1)
+    p1 = pv * np.exp(gy).reshape(-1)
+    q = np.full(pv.size, TABLE_INVALID_NODE)
+    # cells meeting the band ln p1v1_min <= x + y <= ln p1v1_max (x + y is extreme at the corners)
+    s_node = gx + gy
+    s_lo = s_node[:-1, :-1]
+    s_hi = s_node[1:, 1:]
+    band = (s_hi >= math.log(p1v1_min) - 1e-12) & (s_lo <= math.log(p1v1_max) + 1e-12)
+    need = np.zeros((n_pv, n_r), dtype=bool)
+    need[:-1, :-1] |= band
+    need[1:, :-1] |= band
+    need[:-1, 1:] |= band
+    need[1:, 1:] |= band
+    reach = need.reshape(-1)
+    if np.any(reach):
+        peq, st = root_pv_equivalent_batch(
+            ion_pack, proton_pack, comp, quad, z, mass_mev, pv[reach], p1[reach]
+        )
+        q[reach] = np.where(st == 0, peq / pv[reach], TABLE_INVALID_NODE)
+    grid = q.reshape(n_pv, n_r)
+    cell_ok = (
+        (grid[:-1, :-1] > 0.0)
+        & (grid[1:, :-1] > 0.0)
+        & (grid[:-1, 1:] > 0.0)
+        & (grid[1:, 1:] > 0.0)
+    )
+    if np.any(band & ~cell_ok):
+        i, j = np.argwhere(band & ~cell_ok)[0]
+        raise fail(
+            "the pv_eq/pv table cannot be built over the source domain: the root solve fails at a "
+            f"node of the cell at pv = {math.exp(xs[i]):.6g} MeV, p1v1/pv = {math.exp(ys[j]):.6g} "
+            "(the ion or proton path does not reach one cell beyond pv(E0 + 6 sigma_E)); use "
+            "mcs_mapping_eval='root' or extend the stopping table"
+        )
+    header = [
+        x0,
+        (n_pv - 1) / (x1 - x0),
+        float(n_pv),
+        y0,
+        (n_r - 1) / (y1 - y0),
+        float(n_r),
+        x1,
+        y1,
+    ]
+    row = np.concatenate((header, q)).astype(np.float64)
+    row.setflags(write=False)
+    _TABLES[key] = row
+    return row
