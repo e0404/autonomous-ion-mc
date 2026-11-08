@@ -118,3 +118,128 @@ These operational interruptions are logged separately from scientific interventi
 Start a fresh Claude session to load the updated hook configuration. Preflight tests
 notification delivery and runtime readiness; it does not check remaining Claude
 subscription quota or start the scientific experiment.
+
+## Signed attestations (V3-INFRA-002)
+
+Records written by the protected MCP services carry an Ed25519 `attestation`
+block so that a repository-authored copy can be told apart from a real record.
+
+- **What is signed:** the Ed25519 message is the canonical JSON (sorted keys,
+  compact separators, ASCII) of `{"payload": <record without its attestation
+  field>, "signer", "signed_at_utc", "key_id"}`; `payload_sha256` hashes the
+  canonical payload alone. `validation-manager` signs each `VAL-...` record
+  before it is written and returned; `host-runner` signs each `RUN-...` record
+  (including `stdout_sha256`, `stderr_sha256` and `output_manifest_sha256`) and
+  stores it as `record.json` (and `result.json`) in the run directory.
+- **Block shape:** `{"schema": "ionmc-attestation-1", "alg": "ed25519", "signer",
+  "key_id" (sha256(public key)[:16]), "public_key" (hex), "signed_at_utc",
+  "payload_sha256", "signature" (hex)}`.
+- **Keys:** created on first use under `<share root>/attestation/<signer>.key`
+  (32-byte seed, hex, mode 0600) with `<signer>.pub` (public key, hex) next to
+  it. Implementation is pure stdlib (`infrastructure/experiment_v3/attest.py`,
+  RFC 8032, not constant time; acceptable for this single-user host).
+- **Trust file:** `infrastructure/keys/trusted_attestation_keys.json`, empty on
+  merge (trust on first use). A record whose key is not listed is `unverified`,
+  never `verified`; a present-but-wrong attestation (altered payload, bad
+  signature, wrong signer) is `invalid`.
+- **Enforcement rule (local-validation gate):** `infrastructure/validation/
+  local_validation.py` (`records_for`, `inspect`, `check`) verifies every record
+  against the trust map with expected signer `validation-manager` and requires
+  the signed `task_id` and `git_sha` to equal the requested task and SHA (else
+  `invalid`). Each record gets a derived `attestation_status`
+  (`verified`/`unverified`/`invalid`, plus `attestation_reason`). Only
+  `verified` records count as passing; unverified and invalid ones are rejected
+  with an explicit reason. `invalid` records are rejected always. **Bootstrap
+  exception, migration task only:** `BOOTSTRAP_TASKS = {"V3-INFRA-002"}`; only
+  for such a task, while the trust map has no `validation-manager` key, are
+  unverified records tolerated ("unverified (no trusted key published yet)").
+  For every other task unverified records are rejected whatever the trust map
+  state ("attestation required: no trusted validation-manager key published
+  (operator runbook) or record not verified"). **After this change merges,
+  every other task's merge gate is blocked until the operator publishes the
+  keys** (the runbook does both keys in one sitting). Records with status
+  `failed` always count as failing.
+- **Host-run evidence:** a validation record references host runs with
+  `details.host_runs = [{"run_id": "RUN-...", "output_manifest_sha256":
+  "<64 hex or null>"}]`. When `record_local_validation` receives entries with a
+  `run_id` but no `output_manifest_sha256`, the service looks up the signed run
+  record under the protected host-runs root and fills the digest in itself (the
+  orchestrator cannot mis-state it); if the run record is missing, the record
+  is still written but with `details.host_run_manifest_lookup: "missing"` and
+  the gate rejects it. The gate accepts the record only if the signed run record
+  `<share root>/host-runs/<task>/<RUN-id>/record.json` exists
+  (`infrastructure/validation/host_run_records.py`), is `verified` by a trusted
+  `host-runner` key (unverified tolerated only in bootstrap, migration task
+  only; missing or invalid never), has signed `task_id`, `sha` and `run_id`
+  equal to the validation record's task, SHA and the referenced id (replay
+  protection), has a signed `output_manifest_sha256` equal to the claimed one
+  (null must match null; mismatch rejects), and succeeded: `succeeded` true,
+  `exit_code` 0, `timed_out` false, `committed_state_unchanged` true and
+  `dirty_after` false (when present), and no `output_publication_error`. The
+  legacy `host_run_id` / `host_run_ids` forms carry no manifest claim and are
+  rejected with "host run referenced without output_manifest_sha256 binding"
+  except for the bootstrap task. A malformed reserved field (`host_runs` not a
+  list, an entry without a non-blank string `run_id` or with a claim that is
+  neither 64 hex nor null, `host_run_id` not a non-blank string, `host_run_ids`
+  not a list of such strings) is refused by `record_local_validation`
+  (ValueError) and, if it reaches the store anyway, rejected by the gate in
+  every mode with one `<malformed>` entry per problem; it is never ignored.
+  `inspect` reports each record's `host_run_attestation`.
+- **Transport consumers:** `validation/scripts/transport/attest_verify.py`
+  provides `require_verified(record, expected_signer, trust=None, *,
+  expected_task_id, expected_git_sha, expected_run_id,
+  expected_output_manifest_sha256, bootstrap=False)`. It is strict by default
+  (only `verified` passes; invalid always raises), raises on any mismatch of a
+  given expected identity value, and tolerates unverified records only with an
+  explicit `bootstrap=True` while the signer has no trusted key. The gate above
+  is the production consumer of `RUN-` records.
+- **Key-publication mode (trust bootstrap):** the gate runs from the
+  integration checkout, whose trust file is empty until a key-publication
+  commit merges, and that commit could never pass an empty-trust gate. So,
+  while the integration trust map has no `validation-manager` key, a task
+  branch whose ONLY change against the integration base (`git diff
+  --name-only $(git merge-base origin/<integration> <sha>) <sha>`) is
+  `infrastructure/keys/trusted_attestation_keys.json`, and whose file lists
+  EXACTLY one well-formed entry (32-byte key that is a valid non-small-order
+  curve point, `key_id` = sha256(key)[:16]) for BOTH signers, is evaluated
+  against its own trust file (`trust_source: "key-publication"`, enforcement
+  `enforcing`, no bootstrap tolerance, every validation record and host run
+  must verify). Every published key must be evidenced by a protected signed
+  record for that task and SHA: the gate passes only with a verified passing
+  validation record (proves the validation-manager key) that references a
+  verified, successful host run (proves the host-runner key); the output
+  carries `key_publication_evidence` and, when incomplete,
+  `key_publication_problem`. The same rule governs EVERY later change of the
+  trust file (key rotation = a pure branch replacing the keys, evidenced by
+  records signed with the new keys): a branch that changes the trust file
+  together with anything else, or publishes more than one key per signer, or
+  whose diff cannot be determined, fails with `trust_problem` even when the
+  integration file already trusts a key (the records may verify, the gate
+  still fails). A branch that does not touch the trust file is evaluated
+  against the integration file (`trust_source: "integration"`). The
+  protected validation and host-run stores are outside the repository write
+  boundary, so a branch cannot supply forged records to match a key it
+  publishes; that the published keys are the service-held ones is established
+  by this evidence rule of the gate (only the services can produce records
+  that verify under the published keys), not by the Codex review, which sees
+  the repository snapshot only.
+- **Verifier hardening:** both Ed25519 verifiers (`attest.py` and the
+  repository copy `attest_verify.py`) reject a public key or a signature point
+  R of small order (identity and the other points of order dividing 8), which
+  would otherwise satisfy the verification equation for any message; the
+  trust-map parser rejects such keys too. Adversarial vectors are in
+  `tests/infrastructure/test_attest.py`.
+- **Operator runbook:** merge the PR; restart the MCP servers (they create
+  their keys on first use). Then the orchestrator (or operator) creates a
+  key-publication task whose only change is the trust file: take each
+  signer's `key_id`/`public_key` from `python
+  infrastructure/experiment_v3/attest.py --print-public-key <signer>` (or
+  from the `attestation.public_key` of the first signed `VAL-`/`RUN-` record,
+  which must agree), run one host-runner job for the task (its signed run
+  record is the host-runner key's evidence), record validation for it after
+  the restart (signed, referencing that run in `details.host_runs`), review,
+  push, CI, merge. Records created before the restart carry no
+  attestation and stay `unverified`; once the `validation-manager` key is
+  published they no longer count toward the gate, so re-record validation
+  after publishing the key. Until the key-publication commit merges every
+  non-migration task's gate is blocked.

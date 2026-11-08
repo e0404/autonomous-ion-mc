@@ -1,0 +1,18 @@
+{
+  "validation-manager": [
+    {
+      "key_id": "be42a5ebe42a750b",
+      "public_key": "1ce925c716d495f263e9d9edf5ed42d4779e781b286049fa4f584a98880d20ef",
+      "added": "2026-11-08",
+      "note": "First publication (V3-INFRA-003) after the operator restarted the MCP services on 2026-11-08 (IR-20261107-235713-1724FF). Taken from the attestation block of VAL-20261108-000151-6C2F33 (task V3-INFRA-003, sha 5ea81694), key_id = sha256(public_key)[:16] checked; signature verified with infrastructure/experiment_v3/attest.py."
+    }
+  ],
+  "host-runner": [
+    {
+      "key_id": "4d02f521f3fb9344",
+      "public_key": "fbd70c036026c9dc84362645df51dd86bc689713b590a5d4b858dc87cdee263e",
+      "added": "2026-11-08",
+      "note": "First publication (V3-INFRA-003) after the operator restarted the MCP services on 2026-11-08 (IR-20261107-235713-1724FF). Taken from the attestation block of host-runner record RUN-20261108T000143Z-867f1663 (task V3-INFRA-003, sha 5ea81694), key_id = sha256(public_key)[:16] checked."
+    }
+  ]
+}

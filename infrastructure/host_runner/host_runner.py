@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -271,6 +272,31 @@ def write_json(path: Path, value: dict) -> None:
     )
 
 
+def file_sha256(path: Path) -> str:
+    """Streaming sha256 of a file (bounded memory; sparse files are fine)."""
+    with open(path, "rb") as stream:
+        if hasattr(hashlib, "file_digest"):
+            return hashlib.file_digest(stream, "sha256").hexdigest()
+        digest = hashlib.sha256()
+        while chunk := stream.read(1 << 20):
+            digest.update(chunk)
+        return digest.hexdigest()
+
+
+def output_manifest_sha256(outputs: Path) -> str | None:
+    """sha256 over sorted "<relative path>\\0<file sha256>\\n" lines of produced
+    output files; None if the run produced none."""
+    if not outputs.is_dir():
+        return None
+    lines = []
+    for path in sorted(p for p in outputs.rglob("*") if p.is_file() and not p.is_symlink()):
+        digest = file_sha256(path)
+        lines.append(f"{path.relative_to(outputs).as_posix()}\0{digest}\n")
+    if not lines:
+        return None
+    return hashlib.sha256("".join(lines).encode("utf-8")).hexdigest()
+
+
 def bounded_tail(text: str, max_chars: int) -> tuple[str, bool, int]:
     total_chars = len(text)
 
@@ -411,7 +437,18 @@ def run_validation(
         "succeeded": (not timed_out and exit_code == 0 and unchanged and publication_error is None),
     }
 
+    result["stdout_sha256"] = hashlib.sha256(stdout.encode("utf-8")).hexdigest()
+    result["stderr_sha256"] = hashlib.sha256(stderr.encode("utf-8")).hexdigest()
+    result["output_manifest_sha256"] = output_manifest_sha256(run_dir / "outputs")
+
+    # V3-INFRA-002: Ed25519 attestation by the service-held key (additive field).
+    sys.path.insert(0, str(REPO))
+    from infrastructure.experiment_v3.attest import sign_with_service_key
+
+    result = sign_with_service_key(result, "host-runner")
+
     write_json(run_dir / "result.json", result)
+    write_json(run_dir / "record.json", result)
     return result
 
 
