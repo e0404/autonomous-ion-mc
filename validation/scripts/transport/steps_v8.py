@@ -19,7 +19,7 @@ Seeds (plan section C, r2-topas-target section 7): ``seed = 20581004 + 100 r_ind
 independent runs; their per-batch grids are combined by the evaluator, not here). The held-out set
 after a model amendment uses the re-run base 20621004 with the same r_index (``--seed-base``).
 
-The step writes ``ionmc-case<N>-k<K>.npz`` (per-grid batch energy arrays [MeV] and the grid edges)
+The step writes ``ionmc-case<N>-k<K>.npz`` (per-grid batch energy arrays [MeV] and the grid edges; ``np.savez_compressed``, lossless)
 and prints one JSON document (``#JSON-BEGIN`` / ``#JSON-END``) with the sha256 of the npz, the
 effective-configuration summary, the counters, validity and the energy balance. Every invalid
 result or nonzero counter fails the step. No TD/TL statistic is computed here.
@@ -146,7 +146,7 @@ def step_td_tl_sample(a: argparse.Namespace) -> int:
         for ax in range(3):
             arrays[f"{g.name}_edges{ax}_mm"] = grid.edges_mm(ax)
     npz = out / f"ionmc-case{a.case}-k{a.k}.npz"
-    np.savez(npz, **arrays)
+    np.savez_compressed(npz, **arrays)  # lateral grids are mostly zero: ~10-20x smaller on disk
     digest = hashlib.sha256(npz.read_bytes()).hexdigest()
     counters = res.counters.as_dict()
     doc = {

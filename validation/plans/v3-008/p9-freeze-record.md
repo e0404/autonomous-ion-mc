@@ -231,7 +231,7 @@ placeholder scorer output was deleted unread.
 | `src/ionmc/transport/tally.py` | `b941a46bda49c12e2cda1e27978528b85c08120fc56a7d4c7e172f32953c87d0` |
 | `src/ionmc/transport/warp_driver.py` | `cb32245e48d6bffd03092d09fb7421d8b11a8191158a311fd0b9a92e568aeb86` |
 | `validation/scripts/ion_em/r2_evaluate.py` | `be1eadcc504968d75fce09b0f7555b80ccb23c2ece18477b08159091f226ec14` |
-| `validation/scripts/transport/steps_v8.py` | `8d2617cd671d5d96411d336ae2df1417951e50abd6813bfa844230cac3650078` |
+| `validation/scripts/transport/steps_v8.py` | `e8b73006921b479797e762c1319adf7e1e4edb95594ffac4109827b4ee185a7d` |
 | `tests/ionmc/test_ion_mcs_table.py` | `62d495bc4bba5557589e8670cd8f58ced5fc40cf194320fcacfe49b88a4dbb18` |
 | `tests/ionmc/test_v3_008_rows_ci.py` | `efce49724d4eef7060bc755e8b4c2ecb60d76141d61993120be0b5577336987d` |
 | `tests/ionmc/test_r2_evaluate.py` | `5b996ebb62304e4720bc631ec4bae4b41c7a4bf13ddabdfd1ccc7ea9cf18f222` |
@@ -248,6 +248,8 @@ placeholder scorer output was deleted unread.
 **Dated note (2026-11-08, post-freeze implementation commit R2-TOPAS-9b, Codex REVIEW-4bf4f5bc minor: the `mcs_table_bracket_miss` descriptions now state that the counter counts every miss of the initial tight bracket, widened or full; documentation only) — rebound entries (old → new): `src/ionmc/physics/exact_omega.py` 5f4aa165… → e43eecc3…; `src/ionmc/simulation.py` b855273a… → 2958dbd3…; `src/ionmc/transport/tally.py` 7a746c99… → b941a46b…. All other entries unchanged (recomputed against the tree). Counts unchanged (490 paths / 534 values).**
 
 **Dated note (2026-11-08, ionmc sample chunk plan appended to r2-topas-target.md section 8; records only) — rebound entries (old → new): `validation/plans/v3-008/r2-topas-target.md` 4722d837… → 346ad951…. Counts unchanged (490 paths / 534 values).**
+
+**Dated note (2026-11-08, steps_v8 writes the sample npz with np.savez_compressed (lossless; the lateral grids are mostly zero, ~385 MB → tens of MB per chunk; chosen before any sealed sample, the single chunk run so far is repeated) — rebound entries (old → new): `validation/scripts/transport/steps_v8.py` 8d2617cd… → e8b73006…. Counts unchanged (490 paths / 534 values).**
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.
