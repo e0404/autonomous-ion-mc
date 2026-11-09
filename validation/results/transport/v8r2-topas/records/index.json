@@ -1,1 +1,438 @@
-{"schema": "ionmc-v8r2-topas-records-index-1", "runs": [], "_note": "one entry per evidence part {case, config, part, run_id}; filled by the orchestrator as evidence runs complete (plan Order step 3); smokes are not evidence and are listed in ../smokes.json"}
+{
+  "schema": "ionmc-v8r2-topas-records-index-1",
+  "runs": [
+    {
+      "case": 1,
+      "config": "idd-em",
+      "part": 0,
+      "run_id": "REF-33697a5201767cc8e211-956a6d1a"
+    },
+    {
+      "case": 1,
+      "config": "idd-em",
+      "part": 1,
+      "run_id": "REF-56b37ef1fd8dbf0789c3-ec02c119"
+    },
+    {
+      "case": 1,
+      "config": "idd-em",
+      "part": 2,
+      "run_id": "REF-0d6cbfab1d9b4bef9647-df1501a1"
+    },
+    {
+      "case": 1,
+      "config": "idd-em",
+      "part": 3,
+      "run_id": "REF-750d9a34da3f616e101c-d65c932b"
+    },
+    {
+      "case": 2,
+      "config": "idd-em",
+      "part": 0,
+      "run_id": "REF-07e2fc253fd227f8865f-ef8acb6a"
+    },
+    {
+      "case": 2,
+      "config": "idd-em",
+      "part": 1,
+      "run_id": "REF-f596373c28b3d26ab5d5-a88b001e"
+    },
+    {
+      "case": 2,
+      "config": "idd-em",
+      "part": 2,
+      "run_id": "REF-8ab4771dd1c3f998104e-85ff657d"
+    },
+    {
+      "case": 2,
+      "config": "idd-em",
+      "part": 3,
+      "run_id": "REF-2a3f5a44cdfac62f921c-8182cea9"
+    },
+    {
+      "case": 3,
+      "config": "idd-em",
+      "part": 0,
+      "run_id": "REF-468d75c0234179822ef6-03056a77"
+    },
+    {
+      "case": 3,
+      "config": "idd-em",
+      "part": 1,
+      "run_id": "REF-b235c3220e66b464555a-85711fcc"
+    },
+    {
+      "case": 3,
+      "config": "idd-em",
+      "part": 2,
+      "run_id": "REF-5c309b0ee9905e6be306-efccf482"
+    },
+    {
+      "case": 3,
+      "config": "idd-em",
+      "part": 3,
+      "run_id": "REF-6ad649bce2f2c9e9bc80-7b753c4a"
+    },
+    {
+      "case": 4,
+      "config": "idd-em",
+      "part": 0,
+      "run_id": "REF-72ef20c9ce60ae1dd228-6783b617"
+    },
+    {
+      "case": 4,
+      "config": "idd-em",
+      "part": 1,
+      "run_id": "REF-0881c06b2c79cc46abe9-d9b3783d"
+    },
+    {
+      "case": 4,
+      "config": "idd-em",
+      "part": 2,
+      "run_id": "REF-844b1cf2bfc4b3287667-fc8a609d"
+    },
+    {
+      "case": 4,
+      "config": "idd-em",
+      "part": 3,
+      "run_id": "REF-85bf230318944e37467a-35b2cabb"
+    },
+    {
+      "case": 5,
+      "config": "idd-em",
+      "part": 0,
+      "run_id": "REF-0f6fa87af643aa024933-64402f0a"
+    },
+    {
+      "case": 5,
+      "config": "idd-em",
+      "part": 1,
+      "run_id": "REF-12b6bbf50b273f244387-ad7f9f2b"
+    },
+    {
+      "case": 5,
+      "config": "idd-em",
+      "part": 2,
+      "run_id": "REF-986a7d3ea8d26f84cd71-e55464e8"
+    },
+    {
+      "case": 5,
+      "config": "idd-em",
+      "part": 3,
+      "run_id": "REF-37b0c6d0fb895d4f64c0-04266851"
+    },
+    {
+      "case": 6,
+      "config": "idd-em",
+      "part": 0,
+      "run_id": "REF-a76389b59e272bee7b3d-c398fe21"
+    },
+    {
+      "case": 6,
+      "config": "idd-em",
+      "part": 1,
+      "run_id": "REF-91a6979b5edd1995642f-93b9881a"
+    },
+    {
+      "case": 6,
+      "config": "idd-em",
+      "part": 2,
+      "run_id": "REF-c431be25d1b37248cd7e-4bdb3417"
+    },
+    {
+      "case": 6,
+      "config": "idd-em",
+      "part": 3,
+      "run_id": "REF-f085e4479d78b277a4c6-707fcf44"
+    },
+    {
+      "case": 7,
+      "config": "idd-em",
+      "part": 0,
+      "run_id": "REF-04dae32f7e6e4b7c53d9-cd22c30a"
+    },
+    {
+      "case": 7,
+      "config": "idd-em",
+      "part": 1,
+      "run_id": "REF-13e2a8a44d1f00e3d7df-88894365"
+    },
+    {
+      "case": 7,
+      "config": "idd-em",
+      "part": 2,
+      "run_id": "REF-0a1ffa6a5e64335d797a-6351fe0e"
+    },
+    {
+      "case": 7,
+      "config": "idd-em",
+      "part": 3,
+      "run_id": "REF-13caa50a25cdc3a9e6fc-7f169e4e"
+    },
+    {
+      "case": 8,
+      "config": "idd-em",
+      "part": 0,
+      "run_id": "REF-8b7009c123e89db33318-78bc11f0"
+    },
+    {
+      "case": 8,
+      "config": "idd-em",
+      "part": 1,
+      "run_id": "REF-685038154a1f58026833-65882747"
+    },
+    {
+      "case": 8,
+      "config": "idd-em",
+      "part": 2,
+      "run_id": "REF-97f42afba70d58702506-6d3f2983"
+    },
+    {
+      "case": 8,
+      "config": "idd-em",
+      "part": 3,
+      "run_id": "REF-d16fbbeb28af18b513b1-eedfbfd8"
+    },
+    {
+      "case": 9,
+      "config": "idd-em",
+      "part": 0,
+      "run_id": "REF-2ae51e027f7910f26a08-b8f8c673"
+    },
+    {
+      "case": 9,
+      "config": "idd-em",
+      "part": 1,
+      "run_id": "REF-fc2f8c0c67ddd847ed75-f40e519a"
+    },
+    {
+      "case": 9,
+      "config": "idd-em",
+      "part": 2,
+      "run_id": "REF-659638d1daa0c25ab0c4-1f757981"
+    },
+    {
+      "case": 9,
+      "config": "idd-em",
+      "part": 3,
+      "run_id": "REF-3263419233fca6fb8e42-120e4a53"
+    },
+    {
+      "case": 1,
+      "config": "lat-em",
+      "part": 4,
+      "run_id": "REF-1c6adae4c80435460bbd-1a2f16fe"
+    },
+    {
+      "case": 1,
+      "config": "lat-em",
+      "part": 5,
+      "run_id": "REF-b73b308392747b407aba-884b2a64"
+    },
+    {
+      "case": 1,
+      "config": "lat-em",
+      "part": 6,
+      "run_id": "REF-260acb9d47e48a902a61-0c7cfb06"
+    },
+    {
+      "case": 1,
+      "config": "lat-em",
+      "part": 7,
+      "run_id": "REF-8e0b95d380d64b45cae0-70144471"
+    },
+    {
+      "case": 2,
+      "config": "lat-em",
+      "part": 4,
+      "run_id": "REF-a3a9cbc0bf63b1aa4f16-351e0c17"
+    },
+    {
+      "case": 2,
+      "config": "lat-em",
+      "part": 5,
+      "run_id": "REF-b3289bd56dfb73d3d2eb-87adddc9"
+    },
+    {
+      "case": 2,
+      "config": "lat-em",
+      "part": 6,
+      "run_id": "REF-22b2769f0653860495b9-01882251"
+    },
+    {
+      "case": 2,
+      "config": "lat-em",
+      "part": 7,
+      "run_id": "REF-e244c0801114dabea9df-af8f93df"
+    },
+    {
+      "case": 3,
+      "config": "lat-em",
+      "part": 4,
+      "run_id": "REF-81587d7789d43f89f46f-5bec307a"
+    },
+    {
+      "case": 3,
+      "config": "lat-em",
+      "part": 5,
+      "run_id": "REF-377d191363dfd225d31e-6c60fce6"
+    },
+    {
+      "case": 3,
+      "config": "lat-em",
+      "part": 6,
+      "run_id": "REF-b5b9ff08f408b4ca5317-7d7f168d"
+    },
+    {
+      "case": 3,
+      "config": "lat-em",
+      "part": 7,
+      "run_id": "REF-498b9fa7f3d232ad0360-68b55a0d"
+    },
+    {
+      "case": 4,
+      "config": "lat-em",
+      "part": 4,
+      "run_id": "REF-badd5762e53b6bd276e3-21fd2fff"
+    },
+    {
+      "case": 4,
+      "config": "lat-em",
+      "part": 5,
+      "run_id": "REF-6b30b8a86a1edc12d348-8bd43e2a"
+    },
+    {
+      "case": 4,
+      "config": "lat-em",
+      "part": 6,
+      "run_id": "REF-39731c5d7e8122f2c417-5c2db0ad"
+    },
+    {
+      "case": 4,
+      "config": "lat-em",
+      "part": 7,
+      "run_id": "REF-33c53d05d0754f3f7d78-a60f9ea8"
+    },
+    {
+      "case": 5,
+      "config": "lat-em",
+      "part": 4,
+      "run_id": "REF-79f238180437968711f6-f2cb2cb0"
+    },
+    {
+      "case": 5,
+      "config": "lat-em",
+      "part": 5,
+      "run_id": "REF-b3507ec2481cbf21ebce-65cedd9b"
+    },
+    {
+      "case": 5,
+      "config": "lat-em",
+      "part": 6,
+      "run_id": "REF-af61a9d385173066f95b-3cf34e11"
+    },
+    {
+      "case": 5,
+      "config": "lat-em",
+      "part": 7,
+      "run_id": "REF-11da44e21bce0ef5627f-59121724"
+    },
+    {
+      "case": 6,
+      "config": "lat-em",
+      "part": 4,
+      "run_id": "REF-6f1fc1d8d8c16b921a7d-267b5a49"
+    },
+    {
+      "case": 6,
+      "config": "lat-em",
+      "part": 5,
+      "run_id": "REF-1128ee8ff3ebb9a57dae-5eb6035a"
+    },
+    {
+      "case": 6,
+      "config": "lat-em",
+      "part": 6,
+      "run_id": "REF-8516878f8ed4839c0e40-a65debca"
+    },
+    {
+      "case": 6,
+      "config": "lat-em",
+      "part": 7,
+      "run_id": "REF-98e7a0959e5f90db9e8f-4d557788"
+    },
+    {
+      "case": 7,
+      "config": "lat-em",
+      "part": 4,
+      "run_id": "REF-b8295b6f8d4592fa533e-b95784a2"
+    },
+    {
+      "case": 7,
+      "config": "lat-em",
+      "part": 5,
+      "run_id": "REF-1dbb2ed332a1135f22b9-6694ebcc"
+    },
+    {
+      "case": 7,
+      "config": "lat-em",
+      "part": 6,
+      "run_id": "REF-75440efa37bc041bc727-0733d482"
+    },
+    {
+      "case": 7,
+      "config": "lat-em",
+      "part": 7,
+      "run_id": "REF-a90e8e8eaccf867b5862-6b59925b"
+    },
+    {
+      "case": 8,
+      "config": "lat-em",
+      "part": 4,
+      "run_id": "REF-999bc535b2538ab9591f-0c130fb3"
+    },
+    {
+      "case": 8,
+      "config": "lat-em",
+      "part": 5,
+      "run_id": "REF-933b2e2647ee26272deb-9b8e26de"
+    },
+    {
+      "case": 8,
+      "config": "lat-em",
+      "part": 6,
+      "run_id": "REF-62dbefc64ddefddef3b4-5724a8ed"
+    },
+    {
+      "case": 8,
+      "config": "lat-em",
+      "part": 7,
+      "run_id": "REF-c040317b99df027519b9-83b73a0f"
+    },
+    {
+      "case": 9,
+      "config": "lat-em",
+      "part": 4,
+      "run_id": "REF-e6de6cb81a11a5af603b-264be1c5"
+    },
+    {
+      "case": 9,
+      "config": "lat-em",
+      "part": 5,
+      "run_id": "REF-2e66a62b0de5aec1aae2-43c82a33"
+    },
+    {
+      "case": 9,
+      "config": "lat-em",
+      "part": 6,
+      "run_id": "REF-b8ecd7fdcf2b60c4f22a-b5a017b7"
+    },
+    {
+      "case": 9,
+      "config": "lat-em",
+      "part": 7,
+      "run_id": "REF-ddb4748e2128aaa99e06-48894b44"
+    }
+  ],
+  "_note": "one entry per evidence part {case, config, part, run_id}; filled by the orchestrator as evidence runs complete (plan Order step 3); smokes are not evidence and are listed in ../smokes.json"
+}

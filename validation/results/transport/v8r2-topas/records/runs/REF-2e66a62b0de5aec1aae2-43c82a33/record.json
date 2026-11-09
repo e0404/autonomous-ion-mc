@@ -1,0 +1,43 @@
+{
+  "attestation": {
+    "alg": "ed25519",
+    "key_id": "303cce4c129d387c",
+    "payload_sha256": "846dca750e0171adf6e00119e112df11c56432d6818224318eb0022c06fd4edb",
+    "public_key": "4ca28f27ff512758365bdd54799baaaaec661eeac507a7c6ff0785cf1ac417e9",
+    "schema": "ionmc-attestation-1",
+    "signature": "bf3695734530c4bb0b4bfa32d3573d229c6b90587217099ad29d4d3ff7e1e2f9a9ed350b47e36381e37a41a49d68fe24b59b8ce8e98d32f9909e4e5cf3467f0c",
+    "signed_at_utc": "2026-11-09T19:45:38.979134+00:00",
+    "signer": "reference-runner"
+  },
+  "code_sha": "ead583f141c66bcfdbff18ac7588f5f70c380695",
+  "configuration_id": "2e66a62b0de5aec1aae2b833f3eb23c6d1daba23526492e1e825f3b8fbb5694e",
+  "engine": "topas",
+  "error": null,
+  "exit_code": 0,
+  "finished_at": "2026-11-09T19:45:38.976337+00:00",
+  "metadata_status": "declared; inspect native logs/outputs",
+  "missing_outputs": [],
+  "output_count": 6,
+  "output_files_sha256": "66317af4ff74eef400793d88fab7c4020a1f11a2deebfd65ff8be5ac135af970",
+  "request_sha256": "e177bc946a092a3545868d019a7d171d1d2852d0c1c1acbc8e9cc9bb2ffd1507",
+  "run_id": "REF-2e66a62b0de5aec1aae2-43c82a33",
+  "schema_version": 3,
+  "scientifically_validated": false,
+  "seconds": 26.889757484197617,
+  "started_at": "2026-11-09T19:45:12.086581+00:00",
+  "stderr": {
+    "bytes": 0,
+    "text": "",
+    "truncated": false
+  },
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stdout": {
+    "bytes": 1319837,
+    "text": "4WT0 > Begin processing for Run: 0, History: 24975\nG4WT0 > Begin processing for Run: 0, History: 24976\nG4WT0 > Begin processing for Run: 0, History: 24977\nG4WT0 > Begin processing for Run: 0, History: 24978\nG4WT0 > Begin processing for Run: 0, History: 24979\nG4WT0 > Begin processing for Run: 0, History: 24980\nG4WT0 > Begin processing for Run: 0, History: 24981\nG4WT0 > Begin processing for Run: 0, History: 24982\nG4WT0 > Begin processing for Run: 0, History: 24983\nG4WT0 > Begin processing for Run: 0, History: 24984\nG4WT0 > Begin processing for Run: 0, History: 24985\nG4WT0 > Begin processing for Run: 0, History: 24986\nG4WT0 > Begin processing for Run: 0, History: 24987\nG4WT0 > Begin processing for Run: 0, History: 24988\nG4WT0 > Begin processing for Run: 0, History: 24989\nG4WT0 > Begin processing for Run: 0, History: 24990\nG4WT0 > Begin processing for Run: 0, History: 24991\nG4WT0 > Begin processing for Run: 0, History: 24992\nG4WT0 > Begin processing for Run: 0, History: 24993\nG4WT0 > Begin processing for Run: 0, History: 24994\nG4WT0 > Begin processing for Run: 0, History: 24995\nG4WT0 > Begin processing for Run: 0, History: 24996\nG4WT0 > Begin processing for Run: 0, History: 24997\nG4WT0 > Begin processing for Run: 0, History: 24998\nG4WT0 > Begin processing for Run: 0, History: 24999\n\nTOPAS run sequence complete.\nParticle source Beam: Total number of histories: 25000\nParticle source Demo: Total number of histories: 0\n\nScorer: LatX\nResults have been written to file: lat_x.bin with header file: lat_x.binheader\n\nScorer: LatY\nResults have been written to file: lat_y.bin with header file: lat_y.binheader\n\nElapsed times:\nParameter Reading : User=0.000000s Real=0.001315s Sys=0.000000s [Cpu=0.0%]\n    Initialization: User=0.020000s Real=0.030820s Sys=0.010000s [Cpu=97.3%]\n         Execution: User=26.550000s Real=26.623125s Sys=0.070000s [Cpu=100.0%]\n      Finalization: User=0.060000s Real=0.080955s Sys=0.030000s [Cpu=111.2%]\n             Total: User=26.63s Real=26.7362s Sys=0.11s\n",
+    "truncated": true
+  },
+  "stdout_sha256": "06db056fe7a098c4b44480e8fa2b065551ef82d9dae725442de5dd54e3ac10c0",
+  "succeeded": true,
+  "task_id": "V3-008",
+  "timed_out": false
+}

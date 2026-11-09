@@ -267,7 +267,7 @@ placeholder scorer output was deleted unread.
 | `validation/scripts/ion_em/r2_statistics.py` | `fbb19370ae0bb20ed1cc5289864c3331ba63bdcb88315b33f06b6d710c79ed6b` |
 | `validation/results/transport/v8r2-topas/smokes.json` | `9f5c1b24bfe278869b30cc89c03137786fc683ed85d6b6509c48cdffa964f621` |
 | `validation/results/transport/v8r2-topas/records/review.json` | `87988397d4c14304d75f987117e4c22199d4452a0b48030e131a2bd52edb1199` |
-| `validation/results/transport/v8r2-topas/records/index.json` | `2e092ee30964b55d1519b7bfd45467a7f5155c337cb54aa3b08cccb930d3cdb3` |
+| `validation/results/transport/v8r2-topas/records/index.json` | `264fba78aa314c04ac72574eb02e79a9e58798238de77ca5a85adaa9da209b98` |
 
 
 **Dated note (2026-11-09, R2-SIZE-1 bundle regeneration; orchestrator) — supersedes the bundle-set digest `a8a1c27d…` of the rows above.** The bundle set is now 209 bundles / 418 files with bundle-set digest `e51d3b3d1bf00e51daadf889f6541bf8bd6ba8aea6453eee132110e07ff0c4d6` (`gen_r2_bundles.py --check`; per-file sha256 of the 168 changed or new files in `r2-topas-target.md` appendix A, 2026-11-09 listing; the 250 unchanged files keep their appendix-A hashes). Changed: 48 LAT-FULL evidence bundles (`CutForElectron = 1 km`, texts), 32 carbon/oxygen IDD-FULL bundles (`NumberOfHistoriesInRun` 3333 / 2529). **(2026-11-09, later; Codex REVIEW-6b4731a7)** every evidence bundle and the four new smokes additionally request `b:Ph/ListProcesses = "True"` (runtime evidence of the executed module set, g4decay included); bundle-set digest now `6d1ae3a06211831cfb7e8924c65d6d8fe31fae7781443ff84c077204045ea790` (appendix A 2026-11-09 "ListProcesses" listing; the thirteen smokes already run are byte-identical). New execution-only smokes (sha256 of `case.json` | `input.txt`):
@@ -406,6 +406,158 @@ placeholder scorer output was deleted unread.
 **Dated note (2026-11-09, summariser docstring (Codex REVIEW-027cb008 minor); orchestrator) — hashes regenerated at the working tree; entries that changed since the note above:** `validation/scripts/ion_em/r2_smoke_reruns.py` 33964577… → b0a8e70e…. All other entries unchanged (recomputed).
 
 **Dated note (2026-11-09, orchestrator) — hashes regenerated at the freeze commit's parent; entries that changed since f694b747:** `validation/scripts/ion_em/r2_smoke_reruns.py` b0a8e70e… → 2411d900…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-09, orchestrator) — files added by the EM evidence-records commit of 2026-11-09 (the 72 EM evidence parts: IDD-EM parts 0–3 and LAT-EM parts 4–7 of cases 1–9, run at code_sha ead583f1 after REVIEW-5baeb516; signed run records and verbatim artifact listings; sha256 as committed):**
+
+| File | sha256 |
+|---|---|
+| `validation/results/transport/v8r2-topas/records/runs/REF-04dae32f7e6e4b7c53d9-cd22c30a/record.json` | `a8aac6e6d8b04dc963c53a2aea05243da73e6c19f0e7cc00cf8bc266e0faaa05` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-04dae32f7e6e4b7c53d9-cd22c30a/artifacts.json` | `1af7490da5bad94536fb8ff5feaf295a6a8a7492c9ca8393af985793668a722a` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-07e2fc253fd227f8865f-ef8acb6a/record.json` | `f6f7b13ee1355812703c08c1aac5c1148edd22bb242de8ce22762567d9884b55` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-07e2fc253fd227f8865f-ef8acb6a/artifacts.json` | `701294ec694456ac618731c634f2ef52edd6754c9cc6a7bd6afa858329c01b94` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-0881c06b2c79cc46abe9-d9b3783d/record.json` | `990474c3fdca7ca0832190407af716262aae8d3f0335fbe313f8c979c05a0658` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-0881c06b2c79cc46abe9-d9b3783d/artifacts.json` | `b90a3e4401c923bd1d4016d49d23378dfb3e8633ed8676650b05e0d7b1c451c8` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-0a1ffa6a5e64335d797a-6351fe0e/record.json` | `b9fa0d9deb187b3dbddd8d628f71e40020a92d4edf3467bb1ecaf74d18b9044f` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-0a1ffa6a5e64335d797a-6351fe0e/artifacts.json` | `76d060bd03785c825c03b62581ff3e481185299f8e5ef12032885c339cf580a6` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-0d6cbfab1d9b4bef9647-df1501a1/record.json` | `f98e843088cfab9e9c63a6b3e23993fb4a207642849194391e882b25a064d3eb` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-0d6cbfab1d9b4bef9647-df1501a1/artifacts.json` | `a2a08e91fbb00a9a940bba271c4cec71c25f8b992d8e1fd982905721cf4d900e` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-0f6fa87af643aa024933-64402f0a/record.json` | `3b627b6897c27291d5e296d60aec8b29db5c1bae8abb5cf25b83f498417efcc8` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-0f6fa87af643aa024933-64402f0a/artifacts.json` | `cde645808cd3047d14ea62aed8b6b52602e92deb83fa993a341e90cc949c3227` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-1128ee8ff3ebb9a57dae-5eb6035a/record.json` | `0fe0afdcd8300b16c627450ca4a32f85c6ad56070f0a41369f806d29139a1641` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-1128ee8ff3ebb9a57dae-5eb6035a/artifacts.json` | `abb598f1511d20a636d7c6bd20d710e7c2f3df4b6fa0af05cd86a277a327c368` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-11da44e21bce0ef5627f-59121724/record.json` | `9ff034624d92f27ba8bfa2aeedd1902e717bafa5938f56c3445f24dce72164b8` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-11da44e21bce0ef5627f-59121724/artifacts.json` | `fc792977617f28741a098c476f734a071df049ee2da4e63e0e288e7d71faec37` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-12b6bbf50b273f244387-ad7f9f2b/record.json` | `a0de80dd244284b3bcc65397271d44d8beea547289b514ba5249cba488ca19c2` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-12b6bbf50b273f244387-ad7f9f2b/artifacts.json` | `d7ab27e142ab27bcafcf6238b7bb22aeec67a2a8c45d5300d9b60014f3a19faa` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-13caa50a25cdc3a9e6fc-7f169e4e/record.json` | `cbdcc8005e641a65ab3924c6976af29e5a9a8dd0a0e1e44fa1cae85d830536e4` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-13caa50a25cdc3a9e6fc-7f169e4e/artifacts.json` | `9789f669c65f8a8330c540f1b1ae7526532cba426eafaa15ebb822cad8ce07f8` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-13e2a8a44d1f00e3d7df-88894365/record.json` | `a8e2c3f780d179bbb0589b93c0ff8797d5534b47482a368a8428dc74713a01ec` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-13e2a8a44d1f00e3d7df-88894365/artifacts.json` | `4571463b9055518fb57cc66ecc0fb988a83b14365aa2f6dab8b1364c7fb453d5` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-1c6adae4c80435460bbd-1a2f16fe/record.json` | `e85e415c5ac64ffcfbba5d19dc67309d9a7b732c95256afad599b1cd9d010d1b` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-1c6adae4c80435460bbd-1a2f16fe/artifacts.json` | `f2c88c73b3a2b4d12a34782b9bb87529c901a889718d5f5265d703b6bcd28148` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-1dbb2ed332a1135f22b9-6694ebcc/record.json` | `fb272a6ded4a16377b3b3497c845d60adeaba882b220cc9c85a63b19ee665cec` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-1dbb2ed332a1135f22b9-6694ebcc/artifacts.json` | `428d93e4aeae4a7f8c167f1df9a6c73f61848ed7caf305aa1a606d02adcee058` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-22b2769f0653860495b9-01882251/record.json` | `77d748b5aa54e67489c7ba6493c29b816567eb27aecbb84ee70c20c7c4ab6620` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-22b2769f0653860495b9-01882251/artifacts.json` | `7bcac72f2753340793819920cb4666a730d2fea3ae0a7eba54da77450d9bb06a` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-260acb9d47e48a902a61-0c7cfb06/record.json` | `ad847cb39accf87c55c6c9c1870a618da1bf2e333b428a03e59815d216df429a` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-260acb9d47e48a902a61-0c7cfb06/artifacts.json` | `5a4498e65fcd36c28ec41e2c0f628f869ab168269b7e3c3d95f61a37e5647988` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-2a3f5a44cdfac62f921c-8182cea9/record.json` | `3550b119f8be2096d3abe054743db4d7446f378208a720bcb79610068798198e` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-2a3f5a44cdfac62f921c-8182cea9/artifacts.json` | `0f62f58d2c8872e2d1dccc7dd49eab0c98f6503d95f25396e4ed6903e82998ee` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-2ae51e027f7910f26a08-b8f8c673/record.json` | `ac81b01aeda788a475d79999efb6dcbd163c21e8cc81c15589dad859d13302fb` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-2ae51e027f7910f26a08-b8f8c673/artifacts.json` | `415b666209760e90a5693c8012401a94055ac0db7dd971f8e459fcbc29ed0c5d` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-2e66a62b0de5aec1aae2-43c82a33/record.json` | `2fac380519602643093cdc6af6eca5730567c098db5f84ac25eed712553f3dba` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-2e66a62b0de5aec1aae2-43c82a33/artifacts.json` | `17b5ad97677eb1a2cdb46a9935a033e607b2d33efca863487c149adba494dbb8` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-3263419233fca6fb8e42-120e4a53/record.json` | `6451cb69039ce03c39c5c39f4ce535db626bccc4e457706d2290079307dfd89f` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-3263419233fca6fb8e42-120e4a53/artifacts.json` | `7be67a6196e409c29205d802bf9d9f29a7858331c0ac1d4f6b195acfc6ee349d` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-33697a5201767cc8e211-956a6d1a/record.json` | `02cb14768b5052cc9c9a0a75f8fa258c1bfcef3d3e2a74237a194da73ae7c9f2` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-33697a5201767cc8e211-956a6d1a/artifacts.json` | `e75c328820f810de49ac8327e766c8823c15f39e59b32c3e6ee6f652adef786b` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-33c53d05d0754f3f7d78-a60f9ea8/record.json` | `cf2cce902eb866bedb130dd3d6853868d1024ba47b9936817cd9c910e9665ad0` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-33c53d05d0754f3f7d78-a60f9ea8/artifacts.json` | `a0a5633c68181da94adc01145e9137d8b507dc00044f54bbe8e58eee6d94a5ac` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-377d191363dfd225d31e-6c60fce6/record.json` | `233d41cee7abcf50549b620059bb8578b3926842bb08434cdb13ffa484bb0f8d` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-377d191363dfd225d31e-6c60fce6/artifacts.json` | `39d6b68e5ee7c8a80bdf252625da1e6c2503b46da07da898e77ca28fcd0b3161` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-37b0c6d0fb895d4f64c0-04266851/record.json` | `fcccf9bd65c0d3445723ee405f8ee0363324d84790bcdae1b328197d54875287` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-37b0c6d0fb895d4f64c0-04266851/artifacts.json` | `9557d6feead43e88044a5ad74f6b311a92679db850187226fd9c4f3f42cb8620` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-39731c5d7e8122f2c417-5c2db0ad/record.json` | `991f9b301515fb1e92ea80f6a4b9a84cfdd39053544d1729d5dc38a87ab7affa` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-39731c5d7e8122f2c417-5c2db0ad/artifacts.json` | `3188f626464715fd1c3c0d6e231ee3dac956bcadf0a738b564164c3732da1346` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-468d75c0234179822ef6-03056a77/record.json` | `afb20fa6853b6dac8e69e2ed685ff570c4281a477eb8904bec7a9bbf5f7fee79` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-468d75c0234179822ef6-03056a77/artifacts.json` | `f40967889543ce4b3f9c51083c531f52df6f135839712f8b80c588efae88544d` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-498b9fa7f3d232ad0360-68b55a0d/record.json` | `fcd2bc8af064849de97ad686bbb16acace8415496d16634a73700b265bebf366` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-498b9fa7f3d232ad0360-68b55a0d/artifacts.json` | `bb7b036084adfc7a74265f9ad3232a64a1a8bfca540c30240e6ec9f3bfb891ae` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-56b37ef1fd8dbf0789c3-ec02c119/record.json` | `84b40d698d7368b9ebfb59dcb42885c275afc9efc85f38c852194c58bc104161` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-56b37ef1fd8dbf0789c3-ec02c119/artifacts.json` | `8d1ee9002fda6bb8800ad70195639434b5d9aa03e857728f1e51d2a6f80d1a06` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-5c309b0ee9905e6be306-efccf482/record.json` | `ac707adc9269594926432aa1495ec5b1c898d8f1daecdbda2cadda3839ec47c1` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-5c309b0ee9905e6be306-efccf482/artifacts.json` | `26aa20f5a5a36a1cded5b5f2d1080a84f05613e071915500d5696f30c1b86271` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-62dbefc64ddefddef3b4-5724a8ed/record.json` | `80c9e698862321ee060f830125a1073c17be8785fa4c4d8148480c18453df216` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-62dbefc64ddefddef3b4-5724a8ed/artifacts.json` | `5ade4e90567da05aeb144ad6b29918620f15fb473127de5ab9d7ad822929f07f` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-659638d1daa0c25ab0c4-1f757981/record.json` | `94f1ef124b0f854974a009c2de04e7ea59d9168ab2b2a5f45a459cf4ca1546da` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-659638d1daa0c25ab0c4-1f757981/artifacts.json` | `c5a2999b854e7095fb40ff6136d27f5162059d021f80bc9a30b46c2ea735c9bc` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-685038154a1f58026833-65882747/record.json` | `dd112f433848f47f13a610e1f940609c63996db0315a5dd4f85ca0633356022e` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-685038154a1f58026833-65882747/artifacts.json` | `46d294cf2f84ed744fcc182a7348a599d043078886b2af90a0d2ea13a5244ebd` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-6ad649bce2f2c9e9bc80-7b753c4a/record.json` | `39f6ca7441f8c7d971f1ab46bf0fde96453ba540f266dd1fea319c3907902202` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-6ad649bce2f2c9e9bc80-7b753c4a/artifacts.json` | `5e235a11aaf427e871c9e259d02ab2d142136825e8a0bb6e943c04b06700ee14` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-6b30b8a86a1edc12d348-8bd43e2a/record.json` | `8b73a94eb47bf74ab8c08c9323c85101d9846820389a59e0d426851d8b6ca2ce` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-6b30b8a86a1edc12d348-8bd43e2a/artifacts.json` | `5848e8e3c1dcfe9b681a55d9de68823e4c231e6a0ad2d6475e25e2f814a58a04` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-6f1fc1d8d8c16b921a7d-267b5a49/record.json` | `2bc93197830b33467e9ffe5438e702cc6a47c920fdfd05bfee5abe0ade0f93d7` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-6f1fc1d8d8c16b921a7d-267b5a49/artifacts.json` | `9adb2a1a4f75219b4d83324d5cff8096d94a3f2cccaf345b6d02b75d30fae32e` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-72ef20c9ce60ae1dd228-6783b617/record.json` | `b4a46d56b8c6cfbd31be14734e6e3c0bbe8cab304d2fb36df1c7635382c032d2` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-72ef20c9ce60ae1dd228-6783b617/artifacts.json` | `a38d6b2be0005114cb2c2ecd1519b8e4809c736f213e5428f446c959bb49c0ad` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-750d9a34da3f616e101c-d65c932b/record.json` | `172e67ae7a8be791751829347a2ec455ddcbbcb78107a557c074c452a9062b20` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-750d9a34da3f616e101c-d65c932b/artifacts.json` | `86c66c3e1192c9336d2d4048233a3a4bdc9dd1c6a0e4e1901f0b85fc9bef8cc4` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-75440efa37bc041bc727-0733d482/record.json` | `39d9943331d4baf04aadce54fb78041e90342f2da9f58edc79609a94d472e021` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-75440efa37bc041bc727-0733d482/artifacts.json` | `adbe8d9ab3141a54ff98f052e80f44e262e5179b6d354cd2e024c8e4fabc79b8` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-79f238180437968711f6-f2cb2cb0/record.json` | `bb9eafc7472cf1576ffd4573c323e79968065edd3379d60dc2c86eb1736c3111` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-79f238180437968711f6-f2cb2cb0/artifacts.json` | `bba447fcc72a8d1a328c7d420ad85689d165b5b08a95e80abb3bef274ebf57f0` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-81587d7789d43f89f46f-5bec307a/record.json` | `67e4f596e5b9a20ca941138edfe85e8c49af9e05ed920d5854f2376eb6081f0f` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-81587d7789d43f89f46f-5bec307a/artifacts.json` | `68282a92fdf9424091a9a001bedd27a4f387eb443f6f9ffaf76c6ccb87764859` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-844b1cf2bfc4b3287667-fc8a609d/record.json` | `c9d836f39bcbc28e83fe623a62b4b1ef43300e099792995cac2296d963de0925` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-844b1cf2bfc4b3287667-fc8a609d/artifacts.json` | `c9a7c24f74bb7310b05abec669aa910972a032eba4cdbec5ca0284ee95d59b79` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-8516878f8ed4839c0e40-a65debca/record.json` | `de028f4a6f047ec4462dbc0f57a46faf5abcfc5ead616aefd1e313d9b9614a9e` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-8516878f8ed4839c0e40-a65debca/artifacts.json` | `72a1e977513bcaa790cc6b19f2b3b2836f1a71f7822337d3aff5d685a5e0b283` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-85bf230318944e37467a-35b2cabb/record.json` | `83d8b8309f700bbec1d94bb52b6d1cf3dafca7a36edc5f2f9452c4aad4dab363` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-85bf230318944e37467a-35b2cabb/artifacts.json` | `cb4b4d6e1e2bacd85353dd9c106f97a0959f45f5ff6cf1c2a66939693e1d977b` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-8ab4771dd1c3f998104e-85ff657d/record.json` | `fade3b6c39cf0302c9eb7265a59dc87cdcbe399f9c495a937e26ed9918af1ce1` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-8ab4771dd1c3f998104e-85ff657d/artifacts.json` | `f9b554a01a39b10ad21fac2c48a203bd8e9dc961e643b5feb25521e7141cf686` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-8b7009c123e89db33318-78bc11f0/record.json` | `558aca769025c6dad6fc920f8ab367a418bb0bfcc30b4f3574dfb4a7feb47120` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-8b7009c123e89db33318-78bc11f0/artifacts.json` | `ea06b6779b5e845c8b718ede4fb23c41da152556fa9353605bd81475567bd128` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-8e0b95d380d64b45cae0-70144471/record.json` | `f32699eb5770bb19911e9c7579b2670c833c733758e8f8e3a24181e3bd75eca0` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-8e0b95d380d64b45cae0-70144471/artifacts.json` | `4200dcacad65f40a3312b8101d14b42e667f4a64a27aee3855202cd331aa88bb` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-91a6979b5edd1995642f-93b9881a/record.json` | `fa7f5f9917027b8de963f8929fc770a1b5d36544ee591ed964b5e0e9ac183463` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-91a6979b5edd1995642f-93b9881a/artifacts.json` | `8f05dd909569547ce12d8ce5a6f352de421beb75e39323c6d2e8f810199a4681` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-933b2e2647ee26272deb-9b8e26de/record.json` | `ea49ad515a92669aee388112b75b9f01d636f71aac614a10128e451949b0a819` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-933b2e2647ee26272deb-9b8e26de/artifacts.json` | `65c628a2db6aa2a6be778245f481394d98b2916c3b91571a527edf54a3dda80b` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-97f42afba70d58702506-6d3f2983/record.json` | `ed7647e5beb80bd4df35bbfbdd222a7165586f68e67f38d54d65559db7ad4647` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-97f42afba70d58702506-6d3f2983/artifacts.json` | `a44010450a58ee8fead836f465250b971d4d7efeb9873e83f46bab7634e1977b` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-986a7d3ea8d26f84cd71-e55464e8/record.json` | `d1988264eee3aa3367ed287b6f824b09f60943e54e13ccfc48f65b88f083cd63` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-986a7d3ea8d26f84cd71-e55464e8/artifacts.json` | `e6a16c3953284e0cc0cf5098a218033039d122e7cb89dead1f83431ff0be8438` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-98e7a0959e5f90db9e8f-4d557788/record.json` | `a5ad5067a270e4baeac140936f246a19f15ff06e7678991fca8f4e7bc205ae9a` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-98e7a0959e5f90db9e8f-4d557788/artifacts.json` | `67359267b69fb7dc5c35244efd5941096d71b61e54a4b024d9149c61ca06a7ad` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-999bc535b2538ab9591f-0c130fb3/record.json` | `924e9fd802769cd3b3ee2b7be1739c29af1fce03e494780a2fadc12e2710a45e` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-999bc535b2538ab9591f-0c130fb3/artifacts.json` | `7ec483ec61aa7d62503276563eb450c21565c2aa71a965fe588abf359b6578c3` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-a3a9cbc0bf63b1aa4f16-351e0c17/record.json` | `a9839e4c71a4b353114cef04a740a0073343a042e45e02593662ba5eac01334e` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-a3a9cbc0bf63b1aa4f16-351e0c17/artifacts.json` | `8baf5df22e751dd6aa233c196c1259374327ca3f1dd22be157b6739b05c1dbac` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-a76389b59e272bee7b3d-c398fe21/record.json` | `1646f13e255826e6ded6432ae7c7b47704db4030aade7fafbdb531b5296a8062` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-a76389b59e272bee7b3d-c398fe21/artifacts.json` | `45997127d89517e70cd7bc31710f37dc9c10203ec0a91a52dcb6828cf70437aa` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-a90e8e8eaccf867b5862-6b59925b/record.json` | `64a370d253dbed641b000bf9f2ec46b6a7d387d03c3c474b6ffd1f6cb4eac4b9` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-a90e8e8eaccf867b5862-6b59925b/artifacts.json` | `67dddf497312fc248ba6623d84208f2652640f84d8b27742cb03c5f1e645b7e7` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-af61a9d385173066f95b-3cf34e11/record.json` | `e978820cfd5c0b2033b0bd2ec4bccc7b08c482eabf7c9312a4d152921c61296a` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-af61a9d385173066f95b-3cf34e11/artifacts.json` | `fe6bb9f7429cbf35e20197d93dfc8caeb71d8c4aedcf81ff7c812df335d5c8f1` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-b235c3220e66b464555a-85711fcc/record.json` | `4fae9f3222d62941cb684ded92e77a602de9f01276c4b4c2fe54e16fecc9e1ed` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-b235c3220e66b464555a-85711fcc/artifacts.json` | `ca357367ab02990b42008e79301b2822c44a22edb2cb01c60024bb9769dda452` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-b3289bd56dfb73d3d2eb-87adddc9/record.json` | `add1b441e44e021c669ab4f160f78efbb5705e0748622fc66862bffb735f2124` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-b3289bd56dfb73d3d2eb-87adddc9/artifacts.json` | `cef458ba4c62085de2974dea2c31356f3d1ebefd4ea26226e7242958ed15a9e4` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-b3507ec2481cbf21ebce-65cedd9b/record.json` | `2bb5944a0a4a62e3e2d85f83981b3bf26bde5bbb690254ad5de32c7bab814aab` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-b3507ec2481cbf21ebce-65cedd9b/artifacts.json` | `5dfc3aec39b6da135dfb0aa2067e282599f45e62a3fd0da04769b91ced59c328` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-b5b9ff08f408b4ca5317-7d7f168d/record.json` | `80a92e0172bfe43c2c5afd4deffcb0db5a652061194f4cb26ed737cbd68d07a4` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-b5b9ff08f408b4ca5317-7d7f168d/artifacts.json` | `17dc0b66a5e88877e2baed065893499b0367c87cccc5c3ea9ccc2cae7d1eaba0` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-b73b308392747b407aba-884b2a64/record.json` | `9699f569714661aa1784eb3482ef172a2d227b4004c1972a573192f2260917d5` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-b73b308392747b407aba-884b2a64/artifacts.json` | `9d460217e7922b1fb2f0e19a76284652d483db9fad1e8fb1e7ef279e45cbbaa8` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-b8295b6f8d4592fa533e-b95784a2/record.json` | `408d7aea22369d9f6b5bc92210fb9afdd0afb2efa31245d5bda805e6e3e93441` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-b8295b6f8d4592fa533e-b95784a2/artifacts.json` | `c245679e08e610913ba6cd6afd7ea6024d89add5f027e8a4fa4840cb96ae23df` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-b8ecd7fdcf2b60c4f22a-b5a017b7/record.json` | `a460f3971648d13ba491b2626382f0bf3ab108d713468722d06ffaeb9ed05635` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-b8ecd7fdcf2b60c4f22a-b5a017b7/artifacts.json` | `702dc821e027faf047c007becb7e9a2c3af66ec18695a9e46e19a38be46c82be` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-badd5762e53b6bd276e3-21fd2fff/record.json` | `f1eead5c815b7f270e7712909cddcf6bc28926d537632af6bcbea5686193626c` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-badd5762e53b6bd276e3-21fd2fff/artifacts.json` | `ad1715897b815bb224169d911bc34a25fa7f2f30784517550d0081aab559c1da` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-c040317b99df027519b9-83b73a0f/record.json` | `cb701d04b9f928ee2924d2fd1cd857a7823d1da8306bb480f1a32085c5c40f43` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-c040317b99df027519b9-83b73a0f/artifacts.json` | `fad51c899e348d1177ec8f1f8d5f67a5995cad8f8306c650c30657a18160e32d` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-c431be25d1b37248cd7e-4bdb3417/record.json` | `bd3a5a3d0cde8c4f70d852d478721c24858c0bb7ad3bc6d701be414137ada1b5` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-c431be25d1b37248cd7e-4bdb3417/artifacts.json` | `75cc2d0411bc7c77ac34cb79d61aea8f6a7fac9c5007918e72288bab5872e226` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-d16fbbeb28af18b513b1-eedfbfd8/record.json` | `2ed2803a938ef4e51b5ab3cf605e01c32e92656137fcac80cf38bc786a0faaaa` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-d16fbbeb28af18b513b1-eedfbfd8/artifacts.json` | `ce3f086e2ecccfceaa9e071a225dcdd009e7c726ff9c83a65aa9c69e438cf6ba` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-ddb4748e2128aaa99e06-48894b44/record.json` | `04154c327af4e3034ae329f7b121ed4fb267875656d959c112b3fd81e7d77fde` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-ddb4748e2128aaa99e06-48894b44/artifacts.json` | `e2c1e1f6bb0cf5ce8ae382335ad2cbc01a6a6e451f234a0d5d955da1a13eb1f2` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-e244c0801114dabea9df-af8f93df/record.json` | `30fc6e48d3014e2fcbc0e5fed8bf1777094c4a3c3fa092313bda1476f1e36f9e` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-e244c0801114dabea9df-af8f93df/artifacts.json` | `0647735df3137dd748b693f6ae2f28e8a2618bfb6169f622e3b360c45118d229` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-e6de6cb81a11a5af603b-264be1c5/record.json` | `6749fa90e457d08e0f794859e59f15c6bbc4be935809da7be66afa630a2ce59e` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-e6de6cb81a11a5af603b-264be1c5/artifacts.json` | `77375b8144d3a7d2bf1772249773e403d5452484407a8cd64ea9de00e5bffcaa` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-f085e4479d78b277a4c6-707fcf44/record.json` | `a6231cc46bcc6725f825a75966c7e0ff16912cc313f6e0f056b184c549476e79` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-f085e4479d78b277a4c6-707fcf44/artifacts.json` | `5ebedee6992723a1c2b66fdaa14b7e5055913a8e5461d1958a699b8ebd2b720a` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-f596373c28b3d26ab5d5-a88b001e/record.json` | `86d846dee1afebd7d72aac1a47e5a526a092e4a834fc043dd715fad211c1c2f4` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-f596373c28b3d26ab5d5-a88b001e/artifacts.json` | `7fa5441703d6ef0a3d33597ebf2a94dd6fb68ce3877fbfae5cc0897c8c92c3fa` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-fc2f8c0c67ddd847ed75-f40e519a/record.json` | `2aecbc913e9c0ce4cb92d38acec6f5c0184ef0fcf50257d91ac6c7ff998900a4` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-fc2f8c0c67ddd847ed75-f40e519a/artifacts.json` | `a1c4fbd7c0ed52251e9b6ac05c9ac7a75df7f6b6c7aa4ed300fe57c5836e16d0` |
+
+
+**Dated note (2026-11-09, orchestrator) — records/index.json filled with the 72 EM evidence parts (IDD-EM 0–3, LAT-EM 4–7, cases 1–9); entries that changed:** `validation/results/transport/v8r2-topas/records/index.json` 2e092ee3… → 264fba78…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.
