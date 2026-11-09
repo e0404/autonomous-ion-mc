@@ -133,7 +133,9 @@ class IonTransportCounters(TransportCounters):
     is invalid), and the diagnostic ``mcs_table_bracket_miss``, the number of steps of the
     table-accelerated root (``mcs_mapping_eval = "table"``) whose initial tight starting bracket
     had no sign change, so that the widened or the full bracket was used (performance only: the
-    step still returns the exact root; it never invalidates a result)."""
+    step still returns the exact root; it never invalidates a result). A step without a starting
+    guess (state outside the table or in an uncovered cell) uses the full bracket from the start
+    and is not counted."""
 
     mcs_mapping_failure: int = 0
     mcs_table_bracket_miss: int = 0
@@ -507,6 +509,17 @@ def _species_capabilities(nuclear: bool = False) -> dict[str, Any]:
                         "pv_eq/pv table built by the root solve; the table is an accelerator "
                         "only) or 'root' (the root from the full proton-path bracket)"
                     ),
+                    "mapping_domain": (
+                        "the mapping is defined where the proton-equivalent state stays inside "
+                        "the proton b-slab range; a source whose reachable states leave it fails "
+                        "closed at validation in both modes (observed: oxygen16 at 100 and 150 "
+                        "MeV/u in copper and lead; a monoenergetic scan of the oxygen16 domain "
+                        "found the failure in copper up to 175 MeV/u (200 MeV/u and above "
+                        "validate) and in lead up to 350 MeV/u (405 MeV/u validates); alpha and "
+                        "carbon12 validate in every built-in material at both domain ends), so "
+                        "every validated run has table coverage 1.0; runs with "
+                        "multiple_scattering=False build no mapping table and are unaffected"
+                    ),
                     "table_evaluation": {
                         "contract": TABLE_EVAL_CONTRACT,
                         "root_residual_tol": RESIDUAL_TOL["float64"],
@@ -516,7 +529,9 @@ def _species_capabilities(nuclear: bool = False) -> dict[str, Any]:
                         "diagnostic_counter": "mcs_table_bracket_miss (never invalidates)",
                         "recorded": (
                             "summary mcs_mapping.table: interp_estimate (overall and per "
-                            "material, a performance diagnostic), bracket half-widths"
+                            "material, a performance diagnostic), bracket half-widths, "
+                            "table_coverage (overall minimum and per material: fraction of the "
+                            "band cells with four valid nodes; 1.0 for every validated run)"
                         ),
                     },
                     "fdm_domain_status": (

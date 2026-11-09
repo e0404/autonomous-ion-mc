@@ -280,8 +280,10 @@ def test_i0_mapping_failure_is_a_named_counter_and_invalidates(
     """A failed mapping fails closed: ``valid=False`` with the named counter
     ``mcs_mapping_failure``; the step scatters with zero variance (an impossible proton path,
     status 3, for both evaluations: the table-accelerated root solves the same equation). A table
-    without any valid node is not a failure: every step falls back to the full bracket, counted
-    in the diagnostic ``mcs_table_bracket_miss``, and the result stays valid."""
+    without any valid node is not a failure: every step has no starting guess and uses the full
+    bracket from the start, as ``"root"``; no tight bracket is tried, so the diagnostic
+    ``mcs_table_bracket_miss`` stays 0 (Codex REVIEW-16c63514: a step without a guess is not a
+    miss; formerly counted), and the result stays valid."""
     kw = {"mcs_mapping_eval": evaluation}
     sim = Simulation(
         _cfg(CARBON12, backend=backend, n=2, nb=2, allow_invalid=True, physics_kwargs=kw)
@@ -305,7 +307,7 @@ def test_i0_mapping_failure_is_a_named_counter_and_invalidates(
         sim2.effective = replace(sim2.effective, ion_mapping=replace(im, table=tab))
         miss = sim2.run()
         assert miss.valid  # a diagnostic, never a failure
-        assert miss.counters.as_dict()["mcs_table_bracket_miss"] > 0
+        assert miss.counters.as_dict()["mcs_table_bracket_miss"] == 0  # no guess, no miss
         assert miss.counters.as_dict()["mcs_mapping_failure"] == 0
 
 

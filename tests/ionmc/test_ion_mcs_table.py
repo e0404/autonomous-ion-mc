@@ -8,7 +8,9 @@ performance diagnostic. The decision-0043 bound test is therefore the per-step r
 later and first steps with both end-point extremes), that the accelerated result equals the root
 path's within the solver tolerance (pv_eq relative <= 1e-8, variance ratio - 1 <= 1e-8 times
 the f_dM sensitivity max(1, |c2 + c3 l1| / f), equal status). The twin/kernel equality,
-fall-back, corrupted-table and summary tests follow.
+fall-back, corrupted-table and summary tests follow. Coverage never restricts availability (Codex
+REVIEW-16c63514): table cells with a node where the root fails stay invalid and use the full
+bracket (the root path's behaviour), and no table is built without multiple scattering.
 """
 
 from __future__ import annotations
@@ -39,6 +41,7 @@ from ionmc.physics.ion_mcs import THIN_SLAB_R, make_ion_mcs
 from ionmc.physics.projectiles import ALPHA, CARBON12, OXYGEN16, PROTON, Projectile
 from ionmc.physics.stopping import BetheStoppingSource
 from ionmc.scoring import ScoringGrid
+from ionmc.simulation import Simulation
 from ionmc.sources import PencilBeamSource
 
 wp.config.log_level = wp.LOG_WARNING
@@ -58,12 +61,14 @@ USER_MATERIAL = Material(
     {"H": 0.08, "C": 0.40, "N": 0.05, "O": 0.40, "Ca": 0.07},
 )
 """An arbitrary user-defined material (composition, density; I from Bragg additivity)."""
-UNTABULABLE = {
+PARTIAL_COVERAGE = {
     ("oxygen16", "copper", "_lower_case"),
     ("oxygen16", "lead", "_lower_case"),
 }
-"""(ion, material, case) whose table node build fails closed (a node of a band cell has no root:
-oxygen at 100 MeV/u in copper and lead); the root option remains."""
+"""(ion, material, case) whose table has band cells with a node where the root solve itself fails
+(status 2 at the lowest midpoint pv with a whole-range slab: oxygen at 100 MeV/u in copper and
+lead): validation fails closed (decision D1); the table rows, built directly, have coverage < 1
+and those states fail identically on both paths."""
 INV_XS = 0.0123
 RHO = 1.0
 S_MM = 0.7
@@ -212,13 +217,18 @@ def _states(im: Any, rng: np.random.Generator, n: int) -> tuple[np.ndarray, ...]
 
 
 def _compare(proj: Projectile, im: Any, pv: np.ndarray, p1: np.ndarray, pv_end: np.ndarray,
-             birth: int) -> tuple[float, float, int]:  # fmt: skip
+             birth: int, root_failures: bool = False) -> tuple[float, float, int]:  # fmt: skip
     """Accelerated against root: equal status everywhere, pv_eq and variance within the solver
-    tolerance where converged. Returns (max pv_eq difference, max variance difference, misses)."""
+    tolerance where converged. Returns (max pv_eq difference, max variance difference, misses).
+    ``root_failures``: states where the root path itself fails are allowed (equal status)."""
     out, st = _evaluate(proj, im, pv, pv_end, p1, np.full(pv.size, birth))
     assert np.array_equal(st[:, 0], st[:, 1]) and np.array_equal(st[:, 2], st[:, 3])
     ok = st[:, 2] == 0
-    assert np.all(ok), (proj.name, np.argwhere(~ok)[:5])  # the table domain maps everywhere
+    if root_failures:
+        assert np.mean(ok) > 0.9
+        out, st, pv, p1, pv_end = out[ok], st[ok], pv[ok], p1[ok], pv_end[ok]
+    else:
+        assert np.all(ok), (proj.name, np.argwhere(~ok)[:5])  # the table domain maps everywhere
     # f_dM is clamped to 0 where its fit vanishes (first steps that end very close to p1v1):
     # both paths then give 0; elsewhere the variances agree relatively
     pos = out[:, 0] > 0.0
@@ -251,29 +261,36 @@ def test_accelerated_root_equals_root(material: Material) -> None:
     equals the root path's (same status; pv_eq within 1e-8, variance within 1e-8 x the f_dM
     sensitivity, ``VAR_TOL``). Bracket misses
     (a diagnostic) stay below 0.1 % of the states. The maxima are printed. Oxygen at 100 MeV/u
-    in copper and lead cannot be tabulated (``UNTABULABLE``): the build fails closed."""
+    in copper and lead (``PARTIAL_COVERAGE``) fails validation (decision D1); its directly built
+    table rows have coverage < 1: states where the root path itself fails fail identically on
+    the accelerated path; the others agree as above."""
     rng = np.random.default_rng(20261108)
     for proj in IONS:
         for case in (_upper_case, _lower_case):
             label = f"{proj.name} in {material.name} ({case.__name__[1:6]})"
-            if (proj.name, material.name, case.__name__) in UNTABULABLE:
-                with pytest.raises(UnsupportedCombinationError, match="cannot be built"):
+            partial = (proj.name, material.name, case.__name__) in PARTIAL_COVERAGE
+            if partial:
+                with pytest.raises(UnsupportedCombinationError, match="unsupported with multiple"):
                     validate(case(proj, material))
-                print(f"not tabulable {label}: the build fails closed (root option)")
-                continue
-            im = validate(case(proj, material)).ion_mapping
+                im = _built_mapping(case(proj, material))
+            else:
+                im = validate(case(proj, material)).ion_mapping
             assert im is not None and im.evaluation == "table" and im.table is not None
+            assert im.estimates is not None
+            coverage = im.estimates[0].table_coverage
+            assert (coverage < 1.0) if partial else (coverage == 1.0), (label, coverage)
             pv, p1 = _states(im, rng, 2000)
             assert pv.size >= 2000
             worst_q = worst_v = 0.0
             misses = 0
             for birth, pv_end in ((0, pv), (1, pv), (1, pv * 1e-6)):
-                d_q, d_v, n_miss = _compare(proj, im, pv, p1, pv_end, birth)
+                d_q, d_v, n_miss = _compare(proj, im, pv, p1, pv_end, birth, partial)
                 worst_q, worst_v = max(worst_q, d_q), max(worst_v, d_v)
                 misses += n_miss
             print(
                 f"accelerated root {label}: max |pv_eq/pv_eq_root - 1| = {worst_q:.2e}, max "
-                f"|var/var_root - 1| = {worst_v:.2e}, bracket misses {misses} of {3 * pv.size}"
+                f"|var/var_root - 1| = {worst_v:.2e}, bracket misses {misses} of {3 * pv.size}, "
+                f"table coverage {coverage:.4f}"
             )
             assert worst_q <= PV_EQ_TOL and worst_v <= VAR_TOL
             assert misses <= 1e-3 * 3 * pv.size
@@ -281,9 +298,9 @@ def test_accelerated_root_equals_root(material: Material) -> None:
 
 def test_outside_table_states_fall_back_to_the_root() -> None:
     """States outside the table (below the lowest midpoint, above the initial-state band) have no
-    starting guess (interpolation status 5): the accelerated path uses the full bracket (a
-    counted bracket miss) and returns the root path's result; a cell with an invalid node does
-    the same."""
+    starting guess (interpolation status 5): the accelerated path uses the full bracket from the
+    start (no tight bracket tried, so no bracket miss) and returns the root path's result; a cell
+    with an invalid node does the same."""
     cfg = _lower_case(CARBON12, WATER)
     im = validate(cfg).ion_mapping
     assert im is not None and im.table_domain is not None
@@ -292,7 +309,7 @@ def test_outside_table_states_fall_back_to_the_root() -> None:
     pv = np.array([pv_lo / 1.5, p1_max / 1.6, p1_max / 1.01 / 1.0001])
     out, st = _evaluate(CARBON12, im, pv, pv, p1, np.zeros(3, dtype=int))
     assert list(st[:, 4]) == [5, 5, 0]  # interpolation
-    assert list(st[:, 6]) == [1, 1, 0]  # bracket misses
+    assert list(st[:, 5]) == list(st[:, 6]) == [0, 0, 0]  # no guess is not a bracket miss
     assert np.array_equal(st[:, 0], st[:, 1])
     ok = st[:, 0] == 0
     assert np.all(np.abs(out[ok, 3] / out[ok, 2] - 1.0) <= PV_EQ_TOL)
@@ -300,7 +317,7 @@ def test_outside_table_states_fall_back_to_the_root() -> None:
     tab[0, XO.TABLE_HEADER :] = XO.TABLE_INVALID_NODE
     bad = replace(im, table=tab)
     out, st = _evaluate(CARBON12, bad, pv[2:], pv[2:], p1[2:], np.zeros(1, dtype=int))
-    assert st[0, 4] == 5 and st[0, 6] == 1 and st[0, 1] == st[0, 0] == 0
+    assert st[0, 4] == 5 and st[0, 6] == 0 and st[0, 1] == st[0, 0] == 0
     assert abs(out[0, 3] / out[0, 2] - 1.0) <= PV_EQ_TOL
 
 
@@ -470,6 +487,8 @@ def test_option_validation_and_summary() -> None:
     assert t["ln_r_range"][0] == pytest.approx(math.log1p(THIN_SLAB_R), rel=1e-12)
     assert t["pv_lo_mev"] < t["p1v1_min_mev"] < t["p1v1_max_mev"]
     assert len(t["sha256"]) == 64
+    assert t["table_coverage"] == 1.0 and t["table_coverage_per_material"] == [1.0]
+    assert "unused" not in s
     root = validate(_config(CARBON12, WATER, 80.0 * 12, 0.0, evaluation="root"))
     assert root.ion_mapping is not None and root.ion_mapping.table is None
     rs = root.summary()["mcs_mapping"]
@@ -480,16 +499,22 @@ def test_option_validation_and_summary() -> None:
         assert "evaluation" not in p.summary()["mcs_mapping"]
 
 
-def test_table_build_fails_closed_beyond_the_paths() -> None:
-    """A band of initial states whose cells need nodes beyond the ion path cannot be tabulated:
-    ``UnsupportedCombinationError`` (the root option remains)."""
+def test_table_build_beyond_the_paths_records_coverage() -> None:
+    """A band of initial states whose cells need nodes beyond the ion path is built with those
+    cells invalid (coverage < 1, recorded; Codex REVIEW-16c63514; formerly this build failed
+    closed): a state in an uncovered cell has no starting guess and the accelerated path returns
+    the root path's result and status from the full bracket (no bracket miss). An invalid domain
+    still fails closed (``UnsupportedCombinationError``)."""
     mp = XO.ExactOmegaMapping.build(CARBON12, WATER)
     e_top = mp.ion_path.e_max_mev
     dom = XO.table_domain(CARBON12, 24.0, e_top * 0.99, e_top * 0.9999)
-    with pytest.raises(UnsupportedCombinationError, match="mcs_mapping_eval='root'"):
-        XO.build_pv_eq_table(
-            mp.ion_path.pack, mp.proton.pack, mp.comp, mp.quad, 6.0, CARBON12.mass_mev, *dom
-        )
+    args = (mp.ion_path.pack, mp.proton.pack, mp.comp, mp.quad, 6.0, CARBON12.mass_mev, *dom)
+    row, est = XO.build_pv_eq_table_and_estimate(*args)
+    assert 0.0 <= est.table_coverage < 1.0 and est.n_band_cells > 0
+    assert row[8] == est.bracket_half_width >= XO.TABLE_BRACKET_MIN
+    if est.interp_estimate is None:
+        assert est.n_cells == 0 and est.bracket_half_width == XO.TABLE_BRACKET_MIN
+    assert np.any(row[XO.TABLE_HEADER :] == XO.TABLE_INVALID_NODE)
     with pytest.raises(UnsupportedCombinationError):
         XO.build_pv_eq_table(
             mp.ion_path.pack, mp.proton.pack, mp.comp, mp.quad, 6.0, CARBON12.mass_mev,
@@ -554,9 +579,179 @@ def test_summary_and_capabilities_carry_the_contract() -> None:
     assert t["estimated_cells"] == sum(e.n_cells for e in es)
     assert t["refined_points"] == sum(e.n_refined_points for e in es)
     assert "certified_bound_analytic" not in t and "variance_bound" not in t
+    assert t["table_coverage_per_material"] == [e.table_coverage for e in es] == [1.0, 1.0]
+    assert t["table_coverage"] == 1.0
+    assert "full proton-path bracket" in t["contract"] and "table_coverage" in t["contract"]
     cap = ionmc.capabilities()["species_details"]
     for proj in IONS:
         mcs = cap[proj.name]["mcs"]
         assert mcs["table_evaluation"]["contract"] == XO.TABLE_EVAL_CONTRACT
         assert "exact root solve on every step" in mcs["evaluation"]
         assert "mcs_table_bracket_miss" in mcs["table_evaluation"]["diagnostic_counter"]
+        # the evaluation choice implies no material restriction; the mapping domain (decision
+        # D1) fails closed in both modes, with the observed example only; coverage is recorded
+        text = mcs["evaluation"] + " " + mcs["table_evaluation"]["recorded"]
+        assert "table_coverage" in text and "1.0 for every validated run" in text
+        for word in ("copper", "lead", "cannot be built", "except"):
+            assert word not in text
+        dom = mcs["mapping_domain"]
+        assert "inside the proton b-slab range" in dom
+        assert "fails closed at validation in both modes" in dom
+        assert "oxygen16 at 100 and 150 MeV/u in copper and lead" in dom
+        assert "in lead up to 350 MeV/u" in dom and "in copper up to 175 MeV/u" in dom
+        assert "multiple_scattering=False build no mapping table and are unaffected" in dom
+        assert "table coverage 1.0" in dom
+
+
+def _partial_config(material: Material, evaluation: str = "table", mcs: bool = True,
+                    n: int = 2, allow_invalid: bool = False) -> SimulationConfig:  # fmt: skip
+    """Oxygen at 100 MeV/u in a 20 mm box of ``material`` (the band reaches cells whose lowest
+    node has no root)."""
+    cfg = _config(OXYGEN16, material, 100.0 * OXYGEN16.a, 0.0, evaluation)
+    return replace(
+        cfg,
+        geometry=BoxPhantom((-30.0, -30.0, 0.0), (60.0, 60.0, 20.0), material),
+        physics=replace(cfg.physics, multiple_scattering=mcs),
+        run=replace(cfg.run, n_histories=n, n_batches=2, allow_invalid_result=allow_invalid),
+    )
+
+
+UNSUPPORTED_MESSAGE = "unsupported with multiple scattering"
+
+
+@pytest.mark.parametrize("name", ["copper", "lead"])
+def test_uncovered_mapping_domain_fails_closed_in_both_modes(name: str) -> None:
+    """Decision D1 (Codex REVIEW-16c63514): oxygen at 100 MeV/u in copper and lead, whose
+    lowest-energy reachable states have no root (status 2: the proton-equivalent state leaves the
+    proton b-slab range), fails closed at validation with MCS on in BOTH evaluations (the root
+    path would count ``mcs_mapping_failure`` on every history); the message names the material,
+    the uncovered cells and the reason, and does not suggest ``"root"``. With MCS off it
+    validates in both modes (no table, no check) and a short python run has every counter 0."""
+    material = MATERIALS[name]
+    for ev in MCS_MAPPING_EVALS:
+        with pytest.raises(UnsupportedCombinationError, match=UNSUPPORTED_MESSAGE) as err:
+            validate(_partial_config(material, ev))
+        msg = str(err.value)
+        assert name in msg and "cells of the band of initial states uncovered" in msg
+        assert "proton b-slab range (root status 2)" in msg
+        assert "multiple_scattering=False are unaffected" in msg
+        assert "mcs_mapping_eval" not in msg and "'root'" not in msg
+        eff = validate(_partial_config(material, ev, mcs=False))
+        im = eff.ion_mapping
+        assert im is not None and im.evaluation == "root" and im.unused and im.table is None
+        s = eff.summary()["mcs_mapping"]
+        assert s["evaluation"] == "root" and s["unused"] is True and "table" not in s
+    res = Simulation(_partial_config(material, "table", mcs=False)).run()
+    assert res.valid and not res.counters.any_nonzero
+    assert all(v == 0 for v in res.counters.as_dict().values())
+
+
+def _built_mapping(cfg: SimulationConfig) -> Any:
+    """The table-mode mapping of a one-material ion configuration built directly from its rows
+    (the domain and the build of ``config._ion_mapping_data``, without the coverage check), so
+    that a configuration that fails validation can still be compared state by state."""
+    from ionmc.config import effective_e_cut_mev
+
+    off = replace(cfg, physics=replace(cfg.physics, multiple_scattering=False))
+    eff = validate(off)
+    im = eff.ion_mapping
+    assert im is not None and len(eff.geometry.materials) == 1
+    src, proj = cfg.source, cfg.source.projectile
+    e_cut = effective_e_cut_mev(cfg)
+    e0 = src.kinetic_energy_mev
+    e_hi = min(e0 + 6.0 * src.energy_sigma_mev, float(eff.tables.e_max_mev.min()))
+    e_lo = max(e0 - 6.0 * src.energy_sigma_mev, e_cut)
+    dom = XO.table_domain(proj, (1.0 - cfg.physics.max_energy_loss_fraction) * e_cut, e_lo, e_hi)
+    row, est = XO.build_pv_eq_table_and_estimate(
+        im.ion[0], im.proton[0], im.comp[0], im.quad, float(proj.z), proj.mass_mev, *dom
+    )
+    return replace(
+        im, evaluation="table", table=row[None, :], table_domain=dom, estimates=(est,), unused=False
+    )
+
+
+MAPPING_UNSUPPORTED = {
+    ("oxygen16", "copper", "_lower_case"),
+    ("oxygen16", "lead", "_lower_case"),
+}
+"""Measured (this change): the (ion, built-in material, domain end) combinations that fail
+validation with MCS on because a reachable state has no exact-Omega root. Not exhaustive in
+energy: oxygen16 also fails in between (copper up to at least 175 MeV/u, lead up to at least
+350 MeV/u, monoenergetic), only the domain ends are enumerated here."""
+
+
+@pytest.mark.parametrize("case", [_upper_case, _lower_case], ids=["upper", "lower"])
+@pytest.mark.parametrize("proj", IONS, ids=lambda p: p.name)
+@pytest.mark.parametrize("material", list(MATERIALS.values()), ids=lambda m: m.name)
+def test_mapping_domain_restrictions_are_measured(
+    material: Material, proj: Projectile, case: Any
+) -> None:
+    """The restriction of decision D1 as a tested fact: for the eleven built-in materials x three
+    ions x both domain ends, exactly the combinations of ``MAPPING_UNSUPPORTED`` fail validation
+    (MCS on, table mode) for an uncovered mapping domain; every other one validates with table
+    coverage 1.0 and its table equals the directly built one (``_built_mapping``)."""
+    assert len(MATERIALS) == 11
+    cfg = case(proj, material)
+    key = (proj.name, material.name, case.__name__)
+    try:
+        im = validate(cfg).ion_mapping
+    except UnsupportedCombinationError as e:
+        assert UNSUPPORTED_MESSAGE in str(e)
+        print(f"mapping domain unsupported: {key}")
+        assert key in MAPPING_UNSUPPORTED
+        return
+    assert key not in MAPPING_UNSUPPORTED
+    assert im is not None and im.estimates is not None
+    assert im.estimates[0].table_coverage == 1.0
+    assert np.array_equal(_built_mapping(cfg).table, im.table)
+
+
+def test_no_table_without_multiple_scattering() -> None:
+    """With ``multiple_scattering=False`` the mapping is never evaluated: an ion configuration in
+    table mode builds no table and solves no root (evaluation ``"root"``, ``unused``), whatever
+    the requested evaluation; the summary says so; a python run is unchanged by the option."""
+    for ev in MCS_MAPPING_EVALS:
+        cfg = _config(CARBON12, WATER, 80.0 * 12, 0.0, ev)
+        cfg = replace(cfg, physics=replace(cfg.physics, multiple_scattering=False))
+        XO._TABLES.clear()
+        eff = validate(cfg)
+        assert not XO._TABLES  # nothing was built (the table cache stays empty)
+        im = eff.ion_mapping
+        assert im is not None and im.evaluation == "root" and im.unused
+        assert im.table is None and im.estimates is None and im.table_domain is None
+        s = eff.summary()["mcs_mapping"]
+        assert s["evaluation"] == "root" and s["unused"] is True and "table" not in s
+        assert "multiple_scattering=False" in s["unused_note"]
+    on = validate(_config(CARBON12, WATER, 80.0 * 12, 0.0, "root")).ion_mapping
+    assert on is not None and not on.unused
+
+
+def test_partial_coverage_table_equals_the_root() -> None:
+    """A partially covered table (oxygen 100 MeV/u in lead, plus a band of artificially
+    invalidated cells): states in invalid cells (no guess, interpolation status 5) and in valid
+    cells give the root path's pv_eq and status; a state without a guess is no bracket miss."""
+    im = _built_mapping(_partial_config(MATERIALS["lead"]))  # fails validation (decision D1)
+    assert im.estimates is not None and im.estimates[0].table_coverage < 1.0
+    tab = im.table.copy()
+    h = tab[0]
+    n_x, n_y = int(h[2]), int(h[5])
+    grid = tab[0, XO.TABLE_HEADER : XO.TABLE_HEADER + n_x * n_y].reshape(n_x, n_y)
+    grid[n_x // 2 : n_x // 2 + 3, :] = XO.TABLE_INVALID_NODE  # a strip of invalid nodes
+    im = replace(im, table=tab)
+    rng = np.random.default_rng(5)
+    pv, p1 = _states(im, rng, 400)
+    # plus states inside the invalidated strip (its x range, p1v1 in the initial-state band)
+    assert im.table_domain is not None
+    x_strip = h[0] + (n_x // 2 + rng.uniform(0.1, 1.9, 40)) / h[1]
+    m = 1.0 + XO.TABLE_PV_MARGIN
+    p1_strip = np.exp(
+        rng.uniform(math.log(im.table_domain[1] * m), math.log(im.table_domain[2] / m), 40)
+    )
+    pv, p1 = np.concatenate((pv, np.exp(x_strip))), np.concatenate((p1, p1_strip))
+    out, st = _evaluate(OXYGEN16, im, pv, pv, p1, np.zeros(pv.size, dtype=int))
+    assert np.array_equal(st[:, 2], st[:, 3]) and np.array_equal(st[:, 0], st[:, 1])
+    no_guess = st[:, 4] == 5
+    ok = st[:, 2] == 0
+    assert np.sum(no_guess & ok) >= 10 and np.sum(~no_guess & ok) >= 100
+    assert np.all(st[no_guess, 6] == 0)
+    assert np.all(np.abs(out[ok, 3] / out[ok, 2] - 1.0) <= PV_EQ_TOL)

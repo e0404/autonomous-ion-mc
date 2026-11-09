@@ -114,7 +114,8 @@ ION_COUNTER_NAMES = ("mcs_mapping_failure", "mcs_table_bracket_miss")
 steps whose exact-Omega mapping of f_dM did not converge (status != 0; any nonzero value
 invalidates the result), and ``mcs_table_bracket_miss``, steps of the table-accelerated root whose
 initial tight bracket had no sign change (the widened or the full bracket was needed; a
-performance diagnostic, it never invalidates a result). Appended after
+performance diagnostic, it never invalidates a result; a step without a starting guess is not
+counted). Appended after
 ``COUNTER_NAMES`` (ion and nuclear runs exclude each other)."""
 
 QUANTUM_MEV = 2.0**-30

@@ -28,7 +28,9 @@ it from the full proton-path bracket (``"root"``); ``mapped_state_table`` /
 ``mcs_variance_table`` (``"table"``, the default) solve the same equation to the same tolerance
 from a tight bracket around the bilinear ``pv_eq/pv`` table value
 (:func:`ionmc.physics.exact_omega.pv_equivalent_seeded`; the table is an accelerator only) and
-return a bracket-miss flag (the full bracket was needed; a diagnostic, not a failure).
+return a bracket-miss flag (the full bracket was needed; a diagnostic, not a failure). A state
+outside the table or in a cell with an invalid node has no starting guess and is solved from the
+full bracket, as ``"root"`` (no miss).
 ``interpolated_state`` is the bare table value (diagnostics and tests). All apply the same
 thin-slab guard and the same variance formula (``variance_of_state``).
 

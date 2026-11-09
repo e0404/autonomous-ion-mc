@@ -35,8 +35,15 @@ accelerator only (Codex REVIEW-ee53867c): its bilinear value (:func:`pv_equivale
 starting guess of the same root solve, started from a tight bracket around it
 (:func:`pv_equivalent_seeded`; the full bracket when the tight one shows no sign change), so every
 step returns the exact root to the root path's tolerance (:data:`TABLE_EVAL_CONTRACT`). The table's
-interpolation error is a performance diagnostic (:func:`estimate_pv_eq_table`). The root solve:
-:func:`pv_equivalent` solves ``g(u) = b_p(e^u, r e^u) - b_ion(pv, p1v1) = 0`` for
+interpolation error is a performance diagnostic (:func:`estimate_pv_eq_table`). Coverage never
+fails the build (Codex REVIEW-16c63514): a cell of the table with a node whose root solve fails
+stays invalid and a state in it (or outside the table) has no starting guess, so the root starts
+from the full proton-path bracket, exactly as ``"root"``; the fraction of covered cells is recorded
+(``TableEstimate.table_coverage``). Whether the mapping is defined over a run's reachable states
+is a separate check of both evaluations (:func:`pv_eq_table_coverage`; ``config.validate`` fails
+closed otherwise, so validated runs have coverage 1.0). No table is built when multiple
+scattering is off.
+The root solve: :func:`pv_equivalent` solves ``g(u) = b_p(e^u, r e^u) - b_ion(pv, p1v1) = 0`` for
 ``u = ln pv_eq``, ``r = p1v1 / pv``, by a bracketed Illinois (modified regula falsi) iteration
 with a bisection safeguard. The bracket is the proton path itself: from its lowest energy to the
 largest ``pv_eq`` whose ``p1v1_eq = r pv_eq`` is still on the proton path. ``g`` is monotone
@@ -174,8 +181,12 @@ TABLE_EVAL_CONTRACT = (
     "float64, the root path's tolerance and status codes); the pv_eq/pv table only supplies the "
     "starting bracket (half-width max(10 x the table's interpolation estimate, 1e-5) around the "
     "bilinear guess, widened once x10, else the full proton-path bracket, counted as "
-    "mcs_table_bracket_miss); the interpolation error of the table is a performance diagnostic "
-    "(build-time estimate recorded), not a correctness claim"
+    "mcs_table_bracket_miss); a state outside the table or in a cell with an invalid node (no "
+    "root at a node) has no guess and uses the full proton-path bracket from the start, as "
+    "mcs_mapping_eval 'root' (not counted as a miss); the fraction of covered cells is recorded "
+    "(table_coverage, 1.0 for every validated run: validation fails closed when a reachable "
+    "node has no root, in both modes); the interpolation error of the table is a performance "
+    "diagnostic (build-time estimate recorded), not a correctness claim"
 )
 """The evaluation contract of ``mcs_mapping_eval = "table"``, as recorded in the summary and the
 capability report."""
@@ -593,13 +604,14 @@ def make_exact_omega(real: type) -> SimpleNamespace:
         changes sign (``w`` a relative half-width), clipped to the proton path's full bracket.
         Without a sign change the other end is moved once to ``u0 -+ 10 w``; failing that (or for
         ``q0 <= 0``, no guess) the full bracket of :func:`pv_equivalent` is used.
-        ``bracket_miss`` = 1 whenever the INITIAL tight bracket had no sign change (the widened
-        bracket or the full bracket was needed); it is a performance diagnostic, not a failure.
-        Ion states only (z >= 2)."""
+        ``bracket_miss`` = 1 whenever a tight bracket was tried (``q0 > 0``) and the INITIAL one
+        had no sign change (the widened bracket or the full bracket was needed); 0 without a
+        guess (``q0 <= 0``: the full bracket from the start, no tight bracket tried). A
+        performance diagnostic, not a failure. Ion states only (z >= 2)."""
         out = pv
         status = int(0)
         iters = int(0)
-        miss = int(1)
+        miss = int(0)
         target, st_ion = b_slab(ion_pth, comp, quad, z, m_ion_mev, pv, p1v1)
         if st_ion != 0:
             status = 1
@@ -620,6 +632,7 @@ def make_exact_omega(real: type) -> SimpleNamespace:
                 gb = real(0.0)
                 found = int(0)
                 if q0 > real(0.0):
+                    miss = 1  # a tight bracket is tried: a miss unless its first try succeeds
                     # one end at the guess u0, the other on the side of the sign change
                     u0 = wp.min(wp.max(wp.log(q0 * pv), u_lo), u_hi)
                     g0, s0 = b_residual(pro_pth, comp, quad, u0, r, target)
@@ -1093,15 +1106,21 @@ def table_domain(
 class TableEstimate:
     """Build-time interpolation estimate of one ``pv_eq/pv`` table (:func:`estimate_pv_eq_table`):
     ``interp_estimate`` the largest per-cell estimate of ``|ln pv_eq(table) - ln pv_eq(root)|``
-    over the ``n_cells`` solved cells (``n_refined_points`` stencil root solves, safety factor
-    ``safety_factor``) and ``bracket_half_width`` the starting bracket half-width it sets. A
-    performance diagnostic: every step is solved exactly (module docstring)."""
+    over the ``n_cells`` estimated cells (covered band cells whose 3 x 3 stencil fully solves;
+    ``n_refined_points`` stencil root solves, safety factor ``safety_factor``; None when no cell
+    qualifies) and ``bracket_half_width`` the starting bracket half-width it sets
+    (:data:`TABLE_BRACKET_MIN` without an estimate). ``table_coverage`` is the fraction of the
+    ``n_band_cells`` cells meeting the band of initial states that have four valid nodes (1.0:
+    full coverage; a state in an uncovered cell uses the full bracket). A performance
+    diagnostic: every step is solved exactly (module docstring)."""
 
-    interp_estimate: float
+    interp_estimate: float | None
     bracket_half_width: float
     n_cells: int
     n_refined_points: int
     safety_factor: float
+    table_coverage: float = 1.0
+    n_band_cells: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return dict(self.__dict__)
@@ -1155,15 +1174,24 @@ def estimate_pv_eq_table(
     ``dq``. The estimate of ``|ln q_table - ln q_root|`` is ``dq / q_lo`` (``q_lo`` the stencil
     minimum less ``dq``), its maximum over the solved cells is ``interp_estimate``, and the
     starting bracket half-width ``max(TABLE_BRACKET_FACTOR x interp_estimate,
-    TABLE_BRACKET_MIN)``. Fails closed (``UnsupportedCombinationError``) when a root solve fails
-    at a stencil point."""
+    TABLE_BRACKET_MIN)``. Only the covered band cells (four valid nodes) are estimated, and a cell
+    whose stencil has a failed root solve is excluded (not failed); without any estimated cell
+    ``interp_estimate`` is None and the half-width :data:`TABLE_BRACKET_MIN` (a too-narrow
+    bracket only costs a counted miss). Fails closed (``UnsupportedCombinationError``) only for
+    a band meeting no cell (invalid domain)."""
     row = np.ascontiguousarray(row, dtype=np.float64)
     xs, ys = _table_axes(row)
     n_y = len(ys)
-    cells = np.argwhere(_band_cells(xs, ys, p1v1_min, p1v1_max))
-    n_c = len(cells)
-    if n_c == 0:
-        raise fail("the pv_eq/pv table has no solved cell")
+    band = _band_cells(xs, ys, p1v1_min, p1v1_max)
+    n_band = int(band.sum())
+    if n_band == 0:
+        raise fail("the pv_eq/pv table has no cell meeting the band of initial states")
+    grid = row[TABLE_HEADER : TABLE_HEADER + len(xs) * n_y].reshape(len(xs), n_y)
+    covered = band & _valid_cells(grid)
+    coverage = float(covered.sum()) / n_band
+    cells = np.argwhere(covered)
+    if len(cells) == 0:
+        return _no_estimate(0, 0, coverage, n_band)
     hx, hy = xs[1] - xs[0], ys[1] - ys[0]
     ci, cj = cells[:, 0], cells[:, 1]
     a = np.arange(3)
@@ -1175,14 +1203,14 @@ def estimate_pv_eq_table(
     pv_s = np.exp(xs[0] + (uniq // n_ry) * (0.5 * hx))
     p1_s = pv_s * np.exp(ys[0] + (uniq % n_ry) * (0.5 * hy))
     peq, st = root_pv_equivalent_batch(ion_pack, proton_pack, comp, quad, z, mass_mev, pv_s, p1_s)
-    if np.any(st != 0):
-        k = int(np.argwhere(st != 0)[0, 0])
-        raise fail(
-            "the pv_eq/pv table cannot be built: the root solve fails at the stencil point "
-            f"pv = {pv_s[k]:.6g} MeV, p1v1 = {p1_s[k]:.6g} MeV (status {st[k]}); use "
-            "mcs_mapping_eval='root'"
-        )
-    q = (peq / pv_s)[inv].reshape(n_c, 3, 3)
+    # a cell whose stencil has a failed root solve is excluded from the estimate
+    keep = (st == 0)[inv].reshape(len(cells), 9).all(axis=1)
+    n_refined = int(uniq.size)
+    q = (peq / pv_s)[inv].reshape(len(cells), 3, 3)[keep]
+    cells = cells[keep]
+    n_c = len(cells)
+    if n_c == 0:
+        return _no_estimate(0, n_refined, coverage, n_band)
     d_xx = _neighbour_max(np.abs(q[:, 0, :] - 2.0 * q[:, 1, :] + q[:, 2, :]).max(axis=1), cells)
     d_yy = _neighbour_max(np.abs(q[:, :, 0] - 2.0 * q[:, :, 1] + q[:, :, 2]).max(axis=1), cells)
     q_max = q.max(axis=(1, 2))
@@ -1195,8 +1223,34 @@ def estimate_pv_eq_table(
         interp_estimate=est,
         bracket_half_width=max(TABLE_BRACKET_FACTOR * est, TABLE_BRACKET_MIN),
         n_cells=n_c,
-        n_refined_points=int(uniq.size),
+        n_refined_points=n_refined,
         safety_factor=TABLE_SAFETY_FACTOR,
+        table_coverage=coverage,
+        n_band_cells=n_band,
+    )
+
+
+def _valid_cells(grid: np.ndarray) -> np.ndarray:
+    """Mask ``[n_x - 1, n_y - 1]`` of the cells of the node grid with four valid nodes."""
+    return (
+        (grid[:-1, :-1] > 0.0)
+        & (grid[1:, :-1] > 0.0)
+        & (grid[:-1, 1:] > 0.0)
+        & (grid[1:, 1:] > 0.0)
+    )
+
+
+def _no_estimate(n_cells: int, n_refined: int, coverage: float, n_band: int) -> TableEstimate:
+    """The estimate of a table without any estimated cell: no interpolation estimate, the
+    smallest starting bracket (states there use the full bracket or count a miss)."""
+    return TableEstimate(
+        interp_estimate=None,
+        bracket_half_width=TABLE_BRACKET_MIN,
+        n_cells=n_cells,
+        n_refined_points=n_refined,
+        safety_factor=TABLE_SAFETY_FACTOR,
+        table_coverage=coverage,
+        n_band_cells=n_band,
     )
 
 
@@ -1220,6 +1274,143 @@ def build_pv_eq_table(
     return build_pv_eq_table_and_estimate(
         ion_pack, proton_pack, comp, quad, z, mass_mev, pv_lo, p1v1_min, p1v1_max, n_pv, n_r
     )[0]
+
+
+@dataclass(frozen=True)
+class _BandNodes:
+    """The root solve at the nodes of the table cells meeting the band of initial states
+    (:func:`_band_nodes`): axes, ``q = pv_eq/pv`` per node (:data:`TABLE_INVALID_NODE` where not
+    solved or failed), the root status per node (-1 where not solved) and the band mask."""
+
+    xs: np.ndarray
+    ys: np.ndarray
+    q: np.ndarray
+    status: np.ndarray
+    band: np.ndarray
+
+
+_NODES: dict[str, _BandNodes] = {}
+
+
+def _band_nodes(
+    ion_pack: np.ndarray,
+    proton_pack: np.ndarray,
+    comp: np.ndarray,
+    quad: np.ndarray,
+    z: float,
+    mass_mev: float,
+    pv_lo: float,
+    p1v1_min: float,
+    p1v1_max: float,
+    n_pv: int,
+    n_r: int,
+) -> _BandNodes:
+    """Root solve of the nodes of the cells meeting the band (the node grid of
+    :func:`build_pv_eq_table_and_estimate`; cached per input). Fails closed on an invalid domain."""
+    from ionmc.physics.ion_mcs import THIN_SLAB_R  # noqa: PLC0415
+
+    if not (0.0 < pv_lo < p1v1_min <= p1v1_max) or n_pv < 2 or n_r < 2:
+        raise fail(
+            f"invalid pv_eq table domain: pv_lo={pv_lo}, p1v1 in [{p1v1_min}, {p1v1_max}], "
+            f"n_pv={n_pv}, n_r={n_r}"
+        )
+    import hashlib  # noqa: PLC0415
+
+    h = hashlib.sha256()
+    for a in (ion_pack, proton_pack, comp, quad):
+        h.update(np.ascontiguousarray(a, dtype=np.float64).tobytes())
+    h.update(
+        np.array([z, mass_mev, pv_lo, p1v1_min, p1v1_max, n_pv, n_r], dtype=np.float64).tobytes()
+    )
+    key = h.hexdigest()
+    if key in _NODES:
+        return _NODES[key]
+    y0 = math.log1p(THIN_SLAB_R)
+    x0 = math.log(pv_lo)
+    x1 = math.log(p1v1_max) - y0
+    y1 = math.log(p1v1_max / pv_lo)
+    xs = np.linspace(x0, x1, n_pv)
+    ys = np.linspace(y0, y1, n_r)
+    gx, gy = np.meshgrid(xs, ys, indexing="ij")
+    pv = np.exp(gx).reshape(-1)
+    p1 = pv * np.exp(gy).reshape(-1)
+    q = np.full(pv.size, TABLE_INVALID_NODE)
+    status = np.full(pv.size, -1, dtype=np.int64)
+    band = _band_cells(xs, ys, p1v1_min, p1v1_max)
+    need = np.zeros((n_pv, n_r), dtype=bool)
+    need[:-1, :-1] |= band
+    need[1:, :-1] |= band
+    need[:-1, 1:] |= band
+    need[1:, 1:] |= band
+    reach = need.reshape(-1)
+    if np.any(reach):
+        peq, st = root_pv_equivalent_batch(
+            ion_pack, proton_pack, comp, quad, z, mass_mev, pv[reach], p1[reach]
+        )
+        q[reach] = np.where(st == 0, peq / pv[reach], TABLE_INVALID_NODE)
+        status[reach] = st
+    out = _BandNodes(xs, ys, q, status.reshape(n_pv, n_r), band)
+    _NODES[key] = out
+    return out
+
+
+@dataclass(frozen=True)
+class TableCoverage:
+    """Coverage of the reachable mapping domain (:func:`pv_eq_table_coverage`): of the
+    ``n_band_cells`` table cells meeting the band of initial states, ``n_uncovered`` have a node
+    where the root solve fails; ``pv_lowest_mev`` and ``r_largest`` are the lowest ``pv`` and the
+    largest ``p1v1/pv`` of a failed node of an uncovered cell and ``statuses`` the root statuses
+    there (None and empty for full coverage)."""
+
+    n_band_cells: int
+    n_uncovered: int
+    pv_lowest_mev: float | None
+    r_largest: float | None
+    statuses: tuple[int, ...]
+
+    @property
+    def coverage(self) -> float:
+        return 1.0 - self.n_uncovered / self.n_band_cells
+
+
+def pv_eq_table_coverage(
+    ion_pack: np.ndarray,
+    proton_pack: np.ndarray,
+    comp: np.ndarray,
+    quad: np.ndarray,
+    z: float,
+    mass_mev: float,
+    pv_lo: float,
+    p1v1_min: float,
+    p1v1_max: float,
+    n_pv: int = TABLE_N_PV,
+    n_r: int = TABLE_N_R,
+) -> TableCoverage:
+    """Whether the mapping is defined over the run's reachable domain: the root solve at the
+    nodes of the table cells meeting the band of initial states (the same nodes, solve and cache
+    as :func:`build_pv_eq_table_and_estimate`; no estimate, no table), for both evaluations
+    (``config.validate`` fails closed on ``n_uncovered > 0``)."""
+    nodes = _band_nodes(
+        ion_pack, proton_pack, comp, quad, z, mass_mev, pv_lo, p1v1_min, p1v1_max, n_pv, n_r
+    )
+    grid = nodes.q.reshape(len(nodes.xs), len(nodes.ys))
+    bad = nodes.band & ~_valid_cells(grid)
+    n_band = int(nodes.band.sum())
+    if not np.any(bad):
+        return TableCoverage(n_band, 0, None, None, ())
+    node_bad = np.zeros(grid.shape, dtype=bool)
+    for di in (0, 1):
+        for dj in (0, 1):
+            node_bad[di : di + bad.shape[0], dj : dj + bad.shape[1]] |= bad
+    node_bad &= grid <= 0.0
+    ii, jj = np.nonzero(node_bad)
+    return TableCoverage(
+        n_band,
+        int(bad.sum()),
+        float(math.exp(nodes.xs[ii].min())),
+        float(math.exp(nodes.ys[jj].max())),
+        tuple(sorted({int(s) for s in nodes.status[ii, jj]})),
+    )
 
 
 def build_pv_eq_table_and_estimate(
@@ -1246,16 +1437,14 @@ def build_pv_eq_table_and_estimate(
     ``w`` the starting bracket half-width (:func:`estimate_pv_eq_table`). Only the nodes of cells
     that meet the band of the run's initial states, ``p1v1_min <= p1v1 <= p1v1_max``
     (:func:`table_domain`), are solved; every other node, and a node whose solve fails, holds
-    :data:`TABLE_INVALID_NODE` (no starting guess there: the full bracket is used). Fails closed
-    (``UnsupportedCombinationError``) unless every cell meeting the band has four valid nodes.
-    The table only accelerates the root (:data:`TABLE_EVAL_CONTRACT`). Cached per input."""
-    from ionmc.physics.ion_mcs import THIN_SLAB_R  # noqa: PLC0415
-
-    if not (0.0 < pv_lo < p1v1_min <= p1v1_max) or n_pv < 2 or n_r < 2:
-        raise fail(
-            f"invalid pv_eq table domain: pv_lo={pv_lo}, p1v1 in [{p1v1_min}, {p1v1_max}], "
-            f"n_pv={n_pv}, n_r={n_r}"
-        )
+    :data:`TABLE_INVALID_NODE` (no starting guess there: the full bracket is used, exactly the
+    ``"root"`` evaluation). Coverage never fails the build: the fraction of band cells with four
+    valid nodes is recorded (``estimate.table_coverage``). Fails closed
+    (``UnsupportedCombinationError``) only on an invalid domain. The table only accelerates the
+    root (:data:`TABLE_EVAL_CONTRACT`). Cached per input."""
+    nodes = _band_nodes(
+        ion_pack, proton_pack, comp, quad, z, mass_mev, pv_lo, p1v1_min, p1v1_max, n_pv, n_r
+    )
     import hashlib  # noqa: PLC0415
 
     h = hashlib.sha256()
@@ -1267,43 +1456,8 @@ def build_pv_eq_table_and_estimate(
     key = h.hexdigest()
     if key in _TABLES:
         return _TABLES[key]
-    y0 = math.log1p(THIN_SLAB_R)
-    x0 = math.log(pv_lo)
-    x1 = math.log(p1v1_max) - y0
-    y1 = math.log(p1v1_max / pv_lo)
-    xs = np.linspace(x0, x1, n_pv)
-    ys = np.linspace(y0, y1, n_r)
-    gx, gy = np.meshgrid(xs, ys, indexing="ij")
-    pv = np.exp(gx).reshape(-1)
-    p1 = pv * np.exp(gy).reshape(-1)
-    q = np.full(pv.size, TABLE_INVALID_NODE)
-    band = _band_cells(xs, ys, p1v1_min, p1v1_max)
-    need = np.zeros((n_pv, n_r), dtype=bool)
-    need[:-1, :-1] |= band
-    need[1:, :-1] |= band
-    need[:-1, 1:] |= band
-    need[1:, 1:] |= band
-    reach = need.reshape(-1)
-    if np.any(reach):
-        peq, st = root_pv_equivalent_batch(
-            ion_pack, proton_pack, comp, quad, z, mass_mev, pv[reach], p1[reach]
-        )
-        q[reach] = np.where(st == 0, peq / pv[reach], TABLE_INVALID_NODE)
-    grid = q.reshape(n_pv, n_r)
-    cell_ok = (
-        (grid[:-1, :-1] > 0.0)
-        & (grid[1:, :-1] > 0.0)
-        & (grid[:-1, 1:] > 0.0)
-        & (grid[1:, 1:] > 0.0)
-    )
-    if np.any(band & ~cell_ok):
-        i, j = np.argwhere(band & ~cell_ok)[0]
-        raise fail(
-            "the pv_eq/pv table cannot be built over the source domain: the root solve fails at a "
-            f"node of the cell at pv = {math.exp(xs[i]):.6g} MeV, p1v1/pv = {math.exp(ys[j]):.6g} "
-            "(the ion or proton path does not reach one cell beyond pv(E0 + 6 sigma_E)); use "
-            "mcs_mapping_eval='root' or extend the stopping table"
-        )
+    xs, ys, q = nodes.xs, nodes.ys, nodes.q
+    x0, x1, y0, y1 = float(xs[0]), float(xs[-1]), float(ys[0]), float(ys[-1])
     header = [
         x0,
         (n_pv - 1) / (x1 - x0),

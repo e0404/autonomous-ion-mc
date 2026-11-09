@@ -418,7 +418,14 @@ enforce it). The ion models are electromagnetic only.
   the same Illinois iteration (`exact_omega.pv_equivalent_seeded`; a miss of the initial tight
   bracket, resolved by the widened or the full bracket, is counted in the diagnostic
   `mcs_table_bracket_miss`), and its build-time interpolation estimate
-  (`exact_omega.estimate_pv_eq_table`) only sets the bracket width.
+  (`exact_omega.estimate_pv_eq_table`) only sets the bracket width. A table cell with a node
+  where the root solve fails stays invalid; states there (or outside the table) use the full
+  bracket, as `"root"` (not counted as a miss), and the covered fraction is recorded
+  (`table_coverage`). The mapping is defined where the proton-equivalent state stays inside the
+  proton b-slab range: with multiple scattering on, `validate()` root-solves the table nodes of
+  the reachable states in both modes and fails closed otherwise (observed: oxygen16 at 100 and
+  150 MeV/u in copper and lead), so validated runs have coverage 1.0. With
+  `multiple_scattering=False` no table is built (`evaluation = "root"`, `unused = True`).
   Ion stopping tables are keyed by the full material identity (name, density, composition, I,
   density-effect parameters), not by the material name.
 * **Stopping.** Bethe tables with the Lindhard-Sorensen option `ls` (default `"off"`; `"eff"` and

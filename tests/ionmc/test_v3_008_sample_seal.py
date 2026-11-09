@@ -84,7 +84,9 @@ def test_totals_hashes_and_run_binding(record: dict) -> None:
     shared = Counter(c["run_id"] for c in chunks)
     for c in chunks:
         if shared[c["run_id"]] > 1:
-            assert "run_shared_with" in c, f"case{c['case']} k{c['k']} shares a run without saying so"
+            assert "run_shared_with" in c, (
+                f"case{c['case']} k{c['k']} shares a run without saying so"
+            )
     assert len(record["superseded_runs"]) >= 1
     for failed in record["failed_runs"]:
         assert failed["succeeded"] is False and RUN_ID.match(failed["run_id"])

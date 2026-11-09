@@ -218,13 +218,23 @@ engine's stepped `T_dM` up to 1 mm; the worst U5 deviation is 1.5e-3.
   diagnostic `mcs_table_bracket_miss` (it never invalidates a result). The table is an
   accelerator only: its interpolation error (estimated at build from second differences on a
   2x-refined root-solve grid, safety factor 2) is a performance diagnostic, not a correctness
-  claim (Codex REVIEW-ee53867c). A step whose solve fails (nonzero status) is counted as
+  claim (Codex REVIEW-ee53867c). Coverage does not restrict availability (Codex
+  REVIEW-16c63514): a table cell with a node where the root solve fails stays invalid, and a
+  state in it or outside the table has no starting guess and is solved from the full bracket, as
+  `"root"` (not counted as a miss); the fraction of the band cells with four valid nodes is
+  recorded (`table_coverage`). The mapping is defined where the proton-equivalent state stays
+  inside the proton b-slab range: with multiple scattering on, `validate()` root-solves the
+  table nodes of the run's reachable states in both modes and fails closed when any has no root
+  (observed: oxygen16 at 100 and 150 MeV/u in copper and lead, root status 2 at the lowest-energy
+  states with a whole-range slab), so every validated run has coverage 1.0. With
+  `multiple_scattering=False` the mapping is unused, no table is built and nothing is checked. A step whose solve fails (nonzero status) is counted as
   `mcs_mapping_failure` and the result is invalid. Tests: `tests/ionmc/test_ion_mcs_table.py`
   (the accelerated root equals the root path within the solver tolerance on >= 2000 random states
   per ion, material and domain end). Cost (warp-cpu float64, single thread): about 21 us per step
   for `"table"` against 40 us for `"root"`. The summary (`mcs_mapping`) records the evaluation,
   the table sizes, axes, domain, sha256, the contract, the solver tolerances, the bracket
-  constants and widths and the interpolation estimate (overall and per material).
+  constants and widths, the interpolation estimate and the table coverage (overall and per
+  material).
 * **Not included.** Nuclear interactions, fragmentation and secondary ions (`nuclear=True` fails
   closed for z >= 2). No validation statement is made here beyond the CI rows of the test suite
   (`tests/ionmc/test_v3_008_rows_ci.py`).

@@ -42,6 +42,7 @@ from ionmc.physics.exact_omega import (
     pack_quadrature,
     pack_transport_row,
     proton_path,
+    pv_eq_table_coverage,
     table_domain,
 )
 from ionmc.physics.projectiles import ALPHA, CARBON12, DEUTERON, OXYGEN16, PROTON, Projectile
@@ -124,8 +125,17 @@ class PhysicsOptions:
     (``MCS_MAPPING_EVALS``), both the exact root on every step: ``"table"`` (default; the root
     started from a tight bracket around the bilinear value of a ``pv_eq/pv`` table built at
     validation by the root solve, the table being an accelerator only, ``TABLE_EVAL_CONTRACT``) or
-    ``"root"`` (the root from the full proton-path bracket). It is ignored for protons (no
-    mapping).
+    ``"root"`` (the root from the full proton-path bracket). A table cell with a node where the
+    root solve fails is left invalid and states in it use the full bracket, exactly as
+    ``"root"`` (the same root). The mapping is defined where the proton-equivalent state stays
+    inside the proton b-slab range: with multiple scattering on, ``validate`` root-solves the
+    table nodes of the run's reachable states in both evaluations and fails closed
+    (``UnsupportedCombinationError``) if any fails (observed: oxygen16 at 100 and 150 MeV/u in
+    copper and lead), so every validated run has table coverage 1.0 (recorded, summary
+    ``mcs_mapping.table.table_coverage``); the fallback protects any partial table. With
+    ``multiple_scattering=False`` the mapping is not evaluated: no table is built, no coverage
+    check is made, and the summary records ``mcs_mapping.evaluation = "root"`` with
+    ``unused = True``. It is ignored for protons (no mapping).
     """
 
     nuclear: bool
@@ -290,7 +300,10 @@ class IonMappingData:
     holds the ``pv_eq/pv`` table rows (:func:`ionmc.physics.exact_omega.build_pv_eq_table`) for
     ``"table"`` and is None for ``"root"``; ``table_domain`` the ``(pv_lo, p1v1_min, p1v1_max)``
     [MeV] they were built for; ``estimates`` the build-time interpolation estimate of each row
-    (:func:`ionmc.physics.exact_omega.estimate_pv_eq_table`, a performance diagnostic)."""
+    (:func:`ionmc.physics.exact_omega.estimate_pv_eq_table`, a performance diagnostic, with the
+    table coverage). ``unused`` is True when multiple scattering is off: the mapping is never
+    evaluated, so no table is built whatever the requested evaluation (``evaluation`` is then
+    ``"root"``)."""
 
     ion: np.ndarray
     proton: np.ndarray
@@ -300,11 +313,18 @@ class IonMappingData:
     table: np.ndarray | None = None
     table_domain: tuple[float, float, float] | None = None
     estimates: tuple[TableEstimate, ...] | None = None
+    unused: bool = False
 
     def table_summary(self) -> dict[str, Any]:
         """JSON-serialisable record of the evaluation (sizes, axes bounds and the sha256 of the
         packed table rows)."""
         out: dict[str, Any] = {"evaluation": self.evaluation}
+        if self.unused:
+            out["unused"] = True
+            out["unused_note"] = (
+                "multiple_scattering=False: the mapping is never evaluated; no pv_eq/pv table is "
+                "built whatever mcs_mapping_eval requests"
+            )
         if self.table is not None and self.table_domain is not None:
             rows = np.ascontiguousarray(self.table, dtype=np.float64)
             h = rows[0]
@@ -322,6 +342,7 @@ class IonMappingData:
             }
             if self.estimates is not None:
                 es = self.estimates
+                known = [e.interp_estimate for e in es if e.interp_estimate is not None]
                 out["table"].update(
                     {
                         "contract": TABLE_EVAL_CONTRACT,
@@ -330,7 +351,7 @@ class IonMappingData:
                         "bracket_factor": TABLE_BRACKET_FACTOR,
                         "bracket_min": TABLE_BRACKET_MIN,
                         "bracket_half_width_per_material": [e.bracket_half_width for e in es],
-                        "interp_estimate": max(e.interp_estimate for e in es),
+                        "interp_estimate": max(known) if known else None,
                         "interp_estimate_per_material": [e.interp_estimate for e in es],
                         "interp_estimate_note": (
                             "build-time estimate of |ln pv_eq(table) - ln pv_eq(root)| (bilinear "
@@ -340,6 +361,16 @@ class IonMappingData:
                         "safety_factor": TABLE_SAFETY_FACTOR,
                         "estimated_cells": sum(e.n_cells for e in es),
                         "refined_points": sum(e.n_refined_points for e in es),
+                        "table_coverage": min(e.table_coverage for e in es),
+                        "table_coverage_per_material": [e.table_coverage for e in es],
+                        "table_coverage_note": (
+                            "fraction of the table cells meeting the band of initial states with "
+                            "four valid nodes; 1.0 for every validated run (validate fails closed "
+                            "when a reachable node has no root, in both evaluations); a state "
+                            "outside the table or in an uncovered cell has no starting guess and "
+                            "uses the full proton-path bracket, as mcs_mapping_eval 'root'; "
+                            "interp_estimate is None for a material without an estimated cell"
+                        ),
                     }
                 )
         return out
@@ -366,13 +397,44 @@ def _ion_mapping_data(
     comp = [pack_composition(m) for m in mats]
     quad = pack_quadrature()
     ph = config.physics
-    if ph.mcs_mapping_eval == "root":
-        return IonMappingData(_pad_rows(ion), _pad_rows(pro), _pad_rows(comp), quad, "root")
+    if not ph.multiple_scattering:  # the mapping is never evaluated: no table, no root solve
+        return IonMappingData(
+            _pad_rows(ion), _pad_rows(pro), _pad_rows(comp), quad, "root", unused=True
+        )
     proj = config.source.projectile
     # the step midpoint stays above (1 - f) E_cut (f: the step's energy-loss fraction limit)
     dom = table_domain(
         proj, (1.0 - ph.max_energy_loss_fraction) * effective_e_cut_mev(config), e_lo_mev, e_hi_mev
     )
+    # decision D1 (Codex REVIEW-16c63514): the mapping must be defined over the run's reachable
+    # domain (root solve at the table nodes of the band of initial states), in both evaluations
+    uncovered = []
+    for i, mat in enumerate(mats):
+        cov = pv_eq_table_coverage(
+            ion[i], pro[i], comp[i], quad, float(proj.z), proj.mass_mev, *dom, TABLE_N_PV, TABLE_N_R
+        )
+        if cov.n_uncovered:
+            uncovered.append((mat.name, cov))
+    if uncovered:
+        parts = "; ".join(
+            f"{name}: {c.n_uncovered} of {c.n_band_cells} cells of the band of initial states "
+            f"uncovered, lowest pv {c.pv_lowest_mev:.6g} MeV, largest p1v1/pv {c.r_largest:.6g}, "
+            f"root status {', '.join(str(s) for s in c.statuses)}"
+            for name, c in uncovered
+        )
+        reason = (
+            "the proton-equivalent state leaves the proton b-slab range (root status 2)"
+            if all(c.statuses == (2,) for _n, c in uncovered)
+            else "the exact-Omega root solve fails at reachable states"
+        )
+        raise fail(
+            f"{proj.name} at E0 = {config.source.kinetic_energy_mev:g} MeV is unsupported with "
+            f"multiple scattering in {', '.join(n for n, _c in uncovered)}: the exact-Omega "
+            f"mapping is not defined over the reachable states ({reason}; {parts}); runs with "
+            "multiple_scattering=False are unaffected"
+        )
+    if ph.mcs_mapping_eval == "root":
+        return IonMappingData(_pad_rows(ion), _pad_rows(pro), _pad_rows(comp), quad, "root")
     built = [
         build_pv_eq_table_and_estimate(
             ion[i], pro[i], comp[i], quad, float(proj.z), proj.mass_mev, *dom, TABLE_N_PV, TABLE_N_R
