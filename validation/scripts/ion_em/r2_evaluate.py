@@ -606,10 +606,24 @@ class Context:
 def _validity(ctx: Context) -> list[dict[str, Any]]:
     out = []
     for run in ctx.runs:
-        v = check_run_validity(ctx.repo, ctx.plan, ctx.review, run.chronology_record(), run.run_id)
-        out.append(
-            {"run_id": run.run_id, "config": run.config, "case": run.case, "part": run.part, **v}
+        pinned = run.pinned  # seal note and review record at the run's signed code_sha
+        if pinned["plan"] != ctx.plan:
+            raise io.RecordError(
+                f"{run.run_id}: the seal note at code_sha {run.code_sha} differs from HEAD's"
+            )
+        v = check_run_validity(
+            ctx.repo, pinned["plan"], pinned["review"], run.chronology_record(), run.run_id
         )
+        out.append({
+            "run_id": run.run_id, "config": run.config, "case": run.case, "part": run.part,
+            "code_sha": run.code_sha, "review_finished_at": pinned["review"]["finished_at"],
+            "review_sha256_at_code_sha": pinned["review_sha256"],
+            "review_sha256_at_head": ctx.reader.reads.get(
+                f"{ctx.reader.rel(ctx.records)}/review.json"
+            ) if ctx.reader else None,
+            "plan_sha256_at_code_sha": pinned["plan_sha256"],
+            "manifest_bundle_set_digest": pinned["manifest_bundle_set_digest"], **v,
+        })  # fmt: skip
     return out
 
 

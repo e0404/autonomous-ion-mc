@@ -13,6 +13,11 @@ Usage:
     python -I validation/scripts/ion_em/gen_r2_bundles.py [--out DIR]   # write bundles (default: committed dir)
     python -I validation/scripts/ion_em/gen_r2_bundles.py --check       # regenerate in a temp dir, compare byte
                                                                         # for byte, print the bundle-set digest
+    python -I validation/scripts/ion_em/gen_r2_bundles.py --manifest
+
+--check also compares the committed frozen bundle manifest
+(validation/results/transport/v8r2-topas/frozen-bundles.json) with a fresh regeneration;
+--manifest writes that manifest from the bundles under --out.
 """
 
 import json
@@ -25,6 +30,10 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_OUT = REPO_ROOT / "validation" / "reference_cases" / "topas"
 REL_PREFIX = "validation/reference_cases/topas"
+DEFAULT_MANIFEST = (
+    REPO_ROOT / "validation" / "results" / "transport" / "v8r2-topas" / "frozen-bundles.json"
+)
+MANIFEST_SCHEMA = "ionmc-v8r2-frozen-bundles-1"
 BUNDLE_SET_DIGEST = "6d1ae3a06211831cfb7e8924c65d6d8fe31fae7781443ff84c077204045ea790"
 
 TOPAS_BASE = 20619000
@@ -388,10 +397,52 @@ def bundle_set_digest(out):
     return hashlib.sha256(text.encode()).hexdigest(), len(lines)
 
 
-def check(committed):
+def manifest_text(out):
+    """Frozen bundle manifest (JSON text) of the r2 bundles under `out`.
+
+    Every TOPAS run of the set is bound to this manifest (Codex review requirement): per bundle the
+    sha256 of case.json and input.txt, the counts and the bundle-set digest. Deterministic: sorted
+    keys, indent 1, trailing newline. Fails if the bundle-set digest is not BUNDLE_SET_DIGEST.
+    """
+    out = Path(out)
+    bundles = {}
+    for d in out.iterdir():
+        if d.is_dir() and "-r2-" in d.name:
+            bundles[d.name] = {
+                f: hashlib.sha256((d / f).read_bytes()).hexdigest()
+                for f in ("case.json", "input.txt")
+            }
+    digest, nfiles = bundle_set_digest(out)
+    if digest != BUNDLE_SET_DIGEST:
+        raise ValueError(f"bundle-set digest {digest} != recorded {BUNDLE_SET_DIGEST}")
+    manifest = {
+        "schema": MANIFEST_SCHEMA,
+        "generated_from": "gen_r2_bundles.py",
+        "bundle_count": len(bundles),
+        "file_count": nfiles,
+        "bundle_set_digest": digest,
+        "bundles": bundles,
+    }
+    return json.dumps(manifest, sort_keys=True, indent=1) + "\n"
+
+
+def write_manifest(out, path):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(manifest_text(out))
+    return path
+
+
+def check(committed, manifest_path=DEFAULT_MANIFEST):
     committed = Path(committed)
+    manifest_path = Path(manifest_path)
     with tempfile.TemporaryDirectory() as tmp:
         made = generate(tmp)
+        try:
+            fresh_manifest = manifest_text(tmp)
+        except ValueError as exc:
+            fresh_manifest = None
+            print("MANIFEST NOT GENERATED:", exc)
         bad = []
         for nm, _ in made:
             for f in ("case.json", "input.txt"):
@@ -408,16 +459,41 @@ def check(committed):
         print("DIFFERS or MISSING:", b)
     for e in extra:
         print("EXTRA committed r2 bundle:", e)
-    return ok and not bad and not extra
+    manifest_ok = (
+        fresh_manifest is not None
+        and manifest_path.is_file()
+        and manifest_path.read_text() == fresh_manifest
+        and json.loads(manifest_path.read_text())["bundle_set_digest"] == BUNDLE_SET_DIGEST
+    )
+    print(
+        f"manifest {manifest_path} matches a fresh regeneration"
+        if manifest_ok
+        else f"MANIFEST MISSING or DIFFERS: {manifest_path}"
+    )
+    return ok and not bad and not extra and manifest_ok
 
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT, help="output directory (default: validation/reference_cases/topas)")
     ap.add_argument("--check", action="store_true", help="regenerate into a temp dir and compare byte for byte with --out")
+    ap.add_argument(
+        "--manifest",
+        action="store_true",
+        help="write the frozen bundle manifest computed from --out (default: committed dir)",
+    )
+    ap.add_argument(
+        "--manifest-path",
+        type=Path,
+        default=DEFAULT_MANIFEST,
+        help="manifest path (default: validation/results/transport/v8r2-topas/frozen-bundles.json)",
+    )
     args = ap.parse_args(argv)
     if args.check:
-        return 0 if check(args.out) else 1
+        return 0 if check(args.out, args.manifest_path) else 1
+    if args.manifest:
+        print("wrote", write_manifest(args.out, args.manifest_path))
+        return 0
     for nm, s in generate(args.out):
         print(s, nm)
     return 0

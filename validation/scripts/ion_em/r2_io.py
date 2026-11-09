@@ -12,6 +12,16 @@ Three inputs, each bound to a controlled record before any number is used:
    infrastructure item (V3-INFRA-005), so the binding today is to the reviewed, committed bytes.
    All other records (index, signed run records, listings, seal, trust file) are likewise read
    through :class:`CommittedReader`.
+   **Chronology pinning (Codex REVIEW-096af6a3):** the chronology of each run uses the seal note
+   and ``review.json`` as committed at the run's SIGNED ``code_sha`` (``git show <code_sha>:...``;
+   they predate the run start and cannot be altered later); ``code_sha`` must be an ancestor of
+   HEAD and the HEAD seal note must equal the pinned one; the report records the review digests at
+   ``code_sha`` and at HEAD. **Bundle binding:** the frozen bundle manifest
+   ``validation/results/transport/v8r2-topas/frozen-bundles.json`` must be byte-identical at the
+   run's ``code_sha`` and at HEAD (amendment rule: a bundle change after a run invalidates that
+   run's grading), and the run's ``request.input_files`` sha256 of ``case.json`` / ``input.txt``
+   must equal the manifest entry of the bundle named for the index's case/config/part (else a
+   run-validity FAIL); the frozen module/parameter-line checks remain as an additional layer.
 2. **ionmc samples.** The sealed record ``sample-seal.json`` (``--seal``) must be byte-identical to
    the file committed at the plan's ``seal_sha`` (``git show <seal_sha>:<SEAL_RECORD_PATH>``).
    Each chunk npz (``<samples-root>/validation/generated/<run_id>/r2-samples/case<c>/<npz>``) is
@@ -279,7 +289,10 @@ class CommittedReader:
 def load_plan(reader: CommittedReader) -> dict[str, Any]:
     """``seal_sha`` / ``seal_review_id`` from the one fenced ```json block of the committed
     acceptance plan that contains "seal_sha" (zero or several blocks: fail closed)."""
-    text = reader.read(PLAN_PATH).decode("utf-8")
+    return parse_seal_note(reader.read(PLAN_PATH).decode("utf-8"))
+
+
+def parse_seal_note(text: str) -> dict[str, Any]:
     blocks = [b for b in re.findall(r"```json[ \t]*\n(.*?)```", text, re.S) if '"seal_sha"' in b]
     if len(blocks) != 1:
         raise RecordError(
@@ -297,18 +310,79 @@ def load_plan(reader: CommittedReader) -> dict[str, Any]:
 def load_review(
     reader: CommittedReader, records: Path | str, plan: dict[str, Any]
 ) -> dict[str, Any]:
-    """The seal review record as committed at HEAD (``<records>/review.json``). It is a verbatim
-    copy of the controlled codex-worker response (its ``report_sha256`` is the service's report
-    digest); a signed review record is a future infrastructure item (V3-INFRA-005), so the binding
-    today is to the reviewed, committed bytes. ``review_id`` and ``head_sha`` must equal the plan's
-    seal note."""
-    review = reader.json(Path(records) / "review.json", "seal review record")
+    """The seal review record as committed at HEAD (``<records>/review.json``; reported only, the
+    chronology uses the copy at each run's code_sha, :func:`load_pinned_chronology`). It is a
+    verbatim copy of the controlled codex-worker response (its ``report_sha256`` is the
+    service's report digest); a signed review record is a future infrastructure item
+    (V3-INFRA-005), so the binding today is to the reviewed, committed bytes. ``review_id`` and
+    ``head_sha`` must equal the plan's seal note."""
+    return check_review(reader.json(Path(records) / "review.json", "seal review record"), plan)
+
+
+def check_review(review: Any, plan: dict[str, Any]) -> dict[str, Any]:
     for key in REVIEW_FIELDS:
         require(review, key, "seal review record")
     require(review["report"], "verdict", "seal review report")
     if review["review_id"] != plan["seal_review_id"] or review["head_sha"] != plan["seal_sha"]:
         raise RecordError("the committed review record is not the seal review named by the plan")
     return review
+
+
+def load_pinned_chronology(repo: Path | str, code_sha: str, records_rel: str) -> dict[str, Any]:
+    """The seal note and the seal review record as committed at the run's signed ``code_sha``
+    (Codex REVIEW-096af6a3): the runner executed exactly that commit, so these bytes existed before
+    the run started and cannot be changed afterwards. A later commit (e.g. a forged earlier
+    ``finished_at``) does not affect the chronology of this run. Missing at ``code_sha``: fail
+    closed."""
+    plan_blob = git_show(repo, code_sha, PLAN_PATH)
+    plan = parse_seal_note(plan_blob.decode("utf-8"))
+    rev_blob = git_show(repo, code_sha, f"{records_rel}/review.json")
+    try:
+        review = json.loads(rev_blob.decode("utf-8"))
+    except ValueError as exc:
+        raise RecordError(f"review.json at {code_sha} is not JSON: {exc}") from exc
+    check_review(review, plan)
+    return {
+        "plan": plan, "review": review,
+        "plan_sha256": hashlib.sha256(plan_blob).hexdigest(),
+        "review_sha256": hashlib.sha256(rev_blob).hexdigest(),
+    }  # fmt: skip
+
+
+def is_ancestor(repo: Path | str, older: str, newer: str) -> bool:
+    proc = subprocess.run(  # noqa: S603 - fixed argv
+        ["git", "-C", str(repo), "merge-base", "--is-ancestor", older, newer],
+        capture_output=True, text=True, check=False,
+    )  # fmt: skip
+    if proc.returncode not in (0, 1):
+        raise RecordError(f"git merge-base failed: {proc.stderr.strip()}")
+    return proc.returncode == 0
+
+
+FROZEN_MANIFEST = "validation/results/transport/v8r2-topas/frozen-bundles.json"
+MANIFEST_SCHEMA = "ionmc-v8r2-frozen-bundles-1"
+
+
+def frozen_manifest(reader: CommittedReader, code_sha: str) -> dict[str, Any]:
+    """The frozen bundle manifest, required byte-identical at the run's ``code_sha`` and at HEAD
+    (amendment rule: a bundle change after a run invalidates that run's grading)."""
+    at_run = git_show(reader.repo, code_sha, FROZEN_MANIFEST)
+    at_head = reader.read(FROZEN_MANIFEST)
+    if at_run != at_head:
+        raise RecordError(
+            f"{FROZEN_MANIFEST} differs between the run's code_sha {code_sha} and HEAD "
+            f"{reader.head}: amendment rule, bundles changed after the run invalidate its grading"
+        )
+    try:
+        doc = json.loads(at_head.decode("utf-8"))
+    except ValueError as exc:
+        raise RecordError(f"{FROZEN_MANIFEST} is not JSON: {exc}") from exc
+    if require(doc, "schema", "frozen manifest") != MANIFEST_SCHEMA:
+        raise RecordError(f"{FROZEN_MANIFEST}: schema {doc['schema']!r} != {MANIFEST_SCHEMA}")
+    require(doc, "bundle_set_digest", "frozen manifest")
+    if not isinstance(require(doc, "bundles", "frozen manifest"), dict):
+        raise RecordError(f"{FROZEN_MANIFEST}: bundles must be an object")
+    return doc
 
 
 def load_index(reader: CommittedReader, records: Path | str) -> list[dict[str, Any]]:
@@ -364,6 +438,8 @@ class TopasRun:
     case_doc: dict[str, Any] = field(default_factory=dict)
     request: dict[str, Any] = field(default_factory=dict)
     native: str = ""
+    pinned: dict[str, Any] = field(default_factory=dict)
+    bundle_problems: list[str] = field(default_factory=list)
 
     def chronology_record(self) -> dict[str, Any]:
         """The run record handed to ``check_run_validity``."""
@@ -553,6 +629,19 @@ def load_topas_run(
         }
     if not committed:
         raise RecordError(f"{run_id}: bundle {bundle} is not committed at {code_sha}")
+    if not is_ancestor(repo, code_sha, reader.head):
+        raise RecordError(f"{run_id}: code_sha {code_sha} is not an ancestor of HEAD {reader.head}")
+    manifest = frozen_manifest(reader, code_sha)
+    entry = manifest["bundles"].get(bundle)
+    if not isinstance(entry, dict):
+        run.bundle_problems.append(f"bundle {bundle} is not in the frozen manifest")
+    else:
+        for name in ("case.json", "input.txt"):
+            got = input_files.get(name, {}).get("sha256") if isinstance(input_files, dict) else None
+            if got is None or got != entry.get(name):
+                run.bundle_problems.append(f"{bundle}/{name} differs from the frozen manifest")
+    run.pinned = load_pinned_chronology(repo, code_sha, reader.rel(records))
+    run.pinned["manifest_bundle_set_digest"] = manifest["bundle_set_digest"]
     if input_files != committed:
         raise RecordError(
             f"{run_id}: request input_files differ from the committed bundle {bundle}"
@@ -800,7 +889,7 @@ def run_checks(run: TopasRun) -> dict[str, list[str]]:
     (NumberOfHistoriesInRun completed); the msc printout of GenericIon and alpha lists UrbanMsc
     only; the executed module list matches the bundle (:func:`module_check`). Returns
     ``{"problems": [...], "module_markers_unverifiable": [...]}``."""
-    problems = []
+    problems = list(run.bundle_problems)  # frozen-manifest binding (REVIEW-096af6a3)
     stderr = read_verified(run, "stderr.txt")
     stdout = read_verified(run, "stdout.txt").decode("utf-8", "replace")
     if stderr.strip():

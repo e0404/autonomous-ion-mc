@@ -194,8 +194,8 @@ placeholder scorer output was deleted unread.
 
 | File | sha256 |
 |---|---|
-| `validation/scripts/ion_em/gen_r2_bundles.py` | `8a92d40b7259e8c96c4edf522a5c9e32f66f6fcc16eda89cddc31ae116b4703f` |
-| `tests/ionmc/test_r2_bundles.py` | `fd87a7dc11e61065d963b44308bc6818ccc67b5e3f0ca01b83af0ff2814e6100` |
+| `validation/scripts/ion_em/gen_r2_bundles.py` | `9924429dbe1e08d9f2e3859924ec73fa14ae1effa57946715e5a4cb6331c3343` |
+| `tests/ionmc/test_r2_bundles.py` | `b0e91e2bc53ed0f46fbe8d0b63bf9a6d449cd81fbde38094754c5f054df47530` |
 | `reference_requests/operator-directives/2026-11-07-topas-validation-target.md` | `ca079e9f0af990cdff9d8efde60d38ac55e2d0fc0fb9ef22355a81f4a2ab0b26` |
 | `reference_requests/interventions/IR-20261102-010435-B59B2D/response.json` | `dc6a610cb67dee50fa0bb96327026eea0b81bb9506e7b898c2e9e44322f69bd0` |
 | `validation/plans/v3-008/r2-topas-target.md` | `deade6b6268f52154d066bde7537f380c276a649061e7ae2f13657a3dcc91238` |
@@ -230,11 +230,11 @@ placeholder scorer output was deleted unread.
 | `src/ionmc/transport/tables.py` | `45542d46fb208ba1ca9ccdcb9e8baea41e47f86a7429b46f8566ad12b1b2619d` |
 | `src/ionmc/transport/tally.py` | `be202f7310e3991bead49fd40e24cef1f5493992044c72aff6c5f8e8826b547c` |
 | `src/ionmc/transport/warp_driver.py` | `cb32245e48d6bffd03092d09fb7421d8b11a8191158a311fd0b9a92e568aeb86` |
-| `validation/scripts/ion_em/r2_evaluate.py` | `63ca633cf38eb2013245c65e541a4472ec0da1a8ccfe558c822e2b43cf53a2ca` |
+| `validation/scripts/ion_em/r2_evaluate.py` | `ad7c45f185b1ab5a5f32853826e01495827aa0705d179f3dc74cdc41a5eff484` |
 | `validation/scripts/transport/steps_v8.py` | `e8b73006921b479797e762c1319adf7e1e4edb95594ffac4109827b4ee185a7d` |
 | `tests/ionmc/test_ion_mcs_table.py` | `b3fb9992f866238b11243e032f394583775e292cec49601798ef44b54efcb749` |
 | `tests/ionmc/test_v3_008_rows_ci.py` | `ffea9f20976ec2d721067ccf52d5cb9797fad51a5bda7dd224948829c1cade0e` |
-| `tests/ionmc/test_r2_evaluate.py` | `773f2b4f5a274df87cdebe7df71e779bcbd2e4d340b110013652478016484772` |
+| `tests/ionmc/test_r2_evaluate.py` | `f733732e1520c92a770bd36fad501a8b6b5b2bb4d9f6b51cb34faf9e5f5d4251` |
 | `tests/ionmc/test_v3_008_steps_v8.py` | `ab4922ea8842751e22c9d1882e9e1dec0ae88a25b55174c99586c4802868b731` |
 
 (c) R2.5 counts, superseded by this note (the R2.5 text is kept as written): repository paths 475 + 15 = **490**; total full sha256 values 519 + 15 = **534**, plus the bundle-set digest (unchanged, `a8a1c27d…`). The count in R2.6 item (3) (475) is superseded accordingly by 490 for the acceptance tests of the seal.
@@ -263,7 +263,7 @@ placeholder scorer output was deleted unread.
 
 | File | sha256 |
 |---|---|
-| `validation/scripts/ion_em/r2_io.py` | `417d0de7e50d0c1ec0d7f8c7ca746afd91469e869b497a0391749689ca98efba` |
+| `validation/scripts/ion_em/r2_io.py` | `ec08eea59075daa7bbc65e91fb36510faf1da079e822e1b736ab65ad07332d7e` |
 | `validation/scripts/ion_em/r2_statistics.py` | `fbb19370ae0bb20ed1cc5289864c3331ba63bdcb88315b33f06b6d710c79ed6b` |
 | `validation/results/transport/v8r2-topas/smokes.json` | `bae61e8583a1c122b4f2585aa084347d9e4a8e6ceb043bcb24fe90ec8755eb62` |
 | `validation/results/transport/v8r2-topas/records/review.json` | `87988397d4c14304d75f987117e4c22199d4452a0b48030e131a2bd52edb1199` |
@@ -286,6 +286,15 @@ placeholder scorer output was deleted unread.
 **Dated note (2026-11-09, evaluator round-3 fixes (Codex REVIEW-6b4731a7) and ListProcesses bundles; orchestrator) — hashes regenerated at the working tree; entries that changed since the note above:** `validation/scripts/ion_em/gen_r2_bundles.py` f970715a… → 8a92d40b…; `tests/ionmc/test_r2_bundles.py` f767104f… → fd87a7dc…; `validation/plans/v3-008/r2-topas-target.md` 1999e5cf… → deade6b6…; `validation/scripts/ion_em/r2_evaluate.py` c74faab2… → 441a6a82…; `tests/ionmc/test_r2_evaluate.py` 478dd540… → 2c9d52b7…; `validation/scripts/ion_em/r2_io.py` a4aae6c9… → 4c2cabeb…; `he-water-250mevu-r2-lat-full-ecut1km-timing-smoke` 6567ac23/00428331… → 6567ac23/88ebffbe…; `carbon-water-430mevu-r2-lat-full-ecut1km-timing-smoke` 94f255cd/92c02974… → 94f255cd/f66cd544…; `oxygen-water-430mevu-r2-lat-full-ecut1km-timing-smoke` f81f382d/95ca1a53… → f81f382d/21bbac3a…; `carbon-water-290mevu-r2-lat-em-steps-verbose-smoke` 812c1335/4e9e5179… → 812c1335/37f21fee…. All other entries unchanged (recomputed).
 
 **Dated note (2026-11-09, evaluator round-4 fixes (Codex REVIEW-a50374b1: evaluator pinned to its own checkout, committed-HEAD inputs, frozen module sets); orchestrator) — hashes regenerated at the working tree; entries that changed since the note above:** `validation/scripts/ion_em/r2_evaluate.py` 441a6a82… → 63ca633c…; `tests/ionmc/test_r2_evaluate.py` 2c9d52b7… → 773f2b4f…; `validation/scripts/ion_em/r2_io.py` 4c2cabeb… → 417d0de7…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-09, frozen bundle manifest; orchestrator) — newly bound path (machine-readable manifest of the 209 bundles, bundle-set digest 6d1ae3a0…, verified by `gen_r2_bundles.py --check`; every TOPAS evidence run is bound to it by the evaluator):**
+
+| File | sha256 |
+|---|---|
+| `validation/results/transport/v8r2-topas/frozen-bundles.json` | `b3e27964fdc316e58139041782f1704725f59f150ec955cd6f37ba551983d8ea` |
+
+
+**Dated note (2026-11-09, evaluator round-5 fixes (Codex REVIEW-096af6a3: chronology inputs pinned to the run's code_sha, frozen bundle manifest); orchestrator) — hashes regenerated at the working tree; entries that changed since the note above:** `validation/scripts/ion_em/gen_r2_bundles.py` 8a92d40b… → 9924429d…; `tests/ionmc/test_r2_bundles.py` fd87a7dc… → b0e91e2b…; `validation/scripts/ion_em/r2_evaluate.py` 63ca633c… → ad7c45f1…; `tests/ionmc/test_r2_evaluate.py` 773f2b4f… → f733732e…; `validation/scripts/ion_em/r2_io.py` 417d0de7… → ec08eea5…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.

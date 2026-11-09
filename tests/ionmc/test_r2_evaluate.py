@@ -475,7 +475,8 @@ def _world(
                     frozen += tamper.get("add_line", "")
                 (d / "input.txt").write_text(
                     f"# case {case} part {part}\ni:Ts/Seed = {seed}\n"
-                    f"i:So/Beam/NumberOfHistoriesInRun = 1000\n{frozen}{mods}{extra}"
+                    f"i:So/Beam/NumberOfHistoriesInRun = 1000\nd:So/Beam/BeamEnergy = 200 MeV\n"
+                    f"{frozen}{mods}{extra}"
                 )
     samples = tmp / "samples"  # ionmc chunks + seal
     chunks = []
@@ -519,8 +520,35 @@ def _world(
     trust.parent.mkdir(parents=True)
     trust.write_text(json.dumps({"reference-runner": [
         {"key_id": kp.key_id, "public_key": kp.public_key.hex()}]}))  # fmt: skip
+    # frozen bundle manifest (from the bundles as frozen) + seal note + review, committed at the
+    # runs' code_sha (the chronology and the bundle binding are pinned to that commit)
+    bundles = {}
+    for d in sorted((repo / IO.BUNDLE_ROOT).iterdir()):
+        bundles[d.name] = {n: hashlib.sha256((d / n).read_bytes()).hexdigest()
+                           for n in ("case.json", "input.txt")}  # fmt: skip
+    manifest = {"schema": IO.MANIFEST_SCHEMA, "bundles": bundles,
+                "bundle_set_digest": IO.canonical_digest(bundles)}  # fmt: skip
+    if "bundle_edit" in tamper:  # consistent change of all parts of the first configuration
+        for part in IO.CONFIG_PARTS[first[1]]:
+            f = repo / IO.BUNDLE_ROOT / IO.bundle_name(1, first[1], part) / "input.txt"
+            f.write_text(tamper["bundle_edit"](f.read_text()))
+    man_path = repo / IO.FROZEN_MANIFEST
+    man_path.parent.mkdir(parents=True, exist_ok=True)
+    if not tamper.get("manifest_late"):
+        man_path.write_text(json.dumps(manifest))
+    records = repo / IO.DEFAULT_RECORDS
+    records.mkdir(parents=True, exist_ok=True)
+    review = {"review_id": "REVIEW-x", "head_sha": seal_sha, "status": "passed",
+              "finished_at": tamper.get("review_finished", "2026-11-09T09:00:00Z"),
+              "report": {"verdict": "pass"}}  # fmt: skip
+    if not tamper.get("review_late"):
+        (records / "review.json").write_text(json.dumps(review))
+    plan = repo / IO.PLAN_PATH  # the seal note lives in the committed acceptance plan
+    plan.parent.mkdir(parents=True, exist_ok=True)
+    note = json.dumps({"seal_sha": seal_sha, "seal_review_id": "REVIEW-x"})
+    plan.write_text(tamper.get("plan_text", "# plan\n\n```json\n{note}\n```\n").format(note=note))
     code_sha = _commit(repo, "after")
-    records, outputs = repo / IO.DEFAULT_RECORDS, tmp / "outputs"  # records are committed
+    outputs = tmp / "outputs"
     index, ids = [], {}
     for case, spec in cases.items():
         sig_t = spec.get("sig", SIG)
@@ -611,16 +639,14 @@ def _world(
                 _relist(rdir / "record.json")
                 index.append({"case": case, "config": cfg, "part": part, "run_id": run_id})
     (records / "index.json").write_text(json.dumps({"runs": index}))
-    review = {"review_id": "REVIEW-x", "head_sha": seal_sha, "status": "passed",
-              "finished_at": "2026-11-09T09:00:00Z", "report": {"verdict": "pass"}}  # fmt: skip
-    (records / "review.json").write_text(json.dumps(review))
-    plan = repo / IO.PLAN_PATH  # the seal note lives in the committed acceptance plan
-    plan.parent.mkdir(parents=True, exist_ok=True)
-    note = json.dumps({"seal_sha": seal_sha, "seal_review_id": "REVIEW-x"})
-    plan.write_text(tamper.get("plan_text", "# plan\n\n```json\n{note}\n```\n").format(note=note))
-    _commit(repo, "records and seal note")
+    if tamper.get("review_late"):
+        (records / "review.json").write_text(json.dumps(review))
+    if tamper.get("manifest_late"):
+        man_path.write_text(json.dumps(manifest))
+    _commit(repo, "records")
     return {"repo": repo, "records": records, "outputs": outputs, "samples": samples,
-            "plan": plan, "seal": seal_file, "trust": trust, "ids": ids}  # fmt: skip
+            "plan": plan, "seal": seal_file, "trust": trust, "ids": ids,
+            "manifest": man_path, "code_sha": code_sha}  # fmt: skip
 
 
 def _cli(
@@ -1008,18 +1034,57 @@ def test_review_record_is_read_from_head(tmp_path: Path, small_case: None) -> No
     path.write_text(json.dumps(good | {"finished_at": "2026-11-09T08:00:00Z"}))
     code, rep = _cli(w, "TD-EM", tmp_path / "a.json", commit=False)  # working-copy edit
     assert code == 2 and "differs from HEAD" in rep["error"]
-    # a genuine committed record finishing after the runs started: blinding-control FAIL
-    path.write_text(json.dumps(good | {"finished_at": "2026-11-09T12:30:00Z"}))
-    code, rep = _cli(w, "TD-EM", tmp_path / "b.json")
-    assert code == 1 and rep["category"] == "blinding control"
-    # a forged earlier finished_at on a record that is not the plan's seal review: ERROR
+    # a HEAD record that is not the plan's seal review: ERROR
     for forged in ({"review_id": "REVIEW-forged"}, {"head_sha": "c" * 40}):
         path.write_text(json.dumps(good | {"finished_at": "2026-11-09T08:00:00Z"} | forged))
         code, rep = _cli(w, "TD-EM", tmp_path / "c.json")
         assert code == 2 and rep["status"] == "ERROR", forged
-    path.write_text(json.dumps(good))
+    # a later commit moving finished_at after the run start does not change the chronology:
+    # the record at the run's code_sha is used
+    path.write_text(json.dumps(good | {"finished_at": "2026-11-09T12:30:00Z"}))
     code, rep = _cli(w, "TD-EM", tmp_path / "d.json")
-    assert code == 0 and rep["evaluator"]["committed_inputs"][f"{IO.DEFAULT_RECORDS}/review.json"]
+    assert code == 0, rep
+    v = rep["run_validity"][0]
+    assert v["review_sha256_at_code_sha"] != v["review_sha256_at_head"]
+    assert v["review_finished_at"] == good["finished_at"]
+
+
+def test_forged_review_after_the_run_does_not_rescue_it(tmp_path: Path, small_case: None) -> None:
+    # genuine record (at the runs' code_sha) finishing after the runs started: blinding FAIL
+    w = _world(tmp_path, tamper={"review_finished": "2026-11-09T12:30:00Z"})
+    code, rep = _cli(w, "TD-EM", tmp_path / "a.json")
+    assert code == 1 and rep["category"] == "blinding control"
+    # Codex's attack: commit a forged earlier finished_at with the legitimate id/head afterwards
+    path = _review_path(w)
+    path.write_text(
+        json.dumps(json.loads(path.read_text()) | {"finished_at": "2026-11-09T08:00:00Z"})
+    )
+    code, rep = _cli(w, "TD-EM", tmp_path / "b.json")
+    assert code == 1 and rep["category"] == "blinding control"  # outcome unchanged
+    assert all(v["review_finished_at"] == "2026-11-09T12:30:00Z" for v in rep["run_validity"])
+
+
+def test_review_missing_at_code_sha_fails_closed(tmp_path: Path, small_case: None) -> None:
+    w = _world(tmp_path, tamper={"review_late": True})
+    code, rep = _cli(w, "TD-EM", tmp_path / "r.json")
+    assert code == 2 and "review.json is not committed at" in rep["error"]
+
+
+def test_bundles_bound_to_the_frozen_manifest(tmp_path: Path, small_case: None) -> None:
+    edit = {"bundle_edit": lambda t: t.replace("BeamEnergy = 200 MeV", "BeamEnergy = 210 MeV")}
+    w = _world(tmp_path, tamper=edit)  # all four parts changed consistently, requests re-hashed
+    code, rep = _cli(w, "TD-EM", tmp_path / "m.json")
+    assert code == 1 and rep["category"] == "run validity", rep
+    assert all(any("frozen manifest" in p for p in x["problems"]) for x in rep["part_validity"])
+    w2 = _world(tmp_path / "b", tamper={"manifest_late": True})
+    code, rep = _cli(w2, "TD-EM", tmp_path / "n.json")
+    assert code == 2 and "frozen-bundles.json is not committed at" in rep["error"]
+    w3 = _world(tmp_path / "c")
+    doc = json.loads(w3["manifest"].read_text())
+    doc["bundle_set_digest"] = "f" * 64  # an amendment after the runs
+    w3["manifest"].write_text(json.dumps(doc))
+    code, rep = _cli(w3, "TD-EM", tmp_path / "o.json")
+    assert code == 2 and "amendment rule" in rep["error"]
 
 
 @pytest.mark.parametrize(

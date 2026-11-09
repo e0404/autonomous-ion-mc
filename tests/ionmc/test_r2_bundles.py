@@ -302,3 +302,32 @@ def test_process_list_bundle_counts():
     ]
     assert len(with_list) == 196
     assert len([d for d in with_list if re.search(r"-part\d+$", d.name)]) == 192
+
+
+MANIFEST = ROOT / "validation" / "results" / "transport" / "v8r2-topas" / "frozen-bundles.json"
+
+
+def test_frozen_manifest_matches_committed_bundles():
+    """Every TOPAS run is bound to the frozen bundle manifest; it describes the committed set."""
+    import hashlib
+
+    m = json.loads(MANIFEST.read_text())
+    assert m["schema"] == "ionmc-v8r2-frozen-bundles-1"
+    assert m["generated_from"] == "gen_r2_bundles.py"
+    assert m["bundle_count"] == 209 == len(m["bundles"]) == len(BUNDLES)
+    assert m["file_count"] == 418
+    assert m["bundle_set_digest"] == RECORDED_DIGEST == gen.BUNDLE_SET_DIGEST
+    assert sorted(m["bundles"]) == [d.name for d in BUNDLES]
+    for d in BUNDLES:
+        entry = m["bundles"][d.name]
+        assert sorted(entry) == ["case.json", "input.txt"], d.name
+        for f in ("case.json", "input.txt"):
+            assert entry[f] == hashlib.sha256((d / f).read_bytes()).hexdigest(), (d.name, f)
+
+
+def test_frozen_manifest_is_byte_identical_to_regeneration(tmp_path):
+    gen.generate(tmp_path / "bundles")
+    path = gen.write_manifest(tmp_path / "bundles", tmp_path / "frozen-bundles.json")
+    assert path.read_bytes() == MANIFEST.read_bytes()
+    assert gen.manifest_text(TOPAS) == MANIFEST.read_text()
+    assert MANIFEST.read_text().endswith("}\n")
