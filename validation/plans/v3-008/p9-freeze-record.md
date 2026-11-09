@@ -320,7 +320,7 @@ placeholder scorer output was deleted unread.
 | File | sha256 |
 |---|---|
 | `validation/results/transport/v8r2-topas/smoke-reruns.json` | `4a3fb8af1163dea56e0c8d6868b127f4277ccb02d7a80b133bddf0eb3511ff58` |
-| `validation/scripts/ion_em/r2_smoke_reruns.py` | `3396457791f86af32cf05572c9a9653d7f54da1433f6a9bba9040339be844def` |
+| `validation/scripts/ion_em/r2_smoke_reruns.py` | `2411d900b7b2aac36629edd7829f3cfc44e53a3807b0677a77d8893e2c8d2cb6` |
 | `tests/ionmc/test_r2_smoke_reruns.py` | `85541edab8e4a5a54a578178b911884c9e394d046411deb84b41925dc7f68144` |
 | `validation/results/transport/v8r2-topas/smoke-runs/REF-127b2dd92a8dd609c560-ff8db64b/artifacts.json` | `b2fb14264923e3d9d4b49424b8df72fe6d1d060ac73ebd57b423a3f44fa18dd4` |
 | `validation/results/transport/v8r2-topas/smoke-runs/REF-127b2dd92a8dd609c560-ff8db64b/record.json` | `a79ab4244232b39964db8fa4beb43f78cd7e0d5102cd1465f6979a3bf9f6e8f6` |
@@ -402,6 +402,10 @@ placeholder scorer output was deleted unread.
 **Dated note (2026-11-09, exact confirmation-set gate (Codex REVIEW-27887e4b); orchestrator) — hashes regenerated at the working tree; entries that changed since the note above:** `validation/scripts/ion_em/r2_smoke_reruns.py` 3fa0cb48… → 33964577…; `tests/ionmc/test_r2_smoke_reruns.py` d0eca2fa… → 85541eda…. All other entries unchanged (recomputed).
 
 **Dated note (2026-11-09, confirmation summary regenerated at f1ef5a51 with the exact-set gate; orchestrator) — hashes regenerated at the working tree; entries that changed since the note above:** `validation/results/transport/v8r2-topas/smoke-confirmation.json` 15df91b7… → 9eb05abb…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-09, summariser docstring (Codex REVIEW-027cb008 minor); orchestrator) — hashes regenerated at the working tree; entries that changed since the note above:** `validation/scripts/ion_em/r2_smoke_reruns.py` 33964577… → b0a8e70e…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-09, orchestrator) — hashes regenerated at the freeze commit's parent; entries that changed since f694b747:** `validation/scripts/ion_em/r2_smoke_reruns.py` b0a8e70e… → 2411d900…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.

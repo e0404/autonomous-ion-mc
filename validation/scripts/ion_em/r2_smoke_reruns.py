@@ -23,7 +23,8 @@ orchestrator's execution ledger and is NOT evidence: every verdict comes from
 ``r2_evaluate.check_run`` on the signed record committed under
 ``validation/results/transport/v8r2-topas/smoke-runs/<run_id>/`` (the ledger's ``code_sha`` and
 ``started_at`` are compared with the signed record and a difference is an ERROR). Smokes are
-execution records, never evidence. Exit 0 iff every run is VALID.
+execution records, never evidence. Exit 0 iff every run is VALID and, when
+--confirmation-set-complete is requested, the runs are exactly the pre-registered confirmation set.
 """
 
 from __future__ import annotations
