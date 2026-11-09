@@ -14,10 +14,13 @@ Three inputs, each bound to a controlled record before any number is used:
    set of a case must equal the sealed chunk plan (k = 1..n, seed formula, histories summing
    to 1e6).
 3. **TOPAS runs.** Per run the orchestrator materializes into ``<records>/runs/<run_id>/``:
-   ``result.json`` = the controlled result record of the reference runner (schema_version 2:
-   ``run_id, configuration_id, code_sha, engine, finished_at, seconds, exit_code, succeeded,
-   missing_outputs``; all required) and ``artifacts.json`` = the runner's artifact listing (one page
-   or a list of pages of ``{"run_id", "files": [{"path", "sha256", "bytes"?}]}``). ``<records>/
+   ``record.json`` = the SIGNED run record of the reference runner (V3-INFRA-004, schema_version 3;
+   fields used: ``run_id, configuration_id, code_sha, task_id`` (may be null), ``engine,
+   request_sha256, started_at, finished_at, seconds, exit_code, timed_out, missing_outputs,
+   succeeded, stdout_sha256, stderr_sha256`` and the ``attestation`` block; the runner's unsigned
+   ``result.json`` archive index is never used as evidence) and
+   ``artifacts.json`` = the runner's artifact listing (one page or a list of pages of
+   ``{"run_id", "files": [{"path", "sha256", "bytes"?}]}``). ``<records>/
    index.json`` binds ``{"case", "config", "part", "run_id"}`` (one run per expected part). The
    output files themselves are read from ``<outputs>/<run_id>/<path>`` (the materialize layout,
    default ``<repo>/.ionmc-cache/reference-runs``), each verified against the listing's sha256.
@@ -26,12 +29,22 @@ Three inputs, each bound to a controlled record before any number is used:
    seed ``20619000 + 100 part + case`` and ``input_files`` equal to the bundle
    ``validation/reference_cases/topas/<bundle>/`` as committed at ``code_sha``.
 
-``reference_started`` = ``finished_at - seconds`` of the controlled result record (both written by
-the controlled runner). CAVEAT: this satisfies the plan's "the runner's own start record" only until
-a signed start record exists: the runner emits its ``reference_started`` event before it starts the
-``seconds`` clock and stamps ``finished_at`` just before stopping it, so the derived start differs
-from the event time by the runner's bookkeeping time (milliseconds); a review finishing within that
-interval of a run start cannot be ordered by these records.
+``reference_started`` = the record's ``started_at`` (ISO-8601 with offset), captured by the runner
+at its controlled ``reference_started`` event, and nothing else (``finished_at`` and ``seconds`` are
+never used for the chronology; Codex REVIEW-01b6acd6, orchestrator decision 2026-11-09). The run
+record must carry an Ed25519 attestation (``ionmc-attestation-1``, signer ``reference-runner``,
+``infrastructure/experiment_v3/attest.py``) that ``attest.classify_record`` classifies as
+``verified`` against the trust file (default: the committed
+``infrastructure/keys/trusted_attestation_keys.json``; no bootstrap tolerance: ``unverified`` and
+``invalid`` both fail closed). Its signed ``run_id`` (equal to the index entry and of the
+form ``REF-<configuration_id[:20]>-<8 hex>``), ``configuration_id`` (canonical hash of
+``request.json``), ``request_sha256`` (sha256 of the request.json bytes read), ``code_sha`` (the
+request's), ``stdout_sha256`` / ``stderr_sha256`` (the listing's and the hashed files) must all
+agree, ``started_at <= finished_at``, ``record.json`` itself must be in the artifact listing with
+the same sha256 (replay protection, as ``host_run_records.verify_run_record``).
+``output_files_sha256`` is not re-derived here (each output file read is verified against the
+listing instead). Until the runner signs its records and records
+``started_at`` (infra task V3-INFRA-004) every grade fails closed at this step, by design.
 """
 
 from __future__ import annotations
@@ -42,7 +55,6 @@ import math
 import re
 import subprocess
 from dataclasses import dataclass, field
-from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
@@ -98,8 +110,14 @@ CONFIG_PARTS: dict[str, tuple[int, ...]] = {
     "idd-full": (8, 9, 10, 11),
     "lat-full": (12, 13, 14, 15),
 }
+REFERENCE_SIGNER = "reference-runner"
+DEFAULT_TRUST = "infrastructure/keys/trusted_attestation_keys.json"
 RESULT_FIELDS = (
     "schema_version",
+    "started_at",
+    "request_sha256",
+    "stdout_sha256",
+    "stderr_sha256",
     "run_id",
     "configuration_id",
     "code_sha",
@@ -338,14 +356,32 @@ def load_topas_run(
     config: str,
     part: int,
     run_id: str,
+    trust: dict[str, Any],
 ) -> TopasRun:
-    """Load and bind one TOPAS run (see the module docstring); any gap raises RecordError."""
+    """Load and bind one TOPAS run (see the module docstring); any gap raises RecordError.
+    ``trust`` is ``attest.load_trusted(<trust file>)``."""
     rdir = Path(records) / "runs" / run_id
-    result = read_json(rdir / "result.json", f"result record {run_id}")
+    record_path = rdir / "record.json"
+    result = read_json(record_path, f"signed run record {run_id}")
+    status, reason = attest_module().classify_record(result, trust, REFERENCE_SIGNER)
+    if status != "verified":
+        raise RecordError(
+            f"{run_id}: record.json is not attested by a trusted {REFERENCE_SIGNER!r} key "
+            f"(status {status}: {reason}); signed run records with started_at are required "
+            "(gap until the reference runner signs them, V3-INFRA-004)"
+        )
     for key in RESULT_FIELDS:
         require(result, key, f"result record {run_id}")
-    if result["schema_version"] != 2:
-        raise RecordError(f"{run_id}: result schema_version {result['schema_version']!r} != 2")
+    if result["schema_version"] != 3:  # V3-INFRA-004: signed record with started_at
+        raise RecordError(f"{run_id}: result schema_version {result['schema_version']!r} != 3")
+    if "task_id" not in result:
+        raise RecordError(f"missing record field: run record {run_id} (task_id)")
+    if result.get("timed_out") is not False:
+        raise RecordError(f"{run_id}: timed_out is {result.get('timed_out')!r}, not false")
+    if not re.fullmatch(
+        r"REF-" + re.escape(str(result["configuration_id"])[:20]) + r"-[0-9a-f]{8}", run_id
+    ):
+        raise RecordError(f"{run_id}: run id is not derived from the configuration_id")
     if result["run_id"] != run_id:
         raise RecordError(f"result record {result['run_id']!r} is not bound to run {run_id!r}")
     if result["engine"] != "topas":
@@ -361,12 +397,20 @@ def load_topas_run(
     if not isinstance(seconds, int | float) or not math.isfinite(seconds) or seconds < 0:
         raise RecordError(f"{run_id}: seconds is not a non-negative number: {seconds!r}")
     finished = _parse_time(result["finished_at"], f"{run_id} finished_at")
-    started = (finished - timedelta(seconds=float(seconds))).isoformat()
+    started = _parse_time(result["started_at"], f"{run_id} started_at")
+    if started > finished:
+        raise RecordError(f"{run_id}: started_at is later than finished_at")
+    started_iso = str(result["started_at"])
     code_sha = str(result["code_sha"])
     listing = _listing(rdir / "artifacts.json", run_id, code_sha)
-    for name in ("request.json", "stdout.txt", "stderr.txt"):
+    for name in ("request.json", "stdout.txt", "stderr.txt", "record.json"):
         if name not in listing:
             raise RecordError(f"{run_id}: artifact listing lacks {name}")
+    if sha256_file(record_path) != listing["record.json"]:
+        raise RecordError(f"{run_id}: record.json differs from the listed record.json")
+    for name, key in (("stdout.txt", "stdout_sha256"), ("stderr.txt", "stderr_sha256")):
+        if result[key] != listing[name]:
+            raise RecordError(f"{run_id}: signed {key} differs from the listing's {name}")
     bundle = bundle_name(case, config, part)
     run = TopasRun(
         run_id=run_id,
@@ -378,14 +422,19 @@ def load_topas_run(
         code_sha=code_sha,
         finished_at=str(result["finished_at"]),
         seconds=float(seconds),
-        reference_started=started,
+        reference_started=started_iso,
         histories=0,
         expected_outputs=[],
         listing=listing,
         outputs_dir=Path(outputs) / run_id,
     )
+    for name in ("stdout.txt", "stderr.txt"):
+        read_verified(run, name)  # the files themselves hash to the listing (= signed) digests
+    request_blob = read_verified(run, "request.json")
+    if hashlib.sha256(request_blob).hexdigest() != result["request_sha256"]:
+        raise RecordError(f"{run_id}: request.json does not hash to the signed request_sha256")
     try:
-        request = json.loads(read_verified(run, "request.json").decode("utf-8"))
+        request = json.loads(request_blob.decode("utf-8"))
     except ValueError as exc:
         raise RecordError(f"{run_id}: request.json is not JSON: {exc}") from exc
     if canonical_digest(request) != run.configuration_id:
@@ -439,6 +488,127 @@ _MODEL = re.compile(r"^\s*(\S+)\s*:\s*Emin=", re.M)
 MSC_PARTICLES = ("GenericIon", "alpha")
 
 
+def attest_module() -> Any:
+    """``infrastructure/experiment_v3/attest.py`` of this checkout (pure stdlib)."""
+    import sys
+
+    root = str(Path(__file__).resolve().parents[3])
+    if root not in sys.path:
+        sys.path.insert(0, root)
+    from infrastructure.experiment_v3 import attest
+
+    return attest
+
+
+def load_trust(path: Path | str) -> dict[str, Any]:
+    try:
+        return dict(attest_module().load_trusted(path))
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        raise RecordError(f"trust file {path} unreadable: {exc}") from exc
+
+
+# Module -> printout marker (Geant4 11.4.2 / OpenTOPAS 4.3 stdout). Each marker was checked, format
+# only, against materialized r2 smoke logs under .ionmc-cache/reference-runs (FULL: e.g.
+# REF-171fec5d..., EM opt4: e.g. REF-188fa1d8..., EM SS: REF-285075c5... as the opt4 negative).
+_MODULES_LINE = re.compile(r"^[ \t]*sv:Ph/Default/Modules[ \t]*=[ \t]*(\d+)[ \t]+(.*)$", re.M)
+_HAD_HEAD = re.compile(r"^\s*Hadronic Processes for (\S+)\s*$")
+UNVERIFIABLE_MODULES = ("g4decay",)  # G4Decay prints no process/model line in these logs
+HADRONIC_MARKERS = {  # forbidden in an EM-only (no hadronic module) run
+    "hInelastic": re.compile(r"\bhInelastic\b"),
+    "QMDModel": re.compile(r"QMDModel"),
+    "Radioactive Decay Physics Parameters": re.compile(r"Radioactive Decay Physics Parameters"),
+    "HADRONIC PROCESSES SUMMARY": re.compile(r"HADRONIC PROCESSES SUMMARY"),
+}
+
+
+def hadronic_block(stdout: str, particle: str) -> str:
+    """Lines of the "Hadronic Processes for <particle>" block of the hadronic summary (up to the
+    next dashed separator); all such blocks concatenated."""
+    out, inside = [], False
+    for ln in stdout.splitlines():
+        m = _HAD_HEAD.match(ln)
+        if m:
+            inside = m.group(1) == particle
+            continue
+        if inside and ln.lstrip().startswith("-----"):
+            inside = False
+        if inside:
+            out.append(ln)
+    return "\n".join(out)
+
+
+def _process_models(block: str, process: str) -> list[str]:
+    """Model lines under ``Process: <process>`` of one hadronic block."""
+    out, inside = [], False
+    for ln in block.splitlines():
+        if ln.strip().startswith("Process:"):
+            inside = ln.strip() == f"Process: {process}"
+            continue
+        if inside:
+            out.append(ln)
+    return out
+
+
+def _marker(module: str, stdout: str) -> bool:
+    if module == "g4em-standard_opt4":  # ICRU90 stopping on and GS msc for e- (option4 only)
+        icru = re.search(r"^Use ICRU90 data\s+1\s*$", stdout, re.M) is not None
+        return icru and "GoudsmitSaunderson" in msc_models(stdout, "e-")
+    if module == "g4h-phy_QGSP_BIC_HP":
+        return re.search(r"^\s*hInelastic QGSP_BIC_HP\b", stdout, re.M) is not None
+    if module == "g4ion-QMD":
+        models = _process_models(hadronic_block(stdout, "GenericIon"), "ionInelastic")
+        return any("QMDModel" in ln for ln in models)
+    if module == "g4radioactivedecay":
+        return "Radioactive Decay Physics Parameters" in stdout
+    if module == "g4h-elastic_HP":
+        models = _process_models(hadronic_block(stdout, "neutron"), "hadElastic")
+        return any(re.search(r"Model:\s*NeutronHPElastic\b", ln) for ln in models)
+    if module == "g4stopping":
+        return "Process: muMinusCaptureAtRest" in hadronic_block(stdout, "mu-")
+    raise KeyError(module)
+
+
+VERIFIABLE_MODULES = (
+    "g4em-standard_opt4", "g4h-phy_QGSP_BIC_HP", "g4ion-QMD", "g4radioactivedecay",
+    "g4h-elastic_HP", "g4stopping",
+)  # fmt: skip
+
+
+def bundle_modules(native: str) -> list[str]:
+    """The ``sv:Ph/Default/Modules`` list of the committed native input (exactly one line, count
+    equal to the number of quoted names)."""
+    lines = _MODULES_LINE.findall(native)
+    if len(lines) != 1:
+        raise RecordError(f"expected exactly one sv:Ph/Default/Modules line, found {len(lines)}")
+    n, rest = int(lines[0][0]), lines[0][1]
+    names = re.findall(r'"([^"]+)"', rest)
+    if len(names) != n:
+        raise RecordError(f"Modules line declares {n} modules but names {names}")
+    return names
+
+
+def module_check(native: str, stdout: str) -> tuple[list[str], list[str]]:
+    """(problems, unverifiable modules) of the executed module list: every bundled module with a
+    verifiable marker must show it; a run without any hadronic module must show none of the
+    hadronic markers; bundled modules without a reliable marker are returned as unverifiable."""
+    try:
+        modules = bundle_modules(native)
+    except RecordError as exc:
+        return [str(exc)], []
+    problems, unverifiable = [], []
+    for mod in modules:
+        if mod in VERIFIABLE_MODULES:
+            if not _marker(mod, stdout):
+                problems.append(f"module {mod}: printout marker missing")
+        else:
+            unverifiable.append(mod)
+    if all(m.startswith("g4em-") for m in modules):
+        for name, rx in HADRONIC_MARKERS.items():
+            if rx.search(stdout):
+                problems.append(f"EM-only run shows the hadronic marker {name!r}")
+    return problems, unverifiable
+
+
 def msc_models(stdout: str, particle: str) -> list[str]:
     """Model names of every ``msc:  for <particle>`` block of the Geant4 EM printout (the block
     ends at the first blank line)."""
@@ -451,13 +621,14 @@ def msc_models(stdout: str, particle: str) -> list[str]:
     return models
 
 
-def run_checks(run: TopasRun) -> list[str]:
+def run_checks(run: TopasRun) -> dict[str, list[str]]:
     """Problems of one part (empty = valid): stderr must be empty ("zero killed or stuck tracks in
     stderr", applied strictly: any stderr output invalidates); no stdout line outside the
     "Begin processing" progress lines mentions killed or stuck tracks; "Particle source Beam: Total
     number of histories: N" present with every N equal to the bundle's histories
     (NumberOfHistoriesInRun completed); the msc printout of GenericIon and alpha lists UrbanMsc
-    only. The module-list check of the plan is NOT made here (see the evaluator docstring)."""
+    only; the executed module list matches the bundle (:func:`module_check`). Returns
+    ``{"problems": [...], "module_markers_unverifiable": [...]}``."""
     problems = []
     stderr = read_verified(run, "stderr.txt")
     stdout = read_verified(run, "stdout.txt").decode("utf-8", "replace")
@@ -473,7 +644,8 @@ def run_checks(run: TopasRun) -> list[str]:
         models = msc_models(stdout, p)
         if not models or any(m != "UrbanMsc" for m in models):
             problems.append(f"msc models for {p} are {models}, not UrbanMsc")
-    return problems
+    mod_problems, unverifiable = module_check(run.native, stdout)
+    return {"problems": problems + mod_problems, "module_markers_unverifiable": unverifiable}
 
 
 def replicate_gate(runs: list[TopasRun]) -> list[str]:

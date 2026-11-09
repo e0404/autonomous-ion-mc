@@ -230,11 +230,11 @@ placeholder scorer output was deleted unread.
 | `src/ionmc/transport/tables.py` | `45542d46fb208ba1ca9ccdcb9e8baea41e47f86a7429b46f8566ad12b1b2619d` |
 | `src/ionmc/transport/tally.py` | `be202f7310e3991bead49fd40e24cef1f5493992044c72aff6c5f8e8826b547c` |
 | `src/ionmc/transport/warp_driver.py` | `cb32245e48d6bffd03092d09fb7421d8b11a8191158a311fd0b9a92e568aeb86` |
-| `validation/scripts/ion_em/r2_evaluate.py` | `6f92b41a7cd80e103973c42fdd25c0c0793aa7dd552bd6c47cd58456f349605f` |
+| `validation/scripts/ion_em/r2_evaluate.py` | `c74faab2adb4464b5907aeaaf4f3740faac002bf16e770f06d38b5616cb43fe0` |
 | `validation/scripts/transport/steps_v8.py` | `e8b73006921b479797e762c1319adf7e1e4edb95594ffac4109827b4ee185a7d` |
 | `tests/ionmc/test_ion_mcs_table.py` | `b3fb9992f866238b11243e032f394583775e292cec49601798ef44b54efcb749` |
 | `tests/ionmc/test_v3_008_rows_ci.py` | `ffea9f20976ec2d721067ccf52d5cb9797fad51a5bda7dd224948829c1cade0e` |
-| `tests/ionmc/test_r2_evaluate.py` | `dd9ab8133ca41ae9b82254195db8cfb9f5f9540dda076cc1e82f98479929cb8b` |
+| `tests/ionmc/test_r2_evaluate.py` | `478dd5403fe42a7624a063026a7ee6d67fd2a4b03efe7500dbb291da692cac3a` |
 | `tests/ionmc/test_v3_008_steps_v8.py` | `ab4922ea8842751e22c9d1882e9e1dec0ae88a25b55174c99586c4802868b731` |
 
 (c) R2.5 counts, superseded by this note (the R2.5 text is kept as written): repository paths 475 + 15 = **490**; total full sha256 values 519 + 15 = **534**, plus the bundle-set digest (unchanged, `a8a1c27d…`). The count in R2.6 item (3) (475) is superseded accordingly by 490 for the acceptance tests of the seal.
@@ -263,7 +263,7 @@ placeholder scorer output was deleted unread.
 
 | File | sha256 |
 |---|---|
-| `validation/scripts/ion_em/r2_io.py` | `fa129516fdd38d86b90e00006f5078ee754dffa24712a16429eb9ae8c2e0c6db` |
+| `validation/scripts/ion_em/r2_io.py` | `a4aae6c94016d49f5e7f74631ae727a77a4aa5bba6acdca51932451f19935d90` |
 | `validation/scripts/ion_em/r2_statistics.py` | `fbb19370ae0bb20ed1cc5289864c3331ba63bdcb88315b33f06b6d710c79ed6b` |
 | `validation/results/transport/v8r2-topas/smokes.json` | `bae61e8583a1c122b4f2585aa084347d9e4a8e6ceb043bcb24fe90ec8755eb62` |
 | `validation/results/transport/v8r2-topas/records/review.json` | `87988397d4c14304d75f987117e4c22199d4452a0b48030e131a2bd52edb1199` |
@@ -280,6 +280,8 @@ placeholder scorer output was deleted unread.
 | `carbon-water-290mevu-r2-lat-em-steps-verbose-smoke` | 20600427 | `812c1335cd298ae102af825b80d781409b83d0dc612fd48c74b83637ec74aead` | `4e9e5179cf0b3404a7174ca44ee9efd97460f0c927537a49ad89150efbf7feec` |
 
 **Dated note (2026-11-09, R2-SIZE-1 bundle-regeneration commit; orchestrator) — hashes regenerated at the working tree; entries that changed since the note above:** `validation/scripts/ion_em/gen_r2_bundles.py` fe122218… → f970715a…; `tests/ionmc/test_r2_bundles.py` 54af24fa… → f767104f…; `validation/plans/v3-008/r2-topas-target.md` eb7c2622… → 1999e5cf…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-09, evaluator review-fix commit (Codex REVIEW-01b6acd6: signed start record, executed module-list check); orchestrator) — hashes regenerated at the working tree; entries that changed since the note above:** `validation/scripts/ion_em/r2_evaluate.py` 6f92b41a… → c74faab2…; `tests/ionmc/test_r2_evaluate.py` dd9ab813… → 478dd540…; `validation/scripts/ion_em/r2_io.py` fa129516… → a4aae6c9…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.

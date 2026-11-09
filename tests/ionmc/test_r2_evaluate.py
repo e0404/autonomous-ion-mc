@@ -317,7 +317,7 @@ def test_verify_npz_fails_closed(tmp_path: Path) -> None:
 # ---- synthetic evidence world (git repo, records, outputs, samples) --------------------------
 
 HZ, HX, L = 0.05, 0.1, 10.0
-T_LATE, T_EARLY = "2026-11-09T12:00:00+00:00", "2026-11-09T09:01:00Z"  # review ends 09:00
+T_LATE, T_EARLY = "2026-11-09T12:00:00+00:00", "2026-11-09T08:59:00Z"  # review ends 09:00
 SMALL = {1: ("he", 50.0, 22.5, L, HZ, HX, "main"), 3: ("he", 250.0, 22.5, L, HZ, HX, "main")}
 J_MEV = 1.602176634e-13
 SIG = [0.5 + 0.05 * k for k in range(int(L))]  # lateral sigma per 1 mm slab (>= 3 h_x: gated)
@@ -329,12 +329,71 @@ OUTS = {
                  "lat_x_primary.bin", "lat_x_primary.binheader", "lat_y_primary.bin",
                  "lat_y_primary.binheader"],
 }  # fmt: skip
+# Synthetic printout in the Geant4 11.4 / OpenTOPAS 4.3 layout (format only, checked against the
+# materialized r2 smoke logs; no number of those logs is used).
 MSC = "msc:  for {p}  SubType= 10\n      ===== EM models for the G4Region  DefaultRegionForTheWorld ======\n            {m} : Emin=    0 eV  Emax=   10 GeV\n          StepLim=Minimal Rfact=0.2 Gfact=2.5\n\n"  # noqa: E501
-STDOUT = (
-    MSC.format(p="GenericIon", m="UrbanMsc") + MSC.format(p="alpha", m="UrbanMsc")
+STDOUT_EM = (
+    "Use ICRU90 data                                    1\n"
+    + MSC.format(p="e-", m="GoudsmitSaunderson")
+    + MSC.format(p="GenericIon", m="UrbanMsc") + MSC.format(p="alpha", m="UrbanMsc")
     + "G4WT0 > Begin processing for Run: 0, History: 0\n"
     + "Particle source Beam: Total number of histories: 1000\n"
 )  # fmt: skip
+SEP = "-----------------------------------------------------------------------\n"
+STDOUT_FULL = (
+    " hInelastic QGSP_BIC_HP  Thresholds: \n"
+    "======          Radioactive Decay Physics Parameters           =======\n"
+    "Threshold for very long decay time at rest        1 y  \n\n"
+    + STDOUT_EM
+    + "                  HADRONIC PROCESSES SUMMARY (verbose level 1)\n" + SEP
+    + "                           Hadronic Processes for GenericIon\n"
+    + "  Process: ionInelastic\n"
+    + "        Model:                  QMDModel: 100 MeV/n ---> 6 GeV/n\n"
+    + "  Process: RadioactiveDecay\n" + SEP
+    + "                           Hadronic Processes for mu-\n"
+    + "  Process: muMinusCaptureAtRest\n" + SEP
+    + "                           Hadronic Processes for neutron\n"
+    + "  Process: hadElastic\n"
+    + "        Model:          NeutronHPElastic: 0 eV  ---> 20 MeV\n" + SEP
+)  # fmt: skip
+MODULES = {
+    "em": 'sv:Ph/Default/Modules = 1 "g4em-standard_opt4"\n',
+    "full": 'sv:Ph/Default/Modules = 7 "g4em-standard_opt4" "g4h-phy_QGSP_BIC_HP" "g4decay" '
+    '"g4h-elastic_HP" "g4stopping" "g4ion-QMD" "g4radioactivedecay"\n',
+}
+KEY_SEED = bytes(range(32))
+
+
+def _attest() -> Any:
+    return IO.attest_module()
+
+
+def _sign(record: dict[str, Any], signer: str = "reference-runner") -> dict[str, Any]:
+    at = _attest()
+    old = at.SIGNERS
+    at.SIGNERS = (*old, "reference-runner")
+    try:
+        return at.sign_record(record, at.keypair_from_seed(KEY_SEED), signer)
+    finally:
+        at.SIGNERS = old
+
+
+def _resign(path: Path, changes: dict[str, Any]) -> None:
+    """Re-sign a record.json with ``changes`` and keep its artifact-listing entry consistent."""
+    rec = json.loads(path.read_text())
+    rec.pop("attestation")
+    path.write_text(json.dumps(_sign(rec | changes)))
+    _relist(path)
+
+
+def _relist(path: Path) -> None:
+    lst = path.parent / "artifacts.json"
+    doc = json.loads(lst.read_text())
+    for e in doc["files"]:
+        if e["path"] == "record.json":
+            e["sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
+            e["bytes"] = path.stat().st_size
+    lst.write_text(json.dumps(doc))
 
 
 def _csv(energy_total: np.ndarray, scorer: str = "IDD") -> str:
@@ -400,9 +459,10 @@ def _world(
                             "input": "input.txt", "rationale": f"part {part}"}  # fmt: skip
                 (d / "case.json").write_text(json.dumps(case_doc))
                 extra = tamper.get("input_extra", "") if (case, cfg, part) == first else ""
+                mods = MODULES["full" if cfg.endswith("full") else "em"]
                 (d / "input.txt").write_text(
                     f"# case {case} part {part}\ni:Ts/Seed = {seed}\n"
-                    f"i:So/Beam/NumberOfHistoriesInRun = 1000\n{extra}"
+                    f"i:So/Beam/NumberOfHistoriesInRun = 1000\n{mods}{extra}"
                 )
     samples = tmp / "samples"  # ionmc chunks + seal
     chunks = []
@@ -443,12 +503,11 @@ def _world(
     (repo / "later.txt").write_text("after the seal")
     code_sha = _commit(repo, "after")
     records, outputs = tmp / "records", tmp / "outputs"  # TOPAS records and outputs
-    index = []
+    index, ids = [], {}
     for case, spec in cases.items():
         sig_t = spec.get("sig", SIG)
         for cfg in configs:
             for part in IO.CONFIG_PARTS[cfg]:
-                run_id = f"REF-c{case}-{cfg}-{part}"
                 bdir = f"{IO.BUNDLE_ROOT}/{IO.bundle_name(case, cfg, part)}"
                 files = {}
                 for name in ("case.json", "input.txt"):
@@ -461,11 +520,15 @@ def _world(
                     "runner_source_sha256": "2" * 64, "sandbox_binary_sha256": "3" * 64,
                     "gpu": False,
                 }  # fmt: skip
+                cfg_id = IO.canonical_digest(request)
+                run_id = f"REF-{cfg_id[:20]}-{case:02x}{part:02x}0000"  # runner's id derivation
+                ids[(case, cfg, part)] = run_id
                 odir = outputs / run_id
                 (odir / "work").mkdir(parents=True)
                 (odir / "request.json").write_text(json.dumps(request, indent=2))
                 hit = (case, cfg, part) == first
-                stdout = tamper["stdout"](STDOUT) if hit and "stdout" in tamper else STDOUT
+                base_out = STDOUT_FULL if cfg.endswith("full") else STDOUT_EM
+                stdout = tamper["stdout"](base_out) if hit and "stdout" in tamper else base_out
                 (odir / "stdout.txt").write_text(stdout)
                 (odir / "stderr.txt").write_text(tamper.get("stderr", "") if hit else "")
                 pn = 1000 * (1.0 + 1e-3 * rng.standard_normal())
@@ -498,17 +561,31 @@ def _world(
                 ]  # fmt: skip
                 rdir = records / "runs" / run_id
                 rdir.mkdir(parents=True)
+                sha = {e["path"]: e["sha256"] for e in listing}
+                result = {  # V3-INFRA-004 signed run record, schema_version 3
+                    "schema_version": 3, "run_id": run_id, "configuration_id": cfg_id,
+                    "code_sha": code_sha, "task_id": None, "engine": "topas",
+                    "request_sha256": sha["request.json"],
+                    "started_at": T_LATE if started_ok else T_EARLY,
+                    "finished_at": "2026-11-09T13:00:00+00:00", "seconds": 100.0,
+                    "exit_code": 0, "timed_out": False, "error": None, "missing_outputs": [],
+                    "succeeded": True, "scientifically_validated": False,
+                    "metadata_status": "declared; inspect native logs/outputs",
+                    "output_count": len(OUTS[cfg]), "output_files_sha256": "0" * 64,
+                    "stdout": stdout[-200:], "stderr": "",
+                    "stdout_sha256": sha["stdout.txt"], "stderr_sha256": sha["stderr.txt"],
+                }  # fmt: skip
+                if not (hit and tamper.get("unsigned")):
+                    result = _sign(result, tamper.get("signer", "reference-runner") if hit
+                                   else "reference-runner")  # fmt: skip
+                if hit and "started_after_signing" in tamper:
+                    result["started_at"] = tamper["started_after_signing"]
+                (rdir / "record.json").write_text(json.dumps(result))
+                listing.append({"path": "record.json", "sha256": "", "bytes": 0})
                 (rdir / "artifacts.json").write_text(
                     json.dumps({"run_id": run_id, "files": listing})
                 )
-                result = {
-                    "schema_version": 2, "run_id": run_id,
-                    "configuration_id": IO.canonical_digest(request),
-                    "code_sha": code_sha, "engine": "topas",
-                    "finished_at": T_LATE if started_ok else T_EARLY,
-                    "seconds": 100.0, "exit_code": 0, "succeeded": True, "missing_outputs": [],
-                }  # fmt: skip
-                (rdir / "result.json").write_text(json.dumps(result))
+                _relist(rdir / "record.json")
                 index.append({"case": case, "config": cfg, "part": part, "run_id": run_id})
     (records / "index.json").write_text(json.dumps({"runs": index}))
     review = {"review_id": "REVIEW-x", "head_sha": seal_sha, "status": "passed",
@@ -516,8 +593,12 @@ def _world(
     (records / "review.json").write_text(json.dumps(review))
     plan = tmp / "plan.json"
     plan.write_text(json.dumps({"seal_sha": seal_sha, "seal_review_id": "REVIEW-x"}))
+    kp = _attest().keypair_from_seed(KEY_SEED)
+    trust = tmp / "trust.json"
+    trust.write_text(json.dumps({"reference-runner": [
+        {"key_id": kp.key_id, "public_key": kp.public_key.hex()}]}))  # fmt: skip
     return {"repo": repo, "records": records, "outputs": outputs, "samples": samples,
-            "plan": plan, "seal": seal_file}  # fmt: skip
+            "plan": plan, "seal": seal_file, "trust": trust, "ids": ids}  # fmt: skip
 
 
 def _cli(w: dict[str, Any], row: str, out: Path, case: int = 1) -> tuple[int, dict[str, Any]]:
@@ -525,6 +606,7 @@ def _cli(w: dict[str, Any], row: str, out: Path, case: int = 1) -> tuple[int, di
         "grade", "--plan", str(w["plan"]), "--records", str(w["records"]), "--seal",
         str(w["seal"]), "--case", str(case), "--row", row, "--outputs", str(w["outputs"]),
         "--samples-root", str(w["samples"]), "--repo", str(w["repo"]), "--out", str(out),
+        "--trust", str(w["trust"]),
     ])  # fmt: skip
     return code, json.loads(out.read_text())
 
@@ -554,7 +636,7 @@ def test_cli_td_em_end_to_end(tmp_path: Path, small_case: None) -> None:
     assert names["(b)"]["verdict"] == "REPORT-ONLY"  # W_T < 1.0 mm: report-only
     assert all(v["valid"] for v in rep["run_validity"]) and len(rep["topas_runs"]) == 4
     assert {c["k"] for c in rep["ionmc_chunks"]} == {1, 2}
-    assert all(f.startswith("work/") or f == "request.json"
+    assert all(f.startswith("work/") or f in ("request.json", "stdout.txt", "stderr.txt")
                for r in rep["topas_runs"] for f in r["files_sha256"])  # fmt: skip
     _no_arrays(rep)
 
@@ -598,27 +680,48 @@ def test_cli_fails_closed_on_tampering(tmp_path: Path, small_case: None) -> None
     assert code == 2 and "sha256 mismatch" in rep["error"]
 
 
-@pytest.mark.parametrize("field", list(R2.io.RESULT_FIELDS))
+@pytest.mark.parametrize("field", [*R2.io.RESULT_FIELDS, "task_id", "timed_out"])
 def test_missing_result_field_fails_closed(tmp_path: Path, small_case: None, field: str) -> None:
     w = _world(tmp_path)
-    rec = w["records"] / "runs" / "REF-c1-idd-em-0" / "result.json"
+    rec = w["records"] / "runs" / w["ids"][(1, "idd-em", 0)] / "record.json"
     data = json.loads(rec.read_text())
+    data.pop("attestation")
     del data[field]
-    rec.write_text(json.dumps(data))
+    rec.write_text(json.dumps(_sign(data)))  # validly signed record without the field
+    _relist(rec)
     code, rep = _cli(w, "TD-EM", tmp_path / "r.json")
     assert code == 2 and rep["status"] == "ERROR"
 
 
 def test_unbound_or_failed_runs_fail_closed(tmp_path: Path, small_case: None) -> None:
     w = _world(tmp_path)
-    rec = w["records"] / "runs" / "REF-c1-idd-em-1" / "result.json"
-    good = json.loads(rec.read_text())
+    rec = w["records"] / "runs" / w["ids"][(1, "idd-em", 1)] / "record.json"
+    good = rec.read_text()
     for bad in ({"succeeded": False}, {"configuration_id": "0" * 64}, {"run_id": "REF-other"},
-                {"code_sha": "b" * 40}, {"seconds": -1}):  # fmt: skip
-        rec.write_text(json.dumps(good | bad))
+                {"code_sha": "b" * 40}, {"seconds": -1}, {"started_at": "yesterday"},
+                {"started_at": "2026-11-09T12:00:00"}, {"request_sha256": "0" * 64},
+                {"stdout_sha256": "0" * 64}, {"stderr_sha256": "0" * 64}, {"timed_out": True},
+                {"started_at": "2026-11-09T14:00:00Z"}, {"exit_code": 1}):  # fmt: skip
+        rec.write_text(good)
+        _resign(rec, bad)  # validly signed, but not bound / not successful
         code, rep = _cli(w, "TD-EM", tmp_path / "r.json")
         assert code == 2 and rep["status"] == "ERROR", bad
-    rec.write_text(json.dumps(good))
+    rec.write_text(good)
+    _relist(rec)
+    assert _cli(w, "TD-EM", tmp_path / "r.json")[0] == 0
+    rec.write_text(good.replace('"task_id": null', '"task_id": "V3-008"'))  # unsigned change
+    _relist(rec)
+    assert _cli(w, "TD-EM", tmp_path / "r.json")[0] == 2
+    rec.write_text(good)
+    lst = rec.parent / "artifacts.json"
+    doc = json.loads(lst.read_text())
+    doc["files"] = [e for e in doc["files"] if e["path"] != "record.json"]
+    lst.write_text(json.dumps(doc))
+    assert _cli(w, "TD-EM", tmp_path / "r.json")[0] == 2  # record.json must be listed
+    _relist(rec)
+    doc["files"].append({"path": "record.json", "sha256": "0" * 64})
+    lst.write_text(json.dumps(doc))
+    assert _cli(w, "TD-EM", tmp_path / "r.json")[0] == 2  # listed with another digest
     (w["records"] / "review.json").write_text(json.dumps({"review_id": "REVIEW-x"}))
     assert _cli(w, "TD-EM", tmp_path / "r.json")[0] == 2
 
@@ -728,3 +831,84 @@ def test_cli_run_validity_fail(tmp_path: Path, small_case: None, tamper: dict[st
 def test_begin_processing_lines_are_not_killed_tracks(tmp_path: Path, small_case: None) -> None:
     w = _world(tmp_path, tamper={"stdout": lambda s: s + "Begin processing (killed=0)\n"})
     assert _cli(w, "TD-EM", tmp_path / "v.json")[1]["status"] == "PASS"
+
+
+@pytest.mark.parametrize(
+    ("tamper", "needle"),
+    [
+        ({"unsigned": True}, "status unverified"),
+        ({"signer": "host-runner"}, "status invalid"),
+        ({"started_after_signing": "2026-11-09T12:30:00+00:00"}, "status invalid"),
+    ],
+)
+def test_result_attestation_fails_closed(
+    tmp_path: Path, small_case: None, tamper: dict[str, Any], needle: str
+) -> None:
+    w = _world(tmp_path, tamper=tamper)
+    code, rep = _cli(w, "TD-EM", tmp_path / "s.json")
+    assert code == 2 and rep["status"] == "ERROR" and needle in rep["error"], rep
+    assert "V3-INFRA-004" in rep["error"]
+
+
+def test_untrusted_key_fails_closed(tmp_path: Path, small_case: None) -> None:
+    w = _world(tmp_path)
+    w["trust"].write_text(json.dumps({"reference-runner": []}))
+    code, rep = _cli(w, "TD-EM", tmp_path / "s.json")
+    assert code == 2 and "status unverified" in rep["error"]
+
+
+def test_signed_start_before_review_is_blinding_fail(tmp_path: Path, small_case: None) -> None:
+    w = _world(tmp_path)
+    assert _cli(w, "TD-EM", tmp_path / "a.json")[1]["status"] == "PASS"
+    rec = w["records"] / "runs" / w["ids"][(1, "idd-em", 2)] / "record.json"
+    _resign(rec, {"started_at": "2026-11-09T08:59:59Z"})  # finished_at stays late: unused
+    code, rep = _cli(w, "TD-EM", tmp_path / "b.json")
+    assert code == 1 and rep["category"] == "blinding control"
+    bad = [v["run_id"] for v in rep["run_validity"] if not v["valid"]]
+    assert bad == [w["ids"][(1, "idd-em", 2)]]
+
+
+def _drop_block(text: str, start: str) -> str:
+    """Remove the hadronic-summary block that starts with ``start`` (up to the next separator)."""
+    i = text.index(start)
+    j = text.index(SEP, i)
+    return text[:i] + text[j + len(SEP) :]
+
+
+@pytest.mark.parametrize(
+    "edit",
+    [
+        lambda s: s.replace(
+            "        Model:                  QMDModel: 100 MeV/n ---> 6 GeV/n\n", ""
+        ),
+        lambda s: s.replace("Radioactive Decay Physics Parameters", "Decay Parameters"),
+        lambda s: s.replace(" hInelastic QGSP_BIC_HP  Thresholds: \n", ""),
+        lambda s: _drop_block(s, "                           Hadronic Processes for mu-"),
+        lambda s: s.replace("NeutronHPElastic", "hElasticCHIPS"),
+        lambda s: s.replace("Use ICRU90 data                                    1", "x"),
+    ],
+)
+def test_full_module_markers_missing_fail(tmp_path: Path, small_case: None, edit: Any) -> None:
+    w = _world(tmp_path, configs=("idd-full",), tamper={"stdout": edit})
+    code, rep = _cli(w, "TD-FULL", tmp_path / "m.json")
+    assert code == 1 and rep["category"] == "run validity", rep
+    assert any("module" in p for x in rep["part_validity"] for p in x["problems"])
+
+
+def test_full_logs_intact_pass_and_list_unverifiable(tmp_path: Path, small_case: None) -> None:
+    w = _world(tmp_path, configs=("idd-full",))
+    code, rep = _cli(w, "TD-FULL", tmp_path / "m.json")
+    assert code == 0 and rep["status"] == "PASS", rep
+    assert rep["module_markers_unverifiable"] == ["g4decay"]
+
+
+@pytest.mark.parametrize(
+    "inject",
+    [" hInelastic QGSP_BIC_HP  Thresholds: \n", "        Model:  QMDModel: x\n",
+     "======          Radioactive Decay Physics Parameters           =======\n"],
+)  # fmt: skip
+def test_em_log_with_hadronic_marker_fails(tmp_path: Path, small_case: None, inject: str) -> None:
+    w = _world(tmp_path, tamper={"stdout": lambda s: inject + s})
+    code, rep = _cli(w, "TD-EM", tmp_path / "e.json")
+    assert code == 1 and rep["category"] == "run validity"
+    assert any("hadronic marker" in p for x in rep["part_validity"] for p in x["problems"])

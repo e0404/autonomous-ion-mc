@@ -30,7 +30,7 @@ blinding control and nothing is graded ("never re-graded").
 Record shapes for the chronology checks (dicts; ISO-8601 timestamps with an explicit offset or Z):
 ``plan`` ``{"seal_sha", "seal_review_id"}``; ``review`` ``{"review_id", "head_sha", "status",
 "finished_at", "report": {"verdict"}}``; ``run`` ``{"run_id", "code_sha", "reference_started"}``
-(built by ``r2_io.TopasRun.chronology_record`` from the controlled result record bound by run_id).
+(built by ``r2_io.TopasRun.chronology_record`` from the signed run record bound by run_id).
 
 Statuses: PASS; FAIL with ``category`` "blinding control" (chronology, never re-graded), "run
 validity" (a TOPAS part fails ``r2_io.run_checks`` -- non-empty stderr, killed/stuck tracks,
@@ -41,8 +41,11 @@ a model FAIL but a recorded evidence gap (TL (a) without a gated point, TL (b) w
 depths); exit 1, so it blocks an integration criterion that needs PASS; ERROR: a missing or
 malformed record, nothing graded.
 
-Not done here: the TOPAS module-list printout check of section 6 and the blinding ORDER of grading
-(orchestrator); the report-only items listed under ``not_computed`` in every report.
+The run-validity check includes the executed module list (``r2_io.module_check``: printout markers
+derived from the bundle's ``sv:Ph/Default/Modules``; ``g4decay`` has no reliable marker and is
+reported under ``module_markers_unverifiable``). The chronology uses the signed ``started_at`` of
+the signed reference-runner record.json only (see ``r2_io``). Not done here: the blinding ORDER of
+grading (orchestrator); the report-only items listed under ``not_computed`` in every report.
 """
 
 from __future__ import annotations
@@ -79,7 +82,6 @@ NOT_COMPUTED = [
     "TD-FULL report-only: primary fluence vs depth (and TF-DIAG primary survival at R80)",
     "TL report-only: D_std; C/O 430 equal-velocity sigma ratio",
     "TF-DIAG: FULL/EM plateau and peak ratios",
-    "run validity: the module list printed by TOPAS against the bundled module list",
 ]
 DECISIONS = [
     "D1 pooled point values (estimator on pooled batches / summed TOPAS parts)",
@@ -549,7 +551,9 @@ class Context:
         outputs: Path,
         seal: dict[str, Any],
         samples_root: Path,
+        trust: dict[str, Any],
     ) -> None:
+        self.trust = trust
         self.repo, self.plan, self.review, self.index = repo, plan, review, index
         self.records, self.outputs, self.seal, self.samples_root = (
             records,
@@ -562,7 +566,9 @@ class Context:
 
     def topas(self, case: int, config: str) -> list[io.TopasRun]:
         runs = [
-            io.load_topas_run(self.repo, self.records, self.outputs, case, config, p, rid)
+            io.load_topas_run(
+                self.repo, self.records, self.outputs, case, config, p, rid, self.trust
+            )
             for p, rid in io.runs_for(self.index, case, config)
         ]
         self.runs.extend(runs)
@@ -687,8 +693,11 @@ def grade(
     row: str,
     outputs: Path | None = None,
     samples_root: Path | None = None,
+    trust_path: Path | None = None,
 ) -> dict[str, Any]:
-    """Grade one (case, row). Raises on any missing/malformed record (caller: ERROR)."""
+    """Grade one (case, row). Raises on any missing/malformed record (caller: ERROR).
+    ``trust_path`` defaults to the committed ``infrastructure/keys/trusted_attestation_keys.json``
+    of ``repo`` (evidence grades must use the default; the report records which file was used)."""
     if row not in ROWS:
         raise io.RecordError(f"unknown row {row!r}; rows are {ROWS}")
     info = io.case_info(case)
@@ -704,12 +713,14 @@ def grade(
         outputs or repo / ".ionmc-cache" / "reference-runs",
         seal,
         samples_root or repo,
+        io.load_trust(trust_path or repo / io.DEFAULT_TRUST),
     )
     report: dict[str, Any] = {
         "schema": REPORT_SCHEMA,
         "row": row,
         "case": case,
         "case_info": info,
+        "trust_file": _trust_info(repo, trust_path or repo / io.DEFAULT_TRUST),
         "held_out": info["set"] == "held-out",
         "plan": plan,
         "review": {k: review[k] for k in ("review_id", "head_sha", "status", "finished_at")},
@@ -750,9 +761,12 @@ def grade(
     # per-part run validity and the replicate gate (section 6 "Run validity (each TOPAS part)")
     part_checks = [
         {"run_id": r.run_id, "case": r.case, "config": r.config, "part": r.part,
-         "problems": io.run_checks(r)}
+         **io.run_checks(r)}
         for r in ctx.runs
     ]  # fmt: skip
+    report["module_markers_unverifiable"] = sorted(
+        {m for x in part_checks for m in x["module_markers_unverifiable"]}
+    )
     groups: dict[tuple[int, str], list[io.TopasRun]] = {}
     for r in ctx.runs:
         groups.setdefault((r.case, r.config), []).append(r)
@@ -832,6 +846,17 @@ def grade(
     )
 
 
+def _trust_info(repo: Path, path: Path) -> dict[str, Any]:
+    p = Path(path)
+    digest = io.sha256_file(p) if p.is_file() else None
+    try:
+        committed = io.git_show(repo, "HEAD", io.DEFAULT_TRUST)
+        is_committed = digest == io.hashlib.sha256(committed).hexdigest()
+    except io.RecordError:
+        is_committed = False
+    return {"path": str(p), "sha256": digest, "equals_committed_at_head": is_committed}
+
+
 def _json_safe(v: Any) -> Any:
     if isinstance(v, dict):
         return {k: _json_safe(x) for k, x in v.items()}
@@ -877,9 +902,18 @@ def main(argv: list[str] | None = None) -> int:
     g.add_argument("--samples-root", type=Path, default=None)
     g.add_argument("--repo", type=Path, default=Path(__file__).resolve().parents[3])
     g.add_argument("--out", type=Path, default=None)
+    g.add_argument(
+        "--trust",
+        type=Path,
+        default=None,
+        help="attestation trust file (default and required for evidence: the committed "
+        "infrastructure/keys/trusted_attestation_keys.json)",
+    )
     a = ap.parse_args(argv)
     try:
-        rep = grade(a.repo, a.plan, a.records, a.seal, a.case, a.row, a.outputs, a.samples_root)
+        rep = grade(
+            a.repo, a.plan, a.records, a.seal, a.case, a.row, a.outputs, a.samples_root, a.trust
+        )
         code = {"PASS": 0}.get(rep["status"], 1)
     except (
         ChronologyError,
