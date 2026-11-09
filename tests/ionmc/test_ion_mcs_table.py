@@ -647,15 +647,19 @@ def test_uncovered_mapping_domain_fails_closed_in_both_modes(name: str) -> None:
 
 
 def _built_mapping(cfg: SimulationConfig) -> Any:
-    """The table-mode mapping of a one-material ion configuration built directly from its rows
-    (the domain and the build of ``config._ion_mapping_data``, without the coverage check), so
-    that a configuration that fails validation can still be compared state by state."""
-    from ionmc.config import effective_e_cut_mev
+    """The table-mode mapping of a one-material ion configuration built directly (the packs,
+    domain and build of ``config._ion_mapping_data``, without the coverage check), so that a
+    configuration that fails validation can still be compared state by state."""
+    from ionmc.config import IonMappingData, effective_e_cut_mev
 
     off = replace(cfg, physics=replace(cfg.physics, multiple_scattering=False))
-    eff = validate(off)
-    im = eff.ion_mapping
-    assert im is not None and len(eff.geometry.materials) == 1
+    eff = validate(off)  # the transport tables (the MCS-off mapping is a placeholder)
+    assert len(eff.geometry.materials) == 1
+    mat = eff.geometry.materials[0]
+    ion = XO.pack_transport_row(eff.tables, 0)
+    pro = XO.proton_path(mat).pack
+    comp = XO.pack_composition(mat)
+    quad = XO.pack_quadrature()
     src, proj = cfg.source, cfg.source.projectile
     e_cut = effective_e_cut_mev(cfg)
     e0 = src.kinetic_energy_mev
@@ -663,10 +667,10 @@ def _built_mapping(cfg: SimulationConfig) -> Any:
     e_lo = max(e0 - 6.0 * src.energy_sigma_mev, e_cut)
     dom = XO.table_domain(proj, (1.0 - cfg.physics.max_energy_loss_fraction) * e_cut, e_lo, e_hi)
     row, est = XO.build_pv_eq_table_and_estimate(
-        im.ion[0], im.proton[0], im.comp[0], im.quad, float(proj.z), proj.mass_mev, *dom
+        ion, pro, comp, quad, float(proj.z), proj.mass_mev, *dom
     )
-    return replace(
-        im, evaluation="table", table=row[None, :], table_domain=dom, estimates=(est,), unused=False
+    return IonMappingData(
+        ion[None, :], pro[None, :], comp[None, :], quad, "table", row[None, :], dom, (est,)
     )
 
 
@@ -724,6 +728,87 @@ def test_no_table_without_multiple_scattering() -> None:
         assert "multiple_scattering=False" in s["unused_note"]
     on = validate(_config(CARBON12, WATER, 80.0 * 12, 0.0, "root")).ion_mapping
     assert on is not None and not on.unused
+
+
+_MAPPING_BUILDERS = {
+    "ionmc.config": (
+        "fdm_domain_status",
+        "proton_path",
+        "pack_transport_row",
+        "pack_composition",
+        "pack_quadrature",
+        "pv_eq_table_coverage",
+        "build_pv_eq_table_and_estimate",
+    ),
+    "ionmc.physics.exact_omega": (
+        "fdm_domain_status",
+        "proton_path",
+        "pack_path",
+        "pv_eq_table_coverage",
+        "build_pv_eq_table_and_estimate",
+        "root_pv_equivalent_batch",
+    ),
+}
+"""The exact-Omega builders (f_dM domain check, proton paths, packing, coverage probe, table build,
+root solves) in the modules where ``validate`` looks them up."""
+
+
+def test_mcs_off_runs_no_mapping_machinery(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Codex REVIEW-f3361441: with ``multiple_scattering=False`` an ion source gets no f_dM domain
+    check, no proton path, no packing, no coverage probe, no table and no root solve: every
+    builder raises when called, and alpha, carbon12, oxygen16 in water and oxygen16 at 100 MeV/u
+    in lead (unsupported with MCS) validate in both evaluations. The summary records
+    ``fdm_domain = "not evaluated (multiple_scattering=False)"``, ``fdm_extrapolated`` False,
+    ``evaluation = "root"`` and ``unused``; the table cache stays empty."""
+    import importlib
+
+    def forbidden(name: str) -> Any:
+        def call(*_a: Any, **_k: Any) -> Any:
+            raise AssertionError(f"{name} called with multiple_scattering=False")
+
+        return call
+
+    for mod_name, names in _MAPPING_BUILDERS.items():
+        mod = importlib.import_module(mod_name)
+        for name in names:
+            monkeypatch.setattr(mod, name, forbidden(f"{mod_name}.{name}"))
+    monkeypatch.setattr(XO.ExactOmegaMapping, "build", forbidden("ExactOmegaMapping.build"))
+    cases = [_config(p, WATER, DOMAIN_U[p.name][0] * p.a, 0.0) for p in IONS]
+    cases.append(_partial_config(MATERIALS["lead"]))
+    for base in cases:
+        for ev in MCS_MAPPING_EVALS:
+            cfg = replace(
+                base,
+                physics=replace(base.physics, multiple_scattering=False, mcs_mapping_eval=ev),
+            )
+            XO._TABLES.clear()
+            eff = validate(cfg)
+            assert not XO._TABLES
+            im = eff.ion_mapping
+            assert im is not None and im.unused and im.evaluation == "root" and im.table is None
+            m = eff.summary()["mcs_mapping"]
+            assert m["fdm_domain"] == "not evaluated (multiple_scattering=False)"
+            assert m["fdm_extrapolated"] is False
+            assert m["p1v1_eq_kinetic_energy_mev"] is None
+            assert m["evaluation"] == "root" and m["unused"] is True and "table" not in m
+
+
+@pytest.mark.parametrize("backend", ["python", "warp-cpu"])
+def test_mcs_off_ion_run_with_placeholder_mapping(backend: str) -> None:
+    """An MCS-off ion run (oxygen16 at 100 MeV/u in lead, unsupported with MCS) executes with the
+    zero placeholder mapping arrays on the python and the warp-cpu backend (the mapping is read
+    only inside the multiple-scattering step): valid, every counter 0. The MCS-on summary carries
+    no ``fdm_domain`` note (unchanged)."""
+    cfg = _partial_config(MATERIALS["lead"], mcs=False)
+    cfg = replace(cfg, run=replace(cfg.run, backend=backend))
+    sim = Simulation(cfg)
+    im = sim.effective.ion_mapping
+    assert im is not None and im.unused and im.ion.shape == (1, 1) and not im.ion.any()
+    res = sim.run()
+    assert res.valid and not res.counters.any_nonzero
+    assert all(v == 0 for v in res.counters.as_dict().values())
+    on = validate(_config(CARBON12, WATER, 80.0 * 12, 0.0)).summary()["mcs_mapping"]
+    assert "fdm_domain" not in on and on["mapping"].startswith("exact-Omega")
 
 
 def test_partial_coverage_table_equals_the_root() -> None:

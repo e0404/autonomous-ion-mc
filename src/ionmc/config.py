@@ -25,6 +25,7 @@ from ionmc.lookup import LookupTable
 from ionmc.materials import WATER, Material
 from ionmc.physics.em import E_S_MEV
 from ionmc.physics.exact_omega import (
+    MCS_OFF_FDM_STATUS,
     PROTON_FDM_STATUS,
     RESIDUAL_TOL,
     STEP_TOL,
@@ -133,9 +134,11 @@ class PhysicsOptions:
     (``UnsupportedCombinationError``) if any fails (observed: oxygen16 at 100 and 150 MeV/u in
     copper and lead), so every validated run has table coverage 1.0 (recorded, summary
     ``mcs_mapping.table.table_coverage``); the fallback protects any partial table. With
-    ``multiple_scattering=False`` the mapping is not evaluated: no table is built, no coverage
-    check is made, and the summary records ``mcs_mapping.evaluation = "root"`` with
-    ``unused = True``. It is ignored for protons (no mapping).
+    ``multiple_scattering=False`` the mapping is not evaluated: for an ion source no f_dM domain
+    check, no proton path, no packing and no root solve happen (no table, no coverage check), the
+    summary records ``mcs_mapping.fdm_domain = "not evaluated (multiple_scattering=False)"``,
+    ``mcs_mapping.evaluation = "root"`` and ``unused = True``. It is ignored for protons (no
+    mapping).
     """
 
     nuclear: bool
@@ -302,8 +305,8 @@ class IonMappingData:
     [MeV] they were built for; ``estimates`` the build-time interpolation estimate of each row
     (:func:`ionmc.physics.exact_omega.estimate_pv_eq_table`, a performance diagnostic, with the
     table coverage). ``unused`` is True when multiple scattering is off: the mapping is never
-    evaluated, so no table is built whatever the requested evaluation (``evaluation`` is then
-    ``"root"``)."""
+    evaluated, so nothing is built whatever the requested evaluation (``evaluation`` is then
+    ``"root"`` and ``ion``, ``proton``, ``comp``, ``quad`` are zero placeholders, never read)."""
 
     ion: np.ndarray
     proton: np.ndarray
@@ -322,8 +325,9 @@ class IonMappingData:
         if self.unused:
             out["unused"] = True
             out["unused_note"] = (
-                "multiple_scattering=False: the mapping is never evaluated; no pv_eq/pv table is "
-                "built whatever mcs_mapping_eval requests"
+                "multiple_scattering=False: the mapping is never evaluated; no f_dM domain check, "
+                "no proton path, no packing and no root solve; no pv_eq/pv table is built "
+                "whatever mcs_mapping_eval requests"
             )
         if self.table is not None and self.table_domain is not None:
             rows = np.ascontiguousarray(self.table, dtype=np.float64)
@@ -384,6 +388,14 @@ def _pad_rows(rows: list[np.ndarray]) -> np.ndarray:
     return out
 
 
+def _unused_ion_mapping() -> IonMappingData:
+    """The mapping data of an ion run without multiple scattering: never read (the kernels and
+    the python twin touch the mapping only inside the multiple-scattering step), so its arrays are
+    zero placeholders of the kernel's array ranks (no proton path, no packing, no root solve)."""
+    z2 = np.zeros((1, 1), dtype=np.float64)
+    return IonMappingData(z2, z2, z2, np.zeros(1, dtype=np.float64), "root", unused=True)
+
+
 def _ion_mapping_data(
     tables: TransportTables,
     geometry: VoxelGeometry,
@@ -391,16 +403,14 @@ def _ion_mapping_data(
     e_lo_mev: float,
     e_hi_mev: float,
 ) -> IonMappingData:
+    ph = config.physics
+    if not ph.multiple_scattering:  # the mapping is never evaluated (validate does not call this)
+        return _unused_ion_mapping()
     mats = geometry.materials
     ion = [pack_transport_row(tables, i) for i in range(len(mats))]
     pro = [proton_path(m).pack for m in mats]
     comp = [pack_composition(m) for m in mats]
     quad = pack_quadrature()
-    ph = config.physics
-    if not ph.multiple_scattering:  # the mapping is never evaluated: no table, no root solve
-        return IonMappingData(
-            _pad_rows(ion), _pad_rows(pro), _pad_rows(comp), quad, "root", unused=True
-        )
     proj = config.source.projectile
     # the step midpoint stays above (1 - f) E_cut (f: the step's energy-loss fraction limit)
     dom = table_domain(
@@ -1046,9 +1056,11 @@ def validate(config: SimulationConfig) -> EffectiveConfig:
 
     fdm_domain = PROTON_FDM_STATUS
     ion_mapping: IonMappingData | None = None
-    if (
-        is_ion
-    ):  # row I0: f_dM domain status of the source; fails closed (UnsupportedCombinationError)
+    if is_ion and not config.physics.multiple_scattering:
+        # f_dM is never evaluated: no domain check, no proton path, no packing, no root solve
+        fdm_domain = MCS_OFF_FDM_STATUS
+        ion_mapping = _unused_ion_mapping()
+    elif is_ion:  # row I0: f_dM domain status of the source; fails closed
         fdm_domain = fdm_domain_status(
             src.projectile,
             geometry.materials,

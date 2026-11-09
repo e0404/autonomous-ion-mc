@@ -909,7 +909,8 @@ class FdmDomainStatus:
     slowing down from the nominal energy, and over the materials; ``..._hi`` the same for the
     energy ``E0 + 6 sigma_E`` (the fail-closed bound). ``fdm_extrapolated`` is True when the
     nominal value exceeds :data:`FDM_DOMAIN_EDGE_MEV` (declared, not fail-closed: decision 0043
-    section 5). None for a proton, whose f_dM is evaluated directly."""
+    section 5). None for a proton, whose f_dM is evaluated directly. ``fdm_domain`` is a note
+    recorded only when the status was not evaluated (:data:`MCS_OFF_FDM_STATUS`)."""
 
     mapping: str
     fdm_extrapolated: bool
@@ -918,10 +919,11 @@ class FdmDomainStatus:
     fdm_domain_edge_mev: float
     proton_table_edge_mev: float
     depth_fractions: tuple[float, ...]
+    fdm_domain: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """JSON-serialisable form."""
-        return {
+        out: dict[str, Any] = {
             "mapping": self.mapping,
             "fdm_extrapolated": self.fdm_extrapolated,
             "p1v1_eq_kinetic_energy_mev": self.p1v1_eq_kinetic_energy_mev,
@@ -930,6 +932,9 @@ class FdmDomainStatus:
             "proton_table_edge_mev": self.proton_table_edge_mev,
             "depth_fractions": list(self.depth_fractions),
         }
+        if self.fdm_domain is not None:
+            out["fdm_domain"] = self.fdm_domain
+        return out
 
 
 PROTON_FDM_STATUS = FdmDomainStatus(
@@ -942,6 +947,19 @@ PROTON_FDM_STATUS = FdmDomainStatus(
     depth_fractions=(),
 )
 """The status recorded for a proton source (no mapping: ``fdm_extrapolated`` is False)."""
+
+MCS_OFF_FDM_STATUS = FdmDomainStatus(
+    mapping="exact-Omega b-matching (unused: multiple_scattering=False)",
+    fdm_extrapolated=False,
+    p1v1_eq_kinetic_energy_mev=None,
+    p1v1_eq_kinetic_energy_hi_mev=None,
+    fdm_domain_edge_mev=FDM_DOMAIN_EDGE_MEV,
+    proton_table_edge_mev=PROTON_PATH_EMAX_MEV,
+    depth_fractions=(),
+    fdm_domain="not evaluated (multiple_scattering=False)",
+)
+"""The status recorded for an ion source without multiple scattering: f_dM is never evaluated,
+so no domain check is made (no proton path, no root solve)."""
 
 
 def _max_p1v1_eq_energy(

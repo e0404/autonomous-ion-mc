@@ -518,7 +518,9 @@ def _species_capabilities(nuclear: bool = False) -> dict[str, Any]:
                         "validate) and in lead up to 350 MeV/u (405 MeV/u validates); alpha and "
                         "carbon12 validate in every built-in material at both domain ends), so "
                         "every validated run has table coverage 1.0; runs with "
-                        "multiple_scattering=False build no mapping table and are unaffected"
+                        "multiple_scattering=False build no mapping table and are unaffected: "
+                        "for an ion source no f_dM domain check, no proton path, no packing and "
+                        "no root solve happen"
                     ),
                     "table_evaluation": {
                         "contract": TABLE_EVAL_CONTRACT,
@@ -536,7 +538,8 @@ def _species_capabilities(nuclear: bool = False) -> dict[str, Any]:
                     },
                     "fdm_domain_status": (
                         "recorded per run (mcs_mapping: fdm_extrapolated, proton-equivalent "
-                        "energies, domain edge); fails closed above the proton table edge"
+                        "energies, domain edge); fails closed above the proton table edge; "
+                        "not evaluated with multiple_scattering=False (mcs_mapping.fdm_domain)"
                     ),
                 }
                 if ion

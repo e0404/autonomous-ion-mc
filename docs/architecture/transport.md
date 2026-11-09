@@ -425,7 +425,9 @@ enforce it). The ion models are electromagnetic only.
   proton b-slab range: with multiple scattering on, `validate()` root-solves the table nodes of
   the reachable states in both modes and fails closed otherwise (observed: oxygen16 at 100 and
   150 MeV/u in copper and lead), so validated runs have coverage 1.0. With
-  `multiple_scattering=False` no table is built (`evaluation = "root"`, `unused = True`).
+  `multiple_scattering=False` an ion source gets no f_dM domain check, no proton path, no
+  packing and no root solve (`evaluation = "root"`, `unused = True`, zero placeholder arrays
+  never read; `fdm_domain = "not evaluated (multiple_scattering=False)"`).
   Ion stopping tables are keyed by the full material identity (name, density, composition, I,
   density-effect parameters), not by the material name.
 * **Stopping.** Bethe tables with the Lindhard-Sorensen option `ls` (default `"off"`; `"eff"` and

@@ -227,7 +227,9 @@ engine's stepped `T_dM` up to 1 mm; the worst U5 deviation is 1.5e-3.
   table nodes of the run's reachable states in both modes and fails closed when any has no root
   (observed: oxygen16 at 100 and 150 MeV/u in copper and lead, root status 2 at the lowest-energy
   states with a whole-range slab), so every validated run has coverage 1.0. With
-  `multiple_scattering=False` the mapping is unused, no table is built and nothing is checked. A step whose solve fails (nonzero status) is counted as
+  `multiple_scattering=False` the mapping is unused: for an ion source no f_dM domain check, no
+  proton path, no packing and no root solve happen (summary `mcs_mapping.fdm_domain = "not
+  evaluated (multiple_scattering=False)"`). A step whose solve fails (nonzero status) is counted as
   `mcs_mapping_failure` and the result is invalid. Tests: `tests/ionmc/test_ion_mcs_table.py`
   (the accelerated root equals the root path within the solver tolerance on >= 2000 random states
   per ion, material and domain end). Cost (warp-cpu float64, single thread): about 21 us per step
