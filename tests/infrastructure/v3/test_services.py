@@ -203,6 +203,9 @@ def test_bounded_artifact_and_traversal(tmp_path):
 def test_process_failure_missing_outputs_and_timeout_are_retained(
     tmp_path, monkeypatch
 ):
+    from infrastructure.experiment_v3 import attest
+
+    monkeypatch.setattr(attest, "key_dir", lambda: tmp_path / "keys")
     monkeypatch.setattr(reference, "require_bwrap", lambda: "/usr/bin/true")
     root = tmp_path / "repo"
     root.mkdir()
@@ -242,6 +245,7 @@ def test_process_failure_missing_outputs_and_timeout_are_retained(
     result = reference.run_reference(root, "case", "topas", state=tmp_path / "state")
     assert result["exit_code"] == 0 and not result["succeeded"]
     assert len(list((tmp_path / "state/references").glob("*/result.json"))) == 3
+    assert len(list((tmp_path / "state/references").glob("*/record.json"))) == 3
 
 
 def test_native_internal_output_alias_is_allowed_but_escape_is_not(tmp_path):

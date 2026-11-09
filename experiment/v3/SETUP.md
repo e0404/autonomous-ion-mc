@@ -64,6 +64,8 @@ the committed task; /workspace exposes them to host validation. Analyze in scrip
 The response contains only paths/counts. Text preview is limited to 4000 bytes;
 binary data cannot be read through the preview tool. Execution logs return short
 tails; full logs stay archived. Do not move bulk data through model context.
+Every run since V3-INFRA-004 also archives its signed record as `record.json`
+(listed in the manifest with its sha256; see "Signed reference-run records").
 
 ## Start
 
@@ -130,7 +132,9 @@ block so that a repository-authored copy can be told apart from a real record.
   canonical payload alone. `validation-manager` signs each `VAL-...` record
   before it is written and returned; `host-runner` signs each `RUN-...` record
   (including `stdout_sha256`, `stderr_sha256` and `output_manifest_sha256`) and
-  stores it as `record.json` (and `result.json`) in the run directory.
+  stores it as `record.json` (and `result.json`) in the run directory;
+  `reference-runner` (V3-INFRA-004) signs each `REF-...` reference-run record
+  (see "Signed reference-run records" below).
 - **Block shape:** `{"schema": "ionmc-attestation-1", "alg": "ed25519", "signer",
   "key_id" (sha256(public key)[:16]), "public_key" (hex), "signed_at_utc",
   "payload_sha256", "signature" (hex)}`.
@@ -243,3 +247,75 @@ block so that a repository-authored copy can be told apart from a real record.
   published they no longer count toward the gate, so re-record validation
   after publishing the key. Until the key-publication commit merges every
   non-migration task's gate is blocked.
+
+## Signed reference-run records (V3-INFRA-004)
+
+`run_reference_calculation` (v3-research service,
+`infrastructure/experiment_v3/reference.py`) signs every reference run with
+the service-held `reference-runner` key, so that an evaluator can verify when
+a run started (e.g. "started after review X finished", V3-008 rule
+R2-TOPAS-4) without trusting the orchestrator's copy. Deriving the start from
+`finished_at - seconds` is not accepted.
+
+- **Record (schema_version 3, `<state>/references/<REF-id>/record.json`, also
+  the tool's return value):** `run_id`, `configuration_id`, `code_sha`,
+  `task_id`, `engine`, `request_sha256` (sha256 of `request.json` as written),
+  `started_at` (UTC, taken immediately before the controlled
+  `reference_started` event, whose details carry the same value, and before
+  the engine is launched), `finished_at`, `seconds`, `exit_code`, `timed_out`,
+  `error`, `missing_outputs`, `succeeded`, `scientifically_validated` (false),
+  `metadata_status`, `output_count`, `output_files_sha256` (canonical-JSON
+  digest of the `work/` inventory in `result.json`), `stdout`/`stderr` tails
+  (at most 2000 bytes each), `stdout_sha256`, `stderr_sha256`, `attestation`.
+  The whole record is signed, tails included.
+- **Archive index:** `result.json` (unsigned, no `attestation`) carries the
+  same fields plus `output_files`, `artifact_files` (computed after
+  `record.json` was written, so the signed record is listed with its sha256 by
+  `list_reference_artifacts` and can be previewed/materialized) and
+  `signed_record: "record.json"`. Only `record.json` is evidence.
+- **Verifier:** `infrastructure/validation/reference_run_records.py`:
+  `load_signed_reference_record(run_id, state=None)` and
+  `verify_reference_record(record, expected_run_id, expected_code_sha,
+  expected_configuration_id, trust)` returning `(status, reason)`:
+  `verified`, `unverified` (no attestation or key not in the trust file) or
+  `invalid` (bad signature, wrong signer, schema_version != 3, signed
+  run_id/code_sha/configuration_id differing from the expected values (replay
+  protection), run_id not derived from configuration_id, `started_at` missing,
+  not a timezone-aware ISO-8601 time, or later than `finished_at`).
+  Chronology gates must accept only `verified`.
+- **Trust file:** `reference-runner` is an optional signer of
+  `infrastructure/keys/trusted_attestation_keys.json`: absent or `[]` means not
+  yet published, and its records are then `unverified` (fail closed for any
+  consumer that demands `verified`). The local-validation gate keeps requiring
+  exactly the existing `validation-manager` and `host-runner` keys.
+- **Gate wiring:** a validation record may reference reference runs with
+  `details.reference_runs = [{"run_id": "REF-...", "configuration_id": "<64
+  hex>"}]`. A passed record is then accepted only if every referenced signed
+  record verifies under a trusted `reference-runner` key (no bootstrap
+  tolerance), is bound to the referenced run id and configuration id and to the
+  validation record's `git_sha` (the run must be of the same commit), has a
+  valid signed `started_at` and succeeded. Malformed declarations are refused
+  by `record_local_validation` and rejected by the gate.
+- **Key publication (same rule as V3-INFRA-003):** a pure key-publication
+  branch (only change: the trust file) may add exactly one `reference-runner`
+  entry next to exactly one key for each required signer; the gate then also
+  requires a verified, successful reference run of that branch SHA referenced
+  from a passing validation record (`key_publication_evidence` gains a
+  `reference-runner` entry).
+- **Operator steps:** (1) merge the V3-INFRA-004 change and restart the
+  v3-research MCP service so the running process loads the new runner (it
+  creates `<share root>/attestation/reference-runner.key` on first use).
+  (2) Create the key-publication task worktree (from the integration head)
+  and run one reference calculation for it with `run_reference_calculation`
+  on an already committed case (the branch must not add files). (3) Read
+  `attestation.key_id` / `attestation.public_key` from the returned signed
+  record (cross-check with `python infrastructure/experiment_v3/attest.py
+  --print-public-key reference-runner` run by the operator outside the agent
+  sandbox, and check key_id = sha256(public key)[:16]). (4) Add exactly that
+  entry under `"reference-runner"` in the trust file (with `added` and a
+  `note` naming the REF record), commit it as the only change, run one host
+  validation job, and record validation for that SHA referencing the host run
+  (`details.host_runs`) and the reference run (`details.reference_runs` with
+  its `run_id` and `configuration_id`). (5) Review, push, CI, merge (as
+  V3-INFRA-003 did). Reference runs made before the restart have no
+  `record.json` and stay unverifiable.

@@ -1,8 +1,15 @@
 # Trusted attestation keys
 
 `trusted_attestation_keys.json` lists the Ed25519 public keys of the protected
-MCP services (`validation-manager`, `host-runner`). Trust is on first use: the
-lists are empty on merge. After the servers are restarted, the operator (or the
+MCP services (`validation-manager`, `host-runner`, and optionally
+`reference-runner`, V3-INFRA-004, which signs `REF-...` reference-run
+records). Trust is on first use: the lists are empty on merge. The gate
+requires the first two signers; `reference-runner` may be absent or `[]` until
+its key-publication commit (records it signed are then `unverified`), and once
+listed it obeys the same rules (exactly one key in a key-publication branch,
+evidenced by a verified successful reference run referenced from a passing
+validation record in `details.reference_runs`; see `experiment/v3/SETUP.md`,
+"Signed reference-run records"). After the servers are restarted, the operator (or the
 orchestrator in a reviewed commit) adds each published public key
 (`python infrastructure/experiment_v3/attest.py --print-public-key <signer>`) as
 `{"key_id": ..., "public_key": ..., "added": "YYYY-MM-DD", "note": ...}`.

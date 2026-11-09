@@ -241,7 +241,7 @@ def test_inspect_reports_attestation_status(env, capsys):
 
 def test_committed_trust_map_is_bootstrap_or_loadable():
     trusted = attest.load_trusted(lv.TRUSTED_KEYS_PATH)
-    assert set(trusted) == {"validation-manager", "host-runner"}
+    assert set(lv.REQUIRED_SIGNERS) <= set(trusted) <= set(attest.SIGNERS)
 
 
 def test_require_verified_helper():

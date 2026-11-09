@@ -12,6 +12,7 @@ import pytest
 from infrastructure.experiment_v3 import attest
 from infrastructure.validation import host_run_records as hrr
 from infrastructure.validation import local_validation as lv
+from infrastructure.validation import reference_run_records as rrr
 
 TASK = "V3-INFRA-003"
 RUN = "RUN-20260101-000000-KEY001"
@@ -33,11 +34,14 @@ def entry(key, **extra):
     return {"key_id": key.key_id, "public_key": key.public_key.hex(), **extra}
 
 
-def trust_file(vm_keys=(), hr_keys=()):
-    return json.dumps({
+def trust_file(vm_keys=(), hr_keys=(), rr_keys=None):
+    data = {
         "validation-manager": [entry(k) for k in vm_keys],
         "host-runner": [entry(k) for k in hr_keys],
-    }, indent=2) + "\n"
+    }
+    if rr_keys is not None:  # optional signer (V3-INFRA-004)
+        data["reference-runner"] = [entry(k) for k in rr_keys]
+    return json.dumps(data, indent=2) + "\n"
 
 
 @pytest.fixture
@@ -59,6 +63,7 @@ def repo(tmp_path, monkeypatch):
     monkeypatch.setattr(lv, "TRUSTED_KEYS_PATH", integration_trust)
     monkeypatch.setattr(lv, "VALIDATION_ROOT", tmp_path / "val")
     monkeypatch.setattr(hrr, "HOST_RUNS_ROOT", tmp_path / "runs")
+    monkeypatch.setattr(rrr, "REFERENCE_STATE", tmp_path / "state")
     monkeypatch.setattr(lv, "base_ref", lambda: BASE)
     monkeypatch.setattr(
         lv, "worktree_state",
@@ -77,7 +82,25 @@ def commit_branch(r, text, extra_file=None):
     return git("rev-parse", "HEAD", cwd=r)
 
 
-def put_records(tmp_path, sha, vm, hr, sign_val=True, sign_run=True, with_run=True):
+CONFIG = "ef" * 32
+REF = "REF-" + CONFIG[:20] + "-0123abcd"
+
+
+def put_reference_run(tmp_path, sha, rr):
+    rec = {
+        "schema_version": 3, "run_id": REF, "configuration_id": CONFIG,
+        "code_sha": sha, "task_id": TASK, "engine": "topas",
+        "started_at": "2026-01-01T00:00:00+00:00",
+        "finished_at": "2026-01-01T00:01:00+00:00", "succeeded": True,
+    }
+    d = tmp_path / "state" / "references" / REF
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "record.json").write_text(json.dumps(attest.sign_record(rec, rr, "reference-runner")))
+
+
+def put_records(
+    tmp_path, sha, vm, hr, sign_val=True, sign_run=True, with_run=True, with_ref=False
+):
     run = {
         "schema_version": 1, "run_id": RUN, "task_id": TASK, "sha": sha,
         "exit_code": 0, "timed_out": False, "succeeded": True,
@@ -96,6 +119,8 @@ def put_records(tmp_path, sha, vm, hr, sign_val=True, sign_run=True, with_run=Tr
     }
     if not with_run:
         val["details"] = {}
+    if with_ref:
+        val["details"]["reference_runs"] = [{"run_id": REF, "configuration_id": CONFIG}]
     if sign_val:
         val = attest.sign_record(val, vm, "validation-manager")
     d = tmp_path / "val" / TASK / sha
@@ -316,3 +341,49 @@ def test_undeterminable_branch_diff_fails_closed(repo, tmp_path, capsys, monkeyp
     monkeypatch.setattr(lv, "base_ref", lambda: "refs/heads/does-not-exist")
     code, out = check(capsys)
     assert code == 1 and "cannot determine the branch changes" in out["trust_problem"]
+
+
+def test_reference_runner_key_publication_requires_reference_run_evidence(
+    repo, tmp_path, capsys
+):
+    """Publishing the optional reference-runner key (V3-INFRA-004) follows the same
+    rule: exactly one key, evidenced by a verified reference run of this SHA."""
+    vm, hr, rr = (attest.generate_keypair() for _ in range(3))
+    lv.TRUSTED_KEYS_PATH.write_text(trust_file([vm], [hr]))
+    sha = commit_branch(repo, trust_file([vm], [hr], [rr]))
+    put_reference_run(tmp_path, sha, rr)
+    put_records(tmp_path, sha, vm, hr)
+    code, out = check(capsys)
+    assert code == 1 and out["trust_source"] == "key-publication"
+    assert out["key_publication_evidence"] == {
+        "validation-manager": True, "host-runner": True, "reference-runner": False,
+    }
+    assert "reference-runner" in out["key_publication_problem"]
+    put_records(tmp_path, sha, vm, hr, with_ref=True)
+    code, out = check(capsys)
+    assert code == 0 and out["status"] == "passed"
+    assert out["key_publication_evidence"]["reference-runner"] is True
+
+
+def test_reference_runner_key_publication_rejects_unevidenced_rogue_key(
+    repo, tmp_path, capsys
+):
+    vm, hr, rr, rogue = (attest.generate_keypair() for _ in range(4))
+    lv.TRUSTED_KEYS_PATH.write_text(trust_file([vm], [hr]))
+    sha = commit_branch(repo, trust_file([vm], [hr], [rogue]))
+    put_reference_run(tmp_path, sha, rr)  # signed by the service key, not the rogue one
+    put_records(tmp_path, sha, vm, hr, with_ref=True)
+    code, out = check(capsys)
+    assert code == 1 and out["passing_records"] == 0
+
+
+def test_unpublished_reference_runner_does_not_affect_existing_signers(
+    repo, tmp_path, capsys
+):
+    """An absent or empty reference-runner list keeps the INFRA-002/003 behaviour."""
+    vm, hr = attest.generate_keypair(), attest.generate_keypair()
+    sha = commit_branch(repo, trust_file([vm], [hr], []))
+    put_records(tmp_path, sha, vm, hr)
+    code, out = check(capsys)
+    assert code == 0 and out["trust_source"] == "key-publication"
+    assert out["key_publication_evidence"] == {"validation-manager": True, "host-runner": True}

@@ -86,6 +86,13 @@ ATTESTATION_REQUIRED = (
     "(operator runbook) or record not verified"
 )
 HOST_RUN_SIGNER = "host-runner"
+REFERENCE_RUN_SIGNER = "reference-runner"
+# Signers the trust file must list (at least one key each). Every other signer
+# in attest.SIGNERS (reference-runner, V3-INFRA-004) is optional: absent or an
+# empty list means "not yet published" and its records stay "unverified"; once
+# listed, its entries obey the same rules (well-formed, exactly one in a
+# key-publication branch, evidenced by a signed record).
+REQUIRED_SIGNERS = (SIGNER, HOST_RUN_SIGNER)
 
 
 def _attest():
@@ -131,9 +138,11 @@ def base_ref() -> str:
 def parse_trust_map(data, *, exactly_one: bool = False) -> dict:
     """Strict parse of a trust file: {signer: {key_id: public_key_hex}}.
 
-    Every signer in SIGNERS must be present with at least one entry (exactly
-    one with ``exactly_one``, the key-publication rule: a published key that
-    is not evidenced cannot hide behind an evidenced one); each entry must
+    Every signer in REQUIRED_SIGNERS must be present with at least one entry
+    (exactly one with ``exactly_one``, the key-publication rule: a published
+    key that is not evidenced cannot hide behind an evidenced one); an
+    optional signer of attest.SIGNERS may be absent or an empty list (not yet
+    published), and is otherwise held to the same rules; each entry must
     carry a key_id equal to the public key's derived id, and the key must be a
     valid curve point that is not of small order. Raises ValueError.
     """
@@ -143,6 +152,8 @@ def parse_trust_map(data, *, exactly_one: bool = False) -> dict:
     out: dict = {}
     for signer in attest.SIGNERS:
         entries = data.get(signer)
+        if signer not in REQUIRED_SIGNERS and entries in (None, []):
+            continue
         if not isinstance(entries, list) or not entries:
             raise ValueError(f"trust file has no {signer} key")
         if exactly_one and len(entries) != 1:
@@ -265,10 +276,12 @@ def records_for(task_id: str, sha: str, trusted: dict | None = None) -> list[dic
         rec.pop("attestation_status", None)
         rec.pop("attestation_reason", None)
         rec.pop("host_run_attestation", None)
+        rec.pop("reference_run_attestation", None)
         status, reason = classify(rec, task_id, sha, trusted)
         rec["attestation_status"] = status
         rec["attestation_reason"] = reason
         rec["host_run_attestation"] = check_host_runs(rec, task_id, sha, trusted)
+        rec["reference_run_attestation"] = check_reference_runs(rec, trusted)
         records.append(rec)
 
     return records
@@ -460,6 +473,85 @@ def check_host_runs(rec: dict, task_id: str, sha: str, trusted: dict) -> list[di
     return out
 
 
+CONFIGURATION_ID_PATTERN = re.compile(r"[0-9a-f]{64}")
+
+
+def reference_run_declaration_problems(details) -> list[str]:
+    """Reasons the reserved ``details.reference_runs`` field is malformed.
+
+    Shape: a list of ``{"run_id": non-blank str, "configuration_id": 64 hex}``.
+    Any other shape is a problem (fail closed, never ignored).
+    """
+    if not isinstance(details, dict) or "reference_runs" not in details:
+        return []
+    runs = details["reference_runs"]
+    if not isinstance(runs, list):
+        return ["details.reference_runs is not a list"]
+    problems = []
+    for i, item in enumerate(runs):
+        if not isinstance(item, dict):
+            problems.append(f"details.reference_runs[{i}] is not an object")
+            continue
+        run_id = item.get("run_id")
+        if not isinstance(run_id, str) or not run_id.strip():
+            problems.append(f"details.reference_runs[{i}].run_id is not a non-blank string")
+        config = item.get("configuration_id")
+        if not (isinstance(config, str) and CONFIGURATION_ID_PATTERN.fullmatch(config)):
+            problems.append(
+                f"details.reference_runs[{i}].configuration_id is not 64 hex digits"
+            )
+    return problems
+
+
+def check_reference_runs(rec: dict, trusted: dict) -> list[dict]:
+    """Verify every signed reference-run record a validation record references.
+
+    Each entry: {run_id, status, reason, ok}. ``ok`` requires the signed
+    ``<state>/references/<REF-id>/record.json`` to be present, verified by a
+    trusted reference-runner key (no bootstrap tolerance: unverified is never
+    ok), bound to the referenced run id and configuration id and to the
+    validation record's git SHA (code_sha), to carry a well-formed signed
+    started_at (infrastructure/validation/reference_run_records.py), and to
+    have succeeded. A malformed declaration yields one "<malformed>" entry per
+    problem.
+    """
+    from infrastructure.validation import reference_run_records as rrr
+
+    details = rec.get("details") if isinstance(rec.get("details"), dict) else {}
+    problems = reference_run_declaration_problems(details)
+    out = [
+        {"run_id": "<malformed>", "status": "malformed", "reason": problem, "ok": False}
+        for problem in problems
+    ]
+    if problems:
+        return out
+    for item in details.get("reference_runs", []):
+        run_id = item["run_id"].strip()
+        entry = {"run_id": run_id, "status": "missing", "reason": "", "ok": False}
+        out.append(entry)
+        try:
+            run = rrr.load_signed_reference_record(run_id)
+        except rrr.ReferenceRecordMissing as exc:
+            entry["reason"] = f"reference run record missing: {exc}"
+            continue
+        status, reason = rrr.verify_reference_record(
+            run, run_id, rec.get("git_sha", ""), item["configuration_id"], trusted
+        )
+        entry["status"], entry["reason"] = status, reason
+        if status == "invalid":
+            continue
+        if status != "verified":
+            entry["reason"] = (
+                f"reference run record {status} (attestation required): {reason}"
+            )
+            continue
+        if run.get("succeeded") is not True:
+            entry["reason"] = "reference run did not succeed"
+            continue
+        entry["ok"] = True
+    return out
+
+
 def evaluate(
     records: list[dict],
     dirty: bool,
@@ -489,6 +581,9 @@ def evaluate(
       succeeded (succeeded true, exit_code 0, not timed out, state unchanged,
       no publication error). Legacy host_run_id(s) references carry no
       manifest binding and are rejected outside bootstrap.
+    - Likewise a passed record that references reference runs
+      (details.reference_runs) is rejected unless every one is ok in
+      check_reference_runs (verified, bound, signed started_at, succeeded).
     - Every record with status "failed" counts as failing regardless of its
       attestation (a forged failure can only block, never release, the gate).
     - A branch that changes the trust file in any way other than a pure
@@ -500,7 +595,9 @@ def evaluate(
       bootstrap tolerance, and the gate additionally requires signed evidence
       for every published key: a verified passing validation record
       (validation-manager) referencing a verified successful host run
-      (host-runner), both bound to this task and SHA.
+      (host-runner), both bound to this task and SHA, and, when the branch
+      publishes a reference-runner key, a verified successful reference run
+      of this SHA referenced from a passing record.
     """
     if trusted is None:
         trusted = load_trust()
@@ -512,6 +609,8 @@ def evaluate(
         att = r.get("attestation_status", "unverified")
         runs = r.get("host_run_attestation") or []
         bad_run = next((x for x in runs if not x.get("ok")), None)
+        refs = r.get("reference_run_attestation") or []
+        bad_ref = next((x for x in refs if not x.get("ok")), None)
         if att == "invalid" or (att != "verified" and not tolerate):
             reason = r.get("attestation_reason")
             if att == "unverified" and not enforce:
@@ -529,6 +628,14 @@ def evaluate(
                     "validation_id": r.get("validation_id"),
                     "attestation_status": att,
                     "reason": f"host run {bad_run['run_id']}: {bad_run['reason']}",
+                }
+            )
+        elif r.get("status") == "passed" and bad_ref is not None:
+            rejected.append(
+                {
+                    "validation_id": r.get("validation_id"),
+                    "attestation_status": att,
+                    "reason": f"reference run {bad_ref['run_id']}: {bad_ref['reason']}",
                 }
             )
         elif r.get("status") == "passed":
@@ -568,6 +675,13 @@ def evaluate(
                 for x in (r.get("host_run_attestation") or [])
             ),
         }
+        if trusted.get(REFERENCE_RUN_SIGNER):
+            # Only when the branch publishes a reference-runner key.
+            evidence[REFERENCE_RUN_SIGNER] = any(
+                x.get("status") == "verified" and x.get("ok")
+                for r in passing
+                for x in (r.get("reference_run_attestation") or [])
+            )
         summary["key_publication_evidence"] = evidence
         if not all(evidence.values()):
             missing = [k for k, v in evidence.items() if not v]
@@ -635,6 +749,9 @@ def record(
     problems = host_run_declaration_problems(details)
     if problems:
         raise ValueError("malformed host-run declaration: " + "; ".join(problems))
+    problems = reference_run_declaration_problems(details)
+    if problems:
+        raise ValueError("malformed reference-run declaration: " + "; ".join(problems))
     details = fill_host_run_manifests(details, normalize_task_id(task_id))
 
     now = datetime.now(timezone.utc)
