@@ -49,6 +49,10 @@ def run_reference_calculation(
     case_path is relative to the clean task worktree, containing case.json and
     engine-native inputs. No arbitrary host paths or registry overrides accepted.
     Execution success is not physical validation.
+
+    Returns the signed reference-run record (schema_version 3, signer
+    "reference-runner", with the controlled started_at); the same record is
+    archived as record.json and listed by list_reference_artifacts.
     """
     worktree = (
         {"path": ROOT, "sha": exact_state(ROOT)}

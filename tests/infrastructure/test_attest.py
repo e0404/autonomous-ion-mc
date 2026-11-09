@@ -155,12 +155,15 @@ def test_committed_trust_file_is_empty_or_strictly_published():
 
     trusted = attest_verify.load_trusted()
     assert attest.load_trusted() == trusted
-    assert set(trusted) == set(attest.SIGNERS)
+    # Required signers are always listed; an optional signer (reference-runner,
+    # V3-INFRA-004) may be absent until its key-publication commit.
+    assert set(lv.REQUIRED_SIGNERS) <= set(trusted) <= set(attest.SIGNERS)
     data = json.loads(lv.TRUSTED_KEYS_PATH.read_text())
-    if all(not v for v in trusted.values()):
-        assert data == {"validation-manager": [], "host-runner": []}
+    if all(not trusted[s] for s in lv.REQUIRED_SIGNERS):
+        assert {k: v for k, v in data.items() if v} == {}
     else:
-        assert lv.parse_trust_map(data, exactly_one=True) == trusted
+        published = {s: m for s, m in trusted.items() if m}
+        assert lv.parse_trust_map(data, exactly_one=True) == published
 
 
 def test_cli_print_public_key(tmp_path, monkeypatch):
@@ -191,6 +194,7 @@ def test_local_validation_signs_record(tmp_path, monkeypatch, capsys):
     assert loaded.pop("attestation_status") == "unverified"
     loaded.pop("attestation_reason")
     assert loaded.pop("host_run_attestation") == []
+    assert loaded.pop("reference_run_attestation") == []
     assert loaded == on_disk
 
 

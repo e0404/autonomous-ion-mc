@@ -54,10 +54,17 @@ def score_summary(engine, path):
 
 
 def run_smokes(root=ROOT, state=STATE):
+    """Run the three engine smokes; one report per engine.
+
+    Each report is ``{"record": <signed reference-run record, unchanged>,
+    "smoke": {"execution_succeeded", "score_smoke" | "score_error",
+    "succeeded"}}``. The signed record is never modified (its attestation must
+    keep verifying, V3-INFRA-004); the smoke verdict lives beside it.
+    """
     root, state = Path(root), Path(state)
     results = {}
     for engine in ("topas", "mcsquare", "fred"):
-        result = run_reference(
+        record = run_reference(
             root,
             "experiment/v3/references/" + engine,
             engine,
@@ -65,27 +72,28 @@ def run_smokes(root=ROOT, state=STATE):
             state=state,
             timeout=120,
         )
-        if result["succeeded"]:
+        smoke = {"execution_succeeded": record["succeeded"], "succeeded": False}
+        if record["succeeded"]:
             case = json.loads(
                 (root / "experiment/v3/references" / engine / "case.json").read_text()
             )
             output = (
                 state
                 / "references"
-                / result["run_id"]
+                / record["run_id"]
                 / "work"
                 / case["expected_outputs"][0]
             )
             try:
-                result["score_smoke"] = score_summary(engine, output)
+                smoke["score_smoke"] = score_summary(engine, output)
+                smoke["succeeded"] = True
             except (ValueError, OSError, IndexError, struct.error) as exc:
-                result["succeeded"] = False
-                result["score_error"] = str(exc)
-        results[engine] = {
-            k: v for k, v in result.items() if k not in ("stdout", "stderr")
-        }
+                smoke["score_error"] = str(exc)
+        results[engine] = {"record": record, "smoke": smoke}
     return {
-        "all_execution_smokes_passed": all(r["succeeded"] for r in results.values()),
+        "all_execution_smokes_passed": all(
+            r["smoke"]["succeeded"] for r in results.values()
+        ),
         "engines": results,
     }
 

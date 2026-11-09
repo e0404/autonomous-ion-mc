@@ -28,7 +28,12 @@ from pathlib import Path
 
 SCHEMA = "ionmc-attestation-1"
 ALG = "ed25519"
-SIGNERS = ("validation-manager", "host-runner")
+# Every service that may sign. The local-validation gate requires trusted keys
+# for validation-manager and host-runner (local_validation.REQUIRED_SIGNERS);
+# reference-runner (V3-INFRA-004, REF-... reference-run records) is optional
+# in the trust file until its key is published, and records it signed are
+# "unverified" while its list is absent or empty.
+SIGNERS = ("validation-manager", "host-runner", "reference-runner")
 
 # ---------------------------------------------------------------- Ed25519 --
 
