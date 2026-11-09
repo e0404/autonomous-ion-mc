@@ -198,7 +198,7 @@ placeholder scorer output was deleted unread.
 | `tests/ionmc/test_r2_bundles.py` | `54af24fa0baf13d43f4ed25c96989344e09c01354efdda0dc34ba83a5ab60fdb` |
 | `reference_requests/operator-directives/2026-11-07-topas-validation-target.md` | `ca079e9f0af990cdff9d8efde60d38ac55e2d0fc0fb9ef22355a81f4a2ab0b26` |
 | `reference_requests/interventions/IR-20261102-010435-B59B2D/response.json` | `dc6a610cb67dee50fa0bb96327026eea0b81bb9506e7b898c2e9e44322f69bd0` |
-| `validation/plans/v3-008/r2-topas-target.md` | `2e41ca0ee48fa6d0b077c3e4280aa9880ea691ae22717f13a9778b804cadeb65` |
+| `validation/plans/v3-008/r2-topas-target.md` | `d4d177e3535fa9e102de8adcfe20cdbd528abfc445c7e7dab75210eea2336f88` |
 
 
 **Dated note (2026-11-07, orchestrator) — hashes regenerated at the freeze commit's parent; entries that changed since f694b747:** `validation/plans/v3-008/p10-single-scattering-availability.md` bea86277… → a7f539a0…; `validation/plans/v3-008/p11-exact-omega-mapping.md` 6116648a… → f78e95f5…; `reference_requests/interventions/IR-20261102-010435-B59B2D/request.json` 068cafd7… → e81a7efa…. All other entries unchanged (recomputed).
@@ -254,6 +254,8 @@ placeholder scorer output was deleted unread.
 **Dated note (2026-11-09, Codex REVIEW-16c63514 of the sample seal commit 84b8b2cd, decision D1 mapping-domain rule; orchestrator) — hashes regenerated at the working tree; entries that changed since the 2026-11-08 post-freeze notes:** `src/ionmc/physics/exact_omega.py` e43eecc3… → 1c8f3945…; `src/ionmc/config.py` 34be1169… → 513c32c5…; `validation/plans/v3-008/r2-topas-target.md` 346ad951… → 2e41ca0e…; `src/ionmc/physics/ion_mcs.py` 36f4f3a7… → 42194ccf…; `src/ionmc/simulation.py` 2958dbd3… → 6efadd7f…; `src/ionmc/transport/tally.py` b941a46b… → be202f73…; `tests/ionmc/test_ion_mcs_table.py` 62d495bc… → 7a86e44e…; `tests/ionmc/test_v3_008_rows_ci.py` efce4972… → ffea9f20…. All other entries unchanged (recomputed).
 
 **Dated note (2026-11-09, Codex REVIEW-f3361441 round, MCS-off gating; orchestrator) — hashes regenerated at the working tree; entries that changed since the note above:** `src/ionmc/physics/exact_omega.py` 1c8f3945… → 6471c388…; `src/ionmc/config.py` 513c32c5… → a24aa6b4…; `src/ionmc/simulation.py` 6efadd7f… → 4d490ba4…; `tests/ionmc/test_ion_mcs_table.py` 7a86e44e… → b3fb9992…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-09, seal-note commit; orchestrator) — hashes regenerated at the working tree; entries that changed since the note above:** `validation/plans/v3-008/r2-topas-target.md` 2e41ca0e… → d4d177e3… (seal cross-reference note; an intermediate value 17673937… was superseded within the same working tree by the repair of a shell-mangled sentence). All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.

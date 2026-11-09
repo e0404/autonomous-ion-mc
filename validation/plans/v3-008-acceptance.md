@@ -256,6 +256,28 @@ configuration** (OpenTOPAS 4.3 / Geant4 11.4.2, the seven-module list; EM-only a
 lineage stated; experimental validation is deferred; the lateral agreement is within the pre-registered coarse band;
 the charge dependence of lateral spreading has shared-lineage single-scattering evidence (V5-SS) only.
 
+**Dated seal note (2026-11-09, orchestrator; revision 2, plan section "Order" step 0 — the sample seal).** The
+**sample seal commit** is `0c68b78ac191c850bf9101dbacf8eca12f4e9b1b` (branch
+`task/v3-008-helium-carbon-and-oxygen-electromagnetic-transport-effective`, pushed 2026-11-09 ≈09:21 UTC, PR #84). It
+carries the sealed record `validation/results/transport/v8r2-samples/sample-seal.json` (committed in its ancestor
+`84b8b2cd`; schema `ionmc-v8r2-sample-seal-1`; 86 chunks of the twelve 1e6-history ionmc TD/TL samples produced by 76
+signed host-runner runs at the frozen implementation SHA `1831f2149506b0bd403259f2d00981b835837e4d`; every step `pass`,
+every diagnostic counter 0; one superseded and one failed run preserved) and the two review fixes that followed the record
+(`f2141b03`: mapping-domain rule D1; `0c68b78a`: no mapping work with multiple scattering off; both leave full-coverage
+results bit-identical, P9 freeze record amendment of 2026-11-09). Independent review of the seal commit: Codex
+`REVIEW-9691e1b098e940d7bdfd1063c09325ee`, `head_sha` 0c68b78a…, status `passed`, verdict `pass`, `finished_at`
+2026-11-09T09:15:57.707596+00:00 (preceded by REVIEW-16c63514 and REVIEW-f3361441, `changes_required`, both resolved).
+Validation record `VAL-20261109-092143-547E49` (suite `v3-008-r2-sample-seal`, passed, `details.host_runs` = the 76 runs).
+CI run 42592861874 at 0c68b78a: success (jobs docs, pre-commit and tests all success; completed 2026-11-09T09:30:30Z). Evaluator binding (`r2_evaluate.py`, plan record):
+
+```json
+{"seal_sha": "0c68b78ac191c850bf9101dbacf8eca12f4e9b1b", "seal_review_id": "REVIEW-9691e1b098e940d7bdfd1063c09325ee"}
+```
+
+No TOPAS run of the revision-2 set (smoke or evidence) exists at the time of this note; every such run must have a
+`code_sha` descending from the seal commit and a controlled `reference_started` later than the review's `finished_at`
+above (R2-TOPAS-4). The TD/TL statistics of `r2_evaluate.py` are implemented after this seal (plan section "Order").
+
 ## C. Seeds (fresh; registered before any run; shared seed-base ledger)
 
 **Shared seed-base ledger.**

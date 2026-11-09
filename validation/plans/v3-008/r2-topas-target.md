@@ -818,3 +818,5 @@ step passed but whose signed record reads `succeeded: false` because the orchest
 the run was in flight (`dirty_after`); the clean-tree re-run (RUN-20261109T080127Z-1011e276) reproduced the identical
 npz sha256. The commit holding the record is the **sample seal commit**; its SHA and review id are recorded in
 `v3-008-acceptance.md` by the dated seal note once its review has passed, before any TOPAS run.
+
+**Dated note (2026-11-09, seal recorded; orchestrator).** Sample seal commit `0c68b78ac191c850bf9101dbacf8eca12f4e9b1b` (the record commit 84b8b2cd plus two review fixes: D1 mapping-domain rule, MCS-off gating; full-coverage results bit-identical), Codex REVIEW-9691e1b098e940d7bdfd1063c09325ee passed (finished 2026-11-09T09:15:57Z), VAL-20261109-092143-547E49, CI run 42592861874 success; dated seal note in `v3-008-acceptance.md` (Revision 2 section). No TOPAS run of this set has been started.
