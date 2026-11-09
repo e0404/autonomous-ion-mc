@@ -42,9 +42,12 @@ form ``REF-<configuration_id[:20]>-<8 hex>``), ``configuration_id`` (canonical h
 request's), ``stdout_sha256`` / ``stderr_sha256`` (the listing's and the hashed files) must all
 agree, ``started_at <= finished_at``, ``record.json`` itself must be in the artifact listing with
 the same sha256 (replay protection, as ``host_run_records.verify_run_record``).
-``output_files_sha256`` is not re-derived here (each output file read is verified against the
-listing instead). Until the runner signs its records and records
-``started_at`` (infra task V3-INFRA-004) every grade fails closed at this step, by design.
+The signed ``output_files_sha256`` (and ``output_count``) must be reproduced from the listing's
+``work/`` entries (``{path: {"sha256", "bytes"}}``, canonical JSON digest, as the runner computes
+it), and every output file read must hash to its listed sha256: the outputs are thereby bound to the
+signed record. The trust map is the committed trust file at HEAD (:func:`committed_trust`).
+Until the runner signs its records and records ``started_at`` (infra task V3-INFRA-004) every grade
+fails closed at this step, by design.
 """
 
 from __future__ import annotations
@@ -118,6 +121,8 @@ RESULT_FIELDS = (
     "request_sha256",
     "stdout_sha256",
     "stderr_sha256",
+    "output_files_sha256",
+    "output_count",
     "run_id",
     "configuration_id",
     "code_sha",
@@ -314,7 +319,10 @@ class TopasRun:
         }
 
 
-def _listing(path: Path, run_id: str, code_sha: str) -> dict[str, str]:
+def _listing(
+    path: Path, run_id: str, code_sha: str, sizes: dict[str, Any] | None = None
+) -> dict[str, str]:
+    """path -> sha256 of the artifact listing; ``sizes`` (if given) receives path -> bytes."""
     raw = read_json(path, "artifact listing")
     pages = raw if isinstance(raw, list) else [raw]
     files: dict[str, str] = {}
@@ -331,6 +339,8 @@ def _listing(path: Path, run_id: str, code_sha: str) -> dict[str, str]:
             if p in files and files[p] != d:
                 raise RecordError(f"artifact listing: conflicting entries for {p}")
             files[p] = d
+            if sizes is not None:
+                sizes[p] = e.get("bytes")
     return files
 
 
@@ -402,7 +412,25 @@ def load_topas_run(
         raise RecordError(f"{run_id}: started_at is later than finished_at")
     started_iso = str(result["started_at"])
     code_sha = str(result["code_sha"])
-    listing = _listing(rdir / "artifacts.json", run_id, code_sha)
+    sizes: dict[str, Any] = {}
+    listing = _listing(rdir / "artifacts.json", run_id, code_sha, sizes)
+    # Bind the outputs to the signed record: the runner signs output_files_sha256 =
+    # common.digest(inventory(run_dir / "work", allow_internal_links=True)), i.e. the canonical
+    # JSON digest of {path relative to work/: {"sha256", "bytes"}} (V3-INFRA-004 reference.py).
+    # The unsigned listing's work/ entries must reproduce it exactly (and output_count).
+    work = {}
+    for p, d in listing.items():
+        if p.startswith("work/"):
+            b = sizes.get(p)
+            if not isinstance(b, int) or isinstance(b, bool) or b < 0:
+                raise RecordError(f"{run_id}: artifact listing lacks the byte size of {p}")
+            work[p[len("work/") :]] = {"sha256": d, "bytes": b}
+    if canonical_digest(work) != result.get("output_files_sha256"):
+        raise RecordError(
+            f"{run_id}: the listed work/ outputs do not reproduce the signed output_files_sha256"
+        )
+    if result.get("output_count") != len(work):
+        raise RecordError(f"{run_id}: signed output_count differs from the listed outputs")
     for name in ("request.json", "stdout.txt", "stderr.txt", "record.json"):
         if name not in listing:
             raise RecordError(f"{run_id}: artifact listing lacks {name}")
@@ -501,10 +529,34 @@ def attest_module() -> Any:
 
 
 def load_trust(path: Path | str) -> dict[str, Any]:
+    """Trust map of a trust FILE (tests only; production uses :func:`committed_trust`)."""
     try:
         return dict(attest_module().load_trusted(path))
     except (OSError, ValueError, KeyError, TypeError) as exc:
         raise RecordError(f"trust file {path} unreadable: {exc}") from exc
+
+
+def committed_trust(repo: Path | str) -> tuple[dict[str, Any], dict[str, Any]]:
+    """The trust map of ``infrastructure/keys/trusted_attestation_keys.json`` as committed at the
+    repository's HEAD (``git show HEAD:...``; Codex REVIEW-6b4731a7). Fails closed when the
+    working copy differs from the committed file. Returns (trust map, provenance)."""
+    head = subprocess.run(  # noqa: S603 - fixed argv
+        ["git", "-C", str(repo), "rev-parse", "HEAD"], capture_output=True, text=True, check=False
+    )
+    if head.returncode != 0:
+        raise RecordError(f"cannot resolve HEAD of {repo}: {head.stderr.strip()}")
+    sha = head.stdout.strip()
+    blob = git_show(repo, sha, DEFAULT_TRUST)
+    work = Path(repo) / DEFAULT_TRUST
+    if not work.is_file() or work.read_bytes() != blob:
+        raise RecordError(f"the working copy of {DEFAULT_TRUST} differs from HEAD {sha}")
+    try:
+        data = json.loads(blob.decode("utf-8"))
+        trust = {s: {e["key_id"]: e["public_key"] for e in entries} for s, entries in data.items()}
+    except (ValueError, KeyError, TypeError, AttributeError) as exc:
+        raise RecordError(f"{DEFAULT_TRUST} at {sha} is malformed: {exc}") from exc
+    info = {"path": DEFAULT_TRUST, "head_sha": sha, "sha256": hashlib.sha256(blob).hexdigest()}
+    return trust, info
 
 
 # Module -> printout marker (Geant4 11.4.2 / OpenTOPAS 4.3 stdout). Each marker was checked, format
@@ -512,13 +564,25 @@ def load_trust(path: Path | str) -> dict[str, Any]:
 # REF-171fec5d..., EM opt4: e.g. REF-188fa1d8..., EM SS: REF-285075c5... as the opt4 negative).
 _MODULES_LINE = re.compile(r"^[ \t]*sv:Ph/Default/Modules[ \t]*=[ \t]*(\d+)[ \t]+(.*)$", re.M)
 _HAD_HEAD = re.compile(r"^\s*Hadronic Processes for (\S+)\s*$")
-UNVERIFIABLE_MODULES = ("g4decay",)  # G4Decay prints no process/model line in these logs
+_REGISTERED = re.compile(r"^Registered Physics Processes:\s*$", re.M)
 HADRONIC_MARKERS = {  # forbidden in an EM-only (no hadronic module) run
     "hInelastic": re.compile(r"\bhInelastic\b"),
     "QMDModel": re.compile(r"QMDModel"),
     "Radioactive Decay Physics Parameters": re.compile(r"Radioactive Decay Physics Parameters"),
     "HADRONIC PROCESSES SUMMARY": re.compile(r"HADRONIC PROCESSES SUMMARY"),
 }
+
+
+def registered_processes(stdout: str) -> list[str] | None:
+    """Process names of the TOPAS ``Ph/ListProcesses`` printout, or None if it is absent. Format
+    (confirmed on materialized EM smoke logs, e.g. REF-188fa1d8...): a line ``Registered Physics
+    Processes:`` followed by comma-separated process names over several lines, ended by a blank
+    line. The printout lists names only, without the particle they are attached to."""
+    m = _REGISTERED.search(stdout)
+    if m is None:
+        return None
+    block = stdout[m.end() :].lstrip("\n").split("\n\n", 1)[0]
+    return [t for t in re.split(r"[,\s]+", block) if t]
 
 
 def hadronic_block(stdout: str, particle: str) -> str:
@@ -565,12 +629,19 @@ def _marker(module: str, stdout: str) -> bool:
         return any(re.search(r"Model:\s*NeutronHPElastic\b", ln) for ln in models)
     if module == "g4stopping":
         return "Process: muMinusCaptureAtRest" in hadronic_block(stdout, "mu-")
+    if module == "g4decay":
+        # Requested rule: a process "Decay" listed for pi+/pi-/mu+/mu-/kaon+/neutron. The confirmed
+        # ListProcesses format carries no particle association, so the check is: the name "Decay"
+        # (G4Decay's process name; exact token, not RadioactiveDecay) is registered. Presence of
+        # the token in a g4decay run is UNCONFIRMED until the first FULL ListProcesses smoke.
+        names = registered_processes(stdout)
+        return names is not None and "Decay" in names
     raise KeyError(module)
 
 
 VERIFIABLE_MODULES = (
     "g4em-standard_opt4", "g4h-phy_QGSP_BIC_HP", "g4ion-QMD", "g4radioactivedecay",
-    "g4h-elastic_HP", "g4stopping",
+    "g4h-elastic_HP", "g4stopping", "g4decay",
 )  # fmt: skip
 
 
@@ -588,9 +659,11 @@ def bundle_modules(native: str) -> list[str]:
 
 
 def module_check(native: str, stdout: str) -> tuple[list[str], list[str]]:
-    """(problems, unverifiable modules) of the executed module list: every bundled module with a
-    verifiable marker must show it; a run without any hadronic module must show none of the
-    hadronic markers; bundled modules without a reliable marker are returned as unverifiable."""
+    """(problems, unverifiable modules) of the executed module list. Interim rule (Codex
+    REVIEW-6b4731a7, orchestrator 2026-11-09): every bundled module must show its runtime marker
+    (see :func:`_marker`); a bundled module without a marker is a run-validity FAIL as well (it is
+    also returned as unverifiable); a run whose bundle lists only ``g4em-*`` modules must show no
+    hadronic marker and no registered ``Decay`` process."""
     try:
         modules = bundle_modules(native)
     except RecordError as exc:
@@ -602,10 +675,13 @@ def module_check(native: str, stdout: str) -> tuple[list[str], list[str]]:
                 problems.append(f"module {mod}: printout marker missing")
         else:
             unverifiable.append(mod)
+            problems.append(f"module {mod}: no runtime evidence marker is defined (fail closed)")
     if all(m.startswith("g4em-") for m in modules):
         for name, rx in HADRONIC_MARKERS.items():
             if rx.search(stdout):
                 problems.append(f"EM-only run shows the hadronic marker {name!r}")
+        if "Decay" in (registered_processes(stdout) or []):
+            problems.append("EM-only run registers the Decay process")
     return problems, unverifiable
 
 

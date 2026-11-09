@@ -38,6 +38,8 @@ s:Ph/Default/Type = "Geant4_Modular"
 sv:Ph/Default/Modules = 1 "g4em-standard_opt4"
 d:Ph/Default/CutForAllParticles = 0.05 mm
 d:Ph/Default/CutForElectron = 1 km
+# Prints the per-particle process list so that the executed module set, g4decay included, is verifiable from the log (Codex REVIEW-6b4731a7).
+b:Ph/ListProcesses = "True"
 # EM table upper edge above the highest total kinetic energy (default 600 MeV is below He 150-250 MeV/u totals).
 d:Ph/Default/EMRangeMax = 10 GeV
 

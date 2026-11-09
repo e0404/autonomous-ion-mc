@@ -37,6 +37,8 @@ i:So/Beam/NumberOfHistoriesInRun = 5000
 s:Ph/Default/Type = "Geant4_Modular"
 sv:Ph/Default/Modules = 7 "g4em-standard_opt4" "g4h-phy_QGSP_BIC_HP" "g4decay" "g4h-elastic_HP" "g4stopping" "g4ion-QMD" "g4radioactivedecay"
 d:Ph/Default/CutForAllParticles = 0.05 mm
+# Prints the per-particle process list so that the executed module set, g4decay included, is verifiable from the log (Codex REVIEW-6b4731a7).
+b:Ph/ListProcesses = "True"
 # EM table upper edge above the highest total kinetic energy (default 600 MeV is below He 150-250 MeV/u totals).
 d:Ph/Default/EMRangeMax = 10 GeV
 

@@ -194,11 +194,11 @@ placeholder scorer output was deleted unread.
 
 | File | sha256 |
 |---|---|
-| `validation/scripts/ion_em/gen_r2_bundles.py` | `f970715abba1d5413ba58864e25ada7168212b2fedb489e1d2e7bb9cc3d9a2b3` |
-| `tests/ionmc/test_r2_bundles.py` | `f767104f1abe55879cd2c745b08f2e902df7695c8e2a1e8a2c06b4b819c98dca` |
+| `validation/scripts/ion_em/gen_r2_bundles.py` | `8a92d40b7259e8c96c4edf522a5c9e32f66f6fcc16eda89cddc31ae116b4703f` |
+| `tests/ionmc/test_r2_bundles.py` | `fd87a7dc11e61065d963b44308bc6818ccc67b5e3f0ca01b83af0ff2814e6100` |
 | `reference_requests/operator-directives/2026-11-07-topas-validation-target.md` | `ca079e9f0af990cdff9d8efde60d38ac55e2d0fc0fb9ef22355a81f4a2ab0b26` |
 | `reference_requests/interventions/IR-20261102-010435-B59B2D/response.json` | `dc6a610cb67dee50fa0bb96327026eea0b81bb9506e7b898c2e9e44322f69bd0` |
-| `validation/plans/v3-008/r2-topas-target.md` | `1999e5cfca36379e2a5aaa2d64166a6c49249fac9963631853b5d7a0d433c871` |
+| `validation/plans/v3-008/r2-topas-target.md` | `deade6b6268f52154d066bde7537f380c276a649061e7ae2f13657a3dcc91238` |
 
 
 **Dated note (2026-11-07, orchestrator) — hashes regenerated at the freeze commit's parent; entries that changed since f694b747:** `validation/plans/v3-008/p10-single-scattering-availability.md` bea86277… → a7f539a0…; `validation/plans/v3-008/p11-exact-omega-mapping.md` 6116648a… → f78e95f5…; `reference_requests/interventions/IR-20261102-010435-B59B2D/request.json` 068cafd7… → e81a7efa…. All other entries unchanged (recomputed).
@@ -230,11 +230,11 @@ placeholder scorer output was deleted unread.
 | `src/ionmc/transport/tables.py` | `45542d46fb208ba1ca9ccdcb9e8baea41e47f86a7429b46f8566ad12b1b2619d` |
 | `src/ionmc/transport/tally.py` | `be202f7310e3991bead49fd40e24cef1f5493992044c72aff6c5f8e8826b547c` |
 | `src/ionmc/transport/warp_driver.py` | `cb32245e48d6bffd03092d09fb7421d8b11a8191158a311fd0b9a92e568aeb86` |
-| `validation/scripts/ion_em/r2_evaluate.py` | `c74faab2adb4464b5907aeaaf4f3740faac002bf16e770f06d38b5616cb43fe0` |
+| `validation/scripts/ion_em/r2_evaluate.py` | `441a6a82496d5f9cf2156c0a872c84bb646ebfbaa4f886efc429aed7114e4963` |
 | `validation/scripts/transport/steps_v8.py` | `e8b73006921b479797e762c1319adf7e1e4edb95594ffac4109827b4ee185a7d` |
 | `tests/ionmc/test_ion_mcs_table.py` | `b3fb9992f866238b11243e032f394583775e292cec49601798ef44b54efcb749` |
 | `tests/ionmc/test_v3_008_rows_ci.py` | `ffea9f20976ec2d721067ccf52d5cb9797fad51a5bda7dd224948829c1cade0e` |
-| `tests/ionmc/test_r2_evaluate.py` | `478dd5403fe42a7624a063026a7ee6d67fd2a4b03efe7500dbb291da692cac3a` |
+| `tests/ionmc/test_r2_evaluate.py` | `2c9d52b7c8b73d0f8c3c87180ca50583c814c1dd4c1df293ad44ea125d39d689` |
 | `tests/ionmc/test_v3_008_steps_v8.py` | `ab4922ea8842751e22c9d1882e9e1dec0ae88a25b55174c99586c4802868b731` |
 
 (c) R2.5 counts, superseded by this note (the R2.5 text is kept as written): repository paths 475 + 15 = **490**; total full sha256 values 519 + 15 = **534**, plus the bundle-set digest (unchanged, `a8a1c27d…`). The count in R2.6 item (3) (475) is superseded accordingly by 490 for the acceptance tests of the seal.
@@ -263,25 +263,27 @@ placeholder scorer output was deleted unread.
 
 | File | sha256 |
 |---|---|
-| `validation/scripts/ion_em/r2_io.py` | `a4aae6c94016d49f5e7f74631ae727a77a4aa5bba6acdca51932451f19935d90` |
+| `validation/scripts/ion_em/r2_io.py` | `4c2cabebd3928e36e1c0fa0d78b17268407a3e8993bb3a913f18de8f9e4dcde2` |
 | `validation/scripts/ion_em/r2_statistics.py` | `fbb19370ae0bb20ed1cc5289864c3331ba63bdcb88315b33f06b6d710c79ed6b` |
 | `validation/results/transport/v8r2-topas/smokes.json` | `bae61e8583a1c122b4f2585aa084347d9e4a8e6ceb043bcb24fe90ec8755eb62` |
 | `validation/results/transport/v8r2-topas/records/review.json` | `87988397d4c14304d75f987117e4c22199d4452a0b48030e131a2bd52edb1199` |
 | `validation/results/transport/v8r2-topas/records/index.json` | `2e092ee30964b55d1519b7bfd45467a7f5155c337cb54aa3b08cccb930d3cdb3` |
 
 
-**Dated note (2026-11-09, R2-SIZE-1 bundle regeneration; orchestrator) — supersedes the bundle-set digest `a8a1c27d…` of the rows above.** The bundle set is now 209 bundles / 418 files with bundle-set digest `e51d3b3d1bf00e51daadf889f6541bf8bd6ba8aea6453eee132110e07ff0c4d6` (`gen_r2_bundles.py --check`; per-file sha256 of the 168 changed or new files in `r2-topas-target.md` appendix A, 2026-11-09 listing; the 250 unchanged files keep their appendix-A hashes). Changed: 48 LAT-FULL evidence bundles (`CutForElectron = 1 km`, texts), 32 carbon/oxygen IDD-FULL bundles (`NumberOfHistoriesInRun` 3333 / 2529). New execution-only smokes (sha256 of `case.json` | `input.txt`):
+**Dated note (2026-11-09, R2-SIZE-1 bundle regeneration; orchestrator) — supersedes the bundle-set digest `a8a1c27d…` of the rows above.** The bundle set is now 209 bundles / 418 files with bundle-set digest `e51d3b3d1bf00e51daadf889f6541bf8bd6ba8aea6453eee132110e07ff0c4d6` (`gen_r2_bundles.py --check`; per-file sha256 of the 168 changed or new files in `r2-topas-target.md` appendix A, 2026-11-09 listing; the 250 unchanged files keep their appendix-A hashes). Changed: 48 LAT-FULL evidence bundles (`CutForElectron = 1 km`, texts), 32 carbon/oxygen IDD-FULL bundles (`NumberOfHistoriesInRun` 3333 / 2529). **(2026-11-09, later; Codex REVIEW-6b4731a7)** every evidence bundle and the four new smokes additionally request `b:Ph/ListProcesses = "True"` (runtime evidence of the executed module set, g4decay included); bundle-set digest now `6d1ae3a06211831cfb7e8924c65d6d8fe31fae7781443ff84c077204045ea790` (appendix A 2026-11-09 "ListProcesses" listing; the thirteen smokes already run are byte-identical). New execution-only smokes (sha256 of `case.json` | `input.txt`):
 
 | Bundle | Seed | case.json | input.txt |
 |---|---|---|---|
-| `he-water-250mevu-r2-lat-full-ecut1km-timing-smoke` | 20600424 | `6567ac23198f5b65a0405a6209200409daec0504c4907d40c203b0408369ddc6` | `00428331f3a074b949db04fb054ddafd6c758e41aa4654b263a6148c39676483` |
-| `carbon-water-430mevu-r2-lat-full-ecut1km-timing-smoke` | 20600425 | `94f255cd117727a4370bec056c4cef18944d670abcdca31ba8adc6794e0cdc16` | `92c029746c421a6afc02bc159108818ae4a3b3679e59c043d05d2984ca393517` |
-| `oxygen-water-430mevu-r2-lat-full-ecut1km-timing-smoke` | 20600426 | `f81f382d3ee31d505d08ea30b63506a3055df72e231a5be88c7d2bcf7928ddac` | `95ca1a53958a836ac8ff39b96dbc78645aec5d3c2f7e982a9f80f9a68e273781` |
-| `carbon-water-290mevu-r2-lat-em-steps-verbose-smoke` | 20600427 | `812c1335cd298ae102af825b80d781409b83d0dc612fd48c74b83637ec74aead` | `4e9e5179cf0b3404a7174ca44ee9efd97460f0c927537a49ad89150efbf7feec` |
+| `he-water-250mevu-r2-lat-full-ecut1km-timing-smoke` | 20600424 | `6567ac23198f5b65a0405a6209200409daec0504c4907d40c203b0408369ddc6` | `88ebffbe8c7bbef064fc324adc4a71347f411582ce6111e55c836da578370bb5` |
+| `carbon-water-430mevu-r2-lat-full-ecut1km-timing-smoke` | 20600425 | `94f255cd117727a4370bec056c4cef18944d670abcdca31ba8adc6794e0cdc16` | `f66cd544dcca03d43a90bbb1984a8e3e7267d611e613888e853caff50b2c2ddd` |
+| `oxygen-water-430mevu-r2-lat-full-ecut1km-timing-smoke` | 20600426 | `f81f382d3ee31d505d08ea30b63506a3055df72e231a5be88c7d2bcf7928ddac` | `21bbac3a4881ad9516eafd8cff5748dce5dbfb7f1ff93104e42d06e8fd8e6175` |
+| `carbon-water-290mevu-r2-lat-em-steps-verbose-smoke` | 20600427 | `812c1335cd298ae102af825b80d781409b83d0dc612fd48c74b83637ec74aead` | `37f21fee0a6e64b3a90e9c67e0865a72bab4f6764234cce41db210872fa76ddb` |
 
 **Dated note (2026-11-09, R2-SIZE-1 bundle-regeneration commit; orchestrator) — hashes regenerated at the working tree; entries that changed since the note above:** `validation/scripts/ion_em/gen_r2_bundles.py` fe122218… → f970715a…; `tests/ionmc/test_r2_bundles.py` 54af24fa… → f767104f…; `validation/plans/v3-008/r2-topas-target.md` eb7c2622… → 1999e5cf…. All other entries unchanged (recomputed).
 
 **Dated note (2026-11-09, evaluator review-fix commit (Codex REVIEW-01b6acd6: signed start record, executed module-list check); orchestrator) — hashes regenerated at the working tree; entries that changed since the note above:** `validation/scripts/ion_em/r2_evaluate.py` 6f92b41a… → c74faab2…; `tests/ionmc/test_r2_evaluate.py` dd9ab813… → 478dd540…; `validation/scripts/ion_em/r2_io.py` fa129516… → a4aae6c9…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-09, evaluator round-3 fixes (Codex REVIEW-6b4731a7) and ListProcesses bundles; orchestrator) — hashes regenerated at the working tree; entries that changed since the note above:** `validation/scripts/ion_em/gen_r2_bundles.py` f970715a… → 8a92d40b…; `tests/ionmc/test_r2_bundles.py` f767104f… → fd87a7dc…; `validation/plans/v3-008/r2-topas-target.md` 1999e5cf… → deade6b6…; `validation/scripts/ion_em/r2_evaluate.py` c74faab2… → 441a6a82…; `tests/ionmc/test_r2_evaluate.py` 478dd540… → 2c9d52b7…; `validation/scripts/ion_em/r2_io.py` a4aae6c9… → 4c2cabeb…; `he-water-250mevu-r2-lat-full-ecut1km-timing-smoke` 6567ac23/00428331… → 6567ac23/88ebffbe…; `carbon-water-430mevu-r2-lat-full-ecut1km-timing-smoke` 94f255cd/92c02974… → 94f255cd/f66cd544…; `oxygen-water-430mevu-r2-lat-full-ecut1km-timing-smoke` f81f382d/95ca1a53… → f81f382d/21bbac3a…; `carbon-water-290mevu-r2-lat-em-steps-verbose-smoke` 812c1335/4e9e5179… → 812c1335/37f21fee…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.

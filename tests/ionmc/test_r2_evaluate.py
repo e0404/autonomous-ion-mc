@@ -332,8 +332,13 @@ OUTS = {
 # Synthetic printout in the Geant4 11.4 / OpenTOPAS 4.3 layout (format only, checked against the
 # materialized r2 smoke logs; no number of those logs is used).
 MSC = "msc:  for {p}  SubType= 10\n      ===== EM models for the G4Region  DefaultRegionForTheWorld ======\n            {m} : Emin=    0 eV  Emax=   10 GeV\n          StepLim=Minimal Rfact=0.2 Gfact=2.5\n\n"  # noqa: E501
+REGISTERED = (  # TOPAS Ph/ListProcesses layout, as in the materialized EM smoke logs (names only)
+    "Registered Physics Processes:\n     Transportation,                msc,              eIoni\n"
+    "{extra}            ionIoni,              hIoni\n\n"
+)
 STDOUT_EM = (
-    "Use ICRU90 data                                    1\n"
+    REGISTERED.format(extra="")
+    + "Use ICRU90 data                                    1\n"
     + MSC.format(p="e-", m="GoudsmitSaunderson")
     + MSC.format(p="GenericIon", m="UrbanMsc") + MSC.format(p="alpha", m="UrbanMsc")
     + "G4WT0 > Begin processing for Run: 0, History: 0\n"
@@ -341,7 +346,8 @@ STDOUT_EM = (
 )  # fmt: skip
 SEP = "-----------------------------------------------------------------------\n"
 STDOUT_FULL = (
-    " hInelastic QGSP_BIC_HP  Thresholds: \n"
+    REGISTERED.format(extra="              Decay,     Radioactivation,\n")
+    + " hInelastic QGSP_BIC_HP  Thresholds: \n"
     "======          Radioactive Decay Physics Parameters           =======\n"
     "Threshold for very long decay time at rest        1 y  \n\n"
     + STDOUT_EM
@@ -460,6 +466,8 @@ def _world(
                 (d / "case.json").write_text(json.dumps(case_doc))
                 extra = tamper.get("input_extra", "") if (case, cfg, part) == first else ""
                 mods = MODULES["full" if cfg.endswith("full") else "em"]
+                if (case, cfg, part) == first and "modules" in tamper:
+                    mods = tamper["modules"]
                 (d / "input.txt").write_text(
                     f"# case {case} part {part}\ni:Ts/Seed = {seed}\n"
                     f"i:So/Beam/NumberOfHistoriesInRun = 1000\n{mods}{extra}"
@@ -501,6 +509,11 @@ def _world(
     seal_file.write_text(json.dumps(seal_rec))
     seal_sha = _commit(repo, "seal")
     (repo / "later.txt").write_text("after the seal")
+    kp = _attest().keypair_from_seed(KEY_SEED)
+    trust = repo / IO.DEFAULT_TRUST  # committed: the evaluator reads it from HEAD
+    trust.parent.mkdir(parents=True)
+    trust.write_text(json.dumps({"reference-runner": [
+        {"key_id": kp.key_id, "public_key": kp.public_key.hex()}]}))  # fmt: skip
     code_sha = _commit(repo, "after")
     records, outputs = tmp / "records", tmp / "outputs"  # TOPAS records and outputs
     index, ids = [], {}
@@ -562,6 +575,10 @@ def _world(
                 rdir = records / "runs" / run_id
                 rdir.mkdir(parents=True)
                 sha = {e["path"]: e["sha256"] for e in listing}
+                work_inv = {  # the runner's common.digest(inventory(run_dir / "work"))
+                    e["path"][len("work/") :]: {"sha256": e["sha256"], "bytes": e["bytes"]}
+                    for e in listing if e["path"].startswith("work/")
+                }  # fmt: skip
                 result = {  # V3-INFRA-004 signed run record, schema_version 3
                     "schema_version": 3, "run_id": run_id, "configuration_id": cfg_id,
                     "code_sha": code_sha, "task_id": None, "engine": "topas",
@@ -571,7 +588,8 @@ def _world(
                     "exit_code": 0, "timed_out": False, "error": None, "missing_outputs": [],
                     "succeeded": True, "scientifically_validated": False,
                     "metadata_status": "declared; inspect native logs/outputs",
-                    "output_count": len(OUTS[cfg]), "output_files_sha256": "0" * 64,
+                    "output_count": len(work_inv),
+                    "output_files_sha256": IO.canonical_digest(work_inv),
                     "stdout": stdout[-200:], "stderr": "",
                     "stdout_sha256": sha["stdout.txt"], "stderr_sha256": sha["stderr.txt"],
                 }  # fmt: skip
@@ -593,10 +611,6 @@ def _world(
     (records / "review.json").write_text(json.dumps(review))
     plan = tmp / "plan.json"
     plan.write_text(json.dumps({"seal_sha": seal_sha, "seal_review_id": "REVIEW-x"}))
-    kp = _attest().keypair_from_seed(KEY_SEED)
-    trust = tmp / "trust.json"
-    trust.write_text(json.dumps({"reference-runner": [
-        {"key_id": kp.key_id, "public_key": kp.public_key.hex()}]}))  # fmt: skip
     return {"repo": repo, "records": records, "outputs": outputs, "samples": samples,
             "plan": plan, "seal": seal_file, "trust": trust, "ids": ids}  # fmt: skip
 
@@ -606,7 +620,6 @@ def _cli(w: dict[str, Any], row: str, out: Path, case: int = 1) -> tuple[int, di
         "grade", "--plan", str(w["plan"]), "--records", str(w["records"]), "--seal",
         str(w["seal"]), "--case", str(case), "--row", row, "--outputs", str(w["outputs"]),
         "--samples-root", str(w["samples"]), "--repo", str(w["repo"]), "--out", str(out),
-        "--trust", str(w["trust"]),
     ])  # fmt: skip
     return code, json.loads(out.read_text())
 
@@ -852,9 +865,42 @@ def test_result_attestation_fails_closed(
 
 def test_untrusted_key_fails_closed(tmp_path: Path, small_case: None) -> None:
     w = _world(tmp_path)
-    w["trust"].write_text(json.dumps({"reference-runner": []}))
+    good = w["trust"].read_text()
+    w["trust"].write_text(json.dumps({"reference-runner": []}))  # uncommitted change
+    code, rep = _cli(w, "TD-EM", tmp_path / "s.json")
+    assert code == 2 and "differs from HEAD" in rep["error"]
+    _commit(w["repo"], "drop the key")  # committed trust without the key
     code, rep = _cli(w, "TD-EM", tmp_path / "s.json")
     assert code == 2 and "status unverified" in rep["error"]
+    w["trust"].write_text(good)
+    _commit(w["repo"], "restore the key")
+    code, rep = _cli(w, "TD-EM", tmp_path / "s.json")
+    assert code == 0 and rep["trust_file"]["head_sha"] == _git(w["repo"], "rev-parse", "HEAD")
+
+
+def test_cli_has_no_trust_option(tmp_path: Path, small_case: None) -> None:
+    w = _world(tmp_path)
+    with pytest.raises(SystemExit):
+        R2.main(["grade", "--plan", str(w["plan"]), "--records", str(w["records"]), "--seal",
+                 str(w["seal"]), "--case", "1", "--row", "TD-EM", "--trust", "x.json"])  # fmt: skip
+
+
+def test_coordinated_output_tampering_fails_closed(tmp_path: Path, small_case: None) -> None:
+    w = _world(tmp_path)
+    rid = w["ids"][(1, "idd-em", 0)]
+    csv = w["outputs"] / rid / "work" / "idd_dose.csv"
+    lines = csv.read_text().splitlines()
+    lines[-1] = lines[-1].rsplit(",", 2)[0] + ", 1.0, 0"  # change one value
+    csv.write_text("\n".join(lines) + "\n")
+    lst = w["records"] / "runs" / rid / "artifacts.json"
+    doc = json.loads(lst.read_text())
+    for e in doc["files"]:  # the unsigned listing is updated consistently
+        if e["path"] == "work/idd_dose.csv":
+            e["sha256"] = hashlib.sha256(csv.read_bytes()).hexdigest()
+            e["bytes"] = csv.stat().st_size
+    lst.write_text(json.dumps(doc))
+    code, rep = _cli(w, "TD-EM", tmp_path / "t.json")
+    assert code == 2 and "output_files_sha256" in rep["error"], rep
 
 
 def test_signed_start_before_review_is_blinding_fail(tmp_path: Path, small_case: None) -> None:
@@ -899,7 +945,7 @@ def test_full_logs_intact_pass_and_list_unverifiable(tmp_path: Path, small_case:
     w = _world(tmp_path, configs=("idd-full",))
     code, rep = _cli(w, "TD-FULL", tmp_path / "m.json")
     assert code == 0 and rep["status"] == "PASS", rep
-    assert rep["module_markers_unverifiable"] == ["g4decay"]
+    assert rep["module_markers_unverifiable"] == []
 
 
 @pytest.mark.parametrize(
@@ -912,3 +958,19 @@ def test_em_log_with_hadronic_marker_fails(tmp_path: Path, small_case: None, inj
     code, rep = _cli(w, "TD-EM", tmp_path / "e.json")
     assert code == 1 and rep["category"] == "run validity"
     assert any("hadronic marker" in p for x in rep["part_validity"] for p in x["problems"])
+
+
+def test_decay_marker_and_unknown_modules(tmp_path: Path, small_case: None) -> None:
+    w = _world(tmp_path, configs=("idd-full",),
+               tamper={"stdout": lambda s: s.replace("Decay,     ", "", 1)})  # fmt: skip
+    code, rep = _cli(w, "TD-FULL", tmp_path / "a.json")
+    assert code == 1 and rep["category"] == "run validity"
+    assert any("g4decay" in p for x in rep["part_validity"] for p in x["problems"])
+    w2 = _world(tmp_path / "b", tamper={"stdout": lambda s: s.replace("eIoni\n", "eIoni, Decay\n")})
+    code, rep = _cli(w2, "TD-EM", tmp_path / "b.json")
+    assert code == 1 and any("Decay" in p for x in rep["part_validity"] for p in x["problems"])
+    mods = 'sv:Ph/Default/Modules = 2 "g4em-standard_opt4" "g4foo"\n'
+    w3 = _world(tmp_path / "c", tamper={"modules": mods})
+    code, rep = _cli(w3, "TD-EM", tmp_path / "c.json")
+    assert code == 1 and rep["category"] == "run validity"
+    assert rep["module_markers_unverifiable"] == ["g4foo"]

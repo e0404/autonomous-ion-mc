@@ -25,7 +25,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_OUT = REPO_ROOT / "validation" / "reference_cases" / "topas"
 REL_PREFIX = "validation/reference_cases/topas"
-BUNDLE_SET_DIGEST = "e51d3b3d1bf00e51daadf889f6541bf8bd6ba8aea6453eee132110e07ff0c4d6"
+BUNDLE_SET_DIGEST = "6d1ae3a06211831cfb7e8924c65d6d8fe31fae7781443ff84c077204045ea790"
 
 TOPAS_BASE = 20619000
 # case number, ion tag, MeV/u, A, z, particle, planning CSDA range (project Bethe table, mm), L, h_z, h_x, set
@@ -138,8 +138,12 @@ def scorer_block(name, quantity, xb, yb, zb, out, outtype, report, gen=False, at
     return lines
 
 
-def build(c, cfg, seed, histories, kind, part=None, ecut_1km=None):
-    """One bundle. ecut_1km: CutForElectron = 1 km in FULL (default: LAT-FULL, R2-SIZE-1)."""
+def build(c, cfg, seed, histories, kind, part=None, ecut_1km=None, list_processes=True):
+    """One bundle. ecut_1km: CutForElectron = 1 km in FULL (default: LAT-FULL, R2-SIZE-1).
+
+    list_processes: request the per-particle process list (False only for the 13 smokes
+    already run).
+    """
     num, ion, e, a, z, particle, r_plan, L, hz, hx, cset = c
     full = cfg.endswith("full")
     lat = cfg.startswith("lat")
@@ -215,6 +219,12 @@ def build(c, cfg, seed, histories, kind, part=None, ecut_1km=None):
             EM_MODULES,
             "d:Ph/Default/CutForAllParticles = 0.05 mm",
             "d:Ph/Default/CutForElectron = 1 km",
+        ]
+    if list_processes:
+        inp += [
+            "# Prints the per-particle process list so that the executed module set, g4decay "
+            "included, is verifiable from the log (Codex REVIEW-6b4731a7).",
+            'b:Ph/ListProcesses = "True"',
         ]
     inp += [
         "# EM table upper edge above the highest total kinetic energy (default 600 MeV is below He 150-250 MeV/u totals).",
@@ -340,13 +350,14 @@ def generate(out):
     bynum = {c[0]: c for c in CASES}
     for (num, cfg), seed in SMOKE_SEEDS.items():
         n = 1000 if cfg.endswith("em") else 200
-        # the 0.05 mm LAT-FULL timing smokes ran 2026-11-09 and stay as recorded (no electron cut)
-        case, inp = build(bynum[num], cfg, seed, n, "timing", ecut_1km=False)
+        # the 12 timing smokes ran 2026-11-09 and stay as recorded
+        # (0.05 mm LAT-FULL, no process list)
+        case, inp = build(bynum[num], cfg, seed, n, "timing", ecut_1km=False, list_processes=False)
         nm = name_of(bynum[num], cfg, "timing-smoke")
         write(out, nm, case, inp)
         made.append((nm, seed))
     num, cfg, seed = VERBOSE_SMOKE
-    case, inp = build(bynum[num], cfg, seed, 3, "verbose")
+    case, inp = build(bynum[num], cfg, seed, 3, "verbose", list_processes=False)  # already run
     nm = name_of(bynum[num], cfg, "steps-verbose-smoke")
     write(out, nm, case, inp)
     made.append((nm, seed))

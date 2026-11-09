@@ -15,7 +15,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 TOPAS = ROOT / "validation" / "reference_cases" / "topas"
-RECORDED_DIGEST = "e51d3b3d1bf00e51daadf889f6541bf8bd6ba8aea6453eee132110e07ff0c4d6"
+RECORDED_DIGEST = "6d1ae3a06211831cfb7e8924c65d6d8fe31fae7781443ff84c077204045ea790"
 FULL_MODULES = [
     "g4em-standard_opt4",
     "g4h-phy_QGSP_BIC_HP",
@@ -274,3 +274,31 @@ def test_new_smokes_r2_size_1():
         assert case["histories"] == n
         assert _native(d, "i:Ts/TrackingVerbosity") == verbosity
         assert "execution only" in case["rationale"] and "no evidence" in case["rationale"]
+
+
+# the thirteen smokes run 2026-11-09 before the process-list request (byte-identical records)
+RUN_SMOKE_SEEDS = range(20600411, 20600424)
+
+
+@pytest.mark.parametrize("d", BUNDLES, ids=lambda d: d.name)
+def test_process_list_requested(d):
+    """Codex REVIEW-6b4731a7: evidence bundles and the four R2-SIZE-1 smokes list processes.
+
+    The thirteen smokes already run stay byte-identical, without the line.
+    """
+    text = (d / "input.txt").read_text()
+    lines = re.findall(r"^b:Ph/ListProcesses = (.+)$", text, re.M)
+    if _seed(d) in RUN_SMOKE_SEEDS:
+        assert lines == [], d.name
+        assert "ListProcesses" not in text, d.name
+    else:
+        assert re.search(r"-part\d+$", d.name) or _seed(d) in range(20600424, 20600428), d.name
+        assert lines == ['"True"'], d.name
+
+
+def test_process_list_bundle_counts():
+    with_list = [
+        d for d in BUNDLES if 'b:Ph/ListProcesses = "True"' in (d / "input.txt").read_text()
+    ]
+    assert len(with_list) == 196
+    assert len([d for d in with_list if re.search(r"-part\d+$", d.name)]) == 192

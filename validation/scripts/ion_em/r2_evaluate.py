@@ -42,8 +42,10 @@ depths); exit 1, so it blocks an integration criterion that needs PASS; ERROR: a
 malformed record, nothing graded.
 
 The run-validity check includes the executed module list (``r2_io.module_check``: printout markers
-derived from the bundle's ``sv:Ph/Default/Modules``; ``g4decay`` has no reliable marker and is
-reported under ``module_markers_unverifiable``). The chronology uses the signed ``started_at`` of
+derived from the bundle's ``sv:Ph/Default/Modules``; interim rule: a module without runtime
+evidence is a run-validity FAIL, ``g4decay`` is evidenced by a registered ``Decay`` process in the
+``Ph/ListProcesses`` printout). TOPAS outputs are bound to the signed record through its
+``output_files_sha256``. The chronology uses the signed ``started_at`` of
 the signed reference-runner record.json only (see ``r2_io``). Not done here: the blinding ORDER of
 grading (orchestrator); the report-only items listed under ``not_computed`` in every report.
 """
@@ -693,17 +695,18 @@ def grade(
     row: str,
     outputs: Path | None = None,
     samples_root: Path | None = None,
-    trust_path: Path | None = None,
 ) -> dict[str, Any]:
-    """Grade one (case, row). Raises on any missing/malformed record (caller: ERROR).
-    ``trust_path`` defaults to the committed ``infrastructure/keys/trusted_attestation_keys.json``
-    of ``repo`` (evidence grades must use the default; the report records which file was used)."""
+    """Grade one (case, row). Raises on any missing/malformed record (caller: ERROR). The
+    attestation trust map is ONLY ``infrastructure/keys/trusted_attestation_keys.json`` as committed
+    at ``repo``'s HEAD (``r2_io.committed_trust``; no caller-supplied keys; Codex REVIEW-6b4731a7);
+    tests use a temporary git repository whose committed trust file holds the test key."""
     if row not in ROWS:
         raise io.RecordError(f"unknown row {row!r}; rows are {ROWS}")
     info = io.case_info(case)
     plan = io.load_plan(plan_path)
     review = io.load_review(records)
     seal, seal_digest = io.load_seal(repo, seal_path, plan["seal_sha"])
+    trust, trust_info = io.committed_trust(repo)
     ctx = Context(
         repo,
         plan,
@@ -713,14 +716,14 @@ def grade(
         outputs or repo / ".ionmc-cache" / "reference-runs",
         seal,
         samples_root or repo,
-        io.load_trust(trust_path or repo / io.DEFAULT_TRUST),
+        trust,
     )
     report: dict[str, Any] = {
         "schema": REPORT_SCHEMA,
         "row": row,
         "case": case,
         "case_info": info,
-        "trust_file": _trust_info(repo, trust_path or repo / io.DEFAULT_TRUST),
+        "trust_file": trust_info,
         "held_out": info["set"] == "held-out",
         "plan": plan,
         "review": {k: review[k] for k in ("review_id", "head_sha", "status", "finished_at")},
@@ -846,17 +849,6 @@ def grade(
     )
 
 
-def _trust_info(repo: Path, path: Path) -> dict[str, Any]:
-    p = Path(path)
-    digest = io.sha256_file(p) if p.is_file() else None
-    try:
-        committed = io.git_show(repo, "HEAD", io.DEFAULT_TRUST)
-        is_committed = digest == io.hashlib.sha256(committed).hexdigest()
-    except io.RecordError:
-        is_committed = False
-    return {"path": str(p), "sha256": digest, "equals_committed_at_head": is_committed}
-
-
 def _json_safe(v: Any) -> Any:
     if isinstance(v, dict):
         return {k: _json_safe(x) for k, x in v.items()}
@@ -902,18 +894,9 @@ def main(argv: list[str] | None = None) -> int:
     g.add_argument("--samples-root", type=Path, default=None)
     g.add_argument("--repo", type=Path, default=Path(__file__).resolve().parents[3])
     g.add_argument("--out", type=Path, default=None)
-    g.add_argument(
-        "--trust",
-        type=Path,
-        default=None,
-        help="attestation trust file (default and required for evidence: the committed "
-        "infrastructure/keys/trusted_attestation_keys.json)",
-    )
     a = ap.parse_args(argv)
     try:
-        rep = grade(
-            a.repo, a.plan, a.records, a.seal, a.case, a.row, a.outputs, a.samples_root, a.trust
-        )
+        rep = grade(a.repo, a.plan, a.records, a.seal, a.case, a.row, a.outputs, a.samples_root)
         code = {"PASS": 0}.get(rep["status"], 1)
     except (
         ChronologyError,
