@@ -7,7 +7,7 @@
   "geometry": "G4_WATER box 120 x 120 x 100 mm (x,y centred on the beam axis; z from 0 to 100 mm) in a vacuum world 400 x 400 x 1200 mm; L = 1.3 x planning CSDA range (65.5 mm, project Bethe table) rounded up to 50 mm",
   "materials": "G4_WATER (Geant4 NIST material, I=78 eV, density 1.0 g/cm3)",
   "cuts": "CutForAllParticles = 0.05 mm (default production cut of the proton full-physics cases); EMRangeMax = 10 GeV; Ts/MaxStepNumber = 1e7",
-  "histories": 5000,
+  "histories": 2529,
   "seeds": [
     20619812
   ],

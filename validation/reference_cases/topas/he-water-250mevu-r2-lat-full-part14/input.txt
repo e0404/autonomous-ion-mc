@@ -33,10 +33,11 @@ s:So/Beam/BeamPositionDistribution = "None"
 s:So/Beam/BeamAngularDistribution = "None"
 i:So/Beam/NumberOfHistoriesInRun = 5000
 
-# Physics: the operator's final reference configuration (directive 2026-11-07), seven modules, default production cut of the proton full-physics cases.
+# Physics: the operator's final reference configuration (directive 2026-11-07), seven modules, delta electrons deposited locally (plan amendment R2-SIZE-1): matched electron cut CutForElectron = 1 km so that delta electrons deposit locally (as ionmc and the EM configuration; P4 verbose smoke: e- threshold 9.55 GeV in G4_WATER); CutForAllParticles 0.05 mm for all other particles.
 s:Ph/Default/Type = "Geant4_Modular"
 sv:Ph/Default/Modules = 7 "g4em-standard_opt4" "g4h-phy_QGSP_BIC_HP" "g4decay" "g4h-elastic_HP" "g4stopping" "g4ion-QMD" "g4radioactivedecay"
 d:Ph/Default/CutForAllParticles = 0.05 mm
+d:Ph/Default/CutForElectron = 1 km
 # EM table upper edge above the highest total kinetic energy (default 600 MeV is below He 150-250 MeV/u totals).
 d:Ph/Default/EMRangeMax = 10 GeV
 

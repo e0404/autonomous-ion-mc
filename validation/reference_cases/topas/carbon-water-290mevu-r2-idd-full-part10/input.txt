@@ -31,7 +31,7 @@ d:So/Beam/BeamEnergy = 3480 MeV
 u:So/Beam/BeamEnergySpread = 0
 s:So/Beam/BeamPositionDistribution = "None"
 s:So/Beam/BeamAngularDistribution = "None"
-i:So/Beam/NumberOfHistoriesInRun = 5000
+i:So/Beam/NumberOfHistoriesInRun = 3333
 
 # Physics: the operator's final reference configuration (directive 2026-11-07), seven modules, default production cut of the proton full-physics cases.
 s:Ph/Default/Type = "Geant4_Modular"

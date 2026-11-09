@@ -15,7 +15,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 TOPAS = ROOT / "validation" / "reference_cases" / "topas"
-RECORDED_DIGEST = "a8a1c27d0177d38e763344248753f0cb9792bbf2277158622b41bcbf9d8f423a"
+RECORDED_DIGEST = "e51d3b3d1bf00e51daadf889f6541bf8bd6ba8aea6453eee132110e07ff0c4d6"
 FULL_MODULES = [
     "g4em-standard_opt4",
     "g4h-phy_QGSP_BIC_HP",
@@ -25,7 +25,19 @@ FULL_MODULES = [
     "g4ion-QMD",
     "g4radioactivedecay",
 ]
-SMOKE_RANGE = range(20600411, 20600424)
+SMOKE_RANGE = range(20600411, 20600428)
+SMOKE_SUFFIXES = ("-timing-smoke", "-steps-verbose-smoke")  # includes -ecut1km-timing-smoke
+# histories per part per (configuration, ion): dated sizing note 2026-11-09 and amendment R2-SIZE-1
+# (plan section 8); LAT-FULL is re-sized after the ecut1km timing smokes
+N_PART = {
+    "idd-em": {"he": 25000, "carbon": 25000, "oxygen": 25000},
+    "lat-em": {"he": 25000, "carbon": 25000, "oxygen": 25000},
+    "idd-full": {"he": 5000, "carbon": 3333, "oxygen": 2529},
+    "lat-full": {"he": 5000, "carbon": 5000, "oxygen": 5000},
+}
+# minimum histories per case (four parts): FULL >= 1e4 (plan section 6 step-2 rule);
+# EM 1e5 and LAT-FULL 2e4 as frozen until the LAT-FULL re-sizing
+MIN_TOTAL = {"idd-em": 100000, "lat-em": 100000, "idd-full": 10000, "lat-full": 20000}
 
 
 def _load(name, path):
@@ -45,7 +57,7 @@ BUNDLES = sorted(d for d in TOPAS.iterdir() if d.is_dir() and "-r2-" in d.name)
 
 
 def test_bundle_count():
-    assert len(BUNDLES) == 205
+    assert len(BUNDLES) == 209
 
 
 def test_regeneration_is_byte_identical_and_digest_matches(tmp_path):
@@ -55,9 +67,9 @@ def test_regeneration_is_byte_identical_and_digest_matches(tmp_path):
         for f in ("case.json", "input.txt"):
             assert (TOPAS / nm / f).read_bytes() == (tmp_path / nm / f).read_bytes(), f"{nm}/{f}"
     digest, nfiles = gen.bundle_set_digest(tmp_path)
-    assert nfiles == 410
+    assert nfiles == 418
     assert digest == RECORDED_DIGEST
-    assert gen.bundle_set_digest(TOPAS) == (RECORDED_DIGEST, 410)
+    assert gen.bundle_set_digest(TOPAS) == (RECORDED_DIGEST, 418)
 
 
 @pytest.mark.parametrize("d", BUNDLES, ids=lambda d: d.name)
@@ -84,11 +96,11 @@ def test_seed_formula_and_uniqueness():
             assert 1 <= case_no <= 12, d.name
             assert seed == 20619000 + 100 * part + case_no
         else:
-            assert d.name.endswith(("-timing-smoke", "-steps-verbose-smoke")), d.name
+            assert d.name.endswith(SMOKE_SUFFIXES), d.name
             assert seed in SMOKE_RANGE, d.name
         assert seed not in seeds, f"{d.name} shares seed with {seeds[seed]}"
         seeds[seed] = d.name
-    assert len(seeds) == 205
+    assert len(seeds) == 209
     assert sorted(s for s in seeds if s in SMOKE_RANGE) == list(SMOKE_RANGE)
 
 
@@ -125,16 +137,11 @@ def _scorer_block(d):
 @pytest.mark.parametrize("d", BUNDLES, ids=lambda d: d.name)
 def test_smokes_carry_the_scorer_block_of_their_evidence_configuration(d):
     """Timing is representative: a smoke has the scorers (same bins) of its evidence case."""
-    if not d.name.endswith(("-timing-smoke", "-steps-verbose-smoke")):
+    if not d.name.endswith(SMOKE_SUFFIXES):
         return
-    suffix = "-timing-smoke" if d.name.endswith("-timing-smoke") else "-steps-verbose-smoke"
-    stem = d.name[: -len(suffix)]
-    evidence = [
-        e
-        for e in BUNDLES
-        if e.name.startswith(stem)
-        and not e.name.endswith(("-timing-smoke", "-steps-verbose-smoke"))
-    ]
+    stem = re.sub(r"-(ecut1km-timing|timing|steps-verbose)-smoke$", "", d.name)
+    assert stem != d.name, d.name
+    evidence = [e for e in BUNDLES if re.fullmatch(re.escape(stem) + r"-part\d+", e.name)]
     assert evidence, d.name
     names = _scorer_names(d)
     observable = {"IDD"} if "-idd-" in d.name else {"LatX", "LatY"}
@@ -163,3 +170,107 @@ def test_no_obsolete_deletion_or_blinding_claims(d):
     text = (d / "case.json").read_text() + (d / "input.txt").read_text()
     for forbidden in ("deleted unread", "unread", "non-disclosing", "SmokeEdep"):
         assert forbidden not in text, (d.name, forbidden)
+
+
+def _native(d, key):
+    text = (d / "input.txt").read_text()
+    m = re.findall(rf"^{re.escape(key)} = (.+)$", text, re.M)
+    assert len(m) == 1, (d.name, key)
+    return m[0].strip()
+
+
+def _config(d):
+    m = re.search(r"-r2-(idd-em|lat-em|idd-full|lat-full)-", d.name)
+    assert m, d.name
+    return m.group(1)
+
+
+@pytest.mark.parametrize("d", BUNDLES, ids=lambda d: d.name)
+def test_electron_cut_per_configuration(d):
+    """R2-SIZE-1: LAT-FULL evidence and ecut1km smokes have CutForElectron = 1 km, IDD-FULL not.
+
+    The 0.05 mm LAT-FULL timing smokes (run 2026-11-09) stay as recorded, without the electron cut.
+    EM bundles keep their matched 1 km cut. CutForAllParticles = 0.05 mm everywhere.
+    """
+    text = (d / "input.txt").read_text()
+    cuts = re.findall(r"^d:Ph/Default/CutForElectron = (.+)$", text, re.M)
+    cfg = _config(d)
+    case = json.loads((d / "case.json").read_text())
+    assert _native(d, "d:Ph/Default/CutForAllParticles") == "0.05 mm"
+    assert _native(d, "d:Ph/Default/EMRangeMax") == "10 GeV"
+    assert _native(d, "i:Ts/MaxStepNumber") == "10000000"
+    old_lat_full_smoke = cfg == "lat-full" and d.name.endswith("-lat-full-timing-smoke")
+    if cfg == "idd-full" or old_lat_full_smoke:
+        assert cuts == [], d.name
+        assert "CutForElectron" not in case["cuts"], d.name
+        assert "delta electrons deposited locally" not in json.dumps(case), d.name
+    else:
+        assert cuts == ["1 km"], d.name
+        assert "CutForElectron = 1 km" in case["cuts"], d.name
+    if cfg == "lat-full" and not old_lat_full_smoke:
+        assert "R2-SIZE-1" in case["cuts"], d.name
+        assert (
+            "seven-module TOPAS configuration, delta electrons deposited locally"
+            in case["physics"][0]
+        )
+        if re.search(r"-part\d+$", d.name):
+            assert (
+                "seven-module TOPAS configuration, delta electrons deposited locally"
+                in case["rationale"]
+            )
+
+
+def test_electron_cut_bundle_counts():
+    lat_full_ecut = [
+        d
+        for d in BUNDLES
+        if _config(d) == "lat-full" and not d.name.endswith("-lat-full-timing-smoke")
+    ]
+    assert len([d for d in lat_full_ecut if re.search(r"-part\d+$", d.name)]) == 48
+    assert sorted(d.name for d in lat_full_ecut if not re.search(r"-part\d+$", d.name)) == [
+        "carbon-water-430mevu-r2-lat-full-ecut1km-timing-smoke",
+        "he-water-250mevu-r2-lat-full-ecut1km-timing-smoke",
+        "oxygen-water-430mevu-r2-lat-full-ecut1km-timing-smoke",
+    ]
+
+
+@pytest.mark.parametrize("d", BUNDLES, ids=lambda d: d.name)
+def test_histories_match_native_line(d):
+    case = json.loads((d / "case.json").read_text())
+    assert int(_native(d, "i:So/Beam/NumberOfHistoriesInRun")) == case["histories"]
+    assert int(_native(d, "i:Ts/Seed")) == case["seeds"][0]
+
+
+def test_histories_per_ion_and_configuration_and_totals():
+    assert gen.N_PART == N_PART
+    totals = {}
+    for d in BUNDLES:
+        if not re.search(r"-part\d+$", d.name):
+            continue
+        ion = d.name.split("-water-")[0]
+        cfg = _config(d)
+        n = json.loads((d / "case.json").read_text())["histories"]
+        assert n == N_PART[cfg][ion], d.name
+        key = (d.name.split("-r2-")[0], cfg)
+        totals[key] = totals.get(key, 0) + n
+    assert len(totals) == 48
+    for (case_stem, cfg), total in totals.items():
+        assert total >= MIN_TOTAL[cfg], (case_stem, cfg, total)
+        assert total == 4 * N_PART[cfg][case_stem.split("-water-")[0]]
+
+
+def test_new_smokes_r2_size_1():
+    """The four R2-SIZE-1 smokes: names, rehearsal-family seeds, histories, verbosity."""
+    expect = {
+        "he-water-250mevu-r2-lat-full-ecut1km-timing-smoke": (20600424, 200, "0"),
+        "carbon-water-430mevu-r2-lat-full-ecut1km-timing-smoke": (20600425, 200, "0"),
+        "oxygen-water-430mevu-r2-lat-full-ecut1km-timing-smoke": (20600426, 200, "0"),
+        "carbon-water-290mevu-r2-lat-em-steps-verbose-smoke": (20600427, 3, "1"),
+    }
+    for name, (seed, n, verbosity) in expect.items():
+        d = TOPAS / name
+        case = json.loads((d / "case.json").read_text())
+        assert case["seeds"] == [seed] and seed in SMOKE_RANGE
+        assert case["histories"] == n
+        assert _native(d, "i:Ts/TrackingVerbosity") == verbosity
+        assert "execution only" in case["rationale"] and "no evidence" in case["rationale"]

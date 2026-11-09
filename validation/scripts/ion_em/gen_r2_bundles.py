@@ -1,8 +1,13 @@
-"""Generate the V3-008 plan revision 2 TOPAS case bundles (205 bundles, 410 files).
+"""Generate the V3-008 plan revision 2 TOPAS case bundles (209 bundles, 418 files).
 
 This is the single source of the revision-2 bundles under validation/reference_cases/topas/*-r2-*
 (plan: validation/plans/v3-008/r2-topas-target.md, appendix A). It must not be changed without a plan
 amendment. Nothing is run; only case.json and input.txt are written.
+
+Amendment R2-SIZE-1 (adopted 2026-11-09; plan section 8, v3-008-acceptance.md "Amendments"):
+histories per (ion, configuration) (table N_PART), CutForElectron = 1 km in the LAT-FULL evidence
+bundles (seven modules unchanged; IDD-FULL keeps 0.05 mm), three LAT-FULL ecut1km timing smokes
+and a LAT-EM step-length smoke.
 
 Usage:
     python -I validation/scripts/ion_em/gen_r2_bundles.py [--out DIR]   # write bundles (default: committed dir)
@@ -20,7 +25,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_OUT = REPO_ROOT / "validation" / "reference_cases" / "topas"
 REL_PREFIX = "validation/reference_cases/topas"
-BUNDLE_SET_DIGEST = "a8a1c27d0177d38e763344248753f0cb9792bbf2277158622b41bcbf9d8f423a"
+BUNDLE_SET_DIGEST = "e51d3b3d1bf00e51daadf889f6541bf8bd6ba8aea6453eee132110e07ff0c4d6"
 
 TOPAS_BASE = 20619000
 # case number, ion tag, MeV/u, A, z, particle, planning CSDA range (project Bethe table, mm), L, h_z, h_x, set
@@ -38,12 +43,21 @@ CASES = [
     (11, "carbon", 150, 12, 6, "GenericIon(6,12)", 53.1, 100, 0.05, 0.02, "held-out"),
     (12, "oxygen", 200, 16, 8, "GenericIon(8,16)", 65.5, 100, 0.05, 0.02, "held-out"),
 ]
-# configuration -> (first part index of its block, histories per part)
+# configuration -> first part index of its block
 CONFIGS = {
-    "idd-em": (0, 25000),
-    "lat-em": (4, 25000),
-    "idd-full": (8, 5000),
-    "lat-full": (12, 5000),
+    "idd-em": 0,
+    "lat-em": 4,
+    "idd-full": 8,
+    "lat-full": 12,
+}
+# histories per part, N_part, per (configuration, ion); every case of an ion uses the upper-end
+# value of its ion (dated sizing note 2026-11-09, plan section 8). LAT-FULL is re-sized after the
+# ecut1km timing smokes.
+N_PART = {
+    "idd-em": {"he": 25000, "carbon": 25000, "oxygen": 25000},
+    "lat-em": {"he": 25000, "carbon": 25000, "oxygen": 25000},
+    "idd-full": {"he": 5000, "carbon": 3333, "oxygen": 2529},
+    "lat-full": {"he": 5000, "carbon": 5000, "oxygen": 5000},
 }
 K_PARTS = 4
 SMOKE_SEEDS = {  # rehearsal family 2060xxxx (execution only)
@@ -52,11 +66,40 @@ SMOKE_SEEDS = {  # rehearsal family 2060xxxx (execution only)
     (9, "idd-em"): 20600419, (9, "lat-em"): 20600420, (9, "idd-full"): 20600421, (9, "lat-full"): 20600422,
 }
 VERBOSE_SMOKE = (5, "idd-em", 20600423)
+# amendment R2-SIZE-1 (rehearsal family, execution only)
+ECUT_SMOKE_SEEDS = {(3, "lat-full"): 20600424, (6, "lat-full"): 20600425, (9, "lat-full"): 20600426}
+LAT_VERBOSE_SMOKE = (5, "lat-em", 20600427)
 
 EM_MODULES = 'sv:Ph/Default/Modules = 1 "g4em-standard_opt4"'
 FULL_MODULES = (
     'sv:Ph/Default/Modules = 7 "g4em-standard_opt4" "g4h-phy_QGSP_BIC_HP" "g4decay" '
     '"g4h-elastic_HP" "g4stopping" "g4ion-QMD" "g4radioactivedecay"'
+)
+# LAT-FULL under amendment R2-SIZE-1: the seven modules with the matched electron cut of the EM runs
+ECUT_CONFIG = "seven-module TOPAS configuration, delta electrons deposited locally"
+ECUT_COMMENT = (
+    "# Physics: the operator's final reference configuration (directive 2026-11-07), seven "
+    "modules, delta electrons deposited locally (plan amendment R2-SIZE-1): matched electron cut "
+    "CutForElectron = 1 km so that delta electrons deposit locally (as ionmc and the EM "
+    "configuration; P4 verbose smoke: e- threshold 9.55 GeV in G4_WATER); CutForAllParticles "
+    "0.05 mm for all other particles."
+)
+ECUT_PHYSICS = (
+    f"Geant4_Modular (OpenTOPAS 4.3 / Geant4 11.4.2), FULL, {ECUT_CONFIG} (operator's final "
+    "reference configuration, directive 2026-11-07, with the matched electron cut "
+    "CutForElectron = 1 km of plan amendment R2-SIZE-1): sv:Ph/Default/Modules = 7 "
+)
+ECUT_CUTS = (
+    "CutForAllParticles = 0.05 mm (all particles other than e-); CutForElectron = 1 km (plan "
+    "amendment R2-SIZE-1, matched electron cut as in the EM configuration: e- production threshold "
+    "9.55 GeV in G4_WATER, delta electrons deposit locally); EMRangeMax = 10 GeV; "
+    "Ts/MaxStepNumber = 1e7"
+)
+ECUT_TIMING_RATIONALE = (
+    "V3-008 plan revision 2 timing smoke for amendment R2-SIZE-1 (execution only): LAT-FULL with "
+    f"CutForElectron = 1 km ({ECUT_CONFIG}); wall time and printouts (process list, module "
+    "acceptance, killed tracks) re-size the LAT-FULL parts; run only after the sample seal commit; "
+    "outputs archived by the controlled runner; read for sizing/step diagnostics only; no evidence"
 )
 FULL_LIST = (
     "g4em-standard_opt4, g4h-phy_QGSP_BIC_HP, g4decay, g4h-elastic_HP, g4stopping, g4ion-QMD, "
@@ -95,10 +138,14 @@ def scorer_block(name, quantity, xb, yb, zb, out, outtype, report, gen=False, at
     return lines
 
 
-def build(c, cfg, seed, histories, kind, part=None):
+def build(c, cfg, seed, histories, kind, part=None, ecut_1km=None):
+    """One bundle. ecut_1km: CutForElectron = 1 km in FULL (default: LAT-FULL, R2-SIZE-1)."""
     num, ion, e, a, z, particle, r_plan, L, hz, hx, cset = c
     full = cfg.endswith("full")
     lat = cfg.startswith("lat")
+    if ecut_1km is None:
+        ecut_1km = full and lat
+    full_ecut = full and ecut_1km
     total_e = a * e
     nz_idd = round(L / hz)
     nx_lat = round(120 / hx)
@@ -146,7 +193,15 @@ def build(c, cfg, seed, histories, kind, part=None):
         f"i:So/Beam/NumberOfHistoriesInRun = {histories}",
         "",
     ]
-    if full:
+    if full_ecut:
+        inp += [
+            ECUT_COMMENT,
+            's:Ph/Default/Type = "Geant4_Modular"',
+            FULL_MODULES,
+            "d:Ph/Default/CutForAllParticles = 0.05 mm",
+            "d:Ph/Default/CutForElectron = 1 km",
+        ]
+    elif full:
         inp += [
             "# Physics: the operator's final reference configuration (directive 2026-11-07), seven modules, default production cut of the proton full-physics cases.",
             's:Ph/Default/Type = "Geant4_Modular"',
@@ -208,12 +263,16 @@ def build(c, cfg, seed, histories, kind, part=None):
             ]
     inp.append("")
     physics = (
-        [f"Geant4_Modular (OpenTOPAS 4.3 / Geant4 11.4.2), FULL (operator's final reference configuration, directive 2026-11-07): sv:Ph/Default/Modules = 7 {FULL_LIST}"]
+        [ECUT_PHYSICS + FULL_LIST]
+        if full_ecut
+        else [f"Geant4_Modular (OpenTOPAS 4.3 / Geant4 11.4.2), FULL (operator's final reference configuration, directive 2026-11-07): sv:Ph/Default/Modules = 7 {FULL_LIST}"]
         if full
         else ['Geant4_Modular (OpenTOPAS 4.3 / Geant4 11.4.2), EM ONLY (intermediate configuration): sv:Ph/Default/Modules = 1 "g4em-standard_opt4"; no hadronic, ion, elastic or decay modules']
     )
     cuts = (
-        "CutForAllParticles = 0.05 mm (default production cut of the proton full-physics cases); EMRangeMax = 10 GeV; Ts/MaxStepNumber = 1e7"
+        ECUT_CUTS
+        if full_ecut
+        else "CutForAllParticles = 0.05 mm (default production cut of the proton full-physics cases); EMRangeMax = 10 GeV; Ts/MaxStepNumber = 1e7"
         if full
         else "CutForAllParticles = 0.05 mm; CutForElectron = 1 km (accepted, P4 verbose smoke: e- production threshold 9.55 GeV in G4_WATER, no delta electrons); EMRangeMax = 10 GeV; Ts/MaxStepNumber = 1e7"
     )
@@ -221,10 +280,15 @@ def build(c, cfg, seed, histories, kind, part=None):
         rationale = (
             f"V3-008 plan revision 2 (validation/plans/v3-008/r2-topas-target.md): reference side of row "
             f"{'TL' if lat else 'TD'}-{'FULL' if full else 'EM'}{' held-out set' if cset == 'held-out' else ''}, "
-            f"case {num} ({ion} {e} MeV/u), part {part} of 4 (parts {CONFIGS[cfg][0]}-{CONFIGS[cfg][0] + 3}); "
-            "agreement with the specified TOPAS configuration is the acceptance reference (operator directive 2026-11-07); "
+            f"case {num} ({ion} {e} MeV/u), part {part} of 4 "
+            f"(parts {CONFIGS[cfg]}-{CONFIGS[cfg] + 3}); "
+            "agreement with the specified TOPAS configuration is the acceptance reference "
+            "(operator directive 2026-11-07"
+            f"{f'; configuration: {ECUT_CONFIG}, plan amendment R2-SIZE-1' if full_ecut else ''}); "
             "not run before the reviewed freeze of revision 2; outputs not materialized before the ionmc samples of the row are recorded"
         )
+    elif kind == "timing" and full_ecut:
+        rationale = ECUT_TIMING_RATIONALE
     elif kind == "timing":
         rationale = "V3-008 plan revision 2 timing smoke (execution only): wall time and printouts (process list, module acceptance, killed tracks) size the parts; run only after the sample seal commit; outputs archived by the controlled runner; read for sizing/step diagnostics only; no evidence"
     else:
@@ -260,11 +324,12 @@ def write(out, name, case, inp):
 
 
 def generate(out):
-    """Write all 205 r2 bundles under `out`; return [(name, seed)]."""
+    """Write all 209 r2 bundles under `out`; return [(name, seed)]."""
     out = Path(out)
     made = []
     for c in CASES:
-        for cfg, (p0, n) in CONFIGS.items():
+        for cfg, p0 in CONFIGS.items():
+            n = N_PART[cfg][c[1]]
             for k in range(K_PARTS):
                 part = p0 + k
                 seed = TOPAS_BASE + 100 * part + c[0]
@@ -275,11 +340,22 @@ def generate(out):
     bynum = {c[0]: c for c in CASES}
     for (num, cfg), seed in SMOKE_SEEDS.items():
         n = 1000 if cfg.endswith("em") else 200
-        case, inp = build(bynum[num], cfg, seed, n, "timing")
+        # the 0.05 mm LAT-FULL timing smokes ran 2026-11-09 and stay as recorded (no electron cut)
+        case, inp = build(bynum[num], cfg, seed, n, "timing", ecut_1km=False)
         nm = name_of(bynum[num], cfg, "timing-smoke")
         write(out, nm, case, inp)
         made.append((nm, seed))
     num, cfg, seed = VERBOSE_SMOKE
+    case, inp = build(bynum[num], cfg, seed, 3, "verbose")
+    nm = name_of(bynum[num], cfg, "steps-verbose-smoke")
+    write(out, nm, case, inp)
+    made.append((nm, seed))
+    for (num, cfg), seed in ECUT_SMOKE_SEEDS.items():
+        case, inp = build(bynum[num], cfg, seed, 200, "timing", ecut_1km=True)
+        nm = name_of(bynum[num], cfg, "ecut1km-timing-smoke")
+        write(out, nm, case, inp)
+        made.append((nm, seed))
+    num, cfg, seed = LAT_VERBOSE_SMOKE
     case, inp = build(bynum[num], cfg, seed, 3, "verbose")
     nm = name_of(bynum[num], cfg, "steps-verbose-smoke")
     write(out, nm, case, inp)
