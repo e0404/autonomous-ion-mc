@@ -10,8 +10,10 @@ Usage::
 
 ``--ledger`` is repeatable (e.g. the R2-SMOKE-LP ledger plus the re-runs made at the current
 head); a run id listed twice is refused. ``--confirmation-set-complete`` asks the summary to state
-``confirmation_set_complete: true``; it is set only when every run of the given ledgers is VALID,
-otherwise the summary records ``false`` with the reason and the exit status is 1. The summary
+``confirmation_set_complete: true``; it is set only when every run of the given ledgers is VALID
+and the runs' (bundle, signed seed) pairs equal the pre-registered ``CONFIRMATION_SET`` exactly
+(each once; Codex REVIEW-27887e4b), otherwise the summary records ``false`` with the reason
+and the exit status is 1. The summary
 records the real evaluator HEAD (the checkout that contains this script; every run's
 ``check_run`` must have read its committed inputs at that same HEAD).
 
@@ -38,6 +40,24 @@ import r2_evaluate as ev  # noqa: E402
 
 SCHEMA = "ionmc-v3-008-r2-smoke-reruns-1"
 DEFAULT_OUT = "validation/results/transport/v8r2-topas/smoke-reruns.json"
+# The pre-registered confirmation set (plan amendments of 2026-11-09: R2-SMOKE-LP and the
+# manifest-current re-runs; Codex REVIEW-27887e4b): (bundle, seed), each exactly once.
+CONFIRMATION_SET: frozenset[tuple[str, int]] = frozenset({
+    ("he-water-250mevu-r2-idd-em-lp-timing-smoke", 20600428),
+    ("he-water-250mevu-r2-lat-em-lp-timing-smoke", 20600429),
+    ("he-water-250mevu-r2-idd-full-lp-timing-smoke", 20600430),
+    ("carbon-water-430mevu-r2-idd-em-lp-timing-smoke", 20600431),
+    ("carbon-water-430mevu-r2-lat-em-lp-timing-smoke", 20600432),
+    ("carbon-water-430mevu-r2-idd-full-lp-timing-smoke", 20600433),
+    ("oxygen-water-430mevu-r2-idd-em-lp-timing-smoke", 20600434),
+    ("oxygen-water-430mevu-r2-lat-em-lp-timing-smoke", 20600435),
+    ("oxygen-water-430mevu-r2-idd-full-lp-timing-smoke", 20600436),
+    ("carbon-water-290mevu-r2-idd-em-lp-steps-verbose-smoke", 20600437),
+    ("he-water-250mevu-r2-lat-full-ecut1km-timing-smoke", 20600424),
+    ("carbon-water-430mevu-r2-lat-full-ecut1km-timing-smoke", 20600425),
+    ("oxygen-water-430mevu-r2-lat-full-ecut1km-timing-smoke", 20600426),
+    ("carbon-water-290mevu-r2-lat-em-steps-verbose-smoke", 20600427),
+})  # fmt: skip
 
 
 def check_entry(entry: dict[str, Any], outputs: Path | None) -> dict[str, Any]:
@@ -57,6 +77,7 @@ def check_entry(entry: dict[str, Any], outputs: Path | None) -> dict[str, Any]:
     except ev._FAIL_CLOSED as exc:
         return row | {"verdict": "ERROR", "error": f"{type(exc).__name__}: {exc}"}
     return row | {
+        "seed": rep["seeds"][0],  # the signed run's committed bundle seed (== ledger, checked)
         "code_sha": rep["code_sha"], "started_at": rep["reference_started"],
         "seconds": rep["seconds"], "histories": rep["histories"], "config": rep["config"],
         "verdict": rep["verdict"], "checks": rep["checks"], "review": rep["review"],
@@ -87,18 +108,35 @@ def read_ledgers(paths: list[Path]) -> tuple[list[dict[str, Any]], list[dict[str
 
 
 def confirmation(rows: list[dict[str, Any]], requested: bool) -> dict[str, Any]:
-    """``confirmation_set_complete`` is true only if requested AND every run is VALID."""
-    bad = [f"{r['run_id']} ({r['case']}): {r['verdict']}" for r in rows if r["verdict"] != "VALID"]
+    """``confirmation_set_complete`` is true only if requested, every run is VALID AND the runs'
+    (bundle, seed) pairs equal :data:`CONFIRMATION_SET` exactly, each once (the seed of a VALID
+    row is the signed run's committed bundle seed, see :func:`check_entry`). Otherwise false, with
+    the reason naming the non-VALID, missing, duplicate and unexpected entries."""
     if not requested:
         reason = "not requested (--confirmation-set-complete not given)"
-    elif not rows:
-        reason = "refused: no runs"
-    elif bad:
-        reason = f"refused: {len(bad)} run(s) not VALID: {bad}"
+        return {"confirmation_set_complete": False, "confirmation_reason": reason}
+    pairs = [(r["case"], r["seed"]) for r in rows]
+    problems = []
+    bad = [f"{r['run_id']} ({r['case']}): {r['verdict']}" for r in rows if r["verdict"] != "VALID"]
+    if bad:
+        problems.append(f"{len(bad)} run(s) not VALID: {bad}")
+    missing = sorted(CONFIRMATION_SET - set(pairs))
+    if missing:
+        problems.append(f"missing from the pre-registered set: {missing}")
+    dup = sorted({p for p in pairs if pairs.count(p) > 1})
+    if dup:
+        problems.append(f"duplicate entries: {dup}")
+    unexpected = sorted(set(pairs) - CONFIRMATION_SET)
+    if unexpected:
+        problems.append(f"unexpected entries (not pre-registered): {unexpected}")
+    if problems:
+        reason = "refused: " + "; ".join(problems)
     else:
-        reason = f"all {len(rows)} runs of the given ledgers are VALID"
-    complete = requested and bool(rows) and not bad
-    return {"confirmation_set_complete": complete, "confirmation_reason": reason}
+        reason = (
+            f"all {len(rows)} runs VALID and exactly the pre-registered confirmation set "
+            "(10 R2-SMOKE-LP smokes 20600428-20600437 + re-runs 20600424-20600427)"
+        )
+    return {"confirmation_set_complete": not problems, "confirmation_reason": reason}
 
 
 def main(argv: list[str] | None = None) -> int:

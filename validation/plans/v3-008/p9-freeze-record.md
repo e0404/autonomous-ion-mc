@@ -320,8 +320,8 @@ placeholder scorer output was deleted unread.
 | File | sha256 |
 |---|---|
 | `validation/results/transport/v8r2-topas/smoke-reruns.json` | `4a3fb8af1163dea56e0c8d6868b127f4277ccb02d7a80b133bddf0eb3511ff58` |
-| `validation/scripts/ion_em/r2_smoke_reruns.py` | `3fa0cb4837be84d810b6556f1fa5e505475655fdf048002eefc189e05e76d2d6` |
-| `tests/ionmc/test_r2_smoke_reruns.py` | `d0eca2fa663e5222bd60af81dd70fe712a4d431a86370e6aa2d814fdd6a9c6c1` |
+| `validation/scripts/ion_em/r2_smoke_reruns.py` | `3396457791f86af32cf05572c9a9653d7f54da1433f6a9bba9040339be844def` |
+| `tests/ionmc/test_r2_smoke_reruns.py` | `85541edab8e4a5a54a578178b911884c9e394d046411deb84b41925dc7f68144` |
 | `validation/results/transport/v8r2-topas/smoke-runs/REF-127b2dd92a8dd609c560-ff8db64b/artifacts.json` | `b2fb14264923e3d9d4b49424b8df72fe6d1d060ac73ebd57b423a3f44fa18dd4` |
 | `validation/results/transport/v8r2-topas/smoke-runs/REF-127b2dd92a8dd609c560-ff8db64b/record.json` | `a79ab4244232b39964db8fa4beb43f78cd7e0d5102cd1465f6979a3bf9f6e8f6` |
 | `validation/results/transport/v8r2-topas/smoke-runs/REF-4e5b0681e5576d7ab451-7e640368/artifacts.json` | `c4bcf072e554a1e5882bc4ac06430b3fdf35a543ce15325a196cc21383d7cf8f` |
@@ -398,6 +398,8 @@ placeholder scorer output was deleted unread.
 |---|---|
 | `validation/results/transport/v8r2-topas/smoke-confirmation.json` | `15df91b76206ab9090737aedbaa2722d25934e2008f7cc351b8bcf23297df5c7` |
 
+
+**Dated note (2026-11-09, exact confirmation-set gate (Codex REVIEW-27887e4b); orchestrator) — hashes regenerated at the working tree; entries that changed since the note above:** `validation/scripts/ion_em/r2_smoke_reruns.py` 3fa0cb48… → 33964577…; `tests/ionmc/test_r2_smoke_reruns.py` d0eca2fa… → 85541eda…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.
