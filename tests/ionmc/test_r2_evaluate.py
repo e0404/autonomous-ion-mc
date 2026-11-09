@@ -1135,3 +1135,108 @@ def test_frozen_configuration_enforced(
     assert code == 1 and rep["category"] == "run validity", rep
     bad = [x for x in rep["part_validity"] if x["config"] == configs[0]]
     assert len(bad) == 4 and all(x["problems"] for x in bad)  # every part of the configuration
+
+
+# ---------------------------------------------------------------------------------------------
+# check-run: run validity of ONE signed run (evidence part or smoke), same loaders as grade
+# ---------------------------------------------------------------------------------------------
+
+
+def _check_cli(
+    w: dict[str, Any], out: Path, key: tuple[int, str, int] = (1, "idd-em", 1),
+    records_dir: Path | None = None,
+) -> tuple[int, dict[str, Any]]:  # fmt: skip
+    if _git(w["repo"], "status", "--porcelain"):
+        _commit(w["repo"], "update")
+    argv = ["check-run", "--run-id", w["ids"][key], "--bundle", IO.bundle_name(*key),
+            "--outputs", str(w["outputs"]), "--out", str(out)]  # fmt: skip
+    if records_dir is not None:
+        argv += ["--records-dir", str(records_dir)]
+    old = R2.evaluator_repo
+    R2.evaluator_repo = lambda: w["repo"]
+    try:
+        code = R2.main(argv)
+    finally:
+        R2.evaluator_repo = old
+    return code, json.loads(out.read_text())
+
+
+def test_check_run_valid(tmp_path: Path, small_case: None) -> None:
+    w = _world(tmp_path)
+    code, rep = _check_cli(w, tmp_path / "c.json")
+    assert code == 0 and rep["verdict"] == "VALID", rep
+    c = rep["checks"]
+    assert c["record_binding"] == "PASS" and c["chronology"] == "PASS"
+    assert c["run_checks"] == "PASS" and c["run_checks_problems"] == []
+    assert c["replicate_gate"] == "not applicable (single run)"
+    assert rep["reference_started"] == T_LATE and rep["review"]["finished_at_at_code_sha"]
+    assert rep["bundle_kind"] == "part" and rep["config"] == "idd-em" and rep["part"] == 1
+    assert set(rep["files_sha256"]) == {"request.json", "stdout.txt", "stderr.txt"}  # no work/
+    assert IO.DEFAULT_TRUST in rep["evaluator"]["committed_inputs"]
+    assert not any(isinstance(v, list) and len(v) > 20 for v in rep.values())
+    code, rep = _check_cli(  # explicit records directory: same verdict
+        w, tmp_path / "d.json", (1, "lat-em", 6), w["records"] / "runs"
+    )
+    assert code == 0 and rep["verdict"] == "VALID", rep
+
+
+@pytest.mark.parametrize("where", ["file", "listing"])
+def test_check_run_tampered_stdout_is_error(tmp_path: Path, small_case: None, where: str) -> None:
+    w = _world(tmp_path)
+    rid = w["ids"][(1, "idd-em", 1)]
+    if where == "file":
+        (w["outputs"] / rid / "stdout.txt").write_text(STDOUT_EM + "edited\n")
+    else:
+        lst = w["records"] / "runs" / rid / "artifacts.json"
+        doc = json.loads(lst.read_text())
+        for e in doc["files"]:
+            if e["path"] == "stdout.txt":
+                e["sha256"] = "0" * 64
+        lst.write_text(json.dumps(doc))
+    code, rep = _check_cli(w, tmp_path / "c.json")
+    assert code == 2 and rep["verdict"] == "ERROR" and "stdout" in rep["error"], rep
+
+
+def test_check_run_review_after_start_is_blinding_fail(tmp_path: Path, small_case: None) -> None:
+    w = _world(tmp_path, tamper={"review_finished": "2026-11-09T12:30:00Z"})  # run starts 12:00
+    code, rep = _check_cli(w, tmp_path / "c.json")
+    assert code == 1 and rep["verdict"] == "BLINDING FAIL", rep
+    assert rep["checks"]["chronology_review_before_start"] is False
+    assert rep["checks"]["chronology_ancestry"] is True
+
+
+def test_check_run_missing_module_marker_is_run_validity_fail(
+    tmp_path: Path, small_case: None
+) -> None:
+    edit = {
+        "stdout": lambda s: s.replace("Use ICRU90 data                                    1", "x")
+    }
+    w = _world(tmp_path, tamper=edit)
+    code, rep = _check_cli(w, tmp_path / "c.json")
+    assert code == 1 and rep["verdict"] == "RUN-VALIDITY FAIL", rep
+    assert rep["checks"]["chronology"] == "PASS"
+    assert any("g4em-standard_opt4" in p for p in rep["checks"]["run_checks_problems"])
+    code, rep = _check_cli(w, tmp_path / "d.json", (1, "idd-em", 2))  # untouched part: VALID
+    assert code == 0 and rep["verdict"] == "VALID"
+
+
+@pytest.mark.parametrize(
+    ("bundle", "expected"),
+    [
+        ("he-water-250mevu-r2-lat-full-ecut1km-timing-smoke", ("smoke", 3, "lat-full", None)),
+        ("carbon-water-290mevu-r2-lat-em-steps-verbose-smoke", ("smoke", 5, "lat-em", None)),
+        ("oxygen-water-430mevu-r2-idd-full-timing-smoke", ("smoke", 9, "idd-full", None)),
+        ("carbon-water-80mevu-r2-idd-em-part2", ("part", 4, "idd-em", 2)),
+    ],
+)
+def test_parse_bundle(bundle: str, expected: tuple[Any, ...]) -> None:
+    info = IO.parse_bundle(bundle)
+    assert (info["kind"], info["case"], info["config"], info["part"]) == expected
+
+
+@pytest.mark.parametrize(
+    "bundle", ["he-water-250mevu-r2-idd-em-part5", "he-water-77mevu-r2-idd-em-part1", "x"]
+)
+def test_parse_bundle_rejects(bundle: str) -> None:
+    with pytest.raises(IO.RecordError):
+        IO.parse_bundle(bundle)

@@ -194,11 +194,11 @@ placeholder scorer output was deleted unread.
 
 | File | sha256 |
 |---|---|
-| `validation/scripts/ion_em/gen_r2_bundles.py` | `9924429dbe1e08d9f2e3859924ec73fa14ae1effa57946715e5a4cb6331c3343` |
-| `tests/ionmc/test_r2_bundles.py` | `b0e91e2bc53ed0f46fbe8d0b63bf9a6d449cd81fbde38094754c5f054df47530` |
+| `validation/scripts/ion_em/gen_r2_bundles.py` | `74ab35e3c534ed2029ecb74bf0b88bab88b29df205b698acd9af567bfbaf353d` |
+| `tests/ionmc/test_r2_bundles.py` | `e64313205eb0f30b0c6cae74983fe9e070a81040dd8c9853c4a0380787e2686e` |
 | `reference_requests/operator-directives/2026-11-07-topas-validation-target.md` | `ca079e9f0af990cdff9d8efde60d38ac55e2d0fc0fb9ef22355a81f4a2ab0b26` |
 | `reference_requests/interventions/IR-20261102-010435-B59B2D/response.json` | `dc6a610cb67dee50fa0bb96327026eea0b81bb9506e7b898c2e9e44322f69bd0` |
-| `validation/plans/v3-008/r2-topas-target.md` | `beb3582046e7fc128463080764c9810fcf9fdc9845e909f6c7ff74ed5a8c04be` |
+| `validation/plans/v3-008/r2-topas-target.md` | `3b2a5a400b7f5b447bc9ca2b10f2deba49591e8d333c559eb7f5ef1a62b6e9e9` |
 
 
 **Dated note (2026-11-07, orchestrator) — hashes regenerated at the freeze commit's parent; entries that changed since f694b747:** `validation/plans/v3-008/p10-single-scattering-availability.md` bea86277… → a7f539a0…; `validation/plans/v3-008/p11-exact-omega-mapping.md` 6116648a… → f78e95f5…; `reference_requests/interventions/IR-20261102-010435-B59B2D/request.json` 068cafd7… → e81a7efa…. All other entries unchanged (recomputed).
@@ -230,11 +230,11 @@ placeholder scorer output was deleted unread.
 | `src/ionmc/transport/tables.py` | `45542d46fb208ba1ca9ccdcb9e8baea41e47f86a7429b46f8566ad12b1b2619d` |
 | `src/ionmc/transport/tally.py` | `be202f7310e3991bead49fd40e24cef1f5493992044c72aff6c5f8e8826b547c` |
 | `src/ionmc/transport/warp_driver.py` | `cb32245e48d6bffd03092d09fb7421d8b11a8191158a311fd0b9a92e568aeb86` |
-| `validation/scripts/ion_em/r2_evaluate.py` | `ad7c45f185b1ab5a5f32853826e01495827aa0705d179f3dc74cdc41a5eff484` |
+| `validation/scripts/ion_em/r2_evaluate.py` | `1aa7223607862ee82bafcc9a793e4870980524a9a90450c0acfb2fb1e1ec6bd7` |
 | `validation/scripts/transport/steps_v8.py` | `e8b73006921b479797e762c1319adf7e1e4edb95594ffac4109827b4ee185a7d` |
 | `tests/ionmc/test_ion_mcs_table.py` | `b3fb9992f866238b11243e032f394583775e292cec49601798ef44b54efcb749` |
 | `tests/ionmc/test_v3_008_rows_ci.py` | `ffea9f20976ec2d721067ccf52d5cb9797fad51a5bda7dd224948829c1cade0e` |
-| `tests/ionmc/test_r2_evaluate.py` | `f733732e1520c92a770bd36fad501a8b6b5b2bb4d9f6b51cb34faf9e5f5d4251` |
+| `tests/ionmc/test_r2_evaluate.py` | `34bdee013454959ff8ce4e169428b515c3c5411eac9270c0642100a84b41b8cb` |
 | `tests/ionmc/test_v3_008_steps_v8.py` | `ab4922ea8842751e22c9d1882e9e1dec0ae88a25b55174c99586c4802868b731` |
 
 (c) R2.5 counts, superseded by this note (the R2.5 text is kept as written): repository paths 475 + 15 = **490**; total full sha256 values 519 + 15 = **534**, plus the bundle-set digest (unchanged, `a8a1c27d…`). The count in R2.6 item (3) (475) is superseded accordingly by 490 for the acceptance tests of the seal.
@@ -263,7 +263,7 @@ placeholder scorer output was deleted unread.
 
 | File | sha256 |
 |---|---|
-| `validation/scripts/ion_em/r2_io.py` | `ec08eea59075daa7bbc65e91fb36510faf1da079e822e1b736ab65ad07332d7e` |
+| `validation/scripts/ion_em/r2_io.py` | `621a4979122f4187db79e4e9b7c1e87cb0ed967a8a1219737ca12425bf3fce64` |
 | `validation/scripts/ion_em/r2_statistics.py` | `fbb19370ae0bb20ed1cc5289864c3331ba63bdcb88315b33f06b6d710c79ed6b` |
 | `validation/results/transport/v8r2-topas/smokes.json` | `9f5c1b24bfe278869b30cc89c03137786fc683ed85d6b6509c48cdffa964f621` |
 | `validation/results/transport/v8r2-topas/records/review.json` | `87988397d4c14304d75f987117e4c22199d4452a0b48030e131a2bd52edb1199` |
@@ -291,7 +291,7 @@ placeholder scorer output was deleted unread.
 
 | File | sha256 |
 |---|---|
-| `validation/results/transport/v8r2-topas/frozen-bundles.json` | `b3e27964fdc316e58139041782f1704725f59f150ec955cd6f37ba551983d8ea` |
+| `validation/results/transport/v8r2-topas/frozen-bundles.json` | `fa49012972627b05ebcd1f12ec3832b3166921d300c9653deb7302d329807b0d` |
 
 
 **Dated note (2026-11-09, evaluator round-5 fixes (Codex REVIEW-096af6a3: chronology inputs pinned to the run's code_sha, frozen bundle manifest); orchestrator) — hashes regenerated at the working tree; entries that changed since the note above:** `validation/scripts/ion_em/gen_r2_bundles.py` 8a92d40b… → 9924429d…; `tests/ionmc/test_r2_bundles.py` fd87a7dc… → b0e91e2b…; `validation/scripts/ion_em/r2_evaluate.py` 63ca633c… → ad7c45f1…; `tests/ionmc/test_r2_evaluate.py` 773f2b4f… → f733732e…; `validation/scripts/ion_em/r2_io.py` 417d0de7… → ec08eea5…. All other entries unchanged (recomputed).
@@ -299,6 +299,60 @@ placeholder scorer output was deleted unread.
 **Dated note (2026-11-09, re-sizing note and smoke record update; orchestrator) — hashes regenerated at the working tree; entries that changed since the note above:** `validation/plans/v3-008/r2-topas-target.md` deade6b6… → 22fd4067…; `validation/results/transport/v8r2-topas/smokes.json` bae61e85… → 9f5c1b24…. All other entries unchanged (recomputed).
 
 **Dated note (2026-11-09, smoke run-validity amendment (Codex REVIEW-8429c50e); orchestrator) — hashes regenerated at the working tree; entries that changed since the note above:** `validation/plans/v3-008/r2-topas-target.md` 22fd4067… → beb35820…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-09, R2-SMOKE-LP; orchestrator) — supersedes the bundle-set digest `6d1ae3a0…` above.** Ten ListProcesses smoke variants added (execution only): bundle set 219 bundles / 438 files, bundle-set digest `76d785667211bb39e96d517f46d636ff4b60be212b0d7fda9d968993ef47ed66` (`gen_r2_bundles.py --check`; appendix A 2026-11-09 "R2-SMOKE-LP" listing); all 209 earlier files byte-identical. New smoke bundles (sha256 of `case.json` | `input.txt`):
+
+| Bundle | Seed | case.json | input.txt |
+|---|---|---|---|
+| `he-water-250mevu-r2-idd-em-lp-timing-smoke` | 20600428 | `33942503c5eb0370e08333c0ef9c68925b886abbf387b2899f087c00af807266` | `09acb762d27c0de2b1f3264d3359c89fe6176b52bf20baf8a7bd1dee9d7142fd` |
+| `he-water-250mevu-r2-lat-em-lp-timing-smoke` | 20600429 | `f9641a407b6ccd44e5327a10f4374b57f479f78cb8c6a5c7e98ad5a0e405dbf1` | `4115bab225ef5d42ab1b35d5f4a324762de11e36c15ca0f36fa2c12be8d38902` |
+| `he-water-250mevu-r2-idd-full-lp-timing-smoke` | 20600430 | `34a80eb639b62719911e368d892dbbaeebb496b07dda97c77d86fcf6369823ff` | `0deebb528d989e186723872e31e2ed07879e213347969a2fa6349c0cc9b19947` |
+| `carbon-water-430mevu-r2-idd-em-lp-timing-smoke` | 20600431 | `660fa09e1e2cf1e656de05be99562c2ba541660a15a6547b6d0cf1f07dcc1bc7` | `21c5ab7d7df1a1582776e7bb3c1ba409ec744093e79ec4fbdc12a70c57fc8888` |
+| `carbon-water-430mevu-r2-lat-em-lp-timing-smoke` | 20600432 | `14b1441542169823520c6b56e88743d35c01c26db065aa8bdb95da4f767fee54` | `f7e5a6ac015d368029a39ce14f33d9b4b6adfa05b54841522aa2a1ba3a981579` |
+| `carbon-water-430mevu-r2-idd-full-lp-timing-smoke` | 20600433 | `c1ca492f2f929193d968952de0673a5a594281da7b0e171833ccf88a5324d311` | `dc358b90d13f34b368238f1f47596b8078efb37d296d3141ec79e04dd8b47cc7` |
+| `oxygen-water-430mevu-r2-idd-em-lp-timing-smoke` | 20600434 | `074de84a1b73b82c9a4169b1af2892db79f0af6d6089eed24b3901b9214d72b5` | `8bd26ee79201156ce003efae5bb6a0a151f6a125906e107d3b55e719be435df4` |
+| `oxygen-water-430mevu-r2-lat-em-lp-timing-smoke` | 20600435 | `b8183c78e3429b947ed4e1040ef4e5a4ff61fb2a1c4def3820ad350d330786fe` | `7d09eded2d6761b8820451e4ef9d43ec2448b0420e1127d8346e973d3c99e271` |
+| `oxygen-water-430mevu-r2-idd-full-lp-timing-smoke` | 20600436 | `367db7e36c6304880ffd058e1f998710863db0f2ef09ef7ec301f5b46aedbc33` | `7814b35838e2635a7fc4de267793389ffdc21ebb73ef75b9349a7039d2f8fc79` |
+| `carbon-water-290mevu-r2-idd-em-lp-steps-verbose-smoke` | 20600437 | `05b0c010132dd5e50934f46eee32cb5952345f4929394a4282dd34affc503b49` | `75be3a5823c98902d04fb47b65180fc88a827a94b667de703953ce83c62c10ec` |
+
+**Dated note (2026-11-09, signed smoke re-runs; orchestrator) — newly bound paths: the check-run summary, the smoke-rerun summariser and its test, and the 14 signed smoke-run records (record.json + artifacts.json; sha256 as committed; the records also carry the reference-runner signature):**
+
+| File | sha256 |
+|---|---|
+| `validation/results/transport/v8r2-topas/smoke-reruns.json` | `4a3fb8af1163dea56e0c8d6868b127f4277ccb02d7a80b133bddf0eb3511ff58` |
+| `validation/scripts/ion_em/r2_smoke_reruns.py` | `ffee2f4f2a9469578299268b09e5bea3fcd27752184d5847679253c120c96fef` |
+| `tests/ionmc/test_r2_smoke_reruns.py` | `0b40e2edb5982a179c22b3761263b5ba1a54c2dadd3694bbcd5e1352ccba4ce0` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-127b2dd92a8dd609c560-ff8db64b/artifacts.json` | `b2fb14264923e3d9d4b49424b8df72fe6d1d060ac73ebd57b423a3f44fa18dd4` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-127b2dd92a8dd609c560-ff8db64b/record.json` | `a79ab4244232b39964db8fa4beb43f78cd7e0d5102cd1465f6979a3bf9f6e8f6` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-4e5b0681e5576d7ab451-7e640368/artifacts.json` | `c4bcf072e554a1e5882bc4ac06430b3fdf35a543ce15325a196cc21383d7cf8f` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-4e5b0681e5576d7ab451-7e640368/record.json` | `e47eb958c4457dfef7cddc84af00435fa71d6d15a69f3b7b8b4e8058cae77f98` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-7020741cc2707c255204-a567db01/artifacts.json` | `671a4c9ef68c77e24be5b977615ccc617f17e6a41a7534144ce05644ee21abba` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-7020741cc2707c255204-a567db01/record.json` | `c39c996349872d9d945199cbfd81673d7b1734def8b55c2c518ae56a5acf6035` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-84df1a6d3f6427a74474-1306ceb2/artifacts.json` | `5c6fbf932c0ba166304082a12aca4ec54881a36695559ba7b5059a9efd139000` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-84df1a6d3f6427a74474-1306ceb2/record.json` | `6ca770fd0a54141f666e06b755dac95353e30d26a0c6bc1459f00cfd32ad5bf4` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-878a53365185a3360106-6ceac04f/artifacts.json` | `99df27a033fa8b713872ff08045b93874a2b6beeceff9f5a86fc42601467009d` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-878a53365185a3360106-6ceac04f/record.json` | `c3d5e77532cce6ad1e8cbbe04d4a1e0d793edd20898ba80ab273d254702f4269` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-87d804e7bd55f38370b0-4e7af629/artifacts.json` | `5c5d7d59734a3a79c87451ecae0f18ef60899020def5c6f3c9eb91729d0de118` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-87d804e7bd55f38370b0-4e7af629/record.json` | `d5a683a2c48070fc34f974d4afdbc371c28c7de1030657c7d5f616693c9e1ce1` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-8bf4ca70fe3b29de6260-11223111/artifacts.json` | `2473b2f20c185d60ffadec2c8354967c65f4694d60c4046d73e2dddd7bfdb6a5` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-8bf4ca70fe3b29de6260-11223111/record.json` | `251466978adc72af93182cacd70d7a890ce8f7374f5c41615fc5154df2a774e4` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-95f5caff95494e521eba-c5edd170/artifacts.json` | `afe678f13ee66e61823251c82caf78c55d7f927ab60627baab154506905cd10b` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-95f5caff95494e521eba-c5edd170/record.json` | `a83bfcc6f758cb8340dd1b654261e6e293cd07ea7f2417cf2cabe93736bc405f` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-97622ace316bf969f405-947c0413/artifacts.json` | `f20307a85fbed43cacd48ba3a6d1f8c3fdd709f9af9a973b588665cf3c1e9920` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-97622ace316bf969f405-947c0413/record.json` | `9a5212e874cd3a2050e57790ae6068d8e24777be95ac9d98c4add0d967921279` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-ac5f93bc5cc1507f3e27-8af01fff/artifacts.json` | `3ecff8321c6b14b4ced540fe72c253ff85ad09408691fd2cbddbb64dd67a7167` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-ac5f93bc5cc1507f3e27-8af01fff/record.json` | `7988ed8de6f9411f73b350ee52f0aa233efdfa435448bc120c3a479f055957d1` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-ba0afbd01523d5d68398-153f9b26/artifacts.json` | `71abf85d7e813a2b592599e3df664a87f64020997876ec53e871be5697acbf35` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-ba0afbd01523d5d68398-153f9b26/record.json` | `61dac024afdcdd0cd44206eaafe13309b8a708508eb7d36143fc18a58362398e` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-c32fd0fa07582b3fdb5b-717b2259/artifacts.json` | `78537b0cf0ab6b8644d2ce56ae3cd6faa6bc7f25411d0037e714666a7897b8aa` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-c32fd0fa07582b3fdb5b-717b2259/record.json` | `df815a116dd789209e21ae6ebf05d699163d9400713dd76fdbcd0f18e54b55d7` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-d784c6d81d2a2ca6df30-313c4c31/artifacts.json` | `e29aa535344a4ddf3498ed33c25939d8490c4c20dd562c9af099cc4d365d42ce` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-d784c6d81d2a2ca6df30-313c4c31/record.json` | `ef6b12a766e4b002ee789f7afb37576a0e212377861ba447abe91afdf316921e` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-f1cb893d737b990068a3-bdb32d20/artifacts.json` | `efafa54d89c3f8df7564407e4d0ae730ac04de2a293e43a6dc572f9df7ea0113` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-f1cb893d737b990068a3-bdb32d20/record.json` | `641d76972b7417458e9bd45b4a2843e7ab6e4b31601406cdfb4566849270701c` |
+
+
+**Dated note (2026-11-09, signed smoke re-runs / STOP / R2-SMOKE-LP commit; orchestrator) — hashes regenerated at the working tree; entries that changed since the note above:** `validation/scripts/ion_em/gen_r2_bundles.py` 9924429d… → 74ab35e3…; `tests/ionmc/test_r2_bundles.py` b0e91e2b… → e6431320…; `validation/plans/v3-008/r2-topas-target.md` beb35820… → 3b2a5a40…; `validation/scripts/ion_em/r2_evaluate.py` ad7c45f1… → 1aa72236…; `tests/ionmc/test_r2_evaluate.py` f733732e… → 34bdee01…; `validation/scripts/ion_em/r2_io.py` ec08eea5… → 621a4979…; `validation/results/transport/v8r2-topas/frozen-bundles.json` b3e27964… → fa490129…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.

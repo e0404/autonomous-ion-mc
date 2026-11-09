@@ -1,4 +1,4 @@
-"""Generate the V3-008 plan revision 2 TOPAS case bundles (209 bundles, 418 files).
+"""Generate the V3-008 plan revision 2 TOPAS case bundles (219 bundles, 438 files).
 
 This is the single source of the revision-2 bundles under validation/reference_cases/topas/*-r2-*
 (plan: validation/plans/v3-008/r2-topas-target.md, appendix A). It must not be changed without a plan
@@ -8,6 +8,10 @@ Amendment R2-SIZE-1 (adopted 2026-11-09; plan section 8, v3-008-acceptance.md "A
 histories per (ion, configuration) (table N_PART), CutForElectron = 1 km in the LAT-FULL evidence
 bundles (seven modules unchanged; IDD-FULL keeps 0.05 mm), three LAT-FULL ecut1km timing smokes
 and a LAT-EM step-length smoke.
+
+Resolution R2-SMOKE-LP (2026-11-09): ten execution-only ListProcesses variants (seeds
+20600428-20600437) of the ten smokes whose signed re-runs lacked the process list; the originals
+stay byte-identical.
 
 Usage:
     python -I validation/scripts/ion_em/gen_r2_bundles.py [--out DIR]   # write bundles (default: committed dir)
@@ -34,7 +38,7 @@ DEFAULT_MANIFEST = (
     REPO_ROOT / "validation" / "results" / "transport" / "v8r2-topas" / "frozen-bundles.json"
 )
 MANIFEST_SCHEMA = "ionmc-v8r2-frozen-bundles-1"
-BUNDLE_SET_DIGEST = "6d1ae3a06211831cfb7e8924c65d6d8fe31fae7781443ff84c077204045ea790"
+BUNDLE_SET_DIGEST = "76d785667211bb39e96d517f46d636ff4b60be212b0d7fda9d968993ef47ed66"
 
 TOPAS_BASE = 20619000
 # case number, ion tag, MeV/u, A, z, particle, planning CSDA range (project Bethe table, mm), L, h_z, h_x, set
@@ -78,6 +82,15 @@ VERBOSE_SMOKE = (5, "idd-em", 20600423)
 # amendment R2-SIZE-1 (rehearsal family, execution only)
 ECUT_SMOKE_SEEDS = {(3, "lat-full"): 20600424, (6, "lat-full"): 20600425, (9, "lat-full"): 20600426}
 LAT_VERBOSE_SMOKE = (5, "lat-em", 20600427)
+# resolution R2-SMOKE-LP (2026-11-09, rehearsal family, execution only): ListProcesses variants of
+# the ten smokes whose signed re-runs failed run validity for lack of the process list; each is
+# identical to its original except the process-list request and the seed
+LP_SMOKE_SEEDS = {  # (case, configuration): seed; originals: SMOKE_SEEDS 20600411-13, 15-17, 19-21
+    (3, "idd-em"): 20600428, (3, "lat-em"): 20600429, (3, "idd-full"): 20600430,
+    (6, "idd-em"): 20600431, (6, "lat-em"): 20600432, (6, "idd-full"): 20600433,
+    (9, "idd-em"): 20600434, (9, "lat-em"): 20600435, (9, "idd-full"): 20600436,
+}
+LP_VERBOSE_SMOKE = (5, "idd-em", 20600437)  # original: VERBOSE_SMOKE (20600423)
 
 EM_MODULES = 'sv:Ph/Default/Modules = 1 "g4em-standard_opt4"'
 FULL_MODULES = (
@@ -147,11 +160,15 @@ def scorer_block(name, quantity, xb, yb, zb, out, outtype, report, gen=False, at
     return lines
 
 
-def build(c, cfg, seed, histories, kind, part=None, ecut_1km=None, list_processes=True):
+def build(
+    c, cfg, seed, histories, kind, part=None, ecut_1km=None, list_processes=True, lp_variant_of=None
+):
     """One bundle. ecut_1km: CutForElectron = 1 km in FULL (default: LAT-FULL, R2-SIZE-1).
 
     list_processes: request the per-particle process list (False only for the 13 smokes
     already run).
+    lp_variant_of: seed of the original smoke of which this is the ListProcesses variant
+    (R2-SMOKE-LP); only the rationale text records it.
     """
     num, ion, e, a, z, particle, r_plan, L, hz, hx, cset = c
     full = cfg.endswith("full")
@@ -312,6 +329,11 @@ def build(c, cfg, seed, histories, kind, part=None, ecut_1km=None, list_processe
         rationale = "V3-008 plan revision 2 timing smoke (execution only): wall time and printouts (process list, module acceptance, killed tracks) size the parts; run only after the sample seal commit; outputs archived by the controlled runner; read for sizing/step diagnostics only; no evidence"
     else:
         rationale = "V3-008 plan revision 2 step-length smoke (execution only): TrackingVerbosity 1 records whether scorer-bin boundaries limit the primary step length (relevant to the Urban step dependence); run only after the sample seal commit; outputs archived by the controlled runner; read for sizing/step diagnostics only; no evidence"
+    if lp_variant_of is not None:
+        rationale += (
+            f"; ListProcesses variant (R2-SMOKE-LP, 2026-11-09): identical to seed {lp_variant_of} "
+            "except the process-list printout and the seed; execution only, not evidence"
+        )
     units = (
         "IDD: TOPAS CSV with '#' header, dose in Gy (run total; divide by histories); converted to laterally integrated energy per depth (MeV/mm per primary) with the slab mass 120 x 120 mm x bin depth at 1.0 g/cm3. Fluence 1/mm2 run total. Bins 0-based, z from the entrance face"
         if not lat
@@ -343,7 +365,7 @@ def write(out, name, case, inp):
 
 
 def generate(out):
-    """Write all 209 r2 bundles under `out`; return [(name, seed)]."""
+    """Write all 219 r2 bundles under `out`; return [(name, seed)]."""
     out = Path(out)
     made = []
     for c in CASES:
@@ -378,6 +400,20 @@ def generate(out):
     num, cfg, seed = LAT_VERBOSE_SMOKE
     case, inp = build(bynum[num], cfg, seed, 3, "verbose")
     nm = name_of(bynum[num], cfg, "steps-verbose-smoke")
+    write(out, nm, case, inp)
+    made.append((nm, seed))
+    # R2-SMOKE-LP: ListProcesses variants of the ten smokes above (re-runs lacked the process list)
+    for (num, cfg), seed in LP_SMOKE_SEEDS.items():
+        n = 1000 if cfg.endswith("em") else 200
+        orig = SMOKE_SEEDS[(num, cfg)]
+        case, inp = build(bynum[num], cfg, seed, n, "timing", ecut_1km=False, lp_variant_of=orig)
+        nm = name_of(bynum[num], cfg, "lp-timing-smoke")
+        write(out, nm, case, inp)
+        made.append((nm, seed))
+    num, cfg, seed = LP_VERBOSE_SMOKE
+    assert (num, cfg) == VERBOSE_SMOKE[:2]
+    case, inp = build(bynum[num], cfg, seed, 3, "verbose", lp_variant_of=VERBOSE_SMOKE[2])
+    nm = name_of(bynum[num], cfg, "lp-steps-verbose-smoke")
     write(out, nm, case, inp)
     made.append((nm, seed))
     return made

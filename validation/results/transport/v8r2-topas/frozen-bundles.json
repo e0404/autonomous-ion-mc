@@ -1,6 +1,6 @@
 {
- "bundle_count": 209,
- "bundle_set_digest": "6d1ae3a06211831cfb7e8924c65d6d8fe31fae7781443ff84c077204045ea790",
+ "bundle_count": 219,
+ "bundle_set_digest": "76d785667211bb39e96d517f46d636ff4b60be212b0d7fda9d968993ef47ed66",
  "bundles": {
   "carbon-water-150mevu-r2-idd-em-part0": {
    "case.json": "0d05020abee11f2167ef97b0cbcf77c088c9342e3899a76b43e113b8b3cb9054",
@@ -65,6 +65,10 @@
   "carbon-water-150mevu-r2-lat-full-part15": {
    "case.json": "dc2d28158fd1234a8d3657bf783fbb8b6ee16f92bd450d3e7e3bbc25453bbe4b",
    "input.txt": "d2168e8bc57b784ed2f7d9fa9083c0ed4b55c2af9babea9d6b7ac4b710821d82"
+  },
+  "carbon-water-290mevu-r2-idd-em-lp-steps-verbose-smoke": {
+   "case.json": "05b0c010132dd5e50934f46eee32cb5952345f4929394a4282dd34affc503b49",
+   "input.txt": "75be3a5823c98902d04fb47b65180fc88a827a94b667de703953ce83c62c10ec"
   },
   "carbon-water-290mevu-r2-idd-em-part0": {
    "case.json": "d5b03125879e78930de5c9a25ddb6bb01eb408412e1fa2180642a9316ada44e7",
@@ -138,6 +142,10 @@
    "case.json": "b4f94ebcb21f33ec322e80432745456a0d000cf07deca25e4ccaed683e625842",
    "input.txt": "53cf1aff3074dd53627e4cbcb31941b5a0fbac3aaf141abb443f2568ac8ab7c0"
   },
+  "carbon-water-430mevu-r2-idd-em-lp-timing-smoke": {
+   "case.json": "660fa09e1e2cf1e656de05be99562c2ba541660a15a6547b6d0cf1f07dcc1bc7",
+   "input.txt": "21c5ab7d7df1a1582776e7bb3c1ba409ec744093e79ec4fbdc12a70c57fc8888"
+  },
   "carbon-water-430mevu-r2-idd-em-part0": {
    "case.json": "a0ff91b6a1911fa35744f9b0d15850cf87a82617be71de75a9bb216950f18f63",
    "input.txt": "91c8115f2d1728cc414e81b3e2e6889e828ad023dd83cff46cfa13fd6c72d195"
@@ -158,6 +166,10 @@
    "case.json": "bc1b51aaaedcea7b5c9faef52dbfbbb2eeb8d145aada80a6953ebabc1a1980e1",
    "input.txt": "e764f08fd7aa63b82b206194fb08f657da0ea0038112fdf9694d5971728dd140"
   },
+  "carbon-water-430mevu-r2-idd-full-lp-timing-smoke": {
+   "case.json": "c1ca492f2f929193d968952de0673a5a594281da7b0e171833ccf88a5324d311",
+   "input.txt": "dc358b90d13f34b368238f1f47596b8078efb37d296d3141ec79e04dd8b47cc7"
+  },
   "carbon-water-430mevu-r2-idd-full-part10": {
    "case.json": "e2aee57bb7ca86dfda93ad4fb18eb6e9fe613a1ec41ac8cac19fd3bad7d7c330",
    "input.txt": "4b0f039293051565b2410d110ef6f4fa43ece4120a975549779927f3500dfda9"
@@ -177,6 +189,10 @@
   "carbon-water-430mevu-r2-idd-full-timing-smoke": {
    "case.json": "abe48fa2c7ed2bb16b94304d145249442383b7f15e3460e28f6cf0c1f43343bd",
    "input.txt": "62291644f88c80cb77ed3a50b3282276994053dbe47b20d7287b7edc09d4ef78"
+  },
+  "carbon-water-430mevu-r2-lat-em-lp-timing-smoke": {
+   "case.json": "14b1441542169823520c6b56e88743d35c01c26db065aa8bdb95da4f767fee54",
+   "input.txt": "f7e5a6ac015d368029a39ce14f33d9b4b6adfa05b54841522aa2a1ba3a981579"
   },
   "carbon-water-430mevu-r2-lat-em-part4": {
    "case.json": "a7975cb46a40e8a5eb5b36a352db39aceedf2b0e7d7145708cc565fa452a7d9b",
@@ -414,6 +430,10 @@
    "case.json": "f4b38340d1cfe7dad5c0436baeee6808aadedbe4373dbf1b70247bcbdc93e936",
    "input.txt": "edb95621fe2f9e041f1b3b3aec5a596a52cb6f3fba2af22b050e6a6a6304c799"
   },
+  "he-water-250mevu-r2-idd-em-lp-timing-smoke": {
+   "case.json": "33942503c5eb0370e08333c0ef9c68925b886abbf387b2899f087c00af807266",
+   "input.txt": "09acb762d27c0de2b1f3264d3359c89fe6176b52bf20baf8a7bd1dee9d7142fd"
+  },
   "he-water-250mevu-r2-idd-em-part0": {
    "case.json": "92adb9f38bd96668c16504fbf7dc344ccaa19ddb05f81a98edbca9016d0d7213",
    "input.txt": "252d99f4c9011c87cb2a34cdb3f3dd0f17d829c0a7b635b4ec6d3af2d5a085f0"
@@ -434,6 +454,10 @@
    "case.json": "ec898d5de552402ebd5b72ba8f3f35b8f940dd8789c6e80c8d017df1cf8764d7",
    "input.txt": "a3135dd305cc0bbb45ee3ea9798c3ad3b25dc47bfeb8894251341e7ce4ddec9c"
   },
+  "he-water-250mevu-r2-idd-full-lp-timing-smoke": {
+   "case.json": "34a80eb639b62719911e368d892dbbaeebb496b07dda97c77d86fcf6369823ff",
+   "input.txt": "0deebb528d989e186723872e31e2ed07879e213347969a2fa6349c0cc9b19947"
+  },
   "he-water-250mevu-r2-idd-full-part10": {
    "case.json": "79dddeeba7d850d126605408c29b4377f04ffde2a4ef07ce240177bd91554ff8",
    "input.txt": "83cf5e5fa8f1b222ac38bc2626f06a67b1bb9b8850d763711d03ec626eaef33b"
@@ -453,6 +477,10 @@
   "he-water-250mevu-r2-idd-full-timing-smoke": {
    "case.json": "9e0a3c4be4a24868ba33f0dc75b9ca68a613e33b10ea2a70039cdfe1f7b3f084",
    "input.txt": "e54e544be6562257ea6acaf0cefb61bde0a2ba9970a2eee5289b3fc2428a67cb"
+  },
+  "he-water-250mevu-r2-lat-em-lp-timing-smoke": {
+   "case.json": "f9641a407b6ccd44e5327a10f4374b57f479f78cb8c6a5c7e98ad5a0e405dbf1",
+   "input.txt": "4115bab225ef5d42ab1b35d5f4a324762de11e36c15ca0f36fa2c12be8d38902"
   },
   "he-water-250mevu-r2-lat-em-part4": {
    "case.json": "3fe6bd332baa2c9565d6983830eef7f36510840e5cf1d622ee4dc333fe140e03",
@@ -754,6 +782,10 @@
    "case.json": "6f985691a2948673971608e6f04f60b0cba8659ab91f11ab86cca6824f811b95",
    "input.txt": "aabc8fb1b1beca52f9dcddc50c3a21a358816b9bf33e191ae11b93e9c87368c9"
   },
+  "oxygen-water-430mevu-r2-idd-em-lp-timing-smoke": {
+   "case.json": "074de84a1b73b82c9a4169b1af2892db79f0af6d6089eed24b3901b9214d72b5",
+   "input.txt": "8bd26ee79201156ce003efae5bb6a0a151f6a125906e107d3b55e719be435df4"
+  },
   "oxygen-water-430mevu-r2-idd-em-part0": {
    "case.json": "a1d4655a0aac8ec99a71e83f68b1415856532be166cdd8d91f20da0d774cf6bd",
    "input.txt": "81b8ddbea43835da50c7d9a5c317f434c55f7396b635b91b2c0391734b57089d"
@@ -774,6 +806,10 @@
    "case.json": "1dc45b8271737544010e69af341646bb22b8df58aabc8bfb1293442c19b72860",
    "input.txt": "99e874b301d296d390e828581213f500b8be61d08d8f30102876aefe4e40fd2b"
   },
+  "oxygen-water-430mevu-r2-idd-full-lp-timing-smoke": {
+   "case.json": "367db7e36c6304880ffd058e1f998710863db0f2ef09ef7ec301f5b46aedbc33",
+   "input.txt": "7814b35838e2635a7fc4de267793389ffdc21ebb73ef75b9349a7039d2f8fc79"
+  },
   "oxygen-water-430mevu-r2-idd-full-part10": {
    "case.json": "48eea0640cf36461e4ad1fd4efda8cc0591bd94519b803b5b92f7dedd43afd58",
    "input.txt": "74d9f6056005ce1060260e2e4e2344fb78e017deb0bed13094275fe21c94a5fb"
@@ -793,6 +829,10 @@
   "oxygen-water-430mevu-r2-idd-full-timing-smoke": {
    "case.json": "498747f20ceb861496849755436f6635fc876f7b08f87d29a508937a7c003988",
    "input.txt": "05a521e18813326b6d671eab0d12e35b9d6f70a599962920ad6a0a26659c8523"
+  },
+  "oxygen-water-430mevu-r2-lat-em-lp-timing-smoke": {
+   "case.json": "b8183c78e3429b947ed4e1040ef4e5a4ff61fb2a1c4def3820ad350d330786fe",
+   "input.txt": "7d09eded2d6761b8820451e4ef9d43ec2448b0420e1127d8346e973d3c99e271"
   },
   "oxygen-water-430mevu-r2-lat-em-part4": {
    "case.json": "b6723eece668406022f671b4bcf1eb77646ccf47bfd5cb667edaa659dcf38ebd",
@@ -839,7 +879,7 @@
    "input.txt": "1793e74862e37bb6d89b8cd2733cb61e5d4fd8a8621a5e62e40c4e6a7283b610"
   }
  },
- "file_count": 418,
+ "file_count": 438,
  "generated_from": "gen_r2_bundles.py",
  "schema": "ionmc-v8r2-frozen-bundles-1"
 }

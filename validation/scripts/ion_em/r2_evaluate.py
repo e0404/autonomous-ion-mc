@@ -5,6 +5,12 @@ Entry point::
     python validation/scripts/ion_em/r2_evaluate.py grade --case <n>
         --row <TD-EM|TD-FULL|TL-EM|TL-FULL> [--records <committed dir>] [--seal <committed path>]
         [--outputs <dir>] [--samples-root <dir>] [--out <report.json>]
+    python validation/scripts/ion_em/r2_evaluate.py check-run --run-id <REF-...>
+        --bundle <bundle dir name> [--records-dir <committed dir>] [--outputs <dir>]
+        [--out <report.json>]
+
+``check-run`` establishes the run validity of ONE signed run (evidence part or smoke; nothing
+graded, see :func:`check_run`): exit 0 VALID, 1 BLINDING FAIL / RUN-VALIDITY FAIL, 2 ERROR.
 
 The repository is always the git checkout that contains this file; plan seal note, review record,
 run index, signed run records, listings, seal and trust file are read as committed at its HEAD
@@ -603,28 +609,37 @@ class Context:
         return ch
 
 
-def _validity(ctx: Context) -> list[dict[str, Any]]:
-    out = []
-    for run in ctx.runs:
-        pinned = run.pinned  # seal note and review record at the run's signed code_sha
-        if pinned["plan"] != ctx.plan:
-            raise io.RecordError(
-                f"{run.run_id}: the seal note at code_sha {run.code_sha} differs from HEAD's"
-            )
-        v = check_run_validity(
-            ctx.repo, pinned["plan"], pinned["review"], run.chronology_record(), run.run_id
+def run_chronology(
+    repo: Path,
+    reader: io.CommittedReader | None,
+    run: io.TopasRun,
+    plan: dict[str, Any],
+    review_records: Path,
+) -> dict[str, Any]:
+    """R2-TOPAS-4 chronology of one loaded run: ``check_run_validity`` with the seal note and
+    review record pinned at the run's signed ``code_sha`` (which must equal HEAD's seal note)."""
+    pinned = run.pinned  # seal note and review record at the run's signed code_sha
+    if pinned["plan"] != plan:
+        raise io.RecordError(
+            f"{run.run_id}: the seal note at code_sha {run.code_sha} differs from HEAD's"
         )
-        out.append({
-            "run_id": run.run_id, "config": run.config, "case": run.case, "part": run.part,
-            "code_sha": run.code_sha, "review_finished_at": pinned["review"]["finished_at"],
-            "review_sha256_at_code_sha": pinned["review_sha256"],
-            "review_sha256_at_head": ctx.reader.reads.get(
-                f"{ctx.reader.rel(ctx.records)}/review.json"
-            ) if ctx.reader else None,
-            "plan_sha256_at_code_sha": pinned["plan_sha256"],
-            "manifest_bundle_set_digest": pinned["manifest_bundle_set_digest"], **v,
-        })  # fmt: skip
-    return out
+    v = check_run_validity(
+        repo, pinned["plan"], pinned["review"], run.chronology_record(), run.run_id
+    )
+    return {
+        "run_id": run.run_id, "config": run.config, "case": run.case, "part": run.part,
+        "code_sha": run.code_sha, "review_finished_at": pinned["review"]["finished_at"],
+        "review_sha256_at_code_sha": pinned["review_sha256"],
+        "review_sha256_at_head": reader.reads.get(
+            f"{reader.rel(review_records)}/review.json"
+        ) if reader else None,
+        "plan_sha256_at_code_sha": pinned["plan_sha256"],
+        "manifest_bundle_set_digest": pinned["manifest_bundle_set_digest"], **v,
+    }  # fmt: skip
+
+
+def _validity(ctx: Context) -> list[dict[str, Any]]:
+    return [run_chronology(ctx.repo, ctx.reader, r, ctx.plan, ctx.records) for r in ctx.runs]
 
 
 def _r80_em_topas(ctx: Context, case: int) -> tuple[float, list[io.TopasRun]]:
@@ -903,6 +918,115 @@ def grade(
     )
 
 
+CHECK_SCHEMA = "ionmc-v3-008-r2-check-run-1"
+SMOKE_RECORDS = "validation/results/transport/v8r2-topas/smoke-runs"
+VERDICTS = ("VALID", "RUN-VALIDITY FAIL", "BLINDING FAIL", "ERROR")
+
+
+def check_run(
+    run_id: str,
+    bundle: str,
+    records_dir: Path | str | None = None,
+    outputs: Path | str | None = None,
+    *,
+    repo: Path | None = None,
+) -> dict[str, Any]:
+    """Run validity of ONE signed TOPAS run (evidence part or smoke), nothing graded.
+
+    The same steps as :func:`grade` for each run it uses, through the same loaders:
+    ``io.load_signed_run`` (signature against the committed trust file at HEAD, schema 3, run id
+    derived from the configuration id, request binding incl. ``request_sha256`` and the bundle
+    committed at ``code_sha``, frozen-manifest binding of ``case.json`` / ``input.txt``,
+    stdout/stderr sha256 against the listing and the signed record, ``output_files_sha256``
+    reproduced from the listing's ``work/`` entries), :func:`run_chronology` (seal note and
+    ``<DEFAULT_RECORDS>/review.json`` at the run's ``code_sha``; ``code_sha`` an ancestor of HEAD)
+    and ``io.run_checks`` for the configuration of the bundle name (``io.parse_bundle``). The
+    scorer outputs (``work/``) are NOT read: only ``request.json``, ``stdout.txt`` and
+    ``stderr.txt`` are read from ``<outputs>/<run_id>/`` (each hashed against the listing); the
+    outputs are bound through the signed ``output_files_sha256`` recomputed from the listing's
+    hashes. The replicate gate needs a group of parts and is not applicable to a single run.
+    The seed is checked against the section-7 formula for an evidence part; a smoke's seed is
+    bound through its committed bundle only.
+
+    ``records_dir`` holds ``<run_id>/record.json`` and ``<run_id>/artifacts.json`` (default
+    ``<DEFAULT_RECORDS>/runs`` for an evidence part, :data:`SMOKE_RECORDS` for a smoke); like every
+    repository input it is read as committed at HEAD. Verdict: VALID, BLINDING FAIL (chronology),
+    RUN-VALIDITY FAIL (``run_checks`` problems), ERROR (any record gap; raised to the caller)."""
+    repo = Path(repo).resolve() if repo is not None else evaluator_repo()
+    reader = io.CommittedReader(repo)
+    info = io.parse_bundle(bundle)
+    if records_dir is None:
+        records_dir = (
+            Path(io.DEFAULT_RECORDS) / "runs" if info["kind"] == "part" else Path(SMOKE_RECORDS)
+        )
+    records_dir = Path(records_dir) if Path(records_dir).is_absolute() else repo / records_dir
+    review_records = repo / io.DEFAULT_RECORDS
+    plan = io.load_plan(reader)
+    review = io.load_review(reader, review_records, plan)
+    trust, trust_info = io.committed_trust(reader)
+    seeds = None
+    if info["kind"] == "part":
+        seeds = [io.topas_seed(info["case"], info["part"])]
+    run = io.load_signed_run(
+        repo, records_dir / run_id,
+        Path(outputs) if outputs is not None else repo / ".ionmc-cache" / "reference-runs",
+        run_id, bundle, info["config"], trust, reader, review_records=review_records,
+        case=info["case"], part=info["part"], expected_seeds=seeds,
+    )  # fmt: skip
+    chron = run_chronology(repo, reader, run, plan, review_records)
+    checks = io.run_checks(run)
+    if not chron["valid"]:
+        verdict = "BLINDING FAIL"
+    elif checks["problems"]:
+        verdict = "RUN-VALIDITY FAIL"
+    else:
+        verdict = "VALID"
+    return {
+        "schema": CHECK_SCHEMA,
+        "run_id": run_id,
+        "bundle": bundle,
+        "bundle_kind": info["kind"],
+        "config": info["config"],
+        "case": info["case"],
+        "part": info["part"],
+        "verdict": verdict,
+        "checks": {
+            "record_binding": "PASS",
+            "chronology": "PASS" if chron["valid"] else "FAIL",
+            "chronology_ancestry": chron["ancestry"],
+            "chronology_review_before_start": chron["review_before_start"],
+            "run_checks": "FAIL" if checks["problems"] else "PASS",
+            "run_checks_problems": checks["problems"],
+            "module_markers_unverifiable": checks["module_markers_unverifiable"],
+            "replicate_gate": "not applicable (single run)",
+        },
+        "code_sha": run.code_sha,
+        "configuration_id": run.configuration_id,
+        "reference_started": run.reference_started,
+        "finished_at": run.finished_at,
+        "seconds": run.seconds,
+        "histories": run.histories,
+        "seeds": run.case_doc.get("seeds"),
+        "review": {
+            "review_id": review["review_id"],
+            "finished_at_at_code_sha": chron["review_finished_at"],
+            "review_sha256_at_code_sha": chron["review_sha256_at_code_sha"],
+            "review_sha256_at_head": chron["review_sha256_at_head"],
+            "plan_sha256_at_code_sha": chron["plan_sha256_at_code_sha"],
+        },
+        "plan": plan,
+        "manifest_bundle_set_digest": chron["manifest_bundle_set_digest"],
+        "files_sha256": dict(sorted(run.read.items())),
+        "outputs_note": "scorer outputs (work/) not read; output_files_sha256 recomputed from the "
+        "artifact listing's work/ hashes and sizes",
+        "trust_file": trust_info,
+        "evaluator": {
+            "head_sha": reader.head,
+            "committed_inputs": dict(sorted(reader.reads.items())),
+        },
+    }
+
+
 def _json_safe(v: Any) -> Any:
     if isinstance(v, dict):
         return {k: _json_safe(x) for k, x in v.items()}
@@ -930,6 +1054,11 @@ def _head(repo: Path) -> dict[str, Any]:
     return {"evaluator_head": sha, "generated_at": datetime.now(UTC).isoformat()}
 
 
+_FAIL_CLOSED = (
+    ChronologyError, io.RecordError, st.StatisticsError, OSError, ValueError, KeyError, TypeError,
+)  # fmt: skip
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="V3-008 r2 TOPAS-agreement evaluator")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -947,19 +1076,25 @@ def main(argv: list[str] | None = None) -> int:
     g.add_argument("--outputs", type=Path, default=None)
     g.add_argument("--samples-root", type=Path, default=None)
     g.add_argument("--out", type=Path, default=None)
+    c = sub.add_parser("check-run", help="run validity of one signed run (evidence or smoke)")
+    c.add_argument("--run-id", required=True)
+    c.add_argument("--bundle", required=True, help="bundle directory name")
+    c.add_argument(
+        "--records-dir",
+        type=Path,
+        default=None,
+        help=f"committed directory holding <run_id>/record.json and artifacts.json (default "
+        f"{io.DEFAULT_RECORDS}/runs for an evidence part, {SMOKE_RECORDS} for a smoke)",
+    )
+    c.add_argument("--outputs", type=Path, default=None)
+    c.add_argument("--out", type=Path, default=None)
     a = ap.parse_args(argv)
+    if a.cmd == "check-run":
+        return _main_check_run(a)
     try:
         rep = grade(a.records, a.seal, a.case, a.row, a.outputs, a.samples_root)
         code = {"PASS": 0}.get(rep["status"], 1)
-    except (
-        ChronologyError,
-        io.RecordError,
-        st.StatisticsError,
-        OSError,
-        ValueError,
-        KeyError,
-        TypeError,
-    ) as exc:
+    except _FAIL_CLOSED as exc:
         rep = {
             "schema": REPORT_SCHEMA,
             "row": a.row,
@@ -970,18 +1105,41 @@ def main(argv: list[str] | None = None) -> int:
         }
         print(f"r2_evaluate: ERROR (fail closed): {exc}", file=sys.stderr)
         code = 2
+    _write_report(rep, a.out)
+    return code
+
+
+def _main_check_run(a: argparse.Namespace) -> int:
+    try:
+        rep = check_run(a.run_id, a.bundle, a.records_dir, a.outputs)
+        code = 0 if rep["verdict"] == "VALID" else 1
+    except _FAIL_CLOSED as exc:
+        rep = {
+            "schema": CHECK_SCHEMA,
+            "run_id": a.run_id,
+            "bundle": a.bundle,
+            "verdict": "ERROR",
+            "error": f"{type(exc).__name__}: {exc}",
+            "note": "fail closed: run validity not established",
+        }
+        print(f"r2_evaluate check-run: ERROR (fail closed): {exc}", file=sys.stderr)
+        code = 2
+    _write_report(rep, a.out)
+    return code
+
+
+def _write_report(rep: dict[str, Any], out: Path | None) -> None:
     try:
         own = evaluator_repo()
     except io.RecordError:
         own = Path(__file__).resolve().parent
     rep = _json_safe(rep | _head(own))
     text = json.dumps(rep, indent=1, sort_keys=True, allow_nan=False)
-    if a.out:
-        a.out.parent.mkdir(parents=True, exist_ok=True)
-        a.out.write_text(text + "\n", encoding="utf-8")
+    if out:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(text + "\n", encoding="utf-8")
     else:
         print(text)
-    return code
 
 
 if __name__ == "__main__":

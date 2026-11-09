@@ -320,7 +320,7 @@ Smokes: `<ion>-water-<E>mevu-r2-<config>-timing-smoke` (12; seeds 20600411–206
 `case.json` equals the native seed line, and `histories` equals `NumberOfHistoriesInRun` (checked 2026-11-07).
 Hashes: appendix A.
 
-**Dated note (2026-11-09, R2-SIZE-1 regeneration; orchestrator).** After the sizing note the bundle set is **209** bundles / 418 files: the 48 LAT-FULL evidence bundles carry `CutForElectron = 1 km` (all ions), the 32 carbon/oxygen IDD-FULL bundles carry the rule-(i) history counts (C 3333, O 2529 per part), and four execution-only smokes were added (`he-water-250mevu-r2-lat-full-ecut1km-timing-smoke` 20600424, `carbon-water-430mevu-r2-lat-full-ecut1km-timing-smoke` 20600425, `oxygen-water-430mevu-r2-lat-full-ecut1km-timing-smoke` 20600426, `carbon-water-290mevu-r2-lat-em-steps-verbose-smoke` 20600427); the three 0.05 mm LAT-FULL timing smokes already run stay byte-identical as the record of those runs. The 96 EM bundles and the 16 He IDD-FULL bundles are byte-identical to the frozen set. Bundle-set digest `e51d3b3d1bf00e51daadf889f6541bf8bd6ba8aea6453eee132110e07ff0c4d6` (appendix A, 2026-11-09 listing). The LAT-FULL `NumberOfHistoriesInRun` (5000) is re-sized by a further dated note after the ecut1km smokes. (2026-11-09, ListProcesses; Codex REVIEW-6b4731a7) The 192 evidence bundles and the four smokes 20600424–20600427 now request the per-particle process list (`b:Ph/ListProcesses = "True"`, `input.txt` only), so that the executed module set, `g4decay` included, is verifiable from the log; the thirteen smokes already run are unchanged; bundle-set digest `6d1ae3a06211831cfb7e8924c65d6d8fe31fae7781443ff84c077204045ea790` (appendix A, ListProcesses listing).
+**Dated note (2026-11-09, R2-SIZE-1 regeneration; orchestrator).** After the sizing note the bundle set is **209** bundles / 418 files: the 48 LAT-FULL evidence bundles carry `CutForElectron = 1 km` (all ions), the 32 carbon/oxygen IDD-FULL bundles carry the rule-(i) history counts (C 3333, O 2529 per part), and four execution-only smokes were added (`he-water-250mevu-r2-lat-full-ecut1km-timing-smoke` 20600424, `carbon-water-430mevu-r2-lat-full-ecut1km-timing-smoke` 20600425, `oxygen-water-430mevu-r2-lat-full-ecut1km-timing-smoke` 20600426, `carbon-water-290mevu-r2-lat-em-steps-verbose-smoke` 20600427); the three 0.05 mm LAT-FULL timing smokes already run stay byte-identical as the record of those runs. The 96 EM bundles and the 16 He IDD-FULL bundles are byte-identical to the frozen set. Bundle-set digest `e51d3b3d1bf00e51daadf889f6541bf8bd6ba8aea6453eee132110e07ff0c4d6` (appendix A, 2026-11-09 listing). The LAT-FULL `NumberOfHistoriesInRun` (5000) is re-sized by a further dated note after the ecut1km smokes. (2026-11-09, ListProcesses; Codex REVIEW-6b4731a7) The 192 evidence bundles and the four smokes 20600424–20600427 now request the per-particle process list (`b:Ph/ListProcesses = "True"`, `input.txt` only), so that the executed module set, `g4decay` included, is verifiable from the log; the thirteen smokes already run are unchanged; bundle-set digest `6d1ae3a06211831cfb7e8924c65d6d8fe31fae7781443ff84c077204045ea790` (appendix A, ListProcesses listing). (2026-11-09, R2-SMOKE-LP; orchestrator) Ten execution-only ListProcesses variants of the ten smokes whose signed re-runs lacked the process list were added, each identical to its original except `b:Ph/ListProcesses = "True"` (with its comment), the seed and one appended rationale sentence: `he-water-250mevu-r2-{idd-em,lat-em,idd-full}-lp-timing-smoke` 20600428–20600430, `carbon-water-430mevu-r2-{idd-em,lat-em,idd-full}-lp-timing-smoke` 20600431–20600433, `oxygen-water-430mevu-r2-{idd-em,lat-em,idd-full}-lp-timing-smoke` 20600434–20600436 and `carbon-water-290mevu-r2-idd-em-lp-steps-verbose-smoke` 20600437 (rehearsal family, execution only, not evidence); all earlier bundles, the thirteen original smokes included, are byte-identical; the set is **219** bundles / 438 files, bundle-set digest `76d785667211bb39e96d517f46d636ff4b60be212b0d7fda9d968993ef47ed66` (appendix A, R2-SMOKE-LP listing).
 
 ionmc seeds: lv8 row block `20581004 + 100·r_index + k`, r_index **30–41** = cases 1–12 (declared now; `steps_v8.py`
 must adopt them), k = 0 for the single run, k = 1, 2, … for chunks if a run is split to stay ≤ 1500 s per host call.
@@ -559,6 +559,8 @@ Comparison with the IDD run: there, 97.5 % of steps are limited by the 0.1 mm de
 - Host calls: 192 evidence parts, 17 smokes already run, and the V5-SS parts (16 at the 6e4 design).
 
 **Dated note (2026-11-09, Codex REVIEW-8429c50e).** All 17 smokes above have unsigned (pre-V3-INFRA-004) records: run validity under R2-TOPAS-4 NOT ESTABLISHED; every sizing, step-length and cap statement of this section is PROVISIONAL until the pre-registered signed re-runs of the acceptance plan's amendment of 2026-11-09 (14 smokes, same seeds) confirm them; no evidence run before that.
+
+**Dated note (2026-11-09, signed smoke re-runs: STOP and R2-SMOKE-LP).** The 14 pre-registered signed re-runs were made at fce29f49 (records `validation/results/transport/v8r2-topas/smoke-runs/<run_id>/`, summary `smoke-reruns.json`, checker `r2_evaluate.py check-run`): every record verifies and passes the R2-TOPAS-4 chronology; run validity 4 VALID / 10 RUN-VALIDITY FAIL (the original smoke bundles carry no `b:Ph/ListProcesses` line; FULL logs then have no `Decay` marker) → **STOP recorded**; resolution R2-SMOKE-LP (acceptance plan, dated STOP record and amendment): ten ListProcesses smoke variants (seeds 20600428–20600437, section 7 note; bundle-set digest `76d785667211bb39e96d517f46d636ff4b60be212b0d7fda9d968993ef47ed66`, 219 bundles, frozen manifest regenerated before any evidence run) to be run once signed; the sizing values measured by the 14 re-runs (all within 4 % of the unsigned runs; part times at the final part table: C IDD-FULL 1190 s, O IDD-FULL 1186 s, He LAT-FULL 222 s, C/O LAT-FULL 574/575 s, EM ≤ 173 s) stay provisional until the lp runs are VALID.
 
 ## 9. Not established, risks
 
@@ -1446,4 +1448,38 @@ c5adf48eb5166ddbfc30dc7c9a2b755c0c105150ec26b66d5077ba1cd9cf5be6  validation/ref
 9ef37716845f846a740c342babf49c0add319b4058b97446918f47d8614a57b1  validation/reference_cases/topas/oxygen-water-430mevu-r2-lat-full-part13/input.txt
 dc5e57b51e6ec490f68e2487cdb9f28d4f5c92f68164e179bfa9e49ee7284307  validation/reference_cases/topas/oxygen-water-430mevu-r2-lat-full-part14/input.txt
 1de7a06bafe88677c4d41894d8e4fd74379ab0dc8e5bdf1662e3cae090d34e9e  validation/reference_cases/topas/oxygen-water-430mevu-r2-lat-full-part15/input.txt
+```
+
+## Appendix A (2026-11-09, R2-SMOKE-LP). Bundle hashes of the new files
+
+Regenerated by `validation/scripts/ion_em/gen_r2_bundles.py` (resolution R2-SMOKE-LP): ten new execution-only smokes
+(seeds 20600428–20600437, rehearsal family), the ListProcesses variants of the ten smokes 20600411–20600413,
+20600415–20600417, 20600419–20600421 and 20600423, each identical to its original except the seed, the
+`b:Ph/ListProcesses = "True"` line with its comment and one appended rationale sentence. No existing file changed:
+every file not listed here keeps its hash from the latest listing above. 219 bundles, 438 files.
+
+Bundle-set digest of the full 438-file set (same definition as above; `gen_r2_bundles.py --check`):
+`76d785667211bb39e96d517f46d636ff4b60be212b0d7fda9d968993ef47ed66` (438 files). New files (20, sorted by path):
+
+```
+05b0c010132dd5e50934f46eee32cb5952345f4929394a4282dd34affc503b49  validation/reference_cases/topas/carbon-water-290mevu-r2-idd-em-lp-steps-verbose-smoke/case.json
+75be3a5823c98902d04fb47b65180fc88a827a94b667de703953ce83c62c10ec  validation/reference_cases/topas/carbon-water-290mevu-r2-idd-em-lp-steps-verbose-smoke/input.txt
+660fa09e1e2cf1e656de05be99562c2ba541660a15a6547b6d0cf1f07dcc1bc7  validation/reference_cases/topas/carbon-water-430mevu-r2-idd-em-lp-timing-smoke/case.json
+21c5ab7d7df1a1582776e7bb3c1ba409ec744093e79ec4fbdc12a70c57fc8888  validation/reference_cases/topas/carbon-water-430mevu-r2-idd-em-lp-timing-smoke/input.txt
+c1ca492f2f929193d968952de0673a5a594281da7b0e171833ccf88a5324d311  validation/reference_cases/topas/carbon-water-430mevu-r2-idd-full-lp-timing-smoke/case.json
+dc358b90d13f34b368238f1f47596b8078efb37d296d3141ec79e04dd8b47cc7  validation/reference_cases/topas/carbon-water-430mevu-r2-idd-full-lp-timing-smoke/input.txt
+14b1441542169823520c6b56e88743d35c01c26db065aa8bdb95da4f767fee54  validation/reference_cases/topas/carbon-water-430mevu-r2-lat-em-lp-timing-smoke/case.json
+f7e5a6ac015d368029a39ce14f33d9b4b6adfa05b54841522aa2a1ba3a981579  validation/reference_cases/topas/carbon-water-430mevu-r2-lat-em-lp-timing-smoke/input.txt
+33942503c5eb0370e08333c0ef9c68925b886abbf387b2899f087c00af807266  validation/reference_cases/topas/he-water-250mevu-r2-idd-em-lp-timing-smoke/case.json
+09acb762d27c0de2b1f3264d3359c89fe6176b52bf20baf8a7bd1dee9d7142fd  validation/reference_cases/topas/he-water-250mevu-r2-idd-em-lp-timing-smoke/input.txt
+34a80eb639b62719911e368d892dbbaeebb496b07dda97c77d86fcf6369823ff  validation/reference_cases/topas/he-water-250mevu-r2-idd-full-lp-timing-smoke/case.json
+0deebb528d989e186723872e31e2ed07879e213347969a2fa6349c0cc9b19947  validation/reference_cases/topas/he-water-250mevu-r2-idd-full-lp-timing-smoke/input.txt
+f9641a407b6ccd44e5327a10f4374b57f479f78cb8c6a5c7e98ad5a0e405dbf1  validation/reference_cases/topas/he-water-250mevu-r2-lat-em-lp-timing-smoke/case.json
+4115bab225ef5d42ab1b35d5f4a324762de11e36c15ca0f36fa2c12be8d38902  validation/reference_cases/topas/he-water-250mevu-r2-lat-em-lp-timing-smoke/input.txt
+074de84a1b73b82c9a4169b1af2892db79f0af6d6089eed24b3901b9214d72b5  validation/reference_cases/topas/oxygen-water-430mevu-r2-idd-em-lp-timing-smoke/case.json
+8bd26ee79201156ce003efae5bb6a0a151f6a125906e107d3b55e719be435df4  validation/reference_cases/topas/oxygen-water-430mevu-r2-idd-em-lp-timing-smoke/input.txt
+367db7e36c6304880ffd058e1f998710863db0f2ef09ef7ec301f5b46aedbc33  validation/reference_cases/topas/oxygen-water-430mevu-r2-idd-full-lp-timing-smoke/case.json
+7814b35838e2635a7fc4de267793389ffdc21ebb73ef75b9349a7039d2f8fc79  validation/reference_cases/topas/oxygen-water-430mevu-r2-idd-full-lp-timing-smoke/input.txt
+b8183c78e3429b947ed4e1040ef4e5a4ff61fb2a1c4def3820ad350d330786fe  validation/reference_cases/topas/oxygen-water-430mevu-r2-lat-em-lp-timing-smoke/case.json
+7d09eded2d6761b8820451e4ef9d43ec2448b0420e1127d8346e973d3c99e271  validation/reference_cases/topas/oxygen-water-430mevu-r2-lat-em-lp-timing-smoke/input.txt
 ```

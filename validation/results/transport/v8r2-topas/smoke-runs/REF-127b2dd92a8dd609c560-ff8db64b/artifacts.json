@@ -1,0 +1,70 @@
+[
+  {
+    "run_id": "REF-127b2dd92a8dd609c560-ff8db64b",
+    "sha": "fce29f49282f4392bbb44866c4814f4dac72d57d",
+    "total_files": 12,
+    "next_offset": null,
+    "files": [
+      {
+        "path": "inputs/case.json",
+        "bytes": 1943,
+        "sha256": "87b01fa63601b547ad839337b0823b4c419826244030847d2fd743cbab6f99f2"
+      },
+      {
+        "path": "inputs/input.txt",
+        "bytes": 2705,
+        "sha256": "627556ce583cbf3655b786f317bda3326b58388d49f085d653adb807a4de22d2"
+      },
+      {
+        "path": "record.json",
+        "bytes": 3710,
+        "sha256": "a79ab4244232b39964db8fa4beb43f78cd7e0d5102cd1465f6979a3bf9f6e8f6"
+      },
+      {
+        "path": "request.json",
+        "bytes": 3495,
+        "sha256": "5bdcb9bce5bb43926bb052a9ff100ffba583b88a4465b729518eaef4fda50c16"
+      },
+      {
+        "path": "stderr.txt",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "stdout.txt",
+        "bytes": 78059,
+        "sha256": "dd490eca7e14d760109a480e2cfbedc63d137454477e43aa7b9567fee3c4aff1"
+      },
+      {
+        "path": "work/case.json",
+        "bytes": 1943,
+        "sha256": "87b01fa63601b547ad839337b0823b4c419826244030847d2fd743cbab6f99f2"
+      },
+      {
+        "path": "work/input.txt",
+        "bytes": 2705,
+        "sha256": "627556ce583cbf3655b786f317bda3326b58388d49f085d653adb807a4de22d2"
+      },
+      {
+        "path": "work/lat_x.bin",
+        "bytes": 24000000,
+        "sha256": "dee5e9caa0954b711989ac471d1eced87f782e4f0ae1c31ce30143a7331d30a2"
+      },
+      {
+        "path": "work/lat_x.binheader",
+        "bytes": 239,
+        "sha256": "4306061f94ea6b71edcfe2a654981f705a6256263b35b635a8c4ba9bfc06648d"
+      },
+      {
+        "path": "work/lat_y.bin",
+        "bytes": 24000000,
+        "sha256": "9f0e332577a8be5a14c6a7eb07ad9299c2672ae4445886d5259409e862b61de4"
+      },
+      {
+        "path": "work/lat_y.binheader",
+        "bytes": 239,
+        "sha256": "d69943af024a1c9acba02c3e02191ee82d17b8c2637ba80f6528faa2baa87cc0"
+      }
+    ]
+  }
+]

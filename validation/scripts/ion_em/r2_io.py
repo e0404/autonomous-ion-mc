@@ -236,6 +236,36 @@ def topas_seed(case: int, part: int) -> int:
     return TOPAS_SEED_BASE + 100 * part + case
 
 
+_CONFIG_RE = "(idd-em|lat-em|idd-full|lat-full)"
+_PART_BUNDLE = re.compile(rf"^(he|carbon|oxygen)-water-(\d+)mevu-r2-{_CONFIG_RE}-part(\d+)$")
+_SMOKE_BUNDLE = re.compile(
+    rf"^(he|carbon|oxygen)-water-(\d+)mevu-r2-{_CONFIG_RE}(-ecut1km)?-(timing|steps-verbose)-smoke$"
+)
+
+
+def parse_bundle(bundle: str) -> dict[str, Any]:
+    """``{"kind": "part"|"smoke", "case", "config", "part"}`` of an r2 bundle directory name.
+    Evidence parts: ``<ion>-water-<E>mevu-r2-<config>-part<p>`` (section 7; ``part`` must belong
+    to ``config``). Smokes: ``<ion>-water-<E>mevu-r2-<config>[-ecut1km]-(timing|steps-verbose)-
+    smoke``; the configuration (frozen module set and lines of :func:`run_checks`) is the name's
+    ``<config>`` (the ``-ecut1km-`` smokes are LAT-FULL under R2-SIZE-1), ``part`` is None. The
+    case is the section-3 case with that ion and energy; anything else raises RecordError."""
+    m = _PART_BUNDLE.match(bundle)
+    kind = "part"
+    if m is None:
+        m, kind = _SMOKE_BUNDLE.match(bundle), "smoke"
+    if m is None:
+        raise RecordError(f"{bundle!r} is not an r2 evidence-part or smoke bundle name")
+    ion, energy, config = m.group(1), int(m.group(2)), m.group(3)
+    cases = [c for c, v in CASES.items() if v[0] == ion and int(v[1]) == energy]
+    if len(cases) != 1:
+        raise RecordError(f"{bundle}: no unique section-3 case for {ion} {energy} MeV/u")
+    part = int(m.group(4)) if kind == "part" else None
+    if part is not None and part not in CONFIG_PARTS[config]:
+        raise RecordError(f"{bundle}: part {part} is not in the {config} block")
+    return {"kind": kind, "case": cases[0], "config": config, "part": part}
+
+
 # ---------------------------------------------------------------------------------------------
 # plan, review, index
 # ---------------------------------------------------------------------------------------------
@@ -423,7 +453,7 @@ class TopasRun:
     run_id: str
     case: int
     config: str
-    part: int
+    part: int | None
     bundle: str
     configuration_id: str
     code_sha: str
@@ -514,9 +544,38 @@ def load_topas_run(
     trust: dict[str, Any],
     reader: CommittedReader,
 ) -> TopasRun:
-    """Load and bind one TOPAS run (see the module docstring); any gap raises RecordError.
-    ``trust`` is ``attest.load_trusted(<trust file>)``."""
-    rdir = Path(records) / "runs" / run_id
+    """Load and bind one TOPAS evidence run (see the module docstring); any gap raises
+    RecordError. ``trust`` is ``attest.load_trusted(<trust file>)``. The record lives under
+    ``<records>/runs/<run_id>/`` and the bundle is ``bundle_name(case, config, part)`` with the
+    seed formula of section 7."""
+    return load_signed_run(
+        repo, Path(records) / "runs" / run_id, outputs, run_id, bundle_name(case, config, part),
+        config, trust, reader, review_records=records, case=case, part=part,
+        expected_seeds=[topas_seed(case, part)],
+    )  # fmt: skip
+
+
+def load_signed_run(
+    repo: Path | str,
+    rdir: Path | str,
+    outputs: Path | str,
+    run_id: str,
+    bundle: str,
+    config: str,
+    trust: dict[str, Any],
+    reader: CommittedReader,
+    *,
+    review_records: Path | str,
+    case: int = 0,
+    part: int | None = None,
+    expected_seeds: list[int] | None = None,
+) -> TopasRun:
+    """Load and bind one signed TOPAS run of ``bundle`` (evidence part or smoke) whose
+    ``record.json`` / ``artifacts.json`` are in ``rdir`` (see the module docstring for every
+    binding); the seal note and ``<review_records>/review.json`` are pinned at the run's
+    ``code_sha``. ``expected_seeds``: the seed formula of an evidence part; None for a smoke, whose
+    seed is bound only through the committed bundle at ``code_sha`` (case.json ``seeds``)."""
+    rdir = Path(rdir)
     record_path = rdir / "record.json"
     result = reader.json(record_path, f"signed run record {run_id}")
     status, reason = attest_module().classify_record(result, trust, REFERENCE_SIGNER)
@@ -587,7 +646,6 @@ def load_topas_run(
     for name, key in (("stdout.txt", "stdout_sha256"), ("stderr.txt", "stderr_sha256")):
         if result[key] != listing[name]:
             raise RecordError(f"{run_id}: signed {key} differs from the listing's {name}")
-    bundle = bundle_name(case, config, part)
     run = TopasRun(
         run_id=run_id,
         case=case,
@@ -640,7 +698,7 @@ def load_topas_run(
             got = input_files.get(name, {}).get("sha256") if isinstance(input_files, dict) else None
             if got is None or got != entry.get(name):
                 run.bundle_problems.append(f"{bundle}/{name} differs from the frozen manifest")
-    run.pinned = load_pinned_chronology(repo, code_sha, reader.rel(records))
+    run.pinned = load_pinned_chronology(repo, code_sha, reader.rel(review_records))
     run.pinned["manifest_bundle_set_digest"] = manifest["bundle_set_digest"]
     if input_files != committed:
         raise RecordError(
@@ -650,8 +708,8 @@ def load_topas_run(
     if case_doc != case_json:
         raise RecordError(f"{run_id}: request case differs from the committed case.json")
     seeds = require(case_doc, "seeds", "case.json")
-    if seeds != [topas_seed(case, part)]:
-        raise RecordError(f"{run_id}: seed {seeds!r} != formula {topas_seed(case, part)}")
+    if expected_seeds is not None and seeds != expected_seeds:
+        raise RecordError(f"{run_id}: seed {seeds!r} != formula {expected_seeds}")
     hist = require(case_doc, "histories", "case.json")
     if not isinstance(hist, int) or hist <= 0:
         raise RecordError(f"{run_id}: histories {hist!r} is not a positive integer")

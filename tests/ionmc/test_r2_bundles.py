@@ -15,7 +15,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 TOPAS = ROOT / "validation" / "reference_cases" / "topas"
-RECORDED_DIGEST = "6d1ae3a06211831cfb7e8924c65d6d8fe31fae7781443ff84c077204045ea790"
+RECORDED_DIGEST = "76d785667211bb39e96d517f46d636ff4b60be212b0d7fda9d968993ef47ed66"
 FULL_MODULES = [
     "g4em-standard_opt4",
     "g4h-phy_QGSP_BIC_HP",
@@ -25,10 +25,14 @@ FULL_MODULES = [
     "g4ion-QMD",
     "g4radioactivedecay",
 ]
-SMOKE_RANGE = range(20600411, 20600428)
-SMOKE_SUFFIXES = ("-timing-smoke", "-steps-verbose-smoke")  # includes -ecut1km-timing-smoke
+SMOKE_RANGE = range(20600411, 20600438)
+SMOKE_SUFFIXES = ("-timing-smoke", "-steps-verbose-smoke")  # includes -ecut1km-/-lp- variants
 # histories per part per (configuration, ion): dated sizing note 2026-11-09 and amendment R2-SIZE-1
 # (plan section 8); LAT-FULL is re-sized after the ecut1km timing smokes
+SMOKE_NAME = (
+    r"(he|carbon|oxygen)-water-\d+mevu-r2-(idd|lat)-(em|full)-"
+    r"(timing|ecut1km-timing|steps-verbose|lp-timing|lp-steps-verbose)-smoke"
+)
 N_PART = {
     "idd-em": {"he": 25000, "carbon": 25000, "oxygen": 25000},
     "lat-em": {"he": 25000, "carbon": 25000, "oxygen": 25000},
@@ -57,7 +61,7 @@ BUNDLES = sorted(d for d in TOPAS.iterdir() if d.is_dir() and "-r2-" in d.name)
 
 
 def test_bundle_count():
-    assert len(BUNDLES) == 209
+    assert len(BUNDLES) == 219
 
 
 def test_regeneration_is_byte_identical_and_digest_matches(tmp_path):
@@ -67,9 +71,9 @@ def test_regeneration_is_byte_identical_and_digest_matches(tmp_path):
         for f in ("case.json", "input.txt"):
             assert (TOPAS / nm / f).read_bytes() == (tmp_path / nm / f).read_bytes(), f"{nm}/{f}"
     digest, nfiles = gen.bundle_set_digest(tmp_path)
-    assert nfiles == 418
+    assert nfiles == 438
     assert digest == RECORDED_DIGEST
-    assert gen.bundle_set_digest(TOPAS) == (RECORDED_DIGEST, 418)
+    assert gen.bundle_set_digest(TOPAS) == (RECORDED_DIGEST, 438)
 
 
 @pytest.mark.parametrize("d", BUNDLES, ids=lambda d: d.name)
@@ -97,10 +101,11 @@ def test_seed_formula_and_uniqueness():
             assert seed == 20619000 + 100 * part + case_no
         else:
             assert d.name.endswith(SMOKE_SUFFIXES), d.name
+            assert re.fullmatch(SMOKE_NAME, d.name), d.name
             assert seed in SMOKE_RANGE, d.name
         assert seed not in seeds, f"{d.name} shares seed with {seeds[seed]}"
         seeds[seed] = d.name
-    assert len(seeds) == 209
+    assert len(seeds) == 219
     assert sorted(s for s in seeds if s in SMOKE_RANGE) == list(SMOKE_RANGE)
 
 
@@ -139,7 +144,9 @@ def test_smokes_carry_the_scorer_block_of_their_evidence_configuration(d):
     """Timing is representative: a smoke has the scorers (same bins) of its evidence case."""
     if not d.name.endswith(SMOKE_SUFFIXES):
         return
-    stem = re.sub(r"-(ecut1km-timing|timing|steps-verbose)-smoke$", "", d.name)
+    stem = re.sub(
+        r"-(ecut1km-timing|lp-timing|timing|lp-steps-verbose|steps-verbose)-smoke$", "", d.name
+    )
     assert stem != d.name, d.name
     evidence = [e for e in BUNDLES if re.fullmatch(re.escape(stem) + r"-part\d+", e.name)]
     assert evidence, d.name
@@ -200,6 +207,7 @@ def test_electron_cut_per_configuration(d):
     assert _native(d, "d:Ph/Default/EMRangeMax") == "10 GeV"
     assert _native(d, "i:Ts/MaxStepNumber") == "10000000"
     old_lat_full_smoke = cfg == "lat-full" and d.name.endswith("-lat-full-timing-smoke")
+    # (no LAT-FULL lp smoke exists: the LAT-FULL timing smokes are superseded by the ecut1km ones)
     if cfg == "idd-full" or old_lat_full_smoke:
         assert cuts == [], d.name
         assert "CutForElectron" not in case["cuts"], d.name
@@ -282,7 +290,8 @@ RUN_SMOKE_SEEDS = range(20600411, 20600424)
 
 @pytest.mark.parametrize("d", BUNDLES, ids=lambda d: d.name)
 def test_process_list_requested(d):
-    """Codex REVIEW-6b4731a7: evidence bundles and the four R2-SIZE-1 smokes list processes.
+    """Codex REVIEW-6b4731a7: evidence bundles, the four R2-SIZE-1 smokes and the ten
+    R2-SMOKE-LP smokes list processes.
 
     The thirteen smokes already run stay byte-identical, without the line.
     """
@@ -292,7 +301,7 @@ def test_process_list_requested(d):
         assert lines == [], d.name
         assert "ListProcesses" not in text, d.name
     else:
-        assert re.search(r"-part\d+$", d.name) or _seed(d) in range(20600424, 20600428), d.name
+        assert re.search(r"-part\d+$", d.name) or _seed(d) in range(20600424, 20600438), d.name
         assert lines == ['"True"'], d.name
 
 
@@ -300,8 +309,71 @@ def test_process_list_bundle_counts():
     with_list = [
         d for d in BUNDLES if 'b:Ph/ListProcesses = "True"' in (d / "input.txt").read_text()
     ]
-    assert len(with_list) == 196
+    assert len(with_list) == 206
+    assert len([d for d in with_list if "-lp-" in d.name]) == 10
     assert len([d for d in with_list if re.search(r"-part\d+$", d.name)]) == 192
+
+
+# resolution R2-SMOKE-LP (2026-11-09): ListProcesses variant -> (seed, seed of the original smoke);
+# the original is the bundle of the same name without "-lp"
+LP_SMOKES = {
+    "he-water-250mevu-r2-idd-em-lp-timing-smoke": (20600428, 20600411),
+    "he-water-250mevu-r2-lat-em-lp-timing-smoke": (20600429, 20600412),
+    "he-water-250mevu-r2-idd-full-lp-timing-smoke": (20600430, 20600413),
+    "carbon-water-430mevu-r2-idd-em-lp-timing-smoke": (20600431, 20600415),
+    "carbon-water-430mevu-r2-lat-em-lp-timing-smoke": (20600432, 20600416),
+    "carbon-water-430mevu-r2-idd-full-lp-timing-smoke": (20600433, 20600417),
+    "oxygen-water-430mevu-r2-idd-em-lp-timing-smoke": (20600434, 20600419),
+    "oxygen-water-430mevu-r2-lat-em-lp-timing-smoke": (20600435, 20600420),
+    "oxygen-water-430mevu-r2-idd-full-lp-timing-smoke": (20600436, 20600421),
+    "carbon-water-290mevu-r2-idd-em-lp-steps-verbose-smoke": (20600437, 20600423),
+}
+
+
+def _lp_original(name):
+    return name.replace("-lp-", "-")
+
+
+LP_LINES = [
+    "# Prints the per-particle process list so that the executed module set, g4decay included, "
+    "is verifiable from the log (Codex REVIEW-6b4731a7).",
+    'b:Ph/ListProcesses = "True"',
+]
+
+
+def test_lp_smoke_set():
+    names = sorted(d.name for d in BUNDLES if "-lp-" in d.name)
+    assert names == sorted(LP_SMOKES)
+    assert sorted(s for s, _ in LP_SMOKES.values()) == list(range(20600428, 20600438))
+
+
+@pytest.mark.parametrize("name", sorted(LP_SMOKES))
+def test_lp_smoke_differs_from_original_only_in_seed_process_list_and_rationale(name):
+    """R2-SMOKE-LP: each variant equals its original up to the seed, the two ListProcesses lines
+    (comment + parameter) and the appended rationale sentence."""
+    seed, orig_seed = LP_SMOKES[name]
+    d, o = TOPAS / name, TOPAS / _lp_original(name)
+    case, orig = (
+        json.loads((d / "case.json").read_text()),
+        json.loads((o / "case.json").read_text()),
+    )
+    assert orig["seeds"] == [orig_seed] and case["seeds"] == [seed]
+    assert sorted(k for k in case if case[k] != orig[k]) == ["rationale", "seeds"]
+    assert case["rationale"] == orig["rationale"] + (
+        f"; ListProcesses variant (R2-SMOKE-LP, 2026-11-09): identical to seed {orig_seed} "
+        "except the process-list printout and the seed; execution only, not evidence"
+    )
+    lines, olines = (
+        (d / "input.txt").read_text().split("\n"),
+        (o / "input.txt").read_text().split("\n"),
+    )
+    assert "ListProcesses" not in "\n".join(olines)
+    i = lines.index(LP_LINES[0])
+    assert lines[i : i + 2] == LP_LINES
+    rest = lines[:i] + lines[i + 2 :]
+    assert len(rest) == len(olines)
+    diff = [(a, b) for a, b in zip(rest, olines, strict=True) if a != b]
+    assert diff == [(f"i:Ts/Seed = {seed}", f"i:Ts/Seed = {orig_seed}")]
 
 
 MANIFEST = ROOT / "validation" / "results" / "transport" / "v8r2-topas" / "frozen-bundles.json"
@@ -314,8 +386,8 @@ def test_frozen_manifest_matches_committed_bundles():
     m = json.loads(MANIFEST.read_text())
     assert m["schema"] == "ionmc-v8r2-frozen-bundles-1"
     assert m["generated_from"] == "gen_r2_bundles.py"
-    assert m["bundle_count"] == 209 == len(m["bundles"]) == len(BUNDLES)
-    assert m["file_count"] == 418
+    assert m["bundle_count"] == 219 == len(m["bundles"]) == len(BUNDLES)
+    assert m["file_count"] == 438
     assert m["bundle_set_digest"] == RECORDED_DIGEST == gen.BUNDLE_SET_DIGEST
     assert sorted(m["bundles"]) == [d.name for d in BUNDLES]
     for d in BUNDLES:
