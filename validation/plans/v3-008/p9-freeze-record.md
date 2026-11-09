@@ -198,7 +198,7 @@ placeholder scorer output was deleted unread.
 | `tests/ionmc/test_r2_bundles.py` | `54af24fa0baf13d43f4ed25c96989344e09c01354efdda0dc34ba83a5ab60fdb` |
 | `reference_requests/operator-directives/2026-11-07-topas-validation-target.md` | `ca079e9f0af990cdff9d8efde60d38ac55e2d0fc0fb9ef22355a81f4a2ab0b26` |
 | `reference_requests/interventions/IR-20261102-010435-B59B2D/response.json` | `dc6a610cb67dee50fa0bb96327026eea0b81bb9506e7b898c2e9e44322f69bd0` |
-| `validation/plans/v3-008/r2-topas-target.md` | `d4d177e3535fa9e102de8adcfe20cdbd528abfc445c7e7dab75210eea2336f88` |
+| `validation/plans/v3-008/r2-topas-target.md` | `eb7c262264ea5efab7e8de1b20507315b45dc1e262632d65384671a742f4bcd4` |
 
 
 **Dated note (2026-11-07, orchestrator) — hashes regenerated at the freeze commit's parent; entries that changed since f694b747:** `validation/plans/v3-008/p10-single-scattering-availability.md` bea86277… → a7f539a0…; `validation/plans/v3-008/p11-exact-omega-mapping.md` 6116648a… → f78e95f5…; `reference_requests/interventions/IR-20261102-010435-B59B2D/request.json` 068cafd7… → e81a7efa…. All other entries unchanged (recomputed).
@@ -230,11 +230,11 @@ placeholder scorer output was deleted unread.
 | `src/ionmc/transport/tables.py` | `45542d46fb208ba1ca9ccdcb9e8baea41e47f86a7429b46f8566ad12b1b2619d` |
 | `src/ionmc/transport/tally.py` | `be202f7310e3991bead49fd40e24cef1f5493992044c72aff6c5f8e8826b547c` |
 | `src/ionmc/transport/warp_driver.py` | `cb32245e48d6bffd03092d09fb7421d8b11a8191158a311fd0b9a92e568aeb86` |
-| `validation/scripts/ion_em/r2_evaluate.py` | `be1eadcc504968d75fce09b0f7555b80ccb23c2ece18477b08159091f226ec14` |
+| `validation/scripts/ion_em/r2_evaluate.py` | `6f92b41a7cd80e103973c42fdd25c0c0793aa7dd552bd6c47cd58456f349605f` |
 | `validation/scripts/transport/steps_v8.py` | `e8b73006921b479797e762c1319adf7e1e4edb95594ffac4109827b4ee185a7d` |
 | `tests/ionmc/test_ion_mcs_table.py` | `b3fb9992f866238b11243e032f394583775e292cec49601798ef44b54efcb749` |
 | `tests/ionmc/test_v3_008_rows_ci.py` | `ffea9f20976ec2d721067ccf52d5cb9797fad51a5bda7dd224948829c1cade0e` |
-| `tests/ionmc/test_r2_evaluate.py` | `5b996ebb62304e4720bc631ec4bae4b41c7a4bf13ddabdfd1ccc7ea9cf18f222` |
+| `tests/ionmc/test_r2_evaluate.py` | `dd9ab8133ca41ae9b82254195db8cfb9f5f9540dda076cc1e82f98479929cb8b` |
 | `tests/ionmc/test_v3_008_steps_v8.py` | `ab4922ea8842751e22c9d1882e9e1dec0ae88a25b55174c99586c4802868b731` |
 
 (c) R2.5 counts, superseded by this note (the R2.5 text is kept as written): repository paths 475 + 15 = **490**; total full sha256 values 519 + 15 = **534**, plus the bundle-set digest (unchanged, `a8a1c27d…`). The count in R2.6 item (3) (475) is superseded accordingly by 490 for the acceptance tests of the seal.
@@ -256,6 +256,19 @@ placeholder scorer output was deleted unread.
 **Dated note (2026-11-09, Codex REVIEW-f3361441 round, MCS-off gating; orchestrator) — hashes regenerated at the working tree; entries that changed since the note above:** `src/ionmc/physics/exact_omega.py` 1c8f3945… → 6471c388…; `src/ionmc/config.py` 513c32c5… → a24aa6b4…; `src/ionmc/simulation.py` 6efadd7f… → 4d490ba4…; `tests/ionmc/test_ion_mcs_table.py` 7a86e44e… → b3fb9992…. All other entries unchanged (recomputed).
 
 **Dated note (2026-11-09, seal-note commit; orchestrator) — hashes regenerated at the working tree; entries that changed since the note above:** `validation/plans/v3-008/r2-topas-target.md` 2e41ca0e… → d4d177e3… (seal cross-reference note; an intermediate value 17673937… was superseded within the same working tree by the repair of a shell-mangled sentence). All other entries unchanged (recomputed).
+
+**Dated note (2026-11-09, sizing-note and evaluator commit; orchestrator) — hashes regenerated at the working tree; entries that changed since the note above:** `validation/plans/v3-008/r2-topas-target.md` d4d177e3… → eb7c2622…; `validation/scripts/ion_em/r2_evaluate.py` be1eadcc… → 6f92b41a…; `tests/ionmc/test_r2_evaluate.py` 5b996ebb… → dd9ab813…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-09, sizing-note and evaluator commit; orchestrator) — newly bound implementation and evidence paths (sha256 as committed; the evidence records index will be rebound as evidence runs are added):**
+
+| File | sha256 |
+|---|---|
+| `validation/scripts/ion_em/r2_io.py` | `fa129516fdd38d86b90e00006f5078ee754dffa24712a16429eb9ae8c2e0c6db` |
+| `validation/scripts/ion_em/r2_statistics.py` | `fbb19370ae0bb20ed1cc5289864c3331ba63bdcb88315b33f06b6d710c79ed6b` |
+| `validation/results/transport/v8r2-topas/smokes.json` | `bae61e8583a1c122b4f2585aa084347d9e4a8e6ceb043bcb24fe90ec8755eb62` |
+| `validation/results/transport/v8r2-topas/records/review.json` | `87988397d4c14304d75f987117e4c22199d4452a0b48030e131a2bd52edb1199` |
+| `validation/results/transport/v8r2-topas/records/index.json` | `2e092ee30964b55d1519b7bfd45467a7f5155c337cb54aa3b08cccb930d3cdb3` |
+
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.

@@ -179,8 +179,552 @@ def test_run_validity_combined(repo: dict[str, Any]) -> None:
             R2.check_run_validity(repo["path"], plan, bad, good, "r1")
 
 
-def test_statistics_stubs_fail_closed() -> None:
-    with pytest.raises(NotImplementedError):
-        R2.td_statistics()
-    with pytest.raises(NotImplementedError):
-        R2.tl_statistics()
+# =============================================================================================
+# TD/TL statistics, loaders and CLI (synthetic data only: no TOPAS output, no physics reference
+# value). The TOPAS file formats are written from the header lines of the TOPAS CSV/binary
+# documentation as parsed by ``ionmc.reference.parsers``; no r2 TOPAS output was materialized
+# when these tests were written, and no number of any materialized output is used.
+# =============================================================================================
+
+import hashlib  # noqa: E402
+import json  # noqa: E402
+import math  # noqa: E402
+
+import numpy as np  # noqa: E402
+
+ST, IO = R2.st, R2.io
+
+
+def _phi(x: np.ndarray) -> np.ndarray:
+    return 0.5 * np.array([math.erfc(-v / math.sqrt(2.0)) for v in np.ravel(x)]).reshape(
+        np.shape(x)
+    )
+
+
+def _gauss_bins(edges: np.ndarray, sigma: float, n: float = 1.0) -> np.ndarray:
+    return n * np.diff(_phi(edges / sigma))
+
+
+def test_tost_pass_fail_inconclusive() -> None:
+    assert ST.tost(10.0, 10.02, 0.01, 0.01, 0.05)["verdict"] == "PASS"
+    inc = ST.tost(10.0, 10.04, 0.01, 0.01, 0.05)  # |d| <= tol but margin exceeds it
+    assert inc["verdict"] == "FAIL" and inc["note"] == "inconclusive"
+    out = ST.tost(10.0, 10.1, 0.0, 0.0, 0.05)
+    assert out["verdict"] == "FAIL" and out["note"] == "outside tolerance"
+    assert ST.tost(math.nan, 1.0, 0.0, 0.0, 1.0)["verdict"] == "FAIL"
+    r = ST.tost(1.0, 1.0, 0.03, 0.04, 1.0)
+    assert r["sigma_comb"] == pytest.approx(0.05) and r["statistic"] == pytest.approx(1.645 * 0.05)
+    assert ST.band(1.1, 0.01, -0.05, 0.40)["verdict"] == "PASS"
+    assert ST.band(0.96, 0.01, -0.05, 0.40)["note"] == "inconclusive"
+    assert ST.band(1.5, 0.0, -0.05, 0.40)["verdict"] == "FAIL"
+
+
+def test_uncertainties() -> None:
+    v = [1.0, 2.0, 3.0, 4.0]
+    assert ST.topas_se(v) == pytest.approx(1.430 * np.std(v, ddof=1) / 2.0)
+    assert ST.batch_se(v) == pytest.approx(np.std(v, ddof=1) / 2.0)
+    for bad in ([1.0, 2.0, 3.0], [1.0] * 6, [1.0, 2.0, 3.0, math.nan]):
+        with pytest.raises(ST.StatisticsError):
+            ST.topas_se(bad)
+
+
+def test_peak_parabola_recovers_vertex() -> None:
+    hz, z0 = 0.02, 3.05  # z0 at a group centre: group means of a quadratic are a quadratic
+    zc = (np.arange(500) + 0.5) * hz
+    e = 10.0 - 0.5 * (zc - z0) ** 2
+    zp, dp = ST.peak(e, hz)
+    # mean of 5 bin-centre samples (offsets -2h..2h) of 10 - 0.5 u^2: 10 - 0.5 * 2 h^2
+    assert zp == pytest.approx(z0, abs=1e-9) and dp == pytest.approx(10.0 - hz * hz)
+    zp2, _ = ST.peak(10.0 - 0.5 * (zc - 3.0) ** 2, hz)  # off-centre vertex: exact as well
+    assert zp2 == pytest.approx(3.0, abs=1e-9)
+    with pytest.raises(ST.StatisticsError):
+        ST.peak(zc, hz)  # monotonic: maximal group at the end
+
+
+def test_distal_levels_on_a_linear_falloff() -> None:
+    hz = 0.05
+    zc = (np.arange(400) + 0.5) * hz
+    e = np.where(zc < 10.0, 1.0, np.clip(1.0 - (zc - 10.0) / 4.0, 0.0, None))
+    assert ST.distal_level(e, hz, 9.0, 0.8) == pytest.approx(10.8)
+    assert ST.distal_level(e, hz, 9.0, 0.2) == pytest.approx(13.2)
+    with pytest.raises(ST.StatisticsError):
+        ST.distal_level(np.ones(400), hz, 9.0, 0.8)
+
+
+def _bragg(zc: np.ndarray, shift: float = 0.0) -> np.ndarray:
+    z = zc - shift
+    tail = 0.5 * np.array([math.erfc((v - 7.0) / (math.sqrt(2.0) * 0.15)) for v in z])
+    return (1.0 + 0.05 * z) * tail + 2.0 * np.exp(-((z - 6.9) ** 2) / (2 * 0.25**2)) * tail
+
+
+def test_depth_quantities_on_synthetic_bragg_curve() -> None:
+    hz = 0.05
+    zc = (np.arange(200) + 0.5) * hz
+    q = ST.depth_quantities(_bragg(zc), hz, r_plan_mm=22.5)
+    assert 6.5 < q["z_peak"] < q["r80"] < q["r20"] < 7.6
+    assert q["w"] == pytest.approx(q["r20"] - q["r80"])
+    assert q["d_ent"] == pytest.approx(np.mean(_bragg(zc)[10:30]))  # [0.5, 1.5] mm
+    assert q["pe"] == pytest.approx(q["d_peak"] / q["d_ent"])
+    g = ST.plateau_groups(_bragg(zc), hz, 22.5, q["r80"])
+    assert g.size == int((0.8 * q["r80"] - 0.5) // 1.0)  # 1 mm groups from 0.5 mm
+    assert g[0] == pytest.approx(np.mean(_bragg(zc)[10:30]))
+    shifted = ST.depth_quantities(_bragg(zc, 0.3), hz, 22.5)
+    assert shifted["r80"] - q["r80"] == pytest.approx(0.3, abs=0.01)
+    assert ST.range_class(159.3)["group_mm"] == 5.0 and ST.range_class(53.1)["group_mm"] == 2.0
+
+
+def test_core_sigma_recovers_gaussian() -> None:
+    edges = -60.0 + 0.02 * np.arange(6001)
+    for sigma in (0.07, 0.5, 3.0):
+        fit = ST.core_sigma(_gauss_bins(edges, sigma, 1e6), edges)
+        assert fit.sigma == pytest.approx(sigma, rel=1e-3)
+    # robust to a broad low pedestal (the halo): the +-20 mm moment is not
+    prof = _gauss_bins(edges, 0.5, 1e6) + _gauss_bins(edges, 8.0, 5e4)
+    assert ST.core_sigma(prof, edges).sigma == pytest.approx(0.5, rel=0.01)
+    assert ST.second_moment_sigma(prof, edges) > 0.7
+    assert ST.halo_fraction(prof, edges, 0.5) > 0.04
+    rng = np.random.default_rng(5)
+    noisy = rng.poisson(_gauss_bins(edges, 0.4, 2e5)).astype(float)
+    assert ST.core_sigma(noisy, edges).sigma == pytest.approx(0.4, rel=0.02)
+    with pytest.raises(ST.StatisticsError):  # flat profile: no finite ML scale in the window
+        ST.core_sigma(np.ones(6000), edges)
+
+
+def test_chunk_combination_equals_single_sample() -> None:
+    rng = np.random.default_rng(1)
+    sums = [rng.random((40, 7)) * h for h in (250, 250, 500)]  # raw per-batch sums of 3 chunks
+    hpb = [250, 250, 500]  # histories per batch
+    combined = IO.combine_chunks([(h, s / h) for h, s in zip(hpb, sums, strict=True)])
+    single = sum(sums) / sum(hpb)  # one run with the same 40 batches of 1000 histories
+    np.testing.assert_allclose(combined, single, rtol=1e-14)
+    with pytest.raises(IO.RecordError):
+        IO.combine_chunks([(1, np.zeros(3)), (1, np.zeros(4))])
+
+
+def test_verify_npz_fails_closed(tmp_path: Path) -> None:
+    p = tmp_path / "a.npz"
+    np.savez_compressed(p, a=np.zeros(3))
+    good = {"npz_sha256": hashlib.sha256(p.read_bytes()).hexdigest(), "npz_bytes": p.stat().st_size}
+    IO.verify_npz(p, good)
+    with pytest.raises(IO.RecordError, match="sha256"):
+        IO.verify_npz(p, {**good, "npz_sha256": "0" * 64})
+    with pytest.raises(IO.RecordError, match="size"):
+        IO.verify_npz(p, {**good, "npz_bytes": 1})
+    with pytest.raises(IO.RecordError):
+        IO.verify_npz(tmp_path / "missing.npz", good)
+
+
+# ---- synthetic evidence world (git repo, records, outputs, samples) --------------------------
+
+HZ, HX, L = 0.05, 0.1, 10.0
+T_LATE, T_EARLY = "2026-11-09T12:00:00+00:00", "2026-11-09T09:01:00Z"  # review ends 09:00
+SMALL = {1: ("he", 50.0, 22.5, L, HZ, HX, "main"), 3: ("he", 250.0, 22.5, L, HZ, HX, "main")}
+J_MEV = 1.602176634e-13
+SIG = [0.5 + 0.05 * k for k in range(int(L))]  # lateral sigma per 1 mm slab (>= 3 h_x: gated)
+OUTS = {
+    "idd-em": ["idd_dose.csv"],
+    "idd-full": ["idd_dose.csv", "idd_primary_dose.csv", "primary_fluence.csv"],
+    "lat-em": ["lat_x.bin", "lat_x.binheader", "lat_y.bin", "lat_y.binheader"],
+    "lat-full": ["lat_x.bin", "lat_x.binheader", "lat_y.bin", "lat_y.binheader",
+                 "lat_x_primary.bin", "lat_x_primary.binheader", "lat_y_primary.bin",
+                 "lat_y_primary.binheader"],
+}  # fmt: skip
+MSC = "msc:  for {p}  SubType= 10\n      ===== EM models for the G4Region  DefaultRegionForTheWorld ======\n            {m} : Emin=    0 eV  Emax=   10 GeV\n          StepLim=Minimal Rfact=0.2 Gfact=2.5\n\n"  # noqa: E501
+STDOUT = (
+    MSC.format(p="GenericIon", m="UrbanMsc") + MSC.format(p="alpha", m="UrbanMsc")
+    + "G4WT0 > Begin processing for Run: 0, History: 0\n"
+    + "Particle source Beam: Total number of histories: 1000\n"
+)  # fmt: skip
+
+
+def _csv(energy_total: np.ndarray, scorer: str = "IDD") -> str:
+    mass = 120.0 * 120.0 * HZ * 1e-6
+    dose = energy_total * J_MEV / mass
+    head = (
+        f"# TOPAS Version: 4.3\n# Parameter File: input.txt\n# Results for scorer: {scorer}\n"
+        "# Scored in component: Water\n# X in 1 bin  of 12 cm\n# Y in 1 bin  of 12 cm\n"
+        f"# Z in {dose.size} bins of {HZ / 10} cm\n"
+        "# DoseToMedium ( Gy ) : Sum   Standard_Deviation\n"
+    )
+    return head + "".join(f"0, 0, {i}, {float(v)!r}, 0\n" for i, v in enumerate(dose))
+
+
+def _binheader(stem: str, axis: int, n: int) -> str:
+    """The real r2 .binheader layout (He 250 LAT-EM smoke, format only)."""
+    ax = [f"# X in {n} bins of {HX / 10} cm", "# Y in 1 bin  of 12 cm"]
+    if axis == 1:
+        ax = ["# X in 1 bin  of 12 cm", f"# Y in {n} bins of {HX / 10} cm"]
+    return "\n".join([
+        "# TOPAS Version: 4.3", "# Parameter File: input.txt",
+        f"# Results for scorer: {IO.SCORER_OF[stem]}", "# Scored in component: Water", *ax,
+        f"# Z in {int(L)} bins of 0.1 cm", "# DoseToMedium ( Gy ) : Sum",
+        f"# Binary file: {stem}.bin", "",
+    ])  # fmt: skip
+
+
+def _commit(repo: Path, msg: str) -> str:
+    _git(repo, "add", "-A")
+    _git(repo, "-c", "commit.gpgsign=false", "commit", "-q", "-m", msg)
+    return _git(repo, "rev-parse", "HEAD")
+
+
+def _world(
+    tmp: Path, *, cases: dict[int, dict[str, Any]] | None = None,
+    configs: tuple[str, ...] = ("idd-em", "lat-em"), started_ok: bool = True,
+    tamper: dict[str, Any] | None = None,
+) -> dict[str, Any]:  # fmt: skip
+    """A complete synthetic evidence world. ``cases``: case -> {shift (TOPAS EM IDD), full_shift,
+    sig (TOPAS sigma per slab), ion_scale (ionmc sigma factor)}; ``tamper``: run-validity faults
+    (stderr / stdout callable / input_extra) applied to part 1 of the first config of case 1."""
+    cases = cases or {1: {}}
+    tamper = tamper or {}
+    rng = np.random.default_rng(11)
+    repo = tmp / "repo"
+    repo.mkdir(parents=True)
+    _git(repo, "init", "-q", "-b", "main")
+    nz, nl = round(L / HZ), round(120.0 / HX)
+    zc = (np.arange(nz) + 0.5) * HZ
+    ledges = -60.0 + HX * np.arange(nl + 1)
+    first = (1, configs[0], IO.CONFIG_PARTS[configs[0]][1])
+
+    def lat_of(sig: list[float]) -> np.ndarray:
+        return np.stack([_gauss_bins(ledges, s) for s in sig], axis=1)  # (nl, L) per primary
+
+    for case in cases:  # bundles (committed before the seal)
+        for cfg in configs:
+            for part in IO.CONFIG_PARTS[cfg]:
+                d = repo / IO.BUNDLE_ROOT / IO.bundle_name(case, cfg, part)
+                d.mkdir(parents=True)
+                seed = IO.topas_seed(case, part)
+                case_doc = {"histories": 1000, "seeds": [seed], "expected_outputs": OUTS[cfg],
+                            "input": "input.txt", "rationale": f"part {part}"}  # fmt: skip
+                (d / "case.json").write_text(json.dumps(case_doc))
+                extra = tamper.get("input_extra", "") if (case, cfg, part) == first else ""
+                (d / "input.txt").write_text(
+                    f"# case {case} part {part}\ni:Ts/Seed = {seed}\n"
+                    f"i:So/Beam/NumberOfHistoriesInRun = 1000\n{extra}"
+                )
+    samples = tmp / "samples"  # ionmc chunks + seal
+    chunks = []
+    for case, spec in cases.items():
+        sig_i = [s * spec.get("ion_scale", 1.0) for s in spec.get("sig", SIG)]
+        for k in (1, 2):
+            run_id = f"RUN-2026110{k}T00000{case}Z-0000000{k}"
+            out = samples / "validation" / "generated" / run_id / "r2-samples" / f"case{case}"
+            out.mkdir(parents=True)
+            idd = (_bragg(zc) * HZ)[None, :] * (1.0 + 1e-3 * rng.standard_normal((40, 1)))
+            lx = lat_of(sig_i)[None] * (1.0 + 1e-3 * rng.standard_normal((40, 1, 1)))
+            arrays = {
+                "idd_batch_energy_mev": idd[:, None, None, :],
+                "idd_edges0_mm": np.array([-60.0, 60.0]), "idd_edges1_mm": np.array([-60.0, 60.0]),
+                "idd_edges2_mm": HZ * np.arange(nz + 1),
+                "latx_batch_energy_mev": lx[:, :, None, :], "latx_edges0_mm": ledges,
+                "latx_edges1_mm": np.array([-60.0, 60.0]),
+                "latx_edges2_mm": np.arange(int(L) + 1.0),
+                "laty_batch_energy_mev": lx[:, None, :, :],
+                "laty_edges0_mm": np.array([-60.0, 60.0]), "laty_edges1_mm": ledges,
+                "laty_edges2_mm": np.arange(int(L) + 1.0),
+            }  # fmt: skip
+            npz = out / f"ionmc-case{case}-k{k}.npz"
+            np.savez_compressed(npz, **arrays)
+            chunks.append({
+                "case": case, "k": k, "seed": IO.LV8_BASE + 100 * (29 + case) + k,
+                "histories": 500000, "run_id": run_id, "npz": npz.name,
+                "npz_bytes": npz.stat().st_size,
+                "npz_sha256": hashlib.sha256(npz.read_bytes()).hexdigest(),
+                "counters_all_zero": True,
+            })  # fmt: skip
+    seal_rec = {"schema": IO.SEAL_SCHEMA, "chunk_plan": {"n": {str(c): 2 for c in cases}},
+                "chunks": chunks}  # fmt: skip
+    seal_file = repo / IO.SEAL_RECORD_PATH
+    seal_file.parent.mkdir(parents=True)
+    seal_file.write_text(json.dumps(seal_rec))
+    seal_sha = _commit(repo, "seal")
+    (repo / "later.txt").write_text("after the seal")
+    code_sha = _commit(repo, "after")
+    records, outputs = tmp / "records", tmp / "outputs"  # TOPAS records and outputs
+    index = []
+    for case, spec in cases.items():
+        sig_t = spec.get("sig", SIG)
+        for cfg in configs:
+            for part in IO.CONFIG_PARTS[cfg]:
+                run_id = f"REF-c{case}-{cfg}-{part}"
+                bdir = f"{IO.BUNDLE_ROOT}/{IO.bundle_name(case, cfg, part)}"
+                files = {}
+                for name in ("case.json", "input.txt"):
+                    blob = (repo / bdir / name).read_bytes()
+                    files[name] = {"sha256": hashlib.sha256(blob).hexdigest(), "bytes": len(blob)}
+                request = {
+                    "schema_version": 2, "code_sha": code_sha, "input_files": files,
+                    "case": json.loads((repo / bdir / "case.json").read_text()), "dirty": False,
+                    "engine": {"engine": "topas"}, "os_release_sha256": "1" * 64,
+                    "runner_source_sha256": "2" * 64, "sandbox_binary_sha256": "3" * 64,
+                    "gpu": False,
+                }  # fmt: skip
+                odir = outputs / run_id
+                (odir / "work").mkdir(parents=True)
+                (odir / "request.json").write_text(json.dumps(request, indent=2))
+                hit = (case, cfg, part) == first
+                stdout = tamper["stdout"](STDOUT) if hit and "stdout" in tamper else STDOUT
+                (odir / "stdout.txt").write_text(stdout)
+                (odir / "stderr.txt").write_text(tamper.get("stderr", "") if hit else "")
+                pn = 1000 * (1.0 + 1e-3 * rng.standard_normal())
+                w = odir / "work"
+                if cfg.startswith("idd"):
+                    sh = spec.get("shift", 0.0) if cfg == "idd-em" else spec.get("full_shift", 0.0)
+                    (w / "idd_dose.csv").write_text(_csv(_bragg(zc, sh) * HZ * pn))
+                    if cfg == "idd-full":
+                        (w / "idd_primary_dose.csv").write_text(
+                            _csv(0.9 * _bragg(zc, sh) * HZ * pn, "IDDPrimary")
+                        )
+                        (w / "primary_fluence.csv").write_text("# synthetic, never read\n")
+                else:
+                    profiles = {"lat_x": lat_of(sig_t), "lat_y": lat_of(sig_t)}
+                    if cfg == "lat-full":
+                        broad = lat_of([1.3 * s for s in sig_t])
+                        profiles = {"lat_x": broad, "lat_y": broad,
+                                    "lat_x_primary": lat_of(sig_t),
+                                    "lat_y_primary": lat_of(sig_t)}  # fmt: skip
+                    for stem, prof in profiles.items():
+                        axis = 1 if stem.startswith("lat_y") else 0
+                        m = (prof * pn * J_MEV / (HX * 120 * 1e-6)).astype("<f8")
+                        shape = (nl, 1, int(L)) if axis == 0 else (1, nl, int(L))
+                        (w / f"{stem}.bin").write_bytes(m.reshape(shape).tobytes("F"))
+                        (w / f"{stem}.binheader").write_text(_binheader(stem, axis, nl))
+                listing = [
+                    {"path": p.relative_to(odir).as_posix(), "bytes": p.stat().st_size,
+                     "sha256": hashlib.sha256(p.read_bytes()).hexdigest()}
+                    for p in sorted(odir.rglob("*")) if p.is_file()
+                ]  # fmt: skip
+                rdir = records / "runs" / run_id
+                rdir.mkdir(parents=True)
+                (rdir / "artifacts.json").write_text(
+                    json.dumps({"run_id": run_id, "files": listing})
+                )
+                result = {
+                    "schema_version": 2, "run_id": run_id,
+                    "configuration_id": IO.canonical_digest(request),
+                    "code_sha": code_sha, "engine": "topas",
+                    "finished_at": T_LATE if started_ok else T_EARLY,
+                    "seconds": 100.0, "exit_code": 0, "succeeded": True, "missing_outputs": [],
+                }  # fmt: skip
+                (rdir / "result.json").write_text(json.dumps(result))
+                index.append({"case": case, "config": cfg, "part": part, "run_id": run_id})
+    (records / "index.json").write_text(json.dumps({"runs": index}))
+    review = {"review_id": "REVIEW-x", "head_sha": seal_sha, "status": "passed",
+              "finished_at": "2026-11-09T09:00:00Z", "report": {"verdict": "pass"}}  # fmt: skip
+    (records / "review.json").write_text(json.dumps(review))
+    plan = tmp / "plan.json"
+    plan.write_text(json.dumps({"seal_sha": seal_sha, "seal_review_id": "REVIEW-x"}))
+    return {"repo": repo, "records": records, "outputs": outputs, "samples": samples,
+            "plan": plan, "seal": seal_file}  # fmt: skip
+
+
+def _cli(w: dict[str, Any], row: str, out: Path, case: int = 1) -> tuple[int, dict[str, Any]]:
+    code = R2.main([
+        "grade", "--plan", str(w["plan"]), "--records", str(w["records"]), "--seal",
+        str(w["seal"]), "--case", str(case), "--row", row, "--outputs", str(w["outputs"]),
+        "--samples-root", str(w["samples"]), "--repo", str(w["repo"]), "--out", str(out),
+    ])  # fmt: skip
+    return code, json.loads(out.read_text())
+
+
+@pytest.fixture
+def small_case(monkeypatch: pytest.MonkeyPatch) -> None:
+    for case, spec in SMALL.items():
+        monkeypatch.setitem(IO.CASES, case, spec)
+
+
+def _no_arrays(obj: Any) -> None:
+    if isinstance(obj, dict):
+        for v in obj.values():
+            _no_arrays(v)
+    elif isinstance(obj, list):
+        assert len(obj) < 100, "report must not carry raw curves"
+        for v in obj:
+            _no_arrays(v)
+
+
+def test_cli_td_em_end_to_end(tmp_path: Path, small_case: None) -> None:
+    w = _world(tmp_path)
+    code, rep = _cli(w, "TD-EM", tmp_path / "td.json")
+    assert rep["status"] == "PASS" and code == 0, rep
+    names = {c["criterion"]: c for c in rep["criteria"]}
+    assert set(names) == {"(a)", "(b)", "(c)", "(d)", "(e)"}
+    assert names["(b)"]["verdict"] == "REPORT-ONLY"  # W_T < 1.0 mm: report-only
+    assert all(v["valid"] for v in rep["run_validity"]) and len(rep["topas_runs"]) == 4
+    assert {c["k"] for c in rep["ionmc_chunks"]} == {1, 2}
+    assert all(f.startswith("work/") or f == "request.json"
+               for r in rep["topas_runs"] for f in r["files_sha256"])  # fmt: skip
+    _no_arrays(rep)
+
+
+def test_cli_td_em_detects_a_range_shift(tmp_path: Path, small_case: None) -> None:
+    w = _world(tmp_path, cases={1: {"shift": 0.3}})
+    code, rep = _cli(w, "TD-EM", tmp_path / "td.json")
+    assert code == 1 and rep["status"] == "FAIL"
+    assert next(c for c in rep["criteria"] if c["criterion"] == "(a)")["verdict"] == "FAIL"
+
+
+def test_cli_tl_em_end_to_end(tmp_path: Path, small_case: None) -> None:
+    w = _world(tmp_path)
+    code, rep = _cli(w, "TL-EM", tmp_path / "tl.json")
+    assert rep["status"] == "PASS" and code == 0, rep
+    assert len(rep["points"]) == 4 and all(p["gated"] for p in rep["points"])
+    for p in rep["points"]:
+        assert p["a"]["r"] == pytest.approx(1.0, abs=0.01)
+        assert p["sigma_topas"] == pytest.approx(SIG[p["slab"]], rel=2e-3)
+    assert rep["criterion_b"] is None and "upper-end" in rep["criterion_b_note"]
+
+
+def test_cli_chronology_failure_is_a_fail(tmp_path: Path, small_case: None) -> None:
+    w = _world(tmp_path, started_ok=False)  # runs started before the seal review finished
+    code, rep = _cli(w, "TD-EM", tmp_path / "td.json")
+    assert code == 1 and rep["status"] == "FAIL" and "blinding control" in rep["reason"]
+    assert rep["category"] == "blinding control" and rep["rerun_allowed"] is False
+    assert "criteria" not in rep
+
+
+def test_cli_fails_closed_on_tampering(tmp_path: Path, small_case: None) -> None:
+    w = _world(tmp_path)
+    npz = next(w["samples"].rglob("*.npz"))
+    npz.write_bytes(npz.read_bytes() + b"x")
+    code, rep = _cli(w, "TD-EM", tmp_path / "a.json")
+    assert code == 2 and rep["status"] == "ERROR" and "sealed record" in rep["error"]
+    w2 = _world(tmp_path / "b")
+    csv = next(w2["outputs"].rglob("idd_dose.csv"))
+    csv.write_text(csv.read_text() + "\n")
+    code, rep = _cli(w2, "TD-EM", tmp_path / "b.json")
+    assert code == 2 and "sha256 mismatch" in rep["error"]
+
+
+@pytest.mark.parametrize("field", list(R2.io.RESULT_FIELDS))
+def test_missing_result_field_fails_closed(tmp_path: Path, small_case: None, field: str) -> None:
+    w = _world(tmp_path)
+    rec = w["records"] / "runs" / "REF-c1-idd-em-0" / "result.json"
+    data = json.loads(rec.read_text())
+    del data[field]
+    rec.write_text(json.dumps(data))
+    code, rep = _cli(w, "TD-EM", tmp_path / "r.json")
+    assert code == 2 and rep["status"] == "ERROR"
+
+
+def test_unbound_or_failed_runs_fail_closed(tmp_path: Path, small_case: None) -> None:
+    w = _world(tmp_path)
+    rec = w["records"] / "runs" / "REF-c1-idd-em-1" / "result.json"
+    good = json.loads(rec.read_text())
+    for bad in ({"succeeded": False}, {"configuration_id": "0" * 64}, {"run_id": "REF-other"},
+                {"code_sha": "b" * 40}, {"seconds": -1}):  # fmt: skip
+        rec.write_text(json.dumps(good | bad))
+        code, rep = _cli(w, "TD-EM", tmp_path / "r.json")
+        assert code == 2 and rep["status"] == "ERROR", bad
+    rec.write_text(json.dumps(good))
+    (w["records"] / "review.json").write_text(json.dumps({"review_id": "REVIEW-x"}))
+    assert _cli(w, "TD-EM", tmp_path / "r.json")[0] == 2
+
+
+def test_d_ext_rules() -> None:
+    def pt(f: float, r: float, gated: bool = True) -> dict[str, Any]:
+        return {"f": f, "gated": gated, "sigma_ionmc": r, "sigma_topas": 1.0,
+                "_batches": [r * (1 + 1e-3 * ((b % 3) - 1)) for b in range(40)],
+                "_parts": [1.0 + 1e-3 * (j - 1.5) for j in range(4)]}  # fmt: skip
+
+    low = [pt(0.75, 1.10), pt(0.9, 1.12)]
+    assert R2.d_ext(low, [pt(0.75, 1.05), pt(0.9, 1.07)])["verdict"] == "PASS"
+    assert R2.d_ext(low, [pt(0.75, 1.30), pt(0.9, 1.32)])["verdict"] == "FAIL"
+    none = [pt(0.75, 1.1, False), pt(0.9, 1.1, False)]
+    assert R2.d_ext(none, low)["verdict"] == "NOT EVALUABLE"
+    res = R2.tl_statistics([{"f": 0.25, "gated": False, "a": {"verdict": "REPORT-ONLY"}}], None)
+    assert res["status"] == "NOT EVALUABLE"
+
+
+def test_case_table_matches_steps_v8() -> None:
+    sys.path.insert(0, str(_PATH.parents[1] / "transport"))
+    try:
+        steps_v8 = pytest.importorskip("steps_v8")
+    finally:
+        sys.path.pop(0)
+    for case, (ion, eu, length, hz, hx, cset) in steps_v8.CASES.items():
+        assert IO.CASES[case][:2] == (ion, eu) and IO.CASES[case][3:] == (length, hz, hx, cset)
+
+
+def test_cli_td_full_uses_a_frag(tmp_path: Path, small_case: None) -> None:
+    w = _world(tmp_path, cases={1: {"full_shift": 0.062}}, configs=("idd-em", "idd-full"))
+    code, rep = _cli(w, "TD-FULL", tmp_path / "f.json")
+    a = next(c for c in rep["criteria"] if c["criterion"] == "(a)")
+    r80 = rep["pooled"]["r80"]["topas"]
+    assert a["tol"] == pytest.approx(0.05 + 0.0015 * r80)  # TD-EM floor + A_frag (He)
+    assert a["verdict"] == "PASS" and abs(a["x"] - a["r"]) > 0.05  # passes only with A_frag
+    assert rep["status"] == "PASS" and code == 0, rep
+    gating = {c["criterion"] for c in rep["criteria"] if c["verdict"] != "REPORT-ONLY"}
+    assert gating == {"(a)", "(c)"}
+    ro = rep["report_only"]
+    assert ro["delta_frag_mm"]["value"] == pytest.approx(0.054, abs=0.002)
+    assert ro["r80_topas_iddprimary_mm"] == pytest.approx(r80, abs=1e-6)
+    assert "idd_primary_dose.csv" in json.dumps(rep["topas_runs"])
+    assert rep["not_computed"]
+    w2 = _world(tmp_path / "b", cases={1: {"full_shift": 0.08}}, configs=("idd-em", "idd-full"))
+    code, rep = _cli(w2, "TD-FULL", tmp_path / "f2.json")
+    assert code == 1 and rep["status"] == "FAIL"
+
+
+def test_cli_tl_full_end_to_end(tmp_path: Path, small_case: None) -> None:
+    w = _world(tmp_path, configs=("idd-em", "lat-em", "lat-full"))
+    code, rep = _cli(w, "TL-FULL", tmp_path / "t.json")
+    assert rep["status"] == "PASS" and code == 0, rep
+    for p in rep["points"]:  # graded on the generation-0 profiles, gated by TOPAS-EM
+        assert p["sigma_topas"] == pytest.approx(SIG[p["slab"]], rel=2e-3)
+        assert p["gate_sigma_topas_em"] == pytest.approx(SIG[p["slab"]], rel=2e-3)
+    ro = rep["report_only"]
+    for p, s_all, ratio in zip(rep["points"], ro["sigma_topas_full_all_particle"],
+                               ro["sigma_full_primary_over_em"], strict=True):  # fmt: skip
+        assert s_all == pytest.approx(1.3 * SIG[p["slab"]], rel=0.02)
+        assert ratio == pytest.approx(1.0, abs=2e-3)
+    assert "lat_x_primary.bin" in json.dumps(rep["topas_runs"])
+
+
+@pytest.mark.parametrize(("scale", "verdict"), [(1.05, "PASS"), (1.2, "FAIL")])
+def test_cli_tl_b_through_grade(
+    tmp_path: Path, small_case: None, scale: float, verdict: str
+) -> None:
+    w = _world(tmp_path, cases={1: {}, 3: {"ion_scale": scale}})
+    code, rep = _cli(w, "TL-EM", tmp_path / "b.json", case=3)
+    b = rep["criterion_b"]
+    assert (b["low_case"], b["upper_case"]) == (1, 3) and b["depths"] == [0.75, 0.9]
+    assert b["x"] == pytest.approx(scale - 1.0, abs=0.01)
+    assert b["verdict"] == verdict and rep["criterion_a"] == "PASS"
+    assert rep["status"] == verdict and code == (0 if verdict == "PASS" else 1)
+    assert {c["case"] for c in rep["ionmc_chunks"]} == {1, 3}
+
+
+def test_cli_tl_b_not_evaluable(tmp_path: Path, small_case: None) -> None:
+    w = _world(tmp_path, cases={1: {"sig": [0.2] * int(L)}, 3: {}})  # low end: nothing gated
+    code, rep = _cli(w, "TL-EM", tmp_path / "n.json", case=3)
+    assert rep["criterion_b"]["verdict"] == "NOT EVALUABLE"
+    assert rep["status"] == "NOT EVALUABLE" and code == 1
+
+
+@pytest.mark.parametrize(
+    "tamper",
+    [
+        {"stderr": "G4Exception: something\n"},
+        {"stdout": lambda s: s + "Track stuck or not moving: killed\n"},
+        {"stdout": lambda s: s.replace("histories: 1000", "histories: 999")},
+        {"stdout": lambda s: s.replace("histories: 1000\n", "")},
+        {"stdout": lambda s: s.replace("UrbanMsc", "WentzelVIUni", 2)},
+        {"input_extra": "d:Ph/Default/CutForAllParticles = 0.1 mm\n"},
+    ],
+)
+def test_cli_run_validity_fail(tmp_path: Path, small_case: None, tamper: dict[str, Any]) -> None:
+    w = _world(tmp_path, tamper=tamper)
+    code, rep = _cli(w, "TD-EM", tmp_path / "v.json")
+    assert code == 1 and rep["status"] == "FAIL", rep
+    assert rep["category"] == "run validity" and rep["rerun_allowed"] is True
+    assert "criteria" not in rep
+    probs = [p for x in rep["part_validity"] + rep["replicate_gate"] for p in x["problems"]]
+    assert probs
+
+
+def test_begin_processing_lines_are_not_killed_tracks(tmp_path: Path, small_case: None) -> None:
+    w = _world(tmp_path, tamper={"stdout": lambda s: s + "Begin processing (killed=0)\n"})
+    assert _cli(w, "TD-EM", tmp_path / "v.json")[1]["status"] == "PASS"

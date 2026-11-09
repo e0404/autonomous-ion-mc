@@ -1,0 +1,183 @@
+{
+ "schema": "ionmc-v8r2-topas-smokes-1",
+ "task_id": "V3-008",
+ "revision": 2,
+ "purpose": "plan r2-topas-target.md section 6 'Order' step 1: timing and step-length smokes (execution only; read for sizing and step diagnostics; NO evidence); run after the sample seal (seal commit 0c68b78a, review REVIEW-9691e1b0 finished 2026-11-09T09:15:57Z)",
+ "engine": "topas (OpenTOPAS 4.3 / Geant4 11.4.2, 1 thread)",
+ "code_sha": "0330a82f4929f198675a650e7c19ace835d5466e",
+ "runs": [
+  {
+   "case": "he-water-250mevu-r2-idd-em-timing-smoke",
+   "run_id": "REF-2e6aa910d11b42743db3-8c849b0e",
+   "finished_at": "2026-11-09T09:45:42.826490+00:00",
+   "histories": 1000,
+   "execution_real_s": 7.158,
+   "s_per_primary": 0.007158,
+   "exit_code": 0,
+   "stderr_bytes": 0,
+   "stdout_bytes": 77825,
+   "output_count": 3
+  },
+  {
+   "case": "he-water-250mevu-r2-lat-em-timing-smoke",
+   "run_id": "REF-41e5cd181534df36e9c8-e5593c8b",
+   "finished_at": "2026-11-09T09:46:03.928942+00:00",
+   "histories": 1000,
+   "execution_real_s": 2.457,
+   "s_per_primary": 0.002457,
+   "exit_code": 0,
+   "stderr_bytes": 0,
+   "stdout_bytes": 78058,
+   "output_count": 6
+  },
+  {
+   "case": "he-water-250mevu-r2-idd-full-timing-smoke",
+   "run_id": "REF-2062230d57537b7b0937-f9d8f342",
+   "finished_at": "2026-11-09T09:46:34.501477+00:00",
+   "histories": 200,
+   "execution_real_s": 14.343,
+   "s_per_primary": 0.071715,
+   "exit_code": 0,
+   "stderr_bytes": 0,
+   "stdout_bytes": 56490,
+   "output_count": 5
+  },
+  {
+   "case": "he-water-250mevu-r2-lat-full-timing-smoke",
+   "run_id": "REF-893f1fbacd71983aa723-541f3223",
+   "finished_at": "2026-11-09T09:47:40.667411+00:00",
+   "histories": 200,
+   "execution_real_s": 50.108,
+   "s_per_primary": 0.25054,
+   "exit_code": 0,
+   "stderr_bytes": 0,
+   "stdout_bytes": 56704,
+   "output_count": 10
+  },
+  {
+   "case": "carbon-water-430mevu-r2-idd-em-timing-smoke",
+   "run_id": "REF-ffb564df1f51ba35230c-cefae526",
+   "finished_at": "2026-11-09T09:48:07.177955+00:00",
+   "histories": 1000,
+   "execution_real_s": 6.516,
+   "s_per_primary": 0.006516,
+   "exit_code": 0,
+   "stderr_bytes": 0,
+   "stdout_bytes": 77824,
+   "output_count": 3
+  },
+  {
+   "case": "carbon-water-430mevu-r2-lat-em-timing-smoke",
+   "run_id": "REF-2f873a5c175201c630b3-261c7cc6",
+   "finished_at": "2026-11-09T09:48:24.255311+00:00",
+   "histories": 1000,
+   "execution_real_s": 2.004,
+   "s_per_primary": 0.002004,
+   "exit_code": 0,
+   "stderr_bytes": 0,
+   "stdout_bytes": 78059,
+   "output_count": 6
+  },
+  {
+   "case": "carbon-water-430mevu-r2-idd-full-timing-smoke",
+   "run_id": "REF-cdce63177f55f3cc127f-b9207658",
+   "finished_at": "2026-11-09T09:49:51.707114+00:00",
+   "histories": 200,
+   "execution_real_s": 72.007,
+   "s_per_primary": 0.360035,
+   "exit_code": 0,
+   "stderr_bytes": 0,
+   "stdout_bytes": 56491,
+   "output_count": 5
+  },
+  {
+   "case": "carbon-water-430mevu-r2-lat-full-timing-smoke",
+   "run_id": "REF-c8dac0781969bbbfa2d4-862c12b4",
+   "finished_at": "2026-11-09T09:54:55.243676+00:00",
+   "histories": 200,
+   "execution_real_s": 287.935,
+   "s_per_primary": 1.439675,
+   "exit_code": 0,
+   "stderr_bytes": 0,
+   "stdout_bytes": 56707,
+   "output_count": 10
+  },
+  {
+   "case": "oxygen-water-430mevu-r2-idd-em-timing-smoke",
+   "run_id": "REF-83f7c7330ea44bb41ee7-7b6cb28c",
+   "finished_at": "2026-11-09T09:55:20.249301+00:00",
+   "histories": 1000,
+   "execution_real_s": 5.079,
+   "s_per_primary": 0.005079,
+   "exit_code": 0,
+   "stderr_bytes": 0,
+   "stdout_bytes": 77826,
+   "output_count": 3
+  },
+  {
+   "case": "oxygen-water-430mevu-r2-lat-em-timing-smoke",
+   "run_id": "REF-709c1045ddb63b94355c-b88c9d4a",
+   "finished_at": "2026-11-09T09:55:36.812990+00:00",
+   "histories": 1000,
+   "execution_real_s": 1.623,
+   "s_per_primary": 0.001623,
+   "exit_code": 0,
+   "stderr_bytes": 0,
+   "stdout_bytes": 78060,
+   "output_count": 6
+  },
+  {
+   "case": "oxygen-water-430mevu-r2-idd-full-timing-smoke",
+   "run_id": "REF-793fe683e32d69efe0c1-5b3d237d",
+   "finished_at": "2026-11-09T09:57:29.234626+00:00",
+   "histories": 200,
+   "execution_real_s": 94.864,
+   "s_per_primary": 0.47432,
+   "exit_code": 0,
+   "stderr_bytes": 0,
+   "stdout_bytes": 56490,
+   "output_count": 5
+  },
+  {
+   "case": "oxygen-water-430mevu-r2-lat-full-timing-smoke",
+   "run_id": "REF-171fec5d1b0f764deff1-6115e26c",
+   "finished_at": "2026-11-09T10:04:18.365509+00:00",
+   "histories": 200,
+   "execution_real_s": 392.637,
+   "s_per_primary": 1.963185,
+   "exit_code": 0,
+   "stderr_bytes": 0,
+   "stdout_bytes": 56709,
+   "output_count": 10
+  },
+  {
+   "case": "carbon-water-290mevu-r2-idd-em-steps-verbose-smoke",
+   "run_id": "REF-ab109b030ce4d1189160-ba55a77b",
+   "finished_at": "2026-11-09T10:04:35.900347+00:00",
+   "histories": 3,
+   "execution_real_s": 0.698,
+   "s_per_primary": 0.232667,
+   "exit_code": 0,
+   "stderr_bytes": 0,
+   "stdout_bytes": 4720540,
+   "output_count": 3
+  }
+ ],
+ "printout_checks": {
+  "urban_msc_alpha_and_genericion": "present in every EM and FULL log",
+  "stderr": "empty in every run",
+  "killed_or_stuck_tracks": "none",
+  "full_logs": "QGSP_BIC_HP thresholds block and Radioactive Decay Physics Parameters block present (g4radioactivedecay accepted); hadronic process summary lists 'QMDModel: 100 MeV/n ---> 6 GeV/n' for GenericIon ionInelastic, alphaInelastic, He3 and deuteron inelastic (g4ion-QMD accepted; five lines per FULL log)"
+ },
+ "step_length_smoke": {
+  "run_id": "REF-ab109b030ce4d1189160-ba55a77b",
+  "primary_steps_per_history": 1682.0,
+  "primary_steps_total": 5046,
+  "limited_by_parallel_world_scorer_boundary": 4919,
+  "limited_by_ionIoni": 118,
+  "median_primary_step_mm": 0.1,
+  "mean_primary_step_mm": 0.0976,
+  "conclusion": "the 0.1 mm depth bins of the IDD scorer limit 97.5 % of the primary steps; no mass-world Transportation-limited step"
+ },
+ "notes_markdown": "# Smoke printout checks (orchestrator, 2026-11-09; logs materialized to .ionmc-cache/reference-runs/<REF id>/stdout.txt)\nChecked on REF-2e6aa910 (He IDD-EM), REF-2062230d (He IDD-FULL), REF-c8dac078 (C LAT-FULL):\n- msc for GenericIon: UrbanMsc (Emin 0 eV, Emax 10 GeV); msc for alpha: UrbanMsc \u2014 in EM (opt4) and FULL logs alike. Protons/e+-: WentzelVIUni (irrelevant to the primary ion).\n- stderr empty (0 bytes) in all runs; no \"killed\", \"stuck\", \"Warning\", \"Exception\" lines in stdout; \"Total number of histories\" equals NumberOfHistoriesInRun; exit 0.\n- FULL logs: \"hInelastic QGSP_BIC_HP Thresholds\" block, NeutronHP data loaded (G4NDL4.7.1), \"Radioactive Decay Physics Parameters\" block present (g4radioactivedecay accepted). g4ion-QMD acceptance IS printed in the hadronic process summary of every FULL log: `Model: QMDModel: 100 MeV/n ---> 6 GeV/n` for ionInelastic (GenericIon), alphaInelastic, He3 and deuteron inelastic (five lines per FULL log; correction of an earlier note that said it was not printed). Step functions printed: light ions (0.1, 0.02 mm), general ions (0.1, 0.001 mm).\n- Geant4 11.4.2 [MT], TOPAS 4.3, 1 thread.\n"
+}

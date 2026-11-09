@@ -345,16 +345,143 @@ Host calls: 192 evidence parts + 13 smokes + 16 V5-SS parts = 221 REF calls.
 
 **Dated note (2026-11-08, sizing/mapping amendment).** The ionmc timing smoke RUN-20261107T224820Z-92f9f0be (1e4 histories per case, root-solve mapping) measured per-case ms/history: case 1 7.66, 2 12.26, 3 20.43, 4 8.01, 5 13.39, 6 20.69, 7 8.40, 8 14.44, 9 17.87, 10 9.30, 11 9.41, 12 9.96; projected 42.2 h for the twelve 1e6-history samples with the root solve (the planning value above, 0.5–1.5 h, is superseded). The exact-Omega root solve was ≈ 90 % of that cost (39.5 µs per step). Amendment: mapping evaluation = tabulation (decision 0043 section 3, "Evaluation", the allowed alternative), chosen before any revision-2 ionmc sample or TOPAS evidence run; reason: measured cost. Table: `pv_eq/pv` per (material, ion) on a uniform 128 x 128 grid in (ln pv, ln(p1v1/pv)) (a shear of the decision's (ln pv, ln p1v1) plane), nodes computed by the unchanged root solve `pv_equivalent` at validation (only the nodes of cells meeting the band of the run's initial states pv(E0 - 6 sigma_E) ... pv(E0 + 6 sigma_E); every other node invalid, a state there fails closed as `mcs_mapping_failure`), bilinear interpolation (`exact_omega.pv_equivalent_table`, shared by the python twin and the Warp kernel); option `PhysicsOptions.mcs_mapping_eval` = "table" (default for z >= 2) or "root" (the per-step root solve, retained); the summary records the evaluation, table sizes, axes, domain and the sha256 of the table rows. Bound test `tests/ionmc/test_ion_mcs_table.py::test_table_variance_error_bound` (He, C, O in water and skeletal muscle; >= 2000 random states plus edge states per ion and material, upper and lower domain end, thin-slab edge included; bound |var_table/var_root - 1| <= 1e-3): measured maximum 2.05e-5 (C in skeletal muscle; He 4.4e-6 / 5.5e-6, C 1.83e-5 / 2.05e-5, O 1.84e-5 / 2.04e-5 in water / muscle); transport-level counterpart `test_v3_008_rows_ci.py::test_i11_map_table_against_root_at_transport_states` max 6.8e-6. Measured MCS cost per step (warp-cpu float64, single thread, MCS-on minus MCS-off, 2000 histories, CI configuration): He 100 MeV/u 0.16 us (root 39.85 us), C 150 MeV/u 0.17 us (root 39.57 us). The model (decision 0043 section 3) is unchanged; the root solve remains available as an option. The revision-2 sample cost with the table is not yet measured at the case configurations; it is re-measured by a timing smoke before the samples. (2026-11-08, Codex REVIEW-d3a17ebf) The bound is in addition certified deterministically at build for every produced table (`exact_omega.certify_pv_eq_table`: the root solve at 5 interior points per solved cell, the centre and +-1/4 of the cell in both axes; per-step variance of the first and later steps; a table above TABLE_VARIANCE_BOUND = 1e-3 fails closed; the maximum, cells and points are recorded in the summary), measured maxima at the upper domain end (128 x 128, 628 cells, 3140 points per table) He / C / O: water 4.11e-6 / 1.97e-5 / 1.98e-5, skeletal muscle 4.02e-6 / 2.20e-5 / 2.20e-5, over all eleven built-in materials and a user-defined material at most 4.44e-6 / 2.87e-5 / 3.21e-5 (`test_ion_mcs_table.py::test_certification_every_builtin_and_user_material`). (2026-11-08, Codex REVIEW-9529fd35) The five-sample certification is replaced by a domain-wide analytic bound per solved cell (`exact_omega.certify_pv_eq_table`): the tensor-product bilinear error bound hx^2/8 sup|q_xx| + hy^2/8 sup|q_yy| of q = pv_eq/pv, second derivatives from second differences of the root solve on a 2x-refined grid (3 x 3 stencil per cell, maximum over the cell and its solved neighbours, which covers cells where a second derivative changes sign), times safety factor 2 (q is smooth in ln pv and ln r, P11; the factor covers the variation of the second derivative within a cell; empirically, over the 70 tables below the sampled cross-check passes everywhere with factor 1 and fails in every table with 0.75, so factor 2 leaves a per-cell margin of at least 2), converted exactly into the relative per-step variance error (only pv_eq differs between the paths and f_dM is linear in log10 pv_eq at fixed memory term l1: var_table/var_root - 1 = (c2 + c3 l1) dl2 / f, maximized at the corners of each cell's (l1, l2) rectangle) for later steps and for the first step over every physical end point pv_end in (0, min(pv_mid, (1 - 1e-4) p1v1)] (the first-step ratio is endpoint-dependent, c3 != 0); 5 x 5 interior samples per cell must stay below each cell's analytic bound, else the build fails closed, as it does when the bound exceeds 1e-3; scope: states of a particle that has lost less than 1e-4 of its initial pv (TABLE_MIN_LOSS) are outside the relative contract, because the memory term drives the f_dM fit to its zero there (e.g. He at 50 MeV/u in aluminium, copper, lead, compact bone and the user material, where the fit is clamped to 0 for both paths); measured analytic bound / sampled maximum, upper and lower domain end: water He 1.10e-5 / 4.1e-6 and 1.36e-5 / 3.2e-6, C 4.38e-5 / 1.97e-5 and 1.47e-5 / 7.1e-6, O 4.37e-5 / 1.98e-5 and 1.94e-5 / 9.3e-6; skeletal muscle He 1.09e-5 / 4.0e-6 and 1.32e-5 / 3.1e-6, C 4.90e-5 / 2.20e-5 and 1.46e-5 / 7.0e-6, O 4.91e-5 / 2.20e-5 and 1.94e-5 / 9.3e-6; largest analytic bound over the eleven built-in materials and a user material (70 tables) He 1.36e-5 (water, lower), C 6.37e-5, O 7.20e-5 (beryllium, upper), at most 7.2 % of the 1e-3 threshold; oxygen at 100 MeV/u in copper and lead cannot be tabulated (a node has no root; fails closed before certification, root option remains); build plus certification 0.5-1.6 s per (material, ion) table. (2026-11-08, Codex REVIEW-ee53867c) The table is demoted to an accelerator and the two preceding certification sentences are superseded: mapping evaluation = exact root solve on every step in both modes (the same Illinois iteration, tolerance |residual| <= 1e-13 or step/bracket <= 1e-14 in ln pv_eq, float64, and status codes as the root path); with mcs_mapping_eval = "table" the bilinear pv_eq/pv value only supplies the starting bracket (one end at the table value, the other max(10 x the table's build-time interpolation estimate, 1e-5) away on the side of the sign change, widened once x10, else the full proton-path bracket, counted in the diagnostic counter mcs_table_bracket_miss, which never invalidates a result); no interpolation bound is claimed (the build-time estimate is a performance diagnostic) and the TABLE_MIN_LOSS scope is withdrawn; the decision-0043 test of the table evaluation is the per-step root guarantee (`test_ion_mcs_table.py::test_accelerated_root_equals_root`: He, C, O at both domain ends in the eleven built-in materials and a user material, >= 2000 random plus edge states each, later and first steps with both end-point extremes: equal status, pv_eq within 1e-8 of the root path (observed <= 1.43e-9), variance within 1e-8 times the f_dM sensitivity (observed <= 5.3e-10), 0 bracket misses in 427 704 evaluations; `test_v3_008_rows_ci.py::test_i11_map_table_against_root_at_transport_states`: residual <= 1e-10, observed <= 9.4e-14); oxygen at 100 MeV/u in copper and lead still cannot be tabulated (build fails closed, root option); measured MCS cost (warp-cpu float64, single thread, MCS-on minus MCS-off, 2000 histories, CI configuration): He 100 MeV/u 21.00 us/step (root 40.04), C 150 MeV/u 21.65 us/step (root 39.63), 4.58 / 4.84 ms per history against 8.66 / 8.79; Illinois iterations per step on random table-domain states: accelerated mean 3.8-5.7 (max 26), root 7.8-8.7 (max 33); build 0.11-0.16 s (water) and 0.21-0.31 s (skeletal muscle) per (material, ion) table.
 
+**Dated sizing note (2026-11-09, plan section 6 "Order" step 2; planner, after the sample seal and the step-1 smokes, before any evidence run).** The 13 smokes ran on 2026-11-09 at `code_sha` 0330a82f (descendant of the seal commit 0c68b78a; every run started after REVIEW-9691e1b0 finished at 09:15:57Z): exit 0, stderr 0 bytes, no "killed"/"stuck" line, "Total number of histories" = `NumberOfHistoriesInRun` in all 13. Only stdout/stderr were materialized; no scorer output was read. Ledger of the runs (orchestrator scratch, `smokes/ledger.jsonl`, `printout-checks.md`); t_s = TOPAS "Execution: Real" / histories, single thread. This time includes the physics-table build at BeamOn (a fixed per-run cost; "Initialization" is ≤ 0.21 s), so t_s is slightly high, i.e. conservative.
+
+| Ion (upper end) | IDD-EM | LAT-EM | IDD-FULL | LAT-FULL |
+|---|---|---|---|---|
+| He 250 (case 3) | 7.16 ms (REF-2e6aa910, 1000) | 2.46 ms (REF-41e5cd18, 1000) | 71.72 ms (REF-2062230d, 200) | 250.54 ms (REF-893f1fba, 200) |
+| C 430 (case 6) | 6.52 ms (REF-ffb564df, 1000) | 2.00 ms (REF-2f873a5c, 1000) | 360.03 ms (REF-cdce6317, 200) | 1439.68 ms (REF-c8dac078, 200) |
+| O 430 (case 9) | 5.08 ms (REF-83f7c733, 1000) | 1.62 ms (REF-709c1045, 1000) | 474.32 ms (REF-793fe683, 200) | 1963.19 ms (REF-171fec5d, 200) |
+
+The step-length smoke (C 290 IDD-EM, 3 histories, `TrackingVerbosity` 1) is REF-ab109b03. Full run ids are in the ledger.
+
+**Rule outcomes (t_s × N_part against 1200 s at the upper end).**
+- IDD-EM: 179 / 163 / 127 s (He / C / O). The plan holds: 25 000 × 4.
+- LAT-EM: 61 / 50 / 41 s. The plan holds: 25 000 × 4.
+- IDD-FULL:
+  - He: 359 s, holds at 5000 × 4.
+  - C: 1800 s, so rule (i) applies: **N_part = 3333** (= floor(1200 s / t_s)), total 13 332 ≥ 1e4.
+  - O: 2372 s, so rule (i) applies: **N_part = 2529**, total 10 116 ≥ 1e4.
+- LAT-FULL:
+  - He: 1253 s, so rule (i) applies: **N_part = 4789**, total 19 156 ≥ 1e4.
+  - C: 7198 s. N_part ≤ 833 gives 3332 with four parts and 4998 with six (rule (ii), parts 18–19), both < 1e4. **STOP under rule (iii).**
+  - O: 9816 s. N_part ≤ 611 gives 2444 / 3666, both < 1e4. **STOP under rule (iii).**
+
+**The LAT-FULL STOP for carbon and oxygen is recorded as a STOP of the plan as frozen. It is preserved and is not re-graded. No case is dropped.** Floor(1200/t_s) leaves ≥ 25 % to the 1500 s per-call limit, against an estimated 3–7 % statistical uncertainty of t_s from 200 histories.
+
+**N_part for the lower-energy cases.** Every case of an ion uses the upper-end N_part of its configuration. No scaling argument is used to raise N_part. The upper end is the most expensive case under each of the three scalings below (all ratios ≤ 1), so every part stays ≤ 1200 s.
+- (a) IDD-EM: cost ∝ R/h_z (number of depth bins). This is supported by the step smoke (97.5 % of primary steps are bin-limited) and by the measured 1.9–2.2 µs per bin at the three upper ends.
+- (b) LAT-EM: cost ∝ R × (0.02 mm/h_x).
+- (c) FULL with the 0.05 mm cut: cost ∝ N_δ/h. N_δ = ∫ z²/β² (1/T_cut − 1/T_max) dx is the delta-electron count over the track (T_cut ≈ 58 keV assumed; not printed in these logs), and h is the scorer bin.
+  - Ratio to the upper end, He 50/150/100: 0.24/0.49/0.50; C 80/290/150: 0.43/0.61/0.50; O 100/350/200: 0.67/0.78/0.76.
+  - Projected largest lower-energy part: O 350 IDD-FULL ≈ 930 s.
+
+**Bundle consequence.** The committed bundles carry `NumberOfHistoriesInRun` = 5000 for IDD-FULL and LAT-FULL. Before any of these evidence runs, the values must be changed by a **reviewed bundle regeneration**: `gen_r2_bundles.py`, the new bundle-set digest and appendix A, and the P9 rebinding by the orchestrator. Parts keep their numbers and seeds (`20619000 + 100·part + case`). The EM configurations are unchanged.
+
+**FULL cost is delta-electron transport, not nuclear (measured).** The excess cost per mm of range, (t_FULL − t_EM)/R, scales across He, C and O as z²/β², the delta-production rate:
+- excess / (z²/β²): IDD 0.0160 / 0.0169 / 0.0168 µs·mm⁻¹ per unit; LAT 0.061 / 0.069 / 0.070.
+- A geometric nuclear cross-section scaling, (A^{1/3} + 16^{1/3})², would give He:C:O ≈ 1 : 1.37 : 1.51. Measured: 1 : 6.8 : 12.0 (IDD) and 1 : 7.2 : 13.0 (LAT).
+- A two-term least-squares fit (z²/β² plus nuclear) returns a nuclear term of ≈ 0 (slightly negative). The nuclear share is therefore not resolved, and is small at these t_s.
+- Mechanism: in the FULL logs, e⁻ msc is GoudsmitSaunderson with StepLim = SafetyPlus, Skin = 3. Every delta electron above the cut is tracked through the scorer planes: 0.1 mm depth planes (IDD); 0.02 mm x and y planes plus 1 mm depth planes (LAT), which are two parallel worlds, `Water_6000x1xL` and `Water_1x6000xL`.
+
+**Module and process checks (all 13 logs).**
+- UrbanMsc for alpha and GenericIon in EM and FULL (GenericIon: StepLim = Minimal, Rfact 0.2, Emax 10 GeV). Step functions printed: light ions (0.1, 0.02 mm), general ions (0.1, 0.001 mm).
+- All six FULL logs show the hInelastic QGSP_BIC_HP thresholds block and the "Radioactive Decay Physics Parameters" block. This resolves the §9 `g4radioactivedecay` risk: accepted.
+- **QMD acceptance has positive evidence.** The HADRONIC PROCESSES SUMMARY printed at the default verbosity lists `QMDModel: 100 MeV/n ---> 6 GeV/n` for ionInelastic (GenericIon), alphaInelastic, He3Inelastic and the deuteron, next to Binary Light Ion Cascade (≤ 110 MeV/n) and FTFP (≥ 5.99 GeV/n). It appears 5 times in each of the six FULL logs. This corrects the orchestrator's printout check ("QMD acceptance not printed").
+- Report-only fact: GenericIon lists no hadElastic process (only ionInelastic and RadioactiveDecay); alpha has hadElastic (hElasticLHEP).
+
+**Step-length result (resolves the §4.3/§9 risk for IDD runs).** REF-ab109b03, C 290 MeV/u IDD-EM, 3 histories:
+- 5046 primary steps (1682 per history; R/h_z = 1632).
+- 4919 are limited by the parallel-world scorer volume `Water_1x1x2500` (97.5 %), 118 by ionIoni, 3 by CoupledTransportation (the entrance), none by msc.
+- Median step 0.1000 mm, mean 0.0976 mm.
+
+TOPAS scoring bins therefore limit the primary step: the IDD runs transport the ion with ≈ h_z steps. This affects only laterally integrated quantities (MCS detour ≤ 0.01 % of R80, §5.1 (a) budget), which is the reason for the separate runs (§4.3).
+
+LAT runs were **not** measured. Their 0.02 mm planes are parallel to the beam and are crossed only through lateral motion, every ≈ h_x/|θ| of path (estimate: ≈ 2–4 mm at the upper ends at mid-depth, shorter at the low ends with h_x = 0.01 mm). The 1 mm depth planes cap the step. The expected LAT primary step is therefore ≈ 0.3–1 mm, not 0.02 mm. That is inside the 0.1–1 mm span on which the TL band was built (smallest Urban/Highland-FE factor 0.835 at 0.1 mm, P2 §6.3). **The TL band is unchanged.** Measuring the LAT step regime is part of the proposed smoke set below (seed 20600427).
+
+**Projected REF total under rule (i)** (scalings (a)–(c); R from §3; the R-only scaling in parentheses):
+
+| Item | Hours |
+|---|---|
+| IDD-EM | 1.19 (0.95) |
+| LAT-EM | 0.32 (0.31) |
+| IDD-FULL (He 5000, C 3333, O 2529 × 4 × 4 cases) | 8.55 (5.79) |
+| LAT-FULL He at 0.05 mm, N_part 4789 (superseded if the proposal below is adopted) | 2.32 (2.24) |
+| V5-SS | 2.94 |
+| 13 smokes run | 0.26 |
+| **Subtotal without C/O LAT-FULL** | **≈ 15.6 h (12.5 h)**, cap 16 h |
+
+C/O LAT-FULL at 0.05 mm with ≥ 1e4 histories would add ≥ 2 × 4 × 1e4 × (1.44 or 1.96 s) × Σ scale ≈ 25–30 h. That is beyond any reading of the cap.
+
+**PROPOSED amendment R2-SIZE-1 (dated 2026-11-09; NOT IN FORCE until independently reviewed and committed before any LAT-FULL run).**
+
+Options for resolving the C/O LAT-FULL STOP without dropping a case:
+- **(A) LAT-FULL with `CutForElectron = 1 km`, the cut already used in the EM configuration. Recommended.** The seven modules stay verbatim; `CutForAllParticles` 0.05 mm stays for all other particles; IDD-FULL keeps 0.05 mm, so TD-FULL is unchanged.
+  - Gating observable. The TL-FULL observable is the generation-0 core σ (§5.3). Delta electrons are not generation 0, and the primary's msc and step functions do not depend on the electron cut: `Use cut as a final range` = 0 in the logs.
+  - Restricted vs total loss. Only the primary's deposit changes, from restricted to total loss. At one depth that is a nearly uniform lateral weight (all primaries have nearly the same β), so σ_core is unchanged to ≪ 1 % (estimate).
+  - Like-for-like gain. The deposit becomes like-for-like with ionmc's local deposition, and the TOPAS-internal ratio σ_FULL,primary/σ_EM isolates the nuclear and hadronic effects (identical EM cuts).
+  - Lost (report-only items only). The delta-electron contribution (T_max ≈ 1.2 MeV at 430 MeV/u, ranges up to ≈ 5 mm) to the FULL all-particle core σ, the halo fraction and the ±20 mm second moments. The delta production of secondary fragments is also lost. These become "seven modules, delta electrons deposited locally" quantities and must be labelled so in the ledger.
+  - Cost. The z²/β² scaling above predicts that most of the LAT-FULL excess disappears; the nuclear part is not resolved by the data. Planning bracket for t_s at the upper ends: 3–50 ms. **To be measured.**
+- (B) Coarser lateral bins or a narrower extent for LAT-FULL. The ionmc samples hold `latx`/`laty` on 120/h_x bins from −60 mm with their edges, so exact unions (k·h_x) and sub-ranges are re-binnable; nothing else is.
+  - Cost gain. A narrower extent hardly lowers the cost, because the crossings happen near the core. Coarsening by k = 5 (0.1 mm) cuts the plane density by 5, but the GS SafetyPlus cost per electron near planes is not proportional. A further 3–5× reduction (C ≈ 300–500 ms) is uncertain and may still fail (iii) for O.
+  - Science cost. The TL-FULL bins and resolvability rule would differ from TL-EM: f = 0.25 points at the C/O upper ends may become report-only. The primary step regime would also change between TL-EM and TL-FULL, confounding σ_FULL/σ_EM.
+  - Not recommended.
+- (B′) A depth-windowed fine scorer (fine x/y bins only in 1 mm-edged windows around f·R80). It is exact on ionmc's 1 mm slabs and gives ≈ 5–10× fewer crossings. But it needs either a data-dependent bundle (z_k depends on R80_TOPAS-EM) or windows wide enough for the planning-R uncertainty, plus eight extra parallel worlds. Not recommended.
+- (C) Keep the 0.05 mm cut and fine bins and accept the budget: ≈ 25–30 h more (projection above) at ≤ 1200 s per part. That means ≈ 70–100 more host calls and a REF total ≈ 40 h. This is a budget decision for the orchestrator; it is not justified while the gating observable does not need delta-electron transport.
+- (D) Option from the plan's own structure: drop the all-particle `LatX`/`LatY` from LAT-FULL. This gains nothing: the cost is plane crossings, not scoring. (A) is the plan-internal answer, because §5.3 already chose the generation-0 profile and declared the all-particle FULL profile report-only.
+
+**Recommended procedure (A); bounded.**
+1. Reviewed bundle regeneration (follow-up implementation task; list below):
+   - all 48 LAT-FULL evidence bundles (12 cases × parts 12–15, same names and seeds) gain `d:Ph/Default/CutForElectron = 1 km`, with comment and `case.json` "cuts"/"physics" text saying so. Applied to every case, He included, so that TL-FULL and D_ext use one configuration per row;
+   - IDD-FULL `NumberOfHistoriesInRun` is set to C 3333 and O 2529 (He 5000) for all four cases of each ion;
+   - new execution-only smokes in the rehearsal family:
+     - `he-water-250mevu-r2-lat-full-ecut1km-timing-smoke` (**20600424**);
+     - `carbon-water-430mevu-r2-lat-full-ecut1km-timing-smoke` (**20600425**);
+     - `oxygen-water-430mevu-r2-lat-full-ecut1km-timing-smoke` (**20600426**), each 200 histories with the LAT-FULL scorer block;
+     - `carbon-water-290mevu-r2-lat-em-steps-verbose-smoke` (**20600427**, 3 histories, `TrackingVerbosity` 1, LAT-EM scorer block; measures the LAT primary step regime, execution only).
+   - Total 209 bundles, 418 files, new digest. 20600424–20600427 appear nowhere in the repository except as the end of the current `SMOKE_RANGE`.
+2. Run the four smokes, one at a time. Each must pass the run-validity and seal checks (R2-TOPAS-4). Read stdout only.
+3. Dated re-sizing note: apply the unchanged §6 step-2 rule to LAT-FULL-A (N_part 5000, parts 12–15; then (i) with total ≥ 1e4; then (ii) parts 18–19; then (iii) STOP), with the scalings above for the projection. If the projected total exceeds 16 h: V5-SS takes its 4e4 fallback (−0.98 h), then STOP for the orchestrator's budget decision.
+4. Frozen and unchanged: the modules, the TD-FULL configuration and cut, all tolerances and bands, the seeds formula, the part blocks, K = 4, the sealed ionmc samples, and the evaluator's estimators. The 0.05 mm LAT-FULL smokes, their C/O STOP and the He rule-(i) outcome stay recorded as history.
+
+**Budget with (A).** Projected total ≈ 13.3 h + LAT-FULL-A. Break-even: with the conservative scaling, the cap holds for t_s(A) ≤ ≈ 85 ms at the upper ends (2e4 per case). The bracket upper bound (50 ms) gives ≈ 1.6 h, so ≈ 14.9 h ≤ 16 h; at ≤ 10 ms, ≈ 13.6 h. The V5-SS fallback is projected not to be needed.
+
+The 16 h cap is a planning value of this plan (acceptance plan §E). It is not an operator directive: the operator's directives fix single-process execution, one heavy job, logging and the seven modules, and set no REF wall-clock cap. Raising it is the orchestrator's prospective decision with review.
+
+**Decisions for the orchestrator.**
+- (1) Adopt R2-SIZE-1 (A) after independent review. The cut is the plan's own choice: the directive fixes only the module list. The ledger wording becomes "lateral agreement with the specified seven-module TOPAS configuration with delta electrons deposited locally (CutForElectron 1 km)".
+- (2) Whether He LAT-FULL also moves to (A). Recommended: yes, one configuration per row.
+- (3) Whether the cap is raised, should the smoke exceed ≈ 85 ms.
+- (4) Whether K = 6 under rule (ii) needs a stated σ_T inflation factor. §5 fixes t_{0.95,3}/1.645 for K = 4; with K = 6 it would be t_{0.95,5}/1.645 = 1.226, which the plan does not state. It is not needed under the current outcomes.
+
+**Follow-up implementation task (not done here).**
+- `validation/scripts/ion_em/gen_r2_bundles.py`:
+  - CONFIGS histories per (ion, config): IDD-FULL C 3333, O 2529; LAT-FULL per the re-sizing note;
+  - the `CutForElectron = 1 km` line and its texts for lat-full;
+  - SMOKE_SEEDS plus the three ecut1km smokes and a second verbose smoke (C 290 lat-em, 20600427);
+  - the "part p of 4" rationale stays;
+  - BUNDLE_SET_DIGEST.
+- `tests/ionmc/test_r2_bundles.py`:
+  - `SMOKE_RANGE = range(20600411, 20600428)`, count 209 and 418 files, RECORDED_DIGEST;
+  - a new test: lat-full bundles carry `CutForElectron = 1 km` and idd-full ones do not;
+  - a new test: `NumberOfHistoriesInRun` per (ion, config) equals the sizing table and the totals reach the minima;
+  - the smoke-scorer test must accept the `-ecut1km-timing-smoke` stems.
+- Appendix A: a new dated listing; the old one is kept.
+- `p9-freeze-record.md` rebinding: orchestrator.
+
 ## 9. Not established, risks
 
 - Whether TOPAS scoring bins limit steps (OPEN; step-length smoke). It moves the Urban width by up to ≈ 6 % (P2
   §6.3) inside the TL band, and the cost.
+  **Dated resolution (2026-11-09, sizing note §8):** YES for IDD runs. REF-ab109b03: 97.5 % of primary steps are limited by the 0.1 mm depth-scorer planes (median step 0.1000 mm). This affects only laterally integrated quantities. LAT runs are not measured. Their primary step is expected at ≈ 0.3–1 mm (1 mm depth planes; 0.02 mm lateral planes crossed only through lateral motion), inside the 0.1–1 mm span of the band. TL band unchanged. Proposed LAT step smoke 20600427 (R2-SIZE-1). Cost consequence: the FULL cost is dominated by delta electrons crossing the scorer planes, which leads to the C/O LAT-FULL STOP (§8).
 - The Urban deficit for ions (10–30 %) and its energy trend are scratch estimates (P2 §6.3; the Urban emulator was
   withdrawn in r5). If the actual deficit exceeds the band (e.g. at the low ends with very short steps), TL (a)
   fails on the reference's structure; that is recorded as FAIL with attribution, never re-graded.
 - `g4radioactivedecay` acceptance by OpenTOPAS 4.3 is unverified (timing smoke; rejection = STOP, the operator's
   configuration cannot be changed by the planner).
+  **Dated resolution (2026-11-09):** accepted. All six FULL smokes print the Radioactive Decay Physics Parameters block, and the hadronic summary lists QMDModel (100 MeV/n – 6 GeV/n) for GenericIon and alpha inelastic. Exit 0 (§8 sizing note).
 - FULL cost (fragments, neutrons crossing bins) is uncertain by a factor of several; the sizing rule handles it.
+  **Dated note (2026-11-09):** measured. The cost is dominated by delta electrons, not fragments (§8). The rule gives (i) for C/O IDD-FULL and He LAT-FULL, and a STOP (iii) for C/O LAT-FULL. Proposed resolution R2-SIZE-1 is not in force.
 - ionmc fine lateral tallies (0.01–0.02 mm projected grids) are within the scoring design (grids independent of the
   transport grid, up to 4 grids) but their per-step cost is unmeasured.
 - σ_R/R planning values and the FULL A_frag derivation are estimates; A_frag is frozen as a number now.
