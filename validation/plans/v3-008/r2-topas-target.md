@@ -806,3 +806,15 @@ with `k = 1 .. n`, seed `20581004 + 100 r_index + k`, histories `1e6 / n`, combi
 and the signed host-runner record (run id, output manifest) are the sealed sample artefacts; the npz arrays themselves
 stay in the published run directories and the host-run store (not in Git). The chunk runs start at this commit's SHA or
 a descendant; the sample seal commit (plan section "Order") follows the last chunk.
+
+**Dated note (2026-11-09, ionmc sample chunks complete; orchestrator, before any TOPAS run).** All 86 chunks of the
+2026-11-08 chunk plan ran at the frozen implementation SHA 1831f2149506b0bd403259f2d00981b835837e4d (cases 1–12,
+1e6 histories each, 26.1 h of single-process compute, every step `pass`, every diagnostic counter 0 including
+`mcs_table_bracket_miss`). The sealed record is `validation/results/transport/v8r2-samples/sample-seal.json`
+(schema `ionmc-v8r2-sample-seal-1`; 76 host runs, case 6 two chunks per call; structure checked by
+`tests/ionmc/test_v3_008_sample_seal.py`). Two non-sample runs are preserved in the record: the superseded first
+chunk at 20021d2a (uncompressed npz) and the first attempt of case 12 k 5 (RUN-20261109T074122Z-9838df64), whose
+step passed but whose signed record reads `succeeded: false` because the orchestrator edited the task worktree while
+the run was in flight (`dirty_after`); the clean-tree re-run (RUN-20261109T080127Z-1011e276) reproduced the identical
+npz sha256. The commit holding the record is the **sample seal commit**; its SHA and review id are recorded in
+`v3-008-acceptance.md` by the dated seal note once its review has passed, before any TOPAS run.

@@ -194,3 +194,27 @@ and any `cpu_workers > 1` row; conformance of V2 / V2-probe needs all shards and
 invocation (Amendment 5). Crash observations during this task: two intermittent sandbox pytest crashes
 (one segfault, one faulthandler trace) in worker sessions, each clean on an identical rerun; none of the
 22 host runs failed.
+
+# Ion TD/TL sample seal (V3-008 revision 2)
+
+`v8r2-samples/sample-seal.json` is the **sample seal record** of the twelve 1e6-history ionmc samples
+of the TOPAS-agreement rows (TD-EM, TD-FULL, TL-EM, TL-FULL; `validation/plans/v3-008/r2-topas-target.md`,
+section "Order" step 0 and section 7; dated chunk-plan note of 2026-11-08). Every sample was produced
+by the controlled host runner at the frozen implementation SHA recorded in the file, in the
+single-process diagnostic mode, as independent chunks (`validation/scripts/transport/steps_v8.py
+td-tl-sample --case c --k k --scale 1/n`; seeds `20581004 + 100 (29 + case) + k`, `k = 1 .. n`;
+n = 4, 5, 10, 4, 8, 20, 4, 8, 10, 4, 4, 5 for cases 1–12), combined per batch by the evaluator after the
+seal. The record holds per chunk: case, k, seed, histories, host run id and its signed output-manifest
+digest, the sha256 and size of the npz, the sha256 of the step's stdout (which carries the full step
+document), wall time, the all-zero diagnostic counters and the host-runner attestation block of the run
+record; `host_runs` lists the unique runs (case 6 ran two chunks per host call) for the
+`details.host_runs` binding of the validation record. The npz arrays themselves are **not in Git**: they
+stay in the published run directories (`validation/generated/<run id>/r2-samples/case<c>/`, git-ignored)
+and in the protected host-run store. One superseded run is listed (case 1 k 1 at the pre-compression
+commit 20021d2a; re-run at the frozen SHA), and one failed run record (`failed_runs`: case 12 k 5,
+RUN-20261109T074122Z-9838df64, step passed but the signed record says `succeeded: false` because the
+orchestrator edited the task worktree while the run was in flight; the clean-tree re-run
+RUN-20261109T080127Z-1011e276 reproduced the identical npz sha256). `tests/ionmc/test_v3_008_sample_seal.py` checks the record's
+structure against the frozen chunk plan (counts, seeds, 1e6 totals per case, unique digests, run
+binding); it reads no physics value. No TOPAS run of the revision-2 set may start before the commit
+holding this record has been reviewed and pushed (plan rule R2-TOPAS-4). Not a clinical claim.
