@@ -466,11 +466,16 @@ def _world(
                 (d / "case.json").write_text(json.dumps(case_doc))
                 extra = tamper.get("input_extra", "") if (case, cfg, part) == first else ""
                 mods = MODULES["full" if cfg.endswith("full") else "em"]
-                if (case, cfg, part) == first and "modules" in tamper:
-                    mods = tamper["modules"]
+                frozen = 'b:Ph/ListProcesses = "True"\nd:Ph/Default/CutForAllParticles = 0.05 mm\n'
+                if cfg != "idd-full":
+                    frozen += "d:Ph/Default/CutForElectron = 1 km\n"
+                if (case, cfg) == first[:2]:  # whole-configuration bundle faults (every part)
+                    mods = tamper.get("modules", mods)
+                    frozen = frozen.replace(tamper.get("drop_line", "\0"), "")
+                    frozen += tamper.get("add_line", "")
                 (d / "input.txt").write_text(
                     f"# case {case} part {part}\ni:Ts/Seed = {seed}\n"
-                    f"i:So/Beam/NumberOfHistoriesInRun = 1000\n{mods}{extra}"
+                    f"i:So/Beam/NumberOfHistoriesInRun = 1000\n{frozen}{mods}{extra}"
                 )
     samples = tmp / "samples"  # ionmc chunks + seal
     chunks = []
@@ -515,7 +520,7 @@ def _world(
     trust.write_text(json.dumps({"reference-runner": [
         {"key_id": kp.key_id, "public_key": kp.public_key.hex()}]}))  # fmt: skip
     code_sha = _commit(repo, "after")
-    records, outputs = tmp / "records", tmp / "outputs"  # TOPAS records and outputs
+    records, outputs = repo / IO.DEFAULT_RECORDS, tmp / "outputs"  # records are committed
     index, ids = [], {}
     for case, spec in cases.items():
         sig_t = spec.get("sig", SIG)
@@ -609,18 +614,32 @@ def _world(
     review = {"review_id": "REVIEW-x", "head_sha": seal_sha, "status": "passed",
               "finished_at": "2026-11-09T09:00:00Z", "report": {"verdict": "pass"}}  # fmt: skip
     (records / "review.json").write_text(json.dumps(review))
-    plan = tmp / "plan.json"
-    plan.write_text(json.dumps({"seal_sha": seal_sha, "seal_review_id": "REVIEW-x"}))
+    plan = repo / IO.PLAN_PATH  # the seal note lives in the committed acceptance plan
+    plan.parent.mkdir(parents=True, exist_ok=True)
+    note = json.dumps({"seal_sha": seal_sha, "seal_review_id": "REVIEW-x"})
+    plan.write_text(tamper.get("plan_text", "# plan\n\n```json\n{note}\n```\n").format(note=note))
+    _commit(repo, "records and seal note")
     return {"repo": repo, "records": records, "outputs": outputs, "samples": samples,
             "plan": plan, "seal": seal_file, "trust": trust, "ids": ids}  # fmt: skip
 
 
-def _cli(w: dict[str, Any], row: str, out: Path, case: int = 1) -> tuple[int, dict[str, Any]]:
-    code = R2.main([
-        "grade", "--plan", str(w["plan"]), "--records", str(w["records"]), "--seal",
-        str(w["seal"]), "--case", str(case), "--row", row, "--outputs", str(w["outputs"]),
-        "--samples-root", str(w["samples"]), "--repo", str(w["repo"]), "--out", str(out),
-    ])  # fmt: skip
+def _cli(
+    w: dict[str, Any], row: str, out: Path, case: int = 1, commit: bool = True
+) -> tuple[int, dict[str, Any]]:
+    """Run the production CLI against the temporary repository (test-only monkeypatch of
+    ``evaluator_repo``); by default pending edits of the repository are committed first."""
+    if commit and _git(w["repo"], "status", "--porcelain"):
+        _commit(w["repo"], "update")
+    old = R2.evaluator_repo
+    R2.evaluator_repo = lambda: w["repo"]
+    try:
+        code = R2.main([
+            "grade", "--records", str(w["records"]), "--case", str(case), "--row", row,
+            "--outputs", str(w["outputs"]), "--samples-root", str(w["samples"]),
+            "--out", str(out),
+        ])  # fmt: skip
+    finally:
+        R2.evaluator_repo = old
     return code, json.loads(out.read_text())
 
 
@@ -867,7 +886,7 @@ def test_untrusted_key_fails_closed(tmp_path: Path, small_case: None) -> None:
     w = _world(tmp_path)
     good = w["trust"].read_text()
     w["trust"].write_text(json.dumps({"reference-runner": []}))  # uncommitted change
-    code, rep = _cli(w, "TD-EM", tmp_path / "s.json")
+    code, rep = _cli(w, "TD-EM", tmp_path / "s.json", commit=False)
     assert code == 2 and "differs from HEAD" in rep["error"]
     _commit(w["repo"], "drop the key")  # committed trust without the key
     code, rep = _cli(w, "TD-EM", tmp_path / "s.json")
@@ -881,8 +900,10 @@ def test_untrusted_key_fails_closed(tmp_path: Path, small_case: None) -> None:
 def test_cli_has_no_trust_option(tmp_path: Path, small_case: None) -> None:
     w = _world(tmp_path)
     with pytest.raises(SystemExit):
-        R2.main(["grade", "--plan", str(w["plan"]), "--records", str(w["records"]), "--seal",
-                 str(w["seal"]), "--case", "1", "--row", "TD-EM", "--trust", "x.json"])  # fmt: skip
+        R2.main(["grade", "--case", "1", "--row", "TD-EM", "--trust", "x.json"])
+    for opt in ("--repo", "--plan"):  # no caller-controlled repository or seal note
+        with pytest.raises(SystemExit):
+            R2.main(["grade", "--case", "1", "--row", "TD-EM", opt, str(w["repo"])])
 
 
 def test_coordinated_output_tampering_fails_closed(tmp_path: Path, small_case: None) -> None:
@@ -973,4 +994,79 @@ def test_decay_marker_and_unknown_modules(tmp_path: Path, small_case: None) -> N
     w3 = _world(tmp_path / "c", tamper={"modules": mods})
     code, rep = _cli(w3, "TD-EM", tmp_path / "c.json")
     assert code == 1 and rep["category"] == "run validity"
-    assert rep["module_markers_unverifiable"] == ["g4foo"]
+    assert any("frozen" in p for x in rep["part_validity"] for p in x["problems"])
+
+
+def _review_path(w: dict[str, Any]) -> Path:
+    return w["records"] / "review.json"
+
+
+def test_review_record_is_read_from_head(tmp_path: Path, small_case: None) -> None:
+    w = _world(tmp_path)
+    path = _review_path(w)
+    good = json.loads(path.read_text())
+    path.write_text(json.dumps(good | {"finished_at": "2026-11-09T08:00:00Z"}))
+    code, rep = _cli(w, "TD-EM", tmp_path / "a.json", commit=False)  # working-copy edit
+    assert code == 2 and "differs from HEAD" in rep["error"]
+    # a genuine committed record finishing after the runs started: blinding-control FAIL
+    path.write_text(json.dumps(good | {"finished_at": "2026-11-09T12:30:00Z"}))
+    code, rep = _cli(w, "TD-EM", tmp_path / "b.json")
+    assert code == 1 and rep["category"] == "blinding control"
+    # a forged earlier finished_at on a record that is not the plan's seal review: ERROR
+    for forged in ({"review_id": "REVIEW-forged"}, {"head_sha": "c" * 40}):
+        path.write_text(json.dumps(good | {"finished_at": "2026-11-09T08:00:00Z"} | forged))
+        code, rep = _cli(w, "TD-EM", tmp_path / "c.json")
+        assert code == 2 and rep["status"] == "ERROR", forged
+    path.write_text(json.dumps(good))
+    code, rep = _cli(w, "TD-EM", tmp_path / "d.json")
+    assert code == 0 and rep["evaluator"]["committed_inputs"][f"{IO.DEFAULT_RECORDS}/review.json"]
+
+
+@pytest.mark.parametrize(
+    "plan_text",
+    ["# plan without a seal note\n",
+     "```json\n{note}\n```\n\n```json\n{note}\n```\n"],
+)  # fmt: skip
+def test_plan_seal_note_must_be_unique(tmp_path: Path, small_case: None, plan_text: str) -> None:
+    w = _world(tmp_path, tamper={"plan_text": plan_text})
+    code, rep = _cli(w, "TD-EM", tmp_path / "p.json")
+    assert code == 2 and "seal-note JSON block" in rep["error"]
+
+
+def test_uncommitted_index_fails_closed(tmp_path: Path, small_case: None) -> None:
+    w = _world(tmp_path)
+    idx = w["records"] / "index.json"
+    idx.write_text(idx.read_text() + " ")
+    code, rep = _cli(w, "TD-EM", tmp_path / "i.json", commit=False)
+    assert code == 2 and "differs from HEAD" in rep["error"]
+
+
+FULL_MINUS_QMD = (
+    'sv:Ph/Default/Modules = 6 "g4em-standard_opt4" "g4h-phy_QGSP_BIC_HP" '
+    '"g4decay" "g4h-elastic_HP" "g4stopping" "g4radioactivedecay"\n'
+)
+FULL_PLUS = MODULES["full"].replace("= 7", "= 8").rstrip("\n") + ' "g4h-inclxx"\n'
+
+
+@pytest.mark.parametrize(
+    ("configs", "row", "tamper"),
+    [
+        (("idd-full",), "TD-FULL", {"modules": FULL_MINUS_QMD}),
+        (("idd-full",), "TD-FULL", {"modules": FULL_PLUS}),
+        (("idd-em",), "TD-EM",
+         {"modules": 'sv:Ph/Default/Modules = 2 "g4em-standard_opt4" "g4ion-QMD"\n'}),
+        (("idd-em",), "TD-EM", {"drop_line": 'b:Ph/ListProcesses = "True"\n'}),
+        (("idd-em",), "TD-EM", {"drop_line": "d:Ph/Default/CutForElectron = 1 km\n"}),
+        (("idd-full",), "TD-FULL", {"add_line": "d:Ph/Default/CutForElectron = 1 km\n"}),
+        (("lat-full", "idd-em", "lat-em"), "TL-FULL",
+         {"drop_line": "d:Ph/Default/CutForElectron = 1 km\n"}),
+    ],
+)  # fmt: skip
+def test_frozen_configuration_enforced(
+    tmp_path: Path, small_case: None, configs: tuple[str, ...], row: str, tamper: dict[str, Any]
+) -> None:
+    w = _world(tmp_path, configs=configs, tamper=tamper)
+    code, rep = _cli(w, row, tmp_path / "f.json")
+    assert code == 1 and rep["category"] == "run validity", rep
+    bad = [x for x in rep["part_validity"] if x["config"] == configs[0]]
+    assert len(bad) == 4 and all(x["problems"] for x in bad)  # every part of the configuration

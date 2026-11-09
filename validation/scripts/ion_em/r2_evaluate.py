@@ -2,14 +2,18 @@
 
 Entry point::
 
-    python validation/scripts/ion_em/r2_evaluate.py grade --plan <seal-note.json> --records <dir>
-        --seal <sample-seal.json> --case <n> --row <TD-EM|TD-FULL|TL-EM|TL-FULL>
-        [--outputs <dir>] [--samples-root <dir>] [--repo <dir>] [--out <report.json>]
+    python validation/scripts/ion_em/r2_evaluate.py grade --case <n>
+        --row <TD-EM|TD-FULL|TL-EM|TL-FULL> [--records <committed dir>] [--seal <committed path>]
+        [--outputs <dir>] [--samples-root <dir>] [--out <report.json>]
+
+The repository is always the git checkout that contains this file; plan seal note, review record,
+run index, signed run records, listings, seal and trust file are read as committed at its HEAD
+(a differing working copy fails closed; Codex REVIEW-a50374b1).
 
 Design record ``validation/plans/v3-008/r2-topas-target.md``: section 4 estimators and section 5
 criteria are in ``r2_statistics`` (numpy only), the fail-closed loaders of the controlled records,
 the sealed ionmc chunks and the TOPAS outputs in ``r2_io`` (read its docstring for the evidence
-directory layout and the ``reference_started = finished_at - seconds`` caveat). Exit status:
+directory layout and the record bindings). Exit status:
 0 PASS, 1 FAIL / NOT EVALUABLE, 2 ERROR (fail closed; a report with ``status: ERROR`` is still
 written). The report holds statistics, record ids and sha256 only, never raw arrays.
 
@@ -556,6 +560,7 @@ class Context:
         trust: dict[str, Any],
     ) -> None:
         self.trust = trust
+        self.reader: io.CommittedReader | None = None
         self.repo, self.plan, self.review, self.index = repo, plan, review, index
         self.records, self.outputs, self.seal, self.samples_root = (
             records,
@@ -569,7 +574,15 @@ class Context:
     def topas(self, case: int, config: str) -> list[io.TopasRun]:
         runs = [
             io.load_topas_run(
-                self.repo, self.records, self.outputs, case, config, p, rid, self.trust
+                self.repo,
+                self.records,
+                self.outputs,
+                case,
+                config,
+                p,
+                rid,
+                self.trust,
+                self.reader,
             )
             for p, rid in io.runs_for(self.index, case, config)
         ]
@@ -686,48 +699,75 @@ def _lateral(
     return pts, extra
 
 
+def evaluator_repo() -> Path:
+    """The git toplevel of the checkout that contains this evaluator (the only repository the
+    production CLI grades from; Codex REVIEW-a50374b1)."""
+    here = Path(__file__).resolve()
+    proc = subprocess.run(  # noqa: S603 - fixed argv
+        ["git", "-C", str(here.parent), "rev-parse", "--show-toplevel"],
+        capture_output=True, text=True, check=False,
+    )  # fmt: skip
+    if proc.returncode != 0:
+        raise io.RecordError(f"the evaluator is not inside a git checkout: {proc.stderr.strip()}")
+    top = Path(proc.stdout.strip()).resolve()
+    if not here.is_relative_to(top):
+        raise io.RecordError("the evaluator does not live inside its git toplevel")
+    return top
+
+
 def grade(
-    repo: Path,
-    plan_path: Path,
-    records: Path,
-    seal_path: Path,
+    records: Path | str,
+    seal_path: Path | str,
     case: int,
     row: str,
     outputs: Path | None = None,
     samples_root: Path | None = None,
+    *,
+    repo: Path | None = None,
 ) -> dict[str, Any]:
-    """Grade one (case, row). Raises on any missing/malformed record (caller: ERROR). The
-    attestation trust map is ONLY ``infrastructure/keys/trusted_attestation_keys.json`` as committed
-    at ``repo``'s HEAD (``r2_io.committed_trust``; no caller-supplied keys; Codex REVIEW-6b4731a7);
-    tests use a temporary git repository whose committed trust file holds the test key."""
+    """Grade one (case, row). Raises on any missing/malformed record (caller: ERROR).
+
+    Every repository input (acceptance-plan seal note, review record, run index, signed run
+    records, artifact listings, sample seal, trust file, bundles) is read as committed at the
+    evaluator repository's HEAD (bundles at the run's code_sha) and a differing working copy fails
+    closed. ``repo`` is a test-only override (the CLI never exposes it): production grades use
+    :func:`evaluator_repo`."""
     if row not in ROWS:
         raise io.RecordError(f"unknown row {row!r}; rows are {ROWS}")
+    repo = Path(repo).resolve() if repo is not None else evaluator_repo()
+    reader = io.CommittedReader(repo)
     info = io.case_info(case)
-    plan = io.load_plan(plan_path)
-    review = io.load_review(records)
-    seal, seal_digest = io.load_seal(repo, seal_path, plan["seal_sha"])
-    trust, trust_info = io.committed_trust(repo)
+    plan = io.load_plan(reader)
+    review = io.load_review(reader, records, plan)
+    seal, seal_digest = io.load_seal(reader, seal_path, plan["seal_sha"])
+    trust, trust_info = io.committed_trust(reader)
     ctx = Context(
         repo,
         plan,
         review,
-        io.load_index(records),
-        records,
+        io.load_index(reader, records),
+        Path(records) if Path(records).is_absolute() else repo / records,
         outputs or repo / ".ionmc-cache" / "reference-runs",
         seal,
         samples_root or repo,
         trust,
     )
+    ctx.reader = reader
     report: dict[str, Any] = {
         "schema": REPORT_SCHEMA,
         "row": row,
         "case": case,
         "case_info": info,
         "trust_file": trust_info,
+        "evaluator": {
+            "head_sha": reader.head,
+            "committed_inputs_clean": True,
+            "committed_inputs": reader.reads,  # filled while grading (path -> sha256)
+        },
         "held_out": info["set"] == "held-out",
         "plan": plan,
         "review": {k: review[k] for k in ("review_id", "head_sha", "status", "finished_at")},
-        "seal_record": {"path": str(seal_path), "sha256": seal_digest},
+        "seal_record": {"path": io.SEAL_RECORD_PATH, "sha256": seal_digest},
         "implementation_decisions": DECISIONS,
         "not_computed": NOT_COMPUTED,
     }
@@ -880,23 +920,22 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="V3-008 r2 TOPAS-agreement evaluator")
     sub = ap.add_subparsers(dest="cmd", required=True)
     g = sub.add_parser("grade")
-    g.add_argument("--plan", required=True, type=Path)
     g.add_argument(
         "--records",
-        required=True,
         type=Path,
-        help="evidence directory (orchestrator: validation/results/transport/v8r2-topas/records/)",
+        default=Path(io.DEFAULT_RECORDS),
+        help=f"committed evidence directory inside the evaluator repository "
+        f"(default {io.DEFAULT_RECORDS})",
     )
-    g.add_argument("--seal", required=True, type=Path)
+    g.add_argument("--seal", type=Path, default=Path(io.SEAL_RECORD_PATH))
     g.add_argument("--case", required=True, type=int)
     g.add_argument("--row", required=True, choices=ROWS)
     g.add_argument("--outputs", type=Path, default=None)
     g.add_argument("--samples-root", type=Path, default=None)
-    g.add_argument("--repo", type=Path, default=Path(__file__).resolve().parents[3])
     g.add_argument("--out", type=Path, default=None)
     a = ap.parse_args(argv)
     try:
-        rep = grade(a.repo, a.plan, a.records, a.seal, a.case, a.row, a.outputs, a.samples_root)
+        rep = grade(a.records, a.seal, a.case, a.row, a.outputs, a.samples_root)
         code = {"PASS": 0}.get(rep["status"], 1)
     except (
         ChronologyError,
@@ -917,7 +956,11 @@ def main(argv: list[str] | None = None) -> int:
         }
         print(f"r2_evaluate: ERROR (fail closed): {exc}", file=sys.stderr)
         code = 2
-    rep = _json_safe(rep | _head(a.repo))
+    try:
+        own = evaluator_repo()
+    except io.RecordError:
+        own = Path(__file__).resolve().parent
+    rep = _json_safe(rep | _head(own))
     text = json.dumps(rep, indent=1, sort_keys=True, allow_nan=False)
     if a.out:
         a.out.parent.mkdir(parents=True, exist_ok=True)

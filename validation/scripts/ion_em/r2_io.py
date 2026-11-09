@@ -3,10 +3,15 @@ pure-numpy TOPAS parsers of ``ionmc.reference.parsers``).
 
 Three inputs, each bound to a controlled record before any number is used:
 
-1. **Plan and seal review.** ``--plan`` is the JSON block of the plan's dated seal note
-   (``{"seal_sha", "seal_review_id"}``). The review record is the codex-worker record as returned by
-   the controlled service, materialized by the orchestrator as ``<records>/review.json`` (fields
-   used: ``review_id, head_sha, status, finished_at, report.verdict``; all required).
+1. **Plan and seal review.** ``seal_sha`` / ``seal_review_id`` come from the single seal-note
+   JSON block of ``validation/plans/v3-008-acceptance.md`` as committed at HEAD. The review record
+   ``<records>/review.json`` is read as committed at HEAD (fields used: ``review_id, head_sha,
+   status, finished_at, report.verdict``; all required; ``review_id``/``head_sha`` must match the
+   seal note). It is a verbatim copy of the controlled codex-worker response (its
+   ``report_sha256`` is the service's report digest); a signed review record is a future
+   infrastructure item (V3-INFRA-005), so the binding today is to the reviewed, committed bytes.
+   All other records (index, signed run records, listings, seal, trust file) are likewise read
+   through :class:`CommittedReader`.
 2. **ionmc samples.** The sealed record ``sample-seal.json`` (``--seal``) must be byte-identical to
    the file committed at the plan's ``seal_sha`` (``git show <seal_sha>:<SEAL_RECORD_PATH>``).
    Each chunk npz (``<samples-root>/validation/generated/<run_id>/r2-samples/case<c>/<npz>``) is
@@ -226,23 +231,88 @@ def topas_seed(case: int, part: int) -> int:
 # ---------------------------------------------------------------------------------------------
 
 
-def load_plan(path: Path | str) -> dict[str, Any]:
-    plan = read_json(Path(path), "plan seal note")
+PLAN_PATH = "validation/plans/v3-008-acceptance.md"
+DEFAULT_RECORDS = "validation/results/transport/v8r2-topas/records"
+
+
+class CommittedReader:
+    """Reads repository files only as committed at one resolved HEAD and fails closed when the
+    working copy differs (Codex REVIEW-a50374b1: no caller-controlled input). ``reads`` records
+    every path read with its sha256 for the report."""
+
+    def __init__(self, repo: Path | str) -> None:
+        self.repo = Path(repo).resolve()
+        head = subprocess.run(  # noqa: S603 - fixed argv
+            ["git", "-C", str(self.repo), "rev-parse", "HEAD"],
+            capture_output=True, text=True, check=False,
+        )  # fmt: skip
+        if head.returncode != 0:
+            raise RecordError(f"cannot resolve HEAD of {self.repo}: {head.stderr.strip()}")
+        self.head = head.stdout.strip()
+        self.reads: dict[str, str] = {}
+
+    def rel(self, path: Path | str) -> str:
+        p = Path(path)
+        p = (p if p.is_absolute() else self.repo / p).resolve()
+        try:
+            return p.relative_to(self.repo).as_posix()
+        except ValueError as exc:
+            raise RecordError(f"{path} is outside the evaluator repository") from exc
+
+    def read(self, path: Path | str) -> bytes:
+        rel = self.rel(path)
+        blob = git_show(self.repo, self.head, rel)
+        work = self.repo / rel
+        if work.is_symlink() or not work.is_file() or work.read_bytes() != blob:
+            raise RecordError(f"the working copy of {rel} differs from HEAD {self.head}")
+        self.reads[rel] = hashlib.sha256(blob).hexdigest()
+        return blob
+
+    def json(self, path: Path | str, what: str) -> Any:
+        blob = self.read(path)
+        try:
+            return json.loads(blob.decode("utf-8"))
+        except ValueError as exc:
+            raise RecordError(f"{what}: {path} is not JSON: {exc}") from exc
+
+
+def load_plan(reader: CommittedReader) -> dict[str, Any]:
+    """``seal_sha`` / ``seal_review_id`` from the one fenced ```json block of the committed
+    acceptance plan that contains "seal_sha" (zero or several blocks: fail closed)."""
+    text = reader.read(PLAN_PATH).decode("utf-8")
+    blocks = [b for b in re.findall(r"```json[ \t]*\n(.*?)```", text, re.S) if '"seal_sha"' in b]
+    if len(blocks) != 1:
+        raise RecordError(
+            f"{PLAN_PATH}: expected exactly one seal-note JSON block, found {len(blocks)}"
+        )
+    try:
+        plan = json.loads(blocks[0])
+    except ValueError as exc:
+        raise RecordError(f"{PLAN_PATH}: the seal-note block is not JSON: {exc}") from exc
     for key in ("seal_sha", "seal_review_id"):
         require(plan, key, "plan seal note")
     return {"seal_sha": plan["seal_sha"], "seal_review_id": plan["seal_review_id"]}
 
 
-def load_review(records: Path | str) -> dict[str, Any]:
-    review = read_json(Path(records) / "review.json", "seal review record")
+def load_review(
+    reader: CommittedReader, records: Path | str, plan: dict[str, Any]
+) -> dict[str, Any]:
+    """The seal review record as committed at HEAD (``<records>/review.json``). It is a verbatim
+    copy of the controlled codex-worker response (its ``report_sha256`` is the service's report
+    digest); a signed review record is a future infrastructure item (V3-INFRA-005), so the binding
+    today is to the reviewed, committed bytes. ``review_id`` and ``head_sha`` must equal the plan's
+    seal note."""
+    review = reader.json(Path(records) / "review.json", "seal review record")
     for key in REVIEW_FIELDS:
         require(review, key, "seal review record")
     require(review["report"], "verdict", "seal review report")
+    if review["review_id"] != plan["seal_review_id"] or review["head_sha"] != plan["seal_sha"]:
+        raise RecordError("the committed review record is not the seal review named by the plan")
     return review
 
 
-def load_index(records: Path | str) -> list[dict[str, Any]]:
-    index = read_json(Path(records) / "index.json", "run index")
+def load_index(reader: CommittedReader, records: Path | str) -> list[dict[str, Any]]:
+    index = reader.json(Path(records) / "index.json", "run index")
     runs = require(index, "runs", "run index")
     if not isinstance(runs, list):
         raise RecordError("run index: runs must be a list")
@@ -320,10 +390,9 @@ class TopasRun:
 
 
 def _listing(
-    path: Path, run_id: str, code_sha: str, sizes: dict[str, Any] | None = None
+    raw: Any, run_id: str, code_sha: str, sizes: dict[str, Any] | None = None
 ) -> dict[str, str]:
     """path -> sha256 of the artifact listing; ``sizes`` (if given) receives path -> bytes."""
-    raw = read_json(path, "artifact listing")
     pages = raw if isinstance(raw, list) else [raw]
     files: dict[str, str] = {}
     for page in pages:
@@ -367,12 +436,13 @@ def load_topas_run(
     part: int,
     run_id: str,
     trust: dict[str, Any],
+    reader: CommittedReader,
 ) -> TopasRun:
     """Load and bind one TOPAS run (see the module docstring); any gap raises RecordError.
     ``trust`` is ``attest.load_trusted(<trust file>)``."""
     rdir = Path(records) / "runs" / run_id
     record_path = rdir / "record.json"
-    result = read_json(record_path, f"signed run record {run_id}")
+    result = reader.json(record_path, f"signed run record {run_id}")
     status, reason = attest_module().classify_record(result, trust, REFERENCE_SIGNER)
     if status != "verified":
         raise RecordError(
@@ -413,7 +483,9 @@ def load_topas_run(
     started_iso = str(result["started_at"])
     code_sha = str(result["code_sha"])
     sizes: dict[str, Any] = {}
-    listing = _listing(rdir / "artifacts.json", run_id, code_sha, sizes)
+    listing = _listing(
+        reader.json(rdir / "artifacts.json", "artifact listing"), run_id, code_sha, sizes
+    )
     # Bind the outputs to the signed record: the runner signs output_files_sha256 =
     # common.digest(inventory(run_dir / "work", allow_internal_links=True)), i.e. the canonical
     # JSON digest of {path relative to work/: {"sha256", "bytes"}} (V3-INFRA-004 reference.py).
@@ -434,7 +506,7 @@ def load_topas_run(
     for name in ("request.json", "stdout.txt", "stderr.txt", "record.json"):
         if name not in listing:
             raise RecordError(f"{run_id}: artifact listing lacks {name}")
-    if sha256_file(record_path) != listing["record.json"]:
+    if reader.reads[reader.rel(record_path)] != listing["record.json"]:
         raise RecordError(f"{run_id}: record.json differs from the listed record.json")
     for name, key in (("stdout.txt", "stdout_sha256"), ("stderr.txt", "stderr_sha256")):
         if result[key] != listing[name]:
@@ -536,26 +608,17 @@ def load_trust(path: Path | str) -> dict[str, Any]:
         raise RecordError(f"trust file {path} unreadable: {exc}") from exc
 
 
-def committed_trust(repo: Path | str) -> tuple[dict[str, Any], dict[str, Any]]:
+def committed_trust(reader: CommittedReader) -> tuple[dict[str, Any], dict[str, Any]]:
     """The trust map of ``infrastructure/keys/trusted_attestation_keys.json`` as committed at the
-    repository's HEAD (``git show HEAD:...``; Codex REVIEW-6b4731a7). Fails closed when the
-    working copy differs from the committed file. Returns (trust map, provenance)."""
-    head = subprocess.run(  # noqa: S603 - fixed argv
-        ["git", "-C", str(repo), "rev-parse", "HEAD"], capture_output=True, text=True, check=False
-    )
-    if head.returncode != 0:
-        raise RecordError(f"cannot resolve HEAD of {repo}: {head.stderr.strip()}")
-    sha = head.stdout.strip()
-    blob = git_show(repo, sha, DEFAULT_TRUST)
-    work = Path(repo) / DEFAULT_TRUST
-    if not work.is_file() or work.read_bytes() != blob:
-        raise RecordError(f"the working copy of {DEFAULT_TRUST} differs from HEAD {sha}")
+    evaluator repository's HEAD (Codex REVIEW-6b4731a7 / REVIEW-a50374b1); a working copy that
+    differs fails closed. Returns (trust map, provenance)."""
+    blob = reader.read(DEFAULT_TRUST)
     try:
         data = json.loads(blob.decode("utf-8"))
         trust = {s: {e["key_id"]: e["public_key"] for e in entries} for s, entries in data.items()}
     except (ValueError, KeyError, TypeError, AttributeError) as exc:
-        raise RecordError(f"{DEFAULT_TRUST} at {sha} is malformed: {exc}") from exc
-    info = {"path": DEFAULT_TRUST, "head_sha": sha, "sha256": hashlib.sha256(blob).hexdigest()}
+        raise RecordError(f"{DEFAULT_TRUST} at {reader.head} is malformed: {exc}") from exc
+    info = {"path": DEFAULT_TRUST, "head_sha": reader.head, "sha256": reader.reads[DEFAULT_TRUST]}
     return trust, info
 
 
@@ -658,17 +721,49 @@ def bundle_modules(native: str) -> list[str]:
     return names
 
 
-def module_check(native: str, stdout: str) -> tuple[list[str], list[str]]:
+EM_MODULES = ("g4em-standard_opt4",)
+FULL_MODULES = (
+    "g4em-standard_opt4", "g4h-phy_QGSP_BIC_HP", "g4decay", "g4h-elastic_HP", "g4stopping",
+    "g4ion-QMD", "g4radioactivedecay",
+)  # fmt: skip
+FROZEN_MODULES = {"idd-em": EM_MODULES, "lat-em": EM_MODULES, "idd-full": FULL_MODULES,
+                  "lat-full": FULL_MODULES}  # fmt: skip
+# frozen native lines per configuration (section 2; R2-SIZE-1: LAT-FULL electron cut 1 km;
+# ListProcesses amendment: process list in every evidence bundle); exactly once each
+_COMMON_LINES = ('b:Ph/ListProcesses = "True"', "d:Ph/Default/CutForAllParticles = 0.05 mm")
+_ECUT = "d:Ph/Default/CutForElectron = 1 km"
+FROZEN_LINES = {"idd-em": (*_COMMON_LINES, _ECUT), "lat-em": (*_COMMON_LINES, _ECUT),
+                "idd-full": _COMMON_LINES, "lat-full": (*_COMMON_LINES, _ECUT)}  # fmt: skip
+
+
+def frozen_lines_check(native: str, config: str) -> list[str]:
+    """The frozen physics lines of ``config`` appear exactly once (whitespace-normalised, comment
+    lines ignored); IDD-FULL must carry no CutForElectron line."""
+    lines = [" ".join(ln.split()) for ln in native.splitlines() if not ln.lstrip().startswith("#")]
+    problems = [f"frozen line {w!r} missing or repeated" for w in FROZEN_LINES[config]
+                if lines.count(w) != 1]  # fmt: skip
+    if config == "idd-full" and any("CutForElectron" in ln for ln in lines):
+        problems.append("IDD-FULL bundle sets CutForElectron (not frozen for this configuration)")
+    return problems
+
+
+def module_check(native: str, stdout: str, config: str) -> tuple[list[str], list[str]]:
     """(problems, unverifiable modules) of the executed module list. Interim rule (Codex
     REVIEW-6b4731a7, orchestrator 2026-11-09): every bundled module must show its runtime marker
     (see :func:`_marker`); a bundled module without a marker is a run-validity FAIL as well (it is
     also returned as unverifiable); a run whose bundle lists only ``g4em-*`` modules must show no
-    hadronic marker and no registered ``Decay`` process."""
+    hadronic marker and no registered ``Decay`` process. The bundle's module list must equal the
+    frozen set of its configuration (``FROZEN_MODULES``; order-insensitive, Codex REVIEW-a50374b1);
+    the runtime markers are checked for exactly that frozen set."""
     try:
         modules = bundle_modules(native)
     except RecordError as exc:
         return [str(exc)], []
     problems, unverifiable = [], []
+    frozen = FROZEN_MODULES[config]
+    if sorted(modules) != sorted(frozen):
+        problems.append(f"bundle modules {modules} != the frozen {config} set {list(frozen)}")
+        modules = list(frozen)  # still check the runtime markers of the frozen set
     for mod in modules:
         if mod in VERIFIABLE_MODULES:
             if not _marker(mod, stdout):
@@ -720,7 +815,8 @@ def run_checks(run: TopasRun) -> dict[str, list[str]]:
         models = msc_models(stdout, p)
         if not models or any(m != "UrbanMsc" for m in models):
             problems.append(f"msc models for {p} are {models}, not UrbanMsc")
-    mod_problems, unverifiable = module_check(run.native, stdout)
+    problems += frozen_lines_check(run.native, run.config)
+    mod_problems, unverifiable = module_check(run.native, stdout, run.config)
     return {"problems": problems + mod_problems, "module_markers_unverifiable": unverifiable}
 
 
@@ -875,10 +971,15 @@ def topas_lateral(run: TopasRun, stem: str, axis: int) -> tuple[np.ndarray, np.n
 # ---------------------------------------------------------------------------------------------
 
 
-def load_seal(repo: Path | str, seal_path: Path | str, seal_sha: str) -> tuple[dict[str, Any], str]:
-    """The sealed sample record, byte-identical to the one committed at the seal commit."""
-    blob = Path(seal_path).read_bytes()
-    if blob != git_show(repo, seal_sha, SEAL_RECORD_PATH):
+def load_seal(
+    reader: CommittedReader, seal_path: Path | str, seal_sha: str
+) -> tuple[dict[str, Any], str]:
+    """The sealed sample record as committed at HEAD (path ``SEAL_RECORD_PATH``), byte-identical to
+    the one committed at the seal commit."""
+    if reader.rel(seal_path) != SEAL_RECORD_PATH:
+        raise RecordError(f"the seal record must be {SEAL_RECORD_PATH}, not {seal_path}")
+    blob = reader.read(seal_path)
+    if blob != git_show(reader.repo, seal_sha, SEAL_RECORD_PATH):
         raise RecordError(f"{seal_path} differs from {SEAL_RECORD_PATH} at the seal {seal_sha}")
     record = json.loads(blob.decode("utf-8"))
     if require(record, "schema", "sample seal") != SEAL_SCHEMA:
