@@ -142,7 +142,7 @@ def parse_trust_map(data, *, exactly_one: bool = False) -> dict:
     (exactly one with ``exactly_one``, the key-publication rule: a published
     key that is not evidenced cannot hide behind an evidenced one); an
     optional signer of attest.SIGNERS may be absent or an empty list (not yet
-    published), and is otherwise held to the same rules; each entry must
+    published; an explicit null is rejected), and is otherwise held to the same rules; each entry must
     carry a key_id equal to the public key's derived id, and the key must be a
     valid curve point that is not of small order. Raises ValueError.
     """
@@ -152,8 +152,8 @@ def parse_trust_map(data, *, exactly_one: bool = False) -> dict:
     out: dict = {}
     for signer in attest.SIGNERS:
         entries = data.get(signer)
-        if signer not in REQUIRED_SIGNERS and entries in (None, []):
-            continue
+        if signer not in REQUIRED_SIGNERS and (signer not in data or entries == []):
+            continue  # not yet published: absent or an empty list (an explicit null is malformed)
         if not isinstance(entries, list) or not entries:
             raise ValueError(f"trust file has no {signer} key")
         if exactly_one and len(entries) != 1:

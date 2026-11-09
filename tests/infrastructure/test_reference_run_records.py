@@ -321,6 +321,10 @@ def test_parse_trust_map_reference_runner_is_optional_but_strict_when_listed():
         lv.parse_trust_map({**base, "reference-runner": [{**ent(rr), "key_id": "0" * 16}]})
     with pytest.raises(ValueError, match="reference-runner"):
         lv.parse_trust_map({**base, "reference-runner": "not-a-list"})
+    with pytest.raises(
+        ValueError, match="reference-runner"
+    ):  # explicit null is malformed (REVIEW-73ad5438)
+        lv.parse_trust_map({**base, "reference-runner": None})
     with pytest.raises(ValueError, match="host-runner"):
         lv.parse_trust_map({"validation-manager": [ent(vm)], "reference-runner": [ent(rr)]})
 
