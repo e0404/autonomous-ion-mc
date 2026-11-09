@@ -396,10 +396,12 @@ placeholder scorer output was deleted unread.
 
 | File | sha256 |
 |---|---|
-| `validation/results/transport/v8r2-topas/smoke-confirmation.json` | `15df91b76206ab9090737aedbaa2722d25934e2008f7cc351b8bcf23297df5c7` |
+| `validation/results/transport/v8r2-topas/smoke-confirmation.json` | `9eb05abb2b850d10c473d4aaea6aabeb8a0d5710e335c05d6c64bebeece4ed1d` |
 
 
 **Dated note (2026-11-09, exact confirmation-set gate (Codex REVIEW-27887e4b); orchestrator) — hashes regenerated at the working tree; entries that changed since the note above:** `validation/scripts/ion_em/r2_smoke_reruns.py` 3fa0cb48… → 33964577…; `tests/ionmc/test_r2_smoke_reruns.py` d0eca2fa… → 85541eda…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-09, confirmation summary regenerated at f1ef5a51 with the exact-set gate; orchestrator) — hashes regenerated at the working tree; entries that changed since the note above:** `validation/results/transport/v8r2-topas/smoke-confirmation.json` 15df91b7… → 9eb05abb…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.

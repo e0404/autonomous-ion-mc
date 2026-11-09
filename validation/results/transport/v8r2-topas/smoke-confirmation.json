@@ -1,9 +1,9 @@
 {
  "all_valid": true,
  "checker": "validation/scripts/ion_em/r2_evaluate.py check-run (r2_evaluate.check_run)",
- "confirmation_reason": "all 14 runs of the given ledgers are VALID",
+ "confirmation_reason": "all 14 runs VALID and exactly the pre-registered confirmation set (10 R2-SMOKE-LP smokes 20600428-20600437 + re-runs 20600424-20600427)",
  "confirmation_set_complete": true,
- "evaluator_head": "1d7b239425f013f60331799c458ab533a9613f65",
+ "evaluator_head": "f1ef5a51c8e4484d6da2655b217f6763b5f57943",
  "ledgers": [
   {
    "n_runs": 10,
