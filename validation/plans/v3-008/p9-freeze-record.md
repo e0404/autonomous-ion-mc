@@ -355,6 +355,40 @@ placeholder scorer output was deleted unread.
 **Dated note (2026-11-09, signed smoke re-runs / STOP / R2-SMOKE-LP commit; orchestrator) — hashes regenerated at the working tree; entries that changed since the note above:** `validation/scripts/ion_em/gen_r2_bundles.py` 9924429d… → 74ab35e3…; `tests/ionmc/test_r2_bundles.py` b0e91e2b… → e6431320…; `validation/plans/v3-008/r2-topas-target.md` beb35820… → 3b2a5a40…; `validation/scripts/ion_em/r2_evaluate.py` ad7c45f1… → 1aa72236…; `tests/ionmc/test_r2_evaluate.py` f733732e… → 34bdee01…; `validation/scripts/ion_em/r2_io.py` ec08eea5… → 621a4979…; `validation/results/transport/v8r2-topas/frozen-bundles.json` b3e27964… → fa490129…. All other entries unchanged (recomputed).
 
 **Dated note (2026-11-09, R2-SMOKE-LP correction commit (Codex REVIEW-8286be8c: lp name grammar, manifest-current confirmation set); orchestrator) — hashes regenerated at the working tree; entries that changed since the note above:** `tests/ionmc/test_r2_evaluate.py` 34bdee01… → 0de50eb4…; `validation/scripts/ion_em/r2_io.py` 621a4979… → e4ceb4b2…; `validation/scripts/ion_em/r2_smoke_reruns.py` ffee2f4f… → ffcd9d13…; `tests/ionmc/test_r2_smoke_reruns.py` 0b40e2ed… → d0eca2fa…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-09, confirmation-set records; orchestrator) — newly bound paths: the 14 signed smoke-run records of the R2-SMOKE-LP confirmation set (10 lp smokes, 4 manifest-current re-runs; record.json + artifacts.json, sha256 as committed):**
+
+| File | sha256 |
+|---|---|
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-022775f8c6a8530c48aa-a50056d1/record.json` | `c03a50cc1bfccee55ec3c725c6f64e379f13e2d68c52d859a811f05de3b96a68` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-022775f8c6a8530c48aa-a50056d1/artifacts.json` | `b52ec38d9a1092cb070ca6b4087d8e6971536e3cc3a2ca3e9b480da296e2aada` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-100a453268dacee7ea3f-80664e3e/record.json` | `1b4fa29d220e526a83e3716a8184601745276f68e0010d32130e4b13f800439d` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-100a453268dacee7ea3f-80664e3e/artifacts.json` | `8912090ab0146cd0e53616e7669c45b6940b536978def3075f9c4d952e3a58d1` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-1bee6c0ab49920cf6ff3-685816fc/record.json` | `0917666c242b4e412dd30cbd983eab415a7f7247a9e6c12cae4cadffafa8665a` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-1bee6c0ab49920cf6ff3-685816fc/artifacts.json` | `c585bf6e4f7aa102709895e9478efc7b01a6db290f36fd10ac72c44465707edb` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-2c6d31fa3f3ae83bce78-ea24d511/record.json` | `4a2a4d074ed4ee59e03db1f0bff6791562c3589c84be7493ddb4591f33769e72` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-2c6d31fa3f3ae83bce78-ea24d511/artifacts.json` | `cbd4ed3f28d2f12f7274129942f9b5cba4527a8808590cc5433e07df683b0c3e` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-494fafda858a0a1f2c2d-5e74e4ef/record.json` | `be6c8567bdd463a009ce77839643c81e7fc00696b46f33e0d1d12d002f28e670` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-494fafda858a0a1f2c2d-5e74e4ef/artifacts.json` | `f01b80d1daee1c51335bc817667ad0d349d8f948d64468e7d4b9c654306a7c21` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-706eae23ccef7407d213-b7cff919/record.json` | `2762ef3a6a39c296a5d809613e15af60a2251ee9718942b2625b4e96999226de` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-706eae23ccef7407d213-b7cff919/artifacts.json` | `6d5586cdffe6464d53880e70a14813002502038be72b810fdb928d1c6b069810` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-77d4d10efe5c035b544e-caf6cb7f/record.json` | `8802b8444dd184cd55452c013e891f8d15a7759e6cf15c03aa91be842bd29571` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-77d4d10efe5c035b544e-caf6cb7f/artifacts.json` | `fb399aaaf0c8d82b22865afcc26e236a89c75cd5fc12162a2300cead0a10b2b5` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-88218abcafa16a04e081-8930543c/record.json` | `d79f7cd545e93d847a0042a64d2d38fe43b106303bf073b1052b8a5fc167536c` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-88218abcafa16a04e081-8930543c/artifacts.json` | `45bc49c87c950cec1b437e553456908e72376753d04f35232629e527238dec7d` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-8823040474464055579c-29f6732b/record.json` | `867caf33b263e031f51314b35c2192a71a68ce9e987d61e6e3cdc8ec9ee99123` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-8823040474464055579c-29f6732b/artifacts.json` | `8652e67d320dcdfbf2fef8f75c100602d4697a82c2624cf5a017934d362839a1` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-964a865042b11a34b6bc-688112f3/record.json` | `76a85623fc3d32dee58bdb472f3bfa73fe2ae13d536f49673bc82f2d647b6eea` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-964a865042b11a34b6bc-688112f3/artifacts.json` | `e5477a82ef1b703e7fb5c4bf3e2c8d2ab5b9eb99c3497bb8f84c90d339aacd32` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-ae7dbb3bd0e51a23a709-e348d838/record.json` | `abf7d9acac52e0f031c252a1932606a239510e17fe62851a995d945e5daa538b` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-ae7dbb3bd0e51a23a709-e348d838/artifacts.json` | `47bdb98f431c53fde6eb009d78e67767ce1ab65b7bf004f20a48d2f9879348b9` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-c26d98d1bb1665012906-ef220531/record.json` | `06a64f19c3ae336e226f4e3d24e7fafd0aa139b7e3ab92842de04333ff152490` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-c26d98d1bb1665012906-ef220531/artifacts.json` | `2874573b20ade948a293a90dc804c80813140c643825a1779f59c78a3685f5f2` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-c7ab0adc969cd4034512-f5df42e7/record.json` | `c1bd2a4888cfb0c78632477474a9cf20100ccebc6a056e39862961da1e723c65` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-c7ab0adc969cd4034512-f5df42e7/artifacts.json` | `200e2de570613f0183ae992d57df782e911c892a8c4d2ae767f050d81fcb14fc` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-fda97285d2e8ab1adcb5-9699e0a1/record.json` | `0958e176ece17564893bbf6cce7e4498bdd0f20355fa74a0d9c3fac7012d461e` |
+| `validation/results/transport/v8r2-topas/smoke-runs/REF-fda97285d2e8ab1adcb5-9699e0a1/artifacts.json` | `05c8cb218303c909fa069d38908b35c78275eafd7219174abef19c6c0300f91b` |
+
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.
