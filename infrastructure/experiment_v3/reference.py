@@ -1,4 +1,41 @@
-"""Controlled native reference-engine execution; success is NOT physics validation."""
+"""Controlled native reference-engine execution; success is NOT physics validation.
+
+Archive of one run: ``<state>/references/<run_id>/`` with ``request.json``,
+``inputs/``, ``work/`` (inputs plus native outputs), ``stdout.txt``,
+``stderr.txt``, ``record.json`` (signed) and ``result.json`` (archive index).
+
+``record.json`` -- signed reference-run record, schema_version 3
+(V3-INFRA-004). Ed25519 attestation by the service-held ``reference-runner``
+key (infrastructure/experiment_v3/attest.py); verified by
+infrastructure/validation/reference_run_records.py. The whole record is signed,
+including the bounded stdout/stderr tails. It is also what run_reference (and
+the MCP tool run_reference_calculation) returns. Fields:
+
+- schema_version (3), run_id, configuration_id (sha256 of the canonical
+  request), code_sha (exact clean commit), task_id (None from the CLI), engine;
+- request_sha256: sha256 of request.json exactly as written (binds engine
+  runtime, case, input-file hashes, timeout, gpu, runner/sandbox hashes);
+- started_at: UTC ISO-8601 time taken immediately before the controlled
+  ``reference_started`` event (whose details carry the same value) and before
+  the engine process is launched; finished_at: UTC time after the process ended
+  and the outputs were inventoried; seconds: monotonic duration between them;
+- exit_code, timed_out, error, missing_outputs, succeeded,
+  scientifically_validated (always False), metadata_status;
+- output_count and output_files_sha256 = common.digest(output_files), i.e.
+  sha256 of the canonical JSON (sorted keys, compact separators) of the
+  ``work/`` inventory {path: {sha256, bytes, ...}} listed in result.json;
+- stdout, stderr: tails ({text, bytes, truncated}, at most 2000 bytes each);
+  stdout_sha256, stderr_sha256: hashes of the full archived logs;
+- attestation: see attest.py.
+
+``result.json`` -- archive index (unsigned; carries no attestation block):
+every record field except ``attestation``, plus ``output_files`` (inventory of
+``work/``), ``artifact_files`` (inventory of the run directory, computed after
+record.json was written, so record.json is listed with its sha256 and can be
+listed, previewed and materialized by infrastructure/experiment_v3/artifacts.py)
+and ``signed_record`` = "record.json". Only record.json is evidence; the
+signature, not the index, establishes its integrity.
+"""
 
 from __future__ import annotations
 
@@ -13,6 +50,7 @@ import time
 import uuid
 from pathlib import Path
 
+from infrastructure.experiment_v3 import attest
 from infrastructure.experiment_v3.common import (
     STATE,
     digest,
@@ -29,6 +67,8 @@ from infrastructure.experiment_v3.common import (
 from infrastructure.experiment_v3.sandbox_runtime import require as require_bwrap
 
 ENGINES = {"topas", "mcsquare", "fred"}
+SCHEMA_VERSION = 3
+SIGNER = "reference-runner"
 INLINE_BYTES = 16000
 MAX_SECONDS = 7200
 
@@ -231,14 +271,23 @@ def run_reference(
         if safe_path(run_dir / "work", output).exists():
             raise ValueError("Expected output already exists in input bundle")
     write_json(run_dir / "request.json", request)
+    request_sha256 = file_hash(run_dir / "request.json")
+    # V3-INFRA-004: the controlled start time, taken at the reference_started
+    # event and signed in the record (chronology gates must not derive it from
+    # finished_at - seconds).
+    started_at, started = now(), time.monotonic()
     event(
         "reference_started",
         sha=sha,
         task_id=task_id,
-        details={"run_id": run_id, "engine": engine, "configuration_id": config_id},
+        details={
+            "run_id": run_id,
+            "engine": engine,
+            "configuration_id": config_id,
+            "started_at": started_at,
+        },
         state=state,
     )
-    started = time.monotonic()
     timed_out, error, returncode = False, None, None
     with (
         (run_dir / "stdout.txt").open("wb") as out,
@@ -270,12 +319,15 @@ def run_reference(
         for name in case["expected_outputs"]
         if outputs.get(name, {}).get("bytes", 0) == 0
     ]
-    result = {
-        "schema_version": 2,
+    record = {
+        "schema_version": SCHEMA_VERSION,
         "run_id": run_id,
         "configuration_id": config_id,
         "code_sha": sha,
+        "task_id": task_id,
         "engine": engine,
+        "request_sha256": request_sha256,
+        "started_at": started_at,
         "finished_at": now(),
         "seconds": time.monotonic() - started,
         "exit_code": returncode,
@@ -285,10 +337,21 @@ def run_reference(
         "succeeded": returncode == 0 and not timed_out and not error and not missing,
         "scientifically_validated": False,
         "metadata_status": "declared; inspect native logs/outputs",
-        "output_files": outputs,
-        "artifact_files": inventory(run_dir, allow_internal_links=True),
+        "output_count": len(outputs),
+        "output_files_sha256": digest(outputs),
         "stdout": tail(run_dir / "stdout.txt"),
         "stderr": tail(run_dir / "stderr.txt"),
+        "stdout_sha256": file_hash(run_dir / "stdout.txt"),
+        "stderr_sha256": file_hash(run_dir / "stderr.txt"),
+    }
+    record = attest.sign_with_service_key(record, SIGNER)
+    write_json(run_dir / "record.json", record)
+    # The index is written after record.json so that the artifact inventory
+    # lists the signed record (with its sha256) for the artifact tools.
+    result = {k: v for k, v in record.items() if k != "attestation"} | {
+        "output_files": outputs,
+        "artifact_files": inventory(run_dir, allow_internal_links=True),
+        "signed_record": "record.json",
     }
     write_json(run_dir / "result.json", result)
     event(
@@ -298,10 +361,9 @@ def run_reference(
         details={"run_id": run_id, "engine": engine, "succeeded": result["succeeded"]},
         state=state,
     )
-    # The full file inventory is in the archive; keep MCP responses bounded.
-    return {
-        k: v for k, v in result.items() if k not in ("output_files", "artifact_files")
-    } | {"output_count": len(outputs)}
+    # The signed record is bounded (inventories only by digest/count); the full
+    # file inventories are in result.json.
+    return record
 
 
 def read_artifact(run_id, relative, *, state=None, offset=0, limit=16000):
