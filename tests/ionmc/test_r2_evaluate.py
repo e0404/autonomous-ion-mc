@@ -189,6 +189,7 @@ def test_run_validity_combined(repo: dict[str, Any]) -> None:
 import hashlib  # noqa: E402
 import json  # noqa: E402
 import math  # noqa: E402
+import shutil  # noqa: E402
 
 import numpy as np  # noqa: E402
 
@@ -436,7 +437,7 @@ def _commit(repo: Path, msg: str) -> str:
 def _world(
     tmp: Path, *, cases: dict[int, dict[str, Any]] | None = None,
     configs: tuple[str, ...] = ("idd-em", "lat-em"), started_ok: bool = True,
-    tamper: dict[str, Any] | None = None,
+    tamper: dict[str, Any] | None = None, smokes: dict[str, tuple[int, str, int]] | None = None,
 ) -> dict[str, Any]:  # fmt: skip
     """A complete synthetic evidence world. ``cases``: case -> {shift (TOPAS EM IDD), full_shift,
     sig (TOPAS sigma per slab), ion_scale (ionmc sigma factor)}; ``tamper``: run-validity faults
@@ -478,6 +479,8 @@ def _world(
                     f"i:So/Beam/NumberOfHistoriesInRun = 1000\nd:So/Beam/BeamEnergy = 200 MeV\n"
                     f"{frozen}{mods}{extra}"
                 )
+    for name, key in (smokes or {}).items():  # smoke bundle = byte copy of a part bundle
+        shutil.copytree(repo / IO.BUNDLE_ROOT / IO.bundle_name(*key), repo / IO.BUNDLE_ROOT / name)
     samples = tmp / "samples"  # ionmc chunks + seal
     chunks = []
     for case, spec in cases.items():
@@ -1144,11 +1147,11 @@ def test_frozen_configuration_enforced(
 
 def _check_cli(
     w: dict[str, Any], out: Path, key: tuple[int, str, int] = (1, "idd-em", 1),
-    records_dir: Path | None = None,
+    records_dir: Path | None = None, bundle: str | None = None,
 ) -> tuple[int, dict[str, Any]]:  # fmt: skip
     if _git(w["repo"], "status", "--porcelain"):
         _commit(w["repo"], "update")
-    argv = ["check-run", "--run-id", w["ids"][key], "--bundle", IO.bundle_name(*key),
+    argv = ["check-run", "--run-id", w["ids"][key], "--bundle", bundle or IO.bundle_name(*key),
             "--outputs", str(w["outputs"]), "--out", str(out)]  # fmt: skip
     if records_dir is not None:
         argv += ["--records-dir", str(records_dir)]
@@ -1240,3 +1243,63 @@ def test_parse_bundle(bundle: str, expected: tuple[Any, ...]) -> None:
 def test_parse_bundle_rejects(bundle: str) -> None:
     with pytest.raises(IO.RecordError):
         IO.parse_bundle(bundle)
+
+
+LP_SMOKES = [
+    ("carbon-water-290mevu-r2-idd-em-lp-steps-verbose-smoke", 5, "idd-em"),
+    ("carbon-water-430mevu-r2-idd-em-lp-timing-smoke", 6, "idd-em"),
+    ("carbon-water-430mevu-r2-idd-full-lp-timing-smoke", 6, "idd-full"),
+    ("carbon-water-430mevu-r2-lat-em-lp-timing-smoke", 6, "lat-em"),
+    ("he-water-250mevu-r2-idd-em-lp-timing-smoke", 3, "idd-em"),
+    ("he-water-250mevu-r2-idd-full-lp-timing-smoke", 3, "idd-full"),
+    ("he-water-250mevu-r2-lat-em-lp-timing-smoke", 3, "lat-em"),
+    ("oxygen-water-430mevu-r2-idd-em-lp-timing-smoke", 9, "idd-em"),
+    ("oxygen-water-430mevu-r2-idd-full-lp-timing-smoke", 9, "idd-full"),
+    ("oxygen-water-430mevu-r2-lat-em-lp-timing-smoke", 9, "lat-em"),
+]
+
+
+@pytest.mark.parametrize(("bundle", "case", "config"), LP_SMOKES)
+def test_parse_bundle_lp_smokes(bundle: str, case: int, config: str) -> None:
+    """R2-SMOKE-LP bundles (seeds 20600428-20600437): configuration from the name."""
+    info = IO.parse_bundle(bundle)
+    assert (info["kind"], info["case"], info["config"], info["part"]) == (
+        "smoke",
+        case,
+        config,
+        None,
+    )
+
+
+@pytest.mark.parametrize(
+    "bundle",
+    [
+        "he-water-250mevu-r2-lat-full-ecut1km-lp-timing-smoke",  # -lp- never with -ecut1km-
+        "he-water-250mevu-r2-lat-full-lp-ecut1km-timing-smoke",
+        "he-water-250mevu-r2-idd-em-lp-smoke",
+        "he-water-250mevu-r2-idd-em-lp-lp-timing-smoke",
+    ],
+)
+def test_parse_bundle_rejects_bad_lp_names(bundle: str) -> None:
+    with pytest.raises(IO.RecordError):
+        IO.parse_bundle(bundle)
+
+
+def test_check_run_on_a_synthetic_lp_smoke(tmp_path: Path, small_case: None) -> None:
+    """A smoke bundle named ``-lp-timing-smoke`` (byte copy of part 1, in the frozen manifest) is
+    checked end to end with the configuration from its name; its seed is bound through the
+    committed bundle only (no part formula)."""
+    name = "he-water-250mevu-r2-idd-em-lp-timing-smoke"  # case 3 of SMALL (he 250)
+    w = _world(tmp_path, smokes={name: (1, "idd-em", 1)})
+    code, rep = _check_cli(w, tmp_path / "c.json", records_dir=w["records"] / "runs", bundle=name)
+    assert code == 0 and rep["verdict"] == "VALID", rep
+    assert (rep["bundle_kind"], rep["config"], rep["case"], rep["part"]) == (
+        "smoke",
+        "idd-em",
+        3,
+        None,
+    )
+    assert rep["seeds"] == [IO.topas_seed(1, 1)]
+    other = "he-water-250mevu-r2-idd-em-lp-steps-verbose-smoke"  # not committed: ERROR
+    code, rep = _check_cli(w, tmp_path / "d.json", records_dir=w["records"] / "runs", bundle=other)
+    assert code == 2 and rep["verdict"] == "ERROR", rep

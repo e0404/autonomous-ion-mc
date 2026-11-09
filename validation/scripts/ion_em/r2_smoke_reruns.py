@@ -4,10 +4,18 @@ the seal review").
 
 Usage::
 
-    python validation/scripts/ion_em/r2_smoke_reruns.py --ledger <ledger-signed.jsonl>
+    python validation/scripts/ion_em/r2_smoke_reruns.py --ledger <ledger.jsonl> [--ledger ...]
         [--outputs <dir>] [--out validation/results/transport/v8r2-topas/smoke-reruns.json]
+        [--confirmation-set-complete]
 
-The ledger has one JSON object per line (``case`` = bundle directory name, ``seed``, ``run_id``,
+``--ledger`` is repeatable (e.g. the R2-SMOKE-LP ledger plus the re-runs made at the current
+head); a run id listed twice is refused. ``--confirmation-set-complete`` asks the summary to state
+``confirmation_set_complete: true``; it is set only when every run of the given ledgers is VALID,
+otherwise the summary records ``false`` with the reason and the exit status is 1. The summary
+records the real evaluator HEAD (the checkout that contains this script; every run's
+``check_run`` must have read its committed inputs at that same HEAD).
+
+Each ledger has one JSON object per line (``case`` = bundle directory name, ``seed``, ``run_id``,
 ``code_sha``, ``started_at``, ``exec_real_s``, ``previous_unsigned.run_id``); it is the
 orchestrator's execution ledger and is NOT evidence: every verdict comes from
 ``r2_evaluate.check_run`` on the signed record committed under
@@ -19,6 +27,7 @@ execution records, never evidence. Exit 0 iff every run is VALID.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -56,44 +65,86 @@ def check_entry(entry: dict[str, Any], outputs: Path | None) -> dict[str, Any]:
     }  # fmt: skip
 
 
+def read_ledgers(paths: list[Path]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """(entries in ledger order, provenance ``[{"path", "sha256", "n_runs"}]``); a run id that
+    occurs twice (within or across ledgers) raises RecordError."""
+    entries: list[dict[str, Any]] = []
+    prov = []
+    for path in paths:
+        blob = path.read_bytes()
+        rows = [json.loads(ln) for ln in blob.decode("utf-8").splitlines() if ln.strip()]
+        prov.append({"path": str(path), "sha256": hashlib.sha256(blob).hexdigest(),
+                     "n_runs": len(rows)})  # fmt: skip
+        entries += rows
+    ids = [e.get("run_id") for e in entries]
+    dup = sorted({i for i in ids if ids.count(i) > 1}, key=str)
+    if dup:
+        raise ev.io.RecordError(f"run id(s) listed more than once across the ledgers: {dup}")
+    return entries, prov
+
+
+def confirmation(rows: list[dict[str, Any]], requested: bool) -> dict[str, Any]:
+    """``confirmation_set_complete`` is true only if requested AND every run is VALID."""
+    bad = [f"{r['run_id']} ({r['case']}): {r['verdict']}" for r in rows if r["verdict"] != "VALID"]
+    if not requested:
+        reason = "not requested (--confirmation-set-complete not given)"
+    elif not rows:
+        reason = "refused: no runs"
+    elif bad:
+        reason = f"refused: {len(bad)} run(s) not VALID: {bad}"
+    else:
+        reason = f"all {len(rows)} runs of the given ledgers are VALID"
+    complete = requested and bool(rows) and not bad
+    return {"confirmation_set_complete": complete, "confirmation_reason": reason}
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--ledger", type=Path, required=True)
+    ap.add_argument("--ledger", type=Path, action="append", required=True)
     ap.add_argument("--outputs", type=Path, default=None)
     ap.add_argument("--out", type=Path, default=Path(DEFAULT_OUT))
+    ap.add_argument("--confirmation-set-complete", action="store_true")
     a = ap.parse_args(argv)
-    entries = [json.loads(ln) for ln in a.ledger.read_text().splitlines() if ln.strip()]
+    head = ev.io.CommittedReader(ev.evaluator_repo()).head
+    entries, ledgers = read_ledgers(a.ledger)
     rows = [check_entry(e, a.outputs) for e in entries]
     reviews = {(r["review"]["review_id"], r["review"]["finished_at_at_code_sha"]) for r in rows
                if "review" in r}  # fmt: skip
     trusts = {r["trust_file_sha256"] for r in rows if "trust_file_sha256" in r}
-    heads = {r["evaluator_head"] for r in rows if "evaluator_head" in r}
     for r in rows:
+        if r.get("evaluator_head", head) != head:  # HEAD moved while checking: fail closed
+            r.update(verdict="ERROR", error=f"checked at HEAD {r['evaluator_head']}, not {head}")
         for key in ("review", "trust_file_sha256", "evaluator_head"):
             r.pop(key, None)
+    conf = confirmation(rows, a.confirmation_set_complete)
     doc = {
         "schema": SCHEMA,
         "task_id": "V3-008",
-        "purpose": "run validity of the 14 signed smoke re-runs (plan amendment 2026-11-09, "
+        "purpose": "run validity of signed revision-2 smoke runs (plan amendment 2026-11-09, "
         "REVIEW-8429c50e): r2_io.run_checks + R2-TOPAS-4 chronology against the seal review; "
         "execution records only, never evidence",
         "checker": "validation/scripts/ion_em/r2_evaluate.py check-run (r2_evaluate.check_run)",
+        "ledgers": ledgers,
         "scorer_outputs_read": False,
         "outputs_note": "only request.json, stdout.txt, stderr.txt were materialized and read; the "
         "scorer outputs are bound through the signed output_files_sha256 recomputed from the "
         "artifact listing's work/ hashes",
         "seal_review": [{"review_id": i, "finished_at": f} for i, f in sorted(reviews)],
         "trust_file": {"path": ev.io.DEFAULT_TRUST, "sha256": sorted(trusts)},
-        "evaluator_head": sorted(heads),
+        "evaluator_head": head,
         "n_runs": len(rows),
         "all_valid": bool(rows) and all(r["verdict"] == "VALID" for r in rows),
+        **conf,
         "runs": rows,
     }
     a.out.parent.mkdir(parents=True, exist_ok=True)
     a.out.write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n", encoding="utf-8")
     for r in rows:
         print(f"{r['run_id']} {r['case']}: {r['verdict']}")
-    return 0 if doc["all_valid"] else 1
+    print(f"confirmation_set_complete: {conf['confirmation_set_complete']} "
+          f"({conf['confirmation_reason']})")  # fmt: skip
+    ok = doc["all_valid"] and (conf["confirmation_set_complete"] or not a.confirmation_set_complete)
+    return 0 if ok else 1
 
 
 if __name__ == "__main__":

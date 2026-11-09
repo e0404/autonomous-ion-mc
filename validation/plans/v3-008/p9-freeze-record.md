@@ -234,7 +234,7 @@ placeholder scorer output was deleted unread.
 | `validation/scripts/transport/steps_v8.py` | `e8b73006921b479797e762c1319adf7e1e4edb95594ffac4109827b4ee185a7d` |
 | `tests/ionmc/test_ion_mcs_table.py` | `b3fb9992f866238b11243e032f394583775e292cec49601798ef44b54efcb749` |
 | `tests/ionmc/test_v3_008_rows_ci.py` | `ffea9f20976ec2d721067ccf52d5cb9797fad51a5bda7dd224948829c1cade0e` |
-| `tests/ionmc/test_r2_evaluate.py` | `34bdee013454959ff8ce4e169428b515c3c5411eac9270c0642100a84b41b8cb` |
+| `tests/ionmc/test_r2_evaluate.py` | `0de50eb4a0b85d7e7cc4782524c87a5d71c91e3e7701f4af11063ab0efbcc341` |
 | `tests/ionmc/test_v3_008_steps_v8.py` | `ab4922ea8842751e22c9d1882e9e1dec0ae88a25b55174c99586c4802868b731` |
 
 (c) R2.5 counts, superseded by this note (the R2.5 text is kept as written): repository paths 475 + 15 = **490**; total full sha256 values 519 + 15 = **534**, plus the bundle-set digest (unchanged, `a8a1c27d…`). The count in R2.6 item (3) (475) is superseded accordingly by 490 for the acceptance tests of the seal.
@@ -263,7 +263,7 @@ placeholder scorer output was deleted unread.
 
 | File | sha256 |
 |---|---|
-| `validation/scripts/ion_em/r2_io.py` | `621a4979122f4187db79e4e9b7c1e87cb0ed967a8a1219737ca12425bf3fce64` |
+| `validation/scripts/ion_em/r2_io.py` | `e4ceb4b24ae3cff6acfd250a257aa9d2c6ce378fa14e774a0c198007fdf13f68` |
 | `validation/scripts/ion_em/r2_statistics.py` | `fbb19370ae0bb20ed1cc5289864c3331ba63bdcb88315b33f06b6d710c79ed6b` |
 | `validation/results/transport/v8r2-topas/smokes.json` | `9f5c1b24bfe278869b30cc89c03137786fc683ed85d6b6509c48cdffa964f621` |
 | `validation/results/transport/v8r2-topas/records/review.json` | `87988397d4c14304d75f987117e4c22199d4452a0b48030e131a2bd52edb1199` |
@@ -320,8 +320,8 @@ placeholder scorer output was deleted unread.
 | File | sha256 |
 |---|---|
 | `validation/results/transport/v8r2-topas/smoke-reruns.json` | `4a3fb8af1163dea56e0c8d6868b127f4277ccb02d7a80b133bddf0eb3511ff58` |
-| `validation/scripts/ion_em/r2_smoke_reruns.py` | `ffee2f4f2a9469578299268b09e5bea3fcd27752184d5847679253c120c96fef` |
-| `tests/ionmc/test_r2_smoke_reruns.py` | `0b40e2edb5982a179c22b3761263b5ba1a54c2dadd3694bbcd5e1352ccba4ce0` |
+| `validation/scripts/ion_em/r2_smoke_reruns.py` | `ffcd9d13cea372b1555f7a3013dad27e7d81f8f08e0a69cceb41e03f7f95260b` |
+| `tests/ionmc/test_r2_smoke_reruns.py` | `d0eca2fa663e5222bd60af81dd70fe712a4d431a86370e6aa2d814fdd6a9c6c1` |
 | `validation/results/transport/v8r2-topas/smoke-runs/REF-127b2dd92a8dd609c560-ff8db64b/artifacts.json` | `b2fb14264923e3d9d4b49424b8df72fe6d1d060ac73ebd57b423a3f44fa18dd4` |
 | `validation/results/transport/v8r2-topas/smoke-runs/REF-127b2dd92a8dd609c560-ff8db64b/record.json` | `a79ab4244232b39964db8fa4beb43f78cd7e0d5102cd1465f6979a3bf9f6e8f6` |
 | `validation/results/transport/v8r2-topas/smoke-runs/REF-4e5b0681e5576d7ab451-7e640368/artifacts.json` | `c4bcf072e554a1e5882bc4ac06430b3fdf35a543ce15325a196cc21383d7cf8f` |
@@ -353,6 +353,8 @@ placeholder scorer output was deleted unread.
 
 
 **Dated note (2026-11-09, signed smoke re-runs / STOP / R2-SMOKE-LP commit; orchestrator) — hashes regenerated at the working tree; entries that changed since the note above:** `validation/scripts/ion_em/gen_r2_bundles.py` 9924429d… → 74ab35e3…; `tests/ionmc/test_r2_bundles.py` b0e91e2b… → e6431320…; `validation/plans/v3-008/r2-topas-target.md` beb35820… → 3b2a5a40…; `validation/scripts/ion_em/r2_evaluate.py` ad7c45f1… → 1aa72236…; `tests/ionmc/test_r2_evaluate.py` f733732e… → 34bdee01…; `validation/scripts/ion_em/r2_io.py` ec08eea5… → 621a4979…; `validation/results/transport/v8r2-topas/frozen-bundles.json` b3e27964… → fa490129…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-09, R2-SMOKE-LP correction commit (Codex REVIEW-8286be8c: lp name grammar, manifest-current confirmation set); orchestrator) — hashes regenerated at the working tree; entries that changed since the note above:** `tests/ionmc/test_r2_evaluate.py` 34bdee01… → 0de50eb4…; `validation/scripts/ion_em/r2_io.py` 621a4979… → e4ceb4b2…; `validation/scripts/ion_em/r2_smoke_reruns.py` ffee2f4f… → ffcd9d13…; `tests/ionmc/test_r2_smoke_reruns.py` 0b40e2ed… → d0eca2fa…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.

@@ -239,7 +239,8 @@ def topas_seed(case: int, part: int) -> int:
 _CONFIG_RE = "(idd-em|lat-em|idd-full|lat-full)"
 _PART_BUNDLE = re.compile(rf"^(he|carbon|oxygen)-water-(\d+)mevu-r2-{_CONFIG_RE}-part(\d+)$")
 _SMOKE_BUNDLE = re.compile(
-    rf"^(he|carbon|oxygen)-water-(\d+)mevu-r2-{_CONFIG_RE}(-ecut1km)?-(timing|steps-verbose)-smoke$"
+    rf"^(he|carbon|oxygen)-water-(\d+)mevu-r2-{_CONFIG_RE}(-ecut1km|-lp)?"
+    r"-(timing|steps-verbose)-smoke$"
 )
 
 
@@ -247,8 +248,10 @@ def parse_bundle(bundle: str) -> dict[str, Any]:
     """``{"kind": "part"|"smoke", "case", "config", "part"}`` of an r2 bundle directory name.
     Evidence parts: ``<ion>-water-<E>mevu-r2-<config>-part<p>`` (section 7; ``part`` must belong
     to ``config``). Smokes: ``<ion>-water-<E>mevu-r2-<config>[-ecut1km]-(timing|steps-verbose)-
-    smoke``; the configuration (frozen module set and lines of :func:`run_checks`) is the name's
-    ``<config>`` (the ``-ecut1km-`` smokes are LAT-FULL under R2-SIZE-1), ``part`` is None. The
+    smoke`` and the ListProcesses variants (R2-SMOKE-LP) ``<ion>-water-<E>mevu-r2-<config>-lp-
+    (timing|steps-verbose)-smoke`` (``-lp-`` never combines with ``-ecut1km-``); the configuration
+    (frozen module set and lines of :func:`run_checks`) is the name's ``<config>`` (the
+    ``-ecut1km-`` smokes are LAT-FULL under R2-SIZE-1), ``part`` is None. The
     case is the section-3 case with that ion and energy; anything else raises RecordError."""
     m = _PART_BUNDLE.match(bundle)
     kind = "part"
