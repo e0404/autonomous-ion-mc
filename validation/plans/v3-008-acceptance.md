@@ -467,7 +467,8 @@ operator rules, and each host call ≤ 1500 s.
 
 | Row(s) | Archive | Head SHA | Seed base | Result |
 |---|---|---|---|---|
-| (filled after the runs) | | | | |
+| TD-EM (main set, 9 cases) | `validation/results/transport/v8r2-topas/reports/TD-EM-case<1..9>.json`; signed run records `…/records/runs/<run_id>/` (index `…/records/index.json`, 36 IDD-EM parts) | runs at `ead583f1`; records and grading at `94bc948e` | TOPAS 20619000 + 100·part + case (parts 0–3); ionmc sample seal `0c68b78a` (REVIEW-9691e1b0) | **PASS 3** (He 150, C 290, O 350), **FAIL 6** (He 50, C 80, O 100: (d) PE; He 250, C 430, O 430: (c) z_peak; C 430, O 430 also (d)); see the dated results note of 2026-11-09 (STOP 3) |
+| TL-EM (main set, 9 cases) | `validation/results/transport/v8r2-topas/reports/TL-EM-case<1..9>.json`; signed run records as above (36 LAT-EM parts) | runs at `ead583f1`; records and grading at `94bc948e` | TOPAS 20619000 + 100·part + case (parts 4–7); ionmc sample seal `0c68b78a` | **PASS 1** (C 80), **FAIL 8**: 25 of 36 points invalid by §4.2 fit non-convergence (2-cycle at a bin edge in single batches/parts), 1 point TOPAS σ undefined; every evaluable gated point inside the band (r = 1.17–1.31); D_ext NOT EVALUABLE (He, C, O) |
 
 ## Amendments
 
@@ -538,3 +539,80 @@ A **proposed** amendment, R2-SIZE-1 (LAT-FULL with `CutForElectron = 1 km`, the 
 **Dated correction (2026-11-09, Codex REVIEW-8286be8c; orchestrator).** The confirmation set of R2-SMOKE-LP cannot include the four VALID re-runs made at fce29f49: the frozen bundle manifest changed with the ten lp bundles (digest 6d1ae3a0… → 76d78566…) and the evaluator rejects any run whose manifest at `code_sha` differs from HEAD's (the rule is intentional and is not relaxed). Those four runs remain preserved records (VALID at their own manifest). The confirmation set is therefore the **14 runs made at the manifest-current head**: the ten lp smokes (20600428–20600437) and re-runs of the four R2-SIZE-1 / LAT-EM step smokes (20600424–20600427), all at commit 4cdc44ce or a descendant with the same manifest; all 14 must be VALID under `check-run` run at the committed head of this repository (the earlier `smoke-reruns.json` evaluator SHA f5512c4e was a throwaway clone used because records must be committed before `check-run` can read them — the regenerated summary records the real head). The `check-run` bundle-name grammar is extended to the lp names in the same commit. Any further manifest change before the evidence runs would again void the confirmation and require re-runs.
 
 **Dated confirmation note (2026-11-09, late; orchestrator) — R2-SMOKE-LP confirmation set VALID; IDD-FULL re-sized; smoke binding per bundle.** The 14 runs of the confirmation set (ten lp smokes, seeds 20600428–20600437, nine at 4cdc44ce and one at 1141df44; re-runs of 20600424–20600427 at 1141df44) are **all VALID** under `check-run` at the committed head 111841e2 (`validation/results/transport/v8r2-topas/smoke-confirmation.json`, `confirmation_set_complete: true`; every record verifies, passes the R2-TOPAS-4 chronology against the seal review and all run-validity checks incl. the executed-module markers with `Decay` in the process list). Signed timings and part times at the final part table (this note re-sizes IDD-FULL, see below): he idd-em: t_s 7.0 ms, part 175 s at N = 25000 (REF-022775f8c6a8530c48aa-a50056d1); he lat-em: t_s 2.5 ms, part 62 s at N = 25000 (REF-2c6d31fa3f3ae83bce78-ea24d511); he idd-full: t_s 70.4 ms, part 352 s at N = 5000 (REF-1bee6c0ab49920cf6ff3-685816fc); carbon idd-em: t_s 6.4 ms, part 159 s at N = 25000 (REF-964a865042b11a34b6bc-688112f3); carbon lat-em: t_s 2.0 ms, part 49 s at N = 25000 (REF-706eae23ccef7407d213-b7cff919); carbon idd-full: t_s 364.8 ms, part 1167 s at N = 3200 (REF-494fafda858a0a1f2c2d-5e74e4ef); oxygen idd-em: t_s 5.1 ms, part 127 s at N = 25000 (REF-fda97285d2e8ab1adcb5-9699e0a1); oxygen lat-em: t_s 1.6 ms, part 40 s at N = 25000 (REF-ae7dbb3bd0e51a23a709-e348d838); oxygen idd-full: t_s 475.9 ms, part 1190 s at N = 2500 (REF-77d4d10efe5c035b544e-caf6cb7f); he lat-full: t_s 44.4 ms, part 222 s at N = 5000 (REF-100a453268dacee7ea3f-80664e3e); carbon lat-full: t_s 114.5 ms, part 573 s at N = 5000 (REF-c26d98d1bb1665012906-ef220531); oxygen lat-full: t_s 114.3 ms, part 572 s at N = 5000 (REF-c7ab0adc969cd4034512-f5df42e7). Two parts exceeded the 1200 s planning cap at the previous counts (C IDD-FULL 364.8 ms × 3333 = 1216 s; O IDD-FULL 475.9 ms × 2529 = 1204 s; run-to-run timing jitter ≈ 2 %), so section-6 rule (i) is applied: **C IDD-FULL 3200 per part (12 800 per case), O IDD-FULL 2500 per part (10 000 per case, the statistical minimum)**; all other counts unchanged (EM 25 000; He IDD-FULL 5000; LAT-FULL 5000 at the 1 km electron cut). The 32 IDD-FULL bundles are regenerated accordingly (frozen manifest regenerated; appendix A listing). The sizing, step-length (IDD 97.5 % bin-limited at 0.1 mm; LAT 83 % plane-limited, median 0.45 mm) and cap statements of the sizing and re-sizing notes are hereby **confirmed** with signed records; the provisional status is lifted. Amendment to the evaluator's manifest rule (prospective, reviewed with this commit): an EVIDENCE run is bound to the complete frozen manifest (manifest bytes identical at its `code_sha` and at HEAD, unchanged rule); a SMOKE run is bound to its own bundle's manifest entry (identical at `code_sha` and HEAD and equal to the signed request), so that re-sizing evidence bundles does not void execution-only smoke records; the whole-manifest digests are reported. The evidence runs may start once the commit carrying this note passes its independent review (R2-TOPAS-4 and the plan order then apply to every part).
+
+### Dated results note and STOP 3 (2026-11-09, orchestrator; plan Order step 3: TD-EM and TL-EM graded)
+
+**Evidence.** The 72 EM evidence parts (IDD-EM parts 0–3, LAT-EM parts 4–7, cases 1–9; 25 000 primaries each) ran
+sequentially on 2026-11-09 18:10–19:47 UTC at `code_sha` ead583f1 (the clean committed head after REVIEW-5baeb516;
+the seal commit 0c68b78a is an ancestor; REVIEW-9691e1b0 finished 09:15:57 UTC). Their signed schema-3 run records
+(signer `reference-runner`, key_id 303cce4c129d387c) and artifact listings are committed under
+`validation/results/transport/v8r2-topas/records/` (commit 94bc948e); every listed file was verified against its
+sha256 and the signed `output_files_sha256` reproduces from the `work/` entries. `r2_evaluate.py check-run`:
+72/72 VALID (binding, chronology, frozen manifest, module markers). The rows were then graded, once, with
+`r2_evaluate.py grade` at evaluator HEAD 94bc948e (sealed ionmc samples: the 86 chunks of `sample-seal.json`);
+the reports (statistics, record ids and sha256 only) are
+`validation/results/transport/v8r2-topas/reports/<row>-case<N>.json`, bound by sha256 in the P9 freeze record.
+**They are final: nothing in them is re-graded** (plan D, FAIL).
+
+**TD-EM (gating; all five criteria per case).** 3 PASS, 6 FAIL.
+
+| Case | Status | (a) R80 ionmc / TOPAS [mm] (stat ≤ tol) | (b) W ionmc / TOPAS [mm] (report-only) | (c) z_peak ionmc / TOPAS [mm] (stat ≤ 0.5) | (d) PE ionmc / TOPAS (stat ≤ tol) | (e) plateau groups (failing) |
+|---|---|---|---|---|---|---|
+| He 50 | **FAIL** | 22.49 / 22.55 (0.07 ≤ 0.08) PASS | 0.163 / 0.172 (-5.4 %) | 22.36 / 22.42 (0.06) PASS | 9.91 / 9.19 (0.74 ≤ 0.28) FAIL | 17 (0) PASS |
+| He 150 | **PASS** | 159.22 / 159.57 (0.38 ≤ 0.56) PASS | 1.114 / 1.107 (+0.7 %) | 158.39 / 158.73 (0.36) PASS | 9.39 / 9.38 (0.03 ≤ 0.28) PASS | 25 (0) PASS |
+| He 250 | **FAIL** | 382.54 / 383.36 (0.86 ≤ 1.00) PASS | 2.561 / 2.572 (-0.4 %) | 380.76 / 381.57 (0.91) FAIL | 9.13 / 9.00 (0.15 ≤ 0.27) PASS | 61 (0) PASS |
+| C 80 | **FAIL** | 17.50 / 17.52 (0.02 ≤ 0.06) PASS | 0.072 / 0.087 (-17.4 %) | 17.43 / 17.43 (0.00) PASS | 11.47 / 10.35 (1.13 ≤ 0.31) FAIL | 13 (0) PASS |
+| C 290 | **PASS** | 163.21 / 163.69 (0.49 ≤ 0.57) PASS | 0.621 / 0.644 (-3.6 %) | 162.68 / 163.16 (0.48) PASS | 11.11 / 10.97 (0.18 ≤ 0.33) PASS | 25 (0) PASS |
+| C 430 | **FAIL** | 309.31 / 310.13 (0.84 ≤ 1.00) PASS | 1.130 / 1.189 (-5.0 %) | 308.50 / 309.24 (0.76) FAIL | 10.60 / 10.30 (0.34 ≤ 0.31) FAIL | 49 (0) PASS |
+| O 100 | **FAIL** | 19.57 / 19.58 (0.00 ≤ 0.07) PASS | 0.066 / 0.079 (-16.8 %) | 19.50 / 19.48 (0.02) PASS | 11.10 / 9.96 (1.15 ≤ 0.30) FAIL | 15 (0) PASS |
+| O 350 | **PASS** | 166.61 / 167.10 (0.49 ≤ 0.58) PASS | 0.538 / 0.562 (-4.3 %) | 166.14 / 166.62 (0.48) PASS | 11.37 / 11.20 (0.20 ≤ 0.34) PASS | 26 (0) PASS |
+| O 430 | **FAIL** | 231.83 / 232.52 (0.71 ≤ 0.81) PASS | 0.729 / 0.768 (-5.1 %) | 231.23 / 231.89 (0.67) FAIL | 11.04 / 10.66 (0.41 ≤ 0.32) FAIL | 37 (0) PASS |
+
+Findings: (a) R80 passes in all nine cases, but ionmc is systematically short: −0.29 % (He 50), −0.22 % (He 150),
+−0.21 % (He 250), −0.09 % (C 80), −0.29 % (C 290), −0.27 % (C 430), −0.02 % (O 100), −0.29 % (O 350), −0.30 %
+(O 430); at the standard points and upper ends this exceeds the §5.1 stopping-construction budget (≤ 0.18 % C/O, ≤ 0.10 % He) — a finding for the
+I3b/I3c attribution. (c) z_peak fails at the three upper ends (ionmc 0.66–0.81 mm proximal at ranges 232–383 mm; the
+absolute 0.5 mm tolerance is tighter there than the relative (a) tolerance, by design of revision 1 — not changed).
+(d) PE fails at the three low-energy cases (ionmc/TOPAS − 1 = +7.8 % He 50, +10.8 % C 80, +11.4 % O 100) and at
+C 430 (+2.8 %) and O 430 (+3.5 %); the report-only distal width W is 5–17 % narrower in ionmc at the same cases
+(−5.4 %, −17.4 %, −16.8 %; −5.0 %, −5.1 %), i.e. less energy-loss straggling in ionmc than in TOPAS at low energy per
+nucleon (and at the C/O ends), which raises the peak. (e) every plateau group passes in every case (local stopping
+agrees within 2 % everywhere). No model is changed by this note.
+
+**TL-EM (gating).** 1 PASS (C 80), 8 FAIL.
+
+| Case | Status | f = 0.25 | f = 0.5 | f = 0.75 | f = 0.9 | (b) D_ext |
+|---|---|---|---|---|---|---|
+| He 50 | **FAIL** | σ_i/σ_T 1.381, report-only: REPORT-ONLY | σ_i/σ_T 1.259, gated: FAIL (invalid: a batch/part fit failed) | σ_i/σ_T 1.222, gated: FAIL (invalid: a batch/part fit failed) | σ_i/σ_T 1.206, gated: PASS | n/a |
+| He 150 | **FAIL** | σ_i/σ_T 1.185, gated: PASS | σ_i/σ_T 1.176, gated: FAIL (invalid: a batch/part fit failed) | σ_i/σ_T 1.178, gated: FAIL (invalid: a batch/part fit failed) | σ_i/σ_T 1.181, gated: FAIL (invalid: a batch/part fit failed) | n/a |
+| He 250 | **FAIL** | σ_i/σ_T 1.174, gated: FAIL (invalid: a batch/part fit failed) | σ_i/σ_T 1.178, gated: FAIL (invalid: a batch/part fit failed) | σ_i/σ_T 1.184, gated: FAIL (invalid: a batch/part fit failed) | σ_i/σ_T 1.185, gated: FAIL (invalid: a batch/part fit failed) | FAIL (invalid: a point of D_ext is invalid) |
+| C 80 | **PASS** | σ_i/σ_T 1.495, report-only: REPORT-ONLY (outside band) | σ_i/σ_T 1.369, report-only: REPORT-ONLY | σ_i/σ_T 1.301, gated: PASS | σ_i/σ_T 1.280, gated: PASS | n/a |
+| C 290 | **FAIL** | σ_i/σ_T 1.275, gated: FAIL (invalid: a batch/part fit failed) | σ_i/σ_T 1.262, gated: PASS | σ_i/σ_T 1.259, gated: FAIL (invalid: a batch/part fit failed) | σ_i/σ_T 1.259, gated: FAIL (invalid: a batch/part fit failed) | n/a |
+| C 430 | **FAIL** | σ_i/σ_T 1.265, gated: FAIL (invalid: a batch/part fit failed) | σ_i/σ_T 1.270, gated: FAIL (invalid: a batch/part fit failed) | σ_i/σ_T 1.274, gated: FAIL (invalid: a batch/part fit failed) | σ_i/σ_T 1.277, gated: FAIL (invalid: a batch/part fit failed) | FAIL (invalid: a point of D_ext is invalid) |
+| O 100 | **FAIL** | σ_i/σ_T n/a, gated: FAIL (invalid: fewer than 3 bins (or no signal) inside +-2 sigma) | σ_i/σ_T 1.354, report-only: REPORT-ONLY (invalid: a batch/part fit failed) | σ_i/σ_T 1.309, gated: PASS | σ_i/σ_T 1.286, gated: FAIL (invalid: a batch/part fit failed) | n/a |
+| O 350 | **FAIL** | σ_i/σ_T 1.290, gated: FAIL (invalid: a batch/part fit failed) | σ_i/σ_T 1.283, gated: FAIL (invalid: a batch/part fit failed) | σ_i/σ_T 1.283, gated: FAIL (invalid: a batch/part fit failed) | σ_i/σ_T 1.278, gated: FAIL (invalid: a batch/part fit failed) | n/a |
+| O 430 | **FAIL** | σ_i/σ_T 1.282, gated: FAIL (invalid: a batch/part fit failed) | σ_i/σ_T 1.284, gated: FAIL (invalid: a batch/part fit failed) | σ_i/σ_T 1.287, gated: FAIL (invalid: a batch/part fit failed) | σ_i/σ_T 1.285, gated: FAIL (invalid: a batch/part fit failed) | FAIL (invalid: a point of D_ext is invalid) |
+
+Findings and attribution (allowed under STOP 3; no re-grading): where a point is evaluable, r = σ_core,ionmc/
+σ_core,TOPAS-EM = 1.17–1.31 at the gated points (every one inside the band [−5 %, +40 %], as expected for the Urban
+deficit) and 1.35–1.50 at the shallow report-only points. 25 of the 36 points are invalid with "a batch/part fit
+failed" and 1 with "fewer than 3 bins inside ±2σ" (TOPAS σ undefined at O 100, f = 0.25). A read-only diagnostic
+(orchestrator scratch `diag_tl_fits.py`, `diag_trace.py`, reusing the committed estimator) shows the cause: the §4.2
+fixed-point iteration of the window-truncated ML fit enters a **2-cycle when ±2σ crosses a bin edge** — e.g. He 50,
+slab 11–12 mm, ionmc batch 20, x: the window alternates between 32 and 34 bins and σ between 0.082377 and
+0.082592 mm (0.26 % apart, both ≈ the batch value), never meeting the 1e-4 relative criterion within 50 iterations.
+It affects 2–8 % of single-batch/part fits (He 50: 3/80 and 2/80 at the f = 0.5/0.75 slabs; C 290: 6/80 and 5/80 at
+f = 0.75/0.9 and one TOPAS part at f = 0.25); the pooled fits converge in 2–3 iterations. By the pre-registered §4.2
+rule (non-convergence = invalid point, counted as FAIL for a gated point) **the verdicts stand as graded**; the
+failure is attributed to the estimator's iteration, not to a lateral-width disagreement. Criterion (b) D_ext is NOT
+EVALUABLE for He, C and O (a point of each pair invalid).
+
+**STOP 3 (plan D).** TD-EM and TL-EM fail → halt; amendment and independent review before continuing. The evidence
+loop was halted after the part in flight: the IDD-FULL parts already run (He 50 parts 8–11, He 150 parts 8–11,
+He 250 parts 8–9; signed records in the orchestrator ledger, to be committed with the FULL set) are valid evidence
+runs whose outputs have not been read; the remaining FULL and held-out parts wait for the amendment. V5-SS is
+unaffected. The amendment (R2-STOP3) is written prospectively in a separate reviewed commit; it may change the
+estimator's convergence rule only for rows not yet graded, must preserve these grades verbatim, and decides between
+the two pre-registered branches of STOP 3 (no model change: the FAILs stand and go to the orchestrator/operator for
+integration; model change after attribution: all main TD/TL rows are consumed and the held-out set becomes the sole
+gating evidence at a re-run ionmc base, unchanged tolerances).

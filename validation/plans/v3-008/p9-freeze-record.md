@@ -558,6 +558,30 @@ placeholder scorer output was deleted unread.
 
 
 **Dated note (2026-11-09, orchestrator) — records/index.json filled with the 72 EM evidence parts (IDD-EM 0–3, LAT-EM 4–7, cases 1–9); entries that changed:** `validation/results/transport/v8r2-topas/records/index.json` 2e092ee3… → 264fba78…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-09, orchestrator) — files added by the EM results commit (the 18 TD-EM/TL-EM grade reports of cases 1–9, graded once at evaluator HEAD 94bc948e; final, never re-graded; sha256 as committed):**
+
+| File | sha256 |
+|---|---|
+| `validation/results/transport/v8r2-topas/reports/TD-EM-case1.json` | `d7e2f1c6f2bcf988c8ebf0b87f981b3ebed7e28f8b7f98f098157a620495841f` |
+| `validation/results/transport/v8r2-topas/reports/TD-EM-case2.json` | `61c5dbb7d4dd8e8e5c275dc055bdef526e047e9e183d68c77c5dbefdfab3dd2d` |
+| `validation/results/transport/v8r2-topas/reports/TD-EM-case3.json` | `d7a160df3b7c5a1a0bd7abe074890dec5e7590170c0b020615f1c94f52d914e4` |
+| `validation/results/transport/v8r2-topas/reports/TD-EM-case4.json` | `9ea779c5377cc3432e669c5e6332b6ab178b66254c37e661812526365e094ac2` |
+| `validation/results/transport/v8r2-topas/reports/TD-EM-case5.json` | `072054ddfa9eaabf8766a2a365789baade1c5f42f544098a1f425a01ad6b4949` |
+| `validation/results/transport/v8r2-topas/reports/TD-EM-case6.json` | `f8cfc3cb0e962d2cf2dc60178efce0d5666cb00bc779ff914299d7d53d7fc14b` |
+| `validation/results/transport/v8r2-topas/reports/TD-EM-case7.json` | `42eefce83f1345085ddbd7543709039cd8739bfb7d2e198d9269c608897b5038` |
+| `validation/results/transport/v8r2-topas/reports/TD-EM-case8.json` | `70475da41a29b56969cad08b31203bee779d58e270a9375e213871c1e1b25667` |
+| `validation/results/transport/v8r2-topas/reports/TD-EM-case9.json` | `4f4f670ee978456ba883b946b9a34bff2ba6ba648a9e205215c0a119391ab0bd` |
+| `validation/results/transport/v8r2-topas/reports/TL-EM-case1.json` | `7c6726fc1b7df0dd744492fdb31e618e447cbee9a2192c2cafc9909ab7baed3e` |
+| `validation/results/transport/v8r2-topas/reports/TL-EM-case2.json` | `159f6442979caa8286963ad02b08fc47f74eee7755a9f8ae6d30c4a3df58abb6` |
+| `validation/results/transport/v8r2-topas/reports/TL-EM-case3.json` | `aa135a48e52d0e56e221f6849a369da319f77325d1282cec06bb21d0a9987c35` |
+| `validation/results/transport/v8r2-topas/reports/TL-EM-case4.json` | `a1eb0d27f62c6f97445de1856657e21619054843fe1dbbcf3eff328d5e13f9a3` |
+| `validation/results/transport/v8r2-topas/reports/TL-EM-case5.json` | `1a4bc36ff47461cee37e8499c901f1c2c73caee269a4f3544690e0288dd081b9` |
+| `validation/results/transport/v8r2-topas/reports/TL-EM-case6.json` | `98e210e19333b8e4d8aaa2e5a13c94cca290cea15b1f2c5f2c294f4dbd09e553` |
+| `validation/results/transport/v8r2-topas/reports/TL-EM-case7.json` | `032f1307c69c537349bb0f39ca297be0381814f6caa6ccc2284c488e743fedfa` |
+| `validation/results/transport/v8r2-topas/reports/TL-EM-case8.json` | `66b4aea4ef24247c34cb44a761888c97254809cbda233ed9a4c1d7b48d9216a1` |
+| `validation/results/transport/v8r2-topas/reports/TL-EM-case9.json` | `b8d07ea7b383b69e4da2f5e3c18c15006d8c02892f7605d05e1b068db16f18b5` |
+
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.
