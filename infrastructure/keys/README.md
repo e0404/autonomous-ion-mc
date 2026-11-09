@@ -9,7 +9,9 @@ its key-publication commit (records it signed are then `unverified`), and once
 listed it obeys the same rules (exactly one key in a key-publication branch,
 evidenced by a verified successful reference run referenced from a passing
 validation record in `details.reference_runs`; see `experiment/v3/SETUP.md`,
-"Signed reference-run records"). After the servers are restarted, the operator (or the
+"Signed reference-run records"). A signer that the integration copy lists
+(any signer, optional ones included) may never be removed or emptied by a
+branch; it can only be rotated. After the servers are restarted, the operator (or the
 orchestrator in a reviewed commit) adds each published public key
 (`python infrastructure/experiment_v3/attest.py --print-public-key <signer>`) as
 `{"key_id": ..., "public_key": ..., "added": "YYYY-MM-DD", "note": ...}`.

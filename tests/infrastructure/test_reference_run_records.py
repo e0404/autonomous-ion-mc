@@ -19,8 +19,8 @@ SHA = "a" * 40
 TASK = "V3-X1"
 
 
-def _case(root):
-    case = root / "case"
+def _case(root, relative="case"):
+    case = root / relative
     case.mkdir(parents=True)
     (case / "input").write_text("fixture")
     envelope = {
@@ -323,3 +323,47 @@ def test_parse_trust_map_reference_runner_is_optional_but_strict_when_listed():
         lv.parse_trust_map({**base, "reference-runner": "not-a-list"})
     with pytest.raises(ValueError, match="host-runner"):
         lv.parse_trust_map({"validation-manager": [ent(vm)], "reference-runner": [ent(rr)]})
+
+
+def test_smoke_reports_keep_signed_record_unchanged(tmp_path, monkeypatch):
+    """run_smokes must not mutate the signed record (REVIEW-0bf5f77d): the smoke
+    verdict sits beside it and every record keeps a valid attestation."""
+    from infrastructure.experiment_v3 import smoke
+
+    monkeypatch.setattr(attest, "key_dir", lambda: tmp_path / "keys")
+    monkeypatch.setattr(reference, "require_bwrap", lambda: "/usr/bin/true")
+    monkeypatch.setattr(reference, "exact_state", lambda root: SHA)
+    monkeypatch.setattr(reference, "require_committed_inputs", lambda *args: None)
+    monkeypatch.setattr(reference, "load_engine", lambda name, reg: {"engine": name})
+    # TOPAS-like text scorer output parses; the binary MHD engines fail scoring.
+    monkeypatch.setattr(
+        reference,
+        "command",
+        lambda config, case, work, gpu=False: [
+            "/bin/sh",
+            "-c",
+            f"printf '0 0 0 1.5\\n' > '{work}/out'",
+        ],
+    )
+    root = tmp_path / "repo"
+    for engine in ("topas", "mcsquare", "fred"):
+        _case(root, "experiment/v3/references/" + engine)
+    report = smoke.run_smokes(root, tmp_path / "state")
+    key = attest.load_or_create_key("reference-runner")
+    engines = report["engines"]
+    assert engines["topas"]["smoke"]["succeeded"] is True
+    assert engines["topas"]["smoke"]["score_smoke"]["bins"] == 1
+    for name in ("mcsquare", "fred"):
+        assert engines[name]["smoke"]["succeeded"] is False
+        assert engines[name]["smoke"]["score_error"]
+        assert engines[name]["smoke"]["execution_succeeded"] is True
+    assert report["all_execution_smokes_passed"] is False
+    for name, entry in engines.items():
+        record = entry["record"]
+        assert record["succeeded"] is True and record["engine"] == name
+        assert set(record) >= {"stdout", "stderr", "attestation", "started_at"}
+        assert _verify(record, key) == ("verified", "ok")
+        on_disk = json.loads(
+            (tmp_path / "state/references" / record["run_id"] / "record.json").read_text()
+        )
+        assert on_disk == record

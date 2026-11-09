@@ -218,7 +218,9 @@ def effective_trust(state: dict) -> tuple[dict, str, str | None]:
     change is the trust file, exactly one valid key per signer); evaluate()
     then demands signed evidence for every published key. Any other change to
     the trust file yields a ``problem`` (TRUST_CHANGE_RULE) and the gate fails,
-    whatever keys the integration file already trusts.
+    whatever keys the integration file already trusts. A pure branch that
+    drops a signer the integration file trusts (trust_downgrade) is not a
+    key-publication branch either and fails the same way.
     """
     trusted = load_trust()
     changed, err = trust_file_change(state)
@@ -228,8 +230,26 @@ def effective_trust(state: dict) -> tuple[dict, str, str | None]:
         return trusted, "integration", None
     branch_trust, reason = key_publication_trust(state)
     if branch_trust is not None:
-        return branch_trust, "key-publication", None
+        removed = trust_downgrade(trusted, branch_trust)
+        if not removed:
+            return branch_trust, "key-publication", None
+        reason = (
+            f"branch removes the published key(s) of {removed}; a published "
+            "signer may only be rotated (replaced by one evidenced key), never "
+            "removed or emptied"
+        )
     return trusted, "integration", f"{TRUST_CHANGE_RULE}; {reason}"
+
+
+def trust_downgrade(integration: dict, branch: dict) -> list[str]:
+    """Signers with a key in the integration trust map but none in the branch's.
+
+    Applies to every signer (required or optional, e.g. reference-runner): once
+    published, a signer can change only by authenticated rotation (a pure
+    branch replacing its key with exactly one new, evidenced key); becoming
+    absent or empty would downgrade its records to "unverified" unreviewed.
+    """
+    return sorted(s for s, keys in integration.items() if keys and not branch.get(s))
 
 
 def classify(rec: dict, task_id: str, sha: str, trusted: dict) -> tuple[str, str]:

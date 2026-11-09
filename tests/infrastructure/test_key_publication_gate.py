@@ -387,3 +387,46 @@ def test_unpublished_reference_runner_does_not_affect_existing_signers(
     code, out = check(capsys)
     assert code == 0 and out["trust_source"] == "key-publication"
     assert out["key_publication_evidence"] == {"validation-manager": True, "host-runner": True}
+
+
+def test_removing_published_reference_runner_key_fails(repo, tmp_path, capsys):
+    """Published -> absent (or emptied) is a trust downgrade, not a rotation."""
+    vm, hr, rr = (attest.generate_keypair() for _ in range(3))
+    lv.TRUSTED_KEYS_PATH.write_text(trust_file([vm], [hr], [rr]))
+    sha = commit_branch(repo, trust_file([vm], [hr]))
+    put_records(tmp_path, sha, vm, hr)  # valid evidence for the remaining keys
+    code, out = check(capsys)
+    assert code == 1 and out["trust_source"] == "integration"
+    assert lv.TRUST_CHANGE_RULE in out["trust_problem"]
+    assert "reference-runner" in out["trust_problem"]
+    sha = commit_branch(repo, trust_file([vm], [hr], []))
+    put_records(tmp_path, sha, vm, hr)
+    code, out = check(capsys)
+    assert code == 1 and "reference-runner" in out["trust_problem"]
+
+
+def test_removing_published_required_signer_fails(repo, tmp_path, capsys):
+    vm, hr = attest.generate_keypair(), attest.generate_keypair()
+    lv.TRUSTED_KEYS_PATH.write_text(trust_file([vm], [hr]))
+    assert lv.trust_downgrade(
+        lv.parse_trust_map(json.loads(trust_file([vm], [hr]))),
+        {"validation-manager": {vm.key_id: vm.public_key.hex()}},
+    ) == ["host-runner"]
+    sha = commit_branch(repo, trust_file([vm], []))
+    put_records(tmp_path, sha, vm, hr)
+    code, out = check(capsys)
+    assert code == 1 and out["trust_source"] == "integration"
+    # Rejected (the parser already requires both signers; trust_downgrade above
+    # covers the rule for every signer independently of the parser).
+    assert lv.TRUST_CHANGE_RULE in out["trust_problem"]
+
+
+def test_rotating_published_reference_runner_key_is_allowed(repo, tmp_path, capsys):
+    vm, hr, old_rr, rr = (attest.generate_keypair() for _ in range(4))
+    lv.TRUSTED_KEYS_PATH.write_text(trust_file([vm], [hr], [old_rr]))
+    sha = commit_branch(repo, trust_file([vm], [hr], [rr]))
+    put_reference_run(tmp_path, sha, rr)
+    put_records(tmp_path, sha, vm, hr, with_ref=True)
+    code, out = check(capsys)
+    assert code == 0 and out["trust_source"] == "key-publication"
+    assert out["key_publication_evidence"]["reference-runner"] is True

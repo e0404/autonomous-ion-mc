@@ -302,20 +302,27 @@ R2-TOPAS-4) without trusting the orchestrator's copy. Deriving the start from
   requires a verified, successful reference run of that branch SHA referenced
   from a passing validation record (`key_publication_evidence` gains a
   `reference-runner` entry).
-- **Operator steps:** (1) merge the V3-INFRA-004 change and restart the
+- **Operator steps:** (a) merge the V3-INFRA-004 change and restart the
   v3-research MCP service so the running process loads the new runner (it
   creates `<share root>/attestation/reference-runner.key` on first use).
-  (2) Create the key-publication task worktree (from the integration head)
-  and run one reference calculation for it with `run_reference_calculation`
-  on an already committed case (the branch must not add files). (3) Read
-  `attestation.key_id` / `attestation.public_key` from the returned signed
-  record (cross-check with `python infrastructure/experiment_v3/attest.py
-  --print-public-key reference-runner` run by the operator outside the agent
-  sandbox, and check key_id = sha256(public key)[:16]). (4) Add exactly that
-  entry under `"reference-runner"` in the trust file (with `added` and a
-  `note` naming the REF record), commit it as the only change, run one host
-  validation job, and record validation for that SHA referencing the host run
-  (`details.host_runs`) and the reference run (`details.reference_runs` with
-  its `run_id` and `configuration_id`). (5) Review, push, CI, merge (as
-  V3-INFRA-003 did). Reference runs made before the restart have no
-  `record.json` and stay unverifiable.
+  (b) DISCOVERY run: run `run_reference_calculation` once on any committed
+  case (e.g. from the key-publication task worktree before its trust-file
+  commit). Its record is `unverified` (the key is not yet trusted) and is
+  NOT evidence; it only reveals `attestation.key_id` /
+  `attestation.public_key`. Cross-check them with `python
+  infrastructure/experiment_v3/attest.py --print-public-key reference-runner`
+  run by the operator outside the agent sandbox, and check key_id =
+  sha256(public key)[:16]. (c) Trust-file commit: add exactly that entry under
+  `"reference-runner"` (with `added` and a `note` naming the discovery REF
+  record) as the ONLY change of the key-publication branch. (d) EVIDENCE runs
+  at that commit's SHA (the gate binds `details.reference_runs` and
+  `details.host_runs` to the validation record's SHA, so runs from before the
+  commit can never count): one `run_reference_calculation` on an already
+  committed case and one host validation job, then record validation at the
+  same SHA referencing both signed records (`details.reference_runs` with
+  `run_id` and `configuration_id`, `details.host_runs`). (e) Review, push, CI,
+  merge (as V3-INFRA-003 did). Reference runs made before the restart have no
+  `record.json` and stay unverifiable. Once published, the key can only be
+  rotated by the same procedure (a pure branch replacing it with one new,
+  evidenced key); a branch that removes or empties a signer the integration
+  trust file lists fails the gate (`trust_problem`), for every signer.
