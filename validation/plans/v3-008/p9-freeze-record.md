@@ -391,6 +391,13 @@ placeholder scorer output was deleted unread.
 
 
 **Dated note (2026-11-09, confirmation + IDD-FULL re-sizing commit (C 3200 / O 2500 per part; bundle-set digest b5fa180fa5e8a7fee59ef22716048b1ad3e06e683897bd7962ea0c9f4e3afb75 supersedes 76d78566…; smoke runs bound per bundle entry, evidence runs to the complete manifest); orchestrator) — hashes regenerated at the working tree; entries that changed since the note above:** `validation/scripts/ion_em/gen_r2_bundles.py` 74ab35e3… → 32d7c55e…; `tests/ionmc/test_r2_bundles.py` e6431320… → aaa08b42…; `validation/plans/v3-008/r2-topas-target.md` 3b2a5a40… → dc6b80d2…; `validation/scripts/ion_em/r2_evaluate.py` 1aa72236… → d1da57b5…; `tests/ionmc/test_r2_evaluate.py` 0de50eb4… → aa3e2832…; `validation/scripts/ion_em/r2_io.py` e4ceb4b2… → 827170cf…; `validation/results/transport/v8r2-topas/frozen-bundles.json` fa490129… → f5e39fe6…; `validation/scripts/ion_em/r2_smoke_reruns.py` ffcd9d13… → 3fa0cb48…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-09, confirmation summary; orchestrator) — newly bound path: the check-run confirmation summary of the 14-run R2-SMOKE-LP set (all VALID at evaluator head 1d7b2394; sha256 as committed):**
+
+| File | sha256 |
+|---|---|
+| `validation/results/transport/v8r2-topas/smoke-confirmation.json` | `15df91b76206ab9090737aedbaa2722d25934e2008f7cc351b8bcf23297df5c7` |
+
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.
