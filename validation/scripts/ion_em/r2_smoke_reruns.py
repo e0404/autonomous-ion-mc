@@ -60,6 +60,9 @@ def check_entry(entry: dict[str, Any], outputs: Path | None) -> dict[str, Any]:
         "code_sha": rep["code_sha"], "started_at": rep["reference_started"],
         "seconds": rep["seconds"], "histories": rep["histories"], "config": rep["config"],
         "verdict": rep["verdict"], "checks": rep["checks"], "review": rep["review"],
+        "manifest_binding": rep["manifest_binding"],
+        "manifest_bundle_set_digest_at_code_sha": rep["manifest_bundle_set_digest_at_code_sha"],
+        "manifest_bundle_set_digest_at_head": rep["manifest_bundle_set_digest"],
         "trust_file_sha256": rep["trust_file"]["sha256"],
         "evaluator_head": rep["evaluator"]["head_sha"],
     }  # fmt: skip

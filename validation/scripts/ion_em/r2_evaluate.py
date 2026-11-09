@@ -936,8 +936,12 @@ def check_run(
     The same steps as :func:`grade` for each run it uses, through the same loaders:
     ``io.load_signed_run`` (signature against the committed trust file at HEAD, schema 3, run id
     derived from the configuration id, request binding incl. ``request_sha256`` and the bundle
-    committed at ``code_sha``, frozen-manifest binding of ``case.json`` / ``input.txt``,
-    stdout/stderr sha256 against the listing and the signed record, ``output_files_sha256``
+    committed at ``code_sha``, frozen-manifest binding of ``case.json`` / ``input.txt`` by run
+    kind: an evidence part needs the whole manifest identical at ``code_sha`` and HEAD (evidence
+    rows are bound to the complete frozen set), a smoke only its own bundle entry (smokes are
+    execution-only sizing records bound to their own frozen bundle; both whole-manifest digests
+    are reported), stdout/stderr sha256 against the listing and the signed record,
+    ``output_files_sha256``
     reproduced from the listing's ``work/`` entries), :func:`run_chronology` (seal note and
     ``<DEFAULT_RECORDS>/review.json`` at the run's ``code_sha``; ``code_sha`` an ancestor of HEAD)
     and ``io.run_checks`` for the configuration of the bundle name (``io.parse_bundle``). The
@@ -972,6 +976,7 @@ def check_run(
         Path(outputs) if outputs is not None else repo / ".ionmc-cache" / "reference-runs",
         run_id, bundle, info["config"], trust, reader, review_records=review_records,
         case=info["case"], part=info["part"], expected_seeds=seeds,
+        manifest_binding="set" if info["kind"] == "part" else "entry",
     )  # fmt: skip
     chron = run_chronology(repo, reader, run, plan, review_records)
     checks = io.run_checks(run)
@@ -1016,6 +1021,10 @@ def check_run(
         },
         "plan": plan,
         "manifest_bundle_set_digest": chron["manifest_bundle_set_digest"],
+        "manifest_bundle_set_digest_at_code_sha": run.pinned[
+            "manifest_bundle_set_digest_at_code_sha"
+        ],
+        "manifest_binding": run.pinned["manifest_binding"],
         "files_sha256": dict(sorted(run.read.items())),
         "outputs_note": "scorer outputs (work/) not read; output_files_sha256 recomputed from the "
         "artifact listing's work/ hashes and sizes",

@@ -38,7 +38,7 @@ DEFAULT_MANIFEST = (
     REPO_ROOT / "validation" / "results" / "transport" / "v8r2-topas" / "frozen-bundles.json"
 )
 MANIFEST_SCHEMA = "ionmc-v8r2-frozen-bundles-1"
-BUNDLE_SET_DIGEST = "76d785667211bb39e96d517f46d636ff4b60be212b0d7fda9d968993ef47ed66"
+BUNDLE_SET_DIGEST = "b5fa180fa5e8a7fee59ef22716048b1ad3e06e683897bd7962ea0c9f4e3afb75"
 
 TOPAS_BASE = 20619000
 # case number, ion tag, MeV/u, A, z, particle, planning CSDA range (project Bethe table, mm), L, h_z, h_x, set
@@ -66,10 +66,12 @@ CONFIGS = {
 # histories per part, N_part, per (configuration, ion); every case of an ion uses the upper-end
 # value of its ion (dated sizing note 2026-11-09, plan section 8). LAT-FULL is re-sized after the
 # ecut1km timing smokes.
+# IDD-FULL carbon/oxygen re-sized 2026-11-09 after the signed ListProcesses timing smokes
+# (C 364.8, O 475.9 ms/primary; 3333/2529 exceeded the 1200 s cap; section-6 rule (i)).
 N_PART = {
     "idd-em": {"he": 25000, "carbon": 25000, "oxygen": 25000},
     "lat-em": {"he": 25000, "carbon": 25000, "oxygen": 25000},
-    "idd-full": {"he": 5000, "carbon": 3333, "oxygen": 2529},
+    "idd-full": {"he": 5000, "carbon": 3200, "oxygen": 2500},
     "lat-full": {"he": 5000, "carbon": 5000, "oxygen": 5000},
 }
 K_PARTS = 4

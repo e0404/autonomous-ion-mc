@@ -19,7 +19,9 @@ Three inputs, each bound to a controlled record before any number is used:
    ``code_sha`` and at HEAD. **Bundle binding:** the frozen bundle manifest
    ``validation/results/transport/v8r2-topas/frozen-bundles.json`` must be byte-identical at the
    run's ``code_sha`` and at HEAD (amendment rule: a bundle change after a run invalidates that
-   run's grading), and the run's ``request.input_files`` sha256 of ``case.json`` / ``input.txt``
+   run's grading; for a SMOKE checked by ``check-run`` only the smoke bundle's own manifest entry
+   must be identical, see :func:`frozen_manifest`), and the run's ``request.input_files`` sha256
+   of ``case.json`` / ``input.txt``
    must equal the manifest entry of the bundle named for the index's case/config/part (else a
    run-validity FAIL); the frozen module/parameter-line checks remain as an additional layer.
 2. **ionmc samples.** The sealed record ``sample-seal.json`` (``--seal``) must be byte-identical to
@@ -396,25 +398,62 @@ FROZEN_MANIFEST = "validation/results/transport/v8r2-topas/frozen-bundles.json"
 MANIFEST_SCHEMA = "ionmc-v8r2-frozen-bundles-1"
 
 
-def frozen_manifest(reader: CommittedReader, code_sha: str) -> dict[str, Any]:
-    """The frozen bundle manifest, required byte-identical at the run's ``code_sha`` and at HEAD
-    (amendment rule: a bundle change after a run invalidates that run's grading)."""
-    at_run = git_show(reader.repo, code_sha, FROZEN_MANIFEST)
-    at_head = reader.read(FROZEN_MANIFEST)
-    if at_run != at_head:
-        raise RecordError(
-            f"{FROZEN_MANIFEST} differs between the run's code_sha {code_sha} and HEAD "
-            f"{reader.head}: amendment rule, bundles changed after the run invalidate its grading"
-        )
+def _manifest_doc(blob: bytes, where: str) -> dict[str, Any]:
     try:
-        doc = json.loads(at_head.decode("utf-8"))
+        doc = json.loads(blob.decode("utf-8"))
     except ValueError as exc:
-        raise RecordError(f"{FROZEN_MANIFEST} is not JSON: {exc}") from exc
+        raise RecordError(f"{FROZEN_MANIFEST} at {where} is not JSON: {exc}") from exc
     if require(doc, "schema", "frozen manifest") != MANIFEST_SCHEMA:
         raise RecordError(f"{FROZEN_MANIFEST}: schema {doc['schema']!r} != {MANIFEST_SCHEMA}")
     require(doc, "bundle_set_digest", "frozen manifest")
     if not isinstance(require(doc, "bundles", "frozen manifest"), dict):
         raise RecordError(f"{FROZEN_MANIFEST}: bundles must be an object")
+    return doc
+
+
+def frozen_manifest(
+    reader: CommittedReader, code_sha: str, smoke_bundle: str | None = None
+) -> dict[str, Any]:
+    """The frozen bundle manifest as committed at HEAD, bound to the run's ``code_sha`` by run kind
+    (amendment rule: a bundle change after a run invalidates that run's grading):
+
+    - evidence part (``smoke_bundle`` None): the manifest must be byte-identical at ``code_sha``
+      and at HEAD. An evidence row is graded against the complete frozen bundle set, so any bundle
+      change after the run voids it.
+    - smoke (``smoke_bundle`` = its bundle name; Codex REVIEW-8286be8c allowed "a reviewed
+      versioned/per-bundle amendment that preserves the intended binding"): only the smoke
+      bundle's own entry (its ``case.json`` / ``input.txt`` sha256 pair) must be present and
+      identical at ``code_sha`` and at HEAD; the whole-manifest digest may differ and is only
+      reported. A smoke is an execution-only sizing record bound to its own frozen bundle, so a
+      later re-sizing of other (evidence) bundles does not change what that smoke executed.
+
+    A violation of either rule raises RecordError (ERROR, fail closed). The returned document is
+    HEAD's, with ``_binding`` ("set" | "entry") and ``_bundle_set_digest_at_code_sha`` added."""
+    at_run = git_show(reader.repo, code_sha, FROZEN_MANIFEST)
+    at_head = reader.read(FROZEN_MANIFEST)
+    if smoke_bundle is None and at_run != at_head:
+        raise RecordError(
+            f"{FROZEN_MANIFEST} differs between the run's code_sha {code_sha} and HEAD "
+            f"{reader.head}: amendment rule, bundles changed after the run invalidate its grading"
+        )
+    doc = _manifest_doc(at_head, f"HEAD {reader.head}")
+    run_doc = _manifest_doc(at_run, f"code_sha {code_sha}")
+    if smoke_bundle is not None:
+        old, new = run_doc["bundles"].get(smoke_bundle), doc["bundles"].get(smoke_bundle)
+        pair = ("case.json", "input.txt")
+        if not isinstance(old, dict) or not isinstance(new, dict):
+            raise RecordError(
+                f"smoke bundle {smoke_bundle} is not in {FROZEN_MANIFEST} at both code_sha "
+                f"{code_sha} and HEAD {reader.head}"
+            )
+        if any(old.get(k) is None or old.get(k) != new.get(k) for k in pair):
+            raise RecordError(
+                f"the frozen-manifest entry of smoke bundle {smoke_bundle} differs between the "
+                f"run's code_sha {code_sha} and HEAD {reader.head}: the smoke's bundle changed "
+                "after the run"
+            )
+    doc["_binding"] = "set" if smoke_bundle is None else "entry"
+    doc["_bundle_set_digest_at_code_sha"] = run_doc["bundle_set_digest"]
     return doc
 
 
@@ -572,12 +611,17 @@ def load_signed_run(
     case: int = 0,
     part: int | None = None,
     expected_seeds: list[int] | None = None,
+    manifest_binding: str = "set",
 ) -> TopasRun:
     """Load and bind one signed TOPAS run of ``bundle`` (evidence part or smoke) whose
     ``record.json`` / ``artifacts.json`` are in ``rdir`` (see the module docstring for every
     binding); the seal note and ``<review_records>/review.json`` are pinned at the run's
     ``code_sha``. ``expected_seeds``: the seed formula of an evidence part; None for a smoke, whose
-    seed is bound only through the committed bundle at ``code_sha`` (case.json ``seeds``)."""
+    seed is bound only through the committed bundle at ``code_sha`` (case.json ``seeds``).
+    ``manifest_binding``: "set" (evidence parts: whole frozen manifest identical at ``code_sha``
+    and HEAD) or "entry" (smokes: only the bundle's own manifest entry; :func:`frozen_manifest`)."""
+    if manifest_binding not in ("set", "entry"):
+        raise RecordError(f"unknown manifest binding {manifest_binding!r}")
     rdir = Path(rdir)
     record_path = rdir / "record.json"
     result = reader.json(record_path, f"signed run record {run_id}")
@@ -692,7 +736,7 @@ def load_signed_run(
         raise RecordError(f"{run_id}: bundle {bundle} is not committed at {code_sha}")
     if not is_ancestor(repo, code_sha, reader.head):
         raise RecordError(f"{run_id}: code_sha {code_sha} is not an ancestor of HEAD {reader.head}")
-    manifest = frozen_manifest(reader, code_sha)
+    manifest = frozen_manifest(reader, code_sha, bundle if manifest_binding == "entry" else None)
     entry = manifest["bundles"].get(bundle)
     if not isinstance(entry, dict):
         run.bundle_problems.append(f"bundle {bundle} is not in the frozen manifest")
@@ -703,6 +747,10 @@ def load_signed_run(
                 run.bundle_problems.append(f"{bundle}/{name} differs from the frozen manifest")
     run.pinned = load_pinned_chronology(repo, code_sha, reader.rel(review_records))
     run.pinned["manifest_bundle_set_digest"] = manifest["bundle_set_digest"]
+    run.pinned["manifest_bundle_set_digest_at_code_sha"] = manifest[
+        "_bundle_set_digest_at_code_sha"
+    ]
+    run.pinned["manifest_binding"] = manifest["_binding"]
     if input_files != committed:
         raise RecordError(
             f"{run_id}: request input_files differ from the committed bundle {bundle}"

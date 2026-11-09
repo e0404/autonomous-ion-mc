@@ -15,7 +15,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 TOPAS = ROOT / "validation" / "reference_cases" / "topas"
-RECORDED_DIGEST = "76d785667211bb39e96d517f46d636ff4b60be212b0d7fda9d968993ef47ed66"
+RECORDED_DIGEST = "b5fa180fa5e8a7fee59ef22716048b1ad3e06e683897bd7962ea0c9f4e3afb75"
 FULL_MODULES = [
     "g4em-standard_opt4",
     "g4h-phy_QGSP_BIC_HP",
@@ -36,7 +36,7 @@ SMOKE_NAME = (
 N_PART = {
     "idd-em": {"he": 25000, "carbon": 25000, "oxygen": 25000},
     "lat-em": {"he": 25000, "carbon": 25000, "oxygen": 25000},
-    "idd-full": {"he": 5000, "carbon": 3333, "oxygen": 2529},
+    "idd-full": {"he": 5000, "carbon": 3200, "oxygen": 2500},
     "lat-full": {"he": 5000, "carbon": 5000, "oxygen": 5000},
 }
 # minimum histories per case (four parts): FULL >= 1e4 (plan section 6 step-2 rule);

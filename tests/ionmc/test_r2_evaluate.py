@@ -1303,3 +1303,58 @@ def test_check_run_on_a_synthetic_lp_smoke(tmp_path: Path, small_case: None) -> 
     other = "he-water-250mevu-r2-idd-em-lp-steps-verbose-smoke"  # not committed: ERROR
     code, rep = _check_cli(w, tmp_path / "d.json", records_dir=w["records"] / "runs", bundle=other)
     assert code == 2 and rep["verdict"] == "ERROR", rep
+
+
+SMOKE_LP = "he-water-250mevu-r2-idd-em-lp-timing-smoke"  # case 3 of SMALL (he 250)
+
+
+def _resize_manifest(w: dict[str, Any], bundle: str) -> None:
+    """A later commit changes one manifest entry (as a re-sizing of that bundle would)."""
+    doc = json.loads(w["manifest"].read_text())
+    doc["bundles"][bundle] = dict(doc["bundles"][bundle], **{"input.txt": "f" * 64})
+    doc["bundle_set_digest"] = IO.canonical_digest(doc["bundles"])
+    w["manifest"].write_text(json.dumps(doc))
+    _commit(w["repo"], f"re-size {bundle}")
+
+
+def test_smoke_binding_survives_a_change_of_another_bundle(
+    tmp_path: Path, small_case: None
+) -> None:
+    w = _world(tmp_path, smokes={SMOKE_LP: (1, "idd-em", 1)})
+    runs = w["records"] / "runs"
+    code, before = _check_cli(w, tmp_path / "a.json", records_dir=runs, bundle=SMOKE_LP)
+    assert code == 0 and before["verdict"] == "VALID", before
+    assert before["manifest_binding"] == "entry"
+    assert before["manifest_bundle_set_digest"] == before["manifest_bundle_set_digest_at_code_sha"]
+    _resize_manifest(w, IO.bundle_name(1, "lat-em", 5))  # another bundle re-sized after the run
+    code, rep = _check_cli(w, tmp_path / "b.json", records_dir=runs, bundle=SMOKE_LP)
+    assert code == 0 and rep["verdict"] == "VALID", rep
+    assert rep["manifest_bundle_set_digest_at_code_sha"] == before["manifest_bundle_set_digest"]
+    assert rep["manifest_bundle_set_digest"] != rep["manifest_bundle_set_digest_at_code_sha"]
+    # an evidence part under the same manifest change: whole-set rule, ERROR (unchanged)
+    code, rep = _check_cli(w, tmp_path / "c.json", (1, "idd-em", 1))
+    assert code == 2 and rep["verdict"] == "ERROR" and "differs between" in rep["error"], rep
+    code, rep = _cli(w, "TD-EM", tmp_path / "g.json")
+    assert code == 2 and rep["status"] == "ERROR" and "differs between" in rep["error"], rep
+
+
+def test_smoke_whose_own_entry_changed_is_error(tmp_path: Path, small_case: None) -> None:
+    w = _world(tmp_path, smokes={SMOKE_LP: (1, "idd-em", 1)})
+    _resize_manifest(w, SMOKE_LP)
+    code, rep = _check_cli(
+        w, tmp_path / "a.json", records_dir=w["records"] / "runs", bundle=SMOKE_LP
+    )
+    assert code == 2 and rep["verdict"] == "ERROR", rep
+    assert "entry of smoke bundle" in rep["error"]
+
+
+def test_smoke_missing_from_head_manifest_is_error(tmp_path: Path, small_case: None) -> None:
+    w = _world(tmp_path, smokes={SMOKE_LP: (1, "idd-em", 1)})
+    doc = json.loads(w["manifest"].read_text())
+    del doc["bundles"][SMOKE_LP]
+    doc["bundle_set_digest"] = IO.canonical_digest(doc["bundles"])
+    w["manifest"].write_text(json.dumps(doc))
+    code, rep = _check_cli(
+        w, tmp_path / "a.json", records_dir=w["records"] / "runs", bundle=SMOKE_LP
+    )
+    assert code == 2 and "not in" in rep["error"], rep

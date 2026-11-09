@@ -194,11 +194,11 @@ placeholder scorer output was deleted unread.
 
 | File | sha256 |
 |---|---|
-| `validation/scripts/ion_em/gen_r2_bundles.py` | `74ab35e3c534ed2029ecb74bf0b88bab88b29df205b698acd9af567bfbaf353d` |
-| `tests/ionmc/test_r2_bundles.py` | `e64313205eb0f30b0c6cae74983fe9e070a81040dd8c9853c4a0380787e2686e` |
+| `validation/scripts/ion_em/gen_r2_bundles.py` | `32d7c55ea9d44faea595789de6dfac275516848182209d338b3733589a8c80a0` |
+| `tests/ionmc/test_r2_bundles.py` | `aaa08b42abd3ed660530ba8897cb980fec3e9b3977dfddf7c7a699bc6bcb51ac` |
 | `reference_requests/operator-directives/2026-11-07-topas-validation-target.md` | `ca079e9f0af990cdff9d8efde60d38ac55e2d0fc0fb9ef22355a81f4a2ab0b26` |
 | `reference_requests/interventions/IR-20261102-010435-B59B2D/response.json` | `dc6a610cb67dee50fa0bb96327026eea0b81bb9506e7b898c2e9e44322f69bd0` |
-| `validation/plans/v3-008/r2-topas-target.md` | `3b2a5a400b7f5b447bc9ca2b10f2deba49591e8d333c559eb7f5ef1a62b6e9e9` |
+| `validation/plans/v3-008/r2-topas-target.md` | `dc6b80d2a00de765f4458e6c7416ab31437a42ec47e2953111ab00a205316efe` |
 
 
 **Dated note (2026-11-07, orchestrator) — hashes regenerated at the freeze commit's parent; entries that changed since f694b747:** `validation/plans/v3-008/p10-single-scattering-availability.md` bea86277… → a7f539a0…; `validation/plans/v3-008/p11-exact-omega-mapping.md` 6116648a… → f78e95f5…; `reference_requests/interventions/IR-20261102-010435-B59B2D/request.json` 068cafd7… → e81a7efa…. All other entries unchanged (recomputed).
@@ -230,11 +230,11 @@ placeholder scorer output was deleted unread.
 | `src/ionmc/transport/tables.py` | `45542d46fb208ba1ca9ccdcb9e8baea41e47f86a7429b46f8566ad12b1b2619d` |
 | `src/ionmc/transport/tally.py` | `be202f7310e3991bead49fd40e24cef1f5493992044c72aff6c5f8e8826b547c` |
 | `src/ionmc/transport/warp_driver.py` | `cb32245e48d6bffd03092d09fb7421d8b11a8191158a311fd0b9a92e568aeb86` |
-| `validation/scripts/ion_em/r2_evaluate.py` | `1aa7223607862ee82bafcc9a793e4870980524a9a90450c0acfb2fb1e1ec6bd7` |
+| `validation/scripts/ion_em/r2_evaluate.py` | `d1da57b57d8d55f9a545544eb773ff3c0a019e07c6663ae092779754248f5a05` |
 | `validation/scripts/transport/steps_v8.py` | `e8b73006921b479797e762c1319adf7e1e4edb95594ffac4109827b4ee185a7d` |
 | `tests/ionmc/test_ion_mcs_table.py` | `b3fb9992f866238b11243e032f394583775e292cec49601798ef44b54efcb749` |
 | `tests/ionmc/test_v3_008_rows_ci.py` | `ffea9f20976ec2d721067ccf52d5cb9797fad51a5bda7dd224948829c1cade0e` |
-| `tests/ionmc/test_r2_evaluate.py` | `0de50eb4a0b85d7e7cc4782524c87a5d71c91e3e7701f4af11063ab0efbcc341` |
+| `tests/ionmc/test_r2_evaluate.py` | `aa3e28327f0ff5502ecdffb281cf356484890104333418d7ed7bc68633d13e53` |
 | `tests/ionmc/test_v3_008_steps_v8.py` | `ab4922ea8842751e22c9d1882e9e1dec0ae88a25b55174c99586c4802868b731` |
 
 (c) R2.5 counts, superseded by this note (the R2.5 text is kept as written): repository paths 475 + 15 = **490**; total full sha256 values 519 + 15 = **534**, plus the bundle-set digest (unchanged, `a8a1c27d…`). The count in R2.6 item (3) (475) is superseded accordingly by 490 for the acceptance tests of the seal.
@@ -263,7 +263,7 @@ placeholder scorer output was deleted unread.
 
 | File | sha256 |
 |---|---|
-| `validation/scripts/ion_em/r2_io.py` | `e4ceb4b24ae3cff6acfd250a257aa9d2c6ce378fa14e774a0c198007fdf13f68` |
+| `validation/scripts/ion_em/r2_io.py` | `827170cfa994ffedd709fd998cdca32f76004851bcd9e5752c3e504595e81e48` |
 | `validation/scripts/ion_em/r2_statistics.py` | `fbb19370ae0bb20ed1cc5289864c3331ba63bdcb88315b33f06b6d710c79ed6b` |
 | `validation/results/transport/v8r2-topas/smokes.json` | `9f5c1b24bfe278869b30cc89c03137786fc683ed85d6b6509c48cdffa964f621` |
 | `validation/results/transport/v8r2-topas/records/review.json` | `87988397d4c14304d75f987117e4c22199d4452a0b48030e131a2bd52edb1199` |
@@ -291,7 +291,7 @@ placeholder scorer output was deleted unread.
 
 | File | sha256 |
 |---|---|
-| `validation/results/transport/v8r2-topas/frozen-bundles.json` | `fa49012972627b05ebcd1f12ec3832b3166921d300c9653deb7302d329807b0d` |
+| `validation/results/transport/v8r2-topas/frozen-bundles.json` | `f5e39fe6c7c1c846070e34970024717d86c36dd04b8b287b993a07947856400d` |
 
 
 **Dated note (2026-11-09, evaluator round-5 fixes (Codex REVIEW-096af6a3: chronology inputs pinned to the run's code_sha, frozen bundle manifest); orchestrator) — hashes regenerated at the working tree; entries that changed since the note above:** `validation/scripts/ion_em/gen_r2_bundles.py` 8a92d40b… → 9924429d…; `tests/ionmc/test_r2_bundles.py` fd87a7dc… → b0e91e2b…; `validation/scripts/ion_em/r2_evaluate.py` 63ca633c… → ad7c45f1…; `tests/ionmc/test_r2_evaluate.py` 773f2b4f… → f733732e…; `validation/scripts/ion_em/r2_io.py` 417d0de7… → ec08eea5…. All other entries unchanged (recomputed).
@@ -320,7 +320,7 @@ placeholder scorer output was deleted unread.
 | File | sha256 |
 |---|---|
 | `validation/results/transport/v8r2-topas/smoke-reruns.json` | `4a3fb8af1163dea56e0c8d6868b127f4277ccb02d7a80b133bddf0eb3511ff58` |
-| `validation/scripts/ion_em/r2_smoke_reruns.py` | `ffcd9d13cea372b1555f7a3013dad27e7d81f8f08e0a69cceb41e03f7f95260b` |
+| `validation/scripts/ion_em/r2_smoke_reruns.py` | `3fa0cb4837be84d810b6556f1fa5e505475655fdf048002eefc189e05e76d2d6` |
 | `tests/ionmc/test_r2_smoke_reruns.py` | `d0eca2fa663e5222bd60af81dd70fe712a4d431a86370e6aa2d814fdd6a9c6c1` |
 | `validation/results/transport/v8r2-topas/smoke-runs/REF-127b2dd92a8dd609c560-ff8db64b/artifacts.json` | `b2fb14264923e3d9d4b49424b8df72fe6d1d060ac73ebd57b423a3f44fa18dd4` |
 | `validation/results/transport/v8r2-topas/smoke-runs/REF-127b2dd92a8dd609c560-ff8db64b/record.json` | `a79ab4244232b39964db8fa4beb43f78cd7e0d5102cd1465f6979a3bf9f6e8f6` |
@@ -389,6 +389,8 @@ placeholder scorer output was deleted unread.
 | `validation/results/transport/v8r2-topas/smoke-runs/REF-fda97285d2e8ab1adcb5-9699e0a1/record.json` | `0958e176ece17564893bbf6cce7e4498bdd0f20355fa74a0d9c3fac7012d461e` |
 | `validation/results/transport/v8r2-topas/smoke-runs/REF-fda97285d2e8ab1adcb5-9699e0a1/artifacts.json` | `05c8cb218303c909fa069d38908b35c78275eafd7219174abef19c6c0300f91b` |
 
+
+**Dated note (2026-11-09, confirmation + IDD-FULL re-sizing commit (C 3200 / O 2500 per part; bundle-set digest b5fa180fa5e8a7fee59ef22716048b1ad3e06e683897bd7962ea0c9f4e3afb75 supersedes 76d78566…; smoke runs bound per bundle entry, evidence runs to the complete manifest); orchestrator) — hashes regenerated at the working tree; entries that changed since the note above:** `validation/scripts/ion_em/gen_r2_bundles.py` 74ab35e3… → 32d7c55e…; `tests/ionmc/test_r2_bundles.py` e6431320… → aaa08b42…; `validation/plans/v3-008/r2-topas-target.md` 3b2a5a40… → dc6b80d2…; `validation/scripts/ion_em/r2_evaluate.py` 1aa72236… → d1da57b5…; `tests/ionmc/test_r2_evaluate.py` 0de50eb4… → aa3e2832…; `validation/scripts/ion_em/r2_io.py` e4ceb4b2… → 827170cf…; `validation/results/transport/v8r2-topas/frozen-bundles.json` fa490129… → f5e39fe6…; `validation/scripts/ion_em/r2_smoke_reruns.py` ffcd9d13… → 3fa0cb48…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.
