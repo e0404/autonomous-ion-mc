@@ -14,5 +14,13 @@
       "added": "2026-11-08",
       "note": "First publication (V3-INFRA-003) after the operator restarted the MCP services on 2026-11-08 (IR-20261107-235713-1724FF). Taken from the attestation block of host-runner record RUN-20261108T000143Z-867f1663 (task V3-INFRA-003, sha 5ea81694), key_id = sha256(public_key)[:16] checked."
     }
+  ],
+  "reference-runner": [
+    {
+      "key_id": "303cce4c129d387c",
+      "public_key": "4ca28f27ff512758365bdd54799baaaaec661eeac507a7c6ff0785cf1ac417e9",
+      "added": "2026-11-09",
+      "note": "First publication (V3-INFRA-005) after the operator restarted the MCP services on 2026-11-09 with V3-INFRA-004 (IR-20261109-112802-D6BAE3). Taken from the attestation block of the signed reference-run record REF-61079a16ca9c204ac639-99e4865f (discovery run, task V3-008, code_sha 84bd69e8, he-water-250mevu-r2-lat-em-timing-smoke; execution only, not evidence), key_id = sha256(public_key)[:16] checked."
+    }
   ]
 }
