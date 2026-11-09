@@ -558,6 +558,8 @@ Comparison with the IDD run: there, 97.5 % of steps are limited by the 0.1 mm de
 - Either choice is recorded by a dated entry before the first evidence run.
 - Host calls: 192 evidence parts, 17 smokes already run, and the V5-SS parts (16 at the 6e4 design).
 
+**Dated note (2026-11-09, Codex REVIEW-8429c50e).** All 17 smokes above have unsigned (pre-V3-INFRA-004) records: run validity under R2-TOPAS-4 NOT ESTABLISHED; every sizing, step-length and cap statement of this section is PROVISIONAL until the pre-registered signed re-runs of the acceptance plan's amendment of 2026-11-09 (14 smokes, same seeds) confirm them; no evidence run before that.
+
 ## 9. Not established, risks
 
 - Whether TOPAS scoring bins limit steps (OPEN; step-length smoke). It moves the Urban width by up to ≈ 6 % (P2

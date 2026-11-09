@@ -198,7 +198,7 @@ placeholder scorer output was deleted unread.
 | `tests/ionmc/test_r2_bundles.py` | `b0e91e2bc53ed0f46fbe8d0b63bf9a6d449cd81fbde38094754c5f054df47530` |
 | `reference_requests/operator-directives/2026-11-07-topas-validation-target.md` | `ca079e9f0af990cdff9d8efde60d38ac55e2d0fc0fb9ef22355a81f4a2ab0b26` |
 | `reference_requests/interventions/IR-20261102-010435-B59B2D/response.json` | `dc6a610cb67dee50fa0bb96327026eea0b81bb9506e7b898c2e9e44322f69bd0` |
-| `validation/plans/v3-008/r2-topas-target.md` | `22fd40670a3b3d413a529652e9762bbcad75f936f20c9095cb3c760f5625f923` |
+| `validation/plans/v3-008/r2-topas-target.md` | `beb3582046e7fc128463080764c9810fcf9fdc9845e909f6c7ff74ed5a8c04be` |
 
 
 **Dated note (2026-11-07, orchestrator) — hashes regenerated at the freeze commit's parent; entries that changed since f694b747:** `validation/plans/v3-008/p10-single-scattering-availability.md` bea86277… → a7f539a0…; `validation/plans/v3-008/p11-exact-omega-mapping.md` 6116648a… → f78e95f5…; `reference_requests/interventions/IR-20261102-010435-B59B2D/request.json` 068cafd7… → e81a7efa…. All other entries unchanged (recomputed).
@@ -297,6 +297,8 @@ placeholder scorer output was deleted unread.
 **Dated note (2026-11-09, evaluator round-5 fixes (Codex REVIEW-096af6a3: chronology inputs pinned to the run's code_sha, frozen bundle manifest); orchestrator) — hashes regenerated at the working tree; entries that changed since the note above:** `validation/scripts/ion_em/gen_r2_bundles.py` 8a92d40b… → 9924429d…; `tests/ionmc/test_r2_bundles.py` fd87a7dc… → b0e91e2b…; `validation/scripts/ion_em/r2_evaluate.py` 63ca633c… → ad7c45f1…; `tests/ionmc/test_r2_evaluate.py` 773f2b4f… → f733732e…; `validation/scripts/ion_em/r2_io.py` 417d0de7… → ec08eea5…. All other entries unchanged (recomputed).
 
 **Dated note (2026-11-09, re-sizing note and smoke record update; orchestrator) — hashes regenerated at the working tree; entries that changed since the note above:** `validation/plans/v3-008/r2-topas-target.md` deade6b6… → 22fd4067…; `validation/results/transport/v8r2-topas/smokes.json` bae61e85… → 9f5c1b24…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-09, smoke run-validity amendment (Codex REVIEW-8429c50e); orchestrator) — hashes regenerated at the working tree; entries that changed since the note above:** `validation/plans/v3-008/r2-topas-target.md` 22fd4067… → beb35820…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.
