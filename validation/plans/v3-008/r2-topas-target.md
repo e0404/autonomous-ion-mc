@@ -471,11 +471,105 @@ The 16 h cap is a planning value of this plan (acceptance plan §E). It is not a
 - Appendix A: a new dated listing; the old one is kept.
 - `p9-freeze-record.md` rebinding: orchestrator.
 
+**Dated re-sizing note (2026-11-09, after the R2-SIZE-1 smokes; plan section 6 "Order" step 2 applied to LAT-FULL under R2-SIZE-1; planner, before any evidence run).** The four smokes 20600424–20600427 ran on 2026-11-09 at `code_sha` 39cf5478 (the seal commit 0c68b78a is an ancestor; ledger `finished_at` 11:39–11:41Z, each run ≤ 24 s, i.e. after REVIEW-9691e1b0 finished at 09:15:57Z): exit 0, stderr 0 bytes, no "killed"/"stuck" line, "Total number of histories" = `NumberOfHistoriesInRun` in all four. **Their run records are unsigned schema-2 records:** the operator has not yet restarted the controlled reference service after V3-INFRA-004 (signed, timestamped run records, ed05934). They are execution and sizing records only, not evidence, and no evidence run may use such a record. Only stdout/stderr were materialized; no scorer output was read. t_s = TOPAS "Execution: Real" / histories, single thread, physics-table build included (conservative).
+
+| LAT-FULL, `CutForElectron = 1 km` (upper end) | t_s | was at 0.05 mm | t_s × 5000 |
+|---|---|---|---|
+| He 250 (case 3), REF-fe3eb38a06c93dfcd4da-4dbe8e46, 200 histories, 9.035 s | 45.2 ms | 250.5 ms | 226 s |
+| C 430 (case 6), REF-b07c8cb0f27e0da26d60-9903bf4c, 200 histories, 22.941 s | 114.7 ms | 1439.7 ms | 574 s |
+| O 430 (case 9), REF-9433e888c8a566eecc8b-77d7385e, 200 histories, 22.860 s | 114.3 ms | 1963.2 ms | 572 s |
+
+**Rule outcome (unchanged section 6 rule, N_part 5000, parts 12–15).** He 226 s, C 574 s, O 572 s, all ≤ 1200 s. **The part plan holds for LAT-FULL at 5000 × 4 for every ion; rule (i) and (ii) are not used.** The He rule-(i) value 4789 (0.05 mm) is superseded. **The committed LAT-FULL `NumberOfHistoriesInRun` stays 5000: no bundle change.** The C/O LAT-FULL STOP at 0.05 mm stays recorded as history.
+
+**Forecast check (preserved).** The cost fell by 5.5× (He), 12.6× (C) and 17.2× (O). For C and O it is above the planning bracket of the proposal (3–50 ms) and above its break-even (≈ 85 ms). The proposal's statement "the V5-SS fallback is projected not to be needed" is therefore not borne out under the conservative scaling (projection below).
+
+**What the remaining cost is (report-only).** Excess over LAT-EM per mm of range, (t_FULL-A − t_LAT-EM)/R: He 0.112, C 0.364, O 0.486 ms/mm, ratio 1 : 3.3 : 4.3. This lies between the geometric nuclear cross-section ((A^{1/3} + 16^{1/3})², 1 : 1.37 : 1.51) and cross-section × projectile mass number (1 : 4.1 : 6.0). It is consistent with nuclear secondaries (fragments, nucleons, gammas) now dominating the cost; no attribution beyond that is claimed.
+
+**N_part for the lower-energy cases.** Every case uses the upper-end N_part (5000). Scaling (b) of the earlier note (cost ∝ R × 0.02 mm/h_x; for the delta-free LAT-FULL-A this is the conservative choice: the nuclear-interaction count per primary is ∝ R and the 0.01 mm bins of the low ends double the plane density) gives ratios to the upper end He 0.12/0.42/0.20, C 0.11/0.53/0.17, O 0.17/0.72/0.28 (low end/standard/held-out). Largest lower-energy part: O 350 ≈ 411 s.
+
+**Final part table of the evidence runs (K = 4, seeds `20619000 + 100·part + case`, every case of an ion uses the same N_part).**
+
+| Config (parts) | He (cases 1, 2, 3, 10) | C (4, 5, 6, 11) | O (7, 8, 9, 12) | Total per case |
+|---|---|---|---|---|
+| IDD-EM (0–3) | 25 000 | 25 000 | 25 000 | 1e5 |
+| LAT-EM (4–7) | 25 000 | 25 000 | 25 000 | 1e5 |
+| IDD-FULL (8–11), 0.05 mm | 5 000 | 3 333 | 2 529 | 2e4 / 13 332 / 10 116 |
+| LAT-FULL (12–15), `CutForElectron` 1 km | 5 000 | 5 000 | 5 000 | 2e4 |
+
+Parts 16–19 stay unused. These are exactly the committed bundles (frozen manifest `validation/results/transport/v8r2-topas/frozen-bundles.json`, digest 6d1ae3a0…).
+
+**LAT step-length result (REF-8f7842c1487b5df484aa-31f28612, C 290 MeV/u LAT-EM, 3 histories, `TrackingVerbosity` 1; parallel worlds `Water_6000x1x250` and `Water_1x6000x250`).** The limiting plane of each primary (Track ID 1, Parent ID 0) step was classified by the replica change of the scorer touchables printed with the step.
+- **999 primary steps, 333 per history** (296–362). The IDD run had 1682 per history.
+- Limits:
+  - parallel-world planes 82.9 % (828):
+    - 1 mm depth planes 48.9 % (489). They are reported as `Water_1x6000x250` or `Water_6000x1x250`, which tie at the same z.
+    - x planes 22.0 % (220), mostly reported as `CoupledTransportation`.
+    - y planes 11.9 % (119), reported as `Water_1x6000x250`.
+  - ionIoni 16.5 % (165), all at z ≥ 155 mm (kinetic energy ≤ 630 MeV, ≈ 53 MeV/u; the last ≈ 8 mm);
+  - msc 0;
+  - the entrance and end steps 0.6 %.
+  - The pencil starts on the x = 0 and y = 0 bin boundaries. As a result, the first 1 mm step of each history changes the x, y and z bins at once, and is followed by a ≈ 2e-9 mm y-plane step (report-only; the ionmc samples use the same edges).
+- Step length, all primary steps: median 0.446 mm, mean 0.491 mm, max 1.000 mm. 25 % of the steps are full 1 mm steps.
+- Plateau (z ≤ 150 mm), 245 steps per history:
+  - median 0.634 mm, mean 0.614 mm, quartiles 0.31 / 0.63 / 1.00 mm;
+  - path-weighted geometric-mean step 0.74 mm;
+  - 0.6 % of the path is in steps < 0.1 mm.
+- At the TL depths (± 5 mm around 41, 82, 122, 147 mm, i.e. f ≈ 0.25–0.9 of R ≈ 163 mm), median step 0.93, 0.78, 0.52, 0.35 mm. The steps shorten with depth because the lateral-plane crossings increase as the angular spread grows.
+- Mean path between plane crossings per lateral axis: 2.2 mm (x) and 4.1 mm (y); 1.4 mm for both axes together. This is in line with the earlier per-axis estimate of ≈ 2–4 mm.
+
+Comparison with the IDD run: there, 97.5 % of steps are limited by the 0.1 mm depth planes, median 0.1000 mm. **The LAT runs transport the primary with steps ≈ 0.3–1 mm, ≈ 5× longer than the IDD runs.** This confirms the earlier expectation (≈ 0.3–1 mm). Consequences:
+- The LAT steps lie inside the 0.1–1 mm span on which the TL band (a) was built (Urban/Highland-FE 0.835–0.89, P2 §6.3; the band uses the smallest factor). **The TL band is unchanged.**
+- LAT-FULL uses the same two parallel worlds (C 430 ecut1km log: `Water_6000x1x450`, `Water_1x6000x450`, all four lateral scorers). TL-EM and TL-FULL therefore share the step regime, and the TOPAS-internal ratio σ_FULL,primary/σ_EM is not confounded by it.
+- The step regime differs between IDD and LAT runs by design (§4.3). It enters the IDD runs only through laterally integrated quantities.
+
+**Process list (ListProcesses).** The C 430 ecut1km log (REF-b07c8cb0…) prints the "Registered Physics Processes" block with `Decay` (log line 73) and `RadioactiveDecay`, besides ionInelastic, alphaInelastic and hadElastic. It also shows UrbanMsc for GenericIon (StepLim = Minimal), five QMDModel lines and the Radioactive Decay Physics Parameters block. The executed module set, `g4decay` included, is now verifiable from the printout of every run that requests the list.
+
+**Projected REF total (same scaling assumptions as the 2026-11-09 sizing note).**
+- t_s from the smokes at the upper end of each ion, scaled to the other cases:
+  - IDD-EM ∝ R/h_z;
+  - LAT-EM and LAT-FULL-A ∝ R × 0.02 mm/h_x;
+  - IDD-FULL (0.05 mm cut) ∝ N_δ/h_z with the ratios of that note.
+- In parentheses: cost ∝ R only.
+- V5-SS as designed (10 596 s).
+- Smokes: the wall time actually used.
+
+| Item | Hours |
+|---|---|
+| IDD-EM (25 000 × 4 × 12) | 1.19 (0.95) |
+| LAT-EM (25 000 × 4 × 12) | 0.32 (0.31) |
+| IDD-FULL (He 5000, C 3333, O 2529 × 4 × 4 cases) | 8.55 (5.79) |
+| LAT-FULL-A (5000 × 4 × 12) | 2.97 (2.87) |
+| V5-SS (6e4 per case) | 2.94 |
+| 17 smokes run | 0.28 |
+| **REF total** | **16.25 h (13.12 h)**, cap 16 h |
+
+**Pre-registered order applied.**
+- The conservative projection exceeds the 16 h cap by 0.25 h (1.6 %).
+- Per section 6 step 2, V5-SS takes its pre-registered 4e4 fallback (7064 s ≈ 1.96 h): **saving 0.98 h → projected REF total 15.27 h (12.15 h), 0.73 h under the cap.**
+- **No STOP and no budget decision remains under the plan as frozen.** No case is dropped.
+- Under the R-only scaling the cap holds without the fallback (13.12 h).
+
+**Framing for the orchestrator (a prospective option, not required by the plan).**
+- The fallback is triggered by a 0.25 h overrun of a projection. Its two scalings span 13.1–16.3 h. Its largest term, IDD-FULL, rests on the N_δ/h scaling (8.55 h against 5.79 h).
+- The 16 h cap is a planning value of this plan (acceptance plan §E), not an operator directive.
+- Raising it to **17 h** before any evidence run would keep V5-SS at its 6e4 design (16.25 h projected, 0.75 h margin), at the price of ≈ 1 h more REF time.
+- Keeping 16 h applies the fallback (V5-SS at 4e4, its own pre-registered minimum before any case drop).
+- Planner recommendation: **raise the cap to 17 h**. V5-SS is the only row that resolves the charge dependence b(z) at the 3 % level (§1, §5.3). The fallback widens its statistical uncertainty by √1.5 ≈ 1.22, which is not worth trading for a 1.6 % overrun of an upper projection. If no cap decision is recorded before the first V5-SS run, the fallback applies as written.
+- Either choice is recorded by a dated entry before the first evidence run.
+- Host calls: 192 evidence parts, 17 smokes already run, and the V5-SS parts (16 at the 6e4 design).
+
 ## 9. Not established, risks
 
 - Whether TOPAS scoring bins limit steps (OPEN; step-length smoke). It moves the Urban width by up to ≈ 6 % (P2
   §6.3) inside the TL band, and the cost.
   **Dated resolution (2026-11-09, sizing note §8):** YES for IDD runs. REF-ab109b03: 97.5 % of primary steps are limited by the 0.1 mm depth-scorer planes (median step 0.1000 mm). This affects only laterally integrated quantities. LAT runs are not measured. Their primary step is expected at ≈ 0.3–1 mm (1 mm depth planes; 0.02 mm lateral planes crossed only through lateral motion), inside the 0.1–1 mm span of the band. TL band unchanged. Proposed LAT step smoke 20600427 (R2-SIZE-1). Cost consequence: the FULL cost is dominated by delta electrons crossing the scorer planes, which leads to the C/O LAT-FULL STOP (§8).
+  **Dated resolution (2026-11-09, after the R2-SIZE-1 smokes; re-sizing note §8):** LAT runs measured (REF-8f7842c1487b5df484aa-31f28612, C 290 MeV/u LAT-EM, 3 histories):
+  - 333 primary steps per history (IDD run: 1682).
+  - Step limits: scorer planes 82.9 % (1 mm depth 48.9 %, x 22.0 %, y 11.9 %); ionIoni 16.5 %, only in the last ≈ 8 mm; msc 0.
+  - Plateau step: median 0.63 mm, mean 0.61 mm, max 1.000 mm; 0.6 % of the path is in steps < 0.1 mm. Median at the four TL depths: 0.93–0.35 mm.
+  - This is inside the 0.1–1 mm span of the band: **TL band unchanged.**
+  - TL-EM and TL-FULL use the same two parallel worlds and therefore the same step regime.
+  - The risk is closed for both run types.
 - The Urban deficit for ions (10–30 %) and its energy trend are scratch estimates (P2 §6.3; the Urban emulator was
   withdrawn in r5). If the actual deficit exceeds the band (e.g. at the low ends with very short steps), TL (a)
   fails on the reference's structure; that is recorded as FAIL with attribution, never re-graded.
@@ -483,7 +577,7 @@ The 16 h cap is a planning value of this plan (acceptance plan §E). It is not a
   configuration cannot be changed by the planner).
   **Dated resolution (2026-11-09):** accepted. All six FULL smokes print the Radioactive Decay Physics Parameters block, and the hadronic summary lists QMDModel (100 MeV/n – 6 GeV/n) for GenericIon and alpha inelastic. Exit 0 (§8 sizing note).
 - FULL cost (fragments, neutrons crossing bins) is uncertain by a factor of several; the sizing rule handles it.
-  **Dated note (2026-11-09):** measured. The cost is dominated by delta electrons, not fragments (§8). The rule gives (i) for C/O IDD-FULL and He LAT-FULL, and a STOP (iii) for C/O LAT-FULL. Proposed resolution R2-SIZE-1 is not in force.
+  **Dated note (2026-11-09):** measured. The cost is dominated by delta electrons, not fragments (§8). The rule gives (i) for C/O IDD-FULL and He LAT-FULL, and a STOP (iii) for C/O LAT-FULL. Proposed resolution R2-SIZE-1 is not in force. **(2026-11-09, later)** R2-SIZE-1 is in force (acceptance plan, orchestrator decisions of 2026-11-09 after the re-sizing note; Codex REVIEW-841e82ae); the measured 1 km-cut costs and the final part table are in the section 8 re-sizing note.
 - ionmc fine lateral tallies (0.01–0.02 mm projected grids) are within the scoring design (grids independent of the
   transport grid, up to 4 grids) but their per-step cost is unmeasured.
 - σ_R/R planning values and the FULL A_frag derivation are estimates; A_frag is frozen as a number now.
