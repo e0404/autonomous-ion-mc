@@ -776,6 +776,7 @@ def _compile_tallies(
         producible=producible(src.projectile, ph.nuclear),
         max_step_mm=ph.max_step_mm,
         nuclear=None if nuclear is None else nuclear.capacity,
+        continuous_residual=effective_end_of_range_model(config) == "continuous_residual_v1",
     )
     unused = {lk.name for lk in config.lookups} - {t.lookup for t in config.tallies}
     if unused:

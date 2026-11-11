@@ -115,7 +115,8 @@ counter starting at 0.
    (the block is always drawn, the values are ignored for a zero sigma). A sampled energy outside
    `[E_cut, table maximum]` is not transported and increments `source_energy_out_of_range`. The
    particle is moved to the world box (`ray_box`); the voxel index is found by `floor` and clamped.
-2. If `E <= E_cut`: the energy is deposited at the current position (tallied as `cutoff` and scored)
+2. If `E <= E_cut`: the residual energy is deposited according to the end-of-range model (see
+   "End of range" below; tallied as `cutoff`, the part beyond the world as `escaped`, and scored)
    and the history ends. This step draws nothing. If the step count reached `max_steps` the history
    ends as truncated (counter, energy tallied as `truncated`, never scored).
 3. Read `S(E)` and `R(E)` of the current voxel's material, compute the distance to the next voxel
@@ -149,12 +150,53 @@ counter starting at 0.
    `[ta, tb]` inside one scoring voxel receives `ΔE · ∫ w dt / ∫ w dt` over the whole step (so the pieces sum to
    the deposit); the pieces come from a per-grid incremental DDA over each leg (`seg_piece`, the transport DDA pattern;
    no floor-and-nudge); a piece outside a grid is tallied in that grid's `outside`. The residual is the curvature of
-   `S` along the step (second order in `s / R`). The energy left at the cutoff is a point deposit at the end point.
+   `S` along the step (second order in `s / R`). The energy left at the cutoff is deposited by the end-of-range model (below).
    Each piece is quantized (below). (V3-003A scored the midpoint, V3-003B first the uniform track length: with steps
    comparable to the bin width the former aliased with the bin edges, the latter left a deterministic step dependence of
    the depth-dose of order 5e-4 to 1e-3, see the T9-CI test.)
 8. Leaving the geometry tallies the remaining energy as `escaped`. More than three consecutive
    zero-length steps tally the energy as `truncated` and increment `stall`.
+
+
+## End of range (`PhysicsOptions.end_of_range_model`)
+
+Decision 0043 section 4 (V3-008 R2-STOP3 amendment; review REVIEW-00cd55d4). What happens to the
+residual energy `E <= E_cut` of a history:
+
+* `"default"`: `continuous_residual_v1` for an ion source (z >= 2), `point_v1` for a proton.
+  Explicit values: `"point_v1"` (any source) and `"continuous_residual_v1"` (ion sources only;
+  a proton source fails closed). The requested and the effective model are recorded in the run
+  summary (`physics.end_of_range_model`, `physics.end_of_range_model_effective`).
+* `point_v1`: the whole residual energy is a point deposit at the current position (class
+  "local" for the channels). Proton transport is unchanged (bit-identical to before the option).
+* `continuous_residual_v1`: the residual energy is deposited along the straight continuation of
+  the current direction (no straggling, no scattering) over the CSDA range of the transport's own
+  table. `RESIDUAL_SUBSTEPS = 32` sub-steps; a segment in a material `m` of density `rho` starting
+  with the energy `E_s` has the range `r_s = R_tab,m(E_s)`, the length `r_s 10 / rho` mm and `n_s`
+  equal sub-steps; sub-step `j` gets `E_tab(r_{j-1}) - E_tab(r_j)` with `r_j = r_s (n_s - 1 - j) /
+  n_s` (`E_tab` the table inverse, `E_tab(0) = 0`), spread uniformly over its length (track-length
+  apportioning in every grid). Below the table floor `E_lo` the table is continued with the
+  constant stopping power of the start-range convention, `E = E_lo r / R(E_lo)`.
+  * Material stepping: at the start of every sub-step inside the world the voxel of the start
+    point is looked up as the transport locates a point (`floor`, clamped). If its material or
+    density differs from the current one, the rest of the segment is recomputed from the current
+    energy `E_k` in the new medium: range `R_tab,new(E_k)`, length `R 10 / rho_new`, divided into
+    the remaining `32 - k` sub-steps (the boundary is resolved to one sub-step; a homogeneous
+    medium has a single segment and is bit-identical to the first implementation).
+  * Escape: the part of the segment beyond the world box (or the `z_exit_mm` plane) is not
+    deposited; its energy is tallied as `escaped`. If any energy escapes, the history ends as an
+    escape (`end_code` 1) at the boundary-crossing point with the escaped energy (the energy left
+    there) as `end_energy_mev`, so `escape_records` contains it; otherwise it ends as `cutoff`
+    (code 0) at the cutoff point with the residual energy.
+  * Scoring channels: the sub-steps are class "step" pieces. A sub-step that ends at or above
+    `E_lo` of its material is an ordinary step (water `S_mid`, ramp slope `k`, `Edot` at its mean
+    energy). A sub-step that reaches below `E_lo` follows the constant-stopping convention: it is
+    scored at `S_w(E_lo)` with `k = 0` and `E = E_lo` for every piece (so its `LET_t` is
+    `S_w(E_lo)`), and its lookups are evaluated at the floor, clamped by definition and not
+    counted as `lookup_out_of_domain` (piece flag `CLASS_RESIDUAL_FLOOR`). A lookup table whose
+    domain starts exactly at the transport-table floor is therefore complete. The residual path
+    inside the world counts towards the per-history path bound `B_L`, and the capacity envelope of
+    the primary covers midpoint energies from `min(E_cut / 2, E_lo)`.
 
 ## Deviations from the plan text of decision 0039 (accepted)
 
@@ -371,7 +413,7 @@ per-batch estimates and its variance `sum (x_b - mean)^2 / (B (B - 1))`.
 
 `EnergyBalance` (MeV summed over all histories, every tally accumulated independently):
 `initial`, `step_deposit`, `cutoff`, `escaped`, `truncated`, `unaccounted`, and per grid `in_grid` and
-`outside`. `cutoff` is energy that is deposited locally below `E_cut` and scored like any other
+`outside`. `cutoff` is energy that is deposited below `E_cut` (by the end-of-range model) and scored like any other
 deposit, so it is part of `in_grid + outside`. The identities are
 `initial = step_deposit + cutoff + escaped + truncated + unaccounted` and, per grid,
 `in_grid + outside = step_deposit + cutoff` (`closure_residual_mev`, `relative_residual`,
@@ -404,7 +446,8 @@ enforce it). The ion models are electromagnetic only.
   `validate()` raises `UnsupportedCombinationError`.
 * **Cutoff.** The ion cutoff is `e_cut_ion_mev_per_u * A` (default 2 MeV/u) in total kinetic energy,
   at least twice the table floor; `e_cut_mev` must stay at its default for an ion. Below the cutoff
-  the remaining energy is deposited locally.
+  the remaining energy is deposited along the residual range (`continuous_residual_v1`, the ion
+  default; see "End of range"), or locally with `end_of_range_model="point_v1"`.
 * **Nuclear interactions.** Protons only: an ion source with `nuclear=True` fails closed (nuclear
   interactions, fragments and secondary ions are V3-009).
 * **Multiple scattering.** The model is `differential_moliere`; for z >= 2 the ion's `f_dM` is
@@ -527,7 +570,8 @@ quantized `floor(x 2^k + 1/2)` and added with an int64 `atomic_add`; the roundin
 out-of-domain count go to the history's own tally-row columns after the `6 + 2 G` fixed ones (`N` and `N_local` have no
 residual). Per step with `s_act > 0`, `step_state` does one water lookup at `E_mid` (`S_mid`, `k`,
 `Edot`). With channels present the legs of a step with `s_act > 0` are walked even if `eps = 0`;
-cutoff and `s_act = 0` deposits are class "local" (`score_local`). With `n_ch = 0` no scoring code runs
+cutoff point deposits (`point_v1`) and `s_act = 0` deposits are class "local" (`score_local`);
+the `continuous_residual_v1` sub-steps are class "step" (see "End of range"). With `n_ch = 0` no scoring code runs
 and the outputs are bit-identical to the qualified path (row A16). The driver merges `acc` across chunks
 (it stays on the device) and workers (exact int64 sums). Python and warp-cpu float64 agree bit for bit
 on the channels in the cases tested (row A11-CI allows `1e-10` relative plus `n_v q_c`). Float64 CUDA and CPU trajectories are not bitwise identical (ulp-level differences of transcendental

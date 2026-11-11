@@ -97,7 +97,7 @@ evidence for `icru90/z{6,8}_G4_WATER.dat`. This note concerns FC-2 only.
 | `src/ionmc/physics/lindhard_sorensen.py` | `800d1f0a13524af5bad3946032f894479f606ba9b1482bf3ea190eeb9b4d3a6a` | P9 (iii) |
 | `src/ionmc/physics/exact_omega.py` | `6471c388fb75c94e9f2f4f1d19ac94be044f73444cf1e7b4bfb1a62e53ecf57b` | I0/I11-map notes |
 | `src/ionmc/physics/stopping.py` | `89db1de28e5cd1f03efc1622669b58dd766fc88d5d0a91405af190e96094753e` | P9 (iii) |
-| `src/ionmc/config.py` | `8aa37dcae66ea8bf228b5bdf162f8cf7338f8b1a8cc02125cf78cb8a32b4572d` | I0 note |
+| `src/ionmc/config.py` | `85c0f4115a03ef0570373aa087a9ff262a42eb70ddeefa03bd50e8113bc04dc9` | I0 note |
 | `pyproject.toml` | `0e73bd64aea5ef153e198c00a67c20efbc8ef1a5061f1f77d2bdab555dda9352` | lint exceptions for the two mapping files (added by the planner; the only other changed file outside the plan set) |
 
 ### 2.4 Pre-freeze records
@@ -224,17 +224,17 @@ placeholder scorer output was deleted unread.
 | `src/ionmc/physics/ion_mcs.py` | `42194ccf6ede781b6254a138e8c64aacd8a72cf5385232c9e2758ea82edb9c81` |
 | `src/ionmc/simulation.py` | `4d490ba490f521169d52040476662994b5e06eb24d3fb66f4367f290be7c6c28` |
 | `src/ionmc/species.py` | `19df88c722ad93ca65e636b870a4b56b1a80df2e215bee39a7623f441daa2322` |
-| `src/ionmc/transport/kernels.py` | `519d1fefab1dec8aac87ba94323c8afa0840d311be53c8d6cc511946c30f2398` |
-| `src/ionmc/transport/reference.py` | `e4eceaa068029a691932f786542aecdcaf5ae9d7ffc03490085ab0d0a6897b2e` |
+| `src/ionmc/transport/kernels.py` | `5fdf6238c9c6b8f0824b7ede810d5a9ad517f8df223ead388fd3b03551d2013a` |
+| `src/ionmc/transport/reference.py` | `08a1198542f59eb85baefdcafc6e9f6c09dbf70aa3b2149e2842827e94b5aea7` |
 | `src/ionmc/transport/run.py` | `bbfae2a4c1c2168397ab898204ede3bc2d7c92e1968a08b8156a03326217436b` |
 | `src/ionmc/transport/tables.py` | `45542d46fb208ba1ca9ccdcb9e8baea41e47f86a7429b46f8566ad12b1b2619d` |
 | `src/ionmc/transport/tally.py` | `be202f7310e3991bead49fd40e24cef1f5493992044c72aff6c5f8e8826b547c` |
 | `src/ionmc/transport/warp_driver.py` | `bc80fdc5a246fde57ea11fe901a5e864f2fccf4439b348e34c2c1ee34887c2da` |
-| `validation/scripts/ion_em/r2_evaluate.py` | `e9fd0ea4d852a40c5c7ecc60479767e8fe22a8e98a0647bc34768afb898073c2` |
-| `validation/scripts/transport/steps_v8.py` | `e8b73006921b479797e762c1319adf7e1e4edb95594ffac4109827b4ee185a7d` |
+| `validation/scripts/ion_em/r2_evaluate.py` | `c35cc031e0f8ccb07cc39e37882aeb332eea19343e21c482f890de4a79114c5a` |
+| `validation/scripts/transport/steps_v8.py` | `8e951eadd857fb276a930ad636750b6cf576ab92b16782187d0db1bc5d59f29d` |
 | `tests/ionmc/test_ion_mcs_table.py` | `b3fb9992f866238b11243e032f394583775e292cec49601798ef44b54efcb749` |
 | `tests/ionmc/test_v3_008_rows_ci.py` | `ffea9f20976ec2d721067ccf52d5cb9797fad51a5bda7dd224948829c1cade0e` |
-| `tests/ionmc/test_r2_evaluate.py` | `7288ae7731a5681468dda0a71701a0a9a43a43000038991eda13545c3774c0e2` |
+| `tests/ionmc/test_r2_evaluate.py` | `b4903be7fa56998f0737d47b5b34506d6b67b0a77e12dfdd4d19d6e6053f9cd7` |
 | `tests/ionmc/test_v3_008_steps_v8.py` | `ab4922ea8842751e22c9d1882e9e1dec0ae88a25b55174c99586c4802868b731` |
 
 (c) R2.5 counts, superseded by this note (the R2.5 text is kept as written): repository paths 475 + 15 = **490**; total full sha256 values 519 + 15 = **534**, plus the bundle-set digest (unchanged, `a8a1c27d…`). The count in R2.6 item (3) (475) is superseded accordingly by 490 for the acceptance tests of the seal.
@@ -587,7 +587,7 @@ placeholder scorer output was deleted unread.
 
 | File | sha256 |
 |---|---|
-| `tests/ionmc/test_ion_end_of_range.py` | `2da310683099f2dd7abf9fd7ba1c7e237c9fa2107bcc8083ce574b3df600f989` |
+| `tests/ionmc/test_ion_end_of_range.py` | `723a3fae6c982ef51730582a5664e7081ecafb264a5d12208257423b9089760c` |
 | `tests/ionmc/test_r2_statistics_cycle.py` | `b61d36407c1ecf8a35a00428e5efba2ddd725b6710edced95a8ce2acbea25146` |
 | `validation/results/transport/v8r2-topas/records/runs/REF-14a05b26af8573de21d0-c2d0bc54/record.json` | `129c18d61a4f65db1fcda3399a695010a894ac0eee48ab8847b9ab1357d87fce` |
 | `validation/results/transport/v8r2-topas/records/runs/REF-14a05b26af8573de21d0-c2d0bc54/artifacts.json` | `a3d409639bfbe8bdb7f1aefc5455ac95cbfd7ea79ea83b2714ff916136ec5483` |
@@ -612,6 +612,24 @@ placeholder scorer output was deleted unread.
 
 
 **Dated note (2026-11-11, orchestrator) — entries changed by the R2-STOP3 amendment commit (end-of-range model `continuous_residual_v1`, §4.2 window-cycle rule, report-only re-evaluation CLI, records index with the 10 IDD-FULL parts):** `src/ionmc/config.py` a24aa6b4… → 8aa37dca…; `validation/plans/v3-008/r2-topas-target.md` dc6b80d2… → dc43cdde…; `src/ionmc/transport/kernels.py` db4ea1f0… → 519d1fef…; `src/ionmc/transport/reference.py` f3e3dec9… → e4eceaa0…; `src/ionmc/transport/warp_driver.py` cb32245e… → bc80fdc5…; `validation/scripts/ion_em/r2_evaluate.py` d1da57b5… → e9fd0ea4…; `tests/ionmc/test_r2_evaluate.py` aa3e2832… → 7288ae77…; `validation/scripts/ion_em/r2_statistics.py` fbb19370… → fa1bb5c5…; `validation/results/transport/v8r2-topas/records/index.json` 264fba78… → 9d9c7a92…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-11, orchestrator) — files added by the R2-STOP3 round-2 commit (lv8/hr8 suite tests, the nine report-only TL-EM re-evaluations; sha256 as committed):**
+
+| File | sha256 |
+|---|---|
+| `tests/ionmc/test_run_suite_v8.py` | `e91054199e2c06a69cada18a9b84bdcefc8cab30fa80f4aad5ccac6650fe0313` |
+| `validation/results/transport/v8r2-topas/reports/report-only/TL-EM-case1-r2stop3.json` | `345cb265bfc1c6b114c67a10598b34ceb01d07549da4bf892703c05a450b8341` |
+| `validation/results/transport/v8r2-topas/reports/report-only/TL-EM-case2-r2stop3.json` | `6875657cea09e1d33c5586d2f6cddd5f3a18a956a4a61f6e4a067b2a52feb42f` |
+| `validation/results/transport/v8r2-topas/reports/report-only/TL-EM-case3-r2stop3.json` | `6a74aa30462ec92f6e76232ff7f02d34c4387a7e7a822a9df1b4c21cea7d133f` |
+| `validation/results/transport/v8r2-topas/reports/report-only/TL-EM-case4-r2stop3.json` | `ae8e5865cb2c4ac6de375b7a1f5c8e9e21b915dedd8dd6fa6917419fa70cee35` |
+| `validation/results/transport/v8r2-topas/reports/report-only/TL-EM-case5-r2stop3.json` | `0900081bedbc2b80d8d312bbbe00407871541658bbe1030f5fd155379c4c74f7` |
+| `validation/results/transport/v8r2-topas/reports/report-only/TL-EM-case6-r2stop3.json` | `45ec23fa0a9208ff76aff9679d43c7d5c89fd7c24e730a71ac38b9327aa9c6e3` |
+| `validation/results/transport/v8r2-topas/reports/report-only/TL-EM-case7-r2stop3.json` | `ddbdbc636397b5ac6e2a2cb264fca0e995228e7858cdb6970338e51ac6dd8aaa` |
+| `validation/results/transport/v8r2-topas/reports/report-only/TL-EM-case8-r2stop3.json` | `5a08d570873cc770725c4f799ed03c60f94c9800394cbc2eb57ab64157ead4ed` |
+| `validation/results/transport/v8r2-topas/reports/report-only/TL-EM-case9-r2stop3.json` | `ff696c2c1542b672ac4c84a75579a59e336b2e542e43f3943161ef1c47067579` |
+
+
+**Dated note (2026-11-11, orchestrator) — entries changed by the R2-STOP3 round-2 commit (Codex REVIEW-00cd55d4: consumed-case guard, material stepping, channel floor semantics, escape record, docs; lv8/hr8 suites):** `src/ionmc/config.py` 8aa37dca… → 85c0f411…; `src/ionmc/transport/kernels.py` 519d1fef… → 5fdf6238…; `src/ionmc/transport/reference.py` e4eceaa0… → 08a11985…; `validation/scripts/ion_em/r2_evaluate.py` e9fd0ea4… → c35cc031…; `validation/scripts/transport/steps_v8.py` e8b73006… → 8e951ead…; `tests/ionmc/test_r2_evaluate.py` 7288ae77… → b4903be7…; `tests/ionmc/test_ion_end_of_range.py` 2da31068… → 723a3fae…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.

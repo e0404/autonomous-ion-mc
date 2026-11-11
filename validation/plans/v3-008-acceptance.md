@@ -177,7 +177,7 @@ Status words: **CLOSED**; **CLOSED-with-gap** (closed; a declared gap or limitat
 | T13-ion | CUDA chunk invariance 2¹⁰ vs 2¹⁸, C 290 | bit-identical within each precision | self-consistency | HR |
 | R1-ion | Repeatability, C 290 | bit-identical tallies, counters, grids, end states (python, warp-cpu) | self-consistency | CI/LV |
 | R2 | **Proton regression:** A16 nuclear-off digests and the T1 proton trace fixture bit-identical to the develop baseline (P8); `A16_INTENDED_CHANGE` stays None | bit-identical; any difference = STOP | regression | CI/LV |
-| C-res | Residual energy below E_cut deposited locally and tallied; `e_cut_ion ≥ 2 ×` table floor enforced | exact | capability | CI |
+| C-res | Residual energy below E_cut deposited locally and tallied; `e_cut_ion ≥ 2 ×` table floor enforced. **Dated note 2026-11-09 (R2-STOP3):** for ion sources the residual is deposited along the table residual range (`continuous_residual_v1`, decision 0043 §4 amendment) and tallied in `cutoff` (the part beyond the world in `escaped`); `point_v1` keeps the one-point convention (proton default). The floor rule is unchanged | exact | capability | CI |
 
 ## B. Validation rows (independent references)
 
@@ -639,9 +639,19 @@ tolerance is changed; no parameter is fitted to TOPAS; no TOPAS configuration, b
   +7 / +11 / +14 % and R80 by +0.040 / +0.015 / +0.009 mm, against the observed ionmc − TOPAS differences PE
   +7.8 / +10.8 / +11.4 %, W −5.4 / −17.4 / −16.8 %, R80 −0.065 / −0.016 / −0.004 mm. **Residual (INFERRED):** TOPAS
   σ_R exceeds ionmc's Bohr value by ≈ 0–3 % (He), ≈ 4–9 % (C) and ≈ 4–5 % in W but up to ≈ 15 % in PE (O 100);
-  ionmc uses the pure Bohr variance with the bare charge (code, `src/ionmc/physics/em.py`); Geant4's ion
-  energy-loss fluctuation model (charge-state and low-velocity factors) is the suspected source — TO VERIFY by the
-  P2 source reading (item D-4 below). Upper-end (d) FAILs (C 430 +2.8 %, O 430 +3.5 %): E_cut contributes ≤ 0.3 %
+  ionmc uses the pure Bohr variance with the bare charge (code, `src/ionmc/physics/em.py`). **D-4 preliminary
+  (2026-11-11; Geant4 v11.4.2 source reading by the physics researcher; the files were fetched outside the
+  acquisition tool and must be re-acquired through `acquire_reference_data` before this reading is committed as a
+  P2-type record):** opt4 gives alpha and GenericIon `G4IonFluctuations`, which hands over to
+  `G4UniversalFluctuation` above ≈ 10·z·M/m_p MeV (≈ 20 / 60 / 79 MeV/u for He / C / O); with the 1 km electron cut
+  the step's maximum transfer equals T_max, and the Urban ("Glandz") sampler of `G4UniversalFluctuation` is used
+  unless the step's mean loss exceeds 10 T_max; its variance relative to Bohr rises with energy per nucleon (≈ 0.95
+  at 80 MeV/u, ≈ 1.19 at 430 MeV/u, estimate) and depends on the step length; integrated at the 0.1 mm step regime
+  of the IDD runs this gives σ_R(TOPAS)/σ_R(Bohr) ≈ 0.99–1.02 (He 150–250) and ≈ 1.03–1.06 (C/O 290–430) — the
+  observed sign, ordering and size. The excess is therefore a step-dependent property of the reference's
+  fluctuation sampler at high energy per nucleon, not an ion-charge effect and not physics missing from ionmc;
+  at the held-out energies (He 100, C 150, O 200) it is ≈ 0–3 % (INFERRED). The charge-state (Yang) and
+  relativistic terms of `G4IonFluctuations` act only below the handover and change σ_R by < 0.1 %. Upper-end (d) FAILs (C 430 +2.8 %, O 430 +3.5 %): E_cut contributes ≤ 0.3 %
   (estimate); the rest is straggling-type and partly unexplained.
 - **(b) R80 systematically short by 0.2–0.3 % at the standard points and upper ends — on the reference side relative
   to its declared lineage.** ionmc's R80 equals its own table CSDA range within 0.03 % at R ≥ 150 mm (transport
@@ -650,7 +660,17 @@ tolerance is changed; no parameter is fitted to TOPAS; no TOPAS configuration, b
   integrated ICRU 90 by ≤ 0.175 %) and ≤ 0.07 % for He, so the "shared stopping lineage" statement of §B and
   r2-topas-target.md §2 holds only to ≈ 0.2–0.45 %; the §5.1 (a) budget is not violated by ionmc. Mechanism TO
   VERIFY (D-3: ICRU 90 arrays of the Geant4 source integrated to CSDA ranges at the nine energies; D-4: Geant4 ion
-  stopping path — ICRU 90 branch limits, Lindhard–Sørensen/high-order terms, table building). No ionmc stopping
+  stopping path). **D-4 preliminary (2026-11-11, same caveat as above):** in opt4 alpha uses the ICRU 90 alpha
+  array directly (≤ 1 GeV, no along-step corrections); GenericIon uses the ICRU 90 proton array at equal velocity
+  × effective charge² with the Lindhard–Sørensen correction and a Barkas term 2B(z−1)/z applied along the step
+  (not in the range table); Geant4 has no ICRU 90 C/O arrays, so decision 0038's "integrated ICRU 90" C/O baseline
+  must be re-examined (I3c rebuilds exactly this TOPAS-like construction and is the D-3 instrument). Candidate for
+  the lengthening: steps losing ≤ 2 % of the energy use dE/dx at the pre-step energy (`G4VEnergyLossProcess`,
+  limit 0.02 in `G4ionIonisation`), which lengthens the range by ≈ +0.03–0.06 % at 0.1 mm steps and up to
+  ≈ +0.2 % at 1 mm steps (estimate); the LS + Barkas terms probably shorten it by ≈ 0.1–0.2 % (sign TO VERIFY);
+  nuclear stopping, effective charge, interpolation and the R80-vs-CSDA definition are each ≤ 0.05 %. Geant4 ends
+  ion tracks at 1 keV with a final-range step of 1 µm (ions) / 20 µm (alpha): no point deposit comparable to ionmc's
+  2 MeV/u cutoff (ESTABLISHED). No ionmc stopping
   change: closing this gap would be fitting to the reference (plan D STOP 3). Low ends: ≈ 0.04 mm of the He 50
   deficit (0.065 mm) is the E_cut convention (estimate).
 - **(c) z_peak FAILs at the three upper ends = (b) against the absolute 0.5 mm tolerance** (ESTABLISHED from the
@@ -734,6 +754,52 @@ attribution of the TL-EM FAILs, never a grade.
 **4. Budget (planning).** Host: 13 held-out chunk runs (≈ 3–4 h at the sealed per-chunk wall times) + the A-rows
 (≈ 1–2 h); REF: 48 held-out parts (≈ 2–3 h at the measured t_s); EM evidence spent ≈ 1.5 h + 10 FULL parts ≈ 0.5 h;
 all within the 17 h REF cap and the host budget of §E.
+
+**4b. Gap recorded (2026-11-11, orchestrator; found while preparing the A-row re-run).** The LV- and HR-tier
+verification rows of section A (I8, I8b, I9, I12, I13, I14, I15, T1-ion LV, T12-ion, T13-ion, R1-ion, R2 LV) were
+never implemented as the `run_suite` suites `lv8`/`hr8` named in section F.2 and were never run; the CI-tier rows
+ran in CI at every commit. Order step 0 ("implementation and the A-rows … then the ionmc TD/TL samples") was
+therefore not followed for the LV/HR tier before the sample seal of 2026-11-09, an orchestrator omission. The
+main-set samples are consumed under item 3 regardless. The suites are being implemented (`steps_v8.py`,
+`run_suite.py`, `summarize.py`; lv8 base 20581004, hr8 base 20591004; r_index per step in `steps_v8.ROW_R_INDEX`,
+42–55); implemented in this commit: lv8 `i6-lv-deterministic-end-depth` (r 51), `i8-range-straggling-{he150,c290,o350}`
+(r 42; I8b reported in the same document), `i13-r80-vs-csda-{case}` (r 43, nine cases), `t1-ion-trace-parity-c290-o350`
+(r 48, K = 256), `r1-ion-repeatability-c290` (r 50), `r2-a16-trace-fixture`; hr8 `t13-ion-chunks-cuda-c290` (r 55).
+NOT yet implemented (r_index reserved, no stubs): I9 (44), I12 (45), I14 (46), I15 (47), T12-ion LV (49) and HR (54);
+they follow in the next commit under the budget decision of item 4c. Definitions fixed by the implementation
+where the plan was open (documented in `steps_v8.py`): I8 end depth = depth at which E reaches E_cut (before the
+residual deposit), compared with the I4b quadrature from E0 to E_cut (corrections on, Bohr variance with the bare
+charge); I8b compares with a proton of equal CSDA range / √(M/m_p) and, for carbon, the 0.3–0.4 % literature band
+(a deviation beyond ±15 % is a finding); I13 uses 0.1 mm IDD bins in a 1.1 R box and the `parity.r80_of` estimator;
+every row runs warp-cpu float64 with the end-of-range default; R1-ion and T13-ion history counts are the
+implementation's (1e4 per precision; 1e5 per chunk size). Order: the cheap A-rows and the STOP rows T1-ion and
+T12-ion run at the frozen SHA BEFORE the held-out samples; the remaining LV rows (I9, I12, I14, I15) and hr8 run at
+the same SHA before the PASS declaration (one-SHA rule), scheduled after the held-out grading because the host
+executes one job at a time.
+
+**4c. Host budget correction (2026-11-11, orchestrator decision; prospective).** Section E planned warp-cpu at
+≈ 7·10³ histories/s. Measured: ≈ 118 histories/s for C 290 MeV/u, all EM on, 1 mm steps, one process (sandbox,
+lv8 implementation), and 67–270 histories/s on the host for the sealed TD/TL chunks (He 50 268, He 150 149, He 250
+84, C 80 227, C 290 112, C 430 67, O 100 206, O 350 98, O 430 79, He 100 206, C 150 196, O 200 172; from the sealed
+`wall_s`), i.e. ≈ 60× slower than planned: the ≈ 17 × 1e6-history LV rows would cost ≈ 40 h of host time instead
+of 41 min, and each 1e6 run needs ≥ 7 shards of ≤ 1500 s. Decision (no tolerance changes; the rows keep their
+observables, geometries and criteria): the warp-cpu history counts of the LV falsification/self-consistency rows
+are set to **2e5 per configuration** — I9 2e5 per standard point, I12 2e5 per s_max, I14 2e5 per (s_max, f_E),
+I15 2e5 per voxel configuration, T12-ion warp-cpu f64 2e5 (python 4·10³ in 40 batches unchanged) — each as shards of
+≤ 1500 s combined by the step; the CUDA rows (T12-ion cuda f32, the f32-vs-f64 probe, He 150 / O 350 cpu vs cuda,
+T13-ion) keep 1e6 on the GPU where the planned throughput holds (to be measured by the first hr8 step; fallback 2e5
+by the same rule). Statistical adequacy at 2e5 (planning): the relative SE of a projected rms over N histories is
+≈ 1/√(2N) ≈ 0.16 %, so the pairwise 0.5 % θ_rms criterion of I12/I15 is resolved at ≈ 3 SE and the 1 % σ criterion
+at ≈ 4 SE; the I9 2 % criterion at ≈ 10 SE; the I14 R80 SE ≈ σ_R/√N ≈ 1.5 µm against 0.05 mm, the grouped χ²
+keeps its p > 0.001 rule at the reduced N; T12-ion's power is bounded by its python sample (4·10³) in any case.
+Estimated host time ≈ 9 h for the reduced LV rows plus ≈ 1 h for the cheap rows; the held-out samples ≈ 4 h
+(13 chunks at the sealed rates). The §E total is superseded accordingly; REF is unchanged.
+
+The report-only TL-EM re-evaluation of item 2 is committed at
+`validation/results/transport/v8r2-topas/reports/report-only/TL-EM-case<N>-r2stop3.json` (evaluator HEAD e6f17bc2,
+9 files): with the window-cycle rule every gated point of the main set lies inside the band (criterion (a) would
+read PASS for 8 of 9 cases; O 100 keeps its undefined f = 0.25 point); 0–9 of 80 ionmc batch fits and 0–1 of 8 TOPAS
+part fits per point used the cycle rule. The graded TL-EM verdicts stand.
 
 **5. Order from here (pre-registered).** Implementation + estimator rule + this amendment in one reviewed commit (new
 frozen SHA) → A-rows at that SHA → held-out samples (13 chunks) → held-out seal commit + review + dated seal note →

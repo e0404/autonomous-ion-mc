@@ -5,12 +5,17 @@ Entry point::
     python validation/scripts/ion_em/r2_evaluate.py grade --case <n>
         --row <TD-EM|TD-FULL|TL-EM|TL-FULL> [--records <committed dir>] [--seal <committed path>]
         [--outputs <dir>] [--samples-root <dir>] [--out <report.json>]
+    python validation/scripts/ion_em/r2_evaluate.py reeval-tl-em --case <1..9> [same options]
     python validation/scripts/ion_em/r2_evaluate.py check-run --run-id <REF-...>
         --bundle <bundle dir name> [--records-dir <committed dir>] [--outputs <dir>]
         [--out <report.json>]
 
-``check-run`` establishes the run validity of ONE signed run (evidence part or smoke; nothing
-graded, see :func:`check_run`): exit 0 VALID, 1 BLINDING FAIL / RUN-VALIDITY FAIL, 2 ERROR.
+``grade`` accepts only the held-out cases 10-12: every row of cases 1-9 is consumed under
+amendment R2-STOP3 (see ``CONSUMED_MAIN_CASES``) and exits 2 with an ERROR report naming the
+amendment, before any input is read. ``reeval-tl-em`` (report-only, never a grade) works for
+cases 1-9 only. ``check-run`` establishes the run validity of ONE signed run (evidence part or
+smoke; nothing graded, see :func:`check_run`): exit 0 VALID, 1 BLINDING FAIL / RUN-VALIDITY FAIL,
+2 ERROR.
 
 The repository is always the git checkout that contains this file; plan seal note, review record,
 run index, signed run records, listings, seal and trust file are read as committed at its HEAD
@@ -82,6 +87,12 @@ import r2_statistics as st  # noqa: E402
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 REPORT_SCHEMA = "ionmc-v3-008-r2-grade-1"
 ROWS = ("TD-EM", "TD-FULL", "TL-EM", "TL-FULL")
+# Amendment R2-STOP3 (validation/plans/v3-008-acceptance.md, "Amendment R2-STOP3", item 3): every
+# main TD/TL row of cases 1-9 is CONSUMED (TD-EM / TL-EM were graded once, their committed reports
+# are final; TD-FULL / TL-FULL are never graded). ``grade`` fails closed for these cases; only the
+# held-out cases 10-12 (TD-H / TL-H) remain gradable. The report-only ``reeval-tl-em`` still works
+# for exactly these cases (it re-reads the committed graded verdict, which it never changes).
+CONSUMED_MAIN_CASES = frozenset(range(1, 10))
 DEPTH_FRACTIONS = (0.25, 0.5, 0.75, 0.9)  # section 4.2
 DEXT_FRACTIONS = (0.75, 0.9)  # section 5.3 (b)
 A_FRAG = {"he": 0.0015, "carbon": 0.0010, "oxygen": 0.0010}  # section 5.2
@@ -782,9 +793,21 @@ def grade(
     grade; an invalid run or part is an error."""
     if row not in ROWS:
         raise io.RecordError(f"unknown row {row!r}; rows are {ROWS}")
+    info = io.case_info(case)  # unknown case: RecordError
+    if case in CONSUMED_MAIN_CASES and not reeval:
+        raise io.RecordError(
+            f"case {case} row {row}: the main TD/TL rows of cases 1-9 are CONSUMED under "
+            "amendment R2-STOP3 (validation/plans/v3-008-acceptance.md, item 3): TD-EM/TL-EM were "
+            "graded once (committed reports are final) and TD-FULL/TL-FULL are never graded; only "
+            "the held-out cases 10-12 can be graded. Nothing was computed."
+        )
+    if reeval and info["set"] == "held-out":
+        raise io.RecordError(
+            f"reeval: case {case} has no graded verdict to stand (amendment R2-STOP3 consumed "
+            "cases 1-9 only); the report-only re-evaluation is refused"
+        )
     repo = Path(repo).resolve() if repo is not None else evaluator_repo()
     reader = io.CommittedReader(repo)
-    info = io.case_info(case)
     plan = io.load_plan(reader)
     review = io.load_review(reader, records, plan)
     seal, seal_digest = io.load_seal(reader, seal_path, plan["seal_sha"])

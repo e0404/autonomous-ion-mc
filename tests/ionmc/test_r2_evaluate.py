@@ -676,6 +676,15 @@ def _cli(
 def small_case(monkeypatch: pytest.MonkeyPatch) -> None:
     for case, spec in SMALL.items():
         monkeypatch.setitem(IO.CASES, case, spec)
+    # the synthetic worlds grade main cases 1/3; lift the R2-STOP3 consumed-case guard for them
+    monkeypatch.setattr(R2, "CONSUMED_MAIN_CASES", frozenset())
+
+
+@pytest.fixture
+def guarded_case(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Small synthetic cases with the production R2-STOP3 guard left in place (case 10 held out)."""
+    for case, spec in {**SMALL, 10: ("he", 100.0, 22.5, L, HZ, HX, "held-out")}.items():
+        monkeypatch.setitem(IO.CASES, case, spec)
 
 
 def _no_arrays(obj: Any) -> None:
@@ -1404,3 +1413,32 @@ def test_reeval_tl_em_fails_closed_without_committed_report(
     w = _world(tmp_path)  # no committed TL-EM report in the synthetic repository
     code, rep = _reeval_cli(w, tmp_path / "re.json")
     assert code == 2 and "error" in rep and "status" not in rep and "points" not in rep
+
+
+def test_grade_refuses_consumed_main_cases(tmp_path: Path, guarded_case: None) -> None:
+    w = _world(tmp_path)
+    for row in R2.ROWS:
+        code, rep = _cli(w, row, tmp_path / f"{row}.json", case=1)
+        assert code == 2 and rep["status"] == "ERROR", rep
+        assert "R2-STOP3" in rep["error"] and "CONSUMED" in rep["error"]
+        assert "criteria" not in rep and "points" not in rep
+    assert R2.CONSUMED_MAIN_CASES == frozenset(range(1, 10))
+
+
+def test_grade_still_runs_for_held_out_case(tmp_path: Path, guarded_case: None) -> None:
+    w = _world(tmp_path, cases={10: {}})
+    code, rep = _cli(w, "TD-EM", tmp_path / "h.json", case=10)
+    assert rep["status"] == "PASS" and code == 0, rep
+
+
+def test_reeval_works_on_main_and_is_refused_on_held_out(
+    tmp_path: Path, guarded_case: None
+) -> None:
+    w = _world(tmp_path)
+    rpath = w["repo"] / R2.COMMITTED_REPORT.format(row="TL-EM", case=1)
+    rpath.parent.mkdir(parents=True, exist_ok=True)
+    rpath.write_text(json.dumps({"status": "FAIL"}))
+    code, rep = _reeval_cli(w, tmp_path / "re.json")
+    assert code == 0 and rep["graded_verdict_stands"] == "FAIL", rep
+    code, rep = _reeval_cli(w, tmp_path / "re10.json", case=10)
+    assert code == 2 and "refused" in rep["error"] and "points" not in rep, rep

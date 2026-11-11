@@ -63,7 +63,12 @@ from ionmc.rng.philox import (
     u01_py,
 )
 from ionmc.species import PSEUDO_BASE, species_of_projectile
-from ionmc.transport.channels import CLASS_LOCAL, CLASS_STEP, MAX_PARTICLES
+from ionmc.transport.channels import (
+    CLASS_LOCAL,
+    CLASS_RESIDUAL_FLOOR,
+    CLASS_STEP,
+    MAX_PARTICLES,
+)
 from ionmc.transport.funcs import BIG_LENGTH_MM, make_transport_funcs
 from ionmc.transport.run import channel_columns
 from ionmc.transport.scoring_ref import ReferenceChannelScorer
@@ -328,13 +333,15 @@ class _Reference:
         t_off: float,
         s_start: float,
         s_end: float,
+        cls: int = CLASS_STEP,
     ) -> None:
         """Deposit the share of ``deposit`` that belongs to each piece in every voxel of grid ``g``
         crossed by the straight segment from ``p`` along ``u`` of the given length (per-grid
         incremental DDA). The leg starts at the path coordinate ``t_off`` of the step; the share
         of a piece ``[ta, tb]`` is the integral of the linear stopping-power ramp
         ``w(t) = s_start + (s_end - s_start) t / s_act`` over it, divided by the integral over the
-        whole step (the pieces of both legs sum to the deposit)."""
+        whole step (the pieces of both legs sum to the deposit). ``cls`` is the channel class of
+        the pieces (``CLASS_STEP``, possibly with the ``CLASS_RESIDUAL_FLOOR`` flag)."""
         r, F, V = self.R, self.F, self.V
         nx, ny, nz = self.grids[g].shape
         go, gs = self.g_origin[g], self.g_spacing[g]
@@ -356,7 +363,7 @@ class _Reference:
                 if self.scorer is not None and vox >= 0:
                     self.scorer.score_piece(
                         batch, g, vox, piece, tcur + 0.5 * piece - 0.5 * s_act, eps_p,
-                        self.species_id, self.generation, CLASS_STEP,
+                        self.species_id, self.generation, cls,
                     )  # fmt: skip
                 tcur = tb
                 remaining = remaining - piece
@@ -385,7 +392,7 @@ class _Reference:
             if self.scorer is not None and vox >= 0:
                 self.scorer.score_piece(
                     batch, g, vox, remaining, tcur + 0.5 * remaining - 0.5 * s_act, eps_p,
-                    self.species_id, self.generation, CLASS_STEP,
+                    self.species_id, self.generation, cls,
                 )  # fmt: skip
 
     def _deposit_step(
@@ -422,25 +429,11 @@ class _Reference:
             return self._energy_from_range(m, r_g_cm2)
         return math.exp(float(t.ln_e0[m])) * r_g_cm2 / r_lo
 
-    def _deposit_residual(
-        self,
-        batch: int,
-        p: tuple[float, float, float],
-        u: tuple[float, float, float],
-        energy: float,
-        ix: int,
-        iy: int,
-        iz: int,
-    ) -> float:
-        """Model ``continuous_residual_v1`` (see ``kernels.deposit_residual``): the residual
-        energy along the straight continuation over the table CSDA range of ``energy`` in
-        ``RESIDUAL_SUBSTEPS`` equal sub-steps, sub-step ``k`` getting ``E_tab(r_{k-1}) -
-        E_tab(r_k)`` uniformly along its length. Returns the energy beyond the world boundary
-        (not deposited)."""
-        r, F, V = self.R, self.F, self.V
-        t = self.tab
-        m = int(self.mat[ix, iy, iz])
-        rho = float(self.dens[ix, iy, iz])
+    def _residual_range(self, m: int, energy: float) -> float:
+        """CSDA range of ``energy`` in material ``m`` for the end-of-range segment: the table
+        range above the table floor, ``R(E_lo) E / E_lo`` below it (as
+        ``kernels.residual_range``)."""
+        r, F, t = self.R, self.F, self.tab
         e_lo = math.exp(float(t.ln_e0[m]))
         i, f = F.log_bin_index(r(energy), r(t.ln_e0[m]), r(t.inv_dln_e[m]), t.n_e)
         r_g = float(
@@ -450,33 +443,82 @@ class _Reference:
         )
         if energy < e_lo:
             r_g = float(t.r_mass[m, 0]) * energy / e_lo
-        _t_in, t_out = F.ray_box(V(r(p[0]), r(p[1]), r(p[2])), V(r(u[0]), r(u[1]), r(u[2])),
-                                 self.lo, self.hi)  # fmt: skip
-        l_in = max(float(t_out), 0.0)
-        if u[2] > 0.0:
-            l_in = min(l_in, float((self.z_clip - r(p[2])) / r(u[2])))
+        return r_g
+
+    def _deposit_residual(
+        self,
+        batch: int,
+        p: tuple[float, float, float],
+        u: tuple[float, float, float],
+        energy: float,
+        ix: int,
+        iy: int,
+        iz: int,
+        l_in: float,
+    ) -> tuple[float, float]:
+        """Model ``continuous_residual_v1`` (see ``kernels.deposit_residual``): the residual
+        energy along the straight continuation in ``RESIDUAL_SUBSTEPS`` sub-steps, segment by
+        segment of constant material and density (a new segment from the current energy at the
+        start of the first sub-step whose start point lies in another medium), sub-step ``j`` of
+        a segment getting ``E_tab(r_{j-1}) - E_tab(r_j)`` uniformly along its length; sub-steps
+        reaching below the table floor are scored at the constant floor state (flag
+        ``CLASS_RESIDUAL_FLOOR``). ``l_in`` is the path length to the world boundary. Returns the
+        energy beyond it (not deposited) and the scored path length inside the world."""
+        t = self.tab
+        nx, ny, nz = self.shape
+        o, sp = self.geo.origin_mm, self.geo.spacing_mm
         n_sub = RESIDUAL_SUBSTEPS
-        length = r_g * 10.0 / rho
-        l_sub = length / n_sub
+        m = int(self.mat[ix, iy, iz])
+        rho = float(self.dens[ix, iy, iz])
+        r_seg = self._residual_range(m, energy)
+        n_seg = n_sub
+        j = 0
+        s_seg = 0.0
+        length = r_seg * 10.0 / rho
+        l_sub = length / n_seg
         e_prev = energy
         e_escape = 0.0
+        path = 0.0
         for k in range(n_sub):
+            s0 = s_seg + j * l_sub
+            if k > 0 and s0 < l_in:
+                q = (p[0] + u[0] * s0, p[1] + u[1] * s0, p[2] + u[2] * s0)
+                jx = min(max(int(math.floor((q[0] - o[0]) / sp[0])), 0), nx - 1)
+                jy = min(max(int(math.floor((q[1] - o[1]) / sp[1])), 0), ny - 1)
+                jz = min(max(int(math.floor((q[2] - o[2]) / sp[2])), 0), nz - 1)
+                m_q = int(self.mat[jx, jy, jz])
+                rho_q = float(self.dens[jx, jy, jz])
+                if m_q != m or rho_q != rho:  # a new segment from E_k in the new medium
+                    m, rho = m_q, rho_q
+                    r_seg = self._residual_range(m, e_prev)
+                    n_seg = n_sub - k
+                    j = 0
+                    s_seg = s0
+                    length = r_seg * 10.0 / rho
+                    l_sub = length / n_seg
             e_k = 0.0
             if k < n_sub - 1:
-                e_k = min(self._residual_energy(m, r_g * (n_sub - 1 - k) / n_sub), e_prev)
+                e_k = min(self._residual_energy(m, r_seg * (n_seg - 1 - j) / n_seg), e_prev)
             de = e_prev - e_k
-            s0 = k * l_sub
             l_k = min(max(l_in - s0, 0.0), l_sub)
             if l_k < l_sub:
                 e_escape += de * (l_sub - l_k) / l_sub
             if l_k > 0.0 and de > 0.0:
                 pk = (p[0] + u[0] * s0, p[1] + u[1] * s0, p[2] + u[2] * s0)
+                path += l_k
+                cls = CLASS_STEP
                 if self.scorer is not None:
-                    self.scorer.begin_step(0.5 * (e_prev + e_k), de, l_sub)
+                    e_lo = math.exp(float(t.ln_e0[m]))
+                    if e_k < e_lo:  # below the table floor: the constant floor state
+                        self.scorer.begin_floor_step(e_lo)
+                        cls = CLASS_STEP | CLASS_RESIDUAL_FLOOR
+                    else:
+                        self.scorer.begin_step(0.5 * (e_prev + e_k), de, l_sub)
                 for g in range(len(self.grids)):
-                    self._deposit_leg(batch, g, pk, u, l_k, de, l_sub, 0.0, 1.0, 1.0)
+                    self._deposit_leg(batch, g, pk, u, l_k, de, l_sub, 0.0, 1.0, 1.0, cls)
             e_prev = e_k
-        return e_escape
+            j += 1
+        return e_escape, path
 
     def _deposit_point_grid(
         self, batch: int, g: int, pos: tuple[float, float, float], de: float
@@ -869,11 +911,24 @@ class _Reference:
         while True:
             if energy <= self.e_cut:
                 if self.continuous_residual and species == 0:
-                    e_esc = self._deposit_residual(
-                        batch, (px, py, pz), (ux, uy, uz), energy, ix, iy, iz
+                    _t_in, t_out = F.ray_box(V(r(px), r(py), r(pz)), V(r(ux), r(uy), r(uz)),
+                                             self.lo, self.hi)  # fmt: skip
+                    l_in = max(float(t_out), 0.0)
+                    if uz > 0.0:
+                        l_in = min(l_in, float((self.z_clip - r(pz)) / r(uz)))
+                    e_esc, l_res = self._deposit_residual(
+                        batch, (px, py, pz), (ux, uy, uz), energy, ix, iy, iz, l_in
                     )
                     self.tallies["cutoff"] += energy - e_esc
                     self.tallies["escaped"] += e_esc
+                    if self.scorer is not None:
+                        self._path_mm += l_res  # the residual sub-steps are scored path
+                        if self._path_mm > self.path_bound_mm:
+                            self.path_exceeded = 1
+                    if e_esc > 0.0:  # the segment leaves the world: an escape at the crossing
+                        pos = (px + ux * l_in, py + uy * l_in, pz + uz * l_in)
+                        self._end(h, END_ESCAPED, pos, (ux, uy, uz), e_esc)
+                        return
                 else:
                     self.tallies["cutoff"] += energy
                     self._deposit_point(batch, (px, py, pz), energy)
