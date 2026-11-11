@@ -831,6 +831,18 @@ record only (`r2_io.SealKind`; plan block keys `seal_sha_heldout` / `seal_review
 `records/review-heldout.json`; fail closed on any mismatch). No held-out TOPAS output exists yet; the held-out seal
 note follows in the commit after this seal commit's review, and the 48 held-out TOPAS parts start only after that.
 
+**4e. Dated held-out seal note (2026-11-11, orchestrator; written after the independent review of the held-out seal
+commit finished and BEFORE any held-out TOPAS run).** The held-out seal commit is `ca21ec18601c8558082f3f0d543c07d40204992b`
+(seal record `validation/results/transport/v8r2-samples/sample-seal-heldout-r2stop3.json`, implementation f5f3a701);
+its review REVIEW-557971cc64724e7684141671dfac057f passed (finished 2026-11-11T07:54:30.313805Z; record
+`validation/results/transport/v8r2-topas/records/review-heldout.json`). Every held-out TOPAS run must start after
+that time at a `code_sha` descending from the seal commit (R2-TOPAS-4 applied to the held-out seal; evaluator
+`r2_io.SealKind heldout`).
+
+```json
+{"seal_sha_heldout": "ca21ec18601c8558082f3f0d543c07d40204992b", "seal_review_id_heldout": "REVIEW-557971cc64724e7684141671dfac057f"}
+```
+
 **5. Order from here (pre-registered).** Implementation + estimator rule + this amendment in one reviewed commit (new
 frozen SHA) → A-rows at that SHA → held-out samples (13 chunks) → held-out seal commit + review + dated seal note →
 48 held-out TOPAS parts (IDD-EM, LAT-EM, IDD-FULL, LAT-FULL per case) → TD-H, TL-H graded once → V5-SS → report-only

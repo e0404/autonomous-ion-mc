@@ -655,6 +655,13 @@ placeholder scorer output was deleted unread.
 
 
 **Dated note (2026-11-11, orchestrator) — entries changed by the held-out seal commit (evaluator held-out seal support r2_io/r2_evaluate + tests):** `validation/scripts/ion_em/r2_evaluate.py` c35cc031… → 375d4f01…; `tests/ionmc/test_r2_evaluate.py` b4903be7… → ba1f65d0…; `validation/scripts/ion_em/r2_io.py` 827170cf… → d4b86851…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-11, orchestrator) — files added by the held-out seal-note commit (the held-out seal review record; sha256 as committed):**
+
+| File | sha256 |
+|---|---|
+| `validation/results/transport/v8r2-topas/records/review-heldout.json` | `e91b7bb4abed9b2c9da623125ef3b249b9a2480852de06c8b07142faf3c00d13` |
+
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.
