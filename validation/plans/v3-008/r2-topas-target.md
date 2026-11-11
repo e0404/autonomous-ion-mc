@@ -1107,7 +1107,12 @@ name and sha256, `git_sha` (= `implementation_sha`), `pass`, `valid`, all-zero c
 seed / cpu_workers = 1 agree with the seal (`r2_io.step_document`). `scale` and `step_stdout_sha256` are therefore
 required chunk keys of both seals. The published outputs of all 99 sealed chunks reproduce their signed manifests and
 satisfy the step-document binding at this commit; the argv binding is exercised against the real records once they
-are committed (an invocation shape not among the accepted ones fails closed until a reviewed shape is added).
+are committed (an invocation shape not among the accepted ones fails closed until a reviewed shape is added). **Addendum 2 (2026-11-11, Codex REVIEW-84382c07 on eb29618d; records committed).** The invocation binding is
+now an exact-source match: the signed `argv` must be `["python", "-c", <source>]` with the source byte-identical
+to one of the four reviewed wrapper templates in `validation/scripts/ion_em/r2_wrapper_templates.py`, rendered with
+the run's sealed case, k value(s) and scale; the published file set of a run must be exactly its sealed chunks' npz,
+stdout and stderr. The 89 sealed runs' records are committed under `v8r2-samples/host-records/` and match the
+templates 1 / 30 / 45 / 13 (T1–T4); amendment R2-STOP3 item 4i.
 
 **Dated note (2026-11-09, seal recorded; orchestrator).** Sample seal commit `0c68b78ac191c850bf9101dbacf8eca12f4e9b1b` (the record commit 84b8b2cd plus two review fixes: D1 mapping-domain rule, MCS-off gating; full-coverage results bit-identical), Codex REVIEW-9691e1b098e940d7bdfd1063c09325ee passed (finished 2026-11-09T09:15:57Z), VAL-20261109-092143-547E49, CI run 42592861874 success; dated seal note in `v3-008-acceptance.md` (Revision 2 section). No TOPAS run of this set has been started.
 

@@ -219,18 +219,17 @@ structure against the frozen chunk plan (counts, seeds, 1e6 totals per case, uni
 binding); it reads no physics value. No TOPAS run of the revision-2 set may start before the commit
 holding this record has been reviewed and pushed (plan rule R2-TOPAS-4). Not a clinical claim.
 
-`v8r2-samples/host-records/<run_id>.json` is the location of the **complete signed host-runner record** of
-every sample chunk run of both seals (`sample-seal.json`, `sample-seal-heldout-r2stop3.json`; 76 + 13 runs),
-to be copied verbatim from the protected host-run store. The records were requested from the operator
-(IR-20261111-101840-EDCAE6) and are **absent at this commit**: until they are committed, every grade and every
-report-only re-evaluation of `validation/scripts/ion_em/r2_evaluate.py` fails closed (ERROR) at the host-run
-binding. The evaluator (`r2_io.py`, `verify_host_records`) verifies each record against the committed trust
-file (signer `host-runner`), binds it to the sealed chunk (attestation block, run id, `implementation_sha`, clean
-successful run, times, stdout and output-manifest digests), reproduces the signed output manifest from the
-published run directory (which must list the chunk's npz with the sealed sha256 and the step stdout with the
-sealed `step_stdout_sha256`), checks the step document in that stdout against the chunk (case, k, seed, seed
-base, r_index, histories, npz digest, git SHA, pass/valid, all-zero counters, effective configuration) and parses
-the signed `argv` as the prescribed `steps_v8.py td-tl-sample` invocation of that chunk (case, k, scale, seed
-base, out directory); any mismatch fails closed (amendment R2-STOP3 item 4g). `tests/ionmc/test_v3_008_host_records.py`
-checks every committed record (signature, run id, SHA, manifest digest) without the npz files; its completeness
-test is a strict xfail until the records are added.
+`v8r2-samples/host-records/<run_id>.json` holds the **complete signed host-runner record** of every sample chunk
+run of both seals (`sample-seal.json`, `sample-seal-heldout-r2stop3.json`; 76 + 13 runs), copied verbatim from the
+protected host-run store (IR-20261111-101840-EDCAE6, resolved 2026-11-11). The evaluator (`validation/scripts/ion_em/r2_io.py`,
+`verify_host_records`) verifies each record against the committed trust file (signer `host-runner`), binds it to the
+sealed chunk(s) of the run (attestation block, run id, `implementation_sha`, clean successful run, times, stdout and
+output-manifest digests), requires the signed `argv` to be exactly `["python", "-c", <source>]` with the source
+byte-identical to one of the four reviewed wrapper templates of `validation/scripts/ion_em/r2_wrapper_templates.py`
+rendered with the run's sealed case, k value(s) and scale (T1/T2 single-chunk main, T3 multi-chunk main, T4 held-out
+with `--seed-base 20621004`), reproduces the signed output manifest from the published run directory (whose file set
+must be exactly the sealed chunks' npz, stdout and stderr), and checks the step document in each published stdout
+(sha256 = the sealed `step_stdout_sha256`) against the chunk (case, k, seed, seed base, r_index, histories, npz
+digest, git SHA, pass/valid, all-zero counters, effective configuration). Any gap fails closed (ERROR).
+`tests/ionmc/test_v3_008_host_records.py` checks, cache-free, that every sealed run has a committed record that
+verifies, binds and matches a template (counts T1 1, T2 30, T3 45, T4 13).

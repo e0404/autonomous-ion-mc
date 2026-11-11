@@ -57,12 +57,17 @@ Three inputs, each bound to a controlled record before any number is used:
    seal's ``implementation_sha``, its run a clean success of task V3-008, its times / stdout digest
    / ``output_manifest_sha256`` those of the seal (chunk and ``host_runs``), and the signed output
    manifest must be reproduced from the published run directory
-   ``<samples-root>/validation/generated/<run_id>/`` and contain the chunk's npz with the sealed
-   sha256 and the step stdout ``case<c>-k<k>.stdout.txt`` with the sealed ``step_stdout_sha256``;
-   that stdout's one step document must state exactly the chunk (:func:`_step_bound`) and the
-   signed ``argv`` must be the prescribed ``steps_v8.py td-tl-sample`` invocation of the chunk
-   (:func:`sample_invocation`; Codex REVIEW-e844de8a). The report lists the verified record per
-   chunk (``ionmc_chunks[].host_record``).
+   ``<samples-root>/validation/generated/<run_id>/`` and hold exactly the npz, step stdout and
+   stderr of the run's sealed chunks (npz with the sealed sha256, ``case<c>-k<k>.stdout.txt`` with
+   the sealed ``step_stdout_sha256``; no unsealed output); that stdout's one step document must
+   state exactly the chunk (:func:`_step_bound`, Codex REVIEW-e844de8a). The signed ``argv`` must be
+   ``["python", "-c", <source>]`` with a source byte-identical to one of the FOUR reviewed wrapper
+   templates of ``r2_wrapper_templates.py`` (T1/T2/T3 main, T4 held-out; each runs ``steps_v8.py
+   td-tl-sample`` once per k with the chunk's case/k/scale, writes the subprocess stdout/stderr
+   verbatim to the published files and propagates failure through its exit code) rendered for the
+   run's case, sealed ks and scale (:func:`sample_invocation`, Codex REVIEW-84382c07); any other
+   signed source fails closed. The report lists the verified record per chunk
+   (``ionmc_chunks[].host_record``).
 3. **TOPAS runs.** Per run the orchestrator materializes into ``<records>/runs/<run_id>/``:
    ``record.json`` = the SIGNED run record of the reference runner (V3-INFRA-004, schema_version 3;
    fields used: ``run_id, configuration_id, code_sha, task_id`` (may be null), ``engine,
@@ -1383,7 +1388,7 @@ HOST_RECORDS_DIR = "validation/results/transport/v8r2-samples/host-records"
 HOST_SIGNER = "host-runner"
 HOST_TASK_ID = "V3-008"
 _ATTESTATION_CORE = ("signer", "key_id", "signed_at_utc", "payload_sha256", "signature")
-STEP_SCRIPT, STEP_ROW = "validation/scripts/transport/steps_v8.py", "td-tl-sample"
+STEP_ROW = "td-tl-sample"
 
 
 def _exact(got: Any, want: Any) -> bool:
@@ -1401,96 +1406,67 @@ def _bind(run_id: str, what: str, doc: dict[str, Any], expected: dict[str, Any])
             raise RecordError(f"host run {run_id}: {what} {key} {doc[key]!r} != {want!r}")
 
 
-# The chunk wrappers run ``steps_v8.py td-tl-sample`` as a subprocess (``python -c <source>``).
-_W_ARGS = re.compile(
-    r"^case, k, scale = int\(sys\.argv\[1\]\), int\(sys\.argv\[2\]\), sys\.argv\[3\]$", re.M
-)
-_W_LITERAL = re.compile(r"^case, k, scale = (\d+), (\d+), '(\d+(?:\.\d+)?)'$", re.M)
-_W_CMD = re.compile(
-    r"^cmd = \[sys\.executable, 'validation/scripts/transport/steps_v8\.py', 'td-tl-sample', "
-    r"'--case', str\(case\), '--k', str\(k\), '--scale', scale, "
-    r"(?:'--seed-base', '(\d+)', )?'--out-dir', (?:str\(out\)|'([^'\\{}]+)')\]$",
-    re.M,
-)
-_W_OUT = re.compile(r"^out = pathlib\.Path\(f'([^'\\{}]+)\{case\}'\)(?:;.*)?$", re.M)
-_W_RUN = re.compile(r"^.*\bsubprocess\.run\(cmd\b.*$", re.M)
-_SCALE = re.compile(r"^\d+(?:\.\d+)?$")
+def wrapper_templates() -> Any:
+    """``r2_wrapper_templates`` (next to this file): the four reviewed chunk-wrapper sources."""
+    import importlib.util
+    import sys
+
+    name = "r2_wrapper_templates"
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(
+            name, Path(__file__).resolve().with_name(f"{name}.py")
+        )
+        assert spec is not None and spec.loader is not None
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules[name] = mod
+        spec.loader.exec_module(mod)
+    mod = sys.modules[name]
+    mod.check_digests()
+    return mod
 
 
-def sample_invocation(argv: Any) -> dict[str, Any]:
-    """Parse the signed host-run ``argv`` of a sample chunk into ``{"case", "k", "scale",
-    "seed_base", "out_dir"}``; anything else fails closed (:class:`RecordError`).
+def sample_invocation(argv: Any, kind: str, case: int, ks: list[int], scale: str) -> dict[str, Any]:
+    """Bind the signed host-run ``argv`` of one sample run (Codex REVIEW-84382c07).
 
-    Accepted shapes (nothing else):
-
-    1. **Wrapper, values as arguments** (main set): ``[<python>, "-c", <source>, "<case>", "<k>",
-       "<scale>"]`` whose source has the line
-       ``case, k, scale = int(sys.argv[1]), int(sys.argv[2]), sys.argv[3]``.
-    2. **Wrapper, literal values** (held-out set): ``[<python>, "-c", <source>]`` whose source has
-       the line ``case, k, scale = <case>, <k>, '<scale>'``.
-    3. **Direct**: ``[<python>, "validation/scripts/transport/steps_v8.py", "td-tl-sample",
-       "--case", c, "--k", k, "--scale", s, ["--seed-base", b,] "--out-dir", o]``.
-
-    In both wrapper shapes the source must contain exactly one assignment line of case/k/scale,
-    exactly one mention of ``steps_v8.py``, exactly one ``subprocess.run(cmd`` and exactly one line
-    ``cmd = [sys.executable, 'validation/scripts/transport/steps_v8.py', 'td-tl-sample', '--case',
-    str(case), '--k', str(k), '--scale', scale, ['--seed-base', '<digits>',] '--out-dir', X]``
-    with ``X`` a string literal or ``str(out)`` and then exactly one line
-    ``out = pathlib.Path(f'<prefix>{case}')`` (out_dir = prefix + case). ``seed_base`` defaults to
-    the lv8 base 20581004 when ``--seed-base`` is absent (``steps_v8.py`` default)."""
-    if not isinstance(argv, list) or not all(isinstance(t, str) for t in argv) or len(argv) < 3:
-        raise RecordError(f"signed argv is not a sample invocation: {argv!r}")
-    if argv[1] == STEP_SCRIPT:  # shape 3
-        opts = argv[3:]
-        if argv[2] != STEP_ROW or len(opts) not in (8, 10):
-            raise RecordError("signed argv: direct invocation is not td-tl-sample")
-        names = ["--case", "--k", "--scale", "--seed-base", "--out-dir"]
-        if len(opts) == 8:
-            names.remove("--seed-base")
-        if opts[0::2] != names:
-            raise RecordError(f"signed argv: unexpected td-tl-sample options {opts[0::2]}")
-        val = dict(zip(opts[0::2], opts[1::2], strict=True))
-        case_s, k_s, scale = val["--case"], val["--k"], val["--scale"]
-        base_s, out_dir = val.get("--seed-base"), val["--out-dir"]
-    elif argv[1] == "-c":  # shapes 1 and 2
-        src, rest = argv[2], argv[3:]
-        args, lits = _W_ARGS.findall(src), _W_LITERAL.findall(src)
-        if len(args) + len(lits) != 1:
-            raise RecordError("signed argv: wrapper has no unique case/k/scale assignment")
-        if args:
-            if len(rest) != 3:
-                raise RecordError("signed argv: wrapper arguments are not <case> <k> <scale>")
-            case_s, k_s, scale = rest
-        else:
-            if rest:
-                raise RecordError("signed argv: literal wrapper takes no arguments")
-            case_s, k_s, scale = lits[0]
-        cmds = _W_CMD.findall(src)
-        if (
-            len(cmds) != 1
-            or src.count("steps_v8.py") != 1
-            or len(_W_RUN.findall(src)) != 1
-            or src.count("subprocess.run(") != 1
-        ):
-            raise RecordError("signed argv: wrapper does not run exactly steps_v8.py td-tl-sample")
-        base_s, out_lit = cmds[0]
-        base_s = base_s or None
-        if out_lit:
-            out_dir = out_lit
-        else:
-            outs = _W_OUT.findall(src)
-            if len(outs) != 1:
-                raise RecordError("signed argv: wrapper out directory is not unique")
-            out_dir = f"{outs[0]}{case_s}"
-    else:
-        raise RecordError("signed argv: neither a python -c wrapper nor a direct steps_v8.py call")
-    if not (case_s.isdigit() and k_s.isdigit() and _SCALE.match(scale)):
-        raise RecordError(f"signed argv: malformed case/k/scale {case_s!r} {k_s!r} {scale!r}")
-    if base_s is not None and not base_s.isdigit():
-        raise RecordError(f"signed argv: malformed seed base {base_s!r}")
+    Accepted is ONLY ``["python", "-c", <source>]`` whose source is byte-identical to one of the
+    four reviewed wrapper templates of ``r2_wrapper_templates`` allowed for the seal ``kind`` (T1,
+    T2, T3 main; T4 held-out), rendered for this run's sealed chunks: ``case``, the sorted ``ks``
+    of every sealed chunk of the run and the sealed ``scale``. Each template runs ``steps_v8.py
+    td-tl-sample`` once per k with exactly that case/k/scale (T4: ``--seed-base 20621004``),
+    writes the subprocess stdout/stderr verbatim to the published ``case<c>-k<k>.stdout.txt`` /
+    ``.stderr.txt`` and propagates a failed step through its exit code; any other signed source
+    (extra statements, a changed character, other k, another step) fails closed. Returns
+    ``{"template", "template_sha256", "case", "ks", "scale", "seed_base", "out_dir"}``."""
+    w = wrapper_templates()
+    if (
+        not isinstance(argv, list)
+        or len(argv) != 3
+        or not all(isinstance(t, str) for t in argv)
+        or argv[0] != "python"
+        or argv[1] != "-c"
+    ):
+        raise RecordError('signed argv is not ["python", "-c", <reviewed wrapper source>]')
+    matches = []
+    for t in w.TEMPLATES:
+        if t.kind != kind:
+            continue
+        try:
+            if w.render(t, case, ks, scale) == argv[2]:
+                matches.append(t)
+        except ValueError:
+            continue
+    if len(matches) != 1:
+        raise RecordError(
+            f"signed argv: the wrapper source is not a reviewed {kind} template rendered for case "
+            f"{case}, k {ks}, scale {scale!r}"
+        )
+    t = matches[0]
+    out_dir = f"validation/generated/{t.subdir}/case{case}"
+    if t.seed_base != SEAL_KINDS[kind].seed_base or t.subdir != SEAL_KINDS[kind].npz_subdir:
+        raise RecordError(f"wrapper template {t.id} does not belong to the {kind} seal")
     return {
-        "case": int(case_s), "k": int(k_s), "scale": scale,
-        "seed_base": int(base_s) if base_s is not None else LV8_BASE, "out_dir": out_dir,
+        "template": t.id, "template_sha256": t.sha256, "case": case, "ks": sorted(ks),
+        "scale": scale, "seed_base": t.seed_base, "out_dir": out_dir,
     }  # fmt: skip
 
 
@@ -1598,9 +1574,12 @@ def verify_host_records(
     The npz is checked against the sealed size/sha256 (:func:`verify_npz`), the signed output
     manifest is reproduced from the published run directory (:func:`published_manifest`) and must
     contain the entry ``validation/generated/<subdir>/case<c>/<npz>`` with the sealed sha256. The
-    step stdout and its document are bound by :func:`_step_bound`, the signed ``argv`` by
-    :func:`sample_invocation` (case, k, sealed ``scale`` with 1e6 * scale = histories, the kind's
-    seed base, out dir ``validation/generated/<subdir>/case<c>``; Codex REVIEW-e844de8a).
+    step stdout and its document are bound by :func:`_step_bound` (Codex REVIEW-e844de8a). Once
+    per run: the sealed chunks of the run share case and ``scale`` (1e6 * scale = histories), the
+    signed ``argv`` is one of the four reviewed wrapper sources rendered for the run's case,
+    sorted sealed ks and scale (:func:`sample_invocation`, Codex REVIEW-84382c07), and the signed
+    output manifest holds exactly the npz, stdout and stderr of the run's sealed chunks (no
+    unsealed output).
     Returns one report block per chunk."""
     if reader is None:
         raise RecordError("host-run records must be read through the committed reader")
@@ -1614,8 +1593,10 @@ def verify_host_records(
     host_runs = require(seal, "host_runs", "sample seal")
     if not isinstance(host_runs, list):
         raise RecordError("sample seal host_runs is not a list")
+    sealed = require(seal, "chunks", "sample seal")
     attest = attest_module()
     manifests: dict[str, tuple[str, dict[str, str]]] = {}
+    invocations: dict[str, dict[str, Any]] = {}
     out = []
     for c in chunks:
         run_id = require(c, "run_id", f"sample seal chunk case {case}")
@@ -1659,14 +1640,44 @@ def verify_host_records(
             )
         path = npz_path(samples_root, case, c, subdir)
         verify_npz(path, c)  # sealed size and sha256 (unchanged check)
-        if run_id not in manifests:
-            manifests[run_id] = published_manifest(samples_root, run_id)
+        if run_id not in invocations:  # once per run: argv and the run's complete output set
+            peers = [x for x in sealed if isinstance(x, dict) and x.get("run_id") == run_id]
+            scale = c.get("scale")
+            if {x.get("case") for x in peers} != {case} or {x.get("scale") for x in peers} != {
+                scale
+            }:
+                raise RecordError(f"host run {run_id}: sealed chunks differ in case or scale")
+            if not isinstance(scale, str) or round(N_HISTORIES * Fraction(scale)) != c["histories"]:
+                raise RecordError(f"host run {run_id}: sealed scale {scale!r} != histories / 1e6")
+            ks = sorted(x["k"] for x in peers)
+            inv = sample_invocation(rec.get("argv"), kind, case, ks, scale)
+            _bind(run_id, "signed argv", inv, {
+                "case": case, "ks": ks, "scale": scale, "seed_base": SEAL_KINDS[kind].seed_base,
+                "out_dir": f"validation/generated/{subdir}/case{case}",
+            })  # fmt: skip
+            digest, files = published_manifest(samples_root, run_id)
+            if digest != signed_manifest:
+                raise RecordError(
+                    f"host run {run_id}: the published outputs do not reproduce the signed "
+                    "output_manifest_sha256"
+                )
+            base = f"validation/generated/{subdir}/case{case}"
+            expected_files = {
+                f"{base}/{name}"
+                for x in peers
+                for name in (x["npz"], f"case{case}-k{x['k']}.stdout.txt",
+                             f"case{case}-k{x['k']}.stderr.txt")
+            }  # fmt: skip
+            if set(files) != expected_files:
+                extra = sorted(set(files) - expected_files)
+                raise RecordError(
+                    f"host run {run_id}: the signed output manifest is not exactly the npz, stdout "
+                    f"and stderr of the sealed chunks k {ks} (unsealed or missing: "
+                    f"{extra or sorted(expected_files - set(files))})"
+                )
+            invocations[run_id], manifests[run_id] = inv, (digest, files)
+        inv = invocations[run_id]
         digest, files = manifests[run_id]
-        if digest != signed_manifest:
-            raise RecordError(
-                f"host run {run_id}: the published outputs do not reproduce the signed "
-                "output_manifest_sha256"
-            )
         entry = f"validation/generated/{subdir}/case{case}/{c['npz']}"
         if files.get(entry) != c["npz_sha256"]:
             raise RecordError(
@@ -1674,14 +1685,6 @@ def verify_host_records(
                 "sealed npz_sha256"
             )
         step = _step_bound(samples_root, run_id, case, c, files, subdir, kind, impl)
-        inv = sample_invocation(rec.get("argv"))
-        scale = c["scale"]
-        if not isinstance(scale, str) or round(N_HISTORIES * Fraction(scale)) != c["histories"]:
-            raise RecordError(f"host run {run_id}: sealed scale {scale!r} != histories / 1e6")
-        _bind(run_id, "signed argv", inv, {
-            "case": case, "k": c["k"], "scale": scale, "seed_base": SEAL_KINDS[kind].seed_base,
-            "out_dir": f"validation/generated/{subdir}/case{case}",
-        })  # fmt: skip
         block = rec["attestation"]
         out.append({
             "case": case, "k": c["k"], "run_id": run_id, "record_path": rel,
@@ -1690,7 +1693,9 @@ def verify_host_records(
             "signed_at_utc": block["signed_at_utc"], "sha": rec["sha"],
             "output_manifest_sha256": signed_manifest, "manifest_entry": entry,
             "attestation_verified": True, "manifest_verified": True,
-            "step_document_verified": True, "step_stdout_sha256": step, "invocation": inv,
+            "step_document_verified": True, "step_stdout_sha256": step,
+            "invocation": {key: inv[key] for key in ("template", "template_sha256", "ks", "scale",
+                                                     "seed_base", "out_dir")},
             "argv_bound": True,
         })  # fmt: skip
     return out

@@ -198,7 +198,7 @@ placeholder scorer output was deleted unread.
 | `tests/ionmc/test_r2_bundles.py` | `aaa08b42abd3ed660530ba8897cb980fec3e9b3977dfddf7c7a699bc6bcb51ac` |
 | `reference_requests/operator-directives/2026-11-07-topas-validation-target.md` | `ca079e9f0af990cdff9d8efde60d38ac55e2d0fc0fb9ef22355a81f4a2ab0b26` |
 | `reference_requests/interventions/IR-20261102-010435-B59B2D/response.json` | `dc6a610cb67dee50fa0bb96327026eea0b81bb9506e7b898c2e9e44322f69bd0` |
-| `validation/plans/v3-008/r2-topas-target.md` | `ff6887e83600a9281d328b2bddb59ff3250e7baf6cce226b471084b35d3b7c96` |
+| `validation/plans/v3-008/r2-topas-target.md` | `4515144fc1f11246d2e94f6d8eee71a4f834dc76018d221b6df3af3a34a9d369` |
 
 
 **Dated note (2026-11-07, orchestrator) — hashes regenerated at the freeze commit's parent; entries that changed since f694b747:** `validation/plans/v3-008/p10-single-scattering-availability.md` bea86277… → a7f539a0…; `validation/plans/v3-008/p11-exact-omega-mapping.md` 6116648a… → f78e95f5…; `reference_requests/interventions/IR-20261102-010435-B59B2D/request.json` 068cafd7… → e81a7efa…. All other entries unchanged (recomputed).
@@ -234,7 +234,7 @@ placeholder scorer output was deleted unread.
 | `validation/scripts/transport/steps_v8.py` | `c5aefda2e8520c6033431a4059e74eb3261317f222d2d1e4d873406dc77a9bad` |
 | `tests/ionmc/test_ion_mcs_table.py` | `b3fb9992f866238b11243e032f394583775e292cec49601798ef44b54efcb749` |
 | `tests/ionmc/test_v3_008_rows_ci.py` | `ffea9f20976ec2d721067ccf52d5cb9797fad51a5bda7dd224948829c1cade0e` |
-| `tests/ionmc/test_r2_evaluate.py` | `53b0eefc6c59971704c5a389527799bd57a9146743a1ef3cf3294fd0a7169400` |
+| `tests/ionmc/test_r2_evaluate.py` | `6984a58594e984ef2aac8208d0eaab01832a35aac5d5f341a8a02723af7f2242` |
 | `tests/ionmc/test_v3_008_steps_v8.py` | `ab4922ea8842751e22c9d1882e9e1dec0ae88a25b55174c99586c4802868b731` |
 
 (c) R2.5 counts, superseded by this note (the R2.5 text is kept as written): repository paths 475 + 15 = **490**; total full sha256 values 519 + 15 = **534**, plus the bundle-set digest (unchanged, `a8a1c27d…`). The count in R2.6 item (3) (475) is superseded accordingly by 490 for the acceptance tests of the seal.
@@ -263,7 +263,7 @@ placeholder scorer output was deleted unread.
 
 | File | sha256 |
 |---|---|
-| `validation/scripts/ion_em/r2_io.py` | `fef190ebdd4dce26ddc4903a05cd2781e35db7f56dac86d66e11e90e2129330c` |
+| `validation/scripts/ion_em/r2_io.py` | `459ed6742610201e3bee261f3b5688b7495ccfe812c4546cf89c971506637b0a` |
 | `validation/scripts/ion_em/r2_statistics.py` | `fa1bb5c5b372df72fc9d3e9f4daa06d0943db5adb89bd173c53edad1b58bc9c1` |
 | `validation/results/transport/v8r2-topas/smokes.json` | `9f5c1b24bfe278869b30cc89c03137786fc683ed85d6b6509c48cdffa964f621` |
 | `validation/results/transport/v8r2-topas/records/review.json` | `87988397d4c14304d75f987117e4c22199d4452a0b48030e131a2bd52edb1199` |
@@ -771,10 +771,108 @@ placeholder scorer output was deleted unread.
 
 | File | sha256 |
 |---|---|
-| `tests/ionmc/test_v3_008_host_records.py` | `8224d4a796d16975b3ce41c23cb305ba998ac02f631a9fcaae325ce2aecb5782` |
+| `tests/ionmc/test_v3_008_host_records.py` | `5ea24f7a2d101098b84a4c0eed0683e9fde428bc3a631a038af7236e03daab0c` |
 
 
 **Dated note (2026-11-11, orchestrator) — entries changed by the host-record binding round-2 commit (Codex REVIEW-e844de8a: signed-argv and step-document binding, tests, README, plan notes 4h and the target-record addendum):** `validation/plans/v3-008/r2-topas-target.md` 56b7536e… → ff6887e8…; `tests/ionmc/test_r2_evaluate.py` 2c9ae51c… → 53b0eefc…; `validation/scripts/ion_em/r2_io.py` cbad3eb0… → fef190eb…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-11, orchestrator) — files added by the host-records commit (the 89 complete signed host-run records of the sealed sample chunks, `v8r2-samples/host-records/`, and the reviewed wrapper-template registry `r2_wrapper_templates.py`; sha256 as committed):**
+
+| File | sha256 |
+|---|---|
+| `validation/scripts/ion_em/r2_wrapper_templates.py` | `ce2e6439d973e54502d4eb63d2f5930806cc15d97240e92c5739ec2da9cbe6ca` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T051423Z-5c33a3e4.json` | `e0e0792f3c53b929a18133ed8ced6df171c1e8feb2172238f34fbfbc8d50563a` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T053031Z-29586a53.json` | `cb89f1741555c81d118c327eaf817b8d8b955a3f408abf73aefceb78c8f35a8b` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T054626Z-55b6b399.json` | `615a7ec54fabd9cb030227ba4bc01f1ed5a09613699d1ee5719588a986ecb3a2` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T060219Z-d79d6cef.json` | `affec6ba9305e7f619cefa2c6ff10cafd1a31709b27dd0011a158d3302f5598e` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T061813Z-15abdc2a.json` | `cf3795af1e98a4348d379ff891bc7bf9cac273d31500ae8a498693b571c63abd` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T064058Z-3aaba927.json` | `5bcf73fa1a556192cbf7167d833579f09de32e9967b923b45f439f92099d25b1` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T070349Z-c517d8ce.json` | `91345ab4442f299421d3077a1e4b5fb2e0a4ce3f902772ad34e9d51a3a085eaa` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T072633Z-fe38232a.json` | `2d41895aa46ce846c8c8101e6b2477ea8e9a07322f2d2005e3d090b55a6c31a0` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T074918Z-1e3ca128.json` | `2421acdaebe955eda3089ed90696a0fe02956c9c3d638f8a61e04df16e8bb340` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T081210Z-572d2bf9.json` | `2325a345549120f9e0cc0f42d0359d5a26a5a32608a73151430438895bba9e55` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T083227Z-9d8b7018.json` | `677cb6386bd9c39f1942933e8c784d09e526960b17ffafc5a574d52d487bf3b2` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T085243Z-3201eb67.json` | `cababbbd8519f0202e34a39225aee8cdd0d36df9e5a95125b3b0e0f12e6843b9` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T091257Z-fb4fdc19.json` | `c608fb2f2ed1b81000c0b845d8a436f8ef8135f5d71946fa4da34fcad5bcaa3f` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T093312Z-5aa19201.json` | `22129700957ba3b8be95dba47e2444f1c6eefff38c0a8d7f7a5bf8ae589b54d4` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T095332Z-ac754b4f.json` | `c262357f12aab070bf7d3ece06d7e92ff5ad2b4cccbfbca2ff845858c0fd7e74` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T101358Z-8f563473.json` | `76f312591b9e837adb269f03c25b8bc38e44e65da3df007c9cd9ef74dfe305ba` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T103422Z-00ed6f2b.json` | `44bb91f3bc79a78dca22809eec16060bc74f8bcf562a64840e8741ac64f2ebc2` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T105455Z-daae4a84.json` | `eb7633ccbc84663dbc1bf22a1ef1cfadb702c71fc3e3e2abcf5e2e3595e2f1e6` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T111516Z-e97b0a8a.json` | `b66c444f7fd18cb4c645b0f2e2eecbbd9be09c1cdbf4c81f29e4faff64cdcf2b` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T113539Z-cd21fd84.json` | `330de3324821e0c93de66ebacff1c55238d9be304f43ea065985869a41608dac` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T115425Z-70487412.json` | `de497fb7ea18faad8e17f70225b4c2ce8040b2a73585323dc2c5ccd60ddea560` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T121311Z-a178af37.json` | `e6a3f081969b3ee68190644879248bdf7686a3ccf63c912e8877a6f6bc328d43` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T123156Z-159e06e5.json` | `a14992414055ac16e9fd906462582e208790a84c314a7d8eea85a0272616aabd` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T125041Z-531b86b6.json` | `d3eec6da4ee7575a2a24dcfd0ef184dd76314485e19f38c0907847f42a8ea461` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T130944Z-3a776444.json` | `bbbbef41180efaf5b548e03a4b8fdaf07a39bcbee8e93a9e307a537665ed9d53` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T132852Z-c82a4ce1.json` | `7ecb4daede650009c574f48ed8e16587857a9a17df5a27f2ec4e24ff42546be3` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T134758Z-2a2c63cb.json` | `4c20c7fdabdc3a12ce6d43721fca51f2ee9ec2bae7e4083eca4d723a832e1577` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T140706Z-f9613230.json` | `0241c1584d67479c15440760bd73dbcfcb9b428f648fe5e87b4ef793e6cf1a4c` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T142611Z-d57d3a94.json` | `14c4b3242bf5e59e7afce6335d01feee61e283e9b972690b8fcc8f51a9a553dc` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T144517Z-d89c3e82.json` | `5ce9b7c2b494087e1b2de9dc53a8752bef33af42318fd934d1267e3b1851ba05` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T150420Z-e243523d.json` | `1ebfcf5b8dc94c75f0da6c0f5f4b923d661decfb30b8f1901b61aa8a36a22cae` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T152342Z-d0231a16.json` | `5560e3cc6ee9edcc9000468fa3fa31ba826d6dc1b5c37b335a7382d730ba0530` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T154903Z-909be873.json` | `a0fee068d02d62db3e4df8c8c6a3dc1826b52ef43f69e292e70d9e3b82e995bf` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T161426Z-8e7d9d7c.json` | `045634cb756e1c663c881e1f0557d225200d31a97c9d76eeb74b380c03b349f4` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T164006Z-3064871a.json` | `0c862905edd6de19768a1a629c8ef137168a6fd4d3a9410fba8edb55de903524` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T170551Z-0dc79107.json` | `a4e77422c5b23f49abcf4421150606266d74f18a8538b0eecbcbdd12387fc507` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T173127Z-266e12a3.json` | `da8cfa4e6502e2edad45246067e58538672f1245e39ce0c60095af7c224af614` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T175649Z-78801f41.json` | `90fad2f2ce6c372cddb13e6101ec24b48491f5a06cf49fe8813e9cbd5308c223` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T182217Z-f8fa52dd.json` | `554abeeadfdedea64dc768e134b0f87d6c2bb4583cede1ca106f774560c92faa` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T184742Z-38d94933.json` | `eeb67570898ad80802dfd2b822556728b8244b8ca0e54c8e04c166c88350ffe7` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T191317Z-36bfd077.json` | `61dbbf7f9fb0259249e2fde2c34f4631e469199448d25c6261a6a197f2a18331` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T193846Z-0263a72d.json` | `9adcf97c78dd7a3e085485bbed8559b71c5328d15855ec3cf0be158e59748ba8` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T195929Z-b401c250.json` | `de5b174c65a9acc6179bcaa2829d3c85de47455113b6b37746fc501d2b56151f` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T202006Z-a4665d2f.json` | `893e52400b58537fe56d95e757f22492ee336cd3f2205aacef71ed096275eabe` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T204054Z-e81209fb.json` | `0500d154bc2399ea67ff766ead3a51c52638803c80f09f95bf298432cfb77b0e` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T210131Z-82f6c159.json` | `6eae7624f13bce49b2497b500cae019c34566e93bf8f4fac5dc9118fa46d67c3` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T212317Z-33487777.json` | `40a8b96b3fdcd09660e4eb91f14edc1fd69a5015d827bd999ff8d5847ea60643` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T214503Z-3d3d4143.json` | `4074237503edb4d191bc81092274ec18f3fa0816ca4810286b15f8afb2525318` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T220649Z-5dc3ce3f.json` | `3211256b33ce2b0c1d69ab493c52f193e4a3a881af533b187c9eb765200a707e` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T222840Z-8edea4d7.json` | `a237714832b0e136d51d69d45a5043c7273d462cae31cdbdd8446171bd9e0957` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T225028Z-932ee88f.json` | `ec0f65a369dafaa123d68980f8929876d6785f948a9c676e3e57559cc2a71049` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T231219Z-f0f52f98.json` | `738be11243bfe80f39ba8807457a0aed013785d6fdde2bd659b8846f9eacce23` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T233414Z-fff907f9.json` | `891bc4505bdf35767bcd1c8206387ac3b3aacfc3ae120d78ffa663bb70cc7dea` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261108T235613Z-90a685f3.json` | `1e0c14472f5cf71c56ffe2a36b8ef8c0aabb683436496c22cedd9d7ae7a21d62` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261109T001739Z-682dd63f.json` | `c60db03429f5fd33fb6a745d2ea21c58b991b2c822f70fa4156bf7bc801cdf48` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261109T003904Z-5384e958.json` | `39fb40387f43b0a8a7f3d23b79ba7e57ec6a50db4f1bd2a29f7bc63cee624f0d` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261109T010053Z-59e2c46a.json` | `4a99bf5426c5b9515f1a710c0ada78518eb2f8ac6f9dc3692b2355b7b17b872f` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261109T012229Z-96f9d6ca.json` | `402d7ee8f1aceac2321ffb5a9a8430520cdb2ae1cf08a15feac0240dbf150ba1` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261109T014403Z-9bd1a931.json` | `df94bb894614a45fc18d1930a850e087a4f516c60a022783e79aca2379881312` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261109T020535Z-88a6161a.json` | `5b72aa1fd631e8e19243af407634062758a196fbca86ed3a35a73b9e105f78bd` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261109T022703Z-f42d6f90.json` | `8b8389e6a36910b9546e62cea131c41c9abf05fb8376bbb2ce5937a5c164f248` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261109T024829Z-c0b2a442.json` | `72080964da0b75471cd85390cb5dd9591afd4aa83c652b0d1f3f4a3fd7b53e0b` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261109T031121Z-1a5fe722.json` | `7be4e9e6a0d440f6db8d3d01755ef2299d812533998024ea84ba4a294dda513e` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261109T033258Z-01eb0d2a.json` | `9f2b28da722d72c10bc10f3947ae153b49256ec12d7b7d89b74015f09bd24c8e` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261109T035337Z-a65e5be6.json` | `a714cd560cae7b7d1a9b150af6522bd9732284ac781c31bc82da0b2a44c2edc0` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261109T041417Z-c8ee5fe2.json` | `ede149ffd4bc389bbd95f8301bbe58154fa27182aef6f782e07746dd0ee29190` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261109T043455Z-6a9c61dc.json` | `3760c13d43d35ef0c4adca1b00b2ddab7dd60a2fb5d5202003336588608d6611` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261109T045535Z-b49054a0.json` | `c8991a6f9b3d0a0fe0f2247297b2a9bbfafe42e5b5d416a73827632b5a9926ed` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261109T051718Z-c96ea736.json` | `4b8cecc57a3becb398b84594cce65bc73aad5d9ecd9ea58bedacd010bc32ca10` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261109T053856Z-be0e6c25.json` | `a9172b55c5492e605963d67b6989033db9a6a848233e0148920987dfa84ecaa9` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261109T060036Z-e8b34f2f.json` | `61c5689bd61d7d4b78b75015a29bc6dc2414cc2c9e1ff9b13ed1a34680a65646` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261109T062214Z-875e3f18.json` | `8789e049b0ada19038d08ada817d035014564a857ba435141e8b841425baa0ad` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261109T064203Z-c8668cce.json` | `ac55e67c2fc59b41c59f5d20196ee8a2c2c6d4d5604dcdb6105f84d08de6bcc1` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261109T070150Z-188bf4c0.json` | `83e4a9fdfe7be029e710f560fa7cfab59470f73e0a699ba7cf30ec3d9eb92bb5` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261109T072135Z-219c8614.json` | `21dc8fb7821228eb0ffe5df2abac8c98ffa4c4a064aadcc42d77080a40a837fc` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261109T080127Z-1011e276.json` | `a0543921e91052aef785eb97b63645d2fcf7739f19259f9ddf3c47a5659ad5c7` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261111T032108Z-0f2c091b.json` | `9b89dd2ef279313ff7ca519ad3f2c05a16b21dce15bfad695bb5a1f5a82b232f` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261111T034144Z-3d718129.json` | `02caeadec2cad6d382d092c8bf56a3b385bef92c373defc19a0093b9aa321350` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261111T040210Z-bed1ad5f.json` | `4dacfc47af21bd555bbce9281d4e006cb24f694d96fbb0d66f33b3c6996d2190` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261111T042235Z-eb5e4f67.json` | `e917d1a6ea21d69ce5d2dd47af7d0446289d96776629e57e57b3a736fb7c252c` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261111T044303Z-10ad7312.json` | `9969a719d9474df4daf25be5d3ecef943785184fbd2384bc76f289f79216e8bc` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261111T050431Z-9d8383b2.json` | `c48cb152be513d6dc2b5c7b723b2a022b3ff8c5336747568587afc79be505fd7` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261111T052557Z-6ca8729d.json` | `03199b63f56d896a0070e58f773ef632698d19c4f9442ee14def349ed4054d78` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261111T054739Z-333f15dd.json` | `97ee19f92caca91e7ba0fd95680d7eea71b41602069ed5d79b96c319ea3f06eb` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261111T060908Z-fa584e14.json` | `25c0c46db2f20960435239f1cad75a494ed3f43b1d9536df6a0865b8dd9cee1a` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261111T062857Z-6b98f3f0.json` | `d5424bc58483ca32e004a96959a1dc2e350ee479c2a40728c2f5f82be4847279` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261111T064831Z-daec24ca.json` | `4077e0856d31314deb8c3ca6497694c1d141584d648ff0c136a7f2b8fa5a6f25` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261111T070805Z-71ec22bc.json` | `b3869ee5c18ccac473165bd552bf24e27023d7127833d75cf3e6ea877f6e8d9e` |
+| `validation/results/transport/v8r2-samples/host-records/RUN-20261111T072739Z-2ca81843.json` | `1b01371be5b022c955530edbb7031de86a982e177769a5dcb21cac256706c687` |
+
+
+**Dated note (2026-11-11, orchestrator) — entries changed by the host-records commit (Codex REVIEW-84382c07: exact wrapper-template binding in r2_io, tests, inventory test without the pending marker; plan note 4i and the target-record addendum 2):** `tests/ionmc/test_r2_evaluate.py` 53b0eefc… → 6984a585…; `validation/scripts/ion_em/r2_io.py` fef190eb… → 459ed674…; `tests/ionmc/test_v3_008_host_records.py` 8224d4a7… → 5ea24f7a…; `validation/plans/v3-008/r2-topas-target.md` ff6887e8… → 4515144f…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.

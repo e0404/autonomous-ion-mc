@@ -894,6 +894,24 @@ every committed record against the seals and the trust file; its completeness te
 until the records are committed. All 99 sealed chunks' published outputs satisfy the manifest and step-document
 bindings at this commit (checked locally; the `argv` binding needs the records).
 
+**4i. Host records committed; wrapper templates (2026-11-11, orchestrator; IR-20261111-101840-EDCAE6 resolved; Codex
+REVIEW-84382c07 on eb29618d, finding "important").** The operator copied the complete signed host-run records of all
+V3-008 host runs (106 files) into an agent-readable directory; the 89 records of the sealed sample runs (76 main
++ 13 held-out) each verify against the committed trust file (signer `host-runner`, key 4d02f521f3fb9344) and agree
+with the seals (run id, `implementation_sha`, attestation block, start/finish times, stdout and output-manifest
+digests; 0 problems) and are committed verbatim at `validation/results/transport/v8r2-samples/host-records/<run_id>.json`
+(the 17 further records are A-row and other host runs, not part of the seals, and are not committed). The review found
+that the round-2 invocation check (item 4h) matched the wrapper source by pattern and therefore tolerated additional
+code; from this commit the signed `argv` of a sample run must be exactly `["python", "-c", <source>]` with the source
+byte-identical to one of four reviewed wrapper templates (`validation/scripts/ion_em/r2_wrapper_templates.py`:
+T1/T2 single-chunk main wrappers, T3 the multi-chunk main wrapper with the k list, T4 the held-out wrapper with
+`--seed-base 20621004`; each template rendered with the run's sealed case, k value(s) and scale, so the k list of a
+T3 run must equal the sealed chunks of that run), every other source fails closed. The 89 real records match the
+templates 1 / 30 / 45 / 13 (T1–T4). The cache-free inventory test (`tests/ionmc/test_v3_008_host_records.py`) now
+requires a record for every sealed run and checks each record's signature, seal binding and template match. With
+the records committed the held-out grader is complete: TD-H / TL-H (rows TD-EM, TD-FULL, TL-EM, TL-FULL of cases
+10–12) are graded once in the next step, at this evaluator, and reported in the following commit.
+
 **5. Order from here (pre-registered).** Implementation + estimator rule + this amendment in one reviewed commit (new
 frozen SHA) → A-rows at that SHA → held-out samples (13 chunks) → held-out seal commit + review + dated seal note →
 48 held-out TOPAS parts (IDD-EM, LAT-EM, IDD-FULL, LAT-FULL per case) → TD-H, TL-H graded once → V5-SS → report-only
