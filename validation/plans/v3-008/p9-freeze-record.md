@@ -587,7 +587,7 @@ placeholder scorer output was deleted unread.
 
 | File | sha256 |
 |---|---|
-| `tests/ionmc/test_ion_end_of_range.py` | `e39edaafeb6c616b61cf03bb2e6934182c2b39869df4d7ca9bf57138f58bbd40` |
+| `tests/ionmc/test_ion_end_of_range.py` | `b2666c81270ae2fcc4e249a6b05cf5c9460b24ca7854e715ef8a330e45c87e28` |
 | `tests/ionmc/test_r2_statistics_cycle.py` | `b61d36407c1ecf8a35a00428e5efba2ddd725b6710edced95a8ce2acbea25146` |
 | `validation/results/transport/v8r2-topas/records/runs/REF-14a05b26af8573de21d0-c2d0bc54/record.json` | `129c18d61a4f65db1fcda3399a695010a894ac0eee48ab8847b9ab1357d87fce` |
 | `validation/results/transport/v8r2-topas/records/runs/REF-14a05b26af8573de21d0-c2d0bc54/artifacts.json` | `a3d409639bfbe8bdb7f1aefc5455ac95cbfd7ea79ea83b2714ff916136ec5483` |
@@ -644,6 +644,8 @@ placeholder scorer output was deleted unread.
 **Dated note (2026-11-11, orchestrator) — entries changed by the R2-STOP3 round-3 commit (Codex REVIEW-b6484e56: voxel-exact residual walk, docs; lv8/hr8 sharded rows I9/I12/I14/I15/T12-ion):** `src/ionmc/simulation.py` 4d490ba4… → abbbcd0a…; `src/ionmc/transport/kernels.py` 5fdf6238… → bd2f177f…; `src/ionmc/transport/reference.py` 08a11985… → cd56bf0e…; `validation/scripts/transport/steps_v8.py` 8e951ead… → c5aefda2…; `tests/ionmc/test_ion_end_of_range.py` 723a3fae… → e39edaaf…; `tests/ionmc/test_run_suite_v8.py` e9105419… → f060fa10…. All other entries unchanged (recomputed).
 
 **Dated note (2026-11-11, orchestrator) — entries changed by the R2-STOP3 round-4 commit (Codex REVIEW-cd1c66de: D-3 aggregate regenerated with the final script; e_cut docstrings):** `src/ionmc/physics/stopping.py` 89db1de2… → 4be0934a…; `src/ionmc/config.py` 85c0f411… → 3da8eaed…; `validation/results/stopping/v3-008-d3-range-attribution.json` be4e253e… → 04475412…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-11, orchestrator) — entries changed by the R2-STOP3 round-5 commit (CI run 42941591557: one-ulp platform difference of the escaped-energy sum → tolerance 1e-12 in the end-of-range test):** `tests/ionmc/test_ion_end_of_range.py` e39edaaf… → b2666c81…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.

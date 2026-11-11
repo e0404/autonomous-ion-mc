@@ -269,7 +269,10 @@ def test_homogeneous_straggled_and_escape_runs_are_bit_identical(low_domain) -> 
     for backend in ("warp-cpu", "python"):
         res, prof = _profile(_config(ALPHA, backend=backend, depth=0.2, n_cells=20))
         assert _sha(prof) == EXACT_WALK_ESCAPE_SHA256
-        assert res.energy_balance.escaped_mev == 60.76560568262535
+        # The profile hash above is the bit-identity check; the escaped-energy sum differs by one
+        # ulp between platforms (CI run 42941591557 gave 60.76560568262537), so it is compared
+        # at 1e-12 relative.
+        assert res.energy_balance.escaped_mev == pytest.approx(60.76560568262535, rel=1e-12)
 
 
 def _residual_e(tab, m: int, r_g: float) -> float:
