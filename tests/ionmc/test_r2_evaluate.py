@@ -375,14 +375,49 @@ def _attest() -> Any:
     return IO.attest_module()
 
 
-def _sign(record: dict[str, Any], signer: str = "reference-runner") -> dict[str, Any]:
+def _sign(
+    record: dict[str, Any], signer: str = "reference-runner", seed: bytes = KEY_SEED
+) -> dict[str, Any]:
     at = _attest()
     old = at.SIGNERS
     at.SIGNERS = (*old, "reference-runner")
     try:
-        return at.sign_record(record, at.keypair_from_seed(KEY_SEED), signer)
+        return at.sign_record(record, at.keypair_from_seed(seed), signer)
     finally:
         at.SIGNERS = old
+
+
+def _manifest(samples: Path, run_id: str) -> str:
+    """``host_runner.output_manifest_sha256`` of a run whose outputs were published to
+    ``<samples>/validation/generated/<run_id>/`` (independent re-implementation for the tests)."""
+    top = samples / "validation" / "generated" / run_id
+    lines = sorted(
+        f"validation/generated/{p.relative_to(top).as_posix()}\0"
+        f"{hashlib.sha256(p.read_bytes()).hexdigest()}\n"
+        for p in top.rglob("*") if p.is_file()
+    )  # fmt: skip
+    return hashlib.sha256("".join(lines).encode()).hexdigest()
+
+
+def _host_record(chunk: dict[str, Any], sha: str, changes: dict[str, Any]) -> dict[str, Any]:
+    """A complete (unsigned) host-run record in the layout of ``host_runner.py`` for ``chunk``."""
+    rid = chunk["run_id"]
+    return {
+        "schema_version": 1, "run_id": rid, "task_id": "V3-008", "worktree": "/w/v3-008",
+        "branch": "task/v3-008", "sha": sha, "dirty_before": False, "execution_snapshot": "/s",
+        "dirty_after": False, "sha_after": sha, "committed_state_unchanged": True,
+        "argv": ["python", "steps_v8.py"], "started_at": chunk["run_started_at"],
+        "finished_at": chunk["run_finished_at"], "duration_seconds": 3600.0, "exit_code": 0,
+        "timed_out": False, "stdout_file": f"/r/{rid}/stdout.txt",
+        "stderr_file": f"/r/{rid}/stderr.txt", "stdout": "tail", "stderr": "",
+        "stdout_truncated": False, "stderr_truncated": False, "stdout_total_chars": 4,
+        "stderr_total_chars": 0, "run_directory": f"/r/{rid}",
+        "output_paths": [f"/w/v3-008/validation/generated/{rid}"],
+        "output_publication_error": None, "succeeded": True,
+        "stdout_sha256": chunk["wrapper_stdout_sha256"],
+        "stderr_sha256": hashlib.sha256(b"").hexdigest(),
+        "output_manifest_sha256": chunk["output_manifest_sha256"], **changes,
+    }  # fmt: skip
 
 
 def _resign(path: Path, changes: dict[str, Any]) -> None:
@@ -450,7 +485,12 @@ def _world(
     block in the plan and ``review-heldout.json``; held-out tampers: ``heldout_seal`` (record field
     overrides), ``heldout_impl`` ("orphan": implementation_sha of an unrelated commit),
     ``heldout_chunk_base`` (seed base used for the chunk seeds), ``heldout_written_subdir``
-    (where the chunks are written), ``heldout_review_finished``."""
+    (where the chunks are written), ``heldout_review_finished``. Every chunk run gets a complete
+    signed host-run record (``IO.HOST_RECORDS_DIR``, :func:`_host_record`); host-record tampers
+    (first chunk, k = 1, of the first case): ``host_record`` (signed field overrides),
+    ``host_record_after`` (overrides after signing), ``host_key_seed`` (signing key),
+    ``swap_npz`` (npz replaced after the run, the seal recording the new bytes),
+    ``attestation_subset`` (seal chunks carry the main seal's attestation subset)."""
     cases = cases or {1: {}}
     tamper = tamper or {}
     rng = np.random.default_rng(11)
@@ -490,8 +530,10 @@ def _world(
                 )
     for name, key in (smokes or {}).items():  # smoke bundle = byte copy of a part bundle
         shutil.copytree(repo / IO.BUNDLE_ROOT / IO.bundle_name(*key), repo / IO.BUNDLE_ROOT / name)
+    impl_main = _commit(repo, "bundles")  # the main samples' implementation commit
     samples = tmp / "samples"  # ionmc chunks + seal
     chunks: dict[str, list[dict[str, Any]]] = {"main": [], "heldout": []}
+    first_chunk = (next(iter(cases)), 1)
     for case, spec in cases.items():
         sig_i = [s * spec.get("ion_scale", 1.0) for s in spec.get("sig", SIG)]
         kind = IO.seal_kind_of(case)
@@ -519,27 +561,62 @@ def _world(
             }  # fmt: skip
             npz = out / f"ionmc-case{case}-k{k}.npz"
             np.savez_compressed(npz, **arrays)
+            (out / f"case{case}-k{k}.stdout.txt").write_text(f"step document case {case} k {k}\n")
+            manifest_sha = _manifest(samples, run_id)  # what the host runner signed
+            if tamper.get("swap_npz") and (case, k) == first_chunk:  # replaced after the run
+                np.savez_compressed(
+                    npz, **{**arrays, "idd_batch_energy_mev": 2 * idd[:, None, None]}
+                )
             chunks[kind].append({
                 "case": case, "k": k, "seed": base + 100 * (29 + case) + k, "r_index": 29 + case,
                 "histories": 500000, "run_id": run_id, "npz": npz.name,
                 "npz_bytes": npz.stat().st_size,
                 "npz_sha256": hashlib.sha256(npz.read_bytes()).hexdigest(),
                 "counters_all_zero": True,
+                "run_started_at": f"2026-11-0{k}T00:00:0{case % 10}+00:00",
+                "run_finished_at": f"2026-11-0{k}T01:00:0{case % 10}+00:00",
+                "output_manifest_sha256": manifest_sha,
+                "wrapper_stdout_sha256": hashlib.sha256(f"wrapper {run_id}".encode()).hexdigest(),
             })  # fmt: skip
+
+    def sign_host_records(kind: str, sha: str) -> list[dict[str, str]]:
+        """Complete signed host-run records of the ``kind`` chunks at ``sha`` (committed with the
+        seal); each chunk gets the record's attestation as ``host_runner_attestation``."""
+        hdir = repo / IO.HOST_RECORDS_DIR
+        hdir.mkdir(parents=True, exist_ok=True)
+        for c in chunks[kind]:
+            hit = (c["case"], c["k"]) == first_chunk
+            rec = _host_record(c, sha, tamper.get("host_record", {}) if hit else {})
+            seed = tamper.get("host_key_seed", KEY_SEED) if hit else KEY_SEED
+            rec = _sign(rec, "host-runner", seed)
+            att = rec["attestation"]
+            if tamper.get("attestation_subset"):  # the main seal's recorded subset
+                att = {k: att[k] for k in ("signer", "key_id", "signed_at_utc",
+                                           "payload_sha256", "signature")}  # fmt: skip
+            c["host_runner_attestation"] = att
+            if hit:
+                rec |= tamper.get("host_record_after", {})
+            (hdir / f"{c['run_id']}.json").write_text(json.dumps(rec, indent=2, sort_keys=True))
+        return [{"run_id": c["run_id"], "output_manifest_sha256": c["output_manifest_sha256"]}
+                for c in chunks[kind]]  # fmt: skip
+
+    main_runs = sign_host_records("main", impl_main)
     seal_rec = {"schema": IO.SEAL_SCHEMA, "chunk_plan": {"n": {str(c): 2 for c in cases}},
-                "chunks": chunks["main"]}  # fmt: skip
+                "implementation_sha": impl_main, "chunks": chunks["main"],
+                "host_runs": main_runs}  # fmt: skip
     seal_file = repo / IO.SEAL_RECORD_PATH
-    seal_file.parent.mkdir(parents=True)
+    seal_file.parent.mkdir(parents=True, exist_ok=True)
     seal_file.write_text(json.dumps(seal_rec))
     seal_sha = _commit(repo, "seal")
     impl = seal_sha  # the held-out samples' implementation commit precedes their seal
     if tamper.get("heldout_impl") == "orphan":  # a commit unrelated to the seal history
         impl = _git(repo, "commit-tree", f"{seal_sha}^{{tree}}", "-m", "orphan")
+    heldout_runs = sign_host_records("heldout", impl)
     heldout_rec = {
         "schema": IO.SEAL_SCHEMA_HELDOUT, "seed_base": IO.HELDOUT_SEED_BASE,
         "npz_subdir": IO.NPZ_SUBDIR_HELDOUT, "implementation_sha": impl,
         "chunk_plan": {"n": {str(c): 2 for c in cases if IO.seal_kind_of(c) == "heldout"}},
-        "chunks": chunks["heldout"], **tamper.get("heldout_seal", {}),
+        "chunks": chunks["heldout"], "host_runs": heldout_runs, **tamper.get("heldout_seal", {}),
     }  # fmt: skip
     heldout_file = repo / IO.SEAL_RECORD_PATH_HELDOUT
     heldout_file.write_text(json.dumps(heldout_rec))
@@ -548,8 +625,8 @@ def _world(
     kp = _attest().keypair_from_seed(KEY_SEED)
     trust = repo / IO.DEFAULT_TRUST  # committed: the evaluator reads it from HEAD
     trust.parent.mkdir(parents=True)
-    trust.write_text(json.dumps({"reference-runner": [
-        {"key_id": kp.key_id, "public_key": kp.public_key.hex()}]}))  # fmt: skip
+    key = [{"key_id": kp.key_id, "public_key": kp.public_key.hex()}]
+    trust.write_text(json.dumps({"reference-runner": key, "host-runner": key}))
     # frozen bundle manifest (from the bundles as frozen) + seal note + review, committed at the
     # runs' code_sha (the chronology and the bundle binding are pinned to that commit)
     bundles = {}
@@ -1620,3 +1697,176 @@ def test_check_run_heldout_bundle_uses_heldout_chronology(
     assert rep["checks"]["chronology_review_before_start"] is False
     code, rep = _check_cli(late, tmp_path / "ml.json", (1, "idd-em", 1))
     assert code == 0 and rep["verdict"] == "VALID", rep  # the main chronology is not affected
+
+
+# ---------------------------------------------------------------------------------------------
+# Codex REVIEW-2f0b4eec finding 1: every chunk bound to its complete signed host-run record
+# ---------------------------------------------------------------------------------------------
+
+OTHER_SEED = bytes(range(1, 33))
+
+
+@pytest.fixture
+def host_cases(monkeypatch: pytest.MonkeyPatch, small_case: None) -> None:
+    """Main case 1 (consumed-case guard lifted) and held-out case 10."""
+    monkeypatch.setitem(IO.CASES, 10, ("he", 100.0, 22.5, L, HZ, HX, "held-out"))
+
+
+def _no_numbers(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Fail the test if any TOPAS or ionmc number is read."""
+
+    def boom(*_a: Any, **_k: Any) -> Any:
+        raise AssertionError("numbers were read before the host-run binding failed")
+
+    for name in ("load_ionmc", "topas_idd", "topas_lateral"):
+        monkeypatch.setattr(R2.io, name, boom)
+
+
+def _record_file(w: dict[str, Any], case: int, k: int = 1) -> Path:
+    seal = w["heldout_seal"] if IO.seal_kind_of(case) == "heldout" else w["seal"]
+    rid = next(c["run_id"] for c in json.loads(seal.read_text())["chunks"]
+               if c["case"] == case and c["k"] == k)  # fmt: skip
+    return w["repo"] / IO.HOST_RECORDS_DIR / f"{rid}.json"
+
+
+@pytest.mark.parametrize("case", [1, 10])
+@pytest.mark.parametrize("row", ["TD-EM", "TL-EM"])
+def test_host_records_verified_and_reported(
+    tmp_path: Path, host_cases: None, case: int, row: str
+) -> None:
+    w = _world(tmp_path, cases={case: {}})
+    code, rep = _cli(w, row, tmp_path / "h.json", case=case)
+    assert code == 0 and rep["status"] == "PASS", rep
+    assert len(rep["ionmc_chunks"]) == 2
+    inputs = rep["evaluator"]["committed_inputs"]
+    sub = IO.SEAL_KINDS[IO.seal_kind_of(case)].npz_subdir
+    for c in rep["ionmc_chunks"]:
+        h = c["host_record"]
+        assert h["run_id"] == c["run_id"] and h["k"] == c["k"]
+        assert h["record_path"] == f"{IO.HOST_RECORDS_DIR}/{c['run_id']}.json"
+        assert inputs[h["record_path"]] == h["record_sha256"]
+        rec = json.loads((w["repo"] / h["record_path"]).read_text())
+        assert h["key_id"] == rec["attestation"]["key_id"]
+        assert h["payload_sha256"] == rec["attestation"]["payload_sha256"]
+        assert h["output_manifest_sha256"] == rec["output_manifest_sha256"]
+        assert (
+            h["manifest_entry"]
+            == f"validation/generated/{sub}/case{case}/ionmc-case{case}-k{c['k']}.npz"
+        )
+        assert h["attestation_verified"] is True and h["manifest_verified"] is True
+
+
+def test_main_seal_attestation_subset_is_accepted(tmp_path: Path, host_cases: None) -> None:
+    w = _world(tmp_path, tamper={"attestation_subset": True})  # as the committed main seal
+    code, rep = _cli(w, "TD-EM", tmp_path / "s.json")
+    assert code == 0 and rep["status"] == "PASS", rep
+
+
+def _resign_host(path: Path, changes: dict[str, Any]) -> None:
+    rec = json.loads(path.read_text())
+    rec.pop("attestation")
+    path.write_text(json.dumps(_sign(rec | changes, "host-runner"), indent=2))
+
+
+HOST_TAMPERS = [
+    ({"host_key_seed": OTHER_SEED}, "attestation unverified"),  # (b) untrusted key
+    ({"host_record_after": {"stdout": "edited"}}, "attestation invalid"),  # (c) altered payload
+    ({"host_record_after": {"sha": "0" * 40}}, "attestation invalid"),
+    ({"host_record": {"sha": "0" * 40}}, "signed sha"),  # (e)
+    ({"swap_npz": True}, "do not reproduce the signed output_manifest_sha256"),  # (f)
+    ({"host_record": {"succeeded": False}}, "signed succeeded"),  # (g)
+    ({"host_record": {"exit_code": 1}}, "signed exit_code"),
+    ({"host_record": {"exit_code": False}}, "signed exit_code"),
+    ({"host_record": {"timed_out": True}}, "signed timed_out"),
+    ({"host_record": {"dirty_after": True}}, "signed dirty_after"),
+    ({"host_record": {"committed_state_unchanged": False}}, "signed committed_state_unchanged"),
+    ({"host_record": {"output_publication_error": "x"}}, "signed output_publication_error"),
+    ({"host_record": {"task_id": "V3-007"}}, "signed task_id"),
+    ({"host_record": {"run_id": "RUN-other"}}, "signed run_id"),
+    ({"host_record": {"started_at": "2026-10-01T00:00:00+00:00"}}, "signed started_at"),
+    ({"host_record": {"finished_at": "2026-10-01T09:00:00+00:00"}}, "signed finished_at"),
+    ({"host_record": {"stdout_sha256": "0" * 64}}, "signed stdout_sha256"),
+    ({"host_record": {"output_manifest_sha256": "0" * 64}}, "signed output_manifest_sha256"),
+]
+
+
+@pytest.mark.parametrize("case", [1, 10])
+@pytest.mark.parametrize(("tamper", "message"), HOST_TAMPERS)
+def test_host_record_binding_fails_closed(
+    tmp_path: Path, host_cases: None, monkeypatch: pytest.MonkeyPatch, case: int,
+    tamper: dict[str, Any], message: str,
+) -> None:  # fmt: skip
+    w = _world(tmp_path, cases={case: {}}, tamper=tamper)
+    _no_numbers(monkeypatch)
+    code, rep = _cli(w, "TD-EM", tmp_path / "e.json", case=case)
+    assert code == 2 and rep["status"] == "ERROR" and message in rep["error"], rep
+    assert "host run RUN-" in rep["error"] and "criteria" not in rep
+
+
+@pytest.mark.parametrize("case", [1, 10])
+def test_missing_or_uncommitted_host_record_fails_closed(
+    tmp_path: Path, host_cases: None, monkeypatch: pytest.MonkeyPatch, case: int
+) -> None:
+    w = _world(tmp_path, cases={case: {}})
+    _no_numbers(monkeypatch)
+    path = _record_file(w, case)
+    good = path.read_text()
+    path.write_text(good.replace('"stdout": "tail"', '"stdout": "tailx"'))  # (h) working copy
+    code, rep = _cli(w, "TD-EM", tmp_path / "h.json", case=case, commit=False)
+    assert code == 2 and "differs from HEAD" in rep["error"], rep
+    path.write_text(good)
+    path.unlink()  # (a) no committed record
+    code, rep = _cli(w, "TD-EM", tmp_path / "a.json", case=case)
+    assert code == 2 and "no committed signed host-run record" in rep["error"], rep
+
+
+@pytest.mark.parametrize("case", [1, 10])
+def test_resigned_host_record_must_match_the_sealed_attestation(
+    tmp_path: Path, host_cases: None, monkeypatch: pytest.MonkeyPatch, case: int
+) -> None:
+    w = _world(tmp_path, cases={case: {}})
+    _no_numbers(monkeypatch)
+    _resign_host(_record_file(w, case), {"stderr": "other"})  # (d) verified, but not the sealed
+    code, rep = _cli(w, "TD-EM", tmp_path / "d.json", case=case)
+    assert code == 2 and "differs from the sealed host_runner_attestation" in rep["error"], rep
+
+
+def test_heldout_seal_requires_the_complete_attestation_block(
+    tmp_path: Path, host_cases: None
+) -> None:
+    w = _world(tmp_path, cases={10: {}}, tamper={"attestation_subset": True})
+    code, rep = _cli(w, "TD-EM", tmp_path / "s.json", case=10)
+    assert code == 2 and "differs from the sealed host_runner_attestation" in rep["error"], rep
+
+
+def test_trust_without_host_runner_key_fails_closed(tmp_path: Path, host_cases: None) -> None:
+    w = _world(tmp_path, cases={10: {}})
+    doc = json.loads(w["trust"].read_text())
+    w["trust"].write_text(json.dumps({"reference-runner": doc["reference-runner"]}))
+    code, rep = _cli(w, "TD-EM", tmp_path / "t.json", case=10)
+    assert code == 2 and "attestation unverified" in rep["error"], rep
+
+
+@pytest.mark.parametrize("edit", ["extra_file", "host_runs_missing"])
+def test_published_outputs_and_host_runs_are_bound(
+    tmp_path: Path, host_cases: None, edit: str
+) -> None:
+    tamper = {"heldout_seal": {"host_runs": []}} if edit == "host_runs_missing" else {}
+    w = _world(tmp_path, cases={10: {}}, tamper=tamper)
+    if edit == "extra_file":  # an output added to the published run directory after the run
+        rid = json.loads(w["heldout_seal"].read_text())["chunks"][0]["run_id"]
+        (w["samples"] / "validation" / "generated" / rid / "extra.txt").write_text("x")
+        needle = "do not reproduce the signed output_manifest_sha256"
+    else:
+        needle = "host_runs entry"
+    code, rep = _cli(w, "TD-EM", tmp_path / "p.json", case=10)
+    assert code == 2 and needle in rep["error"], rep
+
+
+def test_reeval_requires_the_host_records(tmp_path: Path, host_cases: None) -> None:
+    w = _world(tmp_path, tamper={"host_record": {"succeeded": False}})
+    rpath = w["repo"] / R2.COMMITTED_REPORT.format(row="TL-EM", case=1)
+    rpath.parent.mkdir(parents=True, exist_ok=True)
+    rpath.write_text(json.dumps({"status": "FAIL"}))
+    code, rep = _reeval_cli(w, tmp_path / "re.json")
+    assert code == 2 and "signed succeeded" in rep["error"] and "points" not in rep, rep

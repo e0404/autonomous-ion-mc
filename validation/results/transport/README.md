@@ -218,3 +218,11 @@ RUN-20261109T080127Z-1011e276 reproduced the identical npz sha256). `tests/ionmc
 structure against the frozen chunk plan (counts, seeds, 1e6 totals per case, unique digests, run
 binding); it reads no physics value. No TOPAS run of the revision-2 set may start before the commit
 holding this record has been reviewed and pushed (plan rule R2-TOPAS-4). Not a clinical claim.
+
+`v8r2-samples/host-records/<run_id>.json` holds the **complete signed host-runner record** of every sample
+chunk run of both seals (`sample-seal.json`, `sample-seal-heldout-r2stop3.json`), copied verbatim from the
+protected host-run store (IR-20261111-101840-EDCAE6). The evaluator (`validation/scripts/ion_em/r2_io.py`,
+`verify_host_records`) verifies each record against the committed trust file (signer `host-runner`), binds it to
+the sealed chunk (attestation block, run id, `implementation_sha`, times, stdout and output-manifest digests) and
+reproduces the signed output manifest from the published run directory, which must list the chunk's npz with the
+sealed sha256; a missing or differing record fails closed (amendment R2-STOP3 item 4g).

@@ -843,6 +843,43 @@ that time at a `code_sha` descending from the seal commit (R2-TOPAS-4 applied to
 {"seal_sha_heldout": "ca21ec18601c8558082f3f0d543c07d40204992b", "seal_review_id_heldout": "REVIEW-557971cc64724e7684141671dfac057f"}
 ```
 
+**4f. Held-out TOPAS evidence runs produced (2026-11-11, orchestrator; records commit, before any grade).** The 48
+held-out parts (cases 10–12; per case IDD-EM parts 0–3 at 2.5e4, LAT-EM parts 4–7 at 2.5e4, IDD-FULL parts 8–11 at
+the re-sized N_part 5000 / 3200 / 2500 for He / C / O, LAT-FULL parts 12–15 at 5000 histories; bundles frozen in
+`frozen-bundles.json`) ran through the controlled reference runner in the pre-registered order (case 10, 11, 12; parts
+0–15), all at `code_sha` 55e6a18041710ed1f97d2a6bb44b97ea21daaf12 (the seal-note commit, a descendant of the
+held-out seal ca21ec18); the first run started 2026-11-11T08:02:33.8Z, after the held-out review finished
+(07:54:30.3Z, item 4e), and the last finished 10:02:32.6Z; every run succeeded (exit 0, empty stderr, no missing
+output); wall 0.24 h (He) + 0.55 h (C) + 0.88 h (O) = 1.67 h in total. Their signed records (`record.json`, signer
+`reference-runner`, key 303cce4c129d387c) and verbatim artifact listings (`artifacts.json`) are committed under
+`validation/results/transport/v8r2-topas/records/runs/<run_id>/` and indexed in `records/index.json` (130 entries =
+82 main + 48 held-out). Run validity (`r2_evaluate.py check-run`, held-out chronology) and the grades of TD-H / TL-H
+(rows TD-EM, TD-FULL, TL-EM, TL-FULL of cases 10–12, each once) follow in the next commit; nothing has been graded at
+this commit.
+
+**4g. Evaluator amendment — signed host-run records of the sample chunks (2026-11-11, orchestrator; Codex
+REVIEW-2f0b4eec on the seal-note commit 55e6a180, finding 1 "important").** The review found that the grader bound the
+ionmc samples only through the sealed npz hashes and the attestation *block* copied into the seal, without
+re-verifying the host runner's signature over the complete run record. From this commit `r2_evaluate.py grade` and
+`reeval-tl-em` (both seal kinds) require, for every sealed chunk of a graded case and before any number is read, the
+complete signed host-run record committed at `validation/results/transport/v8r2-samples/host-records/<run_id>.json`
+(read as committed at HEAD): the record must verify against the committed trust file with signer `host-runner`
+(key 4d02f521f3fb9344); its attestation block must be the sealed `host_runner_attestation` (exact for the held-out
+seal; the main seal carries a five-key subset — signer, key_id, signed_at_utc, payload_sha256, signature — which is
+matched key by key, the signature itself binding the whole payload); its signed fields must state a clean successful
+run of V3-008 at the seal's `implementation_sha` (`succeeded`, `exit_code` 0, not timed out, clean tree before and
+after, no publication error) and agree with the seal (`run_id`, start/finish times, `stdout_sha256` =
+`wrapper_stdout_sha256`, `output_manifest_sha256` = the chunk's and the seal's single `host_runs` entry); the signed
+output manifest is reproduced from the published run directory (`validation/generated/<run_id>/`, sorted
+`validation/generated/<path>\0<sha256>` lines) and must contain the chunk's npz with the sealed sha256. Any gap is an
+ERROR (fail closed; `r2_io.verify_host_records`; tests in `tests/ionmc/test_r2_evaluate.py`). The complete records
+live in the protected host-run store, which the agent cannot read; the orchestrator requested their verbatim copies
+from the operator (IR-20261111-101840-EDCAE6, category inaccessible-information). Until the records of the 13 held-out
+runs (and the 76 main runs, for the report-only re-evaluation) are committed, every held-out grade and every
+re-evaluation fails closed with "no committed signed host-run record"; no grade is affected because none of cases
+10–12 has been graded. Finding 2 (minor) is closed by an unconditional digest test of the D-3 aggregate
+(`tests/ionmc/test_d3_range_attribution.py`, no ICRU cache needed).
+
 **5. Order from here (pre-registered).** Implementation + estimator rule + this amendment in one reviewed commit (new
 frozen SHA) → A-rows at that SHA → held-out samples (13 chunks) → held-out seal commit + review + dated seal note →
 48 held-out TOPAS parts (IDD-EM, LAT-EM, IDD-FULL, LAT-FULL per case) → TD-H, TL-H graded once → V5-SS → report-only

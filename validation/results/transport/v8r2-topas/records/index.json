@@ -492,6 +492,294 @@
       "config": "idd-full",
       "part": 9,
       "run_id": "REF-4d897b7cd9e5f0a11d20-3939385a"
+    },
+    {
+      "case": 10,
+      "config": "idd-em",
+      "part": 0,
+      "run_id": "REF-752fdc55585e83f1ac4b-52621625"
+    },
+    {
+      "case": 10,
+      "config": "idd-em",
+      "part": 1,
+      "run_id": "REF-a4d20f971981f9c42445-9bf4fd04"
+    },
+    {
+      "case": 10,
+      "config": "idd-em",
+      "part": 2,
+      "run_id": "REF-7e34dd851596c0795faf-d254322b"
+    },
+    {
+      "case": 10,
+      "config": "idd-em",
+      "part": 3,
+      "run_id": "REF-d96a9deba43bec4d4221-3ba0d25c"
+    },
+    {
+      "case": 10,
+      "config": "lat-em",
+      "part": 4,
+      "run_id": "REF-31f810ba986193c6dff4-3922abbd"
+    },
+    {
+      "case": 10,
+      "config": "lat-em",
+      "part": 5,
+      "run_id": "REF-9b262a6c746e9ff11ac5-e3b41783"
+    },
+    {
+      "case": 10,
+      "config": "lat-em",
+      "part": 6,
+      "run_id": "REF-ddfbbe26ced0909f1ab2-e2ab9df8"
+    },
+    {
+      "case": 10,
+      "config": "lat-em",
+      "part": 7,
+      "run_id": "REF-8bb97ab9bcfa2d334260-311677d5"
+    },
+    {
+      "case": 10,
+      "config": "idd-full",
+      "part": 8,
+      "run_id": "REF-57c92b80d958470d2861-1d1838c0"
+    },
+    {
+      "case": 10,
+      "config": "idd-full",
+      "part": 9,
+      "run_id": "REF-384ac4d0a99fa6c2916c-7fa92ec8"
+    },
+    {
+      "case": 10,
+      "config": "idd-full",
+      "part": 10,
+      "run_id": "REF-f2495000a1d3eab94e44-a06c46c8"
+    },
+    {
+      "case": 10,
+      "config": "idd-full",
+      "part": 11,
+      "run_id": "REF-d3e6d9a37037c32d2022-0c062a85"
+    },
+    {
+      "case": 10,
+      "config": "lat-full",
+      "part": 12,
+      "run_id": "REF-afbf77ba5f572b33234f-1d4d4b0a"
+    },
+    {
+      "case": 10,
+      "config": "lat-full",
+      "part": 13,
+      "run_id": "REF-749956d73f8e3dfc95fb-33a08b6c"
+    },
+    {
+      "case": 10,
+      "config": "lat-full",
+      "part": 14,
+      "run_id": "REF-2ce961a41dd4bf16fc9e-33a72cb5"
+    },
+    {
+      "case": 10,
+      "config": "lat-full",
+      "part": 15,
+      "run_id": "REF-af5e62bcf3c0ffc471e5-a39cd708"
+    },
+    {
+      "case": 11,
+      "config": "idd-em",
+      "part": 0,
+      "run_id": "REF-85e0491f1e02968160cb-4a6a6ea8"
+    },
+    {
+      "case": 11,
+      "config": "idd-em",
+      "part": 1,
+      "run_id": "REF-adb8e4afff1ef045edc0-8d0e6b4c"
+    },
+    {
+      "case": 11,
+      "config": "idd-em",
+      "part": 2,
+      "run_id": "REF-0266e542013f9ac976a0-23cc5fd3"
+    },
+    {
+      "case": 11,
+      "config": "idd-em",
+      "part": 3,
+      "run_id": "REF-3655125586b5df524234-5ec07356"
+    },
+    {
+      "case": 11,
+      "config": "lat-em",
+      "part": 4,
+      "run_id": "REF-d65bb849bb1dc5bf44cd-a2a4af9a"
+    },
+    {
+      "case": 11,
+      "config": "lat-em",
+      "part": 5,
+      "run_id": "REF-30669de9f18e30ad913b-dbc74e4d"
+    },
+    {
+      "case": 11,
+      "config": "lat-em",
+      "part": 6,
+      "run_id": "REF-dcac45f3700cfe6b22d4-35d0ab42"
+    },
+    {
+      "case": 11,
+      "config": "lat-em",
+      "part": 7,
+      "run_id": "REF-2b2461c04f83b9151024-2811d4be"
+    },
+    {
+      "case": 11,
+      "config": "idd-full",
+      "part": 8,
+      "run_id": "REF-a6d1f9daee8e7c144694-666d1d69"
+    },
+    {
+      "case": 11,
+      "config": "idd-full",
+      "part": 9,
+      "run_id": "REF-56609a6d63b960de22f9-9d3eb3ce"
+    },
+    {
+      "case": 11,
+      "config": "idd-full",
+      "part": 10,
+      "run_id": "REF-72036437dcdecaa3e288-fc817f8b"
+    },
+    {
+      "case": 11,
+      "config": "idd-full",
+      "part": 11,
+      "run_id": "REF-649f74383c080235cac5-d96e3066"
+    },
+    {
+      "case": 11,
+      "config": "lat-full",
+      "part": 12,
+      "run_id": "REF-694e117a25a20b74cc58-df3363d4"
+    },
+    {
+      "case": 11,
+      "config": "lat-full",
+      "part": 13,
+      "run_id": "REF-bf9218da36af178c85f2-7f2600e4"
+    },
+    {
+      "case": 11,
+      "config": "lat-full",
+      "part": 14,
+      "run_id": "REF-a761dd4d33c0cc8221bb-f7212981"
+    },
+    {
+      "case": 11,
+      "config": "lat-full",
+      "part": 15,
+      "run_id": "REF-1fc6bc7b3a580967d6b7-8274bb86"
+    },
+    {
+      "case": 12,
+      "config": "idd-em",
+      "part": 0,
+      "run_id": "REF-1506b940a598d81904f2-14ca25c3"
+    },
+    {
+      "case": 12,
+      "config": "idd-em",
+      "part": 1,
+      "run_id": "REF-dab4ce5f8ec854a1fe54-700c95e4"
+    },
+    {
+      "case": 12,
+      "config": "idd-em",
+      "part": 2,
+      "run_id": "REF-15eb7c25fef3a9d5d70e-60ea3e37"
+    },
+    {
+      "case": 12,
+      "config": "idd-em",
+      "part": 3,
+      "run_id": "REF-a2f58bb7564be8db50f4-ed151dbf"
+    },
+    {
+      "case": 12,
+      "config": "lat-em",
+      "part": 4,
+      "run_id": "REF-608aee88350b8c5a0ef9-fcdfe55a"
+    },
+    {
+      "case": 12,
+      "config": "lat-em",
+      "part": 5,
+      "run_id": "REF-5e11b7c87078ce6e9ba3-95a29da8"
+    },
+    {
+      "case": 12,
+      "config": "lat-em",
+      "part": 6,
+      "run_id": "REF-6b78026efc451b574217-700625b9"
+    },
+    {
+      "case": 12,
+      "config": "lat-em",
+      "part": 7,
+      "run_id": "REF-8ee8b1901d9371f5b03a-d3a2d1f3"
+    },
+    {
+      "case": 12,
+      "config": "idd-full",
+      "part": 8,
+      "run_id": "REF-2ef93d8c4920650b4b42-aa4eb229"
+    },
+    {
+      "case": 12,
+      "config": "idd-full",
+      "part": 9,
+      "run_id": "REF-c3eb0225a768ff20b289-8ec9e045"
+    },
+    {
+      "case": 12,
+      "config": "idd-full",
+      "part": 10,
+      "run_id": "REF-aec63daaa85d944f19cb-4267fc34"
+    },
+    {
+      "case": 12,
+      "config": "idd-full",
+      "part": 11,
+      "run_id": "REF-711aa04aa2a59e3b2f91-7bfecf77"
+    },
+    {
+      "case": 12,
+      "config": "lat-full",
+      "part": 12,
+      "run_id": "REF-27aa2ae73c6ea74823e2-a4cef387"
+    },
+    {
+      "case": 12,
+      "config": "lat-full",
+      "part": 13,
+      "run_id": "REF-1895cd064a175dbeb4f5-7dbb1a6c"
+    },
+    {
+      "case": 12,
+      "config": "lat-full",
+      "part": 14,
+      "run_id": "REF-3cc17cfdfcad2ecb839e-388e3184"
+    },
+    {
+      "case": 12,
+      "config": "lat-full",
+      "part": 15,
+      "run_id": "REF-16d92b52953c8af182c6-ca277a48"
     }
   ],
   "_note": "one entry per evidence part {case, config, part, run_id}; filled by the orchestrator as evidence runs complete (plan Order step 3); smokes are not evidence and are listed in ../smokes.json"

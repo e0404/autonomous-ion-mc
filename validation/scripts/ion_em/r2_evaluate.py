@@ -28,8 +28,12 @@ RUN-VALIDITY FAIL, 2 ERROR; a bundle of a held-out case uses the held-out chrono
 note, review-heldout.json).
 
 The repository is always the git checkout that contains this file; plan seal note, review record,
-run index, signed run records, listings, seal and trust file are read as committed at its HEAD
-(a differing working copy fails closed; Codex REVIEW-a50374b1).
+run index, signed run records, listings, seal, the signed host-run records of the sample chunks
+(``r2_io.HOST_RECORDS_DIR``) and trust file are read as committed at its HEAD (a differing working
+copy fails closed; Codex REVIEW-a50374b1). Every sealed chunk a grade or re-evaluation uses is
+bound to its signed host-run record and published output manifest (``r2_io.verify_host_records``,
+Codex REVIEW-2f0b4eec) before any TOPAS or ionmc number is read; the report lists the verified
+record per chunk under ``ionmc_chunks[].host_record``.
 
 Design record ``validation/plans/v3-008/r2-topas-target.md``: section 4 estimators and section 5
 criteria are in ``r2_statistics`` (numpy only), the fail-closed loaders of the controlled records,
@@ -619,6 +623,7 @@ class Context:
         )
         self.runs: list[io.TopasRun] = []
         self.chunks_used: list[dict[str, Any]] = []
+        self.host_verified: dict[int, dict[int, dict[str, Any]]] = {}
 
     def topas(self, case: int, config: str) -> list[io.TopasRun]:
         runs = [
@@ -639,13 +644,21 @@ class Context:
         return runs
 
     def chunks(self, case: int) -> list[dict[str, Any]]:
+        """The sealed chunks of ``case``, each bound to its committed signed host-run record
+        (``io.verify_host_records``, once per case) before any of its numbers is read."""
         ch = io.case_chunks(self.seal, case, self.seal_kind)
+        if case not in self.host_verified:
+            blocks = io.verify_host_records(
+                self.reader, self.trust, self.seal, case, ch, self.samples_root, self.npz_subdir
+            )
+            self.host_verified[case] = {b["k"]: b for b in blocks}
         for c in ch:
             entry = {
                 "case": case,
                 "k": c["k"],
                 "run_id": c["run_id"],
                 "npz_sha256": c["npz_sha256"],
+                "host_record": self.host_verified[case][c["k"]],
             }
             if entry not in self.chunks_used:
                 self.chunks_used.append(entry)
@@ -945,6 +958,10 @@ def grade(
             "topas_runs": [r.summary() for r in ctx.runs],
             "ionmc_chunks": [],
         }
+    # every sealed chunk the grade uses is bound to its signed host-run record (Codex
+    # REVIEW-2f0b4eec finding 1) before any TOPAS or ionmc number is read
+    for c in cases:
+        ctx.chunks(c)
     ctx.runs = []  # reload while reading outputs, so the report lists the files actually read
     if row.startswith("TD"):
         cfg = "idd-em" if row == "TD-EM" else "idd-full"

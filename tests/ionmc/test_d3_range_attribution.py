@@ -71,3 +71,21 @@ def test_sanity(result):
     for r in rows.values():
         assert 0.0 < r["prestep_euler_0p1mm_pct"] <= r["prestep_pure_euler_0p1mm_pct"] + 1e-12
     assert rows[("oxygen", 430.0)]["topas_r80_over_ionmc_r80_pct"] > 0.25
+
+
+def test_committed_digests_match_repository(mod):
+    """Cache-free (Codex REVIEW-2f0b4eec finding 2): the committed ``script_sha256`` and every
+    repository-input sha256 equal the current generator and repository files, and the input set is
+    exactly the one ``compute`` hashes; the ICRU entry is the content address of the registered
+    object (its bytes are re-verified only by the cache-dependent tests above)."""
+    committed = json.loads(COMMITTED.read_text())
+    assert committed["script_sha256"] == mod.sha256(SCRIPT), "regenerate the D-3 JSON"
+    reports = [
+        f"{mod.REPORT_DIR}/TD-EM-case{num}.json" for _ion, _e, num in mod.CASES if num is not None
+    ]
+    icru_key = mod.ICRU_ID + " (cache object)"
+    inputs = committed["input_sha256"]
+    assert set(inputs) == {icru_key, *reports, *mod.SOURCES}
+    assert inputs[icru_key] == mod.ICRU_SHA
+    for rel in (*reports, *mod.SOURCES):
+        assert inputs[rel] == mod.sha256(ROOT / rel), f"{rel} changed; regenerate the D-3 JSON"

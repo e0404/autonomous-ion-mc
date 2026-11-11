@@ -48,6 +48,17 @@ Three inputs, each bound to a controlled record before any number is used:
    k, ``r_index`` = 29 + case), ``npz_subdir`` = ``r2-samples-heldout`` (chunks at
    ``<samples-root>/validation/generated/<run_id>/r2-samples-heldout/case<c>/<npz>``) and an
    ``implementation_sha`` that must be an ancestor of (or equal to) ``seal_sha_heldout``.
+   **Host-run binding (Codex REVIEW-2f0b4eec finding 1), both seal kinds:** before any number of a
+   chunk is read, :func:`verify_host_records` requires the complete signed host-run record of the
+   chunk's run, ``validation/results/transport/v8r2-samples/host-records/<run_id>.json``
+   (:data:`HOST_RECORDS_DIR`; verbatim record of ``infrastructure/host_runner/host_runner.py``) as
+   committed at HEAD, ``verified`` for signer ``host-runner`` against the committed trust file; its
+   attestation must be the chunk's sealed ``host_runner_attestation``, its signed ``sha`` the
+   seal's ``implementation_sha``, its run a clean success of task V3-008, its times / stdout digest
+   / ``output_manifest_sha256`` those of the seal (chunk and ``host_runs``), and the signed output
+   manifest must be reproduced from the published run directory
+   ``<samples-root>/validation/generated/<run_id>/`` and contain the chunk's npz with the sealed
+   sha256. The report lists the verified record per chunk (``ionmc_chunks[].host_record``).
 3. **TOPAS runs.** Per run the orchestrator materializes into ``<records>/runs/<run_id>/``:
    ``record.json`` = the SIGNED run record of the reference runner (V3-INFRA-004, schema_version 3;
    fields used: ``run_id, configuration_id, code_sha, task_id`` (may be null), ``engine,
@@ -1359,6 +1370,188 @@ def verify_npz(path: Path, chunk: dict[str, Any]) -> None:
         raise RecordError(f"{path.name}: size differs from the sealed record")
     if sha256_file(path) != chunk["npz_sha256"]:
         raise RecordError(f"{path.name}: sha256 differs from the sealed record")
+
+
+# Host-run records of the sample chunks (Codex REVIEW-2f0b4eec finding 1): every chunk of a graded
+# case must be proven to be an output of the trusted host runner at the sealed implementation SHA.
+HOST_RECORDS_DIR = "validation/results/transport/v8r2-samples/host-records"
+HOST_SIGNER = "host-runner"
+HOST_TASK_ID = "V3-008"
+_ATTESTATION_CORE = ("signer", "key_id", "signed_at_utc", "payload_sha256", "signature")
+_PUBLISHED_ROOTS = ("validation/generated", "benchmarks/generated")  # host_runner.publish_outputs
+
+
+def published_manifest(samples_root: Path | str, run_id: str) -> tuple[str, dict[str, str]]:
+    """Reproduce the host runner's ``output_manifest_sha256`` of ``run_id`` from its published
+    outputs (``infrastructure/host_runner/host_runner.py``: ``output_manifest_sha256`` over
+    ``<run_dir>/outputs``, published by ``publish_outputs`` to ``<worktree>/<root>/<run_id>/`` for
+    ``root`` in ``validation/generated`` and ``benchmarks/generated``). The digest is sha256 over
+    the sorted lines ``f"{root}/{path relative to the published run directory}\0{file sha256}\n"``
+    of every regular file. Any symlink or non-regular entry fails closed (the runner never
+    publishes links). Returns (digest, {manifest path: sha256})."""
+    base = Path(samples_root)
+    entries: dict[str, str] = {}
+    found = False
+    for root in _PUBLISHED_ROOTS:
+        top = base / root / run_id
+        if top.is_symlink():
+            raise RecordError(f"host run {run_id}: published directory {top} is a symlink")
+        if not top.exists():
+            continue
+        if not top.is_dir():
+            raise RecordError(f"host run {run_id}: published output {top} is not a directory")
+        found = True
+        for p in sorted(top.rglob("*")):
+            if p.is_symlink():
+                raise RecordError(f"host run {run_id}: published output {p} is a symlink")
+            if p.is_dir():
+                continue
+            if not p.is_file():
+                raise RecordError(f"host run {run_id}: published output {p} is not a regular file")
+            entries[f"{root}/{p.relative_to(top).as_posix()}"] = sha256_file(p)
+    if not found or not entries:
+        raise RecordError(f"host run {run_id}: no published outputs under {base}")
+    lines = "".join(f"{rel}\0{entries[rel]}\n" for rel in sorted(entries))
+    return hashlib.sha256(lines.encode("utf-8")).hexdigest(), entries
+
+
+def _attestation_bound(record_block: Any, chunk_block: Any, strict: bool, run_id: str) -> None:
+    """The chunk's sealed ``host_runner_attestation`` must be the signed record's attestation. The
+    held-out seal records the complete block (exact equality); the main seal (sealed before the
+    block was recorded in full) carries the subset signer/key_id/signed_at_utc/payload_sha256/
+    signature, each of which must be present and equal (``payload_sha256`` and ``signature`` bind
+    the whole signed payload)."""
+    if not isinstance(chunk_block, dict) or not isinstance(record_block, dict):
+        raise RecordError(f"host run {run_id}: sealed host_runner_attestation is not an object")
+    if strict:
+        if chunk_block != record_block:
+            raise RecordError(
+                f"host run {run_id}: the signed record's attestation differs from the sealed "
+                "host_runner_attestation"
+            )
+        return
+    missing = [k for k in _ATTESTATION_CORE if k not in chunk_block]
+    if missing:
+        raise RecordError(f"host run {run_id}: sealed host_runner_attestation lacks {missing}")
+    if any(k not in record_block or record_block[k] != v for k, v in chunk_block.items()):
+        raise RecordError(
+            f"host run {run_id}: the signed record's attestation differs from the sealed "
+            "host_runner_attestation"
+        )
+
+
+def verify_host_records(
+    reader: CommittedReader | None,
+    trust: dict[str, Any],
+    seal: dict[str, Any],
+    case: int,
+    chunks: list[dict[str, Any]],
+    samples_root: Path | str,
+    subdir: str,
+) -> list[dict[str, Any]]:
+    """Bind every sealed chunk of ``case`` to the complete signed host-run record that produced it
+    (Codex REVIEW-2f0b4eec finding 1), before any number of the chunk is read. Fails closed.
+
+    Per chunk: ``<HOST_RECORDS_DIR>/<run_id>.json`` as committed at HEAD (:class:`CommittedReader`)
+    must be classified ``verified`` by ``attest.classify_record`` against the committed trust map
+    with signer ``host-runner``; its attestation must be the chunk's sealed
+    ``host_runner_attestation`` (:func:`_attestation_bound`); the signed fields must state a clean
+    successful run of this task at the seal's ``implementation_sha`` (``run_id``, ``sha``,
+    ``task_id`` V3-008, ``succeeded`` true, ``exit_code`` 0, ``timed_out`` false,
+    ``dirty_before`` / ``dirty_after`` false, ``committed_state_unchanged`` true,
+    ``output_publication_error`` null) and agree with the seal (``started_at`` / ``finished_at`` =
+    ``run_started_at`` / ``run_finished_at``, ``stdout_sha256`` = ``wrapper_stdout_sha256``,
+    ``output_manifest_sha256`` = the chunk's and the seal's single ``host_runs`` entry of the run).
+    The npz is checked against the sealed size/sha256 (:func:`verify_npz`), the signed output
+    manifest is reproduced from the published run directory (:func:`published_manifest`) and must
+    contain the entry ``validation/generated/<subdir>/case<c>/<npz>`` with the sealed sha256.
+    Returns one report block per chunk."""
+    if reader is None:
+        raise RecordError("host-run records must be read through the committed reader")
+    impl = require(seal, "implementation_sha", "sample seal")
+    if not isinstance(impl, str) or not re.fullmatch(r"[0-9a-f]{40}", impl):
+        raise RecordError(f"sample seal implementation_sha {impl!r} is not a commit SHA")
+    strict = seal.get("schema") == SEAL_SCHEMA_HELDOUT
+    host_runs = require(seal, "host_runs", "sample seal")
+    if not isinstance(host_runs, list):
+        raise RecordError("sample seal host_runs is not a list")
+    attest = attest_module()
+    manifests: dict[str, tuple[str, dict[str, str]]] = {}
+    out = []
+    for c in chunks:
+        run_id = require(c, "run_id", f"sample seal chunk case {case}")
+        if not isinstance(run_id, str) or not re.fullmatch(r"RUN-[0-9A-Za-z-]+", run_id):
+            raise RecordError(f"sample seal: case {case} k {c.get('k')} run_id {run_id!r}")
+        for key in ("run_started_at", "run_finished_at", "output_manifest_sha256",
+                    "wrapper_stdout_sha256", "host_runner_attestation"):  # fmt: skip
+            require(c, key, f"sample seal chunk case {case} k {c.get('k')}")
+        rel = f"{HOST_RECORDS_DIR}/{run_id}.json"
+        try:
+            blob = reader.read(rel)
+        except RecordError as exc:
+            raise RecordError(
+                f"host run {run_id}: no committed signed host-run record: {exc}"
+            ) from exc
+        try:
+            rec = json.loads(blob.decode("utf-8"))
+        except ValueError as exc:
+            raise RecordError(f"host run {run_id}: {rel} is not JSON: {exc}") from exc
+        if not isinstance(rec, dict):
+            raise RecordError(f"host run {run_id}: {rel} is not a JSON object")
+        status, why = attest.classify_record(rec, trust, HOST_SIGNER)
+        if status != "verified":
+            raise RecordError(f"host run {run_id}: host-run record attestation {status}: {why}")
+        _attestation_bound(rec["attestation"], c["host_runner_attestation"], strict, run_id)
+        expected = {
+            "run_id": run_id, "sha": impl, "task_id": HOST_TASK_ID, "succeeded": True,
+            "exit_code": 0, "timed_out": False, "dirty_before": False, "dirty_after": False,
+            "committed_state_unchanged": True, "output_publication_error": None,
+            "started_at": c["run_started_at"], "finished_at": c["run_finished_at"],
+            "stdout_sha256": c["wrapper_stdout_sha256"],
+            "output_manifest_sha256": c["output_manifest_sha256"],
+        }  # fmt: skip
+        for key, want in expected.items():
+            if key not in rec:
+                raise RecordError(f"host run {run_id}: signed record lacks {key!r}")
+            got = rec[key]
+            exact = isinstance(want, bool) or want is None
+            if not (got is want if exact else type(got) is type(want) and got == want):
+                raise RecordError(
+                    f"host run {run_id}: signed {key} {got!r} != {want!r} (seal / clean run)"
+                )
+        signed_manifest = rec["output_manifest_sha256"]
+        entries = [h for h in host_runs if isinstance(h, dict) and h.get("run_id") == run_id]
+        if len(entries) != 1 or entries[0].get("output_manifest_sha256") != signed_manifest:
+            raise RecordError(
+                f"host run {run_id}: not exactly one seal host_runs entry with the signed "
+                "output_manifest_sha256"
+            )
+        path = npz_path(samples_root, case, c, subdir)
+        verify_npz(path, c)  # sealed size and sha256 (unchanged check)
+        if run_id not in manifests:
+            manifests[run_id] = published_manifest(samples_root, run_id)
+        digest, files = manifests[run_id]
+        if digest != signed_manifest:
+            raise RecordError(
+                f"host run {run_id}: the published outputs do not reproduce the signed "
+                "output_manifest_sha256"
+            )
+        entry = f"validation/generated/{subdir}/case{case}/{c['npz']}"
+        if files.get(entry) != c["npz_sha256"]:
+            raise RecordError(
+                f"host run {run_id}: the signed output manifest has no entry {entry} with the "
+                "sealed npz_sha256"
+            )
+        block = rec["attestation"]
+        out.append({
+            "case": case, "k": c["k"], "run_id": run_id, "record_path": rel,
+            "record_sha256": reader.reads[rel], "signer": HOST_SIGNER,
+            "key_id": block["key_id"], "payload_sha256": block["payload_sha256"],
+            "signed_at_utc": block["signed_at_utc"], "sha": rec["sha"],
+            "output_manifest_sha256": signed_manifest, "manifest_entry": entry,
+            "attestation_verified": True, "manifest_verified": True,
+        })  # fmt: skip
+    return out
 
 
 @dataclass

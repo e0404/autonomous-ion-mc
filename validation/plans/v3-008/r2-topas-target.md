@@ -1088,6 +1088,16 @@ the run was in flight (`dirty_after`); the clean-tree re-run (RUN-20261109T08012
 npz sha256. The commit holding the record is the **sample seal commit**; its SHA and review id are recorded in
 `v3-008-acceptance.md` by the dated seal note once its review has passed, before any TOPAS run.
 
+**Dated note (2026-11-11, host-record binding; orchestrator; Codex REVIEW-2f0b4eec).** The grader now requires the
+complete signed host-run record of every sealed chunk, committed at
+`validation/results/transport/v8r2-samples/host-records/<run_id>.json`, verified against the committed trust file
+(signer `host-runner`) and bound to the seal (attestation block, run id, `implementation_sha`, times, stdout and
+output-manifest digests) and to the published outputs (the signed output manifest is reproduced from
+`validation/generated/<run_id>/` and must list the chunk's npz with the sealed sha256) — main and held-out seals
+alike, before any number is read; a missing or differing record is an ERROR (amendment R2-STOP3 item 4g in
+`v3-008-acceptance.md`). The main seal's attestation blocks carry five keys (signer, key_id, signed_at_utc,
+payload_sha256, signature) and are matched key by key; the held-out seal's full blocks are matched exactly.
+
 **Dated note (2026-11-09, seal recorded; orchestrator).** Sample seal commit `0c68b78ac191c850bf9101dbacf8eca12f4e9b1b` (the record commit 84b8b2cd plus two review fixes: D1 mapping-domain rule, MCS-off gating; full-coverage results bit-identical), Codex REVIEW-9691e1b098e940d7bdfd1063c09325ee passed (finished 2026-11-09T09:15:57Z), VAL-20261109-092143-547E49, CI run 42592861874 success; dated seal note in `v3-008-acceptance.md` (Revision 2 section). No TOPAS run of this set has been started.
 
 ## Appendix A (2026-11-09, after R2-SIZE-1 regeneration). Bundle hashes of the changed and new files
