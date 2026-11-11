@@ -1,0 +1,38 @@
+{
+ "fixed_s": 70.0,
+ "git_sha": "bf694e965552e5e5b7336215f43cf894ca46e21a",
+ "host": {
+  "cpu_count": 32,
+  "machine": "x86_64",
+  "node": "E040-PC011",
+  "platform": "Linux-6.18.40.1-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+  "python": "3.12.0"
+ },
+ "host_run_id": "RUN-20261108T042138Z-386fdfc2",
+ "host_run_record": "RUN-20261108T042138Z-386fdfc2.json",
+ "host_run_record_sha256": "e45f04be8eb5df6b2de06804713cfcfaebe418ce5108239c55fc736838ed5e02",
+ "host_run_signature": {
+  "key_id": "4d02f521f3fb9344",
+  "payload_sha256": "e80a0d6c0dfedccb64622bbd7fdfa2bb2e13d885efe2e0c28816da2697fe722d",
+  "signature": "8fa400904163c5fdb67bd43e2bf91e2c4df125907876ad875e1bc0d945ff2280299091525a170ead9add4cbd18938feb2b32dced20a499633d7f8e48be641b02"
+ },
+ "log_dir": "validation/results/transport/v7r2-r4b",
+ "part_log": "part.log",
+ "part_log_sha256": "61e4a1130ae7def9d9f109874bba157885447f176a71c22c94362a2b32cada9f",
+ "part_record": "v7r2-calibration-archive_fitted-p00.json",
+ "part_record_sha256": "ff8d375f3c61f4d249b28a346e17b61df2691b39163942bf33bc78dba07c120c",
+ "reps": 83,
+ "s_per_rep": 9.789583466422508,
+ "schema": "ionmc-v7r2-cal-rate-2",
+ "trust_file_sha256": "64c3b22e1599d807d36284278975fb1ebedf09fba8b25cf500024920a64f9656",
+ "validation_id": "VAL-20261108-043627-B9D6EF",
+ "validation_record": "VAL-20261108-043627-B9D6EF.json",
+ "validation_record_sha256": "9d61f54186d375e7af9848d4cd70e10cd9e99e6e4b0ac9c8933a269b42cffe5e",
+ "validation_signature": {
+  "key_id": "be42a5ebe42a750b",
+  "payload_sha256": "e1a02ab15c0c24268b1cfacdb8d8aeabc6594212829737307c31bcab385a339c",
+  "signature": "de1ae81ebe21260856e7c6b33d56ca2915d41ab8826d92a8985f63db2696bfcbb7bd4303258c4f7985a62b023ab214701fe5ad21a3f8e074a39f81dec839280c"
+ },
+ "wall_mc_s": 812.5354277130682,
+ "wall_total_s": 820.25
+}

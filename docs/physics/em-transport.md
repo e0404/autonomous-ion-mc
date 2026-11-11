@@ -109,6 +109,10 @@ The differential Moliere scattering power of B. Gottschalk, Med. Phys. 37 (2010)
     T_dM = f_dM(pv, p1v1) (z E_s / pv)^2 / X_S           [rad2 per unit length], E_s = 15.0 MeV
     f_dM = 0.5244 + 0.1975 L1 + 0.2320 L2 - 0.0098 L1 L2,  L1 = lg(1 - (pv / p1v1)^2), L2 = lg(pv)
 
+Calibration of `f_dM` (primary source, dataset `arxiv-0908-1413-source`): a bilinear fit to the ratio
+`T_Hanson/T_IC` computed from Moliere/Fano/Hanson theory for Be, Cu and Pb (E_1 <= 300 MeV); no measured
+scattering data enter the fit, so the factor is Coulomb-only (decision 0041, V3-005C).
+
 with `pv` in MeV, `p1v1` the `pv` of the particle at birth (the source energy) and `lg` the base-10
 logarithm; `f_dM` is clamped at 0 (the fit diverges as `pv` approaches `p1v1`). The scattering length
 `X_S` [g/cm2] follows from

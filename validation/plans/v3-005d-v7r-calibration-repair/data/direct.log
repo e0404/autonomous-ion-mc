@@ -1,0 +1,7 @@
+archive_fitted reproduced kappas {'nominal': (1.0, 1.0, True), 'paired_high': (1.0663746335960607, 1.0663746335960607, True), 'paired_low': (0.9386061328053177, 0.9386061328053177, True), 'single_high': (1.054671450820349, 1.054671450820349, True), 'single_low': (0.9291742406266579, 0.9291742406266579, True)} 56s
+archive_fitted pairs 200000 199s
+archive_fitted singles 150000 79s
+rehearsal_block_sums reproduced kappas {'nominal': (1.0, 1.0, True), 'paired_high': (1.0732314646939765, 1.0732314646939765, True), 'paired_low': (0.9493916971221448, 0.9493916971221448, True), 'single_high': (1.0550107962305066, 1.0550107962305066, True), 'single_low': (0.9275002724040955, 0.9275002724040955, True)} 55s
+rehearsal_block_sums pairs 200000 196s
+rehearsal_block_sums singles 150000 78s
+done

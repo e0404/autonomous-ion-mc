@@ -1,0 +1,22 @@
+# Native MCsquare e0404 configuration. V3-005B row V5 absolute integral depth dose (r = 20 cm), nuclear interactions ON; no validation claim.
+Num_Threads 1
+# RNG_Seed is the PER-BATCH seed: fixed per committed seed-variant directory (batch statistics need >= 2 distinct seeds).
+RNG_Seed 20276003
+Num_Primaries 100000
+E_Cut_Pro 0.5
+D_Max 0.2
+Epsilon_Max 0.25
+Te_Min 0.05
+CT_File CT.mhd
+HU_Density_Conversion_File /opt/reference/mcsquare/Scanners/Water_Phantom/HU_Density_Conversion.txt
+HU_Material_Conversion_File /opt/reference/mcsquare/Scanners/Water_Phantom/HU_Material_Conversion.txt
+BDL_Machine_Parameter_File BDL_mono.txt
+BDL_Plan_File Plan.txt
+Simulate_Nuclear_Interactions True
+Simulate_Secondary_Protons True
+Simulate_Secondary_Deuterons True
+Simulate_Secondary_Alphas True
+Compute_stat_uncertainty True
+Output_Directory Outputs
+Dose_MHD_Output True
+LET_MHD_Output False

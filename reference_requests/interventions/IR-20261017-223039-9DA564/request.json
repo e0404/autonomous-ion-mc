@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "git_sha": "087a70a19c0b896008c762643d03f8f7854ebf4e",
+  "request_id": "IR-20261017-223039-9DA564",
+  "created_at_utc": "2026-10-17T22:30:39.342563+00:00",
+  "task_id": "V3-005B",
+  "category": "experiment-boundary",
+  "summary": "V3-005D elastic attribution is complete: §5 outcome \"partially attributed\" (H2 p+A shape carries ~100 % of the archived V11 peak gap; H3 p-p rate and H4 recoil share not excluded). The plan authorises a model change only for \"established\", so no model change was made. Batched decision request per integration route §4.1 (iv): item 0 (model-change authorisation: 0A adopt M2 with H3/H4 open, recommended; 0B resolve H3/H4 first; 0C no model change) and items 1–5 (merge-gate carrying, V10-A, V7-R slot, V7-R2 calibration variant, V5 fresh base); items 6–8 are statements. Commit of record 804729ee on the V3-005B branch (PR #82, unmerged; Codex REVIEW-3c59deb3 passed; CI green).",
+  "investigation": {
+    "blocked_claim": "The V5/V11 elastic over-correction at dd976c5a is attributed to the p+A angular shape and the pre-committed model M2 may be adopted under plan §4 — it cannot be adopted on the record: the frozen §5 rule gives \"partially attributed\" (clause 5 fails: H3 p-p rate ratio 1.165/1.159 not excluded; H4 recoil part 25 % vs 20 % at 150 MeV), and §5 authorises a model change only for \"established\"; V5, V11, V10-A, V7-R, V6/V6-sens stay recorded failures and the (a)6 merge gate cannot be met as written.",
+    "budget": "Host: re-qualification ≈ 37.2 h with 0A and V7-R2 at 5400/0.005 (≈ 47.3 h at 7200; ≈ 19.8 h / 15.8 h with calibration variants (B)/(C); Option II + ≈ 6.2 h CPU + CUDA; 0C with 3B: 0 h). Sandbox: ≈ 2.2 h V7-R2 joint-power re-measurement on the rebuilt pool plus D-E3-type diagnostics under a minute per 1e5-history run. D-E4's 18 OpenTOPAS runs are already spent. These supersede the ≈ 9.5 h quoted in IR-DEFAF4.",
+    "alternatives": [
+      "Item 0A (recommended): adopt M2 (optical-limit Glauber, plan §4.1 pre-committed inputs: SAID NN / SP07 fallback, Horiuchi 2007 β_NN, de Vries densities, r_p 0.8414 fm; σ_el stays Barashenkov) on the partial attribution with H3 and H4 carried as open findings into the pre-registered re-qualification; new decision 00xx with lineage and the §5 contradiction verbatim; new-model V10-A report-only; a pre-registered report-only M2 diagnostic (D-E3 harness F at 150/200 MeV and the D-E5 comparison against the recorded D-E4 data) that may stop host spending but never selects a model",
+      "Item 0B: pre-register and run a follow-up resolving H3 (p-p σ_pp above 100 MeV: table 1.10× BGG, 1.16× Geant4 in rate — a declared σ_pp correction is itself a model change and would move the p-p channel onto TOPAS lineage) and H4 (recoil bookkeeping) before any model change",
+      "Item 0C: no model change; V5, V11, V10-A stay failed; integrate (if at all) via Option I with the elastic depth-dose claim withdrawn (0 host hours with 3B)",
+      "Item 1: Option I (recommended; amend (a)6: V6 and V10-A carried as recorded failures, V7-R2 replaces V7-R, claims narrowed) / Option II (as I plus V6-F once as a binding gate) / Option III (literal, never merge)",
+      "Item 2: 2B (recommended; dd976c5a V10-A failure carried, new-model V10-A report-only, V11 added to (a)6) / 2A / 2C",
+      "Item 3: 3A (recommended; V7-R2 takes V7-R's slot, V7-R stays failed) / 3B / 3C",
+      "Item 4: V7-R2 as written (recommended; α_tost 0.005, 48 × 2.25e6, R = 3200, measured joint-rate size rule ≥ 378/400 — today 383/400 and 384/400) / variant (B) / variant (C)",
+      "Item 5: grant one fresh V5 base lv 20531004 after the item-0 decision (recommended; Amendment 17 (b)4 fired at dd976c5a) / refuse (V5 stays failed)"
+    ],
+    "attempts": [
+      {
+        "approach": "D-E0–D-E2 deterministic kernels, V10-A shape comparison, p-p audit (Amendment 19; exploratory)",
+        "outcome": "K* sign transcription error disclosed; V10-A minima are duplicate-angle artefacts; p-p ≈ 22 % of peak removal; table σ_pp = 1.10× BGG at 150/200 MeV",
+        "artifact": "validation/results/elastic_attribution/{de0,de1,de2}/; Amendment 19 addendum (a)"
+      },
+      {
+        "approach": "D-E3 shape probes (9 variants × 2 energies, 1e5 histories, CRN) and H5 EM-only check; three executions, bit for bit identical",
+        "outcome": "F multiplicative; pA-s0.9 closes 84 %/76 % of the gap, pA-gauss none; H5 excluded (EM-only within ±2 %)",
+        "artifact": "validation/results/elastic_attribution/de3/de3-summary.md; de0h5/h5.json; Amendment 19 addendum (b)"
+      },
+      {
+        "approach": "D-E4: 18 OpenTOPAS 4.3 / Geant4 11.4.2 thin-target runs (rows 14–23; g4h-elastic_HP only; phase spaces bound to the frozen cases) and the D-E5 table-side comparison",
+        "outcome": "H1 excluded (p+A rates 1.005–1.031); table p+A far wider than CHIPS at every energy; p-p rate ratio (table/Geant4) 0.98/1.00/1.03/1.165/1.159 at 30–200 MeV",
+        "artifact": "validation/results/elastic_attribution/de4/de4-ratios-report.md; de5/de5-report.md; Amendment 19 addendum (c)"
+      },
+      {
+        "approach": "D-E6 swap test: frozen 2×2 (swap-pA, swap-pp, swap-both) plus post-hoc swap-pp-sigma and swap-all; §5 rule evaluated on 1−F and −ln F with full lineage binding; independent review rounds D-E3–D-E6",
+        "outcome": "Clauses 1–4 hold (r +0.0014 / +0.0051, threshold 0.010; H2 carries 100 %/99 %); clause 5 fails (H3, H4) → \"partially attributed\"; H2a sharp-tail mechanism refuted for the peak (core width is the lever); contrary evidence preserved",
+        "artifact": "validation/results/elastic_attribution/de6/de6-report.md; validation/plans/v3-005d-elastic-attribution/review.md (Round D-E6); decisions/0041-proton-nuclear-interactions.md (2026-10-17); Amendment 19 addendum (d)"
+      },
+      {
+        "approach": "V7-R calibration repair design (revision 4) and integration route (revision 6), independently reviewed; measured two-gate joint pass rate",
+        "outcome": "V7-R design defect established; V7-R2 (48 × 2.25e6, α 0.005) selected by the measured rule (383/400, 384/400); route options I/II/III and items 1–8 prepared",
+        "artifact": "validation/plans/v3-005d-v7r-calibration-repair.md; validation/plans/v3-005d-integration-route.md"
+      }
+    ],
+    "memo_markdown_path_in_session_scratchpad": "scratchpad/v3-005d/intervention-draft.md (full decision memo; the same content is in the alternatives/attempts above and in the cited records)",
+    "commit_of_record": "804729ee7609c54acbcdcefeab82dce321466140",
+    "codex_review": "REVIEW-3c59deb3dcda486fb21477775e1ab927 (pass)",
+    "ci_run": "https://github.com/e0404/autonomous-ion-mc/actions/runs/39074576582 (success)"
+  },
+  "reason_autonomous_resolution_not_possible": "EXPERIMENT.md §5 experiment-boundary: the frozen plan (validation/plans/v3-005d-elastic-attribution.md §5) authorises a model-change decision only for an \"established\" attribution, while its §4 says M2 is adopted \"if §5 attributes H2\"; the result is \"partially attributed\" with H2 named, so the two texts conflict and the record is not read as an authorisation (decision 0041, section 2026-10-17; Amendment 19 addendum (d)). Adopting M2 on a partial attribution, changing the (a)6 merge-gate set (Options I/II), carrying V10-A/V7-R as recorded failures with V7-R2 in V7-R's slot, taking one fresh V5 base after Amendment 17 (b)4 fired, and spending ≈ 37 host hours are boundary decisions the orchestrator may not make. All failures (V5, V11, V10-A, V7-R, V6/V6-sens, lv5b V5/V7, P6 below 12.53 MeV, MF6 copy rule) stay recorded; no tolerance, verdict or seed is changed by this request. Default without an answer: no model change, no re-qualification, PR #82 stays open.",
+  "requested_input": "Choose for item 0 (0A / 0B / 0C) and for items 1–5 (1: Option I / II / III; 2: 2A / 2B / 2C; 3: 3A / 3B / 3C; 4: V7-R2 as written / variant (B) / variant (C); 5: grant one fresh V5 base lv 20531004 yes / no), or state another disposition. Items 6–8 (bases, conformity statement, host budget) need no answer. The response is recorded verbatim with resolve_human_intervention and changes no row verdict. Recommended: 0A with the pre-registered report-only M2 diagnostic safeguard; Option I; 2B; 3A; V7-R2 as written (5400/0.005 selected by the measured rule); grant one fresh V5 base.",
+  "decisions_or_tasks_blocked": "IR-20261013-164616-DEFAF4",
+  "status": "resolved",
+  "notification": {
+    "status": "sent",
+    "http_status": 200
+  },
+  "resolved_at_utc": "2026-10-17T23:53:12.275624+00:00",
+  "response_file": "response.json"
+}

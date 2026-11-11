@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "git_sha": "087a70a19c0b896008c762643d03f8f7854ebf4e",
+  "request_id": "IR-20261019-000144-2C50C8",
+  "created_at_utc": "2026-10-19T00:01:44.178419+00:00",
+  "task_id": "V3-005B",
+  "category": "external-data",
+  "summary": "Concrete operator action for the bounded, acquisition-first Option B (your response to IR-20261018-091819-903058): the ENDF/B-VIII.0 neutron evaluations C-12 (MAT 625) and O-16 (MAT 825) are only distributed by NNDC inside the full neutron sublibrary archive https://www.nndc.bnl.gov/endf-b8.0/zips/ENDF-B-VIII.0_neutrons.zip (310,158,456 bytes; HTTP 200, Content-Type application/zip, Last-Modified 2024-03-15; linked from https://www.nndc.bnl.gov/endf-b8.0/download.html), which exceeds the acquisition tool's hard cap MAX_BYTES = 256 MiB. The IAEA per-material mirror (https://www-nds.iaea.org/public/download-endf/ENDF-B-VIII.0/n/n_0625_6-C-12.zip and n_0825_8-O-16.zip) answers HTTP 403 to non-browser clients. ORIGINALLY RECOMMENDED ACTION (withdrawn as an operative instruction on 2026-10-19T00:35:38Z — see requested_input for the version-controlled route): in the checkout that serves the v3-research MCP server — /home/wahln/aiprojects/ion-mc (`.mcp.json`: `uv --project infrastructure/mcp/env run python infrastructure/mcp/research_mcp.py`) — edit `infrastructure/experiment_v3/data.py` line 15 from `MAX_BYTES = 256 * 1024**2` to `MAX_BYTES = 512 * 1024**2` (and, for consistency, the error text \"Download exceeds 256 MiB limit\" near line 130 to \"512 MiB\"), then restart the MCP servers (restart the Claude Code session) and tell me. I will then acquire the archive with the tool (full provenance record: URL, final URL, sha256, bytes, retrieval time, license basis, citation, role \"construction\"), extract only the two members `n-006_C_012.endf` and `n-008_O_016.endf` into an isolated staging directory, record their sha256, verify identity (MF1: MAT 625 / ZA 6012 and MAT 825 / ZA 8016, NLIB 0, NVER 8, LREL 0, NSUB 10; evaluation labels per the NNDC list), check the MF4/MT2 energy coverage (the plan's 135–200 MeV need) and scientific suitability, and only then write the prospective M3 construction/evaluation plan for independent review — no construction or qualification before that.",
+  "investigation": {
+    "blocked_claim": "M3 (ENDF/B-VIII.0 neutron mirror; Amendment 20 (b'')4) cannot be acquired through the experiment's tool: the only reachable authoritative distribution is the NNDC neutron sublibrary archive (310,158,456 bytes) above the 256 MiB tool cap; IAEA per-material files answer 403 to the tool.",
+    "budget": "Operator: one-line edit + MCP restart (minutes) or two browser downloads + one upload. Orchestrator after the change: one 310 MB acquisition (minutes), extraction and verification (minutes of sandbox), then a prospective M3 plan for independent review; no host time before that plan is accepted.",
+    "alternatives": "(1) raise MAX_BYTES 256 -> 512 MiB [recommended; full provenance chain]; (2) operator-controlled public HTTPS mirror of the two per-material files with sha256 [provenance via operator mirror]; (3) other route stated by the operator. Rejected: manual placement into the tool's object store (no provenance record), guessed LANL T2 URLs (SSL failure), NNDC Sigma (<= ENDF/B-VII.1 only), NEA JANIS (session-based).",
+    "attempts": [
+      {
+        "approach": "NNDC neutron sublibrary zip via the acquisition tool (earlier session)",
+        "outcome": "tool error: exceeds MAX_BYTES 256 MiB (310,158,456 bytes)",
+        "artifact": "validation/plans/v3-005-acceptance.md Amendment 20 (b''')1 attempt table"
+      },
+      {
+        "approach": "IAEA per-material zips n_0625_6-C-12.zip / n_0825_8-O-16.zip",
+        "outcome": "HTTP 403 (bot challenge) for the tool and for curl; re-confirmed 2026-10-19",
+        "artifact": "same attempt table; curl HEAD 2026-10-19 00:00 UTC"
+      },
+      {
+        "approach": "LANL T2, NNDC Sigma, endf-releases zips, NEA JANIS, per-file URLs",
+        "outcome": "SSL failure / library <= VII.1 / zips only / session-based / 404",
+        "artifact": "same attempt table"
+      },
+      {
+        "approach": "URL verification 2026-10-19",
+        "outcome": "https://www.nndc.bnl.gov/endf-b8.0/zips/ENDF-B-VIII.0_neutrons.zip -> 200, application/zip, 310,158,456 bytes, Last-Modified 2024-03-15; the earlier guessed .../download/ENDF-B-VIII.0_neutrons.zip -> 404",
+        "artifact": "curl HEAD output in the orchestrator session log"
+      }
+    ],
+    "mcp_server_checkout": "/home/wahln/aiprojects/ion-mc (.mcp.json v3-research: uv --project infrastructure/mcp/env run python infrastructure/mcp/research_mcp.py)",
+    "cap_location": "infrastructure/experiment_v3/data.py line 15 (MAX_BYTES), error text near line 130"
+  },
+  "reason_autonomous_resolution_not_possible": "The acquisition tool (infrastructure/experiment_v3/data.py) accepts public HTTPS only, has no local-file import path, and refuses downloads above MAX_BYTES; the only authoritative distribution of the two evaluations reachable by the tool is the NNDC sublibrary archive of 310 MB. Raising the cap by one constant preserves the full content-addressed provenance chain (NNDC → tool → acquisition record) and avoids any manually placed, provenance-less file. The alternative (below) keeps the chain only through an operator-controlled mirror. Nothing in this request changes validation scope, gates, requirements or verdicts; it is the narrow external action needed for the acquisition-first Option B you selected.",
+  "requested_input": "OPERATIVE REQUEST (version-controlled route; supersedes the in-place-edit wording sent with the notification): (1) the orchestrator carries the acquisition-cap change (MAX_BYTES 256 MiB -> 1 GiB in infrastructure/experiment_v3/data.py, matching the value you chose) in the reviewed infrastructure task V3-INFRA-001 (own worktree, commit, independent review, PR, CI, merge into v3/develop); (2) creating that task requires a clean main checkout (/home/wahln/aiprojects/ion-mc): please restore your two edited files to their committed state — `git checkout -- infrastructure/experiment_v3/data.py experiment/v3/SETUP.md` — once the running v3-research MCP server has loaded the raised cap (a running process keeps its loaded code; if the server was not restarted after your edit, restart it first, then restore the files), and reply 'ready'; (3) after the merge you pull v3/develop in the main checkout and restart the MCP servers; (4) the acquisition then records the infrastructure SHA (the merged v3/develop commit) in its record. Historical observation: at 2026-10-19 00:07 UTC the operator raised the cap in place in the main checkout (uncommitted; MAX_BYTES = 1 GiB; note in experiment/v3/SETUP.md); the restart state is unknown to the orchestrator; no acquisition was attempted from that uncommitted state. ORIGINAL TEXT AS NOTIFIED (retained for provenance; option (1) below is withdrawn as an operative instruction): Choose one: (1) RECOMMENDED — apply the one-constant change (MAX_BYTES 256 → 512 MiB in infrastructure/experiment_v3/data.py of /home/wahln/aiprojects/ion-mc), restart the MCP servers, and reply \"cap raised\"; I do the rest with the tool. (2) ALTERNATIVE without infrastructure change — download the two per-material files yourself from the IAEA mirror in a browser (https://www-nds.iaea.org/public/download-endf/ENDF-B-VIII.0/n/n_0625_6-C-12.zip and https://www-nds.iaea.org/public/download-endf/ENDF-B-VIII.0/n/n_0825_8-O-16.zip) or extract n-006_C_012.endf and n-008_O_016.endf from the NNDC archive, place the two files unchanged at a public HTTPS location you control (e.g. a release asset of a repository you own), and reply with the two URLs and the sha256 of each file; I acquire them with the tool using your sha256 as expected_sha256 and record the provenance as \"operator-provided mirror of NNDC/IAEA ENDF/B-VIII.0\" (identity verified from the MF1 header and the NNDC list, not from the source chain). (3) Neither — state another route. Nothing else is requested; the investigation of the p-p contribution and the archived-baseline sensitivity proceeds autonomously in parallel under independent review.",
+  "decisions_or_tasks_blocked": "M3 acquisition (ENDF/B-VIII.0 neutron C-12 MAT 625 / O-16 MAT 825) and the subsequent identity/provenance/coverage/suitability verification; the prospective M3 construction/evaluation plan and its independent review; any M3 construction or qualification evidence. Not blocked: the D-E9 investigation (archived-baseline sensitivity, p-p contribution), which proceeds in parallel.",
+  "status": "resolved",
+  "notification": {
+    "status": "sent",
+    "http_status": 200
+  },
+  "record_edits": [
+    {
+      "at_utc": "2026-10-19T00:10:20Z",
+      "by": "orchestrator",
+      "after_notification": true,
+      "reason": "Codex REVIEW-3c1ac74a findings: (1) decisions_or_tasks_blocked was null — filled; (2) the recommended action named an uncommitted in-place edit of the live MCP checkout, which the protocol does not allow as the operative infrastructure state — the version-controlled route is recorded here: the identical cap change is carried in a reviewed infrastructure task (V3-INFRA-001) and merged, the main checkout then pulls v3/develop and the MCP servers are restarted, and the acquisition records the infrastructure SHA used. Observed 2026-10-19 00:07 UTC: the operator raised the cap in place in the main checkout (MAX_BYTES = 1 GiB; note in experiment/v3/SETUP.md), uncommitted; whether the MCP server was restarted is unknown to the orchestrator. Substance of the request unchanged; the notification carried the original wording.",
+      "changed_fields": [
+        "decisions_or_tasks_blocked"
+      ]
+    },
+    {
+      "at_utc": "2026-10-19T00:35:38Z",
+      "by": "orchestrator",
+      "after_notification": true,
+      "reason": "Codex REVIEW-a701b2c8 (important): the operative request still recommended an uncommitted edit of the live MCP checkout. The operative request is now the version-controlled V3-INFRA-001 route with the infrastructure SHA recorded before acquisition; the in-place edit observed at 00:07 UTC is retained as a historical observation only; the original notified wording is retained verbatim after the operative text.",
+      "changed_fields": [
+        "requested_input (operative text prepended; original retained)",
+        "summary (recommendation marked withdrawn)"
+      ]
+    }
+  ],
+  "resolved_at_utc": "2026-10-23T18:38:00.910457+00:00",
+  "response_file": "response.json"
+}

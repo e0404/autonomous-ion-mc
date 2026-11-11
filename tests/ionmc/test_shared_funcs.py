@@ -699,12 +699,15 @@ EXERCISED = {
         "select_step", "select_step_nuclear", "point_on_hinge", "grid_index", "ray_box",
         "gauss_pair", "gauss_one",
         "orthonormal_basis",
+        # V3-005C C8: exercised by test_scoring_annular.py::test_u1_new_funcs_twin_equals_warp_cpu
+        "source_direction", "cyl_index", "cyl_next", "seg_piece_cyl",
     },
     "nu": {
         "nuclear_step_limit", "thinning_accept", "select_target", "poisson_inverse",
         "multiplicity_round", "grid_locate", "inv_cdf_bin", "inv_cdf_sample", "kalbach_a",
         "kalbach_cdf", "kalbach_pdf", "kalbach_mu",
         "residual_invariant_mass", "residual_mass_ok", "cm_boost", "boost_z", "cm_to_lab",
+        "choose_target", "sample_event",
     },
 }  # fmt: skip
 """Functions exercised by the harness (kernel and twin sides, both in ``_make_kernel`` and

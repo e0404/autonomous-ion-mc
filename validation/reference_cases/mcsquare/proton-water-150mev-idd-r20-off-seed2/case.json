@@ -1,0 +1,32 @@
+{
+  "input": "config.txt",
+  "physics": "MCsquare e0404: Class II condensed history, ICRU-63-type nuclear cross sections; nuclear interactions DISABLED (Simulate_Nuclear_Interactions False and the three Simulate_Secondary_* flags False); the on/off switch is that config flag; whether e0404 honours it without side effects is verified only by the run (the on-minus-off difference must be positive and of order 1 % of the deposit); E_Cut_Pro 0.5 MeV, D_Max 0.2 cm, Epsilon_Max 0.25",
+  "source": "Single spot, nominal 150 MeV; BDL_mono.txt is the verbatim V3-010B BDL layout with rows for 140/150/160 MeV: EnergySpread 0 %, SpotSize 1.0 mm (sigma), Divergence 1e-6 rad, Correlation 0, Weight1 1, Weight2 0, ProtonsMU 1e9 (the beam is NOT point-like: sigma 1 mm, the smallest verified working size; see validation/reference_cases/README.md). Gantry 0, couch 0, spot (0,0), meterset 1; isocentre (200,160,200) mm = CT centre",
+  "geometry": "CT 5 x 640 x 5 voxels with spacing 80 x 0.5 x 80 mm (400 x 320 x 400 mm; depth axis y, 0.5 mm depth bins, all voxels HU 0); dose grid = CT grid. The lateral voxels are deliberately coarse (80 mm) so that the committed CT.raw stays at 64 kB; the beam hits the centre voxel (x,z = 160-240 mm) and the sum over the five x and five z voxels is the 400 x 400 mm integral. Anisotropic spacing was accepted by e0404 for 2 x 0.5 x 2 mm (V3-010B); 80 mm lateral voxels are NOT verified by a run (fallback if rejected or if MCsquare's depth-dose changes: 20 mm voxels, 21 x 640 x 21). For gantry 0 the beam enters at the y_max face and travels in -y, so depth = (y_max - y)",
+  "materials": "HU 0 -> Water_Phantom scanner conversion of the registered MCsquare (HU_Density/HU_Material files); I-value not printed by the engine",
+  "cuts": "E_Cut_Pro 0.5 MeV, D_Max 0.2 cm, Epsilon_Max 0.25, Te_Min 0.05 MeV",
+  "histories": 100000,
+  "seeds": [
+    20277002
+  ],
+  "scorers": [
+    "dose (dose-to-medium) per voxel, Compute_stat_uncertainty True; LET output off"
+  ],
+  "units": "MetaImage float32 little-endian, x fastest, spacing 80 x 0.5 x 80 mm, y reversed with respect to depth. Dose.mhd is dose per delivered proton (src/compute_scoring.c: deposited energy / simulated primaries / voxel volume, plan normalisation 1.0, NOT scaled by meterset or ProtonsMU); the file unit is INFERRED to be eV/g per proton (source DoseScaling = 1.602176e-19 * 1000 * N_delivered). Conversion in compare_idd_v5.py: IDD [MeV/(g/cm2)/primary] = sum over x,z voxels of dose [MeV/g/primary] x (dx x dz) [cm2] (density cancels) with dose [MeV/g] = file value x 1e-6 (eV -> MeV); the script's own check requires the in-grid total to be 0.9-1.0 of the beam energy and the result is flagged and excluded if not. The 400 x 400 mm square contains the r = 20 cm circle (corner deviation as for TOPAS). RNG_Seed in config.txt is fixed per committed seed-variant directory",
+  "rationale": "V3-005B acceptance row V5 (absolute IDD at r = 20 cm, 150 and 200 MeV, nuclear on and off; MCsquare shares sigma lineage with ionmc/TOPAS and is report-only, Amendment 7 (b)): nuclear OFF 150 MeV run, seed variant 2 of 3; evidence-grade candidate (1e5 primaries, 0.5 mm depth bins)",
+  "expected_outputs": [
+    "Outputs/Dose.mhd",
+    "Outputs/Dose.raw"
+  ],
+  "arguments": [],
+  "v5": {
+    "row": "V5",
+    "energy_mev": 150,
+    "mode": "nuclear-off",
+    "nuclear": false,
+    "bin_mm": 0.5,
+    "depth_bins": 640,
+    "lateral_box_mm": 400.0,
+    "scored_radius_mm": 200.0
+  }
+}

@@ -1,0 +1,36 @@
+{
+ "acquisition": {
+  "acquisition_code_sha": "c790df369c03d1d775c843d4f1e13ab9337137e5",
+  "acquisition_id": "7490952096b342c98f533fab81d1b1aa",
+  "bytes": 310158456,
+  "citation": "D. A. Brown et al., Nucl. Data Sheets 148 (2018) 1-142, doi:10.1016/j.nds.2018.02.001",
+  "license_basis": "public NNDC distribution of the US evaluated nuclear data library",
+  "retrieved_at_utc": "2026-10-23T18:37:16Z",
+  "role": "exploratory",
+  "sha256": "a1cced11710eb36690c5ad7b64d414465c5849f5428904049c864e9beca28894",
+  "upstream_last_modified_header_seen_2026_10_19": "2024-03-15",
+  "url": "https://www.nndc.bnl.gov/endf-b8.0/zips/ENDF-B-VIII.0_neutrons.zip"
+ },
+ "date_utc": "2026-10-23",
+ "evaluation_comment_quotes": {
+  "n-006_C_012.endf": "MF1/MT451: 'ENDF/B-VII MOD 1 Evaluation, August 2015, G. M. Hale and P. G. Young (LANL)'; R-matrix analysis up to 6.45 MeV; 'At neutron energies above 6.45 MeV, the evaluation was joined to the existing ENDF/B-VII.0 evaluation for natural carbon, which is essentially version VI.1 (Fu, Axton, and Perey)'; 'All cross sections were kept the same as the VII.0 file in the energy range 6.47 <= E <= 20 MeV'; 'The version VI.3 extension to 150 MeV (Chadwick and Young) was not retained in this file.' This last sentence is stale text from the August 2015 revision (see finding O1 and the CHANGELOG quote).",
+  "n-008_O_016.endf": "MF1/MT451: 'EVAL-DEC16 Hale,Paris,Young,Chadwick'; R-matrix below 6.25 MeV, GNASH/optical-model evaluation 6.25-30 MeV; the previous MOD 2 (LA150-type, Chadwick et al.) evaluation retained from 30 to 150 MeV ('the previous evaluation, which extends to 150 MeV'); above 30 MeV MF6/MT5 carries the non-elastic emission and 'MF=4 MT=2 Elastic Angular Distributions' are listed among the non-zero data above 30 MeV; covariances 'continuing to 150 MeV'"
+ },
+ "findings": [
+  "Both files: MF3/MT2 (elastic cross section) from 1e-5 eV to 150 MeV; MF4/MT2 with LTT = 3 (Legendre below, tabulated above a switch energy), LCT = 2 (centre-of-mass). Tabulated f(mu) uses INT 4 (log-y, lin-mu) throughout; the statistics below honour it, with the exceedance probabilities interpolated exactly to the threshold angle.",
+  "C-12: Legendre part to 20 MeV (NL <= 8; its only incident energy >= 20 MeV is 20 MeV); tabulated f(mu) at 17 incident energies from 20 to 150 MeV (NP <= 91). O-16: Legendre part to 30 MeV (NL <= 10; the incident energies 20-30 MeV listed under it are Legendre entries); tabulated at 14 incident energies from 30 to 150 MeV (NP <= 73).",
+  "The project's energies of interest are 100, 150 and 200 MeV and the elastic table grid runs to 250 MeV: 100 and 150 MeV are inside the evaluated domain (150 MeV is the LAST node), 200 MeV and the grid above 150 MeV are OUTSIDE it. No extrapolation is authorised without scientific justification (operator, 2026-10-19).",
+  "O1 RESOLVED BY RECORD: CHANGELOG line 202 reads 'n-006_C_012.endf: Revised from Hale & Paris: natC evaluation restored from 20-150 MeV.' The C-12 20-150 MeV content is therefore the natural-carbon evaluation restored in the VIII.0 cycle; the MF1 comment 'was not retained in this file' is stale text from the August 2015 revision (the tape label is dated 2015-08-29).",
+  "Header anomaly: MF1/MT451 EMAX is 2.0e7 eV (C-12) and 3.0e7 eV (O-16) while the data extend to 1.5e8 eV. Recorded as is; not corrected.",
+  "No MF6/MT2 in either file. No MF4/MT2 shape covariance above 20 MeV in C-12 (MF33 only; no MF34 section). O-16: MF34/MT2 parsed (one block, MT1 = 2, NL = 1, NL1 = 1, i.e. Legendre order L = 1 only) and its energy grid ends at 7.005 MeV, below the 30 MeV switch to the tabulated part, so no MF4/MT2 shape covariance is carried above 7.005 MeV in O-16 (stricter than the 30 MeV previously assumed).",
+  "These are NEUTRON evaluations. Their use as a mirror for p+A elastic angular distributions (M3) is a scientific hypothesis to be assessed (isospin mirror validity, Coulomb-nuclear interference, isovector terms) before any plan; this record establishes identity, provenance and coverage only."
+ ],
+ "git_policy": "decision 0041: no cross-section value, no angular distribution point and no Legendre coefficient is recorded here; the files stay in the reference store (content-addressed object a1cced11...) and the git-ignored task cache; the staging copies are deleted after the suitability assessment.",
+ "operator_authorisation": [
+  "response of 2026-10-19 to IR-20261018-091819-903058 (bounded, acquisition-first Option B)",
+  "IR-20261019-000144-2C50C8 resolved 2026-10-23T18:38:00Z (V3-INFRA-001 integrated via PR #83 at c790df369c03d1d775c843d4f1e13ab9337137e5)"
+ ],
+ "record": "ENDF/B-VIII.0 neutron sublibrary: acquisition, identity and coverage verification of n+C-12 (MAT 625) and n+O-16 (MAT 825) for the V3-005D M3 candidate (exploratory role; NO construction, calibration or evaluation use)",
+ "status": "identity, provenance and energy coverage VERIFIED by the committed verifier; scientific suitability recorded in decision 0042",
+ "verification_method": "structural ENDF-6 parse of MF1/MT451, MF2/MT151, MF3/MT1-2, MF4/MT2 and the MF34/MT2 header by the committed verifier validation/scripts/reference_data/endf_verify.py (members read in memory with zipfile from the cached source archive; nothing extracted or executed); only hashes, headers, grid metadata, ratios and aggregate statistics are recorded (decision 0041)"
+}

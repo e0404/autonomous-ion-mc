@@ -1,0 +1,16 @@
+=== implied_eps.py
+rehearsal_block_sums   paired_low   accepted  369/3200 -> implied true paired coverage 0.65733 (margin 0.6527; shift +0.00463; 95% [+0.00416,+0.00507])
+rehearsal_block_sums   paired_high  accepted   69/3200 -> implied true paired coverage 0.71459 (margin 0.7127; shift +0.00189; 95% [+0.00122,+0.00270])
+archive_fitted         paired_low   accepted  150/3200 -> implied true paired coverage 0.65354 (margin 0.6527; shift +0.00084; 95% [+0.00020,+0.00140])
+archive_fitted         paired_high  accepted   67/3200 -> implied true paired coverage 0.71468 (margin 0.7127; shift +0.00198; 95% [+0.00131,+0.00281])
+kappa-solve MC coverage SE at n=20000: 0.00336662078351572 0.00319967740561451
+=== candidates.py
+design | paired FA@margin, power | single FA@margin, power | joint power (indep.) | P(cal clauses pass) for kappa error e = 0 / 0.0007 / 0.0034
+D0 as frozen                     | 0.0383, 0.9636 | 0.0382, 0.9970 | 0.9607 | 0.021(joint>=0.00) / 0.000(joint>=0.00) / 0.000(joint>=0.00)
+D1 alpha 0.025                   | 0.0233, 0.9396 | 0.0242, 0.9942 | 0.9342 | 1.000(joint>=0.00) / 0.835(joint>=0.00) / 0.000(joint>=0.00)
+D2 alpha 0.02                    | 0.0196, 0.9292 | 0.0197, 0.9925 | 0.9222 | 0.997(joint>=0.08) / 0.996(joint>=0.00) / 0.000(joint>=0.00)
+D3 2x replicates, alpha 0.02     | 0.0197, 0.9993 | 0.0191, 1.0000 | 0.9993 | 1.000(joint>=0.08) / 0.977(joint>=0.00) / 0.000(joint>=0.00)
+D4 2x replicates, alpha 0.015    | 0.0147, 0.9990 | 0.0149, 1.0000 | 0.9990 | 1.000(joint>=0.74) / 1.000(joint>=0.05) / 0.000(joint>=0.00)
+kappa-solve n=20000: coverage SE 0.00337
+kappa-solve n=200000: coverage SE 0.00106
+kappa-solve n=1000000: coverage SE 0.00048

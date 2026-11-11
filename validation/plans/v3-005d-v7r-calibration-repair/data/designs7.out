@@ -1,0 +1,8 @@
+archive_fitted 5400/0.005 shrink 15: power 0.9537  P(power clause) 1.0000
+archive_fitted 5400/0.005 shrink 0: power 0.9627  P(power clause) 1.0000
+archive_fitted 7200/0.005 shrink 21: power 0.9937  P(power clause) 1.0000
+archive_fitted 7200/0.005 shrink 0: power 0.9952  P(power clause) 1.0000
+rehearsal_block_sums 5400/0.005 shrink 15: power 0.9618  P(power clause) 1.0000
+rehearsal_block_sums 5400/0.005 shrink 0: power 0.9668  P(power clause) 1.0000
+rehearsal_block_sums 7200/0.005 shrink 21: power 0.9954  P(power clause) 1.0000
+rehearsal_block_sums 7200/0.005 shrink 0: power 0.9960  P(power clause) 1.0000

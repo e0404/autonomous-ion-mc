@@ -1,10 +1,13 @@
 """Fail-closed behaviour of the LV/HR runner and its summariser (subset labelling, combining,
 source attestation, dirty trees); steps are only run for the git/snapshot end-to-end checks."""
 
+# ruff: noqa: E501
+
 from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib
 import importlib.util
 import json
 import os
@@ -866,6 +869,35 @@ def test_v4_summary_conformance_deferred_and_combine(tmp_path: Path) -> None:
     assert c["pass"] and c["complete"] and c["conformant"] and not c["missing_steps"]
 
 
+def test_combine_reports_a_failed_step_as_a_failed_verdict_not_an_unverified_archive(
+    tmp_path: Path,
+) -> None:
+    """C11: a failed step is a verified archive with a failed verdict: complete stays true, no verification problem,
+    pass false, the step is listed in failed_steps."""
+    summ, mod = _load("summarize"), _load("run_suite")
+    full = mod.full_step_names("lv4", 2)
+    a, b = tmp_path / "a", tmp_path / "b"
+    _archive4(a, full[:6])
+    _archive4(b, full[6:])
+    clean = summ.combine([a, b], SHA)
+    assert clean["pass"] and clean["complete"] and clean["failed_steps"] == []
+    bad = next(n for n in full[6:] if summ.expected_tag(n) is not None)
+    shutil.rmtree(b)
+    _archive4(b, full[6:])
+    txt = (b / f"{bad}.txt").read_text().replace('"pass": true', '"pass": false')
+    (b / f"{bad}.txt").write_text(txt)
+    c = summ.combine([a, b], SHA)
+    assert c["pass"] is False and c["conformant"] is False
+    assert c["complete"] is True and c["problems"] == [] and c["missing_steps"] == []
+    assert c["failed_steps"] == [bad]
+    wrong = tmp_path / "w"
+    _archive4(
+        wrong, full[6:], doc={"seed_base": 1}
+    )  # a real verification problem is still a problem
+    w = summ.combine([a, wrong], SHA)
+    assert w["complete"] is False and any("archive does not verify" in p for p in w["problems"])
+
+
 def test_v4_runner_single_process_smoke_end_to_end(tmp_path: Path) -> None:
     """The cheapest steps of lv4 through the real runner (a8 at scale 0.01 and the deferred
     workers step), single-process, rehearsal base."""
@@ -1401,11 +1433,64 @@ LV5_ROW_STEP = {
 }  # fmt: skip
 LV5_NOT_IN_SUITE = {"P1", "P2", "P3", "P4", "P5", "V9", "C1"}  # CI tier (tests/ionmc)
 LV5_SLICE_B = {"V2b", "V5", "V6", "V7", "V8"}
+# V3-005C rows frozen by Amendment 14; each must be removed when its lv5c/hr5c step lands (step C9);
+# the set must be empty before the V3-005C evidence commit.
+PLAN_ROWS_PENDING_STEPS: frozenset[str] = frozenset()
+"""Emptied by V3-005C C6 (plan Amendment 14 (m), Amendment 17 (d)): every Amendment 14-16 row has a step or a CI test."""
+
+
+# V3-005C rows whose lv5c/hr5c step has landed -> (suite, step); several pairs: every backend must pass
+SLICE_C_ROWS = {
+    "V7-R": ("lv5c", "v7r-combine"), "V11": ("lv5c", "v11-compare"),
+    "V6-sens": ("lv5c", "v6-compare"),  # the V6-sens status is evaluated inside v6-compare
+    "V6": (("lv5c", "v6-compare"), ("hr5c", "v6-cuda-compare")),  # both backends must pass
+    "R1-D2": ("lv5c", "r1-d2-regression"), "P7": ("lv5c", "p7-sampler"), "V2b-el": ("lv5c", "v2b-el-combine"),
+    "V7-scan-el": ("lv5c", "v7-scan-el"), "V7-shift-el": ("lv5c", "v7-shift-el"), "E1-B": ("lv5c", "e1-b-compare"),
+    "E-shape": ("lv5c", "e-shape-exploratory"), "V8-nuc": ("hr5c", "v8-stat-compare"),
+    "V10": ("lv5c", "v10-pp-level"), "V10-A": ("lv5c", "v10-a"), "X-ENDF": ("lv5c", "x-endf"),
+    "D9-BGG": ("lv5c", "d9-bgg"),
+}  # fmt: skip
+# rows evaluated by CI tests (node ids relative to the repository root; several: all must pass)
+SLICE_C_CI_ROWS: dict[str, tuple[str, ...]] = {
+    "P6": ("tests/ionmc/test_elastic_table.py::test_real_table_h1_p6_failure_recorded_and_positive_in_domain",
+           "tests/ionmc/test_elastic_law5.py::test_h1_ni_cross_sections_match_la150_reconstruction",
+           "tests/ionmc/test_elastic_bgg.py::test_calcium_100_mev_is_767_not_912"),  # recorded FAIL stays in the ledger
+    "P6-D": ("tests/ionmc/test_elastic_table.py::test_pp_domain_sign_fixtures_p6d",),
+    "X-MT5-SPEC": ("tests/ionmc/test_elastic_table.py::test_x_mt5_spec_fixtures",),
+    "P5-ext": ("tests/ionmc/test_elastic_warp.py::test_event_parity_recorded_inputs_float64_bit_equal",),
+    "C1-ext": ("tests/ionmc/test_elastic_table.py::test_loader_fail_closed_cases_c1_ext",
+               "tests/ionmc/test_elastic_transport.py::test_fail_closed_cases"),
+}  # fmt: skip
 
 
 def _plan_rows() -> list[str]:
     rows = re.findall(r"^\| ([A-Z][A-Za-z0-9-]*) \|", PLAN5.read_text(), flags=re.M)
-    return [r for r in rows if r not in ("Tier", "Row(s)", "#", "CI", "LV", "HR")]
+    # excluded: table headers and the first-column labels of the amendment tables (review-history "Item",
+    # the Amendment 20/21 outcome, branch, route, diagnostic, gate, integration and successor tables, and the
+    # model labels M2 / M3 of the Amendment 20 model table); none of them is a plan row
+    return [
+        r
+        for r in rows
+        if r
+        not in (
+            "Tier",
+            "Row(s)",
+            "#",
+            "CI",
+            "LV",
+            "HR",
+            "Item",
+            "Outcome",
+            "Branch",
+            "Route",
+            "Diagnostic",
+            "Gate",
+            "Integration",
+            "Successor",
+            "M2",
+            "M3",
+        )
+    ]
 
 
 def test_lv5_manifest_seeds_hashed_files_and_deferred() -> None:
@@ -1445,12 +1530,53 @@ def test_lv5_manifest_seeds_hashed_files_and_deferred() -> None:
     assert all("--workers" not in c or c[c.index("--workers") + 1] == "1" for _, c, _ in steps)
 
 
+def test_plan_rows_pending_steps_are_plan_rows() -> None:
+    """Every allowlisted V3-005C row (Amendment 14) exists in the plan, so stale entries fail."""
+    rows = set(_plan_rows())
+    assert PLAN_ROWS_PENDING_STEPS <= rows, PLAN_ROWS_PENDING_STEPS - rows
+    assert not PLAN_ROWS_PENDING_STEPS & (set(LV5_ROW_STEP) | LV5_NOT_IN_SUITE | LV5_SLICE_B)
+    assert not PLAN_ROWS_PENDING_STEPS & set(SLICE_C_ROWS) and not set(SLICE_C_CI_ROWS) & set(
+        SLICE_C_ROWS
+    )
+    assert set(SLICE_C_ROWS) | set(SLICE_C_CI_ROWS) <= rows
+    mod = _load("run_suite")
+    for row, spec in SLICE_C_ROWS.items():
+        pairs = spec if isinstance(spec[0], tuple) else (spec,)
+        for suite, step in pairs:
+            assert row in rows and step in {
+                n.split("-", 1)[1] for n in mod.full_step_names(suite, 2)
+            }
+
+
+def test_pending_plan_rows_allowlist_is_empty() -> None:
+    """Amendment 14 (m): the set must be empty before the V3-005C evidence commit (C9)."""
+    assert PLAN_ROWS_PENDING_STEPS == frozenset()
+
+
+def test_slice_c_ci_rows_name_existing_tests() -> None:
+    """Every CI node id of ``SLICE_C_CI_ROWS`` exists in its file (def of that name), so a rename fails here."""
+    for row, ids in SLICE_C_CI_ROWS.items():
+        assert ids, row
+        for node in ids:
+            path, name = node.split("::")
+            text = (REPO / path).read_text()
+            assert re.search(rf"^def {re.escape(name)}\(", text, flags=re.M), (row, node)
+
+
 def test_lv5_plan_rows_are_all_accounted_for_and_seeds_match_the_plan() -> None:
     mod, v5 = _load("run_suite"), _load("steps_v5")
     plan = PLAN5.read_text()
     rows = set(_plan_rows())
     assert {"N1", "V1", "V1b", "V2", "V2-probe", "V3", "V4", "V4b", "X1", "E1", "D6", "R1"} <= rows
-    accounted = set(LV5_ROW_STEP) | LV5_NOT_IN_SUITE | LV5_SLICE_B | {"V3-CI"}
+    accounted = (
+        set(LV5_ROW_STEP)
+        | LV5_NOT_IN_SUITE
+        | LV5_SLICE_B
+        | {"V3-CI"}
+        | PLAN_ROWS_PENDING_STEPS
+        | set(SLICE_C_ROWS)
+        | set(SLICE_C_CI_ROWS)
+    )
     assert rows - accounted == set(), (
         rows - accounted
     )  # a new plan row needs a step or a declaration
@@ -1651,3 +1777,1644 @@ def test_imported_partials_make_the_summary_non_conformant_by_code(tmp_path: Pat
         else:
             assert s["conformant"] and s["non_conformant_reasons"] == []
             assert c["conformant"] and c["non_conformant_reasons"] == []
+
+
+# -- V3-005B slice-B suites (lv5b, hr5) ------------------------------------------------------------
+QUAL5B, QUALHR5, REH5B = 20471004, 20451004, 20461004
+CONSUMED5B = 20441004  # amendment 11
+LV5B_STEPS = [
+    "lv5b-throughput", "v8-lv-python-vs-warp-cpu", "r1-nuc-regression",
+    "v5-150-on", "v5-150-off", "v5-200-on", "v5-200-off", "v5-compare",
+]  # fmt: skip
+HR5_STEPS = ["v8-stat-python-s0", "v8-stat-python-s1", "v8-stat-cpu64", "v8-stat-cuda32",
+             "v8-stat-cuda64", "v8-stat-compare", "v7-f32-f64-cuda"]  # fmt: skip
+# slice-B rows evaluated by V3-005B -> (suite, step); V6 is V3-005C
+SLICE_B_ROWS = {
+    "V2b": ("lv5b", "v2b-combine"), "V5": ("lv5b", "v5-compare"), "V7": ("lv5b", "v7-rep-combine"),
+    "V8": ("lv5b", "v8-lv-python-vs-warp-cpu"),
+}  # fmt: skip
+SLICE_B_DEFERRED: dict[str, str] = {}  # V6 moved to SLICE_C_ROWS (V3-005C C8)
+
+
+def summ_tag_none(name: str) -> bool:
+    return _load("summarize").expected_tag(name) is None
+
+
+def test_lv5b_hr5_manifest_seeds_hashed_set_and_deferred() -> None:
+    mod, v5b = _load("run_suite"), _load("steps_v5b")
+    names = [n.split("-", 1)[1] for n in mod.full_step_names("lv5b", 2)]
+    assert names[:8] == LV5B_STEPS
+    assert names[8:] == [*(f"v2b-s{k}" for k in range(v5b.V2B_SHARDS)), "v2b-combine", "v7-scan",
+                         "v7-shift", *(f"v7-rep-s{k}" for k in range(8)), "v7-rep-ref",
+                         "pytest-v7-rep-calibration", "v7-rep-combine",
+                         "v3-workers-partition"]  # fmt: skip
+    assert len(names) == 25 and v5b.V7_SHARDS == mod.V7_REP_SHARDS == 8
+    full = mod.full_step_names("lv5b", 2)
+    assert [full.index(n) + 1 for n in full if "v7-rep" in n] == list(range(14, 25))
+    assert [n.split("-", 1)[1] for n in full][:2] == ["lv5b-throughput", "v8-lv-python-vs-warp-cpu"]
+    assert [n.split("-", 1)[1] for n in mod.full_step_names("hr5", 2)] == HR5_STEPS
+    assert mod.DEFAULT_SEED_BASES["lv5b"] == QUAL5B == v5b.QUALIFICATION_SEED_BASE
+    assert mod.DEFAULT_SEED_BASES["hr5"] == QUALHR5 == v5b.HR5_SEED_BASE
+    assert v5b.REHEARSAL_SEED_BASE == REH5B
+    assert mod.deferred_step_names("lv5b") == [f"{len(names):02d}-v3-workers-partition"]
+    assert mod.deferred_step_names("hr5") == []
+    for suite, base_ in (("lv5b", QUAL5B), ("hr5", QUALHR5)):
+        for name, cmd, env in mod.suite_steps(suite, 1, 0.5):
+            if "pytest" in name:  # the calibration pytest step has no seed
+                assert "--seed-base" not in cmd and "tests/ionmc/test_v7_coverage.py" in cmd
+                assert env["IONMC_REQUIRE_DATA"] == "1"
+                continue
+            assert cmd[cmd.index("--seed-base") + 1] == str(base_), name
+            assert env["IONMC_REQUIRE_DATA"] == "1", name
+            assert ("IONMC_REQUIRE_CUDA" in env) == (suite == "hr5"), name
+            if "workers-partition" not in name:
+                assert "steps_v5b.py" in " ".join(cmd), name
+            assert "--workers" not in cmd or cmd[cmd.index("--workers") + 1] == "1", name
+    for suite in ("lv5b", "hr5"):
+        got = {str(f.relative_to(mod.REPO)) for f in mod.source_files(suite)}
+        assert {
+            "validation/scripts/transport/steps_v5b.py",
+            "validation/plans/v3-005-acceptance.md",
+            "src/ionmc/transport/kernels_nuclear.py",
+        } <= got
+    assert "validation/scripts/transport/steps_v5b.py" not in mod.source_file_list("lv5")
+    with pytest.raises(SystemExit):  # imports need a manifest
+        mod.suite_steps("lv5b", 1, 1.0, import_dirs=["x"])
+    with pytest.raises(SystemExit):
+        mod.suite_steps("hr5", 1, 1.0, import_dirs=["x"])
+    assert mod.step_timeout_s("lv5b", "08-v2b-s0", 1500) == 3300
+    for k in range(8):
+        assert mod.step_timeout_s("lv5b", f"{14 + k:02d}-v7-rep-s{k}", 1500) == 3300
+    assert mod.step_timeout_s("lv5b", "22-v7-rep-ref", 1500) == 3300
+    cmds = {n.split("-", 1)[1]: c for n, c, _ in mod.suite_steps("lv5b", 1, 1.0)}
+    for k in range(8):
+        c = cmds[f"v7-rep-s{k}"]
+        assert c[c.index("v7-rep-shard") + 1 :][:2] == ["--shard", str(k)] and "--out-dir" in c
+    assert "--out-dir" in cmds["v7-rep-ref"] and "--dirs" in cmds["v7-rep-combine"]
+    assert mod.step_timeout_s("lv5b", "23-pytest-v7-rep-calibration", 1500) == 3300
+    cal = cmds["pytest-v7-rep-calibration"]  # the calibration runs in exact-SHA local validation
+    assert cal[1:3] == ["-m", "pytest"] and "tests/ionmc/test_v7_coverage.py" in cal
+    assert (
+        cal[cal.index("-m", 3) + 1] == "calibration" and "-p" in cal and "no:cacheprovider" in cal
+    )
+    assert summ_tag_none("23-pytest-v7-rep-calibration")
+    assert mod.step_timeout_s("hr5", "03-v8-stat-cpu64", 1500) == 3600
+
+
+def test_slice_b_rows_have_steps_or_are_declared_and_seeds_match_plan() -> None:
+    mod, v5b = _load("run_suite"), _load("steps_v5b")
+    plan = PLAN5.read_text()
+    rows = set(_plan_rows())
+    assert (
+        set(SLICE_B_ROWS) | set(SLICE_B_DEFERRED) | {"V6"} == LV5_SLICE_B and "V6" in SLICE_C_ROWS
+    )
+    assert LV5_SLICE_B <= rows
+    for row, (suite, step) in SLICE_B_ROWS.items():
+        assert step in {n.split("-", 1)[1] for n in mod.full_step_names(suite, 2)}, row
+    assert "V3-005C" in plan  # V6 and E1-B are declared as belonging to V3-005C
+    am6 = plan[plan.index("**Amendment 6") : plan.index("**Amendment 7")]
+    pairs = {
+        k.lower(): int(v)
+        for k, v in re.findall(r"([A-Za-z0-9]+(?:-[A-Za-z0-9]+)*) (\d+)(?=[ ,)])", am6)
+    }
+    want = {
+        "throughput": 1, "v8-lv": 2, "r1-nuc": 3, "v5-150-on": 4, "v5-150-off": 5,
+        "v5-200-on": 6, "v5-200-off": 7, "v2b": 8, "v7-scan": 9, "v7-shift": 10,
+        "v7-replicates": 11,
+    }  # fmt: skip
+    assert {k: pairs[k] for k in want} == want
+    assert {**v5b.R_INDEX, "v7-replicates": v5b.R_INDEX["v7-rep"]}.keys() >= want.keys()
+    assert all(v5b.R_INDEX[k if k != "v7-replicates" else "v7-rep"] == v for k, v in want.items())
+    assert v5b.R_INDEX_RESERVED == {"v6": 12, "e1-b": 13} and v5b.R_INDEX_HR == {
+        "v8-stat": 1,
+        "v7-f32": 2,
+    }
+    assert "20471004" in plan and "20451004" in plan
+
+
+def test_slice_b_tags_blockers_documents_and_shard_budget() -> None:
+    summ, mod, v5b = _load("summarize"), _load("run_suite"), _load("steps_v5b")
+    src = (SCRIPTS / "steps_v5b.py").read_text()
+    printed = set(re.findall(r'"step": "([a-z0-9-]+)"', src))
+    for suite in ("lv5b", "hr5"):
+        tags = {summ.expected_tag(n) for n in mod.full_step_names(suite, 2)} - {
+            "v3-workers",
+            None,
+        }  # None: pytest step
+        assert tags <= printed, tags - printed
+    assert summ.expected_tag("03-r1-nuc-regression") == "r1-nuc"
+    assert summ.expected_tag("14-v7-rep-s0") == summ.expected_tag("21-v7-rep-s7") == "v7-rep-shard"
+    assert summ.expected_tag("22-v7-rep-ref") == "v7-rep-ref"
+    assert summ.expected_tag("24-v7-rep-combine") == "v7-rep-combine"
+    assert {"v7-rep-shard", "v7-rep-ref", "v7-rep-combine"} <= printed
+    assert summ.expected_tag("03-r1-a16-t1-regression") == "r1"
+    assert summ.seed_blockers(QUAL5B, "lv5b") == [] and summ.seed_blockers(QUALHR5, "hr5") == []
+    assert summ.seed_blockers(REH5B, "lv5b") and summ.seed_blockers(QUAL5B, "hr5")
+    assert summ.seed_blockers(QUAL5B, "lv5")
+    # the declared shard counts keep every step within limit/margin at the declared host rates
+    r = v5b.DECLARED_RATES
+    limit = v5b.STEP_LIMIT_S / v5b.MARGIN
+    v2b_rate = 1.0 / (1.0 / r["v2b-a"] + 1.0 / r["v2b-b"])
+    assert v5b.V2B_N / v5b.V2B_SHARDS / v2b_rate <= limit
+    assert v5b.HR5_PYTHON_SHARDS * v5b.HR5_PYTHON_N / v5b.HR5_PYTHON_SHARDS / r["python"] <= limit
+    assert sum(v5b.V7_SCAN_N) / r["warp-cpu-f64"] <= limit
+    # V7 replicate shards: 9e6 histories each, at the declared rate and at the measured rate of the
+    # 500-history run_range blocks of batch_estimates (about 5000 hist/s), within limit / margin
+    assert v5b.V7_SHARD_N / r["warp-cpu-f64"] <= limit
+    assert v5b.V7_SHARD_N / r["warp-cpu-f64-blocks"] <= limit
+    assert (
+        v5b.V7_SHARD_N / r["warp-cpu-f64-blocks"]
+        <= mod.step_timeout_s("lv5b", "14-v7-rep-s0", 1500) / 1.25
+    )
+    assert (v5b.V7_SHARDS * v5b.V7_SHARD_N + v5b.V7_REF_N) / r["warp-cpu-f64"] / (
+        v5b.V7_SHARDS + 1
+    ) <= limit
+    # frozen counts of the plan rows
+    assert (v5b.V5_N, v5b.V5_BATCHES, v5b.V5_DZ_MM, v5b.V5_HALF_MM) == (100_000, 20, 0.5, 200.0)
+    assert (v5b.V8_K, v5b.V8_DENSE_MIN_EVENTS, v5b.V8_TOL) == (256, 50, 1e-10)
+    assert v5b.V7_REPLICATES == 7200 == v5b.V7_SHARDS * v5b.V7_REPS_PER_SHARD
+    assert v5b.V7_SHARD_BATCHES == 18_000 and v5b.V7_REP_N == 10_000 and v5b.V7_BINS == 12
+    seeds = [v5b.seed_of("v7-rep", k) for k in range(v5b.V7_SHARDS + 1)]  # shards 0..7, reference 8
+    lo = v5b.base.SEED_BASE + 1000 * v5b.R_INDEX["v7-rep"]
+    assert seeds == list(range(lo, lo + 9)) and seeds[-1] < lo + 1000
+    assert len(set(seeds)) == 9 and v5b.V7_REPLICATES * v5b.V7_BINS >= v5b.V7_MIN_INTERVALS
+    assert (v5b.V7_SLOPE, v5b.V7_SLOPE_TOL, v5b.V7_LEGACY_TARGET, v5b.V7_LEGACY_TOL) == (
+        -0.5,
+        0.05,
+        0.68,
+        0.03,
+    )
+    assert v5b.V2B_N == 1_000_000 and v5b.V8_SAMPLES["cuda32"][3] == 1_000_000
+    assert len(v5b.R1_NUC_DIGEST) == 64
+
+
+# -- hr5 v8-stat-compare: T12 on identical, independent and biased samples (C18a) ----------
+def _v8_sample(seed: int, hpb: int, nb: int = 100, nz: int = 120, rate: float = 6.0) -> dict:
+    """A synthetic partial of ``v8-stat-sample``: Bragg-like IDD with batch noise, sparse Poisson
+    ``sec_p`` / ``nuc_local`` profiles (``rate`` events per bin and batch at 1000 histories per
+    batch, scaling with ``hpb``) and scalar channels."""
+    rng = np.random.default_rng(seed)
+    z = (np.arange(nz) + 0.5) / nz
+    shape = 1.0 + 4.0 * np.exp(-(((z - 0.8) / 0.05) ** 2)) * (z < 0.82)
+    shape = np.where(z > 0.85, 0.0, shape)
+    idd = shape[None, :] * (1.0 + 0.5 / np.sqrt(hpb) * rng.standard_normal((nb, nz)))
+    lam = rate * hpb / 1000.0
+    return {
+        "n": hpb * nb, "n_batches": nb, "precision": "float64",
+        "idd": idd.tolist(),
+        "sec_p": (rng.poisson(lam, (nb, nz)) / lam * 1e-3).tolist(),
+        "nuc_local": (rng.poisson(lam, (nb, nz)) / lam * 1e-3).tolist(),
+        "nuclear_local": (1.3 + 0.1 * rng.standard_normal(nb)).tolist(),
+        "escaped_neutral": (2.5 + 0.1 * rng.standard_normal(nb)).tolist(),
+    }  # fmt: skip
+
+
+def test_v8_stat_compare_identical_independent_biased() -> None:
+    v5b = _load("steps_v5b")
+    parity = importlib.import_module("ionmc.transport.parity")
+    a, b = _v8_sample(11, 1000), _v8_sample(12, 1000)
+    # (a) a sample compared with itself: every profile passes (p = 1), every scalar is equal
+    same = parity.t12_compare(v5b.observables([a]), v5b.observables([a]))
+    assert same["pass"] is True
+    assert all(r["verdict"] == "pass" and r["p_value"] == 1.0 for r in same["arrays"].values())
+    # (b) two independent samples of the same distribution (different seeds) pass the T12 tolerances
+    indep = parity.t12_compare(v5b.observables([a]), v5b.observables([b]))
+    assert indep["pass"] is True, indep
+    # (c) a deliberately biased sample (IDD +2 %) fails, on the IDD profile and the total deposit
+    bad = dict(b, idd=(np.array(b["idd"]) * 1.02).tolist())
+    biased = parity.t12_compare(v5b.observables([a]), v5b.observables([bad]))
+    assert biased["pass"] is False
+    assert biased["arrays"]["idd"]["verdict"] == "fail"
+    assert biased["scalars"]["total_deposit_mev"]["pass"] is False
+
+
+def test_v8_stat_compare_sparse_profile_is_inconclusive_not_a_bug() -> None:
+    """Root cause of the C18a rehearsal failure at 100 batches x 200 histories: the sparse
+    ``nuc_local`` profile has no individually supported bin (singleton mass fraction 0 < 0.5), so
+    T12 fails closed as ``inconclusive`` even for a sample compared with itself; with the frozen
+    batch size (10^4 histories per batch, here 1000) the same data pass."""
+    v5b = _load("steps_v5b")
+    parity = importlib.import_module("ionmc.transport.parity")
+    sparse = _v8_sample(21, 200, rate=0.5)
+    res = parity.t12_compare(v5b.observables([sparse]), v5b.observables([sparse]))
+    rec = res["arrays"]["nuc_local"]
+    assert res["pass"] is False and rec["verdict"] == "inconclusive"
+    assert rec["singleton_mass_fraction"] < 0.5 and rec["p_value"] == 1.0
+
+
+def test_v5_compare_step_registered_and_fails_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """C19 F3: ``v5-compare`` is an lv5b step after the four producers, tagged for summarize, its
+    timeout and source hashes are registered, and without usable reference runs the document is a
+    failed one carrying the reason (never a skip)."""
+    mod, v5b, summ = _load("run_suite"), _load("steps_v5b"), _load("summarize")
+    assert "v5-compare" in v5b.STEPS and "v5-ionmc" in v5b.STEPS
+    assert summ.expected_tag("07-v5-compare") == "v5-compare"
+    assert summ.expected_tag("06-v5-200-off") == "v5-ionmc"
+    assert mod.step_timeout_s("lv5b", "08-v5-compare", 1500) >= 1800
+    files = mod.source_file_list("lv5b")
+    assert "validation/scripts/reference/compare_idd_v5.py" in files
+    fake = [{"reduced": False, "n": 100000} for _ in range(4)]
+    seen: dict = {}
+    monkeypatch.setattr(v5b.v5, "load_partials", lambda a, names: fake)
+    monkeypatch.setattr(v5b.v5, "attestation_block", lambda a: {})
+    monkeypatch.setattr(v5b, "finish5b", lambda doc, frozen, used, reduced: seen.update(doc) or 1)
+    ns = argparse.Namespace(dirs=[str(tmp_path)], reference_dir=str(tmp_path / "no-runs"))
+    assert v5b.step_v5_compare(ns) == 1
+    assert seen["pass"] is False and seen["verdict"] is None and seen["error"]
+
+
+def test_v5_compare_step_without_engine_runs_is_a_failed_document(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """C20 G2: valid partials with an empty reference dir give a failed document whose reason is
+    the missing engine runs (not an unrelated error), and the frozen cases dir is recorded."""
+    from tests.ionmc import test_compare_idd_v5 as t5
+
+    v5b = _load("steps_v5b")
+    parts = []
+    for e in (150, 200):
+        for nuc in (True, False):
+            f = tmp_path / f"p{e}{nuc}.json"
+            t5._partial(f, e, nuc, t5.noisy(t5._scaled(e, nuc), 20, 0.03, e))
+            parts.append(json.loads(f.read_text()) | {"reduced": False})
+    # the step re-serialises the partials: recompute the content digest after adding fields
+    for p in parts:
+        p["content_sha256"] = t5.M.content_digest(p)
+    seen: dict = {}
+    monkeypatch.setattr(v5b.v5, "load_partials", lambda a, names: parts)
+    monkeypatch.setattr(v5b.v5, "attestation_block", lambda a: {})
+    monkeypatch.setattr(v5b, "finish5b", lambda doc, frozen, used, reduced: seen.update(doc) or 1)
+    (tmp_path / "refs").mkdir()
+    ns = argparse.Namespace(dirs=[str(tmp_path)], reference_dir=str(tmp_path / "refs"))
+    assert v5b.step_v5_compare(ns) == 1
+    assert seen["pass"] is False and seen["verdict"] is None
+    assert "IddError" in seen["error"] and "no topas reference runs" in seen["error"]
+    assert seen["cases_dir"].endswith("validation/reference_cases")
+
+
+def _lv5b_environment(mod: ModuleType) -> dict[str, object]:
+    return {"suite": "lv5b", "git_sha": SHA,
+            "source_hashes": {str(f.relative_to(mod.REPO)): mod.sha256(f)
+                              for f in mod.source_files("lv5b")}}  # fmt: skip
+
+
+def test_v5_case_files_are_enumerated_hashed_and_present() -> None:
+    """Review fe367d22: the 96 files of the 24 frozen V5 cases are in the hashed set of lv5b/hr5
+    (and of no other suite), enumerated (no prefix) and all present."""
+    mod = _load("run_suite")
+    files = mod.V5_CASE_FILES
+    assert len(files) == len(set(files)) == 96
+    topas = [f for f in files if "/topas/" in f]
+    mcs = [f for f in files if "/mcsquare/" in f]
+    assert len(topas) == 24 and len(mcs) == 72
+    names = {f.split("/")[2] + "/" + f.split("/")[3] for f in files}
+    assert names == {
+        f"topas/proton-water-{e}mev-idd-r20{t}-seed{k}"
+        for e in (150, 200)
+        for t in ("", "-emonly")
+        for k in (1, 2, 3)  # fmt: skip
+    } | {
+        f"mcsquare/proton-water-{e}mev-idd-r20-{n}-seed{k}"
+        for e in (150, 200)
+        for n in ("on", "off")
+        for k in (1, 2, 3)  # fmt: skip
+    }
+    assert not any(
+        "x1" in f or "x2" in f or "x3" in f or "x4" in f or "lateral" in f for f in files
+    )
+    assert "validation/reference_cases" not in mod.SOURCE_PREFIXES
+    for suite in ("lv5b", "hr5"):
+        listed = mod.source_file_list(suite)
+        assert set(files) <= set(listed)
+        assert {str(f.relative_to(mod.REPO)) for f in mod.source_files(suite)} >= set(files)
+    for suite in ("lv", "hr", "lv4", "hr4", "lv5"):
+        assert not set(files) & set(mod.source_file_list(suite))
+    for f in files:
+        assert (mod.REPO / f).is_file(), f
+    # every file of every V5 case directory is listed (no unlisted aux file)
+    dirs = {Path(f).parent for f in files}
+    on_disk = {p.relative_to(mod.REPO).as_posix() for d in dirs for p in (mod.REPO / d).iterdir()}
+    assert on_disk == set(files)
+
+
+def test_missing_v5_case_file_fails_the_hashing_loudly(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    mod = _load("run_suite")
+    monkeypatch.setattr(mod, "REPO", tmp_path)
+    with pytest.raises(SystemExit, match="frozen V5 case file"):
+        mod.source_files("lv5b")
+    with pytest.raises(SystemExit, match="frozen V5 case file"):
+        mod.source_files("hr5")
+
+
+def test_attestation_detects_a_changed_frozen_v5_case_file(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Gitless-snapshot workflow: the archive's recorded hash of a case file differs from the
+    commit's blob -> ``content differs``; an unrecorded one is ``tracked but not hashed``."""
+    mod, summ = _load("run_suite"), _load("summarize")
+    env = _lv5b_environment(mod)
+    hashes: dict[str, str] = env["source_hashes"]  # type: ignore[assignment]
+    case = mod.V5_CASE_FILES[0]
+    assert case in hashes and mod.V5_CASE_FILES[-1] in hashes
+
+    tracked = sorted(hashes)
+
+    def fake_git(*args: str) -> bytes | None:
+        if args[0] == "ls-tree":
+            return "\n".join(tracked).encode()
+        if args[0] == "cat-file":  # the commit's blob = the current file on disk
+            return (mod.REPO / args[2].split(":", 1)[1]).read_bytes()
+        return None
+
+    monkeypatch.setattr(summ, "_git", fake_git)
+    ok = summ.attest(env, SHA)
+    assert ok["valid"], ok["mismatches"]
+    hashes[case] = "0" * 64  # the snapshot's case file was modified
+    bad = summ.attest(env, SHA)
+    assert not bad["valid"]
+    assert bad["mismatches"] == [f"content differs: {case}"]
+    del hashes[case]  # or not hashed at all
+    assert f"tracked but not hashed: {case}" in summ.attest(env, SHA)["mismatches"]
+
+
+def test_v5_compare_records_that_bound_cases_are_in_the_source_identity(tmp_path: Path) -> None:
+    mod, v5b = _load("run_suite"), _load("steps_v5b")
+    cases = mod.REPO / "validation" / "reference_cases"
+    t_case = "topas/proton-water-150mev-idd-r20-seed1"
+    m_case = "mcsquare/proton-water-150mev-idd-r20-on-seed1"
+    verdict = {"groups": [{"binding": {"T-1": {"bound_case": t_case},
+                                       "M-1": {"bound_case": m_case}}}]}  # fmt: skip
+    rec = v5b.bound_cases_source_identity(verdict, cases)
+    assert rec["cases_in_source_identity"] is True
+    assert len(rec["bound_case_paths"]) == 2 + 6
+    assert set(rec["bound_case_paths"]) <= set(mod.source_file_list("lv5b"))
+    # a bound case that is not in the frozen set (e.g. exploratory X1) fails the document
+    x1 = {"b": {"bound_case": "topas/proton-water-150mev-idd-r20-x1-no-hadron-elastic"}}
+    with pytest.raises(SystemExit, match="not in the suite source identity"):
+        v5b.bound_cases_source_identity(x1, cases)
+    # an extra unlisted file in a bound case directory fails as well
+    extra = tmp_path / "topas" / "proton-water-150mev-idd-r20-seed1"
+    extra.mkdir(parents=True)
+    (extra / "case.json").write_text("{}")
+    (extra / "surprise.txt").write_text("x")
+    with pytest.raises(SystemExit, match="not in the suite source identity"):
+        v5b.bound_cases_source_identity(
+            {"b": {"bound_case": "topas/proton-water-150mev-idd-r20-seed1"}}, tmp_path
+        )
+    with pytest.raises(SystemExit, match="no bound case"):
+        v5b.bound_cases_source_identity({}, cases)
+
+
+def test_suite_definition_and_hashing_need_no_ionmc() -> None:
+    """The host interpreter running ``run_suite.py`` has no ``ionmc``: defining and hashing every
+    suite must not import the step modules (regression of RUN-20261008T130049Z-5a04b473)."""
+    code = (
+        "import sys\n"
+        "sys.modules['ionmc'] = None\n"
+        f"sys.path.insert(0, {str(SCRIPTS)!r})\n"
+        "import run_suite\n"
+        "for s in run_suite.SUITES:\n"
+        "    assert run_suite.source_file_list(s), s\n"
+        "    if s in ('lv5d', 'hr5d'):  # T1 registers the suite constants only; the step lists are T2\n"
+        "        continue\n"
+        "    assert run_suite.suite_steps(s, 1, 1.0, single_process=True), s\n"
+        "assert run_suite.source_files('lv5b')\n"
+        "assert run_suite.V2B_SHARDS == 2\n"
+        "assert not any(m.startswith('steps') for m in sys.modules)\n"
+    )
+    r = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, cwd=REPO, timeout=120
+    )
+    assert r.returncode == 0, r.stderr
+    text = (SCRIPTS / "run_suite.py").read_text()
+    assert 'import_module("steps' not in text
+    assert not re.search(r"^import steps|^from steps", text, re.M)
+
+
+def test_lv5b_consumed_base_refused_and_new_base_accepted() -> None:
+    """Amendment 11: 20441004 is consumed for lv5b, 20471004 qualifies; the V7 seeds fit."""
+    summ, mod, v5b = _load("summarize"), _load("run_suite"), _load("steps_v5b")
+    assert mod.V5B_CONSUMED_SEED_BASES == summ.V5B_CONSUMED_SEED_BASES == (CONSUMED5B,)
+    assert mod.V5B_QUALIFICATION_SEED_BASE == summ.V5B_QUALIFICATION_SEED_BASE == QUAL5B == 20471004
+    assert mod.DEFAULT_SEED_BASES["lv5b"] == QUAL5B and mod.DEFAULT_SEED_BASES["hr5"] == 20451004
+    assert CONSUMED5B not in mod.DEFAULT_SEED_BASES.values()
+    reasons = summ.seed_blockers(CONSUMED5B, "lv5b")
+    assert reasons and "consumed" in reasons[0]
+    assert summ.seed_blockers(QUAL5B, "lv5b") == []
+    assert summ.seed_blockers(20451004, "hr5") == []
+    with pytest.raises(SystemExit, match="consumed"):
+        mod.main(["--suite", "lv5b", "--seed-base", str(CONSUMED5B), "--expected-sha", "0" * 40,
+                  "--out", "unused-never-created"])  # fmt: skip
+    assert v5b.V7_REPLICATES == 7200
+    seeds = [v5b.seed_of("v7-rep", k) for k in range(v5b.V7_SHARDS + 1)]
+    lo = v5b.base.SEED_BASE + 1000 * v5b.R_INDEX["v7-rep"]
+    assert seeds == list(range(lo, lo + 9)) and seeds[-1] < lo + 1000
+
+
+def test_every_step_gets_the_fault_handler_environment() -> None:
+    """PYTHONFAULTHANDLER=1 is in the base environment of every step (a native crash of a step, as
+    the V7 shard SIGSEGV of the 2026-10-08 host runs, then leaves a Python traceback) and in the
+    environment of every lv5b / hr5 step."""
+    mod = _load("run_suite")
+    assert mod.STEP_BASE_ENV["PYTHONFAULTHANDLER"] == "1"
+    assert mod.STEP_BASE_ENV["PYTHONDONTWRITEBYTECODE"] == "1"
+    for suite in ("lv5b", "hr5"):
+        for name, _cmd, env in mod.suite_steps(suite, 1, 0.5):
+            assert env.get("PYTHONFAULTHANDLER") == "1", (suite, name)
+
+
+# ---- frozen suites lv5 / lv5b / hr5 pin elastic=False (V3-005C C3 review finding A) ------------
+def _frozen_suite_configs() -> list[tuple[str, object]]:
+    """Every nuclear-on configuration the producers of lv5, lv5b and hr5 build without running
+    transport: the shared ``steps_v5.nuc_config`` (all lv5 steps), its re-targeting ``wcfg`` for
+    every backend, the V7 shard config and the V8 statistical sample configs of hr5."""
+    v5, v5b = _load("steps_v5"), _load("steps_v5b")
+    from ionmc import materials as M
+
+    geo, grid, _, _ = v5.depth_box(M.WATER, 60.0)
+    kw = dict(energy=60.0, n=8, seed=1, geometry=geo, grid=grid, n_batches=2)
+    out: list[tuple[str, object]] = [("v5.nuc_config", v5.nuc_config(**kw))]
+    for backend, prec in (("python", "float64"), ("warp-cpu", "float64"), ("warp-cuda", "float32")):
+        out.append((f"v5b.wcfg:{backend}", v5b.wcfg(backend, prec, **kw)))
+        out.append((f"v5b.v7_config:{backend}", v5b.v7_config(backend, prec, 8, 2, 1)))
+    ns = argparse.Namespace(scale=1e-3, timeout=None)
+    for name in v5b.V8_SAMPLES:
+        out.append((f"v5b.v8_config:{name}", v5b.v8_config(name, ns)[0]))
+    return out
+
+
+def test_frozen_suite_producers_pin_elastic_false() -> None:
+    import ast
+
+    for label, cfg in _frozen_suite_configs():
+        assert cfg.physics.nuclear is True, label  # type: ignore[attr-defined]
+        assert cfg.physics.elastic is False, label  # type: ignore[attr-defined]
+    # no other producer of the frozen suites constructs a PhysicsOptions / SimulationConfig: every
+    # nuclear-on configuration comes from nuc_config (steps_v5b only re-targets it with replace)
+    for fname in ("steps_v5.py", "steps_v5b.py"):
+        tree = ast.parse((SCRIPTS / fname).read_text())
+        for fn in ast.walk(tree):
+            if isinstance(fn, ast.FunctionDef):
+                for call in ast.walk(fn):
+                    if (
+                        isinstance(call, ast.Call)
+                        and isinstance(call.func, ast.Name)
+                        and call.func.id in ("PhysicsOptions", "SimulationConfig")
+                    ):
+                        assert (fname, fn.name) == ("steps_v5.py", "nuc_config")
+
+
+@pytest.mark.requires_tables("nuclear")
+def test_lv5_nuclear_producer_is_bit_identical_to_non_elastic_run() -> None:
+    from dataclasses import replace
+
+    from ionmc import materials as M
+    from ionmc.simulation import Simulation
+
+    v5 = _load("steps_v5")
+    geo, grid, _, _ = v5.depth_box(M.WATER, 60.0)
+    cfg = v5.nuc_config(energy=60.0, n=16, seed=20351004, geometry=geo, grid=grid, n_batches=2)
+    ref = replace(
+        cfg,
+        physics=replace(cfg.physics, nuclear=True, nuclear_table_id=v5.TABLE_ID, elastic=False),
+    )
+    assert cfg == ref
+    a, b = Simulation(cfg).run(), Simulation(ref).run()
+    assert a.valid and b.valid
+    assert "elastic" not in a.diagnostics.get("nuclear", {})
+    for ga, gb in zip(a.grids, b.grids, strict=True):
+        np.testing.assert_array_equal(ga.batch_energy_mev, gb.batch_energy_mev)
+    assert a.energy_balance == b.energy_balance
+    assert a.counters == b.counters
+
+
+@pytest.mark.requires_tables("nuclear")
+def test_lv5b_warp_cpu_producer_config_validates() -> None:
+    from ionmc import materials as M
+    from ionmc.config import validate
+
+    v5, v5b = _load("steps_v5"), _load("steps_v5b")
+    geo, grid, _, _ = v5.depth_box(M.WATER, 60.0)
+    cfg = v5b.wcfg(
+        "warp-cpu", "float64", energy=60.0, n=8, seed=1, geometry=geo, grid=grid, n_batches=2
+    )
+    eff = validate(cfg)
+    assert eff.nuclear is not None and eff.nuclear.elastic is None
+
+
+# ---- V6 / V6-sens registration (V3-005C C8) ------------------------------------------------------
+def test_v6_registration_lv5c_hr5c_and_fail_closed_shards() -> None:
+    mod = _load("run_suite")
+    assert mod.V6_SHARDS is None and "hr5c" in mod.SUITES
+    lv = [n.split("-", 1)[1] for n in mod.full_step_names("lv5c", 2)]
+    assert (
+        "v6-unsized" in lv and "v6-compare" in lv and not any(n.startswith("v6-s") for n in lv)
+        and lv.index("v6-unsized") + 1 == lv.index("v6-compare")
+    )  # fmt: skip
+    assert [n.split("-", 1)[1] for n in mod.full_step_names("hr5c", 2)][-2:] == [
+        "v6-unsized",
+        "v6-cuda-compare",
+    ]
+    assert mod.DEFAULT_SEED_BASES["hr5c"] == 20491004
+    mod.V6_SHARDS = 2
+    try:
+        names = [n.split("-", 1)[1] for n in mod.full_step_names("lv5c", 2)]
+        assert "v6-unsized" not in names and {"v6-s0", "v6-s1", "v6-compare"} <= set(names)
+        for v in (
+            "nominal",
+            "sx-lo",
+            "sx-hi",
+            "st-lo",
+            "st-hi",
+            "rho-lo",
+            "rho-hi",
+            "r0-lo",
+            "r0-hi",
+        ):
+            assert {f"v6-sens-{v}-s0", f"v6-sens-{v}-s1"} <= set(names)
+        assert [n.split("-", 1)[1] for n in mod.full_step_names("hr5c", 2)][-3:] == [
+            "v6-cuda-s0",
+            "v6-cuda-s1",
+            "v6-cuda-compare",
+        ]
+        steps = mod.suite_steps("hr5c", 1, 1.0, python_parts=2)
+        for _, cmd, env in steps:
+            assert (
+                env["IONMC_REQUIRE_CUDA"] == "1"
+                and "--seed-base" in cmd
+                and cmd[cmd.index("--seed-base") + 1] == "20491004"
+            )
+        assert mod.step_timeout_s("hr5c", "10-v6-cuda-s0", 1500) == 3600
+        assert (
+            mod.step_timeout_s("lv5c", "02-v6-s0", 1500) == 3300
+            and mod.step_timeout_s("lv5c", "99-v6-compare", 1500) == 1800
+        )
+    finally:
+        mod.V6_SHARDS = None
+
+
+def test_v6_tags_hashed_set_and_seed_refusals() -> None:
+    mod, summ = _load("run_suite"), _load("summarize")
+    for name, tag in (
+        ("03-v6-s0", "v6-shard"),
+        ("04-v6-sens-nominal-s1", "v6-sens-shard"),
+        ("09-v6-compare", "v6-compare"),
+        ("02-v6-cuda-s3", "v6-cuda-shard"),
+        ("05-v6-cuda-compare", "v6-cuda-compare"),
+    ):
+        assert summ.expected_tag(name) == tag, name
+    for suite in ("lv5c", "hr5c"):
+        listed = mod.source_file_list(suite)
+        assert (
+            "validation/scripts/reference/gottschalk_v6.py" in listed
+            and "validation/scripts/transport/steps_v6.py" in listed
+        )
+    assert summ.seed_blockers(20491004, "hr5c") == [] and summ.seed_blockers(20481004, "hr5c")
+    assert summ.seed_blockers(20471004, "hr5c") and summ.seed_blockers(20491004, "lv5c")
+
+
+# -- V3-005D wiring T1: suites lv5d / hr5d, protection of the archived lv5c / hr5c definitions -----------------------
+# Golden values copied from the code at 5bb9ab64 (before the lv5d / hr5d registration); they must equal HEAD's behaviour.
+
+GOLDEN_LV5C_STEP_NAMES = (
+    "01-v6-e0",
+    "02-v10-pp-level",
+    "03-v10-a",
+    "04-v10-a-xcheck",
+    "05-x-endf",
+    "06-d9-bgg",
+    "07-lv5c-throughput",
+    "08-r1-d2-regression",
+    "09-v8-lv-python-vs-warp-cpu",
+    "10-p7-sampler",
+    "11-v10-a-trigger",
+    "12-v11-ionmc-150-emel",
+    "13-v11-ionmc-150-emonly",
+    "14-v11-ionmc-200-emel",
+    "15-v11-ionmc-200-emonly",
+    "16-v11-compare",
+    "17-v5-150-on",
+    "18-v5-150-off",
+    "19-v5-200-on",
+    "20-v5-200-off",
+    "21-v5-compare",
+    "22-v5-attribution",
+    "23-v2b-el-s0",
+    "24-v2b-el-s1",
+    "25-v2b-el-combine",
+    "26-v7-scan-el",
+    "27-v7-shift-el",
+    "28-v6-unsized",
+    "29-v6-compare",
+    "30-v7r-s0",
+    "31-v7r-s1",
+    "32-v7r-s2",
+    "33-v7r-s3",
+    "34-v7r-s4",
+    "35-v7r-s5",
+    "36-v7r-s6",
+    "37-v7r-s7",
+    "38-v7r-s8",
+    "39-v7r-s9",
+    "40-v7r-s10",
+    "41-v7r-s11",
+    "42-v7r-s12",
+    "43-v7r-s13",
+    "44-v7r-s14",
+    "45-v7r-s15",
+    "46-v7r-ref",
+    "47-pytest-v7r-calibration-s0",
+    "48-pytest-v7r-calibration-s1",
+    "49-pytest-v7r-calibration-s2",
+    "50-pytest-v7r-calibration-s3",
+    "51-pytest-v7r-calibration-s4",
+    "52-pytest-v7r-calibration-s5",
+    "53-pytest-v7r-calibration-s6",
+    "54-pytest-v7r-calibration-s7",
+    "55-pytest-v7r-calibration-s8",
+    "56-pytest-v7r-calibration-s9",
+    "57-pytest-v7r-calibration-s10",
+    "58-pytest-v7r-calibration-s11",
+    "59-pytest-v7r-calibration-s12",
+    "60-pytest-v7r-calibration-s13",
+    "61-pytest-v7r-calibration-s14",
+    "62-pytest-v7r-calibration-s15",
+    "63-pytest-v7r-calibration-s16",
+    "64-pytest-v7r-calibration-s17",
+    "65-pytest-v7r-calibration-s18",
+    "66-pytest-v7r-calibration-s19",
+    "67-pytest-v7r-calibration-s20",
+    "68-pytest-v7r-calibration-s21",
+    "69-pytest-v7r-calibration-s22",
+    "70-pytest-v7r-calibration-s23",
+    "71-pytest-v7r-calibration-s24",
+    "72-pytest-v7r-calibration-s25",
+    "73-pytest-v7r-calibration-s26",
+    "74-pytest-v7r-calibration-s27",
+    "75-pytest-v7r-calibration-s28",
+    "76-pytest-v7r-calibration-s29",
+    "77-pytest-v7r-calibration-s30",
+    "78-v7r-calibration-combine",
+    "79-v7r-combine",
+    "80-v7r-diag",
+    "81-e1-b-s0",
+    "82-e1-b-s1",
+    "83-e1-b-s2",
+    "84-e1-b-compare",
+    "85-e-shape-exploratory",
+    "86-v3-workers-partition",
+)
+GOLDEN_LV5C_ARGV_SHA256 = "ab5fb2f34c9f412f4969f6bb810be459674c5cf4673296979c2bde566b77b4ac"
+GOLDEN_LV5C_SPOT = [
+    "04-v10-a-xcheck",
+    [
+        "<PY>",
+        "<REPO>/validation/scripts/transport/steps_v5d.py",
+        "v10-a-xcheck",
+        "--scale",
+        "1.0",
+        "--timeout",
+        "2970",
+        "--seed-base",
+        "20481004",
+    ],
+    {
+        "IONMC_CACHE_DIR": "<REPO>/.ionmc-cache/ionmc-data",
+        "IONMC_REQUIRE_DATA": "1",
+        "PYTHONFAULTHANDLER": "1",
+    },
+]
+GOLDEN_HR5C_STEP_NAMES = (
+    "01-v8-stat-python-s0",
+    "02-v8-stat-python-s1",
+    "03-v8-stat-python-s2",
+    "04-v8-stat-python-s3",
+    "05-v8-stat-cpu64",
+    "06-v8-stat-cuda32",
+    "07-v8-stat-cuda64",
+    "08-v8-stat-compare",
+    "09-v7-f32-f64-cuda",
+    "10-v6-unsized",
+    "11-v6-cuda-compare",
+)
+GOLDEN_HR5C_ARGV_SHA256 = "81812a7497a1264ed44c19a6b2237d050aef1dc80953bcbb3d9adba9289755a7"
+GOLDEN_HR5C_SPOT = [
+    "08-v8-stat-compare",
+    [
+        "<PY>",
+        "<REPO>/validation/scripts/transport/steps_v5d.py",
+        "v8-stat-compare",
+        "--dirs",
+        "OUT",
+        "--scale",
+        "1.0",
+        "--timeout",
+        "1620",
+        "--seed-base",
+        "20491004",
+    ],
+    {
+        "IONMC_CACHE_DIR": "<REPO>/.ionmc-cache/ionmc-data",
+        "IONMC_REQUIRE_CUDA": "1",
+        "IONMC_REQUIRE_DATA": "1",
+        "PYTHONFAULTHANDLER": "1",
+    },
+]
+GOLDEN_SOURCE_FILES_V5C_LEN = 140
+GOLDEN_SOURCE_FILES_V5C_SHA256 = "9414aef7b46306177f1353ecfd8cc09a50553d2d349e28e7f51f9376d5873ba0"
+GOLDEN_DEFAULT_SEED_BASES = {
+    "lv": 20391004, "hr": 20391004, "lv4": 20401004, "hr4": 20401004, "lv5": 20421004, "lv5b": 20471004,
+    "hr5": 20451004, "lv5c": 20481004, "hr5c": 20491004,
+}  # fmt: skip
+ARCHIVE_SHA_LV5C_HR5C = (
+    "dd976c5a69850b9597ac4da938792d4273a71719"  # the committed lv5c / hr5c archives (README)
+)
+
+
+def _normalised_steps(mod: ModuleType, suite: str) -> list[list[object]]:
+    # the interpreter first: it usually lies under REPO (.venv) locally and elsewhere on a CI runner
+    pys = {mod.PY, os.path.realpath(mod.PY), sys.executable}
+    repos = {str(mod.REPO), os.path.realpath(mod.REPO)}
+
+    def rep(s: str) -> str:
+        for x in sorted(pys, key=len, reverse=True):
+            s = s.replace(x, "<PY>")
+        for x in sorted(repos, key=len, reverse=True):
+            s = s.replace(x, "<REPO>")
+        return s
+
+    steps = mod.suite_steps(suite, 1, 1.0, single_process=True)
+    return [
+        [n, [rep(str(x)) for x in a], {k: rep(v) for k, v in sorted(e.items())}]
+        for n, a, e in steps
+    ]
+
+
+@pytest.mark.parametrize("suite", ["lv5c", "hr5c"])
+def test_golden_archived_suite_steps_and_argv(suite: str) -> None:
+    """The step names, every step's argv and extra environment of the archived suites are unchanged."""
+    mod = _load("run_suite")
+    names = globals()[f"GOLDEN_{suite.upper()}_STEP_NAMES"]
+    assert tuple(mod.full_step_names(suite, 2)) == names
+    norm = _normalised_steps(mod, suite)
+    assert tuple(x[0] for x in norm) == names
+    digest = hashlib.sha256(json.dumps(norm, sort_keys=True).encode()).hexdigest()
+    assert digest == globals()[f"GOLDEN_{suite.upper()}_ARGV_SHA256"]
+    spot = globals()[f"GOLDEN_{suite.upper()}_SPOT"]
+    assert (
+        next(x for x in norm if x[0] == spot[0]) == spot
+    )  # one readable argv (suite base, timeout, env)
+
+
+def test_golden_archived_hashed_sets_seed_bases_and_ref_index() -> None:
+    mod = _load("run_suite")
+    files = mod.SOURCE_FILES_V5C
+    assert len(files) == GOLDEN_SOURCE_FILES_V5C_LEN
+    assert hashlib.sha256("\n".join(files).encode()).hexdigest() == GOLDEN_SOURCE_FILES_V5C_SHA256
+    assert files[0] == "pyproject.toml" and files[-1] == "validation/scripts/transport/v7r.py"
+    assert "validation/scripts/transport/steps_v6f.py" not in files  # the archived set is untouched
+    for suite in ("lv5c", "hr5c"):
+        assert mod.source_file_list(suite) == files
+    assert {
+        k: v for k, v in mod.DEFAULT_SEED_BASES.items() if k in GOLDEN_DEFAULT_SEED_BASES
+    } == GOLDEN_DEFAULT_SEED_BASES
+    assert mod.SUITES[:9] == tuple(GOLDEN_DEFAULT_SEED_BASES)
+    assert _load("v7r").V7R_REF_INDEX == 16  # archived V7-R; V7-R2 uses V7R2_REF_INDEX == 48
+    assert _load("v7r").V7R2_REF_INDEX == 48
+
+
+def _git_available(sha: str) -> bool:
+    return (
+        subprocess.run(
+            ["git", "cat-file", "-e", f"{sha}^{{commit}}"], cwd=REPO, capture_output=True
+        ).returncode
+        == 0
+    )
+
+
+@pytest.mark.parametrize("suite", ["lv5c", "hr5c"])
+def test_attest_of_the_archived_suites_still_passes_at_head(suite: str) -> None:
+    """``summarize.attest`` of an environment hashed under the archived (dd976c5a) definition of the suite verifies
+    at HEAD: the hashed set of lv5c / hr5c has not moved. The environment is rebuilt from that commit's own
+    ``run_suite.py`` (its prefixes and ``source_file_list``) and its blobs; the committed summaries
+    (``validation/results/transport/{lv5c,hr5c}-dd976c5-single-process.json``) record the same SHA and suite."""
+    sha = ARCHIVE_SHA_LV5C_HR5C
+    rec = json.loads(
+        (
+            REPO / "validation" / "results" / "transport" / f"{suite}-dd976c5-single-process.json"
+        ).read_text()
+    )
+    assert rec["git_sha"] == sha and rec["suite"] == suite
+    if not _git_available(sha):
+        pytest.skip("the archived commit dd976c5a is not in this clone (shallow checkout)")
+
+    def git(*args: str) -> bytes:
+        return subprocess.run(["git", *args], cwd=REPO, capture_output=True, check=True).stdout
+
+    old_src = git("show", f"{sha}:validation/scripts/transport/run_suite.py").decode()
+    ns: dict[str, object] = {
+        "__name__": "run_suite_dd976c5a",
+        "__file__": str(SCRIPTS / "run_suite.py"),
+    }
+    exec(compile(old_src, "run_suite_dd976c5a.py", "exec"), ns)  # noqa: S102 (the repository's own archived code)
+    old_files = ns["source_file_list"](suite)  # type: ignore[operator]
+    prefixes = tuple(ns["SOURCE_PREFIXES"])  # type: ignore[call-overload]
+    assert tuple(old_files) == _load("run_suite").source_file_list(
+        suite
+    )  # same individually hashed set at HEAD
+    assert prefixes == _load("run_suite").SOURCE_PREFIXES
+    tracked = [
+        p for p in git("ls-tree", "-r", "--name-only", sha).decode().splitlines()
+        if (p.startswith(prefixes) or p in old_files) and not p.endswith(".pyc") and "__pycache__" not in p
+    ]  # fmt: skip
+    hashes = {p: hashlib.sha256(git("cat-file", "blob", f"{sha}:{p}")).hexdigest() for p in tracked}
+    env = {"suite": suite, "git_sha": sha, "source_hashes": hashes}
+    att = _load("summarize").attest(env, sha)
+    assert att["valid"], att["mismatches"]
+
+
+def test_unknown_suite_is_an_error_not_a_fall_through(monkeypatch: pytest.MonkeyPatch) -> None:
+    mod, summ = _load("run_suite"), _load("summarize")
+    with pytest.raises(ValueError, match="unknown suite"):
+        mod.source_file_list("lv5e")
+    with pytest.raises(ValueError, match="unknown suite"):
+        mod.source_file_list("lv6")
+    monkeypatch.setenv("IONMC_RUN_SUITE", "nonsense")
+    with pytest.raises(ValueError, match="unknown suite"):
+        mod.source_file_list()
+    monkeypatch.delenv("IONMC_RUN_SUITE")
+    assert mod.source_file_list() == mod.SOURCE_FILES  # no suite selected: the base set
+    for suite in mod.SUITES:
+        assert mod.source_file_list(suite)
+    att = summ.attest(
+        {"suite": "lv5e", "git_sha": SHA, "source_hashes": {}}, SHA
+    )  # archive of an unknown suite
+    assert att["valid"] is False and "unknown suite" in att["mismatches"][0]
+
+
+def test_lv5d_hr5d_registration_constants() -> None:
+    mod, summ, v6f, v7r = _load("run_suite"), _load("summarize"), _load("steps_v6f"), _load("v7r")
+    assert mod.SUITES[-2:] == ("lv5d", "hr5d")
+    assert mod.DEFAULT_SEED_BASES["lv5d"] == 20531004 and mod.DEFAULT_SEED_BASES["hr5d"] == 20541004
+    assert (
+        summ.V5D_LV_QUALIFICATION_SEED_BASE == 20531004
+        and summ.V5D_HR_QUALIFICATION_SEED_BASE == 20541004
+    )
+    assert mod.V6F_ROW_BASE == summ.V6F_ROW_BASE == v6f.V6F_BASE == 20551004
+    assert (
+        v7r.V7R2_SEED_BASE == mod.V5D_LV_QUALIFICATION_SEED_BASE == 20531004
+    )  # V7-R2 draws at the lv5d base
+    assert mod.V5D_RETIRED_SEED_BASES == summ.V5D_RETIRED_SEED_BASES == (20511004, 20521004)
+    assert set(summ.V6F_STEP_TAGS) == set(v6f.STEPS)  # the exemption covers exactly the V6-F steps
+    # the source set: the lv5c chain plus the V6-F module, for both suites; the archived set is a prefix of it
+    for suite in ("lv5d", "hr5d"):
+        listed = mod.source_file_list(suite)
+        assert listed == mod.SOURCE_FILES_V5D != mod.SOURCE_FILES
+        assert "validation/scripts/transport/steps_v6f.py" in listed
+        assert listed[: len(mod.SOURCE_FILES_V5C)] == mod.SOURCE_FILES_V5C
+        assert all(f in listed for f in mod.SOURCE_FILES_V5C)
+        assert (mod.REPO / "validation/scripts/transport/steps_v6f.py").is_file()
+        assert mod.source_files(suite)  # hashes without a missing file
+    assert (
+        mod.DEFERRED_STEPS["lv5d"] == ("v3-workers-partition",) and mod.DEFERRED_STEPS["hr5d"] == ()
+    )
+    assert "hr5d" in mod.SUITES
+
+
+def test_lv5d_hr5d_force_single_process_and_refuse_earlier_bases(tmp_path: Path) -> None:
+    """The workers = 1 force list names lv5d / hr5d; an earlier or retired base is refused at the suite start."""
+    mod = _load("run_suite")
+    text = (SCRIPTS / "run_suite.py").read_text()
+    assert '"lv5c", "hr5c", "lv5d", "hr5d")' in text  # the force list
+    for suite in ("lv5d", "hr5d"):
+        for base in (*mod.V5C_CONSUMED_SEED_BASES, 20481004, 20491004, 20511004, 20521004):
+            r = _run("--suite", suite, "--seed-base", str(base), "--expected-sha", "0" * 40,
+                     "--out", str(REPO / "validation" / "generated" / "transport" / "t1-never-created"))  # fmt: skip
+            assert r.returncode != 0 and "earlier evidence base or retired" in r.stderr, (
+                suite,
+                base,
+                r.stderr,
+            )
+    assert not (REPO / "validation" / "generated" / "transport" / "t1-never-created").exists()
+
+
+def test_lv5d_hr5d_seed_blockers() -> None:
+    summ = _load("summarize")
+    assert summ.seed_blockers(20531004, "lv5d") == [] and summ.seed_blockers(20541004, "hr5d") == []
+    for suite, other in (("lv5d", 20541004), ("hr5d", 20531004)):
+        assert summ.seed_blockers(other, suite)  # the other suite's base
+    for suite in ("lv5d", "hr5d"):
+        for base in (
+            20511004,
+            20521004,
+            20481004,
+            20491004,
+            20471004,
+            20451004,
+            20441004,
+            20551004,
+            20505000,
+            20391004,
+        ):
+            assert summ.seed_blockers(base, suite), (suite, base)
+        assert summ.seed_blockers(None, suite)
+    assert "retired" in summ.seed_blockers(20511004, "lv5d")[0]
+    # the existing suites are unchanged (no loosening)
+    assert summ.seed_blockers(20531004, "lv5c") and summ.seed_blockers(20481004, "lv5c") == []
+    assert summ.seed_blockers(20541004, "hr5c") and summ.seed_blockers(20491004, "hr5c") == []
+    assert summ.seed_blockers(20531004, "lv") and summ.seed_blockers(20391004, "hr") == []
+
+
+def test_seed_blocker_envelopes_are_disjoint_from_v6f_and_the_v3_008_reservation() -> None:
+    mod, v6f = _load("run_suite"), _load("steps_v6f")
+    env = lambda base, rs: {base + 1000 * r + k for r in rs for k in range(1000)}  # noqa: E731 (conservative envelope)
+    v6f_seeds = {s for g in v6f.seeds_of(mod.V6F_ROW_BASE).values() for s in g}
+    reserved = set(
+        range(20572004, 20632004)
+    )  # V3-008 (shared seed-base ledger, Amendment 20 (f)2 note)
+    lv = env(mod.DEFAULT_SEED_BASES["lv5d"], range(21))
+    hr_used = env(mod.DEFAULT_SEED_BASES["hr5d"], mod.HR5D_USED_R_INDEX)
+    hr_reserved = env(mod.DEFAULT_SEED_BASES["hr5d"], mod.HR5D_RESERVED_R_INDEX)
+    v6f_env = env(mod.V6F_ROW_BASE, range(21))
+    assert mod.HR5D_USED_R_INDEX == (1, 2, 3)
+    assert not set(mod.HR5D_USED_R_INDEX) & set(mod.HR5D_RESERVED_R_INDEX)
+    assert set(mod.HR5D_RESERVED_R_INDEX) | set(mod.HR5D_USED_R_INDEX) | {
+        7,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+    } == set(range(20))
+    assert (
+        max(v6f_env) == 20572003 and max(hr_reserved) < 20572004
+    )  # the whole envelope ends below the reservation
+    for fam in (lv, hr_used, hr_reserved, v6f_env):
+        assert not fam & reserved
+    # the V6-F seeds lie outside the lv5d envelope and the used hr5d blocks; the reserved hr blocks 17-19 ARE the V6-F seeds
+    assert not v6f_seeds & lv and not v6f_seeds & hr_used and not v6f_seeds & reserved
+    for r_hr, key in ((17, "cpu"), (18, "sens"), (19, "cuda")):
+        block = env(mod.DEFAULT_SEED_BASES["hr5d"], [r_hr])
+        assert set(v6f.seeds_of(mod.V6F_ROW_BASE)[key]) <= block  # reserved for exactly these seeds
+    # the archived (lv5c / hr5c) bases' envelopes do not meet the lv5d / hr5d used blocks or the V6-F envelope (the
+    # retired unused bases drew no seed; their nominal envelope reaches 20532003 and is not an observed seed set)
+    for base in (20481004, 20491004):
+        assert not env(base, range(21)) & (lv | hr_used | v6f_env)
+
+
+def test_per_tag_seed_base_exemption_applies_only_to_the_v6f_tags(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    summ = _load("summarize")
+    v6f_tags = ("v6f-shard", "v6f-sens-shard", "v6f-cuda-shard", "v6f-compare", "v6f-timing")
+    assert tuple(summ.V6F_STEP_TAGS) == v6f_tags
+    for suite, base in (("lv5d", "20531004"), ("hr5d", "20541004")):
+        for tag in v6f_tags:
+            assert summ.expected_seed_base(tag, suite, base) == 20551004
+        for tag in ("v5-compare", "v8-stat-sample", "v6-shard", "v7r2-shard", "v11-compare"):
+            assert summ.expected_seed_base(tag, suite, base) == int(base)
+    for suite, base in (
+        ("lv5c", "20481004"),
+        ("hr5c", "20491004"),
+        ("lv", "20391004"),
+        (None, "20481004"),
+    ):
+        for tag in v6f_tags:  # outside lv5d / hr5d the archive's base is required for every tag
+            assert summ.expected_seed_base(tag, suite, base) == int(base)
+    assert (
+        summ.expected_seed_base("v6f-shard", "lv5d", None) == 20551004
+    )  # the row base is fixed, not recorded
+    assert (
+        summ.expected_seed_base("v5-compare", "lv5d", None) is None
+    )  # no recorded base: not checked (unchanged)
+
+    def step_file(name: str, suite: str, base: int) -> Path:
+        doc = {"step": "TAG", "suite": suite, "git_sha": SHA, "seed_base": base, "pass": True}
+        text = f"# command: x\n# git_sha: {SHA}\n# a\n# b\n#JSON-BEGIN\n{json.dumps(doc)}\n#JSON-END\n# exit=0"
+        p = tmp_path / f"{name}.txt"
+        p.write_text(text)
+        return p
+
+    def parse(
+        tag: str, doc_base: int, suite: str = "lv5d", archive_base: str = "20531004"
+    ) -> dict[str, object]:
+        monkeypatch.setattr(
+            summ, "expected_tag", lambda _n: tag
+        )  # the step tags of lv5d / hr5d are registered with the step lists
+        p = step_file("07-x", suite, doc_base)
+        p.write_text(p.read_text().replace('"TAG"', json.dumps(tag)))
+        return summ.parse_step(p, SHA, suite, archive_base)
+
+    assert parse("v6f-shard", 20551004)["pass"] is True  # V6-F step at the row base inside lv5d
+    assert (
+        parse("v6f-shard", 20531004)["pass"] is False
+    )  # at the suite base: the exemption is a fixed base, not "any"
+    assert parse("v6f-shard", 20551004, "hr5d", "20541004")["pass"] is True
+    assert parse("v5-compare", 20531004)["pass"] is True  # every other tag: the archive base
+    r = parse("v5-compare", 20551004)  # a non-V6-F step at the V6-F base is flagged
+    assert r["pass"] is False and any("seed_base" in p for p in r["problems"])  # type: ignore[attr-defined]
+    r = parse(
+        "v6f-shard", 20551004, "lv5c", "20481004"
+    )  # the exemption does not exist outside lv5d / hr5d
+    assert r["pass"] is False and any("seed_base" in p for p in r["problems"])  # type: ignore[attr-defined]
+
+
+# -- lv5d / hr5d step lists, tags, seeds, rows (wiring task T2; Amendment 20 (f)1, (f)3, (f)4, (f)8) -------------------
+def _seg(*names: str) -> list[str]:
+    return list(names)
+
+
+# Amendment 20 (f)3 (lv5d r_index table, "as lv5c") and the route (vi) 4 evidence order; the throughput step first
+# (route (vi) 3, review-route m2; plan (g) step 11 "lv5d (throughput first)"). Counts: 6 kappa parts (PN-V7R2-1/5),
+# 78 calibration parts (repair plan 6.5: 2 x 39), 48 transport shards + reference (index 48) + combine + diag
+# (r_index 16 / 17), 72 V6-F CPU shards (16 gating + 7 sensitivity runs x 8; (f)5), E1-B x 3 (Amendment 14a).
+GOLDEN_LV5D_STEP_NAMES: list[str] = [
+    *_seg("lv5d-throughput", "v6-e0", "v10-pp-level", "v10-a", "v10-a-xcheck", "x-endf", "d9-bgg"),
+    *_seg("r1-d2-regression", "v8-lv-python-vs-warp-cpu", "p7-sampler", "v10-a-trigger"),
+    *_seg(
+        "v11-ionmc-150-emel",
+        "v11-ionmc-150-emonly",
+        "v11-ionmc-200-emel",
+        "v11-ionmc-200-emonly",
+        "v11-compare",
+    ),
+    *_seg("v5-150-on", "v5-150-off", "v5-200-on", "v5-200-off", "v5-compare", "v5-attribution"),
+    *_seg(
+        "v2b-el-s0",
+        "v2b-el-s1",
+        "v2b-el-combine",
+        "v7-scan-el",
+        "v7-shift-el",
+        "v6-unsized",
+        "v6-compare",
+    ),
+    *[f"v6f-s{k}" for k in range(16)],
+    *[
+        f"v6f-sens-{v}-s{k}"
+        for v in ("nominal", "sx-lo", "sx-hi", "st-lo", "st-hi", "rho-lo", "rho-hi")
+        for k in range(8)
+    ],
+    *[f"pytest-v7r2-kappa-s{i}" for i in range(6)],
+    "v7r-kappa-combine",
+    *[f"pytest-v7r2-calibration-s{i}" for i in range(78)],
+    "v7r2-calibration-combine",
+    *[f"v7r2-s{k}" for k in range(48)],
+    *_seg("v7r2-ref", "v7r2-combine", "v7r2-diag"),
+    *_seg(
+        "e1-b-s0",
+        "e1-b-s1",
+        "e1-b-s2",
+        "e1-b-compare",
+        "e-shape-exploratory",
+        "v3-workers-partition",
+    ),
+]
+# Amendment 20 (f)1, (f)4 and (f)8: V8-stat (python x 4, cpu64, cuda32, cuda64, compare), V7 f32/f64 CUDA,
+# v6-unsized / v6-cuda-compare, the V6-F CUDA timing step (first of the V6-F steps), 16 CUDA shards, v6f-compare
+# (hosted here, review round W-1); r_index 1, 2, 3 only.
+GOLDEN_HR5D_STEP_NAMES: list[str] = [
+    *[f"v8-stat-python-s{k}" for k in range(4)],
+    *_seg(
+        "v8-stat-cpu64", "v8-stat-cuda32", "v8-stat-cuda64", "v8-stat-compare", "v7-f32-f64-cuda"
+    ),
+    *_seg("v6-unsized", "v6-cuda-compare", "v6f-timing"),
+    *[f"v6f-cuda-s{k}" for k in range(16)],
+    "v6f-compare",
+]
+GOLDEN_LV5D_ARGV_SHA256 = "367ed41882301a18547d0467add6678ebfe9b4d61406ede119cba412f8ca27b7"
+GOLDEN_HR5D_ARGV_SHA256 = "9d0ed7f1c37097e2fbc68f8b05703a31a1a1cfdd3ba626653a0189303c2d3663"
+LV5D_BASE, HR5D_BASE, V6F_BASE = 20531004, 20541004, 20551004
+
+
+def _numbered(names: list[str]) -> tuple[str, ...]:
+    return tuple(f"{i:02d}-{n}" for i, n in enumerate(names, 1))
+
+
+def _arg(argv: list[str], flag: str) -> str:
+    return argv[argv.index(flag) + 1]
+
+
+@pytest.mark.parametrize("suite", ["lv5d", "hr5d"])
+def test_lv5d_hr5d_step_lists_are_golden(suite: str) -> None:
+    mod = _load("run_suite")
+    names = _numbered(globals()[f"GOLDEN_{suite.upper()}_STEP_NAMES"])
+    assert tuple(mod.full_step_names(suite, 2)) == names
+    assert len(names) == {"lv5d": 244, "hr5d": 29}[suite]
+    assert len(set(names)) == len(names)
+    norm = _normalised_steps(mod, suite)
+    assert tuple(x[0] for x in norm) == names
+    digest = hashlib.sha256(json.dumps(norm, sort_keys=True).encode()).hexdigest()
+    assert digest == globals()[f"GOLDEN_{suite.upper()}_ARGV_SHA256"]
+    assert mod.deferred_step_names(suite) == (
+        ["244-v3-workers-partition"] if suite == "lv5d" else []
+    )
+    if suite == "lv5d":
+        base = [n.split("-", 1)[1] for n in names]
+        assert (
+            sum(n.startswith("v6f-") for n in base) == 72
+        )  # the 72 CPU shards; v6f-compare is an hr5d step
+        assert sum(n.startswith("pytest-v7r2-kappa-") for n in base) == 6
+        assert sum(n.startswith("pytest-v7r2-calibration-") for n in base) == 78
+        assert sum(n.startswith("v7r2-s") for n in base) == 48 and "v6f-compare" not in base
+        assert not any(
+            n.startswith(("v7r-s", "v7r-ref", "v7r-combine", "v7r-diag", "pytest-v7r-"))
+            for n in base
+        )
+        # the V7-R2 order: the calibration verdict precedes every transport shard
+        assert (
+            base.index("v7r2-calibration-combine") < base.index("v7r2-s0") < base.index("v7r2-ref")
+        )
+        assert base.index("v7r-kappa-combine") < base.index("pytest-v7r2-calibration-s0")
+        assert base[0] == "lv5d-throughput"
+    else:
+        base = [n.split("-", 1)[1] for n in names]
+        assert base.index("v6f-timing") < base.index("v6f-cuda-s0") < base.index("v6f-compare")
+
+
+def test_lv5c_and_hr5c_are_untouched_by_the_v6f_and_v7r2_registration() -> None:
+    """Besides the golden argv digests: no archived step name carries a V7-R2 or V6-F name, no V7-R2 pytest step exists."""
+    mod = _load("run_suite")
+    for suite in ("lv5c", "hr5c"):
+        for n in mod.full_step_names(suite, 2):
+            assert not n.split("-", 1)[1].startswith(
+                ("v6f", "v7r2", "lv5d", "pytest-v7r2", "v7r-kappa")
+            )
+
+
+@pytest.mark.parametrize("suite", ["lv5d", "hr5d"])
+def test_lv5d_hr5d_floors_and_tags_cover_every_step(suite: str) -> None:
+    mod, summ = _load("run_suite"), _load("summarize")
+    base = {n.split("-", 1)[1] for n in mod.full_step_names(suite, 2)}
+    floors = mod.STEP_TIMEOUT_FLOOR_S[suite]
+    assert set(floors) == base  # a floor for every step and none for an unregistered step
+    for n in mod.full_step_names(suite, 2):
+        assert summ.expected_tag(n) is not False, n  # every step name has a STEP_TAGS entry
+        b = n.split("-", 1)[1]
+        assert mod.step_timeout_s(suite, n, 1500) == max(1500, floors[b]) >= 1800, n
+        if b.startswith(("v6f-s", "v6f-cuda", "v7r2-s", "pytest-v7r2", "v7r2-ref", "v6f-timing")):
+            # producers of the heavy families: the kill guards 3300 (lv5d) / 3600 (hr5d)
+            assert floors[b] == (3600 if suite == "hr5d" else 3300), n
+        if b.endswith(("combine", "compare", "diag", "unsized", "attribution")):
+            assert floors[b] == 1800, n  # consumers
+    assert mod.step_timeout_s("hr5d", "12-v6f-timing", 1500) == 3600
+
+
+def test_lv5d_hr5d_tags_are_the_step_documents_names_and_resolve_by_longest_prefix() -> None:
+    """The tag of a step is the subcommand of its argv, which is a key of the STEPS table of the step script (the script
+    prints that name in its document); the V7-R2 pytest steps have no document (tag ``None``)."""
+    mod, summ = _load("run_suite"), _load("summarize")
+    scripts: dict[str, ModuleType] = {}
+    for suite in ("lv5d", "hr5d"):
+        for name, argv, _ in mod.suite_steps(suite, 1, 1.0, single_process=True):
+            tag = summ.expected_tag(name)
+            if name.split("-", 1)[1].startswith("pytest-"):
+                assert tag is None and argv[1:3] == ["-m", "pytest"], name
+                continue
+            stem = Path(argv[1]).stem
+            if stem not in scripts:
+                scripts[stem] = _load(stem)
+            assert tag == argv[2], (name, tag, argv[2])
+            assert argv[2] in scripts[stem].STEPS, (name, argv[2])
+    # prefix collisions: sensitivity before the gating shards, V7-R2 names before V7-R names
+    for base, tag in (
+        ("v6f-s3", "v6f-shard"), ("v6f-sens-st-hi-s7", "v6f-sens-shard"), ("v6f-cuda-s15", "v6f-cuda-shard"),
+        ("v6f-compare", "v6f-compare"), ("v6f-timing", "v6f-timing"), ("v7r2-s47", "v7r2-shard"),
+        ("v7r2-ref", "v7r2-ref"), ("v7r2-combine", "v7r2-combine"), ("v7r2-diag", "v7r2-diag"),
+        ("v7r2-calibration-combine", "v7r2-calibration-combine"), ("v7r-kappa-combine", "v7r-kappa-combine"),
+        ("lv5d-throughput", "lv5d-throughput"), ("v7r-s3", "v7r-shard"), ("v6-s3", "v6-shard"),
+        ("v7r-combine", "v7r-combine"), ("v7r-calibration-combine", "v7r-calibration-combine"),
+    ):  # fmt: skip
+        assert summ.expected_tag(f"07-{base}") == tag, base
+    assert summ.expected_tag("07-pytest-v7r2-kappa-s0") is None
+
+
+def test_lv5d_hr5d_seed_derivation_per_step() -> None:
+    """Seeds are base + 1000 * r_index + k: every lv5d / hr5d step takes its suite base except the V6-F steps (row base
+    20551004, Amendment 20 (f)2); V7-R2 shards r_index 16 (20547004 + k at the lv5d base), the reference index 48, V6-F
+    r_index 7 / 8 / 9 (20558004.., 20559004.., 20560004..), the timing seed fixed at 20514000."""
+    mod, v7r, v6f = _load("run_suite"), _load("v7r"), _load("steps_v6f")
+    c = _load("steps_v5c")
+    lv = {n.split("-", 1)[1]: a for n, a, _ in mod.suite_steps("lv5d", 1, 1.0, single_process=True)}
+    hr = {n.split("-", 1)[1]: a for n, a, _ in mod.suite_steps("hr5d", 1, 1.0, single_process=True)}
+    for steps, base in ((lv, LV5D_BASE), (hr, HR5D_BASE)):
+        for name, argv in steps.items():
+            if name.startswith("pytest-"):
+                assert "--seed-base" not in argv, name  # no seed drawn here
+                continue
+            want = V6F_BASE if name.startswith("v6f-") else base
+            assert _arg(argv, "--seed-base") == str(want), (name, argv)
+    assert V6F_BASE == mod.V6F_ROW_BASE == v6f.V6F_BASE
+    for k in range(48):  # V7-R2: r_index 16
+        seed = LV5D_BASE + 1000 * 16 + k
+        assert seed == 20547004 + k == v7r.r2_shard_seed(k)
+        assert _arg(lv[f"v7r2-s{k}"], "--shard") == str(k) and _arg(
+            lv[f"v7r2-s{k}"], "--seed-base"
+        ) == str(LV5D_BASE)
+        c.base.SEED_BASE = LV5D_BASE  # the step derives the seed from the base it was given
+        assert c.r2_seed(k) == seed
+    assert (
+        20547004 + 48 == v7r.r2_ref_seed(48) == 20547052
+    )  # the reference index 48 is no shard index
+    assert LV5D_BASE + 16000 + v7r.V7R2_REF_INDEX == 20547052 and v7r.V7R2_REF_INDEX not in range(
+        48
+    )
+    seeds = v6f.seeds_of(V6F_BASE)
+    for k in range(16):  # V6-F gating CPU, r_index 7; CUDA, r_index 9
+        assert seeds["cpu"][k] == V6F_BASE + 7000 + k == 20558004 + k
+        assert seeds["cuda"][k] == V6F_BASE + 9000 + k == 20560004 + k
+        assert _arg(lv[f"v6f-s{k}"], "--shard") == str(k) and _arg(
+            hr[f"v6f-cuda-s{k}"], "--shard"
+        ) == str(k)
+    for v in (
+        "nominal",
+        "sx-lo",
+        "sx-hi",
+        "st-lo",
+        "st-hi",
+        "rho-lo",
+        "rho-hi",
+    ):  # r_index 8, shared by all runs (CRN)
+        for k in range(8):
+            assert seeds["sens"][k] == V6F_BASE + 8000 + k == 20559004 + k
+            a = lv[f"v6f-sens-{v}-s{k}"]
+            assert _arg(a, "--variant") == v and _arg(a, "--shard") == str(k)
+    assert (
+        v6f.V6F_TIMING_SEED == 20514000
+    )  # fixed; the step argv carries only the row base (recorded in its document)
+    assert _arg(hr["v6f-timing"], "--seed-base") == str(V6F_BASE)
+    # the shard counts of the registered families are the ones of the step script (no import of ionmc in run_suite)
+    assert (mod.V6F_CPU_SHARDS, mod.V6F_SENS_SHARDS, mod.V6F_CUDA_SHARDS) == (
+        v6f.V6F_CPU_SHARDS, v6f.V6F_SENS_SHARDS, v6f.V6F_CUDA_SHARDS)  # fmt: skip
+    assert mod.V6F_SENS_RUNS == v6f.V6F_SENS_RUNS
+    assert (
+        mod.V7R2_SHARDS == v7r.V7R2_SHARDS == c.v7r.V7R2_SHARDS
+        and mod.V7R2_CAL_PARTS == v7r.V7R2_CAL_PARTS
+    )
+    assert mod.V7R_CAL_REPS == v7r.V7R_CAL_REPS == 3200
+
+
+def test_lv5d_hr5d_argv_is_single_process_and_runner_forces_one_worker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mod = _load("run_suite")
+    for suite in ("lv5d", "hr5d"):
+        for name, argv, _ in mod.suite_steps(suite, 1, 1.0, single_process=True):
+            assert "--workers" not in argv or argv[argv.index("--workers") + 1] == "1", name
+    real_steps = mod.suite_steps
+    for suite in ("lv5d", "hr5d"):
+        # the runner forces ``--workers 1`` for these suites even for ``--workers auto`` (no --single-process needed)
+        seen: dict[str, object] = {}
+
+        def fake_steps(
+            suite_: str, workers: int, *a: object, _seen: dict = seen, **k: object
+        ) -> list[object]:  # type: ignore[type-arg]
+            _seen.update(suite=suite_, workers=workers)
+            raise SystemExit("captured")
+
+        monkeypatch.setattr(mod, "suite_steps", fake_steps)
+        assert real_steps is not fake_steps
+        out = REPO / "validation" / "generated" / "transport" / f"t2-{suite}-never-created"
+        with pytest.raises(SystemExit, match="captured"):
+            mod.main(
+                [
+                    "--suite",
+                    suite,
+                    "--out",
+                    str(out),
+                    "--expected-sha",
+                    "0" * 40,
+                    "--workers",
+                    "auto",
+                ]
+            )
+        assert seen == {"suite": suite, "workers": 1} and not out.exists()
+
+
+def test_lv5d_hr5d_pytest_steps_select_exactly_one_case_each() -> None:
+    mod = _load("run_suite")
+    steps = mod.suite_steps("lv5d", 1, 1.0, out=Path("OUT"), single_process=True)
+    kappa = [(n, a, e) for n, a, e in steps if "pytest-v7r2-kappa-" in n]
+    cal = [(n, a, e) for n, a, e in steps if "pytest-v7r2-calibration-" in n]
+    assert len(kappa) == 6 and len(cal) == 78
+    assert mod.V7R2_KAPPA_CASES == (
+        "archive_fitted-single-p0", "archive_fitted-pair-p0", "archive_fitted-pair-p1",
+        "rehearsal_block_sums-single-p0", "rehearsal_block_sums-pair-p0", "rehearsal_block_sums-pair-p1",
+    )  # fmt: skip
+    assert (
+        mod.V7R2_CAL_CASES[0] == "archive_fitted-part00"
+        and mod.V7R2_CAL_CASES[38] == "archive_fitted-part38"
+    )
+    assert (
+        mod.V7R2_CAL_CASES[39] == "rehearsal_block_sums-part00"
+        and mod.V7R2_CAL_CASES[77] == "rehearsal_block_sums-part38"
+    )
+    for i, (_n, a, e) in enumerate(kappa):
+        assert a == [mod.PY, "-m", "pytest", *mod.v7r2_pytest_args("kappa", i)]
+        assert "tests/ionmc/test_v7r2_calibration.py" in a
+        assert a[a.index("-k") + 1] == f"test_v7r2_kappa_part and {mod.V7R2_KAPPA_CASES[i]}"
+        assert e["IONMC_V7R_FIXTURES"] == "required" and e["IONMC_V7R_CAL_OUT"] == str(
+            Path("OUT") / "samples"
+        )
+        assert "IONMC_V7R_KAPPA_DIR" not in e  # the kappa parts produce the record
+    for i, (_n, a, e) in enumerate(cal):
+        assert a[a.index("-k") + 1] == f"test_v7r2_calibration_part and {mod.V7R2_CAL_CASES[i]}"
+        assert e["IONMC_V7R_FIXTURES"] == "required" and e["IONMC_V7R_CAL_REPS"] == "3200"
+        assert e["IONMC_V7R_KAPPA_DIR"] == str(
+            Path("OUT") / "samples"
+        )  # the parts refuse to run without the record
+    # with imported archives the record is read from the first imported directory
+    imp = mod.suite_steps(
+        "lv5d", 1, 1.0, out=Path("OUT"), import_dirs=["IMP"], partials_manifest="M.json"
+    )
+    assert [e["IONMC_V7R_KAPPA_DIR"] for n, a, e in imp if "pytest-v7r2-calibration-" in n] == [
+        "IMP"
+    ] * 78
+    # the combine steps write their sealed status into the step output and read the archives through --dirs
+    comb = {
+        n.split("-", 1)[1]: a
+        for n, a, _ in steps
+        if n.split("-", 1)[1] in ("v7r-kappa-combine", "v7r2-calibration-combine")
+    }
+    for a in comb.values():
+        assert a[a.index("--out-dir") + 1] == str(Path("OUT") / "samples") and "--dirs" in a
+    # the V7-R2 steps never inherit the rehearsal-directory override; the header lines are written for them
+    for n in ("12-pytest-v7r2-kappa-s0", "55-pytest-v7r2-calibration-s3"):
+        assert mod.is_v7r_calibration_step(n)
+        env = mod.step_environment({"IONMC_V7R_REHEARSAL_DIR": "/x", "IONMC_V6_X": "1"}, n, {})
+        assert (
+            "IONMC_V7R_REHEARSAL_DIR" not in env
+            and "IONMC_V6_X" not in env
+            and env["IONMC_V7R_CAL_REPS"] == "3200"
+        )
+    assert not mod.is_v7r_calibration_step("30-v7r2-s0") and mod.is_v7r_calibration_step(
+        "62-pytest-v7r-calibration-s15"
+    )
+
+
+def test_lv5d_hr5d_import_dirs_need_a_manifest_and_unknown_suites_still_raise() -> None:
+    mod = _load("run_suite")
+    for suite in ("lv5d", "hr5d"):
+        with pytest.raises(SystemExit, match="requires --partials-manifest"):
+            mod.suite_steps(suite, 1, 1.0, import_dirs=["IMP"])
+    with pytest.raises(SystemExit, match="unknown suite"):
+        mod.suite_steps("lv5e", 1, 1.0)
+
+
+def test_declared_plans_are_gated_by_suite_and_fail_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("IONMC_V7R2_CAL_RATE_RECORD", raising=False)
+    d = _load("steps_v5d")
+    lv5c_keys = [
+        "v7r (16 shards x 4.5e6, block rate)", "v2b-el (both variants, 1e6 each)",
+        "v7-scan-el (1e4 + 1e5 + 1e6, plus f32 1e5)", "v7-shift-el (3 layouts)", "v5-ionmc (per step)",
+        "v11-ionmc (per step)", "v8-nuc python sample (4 x 3e4, 150 MeV)", "e1-b (python 150 MeV, 1e5)",
+        "e-shape (python 150 MeV, 2 x 2e4)",
+    ]  # fmt: skip
+    assert (
+        list(d.declared_plans()) == lv5c_keys
+    )  # the default and the archived lv5c table: unchanged (golden)
+    assert d.declared_plans("lv5c") == d.declared_plans("hr5c") == d.declared_plans()
+    assert d.declared_plans()["v7r (16 shards x 4.5e6, block rate)"] == (72_000_000, "blocks", 16)
+    with pytest.raises(SystemExit, match="calibration rate not measured"):
+        d.declared_plans("lv5d")  # fail closed without the measured rate record (Amendment 20 (f)8)
+    plans = d._declared_plans("lv5d")  # the ungated table (the gate itself: test_v7r2_wiring_t3.py)
+    assert "v7r (16 shards x 4.5e6, block rate)" not in plans  # V7-R is not an lv5d row
+    assert plans["v7r2 transport (48 shards x 2.25e6, block rate)"] == (
+        48 * 2_250_000,
+        "blocks",
+        48,
+    )
+    assert plans["v7r2 reference (1e6, block rate)"] == (1_000_000, "blocks", 1)
+    assert plans["v6f gating (16 shards x 1e6)"] == (16_000_000, "v5", 16)
+    assert plans["v6f-sens (7 runs x 8 shards x 1e6)"] == (56_000_000, "v5", 56)
+    assert [k for k in plans if k in d.declared_plans()] == [
+        k for k in lv5c_keys if not k.startswith("v7r (")
+    ]
+    for bad in (
+        "hr5d",
+        "lv5b",
+        "lv5e",
+        "lv",
+        "",
+        "LV5D",
+    ):  # fail closed: no table, no silent default
+        with pytest.raises(SystemExit, match="no shard table is registered"):
+            d.declared_plans(bad)
+    with pytest.raises(SystemExit, match="belong to lv5d"):
+        d.rep_plan_table("lv5c")
+    assert not d.rep_plan_table("lv5d")[
+        "ok"
+    ]  # no measured rate: not ok (the default rate is extrapolated)
+    rep = (
+        _load("v7r").r2_rep_plans()
+    )  # rep-based kappa / calibration parts, the extrapolated default rates (library)
+    assert (
+        rep["ok"] and len(rep["plans"]) == 4
+    )  # calibration + three kappa parts families (single p0, pair p0, pair p1)
+    assert (
+        rep["plans"]["v7r2 calibration (3200 reps x 39 parts per surrogate)"]["declared_parts"]
+        == 39
+    )
+    # the throughput document of lv5c stays structurally as archived; lv5d adds the rep plans
+    assert d.THROUGHPUT_STEP_SUITE == {"lv5c-throughput": "lv5c", "lv5d-throughput": "lv5d"}
+    assert "lv5d-throughput" in d.STEPS and d.STEPS["lv5d-throughput"] is d.STEPS["lv5c-throughput"]
+    # the rep plan is not ok at 14 s per repetition: the throughput verdict would fail closed
+    assert not _load("v7r").r2_rep_plans(cal_s_per_rep=14.0)["ok"]
+
+
+@pytest.mark.parametrize("suite", ["lv5c", "hr5c", "lv5d", "hr5d"])
+def test_normalised_steps_carry_no_machine_dependent_content(suite: str) -> None:
+    """The golden digests must be portable: after normalisation no absolute path, home or temp directory, hostname or
+    user name remains (the first CI run failed because the interpreter path, which lies under the repository locally,
+    was normalised before it)."""
+    import getpass
+    import socket
+
+    mod = _load("run_suite")
+    norm = _normalised_steps(mod, suite)
+    texts = [str(x) for _, argv, env in norm for x in (*argv, *env.keys(), *env.values())]
+    assert texts
+    for t in texts:
+        for tok in t.split():  # a pytest -k expression holds spaces; every token must be path free
+            assert not tok.startswith("/") and ":\\" not in tok, (suite, t)
+    blob = json.dumps(norm)
+    leaks = {os.path.realpath(mod.REPO), str(mod.REPO), sys.executable, os.path.realpath(sys.executable),
+             os.path.expanduser("~"), os.environ.get("TMPDIR", ""), socket.gethostname(), getpass.getuser()}  # fmt: skip
+    for leak in leaks - {"", "/", "/tmp"}:
+        assert leak not in blob, (suite, leak)
+    assert "<PY>" in blob and "<REPO>" in blob
+
+
+# -- synthetic lv5d / hr5d archives: seed and tag checks, V6-F exemption, rows --------------------------------------
+def _env_d(suite: str, base: int) -> str:
+    lines = [
+        f"suite={suite}", f"git_sha={SHA}", "sha_source=git", "tree_dirty=no", "scale=1.0", f"seed_base={base}",
+        "python_parts=2", "only=", "source_hashes:", f"  {'0' * 64}  src/ionmc/a.py",
+    ]  # fmt: skip
+    return "\n".join(lines) + "\n"
+
+
+def _archive_d(d: Path, suite: str, *, skip: tuple[str, ...] = (),
+               doc_over: dict[str, dict] | None = None, cmd_over: dict[str, str] | None = None,  # type: ignore[type-arg]
+               base_over: dict[str, int] | None = None) -> list[str]:  # fmt: skip
+    """An archive of every step of ``suite`` built from the registered step list: statistical steps print a document
+    naming their tag, suite, SHA and seed base (V6-F tags: the row base); pytest steps carry their real command, the
+    ``# v7r_cal_reps`` header and a one-passed summary. ``skip`` drops steps (base names)."""
+    mod, summ = _load("run_suite"), _load("summarize")
+    base = {"lv5d": LV5D_BASE, "hr5d": HR5D_BASE}[suite]
+    steps = mod.suite_steps(suite, 1, 1.0, out=Path("OUT"), single_process=False)
+    d.mkdir()
+    names = [n for n, _, _ in steps if n.split("-", 1)[1] not in skip]
+    (d / "environment.txt").write_text(_env_d(suite, base))
+    (d / "manifest.txt").write_text("".join(f"{n}\n" for n in names))
+    for n, argv, _ in steps:
+        b = n.split("-", 1)[1]
+        if b in skip:
+            continue
+        cmd = (cmd_over or {}).get(b, " ".join(argv))
+        head = f"# command: {cmd}\n# git_sha: {SHA}\n# started_utc: now\n# step_timeout_s: 1\n"
+        tag = summ.expected_tag(n)
+        if tag is None:
+            body = head + "# v7r_cal_reps: 3200\n1 passed, 120 deselected in 1.0s\n"
+        else:
+            sb = (base_over or {}).get(b, V6F_BASE if tag in summ.V6F_STEP_TAGS else base)
+            doc = {"step": tag, "suite": suite, "git_sha": SHA, "seed_base": sb, "pass": True}
+            if tag == "v7r2-combine":
+                doc |= {"gates_pass": True, "calibration_status": {"pass": True}}
+            doc |= (doc_over or {}).get(b, {})
+            body = head + "#JSON-BEGIN\n" + json.dumps(doc) + "\n#JSON-END\n"
+        (d / f"{n}.txt").write_text(body + "\n# exit=0\n")
+    return names
+
+
+@pytest.mark.parametrize("suite", ["lv5d", "hr5d"])
+def test_synthetic_archive_passes_seed_tag_and_v6f_exemption_checks(
+    tmp_path: Path, suite: str
+) -> None:
+    summ = _load("summarize")
+    d = tmp_path / suite
+    names = _archive_d(d, suite)
+    s = summ.verify(d, SHA)
+    assert s["problems"] == [] and all(not v["problems"] for v in s["steps"].values())
+    assert (
+        s["pass"] is True
+        and s["subset"] is False
+        and s["seed_base"] == str(LV5D_BASE if suite == "lv5d" else HR5D_BASE)
+    )
+    assert (
+        s["conformant"] is True and s["non_conformant_reasons"] == []
+    )  # standard mode, no import, base ok
+    assert len(s["steps"]) == len(names)
+    v6f_steps = [n for n in names if summ.expected_tag(n) in summ.V6F_STEP_TAGS]
+    assert len(v6f_steps) == (72 if suite == "lv5d" else 18)
+    # the V6-F steps carry the row base inside lv5d / hr5d, which the exemption accepts
+    # a V6-F step at the suite base is flagged (the exemption is a fixed base, not "any")
+    bad = tmp_path / f"bad-{suite}"
+    first = v6f_steps[0].split("-", 1)[1]
+    _archive_d(bad, suite, base_over={first: LV5D_BASE if suite == "lv5d" else HR5D_BASE})
+    sb = summ.verify(bad, SHA)
+    assert sb["pass"] is False and any(
+        "seed_base" in p for p in sb["steps"][v6f_steps[0]]["problems"]
+    )
+    # a non-V6-F step at the V6-F base is flagged
+    bad2 = tmp_path / f"bad2-{suite}"
+    other = next(n for n in names if summ.expected_tag(n) not in (None, *summ.V6F_STEP_TAGS)).split(
+        "-", 1
+    )[1]
+    _archive_d(bad2, suite, base_over={other: V6F_BASE})
+    assert summ.verify(bad2, SHA)["pass"] is False
+
+
+def test_lv5d_rows_v7r2_conjunction_is_fail_closed(tmp_path: Path) -> None:
+    summ = _load("summarize")
+    d = tmp_path / "ok"
+    _archive_d(d, "lv5d")
+    rows = summ.verify(d, SHA)["rows"]
+    assert rows["V7-R2"]["pass"] is True and "verdict" not in rows["V7-R2"]
+    assert rows["V7-R2"]["kappa_steps"] == 6 and rows["V7-R2"]["calibration_steps"] == 78
+    assert set(rows) == {*summ.SLICE_C_STEP_ROWS["lv5d"], "V7-R2"} and "V7-R" not in rows
+    assert all(v["pass"] for v in rows.values())
+    cases = {
+        "missing calibration part": dict(skip=("pytest-v7r2-calibration-s77",)),
+        "missing kappa part": dict(skip=("pytest-v7r2-kappa-s0",)),
+        "missing kappa combine": dict(skip=("v7r-kappa-combine",)),
+        "missing status step": dict(skip=("v7r2-calibration-combine",)),
+        "missing v7r2-combine": dict(skip=("v7r2-combine",)),
+        "status failed": dict(doc_over={"v7r2-combine": {"calibration_status": {"pass": False}, "pass": False}}),
+        "gates failed": dict(doc_over={"v7r2-combine": {"gates_pass": False, "pass": False}}),
+        "wrong selection": dict(cmd_over={"pytest-v7r2-calibration-s3": "py -m pytest tests/ionmc/test_v7r2_calibration.py -m calibration"}),
+    }  # fmt: skip
+    for label, kw in cases.items():
+        dd = tmp_path / label.replace(" ", "-")
+        _archive_d(dd, "lv5d", **kw)  # type: ignore[arg-type]
+        r = summ.verify(dd, SHA)["rows"]["V7-R2"]
+        assert r["pass"] is False and r["verdict"] == summ.V7R_NOT_ESTABLISHED, label
+    # a short count, a stray or a repeated part
+    pairs = [(n.split("-", 1)[1], st) for n, st in summ.verify(d, SHA)["steps"].items()]
+    assert summ.v7r2_pytest_established(pairs)["calibration"] is True
+    assert (
+        summ.v7r2_pytest_established(
+            [
+                *pairs,
+                pairs[-1],
+                pairs[pairs.index(next(p for p in pairs if "calibration-s5" in p[0]))],
+            ]
+        )["calibration"]
+        is False
+    )
+    stray = [*pairs, ("pytest-v7r2-calibration-s78", pairs[0][1])]
+    assert summ.v7r2_pytest_established(stray)["calibration"] is False  # s78 is outside 0..77
+    assert summ.v7r2_pytest_established([*pairs, ("pytest-v7r2-other", pairs[0][1])]) == {
+        "kappa": False, "calibration": False, "kappa_steps": 6, "calibration_steps": 78}  # fmt: skip
+    short = [
+        (
+            n,
+            (
+                {**st, "pytest_counts": {"passed": 0, "skipped": 1}}
+                if n == "pytest-v7r2-kappa-s2"
+                else st
+            ),
+        )
+        for n, st in pairs
+    ]
+    assert summ.v7r2_pytest_established(short)["kappa"] is False
+    # the archived lv5c row set is unchanged: V7-R, no V7-R2
+    assert "V7-R2" not in summ.slice_c_rows("lv5c", {}) and "V7-R2" not in summ.slice_c_rows(
+        "hr5d", {}
+    )
+
+
+def test_hr5d_rows_and_v6_unsized_rows(tmp_path: Path) -> None:
+    summ = _load("summarize")
+    d = tmp_path / "hr"
+    _archive_d(
+        d,
+        "hr5d",
+        doc_over={"v6-unsized": {"verdict": "failed", "reason": "unsized", "pass": False}},
+    )
+    r = summ.verify(d, SHA)["rows"]
+    assert (
+        set(summ.SLICE_C_STEP_ROWS["hr5d"]) <= set(r)
+        and r["V6-F"]["step"] == "v6f-compare"
+        and r["V6-F"]["pass"]
+    )
+    assert (
+        r["V6"]["pass"] is False
+        and r["V6"]["verdict"] == "failed"
+        and r["V6-sens"]["verdict"] == "failed"
+    )
+    nrun = summ.step_rows("hr5d", {})
+    assert nrun["V6-F"] == {
+        "pass": False,
+        "step": "v6f-compare",
+        "status": "not run",
+    }  # absent: never a pass
+    # every plan row of the lv5d / hr5d maps to a step of the registered list; PLAN_ROWS_PENDING_STEPS stays empty
+    mod = _load("run_suite")
+    for suite in ("lv5d", "hr5d"):
+        base = {n.split("-", 1)[1] for n in mod.full_step_names(suite, 2)}
+        assert set(summ.SLICE_C_STEP_ROWS[suite].values()) <= base
+    assert PLAN_ROWS_PENDING_STEPS == frozenset()

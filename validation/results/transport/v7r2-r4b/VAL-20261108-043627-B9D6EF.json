@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "validation_id": "VAL-20261108-043627-B9D6EF",
+  "task_id": "V3-005B",
+  "recorded_at_utc": "2026-11-08T04:36:27.263386+00:00",
+  "suite": "V7-R2 calibration-rate measurement (host run, single-process, lv5d archive_fitted part00 of 83 repetitions)",
+  "status": "passed",
+  "summary": "Signed re-measurement of the calibration rate at bf694e965552e5e5b7336215f43cf894ca46e21a: host-runner job RUN-20261108T042138Z-386fdfc2 (exit 0, succeeded, state unchanged, 820.8 s, signed by host-runner key 4d02f521f3fb9344) ran tests/ionmc/test_v7r2_calibration.py::test_v7r2_calibration_part[archive_fitted-part00] (suite lv5d, token R4B-20261108T042139Z-bf694e96) against the combined kappa record of chain run RUN-20261108T031543Z-b7a850c2 (same SHA and suite; 6 kappa parts, all passed; imported through the snapshot cache). The run's stdout binds the part record (sha256 ff8d375f...) and part.log (61e4a113...). The rehearsal fixture at this SHA was regenerated from RUN-20261108T023053Z-a3ec6b36 (fixture tests 35 passed). No test suite beyond the calibration part was run in this record.",
+  "details": {
+    "git_sha": "bf694e965552e5e5b7336215f43cf894ca46e21a",
+    "host_runs": [
+      {
+        "run_id": "RUN-20261108T042138Z-386fdfc2",
+        "output_manifest_sha256": "9bb941e6e9799eca8378b3506cade5d1078e3e9cb0d94dc245591e8b4a0c5ead"
+      }
+    ],
+    "chain_run": "RUN-20261108T031543Z-b7a850c2",
+    "fixture_run": "RUN-20261108T023053Z-a3ec6b36",
+    "token": "R4B-20261108T042139Z-bf694e96",
+    "part_record_sha256": "ff8d375f3c61f4d249b28a346e17b61df2691b39163942bf33bc78dba07c120c",
+    "part_log_sha256": "61e4a1130ae7def9d9f109874bba157885447f176a71c22c94362a2b32cada9f"
+  },
+  "git_branch": "task/v3-005b-proton-nuclear-interactions-slice-b-warp-cpu-cuda-nuclear-ke",
+  "git_sha": "bf694e965552e5e5b7336215f43cf894ca46e21a",
+  "worktree": "/home/wahln/aiprojects/ion-mc-worktrees/v3-005b",
+  "attestation": {
+    "schema": "ionmc-attestation-1",
+    "alg": "ed25519",
+    "signer": "validation-manager",
+    "key_id": "be42a5ebe42a750b",
+    "public_key": "1ce925c716d495f263e9d9edf5ed42d4779e781b286049fa4f584a98880d20ef",
+    "signed_at_utc": "2026-11-08T04:36:27.276431+00:00",
+    "payload_sha256": "e1a02ab15c0c24268b1cfacdb8d8aeabc6594212829737307c31bcab385a339c",
+    "signature": "de1ae81ebe21260856e7c6b33d56ca2915d41ab8826d92a8985f63db2696bfcbb7bd4303258c4f7985a62b023ab214701fe5ad21a3f8e074a39f81dec839280c"
+  }
+}
