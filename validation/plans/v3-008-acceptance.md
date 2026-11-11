@@ -469,6 +469,8 @@ operator rules, and each host call ≤ 1500 s.
 |---|---|---|---|---|
 | TD-EM (main set, 9 cases) | `validation/results/transport/v8r2-topas/reports/TD-EM-case<1..9>.json`; signed run records `…/records/runs/<run_id>/` (index `…/records/index.json`, 36 IDD-EM parts) | runs at `ead583f1`; records and grading at `94bc948e` | TOPAS 20619000 + 100·part + case (parts 0–3); ionmc sample seal `0c68b78a` (REVIEW-9691e1b0) | **PASS 3** (He 150, C 290, O 350), **FAIL 6** (He 50, C 80, O 100: (d) PE; He 250, C 430, O 430: (c) z_peak; C 430, O 430 also (d)); see the dated results note of 2026-11-09 (STOP 3) |
 | TL-EM (main set, 9 cases) | `validation/results/transport/v8r2-topas/reports/TL-EM-case<1..9>.json`; signed run records as above (36 LAT-EM parts) | runs at `ead583f1`; records and grading at `94bc948e` | TOPAS 20619000 + 100·part + case (parts 4–7); ionmc sample seal `0c68b78a` | **PASS 1** (C 80), **FAIL 8**: 25 of 36 points invalid by §4.2 fit non-convergence (2-cycle at a bin edge in single batches/parts), 1 point TOPAS σ undefined; every evaluable gated point inside the band (r = 1.17–1.31); D_ext NOT EVALUABLE (He, C, O) |
+| TD-H = TD-EM + TD-FULL (held-out, cases 10–12) | `validation/results/transport/v8r2-topas/reports/TD-EM-case<10..12>.json`, `…/TD-FULL-case<10..12>.json`; signed run records `…/records/runs/<run_id>/` (index `…/records/index.json`, 24 IDD parts); host records `v8r2-samples/host-records/` | runs at `55e6a180`; records at `b18fa715`; grading at `1fc287cf` | TOPAS 20619000 + 100·part + case (parts 0–3, 8–11); ionmc held-out seal `ca21ec18` (REVIEW-557971cc), base 20621004 | **PASS 6/6** (TD-EM 3/3, TD-FULL 3/3); see the dated held-out results note of 2026-11-11 |
+| TL-H = TL-EM + TL-FULL (held-out, cases 10–12) | `…/reports/TL-EM-case<10..12>.json`, `…/TL-FULL-case<10..12>.json`; signed run records as above (24 LAT parts) | runs at `55e6a180`; records at `b18fa715`; grading at `1fc287cf` | TOPAS as above (parts 4–7, 12–15); ionmc held-out seal `ca21ec18`, base 20621004 | **PASS 6/6** (TL-EM 3/3, TL-FULL 3/3); no point invalid under the §4.2 window-cycle rule; D_ext not defined |
 
 ## Amendments
 
@@ -916,3 +918,88 @@ the records committed the held-out grader is complete: TD-H / TL-H (rows TD-EM, 
 frozen SHA) → A-rows at that SHA → held-out samples (13 chunks) → held-out seal commit + review + dated seal note →
 48 held-out TOPAS parts (IDD-EM, LAT-EM, IDD-FULL, LAT-FULL per case) → TD-H, TL-H graded once → V5-SS → report-only
 TL-EM re-evaluation and D-1…D-4 (any time after this commit; they read only committed inputs).
+
+### Dated results note — held-out set TD-H / TL-H (2026-11-11, orchestrator; amendment R2-STOP3 item 5: the held-out rows graded once)
+
+**Evidence.** The 48 held-out evidence parts (cases 10 He 100, 11 C 150, 12 O 200; IDD-EM parts 0–3 and LAT-EM parts
+4–7 at 2.5e4 primaries, IDD-FULL parts 8–11 at 5000 / 3200 / 2500, LAT-FULL parts 12–15 at 5000) ran sequentially on
+2026-11-11 08:02–10:02 UTC at `code_sha` 55e6a180 (the held-out seal-note commit; the held-out seal ca21ec18 is an
+ancestor; REVIEW-557971cc finished 07:54:30 UTC, item 4e). Their signed schema-3 run records (signer
+`reference-runner`, key_id 303cce4c129d387c) and verbatim artifact listings are committed under
+`validation/results/transport/v8r2-topas/records/` (commit b18fa715, item 4f); every listed file was verified
+against its sha256 and the signed `output_files_sha256` reproduces from the `work/` entries. `r2_evaluate.py
+check-run` at b18fa715: 48/48 VALID (binding, held-out chronology, frozen manifest, module markers). The sealed
+ionmc samples are the 13 held-out chunks of `sample-seal-heldout-r2stop3.json` (implementation f5f3a701, re-run
+base 20621004), each bound to its complete signed host-run record (items 4g–4i). The four rows were then graded,
+once each, with `r2_evaluate.py grade` at evaluator HEAD 1fc287cf (2026-11-11 11:58–11:59 UTC; the grade
+re-checks run validity, chronology, the replicate gate and the host-record binding before reading any number);
+the reports (statistics, record ids and sha256 only) are `validation/results/transport/v8r2-topas/reports/<row>-case<N>.json`
+for rows TD-EM, TD-FULL, TL-EM, TL-FULL and cases 10–12, bound by sha256 in the P9 freeze record. **They are final:
+nothing in them is re-graded.**
+
+**Verdict: TD-H PASS (TD-EM 3/3, TD-FULL 3/3) and TL-H PASS (TL-EM 3/3, TL-FULL 3/3)** — all twelve (case, row)
+grades PASS; every gated criterion passes in every case.
+**TD-EM (held-out):**
+
+| Case | Status | (a) R80 ionmc / TOPAS [mm] (stat ≤ tol) | (b) W ionmc / TOPAS [mm] (report-only) | (c) z_peak ionmc / TOPAS [mm] (stat ≤ 0.5) | (d) PE ionmc / TOPAS (stat ≤ tol) | (e) plateau groups (failing) |
+|---|---|---|---|---|---|---|
+| He 100 | **PASS** | 77.95 / 78.12 (0.18 ≤ 0.27) PASS | 0.570 / 0.550 (+3.6 %) | 77.54 / 77.71 (0.19) PASS | 9.44 / 9.42 (0.04 ≤ 0.28) PASS | 30 (0) PASS |
+| C 150 | **PASS** | 53.10 / 53.20 (0.11 ≤ 0.19) PASS | 0.215 / 0.216 (-0.4 %) | 52.86 / 53.01 (0.15) PASS | 10.95 / 11.06 (0.14 ≤ 0.33) PASS | 20 (0) PASS |
+| O 200 | **PASS** | 65.47 / 65.57 (0.10 ≤ 0.23) PASS | 0.226 / 0.232 (-2.5 %) | 65.27 / 65.34 (0.07) PASS | 11.51 / 11.58 (0.09 ≤ 0.35) PASS | 25 (0) PASS |
+
+**TD-FULL (held-out):**
+
+| Case | Status | (a) R80 ionmc / TOPAS [mm] (stat ≤ tol) | (b) W ionmc / TOPAS [mm] (report-only) | (c) z_peak ionmc / TOPAS [mm] (stat ≤ 0.5) | (d) PE ionmc / TOPAS (stat ≤ tol) | (e) plateau groups (failing) |
+|---|---|---|---|---|---|---|
+| He 100 | **PASS** | 77.95 / 78.11 (0.21 ≤ 0.39) PASS | 0.570 / 0.580 (-1.7 %) | 77.54 / 77.66 (0.15) PASS | 9.44 / 6.65 (2.84 ≤ 0.20) REPORT-ONLY (report-only) | 30 (24) REPORT-ONLY (report-only) |
+| C 150 | **PASS** | 53.10 / 53.21 (0.12 ≤ 0.24) PASS | 0.215 / 0.224 (-4.0 %) | 52.86 / 52.99 (0.13) PASS | 10.95 / 7.88 (3.29 ≤ 0.24) REPORT-ONLY (report-only) | 20 (15) REPORT-ONLY (report-only) |
+| O 200 | **PASS** | 65.47 / 65.55 (0.09 ≤ 0.29) PASS | 0.226 / 0.260 (-13.0 %) | 65.27 / 65.32 (0.06) PASS | 11.51 / 8.18 (3.53 ≤ 0.25) REPORT-ONLY (report-only) | 25 (21) REPORT-ONLY (report-only) |
+
+**TL-EM (held-out):**
+
+| Case | Status | f = 0.25 | f = 0.5 | f = 0.75 | f = 0.9 | (b) D_ext |
+|---|---|---|---|---|---|---|
+| He 100 | **PASS** | σ_i/σ_T 1.208, gated: PASS | σ_i/σ_T 1.179, gated: PASS | σ_i/σ_T 1.181, gated: PASS; cycled fits 4 | σ_i/σ_T 1.178, gated: PASS; cycled fits 1 | n/a (held-out: no D_ext) |
+| C 150 | **PASS** | σ_i/σ_T 1.311, report-only: REPORT-ONLY | σ_i/σ_T 1.267, gated: PASS | σ_i/σ_T 1.257, gated: PASS | σ_i/σ_T 1.253, gated: PASS; cycled fits 1 | n/a (held-out: no D_ext) |
+| O 200 | **PASS** | σ_i/σ_T 1.320, report-only: REPORT-ONLY | σ_i/σ_T 1.280, gated: PASS | σ_i/σ_T 1.270, gated: PASS | σ_i/σ_T 1.266, gated: PASS; cycled fits 2 | n/a (held-out: no D_ext) |
+
+**TL-FULL (held-out):**
+
+| Case | Status | f = 0.25 | f = 0.5 | f = 0.75 | f = 0.9 | (b) D_ext |
+|---|---|---|---|---|---|---|
+| He 100 | **PASS** | σ_i/σ_T 1.210, gated: PASS | σ_i/σ_T 1.165, gated: PASS | σ_i/σ_T 1.140, gated: PASS; cycled fits 4 | σ_i/σ_T 1.127, gated: PASS; cycled fits 2 | n/a (held-out: no D_ext) |
+| C 150 | **PASS** | σ_i/σ_T 1.318, report-only: REPORT-ONLY | σ_i/σ_T 1.285, gated: PASS | σ_i/σ_T 1.259, gated: PASS | σ_i/σ_T 1.252, gated: PASS; cycled fits 1 | n/a (held-out: no D_ext) |
+| O 200 | **PASS** | σ_i/σ_T 1.308, report-only: REPORT-ONLY | σ_i/σ_T 1.279, gated: PASS | σ_i/σ_T 1.255, gated: PASS | σ_i/σ_T 1.258, gated: PASS; cycled fits 2 | n/a (held-out: no D_ext) |
+
+**Findings (no re-grading; attribution only).** TD-EM: (a) R80 passes with ionmc again systematically short, by
+−0.21 % (He 100), −0.20 % (C 150), −0.15 % (O 200) — the same sign and size as in the main set (−0.2 … −0.3 % at the
+standard points), consistent with the D-3/D-4 attribution of item 1(b) (reference-side pre-step dE/dx and the
+C/O stopping construction; no ionmc stopping change); (c) z_peak is 0.07–0.17 mm proximal, inside the absolute
+0.5 mm tolerance at these ranges (53–78 mm); (d) PE agrees to +0.1 % (He 100), −1.0 % (C 150), −0.6 % (O 200),
+i.e. the ionmc peak excess of the main low ends (+7.8 … +11.4 % at He 50, C 80, O 100 under the point deposit) is
+absent at these energies under `continuous_residual_v1`, and the report-only distal width W is within +3.6 % /
+−0.4 % / −2.5 % of TOPAS (main low ends: −5 … −17 %); (e) every plateau group passes. The held-out set contains no
+case at the main set's low ends (50–100 MeV/u) or upper ends (430 MeV/u): the low-end PE/W behaviour and the
+upper-end z_peak behaviour of the amended model are therefore not re-measured by this set, and the main-set
+FAILs stand as graded (item 0). TD-FULL (gated (a), (c) only, §5.4): R80 and z_peak pass with the same −0.12 … −0.21 %
+range offset; the report-only (d) and (e) show the expected signature of nuclear physics absent from ionmc — the
+TOPAS-FULL peak is 28–30 % lower than the ionmc (EM-only) peak (ionmc/TOPAS − 1 = +42 %, +39 %, +41 %) and the plateau
+rises along the depth in TOPAS (24/30, 15/20, 21/25 groups outside the 2 % band, all inconclusive-to-high), the
+TF-DIAG attribution of §5.5 (V3-009 scope, no grade affected); W is −1.7 % / −4.0 % / −13.0 % (the O 200 FULL peak is
+broadened by fragments). TL-EM and TL-FULL: at the ten gated points r = σ_core,ionmc / σ_core,TOPAS-EM is 1.178–1.280
+(EM) and 1.127–1.285 (FULL), every point inside the band [−5 %, +40 %] of §5.3; the shallow f = 0.25 points of C 150
+and O 200 are report-only by the gate-σ rule (r = 1.31–1.32); the dated §4.2 window-cycle rule (item 2) resolved
+8 (EM) and 9 (FULL) batch/part fits that entered the 2-cycle at a bin edge — no point is invalid, and every
+re-measured width lies in the same 1.13–1.32 band as the main-set re-evaluation (reports/report-only). D_ext is
+not defined for the held-out set (§5.4).
+
+**Consequence (plan D, revision-2 block; amendment R2-STOP3 item 3).** The held-out set was the sole gating
+TOPAS-agreement evidence after the model change; it passes in full. The remaining gates of V3-008 before the
+integration decision are unchanged: the lv8/hr8 rows not yet run (I9, I12, I14, I15 sharded and T12-ion HR, T13-ion;
+items 4b–4c), V5-SS, the D-4 record, and the CI/review/validation gates of the reports commit. No clinical claim.
+
+**Archive cross-check (2026-11-11, after the operator integrated the host-run record retrieval tools, develop 930b7a9).**
+`list_host_run_records` lists 107 V3-008 host runs, 106 with a complete archived record (the first smoke run
+RUN-20261107T224820Z-92f9f0be has none — a pre-existing gap, not a sealed run); the archive byte hashes of the
+sampled sealed records (T1/T2/T3/T4 examples and one more held-out run) equal those of the operator's copies, and the
+committed records remain bound by their verified signatures. No record was re-materialized or re-signed.

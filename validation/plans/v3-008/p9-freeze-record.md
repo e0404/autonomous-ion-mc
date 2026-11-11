@@ -873,6 +873,24 @@ placeholder scorer output was deleted unread.
 
 
 **Dated note (2026-11-11, orchestrator) — entries changed by the host-records commit (Codex REVIEW-84382c07: exact wrapper-template binding in r2_io, tests, inventory test without the pending marker; plan note 4i and the target-record addendum 2):** `tests/ionmc/test_r2_evaluate.py` 53b0eefc… → 6984a585…; `validation/scripts/ion_em/r2_io.py` fef190eb… → 459ed674…; `tests/ionmc/test_v3_008_host_records.py` 8224d4a7… → 5ea24f7a…; `validation/plans/v3-008/r2-topas-target.md` ff6887e8… → 4515144f…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-11, orchestrator) — files added by the held-out results commit (the twelve TD-H / TL-H grade reports of cases 10–12; sha256 as committed):**
+
+| File | sha256 |
+|---|---|
+| `validation/results/transport/v8r2-topas/reports/TD-EM-case10.json` | `15749f608a7852e1c203f5be4f4b8e52783b2131f50236593928bd0d5c679987` |
+| `validation/results/transport/v8r2-topas/reports/TD-EM-case11.json` | `16b00ba5908b9e61fc2a8478659ead197324f460ac06c9152cf4c206de6e7cb9` |
+| `validation/results/transport/v8r2-topas/reports/TD-EM-case12.json` | `1d94647518b6790c8085a2f87ca5da8945c7ef7c8ba918aeb9f914789e3c947e` |
+| `validation/results/transport/v8r2-topas/reports/TD-FULL-case10.json` | `805041bb8cb85964474569e9d6ba766b4e8ecbefa36bb9edb284325f125b5da1` |
+| `validation/results/transport/v8r2-topas/reports/TD-FULL-case11.json` | `057c5480a95c01c0847d72c70c8310753e0ab8fa0151af32c1d4d1574d9a9c3e` |
+| `validation/results/transport/v8r2-topas/reports/TD-FULL-case12.json` | `cf03baeb0a5a4ed21873e36e27c03bc5a19c7d99e766f2b8cf1cc431d8837936` |
+| `validation/results/transport/v8r2-topas/reports/TL-EM-case10.json` | `e4caf506224ca4c2a374a5a55c7cc5d37004029b083d8cdc8dd5f85f6331e559` |
+| `validation/results/transport/v8r2-topas/reports/TL-EM-case11.json` | `153c5144545cf0c4c0be2e4d0a0571f2c7fccb0cf7679ecf13a552eeb7d687e4` |
+| `validation/results/transport/v8r2-topas/reports/TL-EM-case12.json` | `e15068b105356f3790be94c8c6746ddff9914eb5e293b8dd0a7d07b7c827c7af` |
+| `validation/results/transport/v8r2-topas/reports/TL-FULL-case10.json` | `c199700a52269f9ec024d243bc9490e16b07eae4496fb3a08fa60e403c6e2043` |
+| `validation/results/transport/v8r2-topas/reports/TL-FULL-case11.json` | `159c0359659f731ea29569ba7ea343cf73a49ec25f8c3b73cb43857ee1a3365f` |
+| `validation/results/transport/v8r2-topas/reports/TL-FULL-case12.json` | `4f4b0d74278650c59abc18bf21e7b917ef420fb45600cee6bb44adc56fe04737` |
+
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.
