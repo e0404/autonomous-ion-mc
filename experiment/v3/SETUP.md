@@ -331,3 +331,37 @@ R2-TOPAS-4) without trusting the orchestrator's copy. Deriving the start from
   rotated by the same procedure (a pure branch replacing it with one new,
   evidenced key); a branch that removes or empties a signer the integration
   trust file lists fails the gate (`trust_problem`), for every signer.
+
+## Recovering archived host-run records
+
+The `host-runner` MCP exposes `list_host_run_records(task_id, offset=0, limit=50)`
+and `materialize_host_run_records(task_id, run_ids)`. Use these to recover complete
+signed records after a session interruption or an incomplete runtime capture,
+without rerunning simulations or reading the protected store directly.
+
+Listing is scoped to a V3 task and returns up to 100 runs per page, with
+`next_offset`, record availability, code SHA, byte count, SHA-256 and
+`attestation_present`. The latter indicates presence only, not verified provenance.
+Missing `record.json` files are reported as unavailable (including older or
+unfinished runs); `result.json` is never substituted and records are never recreated.
+An unknown archive/task fails with an error. Listing does not require a live worktree.
+
+Materialization accepts 1–100 unique run IDs from the same task (up to 4 MiB per
+record and 64 MiB per call). It requires that task's registered worktree in the
+active clone, but permits uncommitted work. Original bytes are copied to
+`.ionmc-cache/host-run-records/<run_id>.json`; responses contain paths, hashes,
+sizes and per-file `copied`/`existing` status, not bulk logs. Identical existing
+files are reusable; conflicts and symlinks are rejected. Each file is published
+atomically without overwriting; a failed batch may leave completed files and can
+be retried. No simulation, signing, validation recording or trust-key change occurs.
+
+For example, list `V3-008`, collect available run IDs across pages, then materialize
+those IDs in batches. Consumers must verify the complete records against the
+committed host-runner trust key and bind the run IDs, code SHAs and output manifest
+hashes to their sample files. Unsigned records remain unsigned and do not become
+qualification evidence merely by being copied. Neither private keys nor raw log
+files, snapshots or arbitrary archive paths are exposed by these operations.
+
+After integrating this change, reconnect **host-runner** from Claude's `/mcp` menu
+(or restart the launcher/session). Confirm both tools appear. Previously archived
+records are immediately available; no regeneration or new key publication is needed.

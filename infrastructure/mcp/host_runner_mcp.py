@@ -16,7 +16,33 @@ RUNNER = (
     / "host_runner.py"
 )
 
+sys.path.insert(0, str(REPO_ROOT))
+from infrastructure.experiment_v3.host_records import list_records, materialize_records
+
 mcp = MCPServer("ionmc-host-runner")
+
+
+@mcp.tool()
+def list_host_run_records(task_id: str, offset: int = 0, limit: int = 50) -> dict:
+    """List archived host runs and complete record availability (up to 100/page).
+
+    Returns code SHAs, sizes and byte hashes, never bulk logs. Attestation
+    presence is not signature verification. Missing records are not recreated.
+    """
+    return list_records(task_id, offset, limit)
+
+
+@mcp.tool()
+def materialize_host_run_records(task_id: str, run_ids: list[str]) -> dict:
+    """Retrieve complete original records into this task's ignored cache.
+
+    Select 1..100 run IDs from list_host_run_records. Copies record.json bytes
+    to .ionmc-cache/host-run-records/<run_id>.json without altering signatures.
+    Returns paths and digests. Conflicting files and symlinks are rejected.
+    No clean-worktree requirement; this does not run or validate anything.
+    Verify the records with the committed trust file before using as evidence.
+    """
+    return materialize_records(task_id, run_ids)
 
 
 @mcp.tool()
