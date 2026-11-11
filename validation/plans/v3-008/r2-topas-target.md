@@ -141,6 +141,31 @@ sharper than the bin, the apparent shift is between 0.2 and 0.8 of the true shif
 - Resolvability rule (fixed now, reference-only): a (case, depth) point is gated iff σ_core,TOPAS-EM ≥ 3 h_x; else
   report-only.
 
+**Dated amendment (2026-11-09, R2-STOP3; prospective; rows not yet graded only — TD-H/TL-H; the TL-EM grades stand).**
+The fixed-point iteration above can lack a self-consistent window: the window is a step function of σ, and when the
+ML scale on the inner window is ≥ the switching value while the ML scale on the outer window is < it, the iteration
+2-cycles (observed in 2–8 % of the single-batch/part fits of TL-EM, e.g. He 50, slab 11–12 mm, one ionmc batch:
+32 ↔ 34 bins, σ 0.082377 ↔ 0.082592 mm). Replacement text for "iterated from … invalid point)":
+> iterated from the Sheppard-corrected second moment σ_0 in ±20 mm: at iteration k the window W_k = {bins with
+> |centre| ≤ 2σ_{k−1}} is selected and σ_k = the window-truncated ML scale on W_k is fitted. **Converged** when
+> |σ_k − σ_{k−1}| < 1e-4 σ_{k−1} (σ_core = σ_k; the unchanged rule, tested first at every iteration). Otherwise,
+> **window cycle:** if W_k equals a window W_j used at an earlier iteration j ≤ k − 2 (no self-consistent window
+> exists; W_{k−1} = W_k is a fixed window and is left to the ordinary iteration), σ_core = the arithmetic mean of
+> σ_j … σ_{k−1} (the ML scales of the distinct windows of the cycle), recorded with the cycle period k − j and the
+> amplitude A = (max − min)/mean over those scales; the fit is valid iff A ≤ 2 %. Any other non-termination within
+> 50 iterations, fewer than 3 bins or no signal inside ±2σ, a non-contiguous window, or an ML scale at its bracket
+> edge = invalid point (FAIL for a gated point).
+Defence: deterministic (depends only on the profile and σ_0); fits that converge under the old rule return
+bit-identical σ and iteration counts (cycle detection is reached only where the old rule fails); symmetric (no
+inner/outer preference); the cycle mean lies within A/2 of every cycle member, i.e. inside the bin-edge ambiguity; the
+2 % cap is fixed a priori (≈ 2× the single-part statistical SE of σ̂ at 5e3 primaries, < 1/2 of the −5 % band edge), so
+a pathological cycle (pedestal-dominated core) stays invalid. Rejected alternatives: inner/outer window choice
+(arbitrary), σ = c_k/2 (grid-quantised), batch/part fits at the pooled window (changes the SE definition, does not
+fix pooled cycles), fractional edge bins (changes every value), a larger iteration cap (no fixed point exists).
+Implementation: `r2_statistics.core_sigma` (`FIT_CYCLE_MAX_AMPLITUDE = 0.02`), TL reports carry per point the number
+of batch/part fits that used the rule; tests `tests/ionmc/test_r2_statistics_cycle.py`. The TL-EM rows are re-evaluated
+under this rule as REPORT-ONLY attribution (`r2_evaluate.py reeval-tl-em`), never as a grade.
+
 ### 4.3 Why IDD and lateral runs are separate TOPAS runs
 Whether TOPAS scoring bins act as step-limiting boundaries is OPEN (P2 §6.2). Urban's per-length width depends on the
 step length (factor 0.756 between 0.1 and 1 mm per step, P2 §6.2). Fine depth bins (0.02–0.1 mm) in the lateral run
@@ -565,6 +590,21 @@ Comparison with the IDD run: there, 97.5 % of steps are limited by the 0.1 mm de
 **Dated confirmation note (2026-11-09, late; signed R2-SMOKE-LP confirmation set).** The 14 runs of the confirmation set (ten lp smokes 20600428–20600437; re-runs of 20600424–20600427; all at the manifest of 4cdc44ce/1141df44) are VALID under `check-run` (`validation/results/transport/v8r2-topas/smoke-confirmation.json`, `confirmation_set_complete: true`). Signed t_s (ms/primary): IDD-EM He 7.0 / C 6.4 / O 5.1; LAT-EM 2.5 / 2.0 / 1.6; IDD-FULL (0.05 mm) 70.4 / 364.8 / 475.9; LAT-FULL (1 km) 44.4 / 114.5 / 114.3 — within ≈ 2 % of the unsigned and the fce29f49 runs. Rule (i) re-applied to IDD-FULL: C 3200 per part (1167 s; 12 800 per case), O 2500 per part (1190 s; 10 000 per case, the minimum); all other parts ≤ 573 s. Final part table: EM 25 000 × 4 per config; IDD-FULL He 5000 / C 3200 / O 2500; LAT-FULL 5000 (1 km electron cut). Projected REF total unchanged within rounding (≈ 16.1 h conservative; cap 17 h). The LAT step-length finding (83 % plane-limited, median 0.45 mm) and the `Decay`/QMD/radioactive-decay/UrbanMsc markers are confirmed in the signed logs. The sizing statements of this section are no longer provisional. Smoke runs are bound to their own bundle's manifest entry (evidence runs to the complete manifest), see the acceptance plan's confirmation note.
 
 ## 9. Not established, risks
+
+**Dated notes (2026-11-09, R2-STOP3; after the TD-EM/TL-EM grades; acceptance plan, Amendments).**
+- §5.1 (d) defence: the end-of-range treatment is NOT identical (ionmc E_cut point deposit vs continuous Geant4
+  tracking); effect on PE ≈ 5–11 % at R < 30 mm, ≈ 1–2 % at the held-out energies, ≤ 0.3 % at R ≥ 150 mm (scratch
+  estimate). Removed prospectively by the decision-0043 §4 model change (`continuous_residual_v1`); residual
+  tail-profile dependence ≤ 2.3 % PE at the low ends. The main TD/TL rows are consumed; TD-H/TL-H gate.
+- Lineage (§2): TOPAS-EM R80 exceeds the declared ICRU 90 lineage by ≈ 0.15–0.45 % at ≥ 150 MeV/u (attribution,
+  mechanism TO VERIFY, D-3/D-4); the "shared-lineage" statement holds only to that level; the absolute 0.5 mm z_peak
+  tolerance (§5.1 (c)) cannot be met at R > 143 mm while it persists (tolerances unchanged).
+- §4.2 estimator could be undefined (no self-consistent window); resolved for the ungraded rows by the window-cycle
+  rule (dated amendment in §4.2).
+- Ion energy-loss straggling: TOPAS-EM exceeds ionmc's Bohr σ_R by ≈ 4–9 % for C/O (not He) (INFERRED from W after
+  removing the E_cut effect); the held-out TD-H (d) margin is ≈ 1 % if the excess is ≈ 10 %.
+- TL (b) D_ext is never evaluated (TL-EM (b) NOT EVALUABLE, consumed); the f_dM extrapolation adequacy rests on
+  TL-H (a) and I11-ext.
 
 - Whether TOPAS scoring bins limit steps (OPEN; step-length smoke). It moves the Urban width by up to ≈ 6 % (P2
   §6.3) inside the TL band, and the cost.

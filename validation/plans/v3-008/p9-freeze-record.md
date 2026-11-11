@@ -97,7 +97,7 @@ evidence for `icru90/z{6,8}_G4_WATER.dat`. This note concerns FC-2 only.
 | `src/ionmc/physics/lindhard_sorensen.py` | `800d1f0a13524af5bad3946032f894479f606ba9b1482bf3ea190eeb9b4d3a6a` | P9 (iii) |
 | `src/ionmc/physics/exact_omega.py` | `6471c388fb75c94e9f2f4f1d19ac94be044f73444cf1e7b4bfb1a62e53ecf57b` | I0/I11-map notes |
 | `src/ionmc/physics/stopping.py` | `89db1de28e5cd1f03efc1622669b58dd766fc88d5d0a91405af190e96094753e` | P9 (iii) |
-| `src/ionmc/config.py` | `a24aa6b44b72a26d2771d50ebfafa447fbc7aa141f70b5be324d67fec5dfc411` | I0 note |
+| `src/ionmc/config.py` | `8aa37dcae66ea8bf228b5bdf162f8cf7338f8b1a8cc02125cf78cb8a32b4572d` | I0 note |
 | `pyproject.toml` | `0e73bd64aea5ef153e198c00a67c20efbc8ef1a5061f1f77d2bdab555dda9352` | lint exceptions for the two mapping files (added by the planner; the only other changed file outside the plan set) |
 
 ### 2.4 Pre-freeze records
@@ -198,7 +198,7 @@ placeholder scorer output was deleted unread.
 | `tests/ionmc/test_r2_bundles.py` | `aaa08b42abd3ed660530ba8897cb980fec3e9b3977dfddf7c7a699bc6bcb51ac` |
 | `reference_requests/operator-directives/2026-11-07-topas-validation-target.md` | `ca079e9f0af990cdff9d8efde60d38ac55e2d0fc0fb9ef22355a81f4a2ab0b26` |
 | `reference_requests/interventions/IR-20261102-010435-B59B2D/response.json` | `dc6a610cb67dee50fa0bb96327026eea0b81bb9506e7b898c2e9e44322f69bd0` |
-| `validation/plans/v3-008/r2-topas-target.md` | `dc6b80d2a00de765f4458e6c7416ab31437a42ec47e2953111ab00a205316efe` |
+| `validation/plans/v3-008/r2-topas-target.md` | `dc43cddefc3784bdf62b0c2556709201a65e5845a7782716d5e0d48a60aae4ad` |
 
 
 **Dated note (2026-11-07, orchestrator) — hashes regenerated at the freeze commit's parent; entries that changed since f694b747:** `validation/plans/v3-008/p10-single-scattering-availability.md` bea86277… → a7f539a0…; `validation/plans/v3-008/p11-exact-omega-mapping.md` 6116648a… → f78e95f5…; `reference_requests/interventions/IR-20261102-010435-B59B2D/request.json` 068cafd7… → e81a7efa…. All other entries unchanged (recomputed).
@@ -224,17 +224,17 @@ placeholder scorer output was deleted unread.
 | `src/ionmc/physics/ion_mcs.py` | `42194ccf6ede781b6254a138e8c64aacd8a72cf5385232c9e2758ea82edb9c81` |
 | `src/ionmc/simulation.py` | `4d490ba490f521169d52040476662994b5e06eb24d3fb66f4367f290be7c6c28` |
 | `src/ionmc/species.py` | `19df88c722ad93ca65e636b870a4b56b1a80df2e215bee39a7623f441daa2322` |
-| `src/ionmc/transport/kernels.py` | `db4ea1f096e4919303b5e1d1413f25d78dd7ced149c331983016172b0b099266` |
-| `src/ionmc/transport/reference.py` | `f3e3dec9ed5c7bffed827213783af19eee2bbe833f47120550c2c88a0a6b9bb3` |
+| `src/ionmc/transport/kernels.py` | `519d1fefab1dec8aac87ba94323c8afa0840d311be53c8d6cc511946c30f2398` |
+| `src/ionmc/transport/reference.py` | `e4eceaa068029a691932f786542aecdcaf5ae9d7ffc03490085ab0d0a6897b2e` |
 | `src/ionmc/transport/run.py` | `bbfae2a4c1c2168397ab898204ede3bc2d7c92e1968a08b8156a03326217436b` |
 | `src/ionmc/transport/tables.py` | `45542d46fb208ba1ca9ccdcb9e8baea41e47f86a7429b46f8566ad12b1b2619d` |
 | `src/ionmc/transport/tally.py` | `be202f7310e3991bead49fd40e24cef1f5493992044c72aff6c5f8e8826b547c` |
-| `src/ionmc/transport/warp_driver.py` | `cb32245e48d6bffd03092d09fb7421d8b11a8191158a311fd0b9a92e568aeb86` |
-| `validation/scripts/ion_em/r2_evaluate.py` | `d1da57b57d8d55f9a545544eb773ff3c0a019e07c6663ae092779754248f5a05` |
+| `src/ionmc/transport/warp_driver.py` | `bc80fdc5a246fde57ea11fe901a5e864f2fccf4439b348e34c2c1ee34887c2da` |
+| `validation/scripts/ion_em/r2_evaluate.py` | `e9fd0ea4d852a40c5c7ecc60479767e8fe22a8e98a0647bc34768afb898073c2` |
 | `validation/scripts/transport/steps_v8.py` | `e8b73006921b479797e762c1319adf7e1e4edb95594ffac4109827b4ee185a7d` |
 | `tests/ionmc/test_ion_mcs_table.py` | `b3fb9992f866238b11243e032f394583775e292cec49601798ef44b54efcb749` |
 | `tests/ionmc/test_v3_008_rows_ci.py` | `ffea9f20976ec2d721067ccf52d5cb9797fad51a5bda7dd224948829c1cade0e` |
-| `tests/ionmc/test_r2_evaluate.py` | `aa3e28327f0ff5502ecdffb281cf356484890104333418d7ed7bc68633d13e53` |
+| `tests/ionmc/test_r2_evaluate.py` | `7288ae7731a5681468dda0a71701a0a9a43a43000038991eda13545c3774c0e2` |
 | `tests/ionmc/test_v3_008_steps_v8.py` | `ab4922ea8842751e22c9d1882e9e1dec0ae88a25b55174c99586c4802868b731` |
 
 (c) R2.5 counts, superseded by this note (the R2.5 text is kept as written): repository paths 475 + 15 = **490**; total full sha256 values 519 + 15 = **534**, plus the bundle-set digest (unchanged, `a8a1c27d…`). The count in R2.6 item (3) (475) is superseded accordingly by 490 for the acceptance tests of the seal.
@@ -264,10 +264,10 @@ placeholder scorer output was deleted unread.
 | File | sha256 |
 |---|---|
 | `validation/scripts/ion_em/r2_io.py` | `827170cfa994ffedd709fd998cdca32f76004851bcd9e5752c3e504595e81e48` |
-| `validation/scripts/ion_em/r2_statistics.py` | `fbb19370ae0bb20ed1cc5289864c3331ba63bdcb88315b33f06b6d710c79ed6b` |
+| `validation/scripts/ion_em/r2_statistics.py` | `fa1bb5c5b372df72fc9d3e9f4daa06d0943db5adb89bd173c53edad1b58bc9c1` |
 | `validation/results/transport/v8r2-topas/smokes.json` | `9f5c1b24bfe278869b30cc89c03137786fc683ed85d6b6509c48cdffa964f621` |
 | `validation/results/transport/v8r2-topas/records/review.json` | `87988397d4c14304d75f987117e4c22199d4452a0b48030e131a2bd52edb1199` |
-| `validation/results/transport/v8r2-topas/records/index.json` | `264fba78aa314c04ac72574eb02e79a9e58798238de77ca5a85adaa9da209b98` |
+| `validation/results/transport/v8r2-topas/records/index.json` | `9d9c7a92bbf6b6cfcff9703647dd6f608d086b6ad2d03d5aa6d395e451f3d766` |
 
 
 **Dated note (2026-11-09, R2-SIZE-1 bundle regeneration; orchestrator) — supersedes the bundle-set digest `a8a1c27d…` of the rows above.** The bundle set is now 209 bundles / 418 files with bundle-set digest `e51d3b3d1bf00e51daadf889f6541bf8bd6ba8aea6453eee132110e07ff0c4d6` (`gen_r2_bundles.py --check`; per-file sha256 of the 168 changed or new files in `r2-topas-target.md` appendix A, 2026-11-09 listing; the 250 unchanged files keep their appendix-A hashes). Changed: 48 LAT-FULL evidence bundles (`CutForElectron = 1 km`, texts), 32 carbon/oxygen IDD-FULL bundles (`NumberOfHistoriesInRun` 3333 / 2529). **(2026-11-09, later; Codex REVIEW-6b4731a7)** every evidence bundle and the four new smokes additionally request `b:Ph/ListProcesses = "True"` (runtime evidence of the executed module set, g4decay included); bundle-set digest now `6d1ae3a06211831cfb7e8924c65d6d8fe31fae7781443ff84c077204045ea790` (appendix A 2026-11-09 "ListProcesses" listing; the thirteen smokes already run are byte-identical). New execution-only smokes (sha256 of `case.json` | `input.txt`):
@@ -582,6 +582,36 @@ placeholder scorer output was deleted unread.
 | `validation/results/transport/v8r2-topas/reports/TL-EM-case8.json` | `66b4aea4ef24247c34cb44a761888c97254809cbda233ed9a4c1d7b48d9216a1` |
 | `validation/results/transport/v8r2-topas/reports/TL-EM-case9.json` | `b8d07ea7b383b69e4da2f5e3c18c15006d8c02892f7605d05e1b068db16f18b5` |
 
+
+**Dated note (2026-11-11, orchestrator) — files added by the R2-STOP3 amendment commit (new frozen SHA; the two new test files and the signed records of the 10 main IDD-FULL parts already run before STOP 3; sha256 as committed):**
+
+| File | sha256 |
+|---|---|
+| `tests/ionmc/test_ion_end_of_range.py` | `2da310683099f2dd7abf9fd7ba1c7e237c9fa2107bcc8083ce574b3df600f989` |
+| `tests/ionmc/test_r2_statistics_cycle.py` | `b61d36407c1ecf8a35a00428e5efba2ddd725b6710edced95a8ce2acbea25146` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-14a05b26af8573de21d0-c2d0bc54/record.json` | `129c18d61a4f65db1fcda3399a695010a894ac0eee48ab8847b9ab1357d87fce` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-14a05b26af8573de21d0-c2d0bc54/artifacts.json` | `a3d409639bfbe8bdb7f1aefc5455ac95cbfd7ea79ea83b2714ff916136ec5483` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-2f217c7c22c7b8000048-45514ee1/record.json` | `c90303df587a5e7977f56735f540d6df604884bf979bbe4138f2996cc0c890f7` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-2f217c7c22c7b8000048-45514ee1/artifacts.json` | `85a53f528131f1aad51204217b0a1d9ebffca87d19a6e5e3034324ba760afd21` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-32dc0d7ec008cda4893b-90520282/record.json` | `1cf8568e33c2f5db7550331988b0ece99f8a3999770426d295e1680f958d5bd4` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-32dc0d7ec008cda4893b-90520282/artifacts.json` | `f3a5c4b6ba3afe91b1829397a560ae4a549fe48d29cd5280b0428a5878fb443b` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-3e0dd1b4daa7cb8ae358-270b3b73/record.json` | `2e18718165a4f83a641e4a0562396658b668e74e0a4d80586630d1264ab1c049` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-3e0dd1b4daa7cb8ae358-270b3b73/artifacts.json` | `098dc722688e986f91acba30d08c710f554e93848c43cd62bff11ba705d8ac7a` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-4d897b7cd9e5f0a11d20-3939385a/record.json` | `dd154ba33b22fe1fae7dc4c9d51322f070cc6502244f6f7c05e8ca3cbf4a6f24` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-4d897b7cd9e5f0a11d20-3939385a/artifacts.json` | `2f76590cfcbca1df5c3ae8dec797774cecb421f86aa122729b344778bbcb7eee` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-5ef9013e75d5efcfc096-92630506/record.json` | `c62a68396a28d7a91c06acdb11edc6544d6217588e4617e8d76fb54ba43bbd7e` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-5ef9013e75d5efcfc096-92630506/artifacts.json` | `0095177398ee2d8f9558ec955fb76d0ac59fa41ee9e0ea2a81fb80cef7132051` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-66ca7ff774a90e7414fc-a0669572/record.json` | `63c3cb2aeb723c61cee885634abfa9dd9777ad7350a9b06d897b8dfb3d348c76` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-66ca7ff774a90e7414fc-a0669572/artifacts.json` | `8583ed9fe12d63d178486e8d6c69f619f8334f0de1f79f5af1070a7feb07df92` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-9b127284b843da608421-8fe1c89c/record.json` | `64c719b799a0e75f0e7a203360d21efa85bddeb7671931e4b9af6cc485b7ba37` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-9b127284b843da608421-8fe1c89c/artifacts.json` | `44544b6cad94fd87b19504bab6c9f209d1882361a6871ef1eb6489e3606ee55c` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-9b5218933159f8cbac00-066e41e6/record.json` | `cf5304839144496d9ec25a082d8b62f078253945bb2d1629a46391be680c69b2` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-9b5218933159f8cbac00-066e41e6/artifacts.json` | `56c6d045e9ca50125cb232520456cd75fdebb4f41d3a17de74a78a6dc5ef314d` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-9f5f5af6a810be2c724d-0108950d/record.json` | `a078a0a4ce0b0752a0e83e7d7f4bbfa629a9e24a1b487e1e6e970211b5dfbae4` |
+| `validation/results/transport/v8r2-topas/records/runs/REF-9f5f5af6a810be2c724d-0108950d/artifacts.json` | `41b166b9cb7fdb852db9e7be39a605ee8c3b07b747818b0deaf713fa95bb65f5` |
+
+
+**Dated note (2026-11-11, orchestrator) — entries changed by the R2-STOP3 amendment commit (end-of-range model `continuous_residual_v1`, §4.2 window-cycle rule, report-only re-evaluation CLI, records index with the 10 IDD-FULL parts):** `src/ionmc/config.py` a24aa6b4… → 8aa37dca…; `validation/plans/v3-008/r2-topas-target.md` dc6b80d2… → dc43cdde…; `src/ionmc/transport/kernels.py` db4ea1f0… → 519d1fef…; `src/ionmc/transport/reference.py` f3e3dec9… → e4eceaa0…; `src/ionmc/transport/warp_driver.py` cb32245e… → bc80fdc5…; `validation/scripts/ion_em/r2_evaluate.py` d1da57b5… → e9fd0ea4…; `tests/ionmc/test_r2_evaluate.py` aa3e2832… → 7288ae77…; `validation/scripts/ion_em/r2_statistics.py` fbb19370… → fa1bb5c5…; `validation/results/transport/v8r2-topas/records/index.json` 264fba78… → 9d9c7a92…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.

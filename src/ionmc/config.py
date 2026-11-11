@@ -70,6 +70,14 @@ DELTA_ELECTRON_MODELS = ("local",)
 BACKENDS = ("python", "warp-cpu", "warp-cuda")
 PRECISIONS = ("float32", "float64")
 MAX_REJECTION_ATTEMPTS = 64
+END_OF_RANGE_MODELS = ("default", "point_v1", "continuous_residual_v1")
+"""End-of-range models of a history that reaches the cutoff energy (V3-008 R2-STOP3):
+``"point_v1"`` deposits the whole residual energy at the point; ``"continuous_residual_v1"``
+(ion sources only) deposits it along the straight continuation of the direction over the CSDA
+range of the residual energy in the transport's own table, with the table's energy density;
+``"default"`` is ``continuous_residual_v1`` for an ion (z >= 2) and ``point_v1`` for a proton."""
+RESIDUAL_SUBSTEPS = 32
+"""Equal sub-steps of the ``continuous_residual_v1`` segment (fixed; part of the model)."""
 DEFAULT_CHUNK_HISTORIES = 2**18
 MIN_CHUNK_HISTORIES = 2**10
 MAX_CPU_WORKERS = 256
@@ -122,6 +130,10 @@ class PhysicsOptions:
     plane the straight line reaches, the angle is sampled for that length, leg 2 is not cut again
     and the end point is snapped onto the plane (the displacements are recorded per history; the
     direction is never changed).
+    ``end_of_range_model`` (``END_OF_RANGE_MODELS``, default ``"default"``) selects what happens
+    below the cutoff energy: ``"point_v1"`` deposits the residual energy at the current point;
+    ``"continuous_residual_v1"`` (ion source only) deposits it along the straight continuation
+    over the table CSDA range of the residual energy (:func:`effective_end_of_range_model`).
     ``mcs_mapping_eval`` selects how the exact-Omega mapping of an ion (z >= 2) is evaluated
     (``MCS_MAPPING_EVALS``), both the exact root on every step: ``"table"`` (default; the root
     started from a tight bracket around the bilinear value of a ``pv_eq/pv`` table built at
@@ -159,15 +171,23 @@ class PhysicsOptions:
     nuclear_table_id: str | None = None
     e_cut_ion_mev_per_u: float = E_CUT_ION_DEFAULT_MEV_PER_U
     mcs_mapping_eval: str = "table"
+    end_of_range_model: str = "default"
 
     def __post_init__(self) -> None:
         for name in ("nuclear", "straggling", "multiple_scattering", "truncated_hinge_diagnostic"):
             if not isinstance(getattr(self, name), bool):
                 raise fail(f"{name} must be a bool, got {getattr(self, name)!r}")
-        for name in ("straggling_model", "mcs_model", "delta_electrons", "mcs_mapping_eval"):
+        for name in (
+            "straggling_model",
+            "mcs_model",
+            "delta_electrons",
+            "mcs_mapping_eval",
+            "end_of_range_model",
+        ):
             if not isinstance(getattr(self, name), str):
                 raise fail(f"{name} must be a string")
         choice("mcs_mapping_eval", self.mcs_mapping_eval, MCS_MAPPING_EVALS)
+        choice("end_of_range_model", self.end_of_range_model, END_OF_RANGE_MODELS)
         if not (hasattr(self.stopping, "table") and hasattr(self.stopping, "name")):
             raise fail("stopping must be a StoppingSource (with .name and .table())")
         ls_mode = getattr(getattr(self.stopping, "options", None), "ls", "off")
@@ -290,6 +310,15 @@ class SimulationConfig:
             isinstance(t, LookupTable) for t in self.lookups
         ):
             raise fail("lookups must be a tuple of LookupTable")
+
+
+def effective_end_of_range_model(config: SimulationConfig) -> str:
+    """The end-of-range model of the run: the requested one, or for ``"default"``
+    ``continuous_residual_v1`` for an ion (z >= 2) and ``point_v1`` for a proton."""
+    model = config.physics.end_of_range_model
+    if model == "default":
+        return "continuous_residual_v1" if config.source.projectile.z >= 2 else "point_v1"
+    return model
 
 
 @dataclass(frozen=True, eq=False)
@@ -507,6 +536,11 @@ class EffectiveConfig:
         return self.requested.source.projectile.z >= 2
 
     @property
+    def end_of_range_model(self) -> str:
+        """The effective end-of-range model (see :func:`effective_end_of_range_model`)."""
+        return effective_end_of_range_model(self.requested)
+
+    @property
     def e_cut_mev(self) -> float:
         """The effective cutoff energy [MeV] (see :func:`effective_e_cut_mev`)."""
         return effective_e_cut_mev(self.requested)
@@ -561,6 +595,8 @@ class EffectiveConfig:
                 "e_cut_mev": p.e_cut_mev,
                 "e_cut_ion_mev_per_u": p.e_cut_ion_mev_per_u,
                 "e_cut_effective_mev": self.e_cut_mev,
+                "end_of_range_model": p.end_of_range_model,
+                "end_of_range_model_effective": self.end_of_range_model,
                 "max_step_mm": p.max_step_mm,
                 "max_energy_loss_fraction": p.max_energy_loss_fraction,
                 "range_alpha": p.range_alpha,
@@ -969,6 +1005,8 @@ def validate(config: SimulationConfig) -> EffectiveConfig:
         nuc_table, nuc_rows = _nuclear_setup_checks(config, geometry)
     choice("straggling_model", ph.straggling_model, STRAGGLING_MODELS)
     choice("mcs_model", ph.mcs_model, MCS_MODELS)
+    if ph.end_of_range_model == "continuous_residual_v1" and not is_ion:
+        raise fail("end_of_range_model 'continuous_residual_v1' is available for ion sources only")
     choice("delta_electrons", ph.delta_electrons, DELTA_ELECTRON_MODELS)
 
     if run.backend == "python" and run.precision == "float32":

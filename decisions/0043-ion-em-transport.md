@@ -660,6 +660,20 @@ and falsification), and V5-SS (held-out, single scattering) if its run condition
     The effect on R80 is ≪ 0.01 mm against a straggling σ of 0.1–1 mm.
   - The estimates are reproduced from the tables in rows I6/C-res.
 - **Deltas:** deposited locally (unrestricted S).
+
+  **Dated amendment (2026-11-09, V3-008 amendment R2-STOP3, after the TD-EM grades; prospective).** The point
+  deposit at E_cut raised the peak-to-entrance ratio of the low-energy Bragg peaks by ≈ 5–11 % against TOPAS (the
+  residual range 0.04–0.09 mm is not small against σ_R ≈ 0.05–0.13 mm and the 0.1 mm peak group), so the estimate
+  "only the last ≤ 0.075 mm of dose moves upstream" was right about R80 but wrong about the peak height. New
+  end-of-range model `continuous_residual_v1` (default for ion sources; `point_v1` kept, proton default): the
+  residual energy is deposited along the straight continuation of the current direction over the table residual
+  range R_tab(E) with the table's dE/ds (sub-stepped on the scoring grids), no straggling, MCS or secondaries on that
+  segment (32 equal sub-steps, the table inverse E_tab(r) per sub-step, uniform along each sub-step); E_cut and the
+  table floor rule are unchanged; `cutoff` counts the residual deposited inside the world and the part of the segment
+  beyond the world boundary goes to the `escaped` tally (energy closure unchanged). The option (`PhysicsOptions.
+  end_of_range_model`: `default` → `continuous_residual_v1` for z ≥ 2, `point_v1` for protons) is recorded in the
+  run summary (`end_of_range_model`, `end_of_range_model_effective`).
+  Consequence under the V3-008 plan (STOP 3): the main TD/TL rows are consumed; the held-out set gates.
 - **Nuclear interactions, fragments and secondary ions:** out of scope (V3-009). `nuclear=True` with
   z ≥ 2 raises `UnsupportedCombinationError`. The producible set is `{(ion, "primary")}`.
 - **Species:** append `carbon12` (id 5) and `oxygen16` (id 6) after `alpha` (id 4), append-only.

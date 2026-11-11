@@ -718,6 +718,9 @@ def test_cli_tl_em_end_to_end(tmp_path: Path, small_case: None) -> None:
         assert p["a"]["r"] == pytest.approx(1.0, abs=0.01)
         assert p["sigma_topas"] == pytest.approx(SIG[p["slab"]], rel=2e-3)
     assert rep["criterion_b"] is None and "upper-end" in rep["criterion_b_note"]
+    for p in rep["points"]:  # R2-STOP3 bookkeeping: no cycle in clean synthetic data
+        assert p["cycled_fits_ionmc"] == 0 and p["cycled_fits_topas"] == 0
+        assert p["cycled_fit_pooled"] is False
 
 
 def test_cli_chronology_failure_is_a_fail(tmp_path: Path, small_case: None) -> None:
@@ -1358,3 +1361,46 @@ def test_smoke_missing_from_head_manifest_is_error(tmp_path: Path, small_case: N
         w, tmp_path / "a.json", records_dir=w["records"] / "runs", bundle=SMOKE_LP
     )
     assert code == 2 and "not in" in rep["error"], rep
+
+
+def _reeval_cli(w: dict[str, Any], out: Path, case: int = 1) -> tuple[int, dict[str, Any]]:
+    if _git(w["repo"], "status", "--porcelain"):
+        _commit(w["repo"], "update")
+    old = R2.evaluator_repo
+    R2.evaluator_repo = lambda: w["repo"]
+    try:
+        code = R2.main([
+            "reeval-tl-em", "--records", str(w["records"]), "--case", str(case),
+            "--outputs", str(w["outputs"]), "--samples-root", str(w["samples"]),
+            "--out", str(out),
+        ])  # fmt: skip
+    finally:
+        R2.evaluator_repo = old
+    return code, json.loads(out.read_text())
+
+
+def test_reeval_tl_em_is_report_only(tmp_path: Path, small_case: None) -> None:
+    w = _world(tmp_path)
+    rpath = w["repo"] / R2.COMMITTED_REPORT.format(row="TL-EM", case=1)
+    rpath.parent.mkdir(parents=True, exist_ok=True)
+    rpath.write_text(json.dumps({"status": "FAIL"}))
+    code, rep = _reeval_cli(w, tmp_path / "re.json")
+    assert code == 0, rep
+    assert rep["schema"] == "ionmc-v3-008-r2-reeval-1"
+    assert rep["graded_verdict_stands"] == "FAIL"
+    assert "status" not in rep and "verdict" not in rep
+    assert len(rep["points"]) == 4
+    for p in rep["points"]:
+        assert "verdict" not in p["a"] and "band_result" in p["a"]
+        assert p["cycled_fits_ionmc"] == 0 and p["cycled_fit_pooled"] is False
+    assert rep["tl_statistics"]["criterion_a"] in ("PASS", "FAIL", "NOT EVALUABLE")
+    assert "status" not in rep["tl_statistics"]
+    _no_arrays(rep)
+
+
+def test_reeval_tl_em_fails_closed_without_committed_report(
+    tmp_path: Path, small_case: None
+) -> None:
+    w = _world(tmp_path)  # no committed TL-EM report in the synthetic repository
+    code, rep = _reeval_cli(w, tmp_path / "re.json")
+    assert code == 2 and "error" in rep and "status" not in rep and "points" not in rep

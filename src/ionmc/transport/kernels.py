@@ -114,6 +114,8 @@ def make_kernel_support(real: type) -> SimpleNamespace:
         "mass": D,
         "z": D,  # charge number of the transported projectile (1 for a proton)
         "ion": int,  # 1 for z >= 2: f_dM through the exact-Omega mapping
+        "n_sub": int,  # sub-steps of the continuous_residual_v1 segment (RESIDUAL_SUBSTEPS)
+        "eor": int,  # end of range: 0 point_v1 (point deposit), 1 continuous_residual_v1
         "pos0": v3,
         "dir": v3,
         "origin": v3,
@@ -519,12 +521,108 @@ def make_kernel_support(real: type) -> SimpleNamespace:
         i, f = FD.log_bin_index(r_g_cm2, ln_r0[m], inv_dln_r[m], n_r)
         return FD.interp_exp(ln_er[m, i], ln_er[m, i + 1], f)
 
+    @named_func(name)
+    def residual_energy(
+        ln_er: wp.array2d(dtype=D),
+        ln_r0: wp.array(dtype=D),
+        inv_dln_r: wp.array(dtype=D),
+        ln_e0: wp.array(dtype=D),
+        r_mass: wp.array2d(dtype=D),
+        n_r: int,
+        m: int,
+        r_g_cm2: D,
+    ) -> D:
+        """Energy [MeV] at the remaining CSDA range ``r_g_cm2`` for the end-of-range segment: the
+        table inverse above the range ``R(E_lo)`` of the table floor and, below it, the constant
+        stopping power of the start-range convention (``E = E_lo r / R(E_lo)``)."""
+        r_lo = r_mass[m, 0]
+        e = wp.exp(ln_e0[m]) * r_g_cm2 / r_lo
+        if r_g_cm2 >= r_lo:
+            e = energy_from_range(ln_er, ln_r0, inv_dln_r, n_r, m, r_g_cm2)
+        return e
+
+    @named_func(name)
+    def deposit_residual(
+        edep: wp.array2d(dtype=wp.int64),
+        tally_rows: wp.array2d(dtype=wp.float64),
+        tid: int,
+        batch: int,
+        p0: v3,
+        d0: v3,
+        energy: D,
+        r_g_cm2: D,
+        rho: D,
+        l_in: D,
+        m: int,
+        ln_er: wp.array2d(dtype=D),
+        ln_r0: wp.array(dtype=D),
+        inv_dln_r: wp.array(dtype=D),
+        ln_e0: wp.array(dtype=D),
+        r_mass: wp.array2d(dtype=D),
+        n_r: int,
+        g_origin: wp.array2d(dtype=R),
+        g_spacing: wp.array2d(dtype=R),
+        g_inv: wp.array2d(dtype=R),
+        g_shape: wp.array2d(dtype=int),
+        g_off: wp.array(dtype=int),
+        n_grids: int,
+        max_pieces: int,
+        chan: chan_t,
+        n_sub: int,
+    ) -> tuple[D, int]:
+        """Model ``continuous_residual_v1`` (end of range): deposit the residual energy ``energy``
+        along the straight continuation of the direction ``d0`` from ``p0`` over the CSDA range
+        ``r_g_cm2`` of the table (``length = r 10 / rho`` mm; no straggling, no scattering).
+        The length is cut into ``RESIDUAL_SUBSTEPS`` equal sub-steps; sub-step ``k`` gets the
+        energy ``E_tab(r_{k-1}) - E_tab(r_k)`` (``r_k`` its remaining range at the end, ``E_tab``
+        the table inverse, ``E_tab(r_N) = 0``), spread uniformly over its length through
+        ``deposit_leg`` in every grid. ``l_in`` is the path length [mm] to the world boundary;
+        the energy of the part beyond it is not deposited. Returns that escaped energy and the
+        number of legs that exceeded ``max_pieces``."""
+        length = r_g_cm2 * D(10.0) / rho
+        l_sub = length / D(n_sub)
+        e_prev = energy
+        e_escape = D(0.0)
+        ovf = int(0)
+        k = int(0)
+        while k < n_sub:
+            e_k = D(0.0)
+            if k < n_sub - 1:
+                r_k = r_g_cm2 * D(n_sub - 1 - k) / D(n_sub)
+                e_k = wp.min(
+                    residual_energy(ln_er, ln_r0, inv_dln_r, ln_e0, r_mass, n_r, m, r_k), e_prev
+                )
+            de = e_prev - e_k
+            s0 = D(k) * l_sub
+            l_k = wp.min(wp.max(l_in - s0, D(0.0)), l_sub)
+            if l_k < l_sub:
+                e_escape = e_escape + de * (l_sub - l_k) / l_sub
+            if l_k > D(0.0) and de > D(0.0):
+                pk = v3(p0[0] + d0[0] * R(s0), p0[1] + d0[1] * R(s0), p0[2] + d0[2] * R(s0))
+                ss_mid = D(0.0)
+                ss_k = D(0.0)
+                ss_e = D(0.0)
+                ss_dot = D(0.0)
+                if chan.n_ch > 0:
+                    ss_e = half_d * (e_prev + e_k)
+                    ss_mid, ss_k, ss_dot = step_state(chan, ss_e, de, l_sub)
+                for g in range(n_grids):
+                    ovf = ovf + deposit_leg(
+                        edep, tally_rows, tid, batch, g, pk[0], pk[1], pk[2], d0[0], d0[1], d0[2],
+                        R(l_k), de, R(l_sub), D(0.0), D(1.0), D(1.0), g_origin, g_spacing, g_inv,
+                        g_shape, g_off, n_grids, max_pieces, chan, ss_mid, ss_k, ss_e, ss_dot,
+                    )  # fmt: skip
+            e_prev = e_k
+            k = k + 1
+        return e_escape, ovf
+
     return SimpleNamespace(
         control=control,
         chan=chan_t,
         score_piece=score_piece,
         step_state=step_state,
         deposit_point=deposit_point,
+        deposit_residual=deposit_residual,
         deposit_step=deposit_step,
         energy_from_range=energy_from_range,
         real=name,
@@ -561,6 +659,7 @@ def make_transport_kernel(real: type, diag: bool, ion: bool = False, ion_eval: s
     v3 = F.vec3
     control = S.control
     deposit_point = S.deposit_point
+    deposit_residual = S.deposit_residual
     deposit_step = S.deposit_step
     step_state = S.step_state
     chan_t = S.chan
@@ -780,11 +879,37 @@ def make_transport_kernel(real: type, diag: bool, ion: bool = False, ion_eval: s
         zero_run = int(0)
         while alive == 1:
             if energy <= ctl.e_cut:
-                t_cutoff = t_cutoff + wp.float64(energy)
-                deposit_point(
-                    edep, tally_rows, tid, batch, px, py, pz, energy, g_origin, g_inv, g_shape,
-                    g_off, ctl.n_grids, chan,
-                )  # fmt: skip
+                if ctl.eor == 1:
+                    # continuous_residual_v1: the residual energy along the straight continuation
+                    # over the table CSDA range R(E) (constant-S convention below the table floor)
+                    m_c = int(mat[ix, iy, iz])
+                    rho_c = dens[ix, iy, iz]
+                    ibc, fbc = FD.log_bin_index(energy, ln_e0[m_c], inv_dln_e[m_c], ctl.n_e)
+                    r_c = FD.range_in_bin(
+                        r_mass[m_c, ibc], f_mass[m_c, ibc], d_f[m_c, ibc],
+                        D(1.0) / inv_dln_e[m_c], fbc,
+                    )  # fmt: skip
+                    if energy < wp.exp(ln_e0[m_c]):
+                        r_c = r_mass[m_c, 0] * energy / wp.exp(ln_e0[m_c])
+                    t_ci, t_co = F.ray_box(v3(px, py, pz), v3(ux, uy, uz), ctl.lo, ctl.hi)
+                    l_in = wp.max(D(t_co), D(0.0))
+                    if uz > zero:
+                        l_in = wp.min(l_in, D((ctl.z_clip - pz) / uz))
+                    e_esc, ovf_c = deposit_residual(
+                        edep, tally_rows, tid, batch, v3(px, py, pz), v3(ux, uy, uz), energy, r_c,
+                        rho_c, l_in, m_c, ln_er, ln_r0, inv_dln_r, ln_e0, r_mass, ctl.n_r,
+                        g_origin, g_spacing, g_inv, g_shape, g_off, ctl.n_grids, ctl.max_pieces,
+                        chan, ctl.n_sub,
+                    )  # fmt: skip
+                    c_pieces = c_pieces + ovf_c
+                    t_cutoff = t_cutoff + wp.float64(energy - e_esc)
+                    t_escaped = t_escaped + wp.float64(e_esc)
+                else:
+                    t_cutoff = t_cutoff + wp.float64(energy)
+                    deposit_point(
+                        edep, tally_rows, tid, batch, px, py, pz, energy, g_origin, g_inv, g_shape,
+                        g_off, ctl.n_grids, chan,
+                    )  # fmt: skip
                 code = code_cutoff
                 alive = 0
             if alive == 1 and steps >= ctl.max_steps:

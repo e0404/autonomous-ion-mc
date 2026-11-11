@@ -42,7 +42,12 @@ from typing import Any
 import numpy as np
 
 from ionmc._wpfunc import python_twin
-from ionmc.config import MAX_REJECTION_ATTEMPTS, NUCLEAR_MAX_ENERGY_MEV, EffectiveConfig
+from ionmc.config import (
+    MAX_REJECTION_ATTEMPTS,
+    NUCLEAR_MAX_ENERGY_MEV,
+    RESIDUAL_SUBSTEPS,
+    EffectiveConfig,
+)
 from ionmc.errors import CounterOverflowError
 from ionmc.physics.em import make_em
 from ionmc.physics.ion_mcs import make_ion_mcs
@@ -169,6 +174,7 @@ class _Reference:
         ph = cfg.physics
         r = self.R
         self.e_cut = eff.e_cut_mev
+        self.continuous_residual = eff.end_of_range_model == "continuous_residual_v1"
         self.c_alpha = r(ph.range_alpha)
         self.c_rho_f = r(ph.range_rho_f_mm)
         self.c_frac = r(ph.max_energy_loss_fraction)
@@ -405,6 +411,72 @@ class _Reference:
                 self._deposit_leg(batch, g, hinge, d1, leg2, deposit, s_act, leg1, s_start, s_end)
             else:
                 self._deposit_point_grid(batch, g, p0, deposit)
+
+    def _residual_energy(self, m: int, r_g_cm2: float) -> float:
+        """Energy at the remaining range ``r_g_cm2`` of the end-of-range segment: the table
+        inverse above the range of the table floor, the constant-S start-range convention
+        ``E_lo r / R(E_lo)`` below it (as ``kernels.residual_energy``)."""
+        t = self.tab
+        r_lo = float(t.r_mass[m, 0])
+        if r_g_cm2 >= r_lo:
+            return self._energy_from_range(m, r_g_cm2)
+        return math.exp(float(t.ln_e0[m])) * r_g_cm2 / r_lo
+
+    def _deposit_residual(
+        self,
+        batch: int,
+        p: tuple[float, float, float],
+        u: tuple[float, float, float],
+        energy: float,
+        ix: int,
+        iy: int,
+        iz: int,
+    ) -> float:
+        """Model ``continuous_residual_v1`` (see ``kernels.deposit_residual``): the residual
+        energy along the straight continuation over the table CSDA range of ``energy`` in
+        ``RESIDUAL_SUBSTEPS`` equal sub-steps, sub-step ``k`` getting ``E_tab(r_{k-1}) -
+        E_tab(r_k)`` uniformly along its length. Returns the energy beyond the world boundary
+        (not deposited)."""
+        r, F, V = self.R, self.F, self.V
+        t = self.tab
+        m = int(self.mat[ix, iy, iz])
+        rho = float(self.dens[ix, iy, iz])
+        e_lo = math.exp(float(t.ln_e0[m]))
+        i, f = F.log_bin_index(r(energy), r(t.ln_e0[m]), r(t.inv_dln_e[m]), t.n_e)
+        r_g = float(
+            F.range_in_bin(
+                r(t.r_mass[m, i]), r(t.f_mass[m, i]), r(t.d_f[m, i]), r(1.0 / t.inv_dln_e[m]), f
+            )
+        )
+        if energy < e_lo:
+            r_g = float(t.r_mass[m, 0]) * energy / e_lo
+        _t_in, t_out = F.ray_box(V(r(p[0]), r(p[1]), r(p[2])), V(r(u[0]), r(u[1]), r(u[2])),
+                                 self.lo, self.hi)  # fmt: skip
+        l_in = max(float(t_out), 0.0)
+        if u[2] > 0.0:
+            l_in = min(l_in, float((self.z_clip - r(p[2])) / r(u[2])))
+        n_sub = RESIDUAL_SUBSTEPS
+        length = r_g * 10.0 / rho
+        l_sub = length / n_sub
+        e_prev = energy
+        e_escape = 0.0
+        for k in range(n_sub):
+            e_k = 0.0
+            if k < n_sub - 1:
+                e_k = min(self._residual_energy(m, r_g * (n_sub - 1 - k) / n_sub), e_prev)
+            de = e_prev - e_k
+            s0 = k * l_sub
+            l_k = min(max(l_in - s0, 0.0), l_sub)
+            if l_k < l_sub:
+                e_escape += de * (l_sub - l_k) / l_sub
+            if l_k > 0.0 and de > 0.0:
+                pk = (p[0] + u[0] * s0, p[1] + u[1] * s0, p[2] + u[2] * s0)
+                if self.scorer is not None:
+                    self.scorer.begin_step(0.5 * (e_prev + e_k), de, l_sub)
+                for g in range(len(self.grids)):
+                    self._deposit_leg(batch, g, pk, u, l_k, de, l_sub, 0.0, 1.0, 1.0)
+            e_prev = e_k
+        return e_escape
 
     def _deposit_point_grid(
         self, batch: int, g: int, pos: tuple[float, float, float], de: float
@@ -796,8 +868,15 @@ class _Reference:
         max_steps = self.eff.max_steps
         while True:
             if energy <= self.e_cut:
-                self.tallies["cutoff"] += energy
-                self._deposit_point(batch, (px, py, pz), energy)
+                if self.continuous_residual and species == 0:
+                    e_esc = self._deposit_residual(
+                        batch, (px, py, pz), (ux, uy, uz), energy, ix, iy, iz
+                    )
+                    self.tallies["cutoff"] += energy - e_esc
+                    self.tallies["escaped"] += e_esc
+                else:
+                    self.tallies["cutoff"] += energy
+                    self._deposit_point(batch, (px, py, pz), energy)
                 self._end(h, END_CUTOFF, (px, py, pz), (ux, uy, uz), energy)
                 return
             if steps >= max_steps:

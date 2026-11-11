@@ -616,3 +616,126 @@ estimator's convergence rule only for rows not yet graded, must preserve these g
 the two pre-registered branches of STOP 3 (no model change: the FAILs stand and go to the orchestrator/operator for
 integration; model change after attribution: all main TD/TL rows are consumed and the held-out set becomes the sole
 gating evidence at a re-run ionmc base, unchanged tolerances).
+
+### Amendment R2-STOP3 (2026-11-09, orchestrator; prospective; in force once the commit carrying it and its implementation has passed independent review; nothing graded is re-graded)
+
+**0. Scope.** Resolves STOP 3 of the dated results note above. Every grade of that note stands verbatim; no
+tolerance is changed; no parameter is fitted to TOPAS; no TOPAS configuration, bundle or seed changes.
+
+**1. Attribution (STOP 3 allows I3b/I3c-type table work and the P2 source reading; estimates are labelled).**
+- **(a) TD-EM low-end (d) FAILs — dominant cause: ionmc's end-of-range point deposit.** Decision 0043 §4: at
+  E ≤ E_cut = 2 MeV/u × A the whole residual energy is deposited at the current point
+  (`src/ionmc/transport/kernels.py`, `deposit_point`, counter `t_cutoff`); the residual CSDA range at 2 MeV/u from
+  ionmc's own table is 0.092 mm (He), 0.043 mm (C), 0.038 mm (O), against σ_R ≈ 0.05–0.13 mm at the low ends and a
+  peak group of w_p = 5 h_z = 0.1 mm. TOPAS tracks ions continuously to rest (no cutoff deposit). The §5.1 (d)
+  defence ("E_cut and the peak-group width are identical in both analyses", r2-topas-target.md §5.1) was therefore
+  WRONG: the estimator is identical, the end-of-range physics is not; §5.1 (b) had identified the R20 effect only.
+  Scratch forward model (orchestrator and planner, SEEN after grading, labelled estimate, not evidence: single-ion
+  CSDA depth-dose from ionmc's committed stopping table, Gaussian range straggling from the first-order Bohr
+  integral σ_R² = ∫(dΩ²/dx)/S³ dE, bin-averaged on the case grid, reduced with the committed `r2_statistics`
+  depth estimators): with the point deposit it reproduces the sealed ionmc W within 1.3 % at all nine cases and the
+  low-end PE within 0.5 % (so ionmc's straggling is the declared Bohr model, correctly implemented); replacing the
+  point by a continuous residual deposit changes PE by −10.7 / −9.9 / −5.4 % (He 50 / C 80 / O 100), W by
+  +7 / +11 / +14 % and R80 by +0.040 / +0.015 / +0.009 mm, against the observed ionmc − TOPAS differences PE
+  +7.8 / +10.8 / +11.4 %, W −5.4 / −17.4 / −16.8 %, R80 −0.065 / −0.016 / −0.004 mm. **Residual (INFERRED):** TOPAS
+  σ_R exceeds ionmc's Bohr value by ≈ 0–3 % (He), ≈ 4–9 % (C) and ≈ 4–5 % in W but up to ≈ 15 % in PE (O 100);
+  ionmc uses the pure Bohr variance with the bare charge (code, `src/ionmc/physics/em.py`); Geant4's ion
+  energy-loss fluctuation model (charge-state and low-velocity factors) is the suspected source — TO VERIFY by the
+  P2 source reading (item D-4 below). Upper-end (d) FAILs (C 430 +2.8 %, O 430 +3.5 %): E_cut contributes ≤ 0.3 %
+  (estimate); the rest is straggling-type and partly unexplained.
+- **(b) R80 systematically short by 0.2–0.3 % at the standard points and upper ends — on the reference side relative
+  to its declared lineage.** ionmc's R80 equals its own table CSDA range within 0.03 % at R ≥ 150 mm (transport
+  self-consistent). TOPAS-EM R80 exceeds ionmc's CSDA range by +0.19 % (He 150, He 250) and +0.26 … +0.29 %
+  (C/O 290–430). Decision 0038 ("Later validation outcome") predicts the opposite sign for C/O (ionmc longer than
+  integrated ICRU 90 by ≤ 0.175 %) and ≤ 0.07 % for He, so the "shared stopping lineage" statement of §B and
+  r2-topas-target.md §2 holds only to ≈ 0.2–0.45 %; the §5.1 (a) budget is not violated by ionmc. Mechanism TO
+  VERIFY (D-3: ICRU 90 arrays of the Geant4 source integrated to CSDA ranges at the nine energies; D-4: Geant4 ion
+  stopping path — ICRU 90 branch limits, Lindhard–Sørensen/high-order terms, table building). No ionmc stopping
+  change: closing this gap would be fitting to the reference (plan D STOP 3). Low ends: ≈ 0.04 mm of the He 50
+  deficit (0.065 mm) is the E_cut convention (estimate).
+- **(c) z_peak FAILs at the three upper ends = (b) against the absolute 0.5 mm tolerance** (ESTABLISHED from the
+  reports: z_peak shift / R80 shift = −0.81/−0.82 mm He 250, −0.74/−0.83 mm C 430, −0.66/−0.70 mm O 430). The
+  absolute (c) tolerance is tighter than the relative (a) tolerance for R80 > 143 mm — a revision-1 design
+  inconsistency, recorded, NOT changed (tolerances are never widened). The held-out ranges (≤ 78 mm) are not
+  affected by it.
+- **(d) TL-EM FAILs — estimator** (no self-consistent ±2σ window; results note). Every evaluable gated point lies in
+  the band (r = 1.17–1.31); the lateral physics shows no disagreement at the band's resolution.
+- Diagnostics to be committed as reviewed, report-only scripts before the held-out grading (none touches a sealed
+  sample or any TOPAS output beyond the committed reports): **D-1** table CSDA range vs committed R80 per case;
+  **D-2** the forward W/PE model (point vs continuous deposit, σ_R scan); **D-3** ICRU 90 array integration vs TOPAS
+  R80; **D-4** P2 source reading (Geant4 11.4 ion fluctuation and ion stopping classes, via
+  `acquire_reference_data`); **D-5** (optional, reference-internal) a scorer-free TOPAS smoke dumping the Geant4
+  dE/dx and range tables for alpha and GenericIon(6,12)/(8,16) in G4_WATER, if TOPAS exposes the dump (TO VERIFY).
+  D-3/D-4 inform the attribution only; they do not block the held-out set.
+
+**2. Estimator (prospective; applies to rows not yet graded only).** r2-topas-target.md §4.2 receives the dated
+"window-cycle" rule (exact text there): the 1e-4 relative convergence test is kept and applied first (every fit that
+converged before returns a bit-identical σ and iteration count); if the window W_k equals a window used at an
+earlier iteration j ≤ k − 2 (no self-consistent window exists), σ_core = arithmetic mean of the ML scales σ_j … σ_{k−1}
+of the cycle's distinct windows, flagged with period and amplitude A = (max − min)/mean, valid iff A ≤ 2 % (cap fixed a priori: ≈ 2× the
+single-part statistical SE of σ̂ at the smallest planned statistics and < 1/2 of the −5 % band edge); every other
+non-termination, "fewer than 3 bins", non-contiguous window or bracket-edge ML stays invalid. Implementation
+`validation/scripts/ion_em/r2_statistics.py` (`core_sigma`, `FIT_CYCLE_MAX_AMPLITUDE = 0.02`, `CoreFit.cycle_period`,
+`CoreFit.cycle_amplitude`), per-point counts of cycled fits in the TL reports, tests
+`tests/ionmc/test_r2_statistics_cycle.py`. It governs TD-H/TL-H (the only rows left to grade, item 3). The 18 EM
+grades stay as graded. A **report-only re-evaluation** of TL-EM under the rule is permitted and will be committed at
+`validation/results/transport/v8r2-topas/reports/report-only/TL-EM-case<N>-r2stop3.json` (`r2_evaluate.py
+reeval-tl-em`, schema `ionmc-v3-008-r2-reeval-1`, no `status`/`verdict`, header "graded verdict stands"); it is an
+attribution of the TL-EM FAILs, never a grade.
+
+**3. Branch decision: B — model change after attribution, limited to the end-of-range deposition.**
+- **Change (decision 0043 §4, dated amendment of the same date):** end-of-range model `continuous_residual_v1`
+  (default for the ion sources He/C/O): when E ≤ E_cut the residual energy is deposited along the straight
+  continuation of the current direction over ionmc's own table residual range R_tab(E), with the table's dE/ds
+  (sub-stepped on the scoring grids), no straggling, no MCS and no secondaries on that ≤ 0.092 mm segment; the
+  history ends as before (`code_cutoff`; `cutoff` counts the in-world residual, the part beyond the world boundary
+  goes to the `escaped` tally; 32 equal sub-steps, table inverse per sub-step). `point_v1` (the previous convention)
+  stays selectable and is the proton default (`PhysicsOptions.end_of_range_model = "default"` resolves by charge;
+  proton transport bit-identical). The requested and effective option are recorded in the run summary. No stopping
+  change, no straggling change, no new parameter: nothing is fitted to TOPAS. Declared residual of the model
+  (estimate): tail-profile dependence ≤ 2.3 % in PE and ≤ 0.008 mm in R80 at the low ends, ≤ 0.4 % / ≤ 0.004 mm
+  at the held-out energies.
+- **Consequences (plan D STOP 3, revision-2 note of 2026-11-07; r2-topas-target.md §5.4):** (i) all main TD/TL rows
+  are **consumed**: TD-EM/TL-EM preserved as graded (3 + 1 PASS, 6 + 8 FAIL), TD-FULL/TL-FULL (main) never graded;
+  (ii) **TD-H/TL-H** (cases 10–12: He 100, C 150, O 200 MeV/u; criteria TD-EM (a)–(e), TD-FULL (a), (c), TL-EM (a),
+  TL-FULL (a); no D_ext) become the **sole gating TOPAS-agreement evidence**, with unchanged tolerances; (iii) the
+  **new frozen SHA** is the reviewed commit carrying this amendment and the implementation (P9 freeze record
+  rebound to it); the A-rows (CI, LV8/HR8 host rows, T1-ion, T12-ion) are re-run at that SHA before any held-out
+  sample is produced (one-SHA rule, plan D PASS); (iv) the **held-out ionmc samples** are re-run at that SHA with
+  the re-run base **20621004** (declared here before use; r_index 39–41 unchanged, `steps_v8.py --seed-base
+  20621004`, seeds 20624904 + k, 20625004 + k, 20625104 + k; chunk plan as sealed: case 10: 4 × 2.5e5, case 11:
+  4 × 2.5e5, case 12: 5 × 2e5 histories), their signed host records sealed in a new sample-seal record
+  (`validation/results/transport/v8r2-samples/sample-seal-heldout-r2stop3.json`) by a reviewed commit, recorded in
+  this plan by a dated held-out seal note (seal SHA + review id) **before any held-out TOPAS run**; the R2-TOPAS-4
+  run-validity rule then binds the held-out TOPAS parts to that seal commit (ancestry; review finished before
+  `reference_started`); the sealed main-set samples of `sample-seal.json` stay sealed (consumed, preserved); (v)
+  **V5-SS** is not in the sample seal (its ionmc samples and TOPAS runs are not yet produced); it is produced at the
+  new frozen SHA, unchanged design; (vi) **TOPAS:** the 48 held-out parts (cases 10–12, parts 0–15, seeds unchanged)
+  are evidence; the 10 main IDD-FULL parts already run (He 50 parts 8–11, He 150 parts 8–11, He 250 parts 8–9) are
+  preserved (records committed, outputs unread; TF-DIAG use only); the remaining 62 main FULL parts are **not
+  required** and are deferred — orchestrator decision after the held-out grading whether to run them as TF-DIAG
+  within the REF cap. **Loss:** TL (b) D_ext (the f_dM extrapolation trend, directive item 6) is never evaluated
+  (TL-EM (b) NOT EVALUABLE and consumed); the adequacy of the f_dM extrapolation rests on TL-H (a) and I11-ext
+  (declared limitation); the TOPAS-agreement claim narrows to He 100, C 150 and O 200 MeV/u plus the main EM rows
+  that passed as graded.
+- **Why B and not A.** The dominant cause of the low-end (d) FAILs is an identified ionmc model approximation whose
+  effect the pre-registered defence misjudged; leaving it would knowingly spend the held-out set on the same defect.
+  Branch A would end at the operator with gating FAILs that are partly an estimator defect. B is the pre-registered
+  route for a model change after attribution. **Planning expectations (estimates, not predictions, recorded before
+  the held-out runs):** TD-H (a)/(c) pass with margin (reference range excess ≈ 0.13–0.18 mm vs (a) tolerance
+  0.19–0.27 mm; z_peak not binding at R ≤ 78 mm); TD-H (d) residual ≈ +1.2–2.1 % if TOPAS σ_R exceeds Bohr by 5 %
+  — a FAIL there if the C/O excess is ≈ 10 % would be a legitimate finding against ionmc's straggling model, recorded
+  as such.
+- **The operator is informed through the ledger that** (i) the upper-end z_peak FAILs trace to a reference range
+  0.15–0.45 % beyond its declared ICRU 90 lineage, which no non-fitted ionmc change can remove; (ii) the claim
+  narrows to three interior energies without the f_dM trend test; (iii) the operator may override this branch choice
+  (Branch A: integration decision on gating FAILs). No operator action is required to proceed.
+
+**4. Budget (planning).** Host: 13 held-out chunk runs (≈ 3–4 h at the sealed per-chunk wall times) + the A-rows
+(≈ 1–2 h); REF: 48 held-out parts (≈ 2–3 h at the measured t_s); EM evidence spent ≈ 1.5 h + 10 FULL parts ≈ 0.5 h;
+all within the 17 h REF cap and the host budget of §E.
+
+**5. Order from here (pre-registered).** Implementation + estimator rule + this amendment in one reviewed commit (new
+frozen SHA) → A-rows at that SHA → held-out samples (13 chunks) → held-out seal commit + review + dated seal note →
+48 held-out TOPAS parts (IDD-EM, LAT-EM, IDD-FULL, LAT-FULL per case) → TD-H, TL-H graded once → V5-SS → report-only
+TL-EM re-evaluation and D-1…D-4 (any time after this commit; they read only committed inputs).

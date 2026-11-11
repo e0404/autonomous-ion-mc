@@ -55,6 +55,7 @@ MOMENT_HALF_WINDOW_MM = 20.0  # section 4.2 "Sheppard-corrected second moment in
 FIT_WINDOW_SIGMAS = 2.0  # section 4.2 "truncated to |x| <= 2 sigma"
 HALO_SIGMAS = 3.0  # section 4.2 "dose outside +-3 sigma_core over the full field"
 _EDGE_EPS = 1e-9
+FIT_CYCLE_MAX_AMPLITUDE = 0.02  # section 4.2, amendment R2-STOP3
 
 
 class StatisticsError(Exception):
@@ -340,6 +341,8 @@ class CoreFit:
     sigma: float
     sigma0: float
     iterations: int
+    cycle_period: int = 0  # > 0: sigma is the mean of a window cycle (amendment R2-STOP3)
+    cycle_amplitude: float = 0.0  # (max - min) / mean of the cycle's ML scales
 
 
 def core_sigma(w: np.ndarray, edges: np.ndarray) -> CoreFit:
@@ -347,7 +350,18 @@ def core_sigma(w: np.ndarray, edges: np.ndarray) -> CoreFit:
     to the profile truncated to |x| <= 2 sigma (window-truncated normal likelihood), iterated from
     the Sheppard-corrected second moment in +-20 mm until sigma changes by < 1e-4 relative
     (<= 50 iterations; non-convergence = invalid point)". Raises :class:`StatisticsError` for an
-    invalid point."""
+    invalid point.
+
+    Section 4.2, amendment R2-STOP3 (window cycles). The window {bins with |centre| <= 2 s} is a
+    step function of s, so the iteration can have no self-consistent window and 2-cycle (or
+    longer-cycle) between windows. The convergence test above is applied first and unchanged, so
+    every fit that converged before is bit-identical. If it fails and the window just used is the
+    window of an earlier iteration j (not the immediately preceding one: that is a fixed window,
+    handled by the ordinary iteration), the ML scales sigma_j ... sigma_{k-1} of the windows of the
+    cycle are collected; sigma_core is their arithmetic mean, accepted iff the relative amplitude
+    A = (max - min) / mean <= FIT_CYCLE_MAX_AMPLITUDE (0.02), else the point is invalid. The cycle
+    length and A are recorded on the returned :class:`CoreFit`. Every other non-termination within
+    FIT_MAX_ITER remains invalid."""
     w = np.asarray(w, dtype=np.float64)
     edges = np.asarray(edges, dtype=np.float64)
     if w.ndim != 1 or edges.size != w.size + 1 or not np.all(np.isfinite(w)) or np.any(w < 0):
@@ -355,13 +369,25 @@ def core_sigma(w: np.ndarray, edges: np.ndarray) -> CoreFit:
     c = 0.5 * (edges[:-1] + edges[1:])
     s0 = second_moment_sigma(w, edges)
     s = s0
+    keys: list[tuple[int, int]] = []  # window (first, last bin) of each earlier iteration
+    scales: list[float] = []  # ML scale produced on that window
     for it in range(1, FIT_MAX_ITER + 1):
         sel = np.nonzero(np.abs(c) <= FIT_WINDOW_SIGMAS * s + _EDGE_EPS)[0]
         if sel.size < 3 or not np.sum(w[sel]) > 0.0 or np.any(np.diff(sel) != 1):
             raise StatisticsError("fewer than 3 bins (or no signal) inside +-2 sigma")
+        key = (int(sel[0]), int(sel[-1]))
         s_new = _window_ml(w[sel], edges[sel], edges[sel + 1], s)
         if abs(s_new - s) < FIT_REL_TOL * s:
             return CoreFit(s_new, s0, it)
+        if key in keys[:-1]:
+            cyc = scales[keys.index(key) :]
+            mean = sum(cyc) / len(cyc)
+            amp = (max(cyc) - min(cyc)) / mean
+            if amp > FIT_CYCLE_MAX_AMPLITUDE:
+                raise StatisticsError(f"window cycle amplitude {amp:.4g} > 0.02")
+            return CoreFit(mean, s0, it, cycle_period=len(cyc), cycle_amplitude=amp)
+        keys.append(key)
+        scales.append(s_new)
         s = s_new
     raise StatisticsError(f"core fit did not converge in {FIT_MAX_ITER} iterations")
 
@@ -377,6 +403,15 @@ def halo_fraction(w: np.ndarray, edges: np.ndarray, sigma_core: float) -> float:
     return float(np.sum(w[np.abs(c) > HALO_SIGMAS * sigma_core])) / tot
 
 
+def core_xy_detail(
+    px: np.ndarray, py: np.ndarray, ex: np.ndarray, ey: np.ndarray
+) -> tuple[float, int]:
+    """sigma_core = mean of the x and y fits (section 4.2) and the number (0-2) of those two fits
+    that used the window-cycle rule (amendment R2-STOP3)."""
+    fx, fy = core_sigma(px, ex), core_sigma(py, ey)
+    return 0.5 * (fx.sigma + fy.sigma), int(fx.cycle_period > 0) + int(fy.cycle_period > 0)
+
+
 def core_xy(px: np.ndarray, py: np.ndarray, ex: np.ndarray, ey: np.ndarray) -> float:
     """sigma_core = mean of the x and y fits (section 4.2)."""
-    return 0.5 * (core_sigma(px, ex).sigma + core_sigma(py, ey).sigma)
+    return core_xy_detail(px, py, ex, ey)[0]

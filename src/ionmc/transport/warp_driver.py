@@ -19,7 +19,7 @@ from typing import Any
 import numpy as np
 import warp as wp
 
-from ionmc.config import EffectiveConfig
+from ionmc.config import RESIDUAL_SUBSTEPS, EffectiveConfig
 from ionmc.species import species_of_projectile
 from ionmc.transport.channel_device import empty_channel_data, make_channel_data
 from ionmc.transport.funcs import BIG_LENGTH_MM
@@ -129,6 +129,8 @@ def run_warp_range(eff: EffectiveConfig, h0: int, h1: int, device: str) -> Parti
     ctl.mass = wp.float64(src.projectile.mass_mev)
     ctl.z = wp.float64(float(src.projectile.z))
     ctl.ion = 1 if eff.is_ion else 0
+    ctl.n_sub = RESIDUAL_SUBSTEPS
+    ctl.eor = 1 if eff.end_of_range_model == "continuous_residual_v1" else 0
     ctl.pos0 = vec(src.position_mm)
     ctl.dir = vec(eff.unit_direction)
     ctl.origin = vec(geo.origin_mm)

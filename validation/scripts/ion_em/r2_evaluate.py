@@ -422,6 +422,15 @@ def _fit_xy(
     return _safe(lambda: st.core_xy(px, py, ex, ey))
 
 
+def _fit_xy_c(
+    px: np.ndarray, py: np.ndarray, ex: np.ndarray, ey: np.ndarray
+) -> tuple[float | None, str | None, int]:
+    """:func:`_fit_xy` plus the number (0-2) of the x/y fits that used the window-cycle rule
+    (section 4.2, amendment R2-STOP3); 0 for a failed fit."""
+    out, err = _safe(lambda: st.core_xy_detail(px, py, ex, ey))
+    return (None, err, 0) if out is None else (out[0], None, out[1])
+
+
 def tl_points(
     case: int,
     ion_lat: dict[str, np.ndarray],
@@ -439,12 +448,14 @@ def tl_points(
     pts = []
     for k, d in enumerate(depths):
         ix, iy = ion_lat["x"][:, :, k], ion_lat["y"][:, :, k]
-        si, ei = _fit_xy(ix.mean(axis=0), iy.mean(axis=0), ex, ey)
-        si_b = [_fit_xy(ix[b], iy[b], ex, ey)[0] for b in range(ix.shape[0])]
+        si, ei, cyc_i_pool = _fit_xy_c(ix.mean(axis=0), iy.mean(axis=0), ex, ey)
+        fb = [_fit_xy_c(ix[b], iy[b], ex, ey) for b in range(ix.shape[0])]
+        si_b = [f[0] for f in fb]
         tx = [p["x"][:, k] for p in topas_parts]
         ty = [p["y"][:, k] for p in topas_parts]
-        stt, et = _fit_xy(sum(tx), sum(ty), ex, ey)
-        st_p = [_fit_xy(a, b, ex, ey)[0] for a, b in zip(tx, ty, strict=True)]
+        stt, et, cyc_t_pool = _fit_xy_c(sum(tx), sum(ty), ex, ey)
+        fp = [_fit_xy_c(a, b, ex, ey) for a, b in zip(tx, ty, strict=True)]
+        st_p = [f[0] for f in fp]
         g = gate_sigma[k]
         gated = g is None or g >= 3.0 * hx
         pt: dict[str, Any] = {
@@ -453,6 +464,11 @@ def tl_points(
             "gate_sigma_topas_em": g,
             "sigma_ionmc": si,
             "sigma_topas": stt,
+            "cycled_fits_ionmc": sum(f[2] for f in fb),
+            "cycled_fits_topas": sum(f[2] for f in fp),
+            "cycled_fit_pooled_ionmc": cyc_i_pool > 0,
+            "cycled_fit_pooled_topas": cyc_t_pool > 0,
+            "cycled_fit_pooled": cyc_i_pool > 0 or cyc_t_pool > 0,
         }
         valid = (
             si is not None
@@ -753,6 +769,7 @@ def grade(
     samples_root: Path | None = None,
     *,
     repo: Path | None = None,
+    reeval: bool = False,
 ) -> dict[str, Any]:
     """Grade one (case, row). Raises on any missing/malformed record (caller: ERROR).
 
@@ -760,7 +777,9 @@ def grade(
     records, artifact listings, sample seal, trust file, bundles) is read as committed at the
     evaluator repository's HEAD (bundles at the run's code_sha) and a differing working copy fails
     closed. ``repo`` is a test-only override (the CLI never exposes it): production grades use
-    :func:`evaluator_repo`."""
+    :func:`evaluator_repo`. ``reeval`` (TL-EM only, used by ``reeval-tl-em``): same committed-input
+    machinery, but the result is a report-only re-evaluation (:func:`reeval_report`), never a
+    grade; an invalid run or part is an error."""
     if row not in ROWS:
         raise io.RecordError(f"unknown row {row!r}; rows are {ROWS}")
     repo = Path(repo).resolve() if repo is not None else evaluator_repo()
@@ -821,6 +840,8 @@ def grade(
     report["run_validity"] = validity
     if not all(v["valid"] for v in validity):
         bad = [v["run_id"] for v in validity if not v["valid"]]
+        if reeval:
+            raise io.RecordError(f"reeval: run(s) {bad} fail check_run_validity")
         return report | {
             "status": "FAIL",
             "category": "blinding control",
@@ -849,6 +870,8 @@ def grade(
     report["part_validity"] = part_checks
     report["replicate_gate"] = gates
     if any(x["problems"] for x in part_checks + gates):
+        if reeval:
+            raise io.RecordError("reeval: a TOPAS part or replicate gate has run-validity problems")
         return report | {
             "status": "FAIL",
             "category": "run validity",
@@ -901,6 +924,10 @@ def grade(
             dext["low_case"], dext["upper_case"] = lowc, case
         res = tl_statistics(pts, dext)
         res["r80_topas_em_mm"] = r80_em
+        if reeval:
+            committed = reader.json(COMMITTED_REPORT.format(row=row, case=case), "committed report")
+            report |= {"topas_runs": [r.summary() for r in ctx.runs]}
+            return reeval_report(report, res, str(committed["status"]))
         res["report_only"] = extra
         if not tl_b:
             res["criterion_b_note"] = (
@@ -916,6 +943,37 @@ def grade(
             "ionmc_chunks": ctx.chunks_used,
         }
     )
+
+
+COMMITTED_REPORT = "validation/results/transport/v8r2-topas/reports/{row}-case{case}.json"
+REEVAL_SCHEMA = "ionmc-v3-008-r2-reeval-1"
+
+
+def reeval_report(
+    base: dict[str, Any], res: dict[str, Any], committed_status: str
+) -> dict[str, Any]:
+    """Shape a report-only re-evaluation: no top-level ``status``/``verdict``; the graded verdict
+    is only quoted (``graded_verdict_stands``) and every per-point/criterion ``verdict`` is renamed
+    ``band_result`` so it cannot be read as a grade."""
+
+    def rename(v: Any) -> Any:
+        if isinstance(v, dict):
+            return {("band_result" if k == "verdict" else k): rename(x) for k, x in v.items()}
+        if isinstance(v, list | tuple):
+            return [rename(x) for x in v]
+        return v
+
+    out = {k: v for k, v in base.items() if k not in ("status", "verdict")}
+    out["schema"] = REEVAL_SCHEMA
+    out["graded_verdict_stands"] = committed_status
+    out["note"] = (
+        "report-only re-evaluation with the amendment R2-STOP3 estimator; not a grade and not a "
+        "re-grade: the committed graded verdict stands"
+    )
+    out["points"] = rename(res["points"])
+    out["tl_statistics"] = rename({k: v for k, v in res.items() if k not in ("points", "status")})
+    out["tl_statistics_criterion_a_band_result"] = res["criterion_a"]
+    return out
 
 
 CHECK_SCHEMA = "ionmc-v3-008-r2-check-run-1"
@@ -1097,9 +1155,18 @@ def main(argv: list[str] | None = None) -> int:
     )
     c.add_argument("--outputs", type=Path, default=None)
     c.add_argument("--out", type=Path, default=None)
+    r = sub.add_parser("reeval-tl-em", help="report-only TL-EM re-evaluation (never a grade)")
+    r.add_argument("--records", type=Path, default=Path(io.DEFAULT_RECORDS))
+    r.add_argument("--seal", type=Path, default=Path(io.SEAL_RECORD_PATH))
+    r.add_argument("--case", required=True, type=int)
+    r.add_argument("--outputs", type=Path, default=None)
+    r.add_argument("--samples-root", type=Path, default=None)
+    r.add_argument("--out", type=Path, default=None)
     a = ap.parse_args(argv)
     if a.cmd == "check-run":
         return _main_check_run(a)
+    if a.cmd == "reeval-tl-em":
+        return _main_reeval(a)
     try:
         rep = grade(a.records, a.seal, a.case, a.row, a.outputs, a.samples_root)
         code = {"PASS": 0}.get(rep["status"], 1)
@@ -1113,6 +1180,23 @@ def main(argv: list[str] | None = None) -> int:
             "note": "fail closed: nothing graded; not a pass",
         }
         print(f"r2_evaluate: ERROR (fail closed): {exc}", file=sys.stderr)
+        code = 2
+    _write_report(rep, a.out)
+    return code
+
+
+def _main_reeval(a: argparse.Namespace) -> int:
+    try:
+        rep = grade(a.records, a.seal, a.case, "TL-EM", a.outputs, a.samples_root, reeval=True)
+        code = 0
+    except _FAIL_CLOSED as exc:
+        rep = {
+            "schema": REEVAL_SCHEMA,
+            "case": a.case,
+            "error": f"{type(exc).__name__}: {exc}",
+            "note": "fail closed: nothing re-evaluated; the committed graded verdict is unchanged",
+        }
+        print(f"r2_evaluate reeval-tl-em: ERROR (fail closed): {exc}", file=sys.stderr)
         code = 2
     _write_report(rep, a.out)
     return code

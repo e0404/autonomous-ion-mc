@@ -432,6 +432,66 @@
       "config": "lat-em",
       "part": 7,
       "run_id": "REF-ddb4748e2128aaa99e06-48894b44"
+    },
+    {
+      "case": 1,
+      "config": "idd-full",
+      "part": 8,
+      "run_id": "REF-9f5f5af6a810be2c724d-0108950d"
+    },
+    {
+      "case": 1,
+      "config": "idd-full",
+      "part": 9,
+      "run_id": "REF-32dc0d7ec008cda4893b-90520282"
+    },
+    {
+      "case": 1,
+      "config": "idd-full",
+      "part": 10,
+      "run_id": "REF-9b127284b843da608421-8fe1c89c"
+    },
+    {
+      "case": 1,
+      "config": "idd-full",
+      "part": 11,
+      "run_id": "REF-3e0dd1b4daa7cb8ae358-270b3b73"
+    },
+    {
+      "case": 2,
+      "config": "idd-full",
+      "part": 8,
+      "run_id": "REF-14a05b26af8573de21d0-c2d0bc54"
+    },
+    {
+      "case": 2,
+      "config": "idd-full",
+      "part": 9,
+      "run_id": "REF-2f217c7c22c7b8000048-45514ee1"
+    },
+    {
+      "case": 2,
+      "config": "idd-full",
+      "part": 10,
+      "run_id": "REF-66ca7ff774a90e7414fc-a0669572"
+    },
+    {
+      "case": 2,
+      "config": "idd-full",
+      "part": 11,
+      "run_id": "REF-9b5218933159f8cbac00-066e41e6"
+    },
+    {
+      "case": 3,
+      "config": "idd-full",
+      "part": 8,
+      "run_id": "REF-5ef9013e75d5efcfc096-92630506"
+    },
+    {
+      "case": 3,
+      "config": "idd-full",
+      "part": 9,
+      "run_id": "REF-4d897b7cd9e5f0a11d20-3939385a"
     }
   ],
   "_note": "one entry per evidence part {case, config, part, run_id}; filled by the orchestrator as evidence runs complete (plan Order step 3); smokes are not evidence and are listed in ../smokes.json"
