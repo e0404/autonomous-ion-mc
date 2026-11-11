@@ -766,3 +766,14 @@ Frozen in `validation/plans/v3-008-acceptance.md` (draft r6 alongside).
 commit named in `validation/plans/v3-008/p9-freeze-record.md`, once FC-1 and FC-2 are disposed.
 
 **Revision 2 (2026-11-07; dated amendment, earlier text kept).** The validation strategy is rewritten by the operator directive (`reference_requests/operator-directives/2026-11-07-topas-validation-target.md`): acceptance = agreement with the specified TOPAS configuration (OpenTOPAS 4.3 / Geant4 11.4.2, seven modules), EM-only TOPAS as intermediate, experimental validation deferred, complementary checks retained (I3 libdEdx, I11, V5-SS). Frozen in `validation/plans/v3-008-acceptance.md` revision 2 (rows TD-EM, TD-FULL, TL-EM, TL-FULL, TD-H/TL-H, TF-DIAG; §3 amendment above for the lineage and the f_dM criterion) by the reviewed commit that binds `validation/plans/v3-008/r2-topas-target.md` and the 205 revision-2 TOPAS bundles in `validation/plans/v3-008/p9-freeze-record.md` ("Revision 2 additions").
+
+**Later validation outcome (2026-11-11, orchestrator; V3-008 lv8 row I9 at e602a583).** The lateral variance of
+deposits exceeded the Fermi–Eyges A2 computed by the row's reference helper by the uniform factor 1.733–1.740
+(σ ratio 1.317–1.319) for He 150, C 290 and O 350 MeV/u at all depth fractions — FAIL, preserved verbatim
+(`validation/plans/v3-008-acceptance.md`, Evidence archive and amendment R2-STOP3 item 4k). Attribution by code
+reading: the helper evaluated the implemented T_ion with a placeholder inverse scattering length 1/X_S = 0.0123 cm²/g
+instead of the material value 0.021331 cm²/g used by the transport kernel; 0.021331/0.0123 = 1.7342 reproduces the
+measured factor to ≤ 0.35 %, i.e. the transport is consistent with the Fermi–Eyges prediction of its own scattering
+power (§3) to ≤ 0.35 % at 2e5 histories. No transport model or parameter is changed; the helper is corrected
+(amendment I9-REF) and the row is re-run as a fresh sample. This does not alter the §3 attribution of the TOPAS
+lateral-width ratios (model difference, Gaussian core vs single-scattering halo), which are not a constant factor.

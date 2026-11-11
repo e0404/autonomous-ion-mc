@@ -88,7 +88,7 @@ evidence for `icru90/z{6,8}_G4_WATER.dat`. This note concerns FC-2 only.
 | `tests/ionmc/test_ion_em_ss_budget.py` | `ca49735b5b00831aeaabd59d63faecfc23b98fe0d4247024ca963d7e9a77f097` | P9 (iv) |
 | `tests/ionmc/test_ion_em_ls_option.py` | `c67966c8d2c3d9564032e33e666321dd11bd8d2386780afa0cb74850455ca84d` | P9 (iii) |
 | `tests/ionmc/test_ion_em_mapping_src.py` | `865d3143892f8c6ebc548a86400bae198d455c3ad8c3bec2df074ebeb0210175` | I11-map (src), I0, I1 |
-| `tests/ionmc/test_v3_008_seed_families.py` | `5a11ca5128709fe23618a8179dab0288c2d01fbe0431f5b328ca45d5107e9114` | P7, §C |
+| `tests/ionmc/test_v3_008_seed_families.py` | `fb7d63c1933bf2acb4a37ef08a84c960ebf48ed9134895dbac5589e1b3f5d3fc` | P7, §C |
 
 ### 2.3 Implementation already on the branch (src)
 
@@ -231,9 +231,9 @@ placeholder scorer output was deleted unread.
 | `src/ionmc/transport/tally.py` | `be202f7310e3991bead49fd40e24cef1f5493992044c72aff6c5f8e8826b547c` |
 | `src/ionmc/transport/warp_driver.py` | `bc80fdc5a246fde57ea11fe901a5e864f2fccf4439b348e34c2c1ee34887c2da` |
 | `validation/scripts/ion_em/r2_evaluate.py` | `cfd89e2a06e7f33876274d9f4b30ddfaf9587ee7120663dab406cec15258a750` |
-| `validation/scripts/transport/steps_v8.py` | `c5aefda2e8520c6033431a4059e74eb3261317f222d2d1e4d873406dc77a9bad` |
+| `validation/scripts/transport/steps_v8.py` | `7654db6f3c61c95a6492301be4f829cdd8c5aa403aeeb0cf213eea9e5f4878ab` |
 | `tests/ionmc/test_ion_mcs_table.py` | `b3fb9992f866238b11243e032f394583775e292cec49601798ef44b54efcb749` |
-| `tests/ionmc/test_v3_008_rows_ci.py` | `ffea9f20976ec2d721067ccf52d5cb9797fad51a5bda7dd224948829c1cade0e` |
+| `tests/ionmc/test_v3_008_rows_ci.py` | `9192609f4bbc38ea9b68ba56c85d59ec3a1836f943080c5d66849936f36464d6` |
 | `tests/ionmc/test_r2_evaluate.py` | `6984a58594e984ef2aac8208d0eaab01832a35aac5d5f341a8a02723af7f2242` |
 | `tests/ionmc/test_v3_008_steps_v8.py` | `ab4922ea8842751e22c9d1882e9e1dec0ae88a25b55174c99586c4802868b731` |
 
@@ -617,7 +617,7 @@ placeholder scorer output was deleted unread.
 
 | File | sha256 |
 |---|---|
-| `tests/ionmc/test_run_suite_v8.py` | `f060fa10e8f8d77a22144e1c9c4fd977552c1e73e5565700cdc919c4f42f6424` |
+| `tests/ionmc/test_run_suite_v8.py` | `90cf5565ec032d8f1bcfd47e3979334a6552b2db8794d5e2f3790d4e99c1ac00` |
 | `validation/results/transport/v8r2-topas/reports/report-only/TL-EM-case1-r2stop3.json` | `345cb265bfc1c6b114c67a10598b34ceb01d07549da4bf892703c05a450b8341` |
 | `validation/results/transport/v8r2-topas/reports/report-only/TL-EM-case2-r2stop3.json` | `6875657cea09e1d33c5586d2f6cddd5f3a18a956a4a61f6e4a067b2a52feb42f` |
 | `validation/results/transport/v8r2-topas/reports/report-only/TL-EM-case3-r2stop3.json` | `6a74aa30462ec92f6e76232ff7f02d34c4387a7e7a822a9df1b4c21cea7d133f` |
@@ -891,6 +891,15 @@ placeholder scorer output was deleted unread.
 | `validation/results/transport/v8r2-topas/reports/TL-FULL-case11.json` | `159c0359659f731ea29569ba7ea343cf73a49ec25f8c3b73cb43857ee1a3365f` |
 | `validation/results/transport/v8r2-topas/reports/TL-FULL-case12.json` | `4f4b0d74278650c59abc18bf21e7b917ef420fb45600cee6bb44adc56fe04737` |
 
+
+**Dated note (2026-11-11, orchestrator) — files added by the amendment I9-REF commit (the ion Fermi–Eyges verification helper `ion_mcs_checks.py`, moved out of the CI test module with the material 1/X_S; sha256 as committed):**
+
+| File | sha256 |
+|---|---|
+| `src/ionmc/transport/ion_mcs_checks.py` | `299d999a64035e45da446a78276646bfb9791f238cb1257ca0a22f2667ad6351` |
+
+
+**Dated note (2026-11-11, orchestrator) — entries changed by the amendment I9-REF commit (reference helper constant 1/X_S from the material table; third re-run base 20572004 in the seed guard and summarize; plan items 4k and section C; decision 0043 later validation outcome):** `tests/ionmc/test_v3_008_seed_families.py` 5a11ca51… → fb7d63c1…; `validation/scripts/transport/steps_v8.py` c5aefda2… → 7654db6f…; `tests/ionmc/test_v3_008_rows_ci.py` ffea9f20… → 9192609f…; `tests/ionmc/test_run_suite_v8.py` f060fa10… → 90cf5565…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.

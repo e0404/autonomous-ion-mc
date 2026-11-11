@@ -24,7 +24,8 @@ TOPAS_PARTS = range(0, 20)
 TOPAS_CASES = range(1, 41)
 RERUN_BASE_1 = 20621004  # full r range
 RERUN_BASE_2 = 20631004  # r_index <= 9 only
-RERUN_R_MAX = {RERUN_BASE_1: R_MAX, RERUN_BASE_2: 9}
+RERUN_BASE_3 = 20572004  # full r range; the unassigned leading gap of the block, below LV8_BASE
+RERUN_R_MAX = {RERUN_BASE_1: R_MAX, RERUN_BASE_2: 9, RERUN_BASE_3: R_MAX}
 
 
 def row_seeds(base, r_max=R_MAX):
@@ -42,6 +43,7 @@ def v8_families():
         "rehearsal8": REHEARSAL_8,
         "rerun1": row_seeds(RERUN_BASE_1, RERUN_R_MAX[RERUN_BASE_1]),
         "rerun2": row_seeds(RERUN_BASE_2, RERUN_R_MAX[RERUN_BASE_2]),
+        "rerun3": row_seeds(RERUN_BASE_3, RERUN_R_MAX[RERUN_BASE_3]),
     }
     t = sorted(topas_seeds())
     fam["topas8"] = t
@@ -81,6 +83,16 @@ def test_declared_extents_match_plan_arithmetic():
     assert _bounds(fam["hr8"]) == (20591004, 20597103)
     assert _bounds(fam["topas8"]) == (20619001, 20620940)
     assert _bounds(fam["rerun2"])[1] == V3_008_RESERVED[-1]
+    assert _bounds(fam["rerun3"]) == (20572004, 20578103)
+
+
+def test_rerun3_in_leading_gap_of_reservation():
+    """rerun3 starts at the first value of the block and ends below every other V3-008 family."""
+    fam = v8_families()
+    assert RERUN_BASE_3 == V3_008_RESERVED[0]
+    hi = _bounds(fam["rerun3"])[1]
+    assert hi < LV8_BASE
+    assert all(hi < _bounds(v)[0] for k, v in fam.items() if k != "rerun3")
 
 
 def test_v8_families_mutually_disjoint():
@@ -133,6 +145,8 @@ def test_plan_section_c_matches_constants():
     assert f"case {TOPAS_CASES[0]}–{TOPAS_CASES[-1]}" in c
     assert f"r_index ≤ {R_MAX}" in c and "k < 100" in c
     assert f"from **{RERUN_BASE_1}**, then {RERUN_BASE_2}" in c
+    assert f"third re-run base **{RERUN_BASE_3}**" in c
+    assert f"{RERUN_BASE_3}–{_bounds(row_seeds(RERUN_BASE_3))[1]}" in c
     assert f"{LV8_BASE}–{_bounds(row_seeds(LV8_BASE))[1]}" in c
     assert f"{HR8_BASE}–{_bounds(row_seeds(HR8_BASE))[1]}" in c
     assert re.search(rf"highest is {max(topas_seeds())}", c)

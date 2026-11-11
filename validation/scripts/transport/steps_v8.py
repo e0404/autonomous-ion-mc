@@ -716,23 +716,16 @@ def planned_shard_seconds(row: str, unit: str) -> float:
     return n / {"he": 150.0, "carbon": 111.0, "oxygen": 100.0}[ion]
 
 
-_CI_MODULE: Any = None
-
-
 def ion_path(proj: Projectile, e_u: float) -> Any:
-    """The CSDA path of the I10 CI test (``tests/ionmc/test_v3_008_rows_ci._IonPath``): the
-    implemented T_ion per mm (``power``) and its quadrature ``theta2_quadrature``; also the
-    integrand of the Fermi-Eyges A2(z) (``steps.fermi_eyges_a2``)."""
-    global _CI_MODULE
-    if _CI_MODULE is None:
-        import importlib.util
+    """The CSDA path of ``proj`` in water (``ionmc.transport.ion_mcs_checks.IonPath``, the path of
+    the I10 CI test): the implemented T_ion per mm in absolute scale (``power``; the shared
+    ``mcs_variance`` with the material 1/X_S = ``inverse_scattering_length_cm2_per_g(WATER)`` and
+    rho = ``WATER.density_g_cm3``, the values the transport uses) and its quadrature
+    ``theta2_quadrature``; also the integrand of the Fermi-Eyges A2(z)
+    (``steps.fermi_eyges_a2``)."""
+    from ionmc.transport.ion_mcs_checks import IonPath
 
-        spec = importlib.util.spec_from_file_location(
-            "v8_rows_ci", REPO / "tests" / "ionmc" / "test_v3_008_rows_ci.py")  # fmt: skip
-        assert spec is not None and spec.loader is not None
-        _CI_MODULE = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(_CI_MODULE)
-    return _CI_MODULE._IonPath(proj, e_u)
+    return IonPath(proj, e_u)
 
 
 def _lateral_run(proj: Projectile, e_u: float, fracs: tuple[float, ...], bin_mm: float, *,
@@ -953,7 +946,8 @@ def _pooled_theta(parts: list[dict[str, Any]]) -> dict[str, Any]:
 def combine_i9(units: dict[str, list[dict[str, Any]]]) -> tuple[dict[str, Any], bool]:
     """I9: Sheppard-corrected lateral variance at z/R in I9_FRACS against the Fermi-Eyges A2 at
     the slab centre with the implemented T_ion: |var / A2 - 1| <= 2 % (the row's literal
-    'lateral variance within 2 % of A2'; sigma ratios reported)."""
+    'lateral variance within 2 % of A2'; sigma ratios reported). A2 integrates ``ion_path``'s
+    T_ion with the material 1/X_S of water (``inverse_scattering_length_cm2_per_g``)."""
     out, ok = {}, True
     for unit, parts in units.items():
         ion, e_u = STANDARD_UNITS[unit]
@@ -974,7 +968,8 @@ def combine_i9(units: dict[str, list[dict[str, Any]]]) -> tuple[dict[str, Any], 
 
 def combine_i12(units: dict[str, list[dict[str, Any]]]) -> tuple[dict[str, Any], bool]:
     """I12: pairwise theta_rms spread <= 0.5 %, sigma(0.9 R) spread <= 1 %, every theta_rms
-    within 0.5 % of the I10 quadrature (``theta2_quadrature`` at the exact exit plane)."""
+    within 0.5 % of the I10 quadrature (``theta2_quadrature`` at the exact exit plane; T_ion with
+    the material 1/X_S of water, ``inverse_scattering_length_cm2_per_g``)."""
     path = ion_path(CARBON12, 290.0)
     th = {s: _pooled_theta(units[f"theta-{_sname(s)}"]) for s in I12_SMAX}
     sg = {s: math.sqrt(_pooled_sigma2(units[f"sigma-{_sname(s)}"], "0.9")) for s in I12_SMAX}
@@ -1030,7 +1025,8 @@ def combine_i14(units: dict[str, list[dict[str, Any]]]) -> tuple[dict[str, Any],
 def combine_i15(units: dict[str, list[dict[str, Any]]]) -> tuple[dict[str, Any], bool]:
     """I15 (reduced T14): pairwise theta_rms spread <= 0.5 % and sigma spread <= 1 % at 0.5 R
     and 0.9 R over the four voxel configurations; the ratios to the I10 quadrature and to the
-    Fermi-Eyges sigma are informative."""
+    Fermi-Eyges sigma are informative (both from ``ion_path``: T_ion with the material 1/X_S of
+    water, ``inverse_scattering_length_cm2_per_g``)."""
     path = ion_path(CARBON12, 290.0)
     rows: dict[str, Any] = {}
     for v, sh in I15_CONFIGS:

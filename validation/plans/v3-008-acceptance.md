@@ -301,6 +301,13 @@ above (R2-TOPAS-4). The TD/TL statistics of `r2_evaluate.py` are implemented aft
 - **Re-runs** take fresh bases from **20621004**, then 20631004, each declared in an amendment before use. The
   last base inside the reserved block is 20631004, whose `base + 100·r + k` seeds stay ≤ 20632003 only for
   r_index ≤ 9. A re-run needing more rows, or a third re-run base, requests a new block in the shared ledger.
+  - **Dated note 2026-11-11 (amendment I9-REF, item 4k; before any re-run).** The third re-run base **20572004** (seeds
+    20572004–20578103, full r_index ≤ 60; family `rerun3`) is declared for the lv8 re-run of I9, I12, I14 and I15
+    (r_index 44–47). It is the first value of the V3-008 reservation, in the leading gap 20572004–20581003 that no
+    family had used, disjoint from lv8/hr8/rehearsal/TOPAS/re-run families and from every V3-005 family (guard test
+    extended); the sentence "a third re-run base requests a new block in the shared ledger" is superseded for this
+    base because the reservation itself still holds it — no cross-task ledger change. 20631004 remains the declared
+    base for re-runs with r_index ≤ 9.
 - Never 2098xxxx or 2099xxxx. CI tests use fixed small seeds documented in the tests.
 
 **Guard test** `tests/ionmc/test_v3_008_seed_families.py`. It asserts that every V3-008 seed is:
@@ -471,6 +478,8 @@ operator rules, and each host call ≤ 1500 s.
 | TL-EM (main set, 9 cases) | `validation/results/transport/v8r2-topas/reports/TL-EM-case<1..9>.json`; signed run records as above (36 LAT-EM parts) | runs at `ead583f1`; records and grading at `94bc948e` | TOPAS 20619000 + 100·part + case (parts 4–7); ionmc sample seal `0c68b78a` | **PASS 1** (C 80), **FAIL 8**: 25 of 36 points invalid by §4.2 fit non-convergence (2-cycle at a bin edge in single batches/parts), 1 point TOPAS σ undefined; every evaluable gated point inside the band (r = 1.17–1.31); D_ext NOT EVALUABLE (He, C, O) |
 | TD-H = TD-EM + TD-FULL (held-out, cases 10–12) | `validation/results/transport/v8r2-topas/reports/TD-EM-case<10..12>.json`, `…/TD-FULL-case<10..12>.json`; signed run records `…/records/runs/<run_id>/` (index `…/records/index.json`, 24 IDD parts); host records `v8r2-samples/host-records/` | runs at `55e6a180`; records at `b18fa715`; grading at `1fc287cf` | TOPAS 20619000 + 100·part + case (parts 0–3, 8–11); ionmc held-out seal `ca21ec18` (REVIEW-557971cc), base 20621004 | **PASS 6/6** (TD-EM 3/3, TD-FULL 3/3); see the dated held-out results note of 2026-11-11 |
 | TL-H = TL-EM + TL-FULL (held-out, cases 10–12) | `…/reports/TL-EM-case<10..12>.json`, `…/TL-FULL-case<10..12>.json`; signed run records as above (24 LAT parts) | runs at `55e6a180`; records at `b18fa715`; grading at `1fc287cf` | TOPAS as above (parts 4–7, 12–15); ionmc held-out seal `ca21ec18`, base 20621004 | **PASS 6/6** (TL-EM 3/3, TL-FULL 3/3); no point invalid under the §4.2 window-cycle rule; D_ext not defined |
+| I9 (lv8, first run) | `validation/generated/RUN-20261111T132917Z-098c9e9a/transport/lv8-e602a583-28/28-i9-combine.txt` (host-run store and task worktree; signed host records RUN-20261111T124822Z-f978c3d3 … RUN-20261111T132114Z-876468a3 (shards 22–27), RUN-20261111T132917Z-098c9e9a (combine); not in Git) | `e602a583` | lv8 20581004 (r 44; consumed) | **FAIL** — variance/A2 = 1.733–1.740 at every point (He 150, C 290, O 350; f 0.25–0.9); attributed to the reference helper's placeholder 1/X_S = 0.0123 cm²/g (amendment I9-REF, item 4k); never re-graded; re-run as a fresh sample at base 20572004 |
+| I12 (lv8, first run; abandoned) | shard 29 only (`RUN-20261111T133119Z-94ee45c3`, i12-theta-s01-s0, pass as a shard); no combine, no grade | `e602a583` | lv8 20581004 (r 45; shard 0 consumed) | ABANDONED after the I9 attribution (same reference helper); re-run at base 20572004 |
 
 ## Amendments
 
@@ -926,6 +935,46 @@ combine steps run at that one HEAD (the partials bind the SHA), and no commit is
 block is in flight. The tolerances, observables, history counts (item 4c) and seeds (lv8 base 20581004, hr8 base
 20591004, r_index per `steps_v8.ROW_R_INDEX`) are unchanged. This satisfies the one-SHA rule in substance (one
 implementation) and is recorded here because the letter of item 4b named f5f3a701.
+
+**4k. I9 FAIL at e602a583 and its attribution; amendment I9-REF (2026-11-11, orchestrator; prospective for the
+re-run; the FAIL is preserved).** The lv8 row I9 (lateral variance of deposits vs Fermi–Eyges A2 with the implemented
+T_ion, |variance/A2 − 1| ≤ 2 %) ran at e602a583 (item 4j; shards 22–27, host runs RUN-20261111T124822Z-f978c3d3,
+RUN-20261111T125420Z-301ed67a, RUN-20261111T130009Z-2aee46ff, RUN-20261111T130648Z-f00c3ca4,
+RUN-20261111T131327Z-d3458298, RUN-20261111T132114Z-876468a3, 2e5 histories per standard point; combine 28 =
+RUN-20261111T132917Z-098c9e9a, exit 1) and **FAILS**: variance/A2 = 1.733–1.740 (σ/√A2 = 1.317–1.319) for He 150,
+C 290 and O 350 at every depth fraction 0.25–0.9 — a factor uniform in ion, energy and depth. **Attribution (read-only
+code reading, no re-grading):** the row's reference helper `_IonPath` (`tests/ionmc/test_v3_008_rows_ci.py`, used by
+`steps_v8.ion_path` for I9, I12 and the informative I15 ratios) evaluates the implemented ion scattering power with a
+hard-coded inverse scattering length 1/X_S = 0.0123 cm²/g (a placeholder carried over from the ratio-only CI tests,
+commit 53424cf), whereas the transport kernel uses the material value `inverse_scattering_length_cm2_per_g(WATER)` =
+0.021331 cm²/g; the predicted ratio 0.021331/0.0123 = 1.7342 reproduces the twelve measured ratios to −0.08 … +0.35 %.
+The transport is therefore consistent with the Fermi–Eyges prediction of its own T_ion to ≤ 0.35 % at 2e5 histories;
+the FAIL is a defect of the verification row's reference constant, not of the implementation under test. (The TOPAS
+TL ratios r = 1.18–1.31 are not a constant factor and keep their attribution of item 1(d): a model difference,
+Gaussian core vs Geant4's single-scattering halo.) The proton references (`transport/mcs_checks.py`) use the material
+value and are unaffected; I10 (CI) is ratio-only and passes with either constant; I14, T12-ion and T13-ion do not use
+the helper. **Record:** I9 at e602a583 is FAIL in the evidence table (verbatim, never re-graded); the I12 shard 29
+started at e602a583 (base 20581004) is preserved as an abandoned partial (no row graded from it); no further lv8 row is
+run at e602a583. **Amendment I9-REF (reviewed with its implementation commit before any re-run):** (i) `_IonPath` and
+the CI helpers take 1/X_S from the material table (water 0.021331 cm²/g) and a CI test pins the helper's constant to
+the table value; the I9/I12/I15 definitions, tolerances, geometries, bins and history counts are unchanged; (ii) the
+remaining lv8 rows I9, I12, I14, I15 run at the SHA of the amendment commit (one-SHA rule for the re-run block) with
+the lv8 **re-run base 20572004** (declared here before use; section C amended: the second declared re-run base
+20631004 supports r_index ≤ 9 only, while I9/I12/I14/I15 use r_index 44–47, and the leading gap 20572004–20581003 of
+the V3-008 reservation was never assigned — the new family `rerun3` = 20572004 + 100·r + k, r ≤ 60, k < 100, lies
+entirely inside the reservation and is disjoint from every other V3-008 and V3-005 family, so no cross-task ledger
+block is requested; guard test `test_v3_008_seed_families.py` extended accordingly; `--seed-base 20572004`), i.e.
+the re-run I9 is a fresh sample, not a re-grade of the consumed one; hr8
+(T13-ion, T12-ion HR) runs at the same SHA with its untouched base 20591004; (iii) the A-rows of item 4d (steps 01–21
+at f5f3a701, base 20581004) stand. The corrected lateral grid half-width (8·√A2 with the material constant) is the
+only computational change of the rows.
+
+Implementation of I9-REF (same commit): `IonPath` moved to the new helper module
+`src/ionmc/transport/ion_mcs_checks.py` (verification helper only; `git diff f5f3a701 -- src/ionmc` shows this added
+file and nothing else — no transport kernel, physics table or option changed), the material 1/X_S and density are its
+defaults, the CI tests use the material value and pin it, `steps_v8.ion_path` imports the helper, and
+`summarize.V8_RERUN_SEED_BASES` accepts the lv8 re-run base 20572004 as qualifying (plan decision of this item; the
+consumed base 20581004 stays the base of the A-rows of item 4d).
 
 **5. Order from here (pre-registered).** Implementation + estimator rule + this amendment in one reviewed commit (new
 frozen SHA) → A-rows at that SHA → held-out samples (13 chunks) → held-out seal commit + review + dated seal note →

@@ -83,6 +83,17 @@ def test_suite_step_names_and_seed_bases() -> None:
     assert SUM.expected_tag("15-r1-ion-repeatability-c290") == "r1-ion"
     assert SUM.seed_blockers(20581004, "lv8") == [] and SUM.seed_blockers(20591004, "hr8") == []
     assert SUM.seed_blockers(20601004, "lv8")
+    # the third re-run base (plan section C) qualifies lv8 only
+    assert SUM.seed_blockers(20572004, "lv8") == [] and SUM.seed_blockers(20572004, "hr8")
+    assert SUM.seed_blockers(20621004, "lv8")  # not declared for run_suite re-runs
+
+
+def test_lv8_accepts_the_third_rerun_base() -> None:
+    """``--seed-base 20572004`` reaches every lv8 step unchanged (no base guard in run_suite or
+    steps_v8; every seed is ``base + 100 r_index + k``)."""
+    for _name, cmd, _env in RS.suite_steps("lv8", 1, 0.01, seed_base=20572004):
+        assert cmd[cmd.index("--seed-base") + 1] == "20572004"
+    assert V8.row_seed("i9", 0, 20572004) == 20572004 + 100 * V8.ROW_R_INDEX["i9"]
 
 
 def test_argv_carries_seed_base_timeout_and_cuda_env() -> None:
@@ -314,3 +325,19 @@ def test_combine_i14_synthetic_r80_and_invalid_shard(tmp_path: Path) -> None:
                 np.random.default_rng(1), "", 100, 20)})  # fmt: skip
     with pytest.raises(SystemExit, match="validity"):
         _combine(tmp_path, "i14", 0.001)
+
+
+def test_ion_path_carries_the_material_scattering_length() -> None:
+    """``steps_v8.ion_path`` (A2 of I9 and the lateral grid, theta^2 quadrature of I12 / I15) is
+    ``ionmc.transport.ion_mcs_checks.IonPath`` with the transport's 1/X_S of water, not the former
+    placeholder 0.0123 cm2/g."""
+    from ionmc.materials import WATER
+    from ionmc.physics.projectiles import CARBON12
+    from ionmc.physics.scattering import inverse_scattering_length_cm2_per_g
+    from ionmc.transport.ion_mcs_checks import IonPath
+
+    path = V8.ion_path(CARBON12, 290.0)
+    assert isinstance(path, IonPath)
+    assert path.inv_rho_xs_cm2_g == inverse_scattering_length_cm2_per_g(WATER)
+    assert path.inv_rho_xs_cm2_g != 0.0123
+    assert path.rho_g_cm3 == WATER.density_g_cm3

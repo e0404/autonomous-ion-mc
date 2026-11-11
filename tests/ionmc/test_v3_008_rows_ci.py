@@ -42,6 +42,7 @@ from ionmc.physics.projectiles import (
     TRITON,
     Projectile,
 )
+from ionmc.physics.scattering import inverse_scattering_length_cm2_per_g
 from ionmc.physics.stopping import (
     BetheOptions,
     BetheStoppingSource,
@@ -52,6 +53,7 @@ from ionmc.physics.stopping import (
 from ionmc.scoring import ScoringGrid, TallyRequest
 from ionmc.simulation import Simulation
 from ionmc.sources import PencilBeamSource
+from ionmc.transport import ion_mcs_checks
 from ionmc.transport.mcs_checks import radiation_length_g_cm2
 from ionmc.transport.parity import compare_traces
 from ionmc.transport.tables import TransportTables
@@ -64,6 +66,10 @@ STANDARD_E_U = {"alpha": 150.0, "carbon12": 290.0, "oxygen16": 350.0}
 CI_E_U = {"alpha": 100.0, "carbon12": 150.0, "oxygen16": 150.0}
 BOX_MM = {"alpha": 100.0, "carbon12": 100.0, "oxygen16": 100.0}  # >= range at CI_E_U (78, 53, 50)
 SIDE = 60.0
+INV_XS_WATER = inverse_scattering_length_cm2_per_g(WATER)
+"""1/X_S of water [cm2/g], the value the transport loads into ``TransportTables.inv_rho_xs``."""
+RHO_WATER = WATER.density_g_cm3
+"""Density of water [g/cm3] (1.0), the voxel density of the water phantoms."""
 
 
 # --------------------------------------------------------------------------------------------
@@ -330,6 +336,8 @@ EM_NAMES = ("bohr_variance", "scattering_power_dm", "scattering_variance_birth")
 def _charge_kernel(real: Any) -> Any:
     EM = make_em(real)
     K = make_kinematics(real)
+    inv_xs = wp.constant(real(INV_XS_WATER))
+    rho_w = wp.constant(real(RHO_WATER))
 
     @wp.kernel(module="unique")
     def k(
@@ -345,10 +353,8 @@ def _charge_kernel(real: Any) -> Any:
         pv_e = K.pv_mev(e_end[i], m[i])
         p1v1 = K.pv_mev(e_0[i], m[i])
         out[i, 0] = EM.bohr_variance(e_mid[i], m[i], z[i], real(0.55), real(1.0), real(1.0))
-        out[i, 1] = EM.scattering_power_dm(pv, p1v1, z[i], real(0.0123), real(1.0))
-        out[i, 2] = EM.scattering_variance_birth(
-            pv, pv_e, p1v1, z[i], real(0.0123), real(1.0), real(0.7)
-        )
+        out[i, 1] = EM.scattering_power_dm(pv, p1v1, z[i], inv_xs, rho_w)
+        out[i, 2] = EM.scattering_variance_birth(pv, pv_e, p1v1, z[i], inv_xs, rho_w, real(0.7))
         out[i, 3] = K.beta2(e_mid[i], m[i])
         out[i, 4] = K.tmax_mev(e_mid[i], m[i])
 
@@ -385,8 +391,10 @@ def test_i1_charge_argument_functions_twin_equals_warp_cpu(precision: str) -> No
         pv, pv_e, p1 = kin.pv_mev(e_mid, m), kin.pv_mev(e_end, m), kin.pv_mev(e0, m)
         ref = (
             em.bohr_variance(e_mid, m, z, 0.55, 1.0, 1.0),
-            em.scattering_power_dm(pv, p1, z, 0.0123, 1.0),
-            em.scattering_variance_birth(pv, pv_e, p1, z, 0.0123, 1.0, 0.7),
+            em.scattering_power_dm(pv, p1, z, float(dt(INV_XS_WATER)), float(dt(RHO_WATER))),
+            em.scattering_variance_birth(
+                pv, pv_e, p1, z, float(dt(INV_XS_WATER)), float(dt(RHO_WATER)), 0.7
+            ),
             kin.beta2(e_mid, m),
             kin.tmax_mev(e_mid, m),
         )
@@ -401,6 +409,8 @@ def test_i1_charge_argument_functions_twin_equals_warp_cpu(precision: str) -> No
 
 def _ion_kernel(real: Any) -> Any:
     IM = make_ion_mcs(real)
+    inv_xs = wp.constant(real(INV_XS_WATER))
+    rho_w = wp.constant(real(RHO_WATER))
 
     @wp.kernel(module="unique")
     def k(
@@ -420,7 +430,7 @@ def _ion_kernel(real: Any) -> Any:
         i = wp.tid()
         v, st = IM.mcs_variance(
             ion, pro, comp, quad, 0, z, mass, pv[i], pv_end[i], p1[i], birth[i],
-            real(0.0123), real(1.0), real(0.7),
+            inv_xs, rho_w, real(0.7),
         )  # fmt: skip
         peq, p1eq, st2 = IM.mapped_state(ion, pro, comp, quad, 0, z, mass, pv[i], p1[i])
         out[i, 0] = v
@@ -493,7 +503,8 @@ def test_i1_mapped_mcs_step_twin_equals_warp_cpu(proj: Projectile, precision: st
         pv, pe, p1 = (float(c[i]) for c in cols)
         v, s1 = tw.mcs_variance(
             L(mp.ion_path.pack), L(mp.proton.pack), L(mp.comp), quad, 0, float(proj.z),
-            float(dt(proj.mass_mev)), pv, pe, p1, int(birth[i]), float(dt(0.0123)), 1.0,
+            float(dt(proj.mass_mev)), pv, pe, p1, int(birth[i]), float(dt(INV_XS_WATER)),
+            float(dt(RHO_WATER)),
             float(dt(0.7)),
         )  # fmt: skip
         peq, p1eq, s2 = tw.mapped_state(
@@ -799,120 +810,30 @@ def test_i16_primary_ion_let_in_thin_slab(proj: Projectile) -> None:
 
 # --------------------------------------------------------------------------------------------
 # I10: MCS integrator step independence for T_ion (U5 analogue) and I11-map at transport level
-def _mapping_arrays(proj: Projectile, tables: TransportTables | None = None) -> tuple[Any, ...]:
-    t = tables or _tables(proj)
-    ion = XO.pack_transport_row(t, 0)[None, :]
-    pro = XO.proton_path(WATER).pack[None, :]
-    comp = XO.pack_composition(WATER)[None, :]
-    return ion, pro, comp, XO.pack_quadrature()
+# The CSDA path of the ion (I10, I11-map and the lv8 steps I9 / I12 / I15 through
+# ``steps_v8.ion_path``) lives in ``ionmc.transport.ion_mcs_checks``: 1/X_S and rho are the
+# material values the transport uses (``inverse_scattering_length_cm2_per_g`` and the density).
+_mapping_arrays = ion_mcs_checks.mapping_arrays
+_mcs_kernel = ion_mcs_checks.mcs_kernel
+_IonPath = ion_mcs_checks.IonPath
 
 
-def _mcs_kernel() -> Any:
-    IM = make_ion_mcs(D)
-    XOF = XO.make_exact_omega(D)
-
-    @wp.kernel(module="unique")
-    def k(
-        ion: wp.array2d(dtype=D),
-        pro: wp.array2d(dtype=D),
-        comp: wp.array2d(dtype=D),
-        quad: wp.array(dtype=D),
-        z: D,
-        mass: D,
-        pv: wp.array(dtype=D),
-        pv_end: wp.array(dtype=D),
-        p1v1: D,
-        birth: int,
-        s_mm: wp.array(dtype=D),
-        out: wp.array2d(dtype=D),
-        status: wp.array(dtype=int),
-    ):  # type: ignore[no-untyped-def]
-        i = wp.tid()
-        v, st = IM.mcs_variance(
-            ion, pro, comp, quad, 0, z, mass, pv[i], pv_end[i], p1v1, birth, D(0.0123), D(1.0),
-            s_mm[i],
-        )  # fmt: skip
-        out[i, 0] = v
-        peq, p1eq, st2 = IM.mapped_state(ion, pro, comp, quad, 0, z, mass, pv[i], p1v1)
-        pv_map = wp.min(pv[i], p1v1 / (D(1.0) + D(THIN_SLAB_R)))
-        target, sb = XOF.b_slab(ion[0], comp[0], quad, z, mass, pv_map, p1v1)
-        g, sg = XOF.b_residual(pro[0], comp[0], quad, wp.log(peq), p1v1 / pv_map, target)
-        out[i, 1] = g
-        out[i, 2] = peq
-        status[i] = st + st2 + sb + sg
-
-    return k
-
-
-class _IonPath:
-    """CSDA path of an ion in water; stepped and quadrature theta^2 with the shared functions."""
-
-    def __init__(self, proj: Projectile, e_u: float) -> None:
-        self.proj = proj
-        self.t = _tables(proj)
-        self.arrs = _mapping_arrays(proj, self.t)
-        self.e0 = e_u * proj.a
-        self.r1 = self.t.range_g_cm2(0, self.e0)
-        self.r1_mm = self.r1 * 10.0
-        self.p1v1 = self._pv(np.array([self.e0]))[0]
-        self.kern = _mcs_kernel()
-
-    def _pv(self, e: np.ndarray) -> np.ndarray:
-        m = self.proj.mass_mev
-        return e * (e + 2.0 * m) / (e + m)
-
-    def energy(self, x_mm: np.ndarray) -> np.ndarray:
-        t = self.t
-        lnr = np.log(np.maximum(self.r1 - x_mm / 10.0, 1e-30))
-        grid = t.ln_r0[0] + np.arange(t.n_r) / t.inv_dln_r[0]
-        return np.exp(np.interp(lnr, grid, t.ln_e_of_r[0]))
-
-    def _run(self, pv: np.ndarray, pv_end: np.ndarray, s: np.ndarray, birth: int) -> np.ndarray:
-        n = len(pv)
-        out = wp.zeros((n, 3), dtype=D, device="cpu")
-        st = wp.zeros(n, dtype=int, device="cpu")
-        ion, pro, comp, quad = self.arrs
-        wp.launch(
-            self.kern, dim=n,
-            inputs=[wp.array(ion, dtype=D, device="cpu"), wp.array(pro, dtype=D, device="cpu"),
-                    wp.array(comp, dtype=D, device="cpu"), wp.array(quad, dtype=D, device="cpu"),
-                    D(float(self.proj.z)), D(self.proj.mass_mev),
-                    wp.array(pv, dtype=D, device="cpu"), wp.array(pv_end, dtype=D, device="cpu"),
-                    D(float(self.p1v1)), birth, wp.array(s, dtype=D, device="cpu"), out, st],
-            device="cpu",
-        )  # fmt: skip
-        self.last_status = st.numpy()
-        res: np.ndarray = out.numpy()
-        return res
-
-    def power(self, x_mm: np.ndarray) -> np.ndarray:
-        pv = self._pv(self.energy(x_mm))
-        return self._run(pv, pv, np.ones_like(pv), 0)[:, 0]
-
-    def birth_variance(self, s_mm: float) -> float:
-        pv = self._pv(self.energy(np.array([0.5 * s_mm])))
-        pe = self._pv(self.energy(np.array([s_mm])))
-        return float(self._run(pv, pe, np.array([s_mm]), 1)[0, 0])
-
-    def theta2_quadrature(self, x_mm: float) -> float:
-        gx, gw = np.polynomial.legendre.leggauss(200)
-        s = 0.5 * (gx + 1.0)
-        pts = x_mm * s**4
-        jac = 4.0 * x_mm * s**3 * 0.5 * gw
-        return float(np.sum(jac * self.power(pts)))
-
-    def theta2_steps(self, x_mm: float, step_mm: float) -> float:
-        n = int(math.floor(x_mm / step_mm))
-        lens = np.full(n, step_mm)
-        starts = np.arange(n) * step_mm
-        rem = x_mm - n * step_mm
-        if rem > 0.0:
-            lens = np.append(lens, rem)
-            starts = np.append(starts, n * step_mm)
-        total = self.birth_variance(float(lens[0]))
-        if len(lens) > 1:
-            total += float(np.sum(lens[1:] * self.power(starts[1:] + 0.5 * lens[1:])))
-        return total
+def test_ion_path_uses_the_material_scattering_length() -> None:
+    """The I9 / I10 / I12 / I15 reference path carries the transport's 1/X_S of water
+    (``inverse_scattering_length_cm2_per_g(WATER)``, loaded into ``TransportTables.inv_rho_xs``),
+    not the former placeholder 0.0123 cm2/g, and the water density; its T_ion scales as 1/X_S."""
+    path = _IonPath(CARBON12, 290.0)
+    assert path.inv_rho_xs_cm2_g == inverse_scattering_length_cm2_per_g(WATER)
+    assert path.inv_rho_xs_cm2_g == pytest.approx(0.021331, rel=1e-4)
+    assert abs(path.inv_rho_xs_cm2_g - 0.0123) > 1e-3
+    assert path.inv_rho_xs_cm2_g == float(path.t.inv_rho_xs_cm2_g[0])
+    assert path.rho_g_cm3 == WATER.density_g_cm3
+    assert INV_XS_WATER == path.inv_rho_xs_cm2_g
+    x = np.array([0.1, 0.5]) * path.r1_mm
+    other = _IonPath(CARBON12, 290.0, inv_rho_xs_cm2_g=0.0123)
+    np.testing.assert_allclose(
+        path.power(x) / other.power(x), path.inv_rho_xs_cm2_g / 0.0123, rtol=1e-12
+    )
 
 
 STEPS_MM = (0.01, 0.1, 0.5, 1.0, 2.0, 5.0)
@@ -1007,8 +928,8 @@ def test_i11_map_table_against_root_at_transport_states(proj: Projectile) -> Non
             ion, pro, comp, quad, tab, 0, z, mass, float(pv[k]), p1
         )
         var, st_v, _m = tw.mcs_variance_table(
-            ion, pro, comp, quad, tab, 0, z, mass, float(pv[k]), float(pv[k]), p1, 0, 0.0123,
-            1.0, 1.0,
+            ion, pro, comp, quad, tab, 0, z, mass, float(pv[k]), float(pv[k]), p1, 0,
+            INV_XS_WATER, RHO_WATER, 1.0,
         )  # fmt: skip
         assert st == st_v == 0
         pv_map = min(float(pv[k]), p1 / (1.0 + THIN_SLAB_R))

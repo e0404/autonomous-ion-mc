@@ -57,6 +57,13 @@ V5_QUALIFICATION_SEED_BASE = 20421004
 """Qualification base of the suite ``lv5`` (V3-005A); the 2043xxxx family are rehearsals."""
 V8_QUALIFICATION_SEED_BASES = {"lv8": 20581004, "hr8": 20591004}
 """Qualification bases of the V3-008 suites (plan section C); 2060xxxx are rehearsals."""
+V8_RERUN_SEED_BASES: dict[str, tuple[int, ...]] = {"lv8": (20572004,)}
+"""Re-run bases of the V3-008 suites that also qualify (plan section C, the third re-run base
+20572004, declared by a dated amendment before use): lv8 rows re-run after the results of their
+qualification base were observed (that base is then consumed for the row) take a fresh base, so
+the summary must not flag the declared re-run base as non-qualification evidence. The seeds
+``20572004 + 100 r_index + k`` (r_index <= 60, k <= 99) lie in the leading gap of the reserved
+block, below 20581004 (``tests/ionmc/test_v3_008_seed_families.py``)."""
 IDENTITY_KEYS = ("git_sha", "suite", "scale", "python_parts", "seed_base")
 
 
@@ -309,11 +316,11 @@ def seed_blockers(seed_base: Any, suite: str | None = None) -> list[str]:
         return []
     if suite in ("lv8", "hr8"):
         want = V8_QUALIFICATION_SEED_BASES[suite]
-        if int(seed_base) != want:
+        if int(seed_base) != want and int(seed_base) not in V8_RERUN_SEED_BASES.get(suite, ()):
             return [
                 f"seed_base {int(seed_base)} is not the {suite} qualification base {want} "
                 "(V3-008 plan section C; the 2060xxxx family are rehearsals, re-run bases need a "
-                "dated amendment)"
+                f"dated amendment; declared re-run bases: {V8_RERUN_SEED_BASES.get(suite, ())})"
             ]
         return []
     if suite in ("lv4", "hr4"):
