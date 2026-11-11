@@ -880,6 +880,20 @@ re-evaluation fails closed with "no committed signed host-run record"; no grade 
 10–12 has been graded. Finding 2 (minor) is closed by an unconditional digest test of the D-3 aggregate
 (`tests/ionmc/test_d3_range_attribution.py`, no ICRU cache needed).
 
+**4h. Evaluator amendment, round 2 (2026-11-11, orchestrator; Codex REVIEW-e844de8a on b18fa715, finding 1 "important").**
+The host-record binding of item 4g additionally binds the signed invocation (`argv`: the prescribed `steps_v8.py
+td-tl-sample` call or the `python -c` chunk wrapper, with the chunk's case, k and `scale`, the kind's seed base and the
+output directory; `r2_io.sample_invocation`, fail closed on any other shape) and the manifest-bound step document
+(the step's published stdout, sha256 = the chunk's `step_stdout_sha256`, carrying exactly one step JSON document
+whose case, k, seed, `seed_base`, `r_index`, histories, npz name/sha256, `git_sha`, `pass`, `valid`, all-zero
+counters and effective n_histories/seed/cpu_workers agree with the seal; `r2_io.step_document`); negative tests for
+wrong case, k, seed, scale, seed base, history count, counters, document and argv shapes. Finding 2 (minor): the
+`validation/results/transport/README.md` paragraph now states that the host records are absent at this commit
+(IR-20261111-101840-EDCAE6 open) and a cache-free inventory test (`tests/ionmc/test_v3_008_host_records.py`) verifies
+every committed record against the seals and the trust file; its completeness test is a strict expected failure
+until the records are committed. All 99 sealed chunks' published outputs satisfy the manifest and step-document
+bindings at this commit (checked locally; the `argv` binding needs the records).
+
 **5. Order from here (pre-registered).** Implementation + estimator rule + this amendment in one reviewed commit (new
 frozen SHA) → A-rows at that SHA → held-out samples (13 chunks) → held-out seal commit + review + dated seal note →
 48 held-out TOPAS parts (IDD-EM, LAT-EM, IDD-FULL, LAT-FULL per case) → TD-H, TL-H graded once → V5-SS → report-only

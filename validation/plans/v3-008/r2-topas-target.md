@@ -1096,7 +1096,18 @@ output-manifest digests) and to the published outputs (the signed output manifes
 `validation/generated/<run_id>/` and must list the chunk's npz with the sealed sha256) — main and held-out seals
 alike, before any number is read; a missing or differing record is an ERROR (amendment R2-STOP3 item 4g in
 `v3-008-acceptance.md`). The main seal's attestation blocks carry five keys (signer, key_id, signed_at_utc,
-payload_sha256, signature) and are matched key by key; the held-out seal's full blocks are matched exactly.
+payload_sha256, signature) and are matched key by key; the held-out seal's full blocks are matched exactly. **Addendum (2026-11-11, Codex REVIEW-e844de8a on b18fa715).** The binding also covers the signed invocation and
+the step document: the record's signed `argv` must be the prescribed `steps_v8.py td-tl-sample` call (direct, or the
+`python -c` chunk wrapper with case/k/scale from the trailing argv tokens or from a literal assignment; exactly one
+call; `r2_io.sample_invocation`) with the chunk's case, k and `scale`, the kind's seed base and the output directory
+`validation/generated/<subdir>/case<c>`; and the step's published stdout (`case<c>-k<k>.stdout.txt`, an entry of the
+signed output manifest whose sha256 must equal the chunk's `step_stdout_sha256`) must carry exactly one step JSON
+document whose row/suite/backend, case, k, seed, `seed_base`, `r_index`, histories (and `frozen_histories` 1e6), npz
+name and sha256, `git_sha` (= `implementation_sha`), `pass`, `valid`, all-zero counters and effective n_histories /
+seed / cpu_workers = 1 agree with the seal (`r2_io.step_document`). `scale` and `step_stdout_sha256` are therefore
+required chunk keys of both seals. The published outputs of all 99 sealed chunks reproduce their signed manifests and
+satisfy the step-document binding at this commit; the argv binding is exercised against the real records once they
+are committed (an invocation shape not among the accepted ones fails closed until a reviewed shape is added).
 
 **Dated note (2026-11-09, seal recorded; orchestrator).** Sample seal commit `0c68b78ac191c850bf9101dbacf8eca12f4e9b1b` (the record commit 84b8b2cd plus two review fixes: D1 mapping-domain rule, MCS-off gating; full-coverage results bit-identical), Codex REVIEW-9691e1b098e940d7bdfd1063c09325ee passed (finished 2026-11-09T09:15:57Z), VAL-20261109-092143-547E49, CI run 42592861874 success; dated seal note in `v3-008-acceptance.md` (Revision 2 section). No TOPAS run of this set has been started.
 

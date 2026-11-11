@@ -198,7 +198,7 @@ placeholder scorer output was deleted unread.
 | `tests/ionmc/test_r2_bundles.py` | `aaa08b42abd3ed660530ba8897cb980fec3e9b3977dfddf7c7a699bc6bcb51ac` |
 | `reference_requests/operator-directives/2026-11-07-topas-validation-target.md` | `ca079e9f0af990cdff9d8efde60d38ac55e2d0fc0fb9ef22355a81f4a2ab0b26` |
 | `reference_requests/interventions/IR-20261102-010435-B59B2D/response.json` | `dc6a610cb67dee50fa0bb96327026eea0b81bb9506e7b898c2e9e44322f69bd0` |
-| `validation/plans/v3-008/r2-topas-target.md` | `56b7536e293330ae0993167cdeb48a21bfce5a1600d01aa2719e57f812d70c56` |
+| `validation/plans/v3-008/r2-topas-target.md` | `ff6887e83600a9281d328b2bddb59ff3250e7baf6cce226b471084b35d3b7c96` |
 
 
 **Dated note (2026-11-07, orchestrator) — hashes regenerated at the freeze commit's parent; entries that changed since f694b747:** `validation/plans/v3-008/p10-single-scattering-availability.md` bea86277… → a7f539a0…; `validation/plans/v3-008/p11-exact-omega-mapping.md` 6116648a… → f78e95f5…; `reference_requests/interventions/IR-20261102-010435-B59B2D/request.json` 068cafd7… → e81a7efa…. All other entries unchanged (recomputed).
@@ -234,7 +234,7 @@ placeholder scorer output was deleted unread.
 | `validation/scripts/transport/steps_v8.py` | `c5aefda2e8520c6033431a4059e74eb3261317f222d2d1e4d873406dc77a9bad` |
 | `tests/ionmc/test_ion_mcs_table.py` | `b3fb9992f866238b11243e032f394583775e292cec49601798ef44b54efcb749` |
 | `tests/ionmc/test_v3_008_rows_ci.py` | `ffea9f20976ec2d721067ccf52d5cb9797fad51a5bda7dd224948829c1cade0e` |
-| `tests/ionmc/test_r2_evaluate.py` | `2c9ae51c7115c7639d1fd0597f60c2127fa5a2be292d7922cb50dfdac0d34de7` |
+| `tests/ionmc/test_r2_evaluate.py` | `53b0eefc6c59971704c5a389527799bd57a9146743a1ef3cf3294fd0a7169400` |
 | `tests/ionmc/test_v3_008_steps_v8.py` | `ab4922ea8842751e22c9d1882e9e1dec0ae88a25b55174c99586c4802868b731` |
 
 (c) R2.5 counts, superseded by this note (the R2.5 text is kept as written): repository paths 475 + 15 = **490**; total full sha256 values 519 + 15 = **534**, plus the bundle-set digest (unchanged, `a8a1c27d…`). The count in R2.6 item (3) (475) is superseded accordingly by 490 for the acceptance tests of the seal.
@@ -263,7 +263,7 @@ placeholder scorer output was deleted unread.
 
 | File | sha256 |
 |---|---|
-| `validation/scripts/ion_em/r2_io.py` | `cbad3eb0c2d34474f9d392dbbcea855d535cbda7c6b879151dba6ae97cdc43a8` |
+| `validation/scripts/ion_em/r2_io.py` | `fef190ebdd4dce26ddc4903a05cd2781e35db7f56dac86d66e11e90e2129330c` |
 | `validation/scripts/ion_em/r2_statistics.py` | `fa1bb5c5b372df72fc9d3e9f4daa06d0943db5adb89bd173c53edad1b58bc9c1` |
 | `validation/results/transport/v8r2-topas/smokes.json` | `9f5c1b24bfe278869b30cc89c03137786fc683ed85d6b6509c48cdffa964f621` |
 | `validation/results/transport/v8r2-topas/records/review.json` | `87988397d4c14304d75f987117e4c22199d4452a0b48030e131a2bd52edb1199` |
@@ -766,6 +766,15 @@ placeholder scorer output was deleted unread.
 
 
 **Dated note (2026-11-11, orchestrator) — entries changed by the held-out records commit (records index 82 → 130 entries) and by the evaluator host-record binding of Codex REVIEW-2f0b4eec (r2_io/r2_evaluate verify the complete signed host-run records of the sample chunks; tests; unconditional D-3 digest test):** `validation/scripts/ion_em/r2_evaluate.py` 375d4f01… → cfd89e2a…; `tests/ionmc/test_r2_evaluate.py` ba1f65d0… → 2c9ae51c…; `validation/scripts/ion_em/r2_io.py` d4b86851… → cbad3eb0…; `validation/results/transport/v8r2-topas/records/index.json` 9d9c7a92… → e355818d…; `tests/ionmc/test_d3_range_attribution.py` 4124470b… → 4125be06…; `validation/plans/v3-008/r2-topas-target.md` dc43cdde… → 56b7536e…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-11, orchestrator) — files added by the host-record binding round-2 commit (cache-free inventory test of the committed host-run records; sha256 as committed):**
+
+| File | sha256 |
+|---|---|
+| `tests/ionmc/test_v3_008_host_records.py` | `8224d4a796d16975b3ce41c23cb305ba998ac02f631a9fcaae325ce2aecb5782` |
+
+
+**Dated note (2026-11-11, orchestrator) — entries changed by the host-record binding round-2 commit (Codex REVIEW-e844de8a: signed-argv and step-document binding, tests, README, plan notes 4h and the target-record addendum):** `validation/plans/v3-008/r2-topas-target.md` 56b7536e… → ff6887e8…; `tests/ionmc/test_r2_evaluate.py` 2c9ae51c… → 53b0eefc…; `validation/scripts/ion_em/r2_io.py` cbad3eb0… → fef190eb…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.

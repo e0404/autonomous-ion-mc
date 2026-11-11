@@ -58,7 +58,11 @@ Three inputs, each bound to a controlled record before any number is used:
    / ``output_manifest_sha256`` those of the seal (chunk and ``host_runs``), and the signed output
    manifest must be reproduced from the published run directory
    ``<samples-root>/validation/generated/<run_id>/`` and contain the chunk's npz with the sealed
-   sha256. The report lists the verified record per chunk (``ionmc_chunks[].host_record``).
+   sha256 and the step stdout ``case<c>-k<k>.stdout.txt`` with the sealed ``step_stdout_sha256``;
+   that stdout's one step document must state exactly the chunk (:func:`_step_bound`) and the
+   signed ``argv`` must be the prescribed ``steps_v8.py td-tl-sample`` invocation of the chunk
+   (:func:`sample_invocation`; Codex REVIEW-e844de8a). The report lists the verified record per
+   chunk (``ionmc_chunks[].host_record``).
 3. **TOPAS runs.** Per run the orchestrator materializes into ``<records>/runs/<run_id>/``:
    ``record.json`` = the SIGNED run record of the reference runner (V3-INFRA-004, schema_version 3;
    fields used: ``run_id, configuration_id, code_sha, task_id`` (may be null), ``engine,
@@ -104,6 +108,7 @@ import math
 import re
 import subprocess
 from dataclasses import dataclass, field
+from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
@@ -1378,6 +1383,134 @@ HOST_RECORDS_DIR = "validation/results/transport/v8r2-samples/host-records"
 HOST_SIGNER = "host-runner"
 HOST_TASK_ID = "V3-008"
 _ATTESTATION_CORE = ("signer", "key_id", "signed_at_utc", "payload_sha256", "signature")
+STEP_SCRIPT, STEP_ROW = "validation/scripts/transport/steps_v8.py", "td-tl-sample"
+
+
+def _exact(got: Any, want: Any) -> bool:
+    """Equality with exact JSON types (bools and None by identity; 0 is not False)."""
+    if isinstance(want, bool) or want is None:
+        return got is want
+    return type(got) is type(want) and got == want
+
+
+def _bind(run_id: str, what: str, doc: dict[str, Any], expected: dict[str, Any]) -> None:
+    for key, want in expected.items():
+        if key not in doc:
+            raise RecordError(f"host run {run_id}: {what} lacks {key!r}")
+        if not _exact(doc[key], want):
+            raise RecordError(f"host run {run_id}: {what} {key} {doc[key]!r} != {want!r}")
+
+
+# The chunk wrappers run ``steps_v8.py td-tl-sample`` as a subprocess (``python -c <source>``).
+_W_ARGS = re.compile(
+    r"^case, k, scale = int\(sys\.argv\[1\]\), int\(sys\.argv\[2\]\), sys\.argv\[3\]$", re.M
+)
+_W_LITERAL = re.compile(r"^case, k, scale = (\d+), (\d+), '(\d+(?:\.\d+)?)'$", re.M)
+_W_CMD = re.compile(
+    r"^cmd = \[sys\.executable, 'validation/scripts/transport/steps_v8\.py', 'td-tl-sample', "
+    r"'--case', str\(case\), '--k', str\(k\), '--scale', scale, "
+    r"(?:'--seed-base', '(\d+)', )?'--out-dir', (?:str\(out\)|'([^'\\{}]+)')\]$",
+    re.M,
+)
+_W_OUT = re.compile(r"^out = pathlib\.Path\(f'([^'\\{}]+)\{case\}'\)(?:;.*)?$", re.M)
+_W_RUN = re.compile(r"^.*\bsubprocess\.run\(cmd\b.*$", re.M)
+_SCALE = re.compile(r"^\d+(?:\.\d+)?$")
+
+
+def sample_invocation(argv: Any) -> dict[str, Any]:
+    """Parse the signed host-run ``argv`` of a sample chunk into ``{"case", "k", "scale",
+    "seed_base", "out_dir"}``; anything else fails closed (:class:`RecordError`).
+
+    Accepted shapes (nothing else):
+
+    1. **Wrapper, values as arguments** (main set): ``[<python>, "-c", <source>, "<case>", "<k>",
+       "<scale>"]`` whose source has the line
+       ``case, k, scale = int(sys.argv[1]), int(sys.argv[2]), sys.argv[3]``.
+    2. **Wrapper, literal values** (held-out set): ``[<python>, "-c", <source>]`` whose source has
+       the line ``case, k, scale = <case>, <k>, '<scale>'``.
+    3. **Direct**: ``[<python>, "validation/scripts/transport/steps_v8.py", "td-tl-sample",
+       "--case", c, "--k", k, "--scale", s, ["--seed-base", b,] "--out-dir", o]``.
+
+    In both wrapper shapes the source must contain exactly one assignment line of case/k/scale,
+    exactly one mention of ``steps_v8.py``, exactly one ``subprocess.run(cmd`` and exactly one line
+    ``cmd = [sys.executable, 'validation/scripts/transport/steps_v8.py', 'td-tl-sample', '--case',
+    str(case), '--k', str(k), '--scale', scale, ['--seed-base', '<digits>',] '--out-dir', X]``
+    with ``X`` a string literal or ``str(out)`` and then exactly one line
+    ``out = pathlib.Path(f'<prefix>{case}')`` (out_dir = prefix + case). ``seed_base`` defaults to
+    the lv8 base 20581004 when ``--seed-base`` is absent (``steps_v8.py`` default)."""
+    if not isinstance(argv, list) or not all(isinstance(t, str) for t in argv) or len(argv) < 3:
+        raise RecordError(f"signed argv is not a sample invocation: {argv!r}")
+    if argv[1] == STEP_SCRIPT:  # shape 3
+        opts = argv[3:]
+        if argv[2] != STEP_ROW or len(opts) not in (8, 10):
+            raise RecordError("signed argv: direct invocation is not td-tl-sample")
+        names = ["--case", "--k", "--scale", "--seed-base", "--out-dir"]
+        if len(opts) == 8:
+            names.remove("--seed-base")
+        if opts[0::2] != names:
+            raise RecordError(f"signed argv: unexpected td-tl-sample options {opts[0::2]}")
+        val = dict(zip(opts[0::2], opts[1::2], strict=True))
+        case_s, k_s, scale = val["--case"], val["--k"], val["--scale"]
+        base_s, out_dir = val.get("--seed-base"), val["--out-dir"]
+    elif argv[1] == "-c":  # shapes 1 and 2
+        src, rest = argv[2], argv[3:]
+        args, lits = _W_ARGS.findall(src), _W_LITERAL.findall(src)
+        if len(args) + len(lits) != 1:
+            raise RecordError("signed argv: wrapper has no unique case/k/scale assignment")
+        if args:
+            if len(rest) != 3:
+                raise RecordError("signed argv: wrapper arguments are not <case> <k> <scale>")
+            case_s, k_s, scale = rest
+        else:
+            if rest:
+                raise RecordError("signed argv: literal wrapper takes no arguments")
+            case_s, k_s, scale = lits[0]
+        cmds = _W_CMD.findall(src)
+        if (
+            len(cmds) != 1
+            or src.count("steps_v8.py") != 1
+            or len(_W_RUN.findall(src)) != 1
+            or src.count("subprocess.run(") != 1
+        ):
+            raise RecordError("signed argv: wrapper does not run exactly steps_v8.py td-tl-sample")
+        base_s, out_lit = cmds[0]
+        base_s = base_s or None
+        if out_lit:
+            out_dir = out_lit
+        else:
+            outs = _W_OUT.findall(src)
+            if len(outs) != 1:
+                raise RecordError("signed argv: wrapper out directory is not unique")
+            out_dir = f"{outs[0]}{case_s}"
+    else:
+        raise RecordError("signed argv: neither a python -c wrapper nor a direct steps_v8.py call")
+    if not (case_s.isdigit() and k_s.isdigit() and _SCALE.match(scale)):
+        raise RecordError(f"signed argv: malformed case/k/scale {case_s!r} {k_s!r} {scale!r}")
+    if base_s is not None and not base_s.isdigit():
+        raise RecordError(f"signed argv: malformed seed base {base_s!r}")
+    return {
+        "case": int(case_s), "k": int(k_s), "scale": scale,
+        "seed_base": int(base_s) if base_s is not None else LV8_BASE, "out_dir": out_dir,
+    }  # fmt: skip
+
+
+def step_document(text: str, run_id: str) -> dict[str, Any]:
+    """The one JSON document of a step stdout, between the lines ``#JSON-BEGIN`` and
+    ``#JSON-END`` (``steps.emit``); zero or several documents fail closed."""
+    lines = text.splitlines()
+    begins = [i for i, x in enumerate(lines) if x == "#JSON-BEGIN"]
+    ends = [i for i, x in enumerate(lines) if x == "#JSON-END"]
+    if len(begins) != 1 or len(ends) != 1 or ends[0] <= begins[0]:
+        raise RecordError(f"host run {run_id}: step stdout does not hold exactly one JSON document")
+    try:
+        doc = json.loads("\n".join(lines[begins[0] + 1 : ends[0]]))
+    except ValueError as exc:
+        raise RecordError(f"host run {run_id}: step document is not JSON: {exc}") from exc
+    if not isinstance(doc, dict):
+        raise RecordError(f"host run {run_id}: step document is not a JSON object")
+    return doc
+
+
 _PUBLISHED_ROOTS = ("validation/generated", "benchmarks/generated")  # host_runner.publish_outputs
 
 
@@ -1464,7 +1597,10 @@ def verify_host_records(
     ``output_manifest_sha256`` = the chunk's and the seal's single ``host_runs`` entry of the run).
     The npz is checked against the sealed size/sha256 (:func:`verify_npz`), the signed output
     manifest is reproduced from the published run directory (:func:`published_manifest`) and must
-    contain the entry ``validation/generated/<subdir>/case<c>/<npz>`` with the sealed sha256.
+    contain the entry ``validation/generated/<subdir>/case<c>/<npz>`` with the sealed sha256. The
+    step stdout and its document are bound by :func:`_step_bound`, the signed ``argv`` by
+    :func:`sample_invocation` (case, k, sealed ``scale`` with 1e6 * scale = histories, the kind's
+    seed base, out dir ``validation/generated/<subdir>/case<c>``; Codex REVIEW-e844de8a).
     Returns one report block per chunk."""
     if reader is None:
         raise RecordError("host-run records must be read through the committed reader")
@@ -1472,6 +1608,9 @@ def verify_host_records(
     if not isinstance(impl, str) or not re.fullmatch(r"[0-9a-f]{40}", impl):
         raise RecordError(f"sample seal implementation_sha {impl!r} is not a commit SHA")
     strict = seal.get("schema") == SEAL_SCHEMA_HELDOUT
+    kind = "heldout" if strict else "main"
+    if SEAL_KINDS[kind].npz_subdir != subdir:
+        raise RecordError(f"chunk subdirectory {subdir!r} is not the {kind} seal's")
     host_runs = require(seal, "host_runs", "sample seal")
     if not isinstance(host_runs, list):
         raise RecordError("sample seal host_runs is not a list")
@@ -1510,15 +1649,7 @@ def verify_host_records(
             "stdout_sha256": c["wrapper_stdout_sha256"],
             "output_manifest_sha256": c["output_manifest_sha256"],
         }  # fmt: skip
-        for key, want in expected.items():
-            if key not in rec:
-                raise RecordError(f"host run {run_id}: signed record lacks {key!r}")
-            got = rec[key]
-            exact = isinstance(want, bool) or want is None
-            if not (got is want if exact else type(got) is type(want) and got == want):
-                raise RecordError(
-                    f"host run {run_id}: signed {key} {got!r} != {want!r} (seal / clean run)"
-                )
+        _bind(run_id, "signed", rec, expected)
         signed_manifest = rec["output_manifest_sha256"]
         entries = [h for h in host_runs if isinstance(h, dict) and h.get("run_id") == run_id]
         if len(entries) != 1 or entries[0].get("output_manifest_sha256") != signed_manifest:
@@ -1542,6 +1673,15 @@ def verify_host_records(
                 f"host run {run_id}: the signed output manifest has no entry {entry} with the "
                 "sealed npz_sha256"
             )
+        step = _step_bound(samples_root, run_id, case, c, files, subdir, kind, impl)
+        inv = sample_invocation(rec.get("argv"))
+        scale = c["scale"]
+        if not isinstance(scale, str) or round(N_HISTORIES * Fraction(scale)) != c["histories"]:
+            raise RecordError(f"host run {run_id}: sealed scale {scale!r} != histories / 1e6")
+        _bind(run_id, "signed argv", inv, {
+            "case": case, "k": c["k"], "scale": scale, "seed_base": SEAL_KINDS[kind].seed_base,
+            "out_dir": f"validation/generated/{subdir}/case{case}",
+        })  # fmt: skip
         block = rec["attestation"]
         out.append({
             "case": case, "k": c["k"], "run_id": run_id, "record_path": rel,
@@ -1550,8 +1690,56 @@ def verify_host_records(
             "signed_at_utc": block["signed_at_utc"], "sha": rec["sha"],
             "output_manifest_sha256": signed_manifest, "manifest_entry": entry,
             "attestation_verified": True, "manifest_verified": True,
+            "step_document_verified": True, "step_stdout_sha256": step, "invocation": inv,
+            "argv_bound": True,
         })  # fmt: skip
     return out
+
+
+def _step_bound(
+    samples_root: Path | str, run_id: str, case: int, c: dict[str, Any], files: dict[str, str],
+    subdir: str, kind: str, impl: str,
+) -> str:  # fmt: skip
+    """The step stdout ``case<c>-k<k>.stdout.txt`` published next to the npz must be in the signed
+    output manifest with the sealed ``step_stdout_sha256``, and its one JSON document must state
+    exactly this chunk (row, suite, backend, case, k, seed, seed base, r_index, histories, npz and
+    its sha256, git SHA = implementation_sha, pass/valid, every counter 0, effective n_histories /
+    seed / single CPU worker). Returns the verified sha256."""
+    want_sha = require(c, "step_stdout_sha256", f"sample seal chunk case {case} k {c['k']}")
+    name = f"case{case}-k{c['k']}.stdout.txt"
+    entry = f"validation/generated/{subdir}/case{case}/{name}"
+    if files.get(entry) != want_sha:
+        raise RecordError(
+            f"host run {run_id}: the signed output manifest has no entry {entry} with the sealed "
+            "step_stdout_sha256"
+        )
+    path = Path(samples_root) / "validation" / "generated" / run_id / subdir / f"case{case}" / name
+    if path.is_symlink() or not path.is_file():
+        raise RecordError(f"host run {run_id}: step stdout {path} is not a regular file")
+    blob = path.read_bytes()
+    if hashlib.sha256(blob).hexdigest() != want_sha:
+        raise RecordError(f"host run {run_id}: step stdout differs from step_stdout_sha256")
+    doc = step_document(blob.decode("utf-8"), run_id)
+    _bind(run_id, "step document", doc, {
+        "row": STEP_ROW, "suite": "lv8", "backend": "warp-cpu", "case": case, "k": c["k"],
+        "seed": c["seed"], "seed_base": SEAL_KINDS[kind].seed_base,
+        "r_index": R_INDEX_OFFSET + case, "histories": c["histories"],
+        "frozen_histories": N_HISTORIES, "npz": c["npz"], "npz_sha256": c["npz_sha256"],
+        "git_sha": impl, "pass": True, "valid": True,
+    })  # fmt: skip
+    counters = doc.get("counters")
+    if (
+        not isinstance(counters, dict)
+        or not counters
+        or not all(_exact(v, 0) for v in counters.values())
+    ):
+        raise RecordError(f"host run {run_id}: step document counters are not all zero")
+    eff = doc.get("effective_config")
+    if not isinstance(eff, dict):
+        raise RecordError(f"host run {run_id}: step document lacks effective_config")
+    _bind(run_id, "step document effective_config", eff,
+          {"n_histories": c["histories"], "seed": c["seed"], "cpu_workers": 1})  # fmt: skip
+    return want_sha
 
 
 @dataclass

@@ -420,6 +420,56 @@ def _host_record(chunk: dict[str, Any], sha: str, changes: dict[str, Any]) -> di
     }  # fmt: skip
 
 
+def _step_doc(chunk: dict[str, Any], npz_sha256: str, sha: str, seed_base: int) -> dict[str, Any]:
+    """The ``steps_v8.py td-tl-sample`` step document of ``chunk`` (``base.emit`` keys)."""
+    counters = dict.fromkeys(("accumulator_overflow", "energy_inversion", "stall"), 0)
+    return {
+        "format": 1, "row": "td-tl-sample", "case": chunk["case"], "r_index": 29 + chunk["case"],
+        "k": chunk["k"], "seed": chunk["seed"], "histories": chunk["histories"],
+        "frozen_histories": 1_000_000, "reduced": True, "backend": "warp-cpu", "valid": True,
+        "counters": counters, "npz": chunk["npz"], "npz_sha256": npz_sha256, "wall_s": 1.5,
+        "effective_config": {"backend": "warp-cpu", "cpu_workers": 1,
+                             "n_histories": chunk["histories"], "seed": chunk["seed"]},
+        "pass": True, "seed_base": seed_base, "suite": "lv8", "git_sha": sha,
+    }  # fmt: skip
+
+
+def _step_stdout(doc: dict[str, Any]) -> str:
+    return (
+        "Warp 1.17.0 initialized:\n   Kernel cache:\n     /cache/warp/1.17.0\n"
+        "Module _table_node_kernel load on device 'cpu' took 1.00 ms  (cached)\n"
+        f"#JSON-BEGIN\n{json.dumps(doc, indent=1, sort_keys=True)}\n#JSON-END\n"
+    )
+
+
+# the chunk wrappers as launched through the host runner (``python -c <source> [args]``)
+WRAPPER = (
+    "import os, subprocess, sys, json, time, pathlib\n"
+    "{assign}\n"
+    "sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()\n"
+    "os.environ.update({{'IONMC_RUN_SHA': sha, 'IONMC_RUN_SUITE': 'lv8'}})\n"
+    "out = pathlib.Path(f'validation/generated/{subdir}/case{{case}}'); "
+    "out.mkdir(parents=True, exist_ok=True)\n"
+    "cmd = [sys.executable, 'validation/scripts/transport/steps_v8.py', 'td-tl-sample', "
+    "'--case', str(case), '--k', str(k), '--scale', scale, {seed}'--out-dir', str(out)]\n"
+    "t0 = time.time(); p = subprocess.run(cmd, text=True, capture_output=True)\n"
+    "(out / f'case{{case}}-k{{k}}.stdout.txt').write_text(p.stdout)\n"
+)
+ASSIGN_ARGS = "case, k, scale = int(sys.argv[1]), int(sys.argv[2]), sys.argv[3]"
+
+
+def _wrapper_argv(chunk: dict[str, Any], kind: str) -> list[str]:
+    """Main: values as wrapper arguments; held-out: literal values and ``--seed-base``."""
+    if kind == "main":
+        src = WRAPPER.format(assign=ASSIGN_ARGS, subdir=IO.NPZ_SUBDIR, seed="")
+        return ["/usr/bin/python3", "-c", src, str(chunk["case"]), str(chunk["k"]), chunk["scale"]]
+    src = WRAPPER.format(
+        assign=f"case, k, scale = {chunk['case']}, {chunk['k']}, '{chunk['scale']}'",
+        subdir=IO.NPZ_SUBDIR_HELDOUT, seed="'--seed-base', '20621004', ",
+    )  # fmt: skip
+    return ["/usr/bin/python3", "-c", src]
+
+
 def _resign(path: Path, changes: dict[str, Any]) -> None:
     """Re-sign a record.json with ``changes`` and keep its artifact-listing entry consistent."""
     rec = json.loads(path.read_text())
@@ -561,32 +611,55 @@ def _world(
             }  # fmt: skip
             npz = out / f"ionmc-case{case}-k{k}.npz"
             np.savez_compressed(npz, **arrays)
-            (out / f"case{case}-k{k}.stdout.txt").write_text(f"step document case {case} k {k}\n")
-            manifest_sha = _manifest(samples, run_id)  # what the host runner signed
-            if tamper.get("swap_npz") and (case, k) == first_chunk:  # replaced after the run
-                np.savez_compressed(
-                    npz, **{**arrays, "idd_batch_energy_mev": 2 * idd[:, None, None]}
-                )
             chunks[kind].append({
                 "case": case, "k": k, "seed": base + 100 * (29 + case) + k, "r_index": 29 + case,
-                "histories": 500000, "run_id": run_id, "npz": npz.name,
-                "npz_bytes": npz.stat().st_size,
-                "npz_sha256": hashlib.sha256(npz.read_bytes()).hexdigest(),
+                "histories": 500000, "scale": "0.5", "run_id": run_id, "npz": npz.name,
                 "counters_all_zero": True,
                 "run_started_at": f"2026-11-0{k}T00:00:0{case % 10}+00:00",
                 "run_finished_at": f"2026-11-0{k}T01:00:0{case % 10}+00:00",
-                "output_manifest_sha256": manifest_sha,
                 "wrapper_stdout_sha256": hashlib.sha256(f"wrapper {run_id}".encode()).hexdigest(),
+                "_arrays": arrays,
             })  # fmt: skip
 
     def sign_host_records(kind: str, sha: str) -> list[dict[str, str]]:
-        """Complete signed host-run records of the ``kind`` chunks at ``sha`` (committed with the
-        seal); each chunk gets the record's attestation as ``host_runner_attestation``."""
+        """Publish the step stdout of the ``kind`` chunks run at ``sha`` (git_sha of the step
+        document), then write their complete signed host-run records (committed with the seal);
+        each chunk gets the record's attestation as ``host_runner_attestation``."""
         hdir = repo / IO.HOST_RECORDS_DIR
         hdir.mkdir(parents=True, exist_ok=True)
         for c in chunks[kind]:
             hit = (c["case"], c["k"]) == first_chunk
-            rec = _host_record(c, sha, tamper.get("host_record", {}) if hit else {})
+            sub = IO.SEAL_KINDS[kind].npz_subdir
+            sub = tamper.get("heldout_written_subdir", sub) if kind == "heldout" else sub
+            out = samples / "validation" / "generated" / c["run_id"] / sub / f"case{c['case']}"
+            npz = out / c["npz"]
+            doc = _step_doc(c, hashlib.sha256(npz.read_bytes()).hexdigest(), sha,
+                            IO.SEAL_KINDS[kind].seed_base)  # fmt: skip
+            doc |= tamper.get("step_doc", {}) if hit else {}
+            text = _step_stdout(doc)
+            if hit and "step_text" in tamper:
+                text = tamper["step_text"](text)
+            if not (hit and tamper.get("no_step_stdout")):
+                (out / f"case{c['case']}-k{c['k']}.stdout.txt").write_text(text)
+            (out / f"case{c['case']}-k{c['k']}.stderr.txt").write_text("")
+            c["output_manifest_sha256"] = _manifest(samples, c["run_id"])  # signed by the runner
+            arrays = c.pop("_arrays")
+            if tamper.get("swap_npz") and hit:  # replaced after the run
+                np.savez_compressed(
+                    npz, **{**arrays, "idd_batch_energy_mev": 2 * arrays["idd_batch_energy_mev"]}
+                )
+            c["npz_bytes"] = npz.stat().st_size
+            c["npz_sha256"] = hashlib.sha256(npz.read_bytes()).hexdigest()
+            c["step_stdout_sha256"] = (
+                tamper["step_sha_seal"] if hit and "step_sha_seal" in tamper
+                else hashlib.sha256(text.encode()).hexdigest()
+            )  # fmt: skip
+            argv = _wrapper_argv(c, kind)
+            if hit and "argv" in tamper:
+                argv = tamper["argv"](argv)
+            rec = _host_record(
+                c, sha, {"argv": argv} | (tamper.get("host_record", {}) if hit else {})
+            )
             seed = tamper.get("host_key_seed", KEY_SEED) if hit else KEY_SEED
             rec = _sign(rec, "host-runner", seed)
             att = rec["attestation"]
@@ -1870,3 +1943,158 @@ def test_reeval_requires_the_host_records(tmp_path: Path, host_cases: None) -> N
     rpath.write_text(json.dumps({"status": "FAIL"}))
     code, rep = _reeval_cli(w, tmp_path / "re.json")
     assert code == 2 and "signed succeeded" in rep["error"] and "points" not in rep, rep
+
+
+# Codex REVIEW-e844de8a finding 1: the signed argv and the manifest-bound step document
+
+
+def _two_docs(text: str) -> str:
+    doc = text[text.index("#JSON-BEGIN") :]
+    return text + doc
+
+
+STEP_TAMPERS = [
+    ({"step_doc": {"case": 99}}, "step document case"),
+    ({"step_doc": {"k": 2}}, "step document k"),
+    ({"step_doc": {"seed": 1}}, "step document seed"),
+    ({"step_doc": {"histories": 250000}}, "step document histories"),
+    ({"step_doc": {"histories": 500000.0}}, "step document histories"),
+    ({"step_doc": {"r_index": 1}}, "step document r_index"),
+    ({"step_doc": {"seed_base": 1}}, "step document seed_base"),
+    ({"step_doc": {"frozen_histories": 500000}}, "step document frozen_histories"),
+    ({"step_doc": {"row": "i8"}}, "step document row"),
+    ({"step_doc": {"suite": "hr8"}}, "step document suite"),
+    ({"step_doc": {"backend": "warp-cuda"}}, "step document backend"),
+    ({"step_doc": {"pass": False}}, "step document pass"),
+    ({"step_doc": {"valid": 1}}, "step document valid"),
+    ({"step_doc": {"git_sha": "0" * 40}}, "step document git_sha"),
+    ({"step_doc": {"npz_sha256": "0" * 64}}, "step document npz_sha256"),
+    ({"step_doc": {"npz": "ionmc-case1-k9.npz"}}, "step document npz"),
+    ({"step_doc": {"counters": {"stall": 1}}}, "counters are not all zero"),
+    ({"step_doc": {"counters": {}}}, "counters are not all zero"),
+    ({"step_doc": {"effective_config": {"n_histories": 500000, "seed": 1, "cpu_workers": 1}}},
+     "effective_config seed"),
+    ({"step_doc": {"effective_config": {"n_histories": 500000, "cpu_workers": 1}}},
+     "effective_config lacks 'seed'"),
+    ({"step_text": lambda t: t.replace('"cpu_workers": 1', '"cpu_workers": 2')},
+     "effective_config cpu_workers"),
+    ({"step_doc": {"effective_config": {"n_histories": 1, "seed": 1, "cpu_workers": 1}}},
+     "effective_config n_histories"),
+    ({"step_text": lambda t: t.replace("#JSON-BEGIN", "#JSON-BEGIN-X")}, "exactly one JSON"),
+    ({"step_text": _two_docs}, "exactly one JSON document"),
+    ({"step_text": lambda t: t.replace("#JSON-END\n", "")}, "exactly one JSON document"),
+    ({"no_step_stdout": True}, "step_stdout_sha256"),
+    ({"step_sha_seal": "0" * 64}, "step_stdout_sha256"),
+]  # fmt: skip
+
+
+@pytest.mark.parametrize("case", [1, 10])
+@pytest.mark.parametrize(("tamper", "message"), STEP_TAMPERS)
+def test_step_document_binding_fails_closed(
+    tmp_path: Path, host_cases: None, monkeypatch: pytest.MonkeyPatch, case: int,
+    tamper: dict[str, Any], message: str,
+) -> None:  # fmt: skip
+    w = _world(tmp_path, cases={case: {}}, tamper=tamper)
+    _no_numbers(monkeypatch)
+    code, rep = _cli(w, "TD-EM", tmp_path / "e.json", case=case)
+    assert code == 2 and rep["status"] == "ERROR" and message in rep["error"], rep
+    assert "host run RUN-" in rep["error"] and "criteria" not in rep
+
+
+def _src(fn: Any) -> Any:
+    """An argv tamper that edits the ``-c`` wrapper source."""
+    return lambda a: [*a[:2], fn(a[2]), *a[3:]]
+
+
+_OTHER_OUT = "validation/generated/other/case{case}"
+ARGV_MAIN = [  # case 1, sys.argv wrapper shape
+    (lambda a: [*a[:3], "3", *a[4:]], "signed argv case"),
+    (lambda a: [*a[:4], "2", a[5]], "signed argv k"),
+    (lambda a: [*a[:5], "0.25"], "signed argv scale"),
+    (lambda a: [*a[:5], "0.50"], "signed argv scale"),
+    (lambda a: a[:5], "not <case> <k> <scale>"),
+    (_src(lambda s: s.replace("scale, '--out", "scale, '--seed-base', '20621004', '--out")),
+     "signed argv seed_base"),
+    (_src(lambda s: s.replace("generated/r2-samples/case{case}", _OTHER_OUT)),
+     "signed argv out_dir"),
+    (_src(lambda s: s.replace("'td-tl-sample'", "'i8'")), "does not run exactly"),
+    (_src(lambda s: s.replace("steps_v8.py'", "steps_v7.py'")), "does not run exactly"),
+    (_src(lambda s: s + "subprocess.run(['python', 'validation/scripts/transport/steps_v8.py'])\n"),
+     "does not run exactly"),
+    (_src(lambda s: s + "case, k, scale = 1, 1, '0.5'\n"), "no unique case/k/scale"),
+    (lambda a: [a[0], "wrapper.py", *a[3:]], "neither a python -c wrapper"),
+    (lambda a: "python -c x", "not a sample invocation"),
+    (lambda a: [], "not a sample invocation"),
+    (lambda a: [a[0], "-c"], "not a sample invocation"),
+]  # fmt: skip
+ARGV_HELDOUT = [  # case 10, literal wrapper shape
+    (_src(lambda s: s.replace("case, k, scale = 10,", "case, k, scale = 11,")), "signed argv case"),
+    (_src(lambda s: s.replace("'0.5'", "'0.25'")), "signed argv scale"),
+    (_src(lambda s: s.replace("'20621004'", "'20581004'")), "signed argv seed_base"),
+    (_src(lambda s: s.replace("'--seed-base', '20621004', ", "")), "signed argv seed_base"),
+    (_src(lambda s: s.replace("generated/r2-samples-heldout/case{case}", _OTHER_OUT)),
+     "signed argv out_dir"),
+    (_src(lambda s: s.replace("str(out)]", "'validation/generated/r2-samples/case10']")),
+     "signed argv out_dir"),
+    (_src(lambda s: s.replace("'td-tl-sample'", "'t1-ion'")), "does not run exactly"),
+    (lambda a: [*a, "10"], "literal wrapper takes no arguments"),
+    (lambda a: [a[0], "-m", a[2]], "neither a python -c wrapper"),
+]  # fmt: skip
+
+
+@pytest.mark.parametrize(
+    ("case", "edit", "message"),
+    [(1, e, m) for e, m in ARGV_MAIN] + [(10, e, m) for e, m in ARGV_HELDOUT],
+)
+def test_signed_argv_binding_fails_closed(
+    tmp_path: Path, host_cases: None, monkeypatch: pytest.MonkeyPatch, case: int, edit: Any,
+    message: str,
+) -> None:  # fmt: skip
+    w = _world(tmp_path, cases={case: {}}, tamper={"argv": edit})
+    _no_numbers(monkeypatch)
+    code, rep = _cli(w, "TD-EM", tmp_path / "e.json", case=case)
+    assert code == 2 and rep["status"] == "ERROR" and message in rep["error"], rep
+    assert "criteria" not in rep
+
+
+def test_step_and_invocation_are_reported(tmp_path: Path, host_cases: None) -> None:
+    for case, sub, base in ((1, IO.NPZ_SUBDIR, IO.LV8_BASE), (10, IO.NPZ_SUBDIR_HELDOUT,
+                                                             IO.HELDOUT_SEED_BASE)):  # fmt: skip
+        w = _world(tmp_path / str(case), cases={case: {}})
+        code, rep = _cli(w, "TD-EM", tmp_path / f"{case}.json", case=case)
+        assert code == 0, rep
+        seal = json.loads((w["heldout_seal"] if case == 10 else w["seal"]).read_text())
+        for c in rep["ionmc_chunks"]:
+            h = c["host_record"]
+            sc = next(x for x in seal["chunks"] if x["k"] == c["k"])
+            assert h["step_document_verified"] is True and h["argv_bound"] is True
+            assert h["step_stdout_sha256"] == sc["step_stdout_sha256"]
+            out_dir = f"validation/generated/{sub}/case{case}"
+            assert h["invocation"] == {
+                "case": case, "k": c["k"], "scale": "0.5", "seed_base": base, "out_dir": out_dir
+            }  # fmt: skip
+
+
+def test_direct_invocation_shape(tmp_path: Path, host_cases: None) -> None:
+    direct = [
+        "/usr/bin/python3", "validation/scripts/transport/steps_v8.py", "td-tl-sample",
+        "--case", "1", "--k", "1", "--scale", "0.5",
+        "--out-dir", "validation/generated/r2-samples/case1",
+    ]  # fmt: skip
+    assert IO.sample_invocation(direct) == {
+        "case": 1, "k": 1, "scale": "0.5", "seed_base": IO.LV8_BASE,
+        "out_dir": "validation/generated/r2-samples/case1",
+    }  # fmt: skip
+    with_base = [*direct[:9], "--seed-base", "20621004", *direct[9:]]
+    assert IO.sample_invocation(with_base)["seed_base"] == IO.HELDOUT_SEED_BASE
+    for bad in (
+        [*direct[:3], "--k", "1", "--case", "1", *direct[7:]],  # option order
+        [*direct[:2], "i8", *direct[3:]],
+        [*direct[:4], "x1", *direct[5:]],
+        [*direct, "--extra"],
+    ):
+        with pytest.raises(IO.RecordError):
+            IO.sample_invocation(bad)
+    w = _world(tmp_path, tamper={"argv": lambda _a: direct})
+    code, rep = _cli(w, "TD-EM", tmp_path / "d.json")
+    assert code == 0 and rep["ionmc_chunks"][0]["host_record"]["argv_bound"] is True, rep
