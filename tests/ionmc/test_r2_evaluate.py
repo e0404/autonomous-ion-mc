@@ -428,6 +428,9 @@ def _binheader(stem: str, axis: int, n: int) -> str:
     ])  # fmt: skip
 
 
+PLAN_TEXT = "# plan\n\n```json\n{note}\n```\n\nheld-out note\n\n```json\n{heldout_note}\n```\n"
+
+
 def _commit(repo: Path, msg: str) -> str:
     _git(repo, "add", "-A")
     _git(repo, "-c", "commit.gpgsign=false", "commit", "-q", "-m", msg)
@@ -441,7 +444,13 @@ def _world(
 ) -> dict[str, Any]:  # fmt: skip
     """A complete synthetic evidence world. ``cases``: case -> {shift (TOPAS EM IDD), full_shift,
     sig (TOPAS sigma per slab), ion_scale (ionmc sigma factor)}; ``tamper``: run-validity faults
-    (stderr / stdout callable / input_extra) applied to part 1 of the first config of case 1."""
+    (stderr / stdout callable / input_extra) applied to part 1 of the first config of case 1.
+    Held-out cases (``IO.seal_kind_of``; R2-STOP3) get their own held-out seal record, committed
+    after the main seal (seed base 20621004, chunks under ``r2-samples-heldout``), a held-out note
+    block in the plan and ``review-heldout.json``; held-out tampers: ``heldout_seal`` (record field
+    overrides), ``heldout_impl`` ("orphan": implementation_sha of an unrelated commit),
+    ``heldout_chunk_base`` (seed base used for the chunk seeds), ``heldout_written_subdir``
+    (where the chunks are written), ``heldout_review_finished``."""
     cases = cases or {1: {}}
     tamper = tamper or {}
     rng = np.random.default_rng(11)
@@ -482,12 +491,18 @@ def _world(
     for name, key in (smokes or {}).items():  # smoke bundle = byte copy of a part bundle
         shutil.copytree(repo / IO.BUNDLE_ROOT / IO.bundle_name(*key), repo / IO.BUNDLE_ROOT / name)
     samples = tmp / "samples"  # ionmc chunks + seal
-    chunks = []
+    chunks: dict[str, list[dict[str, Any]]] = {"main": [], "heldout": []}
     for case, spec in cases.items():
         sig_i = [s * spec.get("ion_scale", 1.0) for s in spec.get("sig", SIG)]
+        kind = IO.seal_kind_of(case)
+        if kind == "heldout":
+            base = tamper.get("heldout_chunk_base", IO.HELDOUT_SEED_BASE)
+            subdir = tamper.get("heldout_written_subdir", IO.NPZ_SUBDIR_HELDOUT)
+        else:
+            base, subdir = IO.LV8_BASE, IO.NPZ_SUBDIR
         for k in (1, 2):
             run_id = f"RUN-2026110{k}T00000{case}Z-0000000{k}"
-            out = samples / "validation" / "generated" / run_id / "r2-samples" / f"case{case}"
+            out = samples / "validation" / "generated" / run_id / subdir / f"case{case}"
             out.mkdir(parents=True)
             idd = (_bragg(zc) * HZ)[None, :] * (1.0 + 1e-3 * rng.standard_normal((40, 1)))
             lx = lat_of(sig_i)[None] * (1.0 + 1e-3 * rng.standard_normal((40, 1, 1)))
@@ -504,19 +519,31 @@ def _world(
             }  # fmt: skip
             npz = out / f"ionmc-case{case}-k{k}.npz"
             np.savez_compressed(npz, **arrays)
-            chunks.append({
-                "case": case, "k": k, "seed": IO.LV8_BASE + 100 * (29 + case) + k,
+            chunks[kind].append({
+                "case": case, "k": k, "seed": base + 100 * (29 + case) + k, "r_index": 29 + case,
                 "histories": 500000, "run_id": run_id, "npz": npz.name,
                 "npz_bytes": npz.stat().st_size,
                 "npz_sha256": hashlib.sha256(npz.read_bytes()).hexdigest(),
                 "counters_all_zero": True,
             })  # fmt: skip
     seal_rec = {"schema": IO.SEAL_SCHEMA, "chunk_plan": {"n": {str(c): 2 for c in cases}},
-                "chunks": chunks}  # fmt: skip
+                "chunks": chunks["main"]}  # fmt: skip
     seal_file = repo / IO.SEAL_RECORD_PATH
     seal_file.parent.mkdir(parents=True)
     seal_file.write_text(json.dumps(seal_rec))
     seal_sha = _commit(repo, "seal")
+    impl = seal_sha  # the held-out samples' implementation commit precedes their seal
+    if tamper.get("heldout_impl") == "orphan":  # a commit unrelated to the seal history
+        impl = _git(repo, "commit-tree", f"{seal_sha}^{{tree}}", "-m", "orphan")
+    heldout_rec = {
+        "schema": IO.SEAL_SCHEMA_HELDOUT, "seed_base": IO.HELDOUT_SEED_BASE,
+        "npz_subdir": IO.NPZ_SUBDIR_HELDOUT, "implementation_sha": impl,
+        "chunk_plan": {"n": {str(c): 2 for c in cases if IO.seal_kind_of(c) == "heldout"}},
+        "chunks": chunks["heldout"], **tamper.get("heldout_seal", {}),
+    }  # fmt: skip
+    heldout_file = repo / IO.SEAL_RECORD_PATH_HELDOUT
+    heldout_file.write_text(json.dumps(heldout_rec))
+    heldout_sha = _commit(repo, "held-out seal")
     (repo / "later.txt").write_text("after the seal")
     kp = _attest().keypair_from_seed(KEY_SEED)
     trust = repo / IO.DEFAULT_TRUST  # committed: the evaluator reads it from HEAD
@@ -546,10 +573,15 @@ def _world(
               "report": {"verdict": "pass"}}  # fmt: skip
     if not tamper.get("review_late"):
         (records / "review.json").write_text(json.dumps(review))
-    plan = repo / IO.PLAN_PATH  # the seal note lives in the committed acceptance plan
+    review_h = {"review_id": "REVIEW-h", "head_sha": heldout_sha, "status": "passed",
+                "finished_at": tamper.get("heldout_review_finished", "2026-11-09T09:00:00Z"),
+                "report": {"verdict": "pass"}}  # fmt: skip
+    (records / IO.REVIEW_NAME_HELDOUT).write_text(json.dumps(review_h))
+    plan = repo / IO.PLAN_PATH  # the seal notes live in the committed acceptance plan
     plan.parent.mkdir(parents=True, exist_ok=True)
     note = json.dumps({"seal_sha": seal_sha, "seal_review_id": "REVIEW-x"})
-    plan.write_text(tamper.get("plan_text", "# plan\n\n```json\n{note}\n```\n").format(note=note))
+    hnote = json.dumps({"seal_sha_heldout": heldout_sha, "seal_review_id_heldout": "REVIEW-h"})
+    plan.write_text(tamper.get("plan_text", PLAN_TEXT).format(note=note, heldout_note=hnote))
     code_sha = _commit(repo, "after")
     outputs = tmp / "outputs"
     index, ids = [], {}
@@ -649,7 +681,8 @@ def _world(
     _commit(repo, "records")
     return {"repo": repo, "records": records, "outputs": outputs, "samples": samples,
             "plan": plan, "seal": seal_file, "trust": trust, "ids": ids,
-            "manifest": man_path, "code_sha": code_sha}  # fmt: skip
+            "manifest": man_path, "code_sha": code_sha, "seal_sha": seal_sha,
+            "heldout_sha": heldout_sha, "heldout_seal": heldout_file}  # fmt: skip
 
 
 def _cli(
@@ -1442,3 +1475,148 @@ def test_reeval_works_on_main_and_is_refused_on_held_out(
     assert code == 0 and rep["graded_verdict_stands"] == "FAIL", rep
     code, rep = _reeval_cli(w, tmp_path / "re10.json", case=10)
     assert code == 2 and "refused" in rep["error"] and "points" not in rep, rep
+
+
+# ---------------------------------------------------------------------------------------------
+# amendment R2-STOP3 item 3: held-out cases 10-12 graded against the held-out seal
+# ---------------------------------------------------------------------------------------------
+
+
+def test_heldout_note_does_not_disturb_the_main_seal_note_search() -> None:
+    assert '"seal_sha"' not in '"seal_sha_heldout"'  # the closing quote separates the keys
+    main = json.dumps({"seal_sha": "a" * 40, "seal_review_id": "REVIEW-x"})
+    held = json.dumps({"seal_sha_heldout": "b" * 40, "seal_review_id_heldout": "REVIEW-h"})
+    text = PLAN_TEXT.format(note=main, heldout_note=held)
+    assert IO.parse_seal_note(text) == {"seal_sha": "a" * 40, "seal_review_id": "REVIEW-x"}
+    assert IO.parse_heldout_seal_note(text) == {"seal_sha": "b" * 40, "seal_review_id": "REVIEW-h"}
+    assert IO.parse_note(text, "heldout") == IO.parse_heldout_seal_note(text)
+    with pytest.raises(IO.RecordError, match="found 0"):  # a held-out block is not a main block
+        IO.parse_seal_note(f"```json\n{held}\n```\n")
+    with pytest.raises(IO.RecordError, match="found 0"):
+        IO.parse_heldout_seal_note(f"```json\n{main}\n```\n")
+    with pytest.raises(IO.RecordError, match="found 2"):
+        IO.parse_heldout_seal_note(text + f"\n```json\n{held}\n```\n")
+    with pytest.raises(IO.RecordError, match="exactly the keys"):
+        extra = json.dumps({"seal_sha_heldout": "b" * 40, "seal_review_id_heldout": "R", "x": 1})
+        IO.parse_heldout_seal_note(f"```json\n{extra}\n```\n")
+
+
+def test_heldout_case_is_never_read_from_the_main_seal() -> None:
+    rec = {"chunk_plan": {"n": {"10": 1}}, "chunks": []}
+    with pytest.raises(IO.RecordError, match="not graded against the main seal"):
+        IO.case_chunks(rec, 10, "main")
+    with pytest.raises(IO.RecordError, match="not graded against the heldout seal"):
+        IO.case_chunks(rec, 1, "heldout")
+    assert IO.seal_kind_of(10) == IO.seal_kind_of(12) == "heldout"
+    assert IO.seal_kind_of(1) == IO.seal_kind_of(0) == "main"
+
+
+@pytest.mark.parametrize("row", ["TD-EM", "TL-EM"])
+def test_heldout_case_grades_pass_against_the_heldout_seal(
+    tmp_path: Path, guarded_case: None, row: str
+) -> None:
+    # the MAIN review finishing late must not matter: held-out grading never uses it
+    w = _world(tmp_path, cases={10: {}}, tamper={"review_finished": "2026-11-09T12:30:00Z"})
+    code, rep = _cli(w, row, tmp_path / "h.json", case=10)
+    assert code == 0 and rep["status"] == "PASS", rep
+    assert rep["seal_kind"] == "heldout" and rep["implementation_sha"] == w["seal_sha"]
+    sr = rep["seal_record"]
+    assert sr["path"] == IO.SEAL_RECORD_PATH_HELDOUT and sr["seal_kind"] == "heldout"
+    assert sr["sha256"] == hashlib.sha256(w["heldout_seal"].read_bytes()).hexdigest()
+    assert sr["seed_base"] == 20621004 and sr["npz_subdir"] == "r2-samples-heldout"
+    assert rep["plan_heldout"] == {
+        "seal_sha_heldout": w["heldout_sha"], "seal_review_id_heldout": "REVIEW-h"
+    }  # fmt: skip
+    assert rep["plan"]["seal_sha"] == w["seal_sha"]  # the main note is still read (unique)
+    assert rep["review"]["review_id"] == "REVIEW-h"
+    assert rep["review"]["path"].endswith("/review-heldout.json")
+    inputs = rep["evaluator"]["committed_inputs"]
+    assert IO.SEAL_RECORD_PATH_HELDOUT in inputs and IO.SEAL_RECORD_PATH not in inputs
+    assert f"{IO.DEFAULT_RECORDS}/review.json" not in inputs
+    assert all(
+        v["seal_kind"] == "heldout" and v["seal_sha"] == w["heldout_sha"] and v["valid"]
+        and v["review_sha256_at_head"] is not None
+        for v in rep["run_validity"]
+    )  # fmt: skip
+    assert {c["case"] for c in rep["ionmc_chunks"]} == {10}
+
+
+@pytest.mark.parametrize(
+    ("tamper", "message"),
+    [
+        ({"plan_text": "```json\n{note}\n```\n"}, "held-out seal-note JSON block, found 0"),
+        ({"plan_text": PLAN_TEXT + "\n```json\n{heldout_note}\n```\n"}, "found 2"),
+        ({"heldout_seal": {"schema": IO.SEAL_SCHEMA}}, "sample seal schema"),
+        ({"heldout_seal": {"seed_base": IO.LV8_BASE}}, "seed_base"),
+        ({"heldout_chunk_base": IO.LV8_BASE}, "seed breaks the formula"),
+        ({"heldout_seal": {"npz_subdir": "r2-samples"}}, "npz_subdir"),
+        ({"heldout_written_subdir": "r2-samples"}, "sealed chunk not found"),
+        ({"heldout_impl": "orphan"}, "is not an ancestor of the held-out seal commit"),
+        ({"heldout_seal": {"implementation_sha": "main"}}, "is not a commit SHA"),
+    ],
+)  # fmt: skip
+def test_heldout_seal_fails_closed(
+    tmp_path: Path, guarded_case: None, tamper: dict[str, Any], message: str
+) -> None:
+    w = _world(tmp_path, cases={10: {}}, tamper=tamper)
+    code, rep = _cli(w, "TD-EM", tmp_path / "e.json", case=10)
+    assert code == 2 and rep["status"] == "ERROR" and message in rep["error"], rep
+
+
+def test_heldout_chunk_r_index_is_checked(tmp_path: Path, guarded_case: None) -> None:
+    w = _world(tmp_path, cases={10: {}})
+    rec = json.loads(w["heldout_seal"].read_text())
+    rec["chunks"][0]["r_index"] = 29
+    rec["chunks"][0]["seed"] = IO.HELDOUT_SEED_BASE + 100 * 29 + rec["chunks"][0]["k"]
+    with pytest.raises(IO.RecordError, match="seed breaks the formula"):
+        IO.case_chunks(rec, 10, "heldout")
+    rec["chunks"][0]["seed"] = IO.HELDOUT_SEED_BASE + 100 * 39 + rec["chunks"][0]["k"]
+    with pytest.raises(IO.RecordError, match="r_index"):
+        IO.case_chunks(rec, 10, "heldout")
+
+
+def test_heldout_seal_path_and_main_seal_are_refused(tmp_path: Path, guarded_case: None) -> None:
+    w = _world(tmp_path, cases={10: {}})
+    with pytest.raises(IO.RecordError, match="heldout seal record must be"):
+        R2.grade(w["records"], IO.SEAL_RECORD_PATH, 10, "TD-EM", w["outputs"], w["samples"],
+                 repo=w["repo"])  # fmt: skip
+
+
+def test_heldout_review_after_start_is_blinding_fail(tmp_path: Path, guarded_case: None) -> None:
+    w = _world(tmp_path, cases={10: {}}, tamper={"heldout_review_finished": "2026-11-09T12:30:00Z"})
+    code, rep = _cli(w, "TD-EM", tmp_path / "b.json", case=10)
+    assert code == 1 and rep["status"] == "FAIL" and rep["category"] == "blinding control", rep
+    assert all(not v["review_before_start"] and v["ancestry"] for v in rep["run_validity"])
+    assert rep["ionmc_chunks"] == []
+
+
+def test_heldout_review_must_name_the_heldout_seal(tmp_path: Path, guarded_case: None) -> None:
+    w = _world(tmp_path, cases={10: {}})
+    path = w["records"] / IO.REVIEW_NAME_HELDOUT
+    path.write_text(json.dumps({**json.loads(path.read_text()), "head_sha": w["seal_sha"]}))
+    code, rep = _cli(w, "TD-EM", tmp_path / "r.json", case=10)
+    assert code == 2 and "not the seal review named by the plan" in rep["error"], rep
+
+
+def test_check_run_heldout_bundle_uses_heldout_chronology(
+    tmp_path: Path, guarded_case: None
+) -> None:
+    w = _world(tmp_path, cases={1: {}, 10: {}}, configs=("idd-em",))
+    code, rep = _check_cli(w, tmp_path / "h.json", (10, "idd-em", 1))
+    assert code == 0 and rep["verdict"] == "VALID", rep
+    assert rep["seal_kind"] == "heldout" and rep["seal_sha"] == w["heldout_sha"]
+    assert rep["review"]["review_id"] == "REVIEW-h"
+    assert rep["review"]["path"].endswith("/review-heldout.json")
+    assert rep["plan_heldout"]["seal_sha_heldout"] == w["heldout_sha"]
+    code, rep = _check_cli(w, tmp_path / "m.json", (1, "idd-em", 1))  # main bundle unchanged
+    assert code == 0 and rep["verdict"] == "VALID" and rep["seal_kind"] == "main", rep
+    assert rep["seal_sha"] == w["seal_sha"] and "plan_heldout" not in rep
+    late = _world(
+        tmp_path / "late", cases={1: {}, 10: {}}, configs=("idd-em",),
+        tamper={"heldout_review_finished": "2026-11-09T12:30:00Z"},
+    )  # fmt: skip
+    code, rep = _check_cli(late, tmp_path / "hl.json", (10, "idd-em", 1))
+    assert code == 1 and rep["verdict"] == "BLINDING FAIL", rep
+    assert rep["checks"]["chronology_review_before_start"] is False
+    code, rep = _check_cli(late, tmp_path / "ml.json", (1, "idd-em", 1))
+    assert code == 0 and rep["verdict"] == "VALID", rep  # the main chronology is not affected

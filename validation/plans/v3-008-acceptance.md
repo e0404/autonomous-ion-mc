@@ -818,6 +818,19 @@ The report-only TL-EM re-evaluation of item 2 is committed at
 read PASS for 8 of 9 cases; O 100 keeps its undefined f = 0.25 point); 0–9 of 80 ionmc batch fits and 0–1 of 8 TOPAS
 part fits per point used the cycle rule. The graded TL-EM verdicts stand.
 
+**4d. Held-out samples produced (2026-11-11, orchestrator; before the held-out seal commit).** The A-rows of item 4b
+(lv8 steps 01–21: I6-LV, I8, I13, T1-ion K = 256, R1-ion, R2, T12-ion LV) passed on the host at the frozen SHA
+f5f3a701 (validation record VAL-20261111-032337-9F2C85; Codex REVIEW-ab510ca6; CI run 42943469701). The 13 held-out
+chunks then ran on the host at f5f3a701 with `steps_v8.py td-tl-sample --seed-base 20621004` (r_index 39–41, seeds
+20624905–20624908, 20625005–20625008, 20625105–20625109; case 10: 4 × 2.5e5, case 11: 4 × 2.5e5, case 12: 5 × 2e5
+histories; every run succeeded with all counters zero; wall 4.38 h in total): `RUN-20261111T032108Z-0f2c091b` (case 10 k1), `RUN-20261111T034144Z-3d718129` (case 10 k2), `RUN-20261111T040210Z-bed1ad5f` (case 10 k3), `RUN-20261111T042235Z-eb5e4f67` (case 10 k4), `RUN-20261111T044303Z-10ad7312` (case 11 k1), `RUN-20261111T050431Z-9d8383b2` (case 11 k2), `RUN-20261111T052557Z-6ca8729d` (case 11 k3), `RUN-20261111T054739Z-333f15dd` (case 11 k4), `RUN-20261111T060908Z-fa584e14` (case 12 k1), `RUN-20261111T062857Z-6b98f3f0` (case 12 k2), `RUN-20261111T064831Z-daec24ca` (case 12 k3), `RUN-20261111T070805Z-71ec22bc` (case 12 k4), `RUN-20261111T072739Z-2ca81843` (case 12 k5). Their signed host records are
+sealed in `validation/results/transport/v8r2-samples/sample-seal-heldout-r2stop3.json` (schema
+`ionmc-v8r2-sample-seal-heldout-1`; `seed_base` 20621004, `npz_subdir` `r2-samples-heldout`, `implementation_sha`
+f5f3a701; the main-set seal `sample-seal.json` stays as sealed). The evaluator reads held-out cases against this
+record only (`r2_io.SealKind`; plan block keys `seal_sha_heldout` / `seal_review_id_heldout`; review record
+`records/review-heldout.json`; fail closed on any mismatch). No held-out TOPAS output exists yet; the held-out seal
+note follows in the commit after this seal commit's review, and the 48 held-out TOPAS parts start only after that.
+
 **5. Order from here (pre-registered).** Implementation + estimator rule + this amendment in one reviewed commit (new
 frozen SHA) → A-rows at that SHA → held-out samples (13 chunks) → held-out seal commit + review + dated seal note →
 48 held-out TOPAS parts (IDD-EM, LAT-EM, IDD-FULL, LAT-FULL per case) → TD-H, TL-H graded once → V5-SS → report-only

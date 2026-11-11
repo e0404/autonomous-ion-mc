@@ -230,11 +230,11 @@ placeholder scorer output was deleted unread.
 | `src/ionmc/transport/tables.py` | `45542d46fb208ba1ca9ccdcb9e8baea41e47f86a7429b46f8566ad12b1b2619d` |
 | `src/ionmc/transport/tally.py` | `be202f7310e3991bead49fd40e24cef1f5493992044c72aff6c5f8e8826b547c` |
 | `src/ionmc/transport/warp_driver.py` | `bc80fdc5a246fde57ea11fe901a5e864f2fccf4439b348e34c2c1ee34887c2da` |
-| `validation/scripts/ion_em/r2_evaluate.py` | `c35cc031e0f8ccb07cc39e37882aeb332eea19343e21c482f890de4a79114c5a` |
+| `validation/scripts/ion_em/r2_evaluate.py` | `375d4f0127e8231a9efbdfc9a6f5bc516a218216112785ca516cca0d060e25ec` |
 | `validation/scripts/transport/steps_v8.py` | `c5aefda2e8520c6033431a4059e74eb3261317f222d2d1e4d873406dc77a9bad` |
 | `tests/ionmc/test_ion_mcs_table.py` | `b3fb9992f866238b11243e032f394583775e292cec49601798ef44b54efcb749` |
 | `tests/ionmc/test_v3_008_rows_ci.py` | `ffea9f20976ec2d721067ccf52d5cb9797fad51a5bda7dd224948829c1cade0e` |
-| `tests/ionmc/test_r2_evaluate.py` | `b4903be7fa56998f0737d47b5b34506d6b67b0a77e12dfdd4d19d6e6053f9cd7` |
+| `tests/ionmc/test_r2_evaluate.py` | `ba1f65d0ec847ba02e81f6f73ac652a42926a9ed228b9abca8b0da81057ed21f` |
 | `tests/ionmc/test_v3_008_steps_v8.py` | `ab4922ea8842751e22c9d1882e9e1dec0ae88a25b55174c99586c4802868b731` |
 
 (c) R2.5 counts, superseded by this note (the R2.5 text is kept as written): repository paths 475 + 15 = **490**; total full sha256 values 519 + 15 = **534**, plus the bundle-set digest (unchanged, `a8a1c27d…`). The count in R2.6 item (3) (475) is superseded accordingly by 490 for the acceptance tests of the seal.
@@ -263,7 +263,7 @@ placeholder scorer output was deleted unread.
 
 | File | sha256 |
 |---|---|
-| `validation/scripts/ion_em/r2_io.py` | `827170cfa994ffedd709fd998cdca32f76004851bcd9e5752c3e504595e81e48` |
+| `validation/scripts/ion_em/r2_io.py` | `d4b86851cb24729c10ce8569ec6d26998251ed1fc9ed6fdae1c43eef371997db` |
 | `validation/scripts/ion_em/r2_statistics.py` | `fa1bb5c5b372df72fc9d3e9f4daa06d0943db5adb89bd173c53edad1b58bc9c1` |
 | `validation/results/transport/v8r2-topas/smokes.json` | `9f5c1b24bfe278869b30cc89c03137786fc683ed85d6b6509c48cdffa964f621` |
 | `validation/results/transport/v8r2-topas/records/review.json` | `87988397d4c14304d75f987117e4c22199d4452a0b48030e131a2bd52edb1199` |
@@ -646,6 +646,15 @@ placeholder scorer output was deleted unread.
 **Dated note (2026-11-11, orchestrator) — entries changed by the R2-STOP3 round-4 commit (Codex REVIEW-cd1c66de: D-3 aggregate regenerated with the final script; e_cut docstrings):** `src/ionmc/physics/stopping.py` 89db1de2… → 4be0934a…; `src/ionmc/config.py` 85c0f411… → 3da8eaed…; `validation/results/stopping/v3-008-d3-range-attribution.json` be4e253e… → 04475412…. All other entries unchanged (recomputed).
 
 **Dated note (2026-11-11, orchestrator) — entries changed by the R2-STOP3 round-5 commit (CI run 42941591557: one-ulp platform difference of the escaped-energy sum → tolerance 1e-12 in the end-of-range test):** `tests/ionmc/test_ion_end_of_range.py` e39edaaf… → b2666c81…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-11, orchestrator) — files added by the held-out seal commit (the held-out sample seal record; sha256 as committed):**
+
+| File | sha256 |
+|---|---|
+| `validation/results/transport/v8r2-samples/sample-seal-heldout-r2stop3.json` | `84b66f1731ce34973f3fc04e933be28eca7ed297d169b61c2c1f1340a2fa6fa3` |
+
+
+**Dated note (2026-11-11, orchestrator) — entries changed by the held-out seal commit (evaluator held-out seal support r2_io/r2_evaluate + tests):** `validation/scripts/ion_em/r2_evaluate.py` c35cc031… → 375d4f01…; `tests/ionmc/test_r2_evaluate.py` b4903be7… → ba1f65d0…; `validation/scripts/ion_em/r2_io.py` 827170cf… → d4b86851…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.

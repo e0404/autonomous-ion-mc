@@ -4,16 +4,28 @@ pure-numpy TOPAS parsers of ``ionmc.reference.parsers``).
 Three inputs, each bound to a controlled record before any number is used:
 
 1. **Plan and seal review.** ``seal_sha`` / ``seal_review_id`` come from the single seal-note
-   JSON block of ``validation/plans/v3-008-acceptance.md`` as committed at HEAD. The review record
-   ``<records>/review.json`` is read as committed at HEAD (fields used: ``review_id, head_sha,
-   status, finished_at, report.verdict``; all required; ``review_id``/``head_sha`` must match the
-   seal note). It is a verbatim copy of the controlled codex-worker response (its
-   ``report_sha256`` is the service's report digest); a signed review record is a future
-   infrastructure item (V3-INFRA-005), so the binding today is to the reviewed, committed bytes.
+   JSON block of ``validation/plans/v3-008-acceptance.md`` as committed at HEAD (the one fenced
+   ```json block containing the exact substring ``"seal_sha"``, closing quote included).
+   **Held-out seal (amendment R2-STOP3 item 3):** the held-out cases 10-12 are graded against a
+   second, held-out seal. Its note is the one fenced ```json block of the plan containing
+   ``"seal_sha_heldout"`` and exactly the keys ``seal_sha_heldout`` / ``seal_review_id_heldout``
+   (``"seal_sha_heldout"`` does not contain ``"seal_sha"``, so the main search is unaffected);
+   its review record is ``<records>/review-heldout.json`` (:data:`REVIEW_RECORD_HELDOUT` at the
+   default records directory; same shape as ``review.json``). The seal kind of a case is
+   :func:`seal_kind_of` (``CASES`` set "held-out" -> ``heldout``, else ``main``) and selects note,
+   review record, seal record, seed base and npz subdirectory everywhere below (:data:`SEAL_KINDS`);
+   held-out grading and ``check-run`` of a held-out bundle never fall back to the main seal.
+   The review record ``<records>/review.json`` is read as committed at HEAD (fields used:
+   ``review_id, head_sha, status, finished_at, report.verdict``; all required;
+   ``review_id``/``head_sha`` must match the seal note). It is a verbatim copy of the controlled
+   codex-worker response (its ``report_sha256`` is the service's report digest); a signed review
+   record is a future infrastructure item (V3-INFRA-005), so the binding today is to the
+   reviewed, committed bytes.
    All other records (index, signed run records, listings, seal, trust file) are likewise read
    through :class:`CommittedReader`.
    **Chronology pinning (Codex REVIEW-096af6a3):** the chronology of each run uses the seal note
-   and ``review.json`` as committed at the run's SIGNED ``code_sha`` (``git show <code_sha>:...``;
+   and ``review.json`` (held-out case: the held-out note and ``review-heldout.json``) as committed
+   at the run's SIGNED ``code_sha`` (``git show <code_sha>:...``;
    they predate the run start and cannot be altered later); ``code_sha`` must be an ancestor of
    HEAD and the HEAD seal note must equal the pinned one; the report records the review digests at
    ``code_sha`` and at HEAD. **Bundle binding:** the frozen bundle manifest
@@ -30,6 +42,12 @@ Three inputs, each bound to a controlled record before any number is used:
    read only after its size and sha256 equal the sealed ``npz_bytes`` / ``npz_sha256``; the chunk
    set of a case must equal the sealed chunk plan (k = 1..n, seed formula, histories summing
    to 1e6).
+   **Held-out samples (R2-STOP3):** ``sample-seal-heldout-r2stop3.json`` (schema
+   ``ionmc-v8r2-sample-seal-heldout-1``), byte-identical to the file committed at the plan's
+   ``seal_sha_heldout``; it carries ``seed_base`` = 20621004 (seed = seed_base + 100 (29 + case) +
+   k, ``r_index`` = 29 + case), ``npz_subdir`` = ``r2-samples-heldout`` (chunks at
+   ``<samples-root>/validation/generated/<run_id>/r2-samples-heldout/case<c>/<npz>``) and an
+   ``implementation_sha`` that must be an ancestor of (or equal to) ``seal_sha_heldout``.
 3. **TOPAS runs.** Per run the orchestrator materializes into ``<records>/runs/<run_id>/``:
    ``record.json`` = the SIGNED run record of the reference runner (V3-INFRA-004, schema_version 3;
    fields used: ``run_id, configuration_id, code_sha, task_id`` (may be null), ``engine,
@@ -84,6 +102,13 @@ from ionmc.reference.parsers import ParseError, parse_topas_binary, parse_topas_
 
 SEAL_RECORD_PATH = "validation/results/transport/v8r2-samples/sample-seal.json"
 SEAL_SCHEMA = "ionmc-v8r2-sample-seal-1"
+# amendment R2-STOP3 item 3 (iv): the held-out samples, re-run at base 20621004, own seal record
+SEAL_RECORD_PATH_HELDOUT = (
+    "validation/results/transport/v8r2-samples/sample-seal-heldout-r2stop3.json"
+)
+SEAL_SCHEMA_HELDOUT = "ionmc-v8r2-sample-seal-heldout-1"
+HELDOUT_SEED_BASE = 20621004  # R2-STOP3 item 3 (iv): re-run base of the held-out samples
+NPZ_SUBDIR, NPZ_SUBDIR_HELDOUT = "r2-samples", "r2-samples-heldout"
 BUNDLE_ROOT = "validation/reference_cases/topas"
 N_BATCHES = 40  # section 6: ionmc 40 batches
 N_HISTORIES = 1_000_000  # section 6: ionmc 1e6 histories per case
@@ -278,6 +303,36 @@ def parse_bundle(bundle: str) -> dict[str, Any]:
 
 PLAN_PATH = "validation/plans/v3-008-acceptance.md"
 DEFAULT_RECORDS = "validation/results/transport/v8r2-topas/records"
+REVIEW_NAME, REVIEW_NAME_HELDOUT = "review.json", "review-heldout.json"
+REVIEW_RECORD_HELDOUT = f"{DEFAULT_RECORDS}/{REVIEW_NAME_HELDOUT}"
+HELDOUT_NOTE_KEYS = ("seal_sha_heldout", "seal_review_id_heldout")
+
+
+@dataclass(frozen=True)
+class SealKind:
+    """Everything that differs between the main seal and the held-out seal (R2-STOP3 item 3)."""
+
+    name: str  # "main" | "heldout"
+    record_path: str
+    schema: str
+    seed_base: int
+    npz_subdir: str
+    review_name: str  # file name inside the records directory
+
+
+SEAL_KINDS = {
+    "main": SealKind("main", SEAL_RECORD_PATH, SEAL_SCHEMA, LV8_BASE, NPZ_SUBDIR, REVIEW_NAME),
+    "heldout": SealKind(
+        "heldout", SEAL_RECORD_PATH_HELDOUT, SEAL_SCHEMA_HELDOUT, HELDOUT_SEED_BASE,
+        NPZ_SUBDIR_HELDOUT, REVIEW_NAME_HELDOUT,
+    ),
+}  # fmt: skip
+
+
+def seal_kind_of(case: int) -> str:
+    """``heldout`` for a section-3 held-out case (10-12), ``main`` otherwise (incl. case 0)."""
+    spec = CASES.get(case)
+    return "heldout" if spec is not None and spec[6] == "held-out" else "main"
 
 
 class CommittedReader:
@@ -321,10 +376,20 @@ class CommittedReader:
             raise RecordError(f"{what}: {path} is not JSON: {exc}") from exc
 
 
-def load_plan(reader: CommittedReader) -> dict[str, Any]:
+def load_plan(reader: CommittedReader, kind: str = "main") -> dict[str, Any]:
     """``seal_sha`` / ``seal_review_id`` from the one fenced ```json block of the committed
-    acceptance plan that contains "seal_sha" (zero or several blocks: fail closed)."""
-    return parse_seal_note(reader.read(PLAN_PATH).decode("utf-8"))
+    acceptance plan that contains "seal_sha" (zero or several blocks: fail closed); ``kind``
+    "heldout": the held-out note (:func:`parse_heldout_seal_note`), returned in the same
+    normalized shape ``{"seal_sha", "seal_review_id"}``."""
+    return parse_note(reader.read(PLAN_PATH).decode("utf-8"), kind)
+
+
+def parse_note(text: str, kind: str) -> dict[str, Any]:
+    if kind == "main":
+        return parse_seal_note(text)
+    if kind == "heldout":
+        return parse_heldout_seal_note(text)
+    raise RecordError(f"unknown seal kind {kind!r}")
 
 
 def parse_seal_note(text: str) -> dict[str, Any]:
@@ -342,16 +407,41 @@ def parse_seal_note(text: str) -> dict[str, Any]:
     return {"seal_sha": plan["seal_sha"], "seal_review_id": plan["seal_review_id"]}
 
 
+def parse_heldout_seal_note(text: str) -> dict[str, Any]:
+    """The dated held-out seal note (R2-STOP3 item 3): the one fenced ```json block containing
+    ``"seal_sha_heldout"``, with exactly the keys :data:`HELDOUT_NOTE_KEYS` (zero or several
+    blocks, other keys or a non-object: fail closed). Returned normalized as ``{"seal_sha",
+    "seal_review_id"}`` so that the chronology checks are the same functions for both seals."""
+    blocks = [
+        b for b in re.findall(r"```json[ \t]*\n(.*?)```", text, re.S) if '"seal_sha_heldout"' in b
+    ]
+    if len(blocks) != 1:
+        raise RecordError(
+            f"{PLAN_PATH}: expected exactly one held-out seal-note JSON block, found {len(blocks)}"
+        )
+    try:
+        note = json.loads(blocks[0])
+    except ValueError as exc:
+        raise RecordError(f"{PLAN_PATH}: the held-out seal-note block is not JSON: {exc}") from exc
+    if not isinstance(note, dict) or sorted(note) != sorted(HELDOUT_NOTE_KEYS):
+        raise RecordError(
+            f"{PLAN_PATH}: the held-out seal note must hold exactly the keys {HELDOUT_NOTE_KEYS}"
+        )
+    return {"seal_sha": note["seal_sha_heldout"], "seal_review_id": note["seal_review_id_heldout"]}
+
+
 def load_review(
-    reader: CommittedReader, records: Path | str, plan: dict[str, Any]
+    reader: CommittedReader, records: Path | str, plan: dict[str, Any], kind: str = "main"
 ) -> dict[str, Any]:
     """The seal review record as committed at HEAD (``<records>/review.json``; reported only, the
     chronology uses the copy at each run's code_sha, :func:`load_pinned_chronology`). It is a
     verbatim copy of the controlled codex-worker response (its ``report_sha256`` is the
     service's report digest); a signed review record is a future infrastructure item
     (V3-INFRA-005), so the binding today is to the reviewed, committed bytes. ``review_id`` and
-    ``head_sha`` must equal the plan's seal note."""
-    return check_review(reader.json(Path(records) / "review.json", "seal review record"), plan)
+    ``head_sha`` must equal the plan's seal note. ``kind`` "heldout": ``review-heldout.json``
+    against the (normalized) held-out note."""
+    name = SEAL_KINDS[kind].review_name
+    return check_review(reader.json(Path(records) / name, f"seal review record {name}"), plan)
 
 
 def check_review(review: Any, plan: dict[str, Any]) -> dict[str, Any]:
@@ -363,22 +453,26 @@ def check_review(review: Any, plan: dict[str, Any]) -> dict[str, Any]:
     return review
 
 
-def load_pinned_chronology(repo: Path | str, code_sha: str, records_rel: str) -> dict[str, Any]:
+def load_pinned_chronology(
+    repo: Path | str, code_sha: str, records_rel: str, kind: str = "main"
+) -> dict[str, Any]:
     """The seal note and the seal review record as committed at the run's signed ``code_sha``
     (Codex REVIEW-096af6a3): the runner executed exactly that commit, so these bytes existed before
     the run started and cannot be changed afterwards. A later commit (e.g. a forged earlier
     ``finished_at``) does not affect the chronology of this run. Missing at ``code_sha``: fail
-    closed."""
+    closed. ``kind`` "heldout" (a run of a held-out case): the held-out note and
+    ``review-heldout.json`` at ``code_sha`` (the main note is not consulted)."""
     plan_blob = git_show(repo, code_sha, PLAN_PATH)
-    plan = parse_seal_note(plan_blob.decode("utf-8"))
-    rev_blob = git_show(repo, code_sha, f"{records_rel}/review.json")
+    plan = parse_note(plan_blob.decode("utf-8"), kind)
+    name = SEAL_KINDS[kind].review_name
+    rev_blob = git_show(repo, code_sha, f"{records_rel}/{name}")
     try:
         review = json.loads(rev_blob.decode("utf-8"))
     except ValueError as exc:
-        raise RecordError(f"review.json at {code_sha} is not JSON: {exc}") from exc
+        raise RecordError(f"{name} at {code_sha} is not JSON: {exc}") from exc
     check_review(review, plan)
     return {
-        "plan": plan, "review": review,
+        "seal_kind": kind, "plan": plan, "review": review,
         "plan_sha256": hashlib.sha256(plan_blob).hexdigest(),
         "review_sha256": hashlib.sha256(rev_blob).hexdigest(),
     }  # fmt: skip
@@ -745,7 +839,9 @@ def load_signed_run(
             got = input_files.get(name, {}).get("sha256") if isinstance(input_files, dict) else None
             if got is None or got != entry.get(name):
                 run.bundle_problems.append(f"{bundle}/{name} differs from the frozen manifest")
-    run.pinned = load_pinned_chronology(repo, code_sha, reader.rel(review_records))
+    run.pinned = load_pinned_chronology(  # held-out case: held-out note + review (R2-STOP3)
+        repo, code_sha, reader.rel(review_records), seal_kind_of(case)
+    )
     run.pinned["manifest_bundle_set_digest"] = manifest["bundle_set_digest"]
     run.pinned["manifest_bundle_set_digest_at_code_sha"] = manifest[
         "_bundle_set_digest_at_code_sha"
@@ -1170,24 +1266,51 @@ def topas_lateral(run: TopasRun, stem: str, axis: int) -> tuple[np.ndarray, np.n
 
 
 def load_seal(
-    reader: CommittedReader, seal_path: Path | str, seal_sha: str
+    reader: CommittedReader, seal_path: Path | str, seal_sha: str, kind: str = "main"
 ) -> tuple[dict[str, Any], str]:
-    """The sealed sample record as committed at HEAD (path ``SEAL_RECORD_PATH``), byte-identical to
-    the one committed at the seal commit."""
-    if reader.rel(seal_path) != SEAL_RECORD_PATH:
-        raise RecordError(f"the seal record must be {SEAL_RECORD_PATH}, not {seal_path}")
+    """The sealed sample record of ``kind`` as committed at HEAD (path ``SealKind.record_path``),
+    byte-identical to the one committed at the seal commit, with the kind's schema. Held-out
+    (R2-STOP3 item 3) additionally: ``seed_base`` == 20621004, ``npz_subdir`` ==
+    ``r2-samples-heldout`` and ``implementation_sha`` an ancestor of (or equal to) ``seal_sha``."""
+    sk = SEAL_KINDS[kind]
+    if reader.rel(seal_path) != sk.record_path:
+        raise RecordError(f"the {kind} seal record must be {sk.record_path}, not {seal_path}")
     blob = reader.read(seal_path)
-    if blob != git_show(reader.repo, seal_sha, SEAL_RECORD_PATH):
-        raise RecordError(f"{seal_path} differs from {SEAL_RECORD_PATH} at the seal {seal_sha}")
+    if blob != git_show(reader.repo, seal_sha, sk.record_path):
+        raise RecordError(f"{seal_path} differs from {sk.record_path} at the seal {seal_sha}")
     record = json.loads(blob.decode("utf-8"))
-    if require(record, "schema", "sample seal") != SEAL_SCHEMA:
-        raise RecordError(f"sample seal schema {record['schema']!r} != {SEAL_SCHEMA}")
+    if not isinstance(record, dict):
+        raise RecordError(f"{sk.record_path} is not a JSON object")
+    if require(record, "schema", "sample seal") != sk.schema:
+        raise RecordError(f"sample seal schema {record['schema']!r} != {sk.schema}")
+    if kind == "heldout":
+        if require(record, "seed_base", "held-out seal") != sk.seed_base:
+            raise RecordError(
+                f"held-out seal seed_base {record['seed_base']!r} != {sk.seed_base} (R2-STOP3)"
+            )
+        if require(record, "npz_subdir", "held-out seal") != sk.npz_subdir:
+            raise RecordError(
+                f"held-out seal npz_subdir {record['npz_subdir']!r} != {sk.npz_subdir!r}"
+            )
+        impl = require(record, "implementation_sha", "held-out seal")
+        if not isinstance(impl, str) or not re.fullmatch(r"[0-9a-f]{40}", impl):
+            raise RecordError(f"held-out seal implementation_sha {impl!r} is not a commit SHA")
+        if not is_ancestor(reader.repo, impl, seal_sha):
+            raise RecordError(
+                f"held-out seal implementation_sha {impl} is not an ancestor of the held-out "
+                f"seal commit {seal_sha}"
+            )
     return record, hashlib.sha256(blob).hexdigest()
 
 
-def case_chunks(record: dict[str, Any], case: int) -> list[dict[str, Any]]:
+def case_chunks(record: dict[str, Any], case: int, kind: str = "main") -> list[dict[str, Any]]:
     """The sealed chunks of ``case``, checked against the sealed chunk plan (k = 1..n, the lv8
-    seed formula, every chunk counter-clean, histories summing to 1e6)."""
+    seed formula with the kind's base -- main 20581004, held-out 20621004 -- every chunk
+    counter-clean, histories summing to 1e6; held-out also ``r_index`` == 29 + case). The case
+    must belong to the seal ``kind`` (a held-out case is never read from the main seal)."""
+    if seal_kind_of(case) != kind:
+        raise RecordError(f"case {case} is not graded against the {kind} seal")
+    base = SEAL_KINDS[kind].seed_base
     plan_n = require(require(record, "chunk_plan", "sample seal"), "n", "chunk plan")
     n = plan_n.get(str(case))
     chunks = [c for c in require(record, "chunks", "sample seal") if c.get("case") == case]
@@ -1198,8 +1321,10 @@ def case_chunks(record: dict[str, Any], case: int) -> list[dict[str, Any]]:
     for c in chunks:
         for key in ("k", "seed", "histories", "run_id", "npz", "npz_sha256", "npz_bytes"):
             require(c, key, f"sample seal chunk case {case}")
-        if c["seed"] != LV8_BASE + 100 * (R_INDEX_OFFSET + case) + c["k"]:
+        if c["seed"] != base + 100 * (R_INDEX_OFFSET + case) + c["k"]:
             raise RecordError(f"sample seal: case {case} k {c['k']} seed breaks the formula")
+        if kind == "heldout" and c.get("r_index") != R_INDEX_OFFSET + case:
+            raise RecordError(f"sample seal: case {case} k {c['k']} r_index != {29 + case}")
         if c.get("counters_all_zero") is not True:
             raise RecordError(f"sample seal: case {case} k {c['k']} is not counter-clean")
         if c["npz"] != f"ionmc-case{case}-k{c['k']}.npz":
@@ -1211,13 +1336,17 @@ def case_chunks(record: dict[str, Any], case: int) -> list[dict[str, Any]]:
     return sorted(chunks, key=lambda c: c["k"])
 
 
-def npz_path(samples_root: Path | str, case: int, chunk: dict[str, Any]) -> Path:
+def npz_path(
+    samples_root: Path | str, case: int, chunk: dict[str, Any], subdir: str = NPZ_SUBDIR
+) -> Path:
+    if subdir not in (NPZ_SUBDIR, NPZ_SUBDIR_HELDOUT):
+        raise RecordError(f"unknown chunk subdirectory {subdir!r}")
     return (
         Path(samples_root)
         / "validation"
         / "generated"
         / str(chunk["run_id"])
-        / "r2-samples"
+        / subdir
         / f"case{case}"
         / str(chunk["npz"])
     )
@@ -1266,13 +1395,14 @@ def load_ionmc(
     chunks: list[dict[str, Any]],
     grid: str,
     slabs: list[int] | None = None,
+    subdir: str = NPZ_SUBDIR,
 ) -> IonmcGrid:
     """Load grid ``idd`` (-> (B, nz)), ``latx`` (-> (B, nx, len(slabs))) or ``laty`` (-> (B, ny,
     len(slabs))) of every sealed chunk of ``case`` (sha256 verified first) and combine per batch."""
     parts: list[tuple[int, np.ndarray]] = []
     edges: list[np.ndarray] | None = None
     for c in chunks:
-        path = npz_path(samples_root, case, c)
+        path = npz_path(samples_root, case, c, subdir)
         verify_npz(path, c)
         try:
             with np.load(path, allow_pickle=False) as z:

@@ -12,10 +12,20 @@ Entry point::
 
 ``grade`` accepts only the held-out cases 10-12: every row of cases 1-9 is consumed under
 amendment R2-STOP3 (see ``CONSUMED_MAIN_CASES``) and exits 2 with an ERROR report naming the
-amendment, before any input is read. ``reeval-tl-em`` (report-only, never a grade) works for
-cases 1-9 only. ``check-run`` establishes the run validity of ONE signed run (evidence part or
-smoke; nothing graded, see :func:`check_run`): exit 0 VALID, 1 BLINDING FAIL / RUN-VALIDITY FAIL,
-2 ERROR.
+amendment, before any input is read. **Held-out seal (R2-STOP3 item 3):** a held-out case is
+graded against the held-out seal only (``r2_io.SEAL_KINDS["heldout"]``): the plan's held-out
+seal note (``seal_sha_heldout`` / ``seal_review_id_heldout``), ``<records>/review-heldout.json``,
+the sealed record ``sample-seal-heldout-r2stop3.json`` (``--seal`` defaults to the record of the
+case's seal kind; another path fails closed) and the chunks under ``r2-samples-heldout``; the
+chronology of its TOPAS runs uses ``seal_sha_heldout`` and the held-out review (both pinned at the
+run's ``code_sha``). The main seal note block is still read (must stay unique; reported as
+``plan``), the main review and main sample seal are not read. Every report states ``seal_kind``,
+the seal record path and sha256, and for the held-out seal its ``implementation_sha`` (an
+ancestor of, or equal to, ``seal_sha_heldout``). ``reeval-tl-em`` (report-only, never a
+grade) works for cases 1-9 only. ``check-run`` establishes the run validity of ONE signed run
+(evidence part or smoke; nothing graded, see :func:`check_run`): exit 0 VALID, 1 BLINDING FAIL /
+RUN-VALIDITY FAIL, 2 ERROR; a bundle of a held-out case uses the held-out chronology (held-out
+note, review-heldout.json).
 
 The repository is always the git checkout that contains this file; plan seal note, review record,
 run index, signed run records, listings, seal and trust file are read as committed at its HEAD
@@ -29,6 +39,9 @@ directory layout and the record bindings). Exit status:
 written). The report holds statistics, record ids and sha256 only, never raw arrays.
 
 Chronology (section 6, "Run validity against the seal"), unchanged:
+
+``<seal>`` / ``seal_sha`` below is the seal of the run's case: ``seal_sha`` (cases 1-9) or
+``seal_sha_heldout`` (cases 10-12); the review is ``review.json`` or ``review-heldout.json``.
 
 1. Ancestry: ``git merge-base --is-ancestor <seal> <code_sha>`` succeeds (the seal itself counts).
 2. Review before start: the controlled review record proves that the seal commit itself passed
@@ -591,8 +604,11 @@ class Context:
         seal: dict[str, Any],
         samples_root: Path,
         trust: dict[str, Any],
+        seal_kind: str = "main",
     ) -> None:
         self.trust = trust
+        self.seal_kind = seal_kind
+        self.npz_subdir = io.SEAL_KINDS[seal_kind].npz_subdir
         self.reader: io.CommittedReader | None = None
         self.repo, self.plan, self.review, self.index = repo, plan, review, index
         self.records, self.outputs, self.seal, self.samples_root = (
@@ -623,7 +639,7 @@ class Context:
         return runs
 
     def chunks(self, case: int) -> list[dict[str, Any]]:
-        ch = io.case_chunks(self.seal, case)
+        ch = io.case_chunks(self.seal, case, self.seal_kind)
         for c in ch:
             entry = {
                 "case": case,
@@ -644,8 +660,12 @@ def run_chronology(
     review_records: Path,
 ) -> dict[str, Any]:
     """R2-TOPAS-4 chronology of one loaded run: ``check_run_validity`` with the seal note and
-    review record pinned at the run's signed ``code_sha`` (which must equal HEAD's seal note)."""
+    review record pinned at the run's signed ``code_sha`` (which must equal HEAD's seal note).
+    The seal kind is the run's case's (``r2_io.seal_kind_of``): a held-out run is checked against
+    ``seal_sha_heldout`` and ``review-heldout.json`` (``plan`` is then the normalized held-out
+    note), never against the main seal."""
     pinned = run.pinned  # seal note and review record at the run's signed code_sha
+    review_name = io.SEAL_KINDS[pinned["seal_kind"]].review_name
     if pinned["plan"] != plan:
         raise io.RecordError(
             f"{run.run_id}: the seal note at code_sha {run.code_sha} differs from HEAD's"
@@ -655,10 +675,11 @@ def run_chronology(
     )
     return {
         "run_id": run.run_id, "config": run.config, "case": run.case, "part": run.part,
+        "seal_kind": pinned["seal_kind"], "seal_sha": pinned["plan"]["seal_sha"],
         "code_sha": run.code_sha, "review_finished_at": pinned["review"]["finished_at"],
         "review_sha256_at_code_sha": pinned["review_sha256"],
         "review_sha256_at_head": reader.reads.get(
-            f"{reader.rel(review_records)}/review.json"
+            f"{reader.rel(review_records)}/{review_name}"
         ) if reader else None,
         "plan_sha256_at_code_sha": pinned["plan_sha256"],
         "manifest_bundle_set_digest": pinned["manifest_bundle_set_digest"], **v,
@@ -740,8 +761,8 @@ def _lateral(
     else:
         parts = em_parts
     chunks = ctx.chunks(case)
-    gx = io.load_ionmc(ctx.samples_root, case, chunks, "latx", slabs)
-    gy = io.load_ionmc(ctx.samples_root, case, chunks, "laty", slabs)
+    gx = io.load_ionmc(ctx.samples_root, case, chunks, "latx", slabs, ctx.npz_subdir)
+    gy = io.load_ionmc(ctx.samples_root, case, chunks, "laty", slabs, ctx.npz_subdir)
     io.same_edges(gx.edges[0], edges["x"], "lateral x")
     io.same_edges(gy.edges[1], edges["y"], "lateral y")
     io.same_edges(gx.edges[2], slab_edges, "lateral depth slabs")
@@ -790,7 +811,8 @@ def grade(
     closed. ``repo`` is a test-only override (the CLI never exposes it): production grades use
     :func:`evaluator_repo`. ``reeval`` (TL-EM only, used by ``reeval-tl-em``): same committed-input
     machinery, but the result is a report-only re-evaluation (:func:`reeval_report`), never a
-    grade; an invalid run or part is an error."""
+    grade; an invalid run or part is an error. ``seal_path`` None: the record of the case's seal
+    kind (held-out cases: ``r2_io.SEAL_RECORD_PATH_HELDOUT``, amendment R2-STOP3 item 3)."""
     if row not in ROWS:
         raise io.RecordError(f"unknown row {row!r}; rows are {ROWS}")
     info = io.case_info(case)  # unknown case: RecordError
@@ -808,9 +830,14 @@ def grade(
         )
     repo = Path(repo).resolve() if repo is not None else evaluator_repo()
     reader = io.CommittedReader(repo)
-    plan = io.load_plan(reader)
-    review = io.load_review(reader, records, plan)
-    seal, seal_digest = io.load_seal(reader, seal_path, plan["seal_sha"])
+    kind = io.seal_kind_of(case)
+    sk = io.SEAL_KINDS[kind]
+    main_plan = io.load_plan(reader)  # the main note stays unique (also for held-out grading)
+    plan = main_plan if kind == "main" else io.load_plan(reader, kind)
+    review = io.load_review(reader, records, plan, kind)
+    seal, seal_digest = io.load_seal(
+        reader, seal_path if seal_path is not None else sk.record_path, plan["seal_sha"], kind
+    )
     trust, trust_info = io.committed_trust(reader)
     ctx = Context(
         repo,
@@ -822,6 +849,7 @@ def grade(
         seal,
         samples_root or repo,
         trust,
+        kind,
     )
     ctx.reader = reader
     report: dict[str, Any] = {
@@ -836,12 +864,25 @@ def grade(
             "committed_inputs": reader.reads,  # filled while grading (path -> sha256)
         },
         "held_out": info["set"] == "held-out",
-        "plan": plan,
-        "review": {k: review[k] for k in ("review_id", "head_sha", "status", "finished_at")},
-        "seal_record": {"path": io.SEAL_RECORD_PATH, "sha256": seal_digest},
+        "seal_kind": kind,
+        "plan": main_plan,
+        "review": {
+            "path": f"{reader.rel(records)}/{sk.review_name}",
+            **{k: review[k] for k in ("review_id", "head_sha", "status", "finished_at")},
+        },
+        "seal_record": {"path": sk.record_path, "sha256": seal_digest, "seal_kind": kind},
         "implementation_decisions": DECISIONS,
         "not_computed": NOT_COMPUTED,
     }
+    if kind == "heldout":  # R2-STOP3 item 3: the held-out seal and its implementation commit
+        report["plan_heldout"] = {
+            "seal_sha_heldout": plan["seal_sha"], "seal_review_id_heldout": plan["seal_review_id"]
+        }  # fmt: skip
+        report["implementation_sha"] = seal["implementation_sha"]
+        report["seal_record"] |= {
+            "implementation_sha": seal["implementation_sha"],
+            "seed_base": seal["seed_base"], "npz_subdir": seal["npz_subdir"],
+        }  # fmt: skip
     # load every TOPAS record the grade needs, then check the chronology BEFORE reading numbers
     cases = [case]
     lowc, _std, upc = io.ION_ENDS[info["ion"]]
@@ -914,7 +955,7 @@ def grade(
             raise io.RecordError(
                 f"IDD bin width {hz} mm differs from the case h_z {info['hz_mm']} mm"
             )
-        grid = io.load_ionmc(ctx.samples_root, case, ctx.chunks(case), "idd")
+        grid = io.load_ionmc(ctx.samples_root, case, ctx.chunks(case), "idd", subdir=ctx.npz_subdir)
         io.same_edges(grid.edges[2], hz * np.arange(parts[0][0].size + 1), "IDD depth")
         io.same_edges(grid.edges[0], [-io.FIELD_MM / 2, io.FIELD_MM / 2], "IDD x extent")
         io.same_edges(grid.edges[1], [-io.FIELD_MM / 2, io.FIELD_MM / 2], "IDD y extent")
@@ -1024,7 +1065,8 @@ def check_run(
     are reported), stdout/stderr sha256 against the listing and the signed record,
     ``output_files_sha256``
     reproduced from the listing's ``work/`` entries), :func:`run_chronology` (seal note and
-    ``<DEFAULT_RECORDS>/review.json`` at the run's ``code_sha``; ``code_sha`` an ancestor of HEAD)
+    ``<DEFAULT_RECORDS>/review.json`` at the run's ``code_sha``, held-out case: the held-out note
+    and ``review-heldout.json``; ``code_sha`` an ancestor of HEAD)
     and ``io.run_checks`` for the configuration of the bundle name (``io.parse_bundle``). The
     scorer outputs (``work/``) are NOT read: only ``request.json``, ``stdout.txt`` and
     ``stderr.txt`` are read from ``<outputs>/<run_id>/`` (each hashed against the listing); the
@@ -1046,8 +1088,10 @@ def check_run(
         )
     records_dir = Path(records_dir) if Path(records_dir).is_absolute() else repo / records_dir
     review_records = repo / io.DEFAULT_RECORDS
-    plan = io.load_plan(reader)
-    review = io.load_review(reader, review_records, plan)
+    kind = io.seal_kind_of(info["case"])  # held-out bundle: held-out chronology (R2-STOP3)
+    main_plan = io.load_plan(reader)
+    plan = main_plan if kind == "main" else io.load_plan(reader, kind)
+    review = io.load_review(reader, review_records, plan, kind)
     trust, trust_info = io.committed_trust(reader)
     seeds = None
     if info["kind"] == "part":
@@ -1061,6 +1105,11 @@ def check_run(
     )  # fmt: skip
     chron = run_chronology(repo, reader, run, plan, review_records)
     checks = io.run_checks(run)
+    heldout_note = {}
+    if kind == "heldout":
+        heldout_note["plan_heldout"] = {
+            "seal_sha_heldout": plan["seal_sha"], "seal_review_id_heldout": plan["seal_review_id"]
+        }  # fmt: skip
     if not chron["valid"]:
         verdict = "BLINDING FAIL"
     elif checks["problems"]:
@@ -1076,6 +1125,8 @@ def check_run(
         "case": info["case"],
         "part": info["part"],
         "verdict": verdict,
+        "seal_kind": kind,
+        "seal_sha": plan["seal_sha"],
         "checks": {
             "record_binding": "PASS",
             "chronology": "PASS" if chron["valid"] else "FAIL",
@@ -1094,13 +1145,15 @@ def check_run(
         "histories": run.histories,
         "seeds": run.case_doc.get("seeds"),
         "review": {
+            "path": f"{io.DEFAULT_RECORDS}/{io.SEAL_KINDS[kind].review_name}",
             "review_id": review["review_id"],
             "finished_at_at_code_sha": chron["review_finished_at"],
             "review_sha256_at_code_sha": chron["review_sha256_at_code_sha"],
             "review_sha256_at_head": chron["review_sha256_at_head"],
             "plan_sha256_at_code_sha": chron["plan_sha256_at_code_sha"],
         },
-        "plan": plan,
+        "plan": main_plan,
+        **heldout_note,
         "manifest_bundle_set_digest": chron["manifest_bundle_set_digest"],
         "manifest_bundle_set_digest_at_code_sha": run.pinned[
             "manifest_bundle_set_digest_at_code_sha"
@@ -1160,7 +1213,13 @@ def main(argv: list[str] | None = None) -> int:
         help=f"committed evidence directory inside the evaluator repository "
         f"(default {io.DEFAULT_RECORDS})",
     )
-    g.add_argument("--seal", type=Path, default=Path(io.SEAL_RECORD_PATH))
+    g.add_argument(
+        "--seal",
+        type=Path,
+        default=None,
+        help="committed sample seal record (default: the record of the case's seal kind, "
+        f"{io.SEAL_RECORD_PATH_HELDOUT} for the held-out cases 10-12)",
+    )
     g.add_argument("--case", required=True, type=int)
     g.add_argument("--row", required=True, choices=ROWS)
     g.add_argument("--outputs", type=Path, default=None)
