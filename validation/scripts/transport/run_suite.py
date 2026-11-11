@@ -275,7 +275,10 @@ def suite_steps(
         _suite_steps_v5(add, s5, sc, out_dir, [*dirs, *pm])
         return steps
     if suite in ("lv8", "hr8"):
-        _suite_steps_v8(suite, add, [PY, str(STEPS_V8)], sc)
+        if import_dirs and partials_manifest is None:
+            raise SystemExit(f"{suite} --import-dirs requires --partials-manifest (name -> sha256)")
+        pm = ["--partials-manifest", str(partials_manifest)] if import_dirs else []
+        _suite_steps_v8(suite, add, [PY, str(STEPS_V8)], sc, out_dir, [*dirs, *pm])
         return steps
     if suite in ("lv4", "hr4"):
         _suite_steps_v4(suite, add, s4, w, sc, cuda, out_dir, dirs, single_process)
@@ -436,12 +439,27 @@ def _suite_steps_v5(add, s5, sc, out_dir, dirs):  # type: ignore[no-untyped-def]
     add("v3-workers-partition", [*s5, "v3-workers"], env)  # deferred: runs only when the mode is lifted
 
 
-def _suite_steps_v8(suite, add, s8, sc):  # type: ignore[no-untyped-def]
+def _sharded_v8(add, s8, sc, out_dir, dirs, row, env=None):  # type: ignore[no-untyped-def]
+    """The shard steps of a sharded lv8/hr8 row (``steps_v8.shard_plan``) and its combine step."""
+    import steps_v8
+
+    for unit, n_sh, _n, _b, _m in steps_v8.shard_plan(row):
+        for j in range(n_sh):
+            add(f"{row}-{unit}-s{j}",
+                [*s8, "shard", "--row", row, "--unit", unit, "--shard", str(j),
+                 "--out-dir", str(out_dir), *sc], env)  # fmt: skip
+    add(f"{row}-combine", [*s8, "combine", "--row", row, "--dirs", *dirs, *sc], env)
+
+
+def _suite_steps_v8(suite, add, s8, sc, out_dir, dirs):  # type: ignore[no-untyped-def]
     """Steps of the V3-008 suites (rows of ``validation/plans/v3-008-acceptance.md`` section A;
     ``steps_v8.py``): one process each, every statistical step takes ``--scale``, the seed base
-    is appended by ``add``. Planned host durations (measured C 290 throughput, steps_v8 docstring)
-    stay below 1500 s per step. Rows I9, I12, I14, I15 and T12-ion are not implemented yet (see
-    ``steps_v8.RESERVED_R_INDEX``); hr8 needs CUDA (``IONMC_REQUIRE_CUDA=1``)."""
+    is appended by ``add``. Planned host durations (measured C 290 throughput, steps_v8 docstring;
+    ``steps_v8.planned_shard_seconds``) stay below 1500 s per step: the rows I9, I12, I14, I15 and
+    T12-ion (amendment 4c, 2e5 warp-cpu histories per configuration) run as shard steps whose
+    sealed partials (``samples/``) a combine step per row reads (``dirs``: this archive first,
+    then imported archives with the partials manifest, as lv5). T12-ion LV runs right after the
+    cheap rows (a STOP row; plan item 4b order). hr8 needs CUDA (``IONMC_REQUIRE_CUDA=1``)."""
     if suite == "lv8":
         add("i6-lv-deterministic-end-depth", [*s8, "i6-lv"], NIST_FREE_ENV)
         for p, name in enumerate(("he150", "c290", "o350")):
@@ -452,8 +470,12 @@ def _suite_steps_v8(suite, add, s8, sc):  # type: ignore[no-untyped-def]
         add("t1-ion-trace-parity-c290-o350", [*s8, "t1-ion", *sc])
         add("r1-ion-repeatability-c290", [*s8, "r1-ion", *sc])
         add("r2-a16-trace-fixture", [*s8, "r2"])
+        for row in ("t12-ion-lv", "i9", "i12", "i14", "i15"):
+            _sharded_v8(add, s8, sc, out_dir, dirs, row)
     else:
-        add("t13-ion-chunks-cuda-c290", [*s8, "t13-ion", *sc], {"IONMC_REQUIRE_CUDA": "1"})
+        cuda = {"IONMC_REQUIRE_CUDA": "1"}
+        add("t13-ion-chunks-cuda-c290", [*s8, "t13-ion", *sc], cuda)
+        _sharded_v8(add, s8, sc, out_dir, dirs, "t12-ion-hr", cuda)
 
 
 NIST_FREE_ENV: dict[str, str] = {}

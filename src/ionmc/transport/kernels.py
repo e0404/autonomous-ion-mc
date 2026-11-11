@@ -607,18 +607,22 @@ def make_kernel_support(real: type) -> SimpleNamespace:
         along the straight continuation of the direction ``d0`` from ``p0`` (voxel ``ix, iy,
         iz`` of the transport); no straggling, no scattering.
 
-        The segment of a material ``m`` (density ``rho``) starting with the energy ``E_s`` has the
-        CSDA range ``r_s = residual_range(E_s)`` of the table, the length ``r_s 10 / rho`` mm and
-        ``n_s`` equal sub-steps (``n_s = RESIDUAL_SUBSTEPS`` for the first segment); its sub-step
-        ``j`` gets the energy ``E_tab(r_{j-1}) - E_tab(r_j)`` (``r_j = r_s (n_s - 1 - j) / n_s``
-        its remaining range at the end, ``E_tab`` = ``residual_energy``, ``E_tab(r_{n_s - 1}) =
-        0``), spread uniformly over its length through ``deposit_leg`` in every grid.
-
-        Material stepping: at the start of every later sub-step ``k`` inside the world the voxel
-        of the start point is looked up as the transport locates a point (clamped floor index);
-        if its material or density differs from the current one, a new segment starts there from
-        the current energy ``E_k`` with the remaining ``RESIDUAL_SUBSTEPS - k`` sub-steps (a
-        homogeneous medium has a single segment).
+        Exact walk through the transport geometry: the continuation is split into legs of
+        constant material and density by the voxel traversal of the transport steps
+        (``dda_next_clip`` with the transport's plane snapping); a leg ends at the first voxel
+        plane behind which the material or the density differs, at the end of the remaining
+        range, or at the world boundary ``l_in``. A leg starting with the energy ``E_s`` in
+        material ``m`` (density ``rho``) has the remaining CSDA range ``r_s =
+        residual_range(E_s)`` of the table (length ``l_s = r_s 10 / rho`` mm); its length is
+        ``L = min(l_s, distance to the medium change or the world boundary)``, the range left at
+        its end ``r_e = r_s - L rho / 10`` (``r_e = 0`` when it stops inside). It is split into
+        ``n = max(1, ceil(RESIDUAL_SUBSTEPS L / l_s))`` equal sub-steps; sub-step ``j`` gets the
+        energy ``E_tab(r_{j-1}) - E_tab(r_j)`` with ``r_j = r_e + (r_s - r_e) (n - 1 - j) / n``
+        (``E_tab`` = ``residual_energy``, ``E_tab = 0`` at the end of a stopping leg), spread
+        uniformly over its length through ``deposit_leg`` in every grid. A homogeneous medium has
+        a single leg of ``RESIDUAL_SUBSTEPS`` sub-steps. More than ``max_pieces`` voxel planes
+        crossed fail closed: the rest continues in the current medium and the overflow counter
+        (validity) is raised.
 
         Scoring channels (decision 0040 hook): a sub-step that ends at or above the table floor
         ``E_lo`` of its material is an ordinary step (``step_state`` at its mean energy, mean loss
@@ -628,88 +632,132 @@ def make_kernel_support(real: type) -> SimpleNamespace:
         ``CLASS_RESIDUAL_FLOOR``: its lookups are evaluated at the floor, clamped by definition,
         and never counted as out-of-domain.
 
-        ``l_in`` is the path length [mm] to the world boundary; the energy of the part beyond it
-        is not deposited. Returns that escaped energy, the scored path length [mm] (inside the
-        world) and the number of legs that exceeded ``max_pieces``."""
+        ``l_in`` is the path length [mm] to the world boundary; the energy left at it (the table
+        energy at the range remaining there) is not deposited. Returns that escaped energy, the
+        scored path length [mm] (inside the world) and the number of overflows (legs that exceeded
+        ``max_pieces`` and the voxel walk)."""
         n_sub = ctl.n_sub
-        m = int(mat[ix, iy, iz])
-        rho = dens[ix, iy, iz]
-        r_seg = residual_range(r_mass, f_mass, d_f, ln_e0, inv_dln_e, ctl.n_e, m, energy)
-        n_seg = n_sub
-        j = int(0)
+        jx = int(ix)
+        jy = int(iy)
+        jz = int(iz)
+        q = v3(p0[0], p0[1], p0[2])
         s_seg = D(0.0)
-        length = r_seg * D(10.0) / rho
-        l_sub = length / D(n_seg)
         e_prev = energy
         e_escape = D(0.0)
         path = D(0.0)
         ovf = int(0)
-        k = int(0)
-        while k < n_sub:
-            s0 = s_seg + D(j) * l_sub
-            if k > 0 and s0 < l_in:
-                q = v3(p0[0] + d0[0] * R(s0), p0[1] + d0[1] * R(s0), p0[2] + d0[2] * R(s0))
-                jx = wp.min(
-                    wp.max(int(wp.floor((q[0] - ctl.origin[0]) / ctl.spacing[0])), 0), ctl.nx - 1
-                )
-                jy = wp.min(
-                    wp.max(int(wp.floor((q[1] - ctl.origin[1]) / ctl.spacing[1])), 0), ctl.ny - 1
-                )
-                jz = wp.min(
-                    wp.max(int(wp.floor((q[2] - ctl.origin[2]) / ctl.spacing[2])), 0), ctl.nz - 1
-                )
-                m_q = int(mat[jx, jy, jz])
-                rho_q = dens[jx, jy, jz]
-                if m_q != m or rho_q != rho:  # a new segment from E_k in the new medium
-                    m = m_q
-                    rho = rho_q
-                    r_seg = residual_range(
-                        r_mass, f_mass, d_f, ln_e0, inv_dln_e, ctl.n_e, m, e_prev
-                    )
-                    n_seg = n_sub - k
-                    j = 0
-                    s_seg = s0
-                    length = r_seg * D(10.0) / rho
-                    l_sub = length / D(n_seg)
-            e_k = D(0.0)
-            if k < n_sub - 1:
-                r_k = r_seg * D(n_seg - 1 - j) / D(n_seg)
-                e_k = wp.min(
-                    residual_energy(ln_er, ln_r0, inv_dln_r, ln_e0, r_mass, ctl.n_r, m, r_k), e_prev
-                )
-            de = e_prev - e_k
-            l_k = wp.min(wp.max(l_in - s0, D(0.0)), l_sub)
-            if l_k < l_sub:
-                e_escape = e_escape + de * (l_sub - l_k) / l_sub
-            if l_k > D(0.0) and de > D(0.0):
-                pk = v3(p0[0] + d0[0] * R(s0), p0[1] + d0[1] * R(s0), p0[2] + d0[2] * R(s0))
-                path = path + l_k
-                ss_mid = D(0.0)
-                ss_k = D(0.0)
-                ss_e = D(0.0)
-                ss_dot = D(0.0)
-                cls = int(cls_step)
-                if chan.n_ch > 0:
-                    e_lo = wp.exp(ln_e0[m])
-                    if e_k < e_lo:  # below the table floor: the constant floor state
-                        ss_e = e_lo
-                        ss_mid, ss_k, ss_dot = step_state(chan, ss_e, de, l_sub)
-                        ss_k = D(0.0)
-                        ss_dot = D(0.0)
-                        cls = cls_step | cls_floor
+        n_cross = int(0)
+        active = int(1)
+        while active == 1:
+            m = int(mat[jx, jy, jz])
+            rho = dens[jx, jy, jz]
+            r_in = residual_range(r_mass, f_mass, d_f, ln_e0, inv_dln_e, ctl.n_e, m, e_prev)
+            l_rem = r_in * D(10.0) / rho
+            l_world = wp.max(l_in - s_seg, D(0.0))
+            stop = int(0)
+            leg = l_world
+            if l_rem <= l_world:
+                stop = 1
+                leg = l_rem
+            # the transport voxels of the same medium along the leg (transport traversal)
+            changed = int(0)
+            d_acc = D(0.0)
+            walking = int(1)
+            while walking == 1:
+                d_geo, axis = F.dda_next_clip(
+                    q, d0, jx, jy, jz, ctl.origin, ctl.spacing, ctl.z_clip
+                )  # fmt: skip
+                d_next = d_acc + D(d_geo)
+                if d_next >= leg or axis == 3:
+                    walking = 0
+                elif n_cross >= ctl.max_pieces:  # fail closed: the rest in this medium
+                    ovf = ovf + 1
+                    walking = 0
+                else:
+                    n_cross = n_cross + 1
+                    ua = R(d0[0])
+                    if axis == 1:
+                        ua = d0[1]
+                    if axis == 2:
+                        ua = d0[2]
+                    upward = int(0)
+                    step_i = int(-1)
+                    if ua > R(0.0):
+                        upward = 1
+                        step_i = 1
+                    qx = q[0] + d0[0] * d_geo
+                    qy = q[1] + d0[1] * d_geo
+                    qz = q[2] + d0[2] * d_geo
+                    if axis == 0:
+                        qx = F.plane_position(jx, upward, ctl.origin[0], ctl.spacing[0])
+                        jx = jx + step_i
+                    if axis == 1:
+                        qy = F.plane_position(jy, upward, ctl.origin[1], ctl.spacing[1])
+                        jy = jy + step_i
+                    if axis == 2:
+                        qz = F.plane_position(jz, upward, ctl.origin[2], ctl.spacing[2])
+                        jz = jz + step_i
+                    q = v3(qx, qy, qz)
+                    if jx < 0 or jx >= ctl.nx or jy < 0 or jy >= ctl.ny or jz < 0 or jz >= ctl.nz:
+                        walking = 0  # the world boundary (l_in) ends the leg
+                    elif int(mat[jx, jy, jz]) != m or dens[jx, jy, jz] != rho:
+                        leg = d_next  # a new leg from the plane in the new medium
+                        stop = 0
+                        changed = 1
+                        walking = 0
                     else:
-                        ss_e = half_d * (e_prev + e_k)
-                        ss_mid, ss_k, ss_dot = step_state(chan, ss_e, de, l_sub)
-                for g in range(ctl.n_grids):
-                    ovf = ovf + deposit_leg(
-                        edep, tally_rows, tid, batch, g, pk[0], pk[1], pk[2], d0[0], d0[1], d0[2],
-                        R(l_k), de, R(l_sub), D(0.0), D(1.0), D(1.0), g_origin, g_spacing, g_inv,
-                        g_shape, g_off, ctl.n_grids, ctl.max_pieces, chan, ss_mid, ss_k, ss_e,
-                        ss_dot, cls,
+                        d_acc = d_next
+            n_leg = int(1)
+            if l_rem > D(0.0):
+                n_leg = wp.min(wp.max(int(wp.ceil(D(n_sub) * leg / l_rem)), 1), n_sub)
+            l_sub = leg / D(n_leg)
+            r_end = D(0.0)
+            if stop == 0:
+                r_end = wp.max(r_in - leg * rho / D(10.0), D(0.0))
+            for j in range(n_leg):
+                s0 = s_seg + D(j) * l_sub
+                e_k = D(0.0)
+                if stop == 0 or j < n_leg - 1:
+                    r_k = r_end + (r_in - r_end) * D(n_leg - 1 - j) / D(n_leg)
+                    e_k = wp.min(
+                        residual_energy(ln_er, ln_r0, inv_dln_r, ln_e0, r_mass, ctl.n_r, m, r_k),
+                        e_prev,
                     )  # fmt: skip
-            e_prev = e_k
-            j = j + 1
-            k = k + 1
+                if l_sub <= D(0.0):
+                    e_k = e_prev  # an empty leg deposits nothing
+                de = e_prev - e_k
+                if de > D(0.0):
+                    pk = v3(p0[0] + d0[0] * R(s0), p0[1] + d0[1] * R(s0), p0[2] + d0[2] * R(s0))
+                    path = path + l_sub
+                    ss_mid = D(0.0)
+                    ss_k = D(0.0)
+                    ss_e = D(0.0)
+                    ss_dot = D(0.0)
+                    cls = int(cls_step)
+                    if chan.n_ch > 0:
+                        e_lo = wp.exp(ln_e0[m])
+                        if e_k < e_lo:  # below the table floor: the constant floor state
+                            ss_e = e_lo
+                            ss_mid, ss_k, ss_dot = step_state(chan, ss_e, de, l_sub)
+                            ss_k = D(0.0)
+                            ss_dot = D(0.0)
+                            cls = cls_step | cls_floor
+                        else:
+                            ss_e = half_d * (e_prev + e_k)
+                            ss_mid, ss_k, ss_dot = step_state(chan, ss_e, de, l_sub)
+                    for g in range(ctl.n_grids):
+                        ovf = ovf + deposit_leg(
+                            edep, tally_rows, tid, batch, g, pk[0], pk[1], pk[2], d0[0], d0[1],
+                            d0[2], R(l_sub), de, R(l_sub), D(0.0), D(1.0), D(1.0), g_origin,
+                            g_spacing, g_inv, g_shape, g_off, ctl.n_grids, ctl.max_pieces, chan,
+                            ss_mid, ss_k, ss_e, ss_dot, cls,
+                        )  # fmt: skip
+                e_prev = e_k
+            s_seg = s_seg + leg
+            if changed == 0:
+                active = 0
+                if stop == 0:
+                    e_escape = e_prev  # the energy left at the world boundary
         return e_escape, path, ovf
 
     return SimpleNamespace(

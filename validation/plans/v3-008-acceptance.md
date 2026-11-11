@@ -709,7 +709,8 @@ attribution of the TL-EM FAILs, never a grade.
   continuation of the current direction over ionmc's own table residual range R_tab(E), with the table's dE/ds
   (sub-stepped on the scoring grids), no straggling, no MCS and no secondaries on that ≤ 0.092 mm segment; the
   history ends as before (`code_cutoff`; `cutoff` counts the in-world residual, the part beyond the world boundary
-  goes to the `escaped` tally; 32 equal sub-steps, table inverse per sub-step). `point_v1` (the previous convention)
+  goes to the `escaped` tally; voxel-exact walk along the transport grid with up to 32 sub-steps per homogeneous
+  leg, table inverse per sub-step — decision 0043 §4 dated precision of 2026-11-11). `point_v1` (the previous convention)
   stays selectable and is the proton default (`PhysicsOptions.end_of_range_model = "default"` resolves by charge;
   proton transport bit-identical). The requested and effective option are recorded in the run summary. No stopping
   change, no straggling change, no new parameter: nothing is fitted to TOPAS. Declared residual of the model
@@ -765,8 +766,18 @@ main-set samples are consumed under item 3 regardless. The suites are being impl
 42–55); implemented in this commit: lv8 `i6-lv-deterministic-end-depth` (r 51), `i8-range-straggling-{he150,c290,o350}`
 (r 42; I8b reported in the same document), `i13-r80-vs-csda-{case}` (r 43, nine cases), `t1-ion-trace-parity-c290-o350`
 (r 48, K = 256), `r1-ion-repeatability-c290` (r 50), `r2-a16-trace-fixture`; hr8 `t13-ion-chunks-cuda-c290` (r 55).
-NOT yet implemented (r_index reserved, no stubs): I9 (44), I12 (45), I14 (46), I15 (47), T12-ion LV (49) and HR (54);
-they follow in the next commit under the budget decision of item 4c. Definitions fixed by the implementation
+Implemented in the round-3 commit under item 4c as shard + combine steps (`steps_v8.py shard/combine`, lv5
+pattern; partials sealed by content digest and bindings; fail closed on missing/altered/mis-bound partials): T12-ion
+LV (r 49: python 2 × 2000 histories, warp-cpu f64 2 × 1e5), I9 (r 44: He 150, C 290, O 350, 2 × 1e5 each), I12
+(r 45: θ_rms and σ at s_max 0.1/0.5/1/5 mm, shards of 2e4–1e5), I14 (r 46: six (s_max, f_E) configurations, shards
+of 1.25e4–1e5), I15 (r 47: two voxel sizes × two shifts, shards of 5e4–1e5); hr8 T12-ion HR (r 54: cpu64 2e5 inside
+hr8, cuda32 and cuda64 1e6, He 150 / O 350 cpu64 2e5 vs cuda32 1e6). Implementation definitions where the plan is open
+(fixed now, before any of these rows runs): T12-ion uses the lv8 ion default step limit 1 mm on both backends (the
+proton T12 used the 0.2 mm lateral bin); I9 gates |variance/A2 − 1| ≤ 2 % (the σ ratio is reported); I14 compares
+each configuration with the reference (1 mm, 0.02) by the T9 IDD rules and checks |ΔR80| ≤ 0.05 mm over all pairs,
+pooled shards rebatched to 40; I12 requires every θ_rms within 0.5 % of the quadrature at the exit plane; I15 gates
+the pairwise checks only (θ/quadrature and σ/Fermi–Eyges reported); the f32-vs-f64 probe is cuda32 vs cuda64 at
+1e6; CUDA samples use 100 batches, CPU/python 40. The ion Fermi–Eyges T_ion path is the I10 CI test's. Definitions fixed by the implementation
 where the plan was open (documented in `steps_v8.py`): I8 end depth = depth at which E reaches E_cut (before the
 residual deposit), compared with the I4b quadrature from E0 to E_cut (corrections on, Bohr variance with the bare
 charge); I8b compares with a proton of equal CSDA range / √(M/m_p) and, for carbon, the 0.3–0.4 % literature band
@@ -792,8 +803,14 @@ by the same rule). Statistical adequacy at 2e5 (planning): the relative SE of a 
 ≈ 1/√(2N) ≈ 0.16 %, so the pairwise 0.5 % θ_rms criterion of I12/I15 is resolved at ≈ 3 SE and the 1 % σ criterion
 at ≈ 4 SE; the I9 2 % criterion at ≈ 10 SE; the I14 R80 SE ≈ σ_R/√N ≈ 1.5 µm against 0.05 mm, the grouped χ²
 keeps its p > 0.001 rule at the reduced N; T12-ion's power is bounded by its python sample (4·10³) in any case.
-Estimated host time ≈ 9 h for the reduced LV rows plus ≈ 1 h for the cheap rows; the held-out samples ≈ 4 h
-(13 chunks at the sealed rates). The §E total is superseded accordingly; REF is unchanged.
+Estimated host time: the sandbox rates at the smaller step limits and energy fractions are 3–6× lower than the
+1 mm rate (C 290, all EM on, histories/s: 1 mm/0.02 → 111, 1 mm/0.005 → 35, 0.5 mm/0.02 → 78, 0.5 mm/0.005 → 34,
+0.1 mm/0.02 → 23, 0.1 mm/0.005 → 18), so the sharded lv8 rows plan to ≈ 22 h of host time (T12-ion ≈ 1.1 h, I9
+≈ 1.4 h, I12 ≈ 6.4 h, I14 ≈ 9.9 h, I15 ≈ 3.5 h; every shard ≤ 1000 s planned against the 1500 s timeout) plus ≈ 1 h
+for the cheap rows and hr8's CPU parts ≈ 1.4 h; the held-out samples ≈ 4 h (13 chunks at the sealed rates). The §E
+total is superseded accordingly; REF is unchanged. These rows gate the task PASS (one-SHA rule) but not the
+held-out blinding, so they are scheduled after the held-out grading; the orchestrator informs the operator of the
+≈ 22 h through the ledger and may ask for a decision if the host time is not available.
 
 The report-only TL-EM re-evaluation of item 2 is committed at
 `validation/results/transport/v8r2-topas/reports/report-only/TL-EM-case<N>-r2stop3.json` (evaluator HEAD e6f17bc2,

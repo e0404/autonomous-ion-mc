@@ -183,8 +183,10 @@ class NuclearTransportCounters(TransportCounters):
 class EnergyBalance:
     """Energy bookkeeping summed over all histories [MeV] (not per primary).
 
-    Every tally is accumulated independently. ``cutoff_mev`` (energy deposited locally below
-    ``E_cut``) is part of the grid and outside deposits; the closure identity is
+    Every tally is accumulated independently. ``cutoff_mev`` (the energy below ``E_cut``
+    deposited by the end-of-range model: at the end point for ``point_v1``, along the residual
+    path for ``continuous_residual_v1``, whose part beyond the world is excluded here and tallied
+    in ``escaped_mev``) is part of the grid and outside deposits; the closure identity is
     ``initial = step_deposit + cutoff + escaped + truncated + unaccounted`` and, for every
     grid, ``in_grid + quantization + outside = step_deposit + cutoff`` (``quantization`` is the
     summed rounding residual of the fixed-point grids, at most q/2 per deposited piece).

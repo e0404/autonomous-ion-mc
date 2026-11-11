@@ -668,8 +668,13 @@ and falsification), and V5-SS (held-out, single scattering) if its run condition
   end-of-range model `continuous_residual_v1` (default for ion sources; `point_v1` kept, proton default): the
   residual energy is deposited along the straight continuation of the current direction over the table residual
   range R_tab(E) with the table's dE/ds (sub-stepped on the scoring grids), no straggling, MCS or secondaries on that
-  segment (32 equal sub-steps, the table inverse E_tab(r) per sub-step, uniform along each sub-step); E_cut and the
-  table floor rule are unchanged; `cutoff` counts the residual deposited inside the world and the part of the segment
+  segment; E_cut and the table floor rule are unchanged. **Dated precision (2026-11-11, R2-STOP3 round 3; Codex
+  REVIEW-b6484e56):** the segment is walked voxel-exactly along the transport grid (the transport's own DDA):
+  neighbouring voxels of the same material and density form one leg, a material/density change starts a new leg
+  from the energy left at that plane with the new medium's table residual range; each leg is divided into
+  n = clamp(⌈32·leg/remaining length⌉, 1, 32) equal sub-steps with the table inverse E_tab(r) per sub-step, uniform
+  along a sub-step (a homogeneous medium therefore uses exactly 32 sub-steps, bit-identical to the first
+  implementation); the part beyond the world boundary is the table energy at the range left there; `cutoff` counts the residual deposited inside the world and the part of the segment
   beyond the world boundary goes to the `escaped` tally (energy closure unchanged). The option (`PhysicsOptions.
   end_of_range_model`: `default` → `continuous_residual_v1` for z ≥ 2, `point_v1` for protons) is recorded in the
   run summary (`end_of_range_model`, `end_of_range_model_effective`).

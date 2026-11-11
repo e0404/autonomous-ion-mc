@@ -96,6 +96,10 @@ def identity(env: dict[str, Any]) -> str:
 STEP_TAGS = (
     ("pytest", None),
     ("i6-lv-", "i6-lv"),  # V3-008 lv8/hr8 (steps_v8.py), before the generic t1-/t13-/r1- tags
+    *((f"{row}-combine", f"{row}-combine") for row in ("i9", "i12", "i14", "i15", "t12-ion-lv",
+                                                       "t12-ion-hr")),
+    *((f"{row}-", f"{row}-shard") for row in ("i9", "i12", "i14", "i15", "t12-ion-lv",
+                                               "t12-ion-hr")),
     ("i8-", "i8"),
     ("i13-", "i13"),
     ("t1-ion-", "t1-ion"),
@@ -219,6 +223,7 @@ def parse_step(
     }
 
 
+STEP_FILE = re.compile(r"^[0-9]{2,3}-.+\.txt$")
 IMPORTED_UNVERIFIED = "imported_partials_unverified_by_code"
 
 
@@ -347,7 +352,8 @@ def verify(d: Path, sha: str, attest_sha: str | None = None) -> dict[str, Any]:
         problems.append("manifest.txt missing or empty")
     if len(set(names)) != len(names):
         problems.append("manifest lists a step twice")
-    present = sorted(p.stem for p in d.glob("[0-9][0-9]-*.txt"))
+    # two-digit step numbers, three digits from step 100 on (the sharded lv8 suite has > 99 steps)
+    present = sorted(p.stem for p in d.glob("[0-9][0-9]*-*.txt") if STEP_FILE.match(p.name))
     if sorted(names) != present:
         problems.append(f"manifest {sorted(names)} differs from step files {present}")
     steps: dict[str, Any] = {}

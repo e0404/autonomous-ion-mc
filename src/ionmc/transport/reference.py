@@ -24,11 +24,14 @@ along both hinge legs for every scoring grid by an incremental DDA over the leg 
 a piece of the path inside one voxel receives the integral over the piece of a linear
 stopping-power ramp from S(E_old) to S(E_new), normalised over the step (``ramp_weight``), so the
 pieces sum to the deposit and the residual step dependence is second order (the curvature of S
-along the step); the energy left at the cutoff is a point deposit at the end point. Pieces are
+along the step); the energy left at the cutoff is deposited by the end-of-range model: a point
+deposit at the end point (``point_v1``, protons) or, for ``continuous_residual_v1`` (ions), along
+the straight residual path walked through the transport voxels (``_deposit_residual``). Pieces are
 quantized to int64 quanta (``tally``).
 
-Tallies (MeV, accumulated independently of the grids): ``initial``, ``cutoff`` (local
-deposition below ``E_cut``; scored into the grids like any deposit), ``step_deposit``,
+Tallies (MeV, accumulated independently of the grids): ``initial``, ``cutoff`` (the
+energy below ``E_cut`` deposited by the end-of-range model; scored into the grids like any
+deposit), ``step_deposit``,
 ``escaped``, ``truncated`` (energy of histories stopped by the step limit or a stall, never
 scored), ``unaccounted`` (genealogy overflow; always 0 here) and ``outside[g]`` (deposits
 outside grid ``g``).
@@ -457,68 +460,99 @@ class _Reference:
         l_in: float,
     ) -> tuple[float, float]:
         """Model ``continuous_residual_v1`` (see ``kernels.deposit_residual``): the residual
-        energy along the straight continuation in ``RESIDUAL_SUBSTEPS`` sub-steps, segment by
-        segment of constant material and density (a new segment from the current energy at the
-        start of the first sub-step whose start point lies in another medium), sub-step ``j`` of
-        a segment getting ``E_tab(r_{j-1}) - E_tab(r_j)`` uniformly along its length; sub-steps
-        reaching below the table floor are scored at the constant floor state (flag
-        ``CLASS_RESIDUAL_FLOOR``). ``l_in`` is the path length to the world boundary. Returns the
-        energy beyond it (not deposited) and the scored path length inside the world."""
-        t = self.tab
+        energy along the straight continuation, walked through the transport voxels with the
+        transport traversal (``dda_next_clip``, plane snapping) in legs of constant material and
+        density ending at a medium change, at the end of the remaining table range or at the
+        world boundary; a leg of length ``L`` with the remaining range ``r_s`` (length ``l_s``)
+        has ``max(1, ceil(RESIDUAL_SUBSTEPS L / l_s))`` equal sub-steps, sub-step ``j`` getting
+        ``E_tab(r_{j-1}) - E_tab(r_j)`` uniformly along its length; sub-steps reaching below the
+        table floor are scored at the constant floor state (flag ``CLASS_RESIDUAL_FLOOR``).
+        ``l_in`` is the path length to the world boundary. Returns the energy left there (not
+        deposited) and the scored path length inside the world."""
+        r, F, V, t = self.R, self.F, self.V, self.tab
         nx, ny, nz = self.shape
         o, sp = self.geo.origin_mm, self.geo.spacing_mm
         n_sub = RESIDUAL_SUBSTEPS
-        m = int(self.mat[ix, iy, iz])
-        rho = float(self.dens[ix, iy, iz])
-        r_seg = self._residual_range(m, energy)
-        n_seg = n_sub
-        j = 0
+        jx, jy, jz = ix, iy, iz
+        qx, qy, qz = p
+        uvec = V(r(u[0]), r(u[1]), r(u[2]))
         s_seg = 0.0
-        length = r_seg * 10.0 / rho
-        l_sub = length / n_seg
         e_prev = energy
         e_escape = 0.0
         path = 0.0
-        for k in range(n_sub):
-            s0 = s_seg + j * l_sub
-            if k > 0 and s0 < l_in:
-                q = (p[0] + u[0] * s0, p[1] + u[1] * s0, p[2] + u[2] * s0)
-                jx = min(max(int(math.floor((q[0] - o[0]) / sp[0])), 0), nx - 1)
-                jy = min(max(int(math.floor((q[1] - o[1]) / sp[1])), 0), ny - 1)
-                jz = min(max(int(math.floor((q[2] - o[2]) / sp[2])), 0), nz - 1)
-                m_q = int(self.mat[jx, jy, jz])
-                rho_q = float(self.dens[jx, jy, jz])
-                if m_q != m or rho_q != rho:  # a new segment from E_k in the new medium
-                    m, rho = m_q, rho_q
-                    r_seg = self._residual_range(m, e_prev)
-                    n_seg = n_sub - k
-                    j = 0
-                    s_seg = s0
-                    length = r_seg * 10.0 / rho
-                    l_sub = length / n_seg
-            e_k = 0.0
-            if k < n_sub - 1:
-                e_k = min(self._residual_energy(m, r_seg * (n_seg - 1 - j) / n_seg), e_prev)
-            de = e_prev - e_k
-            l_k = min(max(l_in - s0, 0.0), l_sub)
-            if l_k < l_sub:
-                e_escape += de * (l_sub - l_k) / l_sub
-            if l_k > 0.0 and de > 0.0:
-                pk = (p[0] + u[0] * s0, p[1] + u[1] * s0, p[2] + u[2] * s0)
-                path += l_k
-                cls = CLASS_STEP
-                if self.scorer is not None:
-                    e_lo = math.exp(float(t.ln_e0[m]))
-                    if e_k < e_lo:  # below the table floor: the constant floor state
-                        self.scorer.begin_floor_step(e_lo)
-                        cls = CLASS_STEP | CLASS_RESIDUAL_FLOOR
-                    else:
-                        self.scorer.begin_step(0.5 * (e_prev + e_k), de, l_sub)
-                for g in range(len(self.grids)):
-                    self._deposit_leg(batch, g, pk, u, l_k, de, l_sub, 0.0, 1.0, 1.0, cls)
-            e_prev = e_k
-            j += 1
-        return e_escape, path
+        n_cross = 0
+        while True:
+            m = int(self.mat[jx, jy, jz])
+            rho = float(self.dens[jx, jy, jz])
+            r_in = self._residual_range(m, e_prev)
+            l_rem = r_in * 10.0 / rho
+            l_world = max(l_in - s_seg, 0.0)
+            stop = l_rem <= l_world
+            leg = l_rem if stop else l_world
+            # the transport voxels of the same medium along the leg (transport traversal)
+            changed = False
+            d_acc = 0.0
+            while True:
+                d_w, axis = F.dda_next_clip(V(r(qx), r(qy), r(qz)), uvec, jx, jy, jz,
+                                            self.origin, self.spacing, self.z_clip)  # fmt: skip
+                d_geo = float(d_w)
+                d_next = d_acc + d_geo
+                if d_next >= leg or axis == 3:
+                    break
+                if n_cross >= self.max_pieces:  # fail closed: the rest in this medium
+                    self.counters["scoring_pieces_overflow"] += 1
+                    break
+                n_cross += 1
+                upward = 1 if u[axis] > 0.0 else 0
+                step = 1 if upward else -1
+                qx, qy, qz = qx + u[0] * d_geo, qy + u[1] * d_geo, qz + u[2] * d_geo
+                idx = (jx, jy, jz)[axis]
+                plane = float(F.plane_position(idx, upward, r(o[axis]), r(sp[axis])))
+                if axis == 0:
+                    qx, jx = plane, jx + step
+                elif axis == 1:
+                    qy, jy = plane, jy + step
+                else:
+                    qz, jz = plane, jz + step
+                if not (0 <= jx < nx and 0 <= jy < ny and 0 <= jz < nz):
+                    break  # the world boundary (l_in) ends the leg
+                if int(self.mat[jx, jy, jz]) != m or float(self.dens[jx, jy, jz]) != rho:
+                    leg, stop, changed = d_next, False, True  # a new leg in the new medium
+                    break
+                d_acc = d_next
+            n_leg = 1
+            if l_rem > 0.0:
+                n_leg = min(max(int(math.ceil(n_sub * leg / l_rem)), 1), n_sub)
+            l_sub = leg / n_leg
+            r_end = 0.0 if stop else max(r_in - leg * rho / 10.0, 0.0)
+            for j in range(n_leg):
+                s0 = s_seg + j * l_sub
+                e_k = 0.0
+                if not stop or j < n_leg - 1:
+                    r_k = r_end + (r_in - r_end) * (n_leg - 1 - j) / n_leg
+                    e_k = min(self._residual_energy(m, r_k), e_prev)
+                if l_sub <= 0.0:
+                    e_k = e_prev  # an empty leg deposits nothing
+                de = e_prev - e_k
+                if de > 0.0:
+                    pk = (p[0] + u[0] * s0, p[1] + u[1] * s0, p[2] + u[2] * s0)
+                    path += l_sub
+                    cls = CLASS_STEP
+                    if self.scorer is not None:
+                        e_lo = math.exp(float(t.ln_e0[m]))
+                        if e_k < e_lo:  # below the table floor: the constant floor state
+                            self.scorer.begin_floor_step(e_lo)
+                            cls = CLASS_STEP | CLASS_RESIDUAL_FLOOR
+                        else:
+                            self.scorer.begin_step(0.5 * (e_prev + e_k), de, l_sub)
+                    for g in range(len(self.grids)):
+                        self._deposit_leg(batch, g, pk, u, l_sub, de, l_sub, 0.0, 1.0, 1.0, cls)
+                e_prev = e_k
+            s_seg += leg
+            if not changed:
+                if not stop:
+                    e_escape = e_prev  # the energy left at the world boundary
+                return e_escape, path
 
     def _deposit_point_grid(
         self, batch: int, g: int, pos: tuple[float, float, float], de: float

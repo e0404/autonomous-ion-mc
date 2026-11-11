@@ -241,7 +241,11 @@ PRE_STEPPING_SHA256 = {
     ("carbon12", "python"): "0ca74783ff3581e303df216fb344d92f8bb256a929b287a05b09a7faaa96d9f7",
 }
 PRE_STEPPING_STRAGGLED_SHA256 = "edad86e9caaa23f72d7f634b49e79f017b20dada0d50d9ae9c509663d978e806"
-PRE_STEPPING_ESCAPE_SHA256 = "129c16bbe5e1f173f7f6f1b9817954adfbf1f24b3606371994f8c20335ab6a2c"
+# the clipped (escape) run changed with the exact voxel walk of REVIEW-b6484e56: the leg cut by
+# the world boundary is refined over its own length and the escaped energy is the table energy at
+# the range left at the boundary (before: the 32-sub-step grid of the full range, the crossing
+# sub-step's energy split linearly by length); pinned with the code of the exact walk
+EXACT_WALK_ESCAPE_SHA256 = "edd0c2667039017177a526ee2555082b6784c291dcdad5876090923518ae6712"
 
 
 def _sha(a: np.ndarray) -> str:
@@ -264,8 +268,8 @@ def test_homogeneous_straggled_and_escape_runs_are_bit_identical(low_domain) -> 
     assert _sha(prof) == PRE_STEPPING_STRAGGLED_SHA256
     for backend in ("warp-cpu", "python"):
         res, prof = _profile(_config(ALPHA, backend=backend, depth=0.2, n_cells=20))
-        assert _sha(prof) == PRE_STEPPING_ESCAPE_SHA256
-        assert res.energy_balance.escaped_mev == 60.76307893690172
+        assert _sha(prof) == EXACT_WALK_ESCAPE_SHA256
+        assert res.energy_balance.escaped_mev == 60.76560568262535
 
 
 def _residual_e(tab, m: int, r_g: float) -> float:
@@ -297,12 +301,16 @@ def _two_material_config(backend: str, second, frac: float = 0.4, n: int = 4):
     return replace(base, geometry=geo, scoring=(grid,)), z_b
 
 
+@pytest.mark.parametrize("backend", ["warp-cpu", "python"])
+@pytest.mark.parametrize("frac", [0.1, 0.5, 0.9])
 @pytest.mark.parametrize("second", [BONE_COMPACT_ICRU, ALUMINIUM], ids=lambda m: m.name)
-def test_residual_steps_through_materials(low_domain, second) -> None:
-    """F2: the boundary lies inside the residual range. Energy is conserved; beyond the first
-    sub-step start in the second material the cumulative deposit follows that material's table
-    from the energy left there; the python reference equals warp-cpu."""
-    cfg, z_b = _two_material_config("warp-cpu", second)
+def test_residual_steps_through_materials(low_domain, second, frac, backend) -> None:
+    """F2 / REVIEW-b6484e56: the boundary lies at 10 %, 50 % or 90 % of the residual range. The
+    exact voxel walk switches material at the boundary itself: the energy there is the water
+    table energy at the range left, the end point is that of the second material's table from
+    it (within one scoring cell), the cumulative deposit beyond the boundary follows the second
+    material's table, and energy is conserved."""
+    cfg, z_b = _two_material_config(backend, second, frac=frac)
     eff = validate(cfg)
     tab = eff.tables
     res, prof = _profile(cfg)
@@ -310,36 +318,78 @@ def test_residual_steps_through_materials(low_domain, second) -> None:
     assert res.valid
     assert b.escaped_mev == 0.0
     assert abs(b.closure_residual_mev) < 1e-9 * b.initial_mev
-    assert prof.sum() == pytest.approx(E0_U * ALPHA.a, rel=1e-9)
-    # the water segment from the cutoff point
+    deposited = prof.sum() * cfg.run.n_histories + b.quantization_mev[0]  # pieces round
+    assert deposited == pytest.approx(b.initial_mev, rel=1e-12)
+    # the water leg from the cutoff point up to the boundary
     e_res = b.cutoff_mev / cfg.run.n_histories
     r_w = _residual_r(tab, 0, e_res)
     z_cut = (tab.range_g_cm2(0, E0_U * ALPHA.a) - r_w) * 10.0 / WATER.density_g_cm3
-    n_sub = cfgmod.RESIDUAL_SUBSTEPS
-    l_w = r_w * 10.0 / WATER.density_g_cm3 / n_sub
-    j = next(k for k in range(n_sub) if z_cut + k * l_w >= z_b)
-    assert 0 < j < n_sub - 1
-    e_j = _residual_e(tab, 0, r_w * (n_sub - j) / n_sub)
-    z_j = z_cut + j * l_w
+    assert z_cut < z_b < z_cut + r_w * 10.0 / WATER.density_g_cm3
+    e_b = _residual_e(tab, 0, r_w - (z_b - z_cut) * WATER.density_g_cm3 / 10.0)
     rho2 = second.density_g_cm3
-    r2 = _residual_r(tab, 1, e_j)
-    z_end = z_j + r2 * 10.0 / rho2
+    r2 = _residual_r(tab, 1, e_b)
+    z_end = z_b + r2 * 10.0 / rho2
     last = int(np.nonzero(prof > 0)[0].max())
     assert abs(last - int(math.floor(z_end / CELL))) <= 1
-    first = int(math.ceil(z_j / CELL))
-    checked = 0
+    first = int(math.ceil(z_b / CELL))
     for c in range(first, last + 1):
-        r_rem = r2 - (c * CELL - z_j) * rho2 / 10.0
+        r_rem = r2 - (c * CELL - z_b) * rho2 / 10.0
         assert prof[c:].sum() == pytest.approx(_residual_e(tab, 1, r_rem), abs=3e-3 * e_res)
-        checked += 1
-    assert checked >= 2
-    assert prof[first:].sum() <= e_j + 1e-9
-    # the segment length is that of the second material, not the water continuation
-    z_end_water = z_j + _residual_r(tab, 0, e_j) * 10.0 / WATER.density_g_cm3
-    assert abs(z_end_water - z_end) > 2.0 * CELL
-    cfg_py, _ = _two_material_config("python", second)
-    _r, prof_py = _profile(cfg_py)
-    np.testing.assert_allclose(prof, prof_py, rtol=0, atol=1e-8)
+    assert prof[first:].sum() <= e_b + 1e-9
+    if backend == "warp-cpu":  # python == warp-cpu
+        cfg_py, _ = _two_material_config("python", second, frac=frac)
+        _r, prof_py = _profile(cfg_py)
+        np.testing.assert_allclose(prof, prof_py, rtol=0, atol=1e-8)
+
+
+def _thin_slab_config(backend: str, second, n: int = 2):
+    """Water with one transport layer of ``second`` inside the residual range, half a residual
+    sub-step thick (layers and scoring cells of that thickness, so the slab is one cell)."""
+    base = _config(ALPHA, backend=backend, n=n)
+    eff = validate(base)
+    tab = eff.tables
+    r0 = tab.range_g_cm2(0, E0_U * ALPHA.a) * 10.0
+    r_cut = tab.range_g_cm2(0, eff.e_cut_mev) * 10.0
+    t = r_cut / cfgmod.RESIDUAL_SUBSTEPS / 2.0
+    k = round((r0 - r_cut + 0.3 * r_cut) / t)
+    n_z = int(math.ceil((r0 + r_cut) / t))
+    ids = np.zeros((1, 1, n_z), dtype=np.int32)
+    ids[0, 0, k] = 1
+    geo = VoxelGeometry((-1.0, -1.0, 0.0), (2.0, 2.0, t), (1, 1, n_z), (WATER, second), ids)
+    grid = ScoringGrid((-1.0, -1.0, 0.0), (2.0, 2.0, t), (1, 1, n_z))
+    return replace(base, geometry=geo, scoring=(grid,)), k, t
+
+
+@pytest.mark.parametrize("backend", ["warp-cpu", "python"])
+def test_thin_voxel_inside_the_residual_range_is_not_skipped(low_domain, backend) -> None:
+    """REVIEW-b6484e56: a transport voxel of aluminium thinner than one residual sub-step (half
+    of one) inside the residual range receives the table energy loss over its thickness in
+    aluminium from the energy at its entry, and the end point is that of the water table from
+    the energy left behind it; python == warp-cpu."""
+    cfg, k, t = _thin_slab_config(backend, ALUMINIUM)
+    tab = validate(cfg).tables
+    res, prof = _profile(cfg)
+    b = res.energy_balance
+    assert res.valid
+    assert abs(b.closure_residual_mev) < 1e-9 * b.initial_mev
+    deposited = prof.sum() * cfg.run.n_histories + b.quantization_mev[0]  # pieces round
+    assert deposited == pytest.approx(b.initial_mev, rel=1e-12)
+    e_res = b.cutoff_mev / cfg.run.n_histories
+    r_w = _residual_r(tab, 0, e_res)
+    z_cut = (tab.range_g_cm2(0, E0_U * ALPHA.a) - r_w) * 10.0
+    z_b = k * t
+    assert z_cut < z_b and z_b + t < z_cut + r_w * 10.0
+    e_b = _residual_e(tab, 0, r_w - (z_b - z_cut) / 10.0)
+    rho2 = ALUMINIUM.density_g_cm3
+    e_a = _residual_e(tab, 1, _residual_r(tab, 1, e_b) - t * rho2 / 10.0)
+    assert prof[k] == pytest.approx(e_b - e_a, rel=1e-5)
+    z_end = z_b + t + _residual_r(tab, 0, e_a) * 10.0
+    last = int(np.nonzero(prof > 0)[0].max())
+    assert abs(last - int(math.floor(z_end / t))) <= 1
+    if backend == "warp-cpu":
+        cfg_py, _k, _t = _thin_slab_config("python", ALUMINIUM)
+        _r, prof_py = _profile(cfg_py)
+        np.testing.assert_allclose(prof, prof_py, rtol=0, atol=1e-8)
 
 
 def test_clipped_residual_records_an_escape(low_domain) -> None:

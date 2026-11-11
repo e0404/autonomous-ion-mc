@@ -171,20 +171,29 @@ residual energy `E <= E_cut` of a history:
   "local" for the channels). Proton transport is unchanged (bit-identical to before the option).
 * `continuous_residual_v1`: the residual energy is deposited along the straight continuation of
   the current direction (no straggling, no scattering) over the CSDA range of the transport's own
-  table. `RESIDUAL_SUBSTEPS = 32` sub-steps; a segment in a material `m` of density `rho` starting
-  with the energy `E_s` has the range `r_s = R_tab,m(E_s)`, the length `r_s 10 / rho` mm and `n_s`
-  equal sub-steps; sub-step `j` gets `E_tab(r_{j-1}) - E_tab(r_j)` with `r_j = r_s (n_s - 1 - j) /
-  n_s` (`E_tab` the table inverse, `E_tab(0) = 0`), spread uniformly over its length (track-length
-  apportioning in every grid). Below the table floor `E_lo` the table is continued with the
-  constant stopping power of the start-range convention, `E = E_lo r / R(E_lo)`.
-  * Material stepping: at the start of every sub-step inside the world the voxel of the start
-    point is looked up as the transport locates a point (`floor`, clamped). If its material or
-    density differs from the current one, the rest of the segment is recomputed from the current
-    energy `E_k` in the new medium: range `R_tab,new(E_k)`, length `R 10 / rho_new`, divided into
-    the remaining `32 - k` sub-steps (the boundary is resolved to one sub-step; a homogeneous
-    medium has a single segment and is bit-identical to the first implementation).
-  * Escape: the part of the segment beyond the world box (or the `z_exit_mm` plane) is not
-    deposited; its energy is tallied as `escaped`. If any energy escapes, the history ends as an
+  table, walked exactly through the transport geometry (review REVIEW-b6484e56). The
+  continuation is split into legs of constant material and density by the transport's own voxel
+  traversal (`dda_next_clip` from the cutoff point and voxel, with the transport's plane
+  snapping); a leg ends at the first voxel plane behind which the material or the density
+  differs, at the end of the remaining range, or at the world boundary. A leg in a material `m`
+  of density `rho` starting with the energy `E_s` has the remaining range `r_s = R_tab,m(E_s)`
+  (length `l_s = r_s 10 / rho` mm); its length is `L = min(l_s, distance to the medium change or
+  the world boundary)` and the range left at its end `r_e = r_s - L rho / 10` (`r_e = 0` when the
+  leg stops inside). The leg is divided into `n = max(1, ceil(RESIDUAL_SUBSTEPS L / l_s))` equal
+  sub-steps (`RESIDUAL_SUBSTEPS = 32`); sub-step `j` gets `E_tab(r_{j-1}) - E_tab(r_j)` with
+  `r_j = r_e + (r_s - r_e) (n - 1 - j) / n` (`E_tab` the table inverse, `E_tab(0) = 0` at the end
+  of a stopping leg), spread uniformly over its length (track-length apportioning in every grid).
+  Below the table floor `E_lo` the table is continued with the constant stopping power of the
+  start-range convention, `E = E_lo r / R(E_lo)`.
+  * Material stepping: the next leg starts at the crossed plane with the energy left there,
+    `E_tab,m(r_e)`, in the medium of the voxel behind it: range `R_tab,new(E)`, length
+    `R 10 / rho_new`. Every voxel of another medium on the path is entered, however thin (no
+    sampling at sub-step starts). A homogeneous medium has a single leg of 32 sub-steps and is
+    bit-identical to the first implementation (pinned hashes). More than `scoring_pieces` voxel
+    planes crossed by the walk fail closed: the rest continues in the current medium and
+    `scoring_pieces_overflow` (validity) is raised.
+  * Escape: a leg cut by the world box (or the `z_exit_mm` plane) ends there; the energy left at
+    the boundary, `E_tab,m(r_e)`, is not deposited and is tallied as `escaped`. If any energy escapes, the history ends as an
     escape (`end_code` 1) at the boundary-crossing point with the escaped energy (the energy left
     there) as `end_energy_mev`, so `escape_records` contains it; otherwise it ends as `cutoff`
     (code 0) at the cutoff point with the residual energy.

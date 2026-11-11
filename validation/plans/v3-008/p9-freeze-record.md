@@ -222,16 +222,16 @@ placeholder scorer output was deleted unread.
 | File | sha256 |
 |---|---|
 | `src/ionmc/physics/ion_mcs.py` | `42194ccf6ede781b6254a138e8c64aacd8a72cf5385232c9e2758ea82edb9c81` |
-| `src/ionmc/simulation.py` | `4d490ba490f521169d52040476662994b5e06eb24d3fb66f4367f290be7c6c28` |
+| `src/ionmc/simulation.py` | `abbbcd0abf0d0951dffdc3f4f65f1a469447c056389c69f61341d8653da9e733` |
 | `src/ionmc/species.py` | `19df88c722ad93ca65e636b870a4b56b1a80df2e215bee39a7623f441daa2322` |
-| `src/ionmc/transport/kernels.py` | `5fdf6238c9c6b8f0824b7ede810d5a9ad517f8df223ead388fd3b03551d2013a` |
-| `src/ionmc/transport/reference.py` | `08a1198542f59eb85baefdcafc6e9f6c09dbf70aa3b2149e2842827e94b5aea7` |
+| `src/ionmc/transport/kernels.py` | `bd2f177f4fd5706652ecb5c3ba42a1df2a37edb205e9bfb42f8af63a853d410e` |
+| `src/ionmc/transport/reference.py` | `cd56bf0ee837d7337592c12b3eb9f4f287e7732b2b05085bab29972e46258be8` |
 | `src/ionmc/transport/run.py` | `bbfae2a4c1c2168397ab898204ede3bc2d7c92e1968a08b8156a03326217436b` |
 | `src/ionmc/transport/tables.py` | `45542d46fb208ba1ca9ccdcb9e8baea41e47f86a7429b46f8566ad12b1b2619d` |
 | `src/ionmc/transport/tally.py` | `be202f7310e3991bead49fd40e24cef1f5493992044c72aff6c5f8e8826b547c` |
 | `src/ionmc/transport/warp_driver.py` | `bc80fdc5a246fde57ea11fe901a5e864f2fccf4439b348e34c2c1ee34887c2da` |
 | `validation/scripts/ion_em/r2_evaluate.py` | `c35cc031e0f8ccb07cc39e37882aeb332eea19343e21c482f890de4a79114c5a` |
-| `validation/scripts/transport/steps_v8.py` | `8e951eadd857fb276a930ad636750b6cf576ab92b16782187d0db1bc5d59f29d` |
+| `validation/scripts/transport/steps_v8.py` | `c5aefda2e8520c6033431a4059e74eb3261317f222d2d1e4d873406dc77a9bad` |
 | `tests/ionmc/test_ion_mcs_table.py` | `b3fb9992f866238b11243e032f394583775e292cec49601798ef44b54efcb749` |
 | `tests/ionmc/test_v3_008_rows_ci.py` | `ffea9f20976ec2d721067ccf52d5cb9797fad51a5bda7dd224948829c1cade0e` |
 | `tests/ionmc/test_r2_evaluate.py` | `b4903be7fa56998f0737d47b5b34506d6b67b0a77e12dfdd4d19d6e6053f9cd7` |
@@ -587,7 +587,7 @@ placeholder scorer output was deleted unread.
 
 | File | sha256 |
 |---|---|
-| `tests/ionmc/test_ion_end_of_range.py` | `723a3fae6c982ef51730582a5664e7081ecafb264a5d12208257423b9089760c` |
+| `tests/ionmc/test_ion_end_of_range.py` | `e39edaafeb6c616b61cf03bb2e6934182c2b39869df4d7ca9bf57138f58bbd40` |
 | `tests/ionmc/test_r2_statistics_cycle.py` | `b61d36407c1ecf8a35a00428e5efba2ddd725b6710edced95a8ce2acbea25146` |
 | `validation/results/transport/v8r2-topas/records/runs/REF-14a05b26af8573de21d0-c2d0bc54/record.json` | `129c18d61a4f65db1fcda3399a695010a894ac0eee48ab8847b9ab1357d87fce` |
 | `validation/results/transport/v8r2-topas/records/runs/REF-14a05b26af8573de21d0-c2d0bc54/artifacts.json` | `a3d409639bfbe8bdb7f1aefc5455ac95cbfd7ea79ea83b2714ff916136ec5483` |
@@ -617,7 +617,7 @@ placeholder scorer output was deleted unread.
 
 | File | sha256 |
 |---|---|
-| `tests/ionmc/test_run_suite_v8.py` | `e91054199e2c06a69cada18a9b84bdcefc8cab30fa80f4aad5ccac6650fe0313` |
+| `tests/ionmc/test_run_suite_v8.py` | `f060fa10e8f8d77a22144e1c9c4fd977552c1e73e5565700cdc919c4f42f6424` |
 | `validation/results/transport/v8r2-topas/reports/report-only/TL-EM-case1-r2stop3.json` | `345cb265bfc1c6b114c67a10598b34ceb01d07549da4bf892703c05a450b8341` |
 | `validation/results/transport/v8r2-topas/reports/report-only/TL-EM-case2-r2stop3.json` | `6875657cea09e1d33c5586d2f6cddd5f3a18a956a4a61f6e4a067b2a52feb42f` |
 | `validation/results/transport/v8r2-topas/reports/report-only/TL-EM-case3-r2stop3.json` | `6a74aa30462ec92f6e76232ff7f02d34c4387a7e7a822a9df1b4c21cea7d133f` |
@@ -630,6 +630,18 @@ placeholder scorer output was deleted unread.
 
 
 **Dated note (2026-11-11, orchestrator) — entries changed by the R2-STOP3 round-2 commit (Codex REVIEW-00cd55d4: consumed-case guard, material stepping, channel floor semantics, escape record, docs; lv8/hr8 suites):** `src/ionmc/config.py` 8aa37dca… → 85c0f411…; `src/ionmc/transport/kernels.py` 519d1fef… → 5fdf6238…; `src/ionmc/transport/reference.py` e4eceaa0… → 08a11985…; `validation/scripts/ion_em/r2_evaluate.py` e9fd0ea4… → c35cc031…; `validation/scripts/transport/steps_v8.py` e8b73006… → 8e951ead…; `tests/ionmc/test_r2_evaluate.py` 7288ae77… → b4903be7…; `tests/ionmc/test_ion_end_of_range.py` 2da31068… → 723a3fae…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-11, orchestrator) — files added by the R2-STOP3 round-3 commit (D-3 range-attribution script, test and aggregate results; sha256 as committed):**
+
+| File | sha256 |
+|---|---|
+| `tests/ionmc/test_d3_range_attribution.py` | `4124470bdd1832b16b5632475c21d299ced818a44509e4a907ddc4c5aba99bbb` |
+| `validation/results/stopping/v3-008-d3-range-attribution.json` | `be4e253e389d125424a90a4b7f7fe9e4177d6780ad15c491bd8f02683d841489` |
+| `validation/results/stopping/v3-008-d3-range-attribution.md` | `816197c2751b68ff74764819367b8e6dcc59fc7be1e1b70b97abedc4ba2f5f77` |
+| `validation/scripts/ion_em/d3_range_attribution.py` | `b1da49ecfb5e7242e3893a20ca9f99cc9bb11b6094a8fbe548503ec9c2b10d2d` |
+
+
+**Dated note (2026-11-11, orchestrator) — entries changed by the R2-STOP3 round-3 commit (Codex REVIEW-b6484e56: voxel-exact residual walk, docs; lv8/hr8 sharded rows I9/I12/I14/I15/T12-ion):** `src/ionmc/simulation.py` 4d490ba4… → abbbcd0a…; `src/ionmc/transport/kernels.py` 5fdf6238… → bd2f177f…; `src/ionmc/transport/reference.py` 08a11985… → cd56bf0e…; `validation/scripts/transport/steps_v8.py` 8e951ead… → c5aefda2…; `tests/ionmc/test_ion_end_of_range.py` 723a3fae… → e39edaaf…; `tests/ionmc/test_run_suite_v8.py` e9105419… → f060fa10…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.
