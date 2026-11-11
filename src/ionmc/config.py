@@ -119,8 +119,10 @@ class PhysicsOptions:
     decision 0043
     section 4; ``e_cut_mev`` must then stay at its default 2.0 and is not used).
     ``stopping`` supplies the electronic stopping tables (for example an
-    analytic :class:`~ionmc.physics.stopping.BetheStoppingSource`). Below ``e_cut_mev`` the
-    remaining kinetic energy is deposited locally; ``max_step_mm`` bounds the step length;
+    analytic :class:`~ionmc.physics.stopping.BetheStoppingSource`). Below the cutoff the
+    remaining kinetic energy is handled by the selected ``end_of_range_model`` (``point_v1``:
+    deposited at the cutoff point, the proton default; ``continuous_residual_v1``: deposited along
+    the table residual range, the ion default); ``max_step_mm`` bounds the step length;
     ``max_energy_loss_fraction`` bounds the mean energy loss per step as a fraction of the
     kinetic energy; ``range_alpha`` and ``range_rho_f_mm`` parametrise the Geant4 range step
     function; steps shorter than ``short_step_fraction`` of the residual range use the

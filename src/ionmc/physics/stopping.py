@@ -478,9 +478,11 @@ class BetheStoppingSource:
     an approximation, not a bound: the electronic stopping power rises below E_min only
     down to its maximum (around 0.1 MeV/u for protons in water) and falls again at lower
     velocity, so the true residual range below 1 MeV/u can be smaller or larger. The offset
-    is of the order of 0.02 mm of water for protons and is recorded in the table metadata;
-    transport deposits the residual energy locally below E_cut, so it never enters a
-    transported range.
+    is of the order of 0.02 mm of water for protons and is recorded in the table metadata.
+    Transport never steps below E_cut; the residual energy below E_cut is handled by the
+    end-of-range model (``PhysicsOptions.end_of_range_model``): a point deposit (``point_v1``,
+    protons) or a deposit along this table residual range (``continuous_residual_v1``, ions),
+    where the constant-stopping convention below E_min enters as the last part of the segment.
     """
 
     options: BetheOptions = field(default_factory=BetheOptions)

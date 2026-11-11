@@ -96,8 +96,8 @@ evidence for `icru90/z{6,8}_G4_WATER.dat`. This note concerns FC-2 only.
 |---|---|---|
 | `src/ionmc/physics/lindhard_sorensen.py` | `800d1f0a13524af5bad3946032f894479f606ba9b1482bf3ea190eeb9b4d3a6a` | P9 (iii) |
 | `src/ionmc/physics/exact_omega.py` | `6471c388fb75c94e9f2f4f1d19ac94be044f73444cf1e7b4bfb1a62e53ecf57b` | I0/I11-map notes |
-| `src/ionmc/physics/stopping.py` | `89db1de28e5cd1f03efc1622669b58dd766fc88d5d0a91405af190e96094753e` | P9 (iii) |
-| `src/ionmc/config.py` | `85c0f4115a03ef0570373aa087a9ff262a42eb70ddeefa03bd50e8113bc04dc9` | I0 note |
+| `src/ionmc/physics/stopping.py` | `4be0934a76219e4e56d3eb7c329137e5781f75ba923899cc44b0d2dc66cd6c08` | P9 (iii) |
+| `src/ionmc/config.py` | `3da8eaed6bc5d8be539e0cffefeeb8cba8d6036e5d6d8cd168cb8ca4f47b322a` | I0 note |
 | `pyproject.toml` | `0e73bd64aea5ef153e198c00a67c20efbc8ef1a5061f1f77d2bdab555dda9352` | lint exceptions for the two mapping files (added by the planner; the only other changed file outside the plan set) |
 
 ### 2.4 Pre-freeze records
@@ -636,12 +636,14 @@ placeholder scorer output was deleted unread.
 | File | sha256 |
 |---|---|
 | `tests/ionmc/test_d3_range_attribution.py` | `4124470bdd1832b16b5632475c21d299ced818a44509e4a907ddc4c5aba99bbb` |
-| `validation/results/stopping/v3-008-d3-range-attribution.json` | `be4e253e389d125424a90a4b7f7fe9e4177d6780ad15c491bd8f02683d841489` |
+| `validation/results/stopping/v3-008-d3-range-attribution.json` | `04475412a3867e1a33dcf1dfc9de0fb3296bbf2fba5f0c957d7117ef6c3a44b1` |
 | `validation/results/stopping/v3-008-d3-range-attribution.md` | `816197c2751b68ff74764819367b8e6dcc59fc7be1e1b70b97abedc4ba2f5f77` |
 | `validation/scripts/ion_em/d3_range_attribution.py` | `b1da49ecfb5e7242e3893a20ca9f99cc9bb11b6094a8fbe548503ec9c2b10d2d` |
 
 
 **Dated note (2026-11-11, orchestrator) — entries changed by the R2-STOP3 round-3 commit (Codex REVIEW-b6484e56: voxel-exact residual walk, docs; lv8/hr8 sharded rows I9/I12/I14/I15/T12-ion):** `src/ionmc/simulation.py` 4d490ba4… → abbbcd0a…; `src/ionmc/transport/kernels.py` 5fdf6238… → bd2f177f…; `src/ionmc/transport/reference.py` 08a11985… → cd56bf0e…; `validation/scripts/transport/steps_v8.py` 8e951ead… → c5aefda2…; `tests/ionmc/test_ion_end_of_range.py` 723a3fae… → e39edaaf…; `tests/ionmc/test_run_suite_v8.py` e9105419… → f060fa10…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-11, orchestrator) — entries changed by the R2-STOP3 round-4 commit (Codex REVIEW-cd1c66de: D-3 aggregate regenerated with the final script; e_cut docstrings):** `src/ionmc/physics/stopping.py` 89db1de2… → 4be0934a…; `src/ionmc/config.py` 85c0f411… → 3da8eaed…; `validation/results/stopping/v3-008-d3-range-attribution.json` be4e253e… → 04475412…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.
