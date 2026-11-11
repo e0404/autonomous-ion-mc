@@ -914,6 +914,19 @@ requires a record for every sealed run and checks each record's signature, seal 
 the records committed the held-out grader is complete: TD-H / TL-H (rows TD-EM, TD-FULL, TL-EM, TL-FULL of cases
 10–12) are graded once in the next step, at this evaluator, and reported in the following commit.
 
+**4j. One-SHA rule applied to the remaining LV/HR rows (2026-11-11, orchestrator; prospective, before any of these
+rows runs).** Item 4b scheduled the remaining lv8 rows (I9, I12, I14, I15; steps 22–135) and hr8 (T13-ion, T12-ion HR)
+"at the same SHA" as the A-rows (f5f3a701). The controlled host runner executes the task worktree's current clean
+HEAD only, and HEAD has moved past f5f3a701 by evaluator, test, record and plan commits only: `git diff --stat
+f5f3a701 HEAD -- src validation/scripts/transport pyproject.toml uv.lock` is empty at the commit carrying this note,
+i.e. the implementation and the suite scripts are byte-identical to the frozen implementation SHA. The remaining
+rows therefore run at the HEAD of the commit carrying this note (recorded with every host run id in the host ledger
+and in the dated results note that follows), with `--expected-sha` set to that HEAD; the sharded rows and their
+combine steps run at that one HEAD (the partials bind the SHA), and no commit is made to the task branch while the
+block is in flight. The tolerances, observables, history counts (item 4c) and seeds (lv8 base 20581004, hr8 base
+20591004, r_index per `steps_v8.ROW_R_INDEX`) are unchanged. This satisfies the one-SHA rule in substance (one
+implementation) and is recorded here because the letter of item 4b named f5f3a701.
+
 **5. Order from here (pre-registered).** Implementation + estimator rule + this amendment in one reviewed commit (new
 frozen SHA) → A-rows at that SHA → held-out samples (13 chunks) → held-out seal commit + review + dated seal note →
 48 held-out TOPAS parts (IDD-EM, LAT-EM, IDD-FULL, LAT-FULL per case) → TD-H, TL-H graded once → V5-SS → report-only
