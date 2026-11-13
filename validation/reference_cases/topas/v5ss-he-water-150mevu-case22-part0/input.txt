@@ -7,6 +7,8 @@ i:Ts/MaxStepNumber = 100000000
 b:Ts/ShowCPUTime = "True"
 # Tracking verbosity 0: no per-step output.
 i:Ts/TrackingVerbosity = 0
+# Run verbosity 2: printout of the production-cut couple table so that the e- threshold >= 1.16 MeV can be read from the log; execution/printout only.
+i:Ts/RunVerbosity = 2
 
 # Geometry (V5-SS design, P10): 120 x 120 x 1 mm G4_WATER slab (z 0..1 mm), entrance face at z = 0, beam axis = +z through the face centre.
 s:Ge/World/Material = "Vacuum"

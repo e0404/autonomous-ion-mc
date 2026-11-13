@@ -131,9 +131,17 @@ def test_seeds_histories_and_particles():
 def test_smoke_bundle():
     d = TOPAS / SMOKE
     c = json.loads((d / "case.json").read_text())
-    assert c["seeds"] == [20600438] and c["histories"] == 200
+    assert c["seeds"] == [20600439] and c["histories"] == 200
     assert "not evidence" in c["rationale"] and "angles never used" in c["rationale"]
     assert _native(d, "d:So/Beam/BeamEnergy") == "1000 MeV"
+    assert "20600438" in c["rationale"] and "no couple table" in c["rationale"]
+
+
+def test_run_verbosity_in_every_bundle():
+    assert len(BUNDLES) == 17
+    for d in BUNDLES:
+        lines = (d / "input.txt").read_text().splitlines()
+        assert lines.count("i:Ts/RunVerbosity = 2") == 1, d.name
 
 
 def test_only_seed_histories_particle_energy_scorer_differ_from_the_1mm_smoke():
@@ -151,6 +159,6 @@ def test_only_seed_histories_particle_energy_scorer_differ_from_the_1mm_smoke():
         new = params((d / "input.txt").read_text())
         diff = {k for k in old.keys() | new.keys() if old.get(k) != new.get(k)}
         allowed = {"i:Ts/Seed", "i:So/Beam/NumberOfHistoriesInRun", "s:So/Beam/BeamParticle",
-                   "d:So/Beam/BeamEnergy"}  # fmt: skip
+                   "d:So/Beam/BeamEnergy", "i:Ts/RunVerbosity"}  # fmt: skip
         assert {k for k in diff if "/Sc/" not in k and not k.startswith(("s:Sc", "i:Sc", "b:Sc",
                 "sv:Sc"))} <= allowed, d.name  # fmt: skip

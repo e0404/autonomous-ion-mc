@@ -292,4 +292,3 @@ git-ignored) and in the protected host-run store. Binding rule SS-SEAL-1 (plan e
 TOPAS run (smoke or evidence) is valid unless its `code_sha` descends from the commit holding this record and that commit's
 independent review finished before the run's controlled start; `ss_evaluate.py check-run` / `grade` fail closed otherwise and
 read the seal and review ids from the plan's SS seal note. Not a clinical claim.
-

@@ -145,7 +145,7 @@ _COLUMN = re.compile(r"^\s*(\d+):\s*(.*?)\s*$")
 _ORIGINAL = re.compile(r"^\s*Number of Original Histories:\s*(\d+)\s*$", re.M)
 _SCORED = re.compile(r"^\s*Number of Scored Particles:\s*(\d+)\s*$", re.M)
 _CS_HEAD = re.compile(r"^CoulombScat:\s+for\s+(\S+)\s", re.M)
-_ANY_MSC = re.compile(r"^msc:\s+for\s+", re.M)
+_MSC_HEAD = re.compile(r"^msc:\s+for\s+(\S+)", re.M)  # per-particle msc block header
 _ETHRESH = re.compile(r"Energy thresholds\s*:.*?\be-\s+([0-9.eE+-]+)\s*(eV|keV|MeV|GeV|TeV)")
 _UNIT_MEV = {"eV": 1e-6, "keV": 1e-3, "MeV": 1.0, "GeV": 1e3, "TeV": 1e6}
 
@@ -586,7 +586,24 @@ def electron_threshold_mev(stdout: str) -> list[float]:
     return [float(v) * _UNIT_MEV[u] for v, u in _ETHRESH.findall(stdout)]
 
 
+def msc_info(stdout: str) -> dict[str, Any]:
+    """Multiple-scattering facts of a log: particles that have an ``msc:  for <particle>`` block and
+    whether the global "Registered Physics Processes" table lists ``msc`` (that table names
+    processes only, not the particle, so a listed ``msc`` is informational: the physics list may
+    attach it to e-/e+ while the beam particle uses single scattering only)."""
+    names = io.registered_processes(stdout)
+    return {
+        "msc_blocks_for": sorted(set(_MSC_HEAD.findall(stdout))),
+        "registered_msc_entry": None if names is None else "msc" in names,
+    }
+
+
 def log_checks(stdout: str, stderr: bytes, histories: int, particle: str) -> list[str]:
+    """Run-validity problems of a TOPAS log (empty = valid). Single-scattering rule is per beam
+    particle: fail if an ``msc:  for <beam particle>`` block exists, if ``CoulombScat`` is not in
+    the registered list, or if the beam particle's CoulombScat models are not exactly
+    ``IonCoulombScattering``. An msc block for another particle (e-, e+) or a global ``msc`` entry
+    in the registered table is recorded by :func:`msc_info`, not a failure."""
     problems = []
     if stderr.strip():
         problems.append("stderr is not empty")
@@ -597,13 +614,13 @@ def log_checks(stdout: str, stderr: bytes, histories: int, particle: str) -> lis
     if not found or any(v != histories for v in found):
         problems.append(f"histories completed {found} != {histories}")
     models = coulomb_models(stdout, particle)
-    if not models or any(m != "IonCoulombScattering" for m in models):
+    if models != ["IonCoulombScattering"]:
         problems.append(f"CoulombScat models for {particle} are {models}, not IonCoulombScattering")
-    if _ANY_MSC.search(stdout):
-        problems.append("an msc process block is printed (single scattering only expected)")
+    if particle in msc_info(stdout)["msc_blocks_for"]:
+        problems.append(f"an msc process block is printed for the beam particle {particle}")
     names = io.registered_processes(stdout)
-    if names is None or "msc" in names or "CoulombScat" not in names:
-        problems.append("process list absent, lists msc or lacks CoulombScat")
+    if names is None or "CoulombScat" not in names:
+        problems.append("process list absent or lacks CoulombScat")
     thr = electron_threshold_mev(stdout)
     if not thr or min(thr) < E_CUT_MIN_MEV:
         problems.append(f"e- energy thresholds {thr} MeV not all >= {E_CUT_MIN_MEV} MeV")
@@ -637,7 +654,13 @@ def check_one(
     verdict = (
         "BLINDING FAIL" if not chron["valid"] else "RUN-VALIDITY FAIL" if problems else "VALID"
     )
-    return {"verdict": verdict, "chronology": chron, "problems": problems, "angles": angles}
+    return {
+        "verdict": verdict,
+        "chronology": chron,
+        "problems": problems,
+        "angles": angles,
+        **msc_info(stdout),
+    }
 
 
 def check_run(
@@ -670,6 +693,8 @@ def check_run(
         "part": info["part"],
         "verdict": res["verdict"],
         "problems": res["problems"],
+        "msc_blocks_for": res["msc_blocks_for"],
+        "registered_msc_entry": res["registered_msc_entry"],
         "chronology": res["chronology"],
         "ss_seal_sha": plan["seal_sha"],
         "ss_seal_review_id": review["review_id"],

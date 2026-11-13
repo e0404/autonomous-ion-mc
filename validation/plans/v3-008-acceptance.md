@@ -1289,3 +1289,20 @@ read the block below and fail closed otherwise. The scorer smoke (seed 20600438)
 ```json
 {"ss_seal_sha": "7fe6ab1d7b7eb18ab377156e0551057264fba40b", "ss_seal_review_id": "REVIEW-5d9e8df442e94669aef5fe609794b608"}
 ```
+
+**Dated note (2026-11-13, orchestrator) — scorer smoke result and bundle regeneration (pre-declared route of the execution note).**
+The scorer smoke `v5ss-helium-water-250mevu-scorer-smoke` (seed 20600438) ran at `code_sha` 677e7c27 after the SS seal review
+(REF-740144c3826978e4ea78-ef394dd8, 2026-11-13 06:34:06–06:34:08 UTC, exit 0, 1.4 s): every PhaseSpace parameter was accepted;
+the `.header` column list equals the evaluator's expected ten columns (X, Y, Z [cm], cosX, cosY, E [MeV], weight, PDG, the
+negative-w flag, the first-scored flag); 200 of 200 primaries reached the surface and were scored once (PDG 1000020040, Z = 0.1 cm
+in world coordinates, flags 0/1, cosines printed with six significant digits); `CoulombScat` for alpha and GenericIon with
+`IonCoulombScattering` only and no `msc` block for any particle. Two log checks of `ss_evaluate.py` could not be satisfied by
+this bundle: the log prints no production-cut couple table (so the e⁻ threshold ≥ 1.16 MeV cannot be read), and the global
+"Registered Physics Processes" table lists an `msc` entry (for a particle other than the beam particle; no per-particle msc
+block exists). Resolution, both execution/printout-level: (i) every V5-SS bundle gains `i:Ts/RunVerbosity = 2` (the setting of the
+committed r2 verbose smoke, which prints the couple table with the e⁻ threshold); the 17 bundles and the SS manifest are
+regenerated (seeds, physics, geometry, scorer unchanged), and the scorer smoke is re-run at the reserved seed **20600439**;
+(ii) the evaluator's process-list rule becomes per beam particle (fail on an `msc: for <beam particle>` block, on a missing
+`CoulombScat`, or on a model other than `IonCoulombScattering`; a global `msc` entry for another particle is recorded, not a
+failure). The angles of the smokes are never used. No evidence run has started; the 16 evidence parts run at the regenerated
+commit (a descendant of the seal commit, after its review).

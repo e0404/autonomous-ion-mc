@@ -50,7 +50,7 @@ CASES: dict[int, tuple[str, int, int, str]] = {
     31: ("oxygen", 250, 16, "GenericIon(8,16)"),
 }
 SMOKE_NAME = "v5ss-helium-water-250mevu-scorer-smoke"
-SMOKE_SEED = 20600438  # rehearsal family; 20600439 reserved for one re-smoke
+SMOKE_SEED = 20600439  # re-smoke (first scorer smoke 20600438 showed no couple table in the log)
 SMOKE_HISTORIES = 200
 SMOKE_CASE = 28  # He 250 configuration
 
@@ -104,7 +104,9 @@ def build(case: int, seed: int, histories: int, kind: str, part: int | None = No
         )
         rationale = (
             "execution-only scorer smoke: parameter acceptance, header/column layout and "
-            "precision; angles never used; not evidence"
+            "precision; angles never used; not evidence; re-smoke after the first scorer smoke "
+            "20600438 (REF-740144c3826978e4ea78-ef394dd8) showed every parameter accepted but no "
+            "couple table in the log"
         )
     inp = [
         f"# Native OpenTOPAS 4.3 input. {head} No validation claim.",
@@ -118,6 +120,9 @@ def build(case: int, seed: int, histories: int, kind: str, part: int | None = No
         'b:Ts/ShowCPUTime = "True"',
         "# Tracking verbosity 0: no per-step output.",
         "i:Ts/TrackingVerbosity = 0",
+        "# Run verbosity 2: printout of the production-cut couple table so that the e- threshold "
+        ">= 1.16 MeV can be read from the log; execution/printout only.",
+        "i:Ts/RunVerbosity = 2",
         "",
         "# Geometry (V5-SS design, P10): 120 x 120 x 1 mm G4_WATER slab (z 0..1 mm), entrance face "
         "at z = 0, beam axis = +z through the face centre.",

@@ -9,13 +9,13 @@
   "cuts": "CutForAllParticles = 0.05 mm; CutForElectron = 1 km (e- energy cut >= 1.16 MeV required, checked in the couple table); EMRangeMax = 10 GeV; Ts/MaxStepNumber = 1e8",
   "histories": 200,
   "seeds": [
-    20600438
+    20600439
   ],
   "scorers": [
     "PhaseSpace SSExit at Water/ZPlusSurface, primaries, outgoing, ASCII"
   ],
   "units": "cm; direction cosines; MeV",
-  "rationale": "execution-only scorer smoke: parameter acceptance, header/column layout and precision; angles never used; not evidence",
+  "rationale": "execution-only scorer smoke: parameter acceptance, header/column layout and precision; angles never used; not evidence; re-smoke after the first scorer smoke 20600438 (REF-740144c3826978e4ea78-ef394dd8) showed every parameter accepted but no couple table in the log",
   "expected_outputs": [
     "ss_exit.phsp",
     "ss_exit.header"

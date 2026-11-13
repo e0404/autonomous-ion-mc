@@ -190,12 +190,22 @@ def _stdout(n: int, particle: str = "alpha", model: str = "IonCoulombScattering"
 def test_log_checks() -> None:
     assert SS.log_checks(_stdout(5), b"", 5, "alpha") == []
     assert SS.log_checks(_stdout(5, "GenericIon"), b"", 5, "GenericIon") == []
+    # a global msc table entry without an msc block for the beam particle passes
+    glob = _stdout(5).replace("ionIoni", "msc")
+    assert SS.log_checks(glob, b"", 5, "alpha") == []
+    assert SS.msc_info(glob) == {"msc_blocks_for": [], "registered_msc_entry": True}
+    # an msc block for e- is recorded, not a failure
+    ele = _stdout(5) + "msc:  for e-  SubType= 10\n"
+    assert SS.log_checks(ele, b"", 5, "alpha") == []
+    assert SS.msc_info(ele)["msc_blocks_for"] == ["e-"]
+    assert SS.msc_info(_stdout(5))["registered_msc_entry"] is False
     bad = [
         SS.log_checks(_stdout(5), b"x", 5, "alpha"),
         SS.log_checks(_stdout(4), b"", 5, "alpha"),
         SS.log_checks(_stdout(5, model="eCoulombScattering"), b"", 5, "alpha"),
         SS.log_checks(_stdout(5) + "msc:  for alpha  SubType= 10\n", b"", 5, "alpha"),
-        SS.log_checks(_stdout(5).replace("ionIoni", "msc"), b"", 5, "alpha"),
+        SS.log_checks(_stdout(5).replace("CoulombScat,", "ionIoni,"), b"", 5, "alpha"),
+        SS.log_checks(_stdout(5) + "msc:  for GenericIon  SubType= 10\n", b"", 5, "GenericIon"),
         SS.log_checks(_stdout(5).replace("9.55 GeV", "990 keV"), b"", 5, "alpha"),
         SS.log_checks(_stdout(5) + "track killed\n", b"", 5, "alpha"),
         SS.log_checks(_stdout(5), b"", 5, "GenericIon"),
