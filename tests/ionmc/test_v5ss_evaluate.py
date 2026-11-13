@@ -402,8 +402,11 @@ def test_ss_note_parsing() -> None:
         with pytest.raises(SS.RecordError):
             SS.parse_ss_note(text)
     plan = (ROOT / "validation" / "plans" / "v3-008-acceptance.md").read_text()
-    with pytest.raises(SS.RecordError):  # no SS seal note before the seal commit
-        SS.parse_ss_note(plan)
+    committed = SS.parse_ss_note(plan)  # the dated SS seal note of 2026-11-13
+    assert committed == {
+        "seal_sha": "7fe6ab1d7b7eb18ab377156e0551057264fba40b",
+        "seal_review_id": "REVIEW-5d9e8df442e94669aef5fe609794b608",
+    }
     assert IO.parse_seal_note(plan)["seal_sha"].startswith("0c68b78a")  # r2 note unaffected
 
 

@@ -1159,6 +1159,13 @@ placeholder scorer output was deleted unread.
 | `validation/results/transport/v8-ss/host-records/RUN-20261113T054735Z-bffb353f.json` | `ade92b61b188f20680e7012fd6d0bc4229fd0d993a102a7e09a4e02c36508759` |
 | `validation/results/transport/v8-ss/host-records/RUN-20261113T054825Z-23a819d9.json` | `a45d22498244262c3961fe3b10fe898080286b99bf6fddc62a2f7ea048b25c22` |
 
+
+**Dated note (2026-11-13, orchestrator) — files added by the SS seal-note commit (the review record of the V5-SS seal commit 7fe6ab1d, REVIEW-5d9e8df4; sha256 as committed):**
+
+| File | sha256 |
+|---|---|
+| `validation/results/transport/v8-ss/ss-seal-review.json` | `8836b102174408980679cf679ace280cd7d2ac5044b61ab8231dff6d4f7e7f52` |
+
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.

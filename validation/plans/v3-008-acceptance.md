@@ -1277,4 +1277,15 @@ render_wrapper(case, sha, "v5ss-samples", "1")]`); evaluator `validation/scripts
 (per part) He 150 528 (264), C 150 1740 (870), O 150 2023 (1012), C 250 1454 (727), He 250 378 (189), C 430 1209 (604),
 O 430 1514 (757), O 250 1752 (876); total 10 596 s = 2.94 h, every part ≤ 1200 s; ionmc ≈ 1–10 min per call (inferred).
 
-The SS seal note (seal SHA, review id, finished_at) follows in the seal commit.
+**Dated SS seal note (2026-11-13, orchestrator; written after the independent review of the SS seal commit finished and
+BEFORE any V5-SS TOPAS run, smoke or evidence).** The SS seal commit is `7fe6ab1d7b7eb18ab377156e0551057264fba40b` (seal record
+`validation/results/transport/v8-ss/ss-sample-seal.json`, eight ionmc thin-slab samples at implementation SHA bef32873, seed base
+20631004, windows W = 2.5 θ_anchor fixed; the eight signed host-run records committed; validation record VAL-20261113-061649-BF6904).
+Its review REVIEW-5d9e8df442e94669aef5fe609794b608 passed (finished 2026-11-13T06:10:46.335228Z; record
+`validation/results/transport/v8-ss/ss-seal-review.json`, copied verbatim from the review service). Binding rule SS-SEAL-1: every
+V5-SS TOPAS run must start after that time at a `code_sha` descending from the seal commit; `ss_evaluate.py check-run` / `grade`
+read the block below and fail closed otherwise. The scorer smoke (seed 20600438) and the 16 evidence parts follow.
+
+```json
+{"ss_seal_sha": "7fe6ab1d7b7eb18ab377156e0551057264fba40b", "ss_seal_review_id": "REVIEW-5d9e8df442e94669aef5fe609794b608"}
+```
