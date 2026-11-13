@@ -24,6 +24,14 @@ and prints one JSON document (``#JSON-BEGIN`` / ``#JSON-END``) with the sha256 o
 effective-configuration summary, the counters, validity and the energy balance. Every invalid
 result or nonzero counter fails the step. No TD/TL statistic is computed here.
 
+V5-SS ionmc thin-slab samples (row V5-SS, branch B; standalone host calls, not an lv8 step)::
+
+    python validation/scripts/transport/steps_v8.py ss-sample --case N [--k K] [--scale F]
+                                                    [--seed-base 20631004] [--out-dir DIR]
+
+writes ``ionmc-ss-case<N>-k<K>.npz`` (per-primary exit angles) and one step document; see
+:func:`step_ss_sample` and the "V5-SS execution note (2026-11-13)" of the acceptance plan.
+
 Verification rows of plan section A (suites ``lv8`` and ``hr8`` of ``run_suite.py``)::
 
     steps_v8.py {i6-lv,i8,i13,t1-ion,r1-ion,r2,t13-ion} [--point P] [--case-index I] [--scale F]
@@ -201,6 +209,131 @@ def step_td_tl_sample(a: argparse.Namespace) -> int:
         "effective_config": res.effective_config.summary(),
         "pass": bool(res.valid and not any(counters.values())),
     }
+    return base.emit(doc)
+
+
+# == V5-SS ionmc thin-slab samples (plan row V5-SS, branch B; "V5-SS execution note 2026-11-13") ==
+# Seeds ``SS_SEED_BASE + 100 * SS_R_INDEX[case] + k`` (k = chunk index, 0 for the single 4e5 run).
+# SS_SEED_BASE = 20631004 is the declared re-run base ``RERUN_BASE_2`` of plan section C (family
+# ``rerun2``, r_index <= 9, never drawn before), used here for the FIRST V5-SS run by the dated
+# section-C note of 2026-11-13. These r_index values are NOT entries of ``ROW_R_INDEX``: that table
+# indexes the lv8 base 20581004, and the two families are disjoint (20631004-20632003 vs
+# 20581004-20587103; ``tests/ionmc/test_v3_008_seed_families.py``).
+SS_SEED_BASE = 20631004
+SS_CASES: tuple[int, ...] = (22, 25, 26, 27, 28, 29, 30, 31)
+SS_R_INDEX: dict[int, int] = {case: i for i, case in enumerate(SS_CASES)}
+SS_HISTORIES = 400_000
+SS_SLAB_MM = 1.0
+SS_WINDOW_K = 2.5  # = ss_budget.WINDOW_K (the evaluator imports it from there)
+SS_Z_TOL_MM = 1e-9
+# case -> (ion, MeV/u); plan section C dated note 2026-11-01 (branch B case numbers)
+SS_CASE_TABLE: dict[int, tuple[str, float]] = {
+    22: ("he", 150.0), 25: ("carbon", 150.0), 26: ("oxygen", 150.0), 27: ("carbon", 250.0),
+    28: ("he", 250.0), 29: ("carbon", 430.0), 30: ("oxygen", 430.0), 31: ("oxygen", 250.0),
+}  # fmt: skip
+
+
+def ss_seed(case: int, k: int = 0, seed_base: int = SS_SEED_BASE) -> int:
+    """``seed_base + 100 SS_R_INDEX[case] + k`` (``0 <= k <= 99``)."""
+    if case not in SS_R_INDEX:
+        raise ValueError(f"unknown V5-SS case {case}; cases are {SS_CASES}")
+    if not 0 <= k <= K_MAX:
+        raise ValueError(f"chunk index k must be in 0..{K_MAX}")
+    return seed_base + 100 * SS_R_INDEX[case] + k
+
+
+def ss_config(
+    case: int, k: int = 0, *, n_histories: int = SS_HISTORIES, seed_base: int = SS_SEED_BASE,
+    backend: str = "warp-cpu",
+) -> SimulationConfig:  # fmt: skip
+    """The V5-SS ionmc configuration of ``case``: the default all-EM physics of
+    :func:`sample_config` (MCS on, straggling on, nuclear off, Bethe stopping, ``ls = "off"``,
+    default step controls), warp-cpu float64, 40 batches, a pencil beam from z = -0.001 mm on the
+    axis into the 120 x 120 x 1 mm water slab (the TOPAS slab), one dummy 1-bin grid (content
+    unused) and the escape records."""
+    ion, e_u = SS_CASE_TABLE[case]
+    proj = IONS[ion]
+    half = FIELD_MM / 2.0
+    return SimulationConfig(
+        source=PencilBeamSource(proj, (0.0, 0.0, SOURCE_Z_MM), (0.0, 0.0, 1.0), e_u * proj.a),
+        geometry=BoxPhantom((-half, -half, 0.0), (FIELD_MM, FIELD_MM, SS_SLAB_MM), WATER),
+        scoring=(
+            ScoringGrid(
+                (-half, -half, 0.0), (FIELD_MM, FIELD_MM, SS_SLAB_MM), (1, 1, 1), name="slab"
+            ),
+        ),
+        physics=PhysicsOptions(nuclear=False, stopping=BetheStoppingSource()),
+        run=RunOptions(
+            backend=backend,  # type: ignore[arg-type]
+            precision="float64",
+            seed=ss_seed(case, k, seed_base),
+            n_histories=n_histories,
+            n_batches=N_BATCHES,
+            memory_budget_bytes=MEMORY_BUDGET_BYTES,
+        ),
+        diagnostics=DiagnosticsOptions(escape_records=True),
+    )
+
+
+def pooled_rms(tx: np.ndarray, ty: np.ndarray, window: float | None = None) -> tuple[float, int]:
+    """Pooled projected rms about zero of x and y, optionally restricted to ``|theta| <= window``:
+    sqrt(sum[tx^2 1(|tx|<=W) + ty^2 1(|ty|<=W)] / sum[1(|tx|<=W) + 1(|ty|<=W)]). Returns
+    (rms, number of projections used)."""
+    t = np.concatenate([np.asarray(tx, np.float64), np.asarray(ty, np.float64)])
+    if window is not None:
+        t = t[np.abs(t) <= window]
+    if t.size == 0:
+        raise ValueError("no projection inside the window")
+    return float(np.sqrt(np.mean(t * t))), int(t.size)
+
+
+def step_ss_sample(a: argparse.Namespace) -> int:
+    """One V5-SS ionmc thin-slab sample (the SS-seal artefact; no V5-SS statistic is graded).
+
+    Exit angles of every primary at the far face: theta_x = atan2(u_x, u_z), theta_y =
+    atan2(u_y, u_z) from the escape records. No secondary track exists under this configuration
+    (nuclear off; ionmc transports no delta rays or other secondaries without the nuclear
+    channels), so the diagnostics hold exactly one end record per history; the step verifies it
+    (escape histories == 0..n-1) instead of assuming it. Valid only if ``res.valid``, every
+    counter is 0, every history escaped, every exit z is within 1e-9 mm of 1 mm and u_z > 0
+    (exit through the far face); otherwise ``pass`` is false and the exit status 1."""
+    n = max(N_BATCHES, int(round(SS_HISTORIES * a.scale / N_BATCHES)) * N_BATCHES)
+    cfg = ss_config(a.case, a.k, n_histories=n, seed_base=a.seed_base)
+    t0 = time.perf_counter()
+    res = Simulation(cfg).run()
+    wall = time.perf_counter() - t0
+    d = res.diagnostics
+    hist = np.asarray(d["escape_history"], dtype=np.int64)
+    pos = np.asarray(d["escape_position_mm"], dtype=np.float64)
+    u = np.asarray(d["escape_direction"], dtype=np.float64)
+    problems = []
+    if hist.size != n or not np.array_equal(hist, np.arange(n)):
+        problems.append(f"escape records {hist.size} != histories {n} (or not one per history)")
+    if u.size and not np.all(u[:, 2] > 0.0):
+        problems.append("a primary left with u_z <= 0")
+    if pos.size and not np.all(np.abs(pos[:, 2] - SS_SLAB_MM) <= SS_Z_TOL_MM):
+        problems.append("an exit z differs from the far face by more than 1e-9 mm")
+    tx, ty = np.arctan2(u[:, 0], u[:, 2]), np.arctan2(u[:, 1], u[:, 2])
+    anchor, _ = pooled_rms(tx, ty) if hist.size else (float("nan"), 0)
+    window = SS_WINDOW_K * anchor
+    theta_w, n_in = pooled_rms(tx, ty, window) if hist.size else (float("nan"), 0)
+    out = Path(a.out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    npz = out / f"ionmc-ss-case{a.case}-k{a.k}.npz"
+    np.savez_compressed(npz, theta_x=tx, theta_y=ty, z_exit_mm=pos[:, 2] if pos.size else pos,
+                        escape_history=hist, theta_rms_untruncated=np.float64(anchor))  # fmt: skip
+    counters = res.counters.as_dict()
+    ok = bool(res.valid and not any(counters.values()) and not problems)
+    doc = {
+        "format": FORMAT, "row": "v5ss", "case": a.case, "r_index": SS_R_INDEX[a.case],
+        "k": a.k, "seed": cfg.run.seed, "histories": n, "frozen_histories": SS_HISTORIES,
+        "reduced": n != SS_HISTORIES, "backend": cfg.run.backend,
+        "precision": cfg.run.precision, "valid": bool(res.valid), "counters": counters,
+        "npz": npz.name, "npz_sha256": hashlib.sha256(npz.read_bytes()).hexdigest(),
+        "wall_s": wall, "effective_config": res.effective_config.summary(),
+        "n_escaped": int(hist.size), "theta_anchor_rad": anchor, "window_k": SS_WINDOW_K,
+        "theta_w_rad": theta_w, "n_in_window": n_in, "problems": problems, "pass": ok,
+    }  # fmt: skip
     return base.emit(doc)
 
 
@@ -1099,6 +1232,7 @@ SHARDED_ROWS = ("i9", "i12", "i14", "i15", "t12-ion-lv", "t12-ion-hr")
 
 STEPS = {
     "td-tl-sample": step_td_tl_sample,
+    "ss-sample": step_ss_sample,
     "i6-lv": step_i6,
     "i8": step_i8,
     "i13": step_i13,
@@ -1114,8 +1248,13 @@ STEPS = {
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("step", choices=sorted(STEPS))
-    ap.add_argument("--case", type=int, default=None, help="td-tl-sample: case 1..12")
-    ap.add_argument("--k", type=int, default=0, help="td-tl-sample: chunk 0..99")
+    ap.add_argument(
+        "--case",
+        type=int,
+        default=None,
+        help="td-tl-sample: case 1..12; ss-sample: a V5-SS case of SS_CASES",
+    )
+    ap.add_argument("--k", type=int, default=0, help="td-tl-sample / ss-sample: chunk 0..99")
     ap.add_argument("--point", type=int, default=0, help="i8: 0 He 150, 1 C 290, 2 O 350")
     ap.add_argument("--case-index", type=int, default=0, help="i13: index 0..8 of I13_CASES")
     ap.add_argument("--scale", type=float, default=1.0, help="history-count factor (reduced run)")
@@ -1131,6 +1270,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--partials-manifest", default=None,
                     help="combine with imported directories: steps_v5.read_manifest schema")
     args = ap.parse_args(argv)
+    if args.seed_base is None and args.step == "ss-sample":
+        args.seed_base = SS_SEED_BASE
     if args.seed_base is None:
         hr = args.step == "t13-ion" or args.row == "t12-ion-hr"
         args.seed_base = HR8_BASE if hr else LV8_BASE
@@ -1146,6 +1287,10 @@ def main(argv: list[str] | None = None) -> int:
         if args.case not in CASES:
             raise SystemExit("--case must be in 1..12")
         seed_of(args.case, args.k, args.seed_base)  # range check
+    if args.step == "ss-sample":
+        if args.case not in SS_R_INDEX:
+            raise SystemExit(f"--case must be one of {SS_CASES}")
+        ss_seed(args.case, args.k, args.seed_base)  # range check
     if not 0 <= args.point < len(STANDARD) or not 0 <= args.case_index < len(I13_CASES):
         raise SystemExit("--point in 0..2, --case-index in 0..8")
     base.SEED_BASE = args.seed_base

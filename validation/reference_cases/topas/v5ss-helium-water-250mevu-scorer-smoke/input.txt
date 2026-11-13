@@ -1,0 +1,61 @@
+# Native OpenTOPAS 4.3 input. V5-SS SCORER SMOKE (execution only): parameter acceptance and phase-space header/column layout; not evidence. No validation claim.
+i:Ts/NumberOfThreads = 1
+i:Ts/Seed = 20600438
+b:Ts/PauseBeforeQuit = "False"
+# Step cap raised far above the per-track single-scattering step count of a 1 mm slab (the 300 mm SS smoke lost every carbon track at the 1e6 default); any killed track invalidates the run.
+i:Ts/MaxStepNumber = 100000000
+b:Ts/ShowCPUTime = "True"
+# Tracking verbosity 0: no per-step output.
+i:Ts/TrackingVerbosity = 0
+
+# Geometry (V5-SS design, P10): 120 x 120 x 1 mm G4_WATER slab (z 0..1 mm), entrance face at z = 0, beam axis = +z through the face centre.
+s:Ge/World/Material = "Vacuum"
+d:Ge/World/HLX = 20 cm
+d:Ge/World/HLY = 20 cm
+d:Ge/World/HLZ = 40 cm
+s:Ge/Water/Parent = "World"
+s:Ge/Water/Type = "TsBox"
+s:Ge/Water/Material = "G4_WATER"
+d:Ge/Water/HLX = 60 mm
+d:Ge/Water/HLY = 60 mm
+d:Ge/Water/HLZ = 0.5 mm
+d:Ge/Water/TransZ = 0.5 mm
+s:Ge/Source/Parent = "World"
+s:Ge/Source/Type = "Group"
+d:Ge/Source/TransZ = -0.001 mm
+
+# Source: monoenergetic, zero-size, zero-divergence pencil beam along +z. BeamEnergy = TOTAL kinetic energy (4 x 250 MeV/u = 1000 MeV; P4 convention).
+s:So/Beam/Type = "Beam"
+s:So/Beam/Component = "Source"
+s:So/Beam/BeamParticle = "alpha"
+d:So/Beam/BeamEnergy = 1000 MeV
+u:So/Beam/BeamEnergySpread = 0
+s:So/Beam/BeamPositionDistribution = "None"
+s:So/Beam/BeamAngularDistribution = "None"
+i:So/Beam/NumberOfHistoriesInRun = 200
+
+# Physics: EM only, single scattering (g4em-standard_SS; alias, IonCoulombScattering for GenericIon and alpha and no msc confirmed by the P10 SS smokes).
+s:Ph/Default/Type = "Geant4_Modular"
+sv:Ph/Default/Modules = 1 "g4em-standard_SS"
+# Production cut: single cut for all particles, electron cut 1 km so that delta electrons deposit locally (e- energy cut >= T_max of the fastest case, about 1.16 MeV; checked in the couple table of the log).
+d:Ph/Default/CutForAllParticles = 0.05 mm
+d:Ph/Default/CutForElectron = 1 km
+# EM table upper edge above the highest total kinetic energy (O 430 MeV/u: 6880 MeV).
+d:Ph/Default/EMRangeMax = 10 GeV
+# Printouts: per-particle process list (no msc may be registered).
+b:Ph/ListProcesses = "True"
+
+# The only scorer: phase space of the primaries leaving the far face (z = 1 mm), ASCII; no time, run, event or track ids. Header and column layout: see ss_evaluate.py.
+s:Sc/SSExit/Quantity = "PhaseSpace"
+s:Sc/SSExit/Surface = "Water/ZPlusSurface"
+s:Sc/SSExit/OutputType = "ASCII"
+s:Sc/SSExit/OutputFile = "ss_exit"
+s:Sc/SSExit/IfOutputFileAlreadyExists = "Overwrite"
+b:Sc/SSExit/OutputToConsole = "False"
+s:Sc/SSExit/OnlyIncludeParticlesGoing = "Out"
+s:Sc/SSExit/OnlyIncludeParticlesOfGeneration = "Primary"
+b:Sc/SSExit/IncludeTOPASTime = "False"
+b:Sc/SSExit/IncludeTimeOfFlight = "False"
+b:Sc/SSExit/IncludeRunID = "False"
+b:Sc/SSExit/IncludeEventID = "False"
+b:Sc/SSExit/IncludeTrackID = "False"

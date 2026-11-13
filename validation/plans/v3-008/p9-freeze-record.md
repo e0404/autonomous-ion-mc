@@ -88,7 +88,7 @@ evidence for `icru90/z{6,8}_G4_WATER.dat`. This note concerns FC-2 only.
 | `tests/ionmc/test_ion_em_ss_budget.py` | `ca49735b5b00831aeaabd59d63faecfc23b98fe0d4247024ca963d7e9a77f097` | P9 (iv) |
 | `tests/ionmc/test_ion_em_ls_option.py` | `c67966c8d2c3d9564032e33e666321dd11bd8d2386780afa0cb74850455ca84d` | P9 (iii) |
 | `tests/ionmc/test_ion_em_mapping_src.py` | `865d3143892f8c6ebc548a86400bae198d455c3ad8c3bec2df074ebeb0210175` | I11-map (src), I0, I1 |
-| `tests/ionmc/test_v3_008_seed_families.py` | `fb7d63c1933bf2acb4a37ef08a84c960ebf48ed9134895dbac5589e1b3f5d3fc` | P7, §C |
+| `tests/ionmc/test_v3_008_seed_families.py` | `4bae0c2f72820290bfc98d1c859ef62ae5e7646df5ebabeb44d4ad2edcfd1c81` | P7, §C |
 
 ### 2.3 Implementation already on the branch (src)
 
@@ -231,7 +231,7 @@ placeholder scorer output was deleted unread.
 | `src/ionmc/transport/tally.py` | `be202f7310e3991bead49fd40e24cef1f5493992044c72aff6c5f8e8826b547c` |
 | `src/ionmc/transport/warp_driver.py` | `bc80fdc5a246fde57ea11fe901a5e864f2fccf4439b348e34c2c1ee34887c2da` |
 | `validation/scripts/ion_em/r2_evaluate.py` | `cfd89e2a06e7f33876274d9f4b30ddfaf9587ee7120663dab406cec15258a750` |
-| `validation/scripts/transport/steps_v8.py` | `7654db6f3c61c95a6492301be4f829cdd8c5aa403aeeb0cf213eea9e5f4878ab` |
+| `validation/scripts/transport/steps_v8.py` | `d5e29db7b761abdf341aa91121b4a97739bb282a631de4f615f939819e387844` |
 | `tests/ionmc/test_ion_mcs_table.py` | `b3fb9992f866238b11243e032f394583775e292cec49601798ef44b54efcb749` |
 | `tests/ionmc/test_v3_008_rows_ci.py` | `9192609f4bbc38ea9b68ba56c85d59ec3a1836f943080c5d66849936f36464d6` |
 | `tests/ionmc/test_r2_evaluate.py` | `6984a58594e984ef2aac8208d0eaab01832a35aac5d5f341a8a02723af7f2242` |
@@ -1055,6 +1055,58 @@ placeholder scorer output was deleted unread.
 | `reference_requests/interventions/IR-20261111-101840-EDCAE6/request.json` | `a3f925afc74d80deff1f95ad72446393d4176c77ddea2fe8add84e528bb4146a` |
 | `reference_requests/interventions/IR-20261111-101840-EDCAE6/response.json` | `97e21604c3cd57dc1cc1b936bc459ff1cfa1c6b2ec348b7e83a8cc6b3647e0b3` |
 
+
+**Dated note (2026-11-13, orchestrator) — files added by the V5-SS implementation commit (the D-4 Geant4 source-reading record; the V5-SS bundle generator, the 16 evidence bundles of cases 22, 25–31 × parts 0–1 and the scorer-smoke bundle with their frozen manifest; the evaluator `ss_evaluate.py` with the single reviewed host-wrapper template `ss_wrapper_template.py`; the three V5-SS test modules and the phase-space fixture; sha256 as committed):**
+
+| File | sha256 |
+|---|---|
+| `validation/plans/v3-008/d4-geant4-ion-fluctuation-stopping.md` | `1cbbd6fc19767a3787fd04439ebdfd19688ff9bf11b6bb767590a9a9d28a125c` |
+| `validation/scripts/ion_em/gen_ss_bundles.py` | `0f68c94ccb58284179901ecd69894368a999bea46736630ef994d2850aa6e9f1` |
+| `validation/scripts/ion_em/ss_evaluate.py` | `b032627ab4e1e6f784900de681368d45103deb333c2c90393f679bfd41d65448` |
+| `validation/scripts/ion_em/ss_wrapper_template.py` | `a989aa237564e4591f15451706b0bbf29860672f18d3244caa58700bc03422a8` |
+| `validation/reference_cases/topas/v5ss-frozen-manifest.json` | `d78a5b8d78ec91b3efaac00a204b5ec80ee2889bd8aace9ad3e0019c6e80d5a0` |
+| `tests/ionmc/test_v5ss_bundles.py` | `204a407dec08c56123e9663b5b4223c00c2e5f25b3580c731740b58999f486ef` |
+| `tests/ionmc/test_v5ss_evaluate.py` | `6551a309735ff4142b1336084b5c9eec3b6714cf764262478ad96028c2d22463` |
+| `tests/ionmc/test_v5ss_sample.py` | `81a3dbdbb70dcf1a10a06ef6abbba0ab179f977af0f77cbc6bff33c4044be51c` |
+| `tests/ionmc/data/v5ss/ss_exit.header` | `dbaab815c24b166648196c1357f611fe8cc966b7ba9e119f6e2ebc88281d904f` |
+| `tests/ionmc/data/v5ss/ss_exit.phsp` | `b8b73e0b5010d134e1f96ce579c3271d5fae478f2d25f0efc3595bef36a3e807` |
+| `validation/reference_cases/topas/v5ss-carbon-water-150mevu-case25-part0/case.json` | `81bc581641215e11e638f0072a855f181713369610a8710eedbdedb65c906574` |
+| `validation/reference_cases/topas/v5ss-carbon-water-150mevu-case25-part0/input.txt` | `15938b46a960a1b097ca247f0ab040198819bc4b8bb6d8ad428126a22a3da42b` |
+| `validation/reference_cases/topas/v5ss-carbon-water-150mevu-case25-part1/case.json` | `ba6f3adddb2507e9202176f4fc5222ac898d1bdf7139e0a76eb7493f78c1302a` |
+| `validation/reference_cases/topas/v5ss-carbon-water-150mevu-case25-part1/input.txt` | `87dbc32e38ff80d89ded9b0b3bb3b8f9e17faf68a0cd4b70904d6fe3bf054d97` |
+| `validation/reference_cases/topas/v5ss-carbon-water-250mevu-case27-part0/case.json` | `98973d297b9346992e8f95ed813c4b05830daaa172459431912fe6dc8aa93278` |
+| `validation/reference_cases/topas/v5ss-carbon-water-250mevu-case27-part0/input.txt` | `d113bcac0b9cc6adcfc2a3753ab2cf6786542401de3886044f26b28c70d6ce9a` |
+| `validation/reference_cases/topas/v5ss-carbon-water-250mevu-case27-part1/case.json` | `998fb32c7fd285fb3f99a81c9c4ab73f1e046d22ec64036d36ef6433f6627ff6` |
+| `validation/reference_cases/topas/v5ss-carbon-water-250mevu-case27-part1/input.txt` | `9a4806d2706dddd6c127011e9778802d3d46cfcbf14a1853f7f6a1d2380e2475` |
+| `validation/reference_cases/topas/v5ss-carbon-water-430mevu-case29-part0/case.json` | `a5de5bd045a17b6fc54a4973f37fa570388c4dae7852f55081dfaa085bacbf70` |
+| `validation/reference_cases/topas/v5ss-carbon-water-430mevu-case29-part0/input.txt` | `c6a7a917159f5d491686428ae730a3b4012196fb1b1eefd442e4c3336d2c5510` |
+| `validation/reference_cases/topas/v5ss-carbon-water-430mevu-case29-part1/case.json` | `bd041831eb4b7703e4aba79e01867e46cb2475c20b7d04d79057db6f35911a73` |
+| `validation/reference_cases/topas/v5ss-carbon-water-430mevu-case29-part1/input.txt` | `35436096162b49d599d7f6ee5c02e4f01ce7504938c2ef3fd06a065af0f596f5` |
+| `validation/reference_cases/topas/v5ss-he-water-150mevu-case22-part0/case.json` | `766731e4541ea83138bbbfa3c4bc03601c7487f186c1db7ad18166203dc147fe` |
+| `validation/reference_cases/topas/v5ss-he-water-150mevu-case22-part0/input.txt` | `51bad7a36204230f498d95353b5bc0c49c6fadb5509361f1f9414020c9ee9a94` |
+| `validation/reference_cases/topas/v5ss-he-water-150mevu-case22-part1/case.json` | `031861d9258402c526534920975b5a18ada2d39e0482b6640fcd1cea308da4b5` |
+| `validation/reference_cases/topas/v5ss-he-water-150mevu-case22-part1/input.txt` | `f4dc9e61f4795739fa8ae4e9bf9a27ba0e80128cd871e5732ed14bb6117e6fa7` |
+| `validation/reference_cases/topas/v5ss-he-water-250mevu-case28-part0/case.json` | `de83d408824b2e6a50cd0292483e98603f026154de3e8c4a2a83960a42da206a` |
+| `validation/reference_cases/topas/v5ss-he-water-250mevu-case28-part0/input.txt` | `9e34c11cd590f6a4daa192d3c2a4c3d9b5ff7bc6a49f3982528842f91dd476da` |
+| `validation/reference_cases/topas/v5ss-he-water-250mevu-case28-part1/case.json` | `e3695dac1b4b4e9491594a1878341567fc6c88f7c3c1cc9ab5c3583350f882f9` |
+| `validation/reference_cases/topas/v5ss-he-water-250mevu-case28-part1/input.txt` | `3e2bf428d738ca6a327ca6172cc85b3600b7494eb926555e7b4422fb898338c9` |
+| `validation/reference_cases/topas/v5ss-helium-water-250mevu-scorer-smoke/case.json` | `4d98850be688463a32c1b8964d4b4f87beba95373ecff0e7ae1aa2978a3ac8df` |
+| `validation/reference_cases/topas/v5ss-helium-water-250mevu-scorer-smoke/input.txt` | `41ef213ce037a812985f5e022871e4c8599d2b257299c751be107594b5c938bf` |
+| `validation/reference_cases/topas/v5ss-oxygen-water-150mevu-case26-part0/case.json` | `dd4f2cb3fa3c756db76560d39a99bad900cfec3cfcdb78e409e659483799c3d0` |
+| `validation/reference_cases/topas/v5ss-oxygen-water-150mevu-case26-part0/input.txt` | `fd2191428478c668a31e900c984bb3f42f4059a8cd9e5792fd8cf71033c9e2a2` |
+| `validation/reference_cases/topas/v5ss-oxygen-water-150mevu-case26-part1/case.json` | `0385423f81aea945df6b8aa0d4062f1fafdd3d1b9d5786dd4c6799c7e46857ab` |
+| `validation/reference_cases/topas/v5ss-oxygen-water-150mevu-case26-part1/input.txt` | `e48a0dc2d4f5fd50ac656e974dd31b3c1922f123c657841f3519c6815d850c99` |
+| `validation/reference_cases/topas/v5ss-oxygen-water-250mevu-case31-part0/case.json` | `d51e843a98b628f1228e1d45cd95ae30314ed902045c02ff16265d6d690acce5` |
+| `validation/reference_cases/topas/v5ss-oxygen-water-250mevu-case31-part0/input.txt` | `145b788f2bcbcabe9414ba33c1047a5170cf8843c7f511906c697566bf975dcb` |
+| `validation/reference_cases/topas/v5ss-oxygen-water-250mevu-case31-part1/case.json` | `49690c1aebdab7e7acec898c5c5ec1e36b2721ac1b172bf03d4119d6561781c3` |
+| `validation/reference_cases/topas/v5ss-oxygen-water-250mevu-case31-part1/input.txt` | `b9291e6adce0b550a18176568c99d48e84db279691352b37fa02c69e92c8ee02` |
+| `validation/reference_cases/topas/v5ss-oxygen-water-430mevu-case30-part0/case.json` | `e3c7bc1990caf143df1b24299c623f7893b56d9702bda657d64929a623321fbd` |
+| `validation/reference_cases/topas/v5ss-oxygen-water-430mevu-case30-part0/input.txt` | `7ab737b2b0db3a98059505b872e4d40257dc7f3e6f5a229b8ab363af58a258aa` |
+| `validation/reference_cases/topas/v5ss-oxygen-water-430mevu-case30-part1/case.json` | `eb4527556f2e812f6cdb8811454936dbf48c1cadb8e731458b181f9d52c5a9e2` |
+| `validation/reference_cases/topas/v5ss-oxygen-water-430mevu-case30-part1/input.txt` | `ed3a3c351d1305e50f7ce108b844ca7d0e46c45109ad20ce59afeffd88cd8f15` |
+
+
+**Dated note (2026-11-13, orchestrator) — entries changed by the V5-SS implementation commit (the `ss-sample` step and the V5-SS seed constants in steps_v8.py; the seed-family guard test extended to the V5-SS ionmc and TOPAS seeds):** `tests/ionmc/test_v3_008_seed_families.py` fb7d63c1… → 4bae0c2f…; `validation/scripts/transport/steps_v8.py` 7654db6f… → d5e29db7…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.

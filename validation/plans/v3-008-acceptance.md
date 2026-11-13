@@ -312,6 +312,11 @@ above (R2-TOPAS-4). The TD/TL statistics of `r2_evaluate.py` are implemented aft
     r_index 44–47) and base **20591004** (hr8 T13-ion and T12-ion HR, r_index 54) are **consumed**: their full-scale
     results were observed (all PASS; dated results note of 2026-11-13). Base 20581004 (lv8 A-rows at f5f3a701, item 4d;
     I9 r 44 and I12 r 45 shard 0 at e602a583) was already consumed. Any further lv8/hr8 re-run takes a fresh declared base.
+  - **Dated note 2026-11-13 (V5-SS ionmc samples; before any run).** Base **20631004** (family `rerun2`, declared for
+    re-runs with r_index ≤ 9 and never drawn) is used for the FIRST run of the V5-SS ionmc thin-slab samples, row `v5ss`,
+    r_index = case order index 0–7 (cases 22, 25, 26, 27, 28, 29, 30, 31), k = chunk index; seeds 20631004–20631704 step 100;
+    it is consumed once the samples' statistics are sealed; a V5-SS re-run would need a new declared block (guard test
+    extended). These r_index values index base 20631004 only (`steps_v8.SS_R_INDEX`), not the lv8 table `ROW_R_INDEX`.
 - Never 2098xxxx or 2099xxxx. CI tests use fixed small seeds documented in the tests.
 
 **Guard test** `tests/ionmc/test_v3_008_seed_families.py`. It asserts that every V3-008 seed is:
@@ -708,6 +713,24 @@ tolerance is changed; no parameter is fitted to TOPAS; no TOPAS configuration, b
   `acquire_reference_data`); **D-5** (optional, reference-internal) a scorer-free TOPAS smoke dumping the Geant4
   dE/dx and range tables for alpha and GenericIon(6,12)/(8,16) in G4_WATER, if TOPAS exposes the dump (TO VERIFY).
   D-3/D-4 inform the attribution only; they do not block the held-out set.
+
+**D-4 record committed (2026-11-13, orchestrator; research specialist's reading; report-only, nothing re-graded).**
+The ten Geant4 v11.4.2 source files of the preliminary D-4 reading (item 1, "D-4 preliminary") were re-acquired through
+`acquire_reference_data` (role exploratory, Geant4 Software License; sha256 and acquisition ids in the record) and re-read:
+`validation/plans/v3-008/d4-geant4-ion-fluctuation-stopping.md` (bound in the P9 record). Findings that change the
+preliminary text: (i) the step regime of the TD rows is settled at 0.1 mm (plan step-length smoke, 97.5 % of IDD steps),
+so the pre-step dE/dx candidate of item 1(b) contributes only ≈ +0.03–0.06 % (INFERRED) — the "up to ≈ +0.2 % at 1 mm
+steps" clause of item 1(b) does not apply to these runs and is superseded by the record; (ii) alpha has no LS term
+(G4BetheBlochModel branch), so the He R80 offset of +0.19–0.21 % is not an LS/Barkas effect; the leading remaining
+candidate for the longer reference range at all three ions is the ICRU 90 base arrays of the Geant4 source against ionmc's
+committed Bethe table (INFERRED; D-3 is the deciding instrument); (iii) the Bohr branch of the universal fluctuation
+sampler has three conditions (with the 1 km cut still meanLoss ≥ 10·T_max), the handover charge and mass come from
+`SetParticleAndCharge` before each step, and the preliminary line numbers of the LS along-step terms, the BetheBloch
+alpha branch, the ICRU 90 vectors and the opt4 step functions are corrected; an archived TOPAS configuration printout
+corroborates linLossLim 0.02, the step functions, LindhardSorensen for GenericIon and the 1 keV lowest energy. The
+σ_R attribution of item 1(a) (Glandz-vs-Bohr variance rising with energy per nucleon; ≈ 0.98–1.02 at the held-out
+energies) stands as INFERRED. Remaining TO VERIFY items and what resolves them are listed in the record's section 5.
+No ionmc model, parameter or grade changes (plan D, STOP 3).
 
 **2. Estimator (prospective; applies to rows not yet graded only).** r2-topas-target.md §4.2 receives the dated
 "window-cycle" rule (exact text there): the 1e-4 relative convergence test is kept and applied first (every fit that
@@ -1177,3 +1200,69 @@ no record and was re-run, one completed call was superseded by a byte-identical 
 running; all are preserved in the committed index. **Consequence (plan D / F).** The LV/HR verification gate of
 section A is closed. Remaining before the integration decision: V5-SS, the D-4 record, and the CI / review / validation
 gates of this results commit. No clinical claim.
+
+### V5-SS execution note (2026-11-13, orchestrator; prospective; before any V5-SS ionmc sample or TOPAS run)
+
+Executes row V5-SS (branch B) exactly as pre-registered (dated notes of 2026-11-01, rounds V3-008-4/-5; cost decision
+2026-11-09: 6e4 TOPAS primaries per case, fallback not invoked). Nothing else of the pre-registered design changes: cases,
+gated pairs, tolerance 3 %, TOST rule, σ > 1 % = INCONCLUSIVE, N (TOPAS 6e4 in parts 0–1, ionmc 4e5), estimator, lineage
+wording. This note only fixes what the frozen text leaves open (D1–D6).
+
+**Order of operations.** (i) One reviewed implementation commit (generator + bundles + SS manifest, sampler step, evaluator,
+tests, this note, the section-C seed note); `git diff 712f484a -- src pyproject.toml uv.lock` empty (implementation of the
+LV/HR block). (ii) Eight ionmc samples on the controlled host runner (one call per case, warp-cpu float64, single process,
+4e5 histories, `--expected-sha` = HEAD of (i)). (iii) SS seal commit (reviewed, pushed): `ss_evaluate.py seal` →
+`validation/results/transport/v8-ss/ss-sample-seal.json` + the signed host-run records, then the dated SS seal note with the
+evaluator binding block. (iv) Scorer smoke (after (iii)). (v) 16 TOPAS evidence parts, one at a time, ≤ 1200 s planned each.
+(vi) Records commit; `ss_evaluate.py check-run` on all 16. (vii) `ss_evaluate.py grade` once →
+`validation/results/transport/v8-ss/ss-report.json`; dated results note; never re-graded.
+
+**SS-SEAL-1 (mirror of R2-TOPAS-4).** A V5-SS TOPAS run (smoke or evidence) is valid only if (a) the `code_sha` of its run
+record has the SS seal commit as an ancestor (`git merge-base --is-ancestor <ss_seal> <code_sha>`), and (b) the SS seal
+commit's independent review (review id in the SS seal note) finished before the run's controlled `reference_started` event
+(controlled-service records, never Git timestamps). `ss_evaluate.py` enforces both and fails closed when a record is missing;
+a run failing either check invalidates the pairs that use its case (FAIL of the blinding control, never re-graded).
+
+**Decisions.** D1 ionmc seeds ("ionmc seeds from the lv8 row block (r_index declared in `steps_v8.py`)"): base 20631004
+(`RERUN_BASE_2`, declared, never drawn; lv8 20581004 is consumed), row `v5ss`, r_index = case order 0–7 (22, 25, 26, 27, 28,
+29, 30, 31), k = chunk index → 20631004 + 100·r + k (`steps_v8.SS_SEED_BASE`, `SS_R_INDEX`); section-C note of 2026-11-13.
+D2 window ("±2.5 θ window anchored on the ionmc prediction (fixed before the run)"): θ_anchor,c = untruncated pooled (x, y,
+about zero) projected rms of the sealed ionmc sample; W_c = `ss_budget.WINDOW_K` · θ_anchor,c = 2.5 θ_anchor,c; it is ionmc's
+own prediction, deterministic and sealed before any TOPAS output (P10 §7.5.1: a ±5 % anchor shift moves the pair biases ≤ 0.07
+pp). D3 generator: new `validation/scripts/ion_em/gen_ss_bundles.py` with its own manifest
+`validation/reference_cases/topas/v5ss-frozen-manifest.json`; the r2 generator and r2 manifest stay byte-identical (the r2
+evaluator requires the r2 manifest at `code_sha` to equal HEAD's). D4 scorer smoke: the phase-space parameter names and the
+ASCII layout are unverified, so one smoke `v5ss-helium-water-250mevu-scorer-smoke` (He 250, 200 primaries, rehearsal seed
+**20600438**; **20600439** reserved for one re-smoke if a parameter name is wrong: regenerated bundles, new SS manifest,
+reviewed commit) runs after the seal; its angles are never used. D5 bootstrap ("σ = bootstrap SE of the ratio statistic over
+primaries and parts"): B = 2000; TOPAS resampled with replacement within each part, ionmc over histories, each (case, side)
+independently; one dev replicate per b; σ = SD; analysis seed `ANALYSIS_SEED = 20261113` (numpy, not a transport seed).
+D6 ionmc physics ("ionmc: same slab, warp-cpu f64"): the default all-EM configuration of the TD/TL samples
+(`steps_v8.sample_config`: MCS on, straggling on, nuclear off, Bethe, `ls = "off"`), 40 batches, pencil beam at z = −0.001 mm,
+`BoxPhantom((−60, −60, 0), (120, 120, 1.0), WATER)`, escape records.
+
+**Statistic (both sides).** θ_w(W) = sqrt( Σ_i [θx_i² 1(|θx_i| ≤ W) + θy_i² 1(|θy_i| ≤ W)] / Σ_i [1(|θx_i| ≤ W) + 1(|θy_i| ≤
+W)] ); TOPAS θ = atan2(u, w), w = +sqrt(1 − u² − v²) from the phase space; ionmc θ = atan2(u_x, u_z). Pair A/B:
+dev = (θ_model,A/θ_model,B)/(θ_ref,A/θ_ref,B) − 1; verdict `ss_budget.gate(100·dev, 100·σ)`; row PASS iff all five PASS.
+
+**Files.** Bundles `validation/reference_cases/topas/v5ss-<ion>-water-<E>mevu-case<NN>-part<P>/`; sampler `steps_v8.py
+ss-sample` (npz `ionmc-ss-case<NN>-k<K>.npz`; wrapper `ss_wrapper_template.py`, argv `["python", "-c",
+render_wrapper(case, sha, "v5ss-samples", "1")]`); evaluator `validation/scripts/ion_em/ss_evaluate.py`; records under
+`validation/results/transport/v8-ss/` (`host-records/`, `ss-seal-review.json`, `topas-runs/<run_id>/`, `smoke-runs/`).
+
+| case | ion | MeV/u | BeamEnergy | TOPAS seeds part 0 / 1 | ionmc seed (k = 0) |
+|---|---|---|---|---|---|
+| 22 | He (`alpha`) | 150 | 600 MeV | 20619022 / 20619122 | 20631004 |
+| 25 | C (`GenericIon(6,12)`) | 150 | 1800 MeV | 20619025 / 20619125 | 20631104 |
+| 26 | O (`GenericIon(8,16)`) | 150 | 2400 MeV | 20619026 / 20619126 | 20631204 |
+| 27 | C | 250 | 3000 MeV | 20619027 / 20619127 | 20631304 |
+| 28 | He (`alpha`) | 250 | 1000 MeV | 20619028 / 20619128 | 20631404 |
+| 29 | C | 430 | 5160 MeV | 20619029 / 20619129 | 20631504 |
+| 30 | O | 430 | 6880 MeV | 20619030 / 20619130 | 20631604 |
+| 31 | O | 250 | 4000 MeV | 20619031 / 20619131 | 20631704 |
+
+30 000 primaries per part. **Expected cost** (`ss_budget.cost_from_measured(0.023 s, 6e4)`, upper estimate): REF s per case
+(per part) He 150 528 (264), C 150 1740 (870), O 150 2023 (1012), C 250 1454 (727), He 250 378 (189), C 430 1209 (604),
+O 430 1514 (757), O 250 1752 (876); total 10 596 s = 2.94 h, every part ≤ 1200 s; ionmc ≈ 1–10 min per call (inferred).
+
+The SS seal note (seal SHA, review id, finished_at) follows in the seal commit.

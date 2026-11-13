@@ -151,3 +151,56 @@ def test_plan_section_c_matches_constants():
     assert f"{HR8_BASE}–{_bounds(row_seeds(HR8_BASE))[1]}" in c
     assert re.search(rf"highest is {max(topas_seeds())}", c)
     assert "Never 2098xxxx or 2099xxxx" in c
+
+
+# ---- V5-SS (dated section-C note 2026-11-13; plan "V5-SS execution note") ----
+SS_CASES = (22, 25, 26, 27, 28, 29, 30, 31)  # r_index = position in this tuple
+SS_PARTS = (0, 1)
+RETIRED_SS_CASES = (23, 24, 32, 33)
+
+
+def ss_ionmc_seeds():
+    """First run of the V5-SS ionmc samples: RERUN_BASE_2 + 100 r + k, k = 0 (one 4e5 chunk)."""
+    return [RERUN_BASE_2 + 100 * r for r in range(len(SS_CASES))]
+
+
+def ss_topas_seeds():
+    return {TOPAS_8_BASE + 100 * p + c for p in SS_PARTS for c in SS_CASES}
+
+
+def test_v5ss_ionmc_seeds_in_rerun2_and_disjoint():
+    seeds = ss_ionmc_seeds()
+    assert seeds == list(range(20631004, 20631705, 100))
+    assert all(20631004 <= s <= 20632003 for s in seeds)
+    assert set(seeds) <= set(v8_families()["rerun2"])
+    assert len(SS_CASES) - 1 <= RERUN_R_MAX[RERUN_BASE_2]
+    for name, fam in v8_families().items():
+        if name != "rerun2":
+            assert not set(seeds) & set(fam), name
+    for ranges in V3_005_FAMILIES.values():
+        for r in ranges:
+            assert not set(seeds) & set(r)
+
+
+def test_v5ss_topas_seeds():
+    seeds = ss_topas_seeds()
+    assert len(seeds) == 16
+    assert sorted(seeds) == [20619022, *range(20619025, 20619032), 20619122,
+                             *range(20619125, 20619132)]  # fmt: skip
+    assert seeds <= topas_seeds()
+    r2 = {TOPAS_8_BASE + 100 * p + c for p in range(16) for c in range(1, 13)}
+    retired = {TOPAS_8_BASE + 100 * p + c for p in TOPAS_PARTS for c in RETIRED_SS_CASES}
+    assert not seeds & r2 and not seeds & retired
+    assert {(s - TOPAS_8_BASE) % 100 for s in seeds} == set(SS_CASES)
+
+
+def test_v5ss_steps_v8_constants_match():
+    text = (PLAN.parents[1] / "scripts" / "transport" / "steps_v8.py").read_text()
+    assert "SS_SEED_BASE = 20631004" in text
+    assert "SS_CASES: tuple[int, ...] = (22, 25, 26, 27, 28, 29, 30, 31)" in text
+
+
+def test_plan_declares_the_v5ss_use_of_rerun2():
+    c = PLAN.read_text().split("## C. Seeds", 1)[1].split("\n## D.", 1)[0]
+    assert "Dated note 2026-11-13 (V5-SS ionmc samples; before any run)" in c
+    assert "seeds 20631004–20631704 step 100" in c
