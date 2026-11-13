@@ -292,3 +292,21 @@ git-ignored) and in the protected host-run store. Binding rule SS-SEAL-1 (plan e
 TOPAS run (smoke or evidence) is valid unless its `code_sha` descends from the commit holding this record and that commit's
 independent review finished before the run's controlled start; `ss_evaluate.py check-run` / `grade` fail closed otherwise and
 read the seal and review ids from the plan's SS seal note. Not a clinical claim.
+
+# V5-SS TOPAS evidence runs and scorer smokes (V3-008, branch B)
+
+`v8-ss/topas-runs/<run_id>/{record.json, artifacts.json}` are the 16 **signed reference-runner records** (signer
+`reference-runner`, key 303cce4c129d387c; schema 3) of the V5-SS evidence block — cases 22, 25–31 × parts 0–1, 30000
+primaries per part, bundles `validation/reference_cases/topas/v5ss-<ion>-water-<E>mevu-case<NN>-part<P>` — all run at
+`code_sha` a508afd8 on 2026-11-13 (07:56–10:21 UTC, one run at a time, exit 0), `record.json` verbatim as returned by the
+reference runner and `artifacts.json` the `list_reference_artifacts` result (path, bytes, sha256 of the ten archived files:
+inputs, request, record, stdout/stderr and the four `work/` outputs including `ss_exit.header` / `ss_exit.phsp`).
+`topas-runs/index.json` maps (case, part) to the run id. The phase spaces (3.3 MB each) are **not in Git**: they stay in
+the reference-runner archive and are materialized into the ignored task cache (`.ionmc-cache/reference-runs/<run_id>/`)
+where `ss_evaluate.py check-run` / `grade` read them under the signed digests of `artifacts.json`
+(`output_files_sha256` of the record must be reproduced by the listed `work/` files). `v8-ss/smoke-runs/` holds the two
+scorer smokes in the same layout: REF-740144c3826978e4ea78-ef394dd8 (seed 20600438 at 677e7c27, bundle later regenerated —
+superseded, kept as the record of the first run) and REF-8358f3c4f2f32a8453f4-a7dbae17 (seed 20600439 at ea10ce6a, the
+run-condition evidence); their angles are never used. `v8-ss/check-runs/<run_id>.json` are the per-run run-validity
+reports (chronology SS-SEAL-1, process list, couple table, phase-space count rule and column checks; nothing graded).
+Not a clinical claim.

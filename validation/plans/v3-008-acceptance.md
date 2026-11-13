@@ -1341,3 +1341,31 @@ check-run and grade reports; the windowed rms and the bootstrap use the scored p
 bootstrap as observed). A primary that does not reach the exit face cannot lie inside the ±2.5 θ window, so the statistic
 is unchanged by its absence; larger deficits remain a fail-closed run-validity error. Estimator, window factor,
 tolerance, N, pairs, expected factors and gate unchanged; no run is repeated.
+
+**Dated note (2026-11-13, orchestrator) — V5-SS evidence block complete; records committed, nothing graded.** The 16
+evidence parts ran one at a time at `code_sha` a508afd8 (a descendant of the seal commit; seal review finished before every
+start), 2026-11-13 07:56–10:21 UTC, every run exit 0, succeeded, four `work/` outputs, signed by `reference-runner`
+(key 303cce4c129d387c). Records (`record.json` verbatim, `artifacts.json` = tool listing) are committed under
+`validation/results/transport/v8-ss/topas-runs/<run_id>/` with `index.json`; the two scorer smokes under `smoke-runs/`
+(REF-740144c3826978e4ea78-ef394dd8 at 677e7c27, superseded by the bundle regeneration — kept; REF-8358f3c4f2f32a8453f4-a7dbae17
+at ea10ce6a, run-condition evidence). Phase spaces stay outside Git. Only header counts and run-validity logs have been
+read (count-rule note above); `ss_evaluate.py check-run` reports and the single grade follow in the next commits.
+
+| case/part | run id | UTC | s | scored primaries |
+|---|---|---|---|---|
+| 22/0 | `REF-69cd778394707910f717-b992a97b` | 07:56:33–07:59:40 | 187 | 30000 |
+| 22/1 | `REF-72b922fb1b0c07ae5c5f-34ae1c10` | 07:59:54–08:02:59 | 185 | 29999 |
+| 25/0 | `REF-9bd0a1263ad70b02be18-6de84b65` | 08:03:12–08:14:03 | 651 | 30000 |
+| 25/1 | `REF-98e6160303a4ec989443-732245e3` | 08:14:17–08:25:03 | 646 | 29999 |
+| 26/0 | `REF-fd8cf8ed4bbab1079850-df809295` | 08:25:17–08:43:07 | 1070 | 30000 |
+| 26/1 | `REF-a65c74269baeeb946284-107281ec` | 08:43:21–09:01:09 | 1068 | 30000 |
+| 27/0 | `REF-323844f0b56dc5de0338-16f4feb4` | 09:01:36–09:10:38 | 542 | 30000 |
+| 27/1 | `REF-1f84bf9c50030ca44319-58d37b01` | 09:10:52–09:20:00 | 548 | 30000 |
+| 28/0 | `REF-2a3055cd9946939e1112-829e8260` | 09:20:13–09:22:24 | 131 | 30000 |
+| 28/1 | `REF-4cc1556c57dbb104d834-efe68a66` | 09:22:37–09:24:49 | 132 | 30000 |
+| 29/0 | `REF-e2306407f51486adf627-85771afc` | 09:25:02–09:32:30 | 448 | 29999 |
+| 29/1 | `REF-3575dbd95c6d72fab50c-a8d6f962` | 09:32:42–09:40:05 | 443 | 29999 |
+| 30/0 | `REF-226e1c04517c66e77896-06ebcdb0` | 09:40:18–09:49:32 | 554 | 29999 |
+| 30/1 | `REF-f785d4669a97d92e3f7a-ecb230b0` | 09:49:45–09:58:56 | 551 | 30000 |
+| 31/0 | `REF-ebec959c8706e098c918-585a9acf` | 09:59:09–10:09:53 | 645 | 30000 |
+| 31/1 | `REF-189c5a09a56470459241-d0087521` | 10:10:06–10:21:01 | 655 | 30000 |

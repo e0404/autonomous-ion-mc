@@ -1174,6 +1174,49 @@ placeholder scorer output was deleted unread.
 **Dated note (2026-11-13, orchestrator) — entries changed by the smoke-binding commit (the generator keeps the scorer-smoke bundle byte-identical to its run-time version; smoke input.txt and SS manifest restored; tests):** `validation/scripts/ion_em/gen_ss_bundles.py` 8cbb5b5e… → 683b148f…; `validation/reference_cases/topas/v5ss-frozen-manifest.json` b1116bf3… → fc032856…; `tests/ionmc/test_v5ss_bundles.py` 4835b54b… → f94d543b…; `validation/reference_cases/topas/v5ss-helium-water-250mevu-scorer-smoke/input.txt` baf597e4… → eb9a4694…. All other entries unchanged (recomputed).
 
 **Dated note (2026-11-13, orchestrator) — entries changed by the count-rule commit (the evaluator's amended phase-space count rule: reached == scored, deficit ≤ 0.1 % recorded per part; tests):** `validation/scripts/ion_em/ss_evaluate.py` a958dba2… → ab3751f1…; `tests/ionmc/test_v5ss_evaluate.py` 83aaee21… → 6123d151…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-13, orchestrator) — files added by the V5-SS records commit (the 16 signed reference-runner records of the evidence parts at a508afd8 and the two scorer smokes, `record.json` + `artifacts.json` each, and `topas-runs/index.json`; sha256 as committed):**
+
+| File | sha256 |
+|---|---|
+| `validation/results/transport/v8-ss/smoke-runs/REF-740144c3826978e4ea78-ef394dd8/artifacts.json` | `e3652ce378ad28d2dcc5fdd249b247b91961bad70c68185d8d5472e0b9c86e0b` |
+| `validation/results/transport/v8-ss/smoke-runs/REF-740144c3826978e4ea78-ef394dd8/record.json` | `245f2334338d850e76949f884d8226da3cf4a1930ccea815f6ddf3038a7fdfd4` |
+| `validation/results/transport/v8-ss/smoke-runs/REF-8358f3c4f2f32a8453f4-a7dbae17/artifacts.json` | `a08c819f95ea02efc6691d1faed277186fd3096ad9c098f2a58e966b7d4fe9d3` |
+| `validation/results/transport/v8-ss/smoke-runs/REF-8358f3c4f2f32a8453f4-a7dbae17/record.json` | `95bd0e0566f43b46cddf62c1650efc150bb0de40f20fad1d7a5033f77ba3c5d4` |
+| `validation/results/transport/v8-ss/topas-runs/REF-189c5a09a56470459241-d0087521/artifacts.json` | `4e86eb960a8f3ce4a25b9d3713e325aec84661c93e800a5708d31c23bb5224aa` |
+| `validation/results/transport/v8-ss/topas-runs/REF-189c5a09a56470459241-d0087521/record.json` | `fb86a5c724950e82b1c79a7390fb82b68e144b1233fa026022211897185e110f` |
+| `validation/results/transport/v8-ss/topas-runs/REF-1f84bf9c50030ca44319-58d37b01/artifacts.json` | `f1df22103d2aec16663de603f29253cec6d733715a4be576e6d23680bb065f9e` |
+| `validation/results/transport/v8-ss/topas-runs/REF-1f84bf9c50030ca44319-58d37b01/record.json` | `fb6a7334fa543a7d8018806c095f2f94ef94ad890bb74d92cb28a9df48559af6` |
+| `validation/results/transport/v8-ss/topas-runs/REF-226e1c04517c66e77896-06ebcdb0/artifacts.json` | `a04aec898c316e397113f0c8395458bbe9f0bd9c1de527fc32aa4e015ae066e8` |
+| `validation/results/transport/v8-ss/topas-runs/REF-226e1c04517c66e77896-06ebcdb0/record.json` | `8d4b92b563fcdb1443dbd494a9627f74ef727318e598039ed673964c476841e0` |
+| `validation/results/transport/v8-ss/topas-runs/REF-2a3055cd9946939e1112-829e8260/artifacts.json` | `5f19f654062e6b4f89d4268b4fe3f47e9353ec9557f352cf3e9f784419a0fc34` |
+| `validation/results/transport/v8-ss/topas-runs/REF-2a3055cd9946939e1112-829e8260/record.json` | `7d851e1f733c5035efb4da9d916527a230ba1eeacfb4112366b2d38cc6f1fe4d` |
+| `validation/results/transport/v8-ss/topas-runs/REF-323844f0b56dc5de0338-16f4feb4/artifacts.json` | `5c7e517e2c13561d1fd8b472daafd473599f0a51d6f36b57b26814f66af3b77e` |
+| `validation/results/transport/v8-ss/topas-runs/REF-323844f0b56dc5de0338-16f4feb4/record.json` | `d3d3165d0ea7260fba145a5aec52aa9dee1d00bdcd05577eb5b81be9a7ac81cc` |
+| `validation/results/transport/v8-ss/topas-runs/REF-3575dbd95c6d72fab50c-a8d6f962/artifacts.json` | `0f89a7365ee3f19069f4446a597611ae4b09b41ea49f2934678ca84bb8976515` |
+| `validation/results/transport/v8-ss/topas-runs/REF-3575dbd95c6d72fab50c-a8d6f962/record.json` | `f31877647642db5c6d82d4a3b9c8776a5d0aac1de1834861f5067b4ce2ea37b6` |
+| `validation/results/transport/v8-ss/topas-runs/REF-4cc1556c57dbb104d834-efe68a66/artifacts.json` | `c9d5a7e9634a73d43b8beb15924dbb48e7f9ee6c6d1d6dfbe732cd738aee440a` |
+| `validation/results/transport/v8-ss/topas-runs/REF-4cc1556c57dbb104d834-efe68a66/record.json` | `89b5a7390add5dc5097c9a4a50358c769fbacbfa4f5ad26b7fb76d482db03222` |
+| `validation/results/transport/v8-ss/topas-runs/REF-69cd778394707910f717-b992a97b/artifacts.json` | `0a6b43a30395533abea821493b331bb00c279dd40e37655d22d131e271e142c5` |
+| `validation/results/transport/v8-ss/topas-runs/REF-69cd778394707910f717-b992a97b/record.json` | `4dd34229d5eb4b4a61401aae9badc0846bcde2e9cd1ce522b9b95a68edeead08` |
+| `validation/results/transport/v8-ss/topas-runs/REF-72b922fb1b0c07ae5c5f-34ae1c10/artifacts.json` | `b0099fa0fc2803fab938366e41d4c4e1542a3217b391c7971af59ec32e862937` |
+| `validation/results/transport/v8-ss/topas-runs/REF-72b922fb1b0c07ae5c5f-34ae1c10/record.json` | `320c171134b8a4fabc4b20d5434115ddfad0066446150db0110b60df7a9164ad` |
+| `validation/results/transport/v8-ss/topas-runs/REF-98e6160303a4ec989443-732245e3/artifacts.json` | `32c44d819e0729fd804a2e6748179d84e1aaf22a49d533bac6e87fc164354391` |
+| `validation/results/transport/v8-ss/topas-runs/REF-98e6160303a4ec989443-732245e3/record.json` | `260e26c4f7cf145cede47ff5547e75eac7263bc34e54100946ee67390d0c7d97` |
+| `validation/results/transport/v8-ss/topas-runs/REF-9bd0a1263ad70b02be18-6de84b65/artifacts.json` | `be1e413cbe5c9e744839dad5f1819b5b28a5958c4419bb20abf14cf4535fceb1` |
+| `validation/results/transport/v8-ss/topas-runs/REF-9bd0a1263ad70b02be18-6de84b65/record.json` | `5a2c8faf6a2cfac8d365a54f48ab63a20ed89301ebf1edb58c89b7930afb44f5` |
+| `validation/results/transport/v8-ss/topas-runs/REF-a65c74269baeeb946284-107281ec/artifacts.json` | `e1329e6247783c7897d512ea852fba47ed6b59b35c58ff6a82adbeddff40ad5a` |
+| `validation/results/transport/v8-ss/topas-runs/REF-a65c74269baeeb946284-107281ec/record.json` | `2174416bdff02beb5b5c3daa1155f17addce0e2551dd77b4d47e74d36bb5bdcf` |
+| `validation/results/transport/v8-ss/topas-runs/REF-e2306407f51486adf627-85771afc/artifacts.json` | `0f24915d5c4b76d9ddaf03f5b65851700e3c8e02731cc78f32037737820b4447` |
+| `validation/results/transport/v8-ss/topas-runs/REF-e2306407f51486adf627-85771afc/record.json` | `04fecaef242a10d4c297df63a7f3fcd0cf92169562e572e8199812a1bedec4e9` |
+| `validation/results/transport/v8-ss/topas-runs/REF-ebec959c8706e098c918-585a9acf/artifacts.json` | `e3ae76b53c9fa421d8cabf7c974226d1d46450d52c63258112a10c98faad5391` |
+| `validation/results/transport/v8-ss/topas-runs/REF-ebec959c8706e098c918-585a9acf/record.json` | `303f6b1570b3f4cd02b969c7cb62553b56f800d96d7f70c9e3ac72fbe9f307f4` |
+| `validation/results/transport/v8-ss/topas-runs/REF-f785d4669a97d92e3f7a-ecb230b0/artifacts.json` | `b371447ac7712e0685cf303647f023713b5d5e8b6f05159d463d1ea1bef53d64` |
+| `validation/results/transport/v8-ss/topas-runs/REF-f785d4669a97d92e3f7a-ecb230b0/record.json` | `9ab3ec05350744ec52890703313315e0bbd586c25954e7dd5498beff70614c34` |
+| `validation/results/transport/v8-ss/topas-runs/REF-fd8cf8ed4bbab1079850-df809295/artifacts.json` | `1078d3c873cf2c778e9c25cb39353b82c2760759241ab06d29a343fdfe3bb44c` |
+| `validation/results/transport/v8-ss/topas-runs/REF-fd8cf8ed4bbab1079850-df809295/record.json` | `569a199c77459b9c73101b46b17911e950588067acfecd2411a1cbde3ef87e85` |
+| `validation/results/transport/v8-ss/topas-runs/index.json` | `0a94c6e48f1d7601717aa6f9a1b771403ecd0a17e3bfb7c5b447d25224e744c0` |
+
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.
