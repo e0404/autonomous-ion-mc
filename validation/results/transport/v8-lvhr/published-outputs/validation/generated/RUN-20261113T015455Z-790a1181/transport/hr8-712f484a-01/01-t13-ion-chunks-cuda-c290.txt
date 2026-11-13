@@ -1,0 +1,184 @@
+# command: /home/wahln/.cache/ionmc-experiment/experiment-v3/host-runner/venv/bin/python /workspace/validation/scripts/transport/steps_v8.py t13-ion --scale 1.0 --timeout 1350 --seed-base 20591004
+# git_sha: 712f484a13dbee4a181d15addf127b1c58dc1cbc
+# started_utc: 2026-11-13T01:54:57Z
+# step_timeout_s: 1500
+Warp 1.17.0 initialized:
+   CUDA Toolkit 12.9, Driver 13.5
+   Devices:
+     "cpu"      : "x86_64"
+     "cuda:0"   : "NVIDIA RTX A6000" (48 GiB, sm_86, mempool enabled)
+   Kernel cache:
+     /cache/warp/1.17.0
+Module _table_node_kernel__locals__nodes_160cf81d 930f1d7 load on device 'cpu' took 1.07 ms  (cached)
+Module transport_float32_plain_2e9e19ed 2e9e19e load on device 'cuda:0' took 9109.04 ms  (compiled)
+#JSON-BEGIN
+{
+ "format": 1,
+ "frozen_histories": 100000,
+ "git_sha": "712f484a13dbee4a181d15addf127b1c58dc1cbc",
+ "histories": 100000,
+ "pass": true,
+ "reduced": false,
+ "seed_base": 20591004,
+ "step": "t13-ion",
+ "suite": "hr8",
+ "t13": {
+  "chunks_1024_vs_262144_float32": {
+   "counter_names": [
+    "step_truncation",
+    "stall",
+    "straggling_rejection",
+    "genealogy_overflow",
+    "queue_overflow",
+    "source_energy_out_of_range",
+    "energy_inversion",
+    "accumulator_overflow",
+    "scoring_pieces_overflow"
+   ],
+   "counters": {
+    "accumulator_overflow": 0,
+    "energy_inversion": 0,
+    "genealogy_overflow": 0,
+    "mcs_mapping_failure": 0,
+    "mcs_table_bracket_miss": 0,
+    "queue_overflow": 0,
+    "scoring_pieces_overflow": 0,
+    "source_energy_out_of_range": 0,
+    "stall": 0,
+    "step_truncation": 0,
+    "straggling_rejection": 0
+   },
+   "counters_identical": true,
+   "deposit": {
+    "dose": {
+     "edep_identical": true,
+     "max_difference_over_peak": 0.0,
+     "max_difference_voxel_index": [
+      0,
+      0,
+      0,
+      0
+     ],
+     "max_relative_difference": 0.0,
+     "n_compared_voxels": 1602000,
+     "n_violating_voxels": 0,
+     "pass": true,
+     "peak": 48.44006456061974,
+     "rtol": 1e-05,
+     "total_relative_difference": 0.0,
+     "worst_voxel_index": [
+      0,
+      0,
+      0,
+      0
+     ],
+     "worst_voxel_value_a": 0.0,
+     "worst_voxel_value_b": 0.0
+    }
+   },
+   "edep_identical": true,
+   "pass": true,
+   "precision": "float32",
+   "tallies_a": {
+    "cutoff": 2375653.3807426314,
+    "escaped": 0.0,
+    "initial": 348000000.0,
+    "outside_0": 0.0,
+    "step_deposit": 345624346.6192574,
+    "truncated": 0.0,
+    "unaccounted": 0.0
+   },
+   "tallies_b": {
+    "cutoff": 2375653.3807426314,
+    "escaped": 0.0,
+    "initial": 348000000.0,
+    "outside_0": 0.0,
+    "step_deposit": 345624346.6192574,
+    "truncated": 0.0,
+    "unaccounted": 0.0
+   },
+   "tallies_identical": true,
+   "valid": true
+  },
+  "chunks_1024_vs_262144_float64": {
+   "counter_names": [
+    "step_truncation",
+    "stall",
+    "straggling_rejection",
+    "genealogy_overflow",
+    "queue_overflow",
+    "source_energy_out_of_range",
+    "energy_inversion",
+    "accumulator_overflow",
+    "scoring_pieces_overflow"
+   ],
+   "counters": {
+    "accumulator_overflow": 0,
+    "energy_inversion": 0,
+    "genealogy_overflow": 0,
+    "mcs_mapping_failure": 0,
+    "mcs_table_bracket_miss": 0,
+    "queue_overflow": 0,
+    "scoring_pieces_overflow": 0,
+    "source_energy_out_of_range": 0,
+    "stall": 0,
+    "step_truncation": 0,
+    "straggling_rejection": 0
+   },
+   "counters_identical": true,
+   "deposit": {
+    "dose": {
+     "edep_identical": true,
+     "max_difference_over_peak": 0.0,
+     "max_difference_voxel_index": [
+      0,
+      0,
+      0,
+      0
+     ],
+     "max_relative_difference": 0.0,
+     "n_compared_voxels": 1602000,
+     "n_violating_voxels": 0,
+     "pass": true,
+     "peak": 47.14000055018403,
+     "rtol": 1e-12,
+     "total_relative_difference": 0.0,
+     "worst_voxel_index": [
+      0,
+      0,
+      0,
+      0
+     ],
+     "worst_voxel_value_a": 0.0,
+     "worst_voxel_value_b": 0.0
+    }
+   },
+   "edep_identical": true,
+   "pass": true,
+   "precision": "float64",
+   "tallies_a": {
+    "cutoff": 2375810.9930762816,
+    "escaped": 0.0,
+    "initial": 348000000.0,
+    "outside_0": 0.0,
+    "step_deposit": 345624189.00692374,
+    "truncated": 0.0,
+    "unaccounted": 0.0
+   },
+   "tallies_b": {
+    "cutoff": 2375810.9930762816,
+    "escaped": 0.0,
+    "initial": 348000000.0,
+    "outside_0": 0.0,
+    "step_deposit": 345624189.00692374,
+    "truncated": 0.0,
+    "unaccounted": 0.0
+   },
+   "tallies_identical": true,
+   "valid": true
+  }
+ }
+}
+#JSON-END
+
+# exit=0

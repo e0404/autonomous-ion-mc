@@ -24,11 +24,14 @@ along both hinge legs for every scoring grid by an incremental DDA over the leg 
 a piece of the path inside one voxel receives the integral over the piece of a linear
 stopping-power ramp from S(E_old) to S(E_new), normalised over the step (``ramp_weight``), so the
 pieces sum to the deposit and the residual step dependence is second order (the curvature of S
-along the step); the energy left at the cutoff is a point deposit at the end point. Pieces are
+along the step); the energy left at the cutoff is deposited by the end-of-range model: a point
+deposit at the end point (``point_v1``, protons) or, for ``continuous_residual_v1`` (ions), along
+the straight residual path walked through the transport voxels (``_deposit_residual``). Pieces are
 quantized to int64 quanta (``tally``).
 
-Tallies (MeV, accumulated independently of the grids): ``initial``, ``cutoff`` (local
-deposition below ``E_cut``; scored into the grids like any deposit), ``step_deposit``,
+Tallies (MeV, accumulated independently of the grids): ``initial``, ``cutoff`` (the
+energy below ``E_cut`` deposited by the end-of-range model; scored into the grids like any
+deposit), ``step_deposit``,
 ``escaped``, ``truncated`` (energy of histories stopped by the step limit or a stall, never
 scored), ``unaccounted`` (genealogy overflow; always 0 here) and ``outside[g]`` (deposits
 outside grid ``g``).
@@ -42,9 +45,15 @@ from typing import Any
 import numpy as np
 
 from ionmc._wpfunc import python_twin
-from ionmc.config import MAX_REJECTION_ATTEMPTS, NUCLEAR_MAX_ENERGY_MEV, EffectiveConfig
+from ionmc.config import (
+    MAX_REJECTION_ATTEMPTS,
+    NUCLEAR_MAX_ENERGY_MEV,
+    RESIDUAL_SUBSTEPS,
+    EffectiveConfig,
+)
 from ionmc.errors import CounterOverflowError
 from ionmc.physics.em import make_em
+from ionmc.physics.ion_mcs import make_ion_mcs
 from ionmc.physics.kinematics import make_kinematics
 from ionmc.physics.nuclear import make_nuclear
 from ionmc.rng.philox import (
@@ -57,7 +66,12 @@ from ionmc.rng.philox import (
     u01_py,
 )
 from ionmc.species import PSEUDO_BASE, species_of_projectile
-from ionmc.transport.channels import CLASS_LOCAL, CLASS_STEP, MAX_PARTICLES
+from ionmc.transport.channels import (
+    CLASS_LOCAL,
+    CLASS_RESIDUAL_FLOOR,
+    CLASS_STEP,
+    MAX_PARTICLES,
+)
 from ionmc.transport.funcs import BIG_LENGTH_MM, make_transport_funcs
 from ionmc.transport.run import channel_columns
 from ionmc.transport.scoring_ref import ReferenceChannelScorer
@@ -68,6 +82,7 @@ from ionmc.transport.tally import (
     END_MISSED_WORLD,
     END_SOURCE_REJECTED,
     END_TRUNCATED,
+    ION_COUNTER_NAMES,
     N_FIXED_TALLIES,
     NUCLEAR_COUNTER_NAMES,
     NUCLEAR_TALLY_NAMES,
@@ -125,7 +140,12 @@ def run_reference(eff: EffectiveConfig) -> RawTransport:
     part = run_reference_range(eff, 0, n)
     diag = eff.requested.diagnostics
     raw = merge_partials(
-        [part], n, len(eff.requested.scoring), channel_columns(eff), eff.nuclear is not None
+        [part],
+        n,
+        len(eff.requested.scoring),
+        channel_columns(eff),
+        eff.nuclear is not None,
+        eff.is_ion,
     )
     raw.diagnostics = build_diagnostics(
         [part], diag.track_end_positions, diag.escape_records, diag.trace_histories
@@ -161,7 +181,8 @@ class _Reference:
         self.n_batches = cfg.run.n_batches
         ph = cfg.physics
         r = self.R
-        self.e_cut = ph.e_cut_mev
+        self.e_cut = eff.e_cut_mev
+        self.continuous_residual = eff.end_of_range_model == "continuous_residual_v1"
         self.c_alpha = r(ph.range_alpha)
         self.c_rho_f = r(ph.range_rho_f_mm)
         self.c_frac = r(ph.max_energy_loss_fraction)
@@ -170,6 +191,18 @@ class _Reference:
         self.path_exceeded = 0
         self.c_fshort = r(ph.short_step_fraction)
         self.mass = r(cfg.source.projectile.mass_mev)
+        self.charge = r(float(cfg.source.projectile.z))
+        self.is_ion = eff.is_ion
+        if self.is_ion:  # z >= 2: f_dM through the exact-Omega mapping (decision 0043 section 3)
+            assert eff.ion_mapping is not None
+            im = eff.ion_mapping
+            self.IM = python_twin(make_ion_mcs)
+            self.map_ion = im.ion.tolist()
+            self.map_pro = im.proton.tolist()
+            self.map_comp = im.comp.tolist()
+            self.map_quad = im.quad.tolist()
+            self.map_eval = im.evaluation
+            self.map_tab = None if im.table is None else im.table.tolist()
         self.trunc_diag = ph.truncated_hinge_diagnostic
         self.straggle_attempt = (
             self.EM.straggle_attempt_gamma
@@ -201,7 +234,9 @@ class _Reference:
         self.species_id = 0
         self.generation = 0
         self.nuc = eff.nuclear
-        self.counter_names: tuple[str, ...] = COUNTER_NAMES
+        self.counter_names: tuple[str, ...] = COUNTER_NAMES + (
+            ION_COUNTER_NAMES if self.is_ion else ()
+        )
         self.ntallies: dict[str, float] = {}
         self.nuc_diag: dict[str, dict[str, Any]] = {}  # nuclear event diagnostics (nuclear runs)
         if self.nuc is not None:  # conditional nuclear blocks (decision 0041 sections 2-5)
@@ -301,13 +336,15 @@ class _Reference:
         t_off: float,
         s_start: float,
         s_end: float,
+        cls: int = CLASS_STEP,
     ) -> None:
         """Deposit the share of ``deposit`` that belongs to each piece in every voxel of grid ``g``
         crossed by the straight segment from ``p`` along ``u`` of the given length (per-grid
         incremental DDA). The leg starts at the path coordinate ``t_off`` of the step; the share
         of a piece ``[ta, tb]`` is the integral of the linear stopping-power ramp
         ``w(t) = s_start + (s_end - s_start) t / s_act`` over it, divided by the integral over the
-        whole step (the pieces of both legs sum to the deposit)."""
+        whole step (the pieces of both legs sum to the deposit). ``cls`` is the channel class of
+        the pieces (``CLASS_STEP``, possibly with the ``CLASS_RESIDUAL_FLOOR`` flag)."""
         r, F, V = self.R, self.F, self.V
         nx, ny, nz = self.grids[g].shape
         go, gs = self.g_origin[g], self.g_spacing[g]
@@ -329,7 +366,7 @@ class _Reference:
                 if self.scorer is not None and vox >= 0:
                     self.scorer.score_piece(
                         batch, g, vox, piece, tcur + 0.5 * piece - 0.5 * s_act, eps_p,
-                        self.species_id, self.generation, CLASS_STEP,
+                        self.species_id, self.generation, cls,
                     )  # fmt: skip
                 tcur = tb
                 remaining = remaining - piece
@@ -358,7 +395,7 @@ class _Reference:
             if self.scorer is not None and vox >= 0:
                 self.scorer.score_piece(
                     batch, g, vox, remaining, tcur + 0.5 * remaining - 0.5 * s_act, eps_p,
-                    self.species_id, self.generation, CLASS_STEP,
+                    self.species_id, self.generation, cls,
                 )  # fmt: skip
 
     def _deposit_step(
@@ -384,6 +421,138 @@ class _Reference:
                 self._deposit_leg(batch, g, hinge, d1, leg2, deposit, s_act, leg1, s_start, s_end)
             else:
                 self._deposit_point_grid(batch, g, p0, deposit)
+
+    def _residual_energy(self, m: int, r_g_cm2: float) -> float:
+        """Energy at the remaining range ``r_g_cm2`` of the end-of-range segment: the table
+        inverse above the range of the table floor, the constant-S start-range convention
+        ``E_lo r / R(E_lo)`` below it (as ``kernels.residual_energy``)."""
+        t = self.tab
+        r_lo = float(t.r_mass[m, 0])
+        if r_g_cm2 >= r_lo:
+            return self._energy_from_range(m, r_g_cm2)
+        return math.exp(float(t.ln_e0[m])) * r_g_cm2 / r_lo
+
+    def _residual_range(self, m: int, energy: float) -> float:
+        """CSDA range of ``energy`` in material ``m`` for the end-of-range segment: the table
+        range above the table floor, ``R(E_lo) E / E_lo`` below it (as
+        ``kernels.residual_range``)."""
+        r, F, t = self.R, self.F, self.tab
+        e_lo = math.exp(float(t.ln_e0[m]))
+        i, f = F.log_bin_index(r(energy), r(t.ln_e0[m]), r(t.inv_dln_e[m]), t.n_e)
+        r_g = float(
+            F.range_in_bin(
+                r(t.r_mass[m, i]), r(t.f_mass[m, i]), r(t.d_f[m, i]), r(1.0 / t.inv_dln_e[m]), f
+            )
+        )
+        if energy < e_lo:
+            r_g = float(t.r_mass[m, 0]) * energy / e_lo
+        return r_g
+
+    def _deposit_residual(
+        self,
+        batch: int,
+        p: tuple[float, float, float],
+        u: tuple[float, float, float],
+        energy: float,
+        ix: int,
+        iy: int,
+        iz: int,
+        l_in: float,
+    ) -> tuple[float, float]:
+        """Model ``continuous_residual_v1`` (see ``kernels.deposit_residual``): the residual
+        energy along the straight continuation, walked through the transport voxels with the
+        transport traversal (``dda_next_clip``, plane snapping) in legs of constant material and
+        density ending at a medium change, at the end of the remaining table range or at the
+        world boundary; a leg of length ``L`` with the remaining range ``r_s`` (length ``l_s``)
+        has ``max(1, ceil(RESIDUAL_SUBSTEPS L / l_s))`` equal sub-steps, sub-step ``j`` getting
+        ``E_tab(r_{j-1}) - E_tab(r_j)`` uniformly along its length; sub-steps reaching below the
+        table floor are scored at the constant floor state (flag ``CLASS_RESIDUAL_FLOOR``).
+        ``l_in`` is the path length to the world boundary. Returns the energy left there (not
+        deposited) and the scored path length inside the world."""
+        r, F, V, t = self.R, self.F, self.V, self.tab
+        nx, ny, nz = self.shape
+        o, sp = self.geo.origin_mm, self.geo.spacing_mm
+        n_sub = RESIDUAL_SUBSTEPS
+        jx, jy, jz = ix, iy, iz
+        qx, qy, qz = p
+        uvec = V(r(u[0]), r(u[1]), r(u[2]))
+        s_seg = 0.0
+        e_prev = energy
+        e_escape = 0.0
+        path = 0.0
+        n_cross = 0
+        while True:
+            m = int(self.mat[jx, jy, jz])
+            rho = float(self.dens[jx, jy, jz])
+            r_in = self._residual_range(m, e_prev)
+            l_rem = r_in * 10.0 / rho
+            l_world = max(l_in - s_seg, 0.0)
+            stop = l_rem <= l_world
+            leg = l_rem if stop else l_world
+            # the transport voxels of the same medium along the leg (transport traversal)
+            changed = False
+            d_acc = 0.0
+            while True:
+                d_w, axis = F.dda_next_clip(V(r(qx), r(qy), r(qz)), uvec, jx, jy, jz,
+                                            self.origin, self.spacing, self.z_clip)  # fmt: skip
+                d_geo = float(d_w)
+                d_next = d_acc + d_geo
+                if d_next >= leg or axis == 3:
+                    break
+                if n_cross >= self.max_pieces:  # fail closed: the rest in this medium
+                    self.counters["scoring_pieces_overflow"] += 1
+                    break
+                n_cross += 1
+                upward = 1 if u[axis] > 0.0 else 0
+                step = 1 if upward else -1
+                qx, qy, qz = qx + u[0] * d_geo, qy + u[1] * d_geo, qz + u[2] * d_geo
+                idx = (jx, jy, jz)[axis]
+                plane = float(F.plane_position(idx, upward, r(o[axis]), r(sp[axis])))
+                if axis == 0:
+                    qx, jx = plane, jx + step
+                elif axis == 1:
+                    qy, jy = plane, jy + step
+                else:
+                    qz, jz = plane, jz + step
+                if not (0 <= jx < nx and 0 <= jy < ny and 0 <= jz < nz):
+                    break  # the world boundary (l_in) ends the leg
+                if int(self.mat[jx, jy, jz]) != m or float(self.dens[jx, jy, jz]) != rho:
+                    leg, stop, changed = d_next, False, True  # a new leg in the new medium
+                    break
+                d_acc = d_next
+            n_leg = 1
+            if l_rem > 0.0:
+                n_leg = min(max(int(math.ceil(n_sub * leg / l_rem)), 1), n_sub)
+            l_sub = leg / n_leg
+            r_end = 0.0 if stop else max(r_in - leg * rho / 10.0, 0.0)
+            for j in range(n_leg):
+                s0 = s_seg + j * l_sub
+                e_k = 0.0
+                if not stop or j < n_leg - 1:
+                    r_k = r_end + (r_in - r_end) * (n_leg - 1 - j) / n_leg
+                    e_k = min(self._residual_energy(m, r_k), e_prev)
+                if l_sub <= 0.0:
+                    e_k = e_prev  # an empty leg deposits nothing
+                de = e_prev - e_k
+                if de > 0.0:
+                    pk = (p[0] + u[0] * s0, p[1] + u[1] * s0, p[2] + u[2] * s0)
+                    path += l_sub
+                    cls = CLASS_STEP
+                    if self.scorer is not None:
+                        e_lo = math.exp(float(t.ln_e0[m]))
+                        if e_k < e_lo:  # below the table floor: the constant floor state
+                            self.scorer.begin_floor_step(e_lo)
+                            cls = CLASS_STEP | CLASS_RESIDUAL_FLOOR
+                        else:
+                            self.scorer.begin_step(0.5 * (e_prev + e_k), de, l_sub)
+                    for g in range(len(self.grids)):
+                        self._deposit_leg(batch, g, pk, u, l_sub, de, l_sub, 0.0, 1.0, 1.0, cls)
+                e_prev = e_k
+            s_seg += leg
+            if not changed:
+                if not stop:
+                    e_escape = e_prev  # the energy left at the world boundary
+                return e_escape, path
 
     def _deposit_point_grid(
         self, batch: int, g: int, pos: tuple[float, float, float], de: float
@@ -775,8 +944,28 @@ class _Reference:
         max_steps = self.eff.max_steps
         while True:
             if energy <= self.e_cut:
-                self.tallies["cutoff"] += energy
-                self._deposit_point(batch, (px, py, pz), energy)
+                if self.continuous_residual and species == 0:
+                    _t_in, t_out = F.ray_box(V(r(px), r(py), r(pz)), V(r(ux), r(uy), r(uz)),
+                                             self.lo, self.hi)  # fmt: skip
+                    l_in = max(float(t_out), 0.0)
+                    if uz > 0.0:
+                        l_in = min(l_in, float((self.z_clip - r(pz)) / r(uz)))
+                    e_esc, l_res = self._deposit_residual(
+                        batch, (px, py, pz), (ux, uy, uz), energy, ix, iy, iz, l_in
+                    )
+                    self.tallies["cutoff"] += energy - e_esc
+                    self.tallies["escaped"] += e_esc
+                    if self.scorer is not None:
+                        self._path_mm += l_res  # the residual sub-steps are scored path
+                        if self._path_mm > self.path_bound_mm:
+                            self.path_exceeded = 1
+                    if e_esc > 0.0:  # the segment leaves the world: an escape at the crossing
+                        pos = (px + ux * l_in, py + uy * l_in, pz + uz * l_in)
+                        self._end(h, END_ESCAPED, pos, (ux, uy, uz), e_esc)
+                        return
+                else:
+                    self.tallies["cutoff"] += energy
+                    self._deposit_point(batch, (px, py, pz), energy)
                 self._end(h, END_CUTOFF, (px, py, pz), (ux, uy, uz), energy)
                 return
             if steps >= max_steps:
@@ -826,7 +1015,30 @@ class _Reference:
                 e_mid = self._energy_from_range(m, r0 - rho * s / 20.0)
                 inv_xs = r(self.tab.inv_rho_xs_cm2_g[m])
                 pv_mid = K.pv_mev(r(e_mid), self.mass)
-                if birth:
+                if self.is_ion:
+                    e_end = (
+                        min(self._energy_from_range(m, r0 - rho * s / 10.0), energy)
+                        if birth
+                        else energy
+                    )
+                    if self.map_eval == "table":
+                        var, st_map, miss = self.IM.mcs_variance_table(
+                            self.map_ion, self.map_pro, self.map_comp, self.map_quad,
+                            self.map_tab, m, self.charge, self.mass, pv_mid,
+                            K.pv_mev(r(e_end), self.mass), r(p1v1), 1 if birth else 0, inv_xs,
+                            r(rho), r(s),
+                        )  # fmt: skip
+                        self.counters["mcs_table_bracket_miss"] += int(miss)
+                    else:
+                        var, st_map = self.IM.mcs_variance(
+                            self.map_ion, self.map_pro, self.map_comp, self.map_quad, m,
+                            self.charge, self.mass, pv_mid, K.pv_mev(r(e_end), self.mass),
+                            r(p1v1), 1 if birth else 0, inv_xs, r(rho), r(s),
+                        )  # fmt: skip
+                    var = float(var)
+                    if st_map != 0:  # fail closed: the step scatters with zero variance
+                        self.counters["mcs_mapping_failure"] += 1
+                elif birth:
                     e_end = min(self._energy_from_range(m, r0 - rho * s / 10.0), energy)
                     var = float(
                         EM.scattering_variance_birth(
@@ -916,7 +1128,7 @@ class _Reference:
                 var_e = EM.bohr_variance(
                     r(energy - 0.5 * mean_f),
                     self.mass,
-                    self.one,
+                    self.charge,
                     r(self.tab.z_over_a[m]),
                     r(rho),
                     r(s_act),

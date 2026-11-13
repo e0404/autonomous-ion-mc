@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "git_sha": "c790df369c03d1d775c843d4f1e13ab9337137e5",
+  "request_id": "IR-20261102-010435-B59B2D",
+  "created_at_utc": "2026-11-02T01:04:35.366905+00:00",
+  "task_id": "V3-008",
+  "category": "inaccessible-information",
+  "summary": "V3-008 freeze (plan revision 1 at 655d16a0 and its reviewed successor): independent evidence of the charge dependence of ion lateral spreading (He/C/O in water, 50–430 MeV/u) and independent coverage of the f_dM extrapolation above the 300 MeV proton domain are unavailable, and so are measured C/O ranges in water with uncertainties (row V3); request data access or acceptance of the gaps as recorded.",
+  "investigation": {
+    "blocked_claim": "V2-ION / decision 0043 §3: 'the ion multiple-scattering model (exact-Ω mapping of the proton f_dM model) reproduces the charge dependence of lateral spreading of He, C and O in water at 50–430 MeV/u' as an independently evidenced claim; 'f_dM evaluated at proton-equivalent states above the 300 MeV proton-qualified domain (up to about 2.5 GeV) is covered by independent evidence'; row V3 'ionmc C/O ranges in water agree with measurement' cannot be evaluated and stays an EVIDENCE GAP without the input.",
+    "budget": "Bounded investigation completed before the freeze: P6 measured-range access (two access approaches, ≤ 2 h); P6 lateral-data search (19 candidates); P10 single-scattering availability with the Geant4 Coulomb-model lineage reading (G4CoulombScattering, G4eCoulombScatteringModel, G4WentzelOKandVIxSection, G4IonCoulombScatteringModel, G4IonCoulombCrossSection, G4EmParameters; 11 pinned sources) and ten scorer-free smokes; P11b/P11c f_dM-extrapolation quantification. No further autonomous route exists: the remaining candidates are paywalled, unpublished or of unknown provenance, and every accessible single-scattering engine shares the screened-Coulomb lineage.",
+    "alternatives": [
+      "P6 lateral-data search (validation/plans/v3-008/p6-lateral-data-search.md): EVIDENCE GAP",
+      "P6 measured range (p6-measured-data-access.md): Sihver 1998 FAILED; V3 EVIDENCE GAP (bundled by orchestrator decision (e))",
+      "P10 / V5-SS branch B (p10-single-scattering-availability.md §7.4.1–7.8): held-out Geant4 single-scattering ion/ion ratios at common velocity; shared screened-Coulomb lineage; differential f_dM coverage only",
+      "I11-abs (informative) against the committed Molière–Hanson reference and I11-ext (report-only): theory-anchored within the same Molière theory, SEEN pre-freeze, not independent",
+      "Informative relative check against text-quoted thesis ratios (P6-lateral §3): beamline-confounded, no uncertainties, cannot discriminate the ±5 % model uncertainty"
+    ],
+    "attempts": [
+      {
+        "approach": "Search for measured He/C/O lateral widths or angular spreads in water (Parodi 2013, Schwaab 2011, Tessonnier 2017 PMB and thesis, Besuglow 2022, Krämer 2016, Phillips LBL, Wong 1990, Bevalac, Matsufuji 2005, HIMAC, MedAustron, geant-val; Gottschalk survey)",
+        "outcome": "EVIDENCE GAP: no tabulated He/C/O data in water with uncertainties; thesis figures and beamline-confounded text ratios only; key papers paywalled; Phillips provenance unknown; Gottschalk arXiv:1204.4470 §5.3 concurs",
+        "artifact": "validation/plans/v3-008/p6-lateral-data-search.md (committed at b3eef90; sha256 d149550b8dc5684ec4cd7530a88e50b75bcf083dbc385934aa73e33a708212ef)"
+      },
+      {
+        "approach": "Measured C/O Bragg-peak positions in water (Sihver, Schardt, Kanai 1998, J-STAGE)",
+        "outcome": "FAILED: curves normalised horizontally to the calculated peaks, figures only, oxygen = 18O",
+        "artifact": "validation/plans/v3-008/p6-measured-data-access.md; PDF sha256 68567feb58bf3c2a669193e87d1f0ce41f86c21dcd36959f5ffd7c390bfcda55"
+      },
+      {
+        "approach": "Geant4 single-scattering thin-slab reference (P10): constructor coverage, Coulomb-model lineage per particle from pinned sources, scorer-free smokes incl. the 1 mm slab",
+        "outcome": "Available and affordable (g4em-standard_SS; 1 mm slab, ≈ 2.94 h REF at the 6e4-primary design), but the ion path G4IonCoulombScatteringModel shares the screened Rutherford law and Born form → branch B, shared-lineage evidence only; the proton path is a different model (not a valid z = 1 reference)",
+        "artifact": "p10-single-scattering-availability.md §7.4.1–7.8; smokes REF-61e64b1b80f37f99f9e5-02b74b6c, REF-285075c563439dac3279-432c3126, REF-35df82fcd7723f6a9a0c-db361e98; validation/scripts/ion_em/ss_budget.py"
+      },
+      {
+        "approach": "V5-SS coverage of the f_dM extrapolation (end cases He 250, C/O 430)",
+        "outcome": "Withdrawn as independent coverage: the common-velocity ion/ion ratio covers it only differentially (≤ 1.5 pp)",
+        "artifact": "p11-exact-omega-mapping.md P11c; decision 0043 §3 round V3-008-4 note"
+      },
+      {
+        "approach": "Theory bound of the extrapolation (I11-ext) and absolute comparison (I11-abs) against the Molière–Hanson reference",
+        "outcome": "Drift ≤ 1.5 pp from 300 MeV to 3 GeV (protons, water); the reference carries ≈ 3 % uncertainty for water (not validated directly; Pb cleared by attribution; compound rule checked against Gottschalk's implementation) → declared limitation, not independent evidence",
+        "artifact": "p11-exact-omega-mapping.md P11b; p1-moliere-hanson-reference.md; p1c-completion.md; validation/scripts/ion_em/moliere_hanson.py"
+      }
+    ]
+  },
+  "reason_autonomous_resolution_not_possible": "The only independent physical evidence of the charge dependence of ion lateral spreading would be measured data, and the bounded search (P6 lateral-data search, 19 candidates; P6 measured-range access; P10 single-scattering availability with Geant4 lineage reading and smokes; P11b/P11c extrapolation quantification) found none accessible in numeric form with uncertainties: the measured He/C/O lateral profiles in water (Tessonnier et al. 2017 PMB 62:3958; Schwaab et al. 2011 PMB 56:7813; HIT campaign data \"available from the authors\", Besuglow 2022) are behind publisher paywalls or held by the measuring groups (EXPERIMENT.md permitted category 1: paper behind inaccessible authentication, data only the operator may be able to obtain). Every single-scattering MC reference available to the autonomous system (Geant4 through OpenTOPAS, G4IonCoulombScatteringModel) shares the screened-Coulomb cross-section lineage of the model under test, so plan revision 1 (amended STOP 4 clause) excludes it as independent evidence; the held-out V5-SS row stays as shared-lineage evidence (branch B). The f_dM extrapolation above 300 MeV proton-equivalent (states up to ≈ 2.5 GeV at the standard points and upper ends) is bounded only within the same Molière theory (row I11-ext). For row V3 the only open candidate for measured C/O Bragg-peak positions (Sihver, Schardt, Kanai 1998) is unusable (curves normalised horizontally to the calculated peaks, figures only, 18O). Autonomous resolution is therefore not possible; integration is not blocked (plan STOP 4 allows integration with the gaps stated in the ledger), but the ledger wording of V2-ION and V3 depends on the answer.",
+  "requested_input": "Unavailable input (1): independent evidence of the charge dependence of lateral spreading for He/C/O in water at 50–430 MeV/u, i.e. measured lateral dose widths or angular spreads with stated uncertainties (candidates Parodi 2013, Schwaab 2011, Tessonnier 2017: no open numeric tables found), or an accessible single-scattering MC reference whose screened-Coulomb cross-section physics is independent of the model used by the exact-Ω mapping; a reference that shares the screened Rutherford law and Molière's Born screening form (including the Geant4 single-scattering configuration of V5-SS, G4IonCoulombScatteringModel, branch B) does not satisfy this input. Unavailable input (2): independent coverage of the f_dM evaluation beyond its 300 MeV proton-qualified domain (proton-equivalent states up to about 2.5 GeV at the standard points and upper ends), declared and bounded only within the same Molière theory (row I11-ext). Unavailable input (3, row V3): measured ranges of carbon and oxygen ions in water, i.e. Bragg-peak and/or R80 positions with stated uncertainties together with the water-equivalent thickness of the beam-line elements upstream of the water, at energies within 80–430 MeV/u (C) and 100–430 MeV/u (O) (candidates: GSI precision Bragg curves (Schardt et al. 2007), HIT numeric tables (Tessonnier 2017, Krämer 2016, Kurz 2012)). Please choose for the lateral input: (A) provide the measured lateral data (e.g. Tessonnier 2017 / HIT σ(z) tables for p, He, C, O in water with uncertainties, or the Schwaab 2011 tables) as files the reference-data tool can acquire; (B) provide, or authorise a route to, an independent-physics single-scattering or angular-distribution reference whose screened-Coulomb cross section is independent of Molière's screened Rutherford law with the Born screening form (not the Geant4 G4IonCoulombScatteringModel / G4eCoulombScatteringModel lineage); (C) accept that V3-008 integrates with ion lateral spreading supported only by theory-derived mapping and implementation checks and by shared-lineage single-scattering MC evidence (V5-SS; no independent evidence), and with the f_dM extrapolation as a declared limitation (a ≤ 1.5 % component of the ±5 % model uncertainty), both recorded as gaps in the ledger. And for the measured-range input: (D) provide measured C/O Bragg-peak or R80 positions in water with uncertainties and the beam-line water-equivalent offsets as files the reference-data tool can acquire; (E) accept that row V3 stays an EVIDENCE GAP in the ledger. Any data provided would be used in a pre-registered amendment row before use, never as construction or calibration.",
+  "decisions_or_tasks_blocked": "V3-008 freeze commit (plan revision 1; candidate 655d16a0f633140c958172d2ac1fdfaeb0faf7a0, reviewed successor to follow); ledger wording of V2-ION and V3 at integration",
+  "status": "resolved",
+  "notification": {
+    "status": "sent",
+    "http_status": 200
+  },
+  "resolved_at_utc": "2026-11-07T20:37:32.995678+00:00",
+  "response_file": "response.json"
+}

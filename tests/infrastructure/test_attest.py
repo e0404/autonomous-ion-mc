@@ -290,3 +290,125 @@ def test_trust_map_rejects_small_order_key():
         }
         with pytest.raises(ValueError, match="small-order"):
             lv.parse_trust_map(data)
+
+
+# --- require_verified: migration-only bootstrap and the output-manifest expectation ---------------
+MIGRATION = "V3-INFRA-002"
+
+
+def _run_record(task=MIGRATION, manifest="m" * 64, drop_manifest=False):
+    rec = {"run_id": "RUN-1", "task_id": task, "sha": "a" * 40, "output_manifest_sha256": manifest}
+    if drop_manifest:
+        del rec["output_manifest_sha256"]
+    return rec
+
+
+def test_bootstrap_tasks_mirror_local_validation():
+    """The stdlib-only verifier mirrors (does not import) the gate's BOOTSTRAP_TASKS."""
+    from infrastructure.validation import local_validation as lv
+
+    assert attest_verify.BOOTSTRAP_TASKS == lv.BOOTSTRAP_TASKS == frozenset({MIGRATION})
+    src = (ROOT / "validation/scripts/transport/attest_verify.py").read_text(encoding="utf-8")
+    assert "import infrastructure" not in src and "from infrastructure" not in src
+
+
+def test_bootstrap_requires_expected_task_id():
+    with pytest.raises(attest_verify.AttestationRequired, match="reserved for the migration"):
+        attest_verify.require_verified(_run_record(), "host-runner", {}, bootstrap=True)
+
+
+def test_bootstrap_rejected_for_non_migration_task():
+    rec = _run_record(task="V3-008")
+    for trust in ({}, {"host-runner": {}}):
+        with pytest.raises(attest_verify.AttestationRequired, match="reserved for the migration"):
+            attest_verify.require_verified(
+                rec, "host-runner", trust, expected_task_id="V3-008", bootstrap=True
+            )
+    # without bootstrap the unsigned record is rejected as well
+    with pytest.raises(attest_verify.AttestationRequired, match="unverified record rejected"):
+        attest_verify.require_verified(rec, "host-runner", {}, expected_task_id="V3-008")
+
+
+def test_bootstrap_migration_task_with_empty_trust_map_passes():
+    for trust in ({}, {"host-runner": {}}):
+        out = attest_verify.require_verified(
+            _run_record(), "host-runner", trust, expected_task_id=MIGRATION, bootstrap=True
+        )
+        assert out["status"] == "unverified"
+    # the task binding still applies in bootstrap
+    with pytest.raises(attest_verify.AttestationRequired, match="identity mismatch"):
+        attest_verify.require_verified(
+            _run_record(task="V3-008"), "host-runner", {}, expected_task_id=MIGRATION,
+            bootstrap=True,
+        )  # fmt: skip
+
+
+def test_bootstrap_migration_task_with_trusted_key_requires_verification():
+    key = attest.generate_keypair()
+    other = attest.generate_keypair()
+    trust = {"host-runner": {key.key_id: key.public_key.hex()}}
+    kw = {"expected_task_id": MIGRATION, "bootstrap": True}
+    with pytest.raises(attest_verify.AttestationRequired, match="unverified record rejected"):
+        attest_verify.require_verified(_run_record(), "host-runner", trust, **kw)
+    untrusted = attest.sign_record(_run_record(), other, "host-runner")
+    with pytest.raises(attest_verify.AttestationRequired, match="not trusted"):
+        attest_verify.require_verified(untrusted, "host-runner", trust, **kw)
+    signed = attest.sign_record(_run_record(), key, "host-runner")
+    assert attest_verify.require_verified(signed, "host-runner", trust, **kw)["status"] == "verified"
+
+
+def _signed_trust(rec):
+    key = attest.generate_keypair()
+    return attest.sign_record(rec, key, "host-runner"), {"host-runner": {key.key_id: key.public_key.hex()}}
+
+
+def test_output_manifest_expectation_omitted():
+    """OMIT (the default) checks nothing: null, hex and a missing field all pass."""
+    assert repr(attest_verify.OMIT) == "OMIT"
+    for rec in (_run_record(manifest=None), _run_record(), _run_record(drop_manifest=True)):
+        signed, trust = _signed_trust(rec)
+        assert attest_verify.require_verified(signed, "host-runner", trust)["status"] == "verified"
+        out = attest_verify.require_verified(
+            signed, "host-runner", trust, expected_output_manifest_sha256=attest_verify.OMIT
+        )
+        assert out["status"] == "verified"
+
+
+def test_output_manifest_explicit_none_matches_signed_null():
+    signed, trust = _signed_trust(_run_record(manifest=None))
+    out = attest_verify.require_verified(
+        signed, "host-runner", trust, expected_output_manifest_sha256=None
+    )
+    assert out["status"] == "verified"
+
+
+def test_output_manifest_explicit_none_vs_non_null_raises():
+    signed, trust = _signed_trust(_run_record(manifest="m" * 64))
+    with pytest.raises(attest_verify.AttestationRequired, match="output_manifest_sha256 is 'm"):
+        attest_verify.require_verified(
+            signed, "host-runner", trust, expected_output_manifest_sha256=None
+        )
+
+
+def test_output_manifest_explicit_hex_vs_null_raises():
+    signed, trust = _signed_trust(_run_record(manifest=None))
+    with pytest.raises(attest_verify.AttestationRequired, match="output_manifest_sha256 is None"):
+        attest_verify.require_verified(
+            signed, "host-runner", trust, expected_output_manifest_sha256="m" * 64
+        )
+    signed, trust = _signed_trust(_run_record(manifest="m" * 64))
+    assert (
+        attest_verify.require_verified(
+            signed, "host-runner", trust, expected_output_manifest_sha256="m" * 64
+        )["status"]
+        == "verified"
+    )
+
+
+def test_output_manifest_missing_field_raises_when_expected():
+    signed, trust = _signed_trust(_run_record(drop_manifest=True))
+    for want in (None, "m" * 64):
+        with pytest.raises(attest_verify.AttestationRequired, match="is missing"):
+            attest_verify.require_verified(
+                signed, "host-runner", trust, expected_output_manifest_sha256=want
+            )

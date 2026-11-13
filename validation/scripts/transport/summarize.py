@@ -3,7 +3,7 @@
 Usage::
 
     python summarize.py DIR --expected-sha SHA [--attest-sha SHA]
-    python summarize.py --combine DIR [DIR ...] --expected-sha SHA --out FILE
+    python summarize.py --combine DIR [DIR ...] --expected-sha SHA --out FILE [--subset]
 
 Single archive: ``environment.txt`` carries the expected SHA; ``manifest.txt`` lists exactly the
 step files present; every step file has the four header lines with the same SHA and an ``# exit=``
@@ -28,6 +28,12 @@ list of the suite, with no step duplicated and none missing. Only then is the co
 imported from another output directory: the code cannot verify the protected host-runner records
 behind ``--partials-manifest``, so such a step is ``conformant: false`` with the reason
 ``imported_partials_unverified_by_code`` (its ``pass`` is unaffected).
+
+``--combine --subset`` (explicit opt-in, for a suite run in blocks at different SHAs) does not
+treat absent suite steps as a problem: they stay in ``missing_steps``,
+``complete`` is False and the combined summary is never ``conformant`` (reason ``subset of the
+suite``); a duplicated or unexpected step remains a problem and ``pass`` is judged over the
+archives present.
 """
 
 from __future__ import annotations
@@ -55,6 +61,15 @@ and 20361004, 20371004 and 20381004 are consumed (observed before amendments 4 a
 results were observed is consumed (plan, section Seeds)."""
 V5_QUALIFICATION_SEED_BASE = 20421004
 """Qualification base of the suite ``lv5`` (V3-005A); the 2043xxxx family are rehearsals."""
+V8_QUALIFICATION_SEED_BASES = {"lv8": 20581004, "hr8": 20591004}
+"""Qualification bases of the V3-008 suites (plan section C); 2060xxxx are rehearsals."""
+V8_RERUN_SEED_BASES: dict[str, tuple[int, ...]] = {"lv8": (20572004,)}
+"""Re-run bases of the V3-008 suites that also qualify (plan section C, the third re-run base
+20572004, declared by a dated amendment before use): lv8 rows re-run after the results of their
+qualification base were observed (that base is then consumed for the row) take a fresh base, so
+the summary must not flag the declared re-run base as non-qualification evidence. The seeds
+``20572004 + 100 r_index + k`` (r_index <= 60, k <= 99) lie in the leading gap of the reserved
+block, below 20581004 (``tests/ionmc/test_v3_008_seed_families.py``)."""
 IDENTITY_KEYS = ("git_sha", "suite", "scale", "python_parts", "seed_base")
 
 
@@ -93,6 +108,17 @@ def identity(env: dict[str, Any]) -> str:
 
 STEP_TAGS = (
     ("pytest", None),
+    ("i6-lv-", "i6-lv"),  # V3-008 lv8/hr8 (steps_v8.py), before the generic t1-/t13-/r1- tags
+    *((f"{row}-combine", f"{row}-combine") for row in ("i9", "i12", "i14", "i15", "t12-ion-lv",
+                                                       "t12-ion-hr")),
+    *((f"{row}-", f"{row}-shard") for row in ("i9", "i12", "i14", "i15", "t12-ion-lv",
+                                               "t12-ion-hr")),
+    ("i8-", "i8"),
+    ("i13-", "i13"),
+    ("t1-ion-", "t1-ion"),
+    ("r1-ion-", "r1-ion"),
+    ("r2-", "r2"),
+    ("t13-ion-", "t13-ion"),
     ("lv5-throughput", "lv5-throughput"),
     ("n1-", "n1"),
     ("v2-combine", "v2-combine"),
@@ -210,6 +236,7 @@ def parse_step(
     }
 
 
+STEP_FILE = re.compile(r"^[0-9]{2,3}-.+\.txt$")
 IMPORTED_UNVERIFIED = "imported_partials_unverified_by_code"
 
 
@@ -293,6 +320,15 @@ def seed_blockers(seed_base: Any, suite: str | None = None) -> list[str]:
                 "is non-qualification evidence)"
             ]
         return []
+    if suite in ("lv8", "hr8"):
+        want = V8_QUALIFICATION_SEED_BASES[suite]
+        if int(seed_base) != want and int(seed_base) not in V8_RERUN_SEED_BASES.get(suite, ()):
+            return [
+                f"seed_base {int(seed_base)} is not the {suite} qualification base {want} "
+                "(V3-008 plan section C; the 2060xxxx family are rehearsals, re-run bases need a "
+                f"dated amendment; declared re-run bases: {V8_RERUN_SEED_BASES.get(suite, ())})"
+            ]
+        return []
     if suite in ("lv4", "hr4"):
         if int(seed_base) != V4_QUALIFICATION_SEED_BASE:
             return [
@@ -329,7 +365,8 @@ def verify(d: Path, sha: str, attest_sha: str | None = None) -> dict[str, Any]:
         problems.append("manifest.txt missing or empty")
     if len(set(names)) != len(names):
         problems.append("manifest lists a step twice")
-    present = sorted(p.stem for p in d.glob("[0-9][0-9]-*.txt"))
+    # two-digit step numbers, three digits from step 100 on (the sharded lv8 suite has > 99 steps)
+    present = sorted(p.stem for p in d.glob("[0-9][0-9]*-*.txt") if STEP_FILE.match(p.name))
     if sorted(names) != present:
         problems.append(f"manifest {sorted(names)} differs from step files {present}")
     steps: dict[str, Any] = {}
@@ -402,7 +439,9 @@ def verify(d: Path, sha: str, attest_sha: str | None = None) -> dict[str, Any]:
     }
 
 
-def combine(dirs: list[Path], sha: str, attest_sha: str | None = None) -> dict[str, Any]:
+def combine(
+    dirs: list[Path], sha: str, attest_sha: str | None = None, subset: bool = False
+) -> dict[str, Any]:
     parts = [verify(d, sha, attest_sha) for d in dirs]
     problems: list[str] = []
     for d, p in zip(dirs, parts, strict=True):
@@ -426,11 +465,14 @@ def combine(dirs: list[Path], sha: str, attest_sha: str | None = None) -> dict[s
         full = run_suite.full_step_names(suite, int(env.get("python_parts", 2)))
         missing = sorted(set(full) - set(seen))
         extra = sorted(set(seen) - set(full))
-        if missing:
+        if missing and not subset:
             problems.append(f"missing steps: {missing}")
         if extra:
             problems.append(f"unexpected steps: {extra}")
     ok = not problems and all(p["pass"] for p in parts)
+    reasons = {r for p in parts for r in p["non_conformant_reasons"]}
+    if subset and missing:
+        reasons.add(f"subset of the suite: {len(missing)} of {len(full)} steps absent (--subset)")
     att_problems = [m for p in parts for m in p["partials_attestation_problems"]]
     reduced = any(p["reduced_history_counts"] for p in parts)
     deferred = sorted({n for p in parts for n in p["deferred_steps"]})
@@ -445,7 +487,7 @@ def combine(dirs: list[Path], sha: str, attest_sha: str | None = None) -> dict[s
             ok
             and not reduced
             and all(p["source_ok"] for p in parts)
-            and all(not p["non_conformant_reasons"] for p in parts)
+            and not reasons
             and not att_problems
         ),
         "attestation": {
@@ -470,8 +512,9 @@ def combine(dirs: list[Path], sha: str, attest_sha: str | None = None) -> dict[s
             "host-runner PARTIAL stdout lines; this code cannot verify those records, compare "
             "the digests and host_run_ids above with them and with record_local_validation",
         },
-        "non_conformant_reasons": sorted({r for p in parts for r in p["non_conformant_reasons"]}),
+        "non_conformant_reasons": sorted(reasons),
         "reduced_history_counts": reduced,
+        "subset": subset,
         "problems": problems,
         "missing_steps": missing,
         "directories": [str(d) for d in dirs],
@@ -489,15 +532,21 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--expected-sha", required=True)
     ap.add_argument("--attest-sha")
     ap.add_argument("--combine", nargs="+", metavar="DIR")
+    ap.add_argument("--subset", action="store_true",
+                    help="with --combine: absent suite steps are not a problem (never conformant)")
     ap.add_argument("--out", help="combined summary file (must not exist)")
     args = ap.parse_args(argv)
+    if args.subset and not args.combine:
+        raise SystemExit("--subset is only valid together with --combine")
     if args.combine:
         if not args.out:
             raise SystemExit("--combine needs --out")
         out = Path(args.out)
         if out.exists():
             raise SystemExit(f"refusing to overwrite {out}")
-        summary = combine([Path(d) for d in args.combine], args.expected_sha, args.attest_sha)
+        summary = combine(
+            [Path(d) for d in args.combine], args.expected_sha, args.attest_sha, args.subset
+        )
         out.write_text(json.dumps(summary, indent=1, sort_keys=True) + "\n")
     else:
         if not args.directory:

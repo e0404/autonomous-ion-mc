@@ -81,7 +81,8 @@ ALLOWED_PARENTS = (REPO / "validation" / "generated", REPO / "benchmarks" / "gen
 STEPS = HERE / "steps.py"
 STEPS_V4 = HERE / "steps_v4.py"
 STEPS_V5 = HERE / "steps_v5.py"
-SUITES = ("lv", "hr", "lv4", "hr4", "lv5")
+STEPS_V8 = HERE / "steps_v8.py"
+SUITES = ("lv", "hr", "lv4", "hr4", "lv5", "lv8", "hr8")
 PY = sys.executable
 SOURCE_PREFIXES = (
     "src/ionmc",
@@ -118,12 +119,23 @@ acceptance plan, decision 0041 and, individually, the lv5 steps and the nuclear 
 prefix ``validation/scripts/transport`` and the nuclear package ``src/ionmc/nuclear`` are hashed in
 every suite)."""
 
+SOURCE_FILES_V8 = (
+    *SOURCE_FILES_V5,
+    "validation/plans/v3-008-acceptance.md",
+    "decisions/0043-ion-em-transport.md",
+    "validation/scripts/transport/steps_v8.py",
+)
+"""The hashed set of the suites ``lv8`` and ``hr8`` (V3-008, decision 0043): the lv5 set plus the
+V3-008 acceptance plan, decision 0043 and, individually, the lv8/hr8 steps."""
+
 
 def source_file_list(suite: str | None = None) -> tuple[str, ...]:
     """Individually hashed files of ``suite`` (default: the suite named by ``IONMC_RUN_SUITE``)."""
     suite = suite or os.environ.get("IONMC_RUN_SUITE", "")
     if suite == "lv5":
         return SOURCE_FILES_V5
+    if suite in ("lv8", "hr8"):
+        return SOURCE_FILES_V8
     return SOURCE_FILES_V4 if suite in ("lv4", "hr4") else SOURCE_FILES
 
 
@@ -136,6 +148,8 @@ V4_QUALIFICATION_SEED_BASE = 20401004  # amendment 6 of the V3-004 plan
 V4_CONSUMED_SEED_BASES = (20361004, 20371004, 20381004)  # amendments 4 and 5, 20381004 by V3-003D
 V4_REHEARSAL_SEED_BASE = 20351004
 V5_QUALIFICATION_SEED_BASE = 20421004  # plan of V3-005, Seeds (rehearsal family 2043xxxx)
+V8_LV_SEED_BASE = 20581004  # V3-008 plan section C (lv8 qualification)
+V8_HR_SEED_BASE = 20591004  # V3-008 plan section C (hr8 qualification)
 V3003D_REHEARSAL_FAMILY = "2041xxxx"  # rehearsals of V3-003D, never qualification evidence
 DEFAULT_SEED_BASES = {
     "lv": QUALIFICATION_SEED_BASE,
@@ -143,6 +157,8 @@ DEFAULT_SEED_BASES = {
     "lv4": V4_QUALIFICATION_SEED_BASE,
     "hr4": V4_QUALIFICATION_SEED_BASE,
     "lv5": V5_QUALIFICATION_SEED_BASE,
+    "lv8": V8_LV_SEED_BASE,
+    "hr8": V8_HR_SEED_BASE,
 }
 REHEARSAL_SEED_BASE = 20261004
 CONSUMED_SEED_BASE = 20271004  # used by the T9 investigation: not a qualification base
@@ -167,6 +183,8 @@ DEFERRED_STEPS = {
     "lv4": ("a15-workers",),
     "hr4": (),
     "lv5": ("v3-workers-partition",),
+    "lv8": (),
+    "hr8": (),
 }
 """Steps whose purpose is the worker-partition invariance (1 versus N worker processes): they are
 not executed in the single-process diagnostic mode and recorded as ``deferred``. Steps that merely
@@ -183,6 +201,7 @@ STEP_TIMEOUT_FLOOR_S = {
         "v3-lv": 3300, "x1": 3300, "e1": 3300, "v4-v4b": 3300, "r1-a16-t1-regression": 3300,
         "n1-v1-v1b-d6": 3300, "v3-workers-partition": 3300,
     },
+    "lv8": {"r2-a16-trace-fixture": 3300},
 }
 """Minimum step timeout [s] of long steps (the ``--step-timeout`` default is 1500 s); the effective
 timeout is the larger of the two and is recorded in the step header."""
@@ -242,7 +261,8 @@ def suite_steps(
 
     def add(name: str, cmd: list[str], env: dict[str, str] | None = None) -> None:
         full = f"{len(steps) + 1:02d}-{name}"
-        if cmd[:2] in ([PY, str(STEPS)], [PY, str(STEPS_V4)], [PY, str(STEPS_V5)]):
+        if cmd[:2] in ([PY, str(STEPS)], [PY, str(STEPS_V4)], [PY, str(STEPS_V5)],
+                       [PY, str(STEPS_V8)]):
             eff = step_timeout_s(suite, full, step_timeout)
             inner = ["--timeout", str(max(30, int(0.9 * eff)))]  # the pool cleans up first
             cmd = [*cmd, *inner, "--seed-base", str(seed_base)]  # every seed derives from the base
@@ -253,6 +273,12 @@ def suite_steps(
             raise SystemExit("lv5 --import-dirs requires --partials-manifest (name -> sha256)")
         pm = ["--partials-manifest", str(partials_manifest)] if import_dirs else []
         _suite_steps_v5(add, s5, sc, out_dir, [*dirs, *pm])
+        return steps
+    if suite in ("lv8", "hr8"):
+        if import_dirs and partials_manifest is None:
+            raise SystemExit(f"{suite} --import-dirs requires --partials-manifest (name -> sha256)")
+        pm = ["--partials-manifest", str(partials_manifest)] if import_dirs else []
+        _suite_steps_v8(suite, add, [PY, str(STEPS_V8)], sc, out_dir, [*dirs, *pm])
         return steps
     if suite in ("lv4", "hr4"):
         _suite_steps_v4(suite, add, s4, w, sc, cuda, out_dir, dirs, single_process)
@@ -412,6 +438,48 @@ def _suite_steps_v5(add, s5, sc, out_dir, dirs):  # type: ignore[no-untyped-def]
     add("r1-a16-t1-regression", [*s5, "r1", *sc], env)
     add("v3-workers-partition", [*s5, "v3-workers"], env)  # deferred: runs only when the mode is lifted
 
+
+def _sharded_v8(add, s8, sc, out_dir, dirs, row, env=None):  # type: ignore[no-untyped-def]
+    """The shard steps of a sharded lv8/hr8 row (``steps_v8.shard_plan``) and its combine step."""
+    import steps_v8
+
+    for unit, n_sh, _n, _b, _m in steps_v8.shard_plan(row):
+        for j in range(n_sh):
+            add(f"{row}-{unit}-s{j}",
+                [*s8, "shard", "--row", row, "--unit", unit, "--shard", str(j),
+                 "--out-dir", str(out_dir), *sc], env)  # fmt: skip
+    add(f"{row}-combine", [*s8, "combine", "--row", row, "--dirs", *dirs, *sc], env)
+
+
+def _suite_steps_v8(suite, add, s8, sc, out_dir, dirs):  # type: ignore[no-untyped-def]
+    """Steps of the V3-008 suites (rows of ``validation/plans/v3-008-acceptance.md`` section A;
+    ``steps_v8.py``): one process each, every statistical step takes ``--scale``, the seed base
+    is appended by ``add``. Planned host durations (measured C 290 throughput, steps_v8 docstring;
+    ``steps_v8.planned_shard_seconds``) stay below 1500 s per step: the rows I9, I12, I14, I15 and
+    T12-ion (amendment 4c, 2e5 warp-cpu histories per configuration) run as shard steps whose
+    sealed partials (``samples/``) a combine step per row reads (``dirs``: this archive first,
+    then imported archives with the partials manifest, as lv5). T12-ion LV runs right after the
+    cheap rows (a STOP row; plan item 4b order). hr8 needs CUDA (``IONMC_REQUIRE_CUDA=1``)."""
+    if suite == "lv8":
+        add("i6-lv-deterministic-end-depth", [*s8, "i6-lv"], NIST_FREE_ENV)
+        for p, name in enumerate(("he150", "c290", "o350")):
+            add(f"i8-range-straggling-{name}", [*s8, "i8", "--point", str(p), *sc])
+        for i, name in enumerate(("he50", "he150", "he250", "c80", "c290", "c430", "o100",
+                                  "o350", "o430")):  # fmt: skip
+            add(f"i13-r80-vs-csda-{name}", [*s8, "i13", "--case-index", str(i), *sc])
+        add("t1-ion-trace-parity-c290-o350", [*s8, "t1-ion", *sc])
+        add("r1-ion-repeatability-c290", [*s8, "r1-ion", *sc])
+        add("r2-a16-trace-fixture", [*s8, "r2"])
+        for row in ("t12-ion-lv", "i9", "i12", "i14", "i15"):
+            _sharded_v8(add, s8, sc, out_dir, dirs, row)
+    else:
+        cuda = {"IONMC_REQUIRE_CUDA": "1"}
+        add("t13-ion-chunks-cuda-c290", [*s8, "t13-ion", *sc], cuda)
+        _sharded_v8(add, s8, sc, out_dir, dirs, "t12-ion-hr", cuda)
+
+
+NIST_FREE_ENV: dict[str, str] = {}
+"""lv8 steps need no cached data: they use the analytic Bethe source only."""
 
 NUCLEAR_ENV = {
     "IONMC_REQUIRE_DATA": "1",

@@ -1,0 +1,90 @@
+[
+  {
+    "files": [
+      {
+        "bytes": 2884,
+        "path": "inputs/case.json",
+        "sha256": "a66a004044fe594fb1568b596355bdcc8a9382832f2ef68a72b12b2105dc6699"
+      },
+      {
+        "bytes": 3875,
+        "path": "inputs/input.txt",
+        "sha256": "298c8844983f3f9862b5c7eeff519005a5e7a2fe5a74f7487b9c3fa29b4e7e9f"
+      },
+      {
+        "bytes": 3710,
+        "path": "record.json",
+        "sha256": "8b8a29c592c7c71ae105cf2799ccfde2bf9acd34080b17684ef8a4f6fc153b44"
+      },
+      {
+        "bytes": 4449,
+        "path": "request.json",
+        "sha256": "e01b6098bfa42ce665327d22258e1f85468dd97ffa868e00008356530f504e03"
+      },
+      {
+        "bytes": 0,
+        "path": "stderr.txt",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "bytes": 307345,
+        "path": "stdout.txt",
+        "sha256": "55f33d8306218b0bee4afcd69ff06de886ea73a2346ee9ac03bb299627c74882"
+      },
+      {
+        "bytes": 2884,
+        "path": "work/case.json",
+        "sha256": "a66a004044fe594fb1568b596355bdcc8a9382832f2ef68a72b12b2105dc6699"
+      },
+      {
+        "bytes": 3875,
+        "path": "work/input.txt",
+        "sha256": "298c8844983f3f9862b5c7eeff519005a5e7a2fe5a74f7487b9c3fa29b4e7e9f"
+      },
+      {
+        "bytes": 4800000,
+        "path": "work/lat_x.bin",
+        "sha256": "a91483f2439b618311bbd54c6a087dc84505934945c39895e0e6427dc1ca1287"
+      },
+      {
+        "bytes": 239,
+        "path": "work/lat_x.binheader",
+        "sha256": "4d5f526efb06a9413134b6a80cff25f762d68385bbadfbc27dbdc994cf7c9a16"
+      },
+      {
+        "bytes": 4800000,
+        "path": "work/lat_x_primary.bin",
+        "sha256": "0b7c9bd92f2dae9d52372b3efd5a5db9cddfca3cb9238320772c8df054841d96"
+      },
+      {
+        "bytes": 314,
+        "path": "work/lat_x_primary.binheader",
+        "sha256": "e35b628626cdcdf0dd4ed712c7cf8f7b826a69367e29be82a5966aae5f2095ff"
+      },
+      {
+        "bytes": 4800000,
+        "path": "work/lat_y.bin",
+        "sha256": "9e58d457c4fb3b992c006164595fc657c19d1f372885ac07c821c0250b892bc7"
+      },
+      {
+        "bytes": 239,
+        "path": "work/lat_y.binheader",
+        "sha256": "82390e6234d4ab3dfe1ff4a65a70688c457dc9e8244ed8e2b74c82219552421d"
+      },
+      {
+        "bytes": 4800000,
+        "path": "work/lat_y_primary.bin",
+        "sha256": "59af22410022a599a9e21f6eddf39cb43b2a6ed7a1d0c6bc8dddf2a2ce33f62f"
+      },
+      {
+        "bytes": 314,
+        "path": "work/lat_y_primary.binheader",
+        "sha256": "22e06f117ed47699466fdc37b2e02c0324c1fa9fbaf3e17224c03929564baa51"
+      }
+    ],
+    "next_offset": null,
+    "run_id": "REF-3cc17cfdfcad2ecb839e-388e3184",
+    "sha": "55e6a18041710ed1f97d2a6bb44b97ea21daaf12",
+    "total_files": 16
+  }
+]

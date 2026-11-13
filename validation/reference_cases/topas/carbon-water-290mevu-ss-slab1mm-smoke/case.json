@@ -1,0 +1,23 @@
+{
+  "input": "input.txt",
+  "physics": [
+    "Geant4_Modular (OpenTOPAS 4.3 / Geant4 11.4.2), EM ONLY: sv:Ph/Default/Modules = 1 \"g4em-standard_SS\"; no hadronic, ion, elastic or decay modules"
+  ],
+  "source": "12C (GenericIon(6,12)), BeamEnergy 3480 MeV total kinetic energy (convention follows the committed carbon smoke case; not verified by docs), monoenergetic, zero-size, zero-divergence pencil beam from z=-0.001 mm along +z at the face centre",
+  "geometry": "G4_WATER slab 120 x 120 x 1 mm (V5-SS design), entrance face z=0; vacuum world 400x400x800 mm",
+  "materials": "G4_WATER",
+  "cuts": "CutForAllParticles = 0.05 mm; CutForElectron = 1 km (parameter documented, acceptance TO VERIFY); EMRangeMax = 10 GeV (default 600 MeV)",
+  "histories": 100,
+  "seeds": [
+    20600410
+  ],
+  "scorers": [
+    "none: scorer-free smoke (P4); only the log/printouts/wall time are recorded. Minimal-scorer caveat: validate_case rejects empty scorers/expected_outputs, so one 1-bin EnergyDeposit scorer (SmokeEdep, Report Sum) is kept; its output smoke_unread.csv is to be deleted unread by the runner and is not evidence"
+  ],
+  "units": "none: no quantity is graded; the placeholder scorer output (MeV, run total) is not read",
+  "rationale": "V3-008 P10 cost smoke: 100 carbon ions through the 1 mm V5-SS slab under g4em-standard_SS with Ts/MaxStepNumber 1e8; records the per-primary wall time and the absence of killed tracks; execution only, no evidence",
+  "expected_outputs": [
+    "smoke_unread.csv"
+  ],
+  "arguments": []
+}

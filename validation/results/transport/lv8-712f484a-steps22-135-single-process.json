@@ -1,0 +1,3582 @@
+{
+ "attestation": {
+  "manifests": [
+   "39f349e2142c4a5e109adeae851f6d622de9579f09e0ef2bd0ff29828932d862",
+   "4b1587ed3aa65bf815da5dc8b557da557a6363455c792f6e7b3b646a6684e7c0",
+   "549ec7430862bfd76a58e4c1246a3f6f5d9737b411c9dc1379a7c4c9bf7c0585",
+   "a83a99040f419ca5a0f7c2664aee0c4d44f9e3c765e43be3e69e318116022b05"
+  ],
+  "partials": [
+   {
+    "content_sha256": "a3ee762836ef183f2a597f9d3601caf06ab3eb408c6c15272d29c0b533c802b0",
+    "host_run_id": "RUN-20261111T140753Z-4ac10d13",
+    "name": "i9-he150-s0.json",
+    "origin": "imported",
+    "step": "28-i9-combine"
+   },
+   {
+    "content_sha256": "01fc3992bb4ab599a9b868adbcabf8a2f3d56a8eb40bfb0c36d885e6d11f358e",
+    "host_run_id": "RUN-20261111T141353Z-8b17b0cc",
+    "name": "i9-he150-s1.json",
+    "origin": "imported",
+    "step": "28-i9-combine"
+   },
+   {
+    "content_sha256": "036e43c95ae8cc6f41e2ad31684b6d0e9adcef442d677006d60d1f9c101da0e5",
+    "host_run_id": "RUN-20261111T141948Z-b2cd0dee",
+    "name": "i9-c290-s0.json",
+    "origin": "imported",
+    "step": "28-i9-combine"
+   },
+   {
+    "content_sha256": "ee9ad3957d7f75ff634d781b974e26cabeec9c18ceb4de0c999ff220348ddd5d",
+    "host_run_id": "RUN-20261111T142631Z-a6420bf7",
+    "name": "i9-c290-s1.json",
+    "origin": "imported",
+    "step": "28-i9-combine"
+   },
+   {
+    "content_sha256": "f43d74b6f59d6e547deb4eedb5d3c9a27e9d68b93d88ab3490c0a63de53aac37",
+    "host_run_id": "RUN-20261111T143323Z-f02c0468",
+    "name": "i9-o350-s0.json",
+    "origin": "imported",
+    "step": "28-i9-combine"
+   },
+   {
+    "content_sha256": "f0352a7cfaff2a2579c37a6187fdb250523f25262dd5c00ffcd46afa77075c12",
+    "host_run_id": "RUN-20261111T144115Z-ce06b608",
+    "name": "i9-o350-s1.json",
+    "origin": "imported",
+    "step": "28-i9-combine"
+   },
+   {
+    "content_sha256": "0ad2d6aba6983cbb66a3256bf50f96baaad8498dad5ac6fd638d1bd6b7352309",
+    "host_run_id": "RUN-20261111T144927Z-09cf2fc5",
+    "name": "i12-theta-s01-s0.json",
+    "origin": "imported",
+    "step": "65-i12-combine"
+   },
+   {
+    "content_sha256": "eadccc4eca4879a62e0aba057c999abeebd6128d363dc4fb2ef36eb1c37bc698",
+    "host_run_id": "RUN-20261111T145702Z-7af94373",
+    "name": "i12-theta-s01-s1.json",
+    "origin": "imported",
+    "step": "65-i12-combine"
+   },
+   {
+    "content_sha256": "2e37433a06f9403299087173910e1e72c5444618a18312080f8a2ea212bfed69",
+    "host_run_id": "RUN-20261111T150435Z-77133289",
+    "name": "i12-theta-s01-s2.json",
+    "origin": "imported",
+    "step": "65-i12-combine"
+   },
+   {
+    "content_sha256": "8b97bdaaa6191b6dc30bc146a304174a199fb6e40f8c234d51b0aecd41c8d65e",
+    "host_run_id": "RUN-20261111T151205Z-6eba5529",
+    "name": "i12-theta-s01-s3.json",
+    "origin": "imported",
+    "step": "65-i12-combine"
+   },
+   {
+    "content_sha256": "5180be455f14fb05e2bf730f67d7ca1d25d817441fd751084ecc5fa923e7caea",
+    "host_run_id": "RUN-20261111T151935Z-c45e2931",
+    "name": "i12-theta-s01-s4.json",
+    "origin": "imported",
+    "step": "65-i12-combine"
+   },
+   {
+    "content_sha256": "47a0c4d4325d266a42e09556e207ea354916d9218d1b449b3324ca8d2485ca4f",
+    "host_run_id": "RUN-20261111T152708Z-b89cc6cf",
+    "name": "i12-theta-s01-s5.json",
+    "origin": "imported",
+    "step": "65-i12-combine"
+   },
+   {
+    "content_sha256": "79987e099ca3cb562396131fc96e1942c8199ad2994ca8b41fab45a55e8e8a6d",
+    "host_run_id": "RUN-20261111T153439Z-c8399741",
+    "name": "i12-theta-s01-s6.json",
+    "origin": "imported",
+    "step": "65-i12-combine"
+   },
+   {
+    "content_sha256": "4c7dfc55f2d3ada03d4d69eb3471d55e0646271f15a3d5862817b5e9763af8ef",
+    "host_run_id": "RUN-20261111T154213Z-27607ba6",
+    "name": "i12-theta-s01-s7.json",
+    "origin": "imported",
+    "step": "65-i12-combine"
+   },
+   {
+    "content_sha256": "1e86e1108d7ca5a45018a1c4c8e107221197db586adb1049c0e91774b2f03d11",
+    "host_run_id": "RUN-20261111T154944Z-8773fe1a",
+    "name": "i12-theta-s01-s8.json",
+    "origin": "imported",
+    "step": "65-i12-combine"
+   },
+   {
+    "content_sha256": "38c516906f9f263d4bfcf58068092d4e723c6c4f277be8e5c9c55227be388ef7",
+    "host_run_id": "RUN-20261111T155716Z-4de7f2b3",
+    "name": "i12-theta-s01-s9.json",
+    "origin": "imported",
+    "step": "65-i12-combine"
+   },
+   {
+    "content_sha256": "83535abd1cbca41a17757b88bbcb858194ac078d0c4bbddb776c7ebab5a43051",
+    "host_run_id": "RUN-20261111T160447Z-40633de0",
+    "name": "i12-theta-s05-s0.json",
+    "origin": "imported",
+    "step": "65-i12-combine"
+   },
+   {
+    "content_sha256": "c1da5b99f588aa523d45597c71bbc3733293dc3f2428270af448eed6ea1a3601",
+    "host_run_id": "RUN-20261111T160836Z-7e7182ba",
+    "name": "i12-theta-s05-s1.json",
+    "origin": "imported",
+    "step": "65-i12-combine"
+   },
+   {
+    "content_sha256": "334778e652c052cacec933ef1d574f5afdcf3c58dabd056a16dead861dccd405",
+    "host_run_id": "RUN-20261111T161226Z-9eb62c82",
+    "name": "i12-theta-s05-s2.json",
+    "origin": "imported",
+    "step": "65-i12-combine"
+   },
+   {
+    "content_sha256": "bf149e9cd1f0c9408f0f5de168238ab1b949a8a68f4947639f9680ea5d00fdd3",
+    "host_run_id": "RUN-20261111T161615Z-c856ac46",
+    "name": "i12-theta-s05-s3.json",
+    "origin": "imported",
+    "step": "65-i12-combine"
+   },
+   {
+    "content_sha256": "8dc66549c0eebd88855cf0853b9be3182527f2220ea3f22056beeae38e78fe61",
+    "host_run_id": "RUN-20261111T162004Z-1aeef20a",
+    "name": "i12-theta-s1-s0.json",
+    "origin": "imported",
+    "step": "65-i12-combine"
+   },
+   {
+    "content_sha256": "0be116212c78221873730118ef640b62c629e19fbe9132f986e260c5b2fb364a",
+    "host_run_id": "RUN-20261111T162356Z-c483753c",
+    "name": "i12-theta-s1-s1.json",
+    "origin": "imported",
+    "step": "65-i12-combine"
+   },
+   {
+    "content_sha256": "c715ee21877df80f10bb5c7a617948ed8f0201af40a768462ad05aceb11e4022",
+    "host_run_id": "RUN-20261111T162748Z-3c3e3450",
+    "name": "i12-theta-s5-s0.json",
+    "origin": "imported",
+    "step": "65-i12-combine"
+   },
+   {
+    "content_sha256": "8b71c9f2e4c9445ceea673f42e948c25c3d4efe96b32162d0ffbc71e809c87f1",
+    "host_run_id": "RUN-20261111T162855Z-487919b9",
+    "name": "i12-theta-s5-s1.json",
+    "origin": "imported",
+    "step": "65-i12-combine"
+   },
+   {
+    "content_sha256": "b20c953f70eeabc89bf86a000e07600cd5b90386459c7c769c6e70edb74f3389",
+    "host_run_id": "RUN-20261111T163000Z-caa8b330",
+    "name": "i12-sigma-s01-s0.json",
+    "origin": "imported",
+    "step": "65-i12-combine"
+   },
+   {
+    "content_sha256": "ea522f4a241776c53e3822d7f1d966c2657826ddb0049a19e228f6ad23a89d21",
+    "host_run_id": "RUN-20261111T164209Z-76250011",
+    "name": "i12-sigma-s01-s1.json",
+    "origin": "imported",
+    "step": "65-i12-combine"
+   },
+   {
+    "content_sha256": "0e5256444d92c79360cfec7b1574c894718767b3766857393b51d2d46dbbb002",
+    "host_run_id": "RUN-20261111T165429Z-8c1f2ae7",
+    "name": "i12-sigma-s01-s2.json",
+    "origin": "imported",
+    "step": "65-i12-combine"
+   },
+   {
+    "content_sha256": "22ddbe7d18d8eac3c9dc5d80b8bd9dc1379abbf4504a385793c7cc2aa8c5ba63",
+    "host_run_id": "RUN-20261111T170649Z-ac3c862c",
+    "name": "i12-sigma-s01-s3.json",
+    "origin": "imported",
+    "step": "65-i12-combine"
+   },
+   {
+    "content_sha256": "ed1c8f71cd035293d29111100039b14a9b4643bb65c005926edb2d7632bc131c",
+    "host_run_id": "RUN-20261111T171909Z-9f2837b6",
+    "name": "i12-sigma-s01-s4.json",
+    "origin": "imported",
+    "step": "65-i12-combine"
+   },
+   {
+    "content_sha256": "19b705dd51248cf94c9e93b88af0c0ad697e69f4e7e2e7c1623f835e6ea78644",
+    "host_run_id": "RUN-20261111T173134Z-d4bc26c3",
+    "name": "i12-sigma-s01-s5.json",
+    "origin": "imported",
+    "step": "65-i12-combine"
+   },
+   {
+    "content_sha256": "da11eacf052cbe02557aac973585d0567aece417c0a3bddde866e225c99e6e6b",
+    "host_run_id": "RUN-20261111T174355Z-f26004ec",
+    "name": "i12-sigma-s01-s6.json",
+    "origin": "imported",
+    "step": "65-i12-combine"
+   },
+   {
+    "content_sha256": "d0bd862214c0a58a7b8dabd860ef35c2a41db1ac723d9e7886ed60bbd89b650d",
+    "host_run_id": "RUN-20261111T175611Z-a894db3e",
+    "name": "i12-sigma-s01-s7.json",
+    "origin": "imported",
+    "step": "65-i12-combine"
+   },
+   {
+    "content_sha256": "8e3d659c73bb11c318797ef054b228601584812153f85e2be3198dcf6dd4e750",
+    "host_run_id": "RUN-20261111T180828Z-e5f88151",
+    "name": "i12-sigma-s01-s8.json",
+    "origin": "imported",
+    "step": "65-i12-combine"
+   },
+   {
+    "content_sha256": "e1e5fff4c5d80417cbc3e764797b58d73e6e7f4936feffe56dea1a12325ac544",
+    "host_run_id": "RUN-20261111T182046Z-04bb35a0",
+    "name": "i12-sigma-s01-s9.json",
+    "origin": "imported",
+    "step": "65-i12-combine"
+   },
+   {
+    "content_sha256": "fc591b405b22d60a0e2e3e65c14604a83f8b22a38572dae0d201012dee33e0f0",
+    "host_run_id": "RUN-20261111T205654Z-ecf93a1e",
+    "name": "i12-sigma-s05-s0.json",
+    "origin": "imported",
+    "step": "65-i12-combine"
+   },
+   {
+    "content_sha256": "eea7ac892864089f6e53d4a6d76ca7b078f57b5e5786d11d3f49b5a0a7875e8e",
+    "host_run_id": "RUN-20261111T210306Z-b042b827",
+    "name": "i12-sigma-s05-s1.json",
+    "origin": "imported",
+    "step": "65-i12-combine"
+   },
+   {
+    "content_sha256": "d1bb8d1539886d934d9275679c9897e7ccd56bd8eaa171f6924e73dc3b554a03",
+    "host_run_id": "RUN-20261111T210917Z-682c6f61",
+    "name": "i12-sigma-s05-s2.json",
+    "origin": "imported",
+    "step": "65-i12-combine"
+   },
+   {
+    "content_sha256": "4a5ff5c048c8c33153f699b7dccfb4254332a6d56f39089b2d23f170c5eb60c7",
+    "host_run_id": "RUN-20261111T211527Z-e90c1439",
+    "name": "i12-sigma-s05-s3.json",
+    "origin": "imported",
+    "step": "65-i12-combine"
+   },
+   {
+    "content_sha256": "06971b9ab70f5caf766e0fa17d444aed9ef9e8a85bbf9ed81fa7619033315c5b",
+    "host_run_id": "RUN-20261111T212138Z-e4c2ff06",
+    "name": "i12-sigma-s1-s0.json",
+    "origin": "imported",
+    "step": "65-i12-combine"
+   },
+   {
+    "content_sha256": "da4505d81e207eff7e5a184306c91a9d36804a8ac1bb4f9a34b5dba9bfc2dbbd",
+    "host_run_id": "RUN-20261111T212804Z-6401ed75",
+    "name": "i12-sigma-s1-s1.json",
+    "origin": "imported",
+    "step": "65-i12-combine"
+   },
+   {
+    "content_sha256": "6af3f8e9562937338dc5949eb4e5c50ba065ba67e7fa03eaa2ea475be5ccfaa6",
+    "host_run_id": "RUN-20261111T213430Z-65cbcb87",
+    "name": "i12-sigma-s5-s0.json",
+    "origin": "imported",
+    "step": "65-i12-combine"
+   },
+   {
+    "content_sha256": "6817f8342edc43172e8b7998069f179b2235d875ea27e25e89a43969c9ca1a63",
+    "host_run_id": "RUN-20261111T213722Z-420ae1d7",
+    "name": "i12-sigma-s5-s1.json",
+    "origin": "imported",
+    "step": "65-i12-combine"
+   },
+   {
+    "content_sha256": "4816f03c5e9ece3fd2cfa238befaf657e4358a3923a547e070e608cfd0a76709",
+    "host_run_id": "RUN-20261111T214043Z-4e67621f",
+    "name": "i14-s01-f0005-s0.json",
+    "origin": "imported",
+    "step": "114-i14-combine"
+   },
+   {
+    "content_sha256": "3c7123ef9306e93c764d531ba8d08fd8f22ba7919189f951e61172d4032a2f6a",
+    "host_run_id": "RUN-20261111T215218Z-2e88df0a",
+    "name": "i14-s01-f0005-s1.json",
+    "origin": "imported",
+    "step": "114-i14-combine"
+   },
+   {
+    "content_sha256": "f0732cb837151c4f1e0f6a449bcd4aca268e20d5eb159e8d1c7e4b868b240804",
+    "host_run_id": "RUN-20261111T220351Z-8a4511fb",
+    "name": "i14-s01-f0005-s2.json",
+    "origin": "imported",
+    "step": "114-i14-combine"
+   },
+   {
+    "content_sha256": "b8796564d20d653cca0bd8bb434d6d7f9704780734b5d72b216c235e3c9b7348",
+    "host_run_id": "RUN-20261111T221527Z-30520490",
+    "name": "i14-s01-f0005-s3.json",
+    "origin": "imported",
+    "step": "114-i14-combine"
+   },
+   {
+    "content_sha256": "030ec188f2d29513c57325ff178a51ea83d38ed3e14b0c93ce7ea287e616dae1",
+    "host_run_id": "RUN-20261112T140322Z-964c767c",
+    "name": "i14-s01-f0005-s4.json",
+    "origin": "imported",
+    "step": "114-i14-combine"
+   },
+   {
+    "content_sha256": "b468b7fb81fee5a31d0ffdead13951f2789123971aff28c34f8c8c273e5a028c",
+    "host_run_id": "RUN-20261112T141503Z-f6ed6c07",
+    "name": "i14-s01-f0005-s5.json",
+    "origin": "imported",
+    "step": "114-i14-combine"
+   },
+   {
+    "content_sha256": "55b0cbfab750421ea9eeb731e0a792f7409697ddc61f96bf693f160607db9796",
+    "host_run_id": "RUN-20261112T142642Z-51212334",
+    "name": "i14-s01-f0005-s6.json",
+    "origin": "imported",
+    "step": "114-i14-combine"
+   },
+   {
+    "content_sha256": "5e934b34166d88d3bc60540fdd839edc897e42d1ce854b60cf433cbd6dcc3520",
+    "host_run_id": "RUN-20261112T143822Z-3b501ef7",
+    "name": "i14-s01-f0005-s7.json",
+    "origin": "imported",
+    "step": "114-i14-combine"
+   },
+   {
+    "content_sha256": "98205d9382cea6e95248b3597e1a38c2bf56e1ea8bf1975c6e6347b7fa312587",
+    "host_run_id": "RUN-20261112T145001Z-1f8f7667",
+    "name": "i14-s01-f0005-s8.json",
+    "origin": "imported",
+    "step": "114-i14-combine"
+   },
+   {
+    "content_sha256": "5010ed2e9155bd43f93593786d719f3f323d08764a80aa4db8ef049c3ef39f5c",
+    "host_run_id": "RUN-20261112T150203Z-61c186ee",
+    "name": "i14-s01-f0005-s9.json",
+    "origin": "imported",
+    "step": "114-i14-combine"
+   },
+   {
+    "content_sha256": "64e3fe1017f94d602d6fc95adeb858b8d432010485a72264f02c026ebba300dd",
+    "host_run_id": "RUN-20261112T151342Z-8389622a",
+    "name": "i14-s01-f0005-s10.json",
+    "origin": "imported",
+    "step": "114-i14-combine"
+   },
+   {
+    "content_sha256": "1b328897246ac391f320c7bea9bf7bc6771cbb2ba4c66948cb3109f0bc8da1fd",
+    "host_run_id": "RUN-20261112T152521Z-5ede3a9e",
+    "name": "i14-s01-f0005-s11.json",
+    "origin": "imported",
+    "step": "114-i14-combine"
+   },
+   {
+    "content_sha256": "576a76fc5913be50ef105561363cedccea53dda8567642f7f96f8c439cf71fa3",
+    "host_run_id": "RUN-20261112T153715Z-dde79ede",
+    "name": "i14-s01-f0005-s12.json",
+    "origin": "imported",
+    "step": "114-i14-combine"
+   },
+   {
+    "content_sha256": "abdd7a935b8484294dfdbac919fc8c19ab7f963dff052381fb466e01783e52d0",
+    "host_run_id": "RUN-20261112T154857Z-044c3201",
+    "name": "i14-s01-f0005-s13.json",
+    "origin": "imported",
+    "step": "114-i14-combine"
+   },
+   {
+    "content_sha256": "efe7a259ba8a7cdc5ec6d61190733088897977dcef9d2178badd3ea125ac4a6a",
+    "host_run_id": "RUN-20261112T160038Z-d2571f49",
+    "name": "i14-s01-f0005-s14.json",
+    "origin": "imported",
+    "step": "114-i14-combine"
+   },
+   {
+    "content_sha256": "5b79f657e3d20ab14dc68164333dfb3569fac6cb8ca3217723e2ca6a67a77e38",
+    "host_run_id": "RUN-20261112T161220Z-919506da",
+    "name": "i14-s01-f0005-s15.json",
+    "origin": "imported",
+    "step": "114-i14-combine"
+   },
+   {
+    "content_sha256": "24ff0b7838190794f98be99c68c88662d144c296a79b7bbe29cb05340283cb3e",
+    "host_run_id": "RUN-20261112T162406Z-f8262b13",
+    "name": "i14-s01-f002-s0.json",
+    "origin": "imported",
+    "step": "114-i14-combine"
+   },
+   {
+    "content_sha256": "7e7ed8eca412cc646664b03832fb6d03b38e399db5bc337b3b5fb8cd0f46ecd6",
+    "host_run_id": "RUN-20261112T163819Z-66b02ddb",
+    "name": "i14-s01-f002-s1.json",
+    "origin": "imported",
+    "step": "114-i14-combine"
+   },
+   {
+    "content_sha256": "f5fcee0722a6e4b5e1669c159ce9eed8d6ca121f5b8eccb6867a78f352f6e4c5",
+    "host_run_id": "RUN-20261112T165232Z-5c3203e3",
+    "name": "i14-s01-f002-s2.json",
+    "origin": "imported",
+    "step": "114-i14-combine"
+   },
+   {
+    "content_sha256": "cd6e2db6add494cfdaaafba3bbbadf297bf5962dec4dcef46a3922b8375cfb4a",
+    "host_run_id": "RUN-20261112T170645Z-0c2a8dc9",
+    "name": "i14-s01-f002-s3.json",
+    "origin": "imported",
+    "step": "114-i14-combine"
+   },
+   {
+    "content_sha256": "94ca4b5f570754179dda9dad5fd20326566fd1340ae820c2fda5e04053545749",
+    "host_run_id": "RUN-20261112T172108Z-52b66f11",
+    "name": "i14-s01-f002-s4.json",
+    "origin": "imported",
+    "step": "114-i14-combine"
+   },
+   {
+    "content_sha256": "0b81a02372bf6cfd09305eb03bf4cc9ff3231b504cd6e8ca63f0c512b05091a2",
+    "host_run_id": "RUN-20261112T173538Z-e24bf528",
+    "name": "i14-s01-f002-s5.json",
+    "origin": "imported",
+    "step": "114-i14-combine"
+   },
+   {
+    "content_sha256": "2fd8ad153bf454ee9de916ecc0e41268b22b286697b4386569ddec19d2e98ba9",
+    "host_run_id": "RUN-20261112T174948Z-ac071725",
+    "name": "i14-s01-f002-s6.json",
+    "origin": "imported",
+    "step": "114-i14-combine"
+   },
+   {
+    "content_sha256": "314f49c5af7f56c3c7db2695a3dd3372b93d233f421176ae96cd6658a51118d9",
+    "host_run_id": "RUN-20261112T180357Z-afb5f588",
+    "name": "i14-s01-f002-s7.json",
+    "origin": "imported",
+    "step": "114-i14-combine"
+   },
+   {
+    "content_sha256": "156c1ebac76a5827593fce2cef4e3bf2e9f83527b6c8517dfde7a479c26d971a",
+    "host_run_id": "RUN-20261112T181804Z-b45513ac",
+    "name": "i14-s01-f002-s8.json",
+    "origin": "imported",
+    "step": "114-i14-combine"
+   },
+   {
+    "content_sha256": "aeb85bae021081e860ddad16d77f2a5b22a1c1ae84915f39fbeb6edd6cf39fec",
+    "host_run_id": "RUN-20261112T183213Z-aa25c3c8",
+    "name": "i14-s01-f002-s9.json",
+    "origin": "imported",
+    "step": "114-i14-combine"
+   },
+   {
+    "content_sha256": "17e434885f5b1fc6b4c17922720d24fffd7e1d99552a3bfbe17b2a49d7367d8b",
+    "host_run_id": "RUN-20261112T184620Z-4ca111ce",
+    "name": "i14-s05-f0005-s0.json",
+    "origin": "imported",
+    "step": "114-i14-combine"
+   },
+   {
+    "content_sha256": "8317897a81ca1b4d72344c46a999865131e51ced7a6138defa99e5b2b17067f5",
+    "host_run_id": "RUN-20261112T185800Z-0f0adee1",
+    "name": "i14-s05-f0005-s1.json",
+    "origin": "imported",
+    "step": "114-i14-combine"
+   },
+   {
+    "content_sha256": "84413ec22e1f4bde7f20e2fc69ec331a2d9c5eba5fcdb299ae773ba07e93161c",
+    "host_run_id": "RUN-20261112T190940Z-4a7e5ac0",
+    "name": "i14-s05-f0005-s2.json",
+    "origin": "imported",
+    "step": "114-i14-combine"
+   },
+   {
+    "content_sha256": "defb9a5491ae16e76aa001665089febb4a4a38e32cd459779557da0dba2da664",
+    "host_run_id": "RUN-20261112T192121Z-bc620d23",
+    "name": "i14-s05-f0005-s3.json",
+    "origin": "imported",
+    "step": "114-i14-combine"
+   },
+   {
+    "content_sha256": "dd456e73551e0f34e44a2d4255e72a66af526b9a33f16547a27a63ba6c32257a",
+    "host_run_id": "RUN-20261112T193302Z-019b2b20",
+    "name": "i14-s05-f0005-s4.json",
+    "origin": "imported",
+    "step": "114-i14-combine"
+   },
+   {
+    "content_sha256": "78c9f94e6e0415d2f8a5e4620816eccecec3bad338f6867785f4394a25aa38a0",
+    "host_run_id": "RUN-20261112T194442Z-9f50d59d",
+    "name": "i14-s05-f0005-s5.json",
+    "origin": "imported",
+    "step": "114-i14-combine"
+   },
+   {
+    "content_sha256": "7d3b2e78c8fd548456a96913ad8a8152a7121e164b408a917b86a3baf8c7363a",
+    "host_run_id": "RUN-20261112T195622Z-704933f3",
+    "name": "i14-s05-f0005-s6.json",
+    "origin": "imported",
+    "step": "114-i14-combine"
+   },
+   {
+    "content_sha256": "61d26d0a81e1bd8a2a920c5eb8e6fe96cfe85f7cbfb58a42f85701dad249837b",
+    "host_run_id": "RUN-20261112T200802Z-75b4d5fe",
+    "name": "i14-s05-f0005-s7.json",
+    "origin": "imported",
+    "step": "114-i14-combine"
+   },
+   {
+    "content_sha256": "373006d131aec354b9f98020914875e9fc9f28bcbe61c5187af101b8f30a5cc0",
+    "host_run_id": "RUN-20261112T201943Z-27788231",
+    "name": "i14-s05-f002-s0.json",
+    "origin": "imported",
+    "step": "114-i14-combine"
+   },
+   {
+    "content_sha256": "facce42cf60b4d765702ec95ec4b47233c31ef46404bddb1c14347513cf9c1bf",
+    "host_run_id": "RUN-20261112T202945Z-41bd91ff",
+    "name": "i14-s05-f002-s1.json",
+    "origin": "imported",
+    "step": "114-i14-combine"
+   },
+   {
+    "content_sha256": "3b20a31fb86d229349f0a43db6e3a82eb96ec614452bebff4aece1df1f6bf2c7",
+    "host_run_id": "RUN-20261112T203947Z-9adc72f8",
+    "name": "i14-s05-f002-s2.json",
+    "origin": "imported",
+    "step": "114-i14-combine"
+   },
+   {
+    "content_sha256": "6cf412ed44533d54c200f294d64ef566d4df32b42389e6c9767da68dc608aac2",
+    "host_run_id": "RUN-20261112T204949Z-116db2d6",
+    "name": "i14-s05-f002-s3.json",
+    "origin": "imported",
+    "step": "114-i14-combine"
+   },
+   {
+    "content_sha256": "d7d529aa2211a0a252b6efc89c1ac0c7cbcb1783fb5a583c2dcb61758a498c1e",
+    "host_run_id": "RUN-20261112T205952Z-b04cf0e0",
+    "name": "i14-s1-f0005-s0.json",
+    "origin": "imported",
+    "step": "114-i14-combine"
+   },
+   {
+    "content_sha256": "bb33b59c0396d69956a002eb6584d3b733e7c61a1bb6ba71d37944031a58e304",
+    "host_run_id": "RUN-20261112T211038Z-cdece5fa",
+    "name": "i14-s1-f0005-s1.json",
+    "origin": "imported",
+    "step": "114-i14-combine"
+   },
+   {
+    "content_sha256": "46f076b811552460770c238ad41ec31da1a96e585296b6cf08465fd1fdfc46c7",
+    "host_run_id": "RUN-20261112T212123Z-d7afb140",
+    "name": "i14-s1-f0005-s2.json",
+    "origin": "imported",
+    "step": "114-i14-combine"
+   },
+   {
+    "content_sha256": "7aaf9dd39f455681399fa21432c69ef4b483dd99ad0b188bb21f1736cb9f0518",
+    "host_run_id": "RUN-20261112T213208Z-cfe38a83",
+    "name": "i14-s1-f0005-s3.json",
+    "origin": "imported",
+    "step": "114-i14-combine"
+   },
+   {
+    "content_sha256": "8b64b6dc18cf442c67785a50891e102531f6bea11c3efce35969eaa495846e1f",
+    "host_run_id": "RUN-20261112T214253Z-3212b476",
+    "name": "i14-s1-f0005-s4.json",
+    "origin": "imported",
+    "step": "114-i14-combine"
+   },
+   {
+    "content_sha256": "f0b07d9057f498fc33aecf20a041a82d8c3c74d7d5602fc4906ff1516b1b46aa",
+    "host_run_id": "RUN-20261112T215339Z-79e4b863",
+    "name": "i14-s1-f0005-s5.json",
+    "origin": "imported",
+    "step": "114-i14-combine"
+   },
+   {
+    "content_sha256": "1f110426f8ae1f819142fe90294fccbbd6c390b160172e079ec5dc6492e47a6d",
+    "host_run_id": "RUN-20261112T220425Z-b1854532",
+    "name": "i14-s1-f0005-s6.json",
+    "origin": "imported",
+    "step": "114-i14-combine"
+   },
+   {
+    "content_sha256": "5462452ba1cfd97969d73e31a99849aeeb241ca6b38a775ee9a94edd6beab929",
+    "host_run_id": "RUN-20261112T221511Z-74af5a6a",
+    "name": "i14-s1-f0005-s7.json",
+    "origin": "imported",
+    "step": "114-i14-combine"
+   },
+   {
+    "content_sha256": "3e4f5dd4119fdb69f026a3c76108a135f8210b1fbdce3afef2889499a47b2905",
+    "host_run_id": "RUN-20261112T222558Z-09ee8444",
+    "name": "i14-s1-f002-s0.json",
+    "origin": "imported",
+    "step": "114-i14-combine"
+   },
+   {
+    "content_sha256": "f7e8079d0727d3c4d43980f19f123c12553c4a45ffbdee06f827c2172271906b",
+    "host_run_id": "RUN-20261112T224006Z-c165b084",
+    "name": "i14-s1-f002-s1.json",
+    "origin": "imported",
+    "step": "114-i14-combine"
+   },
+   {
+    "content_sha256": "bbf002e8c891ca37cbb6ea790a11fbe236c46d2bc921c410d28c376b159d1ed8",
+    "host_run_id": "RUN-20261112T225448Z-24e2fcdc",
+    "name": "i15-theta-v1-sh0-s0.json",
+    "origin": "imported",
+    "step": "135-i15-combine"
+   },
+   {
+    "content_sha256": "8f86748c3842d8955b09e5e5452752ea3030870e1058404131d1862e9ad07a14",
+    "host_run_id": "RUN-20261112T230434Z-8cd363ab",
+    "name": "i15-theta-v1-sh0-s1.json",
+    "origin": "imported",
+    "step": "135-i15-combine"
+   },
+   {
+    "content_sha256": "7bfd00bb7a55cb31bdcd19efa911bd917355b67a5523c2b9b24d70c5c68f377a",
+    "host_run_id": "RUN-20261112T231422Z-84e6d180",
+    "name": "i15-theta-v1-sh1-s0.json",
+    "origin": "imported",
+    "step": "135-i15-combine"
+   },
+   {
+    "content_sha256": "9a935db83f9877c759f16c657058c4c2a93ff6f02a3e01ac107501824f676ae8",
+    "host_run_id": "RUN-20261112T232409Z-72f6bac7",
+    "name": "i15-theta-v1-sh1-s1.json",
+    "origin": "imported",
+    "step": "135-i15-combine"
+   },
+   {
+    "content_sha256": "c6d3834d13a270bdde9809b2d773b47267aeadb7c576eb46af04c8caaf25d103",
+    "host_run_id": "RUN-20261112T233354Z-f894fe3f",
+    "name": "i15-theta-v2-sh0-s0.json",
+    "origin": "imported",
+    "step": "135-i15-combine"
+   },
+   {
+    "content_sha256": "01c2d9abc8a4e16feeadf93c5496229b4dade00f8b27018a43de5b4eaecb8494",
+    "host_run_id": "RUN-20261112T234044Z-94c09a08",
+    "name": "i15-theta-v2-sh0-s1.json",
+    "origin": "imported",
+    "step": "135-i15-combine"
+   },
+   {
+    "content_sha256": "ec299f7a56314f6eca4af6c217570d99925012e2baad9fc72e9efeaba929d40f",
+    "host_run_id": "RUN-20261112T234733Z-d5106d7f",
+    "name": "i15-theta-v2-sh1-s0.json",
+    "origin": "imported",
+    "step": "135-i15-combine"
+   },
+   {
+    "content_sha256": "25a88911d2896b008077fb8019d52a3cff2f852b68b744694035a176b77727a9",
+    "host_run_id": "RUN-20261112T235423Z-cf6802e2",
+    "name": "i15-theta-v2-sh1-s1.json",
+    "origin": "imported",
+    "step": "135-i15-combine"
+   },
+   {
+    "content_sha256": "7243deb1d434b3a3813e13d729c0e5fc351901ed8a9ced6ed2a748e4fd480ee0",
+    "host_run_id": "RUN-20261113T000111Z-797c22ab",
+    "name": "i15-sigma-v1-sh0-s0.json",
+    "origin": "imported",
+    "step": "135-i15-combine"
+   },
+   {
+    "content_sha256": "6ec428b3f4615f3f32083579b49f705967d6d0d438156a80303a5bce48730798",
+    "host_run_id": "RUN-20261113T000930Z-3c056f43",
+    "name": "i15-sigma-v1-sh0-s1.json",
+    "origin": "imported",
+    "step": "135-i15-combine"
+   },
+   {
+    "content_sha256": "8bad12e48b9c1fe5d0fa170bdda0428daa97c4f7f64a16bf707eb32d0f205802",
+    "host_run_id": "RUN-20261113T001748Z-83d1a707",
+    "name": "i15-sigma-v1-sh0-s2.json",
+    "origin": "imported",
+    "step": "135-i15-combine"
+   },
+   {
+    "content_sha256": "426f75a8aeb7539794ac20aa30c804afe56aa2c63a217e34b6dfecf58b9b93b7",
+    "host_run_id": "RUN-20261113T002611Z-209656e3",
+    "name": "i15-sigma-v1-sh0-s3.json",
+    "origin": "imported",
+    "step": "135-i15-combine"
+   },
+   {
+    "content_sha256": "ba9cacf1374a3b43eff8f6023fff163ab84b1f0c4bda6b2ab9b2d1c7710b9812",
+    "host_run_id": "RUN-20261113T003429Z-35438133",
+    "name": "i15-sigma-v1-sh1-s0.json",
+    "origin": "imported",
+    "step": "135-i15-combine"
+   },
+   {
+    "content_sha256": "c6bcb519554ed53ae88c25f637c5316825e94208d2e9032e6d27b186b3f4d5de",
+    "host_run_id": "RUN-20261113T004248Z-164128ed",
+    "name": "i15-sigma-v1-sh1-s1.json",
+    "origin": "imported",
+    "step": "135-i15-combine"
+   },
+   {
+    "content_sha256": "fbbbed1dbdaff7945d370759526c66d6544341f0052a0bd8093de40e7e5ba96c",
+    "host_run_id": "RUN-20261113T005107Z-f599fde9",
+    "name": "i15-sigma-v1-sh1-s2.json",
+    "origin": "imported",
+    "step": "135-i15-combine"
+   },
+   {
+    "content_sha256": "f7f74b22498c0f43c1ce72f13e9bfab81f30900587a7454d8094b140bfbf4d2c",
+    "host_run_id": "RUN-20261113T005926Z-a8e63431",
+    "name": "i15-sigma-v1-sh1-s3.json",
+    "origin": "imported",
+    "step": "135-i15-combine"
+   },
+   {
+    "content_sha256": "8e446c533e9fdd376b486cac14b9d3cb520a429927bf9799504041e77886f235",
+    "host_run_id": "RUN-20261113T010746Z-7066039d",
+    "name": "i15-sigma-v2-sh0-s0.json",
+    "origin": "imported",
+    "step": "135-i15-combine"
+   },
+   {
+    "content_sha256": "1060cc85a4af485fdba1f61a6e78827a676755fbce2052ab30afd568cf7a1dd6",
+    "host_run_id": "RUN-20261113T011921Z-8a4a0a75",
+    "name": "i15-sigma-v2-sh0-s1.json",
+    "origin": "imported",
+    "step": "135-i15-combine"
+   },
+   {
+    "content_sha256": "bf6502a5b010a24c4aa61aa7dbf5eb72af90aee360d7dcfb79d298b33a2c60de",
+    "host_run_id": "RUN-20261113T013055Z-42ce6b13",
+    "name": "i15-sigma-v2-sh1-s0.json",
+    "origin": "imported",
+    "step": "135-i15-combine"
+   },
+   {
+    "content_sha256": "018260f39be97868b037bf4556a8bf26eb07f03157b404e431ddc3c4378e2629",
+    "host_run_id": "RUN-20261113T014227Z-3012a901",
+    "name": "i15-sigma-v2-sh1-s1.json",
+    "origin": "imported",
+    "step": "135-i15-combine"
+   }
+  ],
+  "protected_host_records_verified_by_code": false,
+  "run_sha": "712f484a13dbee4a181d15addf127b1c58dc1cbc",
+  "statement": "the manifest was built by the orchestrator from the protected host-runner PARTIAL stdout lines; this code cannot verify those records, compare the digests and host_run_ids above with them and with record_local_validation"
+ },
+ "complete": false,
+ "conformant": false,
+ "deferred_steps": [],
+ "directories": [
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T140753Z-4ac10d13/transport/lv8-712f484a-22",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T141353Z-8b17b0cc/transport/lv8-712f484a-23",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T141948Z-b2cd0dee/transport/lv8-712f484a-24",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T142631Z-a6420bf7/transport/lv8-712f484a-25",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T143323Z-f02c0468/transport/lv8-712f484a-26",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T144115Z-ce06b608/transport/lv8-712f484a-27",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T144917Z-4c7e600d/transport/lv8-712f484a-28",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T144927Z-09cf2fc5/transport/lv8-712f484a-29",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T145702Z-7af94373/transport/lv8-712f484a-30",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T150435Z-77133289/transport/lv8-712f484a-31",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T151205Z-6eba5529/transport/lv8-712f484a-32",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T151935Z-c45e2931/transport/lv8-712f484a-33",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T152708Z-b89cc6cf/transport/lv8-712f484a-34",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T153439Z-c8399741/transport/lv8-712f484a-35",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T154213Z-27607ba6/transport/lv8-712f484a-36",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T154944Z-8773fe1a/transport/lv8-712f484a-37",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T155716Z-4de7f2b3/transport/lv8-712f484a-38",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T160447Z-40633de0/transport/lv8-712f484a-39",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T160836Z-7e7182ba/transport/lv8-712f484a-40",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T161226Z-9eb62c82/transport/lv8-712f484a-41",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T161615Z-c856ac46/transport/lv8-712f484a-42",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T162004Z-1aeef20a/transport/lv8-712f484a-43",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T162356Z-c483753c/transport/lv8-712f484a-44",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T162748Z-3c3e3450/transport/lv8-712f484a-45",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T162855Z-487919b9/transport/lv8-712f484a-46",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T163000Z-caa8b330/transport/lv8-712f484a-47",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T164209Z-76250011/transport/lv8-712f484a-48",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T165429Z-8c1f2ae7/transport/lv8-712f484a-49",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T170649Z-ac3c862c/transport/lv8-712f484a-50",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T171909Z-9f2837b6/transport/lv8-712f484a-51",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T173134Z-d4bc26c3/transport/lv8-712f484a-52",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T174355Z-f26004ec/transport/lv8-712f484a-53",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T175611Z-a894db3e/transport/lv8-712f484a-54",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T180828Z-e5f88151/transport/lv8-712f484a-55",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T182046Z-04bb35a0/transport/lv8-712f484a-56",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T205654Z-ecf93a1e/transport/lv8-712f484a-57",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T210306Z-b042b827/transport/lv8-712f484a-58",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T210917Z-682c6f61/transport/lv8-712f484a-59",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T211527Z-e90c1439/transport/lv8-712f484a-60",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T212138Z-e4c2ff06/transport/lv8-712f484a-61",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T212804Z-6401ed75/transport/lv8-712f484a-62",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T213430Z-65cbcb87/transport/lv8-712f484a-63",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T213722Z-420ae1d7/transport/lv8-712f484a-64",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T214033Z-180cba48/transport/lv8-712f484a-65",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T214043Z-4e67621f/transport/lv8-712f484a-66",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T215218Z-2e88df0a/transport/lv8-712f484a-67",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T220351Z-8a4511fb/transport/lv8-712f484a-68",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T221527Z-30520490/transport/lv8-712f484a-69",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T140322Z-964c767c/transport/lv8-712f484a-70",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T141503Z-f6ed6c07/transport/lv8-712f484a-71",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T142642Z-51212334/transport/lv8-712f484a-72",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T143822Z-3b501ef7/transport/lv8-712f484a-73",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T145001Z-1f8f7667/transport/lv8-712f484a-74",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T150203Z-61c186ee/transport/lv8-712f484a-75",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T151342Z-8389622a/transport/lv8-712f484a-76",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T152521Z-5ede3a9e/transport/lv8-712f484a-77",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T153715Z-dde79ede/transport/lv8-712f484a-78",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T154857Z-044c3201/transport/lv8-712f484a-79",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T160038Z-d2571f49/transport/lv8-712f484a-80",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T161220Z-919506da/transport/lv8-712f484a-81",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T162406Z-f8262b13/transport/lv8-712f484a-82",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T163819Z-66b02ddb/transport/lv8-712f484a-83",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T165232Z-5c3203e3/transport/lv8-712f484a-84",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T170645Z-0c2a8dc9/transport/lv8-712f484a-85",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T172108Z-52b66f11/transport/lv8-712f484a-86",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T173538Z-e24bf528/transport/lv8-712f484a-87",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T174948Z-ac071725/transport/lv8-712f484a-88",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T180357Z-afb5f588/transport/lv8-712f484a-89",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T181804Z-b45513ac/transport/lv8-712f484a-90",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T183213Z-aa25c3c8/transport/lv8-712f484a-91",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T184620Z-4ca111ce/transport/lv8-712f484a-92",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T185800Z-0f0adee1/transport/lv8-712f484a-93",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T190940Z-4a7e5ac0/transport/lv8-712f484a-94",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T192121Z-bc620d23/transport/lv8-712f484a-95",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T193302Z-019b2b20/transport/lv8-712f484a-96",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T194442Z-9f50d59d/transport/lv8-712f484a-97",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T195622Z-704933f3/transport/lv8-712f484a-98",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T200802Z-75b4d5fe/transport/lv8-712f484a-99",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T201943Z-27788231/transport/lv8-712f484a-100",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T202945Z-41bd91ff/transport/lv8-712f484a-101",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T203947Z-9adc72f8/transport/lv8-712f484a-102",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T204949Z-116db2d6/transport/lv8-712f484a-103",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T205952Z-b04cf0e0/transport/lv8-712f484a-104",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T211038Z-cdece5fa/transport/lv8-712f484a-105",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T212123Z-d7afb140/transport/lv8-712f484a-106",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T213208Z-cfe38a83/transport/lv8-712f484a-107",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T214253Z-3212b476/transport/lv8-712f484a-108",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T215339Z-79e4b863/transport/lv8-712f484a-109",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T220425Z-b1854532/transport/lv8-712f484a-110",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T221511Z-74af5a6a/transport/lv8-712f484a-111",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T222558Z-09ee8444/transport/lv8-712f484a-112",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T224006Z-c165b084/transport/lv8-712f484a-113",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T225438Z-a8fa755d/transport/lv8-712f484a-114",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T225448Z-24e2fcdc/transport/lv8-712f484a-115",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T230434Z-8cd363ab/transport/lv8-712f484a-116",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T231422Z-84e6d180/transport/lv8-712f484a-117",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T232409Z-72f6bac7/transport/lv8-712f484a-118",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T233354Z-f894fe3f/transport/lv8-712f484a-119",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T234044Z-94c09a08/transport/lv8-712f484a-120",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T234733Z-d5106d7f/transport/lv8-712f484a-121",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T235423Z-cf6802e2/transport/lv8-712f484a-122",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261113T000111Z-797c22ab/transport/lv8-712f484a-123",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261113T000930Z-3c056f43/transport/lv8-712f484a-124",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261113T001748Z-83d1a707/transport/lv8-712f484a-125",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261113T002611Z-209656e3/transport/lv8-712f484a-126",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261113T003429Z-35438133/transport/lv8-712f484a-127",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261113T004248Z-164128ed/transport/lv8-712f484a-128",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261113T005107Z-f599fde9/transport/lv8-712f484a-129",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261113T005926Z-a8e63431/transport/lv8-712f484a-130",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261113T010746Z-7066039d/transport/lv8-712f484a-131",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261113T011921Z-8a4a0a75/transport/lv8-712f484a-132",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261113T013055Z-42ce6b13/transport/lv8-712f484a-133",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261113T014227Z-3012a901/transport/lv8-712f484a-134",
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261113T015413Z-8c57c225/transport/lv8-712f484a-135"
+ ],
+ "execution_modes": [
+  "single-process-diagnostic"
+ ],
+ "git_sha": "712f484a13dbee4a181d15addf127b1c58dc1cbc",
+ "missing_steps": [
+  "01-i6-lv-deterministic-end-depth",
+  "02-i8-range-straggling-he150",
+  "03-i8-range-straggling-c290",
+  "04-i8-range-straggling-o350",
+  "05-i13-r80-vs-csda-he50",
+  "06-i13-r80-vs-csda-he150",
+  "07-i13-r80-vs-csda-he250",
+  "08-i13-r80-vs-csda-c80",
+  "09-i13-r80-vs-csda-c290",
+  "10-i13-r80-vs-csda-c430",
+  "11-i13-r80-vs-csda-o100",
+  "12-i13-r80-vs-csda-o350",
+  "13-i13-r80-vs-csda-o430",
+  "14-t1-ion-trace-parity-c290-o350",
+  "15-r1-ion-repeatability-c290",
+  "16-r2-a16-trace-fixture",
+  "17-t12-ion-lv-python-s0",
+  "18-t12-ion-lv-python-s1",
+  "19-t12-ion-lv-cpu64-s0",
+  "20-t12-ion-lv-cpu64-s1",
+  "21-t12-ion-lv-combine"
+ ],
+ "non_conformant_reasons": [
+  "114-i14-combine: imported_partials_unverified_by_code",
+  "135-i15-combine: imported_partials_unverified_by_code",
+  "28-i9-combine: imported_partials_unverified_by_code",
+  "65-i12-combine: imported_partials_unverified_by_code",
+  "execution mode single-process-diagnostic (diagnostic, not the qualification mode)",
+  "subset of the suite: 21 of 135 steps absent (--subset)"
+ ],
+ "parts": {
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T140753Z-4ac10d13/transport/lv8-712f484a-22": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T141353Z-8b17b0cc/transport/lv8-712f484a-23": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T141948Z-b2cd0dee/transport/lv8-712f484a-24": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T142631Z-a6420bf7/transport/lv8-712f484a-25": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T143323Z-f02c0468/transport/lv8-712f484a-26": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T144115Z-ce06b608/transport/lv8-712f484a-27": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T144917Z-4c7e600d/transport/lv8-712f484a-28": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T144927Z-09cf2fc5/transport/lv8-712f484a-29": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T145702Z-7af94373/transport/lv8-712f484a-30": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T150435Z-77133289/transport/lv8-712f484a-31": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T151205Z-6eba5529/transport/lv8-712f484a-32": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T151935Z-c45e2931/transport/lv8-712f484a-33": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T152708Z-b89cc6cf/transport/lv8-712f484a-34": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T153439Z-c8399741/transport/lv8-712f484a-35": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T154213Z-27607ba6/transport/lv8-712f484a-36": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T154944Z-8773fe1a/transport/lv8-712f484a-37": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T155716Z-4de7f2b3/transport/lv8-712f484a-38": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T160447Z-40633de0/transport/lv8-712f484a-39": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T160836Z-7e7182ba/transport/lv8-712f484a-40": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T161226Z-9eb62c82/transport/lv8-712f484a-41": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T161615Z-c856ac46/transport/lv8-712f484a-42": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T162004Z-1aeef20a/transport/lv8-712f484a-43": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T162356Z-c483753c/transport/lv8-712f484a-44": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T162748Z-3c3e3450/transport/lv8-712f484a-45": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T162855Z-487919b9/transport/lv8-712f484a-46": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T163000Z-caa8b330/transport/lv8-712f484a-47": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T164209Z-76250011/transport/lv8-712f484a-48": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T165429Z-8c1f2ae7/transport/lv8-712f484a-49": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T170649Z-ac3c862c/transport/lv8-712f484a-50": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T171909Z-9f2837b6/transport/lv8-712f484a-51": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T173134Z-d4bc26c3/transport/lv8-712f484a-52": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T174355Z-f26004ec/transport/lv8-712f484a-53": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T175611Z-a894db3e/transport/lv8-712f484a-54": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T180828Z-e5f88151/transport/lv8-712f484a-55": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T182046Z-04bb35a0/transport/lv8-712f484a-56": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T205654Z-ecf93a1e/transport/lv8-712f484a-57": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T210306Z-b042b827/transport/lv8-712f484a-58": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T210917Z-682c6f61/transport/lv8-712f484a-59": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T211527Z-e90c1439/transport/lv8-712f484a-60": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T212138Z-e4c2ff06/transport/lv8-712f484a-61": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T212804Z-6401ed75/transport/lv8-712f484a-62": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T213430Z-65cbcb87/transport/lv8-712f484a-63": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T213722Z-420ae1d7/transport/lv8-712f484a-64": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T214033Z-180cba48/transport/lv8-712f484a-65": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T214043Z-4e67621f/transport/lv8-712f484a-66": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T215218Z-2e88df0a/transport/lv8-712f484a-67": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T220351Z-8a4511fb/transport/lv8-712f484a-68": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T221527Z-30520490/transport/lv8-712f484a-69": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T140322Z-964c767c/transport/lv8-712f484a-70": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T141503Z-f6ed6c07/transport/lv8-712f484a-71": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T142642Z-51212334/transport/lv8-712f484a-72": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T143822Z-3b501ef7/transport/lv8-712f484a-73": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T145001Z-1f8f7667/transport/lv8-712f484a-74": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T150203Z-61c186ee/transport/lv8-712f484a-75": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T151342Z-8389622a/transport/lv8-712f484a-76": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T152521Z-5ede3a9e/transport/lv8-712f484a-77": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T153715Z-dde79ede/transport/lv8-712f484a-78": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T154857Z-044c3201/transport/lv8-712f484a-79": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T160038Z-d2571f49/transport/lv8-712f484a-80": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T161220Z-919506da/transport/lv8-712f484a-81": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T162406Z-f8262b13/transport/lv8-712f484a-82": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T163819Z-66b02ddb/transport/lv8-712f484a-83": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T165232Z-5c3203e3/transport/lv8-712f484a-84": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T170645Z-0c2a8dc9/transport/lv8-712f484a-85": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T172108Z-52b66f11/transport/lv8-712f484a-86": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T173538Z-e24bf528/transport/lv8-712f484a-87": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T174948Z-ac071725/transport/lv8-712f484a-88": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T180357Z-afb5f588/transport/lv8-712f484a-89": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T181804Z-b45513ac/transport/lv8-712f484a-90": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T183213Z-aa25c3c8/transport/lv8-712f484a-91": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T184620Z-4ca111ce/transport/lv8-712f484a-92": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T185800Z-0f0adee1/transport/lv8-712f484a-93": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T190940Z-4a7e5ac0/transport/lv8-712f484a-94": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T192121Z-bc620d23/transport/lv8-712f484a-95": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T193302Z-019b2b20/transport/lv8-712f484a-96": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T194442Z-9f50d59d/transport/lv8-712f484a-97": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T195622Z-704933f3/transport/lv8-712f484a-98": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T200802Z-75b4d5fe/transport/lv8-712f484a-99": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T201943Z-27788231/transport/lv8-712f484a-100": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T202945Z-41bd91ff/transport/lv8-712f484a-101": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T203947Z-9adc72f8/transport/lv8-712f484a-102": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T204949Z-116db2d6/transport/lv8-712f484a-103": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T205952Z-b04cf0e0/transport/lv8-712f484a-104": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T211038Z-cdece5fa/transport/lv8-712f484a-105": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T212123Z-d7afb140/transport/lv8-712f484a-106": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T213208Z-cfe38a83/transport/lv8-712f484a-107": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T214253Z-3212b476/transport/lv8-712f484a-108": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T215339Z-79e4b863/transport/lv8-712f484a-109": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T220425Z-b1854532/transport/lv8-712f484a-110": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T221511Z-74af5a6a/transport/lv8-712f484a-111": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T222558Z-09ee8444/transport/lv8-712f484a-112": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T224006Z-c165b084/transport/lv8-712f484a-113": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T225438Z-a8fa755d/transport/lv8-712f484a-114": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T225448Z-24e2fcdc/transport/lv8-712f484a-115": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T230434Z-8cd363ab/transport/lv8-712f484a-116": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T231422Z-84e6d180/transport/lv8-712f484a-117": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T232409Z-72f6bac7/transport/lv8-712f484a-118": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T233354Z-f894fe3f/transport/lv8-712f484a-119": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T234044Z-94c09a08/transport/lv8-712f484a-120": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T234733Z-d5106d7f/transport/lv8-712f484a-121": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T235423Z-cf6802e2/transport/lv8-712f484a-122": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261113T000111Z-797c22ab/transport/lv8-712f484a-123": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261113T000930Z-3c056f43/transport/lv8-712f484a-124": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261113T001748Z-83d1a707/transport/lv8-712f484a-125": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261113T002611Z-209656e3/transport/lv8-712f484a-126": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261113T003429Z-35438133/transport/lv8-712f484a-127": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261113T004248Z-164128ed/transport/lv8-712f484a-128": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261113T005107Z-f599fde9/transport/lv8-712f484a-129": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261113T005926Z-a8e63431/transport/lv8-712f484a-130": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261113T010746Z-7066039d/transport/lv8-712f484a-131": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261113T011921Z-8a4a0a75/transport/lv8-712f484a-132": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261113T013055Z-42ce6b13/transport/lv8-712f484a-133": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261113T014227Z-3012a901/transport/lv8-712f484a-134": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  },
+  "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261113T015413Z-8c57c225/transport/lv8-712f484a-135": {
+   "pass": true,
+   "source_ok": true,
+   "subset": true
+  }
+ },
+ "pass": true,
+ "problems": [],
+ "reduced_history_counts": false,
+ "steps": {
+  "100-i14-s05-f002-s0": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "100-i14-s05-f002-s0.txt",
+   "frozen_histories": 50000,
+   "histories": 50000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "101-i14-s05-f002-s1": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "101-i14-s05-f002-s1.txt",
+   "frozen_histories": 50000,
+   "histories": 50000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "102-i14-s05-f002-s2": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "102-i14-s05-f002-s2.txt",
+   "frozen_histories": 50000,
+   "histories": 50000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "103-i14-s05-f002-s3": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "103-i14-s05-f002-s3.txt",
+   "frozen_histories": 50000,
+   "histories": 50000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "104-i14-s1-f0005-s0": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "104-i14-s1-f0005-s0.txt",
+   "frozen_histories": 25000,
+   "histories": 25000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "105-i14-s1-f0005-s1": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "105-i14-s1-f0005-s1.txt",
+   "frozen_histories": 25000,
+   "histories": 25000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "106-i14-s1-f0005-s2": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "106-i14-s1-f0005-s2.txt",
+   "frozen_histories": 25000,
+   "histories": 25000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "107-i14-s1-f0005-s3": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "107-i14-s1-f0005-s3.txt",
+   "frozen_histories": 25000,
+   "histories": 25000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "108-i14-s1-f0005-s4": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "108-i14-s1-f0005-s4.txt",
+   "frozen_histories": 25000,
+   "histories": 25000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "109-i14-s1-f0005-s5": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "109-i14-s1-f0005-s5.txt",
+   "frozen_histories": 25000,
+   "histories": 25000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "110-i14-s1-f0005-s6": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "110-i14-s1-f0005-s6.txt",
+   "frozen_histories": 25000,
+   "histories": 25000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "111-i14-s1-f0005-s7": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "111-i14-s1-f0005-s7.txt",
+   "frozen_histories": 25000,
+   "histories": 25000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "112-i14-s1-f002-s0": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "112-i14-s1-f002-s0.txt",
+   "frozen_histories": 100000,
+   "histories": 100000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "113-i14-s1-f002-s1": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "113-i14-s1-f002-s1.txt",
+   "frozen_histories": 100000,
+   "histories": 100000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "114-i14-combine": {
+   "attestation": {
+    "manifest_path": "/workspace/.ionmc-cache/transport-samples/712f484a/manifest.json",
+    "manifest_sha256": "39f349e2142c4a5e109adeae851f6d622de9579f09e0ef2bd0ff29828932d862",
+    "manifest_source": "host-runner protected stdout PARTIAL lines",
+    "partials": [
+     {
+      "content_sha256": "4816f03c5e9ece3fd2cfa238befaf657e4358a3923a547e070e608cfd0a76709",
+      "host_run_id": "RUN-20261111T214043Z-4e67621f",
+      "name": "i14-s01-f0005-s0.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "3c7123ef9306e93c764d531ba8d08fd8f22ba7919189f951e61172d4032a2f6a",
+      "host_run_id": "RUN-20261111T215218Z-2e88df0a",
+      "name": "i14-s01-f0005-s1.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "f0732cb837151c4f1e0f6a449bcd4aca268e20d5eb159e8d1c7e4b868b240804",
+      "host_run_id": "RUN-20261111T220351Z-8a4511fb",
+      "name": "i14-s01-f0005-s2.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "b8796564d20d653cca0bd8bb434d6d7f9704780734b5d72b216c235e3c9b7348",
+      "host_run_id": "RUN-20261111T221527Z-30520490",
+      "name": "i14-s01-f0005-s3.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "030ec188f2d29513c57325ff178a51ea83d38ed3e14b0c93ce7ea287e616dae1",
+      "host_run_id": "RUN-20261112T140322Z-964c767c",
+      "name": "i14-s01-f0005-s4.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "b468b7fb81fee5a31d0ffdead13951f2789123971aff28c34f8c8c273e5a028c",
+      "host_run_id": "RUN-20261112T141503Z-f6ed6c07",
+      "name": "i14-s01-f0005-s5.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "55b0cbfab750421ea9eeb731e0a792f7409697ddc61f96bf693f160607db9796",
+      "host_run_id": "RUN-20261112T142642Z-51212334",
+      "name": "i14-s01-f0005-s6.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "5e934b34166d88d3bc60540fdd839edc897e42d1ce854b60cf433cbd6dcc3520",
+      "host_run_id": "RUN-20261112T143822Z-3b501ef7",
+      "name": "i14-s01-f0005-s7.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "98205d9382cea6e95248b3597e1a38c2bf56e1ea8bf1975c6e6347b7fa312587",
+      "host_run_id": "RUN-20261112T145001Z-1f8f7667",
+      "name": "i14-s01-f0005-s8.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "5010ed2e9155bd43f93593786d719f3f323d08764a80aa4db8ef049c3ef39f5c",
+      "host_run_id": "RUN-20261112T150203Z-61c186ee",
+      "name": "i14-s01-f0005-s9.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "64e3fe1017f94d602d6fc95adeb858b8d432010485a72264f02c026ebba300dd",
+      "host_run_id": "RUN-20261112T151342Z-8389622a",
+      "name": "i14-s01-f0005-s10.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "1b328897246ac391f320c7bea9bf7bc6771cbb2ba4c66948cb3109f0bc8da1fd",
+      "host_run_id": "RUN-20261112T152521Z-5ede3a9e",
+      "name": "i14-s01-f0005-s11.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "576a76fc5913be50ef105561363cedccea53dda8567642f7f96f8c439cf71fa3",
+      "host_run_id": "RUN-20261112T153715Z-dde79ede",
+      "name": "i14-s01-f0005-s12.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "abdd7a935b8484294dfdbac919fc8c19ab7f963dff052381fb466e01783e52d0",
+      "host_run_id": "RUN-20261112T154857Z-044c3201",
+      "name": "i14-s01-f0005-s13.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "efe7a259ba8a7cdc5ec6d61190733088897977dcef9d2178badd3ea125ac4a6a",
+      "host_run_id": "RUN-20261112T160038Z-d2571f49",
+      "name": "i14-s01-f0005-s14.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "5b79f657e3d20ab14dc68164333dfb3569fac6cb8ca3217723e2ca6a67a77e38",
+      "host_run_id": "RUN-20261112T161220Z-919506da",
+      "name": "i14-s01-f0005-s15.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "24ff0b7838190794f98be99c68c88662d144c296a79b7bbe29cb05340283cb3e",
+      "host_run_id": "RUN-20261112T162406Z-f8262b13",
+      "name": "i14-s01-f002-s0.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "7e7ed8eca412cc646664b03832fb6d03b38e399db5bc337b3b5fb8cd0f46ecd6",
+      "host_run_id": "RUN-20261112T163819Z-66b02ddb",
+      "name": "i14-s01-f002-s1.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "f5fcee0722a6e4b5e1669c159ce9eed8d6ca121f5b8eccb6867a78f352f6e4c5",
+      "host_run_id": "RUN-20261112T165232Z-5c3203e3",
+      "name": "i14-s01-f002-s2.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "cd6e2db6add494cfdaaafba3bbbadf297bf5962dec4dcef46a3922b8375cfb4a",
+      "host_run_id": "RUN-20261112T170645Z-0c2a8dc9",
+      "name": "i14-s01-f002-s3.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "94ca4b5f570754179dda9dad5fd20326566fd1340ae820c2fda5e04053545749",
+      "host_run_id": "RUN-20261112T172108Z-52b66f11",
+      "name": "i14-s01-f002-s4.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "0b81a02372bf6cfd09305eb03bf4cc9ff3231b504cd6e8ca63f0c512b05091a2",
+      "host_run_id": "RUN-20261112T173538Z-e24bf528",
+      "name": "i14-s01-f002-s5.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "2fd8ad153bf454ee9de916ecc0e41268b22b286697b4386569ddec19d2e98ba9",
+      "host_run_id": "RUN-20261112T174948Z-ac071725",
+      "name": "i14-s01-f002-s6.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "314f49c5af7f56c3c7db2695a3dd3372b93d233f421176ae96cd6658a51118d9",
+      "host_run_id": "RUN-20261112T180357Z-afb5f588",
+      "name": "i14-s01-f002-s7.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "156c1ebac76a5827593fce2cef4e3bf2e9f83527b6c8517dfde7a479c26d971a",
+      "host_run_id": "RUN-20261112T181804Z-b45513ac",
+      "name": "i14-s01-f002-s8.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "aeb85bae021081e860ddad16d77f2a5b22a1c1ae84915f39fbeb6edd6cf39fec",
+      "host_run_id": "RUN-20261112T183213Z-aa25c3c8",
+      "name": "i14-s01-f002-s9.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "17e434885f5b1fc6b4c17922720d24fffd7e1d99552a3bfbe17b2a49d7367d8b",
+      "host_run_id": "RUN-20261112T184620Z-4ca111ce",
+      "name": "i14-s05-f0005-s0.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "8317897a81ca1b4d72344c46a999865131e51ced7a6138defa99e5b2b17067f5",
+      "host_run_id": "RUN-20261112T185800Z-0f0adee1",
+      "name": "i14-s05-f0005-s1.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "84413ec22e1f4bde7f20e2fc69ec331a2d9c5eba5fcdb299ae773ba07e93161c",
+      "host_run_id": "RUN-20261112T190940Z-4a7e5ac0",
+      "name": "i14-s05-f0005-s2.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "defb9a5491ae16e76aa001665089febb4a4a38e32cd459779557da0dba2da664",
+      "host_run_id": "RUN-20261112T192121Z-bc620d23",
+      "name": "i14-s05-f0005-s3.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "dd456e73551e0f34e44a2d4255e72a66af526b9a33f16547a27a63ba6c32257a",
+      "host_run_id": "RUN-20261112T193302Z-019b2b20",
+      "name": "i14-s05-f0005-s4.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "78c9f94e6e0415d2f8a5e4620816eccecec3bad338f6867785f4394a25aa38a0",
+      "host_run_id": "RUN-20261112T194442Z-9f50d59d",
+      "name": "i14-s05-f0005-s5.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "7d3b2e78c8fd548456a96913ad8a8152a7121e164b408a917b86a3baf8c7363a",
+      "host_run_id": "RUN-20261112T195622Z-704933f3",
+      "name": "i14-s05-f0005-s6.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "61d26d0a81e1bd8a2a920c5eb8e6fe96cfe85f7cbfb58a42f85701dad249837b",
+      "host_run_id": "RUN-20261112T200802Z-75b4d5fe",
+      "name": "i14-s05-f0005-s7.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "373006d131aec354b9f98020914875e9fc9f28bcbe61c5187af101b8f30a5cc0",
+      "host_run_id": "RUN-20261112T201943Z-27788231",
+      "name": "i14-s05-f002-s0.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "facce42cf60b4d765702ec95ec4b47233c31ef46404bddb1c14347513cf9c1bf",
+      "host_run_id": "RUN-20261112T202945Z-41bd91ff",
+      "name": "i14-s05-f002-s1.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "3b20a31fb86d229349f0a43db6e3a82eb96ec614452bebff4aece1df1f6bf2c7",
+      "host_run_id": "RUN-20261112T203947Z-9adc72f8",
+      "name": "i14-s05-f002-s2.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "6cf412ed44533d54c200f294d64ef566d4df32b42389e6c9767da68dc608aac2",
+      "host_run_id": "RUN-20261112T204949Z-116db2d6",
+      "name": "i14-s05-f002-s3.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "d7d529aa2211a0a252b6efc89c1ac0c7cbcb1783fb5a583c2dcb61758a498c1e",
+      "host_run_id": "RUN-20261112T205952Z-b04cf0e0",
+      "name": "i14-s1-f0005-s0.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "bb33b59c0396d69956a002eb6584d3b733e7c61a1bb6ba71d37944031a58e304",
+      "host_run_id": "RUN-20261112T211038Z-cdece5fa",
+      "name": "i14-s1-f0005-s1.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "46f076b811552460770c238ad41ec31da1a96e585296b6cf08465fd1fdfc46c7",
+      "host_run_id": "RUN-20261112T212123Z-d7afb140",
+      "name": "i14-s1-f0005-s2.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "7aaf9dd39f455681399fa21432c69ef4b483dd99ad0b188bb21f1736cb9f0518",
+      "host_run_id": "RUN-20261112T213208Z-cfe38a83",
+      "name": "i14-s1-f0005-s3.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "8b64b6dc18cf442c67785a50891e102531f6bea11c3efce35969eaa495846e1f",
+      "host_run_id": "RUN-20261112T214253Z-3212b476",
+      "name": "i14-s1-f0005-s4.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "f0b07d9057f498fc33aecf20a041a82d8c3c74d7d5602fc4906ff1516b1b46aa",
+      "host_run_id": "RUN-20261112T215339Z-79e4b863",
+      "name": "i14-s1-f0005-s5.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "1f110426f8ae1f819142fe90294fccbbd6c390b160172e079ec5dc6492e47a6d",
+      "host_run_id": "RUN-20261112T220425Z-b1854532",
+      "name": "i14-s1-f0005-s6.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "5462452ba1cfd97969d73e31a99849aeeb241ca6b38a775ee9a94edd6beab929",
+      "host_run_id": "RUN-20261112T221511Z-74af5a6a",
+      "name": "i14-s1-f0005-s7.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "3e4f5dd4119fdb69f026a3c76108a135f8210b1fbdce3afef2889499a47b2905",
+      "host_run_id": "RUN-20261112T222558Z-09ee8444",
+      "name": "i14-s1-f002-s0.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "f7e8079d0727d3c4d43980f19f123c12553c4a45ffbdee06f827c2172271906b",
+      "host_run_id": "RUN-20261112T224006Z-c165b084",
+      "name": "i14-s1-f002-s1.json",
+      "origin": "imported"
+     }
+    ],
+    "protected_host_records_verified_by_code": false,
+    "run_sha": "712f484a13dbee4a181d15addf127b1c58dc1cbc",
+    "statement": "the code verifies each imported partial against the manifest entry (digest) and requires a host_run_id per entry, but any imported partial makes the summary non-conformant (imported_partials_unverified_by_code); it cannot verify the protected host-runner records that the manifest is built from. The orchestrator must have written the manifest only from the PARTIAL <name> <sha> stdout lines of those records and must list the host_run_ids in record_local_validation"
+   },
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "114-i14-combine.txt",
+   "frozen_histories": 1200000,
+   "histories": 1200000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "115-i15-theta-v1-sh0-s0": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "115-i15-theta-v1-sh0-s0.txt",
+   "frozen_histories": 100000,
+   "histories": 100000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "116-i15-theta-v1-sh0-s1": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "116-i15-theta-v1-sh0-s1.txt",
+   "frozen_histories": 100000,
+   "histories": 100000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "117-i15-theta-v1-sh1-s0": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "117-i15-theta-v1-sh1-s0.txt",
+   "frozen_histories": 100000,
+   "histories": 100000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "118-i15-theta-v1-sh1-s1": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "118-i15-theta-v1-sh1-s1.txt",
+   "frozen_histories": 100000,
+   "histories": 100000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "119-i15-theta-v2-sh0-s0": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "119-i15-theta-v2-sh0-s0.txt",
+   "frozen_histories": 100000,
+   "histories": 100000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "120-i15-theta-v2-sh0-s1": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "120-i15-theta-v2-sh0-s1.txt",
+   "frozen_histories": 100000,
+   "histories": 100000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "121-i15-theta-v2-sh1-s0": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "121-i15-theta-v2-sh1-s0.txt",
+   "frozen_histories": 100000,
+   "histories": 100000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "122-i15-theta-v2-sh1-s1": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "122-i15-theta-v2-sh1-s1.txt",
+   "frozen_histories": 100000,
+   "histories": 100000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "123-i15-sigma-v1-sh0-s0": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "123-i15-sigma-v1-sh0-s0.txt",
+   "frozen_histories": 50000,
+   "histories": 50000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "124-i15-sigma-v1-sh0-s1": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "124-i15-sigma-v1-sh0-s1.txt",
+   "frozen_histories": 50000,
+   "histories": 50000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "125-i15-sigma-v1-sh0-s2": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "125-i15-sigma-v1-sh0-s2.txt",
+   "frozen_histories": 50000,
+   "histories": 50000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "126-i15-sigma-v1-sh0-s3": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "126-i15-sigma-v1-sh0-s3.txt",
+   "frozen_histories": 50000,
+   "histories": 50000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "127-i15-sigma-v1-sh1-s0": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "127-i15-sigma-v1-sh1-s0.txt",
+   "frozen_histories": 50000,
+   "histories": 50000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "128-i15-sigma-v1-sh1-s1": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "128-i15-sigma-v1-sh1-s1.txt",
+   "frozen_histories": 50000,
+   "histories": 50000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "129-i15-sigma-v1-sh1-s2": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "129-i15-sigma-v1-sh1-s2.txt",
+   "frozen_histories": 50000,
+   "histories": 50000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "130-i15-sigma-v1-sh1-s3": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "130-i15-sigma-v1-sh1-s3.txt",
+   "frozen_histories": 50000,
+   "histories": 50000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "131-i15-sigma-v2-sh0-s0": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "131-i15-sigma-v2-sh0-s0.txt",
+   "frozen_histories": 100000,
+   "histories": 100000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "132-i15-sigma-v2-sh0-s1": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "132-i15-sigma-v2-sh0-s1.txt",
+   "frozen_histories": 100000,
+   "histories": 100000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "133-i15-sigma-v2-sh1-s0": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "133-i15-sigma-v2-sh1-s0.txt",
+   "frozen_histories": 100000,
+   "histories": 100000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "134-i15-sigma-v2-sh1-s1": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "134-i15-sigma-v2-sh1-s1.txt",
+   "frozen_histories": 100000,
+   "histories": 100000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "135-i15-combine": {
+   "attestation": {
+    "manifest_path": "/workspace/.ionmc-cache/transport-samples/712f484a/manifest.json",
+    "manifest_sha256": "4b1587ed3aa65bf815da5dc8b557da557a6363455c792f6e7b3b646a6684e7c0",
+    "manifest_source": "host-runner protected stdout PARTIAL lines",
+    "partials": [
+     {
+      "content_sha256": "bbf002e8c891ca37cbb6ea790a11fbe236c46d2bc921c410d28c376b159d1ed8",
+      "host_run_id": "RUN-20261112T225448Z-24e2fcdc",
+      "name": "i15-theta-v1-sh0-s0.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "8f86748c3842d8955b09e5e5452752ea3030870e1058404131d1862e9ad07a14",
+      "host_run_id": "RUN-20261112T230434Z-8cd363ab",
+      "name": "i15-theta-v1-sh0-s1.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "7bfd00bb7a55cb31bdcd19efa911bd917355b67a5523c2b9b24d70c5c68f377a",
+      "host_run_id": "RUN-20261112T231422Z-84e6d180",
+      "name": "i15-theta-v1-sh1-s0.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "9a935db83f9877c759f16c657058c4c2a93ff6f02a3e01ac107501824f676ae8",
+      "host_run_id": "RUN-20261112T232409Z-72f6bac7",
+      "name": "i15-theta-v1-sh1-s1.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "c6d3834d13a270bdde9809b2d773b47267aeadb7c576eb46af04c8caaf25d103",
+      "host_run_id": "RUN-20261112T233354Z-f894fe3f",
+      "name": "i15-theta-v2-sh0-s0.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "01c2d9abc8a4e16feeadf93c5496229b4dade00f8b27018a43de5b4eaecb8494",
+      "host_run_id": "RUN-20261112T234044Z-94c09a08",
+      "name": "i15-theta-v2-sh0-s1.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "ec299f7a56314f6eca4af6c217570d99925012e2baad9fc72e9efeaba929d40f",
+      "host_run_id": "RUN-20261112T234733Z-d5106d7f",
+      "name": "i15-theta-v2-sh1-s0.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "25a88911d2896b008077fb8019d52a3cff2f852b68b744694035a176b77727a9",
+      "host_run_id": "RUN-20261112T235423Z-cf6802e2",
+      "name": "i15-theta-v2-sh1-s1.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "7243deb1d434b3a3813e13d729c0e5fc351901ed8a9ced6ed2a748e4fd480ee0",
+      "host_run_id": "RUN-20261113T000111Z-797c22ab",
+      "name": "i15-sigma-v1-sh0-s0.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "6ec428b3f4615f3f32083579b49f705967d6d0d438156a80303a5bce48730798",
+      "host_run_id": "RUN-20261113T000930Z-3c056f43",
+      "name": "i15-sigma-v1-sh0-s1.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "8bad12e48b9c1fe5d0fa170bdda0428daa97c4f7f64a16bf707eb32d0f205802",
+      "host_run_id": "RUN-20261113T001748Z-83d1a707",
+      "name": "i15-sigma-v1-sh0-s2.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "426f75a8aeb7539794ac20aa30c804afe56aa2c63a217e34b6dfecf58b9b93b7",
+      "host_run_id": "RUN-20261113T002611Z-209656e3",
+      "name": "i15-sigma-v1-sh0-s3.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "ba9cacf1374a3b43eff8f6023fff163ab84b1f0c4bda6b2ab9b2d1c7710b9812",
+      "host_run_id": "RUN-20261113T003429Z-35438133",
+      "name": "i15-sigma-v1-sh1-s0.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "c6bcb519554ed53ae88c25f637c5316825e94208d2e9032e6d27b186b3f4d5de",
+      "host_run_id": "RUN-20261113T004248Z-164128ed",
+      "name": "i15-sigma-v1-sh1-s1.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "fbbbed1dbdaff7945d370759526c66d6544341f0052a0bd8093de40e7e5ba96c",
+      "host_run_id": "RUN-20261113T005107Z-f599fde9",
+      "name": "i15-sigma-v1-sh1-s2.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "f7f74b22498c0f43c1ce72f13e9bfab81f30900587a7454d8094b140bfbf4d2c",
+      "host_run_id": "RUN-20261113T005926Z-a8e63431",
+      "name": "i15-sigma-v1-sh1-s3.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "8e446c533e9fdd376b486cac14b9d3cb520a429927bf9799504041e77886f235",
+      "host_run_id": "RUN-20261113T010746Z-7066039d",
+      "name": "i15-sigma-v2-sh0-s0.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "1060cc85a4af485fdba1f61a6e78827a676755fbce2052ab30afd568cf7a1dd6",
+      "host_run_id": "RUN-20261113T011921Z-8a4a0a75",
+      "name": "i15-sigma-v2-sh0-s1.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "bf6502a5b010a24c4aa61aa7dbf5eb72af90aee360d7dcfb79d298b33a2c60de",
+      "host_run_id": "RUN-20261113T013055Z-42ce6b13",
+      "name": "i15-sigma-v2-sh1-s0.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "018260f39be97868b037bf4556a8bf26eb07f03157b404e431ddc3c4378e2629",
+      "host_run_id": "RUN-20261113T014227Z-3012a901",
+      "name": "i15-sigma-v2-sh1-s1.json",
+      "origin": "imported"
+     }
+    ],
+    "protected_host_records_verified_by_code": false,
+    "run_sha": "712f484a13dbee4a181d15addf127b1c58dc1cbc",
+    "statement": "the code verifies each imported partial against the manifest entry (digest) and requires a host_run_id per entry, but any imported partial makes the summary non-conformant (imported_partials_unverified_by_code); it cannot verify the protected host-runner records that the manifest is built from. The orchestrator must have written the manifest only from the PARTIAL <name> <sha> stdout lines of those records and must list the host_run_ids in record_local_validation"
+   },
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "135-i15-combine.txt",
+   "frozen_histories": 1600000,
+   "histories": 1600000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "22-i9-he150-s0": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "22-i9-he150-s0.txt",
+   "frozen_histories": 100000,
+   "histories": 100000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "23-i9-he150-s1": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "23-i9-he150-s1.txt",
+   "frozen_histories": 100000,
+   "histories": 100000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "24-i9-c290-s0": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "24-i9-c290-s0.txt",
+   "frozen_histories": 100000,
+   "histories": 100000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "25-i9-c290-s1": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "25-i9-c290-s1.txt",
+   "frozen_histories": 100000,
+   "histories": 100000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "26-i9-o350-s0": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "26-i9-o350-s0.txt",
+   "frozen_histories": 100000,
+   "histories": 100000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "27-i9-o350-s1": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "27-i9-o350-s1.txt",
+   "frozen_histories": 100000,
+   "histories": 100000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "28-i9-combine": {
+   "attestation": {
+    "manifest_path": "/workspace/.ionmc-cache/transport-samples/712f484a/manifest.json",
+    "manifest_sha256": "549ec7430862bfd76a58e4c1246a3f6f5d9737b411c9dc1379a7c4c9bf7c0585",
+    "manifest_source": "host-runner protected stdout PARTIAL lines",
+    "partials": [
+     {
+      "content_sha256": "a3ee762836ef183f2a597f9d3601caf06ab3eb408c6c15272d29c0b533c802b0",
+      "host_run_id": "RUN-20261111T140753Z-4ac10d13",
+      "name": "i9-he150-s0.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "01fc3992bb4ab599a9b868adbcabf8a2f3d56a8eb40bfb0c36d885e6d11f358e",
+      "host_run_id": "RUN-20261111T141353Z-8b17b0cc",
+      "name": "i9-he150-s1.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "036e43c95ae8cc6f41e2ad31684b6d0e9adcef442d677006d60d1f9c101da0e5",
+      "host_run_id": "RUN-20261111T141948Z-b2cd0dee",
+      "name": "i9-c290-s0.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "ee9ad3957d7f75ff634d781b974e26cabeec9c18ceb4de0c999ff220348ddd5d",
+      "host_run_id": "RUN-20261111T142631Z-a6420bf7",
+      "name": "i9-c290-s1.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "f43d74b6f59d6e547deb4eedb5d3c9a27e9d68b93d88ab3490c0a63de53aac37",
+      "host_run_id": "RUN-20261111T143323Z-f02c0468",
+      "name": "i9-o350-s0.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "f0352a7cfaff2a2579c37a6187fdb250523f25262dd5c00ffcd46afa77075c12",
+      "host_run_id": "RUN-20261111T144115Z-ce06b608",
+      "name": "i9-o350-s1.json",
+      "origin": "imported"
+     }
+    ],
+    "protected_host_records_verified_by_code": false,
+    "run_sha": "712f484a13dbee4a181d15addf127b1c58dc1cbc",
+    "statement": "the code verifies each imported partial against the manifest entry (digest) and requires a host_run_id per entry, but any imported partial makes the summary non-conformant (imported_partials_unverified_by_code); it cannot verify the protected host-runner records that the manifest is built from. The orchestrator must have written the manifest only from the PARTIAL <name> <sha> stdout lines of those records and must list the host_run_ids in record_local_validation"
+   },
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "28-i9-combine.txt",
+   "frozen_histories": 600000,
+   "histories": 600000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "29-i12-theta-s01-s0": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "29-i12-theta-s01-s0.txt",
+   "frozen_histories": 20000,
+   "histories": 20000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "30-i12-theta-s01-s1": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "30-i12-theta-s01-s1.txt",
+   "frozen_histories": 20000,
+   "histories": 20000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "31-i12-theta-s01-s2": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "31-i12-theta-s01-s2.txt",
+   "frozen_histories": 20000,
+   "histories": 20000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "32-i12-theta-s01-s3": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "32-i12-theta-s01-s3.txt",
+   "frozen_histories": 20000,
+   "histories": 20000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "33-i12-theta-s01-s4": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "33-i12-theta-s01-s4.txt",
+   "frozen_histories": 20000,
+   "histories": 20000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "34-i12-theta-s01-s5": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "34-i12-theta-s01-s5.txt",
+   "frozen_histories": 20000,
+   "histories": 20000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "35-i12-theta-s01-s6": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "35-i12-theta-s01-s6.txt",
+   "frozen_histories": 20000,
+   "histories": 20000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "36-i12-theta-s01-s7": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "36-i12-theta-s01-s7.txt",
+   "frozen_histories": 20000,
+   "histories": 20000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "37-i12-theta-s01-s8": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "37-i12-theta-s01-s8.txt",
+   "frozen_histories": 20000,
+   "histories": 20000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "38-i12-theta-s01-s9": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "38-i12-theta-s01-s9.txt",
+   "frozen_histories": 20000,
+   "histories": 20000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "39-i12-theta-s05-s0": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "39-i12-theta-s05-s0.txt",
+   "frozen_histories": 50000,
+   "histories": 50000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "40-i12-theta-s05-s1": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "40-i12-theta-s05-s1.txt",
+   "frozen_histories": 50000,
+   "histories": 50000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "41-i12-theta-s05-s2": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "41-i12-theta-s05-s2.txt",
+   "frozen_histories": 50000,
+   "histories": 50000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "42-i12-theta-s05-s3": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "42-i12-theta-s05-s3.txt",
+   "frozen_histories": 50000,
+   "histories": 50000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "43-i12-theta-s1-s0": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "43-i12-theta-s1-s0.txt",
+   "frozen_histories": 100000,
+   "histories": 100000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "44-i12-theta-s1-s1": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "44-i12-theta-s1-s1.txt",
+   "frozen_histories": 100000,
+   "histories": 100000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "45-i12-theta-s5-s0": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "45-i12-theta-s5-s0.txt",
+   "frozen_histories": 100000,
+   "histories": 100000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "46-i12-theta-s5-s1": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "46-i12-theta-s5-s1.txt",
+   "frozen_histories": 100000,
+   "histories": 100000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "47-i12-sigma-s01-s0": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "47-i12-sigma-s01-s0.txt",
+   "frozen_histories": 20000,
+   "histories": 20000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "48-i12-sigma-s01-s1": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "48-i12-sigma-s01-s1.txt",
+   "frozen_histories": 20000,
+   "histories": 20000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "49-i12-sigma-s01-s2": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "49-i12-sigma-s01-s2.txt",
+   "frozen_histories": 20000,
+   "histories": 20000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "50-i12-sigma-s01-s3": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "50-i12-sigma-s01-s3.txt",
+   "frozen_histories": 20000,
+   "histories": 20000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "51-i12-sigma-s01-s4": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "51-i12-sigma-s01-s4.txt",
+   "frozen_histories": 20000,
+   "histories": 20000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "52-i12-sigma-s01-s5": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "52-i12-sigma-s01-s5.txt",
+   "frozen_histories": 20000,
+   "histories": 20000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "53-i12-sigma-s01-s6": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "53-i12-sigma-s01-s6.txt",
+   "frozen_histories": 20000,
+   "histories": 20000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "54-i12-sigma-s01-s7": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "54-i12-sigma-s01-s7.txt",
+   "frozen_histories": 20000,
+   "histories": 20000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "55-i12-sigma-s01-s8": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "55-i12-sigma-s01-s8.txt",
+   "frozen_histories": 20000,
+   "histories": 20000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "56-i12-sigma-s01-s9": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "56-i12-sigma-s01-s9.txt",
+   "frozen_histories": 20000,
+   "histories": 20000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "57-i12-sigma-s05-s0": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "57-i12-sigma-s05-s0.txt",
+   "frozen_histories": 50000,
+   "histories": 50000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "58-i12-sigma-s05-s1": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "58-i12-sigma-s05-s1.txt",
+   "frozen_histories": 50000,
+   "histories": 50000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "59-i12-sigma-s05-s2": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "59-i12-sigma-s05-s2.txt",
+   "frozen_histories": 50000,
+   "histories": 50000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "60-i12-sigma-s05-s3": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "60-i12-sigma-s05-s3.txt",
+   "frozen_histories": 50000,
+   "histories": 50000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "61-i12-sigma-s1-s0": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "61-i12-sigma-s1-s0.txt",
+   "frozen_histories": 100000,
+   "histories": 100000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "62-i12-sigma-s1-s1": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "62-i12-sigma-s1-s1.txt",
+   "frozen_histories": 100000,
+   "histories": 100000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "63-i12-sigma-s5-s0": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "63-i12-sigma-s5-s0.txt",
+   "frozen_histories": 100000,
+   "histories": 100000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "64-i12-sigma-s5-s1": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "64-i12-sigma-s5-s1.txt",
+   "frozen_histories": 100000,
+   "histories": 100000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "65-i12-combine": {
+   "attestation": {
+    "manifest_path": "/workspace/.ionmc-cache/transport-samples/712f484a/manifest.json",
+    "manifest_sha256": "a83a99040f419ca5a0f7c2664aee0c4d44f9e3c765e43be3e69e318116022b05",
+    "manifest_source": "host-runner protected stdout PARTIAL lines",
+    "partials": [
+     {
+      "content_sha256": "0ad2d6aba6983cbb66a3256bf50f96baaad8498dad5ac6fd638d1bd6b7352309",
+      "host_run_id": "RUN-20261111T144927Z-09cf2fc5",
+      "name": "i12-theta-s01-s0.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "eadccc4eca4879a62e0aba057c999abeebd6128d363dc4fb2ef36eb1c37bc698",
+      "host_run_id": "RUN-20261111T145702Z-7af94373",
+      "name": "i12-theta-s01-s1.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "2e37433a06f9403299087173910e1e72c5444618a18312080f8a2ea212bfed69",
+      "host_run_id": "RUN-20261111T150435Z-77133289",
+      "name": "i12-theta-s01-s2.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "8b97bdaaa6191b6dc30bc146a304174a199fb6e40f8c234d51b0aecd41c8d65e",
+      "host_run_id": "RUN-20261111T151205Z-6eba5529",
+      "name": "i12-theta-s01-s3.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "5180be455f14fb05e2bf730f67d7ca1d25d817441fd751084ecc5fa923e7caea",
+      "host_run_id": "RUN-20261111T151935Z-c45e2931",
+      "name": "i12-theta-s01-s4.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "47a0c4d4325d266a42e09556e207ea354916d9218d1b449b3324ca8d2485ca4f",
+      "host_run_id": "RUN-20261111T152708Z-b89cc6cf",
+      "name": "i12-theta-s01-s5.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "79987e099ca3cb562396131fc96e1942c8199ad2994ca8b41fab45a55e8e8a6d",
+      "host_run_id": "RUN-20261111T153439Z-c8399741",
+      "name": "i12-theta-s01-s6.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "4c7dfc55f2d3ada03d4d69eb3471d55e0646271f15a3d5862817b5e9763af8ef",
+      "host_run_id": "RUN-20261111T154213Z-27607ba6",
+      "name": "i12-theta-s01-s7.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "1e86e1108d7ca5a45018a1c4c8e107221197db586adb1049c0e91774b2f03d11",
+      "host_run_id": "RUN-20261111T154944Z-8773fe1a",
+      "name": "i12-theta-s01-s8.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "38c516906f9f263d4bfcf58068092d4e723c6c4f277be8e5c9c55227be388ef7",
+      "host_run_id": "RUN-20261111T155716Z-4de7f2b3",
+      "name": "i12-theta-s01-s9.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "83535abd1cbca41a17757b88bbcb858194ac078d0c4bbddb776c7ebab5a43051",
+      "host_run_id": "RUN-20261111T160447Z-40633de0",
+      "name": "i12-theta-s05-s0.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "c1da5b99f588aa523d45597c71bbc3733293dc3f2428270af448eed6ea1a3601",
+      "host_run_id": "RUN-20261111T160836Z-7e7182ba",
+      "name": "i12-theta-s05-s1.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "334778e652c052cacec933ef1d574f5afdcf3c58dabd056a16dead861dccd405",
+      "host_run_id": "RUN-20261111T161226Z-9eb62c82",
+      "name": "i12-theta-s05-s2.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "bf149e9cd1f0c9408f0f5de168238ab1b949a8a68f4947639f9680ea5d00fdd3",
+      "host_run_id": "RUN-20261111T161615Z-c856ac46",
+      "name": "i12-theta-s05-s3.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "8dc66549c0eebd88855cf0853b9be3182527f2220ea3f22056beeae38e78fe61",
+      "host_run_id": "RUN-20261111T162004Z-1aeef20a",
+      "name": "i12-theta-s1-s0.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "0be116212c78221873730118ef640b62c629e19fbe9132f986e260c5b2fb364a",
+      "host_run_id": "RUN-20261111T162356Z-c483753c",
+      "name": "i12-theta-s1-s1.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "c715ee21877df80f10bb5c7a617948ed8f0201af40a768462ad05aceb11e4022",
+      "host_run_id": "RUN-20261111T162748Z-3c3e3450",
+      "name": "i12-theta-s5-s0.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "8b71c9f2e4c9445ceea673f42e948c25c3d4efe96b32162d0ffbc71e809c87f1",
+      "host_run_id": "RUN-20261111T162855Z-487919b9",
+      "name": "i12-theta-s5-s1.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "b20c953f70eeabc89bf86a000e07600cd5b90386459c7c769c6e70edb74f3389",
+      "host_run_id": "RUN-20261111T163000Z-caa8b330",
+      "name": "i12-sigma-s01-s0.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "ea522f4a241776c53e3822d7f1d966c2657826ddb0049a19e228f6ad23a89d21",
+      "host_run_id": "RUN-20261111T164209Z-76250011",
+      "name": "i12-sigma-s01-s1.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "0e5256444d92c79360cfec7b1574c894718767b3766857393b51d2d46dbbb002",
+      "host_run_id": "RUN-20261111T165429Z-8c1f2ae7",
+      "name": "i12-sigma-s01-s2.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "22ddbe7d18d8eac3c9dc5d80b8bd9dc1379abbf4504a385793c7cc2aa8c5ba63",
+      "host_run_id": "RUN-20261111T170649Z-ac3c862c",
+      "name": "i12-sigma-s01-s3.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "ed1c8f71cd035293d29111100039b14a9b4643bb65c005926edb2d7632bc131c",
+      "host_run_id": "RUN-20261111T171909Z-9f2837b6",
+      "name": "i12-sigma-s01-s4.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "19b705dd51248cf94c9e93b88af0c0ad697e69f4e7e2e7c1623f835e6ea78644",
+      "host_run_id": "RUN-20261111T173134Z-d4bc26c3",
+      "name": "i12-sigma-s01-s5.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "da11eacf052cbe02557aac973585d0567aece417c0a3bddde866e225c99e6e6b",
+      "host_run_id": "RUN-20261111T174355Z-f26004ec",
+      "name": "i12-sigma-s01-s6.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "d0bd862214c0a58a7b8dabd860ef35c2a41db1ac723d9e7886ed60bbd89b650d",
+      "host_run_id": "RUN-20261111T175611Z-a894db3e",
+      "name": "i12-sigma-s01-s7.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "8e3d659c73bb11c318797ef054b228601584812153f85e2be3198dcf6dd4e750",
+      "host_run_id": "RUN-20261111T180828Z-e5f88151",
+      "name": "i12-sigma-s01-s8.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "e1e5fff4c5d80417cbc3e764797b58d73e6e7f4936feffe56dea1a12325ac544",
+      "host_run_id": "RUN-20261111T182046Z-04bb35a0",
+      "name": "i12-sigma-s01-s9.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "fc591b405b22d60a0e2e3e65c14604a83f8b22a38572dae0d201012dee33e0f0",
+      "host_run_id": "RUN-20261111T205654Z-ecf93a1e",
+      "name": "i12-sigma-s05-s0.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "eea7ac892864089f6e53d4a6d76ca7b078f57b5e5786d11d3f49b5a0a7875e8e",
+      "host_run_id": "RUN-20261111T210306Z-b042b827",
+      "name": "i12-sigma-s05-s1.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "d1bb8d1539886d934d9275679c9897e7ccd56bd8eaa171f6924e73dc3b554a03",
+      "host_run_id": "RUN-20261111T210917Z-682c6f61",
+      "name": "i12-sigma-s05-s2.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "4a5ff5c048c8c33153f699b7dccfb4254332a6d56f39089b2d23f170c5eb60c7",
+      "host_run_id": "RUN-20261111T211527Z-e90c1439",
+      "name": "i12-sigma-s05-s3.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "06971b9ab70f5caf766e0fa17d444aed9ef9e8a85bbf9ed81fa7619033315c5b",
+      "host_run_id": "RUN-20261111T212138Z-e4c2ff06",
+      "name": "i12-sigma-s1-s0.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "da4505d81e207eff7e5a184306c91a9d36804a8ac1bb4f9a34b5dba9bfc2dbbd",
+      "host_run_id": "RUN-20261111T212804Z-6401ed75",
+      "name": "i12-sigma-s1-s1.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "6af3f8e9562937338dc5949eb4e5c50ba065ba67e7fa03eaa2ea475be5ccfaa6",
+      "host_run_id": "RUN-20261111T213430Z-65cbcb87",
+      "name": "i12-sigma-s5-s0.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "6817f8342edc43172e8b7998069f179b2235d875ea27e25e89a43969c9ca1a63",
+      "host_run_id": "RUN-20261111T213722Z-420ae1d7",
+      "name": "i12-sigma-s5-s1.json",
+      "origin": "imported"
+     }
+    ],
+    "protected_host_records_verified_by_code": false,
+    "run_sha": "712f484a13dbee4a181d15addf127b1c58dc1cbc",
+    "statement": "the code verifies each imported partial against the manifest entry (digest) and requires a host_run_id per entry, but any imported partial makes the summary non-conformant (imported_partials_unverified_by_code); it cannot verify the protected host-runner records that the manifest is built from. The orchestrator must have written the manifest only from the PARTIAL <name> <sha> stdout lines of those records and must list the host_run_ids in record_local_validation"
+   },
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "65-i12-combine.txt",
+   "frozen_histories": 1600000,
+   "histories": 1600000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "66-i14-s01-f0005-s0": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "66-i14-s01-f0005-s0.txt",
+   "frozen_histories": 12500,
+   "histories": 12500,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "67-i14-s01-f0005-s1": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "67-i14-s01-f0005-s1.txt",
+   "frozen_histories": 12500,
+   "histories": 12500,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "68-i14-s01-f0005-s2": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "68-i14-s01-f0005-s2.txt",
+   "frozen_histories": 12500,
+   "histories": 12500,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "69-i14-s01-f0005-s3": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "69-i14-s01-f0005-s3.txt",
+   "frozen_histories": 12500,
+   "histories": 12500,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "70-i14-s01-f0005-s4": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "70-i14-s01-f0005-s4.txt",
+   "frozen_histories": 12500,
+   "histories": 12500,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "71-i14-s01-f0005-s5": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "71-i14-s01-f0005-s5.txt",
+   "frozen_histories": 12500,
+   "histories": 12500,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "72-i14-s01-f0005-s6": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "72-i14-s01-f0005-s6.txt",
+   "frozen_histories": 12500,
+   "histories": 12500,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "73-i14-s01-f0005-s7": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "73-i14-s01-f0005-s7.txt",
+   "frozen_histories": 12500,
+   "histories": 12500,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "74-i14-s01-f0005-s8": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "74-i14-s01-f0005-s8.txt",
+   "frozen_histories": 12500,
+   "histories": 12500,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "75-i14-s01-f0005-s9": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "75-i14-s01-f0005-s9.txt",
+   "frozen_histories": 12500,
+   "histories": 12500,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "76-i14-s01-f0005-s10": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "76-i14-s01-f0005-s10.txt",
+   "frozen_histories": 12500,
+   "histories": 12500,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "77-i14-s01-f0005-s11": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "77-i14-s01-f0005-s11.txt",
+   "frozen_histories": 12500,
+   "histories": 12500,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "78-i14-s01-f0005-s12": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "78-i14-s01-f0005-s12.txt",
+   "frozen_histories": 12500,
+   "histories": 12500,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "79-i14-s01-f0005-s13": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "79-i14-s01-f0005-s13.txt",
+   "frozen_histories": 12500,
+   "histories": 12500,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "80-i14-s01-f0005-s14": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "80-i14-s01-f0005-s14.txt",
+   "frozen_histories": 12500,
+   "histories": 12500,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "81-i14-s01-f0005-s15": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "81-i14-s01-f0005-s15.txt",
+   "frozen_histories": 12500,
+   "histories": 12500,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "82-i14-s01-f002-s0": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "82-i14-s01-f002-s0.txt",
+   "frozen_histories": 20000,
+   "histories": 20000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "83-i14-s01-f002-s1": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "83-i14-s01-f002-s1.txt",
+   "frozen_histories": 20000,
+   "histories": 20000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "84-i14-s01-f002-s2": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "84-i14-s01-f002-s2.txt",
+   "frozen_histories": 20000,
+   "histories": 20000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "85-i14-s01-f002-s3": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "85-i14-s01-f002-s3.txt",
+   "frozen_histories": 20000,
+   "histories": 20000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "86-i14-s01-f002-s4": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "86-i14-s01-f002-s4.txt",
+   "frozen_histories": 20000,
+   "histories": 20000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "87-i14-s01-f002-s5": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "87-i14-s01-f002-s5.txt",
+   "frozen_histories": 20000,
+   "histories": 20000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "88-i14-s01-f002-s6": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "88-i14-s01-f002-s6.txt",
+   "frozen_histories": 20000,
+   "histories": 20000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "89-i14-s01-f002-s7": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "89-i14-s01-f002-s7.txt",
+   "frozen_histories": 20000,
+   "histories": 20000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "90-i14-s01-f002-s8": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "90-i14-s01-f002-s8.txt",
+   "frozen_histories": 20000,
+   "histories": 20000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "91-i14-s01-f002-s9": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "91-i14-s01-f002-s9.txt",
+   "frozen_histories": 20000,
+   "histories": 20000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "92-i14-s05-f0005-s0": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "92-i14-s05-f0005-s0.txt",
+   "frozen_histories": 25000,
+   "histories": 25000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "93-i14-s05-f0005-s1": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "93-i14-s05-f0005-s1.txt",
+   "frozen_histories": 25000,
+   "histories": 25000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "94-i14-s05-f0005-s2": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "94-i14-s05-f0005-s2.txt",
+   "frozen_histories": 25000,
+   "histories": 25000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "95-i14-s05-f0005-s3": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "95-i14-s05-f0005-s3.txt",
+   "frozen_histories": 25000,
+   "histories": 25000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "96-i14-s05-f0005-s4": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "96-i14-s05-f0005-s4.txt",
+   "frozen_histories": 25000,
+   "histories": 25000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "97-i14-s05-f0005-s5": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "97-i14-s05-f0005-s5.txt",
+   "frozen_histories": 25000,
+   "histories": 25000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "98-i14-s05-f0005-s6": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "98-i14-s05-f0005-s6.txt",
+   "frozen_histories": 25000,
+   "histories": 25000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "99-i14-s05-f0005-s7": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "99-i14-s05-f0005-s7.txt",
+   "frozen_histories": 25000,
+   "histories": 25000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  }
+ },
+ "subset": true,
+ "suite": "lv8"
+}

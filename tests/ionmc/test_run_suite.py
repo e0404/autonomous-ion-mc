@@ -233,6 +233,44 @@ def test_combine_requires_exactly_the_full_suite(tmp_path: Path) -> None:
         summ.main(["--combine", str(tmp_path / "a"), "--expected-sha", SHA, "--out", str(out)])
 
 
+def test_combine_subset_is_an_explicit_opt_in(tmp_path: Path) -> None:
+    summ = _load("summarize")
+    full = _full()
+    a, b = full[:6], full[6:]
+    _archive(tmp_path / "a", a, doc={"pass": True})
+    _archive(tmp_path / "c", b[:-1], doc={"pass": True})
+    out = tmp_path / "subset.json"
+    assert summ.main(["--combine", str(tmp_path / "a"), str(tmp_path / "c"), "--expected-sha", SHA,
+                      "--subset", "--out", str(out)]) == 0  # fmt: skip
+    s = json.loads(out.read_text())
+    reason = f"subset of the suite: 1 of {len(full)} steps absent (--subset)"
+    assert s["pass"] and not s["complete"] and not s["conformant"] and s["subset"] is True
+    assert s["missing_steps"] == [b[-1]] and reason in s["non_conformant_reasons"]
+    assert not s["problems"]
+
+    # a duplicated and an unexpected step remain problems with --subset
+    _archive(tmp_path / "d", b[:-1] + [a[0]], doc={"pass": True})
+    out2 = tmp_path / "subset2.json"
+    assert summ.main(["--combine", str(tmp_path / "a"), str(tmp_path / "d"), "--expected-sha", SHA,
+                      "--subset", "--out", str(out2)]) == 1  # fmt: skip
+    assert any("appears in" in p for p in json.loads(out2.read_text())["problems"])
+    _archive(tmp_path / "x", ["99-pytest-stray"], doc={"pass": True})
+    out3 = tmp_path / "subset3.json"
+    assert summ.main(["--combine", str(tmp_path / "a"), str(tmp_path / "x"), "--expected-sha", SHA,
+                      "--subset", "--out", str(out3)]) == 1  # fmt: skip
+    assert any("unexpected steps" in p for p in json.loads(out3.read_text())["problems"])
+
+    # without the flag the summary records subset False; --subset needs --combine
+    out4 = tmp_path / "full.json"
+    _archive(tmp_path / "b", b, doc={"pass": True})
+    assert summ.main(["--combine", str(tmp_path / "a"), str(tmp_path / "b"), "--expected-sha", SHA,
+                      "--out", str(out4)]) == 0  # fmt: skip
+    assert json.loads(out4.read_text())["subset"] is False
+    with pytest.raises(SystemExit) as exc:
+        summ.main([str(tmp_path / "a"), "--expected-sha", SHA, "--subset"])
+    assert exc.value.code not in (0, None)
+
+
 # -- git and snapshot end to end -----------------------------------------------------------------
 def _git_env(root: Path) -> dict[str, str]:
     """Environment for git in sandboxes without a home directory or identity."""

@@ -1,0 +1,21 @@
+{
+ "base_sha": "341ffaa97a0d0307c0d48e43ff0edb6e06a83d47",
+ "experiment_id": "experiment-v3",
+ "finished_at": "2026-11-09T09:15:57.707596+00:00",
+ "head_sha": "0c68b78ac191c850bf9101dbacf8eca12f4e9b1b",
+ "model": "gpt-5.6-sol",
+ "provider": "openai",
+ "report_sha256": "067be8715d33f5ea2f5333b8813a72ee219fbe519606500b29508d9d7ff08a3a",
+ "review_id": "REVIEW-9691e1b098e940d7bdfd1063c09325ee",
+ "started_at": "2026-11-09T09:13:25.980825+00:00",
+ "status": "passed",
+ "task_id": "V3-008",
+ "tool": "codex exec",
+ "report": {
+  "findings": [],
+  "head_sha": "0c68b78ac191c850bf9101dbacf8eca12f4e9b1b",
+  "summary": "The prior important finding is resolved. MCS-disabled ion validation now bypasses all exact-Omega domain checks, path construction, packing, coverage probes, table construction, and root solves. Regression coverage patches the builders to fail if called and exercises placeholder mappings on Python and Warp CPU. No blocking or important unresolved findings remain in the complete diff.",
+  "verdict": "pass"
+ },
+ "_provenance": "copied verbatim by the orchestrator from the codex-worker controlled service response (inspect_codex_review) on 2026-11-09; the seal review of the sample seal commit (dated seal note, v3-008-acceptance.md)"
+}

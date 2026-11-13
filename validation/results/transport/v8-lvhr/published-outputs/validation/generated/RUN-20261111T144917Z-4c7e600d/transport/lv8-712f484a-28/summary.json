@@ -1,0 +1,84 @@
+{
+ "attestation": null,
+ "conformant": false,
+ "deferred_steps": [],
+ "execution_mode": "single-process-diagnostic",
+ "git_sha": "712f484a13dbee4a181d15addf127b1c58dc1cbc",
+ "identity": "c0fb9b648a0eec58d1f01cf6af5d31bb829b3ea2a41a9e7db5d297f8b8ed41d8",
+ "non_conformant_reasons": [
+  "execution mode single-process-diagnostic (diagnostic, not the qualification mode)",
+  "28-i9-combine: imported_partials_unverified_by_code"
+ ],
+ "partials_attestation_problems": [
+  "28-i9-combine: imported_partials_unverified_by_code"
+ ],
+ "pass": true,
+ "problems": [],
+ "reduced_history_counts": false,
+ "seed_base": "20572004",
+ "sha_source": "git",
+ "single_process_env": "OMP_NUM_THREADS=1,OPENBLAS_NUM_THREADS=1,MKL_NUM_THREADS=1,NUMEXPR_NUM_THREADS=1,IONMC_SINGLE_PROCESS=1",
+ "source_ok": true,
+ "steps": {
+  "28-i9-combine": {
+   "attestation": {
+    "manifest_path": "/workspace/.ionmc-cache/transport-samples/712f484a/manifest.json",
+    "manifest_sha256": "549ec7430862bfd76a58e4c1246a3f6f5d9737b411c9dc1379a7c4c9bf7c0585",
+    "manifest_source": "host-runner protected stdout PARTIAL lines",
+    "partials": [
+     {
+      "content_sha256": "a3ee762836ef183f2a597f9d3601caf06ab3eb408c6c15272d29c0b533c802b0",
+      "host_run_id": "RUN-20261111T140753Z-4ac10d13",
+      "name": "i9-he150-s0.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "01fc3992bb4ab599a9b868adbcabf8a2f3d56a8eb40bfb0c36d885e6d11f358e",
+      "host_run_id": "RUN-20261111T141353Z-8b17b0cc",
+      "name": "i9-he150-s1.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "036e43c95ae8cc6f41e2ad31684b6d0e9adcef442d677006d60d1f9c101da0e5",
+      "host_run_id": "RUN-20261111T141948Z-b2cd0dee",
+      "name": "i9-c290-s0.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "ee9ad3957d7f75ff634d781b974e26cabeec9c18ceb4de0c999ff220348ddd5d",
+      "host_run_id": "RUN-20261111T142631Z-a6420bf7",
+      "name": "i9-c290-s1.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "f43d74b6f59d6e547deb4eedb5d3c9a27e9d68b93d88ab3490c0a63de53aac37",
+      "host_run_id": "RUN-20261111T143323Z-f02c0468",
+      "name": "i9-o350-s0.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "f0352a7cfaff2a2579c37a6187fdb250523f25262dd5c00ffcd46afa77075c12",
+      "host_run_id": "RUN-20261111T144115Z-ce06b608",
+      "name": "i9-o350-s1.json",
+      "origin": "imported"
+     }
+    ],
+    "protected_host_records_verified_by_code": false,
+    "run_sha": "712f484a13dbee4a181d15addf127b1c58dc1cbc",
+    "statement": "the code verifies each imported partial against the manifest entry (digest) and requires a host_run_id per entry, but any imported partial makes the summary non-conformant (imported_partials_unverified_by_code); it cannot verify the protected host-runner records that the manifest is built from. The orchestrator must have written the manifest only from the PARTIAL <name> <sha> stdout lines of those records and must list the host_run_ids in record_local_validation"
+   },
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "28-i9-combine.txt",
+   "frozen_histories": 600000,
+   "histories": 600000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  }
+ },
+ "subset": true,
+ "suite": "lv8",
+ "tree_dirty": "no"
+}

@@ -1,0 +1,21 @@
+{
+ "base_sha": "1e93fe1e82855865105be5baa13cbb743487506b",
+ "experiment_id": "experiment-v3",
+ "finished_at": "2026-11-11T07:54:30.313805+00:00",
+ "head_sha": "ca21ec18601c8558082f3f0d543c07d40204992b",
+ "model": "gpt-5.6-sol",
+ "provider": "openai",
+ "report_sha256": "e54a1d6d86c52d5840c8c067863a9dad14f2fbe7d2fbc862ca0f2a0dfed85908",
+ "review_id": "REVIEW-557971cc64724e7684141671dfac057f",
+ "started_at": "2026-11-11T07:50:38.014201+00:00",
+ "status": "passed",
+ "task_id": "V3-008",
+ "tool": "codex exec",
+ "report": {
+  "findings": [],
+  "head_sha": "ca21ec18601c8558082f3f0d543c07d40204992b",
+  "summary": "Prior findings are resolved. The D-3 aggregate now matches the committed generator and source hashes, and the end-of-range documentation reflects the selected model. The new held-out seal path is fail-closed, separates main and held-out chronology/samples, validates seed and implementation ancestry, and has focused substitution/regression coverage. No blocking or important issues remain.",
+  "verdict": "pass"
+ },
+ "_provenance": "copied verbatim by the orchestrator from the codex-worker controlled service response (inspect_codex_review) on 2026-11-11; the seal review of the held-out sample seal commit ca21ec18 (amendment R2-STOP3; dated held-out seal note, v3-008-acceptance.md)"
+}

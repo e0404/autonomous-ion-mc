@@ -11,9 +11,12 @@ Units follow decision 0037 (MeV, mm, g/cm3, rad); names carry the unit.
 
 from __future__ import annotations
 
+import hashlib
 import math
 from dataclasses import dataclass, replace
 from typing import Any, Literal
+
+import numpy as np
 
 from ionmc._validate import choice, fail, integer, real
 from ionmc.errors import BackendUnavailableError
@@ -21,14 +24,36 @@ from ionmc.geometry import BoxPhantom, VoxelGeometry
 from ionmc.lookup import LookupTable
 from ionmc.materials import WATER, Material
 from ionmc.physics.em import E_S_MEV
-from ionmc.physics.projectiles import DEUTERON, PROTON, Projectile
+from ionmc.physics.exact_omega import (
+    MCS_OFF_FDM_STATUS,
+    PROTON_FDM_STATUS,
+    RESIDUAL_TOL,
+    STEP_TOL,
+    TABLE_BRACKET_FACTOR,
+    TABLE_BRACKET_MIN,
+    TABLE_EVAL_CONTRACT,
+    TABLE_N_PV,
+    TABLE_N_R,
+    TABLE_SAFETY_FACTOR,
+    FdmDomainStatus,
+    TableEstimate,
+    build_pv_eq_table_and_estimate,
+    fdm_domain_status,
+    pack_composition,
+    pack_quadrature,
+    pack_transport_row,
+    proton_path,
+    pv_eq_table_coverage,
+    table_domain,
+)
+from ionmc.physics.projectiles import ALPHA, CARBON12, DEUTERON, OXYGEN16, PROTON, Projectile
 from ionmc.physics.scattering import scattering_length_g_cm2
 from ionmc.physics.stopping import StoppingSource, StoppingTable
 from ionmc.scoring import MAX_SCORING_GRIDS, ScoringGrid, TallyRequest
 from ionmc.sources import PencilBeamSource
 from ionmc.species import producible
 from ionmc.transport.channels import ChannelPlan, NuclearCapacity, compile_channels
-from ionmc.transport.tables import TransportTables, thaw
+from ionmc.transport.tables import TransportTables, material_fingerprint, thaw
 from ionmc.transport.tally import (
     MAX_QUANTA,
     QUANTUM_MEV,
@@ -38,10 +63,21 @@ from ionmc.transport.tally import (
 
 STRAGGLING_MODELS = ("bohr_gamma_v1", "bohr_gauss_clamped_gamma_v1")
 MCS_MODELS = ("differential_moliere",)
+MCS_MAPPING_EVALS = ("table", "root")
+"""Evaluations of the exact-Omega mapping for z >= 2 (decision 0043 section 3, "Evaluation"):
+``"table"`` the bilinear ``pv_eq/pv`` tabulation (default), ``"root"`` the per-step root solve."""
 DELTA_ELECTRON_MODELS = ("local",)
 BACKENDS = ("python", "warp-cpu", "warp-cuda")
 PRECISIONS = ("float32", "float64")
 MAX_REJECTION_ATTEMPTS = 64
+END_OF_RANGE_MODELS = ("default", "point_v1", "continuous_residual_v1")
+"""End-of-range models of a history that reaches the cutoff energy (V3-008 R2-STOP3):
+``"point_v1"`` deposits the whole residual energy at the point; ``"continuous_residual_v1"``
+(ion sources only) deposits it along the straight continuation of the direction over the CSDA
+range of the residual energy in the transport's own table, with the table's energy density;
+``"default"`` is ``continuous_residual_v1`` for an ion (z >= 2) and ``point_v1`` for a proton."""
+RESIDUAL_SUBSTEPS = 32
+"""Equal sub-steps of the ``continuous_residual_v1`` segment (fixed; part of the model)."""
 DEFAULT_CHUNK_HISTORIES = 2**18
 MIN_CHUNK_HISTORIES = 2**10
 MAX_CPU_WORKERS = 256
@@ -53,6 +89,17 @@ CHANNEL_BACKENDS: tuple[str, ...] = ("python", "warp-cpu", "warp-cuda")
 """Backends that implement the scoring channels of decision 0040; a configuration with tallies is
 rejected on every other backend, so a requested tally is never silently ignored."""
 NUCLEAR_MAX_ENERGY_MEV = 250.0
+
+ION_PROJECTILES = (ALPHA, CARBON12, OXYGEN16)
+"""The ions of the electromagnetic ion engine (decision 0043); He-3 and others fail closed."""
+ION_DOMAIN_MEV_PER_U = {
+    "alpha": (50.0, 250.0),
+    "carbon12": (80.0, 430.0),
+    "oxygen16": (100.0, 430.0),
+}
+"""Supported source energy per nucleon [MeV/u] of each ion (decision 0043 section 5): the source
+energy must lie inside and ``E0 + 6 sigma_E`` must not exceed the upper end."""
+E_CUT_ION_DEFAULT_MEV_PER_U = 2.0
 
 U01_MAPPING = {
     "float64": "((w >> 8) + 0.5) * 2**-24",
@@ -68,9 +115,14 @@ class PhysicsOptions:
     backend, proton source only) additionally needs ``nuclear_table_id`` (the derived nuclear
     table, loaded and verified by ``validate()``) and uses ``e_cut_deuteron_mev`` (the deuteron
     cutoff, an engineering default of 4 MeV = twice the 2 MeV total-energy Bethe table floor).
+    For an ion source (z >= 2) the cutoff is ``e_cut_ion_mev_per_u`` x A (default 2 MeV/u,
+    decision 0043
+    section 4; ``e_cut_mev`` must then stay at its default 2.0 and is not used).
     ``stopping`` supplies the electronic stopping tables (for example an
-    analytic :class:`~ionmc.physics.stopping.BetheStoppingSource`). Below ``e_cut_mev`` the
-    remaining kinetic energy is deposited locally; ``max_step_mm`` bounds the step length;
+    analytic :class:`~ionmc.physics.stopping.BetheStoppingSource`). Below the cutoff the
+    remaining kinetic energy is handled by the selected ``end_of_range_model`` (``point_v1``:
+    deposited at the cutoff point, the proton default; ``continuous_residual_v1``: deposited along
+    the table residual range, the ion default); ``max_step_mm`` bounds the step length;
     ``max_energy_loss_fraction`` bounds the mean energy loss per step as a fraction of the
     kinetic energy; ``range_alpha`` and ``range_rho_f_mm`` parametrise the Geant4 range step
     function; steps shorter than ``short_step_fraction`` of the residual range use the
@@ -80,6 +132,27 @@ class PhysicsOptions:
     plane the straight line reaches, the angle is sampled for that length, leg 2 is not cut again
     and the end point is snapped onto the plane (the displacements are recorded per history; the
     direction is never changed).
+    ``end_of_range_model`` (``END_OF_RANGE_MODELS``, default ``"default"``) selects what happens
+    below the cutoff energy: ``"point_v1"`` deposits the residual energy at the current point;
+    ``"continuous_residual_v1"`` (ion source only) deposits it along the straight continuation
+    over the table CSDA range of the residual energy (:func:`effective_end_of_range_model`).
+    ``mcs_mapping_eval`` selects how the exact-Omega mapping of an ion (z >= 2) is evaluated
+    (``MCS_MAPPING_EVALS``), both the exact root on every step: ``"table"`` (default; the root
+    started from a tight bracket around the bilinear value of a ``pv_eq/pv`` table built at
+    validation by the root solve, the table being an accelerator only, ``TABLE_EVAL_CONTRACT``) or
+    ``"root"`` (the root from the full proton-path bracket). A table cell with a node where the
+    root solve fails is left invalid and states in it use the full bracket, exactly as
+    ``"root"`` (the same root). The mapping is defined where the proton-equivalent state stays
+    inside the proton b-slab range: with multiple scattering on, ``validate`` root-solves the
+    table nodes of the run's reachable states in both evaluations and fails closed
+    (``UnsupportedCombinationError``) if any fails (observed: oxygen16 at 100 and 150 MeV/u in
+    copper and lead), so every validated run has table coverage 1.0 (recorded, summary
+    ``mcs_mapping.table.table_coverage``); the fallback protects any partial table. With
+    ``multiple_scattering=False`` the mapping is not evaluated: for an ion source no f_dM domain
+    check, no proton path, no packing and no root solve happen (no table, no coverage check), the
+    summary records ``mcs_mapping.fdm_domain = "not evaluated (multiple_scattering=False)"``,
+    ``mcs_mapping.evaluation = "root"`` and ``unused = True``. It is ignored for protons (no
+    mapping).
     """
 
     nuclear: bool
@@ -98,18 +171,33 @@ class PhysicsOptions:
     truncated_hinge_diagnostic: bool = False
     e_cut_deuteron_mev: float = 4.0
     nuclear_table_id: str | None = None
+    e_cut_ion_mev_per_u: float = E_CUT_ION_DEFAULT_MEV_PER_U
+    mcs_mapping_eval: str = "table"
+    end_of_range_model: str = "default"
 
     def __post_init__(self) -> None:
         for name in ("nuclear", "straggling", "multiple_scattering", "truncated_hinge_diagnostic"):
             if not isinstance(getattr(self, name), bool):
                 raise fail(f"{name} must be a bool, got {getattr(self, name)!r}")
-        for name in ("straggling_model", "mcs_model", "delta_electrons"):
+        for name in (
+            "straggling_model",
+            "mcs_model",
+            "delta_electrons",
+            "mcs_mapping_eval",
+            "end_of_range_model",
+        ):
             if not isinstance(getattr(self, name), str):
                 raise fail(f"{name} must be a string")
+        choice("mcs_mapping_eval", self.mcs_mapping_eval, MCS_MAPPING_EVALS)
+        choice("end_of_range_model", self.end_of_range_model, END_OF_RANGE_MODELS)
         if not (hasattr(self.stopping, "table") and hasattr(self.stopping, "name")):
             raise fail("stopping must be a StoppingSource (with .name and .table())")
+        ls_mode = getattr(getattr(self.stopping, "options", None), "ls", "off")
+        if ls_mode not in ("off", "eff", "bare_mixed"):
+            raise fail(f"stopping options ls must be 'off', 'eff' or 'bare_mixed', got {ls_mode!r}")
         real("e_cut_mev", self.e_cut_mev, positive=True)
         real("e_cut_deuteron_mev", self.e_cut_deuteron_mev, positive=True)
+        real("e_cut_ion_mev_per_u", self.e_cut_ion_mev_per_u, positive=True)
         if self.nuclear_table_id is not None and not isinstance(self.nuclear_table_id, str):
             raise fail("nuclear_table_id must be a string or None")
         real("max_step_mm", self.max_step_mm, positive=True)
@@ -226,6 +314,195 @@ class SimulationConfig:
             raise fail("lookups must be a tuple of LookupTable")
 
 
+def effective_end_of_range_model(config: SimulationConfig) -> str:
+    """The end-of-range model of the run: the requested one, or for ``"default"``
+    ``continuous_residual_v1`` for an ion (z >= 2) and ``point_v1`` for a proton."""
+    model = config.physics.end_of_range_model
+    if model == "default":
+        return "continuous_residual_v1" if config.source.projectile.z >= 2 else "point_v1"
+    return model
+
+
+@dataclass(frozen=True, eq=False)
+class IonMappingData:
+    """Packed inputs of the exact-Omega mapping of an ion run (float64, one row per geometry
+    material, rows zero-padded to a common length; the headers carry the true sizes): ``ion`` the
+    transport-table rows of the ion, ``proton`` the mapping proton paths, ``comp`` the packed
+    compositions and ``quad`` the Gauss-Legendre rule (``ionmc.physics.exact_omega``).
+
+    ``evaluation`` is ``"table"`` or ``"root"`` (``PhysicsOptions.mcs_mapping_eval``); ``table``
+    holds the ``pv_eq/pv`` table rows (:func:`ionmc.physics.exact_omega.build_pv_eq_table`) for
+    ``"table"`` and is None for ``"root"``; ``table_domain`` the ``(pv_lo, p1v1_min, p1v1_max)``
+    [MeV] they were built for; ``estimates`` the build-time interpolation estimate of each row
+    (:func:`ionmc.physics.exact_omega.estimate_pv_eq_table`, a performance diagnostic, with the
+    table coverage). ``unused`` is True when multiple scattering is off: the mapping is never
+    evaluated, so nothing is built whatever the requested evaluation (``evaluation`` is then
+    ``"root"`` and ``ion``, ``proton``, ``comp``, ``quad`` are zero placeholders, never read)."""
+
+    ion: np.ndarray
+    proton: np.ndarray
+    comp: np.ndarray
+    quad: np.ndarray
+    evaluation: str = "root"
+    table: np.ndarray | None = None
+    table_domain: tuple[float, float, float] | None = None
+    estimates: tuple[TableEstimate, ...] | None = None
+    unused: bool = False
+
+    def table_summary(self) -> dict[str, Any]:
+        """JSON-serialisable record of the evaluation (sizes, axes bounds and the sha256 of the
+        packed table rows)."""
+        out: dict[str, Any] = {"evaluation": self.evaluation}
+        if self.unused:
+            out["unused"] = True
+            out["unused_note"] = (
+                "multiple_scattering=False: the mapping is never evaluated; no f_dM domain check, "
+                "no proton path, no packing and no root solve; no pv_eq/pv table is built "
+                "whatever mcs_mapping_eval requests"
+            )
+        if self.table is not None and self.table_domain is not None:
+            rows = np.ascontiguousarray(self.table, dtype=np.float64)
+            h = rows[0]
+            out["table"] = {
+                "kind": "pv_eq/pv, bilinear in (ln pv, ln(p1v1/pv)) (decision 0043 section 3)",
+                "n_pv": int(h[2]),
+                "n_r": int(h[5]),
+                "ln_pv_range": [float(h[0]), float(h[6])],
+                "ln_r_range": [float(h[3]), float(h[7])],
+                "pv_lo_mev": self.table_domain[0],
+                "p1v1_min_mev": self.table_domain[1],
+                "p1v1_max_mev": self.table_domain[2],
+                "n_materials": int(rows.shape[0]),
+                "sha256": hashlib.sha256(rows.tobytes()).hexdigest(),
+            }
+            if self.estimates is not None:
+                es = self.estimates
+                known = [e.interp_estimate for e in es if e.interp_estimate is not None]
+                out["table"].update(
+                    {
+                        "contract": TABLE_EVAL_CONTRACT,
+                        "root_residual_tol": RESIDUAL_TOL["float64"],
+                        "root_step_tol": STEP_TOL["float64"],
+                        "bracket_factor": TABLE_BRACKET_FACTOR,
+                        "bracket_min": TABLE_BRACKET_MIN,
+                        "bracket_half_width_per_material": [e.bracket_half_width for e in es],
+                        "interp_estimate": max(known) if known else None,
+                        "interp_estimate_per_material": [e.interp_estimate for e in es],
+                        "interp_estimate_note": (
+                            "build-time estimate of |ln pv_eq(table) - ln pv_eq(root)| (bilinear "
+                            "bound from second differences on a 2x-refined root-solve grid, "
+                            "safety factor 2): a performance diagnostic, not a correctness claim"
+                        ),
+                        "safety_factor": TABLE_SAFETY_FACTOR,
+                        "estimated_cells": sum(e.n_cells for e in es),
+                        "refined_points": sum(e.n_refined_points for e in es),
+                        "table_coverage": min(e.table_coverage for e in es),
+                        "table_coverage_per_material": [e.table_coverage for e in es],
+                        "table_coverage_note": (
+                            "fraction of the table cells meeting the band of initial states with "
+                            "four valid nodes; 1.0 for every validated run (validate fails closed "
+                            "when a reachable node has no root, in both evaluations); a state "
+                            "outside the table or in an uncovered cell has no starting guess and "
+                            "uses the full proton-path bracket, as mcs_mapping_eval 'root'; "
+                            "interp_estimate is None for a material without an estimated cell"
+                        ),
+                    }
+                )
+        return out
+
+
+def _pad_rows(rows: list[np.ndarray]) -> np.ndarray:
+    width = max(len(r) for r in rows)
+    out = np.zeros((len(rows), width), dtype=np.float64)
+    for i, r in enumerate(rows):
+        out[i, : len(r)] = r
+    return out
+
+
+def _unused_ion_mapping() -> IonMappingData:
+    """The mapping data of an ion run without multiple scattering: never read (the kernels and
+    the python twin touch the mapping only inside the multiple-scattering step), so its arrays are
+    zero placeholders of the kernel's array ranks (no proton path, no packing, no root solve)."""
+    z2 = np.zeros((1, 1), dtype=np.float64)
+    return IonMappingData(z2, z2, z2, np.zeros(1, dtype=np.float64), "root", unused=True)
+
+
+def _ion_mapping_data(
+    tables: TransportTables,
+    geometry: VoxelGeometry,
+    config: SimulationConfig,
+    e_lo_mev: float,
+    e_hi_mev: float,
+) -> IonMappingData:
+    ph = config.physics
+    if not ph.multiple_scattering:  # the mapping is never evaluated (validate does not call this)
+        return _unused_ion_mapping()
+    mats = geometry.materials
+    ion = [pack_transport_row(tables, i) for i in range(len(mats))]
+    pro = [proton_path(m).pack for m in mats]
+    comp = [pack_composition(m) for m in mats]
+    quad = pack_quadrature()
+    proj = config.source.projectile
+    # the step midpoint stays above (1 - f) E_cut (f: the step's energy-loss fraction limit)
+    dom = table_domain(
+        proj, (1.0 - ph.max_energy_loss_fraction) * effective_e_cut_mev(config), e_lo_mev, e_hi_mev
+    )
+    # decision D1 (Codex REVIEW-16c63514): the mapping must be defined over the run's reachable
+    # domain (root solve at the table nodes of the band of initial states), in both evaluations
+    uncovered = []
+    for i, mat in enumerate(mats):
+        cov = pv_eq_table_coverage(
+            ion[i], pro[i], comp[i], quad, float(proj.z), proj.mass_mev, *dom, TABLE_N_PV, TABLE_N_R
+        )
+        if cov.n_uncovered:
+            uncovered.append((mat.name, cov))
+    if uncovered:
+        parts = "; ".join(
+            f"{name}: {c.n_uncovered} of {c.n_band_cells} cells of the band of initial states "
+            f"uncovered, lowest pv {c.pv_lowest_mev:.6g} MeV, largest p1v1/pv {c.r_largest:.6g}, "
+            f"root status {', '.join(str(s) for s in c.statuses)}"
+            for name, c in uncovered
+        )
+        reason = (
+            "the proton-equivalent state leaves the proton b-slab range (root status 2)"
+            if all(c.statuses == (2,) for _n, c in uncovered)
+            else "the exact-Omega root solve fails at reachable states"
+        )
+        raise fail(
+            f"{proj.name} at E0 = {config.source.kinetic_energy_mev:g} MeV is unsupported with "
+            f"multiple scattering in {', '.join(n for n, _c in uncovered)}: the exact-Omega "
+            f"mapping is not defined over the reachable states ({reason}; {parts}); runs with "
+            "multiple_scattering=False are unaffected"
+        )
+    if ph.mcs_mapping_eval == "root":
+        return IonMappingData(_pad_rows(ion), _pad_rows(pro), _pad_rows(comp), quad, "root")
+    built = [
+        build_pv_eq_table_and_estimate(
+            ion[i], pro[i], comp[i], quad, float(proj.z), proj.mass_mev, *dom, TABLE_N_PV, TABLE_N_R
+        )
+        for i in range(len(mats))
+    ]
+    return IonMappingData(
+        _pad_rows(ion),
+        _pad_rows(pro),
+        _pad_rows(comp),
+        quad,
+        "table",
+        _pad_rows([r for r, _c in built]),
+        dom,
+        tuple(c for _r, c in built),
+    )
+
+
+def effective_e_cut_mev(config: SimulationConfig) -> float:
+    """The cutoff energy [MeV, total kinetic energy] of the run: ``e_cut_mev`` for a proton,
+    ``e_cut_ion_mev_per_u`` x A for an ion (z >= 2)."""
+    proj = config.source.projectile
+    if proj.z >= 2:
+        return config.physics.e_cut_ion_mev_per_u * proj.a
+    return config.physics.e_cut_mev
+
+
 @dataclass(frozen=True, eq=False)
 class EffectiveConfig:
     """What will actually run (recorded in every result).
@@ -252,6 +529,35 @@ class EffectiveConfig:
     rng: dict[str, Any]
     channels: ChannelPlan | None = None
     nuclear: NuclearSetup | None = None
+    fdm_domain: FdmDomainStatus = PROTON_FDM_STATUS
+    ion_mapping: IonMappingData | None = None
+
+    @property
+    def is_ion(self) -> bool:
+        """True for an ion source (z >= 2): MCS through the exact-Omega mapping."""
+        return self.requested.source.projectile.z >= 2
+
+    @property
+    def end_of_range_model(self) -> str:
+        """The effective end-of-range model (see :func:`effective_end_of_range_model`)."""
+        return effective_end_of_range_model(self.requested)
+
+    @property
+    def e_cut_mev(self) -> float:
+        """The effective cutoff energy [MeV] (see :func:`effective_e_cut_mev`)."""
+        return effective_e_cut_mev(self.requested)
+
+    @property
+    def ls_requested(self) -> str:
+        """The requested Lindhard-Sorensen mode of the stopping source (``"off"`` for a source
+        without the option)."""
+        return str(getattr(getattr(self.requested.physics.stopping, "options", None), "ls", "off"))
+
+    @property
+    def ls_effective(self) -> str:
+        """The LS mode in effect: ``"off"`` for z = 1 whatever was requested (the proton model
+        never changes, its tables are bit-identical), the requested mode for z >= 2."""
+        return self.ls_requested if self.requested.source.projectile.z >= 2 else "off"
 
     def summary(self) -> dict[str, Any]:
         """JSON-serialisable summary of the effective configuration."""
@@ -273,6 +579,9 @@ class EffectiveConfig:
             "unit_direction": list(self.unit_direction),
             "source": {
                 "projectile": s.projectile.name,
+                "z": s.projectile.z,
+                "a": s.projectile.a,
+                "mass_mev": s.projectile.mass_mev,
                 "position_mm": list(s.position_mm),
                 "kinetic_energy_mev": s.kinetic_energy_mev,
                 "energy_sigma_mev": s.energy_sigma_mev,
@@ -286,6 +595,10 @@ class EffectiveConfig:
                 "mcs_model": p.mcs_model,
                 "delta_electrons": p.delta_electrons,
                 "e_cut_mev": p.e_cut_mev,
+                "e_cut_ion_mev_per_u": p.e_cut_ion_mev_per_u,
+                "e_cut_effective_mev": self.e_cut_mev,
+                "end_of_range_model": p.end_of_range_model,
+                "end_of_range_model_effective": self.end_of_range_model,
                 "max_step_mm": p.max_step_mm,
                 "max_energy_loss_fraction": p.max_energy_loss_fraction,
                 "range_alpha": p.range_alpha,
@@ -294,6 +607,14 @@ class EffectiveConfig:
                 "truncated_hinge_diagnostic": p.truncated_hinge_diagnostic,
                 "scattering_E_s_mev": E_S_MEV,
                 "max_rejection_attempts": MAX_REJECTION_ATTEMPTS,
+                # outside the table hash (compatibility-sensitive): a proton run with
+                # ls="eff" has the hash of ls="off" and states requested=eff, effective=off
+                "ls_requested": self.ls_requested,
+                "ls_effective": self.ls_effective,
+            },
+            "mcs_mapping": {
+                **self.fdm_domain.to_dict(),
+                **({} if self.ion_mapping is None else self.ion_mapping.table_summary()),
             },
             "geometry": {
                 "origin_mm": list(self.geometry.origin_mm),
@@ -398,7 +719,9 @@ def _computed_max_steps(
     sp = geometry.spacing_mm
     n_len = math.ceil(path_mm / ph.max_step_mm)
     n_cross = math.ceil(path_mm * (1.0 / sp[0] + 1.0 / sp[1] + 1.0 / sp[2])) + 3
-    n_eloss = math.ceil(1.5 * math.log(max(e_hi / ph.e_cut_mev, 1.0)) / ph.max_energy_loss_fraction)
+    n_eloss = math.ceil(
+        1.5 * math.log(max(e_hi / effective_e_cut_mev(config), 1.0)) / ph.max_energy_loss_fraction
+    )
     n_range = math.ceil(math.log(max(path_mm / ph.range_rho_f_mm, 1.0)) / ph.range_alpha) + 10
     return int(4 * (n_len + n_cross + n_eloss + n_range) + 100)
 
@@ -444,7 +767,7 @@ def _compile_tallies(
         tables=tables,
         water=water,
         projectile=src.projectile,
-        e_cut_mev=ph.e_cut_mev,
+        e_cut_mev=effective_e_cut_mev(config),
         e_hi_mev=e_hi_mev,
         n_histories=run.n_histories,
         n_batches=run.n_batches,
@@ -455,6 +778,7 @@ def _compile_tallies(
         producible=producible(src.projectile, ph.nuclear),
         max_step_mm=ph.max_step_mm,
         nuclear=None if nuclear is None else nuclear.capacity,
+        continuous_residual=effective_end_of_range_model(config) == "continuous_residual_v1",
     )
     unused = {lk.name for lk in config.lookups} - {t.lookup for t in config.tallies}
     if unused:
@@ -650,17 +974,42 @@ def validate(config: SimulationConfig) -> EffectiveConfig:
     src, ph, run = config.source, config.physics, config.run
     geometry = _resolve_geometry(config.geometry)
 
-    if src.projectile != PROTON:
+    if src.projectile != PROTON and src.projectile not in ION_PROJECTILES:
         raise fail(
             f"projectile {src.projectile!r} is not supported: the transport engine implements "
-            f"exactly the canonical proton {PROTON!r} (ions arrive with V3-008)"
+            f"exactly the canonical proton {PROTON!r} and the ions "
+            f"{[p.name for p in ION_PROJECTILES]} (He-3 and every other ion fail closed)"
         )
+    is_ion = src.projectile.z >= 2
+    if is_ion:
+        if ph.nuclear:
+            raise fail(
+                f"nuclear=True is not available for the ion source {src.projectile.name!r} "
+                "(z >= 2): nuclear interactions, fragments and secondary ions are V3-009"
+            )
+        if ph.e_cut_mev != PhysicsOptions.__dataclass_fields__["e_cut_mev"].default:
+            raise fail(
+                "e_cut_mev applies to protons only; an ion source uses e_cut_ion_mev_per_u "
+                f"(got e_cut_mev = {ph.e_cut_mev}, the default is 2.0)"
+            )
+        lo_u, hi_u = ION_DOMAIN_MEV_PER_U[src.projectile.name]
+        e0_u = src.kinetic_energy_mev / src.projectile.a
+        e_hi_u = (src.kinetic_energy_mev + 6.0 * src.energy_sigma_mev) / src.projectile.a
+        if not lo_u <= e0_u <= hi_u or e_hi_u > hi_u:
+            raise fail(
+                f"{src.projectile.name} source energy {e0_u:g} MeV/u (E0 + 6 sigma_E = {e_hi_u:g} "
+                f"MeV/u) is outside the supported domain [{lo_u:g}, {hi_u:g}] MeV/u "
+                "(decision 0043 section 5)"
+            )
+    e_cut = effective_e_cut_mev(config)
     nuc_table = None
     nuc_rows: tuple[Any, ...] = ()
     if ph.nuclear:
         nuc_table, nuc_rows = _nuclear_setup_checks(config, geometry)
     choice("straggling_model", ph.straggling_model, STRAGGLING_MODELS)
     choice("mcs_model", ph.mcs_model, MCS_MODELS)
+    if ph.end_of_range_model == "continuous_residual_v1" and not is_ion:
+        raise fail("end_of_range_model 'continuous_residual_v1' is available for ion sources only")
     choice("delta_electrons", ph.delta_electrons, DELTA_ELECTRON_MODELS)
 
     if run.backend == "python" and run.precision == "float32":
@@ -707,24 +1056,26 @@ def validate(config: SimulationConfig) -> EffectiveConfig:
             f"limit of {MAX_SCORING_PIECES}; increase the scoring spacing or reduce max_step_mm"
         )
 
-    stopping_tables = _stopping_tables(ph.stopping, geometry.materials)
+    stopping_tables = _stopping_tables(ph.stopping, geometry.materials, src.projectile)
     water_table = _water_table(config)
-    tables = TransportTables.from_stopping_tables(stopping_tables, water=water_table)
+    tables = TransportTables.from_stopping_tables(
+        stopping_tables, water=water_table, projectile=src.projectile
+    )
     nuclear: NuclearSetup | None = None
     if nuc_table is not None:
         tables, nuclear = _nuclear_tables(config, geometry, tables, nuc_table, nuc_rows)
     e_lo = float(tables.e_min_mev.max())
     e_hi_table = float(tables.e_max_mev.min())
-    if e_lo > 0.5 * ph.e_cut_mev:
+    if e_lo > 0.5 * e_cut:
         raise fail(
-            f"the stopping tables start at {e_lo} MeV, above half of e_cut_mev "
-            f"({ph.e_cut_mev}); the cutoff energy must be at least twice the table floor"
+            f"the stopping tables start at {e_lo} MeV, above half of the cutoff energy "
+            f"({e_cut} MeV); the cutoff energy must be at least twice the table floor"
         )
     e0 = src.kinetic_energy_mev
-    if not 2.0 * ph.e_cut_mev <= e0 <= e_hi_table:
+    if not 2.0 * e_cut <= e0 <= e_hi_table:
         raise fail(
             f"source energy {e0} MeV outside [2 e_cut, table maximum] = "
-            f"[{2.0 * ph.e_cut_mev}, {e_hi_table}] MeV"
+            f"[{2.0 * e_cut}, {e_hi_table}] MeV"
         )
     if src.energy_sigma_mev > MAX_ENERGY_SIGMA_FRACTION * e0:
         raise fail(
@@ -742,6 +1093,24 @@ def validate(config: SimulationConfig) -> EffectiveConfig:
             f"{per_batch} histories per batch of up to {e_cap:g} MeV exceed the capacity "
             f"{MAX_QUANTA * QUANTUM_MEV:g} MeV of a fixed-point voxel accumulator (quantum "
             f"{QUANTUM_MEV:g} MeV); increase n_batches or reduce n_histories"
+        )
+
+    fdm_domain = PROTON_FDM_STATUS
+    ion_mapping: IonMappingData | None = None
+    if is_ion and not config.physics.multiple_scattering:
+        # f_dM is never evaluated: no domain check, no proton path, no packing, no root solve
+        fdm_domain = MCS_OFF_FDM_STATUS
+        ion_mapping = _unused_ion_mapping()
+    elif is_ion:  # row I0: f_dM domain status of the source; fails closed
+        fdm_domain = fdm_domain_status(
+            src.projectile,
+            geometry.materials,
+            e0,
+            src.energy_sigma_mev,
+            ion_tables={material_fingerprint(t.material): t for t in stopping_tables},
+        )
+        ion_mapping = _ion_mapping_data(
+            tables, geometry, config, max(e0 - 6.0 * src.energy_sigma_mev, e_cut), e_hi
         )
 
     max_steps_origin = "user" if run.max_steps is not None else "computed"
@@ -803,6 +1172,8 @@ def validate(config: SimulationConfig) -> EffectiveConfig:
         scattering_length_g_cm2=tuple(scattering_length_g_cm2(m) for m in geometry.materials),
         channels=channels,
         nuclear=nuclear,
+        fdm_domain=fdm_domain,
+        ion_mapping=ion_mapping,
         rng={
             "generator": "philox4x32-10",
             "key": "seed low/high 32 bits",
