@@ -2,7 +2,7 @@
 
 **Task:** V3-008
 **Category:** inaccessible-information
-**Status:** open
+**Status:** resolved — the operator resolved this request on 2026-11-11T11:21:51Z (see `response.json`); this line was updated on 2026-11-13 when the record was committed, `request.json` and `response.json` are verbatim
 
 ## Summary
 

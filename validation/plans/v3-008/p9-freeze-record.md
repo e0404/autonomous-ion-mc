@@ -908,7 +908,7 @@ placeholder scorer output was deleted unread.
 | `validation/results/transport/lv8-712f484a-steps22-135-single-process.json` | `a4647be705c1311850911d34471d1e660a1adfbe6790f576a6c050cc3ed6eaae` |
 | `validation/results/transport/hr8-712f484a-single-process.json` | `0e31918d8603399e1acd6cec7b9983861465d5941f8e618f60d3fc06d3789243` |
 | `validation/results/transport/v8-lvhr/index.json` | `4a017d33ebc3eea41190fc7b879b173a486b0d97dda35e76eff318bda638438b` |
-| `tests/ionmc/test_v3_008_lvhr_host_records.py` | `6dc7a332fdbea1f84567241cbd087f1b4c22c9b40ac2f64af51296d62f337003` |
+| `tests/ionmc/test_v3_008_lvhr_host_records.py` | `8b52105da906fd1dd9957a8dce7624902c65c18882237099623d1261c0016bec` |
 | `validation/results/transport/v8-lvhr/host-records/RUN-20261111T124822Z-f978c3d3.json` | `ffb9da5a56fffd68599d094e1d880ddd8c6262f696c06399a77187849579b7bb` |
 | `validation/results/transport/v8-lvhr/host-records/RUN-20261111T125420Z-301ed67a.json` | `dad80297ff4aedb1cb6b9177b5c9697100c8c8b0af002fa2967024f577049b96` |
 | `validation/results/transport/v8-lvhr/host-records/RUN-20261111T130009Z-2aee46ff.json` | `bc01ce55ddd682c673968c90b53550bced699e0e753ecf810bcc7ae710ac3e7a` |
@@ -1051,7 +1051,7 @@ placeholder scorer output was deleted unread.
 
 | File | sha256 |
 |---|---|
-| `reference_requests/interventions/IR-20261111-101840-EDCAE6/README.md` | `5633be1b77858069cd6614dac4f92d21c96d38b6e5f9cfe62e0a325b4d98f5fe` |
+| `reference_requests/interventions/IR-20261111-101840-EDCAE6/README.md` | `19ee15210fc40ec1af1177aa64535a7f756c2d94ebca820a8b4ec9c61ed1bfd5` |
 | `reference_requests/interventions/IR-20261111-101840-EDCAE6/request.json` | `a3f925afc74d80deff1f95ad72446393d4176c77ddea2fe8add84e528bb4146a` |
 | `reference_requests/interventions/IR-20261111-101840-EDCAE6/response.json` | `97e21604c3cd57dc1cc1b936bc459ff1cfa1c6b2ec348b7e83a8cc6b3647e0b3` |
 
@@ -1107,6 +1107,42 @@ placeholder scorer output was deleted unread.
 
 
 **Dated note (2026-11-13, orchestrator) — entries changed by the V5-SS implementation commit (the `ss-sample` step and the V5-SS seed constants in steps_v8.py; the seed-family guard test extended to the V5-SS ionmc and TOPAS seeds):** `tests/ionmc/test_v3_008_seed_families.py` fb7d63c1… → 4bae0c2f…; `validation/scripts/transport/steps_v8.py` 7654db6f… → d5e29db7…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-13, orchestrator) — files added by the combine-binding commit (Codex REVIEW-195f5f58 finding 1: the verbatim published outputs of the five combine runs, the T13-ion run and the preserved e602a583 I9 combine under `v8-lvhr/published-outputs/`, from which the signed output-manifest digests reproduce; sha256 as committed):**
+
+| File | sha256 |
+|---|---|
+| `validation/results/transport/v8-lvhr/published-outputs/validation/generated/RUN-20261111T132917Z-098c9e9a/transport/lv8-e602a583-28/28-i9-combine.txt` | `d0d9fcbfbad2e39effe1440a5fcbc0b0f58bc10fb4c457dd707c588e1fd5c858` |
+| `validation/results/transport/v8-lvhr/published-outputs/validation/generated/RUN-20261111T132917Z-098c9e9a/transport/lv8-e602a583-28/environment.txt` | `aad2149caf23242299022530e67a45b0a701a7663a7324031b423395c0662d76` |
+| `validation/results/transport/v8-lvhr/published-outputs/validation/generated/RUN-20261111T132917Z-098c9e9a/transport/lv8-e602a583-28/manifest.txt` | `c6db855ee6ca3368d03a63b2c39c628440d8e990aadaf062acf28b6104f0310e` |
+| `validation/results/transport/v8-lvhr/published-outputs/validation/generated/RUN-20261111T132917Z-098c9e9a/transport/lv8-e602a583-28/summary.json` | `4f77e9c7be45661de7c31a223b8524fa604487c8f0d840bcc802c01883b4d065` |
+| `validation/results/transport/v8-lvhr/published-outputs/validation/generated/RUN-20261111T144917Z-4c7e600d/transport/lv8-712f484a-28/28-i9-combine.txt` | `6bdc3af1f86a31794f211d7394b2146a318a7c03bae8a098d7d1d0fb2920b531` |
+| `validation/results/transport/v8-lvhr/published-outputs/validation/generated/RUN-20261111T144917Z-4c7e600d/transport/lv8-712f484a-28/environment.txt` | `96ab82fe57cad7b57f1ef3f66f153a8dfe3e2d03bca818d0aba1410aed8ab254` |
+| `validation/results/transport/v8-lvhr/published-outputs/validation/generated/RUN-20261111T144917Z-4c7e600d/transport/lv8-712f484a-28/manifest.txt` | `c6db855ee6ca3368d03a63b2c39c628440d8e990aadaf062acf28b6104f0310e` |
+| `validation/results/transport/v8-lvhr/published-outputs/validation/generated/RUN-20261111T144917Z-4c7e600d/transport/lv8-712f484a-28/summary.json` | `eac1d80d9218c6279932d04c43249c0d36e6bc4ddf72358b4e14288089f43c76` |
+| `validation/results/transport/v8-lvhr/published-outputs/validation/generated/RUN-20261111T214033Z-180cba48/transport/lv8-712f484a-65/65-i12-combine.txt` | `a232145dac0a4452f651d266a47497727bdcf1121be27be95824070e4d83aa63` |
+| `validation/results/transport/v8-lvhr/published-outputs/validation/generated/RUN-20261111T214033Z-180cba48/transport/lv8-712f484a-65/environment.txt` | `bfedc008f237e7083fe3b3dfae7288e2b52dc64af22bbf48c9e8c0dd3385059b` |
+| `validation/results/transport/v8-lvhr/published-outputs/validation/generated/RUN-20261111T214033Z-180cba48/transport/lv8-712f484a-65/manifest.txt` | `bb343f68fe9ddedef7cd4c24e48c14510ee1b28517ed848f798c2a54dd13940e` |
+| `validation/results/transport/v8-lvhr/published-outputs/validation/generated/RUN-20261111T214033Z-180cba48/transport/lv8-712f484a-65/summary.json` | `b78e72909fbf8e9156a53ecb97b36a3c58cdf23245bf0b3e81e1c63006988d28` |
+| `validation/results/transport/v8-lvhr/published-outputs/validation/generated/RUN-20261112T225438Z-a8fa755d/transport/lv8-712f484a-114/114-i14-combine.txt` | `699e9c38c9683916b53abe1230c9a723967c81f1ca5300deff2ca31055994a64` |
+| `validation/results/transport/v8-lvhr/published-outputs/validation/generated/RUN-20261112T225438Z-a8fa755d/transport/lv8-712f484a-114/environment.txt` | `201cada5d44500c82454e4142b3356f7a488d0f83ed0ad1f734278d90afb2fb0` |
+| `validation/results/transport/v8-lvhr/published-outputs/validation/generated/RUN-20261112T225438Z-a8fa755d/transport/lv8-712f484a-114/manifest.txt` | `72124b2699ffda17cecd9b844c3819434317131ceba7c3f8f685d153bb1d8226` |
+| `validation/results/transport/v8-lvhr/published-outputs/validation/generated/RUN-20261112T225438Z-a8fa755d/transport/lv8-712f484a-114/summary.json` | `1b8bc6274e53224471724986bd9d87305e2dd6d54d7f905e31cec6c644607962` |
+| `validation/results/transport/v8-lvhr/published-outputs/validation/generated/RUN-20261113T015413Z-8c57c225/transport/lv8-712f484a-135/135-i15-combine.txt` | `02fa5a20ad5c6bbaaa766c2ca36075a5ae9446c6ae637a074790d3d2407fd32c` |
+| `validation/results/transport/v8-lvhr/published-outputs/validation/generated/RUN-20261113T015413Z-8c57c225/transport/lv8-712f484a-135/environment.txt` | `de831d5546a74f1ab6a6afa64420d8f2495251419898903bd4195d38f0809a3f` |
+| `validation/results/transport/v8-lvhr/published-outputs/validation/generated/RUN-20261113T015413Z-8c57c225/transport/lv8-712f484a-135/manifest.txt` | `e25b0d56c514b2087c51b6bc81627d9ce585368da82ac5769074ba5b4dda9f87` |
+| `validation/results/transport/v8-lvhr/published-outputs/validation/generated/RUN-20261113T015413Z-8c57c225/transport/lv8-712f484a-135/summary.json` | `e7f9fe6f78d3e2b9c11848f5ac98320d719ed6e0e55007a3060ae5c5aecb0798` |
+| `validation/results/transport/v8-lvhr/published-outputs/validation/generated/RUN-20261113T015455Z-790a1181/transport/hr8-712f484a-01/01-t13-ion-chunks-cuda-c290.txt` | `9a0afc56e34bf90139cbd7649ba8f5f212f716cc131450ca60a9b484e4185cdc` |
+| `validation/results/transport/v8-lvhr/published-outputs/validation/generated/RUN-20261113T015455Z-790a1181/transport/hr8-712f484a-01/environment.txt` | `38b4149865d7d609adabebb6f99f49118471dffbc19b637a28cefc7a214361e4` |
+| `validation/results/transport/v8-lvhr/published-outputs/validation/generated/RUN-20261113T015455Z-790a1181/transport/hr8-712f484a-01/manifest.txt` | `7e8a157759ccb82df7f3213777e2400c7771e6ea2738a8bb25683b36f98e2561` |
+| `validation/results/transport/v8-lvhr/published-outputs/validation/generated/RUN-20261113T015455Z-790a1181/transport/hr8-712f484a-01/summary.json` | `ed9d78b45e6522d2776dd36ec2ac0e8b947a8965250a8ed83a5b721c1e3f62f9` |
+| `validation/results/transport/v8-lvhr/published-outputs/validation/generated/RUN-20261113T033810Z-176a1c8f/transport/hr8-712f484a-12/12-t12-ion-hr-combine.txt` | `de009ae34a17b6f94bed0c0eb8cfe711286624696a06b9681102520390887584` |
+| `validation/results/transport/v8-lvhr/published-outputs/validation/generated/RUN-20261113T033810Z-176a1c8f/transport/hr8-712f484a-12/environment.txt` | `9b7fab1dc60f77369688dd5da735502b29a09e06df1b14e8e3fa0b9eab9d0da3` |
+| `validation/results/transport/v8-lvhr/published-outputs/validation/generated/RUN-20261113T033810Z-176a1c8f/transport/hr8-712f484a-12/manifest.txt` | `e55c3f32bb43b5fafa5fcc85178476a4b98b012cdc7c5370aacc1654d138a6f8` |
+| `validation/results/transport/v8-lvhr/published-outputs/validation/generated/RUN-20261113T033810Z-176a1c8f/transport/hr8-712f484a-12/summary.json` | `8ada692ae6866cb120935ca9cbbbd7ee22ec74efcaeb358022adbe7df2124aae` |
+
+
+**Dated note (2026-11-13, orchestrator) — entries changed by the combine-binding commit (the LV/HR inventory test extended to the signed combine step documents; the status line of the intervention README IR-20261111-101840-EDCAE6 updated to resolved, finding 2):** `tests/ionmc/test_v3_008_lvhr_host_records.py` 6dc7a332… → 8b52105d…; `reference_requests/interventions/IR-20261111-101840-EDCAE6/README.md` 5633be1b… → 19ee1521…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.

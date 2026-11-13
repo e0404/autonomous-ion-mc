@@ -1201,6 +1201,18 @@ running; all are preserved in the committed index. **Consequence (plan D / F).**
 section A is closed. Remaining before the integration decision: V5-SS, the D-4 record, and the CI / review / validation
 gates of this results commit. No clinical claim.
 
+**Binding of the combine runs to their consumed partials (2026-11-13, orchestrator; Codex REVIEW-195f5f58 on a326cee3,
+finding 1 "important").** The review found that the committed combined summaries were compared with the signed shard records
+only through the unsigned summary itself, while the combine's signed stdout names only a mutable cache path. Closed without
+re-running anything: the published outputs of the five combine runs, the T13-ion run and the preserved e602a583 I9 combine
+(step file with the step document, `summary.json`, `manifest.txt`, `environment.txt`) are committed verbatim under
+`validation/results/transport/v8-lvhr/published-outputs/`; the signed `output_manifest_sha256` of each record reproduces from
+them, and the combine step document inside carries the sha256 of the partials manifest the step read and the content digest
+it recomputed for every imported partial (steps_v8 combine fails closed on a digest mismatch) with the shard's host run id.
+`tests/ionmc/test_v3_008_lvhr_host_records.py` now requires: signed manifest == reproduction; the signed step document's
+partial set == the committed summary's set for that step; every digest == the `PARTIAL` line of the named shard record; the
+T13 document's identity flags; the preserved I9 FAIL document's binding at e602a583. No grade, number or run changes.
+
 ### V5-SS execution note (2026-11-13, orchestrator; prospective; before any V5-SS ionmc sample or TOPAS run)
 
 Executes row V5-SS (branch B) exactly as pre-registered (dated notes of 2026-11-01, rounds V3-008-4/-5; cost decision

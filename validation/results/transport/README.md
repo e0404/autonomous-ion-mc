@@ -225,6 +225,16 @@ still cannot read the protected store, hence `conformant: false`; the committed 
 `attestation.statement` asks the reader to compare against. The npz/partial arrays stay in the published run
 directories (git-ignored).
 
+`v8-lvhr/published-outputs/validation/generated/<run_id>/transport/<dir>/` holds verbatim copies of the host runner's
+published outputs of the five combine runs at 712f484a (I9, I12, I14, I15, T12-ion HR), the T13-ion run and the preserved
+first I9 combine at e602a583: the step file with its result document, `summary.json`, `manifest.txt` and `environment.txt`.
+The signed record's `output_manifest_sha256` is reproduced from exactly these files (`r2_io.published_manifest`), so the
+combine step document — which carries the sha256 of the partials manifest the step read and the content digest the step
+recomputed for every imported partial together with its host run id — is bound by the host-runner signature; the inventory
+test requires the committed combined summaries' `attestation.partials` to equal that signed set and every digest to equal
+the `PARTIAL` line of the shard record it names (Codex REVIEW-195f5f58, finding 1). The chain is therefore signed shard
+stdout → consumed digest in the signed combine output → committed summary.
+
 # Ion TD/TL sample seal (V3-008 revision 2)
 
 `v8r2-samples/sample-seal.json` is the **sample seal record** of the twelve 1e6-history ionmc samples
