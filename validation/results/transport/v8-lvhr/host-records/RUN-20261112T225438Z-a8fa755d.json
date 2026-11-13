@@ -1,0 +1,51 @@
+{
+  "argv": [
+    "python",
+    "-c",
+    "import os, sys, runpy; os.environ['PYTHONPATH'] = '/workspace/src'; os.environ['PYTHONUNBUFFERED'] = '1'; os.environ['PYTHONFAULTHANDLER'] = '1'; sys.path.insert(0, '/workspace/validation/scripts/transport'); sys.path.insert(0, '/workspace/src'); sys.argv = ['run_suite.py', '--suite', 'lv8', '--out', 'validation/generated/transport/lv8-712f484a-114', '--expected-sha', '712f484a13dbee4a181d15addf127b1c58dc1cbc', '--single-process', '--workers', '1', '--seed-base', '20572004', '--only', '114', '--import-dirs', '/workspace/.ionmc-cache/transport-samples/712f484a/66', '/workspace/.ionmc-cache/transport-samples/712f484a/67', '/workspace/.ionmc-cache/transport-samples/712f484a/68', '/workspace/.ionmc-cache/transport-samples/712f484a/69', '/workspace/.ionmc-cache/transport-samples/712f484a/70', '/workspace/.ionmc-cache/transport-samples/712f484a/71', '/workspace/.ionmc-cache/transport-samples/712f484a/72', '/workspace/.ionmc-cache/transport-samples/712f484a/73', '/workspace/.ionmc-cache/transport-samples/712f484a/74', '/workspace/.ionmc-cache/transport-samples/712f484a/75', '/workspace/.ionmc-cache/transport-samples/712f484a/76', '/workspace/.ionmc-cache/transport-samples/712f484a/77', '/workspace/.ionmc-cache/transport-samples/712f484a/78', '/workspace/.ionmc-cache/transport-samples/712f484a/79', '/workspace/.ionmc-cache/transport-samples/712f484a/80', '/workspace/.ionmc-cache/transport-samples/712f484a/81', '/workspace/.ionmc-cache/transport-samples/712f484a/82', '/workspace/.ionmc-cache/transport-samples/712f484a/83', '/workspace/.ionmc-cache/transport-samples/712f484a/84', '/workspace/.ionmc-cache/transport-samples/712f484a/85', '/workspace/.ionmc-cache/transport-samples/712f484a/86', '/workspace/.ionmc-cache/transport-samples/712f484a/87', '/workspace/.ionmc-cache/transport-samples/712f484a/88', '/workspace/.ionmc-cache/transport-samples/712f484a/89', '/workspace/.ionmc-cache/transport-samples/712f484a/90', '/workspace/.ionmc-cache/transport-samples/712f484a/91', '/workspace/.ionmc-cache/transport-samples/712f484a/92', '/workspace/.ionmc-cache/transport-samples/712f484a/93', '/workspace/.ionmc-cache/transport-samples/712f484a/94', '/workspace/.ionmc-cache/transport-samples/712f484a/95', '/workspace/.ionmc-cache/transport-samples/712f484a/96', '/workspace/.ionmc-cache/transport-samples/712f484a/97', '/workspace/.ionmc-cache/transport-samples/712f484a/98', '/workspace/.ionmc-cache/transport-samples/712f484a/99', '/workspace/.ionmc-cache/transport-samples/712f484a/100', '/workspace/.ionmc-cache/transport-samples/712f484a/101', '/workspace/.ionmc-cache/transport-samples/712f484a/102', '/workspace/.ionmc-cache/transport-samples/712f484a/103', '/workspace/.ionmc-cache/transport-samples/712f484a/104', '/workspace/.ionmc-cache/transport-samples/712f484a/105', '/workspace/.ionmc-cache/transport-samples/712f484a/106', '/workspace/.ionmc-cache/transport-samples/712f484a/107', '/workspace/.ionmc-cache/transport-samples/712f484a/108', '/workspace/.ionmc-cache/transport-samples/712f484a/109', '/workspace/.ionmc-cache/transport-samples/712f484a/110', '/workspace/.ionmc-cache/transport-samples/712f484a/111', '/workspace/.ionmc-cache/transport-samples/712f484a/112', '/workspace/.ionmc-cache/transport-samples/712f484a/113', '--partials-manifest', '/workspace/.ionmc-cache/transport-samples/712f484a/manifest.json']; runpy.run_path('validation/scripts/transport/run_suite.py', run_name='__main__')"
+  ],
+  "attestation": {
+    "alg": "ed25519",
+    "key_id": "4d02f521f3fb9344",
+    "payload_sha256": "5d484eeeb954c4e533c0eeefe5cd950476af8c141783845da8fb3ea68067ccfa",
+    "public_key": "fbd70c036026c9dc84362645df51dd86bc689713b590a5d4b858dc87cdee263e",
+    "schema": "ionmc-attestation-1",
+    "signature": "f98245b05e9ef4231cf1db3eaa55baaee12f0779635695755c04cd92688bb5dcfe95d1df3171670db71b04cc258bdec12fc3393d59015d0ed8cb1e7767976401",
+    "signed_at_utc": "2026-11-12T22:54:42.581189+00:00",
+    "signer": "host-runner"
+  },
+  "branch": "task/v3-008-helium-carbon-and-oxygen-electromagnetic-transport-effective",
+  "committed_state_unchanged": true,
+  "dirty_after": false,
+  "dirty_before": false,
+  "duration_seconds": 2.3460331599999336,
+  "execution_snapshot": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-008/RUN-20261112T225438Z-a8fa755d/snapshot",
+  "exit_code": 0,
+  "finished_at": "2026-11-12T22:54:42.567951+00:00",
+  "output_manifest_sha256": "5776bcc9d94918d56d9fe7c1679cd514c0a3c17317dfae8ed531006f557177d2",
+  "output_paths": [
+    "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261112T225438Z-a8fa755d",
+    "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/benchmarks/generated/RUN-20261112T225438Z-a8fa755d"
+  ],
+  "output_publication_error": null,
+  "run_directory": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-008/RUN-20261112T225438Z-a8fa755d",
+  "run_id": "RUN-20261112T225438Z-a8fa755d",
+  "schema_version": 1,
+  "sha": "712f484a13dbee4a181d15addf127b1c58dc1cbc",
+  "sha_after": "712f484a13dbee4a181d15addf127b1c58dc1cbc",
+  "started_at": "2026-11-12T22:54:40.221896+00:00",
+  "stderr": "",
+  "stderr_file": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-008/RUN-20261112T225438Z-a8fa755d/stderr.txt",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stderr_total_chars": 0,
+  "stderr_truncated": false,
+  "stdout": "== 114-i14-combine: exit=0\n{\"pass\": true, \"conformant\": false}\ndone: /workspace/validation/generated/transport/lv8-712f484a-114 (failed_steps=0)\n",
+  "stdout_file": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-008/RUN-20261112T225438Z-a8fa755d/stdout.txt",
+  "stdout_sha256": "a337865b937fef45ea7a0f7867ae52fad7156a65d0da521c78ae41e660d5444b",
+  "stdout_total_chars": 145,
+  "stdout_truncated": false,
+  "succeeded": true,
+  "task_id": "V3-008",
+  "timed_out": false,
+  "worktree": "/home/wahln/aiprojects/ion-mc-worktrees/v3-008"
+}

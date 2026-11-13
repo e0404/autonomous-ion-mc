@@ -308,6 +308,10 @@ above (R2-TOPAS-4). The TD/TL statistics of `r2_evaluate.py` are implemented aft
     extended); the sentence "a third re-run base requests a new block in the shared ledger" is superseded for this
     base because the reservation itself still holds it — no cross-task ledger change. 20631004 remains the declared
     base for re-runs with r_index ≤ 9.
+  - **Dated note 2026-11-13 (results of the LV/HR block; after the runs).** Base **20572004** (family `rerun3`, lv8 I9/I12/I14/I15,
+    r_index 44–47) and base **20591004** (hr8 T13-ion and T12-ion HR, r_index 54) are **consumed**: their full-scale
+    results were observed (all PASS; dated results note of 2026-11-13). Base 20581004 (lv8 A-rows at f5f3a701, item 4d;
+    I9 r 44 and I12 r 45 shard 0 at e602a583) was already consumed. Any further lv8/hr8 re-run takes a fresh declared base.
 - Never 2098xxxx or 2099xxxx. CI tests use fixed small seeds documented in the tests.
 
 **Guard test** `tests/ionmc/test_v3_008_seed_families.py`. It asserts that every V3-008 seed is:
@@ -480,6 +484,12 @@ operator rules, and each host call ≤ 1500 s.
 | TL-H = TL-EM + TL-FULL (held-out, cases 10–12) | `…/reports/TL-EM-case<10..12>.json`, `…/TL-FULL-case<10..12>.json`; signed run records as above (24 LAT parts) | runs at `55e6a180`; records at `b18fa715`; grading at `1fc287cf` | TOPAS as above (parts 4–7, 12–15); ionmc held-out seal `ca21ec18`, base 20621004 | **PASS 6/6** (TL-EM 3/3, TL-FULL 3/3); no point invalid under the §4.2 window-cycle rule; D_ext not defined |
 | I9 (lv8, first run) | `validation/generated/RUN-20261111T132917Z-098c9e9a/transport/lv8-e602a583-28/28-i9-combine.txt` (host-run store and task worktree; signed host records RUN-20261111T124822Z-f978c3d3 … RUN-20261111T132114Z-876468a3 (shards 22–27), RUN-20261111T132917Z-098c9e9a (combine); not in Git) | `e602a583` | lv8 20581004 (r 44; consumed) | **FAIL** — variance/A2 = 1.733–1.740 at every point (He 150, C 290, O 350; f 0.25–0.9); attributed to the reference helper's placeholder 1/X_S = 0.0123 cm²/g (amendment I9-REF, item 4k); never re-graded; re-run as a fresh sample at base 20572004 |
 | I12 (lv8, first run; abandoned) | shard 29 only (`RUN-20261111T133119Z-94ee45c3`, i12-theta-s01-s0, pass as a shard); no combine, no grade | `e602a583` | lv8 20581004 (r 45; shard 0 consumed) | ABANDONED after the I9 attribution (same reference helper); re-run at base 20572004 |
+| I9 (lv8, re-run) | `validation/results/transport/lv8-712f484a-steps22-135-single-process.json` (step `28-i9-combine`); signed host records `validation/results/transport/v8-lvhr/host-records/` (shards 22–27 `RUN-20261111T140753Z-4ac10d13` … `RUN-20261111T144115Z-ce06b608`, combine `RUN-20261111T144917Z-4c7e600d`); step documents in the host-run store | `712f484a` | lv8 re-run base 20572004 (r 44; consumed) | **PASS** — variance/A2 0.9954–1.0012 at every point (He 150, C 290, O 350; f 0.25–0.9), tolerance 2 %; see the dated results note of 2026-11-13 |
+| I12 (lv8) | same summary (step `65-i12-combine`); host records steps 29–64 and combine `RUN-20261111T214033Z-180cba48` | `712f484a` | 20572004 (r 45; consumed) | **PASS** — θ_rms deviation from quadrature ≤ 0.22 % (tol 0.5 %), pairwise θ spread 0.36 % (tol 0.5 %), σ(0.9 R) spread 0.44 % (tol 1 %) |
+| I14 (lv8) | same summary (step `114-i14-combine`); host records steps 66–113 and combine `RUN-20261112T225438Z-a8fa755d` | `712f484a` | 20572004 (r 46; consumed) | **PASS** — max pairwise \|ΔR80\| 0.0037 mm (tol 0.05 mm); grouped IDD p 0.24–0.96, max \|z\| ≤ 3.36 < 4.52 for all five configurations vs s1-f002 |
+| I15 (lv8) | same summary (step `135-i15-combine`); host records steps 115–134 and combine `RUN-20261113T015413Z-8c57c225` | `712f484a` | 20572004 (r 47; consumed) | **PASS** — pairwise θ_rms spread 0.29 % (tol 0.5 %), σ spread 0.97 % / 0.61 % at 0.5 R / 0.9 R (tol 1 %) |
+| T13-ion (hr8) | `validation/results/transport/hr8-712f484a-single-process.json` (step `01-t13-ion-chunks-cuda-c290`); host record `RUN-20261113T015455Z-790a1181` | `712f484a` | hr8 20591004 (consumed) | **PASS** — chunks 2¹⁰ vs 2¹⁸ bit-identical (edep, tallies, counters) in float32 and float64 |
+| T12-ion HR (hr8) | same summary (step `12-t12-ion-hr-combine`); host records steps 02–11 and combine `RUN-20261113T033810Z-176a1c8f` | `712f484a` | 20591004 (r 54; consumed) | **PASS** — all four pairs (C 290 cpu64/cuda32, cuda32/cuda64, He 150 cpu64/cuda32, O 350 cpu64/cuda32) pass the frozen T12 rules; array p ≥ 0.08, scalar \|z\| ≤ 2.05 (bound 3.5), total deposit identical to ≤ 8.7e-10 |
 
 ## Amendments
 
@@ -1065,3 +1075,105 @@ items 4b–4c), V5-SS, the D-4 record, and the CI/review/validation gates of the
 RUN-20261107T224820Z-92f9f0be has none — a pre-existing gap, not a sealed run); the archive byte hashes of the
 sampled sealed records (T1/T2/T3/T4 examples and one more held-out run) equal those of the operator's copies, and the
 committed records remain bound by their verified signatures. No record was re-materialized or re-signed.
+
+### Dated results note — lv8 re-run block (I9, I12, I14, I15) and hr8 (T13-ion, T12-ion HR) at 712f484a (2026-11-13, orchestrator; items 4j and 4k)
+
+**Evidence.** The remaining lv8 rows ran as the pre-registered shard/combine steps 22–135 of `run_suite.py --suite lv8
+--single-process --workers 1 --seed-base 20572004 --only <step>` (one host call per step; amendment I9-REF, item 4k:
+re-run base 20572004, family `rerun3`, r_index 44–47) and the hr8 suite as its steps 01–12 (`--seed-base 20591004`,
+r_index 54 and T13-ion), all at the clean HEAD `712f484a13dbee4a181d15addf127b1c58dc1cbc` (the amendment I9-REF commit;
+`--expected-sha` set to it; no commit to the task branch while the block was in flight, item 4j). The block ran
+2026-11-11 14:07 UTC – 2026-11-13 03:38 UTC (lv8 evidence wall 17.47 h, hr8 1.70 h; every evidence run `exit 0`,
+`succeeded`, `committed_state_unchanged`, `dirty_before/after` false). Every sharded row's `PARTIAL <name> <sha256>`
+stdout lines were taken from the signed host-runner records; each copied partial was re-hashed against that digest
+before staging into the import archive whose manifest the combine step read (summaries `attestation.partials`, 110 lv8
++ 10 hr8, each with its `host_run_id`). **The complete signed host-runner record of every run of the block (136 files,
+signer `host-runner`, key 4d02f521f3fb9344) is committed verbatim at
+`validation/results/transport/v8-lvhr/host-records/<run_id>.json`** with a derived index (`v8-lvhr/index.json`); the
+cache-free test `tests/ionmc/test_v3_008_lvhr_host_records.py` verifies every signature, requires the signed `argv` to
+be byte-identical to the one wrapper template rendered with the run's suite, SHA, step, declared seed base and import
+list, re-derives the index, and binds every partial and every step of the two committed combined summaries
+(`validation/results/transport/lv8-712f484a-steps22-135-single-process.json`, `summarize.py --combine --subset` over
+the 114 archives, `pass` true, `complete` false because steps 01–21 are the A-row block at f5f3a701 of item 4d;
+`hr8-712f484a-single-process.json`, the complete hr8 suite, `pass` true) to the record that produced it. Both
+summaries are `conformant: false` by code for the recorded reasons only (single-process diagnostic mode; combine steps
+reading imported partials; the lv8 subset). The eight records of the preserved first I9 run and the abandoned I12
+shard at e602a583 (item 4k) are committed in the same directory (roles `preserved_fail`, `preserved_fail_shard`,
+`abandoned_partial`). Grades below are read from the combine step documents; **they are final and nothing is
+re-graded.**
+
+**Verdict: I9 PASS, I12 PASS, I14 PASS, I15 PASS (lv8); T13-ion PASS, T12-ion HR PASS (hr8).** With the A-rows of
+item 4d (I6-LV, I8, I13, T1-ion, R1-ion, R2, T12-ion LV at f5f3a701) every LV/HR verification row of section A has
+now passed, each at one clean SHA per block.
+
+**I9 (lateral variance vs Fermi–Eyges A2 with the implemented T_ion; tolerance 2 %; 2e5 histories per standard point,
+item 4c).** Shards 22–27: `RUN-20261111T140753Z-4ac10d13`, `RUN-20261111T141353Z-8b17b0cc`, `RUN-20261111T141948Z-b2cd0dee`,
+`RUN-20261111T142631Z-a6420bf7`, `RUN-20261111T143323Z-f02c0468`, `RUN-20261111T144115Z-ce06b608`; combine 28
+`RUN-20261111T144917Z-4c7e600d`. variance/A2 at z/R = 0.25 / 0.5 / 0.75 / 0.9: He 150 0.9993 / 0.9962 / 0.9963 / 0.9974;
+C 290 1.0001 / 1.0012 / 1.0000 / 0.9997; O 350 0.9999 / 0.9954 / 0.9967 / 0.9995 — every point within 0.5 % of unity
+(largest deviation −0.46 %, O 350 at 0.5 R), against the 2 % tolerance. **PASS.** The preserved FAIL at e602a583
+(1.733–1.740, item 4k) is thereby confirmed as the reference-helper constant: the fresh sample with the material 1/X_S
+reproduces A2 to ≤ 0.5 %, and no transport code changed between the two runs (`git diff e602a583 712f484a -- src/ionmc`
+adds only the helper module `ion_mcs_checks.py`).
+
+**I12 (transport MCS step independence, C 290, s_max ∈ {0.1, 0.5, 1, 5} mm; 8 × 2e5 histories).** Shards 29–64:
+`RUN-20261111T144927Z-09cf2fc5` … `RUN-20261111T213722Z-420ae1d7` (36 runs, listed in `v8-lvhr/index.json`, steps 29–64);
+combine 65 `RUN-20261111T214033Z-180cba48`. Exit θ_rms of the 0.5 R slab: 7.915 / 7.887 / 7.905 / 7.903 mrad at
+s_max 0.1 / 0.5 / 1 / 5 mm against the I10 quadrature 7.898 mrad: largest deviation 0.22 % (tolerance 0.5 %), pairwise
+spread 0.36 % (tolerance 0.5 %); σ at 0.9 R 0.8910 / 0.8949 / 0.8940 / 0.8932 mm, pairwise spread 0.44 % (tolerance
+1 %). **PASS.** The step-57 host call `RUN-20261111T183304Z-bd523546` was interrupted by a WSL restart (no archived
+record, no published output, nothing seen) and the step was re-launched as `RUN-20261111T205654Z-ecf93a1e` (same seed);
+the interrupted call is preserved in the index as a run without record.
+
+**I14 (IDD step independence, C 290, s_max ∈ {0.1, 0.5, 1} mm × f_E ∈ {0.005, 0.02}; 6 configurations × 2e5
+histories, 48 shards).** Shards 66–113: `RUN-20261111T214043Z-4e67621f` … `RUN-20261112T224006Z-c165b084` (steps 66–113
+in the index); combine 114 `RUN-20261112T225438Z-a8fa755d`. Reference s_max 1 mm / f_E 0.02; max pairwise |ΔR80| =
+0.0037 mm (tolerance 0.05 mm; R80 162.953–162.957 mm over the six configurations); grouped IDD comparisons against the
+reference (165 bins, studentized permutation, Bonferroni bound 4.52, no merged or unsupported bin): p = 0.761 / 0.960 /
+0.946 / 0.799 / 0.240 and max |z| = 2.85 / 2.27 / 2.54 / 2.89 / 3.36 for s01-f0005 / s01-f002 / s05-f0005 / s05-f002 /
+s1-f0005 (every p > 0.001, every max |z| below the bound, amendment ¹⁷). **PASS.** The step-70 host call
+`RUN-20261111T222703Z-13954013` completed on the host (signed record: exit 0, `PARTIAL i14-s01-f0005-s4.json
+030ec188…`) but, after an unexpected WSL restart, its published outputs were not visible from the sandbox; the step
+was re-launched as `RUN-20261112T140322Z-964c767c`, which produced the byte-identical partial (same digest; same seed,
+deterministic single-process transport) and is the run that was staged and imported. Both records are committed
+(roles `evidence` and `superseded_duplicate`); the identity of the two partials is asserted by the inventory test.
+
+**I15 (voxel-boundary scattering: transport voxels 1 and 2 mm, unshifted and half-shifted, C 290; θ 4 × 2 and σ
+4 × (4, 4, 2, 2) shards × 2e5 = 1.6e6 histories).** Shards 115–134: `RUN-20261112T225448Z-24e2fcdc` …
+`RUN-20261113T014227Z-3012a901` (steps 115–134 in the index); combine 135 `RUN-20261113T015413Z-8c57c225`. θ_rms
+7.909 / 7.898 / 7.915 / 7.892 mrad for v1-sh0 / v1-sh1 / v2-sh0 / v2-sh1, pairwise spread 0.29 % (tolerance 0.5 %),
+θ/quadrature 0.9992–1.0021; σ at 0.5 R / 0.9 R 0.3322 / 0.8967, 0.3299 / 0.8932, 0.3322 / 0.8971, 0.3291 / 0.8916 mm,
+pairwise spread 0.97 % (0.5 R) and 0.61 % (0.9 R) (tolerance 1 %), σ/Fermi–Eyges 0.9988–1.0084 (informative). **PASS.**
+
+**T13-ion (hr8 step 01, CUDA chunk invariance 2¹⁰ vs 2¹⁸, C 290, 1e5 histories; `RUN-20261113T015455Z-790a1181`).**
+Energy deposition (1 602 000 voxels), tallies and every diagnostic counter bit-identical between the chunk sizes in
+float32 and in float64; all counters 0. **PASS.** (An earlier launch of this step, `RUN-20261113T015423Z-d1d4986b`, was
+rejected by `run_suite.py` before any step ran because the orchestrator passed `--only 1` instead of the zero-padded
+`01`; exit 1, no output; the record is committed with role `rejected_launch`.)
+
+**T12-ion HR (hr8 steps 02–11 shards, 12 combine `RUN-20261113T033810Z-176a1c8f`; 4.6e6 histories: c290-cpu64 2 × 2e5
+(`RUN-20261113T020456Z-05ed7790`, `RUN-20261113T021924Z-1eaa5433`), c290-cuda32 1e6 (`RUN-20261113T023349Z-79c64988`),
+c290-cuda64 1e6 (`RUN-20261113T023615Z-b875aca3`), he150-cpu64 2 × 2e5 (`RUN-20261113T023844Z-91c97e14`,
+`RUN-20261113T024934Z-685d4820`), he150-cuda32 1e6 (`RUN-20261113T030022Z-482dcc1b`), o350-cpu64 2 × 2e5
+(`RUN-20261113T030211Z-1ac4b788`, `RUN-20261113T031845Z-8a064208`), o350-cuda32 1e6 (`RUN-20261113T033518Z-2e8ccde1`)).**
+All four frozen pairs pass every T12 rule (arrays IDD and lateral profiles at 0.25 / 0.5 / 0.9 R with the grouped χ²,
+max-statistic and Bonferroni rules, no merged or unsupported bin; scalars R80 and σ_lat(0.5 R) by the z rule, bound
+3.5; total deposit by the deterministic precision bound 1e-5): c290-cpu64 vs c290-cuda32 (studentized bootstrap-t,
+40 / 100 batches): IDD p 0.373, max |z| 2.67 (bound 4.52); lat25 / lat50 / lat90 p 0.210 / 0.501 / 0.086; R80 z 0.36;
+σ_lat z 0.08; total deposit relative difference 7.6e-10. c290-cuda32 vs c290-cuda64 (f32-vs-f64 probe, permutation):
+IDD p 0.100, max |z| 3.02; lat p 0.759 / 0.289 / 0.719; R80 z −1.29; σ_lat z −2.05; deposit 7.6e-10. he150-cpu64 vs
+he150-cuda32: IDD p 0.285, max |z| 3.30; lat p 0.504 / 0.080 / 0.459; R80 z −1.00; σ_lat z −1.04; deposit 4.2e-10.
+o350-cpu64 vs o350-cuda32: IDD p 0.665, max |z| 2.25; lat p 0.102 / 0.342 / 0.732; R80 z −1.63; σ_lat z −1.29; deposit
+8.7e-10. **PASS.** (The CUDA samples ran 100–155 s per 1e6 histories; the single-process warp-cpu shards 640–990 s per
+2e5.)
+
+**Findings (no re-grading).** (i) The I9 re-run closes the attribution of item 4k by measurement: the factor 1.734 was
+the helper constant, the transport's lateral variance follows the Fermi–Eyges prediction of its own T_ion to ≤ 0.5 %.
+(ii) The step-independence and voxel rows (I12, I14, I15) show no resolvable dependence of range, IDD shape, exit angle or
+lateral width on the step controls or the voxel grid within their tolerances. (iii) Backend parity holds for He, C and
+O between warp-cpu float64 and warp-cuda float32 and between CUDA precisions; T13-ion is bit-identical. (iv) The three
+operational events of the block (two WSL restarts, one rejected launch) left no evidence gap: one interrupted call has
+no record and was re-run, one completed call was superseded by a byte-identical re-run, one launch was rejected before
+running; all are preserved in the committed index. **Consequence (plan D / F).** The LV/HR verification gate of
+section A is closed. Remaining before the integration decision: V5-SS, the D-4 record, and the CI / review / validation
+gates of this results commit. No clinical claim.

@@ -777,3 +777,15 @@ measured factor to ≤ 0.35 %, i.e. the transport is consistent with the Fermi�
 power (§3) to ≤ 0.35 % at 2e5 histories. No transport model or parameter is changed; the helper is corrected
 (amendment I9-REF) and the row is re-run as a fresh sample. This does not alter the §3 attribution of the TOPAS
 lateral-width ratios (model difference, Gaussian core vs single-scattering halo), which are not a constant factor.
+
+**Later validation outcome (2026-11-13, orchestrator; V3-008 lv8 re-run block and hr8 at 712f484a).** The re-run of I9 at
+the amendment I9-REF commit (fresh base 20572004, material 1/X_S in the reference helper, no transport change) gives
+variance/A2 = 0.9954–1.0012 at every standard point and depth fraction — PASS against the 2 % tolerance, confirming by
+measurement that the preserved FAIL at e602a583 was the helper's placeholder constant. The remaining verification rows
+also pass at the same SHA: I12 (θ_rms within 0.22 % of the quadrature, pairwise spreads 0.36 % / 0.44 %), I14 (max
+pairwise |ΔR80| 0.0037 mm, grouped IDD p ≥ 0.24), I15 (pairwise θ_rms spread 0.29 %, σ spread ≤ 0.97 %), T13-ion
+(bit-identical CUDA chunk invariance in both precisions) and T12-ion HR (warp-cpu float64 vs warp-cuda float32 for He 150,
+C 290, O 350 and the C 290 float32-vs-float64 probe, all T12 rules). Every host run is bound to its committed signed
+host-runner record (`validation/results/transport/v8-lvhr/`). With the A-rows of 2026-11-11 the section-A LV/HR rows
+of the V3-008 plan are closed (dated results note of 2026-11-13 in `validation/plans/v3-008-acceptance.md`); the
+revision-2 TOPAS-agreement rows stand as graded (main set: see the 2026-11-09 outcome; held-out set: PASS 12/12).

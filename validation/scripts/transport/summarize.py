@@ -3,7 +3,7 @@
 Usage::
 
     python summarize.py DIR --expected-sha SHA [--attest-sha SHA]
-    python summarize.py --combine DIR [DIR ...] --expected-sha SHA --out FILE
+    python summarize.py --combine DIR [DIR ...] --expected-sha SHA --out FILE [--subset]
 
 Single archive: ``environment.txt`` carries the expected SHA; ``manifest.txt`` lists exactly the
 step files present; every step file has the four header lines with the same SHA and an ``# exit=``
@@ -28,6 +28,12 @@ list of the suite, with no step duplicated and none missing. Only then is the co
 imported from another output directory: the code cannot verify the protected host-runner records
 behind ``--partials-manifest``, so such a step is ``conformant: false`` with the reason
 ``imported_partials_unverified_by_code`` (its ``pass`` is unaffected).
+
+``--combine --subset`` (explicit opt-in, for a suite run in blocks at different SHAs) does not
+treat absent suite steps as a problem: they stay in ``missing_steps``,
+``complete`` is False and the combined summary is never ``conformant`` (reason ``subset of the
+suite``); a duplicated or unexpected step remains a problem and ``pass`` is judged over the
+archives present.
 """
 
 from __future__ import annotations
@@ -433,7 +439,9 @@ def verify(d: Path, sha: str, attest_sha: str | None = None) -> dict[str, Any]:
     }
 
 
-def combine(dirs: list[Path], sha: str, attest_sha: str | None = None) -> dict[str, Any]:
+def combine(
+    dirs: list[Path], sha: str, attest_sha: str | None = None, subset: bool = False
+) -> dict[str, Any]:
     parts = [verify(d, sha, attest_sha) for d in dirs]
     problems: list[str] = []
     for d, p in zip(dirs, parts, strict=True):
@@ -457,11 +465,14 @@ def combine(dirs: list[Path], sha: str, attest_sha: str | None = None) -> dict[s
         full = run_suite.full_step_names(suite, int(env.get("python_parts", 2)))
         missing = sorted(set(full) - set(seen))
         extra = sorted(set(seen) - set(full))
-        if missing:
+        if missing and not subset:
             problems.append(f"missing steps: {missing}")
         if extra:
             problems.append(f"unexpected steps: {extra}")
     ok = not problems and all(p["pass"] for p in parts)
+    reasons = {r for p in parts for r in p["non_conformant_reasons"]}
+    if subset and missing:
+        reasons.add(f"subset of the suite: {len(missing)} of {len(full)} steps absent (--subset)")
     att_problems = [m for p in parts for m in p["partials_attestation_problems"]]
     reduced = any(p["reduced_history_counts"] for p in parts)
     deferred = sorted({n for p in parts for n in p["deferred_steps"]})
@@ -476,7 +487,7 @@ def combine(dirs: list[Path], sha: str, attest_sha: str | None = None) -> dict[s
             ok
             and not reduced
             and all(p["source_ok"] for p in parts)
-            and all(not p["non_conformant_reasons"] for p in parts)
+            and not reasons
             and not att_problems
         ),
         "attestation": {
@@ -501,8 +512,9 @@ def combine(dirs: list[Path], sha: str, attest_sha: str | None = None) -> dict[s
             "host-runner PARTIAL stdout lines; this code cannot verify those records, compare "
             "the digests and host_run_ids above with them and with record_local_validation",
         },
-        "non_conformant_reasons": sorted({r for p in parts for r in p["non_conformant_reasons"]}),
+        "non_conformant_reasons": sorted(reasons),
         "reduced_history_counts": reduced,
+        "subset": subset,
         "problems": problems,
         "missing_steps": missing,
         "directories": [str(d) for d in dirs],
@@ -520,15 +532,21 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--expected-sha", required=True)
     ap.add_argument("--attest-sha")
     ap.add_argument("--combine", nargs="+", metavar="DIR")
+    ap.add_argument("--subset", action="store_true",
+                    help="with --combine: absent suite steps are not a problem (never conformant)")
     ap.add_argument("--out", help="combined summary file (must not exist)")
     args = ap.parse_args(argv)
+    if args.subset and not args.combine:
+        raise SystemExit("--subset is only valid together with --combine")
     if args.combine:
         if not args.out:
             raise SystemExit("--combine needs --out")
         out = Path(args.out)
         if out.exists():
             raise SystemExit(f"refusing to overwrite {out}")
-        summary = combine([Path(d) for d in args.combine], args.expected_sha, args.attest_sha)
+        summary = combine(
+            [Path(d) for d in args.combine], args.expected_sha, args.attest_sha, args.subset
+        )
         out.write_text(json.dumps(summary, indent=1, sort_keys=True) + "\n")
     else:
         if not args.directory:

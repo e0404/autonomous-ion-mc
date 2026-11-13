@@ -195,6 +195,36 @@ invocation (Amendment 5). Crash observations during this task: two intermittent 
 (one segfault, one faulthandler trace) in worker sessions, each clean on an identical rerun; none of the
 22 host runs failed.
 
+## V3-008 lv8 re-run block (steps 22–135) and hr8 at head 712f484a (single-process diagnostic mode)
+
+`lv8-712f484a-steps22-135-single-process.json` is the `summarize.py --combine --subset` summary of the 114 host-runner
+subset runs of the lv8 rows I9, I12, I14 and I15 (shard steps 22–27, 29–64, 66–113, 115–134 and their combine steps 28,
+65, 114, 135; `run_suite.py --suite lv8 --single-process --workers 1 --seed-base 20572004 --only <step>`, one host call
+per step) at the exact head `712f484a13dbee4a181d15addf127b1c58dc1cbc` (amendment I9-REF; lv8 re-run base 20572004,
+plan section C). `pass` is true for every step; `complete` is false and the summary carries the reason "subset of the
+suite: 21 of 135 steps absent" because the A-row block (steps 01–21) ran at f5f3a701 (plan item 4d, validation record
+VAL-20261111-032337-9F2C85) and is not combinable across SHAs; the other recorded reasons are the single-process diagnostic
+execution mode and the four combine steps that read imported partials (`imported_partials_unverified_by_code`).
+`hr8-712f484a-single-process.json` is the `--combine` summary of the complete hr8 suite (steps 01 T13-ion and 02–12
+T12-ion HR, base 20591004) at the same head: `pass` and `complete` true, `conformant: false` for the diagnostic mode and
+the combine step only. Grades, host run ids and findings: dated results note of 2026-11-13 in
+`validation/plans/v3-008-acceptance.md` (I9, I12, I14, I15, T13-ion, T12-ion HR all PASS).
+
+`v8-lvhr/host-records/<run_id>.json` holds the **complete signed host-runner record** of every host run of the block
+(136 files; signer `host-runner`, key 4d02f521f3fb9344), retrieved through the archived-record tools and committed
+verbatim: the 114 lv8 and 12 hr8 evidence runs, one superseded duplicate (lv8 step 70: a completed run whose outputs were
+not visible after a WSL restart; its re-run produced the byte-identical partial), one rejected launch (hr8 `--only 1`,
+not zero-padded; nothing ran), and the eight runs of the preserved first I9 run and the abandoned I12 shard at e602a583
+(plan item 4k). `v8-lvhr/index.json` is a derived index (every field re-derived from the records by the test; the
+roles are curated) that also lists the one interrupted call without an archived record (`RUN-20261111T183304Z-bd523546`,
+lv8 step 57, re-run). `tests/ionmc/test_v3_008_lvhr_host_records.py` verifies every record's signature, requires the
+signed `argv` to be byte-identical to the single reviewed wrapper template rendered with the run's suite, SHA, step,
+declared seed base and import list, re-derives the index, and binds every `attestation.partials` entry and every step
+of the two combined summaries to the record that produced it (digest and step name in the signed stdout). The code
+still cannot read the protected store, hence `conformant: false`; the committed records are what the summaries'
+`attestation.statement` asks the reader to compare against. The npz/partial arrays stay in the published run
+directories (git-ignored).
+
 # Ion TD/TL sample seal (V3-008 revision 2)
 
 `v8r2-samples/sample-seal.json` is the **sample seal record** of the twelve 1e6-history ionmc samples

@@ -1,0 +1,51 @@
+{
+  "argv": [
+    "python",
+    "-c",
+    "import os, sys, runpy; os.environ['PYTHONPATH'] = '/workspace/src'; os.environ['PYTHONUNBUFFERED'] = '1'; os.environ['PYTHONFAULTHANDLER'] = '1'; sys.path.insert(0, '/workspace/validation/scripts/transport'); sys.path.insert(0, '/workspace/src'); sys.argv = ['run_suite.py', '--suite', 'hr8', '--out', 'validation/generated/transport/hr8-712f484a-09', '--expected-sha', '712f484a13dbee4a181d15addf127b1c58dc1cbc', '--single-process', '--workers', '1', '--seed-base', '20591004', '--only', '09']; runpy.run_path('validation/scripts/transport/run_suite.py', run_name='__main__')"
+  ],
+  "attestation": {
+    "alg": "ed25519",
+    "key_id": "4d02f521f3fb9344",
+    "payload_sha256": "2102b751c29e80f5874aa7e3105565b05c2fed01ce2230d1c3088771188dd38c",
+    "public_key": "fbd70c036026c9dc84362645df51dd86bc689713b590a5d4b858dc87cdee263e",
+    "schema": "ionmc-attestation-1",
+    "signature": "79ca59ca41a77a58789f34c2648e0f8beffc2e4c866e6bd3f961e1599a864e931fa126eb735cb9cb7c1a3507930ddd0c2951453dc684f35379937ad29eac5f0d",
+    "signed_at_utc": "2026-11-13T03:18:39.952199+00:00",
+    "signer": "host-runner"
+  },
+  "branch": "task/v3-008-helium-carbon-and-oxygen-electromagnetic-transport-effective",
+  "committed_state_unchanged": true,
+  "dirty_after": false,
+  "dirty_before": false,
+  "duration_seconds": 987.3135559310031,
+  "execution_snapshot": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-008/RUN-20261113T030211Z-1ac4b788/snapshot",
+  "exit_code": 0,
+  "finished_at": "2026-11-13T03:18:39.937585+00:00",
+  "output_manifest_sha256": "8ce8c2046b9cc882c2ca69ddac4edd433f69e65c39a492fd7b2f7c3ba8f4d3e1",
+  "output_paths": [
+    "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261113T030211Z-1ac4b788",
+    "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/benchmarks/generated/RUN-20261113T030211Z-1ac4b788"
+  ],
+  "output_publication_error": null,
+  "run_directory": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-008/RUN-20261113T030211Z-1ac4b788",
+  "run_id": "RUN-20261113T030211Z-1ac4b788",
+  "schema_version": 1,
+  "sha": "712f484a13dbee4a181d15addf127b1c58dc1cbc",
+  "sha_after": "712f484a13dbee4a181d15addf127b1c58dc1cbc",
+  "started_at": "2026-11-13T03:02:12.624007+00:00",
+  "stderr": "",
+  "stderr_file": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-008/RUN-20261113T030211Z-1ac4b788/stderr.txt",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stderr_total_chars": 0,
+  "stderr_truncated": false,
+  "stdout": "PARTIAL t12-ion-hr-o350-cpu64-s0.json 79a5d7fbeabc88100dbe6a294fbc072fda6b3c748d446280365a8e3914b54328\n== 09-t12-ion-hr-o350-cpu64-s0: exit=0\n{\"pass\": true, \"conformant\": false}\ndone: /workspace/validation/generated/transport/hr8-712f484a-09 (failed_steps=0)\n",
+  "stdout_file": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-008/RUN-20261113T030211Z-1ac4b788/stdout.txt",
+  "stdout_sha256": "70c6e3f4c8858f39d404c50bc287c9e397f22744f9a2044a74010916d46c610b",
+  "stdout_total_chars": 259,
+  "stdout_truncated": false,
+  "succeeded": true,
+  "task_id": "V3-008",
+  "timed_out": false,
+  "worktree": "/home/wahln/aiprojects/ion-mc-worktrees/v3-008"
+}
