@@ -181,8 +181,14 @@ def _stdout(n: int, particle: str = "alpha", model: str = "IonCoulombScattering"
         f"CoulombScat:  for {particle} XStype:1 SubType=1 BuildTable=1\n"
         "      ===== EM models for the G4Region  DefaultRegionForTheWorld ======\n"
         f"  {model} : Emin=    0 eV  Emax=   10 GeV\n\n"
+        "========= Table of registered couples ============\n\n"
+        "Index : 0     used in the geometry : Yes\n Material : Vacuum\n"
         " Range cuts        :  gamma  50 um     e-  1 km      e+  50 um  proton 50 um\n"
-        " Energy thresholds :  gamma  990 eV     e-  9.55 GeV    e+  57 keV proton 5 keV\n"
+        " Energy thresholds :  gamma  990 eV     e-  990 eV    e+  990 eV proton 5 keV\n"
+        " Region(s) which use this couple : \n    DefaultRegionForTheWorld\n\n"
+        "Index : 1     used in the geometry : Yes\n Material : G4_WATER\n"
+        " Range cuts        :  gamma  50 um     e-  1 km      e+  50 um  proton 50 um\n"
+        " Energy thresholds :  gamma  990 eV     e-  9.55 GeV    e+  57 keV proton 5 keV\n\n"
         f"Particle source Beam: Total number of histories: {n}\n"
     )
 
@@ -206,11 +212,27 @@ def test_log_checks() -> None:
         SS.log_checks(_stdout(5) + "msc:  for alpha  SubType= 10\n", b"", 5, "alpha"),
         SS.log_checks(_stdout(5).replace("CoulombScat,", "ionIoni,"), b"", 5, "alpha"),
         SS.log_checks(_stdout(5) + "msc:  for GenericIon  SubType= 10\n", b"", 5, "GenericIon"),
-        SS.log_checks(_stdout(5).replace("9.55 GeV", "990 keV"), b"", 5, "alpha"),
+        SS.log_checks(_stdout(5).replace("9.55 GeV", "990 eV"), b"", 5, "alpha"),
+        SS.log_checks(_stdout(5).replace("G4_WATER", "G4_AIR"), b"", 5, "alpha"),
+        SS.log_checks(_stdout(5).replace("Vacuum", "G4_WATER"), b"", 5, "alpha"),
+        SS.log_checks(
+            _stdout(5).replace(
+                "used in the geometry : Yes\n Material : G4_WATER",
+                "used in the geometry : No\n Material : G4_WATER",
+            ),
+            b"",
+            5,
+            "alpha",
+        ),
         SS.log_checks(_stdout(5) + "track killed\n", b"", 5, "alpha"),
         SS.log_checks(_stdout(5), b"", 5, "GenericIon"),
     ]
     assert all(bad), bad
+    cps = SS.couples(_stdout(5))
+    assert [c["material"] for c in cps] == ["Vacuum", "G4_WATER"]
+    assert cps[0]["e_minus_threshold_mev"] == pytest.approx(990e-6)
+    assert cps[1]["e_minus_threshold_mev"] == pytest.approx(9550.0)
+    assert cps[1]["used_in_geometry"] is True
 
 
 # ---------------------------------------------------------------------------------- seal

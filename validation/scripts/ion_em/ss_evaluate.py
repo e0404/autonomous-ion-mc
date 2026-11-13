@@ -148,6 +148,13 @@ _CS_HEAD = re.compile(r"^CoulombScat:\s+for\s+(\S+)\s", re.M)
 _MSC_HEAD = re.compile(r"^msc:\s+for\s+(\S+)", re.M)  # per-particle msc block header
 _ETHRESH = re.compile(r"Energy thresholds\s*:.*?\be-\s+([0-9.eE+-]+)\s*(eV|keV|MeV|GeV|TeV)")
 _UNIT_MEV = {"eV": 1e-6, "keV": 1e-3, "MeV": 1.0, "GeV": 1e3, "TeV": 1e6}
+SLAB_MATERIAL = "G4_WATER"  # the slab material of every V5-SS bundle (see gen_ss_bundles.py)
+_COUPLE = re.compile(
+    r"^\s*Index\s*:\s*(\d+)\s+used in the geometry\s*:\s*(\w+)\s*\n\s*Material\s*:\s*(\S+)"
+    r"[^\n]*\n(?:(?!\s*Index\s*:)[^\n]*\n)*?\s*Energy thresholds\s*:([^\n]*)",
+    re.M,
+)
+_THRESH_ONE = re.compile(r"(gamma|e-|e\+|proton)\s+([0-9.eE+-]+)\s*(eV|keV|MeV|GeV|TeV)")
 
 
 # =============================================================================================
@@ -586,6 +593,26 @@ def electron_threshold_mev(stdout: str) -> list[float]:
     return [float(v) * _UNIT_MEV[u] for v, u in _ETHRESH.findall(stdout)]
 
 
+def couples(stdout: str) -> list[dict[str, Any]]:
+    """Couples of the Geant4 "Table of registered couples": index, material, used_in_geometry and
+    the production energy thresholds in MeV (gamma, e-, e+, proton; absent if not printed)."""
+    out: list[dict[str, Any]] = []
+    for m in _COUPLE.finditer(stdout):
+        thr = {n: float(v) * _UNIT_MEV[u] for n, v, u in _THRESH_ONE.findall(m.group(4))}
+        out.append(
+            {
+                "index": int(m.group(1)),
+                "material": m.group(3),
+                "used_in_geometry": m.group(2) == "Yes",
+                "gamma_threshold_mev": thr.get("gamma"),
+                "e_minus_threshold_mev": thr.get("e-"),
+                "e_plus_threshold_mev": thr.get("e+"),
+                "proton_threshold_mev": thr.get("proton"),
+            }
+        )
+    return out
+
+
 def msc_info(stdout: str) -> dict[str, Any]:
     """Multiple-scattering facts of a log: particles that have an ``msc:  for <particle>`` block and
     whether the global "Registered Physics Processes" table lists ``msc`` (that table names
@@ -621,9 +648,17 @@ def log_checks(stdout: str, stderr: bytes, histories: int, particle: str) -> lis
     names = io.registered_processes(stdout)
     if names is None or "CoulombScat" not in names:
         problems.append("process list absent or lacks CoulombScat")
-    thr = electron_threshold_mev(stdout)
-    if not thr or min(thr) < E_CUT_MIN_MEV:
-        problems.append(f"e- energy thresholds {thr} MeV not all >= {E_CUT_MIN_MEV} MeV")
+    slab = [c for c in couples(stdout) if c["material"] == SLAB_MATERIAL]
+    if len(slab) != 1:
+        problems.append(f"{len(slab)} couples with material {SLAB_MATERIAL} (exactly one required)")
+    else:
+        if not slab[0]["used_in_geometry"]:
+            problems.append(f"the {SLAB_MATERIAL} couple is not used in the geometry")
+        thr = slab[0]["e_minus_threshold_mev"]
+        if thr is None or thr < E_CUT_MIN_MEV:
+            problems.append(
+                f"{SLAB_MATERIAL} e- energy threshold {thr} MeV is not >= {E_CUT_MIN_MEV} MeV"
+            )
     return problems
 
 
@@ -660,6 +695,7 @@ def check_one(
         "problems": problems,
         "angles": angles,
         **msc_info(stdout),
+        "couples": couples(stdout),
     }
 
 

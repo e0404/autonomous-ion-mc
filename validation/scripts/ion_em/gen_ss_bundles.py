@@ -163,7 +163,10 @@ def build(case: int, seed: int, histories: int, kind: str, part: int | None = No
         "d:Ph/Default/CutForElectron = 1 km",
         "# EM table upper edge above the highest total kinetic energy (O 430 MeV/u: 6880 MeV).",
         "d:Ph/Default/EMRangeMax = 10 GeV",
-        "# Printouts: per-particle process list (no msc may be registered).",
+        "# Printouts: per-particle process list (no msc process may be attached to the beam "
+        "particle, alpha / GenericIon, whose Coulomb scattering model must be "
+        "IonCoulombScattering; a global msc registration for other particles of the physics "
+        "list is tolerated and recorded).",
         'b:Ph/ListProcesses = "True"',
         "",
         "# The only scorer: phase space of the primaries leaving the far face (z = 1 mm), ASCII; "

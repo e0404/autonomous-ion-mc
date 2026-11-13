@@ -1306,3 +1306,14 @@ regenerated (seeds, physics, geometry, scorer unchanged), and the scorer smoke i
 `CoulombScat`, or on a model other than `IonCoulombScattering`; a global `msc` entry for another particle is recorded, not a
 failure). The angles of the smokes are never used. No evidence run has started; the 16 evidence parts run at the regenerated
 commit (a descendant of the seal commit, after its review).
+
+**Dated note (2026-11-13, orchestrator) — re-smoke 20600439 and the couple-table rule.** The re-smoke
+`v5ss-helium-water-250mevu-scorer-smoke` (seed 20600439) ran at `code_sha` ea10ce6a (REF-8358f3c4f2f32a8453f4-a7dbae17,
+06:54:09–06:54:11 UTC, exit 0): identical scorer result (ten expected columns, 200/200 primaries scored once, alpha only,
+Z = 0.1 cm, six-digit cosines), `CoulombScat`/`IonCoulombScattering` for alpha, no msc block for any particle, and the
+production-cut couple table now printed: couple 1, `G4_WATER` (the slab), `Range cuts … e- 1 km`, `Energy thresholds … e-
+9.54965 GeV` — above the required 1.16 MeV, so no δ electron can be produced in the slab; couple 0 is the vacuum world
+(e⁻ threshold 990 eV, the floor; nothing interacts in vacuum). `ss_evaluate.py` had taken the minimum threshold over all
+couples and therefore failed on the vacuum couple; the rule is corrected to read the couple of the slab material `G4_WATER`
+(every other couple is recorded, not graded). Evaluator change only (reviewed commit); bundles, seeds and the seal are
+unchanged; no evidence run has started.
