@@ -53,6 +53,15 @@ SMOKE_NAME = "v5ss-helium-water-250mevu-scorer-smoke"
 SMOKE_SEED = 20600439  # re-smoke (first scorer smoke 20600438 showed no couple table in the log)
 SMOKE_HISTORIES = 200
 SMOKE_CASE = 28  # He 250 configuration
+# Printout comment of the evidence bundles (the rule: this clarified wording).
+PRINTOUT_COMMENT = (
+    "# Printouts: per-particle process list (no msc process may be attached to the beam "
+    "particle, alpha / GenericIon, whose Coulomb scattering model must be "
+    "IonCoulombScattering; a global msc registration for other particles of the physics "
+    "list is tolerated and recorded)."
+)
+# Legacy one-line wording, kept verbatim ONLY in the scorer smoke bundle.
+LEGACY_SMOKE_PRINTOUT_COMMENT = "# Printouts: per-particle process list (no msc may be registered)."
 
 SCORER_LINES = [
     's:Sc/SSExit/Quantity = "PhaseSpace"',
@@ -82,7 +91,12 @@ def bundle_name(case: int, part: int) -> str:
 
 
 def build(case: int, seed: int, histories: int, kind: str, part: int | None = None):
-    """(case.json dict, input.txt text) of one bundle; ``kind`` "evidence" or "smoke"."""
+    """(case.json dict, input.txt text) of one bundle; ``kind`` "evidence" or "smoke".
+
+    Special case: the smoke bundle keeps the earlier one-line printout comment
+    (``LEGACY_SMOKE_PRINTOUT_COMMENT``), frozen at the re-smoke so that REF-8358f3c4... (run at
+    ea10ce6a) stays bound to its manifest entry; the wording of the evidence bundles is the rule.
+    """
     ion, e, a, particle = CASES[case]
     total = a * e
     if kind == "evidence":
@@ -163,10 +177,7 @@ def build(case: int, seed: int, histories: int, kind: str, part: int | None = No
         "d:Ph/Default/CutForElectron = 1 km",
         "# EM table upper edge above the highest total kinetic energy (O 430 MeV/u: 6880 MeV).",
         "d:Ph/Default/EMRangeMax = 10 GeV",
-        "# Printouts: per-particle process list (no msc process may be attached to the beam "
-        "particle, alpha / GenericIon, whose Coulomb scattering model must be "
-        "IonCoulombScattering; a global msc registration for other particles of the physics "
-        "list is tolerated and recorded).",
+        PRINTOUT_COMMENT if kind == "evidence" else LEGACY_SMOKE_PRINTOUT_COMMENT,
         'b:Ph/ListProcesses = "True"',
         "",
         "# The only scorer: phase space of the primaries leaving the far face (z = 1 mm), ASCII; "

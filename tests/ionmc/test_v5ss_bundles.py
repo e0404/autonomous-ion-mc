@@ -23,6 +23,13 @@ SS_CASES = (22, 25, 26, 27, 28, 29, 30, 31)
 ION = {22: "he", 25: "carbon", 26: "oxygen", 27: "carbon", 28: "he", 29: "carbon", 30: "oxygen",
        31: "oxygen"}  # fmt: skip
 SMOKE = "v5ss-helium-water-250mevu-scorer-smoke"
+SMOKE_INPUT_SHA256 = "eb9a4694df863423b798adb2fca1c8fa8f6c1ae9e8a5a980fa2054eb82dc26da"
+SMOKE_CASE_SHA256 = "7cfeb8f04fa7159ac3ef2bea6dd1d02e36de437b42b3b293428d701b33fe2790"
+LEGACY_COMMENT = "# Printouts: per-particle process list (no msc may be registered)."
+
+
+def _sha(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def _load(name, path):
@@ -135,6 +142,19 @@ def test_smoke_bundle():
     assert "not evidence" in c["rationale"] and "angles never used" in c["rationale"]
     assert _native(d, "d:So/Beam/BeamEnergy") == "1000 MeV"
     assert "20600438" in c["rationale"] and "no couple table" in c["rationale"]
+    # frozen at the re-smoke run REF-8358f3c4... (code_sha ea10ce6a): byte-identical files
+    assert _sha(d / "input.txt") == SMOKE_INPUT_SHA256
+    assert _sha(d / "case.json") == SMOKE_CASE_SHA256
+    assert LEGACY_COMMENT in (d / "input.txt").read_text().splitlines()
+
+
+def test_printout_comment_evidence_clarified_smoke_legacy():
+    assert gen.PRINTOUT_COMMENT != LEGACY_COMMENT
+    for d in BUNDLES:
+        lines = (d / "input.txt").read_text().splitlines()
+        want = LEGACY_COMMENT if d.name == SMOKE else gen.PRINTOUT_COMMENT
+        other = gen.PRINTOUT_COMMENT if d.name == SMOKE else LEGACY_COMMENT
+        assert want in lines and other not in lines, d.name
 
 
 def test_run_verbosity_in_every_bundle():

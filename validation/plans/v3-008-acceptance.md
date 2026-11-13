@@ -1317,3 +1317,11 @@ production-cut couple table now printed: couple 1, `G4_WATER` (the slab), `Range
 couples and therefore failed on the vacuum couple; the rule is corrected to read the couple of the slab material `G4_WATER`
 (every other couple is recorded, not graded). Evaluator change only (reviewed commit); bundles, seeds and the seal are
 unchanged; no evidence run has started.
+
+**Dated note (2026-11-13, orchestrator; Codex REVIEW-8252be27 on 4505c89f, finding "important").** The comment rewording of
+4505c89f also regenerated the scorer-smoke bundle after its re-smoke had run (REF-8358f3c4f2f32a8453f4-a7dbae17 at
+ea10ce6a), so the evaluator's exact binding (the smoke's manifest entry at the run's `code_sha` must equal HEAD's) would
+have rejected that smoke. Corrected without any new run: the generator now keeps the smoke bundle byte-identical to its
+run-time version (input.txt sha256 eb9a4694…, legacy comment wording; a documented special case pinned by test), while
+the 16 evidence bundles, which have not run, carry the clarified wording. The smoke of seed 20600439 therefore stays
+the pre-registered run condition evidence; no third smoke seed is used.
