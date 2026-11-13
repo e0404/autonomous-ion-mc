@@ -1046,6 +1046,15 @@ placeholder scorer output was deleted unread.
 | `validation/results/transport/v8-lvhr/host-records/RUN-20261113T033518Z-2e8ccde1.json` | `885542c43d646815ab013011e07e305cfc77d51aa75e3f269835d950b0f863ca` |
 | `validation/results/transport/v8-lvhr/host-records/RUN-20261113T033810Z-176a1c8f.json` | `5f3f75dbc3b404112635b88b88ad7015942040f6464a5078563691a802c09d54` |
 
+
+**Dated note (2026-11-13, orchestrator) — files added by the intervention-record commit (the resolved request IR-20261111-101840-EDCAE6, inaccessible-information: agent-readable access to the signed host-run records, filed 2026-11-11 and resolved by the operator the same day — items 4g–4i; committed verbatim from the intervention tools' record; sha256 as committed):**
+
+| File | sha256 |
+|---|---|
+| `reference_requests/interventions/IR-20261111-101840-EDCAE6/README.md` | `5633be1b77858069cd6614dac4f92d21c96d38b6e5f9cfe62e0a325b4d98f5fe` |
+| `reference_requests/interventions/IR-20261111-101840-EDCAE6/request.json` | `a3f925afc74d80deff1f95ad72446393d4176c77ddea2fe8add84e528bb4146a` |
+| `reference_requests/interventions/IR-20261111-101840-EDCAE6/response.json` | `97e21604c3cd57dc1cc1b936bc459ff1cfa1c6b2ec348b7e83a8cc6b3647e0b3` |
+
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.
