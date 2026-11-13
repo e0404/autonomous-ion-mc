@@ -21,7 +21,8 @@ theta_w(W) = sqrt(sum_i [tx_i^2 1(|tx_i|<=W) + ty_i^2 1(|ty_i|<=W)] /
 sum_i [1(|tx_i|<=W) + 1(|ty_i|<=W)]), with W_c = WINDOW_K * theta_anchor,c and theta_anchor,c the
 untruncated pooled rms of the sealed ionmc sample of case c (decision D2). TOPAS:
 theta = atan2(u, w), w = +sqrt(1 - u^2 - v^2) (the phase space stores u, v and a "w negative"
-flag that must be false); ionmc: atan2(u_x, u_z) (``steps_v8.py ss-sample``).
+flag that must be false), over the scored primaries of each part (count rule
+:data:`MAX_DEFICIT_FRACTION`); ionmc: atan2(u_x, u_z) (``steps_v8.py ss-sample``).
 
 **Pairs.** dev = (theta_model,A / theta_model,B) / (theta_ref,A / theta_ref,B) - 1 for He/C 150
 (22/25), He/O 150 (22/26), He/C 250 (28/27), He/O 250 (28/31), C/O 430 (29/30). sigma = SD over
@@ -144,6 +145,16 @@ E_CUT_MIN_MEV = 1.16  # e- production energy threshold >= T_max of the fastest c
 _COLUMN = re.compile(r"^\s*(\d+):\s*(.*?)\s*$")
 _ORIGINAL = re.compile(r"^\s*Number of Original Histories:\s*(\d+)\s*$", re.M)
 _SCORED = re.compile(r"^\s*Number of Scored Particles:\s*(\d+)\s*$", re.M)
+_REACHED = re.compile(
+    r"^\s*Number of Original Histories that Reached Phase Space:\s*(\d+)\s*$", re.M
+)
+#: Count rule (dated plan note of 2026-11-13, prospective, applied uniformly to the 16 parts before
+#: any grade): every primary that reaches the far face is scored exactly once (reached == scored),
+#: and the deficit original - scored (primaries leaving the slab elsewhere than through the exit
+#: face, a single large-angle Coulomb scatter) is at most this fraction of the original histories.
+#: Such a primary cannot lie inside the window, so the statistic is unchanged by its absence; the
+#: scored primaries enter the rms and the bootstrap. Larger deficits fail closed.
+MAX_DEFICIT_FRACTION = 0.001
 _CS_HEAD = re.compile(r"^CoulombScat:\s+for\s+(\S+)\s", re.M)
 _MSC_HEAD = re.compile(r"^msc:\s+for\s+(\S+)", re.M)  # per-particle msc block header
 _ETHRESH = re.compile(r"Energy thresholds\s*:.*?\be-\s+([0-9.eE+-]+)\s*(eV|keV|MeV|GeV|TeV)")
@@ -327,27 +338,47 @@ def parse_header(text: str) -> dict[str, Any]:
         raise RecordError(
             f"phase-space header: observed column list {names} != expected {list(EXPECTED_COLUMNS)}"
         )
-    orig, scored = _ORIGINAL.findall(text), _SCORED.findall(text)
-    if len(orig) != 1 or len(scored) != 1:
-        raise RecordError("phase-space header lacks the original-history or scored-particle count")
-    return {"columns": names, "original_histories": int(orig[0]), "scored": int(scored[0])}
+    orig, reached, scored = _ORIGINAL.findall(text), _REACHED.findall(text), _SCORED.findall(text)
+    if len(orig) != 1 or len(reached) != 1 or len(scored) != 1:
+        raise RecordError(
+            "phase-space header lacks the original-history, reached or scored-particle count"
+        )
+    return {
+        "columns": names,
+        "original_histories": int(orig[0]),
+        "reached": int(reached[0]),
+        "scored": int(scored[0]),
+    }
 
 
 def parse_phasespace(header: str, rows: str, histories: int, pdg: int) -> dict[str, Any]:
-    """Check one ASCII phase space (every primary scored exactly once at the far face) and return
-    ``{"theta_x", "theta_y", "n"}`` (radians, float64). Problems raise RecordError."""
+    """Check one ASCII phase space (``histories`` original primaries; every primary reaching the
+    far face scored exactly once; deficit ``original - scored`` at most
+    :data:`MAX_DEFICIT_FRACTION`) and return ``{"theta_x", "theta_y", "n", "original_histories",
+    "scored", "deficit"}`` (angles in radians, float64; ``n`` = scored). Problems raise
+    RecordError."""
     h = parse_header(header)
-    if h["original_histories"] != histories or h["scored"] != histories:
+    if h["original_histories"] != histories:
         raise RecordError(
-            f"phase space: original histories {h['original_histories']} / scored {h['scored']} "
-            f"!= {histories}"
+            f"phase space: original histories {h['original_histories']} != {histories}"
+        )
+    scored = h["scored"]
+    if h["reached"] != scored:
+        raise RecordError(
+            f"phase space: histories reaching the exit face {h['reached']} != scored {scored}"
+        )
+    deficit = histories - scored
+    if deficit < 0 or deficit > MAX_DEFICIT_FRACTION * histories:
+        raise RecordError(
+            f"phase space: deficit {deficit} of {histories} primaries outside "
+            f"0 <= deficit <= {100 * MAX_DEFICIT_FRACTION:g} %"
         )
     try:
         data = np.loadtxt(_io.StringIO(rows), dtype=np.float64, ndmin=2)
     except ValueError as exc:
         raise RecordError(f"phase space rows are not numeric: {exc}") from exc
-    if data.shape != (histories, len(EXPECTED_COLUMNS)):
-        raise RecordError(f"phase space has shape {data.shape}, not ({histories}, 10)")
+    if data.shape != (scored, len(EXPECTED_COLUMNS)):
+        raise RecordError(f"phase space has shape {data.shape}, not ({scored}, 10)")
     if not np.all(np.isfinite(data)):
         raise RecordError("phase space holds non-finite values")
     z, u, v = data[:, 2], data[:, 3], data[:, 4]
@@ -363,7 +394,14 @@ def parse_phasespace(header: str, rows: str, histories: int, pdg: int) -> dict[s
     if not np.all(w2 > 0.0):
         raise RecordError("phase space: direction cosines with u^2 + v^2 >= 1")
     w = np.sqrt(w2)
-    return {"theta_x": np.arctan2(u, w), "theta_y": np.arctan2(v, w), "n": histories}
+    return {
+        "theta_x": np.arctan2(u, w),
+        "theta_y": np.arctan2(v, w),
+        "n": scored,
+        "original_histories": histories,
+        "scored": scored,
+        "deficit": deficit,
+    }
 
 
 # =============================================================================================
@@ -694,6 +732,9 @@ def check_one(
         "chronology": chron,
         "problems": problems,
         "angles": angles,
+        "primaries": None
+        if angles is None
+        else {k: angles[k] for k in ("original_histories", "scored", "deficit")},
         **msc_info(stdout),
         "couples": couples(stdout),
     }
@@ -729,6 +770,7 @@ def check_run(
         "part": info["part"],
         "verdict": res["verdict"],
         "problems": res["problems"],
+        "primaries": res["primaries"],
         "msc_blocks_for": res["msc_blocks_for"],
         "registered_msc_entry": res["registered_msc_entry"],
         "chronology": res["chronology"],
@@ -1071,6 +1113,7 @@ def grade(
                 "seconds": r.seconds,
                 "verdict": checks[(c, p)]["verdict"],
                 "problems": checks[(c, p)]["problems"],
+                "primaries": checks[(c, p)]["primaries"],
                 "files_sha256": dict(sorted(r.read.items())),
             }
             for (c, p), r in sorted(runs.items())
@@ -1112,6 +1155,8 @@ def grade(
             * (res["cases"][c]["theta_model_rad"] / res["cases"][c]["theta_ref_rad"] - 1.0),
             "expected_reference_model_factor_pct": list(EXPECTED_ABS_FACTOR_PCT),
             "theta_ref_part_rad": parts,
+            "scored_per_part": [checks[(c, p)]["angles"]["scored"] for p in PARTS],
+            "deficit_per_part": [checks[(c, p)]["angles"]["deficit"] for p in PARTS],
             "ref": _kurtosis_corr(tx, ty, w),
             "model": _kurtosis_corr(*model[c], w),
             "ref_wall_s_per_part": [runs[(c, p)].seconds for p in PARTS],

@@ -421,7 +421,9 @@ def test_nuclear_effective_config_and_capabilities(make_config: MakeConfig, tid:
     assert cap == base
 
 
-CAPABILITIES_SHA256 = "c005912dec9ef9049cf0b397d461098ad9173c8b5bc213c06e3166f0d6d1811e"
+# pinned at 94d57eb, re-pinned 2026-11-13 after the R2-STOP3 report changes (e6f17bc, 3f0fbae); this
+# test only runs with the nuclear datasets cached; the stale pin surfaced on the first complete run
+CAPABILITIES_SHA256 = "d0da26e8d85762a0ac865cf84fb6146973c7889f840f1c2577c6df3434e770fb"
 
 
 def test_capacity_bounds_follow_decision_0041_section_5(

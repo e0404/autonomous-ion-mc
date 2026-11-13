@@ -1325,3 +1325,19 @@ have rejected that smoke. Corrected without any new run: the generator now keeps
 run-time version (input.txt sha256 eb9a4694…, legacy comment wording; a documented special case pinned by test), while
 the 16 evidence bundles, which have not run, carry the clarified wording. The smoke of seed 20600439 therefore stays
 the pre-registered run condition evidence; no third smoke seed is used.
+
+**Dated note (2026-11-13, orchestrator; prospective, before any V5-SS grading) — count rule of the TOPAS phase spaces.**
+Written after the 16 evidence parts had run at a508afd8 and only their header counts and run-validity logs had been read
+(no angle, width or ratio seen; the sealed ionmc samples remain unread). Five parts report 29999 of 30000 original
+histories reaching the exit surface and 29999 scored, each once (no killed or stuck track): 22/1
+(REF-72b922fb1b0c07ae5c5f-34ae1c10), 25/1 (REF-98e6160303a4ec989443-732245e3), 29/0 (REF-e2306407f51486adf627-85771afc),
+29/1 (REF-3575dbd95c6d72fab50c-a8d6f962) and 30/0 (REF-226e1c04517c66e77896-06ebcdb0); the other eleven parts report
+30000/30000. One primary left the slab elsewhere than through the exit face (a single large-angle Coulomb scatter: the
+Rutherford tail of the single-scattering model). The implementation's run-validity rule "every primary scored exactly
+once" was a parsing rule of `ss_evaluate.py`, not part of the pre-registered design, and would reject such a part.
+Amended rule, applied uniformly to the 16 parts before any grade: `reached == scored` (each primary reaching the exit face
+scored once), `scored ≤ original`, and the deficit `original − scored` ≤ 0.1 % (≤ 30 per part), recorded per part in the
+check-run and grade reports; the windowed rms and the bootstrap use the scored primaries (the pooled count enters the
+bootstrap as observed). A primary that does not reach the exit face cannot lie inside the ±2.5 θ window, so the statistic
+is unchanged by its absence; larger deficits remain a fail-closed run-validity error. Estimator, window factor,
+tolerance, N, pairs, expected factors and gate unchanged; no run is repeated.

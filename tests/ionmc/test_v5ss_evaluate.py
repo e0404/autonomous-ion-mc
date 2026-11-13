@@ -149,7 +149,9 @@ def _row_edit(rows: str, col: int, value: str) -> str:
     [
         lambda h, r: (h.replace("Weight", "Weight X"), r),
         lambda h, r: (h.replace("10: Flag", "11: Flag"), r),
-        lambda h, r: (h.replace("Scored Particles: 3", "Scored Particles: 2"), r),
+        lambda h, r: (h.replace("Scored Particles: 3", "Scored Particles: 2"), r),  # reached 3 != 2
+        lambda h, r: (h.replace("Reached Phase Space: 3", "Reached Phase Space: 2"), r),
+        lambda h, r: (h.replace("Histories that Reached Phase Space: 3\n", "\n"), r),  # no count
         lambda h, r: (h.replace("Original Histories: 3", "Original Histories: 4"), r),
         lambda h, r: (h, "\n".join(r.splitlines()[:2]) + "\n"),
         lambda h, r: (h, r + r.splitlines()[0] + "\n"),
@@ -166,6 +168,55 @@ def test_parser_fails_closed(edit: Any) -> None:
     h, r = edit(*_fixture())
     with pytest.raises(SS.RecordError):
         SS.parse_phasespace(h, r, 3, 1000020040)
+
+
+def _synthetic(histories: int, scored: int, reached: int | None = None) -> tuple[str, str]:
+    """Header/rows of a phase space with ``histories`` primaries of which ``scored`` reached the far
+    face (rows cloned from the fixture's first row)."""
+    h, rows = _fixture()
+    reached = scored if reached is None else reached
+    h = (
+        h.replace("Original Histories: 3", f"Original Histories: {histories}")
+        .replace("Reached Phase Space: 3", f"Reached Phase Space: {reached}")
+        .replace("Scored Particles: 3", f"Scored Particles: {scored}")
+    )
+    first = rows.splitlines()[0]
+    return h, "\n".join([first] * scored) + "\n"
+
+
+def test_parser_records_a_small_deficit() -> None:
+    # count rule amended 2026-11-13: deficit = original - scored <= 0.1 %, reached == scored
+    h, r = _synthetic(3000, 2997)
+    out = SS.parse_phasespace(h, r, 3000, 1000020040)
+    counts = (out["n"], out["original_histories"], out["scored"], out["deficit"])
+    assert counts == (2997, 3000, 2997, 3)
+    assert out["theta_x"].shape == (2997,)
+    h, r = _synthetic(3000, 3000)
+    assert SS.parse_phasespace(h, r, 3000, 1000020040)["deficit"] == 0
+
+
+@pytest.mark.parametrize(
+    "histories, scored, reached, match",
+    [
+        (3000, 2996, None, "deficit 4"),  # 0.13 % > 0.1 %
+        (3000, 3001, None, "deficit -1"),
+        (3000, 2999, 3000, "reach.* 3000 != scored 2999"),
+        (3000, 2999, 2998, "reach.* 2998 != scored 2999"),
+        (3001, 3000, None, "original histories 3001 != 3000"),
+    ],
+)
+def test_parser_count_rule_fails_closed(
+    histories: int, scored: int, reached: int | None, match: str
+) -> None:
+    h, r = _synthetic(histories, scored, reached)
+    with pytest.raises(SS.RecordError, match=match):
+        SS.parse_phasespace(h, r, 3000, 1000020040)
+
+
+def test_parser_rows_must_match_scored_count() -> None:
+    h, r = _synthetic(3000, 2999)
+    with pytest.raises(SS.RecordError, match=r"shape \(2998, 10\), not \(2999, 10\)"):
+        SS.parse_phasespace(h, "\n".join(r.splitlines()[:-1]) + "\n", 3000, 1000020040)
 
 
 def test_unexpected_columns_are_named() -> None:
