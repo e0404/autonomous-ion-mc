@@ -273,3 +273,23 @@ must be exactly the sealed chunks' npz, stdout and stderr), and checks the step 
 digest, git SHA, pass/valid, all-zero counters, effective configuration). Any gap fails closed (ERROR).
 `tests/ionmc/test_v3_008_host_records.py` checks, cache-free, that every sealed run has a committed record that
 verifies, binds and matches a template (counts T1 1, T2 30, T3 45, T4 13).
+
+# V5-SS ionmc thin-slab sample seal (V3-008, branch B)
+
+`v8-ss/ss-sample-seal.json` is the **sample seal record** of the eight 4e5-history ionmc thin-slab samples of row V5-SS
+(plan V5-SS execution note of 2026-11-13; P10 §7.5.1–7.5.2): cases 22 (He 150), 25 (C 150), 26 (O 150), 27 (C 250),
+28 (He 250), 29 (C 430), 30 (O 430), 31 (O 250 MeV/u), each one host-runner call at the implementation SHA recorded in
+the file (`steps_v8.py ss-sample --case <c> --k 0 --seed-base 20631004`; seeds 20631004 + 100·r_index, r_index = case
+order 0–7; warp-cpu float64, single-process diagnostic mode; 1 mm G4_WATER slab, TD/TL default physics), built by
+`ss_evaluate.py seal` from the eight complete signed host-run records committed verbatim at
+`v8-ss/host-records/<run_id>.json` (signer `host-runner`, key 4d02f521f3fb9344). Per case it holds the run id, the
+attestation block, the signed output-manifest digest, the npz sha256 and size, the sha256 of the step stdout (the full step
+document) and of the wrapper stdout, the per-history exit-angle statistics that fix the evaluation window before any
+TOPAS output exists — θ_anchor (untruncated pooled projected rms), W = 2.5 θ_anchor, the windowed rms θ_w, the number of
+projections in the window and P(window) — and the sha256 of the single reviewed wrapper template. The npz arrays (per-history
+exit angles) are **not in Git**: they stay in the published run directories (`validation/generated/<run id>/v5ss-samples/case<c>/`,
+git-ignored) and in the protected host-run store. Binding rule SS-SEAL-1 (plan execution note; mirror of R2-TOPAS-4): no V5-SS
+TOPAS run (smoke or evidence) is valid unless its `code_sha` descends from the commit holding this record and that commit's
+independent review finished before the run's controlled start; `ss_evaluate.py check-run` / `grade` fail closed otherwise and
+read the seal and review ids from the plan's SS seal note. Not a clinical claim.
+

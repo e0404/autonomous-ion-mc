@@ -1143,6 +1143,22 @@ placeholder scorer output was deleted unread.
 
 
 **Dated note (2026-11-13, orchestrator) — entries changed by the combine-binding commit (the LV/HR inventory test extended to the signed combine step documents; the status line of the intervention README IR-20261111-101840-EDCAE6 updated to resolved, finding 2):** `tests/ionmc/test_v3_008_lvhr_host_records.py` 6dc7a332… → 8b52105d…; `reference_requests/interventions/IR-20261111-101840-EDCAE6/README.md` 5633be1b… → 19ee1521…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-13, orchestrator) — files added by the V5-SS sample-seal commit (the seal record of the eight ionmc thin-slab samples at bef32873, the eight complete signed host-run records under `v8-ss/host-records/`, the cache-free seal inventory test; sha256 as committed):**
+
+| File | sha256 |
+|---|---|
+| `validation/results/transport/v8-ss/ss-sample-seal.json` | `485fc349eebae876d531fb2eedb9786e6884888fa06e8a82af6c8a200dd3ec6c` |
+| `tests/ionmc/test_v5ss_seal.py` | `2daa095505da56bae60a3bc4b266176dfdf076d799f951475bedeac0214ad4ee` |
+| `validation/results/transport/v8-ss/host-records/RUN-20261113T054252Z-52f10145.json` | `3c14e0eda4841ae8fc5ab23117db2220797140f5d88bdabe2fafee323790a034` |
+| `validation/results/transport/v8-ss/host-records/RUN-20261113T054349Z-964a6f3d.json` | `adfe7065e7ac040428b963aa660f31e43547c571cedf40e2b99815ae3fec2ad5` |
+| `validation/results/transport/v8-ss/host-records/RUN-20261113T054427Z-64259241.json` | `ed7333f91952f13216c0ee344eb2d23803def6734cc542bb1e08f1aed5d29b69` |
+| `validation/results/transport/v8-ss/host-records/RUN-20261113T054503Z-d2d8cccb.json` | `c2acd42747363d10df5a5c62079718d04f6acb571aa1946bf2caf024b98ab035` |
+| `validation/results/transport/v8-ss/host-records/RUN-20261113T054550Z-91eb49d5.json` | `d2fb63cd2a6abcf019a2ffd5efe4414ca940576f6b66cdc1167e1263556abe8a` |
+| `validation/results/transport/v8-ss/host-records/RUN-20261113T054637Z-805b2c94.json` | `933dc178ba3092a57d04fbfef0522a80c67171b21148f2809cce78e4f37aae76` |
+| `validation/results/transport/v8-ss/host-records/RUN-20261113T054735Z-bffb353f.json` | `ade92b61b188f20680e7012fd6d0bc4229fd0d993a102a7e09a4e02c36508759` |
+| `validation/results/transport/v8-ss/host-records/RUN-20261113T054825Z-23a819d9.json` | `a45d22498244262c3961fe3b10fe898080286b99bf6fddc62a2f7ea048b25c22` |
+
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.
