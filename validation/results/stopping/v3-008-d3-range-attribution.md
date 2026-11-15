@@ -28,10 +28,13 @@ reading of the Geant4 LS table).
 
 ## Conclusions (labelled estimates, not evidence)
 
-* **He (alpha uses the ICRU 90 alpha array directly, ESTABLISHED by D-4 preliminary):** the construction difference is +0.05 to
-  +0.08 % (ionmc range shorter than integrated ICRU 90; decision 0038's <= 0.07 % confirmed). Explained: +0.076 / +0.077 of the
-  +0.22 / +0.215 % excess (He 150 / 250), plus the pre-step estimate +0.055 / +0.027 %. **Unexplained (estimate): +0.09 / +0.11 %**
-  (about 0.1 % = 0.15 / 0.4 mm), i.e. about 40-50 % of the He excess.
+* **He (alpha uses the ICRU 90 alpha array directly, ESTABLISHED by D-4 preliminary):** the construction difference is below
+  0.10 % (bound; ionmc range shorter than integrated ICRU 90; decision 0038's <= 0.07 % confirmed in aggregate). Explained: less than
+  0.10 of the +0.22 / +0.215 % excess (He 150 / 250), plus the pre-step estimate +0.055 / +0.027 %. **Unexplained (estimate, as
+  bounds): +0.06 ... +0.26 % (He 150) and +0.09 ... +0.29 % (He 250)**, i.e. roughly 30-100 % of the He excess. **Dated note
+  (2026-11-15, SR-2 finding 1):** the exact He ratios formerly printed here (and the exact per-case values in the JSON) were
+  removed because, next to R_ionmc, they reconstruct the integrated ICRU 90 alpha ranges; earlier commits of this file in the
+  branch history (up to d04ae134) still contain them — disclosed, not re-written.
 * **C/O 290-430 (+0.27 ... +0.30 %):** the explained part depends entirely on the unverified ion terms. ICRU 90 proton x q^2
   alone lengthens the TOPAS-like range by +0.13 (C 290) ... +0.33 % (O 430) relative to ionmc, the observed sign and size
   (residual after pre-step +0.0 ... +0.1 %). With the LS + Barkas terms as constructed here the sign flips to -0.13 ... -0.19 %

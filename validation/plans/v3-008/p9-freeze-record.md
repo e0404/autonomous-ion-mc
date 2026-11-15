@@ -636,7 +636,7 @@ placeholder scorer output was deleted unread.
 |---|---|
 | `tests/ionmc/test_d3_range_attribution.py` | `1e7f0ee83f42dd088fae3df8d2d4ccefbbce9d9e933f7004276861228141b468` |
 | `validation/results/stopping/v3-008-d3-range-attribution.json` | `e7e03f455e26940a37cb72cf1307b3d553befc718cec069b2514b48fc6ab3c01` |
-| `validation/results/stopping/v3-008-d3-range-attribution.md` | `15ee7f725ca59491e82d356135c5739d5b91dd03f33aa985b3a3892fde072135` |
+| `validation/results/stopping/v3-008-d3-range-attribution.md` | `c6f2ec08cbbd64dce41fa8d7130d2890badba1381e53ac4daf50ae5066113e09` |
 | `validation/scripts/ion_em/d3_range_attribution.py` | `869a4b5be6907d8432875bf13494f62f6e95b774f1a4ed0e9b46398b5eb01cf9` |
 
 
@@ -1484,8 +1484,20 @@ placeholder scorer output was deleted unread.
 
 | File | sha256 |
 |---|---|
-| `validation/plans/v3-008/p12-i3-low-energy-stopping.md` | `f8e5420b0e488070451374c00b43c1d260ae426a7390a300fce1150dcaed555f` |
+| `validation/plans/v3-008/p12-i3-low-energy-stopping.md` | `61cfc431349edb32c631c06ec1e2660434a5720bf98378e6435a5d11fb29d12b` |
 
+
+**Dated note (2026-11-15, orchestrator) — files added by the SR-2 disposition commit (the model-only P12 estimate scripts; sha256 as committed):**
+
+| File | sha256 |
+|---|---|
+| `validation/plans/v3-008/p12-scripts/decomp.py` | `b29d6e52de94c2efa61b0bdc2948337cdabcda496abd354d7ca4189321ffb7b7` |
+| `validation/plans/v3-008/p12-scripts/transport.py` | `628ef2cc25259f792dfb6078d0d8cac7bb88bac9314a795d54f7a4422584d3d7` |
+
+
+**Dated note (2026-11-15, orchestrator) — entries changed by the SR-2 disposition commit (the P12 record and the D-3 markdown; no code):** `validation/results/stopping/v3-008-d3-range-attribution.md` 15ee7f72… → c6f2ec08…; `validation/plans/v3-008/p12-i3-low-energy-stopping.md` f8e5420b… → 61cfc431…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-15, orchestrator) — entries changed by the SR-2 disposition commit (P12 scripts after ruff formatting):** `validation/plans/v3-008/p12-scripts/decomp.py` ab0b74a6… → b29d6e52…; `validation/plans/v3-008/p12-scripts/transport.py` 81ce6689… → 628ef2cc…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.

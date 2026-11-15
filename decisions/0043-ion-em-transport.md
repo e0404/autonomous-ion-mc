@@ -821,7 +821,7 @@ equal-velocity ion/ion ratios of the windowed projected rms deviate from the sin
 -1.22 % (He/C 150), -1.36 % (He/O 150), -0.71 % (He/C 250), -0.72 % (He/O 250) and
 -0.16 % (C/O 430) with bootstrap σ 0.30 %, i.e. |dev| + 1.645 σ ≤ 1.86 %. The pre-computed reference-model
 bias was −0.17 to −0.69 %; the He pairs exceed it by up to 0.7 pp within the budget's allowance for ionmc's own model term.
-The exploratory block 1 had given He/C 150 -1.22 vs -1.39 %; He/O 150 -1.36 vs -1.59 %; He/C 250 -0.71 vs -0.75 %; He/O 250 -0.72 vs -0.50 %; C/O 430 -0.16 vs +0.51 % (replication within the combined statistics; no evidential weight). Report-only
+The exploratory block 1 had given He/C 150 -1.22 vs -1.39 %; He/O 150 -1.36 vs -1.59 %; He/C 250 -0.71 vs -0.75 %; He/O 250 -0.72 vs -0.50 %; C/O 430 -0.16 vs +0.51 % (consistent at ≤ 1.7σ per pair; no evidential weight). Report-only
 finding, recorded: the absolute width ratio θ_ionmc/θ_SS − 1 is +5.5 to +8.6 % over the eight cases, 2.4–4.2 pp
 above the pre-registered expected reference factor (+3.1 to +4.4 %), of the size and sign of ionmc's I11-abs offset from
 Molière–Hanson (+1.85 to +5.32 % on the I11 grid), which the pre-registration placed outside that factor; the single-scattering
@@ -835,17 +835,22 @@ reference-runner record (`validation/results/transport/v8-ss/`). **Correction (2
 **Later validation outcome (2026-11-15, orchestrator; V3-008 rows I2 and I3 run once at 7d0e796b after scientific review SR-1).**
 **I2 PASS** (He table reproduction, a regression guard on SEEN decision-0038 values): 4He stopping within 0.20 % of
 ASTAR (75 eV) and 0.20 % of ICRU 90 alpha (78 eV) at ≥ 10 MeV/u, within 0.71 % at 2–10 MeV/u; CSDA ranges within
-0.11 % / 0.07 % at 50–250 MeV/u. **I3 FAIL** (C/O vs libdEdx ICRU73_NEW water, the pre-registered largely
-TOPAS-independent stopping check): the ≥ 10 MeV/u stopping gates fail for both ions (max |dev| 2.51 % C,
+0.11 % / 0.07 % at 50–250 MeV/u. **I3 FAIL** (C/O vs libdEdx ICRU73_NEW water — the revised ICRU 73 lineage per P5b, identity with the 2009 revision
+OPEN — the pre-registered largely TOPAS-independent stopping check): the ≥ 10 MeV/u stopping gates fail for both ions (max |dev| 2.51 % C,
 5.05 % O against 1.5 %; RMS 1.25 % O against 0.8 %) and the 2–10 MeV/u gate fails (10.09 / 13.50 %
-against 6 %), while the CSDA-range gate passes (0.26 / 0.39 % against 0.5 %). Attribution (plan results note of
-2026-11-15, SEEN band diagnostic, labelled estimate): the model is below the table by 2–13 % at 2–20 MeV/u, 0.3–0.8 % at
-20–50 MeV/u and within 0.1 % above 50 MeV/u (which also shows the table is consistent with I = 78 eV and rules out the
-P5b I-value question as the cause); the LS options do not change it; the deficit sits in ionmc's effective-charge /
-Barkas / shell region (§1) and in the last ≈ 1–2 mm of the C/O range. **Consequence (plan D, F.6):** a gating section-A
+against 6 %), while the CSDA-range gate passes (0.26 / 0.39 % against 0.5 %). Attribution (HYPOTHESIS — plan results note of 2026-11-15; SEEN scratch band diagnostic, not reproducible from Git at
+this head; P12 research record): the model is below the table by band means of 1.8–12 % at 2–20 MeV/u (band maxima up to
+13.5 %), 0.3–0.8 % at 20–50 MeV/u and within 0.1 % above 50 MeV/u; the I-value of the table stays TO-VERIFY but cannot be the
+cause (its bounded effect ≤ 0.6 % in S); the LS options do not reduce the deficit; it sits in ionmc's effective-charge /
+Barkas / Bloch / shell region (§1), i.e. in the last ≈ 1–2 mm of the C/O range — every beam traverses it, so it is not a
+domain that can be excluded (P12 §4, ESTIMATE: end-of-range compression ≈ 0.06–0.13 mm; peak-to-entrance +1–10 % if
+corrected, away from TOPAS; TOPAS likely carries ICRU 73-like stopping at 2–20 MeV/u through Geant4's low-energy blend, which
+undercuts the revision-2 statement that the stopping lineage is shared with TOPAS at the low end — a cross-row implication
+for TD-EM/TD-FULL, recorded, not a re-grade). **Consequence (plan D, F.6):** a gating section-A
 row FAILs and is neither a declared gap nor covered by an amendment; the integration criterion F.6 is not met and V3-008 is NOT integrated at this
 head (orchestrator decision; the plan's STOP-type route applies: research record, then a prospective reviewed amendment with
 fresh evidence, or integration by operator directive with the FAIL declared as a limitation); no model, tolerance or grade is
 changed. With I2/I3 every gating row of the
-plan is now graded or declared: section-A rows PASS except I3 FAIL; TOPAS-agreement main set consumed with FAILs
-(R2-STOP3), held-out set PASS 12/12; V5-SS PASS 5/5. Not a clinical claim.
+plan is now graded or declared: section-A rows PASS except I3 FAIL (I2 is a regression guard on SEEN values, not evidence;
+I11-rel keeps its SEEN pre-freeze status; I8b is report-only, reported within the I8 step documents of lv8 steps 02–04);
+TOPAS-agreement main set consumed with FAILs (R2-STOP3), held-out set PASS 12/12; V5-SS PASS 5/5. Not a clinical claim.

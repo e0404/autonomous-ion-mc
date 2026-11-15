@@ -1641,24 +1641,37 @@ E ≥ 2 MeV/u (32 points per ion):
 
 The report-only 10–500 MeV/u band (the transport-table range) has the same maxima (RMS 0.66 % C, 1.41 % O).
 
-**Attribution (allowed as a finding; SEEN read-only diagnostic of the orchestrator on the same inputs, band aggregates only,
-not committed as a result; labelled estimates).** The model sits below the table by a deficit that falls steeply with energy
+**Attribution — HYPOTHESIS (SR-2 / Codex REVIEW-6d750e4d: the band diagnostic below was a read-only scratch computation of
+the orchestrator on the same inputs, band aggregates only, SEEN; it is NOT reproducible from Git at this head and NOT a committed
+result; a committed, tested band diagnostic with exact-SHA provenance is the first step of the follow-up amendment, and until it
+exists every statement in this paragraph is an unresolved hypothesis).** The model sits below the table by a deficit that falls steeply with energy
 per nucleon: 2–5 MeV/u mean −8.6 % (C) / −12.2 % (O), 5–10 MeV/u −4.3 / −7.5 %, 10–20 MeV/u −1.8 / −3.9 %, 20–50 MeV/u
 −0.3 / −0.8 %, and ≥ 50 MeV/u within ±0.03 % (C) / ±0.06 % (O) up to 1000 MeV/u. (i) The ≥ 10 MeV/u gate therefore fails
-on the two grid points at 10–20 MeV/u (and, for O, at 20–50), not on the transport-relevant region above 50 MeV/u, which is
-why the CSDA-range gate passes (0.26 / 0.39 %) — the deficit sits in the last ≈ 1–2 mm of the ion range. (ii) The
-Lindhard–Sørensen options (`ls = "eff"`, `"bare_mixed"`) change the ≥ 50 MeV/u agreement by ≤ 0.05 pp and leave the
-low-energy deficit unchanged: it is the effective-charge / Barkas / shell region of the model (decision 0043 §1), not the
-higher-order stopping-number terms. (iii) The ≥ 50 MeV/u agreement within 0.1 % at I = 78 eV, against +0.25 % (C) /
-−0.11 % mean (O) with the 75 eV model, settles the P5b I-value question empirically: the ICRU73_NEW water values are
-consistent with I = 78 eV (the revised table), so the I-value is not the cause and row decision (d) of 2026-11-01 does not
-apply. (iv) The pre-registered defence of the 2–10 MeV/u gate ("effective-charge model spread plus PASS low-energy
+on the grid points at 10–20 MeV/u (and, for O, at 20–50), while the region above 50 MeV/u agrees, which is why the CSDA-range
+gate passes (0.26 / 0.39 %) — the deficit sits in the last ≈ 1–2 mm of the ion range (P12 §4: residual range below 20 MeV/u
+1.45 mm for C 290, 1.11 mm for O 350). **Transport relevance (SR-2 finding 3; P12 §4, ESTIMATE):** every beam passes through
+2–20 MeV/u, so the deficit is not confined to a domain that can be excluded; it compresses the end of range by ≈ 0.06–0.13 mm
+and would raise ionmc's peak-to-entrance ratio by ≈ +1–3 % (C 290 / O 350) and ≈ +3–10 % (C 80 / O 100) if corrected — in
+the direction away from TOPAS, so it does not explain the TD-EM low-end FAILs of 2026-11-09; and because Geant4 blends its
+Bethe model into an ICRU 73-based low-energy model above the 2 MeV/u switch, TOPAS probably carries ICRU 73-like stopping at
+2–20 MeV/u, which undercuts the revision-2 defence that the stopping lineage is shared with TOPAS at the low end (a cross-row
+implication for TD-EM/TD-FULL recorded here and in decision 0043, not a re-grade). (ii) The
+Lindhard–Sørensen options (`ls = "eff"`, `"bare_mixed"`) change the ≥ 50 MeV/u agreement by ≤ 0.05 pp and do not reduce the
+low-energy deficit (`bare_mixed` makes it slightly larger at the lowest energies, P12 §3): the deficit sits in the
+effective-charge / Barkas / Bloch / shell region of the model (decision 0043 §1); P12 §3 argues that the charge state alone
+cannot account for the part above ≈ 10 MeV/u. (iii) I-value: above 50 MeV/u the 78 eV model agrees with the table within
+0.1 % (SEEN; a 75 eV model would sit ≈ +0.4–0.6 % higher there), which is consistent with a 78 eV table, but the table's
+I-value and its identity with the 2009 revision stay **TO-VERIFY / OPEN** as the committed result and P12 §1 state (an earlier
+wording here that the question was "settled" is withdrawn, SR-2 finding 2). Robust without that: the 2–13 % low-energy deficit
+exceeds the row's bounded I-value contribution (≤ 0.6 % in S) by an order of magnitude, so the I-value is not the cause; row
+decision (d) of 2026-11-01 is not triggered because the range clause passed. (iv) The pre-registered defence of the 2–10 MeV/u gate ("effective-charge model spread plus PASS low-energy
 behaviour, ≤ 6 %") under-estimated the difference between ionmc's Pierce–Blann effective charge with Barkas/Bloch/Mott
 corrections and the ICRU 73 (revised) construction below 20 MeV/u by a factor ≈ 2. No model or tolerance is changed; the
 row stays FAIL. **Consequence for integration (plan F.6, D; orchestrator decision 2026-11-15):** a gating section-A row fails and is neither a
 declared evidence gap nor covered by an amendment, so the integration criterion F.6 is not met and **V3-008 is not integrated
-at this head**; the FAIL is recorded in decision 0043 and the ledger; the PR stays open with every gate otherwise closed
-(reviews, exact-SHA validation records, CI). The route forward is the plan's own (D, STOP-type): a research record on the
+at this head**; the FAIL is recorded in decision 0043 and the ledger; the PR stays open; the remaining gates (Codex reviews, exact-SHA
+validation records, CI, the scientific review rounds SR-1/SR-2) are closed per commit as recorded in the plan notes, and the
+F.5 exact-SHA record exists for every head that was pushed. The route forward is the plan's own (D, STOP-type): a research record on the
 low-energy C/O stopping difference, then a prospective, reviewed amendment (a model change consumes the affected rows and
 needs fresh evidence at a new frozen SHA) — or, by operator directive only, integration with the FAIL declared as a model
 limitation. No intervention request is filed: EXPERIMENT.md permits none for this (it is scientific work, not inaccessible

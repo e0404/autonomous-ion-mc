@@ -3,12 +3,14 @@
 Status: research record written by the physics researcher at the orchestrator's request after row I3 FAILED (plan results
 note "rows I2 and I3", 2026-11-15). It is NOT evidence and changes no grade; it is the input to a future prospective
 amendment (plan D). Labels FACT / ESTIMATE / OPEN as stated by the author; estimates use only the committed ionmc model.
-Per-energy deviations against the reference table are given as band values only (stopping-results policy); the scripts of
-the estimates stay in the orchestrator's scratchpad (`decomp.py`, `transport.py`), not in Git. Not a clinical claim.
+Per-energy deviations against the reference table are given as band values only (stopping-results policy); the model-only
+scripts of the estimates are committed under `validation/plans/v3-008/p12-scripts/` (`decomp.py`, `transport.py`; they read no
+reference table and need only the committed ionmc model); the band diagnostic against the table itself is NOT committed
+(a hypothesis until the follow-up amendment commits a tested reproducer). Not a clinical claim.
 
 # V3-008 row I3: explaining the 2–50 MeV/u deficit (research note, 2026-11-15)
 
-Labels: FACT (code or cited document), ESTIMATE (my calculation with the committed model; scripts `decomp.py` and `transport.py` are in this directory, single process), OPEN. No reference table values are reproduced here.
+Labels: FACT (code or cited document), ESTIMATE (my calculation with the committed model; scripts `decomp.py` and `transport.py` are in `validation/plans/v3-008/p12-scripts/`, single process), OPEN. No reference table values are reproduced here.
 
 ## 1. What ICRU73_NEW is
 - FACT [3]: Geant4 `G4WaterStopping.cc` says: "29.04.2009 A.Ivantchenko added revised data for G4WATER, provided by Prof. P. Sigmund, Univ. Southern Denmark, in the framework of the ESA Technology Research Programme (ESA contract 21435/08/NL/AT)". The table covers Z = 3–18 and 26 on a 0.025–1000 MeV/u grid. That is the same span as libdEdx `icru73_newEng.dat` (P5b found the grid identical to the G4 icru73 files).
