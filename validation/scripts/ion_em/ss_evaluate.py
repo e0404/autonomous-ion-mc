@@ -41,6 +41,16 @@ exactly ``ss_seal_sha`` / ``ss_seal_review_id``) is an ancestor of the run's sig
 violation is a BLINDING FAIL. The SS frozen manifest at the run's ``code_sha`` must equal HEAD's
 (smoke: its own entry only).
 
+**Blocks (amendment V5-SS-B2 of 2026-11-15).** Block 2 (parts 2-3, :data:`PARTS`, records
+:data:`TOPAS_RECORDS`) is the evidence block: ``load_index`` and ``grade`` read only its 16 parts.
+Block 1 (parts 0-1, :data:`BLOCK1_PARTS`, records :data:`BLOCK1_RECORDS`) ran first and is
+EXPLORATORY: its count rule (:data:`MAX_DEFICIT_FRACTION`) was amended after its phase-space
+headers were inspected (REVIEW-2446fe2d), so it is never graded as evidence. ``check-run`` still
+verifies a block-1 run (bundle kind ``"block1_part"``, report ``"block": 1``); because the frozen
+manifest grew by the block-2 bundles after block 1 ran, a block-1 run is bound to its own
+unchanged manifest entry (as the scorer smoke), an evidence part to the byte-identical manifest.
+Seeds of both blocks: 20619000 + 100*part + case.
+
 Phase-space layout (header column names, Z of the exit surface in world coordinates) and log
 string forms marked TO VERIFY below are checked by the scorer smoke; an unexpected column list is
 a fail-closed error naming the observed list. Reports carry statistics, ids and digests only,
@@ -82,7 +92,8 @@ SS_SEED_BASE = 20631004  # RERUN_BASE_2, first V5-SS run (section-C note 2026-11
 SS_HISTORIES = 400_000
 SS_SCALE = "1"
 TOPAS_BASE = 20619000
-PARTS = (0, 1)
+BLOCK1_PARTS = (0, 1)  # exploratory block 1: check-run only, never graded as evidence
+PARTS = (2, 3)  # evidence block 2 (amendment V5-SS-B2 of 2026-11-15): index and grade
 PART_HISTORIES = 30_000
 # case -> (ion tag, MeV/u, PDG code of the primary, Geant4 particle of the EM printout)
 CASE_INFO: dict[int, tuple[str, int, int, str]] = {
@@ -115,7 +126,10 @@ SEAL_PATH = f"{SS_DIR}/ss-sample-seal.json"
 SEAL_SCHEMA = "ionmc-v8-ss-sample-seal-1"
 REVIEW_PATH = f"{SS_DIR}/ss-seal-review.json"
 HOST_RECORDS_DIR = f"{SS_DIR}/host-records"
-TOPAS_RECORDS = f"{SS_DIR}/topas-runs"
+TOPAS_RECORDS = f"{SS_DIR}/topas-runs"  # evidence block 2
+BLOCK1_DIR = f"{SS_DIR}/block1-exploratory"
+BLOCK1_RECORDS = f"{BLOCK1_DIR}/topas-runs"  # exploratory block 1 (never read by grade)
+BLOCK1_REPORT = f"{BLOCK1_DIR}/ss-report.json"
 SMOKE_RECORDS = f"{SS_DIR}/smoke-runs"
 REPORT_PATH = f"{SS_DIR}/ss-report.json"
 REPORT_SCHEMA = "ionmc-v8-ss-report-1"
@@ -187,15 +201,20 @@ def bundle_name(case: int, part: int) -> str:
 
 
 EVIDENCE_BUNDLES = {bundle_name(c, p): (c, p) for c in SS_CASES for p in PARTS}
+BLOCK1_BUNDLES = {bundle_name(c, p): (c, p) for c in SS_CASES for p in BLOCK1_PARTS}
 
 
 def parse_bundle(bundle: str) -> dict[str, Any]:
-    """{"kind": "part"|"smoke", "case", "part"} of one of the 16 bundles or the scorer smoke."""
+    """{"kind": "part"|"block1_part"|"smoke", "case", "part", "block"} of one of the 16 evidence
+    (block 2) bundles, the 16 exploratory block-1 bundles or the scorer smoke."""
     if bundle in EVIDENCE_BUNDLES:
         case, part = EVIDENCE_BUNDLES[bundle]
-        return {"kind": "part", "case": case, "part": part}
+        return {"kind": "part", "case": case, "part": part, "block": 2}
+    if bundle in BLOCK1_BUNDLES:
+        case, part = BLOCK1_BUNDLES[bundle]
+        return {"kind": "block1_part", "case": case, "part": part, "block": 1}
     if bundle == SMOKE_BUNDLE:
-        return {"kind": "smoke", "case": 28, "part": None}
+        return {"kind": "smoke", "case": 28, "part": None, "block": None}
     raise RecordError(f"{bundle!r} is not a V5-SS bundle")
 
 
@@ -456,7 +475,8 @@ def pinned_chronology(repo: Path, code_sha: str) -> dict[str, Any]:
 
 def ss_manifest(reader: io.CommittedReader, code_sha: str, bundle: str, smoke: bool) -> dict:
     """The SS frozen manifest at HEAD bound to the run's ``code_sha``: byte-identical (evidence)
-    or, for the scorer smoke, the smoke's own entry identical."""
+    or, with ``smoke`` true (scorer smoke, exploratory block-1 part), the bundle's own entry
+    identical."""
     at_run = io.git_show(reader.repo, code_sha, MANIFEST_PATH)
     at_head = reader.read(MANIFEST_PATH)
     docs = []
@@ -580,7 +600,7 @@ def load_run(
         raise RecordError(f"{run_id}: request input_files differ from the bundle at code_sha")
     if not io.is_ancestor(repo, code_sha, reader.head):
         raise RecordError(f"{run_id}: code_sha {code_sha} is not an ancestor of HEAD")
-    manifest = ss_manifest(reader, code_sha, bundle, info["kind"] == "smoke")
+    manifest = ss_manifest(reader, code_sha, bundle, info["kind"] != "part")
     entry = manifest["bundles"][bundle]
     for name in ("case.json", "input.txt"):
         if committed.get(name, {}).get("sha256") != entry.get(name):
@@ -589,7 +609,7 @@ def load_run(
     if request.get("case") != case_doc:
         raise RecordError(f"{run_id}: request case differs from the committed case.json")
     seeds = case_doc.get("seeds")
-    if info["kind"] == "part":
+    if info["kind"] in ("part", "block1_part"):
         if seeds != [topas_seed(info["case"], info["part"])]:
             raise RecordError(f"{run_id}: seed {seeds} breaks the formula")
         if case_doc.get("histories") != PART_HISTORIES:
@@ -748,13 +768,16 @@ def check_run(
     *,
     repo: Path | None = None,
 ) -> dict[str, Any]:
-    """Run validity of ONE signed V5-SS TOPAS run (evidence part or scorer smoke); nothing graded.
-    VALID / BLINDING FAIL / RUN-VALIDITY FAIL; record gaps raise (ERROR)."""
+    """Run validity of ONE signed V5-SS TOPAS run (evidence part, exploratory block-1 part or
+    scorer smoke); nothing graded. VALID / BLINDING FAIL / RUN-VALIDITY FAIL; record gaps raise
+    (ERROR)."""
     repo = Path(repo).resolve() if repo is not None else r2e.evaluator_repo()
     reader = io.CommittedReader(repo)
     info = parse_bundle(bundle)
     if records_dir is None:
-        records_dir = Path(TOPAS_RECORDS if info["kind"] == "part" else SMOKE_RECORDS)
+        records_dir = Path(
+            {"part": TOPAS_RECORDS, "block1_part": BLOCK1_RECORDS}.get(info["kind"], SMOKE_RECORDS)
+        )
     records_dir = records_dir if records_dir.is_absolute() else repo / records_dir
     plan, review = load_note_and_review(reader)
     trust, trust_info = io.committed_trust(reader)
@@ -766,6 +789,7 @@ def check_run(
         "run_id": run_id,
         "bundle": bundle,
         "bundle_kind": info["kind"],
+        "block": info["block"],
         "case": info["case"],
         "part": info["part"],
         "verdict": res["verdict"],
@@ -1048,13 +1072,14 @@ def load_sealed_samples(
 
 
 def load_index(reader: io.CommittedReader) -> dict[tuple[int, int], str]:
+    """(case, part) -> run id of the 16 evidence (block-2) parts; block 1 is never read."""
     idx = reader.json(f"{TOPAS_RECORDS}/index.json", "V5-SS run index")
     runs = io.require(idx, "runs", "V5-SS run index")
     out: dict[tuple[int, int], str] = {}
     for e in runs:
         key = (io.require(e, "case", "index entry"), io.require(e, "part", "index entry"))
         if key not in {(c, p) for c in SS_CASES for p in PARTS}:
-            raise RecordError(f"index entry {key} is not a V5-SS (case, part)")
+            raise RecordError(f"index entry {key} is not a V5-SS evidence (case, part)")
         if key in out:
             raise RecordError(f"(case, part) {key} listed twice")
         out[key] = str(io.require(e, "run_id", "index entry"))
@@ -1101,6 +1126,8 @@ def grade(
     base = {
         "schema": REPORT_SCHEMA,
         "row": "V5-SS",
+        "block": 2,
+        "exploratory_block1": {"records": BLOCK1_RECORDS, "report": BLOCK1_REPORT},
         "ss_seal_sha": plan["seal_sha"],
         "ss_seal_review_id": review["review_id"],
         "runs": [

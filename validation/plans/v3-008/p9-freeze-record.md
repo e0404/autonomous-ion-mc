@@ -88,7 +88,7 @@ evidence for `icru90/z{6,8}_G4_WATER.dat`. This note concerns FC-2 only.
 | `tests/ionmc/test_ion_em_ss_budget.py` | `ca49735b5b00831aeaabd59d63faecfc23b98fe0d4247024ca963d7e9a77f097` | P9 (iv) |
 | `tests/ionmc/test_ion_em_ls_option.py` | `c67966c8d2c3d9564032e33e666321dd11bd8d2386780afa0cb74850455ca84d` | P9 (iii) |
 | `tests/ionmc/test_ion_em_mapping_src.py` | `865d3143892f8c6ebc548a86400bae198d455c3ad8c3bec2df074ebeb0210175` | I11-map (src), I0, I1 |
-| `tests/ionmc/test_v3_008_seed_families.py` | `4bae0c2f72820290bfc98d1c859ef62ae5e7646df5ebabeb44d4ad2edcfd1c81` | P7, §C |
+| `tests/ionmc/test_v3_008_seed_families.py` | `e4e33e662900aced756395c1aa63c168bd97b6f7e3c5697f9c5cc5d03bc99ec5` | P7, §C |
 
 ### 2.3 Implementation already on the branch (src)
 
@@ -1061,12 +1061,12 @@ placeholder scorer output was deleted unread.
 | File | sha256 |
 |---|---|
 | `validation/plans/v3-008/d4-geant4-ion-fluctuation-stopping.md` | `1cbbd6fc19767a3787fd04439ebdfd19688ff9bf11b6bb767590a9a9d28a125c` |
-| `validation/scripts/ion_em/gen_ss_bundles.py` | `683b148ff9b8cf508d8eaabd6403732899efff3b6aeec6336b1eb625d1314b9f` |
-| `validation/scripts/ion_em/ss_evaluate.py` | `ab3751f17088e838d97db00b948af223c963b9caf3d6fc7691040e566fd12c99` |
+| `validation/scripts/ion_em/gen_ss_bundles.py` | `6a165292fa94df032e7e5306f25070aa6634750f3a526acf2ce8d8299d14811b` |
+| `validation/scripts/ion_em/ss_evaluate.py` | `ca45fcbed74d80b317240da60d1131c47d448fa4f44529a17359d59393b18a0d` |
 | `validation/scripts/ion_em/ss_wrapper_template.py` | `a989aa237564e4591f15451706b0bbf29860672f18d3244caa58700bc03422a8` |
-| `validation/reference_cases/topas/v5ss-frozen-manifest.json` | `fc03285668ef5f9e6a8daa950a143a12883f89e7035e8c2a5065ad5b13dab13f` |
-| `tests/ionmc/test_v5ss_bundles.py` | `f94d543b6909013e7fe34d5188df07c2fd28a9842326189c0e9eef8732d1ae93` |
-| `tests/ionmc/test_v5ss_evaluate.py` | `6123d1512db4b8bda5b6e8dc0c80aaba6af668b70fc7900222f511e6229d8a9d` |
+| `validation/reference_cases/topas/v5ss-frozen-manifest.json` | `4d4c2da147ae31d744804f2a97231b5f42f5a2cdf48d9a48776481ccc4404082` |
+| `tests/ionmc/test_v5ss_bundles.py` | `93d3dc5baee2605e4da34fd5d2eaf43a84b4cadcfb770916549d8315f8689bf9` |
+| `tests/ionmc/test_v5ss_evaluate.py` | `c2af616501b68b9be2ca322cc3d9ca641b41cf5ddc8e24b395190c09527fc853` |
 | `tests/ionmc/test_v5ss_sample.py` | `81a3dbdbb70dcf1a10a06ef6abbba0ab179f977af0f77cbc6bff33c4044be51c` |
 | `tests/ionmc/data/v5ss/ss_exit.header` | `dbaab815c24b166648196c1357f611fe8cc966b7ba9e119f6e2ebc88281d904f` |
 | `tests/ionmc/data/v5ss/ss_exit.phsp` | `b8b73e0b5010d134e1f96ce579c3271d5fae478f2d25f0efc3595bef36a3e807` |
@@ -1241,6 +1241,99 @@ placeholder scorer output was deleted unread.
 | `validation/results/transport/v8-ss/check-runs/REF-f785d4669a97d92e3f7a-ecb230b0.json` | `f088f04a45d60a91e43becdb4d0c01b324b412109baccf9179d30c759050d918` |
 | `validation/results/transport/v8-ss/check-runs/REF-fd8cf8ed4bbab1079850-df809295.json` | `2338ed65a474d99310b27f4cf9df69e726c503b0a99af00bba24523f82268da0` |
 
+
+**Dated note (2026-11-15, orchestrator) — amendment V5-SS-B2: files added by the block-2 commit (the 16 block-2 bundles, parts 2–3; the block-1 manifest fixture; the block-1 records, listings, validity reports and SEEN grade relocated verbatim under `v8-ss/block1-exploratory/` — the rows above for `v8-ss/topas-runs/` and `v8-ss/check-runs/` are kept as history of the same bytes at their former paths; sha256 as committed):**
+
+| File | sha256 |
+|---|---|
+| `tests/ionmc/data/v5ss/block1-manifest-entries.json` | `d59507f320e38b75a5cf8895d6ab7c9391b3810e695c68296820093388166442` |
+| `validation/reference_cases/topas/v5ss-carbon-water-150mevu-case25-part2/case.json` | `6a940b30c2e313c4900cf269d086beb7db9f7cdee3a5df3b5169ae4ed75d7cbd` |
+| `validation/reference_cases/topas/v5ss-carbon-water-150mevu-case25-part2/input.txt` | `70d6dd395e4e8c5ca150a0725ec104ad42beec4320af65b85f746ddc408639cd` |
+| `validation/reference_cases/topas/v5ss-carbon-water-150mevu-case25-part3/case.json` | `a684b3402e3efebc27a70506e0750dd54ee9398c275f7fca0f719c340d20e373` |
+| `validation/reference_cases/topas/v5ss-carbon-water-150mevu-case25-part3/input.txt` | `6f54640e75a784b5f18393eabb920e85ad9a5ec163f5de7beb66fb3933802119` |
+| `validation/reference_cases/topas/v5ss-carbon-water-250mevu-case27-part2/case.json` | `b45fa2b6de8b34aa63a933f1c99805b2d11edd1230178587b5bf068a0b427b3c` |
+| `validation/reference_cases/topas/v5ss-carbon-water-250mevu-case27-part2/input.txt` | `5a91544d7e9fe545e409f539bce80fca297e2d8194481077253c1840e46d3f44` |
+| `validation/reference_cases/topas/v5ss-carbon-water-250mevu-case27-part3/case.json` | `c22803b9f9c34f0669fc071ed85052654958af575e6cf9ad20b08f87dd418e0f` |
+| `validation/reference_cases/topas/v5ss-carbon-water-250mevu-case27-part3/input.txt` | `9b9b06d2bb4ff7d2a3bba40ddfd813cda622118273dbfe2fb100755a844bcab1` |
+| `validation/reference_cases/topas/v5ss-carbon-water-430mevu-case29-part2/case.json` | `e262512aab8c90b417785859438c64ee1a9a72dec441d000a90d9fbbd5625d7b` |
+| `validation/reference_cases/topas/v5ss-carbon-water-430mevu-case29-part2/input.txt` | `c3b2985785a1496675ff030ec327de217ded6fee4a8ad999a42fdeaec0b767d1` |
+| `validation/reference_cases/topas/v5ss-carbon-water-430mevu-case29-part3/case.json` | `212924745da81137b2c5acc63c95e5fef50c13302e3fdc9ed36607f908f0d7fa` |
+| `validation/reference_cases/topas/v5ss-carbon-water-430mevu-case29-part3/input.txt` | `c5de632f3257d9dbdfcd0321269b2288e9df7fa282d9b50182f6bc7b5cad9a70` |
+| `validation/reference_cases/topas/v5ss-he-water-150mevu-case22-part2/case.json` | `190deda0455b40e4e40d4ef9ab5afebf6c20458e9bb1cc7892c21e55d80580ce` |
+| `validation/reference_cases/topas/v5ss-he-water-150mevu-case22-part2/input.txt` | `ef8dd2c22abc00c2211f43c41df53e61515423de0efd601e4c3d7187eb05f02d` |
+| `validation/reference_cases/topas/v5ss-he-water-150mevu-case22-part3/case.json` | `a6722de9fcd681fa95f96c0e007589e14d00da96f3e7c570472e07f1fe72f511` |
+| `validation/reference_cases/topas/v5ss-he-water-150mevu-case22-part3/input.txt` | `3f2b2ec1dff4944678fc9eb355fa7f960cb6e84a2d5ad569c374a4e3b3e26419` |
+| `validation/reference_cases/topas/v5ss-he-water-250mevu-case28-part2/case.json` | `72412313cba39f38d5f178da1af200f3881edd8f6e5d61660b87d2bd3c7bf671` |
+| `validation/reference_cases/topas/v5ss-he-water-250mevu-case28-part2/input.txt` | `bccf46ed5febc3d333254ccdb4988c850bf19fc004fc7fc99841db9f1a4dfeb2` |
+| `validation/reference_cases/topas/v5ss-he-water-250mevu-case28-part3/case.json` | `bda356f589244938a07d449f7868ebaad18d0298a7b6f4ba3e389ca3674bd1f7` |
+| `validation/reference_cases/topas/v5ss-he-water-250mevu-case28-part3/input.txt` | `0668c312e485538e86d86df6d014bf1d74b5553ca400143d4e2c8824dcdab328` |
+| `validation/reference_cases/topas/v5ss-oxygen-water-150mevu-case26-part2/case.json` | `ad182c72fbb6e56aab547b368b3676961b8cd386ee86ce8aa2111a2fd9830965` |
+| `validation/reference_cases/topas/v5ss-oxygen-water-150mevu-case26-part2/input.txt` | `2cb91c4ff2c53d379d9fbe1d8247ddbe0cb08f4abbb1faf820c5c64bb9b185db` |
+| `validation/reference_cases/topas/v5ss-oxygen-water-150mevu-case26-part3/case.json` | `614c8a3641ccfd68bd5cc230f3895b81f6b0d610be1df6a69b3fc3ba1d89167e` |
+| `validation/reference_cases/topas/v5ss-oxygen-water-150mevu-case26-part3/input.txt` | `cf292a0497c73df73965d5b8fe991272e3607aa8bb35a07cff57bbaf1fd0571f` |
+| `validation/reference_cases/topas/v5ss-oxygen-water-250mevu-case31-part2/case.json` | `62442dd2017cf1ea43a81129c44e2d7c9ab3ae1eb2ce4227578bef4ac130cd08` |
+| `validation/reference_cases/topas/v5ss-oxygen-water-250mevu-case31-part2/input.txt` | `07fdd55dc82965b63095427286332f5bcade7581851c6900b741409ea469fb8c` |
+| `validation/reference_cases/topas/v5ss-oxygen-water-250mevu-case31-part3/case.json` | `0f215cac1663ab9dfc54eb046511b9eaf9e5a547cfaa4bc6c412bc93a56e8cff` |
+| `validation/reference_cases/topas/v5ss-oxygen-water-250mevu-case31-part3/input.txt` | `69c64efbb12963f1cbfd5b0c9d3a4b5875724c70fc70ec1c542e37b44ee59d96` |
+| `validation/reference_cases/topas/v5ss-oxygen-water-430mevu-case30-part2/case.json` | `da022bcc534e809c70c8c5a3baf01fe7efd944941a278f2f0af213229d103c01` |
+| `validation/reference_cases/topas/v5ss-oxygen-water-430mevu-case30-part2/input.txt` | `5671c4aefeee912048d262637eefd8725a77daf089344f6fbac96d85a2637696` |
+| `validation/reference_cases/topas/v5ss-oxygen-water-430mevu-case30-part3/case.json` | `10766fc7817b46e884e5c2e405a7910285739dbbc5f8af786500aa03d8521136` |
+| `validation/reference_cases/topas/v5ss-oxygen-water-430mevu-case30-part3/input.txt` | `fa9dc42806039bde02abc96bd1a9a73c9381b44e61f1db6ff708a44f91820fd8` |
+| `validation/results/transport/v8-ss/block1-exploratory/check-runs/REF-189c5a09a56470459241-d0087521.json` | `fddc5b77047cf9030e352597a65de522c261d50028a63dafa85aeb15790999b1` |
+| `validation/results/transport/v8-ss/block1-exploratory/check-runs/REF-1f84bf9c50030ca44319-58d37b01.json` | `3ab06e8a21e459e4e263fb86c7b322b0ed588993d44677b1fa305a218561ffd4` |
+| `validation/results/transport/v8-ss/block1-exploratory/check-runs/REF-226e1c04517c66e77896-06ebcdb0.json` | `2b9bf9abeefb0fc0a7aae93240c421c922175308e3c6e48223ffe95f288936b9` |
+| `validation/results/transport/v8-ss/block1-exploratory/check-runs/REF-2a3055cd9946939e1112-829e8260.json` | `e399ce0370ec039ecd5b4b92e50a114a5c5b6a939a9dedbea4d7eb7ec786c29f` |
+| `validation/results/transport/v8-ss/block1-exploratory/check-runs/REF-323844f0b56dc5de0338-16f4feb4.json` | `5d59ae920d189270e624dd8c94004e2c9244b8a6e24e03c0187be67c24c2c50b` |
+| `validation/results/transport/v8-ss/block1-exploratory/check-runs/REF-3575dbd95c6d72fab50c-a8d6f962.json` | `a841a5893818a9a5585651223848e3eef9f44387e1df230ff8e65cc0fdc1e603` |
+| `validation/results/transport/v8-ss/block1-exploratory/check-runs/REF-4cc1556c57dbb104d834-efe68a66.json` | `51f367b620728d17068d5e7161aa340c965f5806251464e46c2ff297e690b6fc` |
+| `validation/results/transport/v8-ss/block1-exploratory/check-runs/REF-69cd778394707910f717-b992a97b.json` | `c2bfbefb2a5132b138f1c1fe34974e017bfa5bebb1330a03fcafe19f2feebc80` |
+| `validation/results/transport/v8-ss/block1-exploratory/check-runs/REF-72b922fb1b0c07ae5c5f-34ae1c10.json` | `96b8a12cc274ba2aff5a18236c76f987ad2404de6b6d0cf698a7ed3d25b8518a` |
+| `validation/results/transport/v8-ss/block1-exploratory/check-runs/REF-740144c3826978e4ea78-ef394dd8.json` | `1f7773dcfeb46d759918de342863b2424870e5f93189bfd08088a718423ca1b2` |
+| `validation/results/transport/v8-ss/block1-exploratory/check-runs/REF-8358f3c4f2f32a8453f4-a7dbae17.json` | `486b58fc8b91ab93d7ed439bb08a2e7d67cb922323aeba45ad42f01af89aff0d` |
+| `validation/results/transport/v8-ss/block1-exploratory/check-runs/REF-98e6160303a4ec989443-732245e3.json` | `d678f7660786ff0519c9e9309099d063a9ccecd16a360f009aef005bfeee9b02` |
+| `validation/results/transport/v8-ss/block1-exploratory/check-runs/REF-9bd0a1263ad70b02be18-6de84b65.json` | `b8708732a40476d53ec10f234b1c4349e6165523da24052a7e0a210edb1f6d1e` |
+| `validation/results/transport/v8-ss/block1-exploratory/check-runs/REF-a65c74269baeeb946284-107281ec.json` | `127768016197e53cff16a207f186dfaf7b1e2b0726d89f7059900cc48ec2e3f5` |
+| `validation/results/transport/v8-ss/block1-exploratory/check-runs/REF-e2306407f51486adf627-85771afc.json` | `2deda391c82fa06fb26ce1a6f9c6bb26fba15fd6013c3001c18b13cd6bd7eda1` |
+| `validation/results/transport/v8-ss/block1-exploratory/check-runs/REF-ebec959c8706e098c918-585a9acf.json` | `e91aae7272c8f944d73a5efc7e780614a33d17f9cc923df6498ba0f28119c3a7` |
+| `validation/results/transport/v8-ss/block1-exploratory/check-runs/REF-f785d4669a97d92e3f7a-ecb230b0.json` | `f088f04a45d60a91e43becdb4d0c01b324b412109baccf9179d30c759050d918` |
+| `validation/results/transport/v8-ss/block1-exploratory/check-runs/REF-fd8cf8ed4bbab1079850-df809295.json` | `2338ed65a474d99310b27f4cf9df69e726c503b0a99af00bba24523f82268da0` |
+| `validation/results/transport/v8-ss/block1-exploratory/ss-report.json` | `cc58d7fbbb44933fa849b0d48e4dbff3c7e616f6868961a31a4a50b321887371` |
+| `validation/results/transport/v8-ss/block1-exploratory/topas-runs/REF-189c5a09a56470459241-d0087521/artifacts.json` | `4e86eb960a8f3ce4a25b9d3713e325aec84661c93e800a5708d31c23bb5224aa` |
+| `validation/results/transport/v8-ss/block1-exploratory/topas-runs/REF-189c5a09a56470459241-d0087521/record.json` | `fb86a5c724950e82b1c79a7390fb82b68e144b1233fa026022211897185e110f` |
+| `validation/results/transport/v8-ss/block1-exploratory/topas-runs/REF-1f84bf9c50030ca44319-58d37b01/artifacts.json` | `f1df22103d2aec16663de603f29253cec6d733715a4be576e6d23680bb065f9e` |
+| `validation/results/transport/v8-ss/block1-exploratory/topas-runs/REF-1f84bf9c50030ca44319-58d37b01/record.json` | `fb6a7334fa543a7d8018806c095f2f94ef94ad890bb74d92cb28a9df48559af6` |
+| `validation/results/transport/v8-ss/block1-exploratory/topas-runs/REF-226e1c04517c66e77896-06ebcdb0/artifacts.json` | `a04aec898c316e397113f0c8395458bbe9f0bd9c1de527fc32aa4e015ae066e8` |
+| `validation/results/transport/v8-ss/block1-exploratory/topas-runs/REF-226e1c04517c66e77896-06ebcdb0/record.json` | `8d4b92b563fcdb1443dbd494a9627f74ef727318e598039ed673964c476841e0` |
+| `validation/results/transport/v8-ss/block1-exploratory/topas-runs/REF-2a3055cd9946939e1112-829e8260/artifacts.json` | `5f19f654062e6b4f89d4268b4fe3f47e9353ec9557f352cf3e9f784419a0fc34` |
+| `validation/results/transport/v8-ss/block1-exploratory/topas-runs/REF-2a3055cd9946939e1112-829e8260/record.json` | `7d851e1f733c5035efb4da9d916527a230ba1eeacfb4112366b2d38cc6f1fe4d` |
+| `validation/results/transport/v8-ss/block1-exploratory/topas-runs/REF-323844f0b56dc5de0338-16f4feb4/artifacts.json` | `5c7e517e2c13561d1fd8b472daafd473599f0a51d6f36b57b26814f66af3b77e` |
+| `validation/results/transport/v8-ss/block1-exploratory/topas-runs/REF-323844f0b56dc5de0338-16f4feb4/record.json` | `d3d3165d0ea7260fba145a5aec52aa9dee1d00bdcd05577eb5b81be9a7ac81cc` |
+| `validation/results/transport/v8-ss/block1-exploratory/topas-runs/REF-3575dbd95c6d72fab50c-a8d6f962/artifacts.json` | `0f89a7365ee3f19069f4446a597611ae4b09b41ea49f2934678ca84bb8976515` |
+| `validation/results/transport/v8-ss/block1-exploratory/topas-runs/REF-3575dbd95c6d72fab50c-a8d6f962/record.json` | `f31877647642db5c6d82d4a3b9c8776a5d0aac1de1834861f5067b4ce2ea37b6` |
+| `validation/results/transport/v8-ss/block1-exploratory/topas-runs/REF-4cc1556c57dbb104d834-efe68a66/artifacts.json` | `c9d5a7e9634a73d43b8beb15924dbb48e7f9ee6c6d1d6dfbe732cd738aee440a` |
+| `validation/results/transport/v8-ss/block1-exploratory/topas-runs/REF-4cc1556c57dbb104d834-efe68a66/record.json` | `89b5a7390add5dc5097c9a4a50358c769fbacbfa4f5ad26b7fb76d482db03222` |
+| `validation/results/transport/v8-ss/block1-exploratory/topas-runs/REF-69cd778394707910f717-b992a97b/artifacts.json` | `0a6b43a30395533abea821493b331bb00c279dd40e37655d22d131e271e142c5` |
+| `validation/results/transport/v8-ss/block1-exploratory/topas-runs/REF-69cd778394707910f717-b992a97b/record.json` | `4dd34229d5eb4b4a61401aae9badc0846bcde2e9cd1ce522b9b95a68edeead08` |
+| `validation/results/transport/v8-ss/block1-exploratory/topas-runs/REF-72b922fb1b0c07ae5c5f-34ae1c10/artifacts.json` | `b0099fa0fc2803fab938366e41d4c4e1542a3217b391c7971af59ec32e862937` |
+| `validation/results/transport/v8-ss/block1-exploratory/topas-runs/REF-72b922fb1b0c07ae5c5f-34ae1c10/record.json` | `320c171134b8a4fabc4b20d5434115ddfad0066446150db0110b60df7a9164ad` |
+| `validation/results/transport/v8-ss/block1-exploratory/topas-runs/REF-98e6160303a4ec989443-732245e3/artifacts.json` | `32c44d819e0729fd804a2e6748179d84e1aaf22a49d533bac6e87fc164354391` |
+| `validation/results/transport/v8-ss/block1-exploratory/topas-runs/REF-98e6160303a4ec989443-732245e3/record.json` | `260e26c4f7cf145cede47ff5547e75eac7263bc34e54100946ee67390d0c7d97` |
+| `validation/results/transport/v8-ss/block1-exploratory/topas-runs/REF-9bd0a1263ad70b02be18-6de84b65/artifacts.json` | `be1e413cbe5c9e744839dad5f1819b5b28a5958c4419bb20abf14cf4535fceb1` |
+| `validation/results/transport/v8-ss/block1-exploratory/topas-runs/REF-9bd0a1263ad70b02be18-6de84b65/record.json` | `5a2c8faf6a2cfac8d365a54f48ab63a20ed89301ebf1edb58c89b7930afb44f5` |
+| `validation/results/transport/v8-ss/block1-exploratory/topas-runs/REF-a65c74269baeeb946284-107281ec/artifacts.json` | `e1329e6247783c7897d512ea852fba47ed6b59b35c58ff6a82adbeddff40ad5a` |
+| `validation/results/transport/v8-ss/block1-exploratory/topas-runs/REF-a65c74269baeeb946284-107281ec/record.json` | `2174416bdff02beb5b5c3daa1155f17addce0e2551dd77b4d47e74d36bb5bdcf` |
+| `validation/results/transport/v8-ss/block1-exploratory/topas-runs/REF-e2306407f51486adf627-85771afc/artifacts.json` | `0f24915d5c4b76d9ddaf03f5b65851700e3c8e02731cc78f32037737820b4447` |
+| `validation/results/transport/v8-ss/block1-exploratory/topas-runs/REF-e2306407f51486adf627-85771afc/record.json` | `04fecaef242a10d4c297df63a7f3fcd0cf92169562e572e8199812a1bedec4e9` |
+| `validation/results/transport/v8-ss/block1-exploratory/topas-runs/REF-ebec959c8706e098c918-585a9acf/artifacts.json` | `e3ae76b53c9fa421d8cabf7c974226d1d46450d52c63258112a10c98faad5391` |
+| `validation/results/transport/v8-ss/block1-exploratory/topas-runs/REF-ebec959c8706e098c918-585a9acf/record.json` | `303f6b1570b3f4cd02b969c7cb62553b56f800d96d7f70c9e3ac72fbe9f307f4` |
+| `validation/results/transport/v8-ss/block1-exploratory/topas-runs/REF-f785d4669a97d92e3f7a-ecb230b0/artifacts.json` | `b371447ac7712e0685cf303647f023713b5d5e8b6f05159d463d1ea1bef53d64` |
+| `validation/results/transport/v8-ss/block1-exploratory/topas-runs/REF-f785d4669a97d92e3f7a-ecb230b0/record.json` | `9ab3ec05350744ec52890703313315e0bbd586c25954e7dd5498beff70614c34` |
+| `validation/results/transport/v8-ss/block1-exploratory/topas-runs/REF-fd8cf8ed4bbab1079850-df809295/artifacts.json` | `1078d3c873cf2c778e9c25cb39353b82c2760759241ab06d29a343fdfe3bb44c` |
+| `validation/results/transport/v8-ss/block1-exploratory/topas-runs/REF-fd8cf8ed4bbab1079850-df809295/record.json` | `569a199c77459b9c73101b46b17911e950588067acfecd2411a1cbde3ef87e85` |
+| `validation/results/transport/v8-ss/block1-exploratory/topas-runs/index.json` | `895b6a186cfc2ea53936044950f8626adcf62a2d58ba6f96b2e9ebd41b5d0df7` |
+
+
+**Dated note (2026-11-15, orchestrator) — entries changed by the block-2 commit (generator with BLOCK1/EVIDENCE parts, the SS manifest with 33 bundles, the evaluator's block semantics, tests):** `tests/ionmc/test_v3_008_seed_families.py` 4bae0c2f… → e4e33e66…; `validation/scripts/ion_em/gen_ss_bundles.py` 683b148f… → 6a165292…; `validation/scripts/ion_em/ss_evaluate.py` ab3751f1… → ca45fcbe…; `validation/reference_cases/topas/v5ss-frozen-manifest.json` fc032856… → 4d4c2da1…; `tests/ionmc/test_v5ss_bundles.py` f94d543b… → 93d3dc5b…; `tests/ionmc/test_v5ss_evaluate.py` 6123d151… → c2af6165…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.

@@ -155,7 +155,8 @@ def test_plan_section_c_matches_constants():
 
 # ---- V5-SS (dated section-C note 2026-11-13; plan "V5-SS execution note") ----
 SS_CASES = (22, 25, 26, 27, 28, 29, 30, 31)  # r_index = position in this tuple
-SS_PARTS = (0, 1)
+SS_PARTS = (0, 1)  # block 1 (exploratory)
+SS_BLOCK2_PARTS = (2, 3)  # block 2 (evidence; amendment V5-SS-B2 of 2026-11-15), same formula
 RETIRED_SS_CASES = (23, 24, 32, 33)
 
 
@@ -192,6 +193,17 @@ def test_v5ss_topas_seeds():
     retired = {TOPAS_8_BASE + 100 * p + c for p in TOPAS_PARTS for c in RETIRED_SS_CASES}
     assert not seeds & r2 and not seeds & retired
     assert {(s - TOPAS_8_BASE) % 100 for s in seeds} == set(SS_CASES)
+
+
+def test_v5ss_block2_topas_seeds():
+    b2 = {TOPAS_8_BASE + 100 * p + c for p in SS_BLOCK2_PARTS for c in SS_CASES}
+    assert len(b2) == 16
+    assert sorted(b2) == [20619222, *range(20619225, 20619232), 20619322,
+                          *range(20619325, 20619332)]  # fmt: skip
+    assert b2 <= topas_seeds() and not b2 & ss_topas_seeds()
+    r2 = {TOPAS_8_BASE + 100 * p + c for p in range(16) for c in range(1, 13)}
+    retired = {TOPAS_8_BASE + 100 * p + c for p in TOPAS_PARTS for c in RETIRED_SS_CASES}
+    assert not b2 & r2 and not b2 & retired
 
 
 def test_v5ss_steps_v8_constants_match():

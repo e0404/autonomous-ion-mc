@@ -295,18 +295,28 @@ read the seal and review ids from the plan's SS seal note. Not a clinical claim.
 
 # V5-SS TOPAS evidence runs and scorer smokes (V3-008, branch B)
 
-`v8-ss/topas-runs/<run_id>/{record.json, artifacts.json}` are the 16 **signed reference-runner records** (signer
+`v8-ss/block1-exploratory/topas-runs/<run_id>/{record.json, artifacts.json}` (block 1, exploratory — see the amendment section below; the evidence block 2 uses `v8-ss/topas-runs/`) are the 16 **signed reference-runner records** (signer
 `reference-runner`, key 303cce4c129d387c; schema 3) of the V5-SS evidence block — cases 22, 25–31 × parts 0–1, 30000
 primaries per part, bundles `validation/reference_cases/topas/v5ss-<ion>-water-<E>mevu-case<NN>-part<P>` — all run at
 `code_sha` a508afd8 on 2026-11-13 (07:56–10:21 UTC, one run at a time, exit 0), `record.json` verbatim as returned by the
 reference runner and `artifacts.json` the `list_reference_artifacts` result (path, bytes, sha256 of the ten archived files:
 inputs, request, record, stdout/stderr and the four `work/` outputs including `ss_exit.header` / `ss_exit.phsp`).
-`topas-runs/index.json` maps (case, part) to the run id. The phase spaces (3.3 MB each) are **not in Git**: they stay in
+`topas-runs/index.json` maps (case, part) to the run id (block 1: `block1-exploratory/topas-runs/index.json`). The phase spaces (3.3 MB each) are **not in Git**: they stay in
 the reference-runner archive and are materialized into the ignored task cache (`.ionmc-cache/reference-runs/<run_id>/`)
 where `ss_evaluate.py check-run` / `grade` read them under the signed digests of `artifacts.json`
 (`output_files_sha256` of the record must be reproduced by the listed `work/` files). `v8-ss/smoke-runs/` holds the two
 scorer smokes in the same layout: REF-740144c3826978e4ea78-ef394dd8 (seed 20600438 at 677e7c27, bundle later regenerated —
 superseded, kept as the record of the first run) and REF-8358f3c4f2f32a8453f4-a7dbae17 (seed 20600439 at ea10ce6a, the
-run-condition evidence); their angles are never used. `v8-ss/check-runs/<run_id>.json` are the per-run run-validity
+run-condition evidence); their angles are never used. `v8-ss/check-runs/<run_id>.json` (block 1: `v8-ss/block1-exploratory/check-runs/`) are the per-run run-validity
 reports (chronology SS-SEAL-1, process list, couple table, phase-space count rule and column checks; nothing graded).
 Not a clinical claim.
+
+# V5-SS block 1 (exploratory) and block 2 (evidence) — amendment V5-SS-B2 (2026-11-15)
+
+`v8-ss/block1-exploratory/` holds the 16 signed records, listings and validity reports of the 2026-11-13 block (parts 0–1 at
+a508afd8) and the single grade run on it (`ss-report.json`, SEEN by the orchestrator on 2026-11-15 before the validity
+commit's review had finished). Codex REVIEW-2446fe2d ruled that block exploratory: the phase-space count rule was amended
+after its headers had been inspected (plan amendment V5-SS-B2). Nothing in that directory is evidence; it is preserved
+verbatim as the record of the first block and of the two process lapses. The evidence block is block 2 (parts 2–3, fresh
+seeds, count rule frozen before the runs) under `v8-ss/topas-runs/`, `v8-ss/check-runs/` and `v8-ss/ss-report.json`, filled
+by the later commits of the amendment's order. Not a clinical claim.

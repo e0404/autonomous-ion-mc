@@ -1,4 +1,4 @@
-"""Generate the V3-008 V5-SS (branch B) TOPAS bundles: 16 evidence parts + 1 scorer smoke.
+"""Generate the V3-008 V5-SS (branch B) TOPAS bundles: 32 parts (two blocks) + 1 scorer smoke.
 
 Single source of ``validation/reference_cases/topas/v5ss-*`` and of their frozen manifest
 ``validation/reference_cases/topas/v5ss-frozen-manifest.json`` (plan row V5-SS; dated "V5-SS
@@ -6,6 +6,13 @@ execution note (2026-11-13)" of ``validation/plans/v3-008-acceptance.md``). The 
 generator ``gen_r2_bundles.py`` and its manifest stay byte-identical (the r2 evaluator rejects a
 run whose r2 manifest at ``code_sha`` differs from HEAD's; ``r2_io.frozen_manifest``). Nothing is
 run; only ``case.json`` and ``input.txt`` are written.
+
+Two blocks of 16 parts (8 cases x 2 parts): block 1 (parts 0-1, :data:`BLOCK1_PARTS`) ran and is
+EXPLORATORY (its count rule was amended after its headers were inspected; never evidence); its 16
+bundles stay byte-identical to their run-time versions. Block 2 (parts 2-3,
+:data:`EVIDENCE_PARTS`; amendment V5-SS-B2 of 2026-11-15) is the evidence block: same bundle text
+as the block-1 sibling of the same case except the seed (unchanged formula
+20619000 + 100*part + case) and the part wording of the head and rationale comments.
 
 Every line of ``input.txt`` is that of the committed 1 mm SS smoke
 (``carbon-water-290mevu-ss-slab1mm-smoke``) except seed, histories, particle, energy and the
@@ -36,8 +43,10 @@ MANIFEST_SCHEMA = "ionmc-v5ss-frozen-bundles-1"
 PREFIX = "v5ss-"
 
 TOPAS_BASE = 20619000  # seed = 20619000 + 100 * part + case (plan section C)
-PARTS = (0, 1)
-HISTORIES_PER_PART = 30_000  # 6e4 primaries per case in two parts (row V5-SS, 2026-11-01)
+BLOCK1_PARTS = (0, 1)  # exploratory block 1 (ran; frozen byte-identical; never evidence)
+EVIDENCE_PARTS = (2, 3)  # evidence block 2 (amendment V5-SS-B2 of 2026-11-15)
+PARTS = BLOCK1_PARTS + EVIDENCE_PARTS
+HISTORIES_PER_PART = 30_000  # 6e4 primaries per case and block in two parts (row V5-SS, 2026-11-01)
 # case -> (ion tag, MeV/u, A, BeamParticle); He as the committed r2 helium bundles ("alpha")
 CASES: dict[int, tuple[str, int, int, str]] = {
     22: ("he", 150, 4, "alpha"),
@@ -100,14 +109,25 @@ def build(case: int, seed: int, histories: int, kind: str, part: int | None = No
     ion, e, a, particle = CASES[case]
     total = a * e
     if kind == "evidence":
+        if part in BLOCK1_PARTS:  # block-1 wording, frozen byte-identical (bundles already ran)
+            head_parts = "parts 0-1"
+            rat_parts = "parts 0-1"
+        elif part in EVIDENCE_PARTS:
+            head_parts = (
+                "parts 2-3 (evidence block 2; amendment V5-SS-B2 of 2026-11-15; parts 0-1 are the "
+                "exploratory block 1)"
+            )
+            rat_parts = "parts 2-3 (evidence block 2)"
+        else:
+            raise ValueError(f"part {part} is not a V5-SS part")
         head = (
-            f"V3-008 row V5-SS (branch B), case {case} ({ion} {e} MeV/u), part {part} of parts 0-1 "
-            f"(seed = 20619000 + 100*part + case)."
+            f"V3-008 row V5-SS (branch B), case {case} ({ion} {e} MeV/u), part {part} of "
+            f"{head_parts} (seed = 20619000 + 100*part + case)."
         )
         rationale = (
             f"V3-008 row V5-SS (branch B; plan validation/plans/v3-008-acceptance.md, V5-SS "
             f"execution note 2026-11-13): reference side, case {case} ({ion} {e} MeV/u), part "
-            f"{part} of parts 0-1, seed 20619000 + 100*{part} + {case} = {seed}; exit angles of "
+            f"{part} of {rat_parts}, seed 20619000 + 100*{part} + {case} = {seed}; exit angles of "
             "the primaries at the far face of the 1 mm slab under g4em-standard_SS; run only after "
             "the reviewed SS seal commit (SS-SEAL-1)"
         )
@@ -219,7 +239,8 @@ def write(out: Path, name: str, case_doc: dict, inp: str) -> None:
 
 
 def generate(out: Path | str) -> list[tuple[str, int]]:
-    """Write the 16 evidence bundles and the scorer smoke under ``out``; return [(name, seed)]."""
+    """Write the 32 part bundles (blocks 1 and 2) and the scorer smoke under ``out``; return
+    [(name, seed)]."""
     out = Path(out)
     made = []
     for case in CASES:

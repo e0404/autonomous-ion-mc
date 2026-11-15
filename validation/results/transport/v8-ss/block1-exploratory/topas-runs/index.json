@@ -1,6 +1,8 @@
 {
   "schema": "ionmc-v5ss-topas-runs-index-1",
   "task_id": "V3-008",
+  "block": 1,
+  "status": "exploratory (REVIEW-2446fe2d: count rule amended after inspection; never evidence)",
   "code_sha": "a508afd8802980a8dcf4996f961f2d4bc542d285",
   "note": "the 16 evidence parts of row V5-SS (8 cases x parts 0-1, 30000 primaries each), signer reference-runner; record.json verbatim, artifacts.json = list_reference_artifacts result; outputs stay in the ignored task cache",
   "runs": [

@@ -294,6 +294,31 @@ def test_names_and_seeds() -> None:
     assert SS.parse_bundle(SS.SMOKE_BUNDLE)["kind"] == "smoke"
     with pytest.raises(SS.RecordError):
         SS.parse_bundle("v5ss-he-water-150mevu-case23-part0")
+    with pytest.raises(SS.RecordError):
+        SS.parse_bundle("v5ss-he-water-150mevu-case22-part4")
+
+
+def test_parse_bundle_blocks() -> None:
+    assert SS.PARTS == (2, 3) and SS.BLOCK1_PARTS == (0, 1)
+    assert len(SS.EVIDENCE_BUNDLES) == 16 and set(SS.EVIDENCE_BUNDLES.values()) == {
+        (c, p) for c in SS.SS_CASES for p in (2, 3)
+    }
+    assert SS.parse_bundle("v5ss-oxygen-water-250mevu-case31-part3") == {
+        "kind": "part",
+        "case": 31,
+        "part": 3,
+        "block": 2,
+    }
+    assert SS.parse_bundle("v5ss-he-water-150mevu-case22-part0") == {
+        "kind": "block1_part",
+        "case": 22,
+        "part": 0,
+        "block": 1,
+    }
+    assert SS.parse_bundle("v5ss-carbon-water-430mevu-case29-part1")["kind"] == "block1_part"
+    assert SS.parse_bundle(SS.SMOKE_BUNDLE)["block"] is None
+    assert SS.BLOCK1_RECORDS == "validation/results/transport/v8-ss/block1-exploratory/topas-runs"
+    assert SS.TOPAS_RECORDS == "validation/results/transport/v8-ss/topas-runs"
 
 
 def _sample(case: int, tmp: Path, seed: int = 7) -> tuple[dict[str, Any], Path]:
@@ -502,13 +527,17 @@ class _Reader:
 
 
 def test_index_fails_closed() -> None:
-    runs = [{"case": c, "part": p, "run_id": f"REF-{c}-{p}"} for c in SS.SS_CASES for p in (0, 1)]
-    assert len(SS.load_index(_Reader({"runs": runs}))) == 16
+    runs = [{"case": c, "part": p, "run_id": f"REF-{c}-{p}"} for c in SS.SS_CASES for p in (2, 3)]
+    assert sorted(SS.load_index(_Reader({"runs": runs}))) == sorted(
+        (c, p) for c in SS.SS_CASES for p in (2, 3)
+    )
     for bad in (
         runs[:15],
         [*runs[:15], runs[0]],
         [*runs[:15], {**runs[15], "case": 23}],
-        [*runs[:15], {**runs[15], "part": 2}],
+        [*runs[:15], {**runs[15], "part": 4}],
+        [*runs[:15], {**runs[15], "part": 1}],  # a block-1 (exploratory) part is never evidence
+        [{**r, "part": r["part"] - 2} for r in runs],  # the block-1 index
     ):
         with pytest.raises(SS.RecordError):
             SS.load_index(_Reader({"runs": bad}))
@@ -544,11 +573,13 @@ def _world(
     bundle_case_edit: Any = None,
     manifest_late_edit: bool = False,
     stdout: str | None = None,
+    part: int = 2,
+    extra_manifest_entry: bool = False,
 ) -> dict[str, Any]:
     repo = tmp / "repo"
     repo.mkdir(parents=True)
     _git(repo, "init", "-q", "-b", "main")
-    case, part = 28, 0
+    case = 28
     bundle = SS.bundle_name(case, part)
     src = ROOT / "validation" / "reference_cases" / "topas" / bundle
     dst = repo / IO.BUNDLE_ROOT / bundle
@@ -661,7 +692,8 @@ def _world(
         },
         "reference-runner",
     )
-    rdir = repo / SS.TOPAS_RECORDS / run_id
+    records = SS.TOPAS_RECORDS if part in SS.PARTS else SS.BLOCK1_RECORDS
+    rdir = repo / records / run_id
     rdir.mkdir(parents=True)
     (rdir / "record.json").write_text(json.dumps(result))
     rb = (rdir / "record.json").read_bytes()
@@ -671,6 +703,9 @@ def _world(
     (rdir / "artifacts.json").write_text(json.dumps({"run_id": run_id, "files": listing}))
     if manifest_late_edit:
         manifest["bundles"][bundle]["input.txt"] = "0" * 64
+        (repo / SS.MANIFEST_PATH).write_text(json.dumps(manifest))
+    if extra_manifest_entry:  # the manifest grows after the run (block 2 added after block 1)
+        manifest["bundles"]["v5ss-later-bundle"] = {"case.json": "1" * 64, "input.txt": "2" * 64}
         (repo / SS.MANIFEST_PATH).write_text(json.dumps(manifest))
     _commit(repo, "records")
     return {"repo": repo, "outputs": outputs, "run_id": run_id, "bundle": bundle}
@@ -683,8 +718,25 @@ def _check(w: dict[str, Any]) -> dict[str, Any]:
 def test_check_run_valid(tmp_path: Path) -> None:
     rep = _check(_world(tmp_path))
     assert rep["verdict"] == "VALID", rep["problems"]
+    assert rep["bundle_kind"] == "part" and rep["block"] == 2 and rep["part"] == 2
     assert rep["chronology"]["ancestry"] and rep["chronology"]["review_before_start"]
     SS._json_safe(rep)  # no arrays in the report
+
+
+def test_check_run_block1_part(tmp_path: Path) -> None:
+    """An exploratory block-1 run is still checked (default records dir BLOCK1_RECORDS), bound to
+    its own manifest entry: a manifest grown after the run (block 2) is accepted for it."""
+    rep = _check(_world(tmp_path / "a", part=0, extra_manifest_entry=True))
+    assert rep["verdict"] == "VALID", rep["problems"]
+    assert rep["bundle_kind"] == "block1_part" and rep["block"] == 1 and rep["part"] == 0
+    assert any(SS.BLOCK1_RECORDS in k for k in rep["evaluator"]["committed_inputs"])
+    with pytest.raises(IO.RecordError):  # its own entry changed after the run: still an error
+        _check(_world(tmp_path / "b", part=0, manifest_late_edit=True))
+
+
+def test_check_run_evidence_part_requires_identical_manifest(tmp_path: Path) -> None:
+    with pytest.raises(IO.RecordError):
+        _check(_world(tmp_path, extra_manifest_entry=True))
 
 
 def test_check_run_blinding_failures(tmp_path: Path) -> None:
@@ -735,7 +787,8 @@ def test_cli_error_report(tmp_path: Path) -> None:
     assert code == 2 and json.loads(out.read_text())["status"] == "ERROR"
 
 
-def test_grade_fails_closed_without_the_run_index(tmp_path: Path) -> None:
-    w = _world(tmp_path)
+@pytest.mark.parametrize("part", [2, 0])
+def test_grade_fails_closed_without_the_run_index(tmp_path: Path, part: int) -> None:
+    w = _world(tmp_path, part=part)  # part 0: block-1 records only, never read by grade
     with pytest.raises(IO.RecordError):
         SS.grade(w["outputs"], tmp_path, repo=w["repo"])
