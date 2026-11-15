@@ -843,8 +843,8 @@ this head; P12 research record): the model is below the table by band means of 1
 13.5 %), 0.3–0.8 % at 20–50 MeV/u and within 0.1 % above 50 MeV/u; the I-value of the table stays TO-VERIFY but cannot be the
 cause (its bounded effect ≤ 0.6 % in S); the LS options do not reduce the deficit; it sits in ionmc's effective-charge /
 Barkas / Bloch / shell region (§1), i.e. in the last ≈ 1–2 mm of the C/O range — every beam traverses it, so it is not a
-domain that can be excluded (P12 §4, ESTIMATE: end-of-range compression ≈ 0.06–0.13 mm; peak-to-entrance +1–10 % if
-corrected, away from TOPAS; TOPAS likely carries ICRU 73-like stopping at 2–20 MeV/u through Geant4's low-energy blend, which
+domain that can be excluded (P12 §4, ESTIMATE: end-of-range compression ≈ 0.06–0.13 mm; peak-to-entrance ≈ +2–3 % at the
+standard points if corrected, away from TOPAS, undetermined at the low ends where the forward model is unreliable; TOPAS likely carries ICRU 73-like stopping at 2–20 MeV/u through Geant4's low-energy blend, which
 undercuts the revision-2 statement that the stopping lineage is shared with TOPAS at the low end — a cross-row implication
 for TD-EM/TD-FULL, recorded, not a re-grade). **Consequence (plan D, F.6):** a gating section-A
 row FAILs and is neither a declared gap nor covered by an amendment; the integration criterion F.6 is not met and V3-008 is NOT integrated at this

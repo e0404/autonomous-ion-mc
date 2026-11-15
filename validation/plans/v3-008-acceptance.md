@@ -1651,8 +1651,11 @@ on the grid points at 10–20 MeV/u (and, for O, at 20–50), while the region a
 gate passes (0.26 / 0.39 %) — the deficit sits in the last ≈ 1–2 mm of the ion range (P12 §4: residual range below 20 MeV/u
 1.45 mm for C 290, 1.11 mm for O 350). **Transport relevance (SR-2 finding 3; P12 §4, ESTIMATE):** every beam passes through
 2–20 MeV/u, so the deficit is not confined to a domain that can be excluded; it compresses the end of range by ≈ 0.06–0.13 mm
-and would raise ionmc's peak-to-entrance ratio by ≈ +1–3 % (C 290 / O 350) and ≈ +3–10 % (C 80 / O 100) if corrected — in
-the direction away from TOPAS, so it does not explain the TD-EM low-end FAILs of 2026-11-09; and because Geant4 blends its
+and would raise ionmc's peak-to-entrance ratio by ≈ +2–3 % at C 290 / O 350 if corrected (P12 reproducer after the
+normalisation fix of 2026-11-15, Codex REVIEW-792cbd49); at C 80 / O 100 the crude 0.1 mm-group forward model is phase-noise
+dominated (σ_R ≈ 0.06 mm; −6 to +9 % across profiles), so the low-end effect is undetermined and the earlier "+3–10 %" is
+withdrawn; at the standard points the direction is away from TOPAS, so the deficit does not explain the TD-EM low-end FAILs
+there, while at the low ends the question stays open; and because Geant4 blends its
 Bethe model into an ICRU 73-based low-energy model above the 2 MeV/u switch, TOPAS probably carries ICRU 73-like stopping at
 2–20 MeV/u, which undercuts the revision-2 defence that the stopping lineage is shared with TOPAS at the low end (a cross-row
 implication for TD-EM/TD-FULL recorded here and in decision 0043, not a re-grade). (ii) The

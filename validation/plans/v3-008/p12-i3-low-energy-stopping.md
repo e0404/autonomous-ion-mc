@@ -64,10 +64,12 @@ Alternative charge parameterisations (ESTIMATE, q/z):
   - Using the observed band-mean profile: −0.06 mm (C 290, −0.035 %), −0.09 mm (O 350, −0.055 %), −0.06 mm (C 80, −0.33 %), −0.09 mm (O 100, −0.47 %).
   - This is consistent in sign and size with the reported maxima of 0.26 / 0.39 % over 80–430 MeV/u, which are probably reached at the low-energy end.
 - Bragg peak. The energy deposited below 20 MeV/u is fixed; only its path is compressed, by about 0.1 mm. In my crude model (0.1 mm groups, phase noise about ±2 %):
-  - C 290 / O 350 (σ_R about 0.4–0.5 mm): peak-to-entrance (PE) +1 to +3 %, peak shift ≤ one group.
-  - C 80 / O 100 (σ_R about 0.06 mm): PE +3 to +10 %.
+  - C 290 / O 350 (σ_R about 0.4–0.5 mm): peak-to-entrance (PE) +2 to +3 % (values after the normalisation fix of the point
+    deposit on 2026-11-15, Codex REVIEW-792cbd49; the first version of this note said +1 to +3 %), peak shift ≤ one group.
+  - C 80 / O 100 (σ_R about 0.06 mm): UNDETERMINED — after the fix the 0.1 mm-group model gives −6 to +9 % depending on the
+    profile (phase noise of the grouping dominates at σ_R ≈ 0.06 mm); the first version's "+3 to +10 %" is withdrawn.
 - Relation to TD-EM:
-  - The I3 deficit cannot explain the low-end (d) FAILs. ionmc's PE is already about 11 % higher than TOPAS (C 80 11.47 vs 10.35; O 100 11.10 vs 9.96), and raising ionmc's stopping would increase PE further.
+  - At the standard points raising ionmc's stopping would increase PE further (away from TOPAS). At the low ends (C 80 11.47 vs 10.35; O 100 11.10 vs 9.96, ionmc about 11 % higher) the crude forward model cannot resolve the sign of the effect, so whether the I3 deficit bears on the low-end (d) FAILs is OPEN.
   - If TOPAS/Geant4 carries ICRU 73-like stopping at 2–20 MeV/u (through the `(1+del/e)` blend), the point-deposit excess is larger than observed, not smaller.
   - The R80 pattern points the same way. ionmc−TOPAS is −0.29 % for the upper beams but −0.09 % (C 80) and −0.02 % (O 100). The differences, +0.20 % / +0.27 %, match the band-profile prediction of +0.29 % / +0.41 %.
   - This undercuts the TD-EM defence that "stopping is shared" at low energy.
@@ -91,7 +93,7 @@ Alternative charge parameterisations (ESTIMATE, q/z):
 - This option is the most likely to reproduce TOPAS's low end.
 
 **(c) Declared limitation.**
-- Every beam passes through 2–20 MeV/u, so excluding an energy domain is not meaningful. What can be declared is an uncertainty: S up to −10 % (C) / −13.5 % (O) in the 2–5 MeV/u band, falling about as 1/E. Its consequences are R ≤ 0.13 mm (≤ 0.5 % at R ≈ 20 mm) and Bragg-peak PE of a few %.
+- Every beam passes through 2–20 MeV/u, so excluding an energy domain is not meaningful. What can be declared is an uncertainty: S up to −10 % (C) / −13.5 % (O) in the 2–5 MeV/u band, falling about as 1/E. Its consequences are R ≤ 0.13 mm (≤ 0.5 % at R ≈ 20 mm) and Bragg-peak PE of ≈ 2–3 % at the standard points (low ends undetermined).
 - No model change and no rows consumed. I3 stays FAIL.
 - It needs a plan-D amendment to the capability statement and a check against REQUIREMENTS for ion-specific stopping evidence.
 

@@ -128,17 +128,18 @@ for ion, e0, d2 in (
             for k in range(0, len(mid), 3):
                 w = -np.sum(dz[k : k + 3] * smid[k : k + 3])
                 dep += w * np.exp(-0.5 * ((x - mid[k]) / sigm[k]) ** 2) / sigm[k]
-            # point deposit 2 MeV/u * A at end
-            dep += (
-                2.0
-                * ion.a
-                * np.exp(-0.5 * ((x - rr[-1]) / sR) ** 2)
-                / sR
-                / math.sqrt(2 * math.pi)
-                / math.sqrt(2 * math.pi)
-                * math.sqrt(2 * math.pi)
-            )
+            # point deposit 2 MeV/u * A at end (same un-normalised Gaussian form as the
+            # continuous terms; the common 1/sqrt(2 pi) below normalises every term once —
+            # Codex REVIEW-792cbd49: an earlier version divided the point term twice)
+            dep += 2.0 * ion.a * np.exp(-0.5 * ((x - rr[-1]) / sR) ** 2) / sR
             dep /= math.sqrt(2 * math.pi)
+            # energy conservation check: the profile integrates to the energy deposited
+            # between the start energy and the 2 MeV/u cutoff plus the cutoff point deposit
+            e_total = float((ee[-1] - ee[0]) * ion.a + 2.0 * ion.a) if ee[-1] > ee[0] else None
+            integ = float(np.sum(dep) * (x[1] - x[0]))
+            e_expected = float(-np.sum(dz * smid) + 2.0 * ion.a)
+            if abs(integ / e_expected - 1) > 0.02:
+                raise RuntimeError(f"energy conservation {integ:.2f} vs {e_expected:.2f} MeV")
             grp = dep[: len(dep) // 5 * 5].reshape(-1, 5).mean(1)
             ent = dep[(x > 0.5) & (x < 2.5)].mean()
             ip = np.argmax(grp)

@@ -1484,7 +1484,7 @@ placeholder scorer output was deleted unread.
 
 | File | sha256 |
 |---|---|
-| `validation/plans/v3-008/p12-i3-low-energy-stopping.md` | `61cfc431349edb32c631c06ec1e2660434a5720bf98378e6435a5d11fb29d12b` |
+| `validation/plans/v3-008/p12-i3-low-energy-stopping.md` | `c3dd1a30ed9043beb78ee213b823d17747415893e599a68491cd8c1ee7dee8e1` |
 
 
 **Dated note (2026-11-15, orchestrator) — files added by the SR-2 disposition commit (the model-only P12 estimate scripts; sha256 as committed):**
@@ -1492,12 +1492,14 @@ placeholder scorer output was deleted unread.
 | File | sha256 |
 |---|---|
 | `validation/plans/v3-008/p12-scripts/decomp.py` | `b29d6e52de94c2efa61b0bdc2948337cdabcda496abd354d7ca4189321ffb7b7` |
-| `validation/plans/v3-008/p12-scripts/transport.py` | `628ef2cc25259f792dfb6078d0d8cac7bb88bac9314a795d54f7a4422584d3d7` |
+| `validation/plans/v3-008/p12-scripts/transport.py` | `696202e315b869e22b64e3d2d967207d67ea580eef5973310a3109cdd14d4d7f` |
 
 
 **Dated note (2026-11-15, orchestrator) — entries changed by the SR-2 disposition commit (the P12 record and the D-3 markdown; no code):** `validation/results/stopping/v3-008-d3-range-attribution.md` 15ee7f72… → c6f2ec08…; `validation/plans/v3-008/p12-i3-low-energy-stopping.md` f8e5420b… → 61cfc431…. All other entries unchanged (recomputed).
 
 **Dated note (2026-11-15, orchestrator) — entries changed by the SR-2 disposition commit (P12 scripts after ruff formatting):** `validation/plans/v3-008/p12-scripts/decomp.py` ab0b74a6… → b29d6e52…; `validation/plans/v3-008/p12-scripts/transport.py` 81ce6689… → 628ef2cc…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-15, orchestrator) — entries changed by the REVIEW-792cbd49 disposition commit (P12 transport reproducer normalisation fix and the P12 record):** `validation/plans/v3-008/p12-i3-low-energy-stopping.md` 61cfc431… → c3dd1a30…; `validation/plans/v3-008/p12-scripts/transport.py` 628ef2cc… → 696202e3…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.
