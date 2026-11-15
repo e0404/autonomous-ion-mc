@@ -635,9 +635,9 @@ placeholder scorer output was deleted unread.
 | File | sha256 |
 |---|---|
 | `tests/ionmc/test_d3_range_attribution.py` | `1e7f0ee83f42dd088fae3df8d2d4ccefbbce9d9e933f7004276861228141b468` |
-| `validation/results/stopping/v3-008-d3-range-attribution.json` | `0f273509675d1a4473acf40826ce268fbe41709f7613f6e095bb3527a220120f` |
-| `validation/results/stopping/v3-008-d3-range-attribution.md` | `816197c2751b68ff74764819367b8e6dcc59fc7be1e1b70b97abedc4ba2f5f77` |
-| `validation/scripts/ion_em/d3_range_attribution.py` | `f95474263f59c919a0d38cba05976dc2e52a5d094a06c99285b86592ce56b55e` |
+| `validation/results/stopping/v3-008-d3-range-attribution.json` | `e7e03f455e26940a37cb72cf1307b3d553befc718cec069b2514b48fc6ab3c01` |
+| `validation/results/stopping/v3-008-d3-range-attribution.md` | `15ee7f725ca59491e82d356135c5739d5b91dd03f33aa985b3a3892fde072135` |
+| `validation/scripts/ion_em/d3_range_attribution.py` | `869a4b5be6907d8432875bf13494f62f6e95b774f1a4ed0e9b46398b5eb01cf9` |
 
 
 **Dated note (2026-11-11, orchestrator) — entries changed by the R2-STOP3 round-3 commit (Codex REVIEW-b6484e56: voxel-exact residual walk, docs; lv8/hr8 sharded rows I9/I12/I14/I15/T12-ion):** `src/ionmc/simulation.py` 4d490ba4… → abbbcd0a…; `src/ionmc/transport/kernels.py` 5fdf6238… → bd2f177f…; `src/ionmc/transport/reference.py` 08a11985… → cd56bf0e…; `validation/scripts/transport/steps_v8.py` 8e951ead… → c5aefda2…; `tests/ionmc/test_ion_end_of_range.py` 723a3fae… → e39edaaf…; `tests/ionmc/test_run_suite_v8.py` e9105419… → f060fa10…. All other entries unchanged (recomputed).
@@ -1469,6 +1469,23 @@ placeholder scorer output was deleted unread.
 **Dated note (2026-11-15, orchestrator) — entries changed by the SR-1 part-2 commit (D-3 script, test and regenerated JSON in the non-reconstructive He form; REVIEW-788ebc67):** `tests/ionmc/test_d3_range_attribution.py` 4aaed9c9… → b1b11c98…; `validation/results/stopping/v3-008-d3-range-attribution.json` 534a781c… → 2e984ba2…; `validation/scripts/ion_em/d3_range_attribution.py` 5b24e4dc… → 71c32037…. All other entries unchanged (recomputed).
 
 **Dated note (2026-11-15, orchestrator) — entries changed by the SR-1 part-2 commit (D-3 script, test and regenerated JSON; scalar residual bounds for He; REVIEW-788ebc67):** `tests/ionmc/test_d3_range_attribution.py` b1b11c98… → 1e7f0ee8…; `validation/results/stopping/v3-008-d3-range-attribution.json` 2e984ba2… → 0f273509…; `validation/scripts/ion_em/d3_range_attribution.py` 71c32037… → f9547426…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-15, orchestrator) — files added by the I2/I3 results commit (the two aggregate result files of rows I2 and I3, run once at 7d0e796b; sha256 as committed):**
+
+| File | sha256 |
+|---|---|
+| `validation/results/stopping/v3-008-i2/stopping_comparison.json` | `fec36f864f3d9212adeeb3e39180babed966b366b8034f12d7f27eeb15e4b6eb` |
+| `validation/results/stopping/v3-008-i3/icru73_comparison.json` | `c0c7f16dbcb51e2d590656d336ae4584910a16fbdba3649f4385213bb5b81baa` |
+
+
+**Dated note (2026-11-15, orchestrator) — entries changed by the I2/I3 results commit (D-3 script with the documented He bound formula and the regenerated JSON; REVIEW-c2cc22f9 minor):** `validation/results/stopping/v3-008-d3-range-attribution.json` 0f273509… → e7e03f45…; `validation/results/stopping/v3-008-d3-range-attribution.md` 816197c2… → 15ee7f72…; `validation/scripts/ion_em/d3_range_attribution.py` f9547426… → 869a4b5b…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-15, orchestrator) — file added by the I2/I3 results commit: the P12 research record on the row-I3 deficit (not evidence; sha256 as committed):**
+
+| File | sha256 |
+|---|---|
+| `validation/plans/v3-008/p12-i3-low-energy-stopping.md` | `f8e5420b0e488070451374c00b43c1d260ae426a7390a300fce1150dcaed555f` |
+
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.

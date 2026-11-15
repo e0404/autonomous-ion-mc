@@ -831,3 +831,21 @@ number in the thin slab; not independent evidence of the charge dependence of sc
 reference-runner record (`validation/results/transport/v8-ss/`). **Correction (2026-11-15, scientific review SR-1 finding 1):** the sentence "with this row every gating row of the V3-008 plan is graded" written here earlier that day was false: the section-A LV rows I2 (He table reproduction vs ASTAR / ICRU 90) and I3 (C/O table comparison vs libdEdx ICRU73_NEW) had not been evaluated. They are evaluated after this correction (plan note SR-1; their outcome is a separate later entry). Graded as of this entry: the section-A LV/HR rows of items 4b/4d (I6-LV, I8, I13, T1-ion LV, R1-ion, R2, T12-ion LV at f5f3a701, PASS) and of 2026-11-13 (I9, I12, I14, I15, T13-ion, T12-ion HR at 712f484a, PASS); the revision-2 TOPAS-agreement main set (2026-11-09: TD-EM 3 PASS / 6 FAIL, TL-EM 1 PASS / 8 FAIL, consumed and preserved; entry above) and the held-out set (2026-11-11: TD-H/TL-H PASS 12/12, the sole gating TOPAS-agreement evidence); V5-SS PASS 5/5. Nothing is re-graded. Not a clinical claim.
 
 **Dated note (2026-11-15, orchestrator; SR-1 finding 5).** Where §3 (revision 2) and the dated note of 2026-11-07 say that the adequacy of the f_dM extrapolation is judged by TL-EM criterion (b) and TL-FULL criterion (b) (the energy-trend test D_ext), that test was NOT EVALUABLE on the main set (2026-11-09; invalid points of each pair) and is consumed with the main set under amendment R2-STOP3; the held-out set has no D_ext by design. The adequacy of the extrapolation therefore rests on TL-H (a) at the three interior energies and on the report-only I11-ext only, and the f_dM extrapolation stays a declared model-design limitation without an evaluated trend test. The TOPAS-agreement claim of this decision is limited to the held-out energies He 100, C 150 and O 200 MeV/u (R2-STOP3 item 3 (ii)); the operator may override the Branch-B route (item 3 (iii)).
+
+**Later validation outcome (2026-11-15, orchestrator; V3-008 rows I2 and I3 run once at 7d0e796b after scientific review SR-1).**
+**I2 PASS** (He table reproduction, a regression guard on SEEN decision-0038 values): 4He stopping within 0.20 % of
+ASTAR (75 eV) and 0.20 % of ICRU 90 alpha (78 eV) at ≥ 10 MeV/u, within 0.71 % at 2–10 MeV/u; CSDA ranges within
+0.11 % / 0.07 % at 50–250 MeV/u. **I3 FAIL** (C/O vs libdEdx ICRU73_NEW water, the pre-registered largely
+TOPAS-independent stopping check): the ≥ 10 MeV/u stopping gates fail for both ions (max |dev| 2.51 % C,
+5.05 % O against 1.5 %; RMS 1.25 % O against 0.8 %) and the 2–10 MeV/u gate fails (10.09 / 13.50 %
+against 6 %), while the CSDA-range gate passes (0.26 / 0.39 % against 0.5 %). Attribution (plan results note of
+2026-11-15, SEEN band diagnostic, labelled estimate): the model is below the table by 2–13 % at 2–20 MeV/u, 0.3–0.8 % at
+20–50 MeV/u and within 0.1 % above 50 MeV/u (which also shows the table is consistent with I = 78 eV and rules out the
+P5b I-value question as the cause); the LS options do not change it; the deficit sits in ionmc's effective-charge /
+Barkas / shell region (§1) and in the last ≈ 1–2 mm of the C/O range. **Consequence (plan D, F.6):** a gating section-A
+row FAILs and is neither a declared gap nor covered by an amendment; the integration criterion F.6 is not met and V3-008 is NOT integrated at this
+head (orchestrator decision; the plan's STOP-type route applies: research record, then a prospective reviewed amendment with
+fresh evidence, or integration by operator directive with the FAIL declared as a limitation); no model, tolerance or grade is
+changed. With I2/I3 every gating row of the
+plan is now graded or declared: section-A rows PASS except I3 FAIL; TOPAS-agreement main set consumed with FAILs
+(R2-STOP3), held-out set PASS 12/12; V5-SS PASS 5/5. Not a clinical claim.

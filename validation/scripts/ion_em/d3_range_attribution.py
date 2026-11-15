@@ -277,7 +277,11 @@ def compute(worktree: Path, cache_dir: Path) -> dict:
         "ls_points_per_decade": LS_POINTS_PER_DECADE,
         "step_mm": STEP_MM,
         "residual_definition": (
-            "topas_r80_over_ionmc_r80_pct - construction_diff_pct - prestep_euler_0p1mm_pct"
+            "C/O: residual_pct = topas_r80_over_ionmc_r80_pct - construction_diff_pct - "
+            "prestep_euler_0p1mm_pct. He: only construction_diff_bound_pct (ceiling of the direct "
+            "ICRU 90 alpha range ratio to 0.05 pp) and the bounds residual_pct_lower/upper = "
+            "topas_r80_over_ionmc_r80_pct - prestep_euler_0p1mm_pct -/+ "
+            "construction_diff_bound_pct are written (non-reconstructive form)"
         ),
         "cases": rows,
         "input_sha256": inputs,

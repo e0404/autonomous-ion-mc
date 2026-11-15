@@ -504,6 +504,8 @@ operator rules, and each host call ≤ 1500 s.
 | I6-LV, I8, I13 (lv8 steps 01–13, A-row block) | `validation/results/transport/lv8-f5f3a701-steps01-21-single-process.json` (steps `01`–`13`); signed host record `RUN-20261111T020441Z-0c2dfd2b` and published step documents under `validation/results/transport/v8-lvhr/a-rows-f5f3a701/` (index `a-rows-f5f3a701/index.json`; output manifest reproduces) | `f5f3a701` | lv8 20581004 (r 36–38; consumed) | **PASS** — I6-LV deterministic end depth (residual range at E_cut 0.038 mm); I8 σ_end-depth/σ_quadrature − 1 = −0.21 % (He 150), −0.24 % (C 290), −0.36 % (O 350) (tol 5 %); I13 R80 vs CSDA relative deviation −0.0013 % … −0.197 % over the nine cases (tol 0.2 %; C 80 at −0.197 % sits at the tolerance edge, recorded) |
 | T1-ion LV, R1-ion, R2 (lv8 steps 14–16) | same summary (steps `14`–`16`); host record `RUN-20261111T020808Z-6812ec76` (published outputs committed; manifest reproduces) | `f5f3a701` | lv8 20581004 | **PASS** — T1-ion K = 256 C 290 / O 350: discrete columns identical, continuous within rtol = atol = 1e-10; R1-ion C 290 bit-identical (python, warp-cpu; 100/10 000/10 000 histories); R2 A16 trace fixture bit-identical to the develop baseline |
 | T12-ion LV (lv8 steps 17–21) | same summary (step `21-t12-ion-lv-combine`, 204 000 histories, imported partials bound by content sha256 in `attestation.partials`); host records `RUN-20261111T021859Z-00fbeb58`, `…T023514Z-7f8be657`, `…T025123Z-0d0cccbc`, `…T030552Z-487b99ba` (shards), `RUN-20261111T032028Z-74c82fa0` (combine; manifest reproduces) | `f5f3a701` | lv8 20581004 | **PASS** — python vs warp-cpu float64 pairs pass the frozen T12 rules (R80, σ_lat at 0.5 R; every criterion pass) |
+| I2 (He table reproduction; regression guard) | `validation/results/stopping/v3-008-i2/stopping_comparison.json` (key `i2`; aggregates only) | run and graded at `7d0e796b` | none (table comparison) | **PASS** — S max \|dev\| 0.20 % / 0.20 % at ≥ 10 MeV/u (tol 0.30 %), 0.71 % / 0.71 % at 2–10 (tol 1.0 %); CSDA range 0.11 % vs ASTAR (tol 0.20 %), 0.07 % vs ICRU 90 integral (tol 0.25 %) |
+| I3 (C/O vs libdEdx ICRU73_NEW) | `validation/results/stopping/v3-008-i3/icru73_comparison.json` (aggregates only; archive b941a0c3…, role evaluation) | run and graded at `7d0e796b` | none (table comparison) | **FAIL** — S ≥ 10 MeV/u max \|dev\| 2.51 % (C) / 5.05 % (O) vs tol 1.5 %, RMS 0.59 / 1.25 % vs 0.8 %, 2–10 MeV/u max 10.09 / 13.50 % vs 6 %; CSDA range 0.26 / 0.39 % PASS (tol 0.5 %); attribution: low-energy (< 50 MeV/u) effective-charge region, table consistent with 78 eV; preserved, never re-graded |
 | V5-SS (branch B; 8 cases, 5 gated pairs; evidence block 2, parts 2–3) | `validation/results/transport/v8-ss/ss-report.json`; sample seal `v8-ss/ss-sample-seal.json` + host records `v8-ss/host-records/` (8); signed reference-runner records `v8-ss/topas-runs/<run_id>/` (index `topas-runs/index.json`, 16 parts) and `v8-ss/smoke-runs/` (2); validity reports `v8-ss/check-runs/` (18); exploratory block 1 (parts 0–1, SEEN, never evidence) under `v8-ss/block1-exploratory/` | ionmc samples at `bef32873`; seal `7fe6ab1d`; block-2 runs at `769f2dd6`; records `7a53e0b8`; validity `833ccdcd`; grade at `833ccdcd` | TOPAS 20619000 + 100·part + case (parts 2–3; parts 0–1 consumed by block 1); ionmc 20631004 (r 0–7) | **PASS 5/5** — dev -1.22 / -1.36 / -0.71 / -0.72 / -0.16 % (He/C 150, He/O 150, He/C 250, He/O 250, C/O 430), σ 0.30 %, max \|dev\| + 1.645 σ 1.86 % (tol 3 %); report-only absolute θ_ionmc/θ_SS − 1 = +5.5 to +8.6 % (expected +3.1 to +4.4 %; finding recorded) |
 
 ## Amendments
@@ -1612,3 +1614,52 @@ constant); the I3 result states "TO-VERIFY (P5b)" with the row's bounded contrib
 2026-11-01 applies). (iv) I2 bands: 2 ≤ E < 10 MeV/u and 10 ≤ E ≤ 500 MeV/u (the 10 MeV/u point in the stricter band);
 range at 50/100/150/200/250 MeV/u; only maxima and the energy attaining them are written. (v) Both scripts are reviewed in
 the commit carrying this note and then run once at that clean SHA; results (aggregates only) in `validation/results/stopping/`.
+
+### Dated results note — rows I2 and I3 run once at 7d0e796b (2026-11-15, orchestrator; SR-1 disposition item (b))
+
+**Evidence.** `compare_nist.py` (row I2) and `compare_icru73.py` (row I3), reviewed at 7dc983bf / 7d0e796b (REVIEW-788ebc67,
+REVIEW-c2cc22f9), ran once each at the clean HEAD 7d0e796b on 2026-11-15 14:56 UTC (logged
+`telemetry/test-logs/20261115T145644Z-v3-008-row-i2-compare-nist` and `…145659Z-v3-008-row-i3-compare-icru73`; single
+process; the NIST/ICRU 90 cache objects and the libdEdx archive b941a0c3… identified by sha256 in the files) →
+`validation/results/stopping/v3-008-i2/stopping_comparison.json` and `validation/results/stopping/v3-008-i3/icru73_comparison.json`
+(aggregates only; no table values, per-energy deviations or ratios). Gates as frozen; nothing re-graded.
+
+**I2 — PASS (regression guard on SEEN values, not evidence; all six gates).** 4He Bethe (75 eV) vs ASTAR: max |dev| 0.71 %
+(2–10 MeV/u, tol 1.0 %), 0.20 % (≥ 10 MeV/u, tol 0.30 %); Bethe (78 eV) vs ICRU 90 alpha: 0.71 % (2–10) and
+0.20 % (≥ 10); CSDA range at 50/100/150/200/250 MeV/u: max |dev| 0.11 % vs ASTAR (tol 0.20 %, at
+250 MeV/u) and 0.07 % vs the integrated ICRU 90 range (tol 0.25 %, at 250 MeV/u). The I-value
+difference (ASTAR 75 eV, model default 78 eV) is stated in the file; the model-only 78 − 75 eV range shift is
+0.13 … 1.85 mm from 50 to 250 MeV/u.
+
+**I3 — FAIL (preserved verbatim; never re-graded).** Bethe (78 eV, `ls = "off"`) vs libdEdx ICRU73_NEW water, 53-point grid,
+E ≥ 2 MeV/u (32 points per ion):
+
+| Ion | S ≥ 10 MeV/u max \|dev\| (tol 1.5 %) | S ≥ 10 MeV/u RMS (tol 0.8 %) | S 2–10 MeV/u max \|dev\| (tol 6 %) | CSDA range max \|dev\| (tol 0.5 %; at) | verdict |
+|---|---|---|---|---|---|
+| C (Z = 6) | 2.51 % FAIL | 0.59 % PASS | 10.09 % FAIL | 0.26 % PASS (at 80 MeV/u of 80/290/430) | **FAIL** |
+| O (Z = 8) | 5.05 % FAIL | 1.25 % FAIL | 13.50 % FAIL | 0.39 % PASS (at 100 MeV/u of 100/350/430) | **FAIL** |
+
+The report-only 10–500 MeV/u band (the transport-table range) has the same maxima (RMS 0.66 % C, 1.41 % O).
+
+**Attribution (allowed as a finding; SEEN read-only diagnostic of the orchestrator on the same inputs, band aggregates only,
+not committed as a result; labelled estimates).** The model sits below the table by a deficit that falls steeply with energy
+per nucleon: 2–5 MeV/u mean −8.6 % (C) / −12.2 % (O), 5–10 MeV/u −4.3 / −7.5 %, 10–20 MeV/u −1.8 / −3.9 %, 20–50 MeV/u
+−0.3 / −0.8 %, and ≥ 50 MeV/u within ±0.03 % (C) / ±0.06 % (O) up to 1000 MeV/u. (i) The ≥ 10 MeV/u gate therefore fails
+on the two grid points at 10–20 MeV/u (and, for O, at 20–50), not on the transport-relevant region above 50 MeV/u, which is
+why the CSDA-range gate passes (0.26 / 0.39 %) — the deficit sits in the last ≈ 1–2 mm of the ion range. (ii) The
+Lindhard–Sørensen options (`ls = "eff"`, `"bare_mixed"`) change the ≥ 50 MeV/u agreement by ≤ 0.05 pp and leave the
+low-energy deficit unchanged: it is the effective-charge / Barkas / shell region of the model (decision 0043 §1), not the
+higher-order stopping-number terms. (iii) The ≥ 50 MeV/u agreement within 0.1 % at I = 78 eV, against +0.25 % (C) /
+−0.11 % mean (O) with the 75 eV model, settles the P5b I-value question empirically: the ICRU73_NEW water values are
+consistent with I = 78 eV (the revised table), so the I-value is not the cause and row decision (d) of 2026-11-01 does not
+apply. (iv) The pre-registered defence of the 2–10 MeV/u gate ("effective-charge model spread plus PASS low-energy
+behaviour, ≤ 6 %") under-estimated the difference between ionmc's Pierce–Blann effective charge with Barkas/Bloch/Mott
+corrections and the ICRU 73 (revised) construction below 20 MeV/u by a factor ≈ 2. No model or tolerance is changed; the
+row stays FAIL. **Consequence for integration (plan F.6, D; orchestrator decision 2026-11-15):** a gating section-A row fails and is neither a
+declared evidence gap nor covered by an amendment, so the integration criterion F.6 is not met and **V3-008 is not integrated
+at this head**; the FAIL is recorded in decision 0043 and the ledger; the PR stays open with every gate otherwise closed
+(reviews, exact-SHA validation records, CI). The route forward is the plan's own (D, STOP-type): a research record on the
+low-energy C/O stopping difference, then a prospective, reviewed amendment (a model change consumes the affected rows and
+needs fresh evidence at a new frozen SHA) — or, by operator directive only, integration with the FAIL declared as a model
+limitation. No intervention request is filed: EXPERIMENT.md permits none for this (it is scientific work, not inaccessible
+information or an authorization outside the protocol). Not a clinical claim.

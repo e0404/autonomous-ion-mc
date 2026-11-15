@@ -6,14 +6,14 @@ E_cut = 2 MeV/u, ionmc exact log-log quadrature, 400 points/decade. The C/O "TOP
 Geant4 construction (S = S_ICRU90,p(equal velocity) q_eff^2 (1 + (dL_LS + dL_Barkas)/L_p); LS at the bare Z minus the proton's
 own Bloch + Mott; Barkas = (q - 1) L1 of ionmc's form; exact Geant4 forms not verified, D-4/D-5 pending). All columns in % of
 R_ionmc (Bethe-78, all options, as transported); residual = TOPAS excess - construction (He: ICRU 90 alpha direct; C/O: LS+Barkas
-primary) - pre-step (2 % rule). Held-out energies have no TOPAS-EM R80 (no residual).
+primary) - pre-step (2 % rule). Held-out energies have no TOPAS-EM R80 (no residual). **Dated note (2026-11-15, Codex REVIEW-c2cc22f9):** the He column "ICRU90 alpha direct" is given as an upper bound (ceiling to 0.05 pp) and the He residual as the interval it implies, because the exact ratio next to R_ionmc would reconstruct the integrated ICRU 90 alpha CSDA ranges; the JSON carries the same bounds (`construction_diff_bound_pct`, `residual_pct_lower/upper`). The conclusions below are unchanged (the He construction difference is < 0.10 %).
 
 | ion | E (MeV/u) | R_ionmc (mm) | ICRU90 alpha direct (He) | TOPAS-like plain | TOPAS-like half-LS+Barkas | TOPAS-like LS+Barkas (primary) | pre-step (2 % rule) | pre-step (pure Euler) | TOPAS R80 / ionmc R80 | residual (primary) |
 |---|---|---|---|---|---|---|---|---|---|---|
-| he | 50 | 22.449 | +0.055 | - | - | - | +0.208 | +0.528 | +0.290 | +0.028 |
-| he | 100 | 77.890 | +0.051 | - | - | - | +0.094 | +0.185 | - | - |
-| he | 150 | 159.170 | +0.076 | - | - | - | +0.055 | +0.100 | +0.220 | +0.088 |
-| he | 250 | 382.527 | +0.077 | - | - | - | +0.027 | +0.047 | +0.215 | +0.110 |
+| he | 50 | 22.449 | < 0.10 (bound) | - | - | - | +0.208 | +0.528 | +0.290 | −0.018 … +0.182 |
+| he | 100 | 77.890 | < 0.10 (bound) | - | - | - | +0.094 | +0.185 | - | - |
+| he | 150 | 159.170 | < 0.10 (bound) | - | - | - | +0.055 | +0.100 | +0.220 | +0.064 … +0.264 |
+| he | 250 | 382.527 | < 0.10 (bound) | - | - | - | +0.027 | +0.047 | +0.215 | +0.087 … +0.287 |
 | carbon | 80 | 17.485 | - | -0.078 | -0.095 | -0.026 | +0.232 | +0.709 | +0.091 | -0.115 |
 | carbon | 150 | 53.067 | - | +0.076 | -0.023 | -0.081 | +0.120 | +0.275 | - | - |
 | carbon | 290 | 163.193 | - | +0.132 | -0.028 | -0.170 | +0.052 | +0.101 | +0.294 | +0.413 |
