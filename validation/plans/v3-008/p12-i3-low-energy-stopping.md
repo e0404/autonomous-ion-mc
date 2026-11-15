@@ -6,7 +6,10 @@ amendment (plan D). Labels FACT / ESTIMATE / OPEN as stated by the author; estim
 Per-energy deviations against the reference table are given as band values only (stopping-results policy); the model-only
 scripts of the estimates are committed under `validation/plans/v3-008/p12-scripts/` (`decomp.py`, `transport.py`; they read no
 reference table and need only the committed ionmc model); the band diagnostic against the table itself is NOT committed
-(a hypothesis until the follow-up amendment commits a tested reproducer). Not a clinical claim.
+(a hypothesis until the follow-up amendment commits a tested reproducer). `transport.py` asserts that the cutoff point deposit
+integrates to E_cut·A within 0.2 % and the whole profile to the deposited energy within 1 %, and
+`tests/ionmc/test_p12_transport.py` pins the standard-point results (C 290: PE +1.80 %, dR −0.058 mm; O 350: PE +2.77 %,
+dR −0.092 mm) and fails on a double-normalised point term (Codex REVIEW-c43a2e52). Not a clinical claim.
 
 # V3-008 row I3: explaining the 2–50 MeV/u deficit (research note, 2026-11-15)
 
