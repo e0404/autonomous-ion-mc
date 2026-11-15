@@ -789,3 +789,25 @@ C 290, O 350 and the C 290 float32-vs-float64 probe, all T12 rules). Every host 
 host-runner record (`validation/results/transport/v8-lvhr/`). With the A-rows of 2026-11-11 the section-A LV/HR rows
 of the V3-008 plan are closed (dated results note of 2026-11-13 in `validation/plans/v3-008-acceptance.md`); the
 revision-2 TOPAS-agreement rows stand as graded (main set: see the 2026-11-09 outcome; held-out set: PASS 12/12).
+
+**Later validation outcome (2026-11-15, orchestrator; V3-008 row V5-SS, branch B, graded once on the evidence block 2 at 833ccdcd).**
+The held-out single-scattering row ran as pre-registered (eight ion cases He/C/O at 150, 250 and 430 MeV/u in a 1 mm G4_WATER
+slab, `g4em-standard_SS`, 6e4 primaries per case in two parts, 1 km electron cut; ionmc 4e5 histories per case, warp-cpu
+float64, sealed before any TOPAS output; TOST rule |dev| + 1.645 σ ≤ 3 %, σ ≤ 1 %). A first block of TOPAS runs (parts 0–1,
+2026-11-13) was ruled exploratory by independent review because the phase-space count rule had been amended after its
+headers were inspected; under amendment V5-SS-B2 that block and its (seen) grade are preserved as exploratory, the count rule
+was frozen, and the evidence block 2 ran on the unused parts 2–3 (16 runs at 769f2dd6, all VALID). **PASS 5/5**: the
+equal-velocity ion/ion ratios of the windowed projected rms deviate from the single-scattering reference by
+-1.22 % (He/C 150), -1.36 % (He/O 150), -0.71 % (He/C 250), -0.72 % (He/O 250) and
+-0.16 % (C/O 430) with bootstrap σ 0.30 %, i.e. |dev| + 1.645 σ ≤ 1.86 %. The pre-computed reference-model
+bias was −0.17 to −0.69 %; the He pairs exceed it by up to 0.7 pp within the budget's allowance for ionmc's own model term.
+The exploratory block 1 had given He/C 150 -1.22 vs -1.39 %; He/O 150 -1.36 vs -1.59 %; He/C 250 -0.71 vs -0.75 %; He/O 250 -0.72 vs -0.50 %; C/O 430 -0.16 vs +0.51 % (replication within the combined statistics; no evidential weight). Report-only
+finding, recorded: the absolute width ratio θ_ionmc/θ_SS − 1 is +5.5 to +8.6 % over the eight cases, 2.4–4.2 pp
+above the pre-registered expected reference factor (+3.1 to +4.4 %), of the size and sign of ionmc's I11-abs offset from
+Molière–Hanson (+1.85 to +5.32 % on the I11 grid), which the pre-registration placed outside that factor; the single-scattering
+reference shows heavier within-window tails (kurtosis 2.81–2.87 vs 2.62–2.63) and a small θx²/θy² correlation absent in ionmc.
+The row's lineage statement (§3) stands: shared-lineage evidence that the mapping realises the b(z)-dependence of the collision
+number in the thin slab; not independent evidence of the charge dependence of screening. Every run is bound to its signed
+reference-runner record (`validation/results/transport/v8-ss/`). With this row every gating row of the V3-008 plan is graded:
+section-A LV/HR rows PASS (2026-11-11/13), the revision-2 TOPAS-agreement rows as graded on 2026-11-09 (main set, with the
+R2-STOP3 attribution) and 2026-11-11 (held-out set PASS 12/12), V5-SS PASS. Nothing is re-graded. Not a clinical claim.

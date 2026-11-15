@@ -320,3 +320,14 @@ after its headers had been inspected (plan amendment V5-SS-B2). Nothing in that 
 verbatim as the record of the first block and of the two process lapses. The evidence block is block 2 (parts 2–3, fresh
 seeds, count rule frozen before the runs) under `v8-ss/topas-runs/`, `v8-ss/check-runs/` and `v8-ss/ss-report.json`, filled
 by the later commits of the amendment's order. Not a clinical claim.
+
+# V5-SS grade (V3-008, branch B)
+
+`v8-ss/ss-report.json` is the **single grade** of row V5-SS (`ss_evaluate.py grade`, run once on the evidence block 2 at HEAD 833ccdcd on
+2026-11-15, after the validity commit's review; never re-graded): per gated pair the deviation of the equal-velocity ion/ion ratio of windowed projected rms
+angles (ionmc over TOPAS single scattering), its bootstrap σ (B = 2000, analysis seed 20261113, TOPAS resampled within part,
+ionmc over histories), |dev| + 1.645 σ against the 3 % tolerance and the verdict (`ss_budget.gate`); per case the windowed
+rms of both sides, the window (2.5 × the sealed ionmc anchor), window fractions, counts and, report-only, the absolute ratio,
+the expected reference factor, per-part widths, scored/deficit counts, window kurtosis and θx²/θy² correlation; the 16 run
+records it consumed (verdict, problems, primaries, file digests), the seal it re-verified, the trust file and the evaluator's
+committed inputs. Row verdict PASS 5/5 (dated results note of 2026-11-15 in the plan). Not a clinical claim.

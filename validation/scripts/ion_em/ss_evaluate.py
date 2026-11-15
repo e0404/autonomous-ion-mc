@@ -162,8 +162,10 @@ _SCORED = re.compile(r"^\s*Number of Scored Particles:\s*(\d+)\s*$", re.M)
 _REACHED = re.compile(
     r"^\s*Number of Original Histories that Reached Phase Space:\s*(\d+)\s*$", re.M
 )
-#: Count rule (dated plan note of 2026-11-13, prospective, applied uniformly to the 16 parts before
-#: any grade): every primary that reaches the far face is scored exactly once (reached == scored),
+#: Count rule (dated plan note of 2026-11-13; chosen after the block-1 headers had been inspected,
+#: so block 1 is exploratory; frozen by amendment V5-SS-B2 BEFORE the evidence block 2 ran,
+#: 2026-11-15):
+#: every primary that reaches the far face is scored exactly once (reached == scored),
 #: and the deficit original - scored (primaries leaving the slab elsewhere than through the exit
 #: face, a single large-angle Coulomb scatter) is at most this fraction of the original histories.
 #: Such a primary cannot lie inside the window, so the statistic is unchanged by its absence; the

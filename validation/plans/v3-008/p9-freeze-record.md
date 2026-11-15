@@ -1061,7 +1061,7 @@ placeholder scorer output was deleted unread.
 |---|---|
 | `validation/plans/v3-008/d4-geant4-ion-fluctuation-stopping.md` | `1cbbd6fc19767a3787fd04439ebdfd19688ff9bf11b6bb767590a9a9d28a125c` |
 | `validation/scripts/ion_em/gen_ss_bundles.py` | `6a165292fa94df032e7e5306f25070aa6634750f3a526acf2ce8d8299d14811b` |
-| `validation/scripts/ion_em/ss_evaluate.py` | `ca45fcbed74d80b317240da60d1131c47d448fa4f44529a17359d59393b18a0d` |
+| `validation/scripts/ion_em/ss_evaluate.py` | `4bb8f2eeee81d2ee936921e1e3ea5180bf9b470a01c72c52fb036406cb2f3360` |
 | `validation/scripts/ion_em/ss_wrapper_template.py` | `a989aa237564e4591f15451706b0bbf29860672f18d3244caa58700bc03422a8` |
 | `validation/reference_cases/topas/v5ss-frozen-manifest.json` | `4d4c2da147ae31d744804f2a97231b5f42f5a2cdf48d9a48776481ccc4404082` |
 | `tests/ionmc/test_v5ss_bundles.py` | `93d3dc5baee2605e4da34fd5d2eaf43a84b4cadcfb770916549d8315f8689bf9` |
@@ -1397,6 +1397,15 @@ placeholder scorer output was deleted unread.
 
 
 **Dated note (2026-11-15, orchestrator) — entries changed by the block-2 validity commit (the two smoke rows `v8-ss/check-runs/REF-740144c3…` / `REF-8358f3c4…` of the block-1 table above now bind the block-2 validity reports that occupy those paths; the block-1 reports are bound at `v8-ss/block1-exploratory/check-runs/`; rows of former paths that no longer exist are left as history):** `validation/results/transport/v8-ss/topas-runs/index.json` 895b6a18… → 794667d4…; `validation/results/transport/v8-ss/check-runs/REF-740144c3826978e4ea78-ef394dd8.json` 1f7773dc… → 42777ab7…; `validation/results/transport/v8-ss/check-runs/REF-8358f3c4f2f32a8453f4-a7dbae17.json` 486b58fc… → 7345bb46…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-15, orchestrator) — file added by the V5-SS grade commit (the single grade of the evidence block 2, `ss_evaluate.py grade` at 833ccdcd; sha256 as committed):**
+
+| File | sha256 |
+|---|---|
+| `validation/results/transport/v8-ss/ss-report.json` | `62cfb643f04ecc264d6725ef5e3ec84fcac24a57193d1fe1d0212a1ff88c776e` |
+
+
+**Dated note (2026-11-15, orchestrator) — entries changed by the grade commit (the evaluator's count-rule comment reworded after the grade, REVIEW-f099cd5f minor finding; no logic change):** `validation/scripts/ion_em/ss_evaluate.py` ca45fcbe… → 4bb8f2ee…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.

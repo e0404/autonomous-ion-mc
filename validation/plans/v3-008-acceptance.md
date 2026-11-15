@@ -322,6 +322,7 @@ above (R2-TOPAS-4). The TD/TL statistics of `r2_evaluate.py` are implemented aft
     parts **2–3** of the same cases (seeds 20619222–20619231 and 20619322–20619331), never drawn before; parts 4–19 of these
     cases stay reserved. The ionmc base 20631004 (r 0–7) is consumed (sealed 2026-11-13); it is not re-drawn. Smoke seeds
     20600438/20600439 consumed; no new smoke.
+    **Dated note 2026-11-15 (after the block-2 grade):** parts 2–3 of cases 22, 25–31 are **consumed** (block 2, evidence, graded once); parts 4–19 of these cases stay reserved.
 - Never 2098xxxx or 2099xxxx. CI tests use fixed small seeds documented in the tests.
 
 **Guard test** `tests/ionmc/test_v3_008_seed_families.py`. It asserts that every V3-008 seed is:
@@ -500,6 +501,7 @@ operator rules, and each host call ≤ 1500 s.
 | I15 (lv8) | same summary (step `135-i15-combine`); host records steps 115–134 and combine `RUN-20261113T015413Z-8c57c225` | `712f484a` | 20572004 (r 47; consumed) | **PASS** — pairwise θ_rms spread 0.29 % (tol 0.5 %), σ spread 0.97 % / 0.61 % at 0.5 R / 0.9 R (tol 1 %) |
 | T13-ion (hr8) | `validation/results/transport/hr8-712f484a-single-process.json` (step `01-t13-ion-chunks-cuda-c290`); host record `RUN-20261113T015455Z-790a1181` | `712f484a` | hr8 20591004 (consumed) | **PASS** — chunks 2¹⁰ vs 2¹⁸ bit-identical (edep, tallies, counters) in float32 and float64 |
 | T12-ion HR (hr8) | same summary (step `12-t12-ion-hr-combine`); host records steps 02–11 and combine `RUN-20261113T033810Z-176a1c8f` | `712f484a` | 20591004 (r 54; consumed) | **PASS** — all four pairs (C 290 cpu64/cuda32, cuda32/cuda64, He 150 cpu64/cuda32, O 350 cpu64/cuda32) pass the frozen T12 rules; array p ≥ 0.08, scalar \|z\| ≤ 2.05 (bound 3.5), total deposit identical to ≤ 8.7e-10 |
+| V5-SS (branch B; 8 cases, 5 gated pairs; evidence block 2, parts 2–3) | `validation/results/transport/v8-ss/ss-report.json`; sample seal `v8-ss/ss-sample-seal.json` + host records `v8-ss/host-records/` (8); signed reference-runner records `v8-ss/topas-runs/<run_id>/` (index `topas-runs/index.json`, 16 parts) and `v8-ss/smoke-runs/` (2); validity reports `v8-ss/check-runs/` (18); exploratory block 1 (parts 0–1, SEEN, never evidence) under `v8-ss/block1-exploratory/` | ionmc samples at `bef32873`; seal `7fe6ab1d`; block-2 runs at `769f2dd6`; records `7a53e0b8`; validity `833ccdcd`; grade at `833ccdcd` | TOPAS 20619000 + 100·part + case (parts 2–3; parts 0–1 consumed by block 1); ionmc 20631004 (r 0–7) | **PASS 5/5** — dev -1.22 / -1.36 / -0.71 / -0.72 / -0.16 % (He/C 150, He/O 150, He/C 250, He/O 250, C/O 430), σ 0.30 %, max \|dev\| + 1.645 σ 1.86 % (tol 3 %); report-only absolute θ_ionmc/θ_SS − 1 = +5.5 to +8.6 % (expected +3.1 to +4.4 %; finding recorded) |
 
 ## Amendments
 
@@ -1487,3 +1489,67 @@ REF-8358f3c4f2f32a8453f4-a7dbae17 (seed 20600439 at ea10ce6a): VALID at the new 
 first smoke REF-740144c3826978e4ea78-ef394dd8: ERROR, fail closed (manifest entry changed after the run; expected, kept as
 the record of the first run). Reports: `validation/results/transport/v8-ss/check-runs/<run_id>.json` (16 parts + 2 smokes).
 The single grade of block 2 follows in the next commit, after this commit's review.
+
+### Dated results note — V5-SS (branch B) graded once on block 2 at 833ccdcd (2026-11-15, orchestrator; amendment V5-SS-B2 step (v))
+
+**Evidence.** `ss_evaluate.py grade` ran once on the evidence block 2 (2026-11-15 13:57 UTC, logged
+`telemetry/test-logs/20261115T135747Z-v3-008-v5ss-block2-grade-once`; evaluator HEAD 833ccdcd, after the validity commit's
+review REVIEW-f099cd5f had passed; committed-reader inputs: the SS seal note block, `v8-ss/ss-seal-review.json`, the sample
+seal `v8-ss/ss-sample-seal.json` with its eight signed host-run records, the 16 signed reference-runner records and listings
+of parts 2–3 under `v8-ss/topas-runs/`, the trust file) → `validation/results/transport/v8-ss/ss-report.json`. All 16 parts
+VALID (validity note above); the sealed ionmc samples (4e5 histories per case, seeds 20631004 + 100·r) re-verified against
+the seal; bootstrap B = 2000, analysis seed 20261113, TOPAS resampled within part, ionmc over histories.
+
+**Row verdict: PASS** (pre-registered rule: per gated pair |dev| + 1.645 σ ≤ 3 %, σ ≤ 1 %; all five pass; never re-graded).
+
+| Gated pair (A/B) | dev = (θ_m,A/θ_m,B)/(θ_r,A/θ_r,B) − 1 [%] | σ_boot [%] | \|dev\| + 1.645 σ [%] | expected (P10 §7.5.1) [%] | verdict |
+|---|---|---|---|---|---|
+| He/C 150 (22/25) | -1.22 | 0.30 | 1.71 | -0.49 | **PASS** |
+| He/O 150 (22/26) | -1.36 | 0.30 | 1.86 | -0.69 | **PASS** |
+| He/C 250 (28/27) | -0.71 | 0.31 | 1.21 | -0.38 | **PASS** |
+| He/O 250 (28/31) | -0.72 | 0.31 | 1.22 | -0.57 | **PASS** |
+| C/O 430 (29/30) | -0.16 | 0.30 | 0.65 | -0.17 | **PASS** |
+
+The largest margin term is 1.86 % against the 3 % tolerance. The He pairs at 150 MeV/u deviate more negatively than the
+pre-computed reference-model bias (−1.22 / −1.36 % against −0.49 / −0.69 %), the 250 MeV/u He pairs by 0.1–0.3 pp more, and
+C/O 430 reproduces its expected −0.17 %; each lies within the tolerance the budget reserved for ionmc's own model term
+(I11-rel ≤ 2 %, SEEN spread ≤ 1.13 pp) plus statistics. No pair is inconclusive (σ 0.30 %, as designed).
+
+**Replication statement (disclosed; the exploratory block 1 carries no evidential weight).** The exploratory grade of block 1
+(SEEN, amendment V5-SS-B2 §1) gave He/C 150 -1.22 vs -1.39 %; He/O 150 -1.36 vs -1.59 %; He/C 250 -0.71 vs -0.75 %; He/O 250 -0.72 vs -0.50 %; C/O 430 -0.16 vs +0.51 % — the two independent reference blocks agree within their combined
+statistics (≈ 0.42 % per pair); the block-2 verdicts do not depend on that agreement.
+
+**Report-only (pre-registered as not graded).** Absolute windowed widths θ_w (mrad), the ratio ionmc/TOPAS-SS, the window,
+the window fractions, counts, window kurtosis and x/y squared-angle correlation (reference / model):
+
+| Case | θ_w,ref | θ_w,ionmc | ionmc/ref − 1 [%] | W [mrad] | P(window) ref / model | N ref / model | kurtosis ref / model | corr(θx², θy²) ref / model |
+|---|---|---|---|---|---|---|---|---|
+| 22 He 150 | 0.9731 | 1.0267 | +5.50 | 2.692 | 0.9749 / 0.9874 | 60000 / 400000 | 2.829 / 2.627 | +0.056 / +0.000 |
+| 25 C 150 | 1.0353 | 1.1058 | +6.80 | 2.897 | 0.9793 / 0.9875 | 60000 / 400000 | 2.831 / 2.623 | +0.050 / +0.001 |
+| 26 O 150 | 1.0430 | 1.1155 | +6.96 | 2.921 | 0.9788 / 0.9877 | 59999 / 400000 | 2.811 / 2.622 | +0.048 / +0.001 |
+| 27 C 250 | 0.6406 | 0.6882 | +7.43 | 1.802 | 0.9797 / 0.9876 | 60000 / 400000 | 2.834 / 2.623 | +0.052 / -0.002 |
+| 28 He 250 | 0.5971 | 0.6369 | +6.67 | 1.668 | 0.9762 / 0.9876 | 59998 / 400000 | 2.846 / 2.619 | +0.059 / -0.001 |
+| 29 C 430 | 0.3925 | 0.4257 | +8.44 | 1.114 | 0.9793 / 0.9877 | 59999 / 400000 | 2.871 / 2.626 | +0.053 / +0.002 |
+| 30 O 430 | 0.3957 | 0.4298 | +8.61 | 1.126 | 0.9793 / 0.9875 | 60000 / 400000 | 2.864 / 2.623 | +0.053 / +0.000 |
+| 31 O 250 | 0.6476 | 0.6958 | +7.44 | 1.823 | 0.9788 / 0.9875 | 59998 / 400000 | 2.835 / 2.627 | +0.046 / +0.001 |
+
+**Finding (recorded, not a failure; report-only quantity).** The absolute ratio θ_ionmc/θ_SS − 1 is +5.50 to +8.61 %
+over the eight cases, above the pre-registered expected reference-model factor +3.1 to +4.4 % (P10 §7.5.1: θ_Gauss,w/θ_SS,w from
+the universal screening radius, corr^0.04 and the absent electrons of the ion path) by 2.4–4.2 pp, increasing with the ion
+charge and energy (He 150 +5.5 %, O 430 +8.6 %). The excess has the size and sign of ionmc's own offset from Molière–Hanson
+recorded before the freeze (I11-abs +1.85 to +5.32 % on the I11 grid; I11-rel SEEN all positive), which the pre-registration
+placed explicitly outside the expected reference factor ("it comes before ionmc's own offset"). It largely cancels in the
+equal-velocity ion/ion ratios (gated pairs above), as the budget assumed; the ratio-level residual is the 0.1–0.7 pp by which
+the pairs exceed their expected bias. The thin-slab state (b ≈ 10–12, 1 mm) lies outside the I11 grid (x/R ≥ 0.1), a declared
+assumption of the budget. The reference distributions show the heavier within-window tails of single scattering (kurtosis
+2.81–2.87 against ionmc's 2.62–2.63) and a small positive θx²/θy² correlation (0.05–0.06) absent in ionmc (|corr| ≤ 0.002):
+the expected signature of a single-scattering reference against a Gaussian-type multiple-scattering model, consistent with
+the TL-EM/TL-FULL core-vs-halo attribution (decision 0043 §3). No model or parameter is changed; nothing is re-graded; no
+attribution beyond the pre-registered budget is claimed.
+
+**Lineage statement (unchanged).** V5-SS is shared-lineage evidence (screened Rutherford law, Born form) that the mapping
+realises the b(z)-dependence of the collision number in the thin slab; it is not independent physical evidence of the charge
+dependence of screening and covers the f_dM extrapolation only differentially (decision 0043 §3). Not a clinical claim.
+
+**Consumed.** TOPAS seeds 20619000 + 100·part + case for cases 22, 25–31, parts 2–3 (block 2, evidence) and parts 0–1
+(block 1, exploratory); smokes 20600438/20600439; ionmc base 20631004 (r 0–7, k 0). Section C ledger updated.
