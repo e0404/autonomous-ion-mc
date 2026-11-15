@@ -634,10 +634,10 @@ placeholder scorer output was deleted unread.
 
 | File | sha256 |
 |---|---|
-| `tests/ionmc/test_d3_range_attribution.py` | `4125be066c47863b9417348f10e49cce4a1fdfa04551bcf339dcc266a88d43a7` |
-| `validation/results/stopping/v3-008-d3-range-attribution.json` | `04475412a3867e1a33dcf1dfc9de0fb3296bbf2fba5f0c957d7117ef6c3a44b1` |
+| `tests/ionmc/test_d3_range_attribution.py` | `4aaed9c9b63eaffdd6506e4cbde511c673ec7366a8a9a4b240dfc585ea37d72a` |
+| `validation/results/stopping/v3-008-d3-range-attribution.json` | `534a781c2b5211e5eda1ed7d40e4a4def9128915491f2e57efb73133c23a50dc` |
 | `validation/results/stopping/v3-008-d3-range-attribution.md` | `816197c2751b68ff74764819367b8e6dcc59fc7be1e1b70b97abedc4ba2f5f77` |
-| `validation/scripts/ion_em/d3_range_attribution.py` | `b1da49ecfb5e7242e3893a20ca9f99cc9bb11b6094a8fbe548503ec9c2b10d2d` |
+| `validation/scripts/ion_em/d3_range_attribution.py` | `5b24e4dc3908ed6f9ac08e135b41cc62e4d82540cd74cfa714628d6527464565` |
 
 
 **Dated note (2026-11-11, orchestrator) — entries changed by the R2-STOP3 round-3 commit (Codex REVIEW-b6484e56: voxel-exact residual walk, docs; lv8/hr8 sharded rows I9/I12/I14/I15/T12-ion):** `src/ionmc/simulation.py` 4d490ba4… → abbbcd0a…; `src/ionmc/transport/kernels.py` 5fdf6238… → bd2f177f…; `src/ionmc/transport/reference.py` 08a11985… → cd56bf0e…; `validation/scripts/transport/steps_v8.py` 8e951ead… → c5aefda2…; `tests/ionmc/test_ion_end_of_range.py` 723a3fae… → e39edaaf…; `tests/ionmc/test_run_suite_v8.py` e9105419… → f060fa10…. All other entries unchanged (recomputed).
@@ -1406,6 +1406,57 @@ placeholder scorer output was deleted unread.
 
 
 **Dated note (2026-11-15, orchestrator) — entries changed by the grade commit (the evaluator's count-rule comment reworded after the grade, REVIEW-f099cd5f minor finding; no logic change):** `validation/scripts/ion_em/ss_evaluate.py` ca45fcbe… → 4bb8f2ee…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-15, orchestrator) — files added by the SR-1 disposition commit (the I3 evaluator `compare_icru73.py` and its test; the section-A block at f5f3a701: combined summary, 13 signed host-run records, derived index and the published step documents of the three non-shard calls; sha256 as committed):**
+
+| File | sha256 |
+|---|---|
+| `validation/results/transport/v8-lvhr/a-rows-f5f3a701/host-records/RUN-20261111T014825Z-5f25549d.json` | `012f010f2088416f908074cb58b0026c98f8454cccdd07ef42ce39622860f3f4` |
+| `validation/results/transport/v8-lvhr/a-rows-f5f3a701/host-records/RUN-20261111T014845Z-f01fb6fd.json` | `88709b38e49e1961eaff27acd3fa70ab96319916ec5f09122a4c5f7c78345615` |
+| `validation/results/transport/v8-lvhr/a-rows-f5f3a701/host-records/RUN-20261111T014900Z-fd7dd758.json` | `d92ebfe66f68fa8e6eba71c2d4ff7db074db66193fab7c68cd38dd07c031d2f0` |
+| `validation/results/transport/v8-lvhr/a-rows-f5f3a701/host-records/RUN-20261111T014957Z-83ada423.json` | `bdc6e42bb0160ae8deb9498ef1cfea3a78a0ed390be1912e94612e9d549ce8d1` |
+| `validation/results/transport/v8-lvhr/a-rows-f5f3a701/host-records/RUN-20261111T015250Z-1b4d93ea.json` | `c385b3ef1d0b2033c31126029878dccd9bc4ff0d1f24065db5487c01e69f1137` |
+| `validation/results/transport/v8-lvhr/a-rows-f5f3a701/host-records/RUN-20261111T015805Z-1ec47b83.json` | `3531291f90b169756fa540fe11a462d9badbcfdf0b691975de7bfe38eb5a31c3` |
+| `validation/results/transport/v8-lvhr/a-rows-f5f3a701/host-records/RUN-20261111T020441Z-0c2dfd2b.json` | `4aa99c7a1451b2bf116f9fb42253db238a98058fd10797e4d751224c42ecd423` |
+| `validation/results/transport/v8-lvhr/a-rows-f5f3a701/host-records/RUN-20261111T020808Z-6812ec76.json` | `05f0bb9c2d63dc854b7000daa8a33337116a7428786abcf30c6214fbe5774c5d` |
+| `validation/results/transport/v8-lvhr/a-rows-f5f3a701/host-records/RUN-20261111T021859Z-00fbeb58.json` | `2372304ecf473b6bad4f0195922b737ff18378d7884a975af8047b46b9a7bfd8` |
+| `validation/results/transport/v8-lvhr/a-rows-f5f3a701/host-records/RUN-20261111T023514Z-7f8be657.json` | `3b0ed014054225804726d004cde779b70097efa11512944464a7ded4d2e79cbf` |
+| `validation/results/transport/v8-lvhr/a-rows-f5f3a701/host-records/RUN-20261111T025123Z-0d0cccbc.json` | `cbd6d17a5caa8c8dc7305a57680a6477affebd7d9e887dafcdbd16a8ee0976bc` |
+| `validation/results/transport/v8-lvhr/a-rows-f5f3a701/host-records/RUN-20261111T030552Z-487b99ba.json` | `6b1b6e2b335af6151f4f3eb50702147b4fab247dda19565e439101b4584dec54` |
+| `validation/results/transport/v8-lvhr/a-rows-f5f3a701/host-records/RUN-20261111T032028Z-74c82fa0.json` | `359a087fdb931d4b3291552f093741ea31f8b171445a8f38b54cd54c80be9db8` |
+| `validation/results/transport/v8-lvhr/a-rows-f5f3a701/index.json` | `01d15436d7dd1bb3ae70ad49c2df55c6cf815c6d51c0d3975efb75a8e6e1b30d` |
+| `validation/results/transport/v8-lvhr/a-rows-f5f3a701/published-outputs/validation/generated/RUN-20261111T020441Z-0c2dfd2b/transport/lv8-f5f3a701-01-13/01-i6-lv-deterministic-end-depth.txt` | `54591cd9aadb513f7787500f6e32b83ea1c0f44ffa9e5c15af0065610b6851fe` |
+| `validation/results/transport/v8-lvhr/a-rows-f5f3a701/published-outputs/validation/generated/RUN-20261111T020441Z-0c2dfd2b/transport/lv8-f5f3a701-01-13/02-i8-range-straggling-he150.txt` | `269db204c21813ee790649455b3d6c3fd908706916bfd52af1b990273c21972a` |
+| `validation/results/transport/v8-lvhr/a-rows-f5f3a701/published-outputs/validation/generated/RUN-20261111T020441Z-0c2dfd2b/transport/lv8-f5f3a701-01-13/03-i8-range-straggling-c290.txt` | `6cca436ce2859dd0af86d2219be5b61e4d013bef00fbbe0b1f4ad8efa79a7e3b` |
+| `validation/results/transport/v8-lvhr/a-rows-f5f3a701/published-outputs/validation/generated/RUN-20261111T020441Z-0c2dfd2b/transport/lv8-f5f3a701-01-13/04-i8-range-straggling-o350.txt` | `cd9a5f97a9eb10baef2d60ed0c8e9b151dd5853bd9645a7f1bc31a69a94f7f4a` |
+| `validation/results/transport/v8-lvhr/a-rows-f5f3a701/published-outputs/validation/generated/RUN-20261111T020441Z-0c2dfd2b/transport/lv8-f5f3a701-01-13/05-i13-r80-vs-csda-he50.txt` | `c9a29dc10da3efd84d7cd6d0521e287780759773df2693fa896cf1336afb0ebf` |
+| `validation/results/transport/v8-lvhr/a-rows-f5f3a701/published-outputs/validation/generated/RUN-20261111T020441Z-0c2dfd2b/transport/lv8-f5f3a701-01-13/06-i13-r80-vs-csda-he150.txt` | `f7a4e5a784332acfcef46ba7875755cce2de3068d7b6604a71d8b3606c7f25a9` |
+| `validation/results/transport/v8-lvhr/a-rows-f5f3a701/published-outputs/validation/generated/RUN-20261111T020441Z-0c2dfd2b/transport/lv8-f5f3a701-01-13/07-i13-r80-vs-csda-he250.txt` | `272aea77706a7244dd86de5a823989758cd87c69fddf49bd08bfc4e7ead34cd2` |
+| `validation/results/transport/v8-lvhr/a-rows-f5f3a701/published-outputs/validation/generated/RUN-20261111T020441Z-0c2dfd2b/transport/lv8-f5f3a701-01-13/08-i13-r80-vs-csda-c80.txt` | `44338f0dc954775371bd86145f21420c4162eb750be0c5df93c5d6cd30381970` |
+| `validation/results/transport/v8-lvhr/a-rows-f5f3a701/published-outputs/validation/generated/RUN-20261111T020441Z-0c2dfd2b/transport/lv8-f5f3a701-01-13/09-i13-r80-vs-csda-c290.txt` | `56183b430a28f20f7cdbff2ae2eafe4b974a06a6df8571f6590353f0739a6fc0` |
+| `validation/results/transport/v8-lvhr/a-rows-f5f3a701/published-outputs/validation/generated/RUN-20261111T020441Z-0c2dfd2b/transport/lv8-f5f3a701-01-13/10-i13-r80-vs-csda-c430.txt` | `47fd4ba137844c4b97f041488fd8733c13c78c6b694da1970cfd9d5244c0cb5f` |
+| `validation/results/transport/v8-lvhr/a-rows-f5f3a701/published-outputs/validation/generated/RUN-20261111T020441Z-0c2dfd2b/transport/lv8-f5f3a701-01-13/11-i13-r80-vs-csda-o100.txt` | `0933259793f4bc1d7c9c4984d6c880eac2cc96b74e44d66a65431e1d78804941` |
+| `validation/results/transport/v8-lvhr/a-rows-f5f3a701/published-outputs/validation/generated/RUN-20261111T020441Z-0c2dfd2b/transport/lv8-f5f3a701-01-13/12-i13-r80-vs-csda-o350.txt` | `ae0bae33caa1e779c6cc565046defd16e56840ea40da77fac7d051e0e19e7270` |
+| `validation/results/transport/v8-lvhr/a-rows-f5f3a701/published-outputs/validation/generated/RUN-20261111T020441Z-0c2dfd2b/transport/lv8-f5f3a701-01-13/13-i13-r80-vs-csda-o430.txt` | `afbfc97ec34972a7090849508cc8e468403650b307d0132dcaae1106f78f0b27` |
+| `validation/results/transport/v8-lvhr/a-rows-f5f3a701/published-outputs/validation/generated/RUN-20261111T020441Z-0c2dfd2b/transport/lv8-f5f3a701-01-13/environment.txt` | `79a1c993a4f43cca7dec48441d96f9167ca0e71f5df1d2877b84f989d1877b89` |
+| `validation/results/transport/v8-lvhr/a-rows-f5f3a701/published-outputs/validation/generated/RUN-20261111T020441Z-0c2dfd2b/transport/lv8-f5f3a701-01-13/manifest.txt` | `734b163f864d09a8743fd4521bcdc25fb30c9a2caa42c914d3aab832017e6583` |
+| `validation/results/transport/v8-lvhr/a-rows-f5f3a701/published-outputs/validation/generated/RUN-20261111T020441Z-0c2dfd2b/transport/lv8-f5f3a701-01-13/summary.json` | `80408dfa3e95bf8f201d13f08384ec2d5e3e9304475dd50d59f6e0a65ac51d7f` |
+| `validation/results/transport/v8-lvhr/a-rows-f5f3a701/published-outputs/validation/generated/RUN-20261111T020808Z-6812ec76/transport/lv8-f5f3a701-14-16/14-t1-ion-trace-parity-c290-o350.txt` | `f2282ecf9d2768790e21e27ca5966aa4d8b46b0c20648df3641d5e16dd4b2cf1` |
+| `validation/results/transport/v8-lvhr/a-rows-f5f3a701/published-outputs/validation/generated/RUN-20261111T020808Z-6812ec76/transport/lv8-f5f3a701-14-16/15-r1-ion-repeatability-c290.txt` | `bbf5f00e1de38b47e8f51be9bdc8613dd62e2f4604956e51fca121614b56ea8d` |
+| `validation/results/transport/v8-lvhr/a-rows-f5f3a701/published-outputs/validation/generated/RUN-20261111T020808Z-6812ec76/transport/lv8-f5f3a701-14-16/16-r2-a16-trace-fixture.txt` | `593929875e8a3446c6fab04f430a075305b28f2c5a024f75b004523bea96cbf6` |
+| `validation/results/transport/v8-lvhr/a-rows-f5f3a701/published-outputs/validation/generated/RUN-20261111T020808Z-6812ec76/transport/lv8-f5f3a701-14-16/environment.txt` | `4ab8fd5377a7be77601413e16d213d6995e237ec594d88da00ecacb5c9ddb3ab` |
+| `validation/results/transport/v8-lvhr/a-rows-f5f3a701/published-outputs/validation/generated/RUN-20261111T020808Z-6812ec76/transport/lv8-f5f3a701-14-16/manifest.txt` | `a2fedc85930c2cfbce12ce22c8a0057465d3ae6c7cd00bde8f5286d35eb69f2e` |
+| `validation/results/transport/v8-lvhr/a-rows-f5f3a701/published-outputs/validation/generated/RUN-20261111T020808Z-6812ec76/transport/lv8-f5f3a701-14-16/summary.json` | `a0bf5f8449cbb58982da61f5255bc83654e574e28df9cd01f613fda57a555e4d` |
+| `validation/results/transport/v8-lvhr/a-rows-f5f3a701/published-outputs/validation/generated/RUN-20261111T032028Z-74c82fa0/transport/lv8-f5f3a701-21/21-t12-ion-lv-combine.txt` | `2316c5b1cf4c0e7d26bcd86196e6d03032bb12165b16f2b25664f6fab5315e4e` |
+| `validation/results/transport/v8-lvhr/a-rows-f5f3a701/published-outputs/validation/generated/RUN-20261111T032028Z-74c82fa0/transport/lv8-f5f3a701-21/environment.txt` | `18556723c7e40793eff8c7db976c53fc09f95061e8044f490ebba9d6d25ddc83` |
+| `validation/results/transport/v8-lvhr/a-rows-f5f3a701/published-outputs/validation/generated/RUN-20261111T032028Z-74c82fa0/transport/lv8-f5f3a701-21/manifest.txt` | `96ab232fffda5be642038a0f9cc4007264fefb9829c27d9afa5491c2f0a0d628` |
+| `validation/results/transport/v8-lvhr/a-rows-f5f3a701/published-outputs/validation/generated/RUN-20261111T032028Z-74c82fa0/transport/lv8-f5f3a701-21/summary.json` | `0343993ce241389925faeb9039d3a5b99d0715ee83faea652b5b47143ab1eac7` |
+| `validation/scripts/stopping/compare_icru73.py` | `2dc16272a32a30cdf93a91bc006af8b436b529ead5fa465bccf5351159d6f1e8` |
+| `tests/ionmc/test_compare_icru73.py` | `376b0b523a7ff6d945e03c90919d06d7b672bc6c90c879673c3578fb62a94a11` |
+| `validation/results/transport/lv8-f5f3a701-steps01-21-single-process.json` | `d617849a5124e8473e04275e08d1c71e090f88c74ee52399dd0d6f155c2c84e0` |
+
+
+**Dated note (2026-11-15, orchestrator) — entries changed by the SR-1 disposition commit (`compare_nist.py` extended for row I2 and its test; `d3_range_attribution.py`, its test and the regenerated D-3 JSON without the per-energy ICRU 90 ratio; the D-3 script hash changes with the file):** `tests/ionmc/test_d3_range_attribution.py` 4125be06… → 4aaed9c9…; `validation/results/stopping/v3-008-d3-range-attribution.json` 04475412… → 534a781c…; `validation/scripts/ion_em/d3_range_attribution.py` b1da49ec… → 5b24e4dc…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.

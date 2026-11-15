@@ -501,6 +501,9 @@ operator rules, and each host call ≤ 1500 s.
 | I15 (lv8) | same summary (step `135-i15-combine`); host records steps 115–134 and combine `RUN-20261113T015413Z-8c57c225` | `712f484a` | 20572004 (r 47; consumed) | **PASS** — pairwise θ_rms spread 0.29 % (tol 0.5 %), σ spread 0.97 % / 0.61 % at 0.5 R / 0.9 R (tol 1 %) |
 | T13-ion (hr8) | `validation/results/transport/hr8-712f484a-single-process.json` (step `01-t13-ion-chunks-cuda-c290`); host record `RUN-20261113T015455Z-790a1181` | `712f484a` | hr8 20591004 (consumed) | **PASS** — chunks 2¹⁰ vs 2¹⁸ bit-identical (edep, tallies, counters) in float32 and float64 |
 | T12-ion HR (hr8) | same summary (step `12-t12-ion-hr-combine`); host records steps 02–11 and combine `RUN-20261113T033810Z-176a1c8f` | `712f484a` | 20591004 (r 54; consumed) | **PASS** — all four pairs (C 290 cpu64/cuda32, cuda32/cuda64, He 150 cpu64/cuda32, O 350 cpu64/cuda32) pass the frozen T12 rules; array p ≥ 0.08, scalar \|z\| ≤ 2.05 (bound 3.5), total deposit identical to ≤ 8.7e-10 |
+| I6-LV, I8, I13 (lv8 steps 01–13, A-row block) | `validation/results/transport/lv8-f5f3a701-steps01-21-single-process.json` (steps `01`–`13`); signed host record `RUN-20261111T020441Z-0c2dfd2b` and published step documents under `validation/results/transport/v8-lvhr/a-rows-f5f3a701/` (index `a-rows-f5f3a701/index.json`; output manifest reproduces) | `f5f3a701` | lv8 20581004 (r 36–38; consumed) | **PASS** — I6-LV deterministic end depth (residual range at E_cut 0.038 mm); I8 σ_end-depth/σ_quadrature − 1 = −0.21 % (He 150), −0.24 % (C 290), −0.36 % (O 350) (tol 5 %); I13 R80 vs CSDA relative deviation −0.0013 % … −0.197 % over the nine cases (tol 0.2 %; C 80 at −0.197 % sits at the tolerance edge, recorded) |
+| T1-ion LV, R1-ion, R2 (lv8 steps 14–16) | same summary (steps `14`–`16`); host record `RUN-20261111T020808Z-6812ec76` (published outputs committed; manifest reproduces) | `f5f3a701` | lv8 20581004 | **PASS** — T1-ion K = 256 C 290 / O 350: discrete columns identical, continuous within rtol = atol = 1e-10; R1-ion C 290 bit-identical (python, warp-cpu; 100/10 000/10 000 histories); R2 A16 trace fixture bit-identical to the develop baseline |
+| T12-ion LV (lv8 steps 17–21) | same summary (step `21-t12-ion-lv-combine`, 204 000 histories, imported partials bound by content sha256 in `attestation.partials`); host records `RUN-20261111T021859Z-00fbeb58`, `…T023514Z-7f8be657`, `…T025123Z-0d0cccbc`, `…T030552Z-487b99ba` (shards), `RUN-20261111T032028Z-74c82fa0` (combine; manifest reproduces) | `f5f3a701` | lv8 20581004 | **PASS** — python vs warp-cpu float64 pairs pass the frozen T12 rules (R80, σ_lat at 0.5 R; every criterion pass) |
 | V5-SS (branch B; 8 cases, 5 gated pairs; evidence block 2, parts 2–3) | `validation/results/transport/v8-ss/ss-report.json`; sample seal `v8-ss/ss-sample-seal.json` + host records `v8-ss/host-records/` (8); signed reference-runner records `v8-ss/topas-runs/<run_id>/` (index `topas-runs/index.json`, 16 parts) and `v8-ss/smoke-runs/` (2); validity reports `v8-ss/check-runs/` (18); exploratory block 1 (parts 0–1, SEEN, never evidence) under `v8-ss/block1-exploratory/` | ionmc samples at `bef32873`; seal `7fe6ab1d`; block-2 runs at `769f2dd6`; records `7a53e0b8`; validity `833ccdcd`; grade at `833ccdcd` | TOPAS 20619000 + 100·part + case (parts 2–3; parts 0–1 consumed by block 1); ionmc 20631004 (r 0–7) | **PASS 5/5** — dev -1.22 / -1.36 / -0.71 / -0.72 / -0.16 % (He/C 150, He/O 150, He/C 250, He/O 250, C/O 430), σ 0.30 %, max \|dev\| + 1.645 σ 1.86 % (tol 3 %); report-only absolute θ_ionmc/θ_SS − 1 = +5.5 to +8.6 % (expected +3.1 to +4.4 %; finding recorded) |
 
 ## Amendments
@@ -1516,8 +1519,7 @@ C/O 430 reproduces its expected −0.17 %; each lies within the tolerance the bu
 (I11-rel ≤ 2 %, SEEN spread ≤ 1.13 pp) plus statistics. No pair is inconclusive (σ 0.30 %, as designed).
 
 **Replication statement (disclosed; the exploratory block 1 carries no evidential weight).** The exploratory grade of block 1
-(SEEN, amendment V5-SS-B2 §1) gave He/C 150 -1.22 vs -1.39 %; He/O 150 -1.36 vs -1.59 %; He/C 250 -0.71 vs -0.75 %; He/O 250 -0.72 vs -0.50 %; C/O 430 -0.16 vs +0.51 % — the two independent reference blocks agree within their combined
-statistics (≈ 0.42 % per pair); the block-2 verdicts do not depend on that agreement.
+(SEEN, amendment V5-SS-B2 §1) gave He/C 150 -1.22 vs -1.39 %; He/O 150 -1.36 vs -1.59 %; He/C 250 -0.71 vs -0.75 %; He/O 250 -0.72 vs -0.50 %; C/O 430 -0.16 vs +0.51 % — consistent at ≤ 1.7σ per pair (the largest block-to-block difference is C/O 430, 0.67 pp; case 30 alone differs by −0.76 %, ≈ 2.7σ of a single-case TOPAS width); the block-2 verdicts do not depend on that agreement. **Correction (2026-11-15, SR-1):** an earlier wording "agree within their combined statistics (≈ 0.42 % per pair)" was inaccurate (it double-counted the shared ionmc sample) and is withdrawn.
 
 **Report-only (pre-registered as not graded).** Absolute windowed widths θ_w (mrad), the ratio ionmc/TOPAS-SS, the window,
 the window fractions, counts, window kurtosis and x/y squared-angle correlation (reference / model):
@@ -1535,14 +1537,13 @@ the window fractions, counts, window kurtosis and x/y squared-angle correlation 
 
 **Finding (recorded, not a failure; report-only quantity).** The absolute ratio θ_ionmc/θ_SS − 1 is +5.50 to +8.61 %
 over the eight cases, above the pre-registered expected reference-model factor +3.1 to +4.4 % (P10 §7.5.1: θ_Gauss,w/θ_SS,w from
-the universal screening radius, corr^0.04 and the absent electrons of the ion path) by 2.4–4.2 pp, increasing with the ion
-charge and energy (He 150 +5.5 %, O 430 +8.6 %). The excess has the size and sign of ionmc's own offset from Molière–Hanson
+the universal screening radius, corr^0.04 and the absent electrons of the ion path) by, case by case, +2.4 (He 150), +2.4 (He 250), +3.0 (C 150), +3.0 (C 250), +2.9 (O 150), +3.0 (O 250), +4.2 (C 430) and +4.2 pp (O 430) against the per-case planning values of P10 §7.5.1 (SR-1 correction of the earlier "2.4–4.2 pp" range wording; same numbers), increasing with the ion charge and energy (He 150 +5.5 %, O 430 +8.6 %). The excess has the size and sign of ionmc's own offset from Molière–Hanson
 recorded before the freeze (I11-abs +1.85 to +5.32 % on the I11 grid; I11-rel SEEN all positive), which the pre-registration
 placed explicitly outside the expected reference factor ("it comes before ionmc's own offset"). It largely cancels in the
 equal-velocity ion/ion ratios (gated pairs above), as the budget assumed; the ratio-level residual is the 0.1–0.7 pp by which
 the pairs exceed their expected bias. The thin-slab state (b ≈ 10–12, 1 mm) lies outside the I11 grid (x/R ≥ 0.1), a declared
 assumption of the budget. The reference distributions show the heavier within-window tails of single scattering (kurtosis
-2.81–2.87 against ionmc's 2.62–2.63) and a small positive θx²/θy² correlation (0.05–0.06) absent in ionmc (|corr| ≤ 0.002):
+2.81–2.87 against ionmc's 2.62–2.63, and above the P10 §7.5.2 planning value 2.76–2.78 — the bootstrap σ nevertheless came out at the designed 0.30 %) and a small positive θx²/θy² correlation (0.05–0.06) absent in ionmc (|corr| ≤ 0.002):
 the expected signature of a single-scattering reference against a Gaussian-type multiple-scattering model, consistent with
 the TL-EM/TL-FULL core-vs-halo attribution (decision 0043 §3). No model or parameter is changed; nothing is re-graded; no
 attribution beyond the pre-registered budget is claimed.
@@ -1553,3 +1554,61 @@ dependence of screening and covers the f_dM extrapolation only differentially (d
 
 **Consumed.** TOPAS seeds 20619000 + 100·part + case for cases 22, 25–31, parts 2–3 (block 2, evidence) and parts 0–1
 (block 1, exploratory); smokes 20600438/20600439; ionmc base 20631004 (r 0–7, k 0). Section C ledger updated.
+
+### Scientific review round SR-1 of the evidence summary (2026-11-15, orchestrator; plan F.4, independent of Codex) — verdict "do not merge yet"; disposition
+
+**Reviewer (independent reviewer agent, read-only at 004f641a) findings, verbatim substance.** (1) BLOCKING: rows I2 (He
+table reproduction vs ASTAR / ICRU 90) and I3 (C/O vs libdEdx ICRU73_NEW) are gating LV rows of section A that were never
+evaluated (no lv8 step, no result file; `compare_nist.py` unchanged since V3-003D); the decision 0043 outcome of 2026-11-15
+("every gating row of the V3-008 plan is graded") and the ledger's V1-MUST-005 ("section-A verification rows PASS") are
+false as written, so F.6 is not met. (2) BLOCKING (over-claim): V2-ION cites "I3 libdEdx/ICRU 73-90 lineage" evidence that
+does not exist. (3) IMPORTANT: decision 0043 holds no verbatim 2026-11-09 outcome entry (TD-EM 3 PASS / 6 FAIL, TL-EM
+1 PASS / 8 FAIL) although §D requires FAILs recorded there and the 2026-11-13 entry refers to it. (4) IMPORTANT: the A-row
+block at f5f3a701 (I6-LV, I8, I8b, I13, T1-ion LV, R1-ion, R2, T12-ion LV) rests on VAL-20261111-032337-9F2C85 only — no
+committed summary, no evidence-archive rows, no decision outcome; I11-rel has only its pre-freeze SEEN evaluation. (5)
+IMPORTANT: the R2-STOP3 item-3 commitments (the claim narrows to He 100 / C 150 / O 200 without the f_dM trend test;
+the operator may override Branch B) are not carried into the ledger; decision 0043 still says the f_dM extrapolation is
+"judged by TL (b)" although D_ext was NOT EVALUABLE and consumed. (6) MINOR: the evidence spans f5f3a701 / 712f484a /
+bef32873 / 769f2dd6 (disclosed in items 4j/4k); the ledger should name them. (7) MINOR: V1-MUST-005 wording stale
+(intervention IR-20261102-010435-B59B2D is resolved) and soft ("as graded" hides 14 of 18 main-set FAILs). V5-SS: the
+block-2 PASS is sound (each dev is the ratio of the per-case absolute ratios; margins as stated; the absolute-ratio
+explanation is numerically consistent but post-hoc; "2.4–4.2 pp" pairs range edges; observed SS kurtosis 2.81–2.87 vs the
+planning 2.76–2.78 not stated; replication wording "≈ 0.42 % per pair" inaccurate — C/O 430 differs by 0.67 pp between
+blocks, case 30 by 2.7σ; better "consistent at ≤ 1.7σ per pair"). (8) MINOR (provenance): `validation/results/stopping/
+v3-008-d3-range-attribution.json` stores per-energy ICRU 90-alpha-vs-ionmc range ratios with ionmc's absolute ranges,
+from which ICRU 90 alpha CSDA ranges can be reconstructed, against the stopping README rule. Not finished by the
+reviewer: I11-abs per-case values vs the P11 record; whether the R2-STOP3 review cleared Branch B; CI/R2 at the PR head.
+
+**Disposition (orchestrator, 2026-11-15; before any I2/I3 evaluation).** The findings are accepted. (a) Integration is
+withheld; the decision 0043 sentence "every gating row … is graded" and the ledger rows are corrected in the same commit as
+this note (items 1, 2, 5, 6, 7), and the 2026-11-09 main-set outcome is entered verbatim in decision 0043 (item 3).
+(b) Rows I2 and I3 are evaluated now, as frozen: `compare_nist.py` extended for I2 (4He, Bethe 75 eV vs ASTAR and 78 eV
+vs ICRU 90 alpha; S bands 2–10 and ≥ 10 MeV/u; CSDA at 50/100/150/200/250 MeV/u) and a new `compare_icru73.py` for I3
+(libdEdx ICRU73_NEW, target 276, Z = 6 and 8, 53-point grid above 2 MeV/u; the archive's role is appended "evaluation",
+use-id dba43594db9a4302822035b9131aebb2, 2026-11-15 14:31 UTC); both scripts tested, reviewed, then run once at a clean
+SHA; aggregates only in Git; gates as frozen; the I-value question of P5b is stated in the I3 result and, per the row's
+2026-11-01 decision (d), a range-clause failure within the bounded I-value contribution is FAIL with attribution, never
+re-graded. (c) The A-row block at f5f3a701: the 21 signed host-run records are retrieved through the archived-record
+tools, committed verbatim with a derived summary, and the rows receive evidence-archive entries with their numbers
+(item 4); I11-rel keeps its SEEN status (plan §P: "SEEN, disclosed"). (d) Item 8: the D-3 attribution file is reduced
+to aggregates (the per-energy ratio column removed; the attribution text unchanged), recorded by a dated note in the
+stopping README. (e) The V5-SS results-note wording is corrected as the reviewer states (replication at ≤ 1.7σ per pair;
+case-by-case excess; the observed kurtosis against the planning value), without changing any verdict. (f) A second
+scientific review round SR-2 follows before the merge. Nothing graded is re-graded.
+
+**SR-1 disposition, item (b) continued — prospective notes on the I2/I3 evaluators (2026-11-15, orchestrator; written
+before either row is run).** (i) `compare_icru73.py` evaluates the Bethe model (78 eV, `ls = "off"`) at the table's own grid
+points with E ≥ 2 MeV/u (32 points: 9 in 2–10, 23 at ≥ 10 MeV/u, of which 18 ≤ 500 MeV/u); the ≥ 10 MeV/u band therefore
+extends to 1000 MeV/u as the row says, and a report-only 10–500 MeV/u aggregate (the transport-table range) is written in
+addition, not gated. (ii) The I3 CSDA-range comparison needs a range from a table that gives none: the table is log-log
+interpolated onto 200 points per decade from 2 MeV/u and integrated with the model's own range at 2 MeV/u as the start value
+(both sides share that start). On a synthetic 53-point grid filled with exact model values this construction alone biases the
+range by +0.014 / +0.059 / +0.077 % at C 80 / 290 / 430 MeV/u (the real grid is coarser above 400 MeV/u); this estimator
+contribution of order 0.1 % is recorded now against the 0.5 % range gate and is not subtracted; the gate is unchanged.
+(iii) The I-value of the ICRU73_NEW water values is not stated anywhere in the libdEdx archive (checked: `README.md`,
+`data/README.md`, `tools/dat2c.py`, the generated header; `dedx_metadata.h` lists 75.0 eV for target 276 as a material
+constant); the I3 result states "TO-VERIFY (P5b)" with the row's bounded contribution (≈ 0.4–0.6 % in S above 10 MeV/u,
+≈ 0.4–0.5 % in range if the table used 75 eV) and whether ICRU73_NEW is the 2009 revision stays open (row decision (d) of
+2026-11-01 applies). (iv) I2 bands: 2 ≤ E < 10 MeV/u and 10 ≤ E ≤ 500 MeV/u (the 10 MeV/u point in the stricter band);
+range at 50/100/150/200/250 MeV/u; only maxima and the energy attaining them are written. (v) Both scripts are reviewed in
+the commit carrying this note and then run once at that clean SHA; results (aggregates only) in `validation/results/stopping/`.

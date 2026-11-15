@@ -67,7 +67,8 @@ def test_sanity(result):
     rows = {(r["ion"], r["mev_u"]): r for r in result["cases"]}
     assert len(rows) == 12
     he = rows[("he", 250.0)]
-    assert 0.0 < he["icru90_alpha_direct_vs_ionmc_pct"] < 0.15
+    assert "icru90_alpha_direct_vs_ionmc_pct" not in he  # SR-1 finding 8: not emitted
+    assert 0.0 < he["construction_diff_pct"] < 0.15
     for r in rows.values():
         assert 0.0 < r["prestep_euler_0p1mm_pct"] <= r["prestep_pure_euler_0p1mm_pct"] + 1e-12
     assert rows[("oxygen", 430.0)]["topas_r80_over_ionmc_r80_pct"] > 0.25

@@ -14,3 +14,5 @@ Reproduce: `ionmc data fetch` the three datasets, then
 `uv run python validation/scripts/stopping/compare_nist.py --output-dir OUT --cache-dir CACHE --code-sha $(git rev-parse HEAD)`.
 
 Archived run: produced at clean task SHA `b634e2841a9379339b3b60cd100294904ea01829`.
+
+**Dated note (2026-11-15, orchestrator; scientific review SR-1 finding 8).** `v3-008-d3-range-attribution.json` stored a per-case ratio of the directly integrated ICRU 90 alpha range to the ionmc range next to the ionmc absolute ranges, from which the ICRU 90 ranges could be reconstructed. The field is removed (`redaction_note` in the file); the D-3 attribution (construction difference ≤ 0.08 %, the step-regime terms) is unchanged and stays in the markdown record. `d3_range_attribution.py` no longer writes the field.

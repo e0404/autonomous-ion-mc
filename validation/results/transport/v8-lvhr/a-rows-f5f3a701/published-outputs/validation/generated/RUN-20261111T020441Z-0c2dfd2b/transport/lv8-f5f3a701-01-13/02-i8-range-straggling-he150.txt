@@ -1,0 +1,63 @@
+# command: /home/wahln/.cache/ionmc-experiment/experiment-v3/host-runner/venv/bin/python /workspace/validation/scripts/transport/steps_v8.py i8 --point 0 --scale 1.0 --timeout 1350 --seed-base 20581004
+# git_sha: f5f3a701a06cef29753bfea8fbfbc0100a3a5a5d
+# started_utc: 2026-11-11T02:04:44Z
+# step_timeout_s: 1500
+Warp 1.17.0 initialized:
+   CUDA Toolkit 12.9, Driver 13.5
+   Devices:
+     "cpu"      : "x86_64"
+     "cuda:0"   : "NVIDIA RTX A6000" (48 GiB, sm_86, mempool enabled)
+   Kernel cache:
+     /cache/warp/1.17.0
+Module transport_float64_diag_f805e80a f805e80 load on device 'cpu' took 1.14 ms  (cached)
+Module transport_float64_diag_f805e80a a0a96a2 load on device 'cpu' took 0.32 ms  (cached)
+#JSON-BEGIN
+{
+ "counters": {
+  "accumulator_overflow": 0,
+  "energy_inversion": 0,
+  "genealogy_overflow": 0,
+  "mcs_mapping_failure": 0,
+  "mcs_table_bracket_miss": 0,
+  "queue_overflow": 0,
+  "scoring_pieces_overflow": 0,
+  "source_energy_out_of_range": 0,
+  "stall": 0,
+  "step_truncation": 0,
+  "straggling_rejection": 0
+ },
+ "csda_range_mm": 159.26217742791596,
+ "e_cut_mev": 8.0,
+ "e_mev_per_u": 150.0,
+ "end_codes_all_cutoff": true,
+ "format": 1,
+ "frozen_histories": 100000,
+ "git_sha": "f5f3a701a06cef29753bfea8fbfbc0100a3a5a5d",
+ "histories": 100000,
+ "i8b_report_only": {
+  "finding_vs_proton": false,
+  "proton_energy_same_range_mev": 150.34499922790638,
+  "proton_sigma_R_over_R_scaled": 0.005401392928751466,
+  "ratio_vs_proton_scaled": 0.9965713935495252,
+  "sigma_R_over_R_quadrature": 0.005394232248778054,
+  "sigma_R_over_R_transport": 0.0053828736781143995
+ },
+ "ion": "he",
+ "mean_end_depth_mm": 159.17328988512776,
+ "pass": true,
+ "quadrature_range_mm": 159.17000914003805,
+ "reduced": false,
+ "relative_deviation": -0.002105688101625258,
+ "seed": 20585204,
+ "seed_base": 20581004,
+ "sigma_end_depth_mm": 0.857288182795914,
+ "sigma_quadrature_mm": 0.8590971734922765,
+ "step": "i8",
+ "suite": "lv8",
+ "tolerance": 0.05,
+ "valid": true,
+ "wall_s": 11.309378468999057
+}
+#JSON-END
+
+# exit=0

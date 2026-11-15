@@ -331,3 +331,18 @@ rms of both sides, the window (2.5 × the sealed ionmc anchor), window fractions
 the expected reference factor, per-part widths, scored/deficit counts, window kurtosis and θx²/θy² correlation; the 16 run
 records it consumed (verdict, problems, primaries, file digests), the seal it re-verified, the trust file and the evaluator's
 committed inputs. Row verdict PASS 5/5 (dated results note of 2026-11-15 in the plan). Not a clinical claim.
+
+# Section-A LV block at f5f3a701 (V3-008 lv8 steps 01–21; committed 2026-11-15 after scientific review SR-1)
+
+`lv8-f5f3a701-steps01-21-single-process.json` is the `summarize.py --combine --subset` summary of the seven host-runner
+calls that ran lv8 steps 01–21 at the frozen SHA f5f3a701 on 2026-11-11 (rows I6-LV, I8 × 3, I13 × 9, T1-ion K = 256,
+R1-ion, R2, T12-ion LV; seed base 20581004; `pass` true, `complete` false (steps 22–135 are the later block at 712f484a),
+`conformant` false by code: diagnostic mode, imported partials, subset). `v8-lvhr/a-rows-f5f3a701/host-records/<run_id>.json`
+are the 13 complete signed host-runner records retrieved through the archived-record tools (signer `host-runner`, key
+4d02f521f3fb9344): the seven evidence calls at f5f3a701 and six earlier calls at a8a7c638 (two launch failures before any
+step — a missing `PYTHONPATH` / `sys.path` bootstrap — and four superseded rehearsal calls, never graded), with the derived
+`index.json` (roles and notes). `a-rows-f5f3a701/published-outputs/` holds the published step documents of the three
+non-shard calls (steps 01–13, 14–16 and the T12-ion LV combine 21); their signed `output_manifest_sha256` reproduces from
+the committed files (`r2_io.published_manifest`). The four T12-ion LV shard calls (steps 17–20) published npz partials that
+are not in Git; each partial is bound by content sha256 and host run id in the combine step's `attestation.partials`.
+Numbers: plan evidence archive (rows I6-LV/I8/I13, T1-ion LV/R1-ion/R2, T12-ion LV). Not a clinical claim.

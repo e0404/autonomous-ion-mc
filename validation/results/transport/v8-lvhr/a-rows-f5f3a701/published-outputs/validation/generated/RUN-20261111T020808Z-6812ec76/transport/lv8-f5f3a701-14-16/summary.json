@@ -1,0 +1,68 @@
+{
+ "attestation": null,
+ "conformant": false,
+ "deferred_steps": [],
+ "execution_mode": "single-process-diagnostic",
+ "git_sha": "f5f3a701a06cef29753bfea8fbfbc0100a3a5a5d",
+ "identity": "31bdf3fc98dbe71881e3f4756d287711b311756e3ba5531204bd2f0cdfdc9fdb",
+ "non_conformant_reasons": [
+  "execution mode single-process-diagnostic (diagnostic, not the qualification mode)"
+ ],
+ "partials_attestation_problems": [],
+ "pass": true,
+ "problems": [],
+ "reduced_history_counts": false,
+ "seed_base": "20581004",
+ "sha_source": "git",
+ "single_process_env": "OMP_NUM_THREADS=1,OPENBLAS_NUM_THREADS=1,MKL_NUM_THREADS=1,NUMEXPR_NUM_THREADS=1,IONMC_SINGLE_PROCESS=1",
+ "source_ok": true,
+ "steps": {
+  "14-t1-ion-trace-parity-c290-o350": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "14-t1-ion-trace-parity-c290-o350.txt",
+   "frozen_histories": 256,
+   "histories": 256,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "15-r1-ion-repeatability-c290": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "15-r1-ion-repeatability-c290.txt",
+   "frozen_histories": [
+    100,
+    10000,
+    10000
+   ],
+   "histories": [
+    100,
+    10000,
+    10000
+   ],
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  },
+  "16-r2-a16-trace-fixture": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "16-r2-a16-trace-fixture.txt",
+   "frozen_histories": null,
+   "histories": null,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  }
+ },
+ "subset": true,
+ "suite": "lv8",
+ "tree_dirty": "no"
+}

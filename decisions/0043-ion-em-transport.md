@@ -767,6 +767,26 @@ commit named in `validation/plans/v3-008/p9-freeze-record.md`, once FC-1 and FC-
 
 **Revision 2 (2026-11-07; dated amendment, earlier text kept).** The validation strategy is rewritten by the operator directive (`reference_requests/operator-directives/2026-11-07-topas-validation-target.md`): acceptance = agreement with the specified TOPAS configuration (OpenTOPAS 4.3 / Geant4 11.4.2, seven modules), EM-only TOPAS as intermediate, experimental validation deferred, complementary checks retained (I3 libdEdx, I11, V5-SS). Frozen in `validation/plans/v3-008-acceptance.md` revision 2 (rows TD-EM, TD-FULL, TL-EM, TL-FULL, TD-H/TL-H, TF-DIAG; §3 amendment above for the lineage and the f_dM criterion) by the reviewed commit that binds `validation/plans/v3-008/r2-topas-target.md` and the 205 revision-2 TOPAS bundles in `validation/plans/v3-008/p9-freeze-record.md` ("Revision 2 additions").
 
+**Later validation outcome (2026-11-09, orchestrator; entered verbatim on 2026-11-15 after scientific review SR-1 finding 3 — V3-008 revision-2 TOPAS-agreement main set TD-EM / TL-EM graded once at 94bc948e; FAILs preserved, never re-graded).**
+The 72 EM evidence parts (cases 1–9, IDD-EM parts 0–3 and LAT-EM parts 4–7, 25 000 primaries each) ran at `code_sha`
+ead583f1 on 2026-11-09 and were graded once with `r2_evaluate.py grade` at evaluator HEAD 94bc948e
+(`validation/results/transport/v8r2-topas/reports/<row>-case<N>.json`; plan "Dated results note and STOP 3 (2026-11-09)").
+**TD-EM: 3 PASS (He 150, C 290, O 350), 6 FAIL** — He 50, C 80, O 100 fail criterion (d) peak-to-entrance (ionmc/TOPAS − 1 =
++7.8 / +10.8 / +11.4 %), He 250, C 430, O 430 fail (c) z_peak (ionmc 0.66–0.91 mm proximal at ranges 232–383 mm) and C 430 /
+O 430 also (d) (+2.8 / +3.5 %); (a) R80 passes in all nine cases with ionmc systematically short by 0.02–0.30 %; (e) every
+plateau group passes. **TL-EM: 1 PASS (C 80), 8 FAIL** — 25 of 36 gated points invalid ("a batch/part fit failed": the §4.2
+window-truncated ML fit enters a 2-cycle when ±2σ crosses a bin edge) and one undefined (O 100, f = 0.25); where evaluable,
+σ_core,ionmc/σ_core,TOPAS-EM = 1.17–1.31 at the gated points, inside the pre-registered band; criterion (b) D_ext NOT
+EVALUABLE for He, C and O. **STOP 3** was declared; the attribution and the prospective amendment R2-STOP3 (§4 of this
+decision; plan amendment of 2026-11-09) followed: the low-end (d) FAILs trace to ionmc's end-of-range point deposit (a model
+approximation, replaced by `continuous_residual_v1` under Branch B), the upper-end (c) FAILs to a reference range 0.15–0.45 %
+beyond its declared ICRU 90 lineage, the TL-EM invalid points to the estimator's iteration (window-cycle rule); the main-set
+rows are **consumed and preserved as graded** and the held-out set TD-H/TL-H (He 100, C 150, O 200) became the sole gating
+TOPAS-agreement evidence (PASS 12/12 on 2026-11-11). Consequences carried into the ledger (R2-STOP3 item 3): the
+TOPAS-agreement claim narrows to the three interior held-out energies; the f_dM energy-trend test D_ext was not evaluable and
+is consumed, so the adequacy of the f_dM extrapolation rests on TL-H (a) and I11-ext only; the operator may override the
+Branch-B choice (integration decision on gating FAILs). Not a clinical claim.
+
 **Later validation outcome (2026-11-11, orchestrator; V3-008 lv8 row I9 at e602a583).** The lateral variance of
 deposits exceeded the Fermi–Eyges A2 computed by the row's reference helper by the uniform factor 1.733–1.740
 (σ ratio 1.317–1.319) for He 150, C 290 and O 350 MeV/u at all depth fractions — FAIL, preserved verbatim
@@ -808,6 +828,6 @@ Molière–Hanson (+1.85 to +5.32 % on the I11 grid), which the pre-registration
 reference shows heavier within-window tails (kurtosis 2.81–2.87 vs 2.62–2.63) and a small θx²/θy² correlation absent in ionmc.
 The row's lineage statement (§3) stands: shared-lineage evidence that the mapping realises the b(z)-dependence of the collision
 number in the thin slab; not independent evidence of the charge dependence of screening. Every run is bound to its signed
-reference-runner record (`validation/results/transport/v8-ss/`). With this row every gating row of the V3-008 plan is graded:
-section-A LV/HR rows PASS (2026-11-11/13), the revision-2 TOPAS-agreement rows as graded on 2026-11-09 (main set, with the
-R2-STOP3 attribution) and 2026-11-11 (held-out set PASS 12/12), V5-SS PASS. Nothing is re-graded. Not a clinical claim.
+reference-runner record (`validation/results/transport/v8-ss/`). **Correction (2026-11-15, scientific review SR-1 finding 1):** the sentence "with this row every gating row of the V3-008 plan is graded" written here earlier that day was false: the section-A LV rows I2 (He table reproduction vs ASTAR / ICRU 90) and I3 (C/O table comparison vs libdEdx ICRU73_NEW) had not been evaluated. They are evaluated after this correction (plan note SR-1; their outcome is a separate later entry). Graded as of this entry: the section-A LV/HR rows of items 4b/4d (I6-LV, I8, I13, T1-ion LV, R1-ion, R2, T12-ion LV at f5f3a701, PASS) and of 2026-11-13 (I9, I12, I14, I15, T13-ion, T12-ion HR at 712f484a, PASS); the revision-2 TOPAS-agreement main set (2026-11-09: TD-EM 3 PASS / 6 FAIL, TL-EM 1 PASS / 8 FAIL, consumed and preserved; entry above) and the held-out set (2026-11-11: TD-H/TL-H PASS 12/12, the sole gating TOPAS-agreement evidence); V5-SS PASS 5/5. Nothing is re-graded. Not a clinical claim.
+
+**Dated note (2026-11-15, orchestrator; SR-1 finding 5).** Where §3 (revision 2) and the dated note of 2026-11-07 say that the adequacy of the f_dM extrapolation is judged by TL-EM criterion (b) and TL-FULL criterion (b) (the energy-trend test D_ext), that test was NOT EVALUABLE on the main set (2026-11-09; invalid points of each pair) and is consumed with the main set under amendment R2-STOP3; the held-out set has no D_ext by design. The adequacy of the extrapolation therefore rests on TL-H (a) at the three interior energies and on the report-only I11-ext only, and the f_dM extrapolation stays a declared model-design limitation without an evaluated trend test. The TOPAS-agreement claim of this decision is limited to the held-out energies He 100, C 150 and O 200 MeV/u (R2-STOP3 item 3 (ii)); the operator may override the Branch-B route (item 3 (iii)).

@@ -4,7 +4,6 @@
       "R_ionmc_mm": 22.448565095853596,
       "R_ionmc_table_mm": 22.540897766337935,
       "construction_diff_pct": 0.05470248495118568,
-      "icru90_alpha_direct_vs_ionmc_pct": 0.05470248495118568,
       "ion": "he",
       "mev_u": 50.0,
       "prestep_euler_0p1mm_pct": 0.20791134799140742,
@@ -15,7 +14,6 @@
     {
       "R_ionmc_mm": 77.89031210719904,
       "R_ionmc_table_mm": 77.98256983771404,
-      "icru90_alpha_direct_vs_ionmc_pct": 0.050554913886613484,
       "ion": "he",
       "mev_u": 100.0,
       "prestep_euler_0p1mm_pct": 0.09449333275461935,
@@ -25,7 +23,6 @@
       "R_ionmc_mm": 159.16996698723977,
       "R_ionmc_table_mm": 159.26194029582254,
       "construction_diff_pct": 0.07583748376351895,
-      "icru90_alpha_direct_vs_ionmc_pct": 0.07583748376351895,
       "ion": "he",
       "mev_u": 150.0,
       "prestep_euler_0p1mm_pct": 0.0553980114440078,
@@ -37,7 +34,6 @@
       "R_ionmc_mm": 382.52683613165584,
       "R_ionmc_table_mm": 382.61803523259584,
       "construction_diff_pct": 0.0773517402618884,
-      "icru90_alpha_direct_vs_ionmc_pct": 0.0773517402618884,
       "ion": "he",
       "mev_u": 250.0,
       "prestep_euler_0p1mm_pct": 0.027416218267850567,
@@ -204,6 +200,6 @@
   "note": "D-3 report-only attribution; aggregates only (ranges in mm of water, ratios in percent); no NIST/ICRU/Geant4 stopping values are reproduced. C/O 'topas_like_*' are approximations of the Geant4 construction (see script docstring); pre-step estimate is a planning estimate.",
   "points_per_decade": 400,
   "residual_definition": "topas_r80_over_ionmc_r80_pct - construction_diff_pct - prestep_euler_0p1mm_pct",
-  "script_sha256": "b1da49ecfb5e7242e3893a20ca9f99cc9bb11b6094a8fbe548503ec9c2b10d2d",
+  "script_sha256": "5b24e4dc3908ed6f9ac08e135b41cc62e4d82540cd74cfa714628d6527464565",
   "step_mm": 0.1
 }

@@ -237,14 +237,14 @@ def compute(worktree: Path, cache_dir: Path) -> dict:
         row["prestep_euler_0p1mm_pct"] = (r_euler / r0 - 1) * 100
         r_naive = euler_range_mm(e_all, d["s_ion"], p.a, mev_u)
         row["prestep_pure_euler_0p1mm_pct"] = (r_naive / r0 - 1) * 100
+        # SR-1 (2026-11-15) finding 8: the direct ICRU 90 alpha ratio is not emitted per energy
+        # (with the absolute ionmc ranges it would reproduce the ICRU 90 alpha CSDA ranges); it
+        # enters the He attribution as construction_diff_pct only.
+        direct_he = row.pop("icru90_alpha_direct_vs_ionmc_pct", None)
         if (ion, mev_u) in reports:
             x, r = reports[(ion, mev_u)]
             excess = (r / x - 1) * 100
-            primary = (
-                row["icru90_alpha_direct_vs_ionmc_pct"]
-                if ion == "he"
-                else row["topas_like_ls_barkas_vs_ionmc_pct"]
-            )
+            primary = direct_he if ion == "he" else row["topas_like_ls_barkas_vs_ionmc_pct"]
             row["topas_r80_over_ionmc_r80_pct"] = excess
             row["construction_diff_pct"] = primary
             row["residual_pct"] = excess - primary - row["prestep_euler_0p1mm_pct"]

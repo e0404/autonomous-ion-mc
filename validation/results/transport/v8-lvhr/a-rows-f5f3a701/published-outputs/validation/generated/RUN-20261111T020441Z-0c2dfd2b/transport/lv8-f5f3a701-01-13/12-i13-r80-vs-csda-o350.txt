@@ -1,0 +1,51 @@
+# command: /home/wahln/.cache/ionmc-experiment/experiment-v3/host-runner/venv/bin/python /workspace/validation/scripts/transport/steps_v8.py i13 --case-index 7 --scale 1.0 --timeout 1350 --seed-base 20581004
+# git_sha: f5f3a701a06cef29753bfea8fbfbc0100a3a5a5d
+# started_utc: 2026-11-11T02:07:22Z
+# step_timeout_s: 1500
+Warp 1.17.0 initialized:
+   CUDA Toolkit 12.9, Driver 13.5
+   Devices:
+     "cpu"      : "x86_64"
+     "cuda:0"   : "NVIDIA RTX A6000" (48 GiB, sm_86, mempool enabled)
+   Kernel cache:
+     /cache/warp/1.17.0
+Module transport_float64_plain_944069e3 944069e load on device 'cpu' took 1.12 ms  (cached)
+Module transport_float64_plain_944069e3 3077154 load on device 'cpu' took 0.28 ms  (cached)
+#JSON-BEGIN
+{
+ "counters": {
+  "accumulator_overflow": 0,
+  "energy_inversion": 0,
+  "genealogy_overflow": 0,
+  "mcs_mapping_failure": 0,
+  "mcs_table_bracket_miss": 0,
+  "queue_overflow": 0,
+  "scoring_pieces_overflow": 0,
+  "source_energy_out_of_range": 0,
+  "stall": 0,
+  "step_truncation": 0,
+  "straggling_rejection": 0
+ },
+ "csda_range_mm": 166.6423795816833,
+ "e_mev_per_u": 350.0,
+ "format": 1,
+ "frozen_histories": 100000,
+ "git_sha": "f5f3a701a06cef29753bfea8fbfbc0100a3a5a5d",
+ "histories": 100000,
+ "ion": "oxygen",
+ "pass": true,
+ "r80_batch_sem_mm": 0.0029187596180958795,
+ "r80_mm": 166.6172074564593,
+ "reduced": false,
+ "relative_deviation": -0.00015105476342314184,
+ "seed": 20585311,
+ "seed_base": 20581004,
+ "step": "i13",
+ "suite": "lv8",
+ "tolerance": 0.002,
+ "valid": true,
+ "wall_s": 18.078752023999186
+}
+#JSON-END
+
+# exit=0
