@@ -295,13 +295,13 @@ read the seal and review ids from the plan's SS seal note. Not a clinical claim.
 
 # V5-SS TOPAS evidence runs and scorer smokes (V3-008, branch B)
 
-`v8-ss/block1-exploratory/topas-runs/<run_id>/{record.json, artifacts.json}` (block 1, exploratory — see the amendment section below; the evidence block 2 uses `v8-ss/topas-runs/`) are the 16 **signed reference-runner records** (signer
+`v8-ss/block1-exploratory/topas-runs/<run_id>/{record.json, artifacts.json}` (block 1, EXPLORATORY, never evidence — amendment V5-SS-B2, section below) are the 16 **signed reference-runner records of the exploratory block 1** (signer
 `reference-runner`, key 303cce4c129d387c; schema 3) of the V5-SS evidence block — cases 22, 25–31 × parts 0–1, 30000
 primaries per part, bundles `validation/reference_cases/topas/v5ss-<ion>-water-<E>mevu-case<NN>-part<P>` — all run at
 `code_sha` a508afd8 on 2026-11-13 (07:56–10:21 UTC, one run at a time, exit 0), `record.json` verbatim as returned by the
 reference runner and `artifacts.json` the `list_reference_artifacts` result (path, bytes, sha256 of the ten archived files:
 inputs, request, record, stdout/stderr and the four `work/` outputs including `ss_exit.header` / `ss_exit.phsp`).
-`topas-runs/index.json` maps (case, part) to the run id (block 1: `block1-exploratory/topas-runs/index.json`). The phase spaces (3.3 MB each) are **not in Git**: they stay in
+`block1-exploratory/topas-runs/index.json` maps (case, part) to the run id. The **evidence block 2** (parts 2–3, seeds 20619000 + 100·part + case, 16 runs at 769f2dd6 on 2026-11-15 11:13–13:38 UTC, exit 0) is committed in the same layout under `v8-ss/topas-runs/<run_id>/` with `v8-ss/topas-runs/index.json`. The phase spaces (3.3 MB each) are **not in Git**: they stay in
 the reference-runner archive and are materialized into the ignored task cache (`.ionmc-cache/reference-runs/<run_id>/`)
 where `ss_evaluate.py check-run` / `grade` read them under the signed digests of `artifacts.json`
 (`output_files_sha256` of the record must be reproduced by the listed `work/` files). `v8-ss/smoke-runs/` holds the two

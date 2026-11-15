@@ -1,0 +1,105 @@
+{
+  "schema": "ionmc-v5ss-topas-runs-index-1",
+  "task_id": "V3-008",
+  "code_sha": "769f2dd6b983f08c865e0a3103556ed962e4654f",
+  "block": 2,
+  "note": "the 16 evidence parts of row V5-SS block 2 (amendment V5-SS-B2; 8 cases x parts 2-3, 30000 primaries each), signer reference-runner; record.json verbatim, artifacts.json = list_reference_artifacts result; outputs stay in the ignored task cache",
+  "runs": [
+    {
+      "case": 22,
+      "part": 2,
+      "run_id": "REF-a527fe0e851f00cb1af6-239b9954",
+      "bundle": "v5ss-he-water-150mevu-case22-part2"
+    },
+    {
+      "case": 22,
+      "part": 3,
+      "run_id": "REF-9e3ea425cc38fa5c5cb1-5d2db04b",
+      "bundle": "v5ss-he-water-150mevu-case22-part3"
+    },
+    {
+      "case": 25,
+      "part": 2,
+      "run_id": "REF-edf8878be28659da40f8-cf1ceae9",
+      "bundle": "v5ss-carbon-water-150mevu-case25-part2"
+    },
+    {
+      "case": 25,
+      "part": 3,
+      "run_id": "REF-969c54c0bbf3027b3e95-10156f31",
+      "bundle": "v5ss-carbon-water-150mevu-case25-part3"
+    },
+    {
+      "case": 26,
+      "part": 2,
+      "run_id": "REF-c34615bbf0e59276482e-7ffc7b57",
+      "bundle": "v5ss-oxygen-water-150mevu-case26-part2"
+    },
+    {
+      "case": 26,
+      "part": 3,
+      "run_id": "REF-263b7148f0de286e1fb8-490eb34d",
+      "bundle": "v5ss-oxygen-water-150mevu-case26-part3"
+    },
+    {
+      "case": 27,
+      "part": 2,
+      "run_id": "REF-78cfae4e79aa7d8b8820-d0a47f0a",
+      "bundle": "v5ss-carbon-water-250mevu-case27-part2"
+    },
+    {
+      "case": 27,
+      "part": 3,
+      "run_id": "REF-a051179759e0546dc962-16d193b7",
+      "bundle": "v5ss-carbon-water-250mevu-case27-part3"
+    },
+    {
+      "case": 28,
+      "part": 2,
+      "run_id": "REF-b775b23214605030a29b-81de8299",
+      "bundle": "v5ss-he-water-250mevu-case28-part2"
+    },
+    {
+      "case": 28,
+      "part": 3,
+      "run_id": "REF-8363ef9530932e28229d-515e8220",
+      "bundle": "v5ss-he-water-250mevu-case28-part3"
+    },
+    {
+      "case": 29,
+      "part": 2,
+      "run_id": "REF-60f1b80cc8675eead1a4-509a0cd3",
+      "bundle": "v5ss-carbon-water-430mevu-case29-part2"
+    },
+    {
+      "case": 29,
+      "part": 3,
+      "run_id": "REF-d4af95a44343e1e023d1-74bf4219",
+      "bundle": "v5ss-carbon-water-430mevu-case29-part3"
+    },
+    {
+      "case": 30,
+      "part": 2,
+      "run_id": "REF-b4af3c67ca0f82ac4578-347f26e5",
+      "bundle": "v5ss-oxygen-water-430mevu-case30-part2"
+    },
+    {
+      "case": 30,
+      "part": 3,
+      "run_id": "REF-e10c55b475bfb3f4c2a0-ddcb9100",
+      "bundle": "v5ss-oxygen-water-430mevu-case30-part3"
+    },
+    {
+      "case": 31,
+      "part": 2,
+      "run_id": "REF-3cebbd4da025cb15f650-737a5074",
+      "bundle": "v5ss-oxygen-water-250mevu-case31-part2"
+    },
+    {
+      "case": 31,
+      "part": 3,
+      "run_id": "REF-c9b82f7aa1b4517266ac-8e0b1ab9",
+      "bundle": "v5ss-oxygen-water-250mevu-case31-part3"
+    }
+  ]
+}

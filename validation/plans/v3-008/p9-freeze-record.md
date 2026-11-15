@@ -1215,7 +1215,7 @@ placeholder scorer output was deleted unread.
 | `validation/results/transport/v8-ss/topas-runs/REF-f785d4669a97d92e3f7a-ecb230b0/record.json` | `9ab3ec05350744ec52890703313315e0bbd586c25954e7dd5498beff70614c34` |
 | `validation/results/transport/v8-ss/topas-runs/REF-fd8cf8ed4bbab1079850-df809295/artifacts.json` | `1078d3c873cf2c778e9c25cb39353b82c2760759241ab06d29a343fdfe3bb44c` |
 | `validation/results/transport/v8-ss/topas-runs/REF-fd8cf8ed4bbab1079850-df809295/record.json` | `569a199c77459b9c73101b46b17911e950588067acfecd2411a1cbde3ef87e85` |
-| `validation/results/transport/v8-ss/topas-runs/index.json` | `0a94c6e48f1d7601717aa6f9a1b771403ecd0a17e3bfb7c5b447d25224e744c0` |
+| `validation/results/transport/v8-ss/topas-runs/index.json` | `895b6a186cfc2ea53936044950f8626adcf62a2d58ba6f96b2e9ebd41b5d0df7` |
 
 
 **Dated note (2026-11-15, orchestrator) — files added by the V5-SS check-run commit (the 18 `ss_evaluate.py check-run` reports at d03ce6cb; sha256 as committed):**
@@ -1330,10 +1330,51 @@ placeholder scorer output was deleted unread.
 | `validation/results/transport/v8-ss/block1-exploratory/topas-runs/REF-f785d4669a97d92e3f7a-ecb230b0/record.json` | `9ab3ec05350744ec52890703313315e0bbd586c25954e7dd5498beff70614c34` |
 | `validation/results/transport/v8-ss/block1-exploratory/topas-runs/REF-fd8cf8ed4bbab1079850-df809295/artifacts.json` | `1078d3c873cf2c778e9c25cb39353b82c2760759241ab06d29a343fdfe3bb44c` |
 | `validation/results/transport/v8-ss/block1-exploratory/topas-runs/REF-fd8cf8ed4bbab1079850-df809295/record.json` | `569a199c77459b9c73101b46b17911e950588067acfecd2411a1cbde3ef87e85` |
-| `validation/results/transport/v8-ss/block1-exploratory/topas-runs/index.json` | `895b6a186cfc2ea53936044950f8626adcf62a2d58ba6f96b2e9ebd41b5d0df7` |
+| `validation/results/transport/v8-ss/block1-exploratory/topas-runs/index.json` | `2a0a9039a6fa611f941fa1d71ff1daf11ecbb3d3a63ccf90d19841b7ba72d1e3` |
 
 
 **Dated note (2026-11-15, orchestrator) — entries changed by the block-2 commit (generator with BLOCK1/EVIDENCE parts, the SS manifest with 33 bundles, the evaluator's block semantics, tests):** `tests/ionmc/test_v3_008_seed_families.py` 4bae0c2f… → e4e33e66…; `validation/scripts/ion_em/gen_ss_bundles.py` 683b148f… → 6a165292…; `validation/scripts/ion_em/ss_evaluate.py` ab3751f1… → ca45fcbe…; `validation/reference_cases/topas/v5ss-frozen-manifest.json` fc032856… → 4d4c2da1…; `tests/ionmc/test_v5ss_bundles.py` f94d543b… → 93d3dc5b…; `tests/ionmc/test_v5ss_evaluate.py` 6123d151… → c2af6165…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-15, orchestrator) — files added by the V5-SS block-2 records commit (the 16 signed reference-runner records of the evidence parts 2–3 at 769f2dd6, `record.json` + `artifacts.json` each, and `topas-runs/index.json`; sha256 as committed):**
+
+| File | sha256 |
+|---|---|
+| `validation/results/transport/v8-ss/topas-runs/REF-263b7148f0de286e1fb8-490eb34d/artifacts.json` | `1aa113df69adae4a3fd7a5d280db94700164ea967b0cf3beb712566d935a9120` |
+| `validation/results/transport/v8-ss/topas-runs/REF-263b7148f0de286e1fb8-490eb34d/record.json` | `246276714360f46aeb9ab3c47f7af555911e3d94947652bdde3d83a9f9cc5034` |
+| `validation/results/transport/v8-ss/topas-runs/REF-3cebbd4da025cb15f650-737a5074/artifacts.json` | `c8e44347ecd3b5d1381617147b2f67cf8d818cd704d65213a90006aecfcfc834` |
+| `validation/results/transport/v8-ss/topas-runs/REF-3cebbd4da025cb15f650-737a5074/record.json` | `8c773968c50221c387a61df633b5d194b4d1eda6d143c22f8c29fdd709d8db2b` |
+| `validation/results/transport/v8-ss/topas-runs/REF-60f1b80cc8675eead1a4-509a0cd3/artifacts.json` | `d3a1fe182b897c072ad2654ddf2608e5076553ac0650ab9c4113c58c5a412b70` |
+| `validation/results/transport/v8-ss/topas-runs/REF-60f1b80cc8675eead1a4-509a0cd3/record.json` | `636bb10a903ea9eccbaa224bb19b581655584caeb79cc3fca47c76b66ecb5fa4` |
+| `validation/results/transport/v8-ss/topas-runs/REF-78cfae4e79aa7d8b8820-d0a47f0a/artifacts.json` | `1a5e52c3a6527d874521b79922a9b2ac956ceb9a29e7ae5f0b7c9a2f3f1e1c30` |
+| `validation/results/transport/v8-ss/topas-runs/REF-78cfae4e79aa7d8b8820-d0a47f0a/record.json` | `bd027d21d254d4e5b21b0878d764464a4bbabae57c53ecdb468d5b6ca40f3114` |
+| `validation/results/transport/v8-ss/topas-runs/REF-8363ef9530932e28229d-515e8220/artifacts.json` | `693f9e9ad54391c4411e81ce99fd1f7567690c9bd7a915115a87168fdc207ce0` |
+| `validation/results/transport/v8-ss/topas-runs/REF-8363ef9530932e28229d-515e8220/record.json` | `f37d86c18b2938965c7f766920d0477ea38efee9ba12fbb8030fda0aa9e0aafe` |
+| `validation/results/transport/v8-ss/topas-runs/REF-969c54c0bbf3027b3e95-10156f31/artifacts.json` | `cfb5bdd93abee021c1957f09e6631a1ae330b92c156491b0cf92b2a2f4c42b65` |
+| `validation/results/transport/v8-ss/topas-runs/REF-969c54c0bbf3027b3e95-10156f31/record.json` | `9b8b47513522c5b67961652fa79835bcd1991a73e9fb524f5445b91af7fd70aa` |
+| `validation/results/transport/v8-ss/topas-runs/REF-9e3ea425cc38fa5c5cb1-5d2db04b/artifacts.json` | `dbb99253c0c49a0089162e6d8c85e5ba18ce29799ffe48c16ec7cafe450260ff` |
+| `validation/results/transport/v8-ss/topas-runs/REF-9e3ea425cc38fa5c5cb1-5d2db04b/record.json` | `85fe54ee1135ec6bb73a220961f74bd582c3f9b4bd7b63be4a585643be4c0225` |
+| `validation/results/transport/v8-ss/topas-runs/REF-a051179759e0546dc962-16d193b7/artifacts.json` | `98f32ce3dde0d11297952b4c6a82c6d842f7bb289aa2501a559962b710b347b0` |
+| `validation/results/transport/v8-ss/topas-runs/REF-a051179759e0546dc962-16d193b7/record.json` | `71e62f4af8ae443cea3a62f7bac7a8f7e3b45d844ebb5e75b1a79111778becf9` |
+| `validation/results/transport/v8-ss/topas-runs/REF-a527fe0e851f00cb1af6-239b9954/artifacts.json` | `fa5a82861e273b593d48e0062786d1a8b67fe252b0223806df16d5a565690b78` |
+| `validation/results/transport/v8-ss/topas-runs/REF-a527fe0e851f00cb1af6-239b9954/record.json` | `51958da1063212dace8ce2455b7895462167bc4b3939ccd8de1029272f23cc44` |
+| `validation/results/transport/v8-ss/topas-runs/REF-b4af3c67ca0f82ac4578-347f26e5/artifacts.json` | `f454f2ee362f4e50a57495628fe80a4207c4cf4b8fd9a657b3291f282fd2a81e` |
+| `validation/results/transport/v8-ss/topas-runs/REF-b4af3c67ca0f82ac4578-347f26e5/record.json` | `d90e647e0bcdc946509f7ef393f4120cc710ce4766419e0617038e1b9c0c8d22` |
+| `validation/results/transport/v8-ss/topas-runs/REF-b775b23214605030a29b-81de8299/artifacts.json` | `b7d17219eabf2879cd63492105071ec78ab6104963adcd0d701b20704518a2bc` |
+| `validation/results/transport/v8-ss/topas-runs/REF-b775b23214605030a29b-81de8299/record.json` | `9581d0383d9306536d86f27e92c892a18ca71738b59d240279f615eb46592094` |
+| `validation/results/transport/v8-ss/topas-runs/REF-c34615bbf0e59276482e-7ffc7b57/artifacts.json` | `62ff456b56c670ce1c790b2995756e6f4b12f96c97baff10bdecf9d0760f6fa3` |
+| `validation/results/transport/v8-ss/topas-runs/REF-c34615bbf0e59276482e-7ffc7b57/record.json` | `83b40a76f444266e09ef20294cdccd5f756ae7ed00260cf386824ef14e3e24cc` |
+| `validation/results/transport/v8-ss/topas-runs/REF-c9b82f7aa1b4517266ac-8e0b1ab9/artifacts.json` | `d20e88f11099855777e0c84dd8e0e23e71ff343f08c81b88d559266faba860b4` |
+| `validation/results/transport/v8-ss/topas-runs/REF-c9b82f7aa1b4517266ac-8e0b1ab9/record.json` | `1567b16f72149e93cf43f859b5f9e784fbf23aa26b77f5ca9da6026b349f3c45` |
+| `validation/results/transport/v8-ss/topas-runs/REF-d4af95a44343e1e023d1-74bf4219/artifacts.json` | `feac5996a54d4803d79a262725c8c8b85f95f484eb358a7cc24bd792afcb120f` |
+| `validation/results/transport/v8-ss/topas-runs/REF-d4af95a44343e1e023d1-74bf4219/record.json` | `00ea0cdf62ee323b810498d7687c1de68293cad3efae5452eb2a3f2a3e722afe` |
+| `validation/results/transport/v8-ss/topas-runs/REF-e10c55b475bfb3f4c2a0-ddcb9100/artifacts.json` | `9f6e78346acfcd1c7ba0fc5b25339142c45bb0f1df21bddc0908293675a8479c` |
+| `validation/results/transport/v8-ss/topas-runs/REF-e10c55b475bfb3f4c2a0-ddcb9100/record.json` | `95658b275cf2ef083b1eba1d9ad18947f4fc097192053e6a7430ec35a69a276f` |
+| `validation/results/transport/v8-ss/topas-runs/REF-edf8878be28659da40f8-cf1ceae9/artifacts.json` | `fe3675028a94514472a05d50a5743db6de1c6837c026d788715c6ff01ab3e77e` |
+| `validation/results/transport/v8-ss/topas-runs/REF-edf8878be28659da40f8-cf1ceae9/record.json` | `1cb22efe95cbb1e4541e041c8ac2610964d137f28be19d636d718319cbedffd9` |
+| `validation/results/transport/v8-ss/topas-runs/index.json` | `794667d4d8c0c8a682f944928ab2746429d6af2253419683d52c284f7c6f9368` |
+
+
+**Dated note (2026-11-15, orchestrator) — entries changed by the block-2 records commit (the block-1 index note reworded 'exploratory', REVIEW-b9ac8cea minor finding; the row `v8-ss/topas-runs/index.json` in the block-1 table above keeps the hash of the block-1 index at its former path as history — the block-2 index is the row of the same path in the note below):** `validation/results/transport/v8-ss/topas-runs/index.json` 0a94c6e4… → 794667d4…; `validation/results/transport/v8-ss/block1-exploratory/topas-runs/index.json` 895b6a18… → 2a0a9039…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.

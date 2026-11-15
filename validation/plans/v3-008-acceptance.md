@@ -1446,3 +1446,32 @@ evidential weight. Both lapses are recorded in the operator-visible ledger of th
 
 **3. What this amendment does not do.** It does not change any tolerance, estimator, seed formula, bundle physics, ionmc
 sample or model; it does not re-grade anything; it does not use block 1 for any decision. Not a clinical claim.
+
+**Dated note (2026-11-15, orchestrator) — V5-SS block 2 complete; records committed, nothing graded.** The 16 evidence parts
+of amendment V5-SS-B2 (parts 2–3, seeds 20619000 + 100·part + case) ran one at a time at `code_sha` 769f2dd6 (the reviewed
+amendment commit, REVIEW-b9ac8cea finished 2026-11-15 11:09:40 UTC before the first start at 11:13:39 UTC; a descendant of the
+seal commit 7fe6ab1d), 2026-11-15 11:13–13:38 UTC, every run exit 0, succeeded, four `work/` outputs, signed by
+`reference-runner` (key 303cce4c129d387c); REF cost 8501 s (2.36 h, within the raised planning cap). Records (`record.json`
+verbatim, `artifacts.json` = tool listing, digests cross-checked against the materialized transfer manifests) under
+`validation/results/transport/v8-ss/topas-runs/<run_id>/` with `index.json` (block 2). Only header counts and run-validity
+logs have been read: under the frozen count rule, deficit 1 in 26/2, 28/2, 28/3, 29/3, deficit 2 in 31/2, 0 elsewhere
+(all ≤ 30). `ss_evaluate.py check-run` reports and the single grade follow in the next commits.
+
+| case/part | run id | UTC | s | scored primaries |
+|---|---|---|---|---|
+| 22/2 | `REF-a527fe0e851f00cb1af6-239b9954` | 11:13:39–11:16:46 | 187 | 30000 |
+| 22/3 | `REF-9e3ea425cc38fa5c5cb1-5d2db04b` | 11:16:59–11:20:05 | 186 | 30000 |
+| 25/2 | `REF-edf8878be28659da40f8-cf1ceae9` | 11:20:18–11:31:08 | 650 | 30000 |
+| 25/3 | `REF-969c54c0bbf3027b3e95-10156f31` | 11:31:22–11:42:14 | 653 | 30000 |
+| 26/2 | `REF-c34615bbf0e59276482e-7ffc7b57` | 11:42:28–12:00:32 | 1085 | 29999 |
+| 26/3 | `REF-263b7148f0de286e1fb8-490eb34d` | 12:00:46–12:18:36 | 1071 | 30000 |
+| 27/2 | `REF-78cfae4e79aa7d8b8820-d0a47f0a` | 12:18:50–12:28:04 | 555 | 30000 |
+| 27/3 | `REF-a051179759e0546dc962-16d193b7` | 12:28:18–12:37:23 | 545 | 30000 |
+| 28/2 | `REF-b775b23214605030a29b-81de8299` | 12:37:37–12:39:48 | 131 | 29999 |
+| 28/3 | `REF-8363ef9530932e28229d-515e8220` | 12:40:01–12:42:12 | 131 | 29999 |
+| 29/2 | `REF-60f1b80cc8675eead1a4-509a0cd3` | 12:42:25–12:49:57 | 452 | 30000 |
+| 29/3 | `REF-d4af95a44343e1e023d1-74bf4219` | 12:50:10–12:57:33 | 443 | 29999 |
+| 30/2 | `REF-b4af3c67ca0f82ac4578-347f26e5` | 12:57:47–13:06:58 | 552 | 30000 |
+| 30/3 | `REF-e10c55b475bfb3f4c2a0-ddcb9100` | 13:07:12–13:16:28 | 556 | 30000 |
+| 31/2 | `REF-3cebbd4da025cb15f650-737a5074` | 13:16:42–13:27:35 | 654 | 29998 |
+| 31/3 | `REF-c9b82f7aa1b4517266ac-8e0b1ab9` | 13:27:48–13:38:40 | 651 | 30000 |
