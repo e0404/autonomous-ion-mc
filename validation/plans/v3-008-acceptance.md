@@ -1651,7 +1651,7 @@ on the grid points at 10–20 MeV/u (and, for O, at 20–50), while the region a
 gate passes (0.26 / 0.39 %) — the deficit sits in the last ≈ 1–2 mm of the ion range (P12 §4: residual range below 20 MeV/u
 1.45 mm for C 290, 1.11 mm for O 350). **Transport relevance (SR-2 finding 3; P12 §4, ESTIMATE):** every beam passes through
 2–20 MeV/u, so the deficit is not confined to a domain that can be excluded; it compresses the end of range by ≈ 0.06–0.13 mm
-and would raise ionmc's peak-to-entrance ratio by ≈ +2–3 % at C 290 / O 350 if corrected (P12 reproducer after the
+and would raise ionmc's peak-to-entrance ratio by ≈ +1.8–2.8 % at C 290 / O 350 if corrected (the grouping phase noise of the forward model is itself ≈ ±2 %, P12 §4) (P12 reproducer after the
 normalisation fix of 2026-11-15, Codex REVIEW-792cbd49); at C 80 / O 100 the crude 0.1 mm-group forward model is phase-noise
 dominated (σ_R ≈ 0.06 mm; −6 to +9 % across profiles), so the low-end effect is undetermined and the earlier "+3–10 %" is
 withdrawn; at the standard points the direction is away from TOPAS, so the deficit does not explain the TD-EM low-end FAILs
@@ -1667,9 +1667,9 @@ cannot account for the part above ≈ 10 MeV/u. (iii) I-value: above 50 MeV/u th
 I-value and its identity with the 2009 revision stay **TO-VERIFY / OPEN** as the committed result and P12 §1 state (an earlier
 wording here that the question was "settled" is withdrawn, SR-2 finding 2). Robust without that: the 2–13 % low-energy deficit
 exceeds the row's bounded I-value contribution (≤ 0.6 % in S) by an order of magnitude, so the I-value is not the cause; row
-decision (d) of 2026-11-01 is not triggered because the range clause passed. (iv) The pre-registered defence of the 2–10 MeV/u gate ("effective-charge model spread plus PASS low-energy
+decision (d) of 2026-11-01 (the table-version attribution) stays available for the amendment; the range clause of the row passed. (iv) The pre-registered defence of the 2–10 MeV/u gate ("effective-charge model spread plus PASS low-energy
 behaviour, ≤ 6 %") under-estimated the difference between ionmc's Pierce–Blann effective charge with Barkas/Bloch/Mott
-corrections and the ICRU 73 (revised) construction below 20 MeV/u by a factor ≈ 2. No model or tolerance is changed; the
+corrections and the ICRU73_NEW construction below 20 MeV/u by a factor ≈ 2. No model or tolerance is changed; the
 row stays FAIL. **Consequence for integration (plan F.6, D; orchestrator decision 2026-11-15):** a gating section-A row fails and is neither a
 declared evidence gap nor covered by an amendment, so the integration criterion F.6 is not met and **V3-008 is not integrated
 at this head**; the FAIL is recorded in decision 0043 and the ledger; the PR stays open; the remaining gates (Codex reviews, exact-SHA
@@ -1684,8 +1684,8 @@ information or an authorization outside the protocol). Not a clinical claim.
 
 - **Head:** the task branch (PR #84, open) at the commit carrying this note; every commit since 930b7a9 is Codex-reviewed on
   its exact SHA (the last pass REVIEW-62a63c44 at eaac64ca; one minor docstring wording fixed here), carries an exact-SHA
-  local-validation record, and CI was green at every pushed head checked (last checked 004f641a; the heads after it are
-  documentation, results and the P12 reproducer/test).
+  local-validation record, and CI was green at every pushed head checked (last checked 24032e88, all three jobs green; the
+  heads after it are wording corrections of the SR-2 re-check).
 - **Verdicts (final, never re-graded):** section-A rows PASS except **I3 FAIL** (I2 PASS as a regression guard; I11-rel
   SEEN); TOPAS-agreement main set consumed with FAILs under R2-STOP3; held-out TD-H/TL-H PASS 12/12; V5-SS PASS 5/5 on the
   evidence block 2 (block 1 exploratory). Scientific review rounds SR-1 and SR-2 (plan F.4) recorded with their

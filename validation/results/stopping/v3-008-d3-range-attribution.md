@@ -46,7 +46,13 @@ reading of the Geant4 LS table).
 * **Pre-step lengthening (0.1 mm steps, 2 % rule):** +0.03 ... +0.06 % for R >= 150 mm (the amendment's estimate holds); the
   unconditional Euler bound is +0.05 ... +0.10 %. At the low ends (+0.2 %) it is dominated by the last millimetres and is not
   meaningful for R80.
-* **Low ends (He 50, C 80, O 100):** residuals +0.03 / -0.12 / -0.14 % are inside the R80-vs-CSDA and E_cut-convention
+* **Low ends (He 50, C 80, O 100):** residuals −0.02 … +0.18 % (He 50, as bounds) / -0.12 / -0.14 % (C 80 / O 100) are inside the R80-vs-CSDA and E_cut-convention
   ambiguity (the sub-2 MeV/u residual range is 0.04-0.09 mm = 0.2-0.5 % of these ranges and is not in the integral).
+* **Policy note (2026-11-15, SR-2 re-check):** the He 50 residual is given as bounds for the same reason as the He 150/250 values
+  (the exact value next to R_ionmc would rebuild the ICRU 90 alpha range at 50 MeV/u). The C/O "TOPAS-like" columns are kept
+  as exact values by orchestrator decision: they are range integrals of a rebuilt stopping (ICRU 90 proton array at equal
+  velocity × q_eff² with ionmc's own 2 MeV/u start), i.e. a model construction, not a reproduction of a NIST/ICRU table value;
+  the stopping-results policy forbids table values, per-energy deviations and ratios against the tables, which these are not.
+  This judgement is disclosed here so that a reviewer can contest it.
 * Net: nothing here supports changing ionmc's stopping; at most ~0.1 % (He) to ~0.3-0.4 % (C/O, only if the Geant4 ion terms are
   as large as the primary variant) remains unattributed.

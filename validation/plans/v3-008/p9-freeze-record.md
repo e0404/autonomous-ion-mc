@@ -636,7 +636,7 @@ placeholder scorer output was deleted unread.
 |---|---|
 | `tests/ionmc/test_d3_range_attribution.py` | `1e7f0ee83f42dd088fae3df8d2d4ccefbbce9d9e933f7004276861228141b468` |
 | `validation/results/stopping/v3-008-d3-range-attribution.json` | `e7e03f455e26940a37cb72cf1307b3d553befc718cec069b2514b48fc6ab3c01` |
-| `validation/results/stopping/v3-008-d3-range-attribution.md` | `c6f2ec08cbbd64dce41fa8d7130d2890badba1381e53ac4daf50ae5066113e09` |
+| `validation/results/stopping/v3-008-d3-range-attribution.md` | `c991f96637c897d5026018f2d61362a78710ec690aac0daf28731e0dcf5b8bd0` |
 | `validation/scripts/ion_em/d3_range_attribution.py` | `869a4b5be6907d8432875bf13494f62f6e95b774f1a4ed0e9b46398b5eb01cf9` |
 
 
@@ -1511,6 +1511,8 @@ placeholder scorer output was deleted unread.
 **Dated note (2026-11-15, orchestrator) — entries changed by the REVIEW-c43a2e52 disposition commit (the refactored P12 reproducer with per-term checks; the P12 record):** `validation/plans/v3-008/p12-i3-low-energy-stopping.md` c3dd1a30… → 474b9c18…; `validation/plans/v3-008/p12-scripts/transport.py` 696202e3… → 03b06c10…. All other entries unchanged (recomputed).
 
 **Dated note (2026-11-15, orchestrator) — entry changed by the session-end status commit (P12 reproducer docstring, REVIEW-62a63c44 minor):** `validation/plans/v3-008/p12-scripts/transport.py` 03b06c10… → 90a54bd3…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-15, orchestrator) — entry changed by the SR-2 re-check commit (the D-3 markdown record):** `validation/results/stopping/v3-008-d3-range-attribution.md` c6f2ec08… → c991f966…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.
