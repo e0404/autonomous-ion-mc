@@ -1369,3 +1369,16 @@ read (count-rule note above); `ss_evaluate.py check-run` reports and the single 
 | 30/1 | `REF-f785d4669a97d92e3f7a-ecb230b0` | 09:49:45–09:58:56 | 551 | 30000 |
 | 31/0 | `REF-ebec959c8706e098c918-585a9acf` | 09:59:09–10:09:53 | 645 | 30000 |
 | 31/1 | `REF-189c5a09a56470459241-d0087521` | 10:10:06–10:21:01 | 655 | 30000 |
+
+**Dated note (2026-11-15, orchestrator) — V5-SS run validity (`ss_evaluate.py check-run` at HEAD d03ce6cb, committed-reader
+inputs; nothing graded).** All 16 evidence parts **VALID**: chronology SS-SEAL-1 satisfied (seal commit 7fe6ab1d an ancestor
+of a508afd8; seal review finished before every `started_at`), no problems (beam-particle process list `CoulombScat` /
+`IonCoulombScattering` only, no `msc` block for the beam particle, `G4_WATER` couple e⁻ threshold 9.54965 GeV ≥ 1.16 MeV,
+histories completed, phase-space columns and flags, Z at the exit face, finite cosines, count rule: `reached == scored`,
+deficit 1 in parts 22/1, 25/1, 29/0, 29/1, 30/0 and 0 elsewhere). The re-smoke REF-8358f3c4f2f32a8453f4-a7dbae17 (seed
+20600439 at ea10ce6a): VALID (200/200). The first smoke REF-740144c3826978e4ea78-ef394dd8 (seed 20600438 at 677e7c27):
+**ERROR, fail closed** ("SS manifest entry missing or changed after the run") — the expected outcome of the bundle
+regeneration recorded in the re-smoke note; it is kept as the record of the first run and is not evidence. Reports:
+`validation/results/transport/v8-ss/check-runs/<run_id>.json` (per run: verdict, problems, primaries, chronology, msc and
+couple information, the sha256 of every file read, the evaluator HEAD and its committed inputs). The grade follows in the
+next commit: one run of `ss_evaluate.py grade`, never re-graded.

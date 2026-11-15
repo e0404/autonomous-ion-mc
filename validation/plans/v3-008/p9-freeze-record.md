@@ -1217,6 +1217,30 @@ placeholder scorer output was deleted unread.
 | `validation/results/transport/v8-ss/topas-runs/REF-fd8cf8ed4bbab1079850-df809295/record.json` | `569a199c77459b9c73101b46b17911e950588067acfecd2411a1cbde3ef87e85` |
 | `validation/results/transport/v8-ss/topas-runs/index.json` | `0a94c6e48f1d7601717aa6f9a1b771403ecd0a17e3bfb7c5b447d25224e744c0` |
 
+
+**Dated note (2026-11-15, orchestrator) — files added by the V5-SS check-run commit (the 18 `ss_evaluate.py check-run` reports at d03ce6cb; sha256 as committed):**
+
+| File | sha256 |
+|---|---|
+| `validation/results/transport/v8-ss/check-runs/REF-189c5a09a56470459241-d0087521.json` | `fddc5b77047cf9030e352597a65de522c261d50028a63dafa85aeb15790999b1` |
+| `validation/results/transport/v8-ss/check-runs/REF-1f84bf9c50030ca44319-58d37b01.json` | `3ab06e8a21e459e4e263fb86c7b322b0ed588993d44677b1fa305a218561ffd4` |
+| `validation/results/transport/v8-ss/check-runs/REF-226e1c04517c66e77896-06ebcdb0.json` | `2b9bf9abeefb0fc0a7aae93240c421c922175308e3c6e48223ffe95f288936b9` |
+| `validation/results/transport/v8-ss/check-runs/REF-2a3055cd9946939e1112-829e8260.json` | `e399ce0370ec039ecd5b4b92e50a114a5c5b6a939a9dedbea4d7eb7ec786c29f` |
+| `validation/results/transport/v8-ss/check-runs/REF-323844f0b56dc5de0338-16f4feb4.json` | `5d59ae920d189270e624dd8c94004e2c9244b8a6e24e03c0187be67c24c2c50b` |
+| `validation/results/transport/v8-ss/check-runs/REF-3575dbd95c6d72fab50c-a8d6f962.json` | `a841a5893818a9a5585651223848e3eef9f44387e1df230ff8e65cc0fdc1e603` |
+| `validation/results/transport/v8-ss/check-runs/REF-4cc1556c57dbb104d834-efe68a66.json` | `51f367b620728d17068d5e7161aa340c965f5806251464e46c2ff297e690b6fc` |
+| `validation/results/transport/v8-ss/check-runs/REF-69cd778394707910f717-b992a97b.json` | `c2bfbefb2a5132b138f1c1fe34974e017bfa5bebb1330a03fcafe19f2feebc80` |
+| `validation/results/transport/v8-ss/check-runs/REF-72b922fb1b0c07ae5c5f-34ae1c10.json` | `96b8a12cc274ba2aff5a18236c76f987ad2404de6b6d0cf698a7ed3d25b8518a` |
+| `validation/results/transport/v8-ss/check-runs/REF-740144c3826978e4ea78-ef394dd8.json` | `1f7773dcfeb46d759918de342863b2424870e5f93189bfd08088a718423ca1b2` |
+| `validation/results/transport/v8-ss/check-runs/REF-8358f3c4f2f32a8453f4-a7dbae17.json` | `486b58fc8b91ab93d7ed439bb08a2e7d67cb922323aeba45ad42f01af89aff0d` |
+| `validation/results/transport/v8-ss/check-runs/REF-98e6160303a4ec989443-732245e3.json` | `d678f7660786ff0519c9e9309099d063a9ccecd16a360f009aef005bfeee9b02` |
+| `validation/results/transport/v8-ss/check-runs/REF-9bd0a1263ad70b02be18-6de84b65.json` | `b8708732a40476d53ec10f234b1c4349e6165523da24052a7e0a210edb1f6d1e` |
+| `validation/results/transport/v8-ss/check-runs/REF-a65c74269baeeb946284-107281ec.json` | `127768016197e53cff16a207f186dfaf7b1e2b0726d89f7059900cc48ec2e3f5` |
+| `validation/results/transport/v8-ss/check-runs/REF-e2306407f51486adf627-85771afc.json` | `2deda391c82fa06fb26ce1a6f9c6bb26fba15fd6013c3001c18b13cd6bd7eda1` |
+| `validation/results/transport/v8-ss/check-runs/REF-ebec959c8706e098c918-585a9acf.json` | `e91aae7272c8f944d73a5efc7e780614a33d17f9cc923df6498ba0f28119c3a7` |
+| `validation/results/transport/v8-ss/check-runs/REF-f785d4669a97d92e3f7a-ecb230b0.json` | `f088f04a45d60a91e43becdb4d0c01b324b412109baccf9179d30c759050d918` |
+| `validation/results/transport/v8-ss/check-runs/REF-fd8cf8ed4bbab1079850-df809295.json` | `2338ed65a474d99310b27f4cf9df69e726c503b0a99af00bba24523f82268da0` |
+
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.
