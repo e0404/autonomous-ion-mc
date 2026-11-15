@@ -1492,7 +1492,7 @@ placeholder scorer output was deleted unread.
 | File | sha256 |
 |---|---|
 | `validation/plans/v3-008/p12-scripts/decomp.py` | `b29d6e52de94c2efa61b0bdc2948337cdabcda496abd354d7ca4189321ffb7b7` |
-| `validation/plans/v3-008/p12-scripts/transport.py` | `03b06c10cb45013a82a8cc60642fd78e3e09be83bfeca3b4f0337b3dbd09c8e9` |
+| `validation/plans/v3-008/p12-scripts/transport.py` | `90a54bd32614ad29ccc640a44b3453eb15f44f4ea54a3ac7c22e705f988691cd` |
 
 
 **Dated note (2026-11-15, orchestrator) — entries changed by the SR-2 disposition commit (the P12 record and the D-3 markdown; no code):** `validation/results/stopping/v3-008-d3-range-attribution.md` 15ee7f72… → c6f2ec08…; `validation/plans/v3-008/p12-i3-low-energy-stopping.md` f8e5420b… → 61cfc431…. All other entries unchanged (recomputed).
@@ -1509,6 +1509,8 @@ placeholder scorer output was deleted unread.
 
 
 **Dated note (2026-11-15, orchestrator) — entries changed by the REVIEW-c43a2e52 disposition commit (the refactored P12 reproducer with per-term checks; the P12 record):** `validation/plans/v3-008/p12-i3-low-energy-stopping.md` c3dd1a30… → 474b9c18…; `validation/plans/v3-008/p12-scripts/transport.py` 696202e3… → 03b06c10…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-15, orchestrator) — entry changed by the session-end status commit (P12 reproducer docstring, REVIEW-62a63c44 minor):** `validation/plans/v3-008/p12-scripts/transport.py` 03b06c10… → 90a54bd3…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.

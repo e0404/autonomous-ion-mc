@@ -42,7 +42,8 @@ def sg_q(E, ion, zt=7.22):
 
 
 def charge_table() -> None:
-    """Print q/z of the committed Pierce-Blann charge against literature parameterisations."""
+    """Print q/z of the committed effective charge (the Barkas 1963 coefficient-125 form, exposed
+    by the callable `pierce_blann_charge`; see the P12 record) against literature parameterisations."""
     E = np.array([2.0, 3.0, 5.0, 7.0, 10.0, 15.0, 20.0])
     for ion in (P.CARBON12, P.OXYGEN16):
         b = np.sqrt(S.kinematics(E, ion)[0])

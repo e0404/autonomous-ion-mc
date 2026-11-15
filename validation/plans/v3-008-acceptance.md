@@ -1679,3 +1679,23 @@ low-energy C/O stopping difference, then a prospective, reviewed amendment (a mo
 needs fresh evidence at a new frozen SHA) — or, by operator directive only, integration with the FAIL declared as a model
 limitation. No intervention request is filed: EXPERIMENT.md permits none for this (it is scientific work, not inaccessible
 information or an authorization outside the protocol). Not a clinical claim.
+
+### Status at the end of the autonomous session of 2026-11-15 (orchestrator)
+
+- **Head:** the task branch (PR #84, open) at the commit carrying this note; every commit since 930b7a9 is Codex-reviewed on
+  its exact SHA (the last pass REVIEW-62a63c44 at eaac64ca; one minor docstring wording fixed here), carries an exact-SHA
+  local-validation record, and CI was green at every pushed head checked (last checked 004f641a; the heads after it are
+  documentation, results and the P12 reproducer/test).
+- **Verdicts (final, never re-graded):** section-A rows PASS except **I3 FAIL** (I2 PASS as a regression guard; I11-rel
+  SEEN); TOPAS-agreement main set consumed with FAILs under R2-STOP3; held-out TD-H/TL-H PASS 12/12; V5-SS PASS 5/5 on the
+  evidence block 2 (block 1 exploratory). Scientific review rounds SR-1 and SR-2 (plan F.4) recorded with their
+  dispositions.
+- **Integration: NOT performed.** Plan F.6 is unmet (gating row I3 FAIL without a declared gap or amendment); the orchestrator
+  does not merge; no intervention request is filed (EXPERIMENT.md permits none for this). The PR title still carries its
+  pre-freeze "DRAFT — not for merge" wording, which is accurate for this state.
+- **Follow-up (next planning item, not started):** a prospective, reviewed amendment on the low-energy (≲ 50 MeV/u) C/O
+  stopping model per the P12 options — first a committed, tested band diagnostic (to turn the recorded hypothesis into a
+  result), then either a tabulated low-energy source with a licence review or a declared uncertainty, with fresh evidence
+  under plan D for every consumed row; or integration by operator directive with the FAIL declared as a limitation.
+- **Housekeeping:** the scratch worktree `v3-008-evalscratch` is to be retired; the materialized reference runs and host-run
+  records stay in the ignored task cache (needed by `check-run`/`grade` re-verification). Not a clinical claim.
