@@ -179,7 +179,6 @@ placeholder scorer output was deleted unread.
 | `validation/scripts/ion_em/p1c_attribution.py` | `5ec7482a0604b78129e38ca59bdd0b29acccdbd1c423aa398ba33093661b500a` |
 | `tests/ionmc/test_ion_em_p1c.py` | `d95597c79d74e17e1cf5ef20e2436f719716a359527239435afc9f8f6b07f13e` |
 | `validation/plans/v3-008/p1c-aggregates.json` | `b603c3714c5d701c5560d6e348bab43526aaecb962a4e6dc016229fdd46306d4` |
-| `validation/plans/v3-008/p2b-follow-ups.md` | `9c70eb1b9d49f0375af7976232817dbda925576eeb4b64e31aee61b33dfb5457` |
 | `reference_requests/interventions/IR-20261102-010435-B59B2D/request.json` | `e81a7efa104614e87188c3ef083ef3fb061eb018d2731c46be2cb4a88e1ea7f3` |
 | `reference_requests/interventions/IR-20261102-010435-B59B2D/README.md` | `22712340fcd38179571ac4f7f056b8364b99136e9586040b234cce0040ca451b` |
 
@@ -1215,7 +1214,7 @@ placeholder scorer output was deleted unread.
 | `validation/results/transport/v8-ss/topas-runs/REF-f785d4669a97d92e3f7a-ecb230b0/record.json` | `9ab3ec05350744ec52890703313315e0bbd586c25954e7dd5498beff70614c34` |
 | `validation/results/transport/v8-ss/topas-runs/REF-fd8cf8ed4bbab1079850-df809295/artifacts.json` | `1078d3c873cf2c778e9c25cb39353b82c2760759241ab06d29a343fdfe3bb44c` |
 | `validation/results/transport/v8-ss/topas-runs/REF-fd8cf8ed4bbab1079850-df809295/record.json` | `569a199c77459b9c73101b46b17911e950588067acfecd2411a1cbde3ef87e85` |
-| `validation/results/transport/v8-ss/topas-runs/index.json` | `895b6a186cfc2ea53936044950f8626adcf62a2d58ba6f96b2e9ebd41b5d0df7` |
+| `validation/results/transport/v8-ss/topas-runs/index.json` | `794667d4d8c0c8a682f944928ab2746429d6af2253419683d52c284f7c6f9368` |
 
 
 **Dated note (2026-11-15, orchestrator) — files added by the V5-SS check-run commit (the 18 `ss_evaluate.py check-run` reports at d03ce6cb; sha256 as committed):**
@@ -1231,8 +1230,8 @@ placeholder scorer output was deleted unread.
 | `validation/results/transport/v8-ss/check-runs/REF-4cc1556c57dbb104d834-efe68a66.json` | `51f367b620728d17068d5e7161aa340c965f5806251464e46c2ff297e690b6fc` |
 | `validation/results/transport/v8-ss/check-runs/REF-69cd778394707910f717-b992a97b.json` | `c2bfbefb2a5132b138f1c1fe34974e017bfa5bebb1330a03fcafe19f2feebc80` |
 | `validation/results/transport/v8-ss/check-runs/REF-72b922fb1b0c07ae5c5f-34ae1c10.json` | `96b8a12cc274ba2aff5a18236c76f987ad2404de6b6d0cf698a7ed3d25b8518a` |
-| `validation/results/transport/v8-ss/check-runs/REF-740144c3826978e4ea78-ef394dd8.json` | `1f7773dcfeb46d759918de342863b2424870e5f93189bfd08088a718423ca1b2` |
-| `validation/results/transport/v8-ss/check-runs/REF-8358f3c4f2f32a8453f4-a7dbae17.json` | `486b58fc8b91ab93d7ed439bb08a2e7d67cb922323aeba45ad42f01af89aff0d` |
+| `validation/results/transport/v8-ss/check-runs/REF-740144c3826978e4ea78-ef394dd8.json` | `42777ab7456521baadd73cea234e84bc1e307f6e613ce00a921683122b5653c0` |
+| `validation/results/transport/v8-ss/check-runs/REF-8358f3c4f2f32a8453f4-a7dbae17.json` | `7345bb4659fa17a31a805e98774674b1631c1f9a0aab3130027fcc9956680371` |
 | `validation/results/transport/v8-ss/check-runs/REF-98e6160303a4ec989443-732245e3.json` | `d678f7660786ff0519c9e9309099d063a9ccecd16a360f009aef005bfeee9b02` |
 | `validation/results/transport/v8-ss/check-runs/REF-9bd0a1263ad70b02be18-6de84b65.json` | `b8708732a40476d53ec10f234b1c4349e6165523da24052a7e0a210edb1f6d1e` |
 | `validation/results/transport/v8-ss/check-runs/REF-a65c74269baeeb946284-107281ec.json` | `127768016197e53cff16a207f186dfaf7b1e2b0726d89f7059900cc48ec2e3f5` |
@@ -1242,7 +1241,7 @@ placeholder scorer output was deleted unread.
 | `validation/results/transport/v8-ss/check-runs/REF-fd8cf8ed4bbab1079850-df809295.json` | `2338ed65a474d99310b27f4cf9df69e726c503b0a99af00bba24523f82268da0` |
 
 
-**Dated note (2026-11-15, orchestrator) — amendment V5-SS-B2: files added by the block-2 commit (the 16 block-2 bundles, parts 2–3; the block-1 manifest fixture; the block-1 records, listings, validity reports and SEEN grade relocated verbatim under `v8-ss/block1-exploratory/` — the rows above for `v8-ss/topas-runs/` and `v8-ss/check-runs/` are kept as history of the same bytes at their former paths; sha256 as committed):**
+**Dated note (2026-11-15, orchestrator) — amendment V5-SS-B2: files added by the block-2 commit (the 16 block-2 bundles, parts 2–3; the block-1 manifest fixture; the block-1 records, listings, validity reports and SEEN grade relocated verbatim under `v8-ss/block1-exploratory/` — the rows above for `v8-ss/topas-runs/<block-1 run id>/` and `v8-ss/check-runs/<block-1 run id>.json` are kept as history of the same bytes at their former paths where those paths no longer exist; rows whose path is re-occupied by a block-2 file bind that file; sha256 as committed):**
 
 | File | sha256 |
 |---|---|
@@ -1371,10 +1370,33 @@ placeholder scorer output was deleted unread.
 | `validation/results/transport/v8-ss/topas-runs/REF-e10c55b475bfb3f4c2a0-ddcb9100/record.json` | `95658b275cf2ef083b1eba1d9ad18947f4fc097192053e6a7430ec35a69a276f` |
 | `validation/results/transport/v8-ss/topas-runs/REF-edf8878be28659da40f8-cf1ceae9/artifacts.json` | `fe3675028a94514472a05d50a5743db6de1c6837c026d788715c6ff01ab3e77e` |
 | `validation/results/transport/v8-ss/topas-runs/REF-edf8878be28659da40f8-cf1ceae9/record.json` | `1cb22efe95cbb1e4541e041c8ac2610964d137f28be19d636d718319cbedffd9` |
-| `validation/results/transport/v8-ss/topas-runs/index.json` | `794667d4d8c0c8a682f944928ab2746429d6af2253419683d52c284f7c6f9368` |
 
 
-**Dated note (2026-11-15, orchestrator) — entries changed by the block-2 records commit (the block-1 index note reworded 'exploratory', REVIEW-b9ac8cea minor finding; the row `v8-ss/topas-runs/index.json` in the block-1 table above keeps the hash of the block-1 index at its former path as history — the block-2 index is the row of the same path in the note below):** `validation/results/transport/v8-ss/topas-runs/index.json` 0a94c6e4… → 794667d4…; `validation/results/transport/v8-ss/block1-exploratory/topas-runs/index.json` 895b6a18… → 2a0a9039…. All other entries unchanged (recomputed).
+**Dated note (2026-11-15, orchestrator) — entries changed by the block-2 records commit (the block-1 index note reworded 'exploratory', REVIEW-b9ac8cea minor finding; the row `v8-ss/topas-runs/index.json` of the block-1 table above now binds the block-2 index that occupies that path (the block-1 index is bound at its relocated path `v8-ss/block1-exploratory/topas-runs/index.json`); every row binds the file at its path as committed):** `validation/results/transport/v8-ss/topas-runs/index.json` 0a94c6e4… → 794667d4…; `validation/results/transport/v8-ss/block1-exploratory/topas-runs/index.json` 895b6a18… → 2a0a9039…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-15, orchestrator) — files added by the V5-SS block-2 validity commit (the 18 `ss_evaluate.py check-run` reports at 7a53e0b8: 16 block-2 parts + 2 smokes; sha256 as committed):**
+
+| File | sha256 |
+|---|---|
+| `validation/results/transport/v8-ss/check-runs/REF-263b7148f0de286e1fb8-490eb34d.json` | `9e7b3885542e0acf29c01a8b8ccdd1b33839751842fead4521f187419db8472c` |
+| `validation/results/transport/v8-ss/check-runs/REF-3cebbd4da025cb15f650-737a5074.json` | `7dfb9a55e9b1bba70677b492549b0559bf9e70f3ee8355c70952fe9c5f57309a` |
+| `validation/results/transport/v8-ss/check-runs/REF-60f1b80cc8675eead1a4-509a0cd3.json` | `52c93adac9a8a8fd6f0cb6be3d611e07f86dcb80293945914ce1e85cee293cab` |
+| `validation/results/transport/v8-ss/check-runs/REF-78cfae4e79aa7d8b8820-d0a47f0a.json` | `b98546709e5afbbb1ada069dcb53a5eb7110712351ebbd70b68e9c93da2be465` |
+| `validation/results/transport/v8-ss/check-runs/REF-8363ef9530932e28229d-515e8220.json` | `c60b2c9402fc5be05c85bd16b635f8fbdd3b3c8aab5a11f5c6561bda567deafc` |
+| `validation/results/transport/v8-ss/check-runs/REF-969c54c0bbf3027b3e95-10156f31.json` | `edb105a502c0d00afe73da5c65f54b6d10bcc802bfebd1a6d9c145eda88f3455` |
+| `validation/results/transport/v8-ss/check-runs/REF-9e3ea425cc38fa5c5cb1-5d2db04b.json` | `3296af1d8747c9ffff1e480bd4ebad6a684cfb13a735a2db571a7193c04701a3` |
+| `validation/results/transport/v8-ss/check-runs/REF-a051179759e0546dc962-16d193b7.json` | `8f6bc062f17d5606ef86ab2439d7c1cce425c53f94518e780779ec90a1529abc` |
+| `validation/results/transport/v8-ss/check-runs/REF-a527fe0e851f00cb1af6-239b9954.json` | `45f0a07f09e8174590263ac0d5e38980fc07c56ac7fd8a262b1f5e22ae400dab` |
+| `validation/results/transport/v8-ss/check-runs/REF-b4af3c67ca0f82ac4578-347f26e5.json` | `0dec5faf425305edd340744175249a59327ea4f440cce8b7aa0d02157c4e416a` |
+| `validation/results/transport/v8-ss/check-runs/REF-b775b23214605030a29b-81de8299.json` | `dee0c5c6e31a549e11cee77c379237601bcbe8e55ebeff9974c35d0e69f5fe00` |
+| `validation/results/transport/v8-ss/check-runs/REF-c34615bbf0e59276482e-7ffc7b57.json` | `ae5dc12b99c484c4820b40447cbc055b4ee1191429663d4cf755b22201d65404` |
+| `validation/results/transport/v8-ss/check-runs/REF-c9b82f7aa1b4517266ac-8e0b1ab9.json` | `dbb7f003dad9727c824d9af63713b758e3d70bbc9e53edc10ca8d9cb7c23b128` |
+| `validation/results/transport/v8-ss/check-runs/REF-d4af95a44343e1e023d1-74bf4219.json` | `41bc068d91f485760de6f699ee0300ec4fc1035f870501e51ea06bf41138edc2` |
+| `validation/results/transport/v8-ss/check-runs/REF-e10c55b475bfb3f4c2a0-ddcb9100.json` | `25c4c0153eeccb037c42278300be30abf4b395008bfe9f299591968f292741ed` |
+| `validation/results/transport/v8-ss/check-runs/REF-edf8878be28659da40f8-cf1ceae9.json` | `7562f97fd0e91065d2801a0c5941b1d7f08ea6510daa7e800b08a9c121a1e307` |
+
+
+**Dated note (2026-11-15, orchestrator) — entries changed by the block-2 validity commit (the two smoke rows `v8-ss/check-runs/REF-740144c3…` / `REF-8358f3c4…` of the block-1 table above now bind the block-2 validity reports that occupy those paths; the block-1 reports are bound at `v8-ss/block1-exploratory/check-runs/`; rows of former paths that no longer exist are left as history):** `validation/results/transport/v8-ss/topas-runs/index.json` 895b6a18… → 794667d4…; `validation/results/transport/v8-ss/check-runs/REF-740144c3826978e4ea78-ef394dd8.json` 1f7773dc… → 42777ab7…; `validation/results/transport/v8-ss/check-runs/REF-8358f3c4f2f32a8453f4-a7dbae17.json` 486b58fc… → 7345bb46…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.

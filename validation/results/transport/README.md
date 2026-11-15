@@ -296,7 +296,7 @@ read the seal and review ids from the plan's SS seal note. Not a clinical claim.
 # V5-SS TOPAS evidence runs and scorer smokes (V3-008, branch B)
 
 `v8-ss/block1-exploratory/topas-runs/<run_id>/{record.json, artifacts.json}` (block 1, EXPLORATORY, never evidence — amendment V5-SS-B2, section below) are the 16 **signed reference-runner records of the exploratory block 1** (signer
-`reference-runner`, key 303cce4c129d387c; schema 3) of the V5-SS evidence block — cases 22, 25–31 × parts 0–1, 30000
+`reference-runner`, key 303cce4c129d387c; schema 3) of row V5-SS — cases 22, 25–31 × parts 0–1, 30000
 primaries per part, bundles `validation/reference_cases/topas/v5ss-<ion>-water-<E>mevu-case<NN>-part<P>` — all run at
 `code_sha` a508afd8 on 2026-11-13 (07:56–10:21 UTC, one run at a time, exit 0), `record.json` verbatim as returned by the
 reference runner and `artifacts.json` the `list_reference_artifacts` result (path, bytes, sha256 of the ten archived files:

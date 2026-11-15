@@ -1475,3 +1475,15 @@ logs have been read: under the frozen count rule, deficit 1 in 26/2, 28/2, 28/3,
 | 30/3 | `REF-e10c55b475bfb3f4c2a0-ddcb9100` | 13:07:12–13:16:28 | 556 | 30000 |
 | 31/2 | `REF-3cebbd4da025cb15f650-737a5074` | 13:16:42–13:27:35 | 654 | 29998 |
 | 31/3 | `REF-c9b82f7aa1b4517266ac-8e0b1ab9` | 13:27:48–13:38:40 | 651 | 30000 |
+
+**Dated note (2026-11-15, orchestrator) — V5-SS block 2 run validity (`ss_evaluate.py check-run` at HEAD 7a53e0b8,
+committed-reader inputs; nothing graded).** All 16 block-2 parts **VALID**: chronology SS-SEAL-1 satisfied (seal commit
+7fe6ab1d an ancestor of 769f2dd6; seal review finished before every `started_at`; the amendment review REVIEW-b9ac8cea
+finished before the first start), whole SS manifest identical at the run SHA and HEAD, no problems (beam-particle process
+list `CoulombScat` / `IonCoulombScattering` only, no `msc` block for the beam particle, `G4_WATER` couple e⁻ threshold
+9.54965 GeV, histories completed, phase-space columns and flags, Z at the exit face, finite cosines; frozen count rule:
+`reached == scored`, deficit 1 in 26/2, 28/2, 28/3, 29/3, deficit 2 in 31/2, 0 elsewhere). The re-smoke
+REF-8358f3c4f2f32a8453f4-a7dbae17 (seed 20600439 at ea10ce6a): VALID at the new manifest (its own entry unchanged). The
+first smoke REF-740144c3826978e4ea78-ef394dd8: ERROR, fail closed (manifest entry changed after the run; expected, kept as
+the record of the first run). Reports: `validation/results/transport/v8-ss/check-runs/<run_id>.json` (16 parts + 2 smokes).
+The single grade of block 2 follows in the next commit, after this commit's review.
