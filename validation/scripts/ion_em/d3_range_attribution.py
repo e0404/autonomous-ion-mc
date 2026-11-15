@@ -246,8 +246,19 @@ def compute(worktree: Path, cache_dir: Path) -> dict:
             excess = (r / x - 1) * 100
             primary = direct_he if ion == "he" else row["topas_like_ls_barkas_vs_ionmc_pct"]
             row["topas_r80_over_ionmc_r80_pct"] = excess
-            row["construction_diff_pct"] = primary
-            row["residual_pct"] = excess - primary - row["prestep_euler_0p1mm_pct"]
+            if ion == "he":
+                # Non-reconstructive form (REVIEW-788ebc67): the He construction difference is
+                # the direct ICRU 90 alpha range ratio, which with R_ionmc_mm would give the
+                # ICRU 90 range; only an upper bound (ceiling to 0.05 pp) and the residual
+                # bounds it implies are written (scalars; no lists in the rows).
+                bound = math.ceil(abs(primary) / 0.05) * 0.05
+                row["construction_diff_bound_pct"] = bound
+                base = excess - row["prestep_euler_0p1mm_pct"]
+                row["residual_pct_lower"] = base - bound
+                row["residual_pct_upper"] = base + bound
+            else:
+                row["construction_diff_pct"] = primary
+                row["residual_pct"] = excess - primary - row["prestep_euler_0p1mm_pct"]
             if ion != "he":
                 for name in d["variants"]:
                     row[f"residual_{name}_pct"] = (

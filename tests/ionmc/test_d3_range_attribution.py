@@ -68,7 +68,10 @@ def test_sanity(result):
     assert len(rows) == 12
     he = rows[("he", 250.0)]
     assert "icru90_alpha_direct_vs_ionmc_pct" not in he  # SR-1 finding 8: not emitted
-    assert 0.0 < he["construction_diff_pct"] < 0.15
+    assert "construction_diff_pct" not in he and "residual_pct" not in he  # He: bound only
+    assert he["construction_diff_bound_pct"] in (0.05, 0.1, 0.15)
+    lo, hi = he["residual_pct_lower"], he["residual_pct_upper"]
+    assert lo < hi and hi - lo == pytest.approx(2 * he["construction_diff_bound_pct"])
     for r in rows.values():
         assert 0.0 < r["prestep_euler_0p1mm_pct"] <= r["prestep_pure_euler_0p1mm_pct"] + 1e-12
     assert rows[("oxygen", 430.0)]["topas_r80_over_ionmc_r80_pct"] > 0.25
