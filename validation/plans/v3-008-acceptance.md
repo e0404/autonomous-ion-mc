@@ -298,7 +298,7 @@ above (R2-TOPAS-4). The TD/TL statistics of `r2_evaluate.py` are implemented aft
   - **Dated note 2026-11-01 (V5-SS branch B; before any run):** case 25 = C 150, 26 = O 150, 27 = C 250, 31 = O 250 MeV/u (were protons at matched velocities). Cases 22 (He 150), 28 (He 250), 29 (C 430) and 30 (O 430) are unchanged. Cases 23 (C 290), 24 (O 350), 32 and 33 are retired unused. Nothing has run, so no seed is consumed. The formula and range are unchanged, so there is no ledger change.
   - Each part (≤ 1200 s planned) is a separate host call with its own seed.
   - **Dated note 2026-11-07 (revision 2; before any run; formula, ranges and guard test unchanged, so no ledger change).** Case numbers re-assigned (none of the old numbers ever ran; no seed consumed): **1–12** = the revision-2 TOPAS-agreement cases He 50 (1), He 150 (2), He 250 (3), C 80 (4), C 290 (5), C 430 (6), O 100 (7), O 350 (8), O 430 (9) and the held-out He 100 (10), C 150 (11), O 200 (12) (previously V1/V2 matched 1–9 and part of V1-held). Part blocks per configuration: IDD-EM parts 0–3, LAT-EM 4–7, IDD-FULL 8–11, LAT-FULL 12–15; parts 16–17 (IDD-FULL) and 18–19 (LAT-FULL) reserved for the pre-registered FULL sizing fallback (r2-topas-target.md §6). V5-SS keeps cases 22, 25–31 (parts 0–1). Retired unused and kept retired: 23, 24, 32, 33. Unassigned (use only by amendment): 13–21, 34–40. Revision-2 evidence seeds: 192 values, 20619001 (He 50 IDD-EM part 0) to 20620512 (O 200 LAT-FULL part 15), distinct from each other and from V5-SS. Execution-only smokes of revision 2 use the rehearsal family: 20600411–20600422 (timing) and 20600423 (step length); 20600401–20600410 are consumed by the P4/P10 smokes. **ionmc TD/TL samples:** lv8 rows r_index 30–41 = cases 1–12 (declared now; `steps_v8.py` adopts them), k = 0 for the single run per case, k = 1, 2, … for chunks of a split run; the held-out set after a model amendment uses the re-run base 20621004 with the same r_index.
-- **Re-runs** take fresh bases from **20621004**, then 20631004, each declared in an amendment before use. The
+- **Re-runs** take fresh bases from **20621004**, then 20631004, each declared in an amendment before use. **Dated note 2026-11-16 (amendment I3-FU-1 revision 17):** the TOPAS thin-slab evidence family 20627200 + 100·part + case (parts 0–15, cases 13–21; 20627213–20628721) is declared for the i3fu2 bundles; it lies between rerun1's maximum (20627103) and rerun2's base (20631004) and is added to the guard test. The
   last base inside the reserved block is 20631004, whose `base + 100·r + k` seeds stay ≤ 20632003 only for
   r_index ≤ 9. A re-run needing more rows, or a third re-run base, requests a new block in the shared ledger.
   - **Dated note 2026-11-11 (amendment I9-REF, item 4k; before any re-run).** The third re-run base **20572004** (seeds
@@ -329,7 +329,7 @@ above (R2-TOPAS-4). The TD/TL statistics of `r2_evaluate.py` are implemented aft
     5 = 12C slab t with energy-loss fluctuations off (cases 13, 21), 6 = 12C slab t in fine steps (MaxStepSize t/20), 7 = 16O
     slab t in fine steps (all nine cases; revision 5) — 58 evidence seeds; the frozen repeat parts are **8–15** (= part + 8;
     58 seeds, drawn only on the repeat trigger of the amendment); parts 16–19 reserved; seeds by the unchanged
-    formula 20619000 + 100·part + case (revision 1 of the amendment, same day, before any run: the former t/2 parts and the
+    formula 20619000 + 100·part + case [SUPERSEDED by revision 17 (2026-11-16): that family (20619013–20620521) is CONSUMED by the shadow evaluation disclosed in the STOP note of the c223f5e5 evaluation; the evidence and repeat bundles now use 20627200 + 100·part + case (20627213–20628721), declared before use; the smokes keep 20600440–20600445] (revision 1 of the amendment, same day, before any run: the former t/2 parts and the
     "28 evidence seeds, parts 6–9 reserved" wording are superseded; no seed was drawn; parts 1/3 are the 1.6t slabs).
     **Revision 2 (same day, before any run):** the repeat parts were renumbered from 6–11 to 8–13; **revision 5 (same day,
     before any run):** fine-step parts 6 and 7 added and the repeats extended to 8–15; the rule above is the binding one;
@@ -2525,3 +2525,18 @@ smokes follow at the commit carrying this note, after this pin's signed `finishe
 pre-check of every materialized smoke now applies the evaluator's `validity_problems`, `config_problems`,
 `native_marker_problems`, `measure_outputs` and (for the step smokes) `count_slab_steps` / `parse_exit_energies`. Not a
 clinical claim.
+
+**Revision 17 of amendment I3-FU-1 (2026-11-16, orchestrator; Codex REVIEW-6abc1dea on b19c0d09, important; prospective,
+before any new evidence run; in force once the commit carrying it has passed Codex review).** The sandbox shadow evaluation
+recorded in the STOP note of the c223f5e5 evaluation disclosed the outcome of the sample that the evidence seed family
+20619000 + 100·part + case (cases 13–21, parts 0–15; range 20619013–20620521) produces; single-threaded seeded TOPAS
+reproduces that sample exactly, so re-running those bundles would not be fresh evidence. That family is therefore
+CONSUMED (seen data; its runs at c223f5e5 and the shadow stay preserved as seen, never evidence). **New evidence seed
+family:** seed = **20627200 + 100·part + case** for every evidence and repeat bundle (parts 0–15, cases 13–21; range
+20627213–20628721, inside the V3-008 reserved block 20572004–20632003, above the ionmc re-run family rerun1
+(20621004–20627103) and below rerun2 (from 20631004); declared here before use; the guard test gains the family). The
+116 evidence and repeat bundles are regenerated with the new seeds only (slabs, MaxStepSize 0.0515 t, histories and every
+other line unchanged) and the manifest is re-frozen; the five smokes keep their rehearsal seeds 20600440–20600445 and are
+re-run after the new pin A as the chronology requires. `AMENDMENT_REVISION` = 17. The §C seed note is amended in place
+below. Execution chain as before (pin A → smokes with the full pre-check → pin B → pins note → 58 evidence runs → records →
+evaluator → repeats per trigger). Not a clinical claim.

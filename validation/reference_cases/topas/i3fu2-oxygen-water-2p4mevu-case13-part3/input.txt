@@ -1,6 +1,6 @@
-# Native OpenTOPAS 4.3 input. V3-008 amendment I3-FU-1 step 2 (thin-slab mean energy loss), case 13 (oxygen 2.4 MeV/u), part 3 (slab 1.6t = 0.002784 mm, energy-loss fluctuations on; seed = 20619000 + 100*part + case = 20619313). Diagnostic; no validation claim.
+# Native OpenTOPAS 4.3 input. V3-008 amendment I3-FU-1 step 2 (thin-slab mean energy loss), case 13 (oxygen 2.4 MeV/u), part 3 (slab 1.6t = 0.002784 mm, energy-loss fluctuations on; seed = 20627200 + 100*part + case = 20627513). Diagnostic; no validation claim.
 i:Ts/NumberOfThreads = 1
-i:Ts/Seed = 20619313
+i:Ts/Seed = 20627513
 b:Ts/PauseBeforeQuit = "False"
 b:Ts/ShowCPUTime = "True"
 i:Ts/TrackingVerbosity = 0

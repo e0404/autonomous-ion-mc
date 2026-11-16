@@ -892,3 +892,9 @@ to stderr in every run) and, behind it, because the single-bin energy-deposit CS
 shared parser requires. Revision 16 (prospective, reviewed before any new run) admits exactly that banner and parses the
 single-bin CSV; nothing scientific changes; the chain (pins, smokes, evidence runs, evaluation) is repeated. Nothing
 graded as evidence; I3 stays FAIL. Not a clinical claim.
+
+**Dated note (2026-11-16, orchestrator; amendment I3-FU-1 revision 17).** Codex REVIEW-6abc1dea found that the sandbox
+shadow evaluation had disclosed the outcome of the seeded sample of the evidence family 20619000 + 100·part + case, so
+re-running it would not be fresh evidence; that family is consumed and a new family 20627200 + 100·part + case is
+declared and frozen for the 116 evidence and repeat bundles (smokes unchanged). Nothing scientific changes; nothing
+graded as evidence; I3 stays FAIL. Not a clinical claim.

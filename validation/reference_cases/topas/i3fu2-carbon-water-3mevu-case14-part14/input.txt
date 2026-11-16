@@ -1,6 +1,6 @@
-# Native OpenTOPAS 4.3 input. V3-008 amendment I3-FU-1 step 2 FROZEN REPEAT of part 6 (run only on the evaluator's repeat trigger for this point), case 14 (carbon 3 MeV/u), part 14 (slab t fine-step = 0.00294 mm, energy-loss fluctuations on; seed = 20619000 + 100*part + case = 20620414). Diagnostic; no validation claim.
+# Native OpenTOPAS 4.3 input. V3-008 amendment I3-FU-1 step 2 FROZEN REPEAT of part 6 (run only on the evaluator's repeat trigger for this point), case 14 (carbon 3 MeV/u), part 14 (slab t fine-step = 0.00294 mm, energy-loss fluctuations on; seed = 20627200 + 100*part + case = 20628614). Diagnostic; no validation claim.
 i:Ts/NumberOfThreads = 1
-i:Ts/Seed = 20620414
+i:Ts/Seed = 20628614
 b:Ts/PauseBeforeQuit = "False"
 b:Ts/ShowCPUTime = "True"
 i:Ts/TrackingVerbosity = 0

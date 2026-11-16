@@ -21,7 +21,7 @@ MaxStepSize is written in um (0.0515 t = 51.5 t_mm um, an exact decimal). Revisi
 the twentieth limited step ended exactly on the far face and the following zero-length boundary
 Transportation step was not always scored by the surface phase-space scorer; 0.0515 t gives 19
 limited steps (0.9785 t) and one boundary-limited step of 0.0215 t, never commensurate with t.
-Seed = 20619000 + 100*part + case (unchanged formula). Five execution smokes
+Seed = 20627200 + 100*part + case (revision 17; see below). Five execution smokes
 (:data:`SMOKES`): C 10 MeV/u, slab t, 2000 primaries at rehearsal seed 20600440 (standard lines)
 and 20600441 (the fluctuation-off line), so that every parameter line of an evidence bundle is
 exercised by a smoke; and two step-count smokes, C 2.4 and 50 MeV/u, slab 1.6t, 50 primaries,
@@ -30,6 +30,8 @@ evaluator counts the steps per primary inside the slab (expected: one) before th
 and the fine-step smoke, C 2.4 MeV/u, slab t with MaxStepSize 0.0515 t, 50 primaries,
 TrackingVerbosity 1 (seed 20600445; expected >= 15 steps in the slab per primary, i.e. the step
 limiter acts on GenericIon). 20600442 is reserved by the plan for one re-smoke (not generated).
+Revision 17 (2026-11-16) replaced the seed family 20619000 + 100*part + case because a shadow
+evaluation disclosed that family's sample (consumed, seen data). The smokes keep their rehearsal seeds.
 
 Slab thickness from ionmc's own default Bethe model (``bethe_mass_stopping`` default options,
 ``water(78.0)``): t_mm = 10 * 0.03 * E0 * A / S(E0) (Delta E / E = 3 % at the entrance energy),
@@ -80,7 +82,7 @@ REL_PREFIX = "validation/reference_cases/topas"
 MANIFEST_SCHEMA = "ionmc-i3fu2-frozen-bundles-1"
 PREFIX = "i3fu2-"
 
-TOPAS_BASE = 20619000  # seed = 20619000 + 100 * part + case (plan section C)
+SEED_BASE = 20627200  # seed = 20627200 + 100 * part + case (revision 17)
 #: TOPAS case -> E0 [MeV/u] (section-C note of 2026-11-16); kept as decimal strings.
 CASES: dict[int, str] = {
     13: "2.4",
@@ -182,7 +184,7 @@ EXPECTED_OUTPUTS = ["ss_exit.header", "ss_exit.phsp", "edep.csv"]
 
 
 def topas_seed(case: int, part: int) -> int:
-    return TOPAS_BASE + 100 * part + case
+    return SEED_BASE + 100 * part + case
 
 
 def e_tag(case: int) -> str:
@@ -318,13 +320,13 @@ def build(
             "evaluator's repeat trigger for this point), "
             f"case {case} ({ion} {e0} MeV/u), part {part} "
             f"(slab {slab_word} = {t_txt} mm, energy-loss fluctuations {fl_word}; seed = "
-            f"20619000 + 100*part + case = {seed})."
+            f"20627200 + 100*part + case = {seed})."
         )
         rationale = (
             "V3-008 amendment I3-FU-1 step 2 (plan validation/plans/v3-008-acceptance.md): "
             f"pre-declared repeat (part {part} = part {orig} + 8, same configuration) of the "
             f"thin-slab mean energy loss of {ion} at E0 = {e0} MeV/u in G4_WATER, case {case} "
-            f"(slab {slab_word} = {t_txt} mm, fluctuations {fl_word}), seed 20619000 + "
+            f"(slab {slab_word} = {t_txt} mm, fluctuations {fl_word}), seed 20627200 + "
             f"100*{part} + {case} = {seed}; used only if the original run or its point is "
             "invalid; diagnostic, no validation claim"
         )
@@ -332,13 +334,13 @@ def build(
         head = (
             f"V3-008 amendment I3-FU-1 step 2 (thin-slab mean energy loss), case {case} "
             f"({ion} {e0} MeV/u), part {part} (slab {slab_word} = {t_txt} mm, energy-loss "
-            f"fluctuations {fl_word}; seed = 20619000 + 100*part + case = {seed})."
+            f"fluctuations {fl_word}; seed = 20627200 + 100*part + case = {seed})."
         )
         rationale = (
             "V3-008 amendment I3-FU-1 step 2 (plan validation/plans/v3-008-acceptance.md): "
             "what stopping does the acceptance reference carry; thin-slab mean energy loss "
             f"of {ion} at E0 = {e0} MeV/u in G4_WATER, case {case}, part {part} (slab "
-            f"{slab_word} = {t_txt} mm, fluctuations {fl_word}), seed 20619000 + 100*{part} + "
+            f"{slab_word} = {t_txt} mm, fluctuations {fl_word}), seed 20627200 + 100*{part} + "
             f"{case} = {seed}; diagnostic, no validation claim"
         )
     elif kind == "smoke" and tracking and fine:

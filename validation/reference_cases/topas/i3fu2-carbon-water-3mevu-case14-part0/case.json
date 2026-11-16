@@ -9,14 +9,14 @@
   "cuts": "CutForAllParticles = 0.05 mm; CutForElectron = 1 km (no delta electrons); EMRangeMax = 10 GeV; Ts/MaxStepNumber = 1e7",
   "histories": 50000,
   "seeds": [
-    20619014
+    20627214
   ],
   "scorers": [
     "PhaseSpace SSExit at Water/ZPlusSurface, primaries, outgoing, ASCII",
     "EDep: EnergyDeposit in Water, 1x1x1 bin; Report Sum, Standard_Deviation; csv"
   ],
   "units": "phase space: cm; direction cosines; kinetic energy MeV (total per ion); EDep: MeV, run total (divide by histories)",
-  "rationale": "V3-008 amendment I3-FU-1 step 2 (plan validation/plans/v3-008-acceptance.md): what stopping does the acceptance reference carry; thin-slab mean energy loss of carbon at E0 = 3 MeV/u in G4_WATER, case 14, part 0 (slab t = 0.00294 mm, fluctuations on), seed 20619000 + 100*0 + 14 = 20619014; diagnostic, no validation claim",
+  "rationale": "V3-008 amendment I3-FU-1 step 2 (plan validation/plans/v3-008-acceptance.md): what stopping does the acceptance reference carry; thin-slab mean energy loss of carbon at E0 = 3 MeV/u in G4_WATER, case 14, part 0 (slab t = 0.00294 mm, fluctuations on), seed 20627200 + 100*0 + 14 = 20627214; diagnostic, no validation claim",
   "expected_outputs": [
     "ss_exit.header",
     "ss_exit.phsp",

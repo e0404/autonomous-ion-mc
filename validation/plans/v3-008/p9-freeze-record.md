@@ -88,7 +88,7 @@ evidence for `icru90/z{6,8}_G4_WATER.dat`. This note concerns FC-2 only.
 | `tests/ionmc/test_ion_em_ss_budget.py` | `ca49735b5b00831aeaabd59d63faecfc23b98fe0d4247024ca963d7e9a77f097` | P9 (iv) |
 | `tests/ionmc/test_ion_em_ls_option.py` | `c67966c8d2c3d9564032e33e666321dd11bd8d2386780afa0cb74850455ca84d` | P9 (iii) |
 | `tests/ionmc/test_ion_em_mapping_src.py` | `865d3143892f8c6ebc548a86400bae198d455c3ad8c3bec2df074ebeb0210175` | I11-map (src), I0, I1 |
-| `tests/ionmc/test_v3_008_seed_families.py` | `e4e33e662900aced756395c1aa63c168bd97b6f7e3c5697f9c5cc5d03bc99ec5` | P7, §C |
+| `tests/ionmc/test_v3_008_seed_families.py` | `b2396006852a15dbee340caacec071d66c4ae32c1ee97fefd4ca45ea2c488dad` | P7, §C |
 
 ### 2.3 Implementation already on the branch (src)
 
@@ -1520,10 +1520,10 @@ placeholder scorer output was deleted unread.
 |---|---|
 | `validation/scripts/stopping/i3_band_diagnostic.py` | `137c8414a4e0dcefaac883c16758efb18e3170cce97881267fc2e310c9ebd435` |
 | `tests/ionmc/test_i3_band_diagnostic.py` | `de0ba74e279ebf1d3ccedb552f1a6bfdf3466cbd19f202fbffcba5edc00031dd` |
-| `validation/scripts/stopping/gen_i3fu2_bundles.py` | `d478be6fe561fcf61b9c3731df898133ea9012aa965342d94e16ce758cfdfd22` |
-| `validation/scripts/stopping/i3fu2_evaluate.py` | `c67a972393980a098a9d66e879d61670715b6c709aaba1115f24996ed4b1dce8` |
-| `tests/ionmc/test_i3fu2.py` | `b16457489d293b1130fc7ff57e0e5b4ccae0cc96f769d30e64aadf208167a1ab` |
-| `validation/reference_cases/topas/i3fu2-frozen-manifest.json` | `d9b2dd205921bdd0cff7481293b9cfee6daf57d73df03ca534b8665424f2f0ee` |
+| `validation/scripts/stopping/gen_i3fu2_bundles.py` | `5f0113f5fd632a3c94c3d25d240de8f17c69e1808337b8876271312be785d0d5` |
+| `validation/scripts/stopping/i3fu2_evaluate.py` | `49ddc566157e547ac542c9a4cb544be5f47ae4c26f94df719c78a27bd1420a23` |
+| `tests/ionmc/test_i3fu2.py` | `8f86d7687531b60bf92c4292d1b2c882539ace8e3ad8cc3d4c098a6d65f0567d` |
+| `validation/reference_cases/topas/i3fu2-frozen-manifest.json` | `690ff0bf1fddedfec8c4190dab30aa0b1e686589f80b3f0e2679ec295dea4db7` |
 
 
 **Dated note (2026-11-16, orchestrator) — revision 1 of amendment I3-FU-1 (Codex REVIEW-cfdff398 and the independent review SR-3 of 777b4561): the six files bound by the previous note were revised before any run and their rows above now carry the revised hashes (the 777b4561 hashes are in that commit); the i3fu2 manifest now binds 84 bundles (40 evidence, 40 frozen repeats, 4 smokes; 168 files).**
@@ -1926,6 +1926,8 @@ placeholder scorer output was deleted unread.
 **Dated note (2026-11-16, orchestrator) — amendment I3-FU-1 revision 16 (stderr banner rule, single-bin EDep parser, regression tests on the real logs) rebound; entries that changed:** `validation/scripts/stopping/i3fu2_evaluate.py` be4515cf… → c67a9723…; `tests/ionmc/test_i3fu2.py` 9230b886… → b1645748…. All other entries unchanged (recomputed).
 
 **Dated note (2026-11-16, orchestrator) — amendment I3-FU-1 pin A replaced after revision 16 (REVIEW-9d042ed7 of 8d589e29, verbatim, verified); entries that changed:** `validation/results/stopping/v3-008-i3fu2/i3fu2-review.json` ea096305… → 853340ad…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-16, orchestrator) — amendment I3-FU-1 revision 17 (new evidence seed family 20627200 + 100·part + case; 116 bundles and the manifest regenerated; guard test) rebound; entries that changed:** `tests/ionmc/test_v3_008_seed_families.py` e4e33e66… → b2396006…; `validation/scripts/stopping/gen_i3fu2_bundles.py` d478be6f… → 5f0113f5…; `validation/scripts/stopping/i3fu2_evaluate.py` c67a9723… → 49ddc566…; `tests/ionmc/test_i3fu2.py` b1645748… → 8f86d768…; `validation/reference_cases/topas/i3fu2-frozen-manifest.json` d9b2dd20… → 690ff0bf…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.

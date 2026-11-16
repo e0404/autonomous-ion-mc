@@ -13,7 +13,7 @@ Usage::
         [--manifest validation/reference_cases/topas/i3fu2-frozen-manifest.json] \
         [--repo .] [--output-dir validation/results/stopping/v3-008-i3fu2]
 
-Diagnostic (plan ``validation/plans/v3-008-acceptance.md``, amendment I3-FU-1 step 2 (revision 16)
+Diagnostic (plan ``validation/plans/v3-008-acceptance.md``, amendment I3-FU-1 step 2 (revision 17)
 and decision rule 2a; :data:`AMENDMENT_REVISION`); no gate, no validation claim.
 
 **Launch (Codex REVIEW-8081e0e7 finding 3, REVIEW-cf6fa397).** The evaluator must be started
@@ -134,7 +134,7 @@ the configuration id; the chronology above; the listing reproduces the signed
 ``output_files_sha256`` / ``output_count`` and the signed stdout/stderr/request digests; every
 file read hashes to its listed sha256; the request's ``input_files`` equal the bundle committed
 at the run's code_sha, whose ``case.json`` / ``input.txt`` equal the manifest entry; the request
-case equals that ``case.json``; the seed is 20619000 + 100 part + case (smokes: the generator's
+case equals that ``case.json``; the seed is 20627200 + 100 part + case (smokes: the generator's
 rehearsal seed); the ``i3fu2`` block matches the index entry and the kind (evidence / repeat /
 smoke); configuration markers in stdout: the ``Ph/ListProcesses`` block, the opt4 module marker
 and the EM-only check of ``r2_io.module_check`` (configuration "idd-em"), the frozen physics
@@ -424,7 +424,7 @@ FINE_PREMISE_REASON = "fine_step_premise"
 PREMISE_REASON = "one_step_premise"
 ROBUST_REASON = "not_robust_to_systematic"
 CONVENTION_REASON = "not_invariant_to_energy_convention"
-AMENDMENT_REVISION = 16  # = the highest "**Revision N of amendment I3-FU-1" record of the plan
+AMENDMENT_REVISION = 17  # = the highest "**Revision N of amendment I3-FU-1" record of the plan
 #: the plan's revision records of this amendment (counted in the plan committed at code_sha)
 PLAN_REVISION_RE = re.compile(r"^\*\*Revision (\d+) of amendment I3-FU-1\b", re.M)
 REDISTRIBUTION_NOTE = (

@@ -22,6 +22,13 @@ REHEARSAL_8 = range(20600000, 20610000)
 TOPAS_8_BASE = 20619000  # seed = base + 100*part + case
 TOPAS_PARTS = range(0, 20)
 TOPAS_CASES = range(1, 41)
+# i3fu2 (amendment I3-FU-1 step 2) evidence/repeat family, revision 17 (2026-11-16):
+# seed = base + 100*part + case, parts 0-15, cases 13-21. It replaced 20619000 + 100*part + case
+# (20619013-20620521, inside topas8's formula range), CONSUMED by the shadow evaluation of
+# 2026-11-16 (seen data); that range must not be reused.
+I3FU2_BASE = 20627200
+I3FU2_PARTS = range(0, 16)
+I3FU2_CASES = range(13, 22)
 RERUN_BASE_1 = 20621004  # full r range
 RERUN_BASE_2 = 20631004  # r_index <= 9 only
 RERUN_BASE_3 = 20572004  # full r range; the unassigned leading gap of the block, below LV8_BASE
@@ -36,6 +43,10 @@ def topas_seeds():
     return {TOPAS_8_BASE + 100 * p + c for p in TOPAS_PARTS for c in TOPAS_CASES}
 
 
+def i3fu2_seeds():
+    return {I3FU2_BASE + 100 * p + c for p in I3FU2_PARTS for c in I3FU2_CASES}
+
+
 def v8_families():
     fam = {
         "lv8": row_seeds(LV8_BASE),
@@ -47,6 +58,7 @@ def v8_families():
     }
     t = sorted(topas_seeds())
     fam["topas8"] = t
+    fam["topas_i3fu2"] = sorted(i3fu2_seeds())
     return fam
 
 
@@ -84,6 +96,20 @@ def test_declared_extents_match_plan_arithmetic():
     assert _bounds(fam["topas8"]) == (20619001, 20620940)
     assert _bounds(fam["rerun2"])[1] == V3_008_RESERVED[-1]
     assert _bounds(fam["rerun3"]) == (20572004, 20578103)
+
+
+def test_i3fu2_family_bounds_and_placement():
+    fam = v8_families()
+    assert _bounds(fam["topas_i3fu2"]) == (20627213, 20628721)
+    lo, hi = _bounds(fam["topas_i3fu2"])
+    assert lo in V3_008_RESERVED and hi in V3_008_RESERVED
+    assert lo > _bounds(fam["rerun1"])[1] and hi < RERUN_BASE_2
+    mine = set(fam["topas_i3fu2"])
+    for name, other in fam.items():
+        if name != "topas_i3fu2":
+            assert not mine & set(other), name
+    consumed = {TOPAS_8_BASE + 100 * p + c for p in I3FU2_PARTS for c in I3FU2_CASES}
+    assert not mine & consumed and consumed <= topas_seeds()
 
 
 def test_rerun3_in_leading_gap_of_reservation():

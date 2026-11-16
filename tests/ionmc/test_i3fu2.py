@@ -253,19 +253,25 @@ def test_regeneration_is_byte_identical_and_manifest(tmp_path: Path) -> None:
         assert b.endswith(b"\n") and not b.endswith(b"\n\n"), p
 
 
+SEED_BASE = 20627200  # revision 17 (2026-11-16)
+# Revision 16 family 20619000 + 100*part + case (cases 13-21, parts 0-15): consumed by the
+# shadow evaluation of 2026-11-16 (seen data); must never be reused.
+CONSUMED_SEEDS = {20619000 + 100 * p + c for p in range(16) for c in range(13, 22)}
+
+
 def test_seeds_formula_and_reservation() -> None:
-    topas = seeds.topas_seeds()
+    assert gen.SEED_BASE == SEED_BASE
     used = []
     for d in RUNS:
         c = _case(d)
         case_no, part = c["i3fu2"]["case"], c["i3fu2"]["part"]
-        s = seeds.TOPAS_8_BASE + 100 * part + case_no
+        s = SEED_BASE + 100 * part + case_no
         assert c["seeds"] == [s] == [gen.topas_seed(case_no, part)]
         assert int(_native(d, "i:Ts/Seed")) == s
-        assert s in topas and s in seeds.V3_008_RESERVED
+        assert s in seeds.V3_008_RESERVED and s not in CONSUMED_SEEDS
         assert case_no in seeds.TOPAS_CASES and part in seeds.TOPAS_PARTS
         used.append(s)
-    assert len(set(used)) == 116 and min(used) == 20619013 and max(used) == 20620521
+    assert len(set(used)) == 116 and min(used) == 20627213 and max(used) == 20628721
     smoke_seeds = {}
     for d in SMOKES:
         c = _case(d)
@@ -396,7 +402,8 @@ def test_native_lines_scorers_and_case_keys() -> None:
         head = text.splitlines()[0]
         assert "I3-FU-1 step 2" in head and "no validation claim" in head
         if d not in SMOKES:
-            assert "20619000 + 100*part + case" in head
+            assert "20627200 + 100*part + case" in head
+            assert "20619000" not in head
             assert "diagnostic, no validation claim" in c["rationale"]
             if c["i3fu2"]["kind"] == "repeat":
                 assert "FROZEN REPEAT" in head and "only if the original" in c["rationale"]
