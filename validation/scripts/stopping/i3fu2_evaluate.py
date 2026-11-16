@@ -3,7 +3,7 @@
 Usage::
 
     python validation/scripts/stopping/i3fu2_evaluate.py --runs DIR --archive PATH \
-        --code-sha SHA --step-smokes DIR \
+        --code-sha SHA --smokes DIR \
         [--records validation/results/stopping/v3-008-i3fu2/topas-runs] \
         [--review-pin validation/results/stopping/v3-008-i3fu2/i3fu2-review.json] \
         [--markers-pin validation/results/stopping/v3-008-i3fu2/i3fu2-markers-review.json] \
@@ -12,93 +12,104 @@ Usage::
         [--repo .] [--output-dir validation/results/stopping/v3-008-i3fu2]
 
 Diagnostic (plan ``validation/plans/v3-008-acceptance.md``, amendment I3-FU-1 step 2 and decision
-rule 2a, revision 1 and the dispositions of Codex REVIEW-22f384ed); no gate, no validation claim.
+rule 2a, revision 2: the dispositions of Codex REVIEW-22f384ed and REVIEW-aa4e7b1b and of the
+independent reviewer's passes 2 and 3); no gate, no validation claim.
 
 **Inputs.** ``--repo`` (default: this checkout) is read only as committed at its HEAD
 (``r2_io.CommittedReader``: a working copy that differs fails closed); ``--records``,
-``--step-smokes``, both review pins, ``--markers`` and ``--manifest`` are paths in it. Records
-(``--records`` and ``--step-smokes``, committed): ``index.json`` = ``{"runs": [{"bundle",
-"run_id", ...}, ...]}`` (``--records``: one entry per evidence or offered repeat bundle with its
-``case`` and ``part``; ``--step-smokes``: the two step-count smokes
-``i3fu2-smoke-carbon-water-2p4mevu-steps`` / ``...-50mevu-steps``) and per run
-``<run_id>/record.json`` (the signed reference-runner record, verbatim) and
-``<run_id>/artifacts.json`` (the ``list_reference_artifacts`` result). Materialized outputs
-(``--runs``, not committed, evidence, repeats and step-count smokes alike): ``<run_id>/`` holding
-the listed files at their listed paths, i.e. ``request.json``, ``stdout.txt``, ``stderr.txt``,
-``work/ss_exit.header``, ``work/ss_exit.phsp`` and ``work/edep.csv``.
+``--smokes``, both review pins, ``--markers`` and ``--manifest`` are paths in it. Records
+(committed): ``<dir>/index.json`` = ``{"runs": [{"bundle", "run_id", ...}, ...]}`` (``--records``:
+one entry per evidence or offered repeat bundle with its ``case`` and ``part``; ``--smokes``:
+exactly the four smokes of :data:`gen.SMOKES`) and per run ``<run_id>/record.json`` (the signed
+reference-runner record, verbatim) and ``<run_id>/artifacts.json`` (the
+``list_reference_artifacts`` result). Materialized outputs (``--runs``, not committed, evidence,
+repeats and smokes alike): ``<run_id>/`` holding the listed files at their listed paths
+(``request.json``, ``stdout.txt``, ``stderr.txt``, ``work/ss_exit.header``,
+``work/ss_exit.phsp``, ``work/edep.csv``).
 
-**Sealed decision code (Codex REVIEW-22f384ed finding 1).** The evaluator refuses to run unless
-the ``--repo`` worktree is clean (``git status --porcelain --untracked-files=no`` empty) and every
-decision-producing source (:data:`SEALED_SOURCES`, the evaluator, the generator, the loaders
-and the ionmc model modules it imports, and the attestation module) is byte-identical on disk,
-at HEAD, at ``--code-sha``, at the evaluator review's ``head_sha`` (pin A) and at the code_sha of
-every step-count smoke, and the file the running interpreter actually loaded for each of them
-has the same bytes. Their sha256 are written to ``provenance.sealed_sources``.
+**Sealed executable code (Codex REVIEW-22f384ed finding 1, REVIEW-aa4e7b1b finding 5).** The
+evaluator refuses to run unless the ``--repo`` worktree is clean (``git status --porcelain
+--untracked-files=no`` empty) and every file of the executable closure is byte-identical on
+disk, in the file the interpreter loaded, and as committed at HEAD, at ``--code-sha``, at the
+evaluator review's ``head_sha`` (pin A) and at every smoke's code_sha. The closure
+(:func:`executable_closure`) is computed from ``sys.modules`` after all imports: every ``ionmc``
+module and every validation script loaded by path (:data:`SCRIPT_MODULES`, with the
+attestation module), each with a ``__file__`` under this checkout, plus :data:`SEALED_FILES`
+(``uv.lock``, ``pyproject.toml``). A module imported after the seal is a ``RecordError``. The
+running numpy version must equal the version pinned for numpy in ``uv.lock`` and Python
+major.minor the lower bound of its ``requires-python``. Declared limitation: the bytes of
+third-party binaries (numpy, the Python interpreter) are not sealed; the lock file is. Written:
+``provenance.sealed_sources`` {path: sha256} and ``provenance.environment``.
 
-**Review pins and the plan note (finding 2; reviewer pass 2 item (c)).** Two verbatim
-codex-worker review records: pin A ``i3fu2-review.json`` (the review of the commit that seals
-the evaluator) and pin B ``i3fu2-markers-review.json`` (the review of the commit that adds the
-log-marker file and pin A). Each must hold :data:`rio.REVIEW_FIELDS` and ``report.verdict``,
+**Review pins and the plan note.** Two verbatim codex-worker review records: pin A
+``i3fu2-review.json`` (the review of the commit that seals the evaluator) and pin B
+``i3fu2-markers-review.json`` (the review of the commit that adds the log-marker file, derived
+from the smoke logs, and pin A). Each must hold :data:`rio.REVIEW_FIELDS` and ``report.verdict``,
 ``status`` "passed", ``report.verdict`` "pass", ``task_id`` "V3-008", a 40-hex ``head_sha`` (equal
-to ``report.head_sha`` where present) and an ISO ``finished_at``. The acceptance plan at HEAD and
-at ``code_sha`` must contain exactly one line matching :data:`PLAN_NOTE_RE`, identical at both::
+to ``report.head_sha`` where present), a 64-hex ``report_sha256`` and ISO ``started_at`` <
+``finished_at``. The review service does not sign its records (a signed review record is the
+future item V3-INFRA-005): as for the V5-SS chain, the binding is to the reviewed, committed
+bytes. The acceptance plan at HEAD and at ``code_sha`` must contain exactly one line matching
+:data:`PLAN_NOTE_RE`, identical at both::
 
     **Dated note (<YYYY-MM-DD>, orchestrator; I3-FU-1 step-2 review pins).** evaluator review
     <REVIEW-...> at <40-hex>; markers review <REVIEW-...> at <40-hex>
 
 (one line in the plan), whose ids and SHAs must equal pin A's and pin B's ``review_id`` /
 ``head_sha``. Pin A's ``head_sha`` is an ancestor of pin B's, pin B's an ancestor of
-``code_sha``, and ``code_sha`` an ancestor of (or equal to) HEAD. Pin A and the marker file are
-byte-identical at pin B's ``head_sha``, at ``code_sha`` and at HEAD; pin B at ``code_sha`` and
-HEAD. The frozen manifest is byte-identical at HEAD, at ``code_sha``, at pin A's ``head_sha`` and
-at every step-count smoke's code_sha, has the generator's bundle set and reproduces its own
-``bundle_set_digest``. The trust map is ``infrastructure/keys/trusted_attestation_keys.json`` at
-HEAD. (HEAD itself cannot equal ``code_sha``: the signed records are committed after the runs
-executed ``code_sha``; the seal therefore binds the sources at every commit that matters.)
+``code_sha``, and ``code_sha`` an ancestor of (or equal to) HEAD (HEAD cannot equal ``code_sha``:
+the signed records are committed after the runs). Pin A and the marker file are byte-identical
+at pin B's ``head_sha``, at ``code_sha`` and at HEAD; pin B at ``code_sha`` and HEAD. The frozen
+manifest is byte-identical at HEAD, at ``code_sha``, at pin A's ``head_sha`` and at every smoke's
+code_sha, has the generator's bundle set and reproduces its own ``bundle_set_digest``. The
+trust map is ``infrastructure/keys/trusted_attestation_keys.json`` at HEAD.
 
-**Log markers (reviewer pass 2 item (b)).** ``--markers`` is the committed JSON
-``{"fluct_on_marker", "fluct_off_marker", "step_line_re", "track_header_re"}``; every value must
-be a non-empty regular expression (compiled with ``re.M``), else ``RecordError``. The fluctuation
-markers must discriminate: ``fluct_off_marker`` matches every fluctuation-off run's stdout and no
-fluctuation-on run's, ``fluct_on_marker`` every fluctuation-on run's and no fluctuation-off run's
-(over all authenticated runs, step-count smokes included); otherwise the fluctuation control is
-FAILED (never passed). ``step_line_re`` / ``track_header_re`` are the step-count parser contract
-of :func:`count_slab_steps`.
+**Chronology.** Smokes (all four; missing or late: ``RecordError``, nothing graded): the
+record's code_sha carries pin A (pin A byte-identical there, pin A's ``head_sha`` an ancestor of
+it) and is an ancestor of (or equal to) pin B's ``head_sha``; ``started_at`` after pin A's
+``finished_at`` and ``finished_at`` before pin B's ``started_at`` (the marker file is derived from
+the smoke logs, so its review begins after the smokes end). Evidence and repeat runs: code_sha
+equals ``--code-sha`` and ``started_at`` is after pin B's (and pin A's) ``finished_at``. Every
+run: ``started_at`` <= ``finished_at``.
+
+**Log markers.** ``--markers`` is the committed JSON ``{"fluct_on_marker", "fluct_off_marker",
+"step_line_re", "track_header_re"}``; every value must be a non-empty regular expression
+(compiled with ``re.M``), else ``RecordError``. Neither fluctuation marker may match a run's
+native input text (they must identify the Geant4 ``G4EmParameters`` printout, not the TOPAS
+parameter echo): ``RecordError``. The fluctuation markers must discriminate over all
+authenticated runs and smokes: ``fluct_off_marker`` matches every fluctuation-off stdout and no
+fluctuation-on stdout, ``fluct_on_marker`` the converse; otherwise the fluctuation control is
+FAILED (never passed).
 
 **Per-run authentication and binding (any failure: ``RecordError`` naming the run; Codex
 REVIEW-cfdff398 finding 1, mirroring ``ss_evaluate.load_run`` / ``r2_io.load_signed_run``).**
-Ed25519 attestation of ``record.json`` by a trusted ``reference-runner`` key
-(``attest.classify_record``); schema 3, not timed out, engine topas, ``succeeded`` true,
-``exit_code`` 0, no missing outputs; run id derived from the configuration id; the record's
-``code_sha`` equals ``--code-sha`` (evidence and repeats) or, for a step-count smoke, is a commit
-at which pin A and the sealed sources are present byte-identically and which is an ancestor of
-(or equal to) ``code_sha``; ``started_at`` is not after ``finished_at`` and later than both pins'
-``finished_at`` (evidence and repeats) or than pin A's (step-count smokes: the step-line regexes
-of the marker file are pinned from their logs, so they necessarily precede pin B); the listing
-reproduces the signed ``output_files_sha256`` / ``output_count`` and the signed
-stdout/stderr/request digests; every file read hashes to its listed sha256; the request's
-``input_files`` equal the bundle committed at the run's code_sha, whose ``case.json`` /
-``input.txt`` equal the manifest entry; the request case equals that ``case.json``; the seed is
-20619000 + 100 part + case (smokes: the generator's rehearsal seed); the case's ``i3fu2`` block
-matches the index entry and the kind (evidence / repeat / smoke); configuration markers in stdout:
-the ``Ph/ListProcesses`` block, the opt4 module marker and the EM-only check of
-``r2_io.module_check`` (configuration "idd-em"), the frozen physics lines of the bundle and an
-``ionIoni:  for <GenericIon | alpha>`` block.
+Ed25519 attestation of ``record.json`` by a trusted ``reference-runner`` key; schema 3, not timed
+out, engine topas, ``succeeded`` true, ``exit_code`` 0, no missing outputs; run id derived from
+the configuration id; the chronology above; the listing reproduces the signed
+``output_files_sha256`` / ``output_count`` and the signed stdout/stderr/request digests; every
+file read hashes to its listed sha256; the request's ``input_files`` equal the bundle committed
+at the run's code_sha, whose ``case.json`` / ``input.txt`` equal the manifest entry; the request
+case equals that ``case.json``; the seed is 20619000 + 100 part + case (smokes: the generator's
+rehearsal seed); the ``i3fu2`` block matches the index entry and the kind (evidence / repeat /
+smoke); configuration markers in stdout: the ``Ph/ListProcesses`` block, the opt4 module marker
+and the EM-only check of ``r2_io.module_check`` (configuration "idd-em"), the frozen physics
+lines of the bundle and an ``ionIoni:  for <GenericIon | alpha>`` block.
 
 **Run validity (an INVALID run is recorded with its reason and triggers the repeat rule).** stderr
 empty, no stdout line outside "Begin processing" mentions killed or stuck tracks, every ``Particle
 source Beam: Total number of histories: N`` equals the bundle's histories; phase space: every
 primary scored exactly once (deficit 0), only the beam ion's PDG code, Z at the far face, finite
 values, first-scored flag 1, forward direction, 0 < <Delta E> < 20 % of the entrance energy; the
-energy-deposit cross check |EDep Sum / N / <Delta E>_T - 1| <= 0.1 %. <Delta E>_T = A E0 -
-mean(E_exit), SE = std(E_exit, ddof=1) / sqrt(N).
+energy-deposit cross check |EDep Sum / N / <Delta E>_T - 1| <= 0.1 %.
 
-**One-step premise (finding 3; reviewer pass 2 item (e)).** Both step-count smokes must be
-present and every one of their 50 primaries must have exactly one step whose pre-step point lies
-in the Water slab (0 <= z_pre < slab thickness) (:func:`count_slab_steps`; the limiting process
-of that step is expected to be Transportation, the slab's far face). Otherwise ``conclusive`` is
-false with the reason ``one_step_premise``. Written: ``one_step_premise = {checked, smokes: {name:
-{primaries, max_steps_in_slab}}, pass}`` (counts only).
+**One-step premise (step-count smokes).** For both step-count smokes: every one of the 50
+primaries has exactly one step whose pre-step point lies in the Water slab (0 <= z_pre < slab
+thickness, with the printed-precision tolerance of :func:`count_slab_steps`), that step ends at
+or beyond the far face (its limiting process is expected to be Transportation), and the smoke's
+far-face phase space holds exactly one primary row per history (the evidence-run checks:
+deficit 0, PDG, far-face z). Otherwise ``conclusive`` is false with the reason
+``one_step_premise``. Written: ``one_step_premise = {checked, smokes: {name: {primaries,
+max_steps_in_slab, traversing_primaries, phase_space_complete}}, pass}`` (counts only).
 
 **Predictions** (fixed by this committed code before any run): dE/dz = -rho S(E/A), rho = 1 g/cm3,
 RK4 over the slab (:data:`N_RK4` steps) from E_in = A E0; S from (M) ``bethe_mass_stopping``
@@ -107,51 +118,51 @@ default options at ``water(78.0)`` and (I) the libdEdx ICRU73_NEW liquid-water t
 r_M = Delta E_T / Delta E_M - 1, r_I = Delta E_T / Delta E_I - 1, s = Delta E_I / Delta E_M - 1,
 SE_rel = SE / Delta E_T.
 
-**Stepping model (finding 4).** Geant4's range-table branch freezes the effective charge at the
-pre-step energy for a one-step slab. Emulated with ionmc's own model: S(E) = q^2(E) S_0(E) with q
-from ``pierce_blann_charge`` and S_0 = S / q^2 numerically (so that the q-dependent Barkas, Bloch
-and Mott terms stay those of the default model); the algorithm's loss integrates
-q^2(E_pre) S_0(E) = S(E) q^2(E_pre) / q^2(E) over the slab with the same RK4 integrator as the
-exact loss. g(f) = Delta E_alg / Delta E_exact - 1 at f1 = 0.03 (slab t) and f2 = 0.048 (slab
-1.6 t) per point (He with z = 2 through the same callable). Per point: Delta_pred = g(f2) -
-g(f1); Delta_meas = r_M(f2) - r_M(f1); consistency |Delta_meas - Delta_pred| <=
-:data:`CONSISTENCY_TOL` (a failure makes the point INVALID: repeat rule); model residual of the
-extrapolation R_model = (f2 g(f1) - f1 g(f2)) / (f2 - f1) with |R_model| <=
-:data:`MODEL_RESIDUAL_LIMIT` at every C/O/He point (else ``RecordError``: the design premise
-fails). The 0.25 % method systematic in sigma_b stays (its 0.2 % stepping term bounds twice
-the modelled residual).
+**Stepping model.** Geant4's range-table branch freezes the effective charge at the pre-step
+energy for a one-step slab. Emulated with ionmc's own model: S(E) = q^2(E) S_0(E) with q from
+``pierce_blann_charge`` and S_0 = S / q^2 numerically; the algorithm's loss integrates
+S(E) q^2(E_pre) / q^2(E) over the slab with the same RK4 integrator as the exact loss. g(f) =
+Delta E_alg / Delta E_exact - 1 at f1 = 0.03 (slab t) and f2 = 0.048 (slab 1.6 t) per point (He
+with z = 2 through the same callable). Per point: Delta_pred = g(f2) - g(f1); Delta_meas =
+r_M(f2) - r_M(f1); consistency |Delta_meas - Delta_pred| <= :data:`CONSISTENCY_TOL` (a failure
+makes the point INVALID: repeat rule); model residual of the extrapolation R_model = (f2 g(f1) -
+f1 g(f2)) / (f2 - f1) with |R_model| <= :data:`MODEL_RESIDUAL_LIMIT` at every C/O/He point (else
+``RecordError``: the design premise fails). The 0.25 % method systematic in sigma_b stays (its
+0.2 % stepping term is twice the residual limit).
 
-**Points.** Per ion (C parts 0/1, O parts 2/3) and case: the point value is the zero-thickness
-(Richardson) extrapolation r_0 = (f2 r(f1) - f1 r(f2)) / (f2 - f1) of r_M, r_I and s, f1, f2 read
-from the bundles' ``thickness_factor`` and asserted (:data:`FACTORS`). SE_rel,0 = sqrt((f2
-SE_rel(f1))^2 + (f1 SE_rel(f2))^2) / (f2 - f1).
+**Points.** Per ion (C parts 0/1, O parts 2/3) and case: the zero-thickness (Richardson)
+extrapolation r_0 = (f2 r(f1) - f1 r(f2)) / (f2 - f1) of r_M, r_I and s, f1, f2 read from the
+bundles' ``thickness_factor`` and asserted (:data:`FACTORS`). SE_rel,0 = sqrt((f2 SE_rel(f1))^2
++ (f1 SE_rel(f2))^2) / (f2 - f1).
 
-**Repeat rule (finding 5; deterministic).** Repeat bundle = part + 8 (:data:`gen.REPEAT_OFFSET`).
-A validity failure of a run requires the repeat of exactly that run; a consistency failure of a
-point (both runs valid) requires the repeat of BOTH slabs, and the repeat pair replaces the pair.
-The offered repeats of a point must be exactly the required set: a repeat offered without a
-recorded failure, a repeat of a valid run, or a partial set (e.g. one slab of a failed pair) is a
-``RecordError``. Required repeats not offered: the point is invalid ("no repeat"). A second
-failure (an invalid repeat, or the repeated pair inconsistent) makes the point invalid; an
-invalid evidence point makes the result INCONCLUSIVE.
+**Repeat rule (deterministic).** Repeat bundle = part + 8 (:data:`gen.REPEAT_OFFSET`). A validity
+failure of a run requires the repeat of exactly that run; a consistency failure of a point (both
+runs valid) requires the repeat of BOTH slabs, and the repeat pair replaces the pair. The offered
+repeats of a point must be exactly the required set: a repeat offered without a recorded
+failure, a repeat of a valid run, or a partial set is a ``RecordError``. Required repeats not
+offered: the point is invalid ("no repeat"). A second failure makes the point invalid; an invalid
+evidence point makes the result INCONCLUSIVE.
 
 **Aggregates** (``i3fu2_result.json``; per ion C/O and band [2,5), [5,10), [10,20), [20,50] over
 the valid points): n, mean r_M, mean r_I, mean s, SE_b = sqrt(sum SE_rel,0^2) / n, sigma_b =
 sqrt(SE_b^2 + 0.0025^2), X_b = min(0.01, |s_b| / 3), the class (relative to the sign of s_b;
 U first: X_b <= 1.645 sigma_b; I: |r_I| + 1.645 sigma_b <= X_b; H: sign(s_b) r_I - 1.645
-sigma_b > X_b (TOPAS beyond the table, away from ionmc); M: |r_M| + 1.645 sigma_b <= X_b; L:
--sign(s_b) r_M - 1.645 sigma_b > X_b (TOPAS beyond ionmc, away from the table); else N), the band
-maxima of |r_M(f2) - r_M(f1)|, |Delta_meas - Delta_pred|, |Delta_pred| and |R_model|. The
-table-relative aggregates (mean r_M, mean r_I, mean s, X_b and the He ``max_abs_r_m``) are
-written rounded to 0.1 percentage point (:data:`ROUND_DECIMALS`); classes and the pattern are
-computed from the full-precision values. Pattern: ICRU iff both ions are I/H in [2,5) and
-[5,10) and I/H/U in [10,20); MODEL iff both are M/L in [2,5) and [5,10) and M/L/U in [10,20);
-else MIXED (``pattern_before_controls``). ``pattern`` is INCONCLUSIVE whenever ``conclusive`` is
-false: a control failed or is incomplete, an evidence point is invalid, a band of [2,5) /
-[5,10) is U, or the one-step premise fails. Controls: He (part 4, cases 17/21): pass iff both
-points valid and |r_M| <= 0.005; fluctuations off (part 5 vs the C slab-t run of the same case,
-cases 13/21): pass iff complete, the marker set discriminates and |r_M(off) - r_M(on)| <= 0.002.
-Nothing per point is written; reasons carry no values (decision 0038).
+sigma_b > X_b; M: |r_M| + 1.645 sigma_b <= X_b; L: -sign(s_b) r_M - 1.645 sigma_b > X_b; else N)
+and the band maxima of |r_M(f2) - r_M(f1)|, |Delta_meas - Delta_pred|, |Delta_pred| and
+|R_model|. The table-relative aggregates (mean r_M, mean r_I, mean s, X_b and the He
+``max_abs_r_m``) are written rounded to 0.1 percentage point; classes and the pattern are
+computed from the full-precision values. Pattern: ICRU iff both ions are I/H in [2,5) and [5,10)
+and I/H/U in [10,20); MODEL iff both are M/L in [2,5) and [5,10) and M/L/U in [10,20); else
+MIXED (``pattern_before_controls``). Robustness to the declared systematic (pre-declared): the
+classes and the pattern are computed a second time with the method systematic doubled
+(``classes_sigma_doubled``, ``pattern_sigma_doubled``); ``robust`` = (``pattern_before_controls``
+== ``pattern_sigma_doubled``). ``pattern`` is INCONCLUSIVE whenever ``conclusive`` is false: a
+control failed or is incomplete, an evidence point is invalid, a band of [2,5) / [5,10) is U,
+the one-step premise fails, or the pattern is not robust (``not_robust_to_systematic``).
+Controls: He (part 4, cases 17/21): pass iff both points valid and |r_M| <= 0.005; fluctuations
+off (part 5 vs the C slab-t run of the same case, cases 13/21): pass iff complete, the marker
+set discriminates and |r_M(off) - r_M(on)| <= 0.002. Nothing per point is written; reasons carry
+no values (decision 0038).
 """
 
 from __future__ import annotations
@@ -216,7 +227,7 @@ COL_FIRST = EXPECTED_COLUMNS.index(
     "Flag to tell if this is the First Scored Particle from this History (1 means true)"
 )
 
-RESULT_SCHEMA = "ionmc-i3fu2-result-3"
+RESULT_SCHEMA = "ionmc-i3fu2-result-4"
 RESULT_NAME = "i3fu2_result.json"
 RESULTS_DIR = "validation/results/stopping/v3-008-i3fu2"
 REVIEW_PIN = f"{RESULTS_DIR}/i3fu2-review.json"  # pin A: the evaluator seal review
@@ -236,24 +247,23 @@ PLAN_NOTE_RE = re.compile(
     re.M,
 )
 MARKER_KEYS = ("fluct_on_marker", "fluct_off_marker", "step_line_re", "track_header_re")
-#: Decision-producing sources (repository path -> module name of the running interpreter).
-SEALED_SOURCES: dict[str, str] = {
-    "validation/scripts/stopping/i3fu2_evaluate.py": __name__,
-    "validation/scripts/stopping/gen_i3fu2_bundles.py": "gen_i3fu2_bundles",
-    "validation/scripts/stopping/compare_icru73.py": "compare_icru73",
-    "validation/scripts/ion_em/r2_io.py": "r2_io",
-    "validation/scripts/ion_em/ss_evaluate.py": "ss_evaluate",
-    "validation/scripts/ion_em/r2_evaluate.py": "r2_evaluate",
-    "validation/scripts/ion_em/ss_budget.py": "ss_budget",
-    "validation/scripts/ion_em/ss_wrapper_template.py": "ss_wrapper_template",
-    "src/ionmc/physics/stopping.py": "ionmc.physics.stopping",
-    "src/ionmc/physics/projectiles.py": "ionmc.physics.projectiles",
-    "src/ionmc/physics/lindhard_sorensen.py": "ionmc.physics.lindhard_sorensen",
-    "src/ionmc/materials.py": "ionmc.materials",
-    "src/ionmc/data/cache.py": "ionmc.data.cache",
-    "src/ionmc/reference/parsers.py": "ionmc.reference.parsers",
-    "infrastructure/experiment_v3/attest.py": "infrastructure.experiment_v3.attest",
-}
+#: Validation scripts loaded by path (module names) whose files belong to the executable
+#: closure, besides this module and every ``ionmc`` module (:func:`executable_closure`).
+SCRIPT_MODULES = (
+    "gen_i3fu2_bundles",
+    "compare_icru73",
+    "ss_evaluate",
+    "r2_io",
+    "r2_evaluate",
+    "ss_budget",
+    "ss_wrapper_template",
+    "infrastructure.experiment_v3.attest",
+)
+#: Non-module files sealed with the closure (the dependency lock and the project metadata).
+SEALED_FILES = ("uv.lock", "pyproject.toml")
+REPO_ROOT: Path = gen.REPO_ROOT
+ZEPS_MM = 1e-12  # float guard of the printed-precision comparisons [mm]
+POST_STEP_MIN_TOL_MM = 1e-6  # the counted step must end at >= slab - max(tol, this) [mm]
 PDG = {"carbon": 1000060120, "oxygen": 1000080160, "he": 1000020040}
 BEAM_PARTICLE = {"carbon": "GenericIon", "oxygen": "GenericIon", "he": "alpha"}
 EM_CONFIG = "idd-em"  # r2 configuration whose frozen module set / physics lines these bundles use
@@ -285,6 +295,7 @@ HE_PART, FLUCT_PART = 4, 5
 HE_CASES = (17, 21)
 FLUCT_CASES = (13, 21)
 STEP_SMOKES = ("i3fu2-smoke-carbon-water-2p4mevu-steps", "i3fu2-smoke-carbon-water-50mevu-steps")
+ALL_SMOKES: tuple[str, ...] = tuple(gen.SMOKES)  # the four smokes (two execution, two step-count)
 ICRU_LIKE, MODEL_LIKE = ("I", "H"), ("M", "L")
 _IONIONI = "^ionIoni:\\s+for\\s+{}\\s"
 #: printed length unit -> mm (Geant4 G4BestUnit "Length" symbols)
@@ -301,6 +312,7 @@ LENGTH_UNITS_MM = {
 }
 CONSISTENCY_REASON = f"thickness consistency |Delta_meas - Delta_pred| > {CONSISTENCY_TOL}"
 PREMISE_REASON = "one_step_premise"
+ROBUST_REASON = "not_robust_to_systematic"
 REDISTRIBUTION_NOTE = (
     "Aggregates only: no libdEdx/ICRU 73 or Geant4 table values, no per-energy deviations, "
     "ratios or TOPAS energy-loss values (decision 0038); the controls are written as pass/fail "
@@ -598,14 +610,32 @@ def parse_markers(blob: bytes, where: str) -> dict[str, re.Pattern[str]]:
     return out
 
 
+_NUM_RE = re.compile(r"^[+-]?(\d*)(?:\.(\d*))?(?:[eE]([+-]?\d+))?$")
+
+
+def printed_tolerance(text: str, unit_mm: float) -> float:
+    """Half a unit of the last printed digit of a number printed as ``text`` [mm]: e.g. "65.7"
+    um -> 0.05 um; "1.25e-02" mm -> 0.005e-2 mm. A printed zero is exact (tolerance 0: Geant4
+    prints a vanishing coordinate as a bare 0, whose digit count carries no precision)."""
+    m = _NUM_RE.match(text.strip())
+    if not m or not (m.group(1) or m.group(2)):
+        raise RecordError(f"step line: z {text!r} is not a number")
+    if float(text) == 0.0:
+        return 0.0
+    decimals = len(m.group(2) or "")
+    exponent = int(m.group(3) or 0)
+    return 0.5 * 10.0 ** (exponent - decimals) * unit_mm
+
+
 def count_slab_steps(
     stdout: str,
     slab_mm: float,
     step_line_re: re.Pattern[str],
     track_header_re: re.Pattern[str],
-) -> dict[int, int]:
+) -> dict[int, dict[str, Any]]:
     """Steps per PRIMARY track whose pre-step point lies in the Water slab, from a Geant4
-    SteppingVerbose printout (``Ts/TrackingVerbosity = 1``).
+    SteppingVerbose printout (``Ts/TrackingVerbosity = 1``), and whether the (last) counted step
+    ends at or beyond the far face.
 
     Parser contract (the two regexes come from the committed marker file, pinned from the
     step-count smoke logs): ``track_header_re`` matches the header line of every track with the
@@ -615,21 +645,24 @@ def count_slab_steps(
     number) and ``z`` (the printed z position of the step's post-step point) and optionally
     ``zunit`` (a :data:`LENGTH_UNITS_MM` symbol; absent: mm). Lines are matched one at a time.
     Step 0 is the initial point; the pre-step point of step n >= 1 is the position printed for
-    step n - 1, and step n counts iff 0 <= z_pre < ``slab_mm`` (world frame, the slab spans
-    z = 0 ... slab). Step numbers of a primary must run 0, 1, 2, ... (else ``RecordError``).
-    Returns {ordinal of the primary in the printout: steps in the slab}; Geant4 restarts the
-    track IDs in every event, so the track ID itself is not a key. Expected for a one-step slab:
-    exactly 1 for every one of the primaries, the step limited by Transportation at the far
-    face."""
-    counts: dict[int, int] = {}
+    step n - 1. With tol = half a unit of the last digit printed for that z
+    (:func:`printed_tolerance`), step n counts iff -tol <= z_pre < slab - tol (world frame, the
+    slab spans z = 0 ... slab; a pre-step z within tol of the far face is outside the slab).
+    The counted step traverses iff its own printed post-step z >= slab - max(tol_post, 1e-6
+    mm). Step numbers of a primary must run 0, 1, 2, ... (else ``RecordError``). Returns
+    {ordinal of the primary in the printout: {"steps": n, "traverses": bool}}; Geant4 restarts
+    the track IDs in every event, so the track ID itself is not a key. Expected for a one-step
+    slab: every one of the primaries has exactly one step in the slab, ending at the far face
+    (limiting process Transportation)."""
+    out: dict[int, dict[str, Any]] = {}
     current: int | None = None
-    prev: tuple[int, float] | None = None
+    prev: tuple[int, float, float] | None = None  # (step, z [mm], tol [mm])
     for line in stdout.splitlines():
         h = track_header_re.search(line)
         if h:
             if int(h.group("parent")) == 0:
-                current = len(counts)
-                counts[current] = 0
+                current = len(out)
+                out[current] = {"steps": 0, "traverses": False}
             else:
                 current = None
             prev = None
@@ -643,17 +676,32 @@ def count_slab_steps(
         unit = (m.groupdict().get("zunit") or "mm").strip()
         if unit not in LENGTH_UNITS_MM:
             raise RecordError(f"step line: unknown length unit {unit!r}")
-        z = float(m.group("z")) * LENGTH_UNITS_MM[unit]
+        z_text = m.group("z")
+        z = float(z_text) * LENGTH_UNITS_MM[unit]
+        tol = printed_tolerance(z_text, LENGTH_UNITS_MM[unit])
         if prev is None:
             if step != 0:
                 raise RecordError(f"primary {current}: the first step line is not step 0")
         else:
             if step != prev[0] + 1:
                 raise RecordError(f"primary {current}: step numbers are not consecutive")
-            if 0.0 <= prev[1] < slab_mm:
-                counts[current] += 1
-        prev = (step, z)
-    return counts
+            z_pre, tol_pre = prev[1], prev[2]
+            if -tol_pre - ZEPS_MM <= z_pre < slab_mm - tol_pre - ZEPS_MM:
+                out[current]["steps"] += 1
+                limit = slab_mm - max(tol, POST_STEP_MIN_TOL_MM) - ZEPS_MM
+                out[current]["traverses"] = z >= limit
+        prev = (step, z, tol)
+    return out
+
+
+def native_marker_problems(markers: dict[str, re.Pattern[str]], native: str) -> list[str]:
+    """Neither fluctuation marker may match the run's native input text: they must identify the
+    Geant4 ``G4EmParameters`` printout, not the TOPAS parameter echo."""
+    return [
+        f"{key} matches the bundle's native input text"
+        for key in ("fluct_on_marker", "fluct_off_marker")
+        if markers[key].search(native)
+    ]
 
 
 def marker_hits(markers: dict[str, re.Pattern[str]], stdout: str) -> tuple[bool, bool]:
@@ -676,7 +724,7 @@ class Context:
     repo: Path
     reader: Any
     records: str
-    step_records: str
+    smoke_records: str
     outputs: Path
     code_sha: str
     pins: dict[str, dict[str, Any]]
@@ -691,7 +739,8 @@ class Context:
     trust: dict[str, Any]
     trust_info: dict[str, Any]
     index: dict[str, str]
-    step_index: dict[str, str]
+    smoke_index: dict[str, str]
+    environment: dict[str, str]
     bundles: dict[str, tuple[int, int]] = field(default_factory=dict)
     _committed: dict[tuple[str, str], dict[str, Any]] = field(default_factory=dict)
 
@@ -731,30 +780,102 @@ def require_clean(repo: Path) -> None:
         raise RecordError("the evaluator worktree is not clean (modified tracked files)")
 
 
-def loaded_source(module_name: str) -> Path:
-    """The file the running interpreter loaded for ``module_name``."""
-    if module_name == "infrastructure.experiment_v3.attest":
-        rio.attest_module()
-    mod = sys.modules.get(module_name) or importlib.import_module(module_name)
-    path = getattr(mod, "__file__", None)
-    if not path:
-        raise RecordError(f"sealed module {module_name} has no source file")
-    return Path(path)
+def executable_closure() -> dict[str, Path]:
+    """{path relative to this checkout: loaded file} of every module of the running interpreter
+    that belongs to the decision code: this module, every ``ionmc`` module and every script of
+    :data:`SCRIPT_MODULES` (namespace packages without a file are skipped). A closure module
+    loaded from outside this checkout is a ``RecordError``."""
+    rio.attest_module()
+    root = REPO_ROOT.resolve()
+    out: dict[str, Path] = {}
+    for name, mod in sorted(sys.modules.items()):
+        if not (
+            name == __name__
+            or name == "ionmc"
+            or name.startswith("ionmc.")
+            or name in SCRIPT_MODULES
+        ):
+            continue
+        f = getattr(mod, "__file__", None)
+        if not f:
+            continue
+        path = Path(f).resolve()
+        try:
+            rel = path.relative_to(root).as_posix()
+        except ValueError as exc:
+            raise RecordError(f"closure module {name} is loaded from outside {root}") from exc
+        out[rel] = path
+    return out
+
+
+def _blob_id(blob: bytes) -> str:
+    """git's blob object id of ``blob``."""
+    return hashlib.sha1(b"blob %d\0" % len(blob) + blob, usedforsecurity=False).hexdigest()
+
+
+def tree_blob_ids(repo: Path, sha: str, rels: list[str]) -> dict[str, str]:
+    """{path: blob id} of ``rels`` in the tree of commit ``sha`` (one ``git ls-tree`` call)."""
+    proc = subprocess.run(  # noqa: S603 - fixed argv
+        ["git", "-C", str(repo), "ls-tree", "-r", "--full-tree", sha, "--", *rels],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if proc.returncode != 0:
+        raise RecordError(f"git ls-tree {sha}: {proc.stderr.strip()}")
+    out = {}
+    for ln in proc.stdout.splitlines():
+        meta, path = ln.split("\t", 1)
+        out[path] = meta.split()[2]
+    return out
 
 
 def sealed_sources(reader: Any, shas: dict[str, str]) -> dict[str, str]:
-    """Every :data:`SEALED_SOURCES` file byte-identical on disk and at HEAD (``reader.read``), at
-    every commit of ``shas`` {what: sha} and in the file actually loaded; returns {path: sha256}."""
-    out = {}
-    for rel, module_name in SEALED_SOURCES.items():
-        blob = reader.read(rel)
-        for what, sha in shas.items():
-            if rio.git_show(reader.repo, sha, rel) != blob:
-                raise RecordError(f"sealed source {rel} differs between {what} {sha} and HEAD")
-        if loaded_source(module_name).read_bytes() != blob:
-            raise RecordError(f"sealed source {rel}: the loaded module differs from HEAD")
-        out[rel] = hashlib.sha256(blob).hexdigest()
-    return out
+    """Every file of the executable closure and of :data:`SEALED_FILES` byte-identical on disk
+    in ``--repo``, in the loaded file (modules) and as committed at HEAD and at every commit of
+    ``shas`` {what: sha}; returns {path: sha256}."""
+    closure = executable_closure()
+    rels = sorted(set(closure) | set(SEALED_FILES))
+    disk: dict[str, bytes] = {}
+    for rel in rels:
+        path = reader.repo / rel
+        if path.is_symlink() or not path.is_file():
+            raise RecordError(f"sealed source {rel} is not a regular file in {reader.repo}")
+        disk[rel] = path.read_bytes()
+        if rel in closure and closure[rel].read_bytes() != disk[rel]:
+            raise RecordError(f"sealed source {rel}: the loaded module differs from the worktree")
+    for what, sha in {"HEAD": reader.head, **shas}.items():
+        ids = tree_blob_ids(reader.repo, sha, rels)
+        for rel in rels:
+            if ids.get(rel) != _blob_id(disk[rel]):
+                raise RecordError(f"sealed source {rel} differs between {what} {sha} and disk")
+    return {rel: hashlib.sha256(disk[rel]).hexdigest() for rel in rels}
+
+
+_LOCK_NUMPY_RE = re.compile(r'^\[\[package\]\]\s*\nname = "numpy"\s*\nversion = "([^"]+)"', re.M)
+_LOCK_PYTHON_RE = re.compile(r'^requires-python = ">=(\d+)\.(\d+)', re.M)
+
+
+def environment_check(lock_text: str) -> dict[str, str]:
+    """The running numpy equals the version locked in ``uv.lock`` and Python major.minor equals
+    the lower bound of its ``requires-python``; else ``RecordError``."""
+    found = _LOCK_NUMPY_RE.findall(lock_text)
+    py = _LOCK_PYTHON_RE.search(lock_text)
+    if len(found) != 1 or py is None:
+        raise RecordError("uv.lock: numpy version or requires-python not found exactly once")
+    locked_py = f"{py.group(1)}.{py.group(2)}"
+    running_py = f"{sys.version_info[0]}.{sys.version_info[1]}"
+    if np.__version__ != found[0]:
+        raise RecordError(f"numpy {np.__version__} differs from the uv.lock pin {found[0]}")
+    if running_py != locked_py:
+        raise RecordError(f"Python {running_py} differs from uv.lock requires-python {locked_py}")
+    return {
+        "numpy": np.__version__,
+        "numpy_locked": found[0],
+        "python": running_py,
+        "python_locked": locked_py,
+        "note": "third-party binary bytes (numpy, the interpreter) are not sealed; uv.lock is",
+    }
 
 
 def check_review_record(doc: Any, what: str) -> dict[str, Any]:
@@ -772,7 +893,12 @@ def check_review_record(doc: Any, what: str) -> dict[str, Any]:
         raise RecordError(f"{what}: head_sha is not a 40-hex commit SHA")
     if "head_sha" in doc["report"] and doc["report"]["head_sha"] != doc["head_sha"]:
         raise RecordError(f"{what}: report head_sha differs from head_sha")
-    rio._parse_time(doc["finished_at"], f"{what} finished_at")
+    digest = rio.require(doc, "report_sha256", what)
+    if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+        raise RecordError(f"{what}: report_sha256 is not a 64-hex digest")
+    started = rio._parse_time(rio.require(doc, "started_at", what), f"{what} started_at")
+    if not started < rio._parse_time(doc["finished_at"], f"{what} finished_at"):
+        raise RecordError(f"{what}: started_at is not before finished_at")
     return dict(doc)
 
 
@@ -814,6 +940,7 @@ def load_pins(reader: Any, rel_a: str, rel_b: str, code_sha: str) -> tuple[dict,
             "sha256": hashlib.sha256(blob).hexdigest(),
             "blob": blob,
             "finished": rio._parse_time(doc["finished_at"], f"{rel} finished_at"),
+            "started": rio._parse_time(doc["started_at"], f"{rel} started_at"),
         }
     a, b = pins["evaluator"]["doc"]["head_sha"], pins["markers"]["doc"]["head_sha"]
     if not rio.is_ancestor(reader.repo, a, b):
@@ -867,21 +994,24 @@ def load_index(reader: Any, records: str) -> dict[str, str]:
     return out
 
 
-def load_step_index(reader: Any, records: str) -> dict[str, str]:
-    """smoke bundle -> run id from ``<step-smokes>/index.json`` (step-count smokes only)."""
-    idx = reader.json(f"{records}/index.json", "i3fu2 step-smoke index")
-    runs = rio.require(idx, "runs", "i3fu2 step-smoke index")
+def load_smoke_index(reader: Any, records: str) -> dict[str, str]:
+    """smoke bundle -> run id from ``<smokes>/index.json``: exactly the four smokes."""
+    idx = reader.json(f"{records}/index.json", "i3fu2 smoke index")
+    runs = rio.require(idx, "runs", "i3fu2 smoke index")
     if not isinstance(runs, list):
-        raise RecordError("i3fu2 step-smoke index: runs must be a list")
+        raise RecordError("i3fu2 smoke index: runs must be a list")
     out: dict[str, str] = {}
     for e in runs:
-        bundle = str(rio.require(e, "bundle", "step-smoke index entry"))
-        run_id = str(rio.require(e, "run_id", "step-smoke index entry"))
-        if bundle not in STEP_SMOKES:
-            raise RecordError(f"step-smoke index entry {bundle} is not a step-count smoke")
+        bundle = str(rio.require(e, "bundle", "smoke index entry"))
+        run_id = str(rio.require(e, "run_id", "smoke index entry"))
+        if bundle not in ALL_SMOKES:
+            raise RecordError(f"smoke index entry {bundle} is not an i3fu2 smoke")
         if bundle in out:
-            raise RecordError(f"step-smoke index lists {bundle} twice")
+            raise RecordError(f"smoke index lists {bundle} twice")
         out[bundle] = run_id
+    missing = sorted(set(ALL_SMOKES) - set(out))
+    if missing:
+        raise RecordError(f"smoke index lacks {missing} (all four smokes are required)")
     return out
 
 
@@ -893,7 +1023,7 @@ def context(
     manifest: str,
     code_sha: str,
     *,
-    step_smokes: str,
+    smokes: str,
     markers_pin: str = MARKERS_PIN,
     markers: str = MARKERS,
 ) -> Context:
@@ -903,8 +1033,8 @@ def context(
         raise RecordError(f"--code-sha {code_sha!r} is not a 40-hex commit SHA")
     if not rio.is_ancestor(reader.repo, code_sha, reader.head):
         raise RecordError(f"code_sha {code_sha} is not an ancestor of HEAD {reader.head}")
-    rels = [reader.rel(p) for p in (records, step_smokes, review_pin, markers_pin, manifest)]
-    records_rel, step_rel, pin_a, pin_b, man_rel = rels
+    rels = [reader.rel(p) for p in (records, smokes, review_pin, markers_pin, manifest)]
+    records_rel, smoke_rel, pin_a, pin_b, man_rel = rels
     pins, note = load_pins(reader, pin_a, pin_b, code_sha)
     reviewed = pins["evaluator"]["doc"]["head_sha"]
     markers_reviewed = pins["markers"]["doc"]["head_sha"]
@@ -919,11 +1049,12 @@ def context(
                 f"log-marker file {markers_rel} differs between {what} {sha} and HEAD"
             )
     trust, trust_info = rio.committed_trust(reader)
+    environment = environment_check(reader.read("uv.lock").decode("utf-8"))
     return Context(
         repo=reader.repo,
         reader=reader,
         records=records_rel,
-        step_records=step_rel,
+        smoke_records=smoke_rel,
         outputs=Path(outputs),
         code_sha=code_sha,
         pins=pins,
@@ -938,7 +1069,8 @@ def context(
         trust=trust,
         trust_info=trust_info,
         index=load_index(reader, records_rel),
-        step_index=load_step_index(reader, step_rel),
+        smoke_index=load_smoke_index(reader, smoke_rel),
+        environment=environment,
         bundles=run_bundles(),
     )
 
@@ -973,7 +1105,7 @@ class Expect:
 
 
 def expect_for(ctx: Context, bundle: str) -> Expect:
-    if bundle in STEP_SMOKES:
+    if bundle in ALL_SMOKES:
         seed, part, case, _hist, _tracking = gen.SMOKES[bundle]
         return Expect(case, part, "smoke", seed, smoke=True)
     case, part = ctx.bundles[bundle]
@@ -982,15 +1114,22 @@ def expect_for(ctx: Context, bundle: str) -> Expect:
 
 
 def check_smoke_sha(ctx: Context, sha: str) -> None:
-    """A step-count smoke ran a commit at which pin A, the sealed sources and the manifest are
-    present byte-identically, and which is an ancestor of (or equal to) ``code_sha``."""
-    if not SHA_RE.match(sha) or not rio.is_ancestor(ctx.repo, sha, ctx.code_sha):
-        raise RecordError(f"smoke code_sha {sha} is not an ancestor of code_sha {ctx.code_sha}")
+    """A smoke ran a commit that carries pin A (pin A byte-identical there and pin A's
+    ``head_sha`` an ancestor of it), that is an ancestor of (or equal to) pin B's ``head_sha``,
+    and at which the sealed closure and the manifest are byte-identical."""
     pin_a = ctx.pins["evaluator"]
+    a_head, b_head = pin_a["doc"]["head_sha"], ctx.pins["markers"]["doc"]["head_sha"]
+    if not SHA_RE.match(sha) or not rio.is_ancestor(ctx.repo, a_head, sha):
+        raise RecordError(f"smoke code_sha {sha} is not a descendant of the evaluator review")
     if rio.git_show(ctx.repo, sha, pin_a["path"]) != pin_a["blob"]:
         raise RecordError(f"smoke code_sha {sha} does not carry the evaluator review pin")
-    for rel in SEALED_SOURCES:
-        if hashlib.sha256(rio.git_show(ctx.repo, sha, rel)).hexdigest() != ctx.sealed[rel]:
+    if not rio.is_ancestor(ctx.repo, sha, b_head):
+        raise RecordError(f"smoke code_sha {sha} is not an ancestor of the markers review")
+    rels = sorted(ctx.sealed)
+    ids = tree_blob_ids(ctx.repo, sha, rels)
+    for rel in rels:
+        blob = rio.git_show(ctx.repo, sha, rel) if rel in ids else b""
+        if rel not in ids or hashlib.sha256(blob).hexdigest() != ctx.sealed[rel]:
             raise RecordError(f"sealed source {rel} differs at the smoke code_sha {sha}")
     if hashlib.sha256(rio.git_show(ctx.repo, sha, ctx.manifest_rel)).hexdigest() != (
         ctx.manifest_sha256
@@ -1035,11 +1174,17 @@ def load_run(ctx: Context, bundle: str, run_id: str, records: str | None = None)
             raise RecordError(f"record code_sha {code_sha} != --code-sha {ctx.code_sha}")
         after, after_what = ctx.runs_after, "both review pins'"
     started = rio._parse_time(result["started_at"], f"{run_id} started_at")
-    if started > rio._parse_time(result["finished_at"], f"{run_id} finished_at"):
+    finished = rio._parse_time(result["finished_at"], f"{run_id} finished_at")
+    if started > finished:
         raise RecordError("started_at is later than finished_at")
     if not started > after:
         raise RecordError(
             f"reference_started {result['started_at']} is not after {after_what} finished_at"
+        )
+    if exp.smoke and not finished < ctx.pins["markers"]["started"]:
+        raise RecordError(
+            f"smoke finished_at {result['finished_at']} is not before the markers review's "
+            "started_at (the marker file is derived from the smoke logs)"
         )
     sizes: dict[str, Any] = {}
     listing = rio._listing(
@@ -1125,6 +1270,7 @@ def check_run(ctx: Context, bundle: str, run_id: str) -> dict[str, Any]:
         stdout = rio.read_verified(run, "stdout.txt").decode("utf-8", "replace")
         stderr = rio.read_verified(run, "stderr.txt")
         problems = config_problems(run.native, stdout, info["ion"])
+        problems += native_marker_problems(ctx.markers, run.native)
         if problems:
             raise RecordError("configuration markers: " + "; ".join(problems))
         files = {n: rio.read_verified(run, f"work/{n}") for n in gen.EXPECTED_OUTPUTS}
@@ -1154,33 +1300,51 @@ def check_run(ctx: Context, bundle: str, run_id: str) -> dict[str, Any]:
     return out
 
 
-def check_step_smoke(ctx: Context, bundle: str, run_id: str) -> dict[str, Any]:
-    """Authenticate one step-count smoke (RecordError naming it) and count the steps of its
-    primaries inside the slab (:func:`count_slab_steps`)."""
+def check_smoke(ctx: Context, bundle: str, run_id: str) -> dict[str, Any]:
+    """Authenticate one smoke (RecordError naming it); for a step-count smoke also the one-step
+    premise: :func:`count_slab_steps` and the far-face phase space (the evidence-run checks;
+    a failure there fails the premise, it is not a ``RecordError``)."""
     try:
-        run = load_run(ctx, bundle, run_id, ctx.step_records)
+        run = load_run(ctx, bundle, run_id, ctx.smoke_records)
         info = run.case_doc["i3fu2"]
         stdout = rio.read_verified(run, "stdout.txt").decode("utf-8", "replace")
         problems = config_problems(run.native, stdout, info["ion"])
+        problems += native_marker_problems(ctx.markers, run.native)
         if problems:
             raise RecordError("configuration markers: " + "; ".join(problems))
+        out: dict[str, Any] = {
+            "fluctuations": bool(info["fluctuations"]),
+            "markers": marker_hits(ctx.markers, stdout),
+            "run_id": run_id,
+            "seed": run.case_doc["seeds"][0],
+            "code_sha": run.code_sha,
+        }
+        if bundle not in STEP_SMOKES:
+            return out
+        slab = float(info["slab_mm"])
         counts = count_slab_steps(
-            stdout,
-            float(info["slab_mm"]),
-            ctx.markers["step_line_re"],
-            ctx.markers["track_header_re"],
+            stdout, slab, ctx.markers["step_line_re"], ctx.markers["track_header_re"]
+        )
+        header, rows = (
+            rio.read_verified(run, f"work/{n}").decode("utf-8", "replace")
+            for n in ("ss_exit.header", "ss_exit.phsp")
         )
     except RecordError as exc:
-        raise RecordError(f"step smoke {bundle} ({run_id}): {exc}") from exc
-    return {
-        "primaries": len(counts),
-        "max_steps_in_slab": max(counts.values(), default=None),
-        "ok": len(counts) == run.histories and all(n == 1 for n in counts.values()),
-        "markers": marker_hits(ctx.markers, stdout),
-        "run_id": run_id,
-        "seed": run.case_doc["seeds"][0],
-        "code_sha": run.code_sha,
-    }
+        raise RecordError(f"smoke {bundle} ({run_id}): {exc}") from exc
+    try:
+        parse_exit_energies(header, rows, run.histories, PDG[info["ion"]], slab)
+        complete = True
+    except RecordError:
+        complete = False
+    traversing = sum(1 for c in counts.values() if c["steps"] == 1 and c["traverses"])
+    out.update(
+        primaries=len(counts),
+        max_steps_in_slab=max((c["steps"] for c in counts.values()), default=None),
+        traversing_primaries=traversing,
+        phase_space_complete=complete,
+        ok=len(counts) == run.histories and traversing == run.histories and complete,
+    )
+    return out
 
 
 # =============================================================================================
@@ -1333,6 +1497,23 @@ def _max_abs(values: list[float | None]) -> float | None:
     return max(vals) if vals else None
 
 
+def band_classes(points: list[dict[str, Any]], systematic: float) -> dict[str, str]:
+    """Class per band of the valid points with the method systematic ``systematic`` (the
+    robustness check uses twice :data:`METHOD_SYSTEMATIC`); "none" for an empty band."""
+    out = {}
+    for name, *_ in BANDS:
+        valid = [p for p in points if p["valid"] and band_of(p["e0"]) == name]
+        if not valid:
+            out[name] = "none"
+            continue
+        r_m = float(np.mean([p["r_M"] for p in valid]))
+        r_i = float(np.mean([p["r_I"] for p in valid]))
+        s = float(np.mean([p["s"] for p in valid]))
+        se_b = math.sqrt(sum(p["se_rel"] ** 2 for p in valid)) / len(valid)
+        out[name] = classify(r_m, r_i, s, math.sqrt(se_b**2 + systematic**2))
+    return out
+
+
 def band_aggregates(points: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     """Per band: n, means of r_M, r_I, s (extrapolated points; written rounded, classified at
     full precision), SE_b, sigma_b, X_b, class and the band maxima of the thickness difference,
@@ -1412,7 +1593,7 @@ def evaluate(
     archive: Path,
     code_sha: str,
     *,
-    step_smokes: str,
+    smokes: str,
     markers_pin: str = MARKERS_PIN,
     markers: str = MARKERS,
     archive_sha256: str | None = None,
@@ -1427,7 +1608,7 @@ def evaluate(
         review_pin,
         manifest,
         code_sha,
-        step_smokes=step_smokes,
+        smokes=smokes,
         markers_pin=markers_pin,
         markers=markers,
     )
@@ -1454,15 +1635,18 @@ def evaluate(
         if float(info["slab_mm"]) != gen.slab_mm(info["ion"], c, mult):
             raise RecordError(f"run {name}: slab thickness differs from the generator's")
 
-    smokes = {b: check_step_smoke(ctx, b, rid) for b, rid in sorted(ctx.step_index.items())}
-    premise_checked = sorted(smokes) == sorted(STEP_SMOKES)
+    smoke_runs = {b: check_smoke(ctx, b, rid) for b, rid in sorted(ctx.smoke_index.items())}
+    premise_keys = ("primaries", "max_steps_in_slab", "traversing_primaries")
     premise = {
-        "checked": premise_checked,
+        "checked": True,  # the smoke index holds all four smokes (else RecordError)
         "smokes": {
-            b: {"primaries": v["primaries"], "max_steps_in_slab": v["max_steps_in_slab"]}
-            for b, v in smokes.items()
-        },
-        "pass": premise_checked and all(v["ok"] for v in smokes.values()),
+            b: {
+                **{k: smoke_runs[b][k] for k in premise_keys},
+                "phase_space_complete": smoke_runs[b]["phase_space_complete"],
+            }
+            for b in STEP_SMOKES
+        },  # fmt: skip
+        "pass": all(smoke_runs[b]["ok"] for b in STEP_SMOKES),
     }
 
     def ratios(r: dict[str, Any]) -> dict[str, Any]:
@@ -1535,7 +1719,7 @@ def evaluate(
         else:
             fl_d.append(pt.runs[0]["r_M"] - chosen_t[("carbon", case)]["r_M"])
     hits = [(bool(r["info"]["fluctuations"]), *r["markers"]) for r in runs.values()]
-    hits += [(True, *v["markers"]) for v in smokes.values()]
+    hits += [(bool(v["fluctuations"]), *v["markers"]) for v in smoke_runs.values()]
     discriminate = markers_discriminate(hits)
     fluct = {
         "pass": discriminate
@@ -1555,8 +1739,18 @@ def evaluate(
         reasons.append("class U in [2,5) or [5,10)")
     if not premise["pass"]:
         reasons.append(PREMISE_REASON)
-    conclusive = not reasons
     before = pattern(bands)
+    classes2 = {ion: band_classes(points[ion], 2.0 * METHOD_SYSTEMATIC) for ion in PAIR_PARTS}
+    pattern2 = pattern(
+        {ion: {b: {"class": c} for b, c in cl.items()} for ion, cl in classes2.items()}
+    )
+    robust = before == pattern2
+    if not robust:
+        reasons.append(ROBUST_REASON)
+    conclusive = not reasons
+    late = sorted(set(executable_closure()) - set(ctx.sealed))
+    if late:
+        raise RecordError(f"modules imported after the seal: {late}")
     try:
         ionmc_version: str | None = importlib.metadata.version("ionmc")
     except importlib.metadata.PackageNotFoundError:
@@ -1565,7 +1759,7 @@ def evaluate(
     return {
         "schema": RESULT_SCHEMA,
         "task_id": TASK_ID,
-        "amendment": "I3-FU-1 step 2 (revision 1; Codex REVIEW-22f384ed dispositions)",
+        "amendment": "I3-FU-1 step 2 (revision 2)",
         "claim": "diagnostic; no gate; no validation claim",
         "code_sha": code_sha,
         "method": {
@@ -1578,6 +1772,7 @@ def evaluate(
             "stepping_model": "q^2 frozen at the pre-step energy over the one-step slab, "
             "S_0 = S / q^2 of the default model; g(f) = Delta E_alg / Delta E_exact - 1",
             "method_systematic": METHOD_SYSTEMATIC,
+            "method_systematic_robustness": 2.0 * METHOD_SYSTEMATIC,
             "x_cap": X_CAP,
             "k_one_sided": K_ONE_SIDED,
             "consistency_tolerance": CONSISTENCY_TOL,
@@ -1588,6 +1783,9 @@ def evaluate(
         },
         "bands": bands,
         "pattern_before_controls": before,
+        "classes_sigma_doubled": classes2,
+        "pattern_sigma_doubled": pattern2,
+        "robust": robust,
         "pattern": before if conclusive else "INCONCLUSIVE",
         "conclusive": conclusive,
         "inconclusive_reasons": reasons,
@@ -1619,8 +1817,9 @@ def evaluate(
             "plan_note": {"path": PLAN_PATH, "line": ctx.plan_note["line"]},
             "log_markers": {"path": ctx.markers_rel, "sha256": ctx.markers_sha256},
             "sealed_sources": ctx.sealed,
+            "environment": ctx.environment,
             "records": ctx.records,
-            "step_smoke_records": ctx.step_records,
+            "smoke_records": ctx.smoke_records,
             "code_sha": code_sha,
             "evaluator_head_sha": ctx.reader.head,
             "trust_file": ctx.trust_info,
@@ -1629,9 +1828,9 @@ def evaluate(
                 b: {k: r[k] for k in ("run_id", "seed", "histories", "scored")}
                 for b, r in sorted(runs.items())
             },
-            "step_smokes": {
+            "smokes": {
                 b: {k: v[k] for k in ("run_id", "seed", "code_sha")}
-                for b, v in sorted(smokes.items())
+                for b, v in sorted(smoke_runs.items())
             },
             "versions": {
                 "python": platform.python_version(),
@@ -1647,7 +1846,7 @@ def evaluate(
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     ap.add_argument("--records", default=RECORDS)
-    ap.add_argument("--step-smokes", required=True)
+    ap.add_argument("--smokes", required=True)
     ap.add_argument("--runs", type=Path, required=True)
     ap.add_argument("--review-pin", default=REVIEW_PIN)
     ap.add_argument("--markers-pin", default=MARKERS_PIN)
@@ -1666,7 +1865,7 @@ def main(argv: list[str] | None = None) -> int:
         a.manifest,
         a.archive,
         a.code_sha,
-        step_smokes=a.step_smokes,
+        smokes=a.smokes,
         markers_pin=a.markers_pin,
         markers=a.markers,
     )

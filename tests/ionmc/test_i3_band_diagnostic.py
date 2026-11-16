@@ -560,13 +560,15 @@ def _i3_json(mod, path: Path, sha: str, members: dict[str, str]) -> str:  # type
 
 @pytest.fixture
 def cli_repo(mod, model, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:  # type: ignore[no-untyped-def]
-    """Temporary repository with copies of the sealed sources and the synthetic row I3 file at
-    their real relative paths (one commit); ``run`` bound to the synthetic archive hashes."""
+    """Temporary repository with copies of every ``src/ionmc`` module, the two validation
+    scripts, ``uv.lock``, ``pyproject.toml`` and the synthetic row I3 file at their real relative
+    paths (one commit); ``run`` bound to the synthetic archive hashes."""
     path, sha, members = _build(tmp_path, model, _good_factor)
     repo = tmp_path / "repo"
     repo.mkdir()
     _git(repo, "init", "-q", "-b", "main")
-    for rel in mod.SEALED_SOURCES:
+    sources = [p.relative_to(REPO_ROOT).as_posix() for p in (REPO_ROOT / "src/ionmc").rglob("*.py")]
+    for rel in [*sources, mod.SCRIPT_REL, mod.I3_SCRIPT_REL, *mod.LOCK_FILES]:
         (repo / rel).parent.mkdir(parents=True, exist_ok=True)
         (repo / rel).write_bytes((REPO_ROOT / rel).read_bytes())
     i3 = repo / mod.DEFAULT_EXPECT_I3
@@ -609,16 +611,31 @@ def test_cli_success_records_sealed_sources_and_committed_i3(  # type: ignore[no
     assert prov["ionmc_version"] == __version__
     assert "0.1 percentage point" in data["rounding_note"]
     sealed = prov["sealed_sources"]
-    assert set(sealed) == set(mod.SEALED_SOURCES)
+    closure = {
+        Path(str(m.__file__)).resolve().relative_to(REPO_ROOT).as_posix()
+        for name, m in list(sys.modules.items())
+        if (name == "ionmc" or name.startswith("ionmc.")) and getattr(m, "__file__", None)
+    }
+    expected = closure | {mod.SCRIPT_REL, mod.I3_SCRIPT_REL, "uv.lock", "pyproject.toml"}
+    assert set(sealed) == expected
     assert {
-        "validation/scripts/stopping/i3_band_diagnostic.py",
-        "validation/scripts/stopping/compare_icru73.py",
         "src/ionmc/physics/stopping.py",
         "src/ionmc/physics/projectiles.py",
         "src/ionmc/materials.py",
+        "src/ionmc/data/nist_star.py",
     } <= set(sealed)
     for rel, digest in sealed.items():
         assert digest == hashlib.sha256((REPO_ROOT / rel).read_bytes()).hexdigest(), rel
+    assert prov["ionmc_loaded_from_repo"] is False  # executed from the worktree, bytes identical
+    environment = prov["environment"]
+    assert environment["numpy"] == {
+        "running": np.__version__,
+        "locked": np.__version__,
+        "match": True,
+    }
+    assert environment["python"]["major_minor"] == f"{sys.version_info[0]}.{sys.version_info[1]}"
+    assert environment["python"]["check"] == "satisfies uv.lock requires-python"
+    assert "NOT sealed" in environment["note"]
     record = prov["expect_i3"]
     committed = env["i3"].read_bytes()  # unchanged since the commit (clean-tree check passed)
     assert record == {
@@ -685,7 +702,7 @@ def test_cli_rejects_sealed_source_differing_from_commit(  # type: ignore[no-unt
     # committed edit: clean HEAD, but the loaded (executing) module is not the committed source
     _git(env["repo"], "update-index", "--no-skip-worktree", rel)
     head = _commit(env["repo"], "edit")
-    _rejected(mod, monkeypatch, env, f"loaded {rel} differs", "--code-sha", head)
+    _rejected(mod, monkeypatch, env, f"loaded {rel} ", "--code-sha", head)
 
 
 def test_cli_rejects_i3_working_copy_differing_from_commit(  # type: ignore[no-untyped-def]
@@ -711,3 +728,41 @@ def test_cli_rejects_committed_i3_mismatch(mod, cli_repo: dict[str, Any], monkey
     env["i3"].write_text(json.dumps(i3), encoding="utf-8")
     head = _commit(env["repo"], "tampered row I3")
     _rejected(mod, monkeypatch, env, "oxygen16", "--code-sha", head)
+
+
+def test_cli_rejects_modified_closure_module(mod, cli_repo: dict[str, Any], monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """An imported ionmc module outside the former hand-written list (nist_star.py, imported by
+    stopping.py) is sealed: a committed edit differs from the executing module."""
+    env = cli_repo
+    rel = "src/ionmc/data/nist_star.py"
+    assert "ionmc.data.nist_star" in sys.modules
+    disk = env["repo"] / rel
+    disk.write_bytes(disk.read_bytes() + b"# edit\n")
+    head = _commit(env["repo"], "edit nist_star")
+    _rejected(mod, monkeypatch, env, f"loaded {rel} ", "--code-sha", head)
+
+
+def test_cli_rejects_numpy_version_mismatch(mod, cli_repo: dict[str, Any], monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    monkeypatch.setattr(mod.np, "__version__", "0.0.1")
+    _rejected(mod, monkeypatch, cli_repo, "running numpy 0.0.1", "--code-sha", cli_repo["head"])
+
+
+@pytest.mark.parametrize(
+    ("spec", "ok"),
+    [
+        (">=3.12", True),
+        (">=3.13", False),
+        (">=3.12,<3.13", True),
+        ("==3.12.*", True),
+        ("==3.11.*", False),
+        ("!=3.12.*", False),
+        ("<3.12", False),
+    ],
+)
+def test_python_specifier(mod, spec: str, ok: bool) -> None:  # type: ignore[no-untyped-def]
+    assert mod._python_satisfies((3, 12, 0), spec) is ok
+
+
+def test_python_specifier_unsupported_fails_closed(mod) -> None:  # type: ignore[no-untyped-def]
+    with pytest.raises(RuntimeError, match="unsupported"):
+        mod._python_satisfies((3, 12, 0), "~=3.12")

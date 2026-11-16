@@ -1518,17 +1518,19 @@ placeholder scorer output was deleted unread.
 
 | File | sha256 |
 |---|---|
-| `validation/scripts/stopping/i3_band_diagnostic.py` | `e35e815222b7fe6d07f597f4073598061aea7326c136624bd0cc9b2eb789b68e` |
-| `tests/ionmc/test_i3_band_diagnostic.py` | `303b3b5a6ea15fad8429abfe6960125cc269a5c5056ef18ec635905e06f8281d` |
+| `validation/scripts/stopping/i3_band_diagnostic.py` | `1a080a16c42498ccb055aac72dca18ebb8ea2f45ef739a9b839c8c7fdd001957` |
+| `tests/ionmc/test_i3_band_diagnostic.py` | `592a543a3ca11774335f26c1ef9600bbea72d1da5b63919b6eda5dc9db9b9dbf` |
 | `validation/scripts/stopping/gen_i3fu2_bundles.py` | `f633521f8a29edc46d27e07b7787cab2ff974c83c2d7d378c3c20b5da4be7c89` |
-| `validation/scripts/stopping/i3fu2_evaluate.py` | `ed47cc8a6e9d673810dd57c4d243bbd6195fdd765b012244dbcd32c17ef49c99` |
-| `tests/ionmc/test_i3fu2.py` | `e0954f674321a2b4a85211ef4df701e6f916dc31948772300887b1516f660cf0` |
+| `validation/scripts/stopping/i3fu2_evaluate.py` | `19cf74bf15721b4935e1824b1c73593ed3e8bfde1e261e0ea0019b566c1f556d` |
+| `tests/ionmc/test_i3fu2.py` | `8830fa8ef8cb3bab9dfbcceb6c15930c53e81966b3b045ce8a5b0941a53fab34` |
 | `validation/reference_cases/topas/i3fu2-frozen-manifest.json` | `078195aa9ce3f8f78084387a30cab48f3c41a08db8def44eda1347c104e06877` |
 
 
 **Dated note (2026-11-16, orchestrator) — revision 1 of amendment I3-FU-1 (Codex REVIEW-cfdff398 and the independent review SR-3 of 777b4561): the six files bound by the previous note were revised before any run and their rows above now carry the revised hashes (the 777b4561 hashes are in that commit); the i3fu2 manifest now binds 84 bundles (40 evidence, 40 frozen repeats, 4 smokes; 168 files).**
 
 **Dated note (2026-11-16, orchestrator) — revision 2 of amendment I3-FU-1 (Codex REVIEW-22f384ed and the SR-3 second pass of d493e9cf): the six instrument files were revised again before any run; their rows above carry the revision-2 hashes (the earlier hashes are in commits 777b4561 and d493e9cf); the i3fu2 manifest still binds 84 bundles, the repeat parts now 8–13.**
+
+**Dated note (2026-11-16, orchestrator) — revision 3 of amendment I3-FU-1 (Codex REVIEW-aa4e7b1b and the SR-3 third pass of 59522166): the two diagnostic scripts and their tests were revised again before any run; their rows above carry the revision-3 hashes (earlier hashes in 777b4561, d493e9cf, 59522166); bundles and manifest unchanged.**
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.

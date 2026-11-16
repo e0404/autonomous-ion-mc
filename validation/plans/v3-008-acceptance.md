@@ -326,12 +326,13 @@ above (R2-TOPAS-4). The TD/TL statistics of `r2_evaluate.py` are implemented aft
   - **Dated note 2026-11-16 (amendment I3-FU-1 step 2; before any run).** TOPAS cases **13–21** (declared "unassigned, use only by
     amendment" on 2026-11-07) are assigned to the thin-slab stopping check: case 13–21 = 2.4, 3, 5, 7, 10, 15, 20, 30, 50 MeV/u;
     parts 0 = 12C slab t, 1 = 12C slab 1.6t, 2 = 16O slab t, 3 = 16O slab 1.6t (all nine cases), 4 = 4He slab t (cases 17, 21),
-    5 = 12C slab t with energy-loss fluctuations off (cases 13, 21) — 40 evidence seeds; the frozen repeat parts (40 seeds,
-    drawn only on the repeat trigger of the amendment) are numbered in the revision-2 note below; seeds by the unchanged
+    5 = 12C slab t with energy-loss fluctuations off (cases 13, 21) — 40 evidence seeds; the frozen repeat parts are
+    **8–13** (= part + 8; 40 seeds, drawn only on the repeat trigger of the amendment); parts 6, 7 and 14–19 reserved; seeds by
+    the unchanged
     formula 20619000 + 100·part + case (revision 1 of the amendment, same day, before any run: the former t/2 parts and the
     "28 evidence seeds, parts 6–9 reserved" wording are superseded; no seed was drawn; parts 1/3 are the 1.6t slabs).
-    **Revision 2 (same day, before any run):** the repeat parts are renumbered to **8–13** (= part + 8; parts 6, 7 and 14–19
-    reserved); no seed was drawn.
+    **Revision 2 (same day, before any run):** the repeat parts were renumbered from 6–11 to **8–13** (the rule above is the
+    binding one); no seed was drawn.
     Execution smokes: rehearsal seeds **20600440** (standard lines) and **20600441** (fluctuation-off line), C 10 MeV/u,
     2 000 primaries; **20600443** and **20600444** (step-count smokes, C 2.4 and 50 MeV/u, 50 primaries, tracking verbosity 1);
     **20600442** reserved for one re-smoke. Formula,
@@ -1827,11 +1828,19 @@ unit-charge base table without the run-time q², LS and Barkas terms):
   evaluator carries a model-side emulation of the Geant4 single-step algorithm with ionmc's own model (q² frozen at the
   pre-step energy, the base stopping integrated along the step; the mechanism D-4 §3.2 identifies as the only
   first-order bias): g(f) = ΔE_alg(f)/ΔE_exact(f) − 1 per point for f₁ and f₂. The per-point consistency check becomes
-  |(r_M(f₂) − r_M(f₁)) − (g(f₂) − g(f₁))| ≤ 0.3 % — the measured thickness dependence must match the modelled bias, so a
-  bias that happens to cancel in the difference is detected rather than hidden — and the modelled extrapolation residual
-  R_model = (f₂·g(f₁) − f₁·g(f₂))/(f₂ − f₁) must be ≤ 0.1 % at every point (else the design premise fails and nothing is
-  graded; SR-3's emulation gives −0.02 % (C) / −0.024 % (O) at 2.4 MeV/u and −0.003 % at 10 MeV/u). A consistency failure
-  makes the point INVALID and the repeat rule applies. Per-point values stay in the materialized cache only; per band only
+  |(r_M(f₂) − r_M(f₁)) − (g(f₂) − g(f₁))| ≤ 0.3 % — a gross-error check (revision 3 wording, SR-3 third pass C1): it cannot
+  resolve the modelled bias itself (max Δ_pred 0.26 % < 0.3 %) and does not bound an unmodelled quadratic term; the 0.2 %
+  stepping budget rests on the enforced single step (step-count smokes) and the D-4 §3.2 mechanism analysis of the
+  documented along-step algorithm (pre-step dE/dx or range-table inversion by `linLossLimit`; q² at the pre-step energy;
+  the LS/Barkas along-step corrections at the mid-step energy, a midpoint rule of order f²), which the emulation
+  implements — and the modelled extrapolation residual R_model = (f₂·g(f₁) − f₁·g(f₂))/(f₂ − f₁) must be ≤ 0.1 % at every
+  point (a fixed property of the committed design, checked at run time; SR-3's emulation gives −0.019 % (C) / −0.024 % (O)
+  at 2.4 MeV/u and −0.003 % (C) / −0.006 % (O) at 10 MeV/u). A consistency failure makes the point INVALID and the repeat
+  rule applies. **Robustness (revision 3, Codex REVIEW-aa4e7b1b finding 2):** because the declared systematic enters the
+  classification, the classes and pattern are computed a second time with the method systematic doubled (0.5 %);
+  `conclusive` additionally requires the pattern to be unchanged (`robust`), so the scientific route never rests on the
+  exact size of the 0.25 % estimate. An empirical curvature measurement was considered and rejected: with f₁f₂/h² ≈ 18 the
+  second difference of three thicknesses would need ≈ 1e7 primaries per run to bound the residual at 0.2 %. Per-point values stay in the materialized cache only; per band only
   the maxima of |Δ_meas − Δ_pred|, |Δ_pred| and |R_model| are written.
 - Controls (pre-declared; a failed control makes step 2 INCONCLUSIVE, not a finding): (i) thickness consistency at every
   point as above (the pair t/1.6t replaces the former t/(t/2) control; written per band as maxima, revision 2);
@@ -1846,7 +1855,10 @@ unit-charge base table without the run-time q², LS and Barkas terms):
   (`fluct_on_marker`, `fluct_off_marker`) and the step-count parser (`step_line_re`, `track_header_re`) are pinned from the
   smoke logs into the committed file `validation/results/stopping/v3-008-i3fu2/log-markers.json`; the evaluator requires the
   off-marker to match every fluctuation-off run and no fluctuation-on run, and the on-marker the converse; a
-  non-discriminating marker set (TOPAS silently ignoring the parameter) makes control (iii) FAILED, never passed.
+  non-discriminating marker set (TOPAS silently ignoring the parameter) makes control (iii) FAILED, never passed. The
+  markers must match the Geant4 `G4EmParameters` printout line for energy-loss fluctuations, not a TOPAS parameter echo or
+  the input text (the evaluator rejects a marker that matches the bundle's input; the pin-B review verifies the choice
+  against the smoke logs; SR-3 third pass C2).
 - Aggregates written to `validation/results/stopping/v3-008-i3fu2/i3fu2_result.json` by the committed evaluator
   `validation/scripts/stopping/i3fu2_evaluate.py` (tested on synthetic runs): per ion and band b ∈ {[2,5), [5,10), [10,20),
   [20,50]} over the extrapolated points: n, mean r_M, mean r_I, mean s, SE_b = √(Σ SE_rel²)/n, the class below, the band
@@ -1862,37 +1874,48 @@ unit-charge base table without the run-time q², LS and Barkas terms):
   1–3, 5; SR-3 second pass findings 4, 7, 8):** (1) sealed decision code — the evaluator refuses to run unless the worktree
   is clean, `code_sha` is an ancestor of HEAD (the signed records are committed after the runs, so HEAD cannot equal
   `code_sha`), and every decision-producing source (the evaluator, the generator, `compare_icru73.py`, `r2_io.py`,
-  `ss_evaluate.py` and its imports, the ionmc stopping/LS/projectile/material/parser/cache modules and the attestation
-  module) is byte-identical on disk, at HEAD, at `code_sha`, at the evaluator review pin's `head_sha` and at the step-count
+  `ss_evaluate.py` and its imports, and — revision 3, Codex REVIEW-aa4e7b1b finding 5 / SR-3 third pass C4 — the whole
+  dynamic import closure of the ionmc package as loaded, plus `uv.lock` and `pyproject.toml`, with the running numpy and
+  Python versions required to equal the locked ones; third-party binary bytes are not sealed, a declared limitation of the
+  host environment) is byte-identical on disk, at HEAD, at `code_sha`, at the evaluator review pin's `head_sha` and at the
   smokes' `code_sha`; (2) two review pins, both verbatim passed
   codex-worker records (`status` passed, `report.verdict` pass, task V3-008): pin A `i3fu2-review.json` for the commit that
   seals the evaluator, pin B `i3fu2-markers-review.json` for the commit that adds the markers file and pin A (markers file
-  and pin A byte-identical at pin B's head and at `code_sha`); both named by the dated plan note
+  and pin A byte-identical at pin B's head and at `code_sha`; the review service does not sign its records — V3-INFRA-005
+  future item — so, as for the V5-SS chain (`ss-seal-review.json`), the binding is to the verbatim committed record with its
+  `report_sha256`, a disclosed trust assumption, Codex REVIEW-aa4e7b1b finding 1); both named by the dated plan note
   "I3-FU-1 step-2 review pins" that must be identical at HEAD and at `code_sha`; every evidence run starts after both
   `finished_at`; the smokes (whose logs pin the markers) run at a commit that carries pin A, after pin A's `finished_at`,
   before pin B exists — order: revision-2 commit W → review (pin A) → commit X with pin A → the four smokes at X → commit Y
-  with the markers file → review (pin B) → commit Z with pin B and the plan note → evidence runs at Z; (3) the one-step
-  premise is enforced by the evaluator from the two signed step-count smoke records (verified
-  like evidence runs): every one of the 50 primaries has exactly one step whose pre-step point lies in the Water slab
-  (0 ≤ z_pre < t; its limiting process is expected to be Transportation); otherwise `pattern = INCONCLUSIVE` with reason
+  with the markers file → review (pin B) → commit Z with pin B and the plan note → evidence runs at Z; **revision 3 (Codex
+  REVIEW-aa4e7b1b finding 3):** all four smokes are authenticated by the evaluator like evidence runs, must have started
+  after pin A's `finished_at` and finished before pin B's `started_at`, at a code SHA that carries pin A and is an ancestor of
+  pin B's head — so parameter acceptance and the one-step premise are established before the evidence chronology, never
+  retrospectively; (3) the one-step premise is enforced by the evaluator from the two signed step-count smoke records
+  (verified like evidence runs): every one of the 50 primaries has exactly one step whose pre-step point lies in the Water
+  slab (0 ≤ z_pre < t, with a tolerance of half the last printed digit at both faces; its limiting process is expected to be
+  Transportation), that step ends at or beyond the far face, and the smoke's far-face phase space holds exactly one row per
+  primary (revision 3, Codex finding 4 / SR-3 third pass C3); otherwise `pattern = INCONCLUSIVE` with reason
   `one_step_premise` and the pair design is revised before any evidence run; (4) written aggregates (`mean_r_M`, `mean_r_I`,
   `mean_s`, `x_b`, the He maximum) are rounded to 0.1 pp — the classes and pattern are computed from the full-precision
   values — because the extrapolated s in a two-point band with a published maximum would otherwise expose a table value
   (SR-3 second pass finding 1).
 - Seeds (§C, before any run; revision 1): TOPAS cases **13–21** (declared "unassigned, use only by amendment" on 2026-11-07) =
   the nine energies in the order above; parts 0 = C t, 1 = C 1.6t, 2 = O t, 3 = O 1.6t (all nine cases), 4 = He t (cases 17, 21),
-  5 = C t with fluctuations off (cases 13, 21): 40 evidence bundles; the pre-declared repeat is FROZEN now as parts 6–11
-  (= part + 6, same configuration; 40 repeat bundles); parts 12–19 reserved; seeds 20619000 + 100·part + case (formula,
+  5 = C t with fluctuations off (cases 13, 21): 40 evidence bundles; the pre-declared repeat is FROZEN now as parts 8–13
+  (= part + 8, same configuration; 40 repeat bundles; revision 2 — revision 1 had used 6–11, never drawn); parts 6, 7 and
+  14–19 reserved; seeds 20619000 + 100·part + case (formula,
   ranges and guard test unchanged; frozen manifest `validation/reference_cases/topas/i3fu2-frozen-manifest.json`, generator
   `gen_i3fu2_bundles.py`). Repeat rule (SR-3 finding 5; made deterministic in revision 2, Codex finding 5 / SR-3 second pass
   finding 4; repeats renumbered to parts 8–13 = part + 8, parts 6, 7 and 14–19 reserved): a validity failure of one run is
   repeated by that run's repeat part only; a consistency failure of a point is repeated by BOTH slabs' repeat parts, and the
   repeat pair replaces the pair; a partial repeat set, a repeat of a valid run or a repeat without a recorded failure is a
-  `RecordError`; a repeat that is itself invalid, or a second failure of the same point, makes step 2 INCONCLUSIVE; a class U
-  is final (its σ is systematic, a repeat cannot resolve it). Four execution smokes: rehearsal seeds **20600440** (C 10 MeV/u, 2 000 primaries, standard lines) and
+  `RecordError`; a repeat that is itself invalid, or a second failure of the same point (including a validity repeat
+  followed by an inconsistent pair, which is not repeated again), makes step 2 INCONCLUSIVE; a class U is final (its σ is
+  systematic, a repeat cannot resolve it). Four execution smokes: rehearsal seeds **20600440** (C 10 MeV/u, 2 000 primaries, standard lines) and
   **20600441** (the same with the fluctuation-off line); **20600443** and **20600444** (step-count smokes: C 2.4 and 50 MeV/u,
   slab 1.6t, 50 primaries, `Ts/TrackingVerbosity = 1`, to count the ionisation steps per track inside the slab — expected one —
-  and to pin the fluctuation-off log marker into the evaluator); **20600442** reserved for one re-smoke if a parameter name
+  and to pin the log markers into the committed markers file, revision 2); **20600442** reserved for one re-smoke if a parameter name
   is wrong. Cost (ESTIMATE, never timed): 44 runs × ≤ 2 min, one at a time, each host call ≤ 600 s; outputs materialized one
   run at a time, parsed and deleted (data-retention rule); repeats only on trigger. Pre-declared consequence of the step-count
   smokes: if a slab is not traversed in one ionisation step for the beam ion, the thickness pair is re-designed by a further
@@ -1962,8 +1985,9 @@ tests, bundles and manifest by sha256); `validation/reference_cases/topas/i3fu2-
 #### 5. Review gates and order
 1. This amendment + step-1 script/test + step-2 generator/bundles/manifest/evaluator/tests in one commit → Codex review on
    the exact commit (re-reviewed until passed) → independent reviewer agent (scientific) → exact-SHA local validation record.
-2. Step-1 run once; step-2 smokes (the fluctuation-off marker pinned into the evaluator and the review pin committed and
-   reviewed), then the 40 runs one at a time (outputs materialized, parsed, deleted; repeats only on trigger); results committed
+2. Step-1 run once at the commit carrying pin A; the four step-2 smokes at that commit; the markers file committed (Y),
+   reviewed (pin B), pin B and the plan note committed (Z); then the 40 runs at Z one at a time (outputs materialized,
+   parsed, deleted; repeats only on trigger); results committed
    with dated notes → Codex → exact-SHA record → push → CI green at the exact head.
 3. Step-3 decision note → the same chain; then (b) a new prospective amendment, or (c) the intervention of Appendix A.
 
@@ -2028,3 +2052,18 @@ fluctuation marker) → committed markers file, discrimination required in both 
 and L relative to sign(s_b); SR-3-2 8 (wording) → "physics-list name" replaced by the opt4 runtime markers. SR-3-2 (D): the
 step-1 run and the four smokes may proceed once the revision-2 commit has passed review; the evidence runs after the markers
 commit and its review. Not a clinical claim.
+
+**Revision 3 of amendment I3-FU-1 (2026-11-16, orchestrator; after Codex REVIEW-aa4e7b1b on 59522166 (changes required: five
+important, one minor) and the SR-3 third pass of the same commit (APPROVE WITH CHANGES, no blocking finding; emulation
+confirmed faithful to first order against the cached LS source; step 1 and the smokes cleared to run at the pin-A commit);
+before any run; edits in place above marked "revision 3").** Dispositions: Codex 1 (review pins unsigned) → disclosed trust
+assumption, identical to the accepted V5-SS chain, V3-INFRA-005 future item (mechanical checks on the record kept); Codex 2 /
+SR-3-3 C1 (stepping systematic not bounded by the pair) → the 0.3 % check restated as a gross-error check, the budget rests
+on the enforced single step and the documented algorithm, and the classification is re-run with the systematic doubled —
+`conclusive` requires the pattern to be unchanged; an empirical curvature measurement rejected as infeasible (≈ 1e7
+primaries per run); Codex 3 (smoke gate retrospective) → all four smokes authenticated, started after pin A, finished before
+pin B's review started; Codex 4 / SR-3-3 C3 (traversal unverified) → the counted step must end at the far face, the smoke
+phase space must hold one row per primary, half-digit tolerance at both faces; Codex 5 / SR-3-3 C4 (seal incomplete) →
+dynamic import closure, `uv.lock`/`pyproject.toml` sealed, numpy and Python versions checked against the lock; Codex minor
+(contradictory repeat-part wording) → one binding rule in §C and in the seeds bullet; SR-3-3 C2 → markers must be the Geant4
+parameter printout, never the input echo (evaluator guard); SR-3-3 C5 → wording. Not a clinical claim.

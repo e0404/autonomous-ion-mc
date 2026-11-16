@@ -46,12 +46,17 @@ TD_EM = TOPAS / "carbon-water-150mevu-r2-idd-em-part0" / "input.txt"
 SCRIPTS = ROOT / "validation" / "scripts"
 GRID = np.geomspace(0.025, 1000.0, 53)
 SYN_HISTORIES = 1000
-ROW_NOISE = 0.01
+ROW_NOISE = 0.004  # relative spread of the synthetic exit energies
 TABLE_FACTOR = 1.05  # synthetic ICRU73_NEW = ionmc model x this factor (s ~ +5 %)
 KEY_SEED = bytes(range(32))
-PIN_A_FINISHED = "2026-11-16T12:00:00+00:00"  # evaluator review (pin A)
-PIN_B_FINISHED = "2026-11-16T12:30:00+00:00"  # markers review (pin B)
-STARTED = "2026-11-16T13:00:00+00:00"
+PIN_A_STARTED = "2026-11-16T11:50:00+00:00"  # evaluator review (pin A)
+PIN_A_FINISHED = "2026-11-16T12:00:00+00:00"
+SMOKE_STARTED = "2026-11-16T12:05:00+00:00"  # smokes: after pin A, before pin B starts
+SMOKE_FINISHED = "2026-11-16T12:10:00+00:00"
+PIN_B_STARTED = "2026-11-16T12:20:00+00:00"  # markers review (pin B)
+PIN_B_FINISHED = "2026-11-16T12:30:00+00:00"
+STARTED = "2026-11-16T13:00:00+00:00"  # evidence runs
+FINISHED = "2026-11-16T14:00:00+00:00"
 #: synthetic marker file of the temporary repositories (the real one is pinned from smoke logs)
 TEST_MARKERS = {
     "fluct_on_marker": r"^Fluctuations of dE/dx are enabled\s+1\s*$",
@@ -584,8 +589,16 @@ STEP_RE = re.compile(TEST_MARKERS["step_line_re"], re.M)
 TRACK_RE = re.compile(TEST_MARKERS["track_header_re"], re.M)
 
 
-def _track(slab_mm: float, *, split: bool = False, primary: bool = True, tid: int = 1) -> str:
-    """One synthetic SteppingVerbose block (G4BestUnit style values)."""
+def _track(
+    slab_mm: float,
+    *,
+    split: bool = False,
+    primary: bool = True,
+    tid: int = 1,
+    stop: bool = False,
+) -> str:
+    """One synthetic SteppingVerbose block (G4BestUnit style values); ``stop``: the track ends
+    inside the slab (half way) instead of crossing it."""
     parent = 0 if primary else 1
     lines = [
         f"* G4Track Information:   Particle = C12,   Track ID = {tid},   Parent ID = {parent}",
@@ -593,34 +606,45 @@ def _track(slab_mm: float, *, split: bool = False, primary: bool = True, tid: in
         "    0      0 fm      0 fm     -1 um   28.8 MeV   0 eV   0 fm   0 fm   World initStep",
         "    1      0 fm      0 fm      0 fm   28.8 MeV   0 eV   1 um   1 um   Water Transp",
     ]
-    zs = [slab_mm / 2, slab_mm] if split else [slab_mm]
+    zs = [slab_mm / 2] if stop else ([slab_mm / 2, slab_mm] if split else [slab_mm])
     for i, z in enumerate(zs, start=2):
         lines.append(
             f"    {i}      0 fm      0 fm   {z * 1000:.6g} um   27 MeV   1 MeV   1 um   1 um   "
             "World Transportation"
         )
-    k = len(zs) + 2
-    lines.append(
-        f"    {k}      0 fm      0 fm     40 cm   27 MeV   0 eV   1 cm   1 cm   OutOfWorld T"
-    )
+    if not stop:
+        k = len(zs) + 2
+        lines.append(
+            f"    {k}      0 fm      0 fm     40 cm   27 MeV   0 eV   1 cm   1 cm   OutOfWorld T"
+        )
     lines.append("    :----- List of 2ndaries - #SpawnInStep=  0(Rest= 0,Along= 0,Post= 0)")
     return "\n".join(lines) + "\n"
 
 
-def _step_stdout(n: int, slab_mm: float, *, split: int = -1, primaries: int | None = None) -> str:
+def _step_stdout(
+    n: int, slab_mm: float, *, split: int = -1, stop: int = -1, primaries: int | None = None
+) -> str:
     blocks = [_stdout(n)]
     for i in range(n if primaries is None else primaries):
-        blocks.append(_track(slab_mm, split=i == split))
+        blocks.append(_track(slab_mm, split=i == split, stop=i == stop))
         blocks.append(_track(slab_mm / 3, primary=False, tid=2, split=True))  # ignored
     return "".join(blocks)
+
+
+def _steps(counts: dict[int, dict[str, Any]]) -> dict[int, int]:
+    return {k: int(v["steps"]) for k, v in counts.items()}
 
 
 def test_count_slab_steps_contract() -> None:
     slab = 0.0657
     counts = ev.count_slab_steps(_step_stdout(5, slab), slab, STEP_RE, TRACK_RE)
-    assert counts == dict.fromkeys(range(5), 1)  # secondaries ignored, track IDs repeat
+    assert _steps(counts) == dict.fromkeys(range(5), 1)  # secondaries ignored, IDs repeat
+    assert all(c["traverses"] for c in counts.values())
     counts = ev.count_slab_steps(_step_stdout(5, slab, split=3), slab, STEP_RE, TRACK_RE)
-    assert counts == {0: 1, 1: 1, 2: 1, 3: 2, 4: 1}
+    assert _steps(counts) == {0: 1, 1: 1, 2: 1, 3: 2, 4: 1}  # a step count of 2
+    counts = ev.count_slab_steps(_step_stdout(5, slab, stop=2), slab, STEP_RE, TRACK_RE)
+    assert _steps(counts) == dict.fromkeys(range(5), 1)  # truncated track: one step ...
+    assert [c["traverses"] for c in counts.values()] == [True, True, False, True, True]
     assert ev.count_slab_steps("no steps\n", slab, STEP_RE, TRACK_RE) == {}
     bad = _track(slab).replace("    2      0 fm", "    5      0 fm")
     with pytest.raises(ev.RecordError, match="consecutive"):
@@ -634,7 +658,44 @@ def test_count_slab_steps_contract() -> None:
         "    0      0 fm      0 fm   -0.001 mm\n    1      0 fm      0 fm   0 mm\n"
         "    2      0 fm      0 fm   0.0657 mm\n    3      0 fm      0 fm   400 mm\n"
     )
-    assert ev.count_slab_steps(mm_text, slab, plain, TRACK_RE) == {0: 1}  # no zunit group: mm
+    counts = ev.count_slab_steps(mm_text, slab, plain, TRACK_RE)  # no zunit group: mm
+    assert counts == {0: {"steps": 1, "traverses": True}}
+
+
+def test_count_slab_steps_printed_precision_tolerance() -> None:
+    """Reviewer pass 3 item C3: the far face 0.06574 mm printed as "65.7 um" (3 digits, below the
+    thickness) still ends the counted step at the far face, and the next pre-step z (within
+    half a printed digit of the far face) is outside the slab: one step, traversing."""
+    slab = 0.06574
+    text = (
+        "* G4Track Information:   Particle = C12,   Track ID = 1,   Parent ID = 0\n"
+        "    0      0 fm      0 fm     -1 um   28.8 MeV\n"
+        "    1      0 fm      0 fm      0 fm   28.8 MeV\n"
+        "    2      0 fm      0 fm   65.7 um   27 MeV\n"
+        "    3      0 fm      0 fm     40 cm   27 MeV\n"
+    )
+    assert ev.count_slab_steps(text, slab, STEP_RE, TRACK_RE) == {
+        0: {"steps": 1, "traverses": True}
+    }
+    exact = text.replace("65.7 um", "65.74 um")  # printed exactly: the same outcome
+    assert ev.count_slab_steps(exact, slab, STEP_RE, TRACK_RE)[0] == {
+        "steps": 1,
+        "traverses": True,
+    }
+    short = text.replace("65.7 um", "65.6 um")  # more than half a digit short: inside
+    out = ev.count_slab_steps(short, slab, STEP_RE, TRACK_RE)[0]
+    assert out == {"steps": 2, "traverses": True}  # the second step crosses the face
+    stopped = text.replace("65.7 um", "65.6 um").replace("    3      0 fm      0 fm     40 cm"
+                                                          "   27 MeV\n", "")  # fmt: skip
+    assert ev.count_slab_steps(stopped, slab, STEP_RE, TRACK_RE)[0] == {
+        "steps": 1,
+        "traverses": False,
+    }
+    assert ev.printed_tolerance("65.7", 1e-3) == pytest.approx(0.05e-3)
+    assert ev.printed_tolerance("40", 10.0) == pytest.approx(5.0)
+    assert ev.printed_tolerance("1.25e-02", 1.0) == pytest.approx(0.005e-2)
+    with pytest.raises(ev.RecordError, match="not a number"):
+        ev.printed_tolerance("abc", 1.0)
 
 
 def test_marker_file_parsing() -> None:
@@ -784,7 +845,7 @@ def _archive(tmp: Path, factor: float) -> tuple[Path, str, dict[str, str]]:
     return path, hashlib.sha256(path.read_bytes()).hexdigest(), members
 
 
-def _review(review_id: str, head: str, finished: str, **over: Any) -> dict[str, Any]:
+def _review(review_id: str, head: str, started: str, finished: str, **over: Any) -> dict[str, Any]:
     """A synthetic passed codex-worker review record (schema of ``ss-seal-review.json``)."""
     doc = {
         "base_sha": "0" * 40,
@@ -792,8 +853,9 @@ def _review(review_id: str, head: str, finished: str, **over: Any) -> dict[str, 
         "finished_at": finished,
         "head_sha": head,
         "report": {"findings": [], "head_sha": head, "summary": "synthetic", "verdict": "pass"},
+        "report_sha256": hashlib.sha256(review_id.encode()).hexdigest(),
         "review_id": review_id,
-        "started_at": finished,
+        "started_at": started,
         "status": "passed",
         "task_id": "V3-008",
         "tool": "codex exec",
@@ -814,16 +876,29 @@ def _write_json(path: Path, doc: Any) -> None:
     path.write_text(json.dumps(doc, indent=1) + "\n")
 
 
+def _sealed_copy_list() -> list[str]:
+    """Files copied from this checkout into the temporary repositories: the executable closure,
+    every ionmc source file (so that a later lazy import is present) and the sealed files."""
+    rels = set(ev.executable_closure()) | set(ev.SEALED_FILES)
+    rels |= {
+        p.relative_to(ROOT).as_posix()
+        for p in (ROOT / "src" / "ionmc").rglob("*.py")
+        if "__pycache__" not in p.parts
+    }
+    return sorted(rels)
+
+
 @pytest.fixture(scope="module")
 def base(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
-    """Temporary repository: sealed sources + synthetic bundles (1000 histories) + manifest +
-    trust (commit "reviewed" = the evaluator review's head_sha); pin A + the marker file (commit
-    "markers" = the markers review's head_sha); pin B + the plan note (commit "code_sha")."""
+    """Temporary repository: the sealed closure + synthetic bundles (1000 histories) + manifest +
+    trust (commit "reviewed" = the evaluator review's head_sha); pin A (commit "pin_a": the
+    smokes run here); the marker file (commit "markers" = the markers review's head_sha); pin B
+    + the plan note (commit "code_sha")."""
     root = tmp_path_factory.mktemp("i3fu2")
     repo = root / "repo"
     repo.mkdir()
     _git(repo, "init", "-q", "-b", "main")
-    for rel in ev.SEALED_SOURCES:
+    for rel in _sealed_copy_list():
         (repo / rel).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(ROOT / rel, repo / rel)
     bundles = repo / gen.REL_PREFIX
@@ -837,10 +912,16 @@ def base(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
     (repo / ev.PLAN_PATH).parent.mkdir(parents=True, exist_ok=True)
     (repo / ev.PLAN_PATH).write_text("# synthetic acceptance plan\n")
     reviewed = _commit(repo, "sealed evaluator and bundles")
-    _write_json(repo / ev.REVIEW_PIN, _review("REVIEW-syn-a", reviewed, PIN_A_FINISHED))
+    _write_json(
+        repo / ev.REVIEW_PIN, _review("REVIEW-syn-a", reviewed, PIN_A_STARTED, PIN_A_FINISHED)
+    )
+    pin_a_sha = _commit(repo, "pin A")
     _write_json(repo / ev.MARKERS, TEST_MARKERS)
-    markers_sha = _commit(repo, "pin A and markers")
-    _write_json(repo / ev.MARKERS_PIN, _review("REVIEW-syn-b", markers_sha, PIN_B_FINISHED))
+    markers_sha = _commit(repo, "markers from the smoke logs")
+    _write_json(
+        repo / ev.MARKERS_PIN,
+        _review("REVIEW-syn-b", markers_sha, PIN_B_STARTED, PIN_B_FINISHED),
+    )
     (repo / ev.PLAN_PATH).write_text(
         "# synthetic acceptance plan\n\n"
         + _note("REVIEW-syn-a", reviewed, "REVIEW-syn-b", markers_sha)
@@ -849,7 +930,7 @@ def base(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
     archive, sha, members = _archive(root, TABLE_FACTOR)
     cases, de_m = {}, {}
     for name in [gen.bundle_name(c, p) for c, p in gen.evidence_keys() + gen.repeat_keys()] + list(
-        ev.STEP_SMOKES
+        ev.ALL_SMOKES
     ):
         doc = json.loads((bundles / name / "case.json").read_text())
         info = doc["i3fu2"]
@@ -862,6 +943,7 @@ def base(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
         "root": root,
         "repo": repo,
         "reviewed": reviewed,
+        "pin_a_sha": pin_a_sha,
         "markers_sha": markers_sha,
         "code_sha": code_sha,
         "archive": archive,
@@ -891,6 +973,7 @@ def _write_run(
     stdout: str | None = None,
     stderr: str = "",
     started: str = STARTED,
+    finished: str = FINISHED,
     code_sha: str | None = None,
     succeeded: bool = True,
     exit_code: int = 0,
@@ -918,7 +1001,7 @@ def _write_run(
     }
     cfg = IO.canonical_digest(request)
     run_id = f"REF-{cfg[:20]}-{hashlib.sha256(label.encode()).hexdigest()[:8]}"
-    odir = base["root"] / f"out-{label.removesuffix('-steps')}" / run_id
+    odir = base["root"] / f"out-{label.removesuffix('-smokes')}" / run_id
     (odir / "work").mkdir(parents=True)
     (odir / "request.json").write_text(json.dumps(request))
     particle = ev.BEAM_PARTICLE[info["ion"]]
@@ -962,7 +1045,7 @@ def _write_run(
             "engine": "topas",
             "request_sha256": sha["request.json"],
             "started_at": started,
-            "finished_at": "2026-11-16T14:00:00+00:00",
+            "finished_at": finished,
             "seconds": 60.0,
             "exit_code": exit_code,
             "timed_out": False,
@@ -1007,20 +1090,34 @@ def _write_smokes(
     label: str,
     *,
     split: str = "",
-    only: tuple[str, ...] = ev.STEP_SMOKES,
-    **kw: Any,
+    stop: str = "",
+    deficit: str = "",
+    only: tuple[str, ...] = ev.ALL_SMOKES,
+    over: dict[str, dict[str, Any]] | None = None,
 ) -> None:
-    """The two step-count smokes (``<label>-steps``); ``split``: that smoke's primary 7 takes two
-    steps in the slab."""
+    """The four smokes (``<label>-smokes``), run at the pin-A commit between the two reviews.
+    Step-count smokes: ``split`` / ``stop``: that smoke's primary 7 takes two steps / stops in
+    the slab; ``deficit``: that smoke's phase space misses a row. ``over``: per-smoke keywords."""
     entries: dict[str, str] = {}
     for name in only:
         info = base["cases"][name]["i3fu2"]
         n = int(base["cases"][name]["histories"])
-        out = _step_stdout(n, float(info["slab_mm"]), split=7 if name == split else -1)
+        kw: dict[str, Any] = {
+            "code_sha": base["pin_a_sha"],
+            "started": SMOKE_STARTED,
+            "finished": SMOKE_FINISHED,
+        }
+        if name in ev.STEP_SMOKES:
+            kw["stdout"] = _step_stdout(
+                n, float(info["slab_mm"]), split=7 if name == split else -1,
+                stop=7 if name == stop else -1,
+            )  # fmt: skip
+            kw["deficit"] = 1 if name == deficit else 0
+        kw.update((over or {}).get(name, {}))
         rng = np.random.default_rng(len(entries))
-        entries[name] = _write_run(base, repo, f"{label}-steps", name, 0.0, rng, stdout=out, **kw)
-    (repo / "records" / f"{label}-steps").mkdir(parents=True, exist_ok=True)
-    (repo / "records" / f"{label}-steps" / "index.json").write_text(
+        entries[name] = _write_run(base, repo, f"{label}-smokes", name, 0.0, rng, **kw)
+    (repo / "records" / f"{label}-smokes").mkdir(parents=True, exist_ok=True)
+    (repo / "records" / f"{label}-smokes" / "index.json").write_text(
         json.dumps({"runs": [{"bundle": b, "run_id": r} for b, r in sorted(entries.items())]})
     )
 
@@ -1037,7 +1134,7 @@ def _scenario(
     smoke_kw: dict[str, Any] | None = None,
 ) -> str:
     """All 40 evidence runs (r_of(case, part) planted relative to the model slab loss), plus
-    the ``repeats`` {repeat bundle: r} and the two step-count smokes; ``run_kw`` per bundle."""
+    the ``repeats`` {repeat bundle: r} and the four smokes; ``run_kw`` per bundle."""
     repo, entries = base["repo"], {}
     run_kw = run_kw or {}
     keys = ev.run_bundles()
@@ -1063,7 +1160,7 @@ def _evaluate(base: dict[str, Any], label: str, repo: Path | None = None) -> dic
             ev.MANIFEST,
             base["archive"],
             base["code_sha"],
-            step_smokes=f"records/{label}-steps",
+            smokes=f"records/{label}-smokes",
             archive_sha256=base["sha"],
             member_sha256=base["members"],
         )
@@ -1094,6 +1191,11 @@ def _r_he_fail(c: int, p: int) -> float:
     return 0.02 if p == 4 else _r_icru(c, p)
 
 
+def _r_fragile(c: int, p: int) -> float:
+    """TOPAS 0.4 % above the table everywhere: I at the declared systematic, N when doubled."""
+    return 0.0 if p == 4 else TABLE_FACTOR * 1.004 - 1.0
+
+
 R0, B_LIN = 0.05, 0.1  # Richardson scenario: r = R0 + B_LIN f exactly (noise free, no g)
 
 
@@ -1115,6 +1217,12 @@ BAD = {"deficit": 1}
 def _both_lines(n: int, fluct: bool) -> str:
     """A stdout showing BOTH fluctuation dump lines (a marker set that cannot discriminate)."""
     return _stdout(n, fluct=fluct) + f"Fluctuations of dE/dx are enabled   {int(not fluct)}\n"
+
+
+RESULT_LABELS = (
+    "icru", "model", "mixed", "he_fail", "linear", "invalid", "second_invalid", "repeat_ok",
+    "split", "stopped", "smoke_deficit", "off_hits_on", "on_hits_off", "fragile",
+)  # fmt: skip
 
 
 @pytest.fixture(scope="module")
@@ -1141,7 +1249,8 @@ def results(base: dict[str, Any]) -> dict[str, dict[str, Any]]:
         repeats={gen.bundle_name(15, 8): S, gen.bundle_name(19, 10): S, gen.bundle_name(19, 11): S},
     )
     _scenario(base, "split", _r_icru, smoke_kw={"split": ev.STEP_SMOKES[1]})
-    _scenario(base, "one_smoke", _r_icru, smoke_kw={"only": ev.STEP_SMOKES[:1]})
+    _scenario(base, "stopped", _r_icru, smoke_kw={"stop": ev.STEP_SMOKES[0]})
+    _scenario(base, "smoke_deficit", _r_icru, smoke_kw={"deficit": ev.STEP_SMOKES[1]})
     _scenario(  # the fluctuation-off marker also matches a fluctuation-ON run
         base,
         "off_hits_on",
@@ -1154,16 +1263,11 @@ def results(base: dict[str, Any]) -> dict[str, dict[str, Any]]:
         _r_icru,
         run_kw={gen.bundle_name(21, 5): {"stdout": _both_lines(SYN_HISTORIES, False)}},  # fmt: skip
     )
+    _scenario(base, "fragile", _r_fragile)
     _commit(base["repo"], "records")
     out = {lab: _evaluate(base, lab) for lab in RESULT_LABELS}
     assert o19_2t in out["second_invalid"]["provenance"]["runs"]
     return out
-
-
-RESULT_LABELS = (
-    "icru", "model", "mixed", "he_fail", "linear", "invalid", "second_invalid", "repeat_ok",
-    "split", "one_smoke", "off_hits_on", "on_hits_off",
-)  # fmt: skip
 
 
 def _cls(doc: dict[str, Any], ion: str) -> dict[str, str]:
@@ -1181,13 +1285,15 @@ def test_icru_scenario_with_h_band(results: dict[str, dict[str, Any]], base: dic
             assert v["x_b"] == 0.01
             assert v["n"] == {"[2,5)": 2, "[5,10)": 2, "[10,20)": 2, "[20,50]": 3}[b]
             assert v["sigma_b"] == pytest.approx(np.hypot(v["se_b"], 0.0025))
-            assert 1e-4 < v["se_b"] < 1.5e-3  # 1 % row noise, 1000 rows, extrapolated points
+            assert 1e-4 < v["se_b"] < 6e-4  # 0.4 % row noise, 1000 rows, extrapolated points
             assert v["max_abs_consistency_residual"] < 2e-3  # planted g: Delta_meas ~ Delta_pred
             assert 0.0 <= v["max_abs_model_residual"] < 3e-4
             assert v["max_abs_predicted_difference"] < 3e-3
             if (ion, b) != ("carbon", "[10,20)"):
                 assert v["mean_r_I"] == pytest.approx(0.0, abs=4e-3)
     assert doc["bands"]["carbon"]["[10,20)"]["mean_r_I"] == pytest.approx(0.03, abs=4e-3)
+    assert doc["robust"] is True and doc["pattern_sigma_doubled"] == "ICRU"
+    assert doc["classes_sigma_doubled"] == {ion: _cls(doc, ion) for ion in ("carbon", "oxygen")}
     c = doc["controls"]
     assert c == {
         "helium": {"pass": True, "max_abs_r_m": c["helium"]["max_abs_r_m"]},
@@ -1201,9 +1307,15 @@ def test_icru_scenario_with_h_band(results: dict[str, dict[str, Any]], base: dic
     assert c["helium"]["max_abs_r_m"] <= 2e-3 and c["fluctuations_off"]["max_abs_difference"] < 2e-3
     assert doc["invalid_runs"] == {} and doc["invalid_points"] == {} and doc["repeats_used"] == {}
     assert doc["inconclusive_reasons"] == []
+    one = {
+        "primaries": 50,
+        "max_steps_in_slab": 1,
+        "traversing_primaries": 50,
+        "phase_space_complete": True,
+    }
     assert doc["one_step_premise"] == {
         "checked": True,
-        "smokes": {s: {"primaries": 50, "max_steps_in_slab": 1} for s in ev.STEP_SMOKES},
+        "smokes": dict.fromkeys(ev.STEP_SMOKES, one),
         "pass": True,
     }
     prov = doc["provenance"]
@@ -1212,6 +1324,8 @@ def test_icru_scenario_with_h_band(results: dict[str, dict[str, Any]], base: dic
     assert all(
         v["scored"] == SYN_HISTORIES and v["run_id"].startswith("REF-") for v in runs.values()
     )
+    assert set(prov["smokes"]) == set(ev.ALL_SMOKES)
+    assert {v["code_sha"] for v in prov["smokes"].values()} == {base["pin_a_sha"]}
     pins = prov["review_pins"]
     assert pins["evaluator"]["review_id"] == "REVIEW-syn-a"
     assert pins["evaluator"]["head_sha"] == base["reviewed"]
@@ -1220,15 +1334,19 @@ def test_icru_scenario_with_h_band(results: dict[str, dict[str, Any]], base: dic
     assert prov["manifest"]["path"] == ev.MANIFEST
     assert prov["log_markers"]["path"] == ev.MARKERS
     assert "I3-FU-1 step-2 review pins" in prov["plan_note"]["line"]
-    assert set(prov["sealed_sources"]) == set(ev.SEALED_SOURCES)
-    for rel, digest in prov["sealed_sources"].items():
+    sealed = prov["sealed_sources"]
+    assert set(sealed) == set(ev.executable_closure()) | set(ev.SEALED_FILES)
+    for rel, digest in sealed.items():
         assert digest == hashlib.sha256((ROOT / rel).read_bytes()).hexdigest()
-    assert set(prov["step_smokes"]) == set(ev.STEP_SMOKES)
+    env = prov["environment"]
+    assert env["numpy"] == env["numpy_locked"] == np.__version__
+    assert env["python"] == env["python_locked"]
+    assert doc["amendment"] == "I3-FU-1 step 2 (revision 2)"
 
 
 def test_model_scenario(results: dict[str, dict[str, Any]]) -> None:
     doc = results["model"]
-    assert doc["pattern"] == "MODEL" and doc["conclusive"]
+    assert doc["pattern"] == "MODEL" and doc["conclusive"] and doc["robust"]
     for ion in ("carbon", "oxygen"):
         for v in doc["bands"][ion].values():
             assert v["class"] == "M"
@@ -1238,9 +1356,24 @@ def test_model_scenario(results: dict[str, dict[str, Any]]) -> None:
 
 def test_mixed_scenario(results: dict[str, dict[str, Any]]) -> None:
     doc = results["mixed"]
-    assert doc["pattern"] == "MIXED" and doc["conclusive"]
+    assert doc["pattern"] == "MIXED" and doc["conclusive"] and doc["robust"]
     assert set(_cls(doc, "carbon").values()) == {"I"}
     assert set(_cls(doc, "oxygen").values()) == {"M"}
+
+
+def test_pattern_not_robust_to_the_doubled_systematic_is_inconclusive(
+    results: dict[str, dict[str, Any]],
+) -> None:
+    """REVIEW-aa4e7b1b item 4: TOPAS 0.4 % above the table is I at sigma_sys = 0.25 % but N at
+    0.5 %: the pattern ICRU is not robust and the result is INCONCLUSIVE."""
+    doc = results["fragile"]
+    assert doc["pattern_before_controls"] == "ICRU" and doc["pattern_sigma_doubled"] == "MIXED"
+    assert doc["robust"] is False and doc["pattern"] == "INCONCLUSIVE"
+    assert doc["inconclusive_reasons"] == ["not_robust_to_systematic"] == [ev.ROBUST_REASON]
+    for ion in ("carbon", "oxygen"):
+        for b in ("[2,5)", "[5,10)", "[10,20)"):
+            assert doc["bands"][ion][b]["class"] == "I"
+            assert doc["classes_sigma_doubled"][ion][b] == "N"
 
 
 def test_failed_control_is_inconclusive(results: dict[str, dict[str, Any]]) -> None:
@@ -1308,18 +1441,26 @@ def test_valid_repeats_restore_conclusiveness(results: dict[str, dict[str, Any]]
     assert len(doc["provenance"]["runs"]) == 43
 
 
-def test_one_step_premise_failures_are_inconclusive(results: dict[str, dict[str, Any]]) -> None:
-    doc = results["split"]
+@pytest.mark.parametrize(
+    "label, smoke, want",
+    [
+        ("split", 1, {"max_steps_in_slab": 2, "traversing_primaries": 49}),  # a step count of 2
+        ("stopped", 0, {"max_steps_in_slab": 1, "traversing_primaries": 49}),  # truncated track
+        ("smoke_deficit", 1, {"phase_space_complete": False}),  # a missing phase-space row
+    ],
+)
+def test_one_step_premise_failures_are_inconclusive(
+    results: dict[str, dict[str, Any]], label: str, smoke: int, want: dict[str, Any]
+) -> None:
+    doc = results[label]
     assert doc["pattern"] == "INCONCLUSIVE" and doc["pattern_before_controls"] == "ICRU"
     assert doc["inconclusive_reasons"] == [ev.PREMISE_REASON] == ["one_step_premise"]
     prem = doc["one_step_premise"]
     assert prem["checked"] and not prem["pass"]
-    assert prem["smokes"][ev.STEP_SMOKES[1]] == {"primaries": 50, "max_steps_in_slab": 2}
-    assert prem["smokes"][ev.STEP_SMOKES[0]] == {"primaries": 50, "max_steps_in_slab": 1}
-    doc = results["one_smoke"]
-    assert doc["pattern"] == "INCONCLUSIVE" and doc["inconclusive_reasons"] == ["one_step_premise"]
-    assert doc["one_step_premise"]["checked"] is False and not doc["one_step_premise"]["pass"]
-    assert list(doc["one_step_premise"]["smokes"]) == [ev.STEP_SMOKES[0]]
+    bad = prem["smokes"][ev.STEP_SMOKES[smoke]]
+    assert {k: bad[k] for k in want} == want and bad["primaries"] == 50
+    good = prem["smokes"][ev.STEP_SMOKES[1 - smoke]]
+    assert good["traversing_primaries"] == 50 and good["phase_space_complete"]
 
 
 @pytest.mark.parametrize("label", ["off_hits_on", "on_hits_off"])
@@ -1359,7 +1500,7 @@ def test_aggregates_only_and_table_relative_values_rounded(
         assert doc["rounding_note"] == ev.ROUNDING_NOTE
         for path, v in _walk(doc):
             if isinstance(v, list):
-                assert len(v) <= 4, path
+                assert len(v) <= 5, path
         assert set(doc["bands"]) == {"carbon", "oxygen"}
         for ion in doc["bands"].values():
             assert set(ion) == {"[2,5)", "[5,10)", "[10,20)", "[20,50]"}
@@ -1368,6 +1509,7 @@ def test_aggregates_only_and_table_relative_values_rounded(
                 for key in ("mean_r_M", "mean_r_I", "mean_s", "x_b"):
                     v = band[key]
                     assert v is None or round(v, 3) == v, (key, v)
+        assert set(doc["classes_sigma_doubled"]) == {"carbon", "oxygen"}
         he = doc["controls"]["helium"]["max_abs_r_m"]
         assert he is None or round(he, 3) == he
         for run in doc["provenance"]["runs"].values():
@@ -1379,7 +1521,9 @@ def test_aggregates_only_and_table_relative_values_rounded(
         prem = doc["one_step_premise"]
         assert set(prem) == {"checked", "smokes", "pass"}
         for s in prem["smokes"].values():
-            assert set(s) == {"primaries", "max_steps_in_slab"}
+            assert set(s) == {
+                "primaries", "max_steps_in_slab", "traversing_primaries", "phase_space_complete",
+            }  # fmt: skip
         for reason in [*doc["invalid_runs"].values(), *doc["invalid_points"].values()]:
             rest = reason.replace(ev.CONSISTENCY_REASON, "")
             assert not re.search(r"\d\.\d{3,}", rest), reason  # reasons carry no values
@@ -1400,6 +1544,10 @@ def test_classes_use_full_precision_values() -> None:
     pts[0]["r_I"] = 0.0056  # full: 0.0097 <= 0.01 (I); rounded 0.006: 0.0101 > 0.01 (N)
     band = ev.band_aggregates(pts)["[2,5)"]
     assert band["mean_r_I"] == 0.006 and band["class"] == "I"
+    assert ev.band_classes(pts, 0.0025)["[2,5)"] == "I"
+    assert ev.band_classes(pts, 0.005)["[2,5)"] == "M"  # the robustness re-classification
+    assert ev.band_classes([], 0.0025) == dict.fromkeys(("[2,5)", "[5,10)", "[10,20)", "[20,50]"),
+                                                        "none")  # fmt: skip
 
 
 # --- authentication, sealing and binding ------------------------------------------------------
@@ -1412,10 +1560,11 @@ def _world(
     *,
     r: float = 0.0,
     commit: bool = True,
+    smoke_kw: dict[str, Any] | None = None,
     **kw: Any,
 ) -> dict[str, Any]:
     """A copy of the base repository with ONE run of ``bundle`` (default C 10 MeV/u slab t) and
-    an empty step-smoke index."""
+    the four smokes."""
     repo = tmp / "repo"
     shutil.copytree(base["repo"], repo)
     bundle = bundle or gen.bundle_name(17, 0)
@@ -1423,7 +1572,7 @@ def _world(
     w = {**base, "root": tmp, "repo": repo}
     rid = _write_run(w, repo, label, bundle, r, np.random.default_rng(3), **kw)
     _write_index(repo, label, {bundle: rid})
-    _write_json(repo / "records" / f"{label}-steps" / "index.json", {"runs": []})
+    _write_smokes(w, repo, label, **(smoke_kw or {}))
     if commit:
         _commit(repo, "records")
     return {"repo": repo, "label": label, "bundle": bundle, "run_id": rid, "root": tmp}
@@ -1437,7 +1586,7 @@ def _ctx(base: dict[str, Any], w: dict[str, Any], code_sha: str | None = None) -
         ev.REVIEW_PIN,
         ev.MANIFEST,
         code_sha or base["code_sha"],
-        step_smokes=f"records/{w['label']}-steps",
+        smokes=f"records/{w['label']}-smokes",
     )
 
 
@@ -1490,6 +1639,23 @@ def test_altered_artifact_bytes_raise(base: dict[str, Any], tmp_path: Path) -> N
         _check(base, w)
 
 
+def test_markers_matching_the_native_input_raise(base: dict[str, Any], tmp_path: Path) -> None:
+    """Reviewer pass 3 item C2: a fluctuation marker that matches the TOPAS parameter echo (the
+    bundle's input text) does not identify the G4EmParameters printout."""
+    w = _world(base, tmp_path)
+    for key, rx in (
+        ("fluct_on_marker", r"Ph/Default/Modules"),
+        ("fluct_off_marker", r"EnergyLossFluctuations|Ph/Default/Type"),
+    ):
+        ctx = _ctx(base, w)
+        ctx.markers = {**ctx.markers, key: re.compile(rx, re.M)}
+        with pytest.raises(ev.RecordError, match=f"{key} matches the bundle's native input"):
+            ev.check_run(ctx, w["bundle"], w["run_id"])
+        smoke = ev.ALL_SMOKES[0]
+        with pytest.raises(ev.RecordError, match=f"{key} matches the bundle's native input"):
+            ev.check_smoke(ctx, smoke, ctx.smoke_index[smoke])
+
+
 def test_wrong_code_sha_raises(base: dict[str, Any], tmp_path: Path) -> None:
     w = _world(base, tmp_path, code_sha=base["markers_sha"])  # run executed before pin B
     with pytest.raises(ev.RecordError, match="code_sha"):
@@ -1525,16 +1691,44 @@ def test_manifest_and_pin_mismatch_raise(base: dict[str, Any], tmp_path: Path) -
         _check(base, w)
 
 
+def test_executable_closure_is_computed_from_the_imports() -> None:
+    closure = ev.executable_closure()
+    for rel in (
+        "validation/scripts/stopping/i3fu2_evaluate.py",
+        "validation/scripts/stopping/gen_i3fu2_bundles.py",
+        "validation/scripts/stopping/compare_icru73.py",
+        "validation/scripts/ion_em/r2_io.py",
+        "validation/scripts/ion_em/ss_evaluate.py",
+        "src/ionmc/physics/stopping.py",
+        "src/ionmc/data/nist_star.py",  # imported by stopping.py, never hand-listed
+        "src/ionmc/__init__.py",
+        "infrastructure/experiment_v3/attest.py",
+    ):
+        assert rel in closure, rel
+    assert all(p.is_file() and ROOT.resolve() in p.parents for p in closure.values())
+    assert not any(rel.startswith("tests/") for rel in closure)
+
+
 def test_sealed_sources_committed_or_uncommitted_change_raises(
     base: dict[str, Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Codex REVIEW-22f384ed finding 1: a later committed change and an uncommitted change of a
-    sealed source each refuse; so does a loaded module that differs from the sealed bytes."""
-    for rel in ("src/ionmc/physics/stopping.py", "validation/scripts/stopping/i3fu2_evaluate.py"):
-        w = _world(base, tmp_path / ("c-" + Path(rel).stem))
+    """A later committed change of a closure file (also one no list names: nist_star.py), of
+    uv.lock or pyproject.toml, an uncommitted change, and a loaded module that differs from the
+    worktree each refuse."""
+    for rel in (
+        "src/ionmc/physics/stopping.py",
+        "validation/scripts/stopping/i3fu2_evaluate.py",
+        "src/ionmc/data/nist_star.py",
+        "uv.lock",
+        "pyproject.toml",
+    ):
+        w = _world(base, tmp_path / ("c-" + Path(rel).name))
         (w["repo"] / rel).write_text((w["repo"] / rel).read_text() + "# later change\n")
         _commit(w["repo"], "sealed source changed after the runs")
-        with pytest.raises(ev.RecordError, match=f"sealed source {re.escape(rel)} differs"):
+        # a closure module is caught by the loaded-vs-worktree check, uv.lock / pyproject.toml
+        # by the commit comparison
+        want = f"sealed source {re.escape(rel)}(: the loaded module)? differs"
+        with pytest.raises(ev.RecordError, match=want):
             _ctx(base, w)
     w = _world(base, tmp_path / "dirty")
     rel = "src/ionmc/physics/projectiles.py"
@@ -1544,8 +1738,29 @@ def test_sealed_sources_committed_or_uncommitted_change_raises(
     w = _world(base, tmp_path / "loaded")
     other = tmp_path / "other.py"
     other.write_text("# not the sealed bytes\n")
-    monkeypatch.setattr(ev, "loaded_source", lambda name: other)
-    with pytest.raises(ev.RecordError, match="loaded module differs"):
+    real = ev.executable_closure()
+    monkeypatch.setattr(
+        ev, "executable_closure", lambda: {**real, "src/ionmc/data/nist_star.py": other}
+    )
+    with pytest.raises(ev.RecordError, match="nist_star.py: the loaded module differs"):
+        _ctx(base, w)
+
+
+def test_environment_must_match_the_lock(
+    base: dict[str, Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    lock = (ROOT / "uv.lock").read_text()
+    env = ev.environment_check(lock)
+    assert env["numpy"] == np.__version__ and env["python_locked"] == "3.12"
+    with pytest.raises(ev.RecordError, match="not found exactly once"):
+        ev.environment_check(lock.replace('name = "numpy"', 'name = "numpyx"'))
+    with pytest.raises(ev.RecordError, match="requires-python"):
+        ev.environment_check(
+            lock.replace('requires-python = ">=3.12"', 'requires-python = ">=3.13"')
+        )
+    w = _world(base, tmp_path)
+    monkeypatch.setattr(np, "__version__", "0.0.1")
+    with pytest.raises(ev.RecordError, match="numpy 0.0.1 differs from the uv.lock pin"):
         _ctx(base, w)
 
 
@@ -1577,13 +1792,17 @@ def _repin(base: dict[str, Any], tmp: Path, *, pin_a: Any = None, pin_b: Any = N
         ("a", {"task_id": "V3-005"}, "task_id"),
         ("b", {"finished_at": "yesterday"}, "ISO-8601"),
         ("a", {"head_sha": "abc"}, "40-hex"),
+        ("a", {"report_sha256": "abc"}, "report_sha256 is not a 64-hex"),
+        ("b", {"report_sha256": None}, "missing record field"),
+        ("a", {"started_at": PIN_A_FINISHED}, "started_at is not before finished_at"),
+        ("b", {"started_at": "2026-11-16T13:00:00+00:00"}, "started_at is not before"),
     ],
 )
 def test_review_record_must_be_a_passed_review(
     base: dict[str, Any], tmp_path: Path, which: str, over: dict[str, Any], match: str
 ) -> None:
-    a = _review("REVIEW-syn-a", base["reviewed"], PIN_A_FINISHED)
-    b = _review("REVIEW-syn-b", base["markers_sha"], PIN_B_FINISHED)
+    a = _review("REVIEW-syn-a", base["reviewed"], PIN_A_STARTED, PIN_A_FINISHED)
+    b = _review("REVIEW-syn-b", base["markers_sha"], PIN_B_STARTED, PIN_B_FINISHED)
     if which == "a":
         a.update(over)
     else:
@@ -1648,37 +1867,72 @@ def test_repeat_without_recorded_failure_raises(base: dict[str, Any], tmp_path: 
         _evaluate(w, "extra", repo)
 
 
-def _smoke_world(base: dict[str, Any], tmp: Path, **kw: Any) -> dict[str, Any]:
-    repo = tmp / "repo"
+# --- smokes: completeness and chronology (Codex REVIEW-aa4e7b1b finding 3) --------------------
+
+
+def _smoke_check(base: dict[str, Any], tmp: Path, name: str, **kw: Any) -> dict[str, Any]:
+    """A copy of the base repository with the four smokes (``kw`` for smoke ``name``); checks
+    that smoke."""
+    w = _world(base, tmp, smoke_kw={"over": {name: kw}})
+    ctx = _ctx(base, w)
+    return dict(ev.check_smoke(ctx, name, ctx.smoke_index[name]))
+
+
+def test_smokes_authenticated_with_markers(base: dict[str, Any], tmp_path: Path) -> None:
+    w = _world(base, tmp_path)
+    ctx = _ctx(base, w)
+    out = {n: ev.check_smoke(ctx, n, rid) for n, rid in ctx.smoke_index.items()}
+    assert set(out) == set(ev.ALL_SMOKES)
+    assert out["i3fu2-smoke-carbon-water-10mevu"]["markers"] == (True, False)
+    assert out["i3fu2-smoke-carbon-water-10mevu-fluct-off"]["markers"] == (False, True)
+    assert out["i3fu2-smoke-carbon-water-10mevu-fluct-off"]["fluctuations"] is False
+    for n in ev.STEP_SMOKES:
+        assert out[n]["ok"] and out[n]["traversing_primaries"] == 50
+        assert out[n]["code_sha"] == base["pin_a_sha"]
+
+
+@pytest.mark.parametrize(
+    "kw, match",
+    [
+        ({"finished": "2026-11-16T12:25:00+00:00"}, "not before the markers review"),
+        ({"finished": PIN_B_FINISHED}, "not before the markers review"),
+        ({"started": "2026-11-16T11:55:00+00:00"}, "not after the evaluator review pin"),
+        ({"code_sha": "reviewed"}, "smoke .* not committed"),  # does not carry pin A
+        ({"code_sha": "code_sha"}, "not an ancestor of the markers review"),  # after pin B
+        ({"tamper_record": True}, "attestation"),
+        ({"stdout": _stdout(2000).replace("Use ICRU90 data", "Use ICRU90")}, "opt4"),
+    ],
+)
+def test_smoke_chronology_and_binding_raise(
+    base: dict[str, Any], tmp_path: Path, kw: dict[str, Any], match: str
+) -> None:
+    if kw.get("code_sha") in ("reviewed", "code_sha"):
+        kw = {**kw, "code_sha": base[kw["code_sha"]]}
+    with pytest.raises(ev.RecordError, match=match):
+        _smoke_check(base, tmp_path, "i3fu2-smoke-carbon-water-10mevu", **kw)
+
+
+def test_smoke_at_the_markers_review_head_is_accepted(base: dict[str, Any], tmp_path: Path) -> None:
+    out = _smoke_check(
+        base, tmp_path, ev.STEP_SMOKES[0], code_sha=base["markers_sha"],
+        started="2026-11-16T12:01:00+00:00", finished="2026-11-16T12:19:00+00:00",
+    )  # fmt: skip
+    assert out["ok"] and out["code_sha"] == base["markers_sha"]
+
+
+def test_missing_or_late_smokes_raise_in_the_evaluation(
+    base: dict[str, Any], tmp_path: Path
+) -> None:
+    """Regression (REVIEW-aa4e7b1b finding 3): smokes finishing after the markers review began,
+    or a missing smoke, stop the evaluation (nothing graded)."""
+    repo = tmp_path / "repo"
     shutil.copytree(base["repo"], repo)
-    w = {**base, "root": tmp, "repo": repo}
-    _write_index(repo, "s", {})
-    _write_smokes(w, repo, "s", **kw)
-    _commit(repo, "smoke records")
-    ctx = ev.context(repo, "records/s", tmp / "out-s", ev.REVIEW_PIN, ev.MANIFEST,
-                     base["code_sha"], step_smokes="records/s-steps")  # fmt: skip
-    return {"ctx": ctx, "index": ctx.step_index}
-
-
-def test_step_smoke_authentication_and_chronology(base: dict[str, Any], tmp_path: Path) -> None:
-    """Step-count smokes: after the evaluator pin (A) and at a commit carrying it (they precede
-    the markers pin B, whose marker file is pinned from their logs)."""
-    early = _smoke_world(  # code_sha = the markers review's head (carries pin A), A < t < B
-        base, tmp_path / "early", code_sha=base["markers_sha"], started="2026-11-16T12:15:00+00:00"
-    )
-    for name, rid in early["index"].items():
-        out = ev.check_step_smoke(early["ctx"], name, rid)
-        assert out["ok"] and out["primaries"] == 50 and out["max_steps_in_slab"] == 1
-        assert out["code_sha"] == base["markers_sha"]
-    w = _smoke_world(base, tmp_path / "before", started="2026-11-16T11:00:00+00:00")
-    name, rid = next(iter(w["index"].items()))
-    with pytest.raises(ev.RecordError, match="not after the evaluator review pin"):
-        ev.check_step_smoke(w["ctx"], name, rid)
-    w = _smoke_world(base, tmp_path / "nopin", code_sha=base["reviewed"])
-    name, rid = next(iter(w["index"].items()))
-    with pytest.raises(ev.RecordError, match="step smoke .* not committed"):
-        ev.check_step_smoke(w["ctx"], name, rid)
-    w = _smoke_world(base, tmp_path / "tamper", tamper_record=True)
-    name, rid = next(iter(w["index"].items()))
-    with pytest.raises(ev.RecordError, match="attestation"):
-        ev.check_step_smoke(w["ctx"], name, rid)
+    w = {**base, "root": tmp_path, "repo": repo}
+    late = {n: {"finished": "2026-11-16T13:30:00+00:00"} for n in ev.ALL_SMOKES}
+    _scenario(w, "late", _r_icru, smoke_kw={"over": late})
+    _scenario(w, "three", _r_icru, smoke_kw={"only": ev.ALL_SMOKES[:3]})
+    _commit(repo, "records")
+    with pytest.raises(ev.RecordError, match="not before the markers review"):
+        _evaluate(w, "late", repo)
+    with pytest.raises(ev.RecordError, match="lacks .*all four smokes are required"):
+        _evaluate(w, "three", repo)

@@ -73,16 +73,30 @@ at 15 MeV/u, and the z-scan coefficients and d_z/d_6 ratios would expose the C/O
 Cost: the quantisation limits the z-scan in the [20, 50) band, where the deviations are a few
 0.1 pp.
 
-Provenance (fail closed; ``RuntimeError`` and nothing written on any failure, checked before
-the computation):
+Provenance (fail closed; ``RuntimeError`` and nothing written on any failure; the checkout,
+environment and ``--expect-i3`` checks run before the computation, the source sealing after it
+and before the output is written):
 
 * ``--code-sha`` is required and must be 40 lowercase hex digits; in ``--repo`` (default: the
   repository containing this script) ``git rev-parse HEAD`` must equal it and
   ``git status --porcelain --untracked-files=no`` must be empty (no modified tracked file).
-* Sealed executable sources (``SEALED_SOURCES``: this script, ``compare_icru73.py`` and the
-  ionmc modules that compute or load the compared quantities): for each, the file in ``--repo``,
-  the file actually loaded by this process and ``git show <code_sha>:<path>`` must have identical
-  bytes; their sha256 is recorded in ``provenance.sealed_sources``.
+* Environment (``provenance.environment``, checked against the ``uv.lock`` committed at
+  ``code_sha``): the running ``numpy.__version__`` must equal the single numpy ``[[package]]``
+  version of the lock, and the running Python must satisfy the lock's ``requires-python``
+  (recorded as is when the lock has none; an unsupported specifier fails closed).
+* Sealed sources after the computation (the import closure is then complete, including the
+  lazily loaded ``compare_icru73`` and anything ``BetheStoppingSource`` imports): every module
+  in ``sys.modules`` of the ``ionmc`` package with a ``__file__`` (path relative to the root
+  that contains ``src/ionmc``), this script and ``compare_icru73.py`` (loaded by path). For each,
+  the file actually loaded by this process, the file in ``--repo`` and
+  ``git show <code_sha>:<path>`` must have identical bytes; a module loaded from outside a
+  ``src/ionmc`` tree of a repository (e.g. a site-packages install) has no committed path and
+  fails. ``uv.lock`` and ``pyproject.toml`` are sealed too (disk == committed bytes). The
+  ``{path: sha256}`` map is ``provenance.sealed_sources``; ``provenance.ionmc_loaded_from_repo``
+  says whether the loaded ionmc files lie under ``--repo`` itself (byte identity, not location,
+  is the requirement). Declared limitation: the bytes of third-party packages (numpy, the
+  Python interpreter, compiled extensions) are not sealed; only their lock file and versions
+  are.
 * ``--expect-i3`` is a repo-relative path (default ``DEFAULT_EXPECT_I3``) read as committed
   bytes at ``code_sha`` (``git show``), not from the working copy; the working copy must be
   byte-identical. Recorded as ``provenance.expect_i3`` = ``{path, sha256, committed_at, matched}``.
@@ -99,13 +113,13 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import importlib
 import importlib.util
 import json
 import os
 import re
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -223,16 +237,13 @@ DEFAULT_REPO = Path(__file__).resolve().parents[3]
 DEFAULT_EXPECT_I3 = "validation/results/stopping/v3-008-i3/icru73_comparison.json"
 SCRIPT_REL = "validation/scripts/stopping/i3_band_diagnostic.py"
 I3_SCRIPT_REL = "validation/scripts/stopping/compare_icru73.py"
-# repo-relative path -> the module whose loaded file must be that path's bytes (None: script)
-SEALED_SOURCES: dict[str, str | None] = {
-    SCRIPT_REL: None,
-    I3_SCRIPT_REL: None,
-    "src/ionmc/physics/stopping.py": "ionmc.physics.stopping",
-    "src/ionmc/physics/projectiles.py": "ionmc.physics.projectiles",
-    "src/ionmc/materials.py": "ionmc.materials",
-    "src/ionmc/physics/lindhard_sorensen.py": "ionmc.physics.lindhard_sorensen",
-    "src/ionmc/data/cache.py": "ionmc.data.cache",
-}
+LOCK_FILES = ("uv.lock", "pyproject.toml")  # sealed (disk == committed bytes)
+ENVIRONMENT_NOTE = (
+    "numpy version and Python version checked against the uv.lock committed at code_sha; the "
+    "bytes of third-party packages (numpy, the interpreter, compiled extensions) are NOT sealed "
+    "(declared limitation); uv.lock and pyproject.toml are"
+)
+_SPECIFIER_RE = re.compile(r"\s*(>=|<=|==|!=|>|<)\s*(\d+(?:\.\d+)*)(\.\*)?\s*")
 
 STATUS_NOTE = (
     "diagnostic of the row I3 FAIL under amendment I3-FU-1; no gate; row I3 is not re-graded"
@@ -658,6 +669,8 @@ def run(
             "mass_note": mass_note,
             "mass_sensitivity_max_rel": sensitivity,
             "sealed_sources": None,
+            "ionmc_loaded_from_repo": None,
+            "environment": None,
             "expect_i3": None,
         },
     }
@@ -682,19 +695,10 @@ def committed_bytes(repo: Path, code_sha: str, rel: str) -> bytes:
     return raw
 
 
-def _loaded_file(rel: str, module: str | None) -> Path:
-    """The file this process actually executes for the sealed source ``rel``."""
-    if module is not None:
-        return Path(str(importlib.import_module(module).__file__))
-    return Path(__file__) if rel == SCRIPT_REL else Path(str(I3.__file__))
+def verify_checkout(repo: Path, code_sha: str) -> None:
+    """Fail closed unless ``repo`` is a clean checkout at HEAD == ``code_sha`` (40 lowercase hex).
 
-
-def verify_checkout(repo: Path, code_sha: str) -> dict[str, str]:
-    """Fail closed unless ``repo`` is a clean checkout of ``code_sha`` running its own sources.
-
-    Returns ``{path: sha256}`` of the sealed sources (``SEALED_SOURCES``). Raises
-    ``RuntimeError`` on a malformed SHA, HEAD != ``code_sha``, a modified tracked file, or a
-    sealed source whose disk, loaded or committed bytes differ.
+    Raises ``RuntimeError`` on a malformed SHA, HEAD != ``code_sha`` or a modified tracked file.
     """
     if not isinstance(code_sha, str) or not CODE_SHA_RE.fullmatch(code_sha):
         raise RuntimeError(f"--code-sha must be 40 lowercase hex digits, got {code_sha!r}")
@@ -704,13 +708,106 @@ def verify_checkout(repo: Path, code_sha: str) -> dict[str, str]:
     dirty = _git(repo, "status", "--porcelain", "--untracked-files=no").decode().strip()
     if dirty:
         raise RuntimeError(f"{repo} has modified tracked files:\n{dirty}")
+
+
+def _python_satisfies(version: tuple[int, ...], spec: str) -> bool:
+    """Whether ``version`` satisfies a ``requires-python`` specifier (>=, <=, ==, !=, >, <;
+    ``==X.Y.*``/``!=X.Y.*`` prefix forms). Any other form raises ``RuntimeError``."""
+    ok = True
+    for part in spec.split(","):
+        m = _SPECIFIER_RE.fullmatch(part)
+        if m is None:
+            raise RuntimeError(f"unsupported requires-python specifier {spec!r} in uv.lock")
+        op, num, star = m.group(1), tuple(int(x) for x in m.group(2).split(".")), m.group(3)
+        if star and op not in ("==", "!="):
+            raise RuntimeError(f"unsupported requires-python specifier {spec!r} in uv.lock")
+        width = len(num) if star else max(len(num), len(version))
+        a = (version + (0,) * width)[:width]
+        b = (num + (0,) * width)[:width]
+        ok &= {
+            ">=": a >= b,
+            "<=": a <= b,
+            ">": a > b,
+            "<": a < b,
+            "==": a == b,
+            "!=": a != b,
+        }[op]
+    return ok
+
+
+def check_environment(lock_raw: bytes) -> dict[str, Any]:
+    """Running numpy and Python against the committed ``uv.lock``; ``RuntimeError`` on mismatch."""
+    lock = tomllib.loads(lock_raw.decode("utf-8"))
+    numpy_entries = [p for p in lock.get("package", []) if p.get("name") == "numpy"]
+    if len(numpy_entries) != 1:
+        raise RuntimeError(f"uv.lock has {len(numpy_entries)} numpy entries (need exactly 1)")
+    locked = str(numpy_entries[0].get("version"))
+    running = str(np.__version__)
+    if running != locked:
+        raise RuntimeError(f"running numpy {running} != numpy {locked} pinned in uv.lock")
+    py = tuple(sys.version_info[:3])
+    spec = lock.get("requires-python")
+    python: dict[str, Any] = {
+        "running": ".".join(map(str, py)),
+        "major_minor": f"{py[0]}.{py[1]}",
+        "requires_python": spec,
+    }
+    if spec is None:
+        python["check"] = "recorded only (no requires-python in uv.lock)"
+    else:
+        if not _python_satisfies(py, str(spec)):
+            raise RuntimeError(f"running Python {python['running']} violates uv.lock {spec!r}")
+        python["check"] = "satisfies uv.lock requires-python"
+    return {
+        "numpy": {"running": running, "locked": locked, "match": True},
+        "python": python,
+        "note": ENVIRONMENT_NOTE,
+    }
+
+
+def ionmc_closure() -> dict[str, Path]:
+    """``{repo-relative path: loaded file}`` of every ``ionmc`` module in ``sys.modules``.
+
+    The path is relative to the directory that contains ``src/ionmc`` (two levels above the
+    package directory); modules without ``__file__`` (namespace packages) are skipped.
+    """
+    import ionmc
+
+    base = Path(str(ionmc.__file__)).resolve().parents[2]
+    out: dict[str, Path] = {}
+    for name, module in list(sys.modules.items()):
+        if name != "ionmc" and not name.startswith("ionmc."):
+            continue
+        file = getattr(module, "__file__", None)
+        if file is None:
+            continue
+        path = Path(file).resolve()
+        out[path.relative_to(base).as_posix()] = path
+    return out
+
+
+def seal_sources(repo: Path, code_sha: str) -> tuple[dict[str, str], bool]:
+    """Seal the executable closure and the lock files (see the module docstring).
+
+    Returns ``({path: sha256}, whether every loaded ionmc file lies under repo)``; raises
+    ``RuntimeError`` if a loaded, on-disk or committed copy differs or a path is not committed.
+    """
+    closure = ionmc_closure()
+    loaded: dict[str, Path] = {
+        SCRIPT_REL: Path(__file__).resolve(),
+        I3_SCRIPT_REL: Path(str(I3.__file__)).resolve(),
+        **closure,
+    }
     sealed: dict[str, str] = {}
-    for rel, module in SEALED_SOURCES.items():
+    for rel, path in sorted(loaded.items()):
         raw = committed_bytes(repo, code_sha, rel)
-        if _loaded_file(rel, module).read_bytes() != raw:
-            raise RuntimeError(f"loaded {rel} differs from its committed bytes at {code_sha}")
+        if path.read_bytes() != raw:
+            raise RuntimeError(f"loaded {rel} ({path}) differs from its committed bytes")
         sealed[rel] = hashlib.sha256(raw).hexdigest()
-    return sealed
+    for rel in LOCK_FILES:
+        sealed[rel] = hashlib.sha256(committed_bytes(repo, code_sha, rel)).hexdigest()
+    root = Path(repo).resolve()
+    return sealed, all(path.is_relative_to(root) for path in closure.values())
 
 
 def check_expect_i3(result: dict[str, Any], raw: bytes, rel: str, code_sha: str) -> dict[str, Any]:
@@ -768,10 +865,15 @@ def main() -> int:
     )
     args = parser.parse_args()
     repo = Path(args.repo)
-    sealed = verify_checkout(repo, args.code_sha)
+    verify_checkout(repo, args.code_sha)
+    environment = check_environment(committed_bytes(repo, args.code_sha, "uv.lock"))
     i3_raw = committed_bytes(repo, args.code_sha, args.expect_i3)
     result = run(Path(args.archive), args.code_sha)
+    # after the computation: the import closure is complete (nothing written before this passes)
+    sealed, from_repo = seal_sources(repo, args.code_sha)
     result["provenance"]["sealed_sources"] = sealed
+    result["provenance"]["ionmc_loaded_from_repo"] = from_repo
+    result["provenance"]["environment"] = environment
     result["provenance"]["expect_i3"] = check_expect_i3(
         result, i3_raw, args.expect_i3, args.code_sha
     )
