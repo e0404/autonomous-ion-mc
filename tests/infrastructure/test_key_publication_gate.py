@@ -452,7 +452,7 @@ def put_review(tmp_path, sha, cw, status="passed", task=TASK):
     rec = {
         "schema_version": 1, "review_id": rid, "task_id": task, "head_sha": sha,
         "base_sha": "b" * 40, "status": status, "model": "m", "provider": "openai",
-        "tool": "codex exec", "experiment_id": "e",
+        "tool": "codex exec", "experiment_id": rvr.current_experiment_id(),
         "started_at": "2026-01-01T00:00:00+00:00",
         "finished_at": "2026-01-01T00:10:00+00:00",
         "report_sha256": file_hash(d / "report.json"),

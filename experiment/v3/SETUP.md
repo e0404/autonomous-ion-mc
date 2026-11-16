@@ -362,14 +362,16 @@ can be verified without trusting the orchestrator's copy.
   report_path=None)` returning `(status, reason)`: `verified`, `unverified`
   (no attestation or key not in the trust file) or `invalid` (bad signature,
   wrong signer, schema_version != 1, malformed review_id/SHAs, blank
-  task/model/provider/tool, status not finished, `started_at` /
+  task/model/provider/tool/experiment_id, a signed `experiment_id` other
+  than the current experiment's (`paths.EXPERIMENT_ID`, or
+  `expected_experiment_id`), status not finished, `started_at` /
   `finished_at` not timezone-aware or `started_at` not earlier than
   `finished_at`, missing `report_sha256`, a report that fails the review-report
   schema or whose verdict/findings contradict `status`, a failed review
   without `error`, a signed identity differing from an expected value, or a
   `report.json` whose sha256 differs). CLI: `python -m
   infrastructure.validation.review_records <record.json> [--trust-file F]
-  [--task-id T] [--head-sha S] [--base-sha B]` (checks the adjacent
+  [--task-id T] [--head-sha S] [--base-sha B] [--experiment-id E]` (checks the adjacent
   `report.json` when present; exit 0 only when verified). Chronology gates must
   accept only `verified`.
 - **Trust file / gate:** `codex-worker` is an optional signer (absent or `[]`

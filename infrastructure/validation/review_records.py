@@ -38,7 +38,7 @@ REVIEW_ID_PATTERN = re.compile(r"REVIEW-[0-9a-f]{32}")
 SHA_PATTERN = re.compile(r"[0-9a-f]{40}")
 DIGEST_PATTERN = re.compile(r"[0-9a-f]{64}")
 STATUSES = ("passed", "changes_required", "failed")
-REQUIRED_STRINGS = ("task_id", "model", "provider", "tool")
+REQUIRED_STRINGS = ("task_id", "model", "provider", "tool", "experiment_id")
 
 
 class ReviewRecordMissing(Exception):
@@ -100,6 +100,18 @@ def _utc_time(value):
     except ValueError:
         return None
     return parsed if parsed.tzinfo is not None else None
+
+
+def current_experiment_id() -> str:
+    """The v3 experiment identifier (infrastructure/experiment_v3/paths.py).
+
+    The review service signs ``experiment_id`` from the same
+    ``.ionmc-condition.json`` that defines this default.
+    """
+    _repo_import()
+    from infrastructure.experiment_v3.paths import EXPERIMENT_ID
+
+    return EXPERIMENT_ID
 
 
 def _report_passes(report, head_sha):
@@ -165,6 +177,7 @@ def verify_review_record(
     expected_task_id: str | None = None,
     expected_head_sha: str | None = None,
     expected_base_sha: str | None = None,
+    expected_experiment_id: str | None = None,
     report_path=None,
 ) -> tuple[str, str]:
     """Return (status, reason): verified | unverified | invalid.
@@ -175,7 +188,10 @@ def verify_review_record(
     A malformed or inconsistent payload (schema_problem), an identity
     differing from an expected value (replay protection), or a report.json at
     ``report_path`` whose sha256 differs from the signed report_sha256 makes
-    the record "invalid" even when the signature is genuine.
+    the record "invalid" even when the signature is genuine. The signed
+    ``experiment_id`` must always equal ``expected_experiment_id`` (default:
+    the current v3 experiment, current_experiment_id), so a genuine record of
+    another experiment is never accepted.
     """
     if not isinstance(record, dict):
         return "invalid", "review record is not an object"
@@ -192,6 +208,7 @@ def verify_review_record(
         "task_id": expected_task_id,
         "head_sha": expected_head_sha,
         "base_sha": expected_base_sha,
+        "experiment_id": expected_experiment_id or current_experiment_id(),
     }
     for field, want in expected.items():
         if want is not None and record.get(field) != want:
@@ -260,6 +277,7 @@ def main(argv=None) -> int:
     parser.add_argument("--task-id", default=None)
     parser.add_argument("--head-sha", default=None)
     parser.add_argument("--base-sha", default=None)
+    parser.add_argument("--experiment-id", default=None)
     args = parser.parse_args(argv)
     try:
         record = load_review_record(args.record)
@@ -274,6 +292,7 @@ def main(argv=None) -> int:
         expected_task_id=args.task_id,
         expected_head_sha=args.head_sha,
         expected_base_sha=args.base_sha,
+        expected_experiment_id=args.experiment_id,
         report_path=report if report.is_file() else None,
     )
     raw = record.get("attestation")

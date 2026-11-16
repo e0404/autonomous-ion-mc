@@ -14,6 +14,7 @@ import pytest
 
 from infrastructure.experiment_v3 import attest, host_snapshot, review
 from infrastructure.experiment_v3.common import file_hash, write_json
+from infrastructure.experiment_v3.paths import EXPERIMENT_ID
 from infrastructure.validation import review_records as rvr
 
 SHA = "a" * 40
@@ -50,7 +51,7 @@ def run_review(tmp_path, monkeypatch, *, verdict="pass", findings=(), exit_code=
             "model": "gpt-5.6-sol",
             "provider": "openai",
             "tool": "codex exec",
-            "experiment_id": "ionmc-v3",
+            "experiment_id": EXPERIMENT_ID,
         },
     )
     monkeypatch.setattr(review, "exact_state", lambda _: SHA)
@@ -206,7 +207,7 @@ def base_record():
         "model": "gpt-5.6-sol",
         "provider": "openai",
         "tool": "codex exec",
-        "experiment_id": "ionmc-v3",
+        "experiment_id": EXPERIMENT_ID,
         "report_sha256": "e" * 64,
         "report": {"head_sha": SHA, "verdict": "pass", "summary": "ok", "findings": []},
     }
@@ -236,6 +237,8 @@ def test_verifier_statuses():
         ({"review_id": "REVIEW-x"}, "review_id"),
         ({"head_sha": "short"}, "head_sha"),
         ({"model": ""}, "model"),
+        ({"experiment_id": ""}, "experiment_id"),
+        ({"experiment_id": None}, "experiment_id"),
         ({"status": "running"}, "status"),
         ({"started_at": "2026-09-30"}, "started_at"),
         ({"finished_at": "2026-09-30T00:00:00+00:00"}, "not later than"),
@@ -332,3 +335,18 @@ def test_codex_worker_is_an_optional_signer_and_documented():
         "--print-public-key codex-worker",
     ):
         assert phrase in text, phrase
+
+
+def test_verifier_requires_the_signed_experiment_id():
+    key = attest.generate_keypair()
+    trust = trust_of(key)
+    missing = {k: v for k, v in base_record().items() if k != "experiment_id"}
+    status, why = rvr.verify_review_record(signed(missing, key), trust)
+    assert status == "invalid" and "experiment_id" in why
+    other = signed({**base_record(), "experiment_id": "experiment-v2"}, key)
+    status, why = rvr.verify_review_record(other, trust)
+    assert status == "invalid" and "signed identity mismatch: experiment_id" in why
+    assert rvr.verify_review_record(
+        other, trust, expected_experiment_id="experiment-v2"
+    ) == ("verified", "ok")
+    assert rvr.current_experiment_id() == EXPERIMENT_ID
